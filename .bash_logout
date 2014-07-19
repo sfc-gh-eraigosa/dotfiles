@@ -8,3 +8,4 @@ fi
 cd ~
 git checkout master
 git commit -a -m 'bash_logout commit $(date)'
+git push
