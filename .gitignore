@@ -6,6 +6,8 @@
 !.gitignore
 !.profile
 !.vimrc
+!.vimrc_white
+!.vimrc_green
 !git.properties
 !.bashrc
 !.gitconfig

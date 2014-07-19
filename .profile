@@ -50,10 +50,19 @@ echo -e "\033[1;37m└───────────────────�
 cat ~/.motd
 git-login
 # VIMRC options
+alias vimg='vim -u ~/.vimrc_green'
+function vimg_set {
+  rm -f ~/.vimrc_active
+  ln -s ~/.vimrc_green ~/.vimrc_active;
+};
 alias vimw='vim -u ~/.vimrc_white'
 function vimw_set {
   rm -f ~/.vimrc_active
   ln -s ~/.vimrc_white ~/.vimrc_active;
+};
+function vim_set {
+  rm -f ~/.vimrc_active
+  ln -s ~/.vimrc ~/.vimrc_active;
 };
 [[ ! -f ~/.vimrc_active ]] && ln -s ~/.vimrc ~/.vimrc_active
 alias vi='vim -u ~/.vimrc_active'
