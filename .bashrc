@@ -112,3 +112,6 @@ if ! shopt -oq posix; then
     . /etc/bash_completion
   fi
 fi
+
+alias gitsave_off='export GIT_SAVE_OFF=true;echo "git save is off"'
+alias gitsave='unset GIT_SAVE_OFF;echo "git save is on"'

@@ -13,6 +13,17 @@ the focus here.
 I use a chromebook for most of my UX development so after I get my new
 chromebook, I'll be installing cruton on it and adding some stuff to help me there.
 
+alias and commands
+==================
+
+gitsave_off  :  Turn off the git commit/push on bash exit
+gitsave      :  Turn on git commit/push on bash exit
+
+vimw         :  Open vim with white background
+vimg         :  Open vim with green background
+vimw_set     :  Set the default to be white background
+vimg_set     :  Set the default to be green background
+
 structure
 =========
 I start off by ignoring everything with .gitignore.   I'm not silly, I don't want everything commited from my home folder.

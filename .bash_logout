@@ -5,7 +5,9 @@
 if [ "$SHLVL" = 1 ]; then
     [ -x /usr/bin/clear_console ] && /usr/bin/clear_console -q
 fi
-cd ~
-git checkout master
-git commit -a -m "bash_logout commit $(date)"
-git push
+if [ ! -z $GIT_SAVE_OFF ]; then
+  cd ~
+  git checkout master
+  git commit -a -m "bash_logout commit $(date)"
+  git push
+fi
