@@ -3,3 +3,5 @@
 	email = wenlock@hp.com
 [core]
 	editor = vi
+[push]
+	default = simple
