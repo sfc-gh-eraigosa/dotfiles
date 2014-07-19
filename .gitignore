@@ -1,0 +1,14 @@
+# Ignore everything
+*
+
+# But not these files...
+!.plan
+!.gitignore
+!.profile
+!.vimrc
+!git.properties
+!.bashrc
+!.gitconfig
+!.bash_logout
+!opt/
+!opt/**
