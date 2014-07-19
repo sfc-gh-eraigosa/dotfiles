@@ -7,5 +7,5 @@ if [ "$SHLVL" = 1 ]; then
 fi
 cd ~
 git checkout master
-git commit -a -m 'bash_logout commit $(date)'
+git commit -a -m "bash_logout commit $(date)"
 git push
