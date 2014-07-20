@@ -66,3 +66,7 @@ function vim_set {
 };
 [[ ! -f ~/.vimrc_active ]] && ln -s ~/.vimrc ~/.vimrc_active
 alias vi='vim -u ~/.vimrc_active'
+
+# GIT_SAVE_OFF control functions
+alias gitsave_off='export GIT_SAVE_OFF=true;echo "GIT_SAVE_OFF is true, bash_logout will not commit";'
+alias gitsave='unset GIT_SAVE_OFF;echo "GIT_SAVE_OFF is unset, bash_logout will commit";'
