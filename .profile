@@ -72,3 +72,4 @@ alias gitsave_off='export GIT_SAVE_OFF=true;echo "GIT_SAVE_OFF is true, bash_log
 alias gitsave='unset GIT_SAVE_OFF;echo "GIT_SAVE_OFF is unset, bash_logout will commit";'
 cd ~
 git pull
+[[ -f ~/.custom_profile ]] && . ~/.custom_profile
