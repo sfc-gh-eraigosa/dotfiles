@@ -36,7 +36,7 @@ alias forjssh='~/bin/forjssh.sh'
 force_color_prompt=yes
 # Info file
 id=$(hostname | awk -F. '{print $2}')
-ip=$(facter ipaddress)
+[[ `which facter` ]] && ip=$(facter ipaddress)
 echo "|$id|$ip" > ~/.info
 # SSH BANNER -------------------------
 rm ~/.motd
