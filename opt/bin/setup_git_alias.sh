@@ -55,7 +55,8 @@ if [[ ! $? -eq 0 ]] ; then
     echo "# Source git environment shortcuts" >> ~/.profile
     echo ". ~/.gitenv" >> ~/.profile
 fi
-echo "#GIT environment shortcuts" > ~/.gitenv
+echo "#!/bin/bash" > ~/.gitenv
+echo "#GIT environment shortcuts" >> ~/.gitenv
 echo alias git-logout=\'ssh-add -d ~/.ssh/gerrit_keys\' >> ~/.gitenv
 echo "alias git-sshkill='kill -9 \$(ps -ef|grep ssh-agent|grep -v grep | awk '\\''{printf \$2\" \" }'\'')'" >> ~/.gitenv
 echo "alias git-push='git push origin HEAD:refs/for/\$(git branch -v|grep \"^\\*\"|awk '\''{printf \$2}'\'')'" >> ~/.gitenv
