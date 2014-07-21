@@ -4,4 +4,4 @@
 [core]
 	editor = vi
 [push]
-	default = simple
+	default = matching
