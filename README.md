@@ -32,17 +32,18 @@ install
     eval $(ssh-agent); ssh-add ~/.ssh/git_keys
   ```
 3. Fork the myhome project to your account.  While still logged into your account, now it's time to setup your home directory, for me as user wenlock, this looks like:
-```sh
-  cd ~
-  git init
-  git remote add origin git@github.com:wenlock/myhome.git
-  git pull origin master
-  git reset --hard
-```
+
+  ```sh
+    cd ~
+    git init
+    git remote add origin git@github.com:wenlock/myhome.git
+    git pull origin master
+    git reset --hard
+  ```
 4.  You should now be using the basic myhome project. Setup the git alias's next with this command:
-```sh
-  ~/opt/bin/setup_git_alias.sh
-```
+  ```sh
+    ~/opt/bin/setup_git_alias.sh
+  ```
 
 alias and commands
 ----
