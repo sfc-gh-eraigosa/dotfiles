@@ -47,7 +47,6 @@ if ! [ $CORKSCREW_IS_AVAILABLE -eq 0 ]; then
   echo '    On windows install corkscrew with cyg-get : cyg-get corkscrew'
   echo '    On ubuntu run command : sudo apt-get install corkscrew'
   read -p 'Press any key to exit...'
-  exit 1
 fi
 
 

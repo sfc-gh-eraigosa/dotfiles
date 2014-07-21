@@ -13,6 +13,28 @@ the focus here.
 I use a chromebook for most of my UX development so after I get my new
 chromebook, I'll be installing cruton on it and adding some stuff to help me there.
 
+install
+=======
+1. You'll need git and vim to setup your home folder.  Make sure to install git and vim for your server, or ask your administrator to do this.
+  sudo apt-get install git vim corkscrew
+
+NOTE: corkscrew installation is used for proxies, and is optional, but recommended.
+2. Setup your home directory with your github account ssh keys.  Lets assume these are called git_keys (private key) and git_keys.pub (public key).
+  mkdir ~/.ssh
+  chmod 700 ~/.ssh
+  echo > '<your privatekey>' > ~/.ssh/git_keys
+  echo > '<your public key>' > ~/.ssh/git_keys.pub
+  chmod 600 ~/.ssh/*
+  eval $(ssh-agent); ssh-add ~/.ssh/git_keys
+3. Fork the myhome project to your account.  While still logged into your account, now it's time to setup your home directory, for me as user wenlock, this looks like:
+  cd ~
+  git init
+  git remote add origin git@github.com:wenlock/myhome.git
+  git pull origin master
+  git reset --hard
+4.  You should now be using the basic myhome project. Setup the git alias's next with this command:
+  ~/opt/bin/setup_git_alias.sh
+
 alias and commands
 ==================
 
