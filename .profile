@@ -9,6 +9,10 @@
 #umask 022
 . /etc/environment
 
+# git the latest profile
+cd ~
+git pull
+
 # if running bash
 if [ -n "$BASH_VERSION" ]; then
     # include .bashrc if it exists
@@ -70,6 +74,5 @@ alias vi='vim -u ~/.vimrc_active'
 # GIT_SAVE_OFF control functions
 alias gitsave_off='export GIT_SAVE_OFF=true;echo "GIT_SAVE_OFF is true, bash_logout will not commit";'
 alias gitsave='unset GIT_SAVE_OFF;echo "GIT_SAVE_OFF is unset, bash_logout will commit";'
-cd ~
-git pull
+
 [[ -f ~/.custom_profile ]] && . ~/.custom_profile
