@@ -62,6 +62,7 @@ sudo apt-get install awesome
 ```
 I change to using git at this point with github.com/wenlock/myhome
 sudo apt-get install git vim corkscrew
+
 ```sh
 mkdir ~/.ssh
 chmod 700 ~/.ssh
@@ -78,11 +79,12 @@ git reset --hard
 ```
 
 Setup the xinit resources
+
 ```sh
 echo "exec awesome" > ~/.xinitrc
 mkdir -p ~/.config/awesome
 cp -R /etc/xdg/awesome/* ~/.config/awesome/
-```sh
+```
 
 You can then startup awesome window manager from crosh shell.
 ```sh
