@@ -1,7 +1,8 @@
 Cruton Notes
 ============
 
-I finally got enough [recognition points](http://www.businessinsider.com/whitman-wins-the-love-of-hp-employees-2013-4) to get a new chromebook to hack with.  The chromebook I had before couldn't be hacked on because it was being used by several other family members.  Now that we have a second chromebook, I get to keep the old chromebook to hack on, and the family can use the new chromebook, ![woot](https://lh6.ggpht.com/-Iv1RvuzpCIDFs9Mx_-LrFaLSjBiBWT6rkMl3QSZYWsFb62RRUzefIwD4xKXGOYPiU-w=w300-rw)!
+I finally got enough [recognition points](http://www.businessinsider.com/whitman-wins-the-love-of-hp-employees-2013-4) to get a new chromebook to hack with.  The chromebook I had before couldn't be hacked on because it was being used by several other family members.  Now that we have a second chromebook, I get to keep the old chromebook to hack on, and the family can use the new chromebook, 
+![woot](https://lh6.ggpht.com/-Iv1RvuzpCIDFs9Mx_-LrFaLSjBiBWT6rkMl3QSZYWsFb62RRUzefIwD4xKXGOYPiU-w=w300-rw)!
 
 
 Prep Work
