@@ -1,3 +1,3 @@
 Index
 =====
-[cruton.md]
+[Install Cruton on Chromebook](cruton.md)
