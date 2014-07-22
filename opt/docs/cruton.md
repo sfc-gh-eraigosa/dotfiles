@@ -119,3 +119,20 @@ cd /usr/local
 sudo mv  chroots/ '/media/removable/USB Drive/'
 sudo ln -s '/media/removable/USB Drive/chroots/' chroots
 ```
+Wish List
+---------
+Things I need to get documented on how to do or find out if they work.
+
+* Fix my magic mouse scroll wheel.
+* Acomplish a google hangout meeting.
+* Sharing session with hp rooms
+* Does lync work?
+* Syncronizing my local drive with the google drive on chromeOS to sync changes
+* Copy paste from chromOS to chroot OS
+* Setup atom.io
+* Setup docker.io
+* Get puppet working
+
+Contribute
+==========
+Tell me about your experience with cruton and this awesome work from those folks.   Any gotchas or problems it you solved?
