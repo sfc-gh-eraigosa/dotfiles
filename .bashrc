@@ -113,4 +113,3 @@ if ! shopt -oq posix; then
   fi
 fi
 
-alias startawesome='sudo enter-chroot xinit'
