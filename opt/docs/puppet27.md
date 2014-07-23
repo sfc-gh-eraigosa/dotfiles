@@ -16,7 +16,7 @@ You can then install other tools.  First set the PUPPET_MODULES export:
 export PUPPET_MODULES=~/git/maestro/puppet/modules:/etc/puppet/modules
 ```
 
-* HP Cloud fog libraries and hpcloud clie: ```sudo puppet apply --modulepath=$PUPPET_MODULES -e 'include gardener::requirements'```
+* fog libs & hpcloud cli: ```sudo puppet apply --modulepath=$PUPPET_MODULES -e 'include gardener::requirements'```
 * Python 2.7 + pip : ```sudo puppet apply --modulepath=$PUPPET_MODULES -e 'include pip::python2'```
 * NodeJS and NPM : ```sudo puppet apply --modulepath=$PUPPET_MODULES -e 'include nodejs_wrap'```
 * Gerrit Review workflow tool : ```sudo pip install git-review```
