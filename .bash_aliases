@@ -1,6 +1,7 @@
+#
+# alias files
+#
 
-
-set -o vi
 # Source git environment shortcuts
 if [ -f ~/.gitenv ] ; then
   . ~/.gitenv
@@ -15,18 +16,19 @@ alias irc=irssi
 alias forjssh='~/bin/forjssh.sh'
 
 # VIMRC options
+set -o vi
 alias vimg='vim -u ~/.vimrc_green'
 function vimg_set {
-  rm -f ~/.vimrc_active
+  rm -f ~/.vimrc_active;
   ln -s ~/.vimrc_green ~/.vimrc_active;
 };
 alias vimw='vim -u ~/.vimrc_white'
 function vimw_set {
-  rm -f ~/.vimrc_active
+  rm -f ~/.vimrc_active;
   ln -s ~/.vimrc_white ~/.vimrc_active;
 };
 function vim_set {
-  rm -f ~/.vimrc_active
+  rm -f ~/.vimrc_active;
   ln -s ~/.vimrc ~/.vimrc_active;
 };
 [[ ! -f ~/.vimrc_active ]] && ln -s ~/.vimrc ~/.vimrc_active
@@ -35,3 +37,13 @@ alias vi='vim -u ~/.vimrc_active'
 # GIT_SAVE_OFF control functions
 alias gitsave_off='export GIT_SAVE_OFF=true;echo "GIT_SAVE_OFF is true, bash_logout will not commit";'
 alias gitsave='unset GIT_SAVE_OFF;echo "GIT_SAVE_OFF is unset, bash_logout will commit";'
+
+# windows manager startup 
+# we need to override /usr/local/startunity
+if [ -f /usr/local/bin/startunity ] ; then
+function startunity {
+  export UBUNTU_MENUPROXY=1;
+  export GTK_MODULES="unity-gtk-module";
+  exec gnome-session-wrapper ubuntu;
+};
+fi
