@@ -17,7 +17,8 @@ export PUPPET_MODULES=$HOME/git/maestro/puppet/modules:/etc/puppet/modules
 ```
 
 * fog libs & hpcloud cli: ```sudo puppet apply --modulepath=$PUPPET_MODULES -e 'include gardener::requirements'```
-* Python 2.7 + pip : ```sh
+* Python 2.7 + pip : 
+```sh
 sudo wget https://raw.github.com/pypa/pip/8575e0c16424bcc9866baa0f9f779f1b524fbc20/contrib/get-pip.py -O /var/lib/python-install/get-pip.py
 sudo puppet apply --modulepath=$PUPPET_MODULES -e 'include pip::python2'
 ```
