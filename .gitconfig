@@ -5,3 +5,11 @@
 	editor = vi
 [push]
 	default = matching
+[branch "master"]
+remote = origin
+merge = master
+
+[remote "origin"]
+url = git@github.com:wenlock/myhome
+fetch = master
+
