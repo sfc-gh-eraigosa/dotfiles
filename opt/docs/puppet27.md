@@ -13,7 +13,7 @@ sudo bash ./hiera.sh
 
 You can then install other tools.  First set the PUPPET_MODULES export:
 ```sh
-export PUPPET_MODULES=$(pwd)/git/maestro/puppet/modules:/etc/puppet/modules
+export PUPPET_MODULES=$HOME/git/maestro/puppet/modules:/etc/puppet/modules
 ```
 
 * fog libs & hpcloud cli: ```sudo puppet apply --modulepath=$PUPPET_MODULES -e 'include gardener::requirements'```
