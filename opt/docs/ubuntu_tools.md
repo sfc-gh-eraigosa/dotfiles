@@ -6,7 +6,7 @@ Tools
 * Software Center ```sudo apt-get install software-center```
 * Google Talk
 * Terminator, terminals work better than xterm with copy / paste (ctrl-shift-c, ctrl-shift-v)
-* [Install puppet and some modules](puppet27.md)
+* [Install puppet and some modules using forj-oss/maestro](puppet27.md)
 
 Investigate
 -----------

@@ -9,5 +9,5 @@ if [ ! "$GIT_SAVE_OFF" = "true" ]; then
   cd ~
   git checkout master
   git commit -a -m "bash_logout commit $(date)"
-  git push
+  git push origin master
 fi

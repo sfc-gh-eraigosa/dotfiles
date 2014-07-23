@@ -11,7 +11,7 @@
 
 # git the latest profile
 cd ~
-git pull
+git pull origin master
 
 # if running bash
 if [ -n "$BASH_VERSION" ]; then
