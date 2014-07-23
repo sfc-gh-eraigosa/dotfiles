@@ -16,7 +16,7 @@ Normally I see those for 200$ so for 70$ and 80MB/sec, I think it's a good deal.
 Setting up developer mode
 -------------------------
 Now I switched the computer from normal mode to developer mode.  Couple of gotchas with this.   
-* Your kernel is no longer secure, which means, stuff you store locally shouldn't be trusted.   I plan to only do opensource stuff here, so if I do other stuff that needs protection, I'll likely use a truecrypt drive or something.   Other than that, I plan to keep a close eye on my drive.  I'm not really sure how this really sets you up to be insecure, but I can tell I can do alot more things as root than normal.   Need to read more, but I wonder if setting up passwords for root and chronous helps protect a little more.  I suspect there is more to this though with chromeOS access.  Comments welcome on this topic.
+* Your kernel is no longer secure, which means, secure the underlying OS.   I plan to only do opensource stuff here, so if I do other stuff that needs protection, I'll likely use a truecrypt drive or something to protect the private stuff.   Couple of things to left to do include locking down root, chronos account, and setting up the chroot to have an autolock.  I notice that when your not logged into chrome, you can still switch with ctrl-alt-shift forward and get to an unlocked account.  Another option might also be to add a non sudoer account for login to the machine, but before I do that I need to be sure the windows manager starts without issues.  Comments welcome on this topic.
 * At boot up your going to get a funky warning about recovery mode.  I'm not sure what the best approach here is yet, other than keeping everyone away from your chromebook and don't let them touch it.  Thus why I waited to get a second chromebook for this.   I'm also thinking of getting a shell cover for 20$ and just sticking a little warning on the cover, like, DO NOT ENTER, or DONT TOUCH without Permissions.   Something to ward off the kids.   It also means don't be lazy and forget to hit ctrl-d at boot up everytime.   You might end up reseting your os.   
 * This brings me to my second poing, loosing your OS / or more over your data on a chromebook seems easy to do.  Get an SD card to store that stuff, and maybe setup some automation.  I'll talk more about that later, but I'm hoping to use github for this on the unsecure settings.   Lets see how this goes.
 
@@ -90,6 +90,23 @@ You can then startup awesome window manager from crosh shell.
 ```sh
 echo "alias startawesome='sudo enter-chroot xinit'" > ~/.bashrc
 ```
+Unity setup
+-----------
+After a bit of playing with awesome, I came to the conclusion that I don't want to spend alot of time hacking on my user interface.  For this reason, I switched to a more simple ready to go user interface that had some familliar navigation with basic customization for things like the desktop.  
+
+```sh
+ctrl+alt+t
+
+>shell
+
+sudo sh -e ./crouton -t unity -n unity
+startunity
+```
+I noticed that the unity user interface tends to start best when you kick it off from chros shell.  You should also be running as the user chronos.  If for some reason you get stuck at the root account, you can switch to chronos with the command:
+```sh
+su - chronos
+```
+
 Move chroots to SD Card
 -----------------------
 [Tom Wolf posted](http://tomwwolf.com/chromebook-14-compedium/chromebook-crouton-cookbook/) a nice tip to setup the /usr/local/chroots folder onto an SD card.
