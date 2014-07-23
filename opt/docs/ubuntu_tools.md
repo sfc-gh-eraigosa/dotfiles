@@ -5,6 +5,7 @@ Tools
 * [Install Chrome Browser on ubuntu](chrome-browser.md)
 * Software Center ```sudo apt-get install software-center```
 * Google Talk
+* Terminator
 
 Investigate
 -----------
