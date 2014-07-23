@@ -29,7 +29,11 @@ export PUPPET_MODULES=$PUPPET_MODULES:~/.puppet/modules
 export PUPPET_MODULES=/opt/config/production/puppet/modules:~/git/CDK-infra/blueprints/openstack/puppet/modules:/opt/config/production/git/config/modules:/etc/puppet/modules:/home/wenlock/.puppet/modules
 set -o vi
 # Source git environment shortcuts
-. ~/.gitenv
+if [ -f ~/.gitenv ] ; then
+  . ~/.gitenv
+else
+  echo ".gitenv is missing, you can install with : . opt/bin/setup_git_alias.sh"
+fi
 alias dockerup='bash ~/git/master/CDK-infra/tools/vde/openstack/docker/docker_up.sh'
 alias novassh='function nova_ssh { ssh-keygen -f ~/.ssh/known_hosts -R $1;ssh -i ~/.ssh/nova-USWest-AZ3.pem -l ubuntu $1;};nova_ssh'
 alias novassh1='function nova_ssh1 { ssh-keygen -f ~/.ssh/known_hosts -R $1;ssh -i ~/.ssh/nova-USWest-AZ1.pem -l ubuntu $1;};nova_ssh1'
