@@ -1,0 +1,48 @@
+[global_config]
+  enabled_plugins = LaunchpadCodeURLHandler, APTURLHandler, LaunchpadBugURLHandler
+  window_state = fullscreen
+  handle_size = -2
+  focus = mouse
+[keybindings]
+[profiles]
+  [[default]]
+    visible_bell = True
+    background_darkness = 0.4
+    scrollback_lines = 50000
+    copy_on_selection = True
+    audible_bell = True
+    scrollback_infinite = True
+[layouts]
+  [[default]]
+    [[[child0]]]
+      position = 0:24
+      type = Window
+      order = 0
+      parent = ""
+      size = 1366, 744
+    [[[child1]]]
+      position = 328
+      type = VPaned
+      order = 0
+      parent = child0
+    [[[child2]]]
+      position = 683
+      type = HPaned
+      order = 0
+      parent = child1
+    [[[terminal3]]]
+      profile = default
+      type = Terminal
+      order = 0
+      parent = child2
+    [[[terminal5]]]
+      profile = default
+      type = Terminal
+      order = 1
+      parent = child1
+    [[[terminal4]]]
+      profile = default
+      type = Terminal
+      order = 1
+      parent = child2
+[plugins]

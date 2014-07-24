@@ -14,3 +14,6 @@
 !.bash_logout
 !opt/
 !opt/**
+!.config/
+!.config/terminator/
+!.config/terminator/config
