@@ -15,7 +15,6 @@ sudo puppet apply --modulepath=/etc/puppet/modules -e "package { ['build-essenti
                          'libopenssl-ruby',\
                          'ruby1.8-dev',\
                          'syslog-summary',\
-                         'vnstat',\
                          'whois',\
                          'ngrep',\
                          'bash-completion',\
