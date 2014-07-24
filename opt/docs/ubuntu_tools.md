@@ -7,6 +7,7 @@ Tools
 * Google Talk
 * Terminator, terminals work better than xterm with copy / paste (ctrl-shift-c, ctrl-shift-v)
 * [Install puppet and some modules using forj-oss/maestro](puppet27.md)
+* Setup a bunch of base [packages with puppet](puppet_packages.md)
 
 Investigate
 -----------
