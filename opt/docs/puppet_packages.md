@@ -1,6 +1,6 @@
 Base backages you should probably have on most dev ubuntu desktops:
 ```sh
-puppet resource package ['build-essential',\
+sudo puppet resource package ['build-essential',\
                          'apt-transport-https',\
                          'gftp-text',\
                          'python-software-properties',\
