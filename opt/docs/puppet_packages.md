@@ -39,6 +39,6 @@ sudo puppet apply --modulepath=/etc/puppet/modules -e "package { ['build-essenti
                          'vnstat',\
                          'logwatch',\
                          'htop',\
-                         'python-psutil']}"
+                         'python-psutil']: ensure => present }"
                       
 ```
