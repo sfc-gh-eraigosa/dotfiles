@@ -12,3 +12,4 @@ Investigate
 -----------
 * PlayOnLinux
 * [Setting up virtualization test envs](virtualization.md)
+* [Atom IDE](atom.md)
