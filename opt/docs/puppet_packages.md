@@ -1,6 +1,6 @@
 Base backages you should probably have on most dev ubuntu desktops:
 ```sh
-sudo puppet resource package ['build-essential',\
+sudo puppet apply --modulepath=/etc/puppet/modules -e "package { ['build-essential',\
                          'apt-transport-https',\
                          'gftp-text',\
                          'python-software-properties',\
@@ -39,6 +39,6 @@ sudo puppet resource package ['build-essential',\
                          'vnstat',\
                          'logwatch',\
                          'htop',\
-                         'python-psutil']
+                         'python-psutil']}"
                       
 ```
