@@ -1,4 +1,4 @@
 Index
 =====
 * [Install Cruton on Chromebook](cruton.md)
-* [Ubuntu Tools](ubuntu_tools.md)
+* [Ubuntu Desktop Tools Setup](ubuntu_tools.md)
