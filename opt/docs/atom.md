@@ -1,4 +1,4 @@
-Atom.io provides a hackable ui.
+Atom.io provides a hackable text editor that is super light weight on memory <200MB and it's usable.
 
 * [Install the puppet, node tools](puppet27.md)
 * ```sudo apt-get install build-essential git libgnome-keyring-dev```
