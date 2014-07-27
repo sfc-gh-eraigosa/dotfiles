@@ -17,3 +17,4 @@
 !.config/
 !.config/terminator/
 !.config/terminator/config
+!.zshrc

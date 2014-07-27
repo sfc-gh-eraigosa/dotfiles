@@ -47,3 +47,5 @@ function startunity {
   exec gnome-session-wrapper ubuntu;
 };
 fi
+
+git-login

@@ -31,7 +31,9 @@ export PUPPET_MODULES=/opt/config/production/puppet/modules:~/git/CDK-infra/blue
 force_color_prompt=yes
 # Info file
 id=$(hostname | awk -F. '{print $2}')
-[[ `which facter` ]] && ip=$(facter ipaddress)
+if [ `which facter` ]; then
+  ip=$(facter ipaddress)
+fi
 echo "|$id|$ip" > ~/.info
 # SSH BANNER -------------------------
 rm ~/.motd
@@ -43,7 +45,5 @@ echo -e "\033[1;37m┌───────────────────�
 echo -e "\033[1;37m│ \033[01;31m$host \033[01;32mOWNED BY $owner\033[1;37m│" >> ~/.motd
 echo -e "\033[1;37m└─────────────────────────────────────────────────────────────┘\033[00m" >> ~/.motd
 cat ~/.motd
-
-git-login
 
 [[ -f ~/.custom_profile ]] && . ~/.custom_profile
