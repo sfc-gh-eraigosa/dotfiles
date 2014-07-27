@@ -7,7 +7,9 @@
 # the default umask is set in /etc/profile; for setting the umask
 # for ssh logins, install and configure the libpam-umask package.
 #umask 022
-. /etc/environment
+if [ -f /etc/environment ] ; then
+  . /etc/environment
+fi
 
 # git the latest profile
 cd ~
