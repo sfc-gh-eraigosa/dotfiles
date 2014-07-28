@@ -14,4 +14,3 @@ Investigate
 -----------
 * PlayOnLinux
 * [Setting up virtualization test envs](virtualization.md)
-* [iTerm2 setup](iterm2.md)
