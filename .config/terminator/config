@@ -1,17 +1,54 @@
 [global_config]
   enabled_plugins = LaunchpadCodeURLHandler, APTURLHandler, LaunchpadBugURLHandler
+  title_transmit_bg_color = "#000000"
+  handle_size = 2
   window_state = fullscreen
-  handle_size = -2
   focus = mouse
 [keybindings]
+  hide_window = <Shift><Control>a
 [profiles]
   [[default]]
     visible_bell = True
-    background_darkness = 0.4
-    scrollback_lines = 50000
     copy_on_selection = True
     audible_bell = True
+    scrollbar_position = hidden
+    palette = "#073642:#dc322f:#859900:#b58900:#268bd2:#d33682:#2aa198:#eee8d5:#002b36:#cb4b16:#586e75:#657b83:#839496:#6c71c4:#93a1a1:#fdf6e3"
+    scrollback_lines = 5000
+    use_system_font = False
+    cursor_color = "#002b36"
+    foreground_color = "#002b36"
+    scroll_on_output = False
+    show_titlebar = False
+    font = Inconsolata 10
+    background_color = "#eee8d5"
+    cursor_blink = False
     scrollback_infinite = True
+[[solarized-dark]]
+  scrollbar_position = hidden
+  palette = "#073642:#dc322f:#859900:#b58900:#268bd2:#d33682:#2aa198:#eee8d5:#002b36:#cb4b16:#586e75:#657b83:#839496:#6c71c4:#93a1a1:#fdf6e3"
+  scrollback_lines = 5000
+  use_system_font = False
+  cursor_color = "#eee8d5"
+  foreground_color = "#eee8d5"
+  scroll_on_output = False
+  show_titlebar = True
+  font = Inconsolata 10
+  background_color = "#002b36"
+  cursor_blink = False
+  scrollback_infinite = True
+[[solarized-light]]
+  scrollbar_position = hidden
+  palette = "#073642:#dc322f:#859900:#b58900:#268bd2:#d33682:#2aa198:#eee8d5:#002b36:#cb4b16:#586e75:#657b83:#839496:#6c71c4:#93a1a1:#fdf6e3"
+  scrollback_lines = 5000
+  use_system_font = False
+  cursor_color = "#002b36"
+  foreground_color = "#002b36"
+  scroll_on_output = False
+  show_titlebar = True
+  font = Inconsolata 10
+  background_color = "#eee8d5"
+  cursor_blink = False
+  scrollback_infinite = True
 [layouts]
   [[default]]
     [[[child0]]]
@@ -31,17 +68,17 @@
       order = 0
       parent = child1
     [[[terminal3]]]
-      profile = default
+      profile = solarized-dark
       type = Terminal
       order = 0
       parent = child2
     [[[terminal5]]]
-      profile = default
+      profile = solarized-dark
       type = Terminal
       order = 1
       parent = child1
     [[[terminal4]]]
-      profile = default
+      profile = solarized-dark
       type = Terminal
       order = 1
       parent = child2
