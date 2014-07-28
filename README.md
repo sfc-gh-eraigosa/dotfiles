@@ -1,7 +1,7 @@
 myhome
 ----
 
-Ubuntu Bash Home profile setup, includes vimrc's profiles some git commands
+Ubuntu Bash/zsh Home profile setup, includes vimrc's profiles some git commands
 
 I plan to use this primarly to manage my ux home directory across various
 systems where i plan to use git and cli based tools.  I want a nice
@@ -72,6 +72,7 @@ under ~/opt
 ~/opt/bin - saving my shell scripts and such
 ~/opt/lib - saving any python or ruby help me scripts
 ~/opt/docs - where i save my howto's and such where im learning new stuff or trying to remind myself how to do stuff
+             checkout this section for tips on installing and setting up zsh for a nice git prompt.
 ```
 On logout i want .bash_logout to save and commit my changes
 
