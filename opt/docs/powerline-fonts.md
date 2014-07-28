@@ -8,3 +8,10 @@ you'll need to do some additional steps as listed in the link for system wide se
 Installation will need to have at least this step to work with myhome:
 
 * pip install --user git+git://github.com/Lokaltog/powerline
+* Setup the other fonts:
+```sh
+if [ -d ~/git/powerline-fonts ] ; then
+  find . -name \*.otf|xargs -i cp "{}" ~/.fonts/
+  fc-cache -vf ~/.fonts
+fi
+```
