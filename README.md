@@ -49,13 +49,14 @@ alias and commands
 ----
 ```
 
-gitsave_off  :  Turn off the git commit/push on bash exit
-gitsave      :  Turn on git commit/push on bash exit
+gitsave_off        :  Turn off the git commit/push on bash exit
+gitsave            :  Turn on git commit/push on bash exit
 
-vimw         :  Open vim with white background
-vimg         :  Open vim with green background
-vimw_set     :  Set the default to be white background
-vimg_set     :  Set the default to be green background
+vimw               :  Open vim with white background
+vimg               :  Open vim with green background
+vimw_set           :  Set the default to be white background
+vimg_set           :  Set the default to be green background
+vimprompt {on|off} : requires that you have powerline fonts installed with zsh, a way to togle between vim prompt and zsh prompt. Default is off.
 ```
 
 structure
