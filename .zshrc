@@ -89,3 +89,8 @@ if [ -f ~/.bash_aliases ]; then
   . ~/.bash_aliases
 fi
 export PROMPT_ON_NEWLINE=true
+
+if [[ -r $HOME/.local/lib/python2.7/site-packages/powerline/bindings/zsh/powerline.zsh ]]; then
+  source $HOME/.local/lib/python2.7/site-packages/powerline/bindings/zsh/powerline.zsh
+fi
+

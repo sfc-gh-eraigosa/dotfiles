@@ -52,3 +52,15 @@ fi
 if [ -d "$HOME/.local/bin" ] ; then
   PATH="$HOME/.local/bin:$PATH"
 fi
+if [ ! -d "$HOME/.fonts/" ] ; then
+  mkdir -p "$HOME/.fonts/"
+fi
+if [ ! -d "$HOME/.config/fontconfig/conf.d/" ] ; then
+  mkdir -p "$HOME/.config/fontconfig/conf.d/"
+fi
+if [ ! -f "$HOME/git/powerline/font/PowerlineSymbols.otf" ] ; then
+  cp "$HOME/git/powerline/font/PowerlineSymbols.otf" "$HOME/.fonts/"
+fi
+if [ ! -f "$HOME/.config/fontconfig/conf.d/10-powerline-symbols.conf" ] ; then
+  cp "$HOME/git/powerline/font/10-powerline-symbols.conf" "$HOME/.config/fontconfig/conf.d/10-powerline-symbols.conf"
+fi
