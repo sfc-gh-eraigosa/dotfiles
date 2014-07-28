@@ -1,54 +1,64 @@
 [global_config]
   enabled_plugins = LaunchpadCodeURLHandler, APTURLHandler, LaunchpadBugURLHandler
+  window_state = fullscreen
   title_transmit_bg_color = "#000000"
   handle_size = 2
-  window_state = fullscreen
   focus = mouse
 [keybindings]
   hide_window = <Shift><Control>a
 [profiles]
   [[default]]
-    visible_bell = True
-    copy_on_selection = True
-    audible_bell = True
     scrollbar_position = hidden
     palette = "#073642:#dc322f:#859900:#b58900:#268bd2:#d33682:#2aa198:#eee8d5:#002b36:#cb4b16:#586e75:#657b83:#839496:#6c71c4:#93a1a1:#fdf6e3"
+    copy_on_selection = True
+    exit_action = hold
+    visible_bell = True
+    custom_command = /bin/zsh
     scrollback_lines = 5000
     use_system_font = False
     cursor_color = "#002b36"
     foreground_color = "#002b36"
+    use_custom_command = True
+    login_shell = True
     scroll_on_output = False
     show_titlebar = False
     font = Inconsolata 10
     background_color = "#eee8d5"
     cursor_blink = False
     scrollback_infinite = True
-[[solarized-dark]]
-  scrollbar_position = hidden
-  palette = "#073642:#dc322f:#859900:#b58900:#268bd2:#d33682:#2aa198:#eee8d5:#002b36:#cb4b16:#586e75:#657b83:#839496:#6c71c4:#93a1a1:#fdf6e3"
-  scrollback_lines = 5000
-  use_system_font = False
-  cursor_color = "#eee8d5"
-  foreground_color = "#eee8d5"
-  scroll_on_output = False
-  show_titlebar = True
-  font = Inconsolata 10
-  background_color = "#002b36"
-  cursor_blink = False
-  scrollback_infinite = True
-[[solarized-light]]
-  scrollbar_position = hidden
-  palette = "#073642:#dc322f:#859900:#b58900:#268bd2:#d33682:#2aa198:#eee8d5:#002b36:#cb4b16:#586e75:#657b83:#839496:#6c71c4:#93a1a1:#fdf6e3"
-  scrollback_lines = 5000
-  use_system_font = False
-  cursor_color = "#002b36"
-  foreground_color = "#002b36"
-  scroll_on_output = False
-  show_titlebar = True
-  font = Inconsolata 10
-  background_color = "#eee8d5"
-  cursor_blink = False
-  scrollback_infinite = True
+    audible_bell = True
+  [[solarized-dark]]
+    scrollbar_position = hidden
+    palette = "#073642:#dc322f:#859900:#b58900:#268bd2:#d33682:#2aa198:#eee8d5:#002b36:#cb4b16:#586e75:#657b83:#839496:#6c71c4:#93a1a1:#fdf6e3"
+    login_shell = True
+    custom_command = /bin/zsh
+    scrollback_lines = 5000
+    use_system_font = False
+    cursor_color = "#eee8d5"
+    foreground_color = "#eee8d5"
+    use_custom_command = True
+    scroll_on_output = False
+    exit_action = hold
+    font = Inconsolata 10
+    background_color = "#002b36"
+    cursor_blink = False
+    scrollback_infinite = True
+  [[solarized-light]]
+    scrollbar_position = hidden
+    palette = "#073642:#dc322f:#859900:#b58900:#268bd2:#d33682:#2aa198:#eee8d5:#002b36:#cb4b16:#586e75:#657b83:#839496:#6c71c4:#93a1a1:#fdf6e3"
+    login_shell = True
+    custom_command = /bin/zsh
+    scrollback_lines = 5000
+    use_system_font = False
+    cursor_color = "#002b36"
+    foreground_color = "#002b36"
+    use_custom_command = True
+    scroll_on_output = False
+    exit_action = hold
+    font = Inconsolata 10
+    background_color = "#eee8d5"
+    cursor_blink = False
+    scrollback_infinite = True
 [layouts]
   [[default]]
     [[[child0]]]
