@@ -49,3 +49,10 @@ function startunity {
 fi
 
 git-login
+
+# Pull the latest repos
+if [ -f "${HOME}/.gitrepos" ] ; then
+  cd "${HOME}"
+  git pull origin $(git branch | grep '*'|awk '{print $2}')
+  "${HOME}/.gitrepos"
+fi
