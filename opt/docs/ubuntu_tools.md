@@ -9,6 +9,7 @@ Tools
 * [Install puppet and some modules using forj-oss/maestro](puppet27.md)
 * Setup a bunch of base [packages with puppet](puppet_packages.md)
 * [Atom editor](atom.md)
+* [Fonts for zsh](powerline-fonts.md)
 
 Investigate
 -----------
