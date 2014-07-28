@@ -1,5 +1,5 @@
 # Path to your oh-my-zsh installation.
-export ZSH=$HOME/.oh-my-zsh
+export ZSH=$HOME/git/oh-my-zsh
 
 # Set name of the theme to load.
 # Look in ~/.oh-my-zsh/themes/
@@ -70,14 +70,12 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/g
 # ssh
 # export SSH_KEY_PATH="~/.ssh/dsa_id"
 
-set -x -v
 if [ ! -f "${HOME}/.default_user" ] ; then
   printf $(whoami) > "${HOME}/.default_user"
 fi
 if [ "$(whoami)" = "$(cat "${HOME}/.default_user")" ] ; then
   DEFAULT_USER=$(cat "${HOME}/.default_user")
 fi
-set +x +v
 
 # Set personal aliases, overriding those provided by oh-my-zsh libs,
 # plugins, and themes. Aliases can be placed here, though oh-my-zsh
@@ -90,3 +88,4 @@ set +x +v
 if [ -f ~/.bash_aliases ]; then
   . ~/.bash_aliases
 fi
+export PROMPT_ON_NEWLINE=true

@@ -21,11 +21,18 @@ fi
 function CloneRepo
 {
   _DIR=$1
-  _URI=$2
+  _URI=$(echo $2|awk -F';' '{print $1}')
+  _DOPULL=$(echo $2|awk -F';' '{print $2}')
+  if [ -z "${_DOPULL}" ] ; then
+    _DOPULL=true
+  fi
+
   if [ -d "${_DIR}/.git" ] ; then
     _PWD=$(pwd)
     cd "${_DIR}"
-    git pull origin $(git branch | grep '*'|awk '{print $2}')
+    if [ "${_DOPULL}" = "true" ] ; then
+      git pull origin $(git branch | grep '*'|awk '{print $2}')
+    fi
     cd "${_PWD}"
   else
     git clone "${_URI}"
