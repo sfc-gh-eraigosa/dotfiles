@@ -56,6 +56,7 @@ install
       fc-cache -vf ~/.fonts
     fi
   ```
+
 alias and commands
 ----
 ```
