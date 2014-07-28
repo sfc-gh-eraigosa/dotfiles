@@ -18,3 +18,5 @@
 !.config/terminator/
 !.config/terminator/config
 !.zshrc
+!.gitrepos
+!.repos.env
