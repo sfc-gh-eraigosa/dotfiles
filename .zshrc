@@ -6,6 +6,7 @@ export ZSH=$HOME/git/oh-my-zsh
 # Optionally, if you set this to "random", it'll load a random theme each
 # time that oh-my-zsh is loaded.
 ZSH_THEME="agnoster"
+export PROMPT_ON_NEWLINE=true
 
 # Uncomment the following line to use case-sensitive completion.
 # CASE_SENSITIVE="true"
@@ -88,7 +89,6 @@ fi
 if [ -f ~/.bash_aliases ]; then
   . ~/.bash_aliases
 fi
-export PROMPT_ON_NEWLINE=true
 
 if [[ -r $HOME/.local/lib/python2.7/site-packages/powerline/bindings/zsh/powerline.zsh ]]; then
   source $HOME/.local/lib/python2.7/site-packages/powerline/bindings/zsh/powerline.zsh
