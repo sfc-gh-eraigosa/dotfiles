@@ -11,6 +11,7 @@ Installation will need to have at least this step to work with myhome:
 * Setup the other fonts:
 ```sh
 if [ -d ~/git/powerline-fonts ] ; then
+  cd ~/git/powerline-fonts
   find . -name \*.otf|xargs -i cp "{}" ~/.fonts/
   fc-cache -vf ~/.fonts
 fi
