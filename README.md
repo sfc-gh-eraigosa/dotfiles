@@ -41,10 +41,21 @@ install
     git reset --hard
   ```
 4.  You should now be using the basic myhome project. Setup the git alias's next with this command:
+
   ```sh
     ~/opt/bin/setup_git_alias.sh
   ```
 
+5.  If you plan to use [zsh](opt/docs/zsh_andtools.md) as your default shell, take the time to setup [powerline fonts](opt/docs/powerline-fonts.md).
+
+  ```sh
+    pip install --user git+git://github.com/Lokaltog/powerline
+    if [ -d ~/git/powerline-fonts ] ; then
+      cd ~/git/powerline-fonts
+      find . -name \*.otf|xargs -i cp "{}" ~/.fonts/
+      fc-cache -vf ~/.fonts
+    fi
+  ```
 alias and commands
 ----
 ```
