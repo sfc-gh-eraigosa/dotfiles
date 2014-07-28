@@ -94,7 +94,25 @@ if [ "$(which powerline > /dev/null 2<&1 ; echo $?)" = "1" ] && [ -f $HOME/.loca
   export POWERLINE_COMMAND=~/.local/bin/powerline
 fi
 
-if [[ -r $HOME/.local/lib/python2.7/site-packages/powerline/bindings/zsh/powerline.zsh ]]; then
-  source $HOME/.local/lib/python2.7/site-packages/powerline/bindings/zsh/powerline.zsh
-fi
+# use this function to give a vim status line at the prompt
+function vimprompt
+{
+  _VIMPROMPT=$1
+  if [ -z "$_VIMPROMPT" ] ; then
+    _VIMPROMPT=on
+  fi
+  if [ "${_VIMPROMPT}" = "on" ] ; then
+    if [[ -r $HOME/.local/lib/python2.7/site-packages/powerline/bindings/zsh/powerline.zsh ]]; then
+      source $HOME/.local/lib/python2.7/site-packages/powerline/bindings/zsh/powerline.zsh
+      echo "vim prompt is on"
+    else
+      echo "missing vim prompt, install with: pip install --user git+git://github.com/Lokaltog/powerline"
+    fi
+  elif [ "${_VIMPROMPT}" = "off" ] ; then
+    source $ZSH/oh-my-zsh.sh
+    echo "vim prompt is off"
+  else
+    echo "vimprompt supports arguments on|off only."
+  fi
+}
 
