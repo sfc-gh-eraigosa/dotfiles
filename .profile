@@ -44,4 +44,11 @@ echo -e "\033[1;37m│ \033[01;31m$host \033[01;32mOWNED BY $owner\033[1;37m│"
 echo -e "\033[1;37m└─────────────────────────────────────────────────────────────┘\033[00m" >> ~/.motd
 cat ~/.motd
 
-[[ -f ~/.custom_profile ]] && . ~/.custom_profile
+if [ -f $HOME/.custom_profile ] ; then
+  . $HOME/.custom_profile
+fi
+
+# powerline setup
+if [ -d "$HOME/.local/bin" ] ; then
+  PATH="$HOME/.local/bin:$PATH"
+fi
