@@ -42,6 +42,11 @@ function CloneRepo
 if [ -f "$HOME/.repos.env" ] ; then
     . "$HOME/.repos.env"
 fi
+
+# add some additional repos to clone and keep up to date on this system
+if [ -f "$HOME/.custom.repos.env" ] ; then
+    . "$HOME/.custom.repos.env"
+fi
 echo $REPOS
 if [ -z "${!REPOS[*]}" ] ; then
   echo "nothing to do , unable to find REPOS env"
