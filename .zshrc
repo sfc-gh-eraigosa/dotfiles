@@ -52,7 +52,7 @@ source $ZSH/oh-my-zsh.sh
 
 # User configuration
 
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games"
+# export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games"
 # export MANPATH="/usr/local/man:$MANPATH"
 
 # You may need to manually set your language environment
@@ -88,6 +88,10 @@ fi
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 if [ -f ~/.bash_aliases ]; then
   . ~/.bash_aliases
+fi
+
+if [ "$(which powerline > /dev/null 2<&1 ; echo $?)" = "1" ] && [ -f $HOME/.local/bin/powerline ] ; then
+  export POWERLINE_COMMAND=~/.local/bin/powerline
 fi
 
 if [[ -r $HOME/.local/lib/python2.7/site-packages/powerline/bindings/zsh/powerline.zsh ]]; then
