@@ -58,9 +58,9 @@ fi
 if [ ! -d "$HOME/.config/fontconfig/conf.d/" ] ; then
   mkdir -p "$HOME/.config/fontconfig/conf.d/"
 fi
-if [ ! -f "$HOME/git/powerline/font/PowerlineSymbols.otf" ] ; then
+if [ -f "$HOME/git/powerline/font/PowerlineSymbols.otf" ] ; then
   cp "$HOME/git/powerline/font/PowerlineSymbols.otf" "$HOME/.fonts/"
 fi
-if [ ! -f "$HOME/.config/fontconfig/conf.d/10-powerline-symbols.conf" ] ; then
+if [ -f "$HOME/.config/fontconfig/conf.d/10-powerline-symbols.conf" ] ; then
   cp "$HOME/git/powerline/font/10-powerline-symbols.conf" "$HOME/.config/fontconfig/conf.d/10-powerline-symbols.conf"
 fi
