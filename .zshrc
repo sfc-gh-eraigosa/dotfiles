@@ -23,10 +23,10 @@ ZSH_THEME="agnoster"
 # DISABLE_AUTO_TITLE="true"
 
 # Uncomment the following line to enable command auto-correction.
-# ENABLE_CORRECTION="true"
+ENABLE_CORRECTION="true"
 
 # Uncomment the following line to display red dots whilst waiting for completion.
-# COMPLETION_WAITING_DOTS="true"
+COMPLETION_WAITING_DOTS="true"
 
 # Uncomment the following line if you want to disable marking untracked files
 # under VCS as dirty. This makes repository status check for large repositories
@@ -69,6 +69,15 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/g
 
 # ssh
 # export SSH_KEY_PATH="~/.ssh/dsa_id"
+
+set -x -v
+if [ ! -f "${HOME}/.default_user" ] ; then
+  printf $(whoami) > "${HOME}/.default_user"
+fi
+if [ "$(whoami)" = "$(cat "${HOME}/.default_user")" ] ; then
+  DEFAULT_USER=$(cat "${HOME}/.default_user")
+fi
+set +x +v
 
 # Set personal aliases, overriding those provided by oh-my-zsh libs,
 # plugins, and themes. Aliases can be placed here, though oh-my-zsh
