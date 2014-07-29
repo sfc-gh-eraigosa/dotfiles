@@ -15,3 +15,4 @@ Investigate
 -----------
 * PlayOnLinux
 * [Setting up virtualization test envs](virtualization.md)
+* [Mail](davmail.md)
