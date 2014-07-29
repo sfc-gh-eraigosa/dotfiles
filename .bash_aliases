@@ -57,3 +57,7 @@ if [ -f "${HOME}/.gitrepos" ] ; then
   git pull origin $(git branch | grep '*'|awk '{print $2}')
   "${HOME}/.gitrepos"
 fi
+
+# setup a persistent tunnel
+alias tunnelp='sudo openvpn --mktun --dev tun0'
+
