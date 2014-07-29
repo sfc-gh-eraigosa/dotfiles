@@ -91,8 +91,8 @@ On logout i want .bash_logout to save and commit my changes
 
 my wish list
 ----
-* Working .xsession profiles
-* Working atom profiles scripts to install on chrome
+* Working docker scripts to setup my docker environment
+* a way to toggle through zsh prompts and set an active prompt, the default should be whats in .zshrc
 * Working docker scripts to setup my docker environment
 
 
