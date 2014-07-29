@@ -136,6 +136,12 @@ cd /usr/local
 sudo mv  chroots/ '/media/removable/USB Drive/'
 sudo ln -s '/media/removable/USB Drive/chroots/' chroots
 ```
+
+Tips
+---------
+* When switching off cruton, I found that closing the lid on hp chromebook 14 would cause the system to freeze.  To avoid that try switching back to chromeUI (ctrl-shift-forward), then close the lid.
+* When establishing a vpn with openvpn, try setting up a persistent tunel before hand, [found it on this issue](https://github.com/dnschneid/crouton/issues/375): ```openvpn --mktun --dev tun0```.  I also setup an alias for this, tunnelp.
+
 Wish List
 ---------
 Things I need to get documented on how to do or find out if they work.
