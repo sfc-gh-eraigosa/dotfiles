@@ -38,6 +38,8 @@ I'm using cruton, which is a chroot OS that utilizes the underlying chrome OS li
 
 If you follow those instructions exactly, you should end up with awesome UI plus ubuntu 12.04.  Give yourself 1-2 hours for the chroot setup to complete.  
 
+UPDATE: I switched away from awesome UI to the unity UI.  This was alot more user friendly and seemed easier to setup.
+
 I'll be doing this again with some options for installing my chroot to usb.  Such as :
 ```sh
 # this is recommended method for installing all chroots
@@ -45,8 +47,10 @@ ctrl+alt+t
 
 >shell
 
-sudo sh -e ./crouton -t x11
+sudo sh -e ./crouton -t unity
 ```
+
+You can list other distributions with the command : ```sudo sh -e ./cruton -t list```
 At then end of the install, you'll see something like:
 
 You can flip through your running chroot desktops and Chromium OS by hitting
@@ -56,10 +60,27 @@ You can also use ctrl+alt+back and forward as well to transition between ux prom
 
 Unmounting /usr/local/chroots/precise...
 Done! You can enter the chroot using enter-chroot.
+
+Unity setup
+-----------
+After a bit of playing with awesome, I came to the conclusion that I don't want to spend alot of time hacking on my user interface.  For this reason, I switched to a more simple ready to go user interface that had some familliar navigation with basic customization for things like the desktop.  To enter a chroot, you should do these steps (we use unity as the example here):
+
 ```sh
-sudo enter-chroot -n precise
-sudo apt-get install awesome
+ctrl+alt+t
+
+>shell
+
+sudo sh -e ./crouton -t unity -n unity
+startunity
 ```
+I noticed that the unity user interface tends to start best when you kick it off from chros shell.  You should also be running as the user chronos.  If for some reason you get stuck at the root account, you can switch to chronos with the command:
+```sh
+su - chronos
+```
+
+Customizing my shell
+-----------------------
+Once I'm booted on my new chroot, I customize my desktop by using this projects myhome files.
 I change to using git at this point with github.com/wenlock/myhome
 sudo apt-get install git vim corkscrew
 
@@ -78,34 +99,6 @@ git pull origin master
 git reset --hard
 ```
 
-Setup the xinit resources
-
-```sh
-echo "exec awesome" > ~/.xinitrc
-mkdir -p ~/.config/awesome
-cp -R /etc/xdg/awesome/* ~/.config/awesome/
-```
-
-You can then startup awesome window manager from crosh shell.
-```sh
-echo "alias startawesome='sudo enter-chroot xinit'" > ~/.bashrc
-```
-Unity setup
------------
-After a bit of playing with awesome, I came to the conclusion that I don't want to spend alot of time hacking on my user interface.  For this reason, I switched to a more simple ready to go user interface that had some familliar navigation with basic customization for things like the desktop.  
-
-```sh
-ctrl+alt+t
-
->shell
-
-sudo sh -e ./crouton -t unity -n unity
-startunity
-```
-I noticed that the unity user interface tends to start best when you kick it off from chros shell.  You should also be running as the user chronos.  If for some reason you get stuck at the root account, you can switch to chronos with the command:
-```sh
-su - chronos
-```
 
 Move chroots to SD Card
 -----------------------
