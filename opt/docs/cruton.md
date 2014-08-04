@@ -136,7 +136,7 @@ Tips
 * When establishing a vpn with openvpn, try setting up a persistent tunel before hand, [found it on this issue](https://github.com/dnschneid/crouton/issues/375): ```openvpn --mktun --dev tun0```.  I also setup an alias for this, tunnelp.
 * If you leave the system alone while in ubuntu, your power safe sets your screen dimmed.  This can't be undone.  To avoid this, turn off power save mode: ```sudo initctl stop powerd```
 * Setting up atom on [cruton, works](atom.md).
-* [Puppet setup using 2.7](puppet.md).
+* [Puppet setup using 2.7](puppet27.md).
 Wish List
 ---------
 Things I need to get documented on how to do or find out if they work.
