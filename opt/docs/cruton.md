@@ -16,7 +16,7 @@ Normally I see those for 200$ so for 70$ and 80MB/sec, I think it's a good deal.
 Setting up developer mode
 -------------------------
 Now I switched the computer from normal mode to developer mode.  Couple of gotchas with this.   
-* Your kernel is no longer secure, which means, secure the underlying OS.   I plan to only do opensource stuff here, so if I do other stuff that needs protection, I'll likely use a truecrypt drive or something to protect the private stuff.   Couple of things left to do include locking down root, chronos account, and setting up the chroot to have an autolock.    I notice that when your not logged into chrome, you can still switch with ctrl-alt-shift forward and get to an unlocked account.  You can lock the account at the command prompt in chronos, you will get a warning about this, but it also means you have to remember to logout before you put it to sleep.  Comments welcome on this topic.
+* Your kernel is no longer secure, which means, secure the underlying OS.   I plan to only do opensource stuff here, so if I do other stuff that needs protection, I'll likely use a truecrypt drive or something to protect the private stuff.  To lockdown the root / chronos user accounts, you can issue the command ```chromeos-setdevpasswd```.  From there forward, you'll need a password to issue sudo commands and login with root commands.  Beware, even though your account is locked though, you can still switch into the logged in user account with ctrl-alt-shift.  When locking the computer, make sure to logout and then lock the system.  Comments welcome on this topic.
 * At boot up your going to get a funky warning about recovery mode.  I'm not sure what the best approach here is yet, other than keeping everyone away from your chromebook and don't let them touch it.  Thus why I waited to get a second chromebook for this.   I'm also thinking of getting a shell cover for 20$ and just sticking a little warning on the cover, like, DO NOT ENTER, or DONT TOUCH without Permissions.   Something to ward off the kids.   It also means don't be lazy and forget to hit ctrl-d at boot up everytime.   You might end up reseting your os.   
 * This brings me to another point, loosing your OS / or more over your data on a chromebook seems easy to do.  Get an SD card to store that stuff, and maybe setup some automation.  I'll talk more about that later, but I'm hoping to use github for this on the unsecure settings.   Lets see how this goes.
 
@@ -134,20 +134,19 @@ Tips
 ---------
 * When switching off cruton, I found that closing the lid on hp chromebook 14 would cause the system to freeze.  To avoid that try switching back to chromeUI (ctrl-shift-forward), then close the lid.
 * When establishing a vpn with openvpn, try setting up a persistent tunel before hand, [found it on this issue](https://github.com/dnschneid/crouton/issues/375): ```openvpn --mktun --dev tun0```.  I also setup an alias for this, tunnelp.
-
+* If you leave the system alone while in ubuntu, your power safe sets your screen dimmed.  This can't be undone.  To avoid this, turn off power save mode: ```sudo initctl stop powerd```
+* Setting up atom on [cruton, works](atom.md).
+* [Puppet setup using 2.7](puppet.md).
 Wish List
 ---------
 Things I need to get documented on how to do or find out if they work.
 
 * Fix my magic mouse scroll wheel.
-* Acomplish a google hangout meeting.
 * Sharing session with hp rooms
 * Does lync work?
 * Syncronizing my local drive with the google drive on chromeOS to sync changes
 * Copy paste from chromOS to chroot OS
-* Setup atom.io
-* Setup docker.io
-* Get puppet working
+* Steps for compiling a customer kernel for running docker or virtualbox
 
 Contribute
 ==========
