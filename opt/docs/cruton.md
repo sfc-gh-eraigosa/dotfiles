@@ -137,6 +137,7 @@ Tips
 * If you leave the system alone while in ubuntu, your power safe sets your screen dimmed.  This can't be undone.  To avoid this, turn off power save mode: ```sudo initctl stop powerd```
 * Setting up atom on [cruton, works](atom.md).
 * [Puppet setup using 2.7](puppet27.md).
+* Perform some [backups with these instructions](https://github.com/dnschneid/crouton#a-backup-a-day-keeps-the-price-gouging-data-restoration-services-away).
 Wish List
 ---------
 Things I need to get documented on how to do or find out if they work.
