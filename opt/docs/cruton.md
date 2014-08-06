@@ -34,7 +34,7 @@ Once your in developer mode, login and get back onto your account.  You might al
 
 Change Root Setup
 -----------------
-I'm using cruton, which is a chroot OS that utilizes the underlying chrome OS linux kernel to execute in.   I expect to get most features of ubuntu this way while continuing to utilize my chrome OS for the features it's good at.   I'm also hoping it gives me a good user experience when doing development outside of the chromeOS UI.   For the cruton flavor, I'm trying awesome UI with ubuntu 12.04.  I might experiment with others once I get usto all the cruton chroot options.   I read we can do many chroots, so I'm hoping to try this as well for switching between precise and trusty versions.  Start with the github project wiki instructions [here](https://github.com/dnschneid/crouton/wiki/awesome)
+I'm using [cruton](https://github.com/dnschneid/crouton), which is a chroot OS that utilizes the underlying chrome OS linux kernel to execute in.   I expect to get most features of ubuntu this way while continuing to utilize my chrome OS for the features it's good at.   I'm also hoping it gives me a good user experience when doing development outside of the chromeOS UI.   For the [cruton](https://github.com/dnschneid/crouton) flavor, I'm trying awesome UI with ubuntu 12.04.  I might experiment with others once I get usto all the [cruton](https://github.com/dnschneid/crouton) chroot options.   I read we can do many chroots, so I'm hoping to try this as well for switching between precise and trusty versions.  Start with the github project wiki instructions [here](https://github.com/dnschneid/crouton/wiki/awesome)
 
 If you follow those instructions exactly, you should end up with awesome UI plus ubuntu 12.04.  Give yourself 1-2 hours for the chroot setup to complete.  
 
@@ -132,7 +132,7 @@ sudo ln -s '/media/removable/USB Drive/chroots/' chroots
 
 Tips
 ---------
-* When switching off cruton, I found that closing the lid on hp chromebook 14 would cause the system to freeze.  To avoid that try switching back to chromeUI (ctrl-shift-forward), then close the lid.
+* When switching off [cruton](https://github.com/dnschneid/crouton), I found that closing the lid on hp chromebook 14 would cause the system to freeze.  To avoid that try switching back to chromeUI (ctrl-shift-forward), then close the lid.
 * When establishing a vpn with openvpn, try setting up a persistent tunel before hand, [found it on this issue](https://github.com/dnschneid/crouton/issues/375): ```openvpn --mktun --dev tun0```.  I also setup an alias for this, tunnelp.
 * If you leave the system alone while in ubuntu, your power safe sets your screen dimmed.  This can't be undone.  To avoid this, turn off power save mode: ```sudo initctl stop powerd```
 * Setting up atom on [cruton, works](atom.md).
