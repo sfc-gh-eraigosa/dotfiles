@@ -61,3 +61,10 @@ fi
 # setup a persistent tunnel
 alias tunnelp='sudo openvpn --mktun --dev tun0'
 
+# start gertty
+# if gertty is missing, install with these commands:
+# cd ~
+# virtualenv gertty-env
+# pip install gertty
+# You can find more about gertty from https://review.openstack.org/stackforge/gertty
+alias gertty='source gertty-env/bin/activate && gertty'
