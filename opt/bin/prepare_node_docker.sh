@@ -54,5 +54,5 @@ git clone $REVIEW_SERVER/p/forj-config $GIT_HOME/forj-config
 
 #
 # install docker
-PUPPET_MODULES=$GIT_HOME/forj-config:$GIT_HOME/maestro/puppet:/etc/puppet/modules
+PUPPET_MODULES=$GIT_HOME/forj-config/modules:$GIT_HOME/maestro/puppet/modules:/etc/puppet/modules
 DO_SUDO puppet apply --modulepath=$PUPPET_MODULES -e "include docker_wrap::requirements"
