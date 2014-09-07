@@ -27,7 +27,7 @@ function DO_SUDO {
 }
 
 GIT_HOME=${GIT_HOME:-/opt/config/puppet/git}
-REVIEW_SERVER=${GIT_HOME:-https://review.forj.io}
+REVIEW_SERVER=${REVIEW_SERVER:-https://review.forj.io}
 
 # prepare a node with docker installed
 # * we need puppet commandline setup, along with expected modules
@@ -40,19 +40,17 @@ fi
 DO_SUDO apt-get update
 DO_SUDO apt-get -y install git vim curl wget python-all-dev
 mkdir -p "$GIT_HOME"
-cd "$GIT_HOME"
+
 git config --global http.sslverify false
-git clone $REVIEW_SERVER/forj-oss/maestro
-cd maestro/
-bash -xe puppet/install_puppet.sh 
-bash -xe puppet/install_modules.sh
+git clone $REVIEW_SERVER/forj-oss/maestro $GIT_HOME/maestro
+DO_SUDO bash -xe $GIT_HOME/maestro/puppet/install_puppet.sh 
+DO_SUDO bash -xe $GIT_HOME/maestro/puppet/install_modules.sh
 
 #
 # install docker with puppet modules
 cd "$GIT_HOME"
 git config --global http.sslverify false
-git clone $REVIEW_SERVER/p/forj-config
-cd forj-config/
+git clone $REVIEW_SERVER/p/forj-config $GIT_HOME/forj-config
 
 #
 # install docker
