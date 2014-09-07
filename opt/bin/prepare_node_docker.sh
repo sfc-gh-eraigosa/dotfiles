@@ -17,7 +17,7 @@
 
 # prepare a node with docker installed
 # * we need puppet commandline setup, along with expected modules
-if [ ! $(id -i=u) -eq 0 ] ; then
+if [ ! $(id -u) -eq 0 ] ; then
   echo "ERROR : SCRIPT should be run as sudo or root"
   exit 1
 fi
