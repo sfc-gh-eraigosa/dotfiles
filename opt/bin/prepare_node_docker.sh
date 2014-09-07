@@ -14,6 +14,9 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+# 
+# Test install:
+# curl https://raw.githubusercontent.com/wenlock/myhome/master/opt/bin/prepare_node_docker.sh | sudo bash -xe
 
 # prepare a node with docker installed
 # * we need puppet commandline setup, along with expected modules
@@ -37,5 +40,5 @@ bash -xe puppet/install_modules.sh
 # install docker with puppet modules
 cd /opt/config/puppet/git
 git config --global http.sslverify false
-git clone https://review.forj.io/forj-config
+git clone https://review.forj.io/p/forj-config
 cd forj-config/
