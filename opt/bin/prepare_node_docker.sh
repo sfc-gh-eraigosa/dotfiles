@@ -52,7 +52,8 @@ fi
 #
 # setup the basics
 DO_SUDO apt-get update
-DO_SUDO apt-get -y install git vim curl wget python-all-dev
+DO_SUDO DEBIAN_FRONTEND=noninteractive apt-get --option 'Dpkg::Options::=--force-confold' \
+        --assume-yes install -y --force-yes git vim curl wget python-all-dev
 mkdir -p "$GIT_HOME"
 
 #
