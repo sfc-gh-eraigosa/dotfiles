@@ -79,6 +79,9 @@ PUPPET_MODULES=$GIT_HOME/forj-config/modules:$GIT_HOME/forj-oss/maestro/puppet/m
 DO_SUDO puppet apply $PUPPET_DEBUG --modulepath=$PUPPET_MODULES -e 'include docker_wrap::requirements'
 
 # current user should be given docker privs
+CURRENT_USER=$(facter id)
+[ -z $CURRENT_USER ] && echo "ERROR : failed to get current user with facter id" && exit 1
+DO_SUDO sudo puppet apply -e 'user {"${CURRENT_USER}": ensure => present, gid => "docker" }'
 
 # build a docker image bare_precise_puppet
 # This docker image should have puppet and required modules installed.
