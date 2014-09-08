@@ -16,7 +16,7 @@
 # under the License.
 # 
 # Test install:
-# curl https://raw.githubusercontent.com/wenlock/myhome/master/opt/bin/prepare_node_docker.sh | sudo bash -xe
+# curl https://raw.githubusercontent.com/wenlock/myhome/master/opt/bin/prepare_node_docker.sh | bash -xe
 export DEBUG=${DEBUG:-0}
 export AS_ROOT=${AS_ROOT:-0}
 export SCRIPT_TEMP=$(mktemp -d)
@@ -81,10 +81,13 @@ DO_SUDO puppet apply $PUPPET_DEBUG --modulepath=$PUPPET_MODULES -e 'include dock
 # current user should be given docker privs
 CURRENT_USER=$(facter id)
 [ -z $CURRENT_USER ] && echo "ERROR : failed to get current user with facter id" && exit 1
-DO_SUDO sudo puppet apply -e 'user {"${CURRENT_USER}": ensure => present, gid => "docker" }'
+DO_SUDO puppet apply -e 'user {"${CURRENT_USER}": ensure => present, gid => "docker" }'
 
 # build a docker image bare_precise_puppet
 # This docker image should have puppet and required modules installed.
+cat > $SCRIPT_TEMP/Dockerfile << DOCKER_BARE_PRECISE
+foo
+DOCKER_BARE_PRECISE
 
 # setup beaker
-puppet resource package beaker provider=gem ensure=install
+DO_SUDO puppet resource package beaker provider=gem ensure=install
