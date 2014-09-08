@@ -25,9 +25,9 @@ trap 'rm -rf $SCRIPT_TEMP' EXIT
 [ $DEBUG -eq 1 ] && set -x -v
 function DO_SUDO {
   if [ $AS_ROOT -eq 0 ] ; then
-    sudo $@
+    sudo "$@"
   else
-    $@
+    eval "$@"
   fi
 }
 
