@@ -84,4 +84,4 @@ DO_SUDO puppet apply $PUPPET_DEBUG --modulepath=$PUPPET_MODULES -e 'include dock
 # This docker image should have puppet and required modules installed.
 
 # setup beaker
-puppet resource package=beaker-rspec provider=gem ensure=install
+puppet resource package beaker provider=gem ensure=install
