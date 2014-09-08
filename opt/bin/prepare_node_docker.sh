@@ -73,4 +73,4 @@ DO_SUDO bash -xe $SCRIPT_TEMP/install_modules.sh
 # install docker
 PUPPET_MODULES=$GIT_HOME/forj-config/modules:$GIT_HOME/maestro/puppet/modules:/etc/puppet/modules
 [ $DEBUG -eq 1 ] && PUPPET_DEBUG="--verbose --debug"
-DO_SUDO puppet apply $PUPPET_DEBUG --modulepath=$PUPPET_MODULES -e "include docker_wrap::requirements"
+DO_SUDO puppet apply $PUPPET_DEBUG --modulepath=$PUPPET_MODULES -e 'include docker_wrap::requirements'
