@@ -20,6 +20,7 @@
 export DEBUG=${DEBUG:-0}
 export AS_ROOT=${AS_ROOT:-0}
 export SCRIPT_TEMP=$(mktemp -d)
+trap 'rm -rf $SCRIPT_TEMP' EXIT
 
 [ $DEBUG -eq 1 ] && set -x -v
 function DO_SUDO {
@@ -36,6 +37,7 @@ function GIT_CLONE {
   [ -z $GIT_HOME ] && echo "ERROR no GIT_HOME defined" && exit 1
   git config --global http.sslverify false
   [ ! -d $GIT_HOME/$1/.git ] && git clone --depth=1 $REVIEW_SERVER/p/$1 $GIT_HOME/$1
+  return 0
 }
 
 GIT_HOME=${GIT_HOME:-/opt/config/puppet/git}
