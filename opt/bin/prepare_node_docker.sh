@@ -60,12 +60,12 @@ mkdir -p "$GIT_HOME"
 GIT_CLONE forj-config
 GIT_CLONE forj-oss/maestro
 
-DO_SUDO bash -xe $GIT_HOME/maestro/puppet/install_puppet.sh 
-DO_SUDO bash -xe $GIT_HOME/maestro/puppet/install_modules.sh
+DO_SUDO bash -xe $GIT_HOME/forj-oss/maestro/puppet/install_puppet.sh 
+DO_SUDO bash -xe $GIT_HOME/forj-oss/maestro/puppet/install_modules.sh
 
 #
 # install docker with puppet modules
-cp $GIT_HOME/maestro/puppet/install_modules.sh $SCRIPT_TEMP/install_modules.sh
+cp $GIT_HOME/forj-oss/maestro/puppet/install_modules.sh $SCRIPT_TEMP/install_modules.sh
 cat > $SCRIPT_TEMP/modules.env << MODULES
 unset DEFAULT_MODULES
 MODULES["garethr/docker"]="0.13.0"
@@ -73,6 +73,6 @@ MODULES
 DO_SUDO bash -xe $SCRIPT_TEMP/install_modules.sh
 #
 # install docker
-PUPPET_MODULES=$GIT_HOME/forj-config/modules:$GIT_HOME/maestro/puppet/modules:/etc/puppet/modules
+PUPPET_MODULES=$GIT_HOME/forj-config/modules:$GIT_HOME/forj-oss/maestro/puppet/modules:/etc/puppet/modules
 [ $DEBUG -eq 1 ] && PUPPET_DEBUG="--verbose --debug"
 DO_SUDO puppet apply $PUPPET_DEBUG --modulepath=$PUPPET_MODULES -e 'include docker_wrap::requirements'
