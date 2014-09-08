@@ -42,7 +42,7 @@ DO_SUDO apt-get -y install git vim curl wget python-all-dev
 mkdir -p "$GIT_HOME"
 
 git config --global http.sslverify false
-git clone $REVIEW_SERVER/forj-oss/maestro $GIT_HOME/maestro
+[ ! -d $GIT_HOME/maestro/.git ] && git clone $REVIEW_SERVER/forj-oss/maestro $GIT_HOME/maestro
 DO_SUDO bash -xe $GIT_HOME/maestro/puppet/install_puppet.sh 
 DO_SUDO bash -xe $GIT_HOME/maestro/puppet/install_modules.sh
 
@@ -50,7 +50,7 @@ DO_SUDO bash -xe $GIT_HOME/maestro/puppet/install_modules.sh
 # install docker with puppet modules
 cd "$GIT_HOME"
 git config --global http.sslverify false
-git clone $REVIEW_SERVER/p/forj-config $GIT_HOME/forj-config
+[ ! -d $GIT_HOME/forj-config/.git ] && git clone $REVIEW_SERVER/p/forj-config $GIT_HOME/forj-config
 
 #
 # install docker
