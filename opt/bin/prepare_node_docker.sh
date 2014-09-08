@@ -19,6 +19,7 @@
 # curl https://raw.githubusercontent.com/wenlock/myhome/master/opt/bin/prepare_node_docker.sh | sudo bash -xe
 export DEBUG=${DEBUG:-0}
 export AS_ROOT=${AS_ROOT:-0}
+export SCRIPT_TEMP=$(mktemp -d)
 
 [ $DEBUG -eq 1 ] && set -x -v
 function DO_SUDO {
@@ -27,6 +28,14 @@ function DO_SUDO {
   else
     $@
   fi
+}
+
+function GIT_CLONE {
+  [ -z $1 ] && echo "ERROR GIT_CLONE requires repo name" && exit 1
+  [ -z $REVIEW_SERVER ] && echo "ERROR GIT_CLONE requires REVIEW_SERVER" && exit 1
+  [ -z $GIT_HOME ] && echo "ERROR no GIT_HOME defined" && exit 1
+  git config --global http.sslverify false
+  [ ! -d $GIT_HOME/$1/.git ] && git clone --depth=1 $REVIEW_SERVER/p/$1 $GIT_HOME/$1
 }
 
 GIT_HOME=${GIT_HOME:-/opt/config/puppet/git}
@@ -44,17 +53,22 @@ DO_SUDO apt-get update
 DO_SUDO apt-get -y install git vim curl wget python-all-dev
 mkdir -p "$GIT_HOME"
 
-git config --global http.sslverify false
-[ ! -d $GIT_HOME/maestro/.git ] && git clone $REVIEW_SERVER/forj-oss/maestro $GIT_HOME/maestro
+#
+# clone repos
+GIT_CLONE forj-config
+GIT_CLONE forj-oss/maestro
+
 DO_SUDO bash -xe $GIT_HOME/maestro/puppet/install_puppet.sh 
 DO_SUDO bash -xe $GIT_HOME/maestro/puppet/install_modules.sh
 
 #
 # install docker with puppet modules
-cd "$GIT_HOME"
-git config --global http.sslverify false
-[ ! -d $GIT_HOME/forj-config/.git ] && git clone $REVIEW_SERVER/p/forj-config $GIT_HOME/forj-config
-
+cp $GIT_HOME/maestro/puppet/install_modules.sh $SCRIPT_TEMP/install_modules.sh
+cat > $SCRIPT_TEMP/modules.env << MODULES
+unset DEFAULT_MODULES
+MODULES["garethr/docker"]="0.13.0"
+MODULES
+DO_SUDO bash -xe $SCRIPT_TEMP/install_modules.sh
 #
 # install docker
 PUPPET_MODULES=$GIT_HOME/forj-config/modules:$GIT_HOME/maestro/puppet/modules:/etc/puppet/modules
