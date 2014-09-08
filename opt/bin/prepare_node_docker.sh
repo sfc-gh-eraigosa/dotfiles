@@ -77,3 +77,11 @@ DO_SUDO bash -xe $SCRIPT_TEMP/install_modules.sh
 PUPPET_MODULES=$GIT_HOME/forj-config/modules:$GIT_HOME/forj-oss/maestro/puppet/modules:/etc/puppet/modules
 [ $DEBUG -eq 1 ] && PUPPET_DEBUG="--verbose --debug"
 DO_SUDO puppet apply $PUPPET_DEBUG --modulepath=$PUPPET_MODULES -e 'include docker_wrap::requirements'
+
+# current user should be given docker privs
+
+# build a docker image bare_precise_puppet
+# This docker image should have puppet and required modules installed.
+
+# setup beaker
+puppet resource package=beaker-rspec provider=gem ensure=install
