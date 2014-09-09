@@ -25,10 +25,23 @@ REVIEW_SERVER=${REVIEW_SERVER:-https://review.forj.io}
 export DEBUG=${DEBUG:-0}
 export AS_ROOT=${AS_ROOT:-0}
 export SCRIPT_TEMP=$(mktemp -d)
-
 trap 'rm -rf $SCRIPT_TEMP' EXIT
 
 [ $DEBUG -eq 1 ] && set -x -v
+
+function ERROR_EXIT {
+  _line="$1"
+  _errm="$2"
+  _code="${3:-1}"
+  if [ ! -z "$_errm" ] ; then
+    echo "ERROR (${_line}): ${_errm}, exit code ${_code}" 1>&2
+  else
+    echo "ERROR (${_line}): exit code ${_code}" 1>&2
+  fi
+  exit "${_code}"
+}
+trap 'ERROR_EXIT ${LINENO}' ERR
+
 function DO_SUDO {
   if [ $AS_ROOT -eq 0 ] ; then
     sudo "$@"
@@ -38,9 +51,9 @@ function DO_SUDO {
 }
 
 function GIT_CLONE {
-  [ -z $1 ] && echo "ERROR GIT_CLONE requires repo name" && exit 1
-  [ -z $REVIEW_SERVER ] && echo "ERROR GIT_CLONE requires REVIEW_SERVER" && exit 1
-  [ -z $GIT_HOME ] && echo "ERROR no GIT_HOME defined" && exit 1
+  [ -z $1 ] && ERROR_EXIT  ${LINENO} "GIT_CLONE requires repo name" 2
+  [ -z $REVIEW_SERVER ] && ERROR_EXIT  ${LINENO} "GIT_CLONE requires REVIEW_SERVER" 2
+  [ -z $GIT_HOME ] && ERROR_EXIT  ${LINENO} "no GIT_HOME defined" 2
   git config --global http.sslverify false
   [ ! -d $GIT_HOME/$1/.git ] && git clone --depth=1 $REVIEW_SERVER/p/$1 $GIT_HOME/$1
   _CWD=$(pwd)
@@ -55,10 +68,9 @@ function GIT_CLONE {
 
 # prepare a node with docker installed
 # * we need puppet commandline setup, along with expected modules
-if [ ! $(id -u) -eq 0 ] && [ $AS_ROOT -eq 1 ] ; then
-  echo "ERROR : SCRIPT should be run as sudo or root with export AS_ROOT=1"
-  exit 1
-fi
+[ ! $(id -u) -eq 0 ] && [ $AS_ROOT -eq 1 ] \
+   && ERROR_EXIT  ${LINENO} "SCRIPT should be run as sudo or root with export AS_ROOT=1" 2
+
 
 #
 # setup hostname
@@ -112,7 +124,7 @@ DO_SUDO puppet apply $PUPPET_DEBUG --modulepath=$PUPPET_MODULES -e 'include dock
 
 # current user should be given docker privs
 CURRENT_USER=$(facter id)
-[ -z $CURRENT_USER ] && echo "ERROR : failed to get current user with facter id" && exit 1
+[ -z $CURRENT_USER ] && ERROR_EXIT ${LINENO} "failed to get current user with facter id" 2
 DO_SUDO puppet apply $PUPPET_DEBUG -e 'user {'"'${CURRENT_USER}'"': ensure => present, gid => "docker" }'
 
 # build a docker image bare_precise_puppet
@@ -138,8 +150,7 @@ DOCKER_BARE_PRECISE
 # build an image for this prepare
 docker build -t ubuntu-bare-precise $GIT_HOME
 if ! docker images --no-trunc | grep -e '^ubuntu-bare-precise\s.*' ; then
-  echo "ERROR: ubuntu-bare-precise image not found."
-  exit 1
+  ERROR_EXIT ${LINENO} "ubuntu-bare-precise image not found." 2
 fi
 
 # setup beaker
@@ -160,3 +171,4 @@ DO_SUDO rm -f /etc/cron.{monthly,weekly,daily,hourly,d}/*
 sync
 sleep 5
 echo "*** PREPARE COMPLETED ***"
+exit 0
