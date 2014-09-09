@@ -54,7 +54,7 @@ fi
 DO_SUDO apt-get update
 DO_SUDO DEBIAN_FRONTEND=noninteractive apt-get --option 'Dpkg::Options::=--force-confold' \
         --assume-yes install -y --force-yes git vim curl wget python-all-dev
-DO_SUDO mkdir -p "$GIT_HOME"
+mkdir -p "$GIT_HOME"
 
 #
 # clone repos
