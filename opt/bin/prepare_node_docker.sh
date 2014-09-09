@@ -81,7 +81,7 @@ DO_SUDO puppet apply $PUPPET_DEBUG --modulepath=$PUPPET_MODULES -e 'include dock
 # current user should be given docker privs
 CURRENT_USER=$(facter id)
 [ -z $CURRENT_USER ] && echo "ERROR : failed to get current user with facter id" && exit 1
-DO_SUDO puppet apply -e 'user {'"'${CURRENT_USER}'"': ensure => present, gid => "docker" }'
+DO_SUDO puppet apply $PUPPET_DEBUG -e 'user {'"'${CURRENT_USER}'"': ensure => present, gid => "docker" }'
 
 # build a docker image bare_precise_puppet
 # This docker image should have puppet and required modules installed.
@@ -101,4 +101,4 @@ RUN bash -xe /opt/git/forj-oss/maestro/puppet/install_modules.sh
 DOCKER_BARE_PRECISE
 
 # setup beaker
-DO_SUDO puppet resource package beaker provider=gem ensure=install
+DO_SUDO puppet resource package beaker provider=gem ensure=latest $PUPPET_DEBUG
