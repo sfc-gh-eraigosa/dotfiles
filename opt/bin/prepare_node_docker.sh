@@ -129,7 +129,7 @@ DO_SUDO puppet apply $PUPPET_DEBUG -e 'user {'"'${CURRENT_USER}'"': ensure => pr
 
 # build a docker image bare_precise_puppet
 # This docker image should have puppet and required modules installed.
-DOCKER_HOME=$(readlink -f $GIT_HOME/../docker)
+export DOCKER_HOME=$(readlink -f $GIT_HOME/../docker)
 [ ! -d "${DOCKER_HOME}" ] && mkdir -p "${DOCKER_HOME}"
 [ ! -d "${DOCKER_HOME}/precise" ] && mkdir -p "${DOCKER_HOME}/precise"
 [ ! -d "${DOCKER_HOME}/trusty" ] && mkdir -p "${DOCKER_HOME}/trusty"
