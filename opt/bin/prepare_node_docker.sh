@@ -18,6 +18,7 @@
 # Test install:
 # curl https://raw.githubusercontent.com/wenlock/myhome/master/opt/bin/prepare_node_docker.sh | bash -xe
 PREPARE_HOSTNAME=${PREPARE_HOSTNAME:-node-test}
+PROJECT_EXCLUDE_REGX=${PROJECT_EXCLUDE_REGX:-(CDK-.*|forj/infra|forj-config)}
 export DEBUG=${DEBUG:-0}
 export AS_ROOT=${AS_ROOT:-0}
 export SCRIPT_TEMP=$(mktemp -d)
@@ -82,9 +83,10 @@ GIT_CLONE forj-config
 if [ -z $PROJECTS_YAML ] ; then
   PROJECTS_YAML=file://$GIT_HOME/forj-config/modules/runtime_project/templates/gerrit/config/production/review.projects.yaml.erb
 fi
-curl -s $PROJECTS_YAML | egrep '^-?\s+project:\s+(.*)$' \
-                       | awk -F: '{print $2}' \
-                       | sed 's/^\s//g'|grep -v forj-config \
+curl -s $PROJECTS_YAML | egrep '^-?\s+project:\s+(.*)$'   \
+                       | awk -F: '{print $2}'             \
+                       | sed 's/^\s//g'                   \
+                       | egrep -v "$PROJECT_EXCLUDE_REGX" \
                        | while read PROJECT ; do
                            GIT_CLONE $PROJECT;
                          done
