@@ -105,7 +105,10 @@ DOCKER_BARE_PRECISE
 #
 # build an image for this prepare
 docker build -t ubuntu-bare-precise $GIT_HOME
-docker images --no-trunc
+if ! docker images --no-trunc | grep -e '^ubuntu-bare-precise\s.*' ; then
+  echo "ERROR: ubuntu-bare-precise image not found."
+  exit 1
+fi
 
 # setup beaker
 DO_SUDO puppet apply $PUPPET_DEBUG \
