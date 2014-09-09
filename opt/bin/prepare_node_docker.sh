@@ -16,12 +16,16 @@
 # under the License.
 # 
 # Test install:
-# curl https://raw.githubusercontent.com/wenlock/myhome/master/opt/bin/prepare_node_docker.sh | bash -xe
+# curl https://raw.githubusercontent.com/forj-oss/redstone/master/puppet/modules/runtime_project/files/nodepool/scripts/prepare_node_docker.sh | bash -xe
+[ -z $PROJECTS_YAML ] && echo "INFO: using forj-config project for projects.yaml"
 PREPARE_HOSTNAME=${PREPARE_HOSTNAME:-node-test}
-PROJECT_EXCLUDE_REGX=${PROJECT_EXCLUDE_REGX:-(CDK-.*|forj/infra|forj-config)}
+PROJECT_EXCLUDE_REGX=${PROJECT_EXCLUDE_REGX:-(CDK-.*|forj/infra|forj-ui/forj.csa|forj-config)}
+GIT_HOME=${GIT_HOME:-~/prepare/git}
+REVIEW_SERVER=${REVIEW_SERVER:-https://review.forj.io}
 export DEBUG=${DEBUG:-0}
 export AS_ROOT=${AS_ROOT:-0}
 export SCRIPT_TEMP=$(mktemp -d)
+
 trap 'rm -rf $SCRIPT_TEMP' EXIT
 
 [ $DEBUG -eq 1 ] && set -x -v
@@ -48,8 +52,6 @@ function GIT_CLONE {
   return 0
 }
 
-GIT_HOME=${GIT_HOME:-~/prepare/git}
-REVIEW_SERVER=${REVIEW_SERVER:-https://review.forj.io}
 
 # prepare a node with docker installed
 # * we need puppet commandline setup, along with expected modules
@@ -79,8 +81,8 @@ mkdir -p "$GIT_HOME"
 
 #
 # clone all repos
-GIT_CLONE forj-config
 if [ -z $PROJECTS_YAML ] ; then
+  GIT_CLONE forj-config
   PROJECTS_YAML=file://$GIT_HOME/forj-config/modules/runtime_project/templates/gerrit/config/production/review.projects.yaml.erb
 fi
 curl -s $PROJECTS_YAML | egrep '^-?\s+project:\s+(.*)$'   \
