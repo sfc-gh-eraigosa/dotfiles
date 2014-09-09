@@ -85,6 +85,7 @@ DO_SUDO puppet apply $PUPPET_DEBUG -e 'user {'"'${CURRENT_USER}'"': ensure => pr
 
 # build a docker image bare_precise_puppet
 # This docker image should have puppet and required modules installed.
+# ********** START DOCKER FILE PRECISE ****************************************
 cat > $GIT_HOME/Dockerfile << DOCKER_BARE_PRECISE
 # DOCKER-VERSION 0.3.4
 # build a puppet based image
@@ -95,10 +96,15 @@ RUN apt-get -y update; \
     apt-get -y upgrade; \
     DEBIAN_FRONTEND=noninteractive apt-get --option 'Dpkg::Options::=--force-confold' \
         --assume-yes install -y --force-yes git vim curl wget python-all-dev;
-RUN git config core.autocrlf false
 RUN bash -xe /opt/git/forj-oss/maestro/puppet/install_puppet.sh 
 RUN bash -xe /opt/git/forj-oss/maestro/puppet/install_modules.sh
 DOCKER_BARE_PRECISE
+# ********** END DOCKER FILE PRECISE *******************************************
+
+#
+# build an image for this prepare
+docker build -t ubuntu-bare-precise $GIT_HOME
+docker images --no-trunc
 
 # setup beaker
 DO_SUDO puppet apply $PUPPET_DEBUG \
