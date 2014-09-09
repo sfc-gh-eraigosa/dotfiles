@@ -85,7 +85,9 @@ fi
 curl -s $PROJECTS_YAML | egrep '^-?\s+project:\s+(.*)$' \
                        | awk -F: '{print $2}' \
                        | sed 's/^\s//g'|grep -v forj-config \
-                       | while read PROJECT ; GIT_CLONE forj-oss/maestro; done
+                       | while read PROJECT ; do
+                           GIT_CLONE $PROJECT;
+                         done
 
 DO_SUDO bash -xe $GIT_HOME/forj-oss/maestro/puppet/install_puppet.sh 
 DO_SUDO bash -xe $GIT_HOME/forj-oss/maestro/puppet/install_modules.sh
