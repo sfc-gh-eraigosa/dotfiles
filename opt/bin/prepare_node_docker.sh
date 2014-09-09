@@ -102,8 +102,8 @@ DOCKER_BARE_PRECISE
 
 # setup beaker
 DO_SUDO puppet apply $PUPPET_DEBUG \
-               -e 'package {["build-essential","vim","git","make","dos2unix","libxslt-dev","libxml2-dev"]: \
-                              ensure => present } -> \
-                   package {"beaker": \
-                              provider => gem, \
+               -e 'package {["build-essential","vim","git","make","dos2unix","libxslt-dev","libxml2-dev"]:
+                              ensure => present } ->
+                   package {"beaker":
+                              provider => gem,
                               ensure   => latest, }'
