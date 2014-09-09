@@ -81,12 +81,23 @@ DO_SUDO puppet apply $PUPPET_DEBUG --modulepath=$PUPPET_MODULES -e 'include dock
 # current user should be given docker privs
 CURRENT_USER=$(facter id)
 [ -z $CURRENT_USER ] && echo "ERROR : failed to get current user with facter id" && exit 1
-DO_SUDO puppet apply -e 'user {"${CURRENT_USER}": ensure => present, gid => "docker" }'
+DO_SUDO puppet apply -e 'user {'"'${CURRENT_USER}'"': ensure => present, gid => "docker" }'
 
 # build a docker image bare_precise_puppet
 # This docker image should have puppet and required modules installed.
-cat > $SCRIPT_TEMP/Dockerfile << DOCKER_BARE_PRECISE
-foo
+cat > $GIT_HOME/Dockerfile << DOCKER_BARE_PRECISE
+# DOCKER-VERSION 0.3.4
+# build a puppet based image
+FROM  ubuntu:12.04
+ADD . /opt/git
+# Setup Minimal running system
+RUN apt-get -y update; \
+    apt-get -y upgrade; \
+    DEBIAN_FRONTEND=noninteractive apt-get --option 'Dpkg::Options::=--force-confold' \
+        --assume-yes install -y --force-yes git vim curl wget python-all-dev;
+RUN git config core.autocrlf false
+RUN bash -xe /opt/git/forj-oss/maestro/puppet/install_puppet.sh 
+RUN bash -xe /opt/git/forj-oss/maestro/puppet/install_modules.sh
 DOCKER_BARE_PRECISE
 
 # setup beaker
