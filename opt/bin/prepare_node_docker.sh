@@ -40,7 +40,7 @@ function GIT_CLONE {
   return 0
 }
 
-GIT_HOME=${GIT_HOME:-/opt/config/puppet/git}
+GIT_HOME=${GIT_HOME:-~/prepare/git}
 REVIEW_SERVER=${REVIEW_SERVER:-https://review.forj.io}
 
 # prepare a node with docker installed
@@ -54,7 +54,7 @@ fi
 DO_SUDO apt-get update
 DO_SUDO DEBIAN_FRONTEND=noninteractive apt-get --option 'Dpkg::Options::=--force-confold' \
         --assume-yes install -y --force-yes git vim curl wget python-all-dev
-mkdir -p "$GIT_HOME"
+DO_SUDO mkdir -p "$GIT_HOME"
 
 #
 # clone repos
