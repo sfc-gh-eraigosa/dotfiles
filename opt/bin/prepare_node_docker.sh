@@ -129,8 +129,13 @@ DO_SUDO puppet apply $PUPPET_DEBUG -e 'user {'"'${CURRENT_USER}'"': ensure => pr
 
 # build a docker image bare_precise_puppet
 # This docker image should have puppet and required modules installed.
+DOCKER_HOME=$(readlink -f $GIT_HOME/../docker)
+[ ! -d "${DOCKER_HOME}" ] && mkdir -p "${DOCKER_HOME}"
+[ ! -d "${DOCKER_HOME}/precise" ] && mkdir -p "${DOCKER_HOME}/precise"
+[ ! -d "${DOCKER_HOME}/trusty" ] && mkdir -p "${DOCKER_HOME}/trusty"
+
 # ********** START DOCKER FILE PRECISE ****************************************
-cat > $GIT_HOME/Dockerfile << DOCKER_BARE_PRECISE
+cat > $DOCKER_HOME/precise/Dockerfile << DOCKER_BARE_PRECISE
 # DOCKER-VERSION 0.3.4
 # build a puppet based image
 FROM  ubuntu:12.04
@@ -146,11 +151,34 @@ RUN bash -xe /opt/git/forj-oss/maestro/puppet/install_modules.sh
 DOCKER_BARE_PRECISE
 # ********** END DOCKER FILE PRECISE *******************************************
 
+# ********** START DOCKER FILE TRUSTY ****************************************
+cat > $DOCKER_HOME/trusty/Dockerfile << DOCKER_BARE_TRUSTY
+# DOCKER-VERSION 0.3.4
+# build a puppet based image
+FROM  ubuntu:14.04
+ADD . /opt/git
+# Setup Minimal running system
+RUN apt-get -y update; \
+    apt-get -y upgrade; \
+    DEBIAN_FRONTEND=noninteractive apt-get --option 'Dpkg::Options::=--force-confold' \
+        --assume-yes install -y --force-yes ntpdate git vim curl wget python-all-dev;
+RUN git config --global http.sslverify false
+RUN bash -xe PUPPET_VERSION=3 /opt/git/forj-oss/maestro/puppet/install_puppet.sh 
+RUN bash -xe /opt/git/forj-oss/maestro/puppet/install_modules.sh
+DOCKER_BARE_TRUSTY
+# ********** END DOCKER FILE TRUSTY *******************************************
+
 #
 # build an image for this prepare
-docker build -t ubuntu-bare-precise $GIT_HOME
+newgrp docker
+docker build -t ubuntu-bare-precise ${DOCKER_HOME}/precise
 if ! docker images --no-trunc | grep -e '^ubuntu-bare-precise\s.*' ; then
   ERROR_EXIT ${LINENO} "ubuntu-bare-precise image not found." 2
+fi
+
+docker build -t ubuntu-bare-precise ${DOCKER_HOME}/trusty
+if ! docker images --no-trunc | grep -e '^ubuntu-bare-trusty\s.*' ; then
+  ERROR_EXIT ${LINENO} "ubuntu-bare-trusty image not found." 2
 fi
 
 # setup beaker
