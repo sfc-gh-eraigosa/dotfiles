@@ -17,6 +17,7 @@
 # 
 # Test install:
 # curl https://raw.githubusercontent.com/wenlock/myhome/master/opt/bin/prepare_node_docker.sh | bash -xe
+PREPARE_HOSTNAME=${PREPARE_HOSTNAME:-node-test}
 export DEBUG=${DEBUG:-0}
 export AS_ROOT=${AS_ROOT:-0}
 export SCRIPT_TEMP=$(mktemp -d)
@@ -37,6 +38,12 @@ function GIT_CLONE {
   [ -z $GIT_HOME ] && echo "ERROR no GIT_HOME defined" && exit 1
   git config --global http.sslverify false
   [ ! -d $GIT_HOME/$1/.git ] && git clone --depth=1 $REVIEW_SERVER/p/$1 $GIT_HOME/$1
+  _CWD=$(pwd)
+  cd $GIT_HOME/$1
+  git branch -a > /dev/null 2<&1
+  git reset --hard HEAD
+  git remote update
+  cd $_CWD
   return 0
 }
 
@@ -49,6 +56,19 @@ if [ ! $(id -u) -eq 0 ] && [ $AS_ROOT -eq 1 ] ; then
   echo "ERROR : SCRIPT should be run as sudo or root with export AS_ROOT=1"
   exit 1
 fi
+
+#
+# setup hostname
+[ "${PREPARE_HOSTNAME}" = "node-test" ] && echo "WARNING: operating in test mode with ${PREPARE_HOSTNAME}."
+DO_SUDO hostname $PREPARE_HOSTNAME
+if [ -n "$PREPARE_HOSTNAME" ] && ! grep -q $PREPARE_HOSTNAME /etc/hosts
+then
+  echo "127.0.1.1 $PREPARE_HOSTNAME" | DO_SUDO tee -a /etc/hosts
+fi
+
+# Make sure DNS works.
+dig review.forj.io
+
 #
 # setup the basics
 DO_SUDO apt-get update
@@ -57,9 +77,17 @@ DO_SUDO DEBIAN_FRONTEND=noninteractive apt-get --option 'Dpkg::Options::=--force
 mkdir -p "$GIT_HOME"
 
 #
-# clone repos
+# clone all repos
 GIT_CLONE forj-config
-GIT_CLONE forj-oss/maestro
+if [ -z $PROJECTS_YAML ] ; then
+  PROJECTS_YAML=file://$GIT_HOME/forj-config/modules/runtime_project/templates/gerrit/config/production/review.projects.yaml.erb
+fi
+curl -s $PROJECTS_YAML | egrep '^-?\s+project:\s+(.*)$' \
+                       | awk -F: '{print $2}' \
+                       | sed 's/^\s//g'|grep -v forj-config \
+                       | while read PROJECT ;
+                           GIT_CLONE forj-oss/maestro;
+                         done
 
 DO_SUDO bash -xe $GIT_HOME/forj-oss/maestro/puppet/install_puppet.sh 
 DO_SUDO bash -xe $GIT_HOME/forj-oss/maestro/puppet/install_modules.sh
@@ -117,3 +145,14 @@ DO_SUDO puppet apply $PUPPET_DEBUG \
                    package {"beaker":
                               provider => gem,
                               ensure   => latest, }'
+
+# Remove cron jobs
+# We create fresh servers for these hosts, and they are used once. They don't
+# need to do things like update the locatedb or the mandb or rotate logs
+# or really any of those things. We only want code running here that we want
+# here.
+DO_SUDO rm -f /etc/cron.{monthly,weekly,daily,hourly,d}/*
+
+sync
+sleep 5
+echo "*** PREPARE COMPLETED ***"
