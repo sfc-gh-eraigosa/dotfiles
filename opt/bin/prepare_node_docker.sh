@@ -95,7 +95,7 @@ ADD . /opt/git
 RUN apt-get -y update; \
     apt-get -y upgrade; \
     DEBIAN_FRONTEND=noninteractive apt-get --option 'Dpkg::Options::=--force-confold' \
-        --assume-yes install -y --force-yes git vim curl wget python-all-dev;
+        --assume-yes install -y --force-yes ntpdate git vim curl wget python-all-dev;
 RUN bash -xe /opt/git/forj-oss/maestro/puppet/install_puppet.sh 
 RUN bash -xe /opt/git/forj-oss/maestro/puppet/install_modules.sh
 DOCKER_BARE_PRECISE
