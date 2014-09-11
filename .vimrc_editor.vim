@@ -9,28 +9,22 @@ if has ("autocmd")
 
     "Autocommands to set up tab widths for c, c++ and java
     augroup C_code
-        autocmd FileType c,cpp,java
-                     \ set shiftwidth=2 softtabstop=2
-        autocmd FileType c,cpp,java
-                     \ set expandtab autoindent
+        autocmd FileType c,cpp,java set shiftwidth=2 softtabstop=2
+        autocmd FileType c,cpp,java set expandtab autoindent
     augroup END 
 
     "Autocommands to set up tab widths for python
     augroup python_code
-        autocmd FileType python
-                     \ set shiftwidth=4 softtabstop=4
-        autocmd FileType python
-                     \ set expandtab autoindent
+        autocmd FileType python set shiftwidth=4 softtabstop=4
+        autocmd FileType python set expandtab autoindent
     augroup END 
 
     "Autocommands to set the all important tab width for ruby. Also begins
     "new ruby files with the bang and saves it as executable.
     augroup ruby
         autocmd BufNewFile *.rb 0put ='#!/usr/bin/env ruby'
-        autocmd FileType ruby
-                     \ set shiftwidth=2 softtabstop=2
-        autocmd FileType ruby
-                     \ set expandtab autoindent
+        autocmd FileType ruby set shiftwidth=2 softtabstop=2
+        autocmd FileType ruby set expandtab autoindent
         autocmd BufWritePost *.rb !chmod 744 %
     augroup END 
 
@@ -38,19 +32,15 @@ if has ("autocmd")
     "file as an executable.
     augroup shell
         autocmd BufNewFile *.sh 0put ='#!/bin/sh'
-        autocmd FileType sh
-                     \ set shiftwidth=4 softtabstop=4
-        autocmd FileType sh
-                     \ set expandtab autoindent
+        autocmd FileType sh set shiftwidth=4 softtabstop=4
+        autocmd FileType sh set expandtab autoindent
         "autocmd BufWritePost *.sh !chmod 744 %
     augroup END 
 
     "When editing text documents I dont need the line numbers and text
     "should wrap around 80 characters.
     augroup text
-        autocmd BufRead,BufNewFile *.txt
-                     \ set nonumber
-        autocmd BufRead,BufNewFile *.txt
-                     \ set textwidth=80
+        autocmd BufRead,BufNewFile *.txt set nonumber
+        autocmd BufRead,BufNewFile *.txt set textwidth=80
     augroup END 
 endif
