@@ -17,5 +17,23 @@ if [ -d ~/git/powerline-fonts ] ; then
 fi
 ```
 
+In addition, if you use chromeos and have put your system into developer mode, you can also enable powerline fonts for ChomeOS Shell app.   This [issues talks](https://code.google.com/p/chromium/issues/detail?id=320364) about the details on how to do it, but here are the steps that worked for me:
 
-Can we get this to work?  https://code.google.com/p/chromium/issues/detail?id=320364
+Open shell, ctrl-alt-t, type > shell
+```sh
+sudo mkdir -p /usr/local/share/fonts
+sudo wget -P /usr/local/share/fonts https://raw.github.com/Lokaltog/powerline/develop/font/PowerlineSymbols.otf
+mkdir -p /tmp/test/
+sudo mount --bind /home/chronos/ /tmp/test/
+cd /tmp/test/user
+cat > .font.conf << FONTS
+chronos@localhost ~ $ cat .fonts.conf 
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+        <dir>/usr/local/share/fonts</dir>
+</fontconfig>
+FONTS
+```
+
+Restart chromeOS
