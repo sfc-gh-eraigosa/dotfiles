@@ -16,3 +16,6 @@ if [ -d ~/git/powerline-fonts ] ; then
   fc-cache -vf ~/.fonts
 fi
 ```
+
+
+Can we get this to work?  https://code.google.com/p/chromium/issues/detail?id=320364
