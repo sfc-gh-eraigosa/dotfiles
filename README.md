@@ -112,3 +112,5 @@ wrong or incomplete.  Especially if I make a security boo boo.
 Licensing
 ----
 myhome is licensed under the Apache License, Version 2.0. See LICENSE for full license text.
+
+Testing
