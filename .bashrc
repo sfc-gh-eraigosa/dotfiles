@@ -116,7 +116,7 @@ fi
 
 export GIT_PS1_SHOWDIRTYSTATE=1 GIT_PS1_SHOWSTASHSTATE=1 GIT_PS1_SHOWUNTRACKEDFILES=1 GIT_PS1_SHOWUPSTREAM=verbose GIT_PS1_SHOWUPSTREAM=verbose GIT_PS1_SHOWCOLORHINTS=true
 #AGM function
-. ~/bin/agm/agm.sh
+. ~/opt/bin/agm.sh
 if [ -f ~/.local/lib/python2.7/site-packages/powerline/bindings/bash/powerline.sh ]; then
   source ~/.local/lib/python2.7/site-packages/powerline/bindings/bash/powerline.sh
 fi
