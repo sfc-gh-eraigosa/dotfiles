@@ -22,10 +22,12 @@ usage()
   This script will start a docker container
 
   OPTIONS:
-    -a | --auto {name}    : look for last attached docker, start it if not running. use name for new sessions.
-    -o | --opts <options> : docker options
-    -n | --name <name>    : name of the host container
-    -h | --help           : help
+    -a | --auto {name}      : look for last attached docker, start it if not running. use name for new sessions.
+    -t | --container {name} : optional container name, otherwise defaults to ~/.docker_container contents
+                              changes default container name as well in ~/.docker_container
+    -o | --opts <options>   : docker options
+    -n | --name <name>      : name of the host container
+    -h | --help             : help
 
 EOF
 }
@@ -35,6 +37,13 @@ _options=
 _hostname=
 OPTION=
 _auto=0
+_CONTAINER=ubuntu\:12.04
+if [ -f ~/.docker_container ] ; then
+    _CONTAINER=$(cat ~/.docker_container)
+else
+    echo -n $_CONTAINER > ~/.docker_container
+fi
+
 while [[ $# -gt 0 ]]; do
   opt="$1"
   shift;
@@ -45,6 +54,7 @@ while [[ $# -gt 0 ]]; do
   case "$opt" in
     "-h"|"--help"       ) usage; exit 1;;
     "-a"|"--auto"       ) _auto=1;_auto_name="$1"; shift;;
+    "-t"|"--container"  ) _arg_container=$1; shift;;
     "-n"|"--name"       ) _hostname="$1"; shift;;
     "-o"|"--opts"       ) _options="$1"; shift;;
     *                   ) echo "ERROR: Invalid option: \""$opt"\"" >&2;
@@ -52,6 +62,11 @@ while [[ $# -gt 0 ]]; do
     exit 1;;
   esac
 done
+if [ ! "$_CONTAINER" = "$_arg_container" ] ; then
+    _CONTAINER=$_arg_container
+    echo -n $_CONTAINER > ~/.docker_container
+fi
+
 [[ $_auto = 1 ]] && [[ -z $_auto_name ]] && _auto_name=auto
 function dirnamef
 {
@@ -63,7 +78,6 @@ cd $_dir/..
   echo -n $_dir
 }
 _VOLUMES="-v $(dirnamef $0):/opt/workspace/git:rw -v /lib/modules:/lib/modules:rw"
-_CONTAINER=ubuntu\:12.04
 
 if [ "${_hostname}" = "" ] ; then
   _hostname=maestro.42.forj.io
