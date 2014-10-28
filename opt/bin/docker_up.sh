@@ -23,6 +23,7 @@ usage()
 
   OPTIONS:
     -a | --auto {name}      : look for last attached docker, start it if not running. use name for new sessions.
+    -c | --clear            : when used with -a , clears previous session and starts a new one.
     -t | --container {name} : optional container name, otherwise defaults to ~/.docker_container contents
                               changes default container name as well in ~/.docker_container
     -o | --opts <options>   : docker options
@@ -37,9 +38,12 @@ _options=
 _hostname=
 OPTION=
 _auto=0
+_clear=0
 _CONTAINER=ubuntu\:12.04
 if [ -f ~/.docker_container ] ; then
     _CONTAINER=$(cat ~/.docker_container)
+    [[ -z "$_CONTAINER" ]] && echo "WARNING: ~/.docker_container is empty, setting to default. ubuntu:12.04, otherwise use -t to set to another value."
+    [[ -z "$_CONTAINER" ]] && _CONTAINER=ubuntu\:12.04
 else
     echo -n $_CONTAINER > ~/.docker_container
 fi
@@ -54,6 +58,7 @@ while [[ $# -gt 0 ]]; do
   case "$opt" in
     "-h"|"--help"       ) usage; exit 1;;
     "-a"|"--auto"       ) _auto=1;_auto_name="$1"; shift;;
+    "-c"|"--clear"      ) _clear=1; shift;;
     "-t"|"--container"  ) _arg_container=$1; shift;;
     "-n"|"--name"       ) _hostname="$1"; shift;;
     "-o"|"--opts"       ) _options="$1"; shift;;
@@ -61,9 +66,15 @@ while [[ $# -gt 0 ]]; do
     usage;
     exit 1;;
   esac
+  if [ "$_auto_name" = "-c" ] || [ "$_auto_name" = "-clear" ] ; then
+      _auto_name=""
+      _clear=1
+  fi
 done
 if [ ! "$_CONTAINER" = "$_arg_container" ] ; then
     _CONTAINER=$_arg_container
+    [[ -z "$_CONTAINER" ]] && echo "WARNING: container arg is empty, setting to default. ubuntu:12.04"
+    [[ -z "$_CONTAINER" ]] && _CONTAINER=ubuntu\:12.04
     echo -n $_CONTAINER > ~/.docker_container
 fi
 
@@ -88,6 +99,8 @@ else
   echo "looking for last docker session"
   SESSION_NAME=docker_${_auto_name}
   [[ "${_auto_name}" = "auto" ]] && SESSION_NAME=docker_session
+  [[ $_clear = 1 ]] && [[ -f ~/.$SESSION_NAME ]] && rm -f ~/.$SESSION_NAME
+
   if [ -f ~/.$SESSION_NAME ] ; then
     _session=$(cat ~/.$SESSION_NAME)
   else
