@@ -2,6 +2,7 @@
 *
 
 # But not these files...
+!.pam_environment
 !.plan
 !.gitignore
 !.profile

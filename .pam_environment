@@ -1,0 +1,2 @@
+# bug fix for pidgin-sip 1.17+-1.18
+NSS_SSL_CBC_RANDOM_IV=0
