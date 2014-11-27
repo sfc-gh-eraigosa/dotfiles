@@ -72,3 +72,7 @@ alias gertty='source gertty-env/bin/activate && gertty'
 # setup proxy settings if a .proxy.sh exist
 [ -f ~/.proxy.sh ] && . ~/.proxy.sh
 alias tb=~/git/forj-oss/maestro/tools/bin/test-box.sh
+
+# Wow aliases
+alias win_nogl='LIBGL_ALWAYS_SOFTWARE=1 wine explorer'
+alias win='wine explorer -opengl'
