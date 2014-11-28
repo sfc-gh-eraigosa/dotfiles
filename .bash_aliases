@@ -76,3 +76,4 @@ alias tb=~/git/forj-oss/maestro/tools/bin/test-box.sh
 # Wow aliases
 alias win_nogl='LIBGL_ALWAYS_SOFTWARE=1 wine explorer'
 alias win='wine explorer -opengl'
+alias wow='WINEDEBUG=-all wine "/home/wenlock/.wine/drive_c/Program Files (x86)/World of Warcraft/Wow.exe"'
