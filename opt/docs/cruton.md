@@ -12,6 +12,7 @@ OK, lets start with storage.   I wanted to have enough storage besides the minim
 Normally I see those for 200$ so for 70$ and 80MB/sec, I think it's a good deal.  Also, I've seen most ubuntu boxes run well with 50G or so of disk space.   I can also add more storage later with USB drives, but hopefully I won't have to.
 
 ![](http://pisces.bbystatic.com/image2/BestBuy_US/images/products/4807/4807118_sa.jpg;canvasHeight=139;canvasWidth=105)
+
 Also, if your planning to use wine, virtualbox or docker in combination with any of these other virtualization tools, I highly recommend upgrading to the 128GB or 256GB drive.
 
 Setting up developer mode
