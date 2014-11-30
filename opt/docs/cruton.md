@@ -1,4 +1,4 @@
-Cruton Notes
+Crouton Notes
 ============
 
 I finally got enough [recognition points](http://www.businessinsider.com/whitman-wins-the-love-of-hp-employees-2013-4) to get a new chromebook to hack with.  The chromebook I had before couldn't be hacked on because it was being used by several other family members.  Now that we have a second chromebook, I get to keep the old chromebook to hack on, and the family can use the new chromebook, 
@@ -34,7 +34,7 @@ Once your in developer mode, login and get back onto your account.  You might al
 
 Change Root Setup
 -----------------
-I'm using [cruton](https://github.com/dnschneid/crouton), which is a chroot OS that utilizes the underlying chrome OS linux kernel to execute in.   I expect to get most features of ubuntu this way while continuing to utilize my chrome OS for the features it's good at.   I'm also hoping it gives me a good user experience when doing development outside of the chromeOS UI.   For the [cruton](https://github.com/dnschneid/crouton) flavor, I'm trying awesome UI with ubuntu 12.04.  I might experiment with others once I get usto all the [cruton](https://github.com/dnschneid/crouton) chroot options.   I read we can do many chroots, so I'm hoping to try this as well for switching between precise and trusty versions.  Start with the github project wiki instructions [here](https://github.com/dnschneid/crouton/wiki/awesome)
+I'm using [crouton](https://github.com/dnschneid/crouton), which is a chroot OS that utilizes the underlying chrome OS linux kernel to execute in.   I expect to get most features of ubuntu this way while continuing to utilize my chrome OS for the features it's good at.   I'm also hoping it gives me a good user experience when doing development outside of the chromeOS UI.   For the [crouton](https://github.com/dnschneid/crouton) flavor, I'm trying awesome UI with ubuntu 12.04.  I might experiment with others once I get usto all the [crouton](https://github.com/dnschneid/crouton) chroot options.   I read we can do many chroots, so I'm hoping to try this as well for switching between precise and trusty versions.  Start with the github project wiki instructions [here](https://github.com/dnschneid/crouton/wiki/awesome)
 
 If you follow those instructions exactly, you should end up with awesome UI plus ubuntu 12.04.  Give yourself 1-2 hours for the chroot setup to complete.  
 
@@ -50,7 +50,7 @@ ctrl+alt+t
 sudo sh -e ./crouton -t unity
 ```
 
-You can list other distributions with the command : ```sudo sh -e ./cruton -t list```
+You can list other distributions with the command : ```sudo sh -e ./crouton -t list```
 At then end of the install, you'll see something like:
 
 You can flip through your running chroot desktops and Chromium OS by hitting
@@ -118,7 +118,7 @@ sudo mke2fs /dev/sdb
 * Move any chroots you want to keep to the USB Drive
 
 ```sh
-sudo mkdir -p '/media/removable/USB Drive/roots'
+sudo mkdir -p '/media/removable/USB Drive/chroots'
 sudo edit-chroot -m '/media/removable/USB Drive/chroots/' precise
 ```
 
@@ -132,10 +132,10 @@ sudo ln -s '/media/removable/USB Drive/chroots/' chroots
 
 Tips
 ---------
-* When switching off [cruton](https://github.com/dnschneid/crouton), I found that closing the lid on hp chromebook 14 would cause the system to freeze.  To avoid that try switching back to chromeUI (ctrl-shift-forward), then close the lid.
+* When switching off [crouton](https://github.com/dnschneid/crouton), I found that closing the lid on hp chromebook 14 would cause the system to freeze.  To avoid that try switching back to chromeUI (ctrl-shift-forward), then close the lid.  FIXUPDATE: This seems to now be fixed with latest version of crouton and trusty image ( -t unity -r trusty ).
 * When establishing a vpn with openvpn, try setting up a persistent tunel before hand, [found it on this issue](https://github.com/dnschneid/crouton/issues/375): ```openvpn --mktun --dev tun0```.  I also setup an alias for this, tunnelp.
 * If you leave the system alone while in ubuntu, your power safe sets your screen dimmed.  This can't be undone.  To avoid this, turn off power save mode: ```sudo initctl stop powerd```
-* Setting up atom on [cruton, works](atom.md).
+* Setting up atom on [crouton, works](atom.md).
 * [Puppet setup using 2.7](puppet27.md).
 * Perform some [backups with these instructions](https://github.com/dnschneid/crouton#a-backup-a-day-keeps-the-price-gouging-data-restoration-services-away).
 Wish List
@@ -143,12 +143,12 @@ Wish List
 Things I need to get documented on how to do or find out if they work.
 
 * Fix my magic mouse scroll wheel.
-* Sharing session with hp rooms
-* Does lync work?
-* Syncronizing my local drive with the google drive on chromeOS to sync changes
-* Copy paste from chromOS to chroot OS
-* Steps for compiling a customer kernel for running docker or virtualbox
+* Sharing session with hp rooms (www.myrooms.hp.com works like a charm)
+* Does lync work? (yes, with pidgin-sipe plugin, note, best when compiled from source, TBD)
+* Syncronizing my local drive with the google drive on chromeOS to sync changes  (potential workaround insync, but this is a pay solution and doesn't seem to reliably start on the UI).
+* Copy paste from chromOS to chroot OS (workaround in place is to use google keep).
+* Steps for compiling a customer kernel for running docker or virtualbox  (now working TBD, post an update for this, this is covered on crouton wiki).
 
 Contribute
 ==========
-Tell me about your experience with cruton and this awesome work from those folks.   Any gotchas or problems it you solved?
+Tell me about your experience with crouton and this awesome work from those folks.   Any gotchas or problems it you solved?
