@@ -16,7 +16,7 @@
 
 
 # Copyright 2012 Hewlett-Packard Development Company, L.P
-# 
+#
 # run this script to setup some aliases that are described in Git with Gerrit cookbook
 #
 
@@ -37,7 +37,7 @@ CORKSCREW_IS_AVAILABLE=$?
 
 if ! [ $CORKSCREW_IS_AVAILABLE -eq 0 ]; then
   echo ''
-  echo 'WARNING: Corkscrew is not available, corkscrew helps with proxy' 
+  echo 'WARNING: Corkscrew is not available, corkscrew helps with proxy'
   echo ''
   echo 'Instead of setting up a tunnel with ssh, its now possible on ux and windows to setup corkscrew.'
   echo 'Corkscrew works with openssh to communicate to your local proxy, and then send communication to'
@@ -76,11 +76,11 @@ alias git-tunelkill='fgit-tunelkill'
 alias git-pull='fgit-pull'
 alias git-help='fgit-help'
 alias git-proxy='fgit-proxy \$@'
-alias git-reset='git reset --hard origin/master; git clean -x -d -f; git pull;'
+alias git-reset='fgit-reset'
 alias git-reset-all='fgit-reset-all'
 alias refresh-gitenv='refresh-gitenv'
 
-function fgit-help
+function fgit-help()
 {
   _commands=\$(alias|grep git|awk -F= '/alias/{print \$1}'|sed 's/alias //g' | awk '{printf \$1", "}' | sed 's/, \$//g')
 
@@ -89,11 +89,11 @@ function fgit-help
 
   Summary:
 
-    git-alias's are a set of helper tools to make it easier to interact with git 
-    and gerrit servers.  Tired of trying to remember long worthless command lines?  
+    git-alias's are a set of helper tools to make it easier to interact with git
+    and gerrit servers.  Tired of trying to remember long worthless command lines?
     Make it simple with git alias...
 
-    Commands will start with git-*, use git-help for instrucitons on how 
+    Commands will start with git-*, use git-help for instrucitons on how
     to use it.
 
   Available Commands:
@@ -179,7 +179,7 @@ function fgit-help
     you have an ssh tunel on.
 
   git-reset
-    Start new work by reseting the git repo, cleaning it out and 
+    Start new work by reseting the git repo, cleaning it out and
     pulling the latest version of the git repo onto master.
 
   git-reset-all
@@ -213,7 +213,7 @@ function fgit-help
 HELP_TXT
 
 }
-function get-tempfile
+function get-tempfile()
 {
   _temp_prefix=temp
   [ ! -z "\${1}" ] && _temp_prefix=\$1
@@ -223,7 +223,7 @@ function get-tempfile
   fi
   echo -n \$_temp_file
 }
-function clean-tempfile
+function clean-tempfile()
 {
   _prefix=\$1
   _skip_file=\$2
@@ -231,7 +231,7 @@ function clean-tempfile
 }
 
 # get url
-function fgit-remote-url
+function fgit-remote-url()
 {
   _remote_name=origin
   [ ! -z "\${1}" ] && _remote_name=\$1
@@ -260,7 +260,7 @@ function fgit-remote-url
 }
 
 # get alias from origin
-function fgit-alias
+function fgit-alias()
 {
   _remote_name=origin
   [ ! -z "\${1}" ] && _remote_name=\$1
@@ -271,7 +271,7 @@ function fgit-alias
 }
 
 # get alias from origin
-function fgit-project
+function fgit-project()
 {
   _remote_name=origin
   [ ! -z "\${1}" ] && _remote_name=\$1
@@ -282,7 +282,7 @@ function fgit-project
 }
 
 #Updates CDK-infra with git pull and re-executes setup_git_alias.sh
-function refresh-gitenv
+function refresh-gitenv()
 {
 # /cygdrive/c/Users/chavezom/cloned_dirs/CDK-infra
   echo -n "Enter the full path to your local CDK-infra project: "
@@ -306,7 +306,7 @@ function refresh-gitenv
   fi
 }
 
-function fgit-getIP
+function fgit-getIP()
 {
   _server=\$1
   ping_cmd=""
@@ -324,7 +324,7 @@ function fgit-getIP
   echo \$_ip
 }
 
-function fgit-proxy
+function fgit-proxy()
 {
   if [[ -z "\$1" ]] ; then
     _proxy_action="on"
@@ -350,7 +350,7 @@ function fgit-proxy
   fi
 }
 
-function fgit-is-tunel-up
+function fgit-is-tunel-up()
 {
 # ps -ef|grep -e "ssh -N -L \$_ssh_port:127.0.0.1:\$_ssh_port.*\$_ssh_host" |grep -v grep >/dev/null 2<&1
 
@@ -362,13 +362,13 @@ function fgit-is-tunel-up
   return 0
 }
 
-function fgit-isWindows
+function fgit-isWindows()
 {
   [ "\$OS" == "Windows_NT" ] && return 1
   return 0
 }
 
-function fgit-tunelkill
+function fgit-tunelkill()
 {
   _temp_file=\$(fgit-ssh_info)
   _ssh_port=\$(cat \$_temp_file|awk '{printf \$2}')
@@ -399,7 +399,7 @@ function fgit-tunelkill
   fi
 }
 
-function fgit-pull
+function fgit-pull()
 {
   _remote_origin=\$(git remote -v |grep origin|head -1|awk '{printf \$1}')
   if [[ -z "\$_remote_origin" ]]; then
@@ -410,7 +410,7 @@ function fgit-pull
   git pull
 }
 
-function fgit-remote-refresh
+function fgit-remote-refresh()
 {
   _remote_origin=\$(git remote -v |grep origin|head -1|awk '{printf \$1}')
   if [[ -z "\$_remote_origin" ]]; then
@@ -442,7 +442,7 @@ function fgit-remote-refresh
   git remote set-url \$_remote_origin \$_ALIAS:\$_PROJECT
 }
 
-function fgit-addalias
+function fgit-addalias()
 {
   _alias=\$1
   if [ -z \$GIT_URL ] ; then
@@ -491,7 +491,7 @@ function fgit-addalias
     echo "  Port \$_ssh_port" >> ~/.ssh/config
     echo "  ServerAliveInterval 300" >> ~/.ssh/config
     echo "  ServerAliveCountMax 120" >> ~/.ssh/config
-    echo "  identityfile ~/.ssh/gerrit_keys" >> ~/.ssh/config		
+    echo "  identityfile ~/.ssh/gerrit_keys" >> ~/.ssh/config
     echo "git alias, \$_alias, has been added!"
 # proxy on alias
     fgit-proxy "on"
@@ -521,14 +521,14 @@ function fgit-addalias
   else
     echo "\$_alias alias already exist in ~/.ssh/config"
     echo "If you want to update \$_alias alias follow these steps:"
-    echo "  (1) Manually remove \$_alias alias from ~/.ssh/config" 
+    echo "  (1) Manually remove \$_alias alias from ~/.ssh/config"
     echo "  (2) Re-run git-config"
   fi
 
 }
 
 
-function fgit-createknown_host
+function fgit-createknown_host()
 {
   if [ -z \$GIT_URL ] ; then
     echo "ERROR missing export GIT_URL=http://host:8080, try using git-config <email>"
@@ -549,7 +549,7 @@ function fgit-createknown_host
   fi
 
   if [ ! -d \$home_dir/.ssh ] ; then
-    mkdir -p \$home_dir/.ssh 
+    mkdir -p \$home_dir/.ssh
     if [[ ! \$? -eq 0 ]] ; then
       echo "ERROR creating folder \$home_dir/.ssh"
     fi
@@ -579,7 +579,7 @@ function fgit-createknown_host
     echo "ERROR unable to create file ./known_hosts"
   fi
 
-  echo \$_server > ./keyhost.txt 
+  echo \$_server > ./keyhost.txt
   echo \$(fgit-getIP \$_server) >> ./keyhost.txt
   ssh-keyscan -4 -t ecdsa -f ./keyhost.txt -p \$_port  > ./tmp_key
   ((cat ./known_hosts) && ( cat ./tmp_key) )|sort -u > ./known_hosts.new
@@ -611,7 +611,7 @@ function fgit-createknown_host
   return 0
 }
 
-function fgit-config
+function fgit-config()
 {
   if [ ! -x /usr/bin/wget ] ; then
     echo "'wget' is not installed, please install 'wget' as soon as posible!."
@@ -725,7 +725,7 @@ function fgit-config
 }
 
 # create a new key for gerrit authentication
-function fgit-keys
+function fgit-keys()
 {
 # email address
   _email=\$1
@@ -760,11 +760,11 @@ function fgit-keys
   fi
 }
 
-function fgit-login
+function fgit-login()
 {
   agent_pid=\$(ps -ef | grep "ssh-agent" | grep -v "grep" | awk '{print(\$2)}')
-  if [ "\$agent_pid" != "" ] ; then 
-    kill -9 \$agent_pid 
+  if [ "\$agent_pid" != "" ] ; then
+    kill -9 \$agent_pid
     echo "Killing ssh-agent, process id: \$agent_pid"
   fi
 
@@ -799,7 +799,7 @@ function fgit-login
   fi
 }
 
-function fgit-ssh_info
+function fgit-ssh_info()
 {
   _temp_file=\$(get-tempfile 'sshi')
   trap "clean-tempfile 'sshi' \${_temp_file}" EXIT
@@ -828,7 +828,7 @@ function fgit-ssh_info
   echo -n \$_temp_file
 }
 
-function fgit-ssh_connect
+function fgit-ssh_connect()
 {
   _temp_file=\$(fgit-ssh_info)
   [ ! \$? -eq 0 ] && return
@@ -855,7 +855,7 @@ function fgit-ssh_connect
   echo -n \$_clean_ssh_connect
 }
 
-function fgit-gerritcmd
+function fgit-gerritcmd()
 {
   _command=\$@
   if [[ -z "\$_command" ]] ; then
@@ -876,7 +876,7 @@ function fgit-gerritcmd
   echo -n \$proj_log
 }
 
-function fgit-projects
+function fgit-projects()
 {
   if [ -z \$GIT_URL ] ; then
     echo "ERROR missing export GIT_URL=http://host:8080"
@@ -886,7 +886,7 @@ function fgit-projects
   _alias=
   [ ! -z "\$1" ] && [ ! "\$1" = "-s" ] && _alias=\$1
   _connect=\$(fgit-ssh_connect \$_alias)
-  proj_log=\$(fgit-gerritcmd \$_connect gerrit ls-projects) 
+  proj_log=\$(fgit-gerritcmd \$_connect gerrit ls-projects)
   _connect=\$(echo -n \$_connect|sed 's/ -p /:/g')
 
   while read -r line
@@ -905,7 +905,7 @@ function fgit-projects
 }
 
 #depricate
-function fgit-testt
+function fgit-testt()
 {
   if [ -z \$GIT_URL ] ; then
     echo "ERROR missing export GIT_URL=http://host:8080"
@@ -934,7 +934,7 @@ function fgit-testt
   eval ssh -T \$_user@127.0.0.1 -p \$_ssh_port
 }
 
-function fgit-test
+function fgit-test()
 {
   if [ -z \$GIT_URL ] ; then
     echo "ERROR missing export GIT_URL=http://host:8080, try using git-config <email>"
@@ -969,7 +969,7 @@ function fgit-test
   fi
 }
 
-function fgit-tunel
+function fgit-tunel()
 {
   _user=\$1
   _pem_file=\$2
@@ -1007,7 +1007,7 @@ function fgit-tunel
   if [ -z \$_pem_file ] ; then
     if [ -f ~/.ssh/\$_user.pem ] ; then
       _pem_file=~/.ssh/\$_user.pem
-    elif [ -f ~/.hpcloud/keypairs/\$_user.pem ] ; then 
+    elif [ -f ~/.hpcloud/keypairs/\$_user.pem ] ; then
       _pem_file=~/.hpcloud/keypairs/\$_user.pem
     else
       echo "ERROR: no pem file found, try git-tunel \$_user <pemfile>"
@@ -1032,7 +1032,7 @@ function fgit-tunel
   fi
 }
 
-function fgit-clone
+function fgit-clone()
 {
 #check for url pattern
   if [[ \$_connect == *://*@*:*/* ]] ; then
@@ -1082,10 +1082,11 @@ function fgit-clone
 }
 
 #Example: readparam "GIT_USER"
-readparam() {
+readparam()
+{
   FILE=~/git.properties
   R=""
-  if [ -f "\$FILE" ]  ; then	
+  if [ -f "\$FILE" ]  ; then
     VALUE=\$(grep -E "^ *\$1" \$FILE  | cut -f2 -d'=')
     [ -n "\$VALUE" ] && R="\$VALUE"
   fi
@@ -1093,7 +1094,8 @@ readparam() {
 }
 
 #Example: writeparam "GIT_USER" "chavezom"
-writeparam() {
+writeparam()
+{
   FILE=~/git.properties
 
   if [ ! -f \$FILE ]  ; then
@@ -1112,8 +1114,32 @@ writeparam() {
   fi
 }
 
-function fgit-reset-all() 
-{ 
+# reset a git repository to it's origin
+function fgit-reset()
+{
+  _CWD=\$(pwd)
+  if git rev-parse --show-toplevel >/dev/null 2<&1 ; then
+    _GIT_REPO_ROOT=\$(git rev-parse --show-toplevel)
+    if [ "\${_GIT_REPO_ROOT}" = "$HOME" ]; then
+      echo "WARNING: you are about to reset your home folder!!! [\$_GIT_REPO_ROOT] "
+      echo -n "Do you really want to continue, if so type: [Yes] : "
+      read answer
+    else
+      answer="Yes"
+    fi
+
+    if [ "\${answer}" = "Yes" ]; then
+      cd "\${_GIT_REPO_ROOT}"
+      _BRANCH=\$(git branch|grep '^\* '|sed 's/^\*\s//g')
+      git reset --hard origin/master; git clean -x -d -f; git pull origin \${_BRANCH};
+    else
+      echo "Skipping reset ..."
+    fi
+  fi
+  cd "\${_CWD}"
+}
+function fgit-reset-all()
+{
   find . -maxdepth 1 -mindepth 1 -type d  -printf "%f\n"|xargs -i bash -c 'cd {};git rev-parse --show-toplevel 2>/dev/null;if [ $? -eq 0 ]; then git reset --hard;git clean -x -d -f;git pull origin stable; else echo "{} is not a git repository"; fi;';
 }
 
