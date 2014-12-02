@@ -1120,7 +1120,7 @@ function fgit-reset()
   _CWD=\$(pwd)
   if git rev-parse --show-toplevel >/dev/null 2<&1 ; then
     _GIT_REPO_ROOT=\$(git rev-parse --show-toplevel)
-    if [ "\${_GIT_REPO_ROOT}" = "$HOME" ]; then
+    if [ "\${_GIT_REPO_ROOT}" = "\$HOME" ]; then
       echo "WARNING: you are about to reset your home folder!!! [\$_GIT_REPO_ROOT] "
       echo -n "Do you really want to continue, if so type: [Yes] : "
       read answer
