@@ -50,8 +50,24 @@ if ! [ $CORKSCREW_IS_AVAILABLE -eq 0 ]; then
 fi
 
 
-grep -e "\.gitenv" ~/.profile > /dev/null 2<&1
+grep -e "\.gitenv" ~/.bash_aliases > /dev/null 2<&1
 if [[ ! $? -eq 0 ]] ; then
+    cat >> ~/.bash_aliases << GIT_ALIASES
+
+#
+# Source git environment shortcuts
+#
+if [ -f ~/.gitenv ] ; then
+    source ~/.gitenv
+    if [ ! -f ~/.gitenv.nologin ]; then
+        echo "running git-login, to disable execute: touch ~/.gitenv.nologin"
+        git-login
+    fi
+else
+    echo ".gitenv is missing, you can install with : . opt/bin/setup_git_alias.sh"
+fi
+GIT_ALIASES
+
     echo "# Source git environment shortcuts" >> ~/.profile
     echo ". ~/.gitenv" >> ~/.profile
 fi

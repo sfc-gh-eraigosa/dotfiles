@@ -69,3 +69,5 @@ if [ -f "$HOME/.config/fontconfig/conf.d/10-powerline-symbols.conf" ] ; then
 fi
 # Source git environment shortcuts
 . ~/.gitenv
+# Source git environment shortcuts
+. ~/.gitenv

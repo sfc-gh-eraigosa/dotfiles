@@ -2,12 +2,6 @@
 # alias files
 #
 
-# Source git environment shortcuts
-if [ -f ~/.gitenv ] ; then
-  . ~/.gitenv
-else
-  echo ".gitenv is missing, you can install with : . opt/bin/setup_git_alias.sh"
-fi
 alias dockerup='bash ~/opt/bin/docker_up.sh'
 alias novassh='function nova_ssh { ssh-keygen -f ~/.ssh/known_hosts -R $1;ssh -i ~/.ssh/nova-USWest-AZ3.pem -l ubuntu $1;};nova_ssh'
 alias novassh1='function nova_ssh1 { ssh-keygen -f ~/.ssh/known_hosts -R $1;ssh -i ~/.ssh/nova-USWest-AZ1.pem -l ubuntu $1;};nova_ssh1'
@@ -49,8 +43,6 @@ function startunity {
 };
 fi
 
-git-login
-
 # Pull the latest repos
 if [ -f "${HOME}/.gitrepos" ] ; then
   cd "${HOME}"
@@ -77,3 +69,16 @@ alias tb=~/git/forj-oss/maestro/tools/bin/test-box.sh
 alias win_nogl='LIBGL_ALWAYS_SOFTWARE=1 wine explorer'
 alias win='wine explorer -opengl'
 alias wow='WINEDEBUG=-all wine "/home/wenlock/.wine/drive_c/Program Files (x86)/World of Warcraft/Wow.exe"'
+
+#
+# Source git environment shortcuts
+#
+if [ -f ~/.gitenv ] ; then
+    source ~/.gitenv
+    if [ ! -f ~/.gitenv.nologin ]; then
+        echo "running git-login, to disable execute: touch ~/.gitenv.nologin"
+        git-login
+    fi
+else
+    echo ".gitenv is missing, you can install with : . opt/bin/setup_git_alias.sh"
+fi
