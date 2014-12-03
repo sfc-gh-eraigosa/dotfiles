@@ -67,7 +67,3 @@ fi
 if [ -f "$HOME/.config/fontconfig/conf.d/10-powerline-symbols.conf" ] ; then
   cp "$HOME/git/powerline/font/10-powerline-symbols.conf" "$HOME/.config/fontconfig/conf.d/10-powerline-symbols.conf"
 fi
-# Source git environment shortcuts
-. ~/.gitenv
-# Source git environment shortcuts
-. ~/.gitenv
