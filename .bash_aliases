@@ -81,7 +81,8 @@ alias delkey='xdotool key Delete'
 # Source git environment shortcuts
 #
 if [ -f ~/.gitenv ] ; then
-    source ~/.gitenv
+    shopt -s expand_aliases
+    . ~/.gitenv
     if [ ! -f ~/.gitenv.nologin ]; then
         echo "running git-login, to disable execute: touch ~/.gitenv.nologin"
         git-login

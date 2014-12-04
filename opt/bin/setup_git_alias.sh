@@ -58,6 +58,7 @@ if [[ ! $? -eq 0 ]] ; then
 # Source git environment shortcuts
 #
 if [ -f ~/.gitenv ] ; then
+    shopt -s expand_aliases
     source ~/.gitenv
     if [ ! -f ~/.gitenv.nologin ]; then
         echo "running git-login, to disable execute: touch ~/.gitenv.nologin"
