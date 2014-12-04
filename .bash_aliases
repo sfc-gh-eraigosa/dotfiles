@@ -71,6 +71,13 @@ alias win='wine explorer -opengl'
 alias wow='WINEDEBUG=-all wine "/home/wenlock/.wine/drive_c/Program Files (x86)/World of Warcraft/Wow.exe"'
 
 #
+# for coros and hpchromebook 14, so we have some keys.
+#
+alias f11='xdotool key F11'
+alias f12='xdotool key F12'
+alias delkey='xdotool key Delete'
+
+#
 # Source git environment shortcuts
 #
 if [ -f ~/.gitenv ] ; then
