@@ -126,3 +126,9 @@ source ~/google-cloud-sdk/path.bash.inc
 
 # The next line enables bash completion for gcloud.
 source ~/google-cloud-sdk/completion.bash.inc
+
+# needed for shellcheck
+if [ -f ~/.cabal/bin ] ; then
+    export PATH="${PATH}:~/.cabal/bin"
+fi
+
