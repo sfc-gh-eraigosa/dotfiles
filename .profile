@@ -26,6 +26,12 @@ fi
 if [ -d "$HOME/opt/bin" ] ; then
     PATH="$HOME/opt/bin:$PATH"
 fi
+
+# cabal
+if [ -d "$HOME/.cabal/bin" ] ; then
+      PATH="$HOME/.cabal/bin:$PATH"
+fi
+
 export PUPPET_MODULES=$PUPPET_MODULES:~/.puppet/modules
 export PUPPET_MODULES=/opt/config/production/puppet/modules:~/git/CDK-infra/blueprints/openstack/puppet/modules:/opt/config/production/git/config/modules:/etc/puppet/modules:/home/wenlock/.puppet/modules
 

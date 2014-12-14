@@ -53,8 +53,8 @@ source $ZSH/oh-my-zsh.sh
 # User configuration
 
 # export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games"
-if [ -f ~/.cabal/bin ] ; then
-  export PATH="${PATH}:~/.cabal/bin"
+if [ -d $HOME/.cabal/bin ] ; then
+  export PATH="$HOME/.cabal/bin:$PATH"
 fi
 # export MANPATH="/usr/local/man:$MANPATH"
 
