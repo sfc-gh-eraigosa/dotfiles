@@ -53,6 +53,9 @@ source $ZSH/oh-my-zsh.sh
 # User configuration
 
 # export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games"
+if [ -f ~/.cabal/bin ] ; then
+  export PATH="${PATH}:~/.cabal/bin"
+fi
 # export MANPATH="/usr/local/man:$MANPATH"
 
 # You may need to manually set your language environment
