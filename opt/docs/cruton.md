@@ -40,7 +40,7 @@ I'm using [crouton](https://github.com/dnschneid/crouton), which is a chroot OS 
 
 If you follow those instructions exactly, you should end up with awesome UI plus ubuntu 12.04.  Give yourself 1-2 hours for the chroot setup to complete.  
 
-UPDATE: I switched away from awesome UI to the unity UI.  This was alot more user friendly and seemed easier to setup.
+UPDATE: I switched away from awesome UI to the unity UI.  This was a lot more user friendly and seemed easier to setup.
 
 I'll be doing this again with some options for installing my chroot to usb.  Such as :
 ```sh
