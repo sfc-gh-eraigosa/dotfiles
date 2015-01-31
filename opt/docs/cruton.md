@@ -111,7 +111,7 @@ This gives you a way to install lots more stuff on your SD card, than what disk 
 
 ```sh
 sudo fdisk -l # point here is to make sure the sd card is /dev/sdb device
-sudo umount /dev/sdb1
+sudo umount /dev/sdb
 sudo mke2fs /dev/sdb
 ```
 
