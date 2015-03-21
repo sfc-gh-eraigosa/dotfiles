@@ -8,7 +8,7 @@ These instructions are mainly for my setup but might apply to others who are doi
 I've mainly been using these steps on Ubuntu 14.04 standalone and versions I install from cruton on ChromeOS
 
 #### HP Elitebook 8500 special setup ####
-Setup nvidia drivers and bios options.  Only need to perform for Elitebook 8500 laptops.
+Setup nvidia drivers and bios options.  Only need to perform for Elitebook 8500 laptops.  Otherwise the suspend feature will fail to work correctly with ubuntu.
 
 1. edit /etc/defaults/grub, add line after quiet splash, nouveau.modeset=0
 2. update grub: ```sudo update-grub```
@@ -20,6 +20,36 @@ Configure the video drivers
 3. ```sudo reboot```
 
 Configure the system bios by disable fastboot, or use bios defaults
+
+#### Install software update tools ####
+```script
+sudo apt-get update; \
+sudo apt-get -y autoremove ; \
+sudo apt-get -y install software-center; \
+sudo apt-get -y install apptitude;
+```
+
+#### Package installs ####
+* firefox
+* terminator
+* filezilla
+* Visit google.com/chrome with firefox, download and autostart chrome installation
+TODO: need a script
+```script
+sudo apt-get -y install 
+```
+
+#### Configure Google Chrome App Launcher ####
+
+   run from chrome: chrome://flags/#enable-app-list
+   restart chrome
+   search in app start for app launcher, and lock to tool bar.
+
+#### Install build tools ####
+```script
+sudo apt-get install build-essential libssl-dev zlib1g-dev libxml2-dev libxslt-dev git -y
+```
+
 
 TODO: Finish doc....
 
