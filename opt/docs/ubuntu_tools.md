@@ -81,6 +81,24 @@ git pull origin master ; \
 git reset --hard origin/master;
 ```
 
+#### git shortcuts ####
+The next script I use to automate and simplify some of the usage of git on my local system at the command prompt.  After installation you'll get a script called ```~/.gitenv``` which will be sourced as a set of funcitons and aliases from the ```~/.profile``` shell environment.  Use ```git-help``` to get started on usage / setup.
+
+```script
+bash ~/opt/bin/setup_git_alias.sh
+```
+
+#### setup zsh ####
+Love this shell over bash for productivity.  For automation bash is still the cross platform winner in my mind.
+```script
+sudo apt-get install zsh -y
+wget --no-check-certificate http://install.ohmyz.sh -O - | ZSH=~/.oh-my-zsh sh
+chsh -s /bin/zsh
+```
+
+#### give your command prompt some bling ####
+I like knowing when a file on my git repo has changed, and when things are as they should be.
+
 TODO: Finish doc....
 
 Tools
