@@ -47,9 +47,39 @@ sudo apt-get -y install
 
 #### Install build tools ####
 ```script
-sudo apt-get install build-essential libssl-dev zlib1g-dev libxml2-dev libxslt-dev git -y
+sudo apt-get install corkscrew build-essential libssl-dev zlib1g-dev libxml2-dev libxslt-dev git -y
 ```
 
+#### Bootstrap puppet ####
+```script
+wget --no-check-certificate \
+https://raw.githubusercontent.com/forj-oss/maestro/master/puppet/install_puppet.sh -O - \
+ | sudo bash
+```
+
+#### MyHome directory setup ####
+[My Home Instructions](https://github.com/wenlock/myhome/blob/master/README.md)
+* copy Keys to ~/.ssh
+* Setup proxy script
+```script
+sudo bash -c 'echo "export PROXY=http://yourproxy:8080" > /etc/profile.d/00_proxy.sh'
+sudo bash -c 'curl https://raw.githubusercontent.com/forj-oss/forj-docker/master/bin/scripts/proxy.sh > /etc/profile.d/01_proxy.sh`
+```
+* secure keys
+```script
+mkdir ~/.ssh
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/*
+eval $(ssh-agent); ssh-add ~/.ssh/gerrit_keys
+```
+* pull myhome repo
+```script
+cd ~ ; \
+git init ; \
+git remote add origin git@github.com:wenlock/myhome.git ; \
+git pull origin master ; \
+git reset --hard origin/master;
+```
 
 TODO: Finish doc....
 
