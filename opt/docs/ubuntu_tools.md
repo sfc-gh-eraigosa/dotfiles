@@ -38,6 +38,7 @@ sudo apt-get -y install apptitude;
 * Pithos
 * System Load Indicator
 * Remote Desktop Viewer
+* install Wallch  # screen shot desktop
 
 TODO: need a script
 ```script
@@ -48,7 +49,8 @@ sudo apt-get -y install firefox firefox-locale-en \
     keepass2 keepass2-doc \
     pithos \
     indicator-multiload \
-    remmina remmina-common remmina-plugin-rdp remmina-plugin-vnc
+    remmina remmina-common remmina-plugin-rdp remmina-plugin-vnc \
+    wallch
 ```
 
 #### Install build tools ####
@@ -153,9 +155,6 @@ wget -qO - https://d2t3ff60b2tol4.cloudfront.net/services@insynchq.com.gpg.key \
 sudo -i apt-get update
 sudo -i apt-get -y install insync
 ```
-
-#### install desktop ####
-install Wallch
 
 #### install nodejs ####
 ```script
