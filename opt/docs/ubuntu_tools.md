@@ -38,17 +38,18 @@ sudo apt-get -y install apptitude;
 * Pithos
 * System Load Indicator
 * Remote Desktop Viewer
-* Visit google.com/chrome with firefox, download and autostart chrome installation
+
 TODO: need a script
 ```script
-sudo apt-get -y install 
+sudo apt-get -y install firefox firefox-locale-en \
+    terminator \
+    filezilla \
+    k4dirstat \
+    keepass2 keepass2-doc \
+    pithos \
+    indicator-multiload \
+    remmina remmina-common remmina-plugin-rdp remmina-plugin-vnc \
 ```
-
-#### Configure Google Chrome App Launcher ####
-
-   run from chrome: chrome://flags/#enable-app-list
-   restart chrome
-   search in app start for app launcher, and lock to tool bar.
 
 #### Install build tools ####
 ```script
@@ -61,6 +62,20 @@ wget --no-check-certificate \
 https://raw.githubusercontent.com/forj-oss/maestro/master/puppet/install_puppet.sh -O - \
  | sudo bash
 ```
+
+#### Install Google Chrome ####
+* Visit google.com/chrome with firefox, download and autostart chrome installation
+```script
+cd /etc/puppet/modules
+sudo git clone https://github.com/jamesnetherton/puppet-google-chrome google_chrome
+puppet apply --modulepath=/etc/puppet/modules -e 'include google_chrome'
+```
+
+#### Configure Google Chrome App Launcher ####
+
+   run from chrome: chrome://flags/#enable-app-list
+   restart chrome
+   search in app start for app launcher, and lock to tool bar.
 
 #### MyHome directory setup ####
 [My Home Instructions](https://github.com/wenlock/myhome/blob/master/README.md)
