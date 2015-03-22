@@ -63,21 +63,6 @@ https://raw.githubusercontent.com/forj-oss/maestro/master/puppet/install_puppet.
  | sudo bash
 ```
 
-#### Install Google Chrome ####
-* Visit google.com/chrome with firefox, download and autostart chrome installation
-```script
-cd /etc/puppet/modules
-sudo -i puppet module install juniorsysadmin-chromerepo
-sudo -i puppet apply --verbose --debug --modulepath=/etc/puppet/modules -e "include chromerepo"
-sudo -i apt-get -y install google-chrome-stable
-```
-
-#### Configure Google Chrome App Launcher ####
-
-   run from chrome: chrome://flags/#enable-app-list
-   restart chrome
-   search in app start for app launcher, and lock to tool bar.
-
 #### MyHome directory setup ####
 [My Home Instructions](https://github.com/wenlock/myhome/blob/master/README.md)
 * copy Keys to ~/.ssh
@@ -136,6 +121,21 @@ wget https://github.com/powerline/powerline/raw/develop/font/10-powerline-symbol
 * Restart terminator
 * ```git pull origin master; git reset --hard origin/master;. ./.bashrc```
 * reboot the desktop ```sudo reboot```
+
+#### Install Google Chrome ####
+* Visit google.com/chrome with firefox, download and autostart chrome installation
+```script
+cd /etc/puppet/modules
+sudo -i puppet module install juniorsysadmin-chromerepo
+sudo -i puppet apply --verbose --debug --modulepath=/etc/puppet/modules -e "include chromerepo"
+sudo -i apt-get -y install google-chrome-stable
+```
+
+#### Configure Google Chrome App Launcher ####
+
+   run from chrome: chrome://flags/#enable-app-list
+   restart chrome
+   search in app start for app launcher, and lock to tool bar.
 
 #### chrombook kernel headers installation ####
 On chromebooks, if you plan to use virtual box, there is a nice [guide that explains](https://github.com/divx118/crouton-packages) how to install kernel headers.  Here are some shortcuts that cover the installation in the guide.
