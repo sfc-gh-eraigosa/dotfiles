@@ -53,7 +53,7 @@ sudo apt-get -y install firefox firefox-locale-en \
 
 #### Install build tools ####
 ```script
-sudo apt-get install corkscrew build-essential libssl-dev zlib1g-dev libxml2-dev libxslt-dev git -y
+sudo apt-get install curl corkscrew build-essential libssl-dev zlib1g-dev libxml2-dev libxslt-dev git -y
 ```
 
 #### Bootstrap puppet ####
@@ -69,8 +69,16 @@ https://raw.githubusercontent.com/forj-oss/maestro/master/puppet/install_puppet.
 * Setup proxy script
 ```script
 sudo bash -c 'echo "export PROXY=http://yourproxy:8080" > /etc/profile.d/00_proxy.sh'
-sudo bash -c 'curl https://raw.githubusercontent.com/forj-oss/forj-docker/master/bin/scripts/proxy.sh > /etc/profile.d/01_proxy.sh`
+sudo bash -c 'curl https://raw.githubusercontent.com/forj-oss/forj-docker/master/bin/scripts/proxy.sh > /etc/profile.d/01_proxy.sh'
+sudo chmod +x /etc/profile.d/??_proxy.sh
 ```
+If you use your computer between work and home, and you don't need a proxy at home, you can optionally turn on / off proxy with contents of 00_proxy.sh being (where 10.0.1.* is your home subet, set this to what yours is):
+```script
+if [ ! "$(facter ipaddress|grep '10.0.1.*'|wc -l)" -gt 0 ];then
+    export PROXY=http://web-proxy.corp.hp.com:8080
+fi
+```
+
 * secure keys
 ```script
 mkdir ~/.ssh
