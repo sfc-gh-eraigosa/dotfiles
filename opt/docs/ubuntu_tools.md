@@ -174,6 +174,7 @@ sudo -i apt-get update
 sudo -i apt-get -y install atom
 ```
 * Install some [atom plugins](atom-plugins.md)
+
 #### install wine, with wow ####
 ```script
 sudo -i apt-add-repository ppa:foresto/winepatched
