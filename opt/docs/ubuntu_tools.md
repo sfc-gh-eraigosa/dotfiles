@@ -121,6 +121,7 @@ wget https://github.com/Lokaltog/powerline/raw/develop/font/PowerlineSymbols.otf
 sudo mv PowerlineSymbols.otf /usr/share/fonts/
 sudo fc-cache -vf
 sudo mv 10-powerline-symbols.conf /etc/fonts/conf.d/
+[ ! -d ~/.fonts ] && mkdir -p ~/.fonts
 cd ~/.fonts
 wget https://github.com/powerline/powerline/raw/develop/font/PowerlineSymbols.otf
 fc-cache -vf ~/.fonts
