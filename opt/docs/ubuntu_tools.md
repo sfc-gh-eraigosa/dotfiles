@@ -67,8 +67,8 @@ https://raw.githubusercontent.com/forj-oss/maestro/master/puppet/install_puppet.
 * Visit google.com/chrome with firefox, download and autostart chrome installation
 ```script
 cd /etc/puppet/modules
-sudo git clone https://github.com/jamesnetherton/puppet-google-chrome google_chrome
-puppet apply --modulepath=/etc/puppet/modules -e 'include google_chrome'
+sudo -i puppet module install jamesnetherton-google_chrome
+sudo -i puppet apply --modulepath=/etc/puppet/modules -e 'include google_chrome'
 ```
 
 #### Configure Google Chrome App Launcher ####
