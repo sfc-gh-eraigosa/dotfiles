@@ -348,6 +348,7 @@ sudo dpkg -i ./vagrant.dep
 #### Install forj-docker ####
 * setup bundler
 ```script
+sudo apt-get install ruby1.9.1-dev
 sudo gem install bundler --no-rdoc --no-ri
 ```
 * setup forj-docker
