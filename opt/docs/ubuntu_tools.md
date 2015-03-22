@@ -293,6 +293,7 @@ http://goo.gl/vXxfpt
 cd /etc/puppet/modules
 sudo -i puppet module install juniorsysadmin-chromerepo
 sudo -i puppet apply --verbose --debug --modulepath=/etc/puppet/modules -e "include chromerepo"
+sudo -i apt-get install libxss1 libappindicator1 libindicator7
 sudo -i apt-get -y install google-chrome-stable
 ```
 
