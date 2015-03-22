@@ -147,7 +147,7 @@ xbindkeys-config
 #### Install google drive sync ####
 This requires a 15-20$ subscription, but very usefull.
 ```script
-sudo -i bash -c 'echo deb deb http://apt.insynchq.com/ubuntu trusty non-free contrib>> /etc/apt/sources.list'
+sudo -i bash -c 'echo deb http://apt.insynchq.com/ubuntu/ trusty non-free contrib>> /etc/apt/sources.list'
 wget -qO - https://d2t3ff60b2tol4.cloudfront.net/services@insynchq.com.gpg.key \
 | sudo -i apt-key add -
 sudo -i apt-get update
