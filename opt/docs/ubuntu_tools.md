@@ -131,6 +131,157 @@ wget https://github.com/powerline/powerline/raw/develop/font/10-powerline-symbol
 * ```mkdir ~/git;git pull origin master; git reset --hard origin/master;. ./.bashrc```
 * reboot the desktop ```sudo reboot```
 
+#### key bindings setup ####
+```script
+sudo apt-get install xdotool
+https://github.com/dnschneid/crouton/wiki#custom-keys-bindings-via-commands
+https://help.ubuntu.com/community/KeyboardShortcuts
+sudo apt-get install xbindkeys xbindkeys-config xvkbd -y
+xbindkeys --defaults > /home/$(whoami)/.xbindkeysrc
+```
+* to change things around
+```script
+xbindkeys
+xbindkeys-config
+```
+#### Install google drive sync ####
+This requires a 15-20$ subscription, but very usefull.
+```script
+sudo bash -c 'echo deb deb http://apt.insynchq.com/ubuntu trusty non-free contrib>> /etc/apt/sources.list'
+wget -qO - https://d2t3ff60b2tol4.cloudfront.net/services@insynchq.com.gpg.key \
+| sudo apt-key add -
+sudo apt-get update
+sudo apt-get install insync
+```
+
+#### install desktop ####
+install Wallch
+
+#### install nodejs ####
+```script
+sudo add-apt-repository ppa:chris-lea/node.js
+sudo apt-get update
+sudo apt-get install nodejs
+```
+
+#### install atom ####
+```script
+sudo add-apt-repository ppa:webupd8team/atom
+sudo apt-get update
+sudo apt-get install atom
+```
+
+#### install wine, with wow ####
+```script
+sudo apt-add-repository ppa:foresto/winepatched
+sudo apt-get update
+sudo apt-get install wine1.7 
+```
+* get mono installed
+```wine notepad```
+
+* sound config for wow setting Config.wtf
+```
+SET Sound_SoundOutputSystem "1"
+# SET SoundBufferSize 50-250
+# SET SoundOutputSystem "1"
+SET Sound_SoundBufferSize "150"
+# remove /etc/asound* and ~/.asound*
+# padsp winecfg, use OSS
+# wine reg add "HKCU\Software\Blizzard Entertainment\Blizzard Downloader" /v "Disable Peer-to-Peer" /t REG_DWORD /d "1" /f
+# ui corruption
+Set UIFaster "2"
+# better frame rates
+SET ffxDeath "0"
+SET ffxGlow "0"
+# stutters, /etc/X11/xorg.conf
+Option "UseFastTLS" "2"
+```
+
+#### install myrooms ####
+```script
+cd ~/Downloads
+wget https://www.myroom.hp.com/downloadfiles/hpmyroom_v10.0.0.0210_amd64.deb
+sudo dpkg -i ./hpmyroom_v10.0.0.0210_amd64.deb
+```
+
+#### pidgin installation ####
+* Install pidgin from software center
+  Choose more , and select additional packages
+* compile sipe
+```script
+sudo apt-get install libgstreamer0.10-dev libnice-dev libpurple-dev libnss3-dev libglib2.0-dev checkinstall intltool -y
+mkdir -p ~/Downloads/sipe
+cd ~/Downloads/sipe
+rm -rf pidgin-sipe-1.18.4
+wget http://sourceforge.net/projects/sipe/files/sipe/pidgin-sipe-1.18.4/pidgin-sipe-1.18.4.tar.gz
+tar -xzvf pidgin-sipe-1.18.4.tar.gz
+cd pidgin-sipe-1.18.4
+./configure --with-vv --prefix=/usr
+make
+sudo checkinstall -D make install
+#verify the package install
+dpkg -s pidgin-sipe
+# or install without package
+sudo make install
+```
+
+#### install dig ####
+```script
+sudo apt-get install dnsutils
+```
+
+#### Installing extra certificates ####
+Installing self signed certificates from sites you trust for chrome:
+see http://blog.avirtualhome.com/adding-ssl-certificates-to-google-chrome-linux-ubuntu/
+
+1. setup some tools
+```script
+sudo apt-get install libnss3-tools
+sudo apt-get install curl
+```
+
+2. install common certs
+```script
+cd ~/Downloads
+curl -k -o "cacert-root.crt"   "http://www.cacert.org/certs/root.crt"
+curl -k -o "cacert-class3.crt" "http://www.cacert.org/certs/class3.crt"
+certutil -d sql:$HOME/.pki/nssdb -A -t TC -n "CAcert.org" -i cacert-root.crt 
+certutil -d sql:$HOME/.pki/nssdb -A -t TC -n "CAcert.org Class 3" -i cacert-class3.crt
+```
+
+3. run script described in "Using my little script" of above link
+```bash ~/opt/bin/import-cert.sh hostname portnum```
+
+#### install hipchat ####
+```script
+sudo bash -c 'echo "deb http://downloads.hipchat.com/linux/apt stable main" > \
+  /etc/apt/sources.list.d/atlassian-hipchat.list'
+wget -O - https://www.hipchat.com/keys/hipchat-linux.key | apt-key add -
+apt-get update
+apt-get install hipchat
+```
+
+#### install java ####
+```script
+sudo apt-get install default-jre -y
+sudo apt-get install default-jdk -y
+```
+
+#### setup latest version of seahorse for gnome keyring ####
+```script
+sudo apt-get install seahorse-nautilus
+killall nautilus && nautilus &
+```
+
+#### setup shellcheck ####
+```script
+sudo apt-get install -y cabal-install
+cabal update
+cabal install shellcheck
+```
+http://goo.gl/vXxfpt
+
 #### Install Google Chrome ####
 * Visit google.com/chrome with firefox, download and autostart chrome installation
 ```script
@@ -212,67 +363,6 @@ reboot
 rake dev
 ```
 
-#### Install google drive sync ####
-This requires a 15-20$ subscription, but very usefull.
-```script
-sudo bash -c 'echo deb deb http://apt.insynchq.com/ubuntu trusty non-free contrib>> /etc/apt/sources.list'
-wget -qO - https://d2t3ff60b2tol4.cloudfront.net/services@insynchq.com.gpg.key \
-| sudo apt-key add -
-sudo apt-get update
-sudo apt-get install insync
-```
-
-#### install desktop ####
-install Wallch
-
-#### install nodejs ####
-```script
-sudo add-apt-repository ppa:chris-lea/node.js
-sudo apt-get update
-sudo apt-get install nodejs
-```
-
-#### install atom ####
-```script
-sudo add-apt-repository ppa:webupd8team/atom
-sudo apt-get update
-sudo apt-get install atom
-```
-
-#### install wine, with wow ####
-```script
-sudo apt-add-repository ppa:foresto/winepatched
-sudo apt-get update
-sudo apt-get install wine1.7 
-```
-* get mono installed
-```wine notepad```
-
-* sound config for wow setting Config.wtf
-```
-SET Sound_SoundOutputSystem "1"
-# SET SoundBufferSize 50-250
-# SET SoundOutputSystem "1"
-SET Sound_SoundBufferSize "150"
-# remove /etc/asound* and ~/.asound*
-# padsp winecfg, use OSS
-# wine reg add "HKCU\Software\Blizzard Entertainment\Blizzard Downloader" /v "Disable Peer-to-Peer" /t REG_DWORD /d "1" /f
-# ui corruption
-Set UIFaster "2"
-# better frame rates
-SET ffxDeath "0"
-SET ffxGlow "0"
-# stutters, /etc/X11/xorg.conf
-Option "UseFastTLS" "2"
-```
-
-#### install myrooms ####
-```script
-cd ~/Downloads
-wget https://www.myroom.hp.com/downloadfiles/hpmyroom_v10.0.0.0210_amd64.deb
-sudo dpkg -i ./hpmyroom_v10.0.0.0210_amd64.deb
-```
-
 #### private vpn setup####
 No one but hp employees will be able to use the pip module.
 ```script
@@ -285,98 +375,6 @@ sudo pip install Hpvpn-1.0.1.zip
 sudo hpvpn
 ```
 
-#### pidgin installation ####
-* Install pidgin from software center
-  Choose more , and select additional packages
-* compile sipe
-```script
-sudo apt-get install libgstreamer0.10-dev libnice-dev libpurple-dev libnss3-dev libglib2.0-dev checkinstall intltool -y
-mkdir -p ~/Downloads/sipe
-cd ~/Downloads/sipe
-rm -rf pidgin-sipe-1.18.4
-wget http://sourceforge.net/projects/sipe/files/sipe/pidgin-sipe-1.18.4/pidgin-sipe-1.18.4.tar.gz
-tar -xzvf pidgin-sipe-1.18.4.tar.gz
-cd pidgin-sipe-1.18.4
-./configure --with-vv --prefix=/usr
-make
-sudo checkinstall -D make install
-#verify the package install
-dpkg -s pidgin-sipe
-# or install without package
-sudo make install
-```
-
-#### install dig ####
-```script
-sudo apt-get install dnsutils
-```
-
-#### Installing extra certificates ####
-Installing self signed certificates from sites you trust for chrome:
-see http://blog.avirtualhome.com/adding-ssl-certificates-to-google-chrome-linux-ubuntu/
-
-1. setup some tools
-```script
-sudo apt-get install libnss3-tools
-sudo apt-get install curl
-```
-
-2. install common certs
-```script
-cd ~/Downloads
-curl -k -o "cacert-root.crt"   "http://www.cacert.org/certs/root.crt"
-curl -k -o "cacert-class3.crt" "http://www.cacert.org/certs/class3.crt"
-certutil -d sql:$HOME/.pki/nssdb -A -t TC -n "CAcert.org" -i cacert-root.crt 
-certutil -d sql:$HOME/.pki/nssdb -A -t TC -n "CAcert.org Class 3" -i cacert-class3.crt
-```
-
-3. run script described in "Using my little script" of above link
-```bash ~/opt/bin/import-cert.sh hostname portnum```
-
-#### install hipchat ####
-```script
-sudo bash -c 'echo "deb http://downloads.hipchat.com/linux/apt stable main" > \
-  /etc/apt/sources.list.d/atlassian-hipchat.list'
-wget -O - https://www.hipchat.com/keys/hipchat-linux.key | apt-key add -
-apt-get update
-apt-get install hipchat
-```
-
-#### install java ####
-```script
-sudo apt-get install default-jre -y
-sudo apt-get install default-jdk -y
-```
-
-#### key bindings setup ####
-```script
-sudo apt-get install xdotool
-https://github.com/dnschneid/crouton/wiki#custom-keys-bindings-via-commands
-https://help.ubuntu.com/community/KeyboardShortcuts
-sudo apt-get install xbindkeys xbindkeys-config xvkbd -y
-xbindkeys --defaults > /home/$(whoami)/.xbindkeysrc
-```
-* to change things around
-```script
-xbindkeys
-xbindkeys-config
-```
-
-#### setup latest version of seahorse for gnome keyring ####
-```script
-sudo apt-get install seahorse-nautilus
-killall nautilus && nautilus &
-```
-
 #### chage reboot policy in ####
  /usr/share/polkit-1/actions/org.freedesktop.consolekit.policy
-
-#### setup shellcheck ####
-```script
-sudo apt-get install -y cabal-install
-cabal update
-cabal install shellcheck
-```
-http://goo.gl/vXxfpt
-
 
