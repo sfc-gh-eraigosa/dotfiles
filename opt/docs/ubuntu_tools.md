@@ -128,7 +128,7 @@ fc-cache -vf ~/.fonts
 wget https://github.com/powerline/powerline/raw/develop/font/10-powerline-symbols.conf
 ```
 * Restart terminator
-* ```git pull origin master; git reset --hard origin/master;. ./.bashrc```
+* ```mkdir ~/git;git pull origin master; git reset --hard origin/master;. ./.bashrc```
 * reboot the desktop ```sudo reboot```
 
 #### Install Google Chrome ####
