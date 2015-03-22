@@ -39,6 +39,7 @@ sudo apt-get -y install apptitude;
 * System Load Indicator
 * Remote Desktop Viewer
 * install Wallch  # screen shot desktop
+* htop nice top console tool
 
 TODO: need a script
 ```script
@@ -50,7 +51,8 @@ sudo apt-get -y install firefox firefox-locale-en \
     pithos \
     indicator-multiload \
     remmina remmina-common remmina-plugin-rdp remmina-plugin-vnc \
-    wallch
+    wallch \
+    htop
 ```
 
 #### Install build tools ####
