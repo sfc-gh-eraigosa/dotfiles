@@ -223,6 +223,7 @@ sudo apt-get install wine1.7
 ```wine notepad```
 
 * sound config for wow setting Config.wtf
+```
 SET Sound_SoundOutputSystem "1"
 # SET SoundBufferSize 50-250
 # SET SoundOutputSystem "1"
@@ -237,6 +238,7 @@ SET ffxDeath "0"
 SET ffxGlow "0"
 # stutters, /etc/X11/xorg.conf
 Option "UseFastTLS" "2"
+```
 
 #### install myrooms ####
 ```script
