@@ -37,6 +37,7 @@ sudo apt-get -y install apptitude;
 * KeePass2
 * Pithos
 * System Load Indicator
+* Remote Desktop Viewer
 * Visit google.com/chrome with firefox, download and autostart chrome installation
 TODO: need a script
 ```script
@@ -258,9 +259,6 @@ cd ~/Downloads
 sudo pip install Hpvpn-1.0.1.zip
 sudo hpvpn
 ```
-
-#### remote desktop ####
-Remote Desktop Viewer via software central
 
 #### pidgin installation ####
 * Install pidgin from software center
