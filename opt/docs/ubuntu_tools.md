@@ -354,7 +354,8 @@ sudo gem install bundler --no-rdoc --no-ri
 ```script
 mkdir -p ~/git/forj-oss
 cd ~/git/forj-oss
-git clone review:forj-oss/forj-docker  # this assumes ~/.ssh/config has review alias
+# this assumes ~/.ssh/config has review alias
+git-clone review:forj-oss/forj-docker 
 cd forj-docker
 ruby -S bundle install --gemfile Gemfile
 ```
