@@ -105,7 +105,7 @@ bash ~/opt/bin/setup_git_alias.sh
 #### setup zsh ####
 Love this shell over bash for productivity.  For automation bash is still the cross platform winner in my mind.
 ```script
-sudo apt-get install zsh -y
+sudo -i apt-get install zsh -y
 wget --no-check-certificate http://install.ohmyz.sh -O - | ZSH=~/.oh-my-zsh sh
 chsh -s /bin/zsh
 ```
