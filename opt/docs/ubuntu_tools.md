@@ -198,6 +198,8 @@ Option "UseFastTLS" "2"
 ```
 
 #### install myrooms ####
+TODO: fix instructions, not working.
+
 ```script
 cd ~/Downloads
 wget https://www.myroom.hp.com/downloadfiles/hpmyroom_v10.0.0.0210_amd64.deb
