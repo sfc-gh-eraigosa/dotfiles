@@ -48,7 +48,7 @@ sudo apt-get -y install firefox firefox-locale-en \
     keepass2 keepass2-doc \
     pithos \
     indicator-multiload \
-    remmina remmina-common remmina-plugin-rdp remmina-plugin-vnc \
+    remmina remmina-common remmina-plugin-rdp remmina-plugin-vnc
 ```
 
 #### Install build tools ####
