@@ -26,8 +26,8 @@ sudo wget -P /usr/local/share/fonts https://raw.github.com/Lokaltog/powerline/de
 mkdir -p /tmp/test/
 sudo mount --bind /home/chronos/ /tmp/test/
 cd /tmp/test/user
+sudo -i
 cat > .font.conf << FONTS
-chronos@localhost ~ $ cat .fonts.conf 
 <?xml version="1.0"?>
 <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
 <fontconfig>
