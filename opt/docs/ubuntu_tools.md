@@ -40,6 +40,7 @@ sudo apt-get -y install apptitude;
 * Remote Desktop Viewer
 * install Wallch  # screen shot desktop
 * htop nice top console tool
+* vim, nicer vi editor
 
 TODO: need a script
 ```script
@@ -52,7 +53,8 @@ sudo apt-get -y install firefox firefox-locale-en \
     indicator-multiload \
     remmina remmina-common remmina-plugin-rdp remmina-plugin-vnc \
     wallch \
-    htop
+    htop \
+    vim
 ```
 
 #### Install build tools ####
