@@ -174,6 +174,9 @@ sudo -i apt-get update
 sudo -i apt-get -y install atom
 ```
 * Install some [atom plugins](atom-plugins.md)
+```script
+apm install --packages-file ~/opt/conf/apm_packages.config
+```
 
 #### install wine, with wow ####
 ```script
