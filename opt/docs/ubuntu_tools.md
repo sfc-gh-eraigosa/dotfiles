@@ -386,3 +386,21 @@ sudo hpvpn
 #### chage reboot policy in ####
  /usr/share/polkit-1/actions/org.freedesktop.consolekit.policy
 
+#### Setup sshd server ####
+To connect to your desktop with ssh
+```script
+sudo -i apt-get update 
+sudo -i apt-get install -y openssh-server
+sudo -i mkdir -p /var/run/sshd
+```
+Specific to chromeos you need to enable the [service to run](https://github.com/dnschneid/crouton/wiki/Running-servers-in-crouton):
+```script
+sudo apt-get -y install iptables
+sudo /sbin/iptables -I INPUT -p tcp --dport 22 -j ACCEPT
+```
+Edit /etc/rc.local with :
+```script
+mkdir -p -m0755 /var/run/sshd
+/usr/sbin/sshd
+```
+ 
