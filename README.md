@@ -1,5 +1,6 @@
 myhome
 ----
+[![Build Status](https://drone.io/github.com/wenlock/myhome/status.png)](https://drone.io/github.com/wenlock/myhome/latest)
 
 Ubuntu Bash/zsh Home profile setup, includes vimrc's profiles some git commands
 
