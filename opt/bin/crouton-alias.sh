@@ -77,8 +77,8 @@ function crouton-run {
 function crouton-update {
    [[ -z "$CHROOT_NAME" ]] && CHROOT_NAME=trusty
    cd ~/Downloads
-   [ ! -f ./crouton ] && curl https://goo.gl/fd3zc > ./crouton
-   [ ! -f ./crouton-alias.sh ] && curl https://raw.githubusercontent.com/wenlock/myhome/master/opt/bin/crouton-alias.sh > ./crouton-alias.sh
+   [ ! -f ./crouton ] && curl -L https://goo.gl/fd3zc > ./crouton
+   [ ! -f ./crouton-alias.sh ] && curl -L https://raw.githubusercontent.com/wenlock/myhome/master/opt/bin/crouton-alias.sh > ./crouton-alias.sh
    sudo sh ./crouton -u -n $CHROOT_NAME
 }
 function crouton-clean {
