@@ -68,5 +68,5 @@ function crouton-start {
 
 function crouton-update {
    [[ -z "$CHROOT_NAME" ]] && CHROOT_NAME=trusty
-   sudo sh ~/Downloads/crouton -u -t $CHROOT_NAME
+   sudo sh ~/Downloads/crouton -u -n $CHROOT_NAME
 }
