@@ -65,7 +65,14 @@ function crouton-start {
            ;;
    esac
 }
-
+function crouton-run {
+    COMMAND=$1
+    if [ -z "$COMMAND" ]; then
+       echo "crouton-run <command> : run a xiwi command in chrome window"
+    else
+       sudo enter-chroot -b xiwi $COMMAND -n $CHROOT_NAME
+    fi
+}
 function crouton-update {
    [[ -z "$CHROOT_NAME" ]] && CHROOT_NAME=trusty
    cd ~/Downloads
