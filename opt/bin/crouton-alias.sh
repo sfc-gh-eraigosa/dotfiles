@@ -27,8 +27,9 @@ function crouton-help {
                              cmd  - command prompt only
                              xorg - full video , switch with ctl-alt-shift <arrows>
                              xiwi - use the chromeapp to connect and switch 
-
+    crouton-run [command] : run a xiwi window command.  example: crouton-run terminator
     crouton-update : update the crouton image
+    crouton-clean  : clean up the crouton scripts and alias
 HELP_TXT
 
 }
@@ -77,5 +78,12 @@ function crouton-update {
    [[ -z "$CHROOT_NAME" ]] && CHROOT_NAME=trusty
    cd ~/Downloads
    [ ! -f ./crouton ] && curl https://goo.gl/fd3zc > ./crouton
+   [ ! -f ./crouton-alias.sh ] && curl https://raw.githubusercontent.com/wenlock/myhome/master/opt/bin/crouton-alias.sh > ./crouton-alias.sh
    sudo sh ./crouton -u -n $CHROOT_NAME
+}
+function crouton-clean {
+    cd ~/Downloads
+    [ ! -f ./crouton ] && rm -f ./crouton
+    [ ! -f ./crouton-alias.sh ] && rm -f ./crouton-alias.sh
+    echo "clean done"
 }
