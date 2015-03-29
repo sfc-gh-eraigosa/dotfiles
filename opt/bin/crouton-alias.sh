@@ -83,7 +83,7 @@ function crouton-update {
 }
 function crouton-clean {
     cd ~/Downloads
-    [ ! -f ./crouton ] && rm -f ./crouton
-    [ ! -f ./crouton-alias.sh ] && rm -f ./crouton-alias.sh
+    [ -f ./crouton ] && rm -f ./crouton
+    [ -f ./crouton-alias.sh ] && rm -f ./crouton-alias.sh
     echo "clean done"
 }
