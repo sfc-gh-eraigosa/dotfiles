@@ -17,17 +17,22 @@
 #TODO: need to check all interfaces
 ETH0_IP=$(ifconfig eth0|grep 'inet addr'|awk -F: '{print $2}'|awk '{print $1}')
 WLAN_IP=$(ifconfig wlan0|grep 'inet addr'|awk -F: '{print $2}'|awk '{print $1}')
+TUN0_IP=$(ifconfig tun0|grep 'inet addr'|awk -F: '{print $2}'|awk '{print $1}')
 if [ "${ETH0_IP}" = "" ] ; then
     GET_IP_CLI=$WLAN_IP
 else
     GET_IP_CLI=$ETH0_IP
 fi
+if [ ! -z "${TUN0_IP}" ] ; then
+    GET_IP_CLI=$TUN0_IP
+fi
 [ "${GET_IP_CLI}" = "" ] && GET_IP_CLI=$(/bin/hostname -I)
 
 #TODO: need to remove hardcoding of ip here
 if [ ! "$(echo $GET_IP_CLI|grep '^15.*')" = "" ] || \
+   [ ! "$(echo $GET_IP_CLI|grep '^10.*')" = "" ] || \
    [ ! "$(echo $GET_IP_CLI|grep '^16.*')" = "" ] ; then
-    export PROXY='http://web-proxy.corp.hp.com:8080'
+    export PROXY='http://web-proxy.rose.hp.com:8080'
 else
     unset PROXY
 fi
