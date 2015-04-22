@@ -15,9 +15,18 @@
 #
 # relies on environment option PROXY being configured
 #TODO: need to check all interfaces
-ETH0_IP=$(ifconfig eth0|grep 'inet addr'|awk -F: '{print $2}'|awk '{print $1}')
-WLAN_IP=$(ifconfig wlan0|grep 'inet addr'|awk -F: '{print $2}'|awk '{print $1}')
-TUN0_IP=$(ifconfig tun0|grep 'inet addr'|awk -F: '{print $2}'|awk '{print $1}')
+ETH0_IP=""
+WLAN_IP=""
+TUN0_IP=""
+if ifconfig|grep 'Link encap'|awk '{print $1}'|grep eth0 > /dev/null ; then
+    ETH0_IP=$(ifconfig eth0|grep 'inet addr'|awk -F: '{print $2}'|awk '{print $1}')
+fi
+if ifconfig|grep 'Link encap'|awk '{print $1}'|grep wlan0 > /dev/null ; then
+    WLAN_IP=$(ifconfig wlan0|grep 'inet addr'|awk -F: '{print $2}'|awk '{print $1}')
+fi
+if ifconfig|grep 'Link encap'|awk '{print $1}'|grep tun0 > /dev/null ; then
+    TUN0_IP=$(ifconfig tun0|grep 'inet addr'|awk -F: '{print $2}'|awk '{print $1}')
+fi
 if [ "${ETH0_IP}" = "" ] ; then
     GET_IP_CLI=$WLAN_IP
 else
@@ -30,7 +39,7 @@ fi
 
 #TODO: need to remove hardcoding of ip here
 if [ ! "$(echo $GET_IP_CLI|grep '^15.*')" = "" ] || \
-   [ ! "$(echo $GET_IP_CLI|grep '^10.*')" = "" ] || \
+   ([ ! "$(echo $GET_IP_CLI|grep '^10.*')" = "" ] && [ ! -z "$TUN0_IP" ]) || \
    [ ! "$(echo $GET_IP_CLI|grep '^16.*')" = "" ] ; then
     export PROXY='http://web-proxy.rose.hp.com:8080'
 else
@@ -67,6 +76,6 @@ else
     unset ftp_proxy
     unset socks_proxy
     unset no_proxy
-    [ -f /etc/apt/apt.conf ] && cat /etc/apt/apt.conf | grep -v '::proxy' > /etc/apt.conf
+    [ "$(id -u)" = "0" ] && [ -f /etc/apt/apt.conf ] && cat /etc/apt/apt.conf | grep -v '::proxy' > /etc/apt.conf
     echo "skiping proxy settings"
 fi
