@@ -76,6 +76,6 @@ else
     unset ftp_proxy
     unset socks_proxy
     unset no_proxy
-    [ "$(id -u)" = "0" ] && [ -f /etc/apt/apt.conf ] && cat /etc/apt/apt.conf | grep -v '::proxy' > /etc/apt.conf
+    [ "$(id -u)" = "0" ] && [ -f /etc/apt/apt.conf ] && cat /etc/apt/apt.conf | grep -v '::proxy' > /etc/apt/apt.conf
     echo "skiping proxy settings"
 fi
