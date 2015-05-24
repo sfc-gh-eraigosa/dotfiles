@@ -89,3 +89,6 @@ if [ -f ~/.gitenv ] ; then
 else
     echo ".gitenv is missing, you can install with : . opt/bin/setup_git_alias.sh"
 fi
+if [ -f ~/.custom_alias ] ; then
+    . ~/.custom_alias
+fi

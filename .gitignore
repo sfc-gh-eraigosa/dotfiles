@@ -26,3 +26,4 @@ opt/bin/docker-machine
 !.gitrepos
 !.repos.env
 *.swp
+.custom_alias
