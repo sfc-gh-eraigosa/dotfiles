@@ -18,14 +18,17 @@
 ETH0_IP=""
 WLAN_IP=""
 TUN0_IP=""
-if ifconfig|grep 'Link encap'|awk '{print $1}'|grep eth0 > /dev/null ; then
-    ETH0_IP=$(ifconfig eth0|grep 'inet addr'|awk -F: '{print $2}'|awk '{print $1}')
-fi
-if ifconfig|grep 'Link encap'|awk '{print $1}'|grep wlan0 > /dev/null ; then
-    WLAN_IP=$(ifconfig wlan0|grep 'inet addr'|awk -F: '{print $2}'|awk '{print $1}')
-fi
-if ifconfig|grep 'Link encap'|awk '{print $1}'|grep tun0 > /dev/null ; then
-    TUN0_IP=$(ifconfig tun0|grep 'inet addr'|awk -F: '{print $2}'|awk '{print $1}')
+IFCONFIG_BIN=$(which ifconfig)
+if [ -x "${IFCONFIG_BIN}" ] ; then
+    if $IFCONFIG_BIN|grep 'Link encap'|awk '{print $1}'|grep eth0 > /dev/null ; then
+        ETH0_IP=$($IFCONFIG_BIN eth0|grep 'inet addr'|awk -F: '{print $2}'|awk '{print $1}')
+    fi
+    if $IFCONFIG_BIN|grep 'Link encap'|awk '{print $1}'|grep wlan0 > /dev/null ; then
+        WLAN_IP=$($IFCONFIG_BIN wlan0|grep 'inet addr'|awk -F: '{print $2}'|awk '{print $1}')
+    fi
+    if $IFCONFIG_BIN|grep 'Link encap'|awk '{print $1}'|grep tun0 > /dev/null ; then
+        TUN0_IP=$($IFCONFIG_BIN tun0|grep 'inet addr'|awk -F: '{print $2}'|awk '{print $1}')
+    fi
 fi
 if [ "${ETH0_IP}" = "" ] ; then
     GET_IP_CLI=$WLAN_IP
