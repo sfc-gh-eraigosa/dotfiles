@@ -38,12 +38,20 @@ fi
 [ "${GET_IP_CLI}" = "" ] && GET_IP_CLI=$(/bin/hostname -I)
 
 #TODO: need to remove hardcoding of ip here
+
 if [ ! "$(echo $GET_IP_CLI|grep '^15.*')" = "" ] || \
    ([ ! "$(echo $GET_IP_CLI|grep '^10.*')" = "" ] && [ ! -z "$TUN0_IP" ]) || \
    [ ! "$(echo $GET_IP_CLI|grep '^16.*')" = "" ] ; then
-    export PROXY='http://web-proxy.rose.hp.com:8080'
+    if [ -z "${USE_PROXY}" ] ; then
+        export PROXY=$USE_PROXY
+    else
+        export PROXY='http://web-proxy.rose.hp.com:8080'
+    fi
 else
     unset PROXY
+    if [ -z "${USE_PROXY}" ] ; then
+        export PROXY=$USE_PROXY
+    fi
 fi
 
 if [ ! -z "$PROXY" ] &&  [ ! "$PROXY" = '"nil"' ]; then
