@@ -69,7 +69,8 @@ cd /tmp
 # get download from https://golang.org/dl/
 VERSION=1.4.2
 ARCH=amd64
-wget "https://storage.googleapis.com/golang/go${VERSION}.linux-${ARCH}.tar.gz"
+OS=linux
+wget "https://storage.googleapis.com/golang/go${VERSION}.${OS}-${ARCH}.tar.gz"
 
 sudo bash -c "tar -C /usr/local -xzf /tmp/go$VERSION.$OS-$ARCH.tar.gz"
 sudo bash -c "echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile"
