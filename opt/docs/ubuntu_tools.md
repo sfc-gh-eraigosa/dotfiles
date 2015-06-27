@@ -71,7 +71,7 @@ VERSION=1.4.2
 ARCH=amd64
 wget "https://storage.googleapis.com/golang/go${VERSION}.linux-${ARCH}.tar.gz"
 
-sudo bash -c "tar -C /usr/local -xzf go$VERSION.$OS-$ARCH.tar.gz"
+sudo bash -c "tar -C /usr/local -xzf /tmp/go$VERSION.$OS-$ARCH.tar.gz"
 sudo bash -c "echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile"
 [ ! -d $HOME/go ] && mkdir -p $HOME/go
 [ ! -f $HOME/.goenv.sh ] && echo '. $HOME/.goenv.sh' >> $HOME/.bashrc
