@@ -102,10 +102,14 @@ git reset --hard
 ```
 
 
-Move chroots to SD Card
------------------------
+Move chroots to SD Card 
+------------------------
+**WARNING** I've experienced a bit of chroot corruption with IO errors using ext2.  I'm now experimenting with ext4 to see if I can avoid future drive errors.  See the ext4 section on setup.
+
 [Tom Wolf posted](http://tomwwolf.com/chromebook-14-compedium/chromebook-crouton-cookbook/) a nice tip to setup the /usr/local/chroots folder onto an SD card.
 This gives you a way to install lots more stuff on your SD card, than what disk space is available on your internal drive.  The performance for this was not that bad with a 80MB/sec SD card.
+
+**Ext2 Drive setup**
 
 * Format the sd card with ext2 filesystem
 
@@ -131,6 +135,45 @@ cd /usr/local
 sudo mv  chroots/ '/media/removable/USB Drive/'
 sudo ln -s '/media/removable/USB Drive/chroots/' chroots
 ```
+
+**Ext4 Drive Setup**
+
+
+* Format the sd card with ext4 filesystem, open crosh shell ctrl-t
+
+```sh
+# make sure usb is /dev/sdb
+lsblk
+
+# clean all data
+sudo umount /dev/sdb
+sudo dd if=/dev/zero of=/dev/sdb bs=1M count=100
+sudo sync
+
+# show blank disk with lsblk
+lsblk
+
+# make ext4
+sudo mkfs.ext4 -L "crouton" /dev/sdb
+```
+
+* Eject the device and shutdown the chromebook.  When powered off, you can re-insert the device and start the chromebook.  This insures that you have the drive properly mounted with the 'crouton' name.
+
+* Move any chroots you want to keep to the USB Drive
+
+```sh
+sudo mkdir -p '/media/removable/crouton/chroots'
+sudo edit-chroot -m '/media/removable/crouton/chroots/' precise
+```
+
+* Link the chroot folder to the SD Drive
+
+```sh
+cd /usr/local
+sudo mv  chroots/ '/media/removable/crouton/'
+sudo ln -s '/media/removable/crouton/chroots/' chroots
+```
+
 
 Tips
 ---------
