@@ -26,7 +26,7 @@ Configure the system bios by disable fastboot, or use bios defaults
 sudo apt-get update; \
 sudo apt-get -y autoremove ; \
 sudo apt-get -y install software-center; \
-sudo apt-get -y install apptitude;
+sudo apt-get -y install aptitude;
 ```
 
 #### Package installs ####
