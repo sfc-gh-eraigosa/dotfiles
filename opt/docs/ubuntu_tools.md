@@ -62,6 +62,23 @@ sudo apt-get -y install firefox firefox-locale-en \
 sudo apt-get install curl corkscrew build-essential libssl-dev zlib1g-dev libxml2-dev libxslt-dev git -y
 ```
 
+#### Install go lang ####
+```script
+mkdir /tmp
+cd /tmp
+# get download from https://golang.org/dl/
+VERSION=1.4.2
+ARCH=amd64
+wget "https://storage.googleapis.com/golang/go${VERSION}.linux-${ARCH}.tar.gz"
+
+sudo bash -c "tar -C /usr/local -xzf go$VERSION.$OS-$ARCH.tar.gz"
+sudo bash -c "echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile"
+[ ! -d $HOME/go ] && mkdir -p $HOME/go
+[ ! -f $HOME/.goenv.sh ] && echo '. $HOME/.goenv.sh' >> $HOME/.bashrc
+echo 'export GOROOT=$HOME/go' > $HOME/.goenv.sh
+echo 'export PATH=$PATH:$GOROOT/bin' >> $HOME/.goenv.sh
+
+```
 #### Bootstrap puppet ####
 ```script
 wget --no-check-certificate \
