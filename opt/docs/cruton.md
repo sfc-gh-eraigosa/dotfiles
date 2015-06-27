@@ -53,7 +53,9 @@ sudo sh -e ./crouton -t unity
 ```
 **Example Full Ubuntu 14.04 setup**
 ```sh
-sudo sh -e ./crouton -t core,audio,cli-extra,extension,chrome,unity,unity-desktop,xephyr,xbmc,xorg,xiwi -n trusty -r trusty
+cd ~/Downloads
+sudo sh -e ./crouton -t core,audio,cli-extra,extension,chrome,unity,unity-desktop,xbmc,xorg,xiwi \
+                     -n trusty -r trusty
 ```
 You can list other distributions with the command : ```sudo sh -e ./crouton -t list```
 At then end of the install, you'll see something like:
