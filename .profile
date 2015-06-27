@@ -73,3 +73,8 @@ fi
 if [ -f "$HOME/.config/fontconfig/conf.d/10-powerline-symbols.conf" ] ; then
   cp "$HOME/git/powerline/font/10-powerline-symbols.conf" "$HOME/.config/fontconfig/conf.d/10-powerline-symbols.conf"
 fi
+if [ ! -d $HOME/go ] ; then
+    mkdir $HOME/go
+fi
+export GOROOT=$HOME/go
+export PATH=$PATH:$GOROOT/bin
