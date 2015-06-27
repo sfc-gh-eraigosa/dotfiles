@@ -94,6 +94,7 @@ alias git-help='fgit-help'
 alias git-proxy='fgit-proxy \$@'
 alias git-reset='fgit-reset'
 alias git-reset-all='fgit-reset-all'
+alias gerrit-rebase='fgit-gerrit-rebase \$@'
 alias refresh-gitenv='refresh-gitenv'
 function fgit-commands {
     _commands=\$(alias|grep 'git-'|awk -F= '{print \$1}'|sed 's/alias //g' | awk '{printf \$1", "}' | sed 's/, \$//g')
@@ -229,6 +230,8 @@ function fgit-help {
   refresh-gitenv
     Updates CDK-infra with git pull and re-executes setup_git_alias.sh
 
+  gerrit-rebase <gerrit id>
+    Re-base review with gerrit
 HELP_TXT
 
 }
@@ -1103,6 +1106,7 @@ function writeparam {
     fi
 }
 
+
 # reset a git repository to it's origin
 function fgit-reset {
     _CWD=\$(pwd)
@@ -1118,14 +1122,53 @@ function fgit-reset {
 
         if [ "\${answer}" = "Yes" ]; then
             cd "\${_GIT_REPO_ROOT}"
-            _BRANCH=\$(git branch|grep '^\* '|sed 's/^\*\s//g')
-            git reset --hard origin/master; git clean -x -d -f; git pull origin \${_BRANCH};
+            _REMOTE=origin
+            _ORIGIN_BRANCH=\$(git rev-parse --abbrev-ref \$_REMOTE)
+            _BRANCH=\$(git rev-parse --abbrev-ref \$_REMOTE|awk -F'/' '{print \$2}')
+            git reset --hard \$_ORIGIN_BRANCH && git clean -x -d -f && git pull \$_REMOTE \$_BRANCH;
         else
             echo "Skipping reset ..."
         fi
     fi
     cd "\${_CWD}"
 }
+
+# using git-review rebase a change and push
+function fgit-gerrit-rebase {
+    _ID=\$1
+    _REMOTE=origin
+    if [ ! -z "\${_ID}" ] ; then
+        _CWD=\$(pwd)
+        if git rev-parse --show-toplevel >/dev/null 2<&1 ; then
+            _GIT_REPO_ROOT=\$(git rev-parse --show-toplevel)
+            cd "\${_GIT_REPO_ROOT}"
+            _GIT_CURRENT_BRANCH=\$(git rev-parse --abbrev-ref HEAD)
+            _GIT_ORIGIN_BRANCH=\$(git rev-parse --abbrev-ref \$_REMOTE|awk -F'/' '{print \$2}')
+            if [ ! -z "\${_GIT_ORIGIN_BRANCH}" ] ; then
+                if [ ! "\${_GIT_CURRENT_BRANCH}" = "\${_GIT_ORIGIN_BRANCH}" ] ; then
+                    git checkout "\${_GIT_ORIGIN_BRANCH}"
+                fi
+                fgit-reset
+                git-review -d \$_ID
+                git rebase "\${_GIT_ORIGIN_BRANCH}"
+                if [ \$? -eq 0 ] ; then
+                    echo "pushing rebase"
+                    git-review
+                else
+                    echo "check rebase, non zero exit"
+                fi
+            else
+                echo "Can't determin branch origin"
+            fi
+        else
+            echo "Error : not a git repo"
+        fi
+        cd "\${_CWD}"
+    else
+        echo "Usage gerrit-rebase <gerrit id>"
+    fi
+}
+
 function fgit-reset-all {
     find . -maxdepth 1 -mindepth 1 -type d  -printf "%f\n"|xargs -i bash -c 'cd {};git rev-parse --show-toplevel 2>/dev/null;if [ $? -eq 0 ]; then git reset --hard;git clean -x -d -f;git pull origin stable; else echo "{} is not a git repository"; fi;';
 }
