@@ -386,11 +386,13 @@ ruby -S bundle install --gemfile Gemfile
 ```
 * build a dev image for running docker
 ```script
+export DOCKER_VERSION=latest
 rake rundev
+# you should use `rake 'configure[vagrant]' for virtualbox installation of docker
 rake 'configure[bare]'
-rake dev
+rake provision
 reboot
-rake dev
+rake provision
 ```
 
 #### private vpn setup####
