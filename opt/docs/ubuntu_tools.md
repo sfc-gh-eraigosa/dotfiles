@@ -73,11 +73,12 @@ OS=linux
 wget "https://storage.googleapis.com/golang/go${VERSION}.${OS}-${ARCH}.tar.gz"
 
 sudo bash -c "tar -C /usr/local -xzf /tmp/go$VERSION.$OS-$ARCH.tar.gz"
-sudo bash -c "echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile"
+sudo bash -c "echo 'export PATH=\$PATH:/usr/local/go/bin' >> /etc/profile"
 [ ! -d $HOME/go ] && mkdir -p $HOME/go
 [ ! -f $HOME/.goenv.sh ] && echo '. $HOME/.goenv.sh' >> $HOME/.bashrc
 echo 'export GOROOT=$HOME/go' > $HOME/.goenv.sh
 echo 'export PATH=$PATH:$GOROOT/bin' >> $HOME/.goenv.sh
+chmod +x $HOME/.goenv.sh
 
 ```
 #### Bootstrap puppet ####
