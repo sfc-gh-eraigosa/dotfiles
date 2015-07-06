@@ -92,3 +92,6 @@ fi
 if [ -f ~/.custom_alias ] ; then
     . ~/.custom_alias
 fi
+
+# pulse vpn
+alias pulse='/usr/local/bin/nclauncher.pl'
