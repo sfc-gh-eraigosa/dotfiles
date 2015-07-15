@@ -14,7 +14,9 @@ esac
 HISTCONTROL=ignoreboth
 
 # append to the history file, don't overwrite it
-shopt -s histappend
+if [ ! "$(whence shopt)" = "" ] ; then
+    shopt -s histappend
+fi
 
 # for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
 HISTSIZE=1000
@@ -22,7 +24,9 @@ HISTFILESIZE=2000
 
 # check the window size after each command and, if necessary,
 # update the values of LINES and COLUMNS.
-shopt -s checkwinsize
+if [ ! "$(whence shopt)" = "" ] ; then
+    shopt -s checkwinsize
+fi
 
 # If set, the pattern "**" used in a pathname expansion context will
 # match all files and zero or more directories and subdirectories.
@@ -106,17 +110,20 @@ fi
 # enable programmable completion features (you don't need to enable
 # this, if it's already enabled in /etc/bash.bashrc and /etc/profile
 # sources /etc/bash.bashrc).
-if ! shopt -oq posix; then
-  if [ -f /usr/share/bash-completion/bash_completion ]; then
-    . /usr/share/bash-completion/bash_completion
-  elif [ -f /etc/bash_completion ]; then
-    . /etc/bash_completion
-  fi
+if [ ! "$(whence shopt)" = "" ] ; then
+    if ! shopt -oq posix; then
+      if [ -f /usr/share/bash-completion/bash_completion ]; then
+        . /usr/share/bash-completion/bash_completion
+      elif [ -f /etc/bash_completion ]; then
+        . /etc/bash_completion
+      fi
+    fi
 fi
 
 export GIT_PS1_SHOWDIRTYSTATE=1 GIT_PS1_SHOWSTASHSTATE=1 GIT_PS1_SHOWUNTRACKEDFILES=1 GIT_PS1_SHOWUPSTREAM=verbose GIT_PS1_SHOWUPSTREAM=verbose GIT_PS1_SHOWCOLORHINTS=true
 #AGM function
-. ~/opt/bin/agm.sh
+# disable this
+# . ~/opt/bin/agm.sh
 if [ -f ~/.local/lib/python2.7/site-packages/powerline/bindings/bash/powerline.sh ]; then
   source ~/.local/lib/python2.7/site-packages/powerline/bindings/bash/powerline.sh
 fi
@@ -136,3 +143,10 @@ if [ -f ~/.cabal/bin ] ; then
     export PATH="${PATH}:~/.cabal/bin"
 fi
 
+if [ -f ~/.sshd.env ] ; then
+    # using this on chroot for chromeos
+    # sudo /usr/sbin/sshd -D & 
+    . ~/opt/bin/sshd_run.sh
+else
+    echo "no sshd at login, echo 'SSHD_LOGIN=true'> ~/.sshd.env to enable"
+fi
