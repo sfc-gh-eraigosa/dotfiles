@@ -1,4 +1,7 @@
 #!/bin/bash
+if [ ! -d /var/run/sshd ] ; then
+    sudo mkdir /var/run/sshd
+fi
 if [ -f ~/.sshd.env ] ; then
     . ~/.sshd.env
 fi
