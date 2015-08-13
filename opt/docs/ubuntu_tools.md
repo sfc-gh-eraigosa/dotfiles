@@ -431,7 +431,6 @@ mkdir -p -m0755 /var/run/sshd
 #### installing python ####
 ```script
 sudo -i apt-get update -y ; \
-sudo apt-get install python-dev ruby1.9.1 ruby1.9.1-dev rubygems1.9.1 build-essential libopenssl-ruby1.9.1 libssl-dev zlib1g-dev libxml2-dev libxslt-dev git -y ; \
 sudo apt-get install python-dev build-essential libssl-dev zlib1g-dev libxml2-dev libxslt-dev git curl -y
 ```
 
