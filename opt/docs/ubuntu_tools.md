@@ -427,4 +427,42 @@ Edit /etc/rc.local with :
 mkdir -p -m0755 /var/run/sshd
 /usr/sbin/sshd
 ```
- 
+
+#### installing python ####
+```script
+sudo -i apt-get update -y ; \
+sudo apt-get install python-dev ruby1.9.1 ruby1.9.1-dev rubygems1.9.1 build-essential libopenssl-ruby1.9.1 libssl-dev zlib1g-dev libxml2-dev libxslt-dev git -y ; \
+sudo apt-get install python-dev build-essential libssl-dev zlib1g-dev libxml2-dev libxslt-dev git curl -y
+```
+
+#### installing pip ####
+```script
+cd /temp ; \
+curl https://bitbucket.org/pypa/setuptools/raw/39f7ef5ef22183f3eba9e05a46068e1d9fd877b0/ez_setup.py --insecure > ez_setup.py ; \
+curl https://raw.githubusercontent.com/pypa/pip/develop/contrib/get-pip.py --insecure > get-pip.py ;\
+sudo -i python /tmp/ez_setup.py ;\
+sudo -i python /tmp/get-pip.py
+```
+
+#### installing openstack clients ####
+```script
+echo 'python-barbicanclient
+python-ceilometerclient
+python-cinderclient
+python-glanceclient
+python-heatclient
+python-ironicclient
+python-keystoneclient
+python-magnetodbclient
+python-manilaclient
+python-marconiclient
+python-melangeclient
+python-neutronclient
+python-novaclient
+python-openstackclient
+python-quantumclient
+python-saharaclient
+python-solumclient
+python-swiftclient
+python-troveclient' | sudo -i xargs -i pip install {}
+```
