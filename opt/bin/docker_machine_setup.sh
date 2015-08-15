@@ -1,4 +1,7 @@
 #!/bin/bash
+export DOCKER_MACHINE_HOME=$HOME/opt/bin
+export DOCKER_MACHINE_VERSION='latest'
+
 function get_detected_os {
     uname_bin=$(which uname)
     if [ -f "${uname_bin}" ]; then
@@ -38,10 +41,24 @@ function get_detected_os {
     fi
 }
 
-# setup opt/bin/docker-machine
-if [ ! -f ~/opt/bin/docker-machine ] ; then
-    get_detected_os
-    download_url="https://github.com/docker/machine/releases/download/v0.2.0/docker-machine_${detected_os}"
-    wget $download_url -O ~/opt/bin/docker-machine
-    chmod +x ~/opt/bin/docker-machine
+if [ "$1" = "-f" ] ; then
+    rm -f $DOCKER_MACHINE_HOME/docker-machine
 fi
+# setup $DOCKER_MACHINE_HOME/docker-machine
+if [ "$DOCKER_MACHINE_VERSION" = "latest" ] ; then
+    if [ -z "$(echo $(python --version 2>&1|grep Python))" ] ; then
+        echo "ERROR: configure DOCKER_MACHINE_VERSION or install python to download"
+        exit 1
+    fi
+    export DOCKER_MACHINE_VERSION=$(curl -s  https://api.github.com/repos/docker/machine/releases/latest |  python -c 'import sys, json; print json.load(sys.stdin)["name"]')
+fi
+if [ ! -f $DOCKER_MACHINE_HOME/docker-machine ] ; then
+    get_detected_os
+    download_url="https://github.com/docker/machine/releases/download/${DOCKER_MACHINE_VERSION}/docker-machine_${detected_os}"
+    wget $download_url -O $DOCKER_MACHINE_HOME/docker-machine
+    chmod +x $DOCKER_MACHINE_HOME/docker-machine
+else
+    echo "$DOCKER_MACHINE_HOME/docker-machine already exist.  use -f to force"
+fi
+
+exit 0
