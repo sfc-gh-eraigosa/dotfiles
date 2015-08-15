@@ -6,3 +6,5 @@
 [push]
 	default = matching
 
+[http]
+	sslCAinfo = /home/wenlock/.ssh/certs/github-is-p.15.209.122.62.xip.io.cer

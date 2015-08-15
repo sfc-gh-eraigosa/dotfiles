@@ -95,7 +95,9 @@ alias git-proxy='fgit-proxy \$@'
 alias git-reset='fgit-reset'
 alias git-reset-all='fgit-reset-all'
 alias gerrit-rebase='fgit-gerrit-rebase \$@'
+alias git-ssl='fgit-ssl \$@'
 alias refresh-gitenv='refresh-gitenv'
+
 function fgit-commands {
     _commands=\$(alias|grep 'git-'|awk -F= '{print \$1}'|sed 's/alias //g' | awk '{printf \$1", "}' | sed 's/, \$//g')
     echo \$_commands
@@ -232,6 +234,11 @@ function fgit-help {
 
   gerrit-rebase <gerrit id>
     Re-base review with gerrit
+
+  git-ssl
+    Update ssl certs to avoid git clone ssl errors for a trusted repository.
+    This command will require sudo to update /etc/ssl/certs.
+
 HELP_TXT
 
 }
@@ -1171,6 +1178,21 @@ function fgit-gerrit-rebase {
 
 function fgit-reset-all {
     find . -maxdepth 1 -mindepth 1 -type d  -printf "%f\n"|xargs -i bash -c 'cd {};git rev-parse --show-toplevel 2>/dev/null;if [ $? -eq 0 ]; then git reset --hard;git clean -x -d -f;git pull origin stable; else echo "{} is not a git repository"; fi;';
+}
+
+function fgit-ssl {
+    if [ ! -d \$HOME/.ssh/certs ] ; then
+        mkdir -p \$HOME/.ssh/certs
+    fi
+    if [ -z "\$1" ]; then
+        echo "ERROR usage: git-ssl <host>:<port>"
+        return
+    fi
+    ssl_cer=\$HOME/.ssh/certs/\$(echo \$1|awk -F ':' '{print \$1}').cer
+    echo |openssl s_client -connect \$1 2>&1 | \
+        sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > \$ssl_cer
+    git config --global http.sslCAinfo "\$ssl_cer"
+    echo "git-ssl complete"
 }
 
 [ "\$(readparam 'GIT_USER')" != "" ] && export GIT_USER=\$(readparam "GIT_USER")
