@@ -349,14 +349,13 @@ sh ./enable-vmx.sh
 egrep '(vmx|svm)' /proc/cpuinfo  # should return a vmx flag enabled.
 ```
 
-#### Install virtualbox ####
+#### Install virtualbox 5 (experimental) ####
+# from https://www.virtualbox.org/wiki/Testbuilds
 ```script
-sudo bash -c 'echo deb http://download.virtualbox.org/virtualbox/debian trusty contrib >> /etc/apt/sources.list'
-cd ~/Downloads
-wget http://download.virtualbox.org/virtualbox/debian/oracle_vbox.asc
-sudo apt-key add oracle_vbox.asc
-sudo apt-get update
-sudo apt-get -y install virtualbox-4.3
+cd /tmp
+curl https://www.virtualbox.org/download/testcase/VirtualBox-5.0.1-101939-Linux_amd64.run > vbox.sh
+chmod +x ./vbox.sh
+sudo ./vbox.sh
 sudo adduser $(whoami) vboxusers
 ```
 NOTE: vbox may not install if you don't have a proper /etc/rc.local, the script has some errors at line 18 that need to be fixed in the if statement.
