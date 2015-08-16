@@ -364,7 +364,7 @@ NOTE: vbox may not install if you don't have a proper /etc/rc.local, the script 
 * install vagrant, latest is available [here](https://www.vagrantup.com/downloads.html).
 ```script
 cd ~/Downloads
-wget https://dl.bintray.com/mitchellh/vagrant/vagrant_1.7.2_x86_64.deb -O ./vagrant.dep
+wget https://dl.bintray.com/mitchellh/vagrant/vagrant_1.7.4_x86_64.deb -O ./vagrant.dep
 sudo dpkg -i ./vagrant.dep
 ```
 
