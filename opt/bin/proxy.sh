@@ -65,7 +65,7 @@ echo "setting up proxy"
     export HTTPS_PROXY=$http_proxy
     export ftp_proxy=$(echo $http_proxy | sed 's/^http/ftp/g')
     export socks_proxy=$(echo $http_proxy | sed 's/^http/socks/g')
-    export no_proxy=localhost,127.0.0.1,10.0.0.0/16,169.254.169.254
+    export no_proxy=localhost,127.0.0.1,10.0.0.0/16,172.0.0.0/16,15.108.25.44,169.254.169.254
     if [ "$(id -u)" = "0" ] ; then # should only be done by root
     # clear out previous setting
     [ -f /etc/apt/apt.conf ] && cat /etc/apt/apt.conf | grep -v '::proxy' > /etc/apt/apt.conf
