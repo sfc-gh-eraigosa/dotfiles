@@ -7,4 +7,4 @@
 	default = matching
 
 [http]
-	sslCAinfo = /home/eraigosa/.ssh/certs/github-is-p.15.209.122.62.xip.io.cer
+	sslCAinfo = /Users/eraigosa/.ssh/certs/git-ssl.cer

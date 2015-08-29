@@ -1185,12 +1185,16 @@ function fgit-ssl {
         mkdir -p \$HOME/.ssh/certs
     fi
     if [ -z "\$1" ]; then
-        echo "ERROR usage: git-ssl <host>:<port>"
+        echo "ERROR usage: git-ssl <host>:<port> [-c]"
         return
     fi
-    ssl_cer=\$HOME/.ssh/certs/\$(echo \$1|awk -F ':' '{print \$1}').cer
+    ssl_cer=\$HOME/.ssh/certs/git-ssl.cer
+    if [ "\$2" = "-c" ]; then
+        rm \$ssl_cer
+        echo "removed \$ssl_cer"
+    fi
     echo |openssl s_client -connect \$1 2>&1 | \
-        sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > \$ssl_cer
+        sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' >> \$ssl_cer
     git config --global http.sslCAinfo "\$ssl_cer"
     echo "git-ssl complete"
 }
