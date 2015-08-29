@@ -12,6 +12,7 @@
 !.vimrc_green
 !git.properties
 !.bashrc
+!.goenv.sh
 !.gitconfig
 !.bash_logout
 !opt/
