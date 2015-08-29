@@ -76,10 +76,12 @@ sudo bash -c "tar -C /usr/local -xzf /tmp/go$VERSION.$OS-$ARCH.tar.gz"
 sudo bash -c "echo 'export PATH=\$PATH:/usr/local/go/bin' >> /etc/profile"
 [ ! -d $HOME/go ] && mkdir -p $HOME/go
 [ ! -f $HOME/.goenv.sh ] && echo '. $HOME/.goenv.sh' >> $HOME/.bashrc
-echo 'export GOROOT=$HOME/go' > $HOME/.goenv.sh
+echo 'export GOPATH=$HOME/go' >> $HOME/.goenv.sh
 echo 'export PATH=$PATH:$GOROOT/bin' >> $HOME/.goenv.sh
 chmod +x $HOME/.goenv.sh
-
+go get golang.org/x/tools/cmd/godoc
+go get golang.org/x/tools/cmd/vet
+go get github.com/golang/lint/golint
 ```
 #### Bootstrap puppet ####
 ```script
