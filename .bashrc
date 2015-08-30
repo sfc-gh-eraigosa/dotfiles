@@ -150,4 +150,3 @@ if [ -f ~/.sshd.env ] ; then
 else
     echo "no sshd at login, echo 'SSHD_LOGIN=true'> ~/.sshd.env to enable"
 fi
-. $HOME/.goenv.sh

@@ -95,3 +95,4 @@ fi
 
 # pulse vpn
 alias pulse='/usr/local/bin/nclauncher.pl'
+. ~/.goenv.sh
