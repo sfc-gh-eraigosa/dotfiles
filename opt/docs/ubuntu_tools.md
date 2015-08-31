@@ -362,6 +362,14 @@ sudo adduser $(whoami) vboxusers
 ```
 NOTE: vbox may not install if you don't have a proper /etc/rc.local, the script has some errors at line 18 that need to be fixed in the if statement.
 
+#### Virtualbox troubleshooting
+
+##### Win 8.1/2012 images don't boot for installation
+
+* see: https://www.virtualbox.org/ticket/11841
+* ```vboxmanage setextradata "WIN8_COE" VBoxInternal/CPUM/CMPXCHG16B 1```
+
+
 #### Install vagrant ####
 * install vagrant, latest is available [here](https://www.vagrantup.com/downloads.html).
 ```script
