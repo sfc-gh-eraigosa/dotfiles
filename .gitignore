@@ -13,7 +13,6 @@
 !git.properties
 !.bashrc
 !.goenv.sh
-!.gitconfig
 !.bash_logout
 !opt/
 !opt/**
