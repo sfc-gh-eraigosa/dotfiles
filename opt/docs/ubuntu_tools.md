@@ -67,21 +67,36 @@ sudo apt-get install curl corkscrew build-essential libssl-dev zlib1g-dev libxml
 mkdir /tmp
 cd /tmp
 # get download from https://golang.org/dl/
-VERSION=1.4.2
-ARCH=amd64
-OS=linux
+if [ "$(uname -s)" = "Darwin" ] ; then
+    VERSION=1.5
+    ARCH=amd64
+    OS=darwin
+else
+    VERSION=1.5
+    ARCH=amd64
+    OS=linux
+fi
+# https://golang.org/dl/
 wget "https://storage.googleapis.com/golang/go${VERSION}.${OS}-${ARCH}.tar.gz"
 
 sudo bash -c "tar -C /usr/local -xzf /tmp/go$VERSION.$OS-$ARCH.tar.gz"
-sudo bash -c "echo 'export PATH=\$PATH:/usr/local/go/bin' >> /etc/profile"
-[ ! -d $HOME/go ] && mkdir -p $HOME/go
+
 [ ! -f $HOME/.goenv.sh ] && echo '. $HOME/.goenv.sh' >> $HOME/.bashrc
 echo 'export GOPATH=$HOME/go' >> $HOME/.goenv.sh
-echo 'export PATH=$PATH:$GOROOT/bin' >> $HOME/.goenv.sh
+echo 'export PATH=$PATH:$GOPATH/bin:/usr/local/go/bin' >> $HOME/.goenv.sh
 chmod +x $HOME/.goenv.sh
-go get golang.org/x/tools/cmd/godoc
-go get golang.org/x/tools/cmd/vet
-go get github.com/golang/lint/golint
+. $HOME/.goenv.sh
+mkdir "$GOPATH/src" "$GOPATH/bin"
+chmod 777 $GOPATH
+go get  github.com/mitchellh/gox \
+            github.com/golang/lint/golint \
+            github.com/mattn/goveralls \
+            golang.org/x/tools/cover \
+            github.com/aktau/github-release \
+            golang.org/x/tools/cmd/godoc \
+            golang.org/x/tools/cmd/godoc \
+            github.com/golang/lint/golint
+
 ```
 #### Bootstrap puppet ####
 ```script
