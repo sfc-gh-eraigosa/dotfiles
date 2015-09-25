@@ -76,5 +76,3 @@ fi
 if [ ! -d $HOME/go ] ; then
     mkdir $HOME/go
 fi
-export GOROOT=$HOME/go
-export PATH=$PATH:$GOROOT/bin
