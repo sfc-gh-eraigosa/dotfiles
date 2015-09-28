@@ -88,14 +88,17 @@ chmod +x $HOME/.goenv.sh
 . $HOME/.goenv.sh
 mkdir "$GOPATH/src" "$GOPATH/bin"
 chmod 777 $GOPATH
+# in case you get error: server certificate verification failed. CAfile
+# use : export GIT_SSL_NO_VERIFY=1
 go get  github.com/mitchellh/gox \
             github.com/golang/lint/golint \
             github.com/mattn/goveralls \
             golang.org/x/tools/cover \
-            github.com/aktau/github-release \
-            golang.org/x/tools/cmd/godoc \
-            golang.org/x/tools/cmd/godoc \
-            github.com/golang/lint/golint
+            github.com/aktau/github-release
+# having problems with this one
+# go install golang.org/x/tools/cmd/godoc: open /usr/local/go/bin/godoc: permission denied
+# installed as root to work around issues.
+go get golang.org/x/tools/cmd/godoc
 
 ```
 #### Bootstrap puppet ####
