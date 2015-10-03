@@ -3,46 +3,46 @@ I'll list them here and try to order them.
 
 # Table Of Contents
 
-| Section                    | Description                   |
-|----------------------------|-------------------------------|
-| Ubuntu Post Setup          |                               |
-| HP Elitebook 8500 special setup       |                               |
-| Install software update tools       |                               |
-| Package installs       |                               |
-| Install build tools       |                               |
-| Install go lang       |                               |
-| Bootstrap puppet       |                               |
-| MyHome directory setup       |                               |
-| git shortcuts       |                               |
-| setup zsh       |                               |
-| give your command prompt some bling       |                               |
-| key bindings setup       |                               |
-| Install google drive sync       |                               |
-| install nodejs       |                               |
-| install atom       |                               |
-| install wine, with wow       |                               |
-| install myrooms      |                               |
-| pidgin installation     |                               |
-| install dig      |                               |
-| Installing extra certificates      |                               |
-| install hipchat      |                               |
-| install java      |                               |
-| setup latest version of seahorse for gnome keyring      |                               |
-| setup shellcheck     |                               |
-| Install Google Chrome      |                               |
-| Configure Google Chrome App Launcher      |                               |
-| chrombook kernel headers installation      |                               |
-| Install virtualbox 5 (experimental)      |                               |
-| Win 8.1/2012 images don't boot for installation      |                               |
-| Install vagrant      |                               |
-| Install forj-docker      |                               |
-| private vpn setup      |                               |
-| chage reboot policy in      |                               |
-| Setup sshd server      |                               |
-| installing python      |                               |
-| installing pip      |                               |
-| installing pip      |                               |
-| installing pip      |                               |
+| Section                                                                  |
+|--------------------------------------------------------------------------|
+| [Ubuntu Post Setup](#ubuntu-post-setup)                                  |
+| HP Elitebook 8500 special setup                                          |
+| Install software update tools                                            |
+| Package installs                                                         |
+| Install build tools                                                      |
+| Install go lang                                                          |
+| Bootstrap puppet                                                         |
+| MyHome directory setup                                                   |
+| git shortcuts                                                            |
+| setup zsh                                                                |
+| give your command prompt some bling                                      |
+| key bindings setup                                                       |
+| Install google drive sync                                                |
+| install nodejs                                                           |
+| install atom                                                             |
+| install wine, with wow                                                   |
+| install myrooms                                                          |
+| pidgin installation                                                      |
+| install dig                                                              |
+| Installing extra certificates                                            |
+| install hipchat                                                          |
+| install java                                                             |
+| setup latest version of seahorse for gnome keyring                       |
+| setup shellcheck                                                         |
+| Install Google Chrome                                                    |
+| Configure Google Chrome App Launcher                                     |
+| chrombook kernel headers installation                                    |
+| Install virtualbox 5 (experimental)                                      |
+| Win 8.1/2012 images don't boot for installation                          |
+| Install vagrant                                                          |
+| Install forj-docker                                                      |
+| private vpn setup                                                        |
+| chage reboot policy in                                                   |
+| Setup sshd server                                                        |
+| installing python                                                        |
+| installing pip                                                           |
+| installing openstack clients                                             |
+|                                                                          |
 
 Ubuntu Post Setup
 -----------------
@@ -264,7 +264,7 @@ apm install --packages-file ~/opt/conf/apm_packages.config
 ```script
 sudo -i apt-add-repository ppa:foresto/winepatched
 sudo -i apt-get update
-sudo -i apt-get -y install wine1.7 
+sudo -i apt-get -y install wine1.7
 ```
 * get mono installed
 ```wine notepad```
@@ -336,7 +336,7 @@ sudo -i apt-get -y install libnss3-tools
 cd ~/Downloads
 curl -k -o "cacert-root.crt"   "http://www.cacert.org/certs/root.crt"
 curl -k -o "cacert-class3.crt" "http://www.cacert.org/certs/class3.crt"
-certutil -d sql:$HOME/.pki/nssdb -A -t TC -n "CAcert.org" -i cacert-root.crt 
+certutil -d sql:$HOME/.pki/nssdb -A -t TC -n "CAcert.org" -i cacert-root.crt
 certutil -d sql:$HOME/.pki/nssdb -A -t TC -n "CAcert.org Class 3" -i cacert-class3.crt
 ```
 
@@ -406,7 +406,7 @@ sudo sh setup-headers.sh
 ```
 * enable [vmx](https://gist.github.com/DennisLfromGA/cd3455530cec2a5a1ef4) as well on chromebooks for virtual box
 ```script
-cd ~/Downloads 
+cd ~/Downloads
 wget https://gist.githubusercontent.com/DennisLfromGA/cd3455530cec2a5a1ef4/raw/5d311d6eca3b847878c22927fab7d37a32482490/enable-vmx.sh
 sh ./enable-vmx.sh
 egrep '(vmx|svm)' /proc/cpuinfo  # should return a vmx flag enabled.
@@ -450,7 +450,7 @@ sudo gem install bundler --no-rdoc --no-ri
 mkdir -p ~/git/forj-oss
 cd ~/git/forj-oss
 # this assumes ~/.ssh/config has review alias
-git-clone review:forj-oss/forj-docker 
+git-clone review:forj-oss/forj-docker
 cd forj-docker
 ruby -S bundle install --gemfile Gemfile
 ```
@@ -483,7 +483,7 @@ sudo hpvpn
 #### Setup sshd server ####
 To connect to your desktop with ssh
 ```script
-sudo -i apt-get update 
+sudo -i apt-get update
 sudo -i apt-get install -y openssh-server
 sudo -i mkdir -p /var/run/sshd
 ```
