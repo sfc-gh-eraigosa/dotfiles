@@ -12,13 +12,13 @@ I'll list them here and try to order them.
 | [git shortcuts](#git-shortcuts)                                  | [setup zsh](#setup-zsh)                                             |
 | [give your command prompt some bling](#give-your-command-prompt-some-bling)| [key bindings setup](#key-bindings-setup)                 |
 | [Install google drive sync](#install-google-drive-sync)          | [install nodejs](#install-nodejs)                                |
-| [install atom](#install-atom)                                    | [install wine, with wow](#install-win-with-wow)                 |
+| [install atom](#install-atom)                                    | [install wine, with wow](#install-wine-with-wow)                 |
 | [install myrooms](#install-myrooms)                              | [pidgin installation](#pidgin-installation)                      |
 | [install dig](#install-dig)                                      | [Installing extra certificates](#installing-extra-certificates)  |
 | [install hipchat](#install-hipchat)                              | [install java](#install-java)                                    |
 | [setup latest version of seahorse for gnome keyring](#setup-latest-version-of-seahorse-for-gnome-keyring)| [setup shellcheck](#setup-shellcheck)                            |
 | [Install Google Chrome](#install-google-chrome)                  | [Configure Google Chrome App Launcher](#configure-google-chrome-app-launcher)                   |
-| [chrombook kernel headers installation](#chrombook-kernel-headers-installation)| [Install virtualbox 5 (experimental)](#install-virtualbox-5)     |
+| [chrombook kernel headers installation](#chrombook-kernel-headers-installation)| [Install virtualbox 5 (experimental)](#install-virtualbox-5-experimental)     |
 | [Win 8.1/2012 images don't boot for installation](#win-812012-images-dont-boot-for-installation)| [Install vagrant](#install-vagrant)                              |
 | [Install forj-docker](#install-forj-docker)                      | [private vpn setup](#private-vpn-setup)                          |
 | [chage reboot policy in](#change-rboot-policy-in)                | [Setup sshd server](#setup-sshd-server)                          |
