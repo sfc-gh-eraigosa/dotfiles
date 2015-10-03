@@ -3,46 +3,27 @@ I'll list them here and try to order them.
 
 # Table Of Contents
 
-| Section                                                                  |
-|--------------------------------------------------------------------------|
-| [Ubuntu Post Setup](#ubuntu-post-setup)                                  |
-| HP Elitebook 8500 special setup                                          |
-| Install software update tools                                            |
-| Package installs                                                         |
-| Install build tools                                                      |
-| Install go lang                                                          |
-| Bootstrap puppet                                                         |
-| MyHome directory setup                                                   |
-| git shortcuts                                                            |
-| setup zsh                                                                |
-| give your command prompt some bling                                      |
-| key bindings setup                                                       |
-| Install google drive sync                                                |
-| install nodejs                                                           |
-| install atom                                                             |
-| install wine, with wow                                                   |
-| install myrooms                                                          |
-| pidgin installation                                                      |
-| install dig                                                              |
-| Installing extra certificates                                            |
-| install hipchat                                                          |
-| install java                                                             |
-| setup latest version of seahorse for gnome keyring                       |
-| setup shellcheck                                                         |
-| Install Google Chrome                                                    |
-| Configure Google Chrome App Launcher                                     |
-| chrombook kernel headers installation                                    |
-| Install virtualbox 5 (experimental)                                      |
-| Win 8.1/2012 images don't boot for installation                          |
-| Install vagrant                                                          |
-| Install forj-docker                                                      |
-| private vpn setup                                                        |
-| chage reboot policy in                                                   |
-| Setup sshd server                                                        |
-| installing python                                                        |
-| installing pip                                                           |
-| installing openstack clients                                             |
-|                                                                          |
+| Section                                                          |Section 2                                                            |
+|------------------------------------------------------------------|---------------------------------------------------------------------|
+| [Ubuntu Post Setup](#ubuntu-post-setup)                          | [HP Elitebook 8500 special setup](#hp-elitebook-8500-special-setup) |
+| [Install software update tools](#install-software-update-tools)  | [Package installs](#package-installs)                               |
+| [Install build tools](#install-build-tools)                      | [Install go lang](#install-go-lang)                                 |
+| [Bootstrap puppet](#bootstrap-puppet)                            | [MyHome directory setup](#myhome-directory-setup)                   |
+| [git shortcuts](#git-shortcuts)                                  | [setup zsh](#setup-zsh)                                             |
+| [give your command prompt some bling](#give-your-command-prompt-some-bling)| [key bindings setup](#key-bindings-setup)                 |
+| [Install google drive sync](#install-google-drive-sync)          | [install nodejs](#install-nodejs)                                |
+| [install atom](#install-atom)                                    | [install wine, with wow](#install-win,-with-wow)                 |
+| [install myrooms](#install-myrooms)                              | [pidgin installation](#pidgin-installation)                      |
+| [install dig](#install-dig)                                      | [Installing extra certificates](#installing-extra-certificates)  |
+| [install hipchat](#install-hipchat)                              | [install java](#install-java)                                    |
+| [setup latest version of seahorse for gnome keyring](#setup-latest-version-of-seahorse-for-gnome-keyring)| [setup shellcheck](#setup-shellcheck)                            |
+| [Install Google Chrome](#install-google-chrome)                  | [Configure Google Chrome App Launcher](#configure-google-chrome-app-launcher)                   |
+| [chrombook kernel headers installation](#chrombook-kernel-headers-installation)| [Install virtualbox 5 (experimental)](#install-virtualbox-5)     |
+| [Win 8.1/2012 images don't boot for installation](#win-8.1/2012-images-don't-boot-for-installation)| [Install vagrant](#install-vagrant)                              |
+| [Install forj-docker](#install-forj-docker)                      | [private vpn setup](#private-vpn-setup)                          |
+| [chage reboot policy in](#change-rboot-policy-in)                | [Setup sshd server](#setup-sshd-server)                          |
+| [installing python](#installing-python)                          | [installing pip](#installing-pip)                                |
+| [installing openstack clients](#installing-openstack-clients)    | |
 
 Ubuntu Post Setup
 -----------------
