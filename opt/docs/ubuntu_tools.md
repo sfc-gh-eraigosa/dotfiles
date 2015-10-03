@@ -1,6 +1,49 @@
 Ok, time to update these steps.  I have a long list of notes I've taken on setting up and running my desktop.
 I'll list them here and try to order them.
 
+# Table Of Contents
+
+| Section                    | Description                   |
+|----------------------------|-------------------------------|
+| Ubuntu Post Setup          |                               |
+| HP Elitebook 8500 special setup       |                               |
+| Install software update tools       |                               |
+| Package installs       |                               |
+| Install build tools       |                               |
+| Install go lang       |                               |
+| Bootstrap puppet       |                               |
+| MyHome directory setup       |                               |
+| git shortcuts       |                               |
+| setup zsh       |                               |
+| give your command prompt some bling       |                               |
+| key bindings setup       |                               |
+| Install google drive sync       |                               |
+| install nodejs       |                               |
+| install atom       |                               |
+| install wine, with wow       |                               |
+| install myrooms      |                               |
+| pidgin installation     |                               |
+| install dig      |                               |
+| Installing extra certificates      |                               |
+| install hipchat      |                               |
+| install java      |                               |
+| setup latest version of seahorse for gnome keyring      |                               |
+| setup shellcheck     |                               |
+| Install Google Chrome      |                               |
+| Configure Google Chrome App Launcher      |                               |
+| chrombook kernel headers installation      |                               |
+| Install virtualbox 5 (experimental)      |                               |
+| Win 8.1/2012 images don't boot for installation      |                               |
+| Install vagrant      |                               |
+| Install forj-docker      |                               |
+| private vpn setup      |                               |
+| chage reboot policy in      |                               |
+| Setup sshd server      |                               |
+| installing python      |                               |
+| installing pip      |                               |
+| installing pip      |                               |
+| installing pip      |                               |
+
 Ubuntu Post Setup
 -----------------
 These instructions are mainly for my setup but might apply to others who are doing the same.  Feel free to borrow as needed.
