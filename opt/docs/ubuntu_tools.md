@@ -339,6 +339,28 @@ sudo -i apt-get install default-jre -y
 sudo -i apt-get install default-jdk -y
 ```
 
+#### install oracle java ####
+
+Download http://www.java.com/en/download/manual.jsp
+  http://javadl.sun.com/webapps/download/AutoDL?BundleId=109698
+
+
+```script
+cd ~/opt/bin
+tar -zxvf ~/Downloads/jre-8u60-linux-x64.tar.gz
+cat > $HOME/.ora.java.env << ORA
+export JAVA_HOME=\$HOME/opt/bin/jre1.8.0_60
+export JAVA_BIN=\$JAVA_HOME/bin
+export PATH=\$JAVA_BIN:\$PATH
+ORA
+chmod +x $HOME/.ora.java.env
+echo '. $HOME/.ora.java.env' >> $HOME/.bashrc
+
+sudo -s
+cd /usr/lib/mozilla/plugins
+ln -s $JAVA_BIN/jre1.8.0_60/lib/amd64/libnpjp2.so
+```
+
 #### setup latest version of seahorse for gnome keyring ####
 ```script
 sudo -i apt-get -y install seahorse-nautilus
