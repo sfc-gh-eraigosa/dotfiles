@@ -18,6 +18,7 @@
 opt/XMind_Linux_64bit
 opt/XMind_Linux_64bit/**
 opt/bin/docker-machine
+opt/bin/jre1.8.0_60
 !.config/
 !.config/terminator/
 !.config/terminator/config
