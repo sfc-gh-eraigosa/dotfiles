@@ -92,11 +92,11 @@ mkdir /tmp
 cd /tmp
 # get download from https://golang.org/dl/
 if [ "$(uname -s)" = "Darwin" ] ; then
-    VERSION=1.5
+    VERSION=1.5.1
     ARCH=amd64
     OS=darwin
 else
-    VERSION=1.5
+    VERSION=1.5.1
     ARCH=amd64
     OS=linux
 fi
