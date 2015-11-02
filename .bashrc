@@ -154,3 +154,5 @@ if [ -f ~/.ora.java.env ] ; then
     . $HOME/.ora.java.env
 fi
 
+# mounting git repos across files systems , specifically the crouton use case
+export GIT_DISCOVERY_ACROSS_FILESYSTEM=1
