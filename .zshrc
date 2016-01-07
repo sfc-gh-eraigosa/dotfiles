@@ -54,6 +54,7 @@ plugins=(git)
 # User configuration
 
   export PATH="/home/wenlock/opt/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/home/wenlock/go/bin:/usr/local/go/bin"
+export PATH="$HOME/.local/bin:$PATH"
 # export MANPATH="/usr/local/man:$MANPATH"
 
 source $ZSH/oh-my-zsh.sh
