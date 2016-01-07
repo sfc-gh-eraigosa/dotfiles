@@ -120,4 +120,5 @@ function vimprompt
 }
 
 . ~/.profile
+. ~/.bashrc
 
