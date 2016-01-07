@@ -120,5 +120,5 @@ function vimprompt
 }
 
 . ~/.profile
-. ~/.bashrc
 
+. $HOME/.goenv.sh
