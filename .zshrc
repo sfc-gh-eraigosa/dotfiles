@@ -119,3 +119,5 @@ function vimprompt
   fi
 }
 
+. ~/.profile
+
