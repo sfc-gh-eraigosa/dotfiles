@@ -38,7 +38,7 @@ export PUPPET_MODULES=/opt/config/production/puppet/modules:~/git/CDK-infra/blue
 force_color_prompt=yes
 # Info file
 id=$(hostname | awk -F. '{print $2}')
-if [ `which facter` ]; then
+if [ `command -v facter` ]; then
   ip=$(facter ipaddress)
 fi
 echo "|$id|$ip" > ~/.info
