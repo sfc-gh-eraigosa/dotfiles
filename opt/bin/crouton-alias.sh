@@ -36,6 +36,9 @@ HELP_TXT
 
 function crouton-start {
    _METHOD=$1
+   # fix for tun0 error 
+   sudo stop shill
+   sudo start shill BLACKLISTED_DEVICES=tun0
    [[ -z "$CHROOT_NAME" ]] && CHROOT_NAME=trusty
    if [ -z "$_METHOD" ] ; then
        if [ -f ~/.config/crouton_method.config ]; then
