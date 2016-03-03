@@ -15,6 +15,7 @@
 !.bash_logout
 !opt/
 !opt/**
+opt/bin/docker-machine.5
 opt/XMind_Linux_64bit
 opt/XMind_Linux_64bit/**
 opt/bin/docker-machine
@@ -29,3 +30,4 @@ opt/bin/ApacheDirectoryStudio/**
 !.repos.env
 *.swp
 .custom_alias
+!.docker.sh
