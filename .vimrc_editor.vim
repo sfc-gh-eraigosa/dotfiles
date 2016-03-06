@@ -44,3 +44,5 @@ if has ("autocmd")
         autocmd BufRead,BufNewFile *.txt set textwidth=80
     augroup END 
 endif
+
+source ~/.vimrc_vundle.vim
