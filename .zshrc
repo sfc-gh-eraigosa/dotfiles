@@ -93,6 +93,10 @@ source $ZSH/oh-my-zsh.sh
 # Example aliases
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
+if [ -f ~/.bash_aliases ]; then
+    . ~/.bash_aliases
+fi
 . ~/.profile
 . $HOME/.goenv.sh
 . $HOME/.gitenv
+
