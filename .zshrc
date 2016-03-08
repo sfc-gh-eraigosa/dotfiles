@@ -1,5 +1,16 @@
 # Path to your oh-my-zsh installation.
-export ZSH=/Users/eraigosa/.oh-my-zsh
+export Z_HOME=$HOME
+if [ ! -d $Z_HOME ] ; then
+    export Z_HOME=/home/eraigosa
+fi
+if [ ! -d $Z_HOME ] ; then
+    export Z_HOME=/home/wenlock
+fi
+if [ ! -d $Z_HOME ] ; then
+    export Z_HOME=/Users/eraigosa
+fi
+
+export ZSH=$Z_HOME/.oh-my-zsh
 
 # Set name of the theme to load.
 # Look in ~/.oh-my-zsh/themes/
@@ -53,7 +64,7 @@ plugins=(git)
 
 # User configuration
 
-export PATH="/Users/eraigosa/opt/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/eraigosa/go/bin:/usr/local/go/bin:/Users/eraigosa/go/bin:/usr/local/go/bin"
+export PATH="$HOME/opt/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/go/bin:/usr/local/go/bin"
 # export MANPATH="/usr/local/man:$MANPATH"
 
 source $ZSH/oh-my-zsh.sh
