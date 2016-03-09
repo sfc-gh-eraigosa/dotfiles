@@ -11,6 +11,9 @@ if [ ! -d $Z_HOME ] ; then
 fi
 
 export ZSH=$Z_HOME/.oh-my-zsh
+if [ -f ~/opt/themes/agnoster.zsh-theme ] ; then
+cp ~/opt/themes/agnoster.zsh-theme $ZSH/themes/agnoster.zsh-theme
+fi
 
 # Set name of the theme to load.
 # Look in ~/.oh-my-zsh/themes/
