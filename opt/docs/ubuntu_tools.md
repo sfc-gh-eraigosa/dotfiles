@@ -88,15 +88,14 @@ sudo apt-get install curl corkscrew build-essential libssl-dev zlib1g-dev libxml
 
 #### Install go lang ####
 ```script
-mkdir /tmp
 cd /tmp
 # get download from https://golang.org/dl/
 if [ "$(uname -s)" = "Darwin" ] ; then
-    VERSION=1.5.1
+    VERSION=1.6
     ARCH=amd64
     OS=darwin
 else
-    VERSION=1.5.1
+    VERSION=1.6
     ARCH=amd64
     OS=linux
 fi
