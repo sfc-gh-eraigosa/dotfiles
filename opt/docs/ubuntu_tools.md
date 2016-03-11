@@ -385,9 +385,7 @@ sudo -i apt-get -y install google-chrome-stable
 ```
 
 #### Configure Google Chrome App Launcher ####
-
-   run from chrome: chrome://flags/#enable-app-list
-   restart chrome
+   https://chrome.google.com/webstore/launcher
    search in app start for app launcher, and lock to tool bar.
 
 #### chrombook kernel headers installation ####
