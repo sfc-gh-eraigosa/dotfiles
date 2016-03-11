@@ -23,7 +23,7 @@ I'll list them here and try to order them.
 | [Install forj-docker](#install-forj-docker)                      | [private vpn setup](#private-vpn-setup)                          |
 | [chage reboot policy in](#change-rboot-policy-in)                | [Setup sshd server](#setup-sshd-server)                          |
 | [installing python](#installing-python)                          | [installing pip](#installing-pip)                                |
-| [installing openstack clients](#installing-openstack-clients)    | |
+| [installing openstack clients](#installing-openstack-clients)    | [install ruby](#install-ruby)|
 
 Ubuntu Post Setup
 -----------------
@@ -534,4 +534,17 @@ python-saharaclient
 python-solumclient
 python-swiftclient
 python-troveclient' | sudo -i xargs -i pip install {}
+```
+
+#### install ruby ####
+```script
+sudo apt-get -y install git-core curl zlib1g-dev build-essential libssl-dev libreadline-dev libyaml-dev libsqlite3-dev sqlite3 libxml2-dev libxslt1-dev libcurl4-openssl-dev python-software-properties libffi-dev
+sudo apt-get install libgdbm-dev libncurses5-dev automake libtool bison libffi-dev
+curl -L https://get.rvm.io | bash -s stable
+source ~/.rvm/scripts/rvm
+rvm install 2.2.3
+rvm use 2.2.3 --default
+ruby -v
+echo "gem: --no-ri --no-rdoc" > ~/.gemrc
+gem install bundler
 ```
