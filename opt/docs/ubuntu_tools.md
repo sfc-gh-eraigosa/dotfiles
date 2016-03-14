@@ -506,7 +506,7 @@ sudo apt-get install python-dev build-essential libssl-dev zlib1g-dev libxml2-de
 
 #### installing pip ####
 ```script
-cd /temp ; \
+cd /tmp ; \
 curl https://bitbucket.org/pypa/setuptools/raw/39f7ef5ef22183f3eba9e05a46068e1d9fd877b0/ez_setup.py --insecure > ez_setup.py ; \
 curl https://raw.githubusercontent.com/pypa/pip/develop/contrib/get-pip.py --insecure > get-pip.py ;\
 sudo -i python /tmp/ez_setup.py ;\
