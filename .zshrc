@@ -67,7 +67,8 @@ plugins=(git)
 
 # User configuration
 
-export PATH="$HOME/opt/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/go/bin:/usr/local/go/bin"
+# export PATH="$PATH:$HOME/opt/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/go/bin:/usr/local/go/bin"
+export PATH="$PATH:$HOME/opt/bin"
 # export MANPATH="/usr/local/man:$MANPATH"
 
 source $ZSH/oh-my-zsh.sh
