@@ -45,4 +45,5 @@ if has ("autocmd")
     augroup END 
 endif
 
-source ~/.vimrc_vundle.vim
+" needs work
+"source ~/.vimrc_vundle.vim
