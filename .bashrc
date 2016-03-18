@@ -156,3 +156,5 @@ fi
 
 # mounting git repos across files systems , specifically the crouton use case
 export GIT_DISCOVERY_ACROSS_FILESYSTEM=1
+
+export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
