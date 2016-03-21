@@ -92,6 +92,9 @@ fi
 if [ -f ~/.custom_alias ] ; then
     . ~/.custom_alias
 fi
+if [ -f ~/git/projects.cson ]; then
+    [ ! -f ~/.atom/projects.cson ] && ln -s ~/git/projects.cson ~/.atom/projects.cson
+fi
 
 # pulse vpn
 alias pulse='/usr/local/bin/nclauncher.pl'
