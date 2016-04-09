@@ -1,5 +1,4 @@
 [global_config]
-  window_state = fullscreen
   handle_size = 1
   title_hide_sizetext = True
   focus = mouse
