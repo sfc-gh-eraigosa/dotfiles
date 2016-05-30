@@ -103,7 +103,7 @@ if [ -f ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh ] ; then
 fi
 
 if [ -f ~/.zsh/dircolors-solarized/dircolors.ansi-universal ] ; then
-  eval $(dircolors ~/.zsh/dircolors-solarized/dircolors.ansi-universal)
+  eval $(dircolors ~/.zsh/dircolors-solarized/dircolors.ansi-dark)
 fi
 
 if [ -f ~/.bash_aliases ]; then
