@@ -97,8 +97,18 @@ source $ZSH/oh-my-zsh.sh
 # Example aliases
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
+if [ -f ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh ] ; then
+  .  ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh
+  export ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE=fg=5
+fi
+
+if [ -f ~/.zsh/dircolors-solarized/dircolors.ansi-universal ] ; then
+  eval $(dircolors ~/.zsh/dircolors-solarized/dircolors.ansi-universal)
+fi
+
 if [ -f ~/.bash_aliases ]; then
     . ~/.bash_aliases
+
 fi
 . ~/.profile
 . $HOME/.goenv.sh
