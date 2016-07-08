@@ -35,4 +35,6 @@ cat > .fonts.conf << FONTS
 FONTS
 ```
 
-Restart chromeOS
+In the case that you get an error saying something like `.fonts.conf does not exist`, try using `--rbind` instead of `--bind`.
+
+Save, then restart Chrome OS.
