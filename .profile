@@ -83,37 +83,3 @@ export PATH="$PATH:/usr/local/bin/docker"
 [[ -s "$HOME/.rvm/scripts/rvm" ]] && source "$HOME/.rvm/scripts/rvm" # Load RVM into a shell session *as a function*
 # Source git environment shortcuts
 . /home/docker/.dindcenv
-# Source git environment shortcuts
-. /home/docker/.dindcenv
-# Source git environment shortcuts
-. /home/docker/.dindcenv
-# Source git environment shortcuts
-. /home/docker/.dindcenv
-# Source git environment shortcuts
-. /home/docker/.dindcenv
-# Source git environment shortcuts
-. /home/docker/.dindcenv
-# Source git environment shortcuts
-. /home/docker/.dindcenv
-# Source git environment shortcuts
-. /home/docker/.dindcenv
-# Source git environment shortcuts
-. /home/docker/.dindcenv
-# Source git environment shortcuts
-. /home/docker/.dindcenv
-# Source git environment shortcuts
-. /home/docker/.dindcenv
-# Source git environment shortcuts
-. /home/docker/.dindcenv
-# Source git environment shortcuts
-. /home/docker/.dindcenv
-# Source git environment shortcuts
-. /home/docker/.dindcenv
-# Source git environment shortcuts
-. /home/docker/.dindcenv
-# Source git environment shortcuts
-. /home/docker/.dindcenv
-# Source git environment shortcuts
-. /home/docker/.dindcenv
-# Source git environment shortcuts
-. /home/docker/.dindcenv

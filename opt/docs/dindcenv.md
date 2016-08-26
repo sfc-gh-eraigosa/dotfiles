@@ -13,7 +13,7 @@ The script is designed to run in bash shell prompts, with Linux systems.
 Use the following command to get it setup:
 
 ```
-curl https://raw.githubusercontent.com/wenlock/myhome/master/opt/bin/setup_dindc_alias.sh | sh -
+curl -ks https://raw.githubusercontent.com/wenlock/myhome/master/opt/bin/setup_dindc_alias.sh | bash -
 ```
 
 Usage

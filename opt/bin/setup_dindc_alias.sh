@@ -36,7 +36,7 @@ else
 fi
 
 
-grep -e "\$SCRIPT_NAME" ~/.bash_aliases > /dev/null 2<&1
+grep -e "${SCRIPT_NAME}" ~/.bash_aliases > /dev/null 2<&1
 if [[ ! $? -eq 0 ]] ; then
     cat >> ~/.bash_aliases << DINDC_ALIASES
 
@@ -49,10 +49,14 @@ else
     echo "$SCRIPT_NAME is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
 fi
 DINDC_ALIASES
+fi
 
+grep -e "${SCRIPT_NAME}" ~/.profile > /dev/null 2<&1
+if [[ ! $? -eq 0 ]] ; then
     echo "# Source git environment shortcuts" >> ~/.profile
     echo ". $ALIAS_ENV_SCRIPT" >> ~/.profile
 fi
+
 echo "#!/bin/bash" > $ALIAS_ENV_SCRIPT
 echo "# docker environment shortcuts" >> $ALIAS_ENV_SCRIPT
 cat >> $ALIAS_ENV_SCRIPT << EOF
