@@ -41,7 +41,7 @@ if [[ ! $? -eq 0 ]] ; then
     cat >> ~/.bash_aliases << DINDC_ALIASES
 
 #
-# Source git environment shortcuts
+# Source environment shortcuts
 #
 if [ -f $ALIAS_ENV_SCRIPT ] ; then
     source $ALIAS_ENV_SCRIPT
