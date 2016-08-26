@@ -5,8 +5,6 @@ I've been using [Docker Datcenter - Universal Control Plane](https://docs.docker
 Logging in can sometimes be cumbersom to do from the command line, so I've
 started a simple alias script called dindcenv to help me simplify this process.
 
-![easy login](images/dindc-env.gif;canvasHeight=139;canvasWidth=105)
-
 ![easy login](images/dindc-env.gif)
 
 Install
