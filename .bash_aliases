@@ -101,3 +101,165 @@ alias pulse='/usr/local/bin/nclauncher.pl'
 . ~/.goenv.sh
 
 . ~/.docker.sh
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
+
+#
+# Source git environment shortcuts
+#
+if [ -f /home/docker/.dindcenv ] ; then
+    source /home/docker/.dindcenv
+else
+    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+fi
