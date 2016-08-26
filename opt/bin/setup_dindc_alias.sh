@@ -172,6 +172,7 @@ function fdindc-logout {
        source "\$DINDC_LAST_BUNDLE_DIR/unset.env"
        writeparam "DINDC_LAST_BUNDLE_DIR" ""
        rm -rf "\$DINDC_LAST_BUNDLE_DIR"
+       echo 'Logout completed'
     else
         echo 'No logout required, you can use dindc-login to login'
     fi
