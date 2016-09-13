@@ -113,3 +113,5 @@ else
 fi
 
 
+## different git-reset
+alias git-reset='bash -c $HOME/opt/bin/git-reset.sh'
