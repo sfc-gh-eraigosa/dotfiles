@@ -1,4 +1,5 @@
 # Path to your oh-my-zsh installation.
+DEFAULT_USER=docker
 export Z_HOME=$HOME
 if [ ! -d $Z_HOME ] ; then
     export Z_HOME=/home/eraigosa
