@@ -66,8 +66,16 @@ prompt_end() {
 
 # Context: user@hostname (who am I and where am I)
 prompt_context() {
-  if [[ "$USER" != "$DEFAULT_USER" || -n "$SSH_CLIENT" ]]; then
-    prompt_segment black default "%(!.%{%F{yellow}%}.)$USER@%m"
+#  if [[ "$USER" != "docker" || -n "$SSH_CLIENT" ]]; then
+  PROMPT_DOCKERVER=$(timeout 5 docker version -f "{{.Client.Version}} ⚓ {{.Server.Version}}")
+  if [[ -z "$PROMPT_DOCKERVER" ]] ; then
+    PROMPT_DOCKERVER='--'
+  fi
+
+  if [[ "$USER" != "docker" ]]; then
+    prompt_segment cyan default "%(!.%{%F{yellow}%}.)[$PROMPT_DOCKERVER]$USER@%m"
+  else
+    prompt_segment cyan default "%(!.%{%F{yellow}%}.)[$PROMPT_DOCKERVER]"
   fi
 }
 
