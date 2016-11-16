@@ -99,7 +99,7 @@ function fdindc-help {
 
   dindc-login {ucp url} {ucp username}
     Use this alias to login to a particular ucp server from the command shell.
-    dindc-login will store some defaults from previous login attempts in 
+    dindc-login will store some defaults from previous login attempts in
     $HOME/.dindc.defaults, you can edit this key/value file to change the
     defaults.  Once you login, dindc-login will show docker info for your
     client.
@@ -168,7 +168,7 @@ function isWindows {
 # do logout
 function fdindc-logout {
     if [ ! -z "\$DINDC_LAST_BUNDLE_DIR" ] ; then
-       echo 'unset DOCKER_HOST && unset DOCKER_TLS_VERIFY && unset DOCKER_CERT_PATH' >> "\$DINDC_LAST_BUNDLE_DIR/unset.env"
+       echo 'unset DOCKER_API_VERSION && unset DOCKER_HOST && unset DOCKER_TLS_VERIFY && unset DOCKER_CERT_PATH' >> "\$DINDC_LAST_BUNDLE_DIR/unset.env"
        source "\$DINDC_LAST_BUNDLE_DIR/unset.env"
        writeparam "DINDC_LAST_BUNDLE_DIR" ""
        rm -rf "\$DINDC_LAST_BUNDLE_DIR"
@@ -176,6 +176,15 @@ function fdindc-logout {
     else
         echo 'No logout required, you can use dindc-login to login'
     fi
+}
+
+# set api version for client to match server
+function dindc-setversion {
+  local _apiversion=\$(docker version --format '{{.Server.APIVersion}}')
+  if [ ! -z "\$_apiversion" ]; then
+    echo "(dindc-login) - setting api version to \$_apiversion"
+    export DOCKER_API_VERSION=\$_apiversion
+  fi
 }
 
 # do ucp login
@@ -192,7 +201,7 @@ function fdindc-login {
         ucp_url=\$current_url
     fi
 
-    if [ -z "\$ucp_url" ]; then 
+    if [ -z "\$ucp_url" ]; then
         export DINDC_DEFAULT_UCPURL=\$current_url
         writeparam "DINDC_DEFAULT_UCPURL" "\$current_url"
     else
@@ -215,7 +224,7 @@ function fdindc-login {
         ucp_user=\$current_user
     fi
 
-    if [ -z "\$ucp_user" ]; then 
+    if [ -z "\$ucp_user" ]; then
         export DINDC_DEFAULT_UCPUSER=\$current_user
         writeparam "DINDC_DEFAULT_UCPUSER" "\$current_user"
     else
@@ -269,6 +278,7 @@ function fdindc-login {
     _cwd=\$(pwd)
     cd "\${DINDC_LAST_BUNDLE_DIR}"
     source ./env.sh
+    dindc-setversion
     cd \$_cwd
     echo "login complete! use docker info to check your connection and dindc-logout to reset/remove your creds"
 #    docker info
