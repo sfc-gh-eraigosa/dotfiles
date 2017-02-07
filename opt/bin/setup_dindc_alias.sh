@@ -168,7 +168,7 @@ function isWindows {
 # do logout
 function fdindc-logout {
     if [ ! -z "\$DINDC_LAST_BUNDLE_DIR" ] ; then
-       echo 'unset DOCKER_API_VERSION && unset DOCKER_HOST && unset DOCKER_TLS_VERIFY && unset DOCKER_CERT_PATH' >> "\$DINDC_LAST_BUNDLE_DIR/unset.env"
+       echo 'unset COMPOSE_API_VERSION && unset DOCKER_API_VERSION && unset DOCKER_HOST && unset DOCKER_TLS_VERIFY && unset DOCKER_CERT_PATH' >> "\$DINDC_LAST_BUNDLE_DIR/unset.env"
        source "\$DINDC_LAST_BUNDLE_DIR/unset.env"
        writeparam "DINDC_LAST_BUNDLE_DIR" ""
        rm -rf "\$DINDC_LAST_BUNDLE_DIR"
@@ -184,6 +184,7 @@ function dindc-setversion {
   if [ ! -z "\$_apiversion" ]; then
     echo "(dindc-login) - setting api version to \$_apiversion"
     export DOCKER_API_VERSION=\$_apiversion
+    export COMPOSE_API_VERSION=\$_apiversion
   fi
 }
 
