@@ -64,6 +64,7 @@ BUNDLE_ROOT_DIR="\$HOME/.config/dindcenv"
 alias dindc-logout='fdindc-logout \$@'
 alias dindc-login='fdindc-login \$@'
 alias dindc-help='fdindc-help'
+alias dindc-machine='fdindc-machine \$@'
 
 function fdindc-commands {
     _commands=\$(alias|grep 'dindc-'|awk -F= '{print \$1}'|sed 's/alias //g' | awk '{printf \$1", "}' | sed 's/, \$//g')
@@ -77,7 +78,7 @@ function fdindc-help {
     cat << HELP_TXT
 
   Summary:
-
+    dindc stands for Docker in the Data Center.
     dindc-alias's are a set of helper tools to make it easier to interact with docker.
     Tired of trying to remember long worthless command lines?
     Make it simple with dindc alias...
@@ -107,6 +108,14 @@ function fdindc-help {
   dindc-logout
     reset docker settings so that they are pointing to local docker client again
     and remove settings for login.
+
+  dindc-machine {name}
+    Shortcut to create a virtualbox machine localy and source the environment.
+    If the machine already exist, then skip creating it and go strait to sourcing
+    it.  Uses dindc-proxy as well to determine proxy options.
+
+  dindc-proxy
+    Read the command proxy options and display the docker options for proxy.
 
 HELP_TXT
 
@@ -186,6 +195,50 @@ function dindc-setversion {
     export DOCKER_API_VERSION=\$_apiversion
     export COMPOSE_API_VERSION=\$_apiversion
   fi
+}
+
+# get proxy options
+function dindc-proxy {
+local proxy_options=""
+
+    if [ ! -z "\${http_proxy}" ]; then
+        proxy_options="\${proxy_options} --engine-env http_proxy=\${http_proxy}"
+    fi
+    if [ ! -z "\${https_proxy}" ]; then
+        proxy_options="\${proxy_options} --engine-env https_proxy=\${https_proxy}"
+    fi
+    if [ ! -z "\${no_proxy}" ]; then
+        proxy_options="\${proxy_options} --engine-env no_proxy=\${no_proxy}"
+    fi
+
+    if [ ! -z "\${HTTP_PROXY}" ]; then
+        proxy_options="\${proxy_options} --engine-env HTTP_PROXY=\${HTTP_PROXY}"
+    fi
+    if [ ! -z "\${HTTPS_PROXY}" ]; then
+        proxy_options="\${proxy_options} --engine-env HTTPS_PROXY=\${HTTPS_PROXY}"
+    fi
+    if [ ! -z "\${NO_PROXY}" ]; then
+        proxy_options="\${proxy_options} --engine-env NO_PROXY=\${NO_PROXY}"
+    fi
+    echo -n \$proxy_options
+}
+
+# setup a local docker-machine config
+function fdindc-machine {
+  local _name="\${1:-default}"
+  echo "Checking on machine --> \${_name}"
+  local _status="\$(docker-machine status \${_name} 2>/dev/null)"
+  if [ -z "\${_status}" ]; then
+      eval "docker-machine create -d virtualbox \
+          \$(dindc-proxy) \
+          --virtualbox-cpu-count 4 \
+          --virtualbox-memory 8048 \
+          --virtualbox-disk-size 60000 \
+          --virtualbox-no-vtx-check \${_name}"
+  elif [ "\${_status}" = "Stopped" ]; then
+      eval "docker-machine start \${_name}"
+  fi
+  eval \$(docker-machine env "\${_name}")
 }
 
 # do ucp login

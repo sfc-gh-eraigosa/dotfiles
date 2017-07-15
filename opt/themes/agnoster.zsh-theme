@@ -67,15 +67,21 @@ prompt_end() {
 # Context: user@hostname (who am I and where am I)
 prompt_context() {
 #  if [[ "$USER" != "docker" || -n "$SSH_CLIENT" ]]; then
-  PROMPT_DOCKERVER=$(timeout 5 docker version -f "{{.Client.Version}} ⚓ {{.Server.Version}}")
+  TIMEOUT_BIN=$(whence timeout)
+  if [ -z "${TIMEOUT_BIN}" ] ; then
+    TIMEOUT_BIN=$(whence gtimeout)
+  fi
+  if [ -x "${TIMEOUT_BIN}" ] ; then
+    PROMPT_DOCKERVER=$($TIMEOUT_BIN 5 docker version -f "{{.Client.Version}} ⚓ {{.Server.Version}}")
+  fi
   if [[ -z "$PROMPT_DOCKERVER" ]] ; then
     PROMPT_DOCKERVER='--'
   fi
 
   if [[ "$USER" != "docker" ]]; then
-    prompt_segment cyan default "%(!.%{%F{yellow}%}.)[$PROMPT_DOCKERVER]$USER@%m"
+    prompt_segment cyan white "%(!.%{%F{yellow}%}.)[$PROMPT_DOCKERVER]$USER@%m"
   else
-    prompt_segment cyan default "%(!.%{%F{yellow}%}.)[$PROMPT_DOCKERVER]"
+    prompt_segment cyan white "%(!.%{%F{yellow}%}.)[$PROMPT_DOCKERVER]"
   fi
 }
 

@@ -11,7 +11,12 @@ if [ ! -d $Z_HOME ] ; then
     export Z_HOME=/Users/eraigosa
 fi
 
-export ZSH=$Z_HOME/.oh-my-zsh
+if [ -d "${Z_HOME}/.oh-my-zsh" ] ; then
+  export ZSH="${Z_HOME}/.oh-my-zsh"
+else
+  export ZSH="${Z_HOME}/git/oh-my-zsh"
+fi
+
 if [ -f ~/opt/themes/agnoster.zsh-theme ] ; then
 cp ~/opt/themes/agnoster.zsh-theme $ZSH/themes/agnoster.zsh-theme
 fi

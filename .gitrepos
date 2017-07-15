@@ -58,9 +58,14 @@ _CWD=$(pwd)
 cd $GIT_WORKSPACE
 
 #  for REPO in ${!REPOS[*]} ; do
-  for REPO in ${!REPOS[*]} ; do
-    if [ ! -z "${REPO}" ]; then
-      CloneRepo $REPO ${REPOS[$REPO]}
+#  for REPO in ${!REPOS[*]} ; do
+  for index in "${REPOS[@]}"; do
+    name="${index%%::*}"
+    uri="${index##*::}"
+#    echo $name
+#    echo $uri
+    if [ ! -z "${name}" ]; then
+      CloneRepo $name $uri
     fi
   done
 
