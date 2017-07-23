@@ -84,6 +84,13 @@ export PATH="$PATH:/usr/local/bin/docker"
 # Source git environment shortcuts
 . $HOME/.dindcenv
 
-# run ruby in docker
-[[ -f "$HOME/.ruby.env" ]] && source "$HOME/.ruby.env"
 
+
+#
+# ruby docker environment aliases
+#
+if [ -f /Users/eraigosa/.ruby.env ] ; then
+    source /Users/eraigosa/.ruby.env
+else
+    echo ".ruby.env is missing, you can install with : . opt/bin/setup_ruby-docker.sh"
+fi
