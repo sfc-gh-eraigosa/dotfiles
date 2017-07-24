@@ -59,7 +59,7 @@ function f-ruby-docker-install {
 }
 
 function f-ruby-docker-disable {
-  for cmd in ruby rake bundler gem rails rubocop rspec; do
+  for cmd in ruby rake bundle gem rails rubocop rspec; do
       eval 'unalias \$cmd'
   done
 }
@@ -67,7 +67,7 @@ function f-ruby-docker-disable {
 alias ruby-docker-setup='f-ruby-docker-setup'
 alias ruby-docker-install='f-ruby-docker-install'
 alias ruby-docker-disable='f-ruby-docker-disable'
-for cmd in ruby rake bundler gem rails rubocop rspec; do
+for cmd in ruby rake bundle gem rails rubocop rspec; do
     eval 'alias \$cmd="f-ruby-docker-run \$cmd"'
 done
 
