@@ -47,27 +47,49 @@ function f-ruby-docker-setup {
     docker volume create ruby-bundle
 }
 function f-ruby-docker-run {
+    _start=""
+    _ruby_image="ruby"
     if [ "\$2" = "--version" ]; then
       echo "Running in docker"
     fi
-    docker run -it --rm -v ruby-bundle:/usr/local/bundle -v \$(pwd):/workspace --workdir /workspace ruby \$@
+    if [ "\$1" = "rails" ]; then
+      _ruby_image="ruby:rails"
+    elif [ "\$1" = "rails-server" ]; then
+      _ruby_image="ruby:rails"
+      _options='-p 3000:3000'
+      _start="rails server -b 0.0.0.0"
+      shift
+    fi
+    eval "docker run -it --rm \
+              \${_options}  \
+               -v ruby-bundle:/usr/local/bundle \
+               -v \$(pwd):/workspace \
+               --workdir /workspace \${_ruby_image} \$_start \$@"
 }
-function f-ruby-docker-install {
-    gem install rubocop
-    gem install rspec
-    gem install rails
+function f-ruby-install-rails {
+    docker run -it --name ruby-rails -v ruby-bundle:/usr/local/bundle \
+    ruby bash -c 'apt-get update && \
+    apt-get install -y --no-install-recommends \
+        nodejs \
+        mysql-client \
+        postgresql-client \
+        sqlite3 && \
+    rm -rf /var/lib/apt/lists/* && \
+    gem install rails --version 5.0.1'
+    docker commit ruby-rails ruby:rails
+    docker rm -f ruby-rails
 }
 
 function f-ruby-docker-disable {
-  for cmd in ruby rake bundle gem rails rubocop rspec; do
+  for cmd in ruby rake bundle gem rails rails-server rubocop rspec; do
       eval 'unalias \$cmd'
   done
 }
 
 alias ruby-docker-setup='f-ruby-docker-setup'
-alias ruby-docker-install='f-ruby-docker-install'
+alias ruby-install-rails='f-ruby-install-rails'
 alias ruby-docker-disable='f-ruby-docker-disable'
-for cmd in ruby rake bundle gem rails rubocop rspec; do
+for cmd in ruby rake bundle gem rails rails-server rubocop rspec; do
     eval 'alias \$cmd="f-ruby-docker-run \$cmd"'
 done
 
