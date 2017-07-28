@@ -56,7 +56,7 @@ function f-ruby-docker-run {
       _ruby_image="ruby:rails"
     elif [ "\$1" = "rails-server" ]; then
       _ruby_image="ruby:rails"
-      _options='-p 3000:3000'
+      _options='-e RAILS_ENV -p 3000:3000'
       _start="rails server -b 0.0.0.0"
       shift
     fi
