@@ -49,16 +49,31 @@ function f-ruby-docker-setup {
 function f-ruby-docker-run {
     _start=""
     _ruby_image="ruby"
+    _options='--network rails -e RAILS_ENV -e BUNDLE_GEMFILE'
     if [ "\$2" = "--version" ]; then
       echo "Running in docker"
     fi
-    if [ "\$1" = "rails" ]; then
+    if [ "\$1" = "rails-server" ]; then
       _ruby_image="ruby:rails"
-    elif [ "\$1" = "rails-server" ]; then
-      _ruby_image="ruby:rails"
-      _options='-e RAILS_ENV -p 3000:3000'
+      _options="\${_options} --name rails-server --link xamp -p 3000:3000"
       _start="rails server -b 0.0.0.0"
       shift
+    elif [ "\$1" = "rails-xamp" ]; then
+      docker inspect xamp > /dev/null 2<&1 && \
+          echo 'recreating xamp container ...' && \
+          docker rm -f xamp
+      echo 'Starting xamp server'
+      _ruby_image="tomsik68/xampp"
+      _options="\${_options} --name xamp -d -p 8080:80"
+      shift
+    elif [ "\$1" = "rails" ] && [ "\$2" = "console" ]; then
+      _ruby_image="ruby:rails"
+      _options="\${_options} -it --link rails-server --link xamp"
+      _start="bash"
+      shift; shift;
+    elif [ "\$1" = "rails" ]; then
+      _options="\${_options} --link xamp --link rails-server"
+      _ruby_image="ruby:rails"
     fi
     eval "docker run -it --rm \
               \${_options}  \
@@ -81,7 +96,7 @@ function f-ruby-install-rails {
 }
 
 function f-ruby-docker-disable {
-  for cmd in ruby rake bundle gem rails rails-server rubocop rspec; do
+  for cmd in ruby rake bundle gem rails rails-xamp rails-server rubocop rspec; do
       eval 'unalias \$cmd'
   done
 }
@@ -89,7 +104,7 @@ function f-ruby-docker-disable {
 alias ruby-docker-setup='f-ruby-docker-setup'
 alias ruby-install-rails='f-ruby-install-rails'
 alias ruby-docker-disable='f-ruby-docker-disable'
-for cmd in ruby rake bundle gem rails rails-server rubocop rspec; do
+for cmd in ruby rake bundle gem rails rails-xamp rails-server rubocop rspec; do
     eval 'alias \$cmd="f-ruby-docker-run \$cmd"'
 done
 
