@@ -106,8 +106,8 @@ alias pulse='/usr/local/bin/nclauncher.pl'
 #
 # Source git environment shortcuts
 #
-if [ -f /home/docker/.dindcenv ] ; then
-    source /home/docker/.dindcenv
+if [ -f $HOME/.dindcenv ] ; then
+    source $HOME/.dindcenv
 else
     echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
 fi
@@ -115,3 +115,4 @@ fi
 
 ## different git-reset
 alias git-reset='bash -c $HOME/opt/bin/git-reset.sh'
+[ -f $HOME/.ruby.env ] && source ~/.ruby.env
