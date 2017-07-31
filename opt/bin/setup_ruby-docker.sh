@@ -25,7 +25,7 @@ else
 fi
 
 grep -e "${SCRIPT_NAME}" "$HOME/.profile" > /dev/null 2<&1
-if [[ ! $? -eq 0 ]] ; then
+if [ ! $? -eq 0 ] ; then
     cat >> "$HOME/.profile" << RUBY_DOCKER
 
 #
@@ -82,15 +82,22 @@ function f-ruby-docker-run {
                --workdir /workspace \${_ruby_image} \$_start \$@"
 }
 function f-ruby-install-rails {
-    docker run -it --name ruby-rails -v ruby-bundle:/usr/local/bundle \
-    ruby bash -c 'apt-get update && \
+    eval 'docker run -it --name ruby-rails \
+                     -v ruby-bundle:/usr/local/bundle \
+                     -e http_proxy \
+                     -e https_proxy \
+                     -e no_proxy \
+                     -e HTTP_PROXY \
+                     -e HTTPS_PROXY \
+                     -e NO_PROXY \
+    ruby bash -c "apt-get update && \
     apt-get install -y --no-install-recommends \
         nodejs \
         mysql-client \
         postgresql-client \
         sqlite3 && \
     rm -rf /var/lib/apt/lists/* && \
-    gem install rails --version 5.0.1'
+    gem install rails --version 5.0.1"'
     docker commit ruby-rails ruby:rails
     docker rm -f ruby-rails
 }
