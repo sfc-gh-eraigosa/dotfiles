@@ -68,11 +68,11 @@ function f-ruby-docker-run {
       shift
     elif [ "\$1" = "rails" ] && [ "\$2" = "console" ]; then
       _ruby_image="ruby:rails"
-      _options="\${_options} -it --link rails-server --link xamp"
+      _options="\${_options} -it --rm --link rails-server --link xamp"
       _start="bash"
       shift; shift;
     elif [ "\$1" = "rails" ]; then
-      _options="\${_options} --link xamp --link rails-server"
+      _options="\${_options} --rm --link xamp --link rails-server"
       _ruby_image="ruby:rails"
     fi
     eval "docker run -it --rm \
