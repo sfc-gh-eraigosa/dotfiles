@@ -49,7 +49,7 @@ function f-ruby-docker-setup {
 function f-ruby-docker-run {
     _start=""
     _ruby_image="ruby"
-    _options='--network rails -e RAILS_ENV -e BUNDLE_GEMFILE'
+    _options='--network rails -e http_proxy -e https_proxy -e no_proxy -e RAILS_ENV -e BUNDLE_GEMFILE'
     if [ "\$2" = "--version" ]; then
       echo "Running in docker"
     fi
