@@ -80,9 +80,9 @@ prompt_context() {
   fi
 
   if [[ "$USER" != "docker" ]]; then
-    prompt_segment cyan white "%(!.%{%F{yellow}%}.)[ $WHALE $PROMPT_DOCKERVER ] $USER@%m"
+    prompt_segment '\e[57m' white "%(!.%{%F{yellow}%}.)[ $WHALE $PROMPT_DOCKERVER ] $USER@%m"
   else
-    prompt_segment cyan white "%(!.%{%F{yellow}%}.)[ $WHALE $PROMPT_DOCKERVER ]"
+    prompt_segment '\e[57m' white "%(!.%{%F{yellow}%}.)[ $WHALE $PROMPT_DOCKERVER ]"
   fi
 }
 
