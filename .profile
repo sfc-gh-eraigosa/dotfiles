@@ -94,3 +94,10 @@ if [ -f /Users/eraigosa/.ruby.env ] ; then
 else
     echo ".ruby.env is missing, you can install with : . opt/bin/setup_ruby-docker.sh"
 fi
+
+#
+# iterm integration with brew install https://gist.github.com/ZenLulz/c812f70fc86ebdbb189d9fb82f98197e
+#  brew cask install iterm2
+test -e "${HOME}/.iterm2_shell_integration.bash" && source "${HOME}/.iterm2_shell_integration.bash"
+
+
