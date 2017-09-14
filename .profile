@@ -98,6 +98,6 @@ fi
 #
 # iterm integration with brew install https://gist.github.com/ZenLulz/c812f70fc86ebdbb189d9fb82f98197e
 #  brew cask install iterm2
-test -e "${HOME}/.iterm2_shell_integration.bash" && source "${HOME}/.iterm2_shell_integration.bash"
+#test -e "${HOME}/.iterm2_shell_integration.bash" && source "${HOME}/.iterm2_shell_integration.bash"
 
 
