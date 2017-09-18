@@ -116,3 +116,5 @@ fi
 ## different git-reset
 alias git-reset='bash -c $HOME/opt/bin/git-reset.sh'
 [ -f $HOME/.ruby.env ] && source ~/.ruby.env
+
+alias lastpass=lpass

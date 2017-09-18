@@ -31,3 +31,4 @@ opt/bin/ApacheDirectoryStudio/**
 *.swp
 .custom_alias
 !.docker.sh
+!Brewfile

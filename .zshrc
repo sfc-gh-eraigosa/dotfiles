@@ -123,3 +123,9 @@ fi
 
 
 export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
+
+# setup any missing brew packages from the $HOME/Brewfile
+if [ "$(uname -s)" = "Darwin" ]; then
+    _cwd="$(pwd)"
+    brew bundle check || brew bundle
+fi
