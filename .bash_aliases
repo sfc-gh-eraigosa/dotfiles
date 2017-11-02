@@ -118,3 +118,7 @@ alias git-reset='bash -c $HOME/opt/bin/git-reset.sh'
 [ -f $HOME/.ruby.env ] && source ~/.ruby.env
 
 alias lastpass=lpass
+
+#openvpn applescript
+alias vpn="osascript -e 'tell application \"Viscosity\" to connectall'"
+alias novpn="osascript -e 'tell application \"Viscosity\" to disconnectall'"
