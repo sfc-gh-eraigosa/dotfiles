@@ -96,12 +96,11 @@ if [ -f ~/git/projects.cson ]; then
     [ ! -f ~/.atom/projects.cson ] && ln -s ~/git/projects.cson ~/.atom/projects.cson
 fi
 
-# pulse vpn
-alias pulse='/usr/local/bin/nclauncher.pl'
 . ~/.goenv.sh
 
 . ~/.docker.sh
 
+alias git-reset='bash -c $HOME/opt/bin/git-reset.sh'
 
 #
 # Source git environment shortcuts
@@ -114,11 +113,16 @@ fi
 
 
 ## different git-reset
-alias git-reset='bash -c $HOME/opt/bin/git-reset.sh'
-[ -f $HOME/.ruby.env ] && source ~/.ruby.env
+if [ -f "$HOME/.ruby.env" ]; then
+  source "$HOME/.ruby.env"
+fi
 
 alias lastpass=lpass
 
 #openvpn applescript
 alias vpn="osascript -e 'tell application \"Viscosity\" to connectall'"
 alias novpn="osascript -e 'tell application \"Viscosity\" to disconnectall'"
+
+if [ -d "$HOME/Library/Python/2.7/bin" ] ; then
+    export PATH=$HOME/Library/Python/2.7/bin:$PATH
+fi
