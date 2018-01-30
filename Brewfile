@@ -18,7 +18,7 @@ brew 'sqlite'
 brew 'bash-completion'
 brew 'coreutils'
 brew 'docbook'
-brew 'htop'
+# brew 'htop' -- removing this till https://github.com/hishamhm/htop/issues/682 is resolved
 brew 'lastpass-cli'
 brew 'libgpg-error'
 brew 'oniguruma'
