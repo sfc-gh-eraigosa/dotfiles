@@ -13,7 +13,7 @@ else
   cleanup="Y"
 fi
 # this depends on branches starting with the logged in users user name
-for b in $(git branch -l 2>1 |grep "^\s\s${MY_USER}\/.*"); do
+for b in $(git branch -l 2>&1 |grep "^\s\s${MY_USER}\/.*"); do
   echo "Cleaning up branch $b";
   if [ "${cleanup}" = "Y" ]; then
     git branch -D $b
