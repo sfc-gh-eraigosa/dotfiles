@@ -33,7 +33,7 @@ alias vim='vim -u ~/.vimrc_active'
 alias gitsave_off='export GIT_SAVE_OFF=true;echo "GIT_SAVE_OFF is true, bash_logout will not commit";'
 alias gitsave='unset GIT_SAVE_OFF;echo "GIT_SAVE_OFF is unset, bash_logout will commit";'
 
-# windows manager startup 
+# windows manager startup
 # we need to override /usr/local/startunity
 if [ -f /usr/local/bin/startunity ] ; then
 function startunity {
@@ -80,6 +80,7 @@ alias delkey='xdotool key Delete'
 #
 # Source git environment shortcuts
 #
+
 if [ -f ~/.gitenv ] ; then
     source ~/.gitenv
     if [ ! -f ~/.gitenv.nologin ]; then
@@ -89,18 +90,22 @@ if [ -f ~/.gitenv ] ; then
 else
     echo ".gitenv is missing, you can install with : . opt/bin/setup_git_alias.sh"
 fi
-if [ -f ~/.custom_alias ] ; then
-    . ~/.custom_alias
-fi
+# Some git shortcuts
+unalias git-reset
+alias git-reset='$HOME/opt/bin/git-reset.sh'
+alias git-rm-branches='$HOME/opt/bin/git-rm-mybranches.sh'
+
 if [ -f ~/git/projects.cson ]; then
     [ ! -f ~/.atom/projects.cson ] && ln -s ~/git/projects.cson ~/.atom/projects.cson
 fi
 
-. ~/.goenv.sh
+if [ -f $HOME/.goenv.sh ]; then
+    . $HOME/.goenv.sh
+fi
 
-. ~/.docker.sh
-
-alias git-reset='bash -c $HOME/opt/bin/git-reset.sh'
+if [ -f $HOME/.docker.sh ]; then
+    . $HOME/.docker.sh
+fi
 
 #
 # Source git environment shortcuts
@@ -131,3 +136,8 @@ alias k="kubectl --namespace=$NAMESPACE"
 alias kpodjson='k get pod -o=json'
 alias kpod='kpodjson|jq -r ".items[0].metadata.name"'
 alias klogs="k logs $(kpod) -f"
+
+
+if [ -f ~/.custom_alias ] ; then
+    . ~/.custom_alias
+fi

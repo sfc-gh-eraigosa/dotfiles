@@ -1,32 +1,36 @@
 #!/bin/bash
-
-upstream_remote=$(git remote -v|grep -v wenlock|grep '(push)'|awk '{print $1}')
-
-if [ -z "${upstream_remote}" ]; then
-  echo "ERROR no remote for upstream: $upstream_remote"
+branch_name="$(printf '%s' $(it branch -l 2>1|grep '^*'|awk -F' ' '{print $2}'))"
+if [ -z "${branch_name}" ]; then
+  echo "ERROR no default branch found"
   exit 1
 fi
 
-
-ssh_remote=$(git remote -v | grep 'ssh://'|grep '(push)'|awk '{print $1}')
-if [ -z "${ssh_remote}" ]; then
-  echo "ERROR no remote for ssh: $ssh_remote"
-  exit 1
+if [ ! "$1" = "--force" ]; then
+  echo "Current directory $(pwd) and repo $(git rev-parse --show-toplevel)"
+  echo " The current branch will be reset and pulled from origin/${branch_name}"
+  echo "  "
+  echo -n "Would you like to reset the current branch (${branch_name})? [Y]:" && \
+    read -r doreset
+else
+  doreset="Y"
 fi
 
-_BRANCH=master
-if [ ! -z "$1" ]; then
-  _BRANCH=$1
+
+if [ "${doreset}" = "Y" ]; then
+  git reset origin/$branch_name && \
+  git add -A && git stash \
+  git stash && \
+  git pull origin $branch_name
+else
+  echo "We would have executed the commands"
+  echo ""
+  echo "git reset origin/${branch_name}"
+  echo "git add -A && git stash"
+  echo "git stash"
+  echo "git pull origin ${branch_name}"
+  echo ""
+  echo "However,Y was not selected, so git-reset was skipped"
 fi
 
-echo "Reseting $upstream_remote to $_BRANCH ..." && \
-git reset --hard ${upstream_remote}/$_BRANCH && \
-echo "Pulling $upstream_remote $_BRANCH ..." && \
-git pull ${upstream_remote} $_BRANCH && \
-echo "Reseting $upstream_remote to $_BRANCH ..." && \
-git reset --hard ${upstream_remote}/$_BRANCH && \
-echo "Pushing updates $ssh_remote to $_BRANCH ..." && \
-git push ${ssh_remote} $_BRANCH -f && \
-git pull origin $_BRANCH && \
-echo "Reseting $upstream_remote to $_BRANCH ..." && \
-git reset --hard ${upstream_remote}/$_BRANCH
+echo "git-reset done"
+exit 0

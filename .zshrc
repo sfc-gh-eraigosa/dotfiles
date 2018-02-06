@@ -113,13 +113,10 @@ if [ -f ~/.zsh/dircolors-solarized/dircolors.ansi-universal ] ; then
   eval $(dircolors ~/.zsh/dircolors-solarized/dircolors.ansi-dark)
 fi
 
+. ~/.profile
 if [ -f ~/.bash_aliases ]; then
     . ~/.bash_aliases
-
 fi
-. ~/.profile
-. $HOME/.goenv.sh
-. $HOME/.gitenv
 
 
 export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
