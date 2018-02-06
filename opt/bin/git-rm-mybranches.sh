@@ -7,7 +7,7 @@ export MY_USER="${MY_USER:-$(whoami)}"
 # make sure before moving forward
 if [ ! "$1" = "--force" ]; then
   echo "Current directory $(pwd) and repo $(git rev-parse --show-toplevel)"
-  echo -n "Would you like to cleanup ($(printf '%s' $(git branch -l 2>1 |grep "^\s\s${MY_USER}\/.*"|wc -l))) all branches? [Y]:" && \
+  echo -n "Would you like to cleanup ($(printf '%s' $(git branch -l 2>&1 |grep "^\s\s${MY_USER}\/.*"|wc -l))) all branches? [Y]:" && \
     read -r cleanup
 else
   cleanup="Y"
