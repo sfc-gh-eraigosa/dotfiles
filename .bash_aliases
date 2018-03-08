@@ -141,3 +141,7 @@ alias klogs="k logs $(kpod) -f"
 if [ -f ~/.custom_alias ] ; then
     . ~/.custom_alias
 fi
+
+if [ -f ~/opt/bin/tmuxinator.zsh ] ; then
+    source opt/bin/tmuxinator.zsh
+fi
