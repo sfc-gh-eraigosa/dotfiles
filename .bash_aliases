@@ -94,6 +94,7 @@ fi
 unalias git-reset
 alias git-reset='$HOME/opt/bin/git-reset.sh'
 alias git-branches-rm='$HOME/opt/bin/git-rm-mybranches.sh'
+alias git-local-master='$HOME/opt/bin/git-local-master.sh'
 
 if [ -f ~/git/projects.cson ]; then
     [ ! -f ~/.atom/projects.cson ] && ln -s ~/git/projects.cson ~/.atom/projects.cson
