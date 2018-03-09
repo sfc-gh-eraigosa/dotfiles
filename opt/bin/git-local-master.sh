@@ -17,13 +17,13 @@ if [ ! "$1" = "--force" ]; then
   echo " The current branch ${branch_name} will update master"
   echo "  "
   echo -n "Are you ready to continue, use --force to skip this message, (${branch_name})? [Y]:" && \
-    read -r dorit
+    read -r doit
 else
   doit="Y"
 fi
 
 
-if [ "${doreset}" = "Y" ]; then
+if [ "${doit}" = "Y" ]; then
   git checkout master && \
     git reset origin master && \
     git add -A && \
