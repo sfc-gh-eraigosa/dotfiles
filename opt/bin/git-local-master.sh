@@ -25,7 +25,8 @@ fi
 
 if [ "${doit}" = "Y" ]; then
   git checkout master && \
-    git reset origin master && \
+    git reset --hard origin/master && \
+    git pull origin master && \
     git add -A && \
     git stash && \
     git merge "${branch_name}" && \
@@ -33,7 +34,8 @@ if [ "${doit}" = "Y" ]; then
 else
   echo "We would have executed the commands"
   echo "git checkout master && \
-    git reset origin master && \
+    git reset --hard origin/master && \
+    git pull origin master && \
     git add -A && \
     git stash && \
     git merge \"${branch_name}\" && \
