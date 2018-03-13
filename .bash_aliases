@@ -129,9 +129,6 @@ alias lastpass=lpass
 alias vpn="osascript -e 'tell application \"Viscosity\" to connectall'"
 alias novpn="osascript -e 'tell application \"Viscosity\" to disconnectall'"
 
-if [ -d "$HOME/Library/Python/2.7/bin" ] ; then
-    export PATH=$HOME/Library/Python/2.7/bin:$PATH
-fi
 export NAMESPACE='ci-localhost'
 alias k="kubectl --namespace=$NAMESPACE"
 alias kpodjson='k get pod -o=json'
