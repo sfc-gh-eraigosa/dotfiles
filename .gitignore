@@ -16,6 +16,7 @@
 !.bash_logout
 !opt/
 !opt/**
+opt/.DS_Store
 opt/rbenv
 opt/bin/docker-machine.5
 opt/XMind_Linux_64bit
