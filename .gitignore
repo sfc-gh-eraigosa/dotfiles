@@ -35,3 +35,4 @@ opt/bin/ApacheDirectoryStudio/**
 .custom_alias
 !.docker.sh
 !Brewfile
+opt/bin/.byebug_history

@@ -27,4 +27,5 @@ brew 'pkg-config'
 brew 'readline'
 brew 'shellcheck'
 brew 'vim'
+brew 'ncdu'         # disk usage tool
 cask 'gpg-suite'
