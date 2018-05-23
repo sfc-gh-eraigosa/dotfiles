@@ -143,3 +143,5 @@ fi
 if [ -f ~/opt/bin/tmuxinator.zsh ] ; then
     source opt/bin/tmuxinator.zsh
 fi
+
+alias ecr-login='eval $(aws ecr get-login --no-include-email)'
