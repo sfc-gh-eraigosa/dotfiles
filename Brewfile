@@ -2,6 +2,7 @@
 tap 'github/bootstrap'
 
 # skipping install docker, lets do this manually
+brew 'amazon-ecs-cli'
 brew 'asciidoc'
 brew 'bash-completion'
 brew 'cmake'
