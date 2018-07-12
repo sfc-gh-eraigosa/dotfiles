@@ -145,3 +145,10 @@ if [ -f ~/opt/bin/tmuxinator.zsh ] ; then
 fi
 
 alias ecr-login='eval $(aws ecr get-login --no-include-email)'
+
+if which hub > /dev/null; then 
+    eval "$(hub alias -s)"
+fi
+
+# for travis gem
+[ -f "$HOME/.travis/travis.sh" ] && source "$HOME/.travis/travis.sh"

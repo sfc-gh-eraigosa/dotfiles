@@ -30,5 +30,8 @@ brew 'sqlite'
 brew 'vim'
 brew 'watch'
 
+# hub.github.com
+brew 'hub'
+
 # cask "docker"
 cask 'gpg-suite'
