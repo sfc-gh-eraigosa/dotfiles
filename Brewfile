@@ -29,7 +29,8 @@ brew 'shellcheck'
 brew 'sqlite'
 brew 'vim'
 brew 'watch'
-
+# for node manager
+brew 'nvm'
 # hub.github.com
 brew 'hub'
 
