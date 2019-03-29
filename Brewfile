@@ -1,5 +1,6 @@
 # Helpers
 tap 'github/bootstrap'
+tap 'nektos/tap'
 
 # skipping install docker, lets do this manually
 brew 'amazon-ecs-cli'
@@ -33,6 +34,9 @@ brew 'watch'
 brew 'nvm'
 # hub.github.com
 brew 'hub'
+# act tool https://github.com/nektos/act
+brew 'nektos/tap/act'
+
 
 # cask "docker"
 cask 'gpg-suite'
