@@ -126,3 +126,5 @@ if [ "$(uname -s)" = "Darwin" ]; then
     _cwd="$(pwd)"
     brew bundle check || brew bundle
 fi
+
+eval "$(nodenv init -)"
