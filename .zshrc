@@ -128,3 +128,4 @@ if [ "$(uname -s)" = "Darwin" ]; then
 fi
 
 eval "$(nodenv init -)"
+source  ~/powerlevel9k/powerlevel9k.zsh-theme

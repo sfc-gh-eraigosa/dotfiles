@@ -104,3 +104,5 @@ fi
 export PATH=~/.yarn/bin:$PATH
 export PATH=~/.rbenv/shims:$PATH
 export RBENV_VERSION=2.5.3
+
+export PATH="$HOME/.cargo/bin:$PATH"

@@ -158,3 +158,4 @@ fi
 export GIT_DISCOVERY_ACROSS_FILESYSTEM=1
 
 export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
+export PATH="$HOME/.cargo/bin:$PATH"
