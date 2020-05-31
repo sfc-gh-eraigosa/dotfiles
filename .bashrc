@@ -159,3 +159,8 @@ export GIT_DISCOVERY_ACROSS_FILESYSTEM=1
 
 export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
 export PATH="$HOME/.cargo/bin:$PATH"
+
+# press and hold for vim
+if [[ "$OSTYPE" == "darwin"* ]] ; then
+    defaults write com.microsoft.VSCode ApplePressAndHoldEnabled -bool false
+fi
