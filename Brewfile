@@ -36,6 +36,7 @@ brew 'hub'
 # act tool https://github.com/nektos/act
 brew 'nektos/tap/act'
 brew 'rbenv'
+brew 'git-lfs'
 
 
 # cask "docker"
