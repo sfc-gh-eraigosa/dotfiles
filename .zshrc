@@ -131,5 +131,7 @@ eval "$(nodenv init -)"
 source  ~/powerlevel9k/powerlevel9k.zsh-theme
 
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
-export SDKMAN_DIR="/Users/wenlock/.sdkman"
-[[ -s "/Users/wenlock/.sdkman/bin/sdkman-init.sh" ]] && source "/Users/wenlock/.sdkman/bin/sdkman-init.sh"
+if [ -d "/Users/wenlock/.sdkman" ] ; then
+  export SDKMAN_DIR="/Users/wenlock/.sdkman"
+  [[ -s "/Users/wenlock/.sdkman/bin/sdkman-init.sh" ]] && source "/Users/wenlock/.sdkman/bin/sdkman-init.sh"
+fi
