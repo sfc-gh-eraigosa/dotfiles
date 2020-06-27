@@ -1,4 +1,8 @@
 # Path to your oh-my-zsh installation.
+
+autoload -Uz compinit
+compinit
+
 DEFAULT_USER=docker
 export Z_HOME=$HOME
 if [ ! -d $Z_HOME ] ; then
@@ -128,7 +132,7 @@ if [ "$(uname -s)" = "Darwin" ]; then
 fi
 
 [ -x "$(which nodenv)" ] && eval "$(nodenv init -)"
-source  ~/powerlevel9k/powerlevel9k.zsh-theme
+source  $HOME/git/powerlevel10k/powerlevel10k.zsh-theme
 
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
 if [ -d "/Users/wenlock/.sdkman" ] ; then
