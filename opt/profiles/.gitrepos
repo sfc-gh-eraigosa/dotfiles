@@ -14,9 +14,7 @@
 # under the License.
 #
 # These are a list of git repos we should have for myhome.
-if [ -z "${GIT_WORKSPACE}" ] ; then
-  GIT_WORKSPACE=~/git
-fi
+export GIT_WORKSPACE="${GIT_WORKSPACE:-${HOME}/git}"
 
 function CloneRepo
 {
