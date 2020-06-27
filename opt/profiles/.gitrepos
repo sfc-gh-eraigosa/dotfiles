@@ -33,7 +33,7 @@ function CloneRepo
     fi
     cd "${_PWD}"
   else
-    git clone "${_URI}"
+    git clone "${_URI}" "${_DIR}"
   fi
 }
 
@@ -45,7 +45,7 @@ fi
 if [ -f "$HOME/.custom.repos.env" ] ; then
     . "$HOME/.custom.repos.env"
 fi
-echo $REPOS
+
 if [ -z "${!REPOS[*]}" ] ; then
   echo "nothing to do , unable to find REPOS env"
   exit 0
