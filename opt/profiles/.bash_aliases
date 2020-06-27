@@ -152,12 +152,10 @@ alias lastpass=lpass
 alias vpn="osascript -e 'tell application \"Viscosity\" to connectall'"
 alias novpn="osascript -e 'tell application \"Viscosity\" to disconnectall'"
 
-export NAMESPACE='ci-localhost'
+export NAMESPACE="${NAMESPACE:-default}"
 alias k="kubectl --namespace=$NAMESPACE"
 alias kpodjson='k get pod -o=json'
 alias kpod='kpodjson|jq -r ".items[0].metadata.name"'
-alias klogs="k logs $(kpod) -f"
-
 
 if [ -f ~/.custom_alias ] ; then
     . ~/.custom_alias
