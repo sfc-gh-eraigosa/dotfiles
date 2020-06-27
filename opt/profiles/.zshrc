@@ -3,6 +3,8 @@
 autoload -Uz compinit
 compinit
 
+ echo 'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD=true'
+
 DEFAULT_USER=docker
 export Z_HOME=$HOME
 if [ ! -d $Z_HOME ] ; then

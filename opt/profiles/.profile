@@ -7,6 +7,14 @@
 # the default umask is set in /etc/profile; for setting the umask
 # for ssh logins, install and configure the libpam-umask package.
 #umask 022
+autoload -Uz compinit
+compinit
+
+if [ ! -z "${GREP_OPTIONS}" ]; then
+  alias grep="grep ${GREP_OPTIONS}"
+  unset GREP_OPTIONS
+fi
+
 if [ -f /etc/environment ] ; then
   . /etc/environment
 fi

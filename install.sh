@@ -29,7 +29,8 @@ if [ -x "$(which apt-get)" ]; then
     corkscrew
 fi
 
-[ ! -f "${HOME}/.gitenv" ] && "${HOME}/opt/bin/setup_git_alias.sh"
+[ ! -f "${HOME}/.ruby.env" ] && source "${HOME}/opt/bin/setup_ruby-docker.sh"
+[ ! -f "${HOME}/.gitenv" ] && source "${HOME}/opt/bin/setup_git_alias.sh"
 
 source "${HOME}/.profile"
 
