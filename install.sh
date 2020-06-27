@@ -9,6 +9,11 @@ curl -fLo ~/.vim/autoload/plug.vim --create-dirs https://raw.githubusercontent.c
 vim +'PlugInstall --sync' +qall
 
 ln -s "${BASE_DIR}/opt" ~/opt
+for file in $(find "${BASE_DIR}/opt/profiles" -type f); do
+    echo "Creating symlink to $file in home directory."
+    ln -s "${file}" ~/$(basename "${file}")
+done
+
 source ~/.profile
 
 # zsh 
