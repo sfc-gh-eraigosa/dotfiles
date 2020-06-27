@@ -161,7 +161,8 @@ export DOCKER_STACK_ORCHESTRATOR=swarm
 
 # setup java version
 # 1.8, 11, 12, 1.7
-export JAVA_VERSION=1.8
-export JAVA_HOME=$(/usr/libexec/java_home -v ${JAVA_VERSION})
-
+if [ -d "/usr/libexec/java_home" ] ; then
+  export JAVA_VERSION=1.8
+  export JAVA_HOME=$(/usr/libexec/java_home -v ${JAVA_VERSION})
+fi
 

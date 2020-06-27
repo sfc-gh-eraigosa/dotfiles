@@ -26,8 +26,11 @@ source "${HOME}/.profile"
 if [ -x "$(which apt-get)" ]; then
   sudo apt-get install -y \
     jq \
-    zsh
+    zsh \
+    corkscrew
 fi
+
+[ ! -f "${HOME}/.gitenv" ] && "${HOME}/opt/bin/setup_git_alias.sh"
 
 # zsh 
 if [ "$SHELL" != "/usr/bin/zsh" ]; then

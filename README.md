@@ -1,4 +1,4 @@
-myhome
+dotfiles
 ----
 [![Build Status](https://drone.io/github.com/wenlock/myhome/status.png)](https://drone.io/github.com/wenlock/myhome/latest)
 

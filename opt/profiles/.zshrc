@@ -127,7 +127,7 @@ if [ "$(uname -s)" = "Darwin" ]; then
     brew bundle check || brew bundle
 fi
 
-eval "$(nodenv init -)"
+[ -x "$(which nodenv)" ] && eval "$(nodenv init -)"
 source  ~/powerlevel9k/powerlevel9k.zsh-theme
 
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
