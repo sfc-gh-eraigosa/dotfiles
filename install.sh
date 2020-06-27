@@ -8,16 +8,20 @@ git config --global push.default current
 curl -fLo ~/.vim/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 vim +'PlugInstall --sync' +qall
 
-ln -s "${BASE_DIR}/opt" ~/opt
+[ ! -s "${HOME}/opt" ] && ln -s "${BASE_DIR}/opt" "${HOME}/opt"
 for file in $(find "${BASE_DIR}/opt/profiles" -type f); do
     echo "Creating symlink to $file in home directory."
-    ln -s "${file}" ~/$(basename "${file}")
+    [ ! -s "${HOME}/$(basename "${file}")" ] && ln -s "${file}" "${HOME}/$(basename "${file}")"
 done
 
-source ~/.profile
+source "${HOME}/.profile"
+if [ -z "$(which apt-get)" ]; then
+  sudo apt-get install -y \
+    jq \
+    zsh
+fi
 
 # zsh 
 if [ "$SHELL" != "/usr/bin/zsh" ]; then
-    sudo apt install -y zsh
     zsh
 fi;
