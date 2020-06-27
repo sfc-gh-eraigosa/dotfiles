@@ -14,7 +14,7 @@ esac
 HISTCONTROL=ignoreboth
 
 # append to the history file, don't overwrite it
-if [ ! "$(whence shopt)" = "" ] ; then
+if [ ! -z "$(shopt -p|grep shopt)" ] ; then
     shopt -s histappend
 fi
 
@@ -24,7 +24,7 @@ HISTFILESIZE=2000
 
 # check the window size after each command and, if necessary,
 # update the values of LINES and COLUMNS.
-if [ ! "$(whence shopt)" = "" ] ; then
+if [ ! -z "$(shopt -p|grep shopt)" ] ; then
     shopt -s checkwinsize
 fi
 
@@ -110,7 +110,7 @@ fi
 # enable programmable completion features (you don't need to enable
 # this, if it's already enabled in /etc/bash.bashrc and /etc/profile
 # sources /etc/bash.bashrc).
-if [ ! "$(whence shopt)" = "" ] ; then
+if [ ! -z "$(shopt -p|grep shopt)" ] ; then
     if ! shopt -oq posix; then
       if [ -f /usr/share/bash-completion/bash_completion ]; then
         . /usr/share/bash-completion/bash_completion

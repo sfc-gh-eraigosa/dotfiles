@@ -68,9 +68,9 @@ prompt_end() {
 prompt_context() {
 #  if [[ "$USER" != "docker" || -n "$SSH_CLIENT" ]]; then
   WHALE='🐳 '
-  TIMEOUT_BIN=$(whence timeout)
-  if [ -z "${TIMEOUT_BIN}" ] ; then
-    TIMEOUT_BIN=$(whence gtimeout)
+  TIMEOUT_BIN=$(which timeout)
+  if [ ! -x "${TIMEOUT_BIN}" ] ; then
+    TIMEOUT_BIN=$(which gtimeout)
   fi
   if [ -x "${TIMEOUT_BIN}" ] ; then
     PROMPT_DOCKERVER=$($TIMEOUT_BIN 5 docker version -f "{{.Client.Version}} ⚓  {{.Server.Version}}")
