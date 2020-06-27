@@ -22,7 +22,6 @@ for file in ".profile" ".zshrc" ".bash_logout" ".bashrc"; do
   ln -s "${BASE_DIR}/opt/profiles/${file}" "${HOME}/${file}"
 done 
 
-source "${HOME}/.profile"
 if [ -x "$(which apt-get)" ]; then
   sudo apt-get install -y \
     jq \
@@ -31,6 +30,8 @@ if [ -x "$(which apt-get)" ]; then
 fi
 
 [ ! -f "${HOME}/.gitenv" ] && "${HOME}/opt/bin/setup_git_alias.sh"
+
+source "${HOME}/.profile"
 
 # zsh 
 if [ "$SHELL" != "/usr/bin/zsh" ]; then
