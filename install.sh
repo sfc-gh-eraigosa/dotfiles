@@ -35,8 +35,6 @@ fi
 [ ! -f "${HOME}/.ruby.env" ] && source "${HOME}/opt/bin/setup_ruby-docker.sh"
 [ ! -f "${HOME}/.gitenv" ] && source "${HOME}/opt/bin/setup_git_alias.sh"
 
-source "${HOME}/.zshrc"
-
 # zsh 
 if [ "$SHELL" != "/usr/bin/zsh" ]; then
     zsh
