@@ -22,26 +22,23 @@ fi
 # if running bash
 if [ -n "$BASH_VERSION" ]; then
     # include .bashrc if it exists
-    if [ -f "$HOME/.bashrc" ]; then
-	. "$HOME/.bashrc"
+    if [ -f "${HOME}/.bashrc" ]; then
+	. "${HOME}/.bashrc"
     fi
 fi
 
 # set PATH so it includes user's private bin if it exists
-if [ -d "$HOME/bin" ] ; then
-    PATH="$HOME/bin:$PATH"
+if [ -d "${HOME}/bin" ] ; then
+    PATH="${HOME}/bin:$PATH"
 fi
-if [ -d "$HOME/opt/bin" ] ; then
-    PATH="$HOME/opt/bin:$PATH"
+if [ -d "${HOME}/opt/bin" ] ; then
+    PATH="${HOME}/opt/bin:$PATH"
 fi
 
 # cabal
-if [ -d "$HOME/.cabal/bin" ] ; then
-      PATH="$HOME/.cabal/bin:$PATH"
+if [ -d "${HOME}/.cabal/bin" ] ; then
+      PATH="${HOME}/.cabal/bin:$PATH"
 fi
-
-export PUPPET_MODULES=$PUPPET_MODULES:~/.puppet/modules
-export PUPPET_MODULES=/opt/config/production/puppet/modules:~/git/CDK-infra/blueprints/openstack/puppet/modules:/opt/config/production/git/config/modules:/etc/puppet/modules:/home/wenlock/.puppet/modules
 
 force_color_prompt=yes
 # Info file
@@ -61,42 +58,42 @@ echo -e "\033[1;37m│ \033[01;31m$host \033[01;32mOWNED BY $owner\033[1;37m│"
 echo -e "\033[1;37m└─────────────────────────────────────────────────────────────┘\033[00m" >> ~/.motd
 cat ~/.motd
 
-if [ -f $HOME/.custom_profile ] ; then
-  . $HOME/.custom_profile
+if [ -f "${HOME}/.custom_profile" ] ; then
+  . "${HOME}/.custom_profile"
 fi
 
 # powerline setup
-if [ -d "$HOME/.local/bin" ] ; then
-  PATH="$HOME/.local/bin:$PATH"
+if [ -d "${HOME}/.local/bin" ] ; then
+  PATH="${HOME}/.local/bin:$PATH"
 fi
-if [ ! -d "$HOME/.fonts/" ] ; then
-  mkdir -p "$HOME/.fonts/"
+if [ ! -d "${HOME}/.fonts/" ] ; then
+  mkdir -p "${HOME}/.fonts/"
 fi
-if [ ! -d "$HOME/.config/fontconfig/conf.d/" ] ; then
-  mkdir -p "$HOME/.config/fontconfig/conf.d/"
+if [ ! -d "${HOME}/.config/fontconfig/conf.d/" ] ; then
+  mkdir -p "${HOME}/.config/fontconfig/conf.d/"
 fi
-if [ -f "$HOME/git/powerline/font/PowerlineSymbols.otf" ] ; then
-  cp "$HOME/git/powerline/font/PowerlineSymbols.otf" "$HOME/.fonts/"
+if [ -f "${HOME}/git/powerline/font/PowerlineSymbols.otf" ] ; then
+  cp "${HOME}/git/powerline/font/PowerlineSymbols.otf" "${HOME}/.fonts/"
 fi
-if [ -f "$HOME/.config/fontconfig/conf.d/10-powerline-symbols.conf" ] ; then
-  cp "$HOME/git/powerline/font/10-powerline-symbols.conf" "$HOME/.config/fontconfig/conf.d/10-powerline-symbols.conf"
+if [ -f "${HOME}/.config/fontconfig/conf.d/10-powerline-symbols.conf" ] ; then
+  cp "${HOME}/git/powerline/font/10-powerline-symbols.conf" "${HOME}/.config/fontconfig/conf.d/10-powerline-symbols.conf"
 fi
-if [ ! -d $HOME/go ] ; then
-    mkdir $HOME/go
+if [ ! -d "${HOME}/go" ] ; then
+    mkdir "${HOME}/go"
 fi
 
-export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
+export PATH="$PATH:${HOME}/.rvm/bin" # Add RVM to PATH for scripting
 export PATH="$PATH:/usr/local/bin/docker"
 
-[[ -s "$HOME/.rvm/scripts/rvm" ]] && source "$HOME/.rvm/scripts/rvm" # Load RVM into a shell session *as a function*
+[[ -s "${HOME}/.rvm/scripts/rvm" ]] && source "$HOME/.rvm/scripts/rvm" # Load RVM into a shell session *as a function*
 # Source git environment shortcuts
 [[ -f "${HOME}/.dindcenv" ]] && . "${HOME}/.dindcenv"
 
 #
 # ruby docker environment aliases
 #
-if [ -f /Users/eraigosa/.ruby.env ] ; then
-    source /Users/eraigosa/.ruby.env
+if [ -f "${HOME}/.ruby.env" ] ; then
+    source "${HOME}/.ruby.env"
 else
     echo ".ruby.env is missing, you can install with : . opt/bin/setup_ruby-docker.sh"
 fi
@@ -111,4 +108,4 @@ export PATH=~/.yarn/bin:$PATH
 export PATH=~/.rbenv/shims:$PATH
 export RBENV_VERSION=2.5.3
 
-export PATH="$HOME/.cargo/bin:$PATH"
+export PATH="${HOME}/.cargo/bin:$PATH"

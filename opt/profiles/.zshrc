@@ -2,8 +2,11 @@
 
 autoload -Uz compinit
 compinit
+set -o vi
 
  echo 'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD=true'
+# To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
+[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
 DEFAULT_USER=docker
 export Z_HOME=$HOME
