@@ -1,5 +1,23 @@
 # ~/.bashrc: executed by bash(1) for non-login shells.
+. ~/.profile
+if [ -f ~/.bash_aliases ]; then
+    . ~/.bash_aliases
+fi
+
 echo executing bashrc
+
+# Pull the latest repos
+if [ -f "${HOME}/.gitrepos" ] ; then
+  cd "${HOME}"
+  [ -d "${HOME}/.git" ] && \
+    git pull origin $(git branch | grep '*'|awk '{print $2}')
+  "${HOME}/.gitrepos"
+fi
+
+if [ -f ~/.bash_aliases ]; then
+    . ~/.bash_aliases
+fi
+
 # see /usr/share/doc/bash/examples/startup-files (in the package bash-doc)
 # for examples
 
@@ -77,17 +95,7 @@ xterm*|rxvt*)
     ;;
 esac
 
-# Pull the latest repos
-if [ -f "${HOME}/.gitrepos" ] ; then
-  cd "${HOME}"
-  [ -d "${HOME}/.git" ] && \
-    git pull origin $(git branch | grep '*'|awk '{print $2}')
-  "${HOME}/.gitrepos"
-fi
 
-if [ -f ~/.bash_aliases ]; then
-    . ~/.bash_aliases
-fi
 
 # enable programmable completion features (you don't need to enable
 # this, if it's already enabled in /etc/bash.bashrc and /etc/profile

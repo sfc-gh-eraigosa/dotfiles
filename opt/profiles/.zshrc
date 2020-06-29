@@ -12,6 +12,12 @@ if [ -f "${HOME}/.gitrepos" ] ; then
   "${HOME}/.gitrepos"
 fi
 
+. ~/.profile
+if [ -f ~/.bash_aliases ]; then
+    . ~/.bash_aliases
+fi
+
+
 # echo 'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD=true'
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
@@ -129,12 +135,6 @@ fi
 if [ -f ~/.zsh/dircolors-solarized/dircolors.ansi-universal ] ; then
   eval $(dircolors ~/.zsh/dircolors-solarized/dircolors.ansi-dark)
 fi
-
-. ~/.profile
-if [ -f ~/.bash_aliases ]; then
-    . ~/.bash_aliases
-fi
-
 
 export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
 
