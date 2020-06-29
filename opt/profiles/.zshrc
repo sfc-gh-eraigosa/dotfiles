@@ -4,7 +4,15 @@ autoload -Uz compinit
 compinit
 set -o vi
 
- echo 'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD=true'
+# Pull the latest repos
+if [ -f "${HOME}/.gitrepos" ] ; then
+  cd "${HOME}"
+  [ -d "${HOME}/.git" ] && \
+    git pull origin $(git branch | grep '*'|awk '{print $2}')
+  "${HOME}/.gitrepos"
+fi
+
+# echo 'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD=true'
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
