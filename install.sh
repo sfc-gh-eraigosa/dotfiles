@@ -36,4 +36,7 @@ fi
 [ ! -f "${HOME}/.gitenv" ] && source "${HOME}/opt/bin/setup_git_alias.sh"
 [ ! -f "${HOME}/.dindcenv" ] && source "${HOME}/opt/bin/setup_dindc_alias.sh"
 
-source "${HOME}/.zshrc"
+if [ -f "${HOME}/.gitrepos" ] ; then
+  cd "${HOME}"
+  "${HOME}/.gitrepos"
+fi
