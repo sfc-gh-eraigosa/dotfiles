@@ -36,7 +36,4 @@ fi
 [ ! -f "${HOME}/.gitenv" ] && source "${HOME}/opt/bin/setup_git_alias.sh"
 [ ! -f "${HOME}/.dindcenv" ] && source "${HOME}/opt/bin/setup_dindc_alias.sh"
 
-# zsh 
-if [ "$SHELL" != "/usr/bin/zsh" ]; then
-    zsh
-fi;
+source "${HOME}/.zshrc"
