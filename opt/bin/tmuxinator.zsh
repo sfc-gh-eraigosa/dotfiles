@@ -50,6 +50,6 @@ _muxhelp() {
 "
 }
 export EDITOR='vim'
-compdef _tmuxinator tmuxinator mux
+[ -x "$(which compdef)" ] && compdef _tmuxinator tmuxinator mux
 alias mux="tmuxinator"
 alias muxhelp="_muxhelp"
