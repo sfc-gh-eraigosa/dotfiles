@@ -29,7 +29,9 @@ if [ -x "$(which apt-get)" ]; then
   sudo apt-get install -y \
     jq \
     zsh \
-    corkscrew
+    corkscrew \
+    net-tools \
+    lsof
 fi
 
 [ ! -f "${HOME}/.ruby.env" ] && source "${HOME}/opt/bin/setup_ruby-docker.sh"
