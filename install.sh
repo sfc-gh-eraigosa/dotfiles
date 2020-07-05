@@ -31,7 +31,8 @@ if [ -x "$(which apt-get)" ]; then
     zsh \
     corkscrew \
     net-tools \
-    lsof
+    lsof \
+    iputils-ping
 fi
 
 [ ! -f "${HOME}/.ruby.env" ] && source "${HOME}/opt/bin/setup_ruby-docker.sh"
