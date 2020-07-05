@@ -27,12 +27,14 @@ done
 
 if [ -x "$(which apt-get)" ]; then
   sudo apt-get install -y \
-    jq \
-    zsh \
+  
     corkscrew \
-    net-tools \
+    htop \
+    iputils-ping \
+    jq \
     lsof \
-    iputils-ping
+    net-tools \
+    zsh
 fi
 
 [ ! -f "${HOME}/.ruby.env" ] && source "${HOME}/opt/bin/setup_ruby-docker.sh"
