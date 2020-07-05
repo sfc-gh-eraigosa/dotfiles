@@ -27,7 +27,6 @@ done
 
 if [ -x "$(which apt-get)" ]; then
   sudo apt-get install -y \
-  
     corkscrew \
     htop \
     iputils-ping \
