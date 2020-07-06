@@ -33,6 +33,7 @@ if [ -x "$(which apt-get)" ]; then
     jq \
     lsof \
     net-tools \
+    psmisc \
     zsh
 fi
 
