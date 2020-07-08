@@ -3,6 +3,8 @@
 
 # docker tools setup
 !requirements.txt
+!.devcontainer
+!.devcontainer/**
 !.ruby-version
 !.pam_environment
 !.plan
