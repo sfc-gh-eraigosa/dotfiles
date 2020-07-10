@@ -2,7 +2,7 @@
 set -e
 ## Launch Docker Daemon
 echo "==> Launching the Docker daemon..."
-nohup dind dockerd $DOCKER_EXTRA_OPTS &
+sudo nohup dind dockerd $DOCKER_EXTRA_OPTS &
 counter=1
 while(! docker info > /dev/null 2>&1); do
     if [ $counter -lt 30 ];then
