@@ -11,8 +11,9 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-
+# a dind example
     steps:
     - uses: actions/checkout@v2
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag wenlock/dotfiles:$(date +%s)
+      run: docker build --tag wenlock/dotfiles:latest .
+      run: docker run --privileged wenlock/dotfiles:latest docker build --tag test opt/docker/helloworld
