@@ -16,4 +16,5 @@ jobs:
     - uses: actions/checkout@v2
     - name: Build the Docker image
       run: docker build --tag wenlock/dotfiles:latest .
+    - name: Build Docker in Docker
       run: docker run --privileged wenlock/dotfiles:latest docker build --tag test opt/docker/helloworld

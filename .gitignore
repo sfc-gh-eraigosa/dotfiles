@@ -2,6 +2,7 @@
 *
 
 # docker tools setup
+!.github/workflows/docker-image.yml
 !requirements.txt
 !.devcontainer
 !.devcontainer/**
