@@ -83,6 +83,8 @@ alias git-tunel='fgit-tunel \$@'
 alias git-testt='fgit-testt \$@'
 alias git-test='fgit-test \$@'
 alias git-login='fgit-login \$@'
+alias github-login='fgithub-login \$@'
+alias github-logout='fgithub-logout \$@'
 alias git-keys='fgit-keys \$@'
 alias git-config='fgit-config \$@'
 alias git-addalias='fgit-addalias \$@'
@@ -182,6 +184,12 @@ function fgit-help {
 
   git-logout
     Remove any ssh authenticated keys from current session.
+
+  gitub-login {user name}
+    Setup git with a login to github and save credential file.
+
+  github-logout
+    Clean up git credential to github
 
   git-projects {alias} [-s]
     List gerrit projects that are available.
@@ -808,6 +816,21 @@ function fgit-login {
     if [[ ! $? -eq 0 ]] ; then
         echo "Failed to add key, maybe agent is the problem, try running git-sshkill then this command again."
     fi
+}
+
+function fgithub-login {
+    echo "Login to GitHub, start by generating a PAT ... visit: https://github.com/settings/tokens "
+    echo -n PAT Token: 
+    read -s GITHUB_TOKEN
+    echo
+    mkdir -p \$HOME/.config/git
+    echo "https://git:\$GITHUB_TOKEN@github.com" > "\$HOME/.config/git/credentials"
+    export \$GITHUB_TOKEN
+}
+
+function fgithub-logout {
+    echo "Logout to GitHub ..."
+    [ ! -f "\$HOME/.config/git/credentials" ] && rm -f "\$HOME/.config/git/credentials"
 }
 
 function fgit-ssh_info {
