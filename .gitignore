@@ -3,20 +3,9 @@
 
 # docker tools setup
 !.github/workflows/docker-image.yml
-!requirements.txt
 !.devcontainer
 !.devcontainer/**
-!.ruby-version
-!.pam_environment
-!.plan
 !.gitignore
-!.profile
-!.vimrc
-!.vimrc_white
-!.vimrc_green
-!.bashrc
-!.goenv.sh
-!.bash_logout
 !opt/
 !opt/**
 opt/.DS_Store
@@ -31,11 +20,6 @@ opt/bin/ApacheDirectoryStudio/**
 !.config/
 !.config/terminator/
 !.config/terminator/config
-!.zshrc
-!.gitrepos
-!.repos.env
 *.swp
 .custom_alias
-!.docker.sh
-!Brewfile
 opt/bin/.byebug_history
