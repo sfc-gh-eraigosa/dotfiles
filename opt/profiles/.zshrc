@@ -2,7 +2,6 @@
 
 autoload -Uz compinit
 compinit
-set -o vi
 
 # Pull the latest repos
 if [ -f "${HOME}/.gitrepos" ] ; then
@@ -148,7 +147,8 @@ fi
 source  $HOME/git/powerlevel10k/powerlevel10k.zsh-theme
 
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
-if [ -d "/Users/wenlock/.sdkman" ] ; then
-  export SDKMAN_DIR="/Users/wenlock/.sdkman"
-  [[ -s "/Users/wenlock/.sdkman/bin/sdkman-init.sh" ]] && source "/Users/wenlock/.sdkman/bin/sdkman-init.sh"
+if [ -d "${HOME}/.sdkman" ] ; then
+  export SDKMAN_DIR="${HOME}/.sdkman"
+  [[ -s "${HOME}/.sdkman/bin/sdkman-init.sh" ]] && source "${HOME}/.sdkman/bin/sdkman-init.sh"
 fi
+set -o vi
