@@ -152,3 +152,6 @@ if [ -d "${HOME}/.sdkman" ] ; then
   [[ -s "${HOME}/.sdkman/bin/sdkman-init.sh" ]] && source "${HOME}/.sdkman/bin/sdkman-init.sh"
 fi
 set -o vi
+unset GIT_URL
+test -f ${HOME}/.rbenv/shims/gh && rm -f ${HOME}/.rbenv/shims/gh
+export GITHUB_TOKEN=${GITHUB_TOKEN:-$( printf "protocol=https\\nhost=github.com\\npath=github\\n" | git credential fill | awk -F'=' '/password=/{print $2}')}

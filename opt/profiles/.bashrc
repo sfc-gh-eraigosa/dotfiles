@@ -154,3 +154,5 @@ export PATH="$HOME/.cargo/bin:$PATH"
 if [[ "$OSTYPE" == "darwin"* ]] ; then
     defaults write com.microsoft.VSCode ApplePressAndHoldEnabled -bool false
 fi
+
+test -f $HOME/.rbenv/shims/gh && $HOME/.rbenv/shims/gh
