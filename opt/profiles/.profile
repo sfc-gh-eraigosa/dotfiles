@@ -96,8 +96,9 @@ fi
 #test -e "${HOME}/.iterm2_shell_integration.bash" && source "${HOME}/.iterm2_shell_integration.bash"
 
 
-export PATH=~/.yarn/bin:$PATH
-export PATH=~/.rbenv/shims:$PATH
-export RBENV_VERSION=2.5.3
+export PATH=$HOME/.yarn/bin:$PATH
+export PATH=$HOME/.rbenv/shims:$PATH
+export PATH=$HOME/.nodenv/shims:$PATH
+export PATH=$HOME/.cargo/shims:$PATH
+export RBENV_VERSION=2.7.1
 
-export PATH="${HOME}/.cargo/bin:$PATH"
