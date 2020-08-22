@@ -135,6 +135,7 @@ if [ -f ~/.zsh/dircolors-solarized/dircolors.ansi-universal ] ; then
   eval $(dircolors ~/.zsh/dircolors-solarized/dircolors.ansi-dark)
 fi
 
+
 export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
 
 # setup any missing brew packages from the $HOME/Brewfile
@@ -154,8 +155,8 @@ fi
 set -o vi
 unset GIT_URL
 test -f ${HOME}/.rbenv/shims/gh && rm -f ${HOME}/.rbenv/shims/gh
-export GITHUB_TOKEN=${GITHUB_TOKEN:-$( printf "protocol=https\\nhost=github.com\\npath=github\\n" | git credential fill | awk -F'=' '/password=/{print $2}')}
 
 #
 # node in path
 PATH=$PATH:$HOME/.nodenv/shims
+export GITHUB_TOKEN=${GITHUB_TOKEN:-$( printf "protocol=https\\nhost=github.com\\npath=github\\n" | git credential fill | awk -F'=' '/password=/{print $2}')}
