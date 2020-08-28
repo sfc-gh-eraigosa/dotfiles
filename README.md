@@ -1,6 +1,6 @@
 dotfiles
 ----
-[![Build Status](https://drone.io/github.com/wenlock/myhome/status.png)](https://drone.io/github.com/wenlock/myhome/latest)
+![Docker Image CI](https://github.com/wenlock/dotfiles/workflows/Docker%20Image%20CI/badge.svg)
 
 Ubuntu Bash/zsh Home profile setup, includes vimrc's profiles some git commands
 
@@ -32,19 +32,19 @@ install
     chmod 600 ~/.ssh/*
     eval $(ssh-agent); ssh-add ~/.ssh/git_keys
   ```
-3. Fork the myhome project to your account.  While still logged into your account, now it's time to setup your home directory, for me as user wenlock, this looks like:
+3. Fork the dotfiles project to your account.  While still logged into your account, now it's time to setup your home directory, for me as user wenlock, this looks like:
 
   ```sh
     cd ~
     git init
-    git remote add origin git@github.com:wenlock/myhome.git
+    git remote add origin https://github.com/wenlock/dotfiles
     git pull origin master
     git reset --hard
   ```
-4.  You should now be using the basic myhome project. Setup the git alias's next with this command:
+4.  You should now be using the basic dotfiles project. Setup the defaults:
 
   ```sh
-    ~/opt/bin/setup_git_alias.sh
+    ~/install.sh
   ```
 
 5.  If you plan to use [zsh](opt/docs/zsh_andtools.md) as your default shell, take the time to setup [powerline fonts](opt/docs/powerline-fonts.md).
