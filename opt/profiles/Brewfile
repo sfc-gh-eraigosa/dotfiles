@@ -23,7 +23,6 @@ brew 'openssl'
 brew 'perl'
 brew 'pinentry'
 brew 'pkg-config'
-# not working
 # brew 'python@2'
 brew 'readline'
 brew 'shellcheck'
@@ -42,4 +41,6 @@ brew 'git-lfs'
 # cask "docker"
 cask 'gpg-suite'
 brew 'azure-cli'
-brew 'github/gh/gh'
+# brew 'github/gh/gh'
+
+brew 'gnupg'
