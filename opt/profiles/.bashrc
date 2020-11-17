@@ -156,3 +156,6 @@ if [[ "$OSTYPE" == "darwin"* ]] ; then
 fi
 
 test -f $HOME/.rbenv/shims/gh && $HOME/.rbenv/shims/gh
+
+# /usr/local/bin
+export PATH="$PATH:/usr/local/bin"

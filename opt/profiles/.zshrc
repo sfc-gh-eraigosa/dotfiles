@@ -96,7 +96,7 @@ plugins=(git zsh-completions kubectl)
 
 # User configuration
 
-# export PATH="$PATH:$HOME/opt/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/go/bin:/usr/local/go/bin"
+# export PATH="$PATH:$HOME/opt/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/go/bin"
 export PATH="$PATH:$HOME/opt/bin"
 # export MANPATH="/usr/local/man:$MANPATH"
 
@@ -160,4 +160,5 @@ test -f ${HOME}/.rbenv/shims/gh && rm -f ${HOME}/.rbenv/shims/gh
 # node in path
 PATH=$PATH:$HOME/.nodenv/shims
 export GITHUB_TOKEN=${GITHUB_TOKEN:-$( printf "protocol=https\\nhost=github.com\\npath=github\\n" | git credential fill | awk -F'=' '/password=/{print $2}')}
-unalias ruby
+test -n "$(alias ruby)" && unalias ruby
+

@@ -102,4 +102,7 @@ export PATH=$HOME/.nodenv/shims:$PATH
 export PATH=$HOME/.cargo/shims:$PATH
 export RBENV_VERSION=2.7.1
 
-source "/workspace/Human-Connection/.devcontainer/profile_devcontainer_alias.sh"
+test -e "/workspace/Human-Connection/.devcontainer/profile_devcontainer_alias.sh" && \
+   source "/workspace/Human-Connection/.devcontainer/profile_devcontainer_alias.sh"
+
+export GPG_TTY=$(tty)
