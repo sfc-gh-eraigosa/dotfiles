@@ -190,3 +190,11 @@ fi
 if [ "$(uname -s)" = "Darwin" ]; then
     alias code="open '/Applications/Visual Studio Code.app'"
 fi
+
+# gpg
+alias gpg-test='echo "Hello" | gpg -s'
+alias gpg-list='gpg --list-secret-keys'
+alias gpg-git-config='git config --global --list |egrep "(gpg|sign)"'
+alias gpg-config='cat ~/.gnupg/gpg.conf'
+
+
