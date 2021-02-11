@@ -44,4 +44,5 @@ brew 'azure-cli'
 # brew 'github/gh/gh'
 
 brew 'gnupg'
+brew 'golang'
 
