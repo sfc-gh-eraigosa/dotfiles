@@ -38,7 +38,7 @@ install
     cd ~
     git init
     git remote add origin https://github.com/wenlock/dotfiles
-    git pull origin master
+    git pull origin main
     git reset --hard
   ```
 4.  You should now be using the basic dotfiles project. Setup the defaults:
