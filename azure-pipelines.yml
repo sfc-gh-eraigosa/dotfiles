@@ -42,8 +42,8 @@ stages:
         VersionPrefix: 'dev-'
         BuildBranch: $[coalesce(variables['branch.name'], variables['System.PullRequest.SourceBranch'], variables['Build.SourceBranchName'])]
         CommitSHA: $[coalesce(variables['github.sha'], variables['System.PullRequest.SourceCommitId'], variables['Build.SourceVersion'])]
-      ContainerImagesPath: '$(Build.SourcesDirectory)/ghae-usage-service/config/ev2/app/ServiceGroupRoot/bin/docker_images'
-      ghaeUsageRootPath: '$(Build.SourcesDirectory)/ghae-usage-service'
+      ContainerImagesPath: '$(Build.SourcesDirectory)/dotfiles/config/ev2/app/ServiceGroupRoot/bin/docker_images'
+      ghaeUsageRootPath: '$(Build.SourcesDirectory)/dotfiles'
 
     jobs:
     - job: pullFromGPR # build linux images
@@ -73,36 +73,9 @@ stages:
             COMMIT_SHA: $(CommitSHA)
             DEFAULT_BRANCH: main
 
-        # login to GPR
-        # - task: Docker@2
-        #   displayName: Login to GPR
-        #   inputs:
-        #     command: login
-        #     containerRegistry: gh-containers-bot-ghcr.io
-
         - bash: echo "##vso[task.setvariable variable=BuildVersion]$(cat ./Dockerfile|grep 'USER_ID'| awk -F'=' '{print $2}')"
           displayName: Set Base Version
           workingDirectory: $(ghaeUsageRootPath)
-
-        # - template: .pipelines/templates/task/gen-version.yml@ghae-deployment
-        #   parameters:
-        #     GITHUB_TOKEN: $(CONTAINER_BUILDER_TOKEN)
-        #     BuildPrefix: $(VersionPrefix)
-        #     BuildVersion: $(BuildVersion)
-        #     RepositoryName: $(RepositoryName)
-        #     WorkflowName: $(WorkflowName)
-        #     BranchName: $(BuildBranch)
-        #     CommitSHA: $(CommitSHA)
-        #     # Debug: '1'
-
-        # - template: .pipelines/templates/task/wait-on-workflow.yml@ghae-deployment
-        #   parameters:
-        #     GITHUB_TOKEN: $(CONTAINER_BUILDER_TOKEN)
-        #     RepositoryName: $(RepositoryName)
-        #     WorkflowName: $(WorkflowName)
-        #     BranchName: $(BuildBranch)
-        #     CommitSHA: $(CommitSHA)
-        #     # Debug: '1'
 
         # Pull images from GPR and store them as tar.gz files
         - bash: |
