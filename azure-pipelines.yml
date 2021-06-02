@@ -99,7 +99,7 @@ stages:
                     echo "${{ variable.Key }}"
                     echo "${{ variable.Value }}"
                   fi
-                displayName: "get the image name"
+                displayName: "get ${{ variable.Key }}"
 
           - bash: |
               set -x -v
