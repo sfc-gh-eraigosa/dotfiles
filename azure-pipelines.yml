@@ -42,7 +42,7 @@ stages:
         VersionPrefix: 'dev-'
         BuildBranch: $[coalesce(variables['branch.name'], variables['System.PullRequest.SourceBranch'], variables['Build.SourceBranchName'])]
         CommitSHA: $[coalesce(variables['github.sha'], variables['System.PullRequest.SourceCommitId'], variables['Build.SourceVersion'])]
-      ContainerImagesPath: '$(Build.SourcesDirectory)/dotfiles/config/ev2/app/ServiceGroupRoot/bin/docker_images'
+      ContainerImagesPath: '$(Build.SourcesDirectory)/config/ev2/app/ServiceGroupRoot/bin/docker_images'
       ghaeUsageRootPath: '$(Build.SourcesDirectory)'
 
     jobs:
