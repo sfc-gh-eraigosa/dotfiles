@@ -94,8 +94,9 @@ stages:
           - checkout: self
 
           - ${{ each variable in variables }}:
+            - ${{ if startsWith(variable.Key, 'build.') }}:
               - bash: |
-                  if [[ "${{ variable.Key }}" =~ 'Image_' ]] ; then
+                  if [[ "${{ variable.Key }}" =~ 'build.' ]] ; then
                     echo "${{ variable.Key }}"
                     echo "${{ variable.Value }}"
                   fi
