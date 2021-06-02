@@ -1,0 +1,222 @@
+# YAML definition for Ev2 usage-service app deployment configuration
+
+parameters:
+- name: PublishArtifacts
+  displayName: Publish built artifacts for release
+  type: boolean
+  default: false
+- name: ev2ServiceConnection
+  type: string
+  default: 'GHAE Ev2 Test'
+- name: 'rolloutSpecNames'
+  type: object
+  default: 
+    - RolloutSpec-ImagePublish.json
+    - RolloutSpec-Deploy.json
+
+#
+# This workflow is always triggered from GitHub Actions
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - '*'
+
+
+stages:
+
+  - stage: DockerArtifacts
+
+    variables:
+      RepositoryName: $(Build.Repository.Name)
+      WorkflowName: 'Build Containers'
+      ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
+        VersionPrefix: ''
+        BuildBranch: $(Build.SourceBranchName)
+        CommitSHA: $(Build.SourceVersion)
+      ${{ if ne(variables['Build.SourceBranchName'], 'main') }}:
+        VersionPrefix: 'dev-'
+        BuildBranch: $[coalesce(variables['branch.name'], variables['System.PullRequest.SourceBranch'], variables['Build.SourceBranchName'])]
+        CommitSHA: $[coalesce(variables['github.sha'], variables['System.PullRequest.SourceCommitId'], variables['Build.SourceVersion'])]
+      ContainerImagesPath: '$(Build.SourcesDirectory)/ghae-usage-service/config/ev2/app/ServiceGroupRoot/bin/docker_images'
+      ghaeUsageRootPath: '$(Build.SourcesDirectory)/ghae-usage-service'
+
+    jobs:
+    - job: pullFromGPR # build linux images
+
+      pool:
+        type: docker
+        os: linux
+
+      variables:
+        doPublishing: $[or(eq(variables['ActionsPublishArtifacts'], true), eq(${{ parameters.PublishArtifacts }}, true))]
+        isMergeToMain: $[or(in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'), and(eq(variables['github.event_name'], 'push'), eq(variables['github.ref'], 'refs/heads/main')))]
+
+      steps:
+        - checkout: self
+
+        # check if we need to rebase with main so that migrations are sequential
+        - bash: |
+            set -x -v
+            default_sha=$(git rev-parse refs/remotes/origin/${DEFAULT_BRANCH})
+            branch_sha=$(git merge-base ${default_sha} ${COMMIT_SHA})
+            echo "COMMIT_SHA == > ${COMMIT_SHA}"
+            [ "${default_sha}" = "${branch_sha}" ] && echo "OK" || (echo "Rebase is required" && exit 1)
+          condition: or(eq(variables.doPublishing, true), eq(variables.isMergeToMain, true))
+          workingDirectory: $(ghaeUsageRootPath)
+          displayName: "Check rebase from main"
+          env:
+            COMMIT_SHA: $(CommitSHA)
+            DEFAULT_BRANCH: main
+
+        # login to GPR
+        # - task: Docker@2
+        #   displayName: Login to GPR
+        #   inputs:
+        #     command: login
+        #     containerRegistry: gh-containers-bot-ghcr.io
+
+        - bash: echo "##vso[task.setvariable variable=BuildVersion]$(cat ./Dockerfile|grep 'USER_ID'| awk -F'=' '{print $2}')"
+          displayName: Set Base Version
+          workingDirectory: $(ghaeUsageRootPath)
+
+        # - template: .pipelines/templates/task/gen-version.yml@ghae-deployment
+        #   parameters:
+        #     GITHUB_TOKEN: $(CONTAINER_BUILDER_TOKEN)
+        #     BuildPrefix: $(VersionPrefix)
+        #     BuildVersion: $(BuildVersion)
+        #     RepositoryName: $(RepositoryName)
+        #     WorkflowName: $(WorkflowName)
+        #     BranchName: $(BuildBranch)
+        #     CommitSHA: $(CommitSHA)
+        #     # Debug: '1'
+
+        # - template: .pipelines/templates/task/wait-on-workflow.yml@ghae-deployment
+        #   parameters:
+        #     GITHUB_TOKEN: $(CONTAINER_BUILDER_TOKEN)
+        #     RepositoryName: $(RepositoryName)
+        #     WorkflowName: $(WorkflowName)
+        #     BranchName: $(BuildBranch)
+        #     CommitSHA: $(CommitSHA)
+        #     # Debug: '1'
+
+        # Pull images from GPR and store them as tar.gz files
+        - bash: |
+            set -x -v
+            echo 'Pretend to pull publish.sh -g -u -s -n'
+            mkdir -p "${DOCKER_IMAGES}"
+            touch "${DOCKER_IMAGES}/1"
+            touch "${DOCKER_IMAGES}/2"
+            touch "${DOCKER_IMAGES}/3"
+          condition: or(eq(variables.doPublishing, true), eq(variables.isMergeToMain, true))
+          workingDirectory: $(ghaeUsageRootPath)
+          displayName: "Pull Docker Images from GPR"
+          env:
+            VERSION: $(Version)
+            DOCKER_IMAGES: ${{ variables.ContainerImagesPath }}
+            DEBUG: '-x -v'
+
+        - task: PublishPipelineArtifact@1
+          displayName: "Publish Container artifacts"
+          condition: or(eq(variables.doPublishing, true), eq(variables.isMergeToMain, true))
+          inputs:
+            targetPath: '${{ variables.ContainerImagesPath }}'
+            artifact: 'usage-service-containers'
+            publishLocation: 'pipeline'
+
+  - stage: ArtifactBuilds
+
+    variables:
+      serviceGroupRoot : '$(Build.SourcesDirectory)/ghae-usage-service/config/ev2/app/ServiceGroupRoot'
+      resourcesFilePath: '$(Build.SourcesDirectory)/ghae-usage-service/config/ev2/Resources.json'
+      scaleUnitsOverridesFilePath: '$(Build.SourcesDirectory)/ghae-usage-service/config/ev2/ScaleUnits.json'
+      environmentsOverridesFilePath: '$(Build.SourcesDirectory)/ghae-usage-service/config/ev2/Environments.json'
+      ghaeUsageRootPath: '$(Build.SourcesDirectory)/ghae-usage-service'
+      ghaeDeploymentRootPath: '$(Build.SourcesDirectory)/ghae-deployment'
+      artifactName: ServiceGroupRoot
+      Version: $[stageDependencies.DockerArtifacts.pullFromGPR.outputs['CalculateVersion.Version']]
+
+    dependsOn: [ 'DockerArtifacts' ] # nothing, should just run
+
+    jobs:
+    - job: ArtifactsBuild
+
+      pool:
+        name: Azure Pipelines
+        vmImage: 'windows-latest'
+
+      variables:
+        doPublishing: $[or(eq(variables['ActionsPublishArtifacts'], true), eq(${{ parameters.PublishArtifacts }}, true))]
+        isMergeToMain: $[or(in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'), eq(variables['branch.name'], 'main'))]
+
+      steps:
+
+        - checkout: self
+      
+        - task: DownloadPipelineArtifact@2
+          displayName: "Download docker images artifacts"
+          condition: or(eq(variables.doPublishing, true), eq(variables.isMergeToMain, true))
+          inputs:
+            artifact: 'usage-service-containers'
+            path: '${{ variables.serviceGroupRoot }}/dist/bin/docker_images/'
+
+        # Note this runs in a non-publish mode, so we're testing that first
+        - bash: |
+            set -x -v
+            echo 'Pretend do something artifacty'
+            mkdir -p "${SERVICE_GROUP_ROOT}"
+            touch "${SERVICE_GROUP_ROOT}/artifacts"
+          displayName: 'Prep the workspace with fake artifacts'
+          condition: and(eq(variables.doPublishing, false), eq(variables.isMergeToMain, false))
+          env:
+            VERSION: $(Version)
+            SERVICE_GROUP_ROOT: '${{ variables.serviceGroupRoot }}''
+
+        # - task: Bash@3
+        #   displayName: 'Prep the workspace with real artifacts'
+        #   condition: or(eq(variables.doPublishing, true), eq(variables.isMergeToMain, true))
+        #   inputs:
+        #       targetType: 'filePath'
+        #       filePath: '$(ghaeUsageRootPath)/script/artifacts.sh'
+        #       arguments: '-p'
+        #       workingDirectory: $(ghaeUsageRootPath)
+        #   env:
+        #     VERSION: $(Version)
+        #     # DEBUG: '-x -v'
+
+        # - task: PowerShell@2
+        #   displayName: "Generate scale unit configurations"
+        #   inputs:
+        #     filePath: "$(ghaeDeploymentRootPath)/Process-ScaleUnits.ps1"
+        #     arguments: "-ServiceGroupRootDirectory '${{ variables.serviceGroupRoot }}' -ResourcesFilePath '${{ variables.resourcesFilePath }}' -ScaleUnitsOverridesFilePath '${{ variables.scaleUnitsOverridesFilePath }}' -EnvironmentsOverridesFilePath '${{ variables.environmentsOverridesFilePath }}'"
+        #     errorActionPreference: stop
+        #     failOnStderr: true
+        #   env:
+        #     VERSION: $(Version)
+
+
+        # - ${{ each rolloutSpecName in parameters.rolloutSpecNames }}:
+        #   - task: ExpressV2Internal@1
+        #     displayName: "ExpressV2 Validation for ${{ rolloutSpecName }}"
+        #     inputs:
+        #       UseServerMonitorTask: false
+        #       EnableStrictValidation: false
+        #       ValidateOnly: true
+        #       EndpointProviderType: 'Ev2Endpoint'
+        #       ConnectedServiceName: '${{ parameters.ev2ServiceConnection }}'
+        #       ServiceRootLocation: 'LinkedArtifact'
+        #       RolloutSpecType: 'RSPath'
+        #       ServiceRootPath: '${{ variables.serviceGroupRoot }}'
+        #       RolloutSpecPath: '${{ variables.serviceGroupRoot }}/RolloutSpecs/int/${{ rolloutSpecName }}'
+
+        - task: PublishPipelineArtifact@1
+          displayName: "Publish ServiceGroupRoot artifact"
+          condition: or(eq(variables.doPublishing, true), eq(variables.isMergeToMain, true))
+          inputs:
+            targetPath: '${{ variables.serviceGroupRoot }}'
+            artifact: '${{ variables.artifactName }}'
+            publishLocation: 'pipeline'
