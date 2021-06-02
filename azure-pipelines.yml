@@ -85,7 +85,7 @@ stages:
 
     - ${{ each image in parameters.images }}:
       - job: "image_${{ image }}"
-
+        dependsOn: ['configure']
         pool:
           type: docker
           os: linux
