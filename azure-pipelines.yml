@@ -79,7 +79,7 @@ stages:
         - bash: echo "##vso[task.setvariable variable=BuildVersion]$(cat ./Dockerfile|grep 'USER_ID'| awk -F'=' '{print $2}')"
           displayName: Set Base Version
           workingDirectory: $(ghaeUsageRootPath)
-        - bash: echo "##vso[task.setvariable variable=Image1]$(echo "1")"
+        - bash: echo "##vso[task.setvariable variable=Image_1]$(echo "1")"
           displayName: Set Base Version
           workingDirectory: $(ghaeUsageRootPath)
 
@@ -94,8 +94,10 @@ stages:
           - checkout: self
 
           - ${{ each variable in variables }}:
-            - script: echo "${{ variable.Key }}"
-            - script: echo "${{ variable.Value }}"
+            - ${{ if startsWith(variable.Key, 'Image_') }}:
+              - bash: |
+                  echo "${{ variable.Key }}"
+                  echo "${{ variable.Value }}"
 
           - bash: |
               set -x -v
