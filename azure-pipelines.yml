@@ -92,12 +92,11 @@ stages:
 
         steps:
           - checkout: self
-          - ${{ each parameter in parameters }}:
-            - script: echo ${{ parameter.Key }} 
-            - script: echo ${{ parameter.Value }}
+
           - ${{ each variable in variables }}:
-            - script: echo ${{ variable.Key }} 
-            - script: echo ${{ variable.Value }}
+            - script: echo "${{ variable.Key }}"
+            - script: echo "${{ variable.Value }}"
+
           - bash: |
               set -x -v
               echo 'Pretend to pull publish.sh -g -u -s -n'
