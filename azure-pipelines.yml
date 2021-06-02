@@ -94,10 +94,12 @@ stages:
           - checkout: self
 
           - ${{ each variable in variables }}:
-            - ${{ if startsWith(variable.Key, 'Image_') }}:
               - bash: |
-                  echo "${{ variable.Key }}"
-                  echo "${{ variable.Value }}"
+                  if [[ "${{ variable.Key }}" =~ 'Image_' ]] ; then
+                    echo "${{ variable.Key }}"
+                    echo "${{ variable.Value }}"
+                  fi
+                displayName: "get the image name"
 
           - bash: |
               set -x -v
