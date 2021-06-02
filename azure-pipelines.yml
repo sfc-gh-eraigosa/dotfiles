@@ -89,6 +89,7 @@ stages:
 
         variables:
           target: "${{ image }}"
+          group: usage.services
 
         steps:
           - checkout: self
