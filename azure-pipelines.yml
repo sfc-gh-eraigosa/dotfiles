@@ -174,44 +174,7 @@ stages:
           condition: and(eq(variables.doPublishing, false), eq(variables.isMergeToMain, false))
           env:
             VERSION: $(Version)
-            SERVICE_GROUP_ROOT: '${{ variables.serviceGroupRoot }}''
-
-        # - task: Bash@3
-        #   displayName: 'Prep the workspace with real artifacts'
-        #   condition: or(eq(variables.doPublishing, true), eq(variables.isMergeToMain, true))
-        #   inputs:
-        #       targetType: 'filePath'
-        #       filePath: '$(ghaeUsageRootPath)/script/artifacts.sh'
-        #       arguments: '-p'
-        #       workingDirectory: $(ghaeUsageRootPath)
-        #   env:
-        #     VERSION: $(Version)
-        #     # DEBUG: '-x -v'
-
-        # - task: PowerShell@2
-        #   displayName: "Generate scale unit configurations"
-        #   inputs:
-        #     filePath: "$(ghaeDeploymentRootPath)/Process-ScaleUnits.ps1"
-        #     arguments: "-ServiceGroupRootDirectory '${{ variables.serviceGroupRoot }}' -ResourcesFilePath '${{ variables.resourcesFilePath }}' -ScaleUnitsOverridesFilePath '${{ variables.scaleUnitsOverridesFilePath }}' -EnvironmentsOverridesFilePath '${{ variables.environmentsOverridesFilePath }}'"
-        #     errorActionPreference: stop
-        #     failOnStderr: true
-        #   env:
-        #     VERSION: $(Version)
-
-
-        # - ${{ each rolloutSpecName in parameters.rolloutSpecNames }}:
-        #   - task: ExpressV2Internal@1
-        #     displayName: "ExpressV2 Validation for ${{ rolloutSpecName }}"
-        #     inputs:
-        #       UseServerMonitorTask: false
-        #       EnableStrictValidation: false
-        #       ValidateOnly: true
-        #       EndpointProviderType: 'Ev2Endpoint'
-        #       ConnectedServiceName: '${{ parameters.ev2ServiceConnection }}'
-        #       ServiceRootLocation: 'LinkedArtifact'
-        #       RolloutSpecType: 'RSPath'
-        #       ServiceRootPath: '${{ variables.serviceGroupRoot }}'
-        #       RolloutSpecPath: '${{ variables.serviceGroupRoot }}/RolloutSpecs/int/${{ rolloutSpecName }}'
+            SERVICE_GROUP_ROOT: '${{ variables.serviceGroupRoot }}'
 
         - task: PublishPipelineArtifact@1
           displayName: "Publish ServiceGroupRoot artifact"
