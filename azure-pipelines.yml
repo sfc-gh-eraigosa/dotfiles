@@ -46,7 +46,7 @@ stages:
       ghaeUsageRootPath: '$(Build.SourcesDirectory)'
 
     jobs:
-    - job: pullFromGPR # build linux images
+    - job: configure
 
       pool:
         type: docker
@@ -77,14 +77,26 @@ stages:
           displayName: Set Base Version
           workingDirectory: $(ghaeUsageRootPath)
 
-        # Pull images from GPR and store them as tar.gz files
+
+
+    - job: image_1
+
+      pool:
+        type: docker
+        os: linux
+
+      variables:
+        doPublishing: $[or(eq(variables['ActionsPublishArtifacts'], true), eq(${{ parameters.PublishArtifacts }}, true))]
+        isMergeToMain: $[or(in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'), and(eq(variables['github.event_name'], 'push'), eq(variables['github.ref'], 'refs/heads/main')))]
+        target: 1
+
+      steps:
+        - checkout: self
         - bash: |
             set -x -v
             echo 'Pretend to pull publish.sh -g -u -s -n'
             mkdir -p "${DOCKER_IMAGES}"
-            touch "${DOCKER_IMAGES}/1"
-            touch "${DOCKER_IMAGES}/2"
-            touch "${DOCKER_IMAGES}/3"
+            touch "${DOCKER_IMAGES}/${TARGET}"
           condition: or(eq(variables.doPublishing, true), eq(variables.isMergeToMain, true))
           workingDirectory: $(ghaeUsageRootPath)
           displayName: "Pull Docker Images from GPR"
@@ -92,7 +104,75 @@ stages:
             VERSION: $(Version)
             DOCKER_IMAGES: ${{ variables.ContainerImagesPath }}
             DEBUG: '-x -v'
+            TARGET: $(target)
+        - task: PublishPipelineArtifact@1
+          displayName: "Publish Container artifacts"
+          condition: or(eq(variables.doPublishing, true), eq(variables.isMergeToMain, true))
+          inputs:
+            targetPath: '${{ variables.ContainerImagesPath }}'
+            artifact: 'usage-service-containers'
+            publishLocation: 'pipeline'
 
+    - job: image_2
+
+      pool:
+        type: docker
+        os: linux
+
+      variables:
+        doPublishing: $[or(eq(variables['ActionsPublishArtifacts'], true), eq(${{ parameters.PublishArtifacts }}, true))]
+        isMergeToMain: $[or(in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'), and(eq(variables['github.event_name'], 'push'), eq(variables['github.ref'], 'refs/heads/main')))]
+        target: 2
+
+      steps:
+        - checkout: self
+        - bash: |
+            set -x -v
+            echo 'Pretend to pull publish.sh -g -u -s -n'
+            mkdir -p "${DOCKER_IMAGES}"
+            touch "${DOCKER_IMAGES}/${TARGET}"
+          condition: or(eq(variables.doPublishing, true), eq(variables.isMergeToMain, true))
+          workingDirectory: $(ghaeUsageRootPath)
+          displayName: "Pull Docker Images from GPR"
+          env:
+            VERSION: $(Version)
+            DOCKER_IMAGES: ${{ variables.ContainerImagesPath }}
+            DEBUG: '-x -v'
+            TARGET: $(target)
+        - task: PublishPipelineArtifact@1
+          displayName: "Publish Container artifacts"
+          condition: or(eq(variables.doPublishing, true), eq(variables.isMergeToMain, true))
+          inputs:
+            targetPath: '${{ variables.ContainerImagesPath }}'
+            artifact: 'usage-service-containers'
+            publishLocation: 'pipeline'
+
+    - job: image_3
+
+      pool:
+        type: docker
+        os: linux
+
+      variables:
+        doPublishing: $[or(eq(variables['ActionsPublishArtifacts'], true), eq(${{ parameters.PublishArtifacts }}, true))]
+        isMergeToMain: $[or(in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'), and(eq(variables['github.event_name'], 'push'), eq(variables['github.ref'], 'refs/heads/main')))]
+        target: 3
+
+      steps:
+        - checkout: self
+        - bash: |
+            set -x -v
+            echo 'Pretend to pull publish.sh -g -u -s -n'
+            mkdir -p "${DOCKER_IMAGES}"
+            touch "${DOCKER_IMAGES}/${TARGET}"
+          condition: or(eq(variables.doPublishing, true), eq(variables.isMergeToMain, true))
+          workingDirectory: $(ghaeUsageRootPath)
+          displayName: "Pull Docker Images from GPR"
+          env:
+            VERSION: $(Version)
+            DOCKER_IMAGES: ${{ variables.ContainerImagesPath }}
+            DEBUG: '-x -v'
+            TARGET: $(target)
         - task: PublishPipelineArtifact@1
           displayName: "Publish Container artifacts"
           condition: or(eq(variables.doPublishing, true), eq(variables.isMergeToMain, true))
