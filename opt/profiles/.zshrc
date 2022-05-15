@@ -171,3 +171,9 @@ PATH=$PATH:$HOME/.nodenv/shims
 export GITHUB_TOKEN=${GITHUB_TOKEN:-$( printf "protocol=https\\nhost=github.com\\npath=github\\n" | git credential fill | awk -F'=' '/password=/{print $2}')}
 test -n "$(alias ruby)" && unalias ruby
 
+#
+# change to workspace if defined
+if [ -d "${CODESPACE_VSCODE_FOLDER}" ]; then
+  cd "${CODESPACE_VSCODE_FOLDER}"
+fi
+
