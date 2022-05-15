@@ -172,9 +172,13 @@ export GITHUB_TOKEN=${GITHUB_TOKEN:-$( printf "protocol=https\\nhost=github.com\
 test -n "$(alias ruby)" && unalias ruby
 
 #
+# we're in codespaces, setup some custom things
 # change to workspace if defined
 if [ -d "${CODESPACE_VSCODE_FOLDER}" ]; then
   cd "${CODESPACE_VSCODE_FOLDER}"
   git config pull.rebase true
+  if [ -n "${MY_GITHUB_TOKEN}" ] ; then
+    export GITHUB_TOKEN="${MY_GITHUB_TOKEN}"
+  fi
 fi
 
