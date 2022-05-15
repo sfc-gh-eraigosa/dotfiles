@@ -32,6 +32,9 @@ fi
 if [ ! -d $Z_HOME ] ; then
     export Z_HOME=/Users/eraigosa
 fi
+if [ ! -d $Z_HOME ] ; then
+    export Z_HOME=/home/codespace
+fi
 
 if [ -d "${Z_HOME}/.oh-my-zsh" ] ; then
   export ZSH="${Z_HOME}/.oh-my-zsh"
