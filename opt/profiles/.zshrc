@@ -175,5 +175,6 @@ test -n "$(alias ruby)" && unalias ruby
 # change to workspace if defined
 if [ -d "${CODESPACE_VSCODE_FOLDER}" ]; then
   cd "${CODESPACE_VSCODE_FOLDER}"
+  git config pull.rebase true
 fi
 
