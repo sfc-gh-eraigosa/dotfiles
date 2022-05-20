@@ -197,4 +197,7 @@ alias gpg-list='gpg --list-secret-keys'
 alias gpg-git-config='git config --global --list |egrep "(gpg|sign)"'
 alias gpg-config='cat ~/.gnupg/gpg.conf'
 
+if [ -f /usr/local/bin/dev-vpn ] ; then
+    alias dev-vpn='sudo dev-vpn connect'
+fi
 
