@@ -36,10 +36,13 @@ if [ -x "$(which apt-get)" ]; then
     psmisc \
     zsh
 fi
+# only setup these scripts when docker is installed
+if docker --version 2>&1 >/dev/null; then
+    [ ! -f "${HOME}/.ruby.env" ] && source "${HOME}/opt/bin/setup_ruby-docker.sh"
+    [ ! -f "${HOME}/.dindcenv" ] && source "${HOME}/opt/bin/setup_dindc_alias.sh"
+fi
 
-[ ! -f "${HOME}/.ruby.env" ] && source "${HOME}/opt/bin/setup_ruby-docker.sh"
 [ ! -f "${HOME}/.gitenv" ] && source "${HOME}/opt/bin/setup_git_alias.sh"
-[ ! -f "${HOME}/.dindcenv" ] && source "${HOME}/opt/bin/setup_dindc_alias.sh"
 
 if [ -f "${HOME}/.gitrepos" ] ; then
   cd "${HOME}"
