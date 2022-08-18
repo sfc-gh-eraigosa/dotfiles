@@ -42,7 +42,10 @@ if docker --version 2>&1 >/dev/null; then
     [ ! -f "${HOME}/.dindcenv" ] && source "${HOME}/opt/bin/setup_dindc_alias.sh"
 fi
 
-[ ! -f "${HOME}/.gitenv" ] && source "${HOME}/opt/bin/setup_git_alias.sh"
+# don't bother installing without corkscrew
+if corkscrew |grep "corkscrew" 2>&1 >/dev/null; then
+    [ ! -f "${HOME}/.gitenv" ] && source "${HOME}/opt/bin/setup_git_alias.sh"
+fi
 
 if [ -f "${HOME}/.gitrepos" ] ; then
   cd "${HOME}"
