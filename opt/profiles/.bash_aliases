@@ -114,7 +114,7 @@ else
     echo ".gitenv is missing, you can install with : . opt/bin/setup_git_alias.sh"
 fi
 # Some git shortcuts
-unalias git-reset
+[[ -e $(alias git-reset) ]] && unalias git-reset
 alias git-reset='$HOME/opt/bin/git-reset.sh'
 alias git-branches-rm='$HOME/opt/bin/git-rm-mybranches.sh'
 alias git-local-master='$HOME/opt/bin/git-local-master.sh'
