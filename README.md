@@ -16,37 +16,27 @@ chromebook, I'll be installing cruton on it and adding some stuff to help me the
 
 install
 ----
-1. You'll need git and vim to setup your home folder.  Make sure to install git and vim for your server, or ask your administrator to do this.
+1. You'll need homebrew, git and vim to setup your home folder.  Make sure to install git and vim for your server, or ask your administrator to do this.
   
   ```sh
    sudo apt-get install git vim corkscrew
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
   ```
-  NOTE: corkscrew installation is used for proxies, and is optional, but recommended.
-2. Setup your home directory with your github account ssh keys.  Lets assume these are called git_keys (private key) and git_keys.pub (public key).
-
-  ```sh
-    mkdir ~/.ssh
-    chmod 700 ~/.ssh
-    echo > '<your privatekey>' > ~/.ssh/git_keys
-    echo > '<your public key>' > ~/.ssh/git_keys.pub
-    chmod 600 ~/.ssh/*
-    eval $(ssh-agent); ssh-add ~/.ssh/git_keys
-  ```
-3. Fork the dotfiles project to your account.  While still logged into your account, now it's time to setup your home directory, for me as user wenlock, this looks like:
+  NOTE: corkscrew installation is used for proxies, and is optional, but not needed here.
+2. Setup your home directory with your github account ssh keys and anything else you might need. Please note that the `.bashrc`, etc files will be replaces with soft links.
+3. Fork the dotfiles project to your account.  While still logged into your account, now it's time to setup your home directory. You can clone the repo and install it as follows:
 
   ```sh
     cd ~
-    git init
-    git remote add origin https://github.com/wenlock/dotfiles
-    git pull origin main
-    git reset --hard
+    git clone git@github.com:<youruser>/dotfiles.git
+    ./dotfiles/install.sh
   ```
-4.  You should now be using the basic dotfiles project. Setup the defaults:
-
-  ```sh
-    ~/install.sh
-  ```
-
+4. What you should expect is for files from the `./dotfiles` folder to now be lined to your home directory.  Here is a breakdown of what's linked:
+  - All files in `./dotfiles/opt/profiles/*` are now linked to home
+  - The linke `./Brewfile` will install a bunch of other tools
+  - `./dotfiles/opt` -> `~/opt`
+  - `~/opt/bin` will be in the `PATH`
+  - default shell is `zsh`
 5.  If you plan to use [zsh](opt/docs/zsh_andtools.md) as your default shell, take the time to setup [powerline fonts](opt/docs/powerline-fonts.md).
 
   ```sh
@@ -112,6 +102,6 @@ wrong or incomplete.  Especially if I make a security boo boo.
 
 Licensing
 ----
-myhome is licensed under the Apache License, Version 2.0. See LICENSE for full license text.
+dotfiles is licensed under the Apache License, Version 2.0. See LICENSE for full license text.
 
 Testing
