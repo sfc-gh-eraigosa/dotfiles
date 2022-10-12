@@ -32,7 +32,7 @@ brew 'watch'
 # for node manager
 brew 'nvm'
 # act tool https://github.com/nektos/act
-brew 'nektos/tap/act'
+# brew 'nektos/tap/act'
 brew 'rbenv'
 brew 'git'
 brew 'git-lfs'
