@@ -87,7 +87,7 @@ my wish list
 * Working docker scripts to setup my docker environment
 
 
-Contributing to myhome
+Contributing
 ----
 
 Want to help me be more productive, wow cool!  
