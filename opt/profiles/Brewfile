@@ -36,12 +36,12 @@ brew 'nvm'
 brew 'rbenv'
 brew 'git'
 brew 'git-lfs'
+brew 'gh'
 
 
 # cask "docker"
 cask 'gpg-suite'
 brew 'azure-cli'
-# brew 'github/gh/gh'
 
 brew 'gnupg'
 brew 'golang'
