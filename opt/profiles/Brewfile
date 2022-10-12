@@ -46,3 +46,9 @@ brew 'azure-cli'
 brew 'gnupg'
 brew 'golang'
 
+# install pythons
+# for example install another python with : pyenv install 3.9.14
+# to set it as the default use the command : pyenv global 3.9.14
+# to setup in bash profile: eval "$(pyenv init -)"
+brew 'pyenv'
+

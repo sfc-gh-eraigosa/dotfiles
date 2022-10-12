@@ -155,6 +155,14 @@ if [[ "$OSTYPE" == "darwin"* ]] ; then
     defaults write com.microsoft.VSCode ApplePressAndHoldEnabled -bool false
 fi
 
+# pyenv setup
+if command -v pyenv 1>/dev/null 2>&1; then
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    export PYENV_ROOT="$HOME/.pyenv"                                                                                ─╯
+    command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"
+fi
+
 test -f $HOME/.rbenv/shims/gh && $HOME/.rbenv/shims/gh
 
 # /usr/local/bin
