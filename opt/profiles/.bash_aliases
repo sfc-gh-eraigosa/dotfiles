@@ -201,3 +201,6 @@ if [ -f /usr/local/bin/dev-vpn ] ; then
     alias dev-vpn='sudo dev-vpn connect'
 fi
 
+# lets alias to python3
+alias python=python3
+alias pip=pip3
