@@ -8,12 +8,6 @@ I plan to use this primarly to manage my ux home directory across various
 systems where i plan to use git and cli based tools.  I want a nice
 editor as well where the backgrounds and sytax highlighting work.
 
-I've been mostly developing puppet modules, so those will likely be
-the focus here.
-
-I use a chromebook for most of my UX development so after I get my new
-chromebook, I'll be installing cruton on it and adding some stuff to help me there.
-
 install
 ----
 1. You'll need homebrew, git and vim to setup your home folder.  Make sure to install git and vim for your server, or ask your administrator to do this.
