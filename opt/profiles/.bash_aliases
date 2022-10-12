@@ -204,3 +204,4 @@ fi
 # lets alias to python3
 alias python=python3
 alias pip=pip3
+alias vault-login=vault-login.sh
