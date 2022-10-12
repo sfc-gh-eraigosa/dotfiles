@@ -163,6 +163,11 @@ if command -v pyenv 1>/dev/null 2>&1; then
     eval "$(pyenv init -)"
 fi
 
+# source any secrets
+if [ -f ~/.secrets.env ] ; then
+    source ~/.secrets.env
+else
+
 test -f $HOME/.rbenv/shims/gh && $HOME/.rbenv/shims/gh
 
 # /usr/local/bin
