@@ -166,7 +166,7 @@ fi
 # source any secrets
 if [ -f ~/.secrets.env ] ; then
     source ~/.secrets.env
-else
+fi
 
 test -f $HOME/.rbenv/shims/gh && $HOME/.rbenv/shims/gh
 

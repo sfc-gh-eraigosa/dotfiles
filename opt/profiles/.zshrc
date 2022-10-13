@@ -188,3 +188,8 @@ if [ -d "${CODESPACE_VSCODE_FOLDER}" ]; then
   fi
 fi
 
+# source any secrets
+if [ -f ~/.secrets.env ] ; then
+  source ~/.secrets.env
+fi
+
