@@ -1,6 +1,6 @@
 # Path to your oh-my-zsh installation.
 
-autoload -Uz compinit
+Autoload -Uz compinit
 compinit
 
 # Pull the latest repos
@@ -153,7 +153,9 @@ if [ "$(uname -s)" = "Darwin" ]; then
     brew bundle check || brew bundle &
 fi
 
-[ -x "$(which nodenv)" ] && eval "$(nodenv init -)"
+if command -v nodenv &> /dev/null; then
+  eval "$(nodenv init -)"
+fi
 source  $HOME/git/powerlevel10k/powerlevel10k.zsh-theme
 
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!

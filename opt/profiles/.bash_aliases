@@ -167,7 +167,7 @@ fi
 
 alias ecr-login='eval $(aws ecr get-login --no-include-email)'
 
-if which hub > /dev/null; then 
+if command -v hub &> /dev/null; then
     eval "$(hub alias -s)"
 fi
 
