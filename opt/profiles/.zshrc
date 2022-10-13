@@ -1,6 +1,6 @@
 # Path to your oh-my-zsh installation.
 
-Autoload -Uz compinit
+autoload -Uz compinit
 compinit
 
 # Pull the latest repos
