@@ -168,7 +168,13 @@ test -f ${HOME}/.rbenv/shims/gh && rm -f ${HOME}/.rbenv/shims/gh
 #
 # node in path
 PATH=$PATH:$HOME/.nodenv/shims
-export GITHUB_TOKEN=${GITHUB_TOKEN:-$( printf "protocol=https\\nhost=github.com\\npath=github\\n" | git credential fill | awk -F'=' '/password=/{print $2}')}
+
+#
+# GITHUB_TOKEN setup from stored credential
+if [[ -f .no_github_token ]] ; then
+  export GITHUB_TOKEN=${GITHUB_TOKEN:-$( printf "protocol=https\\nhost=github.com\\npath=github\\n" | git credential fill | awk -F'=' '/password=/{print $2}')}
+fi
+
 test -n "$(alias ruby)" && unalias ruby
 
 #
