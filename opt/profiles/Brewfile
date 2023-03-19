@@ -38,6 +38,9 @@ brew 'git'
 brew 'git-lfs'
 brew 'gh'
 
+# bazel
+brew 'bazel'
+brew 'buildifier'
 
 # cask "docker"
 cask 'gpg-suite'
