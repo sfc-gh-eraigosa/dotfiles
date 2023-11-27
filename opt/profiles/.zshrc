@@ -95,7 +95,7 @@ ZSH_THEME="agnoster"
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
 # plugins=(git)
-plugins=(git zsh-completions kubectl)
+plugins=(git docker golang zsh-completions kubectl)
 
 
 if [ ! -d "${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions" ] ; then
@@ -105,7 +105,7 @@ fi
 # User configuration
 
 # export PATH="$PATH:$HOME/opt/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/go/bin"
-export PATH="$PATH:$HOME/opt/bin"
+export PATH="$PATH:$HOME/bin:$HOME/opt/bin"
 # export MANPATH="/usr/local/man:$MANPATH"
 fpath+=${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions/src
 

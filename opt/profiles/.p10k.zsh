@@ -65,8 +65,8 @@
     # laravel_version       # laravel php framework version (https://laravel.com/)
     # java_version          # java version (https://www.java.com/)
     # package               # name@version from package.json (https://docs.npmjs.com/files/package.json)
-    rbenv                   # ruby version from rbenv (https://github.com/rbenv/rbenv)
-    rvm                     # ruby version from rvm (https://rvm.io)
+    # rbenv                   # ruby version from rbenv (https://github.com/rbenv/rbenv)
+    # rvm                     # ruby version from rvm (https://rvm.io)
     fvm                     # flutter version management (https://github.com/leoafarias/fvm)
     luaenv                  # lua version from luaenv (https://github.com/cehoffman/luaenv)
     jenv                    # java version from jenv (https://github.com/jenv/jenv)
@@ -597,8 +597,8 @@
   typeset -g POWERLEVEL9K_ASDF_SHOW_ON_UPGLOB=
 
   # Ruby version from asdf.
-  typeset -g POWERLEVEL9K_ASDF_RUBY_FOREGROUND=0
-  typeset -g POWERLEVEL9K_ASDF_RUBY_BACKGROUND=1
+  # typeset -g POWERLEVEL9K_ASDF_RUBY_FOREGROUND=0
+  # typeset -g POWERLEVEL9K_ASDF_RUBY_BACKGROUND=1
   # typeset -g POWERLEVEL9K_ASDF_RUBY_VISUAL_IDENTIFIER_EXPANSION='⭐'
   # typeset -g POWERLEVEL9K_ASDF_RUBY_SHOW_ON_UPGLOB='*.foo|*.bar'
 
@@ -610,9 +610,9 @@
 
   # Go version from asdf.
   typeset -g POWERLEVEL9K_ASDF_GOLANG_FOREGROUND=0
-  typeset -g POWERLEVEL9K_ASDF_GOLANG_BACKGROUND=4
-  # typeset -g POWERLEVEL9K_ASDF_GOLANG_VISUAL_IDENTIFIER_EXPANSION='⭐'
-  # typeset -g POWERLEVEL9K_ASDF_GOLANG_SHOW_ON_UPGLOB='*.foo|*.bar'
+  typeset -g POWERLEVEL9K_ASDF_GOLANG_BACKGROUND=1
+  typeset -g POWERLEVEL9K_ASDF_GOLANG_VISUAL_IDENTIFIER_EXPANSION='⭐'
+  typeset -g POWERLEVEL9K_ASDF_GOLANG_SHOW_ON_UPGLOB='*.foo|*.bar'
 
   # Node.js version from asdf.
   typeset -g POWERLEVEL9K_ASDF_NODEJS_FOREGROUND=0
@@ -621,26 +621,26 @@
   # typeset -g POWERLEVEL9K_ASDF_NODEJS_SHOW_ON_UPGLOB='*.foo|*.bar'
 
   # Rust version from asdf.
-  typeset -g POWERLEVEL9K_ASDF_RUST_FOREGROUND=0
-  typeset -g POWERLEVEL9K_ASDF_RUST_BACKGROUND=208
+  # typeset -g POWERLEVEL9K_ASDF_RUST_FOREGROUND=0
+  # typeset -g POWERLEVEL9K_ASDF_RUST_BACKGROUND=208
   # typeset -g POWERLEVEL9K_ASDF_RUST_VISUAL_IDENTIFIER_EXPANSION='⭐'
   # typeset -g POWERLEVEL9K_ASDF_RUST_SHOW_ON_UPGLOB='*.foo|*.bar'
 
   # .NET Core version from asdf.
-  typeset -g POWERLEVEL9K_ASDF_DOTNET_CORE_FOREGROUND=0
-  typeset -g POWERLEVEL9K_ASDF_DOTNET_CORE_BACKGROUND=5
+  # typeset -g POWERLEVEL9K_ASDF_DOTNET_CORE_FOREGROUND=0
+  # typeset -g POWERLEVEL9K_ASDF_DOTNET_CORE_BACKGROUND=5
   # typeset -g POWERLEVEL9K_ASDF_DOTNET_CORE_VISUAL_IDENTIFIER_EXPANSION='⭐'
   # typeset -g POWERLEVEL9K_ASDF_DOTNET_CORE_SHOW_ON_UPGLOB='*.foo|*.bar'
 
   # Flutter version from asdf.
-  typeset -g POWERLEVEL9K_ASDF_FLUTTER_FOREGROUND=0
-  typeset -g POWERLEVEL9K_ASDF_FLUTTER_BACKGROUND=4
+  # typeset -g POWERLEVEL9K_ASDF_FLUTTER_FOREGROUND=0
+  # typeset -g POWERLEVEL9K_ASDF_FLUTTER_BACKGROUND=4
   # typeset -g POWERLEVEL9K_ASDF_FLUTTER_VISUAL_IDENTIFIER_EXPANSION='⭐'
   # typeset -g POWERLEVEL9K_ASDF_FLUTTER_SHOW_ON_UPGLOB='*.foo|*.bar'
 
   # Lua version from asdf.
-  typeset -g POWERLEVEL9K_ASDF_LUA_FOREGROUND=0
-  typeset -g POWERLEVEL9K_ASDF_LUA_BACKGROUND=4
+  # typeset -g POWERLEVEL9K_ASDF_LUA_FOREGROUND=0
+  # typeset -g POWERLEVEL9K_ASDF_LUA_BACKGROUND=4
   # typeset -g POWERLEVEL9K_ASDF_LUA_VISUAL_IDENTIFIER_EXPANSION='⭐'
   # typeset -g POWERLEVEL9K_ASDF_LUA_SHOW_ON_UPGLOB='*.foo|*.bar'
 
@@ -651,20 +651,20 @@
   # typeset -g POWERLEVEL9K_ASDF_JAVA_SHOW_ON_UPGLOB='*.foo|*.bar'
 
   # Perl version from asdf.
-  typeset -g POWERLEVEL9K_ASDF_PERL_FOREGROUND=0
-  typeset -g POWERLEVEL9K_ASDF_PERL_BACKGROUND=4
+  # typeset -g POWERLEVEL9K_ASDF_PERL_FOREGROUND=0
+  # typeset -g POWERLEVEL9K_ASDF_PERL_BACKGROUND=4
   # typeset -g POWERLEVEL9K_ASDF_PERL_VISUAL_IDENTIFIER_EXPANSION='⭐'
   # typeset -g POWERLEVEL9K_ASDF_PERL_SHOW_ON_UPGLOB='*.foo|*.bar'
 
   # Erlang version from asdf.
-  typeset -g POWERLEVEL9K_ASDF_ERLANG_FOREGROUND=0
-  typeset -g POWERLEVEL9K_ASDF_ERLANG_BACKGROUND=1
+  # typeset -g POWERLEVEL9K_ASDF_ERLANG_FOREGROUND=0
+  # typeset -g POWERLEVEL9K_ASDF_ERLANG_BACKGROUND=1
   # typeset -g POWERLEVEL9K_ASDF_ERLANG_VISUAL_IDENTIFIER_EXPANSION='⭐'
   # typeset -g POWERLEVEL9K_ASDF_ERLANG_SHOW_ON_UPGLOB='*.foo|*.bar'
 
   # Elixir version from asdf.
-  typeset -g POWERLEVEL9K_ASDF_ELIXIR_FOREGROUND=0
-  typeset -g POWERLEVEL9K_ASDF_ELIXIR_BACKGROUND=5
+  # typeset -g POWERLEVEL9K_ASDF_ELIXIR_FOREGROUND=0
+  # typeset -g POWERLEVEL9K_ASDF_ELIXIR_BACKGROUND=5
   # typeset -g POWERLEVEL9K_ASDF_ELIXIR_VISUAL_IDENTIFIER_EXPANSION='⭐'
   # typeset -g POWERLEVEL9K_ASDF_ELIXIR_SHOW_ON_UPGLOB='*.foo|*.bar'
 
@@ -675,20 +675,20 @@
   # typeset -g POWERLEVEL9K_ASDF_POSTGRES_SHOW_ON_UPGLOB='*.foo|*.bar'
 
   # PHP version from asdf.
-  typeset -g POWERLEVEL9K_ASDF_PHP_FOREGROUND=0
-  typeset -g POWERLEVEL9K_ASDF_PHP_BACKGROUND=5
+  # typeset -g POWERLEVEL9K_ASDF_PHP_FOREGROUND=0
+  # typeset -g POWERLEVEL9K_ASDF_PHP_BACKGROUND=5
   # typeset -g POWERLEVEL9K_ASDF_PHP_VISUAL_IDENTIFIER_EXPANSION='⭐'
   # typeset -g POWERLEVEL9K_ASDF_PHP_SHOW_ON_UPGLOB='*.foo|*.bar'
 
   # Haskell version from asdf.
-  typeset -g POWERLEVEL9K_ASDF_HASKELL_FOREGROUND=0
-  typeset -g POWERLEVEL9K_ASDF_HASKELL_BACKGROUND=3
+  # typeset -g POWERLEVEL9K_ASDF_HASKELL_FOREGROUND=0
+  # typeset -g POWERLEVEL9K_ASDF_HASKELL_BACKGROUND=3
   # typeset -g POWERLEVEL9K_ASDF_HASKELL_VISUAL_IDENTIFIER_EXPANSION='⭐'
   # typeset -g POWERLEVEL9K_ASDF_HASKELL_SHOW_ON_UPGLOB='*.foo|*.bar'
 
   # Julia version from asdf.
-  typeset -g POWERLEVEL9K_ASDF_JULIA_FOREGROUND=0
-  typeset -g POWERLEVEL9K_ASDF_JULIA_BACKGROUND=2
+  # typeset -g POWERLEVEL9K_ASDF_JULIA_FOREGROUND=0
+  # typeset -g POWERLEVEL9K_ASDF_JULIA_BACKGROUND=2
   # typeset -g POWERLEVEL9K_ASDF_JULIA_VISUAL_IDENTIFIER_EXPANSION='⭐'
   # typeset -g POWERLEVEL9K_ASDF_JULIA_SHOW_ON_UPGLOB='*.foo|*.bar'
 
@@ -965,17 +965,17 @@
 
   ################[ goenv: go environment (https://github.com/syndbg/goenv) ]################
   # Goenv color.
-  # typeset -g POWERLEVEL9K_GOENV_FOREGROUND=0
-  # typeset -g POWERLEVEL9K_GOENV_BACKGROUND=4
+  typeset -g POWERLEVEL9K_GOENV_FOREGROUND=0
+  typeset -g POWERLEVEL9K_GOENV_BACKGROUND=4
   # Hide go version if it doesn't come from one of these sources.
   typeset -g POWERLEVEL9K_GOENV_SOURCES=(shell local global)
   # If set to false, hide go version if it's the same as global:
   # $(goenv version-name) == $(goenv global).
-  typeset -g POWERLEVEL9K_GOENV_PROMPT_ALWAYS_SHOW=false
+  typeset -g POWERLEVEL9K_GOENV_PROMPT_ALWAYS_SHOW=true
   # If set to false, hide go version if it's equal to "system".
   typeset -g POWERLEVEL9K_GOENV_SHOW_SYSTEM=true
   # Custom icon.
-  # typeset -g POWERLEVEL9K_GOENV_VISUAL_IDENTIFIER_EXPANSION='⭐'
+  typeset -g POWERLEVEL9K_GOENV_VISUAL_IDENTIFIER_EXPANSION='⭐'
 
   ##########[ nodenv: node.js version from nodenv (https://github.com/nodenv/nodenv) ]##########
   # Nodenv color.
@@ -1020,12 +1020,12 @@
 
   #######################[ go_version: go version (https://golang.org) ]########################
   # Go version color.
-  # typeset -g POWERLEVEL9K_GO_VERSION_FOREGROUND=255
-  # typeset -g POWERLEVEL9K_GO_VERSION_BACKGROUND=2
+  typeset -g POWERLEVEL9K_GO_VERSION_FOREGROUND=255
+  typeset -g POWERLEVEL9K_GO_VERSION_BACKGROUND=2
   # Show go version only when in a go project subdirectory.
   typeset -g POWERLEVEL9K_GO_VERSION_PROJECT_ONLY=true
   # Custom icon.
-  # typeset -g POWERLEVEL9K_GO_VERSION_VISUAL_IDENTIFIER_EXPANSION='⭐'
+  typeset -g POWERLEVEL9K_GO_VERSION_VISUAL_IDENTIFIER_EXPANSION='⭐'
 
   #################[ rust_version: rustc version (https://www.rust-lang.org) ]##################
   # Rust version color.
@@ -1066,12 +1066,12 @@
   # typeset -g POWERLEVEL9K_RBENV_FOREGROUND=0
   # typeset -g POWERLEVEL9K_RBENV_BACKGROUND=1
   # Hide ruby version if it doesn't come from one of these sources.
-  typeset -g POWERLEVEL9K_RBENV_SOURCES=(shell local global)
+  # typeset -g POWERLEVEL9K_RBENV_SOURCES=(shell local global)
   # If set to false, hide ruby version if it's the same as global:
   # $(rbenv version-name) == $(rbenv global).
-  typeset -g POWERLEVEL9K_RBENV_PROMPT_ALWAYS_SHOW=false
+  # typeset -g POWERLEVEL9K_RBENV_PROMPT_ALWAYS_SHOW=false
   # If set to false, hide ruby version if it's equal to "system".
-  typeset -g POWERLEVEL9K_RBENV_SHOW_SYSTEM=true
+  # typeset -g POWERLEVEL9K_RBENV_SHOW_SYSTEM=true
   # Custom icon.
   # typeset -g POWERLEVEL9K_RBENV_VISUAL_IDENTIFIER_EXPANSION='⭐'
 
@@ -1106,9 +1106,9 @@
   # typeset -g POWERLEVEL9K_RVM_FOREGROUND=0
   # typeset -g POWERLEVEL9K_RVM_BACKGROUND=240
   # Don't show @gemset at the end.
-  typeset -g POWERLEVEL9K_RVM_SHOW_GEMSET=false
+  # typeset -g POWERLEVEL9K_RVM_SHOW_GEMSET=false
   # Don't show ruby- at the front.
-  typeset -g POWERLEVEL9K_RVM_SHOW_PREFIX=false
+  # typeset -g POWERLEVEL9K_RVM_SHOW_PREFIX=false
   # Custom icon.
   # typeset -g POWERLEVEL9K_RVM_VISUAL_IDENTIFIER_EXPANSION='⭐'
 

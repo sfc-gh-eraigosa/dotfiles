@@ -47,7 +47,9 @@ cask 'gpg-suite'
 brew 'azure-cli'
 
 brew 'gnupg'
-brew 'golang'
+brew 'goenv'
+# golang replaced by goenv: https://github.com/go-nv/goenv/blob/master/INSTALL.md
+# brew 'golang'
 
 # install pythons
 # for example install another python with : pyenv install 3.9.14
