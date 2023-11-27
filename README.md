@@ -1,6 +1,6 @@
 dotfiles
 ----
-![Docker Image CI](https://github.com/wenlock/dotfiles/workflows/Docker%20Image%20CI/badge.svg)
+[![Docker Image CI](https://github.com/sfc-gh-eraigosa/dotfiles/actions/workflows/docker-image.yml/badge.svg)](https://github.com/sfc-gh-eraigosa/dotfiles/actions/workflows/docker-image.yml)
 
 Ubuntu Bash/zsh Home profile setup, includes vimrc's profiles some git commands
 
