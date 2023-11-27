@@ -1,6 +1,6 @@
 #
 # Easy dockerfile to test my stuff
-FROM ubuntu:bionic
+FROM ubuntu:jammy
 LABEL Description="Wenlock dotfiles" Vendor="Wenlock Wizzard in a Blizzard LTD." Version="0.0.1" Maintainer="wenlock@github.com"
 
 # Lets setup Docker in Docker using https://github.com/microsoft/vscode-dev-containers/tree/master/script-library
@@ -21,7 +21,7 @@ ARG ENABLE_NONROOT_DOCKER="true"
 ARG SOURCE_SOCKET=/var/run/docker-host.sock
 ARG TARGET_SOCKET=/var/run/docker.sock
 RUN export DEBIAN_FRONTEND=noninteractive \
-    && apt-get update \
+    && apt-get update -y \
     && apt-get -y install --no-install-recommends \
        apt-transport-https \    
        apt-utils \
@@ -30,6 +30,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
        coreutils \
        curl \
        git \
+       gnupg \
        gnupg2 \
        gnupg-agent \
        gosu \
@@ -48,18 +49,35 @@ RUN export DEBIAN_FRONTEND=noninteractive \
     && rm /tmp/common-setup.sh \
     #
     # Install dockerd
-    && curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add - \
-    && add-apt-repository \
-        "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
-        $(lsb_release -cs) \
-        stable" \
-    && apt-get update \
+    && sudo install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+    && chmod a+r /etc/apt/keyrings/docker.gpg \
+    # Add the repository to Apt sources:
+    && echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+        $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+        tee /etc/apt/sources.list.d/docker.list > /dev/null \
+    && apt-get update
+    #
+    # old stuff 
+    # && curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add - \
+    # && add-apt-repository \
+    #     "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+    #     $(lsb_release -cs) \
+    #     stable" \
+    # && apt-get update \
+RUN export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install --no-install-recommends \
         docker-ce \
         docker-ce-cli \
         containerd.io \
+        docker-buildx-plugin \
+        docker-compose-plugin \
     #
     # Use Docker script from script library to set things up (installs: docker, docker-compose, sets up dind, and a bunch of other stuff)
+    && curl -SL https://github.com/docker/compose/releases/download/v2.23.3/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose \
+    && sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose \
+    && chmod +x /usr/local/bin/docker-compose \
     && curl -sSL $DOCKER_SCRIPT_SOURCE -o /tmp/docker-setup.sh \
     && ([ "${DOCKER_SCRIPT_SHA}" = "dev-mode" ] || (echo "${DOCKER_SCRIPT_SHA} */tmp/docker-setup.sh" | sha256sum -c -)) \
     && /bin/bash /tmp/docker-setup.sh "${ENABLE_NONROOT_DOCKER}" "${SOURCE_SOCKET}" "${TARGET_SOCKET}" "${USERNAME}" \
