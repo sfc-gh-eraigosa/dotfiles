@@ -189,6 +189,8 @@ fi
 
 if [ "$(uname -s)" = "Darwin" ]; then
     alias code="open '/Applications/Visual Studio Code.app'"
+else
+    alias code="/mnt/c/Program\ Files/Microsoft\ VS\ Code/Code.exe"
 fi
 
 # gpg
@@ -205,3 +207,12 @@ fi
 alias python=python3
 alias pip=pip3
 alias vault-login=vault-login.sh
+
+# docker windows
+if [ -d /mnt/c/Program\ Files/Docker/Docker/resources/bin/ ]; then
+   alias docker='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker.exe'
+   alias kubectl='/mnt/c/Program\ Files/Docker/Docker/resources/bin/kubectl.exe'
+   alias docker-compose='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker-compose.exe'
+fi
+alias python='python3'
+alias pip='pip3'

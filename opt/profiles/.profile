@@ -40,7 +40,9 @@ if [ `command -v facter` ]; then
 fi
 echo "|$id|$ip" > ~/.info
 # SSH BANNER -------------------------
-rm ~/.motd
+if [ -f ~/.motd ]; then 
+    rm ~/.motd
+fi
 owner="wenlock"
 owner=$(printf '%-40s' $owner)
 host=$(hostname | awk -F. '{print $1"."$2}')
@@ -105,4 +107,15 @@ export RBENV_VERSION=2.7.1
 test -e "/workspace/Human-Connection/.devcontainer/profile_devcontainer_alias.sh" && \
    source "/workspace/Human-Connection/.devcontainer/profile_devcontainer_alias.sh"
 
+if [ -d "/home/linuxbrew" ]; then
+    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
+# docker windows
+if [ -d "/mnt/c/Program\ Files/Docker/Docker" ]; then
+    alias docker='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker.exe'
+    alias docker-compose='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker-compose.exe'
+fi
+
+eval "$(ssh-agent -s)"
 export GPG_TTY=$(tty)
+/bin/bash -c zsh

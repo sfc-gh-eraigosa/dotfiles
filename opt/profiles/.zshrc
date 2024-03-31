@@ -1,7 +1,6 @@
+#!/bin/zsh
 # Path to your oh-my-zsh installation.
 
-autoload -Uz compinit
-compinit
 
 # Pull the latest repos
 if [ -f "${HOME}/.gitrepos" ] ; then
@@ -11,7 +10,7 @@ if [ -f "${HOME}/.gitrepos" ] ; then
   "${HOME}/.gitrepos"
 fi
 
-. ~/.profile
+#. ~/.profile
 if [ -f ~/.bash_aliases ]; then
     . ~/.bash_aliases
 fi
@@ -195,3 +194,5 @@ if [ -f ~/.secrets.env ] ; then
   source ~/.secrets.env
 fi
 
+# autoload -Uz compinit
+# compinit
