@@ -10,8 +10,15 @@ if [[ "$(uname -r | awk -F'-' '{print $3}')" = "Microsoft" ]] ; then
     alias go='go.exe'
 fi
 
+# requires brew install goenv
+goenv install latest --skip-existing
+eval "$(goenv init -)"
+
+goenv shell $(goenv versions --bare|tail -1)
+go version
+
 # export GOENV_ROOT="$HOME/.goenv"
-export PATH=$GOENV_ROOT/bin:$PATH
-eval "$(go env init -)"
-export PATH="$GOROOT/bin:$PATH"
-export PATH="$PATH:$GOPATH/bin"
+#export PATH=$GOENV_ROOT/bin:$PATH
+#eval "$(go env init -)"
+#export PATH="$GOROOT/bin:$PATH"
+#export PATH="$PATH:$GOPATH/bin"
