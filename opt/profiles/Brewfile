@@ -59,4 +59,5 @@ brew 'pyenv'
 
 # setup vault
 brew 'vault'
+brew 'kubeconform'
 
