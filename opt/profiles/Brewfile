@@ -1,3 +1,5 @@
+# Setup local dev env
+# Run: brew bundle
 # Helpers
 tap 'github/bootstrap'
 tap 'nektos/tap'
@@ -12,7 +14,6 @@ brew 'corkscrew'
 brew 'docbook'
 brew 'gdbm'
 brew 'htop'
-brew 'jq'
 brew 'lastpass-cli'
 brew 'libassuan'
 brew 'libgpg-error'
@@ -60,4 +61,6 @@ brew 'pyenv'
 # setup vault
 brew 'vault'
 brew 'kubeconform'
+brew 'jsonnet'
+brew 'jq'
 

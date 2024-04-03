@@ -196,3 +196,7 @@ fi
 
 # autoload -Uz compinit
 # compinit
+
+# Created by `pipx` on 2024-04-03 04:50:34
+export PATH=${PATH}:${HOME}/.local/bin
+eval "$(direnv hook zsh)"
