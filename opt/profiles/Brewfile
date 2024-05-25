@@ -65,3 +65,4 @@ brew 'jsonnet'
 brew 'jq'
 
 cask 'snowflake-snowsql'
+brew 'snowflake-snowsql'

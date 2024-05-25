@@ -216,3 +216,9 @@ if [ -d /mnt/c/Program\ Files/Docker/Docker/resources/bin/ ]; then
 fi
 alias python='python3'
 alias pip='pip3'
+
+# snowsql for mac
+# https://docs.snowflake.com/en/user-guide/snowsql-install-config
+if [ -f /Applications/SnowSQL.app/Contents/MacOS/snowsql ]; then
+    alias snowsql=/Applications/SnowSQL.app/Contents/MacOS/snowsql
+fi
