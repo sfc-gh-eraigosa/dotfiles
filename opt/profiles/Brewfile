@@ -64,3 +64,4 @@ brew 'kubeconform'
 brew 'jsonnet'
 brew 'jq'
 
+cask 'snowflake-snowsql'
