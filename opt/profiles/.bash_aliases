@@ -222,3 +222,6 @@ alias pip='pip3'
 if [ -f /Applications/SnowSQL.app/Contents/MacOS/snowsql ]; then
     alias snowsql=/Applications/SnowSQL.app/Contents/MacOS/snowsql
 fi
+
+# install snow cli
+snow --version || ( pip3 install --upgrade pip && python -m pip install snowflake-cli-labs )
