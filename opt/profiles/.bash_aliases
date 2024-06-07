@@ -225,3 +225,4 @@ fi
 
 # install snow cli
 snow --version || ( pip3 install --upgrade pip && python -m pip install snowflake-cli-labs )
+export GOPRIVATE=github.com/snowflakedb/*
