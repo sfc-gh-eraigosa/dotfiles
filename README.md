@@ -34,13 +34,19 @@ install
 5.  If you plan to use [zsh](opt/docs/zsh_andtools.md) as your default shell, take the time to setup [powerline fonts](opt/docs/powerline-fonts.md).
 
   ```sh
-    pip install --user git+git://github.com/Lokaltog/powerline
-    if [ -d ~/git/powerline-fonts ] ; then
-      cd ~/git/powerline-fonts
-      find . -name \*.otf|xargs -i cp "{}" ~/.fonts/
-      fc-cache -vf ~/.fonts
-    fi
+  git clone https://github.com/powerline/powerline ./powerline
+  pip install --user ./powerline/
+  mkdir -p ~/.fonts
+  cd ~/git/powerline-fonts/
+  find . -name \*.otf|xargs -i cp "{}" ~/.fonts/
+  find . -name \*.otf|xargs -i cp "{}" ~/.fonts/
+  fc-cache -vf ~/.fonts
   ```
+6. Set your default shell to `zsh`
+  ```
+  sudo chsh -s $(which zsh) $(whoami)
+  ```
+  Exit and restart the shell.
 
 alias and commands
 ----
