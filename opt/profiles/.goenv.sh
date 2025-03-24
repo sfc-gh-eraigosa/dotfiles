@@ -3,6 +3,9 @@
 # unset GOROOT
 # https://golang.org/doc/gopath_code.html#GOPATH
 # export PATH=$PATH:$(go env GOPATH)/bin
+if [[ -d $HOME/.goenv ]]; then
+    export PATH=$HOME/.goenv/bin:$PATH
+fi
 
 export GOENV_ROOT=$HOME/go
 if [[ "$(uname -r | awk -F'-' '{print $3}')" = "Microsoft" ]] ; then
