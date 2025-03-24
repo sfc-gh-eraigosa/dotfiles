@@ -224,5 +224,6 @@ if [ -f /Applications/SnowSQL.app/Contents/MacOS/snowsql ]; then
 fi
 
 # install snow cli
-snow --version || ( pip3 install --upgrade pip && python -m pip install snowflake-cli-labs )
+# TODO: restore snow at some point
+# snow --version || ( pip3 install --upgrade pip && python -m pip install snowflake-cli-labs )
 export GOPRIVATE=github.com/snowflakedb/*
