@@ -1,6 +1,5 @@
 #!/bin/bash
 #
-
 function install_zsh_centos7() {
     sudo yum update -y
     sudo yum install -y git make ncurses-devel gcc autoconf man
@@ -38,29 +37,38 @@ for file in ".profile" ".zshrc" ".bash_logout" ".bashrc"; do
   ln -s "${BASE_DIR}/opt/profiles/${file}" "${HOME}/${file}"
 done 
 
-if command -v apt-get &> /dev/null; then
-  sudo apt-get install -y \
-    corkscrew \
-    htop \
-    iputils-ping \
-    jq \
-    lsof \
-    net-tools \
-    psmisc \
-    zsh
+NIX_MANAGED_FILE="$HOME/.config/nix_managed"
+
+if [ -f "$NIX_MANAGED_FILE" ]; then
+  echo "Skipping apt-get because the env is managed with nix, found $NIX_MANAGED_FILE"
+else
+  if command -v apt-get &> /dev/null; then
+    sudo apt-get install -y \
+      corkscrew \
+      htop \
+      iputils-ping \
+      jq \
+      lsof \
+      net-tools \
+      psmisc \
+      zsh
+  fi
 fi
 
-
 # yum script
-if command -v yum &> /dev/null; then
-  sudo yum install -y \
-    htop \
-    jq \
-    lsof \
-    net-tools \
-    psmisc \
+if [ -f "$NIX_MANAGED_FILE" ]; then
+  echo "Skipping yum because the env is managed with nix, found $NIX_MANAGED_FILE"
+else
+  if command -v yum &> /dev/null; then
+    sudo yum install -y \
+      htop \
+      jq \
+      lsof \
+      net-tools \
+      psmisc \
 
-  install_zsh_centos7
+    install_zsh_centos7
+  fi
 fi
 
 # only setup these scripts when docker is installed
