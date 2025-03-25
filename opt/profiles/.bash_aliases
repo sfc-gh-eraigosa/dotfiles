@@ -2,7 +2,6 @@
 # alias files
 #
 
-
 # enable color support of ls and also add handy aliases
 if [ -x /usr/bin/dircolors ]; then
     test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
@@ -28,7 +27,6 @@ alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo
 # You may want to put all your additions into a separate file like
 # ~/.bash_aliases, instead of adding them here directly.
 # See /usr/share/doc/bash-doc/examples in the bash-doc package.
-
 
 alias dockerup='bash ~/opt/bin/docker_up.sh'
 alias novassh='function nova_ssh { ssh-keygen -f ~/.ssh/known_hosts -R $1;ssh -i ~/.ssh/nova-USWest-AZ3.pem -l ubuntu $1;};nova_ssh'
@@ -70,8 +68,6 @@ function startunity {
   exec gnome-session-wrapper ubuntu;
 };
 fi
-
-
 
 # setup a persistent tunnel
 alias tunnelp='sudo openvpn --mktun --dev tun0'
@@ -214,8 +210,6 @@ if [ -d /mnt/c/Program\ Files/Docker/Docker/resources/bin/ ]; then
    alias kubectl='/mnt/c/Program\ Files/Docker/Docker/resources/bin/kubectl.exe'
    alias docker-compose='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker-compose.exe'
 fi
-alias python='python3'
-alias pip='pip3'
 
 # snowsql for mac
 # https://docs.snowflake.com/en/user-guide/snowsql-install-config
@@ -226,4 +220,4 @@ fi
 # install snow cli
 # TODO: restore snow at some point
 # snow --version || ( pip3 install --upgrade pip && python -m pip install snowflake-cli-labs )
-export GOPRIVATE=github.com/snowflakedb/*
+export GOPRIVATE="github.com/snowflakedb/*"

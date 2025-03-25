@@ -37,7 +37,7 @@ for file in ".profile" ".zshrc" ".bash_logout" ".bashrc"; do
   ln -s "${BASE_DIR}/opt/profiles/${file}" "${HOME}/${file}"
 done 
 
-NIX_MANAGED_FILE="$HOME/.config/nix_managed"
+NIX_MANAGED_FILE="${HOME}/.config/nix_managed"
 
 if [ -f "$NIX_MANAGED_FILE" ]; then
   echo "Skipping apt-get because the env is managed with nix, found $NIX_MANAGED_FILE"
