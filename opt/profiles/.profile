@@ -122,5 +122,3 @@ export GPG_TTY=$(tty)
 
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 alias bazel='bazelisk'
-export PATH="$HOME/.goenv/bin:$PATH"
-eval "$(goenv init -)"
