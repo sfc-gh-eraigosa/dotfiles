@@ -216,3 +216,6 @@ fi
 unset __conda_setup
 # <<< conda initialize <<<
 
+export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+eval "$(sf aliases)"
+export PATH="$PATH:/Users/eraigosa/go/bin"

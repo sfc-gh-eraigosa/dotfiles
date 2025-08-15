@@ -218,6 +218,6 @@ if [ -f /Applications/SnowSQL.app/Contents/MacOS/snowsql ]; then
 fi
 
 # install snow cli
-# TODO: restore snow at some point
-# snow --version || ( pip3 install --upgrade pip && python -m pip install snowflake-cli-labs )
-export GOPRIVATE="github.com/snowflakedb/*"
+snow --version || ( pip3 install --upgrade pip && python -m pip install snowflake-cli-labs )
+export GOPRIVATE=github.com/snowflakedb/*
+alias cursor='/Applications/Cursor.app/Contents/MacOS/Cursor'

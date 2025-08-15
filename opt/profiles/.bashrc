@@ -175,3 +175,5 @@ export NVM_DIR="$HOME/.nvm"
 if [ -f /home/linuxbrew/.linuxbrew/bin/brew ] ; then
     eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 fi
+eval "$(sf aliases)"
+

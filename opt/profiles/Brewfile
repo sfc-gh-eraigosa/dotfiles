@@ -40,8 +40,11 @@ brew 'git-lfs'
 brew 'gh'
 
 # bazel
-brew 'bazel'
 brew 'buildifier'
+brew 'bazelisk'
+# brew 'protoc-gen-go'
+# brew 'protoc-gen-go-grpc'
+# brew 'mockery'
 
 # cask "docker"
 cask 'gpg-suite'
@@ -63,9 +66,12 @@ brew 'vault'
 brew 'kubeconform'
 brew 'jsonnet'
 brew 'jq'
+brew 'zstd'
+
+# snowflake tools
+# brew '1password-cli' # had to install manually
 
 cask 'snowflake-snowsql'
-brew 'bazelisk'
 brew 'coreutils'
 brew 'lcov'
 brew 'just'
@@ -74,6 +80,15 @@ brew 'opa'
 brew 'azure-cli'
 brew 'grpcui'
 brew 'grpcurl'
-brew 'golangci-lint'
 brew 'kind'
+brew 'awscli'
 
+# https://github.com/snowflakedb/image-advisor
+# brew tap snowflakedb/prodsec git@github.com:snowflakedb/homebrew-prodsec.git
+tap 'snowflakedb/homebrew-prodsec'
+brew 'image-advisor'
+
+brew 'bufbuild/buf/buf'
+
+tap 'snowflakedb/homebrew-cloudeng'
+brew 'snowflakedb/homebrew-cloudeng/sanssh'

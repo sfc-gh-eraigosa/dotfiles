@@ -119,3 +119,8 @@ fi
 eval "$(ssh-agent -s)"
 export GPG_TTY=$(tty)
 /bin/bash -c zsh
+
+export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+alias bazel='bazelisk'
+export PATH="$HOME/.goenv/bin:$PATH"
+eval "$(goenv init -)"
