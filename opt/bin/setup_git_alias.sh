@@ -1230,8 +1230,15 @@ function fgit-ssl {
 if [ -f "~/.proxy" ]  ; then
     . ~/.proxy
 fi
+
+# Detect if we're in VSCode/Cursor terminal
+if [[ \"\$TERM_PROGRAM\" == \"vscode\" ]] || [[ \"\$TERM_PROGRAM\" == \"cursor\" ]] || [[ -n \"\$VSCODE_PID\" ]] || [[ -n \"\$CURSOR_PID\" ]]; then
+    export EDITOR_TERMINAL=true
+else
+    export EDITOR_TERMINAL=false
+fi
 # disable till we find a workaround to bug in vagrant
-if [[ ! \"\$(whoami)\" = \"vagrant\" ]] ; then
+if [[ ! \"\$(whoami)\" = \"vagrant\" ]] && [[ \"\$EDITOR_TERMINAL\" = \"false\" ]] ; then
     echo "commands available : \$(fgit-commands)"
 fi
 

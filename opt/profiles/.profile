@@ -33,24 +33,34 @@ if [ -d "${HOME}/.cabal/bin" ] ; then
 fi
 
 force_color_prompt=yes
-# Info file
-id=$(hostname | awk -F. '{print $2}')
-if [ `command -v facter` ]; then
-  ip=$(facter ipaddress)
+# Detect if we're in VSCode/Cursor terminal
+if [[ "$TERM_PROGRAM" == "vscode" ]] || [[ "$TERM_PROGRAM" == "cursor" ]] || [[ -n "$VSCODE_PID" ]] || [[ -n "$CURSOR_PID" ]]; then
+    export EDITOR_TERMINAL=true
+else
+    export EDITOR_TERMINAL=false
 fi
-echo "|$id|$ip" > ~/.info
-# SSH BANNER -------------------------
-if [ -f ~/.motd ]; then 
-    rm ~/.motd
+
+# Skip expensive banner operations in editor terminals
+if [[ "$EDITOR_TERMINAL" == "false" ]]; then
+    # Info file
+    id=$(hostname | awk -F. '{print $2}')
+    if [ `command -v facter` ]; then
+      ip=$(facter ipaddress)
+    fi
+    echo "|$id|$ip" > ~/.info
+    # SSH BANNER -------------------------
+    if [ -f ~/.motd ]; then 
+        rm ~/.motd
+    fi
+    owner="wenlock"
+    owner=$(printf '%-40s' $owner)
+    host=$(hostname | awk -F. '{print $1"."$2}')
+    host=$(printf '%10s' $host)
+    echo -e "\033[1;37m┌─────────────────────────────────────────────────────────────┐" > ~/.motd
+    echo -e "\033[1;37m│ \033[01;31m$host \033[01;32mOWNED BY $owner\033[1;37m│" >> ~/.motd
+    echo -e "\033[1;37m└─────────────────────────────────────────────────────────────┘\033[00m" >> ~/.motd
+    cat ~/.motd
 fi
-owner="wenlock"
-owner=$(printf '%-40s' $owner)
-host=$(hostname | awk -F. '{print $1"."$2}')
-host=$(printf '%10s' $host)
-echo -e "\033[1;37m┌─────────────────────────────────────────────────────────────┐" > ~/.motd
-echo -e "\033[1;37m│ \033[01;31m$host \033[01;32mOWNED BY $owner\033[1;37m│" >> ~/.motd
-echo -e "\033[1;37m└─────────────────────────────────────────────────────────────┘\033[00m" >> ~/.motd
-cat ~/.motd
 
 if [ -f "${HOME}/.custom_profile" ] ; then
   . "${HOME}/.custom_profile"
@@ -116,9 +126,12 @@ if [ -d "/mnt/c/Program\ Files/Docker/Docker" ]; then
     alias docker-compose='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker-compose.exe'
 fi
 
-eval "$(ssh-agent -s)"
-export GPG_TTY=$(tty)
-/bin/bash -c zsh
+# Skip SSH agent and shell launching in editor terminals
+if [[ "$EDITOR_TERMINAL" == "false" ]]; then
+    eval "$(ssh-agent -s)"
+    export GPG_TTY=$(tty)
+    /bin/bash -c zsh
+fi
 
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 alias bazel='bazelisk'

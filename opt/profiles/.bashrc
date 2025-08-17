@@ -1,8 +1,19 @@
 # ~/.bashrc: executed by bash(1) for non-login shells.
-echo executing bashrc
 
-# Pull the latest repos
-if [ -f "${HOME}/.gitrepos" ] ; then
+# Detect if we're in VSCode/Cursor terminal
+if [[ "$TERM_PROGRAM" == "vscode" ]] || [[ "$TERM_PROGRAM" == "cursor" ]] || [[ -n "$VSCODE_PID" ]] || [[ -n "$CURSOR_PID" ]]; then
+    export EDITOR_TERMINAL=true
+else
+    export EDITOR_TERMINAL=false
+fi
+
+# Skip debug output in editor terminals
+if [[ "$EDITOR_TERMINAL" == "false" ]]; then
+    echo executing bashrc
+fi
+
+# Pull the latest repos (skip in editor terminals for faster startup)
+if [[ "$EDITOR_TERMINAL" == "false" ]] && [ -f "${HOME}/.gitrepos" ] ; then
   cd "${HOME}"
   [ -d "${HOME}/.git" ] && \
     git pull origin $(git branch | grep '*'|awk '{print $2}')
@@ -150,12 +161,18 @@ if [[ "$OSTYPE" == "darwin"* ]] ; then
     defaults write com.microsoft.VSCode ApplePressAndHoldEnabled -bool false
 fi
 
-# pyenv setup
+# pyenv setup with conditional loading
 if command -v pyenv 1>/dev/null 2>&1; then
-    export PATH="$PYENV_ROOT/bin:$PATH"
     export PYENV_ROOT="$HOME/.pyenv"
-    command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
-    eval "$(pyenv init -)"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    
+    if [[ "$EDITOR_TERMINAL" == "true" ]]; then
+        # Fast loading - just add shims to PATH
+        export PATH="$PYENV_ROOT/shims:$PATH"
+    else
+        # Full pyenv initialization
+        eval "$(pyenv init -)"
+    fi
 fi
 
 # source any secrets
@@ -168,12 +185,25 @@ test -f $HOME/.rbenv/shims/gh && $HOME/.rbenv/shims/gh
 # /usr/local/bin
 export PATH="$PATH:/usr/local/bin"
 
+# NVM setup with conditional loading for performance
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+if [[ "$EDITOR_TERMINAL" == "true" ]]; then
+    # Fast loading - just add node to PATH if available
+    [ -d "$NVM_DIR/versions/node" ] && export PATH="$NVM_DIR/versions/node/$(ls $NVM_DIR/versions/node | tail -1)/bin:$PATH"
+else
+    # Full NVM initialization
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+    [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+fi
 
 if [ -f /home/linuxbrew/.linuxbrew/bin/brew ] ; then
     eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 fi
-eval "$(sf aliases)"
+
+# Load SF aliases conditionally
+if command -v sf &> /dev/null; then
+  if [[ "$EDITOR_TERMINAL" == "false" ]]; then
+    eval "$(sf aliases)"
+  fi
+fi
 

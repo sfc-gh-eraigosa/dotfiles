@@ -217,7 +217,9 @@ if [ -f /Applications/SnowSQL.app/Contents/MacOS/snowsql ]; then
     alias snowsql=/Applications/SnowSQL.app/Contents/MacOS/snowsql
 fi
 
-# install snow cli
-snow --version || ( pip3 install --upgrade pip && python -m pip install snowflake-cli-labs )
+# install snow cli (skip version check in editor terminals to avoid slowdown)
+if [[ "$EDITOR_TERMINAL" != "true" ]]; then
+    snow --version || ( pip3 install --upgrade pip && python -m pip install snowflake-cli-labs )
+fi
 export GOPRIVATE=github.com/snowflakedb/*
 alias cursor='/Applications/Cursor.app/Contents/MacOS/Cursor'

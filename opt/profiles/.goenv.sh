@@ -1,4 +1,12 @@
 # https://golang.org/doc/gopath_code.html#GOPATH
+
+# Detect if we're in VSCode/Cursor terminal
+if [[ "$TERM_PROGRAM" == "vscode" ]] || [[ "$TERM_PROGRAM" == "cursor" ]] || [[ -n "$VSCODE_PID" ]] || [[ -n "$CURSOR_PID" ]]; then
+    export EDITOR_TERMINAL=true
+else
+    export EDITOR_TERMINAL=false
+fi
+
 if [[ -d $HOME/.goenv ]]; then
     export PATH=$HOME/.goenv/bin:$PATH
 fi
@@ -10,7 +18,9 @@ if [[ "$(uname -r | awk -F'-' '{print $3}')" = "Microsoft" ]] ; then
 fi
 
 # requires brew install goenv
-goenv install latest --skip-existing
+if [[ "$EDITOR_TERMINAL" == "false" ]] || ! command -v goenv >/dev/null 2>&1; then
+    goenv install latest --skip-existing
+fi
 eval "$(goenv init -)"
 
 # set GOENV_VERSION
@@ -20,6 +30,11 @@ goenv shell $(goenv versions --bare|tail -1)
 export GO_BINARY=$(goenv which go)
 export GO_BINPATH=$(dirname ${GO_BINARY})
 export PATH=${GO_BINPATH}:${PATH}
+
+if [[ "$EDITOR_TERMINAL" == "true" ]]; then
+    return
+fi
+
 echo "GOENV_VERSION => ${GOENV_VERSION}"
 echo "GO_BINARY => ${GO_BINARY}"
 echo "GO_BINPATH => ${GO_BINPATH}"
@@ -54,6 +69,8 @@ if command -v go >/dev/null 2>&1; then
 else
     echo "✗ go is not installed properly"
 fi
+
+export GOBIN=$(go env -json | jq -r '.GOROOT')/bin
 
 go version
 which go

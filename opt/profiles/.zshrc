@@ -1,13 +1,22 @@
 #!/bin/zsh
 # Path to your oh-my-zsh installation.
 
+# Detect if we're in VSCode/Cursor terminal
+if [[ "$TERM_PROGRAM" == "vscode" ]] || [[ "$TERM_PROGRAM" == "cursor" ]] || [[ -n "$VSCODE_PID" ]] || [[ -n "$CURSOR_PID" ]]; then
+    export EDITOR_TERMINAL=true
+else
+    export EDITOR_TERMINAL=false
+fi
 
-# Pull the latest repos
-if [ -f "${HOME}/.gitrepos" ] ; then
-  cd "${HOME}"
-  [ -d "${HOME}/.git" ] && \
-    git pull origin $(git branch | grep '*'|awk '{print $2}')
-  "${HOME}/.gitrepos"
+# Skip expensive operations in editor terminals for faster startup
+if [[ "$EDITOR_TERMINAL" == "false" ]]; then
+    # Pull the latest repos (only in regular terminals)
+    if [ -f "${HOME}/.gitrepos" ] ; then
+      cd "${HOME}"
+      [ -d "${HOME}/.git" ] && \
+        git pull origin $(git branch | grep '*'|awk '{print $2}')
+      "${HOME}/.gitrepos"
+    fi
 fi
 
 #. ~/.profile
@@ -97,7 +106,8 @@ ZSH_THEME="agnoster"
 plugins=(git docker golang zsh-completions kubectl)
 
 
-if [ ! -d "${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions" ] ; then
+# Only clone zsh-completions if not in editor terminal (expensive git operation)
+if [[ "$EDITOR_TERMINAL" == "false" ]] && [ ! -d "${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions" ] ; then
   git clone https://github.com/zsh-users/zsh-completions ${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions
 fi
 
@@ -146,21 +156,35 @@ fi
 
 export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
 
-# setup any missing brew packages from the $HOME/Brewfile
-if [ "$(uname -s)" = "Darwin" ]; then
+# setup any missing brew packages from the $HOME/Brewfile (skip in editor terminals)
+if [[ "$EDITOR_TERMINAL" == "false" ]] && [ "$(uname -s)" = "Darwin" ]; then
     _cwd="$(pwd)"
     brew bundle check || brew bundle &
 fi
 
+# Initialize nodenv with lazy loading for better performance
 if command -v nodenv &> /dev/null; then
-  eval "$(nodenv init -)"
+  if [[ "$EDITOR_TERMINAL" == "true" ]]; then
+    # Fast loading in editor terminals - just add to PATH
+    export PATH="$HOME/.nodenv/shims:$PATH"
+  else
+    # Full initialization in regular terminals
+    eval "$(nodenv init -)"
+  fi
 fi
 source  $HOME/git/powerlevel10k/powerlevel10k.zsh-theme
 
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
+# Lazy load SDKMAN for better performance in editor terminals
 if [ -d "${HOME}/.sdkman" ] ; then
   export SDKMAN_DIR="${HOME}/.sdkman"
-  [[ -s "${HOME}/.sdkman/bin/sdkman-init.sh" ]] && source "${HOME}/.sdkman/bin/sdkman-init.sh"
+  if [[ "$EDITOR_TERMINAL" == "true" ]]; then
+    # Fast loading - just set up environment
+    export PATH="$SDKMAN_DIR/bin:$PATH"
+  else
+    # Full initialization in regular terminals
+    [[ -s "${HOME}/.sdkman/bin/sdkman-init.sh" ]] && source "${HOME}/.sdkman/bin/sdkman-init.sh"
+  fi
 fi
 set -o vi
 unset GIT_URL
@@ -171,9 +195,15 @@ test -f ${HOME}/.rbenv/shims/gh && rm -f ${HOME}/.rbenv/shims/gh
 PATH=$PATH:$HOME/.nodenv/shims
 
 #
-# GITHUB_TOKEN setup from stored credential
+# GITHUB_TOKEN setup from stored credential (skip expensive git credential call in editor terminals)
 if [[ ! -f .no_github_token ]] ; then
-  export GITHUB_TOKEN=${GITHUB_TOKEN:-$( printf "protocol=https\\nhost=github.com\\npath=github\\n" | git credential fill | awk -F'=' '/password=/{print $2}')}
+  if [[ "$EDITOR_TERMINAL" == "true" ]] && [[ -n "$GITHUB_TOKEN" ]]; then
+    # Use existing GITHUB_TOKEN if available
+    export GITHUB_TOKEN
+  elif [[ "$EDITOR_TERMINAL" == "false" ]]; then
+    # Only fetch credentials in regular terminals
+    export GITHUB_TOKEN=${GITHUB_TOKEN:-$( printf "protocol=https\\nhost=github.com\\npath=github\\n" | git credential fill | awk -F'=' '/password=/{print $2}')}
+  fi
 fi
 
 test -n "$(alias ruby)" && unalias ruby
@@ -199,23 +229,44 @@ fi
 
 # Created by `pipx` on 2024-04-03 04:50:34
 export PATH=${PATH}:${HOME}/.local/bin
-eval "$(direnv hook zsh)"
+# Load direnv conditionally for performance
+if command -v direnv &> /dev/null; then
+  if [[ "$EDITOR_TERMINAL" == "true" ]]; then
+    # Simplified direnv setup for editor terminals
+    export _DIRENV_HOOK=1
+  else
+    # Full direnv initialization
+    eval "$(direnv hook zsh)"
+  fi
+fi
 
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
-__conda_setup="$('/opt/homebrew/Caskroom/miniconda/base/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
-if [ $? -eq 0 ]; then
-    eval "$__conda_setup"
+# Conditional conda loading for better performance
+if [[ "$EDITOR_TERMINAL" == "true" ]]; then
+    # Fast loading - just add conda to PATH
+    export PATH="/opt/homebrew/Caskroom/miniconda/base/bin:$PATH"
 else
-    if [ -f "/opt/homebrew/Caskroom/miniconda/base/etc/profile.d/conda.sh" ]; then
-        . "/opt/homebrew/Caskroom/miniconda/base/etc/profile.d/conda.sh"
+    # Full conda initialization for regular terminals
+    __conda_setup="$('/opt/homebrew/Caskroom/miniconda/base/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
+    if [ $? -eq 0 ]; then
+        eval "$__conda_setup"
     else
-        export PATH="/opt/homebrew/Caskroom/miniconda/base/bin:$PATH"
+        if [ -f "/opt/homebrew/Caskroom/miniconda/base/etc/profile.d/conda.sh" ]; then
+            . "/opt/homebrew/Caskroom/miniconda/base/etc/profile.d/conda.sh"
+        else
+            export PATH="/opt/homebrew/Caskroom/miniconda/base/bin:$PATH"
+        fi
     fi
+    unset __conda_setup
 fi
-unset __conda_setup
 # <<< conda initialize <<<
 
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
-eval "$(sf aliases)"
+# Load SF aliases conditionally
+if command -v sf &> /dev/null; then
+  if [[ "$EDITOR_TERMINAL" == "false" ]]; then
+    eval "$(sf aliases)"
+  fi
+fi
 export PATH="$PATH:/Users/eraigosa/go/bin"
