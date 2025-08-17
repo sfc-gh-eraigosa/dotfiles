@@ -227,13 +227,70 @@ alias cursor='/Applications/Cursor.app/Contents/MacOS/Cursor'
 function sfhelp() {
     echo "Help with sf ws commands:"
     cat <<'EOF'
-     sf ws create --os rocky9 --name gco2 --customization off
-     sf ws create --os rocky9 --name gco2
-     sf ws code gco --dir /home/eraigosa/github/snowflakedb/release-orchestration-service --ide cursor
+    sflist - list all workspaces, alias for "sf ws ls"
+
+    sfssh - ssh to the workspace, alias for "sf ws ssh gco2"
+
+    sfcreate - create a new workspace, alias for "sf ws create --os rocky9 --name gco2 --customization off"
+       usage: sfcreate [-nc] [-nr] [<name>]
+         -nc - no customization, default is customization on
+         -nr - no rocky9, default is rocky9
+         <name> - name of the workspace, default is gco2
+
+    sfcode - code editor for the workspace, alias for "sf ws code gco2 --dir /home/eraigosa/github/snowflakedb/release-orchestration-service --ide cursor"
+       usage: sfcode [-d <directory>] [<name>]
+         -d <directory> - directory to open in the code editor, default is ~/github/snowflakedb/release-orchestration-service
+         <name> - name of the workspace, default is gco2
+     
 EOF
 }
-alias sfcreate='sf ws create --os rocky9 --name'
+
+function sfcode() {
+    local NAME="gco2"
+    local DIR=~/github/snowflakedb/release-orchestration-service
+    local NO_CUSTOMIZATION=
+    local ROCKY9=--os rocky9
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -d)
+                DIR="$2"
+                shift 2
+                ;;
+            *)
+                NAME="$1"
+                shift
+                ;;
+        esac
+    done
+    
+    sf ws code ${NAME} --dir ${DIR} --ide cursor
+}
+
+function sfcreate() {
+    local NAME="gco2"
+    local NO_CUSTOMIZATION=
+    local ROCKY9=--os rocky9
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -nr)
+                ROCKY9=
+                shift
+                ;;
+            -nc)
+                NO_CUSTOMIZATION=--customization off
+                shift
+                ;;
+            *)
+                NAME="$1"
+                shift
+                ;;
+        esac
+    done
+    
+    sf ws create ${ROCKY9} --name ${NAME} ${NO_CUSTOMIZATION}
+}
+
 alias sfssh='sf ws ssh'
-alias sfcode='sf ws code --dir ~/github/snowflakedb/release-orchestration-service --ide cursor'
 alias sfls='sf ws ls'
-alias sfcreateno='sf ws create --os rocky9 --customization off --name'
