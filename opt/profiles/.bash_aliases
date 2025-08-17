@@ -232,7 +232,8 @@ function sfhelp() {
      sf ws code gco --dir /home/eraigosa/github/snowflakedb/release-orchestration-service --ide cursor
 EOF
 }
-alias sfwscreate='sf ws create --os rocky9 --customization off --name'
+alias sfcreate='sf ws create --os rocky9 --name'
 alias sfssh='sf ws ssh'
 alias sfcode='sf ws code --dir ~/github/snowflakedb/release-orchestration-service --ide cursor'
 alias sfls='sf ws ls'
+alias sfcreateno='sf ws create --os rocky9 --customization off --name'
