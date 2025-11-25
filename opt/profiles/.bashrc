@@ -7,18 +7,52 @@ else
     export EDITOR_TERMINAL=false
 fi
 
+# Daily maintenance (bash) - align with zsh once-per-day behavior
+DOTFILES_DAILY_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles"
+DOTFILES_DAILY_STAMP_FILE="${DOTFILES_DAILY_CACHE_DIR}/daily_maintenance.stamp"
+dotfiles_should_run_daily() {
+    [ -d "${DOTFILES_DAILY_CACHE_DIR}" ] || mkdir -p "${DOTFILES_DAILY_CACHE_DIR}"
+    [ -f "${DOTFILES_DAILY_STAMP_FILE}" ] || return 0
+    local now mtime
+    now=$(date +%s)
+    if mtime=$(stat -f %m "${DOTFILES_DAILY_STAMP_FILE}" 2>/dev/null); then
+        :
+    else
+        mtime=$(stat -c %Y "${DOTFILES_DAILY_STAMP_FILE}" 2>/dev/null || echo 0)
+    fi
+    [ $(( now - mtime )) -ge 86400 ]
+}
+dotfiles_touch_daily() {
+    : > "${DOTFILES_DAILY_STAMP_FILE}" 2>/dev/null || touch "${DOTFILES_DAILY_STAMP_FILE}" 2>/dev/null
+}
+dotfiles_run_daily_maintenance() {
+    # Pull the latest repos
+    if [ -f "${HOME}/.gitrepos" ] ; then
+      (
+        cd "${HOME}" || exit 0
+        [ -d "${HOME}/.git" ] && \
+          git pull origin "$(git branch | grep '*' | awk '{print $2}')" 2>/dev/null
+        "${HOME}/.gitrepos"
+      )
+    fi
+    # Load SF aliases (can be slow)
+    if command -v sf >/dev/null 2>&1 ; then
+      eval "$(sf aliases)"
+    fi
+}
+if [[ "$EDITOR_TERMINAL" == "false" ]]; then
+    if dotfiles_should_run_daily; then
+        dotfiles_touch_daily
+        dotfiles_run_daily_maintenance &
+    fi
+fi
+
 # Skip debug output in editor terminals
 if [[ "$EDITOR_TERMINAL" == "false" ]]; then
     echo executing bashrc
 fi
 
-# Pull the latest repos (skip in editor terminals for faster startup)
-if [[ "$EDITOR_TERMINAL" == "false" ]] && [ -f "${HOME}/.gitrepos" ] ; then
-  cd "${HOME}"
-  [ -d "${HOME}/.git" ] && \
-    git pull origin $(git branch | grep '*'|awk '{print $2}')
-  "${HOME}/.gitrepos"
-fi
+# Expensive repo update moved to daily maintenance above
 
 if [ -f ~/.bash_aliases ]; then
     . ~/.bash_aliases
@@ -200,10 +234,5 @@ if [ -f /home/linuxbrew/.linuxbrew/bin/brew ] ; then
     eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 fi
 
-# Load SF aliases conditionally
-if command -v sf &> /dev/null; then
-  if [[ "$EDITOR_TERMINAL" == "false" ]]; then
-    eval "$(sf aliases)"
-  fi
-fi
+# SF aliases load moved to daily maintenance above
 

@@ -66,6 +66,9 @@ brew 'vault'
 brew 'kubeconform'
 brew 'jsonnet'
 brew 'jq'
+brew 'jc'
+brew 'fx'
+
 brew 'zstd'
 
 # snowflake tools
@@ -92,3 +95,16 @@ brew 'bufbuild/buf/buf'
 
 tap 'snowflakedb/homebrew-cloudeng'
 brew 'snowflakedb/homebrew-cloudeng/sanssh'
+
+tap 'snowflakedb/fuse'
+brew 'snowflakedb/fuse/fuse-secret'
+
+# AGM - https://snowflakecomputing.atlassian.net/wiki/spaces/SF/pages/4643880982/AGM+User+Guide+and+FAQ
+tap 'snowflakedb/homebrew-prodsec'
+brew 'snowflakedb/homebrew-prodsec/access-group-manager'
+
+# dns stuff
+brew 'zns'
+
+# jira stuff - https://github.com/ankitpokhrel/jira-cli?tab=readme-ov-file
+brew 'jira-cli'

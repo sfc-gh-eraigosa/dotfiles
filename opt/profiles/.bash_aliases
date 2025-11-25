@@ -158,7 +158,7 @@ if [ -f ~/.custom_alias ] ; then
 fi
 
 if [ -f ~/opt/bin/tmuxinator.zsh ] ; then
-    source opt/bin/tmuxinator.zsh
+    source ~/opt/bin/tmuxinator.zsh
 fi
 
 alias ecr-login='eval $(aws ecr get-login --no-include-email)'
@@ -216,10 +216,8 @@ fi
 if [ -f /Applications/SnowSQL.app/Contents/MacOS/snowsql ]; then
     alias snowsql=/Applications/SnowSQL.app/Contents/MacOS/snowsql
 fi
-
-# install snow cli (skip version check in editor terminals to avoid slowdown)
-if [[ "$EDITOR_TERMINAL" != "true" ]]; then
-    snow --version || ( pip3 install --upgrade pip && python -m pip install snowflake-cli-labs )
+if [ -f ~/opt/bin/snowsql ]; then
+    alias snowsql=~/opt/bin/snowsql
 fi
 export GOPRIVATE=github.com/snowflakedb/*
 alias cursor='/Applications/Cursor.app/Contents/MacOS/Cursor'
@@ -247,14 +245,21 @@ EOF
 
 function sfcode() {
     local NAME="gco2"
-    local DIR=~/github/snowflakedb/release-orchestration-service
-    local NO_CUSTOMIZATION=
-    local ROCKY9=--os rocky9
+    local DIR="~/github/snowflakedb/release-orchestration-service"
+    local IDE="cursor"
     
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            -h)
+                sfhelp
+                return 0
+                ;;
             -d)
                 DIR="$2"
+                shift 2
+                ;;
+            -i)
+                IDE="$2"
                 shift 2
                 ;;
             *)
@@ -264,22 +269,30 @@ function sfcode() {
         esac
     done
     
-    sf ws code ${NAME} --dir ${DIR} --ide cursor
+    echo "sf ws code ${NAME} --dir ${DIR} --ide ${IDE}"
+    eval sf ws code ${NAME} --dir ${DIR} --ide ${IDE}
 }
 
 function sfcreate() {
+    if [[ "${DEBUG}" = "true" ]]; then
+        set -x -v;
+    fi
     local NAME="gco2"
     local NO_CUSTOMIZATION=
-    local ROCKY9=--os rocky9
-    
+    local ROCKY9="--os rocky9"
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            -h)
+                sfhelp
+                return 0
+                ;;
             -nr)
-                ROCKY9=
+                ROCKY9=""
                 shift
                 ;;
             -nc)
-                NO_CUSTOMIZATION=--customization off
+                NO_CUSTOMIZATION="--customization off"
                 shift
                 ;;
             *)
@@ -288,9 +301,25 @@ function sfcreate() {
                 ;;
         esac
     done
-    
-    sf ws create ${ROCKY9} --name ${NAME} ${NO_CUSTOMIZATION}
+    echo "using name = ${NAME}"
+
+    echo "sf ws create --name ${NAME} ${NO_CUSTOMIZATION} ${ROCKY9}"
+    eval sf ws create --name ${NAME} ${NO_CUSTOMIZATION} ${ROCKY9}
+    eval sf ws ssh ${NAME}
 }
 
 alias sfssh='sf ws ssh'
 alias sfls='sf ws ls'
+
+function tmux4() {
+    tmux new-session -s dev \; \
+        split-window -h \; \
+        split-window -v \; \
+        select-pane -t 0 \; \
+        split-window -v \; \
+        select-layout tiled \; \
+        attach
+}
+alias tdev='tmux attach -t dev'
+gorun() { local f=$(mktemp -t gorun-XXXX).go; cat >"$f"; go run "$f"; rm "$f"; }
+alias avalanche_up='GODEBUG="x509ignoreCN=0" go run ./cmd/avaServer -yes-i-really-want-to-disable-authentication -mig-bypass-sha256 -overridedb 127.0.0.1'

@@ -135,3 +135,6 @@ fi
 
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 alias bazel='bazelisk'
+
+# added by Snowflake SnowSQL installer
+export PATH=/Users/eraigosa/opt/bin:$PATH

@@ -8,18 +8,57 @@ else
     export EDITOR_TERMINAL=false
 fi
 
-# Skip expensive operations in editor terminals for faster startup
-if [[ "$EDITOR_TERMINAL" == "false" ]]; then
-    # Pull the latest repos (only in regular terminals)
-    if [ -f "${HOME}/.gitrepos" ] ; then
-      cd "${HOME}"
+# Daily maintenance cache (run expensive tasks at most once per 24 hours)
+# Uses a simple mtime check on a stamp file under XDG cache or ~/.cache
+DAILY_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles"
+DAILY_STAMP_FILE="${DAILY_CACHE_DIR}/daily_maintenance.stamp"
+
+should_run_daily_maintenance() {
+  [ -d "${DAILY_CACHE_DIR}" ] || mkdir -p "${DAILY_CACHE_DIR}"
+  # If the stamp file doesn't exist, run maintenance
+  [ -f "${DAILY_STAMP_FILE}" ] || return 0
+  # macOS: stat -f %m returns epoch seconds of mtime
+  local now
+  local mtime
+  now=$(date +%s)
+  mtime=$(stat -f %m "${DAILY_STAMP_FILE}" 2>/dev/null || echo 0)
+  [ $(( now - mtime )) -ge 86400 ]
+}
+
+touch_daily_maintenance_stamp() {
+  # Update/touch stamp before launching maintenance to prevent duplicate runs
+  : > "${DAILY_STAMP_FILE}" 2>/dev/null || touch "${DAILY_STAMP_FILE}" 2>/dev/null
+}
+
+# Expensive operations moved under daily maintenance above for faster startup
+run_daily_maintenance() {
+  # Pull the latest repos (previously in startup)
+  if [ -f "${HOME}/.gitrepos" ] ; then
+    (
+      cd "${HOME}" || exit 0
       [ -d "${HOME}/.git" ] && \
-        git pull origin $(git branch | grep '*'|awk '{print $2}')
+        git pull origin "$(git branch | grep '*' | awk '{print $2}')" 2>/dev/null
       "${HOME}/.gitrepos"
-    fi
+    )
+  fi
+  # Setup any missing brew packages from the $HOME/Brewfile
+  if [ "$(uname -s)" = "Darwin" ] && command -v brew >/dev/null 2>&1 ; then
+    brew bundle check || brew bundle
+  fi
+  # Ensure Snowflake CLI is available (install if missing)
+  if command -v python >/dev/null 2>&1 && command -v pip3 >/dev/null 2>&1 ; then
+    snow --version >/dev/null 2>&1 || ( pip3 install --upgrade pip && python -m pip install snowflake-cli-labs )
+  fi
+}
+
+# Trigger daily maintenance only in non-editor terminals
+if [[ "$EDITOR_TERMINAL" == "false" ]]; then
+  if should_run_daily_maintenance; then
+    touch_daily_maintenance_stamp
+    run_daily_maintenance &
+  fi
 fi
 
-#. ~/.profile
 if [ -f ~/.bash_aliases ]; then
     . ~/.bash_aliases
 fi
@@ -156,11 +195,6 @@ fi
 
 export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
 
-# setup any missing brew packages from the $HOME/Brewfile (skip in editor terminals)
-if [[ "$EDITOR_TERMINAL" == "false" ]] && [ "$(uname -s)" = "Darwin" ]; then
-    _cwd="$(pwd)"
-    brew bundle check || brew bundle &
-fi
 
 # Initialize nodenv with lazy loading for better performance
 if command -v nodenv &> /dev/null; then
@@ -221,6 +255,7 @@ fi
 
 # source any secrets
 if [ -f ~/.secrets.env ] ; then
+  echo "sourcing secrets"
   source ~/.secrets.env
 fi
 
@@ -270,3 +305,8 @@ if command -v sf &> /dev/null; then
   fi
 fi
 export PATH="$PATH:/Users/eraigosa/go/bin"
+# The following lines have been added by Docker Desktop to enable Docker CLI completions.
+fpath=(/Users/eraigosa/.docker/completions $fpath)
+autoload -Uz compinit
+compinit
+# End of Docker CLI completions
