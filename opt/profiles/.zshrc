@@ -21,7 +21,13 @@ should_run_daily_maintenance() {
   local now
   local mtime
   now=$(date +%s)
-  mtime=$(stat -f %m "${DAILY_STAMP_FILE}" 2>/dev/null || echo 0)
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS
+    mtime=$(stat -f %m "${DAILY_STAMP_FILE}" 2>/dev/null || echo 0)
+  else
+    # Linux / Raspberry Pi
+    mtime=$(stat -c %Y "${DAILY_STAMP_FILE}" 2>/dev/null || echo 0)
+  fi
   [ $(( now - mtime )) -ge 86400 ]
 }
 
