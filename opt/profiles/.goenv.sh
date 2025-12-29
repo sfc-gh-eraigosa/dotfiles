@@ -1,5 +1,7 @@
 # https://golang.org/doc/gopath_code.html#GOPATH
 
+export GOENV_PATH_ORDER=front
+
 # Detect if we're in VSCode/Cursor terminal
 if [[ "$TERM_PROGRAM" == "vscode" ]] || [[ "$TERM_PROGRAM" == "cursor" ]] || [[ -n "$VSCODE_PID" ]] || [[ -n "$CURSOR_PID" ]]; then
     export EDITOR_TERMINAL=true
