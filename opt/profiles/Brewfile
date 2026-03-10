@@ -4,6 +4,11 @@
 tap 'github/bootstrap'
 tap 'nektos/tap'
 
+# for cortext
+brew 'podman'
+cask 'claude-code'
+brew 'claude-code'
+
 # skipping install docker, lets do this manually
 brew 'amazon-ecs-cli'
 brew 'asciidoc'
@@ -88,20 +93,21 @@ brew 'awscli'
 
 # https://github.com/snowflakedb/image-advisor
 # brew tap snowflakedb/prodsec git@github.com:snowflakedb/homebrew-prodsec.git
-tap 'snowflakedb/homebrew-prodsec'
+tap 'snowflake-eng/homebrew-prodsec'
 brew 'image-advisor'
 
 brew 'bufbuild/buf/buf'
 
-tap 'snowflakedb/homebrew-cloudeng'
-brew 'snowflakedb/homebrew-cloudeng/sanssh'
+tap 'snowflake-eng/homebrew-cloudeng'
+brew 'snowflake-eng/homebrew-cloudeng/sanssh'
 
-tap 'snowflakedb/fuse'
-brew 'snowflakedb/fuse/fuse-secret'
+# TODO: disable, it's no longer working
+# tap 'snowflake-eng/fuse'
+# brew 'snowflake-eng/fuse/fuse-secret'
 
 # AGM - https://snowflakecomputing.atlassian.net/wiki/spaces/SF/pages/4643880982/AGM+User+Guide+and+FAQ
-tap 'snowflakedb/homebrew-prodsec'
-brew 'snowflakedb/homebrew-prodsec/access-group-manager'
+tap 'snowflake-eng/homebrew-prodsec'
+brew 'snowflake-eng/homebrew-prodsec/access-group-manager'
 
 # dns stuff
 brew 'zns'

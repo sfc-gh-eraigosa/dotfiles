@@ -313,9 +313,16 @@ fi
 export PATH="$PATH:/Users/eraigosa/go/bin"
 # The following lines have been added by Docker Desktop to enable Docker CLI completions.
 fpath=(/Users/eraigosa/.docker/completions $fpath)
+fpath+=~/.zsh/completions
 autoload -Uz compinit
 compinit
 # End of Docker CLI completions
 export PYENV_ROOT="$HOME/.pyenv"
 [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init - zsh)"
+
+# fnm (Fast Node Manager)
+eval "$(fnm env --use-on-cd)"
+
+# Cortex CLI completion (disable via /settings in cortex)
+[[ -s ~/.zsh/completions/cortex.zsh ]] && source ~/.zsh/completions/cortex.zsh

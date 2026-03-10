@@ -219,7 +219,7 @@ fi
 if [ -f ~/opt/bin/snowsql ]; then
     alias snowsql=~/opt/bin/snowsql
 fi
-export GOPRIVATE=github.com/snowflakedb/*
+export GOPRIVATE=github.com/snowflake-eng/*
 alias cursor='/Applications/Cursor.app/Contents/MacOS/Cursor'
 
 function sfhelp() {
@@ -235,17 +235,16 @@ function sfhelp() {
          -nr - no rocky9, default is rocky9
          <name> - name of the workspace, default is gco2
 
-    sfcode - code editor for the workspace, alias for "sf ws code gco2 --dir /home/eraigosa/github/snowflakedb/release-orchestration-service --ide cursor"
-       usage: sfcode [-d <directory>] [<name>]
-         -d <directory> - directory to open in the code editor, default is ~/github/snowflakedb/release-orchestration-service
-         <name> - name of the workspace, default is gco2
+    sfcode - code editor for the workspace, alias for "sf ws code gco2 --file <project-file> --ide cursor"
+      -f - project file name
+      -i - ide to use
      
 EOF
 }
 
 function sfcode() {
     local NAME="gco2"
-    local DIR="~/github/snowflakedb/release-orchestration-service"
+    local PROJECT_FILE="~/$(whoami).code-workspace"
     local IDE="cursor"
     
     while [[ $# -gt 0 ]]; do
@@ -254,8 +253,8 @@ function sfcode() {
                 sfhelp
                 return 0
                 ;;
-            -d)
-                DIR="$2"
+            -f)
+                PROJECT_FILE="$2"
                 shift 2
                 ;;
             -i)
@@ -269,8 +268,10 @@ function sfcode() {
         esac
     done
     
-    echo "sf ws code ${NAME} --dir ${DIR} --ide ${IDE}"
-    eval sf ws code ${NAME} --dir ${DIR} --ide ${IDE}
+    echo "sync credentials..."
+    sf auth login --login-services optional-service-credentials > /dev/null
+    echo "sf ws code ${NAME} --file ${PROJECT_FILE} --ide ${IDE}"
+    eval sf ws code ${NAME} --file ${PROJECT_FILE} --ide ${IDE}
 }
 
 function sfcreate() {
@@ -323,3 +324,4 @@ function tmux4() {
 alias tdev='tmux attach -t dev'
 gorun() { local f=$(mktemp -t gorun-XXXX).go; cat >"$f"; go run "$f"; rm "$f"; }
 alias avalanche_up='GODEBUG="x509ignoreCN=0" go run ./cmd/avaServer -yes-i-really-want-to-disable-authentication -mig-bypass-sha256 -overridedb 127.0.0.1'
+eval "$(sf aliases)"
