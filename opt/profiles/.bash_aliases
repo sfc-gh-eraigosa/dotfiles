@@ -324,4 +324,6 @@ function tmux4() {
 alias tdev='tmux attach -t dev'
 gorun() { local f=$(mktemp -t gorun-XXXX).go; cat >"$f"; go run "$f"; rm "$f"; }
 alias avalanche_up='GODEBUG="x509ignoreCN=0" go run ./cmd/avaServer -yes-i-really-want-to-disable-authentication -mig-bypass-sha256 -overridedb 127.0.0.1'
-eval "$(sf aliases)"
+if command -v sf &> /dev/null; then
+    eval "$(sf aliases)"
+fi
