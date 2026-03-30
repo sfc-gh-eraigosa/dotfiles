@@ -126,11 +126,22 @@ if [ -d "/mnt/c/Program\ Files/Docker/Docker" ]; then
     alias docker-compose='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker-compose.exe'
 fi
 
+# pyenv, rbenv, goenv paths
+[ -d "$HOME/.pyenv/bin" ] && export PATH="$PATH:$HOME/.pyenv/bin"
+[ -d "$HOME/.rbenv/bin" ] && export PATH="$PATH:$HOME/.rbenv/bin"
+[ -d "$HOME/.goenv/bin" ] && export PATH="$PATH:$HOME/.goenv/bin"
+
 # Skip SSH agent and shell launching in editor terminals
 if [[ "$EDITOR_TERMINAL" == "false" ]]; then
-    eval "$(ssh-agent -s)"
+    # Start agent only if not running
+    if ! pgrep -u "$USER" ssh-agent > /dev/null; then
+      eval "$(ssh-agent -s)" > /dev/null
+    fi
     export GPG_TTY=$(tty)
-    /bin/bash -c zsh
+    # Only launch zsh if we are not already in it and it exists
+    if [ -z "$ZSH_VERSION" ] && command -v zsh &>/dev/null; then
+        exec zsh
+    fi
 fi
 
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"

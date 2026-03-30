@@ -22,19 +22,44 @@ git config --global push.default current
 touch "${HOME}/.gitenv.nologin"
 
 # vim
-curl -fLo ~/.vim/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+curl -fsSLo ~/.vim/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 vim +'PlugInstall --sync' +qall
 
-[ ! -s "${HOME}/opt" ] && ln -s "${BASE_DIR}/opt" "${HOME}/opt"
+[ ! -s "${HOME}/opt" ] && ln -sf "${BASE_DIR}/opt" "${HOME}/opt"
+
+# Source hardware detection
+if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
+  . "${BASE_DIR}/opt/lib/hardware.sh"
+  if is_jetson; then
+    echo "Detected NVIDIA Jetson hardware. Applying specific optimizations..."
+    # On Jetson, ensure we have necessary basic tools for dev
+    [ -z "$(command -v tegrastats)" ] && echo "WARNING: tegrastats not found. You may need to install JetPack."
+    
+    # Set Chromium as default browser
+    if command -v apt-get &> /dev/null; then
+      echo "Ensuring Chromium is installed and set as default..."
+      sudo apt-get install -y -qq chromium-browser
+      
+      # Set as default in update-alternatives
+      sudo update-alternatives --set x-www-browser /usr/bin/chromium-browser 2>/dev/null || true
+      sudo update-alternatives --set gnome-www-browser /usr/bin/chromium-browser 2>/dev/null || true
+      
+      # Set for xdg-utils if in a desktop environment
+      if command -v xdg-settings &> /dev/null; then
+        xdg-settings set default-web-browser chromium-browser.desktop 2>/dev/null || true
+      fi
+    fi
+  fi
+fi
+
 for file in $(find "${BASE_DIR}/opt/profiles" -type f); do
     echo "Creating symlink to $file in home directory."
-    [ ! -s "${HOME}/$(basename "${file}")" ] && ln -s "${file}" "${HOME}/$(basename "${file}")"
+    ln -sf "${file}" "${HOME}/$(basename "${file}")"
 done
 
 # force a few
 for file in ".profile" ".zshrc" ".bash_logout" ".bashrc"; do
-  [ -f "${HOME}/${file}" ] && rm -f "${HOME}/${file}"
-  ln -s "${BASE_DIR}/opt/profiles/${file}" "${HOME}/${file}"
+  ln -sf "${BASE_DIR}/opt/profiles/${file}" "${HOME}/${file}"
 done 
 
 NIX_MANAGED_FILE="${HOME}/.config/nix_managed"
@@ -43,7 +68,7 @@ if [ -f "$NIX_MANAGED_FILE" ]; then
   echo "Skipping apt-get because the env is managed with nix, found $NIX_MANAGED_FILE"
 else
   if command -v apt-get &> /dev/null; then
-    sudo apt-get install -y \
+    sudo apt-get install -y -qq \
       corkscrew \
       htop \
       iputils-ping \
@@ -52,6 +77,12 @@ else
       net-tools \
       psmisc \
       zsh
+    
+    # Set zsh as default shell if not already
+    if [ "$SHELL" != "$(which zsh)" ]; then
+      echo "Changing default shell to zsh..."
+      sudo chsh -s "$(which zsh)" "$USER"
+    fi
   fi
 fi
 
@@ -60,14 +91,25 @@ if [ -f "$NIX_MANAGED_FILE" ]; then
   echo "Skipping yum because the env is managed with nix, found $NIX_MANAGED_FILE"
 else
   if command -v yum &> /dev/null; then
-    sudo yum install -y \
+    sudo yum install -y -q \
       htop \
       jq \
       lsof \
       net-tools \
       psmisc \
+      zsh
 
     install_zsh_centos7
+  fi
+fi
+
+# brew script for macOS
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  if command -v brew &> /dev/null; then
+    echo "Detected macOS. Running brew bundle..."
+    brew bundle --file="${BASE_DIR}/opt/profiles/Brewfile"
+  else
+    echo "WARNING: Homebrew not found. Please install it: https://brew.sh/"
   fi
 fi
 
@@ -82,6 +124,88 @@ fi
 # don't bother installing without corkscrew
 if command -v corkscrew &> /dev/null; then
     [ ! -f "${HOME}/.gitenv" ] && source "${HOME}/opt/bin/setup_git_alias.sh"
+fi
+
+# install goenv
+if ! command -v goenv &> /dev/null; then
+  echo "Installing goenv..."
+  if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
+    brew install goenv
+  else
+    # Linux / Jetson / others
+    if [ ! -d "${HOME}/.goenv" ]; then
+      git clone https://github.com/syndbg/goenv.git "${HOME}/.goenv"
+    else
+      (cd "${HOME}/.goenv" && git pull)
+    fi
+  fi
+  
+  # Initialize goenv to install a version if none exists
+  export PATH="${HOME}/.goenv/bin:${PATH}"
+  if command -v goenv &> /dev/null; then
+    eval "$(goenv init -)"
+    if [ -z "$(goenv versions --bare)" ]; then
+        echo "No Go versions detected. Installing latest..."
+        goenv install latest
+        goenv global $(goenv versions --bare | tail -1)
+    fi
+  fi
+fi
+
+# install pyenv
+if ! command -v pyenv &> /dev/null; then
+  echo "Installing pyenv..."
+  if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
+    brew install pyenv
+  else
+    if [ ! -d "${HOME}/.pyenv" ]; then
+      git clone https://github.com/pyenv/pyenv.git "${HOME}/.pyenv"
+    else
+      (cd "${HOME}/.pyenv" && git pull)
+    fi
+  fi
+fi
+
+# install rbenv
+if ! command -v rbenv &> /dev/null; then
+  echo "Installing rbenv..."
+  if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
+    brew install rbenv
+  else
+    if [ ! -d "${HOME}/.rbenv" ]; then
+      git clone https://github.com/rbenv/rbenv.git "${HOME}/.rbenv"
+      # Also need ruby-build plugin for rbenv
+      mkdir -p "${HOME}/.rbenv/plugins"
+      git clone https://github.com/rbenv/ruby-build.git "${HOME}/.rbenv/plugins/ruby-build"
+    else
+      (cd "${HOME}/.rbenv" && git pull)
+    fi
+  fi
+fi
+
+# install nvm
+if [ ! -d "${HOME}/.nvm" ]; then
+  echo "Installing nvm..."
+  curl -fsSL -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash > /dev/null 2>&1
+fi
+
+# install fnm
+if ! command -v fnm &> /dev/null; then
+  echo "Installing fnm..."
+  curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell > /dev/null 2>&1
+fi
+
+# setup sshd server if requested
+if [ -f "${HOME}/.sshd.env" ]; then
+    source "${HOME}/.sshd.env"
+    if [ "${SSHD_LOGIN}" = "true" ]; then
+        echo "Setting up sshd server..."
+        sudo mkdir -p /var/run/sshd
+        # Start it if not running
+        if ! pgrep -x "sshd" > /dev/null; then
+            sudo /usr/sbin/sshd -D &
+        fi
+    fi
 fi
 
 if [ -f "${HOME}/.gitrepos" ] ; then

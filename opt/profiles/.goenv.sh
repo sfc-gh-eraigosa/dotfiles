@@ -33,6 +33,12 @@ if [[ -d $HOME/.goenv ]]; then
     export PATH=$HOME/.goenv/bin:$PATH
 fi
 
+# Exit early if goenv is not found
+if ! command -v goenv &>/dev/null; then
+    echo "WARNING: goenv not found. Please run install.sh to install it."
+    return 1
+fi
+
 export GOENV_ROOT=$HOME/go
 if [[ "$(uname -r | awk -F'-' '{print $3}')" = "Microsoft" ]] ; then
     export GOENV_ROOT=/mnt/c/Program\ Files/Go
@@ -44,42 +50,52 @@ fi
 if [[ "$EDITOR_TERMINAL" == "false" ]]; then
     if __dotfiles_should_run_daily; then
         __dotfiles_touch_daily
-        command -v goenv >/dev/null 2>&1 && goenv install latest --skip-existing
+        # Quietly try to install if nothing exists, or ensure latest is there
+        goenv install latest --skip-existing >/dev/null 2>&1 &
     fi
 fi
 eval "$(goenv init -)"
 
-# set GOENV_VERSION
-goenv shell $(goenv versions --bare|tail -1)
+# set GOENV_VERSION if any version is installed
+LATEST_GO_VERSION=$(goenv versions --bare 2>/dev/null | tail -1)
+if [ -n "$LATEST_GO_VERSION" ]; then
+    goenv shell "$LATEST_GO_VERSION"
+    export GOENV_VERSION="$LATEST_GO_VERSION"
+fi
 
 # some debug output and default settings to put go in the path
-export GO_BINARY=$(goenv which go)
-export GO_BINPATH=$(dirname ${GO_BINARY})
-export PATH=${GO_BINPATH}:${PATH}
+export GO_BINARY=$(goenv which go 2>/dev/null)
+if [ -n "$GO_BINARY" ]; then
+    export GO_BINPATH=$(dirname "${GO_BINARY}")
+    export PATH="${GO_BINPATH}:${PATH}"
+fi
 
 if [[ "$EDITOR_TERMINAL" == "true" ]]; then
     return
 fi
 
-export GOTOOLCHAIN="go${GOENV_VERSION}"
+if [ -n "$GOENV_VERSION" ] && [[ "$EDITOR_TERMINAL" == "false" ]]; then
+    # echo "GOENV_VERSION => ${GOENV_VERSION}"
+    # echo "GOTOOLCHAIN   => ${GOTOOLCHAIN}"
+    :
+fi
 
-echo "GOENV_VERSION => ${GOENV_VERSION}"
-echo "GOTOOLCHAIN   => ${GOTOOLCHAIN}"
-echo "GO_BINARY     => ${GO_BINARY}"
-echo "GO_BINPATH    => ${GO_BINPATH}"
-echo "GOPATH        => ${GOPATH}"
+if [ -n "$GO_BINARY" ]; then
+    # echo "GO_BINARY     => ${GO_BINARY}"
+    # echo "GO_BINPATH    => ${GO_BINPATH}"
+    # echo "GOPATH        => ${GOPATH}"
 
-
-# install some go command line tools (once per day)
-if __dotfiles_should_run_daily; then
-    __dotfiles_touch_daily
-    go install github.com/bazelbuild/buildtools/buildifier@latest
-    go install golang.org/x/tools/gopls@latest
-    go install github.com/go-delve/delve/cmd/dlv@latest
+    # install some go command line tools (once per day)
+    if __dotfiles_should_run_daily; then
+        __dotfiles_touch_daily
+        go install github.com/bazelbuild/buildtools/buildifier@latest >/dev/null 2>&1 &
+        go install golang.org/x/tools/gopls@latest >/dev/null 2>&1 &
+        go install github.com/go-delve/delve/cmd/dlv@latest >/dev/null 2>&1 &
+    fi
 fi
 
 # verify we have the tools (quiet outside of daily run)
-if __dotfiles_should_run_daily; then
+if __dotfiles_should_run_daily && [ -n "$GO_BINARY" ]; then
     # Check if tools are installed and working
     if command -v buildifier >/dev/null 2>&1; then
         echo "✓ buildifier $(buildifier --version) is installed"
@@ -98,15 +114,16 @@ if __dotfiles_should_run_daily; then
     fi
 fi
 
-if command -v go >/dev/null 2>&1; then
-    echo "✓ $(go version) is installed"
+if [ -n "$GO_BINARY" ] && command -v go >/dev/null 2>&1; then
+    # echo "✓ $(go version) is installed"
+    export GOBIN=$(go env -json 2>/dev/null | jq -r '.GOROOT' 2>/dev/null)/bin
+    # go version
+    # which go
+    :
 else
-    echo "✗ go is not installed properly"
+    if [[ "$EDITOR_TERMINAL" == "false" ]]; then
+      echo "✗ go is not installed properly or not in PATH"
+    fi
 fi
-
-export GOBIN=$(go env -json | jq -r '.GOROOT')/bin
-
-go version
-which go
 
 

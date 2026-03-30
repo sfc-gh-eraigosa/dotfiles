@@ -39,14 +39,16 @@ _hostname=
 OPTION=
 _auto=0
 _clear=0
-_CONTAINER=ubuntu\:12.04
+# Default container: use jammy (22.04) as it has good multi-arch support
+_CONTAINER=ubuntu:22.04
 if [ -f ~/.docker_container ] ; then
     _CONTAINER=$(cat ~/.docker_container)
-    [[ -z "$_CONTAINER" ]] && echo "WARNING: ~/.docker_container is empty, setting to default. ubuntu:12.04, otherwise use -t to set to another value."
-    [[ -z "$_CONTAINER" ]] && _CONTAINER=ubuntu\:12.04
+    [[ -z "$_CONTAINER" ]] && echo "WARNING: ~/.docker_container is empty, setting to default. ubuntu:22.04, otherwise use -t to set to another value."
+    [[ -z "$_CONTAINER" ]] && _CONTAINER=ubuntu:22.04
 else
     echo -n $_CONTAINER > ~/.docker_container
 fi
+
 
 while [[ $# -gt 0 ]]; do
   opt="$1"
@@ -73,10 +75,11 @@ while [[ $# -gt 0 ]]; do
 done
 if [ ! "$_CONTAINER" = "$_arg_container" ] ; then
     _CONTAINER=$_arg_container
-    [[ -z "$_CONTAINER" ]] && echo "WARNING: container arg is empty, setting to default. ubuntu:12.04"
-    [[ -z "$_CONTAINER" ]] && _CONTAINER=ubuntu\:12.04
+    [[ -z "$_CONTAINER" ]] && echo "WARNING: container arg is empty, setting to default. ubuntu:22.04"
+    [[ -z "$_CONTAINER" ]] && _CONTAINER=ubuntu:22.04
     echo -n $_CONTAINER > ~/.docker_container
-fi
+    fi
+
 
 [[ $_auto = 1 ]] && [[ -z $_auto_name ]] && _auto_name=auto
 function dirnamef

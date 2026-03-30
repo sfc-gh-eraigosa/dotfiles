@@ -43,8 +43,8 @@ run_daily_maintenance() {
     (
       cd "${HOME}" || exit 0
       [ -d "${HOME}/.git" ] && \
-        git pull origin "$(git branch | grep '*' | awk '{print $2}')" 2>/dev/null
-      "${HOME}/.gitrepos"
+        GIT_TERMINAL_PROMPT=0 git pull origin "$(git branch | grep '*' | awk '{print $2}')" 2>/dev/null
+      GIT_TERMINAL_PROMPT=0 "${HOME}/.gitrepos" > /dev/null 2>&1
     )
   fi
   # Setup any missing brew packages from the $HOME/Brewfile
@@ -63,6 +63,10 @@ if [[ "$EDITOR_TERMINAL" == "false" ]]; then
     touch_daily_maintenance_stamp
     run_daily_maintenance &
   fi
+fi
+
+if [ -f $HOME/.goenv.sh ]; then
+    . $HOME/.goenv.sh
 fi
 
 if [ -f ~/.bash_aliases ]; then
@@ -317,9 +321,18 @@ fpath+=~/.zsh/completions
 autoload -Uz compinit
 compinit
 # End of Docker CLI completions
+# pyenv setup
 export PYENV_ROOT="$HOME/.pyenv"
 [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init - zsh)"
+if command -v pyenv &>/dev/null; then
+  eval "$(pyenv init - zsh)"
+fi
+
+# rbenv setup
+[[ -d $HOME/.rbenv/bin ]] && export PATH="$HOME/.rbenv/bin:$PATH"
+if command -v rbenv &>/dev/null; then
+  eval "$(rbenv init - zsh)"
+fi
 
 # fnm (Fast Node Manager)
 eval "$(fnm env --use-on-cd)"

@@ -31,8 +31,8 @@ dotfiles_run_daily_maintenance() {
       (
         cd "${HOME}" || exit 0
         [ -d "${HOME}/.git" ] && \
-          git pull origin "$(git branch | grep '*' | awk '{print $2}')" 2>/dev/null
-        "${HOME}/.gitrepos"
+          GIT_TERMINAL_PROMPT=0 git pull origin "$(git branch | grep '*' | awk '{print $2}')" 2>/dev/null
+        GIT_TERMINAL_PROMPT=0 "${HOME}/.gitrepos" > /dev/null 2>&1
       )
     fi
     # Load SF aliases (can be slow)
@@ -53,6 +53,10 @@ if [[ "$EDITOR_TERMINAL" == "false" ]]; then
 fi
 
 # Expensive repo update moved to daily maintenance above
+
+if [ -f $HOME/.goenv.sh ]; then
+    . $HOME/.goenv.sh
+fi
 
 if [ -f ~/.bash_aliases ]; then
     . ~/.bash_aliases
@@ -173,13 +177,14 @@ if [ -f ~/.cabal/bin ] ; then
     export PATH="${PATH}:~/.cabal/bin"
 fi
 
-if [ -f ~/.sshd.env ] ; then
-    # using this on chroot for chromeos
-    # sudo /usr/sbin/sshd -D & 
-    . ~/opt/bin/sshd_run.sh
-else
-    echo "no sshd at login, echo 'SSHD_LOGIN=true'> ~/.sshd.env to enable"
-fi
+# sshd run moved to install.sh for manual setup
+# if [ -f ~/.sshd.env ] ; then
+#     # using this on chroot for chromeos
+#     # sudo /usr/sbin/sshd -D & 
+#     . ~/opt/bin/sshd_run.sh
+# else
+#     echo "no sshd at login, echo 'SSHD_LOGIN=true'> ~/.sshd.env to enable"
+# fi
 if [ -f ~/.ora.java.env ] ; then
     . $HOME/.ora.java.env
 fi
@@ -196,9 +201,9 @@ if [[ "$OSTYPE" == "darwin"* ]] ; then
 fi
 
 # pyenv setup with conditional loading
+[ -d "$HOME/.pyenv/bin" ] && export PATH="$HOME/.pyenv/bin:$PATH"
 if command -v pyenv 1>/dev/null 2>&1; then
     export PYENV_ROOT="$HOME/.pyenv"
-    export PATH="$PYENV_ROOT/bin:$PATH"
     
     if [[ "$EDITOR_TERMINAL" == "true" ]]; then
         # Fast loading - just add shims to PATH
@@ -207,6 +212,12 @@ if command -v pyenv 1>/dev/null 2>&1; then
         # Full pyenv initialization
         eval "$(pyenv init -)"
     fi
+fi
+
+# rbenv setup
+[ -d "$HOME/.rbenv/bin" ] && export PATH="$HOME/.rbenv/bin:$PATH"
+if command -v rbenv 1>/dev/null 2>&1; then
+    eval "$(rbenv init -)"
 fi
 
 # source any secrets

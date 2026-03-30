@@ -84,6 +84,14 @@ alias gertty='source gertty-env/bin/activate && gertty'
 [ -f ~/.proxy.sh ] && . ~/.proxy.sh
 alias tb=~/git/forj-oss/maestro/tools/bin/test-box.sh
 
+# Source hardware detection and skip unsupported tools
+if [ -f ~/opt/lib/hardware.sh ]; then
+  . ~/opt/lib/hardware.sh
+  if [ -f ~/opt/lib/unsupported_tools.sh ]; then
+    . ~/opt/lib/unsupported_tools.sh
+  fi
+fi
+
 # Wow aliases
 alias win_nogl='LIBGL_ALWAYS_SOFTWARE=1 wine explorer'
 alias win='wine explorer -opengl'
