@@ -246,7 +246,7 @@ if [[ ! -f .no_github_token ]] ; then
     export GITHUB_TOKEN
   elif [[ "$EDITOR_TERMINAL" == "false" ]]; then
     # Only fetch credentials in regular terminals
-    export GITHUB_TOKEN=${GITHUB_TOKEN:-$( printf "protocol=https\\nhost=github.com\\npath=github\\n" | git credential fill | awk -F'=' '/password=/{print $2}')}
+    export GITHUB_TOKEN=${GITHUB_TOKEN:-$( printf "protocol=https\\nhost=github.com\\npath=github\\n" | GIT_TERMINAL_PROMPT=0 git credential fill 2>/dev/null | awk -F'=' '/password=/{print $2}')}
   fi
 fi
 
@@ -315,6 +315,14 @@ if command -v sf &> /dev/null; then
   fi
 fi
 export PATH="$PATH:/Users/eraigosa/go/bin"
+# Fix Docker permissions if needed (Linux only)
+if [[ "$(uname -s)" == "Linux" ]] && [[ "$EDITOR_TERMINAL" == "false" ]]; then
+  if [ -S /var/run/docker.sock ] && [ ! -w /var/run/docker.sock ]; then
+    echo "Fixing Docker socket permissions (sudo chmod 666 /var/run/docker.sock)..."
+    sudo chmod 666 /var/run/docker.sock 2>/dev/null
+  fi
+fi
+
 # The following lines have been added by Docker Desktop to enable Docker CLI completions.
 fpath=(/Users/eraigosa/.docker/completions $fpath)
 fpath+=~/.zsh/completions
@@ -335,7 +343,10 @@ if command -v rbenv &>/dev/null; then
 fi
 
 # fnm (Fast Node Manager)
-eval "$(fnm env --use-on-cd)"
+[[ -d "$HOME/.local/share/fnm" ]] && export PATH="$HOME/.local/share/fnm:$PATH"
+if command -v fnm &>/dev/null; then
+  eval "$(fnm env --use-on-cd)"
+fi
 
 # Cortex CLI completion (disable via /settings in cortex)
 [[ -s ~/.zsh/completions/cortex.zsh ]] && source ~/.zsh/completions/cortex.zsh

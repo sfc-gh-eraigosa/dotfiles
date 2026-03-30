@@ -62,6 +62,14 @@ if [ -f ~/.bash_aliases ]; then
     . ~/.bash_aliases
 fi
 
+# Fix Docker permissions if needed (Linux only)
+if [[ "$(uname -s)" == "Linux" ]] && [[ "$EDITOR_TERMINAL" == "false" ]]; then
+  if [ -S /var/run/docker.sock ] && [ ! -w /var/run/docker.sock ]; then
+    echo "Fixing Docker socket permissions (sudo chmod 666 /var/run/docker.sock)..."
+    sudo chmod 666 /var/run/docker.sock 2>/dev/null
+  fi
+fi
+
 # see /usr/share/doc/bash/examples/startup-files (in the package bash-doc)
 # for examples
 

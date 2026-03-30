@@ -115,6 +115,9 @@ fi
 
 # only setup these scripts when docker is installed
 if command -v docker &> /dev/null; then
+    # Setup docker permissions for the current user
+    "${HOME}/opt/bin/setup_docker_perms.sh"
+    
     if docker --version 2>&1 >/dev/null; then
         [ ! -f "${HOME}/.ruby.env" ] && source "${HOME}/opt/bin/setup_ruby-docker.sh"
         [ ! -f "${HOME}/.dindcenv" ] && source "${HOME}/opt/bin/setup_dindc_alias.sh"
@@ -197,15 +200,7 @@ fi
 
 # setup sshd server if requested
 if [ -f "${HOME}/.sshd.env" ]; then
-    source "${HOME}/.sshd.env"
-    if [ "${SSHD_LOGIN}" = "true" ]; then
-        echo "Setting up sshd server..."
-        sudo mkdir -p /var/run/sshd
-        # Start it if not running
-        if ! pgrep -x "sshd" > /dev/null; then
-            sudo /usr/sbin/sshd -D &
-        fi
-    fi
+    "${HOME}/opt/bin/sshd_run.sh"
 fi
 
 if [ -f "${HOME}/.gitrepos" ] ; then

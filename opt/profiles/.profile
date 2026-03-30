@@ -7,8 +7,6 @@
 # the default umask is set in /etc/profile; for setting the umask
 # for ssh logins, install and configure the libpam-umask package.
 #umask 022
-autoload -Uz compinit
-compinit
 
 if [ ! -z "${GREP_OPTIONS}" ]; then
   alias grep="grep ${GREP_OPTIONS}"
@@ -53,12 +51,20 @@ if [[ "$EDITOR_TERMINAL" == "false" ]]; then
         rm ~/.motd
     fi
     owner="wenlock"
-    owner=$(printf '%-40s' $owner)
-    host=$(hostname | awk -F. '{print $1"."$2}')
-    host=$(printf '%10s' $host)
-    echo -e "\033[1;37m┌─────────────────────────────────────────────────────────────┐" > ~/.motd
-    echo -e "\033[1;37m│ \033[01;31m$host \033[01;32mOWNED BY $owner\033[1;37m│" >> ~/.motd
-    echo -e "\033[1;37m└─────────────────────────────────────────────────────────────┘\033[00m" >> ~/.motd
+    # Extract first two parts of hostname, avoiding trailing dots if second part is empty
+    host=$(hostname | cut -d. -f1,2)
+    
+    # Construct the text to measure its length exactly as it will be printed
+    inner_text=" $host OWNED BY $owner "
+    inner_len=${#inner_text}
+    
+    # Generate the horizontal line using a loop (UTF-8 safe way to repeat a character)
+    line=""
+    for ((i=0; i<inner_len; i++)); do line="${line}─"; done
+    
+    echo -e "\033[1;37m┌${line}┐" > ~/.motd
+    echo -e "\033[1;37m│\033[01;31m $host \033[01;32mOWNED BY $owner \033[1;37m│" >> ~/.motd
+    echo -e "\033[1;37m└${line}┘\033[00m" >> ~/.motd
     cat ~/.motd
 fi
 
@@ -90,17 +96,6 @@ export PATH="$PATH:${HOME}/.rvm/bin" # Add RVM to PATH for scripting
 export PATH="$PATH:/usr/local/bin/docker"
 
 [[ -s "${HOME}/.rvm/scripts/rvm" ]] && source "$HOME/.rvm/scripts/rvm" # Load RVM into a shell session *as a function*
-# Source git environment shortcuts
-[[ -f "${HOME}/.dindcenv" ]] && . "${HOME}/.dindcenv"
-
-#
-# ruby docker environment aliases
-#
-if [ -f "${HOME}/.ruby.env" ] ; then
-    source "${HOME}/.ruby.env"
-else
-    echo ".ruby.env is missing, you can install with : . opt/bin/setup_ruby-docker.sh"
-fi
 
 #
 # iterm integration with brew install https://gist.github.com/ZenLulz/c812f70fc86ebdbb189d9fb82f98197e
