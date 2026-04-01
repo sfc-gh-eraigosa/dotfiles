@@ -32,17 +32,17 @@ fi
 
 force_color_prompt=yes
 # Detect if we're in VSCode/Cursor terminal
-if [[ "$TERM_PROGRAM" == "vscode" ]] || [[ "$TERM_PROGRAM" == "cursor" ]] || [[ -n "$VSCODE_PID" ]] || [[ -n "$CURSOR_PID" ]]; then
+if [ "$TERM_PROGRAM" = "vscode" ] || [ "$TERM_PROGRAM" = "cursor" ] || [ -n "$VSCODE_PID" ] || [ -n "$CURSOR_PID" ]; then
     export EDITOR_TERMINAL=true
 else
     export EDITOR_TERMINAL=false
 fi
 
 # Skip expensive banner operations in editor terminals
-if [[ "$EDITOR_TERMINAL" == "false" ]]; then
+if [ "$EDITOR_TERMINAL" = "false" ]; then
     # Info file
     id=$(hostname | awk -F. '{print $2}')
-    if [ `command -v facter` ]; then
+    if command -v facter >/dev/null 2>&1; then
       ip=$(facter ipaddress)
     fi
     echo "|$id|$ip" > ~/.info
@@ -60,7 +60,11 @@ if [[ "$EDITOR_TERMINAL" == "false" ]]; then
     
     # Generate the horizontal line using a loop (UTF-8 safe way to repeat a character)
     line=""
-    for ((i=0; i<inner_len; i++)); do line="${line}─"; done
+    i=0
+    while [ $i -lt ${inner_len:-0} ]; do
+        line="${line}─"
+        i=$((i+1))
+    done
     
     echo -e "\033[1;37m┌${line}┐" > ~/.motd
     echo -e "\033[1;37m│\033[01;31m $host \033[01;32mOWNED BY $owner \033[1;37m│" >> ~/.motd
@@ -95,7 +99,7 @@ fi
 export PATH="$PATH:${HOME}/.rvm/bin" # Add RVM to PATH for scripting
 export PATH="$PATH:/usr/local/bin/docker"
 
-[[ -s "${HOME}/.rvm/scripts/rvm" ]] && source "$HOME/.rvm/scripts/rvm" # Load RVM into a shell session *as a function*
+[ -s "${HOME}/.rvm/scripts/rvm" ] && . "$HOME/.rvm/scripts/rvm" # Load RVM into a shell session *as a function*
 
 #
 # iterm integration with brew install https://gist.github.com/ZenLulz/c812f70fc86ebdbb189d9fb82f98197e
@@ -127,16 +131,20 @@ fi
 [ -d "$HOME/.goenv/bin" ] && export PATH="$PATH:$HOME/.goenv/bin"
 
 # Skip SSH agent and shell launching in editor terminals
-if [[ "$EDITOR_TERMINAL" == "false" ]]; then
+if [ "$EDITOR_TERMINAL" = "false" ]; then
     # Start agent only if not running
     if ! pgrep -u "$USER" ssh-agent > /dev/null; then
       eval "$(ssh-agent -s)" > /dev/null
     fi
-    export GPG_TTY=$(tty)
+    export GPG_TTY=$(tty 2>/dev/null)
     # Only launch zsh if we are not already in it and it exists
-    if [ -z "$ZSH_VERSION" ] && command -v zsh &>/dev/null; then
-        exec zsh
-    fi
+    case "$-" in
+        *i*)
+            if [ -z "$ZSH_VERSION" ] && command -v zsh >/dev/null 2>&1; then
+                exec zsh
+            fi
+            ;;
+    esac
 fi
 
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
