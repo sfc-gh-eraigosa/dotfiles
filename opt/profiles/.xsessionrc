@@ -1,0 +1,98 @@
+#!/bin/bash
+
+# SPDX-FileCopyrightText: Copyright (c) 2019-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this
+# list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+# this list of conditions and the following disclaimer in the documentation
+# and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its
+# contributors may be used to endorse or promote products derived from
+# this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+# xsession sources this script instead of executing it, so don't use
+# 'exit' here.
+
+logo_path="/usr/share/backgrounds/NVIDIA_Login_Logo.png"
+# Set NVIDIA Logo after user login to desktop
+if [ -x "/usr/bin/xsetbg" ] && [ -r "${logo_path}" ]; then
+	xsetbg -center "${logo_path}" -border white
+fi
+
+# Set screensaver as blank
+if [ -x "/usr/bin/xset" ]; then
+	xset s blank s noexpose
+fi
+
+# Apply following settings at first login
+if [ ! -f "/home/${USER}/.local/share/applications/nv_desktop_init" ]; then
+	# Set NV desktop entries as trusted
+	if [ "$(lsb_release -cs)" == "bionic" ]; then
+		trusted_val="yes"
+	else
+		trusted_val="true"
+	fi
+
+	if [ -f "/home/${USER}/Desktop/nv_l4t_readme.desktop" ]; then
+		chmod +x "/home/${USER}/Desktop/nv_l4t_readme.desktop"
+		gio set "/home/${USER}/Desktop/nv_l4t_readme.desktop" "metadata::trusted" "${trusted_val}"
+	fi
+
+	if [ -f "/home/${USER}/Desktop/gnome-terminal.desktop" ]; then
+		chmod +x "/home/${USER}/Desktop/gnome-terminal.desktop"
+		gio set "/home/${USER}/Desktop/gnome-terminal.desktop" "metadata::trusted" "${trusted_val}"
+	fi
+
+	if [ -f "/home/${USER}/Desktop/nv_devzone.desktop" ]; then
+		chmod +x "/home/${USER}/Desktop/nv_devzone.desktop"
+		gio set "/home/${USER}/Desktop/nv_devzone.desktop" "metadata::trusted" "${trusted_val}"
+	fi
+
+	if [ -f "/home/${USER}/Desktop/nv_forums.desktop" ]; then
+		chmod +x "/home/${USER}/Desktop/nv_forums.desktop"
+		gio set "/home/${USER}/Desktop/nv_forums.desktop" "metadata::trusted" "${trusted_val}"
+	fi
+
+	if [ -f "/home/${USER}/Desktop/nv_jetson_projects.desktop" ]; then
+		chmod +x "/home/${USER}/Desktop/nv_jetson_projects.desktop"
+		gio set "/home/${USER}/Desktop/nv_jetson_projects.desktop" "metadata::trusted" "${trusted_val}"
+	fi
+
+	if [ -f "/home/${USER}/Desktop/nv_jetson_zoo.desktop" ]; then
+		chmod +x "/home/${USER}/Desktop/nv_jetson_zoo.desktop"
+		gio set "/home/${USER}/Desktop/nv_jetson_zoo.desktop" "metadata::trusted" "${trusted_val}"
+	fi
+
+	if [ -e "/usr/bin/gnome-shell" ]; then
+		remove_apps="thunderbird rhythmbox libreoffice-writer"
+		favorite_apps="$(gsettings get org.gnome.shell favorite-apps)"
+
+		for app in $remove_apps; do
+			favorite_apps="$(echo "${favorite_apps}" | \
+				sed -e "s/'${app}.desktop', //g" -e "s/, '${app}.desktop' / /g")"
+		done
+
+		gsettings set org.gnome.shell favorite-apps "${favorite_apps}"
+	fi
+
+	mkdir -p "/home/${USER}/.local/share/applications"
+	touch "/home/${USER}/.local/share/applications/nv_desktop_init"
+fi
