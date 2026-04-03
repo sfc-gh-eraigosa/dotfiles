@@ -52,8 +52,13 @@ if [[ "$OS_TYPE" == "Linux" ]]; then
 
 elif [[ "$OS_TYPE" == "Darwin" ]]; then
     echo "On macOS, Docker permissions are usually managed by Docker Desktop."
-    if ! docker system info &>/dev/null; then
-        echo "If you're seeing permission errors, ensure Docker Desktop is running."
+    # Use gtimeout on macOS (coreutils), timeout on Linux
+    _timeout="timeout"
+    command -v timeout &>/dev/null || _timeout="gtimeout"
+    if command -v "$_timeout" &>/dev/null && ! ("$_timeout" 5 docker system info &>/dev/null) 2>/dev/null; then
+        echo "Docker Desktop does not appear to be running. Skipping Docker checks."
+    elif ! command -v "$_timeout" &>/dev/null; then
+        echo "NOTE: 'timeout' command not found. Skipping Docker daemon check (install coreutils)."
     else
         echo "Docker is responsive."
     fi

@@ -1,0 +1,77 @@
+#!/bin/bash
+# ssh-find: Locate an SSH host and update config
+
+TARGET_ALIAS="$1"
+if [[ -z "$TARGET_ALIAS" ]]; then
+    echo "Usage: ssh-find <host-alias>"
+    exit 1
+fi
+
+SSH_CONFIG="${HOME}/.ssh/config"
+
+# Extract current config
+echo "Extracting config for $TARGET_ALIAS..."
+CONFIG=$(ssh -G "$TARGET_ALIAS" 2>/dev/null)
+if [[ $? -ne 0 ]]; then
+    echo "Error: Host '$TARGET_ALIAS' not found in SSH config."
+    exit 1
+fi
+
+SSH_USER=$(echo "$CONFIG" | awk '/^user / {print $2}')
+IDENTITY_FILE=$(echo "$CONFIG" | awk '/^identityfile / {print $2}' | head -n 1 | sed "s|^~|$HOME|")
+
+echo "Scanning network for SSH hosts..."
+# Identify local subnet
+interface=$(route get default | awk '/interface:/ {print $2}')
+if [[ -z "$interface" ]]; then interface="en0"; fi
+subnet=$(ifconfig "$interface" | awk '/inet / {print $2}' | cut -d. -f1-3)".0/24"
+
+echo "Scanning subnet $subnet..."
+ips=$(nmap -p 22 --open "$subnet" -oG - | awk '/Up$/{print $2} /open/{print $2}' | sort -u)
+
+if [[ -z "$ips" ]]; then
+    echo "No SSH hosts found on the network."
+    exit 1
+fi
+
+for ip in $ips; do
+    echo "Testing $ip..."
+    # Attempt to get hostname as proof
+    remote_hostname=$(ssh -o BatchMode=yes -o ConnectTimeout=2 -o StrictHostKeyChecking=no -i "$IDENTITY_FILE" "$SSH_USER@$ip" "hostname" 2>/dev/null)
+    
+    if [[ -n "$remote_hostname" ]]; then
+        echo "FOUND: Host at $ip responded with hostname: $remote_hostname"
+        echo -n "Is this the correct host for '$TARGET_ALIAS'? (y/n): "
+        read -r choice
+        if [[ "$choice" == "y" ]]; then
+            cp "$SSH_CONFIG" "${SSH_CONFIG}.bak"
+            # Update the specific Host block
+            # This python script robustly identifies the block and updates Hostname
+            python3 -c "
+import sys, re
+config_path = '$SSH_CONFIG'
+target = '$TARGET_ALIAS'
+new_ip = '$ip'
+with open(config_path, 'r') as f:
+    lines = f.readlines()
+with open(config_path, 'w') as f:
+    in_block = False
+    for line in lines:
+        if re.match(r'^Host\s+' + re.escape(target) + r'\s*$', line):
+            in_block = True
+        elif in_block and re.match(r'^Host\s+', line):
+            in_block = False
+        if in_block and line.strip().startswith('Hostname'):
+            f.write(re.sub(r'Hostname\s+\S+', f'Hostname {new_ip}', line))
+            in_block = False # Done with this block
+        else:
+            f.write(line)
+"
+            echo "Updated $SSH_CONFIG with new IP $ip."
+            exit 0
+        fi
+    fi
+done
+
+echo "Finished scanning all found hosts. No match confirmed."
+exit 1

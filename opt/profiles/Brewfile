@@ -3,11 +3,12 @@
 # Helpers
 tap 'github/bootstrap'
 tap 'nektos/tap'
+tap 'hashicorp/tap'
 
 # for cortext
 brew 'podman'
+
 cask 'claude-code'
-brew 'claude-code'
 
 # skipping install docker, lets do this manually
 brew 'amazon-ecs-cli'
@@ -66,8 +67,8 @@ brew 'goenv'
 # to setup in bash profile: eval "$(pyenv init -)"
 brew 'pyenv'
 
-# setup vault
-brew 'vault'
+# setup vault (cask installs pre-built binary, no Xcode required)
+cask 'hashicorp/tap/vault'
 brew 'kubeconform'
 brew 'jsonnet'
 brew 'jq'
@@ -92,22 +93,23 @@ brew 'kind'
 brew 'awscli'
 
 # https://github.com/snowflakedb/image-advisor
-# brew tap snowflakedb/prodsec git@github.com:snowflakedb/homebrew-prodsec.git
-tap 'snowflake-eng/homebrew-prodsec'
-brew 'image-advisor'
+# Requires private tap access: brew tap snowflakedb/prodsec git@github.com:snowflakedb/homebrew-prodsec.git
+# Uncomment if you have SSH access to the private tap:
+# tap 'snowflake-eng/homebrew-prodsec'
+# brew 'image-advisor'
 
 brew 'bufbuild/buf/buf'
 
-tap 'snowflake-eng/homebrew-cloudeng'
-brew 'snowflake-eng/homebrew-cloudeng/sanssh'
+# tap 'snowflake-eng/homebrew-cloudeng'
+# brew 'snowflake-eng/homebrew-cloudeng/sanssh'
 
 # TODO: disable, it's no longer working
 # tap 'snowflake-eng/fuse'
 # brew 'snowflake-eng/fuse/fuse-secret'
 
 # AGM - https://snowflakecomputing.atlassian.net/wiki/spaces/SF/pages/4643880982/AGM+User+Guide+and+FAQ
-tap 'snowflake-eng/homebrew-prodsec'
-brew 'snowflake-eng/homebrew-prodsec/access-group-manager'
+# tap 'snowflake-eng/homebrew-prodsec'
+# brew 'snowflake-eng/homebrew-prodsec/access-group-manager'
 
 # dns stuff
 brew 'zns'

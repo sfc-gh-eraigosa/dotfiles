@@ -25,7 +25,16 @@ touch "${HOME}/.gitenv.nologin"
 curl -fsSLo ~/.vim/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 vim +'PlugInstall --sync' +qall
 
-[ ! -s "${HOME}/opt" ] && ln -sf "${BASE_DIR}/opt" "${HOME}/opt"
+# Ensure ~/opt is a symlink to the repo's opt directory
+if [ -L "${HOME}/opt" ] && [ "$(readlink "${HOME}/opt")" = "${BASE_DIR}/opt" ]; then
+  : # Already correctly linked
+elif [ -e "${HOME}/opt" ]; then
+  echo "WARNING: ${HOME}/opt exists but is not linked to dotfiles. Backing up to ${HOME}/opt.bak"
+  mv "${HOME}/opt" "${HOME}/opt.bak"
+  ln -sf "${BASE_DIR}/opt" "${HOME}/opt"
+else
+  ln -sf "${BASE_DIR}/opt" "${HOME}/opt"
+fi
 
 # Source hardware detection
 if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
@@ -61,6 +70,17 @@ done
 for file in ".profile" ".zshrc" ".bash_logout" ".bashrc"; do
   ln -sf "${BASE_DIR}/opt/profiles/${file}" "${HOME}/${file}"
 done 
+
+# Install Antigravity skills globally
+echo "Installing Antigravity skills..."
+mkdir -p "${HOME}/.agents/skills"
+for skill_dir in "${BASE_DIR}/.agents/skills"/*/; do
+  skill_name="$(basename "${skill_dir}")"
+  if [ -f "${skill_dir}SKILL.md" ]; then
+    echo "  Linking skill: ${skill_name}"
+    ln -sf "${skill_dir}" "${HOME}/.agents/skills/${skill_name}"
+  fi
+done
 
 NIX_MANAGED_FILE="${HOME}/.config/nix_managed"
 
@@ -107,20 +127,29 @@ fi
 if [[ "$(uname -s)" == "Darwin" ]]; then
   if command -v brew &> /dev/null; then
     echo "Detected macOS. Running brew bundle..."
-    brew bundle --file="${BASE_DIR}/opt/profiles/Brewfile"
+    brew bundle --no-upgrade --file="${BASE_DIR}/opt/profiles/Brewfile" || {
+      echo "WARNING: Some brew formulas failed to install. Review the output above."
+      echo "         This is non-fatal — the rest of the setup will continue."
+    }
   else
     echo "WARNING: Homebrew not found. Please install it: https://brew.sh/"
   fi
 fi
 
-# only setup these scripts when docker is installed
+# only setup these scripts when docker is installed and responsive
 if command -v docker &> /dev/null; then
     # Setup docker permissions for the current user
     "${HOME}/opt/bin/setup_docker_perms.sh"
     
-    if docker --version 2>&1 >/dev/null; then
+    # Check if Docker daemon is actually running (timeout after 5 seconds)
+    # Use gtimeout on macOS (coreutils), timeout on Linux
+    TIMEOUT_CMD="timeout"
+    command -v timeout &>/dev/null || TIMEOUT_CMD="gtimeout"
+    if ($TIMEOUT_CMD 5 docker info &>/dev/null 2>&1) 2>/dev/null; then
         [ ! -f "${HOME}/.ruby.env" ] && source "${HOME}/opt/bin/setup_ruby-docker.sh"
         [ ! -f "${HOME}/.dindcenv" ] && source "${HOME}/opt/bin/setup_dindc_alias.sh"
+    else
+        echo "NOTE: Docker is installed but the daemon is not running. Skipping Docker-dependent setup."
     fi
 fi
 
