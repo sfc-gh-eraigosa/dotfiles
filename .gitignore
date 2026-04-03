@@ -8,6 +8,10 @@
 !.gitignore
 !opt/
 !opt/**
+!src/
+!src/**
+src/tmux-mgr/tmux-mgr
+opt/bin/tmux-mgr
 opt/bin/vault
 opt/.DS_Store
 opt/rbenv

@@ -231,6 +231,12 @@ if [ ! -d "${HOME}/.nvm" ]; then
   curl -fsSL -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash > /dev/null 2>&1
 fi
 
+# build and install tmux-mgr
+if [ -f "${BASE_DIR}/src/tmux-mgr/build.sh" ]; then
+    echo "Installing tmux-mgr..."
+    "${BASE_DIR}/src/tmux-mgr/build.sh"
+fi
+
 # install fnm
 if ! command -v fnm &> /dev/null; then
   echo "Installing fnm..."
