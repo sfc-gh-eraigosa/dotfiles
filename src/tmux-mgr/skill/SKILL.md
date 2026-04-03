@@ -1,3 +1,7 @@
+---
+name: tmux
+description: A powerful, Go-based management tool for tmux, providing structured session management, window arrangements, and layout persistence.
+---
 # Tmux Management Skill
 
 This skill provides expertise in managing tmux sessions and windows using the `tmux-mgr` tool. It allows the Gemini CLI to interact with tmux sessions, manage layouts, and introspect pane content using natural language.
