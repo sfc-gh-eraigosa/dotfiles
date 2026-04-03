@@ -137,6 +137,10 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
       echo "WARNING: Some brew formulas failed to install. Review the output above."
       echo "         This is non-fatal — the rest of the setup will continue."
     }
+    # Setup Vault as a standalone binary to avoid Xcode versioning issues
+    if [ -f "${BASE_DIR}/opt/bin/vault-setup.sh" ]; then
+      "${BASE_DIR}/opt/bin/vault-setup.sh"
+    fi
   else
     echo "WARNING: Homebrew not found. Please install it: https://brew.sh/"
   fi

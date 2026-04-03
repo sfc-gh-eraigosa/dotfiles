@@ -67,8 +67,8 @@ brew 'goenv'
 # to setup in bash profile: eval "$(pyenv init -)"
 brew 'pyenv'
 
-# setup vault (cask installs pre-built binary, no Xcode required)
-cask 'hashicorp/tap/vault'
+# setup vault (managed via vault-setup.sh)
+# brew 'hashicorp/tap/vault'
 brew 'kubeconform'
 brew 'jsonnet'
 brew 'jq'
@@ -98,7 +98,7 @@ brew 'awscli'
 # tap 'snowflake-eng/homebrew-prodsec'
 # brew 'image-advisor'
 
-brew 'bufbuild/buf/buf'
+# brew 'bufbuild/buf/buf'
 
 # tap 'snowflake-eng/homebrew-cloudeng'
 # brew 'snowflake-eng/homebrew-cloudeng/sanssh'

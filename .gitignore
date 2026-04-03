@@ -8,6 +8,7 @@
 !.gitignore
 !opt/
 !opt/**
+opt/bin/vault
 opt/.DS_Store
 opt/rbenv
 opt/bin/docker-machine.5
