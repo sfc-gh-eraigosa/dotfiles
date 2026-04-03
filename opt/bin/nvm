@@ -1,0 +1,10 @@
+#!/bin/bash
+# nvm wrapper for fnm compatibility
+case "" in
+  --version)
+    echo "0.40.1" # Return a fake nvm version
+    ;;
+  *)
+    exec /home/wenlock/.local/share/fnm/fnm ""
+    ;;
+esac

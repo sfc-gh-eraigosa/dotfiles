@@ -44,6 +44,12 @@ if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
     # On Jetson, ensure we have necessary basic tools for dev
     [ -z "$(command -v tegrastats)" ] && echo "WARNING: tegrastats not found. You may need to install JetPack."
     
+    # Setup jtop and stats
+    if [ -f "${BASE_DIR}/opt/bin/setup_jtop.sh" ]; then
+      echo "Setting up jtop and jetson-stats..."
+      "${BASE_DIR}/opt/bin/setup_jtop.sh"
+    fi
+    
     # Set Chromium as default browser
     if command -v apt-get &> /dev/null; then
       echo "Ensuring Chromium is installed and set as default..."
