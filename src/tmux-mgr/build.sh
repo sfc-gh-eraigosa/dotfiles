@@ -20,6 +20,7 @@ cd "$DIR"
 go build -o "$BIN_DIR/tmux-mgr" main.go
 
 echo "Installing tmux skill..."
-ln -sf "$DIR/skill" "$SKILL_INSTALL_DIR/tmux"
+mkdir -p "$SKILL_INSTALL_DIR"
+ln -sfn "$DIR/skill" "$SKILL_INSTALL_DIR/tmux"
 
 echo "tmux-mgr built and skill installed."

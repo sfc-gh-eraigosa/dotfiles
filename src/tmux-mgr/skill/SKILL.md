@@ -14,10 +14,18 @@ The `tmux-mgr` tool is the primary interface for this skill. It is located in `~
 - **List sessions**: `tmux-mgr session list`
 - **Create new session**: `tmux-mgr session new [name]`
 - **Attach to session**: `tmux-mgr session attach [name]`
+- **Detach from session**: `tmux-mgr session detach`
 - **Kill session**: `tmux-mgr session kill [name]`
+- **Save session**: `tmux-mgr session save [name]`
+- **Restore session**: `tmux-mgr session restore [name]`
 
 ### 2. Window & Pane Arrangements
+- **Create new window**: `tmux-mgr window new [name]`
+- **Rename window**: `tmux-mgr window rename [name]`
+- **Split window**: `tmux-mgr window split [horizontal|vertical|left|right|up|down]`
 - **Move focus**: `tmux-mgr window move [left|right|up|down]`
+- **Swap panes**: `tmux-mgr window swap [left|right|up|down]`
+- **Kill current pane**: `tmux-mgr window kill`
 - **Resize panes**: 
   - Incremental: `tmux-mgr window resize [left|right|up|down] [val]`
   - Percentage: `tmux-mgr window resize width 50%` or `tmux-mgr window resize height 25%`
