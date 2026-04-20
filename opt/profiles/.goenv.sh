@@ -71,6 +71,7 @@ if [ -n "$GO_BINARY" ]; then
 fi
 
 if [[ "$EDITOR_TERMINAL" == "true" ]]; then
+    export GOTOOLCHAIN="local"
     return
 fi
 

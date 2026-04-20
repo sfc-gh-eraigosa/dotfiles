@@ -342,7 +342,7 @@ if command -v rbenv &>/dev/null; then
   eval "$(rbenv init - zsh)"
 fi
 
-# fnm (Fast Node Manager)
+# fnm setup
 [[ -d "$HOME/.local/share/fnm" ]] && export PATH="$HOME/.local/share/fnm:$PATH"
 if command -v fnm &>/dev/null; then
   eval "$(fnm env --use-on-cd)"
@@ -353,3 +353,13 @@ fi
 
 # added by Snowflake SnowSQL installer v1.2
 export PATH=/Applications/SnowSQL.app/Contents/MacOS:$PATH
+
+# OpenClaw Integration
+# [ -f "/home/wenlock/.openclaw.sh" ] && source "/home/wenlock/.openclaw.sh"
+
+# OpenClaw Completion
+source "/home/wenlock/.openclaw/completions/openclaw.zsh"
+
+# OpenClaw Completion
+source <(openclaw completion --shell zsh)
+

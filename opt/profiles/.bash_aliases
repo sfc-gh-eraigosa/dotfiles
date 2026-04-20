@@ -335,3 +335,7 @@ alias avalanche_up='GODEBUG="x509ignoreCN=0" go run ./cmd/avaServer -yes-i-reall
 if command -v sf &> /dev/null; then
     eval "$(sf aliases)"
 fi
+
+if [ -f ~/opt/bin/locales.sh ]; then
+    source ~/opt/bin/locales.sh
+fi

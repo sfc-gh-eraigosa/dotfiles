@@ -255,3 +255,14 @@ fi
 
 # SF aliases load moved to daily maintenance above
 
+
+# OpenClaw Integration
+[ -f "/home/wenlock/.openclaw.sh" ] && source "/home/wenlock/.openclaw.sh"
+
+# OpenClaw Completion
+source <(openclaw completion --shell bash)
+
+# Gemini tmux aliases
+alias tmux-start='tmux new-session -A -s gemini gemini'
+alias tmux-attach='tmux attach-session -t gemini'
+alias tmux-ls='tmux ls'
