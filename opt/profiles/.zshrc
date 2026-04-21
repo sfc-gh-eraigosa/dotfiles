@@ -73,7 +73,6 @@ if [ -f ~/.bash_aliases ]; then
     . ~/.bash_aliases
 fi
 
-
 # echo 'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD=true'
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
@@ -154,7 +153,6 @@ ZSH_THEME="agnoster"
 # plugins=(git)
 plugins=(git docker golang zsh-completions kubectl)
 
-
 # Only clone zsh-completions if not in editor terminal (expensive git operation)
 if [[ "$EDITOR_TERMINAL" == "false" ]] && [ ! -d "${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions" ] ; then
   git clone https://github.com/zsh-users/zsh-completions ${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions
@@ -202,9 +200,7 @@ if [ -f ~/.zsh/dircolors-solarized/dircolors.ansi-universal ] ; then
   eval $(dircolors ~/.zsh/dircolors-solarized/dircolors.ansi-dark)
 fi
 
-
 export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
-
 
 # Initialize nodenv with lazy loading for better performance
 if command -v nodenv &> /dev/null; then
@@ -359,14 +355,22 @@ export PATH=/Applications/SnowSQL.app/Contents/MacOS:$PATH
 
 # OpenClaw Completion
 
+# --- Performance Optimizations by Gemini ---
 
+# Optimize compinit to run once per day
+autoload -Uz compinit
+if [[ $(date +%j) != $(stat -c %y ${ZSH_COMPDUMP:-$HOME\/\.zcompdump} 2>/dev/null | cut -d- -f3 | cut -d" " -f1) ]]; then
+  compinit
+else
+  compinit -C
+fi
 
 # Gemini tmux aliases
 alias tmux-start='tmux new-session -A -s gemini gemini'
 alias tmux-attach='tmux attach-session -t gemini'
 alias tmux-ls='tmux ls'
 
-# NVM Lazy Loader for faster startup
+# NVM Lazy Loader
 export NVM_DIR="$HOME/.nvm"
 nvm() {
   unset -f nvm node npm npx yarn pnpm 2>/dev/null
@@ -390,7 +394,7 @@ npx() {
   npx "$@"
 }
 
-# goenv Lazy Loader for faster startup
+# goenv Lazy Loader
 go() {
   unset -f go goenv
   [ -f "$HOME/.goenv.sh" ] && source "$HOME/.goenv.sh"
