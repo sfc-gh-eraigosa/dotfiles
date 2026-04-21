@@ -49,9 +49,11 @@ fi
 # Install/ensure latest Go version at most once per day in non-editor terminals
 if [[ "$EDITOR_TERMINAL" == "false" ]]; then
     if __dotfiles_should_run_daily; then
-        __dotfiles_touch_daily
         # Quietly try to install if nothing exists, or ensure latest is there
-        goenv install latest --skip-existing >/dev/null 2>&1 &
+        # Touch daily AFTER success to ensure we retry on next shell if it failed
+        (
+            goenv install latest --skip-existing >/dev/null 2>&1 && __dotfiles_touch_daily
+        ) &
     fi
 fi
 eval "$(goenv init -)"
@@ -88,7 +90,6 @@ if [ -n "$GO_BINARY" ]; then
 
     # install some go command line tools (once per day)
     if __dotfiles_should_run_daily; then
-        __dotfiles_touch_daily
         go install github.com/bazelbuild/buildtools/buildifier@latest >/dev/null 2>&1 &
         go install golang.org/x/tools/gopls@latest >/dev/null 2>&1 &
         go install github.com/go-delve/delve/cmd/dlv@latest >/dev/null 2>&1 &
@@ -123,8 +124,11 @@ if [ -n "$GO_BINARY" ] && command -v go >/dev/null 2>&1; then
     :
 else
     if [[ "$EDITOR_TERMINAL" == "false" ]]; then
-      echo "✗ go is not installed properly or not in PATH"
+        # Check if we have goenv but no version yet
+        if command -v goenv &>/dev/null && [ -z "$(goenv versions --bare)" ]; then
+            echo "ⓘ goenv: No Go version installed yet. Background installation started..."
+        else
+            echo "✗ go is not installed properly or not in PATH"
+        fi
     fi
 fi
-
-
