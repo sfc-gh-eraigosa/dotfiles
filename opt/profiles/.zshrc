@@ -358,10 +358,10 @@ export PATH=/Applications/SnowSQL.app/Contents/MacOS:$PATH
 # [ -f "/home/wenlock/.openclaw.sh" ] && source "/home/wenlock/.openclaw.sh"
 
 # OpenClaw Completion
-source "/home/wenlock/.openclaw/completions/openclaw.zsh"
+[ -f "/home/wenlock/.openclaw/completions/openclaw.zsh" ] && source "/home/wenlock/.openclaw/completions/openclaw.zsh"
 
 # OpenClaw Completion
-source <(openclaw completion --shell zsh)
+command -v openclaw >/dev/null && source <(openclaw completion --shell zsh)
 
 
 # Gemini tmux aliases
