@@ -89,6 +89,8 @@ if [ -f "$NIX_MANAGED_FILE" ]; then
 else
   if command -v apt-get &> /dev/null; then
     sudo apt-get install -y -qq \
+      build-essential \
+      make \
       corkscrew \
       htop \
       iputils-ping \
