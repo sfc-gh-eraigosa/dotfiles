@@ -358,10 +358,7 @@ export PATH=/Applications/SnowSQL.app/Contents/MacOS:$PATH
 # [ -f "/home/wenlock/.openclaw.sh" ] && source "/home/wenlock/.openclaw.sh"
 
 # OpenClaw Completion
-[ -f "/home/wenlock/.openclaw/completions/openclaw.zsh" ] && source "/home/wenlock/.openclaw/completions/openclaw.zsh"
 
-# OpenClaw Completion
-command -v openclaw >/dev/null && source <(openclaw completion --shell zsh)
 
 
 # Gemini tmux aliases
@@ -403,4 +400,15 @@ goenv() {
   unset -f go goenv
   [ -f "$HOME/.goenv.sh" ] && source "$HOME/.goenv.sh"
   goenv "$@"
+}
+
+# OpenClaw Lazy Completion
+openclaw() {
+  unset -f openclaw
+  if [ -f "/home/wenlock/.openclaw/completions/openclaw.zsh" ]; then
+    source "/home/wenlock/.openclaw/completions/openclaw.zsh"
+  elif command -v openclaw >/dev/null; then
+    source <(openclaw completion --shell zsh)
+  fi
+  openclaw "$@"
 }
