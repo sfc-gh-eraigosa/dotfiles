@@ -326,8 +326,8 @@ fi
 # The following lines have been added by Docker Desktop to enable Docker CLI completions.
 fpath=(/Users/eraigosa/.docker/completions $fpath)
 fpath+=~/.zsh/completions
-autoload -Uz compinit
-compinit
+# autoload -Uz compinit
+# compinit
 # End of Docker CLI completions
 # pyenv setup
 export PYENV_ROOT="$HOME/.pyenv"
@@ -363,3 +363,44 @@ source "/home/wenlock/.openclaw/completions/openclaw.zsh"
 # OpenClaw Completion
 source <(openclaw completion --shell zsh)
 
+
+# Gemini tmux aliases
+alias tmux-start='tmux new-session -A -s gemini gemini'
+alias tmux-attach='tmux attach-session -t gemini'
+alias tmux-ls='tmux ls'
+
+# NVM Lazy Loader for faster startup
+export NVM_DIR="$HOME/.nvm"
+nvm() {
+  unset -f nvm node npm npx yarn pnpm 2>/dev/null
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+  nvm "$@"
+}
+node() {
+  unset -f nvm node npm npx yarn pnpm 2>/dev/null
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  node "$@"
+}
+npm() {
+  unset -f nvm node npm npx yarn pnpm 2>/dev/null
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  npm "$@"
+}
+npx() {
+  unset -f nvm node npm npx yarn pnpm 2>/dev/null
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  npx "$@"
+}
+
+# goenv Lazy Loader for faster startup
+go() {
+  unset -f go goenv
+  [ -f "$HOME/.goenv.sh" ] && source "$HOME/.goenv.sh"
+  go "$@"
+}
+goenv() {
+  unset -f go goenv
+  [ -f "$HOME/.goenv.sh" ] && source "$HOME/.goenv.sh"
+  goenv "$@"
+}

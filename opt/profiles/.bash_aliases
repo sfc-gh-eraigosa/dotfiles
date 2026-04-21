@@ -127,9 +127,9 @@ if [ -f ~/git/projects.cson ]; then
     [ ! -f ~/.atom/projects.cson ] && ln -s ~/git/projects.cson ~/.atom/projects.cson
 fi
 
-if [ -f $HOME/.goenv.sh ]; then
-    . $HOME/.goenv.sh
-fi
+# if [ -f $HOME/.goenv.sh ]; then
+#     . $HOME/.goenv.sh
+# fi
 
 if [ -f $HOME/.docker.sh ]; then
     . $HOME/.docker.sh
@@ -178,10 +178,10 @@ fi
 # for travis gem
 [ -f "$HOME/.travis/travis.sh" ] && source "$HOME/.travis/travis.sh"
 
-if [ -f "/usr/local/opt/nvm/nvm.sh" ] ; then
-    export NVM_DIR="$HOME/.nvm"
-    source "/usr/local/opt/nvm/nvm.sh"
-fi
+# if [ -f "/usr/local/opt/nvm/nvm.sh" ] ; then
+#     export NVM_DIR="$HOME/.nvm"
+#     source "/usr/local/opt/nvm/nvm.sh"
+# fi
 export DOCKER_STACK_ORCHESTRATOR=swarm
 
 # setup java version
