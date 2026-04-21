@@ -155,3 +155,14 @@ alias bazel='bazelisk'
 
 # added by Snowflake SnowSQL installer
 export PATH=/Users/eraigosa/opt/bin:$PATH
+
+#
+# ruby docker environment aliases
+#
+if [ -f /home/wenlock/.ruby.env ] ; then
+    source /home/wenlock/.ruby.env
+else
+    echo ".ruby.env is missing, you can install with : . opt/bin/setup_ruby-docker.sh"
+fi
+# Source git environment shortcuts
+. /home/wenlock/.dindcenv
