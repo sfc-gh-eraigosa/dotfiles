@@ -64,9 +64,20 @@ init_configs() {
     
     # Gemini
     mkdir -p "${GEMINI_DIR}/skills"
+    
     if [ -f "${GEMINI_DOT_DIR}/settings.json" ]; then
         ln -sf "${GEMINI_DOT_DIR}/settings.json" "${GEMINI_DIR}/settings.json"
         echo -e "${GREEN}Symlinked Gemini settings.${NC}"
+    fi
+
+    if [ -d "${GEMINI_DOT_DIR}/policies" ]; then
+        mkdir -p "${GEMINI_DIR}/policies"
+        # Link files inside policies rather than the directory itself for flexibility
+        for f in "${GEMINI_DOT_DIR}/policies"/*; do
+            [ -e "$f" ] || continue
+            ln -sf "$f" "${GEMINI_DIR}/policies/$(basename "$f")"
+        done
+        echo -e "${GREEN}Symlinked Gemini policies.${NC}"
     fi
 
     # GWS
