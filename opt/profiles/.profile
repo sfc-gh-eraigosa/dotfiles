@@ -166,3 +166,6 @@ else
 fi
 # Source git environment shortcuts
 . /home/wenlock/.dindcenv
+
+# Load Gemini CLI environment
+[ -f "$HOME/.gemini.profile" ] && . "$HOME/.gemini.profile"

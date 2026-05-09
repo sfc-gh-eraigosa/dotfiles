@@ -416,3 +416,6 @@ openclaw() {
   fi
   openclaw "$@"
 }
+
+# Load Gemini CLI environment
+[[ -f "$HOME/.gemini.profile" ]] && source "$HOME/.gemini.profile"
