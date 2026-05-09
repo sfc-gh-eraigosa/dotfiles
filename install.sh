@@ -77,16 +77,10 @@ for file in ".profile" ".zshrc" ".bash_logout" ".bashrc"; do
   ln -sf "${BASE_DIR}/opt/profiles/${file}" "${HOME}/${file}"
 done 
 
-# Install Antigravity skills globally
-echo "Installing Antigravity skills..."
-mkdir -p "${HOME}/.agents/skills"
-for skill_dir in "${BASE_DIR}/.agents/skills"/*/; do
-  skill_name="$(basename "${skill_dir}")"
-  if [ -f "${skill_dir}SKILL.md" ]; then
-    echo "  Linking skill: ${skill_name}"
-    ln -sf "${skill_dir}" "${HOME}/.agents/skills/${skill_name}"
-  fi
-done
+# Gemini CLI Configuration (Skills and Policies)
+if [ -f "${BASE_DIR}/opt/bin/install_gemini_skills.sh" ]; then
+    "${BASE_DIR}/opt/bin/install_gemini_skills.sh"
+fi
 
 NIX_MANAGED_FILE="${HOME}/.config/nix_managed"
 
