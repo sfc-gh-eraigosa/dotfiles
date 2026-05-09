@@ -117,3 +117,4 @@ brew 'zns'
 
 # jira stuff - https://github.com/ankitpokhrel/jira-cli?tab=readme-ov-file
 brew 'jira-cli'
+brew 'gemini-cli'
