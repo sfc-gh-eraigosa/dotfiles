@@ -28,6 +28,11 @@ echo "Creating environment profile at $GEMINI_PROFILE..."
 cat << 'EOF' > "$GEMINI_PROFILE"
 # Gemini CLI Environment Setup
 
+# Load NVM
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+
 # Add tmux to PATH (for Nix systems)
 if [ -d "/nix/store/mlyqvaa6lcwjfbp1dvzxkd9g46fksdnj-tmux-3.6a/bin" ]; then
     export PATH="/nix/store/mlyqvaa6lcwjfbp1dvzxkd9g46fksdnj-tmux-3.6a/bin:$PATH"

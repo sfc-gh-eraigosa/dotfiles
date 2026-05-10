@@ -365,35 +365,6 @@ else
   compinit -C
 fi
 
-# Gemini tmux aliases
-alias tmux-start='tmux new-session -A -s gemini gemini'
-alias tmux-attach='tmux attach-session -t gemini'
-alias tmux-ls='tmux ls'
-
-# NVM Lazy Loader
-export NVM_DIR="$HOME/.nvm"
-nvm() {
-  unset -f nvm node npm npx yarn pnpm 2>/dev/null
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
-  nvm "$@"
-}
-node() {
-  unset -f nvm node npm npx yarn pnpm 2>/dev/null
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-  node "$@"
-}
-npm() {
-  unset -f nvm node npm npx yarn pnpm 2>/dev/null
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-  npm "$@"
-}
-npx() {
-  unset -f nvm node npm npx yarn pnpm 2>/dev/null
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-  npx "$@"
-}
-
 # goenv Lazy Loader
 go() {
   unset -f go goenv
