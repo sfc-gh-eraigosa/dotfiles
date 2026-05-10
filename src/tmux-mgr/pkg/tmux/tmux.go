@@ -21,7 +21,7 @@ func (m *Manager) Run(args ...string) (string, error) {
 	if m.Verbose {
 		log.Printf("Executing: tmux %s", strings.Join(args, " "))
 	}
-	cmd := exec.Command("tmux", args...)
+	cmd := exec.Command("/nix/store/mlyqvaa6lcwjfbp1dvzxkd9g46fksdnj-tmux-3.6a/bin/tmux", args...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

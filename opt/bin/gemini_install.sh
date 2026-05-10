@@ -27,17 +27,37 @@ echo "Creating environment profile at $GEMINI_PROFILE..."
 
 cat << 'EOF' > "$GEMINI_PROFILE"
 # Gemini CLI Environment Setup
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # Load nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # Load nvm bash_completion
 
-# Ensure npm global bin is in PATH
-if command -v npm &> /dev/null; then
-    NPM_BIN=$(npm config get prefix)/bin
-    if [[ ":$PATH:" != *":$NPM_BIN:"* ]]; then
-        export PATH="$PATH:$NPM_BIN"
-    fi
+# Add tmux to PATH (for Nix systems)
+if [ -d "/nix/store/mlyqvaa6lcwjfbp1dvzxkd9g46fksdnj-tmux-3.6a/bin" ]; then
+    export PATH="/nix/store/mlyqvaa6lcwjfbp1dvzxkd9g46fksdnj-tmux-3.6a/bin:$PATH"
 fi
+
+# Gemini tmux configuration
+export TMUX_DEFAULT_SESSION="gemini"
+
+tmux-start() {
+    local session_name="$1"
+    if [ -z "$session_name" ]; then
+        # Find the first unused number from 0 to 9
+        for i in {0..9}; do
+            if ! tmux has-session -t "$i" 2>/dev/null; then
+                session_name="$i"
+                break
+            fi
+        done
+    fi
+    session_name="${session_name:-$TMUX_DEFAULT_SESSION}"
+    tmux new-session -A -s "$session_name"
+}
+
+tmux-a() {
+    local session_name="${1:-$TMUX_DEFAULT_SESSION}"
+    tmux attach-session -t "$session_name"
+}
+
+alias tmux-ls="tmux ls"
+
 EOF
 
 # 4. Ensure the profile is sourced in .zshrc and .profile

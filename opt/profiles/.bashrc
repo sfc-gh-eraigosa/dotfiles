@@ -266,3 +266,5 @@ source <(openclaw completion --shell bash)
 alias tmux-start='tmux new-session -A -s gemini gemini'
 alias tmux-attach='tmux attach-session -t gemini'
 alias tmux-ls='tmux ls'
+#AGM function
+source ~/opt/bin/agm.sh
