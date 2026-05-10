@@ -79,18 +79,6 @@ fi
 
 DEFAULT_USER=docker
 export Z_HOME=$HOME
-if [ ! -d $Z_HOME ] ; then
-    export Z_HOME=/home/eraigosa
-fi
-if [ ! -d $Z_HOME ] ; then
-    export Z_HOME=/home/wenlock
-fi
-if [ ! -d $Z_HOME ] ; then
-    export Z_HOME=/Users/eraigosa
-fi
-if [ ! -d $Z_HOME ] ; then
-    export Z_HOME=/home/codespace
-fi
 
 if [ -d "${Z_HOME}/.oh-my-zsh" ] ; then
   export ZSH="${Z_HOME}/.oh-my-zsh"
@@ -99,7 +87,7 @@ else
 fi
 
 if [ -f ~/opt/themes/agnoster.zsh-theme ] ; then
-cp ~/opt/themes/agnoster.zsh-theme $ZSH/themes/agnoster.zsh-theme
+  cp ~/opt/themes/agnoster.zsh-theme "$ZSH/themes/agnoster.zsh-theme"
 fi
 
 # Set name of the theme to load.
@@ -197,7 +185,7 @@ if [ -f ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh ] ; then
 fi
 
 if [ -f ~/.zsh/dircolors-solarized/dircolors.ansi-universal ] ; then
-  eval $(dircolors ~/.zsh/dircolors-solarized/dircolors.ansi-dark)
+  eval "$(dircolors ~/.zsh/dircolors-solarized/dircolors.ansi-dark)"
 fi
 
 export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
@@ -212,7 +200,10 @@ if command -v nodenv &> /dev/null; then
     eval "$(nodenv init -)"
   fi
 fi
-source  $HOME/git/powerlevel10k/powerlevel10k.zsh-theme
+
+if [ -f "$HOME/git/powerlevel10k/powerlevel10k.zsh-theme" ]; then
+  source "$HOME/git/powerlevel10k/powerlevel10k.zsh-theme"
+fi
 
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
 # Lazy load SDKMAN for better performance in editor terminals
@@ -232,7 +223,7 @@ test -f ${HOME}/.rbenv/shims/gh && rm -f ${HOME}/.rbenv/shims/gh
 
 #
 # node in path
-PATH=$PATH:$HOME/.nodenv/shims
+export PATH="$PATH:$HOME/.nodenv/shims"
 
 #
 # GITHUB_TOKEN setup from stored credential (skip expensive git credential call in editor terminals)
@@ -310,7 +301,7 @@ if command -v sf &> /dev/null; then
     eval "$(sf aliases)"
   fi
 fi
-export PATH="$PATH:/Users/eraigosa/go/bin"
+export PATH="$PATH:$HOME/go/bin"
 # Fix Docker permissions if needed (Linux only)
 if [[ "$(uname -s)" == "Linux" ]] && [[ "$EDITOR_TERMINAL" == "false" ]]; then
   if [ -S /var/run/docker.sock ] && [ ! -w /var/run/docker.sock ]; then
@@ -320,7 +311,7 @@ if [[ "$(uname -s)" == "Linux" ]] && [[ "$EDITOR_TERMINAL" == "false" ]]; then
 fi
 
 # The following lines have been added by Docker Desktop to enable Docker CLI completions.
-fpath=(/Users/eraigosa/.docker/completions $fpath)
+[ -d "$HOME/.docker/completions" ] && fpath=($HOME/.docker/completions $fpath)
 fpath+=~/.zsh/completions
 # autoload -Uz compinit
 # compinit
@@ -348,10 +339,12 @@ fi
 [[ -s ~/.zsh/completions/cortex.zsh ]] && source ~/.zsh/completions/cortex.zsh
 
 # added by Snowflake SnowSQL installer v1.2
-export PATH=/Applications/SnowSQL.app/Contents/MacOS:$PATH
+if [ -d "/Applications/SnowSQL.app/Contents/MacOS" ]; then
+  export PATH="/Applications/SnowSQL.app/Contents/MacOS:$PATH"
+fi
 
 # OpenClaw Integration
-# [ -f "/home/wenlock/.openclaw.sh" ] && source "/home/wenlock/.openclaw.sh"
+# [ -f "$HOME/.openclaw.sh" ] && source "$HOME/.openclaw.sh"
 
 # OpenClaw Completion
 
@@ -359,11 +352,19 @@ export PATH=/Applications/SnowSQL.app/Contents/MacOS:$PATH
 
 # Optimize compinit to run once per day
 autoload -Uz compinit
-if [[ $(date +%j) != $(stat -c %y ${ZSH_COMPDUMP:-$HOME\/\.zcompdump} 2>/dev/null | cut -d- -f3 | cut -d" " -f1) ]]; then
+_comp_dumpfile="${ZSH_COMPDUMP:-$HOME/.zcompdump}"
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  _comp_mtime=$(stat -f %m "$_comp_dumpfile" 2>/dev/null || echo 0)
+else
+  _comp_mtime=$(stat -c %Y "$_comp_dumpfile" 2>/dev/null || echo 0)
+fi
+
+if (( $(date +%s) - _comp_mtime > 86400 )); then
   compinit
 else
   compinit -C
 fi
+unset _comp_dumpfile _comp_mtime
 
 # goenv Lazy Loader
 go() {
@@ -380,8 +381,8 @@ goenv() {
 # OpenClaw Lazy Completion
 openclaw() {
   unset -f openclaw
-  if [ -f "/home/wenlock/.openclaw/completions/openclaw.zsh" ]; then
-    source "/home/wenlock/.openclaw/completions/openclaw.zsh"
+  if [ -f "$HOME/.openclaw/completions/openclaw.zsh" ]; then
+    source "$HOME/.openclaw/completions/openclaw.zsh"
   elif command -v openclaw >/dev/null; then
     source <(openclaw completion --shell zsh)
   fi
