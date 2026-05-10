@@ -25,8 +25,12 @@ var pushCmd = &cobra.Command{
 		remoteOut, _ := exec.Command("git", "-C", path, "remote", "get-url", "origin").Output()
 		remoteURL := strings.TrimSpace(string(remoteOut))
 		remoteURL = strings.TrimSuffix(remoteURL, ".git")
-		// Convert SSH to HTTPS if necessary
 		remoteURL = strings.Replace(remoteURL, "git@github.com:", "https://github.com/", 1)
+
+		// Get current remote SHA before we push
+		exec.Command("git", "-C", path, "fetch", "origin").Run()
+		remoteSHAOut, _ := exec.Command("git", "-C", path, "rev-parse", fmt.Sprintf("origin/%s", currentBranch)).Output()
+		oldRemoteSHA := strings.TrimSpace(string(remoteSHAOut))
 
 		// 1. Safety Backup
 		fmt.Println("Step 1: Creating safety backup...")
@@ -43,12 +47,21 @@ var pushCmd = &cobra.Command{
 			fmt.Printf("Error pushing: %s\n", string(out))
 			return
 		}
+
+		// Get new local SHA after push
+		newSHAOut, _ := exec.Command("git", "-C", path, "rev-parse", "HEAD").Output()
+		newSHA := strings.TrimSpace(string(newSHAOut))
+
 		fmt.Println("Successfully pushed changes!")
 
 		// 4. Generate Diff Link
 		if strings.Contains(remoteURL, "github.com") {
-			fmt.Printf("\nView changes on GitHub: %s/compare/%s...%s\n", remoteURL, "main", currentBranch)
-			// Note: 'main' is used as base for simplicity, could be refined to detect default branch
+			if oldRemoteSHA != "" && newSHA != "" && oldRemoteSHA != newSHA {
+				fmt.Printf("\nView changes on GitHub: %s/compare/%s...%s\n", remoteURL, oldRemoteSHA, newSHA)
+			} else {
+				// Fallback if SHAs match or failed to retrieve
+				fmt.Printf("\nView changes on GitHub: %s/compare/%s...%s\n", remoteURL, "main", currentBranch)
+			}
 		}
 	},
 }
