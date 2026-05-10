@@ -32,8 +32,10 @@ This skill provides a structured and safe workflow for managing Git repositories
 - It automatically handles the safety backup branch.
 
 ### 4. Summarize & Link (Verification Phase)
-- After execution, provide the **GitHub Comparison Link** (from 'gss push') or the **Pull Request URL** (from 'gss pr').
-- Recap the safety steps taken (backup branch created, rebase performed).
+- After execution, summarize the result using the output from 'gss push'.
+- **Detailed Summary**: If fewer than 10 files were changed, provide the list of files and their +/- line counts.
+- **Compact Summary**: If 10 or more files were changed, provide the high-level stats (e.g., "15 files changed").
+- Provide the **GitHub Comparison Link** or the **Pull Request URL**.
 
 ## Guidelines
 - **No Assumptions**: Even if a sync seems obvious, you must ask for permission first.

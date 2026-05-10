@@ -54,13 +54,25 @@ var pushCmd = &cobra.Command{
 
 		fmt.Println("Successfully pushed changes!")
 
-		// 4. Generate Diff Link
-		if strings.Contains(remoteURL, "github.com") {
-			if oldRemoteSHA != "" && newSHA != "" && oldRemoteSHA != newSHA {
+		// 4. Generate Summary and Diff Link
+		if oldRemoteSHA != "" && newSHA != "" && oldRemoteSHA != newSHA {
+			// Get stats
+			statsOut, _ := exec.Command("git", "-C", path, "diff", "--stat", oldRemoteSHA, newSHA).Output()
+			statsLines := strings.Split(strings.TrimSpace(string(statsOut)), "\n")
+			
+			if len(statsLines) > 0 {
+				fmt.Printf("\nSummary of changes (%d files):\n", len(statsLines)-1)
+				if len(statsLines)-1 < 10 {
+					// Show detailed list if < 10 files
+					fmt.Println(string(statsOut))
+				} else {
+					// Just show the final line (e.g., "15 files changed, 100 insertions(+), 50 deletions(-)")
+					fmt.Println(statsLines[len(statsLines)-1])
+				}
+			}
+
+			if strings.Contains(remoteURL, "github.com") {
 				fmt.Printf("\nView changes on GitHub: %s/compare/%s...%s\n", remoteURL, oldRemoteSHA, newSHA)
-			} else {
-				// Fallback if SHAs match or failed to retrieve
-				fmt.Printf("\nView changes on GitHub: %s/compare/%s...%s\n", remoteURL, "main", currentBranch)
 			}
 		}
 	},
