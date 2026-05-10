@@ -85,3 +85,12 @@ commandRegex = "git\\s+push.*-f"
 decision = "ask_user"
 priority = 900
 denyMessage = "Force pushing to a git repository requires manual confirmation."
+
+[[rule]]
+toolName = "run_shell_command"
+# ENFORCE HUMAN APPROVAL FOR GSS
+# This ensures the CLI itself will prompt the user, regardless of agent intent.
+commandPrefix = ["gss push", "gss pr", "gss sync"]
+decision = "ask_user"
+priority = 1000
+denyMessage = "Git synchronization via gss requires explicit user confirmation."
