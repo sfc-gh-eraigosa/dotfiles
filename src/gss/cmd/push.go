@@ -17,7 +17,16 @@ var pushCmd = &cobra.Command{
 		// Get current branch
 		branchOut, _ := exec.Command("git", "-C", path, "rev-parse", "--abbrev-ref", "HEAD").Output()
 		currentBranch := strings.TrimSpace(string(branchOut))
-		if currentBranch == "" { currentBranch = "main" }
+		if currentBranch == "" {
+			currentBranch = "main"
+		}
+
+		// Get remote URL to construct diff link
+		remoteOut, _ := exec.Command("git", "-C", path, "remote", "get-url", "origin").Output()
+		remoteURL := strings.TrimSpace(string(remoteOut))
+		remoteURL = strings.TrimSuffix(remoteURL, ".git")
+		// Convert SSH to HTTPS if necessary
+		remoteURL = strings.Replace(remoteURL, "git@github.com:", "https://github.com/", 1)
 
 		// 1. Safety Backup
 		fmt.Println("Step 1: Creating safety backup...")
@@ -35,6 +44,12 @@ var pushCmd = &cobra.Command{
 			return
 		}
 		fmt.Println("Successfully pushed changes!")
+
+		// 4. Generate Diff Link
+		if strings.Contains(remoteURL, "github.com") {
+			fmt.Printf("\nView changes on GitHub: %s/compare/%s...%s\n", remoteURL, "main", currentBranch)
+			// Note: 'main' is used as base for simplicity, could be refined to detect default branch
+		}
 	},
 }
 

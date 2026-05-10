@@ -30,14 +30,14 @@ var prCmd = &cobra.Command{
 
 		fmt.Println("Attempting to create Pull Request via 'gh' CLI...")
 		if _, err := exec.LookPath("gh"); err == nil {
-			// Using -C for gh as well if supported, otherwise cd
 			c := exec.Command("gh", "pr", "create", "--fill")
 			c.Dir = path
 			out, err := c.CombinedOutput()
 			if err != nil {
 				fmt.Printf("Error creating PR: %s\n", string(out))
 			} else {
-				fmt.Println("Pull Request created successfully!")
+				prLink := string(out)
+				fmt.Printf("Pull Request created successfully: %s", prLink)
 			}
 		} else {
 			fmt.Println("'gh' CLI not found. Please create the PR manually on GitHub.")
