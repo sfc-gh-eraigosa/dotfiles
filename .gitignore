@@ -32,3 +32,5 @@ opt/bin/.byebug_history
 opt/bin/nopr
 opt/bin/nopr-gateway
 opt/bin/nopr-server
+!opt/bin/*.sh
+opt/bin/gss

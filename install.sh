@@ -231,6 +231,12 @@ if [ -f "${BASE_DIR}/opt/bin/gemini_install.sh" ]; then
     "${BASE_DIR}/opt/bin/gemini_install.sh"
 fi
 
+# build and install gss
+if [ -f "${BASE_DIR}/src/gss/build.sh" ]; then
+    echo "Installing gss (dotfiles manager)..."
+    "${BASE_DIR}/src/gss/build.sh"
+fi
+
 # build and install tmux-mgr
 if [ -f "${BASE_DIR}/src/tmux-mgr/build.sh" ]; then
     echo "Installing tmux-mgr..."

@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Gemini CLI Installation Script
-# This script updates Node.js via nvm and installs the Gemini CLI
+# This script updates Node.js via nvm, installs the Gemini CLI,
+# and configures safety policies.
 
 # 1. Update Node.js to the latest LTS version using nvm
 echo "Updating Node.js to the latest LTS version..."
@@ -21,11 +22,30 @@ fi
 echo "Installing Gemini CLI..."
 npm install -g @google/gemini-cli
 
-# 3. Create environment profile
+# 3. Configure Safety Policies
+echo "Configuring Gemini safety policies..."
+POLICIES_DIR="$HOME/.gemini/policies"
+mkdir -p "$POLICIES_DIR"
+
+# Identify the base directory of the dotfiles repo
+# We use a literal path or relative calculation that doesn't trigger injection
+# Since we are in opt/bin/, the root is ../..
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+BASE_DIR=$(cd -- "$SCRIPT_DIR/../.." &> /dev/null && pwd)
+SAFETY_POLICY_SRC="$BASE_DIR/opt/conf/gemini/policies/safety.toml"
+
+if [ -f "$SAFETY_POLICY_SRC" ]; then
+    echo "Linking safety policy from $SAFETY_POLICY_SRC..."
+    ln -sf "$SAFETY_POLICY_SRC" "$POLICIES_DIR/safety.toml"
+else
+    echo "Warning: Safety policy template not found at $SAFETY_POLICY_SRC"
+fi
+
+# 4. Create environment profile
 GEMINI_PROFILE="$HOME/.gemini.profile"
 echo "Creating environment profile at $GEMINI_PROFILE..."
 
-cat << 'EOF' > "$GEMINI_PROFILE"
+cat << 'PROFOF' > "$GEMINI_PROFILE"
 # Gemini CLI Environment Setup
 
 # Load NVM
@@ -63,9 +83,9 @@ tmux-a() {
 
 alias tmux-ls="tmux ls"
 
-EOF
+PROFOF
 
-# 4. Ensure the profile is sourced in .zshrc and .profile
+# 5. Ensure the profile is sourced in .zshrc and .profile
 for shell_config in "$HOME/.zshrc" "$HOME/.profile"; do
     if [ -f "$shell_config" ]; then
         if ! grep -q "source.*\.gemini\.profile" "$shell_config" && ! grep -q "\. .*\.gemini\.profile" "$shell_config"; then
@@ -82,7 +102,7 @@ for shell_config in "$HOME/.zshrc" "$HOME/.profile"; do
     fi
 done
 
-# 5. Verify installation
+# 6. Verify installation
 if command -v gemini &> /dev/null; then
     echo "Gemini CLI installed successfully!"
     gemini --version
