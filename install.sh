@@ -258,3 +258,13 @@ if [ -f "${HOME}/.gitrepos" ] ; then
   cd "${HOME}"
   "${HOME}/.gitrepos"
 fi
+
+# Load Nano Platform environment
+for shell_config in "$HOME/.zshrc" "$HOME/.profile"; do
+    if [ -f "$shell_config" ]; then
+        if ! grep -q "\.nano_profile" "$shell_config"; then
+            echo "Adding .nano_profile source to $shell_config"
+            echo '[ -f "$HOME/.nano_profile" ] && . "$HOME/.nano_profile"' >> "$shell_config"
+        fi
+    fi
+done

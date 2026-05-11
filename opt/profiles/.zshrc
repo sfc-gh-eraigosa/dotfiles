@@ -391,3 +391,6 @@ openclaw() {
 
 # Load Gemini CLI environment
 [[ -f "$HOME/.gemini.profile" ]] && source "$HOME/.gemini.profile"
+
+# Load Nano Platform environment
+[ -f "$HOME/.nano_profile" ] && . "$HOME/.nano_profile"
