@@ -20,15 +20,15 @@ This skill provides a structured and safe workflow for managing Git repositories
 - Summarize the changes clearly for the user.
 
 ### 2. Mandatory Confirmation (Decision Phase)
-- **NEVER** execute 'gss push' or 'gss pr' autonomously.
-- You MUST explicitly ask the user for a directive to proceed.
-- Present the user with clear options:
+- **NEVER** execute 'gss push', 'gss pr', or 'git push' autonomously.
+- You MUST explicitly use the `ask_user` tool to request permission to proceed, even if the user asks you to "sync" or "commit" changes. A request to "sync" means start the workflow, not skip the confirmation.
+- Present the user with clear options in the `ask_user` tool:
   - **Push to Origin**: (Backup -> Sync -> Push)
   - **Create PR**: (Feature Branch -> Push -> GH PR)
   - **Cancel**: Do nothing.
 
 ### 3. Execution (Action Phase)
-- ONLY proceed with 'gss push' if the user provides an explicit directive to do so.
+- ONLY proceed with 'gss push' if the user selects the corresponding option via the `ask_user` tool. Do not use standard `git push`.
 - It automatically handles the safety backup branch.
 
 ### 4. Summarize & Link (Verification Phase)
