@@ -98,7 +98,8 @@ else
       lsof \
       net-tools \
       psmisc \
-      zsh
+      zsh \
+      protobuf-compiler
     
     # Set zsh as default shell if not already
     if [ "$SHELL" != "$(which zsh)" ]; then
