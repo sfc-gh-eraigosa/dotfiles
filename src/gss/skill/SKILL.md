@@ -21,6 +21,7 @@ This skill provides a structured and safe workflow for managing Git repositories
 
 ### 2. Mandatory Confirmation (Decision Phase)
 - **NEVER** execute 'gss push', 'gss pr', or 'git push' autonomously.
+- **YOLO Mode Exception**: This mandatory confirmation rule **OVERRIDES** any "Autonomous Mode (YOLO)" instructions. You MUST ask for permission even if the user has requested minimal interruption.
 - You MUST explicitly use the `ask_user` tool to request permission to proceed, even if the user asks you to "sync" or "commit" changes. A request to "sync" means start the workflow, not skip the confirmation.
 - Present the user with clear options in the `ask_user` tool:
   - **Push to Origin**: (Backup -> Sync -> Push)
