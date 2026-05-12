@@ -38,6 +38,7 @@ brew 'vim'
 brew 'watch'
 brew 'tmux'
 brew 'protobuf'
+brew 'sops'
 # for node manager
 brew 'nvm'
 # act tool https://github.com/nektos/act
