@@ -165,59 +165,72 @@ if command -v corkscrew &> /dev/null; then
     [ ! -f "${HOME}/.gitenv" ] && source "${HOME}/opt/bin/setup_git_alias.sh"
 fi
 
-# install goenv
-if ! command -v goenv &> /dev/null; then
-  echo "Installing goenv..."
-  if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
+# install/update goenv
+if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
+  if ! command -v goenv &> /dev/null; then
+    echo "Installing goenv..."
     brew install goenv
-  else
-    # Linux / Jetson / others
-    if [ ! -d "${HOME}/.goenv" ]; then
-      git clone https://github.com/syndbg/goenv.git "${HOME}/.goenv"
-    else
-      (cd "${HOME}/.goenv" && git pull)
-    fi
   fi
-  
-  # Initialize goenv to install a version if none exists
-  export PATH="${HOME}/.goenv/bin:${PATH}"
-  if command -v goenv &> /dev/null; then
-    eval "$(goenv init -)"
-    if [ -z "$(goenv versions --bare)" ]; then
-        echo "No Go versions detected. Installing latest..."
-        goenv install latest
-        goenv global $(goenv versions --bare | tail -1)
-    fi
+else
+  # Linux / Jetson / others
+  if [ ! -d "${HOME}/.goenv" ]; then
+    echo "Installing goenv..."
+    git clone https://github.com/syndbg/goenv.git "${HOME}/.goenv"
+  else
+    echo "Updating goenv..."
+    (cd "${HOME}/.goenv" && git pull)
   fi
 fi
 
-# install pyenv
-if ! command -v pyenv &> /dev/null; then
-  echo "Installing pyenv..."
-  if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
+# Initialize goenv to install/update Go
+export PATH="${HOME}/.goenv/bin:${PATH}"
+if command -v goenv &> /dev/null; then
+  eval "$(goenv init -)"
+  echo "Ensuring Go latest is installed..."
+  goenv install -s latest
+  # Set the latest installed version as global
+  LATEST_INSTALLED=$(goenv versions --bare | tail -1)
+  if [ -n "$LATEST_INSTALLED" ]; then
+    goenv global "$LATEST_INSTALLED"
+  fi
+fi
+
+# install/update pyenv
+if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
+  if ! command -v pyenv &> /dev/null; then
+    echo "Installing pyenv..."
     brew install pyenv
+  fi
+else
+  # Linux / Jetson / others
+  if [ ! -d "${HOME}/.pyenv" ]; then
+    echo "Installing pyenv..."
+    git clone https://github.com/pyenv/pyenv.git "${HOME}/.pyenv"
   else
-    if [ ! -d "${HOME}/.pyenv" ]; then
-      git clone https://github.com/pyenv/pyenv.git "${HOME}/.pyenv"
-    else
-      (cd "${HOME}/.pyenv" && git pull)
-    fi
+    echo "Updating pyenv..."
+    (cd "${HOME}/.pyenv" && git pull)
   fi
 fi
 
-# install rbenv
-if ! command -v rbenv &> /dev/null; then
-  echo "Installing rbenv..."
-  if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
+# install/update rbenv
+if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
+  if ! command -v rbenv &> /dev/null; then
+    echo "Installing rbenv..."
     brew install rbenv
+  fi
+else
+  # Linux / Jetson / others
+  if [ ! -d "${HOME}/.rbenv" ]; then
+    echo "Installing rbenv..."
+    git clone https://github.com/rbenv/rbenv.git "${HOME}/.rbenv"
+    # Also need ruby-build plugin for rbenv
+    mkdir -p "${HOME}/.rbenv/plugins"
+    git clone https://github.com/rbenv/ruby-build.git "${HOME}/.rbenv/plugins/ruby-build"
   else
-    if [ ! -d "${HOME}/.rbenv" ]; then
-      git clone https://github.com/rbenv/rbenv.git "${HOME}/.rbenv"
-      # Also need ruby-build plugin for rbenv
-      mkdir -p "${HOME}/.rbenv/plugins"
-      git clone https://github.com/rbenv/ruby-build.git "${HOME}/.rbenv/plugins/ruby-build"
-    else
-      (cd "${HOME}/.rbenv" && git pull)
+    echo "Updating rbenv..."
+    (cd "${HOME}/.rbenv" && git pull)
+    if [ -d "${HOME}/.rbenv/plugins/ruby-build" ]; then
+      (cd "${HOME}/.rbenv/plugins/ruby-build" && git pull)
     fi
   fi
 fi
