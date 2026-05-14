@@ -81,7 +81,7 @@ tmux-a() {
     tmux attach-session -t "$session_name"
 }
 
-alias tmux-ls="tmux ls"
+alias tmux-ls="tmux ls 2>/dev/null || echo 'No tmux sessions running'"
 
 PROFOF
 

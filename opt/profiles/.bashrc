@@ -265,6 +265,6 @@ source <(openclaw completion --shell bash)
 # Gemini tmux aliases
 alias tmux-start='tmux new-session -A -s gemini gemini'
 alias tmux-attach='tmux attach-session -t gemini'
-alias tmux-ls='tmux ls'
+alias tmux-ls='tmux ls 2>/dev/null || echo "No tmux sessions running"'
 #AGM function
 source ~/opt/bin/agm.sh
