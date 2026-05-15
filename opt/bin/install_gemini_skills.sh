@@ -83,5 +83,6 @@ fi
 link_skill "$BASE_DIR/src/ssh-host-finder" "$SKILLS_DEST/ssh-host-finder"
 link_skill "$BASE_DIR/src/tmux-mgr/skill" "$SKILLS_DEST/tmux"
 link_skill "$BASE_DIR/src/gss/skill" "$SKILLS_DEST/git-safe-sync"
+link_skill "$BASE_DIR/src/ssh-key-sync" "$SKILLS_DEST/ssh-key-sync"
 
 echo "Gemini CLI Configuration complete."
