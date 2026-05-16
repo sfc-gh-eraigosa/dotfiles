@@ -266,3 +266,6 @@ source <(openclaw completion --shell bash)
 alias tmux-start='tmux new-session -A -s gemini gemini'
 alias tmux-attach='tmux attach-session -t gemini'
 alias tmux-ls='tmux ls'
+
+# Added by tmux-mgr
+[ -f /Users/eraigosa/.config/tmux-mgr/aliases.sh ] && source /Users/eraigosa/.config/tmux-mgr/aliases.sh

@@ -416,3 +416,6 @@ openclaw() {
   fi
   openclaw "$@"
 }
+
+# Added by tmux-mgr
+[ -f /Users/eraigosa/.config/tmux-mgr/aliases.sh ] && source /Users/eraigosa/.config/tmux-mgr/aliases.sh

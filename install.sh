@@ -241,6 +241,9 @@ fi
 if [ -f "${BASE_DIR}/src/tmux-mgr/build.sh" ]; then
     echo "Installing tmux-mgr..."
     "${BASE_DIR}/src/tmux-mgr/build.sh"
+    if [ -f "${HOME}/opt/bin/tmux-mgr" ]; then
+        "${HOME}/opt/bin/tmux-mgr" alias install
+    fi
 fi
 
 # install fnm

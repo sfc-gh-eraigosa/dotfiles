@@ -26,6 +26,24 @@ func (m *Manager) Run(args ...string) (string, error) {
 	return string(out), err
 }
 
+// Attach attaches to an existing tmux session interactively.
+func (m *Manager) Attach(name string) error {
+	if m.Verbose {
+		log.Printf("Attaching to session: %s", name)
+	}
+	c := exec.Command("tmux", "attach-session", "-t", name)
+	c.Stdin = os.Stdin
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	return c.Run()
+}
+
+// SetPaneTitle sets the title of the current pane.
+func (m *Manager) SetPaneTitle(title string) error {
+	_, err := m.Run("select-pane", "-T", title)
+	return err
+}
+
 // Layout represents a tmux window layout.
 type Layout struct {
 	Name    string       `json:"name"`
