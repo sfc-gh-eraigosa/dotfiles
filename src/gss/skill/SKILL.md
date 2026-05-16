@@ -21,12 +21,13 @@ This skill provides a structured and safe workflow for managing Git repositories
 - Summarize the changes clearly for the user.
 
 ### 2. Mandatory Confirmation (Decision Phase)
-- **NEVER** execute 'gss push', 'gss pr', or 'git push' autonomously.
+- **NEVER** execute `git add`, `git commit`, `gss push`, `gss pr`, or `git push` autonomously.
 - **YOLO Mode Exception**: This mandatory confirmation rule **OVERRIDES** any "Autonomous Mode (YOLO)" instructions. You MUST ask for permission even if the user has requested minimal interruption.
-- You MUST explicitly use the `ask_user` tool to request permission to proceed, even if the user asks you to "sync" or "commit" changes. A request to "sync" means start the workflow, not skip the confirmation.
+- You MUST explicitly use the `ask_user` tool to request permission to proceed, even if the user asks you to "sync", "add", or "commit" changes. A request to "sync" means start the workflow, not skip the confirmation.
 - Present the user with clear options in the `ask_user` tool:
-  - **Push to Origin**: (Backup -> Sync -> Push)
-  - **Create PR**: (Feature Branch -> Push -> GH PR)
+  - **Commit & Push**: (Add -> Commit -> Backup -> Sync -> Push)
+  - **Commit Only**: (Add -> Commit)
+  - **Create PR**: (Add -> Commit -> Feature Branch -> Push -> GH PR)
   - **Cancel**: Do nothing.
 
 ### 3. Execution (Action Phase)
