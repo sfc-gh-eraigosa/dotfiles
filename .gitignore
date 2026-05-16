@@ -29,3 +29,14 @@ opt/bin/snowkube
 *.swp
 .custom_alias
 opt/bin/.byebug_history
+opt/bin/nopr
+opt/bin/nopr-gateway
+opt/bin/nopr-server
+!opt/bin/*.sh
+opt/bin/gss
+opt/bin/wol
+opt/bin/nano-*
+opt/bin/ntop
+opt/bin/thermo-cli
+opt/nano/
+opt/clawdad/

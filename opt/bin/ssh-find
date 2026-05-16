@@ -74,4 +74,23 @@ with open(config_path, 'w') as f:
 done
 
 echo "Finished scanning all found hosts. No match confirmed."
+
+# Check for Wake-on-LAN mapping
+WOL_MAP="${HOME}/.ssh/wol_map.json"
+if [[ -f "$WOL_MAP" ]] && command -v jq &>/dev/null; then
+    MAC=$(jq -r ".[\"$TARGET_ALIAS\"] // empty" "$WOL_MAP")
+    if [[ -n "$MAC" ]]; then
+        echo ""
+        echo "Found Wake-on-LAN MAC address for '$TARGET_ALIAS': $MAC"
+        echo -n "Would you like to send a magic packet to wake it up? (y/n): "
+        read -r choice
+        if [[ "$choice" == "y" ]] && command -v wol &>/dev/null; then
+            wol "$MAC"
+            echo "Magic packet sent. Please wait a minute for the host to boot and try again."
+        elif [[ "$choice" == "y" ]]; then
+            echo "Error: 'wol' command not found."
+        fi
+    fi
+fi
+
 exit 1

@@ -77,16 +77,10 @@ for file in ".profile" ".zshrc" ".bash_logout" ".bashrc"; do
   ln -sf "${BASE_DIR}/opt/profiles/${file}" "${HOME}/${file}"
 done 
 
-# Install Antigravity skills globally
-echo "Installing Antigravity skills..."
-mkdir -p "${HOME}/.agents/skills"
-for skill_dir in "${BASE_DIR}/.agents/skills"/*/; do
-  skill_name="$(basename "${skill_dir}")"
-  if [ -f "${skill_dir}SKILL.md" ]; then
-    echo "  Linking skill: ${skill_name}"
-    ln -sf "${skill_dir}" "${HOME}/.agents/skills/${skill_name}"
-  fi
-done
+# Gemini CLI Configuration (Skills and Policies)
+if [ -f "${BASE_DIR}/opt/bin/install_gemini_skills.sh" ]; then
+    "${BASE_DIR}/opt/bin/install_gemini_skills.sh"
+fi
 
 NIX_MANAGED_FILE="${HOME}/.config/nix_managed"
 
@@ -95,6 +89,8 @@ if [ -f "$NIX_MANAGED_FILE" ]; then
 else
   if command -v apt-get &> /dev/null; then
     sudo apt-get install -y -qq \
+      build-essential \
+      make \
       corkscrew \
       htop \
       iputils-ping \
@@ -102,7 +98,8 @@ else
       lsof \
       net-tools \
       psmisc \
-      zsh
+      zsh \
+      protobuf-compiler
     
     # Set zsh as default shell if not already
     if [ "$SHELL" != "$(which zsh)" ]; then
@@ -168,59 +165,72 @@ if command -v corkscrew &> /dev/null; then
     [ ! -f "${HOME}/.gitenv" ] && source "${HOME}/opt/bin/setup_git_alias.sh"
 fi
 
-# install goenv
-if ! command -v goenv &> /dev/null; then
-  echo "Installing goenv..."
-  if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
+# install/update goenv
+if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
+  if ! command -v goenv &> /dev/null; then
+    echo "Installing goenv..."
     brew install goenv
-  else
-    # Linux / Jetson / others
-    if [ ! -d "${HOME}/.goenv" ]; then
-      git clone https://github.com/syndbg/goenv.git "${HOME}/.goenv"
-    else
-      (cd "${HOME}/.goenv" && git pull)
-    fi
   fi
-  
-  # Initialize goenv to install a version if none exists
-  export PATH="${HOME}/.goenv/bin:${PATH}"
-  if command -v goenv &> /dev/null; then
-    eval "$(goenv init -)"
-    if [ -z "$(goenv versions --bare)" ]; then
-        echo "No Go versions detected. Installing latest..."
-        goenv install latest
-        goenv global $(goenv versions --bare | tail -1)
-    fi
+else
+  # Linux / Jetson / others
+  if [ ! -d "${HOME}/.goenv" ]; then
+    echo "Installing goenv..."
+    git clone https://github.com/syndbg/goenv.git "${HOME}/.goenv"
+  else
+    echo "Updating goenv..."
+    (cd "${HOME}/.goenv" && git pull)
   fi
 fi
 
-# install pyenv
-if ! command -v pyenv &> /dev/null; then
-  echo "Installing pyenv..."
-  if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
+# Initialize goenv to install/update Go
+export PATH="${HOME}/.goenv/bin:${PATH}"
+if command -v goenv &> /dev/null; then
+  eval "$(goenv init -)"
+  echo "Ensuring Go latest is installed..."
+  goenv install -s latest
+  # Set the latest installed version as global
+  LATEST_INSTALLED=$(goenv versions --bare | tail -1)
+  if [ -n "$LATEST_INSTALLED" ]; then
+    goenv global "$LATEST_INSTALLED"
+  fi
+fi
+
+# install/update pyenv
+if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
+  if ! command -v pyenv &> /dev/null; then
+    echo "Installing pyenv..."
     brew install pyenv
+  fi
+else
+  # Linux / Jetson / others
+  if [ ! -d "${HOME}/.pyenv" ]; then
+    echo "Installing pyenv..."
+    git clone https://github.com/pyenv/pyenv.git "${HOME}/.pyenv"
   else
-    if [ ! -d "${HOME}/.pyenv" ]; then
-      git clone https://github.com/pyenv/pyenv.git "${HOME}/.pyenv"
-    else
-      (cd "${HOME}/.pyenv" && git pull)
-    fi
+    echo "Updating pyenv..."
+    (cd "${HOME}/.pyenv" && git pull)
   fi
 fi
 
-# install rbenv
-if ! command -v rbenv &> /dev/null; then
-  echo "Installing rbenv..."
-  if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
+# install/update rbenv
+if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
+  if ! command -v rbenv &> /dev/null; then
+    echo "Installing rbenv..."
     brew install rbenv
+  fi
+else
+  # Linux / Jetson / others
+  if [ ! -d "${HOME}/.rbenv" ]; then
+    echo "Installing rbenv..."
+    git clone https://github.com/rbenv/rbenv.git "${HOME}/.rbenv"
+    # Also need ruby-build plugin for rbenv
+    mkdir -p "${HOME}/.rbenv/plugins"
+    git clone https://github.com/rbenv/ruby-build.git "${HOME}/.rbenv/plugins/ruby-build"
   else
-    if [ ! -d "${HOME}/.rbenv" ]; then
-      git clone https://github.com/rbenv/rbenv.git "${HOME}/.rbenv"
-      # Also need ruby-build plugin for rbenv
-      mkdir -p "${HOME}/.rbenv/plugins"
-      git clone https://github.com/rbenv/ruby-build.git "${HOME}/.rbenv/plugins/ruby-build"
-    else
-      (cd "${HOME}/.rbenv" && git pull)
+    echo "Updating rbenv..."
+    (cd "${HOME}/.rbenv" && git pull)
+    if [ -d "${HOME}/.rbenv/plugins/ruby-build" ]; then
+      (cd "${HOME}/.rbenv/plugins/ruby-build" && git pull)
     fi
   fi
 fi
@@ -237,6 +247,12 @@ if [ -f "${BASE_DIR}/opt/bin/gemini_install.sh" ]; then
     "${BASE_DIR}/opt/bin/gemini_install.sh"
 fi
 
+# build and install gss
+if [ -f "${BASE_DIR}/src/gss/build.sh" ]; then
+    echo "Installing gss (dotfiles manager)..."
+    "${BASE_DIR}/src/gss/build.sh"
+fi
+
 # build and install tmux-mgr
 if [ -f "${BASE_DIR}/src/tmux-mgr/build.sh" ]; then
     echo "Installing tmux-mgr..."
@@ -244,6 +260,12 @@ if [ -f "${BASE_DIR}/src/tmux-mgr/build.sh" ]; then
     if [ -f "${HOME}/opt/bin/tmux-mgr" ]; then
         "${HOME}/opt/bin/tmux-mgr" alias install
     fi
+fi
+
+# build and install wol
+if [ -f "${BASE_DIR}/src/wol/build.sh" ]; then
+    echo "Installing wol (Wake-on-LAN utility)..."
+    "${BASE_DIR}/src/wol/build.sh"
 fi
 
 # install fnm
@@ -261,3 +283,13 @@ if [ -f "${HOME}/.gitrepos" ] ; then
   cd "${HOME}"
   "${HOME}/.gitrepos"
 fi
+
+# Load Nano Platform environment
+for shell_config in "$HOME/.zshrc" "$HOME/.profile"; do
+    if [ -f "$shell_config" ]; then
+        if ! grep -q "\.nano_profile" "$shell_config"; then
+            echo "Adding .nano_profile source to $shell_config"
+            echo '[ -f "$HOME/.nano_profile" ] && . "$HOME/.nano_profile"' >> "$shell_config"
+        fi
+    fi
+done

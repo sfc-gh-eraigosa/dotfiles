@@ -1,0 +1,9 @@
+# Nano Platform Path Configuration
+
+if [ -d "$HOME/opt/nano/bin" ]; then
+    # Add to PATH if it exists and isn't already there
+    case ":$PATH:" in
+        *":$HOME/opt/nano/bin:"*) ;;
+        *) export PATH="$HOME/opt/nano/bin:$PATH" ;;
+    esac
+fi

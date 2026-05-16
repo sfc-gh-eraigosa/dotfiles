@@ -18,10 +18,15 @@ type Manager struct {
 
 // Run executes a tmux command and returns output.
 func (m *Manager) Run(args ...string) (string, error) {
-	if m.Verbose {
-		log.Printf("Executing: tmux %s", strings.Join(args, " "))
+	tmuxPath, err := exec.LookPath("tmux")
+	if err != nil {
+		return "", fmt.Errorf("tmux binary not found in PATH. Please ensure tmux is installed and available: %w", err)
 	}
-	cmd := exec.Command("tmux", args...)
+
+	if m.Verbose {
+		log.Printf("Executing: %s %s", tmuxPath, strings.Join(args, " "))
+	}
+	cmd := exec.Command(tmuxPath, args...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
