@@ -68,8 +68,14 @@ if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
 fi
 
 for file in $(find "${BASE_DIR}/opt/profiles" -type f); do
+    filename=$(basename "$file")
+    # Skip metadata and non-profile files
+    [[ "$filename" == "Brewfile" ]] && continue
+    [[ "$filename" == "requirements.txt" ]] && continue
+    [[ "$filename" == "GEMINI.md" ]] && continue
+    
     echo "Creating symlink to $file in home directory."
-    ln -sf "${file}" "${HOME}/$(basename "${file}")"
+    ln -sf "${file}" "${HOME}/${filename}"
 done
 
 # force a few

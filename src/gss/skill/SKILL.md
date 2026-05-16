@@ -8,6 +8,7 @@ This skill provides a structured and safe workflow for managing Git repositories
 
 ## Capabilities
 
+- **Slash Command**: Use `/gss` for a quick status summary and help overview.
 - **Introspect Changes**: Run 'gss status' to see what files are changed in a repo.
 - **Scan for Changes**: Run 'gss scan [dir]' to find all repositories with uncommitted changes.
 - **Reliable Push**: Run 'gss push' to backup, sync, and push changes safely.
@@ -45,4 +46,5 @@ This skill provides a structured and safe workflow for managing Git repositories
 - **Handle Conflicts**: If a rebase conflict occurs, inform the user and show the output.
 
 ## Help
-If the user asks "Which of my projects need a push?", use 'gss scan ~/GitHub/wenlock'.
+- **Slash Command**: Type `/gss` at any time to see the status of the current repository and a quick usage guide.
+- **Status Inquiry**: If the user asks "Which of my projects need a push?", use 'gss scan ~/GitHub/wenlock'.
