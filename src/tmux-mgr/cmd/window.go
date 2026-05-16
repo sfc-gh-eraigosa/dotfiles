@@ -115,6 +115,24 @@ func init() {
 	})
 
 	windowCmd.AddCommand(&cobra.Command{
+		Use:   "rename-pane [title]",
+		Short: "Rename the current tmux pane",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			title := args[0]
+			// Ensure pane titles are visible
+			Tmgr.Run("set", "-g", "pane-border-status", "top")
+			err := Tmgr.SetPaneTitle(title)
+			if err != nil {
+				log.Printf("Error renaming pane to %s: %v", title, err)
+				fmt.Printf("Error renaming pane to %s\n", title)
+				return
+			}
+			log.Printf("Renamed pane to %s", title)
+		},
+	})
+
+	windowCmd.AddCommand(&cobra.Command{
 		Use:   "resize [left|right|up|down|width|height] [val]",
 		Short: "Resize a tmux pane",
 		Args:  cobra.MinimumNArgs(1),

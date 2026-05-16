@@ -12,7 +12,7 @@ The `tmux-mgr` tool is the primary interface for this skill. It is located in `~
 
 ### 1. Session Management
 - **List sessions**: `tmux-mgr session list`
-- **Create new session**: `tmux-mgr session new [name]`
+- **Create new session**: `tmux-mgr session new [name] [-a|--attach]` (Use -a to automatically attach)
 - **Attach to session**: `tmux-mgr session attach [name]`
 - **Detach from session**: `tmux-mgr session detach`
 - **Kill session**: `tmux-mgr session kill [name]`
@@ -22,6 +22,7 @@ The `tmux-mgr` tool is the primary interface for this skill. It is located in `~
 ### 2. Window & Pane Arrangements
 - **Create new window**: `tmux-mgr window new [name]`
 - **Rename window**: `tmux-mgr window rename [name]`
+- **Rename pane**: `tmux-mgr window rename-pane [title]`
 - **Split window**: `tmux-mgr window split [horizontal|vertical|left|right|up|down]`
 - **Move focus**: `tmux-mgr window move [left|right|up|down]`
 - **Swap panes**: `tmux-mgr window swap [left|right|up|down]`
@@ -38,7 +39,12 @@ The `tmux-mgr` tool is the primary interface for this skill. It is located in `~
 - **List windows**: `tmux-mgr desktop list`
 - **Switch window**: `tmux-mgr desktop switch [name|index]`
 
-### 5. Introspection (Eyes for Gemini)
+### 5. Shell Environment
+- **Install aliases & completions**: `tmux-mgr alias install`
+  - Sets up `tmux-a`, `tmux-ls`, `tmux-new`, `tmux-kill`, and `tmux-start`.
+  - Configures shell completions for Bash and Zsh.
+
+### 6. Introspection (Eyes for Gemini)
 - **Capture content**: `tmux-mgr capture [target]` (returns the text content of a pane)
 - Use this to understand what's running in other windows or to troubleshoot terminal output.
 

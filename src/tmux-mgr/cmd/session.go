@@ -3,8 +3,6 @@ package cmd
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/exec"
 
 	"github.com/spf13/cobra"
 )
@@ -24,12 +22,14 @@ func init() {
 		},
 	})
 
-	sessionCmd.AddCommand(&cobra.Command{
+	newSessionCmd := &cobra.Command{
 		Use:   "new [name]",
 		Short: "Create a new tmux session",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			name := args[0]
+			attach, _ := cmd.Flags().GetBool("attach")
+
 			_, err := Tmgr.Run("new-session", "-d", "-s", name)
 			if err != nil {
 				log.Printf("Error creating session %s: %v", name, err)
@@ -38,8 +38,17 @@ func init() {
 			}
 			log.Printf("Session %s created", name)
 			fmt.Printf("Session %s created\n", name)
+
+			if attach {
+				if err := Tmgr.Attach(name); err != nil {
+					log.Printf("Error attaching to session %s: %v", name, err)
+					fmt.Printf("Error attaching to session %s\n", name)
+				}
+			}
 		},
-	})
+	}
+	newSessionCmd.Flags().BoolP("attach", "a", false, "Attach to the session after creation")
+	sessionCmd.AddCommand(newSessionCmd)
 
 	sessionCmd.AddCommand(&cobra.Command{
 		Use:   "attach [name]",
@@ -47,11 +56,10 @@ func init() {
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			name := args[0]
-			c := exec.Command("tmux", "attach-session", "-t", name)
-			c.Stdin = os.Stdin
-			c.Stdout = os.Stdout
-			c.Stderr = os.Stderr
-			c.Run()
+			if err := Tmgr.Attach(name); err != nil {
+				log.Printf("Error attaching to session %s: %v", name, err)
+				fmt.Printf("Error attaching to session %s\n", name)
+			}
 		},
 	})
 
