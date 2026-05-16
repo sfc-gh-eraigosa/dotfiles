@@ -34,6 +34,7 @@ opt/bin/nopr-gateway
 opt/bin/nopr-server
 !opt/bin/*.sh
 opt/bin/gss
+opt/bin/wol
 opt/bin/nano-*
 opt/bin/ntop
 opt/bin/thermo-cli

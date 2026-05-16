@@ -65,11 +65,17 @@ After the script completes, report the outcome to the user:
 
 - **Success**: The SSH config was updated. Show the new IP address and note that
   a backup was created at `~/.ssh/config.bak`.
-- **No match found**: The script scanned all discovered hosts but none were
-  confirmed. Suggest the user check that the target device is powered on and
-  connected to the same network.
-- **No SSH hosts found**: `nmap` found no hosts with port 22 open. Suggest
-  checking network connectivity and firewall settings.
+- **No match found / No SSH hosts found**: The script scanned all discovered
+  hosts but none were confirmed.
+  - If a MAC address for `<HOST_ALIAS>` exists in `~/.ssh/wol_map.json`, the
+    `ssh-find` script will automatically offer to send a Wake-on-LAN magic
+    packet. 
+  - Follow the script's interactive prompts (confirm with the user if they want
+    to wake the host).
+  - If the script doesn't offer WOL but the user provides a MAC address, you
+    can run `wol <MAC_ADDRESS>` manually.
+  - Inform the user if a packet was sent and suggest waiting a minute before
+    retrying.
 
 ### 5. Verify the Update (on success)
 

@@ -256,13 +256,13 @@ fi
 # build and install tmux-mgr
 if [ -f "${BASE_DIR}/src/tmux-mgr/build.sh" ]; then
     echo "Installing tmux-mgr..."
-
-# install sops
-if ! command -v sops &> /dev/null; then
-  echo "Installing sops..."
-  go install github.com/getsops/sops/v3/cmd/sops@latest
-fi
     "${BASE_DIR}/src/tmux-mgr/build.sh"
+fi
+
+# build and install wol
+if [ -f "${BASE_DIR}/src/wol/build.sh" ]; then
+    echo "Installing wol (Wake-on-LAN utility)..."
+    "${BASE_DIR}/src/wol/build.sh"
 fi
 
 # install fnm
