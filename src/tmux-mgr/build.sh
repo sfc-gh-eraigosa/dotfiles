@@ -3,7 +3,7 @@ set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$DIR/../../" && pwd)"
-BIN_DIR="$REPO_ROOT/opt/bin"
+BIN_DIR="${HOME}/opt/bin"
 SKILL_INSTALL_DIR="${HOME}/.agents/skills"
 
 if ! command -v go &> /dev/null; then

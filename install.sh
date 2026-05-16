@@ -13,6 +13,46 @@ function install_zsh_centos7() {
 }
 
 export BASE_DIR="$(cd "$(dirname $0)" && pwd)"
+
+# Idempotent migration of opt/bin to opt/scripts
+function migrate_opt_bin() {
+  local repo_opt_bin="${BASE_DIR}/opt/bin"
+  local repo_opt_scripts="${BASE_DIR}/opt/scripts"
+  
+  if [ ! -d "$repo_opt_scripts" ]; then
+    echo "Migrating opt/bin to categorized opt/scripts..."
+    mkdir -p "$repo_opt_scripts"/{git,docker,system,network,data,misc}
+    
+    # Git
+    for f in git_add.sh git_branch.sh git_pull.sh git-local-master.sh git-reset.sh git-rm-mybranches.sh git-signoff.sh gh_issues.rb setup_git_alias.sh update_origin.sh; do
+      [ -f "$repo_opt_bin/$f" ] && mv "$repo_opt_bin/$f" "$repo_opt_scripts/git/"
+    done
+    # Docker
+    for f in docker_machine_setup.sh docker_up.sh dockerd-entrypoint.sh prepare_node_docker.sh setup_dindc_alias.sh setup_docker_perms.sh setup_ruby-docker.sh; do
+      [ -f "$repo_opt_bin/$f" ] && mv "$repo_opt_bin/$f" "$repo_opt_scripts/docker/"
+    done
+    # System
+    for f in coco_install.sh crouton-alias.sh enable-vmx.sh gemini_install.sh google-cli-setup.sh install_gemini_skills.sh nvm perf-toggle.sh setup_jtop.sh terminal-theme.sh; do
+      [ -f "$repo_opt_bin/$f" ] && mv "$repo_opt_bin/$f" "$repo_opt_scripts/system/"
+    done
+    # Network
+    for f in import-cert.sh proxy.sh remote-setup.sh ssh-find sshd_run.sh vault-login.sh vault-setup.sh; do
+      [ -f "$repo_opt_bin/$f" ] && mv "$repo_opt_bin/$f" "$repo_opt_scripts/network/"
+    done
+    # Data
+    for f in find-badfiles.sh install_rclone_service.sh install_rclone.sh install_snowsql.sh rclone_sync.sh storage-setup.sh y2j.sh; do
+      [ -f "$repo_opt_bin/$f" ] && mv "$repo_opt_bin/$f" "$repo_opt_scripts/data/"
+    done
+    # Misc
+    for f in agm.disable_sh antigravity_arm.sh tmuxinator.zsh toggle_browser.scpt; do
+      [ -f "$repo_opt_bin/$f" ] && mv "$repo_opt_bin/$f" "$repo_opt_scripts/misc/"
+    done
+    
+    [ -f "$repo_opt_bin/README.md" ] && rm "$repo_opt_bin/README.md"
+  fi
+}
+
+migrate_opt_bin
 git config --global pager.branch false
 git config --global push.default current
 
@@ -45,9 +85,9 @@ if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
     [ -z "$(command -v tegrastats)" ] && echo "WARNING: tegrastats not found. You may need to install JetPack."
     
     # Setup jtop and stats
-    if [ -f "${BASE_DIR}/opt/bin/setup_jtop.sh" ]; then
+    if [ -f "${BASE_DIR}/opt/scripts/system/setup_jtop.sh" ]; then
       echo "Setting up jtop and jetson-stats..."
-      "${BASE_DIR}/opt/bin/setup_jtop.sh"
+      "${BASE_DIR}/opt/scripts/system/setup_jtop.sh"
     fi
     
     # Set Chromium as default browser
@@ -84,8 +124,8 @@ for file in ".profile" ".zshrc" ".bash_logout" ".bashrc"; do
 done 
 
 # Gemini CLI Configuration (Skills and Policies)
-if [ -f "${BASE_DIR}/opt/bin/install_gemini_skills.sh" ]; then
-    "${BASE_DIR}/opt/bin/install_gemini_skills.sh"
+if [ -f "${BASE_DIR}/opt/scripts/system/install_gemini_skills.sh" ]; then
+    "${BASE_DIR}/opt/scripts/system/install_gemini_skills.sh"
 fi
 
 NIX_MANAGED_FILE="${HOME}/.config/nix_managed"
@@ -141,8 +181,8 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
       echo "         This is non-fatal — the rest of the setup will continue."
     }
     # Setup Vault as a standalone binary to avoid Xcode versioning issues
-    if [ -f "${BASE_DIR}/opt/bin/vault-setup.sh" ]; then
-      "${BASE_DIR}/opt/bin/vault-setup.sh"
+    if [ -f "${BASE_DIR}/opt/scripts/network/vault-setup.sh" ]; then
+      "${BASE_DIR}/opt/scripts/network/vault-setup.sh"
     fi
   else
     echo "WARNING: Homebrew not found. Please install it: https://brew.sh/"
@@ -152,15 +192,15 @@ fi
 # only setup these scripts when docker is installed and responsive
 if command -v docker &> /dev/null; then
     # Setup docker permissions for the current user
-    "${HOME}/opt/bin/setup_docker_perms.sh"
+    "${BASE_DIR}/opt/scripts/docker/setup_docker_perms.sh"
     
     # Check if Docker daemon is actually running (timeout after 5 seconds)
     # Use gtimeout on macOS (coreutils), timeout on Linux
     TIMEOUT_CMD="timeout"
     command -v timeout &>/dev/null || TIMEOUT_CMD="gtimeout"
     if ($TIMEOUT_CMD 5 docker info &>/dev/null 2>&1) 2>/dev/null; then
-        [ ! -f "${HOME}/.ruby.env" ] && source "${HOME}/opt/bin/setup_ruby-docker.sh"
-        [ ! -f "${HOME}/.dindcenv" ] && source "${HOME}/opt/bin/setup_dindc_alias.sh"
+        [ ! -f "${HOME}/.ruby.env" ] && source "${BASE_DIR}/opt/scripts/docker/setup_ruby-docker.sh"
+        [ ! -f "${HOME}/.dindcenv" ] && source "${BASE_DIR}/opt/scripts/docker/setup_dindc_alias.sh"
     else
         echo "NOTE: Docker is installed but the daemon is not running. Skipping Docker-dependent setup."
     fi
@@ -168,7 +208,7 @@ fi
 
 # don't bother installing without corkscrew
 if command -v corkscrew &> /dev/null; then
-    [ ! -f "${HOME}/.gitenv" ] && source "${HOME}/opt/bin/setup_git_alias.sh"
+    [ ! -f "${HOME}/.gitenv" ] && source "${BASE_DIR}/opt/scripts/git/setup_git_alias.sh"
 fi
 
 # install/update goenv
@@ -248,9 +288,9 @@ if [ ! -d "${HOME}/.nvm" ]; then
 fi
 
 # install Gemini CLI
-if [ -f "${BASE_DIR}/opt/bin/gemini_install.sh" ]; then
+if [ -f "${BASE_DIR}/opt/scripts/system/gemini_install.sh" ]; then
     echo "Installing Gemini CLI..."
-    "${BASE_DIR}/opt/bin/gemini_install.sh"
+    "${BASE_DIR}/opt/scripts/system/gemini_install.sh"
 fi
 
 # build and install gss
@@ -282,7 +322,7 @@ fi
 
 # setup sshd server if requested
 if [ -f "${HOME}/.sshd.env" ]; then
-    "${HOME}/opt/bin/sshd_run.sh"
+    "${BASE_DIR}/opt/scripts/network/sshd_run.sh"
 fi
 
 if [ -f "${HOME}/.gitrepos" ] ; then

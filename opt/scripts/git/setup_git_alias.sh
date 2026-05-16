@@ -64,7 +64,7 @@ if [ -f ~/.gitenv ] ; then
         fgit-login
     fi
 else
-    echo ".gitenv is missing, you can install with : . opt/bin/setup_git_alias.sh"
+    echo ".gitenv is missing, you can install with : . opt/scripts/git/setup_git_alias.sh"
 fi
 GIT_ALIASES
 
