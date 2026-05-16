@@ -39,6 +39,7 @@ This skill provides a structured and safe workflow for managing Git repositories
 - **Detailed Summary**: If fewer than 10 files were changed, provide the list of files and their +/- line counts.
 - **Compact Summary**: If 10 or more files were changed, provide the high-level stats (e.g., "15 files changed").
 - Provide the **GitHub Comparison Link** or the **Pull Request URL**.
+- **Browser Verification**: If the environment supports it (e.g., `open` or `xdg-open` is available) and you are not in a headless session, use the `ask_user` tool to ask if the user wants to open the link in their browser for final verification.
 
 ## Guidelines
 - **No Assumptions**: Even if a sync seems obvious, you must ask for permission first.
