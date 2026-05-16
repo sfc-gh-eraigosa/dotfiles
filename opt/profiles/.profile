@@ -154,18 +154,18 @@ export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 alias bazel='bazelisk'
 
 # added by Snowflake SnowSQL installer
-export PATH=/Users/eraigosa/opt/bin:$PATH
+export PATH=${HOME}/opt/bin:$PATH
 
 #
 # ruby docker environment aliases
 #
-if [ -f /home/wenlock/.ruby.env ] ; then
-    source /home/wenlock/.ruby.env
+if [ -f ${HOME}/.ruby.env ] ; then
+    source ${HOME}/.ruby.env
 else
     echo ".ruby.env is missing, you can install with : . opt/bin/setup_ruby-docker.sh"
 fi
 # Source git environment shortcuts
-. /home/wenlock/.dindcenv
+[ -f ${HOME}/.dindcenv ] && . ${HOME}/.dindcenv
 
 # Load Gemini CLI environment
 [ -f "$HOME/.gemini.profile" ] && . "$HOME/.gemini.profile"

@@ -95,7 +95,7 @@ fi
 # Wow aliases
 alias win_nogl='LIBGL_ALWAYS_SOFTWARE=1 wine explorer'
 alias win='wine explorer -opengl'
-alias wow='WINEDEBUG=-all wine "/home/wenlock/.wine/drive_c/Program Files (x86)/World of Warcraft/Wow.exe"'
+alias wow='WINEDEBUG=-all wine "${HOME}/.wine/drive_c/Program Files (x86)/World of Warcraft/Wow.exe"'
 
 #
 # for coros and hpchromebook 14, so we have some keys.

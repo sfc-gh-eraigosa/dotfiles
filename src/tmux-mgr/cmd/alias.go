@@ -49,10 +49,10 @@ alias tmux-start='tmux-mgr session new gemini -a'
 			rootCmd.GenZshCompletionFile(zshComp)
 
 			// Update aliases file to include completions and alias completions
-			completionSource := fmt.Sprintf(`
+			completionSource := `
 # tmux-mgr completions
-[ -f %s ] && source %s
-[ -f %s ] && source %s
+[ -f ${HOME}/.config/tmux-mgr/completions/tmux-mgr.bash ] && source ${HOME}/.config/tmux-mgr/completions/tmux-mgr.bash
+[ -f ${HOME}/.config/tmux-mgr/completions/tmux-mgr.zsh ] && source ${HOME}/.config/tmux-mgr/completions/tmux-mgr.zsh
 
 # Alias completions
 if command -v compdef >/dev/null 2>&1; then
@@ -61,20 +61,20 @@ if command -v compdef >/dev/null 2>&1; then
     compdef _tmux-mgr tmux-new=session-new
     compdef _tmux-mgr tmux-kill=session-kill
 fi
-`, bashComp, bashComp, zshComp, zshComp)
+`
 
 			f, _ := os.OpenFile(aliasFile, os.O_APPEND|os.O_WRONLY, 0644)
 			f.WriteString(completionSource)
 			f.Close()
 
-			sourceLine := fmt.Sprintf("\n# Added by tmux-mgr\n[ -f %s ] && source %s\n", aliasFile, aliasFile)
+			sourceLine := "\n# Added by tmux-mgr\n[ -f ${HOME}/.config/tmux-mgr/aliases.sh ] && source ${HOME}/.config/tmux-mgr/aliases.sh\n"
 			
 			shellConfigs := []string{".zshrc", ".bashrc"}
 			for _, cfg := range shellConfigs {
 				cfgPath := filepath.Join(home, cfg)
 				if _, err := os.Stat(cfgPath); err == nil {
 					content, _ := os.ReadFile(cfgPath)
-					if !contains(string(content), aliasFile) {
+					if !contains(string(content), "tmux-mgr/aliases.sh") {
 						f, err := os.OpenFile(cfgPath, os.O_APPEND|os.O_WRONLY, 0644)
 						if err == nil {
 							f.WriteString(sourceLine)

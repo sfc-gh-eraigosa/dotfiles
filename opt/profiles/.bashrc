@@ -264,7 +264,4 @@ source <(openclaw completion --shell bash)
 
 # Gemini tmux aliases
 # Added by tmux-mgr
-[ -f $HOME/.config/tmux-mgr/aliases.sh ] && source $HOME/.config/tmux-mgr/aliases.sh
-
-#AGM function
-#source ~/opt/bin/agm.sh
+[ -f ${HOME}/.config/tmux-mgr/aliases.sh ] && source ${HOME}/.config/tmux-mgr/aliases.sh

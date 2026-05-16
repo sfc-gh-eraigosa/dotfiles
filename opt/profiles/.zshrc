@@ -390,7 +390,7 @@ openclaw() {
 }
 
 # Added by tmux-mgr
-[ -f $HOME/.config/tmux-mgr/aliases.sh ] && source $HOME/.config/tmux-mgr/aliases.sh
+[ -f ${HOME}/.config/tmux-mgr/aliases.sh ] && source ${HOME}/.config/tmux-mgr/aliases.sh
 
 # Load Gemini CLI environment
 [[ -f "$HOME/.gemini.profile" ]] && source "$HOME/.gemini.profile"
