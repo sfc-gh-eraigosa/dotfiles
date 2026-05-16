@@ -1,107 +1,81 @@
-dotfiles
-----
+# 🛠️ Dotfiles & Agent Environment
+
 [![Docker Image CI](https://github.com/sfc-gh-eraigosa/dotfiles/actions/workflows/docker-image.yml/badge.svg)](https://github.com/sfc-gh-eraigosa/dotfiles/actions/workflows/docker-image.yml)
+[![Gemini CLI](https://img.shields.io/badge/Gemini_CLI-0.42.0-blue)](https://geminicli.com)
 
-Ubuntu Bash/zsh Home profile setup, includes vimrc's profiles some git commands
+A modernized, agent-first development environment for macOS and Linux. This repository bridges the gap between traditional terminal tools and **AI-assisted engineering**.
 
-I plan to use this primarly to manage my ux home directory across various
-systems where i plan to use git and cli based tools.  I want a nice
-editor as well where the backgrounds and sytax highlighting work.
+---
 
-install
-----
-1. You'll need homebrew, git and vim to setup your home folder.  Make sure to install git and vim for your server, or ask your administrator to do this.
-  
-  ```sh
-   sudo apt-get install git vim corkscrew
-   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-  ```
-  NOTE: corkscrew installation is used for proxies, and is optional, but not needed here.
-2. Setup your home directory with your github account ssh keys and anything else you might need. Please note that the `.bashrc`, etc files will be replaces with soft links.
-3. Fork the dotfiles project to your account.  While still logged into your account, now it's time to setup your home directory. You can clone the repo and install it as follows:
+## ✨ Core Pillars
 
-  ```sh
-    cd ~
-    git clone git@github.com:<youruser>/dotfiles.git
-    ./dotfiles/install.sh
-  ```
-4. What you should expect is for files from the `./dotfiles` folder to now be lined to your home directory.  Here is a breakdown of what's linked:
-  - All files in `./dotfiles/opt/profiles/*` are now linked to home
-  - The linke `./Brewfile` will install a bunch of other tools
-  - `./dotfiles/opt` -> `~/opt`
-  - `~/opt/bin` will be in the `PATH`
-  - default shell is `zsh`
-5.  If you plan to use [zsh](opt/docs/zsh_andtools.md) as your default shell, take the time to setup [powerline fonts](opt/docs/powerline-fonts.md).
+### 🤖 Agent-First Workflow
+Native integration with [Gemini CLI](https://geminicli.com) turns your terminal into a collaborative workspace.
+- **Custom Skills**: Specialized instructions for Git (`gss`), Tmux (`tmux-mgr`), and SSH management.
+- **Slash Commands**: Instant health checks via `/gss`.
+- **Automated Maintenance**: Use Gemini to manage, update, and troubleshoot your dotfiles autonomously.
 
-  ```sh
-  git clone https://github.com/powerline/powerline ./powerline
-  pip install --user ./powerline/
-  mkdir -p ~/.fonts
-  cd ~/git/powerline-fonts/
-  find . -name \*.otf|xargs -i cp "{}" ~/.fonts/
-  find . -name \*.otf|xargs -i cp "{}" ~/.fonts/
-  fc-cache -vf ~/.fonts
-  ```
-6. Set your default shell to `zsh`
-  ```
-  sudo chsh -s $(which zsh) $(whoami)
-  ```
-  Exit and restart the shell.
+### 🔄 Safe Repository Management (`gss`)
+Stop worrying about broken rebases or lost work.
+- **Safety Backups**: Every push triggers an automatic timestamped backup branch.
+- **Workspace Scanning**: Instantly identify uncommitted changes across your entire `~/git` tree.
 
-alias and commands
-----
+### 🪟 Terminal Introspection (`tmux-mgr`)
+Gives your AI agents "eyes" into your terminal state.
+- **Content Capture**: Agents can capture and analyze the history of any pane.
+- **Layout Persistence**: Save and restore complex project environments with one command.
+
+---
+
+## 🚀 Quick Start
+
+### 1. Installation
+Clone the repo and run the idempotent installer:
+
+```bash
+git clone https://github.com/sfc-gh-eraigosa/dotfiles.git ~/git/dotfiles
+~/git/dotfiles/install.sh
 ```
 
-gitsave_off        :  Turn off the git commit/push on bash exit
-gitsave            :  Turn on git commit/push on bash exit
+### 2. What to Expect
+- **Seamless Linking**: Core configs (`.zshrc`, `.tmux.conf`, etc.) are symlinked to your `$HOME`.
+- **Toolchain Readiness**: `nvm`, `pyenv`, `goenv`, and `rbenv` are initialized and ready.
+- **Agent Activation**: Gemini CLI is installed and pre-loaded with the custom skills from `src/`.
 
-vimw               :  Open vim with white background
-vimg               :  Open vim with green background
-vimw_set           :  Set the default to be white background
-vimg_set           :  Set the default to be green background
-vimprompt {on|off} : requires that you have powerline fonts installed with zsh, a way to togle between vim prompt and zsh prompt. Default is off.
-```
+---
 
-structure
-----
-I start off by ignoring everything with .gitignore.   I'm not silly, I don't want everything commited from my home folder.
-If I care about saving it, I'm going to add it to the .gitignore file with the following exception.
+## 🛠️ Development with Gemini
 
-Here is my exception.   
+This repository is designed to be maintained **with** Gemini. 
 
-Tools I use that need to be autosaved when I logout will go in ~/opt.
-My rule is that if it's specific to my development workflow, then it belongs
-```
-under ~/opt
-~/opt/bin - saving my shell scripts and such
-~/opt/lib - saving any python or ruby help me scripts
-~/opt/docs - where i save my howto's and such where im learning new stuff or trying to remind myself how to do stuff
-             checkout this section for tips on installing and setting up zsh for a nice git prompt.
-```
-On logout i want .bash_logout to save and commit my changes
+- **Syncing**: Tell Gemini: *"Sync my dotfiles"* — it will use `gss` to backup and push safely.
+- **Updating**: Ask Gemini: *"Add a new alias to my zshrc"* or *"Fix my brew permissions"*.
+- **Discovery**: Use the `/gss` command inside Gemini to see current status and help.
 
-my wish list
-----
-* Working docker scripts to setup my docker environment
-* a way to toggle through zsh prompts and set an active prompt, the default should be whats in .zshrc
-* Working docker scripts to setup my docker environment
+---
 
+## 📂 Structure
 
-Contributing
-----
+| Path | Description |
+| :--- | :--- |
+| `opt/bin/` | Specialized scripts and binaries (in your `$PATH`). |
+| `opt/profiles/` | Core shell and tool configurations. |
+| `src/` | Source code for custom tools and **Agent Skills**. |
+| `opt/conf/` | Templates for Gemini policies and commands. |
 
-Want to help me be more productive, wow cool!  
+---
 
-Fork this repo and tell me how :D   I'm willing to try most workflows if it 
-makes me a better programmer.   I'd love to see ideas and techniques that
-can help me get there.
+## ⌨️ Common Commands
 
-These are definetly not perfect, please let me know if anything feels
-wrong or incomplete.  Especially if I make a security boo boo.
+| Command | Action |
+| :--- | :--- |
+| `/gss` | (Inside Gemini) Quick status summary and help. |
+| `gss push` | Safely backup, sync, and push the current repo. |
+| `tmux-mgr save` | Save current tmux window layout. |
+| `vimw` / `vimg` | Open Vim with White or Green color profiles. |
 
+---
 
-Licensing
-----
-dotfiles is licensed under the Apache License, Version 2.0. See LICENSE for full license text.
+## 📄 License
 
-Testing
+Licensed under the [Apache License, Version 2.0](LICENSE).

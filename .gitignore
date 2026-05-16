@@ -1,15 +1,25 @@
 # Ignore everything
 *
 
+# Essential project files
+!README.md
+!install.sh
+!LICENSE
+!azure-pipelines.yml
+!Dockerfile
+!.gitignore
+!**/GEMINI.md
+
 # docker tools setup
 !.github/workflows/docker-image.yml
 !.devcontainer
 !.devcontainer/**
-!.gitignore
 !opt/
 !opt/**
 !src/
 !src/**
+!system/
+!system/**
 src/tmux-mgr/tmux-mgr
 opt/bin/tmux-mgr
 opt/bin/vault
