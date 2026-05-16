@@ -18,8 +18,7 @@
 !opt/**
 !src/
 !src/**
-!system/
-!system/**
+system/
 src/tmux-mgr/tmux-mgr
 opt/bin/tmux-mgr
 opt/bin/vault
