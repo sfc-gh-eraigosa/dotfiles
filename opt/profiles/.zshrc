@@ -149,7 +149,17 @@ fi
 # User configuration
 
 # export PATH="$PATH:$HOME/opt/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/go/bin"
-export PATH="$PATH:$HOME/bin:$HOME/opt/bin"
+export PATH="$PATH:$HOME/bin"
+if [ -d "${HOME}/opt/bin" ] ; then
+    PATH="${HOME}/opt/bin:$PATH"
+fi
+if [ -d "${HOME}/opt/scripts" ] ; then
+    for d in "${HOME}/opt/scripts"/*; do
+        if [ -d "$d" ]; then
+            PATH="$d:$PATH"
+        fi
+    done
+fi
 # export MANPATH="/usr/local/man:$MANPATH"
 fpath+=${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions/src
 

@@ -45,7 +45,7 @@ Execute the `ssh-find` script via the terminal. This script is interactive — i
 will scan the network and prompt for confirmation before updating the config.
 
 ```bash
-~/opt/bin/ssh-find <HOST_ALIAS>
+~/opt/scripts/network/ssh-find <HOST_ALIAS>
 ```
 
 **Important:** This command is interactive. It will:
