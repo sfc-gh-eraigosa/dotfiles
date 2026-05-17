@@ -2,7 +2,7 @@
 # Unified testing entry point for dotfiles
 set -e
 
-REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 IMAGE_NAME="dotfiles-test"
 
 # Colors
@@ -42,8 +42,12 @@ function run_unit_tests() {
 }
 
 function run_integration_tests() {
-    log "Building Docker image for integration tests..."
-    docker build -t "$IMAGE_NAME" "$REPO_ROOT"
+    if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+        log "Building Docker image for integration tests..."
+        docker build -t "$IMAGE_NAME" "$REPO_ROOT"
+    else
+        log "Docker image $IMAGE_NAME already exists, skipping build. Use 'docker rmi $IMAGE_NAME' to force rebuild."
+    fi
     
     log "Running System Sanity Check inside container..."
     docker run --rm "$IMAGE_NAME" /home/agent/git/dotfiles/ai/gemini/scripts/sanity_check.sh

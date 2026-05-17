@@ -77,15 +77,9 @@ This repository is designed to be maintained **with** Gemini.
 
 ---
 
-## 🧪 Testing & Validation
+## 🤝 Contributing
 
-This repository includes a unified testing entry point to validate changes locally before pushing.
-
-| Mode | Command | Description |
-| :--- | :--- | :--- |
-| **All** | `./test.sh` | Runs unit tests and full Docker integration tests. |
-| **Unit** | `./test.sh unit` | Runs Go unit tests for `src/` binaries. |
-| **Integration** | `./test.sh integration` | Builds the Docker image and runs sanity checks. |
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on our development workflow, testing procedures, and how to use the `Makefile` to validate your changes.
 
 ---
 
