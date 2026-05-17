@@ -8,14 +8,23 @@ BASE_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 
 echo "Configuring Gemini CLI..."
 
+# Function to clean up broken symlinks in a directory
+cleanup_broken_links() {
+    local dir="$1"
+    if [ -d "$dir" ]; then
+        echo "  Cleaning up broken links in $dir..."
+        find "$dir" -xtype l -delete
+    fi
+}
+
 # --- Policies ---
-# 1. New standard policies in opt/conf/gemini/policies
-if [ -d "$BASE_DIR/opt/conf/gemini/policies" ]; then
+# 1. New standard policies in ai/gemini/policies
+if [ -d "$BASE_DIR/ai/gemini/policies" ]; then
     echo "  Setting up system policies..."
     POLICIES_DEST="${HOME}/.gemini/policies"
     mkdir -p "$POLICIES_DEST"
     
-    for policy in "$BASE_DIR/opt/conf/gemini/policies"/*.toml; do
+    for policy in "$BASE_DIR/ai/gemini/policies"/*.toml; do
         [ -e "$policy" ] || continue
         policy_name=$(basename "$policy")
         dest_policy="$POLICIES_DEST/$policy_name"
@@ -38,12 +47,12 @@ if [ -d "$BASE_DIR/.gemini/policies" ]; then
 fi
 
 # --- Commands ---
-if [ -d "$BASE_DIR/opt/conf/gemini/commands" ]; then
+if [ -d "$BASE_DIR/ai/gemini/commands" ]; then
     echo "  Setting up custom commands..."
     COMMANDS_DEST="${HOME}/.gemini/commands"
     mkdir -p "$COMMANDS_DEST"
     
-    for cmd in "$BASE_DIR/opt/conf/gemini/commands"/*.toml; do
+    for cmd in "$BASE_DIR/ai/gemini/commands"/*.toml; do
         [ -e "$cmd" ] || continue
         cmd_name=$(basename "$cmd")
         dest_cmd="$COMMANDS_DEST/$cmd_name"
@@ -51,6 +60,10 @@ if [ -d "$BASE_DIR/opt/conf/gemini/commands" ]; then
         ln -sf "$cmd" "$dest_cmd"
     done
 fi
+
+# Cleanup obsolete/broken links from previous structures
+cleanup_broken_links "${HOME}/.gemini/policies"
+cleanup_broken_links "${HOME}/.gemini/commands"
 
 # --- Skills ---
 echo "  Linking skills..."

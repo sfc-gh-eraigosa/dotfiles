@@ -8,8 +8,8 @@ set -e
 GEMINI_DIR="${HOME}/.gemini"
 GWS_DIR="${HOME}/.gws"
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-GEMINI_DOT_DIR="${DOTFILES_DIR}/system/gemini"
-GWS_DOT_DIR="${DOTFILES_DIR}/system/gws"
+GEMINI_DOT_DIR="${DOTFILES_DIR}/ai/gemini"
+GWS_DOT_DIR="${DOTFILES_DIR}/ai/gws"
 
 # --- Colors ---
 RED='\033[0;31m'

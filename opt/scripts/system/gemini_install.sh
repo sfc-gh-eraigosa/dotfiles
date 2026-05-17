@@ -32,7 +32,7 @@ mkdir -p "$POLICIES_DIR"
 # Since we are in opt/scripts/system/, the root is ../../..
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 BASE_DIR=$(cd -- "$SCRIPT_DIR/../../.." &> /dev/null && pwd)
-SAFETY_POLICY_SRC="$BASE_DIR/opt/conf/gemini/policies/safety.toml"
+SAFETY_POLICY_SRC="$BASE_DIR/ai/gemini/policies/safety.toml"
 
 if [ -f "$SAFETY_POLICY_SRC" ]; then
     echo "Linking safety policy from $SAFETY_POLICY_SRC..."

@@ -1,0 +1,14 @@
+{
+  "security": {
+    "auth": {
+      "selectedType": "oauth-personal"
+    }
+  },
+  "ui": {
+    "theme": "Default"
+  },
+  "skills": {
+    "enabled": true,
+    "disabled": []
+  }
+}

@@ -6,7 +6,7 @@ set -e
 
 # --- Configuration Paths ---
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-JETSON_CONFIG_DIR="${DOTFILES_DIR}/system/jetson"
+JETSON_CONFIG_DIR="${DOTFILES_DIR}/ai/jetson"
 
 # --- Colors ---
 RED='\033[0;31m'

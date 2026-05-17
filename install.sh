@@ -253,6 +253,18 @@ if [ -f "${BASE_DIR}/opt/scripts/system/gemini_install.sh" ]; then
     echo "Installing Gemini CLI..."
     "${BASE_DIR}/opt/scripts/system/gemini_install.sh"
 fi
+
+# Gemini settings
+if [ -f "${BASE_DIR}/ai/gemini/settings.json" ]; then
+    echo "Configuring Gemini settings..."
+    mkdir -p "${HOME}/.gemini"
+    # If it's a real file (not a symlink), back it up
+    if [ -f "${HOME}/.gemini/settings.json" ] && [ ! -L "${HOME}/.gemini/settings.json" ]; then
+        echo "  Backing up existing settings.json to settings.json.bak"
+        mv "${HOME}/.gemini/settings.json" "${HOME}/.gemini/settings.json.bak"
+    fi
+    ln -sf "${BASE_DIR}/ai/gemini/settings.json" "${HOME}/.gemini/settings.json"
+fi
 # build and install gss
 if [ -f "${BASE_DIR}/src/gss/build.sh" ]; then
     echo "Installing gss (dotfiles manager)..."

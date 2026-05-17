@@ -32,10 +32,12 @@ func runAgentStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("error creating workspace: %w", err)
 	}
 
-	// Construct the native Gemini invocation command.
+	// Construct the native Gemini invocation command using the correct CLI syntax.
+	// We use -r to associate with the task-id (session) and -p for non-interactive mode.
+	// We use --yolo to allow the sub-agent to work autonomously in its isolated environment.
 	// We explicitly tell the sub-agent to write its summary to RESULT.md for fan-in.
-	instruction := fmt.Sprintf("Execute task %s. When finished, you MUST write your final summary to RESULT.md in the current directory and then exit.", taskID)
-	invocationCmd := fmt.Sprintf("gemini-cli --agent %s --task %s --prompt '%s'", agentName, taskID, instruction)
+	instruction := fmt.Sprintf("@%s Execute task %s. When finished, you MUST write your final summary to RESULT.md in the current directory and then exit.", agentName, taskID)
+	invocationCmd := fmt.Sprintf("gemini -r %s -y -p '%s'", taskID, instruction)
 
 	// Create the tmux pane and run the command
 	if err := tmux.CreatePane(sessionID, workspacePath, invocationCmd); err != nil {

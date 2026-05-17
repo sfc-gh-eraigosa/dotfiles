@@ -134,16 +134,26 @@ func CreatePane(sessionID string, worktreePath string, command string) error {
 	// It changes to the worktree directory and then executes the provided command.
 	paneCmd := fmt.Sprintf("cd %s && %s", worktreePath, command)
 
+	// Determine the target for split-window.
+	// We use the TMUX_PANE environment variable if available to ensure we split
+	// the window the caller is currently in.
+	target := os.Getenv("TMUX_PANE")
+	if target == "" {
+		target = ":.+" // default to current window, next pane
+	}
+
 	// The tmux command to split the window and run the command.
-	// We use -v to split vertically (top/bottom) in the current window.
-	tmuxCmd := exec.Command(
-		"tmux",
+	// We use -v to split vertically (top/bottom).
+	args := []string{
 		"split-window",
-		"-v", // split vertically
-		"-P", // print the new pane ID
+		"-v",
+		"-t", target,
+		"-P",
 		"-F", "#{pane_id}",
 		paneCmd,
-	)
+	}
+
+	tmuxCmd := exec.Command("tmux", args...)
 
 	output, err := tmuxCmd.CombinedOutput()
 	if err != nil {
