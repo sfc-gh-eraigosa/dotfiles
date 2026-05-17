@@ -11,7 +11,7 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 
 ## Usage Guidelines
 
-- **Tool Discovery**: Always check `opt/bin/GEMINI.md` first when looking for a script to perform a specific task (e.g., git management, docker setup).
+- **Tool Discovery**: Check `opt/scripts/GEMINI.md` for available shell scripts.
 - **Configuration**: Shell profiles and aliases are maintained in `opt/profiles/`.
 - **Progressive Loading**: Only read subdirectory `GEMINI.md` files when specifically needing information about that section to conserve context.
 
@@ -19,3 +19,4 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 
 - **Use $HOME**: Always use `${HOME}` or `~` instead of absolute home paths (e.g., `/Users/eraigosa`) in scripts, aliases, and configuration files to ensure they are portable across different systems and users.
 - **Avoid Hardcoded Paths**: Use relative paths or environment variables (like `BASE_DIR` in `install.sh`) whenever possible.
+nstall.sh`) whenever possible.

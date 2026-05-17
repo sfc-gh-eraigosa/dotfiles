@@ -336,6 +336,10 @@ if command -v sf &> /dev/null; then
     eval "$(sf aliases)"
 fi
 
+
+sf aliases)"
+fi
+
 if [ -f ~/opt/bin/locales.sh ]; then
     source ~/opt/bin/locales.sh
 fi
