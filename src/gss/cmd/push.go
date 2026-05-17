@@ -1,18 +1,38 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
 
+var forceAutonomous bool
+
 var pushCmd = &cobra.Command{
 	Use:   "push",
 	Short: "Safely push changes to origin",
 	Run: func(cmd *cobra.Command, args []string) {
 		path := getRepoPath()
+
+		// 0. Confirmation (Technical Safeguard)
+		if !forceAutonomous {
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Printf("Are you sure you want to push changes in %s? [y/N]: ", path)
+			response, err := reader.ReadString('\n')
+			if err != nil {
+				fmt.Printf("Error reading input: %v\n", err)
+				return
+			}
+			response = strings.ToLower(strings.TrimSpace(response))
+			if response != "y" && response != "yes" {
+				fmt.Println("Push cancelled.")
+				return
+			}
+		}
 
 		// Get current branch
 		branchOut, _ := exec.Command("git", "-C", path, "rev-parse", "--abbrev-ref", "HEAD").Output()
@@ -79,5 +99,6 @@ var pushCmd = &cobra.Command{
 }
 
 func init() {
+	pushCmd.Flags().BoolVar(&forceAutonomous, "force-autonomous", false, "Skip the interactive confirmation prompt (Dangerous)")
 	rootCmd.AddCommand(pushCmd)
 }
