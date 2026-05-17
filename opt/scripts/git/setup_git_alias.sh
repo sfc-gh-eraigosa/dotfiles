@@ -340,7 +340,7 @@ function refresh-gitenv {
 function fgit-getIP {
     _server=\$1
     ping_cmd=""
-    if [ "$(uname -o)" = "Cygwin" ]; then
+    if [ "\$(uname -o)" = "Cygwin" ]; then
         pingxt=\$(echo \$(cygpath -u \$(dirname \$(echo \$COMSPEC)))/ping)
         ping_cmd="\$pingxt -n 1 -4"
         ping_str="Pinging"
@@ -642,7 +642,7 @@ function fgit-config {
 
     # set gerrit user name
     current_username=\$GIT_USER
-    [ -z "\$current_username" ] && current_username=$(whoami)
+    [ -z "\$current_username" ] && current_username=\$(whoami)
     echo -n "Enter your gerrit/ux user name [\$current_username]: "
     read username
 
@@ -880,7 +880,7 @@ function fgit-ssh_connect {
     [ ! -z "\${_ALIAS}" ] && _ssh_connect=\$(echo -n \$_ALIAS | tr -d "\n" | tr -d "\r")
 
     if [ ! -z "\$1" ] ; then
-        _ssh_connect=$(echo -n \$1 | tr -d "\n" | tr -d "\r")
+        _ssh_connect=\$(echo -n \$1 | tr -d "\n" | tr -d "\r")
     fi
 
     _clean_ssh_connect=\$(echo -n \$_ssh_connect| tr -d "\n" | tr -d "\r")
