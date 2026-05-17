@@ -199,8 +199,8 @@ if command -v docker &> /dev/null; then
     TIMEOUT_CMD="timeout"
     command -v timeout &>/dev/null || TIMEOUT_CMD="gtimeout"
     if ($TIMEOUT_CMD 5 docker info &>/dev/null 2>&1) 2>/dev/null; then
-        [ ! -f "${HOME}/.ruby.env" ] && source "${BASE_DIR}/opt/scripts/docker/setup_ruby-docker.sh"
-        [ ! -f "${HOME}/.dindcenv" ] && source "${BASE_DIR}/opt/scripts/docker/setup_dindc_alias.sh"
+        source "${BASE_DIR}/opt/scripts/docker/setup_ruby-docker.sh"
+        source "${BASE_DIR}/opt/scripts/docker/setup_dindc_alias.sh"
     else
         echo "NOTE: Docker is installed but the daemon is not running. Skipping Docker-dependent setup."
     fi
@@ -208,7 +208,7 @@ fi
 
 # don't bother installing without corkscrew
 if command -v corkscrew &> /dev/null; then
-    [ ! -f "${HOME}/.gitenv" ] && source "${BASE_DIR}/opt/scripts/git/setup_git_alias.sh"
+    source "${BASE_DIR}/opt/scripts/git/setup_git_alias.sh"
 fi
 
 # install/update goenv

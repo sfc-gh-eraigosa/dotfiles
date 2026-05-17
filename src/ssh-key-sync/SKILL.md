@@ -23,16 +23,16 @@ This skill allows for managing SSH keys across a network, including generation, 
 You can run the script directly:
 ```bash
 # Generate and sync to all hosts
-/home/wenlock/git/dotfiles/src/ssh-key-sync/ssh-key-sync.sh <key_name>
+~/git/dotfiles/src/ssh-key-sync/ssh-key-sync.sh <key_name>
 
 # Generate locally only
-/home/wenlock/git/dotfiles/src/ssh-key-sync/ssh-key-sync.sh --no-sync <key_name>
+~/git/dotfiles/src/ssh-key-sync/ssh-key-sync.sh --no-sync <key_name>
 
 # List all keys and their sync status
-/home/wenlock/git/dotfiles/src/ssh-key-sync/ssh-key-sync.sh --list
+~/git/dotfiles/src/ssh-key-sync/ssh-key-sync.sh --list
 
 # Delete one or more keys
-/home/wenlock/git/dotfiles/src/ssh-key-sync/ssh-key-sync.sh --delete <key_name1> <key_name2>
+~/git/dotfiles/src/ssh-key-sync/ssh-key-sync.sh --delete <key_name1> <key_name2>
 ```
 
 ### Natural Language Instructions

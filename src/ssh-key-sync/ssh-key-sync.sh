@@ -39,7 +39,7 @@ if [ "$LIST" = true ]; then
 fi
 for K in "${KEY_NAMES[@]}"; do
     P="$HOME/.ssh/$K"
-    [ -f "$P" ] || ssh-keygen -t ed25519 -f "$P" -N "" -C "wenlock@$(hostname)-$K"
+    [ -f "$P" ] || ssh-keygen -t ed25519 -f "$P" -N "" -C "$(whoami)@$(hostname)-$K"
     PK=$(head -n 1 "$P.pub" | awk "{\$1=\$1;print}")
     grep -qF "$PK" "$HOME/.ssh/authorized_keys" || echo "$PK" >> "$HOME/.ssh/authorized_keys"
     if [ "$SYNC" = true ]; then

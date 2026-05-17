@@ -9,7 +9,7 @@
 set -e
 
 # Path to the sync script we want to run
-SYNC_SCRIPT="$HOME/opt/bin/rclone_sync.sh"
+SYNC_SCRIPT="$HOME/opt/scripts/data/rclone_sync.sh"
 SERVICE_NAME="rclone-sync"
 
 # Colors for output

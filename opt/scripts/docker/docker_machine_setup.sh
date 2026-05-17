@@ -1,5 +1,5 @@
 #!/bin/bash
-export DOCKER_MACHINE_HOME=$HOME/opt/bin
+export DOCKER_MACHINE_HOME="${HOME}/opt/bin"
 export DOCKER_MACHINE_VERSION='latest'
 
 function get_detected_os {

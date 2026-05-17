@@ -584,7 +584,7 @@ function fgit-createknown_host {
     if [[ ! \$? -eq 0 ]] ; then
         echo "ERROR changing ownership \$home_dir/.ssh"
     fi
-    _cwd=$(pwd)
+    _cwd=\$(pwd)
     cd \$home_dir/.ssh > /dev/null 2>&1
     if [[ ! \$? -eq 0 ]] ; then
         echo "ERROR unable to change folders to \$home_dir/.ssh"

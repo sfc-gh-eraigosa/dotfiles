@@ -49,4 +49,4 @@ This skill provides a structured and safe workflow for managing Git repositories
 
 ## Help
 - **Slash Command**: Type `/gss` at any time to see the status of the current repository and a quick usage guide.
-- **Status Inquiry**: If the user asks "Which of my projects need a push?", use 'gss scan ~/GitHub/wenlock'.
+- **Status Inquiry**: If the user asks "Which of my projects need a push?", use 'gss scan ~/git'.

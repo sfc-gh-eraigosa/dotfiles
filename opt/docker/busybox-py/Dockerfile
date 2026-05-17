@@ -3,7 +3,7 @@
 # VERSION               0.0.1
 
 FROM progrium/busybox
-MAINTAINER Edward Raigosa (wenlock) <wenlock@hp.com>
+MAINTAINER Agent <agent@example.com>
 
 ENV ROOT_PASS changeme
 ENV NOTVISIBLE "in users profile"

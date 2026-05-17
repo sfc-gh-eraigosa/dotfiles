@@ -1,12 +1,12 @@
 #
 # Easy dockerfile to test my stuff
 FROM ubuntu:jammy
-LABEL Description="Wenlock dotfiles" Vendor="Wenlock Wizzard in a Blizzard LTD." Version="0.0.1" Maintainer="wenlock@github.com"
+LABEL Description="Dotfiles & Agent Environment" Vendor="Agent LTD." Version="0.0.1" Maintainer="agent@github.com"
 
 # Lets setup Docker in Docker using https://github.com/microsoft/vscode-dev-containers/tree/master/script-library
 
 # See https://aka.ms/vscode-remote/containers/non-root-user for details.
-ARG USERNAME=wenlock
+ARG USERNAME=agent
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 # Common debian config

@@ -26,7 +26,7 @@ chmod +x "$SIG_FILE"
 chmod +x "$BASH_FILE"
 
 gpg --verify "$SIG_FILE" "$BASH_FILE" || exit 1
-SNOWSQL_DEST=~/opt/bin SNOWSQL_LOGIN_SHELL=~/.profile bash "$BASH_FILE"
+SNOWSQL_DEST="${HOME}/opt/bin" SNOWSQL_LOGIN_SHELL=~/.profile bash "$BASH_FILE"
 
 
 

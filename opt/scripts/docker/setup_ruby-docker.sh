@@ -34,7 +34,7 @@ if [ ! $? -eq 0 ] ; then
 if [ -f $ALIAS_ENV_SCRIPT ] ; then
     source $ALIAS_ENV_SCRIPT
 else
-    echo "$SCRIPT_NAME is missing, you can install with : . opt/bin/setup_ruby-docker.sh"
+    echo "$SCRIPT_NAME is missing, you can install with : . opt/scripts/docker/setup_ruby-docker.sh"
 fi
 RUBY_DOCKER
 fi

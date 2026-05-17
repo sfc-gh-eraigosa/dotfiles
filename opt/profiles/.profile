@@ -50,7 +50,7 @@ if [ "$EDITOR_TERMINAL" = "false" ]; then
     if [ -f ~/.motd ]; then 
         rm ~/.motd
     fi
-    owner="wenlock"
+    owner=$(whoami)
     # Extract first two parts of hostname, avoiding trailing dots if second part is empty
     host=$(hostname | cut -d. -f1,2)
     
@@ -162,7 +162,7 @@ export PATH=${HOME}/opt/bin:$PATH
 if [ -f ${HOME}/.ruby.env ] ; then
     source ${HOME}/.ruby.env
 else
-    echo ".ruby.env is missing, you can install with : . opt/bin/setup_ruby-docker.sh"
+    echo ".ruby.env is missing, you can install with : . opt/scripts/docker/setup_ruby-docker.sh"
 fi
 # Source git environment shortcuts
 [ -f ${HOME}/.dindcenv ] && . ${HOME}/.dindcenv

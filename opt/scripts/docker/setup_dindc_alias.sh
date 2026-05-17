@@ -46,7 +46,7 @@ if [[ ! $? -eq 0 ]] ; then
 if [ -f $ALIAS_ENV_SCRIPT ] ; then
     source $ALIAS_ENV_SCRIPT
 else
-    echo "$SCRIPT_NAME is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+    echo "$SCRIPT_NAME is missing, you can install with : . opt/scripts/docker/setup_dindc_alias.sh"
 fi
 DINDC_ALIASES
 fi
