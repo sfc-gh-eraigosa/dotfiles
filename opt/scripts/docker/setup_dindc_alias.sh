@@ -343,8 +343,8 @@ function fdindc-login {
 [ "\$(readparam 'DINDC_DEFAULT_UCPUSER')" != "" ] && export GIT_URL=\$(readparam "DINDC_DEFAULT_UCPUSER")
 
 # disable till we find a workaround to bug in vagrant
-if [[ ! "$(whoami)" = "vagrant" ]] ; then
-    # echo "commands available : $(fdindc-commands)"
+if [[ ! "\$(whoami)" = "vagrant" ]] ; then
+    # echo "commands available : \$(fdindc-commands)"
     :
 fi
 

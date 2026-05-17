@@ -14,45 +14,6 @@ function install_zsh_centos7() {
 
 export BASE_DIR="$(cd "$(dirname $0)" && pwd)"
 
-# Idempotent migration of opt/bin to opt/scripts
-function migrate_opt_bin() {
-  local repo_opt_bin="${BASE_DIR}/opt/bin"
-  local repo_opt_scripts="${BASE_DIR}/opt/scripts"
-  
-  if [ ! -d "$repo_opt_scripts" ]; then
-    echo "Migrating opt/bin to categorized opt/scripts..."
-    mkdir -p "$repo_opt_scripts"/{git,docker,system,network,data,misc}
-    
-    # Git
-    for f in git_add.sh git_branch.sh git_pull.sh git-local-master.sh git-reset.sh git-rm-mybranches.sh git-signoff.sh gh_issues.rb setup_git_alias.sh update_origin.sh; do
-      [ -f "$repo_opt_bin/$f" ] && mv "$repo_opt_bin/$f" "$repo_opt_scripts/git/"
-    done
-    # Docker
-    for f in docker_machine_setup.sh docker_up.sh dockerd-entrypoint.sh prepare_node_docker.sh setup_dindc_alias.sh setup_docker_perms.sh setup_ruby-docker.sh; do
-      [ -f "$repo_opt_bin/$f" ] && mv "$repo_opt_bin/$f" "$repo_opt_scripts/docker/"
-    done
-    # System
-    for f in coco_install.sh crouton-alias.sh enable-vmx.sh gemini_install.sh google-cli-setup.sh install_gemini_skills.sh nvm perf-toggle.sh setup_jtop.sh terminal-theme.sh; do
-      [ -f "$repo_opt_bin/$f" ] && mv "$repo_opt_bin/$f" "$repo_opt_scripts/system/"
-    done
-    # Network
-    for f in import-cert.sh proxy.sh remote-setup.sh ssh-find sshd_run.sh vault-login.sh vault-setup.sh; do
-      [ -f "$repo_opt_bin/$f" ] && mv "$repo_opt_bin/$f" "$repo_opt_scripts/network/"
-    done
-    # Data
-    for f in find-badfiles.sh install_rclone_service.sh install_rclone.sh install_snowsql.sh rclone_sync.sh storage-setup.sh y2j.sh; do
-      [ -f "$repo_opt_bin/$f" ] && mv "$repo_opt_bin/$f" "$repo_opt_scripts/data/"
-    done
-    # Misc
-    for f in agm.disable_sh antigravity_arm.sh tmuxinator.zsh toggle_browser.scpt; do
-      [ -f "$repo_opt_bin/$f" ] && mv "$repo_opt_bin/$f" "$repo_opt_scripts/misc/"
-    done
-    
-    [ -f "$repo_opt_bin/README.md" ] && rm "$repo_opt_bin/README.md"
-  fi
-}
-
-migrate_opt_bin
 git config --global pager.branch false
 git config --global push.default current
 

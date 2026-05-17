@@ -1,0 +1,25 @@
+#!/bin/bash
+# nvm wrapper for fnm compatibility
+case "$1" in
+  --version)
+    echo "0.40.1" # Return a fake nvm version
+    ;;
+  *)
+    # Try to find fnm in standard locations if it's not in the path
+    FNM_BIN="$(command -v fnm)"
+    if [ -z "$FNM_BIN" ]; then
+        if [ -x "${HOME}/.local/share/fnm/fnm" ]; then
+            FNM_BIN="${HOME}/.local/share/fnm/fnm"
+        elif [ -x "/usr/local/bin/fnm" ]; then
+            FNM_BIN="/usr/local/bin/fnm"
+        fi
+    fi
+
+    if [ -n "$FNM_BIN" ]; then
+        exec "$FNM_BIN" "$@"
+    else
+        echo "Error: fnm not found. Please ensure fnm is installed."
+        exit 1
+    fi
+    ;;
+esac

@@ -37,7 +37,7 @@ src/tmux-mgr/tmux-mgr
 coverage/
 
 # System & Local Settings (Always Private)
-system/
+/system/
 .custom_alias
 *.swp
 
