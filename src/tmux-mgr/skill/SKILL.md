@@ -22,14 +22,19 @@ This skill provides expertise in managing tmux sessions and windows using the `t
 - **Cleanup**: `tmux-mgr agent cleanup <session-id>`
   - Removes the Git worktree and deletes the session tracking file.
 
-### 2. Session Management
+### 2. Evaluation Suite
+- **Evaluate Agent Orchestration**: "tmux evaluate the agent"
+  - This command instructs the Gemini CLI to run the self-validation suite located in `src/tmux-mgr/evaluation/AGENT_EVAL.md`.
+  - It proves the ability to spawn agents, isolate worktrees, and fan-in results.
+
+### 3. Session Management
 - **List sessions**: `tmux-mgr session list`
 - **Create new session**: `tmux-mgr session new [name] [-a|--attach]` (Use -a to automatically attach)
 - **Attach to session**: `tmux-mgr session attach [name]`
 - **Detach from session**: `tmux-mgr session detach`
 - **Kill session**: `tmux-mgr session kill [name]`
 
-### 3. Window & Pane Arrangements
+### 4. Window & Pane Arrangements
 - **Split window**: `tmux-mgr window split [horizontal|vertical]`
 - **Move focus**: `tmux-mgr window move [left|right|up|down]`
 - **Resize panes**: 
@@ -37,21 +42,22 @@ This skill provides expertise in managing tmux sessions and windows using the `t
   - Percentage: `tmux-mgr window resize width 50%` or `tmux-mgr window resize height 25%`
 - **Capture content**: `tmux-mgr capture [target]` (returns the text content of a pane)
 
-### 4. Layout Persistence
+### 5. Layout Persistence
 - **Save layout**: `tmux-mgr save [name]` (saves to `~/.config/tmux-mgr/[name].json`)
 - **Restore layout**: `tmux-mgr restore [name]` (restores window layout and names)
 
-### 5. Desktop Navigation
+### 6. Desktop Navigation
 - **List windows**: `tmux-mgr desktop list`
 - **Switch window**: `tmux-mgr desktop switch [name|index]`
 
-### 6. Shell Environment
+### 7. Shell Environment
 - **Install aliases & completions**: `tmux-mgr alias install`
   - Sets up `tmux-a`, `tmux-ls`, `tmux-new`, `tmux-kill`, and `tmux-start`.
   - Configures shell completions for Bash and Zsh.
 
 ## Guidelines for Natural Language Interaction
 
+- **Self-Evaluation**: If a user asks to "evaluate the agent" or "test your team features," activate this skill and follow the instructions in `src/tmux-mgr/evaluation/AGENT_EVAL.md`.
 - **Orchestrate Effectively**: If a task is complex or requires parallel execution, proactively suggest using the `tmux-mgr agent` features.
 - **Isolate for Safety**: Explain that `tmux-mgr` creates a separate `git worktree` for each agent to prevent file-system conflicts.
 - **Fan-In**: Sub-agents MUST write their final summaries to `RESULT.md`. Retrieve these with `agent complete` before summarizing for the user.
