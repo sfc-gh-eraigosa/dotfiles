@@ -50,16 +50,16 @@ function run_integration_tests() {
     fi
     
     log "Running System Sanity Check inside container..."
-    docker run --rm "$IMAGE_NAME" /home/agent/git/dotfiles/ai/gemini/scripts/sanity_check.sh
+    docker run --privileged --rm "$IMAGE_NAME" /home/agent/git/dotfiles/ai/gemini/scripts/sanity_check.sh
     
     log "Verifying Version Commands..."
-    docker run --rm "$IMAGE_NAME" bash -c "gss version && tmux-mgr version && wol version"
+    docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && gss version && tmux-mgr version && wol version"
 
     log "Verifying Script PATH Discovery..."
-    docker run --rm "$IMAGE_NAME" bash -c "source ~/.gemini.profile && which git_add.sh && which gemini_install.sh"
+    docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && which git_add.sh && which gemini_install.sh"
 
     log "Verifying GSS Technical Guardrail..."
-    if docker run --rm "$IMAGE_NAME" gss push 2>&1 | grep -q "Missing or invalid AI approval token"; then
+    if docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && gss push" 2>&1 | grep -q "Missing or invalid AI approval token"; then
         log "GSS safeguard verified."
     else
         echo "FAIL: GSS safeguard failed to trigger!"

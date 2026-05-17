@@ -136,7 +136,7 @@ fi
 # Skip SSH agent and shell launching in editor terminals
 if [ "$EDITOR_TERMINAL" = "false" ]; then
     # Start agent only if not running
-    if ! pgrep -u "$USER" ssh-agent > /dev/null; then
+    if ! pgrep -u "${USER:-$(id -un)}" ssh-agent > /dev/null 2>&1; then
       eval "$(ssh-agent -s)" > /dev/null
     fi
     export GPG_TTY=$(tty 2>/dev/null)
@@ -156,13 +156,14 @@ alias bazel='bazelisk'
 # added by Snowflake SnowSQL installer
 export PATH=${HOME}/opt/bin:$PATH
 
-#
 # ruby docker environment aliases
 #
 if [ -f ${HOME}/.ruby.env ] ; then
     source ${HOME}/.ruby.env
 else
-    echo ".ruby.env is missing, you can install with : . opt/scripts/docker/setup_ruby-docker.sh"
+    case "$-" in
+        *i*) echo ".ruby.env is missing, you can install with : . opt/scripts/docker/setup_ruby-docker.sh" ;;
+    esac
 fi
 # Source git environment shortcuts
 [ -f ${HOME}/.dindcenv ] && . ${HOME}/.dindcenv
