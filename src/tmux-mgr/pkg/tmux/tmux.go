@@ -127,3 +127,29 @@ func (m *Manager) Capture(target string) (string, error) {
 	}
 	return out, nil
 }
+
+// CreatePane creates a new tmux pane for an agent session.
+func CreatePane(sessionID string, worktreePath string, command string) error {
+	// The command that will be run in the new pane.
+	// It changes to the worktree directory and then executes the provided command.
+	paneCmd := fmt.Sprintf("cd %s && %s", worktreePath, command)
+
+	// The tmux command to split the window and run the command.
+	// We use -v to split vertically (top/bottom) in the current window.
+	tmuxCmd := exec.Command(
+		"tmux",
+		"split-window",
+		"-v", // split vertically
+		"-P", // print the new pane ID
+		"-F", "#{pane_id}",
+		paneCmd,
+	)
+
+	output, err := tmuxCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to create tmux pane: %w, Output: %s", err, string(output))
+	}
+
+	fmt.Printf("Created tmux pane: %s\n", string(output))
+	return nil
+}
