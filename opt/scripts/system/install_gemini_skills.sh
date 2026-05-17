@@ -4,7 +4,7 @@
 set -e
 
 # Determine the root of the dotfiles repository
-BASE_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+BASE_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
 
 echo "Configuring Gemini CLI..."
 
@@ -13,7 +13,8 @@ cleanup_broken_links() {
     local dir="$1"
     if [ -d "$dir" ]; then
         echo "  Cleaning up broken links in $dir..."
-        find "$dir" -xtype l -delete
+        # Portable way to find and delete broken symlinks
+        find "$dir" -type l ! -exec test -e {} \; -delete
     fi
 }
 
