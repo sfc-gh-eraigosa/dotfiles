@@ -34,6 +34,7 @@ opt/nano/
 
 # Source Code Build Artifacts
 src/tmux-mgr/tmux-mgr
+coverage/
 
 # System & Local Settings (Always Private)
 system/

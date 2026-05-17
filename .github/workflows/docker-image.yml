@@ -49,5 +49,9 @@ jobs:
             exit 1
           fi
 
+      - name: Integration Test - System Sanity Check
+        run: |
+          docker run --rm dotfiles:latest /home/agent/git/dotfiles/system/scripts/sanity_check.sh
+
       - name: Build Docker in Docker (Legacy Check)
         run: docker run --privileged -v $(pwd):/dotfiles -w /dotfiles dotfiles:latest docker build --tag test opt/docker/helloworld

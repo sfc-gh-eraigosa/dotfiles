@@ -206,8 +206,8 @@ if command -v docker &> /dev/null; then
     fi
 fi
 
-# don't bother installing without corkscrew
-if command -v corkscrew &> /dev/null; then
+# Setup git environment aliases
+if [ -f "${BASE_DIR}/opt/scripts/git/setup_git_alias.sh" ]; then
     source "${BASE_DIR}/opt/scripts/git/setup_git_alias.sh"
 fi
 

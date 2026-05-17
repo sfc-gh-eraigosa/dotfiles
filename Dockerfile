@@ -112,6 +112,7 @@ WORKDIR /home/$USERNAME
 COPY --chown=$USERNAME:$USERNAME . git/dotfiles/
 USER $USERNAME
 RUN /home/$USERNAME/git/dotfiles/install.sh
+RUN /home/$USERNAME/git/dotfiles/system/scripts/sanity_check.sh
 
 ENTRYPOINT ["/usr/local/bin/dockerd-entrypoint.sh"]
 CMD ["sleep", "infinity"]

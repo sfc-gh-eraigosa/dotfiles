@@ -51,8 +51,11 @@ alias tmux-start='tmux-mgr session new gemini -a'
 			// Update aliases file to include completions and alias completions
 			completionSource := `
 # tmux-mgr completions
-[ -f ${HOME}/.config/tmux-mgr/completions/tmux-mgr.bash ] && source ${HOME}/.config/tmux-mgr/completions/tmux-mgr.bash
-[ -f ${HOME}/.config/tmux-mgr/completions/tmux-mgr.zsh ] && source ${HOME}/.config/tmux-mgr/completions/tmux-mgr.zsh
+if [ -n "$BASH_VERSION" ]; then
+    [ -f ${HOME}/.config/tmux-mgr/completions/tmux-mgr.bash ] && source ${HOME}/.config/tmux-mgr/completions/tmux-mgr.bash
+elif [ -n "$ZSH_VERSION" ]; then
+    [ -f ${HOME}/.config/tmux-mgr/completions/tmux-mgr.zsh ] && source ${HOME}/.config/tmux-mgr/completions/tmux-mgr.zsh
+fi
 
 # Alias completions
 if command -v compdef >/dev/null 2>&1; then
