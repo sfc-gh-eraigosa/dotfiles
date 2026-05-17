@@ -80,9 +80,11 @@ RUN export DEBIAN_FRONTEND=noninteractive \
         docker-compose-plugin \
     #
     # Use Docker script from script library to set things up (installs: docker, docker-compose, sets up dind, and a bunch of other stuff)
-    && curl -SL https://github.com/docker/compose/releases/download/v2.23.3/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose \
-    && sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose \
+    && LATEST_COMPOSE_VERSION="v2.23.3" \
+    && ARCH=$(uname -m) \
+    && curl -SL "https://github.com/docker/compose/releases/download/${LATEST_COMPOSE_VERSION}/docker-compose-linux-${ARCH}" -o /usr/local/bin/docker-compose \
     && chmod +x /usr/local/bin/docker-compose \
+    && ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose \
     && curl -sSL $DOCKER_SCRIPT_SOURCE -o /tmp/docker-setup.sh \
     && ([ "${DOCKER_SCRIPT_SHA}" = "dev-mode" ] || (echo "${DOCKER_SCRIPT_SHA} */tmp/docker-setup.sh" | sha256sum -c -)) \
     && /bin/bash /tmp/docker-setup.sh "${ENABLE_NONROOT_DOCKER}" "${SOURCE_SOCKET}" "${TARGET_SOCKET}" "${USERNAME}" \

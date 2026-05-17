@@ -48,6 +48,20 @@ echo "Creating environment profile at $GEMINI_PROFILE..."
 cat << 'PROFOF' > "$GEMINI_PROFILE"
 # Gemini CLI Environment Setup
 
+# Add opt/scripts subdirectories to PATH
+if [ -d "$HOME/opt/scripts" ]; then
+    for dir in "$HOME"/opt/scripts/*/; do
+        if [ -d "$dir" ]; then
+            # Remove trailing slash and add to PATH if not already there
+            dir_path="${dir%/}"
+            case ":$PATH:" in
+                *":$dir_path:"*) ;;
+                *) export PATH="$PATH:$dir_path" ;;
+            esac
+        fi
+    done
+fi
+
 # Load NVM
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
