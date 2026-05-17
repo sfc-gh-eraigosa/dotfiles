@@ -7,14 +7,47 @@ on:
     branches: [ main ]
 
 jobs:
-
-  build:
-
+  unit-tests:
+    name: Run Unit Tests
     runs-on: ubuntu-latest
-# a dind example
     steps:
-    - uses: actions/checkout@v2
-    - name: Build the Docker image
-      run: docker build --tag wenlock/dotfiles:latest .
-    - name: Build Docker in Docker
-      run: docker run --privileged -v $(pwd):/dotfiles -w /dotfiles wenlock/dotfiles:latest docker build --tag test opt/docker/helloworld
+      - uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+      - name: Run Go Unit Tests
+        run: |
+          cd src/gss && go test ./...
+          cd ../tmux-mgr && go test ./...
+          cd ../wol && go test ./...
+
+  build-and-validate:
+    name: Build and Integration Test
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build the Docker image
+        run: docker build --tag dotfiles:latest .
+      
+      - name: Integration Test - Version Commands
+        run: |
+          docker run --rm dotfiles:latest bash -c "gss version && tmux-mgr version && wol version"
+      
+      - name: Integration Test - Script PATH Discovery
+        run: |
+          docker run --rm dotfiles:latest bash -c "source ~/.gemini.profile && which git_add.sh && which gemini_install.sh"
+      
+      - name: Integration Test - GSS Technical Guardrail
+        run: |
+          # This should fail because there is no approval token
+          if docker run --rm dotfiles:latest gss push 2>&1 | grep "Missing or invalid AI approval token"; then
+            echo "GSS safeguard verified"
+          else
+            echo "GSS safeguard failed to trigger!"
+            exit 1
+          fi
+
+      - name: Build Docker in Docker (Legacy Check)
+        run: docker run --privileged -v $(pwd):/dotfiles -w /dotfiles dotfiles:latest docker build --tag test opt/docker/helloworld

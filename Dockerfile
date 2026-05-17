@@ -40,6 +40,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
        procps \
        socat \
        software-properties-common \
+       sudo \
     2>&1 \
     #
     # common debian config like sudo, add user, etc
@@ -47,6 +48,10 @@ RUN export DEBIAN_FRONTEND=noninteractive \
     && ([ "${COMMON_SCRIPT_SHA}" = "dev-mode" ] || (echo "${COMMON_SCRIPT_SHA} */tmp/common-setup.sh" | sha256sum -c -)) \
     && /bin/bash /tmp/common-setup.sh "${INSTALL_ZSH}" "${USERNAME}" "${USER_UID}" "${USER_GID}" "${UPGRADE_PACKAGES}" \
     && rm /tmp/common-setup.sh \
+    #
+    # Ensure sudo is configured for the user
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME \
     #
     # Install dockerd
     && sudo install -m 0755 -d /etc/apt/keyrings \
@@ -104,7 +109,9 @@ RUN curl -fL -o /usr/local/bin/dind "https://raw.githubusercontent.com/moby/moby
     && usermod -a -G docker $USERNAME
 
 WORKDIR /home/$USERNAME
+COPY --chown=$USERNAME:$USERNAME . git/dotfiles/
 USER $USERNAME
+RUN /home/$USERNAME/git/dotfiles/install.sh
 
 ENTRYPOINT ["/usr/local/bin/dockerd-entrypoint.sh"]
 CMD ["sleep", "infinity"]

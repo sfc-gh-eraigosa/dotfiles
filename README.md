@@ -14,6 +14,7 @@ Native integration with [Gemini CLI](https://geminicli.com) turns your terminal 
 - **Custom Skills**: Specialized instructions for Git (`gss`), Tmux (`tmux-mgr`), and SSH management.
 - **Slash Commands**: Instant health checks via `/gss`.
 - **Automated Maintenance**: Use Gemini to manage, update, and troubleshoot your dotfiles autonomously.
+- **Continuous Validation**: CI/CD pipeline automatically runs unit tests and integration tests on every push.
 
 ### 🔄 Safe Repository Management (`gss`)
 Stop worrying about broken rebases or lost work.
@@ -81,4 +82,4 @@ This repository is designed to be maintained **with** Gemini.
 Licensed under the [Apache License, Version 2.0](LICENSE).
 
 ---
-*Safeguards: 🛡️ Turn Break Mandate & 🛠️ OS-Level GSS Confirmation active.*
+*Safeguards: 🛡️ Turn Break Mandate, 🛠️ OS-Level GSS Confirmation, and 🧪 Automated CI Validation active.*
