@@ -97,7 +97,7 @@ ENV DOCKER_CHANNEL=stable
 ENV DOCKER_EXTRA_OPTS="--default-address-pool base=10.88.0.0/22,size=28 --storage-driver overlay2 --log-level error"
 ENV DIND_COMMIT=52379fa76dee07ca038624d639d9e14f4fb719ff
 
-COPY opt/bin/dockerd-entrypoint.sh /usr/local/bin/dockerd-entrypoint.sh
+COPY opt/scripts/docker/dockerd-entrypoint.sh /usr/local/bin/dockerd-entrypoint.sh
 RUN curl -fL -o /usr/local/bin/dind "https://raw.githubusercontent.com/moby/moby/${DIND_COMMIT}/hack/dind" \
     && chmod +x /usr/local/bin/dind \
     && chmod +x /usr/local/bin/dockerd-entrypoint.sh \
