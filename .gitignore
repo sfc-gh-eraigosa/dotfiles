@@ -10,42 +10,37 @@
 !.gitignore
 !**/GEMINI.md
 
-# docker tools setup
-!.github/workflows/docker-image.yml
-!.devcontainer
+# Repository Structure Exceptions
+!.github/
+!.github/**
+!.devcontainer/
 !.devcontainer/**
 !opt/
 !opt/**
-!opt/bin/GEMINI.md
-opt/bin/*
-!opt/scripts/
-!opt/scripts/**
 !src/
 !src/**
-system/
-src/tmux-mgr/tmux-mgr
+
+# Local Binary Zone (opt/bin)
+# We ignore everything in opt/bin except for the registry documentation
+opt/bin/*
+!opt/bin/GEMINI.md
+
+# Opt Subdirectory Configuration
 opt/.DS_Store
 opt/rbenv
-opt/bin/docker-machine.5
-opt/XMind_Linux_64bit
-opt/XMind_Linux_64bit/**
-opt/bin/jre1.8.0_60
-opt/bin/ApacheDirectoryStudio/
-opt/bin/ApacheDirectoryStudio/**
-opt/bin/snowkube
+opt/XMind_Linux_64bit/
+opt/clawdad/
+opt/nano/
+
+# Source Code Build Artifacts
+src/tmux-mgr/tmux-mgr
+
+# System & Local Settings (Always Private)
+system/
+.custom_alias
+*.swp
+
+# Tool Specific Configurations
 !.config/
 !.config/terminator/
 !.config/terminator/config
-*.swp
-.custom_alias
-opt/bin/.byebug_history
-opt/bin/nopr
-opt/bin/nopr-gateway
-opt/bin/nopr-server
-opt/bin/gss
-opt/bin/wol
-opt/bin/nano-*
-opt/bin/ntop
-opt/bin/thermo-cli
-opt/nano/
-opt/clawdad/
