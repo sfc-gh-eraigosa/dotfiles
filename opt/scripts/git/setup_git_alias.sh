@@ -1238,8 +1238,8 @@ else
     export EDITOR_TERMINAL=false
 fi
 # disable till we find a workaround to bug in vagrant
-if [[ ! "$(whoami)" = "vagrant" ]] && [[ "$EDITOR_TERMINAL" = "false" ]] ; then
-    # echo "commands available : $(fgit-commands)"
+if [[ ! "\$(whoami)" = "vagrant" ]] && [[ "\$EDITOR_TERMINAL" = "false" ]] ; then
+    # echo "commands available : \$(fgit-commands)"
     :
 fi
 

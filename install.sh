@@ -292,18 +292,26 @@ if [ -f "${BASE_DIR}/opt/scripts/system/gemini_install.sh" ]; then
     echo "Installing Gemini CLI..."
     "${BASE_DIR}/opt/scripts/system/gemini_install.sh"
 fi
-
 # build and install gss
 if [ -f "${BASE_DIR}/src/gss/build.sh" ]; then
     echo "Installing gss (dotfiles manager)..."
-    "${BASE_DIR}/src/gss/build.sh"
+    bash "${BASE_DIR}/src/gss/build.sh"
+    if [ -f "${HOME}/opt/bin/gss" ]; then
+        echo "--------------------------------------------------"
+        "${HOME}/opt/bin/gss" version
+        echo "--------------------------------------------------"
+    fi
 fi
 
 # build and install tmux-mgr
 if [ -f "${BASE_DIR}/src/tmux-mgr/build.sh" ]; then
     echo "Installing tmux-mgr..."
-    "${BASE_DIR}/src/tmux-mgr/build.sh"
+    bash "${BASE_DIR}/src/tmux-mgr/build.sh"
     if [ -f "${HOME}/opt/bin/tmux-mgr" ]; then
+        echo "--------------------------------------------------"
+        "${HOME}/opt/bin/tmux-mgr" version
+        echo "--------------------------------------------------"
+        # install aliases
         "${HOME}/opt/bin/tmux-mgr" alias install
     fi
 fi
@@ -311,8 +319,14 @@ fi
 # build and install wol
 if [ -f "${BASE_DIR}/src/wol/build.sh" ]; then
     echo "Installing wol (Wake-on-LAN utility)..."
-    "${BASE_DIR}/src/wol/build.sh"
+    bash "${BASE_DIR}/src/wol/build.sh"
+    if [ -f "${HOME}/opt/bin/wol" ]; then
+        echo "--------------------------------------------------"
+        "${HOME}/opt/bin/wol" version
+        echo "--------------------------------------------------"
+    fi
 fi
+
 
 # install fnm
 if ! command -v fnm &> /dev/null; then
