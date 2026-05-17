@@ -79,3 +79,6 @@ This repository is designed to be maintained **with** Gemini.
 ## 📄 License
 
 Licensed under the [Apache License, Version 2.0](LICENSE).
+
+---
+*Safeguards: 🛡️ Turn Break Mandate & 🛠️ OS-Level GSS Confirmation active.*

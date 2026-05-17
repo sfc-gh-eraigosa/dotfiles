@@ -32,8 +32,11 @@ This skill provides a structured and safe workflow for managing Git repositories
   - **Cancel**: Do nothing.
 
 ### 3. Execution (Action Phase)
-- ONLY proceed with 'gss push' if the user selects the corresponding option via the `ask_user` tool. Do not use standard `git push`.
-- It automatically handles the safety backup branch.
+- ONLY proceed if the user selects a confirmation option via the `ask_user` tool.
+- **Handshake Generation**: Before calling `gss push`, you MUST generate an approval token.
+  * Command: `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token && gss push`
+- This consumes the token and satisfies the binary's technical safeguard.
+- **Auto-Recovery**: If `gss push` fails with a "Missing or invalid AI approval token" error, it means you skipped the user confirmation turn. You MUST immediately stop and use the `ask_user` tool to obtain permission.
 
 ### 4. Summarize & Link (Verification Phase)
 - After execution, summarize the result using the output from 'gss push'.

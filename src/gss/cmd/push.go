@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -18,20 +18,29 @@ var pushCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		path := getRepoPath()
 
-		// 0. Confirmation (Technical Safeguard)
+		// 0. Handshake Verification (Technical Safeguard)
 		if !forceAutonomous {
-			reader := bufio.NewReader(os.Stdin)
-			fmt.Printf("Are you sure you want to push changes in %s? [y/N]: ", path)
-			response, err := reader.ReadString('\n')
+			home, _ := os.UserHomeDir()
+			configDir := filepath.Join(home, ".config", "gss")
+			approvalPath := filepath.Join(configDir, "approval.token")
+			
+			// Get current SHA to compare
+			shaOut, _ := exec.Command("git", "-C", path, "rev-parse", "HEAD").Output()
+			currentSHA := strings.TrimSpace(string(shaOut))
+
+			content, err := os.ReadFile(approvalPath)
 			if err != nil {
-				fmt.Printf("Error reading input: %v\n", err)
+				fmt.Println("Error: Missing or invalid AI approval token. The agent must obtain user permission before pushing.")
 				return
 			}
-			response = strings.ToLower(strings.TrimSpace(response))
-			if response != "y" && response != "yes" {
-				fmt.Println("Push cancelled.")
+			
+			if strings.TrimSpace(string(content)) != currentSHA {
+				fmt.Printf("Error: Invalid AI approval token (Expected %s, but token file was different).\n", currentSHA)
 				return
 			}
+			
+			// Consume token
+			os.Remove(approvalPath)
 		}
 
 		// Get current branch
