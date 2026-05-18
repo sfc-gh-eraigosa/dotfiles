@@ -130,7 +130,14 @@ func (m *Manager) Capture(target string) (string, error) {
 
 // CreatePane creates a new tmux pane for an agent session and returns the
 // resulting pane ID (e.g. "%42") so callers can track liveness later.
-func CreatePane(sessionID string, worktreePath string, command string) (string, error) {
+//
+// symbol is an optional emoji prepended to the pane title (typically the
+// `Symbol:` value from a `.ai/agents/<name>.md` definition). When empty the
+// default 🤖 is used.
+// label is an optional human-readable name (e.g. the agent's Persona) used
+// in the pane title in place of the raw session ID. When empty, sessionID is
+// used.
+func CreatePane(sessionID, worktreePath, command, symbol, label string) (string, error) {
 	paneCmd := fmt.Sprintf("cd %s && %s", worktreePath, command)
 
 	target := os.Getenv("TMUX_PANE")
@@ -157,7 +164,13 @@ func CreatePane(sessionID string, worktreePath string, command string) (string, 
 
 	paneID := strings.TrimSpace(string(output))
 
-	styledTitle := fmt.Sprintf("#[bg=colour33,fg=white,bold] 🤖 Agent: %s #[default]", sessionID)
+	if symbol == "" {
+		symbol = "🤖"
+	}
+	if label == "" {
+		label = sessionID
+	}
+	styledTitle := fmt.Sprintf("#[bg=colour33,fg=white,bold] %s %s #[default]", symbol, label)
 	exec.Command("tmux", "select-pane", "-t", paneID, "-T", styledTitle).Run()
 	exec.Command("tmux", "set-option", "-w", "-t", paneID, "pane-border-status", "top").Run()
 

@@ -23,6 +23,7 @@ No flag is needed — detection is automatic from the host shell's environment.
 
 - **Start Agent**: `tmux-mgr agent start <agent-name> --task-description "<task>"`
   - The session is tagged with the current repo's git root so `agent list` can scope to it later. Sessions live globally under `~/.config/tmux-mgr/sessions/`, so the same binary works from any repo without per-repo setup.
+  - **Agent definitions**: `<agent-name>` is matched against `./.ai/agents/<name>.md` first, then `~/.ai/agents/<name>.md`; both directories are also scanned for files whose `# Aliases:` frontmatter contains the name. When matched, the file's `# Persona:` becomes the pane label, `# Symbol:` becomes the pane emoji, and `# Model:` (Ollama-style, e.g. `qwen2.5:1.5b` or `smollm:360m`) is mapped by parameter size to a Claude/Gemini tier (Haiku/Flash for <3B, Sonnet/Pro for 3–7B, Opus/Pro for ≥8B). Unrecognized models cause the spawn to inherit the host CLI's default model. When no file matches, `generalist` defaults apply: the cheapest tier (Haiku 4.5 / gemini-2.5-flash) and the 🤖 emoji.
 - **Check Progress**: `tmux-mgr agent list`
   - Defaults to sessions started from the current repo; pass `--all` to see every session (including global / legacy ones with no repo binding). Status reconciles live: `RUNNING` while the pane is alive, `COMPLETED` once `RESULT.md` is written, `FAILED` if the pane exits without one.
 - **Get Results (Fan-In)**: `tmux-mgr agent complete <session-id>`

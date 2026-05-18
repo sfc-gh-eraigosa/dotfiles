@@ -28,7 +28,23 @@ func runAgentStart(cmd *cobra.Command, args []string) error {
 	}
 
 	host := agent.DetectHost(os.Getenv)
-	fmt.Printf("Starting isolated agent '%s' (assistant=%s) for task '%s'...\n", agentName, host, taskDescription)
+
+	def, err := agent.LoadDefinition(agentName)
+	if err != nil {
+		fmt.Printf("Warning: failed to load agent definition for %q: %s (continuing with generalist defaults)\n", agentName, err)
+		def = nil
+	}
+	model := agent.SelectModel(def, host)
+
+	defSummary := "generalist defaults"
+	if def != nil {
+		defSummary = fmt.Sprintf("definition=%s persona=%q symbol=%q", def.SourcePath, def.Persona, def.Symbol)
+	}
+	modelSummary := model
+	if modelSummary == "" {
+		modelSummary = "(inherit host default)"
+	}
+	fmt.Printf("Starting isolated agent '%s' (assistant=%s model=%s) for task '%s'\n  %s\n", agentName, host, modelSummary, taskDescription, defSummary)
 
 	workspacePath, sessionID, err := workspace.CreateWorkspace(agentName)
 	if err != nil {
@@ -46,9 +62,15 @@ func runAgentStart(cmd *cobra.Command, args []string) error {
 		assistantPath = assistantBinary // fallback; child will surface the error
 	}
 
-	invocationCmd := buildInvocationCmd(host, assistantPath, executablePath, taskDescription)
+	invocationCmd := buildInvocationCmd(host, assistantPath, executablePath, taskDescription, model)
 
-	paneID, err := tmux.CreatePane(sessionID, workspacePath, invocationCmd)
+	symbol := ""
+	label := ""
+	if def != nil {
+		symbol = def.Symbol
+		label = def.Persona
+	}
+	paneID, err := tmux.CreatePane(sessionID, workspacePath, invocationCmd, symbol, label)
 	if err != nil {
 		return fmt.Errorf("error creating tmux pane: %w", err)
 	}
@@ -87,25 +109,41 @@ func runAgentExecute(cmd *cobra.Command, args []string) error {
 		assistantPath = os.Getenv("GEMINI_PATH")
 	}
 
-	fmt.Printf("Agent executing task (assistant=%s): %s\n", host, task)
+	model := os.Getenv("TMUX_MGR_MODEL")
+
+	fmt.Printf("Agent executing task (assistant=%s model=%s): %s\n", host, displayModel(model), task)
 
 	switch host {
 	case agent.AssistantClaude:
-		return runClaudeLoop(task, assistantPath)
+		return runClaudeLoop(task, assistantPath, model)
 	default:
-		return runGeminiLoop(task, assistantPath)
+		return runGeminiLoop(task, assistantPath, model)
 	}
+}
+
+func displayModel(model string) string {
+	if model == "" {
+		return "(inherit host default)"
+	}
+	return model
 }
 
 // buildInvocationCmd produces the shell string used to launch `tmux-mgr agent execute`
 // inside a freshly-created tmux pane. Exposed at package scope so it can be unit-tested
 // without spawning tmux.
-func buildInvocationCmd(host agent.Assistant, assistantPath, executablePath, taskDescription string) string {
-	// Escape single quotes in the task description to prevent shell injection issues.
+//
+// model is the resolved Claude/Gemini model ID (or "" to let the spawned CLI
+// inherit its default). It is forwarded via TMUX_MGR_MODEL so the child
+// `agent execute` process can attach the right CLI flag.
+func buildInvocationCmd(host agent.Assistant, assistantPath, executablePath, taskDescription, model string) string {
 	escapedTask := strings.ReplaceAll(taskDescription, "'", "'\\''")
+	modelEnv := ""
+	if model != "" {
+		modelEnv = fmt.Sprintf("TMUX_MGR_MODEL='%s' ", model)
+	}
 	return fmt.Sprintf(
-		"TMUX_MGR_ASSISTANT='%s' TMUX_MGR_ASSISTANT_PATH='%s' %s agent execute --task-description '%s'",
-		host, assistantPath, executablePath, escapedTask,
+		"%sTMUX_MGR_ASSISTANT='%s' TMUX_MGR_ASSISTANT_PATH='%s' %s agent execute --task-description '%s'",
+		modelEnv, host, assistantPath, executablePath, escapedTask,
 	)
 }
 
@@ -125,20 +163,24 @@ func buildInstruction(host agent.Assistant, task string) string {
 	)
 }
 
-func runGeminiLoop(task, geminiPath string) error {
+func runGeminiLoop(task, geminiPath, requestedModel string) error {
 	if geminiPath == "" {
 		geminiPath = "gemini"
 	}
 
 	instruction := buildInstruction(agent.AssistantGemini, task)
 
-	// List of models to try. Empty string means the default model configured in the CLI.
-	// Ordered by preference and fallback availability.
+	// When the caller requested a specific model (via TMUX_MGR_MODEL), try it
+	// first. The rest of the list provides quota fallback. The empty string
+	// means "use the CLI's default model".
 	models := []string{
 		"", // Default model
 		"gemini-3.1-pro-preview",
 		"gemini-2.5-pro",
 		"gemini-2.5-flash",
+	}
+	if requestedModel != "" {
+		models = append([]string{requestedModel}, models...)
 	}
 
 	for _, model := range models {
@@ -189,16 +231,24 @@ func runGeminiLoop(task, geminiPath string) error {
 	return fmt.Errorf("all models exhausted or failed")
 }
 
-func runClaudeLoop(task, claudePath string) error {
+func runClaudeLoop(task, claudePath, model string) error {
 	if claudePath == "" {
 		claudePath = "claude"
 	}
 
 	instruction := buildInstruction(agent.AssistantClaude, task)
 
-	fmt.Println("Starting cognitive loop with Claude...")
+	if model == "" {
+		fmt.Println("Starting cognitive loop with Claude (default model)...")
+	} else {
+		fmt.Printf("Starting cognitive loop with Claude (model=%s)...\n", model)
+	}
 
-	c := exec.Command(claudePath, "-p", instruction, "--dangerously-skip-permissions")
+	claudeArgs := []string{"-p", instruction, "--dangerously-skip-permissions"}
+	if model != "" {
+		claudeArgs = append([]string{"--model", model}, claudeArgs...)
+	}
+	c := exec.Command(claudePath, claudeArgs...)
 
 	logFile, err := os.OpenFile("agent.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err == nil {
@@ -297,16 +347,15 @@ func runAgentCleanup(cmd *cobra.Command, args []string) {
 
 	fmt.Printf("Cleaning up session '%s'...\n", sessionID)
 
-	// Remove the git worktree
+	// Remove the git worktree. Prefer the session's origin RepoRoot so cleanup
+	// works regardless of where the user runs the command from; fall back to
+	// the cwd's repo for legacy sessions that pre-date the RepoRoot field.
 	fmt.Printf("Removing worktree at: %s\n", session.WorktreePath)
-	gitRootCmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	gitRootBytes, err := gitRootCmd.Output()
-	if err == nil {
-		gitRoot := string(gitRootBytes)
-		if len(gitRoot) > 0 {
-			gitRoot = gitRoot[:len(gitRoot)-1] // Remove newline
-		}
-
+	gitRoot := session.RepoRoot
+	if gitRoot == "" {
+		gitRoot = currentRepoRoot()
+	}
+	if gitRoot != "" {
 		wtCmd := exec.Command("git", "worktree", "remove", "--force", session.WorktreePath)
 		wtCmd.Dir = gitRoot
 		if wtOut, err := wtCmd.CombinedOutput(); err != nil {

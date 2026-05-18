@@ -53,7 +53,7 @@ func TestAgentCleanupCmd_NoArgs(t *testing.T) {
 }
 
 func TestBuildInvocationCmd_Claude(t *testing.T) {
-	got := buildInvocationCmd(agent.AssistantClaude, "/usr/local/bin/claude", "/usr/local/bin/tmux-mgr", "Refactor auth")
+	got := buildInvocationCmd(agent.AssistantClaude, "/usr/local/bin/claude", "/usr/local/bin/tmux-mgr", "Refactor auth", "")
 
 	wantParts := []string{
 		"TMUX_MGR_ASSISTANT='claude'",
@@ -66,10 +66,13 @@ func TestBuildInvocationCmd_Claude(t *testing.T) {
 			t.Errorf("buildInvocationCmd missing %q\n  got: %s", want, got)
 		}
 	}
+	if strings.Contains(got, "TMUX_MGR_MODEL=") {
+		t.Errorf("empty model should not emit TMUX_MGR_MODEL\n  got: %s", got)
+	}
 }
 
 func TestBuildInvocationCmd_Gemini(t *testing.T) {
-	got := buildInvocationCmd(agent.AssistantGemini, "/usr/local/bin/gemini", "/usr/local/bin/tmux-mgr", "say hi")
+	got := buildInvocationCmd(agent.AssistantGemini, "/usr/local/bin/gemini", "/usr/local/bin/tmux-mgr", "say hi", "")
 
 	wantParts := []string{
 		"TMUX_MGR_ASSISTANT='gemini'",
@@ -83,10 +86,22 @@ func TestBuildInvocationCmd_Gemini(t *testing.T) {
 }
 
 func TestBuildInvocationCmd_EscapesSingleQuotes(t *testing.T) {
-	got := buildInvocationCmd(agent.AssistantClaude, "claude", "tmux-mgr", "it's fine")
-	// Expect single quote to be escaped to '\''
+	got := buildInvocationCmd(agent.AssistantClaude, "claude", "tmux-mgr", "it's fine", "")
 	if !strings.Contains(got, `it'\''s fine`) {
 		t.Errorf("buildInvocationCmd did not escape single quote\n  got: %s", got)
+	}
+}
+
+func TestBuildInvocationCmd_PropagatesModel(t *testing.T) {
+	got := buildInvocationCmd(agent.AssistantClaude, "claude", "tmux-mgr", "do work", "claude-haiku-4-5-20251001")
+	if !strings.Contains(got, "TMUX_MGR_MODEL='claude-haiku-4-5-20251001'") {
+		t.Errorf("expected TMUX_MGR_MODEL env to be forwarded\n  got: %s", got)
+	}
+	// Env vars should precede the binary path so they apply to the child process.
+	modelIdx := strings.Index(got, "TMUX_MGR_MODEL=")
+	binIdx := strings.Index(got, "tmux-mgr agent execute")
+	if modelIdx < 0 || binIdx < 0 || modelIdx > binIdx {
+		t.Errorf("TMUX_MGR_MODEL must be exported before the binary invocation\n  got: %s", got)
 	}
 }
 
