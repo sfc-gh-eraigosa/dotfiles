@@ -165,6 +165,11 @@ fpath+=${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions/src
 
 source $ZSH/oh-my-zsh.sh
 
+# oh-my-zsh's git plugin defines `alias gss='git status -s'` which shadows
+# our gss binary at ~/opt/bin/gss. Drop the alias so the binary wins —
+# critical for any AI assistant (Claude, Gemini) that calls `gss push`.
+unalias gss 2>/dev/null
+
 # You may need to manually set your language environment
 # export LANG=en_US.UTF-8
 

@@ -66,6 +66,16 @@ function run_integration_tests() {
         exit 1
     fi
 
+    log "Verifying gss resolves to the binary in interactive zsh (no shadowing alias)..."
+    # oh-my-zsh's git plugin defines `alias gss='git status -s'`. Our .zshrc
+    # unaliases it so the binary wins. This test catches accidental regression.
+    if docker run --privileged --rm "$IMAGE_NAME" zsh -i -c 'gss version' 2>&1 | grep -q "Git Safe Sync"; then
+        log "gss binary takes precedence over alias in zsh."
+    else
+        echo "FAIL: gss in interactive zsh is not resolving to the binary (likely shadowed by oh-my-zsh alias)!"
+        exit 1
+    fi
+
     log "Verifying Claude Code installation..."
     docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && claude --version"
 
