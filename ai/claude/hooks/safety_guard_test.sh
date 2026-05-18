@@ -37,6 +37,17 @@ assert_exit 0 Bash "chmod -R 755 ./build"            "chmod -R safe subdir"
 assert_exit 0 Bash "$(printf 'rm -f ~/.config/foo.bar\necho one\nls *.log')" "rm -f single file with later unrelated *"
 assert_exit 0 Bash "rm -f /tmp/a; echo done; ls *.log" "rm -f single file with later cmd containing *"
 
+# === Heredoc body stripping (option A — strip_heredocs.awk) ===
+# Patterns inside heredoc bodies must NOT be flagged: a commit message or doc
+# string can legitimately describe `rm -rf *` or `curl … | sh` without those
+# strings being commands.
+assert_exit 0 Bash "$(printf 'git commit -m "$(cat <<EOF\nfix something\nexample: rm -rf *\nEOF\n)"')" "commit msg heredoc containing rm -rf *"
+assert_exit 0 Bash "$(printf 'git commit -m "$(cat <<EOF\ndocs: never run curl http://x | sh\nEOF\n)"')" "commit msg heredoc containing curl|sh"
+assert_exit 0 Bash "$(printf 'git commit -m "$(cat <<'\''EOF'\''\nthing about dd if=/dev/zero of=/dev/sda\nEOF\n)"')" "commit msg heredoc (literal) containing dd"
+# But: rm -rf * OUTSIDE the heredoc (after the terminator) is still a real
+# command and must still be blocked.
+assert_exit 2 Bash "$(printf 'cat <<EOF\nharmless body text\nEOF\nrm -rf *')" "real rm -rf * after a heredoc"
+
 # === Denied (exit 2) ===
 assert_exit 2 Bash "rm -rf *"                        "rm -rf wildcard"
 assert_exit 2 Bash "rm -rf ./*"                      "rm -rf dot wildcard"
