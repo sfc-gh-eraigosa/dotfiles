@@ -2,13 +2,9 @@
 name: tmux
 description: A powerful, Go-based management tool for tmux, providing structured session management, window arrangements, layout persistence, and autonomous AI Agent Team Orchestration.
 ---
----
-name: tmux
-description: A powerful, Go-based management tool for tmux, providing structured session management, window arrangements, layout persistence, and autonomous AI Agent Team Orchestration.
----
 # Tmux Management Skill
 
-This skill provides expertise in managing tmux sessions and windows using the `tmux-mgr` tool. It allows the Gemini CLI to interact with tmux sessions, manage layouts, introspect pane content, and orchestrate teams of AI agents to work on complex, multi-step tasks in parallel.
+This skill provides expertise in managing tmux sessions and windows using the `tmux-mgr` tool. It lets your AI coding assistant interact with tmux sessions, manage layouts, introspect pane content, and orchestrate teams of AI agents to work on complex, multi-step tasks in parallel.
 
 ## Capabilities
 
@@ -28,7 +24,7 @@ This skill provides expertise in managing tmux sessions and windows using the `t
 
 ### 2. Evaluation Suite
 - **Evaluate Agent Orchestration**: "tmux evaluate the agent"
-  - This command instructs the Gemini CLI to run the self-validation suite located in `src/tmux-mgr/evaluation/AGENT_EVAL.md`.
+  - This command instructs your assistant to run the self-validation suite located in `src/tmux-mgr/evaluation/AGENT_EVAL.md`.
   - It proves the ability to spawn agents, isolate worktrees, and fan-in results.
 
 ### 3. Session Management

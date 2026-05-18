@@ -56,7 +56,7 @@ function run_integration_tests() {
     docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && gss version && tmux-mgr version && wol version"
 
     log "Verifying Script PATH Discovery..."
-    docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && which git_add.sh && which gemini_install.sh"
+    docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && which git_add.sh && which gemini_install.sh && which claude_install.sh"
 
     log "Verifying GSS Technical Guardrail..."
     if docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && gss push" 2>&1 | grep -q "Missing or invalid AI approval token"; then
@@ -65,7 +65,21 @@ function run_integration_tests() {
         echo "FAIL: GSS safeguard failed to trigger!"
         exit 1
     fi
-    
+
+    log "Verifying Claude Code installation..."
+    docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && claude --version"
+
+    log "Running Claude Sanity Check..."
+    docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && /home/agent/git/dotfiles/ai/claude/scripts/sanity_check.sh"
+
+    log "Verifying Claude safety_guard hook (blocks rm -rf *)..."
+    if docker run --privileged --rm "$IMAGE_NAME" bash -c "echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"rm -rf *\"}}' | /home/agent/git/dotfiles/ai/claude/hooks/safety_guard.sh" 2>&1 | grep -q "BLOCKED by safety_guard"; then
+        log "Claude safety_guard verified."
+    else
+        echo "FAIL: Claude safety_guard hook failed to block 'rm -rf *'!"
+        exit 1
+    fi
+
     echo -e "${GREEN}Integration tests passed!${NC}"
 }
 

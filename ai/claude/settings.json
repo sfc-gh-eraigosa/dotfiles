@@ -1,0 +1,70 @@
+{
+  "theme": "auto",
+  "env": {
+    "DOTFILES_DIR": "$HOME/git/dotfiles"
+  },
+  "permissions": {
+    "deny": [
+      "Bash(rm -rf /:*)",
+      "Bash(rm -rf ~:*)",
+      "Bash(rm -rf $HOME:*)",
+      "Bash(dd if=:*)",
+      "Bash(mkfs:*)",
+      "Bash(mkfs.:*)",
+      "Bash(fdisk:*)",
+      "Bash(parted:*)",
+      "Bash(sfdisk:*)",
+      "Bash(mkswap:*)",
+      "Bash(init 0)",
+      "Bash(init 6)"
+    ],
+    "ask": [
+      "Bash(gss push:*)",
+      "Bash(gss pr:*)",
+      "Bash(gss sync:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(reboot:*)",
+      "Bash(shutdown:*)",
+      "Bash(poweroff:*)",
+      "Bash(halt:*)",
+      "Bash(sudo:*)"
+    ],
+    "allow": [
+      "Bash(gss status:*)",
+      "Bash(gss scan:*)",
+      "Bash(gss version:*)",
+      "Bash(tmux-mgr session:*)",
+      "Bash(tmux-mgr window:*)",
+      "Bash(tmux-mgr capture:*)",
+      "Bash(tmux-mgr agent list:*)",
+      "Bash(tmux-mgr desktop:*)",
+      "Bash(tmux-mgr save:*)",
+      "Bash(tmux-mgr restore:*)",
+      "Bash(tmux-mgr version)",
+      "Bash(wol version)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(make help)",
+      "Bash(make unit-test)",
+      "Bash(make bin)",
+      "Bash(make integration-test)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/git/dotfiles/ai/claude/hooks/safety_guard.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

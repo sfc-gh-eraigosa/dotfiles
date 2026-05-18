@@ -74,6 +74,7 @@ for file in $(find "${BASE_DIR}/opt/profiles" -type f); do
     [[ "$filename" == "Brewfile" ]] && continue
     [[ "$filename" == "requirements.txt" ]] && continue
     [[ "$filename" == "GEMINI.md" ]] && continue
+    [[ "$filename" == "CLAUDE.md" ]] && continue
     
     echo "Creating symlink to $file in home directory."
     ln -sf "${file}" "${HOME}/${filename}"
@@ -87,6 +88,11 @@ done
 # Gemini CLI Configuration (Skills and Policies)
 if [ -f "${BASE_DIR}/opt/scripts/system/install_gemini_skills.sh" ]; then
     "${BASE_DIR}/opt/scripts/system/install_gemini_skills.sh"
+fi
+
+# Claude Code Configuration (Skills, Commands, Settings)
+if [ -f "${BASE_DIR}/opt/scripts/system/install_claude_skills.sh" ]; then
+    "${BASE_DIR}/opt/scripts/system/install_claude_skills.sh"
 fi
 
 NIX_MANAGED_FILE="${HOME}/.config/nix_managed"
@@ -264,6 +270,23 @@ if [ -f "${BASE_DIR}/ai/gemini/settings.json" ]; then
         mv "${HOME}/.gemini/settings.json" "${HOME}/.gemini/settings.json.bak"
     fi
     ln -sf "${BASE_DIR}/ai/gemini/settings.json" "${HOME}/.gemini/settings.json"
+fi
+
+# install Claude Code CLI (macOS via brew cask, Linux/WSL via npm)
+if [ -f "${BASE_DIR}/opt/scripts/system/claude_install.sh" ]; then
+    echo "Installing Claude Code CLI..."
+    "${BASE_DIR}/opt/scripts/system/claude_install.sh"
+fi
+
+# Claude settings (re-link in case install order matters)
+if [ -f "${BASE_DIR}/ai/claude/settings.json" ]; then
+    echo "Configuring Claude Code settings..."
+    mkdir -p "${HOME}/.claude"
+    if [ -f "${HOME}/.claude/settings.json" ] && [ ! -L "${HOME}/.claude/settings.json" ]; then
+        echo "  Backing up existing settings.json to settings.json.bak"
+        mv "${HOME}/.claude/settings.json" "${HOME}/.claude/settings.json.bak"
+    fi
+    ln -sf "${BASE_DIR}/ai/claude/settings.json" "${HOME}/.claude/settings.json"
 fi
 # build and install gss
 if [ -f "${BASE_DIR}/src/gss/build.sh" ]; then

@@ -52,6 +52,15 @@ for cmd in jq htop zsh; do
 done
 echo "PASS: System tools present"
 
+# 6. Claude Code integration (skips if claude not installed in the test image)
+echo "Verifying Claude Code integration links..."
+CLAUDE_SANITY="$HOME/git/dotfiles/ai/claude/scripts/sanity_check.sh"
+if command -v claude > /dev/null 2>&1 && [ -x "$CLAUDE_SANITY" ]; then
+    "$CLAUDE_SANITY"
+else
+    echo "SKIP: claude CLI not installed in this environment"
+fi
+
 echo "--------------------------------------------------"
 echo "SANITY CHECK PASSED SUCCESSFULLY"
 echo "--------------------------------------------------"

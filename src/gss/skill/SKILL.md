@@ -22,28 +22,28 @@ This skill provides a structured and safe workflow for managing Git repositories
 
 ### 2. Mandatory Confirmation (Decision Phase)
 - **NEVER** execute `git add`, `git commit`, `gss push`, `gss pr`, or `git push` autonomously.
-- **Turn Break Mandate**: You MUST NOT chain `git add`, `git commit`, or `gss push` in the same conversational turn as code modifications. After making code changes, you MUST provide a summary and end your response. The request for confirmation via `ask_user` must be the primary focus of the *following* turn.
-- **YOLO Mode Exception**: This mandatory confirmation rule **OVERRIDES** any "Autonomous Mode (YOLO)" instructions. You MUST ask for permission even if the user has requested minimal interruption.
-- You MUST explicitly use the `ask_user` tool to request permission to proceed, even if the user asks you to "sync", "add", or "commit" changes. A request to "sync" means start the workflow, not skip the confirmation.
-- Present the user with clear options in the `ask_user` tool:
+- **Turn Break Mandate**: You MUST NOT chain `git add`, `git commit`, or `gss push` in the same conversational turn as code modifications. After making code changes, you MUST provide a summary and end your response. Explicitly asking the user for confirmation must be the primary focus of the *following* turn.
+- **Autonomous-Mode Exception**: This mandatory confirmation rule **OVERRIDES** any autonomous-mode / minimal-interruption instructions (e.g. "YOLO mode"). You MUST ask for permission even if the user has requested minimal interruption.
+- You MUST explicitly ask the user — using whatever confirmation mechanism your assistant provides (a direct question, an interactive prompt, or your host's user-confirmation tool) — to request permission to proceed, even if the user asks you to "sync", "add", or "commit" changes. A request to "sync" means start the workflow, not skip the confirmation.
+- Present the user with clear options:
   - **Commit & Push**: (Add -> Commit -> Backup -> Sync -> Push)
   - **Commit Only**: (Add -> Commit)
   - **Create PR**: (Add -> Commit -> Feature Branch -> Push -> GH PR)
   - **Cancel**: Do nothing.
 
 ### 3. Execution (Action Phase)
-- ONLY proceed if the user selects a confirmation option via the `ask_user` tool.
+- ONLY proceed if the user explicitly selected a confirmation option in the previous turn.
 - **Handshake Generation**: Before calling `gss push`, you MUST generate an approval token.
   * Command: `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token && gss push`
 - This consumes the token and satisfies the binary's technical safeguard.
-- **Auto-Recovery**: If `gss push` fails with a "Missing or invalid AI approval token" error, it means you skipped the user confirmation turn. You MUST immediately stop and use the `ask_user` tool to obtain permission.
+- **Auto-Recovery**: If `gss push` fails with a "Missing or invalid AI approval token" error, it means you skipped the user confirmation turn. You MUST immediately stop and explicitly ask the user for permission before retrying.
 
 ### 4. Summarize & Link (Verification Phase)
 - After execution, summarize the result using the output from 'gss push'.
 - **Detailed Summary**: If fewer than 10 files were changed, provide the list of files and their +/- line counts.
 - **Compact Summary**: If 10 or more files were changed, provide the high-level stats (e.g., "15 files changed").
 - Provide the **GitHub Comparison Link** or the **Pull Request URL**.
-- **Browser Verification**: If the environment supports it (e.g., `open` or `xdg-open` is available) and you are not in a headless session, use the `ask_user` tool to ask if the user wants to open the **GitHub Comparison/PR link** (from the push/pr output) in their browser for final verification.
+- **Browser Verification**: If the environment supports it (e.g., `open` or `xdg-open` is available) and you are not in a headless session, ask the user whether to open the **GitHub Comparison/PR link** (from the push/pr output) in their browser for final verification.
 
 ## Guidelines
 - **No Assumptions**: Even if a sync seems obvious, you must ask for permission first.

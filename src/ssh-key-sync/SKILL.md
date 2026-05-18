@@ -1,3 +1,7 @@
+---
+name: ssh-key-sync
+description: Generate, distribute, audit, and securely delete SSH keys across all hosts in ~/.ssh/config.
+---
 # SSH Key Sync Skill
 
 This skill allows for managing SSH keys across a network, including generation, synchronization, status reporting, and secure deletion.

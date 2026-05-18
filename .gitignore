@@ -11,6 +11,7 @@
 !Dockerfile
 !.gitignore
 !**/GEMINI.md
+!**/CLAUDE.md
 
 # Repository Structure Exceptions
 !.github/
@@ -28,6 +29,7 @@
 # We ignore everything in opt/bin except for the registry documentation
 opt/bin/*
 !opt/bin/GEMINI.md
+!opt/bin/CLAUDE.md
 
 # Opt Subdirectory Configuration
 opt/.DS_Store

@@ -36,3 +36,16 @@ unit-test: ## Run unit tests only
 .PHONY: integration-test
 integration-test: ## Run integration tests only
 	./scripts/test.sh integration
+
+.PHONY: claude-install
+claude-install: ## Install (or update) Claude Code CLI and link skills/commands/settings
+	./opt/scripts/system/claude_install.sh
+	./opt/scripts/system/install_claude_skills.sh
+
+.PHONY: claude-test
+claude-test: ## Run Claude Code sanity check (CLI, links, hooks, 27-case hook test suite)
+	./ai/claude/scripts/sanity_check.sh
+
+.PHONY: claude-hook-test
+claude-hook-test: ## Run safety_guard hook test suite only
+	./ai/claude/hooks/safety_guard_test.sh
