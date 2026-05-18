@@ -73,8 +73,10 @@ Once installed, you can talk to tmux via the Gemini CLI:
 
 ## 📄 Documentation
 
-For detailed information on project requirements, implementation details, and coding standards, please refer to:
-- [Requirements & Implementation](docs/requirements.md)
+For detailed information on project requirements, implementation details, user guides, and coding standards, please refer to:
+- [User Guide](docs/user_guide.md)
+- [Requirements & Architecture](docs/requirements.md)
+- [Agent Coordination Design](docs/design.md)
 
 ---
 *Maintained in the `~/git/dotfiles` repository.*

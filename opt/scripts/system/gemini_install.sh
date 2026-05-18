@@ -32,7 +32,7 @@ mkdir -p "$POLICIES_DIR"
 # Since we are in opt/scripts/system/, the root is ../../..
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 BASE_DIR=$(cd -- "$SCRIPT_DIR/../../.." &> /dev/null && pwd)
-SAFETY_POLICY_SRC="$BASE_DIR/opt/conf/gemini/policies/safety.toml"
+SAFETY_POLICY_SRC="$BASE_DIR/ai/gemini/policies/safety.toml"
 
 if [ -f "$SAFETY_POLICY_SRC" ]; then
     echo "Linking safety policy from $SAFETY_POLICY_SRC..."
@@ -47,6 +47,20 @@ echo "Creating environment profile at $GEMINI_PROFILE..."
 
 cat << 'PROFOF' > "$GEMINI_PROFILE"
 # Gemini CLI Environment Setup
+
+# Add opt/scripts subdirectories to PATH
+if [ -d "$HOME/opt/scripts" ]; then
+    for dir in "$HOME"/opt/scripts/*/; do
+        if [ -d "$dir" ]; then
+            # Remove trailing slash and add to PATH if not already there
+            dir_path="${dir%/}"
+            case ":$PATH:" in
+                *":$dir_path:"*) ;;
+                *) export PATH="$PATH:$dir_path" ;;
+            esac
+        fi
+    done
+fi
 
 # Load NVM
 export NVM_DIR="$HOME/.nvm"

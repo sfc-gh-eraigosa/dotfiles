@@ -3,7 +3,7 @@
 
 set -e
 
-BASE_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+BASE_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
 HARDWARE_LIB="${BASE_DIR}/opt/lib/hardware.sh"
 
 # Source hardware detection

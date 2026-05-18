@@ -1,60 +1,65 @@
 ---
 name: tmux
-description: A powerful, Go-based management tool for tmux, providing structured session management, window arrangements, and layout persistence.
+description: A powerful, Go-based management tool for tmux, providing structured session management, window arrangements, layout persistence, and autonomous AI Agent Team Orchestration.
 ---
 # Tmux Management Skill
 
-This skill provides expertise in managing tmux sessions and windows using the `tmux-mgr` tool. It allows the Gemini CLI to interact with tmux sessions, manage layouts, and introspect pane content using natural language.
+This skill provides expertise in managing tmux sessions and windows using the `tmux-mgr` tool. It allows the Gemini CLI to interact with tmux sessions, manage layouts, introspect pane content, and orchestrate teams of AI agents to work on complex, multi-step tasks in parallel.
 
 ## Capabilities
 
-The `tmux-mgr` tool is the primary interface for this skill. It is located in `~/opt/bin/tmux-mgr`.
+### 1. Hybrid Agent Team Orchestration (Isolated Parallel Work)
 
-### 1. Session Management
+`tmux-mgr` provides OS-level isolation for parallel agent tasks. By provisioning independent Git worktrees and starting new `gemini-cli` sessions in dedicated tmux panes, multiple agents can work on the same repository without file collisions.
+
+**Crucially, `tmux-mgr` does not manage cognitive state.** You (the primary agent) must use your native Gemini tools (like `tracker_create_task`) to define the work and track progress, while using `tmux-mgr agent start` simply to spawn the isolated workspace.
+
+- **Start Agent**: `tmux-mgr agent start <agent-name> --task-id <task-id>`
+- **Check Progress**: `tmux-mgr agent list`
+  - Shows all currently active agent sessions and the paths to their isolated worktrees.
+- **Get Results (Fan-In)**: `tmux-mgr agent complete <session-id>`
+  - Retrieves the final summary from the `RESULT.md` file in the agent's isolated worktree.
+- **Cleanup**: `tmux-mgr agent cleanup <session-id>`
+  - Removes the Git worktree and deletes the session tracking file.
+
+### 2. Evaluation Suite
+- **Evaluate Agent Orchestration**: "tmux evaluate the agent"
+  - This command instructs the Gemini CLI to run the self-validation suite located in `src/tmux-mgr/evaluation/AGENT_EVAL.md`.
+  - It proves the ability to spawn agents, isolate worktrees, and fan-in results.
+
+### 3. Session Management
 - **List sessions**: `tmux-mgr session list`
 - **Create new session**: `tmux-mgr session new [name] [-a|--attach]` (Use -a to automatically attach)
 - **Attach to session**: `tmux-mgr session attach [name]`
 - **Detach from session**: `tmux-mgr session detach`
 - **Kill session**: `tmux-mgr session kill [name]`
-- **Save session**: `tmux-mgr session save [name]`
-- **Restore session**: `tmux-mgr session restore [name]`
 
-### 2. Window & Pane Arrangements
-- **Create new window**: `tmux-mgr window new [name]`
-- **Rename window**: `tmux-mgr window rename [name]`
-- **Rename pane**: `tmux-mgr window rename-pane [title]`
-- **Split window**: `tmux-mgr window split [horizontal|vertical|left|right|up|down]`
+### 4. Window & Pane Arrangements
+- **Split window**: `tmux-mgr window split [horizontal|vertical]`
 - **Move focus**: `tmux-mgr window move [left|right|up|down]`
-- **Swap panes**: `tmux-mgr window swap [left|right|up|down]`
-- **Kill current pane**: `tmux-mgr window kill`
 - **Resize panes**: 
-  - Incremental: `tmux-mgr window resize [left|right|up|down] [val]`
+  - Directional: `tmux-mgr window resize [left|right|up|down] [val]`
   - Percentage: `tmux-mgr window resize width 50%` or `tmux-mgr window resize height 25%`
+- **Capture content**: `tmux-mgr capture [target]` (returns the text content of a pane)
 
-### 3. Layout Persistence
+### 5. Layout Persistence
 - **Save layout**: `tmux-mgr save [name]` (saves to `~/.config/tmux-mgr/[name].json`)
 - **Restore layout**: `tmux-mgr restore [name]` (restores window layout and names)
 
-### 4. Desktop Navigation
+### 6. Desktop Navigation
 - **List windows**: `tmux-mgr desktop list`
 - **Switch window**: `tmux-mgr desktop switch [name|index]`
 
-### 5. Shell Environment
+### 7. Shell Environment
 - **Install aliases & completions**: `tmux-mgr alias install`
   - Sets up `tmux-a`, `tmux-ls`, `tmux-new`, `tmux-kill`, and `tmux-start`.
   - Configures shell completions for Bash and Zsh.
 
-### 6. Introspection (Eyes for Gemini)
-- **Capture content**: `tmux-mgr capture [target]` (returns the text content of a pane)
-- Use this to understand what's running in other windows or to troubleshoot terminal output.
-
 ## Guidelines for Natural Language Interaction
 
-When a user asks you to "manage tmux" or "fix my windows," use these strategies:
-- **Be Conversational**: "I can help you arrange your tmux windows. Should I move this pane to the right or resize it?"
-- **Interpret Intent**: If the user says "make this wider," use `tmux-mgr window resize right 10`. If they say "half width," use `tmux-mgr window resize width 50%`.
-- **Introspect First**: If asked "what's going on in the other session?", use `tmux-mgr capture` before answering.
-- **Cheap & Efficient**: This skill is designed to be "cheap" by using direct shell commands. Any Gemini model (Flash or Pro) can handle these tasks effectively.
-
-## Help for New Users
-If a user is unfamiliar with the tool, explain that it's a Go-based manager built into their dotfiles that helps bridge the gap between their terminal and the Gemini CLI.
+- **Self-Evaluation**: If a user asks to "evaluate the agent" or "test your team features," activate this skill and follow the instructions in `src/tmux-mgr/evaluation/AGENT_EVAL.md`.
+- **Orchestrate Effectively**: If a task is complex or requires parallel execution, proactively suggest using the `tmux-mgr agent` features.
+- **Isolate for Safety**: Explain that `tmux-mgr` creates a separate `git worktree` for each agent to prevent file-system conflicts.
+- **Fan-In**: Sub-agents MUST write their final summaries to `RESULT.md`. Retrieve these with `agent complete` before summarizing for the user.
+- **Introspect First**: Use `tmux-mgr capture` to understand what's running in other windows or to troubleshoot terminal output.
+- **Be Conversational**: "I'll spawn an agent to handle the backend in a separate pane so we can work on the frontend here."

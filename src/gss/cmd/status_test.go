@@ -17,10 +17,15 @@ func TestIsDirty(t *testing.T) {
 
 	// Initialize a git repo
 	exec.Command("git", "-C", tempDir, "init").Run()
+	// Configure git for the temp repo to avoid failures due to missing global config
+	exec.Command("git", "-C", tempDir, "config", "user.email", "test@example.com").Run()
+	exec.Command("git", "-C", tempDir, "config", "user.name", "Test User").Run()
+	exec.Command("git", "-C", tempDir, "config", "commit.gpgsign", "false").Run()
 
 	// Case 1: Clean repo (initially empty)
 	if isDirty(tempDir) {
-		t.Error("Expected clean repo initially, but isDirty returned true")
+		out, _ := exec.Command("git", "-C", tempDir, "status", "--porcelain").CombinedOutput()
+		t.Errorf("Expected clean repo initially, but isDirty returned true. Status:\n%s", string(out))
 	}
 
 	// Case 2: Dirty repo (new untracked file)
@@ -30,14 +35,19 @@ func TestIsDirty(t *testing.T) {
 	}
 
 	if !isDirty(tempDir) {
-		t.Error("Expected dirty repo after creating file, but isDirty returned false")
+		out, _ := exec.Command("git", "-C", tempDir, "status", "--porcelain").CombinedOutput()
+		t.Errorf("Expected dirty repo after creating file, but isDirty returned false. Status:\n%s", string(out))
 	}
 
 	// Case 3: Clean repo again (staged and committed)
 	exec.Command("git", "-C", tempDir, "add", ".").Run()
-	exec.Command("git", "-C", tempDir, "commit", "-m", "test").Run()
+	if err := exec.Command("git", "-C", tempDir, "commit", "-m", "test").Run(); err != nil {
+		out, _ := exec.Command("git", "-C", tempDir, "status").CombinedOutput()
+		t.Fatalf("Failed to commit: %v. Status:\n%s", err, string(out))
+	}
 
 	if isDirty(tempDir) {
-		t.Error("Expected clean repo after commit, but isDirty returned true")
+		out, _ := exec.Command("git", "-C", tempDir, "status", "--porcelain").CombinedOutput()
+		t.Errorf("Expected clean repo after commit, but isDirty returned true. Status:\n%s", string(out))
 	}
 }

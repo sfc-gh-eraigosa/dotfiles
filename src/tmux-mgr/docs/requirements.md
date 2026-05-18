@@ -15,8 +15,19 @@ This document outlines the requirements for the `tmux-mgr` tool and how each is 
 | **7. Go Implementation** | Written in Go, compiled to `opt/bin`. | **Met**: Source in `src/tmux-mgr`, binary installed to `opt/bin/tmux-mgr`. |
 | **8. Build System** | Script to compile and install without checking in binary. | **Met**: `build.sh` handles compilation and skill linking; `.gitignore` excludes the binary. |
 | **9. Repository Structure** | Source and resources in `~/git/dotfiles/src/tmux-mgr`. | **Met**: All code, build scripts, docs, and skills are encapsulated in the requested directory. |
+| **10. AI Agent Orchestration** | Support hybrid fan-out workflows for autonomous agents. | **Met**: `agent [start\|list\|complete\|cleanup]` commands manage isolated workspaces and results. |
+| **11. Test-Driven Development** | Adhere to TDD standards with minimum test coverage. | **Met**: Implementations under `pkg/` maintain `>60%` test coverage using native Go testing. |
 
 ## Implementation Details
+
+### Hybrid Agent Orchestration (OS Isolation + Result Fan-In)
+The tool supports AI agent orchestration using a hybrid approach. To prevent file-system conflicts, `tmux-mgr` provides OS-level isolation via `git worktree` and `tmux` panes. 
+
+**Result Fan-In Mechanism:** 
+1. Sub-agents are instructed to write their results to a `RESULT.md` file in their worktree.
+2. The primary agent retrieves these results using `tmux-mgr agent complete <session-id>`.
+3. This complements the native Gemini `tracker`, providing both high-level task status and low-level detailed results.
+
 
 ### Window Management & Resizing
 The tool uses `tmux select-pane` for movement and `tmux resize-pane` for resizing. For percentage-based resizing, the tool queries the terminal dimensions (`terminal_width`/`terminal_height`) and calculates absolute values for `-x` and `-y` flags.

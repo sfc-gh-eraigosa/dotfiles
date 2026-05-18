@@ -3,6 +3,8 @@
 
 # Essential project files
 !README.md
+!CONTRIBUTING.md
+!Makefile
 !install.sh
 !LICENSE
 !azure-pipelines.yml
@@ -15,6 +17,8 @@
 !.github/**
 !.devcontainer/
 !.devcontainer/**
+!scripts/
+!scripts/**
 !opt/
 !opt/**
 !src/
@@ -37,7 +41,10 @@ src/tmux-mgr/tmux-mgr
 coverage/
 
 # System & Local Settings (Always Private)
-/system/
+!system/
+!system/**
+!ai/
+!ai/**
 .custom_alias
 *.swp
 
