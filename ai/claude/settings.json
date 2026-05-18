@@ -1,5 +1,9 @@
 {
   "theme": "auto",
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/statusline-command.sh"
+  },
   "env": {
     "DOTFILES_DIR": "$HOME/git/dotfiles"
   },
