@@ -56,9 +56,12 @@ deny() {
 # to one shell-command segment.
 SAFE_CHARS='[^[:cntrl:];|&]'
 
-# --- 1. Recursive wildcard deletion: rm -rf *, rm -rf ./*, rm -rf  * ---
+# --- 1. Wildcard deletion: rm -rf *, rm -rf ./*, rm -f *, etc. ---
+# Note: any rm form with -f and a wildcard is treated as dangerous, not just -rf.
+# `rm -f *` deletes every file in cwd, which is nearly as catastrophic in most
+# repos. If you legitimately need this, name the files explicitly.
 if [[ "$CMD_SCRUBBED" =~ rm[[:space:]]+${SAFE_CHARS}*-[rRf]+${SAFE_CHARS}*\* ]]; then
-    deny "Recursive wildcard deletion (rm -rf *) is prohibited by safety policy."
+    deny "Wildcard deletion with rm -[rRf] is prohibited (matches both rm -rf * and rm -f *). Enumerate the files instead."
 fi
 
 # --- 2. Recursive deletion of current/parent dir: rm -rf . / rm -rf .. ---
@@ -73,18 +76,33 @@ if [[ "$CMD_SCRUBBED" =~ rm[[:space:]]+${SAFE_CHARS}*-[rRf]+[[:space:]]+/(etc|us
 fi
 
 # --- 4. Disk management / raw writes ---
-# mkfs has variants: mkfs.ext4, mkfs.xfs, etc. Match optional dotted suffix.
-for tool in dd fdisk parted sfdisk mkswap; do
+# Hard-block tools that have no legitimate read-only invocation we care about.
+for tool in fdisk sfdisk mkswap; do
     if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|\&])$tool([[:space:]]|$) ]]; then
-        # Allow harmless `dd --help` / `dd --version` style invocations
-        if [[ "$tool" == "dd" ]] && [[ "$CMD_SCRUBBED" =~ dd[[:space:]]+--(help|version) ]]; then
-            continue
-        fi
         deny "Disk management command '$tool' is restricted."
     fi
 done
+# mkfs has variants: mkfs.ext4, mkfs.xfs, etc. Match optional dotted suffix.
 if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|\&])mkfs(\.[a-zA-Z0-9]+)?([[:space:]]|$) ]]; then
     deny "Disk management command 'mkfs' is restricted."
+fi
+# dd: read-only and file-to-file forms are legitimate (backups, image inspection,
+# benchmarks against /dev/null). Block only when the output target is a real
+# block device. This includes Linux (sd*, nvme*, hd*, vd*, mapper/) and macOS
+# (disk*) device names.
+if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|\&])dd([[:space:]]|$) ]]; then
+    if [[ "$CMD_SCRUBBED" =~ dd[[:space:]]+${SAFE_CHARS}*of=/dev/(sd[a-z]|nvme[0-9]+n[0-9]*|hd[a-z]|vd[a-z]|mapper/|disk[0-9]+) ]]; then
+        deny "dd targeting a block device (of=/dev/<disk>) is prohibited."
+    fi
+fi
+# parted: --list / -l only inspect partitions and are safe. Block when targeting
+# a specific device or using a mutating subcommand.
+if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|\&])parted([[:space:]]|$) ]]; then
+    if [[ "$CMD_SCRUBBED" =~ parted[[:space:]]+(-l|--list)([[:space:]]|$) ]]; then
+        :  # read-only listing — allow
+    elif [[ "$CMD_SCRUBBED" =~ parted[[:space:]]+${SAFE_CHARS}*/dev/ ]]; then
+        deny "parted targeting a device is restricted."
+    fi
 fi
 
 # --- 5. Recursive chmod/chown on root ---
@@ -115,7 +133,7 @@ fi
 if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])gss[[:space:]]+(push|pr|sync)([[:space:]]|$) ]]; then
     TOKEN_FILE="${HOME}/.config/gss/approval.token"
     if [ ! -f "$TOKEN_FILE" ]; then
-        deny "gss push/pr/sync requires an approval token. Per the git-safe-sync skill, you must first confirm with the user, then generate the token: mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token"
+        deny "gss push/pr/sync requires an approval token, issued as a SEPARATE Bash call BEFORE the push. Two-call recipe: (1) \`mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token\` (2) \`gss push\` (or pr/sync). Chaining all three with && in one Bash call is intentionally blocked so the user sees an explicit approve→push gate."
     fi
     # Token must be fresh — current HEAD must match the token contents.
     # This prevents reusing a stale token from a previous session.

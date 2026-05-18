@@ -48,14 +48,28 @@ assert_exit 0 Bash "$(printf 'git commit -m "$(cat <<'\''EOF'\''\nthing about dd
 # command and must still be blocked.
 assert_exit 2 Bash "$(printf 'cat <<EOF\nharmless body text\nEOF\nrm -rf *')" "real rm -rf * after a heredoc"
 
+# === dd / parted nuance (added after fuzz corpus surfaced false positives) ===
+# dd: read-only and file-to-file usage is legitimate; only block real
+# block-device targets.
+assert_exit 0 Bash "dd if=input.bin of=output.bin bs=1M"      "dd file-to-file (benign)"
+assert_exit 0 Bash "dd if=test.iso of=/dev/null bs=4M"        "dd to /dev/null (benchmark)"
+assert_exit 0 Bash "dd if=/dev/zero of=zeros.bin count=10"    "dd reading from /dev/zero"
+# parted: --list / -l only inspect; block when /dev/ target is named.
+assert_exit 0 Bash "parted --list"                            "parted --list (read-only)"
+assert_exit 0 Bash "parted -l"                                "parted -l short"
+
 # === Denied (exit 2) ===
 assert_exit 2 Bash "rm -rf *"                        "rm -rf wildcard"
+assert_exit 2 Bash "rm -f *"                         "rm -f wildcard (deletes all in cwd)"
 assert_exit 2 Bash "rm -rf ./*"                      "rm -rf dot wildcard"
 assert_exit 2 Bash "rm -rf ."                        "rm -rf current dir"
 assert_exit 2 Bash "rm -rf .."                       "rm -rf parent dir"
 assert_exit 2 Bash "rm -rf /etc"                     "rm -rf /etc"
 assert_exit 2 Bash "rm -rf /"                        "rm -rf root"
 assert_exit 2 Bash "dd if=/dev/zero of=/dev/sda"     "dd disk wipe"
+assert_exit 2 Bash "dd if=/dev/zero of=/dev/disk2 bs=1m"  "dd disk wipe (macOS disk*)"
+assert_exit 2 Bash "dd if=img.iso of=/dev/nvme0n1"   "dd to nvme"
+assert_exit 2 Bash "parted /dev/sda mkpart primary 0 100" "parted with device target"
 assert_exit 2 Bash "mkfs.ext4 /dev/sda1"             "mkfs"
 assert_exit 2 Bash "fdisk /dev/sda"                  "fdisk"
 assert_exit 2 Bash "chmod -R 777 /"                  "chmod -R /"
@@ -73,6 +87,9 @@ rm -f "$HOME/.config/gss/approval.token"
 assert_exit 2 Bash "gss push"                        "gss push without token"
 assert_exit 2 Bash "gss pr"                          "gss pr without token"
 assert_exit 2 Bash "gss sync"                        "gss sync without token"
+# Chaining token-gen + push in one Bash call is intentionally blocked so the
+# user gets a clear approve→push gate via two separate prompts.
+assert_exit 2 Bash "mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token && gss push" "chained token-gen + gss push (blocked by design)"
 
 # Create a stale token (different HEAD)
 mkdir -p "$HOME/.config/gss"
