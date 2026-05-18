@@ -115,13 +115,11 @@ if [ -f ~/.gitenv ] ; then
         fgit-login
     fi
 else
-    echo ".gitenv is missing, you can install with : . opt/bin/setup_git_alias.sh"
+    echo ".gitenv is missing, you can install with : . opt/scripts/git/setup_git_alias.sh"
 fi
 # Some git shortcuts
-[[ -e $(alias git-reset) ]] && unalias git-reset
-alias git-reset='$HOME/opt/bin/git-reset.sh'
-alias git-branches-rm='$HOME/opt/bin/git-rm-mybranches.sh'
-alias git-local-master='$HOME/opt/bin/git-local-master.sh'
+alias git-branches-rm='$HOME/opt/scripts/git/git-rm-mybranches.sh'
+alias git-local-master='$HOME/opt/scripts/git/git-local-master.sh'
 
 if [ -f ~/git/projects.cson ]; then
     [ ! -f ~/.atom/projects.cson ] && ln -s ~/git/projects.cson ~/.atom/projects.cson
@@ -141,7 +139,7 @@ fi
 if [ -f $HOME/.dindcenv ] ; then
     source $HOME/.dindcenv
 else
-    echo ".dindcenv is missing, you can install with : . opt/bin/setup_dindc_alias.sh"
+    echo ".dindcenv is missing, you can install with : . opt/scripts/docker/setup_dindc_alias.sh"
 fi
 
 

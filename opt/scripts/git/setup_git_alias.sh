@@ -1142,7 +1142,11 @@ function fgit-reset {
     _CWD=\$(pwd)
     if git rev-parse --show-toplevel >/dev/null 2<&1 ; then
         _GIT_REPO_ROOT=\$(git rev-parse --show-toplevel)
-        if [ "\${_GIT_REPO_ROOT}" = "\$HOME" ]; then
+        # Normalize paths for comparison
+        _REAL_REPO_ROOT=\$(readlink -f "\${_GIT_REPO_ROOT}")
+        _REAL_HOME=\$(readlink -f "\$HOME")
+        
+        if [ "\${_REAL_REPO_ROOT}" = "\${_REAL_HOME}" ]; then
             echo "WARNING: you are about to reset your home folder!!! [\$_GIT_REPO_ROOT] "
             echo -n "Do you really want to continue, if so type: [Yes] : "
             read answer
@@ -1153,9 +1157,22 @@ function fgit-reset {
         if [ "\${answer}" = "Yes" ]; then
             cd "\${_GIT_REPO_ROOT}"
             _REMOTE=origin
-            _ORIGIN_BRANCH=\$(git rev-parse --abbrev-ref \$_REMOTE)
-            _BRANCH=\$(git rev-parse --abbrev-ref \$_REMOTE|awk -F'/' '{print \$2}')
-            git reset --hard \$_ORIGIN_BRANCH && git clean -x -d -f && git pull \$_REMOTE \$_BRANCH;
+            # Try to get the default branch from origin/HEAD
+            _ORIGIN_BRANCH=\$(git symbolic-ref --short refs/remotes/\$_REMOTE/HEAD 2>/dev/null)
+            if [ -z "\${_ORIGIN_BRANCH}" ]; then
+                # Fallback to current behavior but with better parsing
+                _ORIGIN_BRANCH=\$(git rev-parse --abbrev-ref \$_REMOTE 2>/dev/null)
+            fi
+            
+            if [[ "\${_ORIGIN_BRANCH}" == "\$_REMOTE/"* ]]; then
+                _BRANCH=\${_ORIGIN_BRANCH#\$_REMOTE/}
+                echo "Resetting to \${_ORIGIN_BRANCH} and pulling \${_BRANCH}..."
+                git reset --hard "\${_ORIGIN_BRANCH}" && git clean -x -d -f && git pull "\$_REMOTE" "\${_BRANCH}";
+            elif [[ "\${_ORIGIN_BRANCH}" == "\$_REMOTE" ]]; then
+                echo "ERROR: Could not determine remote branch for \$_REMOTE. Try 'git remote set-head \$_REMOTE -a'"
+            else
+                echo "ERROR: Unexpected remote branch format: \${_ORIGIN_BRANCH}"
+            fi
         else
             echo "Skipping reset ..."
         fi

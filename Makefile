@@ -12,6 +12,15 @@ help: ## Display this help message
 	@echo "Targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
+.PHONY: bin
+bin: ## Rebuild all binaries in ./src
+	@for d in src/*; do \
+		if [ -f "$$d/build.sh" ]; then \
+			echo "Building $$d..."; \
+			bash "$$d/build.sh"; \
+		fi; \
+	done
+
 .PHONY: build
 build: ## Build the docker image used for testing
 	docker build -t $(IMAGE_NAME) .
