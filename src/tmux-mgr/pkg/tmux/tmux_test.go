@@ -36,9 +36,13 @@ func TestLayoutMarshaling(t *testing.T) {
 func TestCreatePane(t *testing.T) {
 	// Note: This test relies on tmux being installed and potentially running.
 	// If it fails due to tmux missing, that's expected in a minimal CI without tmux.
-	err := CreatePane("test-session", "/tmp", "echo hello")
+	paneID, err := CreatePane("test-session", "/tmp", "echo hello")
 	if err != nil {
 		t.Logf("CreatePane returned an error, possibly because tmux is not running: %v", err)
+		return
+	}
+	if paneID == "" {
+		t.Error("CreatePane succeeded but returned empty pane ID")
 	}
 }
 

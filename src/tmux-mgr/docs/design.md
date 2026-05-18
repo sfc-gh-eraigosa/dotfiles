@@ -52,3 +52,31 @@ The `tmux-mgr agent execute` command is the new entry point for the spawned agen
 3.  **Execute:** The spawned `tmux-mgr` process performs the refactoring task within its isolated worktree. Upon completion, it writes a summary to `RESULT.md`.
 4.  **Fan-In:** User runs `tmux-mgr agent complete <session-id>` to view the `RESULT.md` summary.
 5.  **Cleanup:** User runs `tmux-mgr agent cleanup <session-id>` to remove the worktree and session data.
+
+## 3. Host-Aware Execution
+
+The cognitive loop inside `tmux-mgr agent execute` dispatches to the AI CLI matching the host shell that launched the orchestration.
+
+### 3.1 Detection
+Detection happens **once in the parent** (`runAgentStart`) via `agent.DetectHost(os.Getenv)`:
+
+- `CLAUDECODE=1` → `AssistantClaude`
+- otherwise → `AssistantGemini` (default; preserves original behavior)
+
+The child (`runAgentExecute`) never re-detects — the inherited tmux environment is unreliable for this. Instead, the parent encodes its decision into the invocation command for the child.
+
+### 3.2 Parent → Child Contract
+The parent serializes two env vars into the shell command it hands to `tmux.CreatePane`:
+
+| Var | Value |
+|-----|-------|
+| `TMUX_MGR_ASSISTANT` | `"claude"` or `"gemini"` |
+| `TMUX_MGR_ASSISTANT_PATH` | absolute path of the assistant binary (from `exec.LookPath`), or the bare name as a fallback |
+
+For backward compatibility the child still reads the legacy `GEMINI_PATH` env var when `TMUX_MGR_ASSISTANT_PATH` is unset and the host is Gemini.
+
+### 3.3 Per-Host Cognitive Loops
+- **`runGeminiLoop`**: runs `gemini -y -p "<instruction>"` with the existing model-fallback chain (`gemini-3.1-pro-preview` → `gemini-2.5-pro` → `gemini-2.5-flash`) on quota errors. Instruction is prefixed with `@generalist` (Gemini extension syntax).
+- **`runClaudeLoop`**: runs `claude -p "<instruction>" --dangerously-skip-permissions` once. No model fallback (Claude doesn't surface quota errors in a string-matchable way; one-shot semantics are cleaner). Instruction is plain task text plus the `RESULT.md` write mandate.
+
+Both branches write `RESULT.md` in the worktree, so `runAgentComplete` is host-agnostic.

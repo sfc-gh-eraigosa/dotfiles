@@ -1,13 +1,31 @@
 {
-  "theme": "auto",
-  "statusLine": {
-    "type": "command",
-    "command": "bash ~/.claude/statusline-command.sh"
-  },
   "env": {
     "DOTFILES_DIR": "$HOME/git/dotfiles"
   },
   "permissions": {
+    "allow": [
+      "Bash(gss status:*)",
+      "Bash(gss scan:*)",
+      "Bash(gss version:*)",
+      "Bash(tmux-mgr session:*)",
+      "Bash(tmux-mgr window:*)",
+      "Bash(tmux-mgr capture:*)",
+      "Bash(tmux-mgr agent list:*)",
+      "Bash(tmux-mgr desktop:*)",
+      "Bash(tmux-mgr save:*)",
+      "Bash(tmux-mgr restore:*)",
+      "Bash(tmux-mgr version)",
+      "Bash(wol version)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(make help)",
+      "Bash(make unit-test)",
+      "Bash(make bin)",
+      "Bash(make integration-test)"
+    ],
     "deny": [
       "Bash(rm -rf /:*)",
       "Bash(rm -rf ~:*)",
@@ -34,29 +52,7 @@
       "Bash(halt:*)",
       "Bash(sudo:*)"
     ],
-    "allow": [
-      "Bash(gss status:*)",
-      "Bash(gss scan:*)",
-      "Bash(gss version:*)",
-      "Bash(tmux-mgr session:*)",
-      "Bash(tmux-mgr window:*)",
-      "Bash(tmux-mgr capture:*)",
-      "Bash(tmux-mgr agent list:*)",
-      "Bash(tmux-mgr desktop:*)",
-      "Bash(tmux-mgr save:*)",
-      "Bash(tmux-mgr restore:*)",
-      "Bash(tmux-mgr version)",
-      "Bash(wol version)",
-      "Bash(git status:*)",
-      "Bash(git diff:*)",
-      "Bash(git log:*)",
-      "Bash(git branch:*)",
-      "Bash(git rev-parse:*)",
-      "Bash(make help)",
-      "Bash(make unit-test)",
-      "Bash(make bin)",
-      "Bash(make integration-test)"
-    ]
+    "defaultMode": "auto"
   },
   "hooks": {
     "PreToolUse": [
@@ -70,5 +66,15 @@
         ]
       }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/statusline-command.sh"
+  },
+  "skipDangerousModePermissionPrompt": true,
+  "theme": "auto",
+  "skipAutoPermissionPrompt": true,
+  "enabledPlugins": {
+    "gopls-lsp@claude-plugins-official": true
   }
 }

@@ -128,22 +128,16 @@ func (m *Manager) Capture(target string) (string, error) {
 	return out, nil
 }
 
-// CreatePane creates a new tmux pane for an agent session.
-func CreatePane(sessionID string, worktreePath string, command string) error {
-	// The command that will be run in the new pane.
-	// It changes to the worktree directory and then executes the provided command.
+// CreatePane creates a new tmux pane for an agent session and returns the
+// resulting pane ID (e.g. "%42") so callers can track liveness later.
+func CreatePane(sessionID string, worktreePath string, command string) (string, error) {
 	paneCmd := fmt.Sprintf("cd %s && %s", worktreePath, command)
 
-	// Determine the target for split-window.
-	// We use the TMUX_PANE environment variable if available to ensure we split
-	// the window the caller is currently in.
 	target := os.Getenv("TMUX_PANE")
 	if target == "" {
-		target = ":.+" // default to current window, next pane
+		target = ":.+"
 	}
 
-	// The tmux command to split the window and run the command.
-	// We use -h to split horizontally (open to the right) and -l 30% to use 30% width.
 	args := []string{
 		"split-window",
 		"-h",
@@ -158,17 +152,15 @@ func CreatePane(sessionID string, worktreePath string, command string) error {
 
 	output, err := tmuxCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to create tmux pane: %w, Output: %s", err, string(output))
+		return "", fmt.Errorf("failed to create tmux pane: %w, Output: %s", err, string(output))
 	}
 
 	paneID := strings.TrimSpace(string(output))
 
-	// Set the pane title with styling and an emoji
 	styledTitle := fmt.Sprintf("#[bg=colour33,fg=white,bold] 🤖 Agent: %s #[default]", sessionID)
 	exec.Command("tmux", "select-pane", "-t", paneID, "-T", styledTitle).Run()
-	// Ensure pane titles are visible
 	exec.Command("tmux", "set-option", "-w", "-t", paneID, "pane-border-status", "top").Run()
 
 	fmt.Printf("Created tmux pane: %s\n", paneID)
-	return nil
+	return paneID, nil
 }

@@ -54,3 +54,43 @@ tmux-mgr agent cleanup <session_id_B>
 - [ ] The `agent complete` command successfully retrieves the "Hello World" outputs.
 - [ ] Worktrees and session tracking files are removed after `agent cleanup` is run.
 
+## Pass 2: Host-Aware Assistant Selection (Claude vs Gemini)
+
+`tmux-mgr` auto-detects whether it was invoked from Claude Code or another shell, and spawns the matching assistant. This pass verifies both branches.
+
+### Gemini path (default)
+Run from a shell where `CLAUDECODE` is unset or not `1`:
+```bash
+unset CLAUDECODE
+tmux-mgr agent start regression-gemini --task-description "Write 'Hello from Gemini' to RESULT.md and exit."
+```
+Verify:
+- The `agent start` output reads `assistant=gemini`.
+- `tmux-mgr capture <pane>` shows the spawned process is `gemini -y -p ...`.
+- `tmux-mgr agent complete <session-id>` returns "Hello from Gemini".
+
+### Claude path (host-detected)
+Run from a Claude Code session (the CLI sets `CLAUDECODE=1` automatically):
+```bash
+tmux-mgr agent start regression-claude --task-description "Write 'Hello from Claude' to RESULT.md and exit."
+```
+Verify:
+- The `agent start` output reads `assistant=claude`.
+- `tmux-mgr capture <pane>` shows the spawned process is `claude -p ... --dangerously-skip-permissions`.
+- `tmux-mgr agent complete <session-id>` returns "Hello from Claude".
+
+### Two-agent fan-in under Claude
+Repeat the original two-agent scenario with `CLAUDECODE=1`. Both panes should spawn `claude` and produce distinct `RESULT.md` files; `agent list` shows both sessions concurrently.
+
+### Native sub-agent fan-out spot-check (qualitative)
+```bash
+tmux-mgr agent start team-test --task-description "Use your Task tool to spawn two parallel sub-agents — one summarizes README.md, one summarizes CLAUDE.md. Combine both summaries into RESULT.md, then exit."
+```
+Confirms the in-pane Claude can fan out further. This is the "agent teams" capability — exposed via the spawned Claude itself, not a new tmux-mgr subcommand.
+
+## Pass 2 Success Criteria
+- [ ] With `CLAUDECODE` unset, `agent start` spawns `gemini` and reports `assistant=gemini`.
+- [ ] With `CLAUDECODE=1`, `agent start` spawns `claude --dangerously-skip-permissions` and reports `assistant=claude`.
+- [ ] Both branches write `RESULT.md` and fan-in correctly via `agent complete`.
+- [ ] The team-test agent demonstrates Claude's native sub-agent fan-out.
+

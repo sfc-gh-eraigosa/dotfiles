@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"bytes"
+	"strings"
 	"testing"
+
+	"github.com/eraigosa/dotfiles/src/tmux-mgr/pkg/agent"
 )
 
 func executeCommand(args ...string) (string, error) {
@@ -47,4 +50,65 @@ func TestAgentCleanupCmd_NoArgs(t *testing.T) {
     if err == nil {
         t.Error("Expected error when calling cleanup without args")
     }
+}
+
+func TestBuildInvocationCmd_Claude(t *testing.T) {
+	got := buildInvocationCmd(agent.AssistantClaude, "/usr/local/bin/claude", "/usr/local/bin/tmux-mgr", "Refactor auth")
+
+	wantParts := []string{
+		"TMUX_MGR_ASSISTANT='claude'",
+		"TMUX_MGR_ASSISTANT_PATH='/usr/local/bin/claude'",
+		"/usr/local/bin/tmux-mgr agent execute",
+		"--task-description 'Refactor auth'",
+	}
+	for _, want := range wantParts {
+		if !strings.Contains(got, want) {
+			t.Errorf("buildInvocationCmd missing %q\n  got: %s", want, got)
+		}
+	}
+}
+
+func TestBuildInvocationCmd_Gemini(t *testing.T) {
+	got := buildInvocationCmd(agent.AssistantGemini, "/usr/local/bin/gemini", "/usr/local/bin/tmux-mgr", "say hi")
+
+	wantParts := []string{
+		"TMUX_MGR_ASSISTANT='gemini'",
+		"TMUX_MGR_ASSISTANT_PATH='/usr/local/bin/gemini'",
+	}
+	for _, want := range wantParts {
+		if !strings.Contains(got, want) {
+			t.Errorf("buildInvocationCmd missing %q\n  got: %s", want, got)
+		}
+	}
+}
+
+func TestBuildInvocationCmd_EscapesSingleQuotes(t *testing.T) {
+	got := buildInvocationCmd(agent.AssistantClaude, "claude", "tmux-mgr", "it's fine")
+	// Expect single quote to be escaped to '\''
+	if !strings.Contains(got, `it'\''s fine`) {
+		t.Errorf("buildInvocationCmd did not escape single quote\n  got: %s", got)
+	}
+}
+
+func TestBuildInstruction_Claude(t *testing.T) {
+	got := buildInstruction(agent.AssistantClaude, "Write hello to RESULT.md")
+	if strings.Contains(got, "@generalist") {
+		t.Errorf("Claude instruction must not include Gemini-specific @generalist prefix\n  got: %s", got)
+	}
+	if !strings.Contains(got, "RESULT.md") {
+		t.Errorf("Claude instruction must mandate RESULT.md\n  got: %s", got)
+	}
+	if !strings.Contains(got, "Write hello to RESULT.md") {
+		t.Errorf("Claude instruction must embed the task\n  got: %s", got)
+	}
+}
+
+func TestBuildInstruction_Gemini(t *testing.T) {
+	got := buildInstruction(agent.AssistantGemini, "Write hello to RESULT.md")
+	if !strings.Contains(got, "@generalist") {
+		t.Errorf("Gemini instruction must include @generalist prefix\n  got: %s", got)
+	}
+	if !strings.Contains(got, "RESULT.md") {
+		t.Errorf("Gemini instruction must mandate RESULT.md\n  got: %s", got)
+	}
 }

@@ -12,11 +12,19 @@ This skill provides expertise in managing tmux sessions and windows using the `t
 
 `tmux-mgr` is a self-contained orchestrator that provides OS-level isolation for parallel agent tasks. By provisioning independent Git worktrees and spawning new instances of itself in dedicated tmux panes, multiple agents can work on the same repository without file collisions.
 
+**Host-aware assistant selection.** `tmux-mgr` auto-detects which AI CLI is driving the orchestration and spawns the matching assistant inside each agent pane:
+
+- Inside Claude Code (`CLAUDECODE=1`): each pane runs `claude -p "<task>" --dangerously-skip-permissions` and exits when the task completes. The spawned Claude can further fan out via its native `Task()` subagents inside its own pane — so a single `agent start` invocation already gives you a full agent team.
+- Otherwise (default): each pane runs `gemini -y -p "<task>"` with model fallback, preserving the original behavior.
+
+No flag is needed — detection is automatic from the host shell's environment.
+
 **You (the primary agent) can now delegate tasks directly.** Use the `tmux-mgr agent start` command with a natural language description of the work to be done.
 
 - **Start Agent**: `tmux-mgr agent start <agent-name> --task-description "<task>"`
+  - The session is tagged with the current repo's git root so `agent list` can scope to it later. Sessions live globally under `~/.config/tmux-mgr/sessions/`, so the same binary works from any repo without per-repo setup.
 - **Check Progress**: `tmux-mgr agent list`
-  - Shows all currently active agent sessions and the paths to their isolated worktrees.
+  - Defaults to sessions started from the current repo; pass `--all` to see every session (including global / legacy ones with no repo binding). Status reconciles live: `RUNNING` while the pane is alive, `COMPLETED` once `RESULT.md` is written, `FAILED` if the pane exits without one.
 - **Get Results (Fan-In)**: `tmux-mgr agent complete <session-id>`
   - Retrieves the final summary from the `RESULT.md` file in the agent's isolated worktree.
 - **Cleanup**: `tmux-mgr agent cleanup <session-id>`

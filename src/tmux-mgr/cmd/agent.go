@@ -27,7 +27,8 @@ func runAgentStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--task-description flag is required")
 	}
 
-	fmt.Printf("Starting isolated agent '%s' for task '%s'...\n", agentName, taskDescription)
+	host := agent.DetectHost(os.Getenv)
+	fmt.Printf("Starting isolated agent '%s' (assistant=%s) for task '%s'...\n", agentName, host, taskDescription)
 
 	workspacePath, sessionID, err := workspace.CreateWorkspace(agentName)
 	if err != nil {
@@ -39,27 +40,27 @@ func runAgentStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 
-	geminiPath, err := exec.LookPath("gemini")
+	assistantBinary := string(host)
+	assistantPath, err := exec.LookPath(assistantBinary)
 	if err != nil {
-		geminiPath = "gemini" // fallback if not found in PATH
+		assistantPath = assistantBinary // fallback; child will surface the error
 	}
 
-	// Escape single quotes in the task description to prevent shell injection issues.
-	escapedTask := strings.ReplaceAll(taskDescription, "'", "'\\''")
-	invocationCmd := fmt.Sprintf("GEMINI_PATH='%s' %s agent execute --task-description '%s'", geminiPath, executablePath, escapedTask)
+	invocationCmd := buildInvocationCmd(host, assistantPath, executablePath, taskDescription)
 
-	// Create the tmux pane and run the command
-	if err := tmux.CreatePane(sessionID, workspacePath, invocationCmd); err != nil {
+	paneID, err := tmux.CreatePane(sessionID, workspacePath, invocationCmd)
+	if err != nil {
 		return fmt.Errorf("error creating tmux pane: %w", err)
 	}
 
-	// Save the session details for lifecycle management (cleanup)
 	session := agent.Session{
 		SessionID:    sessionID,
 		AgentName:    agentName,
-		Status:       "RUNNING",
+		Status:       agent.StatusRunning,
 		StartTime:    time.Now(),
 		WorktreePath: workspacePath,
+		PaneID:       paneID,
+		RepoRoot:     currentRepoRoot(),
 	}
 
 	if err := agent.SaveSession(session); err != nil {
@@ -76,15 +77,61 @@ func runAgentExecute(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("task description is empty")
 	}
 
-	fmt.Printf("Agent executing task: %s\n", task)
-	
-	geminiPath := os.Getenv("GEMINI_PATH")
+	host := agent.Assistant(os.Getenv("TMUX_MGR_ASSISTANT"))
+	if host == "" {
+		host = agent.AssistantGemini
+	}
+	assistantPath := os.Getenv("TMUX_MGR_ASSISTANT_PATH")
+	// Back-compat: respect legacy GEMINI_PATH if the new var is absent and host is gemini.
+	if assistantPath == "" && host == agent.AssistantGemini {
+		assistantPath = os.Getenv("GEMINI_PATH")
+	}
+
+	fmt.Printf("Agent executing task (assistant=%s): %s\n", host, task)
+
+	switch host {
+	case agent.AssistantClaude:
+		return runClaudeLoop(task, assistantPath)
+	default:
+		return runGeminiLoop(task, assistantPath)
+	}
+}
+
+// buildInvocationCmd produces the shell string used to launch `tmux-mgr agent execute`
+// inside a freshly-created tmux pane. Exposed at package scope so it can be unit-tested
+// without spawning tmux.
+func buildInvocationCmd(host agent.Assistant, assistantPath, executablePath, taskDescription string) string {
+	// Escape single quotes in the task description to prevent shell injection issues.
+	escapedTask := strings.ReplaceAll(taskDescription, "'", "'\\''")
+	return fmt.Sprintf(
+		"TMUX_MGR_ASSISTANT='%s' TMUX_MGR_ASSISTANT_PATH='%s' %s agent execute --task-description '%s'",
+		host, assistantPath, executablePath, escapedTask,
+	)
+}
+
+// buildInstruction produces the prompt handed to the spawned assistant. The shape differs
+// per host: Gemini uses its @generalist extension prefix; Claude takes a plain task plus
+// the RESULT.md mandate.
+func buildInstruction(host agent.Assistant, task string) string {
+	if host == agent.AssistantClaude {
+		return fmt.Sprintf(
+			"Execute the following task in the current working directory: %s. When finished, you MUST write the final result to RESULT.md in the current directory using the Write tool, then exit.",
+			task,
+		)
+	}
+	return fmt.Sprintf(
+		"@generalist Execute the following task: %s. When finished, you MUST ensure the final result is written to RESULT.md in the current directory, then exit.",
+		task,
+	)
+}
+
+func runGeminiLoop(task, geminiPath string) error {
 	if geminiPath == "" {
 		geminiPath = "gemini"
 	}
 
-	instruction := fmt.Sprintf("@generalist Execute the following task: %s. When finished, you MUST ensure the final result is written to RESULT.md in the current directory, then exit.", task)
-	
+	instruction := buildInstruction(agent.AssistantGemini, task)
+
 	// List of models to try. Empty string means the default model configured in the CLI.
 	// Ordered by preference and fallback availability.
 	models := []string{
@@ -107,7 +154,7 @@ func runAgentExecute(cmd *cobra.Command, args []string) error {
 		}
 
 		c := exec.Command(geminiPath, execArgs...)
-		
+
 		logFile, err := os.OpenFile("agent.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		var outputBuf strings.Builder
 
@@ -142,18 +189,78 @@ func runAgentExecute(cmd *cobra.Command, args []string) error {
 	return fmt.Errorf("all models exhausted or failed")
 }
 
+func runClaudeLoop(task, claudePath string) error {
+	if claudePath == "" {
+		claudePath = "claude"
+	}
+
+	instruction := buildInstruction(agent.AssistantClaude, task)
+
+	fmt.Println("Starting cognitive loop with Claude...")
+
+	c := exec.Command(claudePath, "-p", instruction, "--dangerously-skip-permissions")
+
+	logFile, err := os.OpenFile("agent.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err == nil {
+		c.Stdout = io.MultiWriter(os.Stdout, logFile)
+		c.Stderr = io.MultiWriter(os.Stderr, logFile)
+	} else {
+		c.Stdout = os.Stdout
+		c.Stderr = os.Stderr
+	}
+	c.Stdin = os.Stdin
+
+	runErr := c.Run()
+	if logFile != nil {
+		logFile.Close()
+	}
+
+	if runErr != nil {
+		return fmt.Errorf("agent execution failed: %w", runErr)
+	}
+
+	fmt.Println("Task complete. Exiting.")
+	return nil
+}
+
+// currentRepoRoot returns the absolute git toplevel for the current working
+// directory, or "" if the cwd is not inside a git repository (or git is
+// unavailable). It is used both to tag new sessions and to default the
+// `agent list` filter to the current repo.
+func currentRepoRoot() string {
+	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 func runAgentList(cmd *cobra.Command, args []string) {
-	sessions, err := agent.ListSessions()
+	all, _ := cmd.Flags().GetBool("all")
+
+	filter := ""
+	if !all {
+		filter = currentRepoRoot()
+	}
+
+	sessions, err := agent.ListSessionsFiltered(agent.DefaultPaneChecker, filter)
 	if err != nil {
 		fmt.Printf("Error listing sessions: %s\n", err)
 		return
 	}
 
 	if len(sessions) == 0 {
-		fmt.Println("No active agent sessions found.")
+		if filter != "" {
+			fmt.Printf("No active agent sessions found for repo %s. Use --all to see every session.\n", filter)
+		} else {
+			fmt.Println("No active agent sessions found.")
+		}
 		return
 	}
 
+	if filter != "" {
+		fmt.Printf("Sessions scoped to repo %s (use --all to see every session):\n", filter)
+	}
 	fmt.Printf("%-30s %-15s %-10s %s\n", "SESSION ID", "AGENT NAME", "STATUS", "START TIME")
 	fmt.Println("--------------------------------------------------------------------------------")
 	for _, s := range sessions {
@@ -245,7 +352,7 @@ var executeCmd = &cobra.Command{
 
 var listCmd = &cobra.Command{
 	Use:   "list",
-	Short: "Lists all active agent sessions.",
+	Short: "Lists active agent sessions for the current repo (use --all for every session).",
 	Run:   runAgentList,
 }
 
@@ -276,4 +383,6 @@ func init() {
 
 	executeCmd.Flags().StringP("task-description", "d", "", "The task description for the agent.")
 	executeCmd.MarkFlagRequired("task-description")
+
+	listCmd.Flags().BoolP("all", "a", false, "Show sessions from every repo (and global sessions). Default scopes to current repo.")
 }

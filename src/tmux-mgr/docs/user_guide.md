@@ -33,6 +33,14 @@ The most powerful feature of `tmux-mgr` is its ability to spawn independent, aut
 
 This integrated model removes external dependencies and ensures the agent has the exact same environment and tooling as the main `tmux-mgr` process.
 
+### Host-Aware Assistant Selection
+`tmux-mgr` auto-detects which AI CLI is driving you and runs the matching assistant inside each spawned pane — no flags required:
+
+- **Inside Claude Code** (detected via `CLAUDECODE=1`): each pane runs `claude -p "<task>" --dangerously-skip-permissions`. Because Claude has built-in `Task()` sub-agents, a single `agent start` invocation already gives you a full fan-out / fan-in team inside that pane.
+- **Otherwise (default)**: each pane runs `gemini -y -p "<task>"` with model fallback — the original behavior, untouched.
+
+`tmux-mgr agent start` prints the detected host (e.g. `assistant=claude`) so you can confirm which branch fired.
+
 ### 1. Spawning an Agent (Fan-Out)
 To give a task to an agent, use the `agent start` command with a clear, natural language description of the task.
 

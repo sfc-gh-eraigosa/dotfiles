@@ -4,11 +4,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
+	"strings"
 	"time"
 )
 
 const sessionsDir = ".config/tmux-mgr/sessions"
+
+// Session lifecycle states. RUNNING is the only non-terminal state; COMPLETED
+// and FAILED are settled and will not be re-reconciled.
+const (
+	StatusRunning   = "RUNNING"
+	StatusCompleted = "COMPLETED"
+	StatusFailed    = "FAILED"
+)
 
 // Session represents an active or completed agent session.
 type Session struct {
@@ -17,6 +28,49 @@ type Session struct {
 	Status       string    `json:"status"`
 	StartTime    time.Time `json:"startTime"`
 	WorktreePath string    `json:"worktreePath"`
+	PaneID       string    `json:"paneId,omitempty"`
+	// RepoRoot is the absolute path of the git repository the session was
+	// started from. Empty for legacy sessions (always visible regardless of
+	// filter) and for any future $HOME-only sessions.
+	RepoRoot string `json:"repoRoot,omitempty"`
+}
+
+// PaneChecker reports whether a tmux pane is still alive. Injected for tests.
+type PaneChecker func(paneID string) bool
+
+// DefaultPaneChecker queries tmux for the set of live pane IDs.
+func DefaultPaneChecker(paneID string) bool {
+	if paneID == "" {
+		return false
+	}
+	out, err := exec.Command("tmux", "list-panes", "-a", "-F", "#{pane_id}").Output()
+	if err != nil {
+		return false
+	}
+	return slices.Contains(strings.Fields(string(out)), paneID)
+}
+
+// ReconcileStatus derives the live status of a session by checking pane liveness
+// and RESULT.md presence. Terminal states (COMPLETED/FAILED) are returned as-is.
+// When the pane is gone, RESULT.md presence decides COMPLETED vs FAILED.
+func ReconcileStatus(s Session, isAlive PaneChecker) string {
+	if s.Status == StatusCompleted || s.Status == StatusFailed {
+		return s.Status
+	}
+	if s.PaneID != "" && isAlive(s.PaneID) {
+		return StatusRunning
+	}
+	if s.WorktreePath != "" {
+		if info, err := os.Stat(filepath.Join(s.WorktreePath, "RESULT.md")); err == nil && info.Size() > 0 {
+			return StatusCompleted
+		}
+	}
+	if s.PaneID == "" {
+		// No pane recorded (older session) and no RESULT.md — keep RUNNING so we
+		// don't mark legacy sessions as failed retroactively.
+		return s.Status
+	}
+	return StatusFailed
 }
 
 // GetSessionsDir returns the absolute path to the sessions directory.
@@ -97,6 +151,39 @@ func ListSessions() ([]Session, error) {
 	}
 
 	return sessions, nil
+}
+
+// ListSessionsReconciled returns all stored sessions with their status reconciled
+// against tmux + RESULT.md state. Sessions that transition to a terminal state
+// are persisted back so subsequent calls are cheap.
+func ListSessionsReconciled(isAlive PaneChecker) ([]Session, error) {
+	return ListSessionsFiltered(isAlive, "")
+}
+
+// ListSessionsFiltered is ListSessionsReconciled with an additional repo filter.
+// When repoRoot is empty, no filtering is applied. When non-empty, only sessions
+// whose RepoRoot matches (or whose RepoRoot is empty — legacy/global sessions)
+// are returned. The reconcile-and-persist semantics still apply to every session
+// on disk so terminal transitions settle regardless of which filter is active.
+func ListSessionsFiltered(isAlive PaneChecker, repoRoot string) ([]Session, error) {
+	sessions, err := ListSessions()
+	if err != nil {
+		return nil, err
+	}
+	out := sessions[:0]
+	for i := range sessions {
+		newStatus := ReconcileStatus(sessions[i], isAlive)
+		if newStatus != sessions[i].Status {
+			sessions[i].Status = newStatus
+			if newStatus == StatusCompleted || newStatus == StatusFailed {
+				_ = SaveSession(sessions[i])
+			}
+		}
+		if repoRoot == "" || sessions[i].RepoRoot == "" || sessions[i].RepoRoot == repoRoot {
+			out = append(out, sessions[i])
+		}
+	}
+	return out, nil
 }
 
 // DeleteSession removes a session file from disk.
