@@ -36,19 +36,25 @@ deny() {
     exit 2
 }
 
+# Pattern note: bash regex `.*` matches newlines and command separators (; | &),
+# which causes false positives across multi-line scripts (e.g. an unrelated `*`
+# many lines after a safe `rm -f one_file`). Use SAFE_CHARS to scope each rule
+# to one shell-command segment.
+SAFE_CHARS='[^[:cntrl:];|&]'
+
 # --- 1. Recursive wildcard deletion: rm -rf *, rm -rf ./*, rm -rf  * ---
-if [[ "$CMD" =~ rm[[:space:]]+.*-[rRf]+.*\* ]]; then
+if [[ "$CMD" =~ rm[[:space:]]+${SAFE_CHARS}*-[rRf]+${SAFE_CHARS}*\* ]]; then
     deny "Recursive wildcard deletion (rm -rf *) is prohibited by safety policy."
 fi
 
 # --- 2. Recursive deletion of current/parent dir: rm -rf . / rm -rf .. ---
-if [[ "$CMD" =~ rm[[:space:]]+.*-[rRf]+[[:space:]]+\.{1,2}([[:space:]]|/|$) ]]; then
+if [[ "$CMD" =~ rm[[:space:]]+${SAFE_CHARS}*-[rRf]+[[:space:]]+\.{1,2}([[:space:]]|/|$) ]]; then
     deny "Recursive deletion of current/parent directory is prohibited."
 fi
 
 # --- 3. Deletion of root or critical system dirs ---
-if [[ "$CMD" =~ rm[[:space:]]+.*-[rRf]+[[:space:]]+/(etc|usr|bin|sbin|var|boot|root|lib|home)([[:space:]]|/|$) ]] \
-   || [[ "$CMD" =~ rm[[:space:]]+.*-[rRf]+[[:space:]]+/[[:space:]]*$ ]]; then
+if [[ "$CMD" =~ rm[[:space:]]+${SAFE_CHARS}*-[rRf]+[[:space:]]+/(etc|usr|bin|sbin|var|boot|root|lib|home)([[:space:]]|/|$) ]] \
+   || [[ "$CMD" =~ rm[[:space:]]+${SAFE_CHARS}*-[rRf]+[[:space:]]+/[[:space:]]*$ ]]; then
     deny "Deletion of root or protected system directories is prohibited."
 fi
 

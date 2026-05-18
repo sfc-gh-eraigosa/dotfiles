@@ -265,3 +265,6 @@ source <(openclaw completion --shell bash)
 # Gemini tmux aliases
 # Added by tmux-mgr
 [ -f ${HOME}/.config/tmux-mgr/aliases.sh ] && source ${HOME}/.config/tmux-mgr/aliases.sh
+
+# Claude Code CLI helpers: claude (wrapper) and claude-toggle (YOLO on/off)
+[ -f "${HOME}/.config/claude/aliases.sh" ] && . "${HOME}/.config/claude/aliases.sh"

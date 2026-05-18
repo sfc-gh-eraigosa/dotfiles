@@ -32,6 +32,10 @@ assert_exit 0 Bash "dd --help"                       "dd --help allowed"
 assert_exit 0 Read "/etc/hosts"                      "non-Bash tool passes through"
 assert_exit 0 Bash "echo curl https://x.com | grep curl"   "echo containing curl|"
 assert_exit 0 Bash "chmod -R 755 ./build"            "chmod -R safe subdir"
+# Regression: bash regex `.*` crosses newlines/separators. An unrelated `*`
+# many lines after a safe `rm -f single_file` must not be flagged as `rm -rf *`.
+assert_exit 0 Bash "$(printf 'rm -f ~/.config/foo.bar\necho one\nls *.log')" "rm -f single file with later unrelated *"
+assert_exit 0 Bash "rm -f /tmp/a; echo done; ls *.log" "rm -f single file with later cmd containing *"
 
 # === Denied (exit 2) ===
 assert_exit 2 Bash "rm -rf *"                        "rm -rf wildcard"

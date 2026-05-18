@@ -85,4 +85,17 @@ if [ -d "$BASE_DIR/ai/claude/hooks" ]; then
     chmod +x "$BASE_DIR/ai/claude/hooks"/*.sh 2>/dev/null || true
 fi
 
+# --- Shell aliases (~/.config/claude/aliases.sh, sourced by .zshrc and .bashrc) ---
+# Mirrors the tmux-mgr convention of ~/.config/<tool>/aliases.sh. The state
+# file (yolo.enabled) lives in the same directory.
+if [ -f "$BASE_DIR/ai/claude/aliases.sh" ]; then
+    CLAUDE_XDG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/claude"
+    mkdir -p "$CLAUDE_XDG_DIR"
+    if [ -e "$CLAUDE_XDG_DIR/aliases.sh" ] && [ ! -L "$CLAUDE_XDG_DIR/aliases.sh" ]; then
+        echo "    Backing up existing aliases.sh -> aliases.sh.bak"
+        mv "$CLAUDE_XDG_DIR/aliases.sh" "$CLAUDE_XDG_DIR/aliases.sh.bak"
+    fi
+    ln -sf "$BASE_DIR/ai/claude/aliases.sh" "$CLAUDE_XDG_DIR/aliases.sh"
+fi
+
 echo "Claude Code configuration complete."

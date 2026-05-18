@@ -170,6 +170,9 @@ source $ZSH/oh-my-zsh.sh
 # critical for any AI assistant (Claude, Gemini) that calls `gss push`.
 unalias gss 2>/dev/null
 
+# Claude Code CLI helpers: claude (wrapper) and claude-toggle (YOLO on/off)
+[ -f "${HOME}/.config/claude/aliases.sh" ] && . "${HOME}/.config/claude/aliases.sh"
+
 # You may need to manually set your language environment
 # export LANG=en_US.UTF-8
 
