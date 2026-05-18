@@ -1,11 +1,11 @@
 echo "crouton aliases installed, use crouton-help for more info."
 alias startchroot='sudo enter-chroot -n precise'
-alias startxfce4='sudo enter-chroot -n xfce startxfce4'
+alias startxfce4='sudo startxfce4 -n ${CHROOT_NAME:-xfce}'
 #alias startunity='sudo initctl stop powerd;sudo enter-chroot -n unity startunity'
 # alias startunity='sudo enter-chroot -n unity startunity'
-alias startunity='sudo enter-chroot -n trusty exec env XMETHOD=xorg startunity'
-alias startunityw='sudo enter-chroot -n trusty  exec env XMETHOD=xiwi startunity'
-alias startunitycmd='sudo enter-chroot -n trusty'
+alias startunity='sudo startunity -X xorg -n ${CHROOT_NAME:-trusty}'
+alias startunityw='sudo startunity -X xiwi -n ${CHROOT_NAME:-trusty}'
+alias startunitycmd='sudo enter-chroot -n ${CHROOT_NAME:-trusty}'
 
 function crouton-help {
     cat <<HELP_TXT
@@ -13,7 +13,7 @@ function crouton-help {
   Summary:
 
     Helper for interacting with crouton chroot setup on ChromeOS.  Setup a 
-    config in .bashrc for chroot name, otherwise we default to unity as
+    config in .bashrc for chroot name, otherwise we default to trusty as
     the name of the chroot.  XMETHOD targets supported atm are xiwi and xorg.
 
     export CHROOT_NAME=trusty
@@ -56,12 +56,12 @@ function crouton-start {
        xorg) 
            echo "start using xorg"
            echo $_METHOD> ~/.config/crouton_method.config
-           sudo enter-chroot -n $CHROOT_NAME exec env XMETHOD=xorg startunity
+           sudo startunity -X xorg -n $CHROOT_NAME
            ;;
        xiwi) 
            echo "start using xiwi"
            echo $_METHOD> ~/.config/crouton_method.config
-           sudo enter-chroot -n $CHROOT_NAME exec env XMETHOD=xiwi startunity
+           sudo startunity -X xiwi -n $CHROOT_NAME
            ;;
        *)
            echo "ERROR start method not supported"
@@ -74,7 +74,7 @@ function crouton-run {
     if [ -z "$COMMAND" ]; then
        echo "crouton-run <command> : run a xiwi command in chrome window"
     else
-       sudo enter-chroot -b xiwi $COMMAND -n $CHROOT_NAME
+       sudo startxiwi -bn $CHROOT_NAME $COMMAND
     fi
 }
 function crouton-update {
