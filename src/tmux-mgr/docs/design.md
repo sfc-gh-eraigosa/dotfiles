@@ -1,59 +1,54 @@
-# Architectural Design: Hybrid Agent Orchestration
+# Architectural Design: Integrated Agent Orchestration
 
-This document outlines the architecture for adapting the `tmux-mgr` CLI to orchestrate AI agent teams. The architecture employs a **Hybrid Approach**, cleanly dividing responsibilities between OS-level isolation and cognitive state management.
+This document outlines the architecture for `tmux-mgr` to act as a self-contained orchestrator for AI agent teams. The architecture uses an **Integrated Approach**, where `tmux-mgr` manages both OS-level isolation and agent execution within a single binary.
 
-## The Hybrid Approach
+## The Integrated Approach
 
-When spawning multiple autonomous agents concurrently on the same project, two distinct challenges arise:
-1.  **File System Conflicts:** Parallel processes modifying the same files will cause race conditions and data corruption.
-2.  **Cognitive Coordination:** Agents need to know what to do, report their status, and share findings.
+To solve the challenges of running multiple autonomous agents concurrently, `tmux-mgr` will now be responsible for the entire agent lifecycle, from environment setup to task execution.
 
-**The Solution:**
-*   `tmux-mgr` handles **Physical Isolation**: It provisions unique Git worktrees and spawns isolated tmux panes.
-*   The `gemini-cli` handles **Cognitive Coordination**: It uses its native `.gemini/agents/` routing, `invoke_agent`, and `tracker_*` tools to maintain a Directed Acyclic Graph (DAG) of tasks.
+1.  **File System Conflicts:** Solved by provisioning unique Git worktrees for each agent session.
+2.  **Cognitive Coordination:** Solved by `tmux-mgr` self-invoking in a new "agent execution" mode, making it the central orchestrator.
 
-## 1. OS-Level Isolation (`tmux-mgr`)
+This new model eliminates the fragile dependency on an external `gemini` or `gemini-cli` binary and avoids `PATH` and environment-related issues.
 
-### 1.1 Isolated Worktree Setup
-When an agent team member is spawned, `tmux-mgr` ensures a clean environment:
-1.  Generates a unique session ID (e.g., `generalist-1678886400`).
-2.  Creates a new `git worktree` branched from the current repository state.
-3.  **Destination:** `~/.config/tmux-mgr/worktrees/<session-id>`
-4.  This isolation guarantees that parallel agents can edit code, run tests, and format files without breaking the primary workspace or other agents.
+## 1. Orchestration and Isolation (`tmux-mgr`)
 
-### 1.2 Tmux Pane Management
-1.  `tmux-mgr` executes `tmux split-window` to create a new, visible pane in the current window.
-2.  The pane drops the agent directly into its isolated worktree.
+### 1.1 Command Flow
+The entire agent workflow is now handled by `tmux-mgr` subcommands:
 
-### 1.3 Session Tracking & Cleanup
-1.  To ensure no orphaned worktrees are left behind, `tmux-mgr` tracks active sessions by writing JSON state files to `~/.config/tmux-mgr/sessions/`.
-2.  The `tmux-mgr agent cleanup <session-id>` command is responsible for forcing the removal of the Git worktree and deleting the tracking file once the task is complete.
+1.  **User Request:** The user initiates the process with `tmux-mgr agent start <agent-type> --task-description "Your task..."`.
+2.  **Isolation:** The primary `tmux-mgr` process:
+    *   Generates a unique session ID.
+    *   Creates an isolated Git worktree at `~/.config/tmux-mgr/worktrees/<session-id>`.
+    *   Splits the current tmux window to create a new pane.
+3.  **Self-Invocation:** Inside the new pane, `tmux-mgr` launches a new instance of itself in agent execution mode: `tmux-mgr agent execute --task-description "..."`.
+4.  **Execution:** The `tmux-mgr agent execute` process runs the agent's cognitive loop, performs the work, and writes its final findings to `RESULT.md` in its worktree.
+5.  **Fan-In:** The user or primary agent can retrieve this result using `tmux-mgr agent complete <session-id>`.
+6.  **Cleanup:** `tmux-mgr agent cleanup <session-id>` removes the worktree and session state files.
 
-## 2. Cognitive Coordination (Native Gemini)
+### 1.2 Session Tracking & State
+Session state (ID, status, worktree path) continues to be managed via JSON files in `~/.config/tmux-mgr/sessions/`, ensuring that the lifecycle of each agent is tracked and can be cleaned up reliably.
 
-We intentionally do *not* implement custom task files (like `TASK.md`) or custom agent routing in `tmux-mgr`. Instead, the invocation bridges to native Gemini features.
+## 2. Agent Execution (Internal)
 
-### 2.1 Agent Invocation
-The `tmux-mgr agent start` command bridges the gap by formatting the correct shell command for the new pane:
-*   `gemini-cli --agent <agent-name> --task <task-id>`
-*   This relies on Gemini's built-in subagent definitions (`.gemini/agents/*.md`), eliminating the need for duplicate configuration.
+The `tmux-mgr agent execute` command is the new entry point for the spawned agent.
 
-### 2.2 Task Tracking & Results (The Fan-In)
-While the primary agent uses the native Gemini `tracker` for high-level status, a robust **shell-level Fan-In** is required to retrieve the sub-agent's detailed findings:
+### 2.1 Agent Logic
+- This command will house the core logic for the agent. Initially, this can be a simple placeholder.
+- In the future, this command will be responsible for:
+    1.  Parsing the `--task-description`.
+    2.  Interfacing with a Gemini model via a Go SDK or direct API calls.
+    3.  Executing tools (shell commands, file edits) as required by the task.
+    4.  Writing the final, summarized result to `RESULT.md`.
 
-1.  **Standardized Output:** Every spawned agent is instructed to write its final summary to a `RESULT.md` file in the root of its isolated worktree.
-2.  **Retrieval:** The primary agent uses the `tmux-mgr agent complete <session-id>` command. This command reads the `RESULT.md` from the corresponding worktree and prints it to the console, allowing the primary agent to "roll up" the findings.
-
-## 3. Reliability & Visibility
-To ensure the user can visually monitor agents:
-*   `tmux-mgr` uses a simplified `tmux split-window -v` targeting the current window, ensuring new panes are always visible and positioned predictably.
-*   Agents are launched with the `gemini-cli`, which remains open until the task is complete, allowing the user to see the "live" reasoning process.
+### 2.2 Task Definition
+- Tasks are now defined directly via the `--task-description` flag on the `start` command.
+- This removes the need for an external tracker system like `tracker_create_task` for simple, fire-and-forget agent tasks. For more complex, multi-agent workflows, a primary agent could still coordinate tasks, but the execution primitive is now self-contained within `tmux-mgr`.
 
 ## Summary Workflow
 
-1.  **Plan:** Primary agent runs `tracker_create_task` -> yields Task ID `123`.
-2.  **Spawn:** Primary agent runs `tmux-mgr agent start generalist --task-id 123`.
-3.  **Isolate:** `tmux-mgr` creates worktree, splits pane, and runs `gemini-cli --agent generalist --task 123`.
-4.  **Execute:** Subagent does work in the worktree, natively updates tracker state.
-5.  **Fan-In:** Primary agent sees task `123` is done in its tracker.
-6.  **Cleanup:** Primary agent runs `tmux-mgr agent cleanup <session-id>` to remove the worktree.
+1.  **Spawn:** User runs `tmux-mgr agent start generalist --task-description "Refactor the authentication module."`
+2.  **Isolate & Self-Invoke:** `tmux-mgr` creates a worktree and a new tmux pane, then runs `tmux-mgr agent execute --task-description "..."` inside it.
+3.  **Execute:** The spawned `tmux-mgr` process performs the refactoring task within its isolated worktree. Upon completion, it writes a summary to `RESULT.md`.
+4.  **Fan-In:** User runs `tmux-mgr agent complete <session-id>` to view the `RESULT.md` summary.
+5.  **Cleanup:** User runs `tmux-mgr agent cleanup <session-id>` to remove the worktree and session data.

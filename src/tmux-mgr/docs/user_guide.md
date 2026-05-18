@@ -21,20 +21,25 @@ If you have a complex setup of windows and panes that you use every day, you can
 
 ## AI Agent Team Orchestration
 
-The most powerful feature of `tmux-mgr` is its ability to spawn independent `gemini-cli` agent sessions. This allows you to fan out complex tasks to specialized agents without them stepping on each other's toes.
+The most powerful feature of `tmux-mgr` is its ability to spawn independent, autonomous agents directly from the command line. This allows you to delegate complex tasks to specialized agents that run in parallel without conflicting with your work.
 
-### How it Works (Hybrid Architecture)
-Gemini natively tracks tasks and routes agent requests, but it doesn't automatically isolate file systems for parallel OS processes. When you start an agent, `tmux-mgr` handles the physical isolation:
-1. It creates a new, isolated **Git Worktree** from your current repository branch.
-2. It creates a new **tmux pane** and launches the agent inside it using the native command: `gemini-cli --agent <name> --task <id>`.
-3. The newly spawned agent connects to Gemini's native tracking system to understand its assignment.
+### How it Works (Integrated Architecture)
+`tmux-mgr` is a self-contained orchestrator. When you start an agent, `tmux-mgr` handles the entire lifecycle:
+
+1.  It creates a new, isolated **Git Worktree** from your current repository branch.
+2.  It creates a new **tmux pane** for the agent to run in.
+3.  It launches a new instance of **itself** in that pane in a special agent execution mode.
+4.  The new `tmux-mgr` instance then performs the task, writing its results to a `RESULT.md` file.
+
+This integrated model removes external dependencies and ensures the agent has the exact same environment and tooling as the main `tmux-mgr` process.
 
 ### 1. Spawning an Agent (Fan-Out)
-To give a task to an agent, you must first create a task using Gemini's native `tracker_create_task` tool to get a Task ID. Then, use the `agent start` command:
+To give a task to an agent, use the `agent start` command with a clear, natural language description of the task.
+
 ```bash
-tmux-mgr agent start generalist --task-id 12345
+tmux-mgr agent start generalist --task-description "Refactor the user authentication Go module to improve error handling."
 ```
-*This command drops the `generalist` subagent directly into an isolated worktree and tells it to fulfill task `12345`.*
+*This command spawns a `generalist` agent in an isolated worktree and gives it the specified task.*
 
 ### 2. Checking Status
 You can see all currently active agent sessions (and the paths to their worktrees) using:

@@ -143,10 +143,11 @@ func CreatePane(sessionID string, worktreePath string, command string) error {
 	}
 
 	// The tmux command to split the window and run the command.
-	// We use -v to split vertically (top/bottom).
+	// We use -h to split horizontally (open to the right) and -l 30% to use 30% width.
 	args := []string{
 		"split-window",
-		"-v",
+		"-h",
+		"-l", "30%",
 		"-t", target,
 		"-P",
 		"-F", "#{pane_id}",
@@ -160,6 +161,14 @@ func CreatePane(sessionID string, worktreePath string, command string) error {
 		return fmt.Errorf("failed to create tmux pane: %w, Output: %s", err, string(output))
 	}
 
-	fmt.Printf("Created tmux pane: %s\n", string(output))
+	paneID := strings.TrimSpace(string(output))
+
+	// Set the pane title with styling and an emoji
+	styledTitle := fmt.Sprintf("#[bg=colour33,fg=white,bold] 🤖 Agent: %s #[default]", sessionID)
+	exec.Command("tmux", "select-pane", "-t", paneID, "-T", styledTitle).Run()
+	// Ensure pane titles are visible
+	exec.Command("tmux", "set-option", "-w", "-t", paneID, "pane-border-status", "top").Run()
+
+	fmt.Printf("Created tmux pane: %s\n", paneID)
 	return nil
 }

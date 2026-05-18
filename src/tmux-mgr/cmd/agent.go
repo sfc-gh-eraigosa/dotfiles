@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/eraigosa/dotfiles/src/tmux-mgr/pkg/agent"
@@ -19,25 +21,32 @@ func runAgent(cmd *cobra.Command, args []string) {
 
 func runAgentStart(cmd *cobra.Command, args []string) error {
 	agentName := args[0]
-	taskID, _ := cmd.Flags().GetString("task-id")
+	taskDescription, _ := cmd.Flags().GetString("task-description")
 
-	if taskID == "" {
-		return fmt.Errorf("--task-id flag is required")
+	if taskDescription == "" {
+		return fmt.Errorf("--task-description flag is required")
 	}
 
-	fmt.Printf("Starting isolated agent '%s' for task '%s'...\n", agentName, taskID)
+	fmt.Printf("Starting isolated agent '%s' for task '%s'...\n", agentName, taskDescription)
 
 	workspacePath, sessionID, err := workspace.CreateWorkspace(agentName)
 	if err != nil {
 		return fmt.Errorf("error creating workspace: %w", err)
 	}
 
-	// Construct the native Gemini invocation command using the correct CLI syntax.
-	// We use -r to associate with the task-id (session) and -p for non-interactive mode.
-	// We use --yolo to allow the sub-agent to work autonomously in its isolated environment.
-	// We explicitly tell the sub-agent to write its summary to RESULT.md for fan-in.
-	instruction := fmt.Sprintf("@%s Execute task %s. When finished, you MUST write your final summary to RESULT.md in the current directory and then exit.", agentName, taskID)
-	invocationCmd := fmt.Sprintf("gemini -r %s -y -p '%s'", taskID, instruction)
+	executablePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	geminiPath, err := exec.LookPath("gemini")
+	if err != nil {
+		geminiPath = "gemini" // fallback if not found in PATH
+	}
+
+	// Escape single quotes in the task description to prevent shell injection issues.
+	escapedTask := strings.ReplaceAll(taskDescription, "'", "'\\''")
+	invocationCmd := fmt.Sprintf("GEMINI_PATH='%s' %s agent execute --task-description '%s'", geminiPath, executablePath, escapedTask)
 
 	// Create the tmux pane and run the command
 	if err := tmux.CreatePane(sessionID, workspacePath, invocationCmd); err != nil {
@@ -59,6 +68,78 @@ func runAgentStart(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Agent '%s' with session ID '%s' started in a new tmux pane.\n", agentName, sessionID)
 	return nil
+}
+
+func runAgentExecute(cmd *cobra.Command, args []string) error {
+	task, _ := cmd.Flags().GetString("task-description")
+	if task == "" {
+		return fmt.Errorf("task description is empty")
+	}
+
+	fmt.Printf("Agent executing task: %s\n", task)
+	
+	geminiPath := os.Getenv("GEMINI_PATH")
+	if geminiPath == "" {
+		geminiPath = "gemini"
+	}
+
+	instruction := fmt.Sprintf("@generalist Execute the following task: %s. When finished, you MUST ensure the final result is written to RESULT.md in the current directory, then exit.", task)
+	
+	// List of models to try. Empty string means the default model configured in the CLI.
+	// Ordered by preference and fallback availability.
+	models := []string{
+		"", // Default model
+		"gemini-3.1-pro-preview",
+		"gemini-2.5-pro",
+		"gemini-2.5-flash",
+	}
+
+	for _, model := range models {
+		if model == "" {
+			fmt.Println("Starting cognitive loop with default model...")
+		} else {
+			fmt.Printf("Starting cognitive loop with fallback model: %s...\n", model)
+		}
+
+		execArgs := []string{"-y", "-p", instruction}
+		if model != "" {
+			execArgs = append([]string{"-m", model}, execArgs...)
+		}
+
+		c := exec.Command(geminiPath, execArgs...)
+		
+		logFile, err := os.OpenFile("agent.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		var outputBuf strings.Builder
+
+		if err == nil {
+			c.Stdout = io.MultiWriter(os.Stdout, logFile, &outputBuf)
+			c.Stderr = io.MultiWriter(os.Stderr, logFile, &outputBuf)
+		} else {
+			c.Stdout = io.MultiWriter(os.Stdout, &outputBuf)
+			c.Stderr = io.MultiWriter(os.Stderr, &outputBuf)
+		}
+		c.Stdin = os.Stdin
+
+		runErr := c.Run()
+		if logFile != nil {
+			logFile.Close()
+		}
+
+		if runErr == nil {
+			fmt.Println("Task complete. Exiting.")
+			return nil
+		}
+
+		output := outputBuf.String()
+		if strings.Contains(output, "exhausted your capacity") || strings.Contains(output, "QUOTA_EXHAUSTED") || strings.Contains(output, "429") {
+			fmt.Printf("Model quota exhausted. Retrying with next available model...\n")
+			continue
+		}
+
+		return fmt.Errorf("agent execution failed: %w", runErr)
+	}
+
+	return fmt.Errorf("all models exhausted or failed")
 }
 
 func runAgentList(cmd *cobra.Command, args []string) {
@@ -132,7 +213,7 @@ func runAgentCleanup(cmd *cobra.Command, args []string) {
 	} else {
 		fmt.Println("Session state cleared.")
 	}
-	
+
 	fmt.Println("Cleanup complete.")
 }
 
@@ -152,6 +233,14 @@ var startCmd = &cobra.Command{
 	Long:  `Starts a new agent session in a dedicated, isolated tmux pane and git worktree.`,
 	Args:  cobra.ExactArgs(1),
 	RunE:  runAgentStart,
+}
+
+var executeCmd = &cobra.Command{
+	Use:   "execute",
+	Short: "Internal command for an agent to execute its task.",
+	Long:  "This command is not intended for direct user interaction. It runs the agent's cognitive loop.",
+	Args:  cobra.NoArgs,
+	RunE:  runAgentExecute,
 }
 
 var listCmd = &cobra.Command{
@@ -177,10 +266,14 @@ var cleanupCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(agentCmd)
 	agentCmd.AddCommand(startCmd)
+	agentCmd.AddCommand(executeCmd)
 	agentCmd.AddCommand(listCmd)
 	agentCmd.AddCommand(completeCmd)
 	agentCmd.AddCommand(cleanupCmd)
 
-	startCmd.Flags().StringP("task-id", "t", "", "The native Gemini tracker task ID for the agent.")
-	startCmd.MarkFlagRequired("task-id")
+	startCmd.Flags().StringP("task-description", "d", "", "A natural language description of the agent's task.")
+	startCmd.MarkFlagRequired("task-description")
+
+	executeCmd.Flags().StringP("task-description", "d", "", "The task description for the agent.")
+	executeCmd.MarkFlagRequired("task-description")
 }

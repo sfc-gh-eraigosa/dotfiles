@@ -28,7 +28,7 @@ func CreateWorkspace(agentName string) (string, string, error) {
 		return "", "", fmt.Errorf("failed to get worktrees directory: %w", err)
 	}
 
-	sessionID := fmt.Sprintf("%s-%d", agentName, time.Now().Unix())
+	sessionID := fmt.Sprintf("%s-%d", agentName, time.Now().UnixNano())
 	workspacePath := filepath.Join(worktreesPath, sessionID)
 
 	if err := os.MkdirAll(workspacePath, 0755); err != nil {
@@ -42,7 +42,7 @@ func CreateWorkspace(agentName string) (string, string, error) {
 		return "", "", fmt.Errorf("failed to find git repository root: %w", err)
 	}
 	gitRoot := string(gitRootBytes)
-    gitRoot = gitRoot[:len(gitRoot)-1] // remove trailing newline
+	gitRoot = gitRoot[:len(gitRoot)-1] // remove trailing newline
 
 	// Create the worktree
 	// We are creating a new branch for the worktree.
