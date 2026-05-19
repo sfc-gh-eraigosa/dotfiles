@@ -102,6 +102,21 @@ echo "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" > "$HOME/.config/gss/approval.to
   git rev-parse HEAD > "$HOME/.config/gss/approval.token" && \
   assert_exit 0 Bash "gss push" "gss push with fresh token" )
 
+# === gss cross-repo push (cd <path> && gss push pattern) ===
+# When the command leads with `cd <target-repo>`, the hook must resolve HEAD
+# from that directory, not from the session CWD. Token must match target HEAD.
+(
+    DOTFILES_HEAD=$(git -C "$HOME/git/dotfiles" rev-parse HEAD)
+    echo "$DOTFILES_HEAD" > "$HOME/.config/gss/approval.token"
+    assert_exit 0 Bash "cd $HOME/git/dotfiles && gss push" \
+        "cross-repo gss push: token matches target-repo HEAD"
+)
+(
+    echo "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" > "$HOME/.config/gss/approval.token"
+    assert_exit 2 Bash "cd $HOME/git/dotfiles && gss push" \
+        "cross-repo gss push: stale token (does not match target-repo HEAD)"
+)
+
 # Clean up
 rm -f "$HOME/.config/gss/approval.token"
 

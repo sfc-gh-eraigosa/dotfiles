@@ -137,11 +137,20 @@ if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])gss[[:space:]]+(push|pr|sync)([[:spac
     fi
     # Token must be fresh — current HEAD must match the token contents.
     # This prevents reusing a stale token from a previous session.
+    # When the command leads with `cd <path>`, resolve HEAD from that repo
+    # rather than the hook's CWD — this handles cross-repo pushes like
+    # `cd ~/git/dotfiles && gss push` run from a different project's session.
     if command -v git &> /dev/null; then
-        CURRENT_HEAD="$(git rev-parse HEAD 2>/dev/null || echo)"
+        GIT_CHECK_DIR="."
+        if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])cd[[:space:]]+([^[:space:];|&]+)[[:space:]]*(&&|;) ]]; then
+            CANDIDATE="${BASH_REMATCH[2]}"
+            CANDIDATE="${CANDIDATE/#\~/$HOME}"
+            [ -d "$CANDIDATE" ] && GIT_CHECK_DIR="$CANDIDATE"
+        fi
+        CURRENT_HEAD="$(git -C "$GIT_CHECK_DIR" rev-parse HEAD 2>/dev/null || echo)"
         TOKEN_HEAD="$(cat "$TOKEN_FILE" 2>/dev/null || echo)"
         if [ -n "$CURRENT_HEAD" ] && [ "$CURRENT_HEAD" != "$TOKEN_HEAD" ]; then
-            deny "gss approval token is stale (does not match HEAD $CURRENT_HEAD). Re-confirm with the user and regenerate."
+            deny "gss approval token is stale (does not match HEAD $CURRENT_HEAD of ${GIT_CHECK_DIR}). Re-confirm with the user and regenerate."
         fi
     fi
 fi
