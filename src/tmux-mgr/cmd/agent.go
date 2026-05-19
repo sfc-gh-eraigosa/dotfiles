@@ -35,6 +35,15 @@ func runAgentStart(cmd *cobra.Command, args []string) error {
 		def = nil
 	}
 	model := agent.SelectModel(def, host)
+	// When a custom launcher is configured, defer model choice to the launcher.
+	// `sf ai claude` and similar wrappers may use a different model namespace
+	// than the bare CLI, so passing tmux-mgr's tier mapping would fail.
+	if host == agent.AssistantClaude && os.Getenv("TMUX_MGR_CLAUDE_LAUNCHER") != "" {
+		model = ""
+	}
+	if host == agent.AssistantGemini && os.Getenv("TMUX_MGR_GEMINI_LAUNCHER") != "" {
+		model = ""
+	}
 
 	defSummary := "generalist defaults"
 	if def != nil {
@@ -128,6 +137,30 @@ func displayModel(model string) string {
 	return model
 }
 
+// resolveLauncher splits a launcher env var into an executable + prefix args
+// for use with exec.Command. This lets users wrap an assistant CLI in a
+// platform-specific runner without forking the binary or changing flag order.
+//
+// Example: TMUX_MGR_CLAUDE_LAUNCHER="sf ai claude --" produces
+//   execPath="sf", prefixArgs=["ai","claude","--"]
+// so the spawned command becomes:
+//   sf ai claude -- -p "<task>" --dangerously-skip-permissions
+//
+// Resolution order: env var (multi-token) > explicit fallbackPath (single
+// token, from TMUX_MGR_ASSISTANT_PATH) > defaultExec (e.g. "claude").
+func resolveLauncher(envName, defaultExec, fallbackPath string) (string, []string) {
+	if l := strings.TrimSpace(os.Getenv(envName)); l != "" {
+		tokens := strings.Fields(l)
+		if len(tokens) > 0 {
+			return tokens[0], tokens[1:]
+		}
+	}
+	if fallbackPath != "" {
+		return fallbackPath, nil
+	}
+	return defaultExec, nil
+}
+
 // buildInvocationCmd produces the shell string used to launch `tmux-mgr agent execute`
 // inside a freshly-created tmux pane. Exposed at package scope so it can be unit-tested
 // without spawning tmux.
@@ -141,9 +174,19 @@ func buildInvocationCmd(host agent.Assistant, assistantPath, executablePath, tas
 	if model != "" {
 		modelEnv = fmt.Sprintf("TMUX_MGR_MODEL='%s' ", model)
 	}
+	// Forward launcher env vars from the parent process. tmux runs the pane
+	// command via /bin/sh -c, which does NOT source the user's shell rc, so
+	// vars set in ~/.zshrc.local would otherwise be lost in the spawned pane.
+	extraEnv := ""
+	for _, name := range []string{"TMUX_MGR_CLAUDE_LAUNCHER", "TMUX_MGR_GEMINI_LAUNCHER"} {
+		if v := os.Getenv(name); v != "" {
+			escaped := strings.ReplaceAll(v, "'", "'\\''")
+			extraEnv += fmt.Sprintf("%s='%s' ", name, escaped)
+		}
+	}
 	return fmt.Sprintf(
-		"%sTMUX_MGR_ASSISTANT='%s' TMUX_MGR_ASSISTANT_PATH='%s' %s agent execute --task-description '%s'",
-		modelEnv, host, assistantPath, executablePath, escapedTask,
+		"%s%sTMUX_MGR_ASSISTANT='%s' TMUX_MGR_ASSISTANT_PATH='%s' %s agent execute --task-description '%s'",
+		extraEnv, modelEnv, host, assistantPath, executablePath, escapedTask,
 	)
 }
 
@@ -164,9 +207,8 @@ func buildInstruction(host agent.Assistant, task string) string {
 }
 
 func runGeminiLoop(task, geminiPath, requestedModel string) error {
-	if geminiPath == "" {
-		geminiPath = "gemini"
-	}
+	// Launcher resolution mirrors runClaudeLoop — see TMUX_MGR_GEMINI_LAUNCHER.
+	execPath, prefixArgs := resolveLauncher("TMUX_MGR_GEMINI_LAUNCHER", "gemini", geminiPath)
 
 	instruction := buildInstruction(agent.AssistantGemini, task)
 
@@ -194,8 +236,9 @@ func runGeminiLoop(task, geminiPath, requestedModel string) error {
 		if model != "" {
 			execArgs = append([]string{"-m", model}, execArgs...)
 		}
+		execArgs = append(append([]string{}, prefixArgs...), execArgs...)
 
-		c := exec.Command(geminiPath, execArgs...)
+		c := exec.Command(execPath, execArgs...)
 
 		logFile, err := os.OpenFile("agent.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		var outputBuf strings.Builder
@@ -232,9 +275,10 @@ func runGeminiLoop(task, geminiPath, requestedModel string) error {
 }
 
 func runClaudeLoop(task, claudePath, model string) error {
-	if claudePath == "" {
-		claudePath = "claude"
-	}
+	// Launcher resolution: prefer TMUX_MGR_CLAUDE_LAUNCHER (multi-token, e.g.
+	// "sf ai claude --") for hosts that wrap claude in a platform runner;
+	// otherwise use the explicit claudePath; otherwise default to "claude".
+	execPath, prefixArgs := resolveLauncher("TMUX_MGR_CLAUDE_LAUNCHER", "claude", claudePath)
 
 	instruction := buildInstruction(agent.AssistantClaude, task)
 
@@ -244,11 +288,12 @@ func runClaudeLoop(task, claudePath, model string) error {
 		fmt.Printf("Starting cognitive loop with Claude (model=%s)...\n", model)
 	}
 
-	claudeArgs := []string{"-p", instruction, "--dangerously-skip-permissions"}
+	claudeArgs := append([]string{}, prefixArgs...)
 	if model != "" {
-		claudeArgs = append([]string{"--model", model}, claudeArgs...)
+		claudeArgs = append(claudeArgs, "--model", model)
 	}
-	c := exec.Command(claudePath, claudeArgs...)
+	claudeArgs = append(claudeArgs, "-p", instruction, "--dangerously-skip-permissions")
+	c := exec.Command(execPath, claudeArgs...)
 
 	logFile, err := os.OpenFile("agent.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err == nil {
