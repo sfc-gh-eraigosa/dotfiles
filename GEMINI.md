@@ -35,6 +35,7 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - **Confirmation is mandatory** regardless of the user phrasing ("sync", "push", "commit it"): always present options via `AskUserQuestion` before any `git add` / `git commit` / `gss push` / `gss pr`. The gss skill's "Mandatory Confirmation" rule overrides any autonomous-mode preference.
 - **Two-call recipe for gss push**: the `safety_guard.sh` hook intentionally blocks chained `mkdir + token + gss push` in a single Bash call. Always issue the token-generation line as one Bash call and `gss push` (or `gss pr` / `gss sync`) as a separate second call.
 - **Group related changes**: prefer one cohesive commit per logical unit. Stage files by explicit name (never `git add -A` / `git add .`) to keep blast radius tight and avoid sweeping in unrelated dirty state.
+- **`.gitignore` hygiene**: this repo uses an allowlist pattern — `*` blocks everything and `!` entries opt directories/files back in. When you add a new file or directory, explicitly decide whether it belongs in the allowlist (`!docs/`) or should stay local-only (add an explicit exclusion with a comment explaining why). Never rely on "it's already covered by `*`" as a substitute for a documented decision. The `docs/` folder is an example: it is intentionally local-only and listed explicitly in `.gitignore` with a comment, rather than silently falling through.
 
 ## Hook & Regex Safety
 

@@ -38,6 +38,12 @@ opt/XMind_Linux_64bit/
 opt/clawdad/
 opt/nano/
 
+# Documentation
+# docs/ is tracked so guides are available on all machines.
+# To keep a doc local-only, list it explicitly below (e.g. docs/my-private-notes.md).
+!docs/
+!docs/**
+
 # Source Code Build Artifacts
 src/tmux-mgr/tmux-mgr
 coverage/
@@ -47,6 +53,9 @@ coverage/
 !system/**
 !ai/
 !ai/**
+# Per-host Claude/Gemini settings stay local; install.sh seeds them from the
+# tracked .template files so each machine can customize without leaking values.
+ai/claude/settings.json
 .custom_alias
 *.swp
 

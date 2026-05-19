@@ -415,3 +415,9 @@ openclaw() {
 
 # Load Nano Platform environment
 [ -f "$HOME/.nano_profile" ] && . "$HOME/.nano_profile"
+
+# Machine-local overrides (not tracked in dotfiles — safe to create on any host)
+# Use this file for host-specific aliases, PATH entries, or function overrides
+# that should not be committed to the shared repo.
+# See: docs/machine-local-overrides.md
+[ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"

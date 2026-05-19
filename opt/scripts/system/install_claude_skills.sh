@@ -21,13 +21,22 @@ cleanup_broken_links() {
     fi
 }
 
-# --- settings.json (back up real file if present, then symlink) ---
-if [ -f "$BASE_DIR/ai/claude/settings.json" ]; then
+# --- settings.json (seed from template if absent, then symlink) ---
+# settings.json is gitignored so each host can hold its own customizations
+# (apiKeyHelper paths, ANTHROPIC_BASE_URL, enabledPlugins, etc.) without
+# leaking them into the repo. The .template file is the tracked baseline.
+SETTINGS_SRC="$BASE_DIR/ai/claude/settings.json"
+SETTINGS_TEMPLATE="$BASE_DIR/ai/claude/settings.json.template"
+if [ ! -f "$SETTINGS_SRC" ] && [ -f "$SETTINGS_TEMPLATE" ]; then
+    echo "  Seeding ai/claude/settings.json from template (first run)"
+    cp "$SETTINGS_TEMPLATE" "$SETTINGS_SRC"
+fi
+if [ -f "$SETTINGS_SRC" ]; then
     if [ -f "$CLAUDE_HOME/settings.json" ] && [ ! -L "$CLAUDE_HOME/settings.json" ]; then
         echo "  Backing up existing settings.json -> settings.json.bak"
         mv "$CLAUDE_HOME/settings.json" "$CLAUDE_HOME/settings.json.bak"
     fi
-    ln -sf "$BASE_DIR/ai/claude/settings.json" "$CLAUDE_HOME/settings.json"
+    ln -sf "$SETTINGS_SRC" "$CLAUDE_HOME/settings.json"
 fi
 
 # --- Commands (.md slash commands) ---

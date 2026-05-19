@@ -196,15 +196,23 @@ else
 fi
 
 # Initialize goenv to install/update Go
+# Pin to the version in .go-version so all hosts build with the same toolchain.
+# Falls back to "latest" only if .go-version is missing.
 export PATH="${HOME}/.goenv/bin:${PATH}"
 if command -v goenv &> /dev/null; then
   eval "$(goenv init -)"
-  echo "Ensuring Go latest is installed..."
-  goenv install -s latest
-  # Set the latest installed version as global
-  LATEST_INSTALLED=$(goenv versions --bare | tail -1)
-  if [ -n "$LATEST_INSTALLED" ]; then
-    goenv global "$LATEST_INSTALLED"
+  if [ -f "${BASE_DIR}/.go-version" ]; then
+    PINNED_GO_VERSION=$(tr -d '[:space:]' < "${BASE_DIR}/.go-version")
+    echo "Ensuring Go ${PINNED_GO_VERSION} is installed (pinned via .go-version)..."
+    goenv install -s "${PINNED_GO_VERSION}"
+    goenv global "${PINNED_GO_VERSION}"
+  else
+    echo "WARNING: ${BASE_DIR}/.go-version not found; installing latest goenv-known Go."
+    goenv install -s latest
+    LATEST_INSTALLED=$(goenv versions --bare | tail -1)
+    if [ -n "$LATEST_INSTALLED" ]; then
+      goenv global "$LATEST_INSTALLED"
+    fi
   fi
 fi
 
@@ -279,14 +287,22 @@ if [ -f "${BASE_DIR}/opt/scripts/system/claude_install.sh" ]; then
 fi
 
 # Claude settings (re-link in case install order matters)
-if [ -f "${BASE_DIR}/ai/claude/settings.json" ]; then
+# settings.json is gitignored per-host. Seed from .template on first run, then
+# symlink ~/.claude/settings.json to the local copy.
+CLAUDE_SETTINGS="${BASE_DIR}/ai/claude/settings.json"
+CLAUDE_SETTINGS_TEMPLATE="${BASE_DIR}/ai/claude/settings.json.template"
+if [ ! -f "${CLAUDE_SETTINGS}" ] && [ -f "${CLAUDE_SETTINGS_TEMPLATE}" ]; then
+    echo "Seeding ai/claude/settings.json from template (first run)"
+    cp "${CLAUDE_SETTINGS_TEMPLATE}" "${CLAUDE_SETTINGS}"
+fi
+if [ -f "${CLAUDE_SETTINGS}" ]; then
     echo "Configuring Claude Code settings..."
     mkdir -p "${HOME}/.claude"
     if [ -f "${HOME}/.claude/settings.json" ] && [ ! -L "${HOME}/.claude/settings.json" ]; then
         echo "  Backing up existing settings.json to settings.json.bak"
         mv "${HOME}/.claude/settings.json" "${HOME}/.claude/settings.json.bak"
     fi
-    ln -sf "${BASE_DIR}/ai/claude/settings.json" "${HOME}/.claude/settings.json"
+    ln -sf "${CLAUDE_SETTINGS}" "${HOME}/.claude/settings.json"
 fi
 # build and install gss
 if [ -f "${BASE_DIR}/src/gss/build.sh" ]; then

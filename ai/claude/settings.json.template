@@ -73,8 +73,5 @@
   },
   "skipDangerousModePermissionPrompt": true,
   "theme": "auto",
-  "skipAutoPermissionPrompt": true,
-  "enabledPlugins": {
-    "gopls-lsp@claude-plugins-official": true
-  }
+  "skipAutoPermissionPrompt": true
 }

@@ -87,6 +87,18 @@ This repository is designed to be maintained **with** your AI assistant.
 
 ---
 
+## 🖥️ Machine-Local Customization
+
+Some settings differ per host — a different CLI launcher, work credentials, or
+function overrides that would break other machines if committed. Use
+`~/.zshrc.local` for this: it is sourced last by `.zshrc`, overrides anything
+in the shared config, and is never tracked in this repo.
+
+See **[docs/machine-local-overrides.md](docs/machine-local-overrides.md)** for
+usage and examples.
+
+---
+
 ## ⌨️ Common Commands
 
 | Command | Action |

@@ -6,6 +6,22 @@ REPO_ROOT="$(cd "$DIR/../../" && pwd)"
 BIN_DIR="${HOME}/opt/bin"
 SKILL_INSTALL_DIR="${HOME}/.agents/skills"
 
+# Drop any inherited GOROOT/GOTOOLCHAIN so the resolved `go` binary uses its
+# own matching stdlib (prevents brew-go vs goenv-go version-mismatch).
+unset GOROOT GOTOOLCHAIN
+
+# Prefer goenv-managed go (respects repo-root .go-version); fall back to PATH.
+if command -v goenv >/dev/null 2>&1; then
+    GO_BIN="$(goenv which go 2>/dev/null || command -v go || true)"
+else
+    GO_BIN="$(command -v go || true)"
+fi
+if [ -z "$GO_BIN" ]; then
+    echo "WARNING: 'go' command not found. Skipping tmux-mgr build."
+    echo "Install Go (https://golang.org/doc/install) and run this script again to enable tmux-mgr."
+    exit 0
+fi
+
 VERSION=$(cat "$DIR/VERSION")
 COMMIT=$(git -C "$DIR" rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
@@ -19,18 +35,12 @@ LDFLAGS="-X github.com/eraigosa/dotfiles/src/tmux-mgr/cmd.Version=$VERSION \
          -X github.com/eraigosa/dotfiles/src/tmux-mgr/cmd.BuildDate=$DATE \
          -X github.com/eraigosa/dotfiles/src/tmux-mgr/cmd.Dirty=$DIRTY"
 
-if ! command -v go &> /dev/null; then
-    echo "WARNING: 'go' command not found. Skipping tmux-mgr build."
-    echo "Install Go (https://golang.org/doc/install) and run this script again to enable tmux-mgr."
-    exit 0
-fi
-
 mkdir -p "$BIN_DIR"
 mkdir -p "$SKILL_INSTALL_DIR"
 
-echo "Building tmux-mgr v$VERSION..."
+echo "Building tmux-mgr v$VERSION with $($GO_BIN version)..."
 cd "$DIR"
-go build -ldflags "$LDFLAGS" -o "$BIN_DIR/tmux-mgr" main.go
+"$GO_BIN" build -ldflags "$LDFLAGS" -o "$BIN_DIR/tmux-mgr" main.go
 
 echo "Installing tmux skill..."
 mkdir -p "$SKILL_INSTALL_DIR"
