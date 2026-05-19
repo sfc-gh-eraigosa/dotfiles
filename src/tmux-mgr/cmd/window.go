@@ -3,9 +3,11 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 
+	"github.com/eraigosa/dotfiles/src/tmux-mgr/pkg/tmux"
 	"github.com/spf13/cobra"
 )
 
@@ -47,13 +49,20 @@ func init() {
 			}
 			var tmuxArg string
 			switch dir {
-			case "horizontal", "right", "left": tmuxArg = "-h"
-			case "vertical", "up", "down": tmuxArg = "-v"
+			case "horizontal", "right", "left":
+				tmuxArg = "-h"
+			case "vertical", "up", "down":
+				tmuxArg = "-v"
 			default:
 				fmt.Println("Invalid direction. Use horizontal|vertical|left|right|up|down")
 				return
 			}
-			Tmgr.Run("split-window", tmuxArg)
+			target, err := tmux.RootPaneID()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Error:", err)
+				os.Exit(1)
+			}
+			Tmgr.Run("split-window", tmuxArg, "-t", target)
 			log.Printf("Split window %s", dir)
 		},
 	})

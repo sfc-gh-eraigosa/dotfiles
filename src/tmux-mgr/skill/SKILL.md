@@ -44,6 +44,17 @@ No flag is needed — detection is automatic from the host shell's environment.
 - **Kill session**: `tmux-mgr session kill [name]`
 
 ### 4. Window & Pane Arrangements
+- **Anchor root pane**: `tmux-mgr pane anchor [title]`
+  - Run once from your terminal to mark the active pane as the orchestration root.
+  - Stores the pane ID in the tmux global environment (`TMUX_MGR_ROOT_PANE`) so any AI process can target it.
+  - Required before any AI process (Claude, Gemini) can split or spawn panes correctly from outside tmux.
+  - Default title is `root`; pass a custom label (e.g. `claude`, `gemini`) if desired.
+- **Adopt pane from outside tmux**: `tmux-mgr pane adopt`
+  - Creates a new tmux window from a non-tmux shell, registers it as the root anchor, and prints its pane ID.
+  - Use this when an AI process needs an anchor but was not launched from inside tmux.
+  - Requires a running tmux server.
+- **Split (anchor-aware)**: `tmux-mgr pane split [horizontal|vertical|left|right|up|down]`
+  - Splits the root anchor pane. Errors with an actionable message if no anchor is set.
 - **Split window**: `tmux-mgr window split [horizontal|vertical|left|right|up|down]`
   - Use `vertical` or `down` when requested to "open a pane below" or "under" (splits top-to-bottom).
   - Use `horizontal` or `right` when requested to "open a pane to the side" (splits left-to-right).
@@ -73,4 +84,13 @@ No flag is needed — detection is automatic from the host shell's environment.
 - **Isolate for Safety**: Explain that `tmux-mgr` creates a separate `git worktree` for each agent to prevent file-system conflicts.
 - **Fan-In**: Sub-agents MUST write their final summaries to `RESULT.md`. Retrieve these with `agent complete` before summarizing for the user.
 - **Introspect First**: Use `tmux-mgr capture` to understand what's running in other windows or to troubleshoot terminal output.
+- **Anchor before splitting**: If `tmux-mgr window split` or `tmux-mgr pane split` returns an error like `not running inside a tmux pane and no anchor established`, respond with the following message to the user:
+
+  > To let me manage panes, I need a one-time anchor from your terminal. Run this from inside your tmux pane:
+  > ```
+  > tmux-mgr pane anchor
+  > ```
+  > Once that's done, ask me again and I'll split the pane correctly.
+
+  From outside tmux, use `tmux-mgr pane adopt` to create and register an anchor window automatically.
 - **Be Conversational**: "I'll spawn an agent to handle the backend in a separate pane so we can work on the frontend here."

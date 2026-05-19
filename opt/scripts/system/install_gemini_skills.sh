@@ -113,4 +113,17 @@ link_skill "$BASE_DIR/src/tmux-mgr/skill" "$SKILLS_DEST/tmux"
 link_skill "$BASE_DIR/src/gss/skill" "$SKILLS_DEST/git-safe-sync"
 link_skill "$BASE_DIR/src/ssh-key-sync" "$SKILLS_DEST/ssh-key-sync"
 
+# --- Shell aliases (~/.config/gemini/aliases.sh, sourced by .zshrc and .bashrc) ---
+# Provides the gemini() wrapper with tmux auto-anchor support.
+GEMINI_XDG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gemini"
+if [ -f "$BASE_DIR/ai/gemini/aliases.sh" ]; then
+    echo "  Linking gemini aliases.sh..."
+    mkdir -p "$GEMINI_XDG_DIR"
+    if [ -e "$GEMINI_XDG_DIR/aliases.sh" ] && [ ! -L "$GEMINI_XDG_DIR/aliases.sh" ]; then
+        echo "    Backing up existing aliases.sh -> aliases.sh.bak"
+        mv "$GEMINI_XDG_DIR/aliases.sh" "$GEMINI_XDG_DIR/aliases.sh.bak"
+    fi
+    ln -sf "$BASE_DIR/ai/gemini/aliases.sh" "$GEMINI_XDG_DIR/aliases.sh"
+fi
+
 echo "Gemini CLI Configuration complete."

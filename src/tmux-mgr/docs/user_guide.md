@@ -2,6 +2,27 @@
 
 `tmux-mgr` is your command-line interface for complex tmux interactions, saving layouts, and acting as a central hub for spawning AI Agent Teams.
 
+## Anchoring the Root Pane
+
+AI processes (Claude, Gemini) run outside your tmux session and don't inherit `$TMUX_PANE`. Without an anchor, commands like `tmux-mgr window split` have no reliable target and will error or hit the wrong pane.
+
+**One-time setup — run from your terminal, inside tmux:**
+```bash
+tmux-mgr pane anchor
+# or give it a custom label:
+tmux-mgr pane anchor claude
+```
+
+This saves your current pane's ID to the tmux global environment (`TMUX_MGR_ROOT_PANE`). All subsequent AI-driven splits and agent spawns will target it correctly.
+
+**The `claude` and `gemini` shell wrappers do this automatically** when launched from inside a tmux pane — you only need the manual command if you start your AI session outside tmux first.
+
+**If you're not in tmux at all:**
+```bash
+tmux-mgr pane adopt        # creates a new tmux window and registers it as the anchor
+```
+Requires a running tmux server (`tmux new-session -d -s main` to start one).
+
 ## Managing Windows and Sessions
 
 ### Session Lifecycle

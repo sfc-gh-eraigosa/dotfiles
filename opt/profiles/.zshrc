@@ -412,6 +412,8 @@ openclaw() {
 
 # Load Gemini CLI environment
 [[ -f "$HOME/.gemini.profile" ]] && source "$HOME/.gemini.profile"
+# Gemini CLI helpers: gemini() wrapper with tmux auto-anchor
+[ -f "${HOME}/.config/gemini/aliases.sh" ] && . "${HOME}/.config/gemini/aliases.sh"
 
 # Load Nano Platform environment
 [ -f "$HOME/.nano_profile" ] && . "$HOME/.nano_profile"

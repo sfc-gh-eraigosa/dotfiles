@@ -140,9 +140,9 @@ func (m *Manager) Capture(target string) (string, error) {
 func CreatePane(sessionID, worktreePath, command, symbol, label string) (string, error) {
 	paneCmd := fmt.Sprintf("cd %s && %s", worktreePath, command)
 
-	target := os.Getenv("TMUX_PANE")
-	if target == "" {
-		target = ":.+"
+	target, err := RootPaneID()
+	if err != nil {
+		return "", fmt.Errorf("cannot create pane: %w", err)
 	}
 
 	args := []string{
