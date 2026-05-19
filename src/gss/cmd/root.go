@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -30,7 +32,29 @@ func getRepoPath() string {
 	return repoPath
 }
 
+// getDefaultBranch detects the remote default branch (main, master, etc).
+// Uses the local symbolic-ref cache first (no network); falls back to
+// `git remote show origin` if the ref is not yet initialised.
 func getDefaultBranch() string {
-	// Try to detect the default branch (main or master)
-	return "main" // Simplified for now, can be improved with 'git remote show origin'
+	path := getRepoPath()
+
+	out, err := exec.Command("git", "-C", path, "symbolic-ref", "refs/remotes/origin/HEAD").Output()
+	if err == nil {
+		ref := strings.TrimSpace(string(out))
+		if idx := strings.LastIndex(ref, "/"); idx >= 0 {
+			return ref[idx+1:]
+		}
+	}
+
+	out, err = exec.Command("git", "-C", path, "remote", "show", "origin").Output()
+	if err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "HEAD branch:") {
+				return strings.TrimSpace(strings.TrimPrefix(line, "HEAD branch:"))
+			}
+		}
+	}
+
+	return "main"
 }

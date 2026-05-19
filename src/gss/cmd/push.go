@@ -49,6 +49,8 @@ var pushCmd = &cobra.Command{
 		if currentBranch == "" {
 			currentBranch = "main"
 		}
+		defaultBranch := getDefaultBranch()
+		isDefaultBranch := currentBranch == defaultBranch
 
 		// Get remote URL to construct diff link
 		remoteOut, _ := exec.Command("git", "-C", path, "remote", "get-url", "origin").Output()
@@ -71,7 +73,12 @@ var pushCmd = &cobra.Command{
 
 		// 3. Push
 		fmt.Printf("\nStep 3: Pushing %s to origin/%s...\n", path, currentBranch)
-		out, err := exec.Command("git", "-C", path, "push", "origin", currentBranch).CombinedOutput()
+		pushArgs := []string{"-C", path, "push"}
+		if !isDefaultBranch {
+			pushArgs = append(pushArgs, "-u") // set upstream tracking on feature branches
+		}
+		pushArgs = append(pushArgs, "origin", currentBranch)
+		out, err := exec.Command("git", pushArgs...).CombinedOutput()
 		if err != nil {
 			fmt.Printf("Error pushing: %s\n", string(out))
 			return
@@ -102,6 +109,39 @@ var pushCmd = &cobra.Command{
 
 			if strings.Contains(remoteURL, "github.com") {
 				fmt.Printf("\nView changes on GitHub: %s/compare/%s...%s\n", remoteURL, oldRemoteSHA, newSHA)
+			}
+		}
+
+		// 5. On a feature branch: surface existing PR or create a new one via gh CLI.
+		if !isDefaultBranch {
+			fmt.Println()
+			if _, err := exec.LookPath("gh"); err == nil {
+				viewCmd := exec.Command("gh", "pr", "view", "--json", "url", "-q", ".url")
+				viewCmd.Dir = path
+				prURL, err := viewCmd.CombinedOutput()
+				prURLStr := strings.TrimSpace(string(prURL))
+				if err == nil && prURLStr != "" {
+					fmt.Printf("Pull Request: %s\n", prURLStr)
+				} else {
+					fmt.Println("Creating Pull Request via gh CLI...")
+					createCmd := exec.Command("gh", "pr", "create", "--fill")
+					createCmd.Dir = path
+					prOut, prErr := createCmd.CombinedOutput()
+					if prErr != nil {
+						fmt.Printf("Error creating PR: %s\n", string(prOut))
+						if strings.Contains(remoteURL, "github.com") {
+							fmt.Printf("Create it manually: %s/compare/%s\n", remoteURL, currentBranch)
+						}
+					} else {
+						fmt.Printf("Pull Request created: %s", string(prOut))
+					}
+				}
+			} else {
+				if strings.Contains(remoteURL, "github.com") {
+					fmt.Printf("'gh' CLI not found. Create PR manually: %s/compare/%s\n", remoteURL, currentBranch)
+				} else {
+					fmt.Println("'gh' CLI not found. Please create the PR manually.")
+				}
 			}
 		}
 	},
