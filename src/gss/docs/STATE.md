@@ -14,19 +14,24 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## Cursor
 
-- **Most recent PR opened**: PR-09 — `internal/repo` NWO detection + cache
-  (#31 in playground). **End of Batch A** (foundation packages PR-01–09).
-- **Playground branches in flight** (stacked linearly, each on the prior):
+- **Most recent PR opened**: PR-10 — `internal/approval` HEAD-bound token
+  handshake (#32 in playground). **Batch B has begun** (classic primitives).
+- **Playground branches in flight**:
   - `test_gss` — integration trunk (root of the stack).
-  - `pr01-internal-errors` … `pr08-identity-validate` — PRs #23–#30.
-  - `pr09-internal-repo` — PR #31, stacked on PR-08, awaiting merge.
-- **Next PR**: PR-10 — `internal/approval/` token handshake (start of
-  **Batch B**: classic primitives, which the plan says fan out after
-  PR-09). Stacks on PR-09.
-- **PRs remaining in plan**: 52 (PR-10 through PR-61).
+  - `pr01-internal-errors` … `pr09-internal-repo` — PRs #23–#31 (Batch A,
+    stacked linearly).
+  - `pr10-internal-approval` — PR #32, stacked on PR-09, awaiting merge.
+    **Batch B note**: PR-10–14 are fan-out siblings — each branches off
+    `pr09-internal-repo`, NOT off each other (plan: "fan out after PR-09").
+- **Next PR**: PR-11 — `internal/backup/` `backup/gss-TIMESTAMP` branch
+  (Clock-driven name, idempotent monotonic suffix, git.Runner). Branches
+  off PR-09 (sibling of PR-10).
+- **PRs remaining in plan**: 51 (PR-11 through PR-61).
 - **This staging snapshot**: reflects playground branch
-  `pr09-internal-repo` at SHA `89aa3c6`, plus dotfiles-only classic
-  wiring (build.sh + cmd/version.go + cmd/config.go) described below.
+  `pr10-internal-approval` at SHA `d2afe50`, plus dotfiles-only classic
+  wiring (build.sh + cmd/version.go + cmd/config.go) described below. The
+  staging branch accumulates all Batch-B siblings linearly even though the
+  PRs fan out.
 - **External dependencies**: `gopkg.in/yaml.v3 v3.0.1` (PR-05),
   `golang.org/x/text v0.37.0` (PR-08, BSD-3-Clause, for NFC).
 - **External dependencies**: `gopkg.in/yaml.v3 v3.0.1` (PR-05),
@@ -47,7 +52,7 @@ PR-61 (the final integration) opens *its own* non-draft PR against
    ```
    git clone <playground-remote> ~/GitHub/playground
    cd ~/GitHub/playground
-   git checkout pr09-internal-repo
+   git checkout pr10-internal-approval
    ```
 3. **Tooling install** (Phase 3 prerequisites):
    ```
@@ -93,6 +98,9 @@ below (PR-04, PR-05):
   (NFC + strip + bounds), and `ResolveUser` precedence (PR-08, +x/text).
 - `src/gss/internal/repo/` — `NWO` type, `Resolver` (gh RepoView → origin
   URL fallback, `--repo` shadow), and the origin-keyed `.nwo` cache (PR-09).
+- `src/gss/internal/approval/` — HEAD-bound `Verifier` (verify-then-consume
+  token, `Issue`, `--force-autonomous` bypass; wraps
+  `ErrApprovalTokenMissing`) (PR-10).
 - `src/gss/docs/STATE.md` — this file.
 
 **Classic-code wiring (dotfiles-only).** Because the playground module is
@@ -145,3 +153,4 @@ starts using at PR-22 (`internal/classic/push.go`) and beyond;
 | 2026-05-21 | `playground:pr07-identity-suffix` | `f7d1a19` | PR-07 — `internal/identity` `WorkerRef` (+`ParseWorkerRef` round-trip), `RNG`/`SystemRNG` (crypto/rand), `AllocateRef` (suffix-less first unless forced; 5-retry; `ErrSuffixExhausted`; caller suffix ignored). 11 tests; coverage 92.5%. No new deps; playground-only. PR #29 stacked on PR-06. |
 | 2026-05-21 | `playground:pr08-identity-validate` | `d931224` | PR-08 — `internal/identity` segment grammar (`ValidateFeature`/`User`/`Purpose` wrapping `ErrInvalidIdent`), `ValidateDescription` (NFC + strip ANSI/markers/newlines + control reject + 1–240 cp), `ResolveUser` precedence (--user→gh→email-slug→$USER). 13 tests; coverage 95.8%. **New dep**: `golang.org/x/text v0.37.0` (BSD-3-Clause; verified at github.com/golang/text/blob/master/LICENSE) for NFC. Mirrored to dotfiles incl. go.mod/go.sum; no cmd wiring. PR #30 stacked on PR-07. |
 | 2026-05-21 | `playground:pr09-internal-repo` | `89aa3c6` | PR-09 — `internal/repo` NWO resolution: `Resolver.Resolve` (--repo shadow → `.nwo` cache → `gh.RepoView` → origin-URL parse → refuse), `ParseNWO`/`ParseRemoteURL`, origin-keyed cache (invalidates on origin change). 9 tests; coverage 86.3%. No new deps; playground-only. Ends Batch A. PR #31 stacked on PR-08. |
+| 2026-05-21 | `playground:pr10-internal-approval` | `d2afe50` | PR-10 — `internal/approval` HEAD-bound token (`Verify` verify-then-consume, `Issue`, force-autonomous bypass; typed `*Error{Missing|Mismatch}` wrapping `ErrApprovalTokenMissing`). Mirrors classic cmd/push.go semantics. 5 tests; coverage 71%. No new deps; playground-only. Starts Batch B (fan-out sibling off PR-09). PR #32. |
