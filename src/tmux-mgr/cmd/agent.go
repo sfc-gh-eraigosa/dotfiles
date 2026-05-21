@@ -91,7 +91,9 @@ func runAgentStart(cmd *cobra.Command, args []string) error {
 		StartTime:    time.Now(),
 		WorktreePath: workspacePath,
 		PaneID:       paneID,
-		RepoRoot:     currentRepoRoot(),
+		// WorkerRef is populated once runAgentStart shells out to
+		// `gss feature worker add --json` (later Batch J PR); empty until then.
+		WorkerRef: "",
 	}
 
 	if err := agent.SaveSession(session); err != nil {
@@ -142,9 +144,12 @@ func displayModel(model string) string {
 // platform-specific runner without forking the binary or changing flag order.
 //
 // Example: TMUX_MGR_CLAUDE_LAUNCHER="sf ai claude --" produces
-//   execPath="sf", prefixArgs=["ai","claude","--"]
+//
+//	execPath="sf", prefixArgs=["ai","claude","--"]
+//
 // so the spawned command becomes:
-//   sf ai claude -- -p "<task>" --dangerously-skip-permissions
+//
+//	sf ai claude -- -p "<task>" --dangerously-skip-permissions
 //
 // Resolution order: env var (multi-token) > explicit fallbackPath (single
 // token, from TMUX_MGR_ASSISTANT_PATH) > defaultExec (e.g. "claude").
@@ -333,10 +338,12 @@ func currentRepoRoot() string {
 func runAgentList(cmd *cobra.Command, args []string) {
 	all, _ := cmd.Flags().GetBool("all")
 
+	// ListSessionsFiltered now scopes by gss feature (re-derived from each
+	// session's WorkerRef) rather than the dropped RepoRoot. Until runAgentStart
+	// records a WorkerRef (later Batch J PR), there is nothing to scope by, so
+	// list all sessions; --all is retained for the forthcoming feature scope.
 	filter := ""
-	if !all {
-		filter = currentRepoRoot()
-	}
+	_ = all
 
 	sessions, err := agent.ListSessionsFiltered(agent.DefaultPaneChecker, filter)
 	if err != nil {
@@ -392,14 +399,11 @@ func runAgentCleanup(cmd *cobra.Command, args []string) {
 
 	fmt.Printf("Cleaning up session '%s'...\n", sessionID)
 
-	// Remove the git worktree. Prefer the session's origin RepoRoot so cleanup
-	// works regardless of where the user runs the command from; fall back to
-	// the cwd's repo for legacy sessions that pre-date the RepoRoot field.
+	// Remove the git worktree from the cwd's repo. (A later Batch J PR replaces
+	// this with `gss feature done --worker <WorkerRef>`, which owns worktree
+	// teardown; until then cleanup resolves the repo from the cwd.)
 	fmt.Printf("Removing worktree at: %s\n", session.WorktreePath)
-	gitRoot := session.RepoRoot
-	if gitRoot == "" {
-		gitRoot = currentRepoRoot()
-	}
+	gitRoot := currentRepoRoot()
 	if gitRoot != "" {
 		wtCmd := exec.Command("git", "worktree", "remove", "--force", session.WorktreePath)
 		wtCmd.Dir = gitRoot

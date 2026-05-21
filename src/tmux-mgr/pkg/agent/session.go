@@ -29,10 +29,23 @@ type Session struct {
 	StartTime    time.Time `json:"startTime"`
 	WorktreePath string    `json:"worktreePath"`
 	PaneID       string    `json:"paneId,omitempty"`
-	// RepoRoot is the absolute path of the git repository the session was
-	// started from. Empty for legacy sessions (always visible regardless of
-	// filter) and for any future $HOME-only sessions.
-	RepoRoot string `json:"repoRoot,omitempty"`
+	// WorkerRef is the canonical gss worker identifier
+	// (<feature>/<user>/<purpose>[-<sfx>]); gss owns repo identity, so the
+	// former RepoRoot field is gone. Empty for legacy sessions (always visible
+	// regardless of filter) and for any future $HOME-only sessions. A tmux-mgr
+	// Session and a gss Worker are distinct records that map one-to-one.
+	WorkerRef string `json:"workerRef,omitempty"`
+}
+
+// FeatureOf returns the feature segment of a gss worker ref
+// (<feature>/<user>/<purpose>[-<sfx>]), or "" if the ref is empty. It is how
+// ListSessionsFiltered re-derives "repo identity" (the feature grouping) from
+// the WorkerRef now that RepoRoot is gone.
+func FeatureOf(workerRef string) string {
+	if i := strings.IndexByte(workerRef, '/'); i >= 0 {
+		return workerRef[:i]
+	}
+	return workerRef
 }
 
 // PaneChecker reports whether a tmux pane is still alive. Injected for tests.
@@ -160,12 +173,14 @@ func ListSessionsReconciled(isAlive PaneChecker) ([]Session, error) {
 	return ListSessionsFiltered(isAlive, "")
 }
 
-// ListSessionsFiltered is ListSessionsReconciled with an additional repo filter.
-// When repoRoot is empty, no filtering is applied. When non-empty, only sessions
-// whose RepoRoot matches (or whose RepoRoot is empty — legacy/global sessions)
-// are returned. The reconcile-and-persist semantics still apply to every session
-// on disk so terminal transitions settle regardless of which filter is active.
-func ListSessionsFiltered(isAlive PaneChecker, repoRoot string) ([]Session, error) {
+// ListSessionsFiltered is ListSessionsReconciled with an additional feature
+// filter, re-derived from each session's WorkerRef (repo identity is no longer
+// stored). When feature is empty, no filtering is applied. When non-empty,
+// only sessions whose WorkerRef's feature matches (or whose WorkerRef is empty
+// — legacy/global sessions) are returned. The reconcile-and-persist semantics
+// still apply to every session on disk so terminal transitions settle
+// regardless of which filter is active.
+func ListSessionsFiltered(isAlive PaneChecker, feature string) ([]Session, error) {
 	sessions, err := ListSessions()
 	if err != nil {
 		return nil, err
@@ -179,7 +194,7 @@ func ListSessionsFiltered(isAlive PaneChecker, repoRoot string) ([]Session, erro
 				_ = SaveSession(sessions[i])
 			}
 		}
-		if repoRoot == "" || sessions[i].RepoRoot == "" || sessions[i].RepoRoot == repoRoot {
+		if feature == "" || sessions[i].WorkerRef == "" || FeatureOf(sessions[i].WorkerRef) == feature {
 			out = append(out, sessions[i])
 		}
 	}
