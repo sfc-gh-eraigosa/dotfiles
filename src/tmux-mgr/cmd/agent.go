@@ -33,16 +33,7 @@ func runAgentStart(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Warning: failed to load agent definition for %q: %s (continuing with generalist defaults)\n", agentName, err)
 		def = nil
 	}
-	model := agent.SelectModel(def, host)
-	// When a custom launcher is configured, defer model choice to the launcher.
-	// `sf ai claude` and similar wrappers may use a different model namespace
-	// than the bare CLI, so passing tmux-mgr's tier mapping would fail.
-	if host == agent.AssistantClaude && os.Getenv("TMUX_MGR_CLAUDE_LAUNCHER") != "" {
-		model = ""
-	}
-	if host == agent.AssistantGemini && os.Getenv("TMUX_MGR_GEMINI_LAUNCHER") != "" {
-		model = ""
-	}
+	model := resolveModel(def, host)
 
 	defSummary := "generalist defaults"
 	if def != nil {
@@ -74,47 +65,60 @@ func runAgentStart(cmd *cobra.Command, args []string) error {
 	workspacePath := wa.WorktreePath
 	fmt.Printf("Created gss worker %s at %s (branch %s, base %s)\n", wa.WorkerRef, workspacePath, wa.Branch, wa.BaseBranch)
 
+	return spawnAgentPane(host, def, model, agentName, sessionID, wa, taskDescription)
+}
+
+// resolveModel selects the model for host, deferring to a configured launcher
+// (TMUX_MGR_*_LAUNCHER) by clearing the model — those wrappers may use a
+// different model namespace than the bare CLI, so passing tmux-mgr's tier
+// mapping would fail.
+func resolveModel(def *agent.Definition, host agent.Assistant) string {
+	model := agent.SelectModel(def, host)
+	if host == agent.AssistantClaude && os.Getenv("TMUX_MGR_CLAUDE_LAUNCHER") != "" {
+		return ""
+	}
+	if host == agent.AssistantGemini && os.Getenv("TMUX_MGR_GEMINI_LAUNCHER") != "" {
+		return ""
+	}
+	return model
+}
+
+// spawnAgentPane launches the agent for an already-created gss worker: build
+// the pane-wrapped invocation (PR-54), create the tmux pane, and persist the
+// session. Shared by `agent start` and `feature add-agent`.
+func spawnAgentPane(host agent.Assistant, def *agent.Definition, model, agentName, sessionID string, wa workerAddResult, taskDescription string) error {
 	executablePath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
-
 	assistantBinary := string(host)
 	assistantPath, err := exec.LookPath(assistantBinary)
 	if err != nil {
 		assistantPath = assistantBinary // fallback; child will surface the error
 	}
-
-	// Launch the agent under the pane-wrap shim so the worker auto-checkpoints
-	// when the agent exits (PR-54).
 	inner := buildInvocationCmd(host, assistantPath, executablePath, taskDescription, model)
 	invocationCmd := wrapWithPaneWrap(executablePath, wa.WorkerRef, inner)
-
-	symbol := ""
-	label := ""
+	symbol, label := "", ""
 	if def != nil {
 		symbol = def.Symbol
 		label = def.Persona
 	}
-	paneID, err := tmux.CreatePane(sessionID, workspacePath, invocationCmd, symbol, label)
+	paneID, err := tmux.CreatePane(sessionID, wa.WorktreePath, invocationCmd, symbol, label)
 	if err != nil {
 		return fmt.Errorf("error creating tmux pane: %w", err)
 	}
-
 	session := agent.Session{
 		SessionID:    sessionID,
 		AgentName:    agentName,
 		Status:       agent.StatusRunning,
 		StartTime:    time.Now(),
-		WorktreePath: workspacePath,
+		WorktreePath: wa.WorktreePath,
 		PaneID:       paneID,
 		WorkerRef:    wa.WorkerRef,
 	}
-
 	if err := agent.SaveSession(session); err != nil {
 		fmt.Printf("Warning: Failed to save session state: %s\n", err)
 	}
-
 	fmt.Printf("Agent '%s' (worker %s, session %s) started in a new tmux pane.\n", agentName, wa.WorkerRef, sessionID)
 	return nil
 }
