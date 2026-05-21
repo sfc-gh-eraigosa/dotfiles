@@ -11,7 +11,6 @@ import (
 
 	"github.com/eraigosa/dotfiles/src/tmux-mgr/pkg/agent"
 	"github.com/eraigosa/dotfiles/src/tmux-mgr/pkg/tmux"
-	"github.com/eraigosa/dotfiles/src/tmux-mgr/pkg/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -55,10 +54,25 @@ func runAgentStart(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("Starting isolated agent '%s' (assistant=%s model=%s) for task '%s'\n  %s\n", agentName, host, modelSummary, taskDescription, defSummary)
 
-	workspacePath, sessionID, err := workspace.CreateWorkspace(agentName)
-	if err != nil {
-		return fmt.Errorf("error creating workspace: %w", err)
+	// gss owns the worktree + repo identity now. Resolve the feature/purpose
+	// (defaulting both to the agent name), then create the worker via gss.
+	feature, _ := cmd.Flags().GetString("feature")
+	if feature == "" {
+		feature = agentName
 	}
+	purpose, _ := cmd.Flags().GetString("purpose")
+	if purpose == "" {
+		purpose = agentName
+	}
+	sessionID := fmt.Sprintf("%s-%d", agentName, time.Now().UnixNano())
+
+	wa, err := gssWorkerAdd(defaultGssRunner, feature, purpose, taskDescription,
+		os.Getenv("USER"), string(host), engineSessionID(host, os.Getenv), sessionID)
+	if err != nil {
+		return fmt.Errorf("error creating gss worker: %w", err)
+	}
+	workspacePath := wa.WorktreePath
+	fmt.Printf("Created gss worker %s at %s (branch %s, base %s)\n", wa.WorkerRef, workspacePath, wa.Branch, wa.BaseBranch)
 
 	executablePath, err := os.Executable()
 	if err != nil {
@@ -71,7 +85,10 @@ func runAgentStart(cmd *cobra.Command, args []string) error {
 		assistantPath = assistantBinary // fallback; child will surface the error
 	}
 
-	invocationCmd := buildInvocationCmd(host, assistantPath, executablePath, taskDescription, model)
+	// Launch the agent under the pane-wrap shim so the worker auto-checkpoints
+	// when the agent exits (PR-54).
+	inner := buildInvocationCmd(host, assistantPath, executablePath, taskDescription, model)
+	invocationCmd := wrapWithPaneWrap(executablePath, wa.WorkerRef, inner)
 
 	symbol := ""
 	label := ""
@@ -91,16 +108,14 @@ func runAgentStart(cmd *cobra.Command, args []string) error {
 		StartTime:    time.Now(),
 		WorktreePath: workspacePath,
 		PaneID:       paneID,
-		// WorkerRef is populated once runAgentStart shells out to
-		// `gss feature worker add --json` (later Batch J PR); empty until then.
-		WorkerRef: "",
+		WorkerRef:    wa.WorkerRef,
 	}
 
 	if err := agent.SaveSession(session); err != nil {
 		fmt.Printf("Warning: Failed to save session state: %s\n", err)
 	}
 
-	fmt.Printf("Agent '%s' with session ID '%s' started in a new tmux pane.\n", agentName, sessionID)
+	fmt.Printf("Agent '%s' (worker %s, session %s) started in a new tmux pane.\n", agentName, wa.WorkerRef, sessionID)
 	return nil
 }
 
@@ -478,6 +493,8 @@ func init() {
 
 	startCmd.Flags().StringP("task-description", "d", "", "A natural language description of the agent's task.")
 	startCmd.MarkFlagRequired("task-description")
+	startCmd.Flags().String("feature", "", "gss feature to add the worker to (default: the agent name; auto-created)")
+	startCmd.Flags().String("purpose", "", "gss worker purpose (default: the agent name)")
 
 	executeCmd.Flags().StringP("task-description", "d", "", "The task description for the agent.")
 	executeCmd.MarkFlagRequired("task-description")
