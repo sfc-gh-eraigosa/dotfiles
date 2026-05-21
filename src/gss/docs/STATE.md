@@ -14,12 +14,19 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## Cursor
 
-- **Most recent**: PR-42 — `internal/feature/audit.go`. **Batch G COMPLETE**
-  (PR-32–42 — the whole `internal/feature` orchestrator package). Playground:
-  #50 start/worker, #51 list, #52 conflicts, #53 checkpoint, #54 auto, #55
-  pr `--ready`, #56 rebase, #57 restack, #58 done, #59 merged, #60 audit — a
-  LINEAR feature stack pr32→…→pr42 off pr31. dotfiles `internal/` now mirrors
-  PR-01–42 (+ stack body/restack + tmpl from Batch F).
+- **Most recent**: PR-48 — `gss feature` cobra subtree complete. **Batch H
+  COMPLETE** (PR-44–48, dotfiles-only, flat `cmd/` layout per the cmd-leaf
+  decision). All 11 feature verbs wired on `featureCmd`: start, worker add,
+  list, checkpoint, conflicts, pr, rebase, restack, done, merged, audit; each
+  a thin RunE shim over the matching `feature.Service` method via
+  `newFeatureService()` / `newRegistryStore()` / `currentWorkerRef()`.
+  `gss --help` and `gss feature --help` exhaustive; `gss config print|check`
+  intact; `build.sh` builds. PR-43 (#61) added the cross-machine audit
+  fixtures + the `duplicate-branch`/`pr-state-stale` checks, mirrored into
+  dotfiles at PR-47. **Batch G COMPLETE** earlier (PR-32–42, the whole
+  `internal/feature` package; playground #50–#60, LINEAR stack pr32→…→pr42).
+  dotfiles `internal/` mirrors PR-01–43; `cmd/` carries the full feature
+  subtree.
 - **Playground branches in flight**:
   - `test_gss` — integration trunk (root of the stack).
   - `pr01-internal-errors` … `pr09-internal-repo` — PRs #23–#31 (Batch A,
@@ -30,14 +37,13 @@ PR-61 (the final integration) opens *its own* non-draft PR against
   - Batch D **linear stack** off `pr09`: `pr17-registry-schema` #37 →
     `pr18-registry-lock` #38 → `pr19-registry-reconcile` #39 →
     `pr20-worktree-backend` #40 → `pr21-worktree-git` #41.
-- **Next PR**: PR-43 — audit edge-case tests (cross-machine sync failure
-  modes); playground test-only, stacks on pr42. Then **Batch H** (PR-44–48,
-  cobra wiring for the `gss feature` subtree) is **dotfiles-only** per the
-  cmd-leaf decision — mirror each prerequisite internal package into the
-  same staging commit. Then Batch I hardening (PR-49–) and PR-61 final
-  integration against `dotfiles:main`.
-- **PRs remaining in plan**: 19 (PR-43 through PR-61). (Playground PRs
-  open: #23–#60; cmd leaves PR-15/16/23/25 + Batch H dotfiles-only.)
+- **Next PR**: PR-49 — **Batch I (hardening)** begins: `src/git-machete/skill/
+  SKILL.md` companion CLI skill (license-checked pin). Then PR-50 (build.sh +
+  CI `go-licenses check ./...` gate), PR-51 (safety_guard.sh + test
+  extension), PR-52 (`src/gss/skill/SKILL.md`), … and PR-61 final integration
+  against `dotfiles:main`. Batch I is mostly parallel/independent.
+- **PRs remaining in plan**: 13 (PR-49 through PR-61). (Playground PRs
+  open: #23–#61; cmd leaves PR-15/16/23/25 + Batch H (PR-44–48) dotfiles-only.)
 - **Batch E integration note**: orchestrators need fanned-out Batch B
   packages. pr22 merged pr10/11/12 (approval/backup/sync) for a coherent
   base; later Batch E PRs stack linearly on the prior E PR. cmd-leaf PRs
@@ -46,11 +52,14 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 - **Snapshot cadence**: dotfiles snapshots BATCHED ~every 5 PRs (user pick
   2026-05-21). Playground PRs are individual + the source of truth;
   reconcile STATE.md against `gh pr list` when resuming.
-- **This staging snapshot**: dotfiles `internal/` mirrors PR-01–42 (through
-  `pr42-feature-audit` @ `c5c9ea5` — full `internal/feature` package), plus
-  dotfiles-only classic wiring (build.sh + cmd/version.go + cmd/config.go +
-  cmd/{status,scan,backup,sync}.go from PR-15–16; cmd/{push,pr}.go from
-  PR-23/25). Batch H (`cmd/gss/feature/` cobra subtree) not yet wired.
+- **This staging snapshot**: dotfiles `internal/` mirrors PR-01–43 (through
+  `pr43-audit-xmachine` @ `1cac092` — full `internal/feature` package incl.
+  the audit duplicate-branch/pr-state-stale checks + xmachine fixtures), plus
+  the dotfiles-only cmd wiring: classic (build.sh + cmd/version.go +
+  cmd/config.go + cmd/{status,scan,backup,sync}.go from PR-15–16;
+  cmd/{push,pr}.go from PR-23/25) AND the full **`gss feature` subtree** in
+  flat `cmd/feature*.go` (PR-44–48). Batch H complete; Batch I (hardening)
+  next.
 - **External dependencies** (all Allowed, licenses verified):
   `gopkg.in/yaml.v3 v3.0.1` (PR-05, MIT+Apache-2.0), `golang.org/x/text
   v0.37.0` (PR-08, BSD-3-Clause), `github.com/gofrs/flock v0.13.0` +
@@ -155,6 +164,12 @@ below (PR-04, PR-05):
 - `src/gss/cmd/{push,pr}.go` — rewired onto `classic.{Pusher,PRer}` with
   the `mode.IsInWorker` + `classicAllowed` (`ErrWrongMode`) gate (PR-23/25,
   routed through internal/mode at PR-26).
+- `src/gss/cmd/feature*.go` — the **`gss feature` cobra subtree** (Batch H,
+  PR-44–48, flat layout): `feature.go` parent; `feature_service.go`
+  (`newFeatureService`/`newRegistryStore`/`fail`/`currentWorkerRef`);
+  leaves `feature_{start,worker,list,checkpoint,conflicts,pr,rebase,restack,
+  done,merged,audit}.go`, each a thin RunE shim over the matching
+  `feature.Service` method. All 11 verbs registered via `init()`.
 - `src/gss/docs/STATE.md` — this file.
 
 **Classic-code wiring (dotfiles-only).** Because the playground module is
@@ -205,6 +220,11 @@ starts using at PR-22 (`internal/classic/push.go`) and beyond;
 | 8 | PR-02 Architect | PR-50 must add CI grep enforcing "no `os/exec` outside `internal/git/` and `internal/gh/`". | Track for PR-50. |
 | 9 | PR-02 Architect | PR-03 (`gh/fake`) must use per-verb scripting, not the FIFO shape from `git/fake`. | ✅ Done in PR-03 — per-verb error scripting (`ScriptError(verb, …)`); proven by `TestFakeClient_PerVerbScripting`. |
 | 10 | PR-03 | `gh.systemExec.Run` (the real-`gh` subprocess shell) is uncovered by unit tests by design — exercising it needs a live `gh` + repo. | Optional: add an integration test behind a build tag / `GSS_GH_INTEGRATION=1` env gate in a future hardening PR. |
+| 11 | PR-45 | `gss feature worker update` not wired — Batch G never implemented `Service.WorkerUpdate` (design.md → worker update). | Add `Service.WorkerUpdate` as a small playground internal PR, then a cmd leaf. |
+| 12 | PR-45 | `UserSources.GHLogin` is nil — `gh.Client` has no CurrentUser verb, so user resolution falls through git email → `$USER` (`--user` still wins). | Add a `gh.Client` CurrentUser verb (internal/gh PR), then wire the gh login precedence step. |
+| 13 | PR-45 | `gss feature start --purpose` convenience (create feature + first worker in one call) not implemented. | Compose `Start`+`WorkerAdd` at the cmd layer, or add a Service convenience. |
+| 14 | PR-46 | `gss feature checkpoint --message` not supported — `CheckpointOpts` has no `Message` field. Flag omitted (not silently ignored). | Add `Message` to `CheckpointOpts` + plumb to the WIP/PR body. |
+| 15 | PR-46 | `gss feature conflicts` requires `--feature` — internal `Conflicts` errors (`ErrInvalidIdent`) on an empty feature instead of defaulting to all-features / cwd-resolved as the design describes. | Extend `Service.Conflicts` to iterate all features (or cwd-resolve) when `Feature==""`. |
 
 ## Sync log
 
@@ -224,6 +244,7 @@ starts using at PR-22 (`internal/classic/push.go`) and beyond;
 | 2026-05-21 | `playground:pr13-internal-scan` | `2385050` | PR-13 — `internal/scan` `Scanner.Scan` (WalkDir, nested repos, symlink-loop-safe) + `Format` (`[DIRTY] <path>` contract) + `GitDirty`. Test trees built at runtime (committed `.git` fixtures impossible). 5 tests; cov 95%. No deps. PR #35 (sibling off PR-09). |
 | 2026-05-21 | `playground:pr14-internal-status` | `f158791` | PR-14 — `internal/status` `Service.Status` + `Format` (porcelain → classic report byte-identical: "No changes detected"/"Changes in"/" - line"). 4 tests; cov 100%. No deps. PR #36 (sibling off PR-09). Ends Batch B. |
 | 2026-05-21 | (dotfiles-only) | — | **Batch C** PR-15/16 — cmd leaves rewired in place onto internal packages (`cmd/status.go` → internal/status; `cmd/{scan,backup,sync}.go` → internal/{scan,backup,sync}). Output byte-identical, smoke-verified. No playground PRs (cmd-leaf decision). |
+| 2026-05-21 | (dotfiles-only) PR-43–48 | `1cac092`+staging | **PR-43 + Batch H.** PR-43 (#61, playground) — cross-machine audit edge-case tests: 5 `testdata/audit/xmachine/*.json` fixtures + 5 tests pinning "observable state wins"; also rounded out `audit.go` with `duplicate-branch` (error, not repaired) + `pr-state-stale` (info, reconcile). **Batch H (PR-44–48, dotfiles-only, flat `cmd/` layout)** — the `gss feature` cobra subtree: parent (9224a85) → start/worker-add/list + `newFeatureService` (0ba871c) → checkpoint/conflicts/pr/rebase/restack + `currentWorkerRef` (c8dfeb0) → done/merged/audit + audit re-mirror from playground pr43 (f15cd4c) → main/root verification + this STATE.md closeout (PR-48). All 11 verbs wired; `gss --help`/`gss feature --help` exhaustive; `gss config print|check` intact; `build.sh` builds; cmd + full internal/ suites pass. Gaps logged as carry-forward #11–15. No new deps. |
 | 2026-05-21 | `playground` PR-37–42 (#55–#60) | `c5c9ea5` | **Batch G full snapshot — `internal/feature` COMPLETE.** PromoteReady (`pr --ready`: always token-gated → `ErrPRReadyNeedsToken`; parent-draft guard overridable by --force) #55; Rebase (fetch→rebase→force-push→PREdit base only) #56; Restack (rebase --onto, force-push, restack_count++ on worker+descendants, increment-only) #57; Done (refuse dirty/dependents/open-PR unless --force; backend.Remove; registry row drop; empty-feature cleanup via whitespace-normalised FEATURE.md vs rendered-template byte-diff) #58; Merged (mechanical re-target THEN gated auto-promote — linear + restack_count==0; fan-out/restacked disqualification notice; ordering pinned) #59; Audit (read-only drift matrix + registry-local `--repair`, provably side-effect-free via the read-only `Observer` seam; schema-newer surfaced from the load error; spawned_by deliberately NOT validated per resolution #8) #60. Linear feature stack pr37→pr42 off pr36. Full dotfiles module builds (`go build ./...`); all 22 internal packages pass; feature coverage 82.6%. No new deps. PR-43 (audit edge-case tests) + Batch H cobra wiring remain. |
 | 2026-05-21 | `playground` PR-32–36 (#50–#54) | (prev) | **Batch G core snapshot** — `internal/feature` Service: start+worker (#50), list + spawned_by informational static-grep guard (#51), conflicts/never-resolves (#52), checkpoint (fetch→rebase→PR create/edit→body render; merged pr28 for stack/body; added Service.GH) (#53), checkpoint --auto (no-op silence, tracked-only WIP commit, detached/conflict skip→WORKER.md, draft-only, --dry-run) (#54). Linear feature stack pr32→pr36 off pr31. All build + tests pass in dotfiles; coverage ~85–89%. No new deps. PR-37–39 (pr --ready / rebase / restack) + done/merged remain in Batch G. |
 | 2026-05-21 | `playground` PR-27–31 (#45–#49) | (prev) | **Batch F batch snapshot** — `internal/stack` (compute #45 / body+marker-strip #46 / restack #47) + `internal/tmpl` (renderer #48 / embed #49). Pure-logic stack + template renderer with user-field sanitisation. Assembled into dotfiles from the sibling branches; all build + tests pass. Coverage: stack 98–100%, tmpl ~88–91%. No new deps. PR-bodies/markers are the PR-injection-defence surface (security #7). |
