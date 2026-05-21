@@ -14,25 +14,29 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## Cursor
 
-- **Most recent PR opened**: PR-11 — `internal/backup` Clock-driven safety
-  branch (#33 in playground). **Batch B in progress** (classic primitives).
+- **Most recent PR opened**: PR-14 — `internal/status` porcelain formatter
+  (#36 in playground). **Batch B (classic primitives) complete** — PR-10–14.
 - **Playground branches in flight**:
   - `test_gss` — integration trunk (root of the stack).
   - `pr01-internal-errors` … `pr09-internal-repo` — PRs #23–#31 (Batch A,
     stacked linearly).
-  - `pr10-internal-approval` — PR #32, off PR-09.
-  - `pr11-internal-backup` — PR #33, off PR-09.
-    **Batch B note**: PR-10–14 are fan-out siblings — each branches off
-    `pr09-internal-repo`, NOT off each other (plan: "fan out after PR-09").
-- **Next PR**: PR-12 — `internal/sync/` fetch + pull --rebase (fetch
-  precedes pull; conflict → `ErrRebaseConflict`; non-ff clean diagnostic).
-  Branches off PR-09 (sibling).
-- **PRs remaining in plan**: 50 (PR-12 through PR-61).
-- **This staging snapshot**: reflects playground branch
-  `pr11-internal-backup` at SHA `d250242`, plus dotfiles-only classic
-  wiring (build.sh + cmd/version.go + cmd/config.go) described below. The
-  staging branch accumulates all Batch-B siblings linearly even though the
-  PRs fan out.
+  - Batch B **fan-out siblings, each branched off `pr09-internal-repo`**
+    (NOT off each other): `pr10-internal-approval` #32, `pr11-internal-backup`
+    #33, `pr12-internal-sync` #34, `pr13-internal-scan` #35,
+    `pr14-internal-status` #36.
+- **Next PR**: PR-15 — **Batch C** begins: `cmd/gss/{status,diff,version}.go`
+  cobra leaves (wire the classic command surface onto the new internal
+  packages). NOTE: Batch C is dotfiles-heavy (classic `cmd/` wiring) and the
+  design's `cmd/gss/` layout differs from the current `cmd/` — reconcile when
+  starting. Per plan, Batch C leaves go in parallel after their primitives.
+- **PRs remaining in plan**: 47 (PR-15 through PR-61).
+- **Snapshot cadence**: dotfiles snapshots are now BATCHED ~every 5 PRs
+  (user pick 2026-05-21). Playground PRs remain individual and are the
+  source of truth; reconcile STATE.md against `gh pr list` when resuming.
+- **This staging snapshot**: reflects playground branches through
+  `pr14-internal-status` (SHA `f158791`); dotfiles `internal/` now mirrors
+  PR-01–14. Plus dotfiles-only classic wiring (build.sh + cmd/version.go +
+  cmd/config.go).
 - **External dependencies**: `gopkg.in/yaml.v3 v3.0.1` (PR-05),
   `golang.org/x/text v0.37.0` (PR-08, BSD-3-Clause, for NFC).
 - **External dependencies**: `gopkg.in/yaml.v3 v3.0.1` (PR-05),
@@ -53,7 +57,7 @@ PR-61 (the final integration) opens *its own* non-draft PR against
    ```
    git clone <playground-remote> ~/GitHub/playground
    cd ~/GitHub/playground
-   git checkout pr11-internal-backup
+   git checkout pr14-internal-status   # or any Batch B sibling; all branch off pr09
    ```
 3. **Tooling install** (Phase 3 prerequisites):
    ```
@@ -104,6 +108,12 @@ below (PR-04, PR-05):
   `ErrApprovalTokenMissing`) (PR-10).
 - `src/gss/internal/backup/` — `Service.Create` safety branch
   `backup/gss-<ts>` (Clock-driven, monotonic-suffix idempotent) (PR-11).
+- `src/gss/internal/sync/` — `Service.Sync` fetch→pull --rebase; rebase
+  failure wraps `ErrRebaseConflict` (PR-12).
+- `src/gss/internal/scan/` — `Scanner.Scan` dirty-repo walker + `Format`
+  (`[DIRTY] <path>` contract) + `GitDirty` (PR-13).
+- `src/gss/internal/status/` — `Service.Status` + `Format` (porcelain →
+  classic report, byte-identical) (PR-14).
 - `src/gss/docs/STATE.md` — this file.
 
 **Classic-code wiring (dotfiles-only).** Because the playground module is
@@ -158,3 +168,6 @@ starts using at PR-22 (`internal/classic/push.go`) and beyond;
 | 2026-05-21 | `playground:pr09-internal-repo` | `89aa3c6` | PR-09 — `internal/repo` NWO resolution: `Resolver.Resolve` (--repo shadow → `.nwo` cache → `gh.RepoView` → origin-URL parse → refuse), `ParseNWO`/`ParseRemoteURL`, origin-keyed cache (invalidates on origin change). 9 tests; coverage 86.3%. No new deps; playground-only. Ends Batch A. PR #31 stacked on PR-08. |
 | 2026-05-21 | `playground:pr10-internal-approval` | `d2afe50` | PR-10 — `internal/approval` HEAD-bound token (`Verify` verify-then-consume, `Issue`, force-autonomous bypass; typed `*Error{Missing|Mismatch}` wrapping `ErrApprovalTokenMissing`). Mirrors classic cmd/push.go semantics. 5 tests; coverage 71%. No new deps; playground-only. Starts Batch B (fan-out sibling off PR-09). PR #32. |
 | 2026-05-21 | `playground:pr11-internal-backup` | `d250242` | PR-11 — `internal/backup` `Service.Create` safety branch `backup/gss-<YYYYMMDD-HHMMSS>` (config.Clock-driven, byte-identical name to classic cmd/backup.go; monotonic `-N` suffix on collision, cap 1000). 3 tests; coverage 91.7%. No new deps; playground-only (fan-out sibling off PR-09). PR #33. |
+| 2026-05-21 | `playground:pr12-internal-sync` | `e2ffde7` | PR-12 — `internal/sync` `Service.Sync` (resolve branch→`fetch origin`→`pull --rebase`; fetch precedes pull; rebase failure wraps `ErrRebaseConflict`). 4 tests; cov 93.3%. No deps. PR #34 (sibling off PR-09). |
+| 2026-05-21 | `playground:pr13-internal-scan` | `2385050` | PR-13 — `internal/scan` `Scanner.Scan` (WalkDir, nested repos, symlink-loop-safe) + `Format` (`[DIRTY] <path>` contract) + `GitDirty`. Test trees built at runtime (committed `.git` fixtures impossible). 5 tests; cov 95%. No deps. PR #35 (sibling off PR-09). |
+| 2026-05-21 | `playground:pr14-internal-status` | `f158791` | PR-14 — `internal/status` `Service.Status` + `Format` (porcelain → classic report byte-identical: "No changes detected"/"Changes in"/" - line"). 4 tests; cov 100%. No deps. PR #36 (sibling off PR-09). Ends Batch B. |
