@@ -14,8 +14,10 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## Cursor
 
-- **Most recent PR opened**: PR-14 — `internal/status` porcelain formatter
-  (#36 in playground). **Batch B (classic primitives) complete** — PR-10–14.
+- **Most recent**: PR-15 — `cmd/status.go` rewired to delegate to
+  `internal/status` (dotfiles-only, no playground PR; output byte-identical,
+  smoke-verified). **Batch C (cmd leaves) in progress.** Last playground PR
+  was PR-14 (#36); Batch B complete (PR-10–14).
 - **Playground branches in flight**:
   - `test_gss` — integration trunk (root of the stack).
   - `pr01-internal-errors` … `pr09-internal-repo` — PRs #23–#31 (Batch A,
@@ -24,12 +26,12 @@ PR-61 (the final integration) opens *its own* non-draft PR against
     (NOT off each other): `pr10-internal-approval` #32, `pr11-internal-backup`
     #33, `pr12-internal-sync` #34, `pr13-internal-scan` #35,
     `pr14-internal-status` #36.
-- **Next PR**: PR-15 — **Batch C** begins: `cmd/gss/{status,diff,version}.go`
-  cobra leaves (wire the classic command surface onto the new internal
-  packages). NOTE: Batch C is dotfiles-heavy (classic `cmd/` wiring) and the
-  design's `cmd/gss/` layout differs from the current `cmd/` — reconcile when
-  starting. Per plan, Batch C leaves go in parallel after their primitives.
-- **PRs remaining in plan**: 47 (PR-15 through PR-61).
+- **Next PR**: PR-16 — `cmd/{scan,backup,sync}.go` rewired onto
+  `internal/{scan,backup,sync}` (dotfiles-only cmd leaves). NOTE: keep the
+  flat `cmd/` layout, rewire in place (do NOT create the design's `cmd/gss/`
+  subdir). cmd-leaf PRs are dotfiles-only — no playground PR. version.go
+  was already wired in PR-04; diff.go has no internal package (leave as-is).
+- **PRs remaining in plan**: 46 (PR-16 through PR-61).
 - **Snapshot cadence**: dotfiles snapshots are now BATCHED ~every 5 PRs
   (user pick 2026-05-21). Playground PRs remain individual and are the
   source of truth; reconcile STATE.md against `gh pr list` when resuming.
@@ -133,6 +135,9 @@ wiring here. So far:
   end-to-end with a temp `HOME`.
 - `src/gss/go.mod` + `go.sum` (PR-05) — `gopkg.in/yaml.v3 v3.0.1` added as
   a direct require; `go mod tidy` promoted cobra to a direct require.
+- `src/gss/cmd/status.go` (PR-15) — now delegates to `internal/status`
+  (`status.NewService(git.NewSystemRunner()).Status`); output byte-identical
+  (smoke-verified). First Batch C cmd leaf.
 
 Otherwise the classic gss code (`cmd/*.go`, `main.go`) is unchanged. The
 remaining `internal/` packages are foundation layers the classic code
