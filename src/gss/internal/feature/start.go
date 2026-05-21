@@ -30,6 +30,8 @@ type Service struct {
 	Backend      worktree.Backend
 	Git          git.Runner
 	GH           gh.Client
+	Approval     approver // approval-token verifier for `pr --ready` (PR-37)
+	Observe      Observer // read-only audit observer (PR-42); nil → built from Git/GH/os
 	Clock        config.Clock
 	WorktreeRoot string               // expanded worktrees root
 	NWO          string               // "owner/repo"
