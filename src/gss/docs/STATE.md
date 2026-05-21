@@ -14,10 +14,10 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## Cursor
 
-- **Most recent**: PR-15 — `cmd/status.go` rewired to delegate to
-  `internal/status` (dotfiles-only, no playground PR; output byte-identical,
-  smoke-verified). **Batch C (cmd leaves) in progress.** Last playground PR
-  was PR-14 (#36); Batch B complete (PR-10–14).
+- **Most recent**: PR-16 — `cmd/{scan,backup,sync}.go` rewired onto
+  `internal/{scan,backup,sync}` (dotfiles-only; output byte-identical,
+  smoke-verified). **Batch C (cmd leaves PR-15–16) complete.** Last
+  playground PR was PR-14 (#36).
 - **Playground branches in flight**:
   - `test_gss` — integration trunk (root of the stack).
   - `pr01-internal-errors` … `pr09-internal-repo` — PRs #23–#31 (Batch A,
@@ -26,12 +26,12 @@ PR-61 (the final integration) opens *its own* non-draft PR against
     (NOT off each other): `pr10-internal-approval` #32, `pr11-internal-backup`
     #33, `pr12-internal-sync` #34, `pr13-internal-scan` #35,
     `pr14-internal-status` #36.
-- **Next PR**: PR-16 — `cmd/{scan,backup,sync}.go` rewired onto
-  `internal/{scan,backup,sync}` (dotfiles-only cmd leaves). NOTE: keep the
-  flat `cmd/` layout, rewire in place (do NOT create the design's `cmd/gss/`
-  subdir). cmd-leaf PRs are dotfiles-only — no playground PR. version.go
-  was already wired in PR-04; diff.go has no internal package (leave as-is).
-- **PRs remaining in plan**: 46 (PR-16 through PR-61).
+- **Next PR**: PR-17 — **Batch D** begins (registry + worktree backend,
+  *sequential* stacking): `internal/registry/schema.go` (structs + JSON
+  round-trip). This is an `internal/` package → resumes individual
+  **playground PRs**. Check the plan for its base branch (Batch D stacks
+  linearly: 17→18→19→20→21).
+- **PRs remaining in plan**: 45 (PR-17 through PR-61).
 - **Snapshot cadence**: dotfiles snapshots are now BATCHED ~every 5 PRs
   (user pick 2026-05-21). Playground PRs remain individual and are the
   source of truth; reconcile STATE.md against `gh pr list` when resuming.
@@ -138,6 +138,14 @@ wiring here. So far:
 - `src/gss/cmd/status.go` (PR-15) — now delegates to `internal/status`
   (`status.NewService(git.NewSystemRunner()).Status`); output byte-identical
   (smoke-verified). First Batch C cmd leaf.
+- `src/gss/cmd/{scan,backup,sync}.go` (PR-16) — rewired onto
+  `internal/{scan,backup,sync}`. scan injects the kept `isDirty` into
+  `scan.Scanner`; backup uses `config.SystemClock`; sync distinguishes
+  `ErrRebaseConflict` from fetch errors. Output byte-identical
+  (smoke-verified). Minor: sync drops the cosmetic "Attempting to
+  pull/rebase onto <branch>…" progress line (branch is resolved inside
+  internal/sync). `isDirty` kept in cmd/scan.go for the existing
+  cmd/status_test.go (TestIsDirty); retire in a later cleanup.
 
 Otherwise the classic gss code (`cmd/*.go`, `main.go`) is unchanged. The
 remaining `internal/` packages are foundation layers the classic code
