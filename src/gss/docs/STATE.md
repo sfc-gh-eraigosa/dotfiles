@@ -14,22 +14,24 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## Cursor
 
-- **Most recent PR opened**: PR-04 — `internal/version` build-metadata
-  single source of truth (#26 in playground).
+- **Most recent PR opened**: PR-05 — `internal/config` YAML + env + flag
+  merge (#27 in playground).
 - **Playground branches in flight**:
   - `test_gss` — integration trunk (root of the stack).
   - `pr01-internal-errors` — PR #23, awaiting human merge to `test_gss`.
   - `pr02-internal-git-runner` — PR #24, stacked on PR-01, awaiting merge.
   - `pr03-internal-gh-client` — PR #25, stacked on PR-02, awaiting merge.
   - `pr04-internal-version` — PR #26, stacked on PR-03, awaiting merge.
-- **Next PR**: PR-05 — `internal/config/` YAML + env + flag merge
-  (adds `gopkg.in/yaml.v3`; precedence built-in → YAML → env → flag;
-  injectable `Clock`). Stacks on PR-04. First PR with a new external dep —
-  cite the LICENSE URL in the PR description.
-- **PRs remaining in plan**: 57 (PR-05 through PR-61).
+  - `pr05-internal-config` — PR #27, stacked on PR-04, awaiting merge.
+- **Next PR**: PR-06 — `internal/identity/wordlist.go` + `wordlist.txt`
+  (the 256-word suffix pool: exactly 256 entries, each 3–5 lowercase ASCII
+  letters, no duplicates). Stacks on PR-05.
+- **PRs remaining in plan**: 56 (PR-06 through PR-61).
 - **This staging snapshot**: reflects playground branch
-  `pr04-internal-version` at SHA `91e8f44`, plus dotfiles-only classic
-  wiring (build.sh + cmd/version.go) described below.
+  `pr05-internal-config` at SHA `81d794d`, plus dotfiles-only classic
+  wiring (build.sh + cmd/version.go + cmd/config.go) described below.
+- **First external dependency**: `gopkg.in/yaml.v3 v3.0.1` (dual
+  MIT + Apache-2.0; allowed) added in PR-05.
 
 ## Handoff procedure (new machine)
 
@@ -44,7 +46,7 @@ PR-61 (the final integration) opens *its own* non-draft PR against
    ```
    git clone <playground-remote> ~/GitHub/playground
    cd ~/GitHub/playground
-   git checkout pr04-internal-version
+   git checkout pr05-internal-config
    ```
 3. **Tooling install** (Phase 3 prerequisites):
    ```
@@ -63,8 +65,8 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## What's in the staging branch right now
 
-Additive to the existing `src/gss/` tree (the classic `cmd/`, `main.go`,
-`go.mod` with cobra all unchanged):
+Additive `internal/` packages, plus the small classic-code wiring noted
+below (PR-04, PR-05):
 
 - `src/gss/LICENSE` — Apache 2.0, mirrored from upstream.
 - `src/gss/internal/errors/` — 14 sentinels, exit-code map (10–29), JSON
@@ -78,19 +80,29 @@ Additive to the existing `src/gss/` tree (the classic `cmd/`, `main.go`,
 - `src/gss/internal/version/` — build-metadata single source of truth:
   `Version`/`Commit`/`BuildDate`/`Dirty` (set via `-X` ldflags) + `Get()`
   with display fallbacks (PR-04).
+- `src/gss/internal/config/` — layered config loader (built-in → YAML →
+  `GSS_*` env → flag), `*ParseError`, first-run stub (`WriteStubIfMissing`),
+  `Marshal`, and the `Clock` seam (`clock.go`) (PR-05). Depends on
+  `gopkg.in/yaml.v3`.
 - `src/gss/docs/STATE.md` — this file.
 
-**Classic-code wiring (dotfiles-only, PR-04).** PR-04 is the first
-deliverable to touch the classic tool. Because the playground module is
-stripped (no `cmd/`, no `build.sh`), the new package ships in playground
-PR #26 while its wiring lives here:
+**Classic-code wiring (dotfiles-only).** Because the playground module is
+stripped (no `cmd/`, no `build.sh`, no cobra), each PR that touches the
+classic tool reviews its new package in the playground PR and applies the
+wiring here. So far:
 
-- `src/gss/build.sh` — ldflag targets retargeted from
+- `src/gss/build.sh` (PR-04) — ldflag targets retargeted from
   `…/gss/cmd.{Version,…}` to `…/gss/internal/version.{Version,…}`.
-- `src/gss/cmd/version.go` — now reads `version.Get()`; its local
-  `Version`/`Commit`/`Dirty`/`BuildDate` vars are removed. End-to-end
-  verified: a binary stamped with the new ldflag targets renders the
-  injected values, and an unstamped binary falls back to dev/none/…
+- `src/gss/cmd/version.go` (PR-04) — now reads `version.Get()`; its local
+  `Version`/`Commit`/`Dirty`/`BuildDate` vars are removed. Verified
+  end-to-end: a stamped binary renders the injected values; an unstamped
+  binary falls back to dev/none/…
+- `src/gss/cmd/config.go` (PR-05) — new `gss config print` (dumps the
+  effective config; writes the first-run stub) and `gss config check`
+  (validates the file + confirms `git`/`gh` resolve on PATH). Verified
+  end-to-end with a temp `HOME`.
+- `src/gss/go.mod` + `go.sum` (PR-05) — `gopkg.in/yaml.v3 v3.0.1` added as
+  a direct require; `go mod tidy` promoted cobra to a direct require.
 
 Otherwise the classic gss code (`cmd/*.go`, `main.go`) is unchanged. The
 remaining `internal/` packages are foundation layers the classic code
@@ -119,3 +131,4 @@ starts using at PR-22 (`internal/classic/push.go`) and beyond;
 | 2026-05-20 | `playground:pr02-internal-git-runner` | `e8c9b8a` | Initial staging snapshot — PR-01 (sentinels + JSON envelope) + PR-02 (`internal/git` Runner + fake). Tests pass in dotfiles context; `go build ./internal/...` clean. |
 | 2026-05-21 | `playground:pr03-internal-gh-client` | `4f6bedc` | PR-03 — `internal/gh` `Client` interface + `SystemClient` (over an `Exec` seam) + stateful per-verb `fake.Client` + `testdata/gh_responses/*.json`. 31 tests; coverage gh 77.7%, fake 87.8%; build + full module tests clean in dotfiles context. No new deps. `-race` skipped on the aarch64 dev host (47-bit VMA vs ThreadSanitizer's 48-bit, `unsupported VMA range`); x86 CI covers it. PR #25 stacked on PR-02. |
 | 2026-05-21 | `playground:pr04-internal-version` | `91e8f44` | PR-04 — `internal/version` build-metadata single source of truth (`Version`/`Commit`/`BuildDate`/`Dirty` + `Get()` fallbacks). 4 tests; coverage 100%. Cross-repo split (per user decision): package ships in playground PR #26; dotfiles-only wiring retargets `build.sh` ldflags and cuts `cmd/version.go` over to `version.Get()` (local build vars removed). Full dotfiles module builds + all tests pass; ldflag injection verified end-to-end (stamped binary shows injected values, unstamped falls back to dev/none/…). No new deps. PR #26 stacked on PR-03. |
+| 2026-05-21 | `playground:pr05-internal-config` | `81d794d` | PR-05 — `internal/config` layered loader (built-in → YAML → `GSS_*` env → flag), `*ParseError`, first-run stub round-tripping to `Default()`, `Marshal`, `Clock` seam. 16 tests; coverage 89.5%. **First external dep**: `gopkg.in/yaml.v3 v3.0.1` (dual MIT + Apache-2.0; LICENSE verified at github.com/go-yaml/yaml/blob/v3.0.1/LICENSE; both Allowed). Dotfiles-only wiring adds `cmd/config.go` (`gss config print`/`check`) and the dep to `go.mod`/`go.sum`. Full module builds + all tests pass; `gss config print`/`check` verified end-to-end with a temp HOME. PR #27 stacked on PR-04. |
