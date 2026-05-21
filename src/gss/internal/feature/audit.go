@@ -112,6 +112,20 @@ func (s *Service) Audit(ctx context.Context, opts AuditOpts) (AuditReport, error
 // performs no I/O of its own; every observation goes through obs.
 func runAudit(ctx context.Context, reg registry.Registry, obs Observer, only string) []Finding {
 	var fs []Finding
+
+	// Registry-wide branch claims, used for the cross-machine duplicate-branch
+	// check (roadmap.md → cross-machine sync failure mode 3): two hosts running
+	// `worker add` against the same NWO + name collide on one branch.
+	branchClaims := map[string]int{}
+	for _, f := range reg.Features {
+		if only != "" && f.Name != only {
+			continue
+		}
+		for _, w := range f.Workers {
+			branchClaims[w.Branch]++
+		}
+	}
+
 	for _, f := range reg.Features {
 		if only != "" && f.Name != only {
 			continue
@@ -133,6 +147,11 @@ func runAudit(ctx context.Context, reg registry.Registry, obs Observer, only str
 					Detail: w.Branch, Remedy: "audit --repair drops the row"})
 				continue
 			}
+			if branchClaims[w.Branch] > 1 {
+				fs = append(fs, Finding{Worker: ref, Check: "duplicate-branch", Severity: SevError,
+					Detail: fmt.Sprintf("branch %q is claimed by %d registry rows", w.Branch, branchClaims[w.Branch]),
+					Remedy: "pick one to keep, then gss feature done --force --worker <ref> on the loser (repair won't choose)"})
+			}
 			if !obs.BaseReachable(ctx, w.Branch, w.BaseBranch) {
 				fs = append(fs, Finding{Worker: ref, Check: "base-unreachable", Severity: SevError,
 					Detail: fmt.Sprintf("%s cannot reach base %s", w.Branch, w.BaseBranch),
@@ -145,14 +164,27 @@ func runAudit(ctx context.Context, reg registry.Registry, obs Observer, only str
 			}
 			if w.PRURL != "" {
 				num := prNumber(w.PRURL)
-				if pr, ok := obs.PRView(ctx, num); !ok {
+				pr, ok := obs.PRView(ctx, num)
+				switch {
+				case !ok:
 					fs = append(fs, Finding{Worker: ref, Check: "pr-404", Severity: SevWarn,
 						Detail: fmt.Sprintf("PR #%d (%s) not found", num, w.PRURL),
 						Remedy: "audit --repair clears pr_url/pr_state"})
-				} else if pr.Base != "" && pr.Base != w.BaseBranch {
-					fs = append(fs, Finding{Worker: ref, Check: "pr-base-diverged", Severity: SevWarn,
-						Detail: fmt.Sprintf("PR base %q != registry base %q", pr.Base, w.BaseBranch),
-						Remedy: "audit --repair adopts the PR base (the PR is authoritative)", fix: pr.Base})
+				default:
+					if pr.Base != "" && pr.Base != w.BaseBranch {
+						fs = append(fs, Finding{Worker: ref, Check: "pr-base-diverged", Severity: SevWarn,
+							Detail: fmt.Sprintf("PR base %q != registry base %q", pr.Base, w.BaseBranch),
+							Remedy: "audit --repair adopts the PR base (the PR is authoritative)", fix: pr.Base})
+					}
+					// pr-state reconcile (roadmap.md → cross-machine sync failure
+					// mode 5): another host already flipped the PR; the registry's
+					// pr_state is stale. Benign — the ready-flip is idempotent — so
+					// it is info-severity and repair just adopts the observed state.
+					if obsd := observedPRState(pr); obsd != "" && w.PRState != "" && obsd != w.PRState {
+						fs = append(fs, Finding{Worker: ref, Check: "pr-state-stale", Severity: SevInfo,
+							Detail: fmt.Sprintf("registry pr_state %q but observed %q", w.PRState, obsd),
+							Remedy: "audit --repair reconciles pr_state to the observed value", fix: obsd})
+					}
 				}
 			}
 			// NOTE: spawned_by is intentionally NOT validated here. Resolution
@@ -162,6 +194,15 @@ func runAudit(ctx context.Context, reg registry.Registry, obs Observer, only str
 		}
 	}
 	return fs
+}
+
+// observedPRState maps a gh.PR to the registry pr_state vocabulary: a draft is
+// "draft"; otherwise the lower-cased State (open/closed/merged).
+func observedPRState(pr gh.PR) string {
+	if pr.IsDraft {
+		return "draft"
+	}
+	return strings.ToLower(pr.State)
 }
 
 // applyRepairs performs the deterministic registry-local fixes for repairable
@@ -180,7 +221,13 @@ func applyRepairs(r *registry.Registry, findings []Finding) int {
 		case "pr-base-diverged", "stale-base":
 			target := f.fix
 			ok = mutateWorker(r, f.Worker, func(w *registry.Worker) { w.BaseBranch = target })
+		case "pr-state-stale":
+			target := f.fix
+			ok = mutateWorker(r, f.Worker, func(w *registry.Worker) { w.PRState = target })
 		}
+		// duplicate-branch and base-unreachable are intentionally absent: both
+		// need human judgement (which row to keep / a git rewrite), so repair
+		// reports them but never acts.
 		if ok {
 			f.Repaired = true
 			n++

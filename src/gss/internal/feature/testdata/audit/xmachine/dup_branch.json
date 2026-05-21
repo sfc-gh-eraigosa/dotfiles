@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "features": [
+    {
+      "name": "auth",
+      "default_base_branch": "main",
+      "description": "login work",
+      "started_at": "2026-05-21T12:00:00Z",
+      "workers": [
+        {
+          "user": "erai",
+          "purpose": "api",
+          "branch": "feature/auth/erai/api",
+          "worktree": "/wt/api-hostA",
+          "base_branch": "main",
+          "description": "api (host A)"
+        },
+        {
+          "user": "erai",
+          "purpose": "api",
+          "branch": "feature/auth/erai/api",
+          "worktree": "/wt/api-hostB",
+          "base_branch": "main",
+          "description": "api (host B)"
+        }
+      ]
+    }
+  ]
+}

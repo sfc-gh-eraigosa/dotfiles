@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "features": [
+    {
+      "name": "auth",
+      "default_base_branch": "main",
+      "description": "login work",
+      "started_at": "2026-05-21T12:00:00Z",
+      "workers": [
+        {
+          "user": "erai",
+          "purpose": "ui",
+          "branch": "feature/auth/erai/ui",
+          "worktree": "/wt/ui",
+          "base_branch": "main",
+          "description": "ui",
+          "pr_url": "https://github.com/o/r/pull/43",
+          "pr_state": "draft"
+        }
+      ]
+    }
+  ]
+}

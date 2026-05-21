@@ -43,7 +43,9 @@ func healthyObserver(workers []registry.Worker) *fakeObserver {
 	}
 	for _, w := range workers {
 		if w.PRURL != "" {
-			o.prs[prNum(w.PRURL)] = gh.PR{Number: prNum(w.PRURL), Base: w.BaseBranch, Head: w.Branch, State: "OPEN"}
+			// IsDraft:true matches the worker's seeded pr_state "draft" so a
+			// clean fixture produces no pr-state-stale reconcile finding.
+			o.prs[prNum(w.PRURL)] = gh.PR{Number: prNum(w.PRURL), Base: w.BaseBranch, Head: w.Branch, State: "OPEN", IsDraft: true}
 		}
 	}
 	return o
@@ -178,7 +180,7 @@ func TestAuditPR404AndRepair(t *testing.T) {
 func TestAuditPRBaseDivergedAndRepair(t *testing.T) {
 	workers := []registry.Worker{aw("api", "main", "https://github.com/o/r/pull/42")}
 	obs := healthyObserver(workers)
-	obs.prs[42] = gh.PR{Number: 42, Base: "develop", Head: "feature/auth/erai/api", State: "OPEN"}
+	obs.prs[42] = gh.PR{Number: 42, Base: "develop", Head: "feature/auth/erai/api", State: "OPEN", IsDraft: true}
 	svc, store := auditService(t, workers, obs)
 
 	rep, _ := svc.Audit(context.Background(), feature.AuditOpts{Repair: true})
