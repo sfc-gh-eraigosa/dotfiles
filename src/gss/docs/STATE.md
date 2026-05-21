@@ -14,8 +14,8 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## Cursor
 
-- **Most recent PR opened**: PR-07 — `internal/identity` suffix draw +
-  `WorkerRef` (#29 in playground).
+- **Most recent PR opened**: PR-08 — `internal/identity` segment validation
+  + user/purpose resolution (#30 in playground).
 - **Playground branches in flight**:
   - `test_gss` — integration trunk (root of the stack).
   - `pr01-internal-errors` — PR #23, awaiting human merge to `test_gss`.
@@ -25,14 +25,16 @@ PR-61 (the final integration) opens *its own* non-draft PR against
   - `pr05-internal-config` — PR #27, stacked on PR-04, awaiting merge.
   - `pr06-identity-wordlist` — PR #28, stacked on PR-05, awaiting merge.
   - `pr07-identity-suffix` — PR #29, stacked on PR-06, awaiting merge.
-- **Next PR**: PR-08 — `internal/identity/user.go` + `purpose.go` +
-  `validate.go` (segment regex `^[a-z][a-z0-9-]{0,30}[a-z0-9]$`; purpose
-  must not collide with the wordlist; user resolution precedence; NFC
-  `--description` validation). Stacks on PR-07.
-- **PRs remaining in plan**: 54 (PR-08 through PR-61).
+  - `pr08-identity-validate` — PR #30, stacked on PR-07, awaiting merge.
+- **Next PR**: PR-09 — `internal/repo/` NWO (name-with-owner) detection
+  via `gh repo view` with an origin-URL fallback + per-repo cache. Stacks
+  on PR-08.
+- **PRs remaining in plan**: 53 (PR-09 through PR-61).
 - **This staging snapshot**: reflects playground branch
-  `pr07-identity-suffix` at SHA `f7d1a19`, plus dotfiles-only classic
+  `pr08-identity-validate` at SHA `d931224`, plus dotfiles-only classic
   wiring (build.sh + cmd/version.go + cmd/config.go) described below.
+- **External dependencies**: `gopkg.in/yaml.v3 v3.0.1` (PR-05),
+  `golang.org/x/text v0.37.0` (PR-08, BSD-3-Clause, for NFC).
 - **First external dependency**: `gopkg.in/yaml.v3 v3.0.1` (dual
   MIT + Apache-2.0; allowed) added in PR-05.
 
@@ -49,7 +51,7 @@ PR-61 (the final integration) opens *its own* non-draft PR against
    ```
    git clone <playground-remote> ~/GitHub/playground
    cd ~/GitHub/playground
-   git checkout pr07-identity-suffix
+   git checkout pr08-identity-validate
    ```
 3. **Tooling install** (Phase 3 prerequisites):
    ```
@@ -90,7 +92,9 @@ below (PR-04, PR-05):
 - `src/gss/internal/identity/` — embedded 256-word suffix pool
   (`wordlist.txt` + `Words()`, PR-06); `WorkerRef` type + `ParseWorkerRef`,
   `RNG` interface + `SystemRNG` (crypto/rand), and `AllocateRef`
-  (5-retry suffix draw, caller-supplied suffix rejected) (PR-07).
+  (5-retry suffix draw, caller-supplied suffix rejected) (PR-07); segment
+  grammar (`ValidateFeature`/`User`/`Purpose`), `ValidateDescription`
+  (NFC + strip + bounds), and `ResolveUser` precedence (PR-08, +x/text).
 - `src/gss/docs/STATE.md` — this file.
 
 **Classic-code wiring (dotfiles-only).** Because the playground module is
@@ -141,3 +145,4 @@ starts using at PR-22 (`internal/classic/push.go`) and beyond;
 | 2026-05-21 | `playground:pr05-internal-config` | `81d794d` | PR-05 — `internal/config` layered loader (built-in → YAML → `GSS_*` env → flag), `*ParseError`, first-run stub round-tripping to `Default()`, `Marshal`, `Clock` seam. 16 tests; coverage 89.5%. **First external dep**: `gopkg.in/yaml.v3 v3.0.1` (dual MIT + Apache-2.0; LICENSE verified at github.com/go-yaml/yaml/blob/v3.0.1/LICENSE; both Allowed). Dotfiles-only wiring adds `cmd/config.go` (`gss config print`/`check`) and the dep to `go.mod`/`go.sum`. Full module builds + all tests pass; `gss config print`/`check` verified end-to-end with a temp HOME. PR #27 stacked on PR-04. |
 | 2026-05-21 | `playground:pr06-identity-wordlist` | `e859719` | PR-06 — `internal/identity` embedded 256-word suffix pool (`//go:embed wordlist.txt` + `Words()` defensive copy). 5 tests; coverage 100%. Data file mechanically pre-validated (256 unique, all 3–5 lowercase ASCII). No new deps; playground-only (no classic wiring). PR #28 stacked on PR-05. |
 | 2026-05-21 | `playground:pr07-identity-suffix` | `f7d1a19` | PR-07 — `internal/identity` `WorkerRef` (+`ParseWorkerRef` round-trip), `RNG`/`SystemRNG` (crypto/rand), `AllocateRef` (suffix-less first unless forced; 5-retry; `ErrSuffixExhausted`; caller suffix ignored). 11 tests; coverage 92.5%. No new deps; playground-only. PR #29 stacked on PR-06. |
+| 2026-05-21 | `playground:pr08-identity-validate` | `d931224` | PR-08 — `internal/identity` segment grammar (`ValidateFeature`/`User`/`Purpose` wrapping `ErrInvalidIdent`), `ValidateDescription` (NFC + strip ANSI/markers/newlines + control reject + 1–240 cp), `ResolveUser` precedence (--user→gh→email-slug→$USER). 13 tests; coverage 95.8%. **New dep**: `golang.org/x/text v0.37.0` (BSD-3-Clause; verified at github.com/golang/text/blob/master/LICENSE) for NFC. Mirrored to dotfiles incl. go.mod/go.sum; no cmd wiring. PR #30 stacked on PR-07. |
