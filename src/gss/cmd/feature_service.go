@@ -14,6 +14,7 @@ import (
 	"github.com/wenlock/dotfiles/gss/internal/gh"
 	"github.com/wenlock/dotfiles/gss/internal/git"
 	"github.com/wenlock/dotfiles/gss/internal/identity"
+	"github.com/wenlock/dotfiles/gss/internal/mode"
 	"github.com/wenlock/dotfiles/gss/internal/registry"
 	"github.com/wenlock/dotfiles/gss/internal/repo"
 	wtgit "github.com/wenlock/dotfiles/gss/internal/worktree/git"
@@ -82,4 +83,17 @@ func newRegistryStore() (*registry.Store, error) {
 func fail(err error) {
 	fmt.Fprintln(os.Stderr, err)
 	os.Exit(errors.ExitCode(err))
+}
+
+// currentWorkerRef resolves the worker_ref of the worktree containing cwd
+// (the per-worker default for checkpoint/pr/rebase). Returns ErrWrongMode if
+// cwd is not inside a registered worker worktree.
+func currentWorkerRef() (string, error) {
+	reg, _ := loadRegistry()
+	cwd, _ := os.Getwd()
+	ref, ok := mode.IsInWorker(cwd, reg)
+	if !ok {
+		return "", errors.ErrWrongMode
+	}
+	return ref, nil
 }
