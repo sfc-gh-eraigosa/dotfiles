@@ -14,8 +14,8 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## Cursor
 
-- **Most recent PR opened**: PR-06 — `internal/identity` embedded 256-word
-  suffix pool (#28 in playground).
+- **Most recent PR opened**: PR-07 — `internal/identity` suffix draw +
+  `WorkerRef` (#29 in playground).
 - **Playground branches in flight**:
   - `test_gss` — integration trunk (root of the stack).
   - `pr01-internal-errors` — PR #23, awaiting human merge to `test_gss`.
@@ -24,13 +24,14 @@ PR-61 (the final integration) opens *its own* non-draft PR against
   - `pr04-internal-version` — PR #26, stacked on PR-03, awaiting merge.
   - `pr05-internal-config` — PR #27, stacked on PR-04, awaiting merge.
   - `pr06-identity-wordlist` — PR #28, stacked on PR-05, awaiting merge.
-- **Next PR**: PR-07 — `internal/identity/suffix.go` + `rng.go` (RNG-injected
-  suffix draw with 5-retry collision cap; `WorkerRef` type with
-  formatter/parser; `--suffix` rejects caller-supplied values). Stacks on
-  PR-06.
-- **PRs remaining in plan**: 55 (PR-07 through PR-61).
+  - `pr07-identity-suffix` — PR #29, stacked on PR-06, awaiting merge.
+- **Next PR**: PR-08 — `internal/identity/user.go` + `purpose.go` +
+  `validate.go` (segment regex `^[a-z][a-z0-9-]{0,30}[a-z0-9]$`; purpose
+  must not collide with the wordlist; user resolution precedence; NFC
+  `--description` validation). Stacks on PR-07.
+- **PRs remaining in plan**: 54 (PR-08 through PR-61).
 - **This staging snapshot**: reflects playground branch
-  `pr06-identity-wordlist` at SHA `e859719`, plus dotfiles-only classic
+  `pr07-identity-suffix` at SHA `f7d1a19`, plus dotfiles-only classic
   wiring (build.sh + cmd/version.go + cmd/config.go) described below.
 - **First external dependency**: `gopkg.in/yaml.v3 v3.0.1` (dual
   MIT + Apache-2.0; allowed) added in PR-05.
@@ -48,7 +49,7 @@ PR-61 (the final integration) opens *its own* non-draft PR against
    ```
    git clone <playground-remote> ~/GitHub/playground
    cd ~/GitHub/playground
-   git checkout pr06-identity-wordlist
+   git checkout pr07-identity-suffix
    ```
 3. **Tooling install** (Phase 3 prerequisites):
    ```
@@ -87,8 +88,9 @@ below (PR-04, PR-05):
   `Marshal`, and the `Clock` seam (`clock.go`) (PR-05). Depends on
   `gopkg.in/yaml.v3`.
 - `src/gss/internal/identity/` — embedded 256-word suffix pool
-  (`wordlist.txt` + `Words()`); the base for the PR-07 suffix draw and
-  PR-08 user/purpose validation (PR-06).
+  (`wordlist.txt` + `Words()`, PR-06); `WorkerRef` type + `ParseWorkerRef`,
+  `RNG` interface + `SystemRNG` (crypto/rand), and `AllocateRef`
+  (5-retry suffix draw, caller-supplied suffix rejected) (PR-07).
 - `src/gss/docs/STATE.md` — this file.
 
 **Classic-code wiring (dotfiles-only).** Because the playground module is
@@ -138,3 +140,4 @@ starts using at PR-22 (`internal/classic/push.go`) and beyond;
 | 2026-05-21 | `playground:pr04-internal-version` | `91e8f44` | PR-04 — `internal/version` build-metadata single source of truth (`Version`/`Commit`/`BuildDate`/`Dirty` + `Get()` fallbacks). 4 tests; coverage 100%. Cross-repo split (per user decision): package ships in playground PR #26; dotfiles-only wiring retargets `build.sh` ldflags and cuts `cmd/version.go` over to `version.Get()` (local build vars removed). Full dotfiles module builds + all tests pass; ldflag injection verified end-to-end (stamped binary shows injected values, unstamped falls back to dev/none/…). No new deps. PR #26 stacked on PR-03. |
 | 2026-05-21 | `playground:pr05-internal-config` | `81d794d` | PR-05 — `internal/config` layered loader (built-in → YAML → `GSS_*` env → flag), `*ParseError`, first-run stub round-tripping to `Default()`, `Marshal`, `Clock` seam. 16 tests; coverage 89.5%. **First external dep**: `gopkg.in/yaml.v3 v3.0.1` (dual MIT + Apache-2.0; LICENSE verified at github.com/go-yaml/yaml/blob/v3.0.1/LICENSE; both Allowed). Dotfiles-only wiring adds `cmd/config.go` (`gss config print`/`check`) and the dep to `go.mod`/`go.sum`. Full module builds + all tests pass; `gss config print`/`check` verified end-to-end with a temp HOME. PR #27 stacked on PR-04. |
 | 2026-05-21 | `playground:pr06-identity-wordlist` | `e859719` | PR-06 — `internal/identity` embedded 256-word suffix pool (`//go:embed wordlist.txt` + `Words()` defensive copy). 5 tests; coverage 100%. Data file mechanically pre-validated (256 unique, all 3–5 lowercase ASCII). No new deps; playground-only (no classic wiring). PR #28 stacked on PR-05. |
+| 2026-05-21 | `playground:pr07-identity-suffix` | `f7d1a19` | PR-07 — `internal/identity` `WorkerRef` (+`ParseWorkerRef` round-trip), `RNG`/`SystemRNG` (crypto/rand), `AllocateRef` (suffix-less first unless forced; 5-retry; `ErrSuffixExhausted`; caller suffix ignored). 11 tests; coverage 92.5%. No new deps; playground-only. PR #29 stacked on PR-06. |
