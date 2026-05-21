@@ -14,8 +14,10 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## Cursor
 
-- **Most recent**: PR-21 — `internal/worktree/git` v1 git backend
-  (#41 in playground). **Batch D (registry + worktree) complete** — PR-17–21.
+- **Most recent**: PR-23 — `cmd/push.go` rewired onto `classic.Pusher`
+  with the `ErrWrongMode` mode gate (dotfiles-only; this staging commit
+  also mirrors `internal/classic` from PR-22). PR-22 (`internal/classic/
+  push`) is playground #42. **Batch E in progress** (PR-22–26).
 - **Playground branches in flight**:
   - `test_gss` — integration trunk (root of the stack).
   - `pr01-internal-errors` … `pr09-internal-repo` — PRs #23–#31 (Batch A,
@@ -26,11 +28,18 @@ PR-61 (the final integration) opens *its own* non-draft PR against
   - Batch D **linear stack** off `pr09`: `pr17-registry-schema` #37 →
     `pr18-registry-lock` #38 → `pr19-registry-reconcile` #39 →
     `pr20-worktree-backend` #40 → `pr21-worktree-git` #41.
-- **Next PR**: PR-22 — **Batch E** begins (classic orchestration,
-  *sequential* after A/B/D): `internal/classic/push.go` orchestrator — the
-  first package to wire the foundation layers together (uses git, gh,
-  approval, backup, sync, repo). Stacks on PR-21 (check plan for exact base).
-- **PRs remaining in plan**: 40 (PR-22 through PR-61).
+- **Next PR**: PR-24 — `internal/classic/pr.go` orchestrator (timestamped
+  feature-branch generation, PR open/create via gh.Client, approval-token
+  consumed). Playground PR, **stacks linearly on pr22-classic-push** (Batch
+  E linear stacking per the integration note; merge scan/status fan-out
+  deps only if pr.go needs them).
+- **PRs remaining in plan**: 38 (PR-24 through PR-61). (PR-22 #42 open;
+  PR-23 landed dotfiles-only.)
+- **Batch E integration note**: orchestrators need fanned-out Batch B
+  packages. pr22 merged pr10/11/12 (approval/backup/sync) for a coherent
+  base; later Batch E PRs stack linearly on the prior E PR. cmd-leaf PRs
+  (23, 25) are dotfiles-only and mirror their prerequisite internal package
+  into the same staging commit.
 - **Snapshot cadence**: dotfiles snapshots BATCHED ~every 5 PRs (user pick
   2026-05-21). Playground PRs are individual + the source of truth;
   reconcile STATE.md against `gh pr list` when resuming.

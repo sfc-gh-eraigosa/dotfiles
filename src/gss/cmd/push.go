@@ -1,13 +1,23 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/wenlock/dotfiles/gss/internal/approval"
+	"github.com/wenlock/dotfiles/gss/internal/backup"
+	"github.com/wenlock/dotfiles/gss/internal/classic"
+	"github.com/wenlock/dotfiles/gss/internal/config"
+	"github.com/wenlock/dotfiles/gss/internal/errors"
+	"github.com/wenlock/dotfiles/gss/internal/gh"
+	"github.com/wenlock/dotfiles/gss/internal/git"
+	"github.com/wenlock/dotfiles/gss/internal/registry"
+	"github.com/wenlock/dotfiles/gss/internal/sync"
 )
 
 var forceAutonomous bool
@@ -17,134 +27,104 @@ var pushCmd = &cobra.Command{
 	Short: "Safely push changes to origin",
 	Run: func(cmd *cobra.Command, args []string) {
 		path := getRepoPath()
+		cwd, _ := os.Getwd()
 
-		// 0. Handshake Verification (Technical Safeguard)
-		if !forceAutonomous {
-			home, _ := os.UserHomeDir()
-			configDir := filepath.Join(home, ".config", "gss")
-			approvalPath := filepath.Join(configDir, "approval.token")
-			
-			// Get current SHA to compare
-			shaOut, _ := exec.Command("git", "-C", path, "rev-parse", "HEAD").Output()
-			currentSHA := strings.TrimSpace(string(shaOut))
-
-			content, err := os.ReadFile(approvalPath)
-			if err != nil {
-				fmt.Println("Error: Missing or invalid AI approval token. The agent must obtain user permission before pushing.")
-				return
-			}
-			
-			if strings.TrimSpace(string(content)) != currentSHA {
-				fmt.Printf("Error: Invalid AI approval token (Expected %s, but token file was different).\n", currentSHA)
-				return
-			}
-			
-			// Consume token
-			os.Remove(approvalPath)
+		// Mode gate (preliminary; PR-26 formalizes via internal/mode):
+		// `gss push` is a classic-mode command and is invalid inside a
+		// registered feature worker worktree — even with --force-autonomous.
+		reg, _ := loadRegistry()
+		ref, inWorker := isWorkerWorktree(cwd, reg)
+		if err := classicAllowed(inWorker, forceAutonomous); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: 'gss push' is not valid inside feature worker worktree %q; use the gss feature commands.\n", ref)
+			os.Exit(errors.ExitCode(err))
 		}
 
-		// Get current branch
-		branchOut, _ := exec.Command("git", "-C", path, "rev-parse", "--abbrev-ref", "HEAD").Output()
-		currentBranch := strings.TrimSpace(string(branchOut))
-		if currentBranch == "" {
-			currentBranch = "main"
+		// Wire and run the classic push orchestrator (PR-22).
+		runner := git.NewSystemRunner()
+		home, _ := os.UserHomeDir()
+		tokenPath := filepath.Join(home, ".config", "gss", "approval.token")
+		pusher := &classic.Pusher{
+			Git:      runner,
+			GH:       gh.NewSystemClient(),
+			Approval: approval.NewVerifier(tokenPath, runner),
+			Backup:   backup.NewService(runner, config.SystemClock{}),
+			Sync:     sync.NewService(runner),
+			Out:      os.Stdout,
 		}
-		defaultBranch := getDefaultBranch()
-		isDefaultBranch := currentBranch == defaultBranch
-
-		// Get remote URL to construct diff link
-		remoteOut, _ := exec.Command("git", "-C", path, "remote", "get-url", "origin").Output()
-		remoteURL := strings.TrimSpace(string(remoteOut))
-		remoteURL = strings.TrimSuffix(remoteURL, ".git")
-		remoteURL = strings.Replace(remoteURL, "git@github.com:", "https://github.com/", 1)
-
-		// Get current remote SHA before we push
-		exec.Command("git", "-C", path, "fetch", "origin").Run()
-		remoteSHAOut, _ := exec.Command("git", "-C", path, "rev-parse", fmt.Sprintf("origin/%s", currentBranch)).Output()
-		oldRemoteSHA := strings.TrimSpace(string(remoteSHAOut))
-
-		// 1. Safety Backup
-		fmt.Println("Step 1: Creating safety backup...")
-		backupCmd.Run(cmd, []string{})
-
-		// 2. Sync
-		fmt.Printf("\nStep 2: Syncing %s with origin/%s...\n", path, currentBranch)
-		syncCmd.Run(cmd, []string{})
-
-		// 3. Push
-		fmt.Printf("\nStep 3: Pushing %s to origin/%s...\n", path, currentBranch)
-		pushArgs := []string{"-C", path, "push"}
-		if !isDefaultBranch {
-			pushArgs = append(pushArgs, "-u") // set upstream tracking on feature branches
-		}
-		pushArgs = append(pushArgs, "origin", currentBranch)
-		out, err := exec.Command("git", pushArgs...).CombinedOutput()
-		if err != nil {
-			fmt.Printf("Error pushing: %s\n", string(out))
-			return
-		}
-
-		// Get new local SHA after push
-		newSHAOut, _ := exec.Command("git", "-C", path, "rev-parse", "HEAD").Output()
-		newSHA := strings.TrimSpace(string(newSHAOut))
-
-		fmt.Println("Successfully pushed changes!")
-
-		// 4. Generate Summary and Diff Link
-		if oldRemoteSHA != "" && newSHA != "" && oldRemoteSHA != newSHA {
-			// Get stats
-			statsOut, _ := exec.Command("git", "-C", path, "diff", "--stat", oldRemoteSHA, newSHA).Output()
-			statsLines := strings.Split(strings.TrimSpace(string(statsOut)), "\n")
-			
-			if len(statsLines) > 0 {
-				fmt.Printf("\nSummary of changes (%d files):\n", len(statsLines)-1)
-				if len(statsLines)-1 < 10 {
-					// Show detailed list if < 10 files
-					fmt.Println(string(statsOut))
-				} else {
-					// Just show the final line (e.g., "15 files changed, 100 insertions(+), 50 deletions(-)")
-					fmt.Println(statsLines[len(statsLines)-1])
-				}
-			}
-
-			if strings.Contains(remoteURL, "github.com") {
-				fmt.Printf("\nView changes on GitHub: %s/compare/%s...%s\n", remoteURL, oldRemoteSHA, newSHA)
-			}
-		}
-
-		// 5. On a feature branch: surface existing PR or create a new one via gh CLI.
-		if !isDefaultBranch {
-			fmt.Println()
-			if _, err := exec.LookPath("gh"); err == nil {
-				viewCmd := exec.Command("gh", "pr", "view", "--json", "url", "-q", ".url")
-				viewCmd.Dir = path
-				prURL, err := viewCmd.CombinedOutput()
-				prURLStr := strings.TrimSpace(string(prURL))
-				if err == nil && prURLStr != "" {
-					fmt.Printf("Pull Request: %s\n", prURLStr)
-				} else {
-					fmt.Println("Creating Pull Request via gh CLI...")
-					createCmd := exec.Command("gh", "pr", "create", "--fill")
-					createCmd.Dir = path
-					prOut, prErr := createCmd.CombinedOutput()
-					if prErr != nil {
-						fmt.Printf("Error creating PR: %s\n", string(prOut))
-						if strings.Contains(remoteURL, "github.com") {
-							fmt.Printf("Create it manually: %s/compare/%s\n", remoteURL, currentBranch)
-						}
-					} else {
-						fmt.Printf("Pull Request created: %s", string(prOut))
-					}
-				}
-			} else {
-				if strings.Contains(remoteURL, "github.com") {
-					fmt.Printf("'gh' CLI not found. Create PR manually: %s/compare/%s\n", remoteURL, currentBranch)
-				} else {
-					fmt.Println("'gh' CLI not found. Please create the PR manually.")
-				}
-			}
+		if err := pusher.Push(context.Background(), classic.PushOpts{
+			RepoPath:        path,
+			DefaultBranch:   getDefaultBranch(),
+			ForceAutonomous: forceAutonomous,
+		}); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(errors.ExitCode(err))
 		}
 	},
+}
+
+// classicAllowed enforces the mode gate: a classic command is rejected
+// (errors.ErrWrongMode) inside a feature worker worktree. --force-autonomous
+// bypasses the approval prompt, NOT the mode gate, so force is irrelevant
+// here — both worker-mode combinations are refused.
+func classicAllowed(inWorker, forceAutonomous bool) error {
+	_ = forceAutonomous // documented: force never bypasses the mode gate
+	if inWorker {
+		return errors.ErrWrongMode
+	}
+	return nil
+}
+
+// isWorkerWorktree reports whether cwd is at or under a registered worker's
+// worktree, returning the worker_ref when so.
+func isWorkerWorktree(cwd string, reg registry.Registry) (string, bool) {
+	if cwd == "" {
+		return "", false
+	}
+	for _, f := range reg.Features {
+		for _, w := range f.Workers {
+			if w.Worktree == "" {
+				continue
+			}
+			if cwd == w.Worktree || strings.HasPrefix(cwd, w.Worktree+string(os.PathSeparator)) {
+				ref := f.Name + "/" + w.User + "/" + w.Purpose
+				if w.Suffix != "" {
+					ref += "-" + w.Suffix
+				}
+				return ref, true
+			}
+		}
+	}
+	return "", false
+}
+
+// loadRegistry best-effort loads the per-repo registry. Returns
+// (zero, false) when it can't be found — the v1 norm until feature
+// commands populate it. (Preliminary path resolution; PR-26 + the feature
+// commands resolve the canonical per-NWO nested path.)
+func loadRegistry() (registry.Registry, bool) {
+	cfg, err := config.Load(config.Options{})
+	if err != nil {
+		return registry.Registry{}, false
+	}
+	path := filepath.Join(expandHome(cfg.Paths.RegistryDir), "registry.json")
+	if _, err := os.Stat(path); err != nil {
+		return registry.Registry{}, false
+	}
+	reg, err := registry.NewStore(path).Load()
+	if err != nil {
+		return registry.Registry{}, false
+	}
+	return reg, true
+}
+
+// expandHome expands a leading ~/ to the user's home directory.
+func expandHome(p string) string {
+	if strings.HasPrefix(p, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, p[2:])
+		}
+	}
+	return p
 }
 
 func init() {
