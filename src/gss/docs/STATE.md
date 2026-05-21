@@ -14,10 +14,10 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## Cursor
 
-- **Most recent**: PR-23 — `cmd/push.go` rewired onto `classic.Pusher`
-  with the `ErrWrongMode` mode gate (dotfiles-only; this staging commit
-  also mirrors `internal/classic` from PR-22). PR-22 (`internal/classic/
-  push`) is playground #42. **Batch E in progress** (PR-22–26).
+- **Most recent**: PR-25 — `cmd/pr.go` rewired onto `classic.PRer` with the
+  shared mode gate (dotfiles-only; this staging commit also mirrors
+  `internal/classic/pr` from PR-24). Playground: PR-22 push #42, PR-24 pr
+  #43. **Batch E nearly done** — only PR-26 (internal/mode) remains.
 - **Playground branches in flight**:
   - `test_gss` — integration trunk (root of the stack).
   - `pr01-internal-errors` … `pr09-internal-repo` — PRs #23–#31 (Batch A,
@@ -28,13 +28,12 @@ PR-61 (the final integration) opens *its own* non-draft PR against
   - Batch D **linear stack** off `pr09`: `pr17-registry-schema` #37 →
     `pr18-registry-lock` #38 → `pr19-registry-reconcile` #39 →
     `pr20-worktree-backend` #40 → `pr21-worktree-git` #41.
-- **Next PR**: PR-24 — `internal/classic/pr.go` orchestrator (timestamped
-  feature-branch generation, PR open/create via gh.Client, approval-token
-  consumed). Playground PR, **stacks linearly on pr22-classic-push** (Batch
-  E linear stacking per the integration note; merge scan/status fan-out
-  deps only if pr.go needs them).
-- **PRs remaining in plan**: 38 (PR-24 through PR-61). (PR-22 #42 open;
-  PR-23 landed dotfiles-only.)
+- **Next PR**: PR-26 — `internal/mode/mode.go` shared helper
+  (`IsInWorker(cwd, registry) (workerRef, bool)`) that all classic cobra
+  leaves route through; refactor PR-23/25 to use it. Playground PR (stacks
+  linearly on pr24-classic-pr). Completes Batch E.
+- **PRs remaining in plan**: 36 (PR-26 through PR-61). (PR-22 #42, PR-24 #43
+  open; PR-23/25 landed dotfiles-only.)
 - **Batch E integration note**: orchestrators need fanned-out Batch B
   packages. pr22 merged pr10/11/12 (approval/backup/sync) for a coherent
   base; later Batch E PRs stack linearly on the prior E PR. cmd-leaf PRs

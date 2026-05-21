@@ -1,72 +1,63 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
-	"os/exec"
-	"strings"
-	"time"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
+
+	"github.com/wenlock/dotfiles/gss/internal/approval"
+	"github.com/wenlock/dotfiles/gss/internal/classic"
+	"github.com/wenlock/dotfiles/gss/internal/config"
+	"github.com/wenlock/dotfiles/gss/internal/errors"
+	"github.com/wenlock/dotfiles/gss/internal/gh"
+	"github.com/wenlock/dotfiles/gss/internal/git"
 )
+
+var prForceAutonomous bool
 
 var prCmd = &cobra.Command{
 	Use:   "pr",
 	Short: "Push current branch and open a pull request (or create a new feature branch if on default)",
 	Run: func(cmd *cobra.Command, args []string) {
 		path := getRepoPath()
+		cwd, _ := os.Getwd()
 
-		branchOut, _ := exec.Command("git", "-C", path, "rev-parse", "--abbrev-ref", "HEAD").Output()
-		currentBranch := strings.TrimSpace(string(branchOut))
-		if currentBranch == "" {
-			currentBranch = "main"
-		}
-		defaultBranch := getDefaultBranch()
-
-		if currentBranch == defaultBranch {
-			// On the default branch — create a timestamped feature branch first.
-			timestamp := time.Now().Format("20060102-150405")
-			currentBranch = fmt.Sprintf("feature/gss-%s", timestamp)
-			fmt.Printf("On default branch; creating feature branch in %s: %s\n", path, currentBranch)
-			if out, err := exec.Command("git", "-C", path, "checkout", "-b", currentBranch).CombinedOutput(); err != nil {
-				fmt.Printf("Error creating branch: %s\n", string(out))
-				return
-			}
-		} else {
-			fmt.Printf("Using current branch: %s\n", currentBranch)
+		// Mode gate (shared with push; PR-26 formalizes via internal/mode):
+		// `gss pr` is classic-mode and invalid inside a feature worker
+		// worktree, even with --force-autonomous.
+		reg, _ := loadRegistry()
+		ref, inWorker := isWorkerWorktree(cwd, reg)
+		if err := classicAllowed(inWorker, prForceAutonomous); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: 'gss pr' is not valid inside feature worker worktree %q; use the gss feature commands.\n", ref)
+			os.Exit(errors.ExitCode(err))
 		}
 
-		fmt.Printf("Pushing %s to origin...\n", currentBranch)
-		if out, err := exec.Command("git", "-C", path, "push", "-u", "origin", currentBranch).CombinedOutput(); err != nil {
-			fmt.Printf("Error pushing branch: %s\n", string(out))
-			return
+		// Wire and run the classic pr orchestrator (PR-24).
+		runner := git.NewSystemRunner()
+		home, _ := os.UserHomeDir()
+		tokenPath := filepath.Join(home, ".config", "gss", "approval.token")
+		prer := &classic.PRer{
+			Git:      runner,
+			GH:       gh.NewSystemClient(),
+			Approval: approval.NewVerifier(tokenPath, runner),
+			Clock:    config.SystemClock{},
+			Out:      os.Stdout,
 		}
-
-		if _, err := exec.LookPath("gh"); err == nil {
-			// Check for an existing PR first.
-			viewCmd := exec.Command("gh", "pr", "view", "--json", "url", "-q", ".url")
-			viewCmd.Dir = path
-			prURL, err := viewCmd.CombinedOutput()
-			prURLStr := strings.TrimSpace(string(prURL))
-			if err == nil && prURLStr != "" {
-				fmt.Printf("Pull Request already exists: %s\n", prURLStr)
-				return
-			}
-
-			fmt.Println("Creating Pull Request via gh CLI...")
-			createCmd := exec.Command("gh", "pr", "create", "--fill")
-			createCmd.Dir = path
-			out, err := createCmd.CombinedOutput()
-			if err != nil {
-				fmt.Printf("Error creating PR: %s\n", string(out))
-			} else {
-				fmt.Printf("Pull Request created: %s", string(out))
-			}
-		} else {
-			fmt.Println("'gh' CLI not found. Please create the PR manually on GitHub.")
+		if err := prer.PR(context.Background(), classic.PROpts{
+			RepoPath:        path,
+			DefaultBranch:   getDefaultBranch(),
+			ForceAutonomous: prForceAutonomous,
+		}); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(errors.ExitCode(err))
 		}
 	},
 }
 
 func init() {
+	prCmd.Flags().BoolVar(&prForceAutonomous, "force-autonomous", false, "Skip the approval prompt (Dangerous)")
 	rootCmd.AddCommand(prCmd)
 }
