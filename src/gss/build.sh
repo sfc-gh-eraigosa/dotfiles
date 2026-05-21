@@ -42,3 +42,9 @@ echo "Building gss v$VERSION with $($GO_BIN version)..."
 cd "$SCRIPT_DIR"
 "$GO_BIN" build -ldflags "$LDFLAGS" -o "$BIN_DIR/gss" main.go
 echo "gss built and installed to $BIN_DIR/gss"
+
+# Dependency + seam gate (PR-50; design.md → Pinned external dependencies).
+# Non-strict here so a normal install without go-licenses still succeeds: the
+# os/exec seam check always runs, and the license gate runs only when
+# go-licenses is present (failing the build on a banned-license dependency).
+"$SCRIPT_DIR/scripts/check-deps.sh"
