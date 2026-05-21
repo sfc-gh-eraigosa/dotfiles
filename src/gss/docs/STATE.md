@@ -14,37 +14,34 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## Cursor
 
-- **Most recent**: PR-16 — `cmd/{scan,backup,sync}.go` rewired onto
-  `internal/{scan,backup,sync}` (dotfiles-only; output byte-identical,
-  smoke-verified). **Batch C (cmd leaves PR-15–16) complete.** Last
-  playground PR was PR-14 (#36).
+- **Most recent**: PR-21 — `internal/worktree/git` v1 git backend
+  (#41 in playground). **Batch D (registry + worktree) complete** — PR-17–21.
 - **Playground branches in flight**:
   - `test_gss` — integration trunk (root of the stack).
   - `pr01-internal-errors` … `pr09-internal-repo` — PRs #23–#31 (Batch A,
-    stacked linearly).
-  - Batch B **fan-out siblings, each branched off `pr09-internal-repo`**
-    (NOT off each other): `pr10-internal-approval` #32, `pr11-internal-backup`
-    #33, `pr12-internal-sync` #34, `pr13-internal-scan` #35,
-    `pr14-internal-status` #36.
-- **Next PR**: PR-17 — **Batch D** begins (registry + worktree backend,
-  *sequential* stacking): `internal/registry/schema.go` (structs + JSON
-  round-trip). This is an `internal/` package → resumes individual
-  **playground PRs**. Check the plan for its base branch (Batch D stacks
-  linearly: 17→18→19→20→21).
-- **PRs remaining in plan**: 45 (PR-17 through PR-61).
-- **Snapshot cadence**: dotfiles snapshots are now BATCHED ~every 5 PRs
-  (user pick 2026-05-21). Playground PRs remain individual and are the
-  source of truth; reconcile STATE.md against `gh pr list` when resuming.
-- **This staging snapshot**: reflects playground branches through
-  `pr14-internal-status` (SHA `f158791`); dotfiles `internal/` now mirrors
-  PR-01–14. Plus dotfiles-only classic wiring (build.sh + cmd/version.go +
-  cmd/config.go).
-- **External dependencies**: `gopkg.in/yaml.v3 v3.0.1` (PR-05),
-  `golang.org/x/text v0.37.0` (PR-08, BSD-3-Clause, for NFC).
-- **External dependencies**: `gopkg.in/yaml.v3 v3.0.1` (PR-05),
-  `golang.org/x/text v0.37.0` (PR-08, BSD-3-Clause, for NFC).
-- **First external dependency**: `gopkg.in/yaml.v3 v3.0.1` (dual
-  MIT + Apache-2.0; allowed) added in PR-05.
+    linear).
+  - Batch B fan-out siblings off `pr09`: `pr10`…`pr14` — PRs #32–#36
+    (approval, backup, sync, scan, status).
+  - Batch C (cmd leaves PR-15–16) — **dotfiles-only**, no playground PR.
+  - Batch D **linear stack** off `pr09`: `pr17-registry-schema` #37 →
+    `pr18-registry-lock` #38 → `pr19-registry-reconcile` #39 →
+    `pr20-worktree-backend` #40 → `pr21-worktree-git` #41.
+- **Next PR**: PR-22 — **Batch E** begins (classic orchestration,
+  *sequential* after A/B/D): `internal/classic/push.go` orchestrator — the
+  first package to wire the foundation layers together (uses git, gh,
+  approval, backup, sync, repo). Stacks on PR-21 (check plan for exact base).
+- **PRs remaining in plan**: 40 (PR-22 through PR-61).
+- **Snapshot cadence**: dotfiles snapshots BATCHED ~every 5 PRs (user pick
+  2026-05-21). Playground PRs are individual + the source of truth;
+  reconcile STATE.md against `gh pr list` when resuming.
+- **This staging snapshot**: dotfiles `internal/` mirrors PR-01–21
+  (through `pr21-worktree-git` @ `2e03c71`), plus dotfiles-only classic
+  wiring (build.sh + cmd/version.go + cmd/config.go + cmd/{status,scan,
+  backup,sync}.go from PR-15–16).
+- **External dependencies** (all Allowed, licenses verified):
+  `gopkg.in/yaml.v3 v3.0.1` (PR-05, MIT+Apache-2.0), `golang.org/x/text
+  v0.37.0` (PR-08, BSD-3-Clause), `github.com/gofrs/flock v0.13.0` +
+  `golang.org/x/sys v0.37.0` (PR-18, BSD-3-Clause).
 
 ## Handoff procedure (new machine)
 
@@ -59,7 +56,7 @@ PR-61 (the final integration) opens *its own* non-draft PR against
    ```
    git clone <playground-remote> ~/GitHub/playground
    cd ~/GitHub/playground
-   git checkout pr14-internal-status   # or any Batch B sibling; all branch off pr09
+   git checkout pr21-worktree-git   # Batch D stack tip (contains registry + worktree)
    ```
 3. **Tooling install** (Phase 3 prerequisites):
    ```
@@ -116,6 +113,13 @@ below (PR-04, PR-05):
   (`[DIRTY] <path>` contract) + `GitDirty` (PR-13).
 - `src/gss/internal/status/` — `Service.Status` + `Format` (porcelain →
   classic report, byte-identical) (PR-14).
+- `src/gss/internal/registry/` — registry.json schema + JSON round-trip
+  with unknown-field preservation (PR-17); locked/atomic `Store`
+  (flock + tmp+rename + 0600 + uid guard, PR-18); `Reconciler` vs git
+  worktree / gh pr with `--repair` (PR-19).
+- `src/gss/internal/worktree/` — `Backend` interface + `Register`/`Open`
+  + `backendtest` contract suite (PR-20); `git/` v1 backend
+  (worktree add/remove/list/status, sets rebase.updateRefs) (PR-21).
 - `src/gss/docs/STATE.md` — this file.
 
 **Classic-code wiring (dotfiles-only).** Because the playground module is
@@ -184,3 +188,5 @@ starts using at PR-22 (`internal/classic/push.go`) and beyond;
 | 2026-05-21 | `playground:pr12-internal-sync` | `e2ffde7` | PR-12 — `internal/sync` `Service.Sync` (resolve branch→`fetch origin`→`pull --rebase`; fetch precedes pull; rebase failure wraps `ErrRebaseConflict`). 4 tests; cov 93.3%. No deps. PR #34 (sibling off PR-09). |
 | 2026-05-21 | `playground:pr13-internal-scan` | `2385050` | PR-13 — `internal/scan` `Scanner.Scan` (WalkDir, nested repos, symlink-loop-safe) + `Format` (`[DIRTY] <path>` contract) + `GitDirty`. Test trees built at runtime (committed `.git` fixtures impossible). 5 tests; cov 95%. No deps. PR #35 (sibling off PR-09). |
 | 2026-05-21 | `playground:pr14-internal-status` | `f158791` | PR-14 — `internal/status` `Service.Status` + `Format` (porcelain → classic report byte-identical: "No changes detected"/"Changes in"/" - line"). 4 tests; cov 100%. No deps. PR #36 (sibling off PR-09). Ends Batch B. |
+| 2026-05-21 | (dotfiles-only) | — | **Batch C** PR-15/16 — cmd leaves rewired in place onto internal packages (`cmd/status.go` → internal/status; `cmd/{scan,backup,sync}.go` → internal/{scan,backup,sync}). Output byte-identical, smoke-verified. No playground PRs (cmd-leaf decision). |
+| 2026-05-21 | `playground:pr21-worktree-git` | `2e03c71` | **Batch D batch snapshot** (PR-17–21). `internal/registry` (schema+unknown-field preservation #37; flock/atomic/0600/uid `Store` #38; `Reconciler` #39) + `internal/worktree` (`Backend` interface + contract suite #40; `git` v1 backend #41). New deps `gofrs/flock v0.13.0` + `golang.org/x/sys v0.37.0` (BSD-3-Clause). All build + tests pass in dotfiles (incl. real-git contract suite). Coverage: registry 82.9%, worktree 100% / git-backend 68.4%. |
