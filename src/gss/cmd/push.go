@@ -16,6 +16,7 @@ import (
 	"github.com/wenlock/dotfiles/gss/internal/errors"
 	"github.com/wenlock/dotfiles/gss/internal/gh"
 	"github.com/wenlock/dotfiles/gss/internal/git"
+	"github.com/wenlock/dotfiles/gss/internal/mode"
 	"github.com/wenlock/dotfiles/gss/internal/registry"
 	"github.com/wenlock/dotfiles/gss/internal/sync"
 )
@@ -29,11 +30,11 @@ var pushCmd = &cobra.Command{
 		path := getRepoPath()
 		cwd, _ := os.Getwd()
 
-		// Mode gate (preliminary; PR-26 formalizes via internal/mode):
-		// `gss push` is a classic-mode command and is invalid inside a
-		// registered feature worker worktree — even with --force-autonomous.
+		// Mode gate (canonical, via internal/mode — PR-26): `gss push` is a
+		// classic-mode command and is invalid inside a registered feature
+		// worker worktree, even with --force-autonomous.
 		reg, _ := loadRegistry()
-		ref, inWorker := isWorkerWorktree(cwd, reg)
+		ref, inWorker := mode.IsInWorker(cwd, reg)
 		if err := classicAllowed(inWorker, forceAutonomous); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: 'gss push' is not valid inside feature worker worktree %q; use the gss feature commands.\n", ref)
 			os.Exit(errors.ExitCode(err))
@@ -72,29 +73,6 @@ func classicAllowed(inWorker, forceAutonomous bool) error {
 		return errors.ErrWrongMode
 	}
 	return nil
-}
-
-// isWorkerWorktree reports whether cwd is at or under a registered worker's
-// worktree, returning the worker_ref when so.
-func isWorkerWorktree(cwd string, reg registry.Registry) (string, bool) {
-	if cwd == "" {
-		return "", false
-	}
-	for _, f := range reg.Features {
-		for _, w := range f.Workers {
-			if w.Worktree == "" {
-				continue
-			}
-			if cwd == w.Worktree || strings.HasPrefix(cwd, w.Worktree+string(os.PathSeparator)) {
-				ref := f.Name + "/" + w.User + "/" + w.Purpose
-				if w.Suffix != "" {
-					ref += "-" + w.Suffix
-				}
-				return ref, true
-			}
-		}
-	}
-	return "", false
 }
 
 // loadRegistry best-effort loads the per-repo registry. Returns

@@ -14,6 +14,7 @@ import (
 	"github.com/wenlock/dotfiles/gss/internal/errors"
 	"github.com/wenlock/dotfiles/gss/internal/gh"
 	"github.com/wenlock/dotfiles/gss/internal/git"
+	"github.com/wenlock/dotfiles/gss/internal/mode"
 )
 
 var prForceAutonomous bool
@@ -25,11 +26,11 @@ var prCmd = &cobra.Command{
 		path := getRepoPath()
 		cwd, _ := os.Getwd()
 
-		// Mode gate (shared with push; PR-26 formalizes via internal/mode):
-		// `gss pr` is classic-mode and invalid inside a feature worker
-		// worktree, even with --force-autonomous.
+		// Mode gate (canonical, via internal/mode — PR-26): `gss pr` is
+		// classic-mode and invalid inside a feature worker worktree, even
+		// with --force-autonomous.
 		reg, _ := loadRegistry()
-		ref, inWorker := isWorkerWorktree(cwd, reg)
+		ref, inWorker := mode.IsInWorker(cwd, reg)
 		if err := classicAllowed(inWorker, prForceAutonomous); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: 'gss pr' is not valid inside feature worker worktree %q; use the gss feature commands.\n", ref)
 			os.Exit(errors.ExitCode(err))

@@ -14,10 +14,10 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## Cursor
 
-- **Most recent**: PR-25 — `cmd/pr.go` rewired onto `classic.PRer` with the
-  shared mode gate (dotfiles-only; this staging commit also mirrors
-  `internal/classic/pr` from PR-24). Playground: PR-22 push #42, PR-24 pr
-  #43. **Batch E nearly done** — only PR-26 (internal/mode) remains.
+- **Most recent**: PR-26 — `internal/mode` canonical worker-mode detector
+  (#44) + dotfiles refactor routing `cmd/push`/`cmd/pr` through
+  `mode.IsInWorker`. **Batch E (classic orchestration) complete** — PR-22–26.
+  Playground: push #42, pr #43, mode #44; PR-23/25 dotfiles-only.
 - **Playground branches in flight**:
   - `test_gss` — integration trunk (root of the stack).
   - `pr01-internal-errors` … `pr09-internal-repo` — PRs #23–#31 (Batch A,
@@ -28,12 +28,12 @@ PR-61 (the final integration) opens *its own* non-draft PR against
   - Batch D **linear stack** off `pr09`: `pr17-registry-schema` #37 →
     `pr18-registry-lock` #38 → `pr19-registry-reconcile` #39 →
     `pr20-worktree-backend` #40 → `pr21-worktree-git` #41.
-- **Next PR**: PR-26 — `internal/mode/mode.go` shared helper
-  (`IsInWorker(cwd, registry) (workerRef, bool)`) that all classic cobra
-  leaves route through; refactor PR-23/25 to use it. Playground PR (stacks
-  linearly on pr24-classic-pr). Completes Batch E.
-- **PRs remaining in plan**: 36 (PR-26 through PR-61). (PR-22 #42, PR-24 #43
-  open; PR-23/25 landed dotfiles-only.)
+- **Next PR**: PR-27 — **Batch F** begins (stack logic + templates,
+  parallel): `internal/stack/stack.go` parent/child computation. Playground
+  PR. Check the plan for its base (Batch F can branch off the foundation;
+  likely off pr09 or the Batch D/E tip — see plan "Stacked PRs").
+- **PRs remaining in plan**: 35 (PR-27 through PR-61). (Playground PRs
+  open: #42 push, #43 pr, #44 mode; cmd leaves PR-23/25 dotfiles-only.)
 - **Batch E integration note**: orchestrators need fanned-out Batch B
   packages. pr22 merged pr10/11/12 (approval/backup/sync) for a coherent
   base; later Batch E PRs stack linearly on the prior E PR. cmd-leaf PRs
@@ -128,6 +128,13 @@ below (PR-04, PR-05):
 - `src/gss/internal/worktree/` — `Backend` interface + `Register`/`Open`
   + `backendtest` contract suite (PR-20); `git/` v1 backend
   (worktree add/remove/list/status, sets rebase.updateRefs) (PR-21).
+- `src/gss/internal/classic/` — `Pusher` (PR-22) + `PRer` (PR-24)
+  orchestrators (approval→backup→sync→push→PR; pr cuts feature/gss-<ts>).
+- `src/gss/internal/mode/` — `IsInWorker(cwd, registry)` worker-mode
+  detector used by all classic cobra leaves (PR-26).
+- `src/gss/cmd/{push,pr}.go` — rewired onto `classic.{Pusher,PRer}` with
+  the `mode.IsInWorker` + `classicAllowed` (`ErrWrongMode`) gate (PR-23/25,
+  routed through internal/mode at PR-26).
 - `src/gss/docs/STATE.md` — this file.
 
 **Classic-code wiring (dotfiles-only).** Because the playground module is
@@ -197,4 +204,5 @@ starts using at PR-22 (`internal/classic/push.go`) and beyond;
 | 2026-05-21 | `playground:pr13-internal-scan` | `2385050` | PR-13 — `internal/scan` `Scanner.Scan` (WalkDir, nested repos, symlink-loop-safe) + `Format` (`[DIRTY] <path>` contract) + `GitDirty`. Test trees built at runtime (committed `.git` fixtures impossible). 5 tests; cov 95%. No deps. PR #35 (sibling off PR-09). |
 | 2026-05-21 | `playground:pr14-internal-status` | `f158791` | PR-14 — `internal/status` `Service.Status` + `Format` (porcelain → classic report byte-identical: "No changes detected"/"Changes in"/" - line"). 4 tests; cov 100%. No deps. PR #36 (sibling off PR-09). Ends Batch B. |
 | 2026-05-21 | (dotfiles-only) | — | **Batch C** PR-15/16 — cmd leaves rewired in place onto internal packages (`cmd/status.go` → internal/status; `cmd/{scan,backup,sync}.go` → internal/{scan,backup,sync}). Output byte-identical, smoke-verified. No playground PRs (cmd-leaf decision). |
+| 2026-05-21 | (dotfiles staging, PR-22–26) | `9bc2947`…(this) | **Batch E** classic orchestration. `internal/classic/push` (PR-22 #42) + `internal/classic/pr` (PR-24 #43) + `internal/mode` (PR-26 #44), mirrored to dotfiles; `cmd/push`/`cmd/pr` rewired onto the orchestrators with the `mode.IsInWorker`/`ErrWrongMode` gate (cmd leaves PR-23/25 dotfiles-only). pr22 merged Batch B siblings pr10/11/12 for a coherent base; pr24/pr26 stack linearly. All build + tests pass; coverage classic ~82%, mode 91.7%. No new deps. |
 | 2026-05-21 | `playground:pr21-worktree-git` | `2e03c71` | **Batch D batch snapshot** (PR-17–21). `internal/registry` (schema+unknown-field preservation #37; flock/atomic/0600/uid `Store` #38; `Reconciler` #39) + `internal/worktree` (`Backend` interface + contract suite #40; `git` v1 backend #41). New deps `gofrs/flock v0.13.0` + `golang.org/x/sys v0.37.0` (BSD-3-Clause). All build + tests pass in dotfiles (incl. real-git contract suite). Coverage: registry 82.9%, worktree 100% / git-backend 68.4%. |

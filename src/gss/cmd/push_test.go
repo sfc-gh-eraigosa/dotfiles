@@ -5,13 +5,13 @@ import (
 	"testing"
 
 	"github.com/wenlock/dotfiles/gss/internal/errors"
-	"github.com/wenlock/dotfiles/gss/internal/registry"
 )
 
-// TestClassicAllowed_ModeForceMatrix pins PR-23's matrix: a classic command
-// is allowed in a regular checkout (regardless of --force-autonomous) and
-// refused with ErrWrongMode inside a worker worktree (force does NOT bypass
-// the mode gate).
+// TestClassicAllowed_ModeForceMatrix pins the mode gate (PR-23/26): a
+// classic command is allowed in a regular checkout (regardless of
+// --force-autonomous) and refused with ErrWrongMode inside a worker
+// worktree (force does NOT bypass the gate). The worktree-detection logic
+// itself now lives in internal/mode and is tested there.
 func TestClassicAllowed_ModeForceMatrix(t *testing.T) {
 	cases := []struct {
 		inWorker bool
@@ -32,40 +32,5 @@ func TestClassicAllowed_ModeForceMatrix(t *testing.T) {
 		} else if err != nil {
 			t.Errorf("classicAllowed(inWorker=%v, force=%v) = %v; want nil", c.inWorker, c.force, err)
 		}
-	}
-}
-
-func TestIsWorkerWorktree(t *testing.T) {
-	reg := registry.Registry{
-		SchemaVersion: 1,
-		Features: []registry.Feature{{
-			Name: "feat",
-			Workers: []registry.Worker{
-				{User: "erai", Purpose: "api", Suffix: "moss", Worktree: "/wt/erai/api-moss"},
-			},
-		}},
-	}
-	cases := []struct {
-		cwd     string
-		wantRef string
-		wantIn  bool
-	}{
-		{"/wt/erai/api-moss", "feat/erai/api-moss", true},         // exact
-		{"/wt/erai/api-moss/sub/dir", "feat/erai/api-moss", true}, // under
-		{"/wt/erai/api", "", false},                               // prefix-but-not-path-boundary
-		{"/somewhere/else", "", false},                            // unrelated
-		{"", "", false},                                           // empty cwd
-	}
-	for _, c := range cases {
-		ref, in := isWorkerWorktree(c.cwd, reg)
-		if in != c.wantIn || ref != c.wantRef {
-			t.Errorf("isWorkerWorktree(%q) = (%q, %v); want (%q, %v)", c.cwd, ref, in, c.wantRef, c.wantIn)
-		}
-	}
-}
-
-func TestIsWorkerWorktree_EmptyRegistry(t *testing.T) {
-	if ref, in := isWorkerWorktree("/anywhere", registry.Registry{}); in || ref != "" {
-		t.Errorf("empty registry → (%q, %v); want (\"\", false)", ref, in)
 	}
 }
