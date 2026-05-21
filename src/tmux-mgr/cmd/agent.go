@@ -412,20 +412,27 @@ func runAgentCleanup(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	force, _ := cmd.Flags().GetBool("force")
 	fmt.Printf("Cleaning up session '%s'...\n", sessionID)
 
-	// Remove the git worktree from the cwd's repo. (A later Batch J PR replaces
-	// this with `gss feature done --worker <WorkerRef>`, which owns worktree
-	// teardown; until then cleanup resolves the repo from the cwd.)
-	fmt.Printf("Removing worktree at: %s\n", session.WorktreePath)
-	gitRoot := currentRepoRoot()
-	if gitRoot != "" {
-		wtCmd := exec.Command("git", "worktree", "remove", "--force", session.WorktreePath)
-		wtCmd.Dir = gitRoot
-		if wtOut, err := wtCmd.CombinedOutput(); err != nil {
-			fmt.Printf("Warning: Failed to remove git worktree: %s\nOutput: %s\n", err, string(wtOut))
-		}
-	}
+	// gss owns worktree teardown via `gss feature done --worker <ref>`; legacy
+	// sessions (no WorkerRef) fall back to a cwd-repo `git worktree remove`.
+	cleanupSession(session, force, cleanupDeps{
+		run:      defaultGssRunner,
+		killPane: func(paneID string) error { return exec.Command("tmux", "kill-pane", "-t", paneID).Run() },
+		removeLegacyWorktree: func(wt string) {
+			gitRoot := currentRepoRoot()
+			if gitRoot == "" {
+				return
+			}
+			wtCmd := exec.Command("git", "worktree", "remove", "--force", wt)
+			wtCmd.Dir = gitRoot
+			if wtOut, err := wtCmd.CombinedOutput(); err != nil {
+				fmt.Printf("Warning: Failed to remove git worktree: %s\nOutput: %s\n", err, string(wtOut))
+			}
+		},
+		out: os.Stdout,
+	})
 
 	// Delete the session file
 	if err := agent.DeleteSession(sessionID); err != nil {
@@ -495,6 +502,8 @@ func init() {
 	startCmd.MarkFlagRequired("task-description")
 	startCmd.Flags().String("feature", "", "gss feature to add the worker to (default: the agent name; auto-created)")
 	startCmd.Flags().String("purpose", "", "gss worker purpose (default: the agent name)")
+
+	cleanupCmd.Flags().Bool("force", false, "Forward --force to `gss feature done` (remove despite dirty/dependents/open PR)")
 
 	executeCmd.Flags().StringP("task-description", "d", "", "The task description for the agent.")
 	executeCmd.MarkFlagRequired("task-description")

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"strings"
 	"testing"
@@ -94,5 +95,58 @@ func TestWrapWithPaneWrap(t *testing.T) {
 func TestShellQuote(t *testing.T) {
 	if got := shellQuote("a'b"); got != `'a'\''b'` {
 		t.Errorf(`shellQuote(a'b) = %s; want 'a'\''b'`, got)
+	}
+}
+
+func TestCleanupSession_WorkerRef(t *testing.T) {
+	for _, force := range []bool{false, true} {
+		var gotArgs []string
+		var killed string
+		legacyCalled := false
+		var out bytes.Buffer
+		s := &agent.Session{SessionID: "s1", WorkerRef: "auth/erai/api", PaneID: "%7", WorktreePath: "/wt/api"}
+		cleanupSession(s, force, cleanupDeps{
+			run:                  func(args ...string) ([]byte, error) { gotArgs = args; return nil, nil },
+			killPane:             func(p string) error { killed = p; return nil },
+			removeLegacyWorktree: func(string) { legacyCalled = true },
+			out:                  &out,
+		})
+		want := "feature done --worker auth/erai/api"
+		got := strings.Join(gotArgs, " ")
+		if force {
+			want += " --force"
+		}
+		if got != want {
+			t.Errorf("force=%v: gss args = %q; want %q", force, got, want)
+		}
+		if killed != "%7" {
+			t.Errorf("pane not killed: %q", killed)
+		}
+		if legacyCalled {
+			t.Error("WorkerRef set → legacy worktree removal must not run")
+		}
+	}
+}
+
+func TestCleanupSession_LegacyNoWorkerRef(t *testing.T) {
+	var gotWT string
+	runCalled := false
+	killed := ""
+	var out bytes.Buffer
+	s := &agent.Session{SessionID: "old", WorkerRef: "", PaneID: "%9", WorktreePath: "/wt/old"}
+	cleanupSession(s, false, cleanupDeps{
+		run:                  func(args ...string) ([]byte, error) { runCalled = true; return nil, nil },
+		killPane:             func(p string) error { killed = p; return nil },
+		removeLegacyWorktree: func(wt string) { gotWT = wt },
+		out:                  &out,
+	})
+	if runCalled {
+		t.Error("legacy session (no WorkerRef) must NOT call gss feature done")
+	}
+	if gotWT != "/wt/old" {
+		t.Errorf("legacy worktree removal got %q; want /wt/old", gotWT)
+	}
+	if killed != "%9" {
+		t.Errorf("pane not killed: %q", killed)
 	}
 }

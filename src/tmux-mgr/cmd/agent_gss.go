@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 
@@ -86,4 +87,37 @@ func shellQuote(s string) string {
 func wrapWithPaneWrap(exePath, workerRef, inner string) string {
 	return fmt.Sprintf("%s internal pane-wrap --worker-ref %s -- /bin/sh -c %s",
 		exePath, shellQuote(workerRef), shellQuote(inner))
+}
+
+// cleanupDeps are the injectable seams for cleanupSession.
+type cleanupDeps struct {
+	run                  gssRunner
+	killPane             func(paneID string) error
+	removeLegacyWorktree func(worktreePath string)
+	out                  io.Writer
+}
+
+// cleanupSession tears down a worker (design.md → "What changes" #3): gss owns
+// worktree removal via `gss feature done --worker <ref>` (forwarding --force)
+// for gss-backed sessions; legacy sessions (no WorkerRef) fall back to a
+// cwd-repo `git worktree remove`. The tmux pane is killed afterwards. The
+// caller removes the session file.
+func cleanupSession(session *agent.Session, force bool, deps cleanupDeps) {
+	if session.WorkerRef != "" {
+		args := []string{"feature", "done", "--worker", session.WorkerRef}
+		if force {
+			args = append(args, "--force")
+		}
+		if out, err := deps.run(args...); err != nil {
+			fmt.Fprintf(deps.out, "Warning: gss feature done failed: %s\n%s\n", err, out)
+		}
+	} else {
+		fmt.Fprintf(deps.out, "Removing worktree at: %s\n", session.WorktreePath)
+		deps.removeLegacyWorktree(session.WorktreePath)
+	}
+	if session.PaneID != "" {
+		if err := deps.killPane(session.PaneID); err != nil {
+			fmt.Fprintf(deps.out, "Warning: failed to kill pane %s: %s\n", session.PaneID, err)
+		}
+	}
 }
