@@ -14,10 +14,11 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## Cursor
 
-- **Most recent**: PR-26 — `internal/mode` canonical worker-mode detector
-  (#44) + dotfiles refactor routing `cmd/push`/`cmd/pr` through
-  `mode.IsInWorker`. **Batch E (classic orchestration) complete** — PR-22–26.
-  Playground: push #42, pr #43, mode #44; PR-23/25 dotfiles-only.
+- **Most recent**: PR-31 — `internal/tmpl` embed (feature/worker .tmpl).
+  **Batch F (stack logic + templates) complete** — PR-27–31. Playground:
+  #45 stack-compute, #46 stack-body, #47 stack-restack, #48 tmpl-render,
+  #49 tmpl-embed (all siblings off pr27 except pr31→pr30). dotfiles
+  internal/ now mirrors PR-01–31.
 - **Playground branches in flight**:
   - `test_gss` — integration trunk (root of the stack).
   - `pr01-internal-errors` … `pr09-internal-repo` — PRs #23–#31 (Batch A,
@@ -28,12 +29,14 @@ PR-61 (the final integration) opens *its own* non-draft PR against
   - Batch D **linear stack** off `pr09`: `pr17-registry-schema` #37 →
     `pr18-registry-lock` #38 → `pr19-registry-reconcile` #39 →
     `pr20-worktree-backend` #40 → `pr21-worktree-git` #41.
-- **Next PR**: PR-27 — **Batch F** begins (stack logic + templates,
-  parallel): `internal/stack/stack.go` parent/child computation. Playground
-  PR. Check the plan for its base (Batch F can branch off the foundation;
-  likely off pr09 or the Batch D/E tip — see plan "Stacked PRs").
-- **PRs remaining in plan**: 35 (PR-27 through PR-61). (Playground PRs
-  open: #42 push, #43 pr, #44 mode; cmd leaves PR-23/25 dotfiles-only.)
+- **Next PR**: PR-32 — **Batch G** begins (feature orchestrators,
+  *sequential*): `internal/feature/start.go` + `worker.go` (gss feature
+  start + worker add). The biggest batch — wires registry + worktree +
+  identity + tmpl + stack together. Likely needs a coherent base merging
+  the relevant fan-out branches (registry/worktree/identity/stack/tmpl) —
+  see the Batch E integration note; plan it like pr22 did. Playground PR.
+- **PRs remaining in plan**: 30 (PR-32 through PR-61). (Playground PRs
+  open: #42–#49; cmd leaves PR-15/16/23/25 dotfiles-only.)
 - **Batch E integration note**: orchestrators need fanned-out Batch B
   packages. pr22 merged pr10/11/12 (approval/backup/sync) for a coherent
   base; later Batch E PRs stack linearly on the prior E PR. cmd-leaf PRs
@@ -132,6 +135,11 @@ below (PR-04, PR-05):
   orchestrators (approval→backup→sync→push→PR; pr cuts feature/gss-<ts>).
 - `src/gss/internal/mode/` — `IsInWorker(cwd, registry)` worker-mode
   detector used by all classic cobra leaves (PR-26).
+- `src/gss/internal/stack/` — parent/child compute (PR-27), PR-body stack
+  section + marker-strip injection defence (PR-28), merge/restack re-target
+  math + auto-promote eligibility (PR-29). Pure logic.
+- `src/gss/internal/tmpl/` — FEATURE.md/WORKER.md renderer with user-field
+  sanitisation (PR-30) + embedded `*.md.tmpl` + loaders (PR-31).
 - `src/gss/cmd/{push,pr}.go` — rewired onto `classic.{Pusher,PRer}` with
   the `mode.IsInWorker` + `classicAllowed` (`ErrWrongMode`) gate (PR-23/25,
   routed through internal/mode at PR-26).
@@ -204,5 +212,6 @@ starts using at PR-22 (`internal/classic/push.go`) and beyond;
 | 2026-05-21 | `playground:pr13-internal-scan` | `2385050` | PR-13 — `internal/scan` `Scanner.Scan` (WalkDir, nested repos, symlink-loop-safe) + `Format` (`[DIRTY] <path>` contract) + `GitDirty`. Test trees built at runtime (committed `.git` fixtures impossible). 5 tests; cov 95%. No deps. PR #35 (sibling off PR-09). |
 | 2026-05-21 | `playground:pr14-internal-status` | `f158791` | PR-14 — `internal/status` `Service.Status` + `Format` (porcelain → classic report byte-identical: "No changes detected"/"Changes in"/" - line"). 4 tests; cov 100%. No deps. PR #36 (sibling off PR-09). Ends Batch B. |
 | 2026-05-21 | (dotfiles-only) | — | **Batch C** PR-15/16 — cmd leaves rewired in place onto internal packages (`cmd/status.go` → internal/status; `cmd/{scan,backup,sync}.go` → internal/{scan,backup,sync}). Output byte-identical, smoke-verified. No playground PRs (cmd-leaf decision). |
-| 2026-05-21 | (dotfiles staging, PR-22–26) | `9bc2947`…(this) | **Batch E** classic orchestration. `internal/classic/push` (PR-22 #42) + `internal/classic/pr` (PR-24 #43) + `internal/mode` (PR-26 #44), mirrored to dotfiles; `cmd/push`/`cmd/pr` rewired onto the orchestrators with the `mode.IsInWorker`/`ErrWrongMode` gate (cmd leaves PR-23/25 dotfiles-only). pr22 merged Batch B siblings pr10/11/12 for a coherent base; pr24/pr26 stack linearly. All build + tests pass; coverage classic ~82%, mode 91.7%. No new deps. |
+| 2026-05-21 | `playground` PR-27–31 (#45–#49) | (this) | **Batch F batch snapshot** — `internal/stack` (compute #45 / body+marker-strip #46 / restack #47) + `internal/tmpl` (renderer #48 / embed #49). Pure-logic stack + template renderer with user-field sanitisation. Assembled into dotfiles from the sibling branches; all build + tests pass. Coverage: stack 98–100%, tmpl ~88–91%. No new deps. PR-bodies/markers are the PR-injection-defence surface (security #7). |
+| 2026-05-21 | (dotfiles staging, PR-22–26) | `9bc2947`…(prev) | **Batch E** classic orchestration. `internal/classic/push` (PR-22 #42) + `internal/classic/pr` (PR-24 #43) + `internal/mode` (PR-26 #44), mirrored to dotfiles; `cmd/push`/`cmd/pr` rewired onto the orchestrators with the `mode.IsInWorker`/`ErrWrongMode` gate (cmd leaves PR-23/25 dotfiles-only). pr22 merged Batch B siblings pr10/11/12 for a coherent base; pr24/pr26 stack linearly. All build + tests pass; coverage classic ~82%, mode 91.7%. No new deps. |
 | 2026-05-21 | `playground:pr21-worktree-git` | `2e03c71` | **Batch D batch snapshot** (PR-17–21). `internal/registry` (schema+unknown-field preservation #37; flock/atomic/0600/uid `Store` #38; `Reconciler` #39) + `internal/worktree` (`Backend` interface + contract suite #40; `git` v1 backend #41). New deps `gofrs/flock v0.13.0` + `golang.org/x/sys v0.37.0` (BSD-3-Clause). All build + tests pass in dotfiles (incl. real-git contract suite). Coverage: registry 82.9%, worktree 100% / git-backend 68.4%. |
