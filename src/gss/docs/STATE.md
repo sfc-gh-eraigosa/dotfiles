@@ -14,19 +14,22 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## Cursor
 
-- **Most recent PR opened**: PR-03 — `internal/gh` Client interface +
-  per-verb recording fake (#25 in playground).
+- **Most recent PR opened**: PR-04 — `internal/version` build-metadata
+  single source of truth (#26 in playground).
 - **Playground branches in flight**:
   - `test_gss` — integration trunk (root of the stack).
   - `pr01-internal-errors` — PR #23, awaiting human merge to `test_gss`.
   - `pr02-internal-git-runner` — PR #24, stacked on PR-01, awaiting merge.
   - `pr03-internal-gh-client` — PR #25, stacked on PR-02, awaiting merge.
-- **Next PR**: PR-04 — `internal/version/` + `build.sh` ldflags update
-  (exports `Version`/`Commit`/`BuildDate`/`Dirty` via `-X`; `gss version`
-  reads from this package, not from `main`). Stacks on PR-03.
-- **PRs remaining in plan**: 58 (PR-04 through PR-61).
+  - `pr04-internal-version` — PR #26, stacked on PR-03, awaiting merge.
+- **Next PR**: PR-05 — `internal/config/` YAML + env + flag merge
+  (adds `gopkg.in/yaml.v3`; precedence built-in → YAML → env → flag;
+  injectable `Clock`). Stacks on PR-04. First PR with a new external dep —
+  cite the LICENSE URL in the PR description.
+- **PRs remaining in plan**: 57 (PR-05 through PR-61).
 - **This staging snapshot**: reflects playground branch
-  `pr03-internal-gh-client` at SHA `4f6bedc`.
+  `pr04-internal-version` at SHA `91e8f44`, plus dotfiles-only classic
+  wiring (build.sh + cmd/version.go) described below.
 
 ## Handoff procedure (new machine)
 
@@ -41,7 +44,7 @@ PR-61 (the final integration) opens *its own* non-draft PR against
    ```
    git clone <playground-remote> ~/GitHub/playground
    cd ~/GitHub/playground
-   git checkout pr03-internal-gh-client
+   git checkout pr04-internal-version
    ```
 3. **Tooling install** (Phase 3 prerequisites):
    ```
@@ -72,13 +75,27 @@ Additive to the existing `src/gss/` tree (the classic `cmd/`, `main.go`,
   `PRReady`/`PRView`/`PRList`/`RepoView`/`AuthStatus`) + `SystemClient`
   real impl over an `Exec` seam + `fake.Client` stateful, per-verb
   scriptable fake + `testdata/gh_responses/*.json` fixtures (PR-03).
+- `src/gss/internal/version/` — build-metadata single source of truth:
+  `Version`/`Commit`/`BuildDate`/`Dirty` (set via `-X` ldflags) + `Get()`
+  with display fallbacks (PR-04).
 - `src/gss/docs/STATE.md` — this file.
 
-The classic gss code at `src/gss/cmd/*.go`, `main.go`, etc. is
-**untouched**. The new `internal/` packages are foundation layers that
-the classic code will start using at PR-22 (the `internal/classic/push.go`
-orchestrator) and beyond; `internal/gh` first gets wired in at PR-24
-(the `internal/classic/pr.go` orchestrator).
+**Classic-code wiring (dotfiles-only, PR-04).** PR-04 is the first
+deliverable to touch the classic tool. Because the playground module is
+stripped (no `cmd/`, no `build.sh`), the new package ships in playground
+PR #26 while its wiring lives here:
+
+- `src/gss/build.sh` — ldflag targets retargeted from
+  `…/gss/cmd.{Version,…}` to `…/gss/internal/version.{Version,…}`.
+- `src/gss/cmd/version.go` — now reads `version.Get()`; its local
+  `Version`/`Commit`/`Dirty`/`BuildDate` vars are removed. End-to-end
+  verified: a binary stamped with the new ldflag targets renders the
+  injected values, and an unstamped binary falls back to dev/none/…
+
+Otherwise the classic gss code (`cmd/*.go`, `main.go`) is unchanged. The
+remaining `internal/` packages are foundation layers the classic code
+starts using at PR-22 (`internal/classic/push.go`) and beyond;
+`internal/gh` first gets wired in at PR-24 (`internal/classic/pr.go`).
 
 ## Open carry-forward notes
 
@@ -101,3 +118,4 @@ orchestrator) and beyond; `internal/gh` first gets wired in at PR-24
 |------|-------------|-----|-------|
 | 2026-05-20 | `playground:pr02-internal-git-runner` | `e8c9b8a` | Initial staging snapshot — PR-01 (sentinels + JSON envelope) + PR-02 (`internal/git` Runner + fake). Tests pass in dotfiles context; `go build ./internal/...` clean. |
 | 2026-05-21 | `playground:pr03-internal-gh-client` | `4f6bedc` | PR-03 — `internal/gh` `Client` interface + `SystemClient` (over an `Exec` seam) + stateful per-verb `fake.Client` + `testdata/gh_responses/*.json`. 31 tests; coverage gh 77.7%, fake 87.8%; build + full module tests clean in dotfiles context. No new deps. `-race` skipped on the aarch64 dev host (47-bit VMA vs ThreadSanitizer's 48-bit, `unsupported VMA range`); x86 CI covers it. PR #25 stacked on PR-02. |
+| 2026-05-21 | `playground:pr04-internal-version` | `91e8f44` | PR-04 — `internal/version` build-metadata single source of truth (`Version`/`Commit`/`BuildDate`/`Dirty` + `Get()` fallbacks). 4 tests; coverage 100%. Cross-repo split (per user decision): package ships in playground PR #26; dotfiles-only wiring retargets `build.sh` ldflags and cuts `cmd/version.go` over to `version.Get()` (local build vars removed). Full dotfiles module builds + all tests pass; ldflag injection verified end-to-end (stamped binary shows injected values, unstamped falls back to dev/none/…). No new deps. PR #26 stacked on PR-03. |
