@@ -14,21 +14,22 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## Cursor
 
-- **Most recent PR opened**: PR-10 — `internal/approval` HEAD-bound token
-  handshake (#32 in playground). **Batch B has begun** (classic primitives).
+- **Most recent PR opened**: PR-11 — `internal/backup` Clock-driven safety
+  branch (#33 in playground). **Batch B in progress** (classic primitives).
 - **Playground branches in flight**:
   - `test_gss` — integration trunk (root of the stack).
   - `pr01-internal-errors` … `pr09-internal-repo` — PRs #23–#31 (Batch A,
     stacked linearly).
-  - `pr10-internal-approval` — PR #32, stacked on PR-09, awaiting merge.
+  - `pr10-internal-approval` — PR #32, off PR-09.
+  - `pr11-internal-backup` — PR #33, off PR-09.
     **Batch B note**: PR-10–14 are fan-out siblings — each branches off
     `pr09-internal-repo`, NOT off each other (plan: "fan out after PR-09").
-- **Next PR**: PR-11 — `internal/backup/` `backup/gss-TIMESTAMP` branch
-  (Clock-driven name, idempotent monotonic suffix, git.Runner). Branches
-  off PR-09 (sibling of PR-10).
-- **PRs remaining in plan**: 51 (PR-11 through PR-61).
+- **Next PR**: PR-12 — `internal/sync/` fetch + pull --rebase (fetch
+  precedes pull; conflict → `ErrRebaseConflict`; non-ff clean diagnostic).
+  Branches off PR-09 (sibling).
+- **PRs remaining in plan**: 50 (PR-12 through PR-61).
 - **This staging snapshot**: reflects playground branch
-  `pr10-internal-approval` at SHA `d2afe50`, plus dotfiles-only classic
+  `pr11-internal-backup` at SHA `d250242`, plus dotfiles-only classic
   wiring (build.sh + cmd/version.go + cmd/config.go) described below. The
   staging branch accumulates all Batch-B siblings linearly even though the
   PRs fan out.
@@ -52,7 +53,7 @@ PR-61 (the final integration) opens *its own* non-draft PR against
    ```
    git clone <playground-remote> ~/GitHub/playground
    cd ~/GitHub/playground
-   git checkout pr10-internal-approval
+   git checkout pr11-internal-backup
    ```
 3. **Tooling install** (Phase 3 prerequisites):
    ```
@@ -101,6 +102,8 @@ below (PR-04, PR-05):
 - `src/gss/internal/approval/` — HEAD-bound `Verifier` (verify-then-consume
   token, `Issue`, `--force-autonomous` bypass; wraps
   `ErrApprovalTokenMissing`) (PR-10).
+- `src/gss/internal/backup/` — `Service.Create` safety branch
+  `backup/gss-<ts>` (Clock-driven, monotonic-suffix idempotent) (PR-11).
 - `src/gss/docs/STATE.md` — this file.
 
 **Classic-code wiring (dotfiles-only).** Because the playground module is
@@ -154,3 +157,4 @@ starts using at PR-22 (`internal/classic/push.go`) and beyond;
 | 2026-05-21 | `playground:pr08-identity-validate` | `d931224` | PR-08 — `internal/identity` segment grammar (`ValidateFeature`/`User`/`Purpose` wrapping `ErrInvalidIdent`), `ValidateDescription` (NFC + strip ANSI/markers/newlines + control reject + 1–240 cp), `ResolveUser` precedence (--user→gh→email-slug→$USER). 13 tests; coverage 95.8%. **New dep**: `golang.org/x/text v0.37.0` (BSD-3-Clause; verified at github.com/golang/text/blob/master/LICENSE) for NFC. Mirrored to dotfiles incl. go.mod/go.sum; no cmd wiring. PR #30 stacked on PR-07. |
 | 2026-05-21 | `playground:pr09-internal-repo` | `89aa3c6` | PR-09 — `internal/repo` NWO resolution: `Resolver.Resolve` (--repo shadow → `.nwo` cache → `gh.RepoView` → origin-URL parse → refuse), `ParseNWO`/`ParseRemoteURL`, origin-keyed cache (invalidates on origin change). 9 tests; coverage 86.3%. No new deps; playground-only. Ends Batch A. PR #31 stacked on PR-08. |
 | 2026-05-21 | `playground:pr10-internal-approval` | `d2afe50` | PR-10 — `internal/approval` HEAD-bound token (`Verify` verify-then-consume, `Issue`, force-autonomous bypass; typed `*Error{Missing|Mismatch}` wrapping `ErrApprovalTokenMissing`). Mirrors classic cmd/push.go semantics. 5 tests; coverage 71%. No new deps; playground-only. Starts Batch B (fan-out sibling off PR-09). PR #32. |
+| 2026-05-21 | `playground:pr11-internal-backup` | `d250242` | PR-11 — `internal/backup` `Service.Create` safety branch `backup/gss-<YYYYMMDD-HHMMSS>` (config.Clock-driven, byte-identical name to classic cmd/backup.go; monotonic `-N` suffix on collision, cap 1000). 3 tests; coverage 91.7%. No new deps; playground-only (fan-out sibling off PR-09). PR #33. |
