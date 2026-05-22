@@ -14,7 +14,15 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## Cursor
 
-- **Most recent**: PR-48 — `gss feature` cobra subtree complete. **Batch H
+- **HEAD now @ PR-57** (`6f61b8e`, pushed to origin) — Batch J landed since
+  this narrative was last refreshed: PR-54 (`internal pane-wrap` shim), PR-55
+  (+ gss prereq: `gss feature worker add` gains `--json`/spawned_by), PR-56
+  (`runAgentCleanup` → `gss feature done`), PR-57 (`tmux-mgr feature
+  start|add-agent|status` verbs). tmux-mgr↔gss seam validated end-to-end
+  (`src/tmux-mgr/scripts/e2e-gss-integration.sh`). **Live deliverable: PR-58**
+  (`tmux-mgr internal migrate-to-gss`). The PR-48-era detail below predates
+  this and is pending a full refresh.
+- **Most recent (narrative below, pre-refresh)**: PR-48 — `gss feature` cobra subtree complete. **Batch H
   COMPLETE** (PR-44–48, dotfiles-only, flat `cmd/` layout per the cmd-leaf
   decision). All 11 feature verbs wired on `featureCmd`: start, worker add,
   list, checkpoint, conflicts, pr, rebase, restack, done, merged, audit; each
@@ -225,6 +233,7 @@ starts using at PR-22 (`internal/classic/push.go`) and beyond;
 | 13 | PR-45 | `gss feature start --purpose` convenience (create feature + first worker in one call) not implemented. | Compose `Start`+`WorkerAdd` at the cmd layer, or add a Service convenience. |
 | 14 | PR-46 | `gss feature checkpoint --message` not supported — `CheckpointOpts` has no `Message` field. Flag omitted (not silently ignored). | Add `Message` to `CheckpointOpts` + plumb to the WIP/PR body. |
 | 15 | PR-46 | `gss feature conflicts` requires `--feature` — internal `Conflicts` errors (`ErrInvalidIdent`) on an empty feature instead of defaulting to all-features / cwd-resolved as the design describes. | Extend `Service.Conflicts` to iterate all features (or cwd-resolve) when `Feature==""`. |
+| 16 | PR-54–57 e2e | Installed `gss` binary can lag the source `tmux-mgr` shells out to — there's no runtime version/capability check. A stale `gss` (pre-PR-55, no `--json`) makes `tmux-mgr feature add-agent` die with a cryptic `unknown flag: --json`, even though both modules' source + unit tests are green (the tests mock the gss runner). Found + fixed during the PR-54–57 e2e by rebuilding via `src/gss/build.sh`. | Have `tmux-mgr` detect the old-gss/unknown-flag case and print "rebuild gss: src/gss/build.sh"; consider a `gss --version`/capability gate. Regression guard added: `src/tmux-mgr/scripts/e2e-gss-integration.sh` (defaults to the PATH `gss`, so it re-catches staleness). |
 
 ## Sync log
 
