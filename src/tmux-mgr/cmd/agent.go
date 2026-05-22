@@ -342,18 +342,6 @@ func runClaudeLoop(task, claudePath, model string) error {
 	return nil
 }
 
-// currentRepoRoot returns the absolute git toplevel for the current working
-// directory, or "" if the cwd is not inside a git repository (or git is
-// unavailable). It is used both to tag new sessions and to default the
-// `agent list` filter to the current repo.
-func currentRepoRoot() string {
-	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
-
 func runAgentList(cmd *cobra.Command, args []string) {
 	all, _ := cmd.Flags().GetBool("all")
 
@@ -419,23 +407,13 @@ func runAgentCleanup(cmd *cobra.Command, args []string) {
 	force, _ := cmd.Flags().GetBool("force")
 	fmt.Printf("Cleaning up session '%s'...\n", sessionID)
 
-	// gss owns worktree teardown via `gss feature done --worker <ref>`; legacy
-	// sessions (no WorkerRef) fall back to a cwd-repo `git worktree remove`.
+	// gss owns worktree teardown via `gss feature done --worker <ref>`. As of
+	// PR-59 tmux-mgr no longer removes worktrees directly; a legacy session
+	// (no WorkerRef) is left in place with a pointer to `migrate-to-gss`.
 	cleanupSession(session, force, cleanupDeps{
 		run:      defaultGssRunner,
 		killPane: func(paneID string) error { return exec.Command("tmux", "kill-pane", "-t", paneID).Run() },
-		removeLegacyWorktree: func(wt string) {
-			gitRoot := currentRepoRoot()
-			if gitRoot == "" {
-				return
-			}
-			wtCmd := exec.Command("git", "worktree", "remove", "--force", wt)
-			wtCmd.Dir = gitRoot
-			if wtOut, err := wtCmd.CombinedOutput(); err != nil {
-				fmt.Printf("Warning: Failed to remove git worktree: %s\nOutput: %s\n", err, string(wtOut))
-			}
-		},
-		out: os.Stdout,
+		out:      os.Stdout,
 	})
 
 	// Delete the session file

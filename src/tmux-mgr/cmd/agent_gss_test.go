@@ -102,14 +102,12 @@ func TestCleanupSession_WorkerRef(t *testing.T) {
 	for _, force := range []bool{false, true} {
 		var gotArgs []string
 		var killed string
-		legacyCalled := false
 		var out bytes.Buffer
 		s := &agent.Session{SessionID: "s1", WorkerRef: "auth/erai/api", PaneID: "%7", WorktreePath: "/wt/api"}
 		cleanupSession(s, force, cleanupDeps{
-			run:                  func(args ...string) ([]byte, error) { gotArgs = args; return nil, nil },
-			killPane:             func(p string) error { killed = p; return nil },
-			removeLegacyWorktree: func(string) { legacyCalled = true },
-			out:                  &out,
+			run:      func(args ...string) ([]byte, error) { gotArgs = args; return nil, nil },
+			killPane: func(p string) error { killed = p; return nil },
+			out:      &out,
 		})
 		want := "feature done --worker auth/erai/api"
 		got := strings.Join(gotArgs, " ")
@@ -122,31 +120,33 @@ func TestCleanupSession_WorkerRef(t *testing.T) {
 		if killed != "%7" {
 			t.Errorf("pane not killed: %q", killed)
 		}
-		if legacyCalled {
-			t.Error("WorkerRef set → legacy worktree removal must not run")
-		}
 	}
 }
 
+// TestCleanupSession_LegacyNoWorkerRef pins the PR-59 behaviour: tmux-mgr no
+// longer removes worktrees directly (gss owns teardown; currentRepoRoot + the
+// direct `git worktree remove` are gone). A no-WorkerRef session just kills the
+// pane and is told to migrate; its worktree is left in place.
 func TestCleanupSession_LegacyNoWorkerRef(t *testing.T) {
-	var gotWT string
 	runCalled := false
 	killed := ""
 	var out bytes.Buffer
 	s := &agent.Session{SessionID: "old", WorkerRef: "", PaneID: "%9", WorktreePath: "/wt/old"}
 	cleanupSession(s, false, cleanupDeps{
-		run:                  func(args ...string) ([]byte, error) { runCalled = true; return nil, nil },
-		killPane:             func(p string) error { killed = p; return nil },
-		removeLegacyWorktree: func(wt string) { gotWT = wt },
-		out:                  &out,
+		run:      func(args ...string) ([]byte, error) { runCalled = true; return nil, nil },
+		killPane: func(p string) error { killed = p; return nil },
+		out:      &out,
 	})
 	if runCalled {
 		t.Error("legacy session (no WorkerRef) must NOT call gss feature done")
 	}
-	if gotWT != "/wt/old" {
-		t.Errorf("legacy worktree removal got %q; want /wt/old", gotWT)
-	}
 	if killed != "%9" {
 		t.Errorf("pane not killed: %q", killed)
+	}
+	if !strings.Contains(out.String(), "migrate-to-gss") {
+		t.Errorf("legacy cleanup should point at migrate-to-gss; got %q", out.String())
+	}
+	if !strings.Contains(out.String(), "/wt/old") {
+		t.Errorf("legacy cleanup should name the retained worktree; got %q", out.String())
 	}
 }

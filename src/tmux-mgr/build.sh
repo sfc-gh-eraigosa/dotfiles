@@ -38,6 +38,10 @@ LDFLAGS="-X github.com/eraigosa/dotfiles/src/tmux-mgr/cmd.Version=$VERSION \
 mkdir -p "$BIN_DIR"
 mkdir -p "$SKILL_INSTALL_DIR"
 
+# Guard: pkg/workspace was deleted in PR-59 (gss owns worktrees). Fail the
+# build if it creeps back rather than silently re-coupling tmux-mgr to it.
+"$DIR/scripts/no-workspace-guard.sh"
+
 echo "Building tmux-mgr v$VERSION with $($GO_BIN version)..."
 cd "$DIR"
 "$GO_BIN" build -ldflags "$LDFLAGS" -o "$BIN_DIR/tmux-mgr" main.go

@@ -91,17 +91,17 @@ func wrapWithPaneWrap(exePath, workerRef, inner string) string {
 
 // cleanupDeps are the injectable seams for cleanupSession.
 type cleanupDeps struct {
-	run                  gssRunner
-	killPane             func(paneID string) error
-	removeLegacyWorktree func(worktreePath string)
-	out                  io.Writer
+	run      gssRunner
+	killPane func(paneID string) error
+	out      io.Writer
 }
 
-// cleanupSession tears down a worker (design.md → "What changes" #3): gss owns
-// worktree removal via `gss feature done --worker <ref>` (forwarding --force)
-// for gss-backed sessions; legacy sessions (no WorkerRef) fall back to a
-// cwd-repo `git worktree remove`. The tmux pane is killed afterwards. The
-// caller removes the session file.
+// cleanupSession tears down a worker (design.md → "What changes" #3 / "What
+// goes away" #3-4): gss owns worktree removal via `gss feature done --worker
+// <ref>` (forwarding --force) for gss-backed sessions. As of PR-59 tmux-mgr no
+// longer removes worktrees directly, so a legacy session (no WorkerRef) is left
+// in place with a pointer to `migrate-to-gss`. The tmux pane is killed
+// afterwards in both cases; the caller removes the session file.
 func cleanupSession(session *agent.Session, force bool, deps cleanupDeps) {
 	if session.WorkerRef != "" {
 		args := []string{"feature", "done", "--worker", session.WorkerRef}
@@ -112,8 +112,9 @@ func cleanupSession(session *agent.Session, force bool, deps cleanupDeps) {
 			fmt.Fprintf(deps.out, "Warning: gss feature done failed: %s\n%s\n", err, out)
 		}
 	} else {
-		fmt.Fprintf(deps.out, "Removing worktree at: %s\n", session.WorktreePath)
-		deps.removeLegacyWorktree(session.WorktreePath)
+		fmt.Fprintf(deps.out, "Session %s has no gss worker ref; leaving worktree %s in place "+
+			"(run `tmux-mgr internal migrate-to-gss` to adopt it into gss, then clean up via gss).\n",
+			session.SessionID, session.WorktreePath)
 	}
 	if session.PaneID != "" {
 		if err := deps.killPane(session.PaneID); err != nil {
