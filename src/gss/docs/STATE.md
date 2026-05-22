@@ -14,14 +14,17 @@ PR-61 (the final integration) opens *its own* non-draft PR against
 
 ## Cursor
 
-- **HEAD now @ PR-57** (`6f61b8e`, pushed to origin) — Batch J landed since
-  this narrative was last refreshed: PR-54 (`internal pane-wrap` shim), PR-55
-  (+ gss prereq: `gss feature worker add` gains `--json`/spawned_by), PR-56
-  (`runAgentCleanup` → `gss feature done`), PR-57 (`tmux-mgr feature
-  start|add-agent|status` verbs). tmux-mgr↔gss seam validated end-to-end
-  (`src/tmux-mgr/scripts/e2e-gss-integration.sh`). **Live deliverable: PR-58**
-  (`tmux-mgr internal migrate-to-gss`). The PR-48-era detail below predates
-  this and is pending a full refresh.
+- **HEAD now @ PR-58** — Batch J landed since this narrative was last
+  refreshed: PR-54 (`internal pane-wrap` shim), PR-55 (+ gss prereq: `gss
+  feature worker add` gains `--json`/spawned_by), PR-56 (`runAgentCleanup` →
+  `gss feature done`), PR-57 (`tmux-mgr feature start|add-agent|status`
+  verbs), PR-58 (`tmux-mgr internal migrate-to-gss` one-shot migrator —
+  adopts legacy sessions via `gss feature worker add --base <legacy-branch>`;
+  `--dry-run`, idempotent, best-effort/partial-OK). tmux-mgr↔gss seam
+  validated end-to-end (`src/tmux-mgr/scripts/e2e-gss-integration.sh`).
+  **Live deliverable: PR-59** (delete `tmux-mgr/pkg/workspace/` — the migrator
+  must ship first, which it now has). The PR-48-era detail below predates this
+  and is pending a full refresh.
 - **Most recent (narrative below, pre-refresh)**: PR-48 — `gss feature` cobra subtree complete. **Batch H
   COMPLETE** (PR-44–48, dotfiles-only, flat `cmd/` layout per the cmd-leaf
   decision). All 11 feature verbs wired on `featureCmd`: start, worker add,
