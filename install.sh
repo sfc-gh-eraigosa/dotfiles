@@ -37,6 +37,24 @@ else
   ln -sf "${BASE_DIR}/opt" "${HOME}/opt"
 fi
 
+# ---------------------------------------------------------------------------
+# Windows/WSL only: deploy opt/Desktop/* onto the real Windows Desktop.
+# The Desktop is often OneDrive-redirected, so ask Windows for its real path
+# (via PowerShell) and translate it with wslpath. No-op off Windows.
+# ---------------------------------------------------------------------------
+if grep -qi microsoft /proc/version 2>/dev/null && command -v powershell.exe >/dev/null 2>&1; then
+  win_desktop_raw="$(powershell.exe -NoProfile -Command "[Environment]::GetFolderPath('Desktop')" 2>/dev/null | tr -d '\r')"
+  if [ -n "$win_desktop_raw" ]; then
+    win_desktop="$(wslpath -u "$win_desktop_raw" 2>/dev/null)"
+    if [ -n "$win_desktop" ] && [ -d "$win_desktop" ]; then
+      echo "Deploying opt/Desktop -> ${win_desktop}"
+      cp -r "${BASE_DIR}/opt/Desktop/." "${win_desktop}/"
+    else
+      echo "WARNING: could not resolve Windows Desktop (${win_desktop_raw}); skipping desktop deploy."
+    fi
+  fi
+fi
+
 # Source hardware detection
 if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
   . "${BASE_DIR}/opt/lib/hardware.sh"
