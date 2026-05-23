@@ -42,9 +42,15 @@ fi
 # The Desktop is often OneDrive-redirected, so ask Windows for its real path
 # (via PowerShell) and translate it with wslpath. No-op off Windows.
 # ---------------------------------------------------------------------------
-if grep -qi microsoft /proc/version 2>/dev/null && command -v powershell.exe >/dev/null 2>&1; then
-  win_desktop_raw="$(powershell.exe -NoProfile -Command "[Environment]::GetFolderPath('Desktop')" 2>/dev/null | tr -d '\r')"
-  if [ -n "$win_desktop_raw" ]; then
+if grep -qi microsoft /proc/version 2>/dev/null; then
+  # Locate powershell.exe: prefer PATH, fall back to the standard System32 path
+  # (Windows exes are not always on the WSL PATH, e.g. appendWindowsPath=false).
+  ps_exe="$(command -v powershell.exe 2>/dev/null || true)"
+  if [ -z "$ps_exe" ] && [ -x "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" ]; then
+    ps_exe="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+  fi
+  if [ -n "$ps_exe" ]; then
+    win_desktop_raw="$("$ps_exe" -NoProfile -Command "[Environment]::GetFolderPath('Desktop')" 2>/dev/null | tr -d '\r')"
     win_desktop="$(wslpath -u "$win_desktop_raw" 2>/dev/null)"
     if [ -n "$win_desktop" ] && [ -d "$win_desktop" ]; then
       echo "Deploying opt/Desktop -> ${win_desktop}"
@@ -52,6 +58,8 @@ if grep -qi microsoft /proc/version 2>/dev/null && command -v powershell.exe >/d
     else
       echo "WARNING: could not resolve Windows Desktop (${win_desktop_raw}); skipping desktop deploy."
     fi
+  else
+    echo "NOTE: powershell.exe not found; skipping Windows Desktop deploy."
   fi
 fi
 

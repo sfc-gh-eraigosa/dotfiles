@@ -11,9 +11,9 @@
 $ErrorActionPreference = 'Stop'
 
 $taskName = 'macOS Hotkeys'
-$user     = 'ashyumi\edwar'
-$alias    = 'C:\Users\edwar\AppData\Local\Microsoft\WindowsApps\AutoHotkey.exe'
-$script   = 'C:\Users\edwar\OneDrive\Desktop\Apps\scripts\macos.ahk'
+$user     = "$env:USERDOMAIN\$env:USERNAME"
+$alias    = "$env:LOCALAPPDATA\Microsoft\WindowsApps\AutoHotkey.exe"
+$script   = Join-Path $PSScriptRoot 'macos.ahk'
 $log      = 'C:\Windows\Temp\macos-hotkeys-setup.log'
 
 # --- self-elevate if not already running as administrator -------------------
