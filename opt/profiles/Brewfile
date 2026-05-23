@@ -1,5 +1,11 @@
 # Setup local dev env
 # Run: brew bundle
+#
+# NOTE: The cross-platform common core (git, gh, jq, vim, tmux, htop, ncdu,
+#       shellcheck, gnupg, corkscrew, cmake, protobuf, zstd, coreutils, etc.)
+#       now lives in opt/profiles/packages.tsv and is installed by `pkg-install`
+#       (pkg-install-brew on macOS). This Brewfile holds only macOS-specific
+#       extras: work tools, GUI casks, taps, and build libraries.
 # Helpers
 tap 'github/bootstrap'
 tap 'nektos/tap'
@@ -13,40 +19,25 @@ cask 'claude-code'
 # skipping install docker, lets do this manually
 brew 'amazon-ecs-cli'
 brew 'asciidoc'
-brew 'bash-completion'
-brew 'cmake'
-brew 'coreutils'
-brew 'corkscrew'
 brew 'docbook'
 brew 'gdbm'
-brew 'htop'
 brew 'lastpass-cli'
 brew 'libassuan'
 brew 'libgpg-error'
 brew 'libyaml'
-brew 'ncdu'         # disk usage tool
 brew 'oniguruma'
 brew 'openssl'
 brew 'perl'
 brew 'pinentry'
-brew 'pkg-config'
 # brew 'python@2'
 brew 'readline'
-brew 'shellcheck'
 brew 'sqlite'
-brew 'vim'
-brew 'watch'
-brew 'tmux'
-brew 'protobuf'
 brew 'sops'
 # for node manager
 brew 'nvm'
 # act tool https://github.com/nektos/act
 # brew 'nektos/tap/act'
 brew 'rbenv'
-brew 'git'
-brew 'git-lfs'
-brew 'gh'
 
 # bazel
 brew 'buildifier'
@@ -59,7 +50,6 @@ brew 'bazelisk'
 cask 'gpg-suite'
 brew 'azure-cli'
 
-brew 'gnupg'
 brew 'goenv'
 # golang replaced by goenv: https://github.com/go-nv/goenv/blob/master/INSTALL.md
 # brew 'golang'
@@ -74,17 +64,12 @@ brew 'pyenv'
 # brew 'hashicorp/tap/vault'
 brew 'kubeconform'
 brew 'jsonnet'
-brew 'jq'
-brew 'jc'
 brew 'fx'
-
-brew 'zstd'
 
 # snowflake tools
 # brew '1password-cli' # had to install manually
 
 cask 'snowflake-snowsql'
-brew 'coreutils'
 brew 'lcov'
 brew 'just'
 brew 'clang-format'

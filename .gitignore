@@ -26,10 +26,14 @@
 !src/**
 
 # Local Binary Zone (opt/bin)
-# We ignore everything in opt/bin except for the registry documentation
+# We ignore everything in opt/bin except for the registry documentation and a
+# few committed, hand-maintained tools (locally built binaries stay ignored).
 opt/bin/*
 !opt/bin/GEMINI.md
 !opt/bin/CLAUDE.md
+!opt/bin/pkg-install
+!opt/bin/pkg-install-apt
+!opt/bin/pkg-install-brew
 
 # Opt Subdirectory Configuration
 opt/.DS_Store

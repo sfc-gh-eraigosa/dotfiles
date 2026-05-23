@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+#
+# pkg-install-brew — install the curated common-core packages on macOS via
+# Homebrew.
+#
+# Reads the shared manifest (opt/profiles/packages.tsv) so the package set stays
+# consistent with the other platforms. macOS-only extras (work tools, casks,
+# taps) live in opt/profiles/Brewfile and are installed separately by
+# install.sh via `brew bundle`. Resilient by design: warns on any formula that
+# can't be installed but never aborts the run. Safe to re-run.
+#
+# Manifest location can be overridden with PKG_MANIFEST=/path/to/file.
+
+set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANIFEST="${PKG_MANIFEST:-${SCRIPT_DIR}/../profiles/packages.tsv}"
+
+if ! command -v brew >/dev/null 2>&1; then
+  echo "pkg-install-brew: Homebrew not found. Install it first: https://brew.sh/" >&2
+  exit 1
+fi
+if [ ! -f "$MANIFEST" ]; then
+  echo "pkg-install-brew: manifest not found at $MANIFEST" >&2
+  exit 1
+fi
+
+# Collect brew formula names (1st column), skipping comments, blanks, and "-".
+PKGS=()
+while read -r bpkg apkg; do
+  [[ -z "${bpkg:-}" || "${bpkg:0:1}" == "#" ]] && continue
+  [[ "$bpkg" == "-" ]] && continue
+  PKGS+=("$bpkg")
+done < "$MANIFEST"
+
+if [ "${#PKGS[@]}" -eq 0 ]; then
+  echo "pkg-install-brew: no brew formulae listed in manifest; nothing to do."
+  exit 0
+fi
+
+echo "Installing ${#PKGS[@]} core packages via brew..."
+failed=()
+for pkg in "${PKGS[@]}"; do
+  if brew list --formula "$pkg" >/dev/null 2>&1; then
+    continue   # already installed
+  fi
+  brew install "$pkg" || failed+=("$pkg")
+done
+if [ "${#failed[@]}" -gt 0 ]; then
+  echo "WARNING: could not install these brew formulae: ${failed[*]}"
+fi
+
+echo "pkg-install-brew: done."

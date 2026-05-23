@@ -6,6 +6,7 @@ This directory contains scripts for configuring the operating system, environmen
 
 - `gemini_install.sh`: Installs and configures the Gemini CLI and environment.
 - `install_gemini_skills.sh`: Sets up specialized skills for the Gemini CLI.
+- `install_sops.sh`: Installs the `sops` secrets-management binary into `~/opt/bin` (Linux/WSL fetches the official release; macOS uses the Brewfile).
 - `nvm`: Helper for Node Version Manager setup.
 - `google-cli-setup.sh`: Configures the Google Cloud SDK.
 - `setup_jtop.sh`: Installs and configures jetson-stats (jtop) for NVIDIA Jetson devices.

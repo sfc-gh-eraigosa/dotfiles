@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+#
+# pkg-install-apt — install the curated common-core packages on
+# Debian/Ubuntu/WSL via apt.
+#
+# Reads the shared manifest (opt/profiles/packages.tsv) so the package set stays
+# consistent with the other platforms. Resilient by design: it warns on any
+# package that can't be installed but never aborts the run. Safe to re-run.
+#
+# Manifest location can be overridden with PKG_MANIFEST=/path/to/file.
+
+set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANIFEST="${PKG_MANIFEST:-${SCRIPT_DIR}/../profiles/packages.tsv}"
+
+if ! command -v apt-get >/dev/null 2>&1; then
+  echo "pkg-install-apt: apt-get not found; this installer is for Debian/Ubuntu." >&2
+  exit 1
+fi
+if [ ! -f "$MANIFEST" ]; then
+  echo "pkg-install-apt: manifest not found at $MANIFEST" >&2
+  exit 1
+fi
+
+# Collect apt package names (2nd column), skipping comments, blanks, and "-".
+PKGS=()
+while read -r bpkg apkg; do
+  [[ -z "${bpkg:-}" || "${bpkg:0:1}" == "#" ]] && continue
+  [[ -z "${apkg:-}" || "$apkg" == "-" ]] && continue
+  PKGS+=("$apkg")
+done < "$MANIFEST"
+
+if [ "${#PKGS[@]}" -eq 0 ]; then
+  echo "pkg-install-apt: no apt packages listed in manifest; nothing to do."
+  exit 0
+fi
+
+# Refresh package lists first. A freshly imaged distro can be missing the
+# universe component index, which is where gh / corkscrew / jc live — without
+# this they'd be reported "Unable to locate package".
+echo "Updating apt package lists..."
+sudo apt-get update -qq || echo "WARNING: apt-get update failed; installs may be incomplete."
+
+echo "Installing ${#PKGS[@]} core packages via apt..."
+# apt-get install is all-or-nothing within one invocation: a single bad name
+# makes the whole batch install nothing. So if the grouped install fails, retry
+# each package on its own to keep one missing package from blocking the rest.
+if ! sudo apt-get install -y -qq "${PKGS[@]}"; then
+  echo "WARNING: grouped install failed; retrying packages individually..."
+  failed=()
+  for pkg in "${PKGS[@]}"; do
+    sudo apt-get install -y -qq "$pkg" || failed+=("$pkg")
+  done
+  if [ "${#failed[@]}" -gt 0 ]; then
+    echo "WARNING: could not install these apt packages: ${failed[*]}"
+  fi
+fi
+
+echo "pkg-install-apt: done."

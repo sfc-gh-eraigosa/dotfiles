@@ -46,7 +46,9 @@ if ! [ $CORKSCREW_IS_AVAILABLE -eq 0 ]; then
     echo '    INSTALLATION (cygwin with cyg-get is required):'
     echo '    On windows install corkscrew with cyg-get : cyg-get corkscrew'
     echo '    On ubuntu run command : sudo apt-get install corkscrew'
-    read -p 'Press any key to exit...'
+    # Only pause for a keypress when attached to a terminal, so an unattended
+    # install (piped/CI) is never blocked by this non-fatal warning.
+    [ -t 0 ] && read -p 'Press any key to exit...'
 fi
 
 

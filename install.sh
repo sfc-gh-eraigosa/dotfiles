@@ -72,6 +72,7 @@ for file in $(find "${BASE_DIR}/opt/profiles" -type f); do
     filename=$(basename "$file")
     # Skip metadata and non-profile files
     [[ "$filename" == "Brewfile" ]] && continue
+    [[ "$filename" == "packages.tsv" ]] && continue
     [[ "$filename" == "requirements.txt" ]] && continue
     [[ "$filename" == "GEMINI.md" ]] && continue
     [[ "$filename" == "CLAUDE.md" ]] && continue
@@ -98,34 +99,18 @@ fi
 NIX_MANAGED_FILE="${HOME}/.config/nix_managed"
 
 if [ -f "$NIX_MANAGED_FILE" ]; then
-  echo "Skipping apt-get because the env is managed with nix, found $NIX_MANAGED_FILE"
+  echo "Skipping system package install because the env is managed with nix, found $NIX_MANAGED_FILE"
 else
-  if command -v apt-get &> /dev/null; then
-    sudo apt-get install -y -qq \
-      build-essential \
-      make \
-      corkscrew \
-      htop \
-      iputils-ping \
-      jq \
-      lsof \
-      net-tools \
-      psmisc \
-      zsh \
-      protobuf-compiler
-    
-    # Set zsh as default shell if not already
-    if [ "$SHELL" != "$(which zsh)" ]; then
-      echo "Changing default shell to zsh..."
-      sudo chsh -s "$(which zsh)" "$USER"
-    fi
+  # Install the curated common-core packages. They are defined once in
+  # opt/profiles/packages.tsv; the per-platform installers in opt/bin translate
+  # that list to the right package manager (apt on Debian/Ubuntu/WSL, Homebrew
+  # on macOS). These can also be run by hand: `pkg-install` (auto-detect) or
+  # `pkg-install-apt` / `pkg-install-brew` directly.
+  if [ -x "${BASE_DIR}/opt/bin/pkg-install" ]; then
+    "${BASE_DIR}/opt/bin/pkg-install" || echo "WARNING: package install reported problems; continuing."
   fi
-fi
 
-# yum script
-if [ -f "$NIX_MANAGED_FILE" ]; then
-  echo "Skipping yum because the env is managed with nix, found $NIX_MANAGED_FILE"
-else
+  # RHEL/CentOS is not manifest-driven yet; keep the legacy yum path working.
   if command -v yum &> /dev/null; then
     sudo yum install -y -q \
       htop \
@@ -137,12 +122,26 @@ else
 
     install_zsh_centos7
   fi
+
+  # Set zsh as the default shell on every platform — but only when zsh is
+  # actually installed, so we never blank the login shell by passing an empty
+  # path to chsh.
+  ZSH_PATH="$(command -v zsh || true)"
+  if [ -n "$ZSH_PATH" ]; then
+    if [ "$SHELL" != "$ZSH_PATH" ]; then
+      echo "Changing default shell to zsh ($ZSH_PATH)..."
+      sudo chsh -s "$ZSH_PATH" "$USER" || echo "WARNING: could not change default shell to zsh."
+    fi
+  else
+    echo "WARNING: zsh is not installed; leaving the default shell unchanged."
+  fi
 fi
 
-# brew script for macOS
+# brew script for macOS: install the macOS-only extras from the Brewfile.
+# (The cross-platform common core is installed above via pkg-install.)
 if [[ "$(uname -s)" == "Darwin" ]]; then
   if command -v brew &> /dev/null; then
-    echo "Detected macOS. Running brew bundle..."
+    echo "Detected macOS. Running brew bundle for macOS extras..."
     brew bundle --no-upgrade --file="${BASE_DIR}/opt/profiles/Brewfile" || {
       echo "WARNING: Some brew formulas failed to install. Review the output above."
       echo "         This is non-fatal — the rest of the setup will continue."
@@ -154,6 +153,14 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   else
     echo "WARNING: Homebrew not found. Please install it: https://brew.sh/"
   fi
+fi
+
+# Install sops (secrets management). macOS gets it from the Brewfile above;
+# Linux/WSL has no usable apt package, so install_sops.sh fetches the official
+# static release binary into ~/opt/bin. Safe to re-run on any platform.
+if [ -f "${BASE_DIR}/opt/scripts/system/install_sops.sh" ]; then
+    echo "Installing sops..."
+    "${BASE_DIR}/opt/scripts/system/install_sops.sh" || echo "WARNING: sops install reported problems; continuing."
 fi
 
 # only setup these scripts when docker is installed and responsive

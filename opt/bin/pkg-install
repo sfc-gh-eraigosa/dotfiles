@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#
+# pkg-install — install the curated common-core packages for this platform.
+#
+# Detects the OS / package manager and dispatches to the matching installer
+# (pkg-install-brew on macOS, pkg-install-apt on Debian/Ubuntu/WSL). All three
+# read the same manifest (opt/profiles/packages.tsv). Safe to re-run.
+
+set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+case "$(uname -s)" in
+  Darwin)
+    exec "${SCRIPT_DIR}/pkg-install-brew" "$@"
+    ;;
+  Linux)
+    if command -v apt-get >/dev/null 2>&1; then
+      exec "${SCRIPT_DIR}/pkg-install-apt" "$@"
+    fi
+    echo "pkg-install: no supported package manager found (need apt-get)." >&2
+    echo "             RHEL/CentOS (yum) is handled inline by install.sh." >&2
+    exit 1
+    ;;
+  *)
+    echo "pkg-install: unsupported platform: $(uname -s)" >&2
+    exit 1
+    ;;
+esac

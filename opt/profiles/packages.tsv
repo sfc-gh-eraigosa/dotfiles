@@ -1,0 +1,43 @@
+# Curated common-core packages — the single source of truth for the
+# cross-platform toolset. The per-platform installers in opt/bin read this file
+# so every machine gets the same core regardless of OS.
+#
+# Platform-only extras live elsewhere:
+#   macOS  -> opt/profiles/Brewfile   (work/GUI tools, casks, taps)
+#
+# Format: two whitespace-separated columns.  BREW  APT
+#   * Use "-" when a package does not apply / isn't available for that manager.
+#   * Lines starting with '#' and blank lines are ignored.
+#   * Names only — no versions; pin elsewhere if you need a specific version.
+
+#  BREW              APT
+git                  git
+gh                   gh
+git-lfs              git-lfs
+jq                   jq
+jc                   jc
+vim                  vim
+tmux                 tmux
+htop                 htop
+ncdu                 ncdu
+wget                 wget
+shellcheck           shellcheck
+gnupg                gnupg
+corkscrew            corkscrew
+zstd                 zstd
+cmake                cmake
+make                 make
+pkg-config           pkg-config
+bash-completion      bash-completion
+protobuf             protobuf-compiler
+
+# GNU userland on macOS (already present in the base Linux install)
+coreutils            -
+watch                -
+
+# Linux build/runtime basics (provided by the Xcode Command Line Tools on macOS)
+-                    build-essential
+-                    iputils-ping
+-                    lsof
+-                    net-tools
+-                    psmisc
