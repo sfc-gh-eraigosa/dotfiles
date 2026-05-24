@@ -28,3 +28,5 @@ gemini-yolo() {
     fi
     command gemini -y "$@"
 }
+
+alias sync-skills="bash $HOME/git/dotfiles/opt/scripts/system/sync-skills.sh"
