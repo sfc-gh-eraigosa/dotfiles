@@ -66,53 +66,6 @@ fi
 cleanup_broken_links "${HOME}/.gemini/policies"
 cleanup_broken_links "${HOME}/.gemini/commands"
 
-# --- Skills ---
-echo "  Linking skills..."
-SKILLS_DEST="${HOME}/.agents/skills"
-mkdir -p "$SKILLS_DEST"
-
-# Function to safely create a symlink for a skill
-link_skill() {
-    local src="$1"
-    local dest="$2"
-    
-    if [ ! -d "$src" ]; then
-        return
-    fi
-    
-    # Remove trailing slash if any
-    src="${src%/}"
-    
-    if [ -L "$dest" ]; then
-        if [ "$(readlink "$dest")" = "$src" ]; then
-            return
-        fi
-        rm "$dest"
-    elif [ -e "$dest" ]; then
-        echo "    Warning: $dest exists but is not a symlink. Moving to $dest.bak"
-        mv "$dest" "$dest.bak"
-    fi
-    
-    echo "    Linking $(basename "$dest") -> $src"
-    ln -s "$src" "$dest"
-}
-
-# 1. Repo-wide skills from .gemini/skills
-if [ -d "$BASE_DIR/.gemini/skills" ]; then
-    for skill_dir in "$BASE_DIR/.gemini/skills"/*/; do
-        skill_name=$(basename "$skill_dir")
-        if [ -f "${skill_dir}SKILL.md" ]; then
-            link_skill "$skill_dir" "$SKILLS_DEST/$skill_name"
-        fi
-    done
-fi
-
-# 2. Specific source skills
-link_skill "$BASE_DIR/src/ssh-host-finder" "$SKILLS_DEST/ssh-host-finder"
-link_skill "$BASE_DIR/src/tmux-mgr/skill" "$SKILLS_DEST/tmux"
-link_skill "$BASE_DIR/src/gss/skill" "$SKILLS_DEST/git-safe-sync"
-link_skill "$BASE_DIR/src/ssh-key-sync" "$SKILLS_DEST/ssh-key-sync"
-
 # --- Shell aliases (~/.config/gemini/aliases.sh, sourced by .zshrc and .bashrc) ---
 # Provides the gemini() wrapper with tmux auto-anchor support.
 GEMINI_XDG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gemini"

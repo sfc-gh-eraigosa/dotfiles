@@ -31,6 +31,13 @@ This skill provides a structured and safe workflow for managing Git repositories
   - **Create PR**: (Add -> Commit -> Feature Branch -> Push -> GH PR)
   - **Cancel**: Do nothing.
 
+- **PR Hygiene**: When creating a PR, you MUST provide a high-quality, comprehensive description. It should include:
+  - **What**: A clear summary of the functional changes.
+  - **Why**: The technical or workflow rationale for the change.
+  - **Impact**: How this affects the system or user experience (e.g., "New alias available", "Bootstrap is now faster").
+  - **Testing**: A brief note on how the change was verified.
+  - NEVER use generic or empty PR descriptions.
+
 ### 3. Execution (Action Phase)
 - ONLY proceed if the user explicitly selected a confirmation option in the previous turn.
 - **Handshake Generation**: Before calling `gss push`, you MUST generate an approval token — as **two separate commands**. The `safety_guard.sh` hook intentionally blocks chaining the token generation and the push in one command, so the user sees an explicit approve→publish gate.

@@ -93,7 +93,12 @@ for file in ".profile" ".zshrc" ".bash_logout" ".bashrc"; do
 done 
 
 # Gemini CLI Configuration (Skills and Policies)
+if [ -f "${BASE_DIR}/opt/scripts/system/sync-skills.sh" ]; then
+    bash "${BASE_DIR}/opt/scripts/system/sync-skills.sh"
+fi
+
 if [ -f "${BASE_DIR}/opt/scripts/system/install_gemini_skills.sh" ]; then
+    # Keeping the original for policy/command setup, but sync-skills handles the skill links now.
     "${BASE_DIR}/opt/scripts/system/install_gemini_skills.sh"
 fi
 
