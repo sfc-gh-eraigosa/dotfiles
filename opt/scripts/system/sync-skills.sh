@@ -7,12 +7,27 @@ set -e
 BASE_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
 SKILLS_DEST="${HOME}/.agents/skills"
 
+show_help() {
+    echo "Usage: sync-skills [FLAGS]"
+    echo ""
+    echo "Synchronizes agent skills from the dotfiles repository to ~/.agents/skills."
+    echo ""
+    echo "Flags:"
+    echo "  --build     Build associated binaries (gss, tmux-mgr, wol) while syncing."
+    echo "  --help      Show this help message."
+    echo ""
+}
+
 BUILD=false
 for arg in "$@"; do
   case $arg in
     --build)
       BUILD=true
       shift
+      ;;
+    --help)
+      show_help
+      exit 0
       ;;
   esac
 done
