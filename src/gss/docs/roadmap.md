@@ -388,3 +388,47 @@ against its **actual upstream `LICENSE`** (badges/marketing don't count):
 - **Auto-migrating live workers between backends** — `Info.Backend` is
   immutable for a worker's lifetime by design; migration = `done` the old
   worker, `worker add` a new one.
+
+---
+
+## Post-v1.0 engineering follow-ups
+
+Carried over from the v1.0 development cursor (`STATE.md`, now retired)
+and the PR-61 integration review. Feature gaps are also summarized in
+[`RELEASE.md`](./RELEASE.md#known-gaps-non-blocking-tracked); this list is
+the durable home for the engineering/test-debt items.
+
+**Test coverage**
+
+- `cmd/` is at ~20.6% — below the repo's >60% bar. The cobra leaves are
+  thin shims, but the security-relevant glue (`classicAllowed` + the
+  `mode.IsInWorker` gate in `cmd/push.go`) deserves direct table tests.
+- `internal/worktree/git`: `parseStatusV2` (~29%) and `countField` (0%)
+  are the least-tested code on a hot path (`feature list`/`conflicts`/
+  `checkpoint --auto`). Add golden fixtures over real
+  `git status --porcelain=v2 -b` output (renamed `2 `, unmerged `u `,
+  ahead/behind `# branch.ab`).
+
+**Robustness / hardening**
+
+- Unbounded `bytes.Buffer` for very large `git log` output (carry-forward
+  from PR-02 QA) — bound it in a future hardening pass.
+- Optional `gh` subprocess integration test behind a build tag /
+  `GSS_GH_INTEGRATION=1` gate (PR-03 carry-forward).
+- A `gss --version` / capability gate so `tmux-mgr` fails with "rebuild
+  gss: src/gss/build.sh" instead of a cryptic `unknown flag` when the
+  installed binary lags source (the `e2e-gss-integration.sh` guard
+  mitigates but doesn't replace this).
+
+**Feature gaps** (detail in `RELEASE.md` known-gaps)
+
+- `gss feature worker update`; `gh`-login user-resolution precedence;
+  `gss feature start --purpose` one-shot; `checkpoint --message`;
+  `conflicts` defaulting to all features.
+
+**Contract ergonomics**
+
+- The approval guardrail is validated by grepping human prose
+  (`missing or unreadable approval token`). A structured `--json` / stable
+  error-code surface would let integration tests assert on a contract
+  rather than wording.
