@@ -4,8 +4,11 @@ This directory contains scripts for configuring the operating system, environmen
 
 ## Scripts
 
+- `sync-skills.sh`: **Canonical skill linker for both assistants.** Discovers every `SKILL.md` (under `src/*/`, `ai/skills/*`, `.gemini/skills/*`) and links it into **both** `~/.agents/skills` (Gemini CLI) and `~/.claude/skills` (Claude Code). Exposed as the `sync-skills` alias; pass `--build` to also rebuild core binaries (`gss`, `tmux-mgr`, `wol`).
 - `gemini_install.sh`: Installs and configures the Gemini CLI and environment.
-- `install_gemini_skills.sh`: Sets up specialized skills for the Gemini CLI.
+- `install_gemini_skills.sh`: Gemini-specific config (policies, commands, aliases). Skill links are handled by `sync-skills.sh`.
+- `claude_install.sh`: Installs (or updates) the Claude Code CLI binary.
+- `install_claude_skills.sh`: Claude-specific config (settings.json, slash commands, hooks, aliases). Skill links are handled by `sync-skills.sh`.
 - `install_sops.sh`: Installs the `sops` secrets-management binary into `~/opt/bin` (Linux/WSL fetches the official release; macOS uses the Brewfile).
 - `nvm`: Helper for Node Version Manager setup.
 - `google-cli-setup.sh`: Configures the Google Cloud SDK.
