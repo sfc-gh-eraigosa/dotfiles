@@ -20,7 +20,8 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 
 ## Portability & Best Practices
 
-- **Use $HOME**: Always use `${HOME}` or `~` instead of absolute home paths (e.g., `/Users/eraigosa`) in scripts, aliases, and configuration files to ensure they are portable across different systems and users.
+- **Use $HOME**: Always use `${HOME}` or `~` instead of absolute home paths (e.g., `/home/wenlock` or `/Users/eraigosa`) in scripts, aliases, and configuration files to ensure they are portable across different systems and users.
+- **Avoid Hardcoded Usernames**: Never hardcode usernames in paths or instructions; use environment variables like `$USER` if needed.
 - **Avoid Hardcoded Paths**: Use relative paths or environment variables (like `BASE_DIR` in `install.sh`) whenever possible.
 
 ## Shell & Dotfiles Conventions

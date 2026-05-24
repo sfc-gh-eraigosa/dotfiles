@@ -30,3 +30,4 @@ gemini-yolo() {
 }
 
 alias sync-skills="bash $HOME/git/dotfiles/opt/scripts/system/sync-skills.sh"
+alias sync-forks="bash $HOME/git/dotfiles/ai/skills/sync-forks/scripts/check_and_sync_forks.sh"

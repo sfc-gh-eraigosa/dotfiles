@@ -16,7 +16,7 @@ When the user asks to check or sync their forks, use the provided script.
 Run the script without any arguments to get a summary of forks that are behind their parent repositories.
 
 ```bash
-bash /home/wenlock/git/dotfiles/ai/skills/sync-forks/scripts/check_and_sync_forks.sh
+sync-forks
 ```
 
 ### 2. Sync Out-of-Date Forks
@@ -24,7 +24,7 @@ bash /home/wenlock/git/dotfiles/ai/skills/sync-forks/scripts/check_and_sync_fork
 Run the script with the `--sync` flag to automatically sync any forks that are behind.
 
 ```bash
-bash /home/wenlock/git/dotfiles/ai/skills/sync-forks/scripts/check_and_sync_forks.sh --sync
+sync-forks --sync
 ```
 
 ### 3. Force Sync Diverged Forks
@@ -32,7 +32,7 @@ bash /home/wenlock/git/dotfiles/ai/skills/sync-forks/scripts/check_and_sync_fork
 If a fork has diverged from its parent and the user wants to forcefully overwrite local changes to match the parent, use the `--force` flag along with `--sync`.
 
 ```bash
-bash /home/wenlock/git/dotfiles/ai/skills/sync-forks/scripts/check_and_sync_forks.sh --sync --force
+sync-forks --sync --force
 ```
 
 ## Note
