@@ -19,6 +19,11 @@ jobs:
           cache-dependency-path: "src/**/*.sum"
       - name: Run Go Unit Tests
         run: make unit-test
+      - name: gss dependency + license gate
+        run: |
+          go install github.com/google/go-licenses@latest
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          GSS_STRICT_CHECK=1 bash src/gss/scripts/check-deps.sh
 
   build-and-validate:
     name: Build and Integration Test

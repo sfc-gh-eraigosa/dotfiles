@@ -117,6 +117,46 @@ echo "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" > "$HOME/.config/gss/approval.to
         "cross-repo gss push: stale token (does not match target-repo HEAD)"
 )
 
+# === gss feature publish-verb token gate (PR-51) ===
+# pr --ready / merged / restack mutate remote state, so they require a fresh
+# approval token just like classic push/pr/sync.
+rm -f "$HOME/.config/gss/approval.token"
+assert_exit 2 Bash "gss feature pr --ready"                       "feature pr --ready without token"
+assert_exit 2 Bash "gss feature merged auth/erai/api"             "feature merged without token"
+assert_exit 2 Bash "gss feature restack auth/erai/api --onto main" "feature restack without token"
+# Non-publish feature verbs need no token.
+assert_exit 0 Bash "gss feature list"                             "feature list needs no token"
+assert_exit 0 Bash "gss feature pr"                               "feature pr without --ready needs no token"
+# With a fresh token (matching target-repo HEAD), the publish verbs pass.
+(
+    git -C "$HOME/git/dotfiles" rev-parse HEAD > "$HOME/.config/gss/approval.token"
+    assert_exit 0 Bash "cd $HOME/git/dotfiles && gss feature pr --ready"           "feature pr --ready with fresh token"
+    assert_exit 0 Bash "cd $HOME/git/dotfiles && gss feature merged auth/erai/api" "feature merged with fresh token"
+)
+rm -f "$HOME/.config/gss/approval.token"
+
+# === gss --force-autonomous inside a worker worktree (resolution #22) ===
+# A fresh token is present so the token gate would otherwise ALLOW these — the
+# block must come from the wrong-mode (worker-cwd) rule, not the token rule.
+WT_PROBE="$HOME/.config/gss/worktrees/octo/repo/auth/erai/api"
+git rev-parse HEAD > "$HOME/.config/gss/approval.token" 2>/dev/null || echo token > "$HOME/.config/gss/approval.token"
+assert_exit 2 Bash "cd $WT_PROBE && gss push --force-autonomous" "push --force-autonomous in a worker worktree (wrong mode)"
+assert_exit 2 Bash "cd $WT_PROBE && gss pr --force-autonomous"   "pr --force-autonomous in a worker worktree (wrong mode)"
+rm -f "$HOME/.config/gss/approval.token"
+# Same flag on a regular checkout (not under the worktree root) + fresh token → allowed.
+(
+    git -C "$HOME/git/dotfiles" rev-parse HEAD > "$HOME/.config/gss/approval.token"
+    assert_exit 0 Bash "cd $HOME/git/dotfiles && gss push --force-autonomous" "push --force-autonomous on a regular checkout"
+)
+rm -f "$HOME/.config/gss/approval.token"
+
+# === gss feature checkpoint outside a worker worktree (PR-51) ===
+# Bare checkpoint resolves the worker from cwd; without --worker AND outside
+# the worktree root it is a classic-context misuse.
+assert_exit 2 Bash "cd $HOME/git/dotfiles && gss feature checkpoint" "checkpoint without --worker outside a worktree"
+assert_exit 0 Bash "gss feature checkpoint --worker auth/erai/api"   "checkpoint --worker is fine anywhere"
+assert_exit 0 Bash "cd $WT_PROBE && gss feature checkpoint"          "bare checkpoint inside a worker worktree"
+
 # Clean up
 rm -f "$HOME/.config/gss/approval.token"
 

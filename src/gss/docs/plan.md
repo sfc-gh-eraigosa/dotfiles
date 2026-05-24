@@ -979,6 +979,7 @@ release.
 | `gss version --json` keys | `"version"`, `"commit"`, `"dirty"` | (future tooling) |
 | `gss feature worker add --json` keys | `"worker_ref"`, `"worktree_path"`, `"branch"`, `"base_branch"` | tmux-mgr `runAgentStart` |
 | `gss feature checkpoint --auto` skip diagnostic | one-line, prefix `gss: auto-checkpoint skipped:` | tmux-mgr pane-close-hook |
+| `gss push` refusal (no approval token) | `missing or unreadable approval token` (+ exit 22) | `scripts/test.sh` GSS guardrail; `/sync` safety |
 
 ---
 

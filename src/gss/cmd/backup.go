@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
-	"os/exec"
-	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/wenlock/dotfiles/gss/internal/backup"
+	"github.com/wenlock/dotfiles/gss/internal/config"
+	"github.com/wenlock/dotfiles/gss/internal/git"
 )
 
 var backupCmd = &cobra.Command{
@@ -13,16 +16,17 @@ var backupCmd = &cobra.Command{
 	Short: "Create a local safety branch of current changes",
 	Run: func(cmd *cobra.Command, args []string) {
 		path := getRepoPath()
-		timestamp := time.Now().Format("20060102-150405")
-		branchName := fmt.Sprintf("backup/gss-%s", timestamp)
 
-		fmt.Printf("Creating safety backup branch in %s: %s\n", path, branchName)
-		
-		out, err := exec.Command("git", "-C", path, "branch", branchName).CombinedOutput()
+		// Delegate to internal/backup (PR-11). The branch name (backup/gss-
+		// <timestamp>) is byte-identical to the classic command; Create now
+		// also appends a monotonic -N suffix if the name collides, so a rerun
+		// in the same second succeeds instead of failing.
+		name, err := backup.NewService(git.NewSystemRunner(), config.SystemClock{}).Create(context.Background(), path)
 		if err != nil {
-			fmt.Printf("Error creating backup branch: %s\n", string(out))
+			fmt.Printf("Error creating backup branch: %s\n", err)
 			return
 		}
+		fmt.Printf("Creating safety backup branch in %s: %s\n", path, name)
 		fmt.Println("Backup branch created successfully.")
 	},
 }

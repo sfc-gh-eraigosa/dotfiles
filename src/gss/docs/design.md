@@ -500,15 +500,17 @@ A thin wrapper around `git worktree add/remove/list` and `git status
 --porcelain=v2 -b`. No new dependencies. This is the only backend that
 ships in v1; everything else stays a `// TODO` doc-only package.
 
-### Future: `overlayfs` backend (placeholder)
+### Future backends (overlayfs, sandboxfs, dockerfs, tmpfs)
 
-An overlayfs backend would maintain a single bare clone (the "lower"
-layer) and stack a per-worker upper dir on top, mounted at the worker's
-path. Pros: O(MB) instead of O(GB) per worker, faster spin-up, shared
-object database. Cons: Linux-only (macOS would need bindfs or similar),
-needs root or user-namespace tricks, and any background `git gc` on the
-lower layer must be coordinated. Deferred — the interface lets us add
-it without touching callers.
+Alternative backends — kernel `overlayfs` copy-on-write, Bazel's
+Apache-2.0 `sandboxfs`, container/`dockerfs` (with optional full process
+isolation), and RAM-backed `tmpfs` scratch trees — are all deferred past
+v1.0. The interface above lets us add each as one new sub-package + one
+`Register` call without touching callers. Architecture, the per-backend
+trade-off matrix, config schema, and the **license gate** (kernel overlay
+is fine; the GPL-2.0 `fuse-overlayfs` helper is banned; macFUSE is
+review-required) are documented in
+[roadmap.md → Worktree backend options](./roadmap.md#worktree-backend-options).
 
 ### Selecting a backend
 

@@ -29,13 +29,22 @@ if ! git -C "$SCRIPT_DIR" diff --quiet 2>/dev/null; then
     DIRTY="true"
 fi
 
-LDFLAGS="-X github.com/wenlock/dotfiles/gss/cmd.Version=$VERSION \
-         -X github.com/wenlock/dotfiles/gss/cmd.Commit=$COMMIT \
-         -X github.com/wenlock/dotfiles/gss/cmd.BuildDate=$DATE \
-         -X github.com/wenlock/dotfiles/gss/cmd.Dirty=$DIRTY"
+# Version metadata is stamped into the single source of truth,
+# internal/version (PR-04; design.md → "Build-time version"). No build
+# vars live in package cmd or package main any more.
+LDFLAGS="-X github.com/wenlock/dotfiles/gss/internal/version.Version=$VERSION \
+         -X github.com/wenlock/dotfiles/gss/internal/version.Commit=$COMMIT \
+         -X github.com/wenlock/dotfiles/gss/internal/version.BuildDate=$DATE \
+         -X github.com/wenlock/dotfiles/gss/internal/version.Dirty=$DIRTY"
 
 mkdir -p "$BIN_DIR"
 echo "Building gss v$VERSION with $($GO_BIN version)..."
 cd "$SCRIPT_DIR"
 "$GO_BIN" build -ldflags "$LDFLAGS" -o "$BIN_DIR/gss" main.go
 echo "gss built and installed to $BIN_DIR/gss"
+
+# Dependency + seam gate (PR-50; design.md → Pinned external dependencies).
+# Non-strict here so a normal install without go-licenses still succeeds: the
+# os/exec seam check always runs, and the license gate runs only when
+# go-licenses is present (failing the build on a banned-license dependency).
+"$SCRIPT_DIR/scripts/check-deps.sh"

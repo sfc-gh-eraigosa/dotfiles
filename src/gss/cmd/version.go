@@ -6,13 +6,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-)
-
-var (
-	Version   = "dev"
-	Commit    = "none"
-	Dirty     = "false"
-	BuildDate = "unknown"
+	"github.com/wenlock/dotfiles/gss/internal/version"
 )
 
 type VersionInfo struct {
@@ -31,11 +25,12 @@ var versionCmd = &cobra.Command{
 	Short: "Show version information",
 	Run: func(cmd *cobra.Command, args []string) {
 		execPath, _ := os.Executable()
+		v := version.Get()
 		info := VersionInfo{
-			Version:     Version,
-			Commit:      Commit,
-			Dirty:       Dirty,
-			BuildDate:   BuildDate,
+			Version:     v.Version,
+			Commit:      v.Commit,
+			Dirty:       v.Dirty,
+			BuildDate:   v.BuildDate,
 			Description: "Git Safe Sync (gss) - A tool for safe repo synchronization",
 			Path:        execPath,
 		}
