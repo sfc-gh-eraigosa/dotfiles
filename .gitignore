@@ -34,6 +34,7 @@ opt/bin/*
 !opt/bin/pkg-install
 !opt/bin/pkg-install-apt
 !opt/bin/pkg-install-brew
+!opt/bin/install_windows.sh
 
 # Opt Subdirectory Configuration
 opt/.DS_Store
@@ -49,7 +50,7 @@ opt/nano/
 !docs/**
 
 # Source Code Build Artifacts
-src/tmux-mgr/tmux-mgr
+src/tmux-mgr/tmux-mg
 coverage/
 
 # System & Local Settings (Always Private)

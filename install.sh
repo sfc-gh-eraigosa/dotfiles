@@ -37,30 +37,10 @@ else
   ln -sf "${BASE_DIR}/opt" "${HOME}/opt"
 fi
 
-# ---------------------------------------------------------------------------
 # Windows/WSL only: deploy opt/Desktop/* onto the real Windows Desktop.
-# The Desktop is often OneDrive-redirected, so ask Windows for its real path
-# (via PowerShell) and translate it with wslpath. No-op off Windows.
-# ---------------------------------------------------------------------------
-if grep -qi microsoft /proc/version 2>/dev/null; then
-  # Locate powershell.exe: prefer PATH, fall back to the standard System32 path
-  # (Windows exes are not always on the WSL PATH, e.g. appendWindowsPath=false).
-  ps_exe="$(command -v powershell.exe 2>/dev/null || true)"
-  if [ -z "$ps_exe" ] && [ -x "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" ]; then
-    ps_exe="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
-  fi
-  if [ -n "$ps_exe" ]; then
-    win_desktop_raw="$("$ps_exe" -NoProfile -Command "[Environment]::GetFolderPath('Desktop')" 2>/dev/null | tr -d '\r')"
-    win_desktop="$(wslpath -u "$win_desktop_raw" 2>/dev/null)"
-    if [ -n "$win_desktop" ] && [ -d "$win_desktop" ]; then
-      echo "Deploying opt/Desktop -> ${win_desktop}"
-      cp -r "${BASE_DIR}/opt/Desktop/." "${win_desktop}/"
-    else
-      echo "WARNING: could not resolve Windows Desktop (${win_desktop_raw}); skipping desktop deploy."
-    fi
-  else
-    echo "NOTE: powershell.exe not found; skipping Windows Desktop deploy."
-  fi
+# Logic is isolated in opt/bin/install_windows.sh for clarity.
+if [ -f "${BASE_DIR}/opt/bin/install_windows.sh" ]; then
+  bash "${BASE_DIR}/opt/bin/install_windows.sh" "${BASE_DIR}"
 fi
 
 # Source hardware detection
@@ -77,10 +57,10 @@ if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
       "${BASE_DIR}/opt/scripts/system/setup_jtop.sh"
     fi
     
-    # Set Chromium as default browser
+    # Set Chromium as default browse
     if command -v apt-get &> /dev/null; then
       echo "Ensuring Chromium is installed and set as default..."
-      sudo apt-get install -y -qq chromium-browser
+      sudo apt-get install -y -qq chromium-browse
       
       # Set as default in update-alternatives
       sudo update-alternatives --set x-www-browser /usr/bin/chromium-browser 2>/dev/null || true
@@ -130,7 +110,7 @@ else
   # Install the curated common-core packages. They are defined once in
   # opt/profiles/packages.tsv; the per-platform installers in opt/bin translate
   # that list to the right package manager (apt on Debian/Ubuntu/WSL, Homebrew
-  # on macOS). These can also be run by hand: `pkg-install` (auto-detect) or
+  # on macOS). These can also be run by hand: `pkg-install` (auto-detect) o
   # `pkg-install-apt` / `pkg-install-brew` directly.
   if [ -x "${BASE_DIR}/opt/bin/pkg-install" ]; then
     "${BASE_DIR}/opt/bin/pkg-install" || echo "WARNING: package install reported problems; continuing."
@@ -191,7 +171,7 @@ fi
 
 # only setup these scripts when docker is installed and responsive
 if command -v docker &> /dev/null; then
-    # Setup docker permissions for the current user
+    # Setup docker permissions for the current use
     "${BASE_DIR}/opt/scripts/docker/setup_docker_perms.sh"
     
     # Check if Docker daemon is actually running (timeout after 5 seconds)
@@ -348,7 +328,7 @@ if [ -f "${BASE_DIR}/src/gss/build.sh" ]; then
     fi
 fi
 
-# build and install tmux-mgr
+# build and install tmux-mg
 if [ -f "${BASE_DIR}/src/tmux-mgr/build.sh" ]; then
     echo "Installing tmux-mgr..."
     bash "${BASE_DIR}/src/tmux-mgr/build.sh"
