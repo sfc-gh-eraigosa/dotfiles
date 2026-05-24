@@ -18,6 +18,8 @@ import (
 )
 
 var prForceAutonomous bool
+var prTitle string
+var prBody string
 
 var prCmd = &cobra.Command{
 	Use:   "pr",
@@ -51,6 +53,8 @@ var prCmd = &cobra.Command{
 			RepoPath:        path,
 			DefaultBranch:   getDefaultBranch(),
 			ForceAutonomous: prForceAutonomous,
+			Title:           prTitle,
+			Body:            prBody,
 		}); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(errors.ExitCode(err))
@@ -60,5 +64,7 @@ var prCmd = &cobra.Command{
 
 func init() {
 	prCmd.Flags().BoolVar(&prForceAutonomous, "force-autonomous", false, "Skip the approval prompt (Dangerous)")
+	prCmd.Flags().StringVar(&prTitle, "title", "", "Pull request title")
+	prCmd.Flags().StringVar(&prBody, "body", "", "Pull request body")
 	rootCmd.AddCommand(prCmd)
 }
