@@ -59,10 +59,18 @@ function run_integration_tests() {
     docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && which git_add.sh && which gemini_install.sh && which claude_install.sh"
 
     log "Verifying GSS Technical Guardrail..."
-    if docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && gss push" 2>&1 | grep -q "Missing or invalid AI approval token"; then
-        log "GSS safeguard verified."
+    # gss push must refuse without a HEAD-bound approval token. v1.0 reworded
+    # the message (internal/approval) and pins exit code 22
+    # (ExitApprovalTokenMissing). Assert BOTH the declared stable string and
+    # the exit code, so a future reword or exit-code drift is caught.
+    # See src/gss/docs/plan.md -> "Stable output strings".
+    guard_out=$(docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && gss push" 2>&1)
+    guard_rc=$?
+    if echo "$guard_out" | grep -q "missing or unreadable approval token" && [ "$guard_rc" -eq 22 ]; then
+        log "GSS safeguard verified (refused without token, exit ${guard_rc})."
     else
-        echo "FAIL: GSS safeguard failed to trigger!"
+        echo "FAIL: GSS safeguard failed to trigger! (exit=${guard_rc})"
+        echo "$guard_out"
         exit 1
     fi
 

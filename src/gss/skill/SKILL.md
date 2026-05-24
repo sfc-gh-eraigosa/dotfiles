@@ -36,7 +36,7 @@ This skill provides a structured and safe workflow for managing Git repositories
 - **Handshake Generation**: Before calling `gss push`, you MUST generate an approval token.
   * Command: `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token && gss push`
 - This consumes the token and satisfies the binary's technical safeguard.
-- **Auto-Recovery**: If `gss push` fails with a "Missing or invalid AI approval token" error, it means you skipped the user confirmation turn. You MUST immediately stop and explicitly ask the user for permission before retrying.
+- **Auto-Recovery**: If `gss push` fails with a "missing or unreadable approval token" error (exit 22), it means you skipped the user confirmation turn. You MUST immediately stop and explicitly ask the user for permission before retrying.
 
 ### 4. Summarize & Link (Verification Phase)
 - After execution, summarize the result using the output from 'gss push'.
