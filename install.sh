@@ -37,6 +37,12 @@ else
   ln -sf "${BASE_DIR}/opt" "${HOME}/opt"
 fi
 
+# Windows/WSL only: deploy opt/Desktop/* onto the real Windows Desktop.
+# Logic is isolated in opt/bin/install_windows.sh for clarity.
+if [ -f "${BASE_DIR}/opt/bin/install_windows.sh" ]; then
+  bash "${BASE_DIR}/opt/bin/install_windows.sh" "${BASE_DIR}"
+fi
+
 # Source hardware detection
 if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
   . "${BASE_DIR}/opt/lib/hardware.sh"
@@ -51,10 +57,10 @@ if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
       "${BASE_DIR}/opt/scripts/system/setup_jtop.sh"
     fi
     
-    # Set Chromium as default browser
+    # Set Chromium as default browse
     if command -v apt-get &> /dev/null; then
       echo "Ensuring Chromium is installed and set as default..."
-      sudo apt-get install -y -qq chromium-browser
+      sudo apt-get install -y -qq chromium-browse
       
       # Set as default in update-alternatives
       sudo update-alternatives --set x-www-browser /usr/bin/chromium-browser 2>/dev/null || true
@@ -104,7 +110,7 @@ else
   # Install the curated common-core packages. They are defined once in
   # opt/profiles/packages.tsv; the per-platform installers in opt/bin translate
   # that list to the right package manager (apt on Debian/Ubuntu/WSL, Homebrew
-  # on macOS). These can also be run by hand: `pkg-install` (auto-detect) or
+  # on macOS). These can also be run by hand: `pkg-install` (auto-detect) o
   # `pkg-install-apt` / `pkg-install-brew` directly.
   if [ -x "${BASE_DIR}/opt/bin/pkg-install" ]; then
     "${BASE_DIR}/opt/bin/pkg-install" || echo "WARNING: package install reported problems; continuing."
@@ -165,7 +171,7 @@ fi
 
 # only setup these scripts when docker is installed and responsive
 if command -v docker &> /dev/null; then
-    # Setup docker permissions for the current user
+    # Setup docker permissions for the current use
     "${BASE_DIR}/opt/scripts/docker/setup_docker_perms.sh"
     
     # Check if Docker daemon is actually running (timeout after 5 seconds)
@@ -322,7 +328,7 @@ if [ -f "${BASE_DIR}/src/gss/build.sh" ]; then
     fi
 fi
 
-# build and install tmux-mgr
+# build and install tmux-mg
 if [ -f "${BASE_DIR}/src/tmux-mgr/build.sh" ]; then
     echo "Installing tmux-mgr..."
     bash "${BASE_DIR}/src/tmux-mgr/build.sh"
