@@ -67,8 +67,12 @@ function run_integration_tests() {
     # `gss push` exits non-zero by design here; bracket with `set +e` so the
     # intentional refusal doesn't trip the script-level `set -e` (the original
     # survived only because its failing command sat inside an `if` pipeline).
+    # Run INSIDE the repo: v1.0's approval check resolves HEAD before reading
+    # the token, so cwd must be a real git repo. (The pre-v1.0 code checked the
+    # token first and reported "missing" from anywhere, so running from $HOME
+    # passed by accident — it never touched git.)
     set +e
-    guard_out=$(docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && gss push" 2>&1)
+    guard_out=$(docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && cd ~/git/dotfiles && gss push" 2>&1)
     guard_rc=$?
     set -e
     if echo "$guard_out" | grep -q "missing or unreadable approval token" && [ "$guard_rc" -eq 22 ]; then
