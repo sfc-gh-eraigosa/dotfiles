@@ -33,8 +33,9 @@ This skill provides a structured and safe workflow for managing Git repositories
 
 ### 3. Execution (Action Phase)
 - ONLY proceed if the user explicitly selected a confirmation option in the previous turn.
-- **Handshake Generation**: Before calling `gss push`, you MUST generate an approval token.
-  * Command: `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token && gss push`
+- **Handshake Generation**: Before calling `gss push`, you MUST generate an approval token — as **two separate commands**. The `safety_guard.sh` hook intentionally blocks chaining the token generation and the push in one command, so the user sees an explicit approve→publish gate.
+  * Step 1 (one command): `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token`
+  * Step 2 (a separate command): `gss push`
 - This consumes the token and satisfies the binary's technical safeguard.
 - **Auto-Recovery**: If `gss push` fails with a "missing or unreadable approval token" error (exit 22), it means you skipped the user confirmation turn. You MUST immediately stop and explicitly ask the user for permission before retrying.
 

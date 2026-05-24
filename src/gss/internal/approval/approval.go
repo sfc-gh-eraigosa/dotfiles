@@ -78,13 +78,18 @@ func (v *Verifier) Verify(ctx context.Context, repoPath string, forceAutonomous 
 	if forceAutonomous {
 		return nil
 	}
-	head, err := v.headSHA(ctx, repoPath)
-	if err != nil {
-		return fmt.Errorf("approval: resolve HEAD: %w", err)
-	}
+	// Read the token's existence BEFORE resolving HEAD. A missing token is
+	// the guardrail's primary signal and must surface as
+	// ErrApprovalTokenMissing regardless of git state (e.g. cwd is not a
+	// repo), so it can't be masked by an unrelated "resolve HEAD" error.
+	// HEAD is only needed to validate a token that actually exists.
 	content, err := os.ReadFile(v.Path)
 	if err != nil {
 		return &Error{Reason: ReasonMissing, Err: errors.ErrApprovalTokenMissing}
+	}
+	head, err := v.headSHA(ctx, repoPath)
+	if err != nil {
+		return fmt.Errorf("approval: resolve HEAD: %w", err)
 	}
 	if token := strings.TrimSpace(string(content)); token != head {
 		return &Error{Reason: ReasonMismatch, Expected: head, Got: token, Err: errors.ErrApprovalTokenMissing}

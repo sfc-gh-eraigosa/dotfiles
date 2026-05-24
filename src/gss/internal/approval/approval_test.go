@@ -57,6 +57,34 @@ func TestVerify_MissingToken(t *testing.T) {
 	}
 }
 
+func TestVerify_MissingToken_HeadUnresolvable(t *testing.T) {
+	// Guardrail robustness: a missing token must surface as ReasonMissing
+	// even when HEAD cannot be resolved (e.g. cwd is not a git repo). The
+	// token-existence check must short-circuit before headSHA so the
+	// "you need approval" signal isn't masked by an unrelated git error.
+	failHead := &gitfake.Runner{Default: gitfake.Response{
+		Stderr: []byte("fatal: not a git repository"),
+		Err:    stderrors.New("exit status 128"),
+	}}
+	v := approval.NewVerifier(tokenPath(t), failHead) // dir exists; token file does not
+
+	err := v.Verify(t.Context(), ".", false)
+	if err == nil {
+		t.Fatal("missing token (HEAD unresolvable): err = nil; want rejection")
+	}
+	var ae *approval.Error
+	if !stderrors.As(err, &ae) || ae.Reason != approval.ReasonMissing {
+		t.Fatalf("err = %v; want *approval.Error{ReasonMissing} (token check must precede HEAD)", err)
+	}
+	if !stderrors.Is(err, errors.ErrApprovalTokenMissing) {
+		t.Errorf("err = %v; want wrapping ErrApprovalTokenMissing", err)
+	}
+	// Prove the short-circuit: headSHA must not have been called.
+	if failHead.CallCount() != 0 {
+		t.Errorf("headSHA called %d times; want 0 (token check should short-circuit)", failHead.CallCount())
+	}
+}
+
 func TestVerify_Mismatch(t *testing.T) {
 	path := tokenPath(t)
 	writeToken(t, path, "STALEsha\n")
