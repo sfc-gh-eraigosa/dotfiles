@@ -28,6 +28,15 @@ PR-61 (the final integration) opens *its own* non-draft PR against
   **Live deliverable: PR-60** (`tmux-mgr/skill/SKILL.md` updates — no gss
   leakage). The PR-48-era detail below predates this and is pending a full
   refresh.
+- **Documentation phase — applied locally, pending commit** (2026-05-23):
+  PR-60 SKILL.md cleanup DONE (0 `gss feature`, 0 `git worktree`
+  mentions; auto-checkpoint added as observable side effect). Plus, ahead
+  of PR-61: expanded `roadmap.md` with the **Worktree backend options**
+  section (git/overlayfs/sandboxfs[bazel]/dockerfs/tmpfs + comparison
+  matrix + license gate — kernel overlay OK, GPL-2.0 `fuse-overlayfs`
+  banned, macFUSE review-required), cross-linked from `design.md`;
+  created `RELEASE.md` (PR-61 migration note) and `CLEANUP.md`
+  (post-merge teardown plan). Next: confirm release gate, then open PR-61.
 - **Most recent (narrative below, pre-refresh)**: PR-48 — `gss feature` cobra subtree complete. **Batch H
   COMPLETE** (PR-44–48, dotfiles-only, flat `cmd/` layout per the cmd-leaf
   decision). All 11 feature verbs wired on `featureCmd`: start, worker add,

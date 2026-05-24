@@ -10,7 +10,7 @@ This skill provides expertise in managing tmux sessions and windows using the `t
 
 ### 1. Integrated Agent Team Orchestration
 
-`tmux-mgr` is a self-contained orchestrator that provides OS-level isolation for parallel agent tasks. By provisioning independent Git worktrees and spawning new instances of itself in dedicated tmux panes, multiple agents can work on the same repository without file collisions.
+`tmux-mgr` is a self-contained orchestrator that provides OS-level isolation for parallel agent tasks. By provisioning an isolated working directory for each agent and spawning new instances of itself in dedicated tmux panes, multiple agents can work on the same repository without file collisions.
 
 **Host-aware assistant selection.** `tmux-mgr` auto-detects which AI CLI is driving the orchestration and spawns the matching assistant inside each agent pane:
 
@@ -27,14 +27,14 @@ No flag is needed — detection is automatic from the host shell's environment.
 - **Check Progress**: `tmux-mgr agent list`
   - Defaults to sessions started from the current repo; pass `--all` to see every session (including global / legacy ones with no repo binding). Status reconciles live: `RUNNING` while the pane is alive, `COMPLETED` once `RESULT.md` is written, `FAILED` if the pane exits without one.
 - **Get Results (Fan-In)**: `tmux-mgr agent complete <session-id>`
-  - Retrieves the final summary from the `RESULT.md` file in the agent's isolated worktree.
+  - Retrieves the final summary from the `RESULT.md` file in the agent's isolated working directory.
 - **Cleanup**: `tmux-mgr agent cleanup <session-id>`
-  - Removes the Git worktree and deletes the session tracking file.
+  - Tears down the agent's isolated working directory and deletes the session tracking file.
 
 ### 2. Evaluation Suite
 - **Evaluate Agent Orchestration**: "tmux evaluate the agent"
   - This command instructs your assistant to run the self-validation suite located in `src/tmux-mgr/evaluation/AGENT_EVAL.md`.
-  - It proves the ability to spawn agents, isolate worktrees, and fan-in results.
+  - It proves the ability to spawn agents, isolate working directories, and fan-in results.
 
 ### 3. Session Management
 - **List sessions**: `tmux-mgr session list`
@@ -81,7 +81,8 @@ No flag is needed — detection is automatic from the host shell's environment.
 
 - **Self-Evaluation**: If a user asks to "evaluate the agent" or "test your team features," activate this skill and follow the instructions in `src/tmux-mgr/evaluation/AGENT_EVAL.md`.
 - **Orchestrate Effectively**: If a task is complex or requires parallel execution, proactively suggest using the `tmux-mgr agent` features with a direct task description.
-- **Isolate for Safety**: Explain that `tmux-mgr` creates a separate `git worktree` for each agent to prevent file-system conflicts.
+- **Isolate for Safety**: Explain that `tmux-mgr` gives each agent its own isolated working directory to prevent file-system conflicts.
+- **Durable Progress**: Each agent's work is automatically checkpointed to a draft pull request as it runs, so an interrupted or failed agent still leaves a recoverable trail you can inspect — you don't have to babysit a pane to avoid losing work.
 - **Fan-In**: Sub-agents MUST write their final summaries to `RESULT.md`. Retrieve these with `agent complete` before summarizing for the user.
 - **Introspect First**: Use `tmux-mgr capture` to understand what's running in other windows or to troubleshoot terminal output.
 - **Anchor before splitting**: If `tmux-mgr window split` or `tmux-mgr pane split` returns an error like `not running inside a tmux pane and no anchor established`, respond with the following message to the user:

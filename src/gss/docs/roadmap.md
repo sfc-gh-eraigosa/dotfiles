@@ -192,3 +192,199 @@ prioritised:
   hosts don't collide on disk paths.
 - A `gss feature audit --watch` mode that runs in the background and
   surfaces drift via a desktop notification.
+
+---
+
+## Worktree backend options
+
+**Status**: the `Backend` interface ships in v1.0 (PR-20/21) with exactly
+**one** implementation — the `git` backend. Every alternative below is
+doc-only / `// TODO` for v1.0. The interface (see
+[design.md → Worktree backend abstraction](./design.md#worktree-backend-abstraction))
+was deliberately shaped so each of these is "one new sub-package + one
+`worktree.Register(<name>, New)` call" with **zero changes to callers** —
+`checkpoint`, `rebase`, `push`, and PR plumbing keep operating on a plain
+git repo at the worktree path.
+
+### Why alternative backends at all
+
+The `git` backend runs `git worktree add` per worker: a full working tree
+on disk. For a few workers on a small repo that's fine. It stops being
+fine when:
+
+- the repo is large (a monorepo worker is O(GB); spin-up is
+  seconds-to-minutes),
+- you want **dozens** of ephemeral workers (fan-out orchestration),
+- you want stronger isolation than "same uid, different directory" — i.e.
+  the agent code is untrusted.
+
+### The hard contract every backend must preserve
+
+A backend may virtualize the inodes underneath, but the path it returns
+**must be a working git repo**: `git status` / `git log` / `git commit` /
+`git push` behave normally at that path. The rest of `gss` is
+backend-agnostic and must stay that way. Any approach that breaks native
+git semantics at the worktree path is disqualified, however fast it is.
+
+### Candidate backends
+
+#### 1. `git` — shipped in v1.0
+
+Thin wrapper over `git worktree add/remove/list` + `git status
+--porcelain=v2 -b`. Zero dependencies, correct git semantics for free,
+portable across Linux/macOS/WSL. The baseline against which the others
+are judged. Cost: O(repo size) disk per worker, slow spin-up on big
+repos.
+
+#### 2. `overlayfs` — kernel copy-on-write (Linux)
+
+Maintain one shared **lower** layer (a bare or full base clone); each
+worker gets its own **upper** + **work** dirs, kernel-mounted as an
+overlay at the worker path. Copy-on-write: unchanged files are shared,
+only edits consume space.
+
+- **Pros**: O(changed-files) disk, fast spin-up, one shared object DB.
+- **Cons**: Linux-only (macOS has no kernel overlay); needs
+  `CAP_SYS_ADMIN` or unprivileged user namespaces; any background
+  `git gc` on the lower layer must be coordinated; whiteout-file handling
+  on teardown.
+- **License gate (critical)**: use the **kernel** overlay filesystem via
+  `mount -t overlay` / `mount(2)` inside a user namespace (Linux ≥ 5.11
+  supports unprivileged overlay in a userns). Do **not** depend on
+  **`fuse-overlayfs`** — it ships under **GPL-2.0** (verify against its
+  upstream `LICENSE` before any work), which is **banned** for anything
+  we vendor or recommend in a skill (see
+  [src/CLAUDE.md → Banned licenses](../../src/CLAUDE.md)). The kernel
+  filesystem is the OS, not a linked dependency, so it carries no license
+  obligation on our statically-linked binary; the GPL userspace helper
+  does and is therefore out.
+
+#### 3. `sandboxfs` — Bazel's FUSE symlink filesystem ("bazel-based")
+
+The Bazel team built **`sandboxfs`**
+([github.com/bazelbuild/sandboxfs](https://github.com/bazelbuild/sandboxfs),
+**Apache-2.0** ✓ — verify the upstream `LICENSE`), a FUSE filesystem that
+materializes a tree from a declarative mapping near-instantly: read-only
+entries pass through to a shared base, writable entries land in a
+per-worker scratch dir. As a gss backend: one shared base checkout (the
+"lower"), each worker a sandboxfs mount that passes through unchanged
+files and copies-on-write only what an agent actually touches.
+
+- **Pros**: near-instant create, O(touched-files) disk, works on Linux
+  **and** macOS (via FUSE / macFUSE), Apache-2.0 (the reason it is
+  preferable to `fuse-overlayfs` for the COW story).
+- **Cons**: FUSE runtime dependency (macFUSE install friction; some hosts
+  forbid FUSE); the mapping must present a real `.git` so git tooling
+  works; `sandboxfs` is maintenance-light upstream.
+- **License gate**: `sandboxfs` itself is clean (Apache-2.0). **macFUSE**
+  is **review-required** — recent macFUSE releases are *not* clearly
+  OSI-permissive; pin to a permissive version after verifying its
+  `LICENSE`, or treat macOS COW as unsupported. The "bazel-based" idea
+  more broadly is a CAS-backed symlink forest (Bazel's own output-tree
+  trick); `sandboxfs` is the concrete, license-clean way to get there
+  without us reimplementing a content store.
+
+#### 4. `dockerfs` — container-overlay + optional process isolation
+
+Two flavors, increasing isolation:
+
+- **(a) fs-only**: use a container runtime's `overlay2` graph driver to
+  get the same COW story as `overlayfs`, managed through container
+  tooling rather than raw mounts.
+- **(b) full sandbox**: the worker's worktree is a bind-mount / volume
+  inside a throwaway container **and the agent process itself runs inside
+  that container**. This is the only backend that isolates the process
+  tree + network + filesystem, not just the filesystem — the right call
+  for untrusted agent code.
+
+- **Runtime**: Docker Engine (**Apache-2.0** ✓) or Podman (**Apache-2.0**
+  ✓, rootless-first) — verify each upstream `LICENSE`.
+- **Pros**: strongest isolation, reproducible per-worker toolchain, works
+  on macOS/Windows through the runtime's VM.
+- **Cons**: daemon dependency, heaviest spin-up, image/toolchain
+  management overhead.
+- **License / security gates**:
+  - Docker **Desktop** (the macOS/Windows bundle) carries **commercial
+    licensing terms** — a skill must recommend the Apache-2.0 **engine**
+    or **Podman**, never Desktop.
+  - Rootless container stacks frequently pull in **`fuse-overlayfs`
+    (GPL-2.0, banned)** — prefer the kernel `overlay` snapshotter or the
+    `native` snapshotter.
+  - Mounting the Docker socket into anything an agent controls is a
+    privilege-escalation surface; document it loudly and default to
+    rootless.
+
+#### 5. `tmpfs` — RAM-backed scratch trees
+
+A `git` (or overlay) worktree whose path lives on `tmpfs`. Fastest IO,
+zero persistence — dies on reboot, so only for genuinely disposable
+workers; **checkpoint-to-PR before teardown is mandatory**. Smallest
+change of all (compose the `git` backend with a tmpfs mount point).
+Capacity-bounded by RAM.
+
+### Comparison matrix
+
+| Backend | OS support | Extra dep (license) | Disk/worker | Spin-up | Isolation | Ships in |
+|---|---|---|---|---|---|---|
+| `git` | Linux/macOS/WSL | none | O(repo) | slow on big repos | uid + dir | **v1.0** |
+| `overlayfs` | Linux only | kernel overlay (none vendored) | O(changed) | fast | uid + dir + COW | post-v1 |
+| `sandboxfs` | Linux/macOS (FUSE) | sandboxfs (Apache-2.0) + FUSE runtime | O(touched) | very fast | uid + dir + COW | post-v1 |
+| `dockerfs` | Linux/macOS/Win (VM) | Docker/Podman engine (Apache-2.0) | O(changed) | slowest | process + net + fs | post-v1 |
+| `tmpfs` | Linux/macOS | none (RAM) | O(repo), in RAM | fastest IO | uid + dir, ephemeral | post-v1 |
+
+### Selecting & configuring a backend
+
+`worktree.backend` sets the default; `--backend <name>` on
+`gss feature start` / `worker add` overrides per-call (already specced in
+[design.md → Selecting a backend](./design.md#selecting-a-backend)). The
+creating backend is persisted per-worker in `registry.json`
+(`Info.Backend`), so teardown always uses the backend that made the
+worktree — flipping config never retroactively migrates a live worker.
+
+Backend-specific tuning lives under a `worktree.backends.<name>:`
+sub-block (reserved; v1.0 ignores it):
+
+```yaml
+# Reserved for a future gss release; ignored in v1.0.
+worktree:
+  backend: git              # git (v1.0) | overlayfs | sandboxfs | dockerfs | tmpfs
+  backends:
+    overlayfs:
+      base_clone: ~/.config/gss/base/<owner>/<repo>   # shared lower layer
+      userns: true                                     # unprivileged mount
+    sandboxfs:
+      base_clone: ~/.config/gss/base/<owner>/<repo>
+      sandboxfs_bin: sandboxfs                         # must resolve on PATH
+    dockerfs:
+      runtime: podman        # podman (rootless, preferred) | docker
+      image: gss-worker:latest
+      isolate_process: true  # (b) run the agent inside the container
+      mount_docker_socket: false   # never default-on; escalation surface
+    tmpfs:
+      size: 2g               # per-worker cap; bounded by host RAM
+```
+
+### License gate (read before implementing ANY of these)
+
+Per [src/CLAUDE.md → Library standards](../../src/CLAUDE.md), every
+companion CLI or library must be Allowed/Flag-for-review and verified
+against its **actual upstream `LICENSE`** (badges/marketing don't count):
+
+- ✅ **sandboxfs**, **Docker Engine**, **Podman** — Apache-2.0.
+- ❌ **fuse-overlayfs** — GPL-2.0; never vendor or recommend. Use kernel
+  overlay instead.
+- ⚠️ **macFUSE** — review-required; recent releases are not clearly
+  OSI-permissive. Pin a permissive version or drop macOS COW support.
+- ✅ **kernel overlayfs / tmpfs** — these are the OS, not a linked
+  dependency; no obligation on our binary.
+
+### Out of scope even post-v1
+
+- **Network filesystems as a backend** (NFS/SMB worktrees) — git
+  semantics over a network FS are a known footgun.
+- **Remote / distributed worktrees** (the worker tree on another host) —
+  that's the cross-machine story, tracked under
+  [Cross-machine sync](#cross-machine-sync), not the backend abstraction.
+- **Auto-migrating live workers between backends** — `Info.Backend` is
+  immutable for a worker's lifetime by design; migration = `done` the old
+  worker, `worker add` a new one.
