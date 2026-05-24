@@ -423,3 +423,4 @@ openclaw() {
 # that should not be committed to the shared repo.
 # See: docs/machine-local-overrides.md
 [ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"
+true

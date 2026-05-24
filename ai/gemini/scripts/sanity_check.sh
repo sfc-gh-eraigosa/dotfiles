@@ -39,7 +39,7 @@ echo "PASS: Configurations present"
 
 # 4. Aliases (Zsh check)
 echo "Verifying aliases in Zsh..."
-zsh -c "source ~/.zshrc && alias git-help" > /dev/null
+zsh -c "source ~/.zshrc; alias git-help" > /dev/null
 echo "PASS: Aliases functional"
 
 # 5. Homebrew/Tools (Mock check)
