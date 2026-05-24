@@ -1,9 +1,12 @@
 #!/bin/bash
-# install_claude_skills.sh - Idempotently install Claude Code skills, commands, and settings.
+# install_claude_skills.sh - Idempotently install Claude Code's assistant-specific
+# config: settings.json, slash commands, hooks, and shell aliases.
 #
-# Mirrors install_gemini_skills.sh. Reuses the same SKILL.md skill directories
-# under src/*/skill/ (the SKILL.md format is shared between Claude and Gemini),
-# so a single source of truth drives both assistants.
+# Mirrors install_gemini_skills.sh (which handles Gemini's policies/commands/aliases).
+# Skill linking is NOT done here — sync-skills.sh is the single canonical linker that
+# discovers every SKILL.md and links it into BOTH ~/.agents/skills (Gemini) and
+# ~/.claude/skills (Claude). Run sync-skills.sh (or the `sync-skills` alias) to refresh
+# skills; this script only owns the Claude-specific config below.
 
 set -e
 
@@ -12,7 +15,7 @@ BASE_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
 echo "Configuring Claude Code..."
 
 CLAUDE_HOME="${HOME}/.claude"
-mkdir -p "$CLAUDE_HOME/skills" "$CLAUDE_HOME/commands"
+mkdir -p "$CLAUDE_HOME/commands"
 
 cleanup_broken_links() {
     local dir="$1"
@@ -53,39 +56,8 @@ fi
 cleanup_broken_links "$CLAUDE_HOME/commands"
 
 # --- Skills ---
-echo "  Linking skills..."
-
-link_skill() {
-    local src="$1"
-    local dest="$2"
-
-    if [ ! -d "$src" ]; then
-        echo "    Skipping missing skill src: $src"
-        return
-    fi
-    src="${src%/}"
-
-    if [ -L "$dest" ]; then
-        if [ "$(readlink "$dest")" = "$src" ]; then
-            return
-        fi
-        rm "$dest"
-    elif [ -e "$dest" ]; then
-        echo "    Warning: $dest exists but is not a symlink. Moving to $dest.bak"
-        mv "$dest" "$dest.bak"
-    fi
-
-    echo "    Linking $(basename "$dest") -> $src"
-    ln -s "$src" "$dest"
-}
-
-# Reuse the same skill directories Gemini uses (SKILL.md is the shared format)
-link_skill "$BASE_DIR/src/ssh-host-finder"   "$CLAUDE_HOME/skills/ssh-host-finder"
-link_skill "$BASE_DIR/src/tmux-mgr/skill"    "$CLAUDE_HOME/skills/tmux"
-link_skill "$BASE_DIR/src/gss/skill"         "$CLAUDE_HOME/skills/git-safe-sync"
-link_skill "$BASE_DIR/src/ssh-key-sync"      "$CLAUDE_HOME/skills/ssh-key-sync"
-
-cleanup_broken_links "$CLAUDE_HOME/skills"
+# Handled by sync-skills.sh, which links every discovered SKILL.md into
+# ~/.claude/skills (and ~/.agents/skills for Gemini). Nothing to do here.
 
 # --- Hooks (referenced by absolute path from settings.json) ---
 # We don't symlink hooks — settings.json points at them in-place. Just ensure

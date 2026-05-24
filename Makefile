@@ -40,6 +40,7 @@ integration-test: ## Run integration tests only
 .PHONY: claude-install
 claude-install: ## Install (or update) Claude Code CLI and link skills/commands/settings
 	./opt/scripts/system/claude_install.sh
+	./opt/scripts/system/sync-skills.sh
 	./opt/scripts/system/install_claude_skills.sh
 
 .PHONY: claude-test

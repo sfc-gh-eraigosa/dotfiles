@@ -7,12 +7,19 @@ set -e
 # Use readlink -f to handle symlinks (like ~/opt) and find the physical repo root
 SCRIPT_PATH="$(readlink -f "$0")"
 BASE_DIR="$(cd "$(dirname "$SCRIPT_PATH")/../../.." && pwd)"
-SKILLS_DEST="${HOME}/.agents/skills"
+
+# Destinations that receive the synced skills. Gemini CLI reads ~/.agents/skills;
+# Claude Code reads ~/.claude/skills. The SKILL.md format is shared between both
+# assistants, so the single discovery pass below links every skill into each one.
+# This is the canonical skill linker for BOTH tools — install_gemini_skills.sh
+# and install_claude_skills.sh only handle their assistant-specific config now.
+SKILLS_DESTS=("${HOME}/.agents/skills" "${HOME}/.claude/skills")
 
 show_help() {
     echo "Usage: sync-skills [FLAGS]"
     echo ""
-    echo "Synchronizes agent skills from the dotfiles repository to ~/.agents/skills."
+    echo "Synchronizes agent skills from the dotfiles repository into both"
+    echo "~/.agents/skills (Gemini CLI) and ~/.claude/skills (Claude Code)."
     echo ""
     echo "Flags:"
     echo "  --build     Build associated binaries (gss, tmux-mgr, wol) while syncing."
@@ -35,20 +42,22 @@ for arg in "$@"; do
 done
 
 echo "Synchronizing AI agent skills..."
-mkdir -p "$SKILLS_DEST"
+for dest_root in "${SKILLS_DESTS[@]}"; do
+    mkdir -p "$dest_root"
+done
 
 # Function to safely create a symlink for a skill
 link_skill() {
     local src="$1"
     local dest="$2"
-    
+
     if [ ! -d "$src" ]; then
         return
     fi
-    
+
     # Remove trailing slash if any
     src="${src%/}"
-    
+
     if [ -L "$dest" ]; then
         if [ "$(readlink "$dest")" = "$src" ]; then
             return
@@ -58,9 +67,19 @@ link_skill() {
         echo "    Warning: $dest exists but is not a symlink. Moving to $dest.bak"
         mv "$dest" "$dest.bak"
     fi
-    
+
     echo "    Linking $(basename "$dest") -> $src"
     ln -s "$src" "$dest"
+}
+
+# Link a skill (by basename) into every destination in SKILLS_DESTS.
+link_skill_all() {
+    local src="$1"
+    local name="$2"
+    local dest_root
+    for dest_root in "${SKILLS_DESTS[@]}"; do
+        link_skill "$src" "$dest_root/$name"
+    done
 }
 
 # Function to build a component if build.sh exists
@@ -96,10 +115,10 @@ for dir in "$BASE_DIR/src"/*/; do
             gss) dest_name="git-safe-sync" ;;
             tmux-mgr) dest_name="tmux" ;;
         esac
-        link_skill "${dir}skill" "$SKILLS_DEST/$dest_name"
+        link_skill_all "${dir}skill" "$dest_name"
     # Priority 2: 'SKILL.md' file in the directory (like src/ssh-host-finder/SKILL.md)
     elif [ -f "${dir}SKILL.md" ]; then
-        link_skill "$dir" "$SKILLS_DEST/$name"
+        link_skill_all "$dir" "$name"
     fi
 done
 
@@ -109,7 +128,7 @@ if [ -d "$BASE_DIR/ai/skills" ]; then
         [ -d "$skill_dir" ] || continue
         skill_name=$(basename "$skill_dir")
         if [ -f "${skill_dir}SKILL.md" ]; then
-            link_skill "$skill_dir" "$SKILLS_DEST/$skill_name"
+            link_skill_all "$skill_dir" "$skill_name"
         fi
     done
 fi
@@ -120,15 +139,17 @@ if [ -d "$BASE_DIR/.gemini/skills" ]; then
         [ -d "$skill_dir" ] || continue
         skill_name=$(basename "$skill_dir")
         if [ -f "${skill_dir}SKILL.md" ]; then
-            link_skill "$skill_dir" "$SKILLS_DEST/$skill_name"
+            link_skill_all "$skill_dir" "$skill_name"
         fi
     done
 fi
 
-# Cleanup broken symlinks
-if [ -d "$SKILLS_DEST" ]; then
-    echo "  Cleaning up broken links in $SKILLS_DEST..."
-    find "$SKILLS_DEST" -type l ! -exec test -e {} \; -delete
-fi
+# Cleanup broken symlinks in every destination
+for dest_root in "${SKILLS_DESTS[@]}"; do
+    if [ -d "$dest_root" ]; then
+        echo "  Cleaning up broken links in $dest_root..."
+        find "$dest_root" -type l ! -exec test -e {} \; -delete
+    fi
+done
 
 echo "Skill synchronization complete."

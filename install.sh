@@ -92,18 +92,21 @@ for file in ".profile" ".zshrc" ".bash_logout" ".bashrc"; do
   ln -sf "${BASE_DIR}/opt/profiles/${file}" "${HOME}/${file}"
 done 
 
-# Gemini CLI Configuration (Skills and Policies)
+# Shared skill sync — links every SKILL.md into BOTH ~/.agents/skills (Gemini)
+# and ~/.claude/skills (Claude). Single source of truth for both assistants.
 if [ -f "${BASE_DIR}/opt/scripts/system/sync-skills.sh" ]; then
     bash "${BASE_DIR}/opt/scripts/system/sync-skills.sh"
 fi
 
+# Gemini CLI Configuration (Policies, Commands, Aliases)
 if [ -f "${BASE_DIR}/opt/scripts/system/install_gemini_skills.sh" ]; then
-    # Keeping the original for policy/command setup, but sync-skills handles the skill links now.
+    # sync-skills handles the skill links now; this only does Gemini-specific config.
     "${BASE_DIR}/opt/scripts/system/install_gemini_skills.sh"
 fi
 
-# Claude Code Configuration (Skills, Commands, Settings)
+# Claude Code Configuration (Settings, Commands, Hooks, Aliases)
 if [ -f "${BASE_DIR}/opt/scripts/system/install_claude_skills.sh" ]; then
+    # sync-skills handles the skill links now; this only does Claude-specific config.
     "${BASE_DIR}/opt/scripts/system/install_claude_skills.sh"
 fi
 
