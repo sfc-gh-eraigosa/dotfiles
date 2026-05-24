@@ -3,6 +3,7 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -60,11 +61,11 @@ func TestSessionLifecycle(t *testing.T) {
 		t.Fatalf("DeleteSession failed: %v", err)
 	}
 
-    // Verify it's deleted
-    _, err = LoadSession(sessionID)
-    if err == nil {
-        t.Error("Expected error loading deleted session, got nil")
-    }
+	// Verify it's deleted
+	_, err = LoadSession(sessionID)
+	if err == nil {
+		t.Error("Expected error loading deleted session, got nil")
+	}
 }
 
 func TestReconcileStatus(t *testing.T) {
@@ -146,7 +147,7 @@ func TestReconcileStatus(t *testing.T) {
 	}
 }
 
-func TestListSessionsFiltered_RepoScope(t *testing.T) {
+func TestListSessionsFiltered_FeatureScope(t *testing.T) {
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
 
@@ -159,11 +160,9 @@ func TestListSessionsFiltered_RepoScope(t *testing.T) {
 		return d
 	}
 
-	repoA := "/repo/a"
-	repoB := "/repo/b"
 	now := time.Now().Truncate(time.Second)
 
-	seed := func(id, repo string) {
+	seed := func(id, workerRef string) {
 		s := Session{
 			SessionID:    id,
 			AgentName:    "agent",
@@ -171,28 +170,29 @@ func TestListSessionsFiltered_RepoScope(t *testing.T) {
 			StartTime:    now,
 			WorktreePath: mkResult(t),
 			PaneID:       "%done",
-			RepoRoot:     repo,
+			WorkerRef:    workerRef,
 		}
 		if err := SaveSession(s); err != nil {
 			t.Fatalf("SaveSession %s: %v", id, err)
 		}
 	}
 
-	seed("a-session", repoA)
-	seed("b-session", repoB)
-	seed("legacy-session", "") // legacy / global
+	// Repo identity is re-derived from the WorkerRef feature segment.
+	seed("a-session", "auth/erai/api")
+	seed("b-session", "billing/erai/api")
+	seed("legacy-session", "") // legacy / global (no WorkerRef)
 
 	dead := func(id string) bool { return false }
 
 	cases := []struct {
-		name     string
-		filter   string
-		wantIDs  []string
+		name    string
+		filter  string
+		wantIDs []string
 	}{
 		{"empty filter shows all", "", []string{"a-session", "b-session", "legacy-session"}},
-		{"repo A scope returns A + legacy", repoA, []string{"a-session", "legacy-session"}},
-		{"repo B scope returns B + legacy", repoB, []string{"b-session", "legacy-session"}},
-		{"unknown repo returns only legacy", "/repo/nonexistent", []string{"legacy-session"}},
+		{"feature auth returns auth + legacy", "auth", []string{"a-session", "legacy-session"}},
+		{"feature billing returns billing + legacy", "billing", []string{"b-session", "legacy-session"}},
+		{"unknown feature returns only legacy", "nope", []string{"legacy-session"}},
 	}
 
 	for _, tc := range cases {
@@ -209,6 +209,85 @@ func TestListSessionsFiltered_RepoScope(t *testing.T) {
 				t.Errorf("got %v, want %v", gotIDs, tc.wantIDs)
 			}
 		})
+	}
+}
+
+func TestFeatureOf(t *testing.T) {
+	cases := map[string]string{
+		"auth/erai/api":      "auth",
+		"auth/erai/api-moss": "auth",
+		"solo":               "solo",
+		"":                   "",
+	}
+	for ref, want := range cases {
+		if got := FeatureOf(ref); got != want {
+			t.Errorf("FeatureOf(%q) = %q; want %q", ref, got, want)
+		}
+	}
+}
+
+func TestSession_WorkerRefRoundTripAndNoRepoRoot(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	s := Session{
+		SessionID:    "s1",
+		AgentName:    "agent",
+		Status:       StatusRunning,
+		StartTime:    time.Now().Truncate(time.Second),
+		WorktreePath: "/wt/api",
+		PaneID:       "%1",
+		WorkerRef:    "auth/erai/api",
+	}
+	if err := SaveSession(s); err != nil {
+		t.Fatalf("SaveSession: %v", err)
+	}
+
+	// Round-trip preserves WorkerRef.
+	got, err := LoadSession("s1")
+	if err != nil {
+		t.Fatalf("LoadSession: %v", err)
+	}
+	if got.WorkerRef != "auth/erai/api" {
+		t.Errorf("WorkerRef = %q; want auth/erai/api", got.WorkerRef)
+	}
+
+	// The serialized form must not carry the dropped repoRoot key.
+	dir, _ := GetSessionsDir()
+	data, err := os.ReadFile(filepath.Join(dir, "s1.json"))
+	if err != nil {
+		t.Fatalf("read session file: %v", err)
+	}
+	if strings.Contains(string(data), "repoRoot") {
+		t.Errorf("session JSON should not contain repoRoot:\n%s", data)
+	}
+	if !strings.Contains(string(data), "workerRef") {
+		t.Errorf("session JSON should contain workerRef:\n%s", data)
+	}
+}
+
+func TestLoadSession_BackCompatLegacyRepoRoot(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	dir, err := GetSessionsDir()
+	if err != nil {
+		t.Fatalf("GetSessionsDir: %v", err)
+	}
+	// A pre-refactor session file: has repoRoot, no workerRef. Loading must not
+	// error; the unknown repoRoot key is ignored and WorkerRef stays empty.
+	legacy := `{"sessionId":"old","agentName":"a","status":"RUNNING","startTime":"2026-05-21T00:00:00Z","worktreePath":"/wt/old","paneId":"%9","repoRoot":"/repo/old"}`
+	if err := os.WriteFile(filepath.Join(dir, "old.json"), []byte(legacy), 0644); err != nil {
+		t.Fatalf("seed legacy: %v", err)
+	}
+	got, err := LoadSession("old")
+	if err != nil {
+		t.Fatalf("LoadSession(legacy): %v", err)
+	}
+	if got.WorkerRef != "" {
+		t.Errorf("legacy session WorkerRef = %q; want empty", got.WorkerRef)
+	}
+	if got.SessionID != "old" || got.WorktreePath != "/wt/old" {
+		t.Errorf("legacy fields not preserved: %+v", got)
 	}
 }
 

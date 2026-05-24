@@ -126,33 +126,68 @@ if [[ "$CMD_SCRUBBED" =~ \>[[:space:]]*/dev/(sd[a-z]|nvme[0-9]+n[0-9]+|mapper/|h
     deny "Direct redirection to block devices is prohibited."
 fi
 
-# --- 9. gss approval token enforcement ---
+# Shared gss context for the rules below: resolve the effective working dir
+# (target of a leading `cd <path> &&`, else the hook's CWD) and whether it is
+# inside a registered feature worker worktree (under the gss worktree root).
+GSS_WT_ROOT="${GSS_WORKTREE_ROOT:-$HOME/.config/gss/worktrees}"
+GSS_EFFECTIVE_DIR="$PWD"
+if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])cd[[:space:]]+([^[:space:];|&]+)[[:space:]]*(&&|;) ]]; then
+    GSS_EFFECTIVE_DIR="${BASH_REMATCH[2]/#\~/$HOME}"
+fi
+gss_in_worker() {
+    case "$GSS_EFFECTIVE_DIR" in
+        "$GSS_WT_ROOT" | "$GSS_WT_ROOT"/*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# --- 9. gss --force-autonomous inside a worker worktree (resolution #22) ---
+# Classic `gss push/pr --force-autonomous` is valid on a regular checkout but
+# is the WRONG MODE inside a feature worker worktree (the binary errors
+# ErrWrongMode). Fires before the token gate so the user sees the real cause.
+if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])gss[[:space:]]+(push|pr)([[:space:]]|$) ]] \
+   && [[ "$CMD_SCRUBBED" =~ (^|[[:space:]])--force-autonomous([[:space:]]|$) ]] \
+   && gss_in_worker; then
+    deny "gss push/pr --force-autonomous is invalid inside a feature worker worktree ($GSS_EFFECTIVE_DIR) — it is the wrong mode (the binary errors ErrWrongMode). Use the gss feature commands, or run classic gss from a regular checkout."
+fi
+
+# --- 10. gss approval token enforcement ---
 # The git-safe-sync skill mandates an approval token generated immediately
-# before `gss push`/`pr`/`sync`. The binary itself also checks, but we enforce
-# at the hook layer so the user can never be surprised by an autonomous push.
-if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])gss[[:space:]]+(push|pr|sync)([[:space:]]|$) ]]; then
+# before any remote-mutating gss verb. The binary also checks, but we enforce
+# at the hook layer so the user can never be surprised by an autonomous
+# publish. Covers classic push/pr/sync AND the publish-class feature verbs:
+# `feature pr --ready` (promote draft→ready), `feature merged` (re-target +
+# auto-promote children), `feature restack` (force-push + retarget).
+if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])gss[[:space:]]+(push|pr|sync)([[:space:]]|$) ]] \
+   || [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])gss[[:space:]]+feature[[:space:]]+(merged|restack)([[:space:]]|$) ]] \
+   || { [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])gss[[:space:]]+feature[[:space:]]+pr([[:space:]]|$) ]] \
+        && [[ "$CMD_SCRUBBED" =~ (^|[[:space:]])--ready([[:space:]]|$) ]]; }; then
     TOKEN_FILE="${HOME}/.config/gss/approval.token"
     if [ ! -f "$TOKEN_FILE" ]; then
-        deny "gss push/pr/sync requires an approval token, issued as a SEPARATE Bash call BEFORE the push. Two-call recipe: (1) \`mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token\` (2) \`gss push\` (or pr/sync). Chaining all three with && in one Bash call is intentionally blocked so the user sees an explicit approve→push gate."
+        deny "This gss command publishes/mutates remote state (push/pr/sync, or feature pr --ready / merged / restack) and requires an approval token, issued as a SEPARATE Bash call BEFORE it. Two-call recipe: (1) \`mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token\` (2) the gss command. Chaining both with && in one Bash call is intentionally blocked so the user sees an explicit approve→publish gate."
     fi
-    # Token must be fresh — current HEAD must match the token contents.
-    # This prevents reusing a stale token from a previous session.
-    # When the command leads with `cd <path>`, resolve HEAD from that repo
-    # rather than the hook's CWD — this handles cross-repo pushes like
-    # `cd ~/git/dotfiles && gss push` run from a different project's session.
+    # Token must be fresh — current HEAD must match the token contents. When
+    # the command leads with `cd <path>`, HEAD is resolved from that repo
+    # (cross-repo publishes), via the shared GSS_EFFECTIVE_DIR above.
     if command -v git &> /dev/null; then
         GIT_CHECK_DIR="."
-        if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])cd[[:space:]]+([^[:space:];|&]+)[[:space:]]*(&&|;) ]]; then
-            CANDIDATE="${BASH_REMATCH[2]}"
-            CANDIDATE="${CANDIDATE/#\~/$HOME}"
-            [ -d "$CANDIDATE" ] && GIT_CHECK_DIR="$CANDIDATE"
-        fi
+        [ -d "$GSS_EFFECTIVE_DIR" ] && GIT_CHECK_DIR="$GSS_EFFECTIVE_DIR"
         CURRENT_HEAD="$(git -C "$GIT_CHECK_DIR" rev-parse HEAD 2>/dev/null || echo)"
         TOKEN_HEAD="$(cat "$TOKEN_FILE" 2>/dev/null || echo)"
         if [ -n "$CURRENT_HEAD" ] && [ "$CURRENT_HEAD" != "$TOKEN_HEAD" ]; then
             deny "gss approval token is stale (does not match HEAD $CURRENT_HEAD of ${GIT_CHECK_DIR}). Re-confirm with the user and regenerate."
         fi
     fi
+fi
+
+# --- 11. gss feature checkpoint outside a worker worktree ---
+# Plain `gss feature checkpoint` resolves the worker from cwd. Without an
+# explicit --worker AND outside the worktree root it is a classic-context
+# misuse (the binary would error). Require --worker when not in a worker.
+if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])gss[[:space:]]+feature[[:space:]]+checkpoint([[:space:]]|$) ]] \
+   && ! [[ "$CMD_SCRUBBED" =~ (^|[[:space:]])--worker([[:space:]]|=) ]] \
+   && ! gss_in_worker; then
+    deny "gss feature checkpoint resolves the worker from cwd, but $GSS_EFFECTIVE_DIR is not a feature worker worktree. Run it from inside the worktree, or pass --worker <feature/user/purpose>."
 fi
 
 # All checks passed

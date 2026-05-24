@@ -2,12 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/wenlock/dotfiles/gss/internal/scan"
 )
 
 var scanCmd = &cobra.Command{
@@ -22,26 +22,22 @@ var scanCmd = &cobra.Command{
 
 		fmt.Printf("Scanning %s for dirty repositories...\n", root)
 
-		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return nil // Skip errors
-			}
-			if info.IsDir() && info.Name() == ".git" {
-				repoDir := filepath.Dir(path)
-				if isDirty(repoDir) {
-					fmt.Printf("[DIRTY] %s\n", repoDir)
-				}
-				return filepath.SkipDir // Don't look inside .git
-			}
-			return nil
-		})
-
+		// Delegate the walk to internal/scan (PR-13); inject the existing
+		// isDirty check so the [DIRTY] output stays byte-identical.
+		sc := &scan.Scanner{IsDirty: isDirty}
+		dirty, err := sc.Scan(root)
 		if err != nil {
 			fmt.Printf("Error scanning: %v\n", err)
+			return
 		}
+		fmt.Print(scan.Format(dirty))
 	},
 }
 
+// isDirty reports whether the repo at path has uncommitted changes. Kept in
+// the cmd package because cmd/status_test.go (TestIsDirty) exercises it; it
+// is functionally equivalent to internal/scan.GitDirty and can be retired
+// in a later cleanup once that test is migrated.
 func isDirty(path string) bool {
 	c := exec.Command("git", "-C", path, "status", "--porcelain")
 	out, err := c.Output()

@@ -11,7 +11,6 @@ import (
 
 	"github.com/eraigosa/dotfiles/src/tmux-mgr/pkg/agent"
 	"github.com/eraigosa/dotfiles/src/tmux-mgr/pkg/tmux"
-	"github.com/eraigosa/dotfiles/src/tmux-mgr/pkg/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -34,16 +33,7 @@ func runAgentStart(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Warning: failed to load agent definition for %q: %s (continuing with generalist defaults)\n", agentName, err)
 		def = nil
 	}
-	model := agent.SelectModel(def, host)
-	// When a custom launcher is configured, defer model choice to the launcher.
-	// `sf ai claude` and similar wrappers may use a different model namespace
-	// than the bare CLI, so passing tmux-mgr's tier mapping would fail.
-	if host == agent.AssistantClaude && os.Getenv("TMUX_MGR_CLAUDE_LAUNCHER") != "" {
-		model = ""
-	}
-	if host == agent.AssistantGemini && os.Getenv("TMUX_MGR_GEMINI_LAUNCHER") != "" {
-		model = ""
-	}
+	model := resolveModel(def, host)
 
 	defSummary := "generalist defaults"
 	if def != nil {
@@ -55,50 +45,81 @@ func runAgentStart(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("Starting isolated agent '%s' (assistant=%s model=%s) for task '%s'\n  %s\n", agentName, host, modelSummary, taskDescription, defSummary)
 
-	workspacePath, sessionID, err := workspace.CreateWorkspace(agentName)
-	if err != nil {
-		return fmt.Errorf("error creating workspace: %w", err)
+	// gss owns the worktree + repo identity now. Resolve the feature/purpose
+	// (defaulting both to the agent name), then create the worker via gss.
+	feature, _ := cmd.Flags().GetString("feature")
+	if feature == "" {
+		feature = agentName
 	}
+	purpose, _ := cmd.Flags().GetString("purpose")
+	if purpose == "" {
+		purpose = agentName
+	}
+	sessionID := fmt.Sprintf("%s-%d", agentName, time.Now().UnixNano())
 
+	wa, err := gssWorkerAdd(defaultGssRunner, feature, purpose, taskDescription,
+		os.Getenv("USER"), string(host), engineSessionID(host, os.Getenv), sessionID)
+	if err != nil {
+		return fmt.Errorf("error creating gss worker: %w", err)
+	}
+	workspacePath := wa.WorktreePath
+	fmt.Printf("Created gss worker %s at %s (branch %s, base %s)\n", wa.WorkerRef, workspacePath, wa.Branch, wa.BaseBranch)
+
+	return spawnAgentPane(host, def, model, agentName, sessionID, wa, taskDescription)
+}
+
+// resolveModel selects the model for host, deferring to a configured launcher
+// (TMUX_MGR_*_LAUNCHER) by clearing the model — those wrappers may use a
+// different model namespace than the bare CLI, so passing tmux-mgr's tier
+// mapping would fail.
+func resolveModel(def *agent.Definition, host agent.Assistant) string {
+	model := agent.SelectModel(def, host)
+	if host == agent.AssistantClaude && os.Getenv("TMUX_MGR_CLAUDE_LAUNCHER") != "" {
+		return ""
+	}
+	if host == agent.AssistantGemini && os.Getenv("TMUX_MGR_GEMINI_LAUNCHER") != "" {
+		return ""
+	}
+	return model
+}
+
+// spawnAgentPane launches the agent for an already-created gss worker: build
+// the pane-wrapped invocation (PR-54), create the tmux pane, and persist the
+// session. Shared by `agent start` and `feature add-agent`.
+func spawnAgentPane(host agent.Assistant, def *agent.Definition, model, agentName, sessionID string, wa workerAddResult, taskDescription string) error {
 	executablePath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
-
 	assistantBinary := string(host)
 	assistantPath, err := exec.LookPath(assistantBinary)
 	if err != nil {
 		assistantPath = assistantBinary // fallback; child will surface the error
 	}
-
-	invocationCmd := buildInvocationCmd(host, assistantPath, executablePath, taskDescription, model)
-
-	symbol := ""
-	label := ""
+	inner := buildInvocationCmd(host, assistantPath, executablePath, taskDescription, model)
+	invocationCmd := wrapWithPaneWrap(executablePath, wa.WorkerRef, inner)
+	symbol, label := "", ""
 	if def != nil {
 		symbol = def.Symbol
 		label = def.Persona
 	}
-	paneID, err := tmux.CreatePane(sessionID, workspacePath, invocationCmd, symbol, label)
+	paneID, err := tmux.CreatePane(sessionID, wa.WorktreePath, invocationCmd, symbol, label)
 	if err != nil {
 		return fmt.Errorf("error creating tmux pane: %w", err)
 	}
-
 	session := agent.Session{
 		SessionID:    sessionID,
 		AgentName:    agentName,
 		Status:       agent.StatusRunning,
 		StartTime:    time.Now(),
-		WorktreePath: workspacePath,
+		WorktreePath: wa.WorktreePath,
 		PaneID:       paneID,
-		RepoRoot:     currentRepoRoot(),
+		WorkerRef:    wa.WorkerRef,
 	}
-
 	if err := agent.SaveSession(session); err != nil {
 		fmt.Printf("Warning: Failed to save session state: %s\n", err)
 	}
-
-	fmt.Printf("Agent '%s' with session ID '%s' started in a new tmux pane.\n", agentName, sessionID)
+	fmt.Printf("Agent '%s' (worker %s, session %s) started in a new tmux pane.\n", agentName, wa.WorkerRef, sessionID)
 	return nil
 }
 
@@ -142,9 +163,12 @@ func displayModel(model string) string {
 // platform-specific runner without forking the binary or changing flag order.
 //
 // Example: TMUX_MGR_CLAUDE_LAUNCHER="sf ai claude --" produces
-//   execPath="sf", prefixArgs=["ai","claude","--"]
+//
+//	execPath="sf", prefixArgs=["ai","claude","--"]
+//
 // so the spawned command becomes:
-//   sf ai claude -- -p "<task>" --dangerously-skip-permissions
+//
+//	sf ai claude -- -p "<task>" --dangerously-skip-permissions
 //
 // Resolution order: env var (multi-token) > explicit fallbackPath (single
 // token, from TMUX_MGR_ASSISTANT_PATH) > defaultExec (e.g. "claude").
@@ -318,25 +342,15 @@ func runClaudeLoop(task, claudePath, model string) error {
 	return nil
 }
 
-// currentRepoRoot returns the absolute git toplevel for the current working
-// directory, or "" if the cwd is not inside a git repository (or git is
-// unavailable). It is used both to tag new sessions and to default the
-// `agent list` filter to the current repo.
-func currentRepoRoot() string {
-	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
-
 func runAgentList(cmd *cobra.Command, args []string) {
 	all, _ := cmd.Flags().GetBool("all")
 
+	// ListSessionsFiltered now scopes by gss feature (re-derived from each
+	// session's WorkerRef) rather than the dropped RepoRoot. Until runAgentStart
+	// records a WorkerRef (later Batch J PR), there is nothing to scope by, so
+	// list all sessions; --all is retained for the forthcoming feature scope.
 	filter := ""
-	if !all {
-		filter = currentRepoRoot()
-	}
+	_ = all
 
 	sessions, err := agent.ListSessionsFiltered(agent.DefaultPaneChecker, filter)
 	if err != nil {
@@ -390,23 +404,17 @@ func runAgentCleanup(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	force, _ := cmd.Flags().GetBool("force")
 	fmt.Printf("Cleaning up session '%s'...\n", sessionID)
 
-	// Remove the git worktree. Prefer the session's origin RepoRoot so cleanup
-	// works regardless of where the user runs the command from; fall back to
-	// the cwd's repo for legacy sessions that pre-date the RepoRoot field.
-	fmt.Printf("Removing worktree at: %s\n", session.WorktreePath)
-	gitRoot := session.RepoRoot
-	if gitRoot == "" {
-		gitRoot = currentRepoRoot()
-	}
-	if gitRoot != "" {
-		wtCmd := exec.Command("git", "worktree", "remove", "--force", session.WorktreePath)
-		wtCmd.Dir = gitRoot
-		if wtOut, err := wtCmd.CombinedOutput(); err != nil {
-			fmt.Printf("Warning: Failed to remove git worktree: %s\nOutput: %s\n", err, string(wtOut))
-		}
-	}
+	// gss owns worktree teardown via `gss feature done --worker <ref>`. As of
+	// PR-59 tmux-mgr no longer removes worktrees directly; a legacy session
+	// (no WorkerRef) is left in place with a pointer to `migrate-to-gss`.
+	cleanupSession(session, force, cleanupDeps{
+		run:      defaultGssRunner,
+		killPane: func(paneID string) error { return exec.Command("tmux", "kill-pane", "-t", paneID).Run() },
+		out:      os.Stdout,
+	})
 
 	// Delete the session file
 	if err := agent.DeleteSession(sessionID); err != nil {
@@ -474,6 +482,10 @@ func init() {
 
 	startCmd.Flags().StringP("task-description", "d", "", "A natural language description of the agent's task.")
 	startCmd.MarkFlagRequired("task-description")
+	startCmd.Flags().String("feature", "", "gss feature to add the worker to (default: the agent name; auto-created)")
+	startCmd.Flags().String("purpose", "", "gss worker purpose (default: the agent name)")
+
+	cleanupCmd.Flags().Bool("force", false, "Forward --force to `gss feature done` (remove despite dirty/dependents/open PR)")
 
 	executeCmd.Flags().StringP("task-description", "d", "", "The task description for the agent.")
 	executeCmd.MarkFlagRequired("task-description")

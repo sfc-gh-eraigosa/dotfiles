@@ -1,0 +1,6 @@
+{
+  "name": "playground",
+  "owner": { "login": "sfc-gh-eraigosa" },
+  "nameWithOwner": "sfc-gh-eraigosa/playground",
+  "defaultBranchRef": { "name": "main" }
+}

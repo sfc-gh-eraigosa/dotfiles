@@ -1,0 +1,22 @@
+[
+  {
+    "name": "auth",
+    "default_base_branch": "main",
+    "description": "login work",
+    "workers": [
+      {
+        "worker_ref": "auth/erai/api",
+        "branch": "feature/auth/erai/api",
+        "base_branch": "main",
+        "description": "endpoints",
+        "pr_state": "draft"
+      },
+      {
+        "worker_ref": "auth/erai/ui-moss",
+        "branch": "feature/auth/erai/ui-moss",
+        "base_branch": "feature/auth/erai/api",
+        "description": "wire ui"
+      }
+    ]
+  }
+]

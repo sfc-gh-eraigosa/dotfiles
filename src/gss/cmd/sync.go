@@ -1,11 +1,15 @@
 package cmd
 
 import (
+	"context"
+	stderrors "errors"
 	"fmt"
-	"os/exec"
-	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/wenlock/dotfiles/gss/internal/errors"
+	"github.com/wenlock/dotfiles/gss/internal/git"
+	"github.com/wenlock/dotfiles/gss/internal/sync"
 )
 
 var syncCmd = &cobra.Command{
@@ -13,26 +17,23 @@ var syncCmd = &cobra.Command{
 	Short: "Pull latest changes and rebase if necessary",
 	Run: func(cmd *cobra.Command, args []string) {
 		path := getRepoPath()
-		
-		// Get current branch
-		branchOut, _ := exec.Command("git", "-C", path, "rev-parse", "--abbrev-ref", "HEAD").Output()
-		currentBranch := strings.TrimSpace(string(branchOut))
-		if currentBranch == "" { currentBranch = "main" }
 
 		fmt.Printf("Fetching latest changes for %s...\n", path)
-		if out, err := exec.Command("git", "-C", path, "fetch", "origin").CombinedOutput(); err != nil {
-			fmt.Printf("Error fetching: %s\n", string(out))
-			return
-		}
 
-		fmt.Printf("Attempting to pull/rebase onto %s...\n", currentBranch)
-		out, err := exec.Command("git", "-C", path, "pull", "--rebase", "origin", currentBranch).CombinedOutput()
+		// Delegate to internal/sync (PR-12): fetch origin then
+		// pull --rebase. A rebase failure is the ErrRebaseConflict sentinel;
+		// anything else is a fetch/transport error.
+		res, err := sync.NewService(git.NewSystemRunner()).Sync(context.Background(), path)
 		if err != nil {
-			fmt.Printf("Conflict detected or error during rebase:\n%s\n", string(out))
-			fmt.Println("\nPlease resolve conflicts manually or use 'git rebase --abort'.")
+			if stderrors.Is(err, errors.ErrRebaseConflict) {
+				fmt.Printf("Conflict detected or error during rebase:\n%v\n", err)
+				fmt.Println("\nPlease resolve conflicts manually or use 'git rebase --abort'.")
+			} else {
+				fmt.Printf("Error fetching: %v\n", err)
+			}
 			return
 		}
-		fmt.Printf("Successfully synchronized %s with origin/%s.\n", path, currentBranch)
+		fmt.Printf("Successfully synchronized %s with origin/%s.\n", path, res.Branch)
 	},
 }
 

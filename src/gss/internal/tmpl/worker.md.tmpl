@@ -1,0 +1,14 @@
+# {{.Feature}}: {{.Purpose}}
+
+- **Description**: {{.Description}}
+- **Worker**: {{.User}}/{{.Purpose}}{{if .Suffix}}-{{.Suffix}}{{end}}
+- **Branch**: {{.Branch}}
+- **Base branch**: {{.BaseBranch}}
+
+## Goal
+{{if .Goal}}{{.Goal}}{{else}}<!-- describe this worker's goal -->{{end}}
+
+## Decisions & notes
+<!-- append freely; rendered verbatim into PR body -->
+
+## Open questions
