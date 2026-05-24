@@ -50,3 +50,5 @@ claude-toggle() {
         echo "Claude YOLO mode: ON  — claude will run with --dangerously-skip-permissions."
     fi
 }
+
+alias sync-skills="bash $HOME/git/dotfiles/opt/scripts/system/sync-skills.sh"
