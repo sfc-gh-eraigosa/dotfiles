@@ -9,11 +9,18 @@ This skill allows the agent to refresh the AI agent environment by synchronizing
 
 ## Usage
 
-When the user asks to "sync skills" or "rebuild tools", use the `sync-skills` alias.
+Always run `sync-skills` using the established alias, which points to the version in `~/opt/scripts/system/sync-skills.sh`. 
+
+Using the `~/opt` path ensures that you are running the scripts as they are installed in the user's environment, maintaining consistency across different machines and installations.
 
 ### 1. Synchronize Skills
 Link all available skills into `~/.agents/skills`.
 
+```bash
+bash ~/opt/scripts/system/sync-skills.sh
+```
+
+Or via alias if available:
 ```bash
 sync-skills
 ```
@@ -22,7 +29,7 @@ sync-skills
 Link skills and rebuild core binaries (`gss`, `tmux-mgr`, `wol`).
 
 ```bash
-sync-skills --build
+bash ~/opt/scripts/system/sync-skills.sh --build
 ```
 
 ## Mandatory Reload

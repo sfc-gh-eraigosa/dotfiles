@@ -4,7 +4,9 @@
 set -e
 
 # Determine the root of the dotfiles repository
-BASE_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+# Use readlink -f to handle symlinks (like ~/opt) and find the physical repo root
+SCRIPT_PATH="$(readlink -f "$0")"
+BASE_DIR="$(cd "$(dirname "$SCRIPT_PATH")/../../.." && pwd)"
 SKILLS_DEST="${HOME}/.agents/skills"
 
 show_help() {
@@ -71,25 +73,37 @@ build_component() {
     fi
 }
 
-# 1. Standard source-code skills and binaries
-# gss
-build_component "$BASE_DIR/src/gss" "gss"
-link_skill "$BASE_DIR/src/gss/skill" "$SKILLS_DEST/git-safe-sync"
+# 1. Component Builds (for tools with source code)
+# Explicitly build known binaries if --build is passed
+for component in "gss" "tmux-mgr" "wol"; do
+    build_component "$BASE_DIR/src/$component" "$component"
+done
 
-# tmux-mgr
-build_component "$BASE_DIR/src/tmux-mgr" "tmux-mgr"
-link_skill "$BASE_DIR/src/tmux-mgr/skill" "$SKILLS_DEST/tmux"
+# 2. Dynamic Skill Discovery
+echo "Discovering and linking skills..."
 
-# wol (no skill yet, but built in install.sh)
-build_component "$BASE_DIR/src/wol" "wol"
+# A. Skills in src/ (either as a 'skill/' subdirectory or a top-level 'SKILL.md')
+# We look for src/*/skill/ or src/*/SKILL.md
+for dir in "$BASE_DIR/src"/*/; do
+    [ -d "$dir" ] || continue
+    name=$(basename "$dir")
+    
+    # Priority 1: 'skill/' subdirectory (like src/gss/skill)
+    if [ -d "${dir}skill" ]; then
+        # Map specific names if needed, otherwise use the directory name
+        dest_name="$name"
+        case "$name" in
+            gss) dest_name="git-safe-sync" ;;
+            tmux-mgr) dest_name="tmux" ;;
+        esac
+        link_skill "${dir}skill" "$SKILLS_DEST/$dest_name"
+    # Priority 2: 'SKILL.md' file in the directory (like src/ssh-host-finder/SKILL.md)
+    elif [ -f "${dir}SKILL.md" ]; then
+        link_skill "$dir" "$SKILLS_DEST/$name"
+    fi
+done
 
-# ssh-host-finder
-link_skill "$BASE_DIR/src/ssh-host-finder" "$SKILLS_DEST/ssh-host-finder"
-
-# ssh-key-sync
-link_skill "$BASE_DIR/src/ssh-key-sync" "$SKILLS_DEST/ssh-key-sync"
-
-# 2. Generic AI skills from ai/skills
+# B. Generic AI skills from ai/skills/
 if [ -d "$BASE_DIR/ai/skills" ]; then
     for skill_dir in "$BASE_DIR/ai/skills"/*/; do
         [ -d "$skill_dir" ] || continue
