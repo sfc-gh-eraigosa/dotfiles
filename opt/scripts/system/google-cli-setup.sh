@@ -62,8 +62,13 @@ install_or_upgrade() {
 }
 
 install_gcloud() {
-    if command -v gcloud >/dev/null 2>&1; then
+    # Check if gcloud is in PATH or in the standard install location
+    if command -v gcloud >/dev/null 2>&1 || [ -f "${HOME}/opt/google-cloud-sdk/bin/gcloud" ]; then
         echo -e "${GREEN}gcloud CLI is already installed.${NC}"
+        # Ensure it's in the current PATH if it was just found in the standard location
+        if ! command -v gcloud >/dev/null 2>&1; then
+            export PATH="${HOME}/opt/google-cloud-sdk/bin:${PATH}"
+        fi
         return
     fi
 
@@ -118,12 +123,23 @@ init_configs() {
     fi
 }
 
+get_gcloud_version() {
+    if command -v gcloud >/dev/null 2>&1; then
+        gcloud --version | head -n 1
+    elif [ -f "${HOME}/opt/google-cloud-sdk/bin/gcloud" ]; then
+        "${HOME}/opt/google-cloud-sdk/bin/gcloud" --version | head -n 1
+    else
+        echo "Missing"
+    fi
+}
+
 show_status() {
     echo -e "\n${BOLD}--- Google CLI Status ---${NC}"
     
     # gcloud
-    if command -v gcloud >/dev/null 2>&1; then
-        echo -e "${GREEN}[OK]${NC} gcloud CLI: $(gcloud --version | head -n 1)"
+    local gcloud_ver=$(get_gcloud_version)
+    if [[ "$gcloud_ver" != "Missing" ]]; then
+        echo -e "${GREEN}[OK]${NC} gcloud CLI: $gcloud_ver"
     else
         echo -e "${RED}[MISSING]${NC} gcloud CLI"
     fi
@@ -148,7 +164,7 @@ show_status() {
     if command -v gws >/dev/null 2>&1; then
         if [ -f "${GWS_CONFIG_DIR}/client_secret.json" ] && ! grep -q "YOUR_CLIENT_ID" "${GWS_CONFIG_DIR}/client_secret.json"; then
              echo -e "${GREEN}[OK]${NC} GWS Client Secret found."
-        elif [ -f "${HOME}/.config/gws/tokens.json" ]; then
+        elif [ -f "${GWS_CONFIG_DIR}/tokens.json" ]; then
              echo -e "${GREEN}[OK]${NC} GWS Auth Token found."
         else
             echo -e "${RED}[!]${NC} GWS Auth missing."
