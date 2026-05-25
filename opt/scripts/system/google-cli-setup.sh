@@ -11,6 +11,7 @@ GWS_CONFIG_DIR="${HOME}/.config/gws"
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 GEMINI_DOT_DIR="${DOTFILES_DIR}/ai/gemini"
 GWS_DOT_DIR="${DOTFILES_DIR}/ai/gws"
+INSTALL_LOG="/tmp/google-cli-setup.log"
 
 # --- Colors ---
 RED='\033[0;31m'
@@ -53,10 +54,10 @@ install_or_upgrade() {
     
     if command -v "$cmd_name" >/dev/null 2>&1; then
         echo -e "${BLUE}Updating ${cmd_name} (${package_name})...${NC}"
-        $SUDO npm install -g "$package_name@latest"
+        $SUDO npm install -g "$package_name@latest" >> "$INSTALL_LOG" 2>&1
     else
         echo -e "${BLUE}Installing ${cmd_name} (${package_name})...${NC}"
-        $SUDO npm install -g "$package_name"
+        $SUDO npm install -g "$package_name" >> "$INSTALL_LOG" 2>&1
     fi
 }
 
@@ -66,14 +67,12 @@ install_gcloud() {
         return
     fi
 
-    echo -e "${BLUE}Installing Google Cloud SDK (gcloud)...${NC}"
-    curl -fsSL https://sdk.cloud.google.com | bash -s -- --disable-prompts --install-dir="${HOME}/opt"
+    echo -e "${BLUE}Installing Google Cloud SDK (gcloud)... (log: ${INSTALL_LOG})${NC}"
+    # Redirecting to log for a cleaner install experience as requested
+    curl -fsSL https://sdk.cloud.google.com | bash -s -- --disable-prompts --install-dir="${HOME}/opt" >> "$INSTALL_LOG" 2>&1
     
     # Add to path for current session
     export PATH="${HOME}/opt/google-cloud-sdk/bin:${PATH}"
-    
-    echo -e "${GREEN}gcloud CLI installed to ${HOME}/opt/google-cloud-sdk.${NC}"
-    echo -e "${BLUE}Please restart your shell or run: source ~/.bashrc (or ~/.zshrc)${NC}"
 }
 
 init_configs() {
@@ -126,8 +125,7 @@ show_status() {
     if command -v gcloud >/dev/null 2>&1; then
         echo -e "${GREEN}[OK]${NC} gcloud CLI: $(gcloud --version | head -n 1)"
     else
-        echo -e "${RED}[MISSING]${NC} gcloud CLI (required for 'gws auth setup')"
-        echo -e "          Run: $0 gcloud"
+        echo -e "${RED}[MISSING]${NC} gcloud CLI"
     fi
 
     # Gemini
@@ -154,15 +152,16 @@ show_status() {
              echo -e "${GREEN}[OK]${NC} GWS Auth Token found."
         else
             echo -e "${RED}[!]${NC} GWS Auth missing."
-            echo -e "    Recommended path: run 'gws auth setup' (requires gcloud)"
-            echo -e "    Manual path: edit ${GWS_CONFIG_DIR}/client_secret.json and run 'gws auth login'"
+            echo -e "    Recommended path: run 'gws auth setup'"
         fi
     fi
 }
 
 # Main Execution Flow
 setup_all() {
+    echo -e "${BLUE}Starting Google CLI setup... Full log at ${INSTALL_LOG}${NC}"
     load_node_env
+    install_gcloud
     install_or_upgrade "gemini" "@google/gemini-cli"
     install_or_upgrade "gws" "@googleworkspace/cli"
     init_configs
