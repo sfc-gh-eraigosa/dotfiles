@@ -36,9 +36,18 @@ if [ "${#PKGS[@]}" -eq 0 ]; then
   exit 0
 fi
 
+# Register GitHub CLI's official apt repo before refreshing, so the manifest's
+# `gh` resolves to the latest upstream release rather than the stale one in
+# `universe`. Idempotent and non-fatal: if it fails, gh just falls back to the
+# distro package below.
+if [ -x "${SCRIPT_DIR}/../scripts/system/setup_gh_apt_repo.sh" ]; then
+  "${SCRIPT_DIR}/../scripts/system/setup_gh_apt_repo.sh" \
+    || echo "WARNING: GitHub CLI apt repo setup failed; gh will fall back to the distro version."
+fi
+
 # Refresh package lists first. A freshly imaged distro can be missing the
-# universe component index, which is where gh / corkscrew / jc live — without
-# this they'd be reported "Unable to locate package".
+# universe component index, which is where corkscrew / jc live — without this
+# they'd be reported "Unable to locate package".
 echo "Updating apt package lists..."
 sudo apt-get update -qq || echo "WARNING: apt-get update failed; installs may be incomplete."
 

@@ -12,6 +12,9 @@
 
 #  BREW              APT
 git                  git
+# gh: pkg-install-apt adds GitHub CLI's official apt repo (via
+# setup_gh_apt_repo.sh) first, so this resolves to the latest upstream release
+# instead of the stale one in Ubuntu's universe. macOS gets a current gh via brew.
 gh                   gh
 git-lfs              git-lfs
 jq                   jq
