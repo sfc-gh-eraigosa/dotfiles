@@ -161,7 +161,8 @@ else
   if [ -n "$ZSH_PATH" ]; then
     if [ "$SHELL" != "$ZSH_PATH" ]; then
       echo "Changing default shell to zsh ($ZSH_PATH)..."
-      sudo chsh -s "$ZSH_PATH" "$USER" || echo "WARNING: could not change default shell to zsh."
+      # ${USER:-$(id -un)} so chsh still gets a real name in non-login/root shells.
+      sudo chsh -s "$ZSH_PATH" "${USER:-$(id -un)}" || echo "WARNING: could not change default shell to zsh."
     fi
   else
     echo "WARNING: zsh is not installed; leaving the default shell unchanged."
