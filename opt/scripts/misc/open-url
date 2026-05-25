@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+#
+# open-url — open a URL (or file) in the platform's default browser/handler.
+#
+# One canonical opener for every environment the dotfiles run in:
+#   * macOS         -> open
+#   * WSL           -> wslview, else explorer.exe, else cmd.exe /c start
+#   * Linux (X/Wayland) -> xdg-open
+#
+# Skills (e.g. git-safe-sync's "open the PR in your browser?" step) call this so
+# they don't each re-implement platform detection. Exits 0 on a successful
+# launch; non-zero (with the URL printed) when no opener exists — e.g. a headless
+# SSH session — so callers can fall back to just showing the link.
+
+set -u
+
+URL="${1:-}"
+if [ -z "$URL" ]; then
+  echo "usage: open-url <url-or-path>" >&2
+  exit 2
+fi
+
+# WSL identifies itself via "microsoft"/"WSL" in /proc/version or $WSL_DISTRO_NAME.
+is_wsl() {
+  [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null
+}
+
+case "$(uname -s)" in
+  Darwin)
+    exec open "$URL"
+    ;;
+  Linux)
+    if is_wsl; then
+      # wslu's wslview is the cleanest bridge to the Windows default browser.
+      if command -v wslview >/dev/null 2>&1; then
+        exec wslview "$URL"
+      fi
+      # explorer.exe opens the Windows default browser but quirkily returns a
+      # non-zero exit even on success, so don't propagate its status.
+      if command -v explorer.exe >/dev/null 2>&1; then
+        explorer.exe "$URL" >/dev/null 2>&1
+        exit 0
+      fi
+      if command -v cmd.exe >/dev/null 2>&1; then
+        # Empty first arg is start's window-title placeholder.
+        cmd.exe /c start "" "$URL" >/dev/null 2>&1
+        exit 0
+      fi
+    fi
+    if command -v xdg-open >/dev/null 2>&1; then
+      exec xdg-open "$URL"
+    fi
+    echo "open-url: no opener found (headless?); open manually: $URL" >&2
+    exit 1
+    ;;
+  *)
+    echo "open-url: unsupported platform $(uname -s); open manually: $URL" >&2
+    exit 1
+    ;;
+esac

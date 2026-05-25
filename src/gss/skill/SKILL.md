@@ -31,12 +31,13 @@ This skill provides a structured and safe workflow for managing Git repositories
   - **Create PR**: (Add -> Commit -> Feature Branch -> Push -> GH PR)
   - **Cancel**: Do nothing.
 
-- **PR Hygiene**: When creating a PR, you MUST provide a high-quality, comprehensive description. It should include:
+- **PR Hygiene**: When creating a PR, you MUST provide a high-quality, comprehensive description. `gss pr` does **not** infer a body — you MUST pass it explicitly via `gss pr --title "<subject>" --body "<markdown body>"`. Without `--body` the PR ships with an empty/generic description, which violates this rule. The body should include:
   - **What**: A clear summary of the functional changes.
   - **Why**: The technical or workflow rationale for the change.
   - **Impact**: How this affects the system or user experience (e.g., "New alias available", "Bootstrap is now faster").
   - **Testing**: A brief note on how the change was verified.
   - NEVER use generic or empty PR descriptions.
+  - **Note**: `gss pr` has no `--draft` flag — classic PRs are created ready-for-review. (Draft PRs exist only in the `gss feature` stacked-worker workflow.)
 
 ### 3. Execution (Action Phase)
 - ONLY proceed if the user explicitly selected a confirmation option in the previous turn.
@@ -51,7 +52,7 @@ This skill provides a structured and safe workflow for managing Git repositories
 - **Detailed Summary**: If fewer than 10 files were changed, provide the list of files and their +/- line counts.
 - **Compact Summary**: If 10 or more files were changed, provide the high-level stats (e.g., "15 files changed").
 - Provide the **GitHub Comparison Link** or the **Pull Request URL**.
-- **Browser Verification**: If the environment supports it (e.g., `open` or `xdg-open` is available) and you are not in a headless session, ask the user whether to open the **GitHub Comparison/PR link** (from the push/pr output) in their browser for final verification.
+- **Browser Verification**: Ask the user whether to open the **GitHub Comparison/PR link** (from the push/pr output) in their browser for final verification. To open it, run the repo's `open-url <link>` helper (`opt/scripts/misc/open-url`), which picks the right opener per platform — `open` on macOS, `wslview`/`explorer.exe` under WSL, `xdg-open` on Linux. It exits non-zero and prints the link when no opener exists (e.g. a headless SSH session); in that case just leave the link visible rather than retrying.
 
 ## Guidelines
 - **No Assumptions**: Even if a sync seems obvious, you must ask for permission first.
