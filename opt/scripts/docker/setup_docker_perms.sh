@@ -18,10 +18,15 @@ if [[ "$OS_TYPE" == "Linux" ]]; then
         sudo groupadd docker
     fi
 
-    # Add current user to docker group if not already a member
-    if ! groups "$USER" | grep &>/dev/null "\bdocker\b"; then
-        echo "Adding user $USER to docker group..."
-        sudo usermod -aG docker "$USER"
+    # Resolve the target user even when $USER is unset (non-login shells, CI,
+    # or root-driven automation) — otherwise groups/usermod get an empty arg.
+    TARGET_USER="${USER:-$(id -un)}"
+
+    # Add the target user to the docker group if not already a member.
+    # root already has full docker access, so there is nothing to do.
+    if [ "$TARGET_USER" != "root" ] && ! groups "$TARGET_USER" | grep &>/dev/null "\bdocker\b"; then
+        echo "Adding user $TARGET_USER to docker group..."
+        sudo usermod -aG docker "$TARGET_USER"
         echo "NOTE: You may need to log out and back in for group changes to take effect."
         echo "Alternatively, run: newgrp docker"
     fi

@@ -40,12 +40,8 @@ git config --global push.default current
 
 [ ! -d "${HOME}/git" ] && mkdir -p "${HOME}/git"
 
-# skip login check for sshd 
+# skip login check for sshd
 touch "${HOME}/.gitenv.nologin"
-
-# vim
-curl -fsSLo ~/.vim/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
-vim +'PlugInstall --sync' +qall
 
 # Ensure ~/opt is a symlink to the repo's opt directory
 if [ -L "${HOME}/opt" ] && [ "$(readlink "${HOME}/opt")" = "${BASE_DIR}/opt" ]; then
