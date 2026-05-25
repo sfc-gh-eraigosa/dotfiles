@@ -11,6 +11,8 @@
 !Dockerfile
 !.gitignore
 !**/GEMINI.md
+!**/WORKER.md
+!**/FEATURE.md
 !**/CLAUDE.md
 
 # Repository Structure Exceptions
