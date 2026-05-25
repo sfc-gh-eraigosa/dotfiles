@@ -27,9 +27,9 @@ Follow the **git-safe-sync** skill rules strictly. The sequence below is mandato
 3. **Execute** (next turn, only after the user picks an option):
    - Stage files by explicit name (never `git add -A` / `git add .`).
    - Commit using a HEREDOC message that ends with `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`.
-   - For Push: generate the approval token as a **separate Bash call** (`mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token`), then run `gss push` as a **second Bash call**. Chaining them with `&&` is intentionally blocked by `safety_guard.sh`.
-   - For PR: use the same two-call pattern with `gss pr` instead of `gss push`.
-4. **Surface** (post-execution): show the commit SHA, the safety backup branch, and the GitHub compare/PR URL. Then ask whether to open the URL in the browser (`open` on macOS).
+   - For Push: generate the approval token as a **separate Bash call** (`mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token`), then run `gss push` as a **second Bash call**. Chaining them with `&&` is intentionally blocked by `safety_guard.sh`. **If the pushed branch already has an open PR**, `gss push` updates the branch but NOT the PR body — you MUST then refresh it with `gh pr edit <number> --title/--body` so the description covers every commit now on the PR (re-derive What/Why/Impact/Testing from `git log <base>..HEAD`). Leaving a stale description is an incomplete sync.
+   - For PR: use the same two-call pattern with `gss pr` instead of `gss push`. Per the skill's **PR Hygiene** rule, you MUST pass a real description — `gss pr --title "<subject>" --body "<What/Why/Impact/Testing markdown>"`. `gss pr` does not infer a body, so omitting `--body` ships an empty PR description. (`gss pr` has no `--draft` flag; classic PRs are created ready-for-review.)
+4. **Surface** (post-execution): show the commit SHA, the safety backup branch, and the GitHub compare/PR URL. If you pushed to an existing PR, confirm its description was refreshed to match the new scope. Then ask whether to open the URL in the browser — to open it, run the `open-url <url>` helper (`opt/scripts/misc/open-url`), which selects the right opener per platform (`open` on macOS, `wslview`/`explorer.exe` under WSL, `xdg-open` on Linux). If it exits non-zero (e.g. headless session), just leave the link visible.
 
 ## Hard rules
 

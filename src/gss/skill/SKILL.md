@@ -31,12 +31,11 @@ This skill provides a structured and safe workflow for managing Git repositories
   - **Create PR**: (Add -> Commit -> Feature Branch -> Push -> GH PR)
   - **Cancel**: Do nothing.
 
-- **PR Hygiene**: When creating a PR, you MUST provide a high-quality, comprehensive description. It should include:
-  - **What**: A clear summary of the functional changes.
-  - **Why**: The technical or workflow rationale for the change.
-  - **Impact**: How this affects the system or user experience (e.g., "New alias available", "Bootstrap is now faster").
-  - **Testing**: A brief note on how the change was verified.
-  - NEVER use generic or empty PR descriptions.
+- **PR Hygiene — the description must always match the PR's full current scope**: A PR's description is part of its state, not a one-time creation step. Keep it accurate for *everything the PR now contains*, every time you change what's on it:
+  - **On create** (`gss pr`): `gss pr` does **not** infer a body — pass it explicitly via `gss pr --title "<subject>" --body "<markdown body>"`. Omitting `--body` ships an empty/generic description, which violates this rule.
+  - **On every later push to a branch that already has an open PR** (`gss push`, or a re-run `gss pr`): `gss push` only updates the branch — it has **no** `--body`/`--title` flag and does **not** touch the description, so the description silently goes stale and describes only the earlier work. After such a push you MUST refresh the description to cover the newly added commits, via `gh pr edit <number> --title "<subject>" --body "<body>"`. **Never push scope-changing commits to a PR and leave its description behind.**
+  - The body should always include — **What** (summary of functional changes), **Why** (rationale), **Impact** (effect on system/UX), **Testing** (how verified). NEVER use generic or empty descriptions.
+  - **Note**: `gss pr` has no `--draft` flag — classic PRs are created ready-for-review. (Draft PRs exist only in the `gss feature` stacked-worker workflow, whose PR bodies are owned by `gss feature checkpoint` — do **not** hand-edit those with `gh pr edit`.)
 
 ### 3. Execution (Action Phase)
 - ONLY proceed if the user explicitly selected a confirmation option in the previous turn.
@@ -45,13 +44,15 @@ This skill provides a structured and safe workflow for managing Git repositories
   * Step 2 (a separate command): `gss push`
 - This consumes the token and satisfies the binary's technical safeguard.
 - **Auto-Recovery**: If `gss push` fails with a "missing or unreadable approval token" error (exit 22), it means you skipped the user confirmation turn. You MUST immediately stop and explicitly ask the user for permission before retrying.
+- **Refresh the PR description (mandatory after pushing to an existing PR)**: If the push added commits to a branch that *already* has an open PR (rather than creating a new one), the PR body is now stale — `gss push` never updates it. Immediately reconcile it with `gh pr edit <number> --title "<subject>" --body "<body>"` so the description covers the PR's new full scope (re-derive What/Why/Impact/Testing from *all* commits now on the branch, e.g. `git log <base>..HEAD`). This is part of the push, not an optional follow-up. (Skip only for `gss feature` worktrees — `gss feature checkpoint` owns those bodies.)
 
 ### 4. Summarize & Link (Verification Phase)
 - After execution, summarize the result using the output from 'gss push'.
 - **Detailed Summary**: If fewer than 10 files were changed, provide the list of files and their +/- line counts.
 - **Compact Summary**: If 10 or more files were changed, provide the high-level stats (e.g., "15 files changed").
 - Provide the **GitHub Comparison Link** or the **Pull Request URL**.
-- **Browser Verification**: If the environment supports it (e.g., `open` or `xdg-open` is available) and you are not in a headless session, ask the user whether to open the **GitHub Comparison/PR link** (from the push/pr output) in their browser for final verification.
+- **Description sync check**: If the push targeted an existing PR, confirm you refreshed its description (Execution phase) so it matches every commit now on the PR. A push that left the description stale is an incomplete sync — go back and run `gh pr edit`.
+- **Browser Verification**: Ask the user whether to open the **GitHub Comparison/PR link** (from the push/pr output) in their browser for final verification. To open it, run the repo's `open-url <link>` helper (`opt/scripts/misc/open-url`), which picks the right opener per platform — `open` on macOS, `wslview`/`explorer.exe` under WSL, `xdg-open` on Linux. It exits non-zero and prints the link when no opener exists (e.g. a headless SSH session); in that case just leave the link visible rather than retrying.
 
 ## Guidelines
 - **No Assumptions**: Even if a sync seems obvious, you must ask for permission first.

@@ -14,6 +14,27 @@ function install_zsh_centos7() {
 
 export BASE_DIR="$(cd "$(dirname $0)" && pwd)"
 
+# --- Authenticate sudo up front -------------------------------------------
+# The rest of this installer runs several privileged steps (apt/yum installs,
+# the GitHub CLI apt-repo setup, chsh). Caching sudo credentials once here means
+# the long, otherwise-unattended run never stalls on a password prompt midway.
+# A background keep-alive refreshes the timestamp until this script exits so it
+# can't lapse mid-install. Skipped when already root or when sudo is absent
+# (e.g. minimal containers); a failed auth is non-fatal — individual privileged
+# steps still run and warn on their own.
+if [ "$(id -u)" -ne 0 ] && command -v sudo &> /dev/null; then
+  echo "Requesting sudo access up front (used for package installs, repo setup, chsh)..."
+  if sudo -v; then
+    # Refresh the sudo timestamp every 50s (well under the default 15m timeout)
+    # until install.sh exits, so a slow build can't let credentials lapse.
+    while true; do sudo -n true 2>/dev/null; sleep 50; kill -0 "$$" 2>/dev/null || exit; done &
+    SUDO_KEEPALIVE_PID=$!
+    trap 'kill "$SUDO_KEEPALIVE_PID" 2>/dev/null' EXIT
+  else
+    echo "WARNING: could not cache sudo credentials; privileged steps may prompt or be skipped."
+  fi
+fi
+
 git config --global pager.branch false
 git config --global push.default current
 
