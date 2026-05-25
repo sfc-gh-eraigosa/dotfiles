@@ -21,6 +21,25 @@ changes (each a reviewer comment) are folded into the design below:
    the sum — every per-call deadline sits below the ceiling and can actually fire. On timeout
    **degrade** (omit segment / use last MCP cache), **never block**.
 
+## Follow-up requirement: `repo` segment (PR# + worktree awareness)
+
+After the review, the user added a fifth requirement: a **fourth segment** — `repo` — between
+`dirgit` and `ai`, surfacing repo/worktree context the existing segments don't:
+
+- a **🏠 root / 🌳 worktree indicator** (blue / magenta; ASCII `[root]` / `[wt]`) showing whether
+  the current checkout is the canonical repo root or a linked git worktree;
+- in a worktree, the **gss feature name** it belongs to (e.g. `gsl`) — info `dirgit` doesn't show
+  (it shows the worktree's own dir basename + branch); non-gss worktrees fall back to the dir name;
+- the active **PR number** (`PR#21`, tinted by PR state), resolved **instantly from the gss
+  registry** with `gh pr view` as a cached network fallback;
+- a **worktree count** (`⑂N`, shown when N ≥ 2; ASCII `wtN`) — "how many worktrees do I have going",
+  in the spirit of the MCP `active/configured` count.
+
+All of it is one instant `registry.json` read plus two fast git calls (`rev-parse`,
+`git worktree list`); only the `gh` fallback touches the network, and it is cached/timed out like
+`claude mcp list`. The segment self-omits parts that don't apply, so a plain non-git dir shows
+nothing extra. Details fold into the sections below.
+
 ---
 
 ## Context
@@ -56,32 +75,47 @@ covered too. Research established:
    the same binary in plain-text mode; document Gemini's built-in footer toggles.
 3. MCP segment: **best-effort cached** — instant "configured" count + an "active" count from
    `claude mcp list` refreshed at most once/60s.
+4. `repo` segment: **🏠/🌳 root-vs-worktree indicator + gss feature name + PR# + worktree count**,
+   sourced from the gss `registry.json` (instant) and local git, with a cached `gh pr view`
+   fallback for the PR number on non-gss branches.
 
-**Outcome:** one fast (~ms startup) binary renders a 3-part powerline status line —
-`dir+git` · `AI(context/model/MCP/rate-limits)` · `date/time` — live in Claude, on demand in
-Gemini, with a `gsl preview` to see and tune it, fully toggleable via a config file and a
-configuration skill.
+**Outcome:** one fast (~ms startup) binary renders a 4-part powerline status line —
+`dir+git` · `repo(root/worktree · PR# · worktree-count)` · `AI(context/model/MCP/rate-limits)` ·
+`date/time` — live in Claude, on demand in Gemini, with a `gsl preview` to see and tune it, fully
+toggleable via a config file and a configuration skill.
 
 ---
 
 ## What it looks like (preview)
 
-Nerd-Font glyphs (representative; actual glyphs from `opt/profiles/.p10k.zsh`):
+Nerd-Font glyphs (representative; actual glyphs from `opt/profiles/.p10k.zsh`). The `repo`
+segment (2nd) renders differently at the repo root vs inside a linked worktree:
 
 ```
-  ~/dotfiles   main +2 !1 ?3 ⇡2 ⇣1     Opus 4.7  42% 84k/200k   MCP 2/5   5h 12% · 7d 45%      Sat 05/24 15:30 PDT
-└──────── dirgit ────────┘ └──────────────────────── ai ────────────────────────┘ └──────── time ───────┘
+root checkout:
+  ~/dotfiles   main +2 !1 ?3 ⇡2 ⇣1    🏠 PR#42 ⑂4    Opus 4.7  42% 84k/200k  MCP 2/5  5h 12% · 7d 45%   Sat 05/24 15:30 PDT
+└──────── dirgit ────────┘ └─── repo ───┘ └──────────────────────── ai ────────────────────────┘ └──────── time ───────┘
+
+inside a worktree:
+  …/gsl/…/plan   feature/gsl… +1     🌳 gsl PR#21 ⑂4    Opus 4.7  42% 84k/200k  MCP 2/5  5h 12% · 7d 45%   Sat 05/24 15:30 PDT
+└──────── dirgit ─────────┘ └────── repo ──────┘ └──────────────────────── ai ────────────────────────┘ └──────── time ───────┘
 ```
+
+`repo` glyphs: 🏠 = repo root (blue), 🌳 = linked worktree (magenta); `gsl` = the gss feature the
+worktree belongs to; `PR#21` is tinted by PR state (draft dim / open normal); `⑂4` = 4 worktrees
+exist. Parts self-omit: no PR ⇒ no `PR#`, a lone main checkout ⇒ no `⑂N`, a non-git dir ⇒ the whole
+`repo` segment disappears.
 
 ASCII fallback (`glyphs: ascii`):
 
 ```
-[~/dotfiles] (main +2 !1 ?3 ^2 v1) | Opus 4.7 42% 84k/200k MCP 2/5 5h 12% 7d 45% | Sat 05/24 15:30 PDT
+[~/dotfiles] (main +2 !1 ?3 ^2 v1) | [root] PR#42 wt4 | Opus 4.7 42% 84k/200k MCP 2/5 5h 12% 7d 45% | Sat 05/24 15:30 PDT
+[~/…/plan]   (feature/gsl… +1)     | [wt] gsl PR#21 wt4 | Opus 4.7 42% 84k/200k MCP 2/5 5h 12% 7d 45% | Sat 05/24 15:30 PDT
 ```
 
 `gsl preview` renders this against fixture payloads (clean repo, dirty repo, high-context,
-rate-limited); `gsl preview` interactive lets you toggle each segment, switch glyphs/theme,
-and watch the clock tick before saving config.
+rate-limited, **root vs worktree**); `gsl preview` interactive lets you toggle each segment, switch
+glyphs/theme, and watch the clock tick before saving config.
 
 ---
 
@@ -92,10 +126,10 @@ and watch the clock tick before saving config.
 Mirror the `src/gss` conventions: `build.sh` (goenv-aware `go`, version stamped via
 `-X github.com/wenlock/dotfiles/gsl/internal/version.*` from a `VERSION` file, output to
 `~/opt/bin/gsl`, then run `scripts/check-deps.sh`), an `os/exec` **seam** confined to
-`internal/git` + `internal/mcp` and enforced by `check-deps.sh`, a `skill/SKILL.md`,
-Apache-2.0 `LICENSE`. **cobra** for dispatch (`cmd.Execute()` in `main.go`); **bubbletea**
-imported only by the preview package. `check-deps.sh` allows cobra/bubbletea in `cmd/` +
-`internal/preview`, and keeps `os/exec` out of everything except the two seams.
+`internal/git`, `internal/mcp`, and `internal/gh` and enforced by `check-deps.sh`, a
+`skill/SKILL.md`, Apache-2.0 `LICENSE`. **cobra** for dispatch (`cmd.Execute()` in `main.go`);
+**bubbletea** imported only by the preview package. `check-deps.sh` allows cobra/bubbletea in
+`cmd/` + `internal/preview`, and keeps `os/exec` out of everything except the three seams.
 
 ```
 src/gsl/
@@ -106,9 +140,13 @@ src/gsl/
     version/      version.go        (copy gss pattern)
     payload/      payload.go        (defensive parse of Claude stdin JSON; all fields pointers)
     config/       config.go         (Config, Default(), Load/Save, toggle helpers)
-    git/          exec.go (Runner seam, CommandContext) status.go (GitInfo)  fake/runner.go
+    git/          exec.go (Runner seam, CommandContext) status.go (GitInfo)
+                  worktree.go (IsLinked, Count, Toplevel)  fake/runner.go
     mcp/          detect.go cache.go (Configured instant + Active cached/60s)  fake/runner.go
-    render/       segment.go glyphs.go render.go + seg_dirgit.go seg_ai.go seg_time.go
+    repo/         detect.go (root/worktree via git) registry.go (gss registry.json reader)
+                  pr.go (PR# from registry → gh fallback)
+    gh/           exec.go (Runner seam, CommandContext) pr.go (gh pr view, cached/60s)  fake/runner.go
+    render/       segment.go glyphs.go render.go + seg_dirgit.go seg_repo.go seg_ai.go seg_time.go
     preview/      ui.go (bubbletea Model/Update/View) fixtures.go  (+ golden tests)
   skill/SKILL.md  scripts/check-deps.sh  docs/design.md
 ```
@@ -128,11 +166,18 @@ src/gsl/
    unstaged `!N`, untracked `?N`, stashes, ahead `⇡N`, behind `⇣N`. One
    `git -C <dir> status --porcelain=v2 --branch` + `git stash list`, via the `git.Runner` seam
    (`CommandContext`, ~800ms timeout). Mirrors `opt/profiles/.p10k.zsh` `my_git_formatter`.
-2. **ai** — from the Claude payload: `model.display_name`, `context_window.used_percentage`
+2. **repo** — repo/worktree context, all from local git + the gss registry (no payload needed,
+   so it renders in Claude *and* Gemini/CLI mode). Left→right, each part self-omitting:
+   **🏠 root / 🌳 worktree** indicator (root if `git rev-parse --git-dir` ==
+   `--git-common-dir`, else linked worktree); in a worktree the **gss feature name**; the
+   **PR number** (`repo.PR()` → registry first, `gh` fallback); and the **worktree count**
+   (`git worktree list`, shown when ≥ 2). Glyphs honor `glyphs` (🏠/🌳/⑂ vs `[root]`/`[wt]`/`wtN`);
+   colors root=blue / worktree=magenta (themeable). Self-omits entirely outside a git repo.
+3. **ai** — from the Claude payload: `model.display_name`, `context_window.used_percentage`
    + tokens vs `context_window_size`, MCP `active/configured`, and rate-limit usage for the
    5-hour and 7-day windows (`rate_limits.five_hour`/`seven_day` + `resets_at`). Returns
    `("", false)` (self-omits) when there is no payload (Gemini/CLI mode) or a field is null.
-3. **time** — current time in a configurable tz (default `America/Los_Angeles`/PST) with
+4. **time** — current time in a configurable tz (default `America/Los_Angeles`/PST) with
    Nerd-Font calendar + clock glyphs: day-of-week, month/day, `HH:MM`, tz abbreviation.
 
 ### Performance budget & graceful degradation (review comment #4)
@@ -142,6 +187,9 @@ All subprocess work goes through the seams with `context.WithTimeout` + `exec.Co
 | Call | Timeout | On timeout/error |
 | --- | --- | --- |
 | `git status …` + `git stash list` | ~800ms | omit git detail (show cwd only) or last value |
+| `git rev-parse` + `git worktree list` (repo seg) | ~800ms (shared git budget) | omit worktree indicator/count |
+| `~/.config/gss/worktrees/registry.json` read (PR# + name) | none (instant file read) | parse error ⇒ fall through to `gh` |
+| `gh pr view` (PR# fallback only) | ~800ms | last PR cache, else omit `PR#` |
 | `claude mcp list` (active count) | ~500ms | fall back to last MCP cache, else configured-only |
 | **whole `gsl render`** | soft ~150ms / hard ~1000ms | emit partial line (never block) |
 
@@ -161,10 +209,25 @@ through the `mcp.Runner` seam with the timeout above, parses connected vs failed
 rewrites the cache; a cache hit (<60s) spawns **no** subprocess (asserted via a spy runner in
 tests).
 
+**Repo/worktree detection** (`internal/repo` + `internal/git/worktree.go`): root-vs-worktree is
+`git rev-parse --path-format=absolute --git-common-dir` vs `--git-dir` — equal ⇒ root, differ ⇒
+linked worktree (verified against this repo). Worktree count is `git worktree list --porcelain`
+(count `^worktree ` lines), via the `git.Runner` seam under the shared git budget. Feature name +
+PR number come from `repo.PR(branch, toplevel)`: read `${XDG_CONFIG_HOME:-~/.config}/gss/worktrees/
+registry.json` (guard on `schema_version`), match the current `--show-toplevel` (or branch) to a
+worker row, and take `pr_url` (parse the trailing number) + `pr_state` + the parent feature `name`
+— **instant, no subprocess**. Only when the registry is absent / the branch isn't found does it
+fall back to `internal/gh`: `gh pr view --json number,state` through the `gh.Runner` seam, cached at
+`${XDG_CACHE_HOME:-~/.cache}/gsl/pr-<branch>.json` for 60s (cache hit ⇒ no subprocess, spy-tested),
+timed out as above; no PR / no `gh` / no remote ⇒ the `PR#` part self-omits.
+
 **Config + on/off** (`internal/config`): JSON at `${XDG_CONFIG_HOME:-~/.config}/gsl/config.json`,
 with `enabled` (master), an ordered `segments[]` (each `{type, enabled, options}`), `timezone`,
-time/date formats, `glyphs` (`nerdfont`|`ascii`), powerline separators, and `theme`. **Missing
-file ⇒ sane defaults** (the binary works with zero config). Two on/off layers, both honored:
+time/date formats, `glyphs` (`nerdfont`|`ascii`), powerline separators, and `theme`. The `repo`
+segment's `options` carry `show_pr` (bool), `show_count` (bool), and `name`
+(`feature`|`worker`|`branch`|`off`, default `feature`); its colors live in `theme`
+(`repo_root`/`repo_worktree`, default blue/magenta). **Missing file ⇒ sane defaults** (the binary
+works with zero config; `repo` enabled by default). Two on/off layers, both honored:
 the harness `statusLine.command` key (hard off = remove it) and `config.enabled` (soft off:
 `gsl render` prints empty stdout) plus per-segment toggles — all reachable via `gsl config …`.
 
@@ -194,7 +257,7 @@ the harness `statusLine.command` key (hard off = remove it) and `config.enabled`
 
 | Action | Path |
 | --- | --- |
-| NEW (tool tree) | `src/gsl/**` — cobra Go source, `build.sh`, `VERSION`, `internal/preview` (bubbletea), `skill/SKILL.md`, `scripts/check-deps.sh`, tests |
+| NEW (tool tree) | `src/gsl/**` — cobra Go source, `build.sh`, `VERSION`, `internal/{repo,gh}` (worktree + PR# detection), `internal/preview` (bubbletea), `skill/SKILL.md`, `scripts/check-deps.sh`, tests |
 | NEW | `ai/claude/statusline-command.sh` (shim) |
 | NEW | `ai/gemini/commands/gsl-status.toml` |
 | EDIT | `opt/scripts/system/install_claude_skills.sh` (symlink shim) |
@@ -206,8 +269,12 @@ the harness `statusLine.command` key (hard off = remove it) and `config.enabled`
   names/paths to `gsl`.
 - `src/gss/cmd/root.go` — cobra root + `Execute()` shape.
 - `src/gss/internal/git` + its `fake/` runner — the `os/exec` seam + fakeable Runner pattern
-  for both `git` and `mcp`; `src/gss/scripts/check-deps.sh` — copy and adjust the seam
-  allowlist to `internal/git` + `internal/mcp` (and allow cobra/bubbletea in `cmd/`/`preview`).
+  reused for `git`, `mcp`, and `gh`; `src/gss/scripts/check-deps.sh` — copy and adjust the seam
+  allowlist to `internal/git` + `internal/mcp` + `internal/gh` (and allow cobra/bubbletea in
+  `cmd/`/`preview`).
+- `gss feature list --json` / `~/.config/gss/worktrees/registry.json` — the worker rows
+  (`branch`, `worktree`, `pr_url`, `pr_state`, parent `name`) the `internal/repo` registry reader
+  parses; guard on the top-level `schema_version`.
 - `src/gss/internal/version` — version var + `Get()` fallback pattern.
 - `opt/profiles/.p10k.zsh` `my_git_formatter` — authoritative glyph semantics
   (`⇡`/`⇣` ahead/behind, `+`/`!`/`?` staged/unstaged/untracked) to mirror.
@@ -226,9 +293,11 @@ seams land; CP3 depends on both; CP4 is final.
   `scripts/check-deps.sh` (from gss, seam allowlist adjusted); `internal/{version,payload,config}`
   and the `git`/`mcp` seam interfaces + `fake/` runners. Gate: `go build ./...`, check-deps
   green, no panic on missing config.
-- **CP2 — Detection & render.** `internal/git` (porcelain v2 + timeout), `internal/mcp`
-  (configured instant + active cached/timeout + spy-tested cache hit), `internal/render`
-  (3 segments, glyphs, powerline join, per-segment deadline).
+- **CP2 — Detection & render.** `internal/git` (porcelain v2 + timeout + `worktree.go`),
+  `internal/mcp` (configured instant + active cached/timeout + spy-tested cache hit),
+  `internal/repo` (root/worktree detect + registry reader) and `internal/gh` (cached PR# fallback
+  + spy-tested cache hit), `internal/render` (**4 segments** incl. `seg_repo.go`, glyphs,
+  powerline join, per-segment deadline).
 - **CP3 — CLI, preview & wiring.** `cmd/{render,status,config,version,preview}`;
   `internal/preview` bubbletea TUI + `--once` golden snapshot; `ai/claude/statusline-command.sh`
   shim + `install_claude_skills.sh` symlink; `sync-skills.sh` build loop + `gsl) gsl-status`
@@ -242,9 +311,10 @@ seams land; CP3 depends on both; CP4 is final.
 1. **Build**: `bash src/gsl/build.sh` → `gsl built and installed to ~/opt/bin/gsl`,
    check-deps passes. (`make bin` also works.)
 2. **Tests/coverage** (TDD, ≥60% per pkg per `src/CLAUDE.md`; targets: payload ~95, git 70,
-   mcp 60, config 70, render 75, cmd 80, preview 60):
-   `cd src/gsl && go test ./... -cover`. Seams faked via `git/fake` + `mcp/fake`; payload
-   fixtures under `internal/payload/testdata/`. Cases per package:
+   mcp 60, repo 70, gh 60, config 70, render 75, cmd 80, preview 60):
+   `cd src/gsl && go test ./... -cover`. Seams faked via `git/fake` + `mcp/fake` + `gh/fake`;
+   payload fixtures under `internal/payload/testdata/`, registry fixtures under
+   `internal/repo/testdata/`. Cases per package:
    - payload: full fixture; malformed JSON → error; **empty stdin → empty struct, no error**;
      `used_percentage:null` → nil; `seven_day` absent but `five_hour` present.
    - git: scripted porcelain=v2 (staged/unstaged/untracked, ahead 2/behind 1, stashes); clean
@@ -253,26 +323,41 @@ seams land; CP3 depends on both; CP4 is final.
    - mcp: configured count from temp `~/.claude.json` + `.mcp.json` (CLAUDE_CONFIG_DIR honored);
      active from fake `claude mcp list` (mixed ✓/✗); **cache hit <60s ⇒ spy runner NOT called**;
      stale cache + timeout ⇒ last value.
-   - render: segment ordering + disable; master `enabled=false` ⇒ empty output; tz render +
-     bad-tz→UTC fallback; nerdfont vs ascii glyphs; **golden line at fixed time + fixed payload**.
+   - repo: root detect (`--git-dir`==`--git-common-dir`) vs linked-worktree (differ), via fake
+     `git rev-parse`; worktree count from fake `git worktree list --porcelain` (1, 4); registry
+     parse from fixture `registry.json` — match by toplevel **and** by branch, `pr_url`→number,
+     `pr_state` + feature `name`; worker with no `pr_url`; **bumped `schema_version` ⇒ ignored**
+     (falls through to gh); missing registry ⇒ gh fallback.
+   - gh: PR# from fake `gh pr view` (open/draft/none); **cache hit <60s ⇒ spy NOT called**;
+     timeout/`gh` absent/no remote ⇒ omit.
+   - render: segment ordering + disable; master `enabled=false` ⇒ empty output; **repo: 🏠 root vs
+     🌳 worktree glyph + color, PR#/count omission, `name` modes (feature/worker/branch/off)**; tz
+     render + bad-tz→UTC fallback; nerdfont vs ascii glyphs; **golden line at fixed time + fixed
+     payload, for both root and worktree**.
    - preview: `--once` golden frame; bubbletea model toggle/tick transitions.
    - config: Default(); Load-missing → defaults; round-trip; toggle; bad-tz fallback.
 3. **Render (Claude path)**: pipe a sample payload —
    `printf '%s' '{"cwd":"'"$PWD"'","model":{"display_name":"Opus 4.7"},"context_window":{"used_percentage":42,"total_input_tokens":84000,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":12.5,"resets_at":"2026-05-24T20:00:00Z"}}}' | ~/opt/bin/gsl render`
-   → one powerline line: dir+git, AI(model/ctx%/tokens/MCP/5h+7d), time.
-4. **On-demand (Gemini/CLI)**: `~/opt/bin/gsl status` (no stdin) → dir+git+time, AI omitted.
-5. **Preview**: `gsl preview --once` → one rendered frame; `gsl preview` → interactive TUI,
-   toggle a segment, watch the clock tick, `q` to exit.
-6. **Toggle**: `gsl config disable time` → time gone; `gsl config enable time` restores;
-   `gsl config disable` (master) → empty output.
-7. **Timeout proof**: prepend a `PATH` dir with a `git` (and `claude`) that `sleep 5` →
+   → one powerline line: dir+git, repo(root/worktree·PR#·count), AI(model/ctx%/tokens/MCP/5h+7d), time.
+4. **On-demand (Gemini/CLI)**: `~/opt/bin/gsl status` (no stdin) → dir+git+repo+time, AI omitted
+   (repo renders without a payload).
+5. **Repo segment (root vs worktree)**: run `~/opt/bin/gsl status` from the repo root → `🏠` +
+   any PR# for the current branch + `⑂N`; run it from inside a gss worktree
+   (`~/.config/gss/worktrees/.../plan`) → `🌳 <feature>` + `PR#<n>` (from `registry.json`, no
+   network) + `⑂N`. Move/rename the registry → PR# falls back to a cached `gh pr view`; on a plain
+   repo with no PR → `PR#` self-omits; on a lone main checkout → `⑂N` self-omits.
+6. **Preview**: `gsl preview --once` → one rendered frame; `gsl preview` → interactive TUI,
+   toggle a segment (incl. `repo`), watch the clock tick, `q` to exit.
+7. **Toggle**: `gsl config disable time` → time gone; `gsl config disable repo` → repo segment
+   gone; `gsl config enable …` restores; `gsl config disable` (master) → empty output.
+8. **Timeout proof**: prepend a `PATH` dir with a `git` (and `claude`/`gh`) that `sleep 5` →
    `time ~/opt/bin/gsl status` returns within the render budget with graceful degradation.
-8. **Wiring**: `bash opt/scripts/system/sync-skills.sh --build` builds gsl + links
+9. **Wiring**: `bash opt/scripts/system/sync-skills.sh --build` builds gsl + links
    `~/.claude/skills/gsl-status` and `~/.agents/skills/gsl-status`;
    `bash opt/scripts/system/install_claude_skills.sh` → `~/.claude/statusline-command.sh`
    symlink exists & executable; `bash opt/scripts/system/install_gemini_skills.sh` →
    `~/.gemini/commands/gsl-status.toml` linked.
-9. **Shim fallback**: `mv ~/opt/bin/gsl ~/opt/bin/gsl.bak`, pipe a payload into
-   `bash ~/.claude/statusline-command.sh` → minimal bash line; restore binary.
-10. **Live Claude pickup**: start a Claude Code session; after an assistant turn the status
+10. **Shim fallback**: `mv ~/opt/bin/gsl ~/opt/bin/gsl.bak`, pipe a payload into
+    `bash ~/.claude/statusline-command.sh` → minimal bash line; restore binary.
+11. **Live Claude pickup**: start a Claude Code session; after an assistant turn the status
     line renders (harness pipes the live payload → shim → `gsl render`).
