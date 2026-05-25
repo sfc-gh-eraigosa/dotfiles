@@ -11,6 +11,8 @@
 !Dockerfile
 !.gitignore
 !**/GEMINI.md
+!**/WORKER.md
+!**/FEATURE.md
 !**/CLAUDE.md
 
 # Repository Structure Exceptions
@@ -42,6 +44,7 @@ opt/rbenv
 opt/XMind_Linux_64bit/
 opt/clawdad/
 opt/nano/
+opt/google-cloud-sdk/
 
 # Documentation
 # docs/ is tracked so guides are available on all machines.
