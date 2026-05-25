@@ -4,7 +4,7 @@ description: Integration for interacting with Google Docs and Google Workspace u
 ---
 # Google Docs Integration Skill
 
-This skill allows Gemini to interact with Google Workspace (Docs, Drive, Gmail, etc.) using the `gws` CLI.
+This skill allows Gemini and Claude to interact with Google Workspace (Docs, Drive, Gmail, etc.) using the `gws` CLI.
 
 ## Capabilities
 
@@ -39,3 +39,10 @@ gws auth login
 
 - **JSON Output**: `gws` returns JSON by default. Use `jq` to parse it if needed.
 - **File IDs**: Most operations require a `fileId`. Use the list or search commands to find it.
+
+## Gotchas
+
+- **Rate Limits**: Google APIs have rate limits. Avoid making hundreds of requests in a tight loop.
+- **Scopes**: If you get "Insufficient Permission" errors, you may need to re-run `gws auth login` and ensure all requested scopes are approved.
+- **Binary Format**: When downloading non-Google formats (like PDFs or Word docs), use appropriate flags or helpers to handle the binary stream.
+- **Large Docs**: Extremely large documents might hit token limits if read in their entirety. Consider reading them in chunks or summarizing if supported by the underlying API.

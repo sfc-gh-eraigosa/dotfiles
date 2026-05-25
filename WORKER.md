@@ -16,7 +16,17 @@ Implement an installation mechanic for Google Docs integration. This includes:
 - Used `@googleworkspace/cli` (gws) as the primary tool for Workspace interaction.
 - Added a seeding mechanism for `config.json` to allow per-host configuration while maintaining a shared template.
 - Integrated `google-cli-setup.sh` into `install.sh` to ensure a smooth bootstrapping experience.
+- **Full API Coverage**: We assume the user wants access to all major Workspace APIs (Calendar, Gmail, Drive, Docs, Sheets) by default.
+
+## Authentication Methods: Pros & Cons
+We support two primary ways to authenticate `gws`:
+
+1. **Pre-provisioned `client_secret.json`**:
+   - **Pros**: Can be fully automated (non-interactive); ideal for CI/CD or managed workstations.
+   - **Cons**: Requires manual creation of a Desktop OAuth client in the Google Cloud Console; requires secure distribution of the secret file.
+2. **Interactive `gws auth setup`**:
+   - **Pros**: Very user-friendly; automates API enablement and credential creation via the browser.
+   - **Cons**: Requires manual interaction during the installation process; requires `gcloud` to be installed and authenticated for full automation.
 
 ## Open questions
-- Should we provide a default `client_secret.json` or rely on `gws auth setup`?
-- Are there specific Google Docs APIs that need pre-authorization?
+- **Authorization**: We will default to requesting full scopes for the primary Workspace services to ensure the assistant is useful out-of-the-box.

@@ -312,6 +312,7 @@ fi
 
 # Google CLI (Gemini & Workspace) Setup
 if [ -f "${BASE_DIR}/opt/scripts/system/google-cli-setup.sh" ]; then
+    # This configures gws for BOTH Gemini CLI and Claude Code via shared skills.
     echo "Setting up Google CLI (Gemini & Workspace)..."
     "${BASE_DIR}/opt/scripts/system/google-cli-setup.sh"
 fi
