@@ -82,6 +82,13 @@ init_configs() {
 
     # GWS
     mkdir -p "${GWS_DIR}"
+    
+    # Seed config.json from template if it doesn't exist
+    if [ ! -f "${GWS_DOT_DIR}/config.json" ] && [ -f "${GWS_DOT_DIR}/config.json.template" ]; then
+        echo -e "${BLUE}Seeding GWS configuration from template...${NC}"
+        cp "${GWS_DOT_DIR}/config.json.template" "${GWS_DOT_DIR}/config.json"
+    fi
+
     if [ -f "${GWS_DOT_DIR}/config.json" ]; then
         ln -sf "${GWS_DOT_DIR}/config.json" "${GWS_DIR}/config.json"
         echo -e "${GREEN}Symlinked GWS configuration.${NC}"
@@ -107,6 +114,14 @@ show_status() {
 
     # Auth checks
     [ -f "${GEMINI_DIR}/oauth_creds.json" ] && echo -e "${GREEN}[OK]${NC} Gemini Auth found." || echo -e "${RED}[!]${NC} Gemini Auth missing (run 'gemini auth login')"
+    
+    if command -v gws >/dev/null 2>&1; then
+        if [ -f "${HOME}/.config/gws/client_secret.json" ] || [ -f "${GWS_DIR}/config.json" ]; then
+            echo -e "${GREEN}[OK]${NC} GWS Auth/Config found."
+        else
+            echo -e "${RED}[!]${NC} GWS Auth/Config missing (run 'gws auth setup')"
+        fi
+    fi
 }
 
 # Main Execution Flow
