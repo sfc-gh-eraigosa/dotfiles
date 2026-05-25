@@ -7,6 +7,7 @@ set -e
 # --- Configuration ---
 GEMINI_DIR="${HOME}/.gemini"
 GWS_DIR="${HOME}/.gws"
+GWS_CONFIG_DIR="${HOME}/.config/gws"
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 GEMINI_DOT_DIR="${DOTFILES_DIR}/ai/gemini"
 GWS_DOT_DIR="${DOTFILES_DIR}/ai/gws"
@@ -59,6 +60,22 @@ install_or_upgrade() {
     fi
 }
 
+install_gcloud() {
+    if command -v gcloud >/dev/null 2>&1; then
+        echo -e "${GREEN}gcloud CLI is already installed.${NC}"
+        return
+    fi
+
+    echo -e "${BLUE}Installing Google Cloud SDK (gcloud)...${NC}"
+    curl -fsSL https://sdk.cloud.google.com | bash -s -- --disable-prompts --install-dir="${HOME}/opt"
+    
+    # Add to path for current session
+    export PATH="${HOME}/opt/google-cloud-sdk/bin:${PATH}"
+    
+    echo -e "${GREEN}gcloud CLI installed to ${HOME}/opt/google-cloud-sdk.${NC}"
+    echo -e "${BLUE}Please restart your shell or run: source ~/.bashrc (or ~/.zshrc)${NC}"
+}
+
 init_configs() {
     echo -e "${BLUE}Initializing configurations...${NC}"
     
@@ -82,6 +99,7 @@ init_configs() {
 
     # GWS
     mkdir -p "${GWS_DIR}"
+    mkdir -p "${GWS_CONFIG_DIR}"
     
     # Seed config.json from template if it doesn't exist
     if [ ! -f "${GWS_DOT_DIR}/config.json" ] && [ -f "${GWS_DOT_DIR}/config.json.template" ]; then
@@ -93,11 +111,25 @@ init_configs() {
         ln -sf "${GWS_DOT_DIR}/config.json" "${GWS_DIR}/config.json"
         echo -e "${GREEN}Symlinked GWS configuration.${NC}"
     fi
+
+    # Seed client_secret.json from template if it doesn't exist (optional path)
+    if [ ! -f "${GWS_CONFIG_DIR}/client_secret.json" ] && [ -f "${GWS_DOT_DIR}/client_secret.json.template" ]; then
+        echo -e "${BLUE}Seeding GWS client_secret.json from template...${NC}"
+        cp "${GWS_DOT_DIR}/client_secret.json.template" "${GWS_CONFIG_DIR}/client_secret.json"
+    fi
 }
 
 show_status() {
     echo -e "\n${BOLD}--- Google CLI Status ---${NC}"
     
+    # gcloud
+    if command -v gcloud >/dev/null 2>&1; then
+        echo -e "${GREEN}[OK]${NC} gcloud CLI: $(gcloud --version | head -n 1)"
+    else
+        echo -e "${RED}[MISSING]${NC} gcloud CLI (required for 'gws auth setup')"
+        echo -e "          Run: $0 gcloud"
+    fi
+
     # Gemini
     if command -v gemini >/dev/null 2>&1; then
         echo -e "${GREEN}[OK]${NC} Gemini CLI: $(gemini --version 2>/dev/null | head -n 1 || echo 'Installed')"
@@ -116,10 +148,14 @@ show_status() {
     [ -f "${GEMINI_DIR}/oauth_creds.json" ] && echo -e "${GREEN}[OK]${NC} Gemini Auth found." || echo -e "${RED}[!]${NC} Gemini Auth missing (run 'gemini auth login')"
     
     if command -v gws >/dev/null 2>&1; then
-        if [ -f "${HOME}/.config/gws/client_secret.json" ] || [ -f "${GWS_DIR}/config.json" ]; then
-            echo -e "${GREEN}[OK]${NC} GWS Auth/Config found."
+        if [ -f "${GWS_CONFIG_DIR}/client_secret.json" ] && ! grep -q "YOUR_CLIENT_ID" "${GWS_CONFIG_DIR}/client_secret.json"; then
+             echo -e "${GREEN}[OK]${NC} GWS Client Secret found."
+        elif [ -f "${HOME}/.config/gws/tokens.json" ]; then
+             echo -e "${GREEN}[OK]${NC} GWS Auth Token found."
         else
-            echo -e "${RED}[!]${NC} GWS Auth/Config missing (run 'gws auth setup')"
+            echo -e "${RED}[!]${NC} GWS Auth missing."
+            echo -e "    Recommended path: run 'gws auth setup' (requires gcloud)"
+            echo -e "    Manual path: edit ${GWS_CONFIG_DIR}/client_secret.json and run 'gws auth login'"
         fi
     fi
 }
@@ -137,6 +173,9 @@ setup_all() {
 case "$1" in
     status)
         show_status
+        ;;
+    gcloud)
+        install_gcloud
         ;;
     *)
         setup_all
