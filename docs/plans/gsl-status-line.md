@@ -75,9 +75,14 @@ covered too. Research established:
    the same binary in plain-text mode; document Gemini's built-in footer toggles.
 3. MCP segment: **best-effort cached** — instant "configured" count + an "active" count from
    `claude mcp list` refreshed at most once/60s.
-4. `repo` segment: **🏠/🌳 root-vs-worktree indicator + gss feature name + PR# + worktree count**,
+4. `repo` segment: **root-vs-worktree indicator + gss feature name + PR# + worktree count**,
    sourced from the gss `registry.json` (instant) and local git, with a cached `gh pr view`
    fallback for the PR number on non-gss branches.
+5. **Configurable styles**: a named **style** bundles glyph set (per-segment icons), separator
+   (`powerline`/`thin`/`space`), background-fill on/off, glyph mode (`nerdfont`/`emoji`/`ascii`),
+   and theme colors. Two built-ins ship — **`powerline`** (default; NF tinted ` `/` ` repo
+   glyph) and **`emoji`** (color-emoji markers, airy spacing). Users add or override styles in
+   `config.json`; `gsl config style <name>` switches; `gsl preview` cycles them.
 
 **Outcome:** one fast (~ms startup) binary renders a 4-part powerline status line —
 `dir+git` · `repo(root/worktree · PR# · worktree-count)` · `AI(context/model/MCP/rate-limits)` ·
@@ -88,34 +93,45 @@ toggleable via a config file and a configuration skill.
 
 ## What it looks like (preview)
 
-Nerd-Font glyphs (representative; actual glyphs from `opt/profiles/.p10k.zsh`). The `repo`
-segment (2nd) renders differently at the repo root vs inside a linked worktree:
+The line is rendered by the active **style** (see "Styles" below). Two built-ins ship; both show
+the `repo` segment (2nd) differently at the repo root vs inside a linked worktree.
+
+**`powerline` (default)** — NF tinted repo glyph (` ` root = blue, ` ` worktree = magenta) on a
+neutral powerline; the glyph is foreground-tinted (which emoji can't be), so the root/worktree
+colour reads cleanly:
 
 ```
 root checkout:
-  ~/dotfiles   main +2 !1 ?3 ⇡2 ⇣1    🏠 PR#42 ⑂4    Opus 4.7  42% 84k/200k  MCP 2/5  5h 12% · 7d 45%   Sat 05/24 15:30 PDT
+  ~/dotfiles   main +2 !1 ?3 ⇡2 ⇣1     PR#42 ⑂4    Opus 4.7  42% 84k/200k  MCP 2/5  5h 12% · 7d 45%   Sat 05/24 15:30 PDT
 └──────── dirgit ────────┘ └─── repo ───┘ └──────────────────────── ai ────────────────────────┘ └──────── time ───────┘
 
 inside a worktree:
-  …/gsl/…/plan   feature/gsl… +1     🌳 gsl PR#21 ⑂4    Opus 4.7  42% 84k/200k  MCP 2/5  5h 12% · 7d 45%   Sat 05/24 15:30 PDT
+  …/gsl/…/plan   feature/gsl… +1      gsl PR#21 ⑂4    Opus 4.7  42% 84k/200k  MCP 2/5  5h 12% · 7d 45%   Sat 05/24 15:30 PDT
 └──────── dirgit ─────────┘ └────── repo ──────┘ └──────────────────────── ai ────────────────────────┘ └──────── time ───────┘
 ```
 
-`repo` glyphs: 🏠 = repo root (blue), 🌳 = linked worktree (magenta); `gsl` = the gss feature the
-worktree belongs to; `PR#21` is tinted by PR state (draft dim / open normal); `⑂4` = 4 worktrees
-exist. Parts self-omit: no PR ⇒ no `PR#`, a lone main checkout ⇒ no `⑂N`, a non-git dir ⇒ the whole
-`repo` segment disappears.
+**`emoji`** — color-emoji markers, thin separators, no background fills (airier; emoji carry the
+root/worktree distinction by shape — 🏠 vs 🌳 — since emoji can't be ANSI-tinted):
 
-ASCII fallback (`glyphs: ascii`):
+```
+📁 ~/dotfiles  🌿 main +2 !1   🏠 PR#42 ⑂4   🤖 Opus 4.7  🧠 42%  🔌 2/5   ⏰ Sat 15:30
+📁 …/plan      🌿 feat/gsl +1   🌳 gsl PR#21 ⑂4   🤖 Opus 4.7  🧠 42%  🔌 2/5   ⏰ Sat 15:30
+```
+
+In both, `gsl` = the gss feature the worktree belongs to; `PR#21` is tinted by PR state (draft dim /
+open normal); `⑂4` = 4 worktrees exist. Parts self-omit: no PR ⇒ no `PR#`, a lone main checkout ⇒
+no `⑂N`, a non-git dir ⇒ the whole `repo` segment disappears.
+
+**ASCII fallback** (any style with `glyphs: ascii`, or when no Nerd Font is detected):
 
 ```
 [~/dotfiles] (main +2 !1 ?3 ^2 v1) | [root] PR#42 wt4 | Opus 4.7 42% 84k/200k MCP 2/5 5h 12% 7d 45% | Sat 05/24 15:30 PDT
 [~/…/plan]   (feature/gsl… +1)     | [wt] gsl PR#21 wt4 | Opus 4.7 42% 84k/200k MCP 2/5 5h 12% 7d 45% | Sat 05/24 15:30 PDT
 ```
 
-`gsl preview` renders this against fixture payloads (clean repo, dirty repo, high-context,
-rate-limited, **root vs worktree**); `gsl preview` interactive lets you toggle each segment, switch
-glyphs/theme, and watch the clock tick before saving config.
+`gsl preview` renders these against fixture payloads (clean repo, dirty repo, high-context,
+rate-limited, **root vs worktree**); the interactive TUI lets you toggle each segment, **cycle
+styles**, switch glyphs/theme, and watch the clock tick before saving config.
 
 ---
 
@@ -146,6 +162,8 @@ src/gsl/
     repo/         detect.go (root/worktree via git) registry.go (gss registry.json reader)
                   pr.go (PR# from registry → gh fallback)
     gh/           exec.go (Runner seam, CommandContext) pr.go (gh pr view, cached/60s)  fake/runner.go
+    style/        style.go (Style struct) builtins.go (powerline default + emoji) resolve.go
+                  (merge user styles/overrides over built-ins)
     render/       segment.go glyphs.go render.go + seg_dirgit.go seg_repo.go seg_ai.go seg_time.go
     preview/      ui.go (bubbletea Model/Update/View) fixtures.go  (+ golden tests)
   skill/SKILL.md  scripts/check-deps.sh  docs/design.md
@@ -159,6 +177,8 @@ src/gsl/
   TUI (toggle segments/glyphs/theme, 1s clock tick); `--once` prints one frame and exits
   (CI/golden-test friendly).
 - `gsl config get|set|enable|disable|toggle [<segment>]` — drives the configuration skill.
+- `gsl config style <name>` / `gsl config style --list` — switch the active style / list built-ins
+  + user-defined styles.
 - `gsl version [--json]`.
 
 **Segments** (ordered, individually toggleable):
@@ -223,13 +243,28 @@ timed out as above; no PR / no `gh` / no remote ⇒ the `PR#` part self-omits.
 
 **Config + on/off** (`internal/config`): JSON at `${XDG_CONFIG_HOME:-~/.config}/gsl/config.json`,
 with `enabled` (master), an ordered `segments[]` (each `{type, enabled, options}`), `timezone`,
-time/date formats, `glyphs` (`nerdfont`|`ascii`), powerline separators, and `theme`. The `repo`
-segment's `options` carry `show_pr` (bool), `show_count` (bool), and `name`
-(`feature`|`worker`|`branch`|`off`, default `feature`); its colors live in `theme`
-(`repo_root`/`repo_worktree`, default blue/magenta). **Missing file ⇒ sane defaults** (the binary
-works with zero config; `repo` enabled by default). Two on/off layers, both honored:
-the harness `statusLine.command` key (hard off = remove it) and `config.enabled` (soft off:
-`gsl render` prints empty stdout) plus per-segment toggles — all reachable via `gsl config …`.
+time/date formats, the active `style` (default `powerline`), and a `styles` map of user
+definitions/overrides (see "Styles"). The `repo` segment's `options` carry `show_pr` (bool),
+`show_count` (bool), and `name` (`feature`|`worker`|`branch`|`off`, default `feature`). **Missing
+file ⇒ sane defaults** (the binary works with zero config; `repo` enabled, `style: powerline`).
+Two on/off layers, both honored: the harness `statusLine.command` key (hard off = remove it) and
+`config.enabled` (soft off: `gsl render` prints empty stdout) plus per-segment toggles — all
+reachable via `gsl config …`.
+
+**Styles** (`internal/style`): a *style* is a named bundle controlling presentation (segments and
+their data are unchanged): `separator` (`powerline` ` `/`thin` ` `/`space`), `fill` (bool —
+draw segment background blocks), `glyphs` (`nerdfont`|`emoji`|`ascii`), a per-segment `icons` map,
+and `theme` colors (incl. `repo_root`/`repo_worktree`, default blue/magenta). `builtins.go` ships
+two compiled-in styles — **`powerline`** (default: NF tinted repo glyph, filled powerline) and
+**`emoji`** (emoji icons, thin separators, no fill). `resolve.go` produces the effective style:
+look up the built-in named by `config.style`, then deep-merge any same-named entry from
+`config.styles` over it (so users tweak one field or define a brand-new style). Unknown style name
+⇒ fall back to `powerline` (warn to stderr, never crash). `glyphs: ascii` (or no Nerd Font on
+`PATH`/`TERM`) forces the ASCII fallback table regardless of style. The render layer reads only the
+resolved `Style`, so adding a style is data, not code. Example user styles a contributor could drop
+in `config.json` (not shipped, but exercised by the design): a `glyphicon` style (NF icon per
+segment), a `compact` style (emoji status indicators — ⚠️ dirty, 🟢/🟡/🔴 rate-limit, ◉/● PR
+state), and a `spacious` style (no fill, fg-only glyphs, wide separators).
 
 ### Wiring into install (exact edits)
 
@@ -257,7 +292,7 @@ the harness `statusLine.command` key (hard off = remove it) and `config.enabled`
 
 | Action | Path |
 | --- | --- |
-| NEW (tool tree) | `src/gsl/**` — cobra Go source, `build.sh`, `VERSION`, `internal/{repo,gh}` (worktree + PR# detection), `internal/preview` (bubbletea), `skill/SKILL.md`, `scripts/check-deps.sh`, tests |
+| NEW (tool tree) | `src/gsl/**` — cobra Go source, `build.sh`, `VERSION`, `internal/{repo,gh}` (worktree + PR# detection), `internal/style` (powerline + emoji built-ins), `internal/preview` (bubbletea), `skill/SKILL.md`, `scripts/check-deps.sh`, tests |
 | NEW | `ai/claude/statusline-command.sh` (shim) |
 | NEW | `ai/gemini/commands/gsl-status.toml` |
 | EDIT | `opt/scripts/system/install_claude_skills.sh` (symlink shim) |
@@ -296,12 +331,14 @@ seams land; CP3 depends on both; CP4 is final.
 - **CP2 — Detection & render.** `internal/git` (porcelain v2 + timeout + `worktree.go`),
   `internal/mcp` (configured instant + active cached/timeout + spy-tested cache hit),
   `internal/repo` (root/worktree detect + registry reader) and `internal/gh` (cached PR# fallback
-  + spy-tested cache hit), `internal/render` (**4 segments** incl. `seg_repo.go`, glyphs,
-  powerline join, per-segment deadline).
-- **CP3 — CLI, preview & wiring.** `cmd/{render,status,config,version,preview}`;
-  `internal/preview` bubbletea TUI + `--once` golden snapshot; `ai/claude/statusline-command.sh`
-  shim + `install_claude_skills.sh` symlink; `sync-skills.sh` build loop + `gsl) gsl-status`
-  case; `ai/gemini/commands/gsl-status.toml`; `skill/SKILL.md`.
+  + spy-tested cache hit), `internal/style` (`powerline` + `emoji` built-ins + resolve/merge),
+  `internal/render` (**4 segments** incl. `seg_repo.go`, style-driven glyphs/separators/fills,
+  per-segment deadline).
+- **CP3 — CLI, preview & wiring.** `cmd/{render,status,config,version,preview}` incl.
+  `gsl config style`; `internal/preview` bubbletea TUI (segment toggle + **style cycle**) + `--once`
+  golden snapshot; `ai/claude/statusline-command.sh` shim + `install_claude_skills.sh` symlink;
+  `sync-skills.sh` build loop + `gsl) gsl-status` case; `ai/gemini/commands/gsl-status.toml`;
+  `skill/SKILL.md`.
 - **CP4 — Docs & finalize.** `README.md`, `SKILL.md` polish, fold final decisions into this doc.
 
 ---
@@ -311,7 +348,7 @@ seams land; CP3 depends on both; CP4 is final.
 1. **Build**: `bash src/gsl/build.sh` → `gsl built and installed to ~/opt/bin/gsl`,
    check-deps passes. (`make bin` also works.)
 2. **Tests/coverage** (TDD, ≥60% per pkg per `src/CLAUDE.md`; targets: payload ~95, git 70,
-   mcp 60, repo 70, gh 60, config 70, render 75, cmd 80, preview 60):
+   mcp 60, repo 70, gh 60, style 80, config 70, render 75, cmd 80, preview 60):
    `cd src/gsl && go test ./... -cover`. Seams faked via `git/fake` + `mcp/fake` + `gh/fake`;
    payload fixtures under `internal/payload/testdata/`, registry fixtures under
    `internal/repo/testdata/`. Cases per package:
@@ -330,34 +367,44 @@ seams land; CP3 depends on both; CP4 is final.
      (falls through to gh); missing registry ⇒ gh fallback.
    - gh: PR# from fake `gh pr view` (open/draft/none); **cache hit <60s ⇒ spy NOT called**;
      timeout/`gh` absent/no remote ⇒ omit.
-   - render: segment ordering + disable; master `enabled=false` ⇒ empty output; **repo: 🏠 root vs
-     🌳 worktree glyph + color, PR#/count omission, `name` modes (feature/worker/branch/off)**; tz
-     render + bad-tz→UTC fallback; nerdfont vs ascii glyphs; **golden line at fixed time + fixed
-     payload, for both root and worktree**.
-   - preview: `--once` golden frame; bubbletea model toggle/tick transitions.
-   - config: Default(); Load-missing → defaults; round-trip; toggle; bad-tz fallback.
+   - style: built-in lookup (`powerline`, `emoji`); unknown name ⇒ `powerline` + stderr warn;
+     user `styles` entry **deep-merges** over a built-in (override one field) and **defines a new
+     style**; `glyphs: ascii` forces the ASCII table regardless of style.
+   - render: segment ordering + disable; master `enabled=false` ⇒ empty output; **repo indicator
+     per style — `powerline` NF tinted ` `/` ` (root blue / worktree magenta) vs `emoji` 🏠/🌳**;
+     PR#/count omission, `name` modes (feature/worker/branch/off); tz render + bad-tz→UTC fallback;
+     nerdfont/emoji/ascii glyphs; **golden line at fixed time + fixed payload, per style × (root,
+     worktree)**.
+   - preview: `--once` golden frame; bubbletea model toggle/**style-cycle**/tick transitions.
+   - config: Default(); Load-missing → defaults; round-trip; toggle; `style` set/list; bad-tz
+     fallback.
 3. **Render (Claude path)**: pipe a sample payload —
    `printf '%s' '{"cwd":"'"$PWD"'","model":{"display_name":"Opus 4.7"},"context_window":{"used_percentage":42,"total_input_tokens":84000,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":12.5,"resets_at":"2026-05-24T20:00:00Z"}}}' | ~/opt/bin/gsl render`
    → one powerline line: dir+git, repo(root/worktree·PR#·count), AI(model/ctx%/tokens/MCP/5h+7d), time.
 4. **On-demand (Gemini/CLI)**: `~/opt/bin/gsl status` (no stdin) → dir+git+repo+time, AI omitted
    (repo renders without a payload).
-5. **Repo segment (root vs worktree)**: run `~/opt/bin/gsl status` from the repo root → `🏠` +
-   any PR# for the current branch + `⑂N`; run it from inside a gss worktree
-   (`~/.config/gss/worktrees/.../plan`) → `🌳 <feature>` + `PR#<n>` (from `registry.json`, no
-   network) + `⑂N`. Move/rename the registry → PR# falls back to a cached `gh pr view`; on a plain
-   repo with no PR → `PR#` self-omits; on a lone main checkout → `⑂N` self-omits.
+5. **Repo segment (root vs worktree)**: run `~/opt/bin/gsl status` from the repo root → the root
+   indicator (` ` in the default `powerline` style, 🏠 under `emoji`) + any PR# for the current
+   branch + `⑂N`; run it from inside a gss worktree (`~/.config/gss/worktrees/.../plan`) → the
+   worktree indicator (` `/🌳) + `<feature>` + `PR#<n>` (from `registry.json`, no network) + `⑂N`.
+   Move/rename the registry → PR# falls back to a cached `gh pr view`; on a plain repo with no PR →
+   `PR#` self-omits; on a lone main checkout → `⑂N` self-omits.
 6. **Preview**: `gsl preview --once` → one rendered frame; `gsl preview` → interactive TUI,
-   toggle a segment (incl. `repo`), watch the clock tick, `q` to exit.
-7. **Toggle**: `gsl config disable time` → time gone; `gsl config disable repo` → repo segment
+   toggle a segment (incl. `repo`), cycle styles, watch the clock tick, `q` to exit.
+7. **Styles**: `gsl config style emoji` → line re-renders with emoji markers / thin separators;
+   `gsl config style --list` shows `powerline`*, `emoji` (+ any user styles); an unknown name
+   (`gsl config style nope`) → falls back to `powerline` with a stderr warning; add a `styles`
+   entry to `config.json` overriding one field → reflected on next render.
+8. **Toggle**: `gsl config disable time` → time gone; `gsl config disable repo` → repo segment
    gone; `gsl config enable …` restores; `gsl config disable` (master) → empty output.
-8. **Timeout proof**: prepend a `PATH` dir with a `git` (and `claude`/`gh`) that `sleep 5` →
+9. **Timeout proof**: prepend a `PATH` dir with a `git` (and `claude`/`gh`) that `sleep 5` →
    `time ~/opt/bin/gsl status` returns within the render budget with graceful degradation.
-9. **Wiring**: `bash opt/scripts/system/sync-skills.sh --build` builds gsl + links
-   `~/.claude/skills/gsl-status` and `~/.agents/skills/gsl-status`;
-   `bash opt/scripts/system/install_claude_skills.sh` → `~/.claude/statusline-command.sh`
-   symlink exists & executable; `bash opt/scripts/system/install_gemini_skills.sh` →
-   `~/.gemini/commands/gsl-status.toml` linked.
-10. **Shim fallback**: `mv ~/opt/bin/gsl ~/opt/bin/gsl.bak`, pipe a payload into
+10. **Wiring**: `bash opt/scripts/system/sync-skills.sh --build` builds gsl + links
+    `~/.claude/skills/gsl-status` and `~/.agents/skills/gsl-status`;
+    `bash opt/scripts/system/install_claude_skills.sh` → `~/.claude/statusline-command.sh`
+    symlink exists & executable; `bash opt/scripts/system/install_gemini_skills.sh` →
+    `~/.gemini/commands/gsl-status.toml` linked.
+11. **Shim fallback**: `mv ~/opt/bin/gsl ~/opt/bin/gsl.bak`, pipe a payload into
     `bash ~/.claude/statusline-command.sh` → minimal bash line; restore binary.
-11. **Live Claude pickup**: start a Claude Code session; after an assistant turn the status
+12. **Live Claude pickup**: start a Claude Code session; after an assistant turn the status
     line renders (harness pipes the live payload → shim → `gsl render`).
