@@ -24,6 +24,9 @@ fi
 if [ -d "${HOME}/opt/bin" ] ; then
     PATH="${HOME}/opt/bin:$PATH"
 fi
+if [ -d "${HOME}/opt/google-cloud-sdk/bin" ] ; then
+    PATH="${HOME}/opt/google-cloud-sdk/bin:$PATH"
+fi
 if [ -d "${HOME}/opt/scripts" ] ; then
     for d in "${HOME}/opt/scripts"/*; do
         if [ -d "$d" ]; then

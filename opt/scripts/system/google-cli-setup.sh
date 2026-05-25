@@ -171,6 +171,12 @@ show_status() {
             echo -e "    Recommended path: run 'gws auth setup'"
         fi
     fi
+    
+    # Final PATH warning if gcloud is installed but not in PATH
+    if [[ "$gcloud_ver" != "Missing" ]] && ! command -v gcloud >/dev/null 2>&1; then
+        echo -e "\n${BLUE}${BOLD}NOTE: gcloud is installed but not in your current PATH.${NC}"
+        echo -e "${BLUE}Please restart your shell or run: source ~/.bashrc (or ~/.zshrc)${NC}"
+    fi
 }
 
 # Main Execution Flow
