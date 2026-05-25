@@ -16,7 +16,9 @@ changes (each a reviewer comment) are folded into the design below:
    interactive bubbletea TUI (live-toggle segments/glyphs/theme, 1s clock tick), rendered
    against representative sample-payload fixtures.
 4. **Concrete timeout/degrade budget** — `context.WithTimeout` + `exec.CommandContext`:
-   git ~800ms, `claude mcp list` ~500ms, total render soft ~150ms / hard ~500ms; on timeout
+   git ~800ms, `claude mcp list` ~500ms, total render soft ~150ms / hard ~1000ms. Segments
+   render **concurrently**, so the hard cap bounds the slowest single call (git ~800ms), not
+   the sum — every per-call deadline sits below the ceiling and can actually fire. On timeout
    **degrade** (omit segment / use last MCP cache), **never block**.
 
 ---
@@ -141,9 +143,12 @@ All subprocess work goes through the seams with `context.WithTimeout` + `exec.Co
 | --- | --- | --- |
 | `git status …` + `git stash list` | ~800ms | omit git detail (show cwd only) or last value |
 | `claude mcp list` (active count) | ~500ms | fall back to last MCP cache, else configured-only |
-| **whole `gsl render`** | soft ~150ms / hard ~500ms | emit partial line (never block) |
+| **whole `gsl render`** | soft ~150ms / hard ~1000ms | emit partial line (never block) |
 
-The render passes a parent context to every segment; a segment that exceeds its deadline is
+The hard cap (~1000ms) sits above the slowest per-call deadline (git ~800ms) so each per-call
+timeout can actually fire before the parent context cancels it. The render passes a parent
+context to every segment and runs the segments **concurrently** (so wall-clock ≈ the slowest
+single call, not the sum); a segment that exceeds its deadline — or the parent ceiling — is
 skipped, the rest still render. Timeout behaviour is unit-tested with fake runners that sleep
 past the deadline (no real hang), and an end-to-end check injects a slow `git`/`claude` on
 `PATH` to prove the line returns within budget.
