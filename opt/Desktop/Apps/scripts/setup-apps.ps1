@@ -54,24 +54,13 @@ $HistorySize  = 100000
 # Color schemes to publish, and the order in which a profile is made per distro.
 $Themes = 'Solarized Dark', 'Solarized Light', 'Ocean', 'Green', 'GitHub Dark'
 
-# Friendly name => @{ Id = winget id; Match = regex vs registry DisplayName;
-#   optional Exe (App Paths fallback) / Appx (Store-package fallback) }
-$apps = [ordered]@{
-    'Discord'         = @{ Id = 'Discord.Discord';         Match = 'Discord' }
-    'Slack'           = @{ Id = 'SlackTechnologies.Slack'; Match = 'Slack' }
-    'Obsidian'        = @{ Id = 'Obsidian.Obsidian';       Match = 'Obsidian' }
-    'OBS Studio'      = @{ Id = 'OBSProject.OBSStudio';    Match = 'OBS Studio' }
-    'Spotify'         = @{ Id = 'Spotify.Spotify';         Match = 'Spotify' }
-    'Apple iTunes'    = @{ Id = 'Apple.iTunes';            Match = 'iTunes' }
-    'Antigravity'     = @{ Id = 'Google.Antigravity';      Match = '^Antigravity(?! IDE)' }
-    'Antigravity IDE' = @{ Id = 'Google.AntigravityIDE';   Match = 'Antigravity IDE' }
-    'Cursor'          = @{ Id = 'Anysphere.Cursor';        Match = 'Cursor' }
-    'Claude'          = @{ Id = 'Anthropic.Claude';        Match = '^Claude($| )'; Appx = 'Claude' }
-    'GitHub Desktop'  = @{ Id = 'GitHub.GitHubDesktop';    Match = 'GitHub Desktop' }
-    'Docker Desktop'  = @{ Id = 'Docker.DockerDesktop';    Match = 'Docker Desktop' }
-    'Google Chrome'   = @{ Id = 'Google.Chrome';           Match = 'Google Chrome';   Exe = 'chrome.exe' }
-    'Mozilla Firefox' = @{ Id = 'Mozilla.Firefox';         Match = 'Mozilla Firefox'; Exe = 'firefox.exe' }
+# Load application configuration from apps.json
+$appsPath = Join-Path $PSScriptRoot 'apps.json'
+if (-not (Test-Path $appsPath)) {
+    Write-Host "ERROR: apps.json not found at $appsPath" -ForegroundColor Red
+    exit 1
 }
+$apps = Get-Content $appsPath -Raw | ConvertFrom-Json
 
 # Color-scheme palettes (Windows Terminal "schemes" entries).
 $SchemeDefs = @(
@@ -357,14 +346,18 @@ if ($Status) {
 
     Write-Host "`n===== Apps =====" -ForegroundColor Cyan
     $reg = Get-UninstallEntries
-    $report = foreach ($name in $apps.Keys) {
-        $app     = $apps[$name]
+    $appCount = $apps.Count
+    $currentIndex = 0
+    $report = foreach ($app in $apps) {
+        $currentIndex++
+        Write-Host ("[{0}/{1}] Querying {2} ({3})..." -f $currentIndex, $appCount, $app.Name, $app.Id) -ForegroundColor DarkGray
+        
         $version = Get-WingetVersion -Id $app.Id
         $installed = [bool]$version
         $location = '-'
         if ($installed) { $location = Resolve-AppLocation -App $app -Version $version -Reg $reg }
         [pscustomobject]@{
-            App       = $name
+            App       = $app.Name
             Installed = if ($installed) { 'Yes' } else { 'No' }
             Version   = if ($installed) { $version } else { '-' }
             Location  = $location
@@ -416,19 +409,24 @@ if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     Write-Host "winget not available -- skipping app installs." -ForegroundColor Red
 } else {
     $results = [ordered]@{}
-    foreach ($name in $apps.Keys) {
-        $id = $apps[$name].Id
-        if (Test-AppInstalled -Id $id) {
-            Write-Host "$name ($id) already installed -- skipping." -ForegroundColor DarkGray
-            $results[$name] = 'Already installed'
+    $appCount = $apps.Count
+    $currentIndex = 0
+
+    foreach ($app in $apps) {
+        $currentIndex++
+        Write-Host ("[{0}/{1}] Checking {2} ({3})..." -f $currentIndex, $appCount, $app.Name, $app.Id) -ForegroundColor Cyan
+        
+        if (Test-AppInstalled -Id $app.Id) {
+            Write-Host "$($app.Name) ($($app.Id)) already installed -- skipping." -ForegroundColor DarkGray
+            $results[$app.Name] = 'Already installed'
             continue
         }
-        Write-Host "Installing $name ($id)..." -ForegroundColor Cyan
-        winget install --id $id -e --source winget `
+        Write-Host "Installing $($app.Name) ($($app.Id))..." -ForegroundColor Cyan
+        winget install --id $app.Id -e --source winget `
             --accept-package-agreements --accept-source-agreements --disable-interactivity
         $code = $LASTEXITCODE
-        if ($code -eq 0 -or $code -eq -1978335189) { $results[$name] = 'Installed' }
-        else { $results[$name] = "FAILED (exit $code)" }
+        if ($code -eq 0 -or $code -eq -1978335189) { $results[$app.Name] = 'Installed' }
+        else { $results[$app.Name] = "FAILED (exit $code)" }
     }
 
     Write-Host "`n=================== APP SUMMARY ===================" -ForegroundColor Yellow
