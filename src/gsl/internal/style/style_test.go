@@ -299,6 +299,61 @@ func TestResolve_EmptyUserStyles(t *testing.T) {
 	}
 }
 
+// ── ResolveConfig: fill-presence-aware merge ─────────────────────────────────
+
+// TestResolveConfig_FillPresence_NofillKeyKeepsBuiltinFill proves that a user
+// style override that does NOT contain the "fill" key does NOT overwrite the
+// builtin's fill=true. This is the CP2 Minor #3 fix.
+func TestResolveConfig_FillPresence_NofillKeyKeepsBuiltinFill(t *testing.T) {
+	// powerline has fill:true.
+	// User override changes only separator — no "fill" key at all.
+	raw := map[string]map[string]any{
+		"powerline": {
+			"separator": "space",
+		},
+	}
+	var buf bytes.Buffer
+	s := style.ResolveConfig(&buf, "powerline", raw, false)
+	if s.Separator != "space" {
+		t.Errorf("Separator: got %q, want %q", s.Separator, "space")
+	}
+	// fill:true from builtin must be preserved because raw had no "fill" key.
+	if !s.Fill {
+		t.Error("Fill: got false, want true — user override without 'fill' key must not clobber builtin's fill:true")
+	}
+	// Icons from builtin must still be present.
+	if _, found := s.Icons["branch"]; !found {
+		t.Error("Icons[\"branch\"] lost after fill-presence-aware override")
+	}
+}
+
+// TestResolveConfig_FillPresence_ExplicitFalseOverrides proves that when the
+// user explicitly sets fill:false, it DOES override the builtin's fill:true.
+func TestResolveConfig_FillPresence_ExplicitFalseOverrides(t *testing.T) {
+	raw := map[string]map[string]any{
+		"powerline": {
+			"fill": false,
+		},
+	}
+	var buf bytes.Buffer
+	s := style.ResolveConfig(&buf, "powerline", raw, false)
+	if s.Fill {
+		t.Error("Fill: got true, want false — explicit fill:false in user override must take effect")
+	}
+}
+
+// TestResolveConfig_EmptyRaw exercises ResolveConfig with no user overrides.
+func TestResolveConfig_EmptyRaw(t *testing.T) {
+	var buf bytes.Buffer
+	s := style.ResolveConfig(&buf, "powerline", nil, false)
+	if s.Separator != "powerline" {
+		t.Errorf("Separator: got %q, want %q", s.Separator, "powerline")
+	}
+	if !s.Fill {
+		t.Error("Fill: got false, want true")
+	}
+}
+
 // ── ASCII user icon override in ascii mode ────────────────────────────────────
 
 func TestResolve_ASCIIMode_UserCanOverrideASCIIIcon(t *testing.T) {
