@@ -22,7 +22,7 @@ show_help() {
     echo "~/.agents/skills (Gemini CLI) and ~/.claude/skills (Claude Code)."
     echo ""
     echo "Flags:"
-    echo "  --build     Build associated binaries (gss, tmux-mgr, wol) while syncing."
+    echo "  --build     Build associated binaries (gss, tmux-mgr, wol, gsl) while syncing."
     echo "  --help      Show this help message."
     echo ""
 }

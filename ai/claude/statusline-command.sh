@@ -12,11 +12,15 @@
 
 # Use pipefail but NOT -e: we must never exit non-zero in fallback paths.
 set -uo pipefail
+# execfail: if 'exec' below fails (e.g. a corrupt/incompatible binary), return
+# control to this script (and run the fallback) instead of aborting non-zero.
+shopt -s execfail
 
 GSL_BIN="${HOME}/opt/bin/gsl"
 
 if [[ -x "$GSL_BIN" ]]; then
     # exec replaces the current process; stdin from Claude passes straight through.
+    # On exec failure, execfail returns here and we fall through to the fallback.
     exec "$GSL_BIN" render
 fi
 

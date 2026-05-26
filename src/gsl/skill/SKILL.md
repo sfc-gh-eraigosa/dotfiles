@@ -33,7 +33,8 @@ gsl render                          # Read Claude JSON payload from stdin, print
 gsl status                          # Print status line now (no stdin; ai segment self-omits)
 gsl preview                         # Interactive TUI: toggle segments, cycle styles, live time
 gsl preview --once                  # Print one rendered frame and exit (CI / golden-file safe)
-gsl version                         # Show version, commit, build date, and binary path
+gsl version                         # Show version, commit, dirty flag, build date, description, binary path
+gsl version --json                  # Same, as JSON
 ```
 
 ## Configuration
