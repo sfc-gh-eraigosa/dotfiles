@@ -50,6 +50,29 @@ func NewSystemRunner() *SystemRunner {
 	return &SystemRunner{Path: "git"}
 }
 
+// buildArgs constructs the argument slice for a Runner.Run call.
+// When dir is non-empty, the global git "-C <dir>" flag is prepended so that
+// git operates in dir instead of the process working directory. The first
+// element of the returned slice is the subcommand name (or "-C" when dir is
+// set); the remainder are the args to spread after it.
+//
+// Examples:
+//
+//	buildArgs("/my/dir", "status", "--short") → ["-C", "/my/dir", "status", "--short"]
+//	buildArgs("", "rev-parse", "--show-toplevel") → ["rev-parse", "--show-toplevel"]
+func buildArgs(dir, subcommand string, extra ...string) []string {
+	if dir != "" {
+		args := make([]string, 0, 2+1+len(extra))
+		args = append(args, "-C", dir, subcommand)
+		args = append(args, extra...)
+		return args
+	}
+	args := make([]string, 0, 1+len(extra))
+	args = append(args, subcommand)
+	args = append(args, extra...)
+	return args
+}
+
 // Run invokes `<Path> <name> <args...>` with the given context.
 // Stdout and Stderr are merged into a single buffer. The buffer is returned
 // even when the command exits non-zero so that callers can surface git's

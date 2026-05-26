@@ -49,16 +49,16 @@ func PR(ctx context.Context, ghRunner gh.Runner, branch, toplevel, registryPath 
 	reg, err := LoadRegistry(registryPath)
 	if err == nil {
 		// Registry loaded successfully; try to find a match.
-		if m, ok := Match(reg, toplevel, branch); ok && m.HasPR {
-			return &RepoInfo{
-				FeatureName: m.Feature,
-				PRNumber:    m.PRNumber,
-				PRState:     m.PRState,
-			}, nil
-		}
-		// Registry matched but no pr_url (or no match): fall through to gh.
-		// We still capture the feature name if there was a match without a PR.
 		if m, ok := Match(reg, toplevel, branch); ok {
+			if m.HasPR {
+				return &RepoInfo{
+					FeatureName: m.Feature,
+					PRNumber:    m.PRNumber,
+					PRState:     m.PRState,
+				}, nil
+			}
+			// Registry matched but no pr_url: fall through to gh,
+			// preserving the feature name from the registry.
 			info, err := ghFallback(ctx, ghRunner, branch)
 			if err != nil {
 				return nil, err
@@ -73,7 +73,6 @@ func PR(ctx context.Context, ghRunner gh.Runner, branch, toplevel, registryPath 
 		}
 	} else if !errors.Is(err, ErrRegistryNotFound) && !errors.Is(err, ErrUnsupportedSchema) {
 		// Unexpected error loading registry; fall through to gh silently.
-		_ = err
 	}
 	// Registry absent, schema bumped, unreadable, or no match → gh fallback.
 	return ghFallback(ctx, ghRunner, branch)

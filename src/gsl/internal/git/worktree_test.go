@@ -183,3 +183,115 @@ func TestToplevelError(t *testing.T) {
 		t.Errorf("expected sentinel error, got %v", err)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// -C dir flag (Fix 2)
+// ---------------------------------------------------------------------------
+
+// TestDirFlagPrepended asserts that when a non-empty dir is passed to the git
+// functions, the first Runner argument is "-C" followed by the dir. When dir
+// is empty, "-C" must NOT appear.
+func TestDirFlagPrepended(t *testing.T) {
+	const dir = "/wt/feat"
+
+	t.Run("IsLinked with dir", func(t *testing.T) {
+		r := &fake.Runner{
+			Script: []fake.Response{
+				{Stdout: []byte("/repo/.git/worktrees/feat\n")},
+				{Stdout: []byte("/repo/.git\n")},
+			},
+		}
+		if _, err := git.IsLinked(context.Background(), r, dir); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(r.Calls) == 0 {
+			t.Fatal("no calls recorded")
+		}
+		first := r.Calls[0]
+		if first.Name != "-C" {
+			t.Errorf("IsLinked with dir: Name = %q; want \"-C\"", first.Name)
+		}
+		if len(first.Args) == 0 || first.Args[0] != dir {
+			t.Errorf("IsLinked with dir: Args[0] = %q; want %q", first.Args[0], dir)
+		}
+	})
+
+	t.Run("IsLinked without dir", func(t *testing.T) {
+		r := &fake.Runner{
+			Script: []fake.Response{
+				{Stdout: []byte("/repo/.git\n")},
+				{Stdout: []byte("/repo/.git\n")},
+			},
+		}
+		if _, err := git.IsLinked(context.Background(), r, ""); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if first := r.Calls[0]; first.Name == "-C" {
+			t.Errorf("IsLinked without dir: Name = %q; should not be \"-C\"", first.Name)
+		}
+	})
+
+	t.Run("Toplevel with dir", func(t *testing.T) {
+		r := &fake.Runner{
+			Script: []fake.Response{
+				{Stdout: []byte("/home/user/repo\n")},
+			},
+		}
+		if _, err := git.Toplevel(context.Background(), r, dir); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		first := r.Calls[0]
+		if first.Name != "-C" {
+			t.Errorf("Toplevel with dir: Name = %q; want \"-C\"", first.Name)
+		}
+		if len(first.Args) == 0 || first.Args[0] != dir {
+			t.Errorf("Toplevel with dir: Args[0] = %q; want %q", first.Args[0], dir)
+		}
+	})
+
+	t.Run("Toplevel without dir", func(t *testing.T) {
+		r := &fake.Runner{
+			Script: []fake.Response{
+				{Stdout: []byte("/home/user/repo\n")},
+			},
+		}
+		if _, err := git.Toplevel(context.Background(), r, ""); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if first := r.Calls[0]; first.Name == "-C" {
+			t.Errorf("Toplevel without dir: Name = %q; should not be \"-C\"", first.Name)
+		}
+	})
+
+	t.Run("Count with dir", func(t *testing.T) {
+		r := &fake.Runner{
+			Script: []fake.Response{
+				{Stdout: []byte(worktreePorcelainOne)},
+			},
+		}
+		if _, err := git.Count(context.Background(), r, dir); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		first := r.Calls[0]
+		if first.Name != "-C" {
+			t.Errorf("Count with dir: Name = %q; want \"-C\"", first.Name)
+		}
+		if len(first.Args) == 0 || first.Args[0] != dir {
+			t.Errorf("Count with dir: Args[0] = %q; want %q", first.Args[0], dir)
+		}
+	})
+
+	t.Run("Count without dir", func(t *testing.T) {
+		r := &fake.Runner{
+			Script: []fake.Response{
+				{Stdout: []byte(worktreePorcelainOne)},
+			},
+		}
+		if _, err := git.Count(context.Background(), r, ""); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if first := r.Calls[0]; first.Name == "-C" {
+			t.Errorf("Count without dir: Name = %q; should not be \"-C\"", first.Name)
+		}
+	})
+}

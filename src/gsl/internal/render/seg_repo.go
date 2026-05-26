@@ -153,6 +153,12 @@ func workerLabel(branch string) string {
 // CLOSED → red; any other/empty state is left untinted. The "#" prefix keeps
 // the badge readable across glyph modes (no dedicated PR glyph in the style
 // table).
+//
+// When st.Fill is true the badge tint colour is applied for the number only,
+// then the segment's own fg is restored so that any content appended after the
+// badge (e.g. the worktree-count badge) stays inside the same powerline
+// background block. The single trailing ansiReset for the whole segment is
+// owned by paint(), NOT by this helper.
 func prBadge(st style.Style, number int, state string) string {
 	text := "PR#" + strconv.Itoa(number)
 	var colorKey string
@@ -169,6 +175,15 @@ func prBadge(st style.Style, number int, state string) string {
 	seq := fgSeq(colorKey)
 	if seq == "" {
 		return text
+	}
+	if st.Fill {
+		// Re-emit the segment foreground after the tinted number so that
+		// subsequent parts of the same segment retain the powerline background.
+		segFG := fgSeq(themeColor(st, "fg"))
+		if segFG == "" {
+			segFG = fgSeq("white")
+		}
+		return seq + text + segFG
 	}
 	return seq + text + ansiReset
 }

@@ -51,18 +51,20 @@ const statusTimeout = 800 * time.Millisecond
 //
 // If the Runner returns an error for either call (e.g. not a git repo) the
 // error is surfaced immediately; the caller is responsible for degradation.
-func Status(ctx context.Context, r Runner, _ string) (Info, error) {
+func Status(ctx context.Context, r Runner, dir string) (Info, error) {
 	tctx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()
 
-	out, err := r.Run(tctx, "status", "--porcelain=v2", "--branch")
+	statusArgs := buildArgs(dir, "status", "--porcelain=v2", "--branch")
+	out, err := r.Run(tctx, statusArgs[0], statusArgs[1:]...)
 	if err != nil {
 		return Info{}, err
 	}
 
 	info := parsePortcelainV2(out)
 
-	stashOut, err := r.Run(tctx, "stash", "list")
+	stashArgs := buildArgs(dir, "stash", "list")
+	stashOut, err := r.Run(tctx, stashArgs[0], stashArgs[1:]...)
 	if err != nil {
 		return Info{}, err
 	}

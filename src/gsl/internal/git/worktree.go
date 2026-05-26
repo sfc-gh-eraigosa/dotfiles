@@ -19,16 +19,16 @@ const worktreeTimeout = 800 * time.Millisecond
 // In a linked worktree --git-dir points to a worktree-private directory
 // (e.g. /repo/.git/worktrees/feat) while --git-common-dir still points to
 // /repo/.git — so they differ.
-func IsLinked(ctx context.Context, r Runner, _ string) (bool, error) {
+func IsLinked(ctx context.Context, r Runner, dir string) (bool, error) {
 	tctx, cancel := context.WithTimeout(ctx, worktreeTimeout)
 	defer cancel()
 
 	// Two separate rev-parse calls so we can compare the values.
-	gitDir, err := revParseSingle(tctx, r, "--path-format=absolute", "--git-dir")
+	gitDir, err := revParseDir(tctx, r, dir, "--path-format=absolute", "--git-dir")
 	if err != nil {
 		return false, err
 	}
-	commonDir, err := revParseSingle(tctx, r, "--path-format=absolute", "--git-common-dir")
+	commonDir, err := revParseDir(tctx, r, dir, "--path-format=absolute", "--git-common-dir")
 	if err != nil {
 		return false, err
 	}
@@ -38,11 +38,12 @@ func IsLinked(ctx context.Context, r Runner, _ string) (bool, error) {
 
 // Count returns the number of worktrees (including the main one) by counting
 // "worktree " header lines in `git worktree list --porcelain` output.
-func Count(ctx context.Context, r Runner, _ string) (int, error) {
+func Count(ctx context.Context, r Runner, dir string) (int, error) {
 	tctx, cancel := context.WithTimeout(ctx, worktreeTimeout)
 	defer cancel()
 
-	out, err := r.Run(tctx, "worktree", "list", "--porcelain")
+	countArgs := buildArgs(dir, "worktree", "list", "--porcelain")
+	out, err := r.Run(tctx, countArgs[0], countArgs[1:]...)
 	if err != nil {
 		return 0, err
 	}
@@ -52,17 +53,19 @@ func Count(ctx context.Context, r Runner, _ string) (int, error) {
 
 // Toplevel returns the absolute path of the root of the working tree,
 // i.e. `git rev-parse --show-toplevel` (trimmed).
-func Toplevel(ctx context.Context, r Runner, _ string) (string, error) {
+func Toplevel(ctx context.Context, r Runner, dir string) (string, error) {
 	tctx, cancel := context.WithTimeout(ctx, worktreeTimeout)
 	defer cancel()
 
-	return revParseSingle(tctx, r, "--show-toplevel")
+	return revParseDir(tctx, r, dir, "--show-toplevel")
 }
 
-// revParseSingle runs `git rev-parse <args...>` and returns the first
-// non-empty, trimmed output line.
-func revParseSingle(ctx context.Context, r Runner, args ...string) (string, error) {
-	out, err := r.Run(ctx, "rev-parse", args...)
+// revParseDir runs `git [-C dir] rev-parse <args...>` and returns the first
+// non-empty, trimmed output line. When dir is empty it behaves identically to
+// revParseSingle.
+func revParseDir(ctx context.Context, r Runner, dir string, args ...string) (string, error) {
+	full := buildArgs(dir, "rev-parse", args...)
+	out, err := r.Run(ctx, full[0], full[1:]...)
 	if err != nil {
 		return "", err
 	}

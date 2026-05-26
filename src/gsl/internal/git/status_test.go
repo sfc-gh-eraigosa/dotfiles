@@ -160,6 +160,53 @@ func TestStatusTimeout(t *testing.T) {
 	}
 }
 
+// TestStatusDirFlag asserts that when dir is non-empty, Status prepends
+// "-C <dir>" to the git args (Fix 2). When dir is empty, "-C" must NOT appear.
+func TestStatusDirFlag(t *testing.T) {
+	minimalOutput := []byte("# branch.oid abc\n# branch.head main\n")
+
+	t.Run("with dir prepends -C", func(t *testing.T) {
+		r := &fake.Runner{
+			Script: []fake.Response{
+				{Stdout: minimalOutput},
+				{Stdout: nil},
+			},
+		}
+		if _, err := git.Status(context.Background(), r, "/my/repo"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(r.Calls) == 0 {
+			t.Fatal("no calls recorded")
+		}
+		first := r.Calls[0]
+		if first.Name != "-C" {
+			t.Errorf("Status with dir: first arg Name = %q; want \"-C\"", first.Name)
+		}
+		if len(first.Args) == 0 || first.Args[0] != "/my/repo" {
+			t.Errorf("Status with dir: first.Args[0] = %q; want \"/my/repo\"", first.Args[0])
+		}
+	})
+
+	t.Run("without dir no -C", func(t *testing.T) {
+		r := &fake.Runner{
+			Script: []fake.Response{
+				{Stdout: minimalOutput},
+				{Stdout: nil},
+			},
+		}
+		if _, err := git.Status(context.Background(), r, ""); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(r.Calls) == 0 {
+			t.Fatal("no calls recorded")
+		}
+		first := r.Calls[0]
+		if first.Name == "-C" {
+			t.Errorf("Status without dir: first arg Name = %q; should not be \"-C\"", first.Name)
+		}
+	})
+}
+
 func TestStatusNoUpstream(t *testing.T) {
 	// When no upstream is configured, branch.ab line is absent.
 	noUpstream := `# branch.oid abc123

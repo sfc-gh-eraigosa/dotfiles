@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -167,7 +169,9 @@ func writeCache(path string, e cacheEntry) error {
 		return err
 	}
 	// Write via a temp file in the same directory for an atomic rename.
-	tmp := path + ".tmp"
+	// Include the PID and a random suffix to avoid collisions when multiple
+	// gsl processes write the cache concurrently.
+	tmp := fmt.Sprintf("%s.%d.%d.tmp", path, os.Getpid(), rand.Int63()) //nolint:gosec
 	if err := os.WriteFile(tmp, data, 0o644); err != nil {
 		return err
 	}
