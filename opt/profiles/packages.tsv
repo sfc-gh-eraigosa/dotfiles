@@ -19,6 +19,10 @@ gh                   gh
 git-lfs              git-lfs
 jq                   jq
 jc                   jc
+# yq: brew ships the mikefarah build; the apt `yq` is the unrelated kislyuk
+# Python wrapper (incompatible syntax), so Linux/WSL gets yq from
+# opt/scripts/system/install_yq.sh instead — hence the `-` in the APT column.
+yq                   -
 vim                  vim
 tmux                 tmux
 htop                 htop
