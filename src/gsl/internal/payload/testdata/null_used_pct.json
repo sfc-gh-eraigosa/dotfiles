@@ -1,0 +1,17 @@
+{
+  "cwd": "/home/user/project",
+  "model": {
+    "display_name": "claude-opus-4"
+  },
+  "context_window": {
+    "used_percentage": null,
+    "total_input_tokens": 5000,
+    "context_window_size": 200000
+  },
+  "rate_limits": {
+    "five_hour": {
+      "used_percentage": 50.0,
+      "resets_at": "2026-05-25T12:00:00Z"
+    }
+  }
+}

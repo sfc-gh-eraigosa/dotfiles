@@ -1,0 +1,21 @@
+{
+  "cwd": "/home/user/project",
+  "model": {
+    "display_name": "claude-sonnet-4-5"
+  },
+  "context_window": {
+    "used_percentage": 42.5,
+    "total_input_tokens": 8500,
+    "context_window_size": 200000
+  },
+  "rate_limits": {
+    "five_hour": {
+      "used_percentage": 25.0,
+      "resets_at": "2026-05-25T10:00:00Z"
+    },
+    "seven_day": {
+      "used_percentage": 10.5,
+      "resets_at": "2026-05-31T00:00:00Z"
+    }
+  }
+}
