@@ -230,11 +230,29 @@ public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wPa
 # ---- Windows Terminal ------------------------------------------------------
 
 function Get-TerminalSettingsPath {
-    $candidates = @(
-        "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
-        "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe\LocalState\settings.json"
-    )
-    $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    $stable  = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
+    $preview = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe\LocalState\settings.json"
+
+    # Prefer a settings.json Windows Terminal has already generated.
+    foreach ($p in @($stable, $preview)) { if (Test-Path $p) { return $p } }
+
+    # A freshly winget-installed Terminal only writes settings.json on first
+    # launch, so on a clean machine this step would otherwise find nothing and
+    # silently skip. Seed a minimal valid file when a WT package is present;
+    # Terminal merges its own defaults + dynamic profiles on launch and keeps
+    # the keys we set here.
+    $pkg = Get-AppxPackage -Name 'Microsoft.WindowsTerminal*' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $pkg) { return $null }
+    $target = if ($pkg.Name -like '*Preview*') { $preview } else { $stable }
+    New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+    $seed = [pscustomobject]@{
+        '$schema' = 'https://aka.ms/terminal-profiles-schema'
+        profiles  = [pscustomobject]@{ defaults = [pscustomobject]@{}; list = @() }
+        schemes   = @()
+    }
+    [IO.File]::WriteAllText($target, ($seed | ConvertTo-Json -Depth 32), [Text.UTF8Encoding]::new($false))
+    Write-Host "Seeded minimal settings.json at $target (Terminal not yet launched)." -ForegroundColor DarkGray
+    return $target
 }
 
 function Configure-Terminal {
