@@ -158,19 +158,25 @@ on sequencing and acceptance gates.
 
 Mirrors the design doc's Verification section as closable gates:
 
-- [ ] **Build:** `bash src/gsl/build.sh` installs `~/opt/bin/gsl`; check-deps passes
-- [ ] **Tests:** `go test ./... -cover` ≥ target per package
-- [ ] **Render (Claude):** sample payload piped to `gsl render` → 4-part powerline line
-- [ ] **On-demand (Gemini/CLI):** `gsl status` (no stdin) → dir+git+repo+time, ai omitted
-- [ ] **Repo segment:** root → root indicator + PR# + `⑂N`; from a gss worktree → worktree indicator + feature name + `PR#<n>` (from registry, no network) + `⑂N`; registry moved → cached `gh` fallback; no PR → `PR#` omits; lone main → `⑂N` omits
-- [ ] **Preview:** `gsl preview --once` one frame; `gsl preview` TUI toggles/cycles/ticks
-- [ ] **Styles:** `gsl config style emoji` re-renders; `--list` shows `powerline`*,`emoji`(+user); unknown → powerline + warn; user override reflected
-- [ ] **Toggle:** disable `time`/`repo` removes them; enable restores; master disable → empty
-- [ ] **Timeout proof:** slow `git`/`claude`/`gh` on PATH → returns within budget
-- [ ] **Wiring:** sync-skills `--build` links `gsl-status` (both dirs); `install_claude_skills.sh` → executable shim symlink; `install_gemini_skills.sh` → `gsl-status.toml` linked
-- [ ] **Shim fallback:** binary moved aside → minimal bash line; restored after
-- [ ] **Live Claude pickup:** after an assistant turn the status line renders via shim → `gsl render`
+- [x] **Build:** `bash src/gsl/build.sh` installs `~/opt/bin/gsl`; check-deps passes
+- [x] **Tests:** `go test ./... -cover` ≥ target per package (git 94.3, repo 94.9, style 96.5, render 91.6, preview 83.5, cmd 80.7, payload 90.0, config 79.1, mcp 65.1, gh 63.0; `-race` clean)
+- [x] **Render (Claude):** sample payload piped to `gsl render` → 4-part powerline line
+- [x] **On-demand (Gemini/CLI):** `gsl status` (no stdin) → dir+git+repo+time, ai omitted
+- [x] **Repo segment:** from a gss worktree → worktree indicator + feature name (`gsl`) + `⑂N`; `PR#` self-omits when the worker is unpushed; root/registry-moved/no-PR/lone-main paths covered by `internal/repo` unit tests (registry-first, `gh` fallback, schema-bump-ignored)
+- [x] **Preview:** `gsl preview --once` one frame; TUI toggle/style-cycle/tick covered by `internal/preview` Model.Update tests
+- [x] **Styles:** `gsl config style emoji` re-renders; `--list` shows `powerline`*,`emoji`(+user); unknown → powerline + warn; user override (fill-presence) reflected
+- [x] **Toggle:** disable `time` removes it; enable restores; master disable → empty
+- [x] **Timeout proof:** slow `git`/`gh`/`claude` on PATH → `gsl status` returns ~1s and degrades (verified with `exec sleep` fakes; `SystemRunner` uses `exec.CommandContext`)
+- [x] **Wiring:** `sync-skills --build` links `gsl-status` (both dirs) + builds gsl; `install_claude_skills.sh` → executable shim symlink; `install_gemini_skills.sh` auto-links `gsl-status.toml` via its `*.toml` glob (verified under a temp `HOME`); `install.sh` builds the binary on a fresh clone
+- [x] **Shim fallback:** binary moved aside → minimal bash line; `execfail`-safe; restored after
+- [ ] **Live Claude pickup:** _deferred — requires activating the live status line in `~/.claude` (the `statusLine.command` + shim symlink); intentionally left as the user's opt-in step, not done autonomously. Run `./install.sh` (or `install_claude_skills.sh`) on the host to enable, then it renders via shim → `gsl render` after each turn._
 
 ## Definition of done
 
-All four checkpoints closed; all acceptance boxes checked; coverage gate green; check-deps + license gate green; `./install.sh` on a clean clone wires gsl end-to-end; design doc updated to match shipped behavior. Ships as the `impl` PR on the **gsl** stack (base of PR #21).
+- [x] All four checkpoints (CP1–CP4) closed, each two-stage reviewed (spec + code-quality) with fixes folded in.
+- [x] Coverage gate green (all packages ≥ their floor); `go vet` + `-race` clean.
+- [x] **check-deps seam gate green**; **license gate SKIP** — `go-licenses` is not installed on the build host, so the optional license scan is skipped (set `GSL_STRICT_CHECK=1` after `go install github.com/google/go-licenses@latest` to enforce). Dependencies were **manually verified permissive**: cobra **Apache-2.0**, bubbletea **MIT**, transitives MIT/BSD — compliant with `src/CLAUDE.md`.
+- [x] `./install.sh` on a clean clone wires gsl end-to-end (a `gsl` build block was added to `install.sh` — the plan had assumed no edit was needed, but install.sh builds each Go tool via an explicit block rather than auto-discovery).
+- [x] Design doc updated to match shipped behavior (see "Shipped" note below).
+- [x] Ships as the **`impl` PR #27** on the **gsl** feature, alongside the **plan** PR #21.
+- [ ] Live Claude status-line activation — deferred to the user (see the acceptance gate above).

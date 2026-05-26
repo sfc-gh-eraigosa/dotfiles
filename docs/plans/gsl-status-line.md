@@ -408,3 +408,40 @@ seams land; CP3 depends on both; CP4 is final.
     `bash ~/.claude/statusline-command.sh` → minimal bash line; restore binary.
 12. **Live Claude pickup**: start a Claude Code session; after an assistant turn the status
     line renders (harness pipes the live payload → shim → `gsl render`).
+
+---
+
+## Shipped (PR #27)
+
+Implemented end-to-end as **PR #27** (`feature/gsl/edward-raigosa/impl`), alongside this
+**plan** PR #21, over CP1–CP4. The design above shipped essentially as written; the notable
+decisions and deviations folded back from implementation + the per-checkpoint reviews:
+
+- **`install.sh` edit (deviation from the plan).** The plan assumed no `install.sh` change
+  was needed ("`make bin` auto-discovers"). In reality `install.sh` builds each Go tool via an
+  explicit per-tool block and calls `sync-skills.sh` *without* `--build`, so a `gsl` build
+  block was added (mirroring the gss/tmux-mgr/wol blocks) to wire gsl on a fresh clone.
+- **Style config wiring — fill-presence merge.** `internal/style` gained `ResolveConfig`
+  (alongside `Resolve`): it converts `config.styles` (`map[string]any`) to styles and merges
+  presence-aware, so a user override that omits `fill` does **not** silently disable a
+  built-in's `fill:true`. The render/cmd path uses `ResolveConfig`.
+- **`repo` segment specifics.** `PR#<n>` is rendered as a literal `PR#` token tinted by PR
+  state (no dedicated Nerd-Font PR glyph in the icon table). `name=worker` derives the label
+  from the branch's trailing segment (the gss `registry.json` parse keeps the feature name +
+  `pr_url`/`pr_state`, not the worker `user`/`purpose`). The powerline repo segment keeps its
+  background block across the PR# + count badges (single trailing ANSI reset).
+- **Timeout/degrade.** Segments render concurrently under a ~1s parent deadline + per-segment
+  deadlines; the real `SystemRunner` uses `exec.CommandContext`. Verified: a slow `git` on PATH
+  → `gsl status` returns ~1s and degrades. (A shell-wrapper fake whose `sleep` grandchild holds
+  the stdout pipe can mask this in testing — real binaries release the pipe at the deadline.)
+- **License gate.** `check-deps.sh`'s seam gate is enforced (+ a `check-deps_test.sh` driver);
+  the optional license scan **skips** when `go-licenses` is absent. Deps were verified manually:
+  cobra **Apache-2.0**, bubbletea **MIT**, transitives MIT/BSD.
+- **Coverage.** All packages meet their floor; `payload` landed at ~90% (vs the ~95% aim),
+  well above the 60% floor.
+- **Live activation is opt-in.** The shim + install wiring are in place, but flipping the live
+  Claude status line (the `statusLine.command` + `~/.claude/statusline-command.sh` symlink) is
+  left to the user / `./install.sh` on the host — it was not activated autonomously.
+
+See the closed acceptance checklist + Definition of Done in
+[`gsl-status-line-execution.md`](./gsl-status-line-execution.md).
