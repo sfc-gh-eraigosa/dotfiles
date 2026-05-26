@@ -166,6 +166,22 @@ fi
 # export MANPATH="/usr/local/man:$MANPATH"
 fpath+=${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions/src
 
+# Shadow dangling completion symlinks before oh-my-zsh runs compinit. Vendor
+# packages such as Docker Desktop on WSL leave _* symlinks in root-owned $fpath
+# dirs that dangle when their backing mount is gone; compinit then errors
+# ("no such file or directory") reading the broken link. An empty stub earlier
+# in $fpath makes compinit skip it. Rebuilt each startup, so the real
+# completion is used again once its target returns.
+_comp_shadow="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/compshadow"
+rm -rf "$_comp_shadow" 2>/dev/null
+for _comp_f in ${^fpath}/_*(N@); do
+  [[ -e $_comp_f ]] && continue                 # symlink target resolves: leave it
+  [[ -d $_comp_shadow ]] || mkdir -p "$_comp_shadow"
+  : > "$_comp_shadow/${_comp_f:t}"
+done
+[[ -d $_comp_shadow ]] && fpath=("$_comp_shadow" $fpath)
+unset _comp_f _comp_shadow
+
 source $ZSH/oh-my-zsh.sh
 
 # oh-my-zsh's git plugin defines `alias gss='git status -s'` which shadows
