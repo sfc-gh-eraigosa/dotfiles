@@ -1,5 +1,6 @@
 # AI-assistant plugins/extensions — source of truth.
-# See docs/plans/ai-plugin-manifest.md for the design.
+# Human reference (summary + first-usage examples): docs/ai-plugins.md
+# Design: docs/plans/ai-plugin-manifest.md
 #
 # Ensure-only (additive): opt/scripts/system/sync-plugins.sh installs + enables
 # what's listed here; it never removes anything. Parsed with mikefarah `yq`.
