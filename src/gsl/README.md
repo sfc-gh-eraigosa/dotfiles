@@ -17,15 +17,18 @@ bash build.sh
 
 ### Wire into Claude Code and Gemini
 
-`./install.sh` (from the repo root) calls both `install_claude_skills.sh` and `sync-skills.sh`:
+`./install.sh` (from the repo root) does three things for gsl:
 
-- `install_claude_skills.sh` symlinks `ai/claude/statusline-command.sh` to `~/.claude/statusline-command.sh` — the shim that Claude Code calls after every assistant turn.
-- `sync-skills.sh --build` rebuilds the binary via `build.sh` AND links `src/gsl/skill/` into `~/.claude/skills/gsl-status` and `~/.agents/skills/gsl-status`.
+1. Builds the `gsl` binary via its own `src/gsl/build.sh` block (same pattern as `gss`, `tmux-mgr`, `wol`).
+2. Calls `sync-skills.sh` (no flags) to link `src/gsl/skill/` into `~/.claude/skills/gsl-status` and `~/.agents/skills/gsl-status`.
+3. Calls `install_claude_skills.sh` to symlink `ai/claude/statusline-command.sh` to `~/.claude/statusline-command.sh` — the shim that Claude Code calls after every assistant turn.
 
-You can also run the build + link step independently:
+You can also build the binary or refresh skill links independently:
 
 ```sh
-sync-skills --build          # rebuild gsl + refresh skill links
+bash src/gsl/build.sh        # compile and install gsl binary only
+sync-skills.sh --build       # rebuild gsl + refresh skill links
+make bin                     # same as bash src/gsl/build.sh (if using the Makefile)
 ```
 
 The Gemini `/gsl-status` command is auto-discovered from `ai/gemini/commands/gsl-status.toml` — no extra step needed.
@@ -66,7 +69,7 @@ gsl preview --once       # print one rendered frame and exit (CI / golden-file s
 ### `gsl version`
 
 ```sh
-gsl version              # human-readable: version, commit, dirty flag, build date, path
+gsl version              # human-readable: version, commit, dirty flag, build date, description, path
 gsl version --json       # same fields as JSON
 ```
 
@@ -137,7 +140,7 @@ Segment options (set in the `options` map of the `repo` segment in `config.json`
 
 Always renders. Shows:
 
-- Date formatted by `date_format` (default `Mon 01-02` — Go reference layout)
+- Date formatted by `date_format` (default `2006-01-02` — Go reference layout)
 - Time formatted by `time_format` (default `15:04:05` — 24-hour HH:MM:SS)
 - Timezone abbreviation (e.g. `PST`, `UTC`)
 
