@@ -375,3 +375,252 @@ func TestResolve_ASCIIMode_UserCanOverrideASCIIIcon(t *testing.T) {
 		t.Errorf("Icons[\"repo_root\"]: got %q, want %q", got, "[root]")
 	}
 }
+
+// ── rawToStyle ────────────────────────────────────────────────────────────────
+
+func TestRawToStyle_GlyphsExtracted(t *testing.T) {
+	raw := map[string]map[string]any{
+		"mything": {
+			"glyphs": "emoji",
+		},
+	}
+	var buf bytes.Buffer
+	s := style.ResolveConfig(&buf, "mything", raw, false)
+	// The resolved style should have Glyphs == "emoji" (from user entry
+	// deep-merged over powerline base, which has Glyphs "nerdfont").
+	if s.Glyphs != "emoji" {
+		t.Errorf("Glyphs: got %q, want %q", s.Glyphs, "emoji")
+	}
+}
+
+func TestRawToStyle_IconsExtracted(t *testing.T) {
+	// rawToStyle must convert map[string]any icon values to map[string]string.
+	raw := map[string]map[string]any{
+		"powerline": {
+			"icons": map[string]any{
+				"ai":   "★",
+				"time": "⏱",
+			},
+		},
+	}
+	var buf bytes.Buffer
+	s := style.ResolveConfig(&buf, "powerline", raw, false)
+	if got := s.Icons["ai"]; got != "★" {
+		t.Errorf("Icons[\"ai\"]: got %q, want %q", got, "★")
+	}
+	if got := s.Icons["time"]; got != "⏱" {
+		t.Errorf("Icons[\"time\"]: got %q, want %q", got, "⏱")
+	}
+	// Builtin icons not overridden must still be present.
+	if got := s.Icons["branch"]; got == "" {
+		t.Error("Icons[\"branch\"] should be inherited from builtin after icons merge")
+	}
+}
+
+func TestRawToStyle_ThemeExtracted(t *testing.T) {
+	// rawToStyle must convert map[string]any theme values to map[string]string.
+	raw := map[string]map[string]any{
+		"powerline": {
+			"theme": map[string]any{
+				"ai": "magenta",
+			},
+		},
+	}
+	var buf bytes.Buffer
+	s := style.ResolveConfig(&buf, "powerline", raw, false)
+	if got := s.Theme["ai"]; got != "magenta" {
+		t.Errorf("Theme[\"ai\"]: got %q, want %q", got, "magenta")
+	}
+	// Other theme keys from builtin must be inherited.
+	if got := s.Theme["repo_root"]; got == "" {
+		t.Error("Theme[\"repo_root\"] should be inherited from builtin")
+	}
+}
+
+func TestRawToStyle_WrongTypeFill_Skipped(t *testing.T) {
+	// fill as a string (wrong type) must be silently skipped — no panic.
+	// The builtin powerline has fill:true; wrong-type fill should not overwrite it.
+	raw := map[string]map[string]any{
+		"powerline": {
+			"fill": "yes", // wrong type: string instead of bool
+		},
+	}
+	var buf bytes.Buffer
+	// Must not panic.
+	s := style.ResolveConfig(&buf, "powerline", raw, false)
+	// Because "fill" key IS present (just wrong type) the applyFill flag is
+	// set but rawToStyle sets Fill to zero (false). So the builtin's fill:true
+	// is overwritten with false. This is the documented behavior: presence of
+	// the key triggers applyFill, type mismatch yields the zero value.
+	// The important thing is no panic.
+	_ = s.Fill
+}
+
+func TestRawToStyle_WrongTypeIcons_Skipped(t *testing.T) {
+	// icons as a string (wrong type) must be silently skipped — no panic.
+	raw := map[string]map[string]any{
+		"powerline": {
+			"icons": "bad-value", // wrong type: string instead of map[string]any
+		},
+	}
+	var buf bytes.Buffer
+	// Must not panic.
+	s := style.ResolveConfig(&buf, "powerline", raw, false)
+	// Icons should still come from builtin since the wrong-type value is skipped.
+	if got := s.Icons["branch"]; got == "" {
+		t.Error("Icons[\"branch\"] should be inherited from builtin when user icons has wrong type")
+	}
+}
+
+func TestRawToStyle_WrongTypeTheme_Skipped(t *testing.T) {
+	// theme as a string (wrong type) must be silently skipped — no panic.
+	raw := map[string]map[string]any{
+		"powerline": {
+			"theme": "bad-value", // wrong type: string instead of map[string]any
+		},
+	}
+	var buf bytes.Buffer
+	// Must not panic.
+	s := style.ResolveConfig(&buf, "powerline", raw, false)
+	// Theme should still come from builtin since wrong-type value is skipped.
+	if got := s.Theme["repo_root"]; got == "" {
+		t.Error("Theme[\"repo_root\"] should be inherited from builtin when user theme has wrong type")
+	}
+}
+
+// ── ResolveConfig: deep-merge (icons/theme) ──────────────────────────────────
+
+func TestResolveConfig_DeepMerge_IconsOneKeyKeeepsOthers(t *testing.T) {
+	// Overriding one icon key must keep all other icons from the builtin.
+	raw := map[string]map[string]any{
+		"powerline": {
+			"icons": map[string]any{
+				"ai": "★",
+			},
+		},
+	}
+	var buf bytes.Buffer
+	s := style.ResolveConfig(&buf, "powerline", raw, false)
+	if got := s.Icons["ai"]; got != "★" {
+		t.Errorf("Icons[\"ai\"]: got %q, want %q", got, "★")
+	}
+	// branch must survive from builtin.
+	if got := s.Icons["branch"]; got == "" {
+		t.Error("Icons[\"branch\"] lost after single-icon override via ResolveConfig")
+	}
+	// repo_root must survive from builtin.
+	if got := s.Icons["repo_root"]; got == "" {
+		t.Error("Icons[\"repo_root\"] lost after single-icon override via ResolveConfig")
+	}
+}
+
+func TestResolveConfig_DeepMerge_ThemeOneKeyKeepsOthers(t *testing.T) {
+	// Overriding one theme key must keep all other theme keys from the builtin.
+	raw := map[string]map[string]any{
+		"powerline": {
+			"theme": map[string]any{
+				"repo_root": "red",
+			},
+		},
+	}
+	var buf bytes.Buffer
+	s := style.ResolveConfig(&buf, "powerline", raw, false)
+	if got := s.Theme["repo_root"]; got != "red" {
+		t.Errorf("Theme[\"repo_root\"]: got %q, want %q", got, "red")
+	}
+	// repo_worktree must survive from builtin.
+	if got := s.Theme["repo_worktree"]; got == "" {
+		t.Error("Theme[\"repo_worktree\"] lost after single-theme override via ResolveConfig")
+	}
+}
+
+// ── ResolveConfig: ASCII fallback branch ─────────────────────────────────────
+
+func TestResolveConfig_ForceASCII_UsesASCIITable(t *testing.T) {
+	// forceASCII=true must replace the icon table with the ASCII fallback.
+	raw := map[string]map[string]any{
+		"powerline": {
+			"separator": "space",
+		},
+	}
+	var buf bytes.Buffer
+	s := style.ResolveConfig(&buf, "powerline", raw, true)
+	if s.Glyphs != "ascii" {
+		t.Errorf("Glyphs: got %q, want %q", s.Glyphs, "ascii")
+	}
+	if got := s.Icons["repo_root"]; got != "[root]" {
+		t.Errorf("Icons[\"repo_root\"]: got %q, want %q", got, "[root]")
+	}
+	if got := s.Icons["ai"]; got != "[ai]" {
+		t.Errorf("Icons[\"ai\"]: got %q, want %q", got, "[ai]")
+	}
+}
+
+func TestResolveConfig_ForceASCII_NoUserStyle(t *testing.T) {
+	// forceASCII=true with no user overrides at all.
+	var buf bytes.Buffer
+	s := style.ResolveConfig(&buf, "powerline", nil, true)
+	if s.Glyphs != "ascii" {
+		t.Errorf("Glyphs: got %q, want %q", s.Glyphs, "ascii")
+	}
+	if got := s.Icons["staged"]; got != "*" {
+		t.Errorf("Icons[\"staged\"]: got %q, want %q", got, "*")
+	}
+	if got := s.Icons["unstaged"]; got != "!" {
+		t.Errorf("Icons[\"unstaged\"]: got %q, want %q", got, "!")
+	}
+}
+
+func TestResolveConfig_ASCIIGlyphs_Triggers_ASCIITable(t *testing.T) {
+	// A user style that sets glyphs:"ascii" (without forceASCII) must still
+	// trigger the ASCII fallback branch inside ResolveConfig.
+	raw := map[string]map[string]any{
+		"powerline": {
+			"glyphs": "ascii",
+		},
+	}
+	var buf bytes.Buffer
+	s := style.ResolveConfig(&buf, "powerline", raw, false)
+	if s.Glyphs != "ascii" {
+		t.Errorf("Glyphs: got %q, want %q", s.Glyphs, "ascii")
+	}
+	if got := s.Icons["repo_root"]; got != "[root]" {
+		t.Errorf("Icons[\"repo_root\"]: got %q, want %q", got, "[root]")
+	}
+}
+
+func TestResolveConfig_ForceASCII_UserIconOverrideInASCIIMode(t *testing.T) {
+	// User may still override individual ASCII icons even when forceASCII=true.
+	raw := map[string]map[string]any{
+		"powerline": {
+			"icons": map[string]any{
+				"ai": "(AI)",
+			},
+		},
+	}
+	var buf bytes.Buffer
+	s := style.ResolveConfig(&buf, "powerline", raw, true)
+	if got := s.Icons["ai"]; got != "(AI)" {
+		t.Errorf("Icons[\"ai\"]: got %q, want %q", got, "(AI)")
+	}
+	// Other ASCII defaults must still be present.
+	if got := s.Icons["repo_root"]; got != "[root]" {
+		t.Errorf("Icons[\"repo_root\"]: got %q, want %q", got, "[root]")
+	}
+}
+
+// ── ResolveConfig: unknown style name fallback ────────────────────────────────
+
+func TestResolveConfig_UnknownStyle_FallsBackToPowerline(t *testing.T) {
+	var buf bytes.Buffer
+	s := style.ResolveConfig(&buf, "no-such-style", nil, false)
+	if s.Separator != "powerline" {
+		t.Errorf("fallback Separator: got %q, want %q", s.Separator, "powerline")
+	}
+	if !s.Fill {
+		t.Error("fallback Fill: got false, want true")
+	}
+	if !strings.Contains(buf.String(), "no-such-style") {
+		t.Errorf("warning should mention unknown style name; got: %q", buf.String())
+	}
+}

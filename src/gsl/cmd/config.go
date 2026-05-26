@@ -53,6 +53,9 @@ func printConfigKey(cfg config.Config, key string) error {
 	case "segments":
 		data, _ := json.MarshalIndent(cfg.Segments, "", "  ")
 		fmt.Println(string(data))
+	case "styles":
+		data, _ := json.MarshalIndent(cfg.Styles, "", "  ")
+		fmt.Println(string(data))
 	default:
 		return fmt.Errorf("gsl config get: unknown key %q; use 'gsl config get' to see all", key)
 	}

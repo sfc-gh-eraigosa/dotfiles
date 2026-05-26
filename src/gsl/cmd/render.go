@@ -1,20 +1,11 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/wenlock/dotfiles/gsl/internal/config"
-	"github.com/wenlock/dotfiles/gsl/internal/gh"
-	"github.com/wenlock/dotfiles/gsl/internal/git"
-	"github.com/wenlock/dotfiles/gsl/internal/mcp"
 	"github.com/wenlock/dotfiles/gsl/internal/payload"
-	"github.com/wenlock/dotfiles/gsl/internal/render"
-	"github.com/wenlock/dotfiles/gsl/internal/repo"
-	"github.com/wenlock/dotfiles/gsl/internal/style"
 )
 
 var renderCmd = &cobra.Command{
@@ -42,63 +33,13 @@ func runRender(cmd *cobra.Command, args []string) error {
 		p = payload.Payload{}
 	}
 
-	cfg, err := config.Load(config.DefaultPath())
-	if err != nil {
-		return fmt.Errorf("gsl render: config load: %w", err)
-	}
-
-	if !cfg.Enabled {
-		// Master off: print nothing.
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
-	gitRunner := git.NewSystemRunner()
-	ghRunner := gh.NewSystemRunner()
-	mcpRunner := mcp.NewSystemRunner()
-
-	// Determine cwd: prefer payload.Cwd, fall back to os.Getwd.
-	cwd := ""
+	// Determine cwd hint from payload.
+	cwdHint := ""
 	if p.Cwd != nil && *p.Cwd != "" {
-		cwd = *p.Cwd
-	} else {
-		if wd, err := os.Getwd(); err == nil {
-			cwd = wd
-		}
+		cwdHint = *p.Cwd
 	}
 
-	// Best-effort branch from git.Status.
-	branch := ""
-	if cwd != "" {
-		if info, err := git.Status(ctx, gitRunner, cwd); err == nil {
-			branch = info.Branch
-		}
-	}
-
-	// Convert raw config.Styles to map[string]map[string]any for ResolveConfig.
-	rawStyles := configToRawStyles(cfg.Styles)
-	st := style.ResolveConfig(os.Stderr, cfg.Style, rawStyles, false)
-
-	deps := render.Deps{
-		Payload:      p,
-		Cwd:          cwd,
-		Branch:       branch,
-		RegistryPath: repo.DefaultRegistryPath(),
-		Git:          gitRunner,
-		GH:           ghRunner,
-		MCP:          mcpRunner,
-		MCPOpts:      mcp.ActiveCountOptions{},
-		Clock:        time.Now,
-	}
-
-	segs := render.BuildSegments(cfg, deps)
-	line := render.Render(ctx, cfg, st, segs)
-	if line != "" {
-		fmt.Println(line)
-	}
-	return nil
+	return runStatusLine(cmd, p, cwdHint)
 }
 
 // configToRawStyles converts config.Styles (map[string]any, raw JSON) to the

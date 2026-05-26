@@ -15,6 +15,8 @@ payload on stdin after every assistant turn) and an on-demand line for
 Gemini/CLI.
 
 Segments: dirgit, repo, ai, time — configurable via ~/.config/gsl/config.json`,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 // Execute runs the root command. Called by main.
