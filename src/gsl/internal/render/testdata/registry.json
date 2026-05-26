@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "features": [
+    {
+      "name": "gsl",
+      "default_base_branch": "main",
+      "description": "render-package test fixture",
+      "workers": [
+        {
+          "user": "edward-raigosa",
+          "purpose": "impl",
+          "branch": "feature/gsl/edward-raigosa/impl",
+          "worktree": "/wt/gsl",
+          "base_branch": "main",
+          "pr_url": "https://github.com/wenlock/dotfiles/pull/21",
+          "pr_state": "OPEN"
+        }
+      ]
+    }
+  ]
+}
