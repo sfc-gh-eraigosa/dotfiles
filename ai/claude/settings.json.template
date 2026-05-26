@@ -79,5 +79,6 @@
   },
   "skipDangerousModePermissionPrompt": true,
   "theme": "auto",
+  "editorMode": "vim",
   "skipAutoPermissionPrompt": true
 }

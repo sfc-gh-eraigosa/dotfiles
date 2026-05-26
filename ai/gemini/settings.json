@@ -1,4 +1,7 @@
 {
+  "general": {
+    "vimMode": true
+  },
   "security": {
     "auth": {
       "selectedType": "oauth-personal"
