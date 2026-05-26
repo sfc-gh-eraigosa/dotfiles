@@ -43,6 +43,27 @@ if [ ! -f "$MANIFEST" ]; then
     exit 1
 fi
 
+# `claude plugin enable` exits non-zero when the plugin is already enabled, which
+# is the normal steady state on a configured host (and on every install.sh re-run).
+# Treat "already enabled" as success so re-runs stay quiet — only a genuine failure
+# surfaces a warning. Honors --dry-run so the planned action is still printed.
+enable_claude_plugin() {
+    local plugin="$1" out
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "DRY-RUN: claude plugin enable $plugin"
+        return 0
+    fi
+    echo "+ claude plugin enable $plugin"
+    if out="$(claude plugin enable "$plugin" 2>&1)"; then
+        [ -n "$out" ] && echo "$out"
+    elif printf '%s' "$out" | grep -qi "already enabled"; then
+        echo "  ($plugin already enabled)"
+    else
+        printf '%s\n' "$out" >&2
+        echo "sync-plugins: WARNING — enable $plugin failed; continuing." >&2
+    fi
+}
+
 sync_claude() {
     if [ "$DRY_RUN" = "0" ] && ! command -v claude >/dev/null 2>&1; then
         echo "sync-plugins: 'claude' CLI not on PATH; skipping Claude plugins."
@@ -57,7 +78,7 @@ sync_claude() {
     while IFS= read -r plugin; do
         { [ -z "$plugin" ] || [ "$plugin" = "null" ]; } && continue
         run claude plugin install "$plugin"
-        run claude plugin enable "$plugin"
+        enable_claude_plugin "$plugin"
     done < <(yq '.plugins[] | select(.enabled == true) | select(.claude.plugin != null) | .claude.plugin' "$MANIFEST")
 }
 
