@@ -30,10 +30,10 @@ func TestSystemRunnerRealGit(t *testing.T) {
 // error but still surfaces the output (combined stdout+stderr).
 func TestSystemRunnerNonZeroExit(t *testing.T) {
 	r := git.NewSystemRunner()
-	// git status in a non-git directory should exit non-zero.
-	out, err := r.Run(context.Background(), "status", "-C", "/tmp")
+	// A bogus subcommand always exits non-zero regardless of environment.
+	out, err := r.Run(context.Background(), "definitely-not-a-command")
 	if err == nil {
-		t.Skip("git status unexpectedly succeeded; skip in non-standard env")
+		t.Fatal("expected error from bogus git subcommand, got nil")
 	}
 	_ = out // output may be non-empty; just confirm it doesn't panic
 }

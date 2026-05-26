@@ -23,7 +23,10 @@ import (
 // Runner is the single entry point for MCP subprocess invocations in gsl.
 // The signature mirrors internal/git.Runner for consistency.
 //
-// name is the binary or subcommand to run; args is forwarded verbatim.
+// Unlike the git and gh seams — where name is a subcommand appended to a
+// fixed "git"/"gh" binary — the mcp Runner treats name as the executable
+// itself (resolved via $PATH or SystemRunner.Path). args are passed
+// directly to that executable with no subcommand prepended.
 // The returned []byte is combined stdout+stderr.
 type Runner interface {
 	Run(ctx context.Context, name string, args ...string) ([]byte, error)
@@ -42,8 +45,10 @@ func NewSystemRunner() *SystemRunner {
 	return &SystemRunner{}
 }
 
-// Run invokes `[Path/]<name> <args...>` with the given context.
-// Stdout and Stderr are merged into a single buffer.
+// Run invokes the executable named by name (or Path if set) with the
+// given args and context. name is the full executable, not a subcommand
+// — unlike the git/gh seams which prepend a fixed binary. Stdout and
+// Stderr are merged into a single buffer.
 func (r *SystemRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	bin := name
 	if r.Path != "" {

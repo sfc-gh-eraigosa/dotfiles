@@ -8,7 +8,15 @@ import (
 	"sync"
 )
 
-// Response is the scripted return value from a single Run call.
+// Response is the scripted return value from a single Run call. Either
+// Err is non-nil (used verbatim and the bytes are still returned to the
+// caller), or Err is nil and ExitCode is informational only (the fake
+// does NOT synthesise an *exec.ExitError; tests that need a non-zero
+// exit error should set Err to e.g. a *exec.ExitError stand-in).
+//
+// Stdout and Stderr are conceptually distinct but the real Runner
+// returns combined output as a single []byte, so the fake concatenates
+// Stdout then Stderr on the way out.
 type Response struct {
 	Stdout   []byte
 	Stderr   []byte
