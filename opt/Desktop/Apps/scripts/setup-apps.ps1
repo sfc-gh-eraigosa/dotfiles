@@ -248,6 +248,9 @@ function Configure-Terminal {
     Copy-Item $path "$path.bak-$(Get-Date -Format yyyyMMdd-HHmmss)" -Force
     $json = Get-Content $path -Raw | ConvertFrom-Json
 
+    # --- global settings ---
+    $json.focusFollowMouse = $true
+
     # --- schemes (idempotent by name) ---
     $schemeObjs = $SchemeDefs | ForEach-Object { [pscustomobject]$_ }
     $mineNames  = $schemeObjs.name
@@ -400,11 +403,8 @@ if ($wslOk) {
 # [4/6] Font
 Install-UbuntuMono
 
-# [5/6] Windows Terminal
-Configure-Terminal
-
-# [6/6] winget apps
-Write-Host "`n=== [6/6] Desktop apps (winget) ===" -ForegroundColor Cyan
+# [5/6] Desktop apps (winget)
+Write-Host "`n=== [5/6] Desktop apps (winget) ===" -ForegroundColor Cyan
 if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     Write-Host "winget not available -- skipping app installs." -ForegroundColor Red
 } else {
@@ -437,3 +437,6 @@ if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     }
     Write-Host "===================================================" -ForegroundColor Yellow
 }
+
+# [6/6] Windows Terminal configuration
+Configure-Terminal

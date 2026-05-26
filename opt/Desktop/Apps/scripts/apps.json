@@ -1,5 +1,10 @@
 [
   {
+    "Name": "Windows Terminal",
+    "Id": "Microsoft.WindowsTerminal",
+    "Match": "Windows Terminal"
+  },
+  {
     "Name": "Discord",
     "Id": "Discord.Discord",
     "Match": "Discord"
