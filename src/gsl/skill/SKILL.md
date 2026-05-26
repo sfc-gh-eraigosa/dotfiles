@@ -19,10 +19,10 @@ description: Query and configure the gsl (Go Status Line) that renders a powerli
 
 | Segment  | What it shows |
 |----------|---------------|
-| `dirgit` | Current directory name + git dirty/ahead/behind indicators |
-| `repo`   | Repository name (basename of the git root) |
-| `ai`     | Model name + context-window used% (Claude payload only) |
-| `time`   | Current time (and optionally date) formatted per config |
+| `dirgit` | Current directory name (basename, `~` for `$HOME`) + branch + staged/unstaged/untracked/stash/ahead/behind badges |
+| `repo`   | Root-or-worktree indicator glyph + optional feature/worker/branch name + optional PR badge (tinted by state) + optional worktree count badge; self-omits outside a git repo |
+| `ai`     | Model display name + context-window usage + MCP active/configured count + 5h/7d rate-limit percentages; **self-omits when no Claude payload is present** (Gemini/CLI mode) |
+| `time`   | Date + time formatted by config Go layouts + timezone abbreviation; always renders |
 
 Each segment is independently enabled/disabled via `gsl config enable/disable/toggle <segment>`.
 
@@ -53,6 +53,21 @@ gsl config style --list             # List all builtin + user-defined styles (* 
 ```
 
 **Segments** valid for enable/disable/toggle: `dirgit`, `repo`, `ai`, `time`
+
+**Keys valid for `config get`:** `enabled`, `style`, `timezone`, `time_format`, `date_format`, `segments`, `styles`
+
+**Keys valid for `config set`:** `style`, `timezone`, `time_format`, `date_format`
+
+## Styles
+
+Two built-in styles:
+
+| Name | Separator | Fill | Glyphs | Notes |
+|------|-----------|------|--------|-------|
+| `powerline` | filled chevron | yes | nerdfont | Default; requires a Nerd Font-patched terminal font |
+| `emoji` | thin bar (`\|`) | no | emoji | No font dependency; works in any terminal |
+
+Add user overrides in the `styles` object of `config.json` under the same key as the built-in name. Only the fields you specify are changed; omitting `fill` preserves the built-in's fill value (fill-presence merging).
 
 ## Two on/off layers
 
