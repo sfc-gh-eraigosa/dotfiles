@@ -94,7 +94,7 @@ build_component() {
 
 # 1. Component Builds (for tools with source code)
 # Explicitly build known binaries if --build is passed
-for component in "gss" "tmux-mgr" "wol"; do
+for component in "gss" "tmux-mgr" "wol" "gsl"; do
     build_component "$BASE_DIR/src/$component" "$component"
 done
 
@@ -114,6 +114,7 @@ for dir in "$BASE_DIR/src"/*/; do
         case "$name" in
             gss) dest_name="git-safe-sync" ;;
             tmux-mgr) dest_name="tmux" ;;
+            gsl) dest_name="gsl-status" ;;
         esac
         link_skill_all "${dir}skill" "$dest_name"
     # Priority 2: 'SKILL.md' file in the directory (like src/ssh-host-finder/SKILL.md)
