@@ -249,7 +249,11 @@ function Configure-Terminal {
     $json = Get-Content $path -Raw | ConvertFrom-Json
 
     # --- global settings ---
-    $json.focusFollowMouse = $true
+    if ($null -eq $json.PSObject.Properties['focusFollowMouse']) {
+        $json | Add-Member -MemberType NoteProperty -Name "focusFollowMouse" -Value $true
+    } else {
+        $json.focusFollowMouse = $true
+    }
 
     # --- schemes (idempotent by name) ---
     $schemeObjs = $SchemeDefs | ForEach-Object { [pscustomobject]$_ }
@@ -431,9 +435,9 @@ if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
 
     Write-Host "`n=================== APP SUMMARY ===================" -ForegroundColor Yellow
     foreach ($name in $results.Keys) {
-        $status = $results[$name]
-        $color = if ($status -like 'FAILED*') { 'Red' } else { 'Green' }
-        Write-Host ("{0,-16} {1}" -f $name, $status) -ForegroundColor $color
+        $appStatus = $results[$name]
+        $color = if ($appStatus -like 'FAILED*') { 'Red' } else { 'Green' }
+        Write-Host ("{0,-16} {1}" -f $name, $appStatus) -ForegroundColor $color
     }
     Write-Host "===================================================" -ForegroundColor Yellow
 }
