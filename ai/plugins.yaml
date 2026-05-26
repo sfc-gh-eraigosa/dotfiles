@@ -1,0 +1,58 @@
+# AI-assistant plugins/extensions — source of truth.
+# Human reference (summary + first-usage examples): docs/ai-plugins.md
+# Design: docs/plans/ai-plugin-manifest.md
+#
+# Ensure-only (additive): opt/scripts/system/sync-plugins.sh installs + enables
+# what's listed here; it never removes anything. Parsed with mikefarah `yq`.
+#
+#   enabled: true   -> install AND enable for each platform block present
+#   enabled: false  -> parked: documented but not installed/enabled
+#   per-plugin `claude:` / `gemini:` blocks are optional; a missing block means
+#   that tool is skipped for that row.
+
+marketplaces:
+  claude-plugins-official:
+    claude: anthropics/claude-plugins-official   # arg to `claude plugin marketplace add`
+
+plugins:
+  - name: superpowers
+    enabled: true
+    claude: { plugin: superpowers@claude-plugins-official }
+  - name: github
+    enabled: true
+    claude: { plugin: github@claude-plugins-official }
+  - name: code-review
+    enabled: true
+    claude: { plugin: code-review@claude-plugins-official }
+  - name: skill-creator
+    enabled: true
+    claude: { plugin: skill-creator@claude-plugins-official }
+  - name: claude-md-management
+    enabled: true
+    claude: { plugin: claude-md-management@claude-plugins-official }
+  - name: pr-review-toolkit
+    enabled: true
+    claude: { plugin: pr-review-toolkit@claude-plugins-official }
+  - name: gopls-lsp
+    enabled: true
+    claude: { plugin: gopls-lsp@claude-plugins-official }
+  - name: remember
+    enabled: true
+    claude: { plugin: remember@claude-plugins-official }
+  - name: deploy-on-aws
+    enabled: true
+    claude: { plugin: deploy-on-aws@claude-plugins-official }
+  - name: aws-serverless
+    enabled: true
+    claude: { plugin: aws-serverless@claude-plugins-official }
+  - name: aws-core
+    enabled: true
+    claude: { plugin: aws-core@claude-plugins-official }
+  - name: mcp-apps
+    enabled: true
+    claude: { plugin: mcp-apps@claude-plugins-official }
+
+  # Future Gemini equivalent (illustrative — none exist today):
+  # - name: some-tool
+  #   enabled: true
+  #   gemini: { source: https://github.com/owner/repo }

@@ -10,6 +10,7 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - `src/`: Source code for custom tools and agent skills. [See src/GEMINI.md](./src/GEMINI.md).
 - `ai/gemini/`: Gemini-specific commands, TOML policies, and settings.
 - `ai/claude/`: Claude-specific commands, settings, and the `safety_guard.sh` PreToolUse hook.
+- `ai/plugins.yaml`: Declarative manifest of the Claude Code plugins this repo installs/enables (ensure-only via `sync-plugins`). See [docs/ai-plugins.md](./docs/ai-plugins.md) for the plugin summary, first-usage examples, and the Gemini-extension path.
 
 ## Usage Guidelines
 

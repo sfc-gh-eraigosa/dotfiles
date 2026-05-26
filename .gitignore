@@ -64,6 +64,11 @@ coverage/
 # Per-host Claude/Gemini settings stay local; install.sh seeds them from the
 # tracked .template files so each machine can customize without leaking values.
 ai/claude/settings.json
+# Per-host gws (Google Workspace CLI) config + OAuth client secret stay local;
+# seeded from the tracked ai/gws/*.template files. client_secret.json is a
+# credential and must never be committed.
+ai/gws/config.json
+ai/gws/client_secret.json
 .custom_alias
 *.swp
 
