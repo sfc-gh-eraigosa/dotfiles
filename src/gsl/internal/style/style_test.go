@@ -157,6 +157,28 @@ func TestResolve_DeepMerge_OverrideOneField(t *testing.T) {
 	}
 }
 
+// TestResolve_DeepMerge_SeparatorOnly_KeepsBuiltinFill is the Finding #6
+// regression test: a user override of ONLY Separator on a Fill:true builtin
+// must keep Fill:true. Previously mergeInto applied user.Fill unconditionally,
+// so a user.Fill zero value (false) silently clobbered the builtin's fill:true,
+// contradicting Resolve's documented "non-zero scalars only" contract.
+func TestResolve_DeepMerge_SeparatorOnly_KeepsBuiltinFill(t *testing.T) {
+	// powerline has Fill:true. User sets only Separator (Fill defaults to false).
+	user := map[string]style.Style{
+		"powerline": {Separator: "thin"},
+	}
+	var buf bytes.Buffer
+	s := style.Resolve(&buf, "powerline", user, false)
+
+	if s.Separator != "thin" {
+		t.Errorf("Separator: got %q, want %q", s.Separator, "thin")
+	}
+	// Fill:true from the builtin must survive because the user did not set it.
+	if !s.Fill {
+		t.Error("Fill: got false, want true — Separator-only override must not clobber builtin's Fill:true")
+	}
+}
+
 func TestResolve_DeepMerge_OverrideSingleIcon(t *testing.T) {
 	// Override one icon; other icons must be inherited from the built-in.
 	user := map[string]style.Style{
@@ -439,7 +461,7 @@ func TestRawToStyle_ThemeExtracted(t *testing.T) {
 
 func TestRawToStyle_WrongTypeFill_Skipped(t *testing.T) {
 	// fill as a string (wrong type) must be silently skipped — no panic.
-	// The builtin powerline has fill:true; wrong-type fill should not overwrite it.
+	// The builtin powerline has fill:true; wrong-type fill must NOT overwrite it.
 	raw := map[string]map[string]any{
 		"powerline": {
 			"fill": "yes", // wrong type: string instead of bool
@@ -448,12 +470,15 @@ func TestRawToStyle_WrongTypeFill_Skipped(t *testing.T) {
 	var buf bytes.Buffer
 	// Must not panic.
 	s := style.ResolveConfig(&buf, "powerline", raw, false)
-	// Because "fill" key IS present (just wrong type) the applyFill flag is
-	// set but rawToStyle sets Fill to zero (false). So the builtin's fill:true
-	// is overwritten with false. This is the documented behavior: presence of
-	// the key triggers applyFill, type mismatch yields the zero value.
-	// The important thing is no panic.
-	_ = s.Fill
+	// Finding #7 fix: a "fill" key whose value is not a JSON bool must NOT
+	// trigger the override. Previously the mere presence of the key set the
+	// applyFill flag, and because rawToStyle left Fill at its zero value
+	// (false) on a type mismatch, the builtin's fill:true was silently
+	// clobbered to false. Now the wrong-type value is ignored entirely, so the
+	// builtin's fill:true is preserved.
+	if !s.Fill {
+		t.Error("Fill: got false, want true — wrong-type 'fill' value must be ignored and builtin's Fill:true preserved")
+	}
 }
 
 func TestRawToStyle_WrongTypeIcons_Skipped(t *testing.T) {

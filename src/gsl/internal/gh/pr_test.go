@@ -227,6 +227,73 @@ func TestPRCacheWrittenAfterFetch(t *testing.T) {
 	}
 }
 
+// TestPRNoPRCachedNegative verifies Finding #3: a "no PR" result (Number 0)
+// is cached, so a second call within the TTL does NOT invoke the Runner and
+// still returns (nil, nil) per the omit contract.
+func TestPRNoPRCachedNegative(t *testing.T) {
+	setupCacheDir(t)
+
+	r := &fake.Runner{
+		Script: []fake.Response{
+			{Stdout: []byte(`{"number":0,"state":""}`)},
+		},
+	}
+
+	// First call — runner invoked, returns nil PRInfo, writes negative cache.
+	info1, err := gh.PR(context.Background(), r, "no-pr-branch")
+	if err != nil {
+		t.Fatalf("first call: unexpected error: %v", err)
+	}
+	if info1 != nil {
+		t.Fatalf("first call: expected nil PRInfo, got: %+v", info1)
+	}
+	if r.CallCount() != 1 {
+		t.Fatalf("first call: CallCount() = %d; want 1", r.CallCount())
+	}
+
+	// Second call — cache hit on the negative result; runner NOT invoked.
+	info2, err := gh.PR(context.Background(), r, "no-pr-branch")
+	if err != nil {
+		t.Fatalf("second call: unexpected error: %v", err)
+	}
+	if info2 != nil {
+		t.Fatalf("second call: expected nil PRInfo (cached negative), got: %+v", info2)
+	}
+	if r.CallCount() != 1 {
+		t.Errorf("second call: CallCount() = %d; want still 1 (negative cache hit)", r.CallCount())
+	}
+}
+
+// TestPRBranchForwarded verifies that the branch is forwarded to gh as a
+// positional argument (`gh pr view <branch> ...`), so the query matches the
+// cache key instead of resolving the process cwd's current branch.
+func TestPRBranchForwarded(t *testing.T) {
+	setupCacheDir(t)
+
+	r := &fake.Runner{
+		Script: []fake.Response{
+			{Stdout: []byte(`{"number":42,"state":"OPEN"}`)},
+		},
+	}
+	if _, err := gh.PR(context.Background(), r, "feature/widget"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(r.Calls) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(r.Calls))
+	}
+	call := r.Calls[0]
+	if call.Name != "pr" {
+		t.Errorf("Name = %q; want pr", call.Name)
+	}
+	// args must be: view <branch> --json number,state
+	if len(call.Args) < 2 || call.Args[0] != "view" {
+		t.Fatalf("Args = %v; want [view <branch> ...]", call.Args)
+	}
+	if call.Args[1] != "feature/widget" {
+		t.Errorf("branch positional arg = %q; want feature/widget (Args=%v)", call.Args[1], call.Args)
+	}
+}
+
 // TestPRBranchSanitization verifies that branch names with slashes do not
 // result in nested directories or path-traversal issues.
 func TestPRBranchSanitization(t *testing.T) {

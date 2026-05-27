@@ -97,14 +97,23 @@ func writeCache(path string, info *PRInfo) {
 // cannot work around by omitting output (currently none in this path).
 //
 // Cache: a file at ${XDG_CACHE_HOME:-$HOME/.cache}/gsl/pr-<branch>.json is
-// consulted first. If it exists and is < 60 s old the Runner is NOT called.
-// Otherwise `gh pr view --json number,state` is invoked with an 800 ms
-// timeout; a fresh cache file is written on success.
+// consulted first. If it exists and is < 60 s old the Runner is NOT called;
+// a cached entry whose Number is 0 represents a previously-observed "no PR"
+// result and yields (nil, nil) without invoking gh. Otherwise
+// `gh pr view <branch> --json number,state` is invoked with an 800 ms
+// timeout (the branch is passed explicitly so the query matches the cache
+// key rather than the process cwd's current branch); a fresh cache file is
+// written on every conclusive result, including the negative one.
 func PR(ctx context.Context, runner Runner, branch string) (*PRInfo, error) {
 	path := cacheFilePath(branch)
 
 	// Cache hit — return without touching the Runner.
 	if c := readCache(path); c != nil {
+		// A cached Number of 0 is a remembered "no PR" result: honor the
+		// (nil, nil) omit contract instead of fabricating a PRInfo{Number:0}.
+		if c.Number == 0 {
+			return nil, nil
+		}
 		return &PRInfo{Number: c.Number, State: c.State}, nil
 	}
 
@@ -112,7 +121,9 @@ func PR(ctx context.Context, runner Runner, branch string) (*PRInfo, error) {
 	tctx, cancel := context.WithTimeout(ctx, prViewTimeout)
 	defer cancel()
 
-	out, err := runner.Run(tctx, "pr", "view", "--json", "number,state")
+	// Forward the branch as a positional arg so gh resolves the PR for the
+	// requested branch (matching the cache key) rather than the cwd branch.
+	out, err := runner.Run(tctx, "pr", "view", branch, "--json", "number,state")
 	if err != nil {
 		// gh absent, no remote, no PR, timeout — all map to "omit".
 		return nil, nil //nolint:nilerr
@@ -130,8 +141,10 @@ func PR(ctx context.Context, runner Runner, branch string) (*PRInfo, error) {
 		return nil, nil //nolint:nilerr
 	}
 
-	// Number == 0 generally means no PR was found.
+	// Number == 0 generally means no PR was found. Cache the negative result
+	// so PR-less repos don't pay the full gh invocation every render.
 	if payload.Number == 0 {
+		writeCache(path, &PRInfo{Number: 0, State: payload.State})
 		return nil, nil
 	}
 

@@ -196,6 +196,36 @@ func TestMatch_NilRegistry(t *testing.T) {
 	}
 }
 
+// TestMatch_EmptyQuery_NoFalseMatch proves that an empty branch/toplevel query
+// (which happens when git.Status failed upstream) never false-matches a worker
+// whose corresponding field is also empty. A malformed/partial registry entry
+// with empty fields must NOT be treated as a hit.
+func TestMatch_EmptyQuery_NoFalseMatch(t *testing.T) {
+	reg := &Registry{
+		Features: []Feature{
+			{
+				Name: "partial",
+				Workers: []Worker{
+					// Worker with empty branch and worktree (partial/malformed entry).
+					{Branch: "", Worktree: "", PRUrl: "https://github.com/o/r/pull/99", PRState: "OPEN"},
+				},
+			},
+		},
+	}
+
+	// Empty branch must not match the worker's empty Branch field.
+	if _, ok := Match(reg, "", ""); ok {
+		t.Error("Match(reg, \"\", \"\"): expected no match for empty query, got one")
+	}
+	// Empty toplevel with empty branch likewise must not match.
+	if _, ok := Match(reg, "", "some-branch"); ok {
+		t.Error("Match(reg, \"\", \"some-branch\"): empty toplevel must not match empty Worktree")
+	}
+	if _, ok := Match(reg, "/some/path", ""); ok {
+		t.Error("Match(reg, \"/some/path\", \"\"): empty branch must not match empty Branch")
+	}
+}
+
 func TestMatch_OtherFeaturePR42(t *testing.T) {
 	reg := loadTestRegistry(t)
 	m, ok := Match(reg, "/home/bob/.config/gss/worktrees/sfc-gh-bob/dotfiles/other-feature/bob/impl", "")

@@ -3,9 +3,20 @@ package repo
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"os"
 
 	"github.com/wenlock/dotfiles/gsl/internal/gh"
 )
+
+// prWarnWriter is the sink for PR's diagnostic warnings. It defaults to
+// os.Stderr and is a package-level var (rather than a parameter) so the
+// warning can be exercised in tests without changing PR's signature, which
+// would force edits to the out-of-package caller in internal/render. See the
+// Finding #8 note: keeping the writer in-package preserves the existing
+// callers while still surfacing a diagnostic that other code paths emit.
+var prWarnWriter io.Writer = os.Stderr
 
 // RepoInfo is the combined view of the current repository state that the
 // render layer consumes. All fields are safe to read even when the
@@ -72,7 +83,11 @@ func PR(ctx context.Context, ghRunner gh.Runner, branch, toplevel, registryPath 
 			return info, nil
 		}
 	} else if !errors.Is(err, ErrRegistryNotFound) && !errors.Is(err, ErrUnsupportedSchema) {
-		// Unexpected error loading registry; fall through to gh silently.
+		// Unexpected error loading registry (unreadable or malformed JSON).
+		// Unlike absent/bumped-schema (which are expected), surface a
+		// diagnostic so the failure is not swallowed, then fall through to
+		// the gh fallback as before (behavior unchanged beyond the warning).
+		fmt.Fprintf(prWarnWriter, "gsl: failed to load registry %q: %v; falling back to gh\n", registryPath, err)
 	}
 	// Registry absent, schema bumped, unreadable, or no match → gh fallback.
 	return ghFallback(ctx, ghRunner, branch)

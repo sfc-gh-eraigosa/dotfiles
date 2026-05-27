@@ -23,9 +23,12 @@ import (
 //   - p: the payload (populated from stdin by render; empty by status)
 //   - cwdHint: a preferred cwd string (render passes payload.Cwd; status passes "")
 func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
+	// A corrupt or unreadable config must never break the status line. Warn to
+	// stderr and fall back to defaults so the line still renders. (Finding #1)
 	cfg, err := config.Load(config.DefaultPath())
 	if err != nil {
-		return fmt.Errorf("config load: %w", err)
+		fmt.Fprintf(os.Stderr, "gsl: config load failed (using defaults): %v\n", err)
+		cfg = config.Default()
 	}
 
 	if !cfg.Enabled {

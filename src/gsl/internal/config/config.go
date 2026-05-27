@@ -75,6 +75,11 @@ func DefaultPath() string {
 // Load reads the config from path. If path does not exist, Load returns
 // Default() with a nil error — missing config is not an error. Any other
 // file system error or JSON parse error is returned as a non-nil error.
+//
+// The file contents are unmarshaled over a Default() base, so a partial
+// hand-edited config (e.g. {"enabled": true}) keeps the defaults for fields it
+// does not specify while any field it does specify — including explicit
+// false/empty values — overrides the default.
 func Load(path string) (Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -83,7 +88,7 @@ func Load(path string) (Config, error) {
 		}
 		return Config{}, fmt.Errorf("config: read %s: %w", path, err)
 	}
-	var c Config
+	c := Default()
 	if err := json.Unmarshal(data, &c); err != nil {
 		return Config{}, fmt.Errorf("config: parse %s: %w", path, err)
 	}

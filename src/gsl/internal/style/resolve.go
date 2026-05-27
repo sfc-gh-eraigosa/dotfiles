@@ -20,8 +20,14 @@ func ResolveConfig(w io.Writer, styleName string, rawUserStyles map[string]map[s
 	for k, raw := range rawUserStyles {
 		s := rawToStyle(raw)
 		typed[k] = s
-		_, fillPresent := raw["fill"]
-		hasFill[k] = fillPresent
+		// Finding #7: only treat "fill" as an override when it is a valid JSON
+		// bool. A "fill" key whose value is the wrong type (e.g. the string
+		// "yes") must NOT trigger the override — otherwise rawToStyle's
+		// zero-valued Fill (false) would silently clobber a builtin's
+		// fill:true. Presence alone is insufficient; the value must be usable.
+		fillVal, fillKeyPresent := raw["fill"]
+		_, fillIsBool := fillVal.(bool)
+		hasFill[k] = fillKeyPresent && fillIsBool
 	}
 
 	// ── 1. Look up built-in ──────────────────────────────────────────────────
@@ -198,12 +204,18 @@ func mergeInto(base Style, user Style) Style {
 	if user.Separator != "" {
 		base.Separator = user.Separator
 	}
-	// Fill is a bool; false could legitimately mean "I want no fill", so we
-	// cannot use the zero-value heuristic. We apply user.Fill unconditionally
-	// when the user provides ANY non-zero field, to avoid silently ignoring a
-	// deliberate Fill=false. The simpler and more predictable rule: always
-	// apply the user's Fill value so that an explicit override always wins.
-	base.Fill = user.Fill
+	// Finding #6: Fill is a bool, and the typed userStyles map carries no
+	// fill-presence information, so we cannot distinguish "user set fill:false"
+	// from "user omitted fill". To honor this function's documented contract
+	// — scalar fields override "only when non-zero", and a false bool is
+	// "treated as not set" — we apply user.Fill only when it is true. This
+	// mirrors the presence-aware behavior of mergeIntoWithFillFlag (used by
+	// ResolveConfig) so a user override of only {Separator:"thin"} no longer
+	// silently clobbers a builtin's Fill:true. Callers that need to force
+	// fill:false should use ResolveConfig, which is fill-presence-aware.
+	if user.Fill {
+		base.Fill = true
+	}
 
 	if user.Glyphs != "" {
 		base.Glyphs = user.Glyphs

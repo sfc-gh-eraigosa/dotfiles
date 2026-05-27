@@ -66,6 +66,32 @@ func TestParseConnectedCount_Mixed(t *testing.T) {
 	}
 }
 
+// TestParseConnectedCount_CheckmarkInName guards against the false-positive
+// where a "✓" embedded in a server name (or any non-status position) inflates
+// the count. Only the "✓ Connected" status token in the status position counts.
+func TestParseConnectedCount_CheckmarkInName(t *testing.T) {
+	o, _ := opts(t)
+	r := &fake.Runner{
+		Script: []fake.Response{
+			{
+				// First server has a "✓" in its NAME but is actually FAILED.
+				// Second server is genuinely connected. Want count == 1.
+				Stdout: []byte(
+					"my✓server: https://example.com/mcp - ✗ Failed to connect\n" +
+						"real-server: https://example.com/mcp - ✓ Connected\n",
+				),
+			},
+		},
+	}
+	count, err := mcp.ActiveCount(context.Background(), r, o)
+	if err != nil {
+		t.Fatalf("ActiveCount: unexpected error: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("ActiveCount = %d; want 1 (✓ in a name must not be counted)", count)
+	}
+}
+
 func TestActiveCount_AllConnected(t *testing.T) {
 	o, _ := opts(t)
 	r := &fake.Runner{

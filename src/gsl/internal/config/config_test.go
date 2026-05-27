@@ -192,6 +192,90 @@ func TestDefaultTimeFormats(t *testing.T) {
 	}
 }
 
+// TestLoadMalformedJSONReturnsError verifies that loading a file containing
+// invalid JSON returns a non-nil error and does not panic. (Finding #10)
+func TestLoadMalformedJSONReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(path, []byte(`{invalid json`), 0o644); err != nil {
+		t.Fatalf("setup: WriteFile: %v", err)
+	}
+
+	_, err := config.Load(path)
+	if err == nil {
+		t.Error("Load(malformed JSON) returned nil error; want non-nil")
+	}
+}
+
+// TestLoadPartialConfigMergesDefaults verifies that a partial hand-edited
+// config keeps the defaults for fields it does not specify, while still
+// honoring the fields it does specify. (Finding #4)
+func TestLoadPartialConfigMergesDefaults(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	// User wrote only the master enable flag; everything else should default.
+	if err := os.WriteFile(path, []byte(`{"enabled": true}`), 0o644); err != nil {
+		t.Fatalf("setup: WriteFile: %v", err)
+	}
+
+	c, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load(partial): %v", err)
+	}
+
+	d := config.Default()
+	if !c.Enabled {
+		t.Error("Load(partial).Enabled = false; want true")
+	}
+	if len(c.Segments) != len(d.Segments) {
+		t.Fatalf("Load(partial).Segments len = %d; want %d (defaults)", len(c.Segments), len(d.Segments))
+	}
+	for i, seg := range c.Segments {
+		if seg.Type != d.Segments[i].Type {
+			t.Errorf("Segments[%d].Type = %q; want %q (default)", i, seg.Type, d.Segments[i].Type)
+		}
+	}
+	if c.Timezone != d.Timezone {
+		t.Errorf("Load(partial).Timezone = %q; want %q (default)", c.Timezone, d.Timezone)
+	}
+	if c.TimeFormat != d.TimeFormat {
+		t.Errorf("Load(partial).TimeFormat = %q; want %q (default)", c.TimeFormat, d.TimeFormat)
+	}
+	if c.DateFormat != d.DateFormat {
+		t.Errorf("Load(partial).DateFormat = %q; want %q (default)", c.DateFormat, d.DateFormat)
+	}
+	if c.Style != d.Style {
+		t.Errorf("Load(partial).Style = %q; want %q (default)", c.Style, d.Style)
+	}
+}
+
+// TestLoadPartialConfigHonorsExplicitOverrides verifies that fields the user
+// explicitly writes — including ones that override defaults — win over the
+// merged Default() base. (Finding #4)
+func TestLoadPartialConfigHonorsExplicitOverrides(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(path, []byte(`{"style":"plain","timezone":"UTC"}`), 0o644); err != nil {
+		t.Fatalf("setup: WriteFile: %v", err)
+	}
+
+	c, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load(partial overrides): %v", err)
+	}
+
+	if c.Style != "plain" {
+		t.Errorf("Load.Style = %q; want %q (explicit override)", c.Style, "plain")
+	}
+	if c.Timezone != "UTC" {
+		t.Errorf("Load.Timezone = %q; want %q (explicit override)", c.Timezone, "UTC")
+	}
+	// Unspecified fields keep defaults.
+	if c.TimeFormat != config.Default().TimeFormat {
+		t.Errorf("Load.TimeFormat = %q; want default", c.TimeFormat)
+	}
+}
+
 // findSegment is a test helper that locates a segment by type or fails the test.
 func findSegment(t *testing.T, c config.Config, segType string) config.Segment {
 	t.Helper()

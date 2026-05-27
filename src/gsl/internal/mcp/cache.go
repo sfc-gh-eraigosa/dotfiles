@@ -63,10 +63,12 @@ func defaultCacheFile() (string, error) {
 //
 // Subprocess: when the cache is absent or stale, Run(ctx, "claude", "mcp",
 // "list") is called with a ~500 ms timeout.  The output is parsed line by line;
-// a line is counted as connected when it contains the Unicode check-mark "✓".
-// Lines containing "✗" (or that don't contain "✓") are counted as failed and
-// excluded.  The format `<name>: <url> - ✓ Connected` is tolerated, as are
-// minor variations, because only the presence/absence of "✓" is checked.
+// a line is counted as connected when it contains the connected status token
+// "✓ Connected" in the status position.  Lines containing "✗" (failed) or that
+// lack the connected token are excluded.  The format
+// `<name>: <url> - ✓ Connected` is tolerated, as are minor spacing variations,
+// because matching keys on the "✓ Connected" status token rather than a bare
+// "✓" anywhere in the line (which a server name could contain).
 //
 // Error handling:
 //   - Runner timeout or error with a non-stale cached value: returns the last
@@ -120,24 +122,37 @@ func ActiveCount(ctx context.Context, r Runner, opts ActiveCountOptions) (int, e
 	return count, nil
 }
 
-// parseConnectedCount scans the output of `claude mcp list` and counts lines
-// that contain the Unicode check mark "✓", which marks a connected server.
-// Lines with "✗" (or no check mark at all) are treated as failed/disconnected.
-//
-// The full line format observed in the wild is:
+// connectedToken is the status token `claude mcp list` prints for a connected
+// server in the status position of each line, e.g.:
 //
 //	<name>: <url> - ✓ Connected
 //	<name>: <url> - ✗ Failed to connect
 //
-// Only the presence of the "✓" rune is required; the surrounding text is
-// intentionally not validated so minor Claude CLI version differences don't
-// break counting.
+// We match on this whole token (check mark + the word "Connected") rather than a
+// bare "✓", so a "✓" appearing inside a server name or some unrelated line does
+// not inflate the count.
+const connectedToken = "✓ Connected"
+
+// parseConnectedCount scans the output of `claude mcp list` and counts lines
+// whose status position reports a connected server.
+//
+// A line is counted only when it contains the connectedToken ("✓ Connected").
+// This rejects two classes of false positive flagged in review:
+//   - a "✓" embedded in a server name (only the status token "✓ Connected"
+//     matches, not a bare check mark elsewhere on the line);
+//   - lines that are not status lines at all.
+//
+// Whitespace between the check mark and "Connected" is normalised to a single
+// space so minor CLI spacing differences (tabs / multiple spaces) still match,
+// while keeping the matcher deliberately simple — not a full grammar.
 func parseConnectedCount(output []byte) int {
 	count := 0
 	sc := bufio.NewScanner(bytes.NewReader(output))
 	for sc.Scan() {
-		line := sc.Text()
-		if strings.Contains(line, "✓") {
+		// Collapse runs of whitespace so "✓   Connected" / "✓\tConnected"
+		// still match the canonical "✓ Connected" token.
+		line := strings.Join(strings.Fields(sc.Text()), " ")
+		if strings.Contains(line, connectedToken) {
 			count++
 		}
 	}

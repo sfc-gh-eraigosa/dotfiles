@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -140,6 +141,47 @@ func TestRenderCmd_BadJSON(t *testing.T) {
 			}
 		})
 	})
+}
+
+// TestRenderCmd_MalformedConfig_FallsBackToDefaults verifies that a corrupt
+// config file does not break the status line: runRender must not return an
+// error, must warn to stderr, and must still render using Default(). (Finding #1)
+func TestRenderCmd_MalformedConfig_FallsBackToDefaults(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	cfgPath := config.DefaultPath()
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
+		t.Fatalf("setup: MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(cfgPath, []byte(`{invalid json`), 0o644); err != nil {
+		t.Fatalf("setup: WriteFile: %v", err)
+	}
+
+	// Redirect stdin to /dev/null so ParseReader gets EOF.
+	origStdin := os.Stdin
+	f, _ := os.Open(os.DevNull)
+	os.Stdin = f
+	defer func() { os.Stdin = origStdin; f.Close() }()
+
+	// Capture stderr to assert a warning is emitted.
+	origStderr := os.Stderr
+	rErr, wErr, _ := os.Pipe()
+	os.Stderr = wErr
+	defer func() { os.Stderr = origStderr }()
+
+	captureStdout(t, func() {
+		if err := runRender(renderCmd, nil); err != nil {
+			t.Errorf("runRender: expected nil error on malformed config, got: %v", err)
+		}
+	})
+
+	wErr.Close()
+	os.Stderr = origStderr
+	var errBuf bytes.Buffer
+	io.Copy(&errBuf, rErr) //nolint:errcheck
+	if !strings.Contains(errBuf.String(), "config load failed") {
+		t.Errorf("expected stderr warning about config load failure, got: %q", errBuf.String())
+	}
 }
 
 // TestConfigToRawStyles covers the configToRawStyles helper.

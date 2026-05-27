@@ -135,16 +135,19 @@ func Match(reg *Registry, toplevel, branch string) (*WorkerMatch, bool) {
 	}
 
 	// Two-pass: first look for a toplevel match (more specific), then branch.
+	// Guard against empty queries: an empty toplevel/branch (e.g. when
+	// git.Status failed upstream) must never match a worker whose own field
+	// is empty, which would falsely match a partial/malformed registry entry.
 	for _, f := range reg.Features {
 		for _, w := range f.Workers {
-			if w.Worktree == toplevel {
+			if toplevel != "" && w.Worktree == toplevel {
 				return buildMatch(f.Name, w), true
 			}
 		}
 	}
 	for _, f := range reg.Features {
 		for _, w := range f.Workers {
-			if w.Branch == branch {
+			if branch != "" && w.Branch == branch {
 				return buildMatch(f.Name, w), true
 			}
 		}

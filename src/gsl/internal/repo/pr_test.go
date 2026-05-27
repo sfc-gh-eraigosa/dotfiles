@@ -1,10 +1,12 @@
 package repo
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	ghfake "github.com/wenlock/dotfiles/gsl/internal/gh/fake"
@@ -281,6 +283,48 @@ func TestGhFallback_ValidResponse(t *testing.T) {
 	}
 	if info.PRNumber != 7 {
 		t.Errorf("PRNumber: want 7, got %d", info.PRNumber)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Malformed registry → stderr warning emitted, then gh fallback
+// ---------------------------------------------------------------------------
+
+// TestPR_MalformedRegistry_WarnsAndFallsBack proves that an unreadable/malformed
+// registry.json no longer fails silently: a diagnostic is emitted to the warning
+// writer, and the gh fallback still resolves the PR (behavior unchanged except
+// for the added warning).
+func TestPR_MalformedRegistry_WarnsAndFallsBack(t *testing.T) {
+	isolateGhCache(t)
+
+	var buf bytes.Buffer
+	prev := prWarnWriter
+	prWarnWriter = &buf
+	t.Cleanup(func() { prWarnWriter = prev })
+
+	ghRunner := &ghfake.Runner{
+		Default: ghfake.Response{Stdout: ghJSONResponse(88, "OPEN")},
+	}
+
+	info, err := PR(
+		context.Background(), ghRunner,
+		"test-branch-malformed-registry", "/some/toplevel",
+		testdataPath("registry_malformed.json"),
+	)
+	if err != nil {
+		t.Fatalf("PR: unexpected error: %v", err)
+	}
+	if info == nil {
+		t.Fatal("PR: expected non-nil RepoInfo from gh fallback")
+	}
+	if info.PRNumber != 88 {
+		t.Errorf("PRNumber: want 88 (gh fallback), got %d", info.PRNumber)
+	}
+	if ghRunner.CallCount() == 0 {
+		t.Error("gh.Runner was NOT called; want ≥1 call for malformed-registry fallback")
+	}
+	if got := buf.String(); !strings.Contains(got, "registry") {
+		t.Errorf("expected a stderr diagnostic mentioning the registry, got %q", got)
 	}
 }
 
