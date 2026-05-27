@@ -195,6 +195,14 @@ if [ -f "${BASE_DIR}/opt/scripts/system/install_sops.sh" ]; then
     "${BASE_DIR}/opt/scripts/system/install_sops.sh" || echo "WARNING: sops install reported problems; continuing."
 fi
 
+# Install yq (YAML processor). Same rationale as sops: macOS gets the mikefarah
+# build from packages.tsv (brew); Linux/WSL fetches the official binary because
+# the apt `yq` is the incompatible kislyuk variant. Needed by sync-plugins.sh.
+if [ -f "${BASE_DIR}/opt/scripts/system/install_yq.sh" ]; then
+    echo "Installing yq..."
+    "${BASE_DIR}/opt/scripts/system/install_yq.sh" || echo "WARNING: yq install reported problems; continuing."
+fi
+
 # only setup these scripts when docker is installed and responsive
 if command -v docker &> /dev/null; then
     # Setup docker permissions for the current use
@@ -350,6 +358,15 @@ if [ -f "${CLAUDE_SETTINGS}" ]; then
     fi
     ln -sf "${CLAUDE_SETTINGS}" "${HOME}/.claude/settings.json"
 fi
+
+# Sync AI plugins from the manifest (ai/plugins.yaml). Ensure-only: installs +
+# enables the listed plugins; never removes anything. Runs after the Claude CLI
+# (claude_install.sh) and yq are installed.
+if [ -f "${BASE_DIR}/opt/scripts/system/sync-plugins.sh" ]; then
+    echo "Syncing AI plugins..."
+    "${BASE_DIR}/opt/scripts/system/sync-plugins.sh" || echo "WARNING: plugin sync reported problems; continuing."
+fi
+
 # build and install gss
 if [ -f "${BASE_DIR}/src/gss/build.sh" ]; then
     echo "Installing gss (dotfiles manager)..."

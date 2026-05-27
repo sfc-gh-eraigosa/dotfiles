@@ -52,4 +52,5 @@ claude-toggle() {
 }
 
 alias sync-skills="bash $HOME/opt/scripts/system/sync-skills.sh"
+alias sync-plugins="bash $HOME/opt/scripts/system/sync-plugins.sh"
 alias sync-forks="bash $HOME/opt/scripts/../../ai/skills/sync-forks/scripts/check_and_sync_forks.sh"
