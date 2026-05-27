@@ -60,6 +60,20 @@ func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (Checkpoi
 	body := renderPRBody(feat, ref)
 	title := fmt.Sprintf("%s: %s", ref.Feature, ref.Purpose) // first H1 of WORKER.md
 
+	// Adopt-existing-PR: a registry row may have no pr_url yet an open PR
+	// already exists on GitHub for this head branch (opened on another
+	// machine, or the url was never recorded). Taking the create path then
+	// fails with "a pull request for branch ... already exists" and drops the
+	// commit on the floor. So before creating, look for an open PR on the head
+	// branch and, if found, adopt its url/state here so we fall through to the
+	// update path (push + edit) and the commit actually reaches the PR.
+	if w.PRURL == "" {
+		if existing, ok := openPRForBranch(ctx, s.GH, w.Branch); ok {
+			w.PRURL = existing.URL
+			w.PRState = observedPRState(existing)
+		}
+	}
+
 	res := CheckpointResult{Ref: ref.String()}
 	if w.PRURL == "" {
 		pr, err := s.GH.PRCreate(ctx, gh.PRCreateOpts{Title: title, Body: body, Base: base, Head: w.Branch, Draft: true})
@@ -134,6 +148,22 @@ func renderPRBody(f registry.Feature, here identity.WorkerRef) string {
 		})
 	}
 	return stack.RenderBody(desc, view)
+}
+
+// openPRForBranch returns the open PR whose head is branch, if one exists.
+// It is best-effort: a gh error (auth, network, no such repo) is swallowed
+// and reported as "not found", so checkpoint degrades to its prior create
+// behaviour rather than failing on a transient list error. Used to adopt a
+// PR that exists on GitHub but isn't recorded in the registry row yet.
+func openPRForBranch(ctx context.Context, c gh.Client, branch string) (gh.PR, bool) {
+	if branch == "" {
+		return gh.PR{}, false
+	}
+	prs, err := c.PRList(ctx, gh.PRFilter{State: "open", Head: branch, Limit: 1})
+	if err != nil || len(prs) == 0 {
+		return gh.PR{}, false
+	}
+	return prs[0], true
 }
 
 var prURLNumRe = regexp.MustCompile(`/pull/(\d+)`)
