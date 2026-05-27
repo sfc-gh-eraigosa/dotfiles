@@ -31,6 +31,16 @@ Gives your AI agents "eyes" into your terminal state.
 
 ---
 
+## 🤖 AI Configuration Framework
+This repository treats the AI assistant as a first-class citizen of the developer environment. 
+
+- **Unified Infrastructure**: Manage settings, policies, and manifests for both Claude and Gemini. [See ai/GEMINI.md](ai/GEMINI.md).
+- **Declarative Plugins**: Extensions are defined in code and auto-synced. [See docs/ai-plugins.md](docs/ai-plugins.md).
+- **Portable Skills**: Write a skill once in `src/`, use it in any assistant. [See ai/skills/](ai/skills/).
+- **Automated Sync**: `sync-plugins` and `sync-skills` keep your environment in state.
+
+---
+
 ## 🚀 Quick Start
 
 ### 1. Installation
