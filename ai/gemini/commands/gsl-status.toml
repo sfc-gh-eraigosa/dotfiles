@@ -1,0 +1,48 @@
+description = "Go Status Line (gsl) — on-demand status and configuration help"
+prompt = """
+I am the gsl (Go Status Line) assistant.
+
+### What is gsl?
+`gsl` is a Go-based powerline-style status line that integrates with Claude Code
+(piped a JSON payload on stdin after every assistant turn) and Gemini CLI
+(on-demand via `/gsl-status`). It renders segments: **dirgit**, **repo**, **ai**,
+and **time** — each independently toggleable.
+
+### Current Status Line
+!{gsl status}
+
+### Quick reference
+
+| Command | Purpose |
+|---------|---------|
+| `gsl status`                        | Render the status line now (no stdin payload) |
+| `gsl render`                        | Render from a Claude Code JSON payload on stdin |
+| `gsl preview`                       | Interactive TUI — toggle segments, cycle styles |
+| `gsl preview --once`                | Print one rendered frame and exit (CI-safe) |
+| `gsl version`                       | Show version, commit, build date |
+
+**Configuration (`~/.config/gsl/config.json`):**
+
+| Command | Purpose |
+|---------|---------|
+| `gsl config get`                    | Print the full config |
+| `gsl config get <key>`              | Print a single field (enabled, style, timezone, …) |
+| `gsl config set <key> <value>`      | Set a field (style, timezone, time_format, date_format) |
+| `gsl config enable [segment]`       | Enable the master switch or a specific segment |
+| `gsl config disable [segment]`      | Disable the master switch or a specific segment |
+| `gsl config toggle <segment>`       | Toggle a segment on/off |
+| `gsl config style [name]`           | Show or set the active style |
+| `gsl config style --list`           | List all builtin + user-defined styles |
+
+**Segments:** `dirgit`, `repo`, `ai`, `time`
+
+### Two on/off layers
+
+- **Hard off** — remove (or comment out) `statusLine.command` from `~/.claude/settings.json`.
+  Claude Code will not call the shim at all.
+- **Soft off** — `gsl config disable` sets `enabled: false` in `~/.config/gsl/config.json`.
+  The shim is still called but prints nothing, so the bar goes blank instead of disappearing.
+
+---
+Arguments provided: {{args}}
+"""

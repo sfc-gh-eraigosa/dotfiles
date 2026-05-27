@@ -402,6 +402,16 @@ if [ -f "${BASE_DIR}/src/wol/build.sh" ]; then
     fi
 fi
 
+# build and install gsl
+if [ -f "${BASE_DIR}/src/gsl/build.sh" ]; then
+    echo "Installing gsl (Go status line)..."
+    bash "${BASE_DIR}/src/gsl/build.sh"
+    if [ -f "${HOME}/opt/bin/gsl" ]; then
+        echo "--------------------------------------------------"
+        "${HOME}/opt/bin/gsl" version
+        echo "--------------------------------------------------"
+    fi
+fi
 
 # install fnm
 if ! command -v fnm &> /dev/null; then

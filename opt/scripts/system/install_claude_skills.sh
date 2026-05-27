@@ -79,4 +79,16 @@ if [ -f "$BASE_DIR/ai/claude/aliases.sh" ]; then
     ln -sf "$BASE_DIR/ai/claude/aliases.sh" "$CLAUDE_XDG_DIR/aliases.sh"
 fi
 
+# --- statusline-command.sh (shim for gsl status line) ---
+# The settings.json template points statusLine.command at ~/.claude/statusline-command.sh.
+# This block symlinks the repo shim into place, backing up any existing plain file.
+if [ -f "$BASE_DIR/ai/claude/statusline-command.sh" ]; then
+    if [ -e "$CLAUDE_HOME/statusline-command.sh" ] && [ ! -L "$CLAUDE_HOME/statusline-command.sh" ]; then
+        echo "  Backing up existing statusline-command.sh -> statusline-command.sh.bak"
+        mv "$CLAUDE_HOME/statusline-command.sh" "$CLAUDE_HOME/statusline-command.sh.bak"
+    fi
+    ln -sf "$BASE_DIR/ai/claude/statusline-command.sh" "$CLAUDE_HOME/statusline-command.sh"
+    chmod +x "$BASE_DIR/ai/claude/statusline-command.sh"
+fi
+
 echo "Claude Code configuration complete."
