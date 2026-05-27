@@ -337,3 +337,4 @@ fi
 if [ -f ~/opt/bin/locales.sh ]; then
     source ~/opt/bin/locales.sh
 fi
+alias wifi-manage='~/git/dotfiles/opt/scripts/system/wifi-manage.sh'

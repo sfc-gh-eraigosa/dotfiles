@@ -18,6 +18,8 @@
       "Bash(wol version)",
       "Bash(sync-skills:*)",
       "Bash(bash $HOME/opt/scripts/system/sync-skills.sh:*)",
+      "Bash(sync-plugins:*)",
+      "Bash(bash $HOME/opt/scripts/system/sync-plugins.sh:*)",
       "Bash($HOME/opt/scripts/*/*:*)",
       "Bash($HOME/opt/bin/*:*)",
       "Bash(git status:*)",
@@ -77,5 +79,6 @@
   },
   "skipDangerousModePermissionPrompt": true,
   "theme": "auto",
+  "editorMode": "vim",
   "skipAutoPermissionPrompt": true
 }
