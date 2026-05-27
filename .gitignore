@@ -6,6 +6,7 @@
 !CONTRIBUTING.md
 !Makefile
 !install.sh
+!.go-version
 !LICENSE
 !azure-pipelines.yml
 !Dockerfile
