@@ -31,7 +31,8 @@ type Finding struct {
 	Remedy   string `json:"remedy,omitempty"`
 	Repaired bool   `json:"repaired,omitempty"`
 
-	fix string // internal: target base branch for a registry-local repair
+	fix      string // internal: target value for a registry-local repair (base branch, pr_state, or — for pr-missing-url — the pr_url)
+	fixState string // internal: target pr_state for a pr-missing-url backfill
 }
 
 // Observer supplies the read-only observations the audit needs. It exposes
@@ -44,6 +45,11 @@ type Observer interface {
 	BranchExists(ctx context.Context, branch string) bool
 	BaseReachable(ctx context.Context, branch, base string) bool
 	PRView(ctx context.Context, num int) (gh.PR, bool) // ok == false on 404
+	// PROpenForBranch returns the open PR whose head is branch, if any. It
+	// lets audit catch the inverse of pr-404: a worker with no recorded
+	// pr_url that nonetheless has a live PR on GitHub (the drift that makes
+	// checkpoint try to create a duplicate). ok == false means no open PR.
+	PROpenForBranch(ctx context.Context, branch string) (gh.PR, bool)
 }
 
 // AuditOpts configures Audit.
@@ -186,6 +192,16 @@ func runAudit(ctx context.Context, reg registry.Registry, obs Observer, only str
 							Remedy: "audit --repair reconciles pr_state to the observed value", fix: obsd})
 					}
 				}
+			} else if pr, ok := obs.PROpenForBranch(ctx, w.Branch); ok && pr.URL != "" {
+				// Inverse of pr-404: the registry row has no pr_url but an open
+				// PR already exists for this head branch. Left unrepaired, the
+				// next checkpoint takes the create path and fails with "a pull
+				// request for branch ... already exists", silently dropping the
+				// commit. Repair backfills pr_url/pr_state from the observed PR.
+				fs = append(fs, Finding{Worker: ref, Check: "pr-missing-url", Severity: SevWarn,
+					Detail: fmt.Sprintf("no pr_url recorded but open PR %s exists for %s", pr.URL, w.Branch),
+					Remedy: "audit --repair backfills pr_url/pr_state from the observed PR",
+					fix:    pr.URL, fixState: observedPRState(pr)})
 			}
 			// NOTE: spawned_by is intentionally NOT validated here. Resolution
 			// #8 makes it informational-only — never the basis for a control
@@ -218,6 +234,9 @@ func applyRepairs(r *registry.Registry, findings []Finding) int {
 			ok = removeWorkerByRef(r, f.Worker)
 		case "pr-404":
 			ok = mutateWorker(r, f.Worker, func(w *registry.Worker) { w.PRURL = ""; w.PRState = "" })
+		case "pr-missing-url":
+			url, state := f.fix, f.fixState
+			ok = mutateWorker(r, f.Worker, func(w *registry.Worker) { w.PRURL = url; w.PRState = state })
 		case "pr-base-diverged", "stale-base":
 			target := f.fix
 			ok = mutateWorker(r, f.Worker, func(w *registry.Worker) { w.BaseBranch = target })
@@ -328,4 +347,8 @@ func (o *systemObserver) PRView(ctx context.Context, num int) (gh.PR, bool) {
 	}
 	pr, err := o.gh.PRView(ctx, num)
 	return pr, err == nil
+}
+
+func (o *systemObserver) PROpenForBranch(ctx context.Context, branch string) (gh.PR, bool) {
+	return openPRForBranch(ctx, o.gh, branch)
 }

@@ -17,10 +17,11 @@ import (
 // by default; a test marks negatives by adding to the maps. PRs default to a
 // base matching the worker (seeded by healthyObserver); absent => 404.
 type fakeObserver struct {
-	missingWorktrees map[string]bool // worktree path -> missing
-	missingBranches  map[string]bool // branch -> missing
-	unreachable      map[string]bool // branch -> base unreachable
-	prs              map[int]gh.PR   // present PRs; absent => 404
+	missingWorktrees map[string]bool  // worktree path -> missing
+	missingBranches  map[string]bool  // branch -> missing
+	unreachable      map[string]bool  // branch -> base unreachable
+	prs              map[int]gh.PR    // present PRs; absent => 404
+	openByBranch     map[string]gh.PR // head branch -> open PR; absent => none
 }
 
 func (o *fakeObserver) WorktreeExists(p string) bool                  { return !o.missingWorktrees[p] }
@@ -32,6 +33,10 @@ func (o *fakeObserver) PRView(_ context.Context, n int) (gh.PR, bool) {
 	pr, ok := o.prs[n]
 	return pr, ok
 }
+func (o *fakeObserver) PROpenForBranch(_ context.Context, b string) (gh.PR, bool) {
+	pr, ok := o.openByBranch[b]
+	return pr, ok
+}
 
 // healthyObserver seeds a clean observer: every worker's worktree+branch
 // present, base reachable, and (if it has a PR) the PR exists with a matching
@@ -39,7 +44,7 @@ func (o *fakeObserver) PRView(_ context.Context, n int) (gh.PR, bool) {
 func healthyObserver(workers []registry.Worker) *fakeObserver {
 	o := &fakeObserver{
 		missingWorktrees: map[string]bool{}, missingBranches: map[string]bool{},
-		unreachable: map[string]bool{}, prs: map[int]gh.PR{},
+		unreachable: map[string]bool{}, prs: map[int]gh.PR{}, openByBranch: map[string]gh.PR{},
 	}
 	for _, w := range workers {
 		if w.PRURL != "" {
@@ -203,6 +208,63 @@ func TestAuditStaleBaseAndRepair(t *testing.T) {
 	}
 	if reg, _ := store.Load(); reg.Features[0].Workers[0].BaseBranch != "main" {
 		t.Errorf("repair should reset stale base to default main; got %q", reg.Features[0].Workers[0].BaseBranch)
+	}
+}
+
+func TestAuditPRMissingURLAndRepair(t *testing.T) {
+	// Worker has no pr_url, but an open PR exists on GitHub for its branch.
+	// This is the silent-drift state that makes checkpoint try (and fail) to
+	// create a duplicate PR; audit should surface it, and repair backfills the
+	// pr_url/pr_state from the observed PR.
+	workers := []registry.Worker{aw("api", "main", "")}
+	workers[0].PRState = "" // no recorded PR at all
+	obs := healthyObserver(workers)
+	obs.openByBranch["feature/auth/erai/api"] = gh.PR{
+		Number: 13, Base: "main", Head: "feature/auth/erai/api",
+		State: "OPEN", IsDraft: true, URL: "https://github.com/o/r/pull/13",
+	}
+	svc, store := auditService(t, workers, obs)
+
+	rep, _ := svc.Audit(context.Background(), feature.AuditOpts{})
+	f := findFinding(rep.Findings, "pr-missing-url")
+	if f == nil || f.Severity != feature.SevWarn {
+		t.Fatalf("want pr-missing-url warn; got %+v", rep.Findings)
+	}
+	// read-only must not have mutated the registry.
+	if reg, _ := store.Load(); reg.Features[0].Workers[0].PRURL != "" {
+		t.Error("read-only audit backfilled pr_url")
+	}
+
+	rep2, err := svc.Audit(context.Background(), feature.AuditOpts{Repair: true})
+	if err != nil {
+		t.Fatalf("Audit --repair: %v", err)
+	}
+	if rep2.Repaired != 1 {
+		t.Errorf("repaired = %d; want 1", rep2.Repaired)
+	}
+	reg, _ := store.Load()
+	w := reg.Features[0].Workers[0]
+	if w.PRURL != "https://github.com/o/r/pull/13" {
+		t.Errorf("repair should backfill pr_url; got %q", w.PRURL)
+	}
+	if w.PRState != "draft" {
+		t.Errorf("repair should backfill pr_state from the observed PR; got %q", w.PRState)
+	}
+}
+
+func TestAuditNoPRMissingURLWhenURLPresent(t *testing.T) {
+	// A worker that already records its PR must not trigger pr-missing-url
+	// even though an open PR exists for its branch.
+	workers := []registry.Worker{aw("api", "main", "https://github.com/o/r/pull/42")}
+	obs := healthyObserver(workers)
+	obs.openByBranch["feature/auth/erai/api"] = gh.PR{
+		Number: 42, Base: "main", Head: "feature/auth/erai/api",
+		State: "OPEN", IsDraft: true, URL: "https://github.com/o/r/pull/42",
+	}
+	svc, _ := auditService(t, workers, obs)
+	rep, _ := svc.Audit(context.Background(), feature.AuditOpts{})
+	if findFinding(rep.Findings, "pr-missing-url") != nil {
+		t.Errorf("worker with a recorded pr_url must not flag pr-missing-url; got %+v", rep.Findings)
 	}
 }
 
