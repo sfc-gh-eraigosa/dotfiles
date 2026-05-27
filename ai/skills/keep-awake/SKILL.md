@@ -12,7 +12,10 @@ Pick the script for the host OS:
 | OS | Keep awake | Stop / revert | Mechanism |
 |----|-----------|---------------|-----------|
 | Windows | `scripts/keep-awake.ps1` | `scripts/revert-keepawake.ps1` | `powercfg` setting + Task Scheduler reminder |
+| Windows from WSL | `scripts/run-ps1.sh keep-awake.ps1 …` | `scripts/run-ps1.sh revert-keepawake.ps1 …` | launcher → the `.ps1` above |
 | macOS | `scripts/keep-awake.sh` | `scripts/revert-keepawake.sh` | `caffeinate` background process |
+
+**Choosing a path:** detect the host with `uname` / `/proc/version`. If `grep -qi microsoft /proc/version` succeeds you are in **WSL on Windows** — use `run-ps1.sh` (it launches the `.ps1`). On native Windows use the `.ps1` directly. On `Darwin` use the `.sh` scripts.
 
 **Key model difference:** Windows changes a *persistent* power setting, so it must be reverted (a scheduled reminder is created as a safety net). macOS uses `caffeinate`, a *process-based* assertion — nothing persists, so "reverting" just means stopping that process (or letting a timeout / watched PID end it).
 
@@ -34,10 +37,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\keep-awake.ps1 -No
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\revert-keepawake.ps1 -Minutes 5 -Quiet
 ```
 
-From WSL:
+From WSL on a Windows host, use the launcher — **do not** assume `powershell.exe` is on `$PATH`. It often isn't (e.g. `appendWindowsPath=false` in `/etc/wsl.conf`). `run-ps1.sh` locates `powershell.exe` (PATH → `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`), translates the script path with `wslpath -w`, and forwards your args — the same convention used by `opt/bin/install_windows.sh`:
 
 ```bash
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(wslpath -w scripts/keep-awake.ps1)" -SleepMonitors
+./scripts/run-ps1.sh keep-awake.ps1 -SleepMonitors
+./scripts/run-ps1.sh keep-awake.ps1 -RemindAt 06:30 -IncludeBattery
+./scripts/run-ps1.sh revert-keepawake.ps1 -Minutes 5 -Quiet
 ```
 
 ### Windows notes
