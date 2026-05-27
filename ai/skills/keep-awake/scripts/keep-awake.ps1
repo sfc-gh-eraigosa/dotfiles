@@ -26,12 +26,15 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-function Get-StandbyTimeoutAcSeconds {
-    $line = (powercfg /query SCHEME_CURRENT SUB_SLEEP STANDBYIDLE |
+function Get-TimeoutAcSeconds([string]$sub, [string]$setting) {
+    $line = (powercfg /query SCHEME_CURRENT $sub $setting |
              Select-String 'Current AC Power Setting Index').ToString()
     $hex = $line.Split(':')[1].Trim()
     return [Convert]::ToInt32($hex, 16)
 }
+
+function Get-StandbyTimeoutAcSeconds { Get-TimeoutAcSeconds SUB_SLEEP STANDBYIDLE }
+function Get-MonitorTimeoutAcSeconds { Get-TimeoutAcSeconds SUB_VIDEO VIDEOIDLE }
 
 # 1. Remember the current AC sleep timeout so the reminder can restore it.
 $origMinutes = [math]::Round((Get-StandbyTimeoutAcSeconds) / 60)
@@ -41,7 +44,9 @@ if ($origMinutes -lt 1) { $origMinutes = 5 }  # was already "never" -> sane defa
 powercfg /change standby-timeout-ac 0
 if ($IncludeBattery) { powercfg /change standby-timeout-dc 0 }
 $scope = if ($IncludeBattery) { 'AC + battery' } else { 'AC' }
-Write-Host "Keep-awake ON: system sleep disabled ($scope). Monitor timeout unchanged."
+$monMin = [math]::Round((Get-MonitorTimeoutAcSeconds) / 60)
+$monText = if ($monMin -gt 0) { "monitors still sleep after $monMin min" } else { 'monitors set to never sleep' }
+Write-Host "Keep-awake ON ($scope): system sleep = never; $monText."
 
 # 3. Schedule the revert reminder.
 if (-not $NoReminder -and $RemindAt) {
