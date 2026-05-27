@@ -147,6 +147,48 @@ func TestParseFiveHourOnlySevenDayAbsent(t *testing.T) {
 	}
 }
 
+// TestParseBadRateLimitsPreservesOtherFields verifies that a wrong-typed
+// rate_limits sub-field does NOT discard the model/context_window that
+// parsed cleanly. Per-field decode means a bad sub-object is skipped, not
+// fatal, and Parse returns no error for partial success (issue #31).
+func TestParseBadRateLimitsPreservesOtherFields(t *testing.T) {
+	data := readFixture(t, "bad_rate_limits.json")
+	p, err := payload.Parse(data)
+	if err != nil {
+		t.Fatalf("Parse(bad_rate_limits.json) returned error: %v; want nil (partial success)", err)
+	}
+
+	// model must survive the bad rate_limits.
+	if p.Model == nil || p.Model.DisplayName == nil || *p.Model.DisplayName != "claude-sonnet-4-5" {
+		t.Errorf("Model.DisplayName: got %v, want pointer to 'claude-sonnet-4-5'", p.Model)
+	}
+
+	// context_window must survive the bad rate_limits.
+	if p.ContextWindow == nil {
+		t.Fatal("ContextWindow is nil; should have survived bad rate_limits")
+	}
+	if p.ContextWindow.UsedPercentage == nil || *p.ContextWindow.UsedPercentage != 42.5 {
+		t.Errorf("ContextWindow.UsedPercentage: got %v, want 42.5", p.ContextWindow.UsedPercentage)
+	}
+
+	// rate_limits failed to decode → nil, and a FieldError recorded.
+	if p.RateLimits != nil {
+		t.Errorf("RateLimits should be nil (sub-object was malformed), got %v", p.RateLimits)
+	}
+	if len(p.FieldErrors) == 0 {
+		t.Error("expected a FieldError recorded for the bad rate_limits, got none")
+	}
+	foundRate := false
+	for _, fe := range p.FieldErrors {
+		if fe.Field == "rate_limits" {
+			foundRate = true
+		}
+	}
+	if !foundRate {
+		t.Errorf("expected a FieldError for 'rate_limits', got %+v", p.FieldErrors)
+	}
+}
+
 // TestParseFromReader verifies ParseReader with an io.Reader (e.g. os.Stdin).
 func TestParseFromReader(t *testing.T) {
 	data := readFixture(t, "full.json")
