@@ -22,8 +22,13 @@ type RateWindow struct {
 	// UsedPercentage is the fraction of the window's quota consumed (0–100).
 	// Pointer so a JSON null value results in nil, not 0.
 	UsedPercentage *float64 `json:"used_percentage"`
-	// ResetsAt is the RFC3339 timestamp at which the window resets.
-	ResetsAt *string `json:"resets_at"`
+	// ResetsAt is the time at which the window resets. Claude Code sends this
+	// as a Unix-epoch NUMBER (e.g. 1779863400), while older/other producers may
+	// send an RFC3339 string. It is not used in rendering (ratePart reads only
+	// UsedPercentage), so we accept any JSON shape via json.RawMessage to keep
+	// parsing future-proof and prevent a single field from rejecting the whole
+	// payload. See issue #30.
+	ResetsAt json.RawMessage `json:"resets_at"`
 }
 
 // RateLimits groups the rate-limit windows present in the Claude payload.

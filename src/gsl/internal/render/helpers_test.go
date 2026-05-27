@@ -1,6 +1,7 @@
 package render
 
 import (
+	"encoding/json"
 	"time"
 
 	gitfake "github.com/wenlock/dotfiles/gsl/internal/git/fake"
@@ -56,7 +57,7 @@ func samplePayload() payload.Payload {
 			ContextWindowSize: f64ptr(200000),
 		},
 		RateLimits: &payload.RateLimits{
-			FiveHour: &payload.RateWindow{UsedPercentage: f64ptr(80), ResetsAt: strptr("2026-05-25T19:00:00Z")},
+			FiveHour: &payload.RateWindow{UsedPercentage: f64ptr(80), ResetsAt: json.RawMessage("1779863400")},
 			SevenDay: &payload.RateWindow{UsedPercentage: f64ptr(15)},
 		},
 	}

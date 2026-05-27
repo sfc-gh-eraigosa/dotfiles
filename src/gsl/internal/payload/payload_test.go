@@ -58,8 +58,10 @@ func TestParseFullFixture(t *testing.T) {
 	if p.RateLimits.FiveHour.UsedPercentage == nil || *p.RateLimits.FiveHour.UsedPercentage != 25.0 {
 		t.Errorf("RateLimits.FiveHour.UsedPercentage: got %v, want 25.0", p.RateLimits.FiveHour.UsedPercentage)
 	}
-	if p.RateLimits.FiveHour.ResetsAt == nil || *p.RateLimits.FiveHour.ResetsAt != "2026-05-25T10:00:00Z" {
-		t.Errorf("RateLimits.FiveHour.ResetsAt: got %v", p.RateLimits.FiveHour.ResetsAt)
+	// ResetsAt is now json.RawMessage; a JSON string fixture preserves the
+	// surrounding quotes verbatim.
+	if string(p.RateLimits.FiveHour.ResetsAt) != `"2026-05-25T10:00:00Z"` {
+		t.Errorf("RateLimits.FiveHour.ResetsAt: got %s", p.RateLimits.FiveHour.ResetsAt)
 	}
 
 	// rate_limits.seven_day
@@ -157,6 +159,34 @@ func TestParseFromReader(t *testing.T) {
 	}
 	if p.Cwd == nil || *p.Cwd != "/home/user/project" {
 		t.Errorf("Cwd: got %v, want '/home/user/project'", p.Cwd)
+	}
+}
+
+// TestParseNumericResetsAt is the regression test for issue #30: Claude Code
+// sends rate_limits.*.resets_at as a Unix-epoch NUMBER, not an RFC3339 string.
+// The whole payload must still parse (no error) and used_percentage must be
+// available for both windows.
+func TestParseNumericResetsAt(t *testing.T) {
+	data := readFixture(t, "numeric_resets_at.json")
+	p, err := payload.Parse(data)
+	if err != nil {
+		t.Fatalf("Parse(numeric_resets_at.json) returned error: %v", err)
+	}
+
+	if p.RateLimits == nil {
+		t.Fatal("RateLimits is nil — entire payload was rejected (the #30 bug)")
+	}
+	if p.RateLimits.FiveHour == nil || p.RateLimits.FiveHour.UsedPercentage == nil {
+		t.Fatal("RateLimits.FiveHour.UsedPercentage is nil")
+	}
+	if *p.RateLimits.FiveHour.UsedPercentage != 28.99 {
+		t.Errorf("FiveHour.UsedPercentage: got %v, want 28.99", *p.RateLimits.FiveHour.UsedPercentage)
+	}
+	if p.RateLimits.SevenDay == nil || p.RateLimits.SevenDay.UsedPercentage == nil {
+		t.Fatal("RateLimits.SevenDay.UsedPercentage is nil")
+	}
+	if *p.RateLimits.SevenDay.UsedPercentage != 32 {
+		t.Errorf("SevenDay.UsedPercentage: got %v, want 32", *p.RateLimits.SevenDay.UsedPercentage)
 	}
 }
 
