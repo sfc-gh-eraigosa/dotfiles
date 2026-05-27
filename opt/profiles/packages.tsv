@@ -25,6 +25,8 @@ jc                   jc
 yq                   -
 vim                  vim
 tmux                 tmux
+# zsh: install.sh sets it as the default login shell (chsh) when present.
+zsh                  zsh
 htop                 htop
 ncdu                 ncdu
 wget                 wget
