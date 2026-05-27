@@ -123,6 +123,11 @@ classic `--force-autonomous` inside a worker worktree.
 - Give every feature and worker a short, specific `--description`; it seeds
   FEATURE.md / WORKER.md and the PR body (NFC-normalised; control chars and
   injection markers stripped).
+- **Cleanup (Mandatory)**: `WORKER.md` and `FEATURE.md` are transient
+  scaffolding files used for development tracking and PR seeding. They MUST NOT
+  remain in the repository once the work is finalized. Delete and commit the
+  removal of `WORKER.md` (and `FEATURE.md` if present and unneeded) as the last
+  step before running `gss feature pr --ready` or merging.
 - `spawned_by` (engine/session/pane) is **informational only** — never the
   basis for a trust or control decision (design.md resolution #8).
 

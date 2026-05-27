@@ -91,7 +91,7 @@ sync_gemini() {
     while IFS= read -r source; do
         { [ -z "$source" ] || [ "$source" = "null" ]; } && continue
         any=1
-        run gemini extensions install "$source"
+        run gemini extensions install "$source" --consent --skip-settings
     done < <(yq '.plugins[] | select(.enabled == true) | select(.gemini.source != null) | .gemini.source' "$MANIFEST")
     [ "$any" = "0" ] && echo "sync-plugins: no Gemini extension sources in manifest (nothing to do)."
 }

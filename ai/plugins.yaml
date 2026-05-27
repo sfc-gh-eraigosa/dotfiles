@@ -18,27 +18,33 @@ plugins:
   - name: superpowers
     enabled: true
     claude: { plugin: superpowers@claude-plugins-official }
+    gemini: { source: https://github.com/obra/superpowers }
   - name: github
     enabled: true
     claude: { plugin: github@claude-plugins-official }
+    gemini: { source: https://github.com/gemini-cli-extensions/conductor }
   - name: code-review
     enabled: true
     claude: { plugin: code-review@claude-plugins-official }
+    gemini: { source: https://github.com/gemini-cli-extensions/code-review }
   - name: skill-creator
     enabled: true
     claude: { plugin: skill-creator@claude-plugins-official }
+    gemini: { source: https://github.com/jduncan-rva/gemini-agent-creator }
   - name: claude-md-management
     enabled: true
     claude: { plugin: claude-md-management@claude-plugins-official }
   - name: pr-review-toolkit
     enabled: true
     claude: { plugin: pr-review-toolkit@claude-plugins-official }
+    gemini: { source: https://github.com/gemini-cli-extensions/code-review }
   - name: gopls-lsp
     enabled: true
     claude: { plugin: gopls-lsp@claude-plugins-official }
   - name: remember
     enabled: true
     claude: { plugin: remember@claude-plugins-official }
+    gemini: { source: https://github.com/Beledarian/mcp-local-memory }
   - name: deploy-on-aws
     enabled: true
     claude: { plugin: deploy-on-aws@claude-plugins-official }
@@ -51,8 +57,4 @@ plugins:
   - name: mcp-apps
     enabled: true
     claude: { plugin: mcp-apps@claude-plugins-official }
-
-  # Future Gemini equivalent (illustrative — none exist today):
-  # - name: some-tool
-  #   enabled: true
-  #   gemini: { source: https://github.com/owner/repo }
+    gemini: { source: https://github.com/gemini-cli-extensions/mcp-toolbox }
