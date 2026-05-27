@@ -30,6 +30,7 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - **Minimal alias surface**: prefer ONE canonical alias per workflow. Don't propose variants (`foo-c`, `foo-r`, `foo-status`) up front — add them only when asked. The shorter the alias surface, the easier the dotfiles are to memorize and audit.
 - **Self-contained shell config**: `.bashrc` / `.zshrc` / sourced fragments must resolve paths from their own location (or `$HOME` / `$DOTFILES_DIR` env vars), never from hardcoded `$HOME/git/dotfiles`. The repo can be cloned anywhere and the config must still work.
 - **One install path**: when adding shell config, wire it through `install.sh` so a fresh clone bootstraps cleanly. Don't rely on the user manually symlinking anything you create.
+- **Worktree safety & `install.sh` (critical)**: NEVER run `install.sh` from a `gss feature` worktree. The script creates absolute symlinks in your `$HOME` (e.g., `~/.zshrc -> .../dotfiles/opt/profiles/zshrc`). Running it from a worktree will link your global configuration to a transient, task-specific path. Always switch to the main repository (`~/git/dotfiles`), checkout the desired branch, and run `install.sh` from there to ensure your system remains in a predictable, stable state.
 
 ## Git Workflow
 
