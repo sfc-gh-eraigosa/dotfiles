@@ -4,9 +4,9 @@
 
 **Goal:** Persist a per-turn token usage timeline to a local JSONL file and expose `gsl mark <label>` and `gsl tokens` commands so users can checkpoint workflows and compute accurate token consumption deltas between any two named markers.
 
-**Architecture:** A new `internal/usagelog` package owns all JSONL I/O — it appends `UsageEntry` (turn) or `MarkEntry` (checkpoint) records to `${XDG_STATE_HOME:-~/.local/state}/gsl/usage.jsonl`, reusing the state-directory infrastructure introduced by #32. `cmd/render.go` calls `usagelog.Append` after each successful payload parse to record token data, and two new cobra commands (`cmd/mark.go`, `cmd/tokens.go`) provide the write-checkpoint and read/diff user-facing surface respectively.
+**Architecture:** A new `internal/usagelog` package owns all JSONL I/O — it appends `UsageEntry` (turn) or `MarkEntry` (checkpoint) records to `${XDG_STATE_HOME:-~/.local/state}/gsl/usage.jsonl`, reusing the state-directory infrastructure introduced by #32. `cmd/render.go` calls `usagelog.Append` after each successful payload parse to record token data, and two new cobra commands (`cmd/mark.go`, `cmd/tokens.go`) provide the write-checkpoint and read/diff user-facing surface respectively. **Coupled with the same recording hook**, an opt-in `internal/metrics` package emits Prometheus gauges (via the node_exporter textfile-collector pattern by default, Pushgateway as an alternative) so the same per-turn data can flow into Grafana for durable, long-term retention and visualization beyond the local `usage.jsonl`. Both the usage-log write and the metrics write are off the hot path and strictly non-fatal: a failure in either must never break the rendered status line (same contract as #32 logging).
 
-**Tech Stack:** Go (depends on #32 logging)
+**Tech Stack:** Go (depends on #32 logging); optional `github.com/prometheus/client_golang` (Apache-2.0) for the metrics exposition writer
 
 ---
 
@@ -61,6 +61,134 @@ Appended by `gsl mark <label>`.
 ## Task Breakdown
 
 Each task is 2–5 minutes, test-first, with one commit per task.
+
+---
+
+### Task 0 — Pre-validation gate: confirm Claude Code actually gives us the data (MUST run BEFORE implementation)
+
+> **This is a hard gate.** Do NOT start Task 1 until this task proves Claude
+> Code's live status-line payload populates the three fields we record. If the
+> fields come back absent/null in a real session, stop and escalate — the whole
+> recording premise is invalid and the design must be revisited.
+
+The fields we depend on are modeled (verified) in
+`src/gsl/internal/payload/payload.go`:
+
+- `ContextWindow.UsedPercentage` → JSON `context_window.used_percentage` (`*float64`)
+- `ContextWindow.TotalInputTokens` → JSON `context_window.total_input_tokens` (`*float64`)
+- `ContextWindow.ContextWindowSize` → JSON `context_window.context_window_size` (`*float64`)
+
+Being *modeled* is not the same as being *populated at runtime*. This task
+proves population end-to-end.
+
+- [ ] **0.1** Capture a real Claude Code status-line payload. Claude Code pipes
+  the status-line JSON to the configured `statusLine.command` on stdin after a
+  turn. Temporarily point the status-line command at a capture shim and run one
+  real turn:
+
+  ```sh
+  # Temporary capture shim — write whatever Claude Code pipes us to a file,
+  # then echo a placeholder so the status line still renders.
+  cat > /tmp/gsl-capture.sh <<'EOF'
+  #!/usr/bin/env bash
+  tee /tmp/gsl-payload.json
+  echo "capturing…"
+  EOF
+  chmod +x /tmp/gsl-capture.sh
+  # Point ~/.claude/settings.json statusLine.command at /tmp/gsl-capture.sh,
+  # run ONE real Claude Code turn, then inspect:
+  cat /tmp/gsl-payload.json | python3 -m json.tool
+  ```
+
+  Assert the captured JSON contains a non-null `context_window` object with
+  non-null `used_percentage`, `total_input_tokens`, and `context_window_size`.
+
+- [ ] **0.2** Add an automated probe that proves the fields parse into non-nil
+  pointers. Write `src/gsl/internal/payload/payload_prevalidate_test.go`:
+
+  ```go
+  package payload_test
+
+  import (
+  	"strings"
+  	"testing"
+
+  	"github.com/wenlock/dotfiles/gsl/internal/payload"
+  )
+
+  // TestPrevalidate_ClaudeContextWindowFieldsPresent proves that a
+  // representative Claude Code status-line payload populates the three
+  // context_window fields gsl records (see docs/plans Task 0 gate).
+  // Replace the literal below with a REAL captured payload from /tmp/gsl-payload.json
+  // before relying on this gate.
+  func TestPrevalidate_ClaudeContextWindowFieldsPresent(t *testing.T) {
+  	// Representative payload captured from a live Claude Code turn (Task 0.1).
+  	raw := `{
+  		"cwd": "/tmp",
+  		"model": {"display_name": "claude-sonnet-4-6"},
+  		"context_window": {
+  			"used_percentage": 18.0,
+  			"total_input_tokens": 36000,
+  			"context_window_size": 200000
+  		},
+  		"rate_limits": {
+  			"five_hour": {"used_percentage": 12.5, "resets_at": "2026-05-27T19:00:00Z"},
+  			"seven_day": {"used_percentage": 40.0, "resets_at": "2026-06-01T00:00:00Z"}
+  		}
+  	}`
+
+  	p, err := payload.ParseReader(strings.NewReader(raw))
+  	if err != nil {
+  		t.Fatalf("ParseReader: %v", err)
+  	}
+  	if p.ContextWindow == nil {
+  		t.Fatal("context_window is nil; Claude payload did not populate it — GATE FAILS")
+  	}
+  	if p.ContextWindow.UsedPercentage == nil {
+  		t.Fatal("used_percentage is nil — GATE FAILS")
+  	}
+  	if p.ContextWindow.TotalInputTokens == nil {
+  		t.Fatal("total_input_tokens is nil — GATE FAILS")
+  	}
+  	if p.ContextWindow.ContextWindowSize == nil {
+  		t.Fatal("context_window_size is nil — GATE FAILS")
+  	}
+  	if *p.ContextWindow.TotalInputTokens != 36000 {
+  		t.Errorf("total_input_tokens = %v; want 36000", *p.ContextWindow.TotalInputTokens)
+  	}
+  }
+  ```
+
+  Run: `go test ./internal/payload/... -run TestPrevalidate -v` — must PASS
+  against the captured/representative payload. If `context_window` or any of the
+  three fields is nil with a *real* captured payload, the gate FAILS.
+
+- [ ] **0.3** Restore `~/.claude/settings.json` `statusLine.command` to the real
+  `gsl render` command and delete `/tmp/gsl-capture.sh` / `/tmp/gsl-payload.json`.
+
+- [ ] **0.4** Record the gate result in the PR description (paste the redacted
+  captured payload + the passing probe output). Only then proceed to Task 1.
+
+#### Gemini (future) — tracked in #42, NOT in scope for this PR
+
+Gemini CLI does **not** currently expose a post-turn status-line hook equivalent
+to Claude Code's (this is the gap behind **#33**), so there is no per-turn
+payload to record token usage from on Gemini today. Decision: **Claude Code
+ships FIRST**; Gemini support is a deliberate follow-up.
+
+Route options to study for Gemini (summary only — do not implement here):
+
+1. **Wait for / drive a Gemini post-turn hook** (depends on #33 landing a
+   status-line/turn hook) — cleanest, mirrors the Claude path one-for-one.
+2. **Parse Gemini CLI session/telemetry artifacts** if Gemini writes a
+   per-turn usage record to disk we can tail — works without a hook but is
+   format-fragile.
+3. **Wrap the Gemini invocation** so gsl observes token counts out-of-band —
+   most invasive, least preferred.
+
+This work is already tracked — do **NOT** open a new issue:
+**#42 — "gsl: token-usage tracking for Gemini CLI (follow-up to #34)"**
+(https://github.com/sfc-gh-eraigosa/dotfiles/issues/42). Link #42 from the PR.
 
 ---
 
@@ -1117,44 +1245,524 @@ Expected: all packages pass; `internal/usagelog` coverage >= 80%.
 
 ---
 
-### Task 8 — End-to-end smoke test + docs update
+### Task 8 — `internal/metrics`: Prometheus exposition writer, COUPLED with the recording hook (TDD)
 
-- [ ] **8.1** Manual verification steps (record in PR description):
+> **Why this layer (review comments 1 + 3):** `usage.jsonl` is a local,
+> rotating-ish file with no native query/visualization story. Coupling the
+> per-turn recording with Prometheus gauges gives us (1) the ability to
+> "leverage this further" by publishing to **Grafana**, and (3) "longer life"
+> — durable long-term retention and dashboards beyond the local JSONL. Same
+> data, two sinks: `usage.jsonl` for `gsl tokens` deltas, Prometheus for
+> historical/visual analysis.
 
-```sh
-# 1. Seed some turns by piping payloads through render.
-echo '{"cwd":"/tmp","model":{"display_name":"claude-sonnet-4-6"},"context_window":{"used_percentage":15.0,"total_input_tokens":30000,"context_window_size":200000}}' | gsl render
+> **Why the textfile-collector pattern (not an HTTP `/metrics` endpoint):**
+> `gsl render` is an **ephemeral, per-prompt CLI invocation** — it starts,
+> prints one line, and exits in milliseconds. An in-process `/metrics` HTTP
+> server cannot work: nothing is alive to scrape. The correct Prometheus
+> pattern for short-lived jobs is the **node_exporter textfile collector** —
+> gsl writes/refreshes a `gsl.prom` exposition file in a textfile-collector
+> directory, and a long-lived local `node_exporter` (started by the user, not
+> by gsl) scrapes that directory on its own interval. For hosts with **no**
+> local node_exporter, the alternative is the **Pushgateway** (gsl POSTs the
+> gauges to a Pushgateway URL). Both are opt-in.
 
-gsl mark before-refactor
+**Config / opt-in surface (OFF by default, non-fatal always):**
 
-echo '{"cwd":"/tmp","model":{"display_name":"claude-sonnet-4-6"},"context_window":{"used_percentage":18.0,"total_input_tokens":36000,"context_window_size":200000}}' | gsl render
+| Knob | Env | Config key | Effect |
+|---|---|---|---|
+| Textfile dir | `GSL_METRICS_DIR` | `metrics.textfile_dir` | If set, write `<dir>/gsl.prom`. This is the **default** mode. |
+| Pushgateway URL | `GSL_METRICS_PUSHGATEWAY` | `metrics.pushgateway_url` | If set (and `GSL_METRICS_DIR` unset), push to this Pushgateway. |
+| Disable | `GSL_METRICS=0` | `metrics.enabled: false` | Force-off even if a dir/URL is set. |
 
-gsl mark after-refactor
+If neither `GSL_METRICS_DIR` nor `GSL_METRICS_PUSHGATEWAY` is set, the metrics
+layer is a no-op — zero overhead, no new files. A write/push failure is logged
+to stderr and **swallowed**; it must never affect the status line (same
+contract as #32 logging and the `usage.jsonl` write).
 
-# 2. Inspect last turn.
-gsl tokens --last
-# Expected output:
-# Last turn: <timestamp>
-#   Input tokens : 36000
-#   Context size : 200000
-#   Used         : 18.00%
+**Gauges emitted (label sets):**
 
-# 3. Inspect delta.
-gsl tokens --diff before-refactor after-refactor
-# Expected output:
-# Token usage delta: +6,000 tokens (Context: 15.00% -> 18.00%)
-#   Range  : before-refactor → after-refactor
-#   Context: 200000 tokens total
+| Metric | Type | Labels | Source field |
+|---|---|---|---|
+| `gsl_context_used_percentage` | gauge | `model`, `assistant` | `context_window.used_percentage` |
+| `gsl_total_input_tokens` | gauge | `model`, `assistant` | `context_window.total_input_tokens` |
+| `gsl_context_window_size` | gauge | `model`, `assistant` | `context_window.context_window_size` |
+| `gsl_rate_limit_used_percentage` | gauge | `model`, `assistant`, `window` | `rate_limits.<window>.used_percentage` (`window="five_hour"` / `"seven_day"`) |
 
-# 4. Confirm log file exists and has expected lines.
-cat "${XDG_STATE_HOME:-$HOME/.local/state}/gsl/usage.jsonl"
-```
+`model` comes from `payload.Model.DisplayName` (fallback `"unknown"`);
+`assistant` is `"claude"` for this PR (the label exists so the future Gemini
+path from #42 can reuse the same series).
 
-- [ ] **8.2** Update `src/gsl/docs/design.md` — add `cmd/mark.go` and `cmd/tokens.go` to the package layout table, and add `internal/usagelog` to the `internal/` package list.
+- [ ] **8.1** Decide the dependency. The plan adopts
+  **`github.com/prometheus/client_golang`** for correct exposition-format
+  encoding and Pushgateway support.
 
-- [ ] **8.3** Run `bash src/gsl/scripts/check-deps.sh` — confirm no `os/exec` outside the allowed seams (the new packages use only `os`, `bufio`, `encoding/json`, `fmt`).
+  **License check (required by `src/CLAUDE.md`):** `prometheus/client_golang`
+  is **Apache-2.0**, which is in this repo's **Allowed (permissive)** set —
+  in fact the *preferred* license ("Apache License 2.0 (preferred; explicit
+  patent grant)", `src/CLAUDE.md` lines 30–31). LICENSE file (verify on the PR):
+  https://github.com/prometheus/client_golang/blob/main/LICENSE — Apache-2.0.
+  No flag-for-review or banned licenses involved. Run `go mod tidy` and confirm
+  `go.sum` doesn't drag in a banned transitive license (the client_golang tree
+  is Apache-2.0 / BSD-3-Clause throughout; spot-check on the PR).
 
-- [ ] **8.4** Commit: `docs(gsl): update design.md for token usage history feature`
+  > **Reviewer decision to confirm:** take the `client_golang` dependency
+  > (Apache-2.0, preferred), **or** hand-write the Prometheus text exposition
+  > format with zero new deps. Hand-writing is viable for the textfile mode
+  > (the `.prom` format is a few lines of `name{labels} value`), but Pushgateway
+  > content-negotiation is fiddly by hand. The plan recommends `client_golang`;
+  > if the reviewer prefers zero-dep, drop Pushgateway to "future" and emit the
+  > textfile format with `fmt.Fprintf` (see 8.3 alt note).
+
+- [ ] **8.2** Write failing tests `src/gsl/internal/metrics/metrics_test.go`:
+
+  ```go
+  package metrics_test
+
+  import (
+  	"os"
+  	"path/filepath"
+  	"strings"
+  	"testing"
+
+  	"github.com/wenlock/dotfiles/gsl/internal/metrics"
+  )
+
+  func sampleSnapshot() metrics.Snapshot {
+  	return metrics.Snapshot{
+  		Model:            "claude-sonnet-4-6",
+  		Assistant:        "claude",
+  		UsedPercentage:   18.0,
+  		TotalInputTokens: 36000,
+  		ContextWindowSize: 200000,
+  		RateLimits: map[string]float64{
+  			"five_hour": 12.5,
+  			"seven_day": 40.0,
+  		},
+  	}
+  }
+
+  // TestWriteTextfile_EmitsGauges proves the textfile collector mode writes a
+  // valid .prom file containing the expected gauges and labels.
+  func TestWriteTextfile_EmitsGauges(t *testing.T) {
+  	dir := t.TempDir()
+  	if err := metrics.WriteTextfile(dir, sampleSnapshot()); err != nil {
+  		t.Fatalf("WriteTextfile: %v", err)
+  	}
+  	data, err := os.ReadFile(filepath.Join(dir, "gsl.prom"))
+  	if err != nil {
+  		t.Fatalf("read gsl.prom: %v", err)
+  	}
+  	s := string(data)
+  	for _, want := range []string{
+  		`gsl_context_used_percentage`,
+  		`gsl_total_input_tokens`,
+  		`gsl_context_window_size`,
+  		`gsl_rate_limit_used_percentage`,
+  		`model="claude-sonnet-4-6"`,
+  		`assistant="claude"`,
+  		`window="five_hour"`,
+  		`window="seven_day"`,
+  	} {
+  		if !strings.Contains(s, want) {
+  			t.Errorf("gsl.prom missing %q; got:\n%s", want, s)
+  		}
+  	}
+  }
+
+  // TestWriteTextfile_AtomicReplace proves the writer replaces gsl.prom (no
+  // duplicate/append) so node_exporter never reads a partial file.
+  func TestWriteTextfile_AtomicReplace(t *testing.T) {
+  	dir := t.TempDir()
+  	if err := metrics.WriteTextfile(dir, sampleSnapshot()); err != nil {
+  		t.Fatalf("first write: %v", err)
+  	}
+  	if err := metrics.WriteTextfile(dir, sampleSnapshot()); err != nil {
+  		t.Fatalf("second write: %v", err)
+  	}
+  	data, _ := os.ReadFile(filepath.Join(dir, "gsl.prom"))
+  	if n := strings.Count(string(data), "gsl_context_window_size"); n != 1 {
+  		t.Errorf("gsl_context_window_size appears %d times; want 1 (atomic replace)", n)
+  	}
+  	// No leftover temp file.
+  	entries, _ := os.ReadDir(dir)
+  	for _, e := range entries {
+  		if strings.HasPrefix(e.Name(), ".gsl.prom") || strings.HasSuffix(e.Name(), ".tmp") {
+  			t.Errorf("leftover temp file: %s", e.Name())
+  		}
+  	}
+  }
+
+  // TestResolveSink_NoConfig proves metrics are a no-op when nothing is set.
+  func TestResolveSink_NoConfig(t *testing.T) {
+  	t.Setenv("GSL_METRICS_DIR", "")
+  	t.Setenv("GSL_METRICS_PUSHGATEWAY", "")
+  	t.Setenv("GSL_METRICS", "")
+  	sink := metrics.ResolveSink()
+  	if sink.Enabled() {
+  		t.Error("ResolveSink().Enabled() = true; want false when nothing configured")
+  	}
+  }
+
+  // TestResolveSink_Disabled proves GSL_METRICS=0 force-disables even with a dir.
+  func TestResolveSink_Disabled(t *testing.T) {
+  	t.Setenv("GSL_METRICS_DIR", t.TempDir())
+  	t.Setenv("GSL_METRICS", "0")
+  	if metrics.ResolveSink().Enabled() {
+  		t.Error("GSL_METRICS=0 should force-disable metrics")
+  	}
+  }
+
+  // TestEmit_NonFatalOnBadDir proves a write failure never returns fatally.
+  func TestEmit_NonFatalOnBadDir(t *testing.T) {
+  	t.Setenv("GSL_METRICS_DIR", "/proc/nonexistent/cannot/write")
+  	t.Setenv("GSL_METRICS", "")
+  	t.Setenv("GSL_METRICS_PUSHGATEWAY", "")
+  	// Emit must swallow the error (logs to stderr); it returns nothing fatal.
+  	metrics.ResolveSink().Emit(sampleSnapshot())
+  }
+  ```
+
+  Run: `go test ./internal/metrics/...` — expect **compile error** (package missing).
+
+- [ ] **8.3** Create `src/gsl/internal/metrics/metrics.go`:
+
+  ```go
+  // Package metrics emits per-turn gsl token-usage data as Prometheus gauges.
+  //
+  // gsl render is an ephemeral per-prompt process, so an in-process /metrics
+  // HTTP server cannot be scraped. This package uses the node_exporter
+  // textfile-collector pattern (write/refresh <dir>/gsl.prom) as the default,
+  // with a Pushgateway POST as the alternative for hosts lacking a local
+  // node_exporter. The layer is OPT-IN (GSL_METRICS_DIR / GSL_METRICS_PUSHGATEWAY
+  // or config keys) and strictly NON-FATAL: any write/push failure is logged to
+  // stderr and swallowed so the status line never breaks.
+  package metrics
+
+  import (
+  	"fmt"
+  	"os"
+  	"path/filepath"
+  	"sort"
+  )
+
+  // Snapshot is the per-turn data the metrics layer publishes.
+  type Snapshot struct {
+  	Model             string
+  	Assistant         string // "claude" for #34; "gemini" reserved for #42
+  	UsedPercentage    float64
+  	TotalInputTokens  float64
+  	ContextWindowSize float64
+  	RateLimits        map[string]float64 // window ("five_hour"/"seven_day") -> used_pct
+  }
+
+  // Sink is a resolved metrics destination (textfile, pushgateway, or off).
+  type Sink struct {
+  	enabled        bool
+  	textfileDir    string
+  	pushgatewayURL string
+  }
+
+  // Enabled reports whether any sink is configured.
+  func (s Sink) Enabled() bool { return s.enabled }
+
+  // ResolveSink reads env (and, when wired, config) to pick the active sink.
+  // Precedence: GSL_METRICS=0 force-off > GSL_METRICS_DIR (textfile, default) >
+  // GSL_METRICS_PUSHGATEWAY (alternative). Off when nothing is set.
+  func ResolveSink() Sink {
+  	if os.Getenv("GSL_METRICS") == "0" {
+  		return Sink{enabled: false}
+  	}
+  	if dir := os.Getenv("GSL_METRICS_DIR"); dir != "" {
+  		return Sink{enabled: true, textfileDir: dir}
+  	}
+  	if url := os.Getenv("GSL_METRICS_PUSHGATEWAY"); url != "" {
+  		return Sink{enabled: true, pushgatewayURL: url}
+  	}
+  	return Sink{enabled: false}
+  }
+
+  // Emit publishes the snapshot to the resolved sink. NON-FATAL: errors are
+  // logged to stderr and swallowed. Never call this on the hot path before the
+  // status line is rendered.
+  func (s Sink) Emit(snap Snapshot) {
+  	if !s.enabled {
+  		return
+  	}
+  	var err error
+  	switch {
+  	case s.textfileDir != "":
+  		err = WriteTextfile(s.textfileDir, snap)
+  	case s.pushgatewayURL != "":
+  		err = PushGateway(s.pushgatewayURL, snap)
+  	}
+  	if err != nil {
+  		fmt.Fprintf(os.Stderr, "gsl metrics: emit failed (ignored): %v\n", err)
+  	}
+  }
+
+  // WriteTextfile writes <dir>/gsl.prom atomically (temp file + rename) so a
+  // scraping node_exporter never reads a partial file.
+  func WriteTextfile(dir string, snap Snapshot) error {
+  	if err := os.MkdirAll(dir, 0o755); err != nil {
+  		return fmt.Errorf("metrics: mkdir: %w", err)
+  	}
+  	body := renderExposition(snap)
+  	tmp, err := os.CreateTemp(dir, ".gsl.prom-*")
+  	if err != nil {
+  		return fmt.Errorf("metrics: tempfile: %w", err)
+  	}
+  	tmpName := tmp.Name()
+  	if _, err := tmp.WriteString(body); err != nil {
+  		tmp.Close()
+  		os.Remove(tmpName)
+  		return fmt.Errorf("metrics: write: %w", err)
+  	}
+  	if err := tmp.Close(); err != nil {
+  		os.Remove(tmpName)
+  		return fmt.Errorf("metrics: close: %w", err)
+  	}
+  	if err := os.Rename(tmpName, filepath.Join(dir, "gsl.prom")); err != nil {
+  		os.Remove(tmpName)
+  		return fmt.Errorf("metrics: rename: %w", err)
+  	}
+  	return nil
+  }
+
+  // renderExposition builds the Prometheus text exposition format. Kept as a
+  // pure function so it is trivially testable and reusable by both sinks.
+  func renderExposition(snap Snapshot) string {
+  	model := snap.Model
+  	if model == "" {
+  		model = "unknown"
+  	}
+  	assistant := snap.Assistant
+  	if assistant == "" {
+  		assistant = "claude"
+  	}
+  	lbl := fmt.Sprintf(`model=%q,assistant=%q`, model, assistant)
+
+  	var b []byte
+  	add := func(name, help, value string) {
+  		b = append(b, fmt.Sprintf("# HELP %s %s\n# TYPE %s gauge\n%s{%s} %s\n",
+  			name, help, name, name, lbl, value)...)
+  	}
+  	add("gsl_context_used_percentage", "Context window used percentage (0-100).",
+  		fmt.Sprintf("%g", snap.UsedPercentage))
+  	add("gsl_total_input_tokens", "Total input tokens in the current context.",
+  		fmt.Sprintf("%g", snap.TotalInputTokens))
+  	add("gsl_context_window_size", "Context window size in tokens.",
+  		fmt.Sprintf("%g", snap.ContextWindowSize))
+
+  	// Rate-limit gauges: one series per window, sorted for deterministic output.
+  	windows := make([]string, 0, len(snap.RateLimits))
+  	for w := range snap.RateLimits {
+  		windows = append(windows, w)
+  	}
+  	sort.Strings(windows)
+  	if len(windows) > 0 {
+  		b = append(b, "# HELP gsl_rate_limit_used_percentage Rate-limit window used percentage (0-100).\n"...)
+  		b = append(b, "# TYPE gsl_rate_limit_used_percentage gauge\n"...)
+  		for _, w := range windows {
+  			b = append(b, fmt.Sprintf("gsl_rate_limit_used_percentage{%s,window=%q} %g\n",
+  				lbl, w, snap.RateLimits[w])...)
+  		}
+  	}
+  	return string(b)
+  }
+  ```
+
+  > **Zero-dep alt (8.1 fallback):** `renderExposition` above is already pure
+  > stdlib — it needs `client_golang` only for the Pushgateway path. If the
+  > reviewer chooses zero-dep, keep `WriteTextfile`/`renderExposition` as-is and
+  > make `PushGateway` return a "pushgateway requires client_golang (deferred)"
+  > error; no go.mod change is then needed.
+
+- [ ] **8.4** Create `src/gsl/internal/metrics/pushgateway.go` (the Pushgateway
+  alternative; uses `client_golang`):
+
+  ```go
+  package metrics
+
+  import (
+  	"fmt"
+
+  	"github.com/prometheus/client_golang/prometheus"
+  	"github.com/prometheus/client_golang/prometheus/push"
+  )
+
+  // PushGateway pushes the snapshot's gauges to a Pushgateway at url. The job
+  // label is "gsl"; the model/assistant become grouping labels so concurrent
+  // windows don't clobber each other's series.
+  func PushGateway(url string, snap Snapshot) error {
+  	model := snap.Model
+  	if model == "" {
+  		model = "unknown"
+  	}
+  	assistant := snap.Assistant
+  	if assistant == "" {
+  		assistant = "claude"
+  	}
+  	reg := prometheus.NewRegistry()
+  	mk := func(name, help string, labels prometheus.Labels) prometheus.Gauge {
+  		g := prometheus.NewGauge(prometheus.GaugeOpts{Name: name, Help: help, ConstLabels: labels})
+  		reg.MustRegister(g)
+  		return g
+  	}
+  	base := prometheus.Labels{"model": model, "assistant": assistant}
+  	mk("gsl_context_used_percentage", "Context window used percentage (0-100).", base).Set(snap.UsedPercentage)
+  	mk("gsl_total_input_tokens", "Total input tokens in the current context.", base).Set(snap.TotalInputTokens)
+  	mk("gsl_context_window_size", "Context window size in tokens.", base).Set(snap.ContextWindowSize)
+  	for window, pct := range snap.RateLimits {
+  		l := prometheus.Labels{"model": model, "assistant": assistant, "window": window}
+  		mk("gsl_rate_limit_used_percentage", "Rate-limit window used percentage (0-100).", l).Set(pct)
+  	}
+  	if err := push.New(url, "gsl").Gatherer(reg).
+  		Grouping("model", model).Grouping("assistant", assistant).Push(); err != nil {
+  		return fmt.Errorf("metrics: pushgateway: %w", err)
+  	}
+  	return nil
+  }
+  ```
+
+  If the zero-dep path (8.1) is chosen, replace this file's body with a single
+  stub returning `fmt.Errorf("metrics: pushgateway requires client_golang (deferred)")`.
+
+- [ ] **8.5** Add the dependency (only if 8.4's real Pushgateway is kept). Run:
+
+  ```sh
+  cd src/gsl
+  go get github.com/prometheus/client_golang@latest
+  go mod tidy
+  ```
+
+  Expected `go.mod` gains:
+  ```
+  require github.com/prometheus/client_golang v1.x.y
+  ```
+  Confirm `go.sum` adds only Apache-2.0 / BSD-3-Clause transitive deps
+  (`prometheus/common`, `prometheus/client_model`, `cespare/xxhash`,
+  `golang/protobuf`, `munnerz/goautoneg` — all permissive). No GPL/LGPL/AGPL.
+
+- [ ] **8.6** Wire the metrics emit into the SAME recording hook in
+  `src/gsl/cmd/render.go`, immediately after the `usagelog.AppendTurn` block
+  (coupling the two sinks), still gated on the non-nil context-window check and
+  still off the hot path / non-fatal:
+
+  ```go
+  // After the usagelog.AppendTurn(...) block, inside the same
+  // `if p.ContextWindow != nil && ...` guard:
+  snap := metrics.Snapshot{
+  	Model:             "",
+  	Assistant:         "claude",
+  	UsedPercentage:    *p.ContextWindow.UsedPercentage,
+  	TotalInputTokens:  *p.ContextWindow.TotalInputTokens,
+  	ContextWindowSize: *p.ContextWindow.ContextWindowSize,
+  	RateLimits:        map[string]float64{},
+  }
+  if p.Model != nil && p.Model.DisplayName != nil {
+  	snap.Model = *p.Model.DisplayName
+  }
+  if p.RateLimits != nil {
+  	if p.RateLimits.FiveHour != nil && p.RateLimits.FiveHour.UsedPercentage != nil {
+  		snap.RateLimits["five_hour"] = *p.RateLimits.FiveHour.UsedPercentage
+  	}
+  	if p.RateLimits.SevenDay != nil && p.RateLimits.SevenDay.UsedPercentage != nil {
+  		snap.RateLimits["seven_day"] = *p.RateLimits.SevenDay.UsedPercentage
+  	}
+  }
+  // ResolveSink() is a no-op when GSL_METRICS_DIR / GSL_METRICS_PUSHGATEWAY are
+  // unset, so this costs nothing on hosts that don't opt in. Emit is non-fatal.
+  metrics.ResolveSink().Emit(snap)
+  ```
+
+  Add `"github.com/wenlock/dotfiles/gsl/internal/metrics"` to render.go's imports.
+
+- [ ] **8.7** Run: `go test ./internal/metrics/... -v` and `go test ./... -count=1`.
+  Expected: metrics tests pass; render still appends the turn record AND (when
+  `GSL_METRICS_DIR` is set in a test) writes `gsl.prom`; status line unaffected
+  when metrics are off or fail.
+
+- [ ] **8.8** Commit: `feat(metrics): add opt-in Prometheus textfile/pushgateway exposition coupled to render`
+
+---
+
+### Task 9 — Post-validation + end-to-end smoke test + docs update
+
+#### Post-validation (verify the implemented feature works end-to-end)
+
+- [ ] **9.1** **(a) Real-turn recording.** Confirm `usage.jsonl` gets a real
+  `turn` record after an **actual Claude Code turn** (not just a piped fixture).
+  With the real `gsl render` wired into `~/.claude/settings.json`
+  `statusLine.command`, run one live turn, then:
+
+  ```sh
+  tail -n1 "${XDG_STATE_HOME:-$HOME/.local/state}/gsl/usage.jsonl" | python3 -m json.tool
+  # Assert: "kind":"turn", non-zero "input_tokens", "context_size", "used_pct".
+  ```
+
+  This closes the loop opened by the Task 0 pre-validation gate: Task 0 proved
+  Claude *gives* us the fields; this proves gsl *records* them in a live session.
+
+- [ ] **9.2** **(b) Delta correctness.** Seed marks around turns and confirm
+  `gsl tokens --last` and `--diff` compute correct deltas:
+
+  ```sh
+  # 1. Seed some turns by piping payloads through render.
+  echo '{"cwd":"/tmp","model":{"display_name":"claude-sonnet-4-6"},"context_window":{"used_percentage":15.0,"total_input_tokens":30000,"context_window_size":200000}}' | gsl render
+
+  gsl mark before-refactor
+
+  echo '{"cwd":"/tmp","model":{"display_name":"claude-sonnet-4-6"},"context_window":{"used_percentage":18.0,"total_input_tokens":36000,"context_window_size":200000}}' | gsl render
+
+  gsl mark after-refactor
+
+  # 2. Inspect last turn.
+  gsl tokens --last
+  # Expected output:
+  # Last turn: <timestamp>
+  #   Input tokens : 36000
+  #   Context size : 200000
+  #   Used         : 18.00%
+
+  # 3. Inspect delta.
+  gsl tokens --diff before-refactor after-refactor
+  # Expected output:
+  # Token usage delta: +6,000 tokens (Context: 15.00% -> 18.00%)
+  #   Range  : before-refactor → after-refactor
+  #   Context: 200000 tokens total
+
+  # 4. Confirm log file exists and has expected lines.
+  cat "${XDG_STATE_HOME:-$HOME/.local/state}/gsl/usage.jsonl"
+  ```
+
+- [ ] **9.3** **(c) Prometheus emission.** Confirm the metrics sink gets the
+  gauges. Textfile mode (default):
+
+  ```sh
+  export GSL_METRICS_DIR=/tmp/gsl-textfile
+  echo '{"cwd":"/tmp","model":{"display_name":"claude-sonnet-4-6"},"context_window":{"used_percentage":18.0,"total_input_tokens":36000,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":12.5},"seven_day":{"used_percentage":40.0}}}' | gsl render
+  cat /tmp/gsl-textfile/gsl.prom
+  # Expected gauges:
+  # gsl_context_used_percentage{model="claude-sonnet-4-6",assistant="claude"} 18
+  # gsl_total_input_tokens{model="claude-sonnet-4-6",assistant="claude"} 36000
+  # gsl_context_window_size{model="claude-sonnet-4-6",assistant="claude"} 200000
+  # gsl_rate_limit_used_percentage{model="...",assistant="claude",window="five_hour"} 12.5
+  # gsl_rate_limit_used_percentage{model="...",assistant="claude",window="seven_day"} 40
+  unset GSL_METRICS_DIR
+
+  # Pushgateway alternative (if a local Pushgateway is available on :9091):
+  GSL_METRICS_PUSHGATEWAY=http://localhost:9091 sh -c 'echo "{...payload...}" | gsl render'
+  # Then confirm series at http://localhost:9091/metrics
+  ```
+
+  Also confirm the **non-fatal** contract: with `GSL_METRICS_DIR` pointed at an
+  unwritable path, `gsl render` still prints the status line and exits 0.
+
+- [ ] **9.4** Update `src/gsl/docs/design.md` — add `cmd/mark.go` and `cmd/tokens.go` to the package layout table, add `internal/usagelog` and `internal/metrics` to the `internal/` package list, and note the opt-in `GSL_METRICS_DIR` / `GSL_METRICS_PUSHGATEWAY` env knobs.
+
+- [ ] **9.5** Run `bash src/gsl/scripts/check-deps.sh` — confirm no `os/exec` outside the allowed seams (the new packages use only `os`, `bufio`, `encoding/json`, `fmt`, `sort`, `path/filepath`, plus `prometheus/client_golang` for the Pushgateway path — no process exec).
+
+- [ ] **9.6** Commit: `docs(gsl): update design.md for token usage history + metrics feature`
 
 ---
 
@@ -1162,14 +1770,18 @@ cat "${XDG_STATE_HOME:-$HOME/.local/state}/gsl/usage.jsonl"
 
 | Gate | Check |
 |---|---|
+| **Pre-validation (Task 0) PASSED** | live Claude payload populates `context_window.{used_percentage,total_input_tokens,context_window_size}`; probe test green |
 | `go build ./...` green | no compile errors |
 | `scripts/check-deps.sh` green | no os/exec outside git/mcp/gh seams |
-| `go test ./... -cover` | all packages pass; `internal/usagelog` >= 80% |
+| `go test ./... -cover` | all packages pass; `internal/usagelog` >= 80%; `internal/metrics` >= 60% |
 | `gsl mark <label>` appends mark record to usage.jsonl | manual + test |
 | `gsl tokens --last` prints last turn's token count | manual + test |
 | `gsl tokens --diff start end` prints `Token usage delta: +4,520 tokens (Context: 15% -> 18%)` format | manual + test |
 | `gsl render` appends turn record on every real Claude payload | manual + test |
-| Render degradation: bad payload / nil context window → no log write, render still works | test |
+| **Post-validation:** real Claude Code turn writes a `turn` record to usage.jsonl | manual (Task 9.1) |
+| **Metrics opt-in:** `GSL_METRICS_DIR` set → `gsl.prom` written with all gauges; unset → no-op | manual + test (Task 9.3) |
+| **Metrics non-fatal:** unwritable metrics dir/URL → status line still renders, exit 0 | test (Task 8.2) + manual (Task 9.3) |
+| Render degradation: bad payload / nil context window → no log write, no metrics write, render still works | test |
 | Missing usage.jsonl → `gsl tokens --last` prints "no turn records" (no crash) | test |
 
 ---
@@ -1197,9 +1809,15 @@ cat "${XDG_STATE_HOME:-$HOME/.local/state}/gsl/usage.jsonl"
    Implementer should choose based on whether x/text is already a direct dep
    after #32 lands.
 
-2. **Log rotation / max size.** `usage.jsonl` grows unboundedly. A simple
-   max-lines or max-bytes cap (e.g. keep last 10,000 lines on append) could be
-   added in a follow-up. Not required for issue #34.
+2. **Log rotation / max size / longer-term retention.** `usage.jsonl` grows
+   unboundedly. A simple max-lines or max-bytes cap (e.g. keep last 10,000 lines
+   on append) could be added in a follow-up. Not required for issue #34. **For
+   durable long-term retention and visualization, the answer is the Prometheus +
+   Grafana layer (Task 8)** — `usage.jsonl` stays a small, rotating local file
+   for `gsl tokens` deltas, while Prometheus (scraped from the textfile collector
+   or pushed via Pushgateway) holds the long-history time series for Grafana
+   dashboards. This is what "if we want longer life, we can use the prometheus
+   metrics" (review comment, original L1200) resolves to.
 
 3. **`--diff` with only a start mark (open-ended range).** The plan supports
    this: `endMark == ""` means "from start mark to end of log." Implementer
@@ -1215,3 +1833,20 @@ cat "${XDG_STATE_HOME:-$HOME/.local/state}/gsl/usage.jsonl"
 5. **State-dir package from #32.** If #32 exports a `statedir.DefaultPath()`
    or equivalent, `usagelog.DefaultPath()` should call it rather than
    re-implementing the XDG resolution. Coordinate with the #32 implementer.
+
+6. **Prometheus dependency choice (reviewer to confirm).** Task 8.1 recommends
+   `github.com/prometheus/client_golang` (Apache-2.0, the repo's *preferred*
+   license per `src/CLAUDE.md`) for correct exposition encoding and Pushgateway
+   support. The zero-dep alternative (hand-written textfile exposition, no
+   Pushgateway) is fully viable and documented inline. **Decision needed:** take
+   the Apache-2.0 dep, or stay zero-dep and defer Pushgateway.
+
+---
+
+## Review feedback addressed
+
+| # | Reviewer comment (location) | Resolved by |
+|---|---|---|
+| 1 | "couple this with prometheus metrics hooks so later we can adapt the tool to publishing to grafana … leverage this further" (L7, Architecture) | **Architecture** paragraph (Prometheus coupled to the recording hook; node_exporter textfile collector default, Pushgateway alternative; Grafana retention) + **Task 8** (`internal/metrics` writer, gauges with `model`/`assistant`/`window` labels, opt-in `GSL_METRICS_DIR`/`GSL_METRICS_PUSHGATEWAY`, non-fatal contract, go.mod addition) + **Task 8.6** wiring into the same render hook |
+| 2 | "confirm this workflow will work with Claude Code … Add this to pre-validation steps. Also include this in post-validation steps. We also need the same for Gemini … record it as a GitHub issue" (L5) | **Task 0 — Pre-validation gate** (capture live payload + probe test asserting the three `context_window` fields are non-nil, citing payload.go) + **Task 9.1–9.3 Post-validation** (real-turn record, delta correctness, Prometheus emission) + **Task 0 "Gemini (future)" subsection** (Claude ships first, route options, links existing **#42** — no new issue created) |
+| 3 | "If we want longer life, we can use the prometheus metrics" (L1200) | **Architecture** paragraph + **Task 8** (Prometheus/Grafana = durable long-term retention beyond `usage.jsonl`) + **Open Design Question 2** (rotation/retention explicitly answered by the Prometheus layer) |
