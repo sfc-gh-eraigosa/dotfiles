@@ -90,23 +90,27 @@ Or just ask "estimate the AWS cost of running this" / "generate the infrastructu
 
 ## Gemini CLI
 
-Today the manifest installs **nothing** for Gemini — and that's expected. The 12
-plugins above are Claude marketplace plugins; Gemini's extension ecosystem is
-separate (git-URL based), and none of these have a Gemini equivalent. Gemini
-already shares this repo's *skills* through the `sync-skills` linker (every
-`SKILL.md` is linked into both `~/.claude/skills` and `~/.agents/skills`), plus
-its own policies and commands under `ai/gemini/`.
+The manifest integrates **Gemini CLI extensions** alongside Claude plugins, enabling a single source of truth for both ecosystems. Where a row includes a `gemini` block, `sync-plugins` will automatically install and enable the specified extension (using `--consent` and `--skip-settings` for non-interactive setup).
 
-The plumbing for Gemini extensions **is** in place, so adding one later is a
-one-line change. Give a plugin row a `gemini` block:
+| Plugin Name | Gemini Extension Source |
+|-------------|-------------------------|
+| **superpowers** | `https://github.com/obra/superpowers` |
+| **github** | `https://github.com/gemini-cli-extensions/conductor` |
+| **code-review** | `https://github.com/gemini-cli-extensions/code-review` |
+| **skill-creator** | `https://github.com/jduncan-rva/gemini-agent-creator` |
+| **remember** | `https://github.com/Beledarian/mcp-local-memory` |
+| **mcp-apps** | `https://github.com/gemini-cli-extensions/mcp-toolbox` |
+
+### Adding a Gemini extension
+
+Add a `gemini: { source: ... }` block to a row in [`ai/plugins.yaml`](../ai/plugins.yaml):
 
 ```yaml
   - name: some-tool
     enabled: true
-    claude: { plugin: some-tool@claude-plugins-official }   # optional
     gemini: { source: https://github.com/owner/repo }       # git URL or local path
 ```
 
-Then `sync-plugins` runs `gemini extensions install <source>` for it (skipped
-automatically when the `gemini` CLI isn't on PATH). Manage them directly with
-`gemini extensions list` / `update` / `disable`.
+Then run `sync-plugins`. The sync engine handles the `gemini extensions install` command (skipped if the `gemini` CLI is not on PATH). You can manage them directly with `gemini extensions list`, `update`, or `disable`.
+
+> **Note on Shared Skills**: Gemini already shares this repo's *custom skills* (located in `src/` and `ai/skills/`) through the `sync-skills` linker. The extensions above provide *bundled* skills and functionality (like the Conductor agent or local MCP servers) specific to the Gemini CLI.
