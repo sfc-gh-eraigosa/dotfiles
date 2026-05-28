@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/wenlock/dotfiles/gsl/internal/config"
+	"github.com/wenlock/dotfiles/gsl/internal/observe"
 )
 
 // withTempConfig sets XDG_CONFIG_HOME to a temp dir, writes cfg there, and
@@ -141,6 +142,41 @@ func TestRenderCmd_BadJSON(t *testing.T) {
 			}
 		})
 	})
+}
+
+// TestRenderCmd_BadJSON_LogsStructuredEvent asserts that malformed stdin is
+// recorded as a payload.parse_error in the structured log so a silent
+// regression (e.g. issue #30) is diagnosable on the first failing refresh.
+func TestRenderCmd_BadJSON_LogsStructuredEvent(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "gsl.log")
+	t.Setenv("GSL_LOG_FILE", logPath)
+	observe.ResetDefaultForTest()
+	t.Cleanup(observe.ResetDefaultForTest)
+
+	cfg := config.Default()
+	withTempConfig(t, cfg, func() {
+		r, w, _ := os.Pipe()
+		fmt.Fprint(w, `{invalid json`)
+		w.Close()
+
+		origStdin := os.Stdin
+		os.Stdin = r
+		defer func() { os.Stdin = origStdin; r.Close() }()
+
+		captureStdout(t, func() {
+			if err := runRender(renderCmd, nil); err != nil {
+				t.Errorf("runRender: expected nil error on bad JSON, got: %v", err)
+			}
+		})
+	})
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read log file: %v", err)
+	}
+	if !strings.Contains(string(data), `"event":"payload.parse_error"`) {
+		t.Fatalf("expected payload.parse_error in log, got: %s", data)
+	}
 }
 
 // TestRenderCmd_MalformedConfig_FallsBackToDefaults verifies that a corrupt
