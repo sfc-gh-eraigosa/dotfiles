@@ -1,6 +1,7 @@
 package payload_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,7 +59,7 @@ func TestParseFullFixture(t *testing.T) {
 	if p.RateLimits.FiveHour.UsedPercentage == nil || *p.RateLimits.FiveHour.UsedPercentage != 25.0 {
 		t.Errorf("RateLimits.FiveHour.UsedPercentage: got %v, want 25.0", p.RateLimits.FiveHour.UsedPercentage)
 	}
-	if p.RateLimits.FiveHour.ResetsAt == nil || *p.RateLimits.FiveHour.ResetsAt != "2026-05-25T10:00:00Z" {
+	if p.RateLimits.FiveHour.ResetsAt == nil || p.RateLimits.FiveHour.ResetsAt.String() != "2026-05-25T10:00:00Z" {
 		t.Errorf("RateLimits.FiveHour.ResetsAt: got %v", p.RateLimits.FiveHour.ResetsAt)
 	}
 
@@ -76,6 +77,66 @@ func TestParseMalformedJSON(t *testing.T) {
 	_, err := payload.Parse([]byte(`{not valid json`))
 	if err == nil {
 		t.Error("Parse(malformed) should return an error, got nil")
+	}
+}
+
+// TestParseLiveNumericResetsAt is the regression test for issue #30: the
+// live Claude Code statusLine payload ships rate_limits.*.resets_at as a
+// Unix-epoch number, which used to nuke the entire AI segment because
+// json.Unmarshal failed the whole payload on the type mismatch.
+// ResetTime.UnmarshalJSON tolerates both shapes; this fixture proves it.
+func TestParseLiveNumericResetsAt(t *testing.T) {
+	data := readFixture(t, "live_numeric_resets.json")
+	p, err := payload.Parse(data)
+	if err != nil {
+		t.Fatalf("Parse(live_numeric_resets.json) returned error: %v (this is the #30 regression)", err)
+	}
+	if p.RateLimits == nil || p.RateLimits.FiveHour == nil || p.RateLimits.FiveHour.ResetsAt == nil {
+		t.Fatalf("RateLimits.FiveHour.ResetsAt is nil; whole payload likely degraded (#30): %+v", p.RateLimits)
+	}
+	// 1779863400 → 2026-05-27T06:30:00Z (UTC).
+	want := "2026-05-27T06:30:00Z"
+	if got := p.RateLimits.FiveHour.ResetsAt.String(); got != want {
+		t.Errorf("five_hour.ResetsAt: got %q, want %q", got, want)
+	}
+	if p.RateLimits.SevenDay == nil || p.RateLimits.SevenDay.ResetsAt == nil {
+		t.Fatalf("RateLimits.SevenDay.ResetsAt is nil")
+	}
+	// 1780052400 → 2026-05-29T11:00:00Z (UTC).
+	want7 := "2026-05-29T11:00:00Z"
+	if got := p.RateLimits.SevenDay.ResetsAt.String(); got != want7 {
+		t.Errorf("seven_day.ResetsAt: got %q, want %q", got, want7)
+	}
+}
+
+// TestResetTime_NullAndAbsent verifies the corner cases that surrounding
+// pointers handle today: null → zero ResetTime, absent → nil pointer.
+func TestResetTime_NullAndAbsent(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string // String() output; "" means zero/absent
+	}{
+		{"absent", `{"used_percentage":50}`, ""},
+		{"null", `{"used_percentage":50,"resets_at":null}`, ""},
+		{"string", `{"used_percentage":50,"resets_at":"2026-05-25T10:00:00Z"}`, "2026-05-25T10:00:00Z"},
+		{"epoch_seconds", `{"used_percentage":50,"resets_at":1779863400}`, "2026-05-27T06:30:00Z"},
+		{"epoch_millis", `{"used_percentage":50,"resets_at":1779863400000}`, "2026-05-27T06:30:00Z"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var w payload.RateWindow
+			if err := json.Unmarshal([]byte(tc.in), &w); err != nil {
+				t.Fatalf("Unmarshal: %v", err)
+			}
+			var got string
+			if w.ResetsAt != nil {
+				got = w.ResetsAt.String()
+			}
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
