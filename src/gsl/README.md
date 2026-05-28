@@ -251,6 +251,25 @@ Use **soft off** to toggle quickly without editing Claude settings. Use **hard o
 
 If `~/opt/bin/gsl` is missing or fails to exec, `statusline-command.sh` falls back to a pure-bash snippet that prints `<basename $PWD>  <git branch>  <HH:MM>`. The pipe never breaks and Claude Code's status bar degrades gracefully rather than erroring.
 
+## Logging
+
+gsl writes a structured JSON log so silent regressions get caught on the first failing refresh (Claude Code discards stderr for status-line commands, so any stderr-only message — like the one that hid issue #30 for months — is invisible).
+
+| Setting | Default | Override |
+|---------|---------|----------|
+| Log file location | `$XDG_STATE_HOME/gsl/gsl.log`, or `~/.local/state/gsl/gsl.log`, or `~/.cache/gsl/gsl.log` (first writable wins) | `GSL_LOG_FILE=/abs/path/file.log` |
+| Log level | `info` | `GSL_LOG_LEVEL=debug\|info\|warn\|error` |
+| Rotation | 5 MB per file · 3 backups · 7-day max age · gzip-compressed | edit `Options.MaxSizeMB` / `MaxBackups` / `MaxAgeDays` in `internal/observe` |
+
+Events currently recorded:
+
+- `payload.parse_error` — Claude stdin JSON failed to parse; full error message (which names the offending field for type mismatches) is captured.
+- `git.subprocess_error` / `gh.subprocess_error` / `mcp.subprocess_error` — a subprocess at one of the three runner seams exited non-zero; binary + argv + error are captured.
+- `segment.panic` — a status-line segment panicked and was dropped.
+- `segment.timeout` — a segment exceeded its per-segment deadline and was dropped.
+
+Logger initialization is **always non-fatal**: if the log path cannot be opened, the logger degrades to `io.Discard` and the status line keeps rendering. Observability never breaks gsl.
+
 ## Development
 
 ```sh
