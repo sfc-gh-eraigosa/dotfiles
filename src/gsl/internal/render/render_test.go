@@ -2,11 +2,14 @@ package render
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/wenlock/dotfiles/gsl/internal/config"
+	"github.com/wenlock/dotfiles/gsl/internal/observe"
 	"github.com/wenlock/dotfiles/gsl/internal/style"
 )
 
@@ -115,6 +118,55 @@ type panicSegment struct{}
 
 func (panicSegment) Render(context.Context, style.Style) (string, bool) {
 	panic("boom")
+}
+
+// TestRender_LogsSegmentPanic asserts the segment.panic structured record
+// is emitted when a segment panics. The recover() behaviour itself is
+// covered by TestRender_PanickingSegmentRecovered.
+func TestRender_LogsSegmentPanic(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "gsl.log")
+	t.Setenv("GSL_LOG_FILE", logPath)
+	observe.ResetDefaultForTest()
+	t.Cleanup(observe.ResetDefaultForTest)
+
+	cfg := config.Default()
+	segs := []Segment{&panicSegment{}}
+	_ = Render(context.Background(), cfg, spaceStyle(), segs)
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read log: %v", err)
+	}
+	if !strings.Contains(string(data), `"event":"segment.panic"`) {
+		t.Fatalf("expected segment.panic in log, got: %s", data)
+	}
+}
+
+// TestRender_LogsSegmentTimeout asserts the segment.timeout structured
+// record is emitted when a segment exceeds the per-segment deadline.
+// The drop-and-continue behaviour itself is covered by
+// TestRender_SlowSegmentDegrades_NoHang.
+func TestRender_LogsSegmentTimeout(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "gsl.log")
+	t.Setenv("GSL_LOG_FILE", logPath)
+	observe.ResetDefaultForTest()
+	t.Cleanup(observe.ResetDefaultForTest)
+
+	cfg := config.Default()
+	// stubSegment with delay > segmentDeadline + tight parent ctx so the
+	// inner sctx hits DeadlineExceeded quickly.
+	segs := []Segment{&stubSegment{text: "x", ok: true, delay: 5 * time.Second}}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_ = Render(ctx, cfg, spaceStyle(), segs)
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read log: %v", err)
+	}
+	if !strings.Contains(string(data), `"event":"segment.timeout"`) {
+		t.Fatalf("expected segment.timeout in log, got: %s", data)
+	}
 }
 
 func TestBuildSegments_OrderAndDisable(t *testing.T) {

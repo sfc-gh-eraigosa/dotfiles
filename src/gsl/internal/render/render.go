@@ -2,16 +2,38 @@ package render
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/wenlock/dotfiles/gsl/internal/config"
 	"github.com/wenlock/dotfiles/gsl/internal/gh"
 	"github.com/wenlock/dotfiles/gsl/internal/git"
 	"github.com/wenlock/dotfiles/gsl/internal/mcp"
+	"github.com/wenlock/dotfiles/gsl/internal/observe"
 	"github.com/wenlock/dotfiles/gsl/internal/payload"
 	"github.com/wenlock/dotfiles/gsl/internal/style"
 )
+
+// segmentTypeName returns the concrete type name of a Segment for log
+// records. Pointer receivers are unwrapped so "*seg_ai.Segment" becomes
+// "Segment". Best-effort: returns "unknown" when reflection cannot
+// resolve a name (e.g. nil interface).
+func segmentTypeName(s Segment) string {
+	if s == nil {
+		return "unknown"
+	}
+	t := reflect.TypeOf(s)
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if name := t.Name(); name != "" {
+		return name
+	}
+	return fmt.Sprintf("%T", s)
+}
 
 // segmentDeadline is the per-segment hard cap. Each segment runs in its own
 // goroutine under a child context with this deadline; a segment that exceeds
@@ -110,6 +132,11 @@ func Render(ctx context.Context, cfg config.Config, st style.Style, segs []Segme
 			// Recover so a panicking segment is dropped, not fatal.
 			defer func() {
 				if r := recover(); r != nil {
+					observe.Default().WithFields(logrus.Fields{
+						"event":   "segment.panic",
+						"segment": segmentTypeName(s),
+						"panic":   fmt.Sprintf("%v", r),
+					}).Warn("segment panicked; dropping")
 					results[idx] = result{ok: false}
 				}
 			}()
@@ -118,6 +145,15 @@ func Render(ctx context.Context, cfg config.Config, st style.Style, segs []Segme
 			defer cancel()
 
 			text, ok := s.Render(sctx, st)
+			if sctx.Err() == context.DeadlineExceeded {
+				observe.Default().WithFields(logrus.Fields{
+					"event":       "segment.timeout",
+					"segment":     segmentTypeName(s),
+					"deadline_ms": segmentDeadline.Milliseconds(),
+				}).Warn("segment exceeded per-segment deadline; dropping")
+				results[idx] = result{ok: false}
+				return
+			}
 			results[idx] = result{text: text, ok: ok}
 		}(i, seg)
 	}
