@@ -36,9 +36,9 @@ func checkpointService(t *testing.T, prURL string, gitScript []gitfake.Response,
 }
 
 func TestCheckpoint_FirstTimeCreatesDraftPR(t *testing.T) {
-	// fetch ok, rebase ok.
+	// fetch ok, rebase ok, push ok.
 	svc, store, gitr := checkpointService(t, "",
-		[]gitfake.Response{{}, {}}, ghfake.NewClient())
+		[]gitfake.Response{{}, {}, {}}, ghfake.NewClient())
 
 	res, err := svc.Checkpoint(context.Background(), feature.CheckpointOpts{WorkerRef: "auth/erai/api"})
 	if err != nil {
@@ -47,9 +47,14 @@ func TestCheckpoint_FirstTimeCreatesDraftPR(t *testing.T) {
 	if !res.Created || res.PRState != "draft" {
 		t.Errorf("result = %+v; want Created draft", res)
 	}
-	// git: fetch then rebase, in order.
-	if len(gitr.Calls) != 2 || !argsHasFC(gitr.Calls[0].Args, "fetch") || !argsHasFC(gitr.Calls[1].Args, "rebase") {
-		t.Errorf("git calls = %+v; want fetch then rebase", gitr.Calls)
+	// git: fetch then rebase then push, in order. The push must precede
+	// gh pr create so origin actually has the head SHA when GitHub looks it
+	// up — without it, gh pr create fails with "Head sha can't be blank".
+	if len(gitr.Calls) != 3 ||
+		!argsHasFC(gitr.Calls[0].Args, "fetch") ||
+		!argsHasFC(gitr.Calls[1].Args, "rebase") ||
+		!argsHasFC(gitr.Calls[2].Args, "push") {
+		t.Errorf("git calls = %+v; want fetch, rebase, push", gitr.Calls)
 	}
 	// PR created draft, head=branch, body has stack section.
 	c := lastPRCreate(svc.GH.(*ghfake.Client))
@@ -63,6 +68,68 @@ func TestCheckpoint_FirstTimeCreatesDraftPR(t *testing.T) {
 	reg, _ := store.Load()
 	if reg.Features[0].Workers[0].PRURL == "" {
 		t.Error("registry pr_url not updated after create")
+	}
+}
+
+// TestCheckpoint_FirstTimePushSetsUpstreamForBranch guards against a
+// regression where the create path called gh pr create before pushing the
+// worker branch to origin. Symptoms in the wild: gh failed with "Head sha
+// can't be blank ... No commits between <base> and <head>" and the registry
+// never got a pr_url, leaving the worker stuck half-checkpointed. The fix
+// pushes with -u so the branch is on origin AND has an upstream tracking ref
+// before the GitHub API call.
+func TestCheckpoint_FirstTimePushSetsUpstreamForBranch(t *testing.T) {
+	ghc := ghfake.NewClient()
+	svc, _, gitr := checkpointService(t, "",
+		[]gitfake.Response{{}, {}, {}}, ghc)
+
+	if _, err := svc.Checkpoint(context.Background(), feature.CheckpointOpts{WorkerRef: "auth/erai/api"}); err != nil {
+		t.Fatalf("Checkpoint: %v", err)
+	}
+
+	// Find the push call; it must target origin + the worker branch with -u.
+	pushIdx := -1
+	for i, call := range gitr.Calls {
+		if argsHasFC(call.Args, "push") && argsHasFC(call.Args, "origin") {
+			pushIdx = i
+			break
+		}
+	}
+	if pushIdx < 0 {
+		t.Fatalf("expected a git push to origin before PRCreate; calls=%+v", gitr.Calls)
+	}
+	args := gitr.Calls[pushIdx].Args
+	if !argsHasFC(args, "feature/auth/erai/api") {
+		t.Errorf("push did not target worker branch; args=%v", args)
+	}
+	if !argsHasFC(args, "-u") && !argsHasFC(args, "--set-upstream") {
+		t.Errorf("push must set upstream tracking; args=%v", args)
+	}
+	if lastPRCreate(ghc) == nil {
+		t.Fatalf("PRCreate was never called")
+	}
+}
+
+// TestCheckpoint_FirstTimePushFailureSurfaces ensures a failed initial push
+// short-circuits the checkpoint with a clear error rather than silently
+// dropping through to gh pr create (which would fail opaquely with "Head sha
+// can't be blank") and leave the registry in a partial state.
+func TestCheckpoint_FirstTimePushFailureSurfaces(t *testing.T) {
+	pushErr := stderrors.New("non-fast-forward")
+	// fetch ok, rebase ok, push fails.
+	svc, _, _ := checkpointService(t, "",
+		[]gitfake.Response{{}, {}, {Err: pushErr}}, ghfake.NewClient())
+
+	_, err := svc.Checkpoint(context.Background(), feature.CheckpointOpts{WorkerRef: "auth/erai/api"})
+	if err == nil {
+		t.Fatalf("push failure: want error, got nil")
+	}
+	if !strings.Contains(err.Error(), "push") {
+		t.Errorf("error should mention push; got: %v", err)
+	}
+	// PRCreate must NOT have been called when push failed.
+	if lastPRCreate(svc.GH.(*ghfake.Client)) != nil {
+		t.Error("PRCreate was called despite push failure; should short-circuit")
 	}
 }
 

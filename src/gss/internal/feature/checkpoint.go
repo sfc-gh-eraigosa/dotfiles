@@ -76,6 +76,19 @@ func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (Checkpoi
 
 	res := CheckpointResult{Ref: ref.String()}
 	if w.PRURL == "" {
+		// Push the worker branch to origin BEFORE asking gh to open a PR.
+		// gh pr create only fills in head/base SHAs by looking them up via
+		// the GitHub API; if the branch isn't on origin yet, that lookup
+		// returns empty and the call fails opaquely with
+		//   "Head sha can't be blank, Base sha can't be blank,
+		//    No commits between <base> and <head>"
+		// which leaves the worker half-checkpointed (commit local-only,
+		// registry still has no pr_url). -u sets upstream tracking so the
+		// follow-up checkpoint's --force-with-lease push has a remote ref
+		// to compare against.
+		if out, err := s.Git.Run(ctx, "-C", w.Worktree, "push", "-u", "origin", w.Branch); err != nil {
+			return CheckpointResult{}, fmt.Errorf("checkpoint: push: %w: %s", err, strings.TrimSpace(string(out)))
+		}
 		pr, err := s.GH.PRCreate(ctx, gh.PRCreateOpts{Title: title, Body: body, Base: base, Head: w.Branch, Draft: true})
 		if err != nil {
 			return CheckpointResult{}, fmt.Errorf("checkpoint: pr create: %w", err)
