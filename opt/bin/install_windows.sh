@@ -85,7 +85,14 @@ case "$choice" in
         # Run setup-apps.ps1 first to ensure all apps (including AutoHotkey) are installed.
         "$ps_exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${BASE_DIR}/opt/Desktop/Apps/scripts/setup-apps.ps1" > /tmp/setup_apps.log 2>&1
         cat /tmp/setup_apps.log
-        
+
+        # Install Wispr Flow (voice dictation). Not on winget, so it has its own
+        # MSI installer. Idempotent; self-elevates for the machine-wide MSI.
+        # Replaces the retired AHK Copilot-key voice macro (see WISPR-FLOW.md).
+        echo "Installing Wispr Flow (voice dictation)..."
+        "$ps_exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${BASE_DIR}/opt/Desktop/Apps/scripts/install-wisprflow.ps1" > /tmp/install_wisprflow.log 2>&1
+        cat /tmp/install_wisprflow.log
+
         # Then setup the macOS-style hotkeys (AutoHotkey)
         echo "Registering macOS-style hotkeys (may trigger a Windows UAC prompt)..."
         "$ps_exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${BASE_DIR}/opt/Desktop/Apps/scripts/setup-autostart.ps1" > /tmp/setup_autostart.log 2>&1

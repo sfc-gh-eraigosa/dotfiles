@@ -21,6 +21,7 @@ This directory contains scripts for configuring the operating system, environmen
 - `enable-vmx.sh`: Helper to check/enable virtualization support.
 - `coco_install.sh`: Installer for the COCO dataset tools or similar.
 - `crouton-alias.sh`: Aliases for Crouton (Chromebook) environments.
+- `retire-ahk-voice-macro.sh`: **WSL migration helper.** Removes the old AutoHotkey Copilot-key voice macro from a machine's deployed `macos.ahk` (backs it up locally, re-deploys the cleaned copy, restarts AutoHotkey). One-off cleanup for hosts provisioned before voice dictation moved to Wispr Flow. Idempotent; `--dry-run` to preview. See `opt/Desktop/Apps/scripts/WISPR-FLOW.md`.
 
 ## Environment Profile
 
