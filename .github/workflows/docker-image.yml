@@ -19,6 +19,14 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  # Phase 6 of CI hygiene (issue #46). `merge_group:` is the synthetic-commit
+  # event GitHub's merge queue dispatches BEFORE landing a PR on main. Every
+  # job below is wired in as a required check via branch protection, so they
+  # must execute on this trigger or the queue will block indefinitely waiting
+  # for status. No `branches:` filter — `merge_group` always targets the
+  # queue's configured base branch (main in our case).
+  # Admin setup runbook: .github/MERGE_QUEUE_SETUP.md
+  merge_group:
 
 jobs:
   lint:
