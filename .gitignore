@@ -12,9 +12,10 @@
 !Dockerfile
 !.gitignore
 !**/GEMINI.md
-!**/WORKER.md
 !**/FEATURE.md
 !**/CLAUDE.md
+# WORKER.md is per-worktree scratch state (gss feature worker add seeds it);
+# keep it local-only so it never lands in a PR or the main branch.
 
 # Repository Structure Exceptions
 !.github/
