@@ -10,7 +10,7 @@ set -euo pipefail
 NERD_FONTS_VERSION="v3.4.0"
 NERD_FONTS_ASSET="Meslo.zip"
 NERD_FONTS_URL_BASE="https://github.com/ryanoasis/nerd-fonts/releases/download/${NERD_FONTS_VERSION}"
-FONT_FAMILY="MesloLGS NF"
+FONT_FAMILY="MesloLGS Nerd Font"
 FONT_SIZE=13
 
 # ── Preflight ────────────────────────────────────────────────────────────────
@@ -30,16 +30,16 @@ done
 # ── Install font faces from the pinned release ───────────────────────────────
 font_dir="${HOME}/Library/Fonts"
 mkdir -p "$font_dir"
-if system_profiler SPFontsDataType 2>/dev/null | grep -qi "MesloLGS NF"; then
-  echo "MesloLGS NF already present in system fonts; skipping download."
+if system_profiler SPFontsDataType 2>/dev/null | grep -qi "MesloLGS Nerd Font"; then
+  echo "MesloLGS Nerd Font already present in system fonts; skipping download."
 else
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
   echo "Downloading ${NERD_FONTS_ASSET} (${NERD_FONTS_VERSION})..."
   curl -fsSL -o "${tmp}/${NERD_FONTS_ASSET}" "${NERD_FONTS_URL_BASE}/${NERD_FONTS_ASSET}"
-  unzip -o -q "${tmp}/${NERD_FONTS_ASSET}" 'MesloLGS NF *.ttf' -d "$tmp"
-  cp "${tmp}"/MesloLGS\ NF\ *.ttf "$font_dir"/
-  echo "Installed MesloLGS NF faces into ${font_dir}."
+  unzip -o -q "${tmp}/${NERD_FONTS_ASSET}" 'MesloLGSNerdFont-*.ttf' -d "$tmp"
+  cp "${tmp}"/MesloLGSNerdFont-*.ttf "$font_dir"/
+  echo "Installed MesloLGS Nerd Font faces into ${font_dir}."
 fi
 
 # ── iTerm2 Dynamic Profile (loads live; NOT overwritten on quit) ─────────────

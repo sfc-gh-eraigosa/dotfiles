@@ -52,17 +52,17 @@ else
   echo "skip - no system font found for negative test"
 fi
 
-# 4) If MesloLGS NF is installed, check coverage (exit 0).
+# 4) If MesloLGS Nerd Font is installed, check coverage (exit 0).
 meslo_font=""
 case "$(uname -s)" in
   Darwin) meslo_font="$(/usr/bin/find "${HOME}/Library/Fonts" /Library/Fonts \
-            -iname 'MesloLGS NF Regular.ttf' 2>/dev/null | head -1)" ;;
-  *)      raw="$(fc-list 2>/dev/null | grep -i 'MesloLGS NF Regular' | head -1 | cut -d: -f1)"; meslo_font="${raw%% }" ;;
+            -iname 'MesloLGSNerdFont-Regular.ttf' 2>/dev/null | head -1)" ;;
+  *)      raw="$(fc-list 2>/dev/null | grep -i 'MesloLGS Nerd Font' | grep -i 'Regular' | head -1 | cut -d: -f1)"; meslo_font="${raw%% }" ;;
 esac
 if [ -n "${meslo_font:-}" ] && [ -f "$meslo_font" ]; then
-  assert_exit 0 "MesloLGS NF Regular covers all 17 codepoints (exit 0)" "$tmp/glyphcheck" "$meslo_font"
+  assert_exit 0 "MesloLGS Nerd Font Regular covers all 17 codepoints (exit 0)" "$tmp/glyphcheck" "$meslo_font"
 else
-  echo "skip - MesloLGS NF not installed; run install_nerd_font_<os>.sh first"
+  echo "skip - MesloLGS Nerd Font not installed; run install_nerd_font_<os>.sh first"
 fi
 
 echo "----"

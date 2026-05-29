@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-    gsl-packaged Windows Nerd Font installer. Installs the pinned MesloLGS NF
+    gsl-packaged Windows Nerd Font installer. Installs the pinned MesloLGS Nerd Font
     faces from the ryanoasis/nerd-fonts release and activates them for the
     running session via GDI. Idempotent.
 .OUTPUTS
-    Returns the installed font family name ('MesloLGS NF') so callers (e.g.
+    Returns the installed font family name ('MesloLGS Nerd Font') so callers (e.g.
     setup-apps.ps1) can use it for terminal profiles.
 #>
 [CmdletBinding()]
@@ -19,7 +19,7 @@ $ErrorActionPreference = 'Stop'
 $NerdFontsVersion = 'v3.4.0'
 $NerdFontsAsset   = 'Meslo.zip'
 $NerdFontsUrl     = "https://github.com/ryanoasis/nerd-fonts/releases/download/$NerdFontsVersion/$NerdFontsAsset"
-$FontFamily       = 'MesloLGS NF'
+$FontFamily       = 'MesloLGS Nerd Font'
 
 # ── Preflight ────────────────────────────────────────────────────────────────
 $fontDir = "$env:LOCALAPPDATA\Microsoft\Windows\Fonts"
@@ -37,10 +37,10 @@ if (-not (Get-Command Invoke-WebRequest -ErrorAction SilentlyContinue)) {
 Write-Host "`n=== gsl Nerd Font ($FontFamily, nerd-fonts $NerdFontsVersion) ===" -ForegroundColor Cyan
 
 $faces = @(
-    @{ File = 'MesloLGS NF Regular.ttf';     Reg = 'MesloLGS NF (TrueType)' }
-    @{ File = 'MesloLGS NF Bold.ttf';        Reg = 'MesloLGS NF Bold (TrueType)' }
-    @{ File = 'MesloLGS NF Italic.ttf';      Reg = 'MesloLGS NF Italic (TrueType)' }
-    @{ File = 'MesloLGS NF Bold Italic.ttf'; Reg = 'MesloLGS NF Bold Italic (TrueType)' }
+    @{ File = 'MesloLGSNerdFont-Regular.ttf';    Reg = 'MesloLGS Nerd Font (TrueType)' }
+    @{ File = 'MesloLGSNerdFont-Bold.ttf';       Reg = 'MesloLGS Nerd Font Bold (TrueType)' }
+    @{ File = 'MesloLGSNerdFont-Italic.ttf';     Reg = 'MesloLGS Nerd Font Italic (TrueType)' }
+    @{ File = 'MesloLGSNerdFont-BoldItalic.ttf'; Reg = 'MesloLGS Nerd Font Bold Italic (TrueType)' }
 )
 
 # Drop stale Ubuntu Mono registry entries whose files no longer exist (migration).
