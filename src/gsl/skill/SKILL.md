@@ -92,6 +92,26 @@ The skill directory is linked by `opt/scripts/system/sync-skills.sh` into
 
 Run `sync-skills --build` to rebuild the binary and refresh all skill links.
 
+**Font setup (Nerd Font for powerline style)**
+
+`install.sh` runs the gsl-packaged font installers AFTER the gsl build so the
+`powerline` style renders glyphs correctly. Pinned release: `NERD_FONTS_VERSION=v3.4.0`
+(ryanoasis/nerd-fonts, `Meslo.zip` — family: `MesloLGS Nerd Font`).
+
+| OS | Installer | Notes |
+|----|-----------|-------|
+| macOS | `src/gsl/scripts/install_nerd_font_macos.sh` | Writes an iTerm2 Dynamic Profile (`gsl-nerd-font`) |
+| Linux/WSL | `src/gsl/scripts/install_nerd_font_linux.sh` | Also invokes Windows installer from WSL for Windows Terminal |
+| Windows | `src/gsl/scripts/install_nerd_font_windows.ps1` | Called by `setup-apps.ps1 → Install-NerdFont`; touchless (`-NonInteractive -ExecutionPolicy Bypass`) |
+
+After install, `src/gsl/scripts/check-font-glyphs.sh` proves the installed font
+covers all 17 PUA codepoints gsl emits. Run it manually to verify:
+
+```bash
+bash src/gsl/scripts/check-font-glyphs.sh
+# expect: OK: all 17 gsl codepoints present in .../MesloLGSNerdFont-Regular.ttf
+```
+
 ## Gemini command
 
 `/gsl-status` — defined in `ai/gemini/commands/gsl-status.toml`. Renders the

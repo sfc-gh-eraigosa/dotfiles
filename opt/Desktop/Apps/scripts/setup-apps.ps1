@@ -48,7 +48,7 @@ $Distros      = [ordered]@{
 
 $DistroUser   = 'wenlock'        # Linux user to ensure on newly-created distros
 $GitHubLink   = 'C:\Users\edwar\GitHub'  # Windows folder (a symlink) to expose in WSL
-$TerminalFont = 'Ubuntu Mono'
+$TerminalFont = 'MesloLGS NF'
 $HistorySize  = 100000
 
 # Color schemes to publish, and the order in which a profile is made per distro.
@@ -168,63 +168,20 @@ function Get-WslReport {
 }
 
 # ---- Fonts -----------------------------------------------------------------
-
-function Install-UbuntuMono {
-    Write-Host "`n=== [4/6] Ubuntu Mono font ===" -ForegroundColor Cyan
-    $fontDir = "$env:LOCALAPPDATA\Microsoft\Windows\Fonts"
-    $regKey  = 'HKCU:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts'
-    New-Item -ItemType Directory -Force -Path $fontDir | Out-Null
-
-    $base = 'https://github.com/google/fonts/raw/main/ufl/ubuntumono'
-    $faces = @(
-        @{ File = 'UbuntuMono-Regular.ttf';    Reg = 'Ubuntu Mono (TrueType)' }
-        @{ File = 'UbuntuMono-Bold.ttf';       Reg = 'Ubuntu Mono Bold (TrueType)' }
-        @{ File = 'UbuntuMono-Italic.ttf';     Reg = 'Ubuntu Mono Italic (TrueType)' }
-        @{ File = 'UbuntuMono-BoldItalic.ttf'; Reg = 'Ubuntu Mono Bold Italic (TrueType)' }
-    )
-
-    # Drop the stale registry entry whose file no longer exists.
-    $existing = Get-ItemProperty $regKey -ErrorAction SilentlyContinue
-    if ($existing) {
-        foreach ($p in $existing.PSObject.Properties) {
-            if ($p.Name -match 'Ubuntu Mono' -and $p.Value -and -not (Test-Path $p.Value)) {
-                Remove-ItemProperty -Path $regKey -Name $p.Name -ErrorAction SilentlyContinue
-            }
-        }
+# Font install/activation now lives in the gsl skill so it stays in sync with
+# the codepoints gsl renders. setup-apps.ps1 only delegates.
+function Install-NerdFont {
+    Write-Host "`n=== [4/6] Nerd Font (MesloLGS NF) ===" -ForegroundColor Cyan
+    # setup-apps.ps1 sits at opt/Desktop/Apps/scripts/; the gsl script is at
+    # src/gsl/scripts/ — four levels up, then into src/gsl/scripts.
+    $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
+    $fontScript = Join-Path $repoRoot 'src\gsl\scripts\install_nerd_font_windows.ps1'
+    if (-not (Test-Path $fontScript)) {
+        Write-Host "Nerd Font installer not found at $fontScript -- skipping." -ForegroundColor Yellow
+        return
     }
-
-    $installed = @()
-    foreach ($f in $faces) {
-        $dest = Join-Path $fontDir $f.File
-        if (-not (Test-Path $dest)) {
-            try {
-                Invoke-WebRequest -Uri "$base/$($f.File)" -OutFile $dest -UseBasicParsing
-                Write-Host "Downloaded $($f.File)" -ForegroundColor Green
-            } catch {
-                Write-Host "Failed to download $($f.File): $($_.Exception.Message)" -ForegroundColor Red
-                continue
-            }
-        } else {
-            Write-Host "$($f.File) already present -- skipping download." -ForegroundColor DarkGray
-        }
-        New-ItemProperty -Path $regKey -Name $f.Reg -Value $dest -PropertyType String -Force | Out-Null
-        $installed += $dest
-    }
-
-    # The registry value alone only activates the font at next logon. Register it
-    # with the running session via GDI and broadcast WM_FONTCHANGE so newly-
-    # launched apps (e.g. a fresh Windows Terminal) can find it immediately.
-    $sig = @'
-[DllImport("gdi32.dll", CharSet=CharSet.Unicode)]
-public static extern int AddFontResourceW(string lpFileName);
-[DllImport("user32.dll", CharSet=CharSet.Auto)]
-public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam, uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
-'@
-    $api = Add-Type -MemberDefinition $sig -Name FontApi -Namespace Win32 -PassThru
-    foreach ($p in $installed) { [void]$api::AddFontResourceW($p) }
-    $res = [IntPtr]::Zero
-    [void]$api::SendMessageTimeout([IntPtr]0xffff, 0x001D, [IntPtr]::Zero, [IntPtr]::Zero, 2, 2000, [ref]$res)
-    Write-Host "Activated Ubuntu Mono for this session (restart Terminal to pick it up)." -ForegroundColor Green
+    $family = & $fontScript
+    if ($family) { $script:TerminalFont = $family }
 }
 
 # ---- Windows Terminal ------------------------------------------------------
@@ -423,7 +380,7 @@ if ($wslOk) {
 }
 
 # [4/6] Font
-Install-UbuntuMono
+Install-NerdFont
 
 # [5/6] Desktop apps (winget)
 Write-Host "`n=== [5/6] Desktop apps (winget) ===" -ForegroundColor Cyan
