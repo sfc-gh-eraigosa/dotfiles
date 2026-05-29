@@ -71,14 +71,17 @@ func TestCheckpoint_FirstTimeCreatesDraftPR(t *testing.T) {
 	}
 }
 
-// TestCheckpoint_FirstTimePushSetsUpstreamForBranch guards against a
-// regression where the create path called gh pr create before pushing the
-// worker branch to origin. Symptoms in the wild: gh failed with "Head sha
-// can't be blank ... No commits between <base> and <head>" and the registry
-// never got a pr_url, leaving the worker stuck half-checkpointed. The fix
-// pushes with -u so the branch is on origin AND has an upstream tracking ref
-// before the GitHub API call.
-func TestCheckpoint_FirstTimePushSetsUpstreamForBranch(t *testing.T) {
+// TestCheckpoint_FirstTimePushUsesForceWithLeaseAndSetsUpstream guards
+// against a regression where the create path called gh pr create before
+// pushing the worker branch to origin. Symptoms in the wild: gh failed with
+// "Head sha can't be blank ... No commits between <base> and <head>" and the
+// registry never got a pr_url, leaving the worker stuck half-checkpointed.
+//
+// The fix mirrors the update path: push with --force-with-lease so a divergent
+// remote branch (e.g. from a half-completed previous checkpoint) doesn't
+// strand the worker on a non-fast-forward error, plus --set-upstream so the
+// branch has a tracking ref before the next checkpoint runs.
+func TestCheckpoint_FirstTimePushUsesForceWithLeaseAndSetsUpstream(t *testing.T) {
 	ghc := ghfake.NewClient()
 	svc, _, gitr := checkpointService(t, "",
 		[]gitfake.Response{{}, {}, {}}, ghc)
@@ -87,7 +90,6 @@ func TestCheckpoint_FirstTimePushSetsUpstreamForBranch(t *testing.T) {
 		t.Fatalf("Checkpoint: %v", err)
 	}
 
-	// Find the push call; it must target origin + the worker branch with -u.
 	pushIdx := -1
 	for i, call := range gitr.Calls {
 		if argsHasFC(call.Args, "push") && argsHasFC(call.Args, "origin") {
@@ -101,6 +103,9 @@ func TestCheckpoint_FirstTimePushSetsUpstreamForBranch(t *testing.T) {
 	args := gitr.Calls[pushIdx].Args
 	if !argsHasFC(args, "feature/auth/erai/api") {
 		t.Errorf("push did not target worker branch; args=%v", args)
+	}
+	if !argsHasFC(args, "--force-with-lease") {
+		t.Errorf("push must use --force-with-lease (mirroring update path); args=%v", args)
 	}
 	if !argsHasFC(args, "-u") && !argsHasFC(args, "--set-upstream") {
 		t.Errorf("push must set upstream tracking; args=%v", args)

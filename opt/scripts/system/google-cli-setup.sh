@@ -58,8 +58,6 @@ load_node_env() {
     else
         SUDO=""
     fi
-
-    echo -e "${BLUE}Using npm at $(command -v npm) (prefix: ${NPM_PREFIX})${NC}"
 }
 
 install_or_upgrade() {
