@@ -50,3 +50,46 @@ claude-test: ## Run Claude Code sanity check (CLI, links, hooks, 27-case hook te
 .PHONY: claude-hook-test
 claude-hook-test: ## Run safety_guard hook test suite only
 	./ai/hooks/safety_guard_test.sh
+
+# -----------------------------------------------------------------------------
+# Lint targets (issue #46 phase 1)
+# -----------------------------------------------------------------------------
+# These are the canonical entry points for repo-wide linting. CI invokes
+# `make lint` to fan out to all three sub-targets. Each sub-target may be
+# invoked individually for fast local iteration.
+#
+# Tool requirements (install locally before running):
+#   - golangci-lint  (Go)         https://golangci-lint.run/
+#   - shellcheck     (shell)      https://www.shellcheck.net/
+#   - markdownlint-cli2 (Markdown) https://github.com/DavidAnson/markdownlint-cli2
+# -----------------------------------------------------------------------------
+
+.PHONY: lint
+lint: lint-go lint-shell lint-markdown ## Run all linters (go, shell, markdown)
+
+.PHONY: lint-go
+lint-go: ## Lint Go modules (gofmt + golangci-lint, per-module)
+	@echo "==> gofmt check across src/..."
+	@unformatted=$$(gofmt -l ./src 2>/dev/null); \
+		if [ -n "$$unformatted" ]; then \
+			echo "gofmt found unformatted files:"; \
+			echo "$$unformatted"; \
+			exit 1; \
+		fi
+	@for d in src/*; do \
+		if [ -f "$$d/go.mod" ]; then \
+			echo "==> golangci-lint run ($$d)"; \
+			(cd "$$d" && golangci-lint run ./...) || exit 1; \
+		fi; \
+	done
+
+.PHONY: lint-shell
+lint-shell: ## Lint shell scripts with shellcheck
+	@echo "==> shellcheck (opt/scripts, ai, install.sh)"
+	@files=$$(find opt/scripts ai -name '*.sh' -type f 2>/dev/null) ; \
+		shellcheck -x -S warning install.sh $$files
+
+.PHONY: lint-markdown
+lint-markdown: ## Lint markdown files with markdownlint-cli2
+	@echo "==> markdownlint-cli2"
+	@markdownlint-cli2 "**/*.md" "#opt/google-cloud-sdk" "#node_modules" "#**/node_modules"

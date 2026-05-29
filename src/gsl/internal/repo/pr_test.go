@@ -221,7 +221,7 @@ func TestPR_RegistryHit_ByBranch(t *testing.T) {
 	info, err := PR(
 		context.Background(), ghSpy,
 		"feature/gsl/edward-raigosa/impl", // matching branch
-		"/not/the/worktree/path",           // non-matching toplevel
+		"/not/the/worktree/path",          // non-matching toplevel
 		testdataPath("registry.json"),
 	)
 	if err != nil {

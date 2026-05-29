@@ -63,10 +63,10 @@ func TestSelectModel_GeneralistFallsBackToCheapest(t *testing.T) {
 
 func TestSelectModel_NamedAgentMapsBySize(t *testing.T) {
 	cases := []struct {
-		name   string
-		model  string
-		host   Assistant
-		want   string
+		name  string
+		model string
+		host  Assistant
+		want  string
 	}{
 		{"captain ollama 1.8b → claude small", "internlm2:1.8b", AssistantClaude, claudeModels[ModelTierSmall]},
 		{"researcher 360m → gemini small", "smollm:360m", AssistantGemini, geminiModels[ModelTierSmall]},

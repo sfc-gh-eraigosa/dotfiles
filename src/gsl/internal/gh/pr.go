@@ -152,4 +152,3 @@ func PR(ctx context.Context, runner Runner, branch string) (*PRInfo, error) {
 	writeCache(path, info)
 	return info, nil
 }
-

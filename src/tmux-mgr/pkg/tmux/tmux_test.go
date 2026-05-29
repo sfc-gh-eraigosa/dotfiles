@@ -48,7 +48,7 @@ func TestCreatePane(t *testing.T) {
 
 func TestLegacyManager(t *testing.T) {
 	m := &Manager{}
-	
+
 	// Test Run
 	_, err := m.Run("info")
 	if err != nil {

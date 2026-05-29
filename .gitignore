@@ -17,6 +17,16 @@
 # WORKER.md is per-worktree scratch state (gss feature worker add seeds it);
 # keep it local-only so it never lands in a PR or the main branch.
 
+# CI hygiene config (issue #46 phase 1). These are repo-root linter configs
+# read by editors, golangci-lint, shellcheck, and markdownlint-cli2. They MUST
+# be opt-in explicitly because the leading `*` rule above would otherwise hide
+# them silently.
+!.editorconfig
+!.golangci.yml
+!.shellcheckrc
+!.markdownlint.jsonc
+!.ci-baseline-issues.md
+
 # Repository Structure Exceptions
 !.github/
 !.github/**
