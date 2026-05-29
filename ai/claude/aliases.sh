@@ -21,9 +21,11 @@
 CLAUDE_YOLO_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/claude"
 CLAUDE_YOLO_FILE="$CLAUDE_YOLO_DIR/yolo.enabled"
 
-_claude_yolo_enabled() {
-    [ -f "$CLAUDE_YOLO_FILE" ]
-}
+# Note: the YOLO check is inlined (instead of a helper function) because
+# Claude Code's shell-snapshot mechanism strips functions whose names start
+# with '_'. A separate `_claude_yolo_enabled` helper would survive in the
+# live shell but vanish from the snapshot, causing "command not found"
+# errors whenever the snapshot is sourced.
 
 claude() {
     # Auto-anchor in tmux so AI-driven pane splits target this pane.
@@ -33,7 +35,7 @@ claude() {
         echo "Tip: run inside a tmux pane for AI pane-split support." \
              "Use 'tmux-start' or 'tmux new-session -A -s main' first." >&2
     fi
-    if _claude_yolo_enabled; then
+    if [ -f "$CLAUDE_YOLO_FILE" ]; then
         command claude --dangerously-skip-permissions "$@"
     else
         command claude "$@"
@@ -42,7 +44,7 @@ claude() {
 
 claude-toggle() {
     mkdir -p "$CLAUDE_YOLO_DIR"
-    if _claude_yolo_enabled; then
+    if [ -f "$CLAUDE_YOLO_FILE" ]; then
         rm -f "$CLAUDE_YOLO_FILE"
         echo "Claude YOLO mode: OFF — claude will prompt for permissions."
     else
