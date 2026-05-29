@@ -86,12 +86,18 @@ case "$choice" in
         "$ps_exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${BASE_DIR}/opt/Desktop/Apps/scripts/setup-apps.ps1" > /tmp/setup_apps.log 2>&1
         cat /tmp/setup_apps.log
 
-        # Install Wispr Flow (voice dictation). Not on winget, so it has its own
-        # MSI installer. Idempotent; self-elevates for the machine-wide MSI.
-        # Replaces the retired AHK Copilot-key voice macro (see WISPR-FLOW.md).
-        echo "Installing Wispr Flow (voice dictation)..."
-        "$ps_exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${BASE_DIR}/opt/Desktop/Apps/scripts/install-wisprflow.ps1" > /tmp/install_wisprflow.log 2>&1
-        cat /tmp/install_wisprflow.log
+        # Wispr Flow (voice dictation) replaces the retired AHK Copilot-key voice
+        # macro. Its machine-wide MSI needs elevation (a UAC prompt), which can't
+        # be driven from this unattended WSL context, so we don't auto-install it
+        # here. Point at the installer + runbook to run interactively instead.
+        wispr_dir_w="$(wslpath -w "${win_desktop}/Apps/scripts" 2>/dev/null)"
+        echo ""
+        echo "Wispr Flow (voice dictation) — one manual step (the MSI needs a UAC prompt):"
+        echo "  From a normal Windows PowerShell window, run the installer and approve UAC:"
+        echo "    powershell -ExecutionPolicy Bypass -File \"${wispr_dir_w}\\install-wisprflow.ps1\""
+        echo "  Then follow the one-time setup (sign-in, mic, bind the Copilot key) in:"
+        echo "    ${wispr_dir_w}\\WISPR-FLOW.md"
+        echo ""
 
         # Then setup the macOS-style hotkeys (AutoHotkey)
         echo "Registering macOS-style hotkeys (may trigger a Windows UAC prompt)..."

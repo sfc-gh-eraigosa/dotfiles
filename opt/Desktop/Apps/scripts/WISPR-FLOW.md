@@ -20,18 +20,22 @@ corners — only the voice block was removed.
 
 ## Install
 
-**Automatic** — `install.sh` runs the Windows desktop step
-(`opt/bin/install_windows.sh`), which calls `install-wisprflow.ps1` when you opt
-into Windows customization.
+There is **no fully unattended install**: Wispr Flow ships a machine-wide MSI
+that requires elevation (a UAC prompt), which can't be driven from the unattended
+WSL provisioning context. So `install.sh` / `install_windows.sh` does **not**
+auto-install it — it prints a pointer to this runbook and the installer.
 
-**Manual / re-run** — from a normal PowerShell window:
+**Run the installer interactively** — from a normal Windows PowerShell window
+(it self-elevates; approve the UAC prompt). The scripts are deployed to your
+Desktop under `Apps\scripts\`:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\OneDrive\Documents\Scripts\install-wisprflow.ps1"
+powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\Desktop\Apps\scripts\install-wisprflow.ps1"
 ```
 
 The installer is idempotent (skips if already installed), pins a known-good
-version, and falls back to "latest" if the pin ages out. Useful switches:
+version, caches the download, and falls back to "latest" if the pin ages out.
+Useful switches:
 
 | Switch | Effect |
 |--------|--------|
