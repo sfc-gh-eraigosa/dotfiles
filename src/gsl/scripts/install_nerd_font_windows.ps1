@@ -44,9 +44,7 @@ $faces = @(
 )
 
 # Drop stale Ubuntu Mono registry entries whose files no longer exist (migration).
-$ErrorActionPreference = 'SilentlyContinue'
-$existing = Get-ItemProperty $regKey
-$ErrorActionPreference = 'Stop'
+$existing = Get-ItemProperty $regKey -ErrorAction SilentlyContinue
 if ($existing) {
     foreach ($p in $existing.PSObject.Properties) {
         if ($p.Name -match 'Ubuntu Mono' -and $p.Value -and -not (Test-Path $p.Value)) {
@@ -89,7 +87,11 @@ public static extern int AddFontResourceW(string lpFileName);
 [DllImport("user32.dll", CharSet=CharSet.Auto)]
 public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam, uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
 '@
-$api = Add-Type -MemberDefinition $sig -Name FontApi -Namespace Win32 -PassThru
+if (-not ([System.Management.Automation.PSTypeName]'Win32.FontApi').Type) {
+    $api = Add-Type -MemberDefinition $sig -Name FontApi -Namespace Win32 -PassThru
+} else {
+    $api = [Win32.FontApi]
+}
 foreach ($p in $installed) { [void]$api::AddFontResourceW($p) }
 $res = [IntPtr]::Zero
 [void]$api::SendMessageTimeout([IntPtr]0xffff, 0x001D, [IntPtr]::Zero, [IntPtr]::Zero, 2, 2000, [ref]$res)
