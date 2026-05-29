@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/wenlock/dotfiles/gsl/internal/observe"
 	"github.com/wenlock/dotfiles/gsl/internal/payload"
 )
 
@@ -28,7 +30,14 @@ func runRender(cmd *cobra.Command, args []string) error {
 	// Parse payload from stdin; degrade gracefully on error.
 	p, err := payload.ParseReader(os.Stdin)
 	if err != nil {
-		// Bad JSON on stdin: log to stderr but continue with empty payload.
+		// Bad JSON on stdin: emit a structured record so the failure is
+		// diagnosable (#30 was invisible for months because we only wrote
+		// to stderr, which Claude Code discards for status-line commands).
+		// Continue with empty payload.
+		observe.Default().WithFields(logrus.Fields{
+			"event": "payload.parse_error",
+			"error": err.Error(),
+		}).Warn("stdin parse failed; degrading to empty payload")
 		fmt.Fprintf(os.Stderr, "gsl render: stdin parse error (degrading): %v\n", err)
 		p = payload.Payload{}
 	}
