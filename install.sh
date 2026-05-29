@@ -413,6 +413,35 @@ if [ -f "${BASE_DIR}/src/gsl/build.sh" ]; then
     fi
 fi
 
+# Configure the Nerd Font (MesloLGS Nerd Font) used by gsl's powerline style.
+# Runs AFTER the gsl build so both the gsl skill files (linked by sync-skills
+# above) and the freshly-built ~/opt/bin/gsl exist. OS-dispatch to the
+# gsl-packaged installers under src/gsl/scripts/.
+GSL_FONT_SCRIPTS="${BASE_DIR}/src/gsl/scripts"
+case "$(uname -s)" in
+  Darwin)
+    if [ -f "${GSL_FONT_SCRIPTS}/install_nerd_font_macos.sh" ]; then
+      echo "Configuring Nerd Font (macOS)..."
+      bash "${GSL_FONT_SCRIPTS}/install_nerd_font_macos.sh" || \
+        echo "WARNING: macOS Nerd Font setup reported problems; continuing."
+    fi
+    ;;
+  Linux)
+    if [ ! -f "$NIX_MANAGED_FILE" ] && [ -f "${GSL_FONT_SCRIPTS}/install_nerd_font_linux.sh" ]; then
+      echo "Configuring Nerd Font (Linux/WSL)..."
+      bash "${GSL_FONT_SCRIPTS}/install_nerd_font_linux.sh" || \
+        echo "WARNING: Linux Nerd Font setup reported problems; continuing."
+    fi
+    ;;
+esac
+
+# Prove the installed font covers every codepoint gsl renders (non-fatal).
+if [ -f "${GSL_FONT_SCRIPTS}/check-font-glyphs.sh" ] && command -v go >/dev/null 2>&1; then
+  echo "Validating gsl glyph coverage..."
+  bash "${GSL_FONT_SCRIPTS}/check-font-glyphs.sh" || \
+    echo "WARNING: glyph-coverage check failed; gsl powerline glyphs may not render."
+fi
+
 # install fnm
 if ! command -v fnm &> /dev/null; then
   echo "Installing fnm..."
