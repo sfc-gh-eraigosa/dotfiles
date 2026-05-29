@@ -114,6 +114,69 @@ rm -rf "$FAKE_BIN"
 assert_eq "$T3RC" "0" "sync completes (no hang) when an install ignores SIGTERM"
 assert_contains "$OUT3" "timed out after 2s" "escalates to SIGKILL on a SIGTERM-ignoring install"
 
+# --- Behavioral: plugin calls run under setsid (no controlling terminal) -------
+# The real claude/gemini plugin subcommands open /dev/tty directly and render an
+# interactive TUI when a controlling terminal is present — bypassing the
+# </dev/null stdin guard and wedging the unattended installer (observed as a
+# job-control-stopped `claude`). sync-plugins must run them under `setsid` so the
+# CLIs have no controlling terminal and fall back to non-interactive mode. Verify
+# the wiring with a `setsid` shim that records its use (and shadows any real one,
+# so this also asserts the intent on macOS where setsid is absent).
+GUARD_BIN="$(mktemp -d)"
+cat > "$GUARD_BIN/setsid" <<'EOF'
+#!/usr/bin/env bash
+echo "SETSID_USED" >&2
+[ "$1" = "-w" ] && shift   # sync-plugins is expected to pass -w; then exec the rest
+exec "$@"
+EOF
+cat > "$GUARD_BIN/claude" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+cat > "$GUARD_BIN/gemini" <<'EOF'
+#!/usr/bin/env bash
+[ "$1 $2" = "extensions list" ] && exit 0
+exit 0
+EOF
+chmod +x "$GUARD_BIN/setsid" "$GUARD_BIN/claude" "$GUARD_BIN/gemini"
+GUARDOUT="$(PATH="$GUARD_BIN:$PATH" bash "$SYNC" 2>&1)"
+rm -rf "$GUARD_BIN"
+assert_contains "$GUARDOUT" "SETSID_USED" "runs plugin commands under setsid to detach the controlling terminal"
+
+# --- Behavioral: a /dev/tty-grabbing CLI must NOT hang the installer -----------
+# End-to-end proof of the fix: run sync_claude under a real pseudo-terminal (so a
+# controlling terminal exists, as in an interactive `./install.sh`) with a fake
+# claude that blocks forever IF it can open its controlling terminal, and prints
+# a sentinel only when it cannot. With setsid the controlling terminal is gone,
+# so the fake runs headless and sync completes; without setsid it would block
+# (and the sentinel would never appear). Linux-only — skipped where `script` or
+# `setsid` are unavailable (e.g. macOS).
+if command -v script >/dev/null 2>&1 && command -v setsid >/dev/null 2>&1; then
+    TTY_BIN="$(mktemp -d)"
+    cat > "$TTY_BIN/claude" <<'EOF'
+#!/usr/bin/env bash
+if : <>/dev/tty 2>/dev/null; then
+    sleep 600            # controlling terminal reachable -> mimic the hanging TUI
+else
+    echo "headless-ok"   # no controlling terminal -> setsid detached it
+fi
+exit 0
+EOF
+    cat > "$TTY_BIN/gemini" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+    chmod +x "$TTY_BIN/claude" "$TTY_BIN/gemini"
+    # Short per-call timeout bounds the pre-fix blocking case; outer `timeout 60`
+    # backstops the whole pty run so a regression fails loudly instead of wedging.
+    TTYOUT="$(SYNC_PLUGINS_TIMEOUT=3 SYNC_PLUGINS_KILL_GRACE=2 PATH="$TTY_BIN:$PATH" \
+              timeout 60 script -qec "bash '$SYNC'" /dev/null </dev/null 2>&1 | tr -d '\r')"
+    TTYRC=$?
+    rm -rf "$TTY_BIN"
+    assert_eq "$TTYRC" "0" "sync completes under a pty when the CLI would grab /dev/tty"
+    assert_contains "$TTYOUT" "headless-ok" "setsid detaches the controlling terminal so claude runs headless"
+fi
+
 echo "----"
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

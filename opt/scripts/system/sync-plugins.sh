@@ -28,6 +28,14 @@ esac
 # Resolve a timeout binary (GNU 'timeout', or 'gtimeout' from coreutils on macOS).
 # Empty when neither exists — calls then run unwrapped but still stdin-guarded.
 TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
+# Resolve setsid (util-linux). The claude/gemini plugin subcommands open
+# /dev/tty directly and render an interactive TUI when a controlling terminal is
+# present — bypassing the </dev/null stdin guard below and wedging an unattended
+# `./install.sh` (the CLI ends up job-control-stopped on a SIGTTOU/SIGTTIN). Run
+# them under `setsid` so they get a new session with NO controlling terminal,
+# can't open /dev/tty, and fall back to non-interactive mode. Empty on macOS
+# (no setsid); the per-call </dev/null + timeout guards still apply there.
+SETSID_BIN="$(command -v setsid || true)"
 # Per-call ceiling so a hung network fetch or an unexpected interactive prompt
 # can't wedge install.sh indefinitely (the orphaned-process failure mode this
 # guards against). Override with SYNC_PLUGINS_TIMEOUT for slow links.
@@ -37,6 +45,17 @@ CMD_TIMEOUT="${SYNC_PLUGINS_TIMEOUT:-300}"
 # the guard. `-k KILL_GRACE` escalates to SIGKILL KILL_GRACE seconds after the
 # initial signal, guaranteeing the call actually terminates.
 KILL_GRACE="${SYNC_PLUGINS_KILL_GRACE:-15}"
+
+# Guard prefix applied to every claude/gemini plugin invocation:
+#   setsid -w  → new session, no controlling terminal (see SETSID_BIN above);
+#                -w makes setsid wait and return the child's real exit code so
+#                the timeout rc detection below still works.
+#   timeout -k → bound runtime and SIGKILL a SIGTERM-ignoring CLI after the grace.
+# Either tool may be absent (minimal containers / macOS lacks setsid); the prefix
+# omits whatever is missing. </dev/null at each call site stays as the stdin guard.
+GUARD=()
+[ -n "$SETSID_BIN" ] && GUARD+=("$SETSID_BIN" -w)
+[ -n "$TIMEOUT_BIN" ] && GUARD+=("$TIMEOUT_BIN" -k "$KILL_GRACE" "$CMD_TIMEOUT")
 
 # Run a plugin command non-interactively. stdin comes from /dev/null so any
 # unexpected prompt (e.g. a credential or overwrite question) gets EOF and fails
@@ -49,11 +68,7 @@ run() {
     fi
     echo "+ $*"
     local rc=0
-    if [ -n "$TIMEOUT_BIN" ]; then
-        "$TIMEOUT_BIN" -k "$KILL_GRACE" "$CMD_TIMEOUT" "$@" </dev/null || rc=$?
-    else
-        "$@" </dev/null || rc=$?
-    fi
+    "${GUARD[@]+"${GUARD[@]}"}" "$@" </dev/null || rc=$?
     # 124 = timed out (SIGTERM); 137 = had to SIGKILL after -k grace (the gemini
     # CLI ignores SIGTERM, so this is the common timeout outcome, not a crash).
     if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
@@ -84,11 +99,7 @@ enable_claude_plugin() {
     fi
     echo "+ claude plugin enable $plugin"
     local rc=0
-    if [ -n "$TIMEOUT_BIN" ]; then
-        out="$("$TIMEOUT_BIN" -k "$KILL_GRACE" "$CMD_TIMEOUT" claude plugin enable "$plugin" </dev/null 2>&1)" || rc=$?
-    else
-        out="$(claude plugin enable "$plugin" </dev/null 2>&1)" || rc=$?
-    fi
+    out="$("${GUARD[@]+"${GUARD[@]}"}" claude plugin enable "$plugin" </dev/null 2>&1)" || rc=$?
     if [ "$rc" -eq 0 ]; then
         [ -n "$out" ] && echo "$out"
     elif printf '%s' "$out" | grep -qi "already enabled"; then
@@ -135,11 +146,7 @@ gemini_installed_names() {
 install_gemini_extension() {
     local source="$1" out rc=0
     echo "+ gemini extensions install $source --consent --skip-settings"
-    if [ -n "$TIMEOUT_BIN" ]; then
-        out="$("$TIMEOUT_BIN" -k "$KILL_GRACE" "$CMD_TIMEOUT" gemini extensions install "$source" --consent --skip-settings </dev/null 2>&1)" || rc=$?
-    else
-        out="$(gemini extensions install "$source" --consent --skip-settings </dev/null 2>&1)" || rc=$?
-    fi
+    out="$("${GUARD[@]+"${GUARD[@]}"}" gemini extensions install "$source" --consent --skip-settings </dev/null 2>&1)" || rc=$?
     if [ "$rc" -eq 0 ]; then
         [ -n "$out" ] && echo "$out"
     elif [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
