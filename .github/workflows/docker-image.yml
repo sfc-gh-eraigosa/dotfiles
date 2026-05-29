@@ -1,5 +1,19 @@
 name: Docker Image CI
 
+# Pin-to-SHA convention (issue #46 phase 5):
+# Every third-party GitHub Action used below is pinned to a full 40-char
+# commit SHA, with a trailing `# vX.Y.Z` comment naming the human-readable
+# release tag. This protects us from a compromised tag being silently
+# repointed at malicious code (a published `vX.Y.Z` tag can be moved by
+# anyone who controls the upstream repo; a 40-char SHA cannot). Dependabot
+# (.github/dependabot.yml) raises PRs that bump both the SHA and the
+# trailing comment together when a new release ships.
+#
+# When bumping a pin by hand:
+#   tag=$(gh api repos/<owner>/<repo>/releases/latest --jq .tag_name)
+#   sha=$(gh api repos/<owner>/<repo>/git/ref/tags/$tag --jq .object.sha)
+#   # then write: uses: <owner>/<repo>@$sha # $tag
+
 on:
   push:
     branches: [ main ]
@@ -8,19 +22,22 @@ on:
 
 jobs:
   lint:
-    name: Lint (go + shell + markdown)
+    name: Lint (go + shell + markdown + actions)
     runs-on: ubuntu-latest
     # Phase 1 of CI hygiene (issue #46). This job MUST gate unit-tests so
     # a lint regression short-circuits the rest of CI. Tool versions are
-    # pinned in .ci-baseline-issues.md; bump them in a dedicated PR
-    # (Phase 5 of issue #46) so reviewers can see the version delta.
+    # pinned in .ci-baseline-issues.md. Phase 5 added actionlint (MIT,
+    # https://github.com/rhysd/actionlint/blob/main/LICENSE.txt) to lint
+    # the workflow YAML itself.
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.26'
+          # setup-go@v5 enables module caching by default (cache: true);
+          # cache-dependency-path scopes the cache key to our four Go modules.
           cache-dependency-path: "src/**/*.sum"
 
       - name: Install golangci-lint
@@ -36,17 +53,29 @@ jobs:
       - name: Install markdownlint-cli2
         run: npm install -g markdownlint-cli2@0.22.1
 
+      - name: Install actionlint
+        # Pinned to the same Go release line we use for the rest of the
+        # workflow; bumps land via the same PR that bumps actionlint usage.
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
       - name: Run make lint
         run: make lint
+
+      - name: Run actionlint
+        # Lints the workflow YAML itself. Run AFTER make lint so a missing
+        # shellcheck/golangci-lint shows up first (clearer failure mode).
+        run: actionlint .github/workflows/*.yml
 
   unit-tests:
     name: Run Unit Tests
     needs: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.26'
           cache-dependency-path: "src/**/*.sum"
@@ -58,10 +87,9 @@ jobs:
         # `if: always()` so the artifact is still uploaded when the coverage
         # gate (the previous step) FAILS — that's exactly when reviewers want
         # to inspect which package is dragging the module under its floor.
-        # actions/upload-artifact is pinned at v3 to match the rest of the
-        # workflow; the v4 bump is intentionally deferred to Phase 5.
+        # Phase 5 bumped this to upload-artifact@v4 (v3 is sunset).
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: coverage-report
           path: coverage/
@@ -69,7 +97,8 @@ jobs:
       - name: gss dependency + license gate
         run: |
           go install github.com/google/go-licenses@latest
-          export PATH="$(go env GOPATH)/bin:$PATH"
+          PATH="$(go env GOPATH)/bin:$PATH"
+          export PATH
           GSS_STRICT_CHECK=1 bash src/gss/scripts/check-deps.sh
 
   shell-tests:
@@ -81,10 +110,9 @@ jobs:
     # aliases_test.sh, the safety_guard hook test suite, plus the new
     # drivers for sync-skills, google-cli-setup, open-url, pkg-install.
     # Parallel to unit-tests (Go) so a shell-driver regression doesn't
-    # gate the Go suite and vice-versa. Action versions match the rest
-    # of this file; bumps are intentionally deferred to Phase 5.
+    # gate the Go suite and vice-versa.
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Install jq
         # safety_guard_test.sh builds its tool_input payloads with jq.
         run: sudo apt-get update && sudo apt-get install -y jq
@@ -98,7 +126,7 @@ jobs:
     env:
       IMAGE_NAME: dotfiles:latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Build the Docker image
         run: make build
 
@@ -106,4 +134,4 @@ jobs:
         run: make integration-test
 
       - name: Build Docker in Docker (Legacy Check)
-        run: docker run --privileged -v $(pwd):/dotfiles -w /dotfiles dotfiles:latest docker build --tag test opt/docker/helloworld
+        run: docker run --privileged -v "$(pwd):/dotfiles" -w /dotfiles dotfiles:latest docker build --tag test opt/docker/helloworld

@@ -85,9 +85,25 @@ lint-go: ## Lint Go modules (gofmt + golangci-lint, per-module)
 
 .PHONY: lint-shell
 lint-shell: ## Lint shell scripts with shellcheck
-	@echo "==> shellcheck (opt/scripts, ai, install.sh)"
+	@echo "==> shellcheck (opt/scripts, ai, opt/profiles, install.sh)"
+	# Phase 5 (issue #46) extended the scope to opt/profiles/ so the
+	# user-facing shell entrypoints (.bashrc, .profile, .bash_aliases,
+	# .docker.sh, .goenv.sh, .nano_profile, .xsessionrc, .bash_logout)
+	# get linted too. Dotfile profiles are listed EXPLICITLY (not via a
+	# `.*` glob) because bash globs skip dotfiles by default and
+	# `shopt -s dotglob` is not portable across make-invoked shells. The
+	# list mirrors install.sh's symlink targets — when a new profile lands
+	# in opt/profiles/, add it here too.
+	#
+	# .zshrc is INTENTIONALLY EXCLUDED: shellcheck only supports
+	# sh/bash/dash/ksh and emits SC1071 (error) on zsh files, which would
+	# fail the whole job regardless of `-S warning`. Zsh-specific linting
+	# would need a different tool (zsh-syntax-check or `zsh -n`); see
+	# .ci-baseline-issues.md for the deferred-work note.
 	@files=$$(find opt/scripts ai -name '*.sh' -type f 2>/dev/null) ; \
-		shellcheck -x -S warning install.sh $$files
+		profile_dotfiles="opt/profiles/.bashrc opt/profiles/.profile opt/profiles/.bash_aliases opt/profiles/.bash_logout opt/profiles/.docker.sh opt/profiles/.goenv.sh opt/profiles/.nano_profile opt/profiles/.xsessionrc" ; \
+		profile_sh=$$(find opt/profiles -maxdepth 1 -name '*.sh' -type f 2>/dev/null) ; \
+		shellcheck -x -S warning install.sh $$files $$profile_sh $$profile_dotfiles
 
 .PHONY: lint-markdown
 lint-markdown: ## Lint markdown files with markdownlint-cli2
