@@ -76,6 +76,26 @@ func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (Checkpoi
 
 	res := CheckpointResult{Ref: ref.String()}
 	if w.PRURL == "" {
+		// Push the worker branch to origin BEFORE asking gh to open a PR.
+		// gh pr create only fills in head/base SHAs by looking them up via
+		// the GitHub API; if the branch isn't on origin yet, that lookup
+		// returns empty and the call fails opaquely with
+		//   "Head sha can't be blank, Base sha can't be blank,
+		//    No commits between <base> and <head>"
+		// which leaves the worker half-checkpointed (commit local-only,
+		// registry still has no pr_url).
+		//
+		// --force-with-lease (mirroring the update path on line 100) is
+		// safe because the `fetch origin` above refreshed origin/<branch>'s
+		// ref. It covers three cases uniformly: branch absent on origin
+		// (acts like a normal push), branch present and matches (no-op
+		// fast-forward), branch present but diverged after a rebase (the
+		// post-rebase HEAD wins without a non-fast-forward error stranding
+		// the worker). --set-upstream wires up the tracking ref so the
+		// follow-up update-path push has something to compare against.
+		if out, err := s.Git.Run(ctx, "-C", w.Worktree, "push", "--force-with-lease", "--set-upstream", "origin", w.Branch); err != nil {
+			return CheckpointResult{}, fmt.Errorf("checkpoint: push: %w: %s", err, strings.TrimSpace(string(out)))
+		}
 		pr, err := s.GH.PRCreate(ctx, gh.PRCreateOpts{Title: title, Body: body, Base: base, Head: w.Branch, Draft: true})
 		if err != nil {
 			return CheckpointResult{}, fmt.Errorf("checkpoint: pr create: %w", err)

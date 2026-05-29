@@ -18,6 +18,9 @@ import (
 	"bytes"
 	"context"
 	"os/exec"
+
+	"github.com/sirupsen/logrus"
+	"github.com/wenlock/dotfiles/gsl/internal/observe"
 )
 
 // Runner is the single entry point for gh invocations in gsl.
@@ -59,6 +62,12 @@ func (r *SystemRunner) Run(ctx context.Context, name string, args ...string) ([]
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 	if err := cmd.Run(); err != nil {
+		observe.Default().WithFields(logrus.Fields{
+			"event":   "gh.subprocess_error",
+			"command": bin,
+			"args":    full,
+			"error":   err.Error(),
+		}).Warn("gh subprocess failed")
 		return buf.Bytes(), err
 	}
 	return buf.Bytes(), nil
