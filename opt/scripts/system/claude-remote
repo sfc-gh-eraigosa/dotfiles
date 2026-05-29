@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# =============================================================================
+# claude-remote — launch a tmux session running `claude --remote-control`
+#                 against a chosen GitHub repo.
+#
+# Picker entries:
+#   - every git repo found under $HOME/github (depth <= 3)
+#   - $HOME/git/dotfiles, pinned
+#   - "[clone new repo into <github-dir>]" — prompt for owner/repo or a full URL
+#     and clone into $HOME/github/ before launching
+#
+# Picker UI:
+#   - fzf if installed, otherwise a numbered `select` menu
+#
+# Usage:
+#   claude-remote                            # interactive picker
+#   claude-remote ~/github/some-repo         # explicit path
+#   claude-remote owner/repo                 # clone-and-launch shorthand
+#   claude-remote https://github.com/o/r.git # clone-and-launch (full URL)
+#
+# Env overrides:
+#   CLAUDE_REMOTE_GITHUB_DIR     (default: $HOME/github)
+#   CLAUDE_REMOTE_DOTFILES_DIR   (default: $HOME/git/dotfiles)
+#   CLAUDE_REMOTE_SESSION_PREFIX (default: claude)
+# =============================================================================
+
+set -euo pipefail
+
+GITHUB_DIR="${CLAUDE_REMOTE_GITHUB_DIR:-$HOME/github}"
+DOTFILES_DIR="${CLAUDE_REMOTE_DOTFILES_DIR:-$HOME/git/dotfiles}"
+SESSION_PREFIX="${CLAUDE_REMOTE_SESSION_PREFIX:-claude}"
+CLONE_LABEL="[clone new repo into ${GITHUB_DIR}]"
+
+for bin in tmux git claude; do
+    command -v "$bin" >/dev/null 2>&1 || {
+        echo "claude-remote: required command not found: $bin" >&2
+        exit 1
+    }
+done
+
+mkdir -p "$GITHUB_DIR"
+
+# -----------------------------------------------------------------------------
+# Discover candidate repos
+# -----------------------------------------------------------------------------
+discover_repos() {
+    if [[ -d "$GITHUB_DIR" ]]; then
+        find "$GITHUB_DIR" -mindepth 1 -maxdepth 3 -type d -name .git 2>/dev/null \
+            | while IFS= read -r gitdir; do dirname "$gitdir"; done
+    fi
+    [[ -d "$DOTFILES_DIR/.git" ]] && echo "$DOTFILES_DIR"
+}
+
+candidates=()
+while IFS= read -r line; do
+    candidates+=("$line")
+done < <(discover_repos | awk 'NF && !seen[$0]++')
+candidates+=("$CLONE_LABEL")
+
+# -----------------------------------------------------------------------------
+# Pick a repo (or "clone new")
+# -----------------------------------------------------------------------------
+choice=""
+clone_target=""
+
+if [[ $# -gt 0 && -n "${1:-}" ]]; then
+    arg="$1"
+    if [[ -d "$arg/.git" ]]; then
+        choice="$arg"
+    else
+        choice="$CLONE_LABEL"
+        clone_target="$arg"
+    fi
+elif command -v fzf >/dev/null 2>&1; then
+    choice=$(printf '%s\n' "${candidates[@]}" \
+        | fzf --prompt='claude-remote > ' --height=40% --reverse) || exit 1
+else
+    echo "Pick a repo for the claude --remote-control session:"
+    PS3='> '
+    select c in "${candidates[@]}"; do
+        [[ -n "$c" ]] && choice="$c" && break
+    done
+fi
+
+# -----------------------------------------------------------------------------
+# Handle the clone option
+# -----------------------------------------------------------------------------
+if [[ "$choice" == "$CLONE_LABEL" ]]; then
+    if [[ -z "$clone_target" ]]; then
+        printf 'GitHub repo to clone (owner/repo or full URL): '
+        read -r clone_target
+    fi
+    [[ -n "$clone_target" ]] || {
+        echo "claude-remote: no repo specified" >&2
+        exit 1
+    }
+
+    case "$clone_target" in
+        http://*|https://*|git@*) url="$clone_target" ;;
+        */*)                      url="https://github.com/${clone_target}" ;;
+        *)
+            echo "claude-remote: not a URL or owner/repo: $clone_target" >&2
+            exit 1
+            ;;
+    esac
+
+    name="${clone_target##*/}"
+    name="${name%.git}"
+    dest="$GITHUB_DIR/$name"
+
+    if [[ -d "$dest/.git" ]]; then
+        echo "claude-remote: $dest already exists, reusing"
+    else
+        echo "claude-remote: cloning $url -> $dest"
+        git clone "$url" "$dest"
+    fi
+    choice="$dest"
+fi
+
+[[ -n "$choice" && -d "$choice/.git" ]] || {
+    echo "claude-remote: invalid choice: $choice" >&2
+    exit 1
+}
+
+# -----------------------------------------------------------------------------
+# Launch tmux
+# -----------------------------------------------------------------------------
+session="${SESSION_PREFIX}-$(basename "$choice")"
+
+# `$SHELL -ic` loads the interactive rc files so the `claude` shell function
+# from ai/claude/aliases.sh (YOLO toggle + pane anchor) is in scope. After
+# `claude` exits, drop into an interactive shell so the pane stays alive and
+# any output is still visible.
+cmd='claude --remote-control || true; exec "$SHELL" -i'
+
+if [[ -n "${TMUX:-}" ]]; then
+    tmux new-session -dA -s "$session" -c "$choice" "$SHELL" -ic "$cmd"
+    tmux switch-client -t "$session"
+else
+    exec tmux new-session -A -s "$session" -c "$choice" "$SHELL" -ic "$cmd"
+fi
