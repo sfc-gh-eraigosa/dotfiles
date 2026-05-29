@@ -6,6 +6,7 @@
 !CONTRIBUTING.md
 !Makefile
 !install.sh
+!install_test.sh
 !.go-version
 !LICENSE
 !azure-pipelines.yml
@@ -53,6 +54,8 @@ opt/bin/*
 !opt/bin/pkg-install-apt
 !opt/bin/pkg-install-brew
 !opt/bin/install_windows.sh
+# Test drivers for the committed opt/bin tools (issue #46 phase 2)
+!opt/bin/pkg-install_test.sh
 
 # Opt Subdirectory Configuration
 opt/.DS_Store

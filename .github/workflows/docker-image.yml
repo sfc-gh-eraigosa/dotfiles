@@ -58,6 +58,25 @@ jobs:
           export PATH="$(go env GOPATH)/bin:$PATH"
           GSS_STRICT_CHECK=1 bash src/gss/scripts/check-deps.sh
 
+  shell-tests:
+    name: Run Shell Test Drivers
+    needs: lint
+    runs-on: ubuntu-latest
+    # Phase 2 of CI hygiene (issue #46). Runs every `*_test.sh` driver
+    # discovered by `make shell-test` — install_test.sh, the migrated
+    # aliases_test.sh, the safety_guard hook test suite, plus the new
+    # drivers for sync-skills, google-cli-setup, open-url, pkg-install.
+    # Parallel to unit-tests (Go) so a shell-driver regression doesn't
+    # gate the Go suite and vice-versa. Action versions match the rest
+    # of this file; bumps are intentionally deferred to Phase 5.
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install jq
+        # safety_guard_test.sh builds its tool_input payloads with jq.
+        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Run make shell-test
+        run: make shell-test
+
   build-and-validate:
     name: Build and Integration Test
     needs: unit-tests
