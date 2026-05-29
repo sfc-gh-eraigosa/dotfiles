@@ -31,4 +31,10 @@ The testing suite consists of:
 - **Unit Tests**: Go-based tests located in the `src/` modules.
 - **Integration Tests**: Docker-based tests that verify the entire environment, including script discovery and tool safeguards.
 
+Per-module Go coverage minimums are enforced by `scripts/test.sh unit`
+(invoked by `make unit-test`). Thresholds are declared in the
+`COVERAGE_MIN` map at the top of `scripts/test.sh`; a module under its
+floor fails CI. HTML reports are written to `coverage/<mod>.html` and
+uploaded as the `coverage-report` artifact by the workflow.
+
 Before submitting a pull request, please ensure `make test` passes successfully.

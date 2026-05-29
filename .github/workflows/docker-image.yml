@@ -52,6 +52,20 @@ jobs:
           cache-dependency-path: "src/**/*.sum"
       - name: Run Go Unit Tests
         run: make unit-test
+      - name: Upload coverage report
+        # Phase 3 of CI hygiene (issue #46). scripts/test.sh emits per-module
+        # `<mod>.out` profiles + `<mod>.html` HTML reports into coverage/.
+        # `if: always()` so the artifact is still uploaded when the coverage
+        # gate (the previous step) FAILS — that's exactly when reviewers want
+        # to inspect which package is dragging the module under its floor.
+        # actions/upload-artifact is pinned at v3 to match the rest of the
+        # workflow; the v4 bump is intentionally deferred to Phase 5.
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
       - name: gss dependency + license gate
         run: |
           go install github.com/google/go-licenses@latest
