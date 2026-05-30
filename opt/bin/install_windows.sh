@@ -30,8 +30,9 @@ fi
 # (Windows exes are not always on the WSL PATH, e.g. appendWindowsPath=false.)
 # ---------------------------------------------------------------------------
 ps_exe="$(command -v powershell.exe 2>/dev/null || true)"
-if [ -z "$ps_exe" ] && [ -x "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" ]; then
-  ps_exe="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+if [ -z "$ps_exe" ]; then
+  _ps_fallback="$(wslpath -u 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' 2>/dev/null)"
+  [ -n "$_ps_fallback" ] && [ -x "$_ps_fallback" ] && ps_exe="$_ps_fallback"
 fi
 
 if [ -z "$ps_exe" ]; then
@@ -94,9 +95,15 @@ case "$choice" in
         echo ""
         echo "Wispr Flow (voice dictation) — one manual step (the MSI needs a UAC prompt):"
         echo "  From a normal Windows PowerShell window, run the installer and approve UAC:"
-        echo "    powershell -ExecutionPolicy Bypass -File \"${wispr_dir_w}\\install-wisprflow.ps1\""
-        echo "  Then follow the one-time setup (sign-in, mic, bind the Copilot key) in:"
-        echo "    ${wispr_dir_w}\\WISPR-FLOW.md"
+        if [ -n "$wispr_dir_w" ]; then
+            echo "    powershell -ExecutionPolicy Bypass -File \"${wispr_dir_w}\\install-wisprflow.ps1\""
+            echo "  Then follow the one-time setup (sign-in, mic, bind the Copilot key) in:"
+            echo "    ${wispr_dir_w}\\WISPR-FLOW.md"
+        else
+            echo "    powershell -ExecutionPolicy Bypass -File \"%USERPROFILE%\\Desktop\\Apps\\scripts\\install-wisprflow.ps1\""
+            echo "  Then follow the one-time setup (sign-in, mic, bind the Copilot key) in:"
+            echo "    %USERPROFILE%\\Desktop\\Apps\\scripts\\WISPR-FLOW.md"
+        fi
         echo ""
 
         # Then setup the macOS-style hotkeys (AutoHotkey)
