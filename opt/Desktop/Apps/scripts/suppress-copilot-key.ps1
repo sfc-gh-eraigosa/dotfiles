@@ -9,10 +9,10 @@
     swallow it before Wispr Flow's hotkey listener sees it. Wispr Flow also often
     refuses to bind F23 directly (its docs only cover function keys up to F12).
 
-    This script remaps the Copilot chord to Ctrl+Alt+F12 in PowerToys Keyboard
+    This script remaps the Copilot chord to Ctrl+Shift+F12 in PowerToys Keyboard
     Manager. That kills the Windows Copilot behaviour AND turns the physical key
-    into a normal, Flow-bindable combo: bind Ctrl+Alt+F12 inside Wispr Flow
-    ("Edit shortcut") and the Copilot key drives dictation. Ctrl+Alt+F12 is the
+    into a normal, Flow-bindable combo: bind Ctrl+Shift+F12 inside Wispr Flow
+    ("Edit shortcut") and the Copilot key drives dictation. Ctrl+Shift+F12 is the
     same combo the AHK fallback shim in WISPR-FLOW.md uses, so they stay in sync.
 
     It edits PowerToys' Keyboard Manager config directly:
@@ -59,17 +59,17 @@ $ErrorActionPreference = 'Stop'
 #   134 = VK_F23
 $CopilotChord = '91;160;134'
 
-# Target chord = Ctrl+Alt+F12, a combo Wispr Flow accepts. Remapping (not
+# Target chord = Ctrl+Shift+F12, a combo Wispr Flow accepts. Remapping (not
 # disabling) means the key still produces something Flow can bind, while Windows
 # Copilot - which only listens for Win+Shift+F23 - never fires.
+#   160 = VK_LSHIFT   (Left Shift)
 #   162 = VK_LCONTROL (Left Ctrl)
-#   164 = VK_LMENU    (Left Alt)
 #   123 = VK_F12
-$FlowChord = '162;164;123'
+$FlowChord = '160;162;123'
 
 # Human-readable labels for log lines.
 $CopilotLabel = 'LWin+LShift+F23'
-$FlowLabel    = 'Ctrl+Alt+F12'
+$FlowLabel    = 'Ctrl+Shift+F12'
 
 # Per-user Keyboard Manager config. This lives under LOCALAPPDATA regardless of
 # whether PowerToys itself was installed per-user or machine-wide.

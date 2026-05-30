@@ -57,8 +57,8 @@ once per machine:
 2. **Microphone** — Windows Settings → Privacy & Security → Microphone → allow desktop apps.
 3. **Bind the dictation hotkey** — first run `suppress-copilot-key.ps1` (see
    [Suppressing the Copilot key](#suppressing-the-copilot-key-powertoys) below) so
-   the Copilot key emits `Ctrl+Alt+F12`. Then open Flow's tray icon → **Edit
-   shortcut** → press **Ctrl+Alt+F12**. The same physical Copilot key now triggers
+   the Copilot key emits `Ctrl+Shift+F12`. Then open Flow's tray icon → **Edit
+   shortcut** → press **Ctrl+Shift+F12**. The same physical Copilot key now triggers
    Flow. (`install-wisprflow.ps1` runs the remap for you at the end of an install.)
    Flow → **Settings → General → Shortcuts**.
 4. **Start at login** — enable it in Flow (the Run-key mechanism isn't scriptable).
@@ -70,17 +70,22 @@ once per machine:
 > the two fight over Win and your `Cmd+C`/`Cmd+V`/etc. silently break (they type a
 > literal letter or trigger Windows' own `Win+C`). **Fix:** in Flow → Settings →
 > General → Shortcuts, change push-to-talk **and** hands-free off `Ctrl+Win` to the
-> Copilot key / `Ctrl+Alt+F12`. That's exactly what the Copilot-key remap above is
+> Copilot key / `Ctrl+Shift+F12`. That's exactly what the Copilot-key remap above is
 > for — once Flow is off the Win key, Flow and the macOS layer coexist.
 
 ## Suppressing the Copilot key (PowerToys)
+
+> If you run `macos.ahk`, prefer its built-in AHK shim instead of PowerToys (see
+> [AutoHotkey shim](#autohotkey-shim-preferred-when-you-run-macosahk) below) —
+> PowerToys' keyboard hook conflicts with the Cmd = Left-Win mappings. Use the
+> PowerToys route only when you don't run `macos.ahk`.
 
 The Copilot key emits `Win(Left)+Shift(Left)+F23`, which causes two problems:
 Windows itself acts on that chord (it launches Windows Copilot) and can swallow it
 before Flow sees it, and Flow's **Edit shortcut** often refuses `F23` (its docs
 only cover function keys up to F12).
 
-`suppress-copilot-key.ps1` fixes both by remapping the chord to **`Ctrl+Alt+F12`**
+`suppress-copilot-key.ps1` fixes both by remapping the chord to **`Ctrl+Shift+F12`**
 in **PowerToys Keyboard Manager** — a combo Flow accepts. Windows Copilot, which
 only listens for `Win+Shift+F23`, never fires; the physical key now emits a clean,
 bindable combo. (It *remaps* rather than fully disabling, so the key still reaches
@@ -95,7 +100,7 @@ you can also run it standalone any time.
 
 | Switch | Effect |
 |--------|--------|
-| _(none)_ | Remap `Win+Shift+F23` → `Ctrl+Alt+F12` |
+| _(none)_ | Remap `Win+Shift+F23` → `Ctrl+Shift+F12` |
 | `-Status` | Report whether PowerToys is installed and whether the remap is in place |
 | `-Remove` | Remove the remap and restore default Copilot-key behaviour |
 
@@ -109,23 +114,25 @@ you can also run it standalone any time.
   before writing.
 - **Restart to apply.** PowerToys reads the file at startup — restart PowerToys (or
   toggle Keyboard Manager off and on) for the remap to take effect, then bind
-  `Ctrl+Alt+F12` in Flow.
+  `Ctrl+Shift+F12` in Flow.
 
-### No PowerToys? AHK shim alternative
+### AutoHotkey shim (preferred when you run `macos.ahk`)
 
-The PowerToys remap above is the preferred route. If you don't run PowerToys, an
-AutoHotkey shim achieves the same `Win+Shift+F23` → `Ctrl+Alt+F12` translation. Add
-this one-liner to `macos.ahk`:
+If you use the macOS-style shortcuts, `macos.ahk` **already** translates the Copilot
+key to the Flow combo — and this is the preferred route, because PowerToys' keyboard
+hook conflicts with `macos.ahk`'s Cmd = Left-Win mappings (it breaks `Cmd+C` etc.).
+The shim already in `macos.ahk`:
 
 ```ahk
-; Copilot key -> a Flow-friendly combo (bind Ctrl+Alt+F12 inside Wispr Flow)
-*F23::Send "^!{F12}"
+; Copilot key (LWin+LShift+F23) -> clean Ctrl+Shift+F12 for Wispr Flow.
+; '*F23' (no '~') also SUPPRESSES the chord so Windows' "assign Copilot key"
+; Settings page never opens. Drop the Win/Shift the key carries first.
+*F23::Send "{LWin up}{LShift up}^+{F12}"
 ```
 
-Put it back where the old voice block was (just below the Screenshots section),
-re-deploy (`install.sh`), and restart AutoHotkey. Either route lands on the same
-`Ctrl+Alt+F12`, so the Flow binding is identical. In Flow: Edit shortcut → press
-`Ctrl+Alt+F12`.
+Bind `Ctrl+Shift+F12` in Flow (Settings → General → Shortcuts). If you pick a
+different combo, change both the shim and the Flow binding to match. Use the
+PowerToys remap above only if you do **not** run `macos.ahk`.
 
 ## Migrating a machine that had the old macro
 

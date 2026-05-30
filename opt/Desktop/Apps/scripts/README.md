@@ -10,7 +10,7 @@ shortcut to this folder ("Scripts") sits on the Desktop for quick access.
 |--------|---------|
 | `setup-apps.ps1` | Full machine provisioning: WSL + Ubuntu distros, Ubuntu Mono font, Windows Terminal themes/profiles, and a standard set of **winget** desktop apps. Every phase is idempotent. A `-Status` mode reports WSL + app state. |
 | `install-wisprflow.ps1` | Install/update/uninstall the **Wispr Flow** voice-dictation app (its own MSI — not on winget). Idempotent; `-Status` / `-Latest` / `-Force` / `-Uninstall`. See **[WISPR-FLOW.md](./WISPR-FLOW.md)**. |
-| `suppress-copilot-key.ps1` | Remap the **Copilot key** (`Win+Shift+F23` → `Ctrl+Alt+F12`) in PowerToys Keyboard Manager so Windows stops grabbing it and Wispr Flow can bind it. Idempotent, backs up the config; `-Status` / `-Remove`. Run by `install-wisprflow.ps1`. See **[WISPR-FLOW.md](./WISPR-FLOW.md)**. |
+| `suppress-copilot-key.ps1` | Remap the **Copilot key** (`Win+Shift+F23` → `Ctrl+Shift+F12`) in PowerToys Keyboard Manager so Windows stops grabbing it and Wispr Flow can bind it. Idempotent, backs up the config; `-Status` / `-Remove`. Run by `install-wisprflow.ps1`. See **[WISPR-FLOW.md](./WISPR-FLOW.md)**. |
 | `macos.ahk` | macOS-style Windows shortcuts (Cmd→Ctrl mappings, screenshots, hot corners). The old Copilot-key voice macro was removed — voice is now Wispr Flow. |
 | `setup-autostart.ps1` | Registers the `macOS Hotkeys` scheduled task that runs `macos.ahk` at logon (elevated). |
 | `copilot-key-detect.ahk` | One-off diagnostic: logs the vk/sc the Copilot key emits. |

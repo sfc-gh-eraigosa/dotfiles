@@ -18,7 +18,7 @@ cmdTabActive := false
 ;
 ; CONFLICT NOTE: Wispr Flow's DEFAULT hotkey is Ctrl+Win, so its keyboard hook
 ; watches this same Win key and breaks the Cmd+* shortcuts below. Rebind Flow off
-; Ctrl+Win (to the Copilot key / Ctrl+Alt+F12) -- see WISPR-FLOW.md.
+; Ctrl+Win (to the Copilot key / Ctrl+Shift+F12) -- see WISPR-FLOW.md.
 ~LWin::Send "{Blind}{vkE8}"
 
 ~LWin Up::
@@ -124,17 +124,22 @@ cmdTabActive := false
 ^+c::CaptureActiveWindow()      ; Ctrl+Shift+C Capture active window -> Pictures\Screenshots
 
 ; ==============================================================================
-;  Copilot key  ->  voice dictation  (now handled by Wispr Flow, not AutoHotkey)
+;  Copilot key  ->  Wispr Flow dictation
 ; ------------------------------------------------------------------------------
-;  The old AHK tap-to-dictate macro (Copilot key -> Windows Voice Typing into
-;  Claude Desktop) has been RETIRED in favour of the Wispr Flow app, which is
-;  the dictation engine now. The Copilot key (LWin+LShift+F23) is intentionally
-;  left UNBOUND here so Wispr Flow can capture it directly: in Flow's tray menu
-;  pick "Edit shortcut" and press the Copilot key once.
+;  The Copilot key emits LWin+LShift+F23. Flow can't bind that chord directly (it
+;  rejects F23, and Windows otherwise opens its "assign Copilot key" Settings
+;  page), so we translate it here. '*F23' (no '~') catches AND suppresses the whole
+;  chord; we drop the LWin/LShift the key carries, then send a clean Ctrl+Shift+F12
+;  -- the hotkey bound inside Wispr Flow (Settings -> General -> Shortcuts). If you
+;  pick a different Flow combo, change both sides to match.
 ;
-;  Retired macro preserved at: archive/macos-copilot-claude-voice.ahk
-;  Setup + fallback (if Flow rejects the F23 chord): opt/Desktop/Apps/scripts/WISPR-FLOW.md
+;  This replaces the old AHK Copilot-key voice macro (retired to
+;  archive/macos-copilot-claude-voice.ahk; see WISPR-FLOW.md). A PowerToys Keyboard
+;  Manager remap (suppress-copilot-key.ps1) is an alternative, but PowerToys'
+;  keyboard hook conflicts with the macOS Cmd=Win mappings above, so when this
+;  script runs the in-script shim is preferred.
 ; ==============================================================================
+*F23::Send "{LWin up}{LShift up}^+{F12}"
 
 ; ==============================================================================
 ;  Hot corners  (move the pointer to the top-right corner -> Task View)
