@@ -172,6 +172,9 @@ fpath+=${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions/src
 # ("no such file or directory") reading the broken link. An empty stub earlier
 # in $fpath makes compinit skip it. Rebuilt each startup, so the real
 # completion is used again once its target returns.
+# NOTE: this only protects OUR compinit (oh-my-zsh + the cached one below). The
+# distro's GLOBAL compinit in /etc/zsh/zshrc runs before this file, so that one
+# is disabled separately via `skip_global_compinit=1` in ~/.zshenv.
 _comp_shadow="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/compshadow"
 rm -rf "$_comp_shadow" 2>/dev/null
 for _comp_f in ${^fpath}/_*(N@); do

@@ -105,7 +105,7 @@ for file in $(find "${BASE_DIR}/opt/profiles" -type f); do
 done
 
 # force a few
-for file in ".profile" ".zshrc" ".bash_logout" ".bashrc"; do
+for file in ".profile" ".zshenv" ".zshrc" ".bash_logout" ".bashrc"; do
   ln -sf "${BASE_DIR}/opt/profiles/${file}" "${HOME}/${file}"
 done 
 
