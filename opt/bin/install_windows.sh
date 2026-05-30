@@ -20,6 +20,12 @@ if [ -z "$BASE_DIR" ]; then
   exit 1
 fi
 
+# Per-run marker: set only when the interactive Windows setup actually runs, so
+# install.sh can print the Wispr Flow reminder banner at the very end. Cleared on
+# every invocation (even non-WSL) so a stale marker never triggers a false banner.
+WIN_SETUP_MARKER="${HOME}/.config/dotfiles/.windows-setup-just-ran"
+rm -f "$WIN_SETUP_MARKER" 2>/dev/null || true
+
 # Only run inside WSL (Windows Subsystem for Linux).
 if ! grep -qi microsoft /proc/version 2>/dev/null; then
   exit 0
@@ -97,11 +103,11 @@ case "$choice" in
         echo "  From a normal Windows PowerShell window, run the installer and approve UAC:"
         if [ -n "$wispr_dir_w" ]; then
             echo "    powershell -ExecutionPolicy Bypass -File \"${wispr_dir_w}\\install-wisprflow.ps1\""
-            echo "  Then follow the one-time setup (sign-in, mic, bind the Copilot key) in:"
+            echo "  Then do the one-time setup (sign-in, mic, set Flow's 3 shortcuts off Win) in:"
             echo "    ${wispr_dir_w}\\WISPR-FLOW.md"
         else
             echo "    powershell -ExecutionPolicy Bypass -File \"%USERPROFILE%\\Desktop\\Apps\\scripts\\install-wisprflow.ps1\""
-            echo "  Then follow the one-time setup (sign-in, mic, bind the Copilot key) in:"
+            echo "  Then do the one-time setup (sign-in, mic, set Flow's 3 shortcuts off Win) in:"
             echo "    %USERPROFILE%\\Desktop\\Apps\\scripts\\WISPR-FLOW.md"
         fi
         echo ""
@@ -110,6 +116,11 @@ case "$choice" in
         echo "Registering macOS-style hotkeys (may trigger a Windows UAC prompt)..."
         "$ps_exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${BASE_DIR}/opt/Desktop/Apps/scripts/setup-autostart.ps1" > /tmp/setup_autostart.log 2>&1
         cat /tmp/setup_autostart.log
+
+        # Mark that the Windows setup ran so install.sh prints the Wispr Flow
+        # shortcut reminder banner at the very end (after all other output).
+        mkdir -p "$(dirname "$WIN_SETUP_MARKER")"
+        : > "$WIN_SETUP_MARKER"
         ;;
     s|S)
         echo "Creating sentinel file at $SENTINEL_FILE. Will not ask again."

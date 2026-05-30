@@ -467,3 +467,29 @@ for shell_config in "$HOME/.zshrc" "$HOME/.profile"; do
         fi
     fi
 done
+
+# Final reminder (WSL): if the interactive Windows setup ran this invocation, the
+# one thing that can't be scripted is Wispr Flow's shortcuts — surface it last so
+# it isn't scrolled away by earlier output. install_windows.sh sets this marker.
+WIN_SETUP_MARKER="${HOME}/.config/dotfiles/.windows-setup-just-ran"
+if [ -f "$WIN_SETUP_MARKER" ]; then
+  rm -f "$WIN_SETUP_MARKER" 2>/dev/null || true
+  cat <<'BANNER'
+
+============================================================================
+  WINDOWS / WISPR FLOW — ONE MANUAL STEP REMAINING (cannot be scripted)
+----------------------------------------------------------------------------
+  After installing and signing into Wispr Flow, open it and move ALL THREE
+  shortcuts OFF the Win key:  Settings -> General -> Shortcuts
+
+    - Push-to-talk : Ctrl+Shift+F12   (this is what the Copilot key sends)
+    - Hands-free   : a non-Win combo  (e.g. Ctrl+Shift+F11)
+    - Command mode : a non-Win combo  (e.g. Ctrl+Shift+F10)
+
+  Flow's default Ctrl+Win fights the macOS-style hotkeys (macos.ahk) and
+  breaks Cmd+C / Cmd+V. Leaving ANY of the three on a Win combo re-breaks them.
+  Flow stores these in a binary, cloud-synced store, so this can't be automated.
+  Full details: <Desktop>\Apps\scripts\WISPR-FLOW.md
+============================================================================
+BANNER
+fi
