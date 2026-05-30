@@ -13,6 +13,8 @@
 marketplaces:
   claude-plugins-official:
     claude: anthropics/claude-plugins-official   # arg to `claude plugin marketplace add`
+  karpathy-skills:
+    claude: forrestchang/andrej-karpathy-skills  # arg to `claude plugin marketplace add`
 
 plugins:
   - name: superpowers
@@ -58,3 +60,8 @@ plugins:
     enabled: true
     claude: { plugin: mcp-apps@claude-plugins-official }
     gemini: { source: https://github.com/gemini-cli-extensions/mcp-toolbox }
+  # Andrej Karpathy's behavioral guidelines (CLAUDE.md-style). Claude-only;
+  # marketplace 'karpathy-skills' = forrestchang/andrej-karpathy-skills.
+  - name: andrej-karpathy-skills
+    enabled: true
+    claude: { plugin: andrej-karpathy-skills@karpathy-skills }

@@ -23,8 +23,8 @@ The synchronization is **ensure-only**: it installs and enables what is listed b
 ## 🤖 Supported Assistants
 
 ### Claude Code
-Plugins are installed from Anthropic's official marketplace (`claude-plugins-official`). 
-- **Manage**: `claude plugin list` / `install` / `enable`.
+Plugins are installed from Anthropic's official marketplace (`claude-plugins-official`), plus any extra marketplaces listed in `plugins.yaml` (e.g. `karpathy-skills` ← `forrestchang/andrej-karpathy-skills`).
+- **Manage**: `claude plugin list` / `install` / `enable`; `claude plugin marketplace add <owner/repo>`.
 
 ### Gemini CLI
 Extensions are git-URL based and sourced from repositories (e.g., the `gemini-cli-extensions` organization).
@@ -47,6 +47,7 @@ We maintain a mapping of equivalent capabilities across both assistants.
 | **PR Toolkit** | `pr-review-toolkit` | (covered by code-review) |
 | **Go LSP** | `gopls-lsp` | (native or via MCP) |
 | **AWS Suite** | `aws-core`, `aws-serverless` | (GCP native equivalents available) |
+| **Karpathy Guidelines** | `andrej-karpathy-skills` (marketplace `karpathy-skills`) | — (Claude-only) |
 
 ## 📖 Feature Highlights
 
