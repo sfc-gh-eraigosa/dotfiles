@@ -60,7 +60,18 @@ once per machine:
    the Copilot key emits `Ctrl+Alt+F12`. Then open Flow's tray icon → **Edit
    shortcut** → press **Ctrl+Alt+F12**. The same physical Copilot key now triggers
    Flow. (`install-wisprflow.ps1` runs the remap for you at the end of an install.)
+   Flow → **Settings → General → Shortcuts**.
 4. **Start at login** — enable it in Flow (the Run-key mechanism isn't scriptable).
+
+> ⚠️ **Critical if you use `macos.ahk` (macOS-style shortcuts).** Wispr Flow's
+> **default** push-to-talk hotkey on Windows is **`Ctrl + Win`**. To detect it,
+> Flow installs a low-level keyboard hook that watches the **Win** key — the exact
+> key `macos.ahk` remaps as **Cmd** for every shortcut. With Flow on its default,
+> the two fight over Win and your `Cmd+C`/`Cmd+V`/etc. silently break (they type a
+> literal letter or trigger Windows' own `Win+C`). **Fix:** in Flow → Settings →
+> General → Shortcuts, change push-to-talk **and** hands-free off `Ctrl+Win` to the
+> Copilot key / `Ctrl+Alt+F12`. That's exactly what the Copilot-key remap above is
+> for — once Flow is off the Win key, Flow and the macOS layer coexist.
 
 ## Suppressing the Copilot key (PowerToys)
 

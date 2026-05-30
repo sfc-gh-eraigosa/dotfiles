@@ -15,6 +15,10 @@ cmdTabActive := false
 ; --- Make a lone Cmd (LWin) tap do nothing, like macOS --------------------------
 ; Tilde keeps LWin working as a modifier; the unassigned vkE8 keystroke absorbs
 ; the press so Windows never shows the Start menu when Cmd is tapped on its own.
+;
+; CONFLICT NOTE: Wispr Flow's DEFAULT hotkey is Ctrl+Win, so its keyboard hook
+; watches this same Win key and breaks the Cmd+* shortcuts below. Rebind Flow off
+; Ctrl+Win (to the Copilot key / Ctrl+Alt+F12) -- see WISPR-FLOW.md.
 ~LWin::Send "{Blind}{vkE8}"
 
 ~LWin Up::
