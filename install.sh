@@ -474,22 +474,28 @@ done
 WIN_SETUP_MARKER="${HOME}/.config/dotfiles/.windows-setup-just-ran"
 if [ -f "$WIN_SETUP_MARKER" ]; then
   rm -f "$WIN_SETUP_MARKER" 2>/dev/null || true
-  cat <<'BANNER'
-
-============================================================================
-  WINDOWS / WISPR FLOW — ONE MANUAL STEP REMAINING (cannot be scripted)
-----------------------------------------------------------------------------
-  After installing and signing into Wispr Flow, open it and move ALL THREE
-  shortcuts OFF the Win key:  Settings -> General -> Shortcuts
-
-    - Push-to-talk : Ctrl+Shift+F12   (this is what the Copilot key sends)
-    - Hands-free   : a non-Win combo  (e.g. Ctrl+Shift+F11)
-    - Command mode : a non-Win combo  (e.g. Ctrl+Shift+F10)
-
-  Flow's default Ctrl+Win fights the macOS-style hotkeys (macos.ahk) and
-  breaks Cmd+C / Cmd+V. Leaving ANY of the three on a Win combo re-breaks them.
-  Flow stores these in a binary, cloud-synced store, so this can't be automated.
-  Full details: <Desktop>\Apps\scripts\WISPR-FLOW.md
-============================================================================
-BANNER
+  # ANSI accents — only when stdout is a real terminal, so piped logs stay clean.
+  if [ -t 1 ]; then
+    _b=$'\033[1m'; _x=$'\033[0m'
+    _yel=$'\033[1;33m'; _cyn=$'\033[1;36m'; _grn=$'\033[1;32m'; _red=$'\033[1;31m'
+  else
+    _b=''; _x=''; _yel=''; _cyn=''; _grn=''; _red=''
+  fi
+  printf '\n'
+  printf '%s\n' "${_yel}════════════════════════════════════════════════════════════════════════════${_x}"
+  printf '%s\n' "  ${_red}${_b}⚠  WINDOWS / WISPR FLOW — ONE MANUAL STEP REMAINING${_x}  ${_b}(cannot be scripted)${_x}"
+  printf '%s\n' "${_yel}────────────────────────────────────────────────────────────────────────────${_x}"
+  printf '%s\n' "  After installing and signing into ${_b}Wispr Flow${_x}, move ${_red}${_b}ALL THREE${_x} shortcuts"
+  printf '%s\n' "  ${_b}OFF the Win key${_x}:   ${_cyn}Settings → General → Shortcuts${_x}"
+  printf '\n'
+  printf '%s\n' "    ${_grn}•${_x} ${_b}Push-to-talk${_x} : ${_cyn}${_b}Ctrl+Shift+F12${_x}   (what the Copilot key sends)"
+  printf '%s\n' "    ${_grn}•${_x} ${_b}Hands-free${_x}   : a non-Win combo  (e.g. ${_cyn}Ctrl+Shift+F11${_x})"
+  printf '%s\n' "    ${_grn}•${_x} ${_b}Command mode${_x} : a non-Win combo  (e.g. ${_cyn}Ctrl+Shift+F10${_x})"
+  printf '\n'
+  printf '%s\n' "  Flow's default ${_b}Ctrl+Win${_x} fights the macOS hotkeys (${_cyn}macos.ahk${_x}) and breaks"
+  printf '%s\n' "  ${_b}Cmd+C / Cmd+V${_x}. Leaving ${_red}${_b}any${_x} of the three on a Win combo re-breaks them."
+  printf '%s\n' "  Full details: ${_cyn}<Desktop>\\Apps\\scripts\\WISPR-FLOW.md${_x}"
+  printf '%s\n' "${_yel}════════════════════════════════════════════════════════════════════════════${_x}"
+  printf '\n'
+  unset _b _x _yel _cyn _grn _red
 fi
