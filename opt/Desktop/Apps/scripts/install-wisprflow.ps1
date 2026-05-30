@@ -188,12 +188,30 @@ switch ($p.ExitCode) {
     default { throw "msiexec install failed (exit $($p.ExitCode)). Cached installer kept at $tmp" }
 }
 
+# --- Tame the Copilot key so Wispr Flow can own it -------------------------------
+# The Copilot key emits Win(Left)+Shift(Left)+F23. Left alone, Windows acts on that
+# chord (launches Copilot) and can swallow it before Flow sees it, and Flow often
+# won't bind F23 directly. The sibling script remaps the chord to Ctrl+Alt+F12 in
+# PowerToys Keyboard Manager (idempotent; backs up the existing config). It is
+# best-effort: a missing PowerToys is a warning, not a failure, so a machine
+# without PowerToys still finishes installing Flow.
+$suppressor = Join-Path $PSScriptRoot 'suppress-copilot-key.ps1'
+if (Test-Path -LiteralPath $suppressor) {
+    Write-Host ''
+    Write-Host 'Remapping the Copilot key (Win+Shift+F23 -> Ctrl+Alt+F12) via PowerToys ...'
+    try { & $suppressor }
+    catch { Write-Warning "Copilot-key remap step failed: $($_.Exception.Message)" }
+} else {
+    Write-Warning "suppress-copilot-key.ps1 not found next to this script; skipping Copilot-key remap."
+}
+
 Write-Host ''
 Write-Host '------------------------------------------------------------------'
 Write-Host 'One-time manual setup (cannot be scripted - see WISPR-FLOW.md):'
 Write-Host '  1. Launch Wispr Flow and sign in (browser).'
 Write-Host '  2. Settings -> Privacy: allow microphone access.'
-Write-Host '  3. Tray icon -> "Edit shortcut" -> press the Copilot key to bind it.'
-Write-Host '     (If Flow rejects it, use the AHK shim - see WISPR-FLOW.md.)'
+Write-Host '  3. Tray icon -> "Edit shortcut" -> press Ctrl+Alt+F12 (the combo the'
+Write-Host '     Copilot key now sends, courtesy of the PowerToys remap above).'
+Write-Host '     Restart PowerToys first if the remap has not taken effect yet.'
 Write-Host '  4. Enable "Start at login" in Flow.'
 Write-Host '------------------------------------------------------------------'

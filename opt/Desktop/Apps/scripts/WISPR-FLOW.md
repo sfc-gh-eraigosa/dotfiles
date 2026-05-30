@@ -55,18 +55,56 @@ once per machine:
 
 1. **Sign in** — launch Wispr Flow; sign in via the browser (Google/Microsoft/SSO/email).
 2. **Microphone** — Windows Settings → Privacy & Security → Microphone → allow desktop apps.
-3. **Bind the Copilot key** — open Flow's tray icon → **Edit shortcut** → press the
-   **Copilot key** once. This makes the same physical key you used before trigger
-   Flow.
+3. **Bind the dictation hotkey** — first run `suppress-copilot-key.ps1` (see
+   [Suppressing the Copilot key](#suppressing-the-copilot-key-powertoys) below) so
+   the Copilot key emits `Ctrl+Alt+F12`. Then open Flow's tray icon → **Edit
+   shortcut** → press **Ctrl+Alt+F12**. The same physical Copilot key now triggers
+   Flow. (`install-wisprflow.ps1` runs the remap for you at the end of an install.)
 4. **Start at login** — enable it in Flow (the Run-key mechanism isn't scriptable).
 
-### If Flow won't accept the Copilot key (fallback shim)
+## Suppressing the Copilot key (PowerToys)
 
-The Copilot key emits `LWin+LShift+F23`. Flow documents function keys only up to
-F12, so it may reject `F23`, or Windows may swallow the chord before Flow sees it.
-If "Edit shortcut" won't capture the Copilot key, add a one-line shim to
-`macos.ahk` that translates it into a combo Flow *does* accept, then bind that
-combo in Flow instead:
+The Copilot key emits `Win(Left)+Shift(Left)+F23`, which causes two problems:
+Windows itself acts on that chord (it launches Windows Copilot) and can swallow it
+before Flow sees it, and Flow's **Edit shortcut** often refuses `F23` (its docs
+only cover function keys up to F12).
+
+`suppress-copilot-key.ps1` fixes both by remapping the chord to **`Ctrl+Alt+F12`**
+in **PowerToys Keyboard Manager** — a combo Flow accepts. Windows Copilot, which
+only listens for `Win+Shift+F23`, never fires; the physical key now emits a clean,
+bindable combo. (It *remaps* rather than fully disabling, so the key still reaches
+Flow — a plain "Disable" would stop Flow from seeing it too.)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\Desktop\Apps\scripts\suppress-copilot-key.ps1"
+```
+
+`install-wisprflow.ps1` runs this automatically at the end of a successful install;
+you can also run it standalone any time.
+
+| Switch | Effect |
+|--------|--------|
+| _(none)_ | Remap `Win+Shift+F23` → `Ctrl+Alt+F12` |
+| `-Status` | Report whether PowerToys is installed and whether the remap is in place |
+| `-Remove` | Remove the remap and restore default Copilot-key behaviour |
+
+- **Requires PowerToys.** If it isn't installed the script prints a warning plus the
+  download link (<https://github.com/microsoft/PowerToys/releases>) and exits
+  without error.
+- **Idempotent.** Re-running never duplicates the entry; an already-applied remap is
+  a no-op and writes no new backup.
+- **Non-destructive.** It *merges* into `…\Keyboard Manager\default.json`, preserving
+  any other remaps, and backs up the existing file as `default.json.bak-<timestamp>`
+  before writing.
+- **Restart to apply.** PowerToys reads the file at startup — restart PowerToys (or
+  toggle Keyboard Manager off and on) for the remap to take effect, then bind
+  `Ctrl+Alt+F12` in Flow.
+
+### No PowerToys? AHK shim alternative
+
+The PowerToys remap above is the preferred route. If you don't run PowerToys, an
+AutoHotkey shim achieves the same `Win+Shift+F23` → `Ctrl+Alt+F12` translation. Add
+this one-liner to `macos.ahk`:
 
 ```ahk
 ; Copilot key -> a Flow-friendly combo (bind Ctrl+Alt+F12 inside Wispr Flow)
@@ -74,8 +112,9 @@ combo in Flow instead:
 ```
 
 Put it back where the old voice block was (just below the Screenshots section),
-re-deploy (`install.sh`), and restart AutoHotkey. In Flow: Edit shortcut →
-press `Ctrl+Alt+F12`.
+re-deploy (`install.sh`), and restart AutoHotkey. Either route lands on the same
+`Ctrl+Alt+F12`, so the Flow binding is identical. In Flow: Edit shortcut → press
+`Ctrl+Alt+F12`.
 
 ## Migrating a machine that had the old macro
 
@@ -112,3 +151,4 @@ Copilot key in Flow, re-deploy, and restart AutoHotkey.
 - Hotkey rules: <https://docs.wisprflow.ai/articles/2612050838-supported-unsupported-keyboard-hotkey-shortcuts>
 - System requirements: <https://docs.wisprflow.ai/articles/1036674442-supported-devices-and-system-requirements>
 - Copilot key = LWin+LShift+F23: Microsoft PowerToys Keyboard Manager docs.
+- PowerToys Keyboard Manager (remap shortcuts): <https://learn.microsoft.com/en-us/windows/powertoys/keyboard-manager>
