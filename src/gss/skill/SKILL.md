@@ -32,11 +32,12 @@ This skill provides a structured and safe workflow for managing Git repositories
   - **Create PR**: (Add -> Commit -> Feature Branch -> Push -> GH PR)
   - **Cancel**: Do nothing.
 
-- **PR Hygiene — the description must always match the PR's full current scope**: A PR's description is part of its state, not a one-time creation step. Keep it accurate for *everything the PR now contains*, every time you change what's on it:
-  - **On create** (`gss pr`): `gss pr` does **not** infer a body — pass it explicitly via `gss pr --title "<subject>" --body "<markdown body>"`. Omitting `--body` ships an empty/generic description, which violates this rule.
-  - **On every later push to a branch that already has an open PR** (`gss push`, or a re-run `gss pr`): `gss push` only updates the branch — it has **no** `--body`/`--title` flag and does **not** touch the description, so the description silently goes stale and describes only the earlier work. After such a push you MUST refresh the description to cover the newly added commits, via `gh pr edit <number> --title "<subject>" --body "<body>"`. **Never push scope-changing commits to a PR and leave its description behind.**
-  - The body should always include — **What** (summary of functional changes), **Why** (rationale), **Impact** (effect on system/UX), **Testing** (how verified). NEVER use generic or empty descriptions.
-  - **Note**: `gss pr` has no `--draft` flag — classic PRs are created ready-for-review. (Draft PRs exist only in the `gss feature` stacked-worker workflow, whose PR bodies are owned by `gss feature checkpoint` — do **not** hand-edit those with `gh pr edit`.)
+- **PR Hygiene — the description and labels must always match the PR's full current scope**: A PR's description and labels are part of its state, not a one-time creation step. Keep them accurate for *everything the PR now contains*, every time you change what's on it:
+- **On create** (`gss pr`): `gss pr` does **not** infer a body or labels — pass them explicitly via `gss pr --title "<subject>" --body "<markdown body>"` and use `gh pr edit --add-label "<labels>"` immediately after.
+- **On every later push to a branch that already has an open PR** (`gss push`, or a re-run `gss pr`): `gss push` only updates the branch. After such a push you MUST refresh the description and labels to cover the newly added commits, via `gh pr edit <number> --title "<subject>" --body "<body>" --add-label "<labels>"`. **Never push scope-changing commits to a PR and leave its description or labels behind.**
+- **Label Selection**: Use standard prefixes (`feat`, `fix`, `docs`, `ci`, `test`, `style`, `refactor`, `chore`) and area-specific labels (e.g., `gsl`, `wispr`, `remote-claude`). If a PR addresses an issue, ensure it carries the same categorization labels as the issue.
+- The body should always include — **What** (summary of functional changes), **Why** (rationale), **Impact** (effect on system/UX), **Testing** (how verified). NEVER use generic or empty descriptions.
+- **Note**: `gss pr` has no `--draft` flag — classic PRs are created ready-for-review. (Draft PRs exist only in the `gss feature` stacked-worker workflow, whose PR bodies and labels are owned by `gss feature checkpoint` — do **not** hand-edit those with `gh pr edit`.)
 
 ### 3. Execution (Action Phase)
 - ONLY proceed if the user explicitly selected a confirmation option in the previous turn.
@@ -60,6 +61,7 @@ This skill provides a structured and safe workflow for managing Git repositories
 - Present the results in **categorized markdown tables**, grouped by focus area or topic (e.g., "Infrastructure", "UI Improvements").
 - Include columns for PR/Issue Number, Title, Status, and a brief Summary of what the item addresses.
 - For PRs, explicitly extract and include **associated issue numbers** and highlight any **latest changes** or recent commits based on the retrieved data.
+- **Label Markers**: Include visible markers for labels (e.g., `[feat]`, `[fix]`) in the Title or Status columns to help categorize items within the summary. If labels are missing but the intent is clear (e.g., "Fixes X"), suggest the appropriate label to the user.
 
 ## Guidelines
 - **No Assumptions**: Even if a sync seems obvious, you must ask for permission first.
