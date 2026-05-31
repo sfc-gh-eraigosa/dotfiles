@@ -18,8 +18,9 @@ cmdTabActive := false
 ; the press so Windows never shows the Start menu when Cmd is tapped on its own.
 ;
 ; CONFLICT NOTE: Wispr Flow's DEFAULT hotkey is Ctrl+Win, so its keyboard hook
-; watches this same Win key and breaks the Cmd+* shortcuts below. Rebind Flow off
-; Ctrl+Win (to the Copilot key / Ctrl+Shift+F12) -- see WISPR-FLOW.md.
+; watches this same Win key and breaks the Cmd+* shortcuts below. Rebind ALL of
+; Flow's shortcuts off the Win key (any non-Win combo); the Copilot key drives Flow
+; via macos.ahk's overlay clicks, not a Flow hotkey. See WISPR-FLOW.md.
 ~LWin::Send "{Blind}{vkE8}"
 
 ~LWin Up::
@@ -157,10 +158,15 @@ FlowState := "IDLE"          ; IDLE | DICTATING | AWAITING_CLIP
 FlowWin   := 0
 FlowX     := 0
 FlowY     := 0
-FlowAutoPaste := false       ; TEST: Flow appears to auto-paste itself now. false = we DON'T
-                             ; Ctrl+V (avoid double paste); set true to re-enable our paste.
+FlowAutoPaste := false       ; Flow auto-pastes the transcript itself, so we do NOT Ctrl+V
+                             ; (that would double-paste). Set true only if a Flow update
+                             ; ever stops auto-pasting and we need to paste ourselves.
 FlowEnabled := true          ; F10 toggles this; when false the Copilot key does nothing.
 _flowToastGui := ""          ; current toggle popup (so a rapid re-toggle replaces it)
+
+; Pastel-rainbow palette shared by the F10/F11 toasts and the calibration HUD title
+; (same hues as the install.sh end banner). Single source so they can't drift.
+_FLOW_RAINBOW := ["FF8787","FFAF87","FFD787","AFFFAF","87D7FF","AFAFFF","D7AFFF","FFAFFF"]
 
 ; Overlay click offsets — WORKING set, used by the click functions below.
 ; Loaded from the calibration ini at startup (falls back to _FlowCalibDefaults()).
@@ -189,16 +195,21 @@ _FlowTip(msg) {
     ToolTip msg, tx + 18, ty + 18
 }
 
+; Show a transient tip and auto-clear it after `ms` milliseconds (one-shot timer).
+_FlowTipFor(msg, ms) {
+    _FlowTip(msg)
+    SetTimer () => _FlowTip(""), -ms
+}
+
 ; Centered, color-coded popup shown for ~1s (green=ON, grey=OFF). NoActivate so it
 ; never steals focus; replaces any previous popup if toggled rapidly.
 _FlowToast(msg, isOn) {
-    global _flowToastGui
+    global _flowToastGui, _FLOW_RAINBOW
     if IsObject(_flowToastGui)
         try _flowToastGui.Destroy()
-    ; Same pastel-rainbow palette as the install.sh banner; muted grey when OFF.
-    static rainbow := ["FF8787","FFAF87","FFD787","AFFFAF","87D7FF","AFAFFF","D7AFFF","FFAFFF"]
-    static grey    := ["8A8A8A","A8A8A8"]
-    hues := isOn ? rainbow : grey
+    ; pastel rainbow when ON, muted grey when OFF.
+    static grey := ["8A8A8A","A8A8A8"]
+    hues := isOn ? _FLOW_RAINBOW : grey
     g := Gui("-Caption +AlwaysOnTop +ToolWindow +Disabled", "")
     g.MarginX := 30, g.MarginY := 18
     g.BackColor := "0B0E14"                              ; dark backdrop so the pastels pop
@@ -243,8 +254,7 @@ _FlowCalibDestroy() {
 
 ; Build (or rebuild) the HUD from the current WORKING values.
 _FlowCalibShow() {
-    global _flowCalibGui, FlowStartX, FlowStartY, FlowStopX, FlowStopY
-    static rainbow := ["FF8787","FFAF87","FFD787","AFFFAF","87D7FF","AFAFFF","D7AFFF","FFAFFF"]
+    global _flowCalibGui, FlowStartX, FlowStartY, FlowStopX, FlowStopY, _FLOW_RAINBOW
     _FlowCalibDestroy()
     g := Gui("+AlwaysOnTop -Caption +ToolWindow +Border", "Flow Calibration")
     g.BackColor := "0B0E14"
@@ -253,7 +263,7 @@ _FlowCalibShow() {
     ; rainbow per-char title
     g.SetFont "s15 Bold", "Consolas"
     Loop Parse "FLOW CALIBRATION" {
-        g.SetFont "c" rainbow[Mod(A_Index - 1, rainbow.Length) + 1]
+        g.SetFont "c" _FLOW_RAINBOW[Mod(A_Index - 1, _FLOW_RAINBOW.Length) + 1]
         g.Add("Text", (A_Index = 1 ? "xm ym" : "x+0 yp"), A_LoopField)
     }
 
@@ -282,8 +292,7 @@ _FlowCalibCapture(which) {
     global FlowStartX, FlowStartY, FlowStopX, FlowStopY
     overlay := "Status ahk_exe Wispr Flow.exe"
     if !WinExist(overlay) {
-        _FlowTip("✗  Flow overlay not found")
-        SetTimer () => _FlowTip(""), -1500
+        _FlowTipFor("✗  Flow overlay not found", 1500)
         return
     }
     CoordMode "Mouse", "Screen"
@@ -341,25 +350,22 @@ _FlowOnClip(dataType) {       ; fires when Flow puts the transcript on the clipb
     }
     _FlowHoverClick(FlowX, FlowY)                        ; re-focus the target / set caret where you pressed
     if (FlowAutoPaste)
-        Send "^v"                                        ; our paste (off while testing Flow's own auto-paste)
-    _FlowTip(FlowAutoPaste ? "✓  pasted" : "✓  (Flow auto-paste)")
-    SetTimer () => _FlowTip(""), -1200
+        Send "^v"                                        ; our paste — disabled by default (Flow auto-pastes); see FlowAutoPaste
+    _FlowTipFor(FlowAutoPaste ? "✓  pasted" : "✓  (Flow auto-paste)", 1200)
 }
 
 OnClipboardChange _FlowOnClip
 
-; The F23 hotkey handlers MUST return instantly. While the Copilot key is held it
-; auto-repeats F23; if our handler is still busy (e.g. mid-click/Sleep) when a
-; repeat arrives, AHK lets that repeat fall through to Windows, which opens the
-; "Customize Copilot key" Settings page. So the hotkeys only flip state + show the
-; tooltip, and the slow clicking happens on a separate timer thread (where the
-; F23 hotkey can still interrupt to suppress each repeat).
+; The F24 handlers MUST return instantly. While the Copilot key is held it auto-
+; repeats (F24, via the KBM remap), and the overlay START click does a ~1.2s
+; hover-dwell — doing that work inline would block the hotkey thread and stack up
+; repeats. So the hotkeys only flip state + show the tip, and the slow dwell-click
+; runs on a separate timer thread.
 _FlowStartClicks() {
     global FlowState, FlowX, FlowY, FlowStartX, FlowStartY
     if !_FlowClickOverlay(FlowStartX, FlowStartY) {       ; START: WORKING offset (calibratable via F11)
         FlowState := "IDLE"
-        _FlowTip("Flow overlay not found")
-        SetTimer () => _FlowTip(""), -1500
+        _FlowTipFor("Flow overlay not found", 1500)
         return
     }
     MouseMove FlowX, FlowY, 0                             ; flick the cursor back to your target
@@ -405,8 +411,7 @@ _FlowStopClicks() {
     SetTimer _FlowStartClicks, 0                          ; cancel any pending start clicks
     SetTimer _FlowStopClicks, 0
     FlowState := "IDLE"
-    _FlowTip("✗  cancelled")
-    SetTimer () => _FlowTip(""), -1000
+    _FlowTipFor("✗  cancelled", 1000)
 }
 #HotIf
 
@@ -464,14 +469,12 @@ F4::{                                  ; save WORKING -> ini
     try {
         _FlowCalibSave(_FlowCalibPath(), m)
     } catch as e {                       ; surface a real write failure, don't fake "saved"
-        _FlowTip("✗  save failed: " e.Message)
-        SetTimer () => _FlowTip(""), -3000
+        _FlowTipFor("✗  save failed: " e.Message, 3000)
         return                           ; keep the ● unsaved markers
     }
     _flowCalib := m.Clone()             ; SAVED snapshot now matches WORKING (clears dirty)
     _FlowCalibShow()
-    _FlowTip("✓  saved")
-    SetTimer () => _FlowTip(""), -1200
+    _FlowTipFor("✓  saved", 1200)
 }
 F10::{                                 ; dry-run: click START, wait, click STOP
     global FlowStartX, FlowStartY, FlowStopX, FlowStopY

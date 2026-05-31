@@ -201,7 +201,11 @@ if (Test-Path -LiteralPath $suppressor) {
     Write-Host ''
     Write-Host 'Configuring PowerToys (Copilot key Win+Shift+F23 -> F24) ...'
     try { & $suppressor }
-    catch { Write-Warning "PowerToys Copilot-key setup failed: $($_.Exception.Message)" }
+    catch {
+        Write-Warning "PowerToys Copilot-key setup failed: $($_.Exception.Message)"
+        Write-Warning "Flow is installed, but the Copilot key is NOT wired up yet. Once PowerToys is installed, re-run:"
+        Write-Warning "  suppress-copilot-key.ps1            (then -Status to verify the F24 remap)"
+    }
 } else {
     Write-Warning "suppress-copilot-key.ps1 not found next to this script; skipping PowerToys setup."
 }

@@ -42,6 +42,15 @@ m4 := _FlowCalibLoad(tmp)
 _assert(m4["startX"] = d["startX"], "non-numeric startX falls back to default")
 _assert(m4["stopX"] = 333, "corrupt startX does not disturb other keys")
 
+; 5. Save creates a missing parent directory (fresh machine: %LOCALAPPDATA%\dotfiles absent)
+subdir := A_Temp "\flow-calib-test-dir-" A_TickCount
+nested := subdir "\sub\flow-calib.ini"
+_FlowCalibSave(nested, saved)
+_assert(FileExist(nested), "save created the nested ini (DirCreate branch)")
+m5 := _FlowCalibLoad(nested)
+_assert(m5["startY"] = 222, "nested ini reloads the saved value")
+try DirDelete subdir, true
+
 try FileDelete tmp
 FileAppend "OK: all calibration config tests passed`n", RESULT
 ExitApp 0

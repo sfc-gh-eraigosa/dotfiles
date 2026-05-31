@@ -71,4 +71,5 @@ try {
 } catch {
     "ERROR $(Get-Date -Format o): $($_.Exception.Message)" | Out-File $log -Encoding utf8
     Write-Output "FAILED: $($_.Exception.Message)"
+    exit 1   # non-zero so the caller (install_windows.sh, set -e) sees the failure
 }

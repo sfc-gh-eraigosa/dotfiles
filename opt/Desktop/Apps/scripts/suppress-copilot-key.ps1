@@ -106,8 +106,9 @@ function Restart-PowerToys {
     }
     Start-Sleep -Seconds 1
     $exe = Join-Path $LocalApp 'PowerToys\PowerToys.exe'
-    if (Test-Path -LiteralPath $exe) { Start-Process -FilePath $exe }
-    else { Write-Warning "PowerToys.exe not found at $exe; start PowerToys manually." }
+    if (Test-Path -LiteralPath $exe) { Start-Process -FilePath $exe; return $true }
+    Write-Warning "PowerToys.exe not found at $exe; start PowerToys manually."
+    return $false
 }
 
 # --- Status ----------------------------------------------------------------------
@@ -196,8 +197,11 @@ if (Test-Path -LiteralPath $PtSettings) {
 
 # 3) Apply ------------------------------------------------------------------------
 if ($changed) {
-    Restart-PowerToys
-    Write-Host "Done. The Copilot key now sends $TargetLabel; macos.ahk drives Wispr Flow from there."
+    if (Restart-PowerToys) {
+        Write-Host "Done. The Copilot key now sends $TargetLabel; macos.ahk drives Wispr Flow from there."
+    } else {
+        Write-Warning "Config written, but PowerToys was not auto-restarted. Start PowerToys manually for the $TargetLabel remap to take effect."
+    }
 } else {
     Write-Host "Already configured; no restart needed."
 }

@@ -500,11 +500,12 @@ if [ -f "$WIN_SETUP_MARKER" ]; then
     printf '%s\n' "  In ${_b}Wispr Flow${_x} → ${_sky}Settings › General › Shortcuts${_x}, set ${_b}all three${_x} shortcuts"
     printf '%s\n' "  off the Win key (Flow's ${_b}Ctrl+Win${_x} default just overlaps the macOS hotkeys):"
     printf '\n'
-    printf '%s\n' "    ${_mint}♪${_x} ${_b}Push-to-talk${_x} : ${_sky}${_b}Ctrl+Shift+F12${_x}   (what the Copilot key sends)"
+    printf '%s\n' "    ${_mint}♪${_x} ${_b}Push-to-talk${_x} : any non-Win combo  (e.g. ${_sky}Ctrl+Shift+F12${_x})"
     printf '%s\n' "    ${_mint}♪${_x} ${_b}Hands-free${_x}   : any non-Win combo  (e.g. ${_sky}Ctrl+Shift+F11${_x})"
     printf '%s\n' "    ${_mint}♪${_x} ${_b}Command mode${_x} : any non-Win combo  (e.g. ${_sky}Ctrl+Shift+F10${_x})"
     printf '\n'
-    printf '%s\n' "  ${_dim}This one's manual — Flow keeps its settings in a binary, cloud-synced store.${_x}"
+    printf '%s\n' "  ${_dim}The Copilot key itself needs no Flow shortcut — PowerToys + macos.ahk drive it.${_x}"
+    printf '%s\n' "  ${_dim}This step is manual — Flow keeps its settings in a binary, cloud-synced store.${_x}"
     printf '%s\n' "  ${_dim}Full guide:${_x} ${_sky}<Desktop>\\Apps\\scripts\\WISPR-FLOW.md${_x}"
     printf '%s\n' "$(_rainbow "$_rule" 4)"
     printf '\n'
@@ -518,11 +519,12 @@ if [ -f "$WIN_SETUP_MARKER" ]; then
   In Wispr Flow -> Settings > General > Shortcuts, set all three shortcuts
   off the Win key (Flow's Ctrl+Win default just overlaps the macOS hotkeys):
 
-    - Push-to-talk : Ctrl+Shift+F12   (what the Copilot key sends)
+    - Push-to-talk : any non-Win combo  (e.g. Ctrl+Shift+F12)
     - Hands-free   : any non-Win combo  (e.g. Ctrl+Shift+F11)
     - Command mode : any non-Win combo  (e.g. Ctrl+Shift+F10)
 
-  This one's manual — Flow keeps its settings in a binary, cloud-synced store.
+  The Copilot key itself needs no Flow shortcut - PowerToys + macos.ahk drive it.
+  This step is manual - Flow keeps its settings in a binary, cloud-synced store.
   Full guide: <Desktop>\Apps\scripts\WISPR-FLOW.md
 ------------------------------------------------------------------------
 BANNER
