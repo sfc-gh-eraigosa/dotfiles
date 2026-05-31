@@ -165,7 +165,12 @@ _flowToastGui := ""          ; current toggle popup (so a rapid re-toggle replac
 ; Overlay click offsets — WORKING set, used by the click functions below.
 ; Loaded from the calibration ini at startup (falls back to _FlowCalibDefaults()).
 ; _flowCalib holds the SAVED snapshot for the dirty check + F3 revert (F11 mode).
-_flowCalib := _FlowCalibLoad(_FlowCalibPath())
+; Guard the load: a calibration-ini problem must never prevent the rest of this
+; daily-driver script (Cmd shortcuts, screenshots, dictation) from loading.
+try
+    _flowCalib := _FlowCalibLoad(_FlowCalibPath())
+catch
+    _flowCalib := _FlowCalibDefaults()
 FlowStartX := _flowCalib["startX"]
 FlowStartY := _flowCalib["startY"]
 FlowStopX  := _flowCalib["stopX"]
@@ -420,6 +425,9 @@ F10::{
 
 ; F11 toggles calibration mode. Only enters from IDLE; the Copilot key is ignored
 ; while active (see *F24). Rainbow ON / grey OFF toast, same as the F10 toggle.
+; Exiting (F11/Esc) intentionally keeps the WORKING offsets live for the session so
+; you can test them with the real Copilot key; only F4 persists them, and a script
+; reload reverts to the saved ini.
 F11::{
     global FlowState, CalibActive
     if (FlowState != "IDLE")
@@ -453,7 +461,13 @@ F5::{                                  ; restore WORKING <- baked-in DEFAULT
 F4::{                                  ; save WORKING -> ini
     global FlowStartX, FlowStartY, FlowStopX, FlowStopY, _flowCalib
     m := Map("startX", FlowStartX, "startY", FlowStartY, "stopX", FlowStopX, "stopY", FlowStopY)
-    _FlowCalibSave(_FlowCalibPath(), m)
+    try {
+        _FlowCalibSave(_FlowCalibPath(), m)
+    } catch as e {                       ; surface a real write failure, don't fake "saved"
+        _FlowTip("✗  save failed: " e.Message)
+        SetTimer () => _FlowTip(""), -3000
+        return                           ; keep the ● unsaved markers
+    }
     _flowCalib := m.Clone()             ; SAVED snapshot now matches WORKING (clears dirty)
     _FlowCalibShow()
     _FlowTip("✓  saved")

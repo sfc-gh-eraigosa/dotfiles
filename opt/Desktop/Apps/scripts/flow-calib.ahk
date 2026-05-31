@@ -14,13 +14,17 @@ _FlowCalibPath() {
     return EnvGet("LOCALAPPDATA") . "\dotfiles\flow-calib.ini"
 }
 
-; Read each key with its default as the fallback, coerced to Integer, so a missing
-; or partially-corrupt file degrades gracefully to defaults and never throws.
+; Read each key, falling back to its default when the key is missing OR holds a
+; non-numeric value, so a missing or corrupt/hand-edited file degrades gracefully
+; to defaults per key and never throws (Integer() would throw on garbage like
+; "startX=abc", which at startup would take down all of macos.ahk).
 _FlowCalibLoad(path) {
     d := _FlowCalibDefaults()
     m := Map()
-    for key, dflt in d
-        m[key] := Integer(IniRead(path, "overlay", key, dflt))
+    for key, dflt in d {
+        raw := IniRead(path, "overlay", key, dflt)
+        m[key] := IsInteger(raw) ? Integer(raw) : dflt
+    }
     return m
 }
 
