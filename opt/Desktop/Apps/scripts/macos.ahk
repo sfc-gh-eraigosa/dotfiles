@@ -1,5 +1,6 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
+#Include flow-calib.ahk      ; overlay-offset calibration data layer (DEFAULT + ini load/save)
 
 ; ==============================================================================
 ;  macOS-style shortcuts for Windows  (AutoHotkey v2)
@@ -132,7 +133,8 @@ cmdTabActive := false
 ;  Keyboard Manager remaps Win+Shift+F23 -> F24 (a clean unused key) BEFORE Windows
 ;  sees it. We therefore bind F24 here, not F23. (KBM-only is enabled; FancyZones /
 ;  PowerToys Run / Shortcut Guide are disabled so KBM doesn't fight the Cmd=Win
-;  mappings above. See WISPR-FLOW.md + flow-coord-capture.ahk.)
+;  mappings above. See WISPR-FLOW.md. The overlay click offsets are calibratable
+;  live via F11 — see the calibration block below.)
 ;
 ;  Wispr Flow IGNORES injected keystrokes, but it DOES accept injected mouse clicks
 ;  on its always-visible "Status" overlay. So we drive Flow by clicking the overlay:
@@ -147,9 +149,9 @@ cmdTabActive := false
 ;  cursor just flicks to the widget and back.
 ;
 ;  Click points are OFFSETS within the "Status" overlay window (anchored via
-;  WinGetPos so they survive the widget moving). Re-capture with
-;  flow-coord-capture.ahk if the overlay layout changes. See WISPR-FLOW.md and
-;  docs/superpowers/specs/2026-05-30-*.
+;  WinGetPos so they survive the widget moving). Re-capture live with the F11
+;  calibration mode if the overlay layout changes. See WISPR-FLOW.md and
+;  docs/superpowers/specs/2026-05-31-flow-calibration-mode-design.md.
 ; ==============================================================================
 FlowState := "IDLE"          ; IDLE | DICTATING | AWAITING_CLIP
 FlowWin   := 0
@@ -159,6 +161,17 @@ FlowAutoPaste := false       ; TEST: Flow appears to auto-paste itself now. fals
                              ; Ctrl+V (avoid double paste); set true to re-enable our paste.
 FlowEnabled := true          ; F10 toggles this; when false the Copilot key does nothing.
 _flowToastGui := ""          ; current toggle popup (so a rapid re-toggle replaces it)
+
+; Overlay click offsets — WORKING set, used by the click functions below.
+; Loaded from the calibration ini at startup (falls back to _FlowCalibDefaults()).
+; _flowCalib holds the SAVED snapshot for the dirty check + F3 revert (F11 mode).
+_flowCalib := _FlowCalibLoad(_FlowCalibPath())
+FlowStartX := _flowCalib["startX"]
+FlowStartY := _flowCalib["startY"]
+FlowStopX  := _flowCalib["stopX"]
+FlowStopY  := _flowCalib["stopY"]
+CalibActive   := false       ; F11 calibration mode flag
+_flowCalibGui := ""          ; persistent calibration HUD handle
 
 _FlowTip(msg) {
     if (msg = "") {
@@ -200,6 +213,83 @@ _FlowToastDestroy(g) {
     try g.Destroy()
     if (_flowToastGui == g)
         _flowToastGui := ""
+}
+
+; --- Calibration mode (F11) -----------------------------------------------------
+; A persistent, NoActivate HUD pinned top-center (never covers the bottom overlay)
+; showing the live WORKING offsets + a per-row saved/unsaved marker + the keymap.
+
+_FlowCalibStartDirty() {
+    global FlowStartX, FlowStartY, _flowCalib
+    return (FlowStartX != _flowCalib["startX"] || FlowStartY != _flowCalib["startY"])
+}
+_FlowCalibStopDirty() {
+    global FlowStopX, FlowStopY, _flowCalib
+    return (FlowStopX != _flowCalib["stopX"] || FlowStopY != _flowCalib["stopY"])
+}
+
+_FlowCalibDestroy() {
+    global _flowCalibGui
+    if (_flowCalibGui) {
+        try _flowCalibGui.Destroy()
+        _flowCalibGui := ""
+    }
+}
+
+; Build (or rebuild) the HUD from the current WORKING values.
+_FlowCalibShow() {
+    global _flowCalibGui, FlowStartX, FlowStartY, FlowStopX, FlowStopY
+    static rainbow := ["FF8787","FFAF87","FFD787","AFFFAF","87D7FF","AFAFFF","D7AFFF","FFAFFF"]
+    _FlowCalibDestroy()
+    g := Gui("+AlwaysOnTop -Caption +ToolWindow +Border", "Flow Calibration")
+    g.BackColor := "0B0E14"
+    g.MarginX := 16, g.MarginY := 12
+
+    ; rainbow per-char title
+    g.SetFont "s15 Bold", "Consolas"
+    Loop Parse "FLOW CALIBRATION" {
+        g.SetFont "c" rainbow[Mod(A_Index - 1, rainbow.Length) + 1]
+        g.Add("Text", (A_Index = 1 ? "xm ym" : "x+0 yp"), A_LoopField)
+    }
+
+    ; offset rows with per-row markers
+    startMark := _FlowCalibStartDirty() ? "● unsaved" : "✓ saved"
+    stopMark  := _FlowCalibStopDirty()  ? "● unsaved" : "✓ saved"
+    g.SetFont "s12 Norm cD0D0D0", "Consolas"
+    g.Add("Text", "xm y+14", Format("START   {1}, {2}     {3}", FlowStartX, FlowStartY, startMark))
+    g.Add("Text", "xm y+4",  Format("STOP    {1}, {2}     {3}", FlowStopX,  FlowStopY,  stopMark))
+
+    ; keymap
+    g.SetFont "s11 c8A8A8A", "Consolas"
+    g.Add("Text", "xm y+12", "F1 set START      F2 set STOP")
+    g.Add("Text", "xm y+4",  "F3 revert         F4 save")
+    g.Add("Text", "xm y+4",  "F5 defaults       F10 test")
+    g.Add("Text", "xm y+4",  "F11 / Esc   end calibration")
+
+    ; Center on screen via AHK's built-in (handles DPI scaling correctly; manual
+    ; A_ScreenWidth math mismatches units at >100% scaling and lands off-screen).
+    g.Show("NoActivate AutoSize Center")
+    _flowCalibGui := g
+}
+
+; Capture the mouse position (relative to the Flow overlay) into a WORKING offset.
+_FlowCalibCapture(which) {
+    global FlowStartX, FlowStartY, FlowStopX, FlowStopY
+    overlay := "Status ahk_exe Wispr Flow.exe"
+    if !WinExist(overlay) {
+        _FlowTip("✗  Flow overlay not found")
+        SetTimer () => _FlowTip(""), -1500
+        return
+    }
+    CoordMode "Mouse", "Screen"
+    MouseGetPos &mx, &my
+    WinGetPos &wx, &wy, , , overlay
+    if (which = "start") {
+        FlowStartX := mx - wx, FlowStartY := my - wy
+    } else {
+        FlowStopX := mx - wx, FlowStopY := my - wy
+    }
+    _FlowCalibShow()
 }
 
 ; Move at natural speed (fires the Electron overlay's hover/mouseenter), DWELL, then
@@ -260,8 +350,8 @@ OnClipboardChange _FlowOnClip
 ; tooltip, and the slow clicking happens on a separate timer thread (where the
 ; F23 hotkey can still interrupt to suppress each repeat).
 _FlowStartClicks() {
-    global FlowState, FlowX, FlowY
-    if !_FlowClickOverlay(440, 560) {                    ; START: hover-dwell then click (calibrated)
+    global FlowState, FlowX, FlowY, FlowStartX, FlowStartY
+    if !_FlowClickOverlay(FlowStartX, FlowStartY) {       ; START: WORKING offset (calibratable via F11)
         FlowState := "IDLE"
         _FlowTip("Flow overlay not found")
         SetTimer () => _FlowTip(""), -1500
@@ -271,14 +361,14 @@ _FlowStartClicks() {
 }
 
 _FlowStopClicks() {
-    global FlowX, FlowY
-    _FlowClickOverlay(512, 538)                          ; STOP: hover-dwell then click
+    global FlowX, FlowY, FlowStopX, FlowStopY
+    _FlowClickOverlay(FlowStopX, FlowStopY)               ; STOP: WORKING offset (calibratable via F11)
     MouseMove FlowX, FlowY, 0
 }
 
 *F24::{                        ; Copilot key (remapped to F24 by PowerToys KBM) -> start
-    global FlowState, FlowWin, FlowX, FlowY, FlowEnabled
-    if (!FlowEnabled)
+    global FlowState, FlowWin, FlowX, FlowY, FlowEnabled, CalibActive
+    if (!FlowEnabled || CalibActive)   ; ignore the Copilot key while calibrating
         return                                           ; dictation toggled off (F11)
     if (FlowState != "IDLE")
         return                                           ; swallow auto-repeat while held
@@ -327,6 +417,61 @@ F10::{
     }
     _FlowToast(FlowEnabled ? "  Dictation  ON  " : "  Dictation  OFF  ", FlowEnabled)
 }
+
+; F11 toggles calibration mode. Only enters from IDLE; the Copilot key is ignored
+; while active (see *F24). Rainbow ON / grey OFF toast, same as the F10 toggle.
+F11::{
+    global FlowState, CalibActive
+    if (FlowState != "IDLE")
+        return
+    CalibActive := !CalibActive
+    if (CalibActive)
+        _FlowCalibShow()
+    else
+        _FlowCalibDestroy()
+    _FlowToast(CalibActive ? "  Calibration  ON  " : "  Calibration  OFF  ", CalibActive)
+}
+
+; These keys are live ONLY while calibrating, so they keep their normal meaning
+; otherwise (notably F10 stays the dictation toggle).
+#HotIf CalibActive
+F1::_FlowCalibCapture("start")
+F2::_FlowCalibCapture("stop")
+F3::{                                  ; revert WORKING <- last SAVED
+    global FlowStartX, FlowStartY, FlowStopX, FlowStopY, _flowCalib
+    FlowStartX := _flowCalib["startX"], FlowStartY := _flowCalib["startY"]
+    FlowStopX  := _flowCalib["stopX"],  FlowStopY  := _flowCalib["stopY"]
+    _FlowCalibShow()
+}
+F5::{                                  ; restore WORKING <- baked-in DEFAULT
+    global FlowStartX, FlowStartY, FlowStopX, FlowStopY
+    d := _FlowCalibDefaults()
+    FlowStartX := d["startX"], FlowStartY := d["startY"]
+    FlowStopX  := d["stopX"],  FlowStopY  := d["stopY"]
+    _FlowCalibShow()
+}
+F4::{                                  ; save WORKING -> ini
+    global FlowStartX, FlowStartY, FlowStopX, FlowStopY, _flowCalib
+    m := Map("startX", FlowStartX, "startY", FlowStartY, "stopX", FlowStopX, "stopY", FlowStopY)
+    _FlowCalibSave(_FlowCalibPath(), m)
+    _flowCalib := m.Clone()             ; SAVED snapshot now matches WORKING (clears dirty)
+    _FlowCalibShow()
+    _FlowTip("✓  saved")
+    SetTimer () => _FlowTip(""), -1200
+}
+F10::{                                 ; dry-run: click START, wait, click STOP
+    global FlowStartX, FlowStartY, FlowStopX, FlowStopY
+    _FlowClickOverlay(FlowStartX, FlowStartY)
+    Sleep 2000
+    _FlowClickOverlay(FlowStopX, FlowStopY)
+}
+Esc::{                                 ; exit calibration (same as F11)
+    global CalibActive
+    CalibActive := false
+    _FlowCalibDestroy()
+    _FlowToast("  Calibration  OFF  ", false)
+}
+#HotIf
 
 ; ==============================================================================
 ;  Hot corners  (move the pointer to the top-right corner -> Task View)

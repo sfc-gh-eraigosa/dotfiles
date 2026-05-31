@@ -37,6 +37,7 @@ Copilot key (Win+Shift+F23)
 | **Copilot key** (hold) | Dictate into the field under the mouse; release to finish |
 | **Esc** *(only while dictating)* | Cancel — reset, no paste; normal Esc otherwise |
 | **F10** | Toggle the whole dictation flow on/off (centered popup shows ON/OFF) |
+| **F11** | Toggle calibration mode — re-capture the overlay click offsets (centered rainbow HUD) |
 
 > The pieces: **`suppress-copilot-key.ps1`** configures PowerToys (the F24 remap +
 > module setup); **`macos.ahk`** does the overlay-click flow; **`install-wisprflow.ps1`**
@@ -99,17 +100,30 @@ binary, cloud-synced `…\Packages\WisprFlow.WisprFlow_*\Settings\settings.dat`)
    overlay to start/stop dictation, so it must be shown (the default).
 5. **Start at login** — enable it in Flow (the Run-key mechanism isn't scriptable).
 
-## Overlay click coordinates
+## Overlay click coordinates & calibration
 
-`macos.ahk` clicks the Flow "Status" overlay at fixed offsets within that window
-(anchored via `WinGetPos`, so they survive the widget moving): **start** ≈
-`(440, 560)`, **stop** ≈ `(512, 538)`, captured at 200% display scaling. If Flow's
-overlay layout changes (or these miss), re-capture with **`flow-coord-capture.ahk`**
-(press `F1`/`F2` over the start/stop targets; `F4` verifies a click) and update the
-offsets in `macos.ahk`'s `_FlowStartClicks` / `_FlowStopClicks`.
+`macos.ahk` clicks the Flow "Status" overlay at offsets within that window
+(anchored via `WinGetPos`, so they survive the widget moving). The baked-in
+defaults are **start** `(440, 560)`, **stop** `(512, 538)` (200% display scaling);
+your tuned values persist to `%LOCALAPPDATA%\dotfiles\flow-calib.ini` and override
+the defaults at startup (so re-deploying `macos.ahk` won't lose them).
 
-> Diagnostics kept for re-tuning: `flow-coord-capture.ahk` (grab/verify overlay
-> coords) and `copilot-key-probe.ahk` (confirm the Copilot key's key events).
+**To re-calibrate, press `F11`** (calibration mode). A centered rainbow HUD shows
+the live offsets + keymap:
+
+| Key | Action |
+|-----|--------|
+| `F1` / `F2` | capture the mouse position as the **start** / **stop** offset |
+| `F3` | revert to the last **saved** values |
+| `F5` | restore the baked-in **defaults** |
+| `F4` | **save** to the ini |
+| `F10` | **dry-run**: click start, wait ~2 s, click stop (watch both land) |
+| `F11` / `Esc` | end calibration |
+
+Hover the exact spot, `F1`/`F2` to capture, `F10` to test, `F4` to save.
+
+> Diagnostic kept for re-tuning: `copilot-key-probe.ahk` (confirm the Copilot key's
+> key events).
 
 ## Migrating a machine that had the old macro
 
