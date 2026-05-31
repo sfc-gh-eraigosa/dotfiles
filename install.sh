@@ -474,28 +474,58 @@ done
 WIN_SETUP_MARKER="${HOME}/.config/dotfiles/.windows-setup-just-ran"
 if [ -f "$WIN_SETUP_MARKER" ]; then
   rm -f "$WIN_SETUP_MARKER" 2>/dev/null || true
-  # ANSI accents — only when stdout is a real terminal, so piped logs stay clean.
+  _b=$'\033[1m'; _x=$'\033[0m'
   if [ -t 1 ]; then
-    _b=$'\033[1m'; _x=$'\033[0m'
-    _yel=$'\033[1;33m'; _cyn=$'\033[1;36m'; _grn=$'\033[1;32m'; _red=$'\033[1;31m'
+    # Soft pastel-rainbow palette (xterm-256) — friendly, not alarming.
+    _hues=(210 216 222 157 117 147 183 219)
+    _sky=$'\033[38;5;117m'; _mint=$'\033[38;5;157m'; _dim=$'\033[38;5;245m'
+    # Render an ASCII string with a flowing pastel rainbow at phase $2 (no newline).
+    _rainbow() {
+      local s="$1" phase="${2:-0}" i out=""
+      for ((i=0; i<${#s}; i++)); do
+        out+=$'\033[38;5;'"${_hues[$(((i+phase) % ${#_hues[@]}))]}"'m'"${s:i:1}"
+      done
+      printf '%s%s' "$out" "$_x"
+    }
+    _rule="------------------------------------------------------------------------"
+    _title="All set!  Just one quick Wispr Flow step to finish up"
+    printf '\n'
+    # Gentle flowing-rainbow animation on the title (~0.5s; skipped if no sleep).
+    for _p in 0 1 2 3 4 5 6 7; do
+      printf '\r  🌈 %s 🌈' "$(_rainbow "$_title" "$_p")"
+      sleep 0.06 2>/dev/null || true
+    done
+    printf '\n'
+    printf '%s\n' "$(_rainbow "$_rule" 0)"
+    printf '%s\n' "  In ${_b}Wispr Flow${_x} → ${_sky}Settings › General › Shortcuts${_x}, set ${_b}all three${_x} shortcuts"
+    printf '%s\n' "  off the Win key (Flow's ${_b}Ctrl+Win${_x} default just overlaps the macOS hotkeys):"
+    printf '\n'
+    printf '%s\n' "    ${_mint}♪${_x} ${_b}Push-to-talk${_x} : ${_sky}${_b}Ctrl+Shift+F12${_x}   (what the Copilot key sends)"
+    printf '%s\n' "    ${_mint}♪${_x} ${_b}Hands-free${_x}   : any non-Win combo  (e.g. ${_sky}Ctrl+Shift+F11${_x})"
+    printf '%s\n' "    ${_mint}♪${_x} ${_b}Command mode${_x} : any non-Win combo  (e.g. ${_sky}Ctrl+Shift+F10${_x})"
+    printf '\n'
+    printf '%s\n' "  ${_dim}This one's manual — Flow keeps its settings in a binary, cloud-synced store.${_x}"
+    printf '%s\n' "  ${_dim}Full guide:${_x} ${_sky}<Desktop>\\Apps\\scripts\\WISPR-FLOW.md${_x}"
+    printf '%s\n' "$(_rainbow "$_rule" 4)"
+    printf '\n'
+    unset -f _rainbow; unset _hues _sky _mint _dim _p _rule _title
   else
-    _b=''; _x=''; _yel=''; _cyn=''; _grn=''; _red=''
+    cat <<'BANNER'
+
+------------------------------------------------------------------------
+  All set! Just one quick Wispr Flow step to finish up.
+------------------------------------------------------------------------
+  In Wispr Flow -> Settings > General > Shortcuts, set all three shortcuts
+  off the Win key (Flow's Ctrl+Win default just overlaps the macOS hotkeys):
+
+    - Push-to-talk : Ctrl+Shift+F12   (what the Copilot key sends)
+    - Hands-free   : any non-Win combo  (e.g. Ctrl+Shift+F11)
+    - Command mode : any non-Win combo  (e.g. Ctrl+Shift+F10)
+
+  This one's manual — Flow keeps its settings in a binary, cloud-synced store.
+  Full guide: <Desktop>\Apps\scripts\WISPR-FLOW.md
+------------------------------------------------------------------------
+BANNER
   fi
-  printf '\n'
-  printf '%s\n' "${_yel}════════════════════════════════════════════════════════════════════════════${_x}"
-  printf '%s\n' "  ${_red}${_b}⚠  WINDOWS / WISPR FLOW — ONE MANUAL STEP REMAINING${_x}  ${_b}(cannot be scripted)${_x}"
-  printf '%s\n' "${_yel}────────────────────────────────────────────────────────────────────────────${_x}"
-  printf '%s\n' "  After installing and signing into ${_b}Wispr Flow${_x}, move ${_red}${_b}ALL THREE${_x} shortcuts"
-  printf '%s\n' "  ${_b}OFF the Win key${_x}:   ${_cyn}Settings → General → Shortcuts${_x}"
-  printf '\n'
-  printf '%s\n' "    ${_grn}•${_x} ${_b}Push-to-talk${_x} : ${_cyn}${_b}Ctrl+Shift+F12${_x}   (what the Copilot key sends)"
-  printf '%s\n' "    ${_grn}•${_x} ${_b}Hands-free${_x}   : a non-Win combo  (e.g. ${_cyn}Ctrl+Shift+F11${_x})"
-  printf '%s\n' "    ${_grn}•${_x} ${_b}Command mode${_x} : a non-Win combo  (e.g. ${_cyn}Ctrl+Shift+F10${_x})"
-  printf '\n'
-  printf '%s\n' "  Flow's default ${_b}Ctrl+Win${_x} fights the macOS hotkeys (${_cyn}macos.ahk${_x}) and breaks"
-  printf '%s\n' "  ${_b}Cmd+C / Cmd+V${_x}. Leaving ${_red}${_b}any${_x} of the three on a Win combo re-breaks them."
-  printf '%s\n' "  Full details: ${_cyn}<Desktop>\\Apps\\scripts\\WISPR-FLOW.md${_x}"
-  printf '%s\n' "${_yel}════════════════════════════════════════════════════════════════════════════${_x}"
-  printf '\n'
-  unset _b _x _yel _cyn _grn _red
+  unset _b _x
 fi
