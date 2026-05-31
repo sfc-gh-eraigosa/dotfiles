@@ -28,6 +28,10 @@
 !opt/**
 !src/
 !src/**
+# Retired-but-kept artifacts (e.g. the old AHK Copilot-key voice macro). Tracked
+# so we can restore them later; see archive/README.md.
+!archive/
+!archive/**
 
 # Local Binary Zone (opt/bin)
 # We ignore everything in opt/bin except for the registry documentation and a

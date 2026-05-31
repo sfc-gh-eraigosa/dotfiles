@@ -71,6 +71,11 @@
     "Match": "AutoHotkey"
   },
   {
+    "Name": "Microsoft PowerToys",
+    "Id": "Microsoft.PowerToys",
+    "Match": "PowerToys"
+  },
+  {
     "Name": "Google Chrome",
     "Id": "Google.Chrome",
     "Match": "Google Chrome",

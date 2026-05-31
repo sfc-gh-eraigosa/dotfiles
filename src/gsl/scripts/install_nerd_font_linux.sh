@@ -10,15 +10,37 @@ NERD_FONTS_ASSET="Meslo.zip"
 NERD_FONTS_URL_BASE="https://github.com/ryanoasis/nerd-fonts/releases/download/${NERD_FONTS_VERSION}"
 
 # ── Preflight ────────────────────────────────────────────────────────────────
-missing=0
+# Required commands and their Debian/Ubuntu package names (fc-cache ships in
+# fontconfig). On apt-based systems we auto-install whatever's missing so a fresh
+# clone bootstraps cleanly; on other distros we fall back to a clear message.
+pkg_for() { case "$1" in fc-cache) echo fontconfig ;; *) echo "$1" ;; esac; }
+
+missing_pkgs=()
 for tool in curl unzip fc-cache; do
-  if ! command -v "$tool" >/dev/null 2>&1; then
-    echo "ERROR: required tool '$tool' not found."
-    echo "  Install it: sudo apt-get install -y fontconfig unzip curl"
-    missing=1
-  fi
+  command -v "$tool" >/dev/null 2>&1 || missing_pkgs+=("$(pkg_for "$tool")")
 done
-[ "$missing" -eq 0 ] || exit 1
+
+if [ "${#missing_pkgs[@]}" -gt 0 ]; then
+  if command -v apt-get >/dev/null 2>&1; then
+    SUDO=""
+    [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1 && SUDO="sudo"
+    echo "Installing missing font prerequisites: ${missing_pkgs[*]}"
+    $SUDO apt-get update -y -qq >/dev/null 2>&1 || true
+    $SUDO apt-get install -y -qq "${missing_pkgs[@]}" || true
+  fi
+  # Re-check; only abort if a tool is STILL missing after the install attempt.
+  missing=0
+  for tool in curl unzip fc-cache; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+      echo "ERROR: required tool '$tool' not found."
+      missing=1
+    fi
+  done
+  if [ "$missing" -ne 0 ]; then
+    echo "  Install the prerequisites and re-run: sudo apt-get install -y fontconfig unzip curl"
+    exit 1
+  fi
+fi
 
 # ── Install Linux-side fonts ─────────────────────────────────────────────────
 font_dir="${HOME}/.local/share/fonts/MesloLGS"

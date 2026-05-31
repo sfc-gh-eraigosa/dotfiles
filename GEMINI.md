@@ -8,6 +8,7 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - `opt/profiles/`: Shell configuration files (.zshrc, .bashrc, .tmux.conf, etc.). [See opt/profiles/GEMINI.md](./opt/profiles/GEMINI.md) for details.
 - `opt/docs/`: Legacy and reference documentation for various tools and setups. [See opt/docs/GEMINI.md](./opt/docs/GEMINI.md).
 - `src/`: Source code for custom tools and agent skills. [See src/GEMINI.md](./src/GEMINI.md).
+- `archive/`: Retired-but-kept artifacts (not wired into install). [See archive/GEMINI.md](./archive/GEMINI.md) for the inventory and restore instructions.
 - `ai/gemini/`: Gemini-specific commands, TOML policies, and settings.
 - `ai/claude/`: Claude-specific commands, settings, and the `safety_guard.sh` PreToolUse hook.
 - `ai/plugins.yaml`: Declarative manifest of the Claude Code plugins this repo installs/enables (ensure-only via `sync-plugins`). See [docs/ai-plugins.md](./docs/ai-plugins.md) for the plugin summary, first-usage examples, and the Gemini-extension path.
@@ -17,6 +18,7 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - **Tool Discovery**: Check `opt/scripts/GEMINI.md` for available shell scripts.
 - **Configuration**: Shell profiles and aliases are maintained in `opt/profiles/`.
 - **Progressive Loading**: Only read subdirectory `GEMINI.md` (or `CLAUDE.md` — same file) when specifically needing information about that section, to conserve context.
+- **GEMINI.md + CLAUDE.md in every documented directory**: Whenever a new directory is added that contains tools, scripts, or documentation worth describing to AI agents, create a `GEMINI.md` in that directory and a `CLAUDE.md -> GEMINI.md` symlink alongside it (`ln -s GEMINI.md CLAUDE.md`). This ensures both Gemini CLI and Claude Code can navigate the repo from any subdirectory. The symlink keeps both agents in sync from a single source file. Add a link to the new `GEMINI.md` in this root file's Repository Structure section.
 - **Skills are shared**: `SKILL.md` files under `src/*/skill/` and `src/ssh-*/` drive both assistants. Edit once, benefit twice.
 
 ## Portability & Best Practices

@@ -105,7 +105,7 @@ for file in $(find "${BASE_DIR}/opt/profiles" -type f); do
 done
 
 # force a few
-for file in ".profile" ".zshrc" ".bash_logout" ".bashrc"; do
+for file in ".profile" ".zshenv" ".zshrc" ".bash_logout" ".bashrc"; do
   ln -sf "${BASE_DIR}/opt/profiles/${file}" "${HOME}/${file}"
 done 
 
@@ -467,3 +467,67 @@ for shell_config in "$HOME/.zshrc" "$HOME/.profile"; do
         fi
     fi
 done
+
+# Final reminder (WSL): if the interactive Windows setup ran this invocation, the
+# one thing that can't be scripted is Wispr Flow's shortcuts — surface it last so
+# it isn't scrolled away by earlier output. install_windows.sh sets this marker.
+WIN_SETUP_MARKER="${HOME}/.config/dotfiles/.windows-setup-just-ran"
+if [ -f "$WIN_SETUP_MARKER" ]; then
+  rm -f "$WIN_SETUP_MARKER" 2>/dev/null || true
+  _b=$'\033[1m'; _x=$'\033[0m'
+  if [ -t 1 ]; then
+    # Soft pastel-rainbow palette (xterm-256) — friendly, not alarming.
+    _hues=(210 216 222 157 117 147 183 219)
+    _sky=$'\033[38;5;117m'; _mint=$'\033[38;5;157m'; _dim=$'\033[38;5;245m'
+    # Render an ASCII string with a flowing pastel rainbow at phase $2 (no newline).
+    _rainbow() {
+      local s="$1" phase="${2:-0}" i out=""
+      for ((i=0; i<${#s}; i++)); do
+        out+=$'\033[38;5;'"${_hues[$(((i+phase) % ${#_hues[@]}))]}"'m'"${s:i:1}"
+      done
+      printf '%s%s' "$out" "$_x"
+    }
+    _rule="------------------------------------------------------------------------"
+    _title="All set!  Just one quick Wispr Flow step to finish up"
+    printf '\n'
+    # Gentle flowing-rainbow animation on the title (~0.5s; skipped if no sleep).
+    for _p in 0 1 2 3 4 5 6 7; do
+      printf '\r  🌈 %s 🌈' "$(_rainbow "$_title" "$_p")"
+      sleep 0.06 2>/dev/null || true
+    done
+    printf '\n'
+    printf '%s\n' "$(_rainbow "$_rule" 0)"
+    printf '%s\n' "  In ${_b}Wispr Flow${_x} → ${_sky}Settings › General › Shortcuts${_x}, set ${_b}all three${_x} shortcuts"
+    printf '%s\n' "  off the Win key (Flow's ${_b}Ctrl+Win${_x} default just overlaps the macOS hotkeys):"
+    printf '\n'
+    printf '%s\n' "    ${_mint}♪${_x} ${_b}Push-to-talk${_x} : any non-Win combo  (e.g. ${_sky}Ctrl+Shift+F12${_x})"
+    printf '%s\n' "    ${_mint}♪${_x} ${_b}Hands-free${_x}   : any non-Win combo  (e.g. ${_sky}Ctrl+Shift+F11${_x})"
+    printf '%s\n' "    ${_mint}♪${_x} ${_b}Command mode${_x} : any non-Win combo  (e.g. ${_sky}Ctrl+Shift+F10${_x})"
+    printf '\n'
+    printf '%s\n' "  ${_dim}The Copilot key itself needs no Flow shortcut — PowerToys + macos.ahk drive it.${_x}"
+    printf '%s\n' "  ${_dim}This step is manual — Flow keeps its settings in a binary, cloud-synced store.${_x}"
+    printf '%s\n' "  ${_dim}Full guide:${_x} ${_sky}<Desktop>\\Apps\\scripts\\WISPR-FLOW.md${_x}"
+    printf '%s\n' "$(_rainbow "$_rule" 4)"
+    printf '\n'
+    unset -f _rainbow; unset _hues _sky _mint _dim _p _rule _title
+  else
+    cat <<'BANNER'
+
+------------------------------------------------------------------------
+  All set! Just one quick Wispr Flow step to finish up.
+------------------------------------------------------------------------
+  In Wispr Flow -> Settings > General > Shortcuts, set all three shortcuts
+  off the Win key (Flow's Ctrl+Win default just overlaps the macOS hotkeys):
+
+    - Push-to-talk : any non-Win combo  (e.g. Ctrl+Shift+F12)
+    - Hands-free   : any non-Win combo  (e.g. Ctrl+Shift+F11)
+    - Command mode : any non-Win combo  (e.g. Ctrl+Shift+F10)
+
+  The Copilot key itself needs no Flow shortcut - PowerToys + macos.ahk drive it.
+  This step is manual - Flow keeps its settings in a binary, cloud-synced store.
+  Full guide: <Desktop>\Apps\scripts\WISPR-FLOW.md
+------------------------------------------------------------------------
+BANNER
+  fi
+  unset _b _x
+fi
