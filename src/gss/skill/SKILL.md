@@ -13,6 +13,7 @@ This skill provides a structured and safe workflow for managing Git repositories
 - **Scan for Changes**: Run 'gss scan [dir]' to find all repositories with uncommitted changes.
 - **Reliable Push**: Run 'gss push' to backup, sync, and push changes safely.
 - **Create PR**: Run 'gss pr' to create a feature branch and pull request.
+- **Repository Summaries**: Generate categorized markdown tables of up to 50 open PRs and Issues, including latest changes and associated issue numbers.
 
 ## The Workflow
 
@@ -53,6 +54,12 @@ This skill provides a structured and safe workflow for managing Git repositories
 - Provide the **GitHub Comparison Link** or the **Pull Request URL**.
 - **Description sync check**: If the push targeted an existing PR, confirm you refreshed its description (Execution phase) so it matches every commit now on the PR. A push that left the description stale is an incomplete sync — go back and run `gh pr edit`.
 - **Browser Verification**: Ask the user whether to open the **GitHub Comparison/PR link** (from the push/pr output) in their browser for final verification. To open it, run the repo's `open-url <link>` helper (`opt/scripts/misc/open-url`), which picks the right opener per platform — `open` on macOS, `wslview`/`explorer.exe` under WSL, `xdg-open` on Linux. It exits non-zero and prints the link when no opener exists (e.g. a headless SSH session); in that case just leave the link visible rather than retrying.
+
+### 5. Repository Summaries (PRs & Issues)
+- When asked to summarize open PRs or issues, always fetch detailed data up to a limit of 50 items (e.g., `gh pr list --state open --limit 50 --json number,title,author,labels,state,updatedAt,body` and similarly for `gh issue list`).
+- Present the results in **categorized markdown tables**, grouped by focus area or topic (e.g., "Infrastructure", "UI Improvements").
+- Include columns for PR/Issue Number, Title, Status, and a brief Summary of what the item addresses.
+- For PRs, explicitly extract and include **associated issue numbers** and highlight any **latest changes** or recent commits based on the retrieved data.
 
 ## Guidelines
 - **No Assumptions**: Even if a sync seems obvious, you must ask for permission first.
