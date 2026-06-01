@@ -35,9 +35,17 @@ Copilot key (Win+Shift+F23)
 | Key | Action |
 |-----|--------|
 | **Copilot key** (hold) | Dictate into the field under the mouse; release to finish |
+| **extra trigger keys** (hold) | Same hold-to-talk as the Copilot key — add your own via F9 (see below) |
 | **Esc** *(only while dictating)* | Cancel — reset, no paste; normal Esc otherwise |
+| **F1** (hold, dictation ON) | Help overlay listing every live binding; release to dismiss |
+| **F9** | Toggle manage-triggers mode — add/remove your own trigger keys (centered rainbow HUD) |
 | **F10** | Toggle the whole dictation flow on/off (centered popup shows ON/OFF) |
 | **F11** | Toggle calibration mode — re-capture the overlay click offsets (centered rainbow HUD) |
+
+> While dictating, the "🎤 Listening…" / "⏳ Transcribing…" tips carry a trailing
+> ` F1 help` hint (the "✗ cancelled" tip does not). Hold **F1** any time dictation is
+> ON to pop the FLOW HELP overlay; it's suppressed during calibration (F11) and
+> manage (F9) modes and returns once you exit them.
 
 > The pieces: **`suppress-copilot-key.ps1`** configures PowerToys (the F24 remap +
 > module setup); **`macos.ahk`** does the overlay-click flow; **`install-wisprflow.ps1`**
@@ -125,6 +133,54 @@ Hover the exact spot, `F1`/`F2` to capture, `F10` to test, `F4` to save.
 > Diagnostic kept for re-tuning: `copilot-key-probe.ahk` (confirm the Copilot key's
 > key events).
 
+## Adding extra trigger keys (F9 manage mode)
+
+The Copilot key isn't the only way to start dictation — you can bind **extra
+trigger keys** that route through the exact same hold-to-talk handlers. Press and
+hold any one of them to dictate, just like the Copilot key.
+
+**Press `F9`** to enter manage-triggers mode. A centered rainbow MANAGE TRIGGERS HUD
+lists the locked Copilot default plus every key you've added, with the rule line
+*"Press a key to add · press again to remove · Esc exits"*. While the HUD is up:
+
+- **Press any key (or modifier+key combo) to add it** as a trigger.
+- **Press an already-added key again to remove it** — add/remove is a single toggle.
+- **`Esc`** (or `F9` again) **exits** manage mode.
+
+The capture is consuming: the key you press to add/remove is swallowed, not typed
+into whatever's behind the HUD. The Copilot key (F24) is the **locked default** — it's
+always listed with a 🔒 and can't be added or removed.
+
+**Allowed trigger shapes** (anything else is refused with an on-screen reason):
+
+- a function key **F6–F8** or **F12–F22**, bare or with modifiers;
+- a **media / browser / launch** key (Volume, Media, Browser, Launch), bare or with modifiers;
+- **any key with at least one modifier** (Ctrl / Alt / Shift / Cmd), e.g. `Ctrl+Alt+D`;
+- **Right Cmd (RWin)** — the one bare modifier you may use on its own.
+
+**Refused with a reason** (the HUD shows a brief `✗ … — <why>` tip and adds nothing):
+
+- **reserved driver keys** — Esc, F1–F5, F9, F10, F11, F23, F24, and Left Cmd (LWin)
+  are owned by the driver / the Cmd layer;
+- **lone modifiers other than Right Cmd** — *"add a key, not a lone modifier"*;
+- **bare nav / edit / printable keys** (arrows, Tab, Space, letters, F1–F5, …) —
+  *"add an F6–F22 / media key, a modifier+key combo, or Right Cmd"*;
+- **common OS / editor shortcuts** — `Ctrl+C/V/X/Z/S/F/…`, `Alt+Tab`, `Alt+F4`,
+  `Cmd+Tab/D/L/E/R`, `Ctrl+Shift+Esc` — *"that's a common OS/editor shortcut"*;
+- anything **already bound** by `macos.ahk`'s Cmd / Opt layers — *"already bound by macos.ahk"*.
+
+> **First-release-wins:** if you hold two triggers at once, releasing *either* one
+> stops dictation (there's no per-key ownership); a second trigger pressed mid-session
+> is swallowed as an auto-repeat no-op.
+
+### Where the triggers live
+
+Added triggers persist per-machine to **`%LOCALAPPDATA%\dotfiles\flow-triggers.ini`**
+— same class as `flow-calib.ini`: **not tracked in git**, and it **survives
+re-deploying `macos.ahk`**. A missing, blank, or hand-corrupted file degrades to
+*"no extra triggers"* and never crashes startup. The Copilot key is never written to
+the file (it's the built-in default).
+
 ## Migrating a machine that had the old macro
 
 Run the cleanup helper once — it finds a deployed `macos.ahk` that still has the old
@@ -148,6 +204,15 @@ No-op (with a message) if nothing old is found or you're not on WSL.
 - **Not elevated** — when `macos.ahk` runs non-elevated it can't dictate into
   elevated/admin windows; run it elevated (the logon task) if you need that, but keep
   PowerToys at the same integrity so KBM's F24 reaches it.
+- **Right Cmd, while added, is captured — even when dictation is OFF.** If you've
+  added **Right Cmd (RWin)** as a trigger (see [Adding extra trigger keys](#adding-extra-trigger-keys-f9-manage-mode)),
+  a lone RWin tap no longer opens the Start menu: AHK swallows the key for as long as
+  `macos.ahk` runs. **Toggling dictation off with F10 does NOT restore it** — F10 gates
+  whether dictation *fires*, not whether trigger keys are *captured*, so a captured
+  RWin stays "dead" (no Start menu, no Win-modifier) regardless of the F10 state. This
+  is deliberate. To return Right Cmd (or any added key) to its OS role, **remove it via
+  F9** (or quit `macos.ahk`). Non-Win triggers like `F13` / `Ctrl+Alt+D` are swallowed
+  the same way, but harmlessly.
 
 ## Restore the old AHK macro
 
