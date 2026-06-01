@@ -48,19 +48,23 @@ Copilot key (Win+Shift+F23)
 > manage (F9) modes and returns once you exit them.
 
 > The pieces: **`suppress-copilot-key.ps1`** configures PowerToys (the F24 remap +
-> module setup); **`macos.ahk`** does the overlay-click flow; **`install-wisprflow.ps1`**
-> installs the Flow app. PowerToys is required.
+> module setup); **`macos.ahk`** does the overlay-click flow; **`wispr-install-core.ps1`**
+> holds the MSI download/install logic; **`install-wisprflow.ps1`** is the standalone
+> installer (+ customizations); **`setup-elevated.ps1`** runs the Flow MSI inside the
+> single elevated batch fired by **`setup-apps.ps1`**. PowerToys is required.
 
 ## Install the Flow app
 
-There is **no fully unattended install**: Wispr Flow ships a machine-wide MSI that
-requires elevation (a UAC prompt), which can't be driven from the unattended WSL
-provisioning context. So `install.sh` / `install_windows.sh` does **not** auto-install
-it — it points here.
+Wispr Flow ships a machine-wide MSI that requires elevation (a UAC prompt).
+`install.sh` → `install_windows.sh` → **`setup-apps.ps1`** now installs it as part
+of its **single elevated batch** (`setup-elevated.ps1`): after the non-elevated app
+pass, one `Start-Process -Verb RunAs` registers the hotkey task, swaps iTunes,
+installs the Flow MSI, and runs the PowerToys remap — **one UAC prompt for all of
+it**. The MSI download/install logic lives in `wispr-install-core.ps1`, shared by the
+batch and the standalone installer below.
 
-**Run the installer interactively** from a normal Windows PowerShell window (it
-self-elevates; approve the UAC prompt). Scripts deploy to your Desktop under
-`Apps\scripts\`:
+**Standalone install / update / status / uninstall** — run from a normal Windows
+PowerShell window (it self-elevates; approve the UAC prompt):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\Desktop\Apps\scripts\install-wisprflow.ps1"
@@ -68,7 +72,14 @@ powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\Desktop\Apps\scripts\
 
 Idempotent (skips if installed), pins a known-good version, caches the download,
 falls back to "latest" if the pin ages out. Switches: `-Status` / `-Latest` /
-`-Version 1.5.530` / `-Force` / `-Uninstall`.
+`-Version 1.5.530` / `-Force` / `-Uninstall`. It also runs `suppress-copilot-key.ps1`
+(the PowerToys customization) after installing.
+
+> **Elevation note (WSL):** the batch must be launched with a local working
+> directory and a local script path — an elevated child cannot read the per-user
+> `\\wsl.localhost\` share, so it would die on startup. `setup-apps.ps1` /
+> `setup-elevated.ps1` handle that; this is also why the *standalone* installer is
+> run from a native Windows PowerShell window, not through WSL.
 
 ## Configure PowerToys (scripted)
 

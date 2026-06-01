@@ -27,7 +27,10 @@
 #>
 [CmdletBinding()]
 param(
-    [switch]$Status
+    [switch]$Status,
+    # Skip the single elevated batch at the end (setup-elevated.ps1). Use for CI or
+    # when you only want the non-elevated app pass.
+    [switch]$SkipElevated
 )
 
 $ErrorActionPreference = 'Continue'
@@ -266,9 +269,27 @@ function Configure-Terminal {
 # ---- winget apps -----------------------------------------------------------
 
 function Test-AppInstalled {
-    param([string]$Id)
-    winget list --id $Id -e --accept-source-agreements 2>$null | Out-Null
-    return ($LASTEXITCODE -eq 0)
+    # Take the whole app object: winget's --id view misses apps installed outside
+    # winget (e.g. Spotify, which installs per-user to %APPDATA% and shows up under
+    # Add/Remove Programs but not as a winget package), causing a needless reinstall
+    # that then fails because Spotify refuses to run elevated. Check several sources.
+    param($App)
+    # 1) winget's own view
+    winget list --id $App.Id -e --accept-source-agreements 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { return $true }
+    # 2) Add/Remove Programs DisplayName match (catches non-winget installs)
+    if ($App.Match) {
+        if (Get-UninstallEntries | Where-Object { $_.DisplayName -match $App.Match } | Select-Object -First 1) { return $true }
+    }
+    # 3) App Paths registry (per-exe), e.g. Spotify.exe / chrome.exe
+    if ($App.Exe) {
+        foreach ($root in 'HKLM:', 'HKCU:') {
+            if (Get-ItemProperty "$root\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\$($App.Exe)" -ErrorAction SilentlyContinue) { return $true }
+        }
+    }
+    # 4) Appx (Store) package present
+    if ($App.Appx -and (Get-AppxPackage -Name $App.Appx -ErrorAction SilentlyContinue)) { return $true }
+    return $false
 }
 
 function Get-WingetVersion {
@@ -387,15 +408,34 @@ Write-Host "`n=== [5/6] Desktop apps (winget) ===" -ForegroundColor Cyan
 if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     Write-Host "winget not available -- skipping app installs." -ForegroundColor Red
 } else {
+    # iTunes: the Microsoft Store build (AppleInc.iTunes) shadows the winget Win32
+    # package (Apple.iTunes) -- winget never sees a match, reinstalls each run, and the
+    # Win32 MSI then fails 1603. Remove the Store build (per-user Appx, no elevation
+    # needed) so the Win32 build installs cleanly in the elevated batch below.
+    $storeITunes = Get-AppxPackage -Name '*iTunes*' -ErrorAction SilentlyContinue
+    if ($storeITunes) {
+        Write-Host "Removing Microsoft Store iTunes ($($storeITunes.Name)) so the Win32 build can install..." -ForegroundColor Yellow
+        try { $storeITunes | Remove-AppxPackage -ErrorAction Stop; Write-Host "  removed." -ForegroundColor DarkGray }
+        catch { Write-Warning "  could not remove Store iTunes: $($_.Exception.Message)" }
+    }
+
     $results = [ordered]@{}
     $appCount = $apps.Count
     $currentIndex = 0
 
     foreach ($app in $apps) {
         $currentIndex++
+        # Elevation-only apps (e.g. iTunes' Win32 MSI) are installed in the single
+        # elevated batch (setup-elevated.ps1), not here -- this pass is non-elevated
+        # on purpose (Spotify refuses to install elevated).
+        if ($app.Elevated) {
+            Write-Host ("[{0}/{1}] {2} ({3}) -- deferred to the elevated batch." -f $currentIndex, $appCount, $app.Name, $app.Id) -ForegroundColor DarkGray
+            $results[$app.Name] = 'Deferred (elevated)'
+            continue
+        }
         Write-Host ("[{0}/{1}] Checking {2} ({3})..." -f $currentIndex, $appCount, $app.Name, $app.Id) -ForegroundColor Cyan
-        
-        if (Test-AppInstalled -Id $app.Id) {
+
+        if (Test-AppInstalled -App $app) {
             Write-Host "$($app.Name) ($($app.Id)) already installed -- skipping." -ForegroundColor DarkGray
             $results[$app.Name] = 'Already installed'
             continue
@@ -419,3 +459,34 @@ if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
 
 # [6/6] Windows Terminal configuration
 Configure-Terminal
+
+# === Elevated setup (one UAC prompt) =======================================
+# Everything that needs admin -- the macOS-hotkeys logon task, the iTunes Win32
+# MSI, the Wispr Flow MSI, and the PowerToys Copilot-key remap -- runs once here,
+# in a single elevated child. This pass stays non-elevated (above) so Spotify can
+# install; we batch the admin work into ONE Start-Process -Verb RunAs so the user
+# approves a single UAC prompt instead of one per installer.
+if (-not $SkipElevated) {
+    Write-Host "`n=== Elevated setup (approve ONE UAC prompt) ===" -ForegroundColor Cyan
+    # Resolve a LOCAL deployed path for the elevated child. When install_windows.sh
+    # launches this script via WSL, $PSScriptRoot is a \\wsl.localhost\... UNC path
+    # that an elevated process cannot read; and the child would inherit that UNC as
+    # its CWD. Point -File at the local Desktop copy and pin -WorkingDirectory local.
+    $elevDeployed = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Apps\scripts\setup-elevated.ps1'
+    $elev = if ($PSScriptRoot -like '\\*' -and (Test-Path $elevDeployed)) { $elevDeployed }
+            else { Join-Path $PSScriptRoot 'setup-elevated.ps1' }
+    if (Test-Path $elev) {
+        Write-Host "Finishing setup (hotkey task, iTunes, Wispr Flow, Copilot-key remap)..." -ForegroundColor Cyan
+        try {
+            Start-Process powershell -Verb RunAs -WorkingDirectory $env:SystemRoot -ArgumentList @(
+                '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$elev`"") -Wait
+            Write-Host "Elevated setup finished. Details: C:\Windows\Temp\setup-elevated.log" -ForegroundColor Green
+        } catch {
+            Write-Warning "Elevated setup was cancelled or failed: $($_.Exception.Message)"
+            Write-Warning "Run it later from a native PowerShell (approve UAC):"
+            Write-Warning "  powershell -ExecutionPolicy Bypass -File `"$elev`""
+        }
+    } else {
+        Write-Warning "setup-elevated.ps1 not found next to setup-apps.ps1; skipping elevated setup."
+    }
+}

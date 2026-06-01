@@ -100,34 +100,24 @@ fi
 case "$choice" in
     y|Y)
         echo "Starting Windows customization... (this may take a few minutes)"
-        # Use the absolute path and redirection to avoid the pipe-hang issue discovered earlier.
-        # Run setup-apps.ps1 first to ensure all apps (including AutoHotkey) are installed.
-        "$ps_exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${BASE_DIR}/opt/Desktop/Apps/scripts/setup-apps.ps1" > /tmp/setup_apps.log 2>&1
+        # setup-apps.ps1 does the non-elevated app installs, then fires ONE
+        # Start-Process -Verb RunAs (setup-elevated.ps1) that performs all admin work
+        # in a single elevated child: the macOS-hotkeys logon task, the iTunes Win32
+        # MSI, the Wispr Flow MSI, and the PowerToys Copilot-key remap. A single UAC
+        # prompt appears during the run — approve it.
+        # </dev/null is load-bearing: powershell.exe consumes the parent shell's stdin
+        # under WSL interop (see the Desktop-path lookup above for the same guard).
+        "$ps_exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${BASE_DIR}/opt/Desktop/Apps/scripts/setup-apps.ps1" </dev/null > /tmp/setup_apps.log 2>&1
         cat /tmp/setup_apps.log
 
-        # Wispr Flow (voice dictation) replaces the retired AHK Copilot-key voice
-        # macro. Its machine-wide MSI needs elevation (a UAC prompt), which can't
-        # be driven from this unattended WSL context, so we don't auto-install it
-        # here. Point at the installer + runbook to run interactively instead.
-        wispr_dir_w="$(wslpath -w "${win_desktop}/Apps/scripts" 2>/dev/null)"
+        # The app/MSI/task elevation all happens inside that single batch. Only Flow's
+        # one-time ACCOUNT setup can't be scripted (sign-in, mic, shortcuts off the Win
+        # key, start-at-login) — point at the runbook for it.
+        wispr_doc_w="$(wslpath -w "${win_desktop}/Apps/scripts/WISPR-FLOW.md" 2>/dev/null)"
         echo ""
-        echo "Wispr Flow (voice dictation) — one manual step (the MSI needs a UAC prompt):"
-        echo "  From a normal Windows PowerShell window, run the installer and approve UAC:"
-        if [ -n "$wispr_dir_w" ]; then
-            echo "    powershell -ExecutionPolicy Bypass -File \"${wispr_dir_w}\\install-wisprflow.ps1\""
-            echo "  Then do the one-time setup (sign-in, mic, set Flow's 3 shortcuts off Win) in:"
-            echo "    ${wispr_dir_w}\\WISPR-FLOW.md"
-        else
-            echo "    powershell -ExecutionPolicy Bypass -File \"%USERPROFILE%\\Desktop\\Apps\\scripts\\install-wisprflow.ps1\""
-            echo "  Then do the one-time setup (sign-in, mic, set Flow's 3 shortcuts off Win) in:"
-            echo "    %USERPROFILE%\\Desktop\\Apps\\scripts\\WISPR-FLOW.md"
-        fi
+        echo "Wispr Flow one-time manual setup (sign-in, mic, shortcuts off Win, start-at-login):"
+        echo "    ${wispr_doc_w:-%USERPROFILE%\\Desktop\\Apps\\scripts\\WISPR-FLOW.md}"
         echo ""
-
-        # Then setup the macOS-style hotkeys (AutoHotkey)
-        echo "Registering macOS-style hotkeys (may trigger a Windows UAC prompt)..."
-        "$ps_exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${BASE_DIR}/opt/Desktop/Apps/scripts/setup-autostart.ps1" > /tmp/setup_autostart.log 2>&1
-        cat /tmp/setup_autostart.log
 
         # Mark that the Windows setup ran so install.sh prints the Wispr Flow
         # shortcut reminder banner at the very end (after all other output).
