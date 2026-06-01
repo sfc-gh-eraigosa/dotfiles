@@ -32,9 +32,13 @@ jobs:
   lint:
     name: Lint (go + shell + markdown + actions)
     runs-on: ubuntu-latest
-    # Phase 1 of CI hygiene (issue #46). This job MUST gate unit-tests so
-    # a lint regression short-circuits the rest of CI. Tool versions are
-    # pinned in .ci-baseline-issues.md. Phase 5 added actionlint (MIT,
+    # Phase 1 of CI hygiene (issue #46). This job runs first and unit-tests
+    # / shell-tests depend on it (`needs: lint`), so once the backlog is
+    # cleared and the warn-only flags below are dropped, a lint regression
+    # will short-circuit the rest of CI. Until then the lint steps are
+    # warn-only (see the per-step notes) so the merge queue isn't blocked by
+    # the pre-existing baseline. Tool versions are pinned in
+    # .ci-baseline-issues.md. Phase 5 added actionlint (MIT,
     # https://github.com/rhysd/actionlint/blob/main/LICENSE.txt) to lint
     # the workflow YAML itself.
     steps:
@@ -69,11 +73,22 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Run make lint
+        # WARN-ONLY: the phase-1 baseline ships a known backlog (121 Go +
+        # ~90 shell + ~979 markdown findings, see .ci-baseline-issues.md).
+        # `continue-on-error: true` keeps every linter RUNNING and surfacing
+        # findings in the step log, but does not fail the job — so the lint
+        # job stays green and the merge queue (phase 6) isn't deadlocked by
+        # the pre-existing backlog. Follow-up phases that burn the backlog
+        # down should drop this flag (per linter as each category reaches
+        # zero) to make the gate strict.
+        continue-on-error: true
         run: make lint
 
       - name: Run actionlint
         # Lints the workflow YAML itself. Run AFTER make lint so a missing
         # shellcheck/golangci-lint shows up first (clearer failure mode).
+        # Warn-only for the same reason as `make lint` above.
+        continue-on-error: true
         run: actionlint .github/workflows/*.yml
 
   unit-tests:

@@ -44,6 +44,17 @@ Add each of these as a required check (they correspond to the four jobs in
 > `name:` field. Don't add `Lint (go + shell + markdown + actions)` —
 > add `lint`.
 
+> **`lint` is currently warn-only.** Its linters run and report findings,
+> but the steps are `continue-on-error: true` so the job reports green
+> (likewise `unit-tests` runs the coverage gate with `COVERAGE_ENFORCE=0`).
+> This is intentional: a required check that is permanently red against the
+> phase-1 baseline backlog (see `.ci-baseline-issues.md`) would deadlock the
+> queue. It is still safe to require `lint` — a *new* hard failure (e.g. a
+> missing tool, or actionlint catching broken YAML once those flags are
+> dropped) will still go red. As follow-up phases burn the backlog down,
+> drop the `continue-on-error` flags / set `COVERAGE_ENFORCE=1` to make the
+> gates strict.
+
 ## Verification
 
 1. Open any non-trivial PR against `main`.
