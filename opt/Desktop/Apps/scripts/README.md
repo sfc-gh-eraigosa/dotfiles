@@ -27,8 +27,8 @@ Runs six idempotent phases in order:
 1. **WSL** — installs the WSL platform if missing (skips if already set up). Installing the platform on a machine that lacks it needs an elevated run + reboot; everything else works un-elevated.
 2. **Distros** — ensures exactly two Ubuntu distributions exist and creates the Linux user:
    - `Ubuntu` — Ubuntu 26.04 LTS ("Latest", pre-existing)
-   - `Ubuntu-24.04` — Ubuntu 24.04 LTS ("LTS", installed with user `wenlock` + passwordless sudo)
-3. **GitHub link** — symlinks the Windows GitHub folder into each distro at `~/GitHub`. It follows the Windows symlink (`C:\Users\edwar\GitHub` → `C:\Users\edwar\OneDrive\GitHub`) to its real OneDrive target, so the link works for sync.
+   - `Ubuntu-24.04` — Ubuntu 24.04 LTS ("LTS", installed with the configured Linux user (`$DistroUser` in `setup-apps.ps1`) + passwordless sudo)
+3. **GitHub link** — symlinks the Windows GitHub folder into each distro at `~/GitHub`. It follows the Windows symlink (`%USERPROFILE%\GitHub` → `%USERPROFILE%\OneDrive\GitHub`) to its real OneDrive target, so the link works for sync.
 4. **Font** — (re)installs **Ubuntu Mono** per-user and clears any stale font-registry entry, fixing Terminal's "Unable to find the following fonts: Ubuntu Mono" warning.
 5. **Windows Terminal** — adds five color schemes (Solarized Dark, Solarized Light, Ocean, Green, GitHub Dark) and one profile per scheme **per distro** (10 profiles), each with a 100,000-line scrollback and the Ubuntu Mono font. settings.json is backed up first (`settings.json.bak-<timestamp>`).
 6. **Apps** — winget-installs the list below, skipping anything already present.
