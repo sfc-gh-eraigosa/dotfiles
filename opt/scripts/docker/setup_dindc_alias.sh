@@ -30,9 +30,7 @@ DOCKER_IS_AVAILABLE=$?
 if [ $DOCKER_IS_AVAILABLE -eq 0 ]; then
     docker --version
 else
-    echo 'ERROR: DOCKER is not installed, try running : curl https://get.docker.com | sh'
-    read -p 'Press any key to exit...'
-    exit 1
+    echo 'WARNING: DOCKER is not installed or not working correctly. You may need to install it: curl https://get.docker.com | sh'
 fi
 
 

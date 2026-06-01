@@ -133,10 +133,10 @@ if [ -d "/home/linuxbrew" ]; then
     eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 fi
 # docker windows
-if [ -d "/mnt/c/Program\ Files/Docker/Docker" ]; then
-    alias docker='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker.exe'
-    alias docker-compose='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker-compose.exe'
-fi
+# if [ -d "/mnt/c/Program\ Files/Docker/Docker" ]; then
+#     alias docker='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker.exe'
+#     alias docker-compose='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker-compose.exe'
+# fi
 
 # pyenv, rbenv, goenv paths
 [ -d "$HOME/.pyenv/bin" ] && export PATH="$PATH:$HOME/.pyenv/bin"

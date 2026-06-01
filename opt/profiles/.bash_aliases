@@ -211,11 +211,11 @@ alias pip=pip3
 alias vault-login=vault-login.sh
 
 # docker windows
-if [ -d /mnt/c/Program\ Files/Docker/Docker/resources/bin/ ]; then
-   alias docker='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker.exe'
-   alias kubectl='/mnt/c/Program\ Files/Docker/Docker/resources/bin/kubectl.exe'
-   alias docker-compose='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker-compose.exe'
-fi
+# if [ -d /mnt/c/Program\ Files/Docker/Docker/resources/bin/ ]; then
+#    alias docker='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker.exe'
+#    alias kubectl='/mnt/c/Program\ Files/Docker/Docker/resources/bin/kubectl.exe'
+#    alias docker-compose='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker-compose.exe'
+# fi
 
 # snowsql for mac
 # https://docs.snowflake.com/en/user-guide/snowsql-install-config
