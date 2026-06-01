@@ -21,9 +21,9 @@ Agents in this repo are trained with specialized "skills" — instructions for c
 
 ### 🛡️ Safety & Policies
 We enforce identical security boundaries across all assistants:
-- **Claude**: Controlled via the `safety_guard.sh` PreToolUse hook in `ai/claude/hooks/`.
+- **Claude**: Controlled via PreToolUse hooks in `ai/claude/hooks/` — `safety_guard.sh` (destructive-command guard) and `privacy_guard.sh` (blocks leaking home paths / usernames / hostnames / secrets into tracked files, PR/issue bodies, and commit messages).
 - **Gemini**: Controlled via TOML policies in `ai/gemini/policies/`.
-- **Rules**: Both block dangerous destructive commands (e.g., `rm -rf /`) and mandate user confirmation for sensitive Git actions (`gss push`).
+- **Rules**: Both block dangerous destructive commands (e.g., `rm -rf /`) and mandate user confirmation for sensitive Git actions (`gss push`). The privacy guard additionally requires a variable/placeholder (`$HOME`, `~`, `${USER}`, `<user>`, `<REDACTED>`) instead of literal identity or secrets in shared content.
 
 ## 📂 Directory Structure
 

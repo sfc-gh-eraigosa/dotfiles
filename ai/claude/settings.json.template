@@ -70,6 +70,15 @@
             "command": "$HOME/git/dotfiles/ai/claude/hooks/safety_guard.sh"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/git/dotfiles/ai/claude/hooks/privacy_guard.sh"
+          }
+        ]
       }
     ]
   },
