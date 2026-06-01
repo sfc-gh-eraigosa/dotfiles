@@ -35,7 +35,7 @@ tmux-mgr remote attach  <ssh-alias>  [flags]   # print the attach command (or ex
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--repo <path>` | `~/git/<local-repo-name>` | Working directory on the remote |
+| `--repo <path>` | auto-detect | Working directory on the remote. When omitted, probe `~/git/<local-repo-name>` then `~/github/<local-repo-name>` on the remote and use the first that exists. Both layouts are in active use across the user's hosts. |
 | `--session <name>` | `claude-remote` | tmux session name |
 | `--width <cols>` | `220` | Initial terminal width |
 | `--height <rows>` | `50` | Initial terminal height |
@@ -73,7 +73,18 @@ tmux-mgr remote attach  <ssh-alias>  [flags]   # print the attach command (or ex
    - Claude via nvm → build an nvm-source prefix for the launch command.
    - Claude not found → error with install hint.
 
-3. **Idempotent session start**:
+3. **Repo-path resolution** (skip if `--repo` was passed explicitly):
+   ```bash
+   ssh <alias> "for d in ~/git/<repo> ~/github/<repo>; do \
+     [ -d \"\$d/.git\" ] && echo \"\$d\" && break; done"
+   ```
+   - Empty output → error listing both candidate paths and asking the caller to
+     pass `--repo` explicitly.
+   - A path is printed → use it as the working directory.
+   - Implementation note: this can be folded into the capability check above as a
+     single SSH round-trip to keep startup latency down.
+
+4. **Idempotent session start**:
    - Check if session exists and Claude is healthy (`grep 'Remote Control active'`).
    - If healthy, print the attach command and exit 0 (no-op).
    - If session exists but Claude is dead, kill it (unless `--force` is not set, in
@@ -81,12 +92,12 @@ tmux-mgr remote attach  <ssh-alias>  [flags]   # print the attach command (or ex
    - Create the session with `tmux new-session -d -s <name> -c <repo> -x W -y H`.
    - Send the launch command via `tmux send-keys`.
 
-4. **Startup verification** — poll `tmux capture-pane` every 1 s for up to 15 s:
+5. **Startup verification** — poll `tmux capture-pane` every 1 s for up to 15 s:
    - Auto-confirm the trust dialog if seen (`send-keys '1' Enter`).
    - Succeed when `Remote Control active` appears in the status bar.
    - On timeout: print the pane content and exit non-zero.
 
-5. **Output** — on success print the attach command (human-readable or `--json`).
+6. **Output** — on success print the attach command (human-readable or `--json`).
 
 ### Phase 2 — `remote stop` / `remote attach`
 

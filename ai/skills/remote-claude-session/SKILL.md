@@ -20,10 +20,10 @@ Collect these from the user's message, conversation context, or by asking:
 | Input | Default | Notes |
 |-------|---------|-------|
 | `SSH_ALIAS` | (required) | Must match a `Host` entry in `~/.ssh/config` |
-| `REPO_PATH` | `~/git/<repo-name>` | Path to the repo on the **remote** host |
+| `REPO_PATH` | auto-detect | Path to the repo on the **remote** host. If not given, probe `~/git/<repo-name>` then `~/github/<repo-name>` on the remote — both layouts exist across this user's hosts. |
 | `SESSION_NAME` | `claude-remote` | tmux session name on the remote |
 
-If `REPO_PATH` is not specified and a local repo is active, default to `~/git/<basename of current repo>`.
+If `REPO_PATH` is not specified, derive `<repo-name>` from the basename of the active local repo (or ask). The actual path on the remote is then resolved in step 2.
 
 ## Steps
 
@@ -35,18 +35,25 @@ ssh -G <SSH_ALIAS> 2>/dev/null | grep -E "^(hostname|user) "
 
 Stop and report the error if the alias is not found in `~/.ssh/config`.
 
-### 2. Check tmux and locate Claude on the remote
+### 2. Check the remote (tmux, Claude, and REPO_PATH)
 
 ```bash
+# tmux + Claude detection
 ssh <SSH_ALIAS> "command -v tmux 2>/dev/null && \
   (command -v claude 2>/dev/null || \
    find ~/.nvm/versions/node/*/bin -name claude 2>/dev/null | sort -V | tail -1)"
+
+# REPO_PATH probe (skip if an explicit path was supplied)
+ssh <SSH_ALIAS> "for d in ~/git/<repo-name> ~/github/<repo-name>; do \
+  [ -d \"\$d/.git\" ] && echo \"\$d\" && break; done"
 ```
 
 - **tmux missing** → stop; tell the user to run `sudo apt install tmux` on the remote.
 - **claude on PATH** → use `claude` directly.
 - **claude found via nvm** → prefix the launch command with `export NVM_DIR=~/.nvm && source ~/.nvm/nvm.sh && `.
 - **claude not found** → stop; tell the user to install Claude Code on the remote (`npm i -g @anthropic-ai/claude-code` after sourcing nvm).
+- **REPO_PATH probe printed a path** → use it.
+- **REPO_PATH probe empty** → stop; show both candidates (`~/git/<repo-name>`, `~/github/<repo-name>`) and ask the user which path to use.
 
 ### 3. Check for an existing session
 
