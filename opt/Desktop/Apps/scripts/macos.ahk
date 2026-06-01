@@ -338,6 +338,187 @@ _FlowCalibShow() {
     _flowCalibGui := _FlowHud("FLOW CALIBRATION", rows, keymap, "Flow Calibration")
 }
 
+; --- Manage-triggers mode (F9) --------------------------------------------------
+; A mode toggle parallel to F11 calibration. Shows a manage HUD listing the locked
+; Copilot default + each added trigger, and arms ONE suppressing InputHook whose
+; OnKeyDown/OnKeyUp event plumbing feeds the headless-tested _FlowComposeChord. The
+; chord logic (modifier-set ordering, bare-RWin-on-key-up) lives in flow-triggers.ahk;
+; this layer is only event wiring + live Hotkey() bind/unbind + persistence.
+
+; Build (or rebuild) the manage HUD from _flowTriggers, via the shared _FlowHud.
+_FlowManageShow() {
+    global _flowTriggerGui, _flowTriggers
+    _FlowManageDestroyGui()
+    rows := ["🔒 Copilot key (F24)   locked default"]
+    for t in _flowTriggers
+        rows.Push(_FlowTriggerLabel(t))
+    keymap := ["Press a key to add · press again to remove · Esc exits"]
+    _flowTriggerGui := _FlowHud("MANAGE TRIGGERS", rows, keymap, "Manage Triggers")
+}
+
+; Destroy ONLY the manage HUD (idempotent, identity-guarded like _FlowCalibDestroy).
+; Split out so _FlowManageShow can rebuild the HUD without stopping the InputHook.
+_FlowManageDestroyGui() {
+    global _flowTriggerGui
+    if (_flowTriggerGui) {
+        try _flowTriggerGui.Destroy()
+        _flowTriggerGui := ""
+    }
+}
+
+; Arm one suppressing InputHook. VisibleText/VisibleNonText := false so the captured
+; key/combo is CONSUMED, not typed into the focused app (the HUD is NoActivate, so
+; without this, pressing F13/^!d to add it would also fire it into the editor).
+; OnKeyDown tracks held modifiers + composes immediately on a non-modifier; OnKeyUp
+; resolves a bare modifier (RWin only) when a tracked modifier is released with no
+; non-modifier seen during its press. Both delegate the chord build to _FlowComposeChord.
+_FlowManageArm() {
+    global _flowInputHook
+    _FlowManageDisarm()                          ; idempotent: never double-arm
+    ih := InputHook()
+    ih.VisibleText := false
+    ih.VisibleNonText := false
+    ; CRITICAL: OnKeyDown/OnKeyUp fire ONLY for keys flagged "N" (Notify). Without this,
+    ; the entire capture algorithm is inert — no key (F13/^!d/RWin) reaches the callbacks.
+    ; "S" (Suppress) also consumes modifier keys (which VisibleText/VisibleNonText never
+    ; suppress), so capturing ^!d in manage mode does not leak Ctrl/Alt into the focused
+    ; (NoActivate) HUD's underlying app. {All} covers modifiers + non-modifiers alike.
+    ih.KeyOpt("{All}", "N S")
+    ; Per-arm capture state (held-modifier set + "non-modifier seen this press" flag).
+    held := Map()                                ; modifier NAME -> true while down
+    sawNonMod := false                           ; a non-modifier was seen during this modifier press
+    ; Map a key NAME to a canonical modifier NAME, or "" if it is not a modifier.
+    modName := (name) => (
+        (n := StrLower(name)) == "lctrl" || n == "rctrl" || n == "control" || n == "ctrl" ? "Ctrl"
+        : n == "lalt" || n == "ralt" || n == "alt" ? "Alt"
+        : n == "lshift" || n == "rshift" || n == "shift" ? "Shift"
+        : n == "lwin" ? "LWin"
+        : n == "rwin" ? "RWin"
+        : "")
+    ih.OnKeyDown := (hook, vk, sc) => _FlowManageKeyDown(GetKeyName(Format("vk{:x}sc{:x}", vk, sc)), held, modName, &sawNonMod)
+    ih.OnKeyUp := (hook, vk, sc) => _FlowManageKeyUp(GetKeyName(Format("vk{:x}sc{:x}", vk, sc)), held, modName, &sawNonMod)
+    ih.Start()
+    _flowInputHook := ih
+}
+
+; OnKeyDown plumbing: a modifier-down joins the held set; a NON-modifier composes the
+; chord immediately via _FlowComposeChord(heldMods, baseKey) and resolves it.
+_FlowManageKeyDown(name, held, modName, &sawNonMod) {
+    mod := modName(name)
+    if (mod != "") {
+        held[mod] := true
+        return
+    }
+    ; Non-modifier key -> compose <held-mods><base> and resolve now.
+    sawNonMod := true
+    mods := []
+    for m in held
+        mods.Push(m)
+    _FlowManageResolve(_FlowComposeChord(mods, name))
+}
+
+; OnKeyUp plumbing: a tracked MODIFIER released with NO non-modifier seen during its
+; press resolves as a BARE modifier (only RWin survives _FlowComposeChord; LWin is
+; hard-reserved and any other lone modifier yields the empty "add a key" sentinel).
+_FlowManageKeyUp(name, held, modName, &sawNonMod) {
+    mod := modName(name)
+    if (mod == "")
+        return
+    wasHeld := held.Has(mod)
+    held.Delete(mod)
+    if (wasHeld && !sawNonMod)
+        _FlowManageResolve(_FlowComposeChord([mod], ""))
+    ; Once the last held modifier lifts, reset the "saw non-modifier" latch for the
+    ; next chord (so a combo's non-mod doesn't suppress a later bare-modifier tap).
+    if (held.Count == 0)
+        sawNonMod := false
+}
+
+; Capture = TOGGLE. Normalize the raw chord, then: already-present -> remove (unbind
+; both variants under GLOBAL context, drop, save); valid -> bind both variants live
+; and append+save; invalid -> tip the reason. Refresh the HUD after any change.
+_FlowManageResolve(raw) {
+    global _flowTriggers
+    c := _FlowTriggerNormalize(raw)
+    if (c == "") {                               ; lone non-RWin modifier sentinel
+        _FlowTipFor("✗  add a key, not a lone modifier", 1500)
+        return
+    }
+    label := _FlowTriggerLabel(c)
+    ; Already present (normalized compare) -> REMOVE path.
+    idx := 0
+    for i, t in _flowTriggers {
+        if (_FlowTriggerNormalize(t) == c) {
+            idx := i
+            break
+        }
+    }
+    if (idx) {
+        try Hotkey "*" c, , "Off"                ; GLOBAL context (no #HotIf open here)
+        try Hotkey "*" c " up", , "Off"
+        _flowTriggers.RemoveAt(idx)
+        try _FlowTriggersSave(_FlowTriggersPath(), _flowTriggers)
+        _FlowTipFor("✓  removed  " label, 1500)
+        _FlowManageShow()
+        return
+    }
+    ; Not present -> validate an addition against the live manifest.
+    v := _FlowTriggerValidate(c, _FlowTriggerManifest())
+    if (!v["ok"]) {
+        _FlowTipFor("✗  " label " — " v["reason"], 2000)
+        return
+    }
+    try Hotkey "*" c, _FlowTriggerDown, "On"     ; GLOBAL context -> On/Off variants match
+    try Hotkey "*" c " up", _FlowTriggerUp, "On"
+    _flowTriggers.Push(c)
+    try _FlowTriggersSave(_FlowTriggersPath(), _flowTriggers)
+    _FlowTipFor("✓  added  " label, 1500)
+    _FlowManageShow()
+}
+
+; Stop + clear the capture InputHook (idempotent).
+_FlowManageDisarm() {
+    global _flowInputHook
+    if (_flowInputHook) {
+        try _flowInputHook.Stop()
+        _flowInputHook := ""
+    }
+}
+
+; Full idempotent teardown of manage mode: HUD + InputHook.
+_FlowManageDestroy() {
+    _FlowManageDestroyGui()
+    _FlowManageDisarm()
+}
+
+; --- Hold-F1 help overlay -------------------------------------------------------
+; A FLOW HELP HUD listing every live binding, built FRESH on each open so it reflects
+; the CURRENT extra triggers. Scoped #HotIf to dictation-ON (yielding to calib/manage);
+; torn down via a CONTEXT-FREE *F1 up:: (a re-evaluated scoped up-variant could fire in
+; a different context and strand the HUD) and also from the F9/F11/F10 mode handlers.
+_FlowHelpShow() {
+    global _flowHelpGui, _flowTriggers
+    _FlowHelpDestroy()
+    rows := ["Copilot key   hold to dictate   🔒"]
+    for t in _flowTriggers
+        rows.Push(_FlowTriggerLabel(t) "   hold to dictate")
+    rows.Push("Esc   cancel dictation")
+    rows.Push("F10   dictation on / off")
+    rows.Push("F11   calibrate overlay")
+    rows.Push("F9   manage trigger keys")
+    rows.Push("F1 (hold)   this help")
+    _flowHelpGui := _FlowHud("FLOW HELP", rows, [], "Flow Help")
+}
+
+; Idempotent, identity-guarded teardown of the help HUD (mirror _FlowCalibDestroy).
+_FlowHelpDestroy() {
+    global _flowHelpGui
+    if (_flowHelpGui) {
+        try _flowHelpGui.Destroy()
+        _flowHelpGui := ""
+    }
+}
+
 ; Capture the mouse position (relative to the Flow overlay) into a WORKING offset.
 _FlowCalibCapture(which) {
     global FlowStartX, FlowStartY, FlowStopX, FlowStopY
@@ -465,6 +646,7 @@ _FlowTriggerUp() {
 #HotIf FlowState != "IDLE"
 *Esc::{
     global FlowState
+    _FlowHelpDestroy()                                    ; tear down help if F1 was held into the cancel
     SetTimer _FlowTimeout, 0
     SetTimer _FlowStartClicks, 0                          ; cancel any pending start clicks
     SetTimer _FlowStopClicks, 0
@@ -473,15 +655,30 @@ _FlowTriggerUp() {
 }
 #HotIf
 
+; --- Hold-F1 help (scoped to dictation-ON; yields to calibration/manage) --------
+; *F1:: shows the help HUD only while FlowEnabled and no other mode owns F1. The
+; teardown is CONTEXT-FREE (#HotIf re-evaluates per key event and never pairs an up
+; with its down, so a scoped *F1 up:: would strand the HUD across a mode flip).
+#HotIf FlowEnabled && !CalibActive && !TriggerMgmtActive
+*F1::_FlowHelpShow()
+#HotIf
+*F1 up::_FlowHelpDestroy()                                ; context-free: always tears the HUD down
+
 ; F10 toggles the whole Copilot-key dictation flow on/off. We bind F10 (no '~') so
 ; it also suppresses Windows' own F10 dictation/menu action, freeing F11 for normal
 ; use (e.g. browser fullscreen).
 F10::{
     global FlowEnabled, FlowState
     FlowEnabled := !FlowEnabled
-    if (!FlowEnabled && FlowState != "IDLE") {           ; turning off mid-flow: stop a held-trigger dictation
-        SetTimer _FlowTimeout, 0
+    ; ONE idempotent teardown when turning off mid-flow (single owner; supersedes the
+    ; interim Phase-8 off-branch). Ordering: help-destroy -> cancel pending start ->
+    ; cancel timeout -> STOP only if START already fired -> IDLE. Cancelling the start
+    ; BEFORE deciding STOP makes both the in-dwell tap (START never landed, no STOP
+    ; needed) and the post-START tap (STOP issued) correct; re-entry is harmless.
+    if (!FlowEnabled && FlowState != "IDLE") {
+        _FlowHelpDestroy()                                ; no stranded help HUD even if F1 was held
         SetTimer _FlowStartClicks, 0                      ; cancel any pending start (F10 tapped during the dwell)
+        SetTimer _FlowTimeout, 0
         if (FlowState = "DICTATING")
             SetTimer _FlowStopClicks, -1                  ; START already fired -> issue STOP so Flow isn't left recording
         FlowState := "IDLE"
@@ -495,15 +692,36 @@ F10::{
 ; you can test them with the real Copilot key; only F4 persists them, and a script
 ; reload reverts to the saved ini.
 F11::{
-    global FlowState, CalibActive
-    if (FlowState != "IDLE")
+    global FlowState, CalibActive, TriggerMgmtActive
+    if (FlowState != "IDLE" || TriggerMgmtActive)        ; mutual exclusion: not while managing
         return
+    _FlowHelpDestroy()                                    ; tear down help if F1 was held into the mode flip
     CalibActive := !CalibActive
     if (CalibActive)
         _FlowCalibShow()
     else
         _FlowCalibDestroy()
     _FlowToast(CalibActive ? "  Calibration  ON  " : "  Calibration  OFF  ", CalibActive)
+}
+
+; F9 toggles manage-triggers mode. Only enters from IDLE && !CalibActive (mutual
+; exclusion with calibration; F11 likewise refuses entry while managing). Rainbow ON /
+; grey OFF toast. On enter: build the manage HUD + arm the suppressing InputHook; on
+; exit: tear both down. The Copilot key + F1 help are inert while managing (the
+; TriggerMgmtActive guard in _FlowTriggerDown / the F1 #HotIf scope).
+F9::{
+    global FlowState, CalibActive, TriggerMgmtActive
+    if (FlowState != "IDLE" || CalibActive)              ; mutual exclusion: not while calibrating
+        return
+    _FlowHelpDestroy()                                    ; tear down help if F1 was held into the mode flip
+    TriggerMgmtActive := !TriggerMgmtActive
+    if (TriggerMgmtActive) {
+        _FlowManageShow()
+        _FlowManageArm()
+    } else {
+        _FlowManageDestroy()
+    }
+    _FlowToast(TriggerMgmtActive ? "  Manage Triggers  ON  " : "  Manage Triggers  OFF  ", TriggerMgmtActive)
 }
 
 ; These keys are live ONLY while calibrating, so they keep their normal meaning
@@ -548,6 +766,24 @@ Esc::{                                 ; exit calibration (same as F11)
     CalibActive := false
     _FlowCalibDestroy()
     _FlowToast("  Calibration  OFF  ", false)
+}
+#HotIf
+
+; These keys are live ONLY while managing triggers (F9 mode). F9 / Esc exit the mode
+; (tearing down the HUD + the suppressing InputHook). The capture itself runs through
+; the armed InputHook's OnKeyDown/OnKeyUp, not a #HotIf hotkey.
+#HotIf TriggerMgmtActive
+F9::{                                  ; toggle manage mode OFF
+    global TriggerMgmtActive
+    TriggerMgmtActive := false
+    _FlowManageDestroy()
+    _FlowToast("  Manage Triggers  OFF  ", false)
+}
+Esc::{                                 ; exit manage mode (same as F9)
+    global TriggerMgmtActive
+    TriggerMgmtActive := false
+    _FlowManageDestroy()
+    _FlowToast("  Manage Triggers  OFF  ", false)
 }
 #HotIf
 
