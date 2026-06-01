@@ -1,6 +1,7 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
 #Include flow-calib.ahk      ; overlay-offset calibration data layer (DEFAULT + ini load/save)
+#Include flow-triggers.ahk   ; extra-trigger-key data + policy layer (load/save/normalize/compose/validate/manifest)
 
 ; ==============================================================================
 ;  macOS-style shortcuts for Windows  (AutoHotkey v2)
@@ -181,8 +182,32 @@ FlowStartX := _flowCalib["startX"]
 FlowStartY := _flowCalib["startY"]
 FlowStopX  := _flowCalib["stopX"]
 FlowStopY  := _flowCalib["stopY"]
+
+; Extra trigger keys (the Copilot key F24 is the locked default and is NOT stored).
+; Loaded at startup from the per-machine flow-triggers.ini, beside the calib load so
+; it inherits the same proven startup-execution path. Guarded identically: a corrupt
+; or hand-edited ini must degrade to "no extra triggers" ([]), never crash startup.
+try
+    _flowTriggers := _FlowTriggersLoad(_FlowTriggersPath())
+catch
+    _flowTriggers := []
+
+; Bind each saved trigger to the same hold-to-talk handlers as the Copilot key, under
+; the GLOBAL #HotIf context (no #HotIf is open here). Each Hotkey() call is individually
+; try-guarded so one bad entry is skipped, not fatal. _FlowTriggerDown/Up are defined
+; later in the file but referenced by name (AHK v2 resolves the reference at load).
+for t in _flowTriggers {
+    try Hotkey "*" t, _FlowTriggerDown, "On"
+    try Hotkey "*" t " up", _FlowTriggerUp, "On"
+}
+
 CalibActive   := false       ; F11 calibration mode flag
 _flowCalibGui := ""          ; persistent calibration HUD handle
+TriggerMgmtActive := false   ; F9 manage-triggers mode flag (mutual-exclusive with calib)
+_flowTriggerGui   := ""      ; persistent manage-triggers HUD handle
+_flowHelpGui      := ""      ; persistent hold-F1 help HUD handle
+_flowInputHook    := ""      ; live InputHook while managing (F9)
+_FLOW_HINT        := "   F1 help"   ; suffix appended to the listening/transcribing tips
 
 _FlowTip(msg) {
     if (msg = "") {
@@ -252,39 +277,65 @@ _FlowCalibDestroy() {
     }
 }
 
-; Build (or rebuild) the HUD from the current WORKING values.
-_FlowCalibShow() {
-    global _flowCalibGui, FlowStartX, FlowStartY, FlowStopX, FlowStopY, _FLOW_RAINBOW
-    _FlowCalibDestroy()
-    g := Gui("+AlwaysOnTop -Caption +ToolWindow +Border", "Flow Calibration")
+; Shared HUD builder for the calibration / manage / help overlays — pins the EXACT
+; calibration geometry & fonts so the three HUDs can't drift. Builds a pinned-top-
+; center, NoActivate (never steals focus / never covers the bottom overlay) window:
+;   title       -> rainbow per-char heading (s15 Bold)
+;   rows         -> body lines (s12 Norm cD0D0D0); first row y+14, rest y+4
+;   keymapLines  -> dimmer keymap block (s11 c8A8A8A); first line y+12, rest y+4
+; `winTitle` is the OS-level (hidden, -Caption) window title; it defaults to `title`
+; but is overridable so a HUD can keep its PR-#53 window-title string distinct from
+; the visible heading (e.g. calibration's "Flow Calibration" vs heading "FLOW CALIBRATION").
+; Returns the shown Gui handle (caller stores + destroys it).
+_FlowHud(title, rows, keymapLines, winTitle := title) {
+    global _FLOW_RAINBOW
+    g := Gui("+AlwaysOnTop -Caption +ToolWindow +Border", winTitle)
     g.BackColor := "0B0E14"
     g.MarginX := 16, g.MarginY := 12
 
     ; rainbow per-char title
     g.SetFont "s15 Bold", "Consolas"
-    Loop Parse "FLOW CALIBRATION" {
+    Loop Parse title {
         g.SetFont "c" _FLOW_RAINBOW[Mod(A_Index - 1, _FLOW_RAINBOW.Length) + 1]
         g.Add("Text", (A_Index = 1 ? "xm ym" : "x+0 yp"), A_LoopField)
     }
 
-    ; offset rows with per-row markers
-    startMark := _FlowCalibStartDirty() ? "● unsaved" : "✓ saved"
-    stopMark  := _FlowCalibStopDirty()  ? "● unsaved" : "✓ saved"
+    ; body rows
     g.SetFont "s12 Norm cD0D0D0", "Consolas"
-    g.Add("Text", "xm y+14", Format("START   {1}, {2}     {3}", FlowStartX, FlowStartY, startMark))
-    g.Add("Text", "xm y+4",  Format("STOP    {1}, {2}     {3}", FlowStopX,  FlowStopY,  stopMark))
+    first := true
+    for row in rows {
+        g.Add("Text", (first ? "xm y+14" : "xm y+4"), row)
+        first := false
+    }
 
     ; keymap
     g.SetFont "s11 c8A8A8A", "Consolas"
-    g.Add("Text", "xm y+12", "F1 set START      F2 set STOP")
-    g.Add("Text", "xm y+4",  "F3 revert         F4 save")
-    g.Add("Text", "xm y+4",  "F5 defaults       F10 test")
-    g.Add("Text", "xm y+4",  "F11 / Esc   end calibration")
+    first := true
+    for line in keymapLines {
+        g.Add("Text", (first ? "xm y+12" : "xm y+4"), line)
+        first := false
+    }
 
     ; Center on screen via AHK's built-in (handles DPI scaling correctly; manual
     ; A_ScreenWidth math mismatches units at >100% scaling and lands off-screen).
     g.Show("NoActivate AutoSize Center")
-    _flowCalibGui := g
+    return g
+}
+
+; Build (or rebuild) the calibration HUD from the current WORKING values, via the
+; shared _FlowHud builder so its geometry/fonts stay pinned to the manage/help HUDs.
+_FlowCalibShow() {
+    global _flowCalibGui, FlowStartX, FlowStartY, FlowStopX, FlowStopY
+    _FlowCalibDestroy()
+    startMark := _FlowCalibStartDirty() ? "● unsaved" : "✓ saved"
+    stopMark  := _FlowCalibStopDirty()  ? "● unsaved" : "✓ saved"
+    rows := [Format("START   {1}, {2}     {3}", FlowStartX, FlowStartY, startMark),
+             Format("STOP    {1}, {2}     {3}", FlowStopX,  FlowStopY,  stopMark)]
+    keymap := ["F1 set START      F2 set STOP",
+               "F3 revert         F4 save",
+               "F5 defaults       F10 test",
+               "F11 / Esc   end calibration"]
+    _flowCalibGui := _FlowHud("FLOW CALIBRATION", rows, keymap, "Flow Calibration")
 }
 
 ; Capture the mouse position (relative to the Flow overlay) into a WORKING offset.
@@ -377,28 +428,35 @@ _FlowStopClicks() {
     MouseMove FlowX, FlowY, 0
 }
 
-*F24::{                        ; Copilot key (remapped to F24 by PowerToys KBM) -> start
-    global FlowState, FlowWin, FlowX, FlowY, FlowEnabled, CalibActive
-    if (!FlowEnabled || CalibActive)   ; ignore the Copilot key while calibrating
-        return                                           ; dictation toggled off (F11)
+; Shared hold-to-talk handlers. The Copilot key (*F24) AND every dynamically-bound
+; extra trigger (see the startup bind loop) route through these so all triggers share
+; one path. single-flight: FIRST trigger released while DICTATING drives STOP (no per-key
+; ownership) — a 2nd trigger pressed mid-session hits the auto-repeat swallow (no-op).
+_FlowTriggerDown() {
+    global FlowState, FlowWin, FlowX, FlowY, FlowEnabled, CalibActive, TriggerMgmtActive, _FLOW_HINT
+    if (!FlowEnabled || CalibActive || TriggerMgmtActive)   ; ignore while toggled off / calibrating / managing
+        return                                           ; dictation toggled off (F10) or another mode owns the key
     if (FlowState != "IDLE")
-        return                                           ; swallow auto-repeat while held
+        return                                           ; swallow auto-repeat while held (and 2nd concurrent trigger)
     CoordMode "Mouse", "Screen"
     MouseGetPos &FlowX, &FlowY, &FlowWin                 ; remember where to drop the text
     FlowState := "DICTATING"
-    _FlowTip("🎤  Listening…")
+    _FlowTip("🎤  Listening…" _FLOW_HINT)
     SetTimer _FlowStartClicks, -1                        ; slow clicking off the hotkey thread
 }
 
-*F24 up::{                     ; Copilot key released
-    global FlowState
+_FlowTriggerUp() {
+    global FlowState, _FLOW_HINT
     if (FlowState != "DICTATING")
         return
     FlowState := "AWAITING_CLIP"
-    _FlowTip("⏳  Transcribing…")
+    _FlowTip("⏳  Transcribing…" _FLOW_HINT)
     SetTimer _FlowStopClicks, -1
     SetTimer _FlowTimeout, -15000
 }
+
+*F24::_FlowTriggerDown            ; Copilot key (remapped to F24 by PowerToys KBM) -> start
+*F24 up::_FlowTriggerUp           ; Copilot key released
 
 ; Esc cancels an in-progress dictation. The #HotIf scopes this hotkey to ONLY when
 ; we're mid-flow (DICTATING / AWAITING_CLIP), so normal Esc is untouched otherwise.
@@ -421,8 +479,11 @@ _FlowStopClicks() {
 F10::{
     global FlowEnabled, FlowState
     FlowEnabled := !FlowEnabled
-    if (!FlowEnabled && FlowState != "IDLE") {           ; turning off mid-flow: reset state
+    if (!FlowEnabled && FlowState != "IDLE") {           ; turning off mid-flow: stop a held-trigger dictation
         SetTimer _FlowTimeout, 0
+        SetTimer _FlowStartClicks, 0                      ; cancel any pending start (F10 tapped during the dwell)
+        if (FlowState = "DICTATING")
+            SetTimer _FlowStopClicks, -1                  ; START already fired -> issue STOP so Flow isn't left recording
         FlowState := "IDLE"
     }
     _FlowToast(FlowEnabled ? "  Dictation  ON  " : "  Dictation  OFF  ", FlowEnabled)
