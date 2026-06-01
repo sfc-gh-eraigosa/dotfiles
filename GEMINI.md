@@ -9,8 +9,9 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - `opt/docs/`: Legacy and reference documentation for various tools and setups. [See opt/docs/GEMINI.md](./opt/docs/GEMINI.md).
 - `src/`: Source code for custom tools and agent skills. [See src/GEMINI.md](./src/GEMINI.md).
 - `archive/`: Retired-but-kept artifacts (not wired into install). [See archive/GEMINI.md](./archive/GEMINI.md) for the inventory and restore instructions.
+- `ai/hooks/`: Unified agent hooks (safety, privacy) shared across CLIs.
 - `ai/gemini/`: Gemini-specific commands, TOML policies, and settings.
-- `ai/claude/`: Claude-specific commands, settings, and the `safety_guard.sh` PreToolUse hook.
+- `ai/claude/`: Claude-specific commands, settings, and hook templates.
 - `ai/plugins.yaml`: Declarative manifest of the Claude Code plugins this repo installs/enables (ensure-only via `sync-plugins`). See [docs/ai-plugins.md](./docs/ai-plugins.md) for the plugin summary, first-usage examples, and the Gemini-extension path.
 
 ## Usage Guidelines
@@ -50,7 +51,7 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 
 ## Hook & Regex Safety
 
-- `ai/claude/hooks/safety_guard.sh` is a PreToolUse hook with regex-based deny rules. Its companion test driver is `ai/claude/hooks/safety_guard_test.sh`.
+- `ai/hooks/safety_guard.sh` is a PreToolUse hook with regex-based deny rules. Its companion test driver is `ai/hooks/safety_guard_test.sh`.
 - **When editing the hook**: extend `safety_guard_test.sh` first. Add at least one new `assert_exit 0` case proving a legitimate command of the same shape still passes, and one new `assert_exit 2` case proving the malicious shape is still blocked. Run the test driver and require all cases to pass before committing.
 - **Beware bash regex line-spanning**: bash regex `.*` matches newlines and command separators (`;`, `|`, `&`). Use `${SAFE_CHARS}` (defined at the top of the hook as `[^[:cntrl:];|&]`) to scope a pattern to one shell-command segment.
 - **Strip heredoc bodies before matching**: multi-line content (commit messages, README text) gets passed via heredocs and routinely contains literal dangerous patterns. Use `strip_heredocs.awk` to drop those bodies before regex evaluation.

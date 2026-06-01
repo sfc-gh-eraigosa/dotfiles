@@ -61,8 +61,8 @@ echo "PASS: CLAUDE.md links resolve"
 
 # 6. Hooks executable + test suite passes
 echo "Verifying safety_guard hook..."
-HOOK="$BASE_DIR/ai/claude/hooks/safety_guard.sh"
-HOOK_TEST="$BASE_DIR/ai/claude/hooks/safety_guard_test.sh"
+HOOK="$BASE_DIR/ai/hooks/safety_guard.sh"
+HOOK_TEST="$BASE_DIR/ai/hooks/safety_guard_test.sh"
 if [ ! -x "$HOOK" ]; then
     echo "FAIL: safety_guard hook missing or not executable"
     exit 1

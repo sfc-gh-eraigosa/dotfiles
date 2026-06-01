@@ -13,5 +13,19 @@
   "skills": {
     "enabled": true,
     "disabled": []
+  },
+  "hooks": {
+    "BeforeTool": [
+      {
+        "matcher": "write_file|replace|run_shell_command",
+        "hooks": [
+          {
+            "name": "privacy-guard",
+            "type": "command",
+            "command": "$GEMINI_PROJECT_DIR/ai/hooks/privacy_guard.sh"
+          }
+        ]
+      }
+    ]
   }
 }

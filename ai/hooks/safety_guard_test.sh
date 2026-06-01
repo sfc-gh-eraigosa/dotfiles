@@ -1,8 +1,8 @@
 #!/bin/bash
-# Test driver for ai/claude/hooks/safety_guard.sh
+# Test driver for ai/hooks/safety_guard.sh
 set -u
 
-HOOK="$HOME/git/dotfiles/ai/claude/hooks/safety_guard.sh"
+HOOK="$HOME/git/dotfiles/ai/hooks/safety_guard.sh"
 PASS=0
 FAIL=0
 
@@ -12,7 +12,7 @@ assert_exit() {
     local payload
     payload=$(jq -n --arg tool "$tool" --arg cmd "$cmd" '{tool_name:$tool, tool_input:{command:$cmd}}')
     set +e
-    out=$(printf '%s' "$payload" | "$HOOK" 2>&1)
+    out=$(printf '%s' "$payload" | bash "$HOOK" 2>&1)
     rc=$?
     set -e
     if [ "$rc" = "$expected" ]; then
@@ -24,8 +24,28 @@ assert_exit() {
     fi
 }
 
+# usage: assert_json_match <expected_code> <tool> <command> <label> <pattern>
+assert_json_match() {
+    local expected="$1" tool="$2" cmd="$3" label="$4" pattern="$5"
+    local payload
+    payload=$(jq -n --arg tool "$tool" --arg cmd "$cmd" '{tool_name:$tool, tool_input:{command:$cmd}}')
+    set +e
+    out=$(printf '%s' "$payload" | bash "$HOOK" 2>&1)
+    rc=$?
+    set -e
+    if [ "$rc" = "$expected" ] && echo "$out" | grep -q "$pattern"; then
+        echo "PASS: $label (exit $rc + JSON match)"
+        PASS=$((PASS+1))
+    else
+        echo "FAIL: $label (expected $expected + pattern '$pattern', got $rc) :: $out"
+        FAIL=$((FAIL+1))
+    fi
+}
+
 # === Allowed (exit 0) ===
 assert_exit 0 Bash "ls -la"                          "plain ls"
+assert_exit 0 run_shell_command "ls -la"             "plain ls (Gemini)"
+assert_json_match 0 run_shell_command "ls -la"       "plain ls (Gemini) JSON check" '{"decision": "allow"}'
 assert_exit 0 Bash "git status"                      "git status"
 assert_exit 0 Bash "rm -rf /tmp/foo"                 "rm -rf safe subdir"
 assert_exit 0 Bash "dd --help"                       "dd --help allowed"

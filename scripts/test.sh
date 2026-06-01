@@ -100,7 +100,7 @@ function run_integration_tests() {
     docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && /home/agent/git/dotfiles/ai/claude/scripts/sanity_check.sh"
 
     log "Verifying Claude safety_guard hook (blocks rm -rf *)..."
-    if docker run --privileged --rm "$IMAGE_NAME" bash -c "echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"rm -rf *\"}}' | /home/agent/git/dotfiles/ai/claude/hooks/safety_guard.sh" 2>&1 | grep -q "BLOCKED by safety_guard"; then
+    if docker run --privileged --rm "$IMAGE_NAME" bash -c "echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"rm -rf *\"}}' | /home/agent/git/dotfiles/ai/hooks/safety_guard.sh" 2>&1 | grep -q "BLOCKED by safety_guard"; then
         log "Claude safety_guard verified."
     else
         echo "FAIL: Claude safety_guard hook failed to block 'rm -rf *'!"

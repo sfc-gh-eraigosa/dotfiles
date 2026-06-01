@@ -2132,7 +2132,7 @@ steps](#next-steps)).
 The following are commitments, not open questions. v1.0 tag is
 blocked until each is checked.
 
-- [ ] Extend `ai/claude/hooks/safety_guard.sh` + `safety_guard_test.sh`
+- [ ] Extend `ai/hooks/safety_guard.sh` + `safety_guard_test.sh`
       to gate `gss feature pr --ready`, `gss feature merged`,
       `gss feature restack`, (outside worker-mode) `gss feature
       checkpoint`, and `gss (push|pr) --force-autonomous` invoked
@@ -2401,7 +2401,7 @@ cannot accidentally drop them.
 >    lands; passing tests at first commit is a TDD violation.
 > 2. **QA Specialist subagent** runs `go test ./...`,
 >    `go-licenses check ./...`, and (if the deliverable touches
->    the hook) `ai/claude/hooks/safety_guard_test.sh`. Verifies
+>    the hook) `ai/hooks/safety_guard_test.sh`. Verifies
 >    coverage delta. Rejects on regression, flake, or coverage
 >    drop.
 > 3. **Security Engineer subagent** audits any deliverable that

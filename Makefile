@@ -49,4 +49,4 @@ claude-test: ## Run Claude Code sanity check (CLI, links, hooks, 27-case hook te
 
 .PHONY: claude-hook-test
 claude-hook-test: ## Run safety_guard hook test suite only
-	./ai/claude/hooks/safety_guard_test.sh
+	./ai/hooks/safety_guard_test.sh
