@@ -1,11 +1,13 @@
 # ============================================================================
 #  Registers a Task Scheduler job that auto-starts the macOS-style hotkeys
 #  (macos.ahk) at logon, elevated, so the shortcuts also work in apps that
-#  run as administrator (Task Manager, installers, etc.).
+#  run as administrator (Task Manager, installers, etc.) — AND reloads them
+#  now, so a freshly-deployed macos.ahk takes effect immediately instead of
+#  only at the next logon.
 #
-#  Re-run this any time you need to recreate the task. It self-elevates
-#  (you'll see one UAC prompt). Right-click -> "Run with PowerShell", or just
-#  double-click is fine.
+#  Re-run this any time you need to recreate the task or pick up a re-deploy.
+#  It self-elevates (you'll see one UAC prompt). Right-click -> "Run with
+#  PowerShell", or just double-click is fine.
 # ============================================================================
 
 $ErrorActionPreference = 'Stop'
@@ -68,6 +70,28 @@ try {
 
     "OK $(Get-Date -Format o): registered task '$taskName' for $user" | Out-File $log -Encoding utf8
     Write-Output "Registered scheduled task '$taskName'."
+
+    # --- Reload now -----------------------------------------------------------
+    # Registering the task does NOT start it, and AutoHotkey does not hot-reload a
+    # changed macos.ahk — so after a fresh deploy the OLD script keeps running
+    # until the next logon (every new hotkey, e.g. F1 help, silently absent). Stop
+    # any running instance and (re)start via the task so the just-deployed script
+    # takes effect immediately, elevated, exactly as it would at logon. Best-effort:
+    # a reload failure must not fail task registration (the logon trigger still works).
+    try {
+        Get-Process -Name 'AutoHotkey*' -ErrorAction SilentlyContinue |
+            Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 400
+        Start-ScheduledTask -TaskName $taskName
+        Write-Output "Reloaded macOS hotkeys (loaded the freshly-deployed macos.ahk)."
+        "OK $(Get-Date -Format o): reloaded macos.ahk via task '$taskName'" | Out-File $log -Append -Encoding utf8
+    } catch {
+        # Fallback: launch the deployed script directly (non-elevated) if the task
+        # could not be started for some reason.
+        try { Start-Process -FilePath $exe -ArgumentList ('"{0}"' -f $script) } catch {}
+        Write-Output "Reload via task failed; launched macos.ahk directly. ($($_.Exception.Message))"
+        "WARN $(Get-Date -Format o): task start failed, launched directly: $($_.Exception.Message)" | Out-File $log -Append -Encoding utf8
+    }
 } catch {
     "ERROR $(Get-Date -Format o): $($_.Exception.Message)" | Out-File $log -Encoding utf8
     Write-Output "FAILED: $($_.Exception.Message)"
