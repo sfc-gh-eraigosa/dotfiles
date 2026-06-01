@@ -32,6 +32,27 @@ if ! grep -qi microsoft /proc/version 2>/dev/null; then
 fi
 
 # ---------------------------------------------------------------------------
+# Ensure Windows interop is live. Without the WSLInterop binfmt handler, every
+# Windows .exe (powershell.exe, winget, the wslpath targets below) fails with
+# "exec format error" and this entire Windows setup silently no-ops. WSL normally
+# registers the handler at boot; if it has gone missing (interop disabled, or a
+# flaky restart), re-register it at runtime. binfmt_misc REFUSES a duplicate name,
+# so only register when BOTH known handler names are absent. Session-only; the
+# persistent fix is `[interop] enabled=true` in /etc/wsl.conf.
+# ---------------------------------------------------------------------------
+if [ ! -e /proc/sys/fs/binfmt_misc/WSLInterop ] && [ ! -e /proc/sys/fs/binfmt_misc/WSLInterop-late ]; then
+  if [ -e /proc/sys/fs/binfmt_misc/register ]; then
+    echo "WSL interop handler not registered; enabling it (may prompt for sudo)..."
+    # install.sh caches sudo up front, so this is normally non-interactive.
+    sudo bash -c 'echo ":WSLInterop:M::MZ::/init:PF" > /proc/sys/fs/binfmt_misc/register' 2>/dev/null \
+      && echo "  WSL interop registered." \
+      || echo "  WARNING: could not register WSL interop (need root?)." >&2
+  else
+    echo "WARNING: binfmt_misc not mounted; cannot enable WSL interop." >&2
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # Locate powershell.exe: prefer PATH, fall back to the standard System32 path.
 # (Windows exes are not always on the WSL PATH, e.g. appendWindowsPath=false.)
 # ---------------------------------------------------------------------------

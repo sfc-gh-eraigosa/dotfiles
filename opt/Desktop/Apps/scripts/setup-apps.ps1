@@ -408,6 +408,12 @@ Write-Host "`n=== [5/6] Desktop apps (winget) ===" -ForegroundColor Cyan
 if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     Write-Host "winget not available -- skipping app installs." -ForegroundColor Red
 } else {
+    # Quiet winget's spinner/progress bar. install.sh captures this output to a file
+    # (and pty runs make winget think it's interactive), so the animated / - \ | frames
+    # each land on their own line -- ugly. 'disabled' keeps just the meaningful lines.
+    # Best-effort: older winget without 'settings --set' just no-ops here.
+    winget settings --set visual.progressBar disabled 2>$null | Out-Null
+
     # iTunes: the Microsoft Store build (AppleInc.iTunes) shadows the winget Win32
     # package (Apple.iTunes) -- winget never sees a match, reinstalls each run, and the
     # Win32 MSI then fails 1603. Remove the Store build (per-user Appx, no elevation

@@ -45,6 +45,8 @@ try {
 try {
     Log '== [2/4] iTunes (Win32) =='
     if (Get-Command winget -ErrorAction SilentlyContinue) {
+        # Quiet winget's spinner in this captured/elevated context (own winget settings).
+        winget settings --set visual.progressBar disabled 2>$null | Out-Null
         winget install --id Apple.iTunes -e --source winget `
             --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 |
             ForEach-Object { Log "  $_" }
