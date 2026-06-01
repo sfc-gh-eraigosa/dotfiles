@@ -8,6 +8,7 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - `opt/profiles/`: Shell configuration files (.zshrc, .bashrc, .tmux.conf, etc.). [See opt/profiles/GEMINI.md](./opt/profiles/GEMINI.md) for details.
 - `opt/docs/`: Legacy and reference documentation for various tools and setups. [See opt/docs/GEMINI.md](./opt/docs/GEMINI.md).
 - `src/`: Source code for custom tools and agent skills. [See src/GEMINI.md](./src/GEMINI.md).
+- `opt/Desktop/Apps/scripts/`: Windows-side automation deployed to the Desktop (macOS-style hotkeys + Wispr Flow voice dictation in `macos.ahk`, PowerToys/app/font setup). [See opt/Desktop/Apps/scripts/GEMINI.md](./opt/Desktop/Apps/scripts/GEMINI.md) for the inventory, the WSL→Windows dev loop, and AutoHotkey v2 gotchas.
 - `archive/`: Retired-but-kept artifacts (not wired into install). [See archive/GEMINI.md](./archive/GEMINI.md) for the inventory and restore instructions.
 - `ai/hooks/`: Unified agent hooks (safety, privacy) shared across CLIs.
 - `ai/gemini/`: Gemini-specific commands, TOML policies, and settings.
@@ -20,7 +21,7 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - **Configuration**: Shell profiles and aliases are maintained in `opt/profiles/`.
 - **Progressive Loading**: Only read subdirectory `GEMINI.md` (or `CLAUDE.md` — same file) when specifically needing information about that section, to conserve context.
 - **GEMINI.md + CLAUDE.md in every documented directory**: Whenever a new directory is added that contains tools, scripts, or documentation worth describing to AI agents, create a `GEMINI.md` in that directory and a `CLAUDE.md -> GEMINI.md` symlink alongside it (`ln -s GEMINI.md CLAUDE.md`). This ensures both Gemini CLI and Claude Code can navigate the repo from any subdirectory. The symlink keeps both agents in sync from a single source file. Add a link to the new `GEMINI.md` in this root file's Repository Structure section.
-- **Skills are shared**: `SKILL.md` files under `src/*/skill/` and `src/ssh-*/` drive both assistants. Edit once, benefit twice.
+- **Skills are shared**: any `SKILL.md` under `src/` (e.g. `src/ssh-host-finder/SKILL.md`, `src/wispr-flow-debug/SKILL.md`, or a tool's `src/<tool>/skill/`) drives both assistants — `sync-skills` discovers every `SKILL.md` and links it into `~/.claude/skills` and `~/.agents/skills`. Edit once, benefit twice.
 
 ## Portability & Best Practices
 
@@ -34,6 +35,7 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - **Self-contained shell config**: `.bashrc` / `.zshrc` / sourced fragments must resolve paths from their own location (or `$HOME` / `$DOTFILES_DIR` env vars), never from hardcoded `$HOME/git/dotfiles`. The repo can be cloned anywhere and the config must still work.
 - **One install path**: when adding shell config, wire it through `install.sh` so a fresh clone bootstraps cleanly. Don't rely on the user manually symlinking anything you create.
 - **Worktree safety & `install.sh` (critical)**: NEVER run `install.sh` from a `gss feature` worktree. The script creates absolute symlinks in your `$HOME` (e.g., `~/.zshrc -> .../dotfiles/opt/profiles/zshrc`). Running it from a worktree will link your global configuration to a transient, task-specific path. Always switch to the main repository (`~/git/dotfiles`), checkout the desired branch, and run `install.sh` from there to ensure your system remains in a predictable, stable state.
+- **`install.sh` is interactive — never run it non-interactively or backgrounded**: on Windows/WSL it deploys `opt/Desktop/*` and then **prompts** ("Windows Desktop Customization detected … [y/n/s]") before running the PowerShell setup (Terminal themes, winget apps, the elevated AHK autostart task). With no TTY (a backgrounded run, or piping through `tail`/redirection) that prompt blocks forever or is silently skipped, so the customization step never runs. Run it in a real terminal and answer the prompt. The earlier file deploy (e.g. the fixed `macos.ahk`) happens *before* the prompt, so a skipped prompt still deploys files — it only skips the PowerShell setup/AHK reload.
 
 ## Git Workflow
 
