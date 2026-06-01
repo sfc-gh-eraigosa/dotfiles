@@ -49,7 +49,11 @@ fi
 # ---------------------------------------------------------------------------
 # Resolve the real Desktop path (may be OneDrive-redirected).
 # ---------------------------------------------------------------------------
-win_desktop_raw="$("$ps_exe" -NoProfile -Command "[Environment]::GetFolderPath('Desktop')" 2>/dev/null | tr -d '\r')"
+# NOTE: </dev/null is load-bearing. powershell.exe (and Windows console exes in
+# general) consume the parent shell's stdin under WSL interop. Without this, the
+# Desktop lookup drains stdin and the interactive "Choice [y/n/s]" read below gets
+# EOF -> empty -> silently skips Windows setup on a freshly-detected Windows box.
+win_desktop_raw="$("$ps_exe" -NoProfile -Command "[Environment]::GetFolderPath('Desktop')" </dev/null 2>/dev/null | tr -d '\r')"
 win_desktop="$(wslpath -u "$win_desktop_raw" 2>/dev/null)"
 
 if [ -z "$win_desktop" ] || [ ! -d "$win_desktop" ]; then
@@ -83,7 +87,15 @@ echo "  [y] Yes, run setup now."
 echo "  [n] No, skip for now (will ask again next time)."
 echo "  [s] Skip and never ask again (creates sentinel file)."
 echo ""
-read -rp "Choice [y/n/s]: " choice
+# Prompt on the controlling terminal, NOT stdin. Even with the </dev/null guards
+# above, stdin can still be non-interactive here: piped installs (curl | bash) have
+# no tty on stdin at all. /dev/tty reaches the real terminal in that case; if there
+# is genuinely no terminal (CI), we say so rather than silently skipping.
+if [ -r /dev/tty ]; then
+    read -rp "Choice [y/n/s]: " choice < /dev/tty
+else
+    choice="__notty__"
+fi
 
 case "$choice" in
     y|Y)
@@ -126,6 +138,14 @@ case "$choice" in
         echo "Creating sentinel file at $SENTINEL_FILE. Will not ask again."
         mkdir -p "$SENTINEL_DIR"
         echo "User chose to skip Windows setup on $(date)" > "$SENTINEL_FILE"
+        ;;
+    __notty__)
+        # No controlling terminal (CI / fully non-interactive). Windows WAS detected,
+        # so don't pretend we asked and don't silently skip — point at the exact
+        # command to finish setup interactively.
+        echo "No terminal available to prompt; Windows customization not run."
+        echo "Windows detected — to configure it, run from an interactive shell:"
+        echo "    bash \"${BASE_DIR}/opt/bin/install_windows.sh\" \"${BASE_DIR}\""
         ;;
     *)
         echo "Skipping Windows customization for now."
