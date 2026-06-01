@@ -47,7 +47,7 @@ $Distros      = [ordered]@{
 }
 
 $DistroUser   = 'wenlock'        # Linux user to ensure on newly-created distros
-$GitHubLink   = 'C:\Users\edwar\GitHub'  # Windows folder (a symlink) to expose in WSL
+$GitHubLink   = "$env:USERPROFILE\GitHub"  # Windows folder (a symlink) to expose in WSL
 $TerminalFont = 'MesloLGS NF'
 $HistorySize  = 100000
 
@@ -366,7 +366,7 @@ if ($wslOk) {
     $ghItem = Get-Item $GitHubLink -Force -ErrorAction SilentlyContinue
     if ($ghItem) {
         $target = if ($ghItem.Target) { $ghItem.Target } else { $ghItem.FullName }
-        # C:\Users\edwar\OneDrive\GitHub -> /mnt/c/Users/edwar/OneDrive/GitHub
+        # e.g. %USERPROFILE%\OneDrive\GitHub -> /mnt/c/Users/<user>/OneDrive/GitHub
         $wslGh = '/mnt/' + $target.Substring(0,1).ToLower() + ($target.Substring(2) -replace '\\','/')
         Write-Host "Windows '$GitHubLink' -> '$target' -> WSL '$wslGh'" -ForegroundColor DarkGray
         foreach ($distro in $Distros.Keys) {

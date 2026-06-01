@@ -22,12 +22,12 @@
 
 **Deploy + reload (used by several tasks).** macos.ahk runs from the local Desktop copy; after editing the repo file, sync and reload the elevated instance:
 ```bash
-cp opt/Desktop/Apps/scripts/macos.ahk "/mnt/c/Users/edwar/OneDrive/Desktop/Apps/scripts/macos.ahk"
+cp opt/Desktop/Apps/scripts/macos.ahk "/mnt/c/Users/<user>/OneDrive/Desktop/Apps/scripts/macos.ahk"
 ```
 Then, in a Windows terminal (one UAC prompt), restart it:
 ```
 taskkill /F /IM AutoHotkey64.exe
-"C:\Users\edwar\AppData\Local\Programs\AutoHotkey\v2\AutoHotkey64.exe" "C:\Users\edwar\OneDrive\Desktop\Apps\scripts\macos.ahk"
+"C:\Users\<user>\AppData\Local\Programs\AutoHotkey\v2\AutoHotkey64.exe" "C:\Users\<user>\OneDrive\Desktop\Apps\scripts\macos.ahk"
 ```
 
 ---
@@ -65,11 +65,11 @@ Esc::ExitApp
 - [ ] **Step 2: Deploy + run the probe**
 
 ```bash
-cp opt/Desktop/Apps/scripts/copilot-key-probe.ahk "/mnt/c/Users/edwar/OneDrive/Desktop/Apps/scripts/copilot-key-probe.ahk"
+cp opt/Desktop/Apps/scripts/copilot-key-probe.ahk "/mnt/c/Users/<user>/OneDrive/Desktop/Apps/scripts/copilot-key-probe.ahk"
 ```
 Run it from a Windows terminal:
 ```
-"C:\Users\edwar\AppData\Local\Programs\AutoHotkey\v2\AutoHotkey64.exe" "C:\Users\edwar\OneDrive\Desktop\Apps\scripts\copilot-key-probe.ahk"
+"C:\Users\<user>\AppData\Local\Programs\AutoHotkey\v2\AutoHotkey64.exe" "C:\Users\<user>\OneDrive\Desktop\Apps\scripts\copilot-key-probe.ahk"
 ```
 
 - [ ] **Step 3: Observe (manual)**
@@ -180,8 +180,8 @@ OnClipboardChange _FlowOnClip
 - [ ] **Step 2: Static validation**
 
 ```bash
-cp opt/Desktop/Apps/scripts/macos.ahk "/mnt/c/Users/edwar/OneDrive/Desktop/Apps/scripts/macos.ahk"
-powershell.exe -NoProfile -Command "\$p=Start-Process 'C:\Users\edwar\AppData\Local\Programs\AutoHotkey\v2\AutoHotkey64.exe' -ArgumentList '/validate','\"C:\Users\edwar\OneDrive\Desktop\Apps\scripts\macos.ahk\"' -Wait -PassThru -WindowStyle Hidden; 'validate exit: '+\$p.ExitCode"
+cp opt/Desktop/Apps/scripts/macos.ahk "/mnt/c/Users/<user>/OneDrive/Desktop/Apps/scripts/macos.ahk"
+powershell.exe -NoProfile -Command "\$p=Start-Process 'C:\Users\<user>\AppData\Local\Programs\AutoHotkey\v2\AutoHotkey64.exe' -ArgumentList '/validate','\"C:\Users\<user>\OneDrive\Desktop\Apps\scripts\macos.ahk\"' -Wait -PassThru -WindowStyle Hidden; 'validate exit: '+\$p.ExitCode"
 ```
 Expected: `validate exit: 0`
 
@@ -189,7 +189,7 @@ Expected: `validate exit: 0`
 
 ```
 taskkill /F /IM AutoHotkey64.exe
-"C:\Users\edwar\AppData\Local\Programs\AutoHotkey\v2\AutoHotkey64.exe" "C:\Users\edwar\OneDrive\Desktop\Apps\scripts\macos.ahk"
+"C:\Users\<user>\AppData\Local\Programs\AutoHotkey\v2\AutoHotkey64.exe" "C:\Users\<user>\OneDrive\Desktop\Apps\scripts\macos.ahk"
 ```
 
 - [ ] **Step 4: Manual behavioral test**

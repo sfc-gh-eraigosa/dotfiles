@@ -15,10 +15,10 @@
 **This machine's paths** (used in every deploy/test command):
 
 ```
-AHK   = C:\Users\edwar\AppData\Local\Programs\AutoHotkey\v2\AutoHotkey64.exe
-DEST  = C:\Users\edwar\OneDrive\Desktop\Apps\scripts        (WSL: /mnt/c/Users/edwar/OneDrive/Desktop/Apps/scripts)
-TEMP  = /mnt/c/Users/edwar/AppData/Local/Temp               (Windows %TEMP%)
-REPO  = /home/wenlock/git/dotfiles
+AHK   = C:\Users\<user>\AppData\Local\Programs\AutoHotkey\v2\AutoHotkey64.exe
+DEST  = C:\Users\<user>\OneDrive\Desktop\Apps\scripts        (WSL: /mnt/c/Users/<user>/OneDrive/Desktop/Apps/scripts)
+TEMP  = /mnt/c/Users/<user>/AppData/Local/Temp               (Windows %TEMP%)
+REPO  = $HOME/git/dotfiles
 SRC   = $REPO/opt/Desktop/Apps/scripts
 ```
 
@@ -29,8 +29,8 @@ SRC   = $REPO/opt/Desktop/Apps/scripts
 ```bash
 # usage: deploy_validate <file.ahk>
 deploy_validate() {
-  cp "$SRC/$1" "/mnt/c/Users/edwar/OneDrive/Desktop/Apps/scripts/$1"
-  powershell.exe -NoProfile -Command "\$p=Start-Process '$AHK' -ArgumentList '/validate','\"C:\\Users\\edwar\\OneDrive\\Desktop\\Apps\\scripts\\$1\"' -Wait -PassThru -WindowStyle Hidden; 'validate '+\$p.ExitCode" 2>&1 | tr -d '\r'
+  cp "$SRC/$1" "/mnt/c/Users/<user>/OneDrive/Desktop/Apps/scripts/$1"
+  powershell.exe -NoProfile -Command "\$p=Start-Process '$AHK' -ArgumentList '/validate','\"C:\\Users\\<user>\\OneDrive\\Desktop\\Apps\\scripts\\$1\"' -Wait -PassThru -WindowStyle Hidden; 'validate '+\$p.ExitCode" 2>&1 | tr -d '\r'
 }
 ```
 
@@ -107,9 +107,9 @@ ExitApp 0
 
 ```bash
 cd $REPO
-AHK="/mnt/c/Users/edwar/AppData/Local/Programs/AutoHotkey/v2/AutoHotkey64.exe"
-cp opt/Desktop/Apps/scripts/flow-calib-test.ahk "/mnt/c/Users/edwar/OneDrive/Desktop/Apps/scripts/flow-calib-test.ahk"
-powershell.exe -NoProfile -Command "\$p=Start-Process '$AHK' -ArgumentList '\"C:\Users\edwar\OneDrive\Desktop\Apps\scripts\flow-calib-test.ahk\"' -Wait -PassThru -WindowStyle Hidden; 'exit '+\$p.ExitCode" 2>&1 | tr -d '\r'
+AHK="/mnt/c/Users/<user>/AppData/Local/Programs/AutoHotkey/v2/AutoHotkey64.exe"
+cp opt/Desktop/Apps/scripts/flow-calib-test.ahk "/mnt/c/Users/<user>/OneDrive/Desktop/Apps/scripts/flow-calib-test.ahk"
+powershell.exe -NoProfile -Command "\$p=Start-Process '$AHK' -ArgumentList '\"C:\Users\<user>\OneDrive\Desktop\Apps\scripts\flow-calib-test.ahk\"' -Wait -PassThru -WindowStyle Hidden; 'exit '+\$p.ExitCode" 2>&1 | tr -d '\r'
 ```
 
 Expected: a non-zero exit (the `#Include flow-calib.ahk` fails to load because the file does not exist yet → AHK error dialog / non-zero). This confirms the harness runs and the implementation is missing.
@@ -159,11 +159,11 @@ _FlowCalibSave(path, m) {
 
 ```bash
 cd $REPO
-AHK="/mnt/c/Users/edwar/AppData/Local/Programs/AutoHotkey/v2/AutoHotkey64.exe"
-cp opt/Desktop/Apps/scripts/flow-calib.ahk "/mnt/c/Users/edwar/OneDrive/Desktop/Apps/scripts/flow-calib.ahk"
-cp opt/Desktop/Apps/scripts/flow-calib-test.ahk "/mnt/c/Users/edwar/OneDrive/Desktop/Apps/scripts/flow-calib-test.ahk"
-powershell.exe -NoProfile -Command "\$p=Start-Process '$AHK' -ArgumentList '\"C:\Users\edwar\OneDrive\Desktop\Apps\scripts\flow-calib-test.ahk\"' -Wait -PassThru -WindowStyle Hidden; 'exit '+\$p.ExitCode" 2>&1 | tr -d '\r'
-cat "/mnt/c/Users/edwar/AppData/Local/Temp/flow-calib-test.out" | tr -d '\r'
+AHK="/mnt/c/Users/<user>/AppData/Local/Programs/AutoHotkey/v2/AutoHotkey64.exe"
+cp opt/Desktop/Apps/scripts/flow-calib.ahk "/mnt/c/Users/<user>/OneDrive/Desktop/Apps/scripts/flow-calib.ahk"
+cp opt/Desktop/Apps/scripts/flow-calib-test.ahk "/mnt/c/Users/<user>/OneDrive/Desktop/Apps/scripts/flow-calib-test.ahk"
+powershell.exe -NoProfile -Command "\$p=Start-Process '$AHK' -ArgumentList '\"C:\Users\<user>\OneDrive\Desktop\Apps\scripts\flow-calib-test.ahk\"' -Wait -PassThru -WindowStyle Hidden; 'exit '+\$p.ExitCode" 2>&1 | tr -d '\r'
+cat "/mnt/c/Users/<user>/AppData/Local/Temp/flow-calib-test.out" | tr -d '\r'
 ```
 
 Expected: `exit 0` and `OK: all calibration config tests passed`.
@@ -268,10 +268,10 @@ to:
 
 ```bash
 cd $REPO
-AHK="/mnt/c/Users/edwar/AppData/Local/Programs/AutoHotkey/v2/AutoHotkey64.exe"
-cp opt/Desktop/Apps/scripts/macos.ahk "/mnt/c/Users/edwar/OneDrive/Desktop/Apps/scripts/macos.ahk"
-powershell.exe -NoProfile -Command "\$p=Start-Process '$AHK' -ArgumentList '/validate','\"C:\Users\edwar\OneDrive\Desktop\Apps\scripts\macos.ahk\"' -Wait -PassThru -WindowStyle Hidden; 'validate '+\$p.ExitCode" 2>&1 | tr -d '\r'
-powershell.exe -NoProfile -Command "taskkill /F /IM AutoHotkey64.exe 2>\$null; Start-Sleep 1; Start-Process '$AHK' -ArgumentList '\"C:\Users\edwar\OneDrive\Desktop\Apps\scripts\macos.ahk\"'" 2>&1 | tr -d '\r'
+AHK="/mnt/c/Users/<user>/AppData/Local/Programs/AutoHotkey/v2/AutoHotkey64.exe"
+cp opt/Desktop/Apps/scripts/macos.ahk "/mnt/c/Users/<user>/OneDrive/Desktop/Apps/scripts/macos.ahk"
+powershell.exe -NoProfile -Command "\$p=Start-Process '$AHK' -ArgumentList '/validate','\"C:\Users\<user>\OneDrive\Desktop\Apps\scripts\macos.ahk\"' -Wait -PassThru -WindowStyle Hidden; 'validate '+\$p.ExitCode" 2>&1 | tr -d '\r'
+powershell.exe -NoProfile -Command "taskkill /F /IM AutoHotkey64.exe 2>\$null; Start-Sleep 1; Start-Process '$AHK' -ArgumentList '\"C:\Users\<user>\OneDrive\Desktop\Apps\scripts\macos.ahk\"'" 2>&1 | tr -d '\r'
 ```
 
 Expected: `validate 0`. Manual: hold the Copilot key — dictation still starts/stops exactly as before (now reading the ini-loaded offsets, which equal the defaults until calibrated).
@@ -463,10 +463,10 @@ Esc::{                                 ; exit calibration (same as F11)
 
 ```bash
 cd $REPO
-AHK="/mnt/c/Users/edwar/AppData/Local/Programs/AutoHotkey/v2/AutoHotkey64.exe"
-cp opt/Desktop/Apps/scripts/macos.ahk "/mnt/c/Users/edwar/OneDrive/Desktop/Apps/scripts/macos.ahk"
-powershell.exe -NoProfile -Command "\$p=Start-Process '$AHK' -ArgumentList '/validate','\"C:\Users\edwar\OneDrive\Desktop\Apps\scripts\macos.ahk\"' -Wait -PassThru -WindowStyle Hidden; 'validate '+\$p.ExitCode" 2>&1 | tr -d '\r'
-powershell.exe -NoProfile -Command "taskkill /F /IM AutoHotkey64.exe 2>\$null; Start-Sleep 1; Start-Process '$AHK' -ArgumentList '\"C:\Users\edwar\OneDrive\Desktop\Apps\scripts\macos.ahk\"'" 2>&1 | tr -d '\r'
+AHK="/mnt/c/Users/<user>/AppData/Local/Programs/AutoHotkey/v2/AutoHotkey64.exe"
+cp opt/Desktop/Apps/scripts/macos.ahk "/mnt/c/Users/<user>/OneDrive/Desktop/Apps/scripts/macos.ahk"
+powershell.exe -NoProfile -Command "\$p=Start-Process '$AHK' -ArgumentList '/validate','\"C:\Users\<user>\OneDrive\Desktop\Apps\scripts\macos.ahk\"' -Wait -PassThru -WindowStyle Hidden; 'validate '+\$p.ExitCode" 2>&1 | tr -d '\r'
+powershell.exe -NoProfile -Command "taskkill /F /IM AutoHotkey64.exe 2>\$null; Start-Sleep 1; Start-Process '$AHK' -ArgumentList '\"C:\Users\<user>\OneDrive\Desktop\Apps\scripts\macos.ahk\"'" 2>&1 | tr -d '\r'
 ```
 
 Expected: `validate 0`.
@@ -480,7 +480,7 @@ Expected: `validate 0`.
   - [ ] With Flow's overlay visible, press **F10** → cursor clicks START, pauses ~2 s, clicks STOP (watch both land).
   - [ ] Re-capture with **F1/F2**, press **F4** → `✓ saved` markers; verify the file exists:
     ```bash
-    cat "/mnt/c/Users/edwar/AppData/Local/dotfiles/flow-calib.ini" | tr -d '\r'
+    cat "/mnt/c/Users/<user>/AppData/Local/dotfiles/flow-calib.ini" | tr -d '\r'
     ```
   - [ ] Press **F11** (or **Esc**) → "CALIBRATION OFF" toast, HUD disappears.
   - [ ] Confirm scoping: outside calibration, **F10** still toggles dictation ON/OFF (not a dry-run).
@@ -553,7 +553,7 @@ Also remove the `flow-coord-capture.ahk` row from the table.
 ```bash
 cd $REPO
 git rm opt/Desktop/Apps/scripts/flow-coord-capture.ahk
-rm -f "/mnt/c/Users/edwar/OneDrive/Desktop/Apps/scripts/flow-coord-capture.ahk"
+rm -f "/mnt/c/Users/<user>/OneDrive/Desktop/Apps/scripts/flow-coord-capture.ahk"
 ```
 
 (If `flow-coord-capture.ahk` is referenced anywhere else, grep and clean: `grep -rn flow-coord-capture opt/ docs/`.)
@@ -574,9 +574,9 @@ git add opt/Desktop/Apps/scripts/WISPR-FLOW.md opt/Desktop/Apps/scripts/README.m
 
 ```bash
 cd $REPO
-AHK="/mnt/c/Users/edwar/AppData/Local/Programs/AutoHotkey/v2/AutoHotkey64.exe"
-powershell.exe -NoProfile -Command "\$p=Start-Process '$AHK' -ArgumentList '\"C:\Users\edwar\OneDrive\Desktop\Apps\scripts\flow-calib-test.ahk\"' -Wait -PassThru -WindowStyle Hidden; 'exit '+\$p.ExitCode" 2>&1 | tr -d '\r'
-cat "/mnt/c/Users/edwar/AppData/Local/Temp/flow-calib-test.out" | tr -d '\r'
+AHK="/mnt/c/Users/<user>/AppData/Local/Programs/AutoHotkey/v2/AutoHotkey64.exe"
+powershell.exe -NoProfile -Command "\$p=Start-Process '$AHK' -ArgumentList '\"C:\Users\<user>\OneDrive\Desktop\Apps\scripts\flow-calib-test.ahk\"' -Wait -PassThru -WindowStyle Hidden; 'exit '+\$p.ExitCode" 2>&1 | tr -d '\r'
+cat "/mnt/c/Users/<user>/AppData/Local/Temp/flow-calib-test.out" | tr -d '\r'
 ```
 
 Expected: `exit 0`, `OK: all calibration config tests passed`.
