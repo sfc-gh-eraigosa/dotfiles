@@ -67,7 +67,16 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/git/dotfiles/ai/claude/hooks/safety_guard.sh"
+            "command": "$HOME/git/dotfiles/ai/hooks/safety_guard.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/git/dotfiles/ai/hooks/privacy_guard.sh"
           }
         ]
       }

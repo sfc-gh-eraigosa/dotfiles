@@ -21,15 +21,17 @@ Agents in this repo are trained with specialized "skills" — instructions for c
 
 ### 🛡️ Safety & Policies
 We enforce identical security boundaries across all assistants:
-- **Claude**: Controlled via the `safety_guard.sh` PreToolUse hook in `ai/claude/hooks/`.
-- **Gemini**: Controlled via TOML policies in `ai/gemini/policies/`.
-- **Rules**: Both block dangerous destructive commands (e.g., `rm -rf /`) and mandate user confirmation for sensitive Git actions (`gss push`).
+- **Shared Hooks**: Controlled via PreToolUse/BeforeTool hooks in `ai/hooks/`.
+  - `safety_guard.sh`: Blocks dangerous destructive commands (e.g., `rm -rf /`) and mandates user confirmation for sensitive Git actions (`gss push`).
+  - `privacy_guard.sh`: Blocks leaking home paths, usernames, hostnames, and secrets into tracked files, PR/issue bodies, and commit messages. Mandates placeholders (`$HOME`, `~`, `${USER}`, `<user>`, `<REDACTED>`) in shared content.
+- **Gemini Policies**: Additional TOML-based policies in `ai/gemini/policies/`.
 
 ## 📂 Directory Structure
 
 | Path | Purpose |
 | :--- | :--- |
-| [`claude/`](./claude/) | Claude Code settings, slash commands, and hooks. |
+| [`hooks/`](./hooks/) | Unified agent hooks (safety, privacy) shared across CLIs. |
+| [`claude/`](./claude/) | Claude Code settings, slash commands, and hook templates. |
 | [`gemini/`](./gemini/) | Gemini CLI settings, custom commands, and policies. |
 | [`skills/`](./skills/) | Repository-wide agent skills (linked via `sync-skills`). |
 | [`plugins.yaml`](./plugins.yaml) | Declarative manifest for assistant extensions. |

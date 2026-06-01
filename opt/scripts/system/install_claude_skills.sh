@@ -62,8 +62,8 @@ cleanup_broken_links "$CLAUDE_HOME/commands"
 # --- Hooks (referenced by absolute path from settings.json) ---
 # We don't symlink hooks — settings.json points at them in-place. Just ensure
 # they remain executable in case a checkout dropped the bit.
-if [ -d "$BASE_DIR/ai/claude/hooks" ]; then
-    chmod +x "$BASE_DIR/ai/claude/hooks"/*.sh 2>/dev/null || true
+if [ -d "$BASE_DIR/ai/hooks" ]; then
+    chmod +x "$BASE_DIR/ai/hooks"/*.sh 2>/dev/null || true
 fi
 
 # --- Shell aliases (~/.config/claude/aliases.sh, sourced by .zshrc and .bashrc) ---
