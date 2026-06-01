@@ -2,7 +2,15 @@
 # Test driver for ai/hooks/safety_guard.sh
 set -u
 
-HOOK="$HOME/git/dotfiles/ai/hooks/safety_guard.sh"
+# Resolve paths from this script's own location so the driver runs anywhere
+# (developer checkout, docker container, or the CI Actions workdir) — NOT from
+# a hardcoded ~/git/dotfiles. REPO_ROOT is two levels up from ai/hooks/. The
+# gss-detection cases below exercise the hook against a real git repo (the
+# hook resolves HEAD via `git -C <dir> rev-parse HEAD`, it never execs gss),
+# so REPO_ROOT just has to be this checkout.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+HOOK="$REPO_ROOT/ai/hooks/safety_guard.sh"
 PASS=0
 FAIL=0
 
@@ -114,11 +122,11 @@ assert_exit 2 Bash "mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss
 # Create a stale token (different HEAD)
 mkdir -p "$HOME/.config/gss"
 echo "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" > "$HOME/.config/gss/approval.token"
-( cd "$HOME/git/dotfiles" && \
+( cd "$REPO_ROOT" && \
   assert_exit 2 Bash "gss push" "gss push with stale token" )
 
 # Create a fresh token matching current HEAD (run from repo root)
-( cd "$HOME/git/dotfiles" && \
+( cd "$REPO_ROOT" && \
   git rev-parse HEAD > "$HOME/.config/gss/approval.token" && \
   assert_exit 0 Bash "gss push" "gss push with fresh token" )
 
@@ -126,14 +134,14 @@ echo "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" > "$HOME/.config/gss/approval.to
 # When the command leads with `cd <target-repo>`, the hook must resolve HEAD
 # from that directory, not from the session CWD. Token must match target HEAD.
 (
-    DOTFILES_HEAD=$(git -C "$HOME/git/dotfiles" rev-parse HEAD)
+    DOTFILES_HEAD=$(git -C "$REPO_ROOT" rev-parse HEAD)
     echo "$DOTFILES_HEAD" > "$HOME/.config/gss/approval.token"
-    assert_exit 0 Bash "cd $HOME/git/dotfiles && gss push" \
+    assert_exit 0 Bash "cd $REPO_ROOT && gss push" \
         "cross-repo gss push: token matches target-repo HEAD"
 )
 (
     echo "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" > "$HOME/.config/gss/approval.token"
-    assert_exit 2 Bash "cd $HOME/git/dotfiles && gss push" \
+    assert_exit 2 Bash "cd $REPO_ROOT && gss push" \
         "cross-repo gss push: stale token (does not match target-repo HEAD)"
 )
 
@@ -149,9 +157,9 @@ assert_exit 0 Bash "gss feature list"                             "feature list 
 assert_exit 0 Bash "gss feature pr"                               "feature pr without --ready needs no token"
 # With a fresh token (matching target-repo HEAD), the publish verbs pass.
 (
-    git -C "$HOME/git/dotfiles" rev-parse HEAD > "$HOME/.config/gss/approval.token"
-    assert_exit 0 Bash "cd $HOME/git/dotfiles && gss feature pr --ready"           "feature pr --ready with fresh token"
-    assert_exit 0 Bash "cd $HOME/git/dotfiles && gss feature merged auth/erai/api" "feature merged with fresh token"
+    git -C "$REPO_ROOT" rev-parse HEAD > "$HOME/.config/gss/approval.token"
+    assert_exit 0 Bash "cd $REPO_ROOT && gss feature pr --ready"           "feature pr --ready with fresh token"
+    assert_exit 0 Bash "cd $REPO_ROOT && gss feature merged auth/erai/api" "feature merged with fresh token"
 )
 rm -f "$HOME/.config/gss/approval.token"
 
@@ -165,15 +173,15 @@ assert_exit 2 Bash "cd $WT_PROBE && gss pr --force-autonomous"   "pr --force-aut
 rm -f "$HOME/.config/gss/approval.token"
 # Same flag on a regular checkout (not under the worktree root) + fresh token → allowed.
 (
-    git -C "$HOME/git/dotfiles" rev-parse HEAD > "$HOME/.config/gss/approval.token"
-    assert_exit 0 Bash "cd $HOME/git/dotfiles && gss push --force-autonomous" "push --force-autonomous on a regular checkout"
+    git -C "$REPO_ROOT" rev-parse HEAD > "$HOME/.config/gss/approval.token"
+    assert_exit 0 Bash "cd $REPO_ROOT && gss push --force-autonomous" "push --force-autonomous on a regular checkout"
 )
 rm -f "$HOME/.config/gss/approval.token"
 
 # === gss feature checkpoint outside a worker worktree (PR-51) ===
 # Bare checkpoint resolves the worker from cwd; without --worker AND outside
 # the worktree root it is a classic-context misuse.
-assert_exit 2 Bash "cd $HOME/git/dotfiles && gss feature checkpoint" "checkpoint without --worker outside a worktree"
+assert_exit 2 Bash "cd $REPO_ROOT && gss feature checkpoint" "checkpoint without --worker outside a worktree"
 assert_exit 0 Bash "gss feature checkpoint --worker auth/erai/api"   "checkpoint --worker is fine anywhere"
 assert_exit 0 Bash "cd $WT_PROBE && gss feature checkpoint"          "bare checkpoint inside a worker worktree"
 

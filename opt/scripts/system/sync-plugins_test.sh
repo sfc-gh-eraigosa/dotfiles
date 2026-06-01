@@ -42,10 +42,10 @@ assert_contains "$OUT" "DRY-RUN: claude plugin install superpowers@claude-plugin
 assert_contains "$OUT" "DRY-RUN: claude plugin install mcp-apps@claude-plugins-official" "installs mcp-apps"
 
 INSTALL_COUNT="$(printf '%s' "$OUT" | grep -c 'DRY-RUN: claude plugin install ')"
-assert_eq "$INSTALL_COUNT" "12" "plans install for all 12 plugins"
+assert_eq "$INSTALL_COUNT" "13" "plans install for all 13 plugins"
 
 ENABLE_COUNT="$(printf '%s' "$OUT" | grep -c 'DRY-RUN: claude plugin enable ')"
-assert_eq "$ENABLE_COUNT" "12" "plans enable for all 12 plugins"
+assert_eq "$ENABLE_COUNT" "13" "plans enable for all 13 plugins"
 
 GEMINI_COUNT="$(printf '%s' "$OUT" | grep -c 'DRY-RUN: gemini extensions install ')"
 assert_eq "$GEMINI_COUNT" "7" "plans install for all 7 gemini extension sources"
