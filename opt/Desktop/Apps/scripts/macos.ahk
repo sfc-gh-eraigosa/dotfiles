@@ -197,8 +197,8 @@ catch
 ; try-guarded so one bad entry is skipped, not fatal. _FlowTriggerDown/Up are defined
 ; later in the file but referenced by name (AHK v2 resolves the reference at load).
 for t in _flowTriggers {
-    try Hotkey "*" t, _FlowTriggerDown, "On"
-    try Hotkey "*" t " up", _FlowTriggerUp, "On"
+    try Hotkey "*" t, _FlowTriggerDown
+    try Hotkey "*" t " up", _FlowTriggerUp
 }
 
 CalibActive   := false       ; F11 calibration mode flag
@@ -388,9 +388,12 @@ _FlowManageArm() {
     held := Map()                                ; modifier NAME -> true while down
     sawNonMod := false                           ; a non-modifier was seen during this modifier press
     ; Map a key NAME to a canonical modifier NAME, or "" if it is not a modifier.
+    ; NOTE: GetKeyName returns the LONG forms "LControl"/"RControl" (and "LMenu"/"RMenu"
+    ; for Alt on some layouts), NOT "LCtrl"/"LAlt" — so we must match both spellings or a
+    ; Ctrl/Alt key gets misclassified as a base key and produces a junk chord (e.g. >#RControl).
     modName := (name) => (
-        (n := StrLower(name)) == "lctrl" || n == "rctrl" || n == "control" || n == "ctrl" ? "Ctrl"
-        : n == "lalt" || n == "ralt" || n == "alt" ? "Alt"
+        (n := StrLower(name)) == "lctrl" || n == "rctrl" || n == "lcontrol" || n == "rcontrol" || n == "control" || n == "ctrl" ? "Ctrl"
+        : n == "lalt" || n == "ralt" || n == "lmenu" || n == "rmenu" || n == "alt" || n == "menu" ? "Alt"
         : n == "lshift" || n == "rshift" || n == "shift" ? "Shift"
         : n == "lwin" ? "LWin"
         : n == "rwin" ? "RWin"
@@ -454,8 +457,8 @@ _FlowManageResolve(raw) {
         }
     }
     if (idx) {
-        try Hotkey "*" c, , "Off"                ; GLOBAL context (no #HotIf open here)
-        try Hotkey "*" c " up", , "Off"
+        try Hotkey "*" c, "Off"                  ; AHK v2: On/Off/Toggle is the ACTION (2nd) arg, not Options
+        try Hotkey "*" c " up", "Off"
         _flowTriggers.RemoveAt(idx)
         try _FlowTriggersSave(_FlowTriggersPath(), _flowTriggers)
         _FlowTipFor("✓  removed  " label, 1500)
@@ -468,8 +471,8 @@ _FlowManageResolve(raw) {
         _FlowTipFor("✗  " label " — " v["reason"], 2000)
         return
     }
-    try Hotkey "*" c, _FlowTriggerDown, "On"     ; GLOBAL context -> On/Off variants match
-    try Hotkey "*" c " up", _FlowTriggerUp, "On"
+    try Hotkey "*" c, _FlowTriggerDown           ; enabled by default; GLOBAL context -> On/Off variants match
+    try Hotkey "*" c " up", _FlowTriggerUp
     _flowTriggers.Push(c)
     try _FlowTriggersSave(_FlowTriggersPath(), _flowTriggers)
     _FlowTipFor("✓  added  " label, 1500)
@@ -617,7 +620,7 @@ _FlowStopClicks() {
 ; extra trigger (see the startup bind loop) route through these so all triggers share
 ; one path. single-flight: FIRST trigger released while DICTATING drives STOP (no per-key
 ; ownership) — a 2nd trigger pressed mid-session hits the auto-repeat swallow (no-op).
-_FlowTriggerDown() {
+_FlowTriggerDown(*) {   ; (*) so the runtime Hotkey() function accepts it as a callback
     global FlowState, FlowWin, FlowX, FlowY, FlowEnabled, CalibActive, TriggerMgmtActive, _FLOW_HINT
     if (!FlowEnabled || CalibActive || TriggerMgmtActive)   ; ignore while toggled off / calibrating / managing
         return                                           ; dictation toggled off (F10) or another mode owns the key
@@ -630,7 +633,7 @@ _FlowTriggerDown() {
     SetTimer _FlowStartClicks, -1                        ; slow clicking off the hotkey thread
 }
 
-_FlowTriggerUp() {
+_FlowTriggerUp(*) {   ; (*) so the runtime Hotkey() function accepts it as a callback
     global FlowState, _FLOW_HINT
     if (FlowState != "DICTATING")
         return
