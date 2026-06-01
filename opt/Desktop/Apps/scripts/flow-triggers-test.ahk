@@ -130,6 +130,15 @@ _assert(_FlowComposeChord(["RWin"], "") == "RWin", "compose bare RWin -> RWin")
 _assert(_FlowComposeChord(["LWin"], "") == "LWin", "compose bare LWin -> LWin")
 _assert(_FlowComposeChord(["LCtrl"], "") == "", "compose lone non-RWin modifier -> sentinel ''")
 
+; 11b. Win HANDEDNESS preserved when composing a Win+key combo (Gate 3 needs this):
+;      LWin+C -> "<#c" (collides with the Cmd layer), RWin+C -> ">#c" (addable).
+_assert(_FlowComposeChord(["LWin"], "c") == "<#c", "compose LWin,c -> <#c (handed)")
+_assert(_FlowComposeChord(["RWin"], "c") == ">#c", "compose RWin,c -> >#c (handed)")
+; BOTH Win keys held -> LWin wins (reserved Cmd side).
+_assert(_FlowComposeChord(["LWin", "RWin"], "c") == "<#c", "compose LWin+RWin,c -> <#c (LWin wins)")
+; Generic 'Win' (no handedness from the source) folds to the non-reserved RWin side.
+_assert(_FlowComposeChord(["Win"], "c") == ">#c", "compose generic Win,c -> >#c")
+
 ; 12. Load dedupe/normalize: count=2, k1=!^d, k2=^!d -> ["^!d"] length 1
 try FileDelete tmp
 IniWrite 2, tmp, "triggers", "count"
@@ -180,6 +189,13 @@ for k in ["F6", "F12", "F13", "^!d", "+F6", "RWin"]
 for k in ["^c", "^v", "!Tab", "#d"]
     _assert(!_FlowTriggerValidate(k, [])["ok"], "Gate 2b reject " k)
 
+; 19b. Gate 2b is Win-handedness-AGNOSTIC: '<#d' and '>#d' both fold to the '#d'
+;      (Win+D show-desktop) entry — the OS shortcut fires from EITHER Win key. The
+;      non-Win '^+Esc' entry still rejects (fold leaves non-Win modifiers alone).
+for k in ["<#d", ">#d", "#d"]
+    _assert(!_FlowTriggerValidate(k, [])["ok"], "Gate 2b folds Win -> reject " k)
+_assert(!_FlowTriggerValidate("^+Esc", [])["ok"], "Gate 2b reject ^+Esc (non-Win entry)")
+
 ; =================================================================================
 ;  Phase 5 — Gate 3 (live collision) + handedness non-collision + scoped exclusion
 ; =================================================================================
@@ -193,8 +209,11 @@ _assert(!_FlowTriggerValidate("^+c", bc)["ok"], "Gate 3 reject ^+c (in boundChor
 ; 21. F13 not in set -> accept
 _assert(_FlowTriggerValidate("F13", bc)["ok"], "Gate 3 accept F13 (absent)")
 
-; 22. Handedness non-collision: #c NOT rejected by <#c in bc
+; 22. Handedness: <#c (LWin Cmd) COLLIDES with bc's <#c (Gate 3 reject); #c and >#c
+;     (RWin / generic) are DISTINCT chords and stay addable.
+_assert(!_FlowTriggerValidate("<#c", bc)["ok"], "Gate 3: <#c collides with bound <#c")
 _assert(_FlowTriggerValidate("#c", bc)["ok"], "Gate 3: #c not blocked by <#c")
+_assert(_FlowTriggerValidate(">#c", bc)["ok"], "Gate 3: >#c (RWin) not blocked by <#c")
 
 ; 23. Scoped-exclusion proof: a globally-free F-key not over-rejected
 _assert(_FlowTriggerValidate("F6", bc)["ok"], "Gate 3: F6 not over-rejected (calib-scoped excluded)")
@@ -216,9 +235,13 @@ _assert(!_has(man, "F6"), "manifest excludes F6 (calib-scoped)")
 _assert(!_has(man, "F7"), "manifest excludes F7 (calib-scoped)")
 _assert(!_has(man, "F8"), "manifest excludes F8 (calib-scoped)")
 
-; 26. Handedness in manifest: contains <#c (handed), #c still addable
+; 26. Handedness in manifest: contains <#c (handed). A captured LWin+C ("<#c")
+;     COLLIDES with the Cmd layer (Gate 3 reject), while #c (generic) and >#c (RWin)
+;     stay addable — the named RWin feature is preserved.
 _assert(_has(man, "<#c"), "manifest contains handed <#c")
+_assert(!_FlowTriggerValidate("<#c", man)["ok"], "manifest: <#c collides with Cmd layer")
 _assert(_FlowTriggerValidate("#c", man)["ok"], "manifest's <#c does not block #c")
+_assert(_FlowTriggerValidate(">#c", man)["ok"], "manifest's <#c does not block >#c (RWin)")
 
 ; 27. Staleness parity: manifest (normalized) == the expected inline dump.
 ;     Drift in macos.ahk's global hotkeys fails this, forcing a deliberate update.

@@ -181,7 +181,7 @@ _FlowTriggerNormalize(chord) {
 ;   compose(["LWin"],"")         -> "LWin"
 ;   compose(["LCtrl"],"")        -> ""      (sentinel: reject a lone non-RWin modifier)
 _FlowComposeChord(heldMods, baseKey) {
-    ctrl := false, alt := false, shift := false, win := false
+    ctrl := false, alt := false, shift := false, lwin := false, rwin := false
     for m in heldMods {
         ml := StrLower(m)
         if (ml == "ctrl" || ml == "lctrl" || ml == "rctrl" || ml == "control")
@@ -190,8 +190,10 @@ _FlowComposeChord(heldMods, baseKey) {
             alt := true
         else if (ml == "shift" || ml == "lshift" || ml == "rshift")
             shift := true
-        else if (ml == "win" || ml == "lwin" || ml == "rwin")
-            win := true
+        else if (ml == "lwin")
+            lwin := true
+        else if (ml == "rwin" || ml == "win")   ; a generic 'win' folds to the non-reserved RWin side
+            rwin := true
     }
     if (!IsSet(baseKey) || baseKey == "") {
         ; Bare-modifier resolution. Only RWin and LWin resolve to a base key;
@@ -205,7 +207,10 @@ _FlowComposeChord(heldMods, baseKey) {
         }
         return ""          ; lone non-Win modifier -> sentinel
     }
-    ; Non-modifier base present: build canonical "<mods><base>".
+    ; Non-modifier base present: build canonical "<mods><base>". Win handedness is
+    ; PRESERVED here (LWin -> "<#", RWin -> ">#") so Gate 3 can catch a captured
+    ; LWin+C colliding with the Cmd-layer "<#c" while RWin+C ("># c") stays addable.
+    ; If BOTH Win keys are somehow held, LWin wins (it is the reserved Cmd side).
     mods := ""
     if (ctrl)
         mods .= "^"
@@ -213,9 +218,21 @@ _FlowComposeChord(heldMods, baseKey) {
         mods .= "!"
     if (shift)
         mods .= "+"
-    if (win)
-        mods .= "#"
+    if (lwin)
+        mods .= "<#"
+    else if (rwin)
+        mods .= ">#"
     return _FlowTriggerNormalize(mods . baseKey)
+}
+
+; Fold a canonical chord's Win handedness to the generic '#' (<#d/>#d/#d -> #d),
+; leaving non-Win modifiers untouched. Used ONLY by Gate 2b so the OS-shortcut
+; denylist (stored generic, e.g. '#d') catches BOTH LWin+D and RWin+D — the OS show-
+; desktop shortcut fires regardless of which Win key is pressed. Gate 3 must NOT use
+; this (it relies on the handed form to keep #c / >#c addable). Never throws.
+_FlowFoldWin(chord) {
+    s := StrReplace(chord, "<#", "#")
+    return StrReplace(s, ">#", "#")
 }
 
 ; ---------------------------------------------------------------------------------
@@ -397,8 +414,12 @@ _FlowTriggerValidate(chord, boundChords) {
         return Map("ok", false,
             "reason", "add an F6-F22 / media key, a modifier+key combo, or Right Cmd")
 
-    ; --- Gate 2b: OS-shortcut denylist (applies to shape-valid modified chords)
-    if (_FlowOsShortcutDenylist().Has(c))
+    ; --- Gate 2b: OS-shortcut denylist (applies to shape-valid modified chords).
+    ; Win handedness is FOLDED to generic '#' for this compare so '<#d'/'>#d'/'#d'
+    ; all hit the '#d' (Win+D show-desktop) entry — the OS shortcut fires regardless
+    ; of which Win key is used. Non-Win entries (^c, !Tab, ^+Esc) are unaffected by
+    ; the fold. (Gate 3 below intentionally keeps the HANDED form.)
+    if (_FlowOsShortcutDenylist().Has(_FlowFoldWin(c)))
         return Map("ok", false, "reason", "that's a common OS/editor shortcut")
 
     ; --- Gate 3: live-keymap collision ---------------------------------------
