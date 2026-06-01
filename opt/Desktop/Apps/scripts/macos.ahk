@@ -498,7 +498,11 @@ _FlowManageDestroy() {
 ; a different context and strand the HUD) and also from the F9/F11/F10 mode handlers.
 _FlowHelpShow() {
     global _flowHelpGui, _flowTriggers
-    _FlowHelpDestroy()
+    ; Hold-to-show: a held F1 AUTO-REPEATS (~30/s). Without this guard each repeat
+    ; would Destroy + rebuild the HUD, so it flickers or never visibly renders.
+    ; Build once on the first press; the context-free *F1 up:: tears it down.
+    if (_flowHelpGui)
+        return
     rows := ["Copilot key   hold to dictate   🔒"]
     for t in _flowTriggers
         rows.Push(_FlowTriggerLabel(t) "   hold to dictate")
