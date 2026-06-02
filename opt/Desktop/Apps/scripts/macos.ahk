@@ -2,6 +2,7 @@
 #SingleInstance Force
 #Include flow-calib.ahk      ; overlay-offset calibration data layer (DEFAULT + ini load/save)
 #Include flow-triggers.ahk   ; extra-trigger-key data + policy layer (load/save/normalize/compose/validate/manifest)
+#Include lib\hotcorners.ahk  ; outer-corner-only hot-corner geometry layer (multi-monitor, hotplug-safe)
 
 ; ==============================================================================
 ;  macOS-style shortcuts for Windows  (AutoHotkey v2)
@@ -808,7 +809,12 @@ HotCorners()
     CoordMode "Mouse", "Screen"
     MouseGetPos &mx, &my
     T := 3
-    inTopRight := (my <= T) && (mx >= A_ScreenWidth - T)
+    ; Recompute the corner every tick from the rightmost monitor's REAL bounds so
+    ; the geometry self-heals on hotplug/resolution/arrangement changes. Only the
+    ; single true top-right corner of the rightmost monitor fires (NOT the seam,
+    ; NOT the whole top edge — that A_ScreenWidth bug was issue #93).
+    target := _HotCornerTarget(_EnumMonitors())
+    inTopRight := (target != "") && _InHotCorner(mx, my, target, T)
     if (inTopRight && armed)
     {
         armed := false
