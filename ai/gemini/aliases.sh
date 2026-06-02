@@ -30,4 +30,5 @@ gemini-yolo() {
 }
 
 alias sync-skills="bash $HOME/opt/scripts/system/sync-skills.sh"
+alias sync-teams="bash $HOME/opt/scripts/system/install_ai_teams.sh"
 alias sync-forks="bash $HOME/opt/scripts/../../ai/skills/sync-forks/scripts/check_and_sync_forks.sh"
