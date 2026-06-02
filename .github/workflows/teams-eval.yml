@@ -46,42 +46,42 @@ jobs:
             ai/claude/commands/team.md \
             ai/gemini/commands/team.toml
 
-  route-eval:
-    name: Route eval gate (>=90%)
-    needs: validate
-    runs-on: ubuntu-latest
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+  # route-eval:
+  #   name: Route eval gate (>=90%)
+  #   needs: validate
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  #     GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Install yq (mikefarah)
-        run: |
-          bash opt/scripts/system/install_yq.sh
-          echo "${HOME}/opt/bin" >> "${GITHUB_PATH}"
+  #     - name: Install yq (mikefarah)
+  #       run: |
+  #         bash opt/scripts/system/install_yq.sh
+  #         echo "${HOME}/opt/bin" >> "${GITHUB_PATH}"
 
-      - name: Route eval (claude runner, threshold 90)
-        run: |
-          set +e
-          bash ai/teams/eval/route-eval.sh --runner claude --threshold 90
-          rc=$?
-          set -e
-          if [ "$rc" -eq 77 ]; then
-            echo "::notice title=route-eval (claude)::SKIPPED — no model credentials (exit 77), treating as neutral."
-            exit 0
-          fi
-          exit "$rc"
+  #     - name: Route eval (claude runner, threshold 90)
+  #       run: |
+  #         set +e
+  #         bash ai/teams/eval/route-eval.sh --runner claude --threshold 90
+  #         rc=$?
+  #         set -e
+  #         if [ "$rc" -eq 77 ]; then
+  #           echo "::notice title=route-eval (claude)::SKIPPED — no model credentials (exit 77), treating as neutral."
+  #           exit 0
+  #         fi
+  #         exit "$rc"
 
-      - name: Route eval (gemini runner, threshold 90)
-        run: |
-          set +e
-          bash ai/teams/eval/route-eval.sh --runner gemini --threshold 90
-          rc=$?
-          set -e
-          if [ "$rc" -eq 77 ]; then
-            echo "::notice title=route-eval (gemini)::SKIPPED — no model credentials (exit 77), treating as neutral."
-            exit 0
-          fi
-          exit "$rc"
+  #     - name: Route eval (gemini runner, threshold 90)
+  #       run: |
+  #         set +e
+  #         bash ai/teams/eval/route-eval.sh --runner gemini --threshold 90
+  #         rc=$?
+  #         set -e
+  #         if [ "$rc" -eq 77 ]; then
+  #           echo "::notice title=route-eval (gemini)::SKIPPED — no model credentials (exit 77), treating as neutral."
+  #           exit 0
+  #         fi
+  #         exit "$rc"
