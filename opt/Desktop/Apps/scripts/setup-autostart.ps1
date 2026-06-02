@@ -16,11 +16,23 @@ $taskName = 'macOS Hotkeys'
 $user     = "$env:USERDOMAIN\$env:USERNAME"
 $log      = 'C:\Windows\Temp\macos-hotkeys-setup.log'
 
-# AutoHotkey launcher: prefer the Store-edition execution alias, fall back to the
-# standard per-user v2 install (the alias can be missing under elevation).
-$alias  = "$env:LOCALAPPDATA\Microsoft\WindowsApps\AutoHotkey.exe"
-$altExe = "$env:LOCALAPPDATA\Programs\AutoHotkey\v2\AutoHotkey64.exe"
-$exe    = if (Test-Path $alias) { $alias } elseif (Test-Path $altExe) { $altExe } else { $alias }
+# AutoHotkey v2 launcher. Check, in priority order: the Store execution alias, the
+# per-user v2 install, then the MACHINE-WIDE v2 install under Program Files — winget
+# (AutoHotkey.AutoHotkey) installs there, so a %LOCALAPPDATA%-only search misses it
+# and the script would wrongly throw "AutoHotkey not found". Fall back to whatever
+# AutoHotkey64.exe / AutoHotkey.exe is on PATH.
+$ahkCandidates = @(
+    "$env:LOCALAPPDATA\Microsoft\WindowsApps\AutoHotkey.exe",
+    "$env:LOCALAPPDATA\Programs\AutoHotkey\v2\AutoHotkey64.exe",
+    "$env:ProgramFiles\AutoHotkey\v2\AutoHotkey64.exe",
+    "${env:ProgramFiles(x86)}\AutoHotkey\v2\AutoHotkey64.exe"
+)
+$exe = $ahkCandidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+if (-not $exe) {
+    $onPath = Get-Command AutoHotkey64.exe, AutoHotkey.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($onPath) { $exe = $onPath.Source }
+}
+if (-not $exe) { $exe = $ahkCandidates[0] }  # keep a value so the Test-Path check below reports it
 
 # Resolve macos.ahk to a LOCAL path. A logon task must NOT point at a network
 # path: if this script is run from \\wsl.localhost\... (the WSL repo mounted into
@@ -47,8 +59,21 @@ if ($PSScriptRoot -like '\\*') {
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
             ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
-    Start-Process powershell -Verb RunAs -ArgumentList @(
-        '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$PSCommandPath`""
+    # Relaunch elevated. Two WSL-specific hazards will otherwise make the elevated
+    # child die on startup *after* the user approves UAC — so nothing happens and no
+    # log is written (the symptom that made this look like "UAC never worked"):
+    #   1. When install_windows.sh launches this script via WSL interop,
+    #      $PSCommandPath is a \\wsl.localhost\... UNC path. An elevated (admin)
+    #      process runs in a different security context that cannot read that
+    #      per-user WSL share, so `-File <UNC>` fails to load. Relaunch the LOCAL
+    #      deployed Desktop copy instead when we detect a UNC self-path.
+    #   2. The elevated child inherits THIS process's working directory, which under
+    #      WSL is also \\wsl.localhost\... — equally inaccessible to admin, so the
+    #      child can't even initialize. Pin -WorkingDirectory to a local path.
+    $selfDeployed = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Apps\scripts\setup-autostart.ps1'
+    $selfLocal = if ($PSCommandPath -like '\\*' -and (Test-Path $selfDeployed)) { $selfDeployed } else { $PSCommandPath }
+    Start-Process powershell -Verb RunAs -WorkingDirectory $env:SystemRoot -ArgumentList @(
+        '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$selfLocal`""
     )
     return
 }

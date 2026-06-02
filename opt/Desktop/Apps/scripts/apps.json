@@ -27,12 +27,14 @@
   {
     "Name": "Spotify",
     "Id": "Spotify.Spotify",
-    "Match": "Spotify"
+    "Match": "Spotify",
+    "Exe": "Spotify.exe"
   },
   {
     "Name": "Apple iTunes",
     "Id": "Apple.iTunes",
-    "Match": "iTunes"
+    "Match": "iTunes",
+    "Elevated": true
   },
   {
     "Name": "Antigravity",
