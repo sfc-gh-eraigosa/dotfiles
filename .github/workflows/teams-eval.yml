@@ -1,0 +1,87 @@
+name: AI Teams Eval
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'ai/teams/**'
+      - 'opt/scripts/system/install_ai_teams.sh'
+      - '.github/workflows/teams-eval.yml'
+  pull_request:
+    paths:
+      - 'ai/teams/**'
+      - 'opt/scripts/system/install_ai_teams.sh'
+      - '.github/workflows/teams-eval.yml'
+
+# Cancel superseded runs on the same ref so only the latest commit is evaluated.
+concurrency:
+  group: teams-eval-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate teams source + routing artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install yq (mikefarah)
+        run: |
+          bash opt/scripts/system/install_yq.sh
+          echo "${HOME}/opt/bin" >> "${GITHUB_PATH}"
+
+      - name: Validate teams source
+        run: bash ai/teams/validate.sh
+
+      - name: Installer test
+        run: bash opt/scripts/system/install_ai_teams_test.sh
+
+      - name: Routing artifacts are up to date
+        run: |
+          bash ai/teams/gen-index.sh
+          git diff --exit-code -- \
+            ai/teams/INDEX.md \
+            'ai/teams/**/GEMINI.md' \
+            ai/claude/commands/team.md \
+            ai/gemini/commands/team.toml
+
+  route-eval:
+    name: Route eval gate (>=90%)
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install yq (mikefarah)
+        run: |
+          bash opt/scripts/system/install_yq.sh
+          echo "${HOME}/opt/bin" >> "${GITHUB_PATH}"
+
+      - name: Route eval (claude runner, threshold 90)
+        run: |
+          set +e
+          bash ai/teams/eval/route-eval.sh --runner claude --threshold 90
+          rc=$?
+          set -e
+          if [ "$rc" -eq 77 ]; then
+            echo "::notice title=route-eval (claude)::SKIPPED — no model credentials (exit 77), treating as neutral."
+            exit 0
+          fi
+          exit "$rc"
+
+      - name: Route eval (gemini runner, threshold 90)
+        run: |
+          set +e
+          bash ai/teams/eval/route-eval.sh --runner gemini --threshold 90
+          rc=$?
+          set -e
+          if [ "$rc" -eq 77 ]; then
+            echo "::notice title=route-eval (gemini)::SKIPPED — no model credentials (exit 77), treating as neutral."
+            exit 0
+          fi
+          exit "$rc"

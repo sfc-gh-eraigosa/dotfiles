@@ -42,11 +42,21 @@ phase so any wakeup can resume cleanly.
 ---
 
 ## STATE
-- **Current phase:** P8 (eval + CI) next — then P9 (teams-tune skill), P10 (final)
-- **P7 DONE:** install.sh calls install_ai_teams.sh after sync-plugins; `sync-teams`
-  alias (claude+gemini); root GEMINI.md row; MODEL_PARAMS.md rewritten to tier+model-map;
-  README Install&Use + Adding-a-Team updated; opt/scripts/system/GEMINI.md registry.
-  Shells syntax-clean; validate ✓; 26/26 tests; aliases_test 8/8.
+- **Current phase:** P10 (final review) in progress.
+- **P8 DONE:** eval/cases.yaml (49 cases, all 21 members + 6 squad/ambiguous),
+  eval/route-eval.sh (roster-built candidates, claude/gemini runners, top-1 team+member,
+  confusion matrix, exit 0/1/77, deterministic --check), .github/workflows/teams-eval.yml
+  (validate job: validate.sh + tests + gen-index drift; route-eval job: 90% gate both
+  runners, 77→neutral skip, SHA-pinned). **Principal caught a CRITICAL scoring bug**
+  (hyphenated team names terraform-aws/ai-ci split at first hyphen) — FIXED: scoring now
+  resolves pick against the roster; verified with stub runner (team→terraform-aws, not
+  terraform). --check OK; YAML OK; validate ✓; 26/26; no drift.
+- **P9 DONE:** src/teams-tune/skill/SKILL.md.
+- **P10 plan:** final whole-branch principal review (silent-failure/quality); confirm
+  full suite; update spec risks if antigravity/CI-creds reality changed; final checkpoint;
+  STOP the loop (omit ScheduleWakeup) and summarize on PR #92.
+- **P7 DONE:** install.sh wiring; sync-teams alias; root GEMINI.md row; MODEL_PARAMS
+  rewritten to tier+model-map; README + registry. Shells clean; validate ✓; 26/26; 8/8.
 - **Completed:** spec (#92); plan; P1 (322316d); **P2** 21 personas (review ok=true);
   **P3** installer (4 emitters, idempotent); **P4** validate.sh (✓21);
   **P5** install_ai_teams_test.sh (26/26 pass); **P6** gen-index.sh → INDEX.md,
