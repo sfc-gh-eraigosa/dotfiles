@@ -32,17 +32,25 @@ rule for `main`).
 
 ## Required status checks
 
-Add each of these as a required check (they correspond to the four jobs in
-`.github/workflows/docker-image.yml`):
+Add each of these as a required check. The string GitHub matches is the
+**check-run name**, which is the job's `name:` field (its display title) —
+**not** the YAML job ID. Use the left column below:
 
-- `lint`
-- `unit-tests`
-- `shell-tests`
-- `build-and-validate`
+| Required-check name (use this) | Workflow job ID |
+| :--- | :--- |
+| `Lint (go + shell + markdown + actions)` | `lint` |
+| `Run Unit Tests` | `unit-tests` |
+| `Run Shell Test Drivers` | `shell-tests` |
+| `Build and Integration Test` | `build-and-validate` |
 
-> The check name GitHub sees is the **job ID** (the YAML key), not the
-> `name:` field. Don't add `Lint (go + shell + markdown + actions)` —
-> add `lint`.
+> **Match the `name:` field, never the job ID.** Adding the job ID
+> `build-and-validate` as a required check creates a context that GitHub
+> never reports against (the real check is named `Build and Integration
+> Test`), which **permanently blocks every merge / deadlocks the queue**.
+> If you ever rename a job's `name:`, update the required-check string here
+> and in branch protection in the same change. (These four are already
+> wired as required checks on `main` via the API; this table is the
+> reference for re-applying or auditing them.)
 
 > **`lint` is currently warn-only.** Its linters run and report findings,
 > but the steps are `continue-on-error: true` so the job reports green
