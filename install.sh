@@ -367,6 +367,14 @@ if [ -f "${BASE_DIR}/opt/scripts/system/sync-plugins.sh" ]; then
     "${BASE_DIR}/opt/scripts/system/sync-plugins.sh" || echo "WARNING: plugin sync reported problems; continuing."
 fi
 
+# Install AI teams: transform ai/teams personas into native agents for Claude, Gemini,
+# Antigravity, and Ollama. Runs after yq + the assistant configs. Validates the source
+# first; each tool emit degrades gracefully, so a teams problem never aborts bootstrap.
+if [ -f "${BASE_DIR}/opt/scripts/system/install_ai_teams.sh" ]; then
+    echo "Installing AI teams..."
+    "${BASE_DIR}/opt/scripts/system/install_ai_teams.sh" || echo "WARNING: AI teams install reported problems; continuing."
+fi
+
 # build and install gss
 if [ -f "${BASE_DIR}/src/gss/build.sh" ]; then
     echo "Installing gss (dotfiles manager)..."
