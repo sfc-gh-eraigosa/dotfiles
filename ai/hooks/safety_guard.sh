@@ -191,6 +191,39 @@ if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])gss[[:space:]]+feature[[:space:]]+che
     deny "gss feature checkpoint resolves the worker from cwd, but $GSS_EFFECTIVE_DIR is not a feature worker worktree. Run it from inside the worktree, or pass --worker <feature/user/purpose>."
 fi
 
+# --- 12. Direct push to the default branch (main) ---
+# AI agents working in sfc-gh-eraigosa/dotfiles must NEVER push directly to
+# the default branch. Every change must go through a PR so automation and
+# humans can review it before it lands. Use `gss pr` (or `gh pr create
+# --draft`) instead — the gss skill handles the full feature-branch workflow.
+#
+# Patterns blocked:
+#   git push <remote> main
+#   git push <remote> HEAD:main
+#   git push <remote> HEAD:refs/heads/main
+#   git push <remote> <branch>:main   (force-push variant)
+# Patterns allowed:
+#   git push origin feature/my-work   (non-main target)
+#   git push --dry-run origin main    (introspection only)
+#   git push origin :main             (delete branch — intentional, separate rule)
+if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])git[[:space:]]+push([[:space:]]+[^[:space:]]+)*[[:space:]]+(HEAD:refs/heads/main|HEAD:main|[^[:space:]]+:main|main)([[:space:]]|$) ]]; then
+    # Allow --dry-run / -n (read-only introspection)
+    if ! [[ "$CMD_SCRUBBED" =~ git[[:space:]]+push[[:space:]]+(${SAFE_CHARS}+[[:space:]])*(--dry-run|-n)([[:space:]]|$) ]]; then
+        deny "Direct push to 'main' is prohibited in sfc-gh-eraigosa/dotfiles. Create a feature branch and open a Draft PR via 'gss pr' or 'gh pr create --draft' instead."
+    fi
+fi
+
+# --- 13. gh CLI direct-push and PR merge to main without a PR ---
+# Block `gh repo` mutations that bypass the PR workflow entirely.
+# gh pr merge without --rebase/--squash/--merge flag review is fine (the gss
+# skill owns that), but `gh repo edit --default-branch main` or any form of
+# forcing a push outside a PR is blocked.
+if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])gh[[:space:]]+repo[[:space:]]+(edit|delete|rename|transfer|archive)([[:space:]]|$) ]]; then
+    if [[ "$CMD_SCRUBBED" =~ --default-branch[[:space:]]+main([[:space:]]|$) ]]; then
+        deny "Changing the default branch via 'gh repo edit --default-branch' is prohibited without explicit user approval."
+    fi
+fi
+
 # All checks passed
 [ "$TOOL_NAME" = "run_shell_command" ] && echo '{"decision": "allow"}'
 exit 0

@@ -37,6 +37,16 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 
 ## Git Workflow
 
+### Push Safety — No Direct Pushes to `main`
+
+> **This rule applies to ALL AI agents (Claude Code, Gemini CLI, Anti-Gravity CLI, and any future tool) working in this repository.**
+
+- **Never push directly to `main`.** Every change, regardless of size, must go through a feature branch and a Draft PR.
+- Use `gss pr` (the canonical path) or `gh pr create --draft` to open a Draft PR. The PR body must follow the What / Why / Impact / Testing format from the gss skill.
+- `safety_guard.sh` rule 12 enforces this at the hook layer — `git push <remote> main`, `git push <remote> HEAD:main`, and all `<branch>:main` refspec forms are blocked at the PreToolUse stage. `--dry-run` is allowed for introspection.
+- If you find yourself about to run `git push origin main` (or any equivalent): **stop, create a feature branch, and open a PR instead**.
+- This is not a branch-protection rule (those are managed elsewhere). It is an agent-layer soft guard that redirects autonomous sessions toward the safe path.
+
 - The **git-safe-sync (gss)** skill is the canonical commit + push path. Use the `/sync` slash command for the common case (commit + push to main) — it scaffolds the introspect → propose → confirm → execute flow.
 - **Confirmation is mandatory** regardless of the user phrasing ("sync", "push", "commit it"): always present options via `AskUserQuestion` before any `git add` / `git commit` / `gss push` / `gss pr`. The gss skill's "Mandatory Confirmation" rule overrides any autonomous-mode preference.
 - **Two-call recipe for gss push**: the `safety_guard.sh` hook intentionally blocks chained `mkdir + token + gss push` in a single Bash call. Always issue the token-generation line as one Bash call and `gss push` (or `gss pr` / `gss sync`) as a separate second call.

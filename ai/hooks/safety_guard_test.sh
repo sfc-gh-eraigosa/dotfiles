@@ -177,6 +177,30 @@ assert_exit 2 Bash "cd $HOME/git/dotfiles && gss feature checkpoint" "checkpoint
 assert_exit 0 Bash "gss feature checkpoint --worker auth/erai/api"   "checkpoint --worker is fine anywhere"
 assert_exit 0 Bash "cd $WT_PROBE && gss feature checkpoint"          "bare checkpoint inside a worker worktree"
 
+# === Rule 12: Direct push to main is blocked ===
+# Any form of `git push <remote> main` (or HEAD:main, HEAD:refs/heads/main,
+# <branch>:main) must be blocked. --dry-run forms must be allowed.
+assert_exit 2 Bash "git push origin main"                          "git push origin main (blocked)"
+assert_exit 2 Bash "git push origin HEAD:main"                     "git push origin HEAD:main (blocked)"
+assert_exit 2 Bash "git push origin HEAD:refs/heads/main"          "git push origin HEAD:refs/heads/main (blocked)"
+assert_exit 2 Bash "git push origin my-branch:main"                "git push origin branch:main refspec (blocked)"
+assert_exit 2 Bash "git push --force origin main"                  "git push --force origin main (blocked)"
+assert_exit 2 Bash "git push -f origin main"                       "git push -f origin main (blocked)"
+# Regression: push to a non-main branch must pass
+assert_exit 0 Bash "git push origin feature/my-work"               "git push to feature branch (allowed)"
+assert_exit 0 Bash "git push origin main-backup"                   "git push to main-backup branch (allowed, not main)"
+assert_exit 0 Bash "git push origin HEAD"                          "git push origin HEAD (no target, allowed)"
+# --dry-run / -n must pass (introspection only)
+assert_exit 0 Bash "git push --dry-run origin main"                "git push --dry-run origin main (allowed)"
+assert_exit 0 Bash "git push -n origin main"                       "git push -n origin main (allowed)"
+# Branch delete (:main) is a separate intentional operation — not blocked here
+assert_exit 0 Bash "git push origin :main"                         "git push delete main ref (allowed)"
+
+# === Rule 13: gh repo default-branch change ===
+assert_exit 2 Bash "gh repo edit --default-branch main"            "gh repo edit --default-branch main (blocked)"
+assert_exit 0 Bash "gh repo edit --description 'updated'"          "gh repo edit description only (allowed)"
+assert_exit 0 Bash "gh repo view"                                  "gh repo view (read-only, allowed)"
+
 # Clean up
 rm -f "$HOME/.config/gss/approval.token"
 
