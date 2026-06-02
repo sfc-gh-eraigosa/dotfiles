@@ -108,10 +108,14 @@ runner_available() {
   esac
 }
 
+# Run the model from a neutral, project-free cwd so a repo CLAUDE.md/GEMINI.md does not
+# contaminate the routing decision — the classifier must judge from the prompt alone.
+NEUTRAL_CWD="$(mktemp -d 2>/dev/null || echo /tmp)"
+trap 'rm -rf "$NEUTRAL_CWD" 2>/dev/null || true' EXIT
 call_model() {  # $1=prompt -> raw stdout
   case "$RUNNER" in
-    claude) claude -p "$1" 2>/dev/null ;;
-    gemini) gemini -p "$1" 2>/dev/null ;;
+    claude) ( cd "$NEUTRAL_CWD" && claude -p "$1" 2>/dev/null ) ;;
+    gemini) ( cd "$NEUTRAL_CWD" && gemini -p "$1" 2>/dev/null ) ;;
     *) echo "route-eval: unknown runner '$RUNNER'" >&2; return 1 ;;
   esac
 }
@@ -139,19 +143,27 @@ build_prompt() {  # $1=task -> prompt on stdout
 
 # Trim model output to the first valid "<team>-<role>" token or squad name.
 parse_pick() {  # stdin -> pick on stdout (empty if none)
-  local raw token i sq
+  local raw last i sq
   raw="$(cat)"
-  # Candidate ids first (longest match wins via the source order; check each).
+  # 1) Prefer the model's final non-empty line as an EXACT id/squad (strict answer).
+  last="$(printf '%s' "$raw" | grep -v '^[[:space:]]*$' | tail -1 | tr -d '[:space:]')"
+  last="${last//\`/}"; last="${last//\"/}"; last="${last//\'/}"; last="${last//./}"; last="${last//\*/}"
   for i in "${!CAND_ID[@]}"; do
-    if grep -qiw -- "${CAND_ID[$i]}" <<<"$raw"; then echo "${CAND_ID[$i]}"; return; fi
+    [ "${last,,}" = "${CAND_ID[$i],,}" ] && { echo "${CAND_ID[$i]}"; return; }
+  done
+  while IFS= read -r sq; do
+    [ -n "$sq" ] && [ "${last,,}" = "${sq,,}" ] && { echo "$sq"; return; }
+  done < <(yq -r '.squads | keys | .[]' "$TEAMS_YAML")
+  # 2) Else first roster id / squad that appears as a whole word anywhere in the output.
+  for i in "${!CAND_ID[@]}"; do
+    grep -qiw -- "${CAND_ID[$i]}" <<<"$raw" && { echo "${CAND_ID[$i]}"; return; }
   done
   while IFS= read -r sq; do
     [ -n "$sq" ] || continue
-    if grep -qiw -- "$sq" <<<"$raw"; then echo "$sq"; return; fi
+    grep -qiw -- "$sq" <<<"$raw" && { echo "$sq"; return; }
   done < <(yq -r '.squads | keys | .[]' "$TEAMS_YAML")
-  # Fallback: first token shaped like word-word
-  token="$(grep -oiE '[a-z-]+-[a-z]+' <<<"$raw" | head -1)"
-  echo "$token"
+  # 3) No valid candidate found -> empty (scored as a miss). No loose-token fallback:
+  #    a regex guess would resolve to a non-candidate and silently corrupt the score.
 }
 
 # =====================================================================================
