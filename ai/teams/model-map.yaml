@@ -1,0 +1,40 @@
+# model-map.yaml — the common resource mapping abstract tiers to concrete
+# per-tool model + effort/temperature settings.
+#
+# Personas (ai/teams/<team>/the_*.md) declare ONLY a `tier:` hint. The installer
+# (opt/scripts/system/install_ai_teams.sh) resolves that tier here when emitting
+# each tool's native agent. This is the single place model churn is fixed — update
+# a slug once and every agent that uses the tier picks it up on the next sync.
+#
+# Tiers: fast | standard | think | deep-think
+#   claude:      model = opus|sonnet|haiku|<id>|inherit ; effort = low|medium|high|xhigh|max
+#   gemini:      model = <id>|inherit                   ; temperature = 0.0–2.0
+#   antigravity: model = <id>                           ; effort = low|medium|high|max
+#   ollama:      model = <tag>                          ; num_ctx = context window
+schema_version: 1
+
+tiers:
+  fast:
+    description: Automation, CI, rote tasks — fastest throughput.
+    claude:      { model: haiku,            effort: low }
+    gemini:      { model: gemini-2.0-flash, temperature: 0.4 }
+    antigravity: { model: gpt-4.1-mini,     effort: low }
+    ollama:      { model: "qwen2.5-coder:1.5b", num_ctx: 4096 }
+  standard:
+    description: Day-to-day coding.
+    claude:      { model: sonnet,           effort: medium }
+    gemini:      { model: gemini-2.5-flash, temperature: 0.3 }
+    antigravity: { model: gpt-4.1,          effort: medium }
+    ollama:      { model: "qwen2.5-coder:7b", num_ctx: 8192 }
+  think:
+    description: Complex problems, code review.
+    claude:      { model: sonnet,           effort: high }
+    gemini:      { model: gemini-2.5-flash, temperature: 0.2 }
+    antigravity: { model: gpt-4.1,          effort: high }
+    ollama:      { model: "qwen2.5:7b",     num_ctx: 8192 }
+  deep-think:
+    description: Architecture, high-stakes design.
+    claude:      { model: opus,             effort: high }
+    gemini:      { model: gemini-2.5-pro,   temperature: 0.2 }
+    antigravity: { model: o3,               effort: max }
+    ollama:      { model: "gemma3:27b",     num_ctx: 8192 }

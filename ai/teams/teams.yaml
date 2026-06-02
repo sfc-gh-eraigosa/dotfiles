@@ -1,0 +1,46 @@
+# teams.yaml — registry of agent teams + cross-team squads.
+#
+# `teams`  : one row per ai/teams/<team>/ folder. Drives display metadata, the
+#            default color, and the default tier for the team's members.
+# `squads` : named cross-team collections for multi-team tasks. Members are
+#            <team>/<role> references; the installer + /team command + routing eval
+#            resolve them. validate.sh asserts every reference points at a real agent.
+schema_version: 1
+
+teams:
+  web:
+    display: "Web Development"
+    symbol: "🎨"
+    color: purple
+    default_tier: standard
+  go:
+    display: "Go Development"
+    symbol: "🐹"
+    color: cyan
+    default_tier: standard
+  terraform-aws:
+    display: "Terraform & AWS"
+    symbol: "☁️"
+    color: orange
+    default_tier: standard
+  ai-ci:
+    display: "AI & CI"
+    symbol: "🤖"
+    color: green
+    default_tier: standard
+  architecture:
+    display: "Architecture"
+    symbol: "🏛️"
+    color: blue
+    default_tier: deep-think
+
+squads:
+  fullstack-feature:
+    description: "Build a user-facing feature end to end (UI + API + service + design)."
+    members: [web/fe, web/api, go/godev, architecture/sysarch]
+  secure-release:
+    description: "Security gate before shipping (code, web surface, threat model)."
+    members: [go/gosec, web/websec, architecture/secarch]
+  infra-rollout:
+    description: "Provision and ship infrastructure changes safely."
+    members: [terraform-aws/infra, terraform-aws/platform, terraform-aws/cloudsec]
