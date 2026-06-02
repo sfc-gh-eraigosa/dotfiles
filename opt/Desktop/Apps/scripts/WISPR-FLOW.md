@@ -39,7 +39,7 @@ Copilot key (Win+Shift+F23)
 | **Esc** *(only while dictating)* | Cancel — reset, no paste; normal Esc otherwise |
 | **F1** (hold, dictation ON) | Help overlay listing every live binding; release to dismiss |
 | **F9** | Toggle manage-triggers mode — add/remove your own trigger keys (centered rainbow HUD) |
-| **F10** | Toggle the whole dictation flow on/off (centered popup shows ON/OFF) |
+| **F10** | Toggle the whole dictation flow on/off (centered popup shows ON/OFF). **Starts OFF at install** — press F10 once to enable so a fresh box never grabs the Copilot key until you opt in |
 | **F11** | Toggle calibration mode — re-capture the overlay click offsets (centered rainbow HUD) |
 
 > While dictating, the "🎤 Listening…" / "⏳ Transcribing…" tips carry a trailing

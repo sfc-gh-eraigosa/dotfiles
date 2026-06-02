@@ -507,6 +507,11 @@ if [ -f "$WIN_SETUP_MARKER" ]; then
     printf '%s\n' "  ${_dim}The Copilot key itself needs no Flow shortcut — PowerToys + macos.ahk drive it.${_x}"
     printf '%s\n' "  ${_dim}This step is manual — Flow keeps its settings in a binary, cloud-synced store.${_x}"
     printf '%s\n' "  ${_dim}Full guide:${_x} ${_sky}<Desktop>\\Apps\\scripts\\WISPR-FLOW.md${_x}"
+    printf '\n'
+    printf '%s\n' "  ${_mint}♪${_x} ${_b}Dictation starts OFF${_x} — press ${_sky}F10${_x} once to turn the dictation toggle ${_b}ON${_x}."
+    printf '%s\n' "  ${_dim}The AutoHotkey setup (macos.ahk) powers a hotkey-automation workflow: extra${_x}"
+    printf '%s\n' "  ${_dim}trigger keys via ${_x}${_sky}F9${_x}${_dim}, calibrate via ${_x}${_sky}F11${_x}${_dim}, hold ${_x}${_sky}F1${_x}${_dim} for help — and it overrides${_x}"
+    printf '%s\n' "  ${_dim}Flow's built-in hands-free mode so the Copilot key drives dictation instead.${_x}"
     printf '%s\n' "$(_rainbow "$_rule" 4)"
     printf '\n'
     unset -f _rainbow; unset _hues _sky _mint _dim _p _rule _title
@@ -526,6 +531,11 @@ if [ -f "$WIN_SETUP_MARKER" ]; then
   The Copilot key itself needs no Flow shortcut - PowerToys + macos.ahk drive it.
   This step is manual - Flow keeps its settings in a binary, cloud-synced store.
   Full guide: <Desktop>\Apps\scripts\WISPR-FLOW.md
+
+  - Dictation starts OFF - press F10 once to turn the dictation toggle ON.
+  The AutoHotkey setup (macos.ahk) powers a hotkey-automation workflow: extra
+  trigger keys via F9, calibrate via F11, hold F1 for help - and it overrides
+  Flow's built-in hands-free mode so the Copilot key drives dictation instead.
 ------------------------------------------------------------------------
 BANNER
   fi
