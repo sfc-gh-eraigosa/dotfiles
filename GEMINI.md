@@ -23,6 +23,14 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - **GEMINI.md + CLAUDE.md in every documented directory**: Whenever a new directory is added that contains tools, scripts, or documentation worth describing to AI agents, create a `GEMINI.md` in that directory and a `CLAUDE.md -> GEMINI.md` symlink alongside it (`ln -s GEMINI.md CLAUDE.md`). This ensures both Gemini CLI and Claude Code can navigate the repo from any subdirectory. The symlink keeps both agents in sync from a single source file. Add a link to the new `GEMINI.md` in this root file's Repository Structure section.
 - **Skills are shared**: `SKILL.md` files under `src/*/skill/` and `src/ssh-*/` drive both assistants. Edit once, benefit twice.
 
+## Asking the User (blocking questions must be colorized)
+
+- **Surface every must-answer question through the interactive prompt, not plain prose.** Whenever you need a decision from the user *before you can proceed* — a genuine fork you can't resolve from the request, the code, or a sensible default — present it via the assistant's interactive question tool so it renders as a **distinct, colorized prompt** that's impossible to miss in a wall of output. In Claude Code that is the **`AskUserQuestion`** tool; in Gemini CLI / other harnesses use the equivalent interactive confirmation/elicitation tool.
+- **Give real options.** List 2–4 concrete, mutually-exclusive choices; put the recommended one first and label it `(Recommended)`. The user can always pick "Other".
+- **Graceful fallback when no interactive tool exists** (e.g. a headless or pipe-driven run): format the question as a visually distinct block so it still stands out — a blockquote led by a bold marker, e.g. `> ⚠️ **NEEDS YOUR INPUT:** …` — never a sentence buried mid-paragraph.
+- **Don't overuse it.** Skip the prompt for trivial choices with an obvious default or facts you can verify yourself — pick the sensible option, state it in passing, and proceed. Reserve the colorized prompt for decisions whose answer actually changes what you do next.
+- This generalizes the mandatory-confirmation rule under **Git Workflow** below (which already routes `git add` / `commit` / `gss push` / `gss pr` through `AskUserQuestion`): that gate is one instance of this broader convention.
+
 ## Portability & Best Practices
 
 - **Use $HOME**: Always use `${HOME}` or `~` instead of absolute home paths (e.g., `/home/wenlock` or `/Users/eraigosa`) in scripts, aliases, and configuration files to ensure they are portable across different systems and users.
