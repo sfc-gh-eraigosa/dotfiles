@@ -42,7 +42,11 @@ phase so any wakeup can resume cleanly.
 ---
 
 ## STATE
-- **Current phase:** P7 (wiring/docs) next
+- **Current phase:** P8 (eval + CI) next — then P9 (teams-tune skill), P10 (final)
+- **P7 DONE:** install.sh calls install_ai_teams.sh after sync-plugins; `sync-teams`
+  alias (claude+gemini); root GEMINI.md row; MODEL_PARAMS.md rewritten to tier+model-map;
+  README Install&Use + Adding-a-Team updated; opt/scripts/system/GEMINI.md registry.
+  Shells syntax-clean; validate ✓; 26/26 tests; aliases_test 8/8.
 - **Completed:** spec (#92); plan; P1 (322316d); **P2** 21 personas (review ok=true);
   **P3** installer (4 emitters, idempotent); **P4** validate.sh (✓21);
   **P5** install_ai_teams_test.sh (26/26 pass); **P6** gen-index.sh → INDEX.md,
