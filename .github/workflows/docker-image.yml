@@ -19,6 +19,23 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+    # Phase 7 of CI hygiene (issue #46 / PR #48): draft-PR fast path. GitHub's
+    # DEFAULT pull_request activity types are opened/synchronize/reopened. None
+    # of those fire when a PR flips draft->ready or when a label is added or
+    # removed — so without the extra types below, the `build-and-validate` gate
+    # (which keys off draft-status and the `ready-for-merge` label) would never
+    # re-evaluate after promotion or labeling, and the heavy job would stay
+    # skipped until the next code push. We therefore opt in explicitly:
+    #   - opened/synchronize/reopened: the defaults, RE-STATED — once you
+    #     specify `types:` the implicit default list is REPLACED, not extended,
+    #     so omitting these would silently drop normal push-to-PR CI for every
+    #     job in this file (the fast jobs share this trigger block too).
+    #   - ready_for_review: fires when a draft is marked "Ready for review";
+    #     this is what lets build-and-validate start the moment a PR leaves draft.
+    #   - labeled / unlabeled: fire when `ready-for-merge` is added or removed,
+    #     so the gate re-runs (or correctly re-skips) on label churn even while
+    #     the PR is still a draft.
+    types: [ opened, synchronize, reopened, ready_for_review, labeled, unlabeled ]
   # Phase 6 of CI hygiene (issue #46). `merge_group:` is the synthetic-commit
   # event GitHub's merge queue dispatches BEFORE landing a PR on main. Every
   # job below is wired in as a required check via branch protection, so they
@@ -144,6 +161,23 @@ jobs:
 
   build-and-validate:
     name: Build and Integration Test
+    # Phase 7 of CI hygiene (issue #46 / PR #48). This is the SLOW job (docker
+    # build + integration suite + docker-in-docker), so we keep it OFF the
+    # draft-PR critical path while leaving the fast jobs (lint/unit/shell)
+    # running on every push. The gate runs build-and-validate when:
+    #   - the event is NOT a pull_request  -> covers `merge_group` (the merge
+    #     queue's required check; it MUST run or the queue hangs — see the
+    #     phase-6 note above) and `push` to main (post-merge validation). This
+    #     clause is the escape hatch: merge_group/push payloads carry no
+    #     `github.event.pull_request` object, so the two PR-specific clauses
+    #     below evaluate to null/false there rather than erroring.
+    #   - OR the PR is not a draft (`draft == false`, i.e. ready-for-review).
+    #   - OR the PR carries the `ready-for-merge` label, which forces the heavy
+    #     job to run even while the PR is still a draft (explicit opt-in).
+    # The pull_request `types:` list above (ready_for_review, labeled) is what
+    # makes GitHub re-dispatch the workflow when draft/label state changes so
+    # this gate is actually re-evaluated.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ready-for-merge')
     needs: unit-tests
     runs-on: ubuntu-latest
     env:
