@@ -48,53 +48,16 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-# Windows PowerShell 5.1 defaults to old TLS; force TLS 1.2 for the CDN.
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$AppName       = 'Wispr Flow'
-$ResolveLatest = 'https://dl.wisprflow.ai/windows/latest'   # 302 -> ...Setup-v<ver>.exe
-$MsiUrlFmt     = 'https://dl.wisprflow.com/wispr-flow/win32/x64/Wispr%20Flow-v{0}.msi'
-
-function Get-Installed {
-    # Look the app up across the standard uninstall hives. Returns the registry
-    # object (DisplayName/DisplayVersion/UninstallString/PSChildName=ProductCode)
-    # or $null.
-    $hives = @(
-        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
-        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
-        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
-    )
-    Get-ItemProperty $hives -ErrorAction SilentlyContinue |
-        Where-Object { $_.DisplayName -match 'Wispr\s*Flow' } |
-        Select-Object -First 1
-}
-
-function Test-Admin {
-    $id = [Security.Principal.WindowsIdentity]::GetCurrent()
-    (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
-        [Security.Principal.WindowsBuiltinRole]::Administrator)
-}
-
-function Resolve-LatestVersion {
-    # Follow the "latest" redirect WITHOUT auto-following, read Location, parse the
-    # version out of the EXE filename, and reuse it for the MSI URL.
-    try {
-        $req = [System.Net.WebRequest]::Create($ResolveLatest)
-        $req.Method = 'HEAD'
-        $req.AllowAutoRedirect = $false
-        $resp = $req.GetResponse()
-        $loc  = $resp.Headers['Location']
-        $resp.Close()
-        if ($loc -match 'v(\d+\.\d+\.\d+)') { return $Matches[1] }
-    } catch {
-        Write-Warning "Could not resolve latest Wispr Flow version: $($_.Exception.Message)"
-    }
-    return $null
-}
+# Shared MSI primitives (Get-WisprInstalled / Resolve-WisprLatestVersion /
+# Save-WisprMsi / Install-WisprMsi / Test-WisprAdmin), also used by setup-elevated.ps1
+# so the unified app step can install Wispr inside the single elevated batch.
+. (Join-Path $PSScriptRoot 'wispr-install-core.ps1')
+$AppName = $script:WisprAppName
 
 # --- Status ----------------------------------------------------------------------
 if ($Status) {
-    $i = Get-Installed
+    $i = Get-WisprInstalled
     if ($i) { Write-Host "$AppName installed: version $($i.DisplayVersion)" }
     else    { Write-Host "$AppName not installed." }
     return
@@ -102,90 +65,22 @@ if ($Status) {
 
 # --- Uninstall -------------------------------------------------------------------
 if ($Uninstall) {
-    $i = Get-Installed
+    $i = Get-WisprInstalled
     if (-not $i) { Write-Host "$AppName not installed; nothing to uninstall."; return }
     $code = $i.PSChildName   # MSI product code, e.g. {GUID}
     Write-Host "Uninstalling $AppName ($($i.DisplayVersion)) ..."
-    $verb = if (Test-Admin) { @{} } else { @{ Verb = 'RunAs' } }
+    $verb = if (Test-WisprAdmin) { @{} } else { @{ Verb = 'RunAs' } }
     $p = Start-Process msiexec.exe -ArgumentList @('/x', $code, '/quiet', '/norestart') -PassThru -Wait @verb
     if ($p.ExitCode -in 0, 3010) { Write-Host "Uninstalled." }
     else { throw "msiexec uninstall failed (exit $($p.ExitCode))." }
     return
 }
 
-# --- Install ---------------------------------------------------------------------
-$existing = Get-Installed
-if ($existing -and -not $Force) {
-    Write-Host "$AppName already installed (version $($existing.DisplayVersion)); skipping."
-    Write-Host "Re-run with -Force to reinstall, or -Latest to update. Setup steps: WISPR-FLOW.md"
-    return
-}
-
-# Decide which version to fetch.
-$ver = $Version
-if ($Latest) {
-    $resolved = Resolve-LatestVersion
-    if ($resolved) { $ver = $resolved; Write-Host "Latest Wispr Flow version: $ver" }
-    else { Write-Warning "Falling back to pinned version $ver." }
-}
-
-function Save-Msi {
-    param([string] $Url, [string] $Dest)
-    # Reuse a previously downloaded installer (e.g. after a cancelled UAC prompt)
-    # instead of re-fetching ~300 MB.
-    if ((Test-Path $Dest) -and ((Get-Item $Dest).Length -gt 50MB)) {
-        Write-Host "Using cached installer: $Dest"
-        return
-    }
-    Write-Host "Downloading from $Url ..."
-    Invoke-WebRequest -Uri $Url -OutFile $Dest -UseBasicParsing
-}
-
-$msiUrl = [string]::Format($MsiUrlFmt, $ver)
-$tmp    = Join-Path $env:TEMP "WisprFlow-v$ver.msi"
-
-Write-Host "Preparing $AppName v$ver ..."
-Write-Host "  $msiUrl"
-try {
-    Save-Msi -Url $msiUrl -Dest $tmp
-} catch {
-    # The pin can 404 once it ages out of the CDN; resolve latest and retry once.
-    if (-not $Latest) {
-        Write-Warning "Pinned download failed ($($_.Exception.Message)); resolving latest and retrying."
-        $resolved = Resolve-LatestVersion
-        if (-not $resolved) { throw "Could not download v$ver and could not resolve latest." }
-        $ver = $resolved; $msiUrl = [string]::Format($MsiUrlFmt, $ver)
-        $tmp = Join-Path $env:TEMP "WisprFlow-v$ver.msi"
-        Write-Host "Retrying with v${ver}: $msiUrl"
-        Save-Msi -Url $msiUrl -Dest $tmp
-    } else { throw }
-}
-
-# Sanity-check the download (the real MSI is ~300 MB; a tiny file means an error page).
-$sizeMB = [math]::Round((Get-Item $tmp).Length / 1MB, 1)
-if ($sizeMB -lt 50) { throw "MSI is only ${sizeMB} MB - looks like an error page, not the installer." }
-Write-Host "Installer ready (${sizeMB} MB): $tmp"
-
-Write-Host "Installing $AppName v$ver (silent; APPROVE the UAC prompt that appears) ..."
-$msiArgs = @('/i', "`"$tmp`"", '/quiet', '/norestart')
-$verb = if (Test-Admin) { @{} } else { @{ Verb = 'RunAs' } }
-try {
-    $p = Start-Process msiexec.exe -ArgumentList $msiArgs -PassThru -Wait @verb
-} catch {
-    # Most common cause: the UAC elevation prompt was dismissed/denied.
-    Write-Warning "Elevation was cancelled or failed: $($_.Exception.Message)"
-    Write-Host "The installer is cached (no re-download needed):"
-    Write-Host "  $tmp"
-    Write-Host "Finish it by re-running this script and approving UAC, or from an admin shell:"
-    Write-Host "  msiexec /i `"$tmp`" /quiet /norestart"
+# --- Install (shared core) -------------------------------------------------------
+$ok = Install-WisprMsi -Latest:$Latest -Version $Version -Force:$Force
+if (-not $ok) {
+    Write-Host "Install did not complete. Re-run this script and approve UAC, or run msiexec from an admin shell."
     exit 1
-}
-
-switch ($p.ExitCode) {
-    0     { Write-Host "$AppName v$ver installed.";                              Remove-Item $tmp -ErrorAction SilentlyContinue }
-    3010  { Write-Host "$AppName v$ver installed (a reboot is recommended).";    Remove-Item $tmp -ErrorAction SilentlyContinue }
-    1638  { Write-Host "Another version of $AppName is already installed.";      Remove-Item $tmp -ErrorAction SilentlyContinue }
-    default { throw "msiexec install failed (exit $($p.ExitCode)). Cached installer kept at $tmp" }
 }
 
 # --- Configure PowerToys so the Copilot key drives dictation ---------------------

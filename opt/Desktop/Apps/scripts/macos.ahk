@@ -163,7 +163,10 @@ FlowY     := 0
 FlowAutoPaste := false       ; Flow auto-pastes the transcript itself, so we do NOT Ctrl+V
                              ; (that would double-paste). Set true only if a Flow update
                              ; ever stops auto-pasting and we need to paste ourselves.
-FlowEnabled := true          ; F10 toggles this; when false the Copilot key does nothing.
+FlowEnabled := false         ; F10 toggles this; when false the Copilot key does nothing.
+                             ; Default OFF at install so a fresh box never grabs the Copilot
+                             ; key until the user opts in: press F10 once to turn dictation ON
+                             ; (the installer's end banner spells this out).
 _flowToastGui := ""          ; current toggle popup (so a rapid re-toggle replaces it)
 
 ; Pastel-rainbow palette shared by the F10/F11 toasts and the calibration HUD title
