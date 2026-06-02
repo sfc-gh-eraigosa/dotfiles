@@ -14,6 +14,7 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - `ai/gemini/`: Gemini-specific commands, TOML policies, and settings.
 - `ai/claude/`: Claude-specific commands, settings, and hook templates.
 - `ai/plugins.yaml`: Declarative manifest of the Claude Code plugins this repo installs/enables (ensure-only via `sync-plugins`). See [docs/ai-plugins.md](./docs/ai-plugins.md) for the plugin summary, first-usage examples, and the Gemini-extension path.
+- `ai/teams/`: Specialized agent teams installed as native subagents for Claude, Gemini, Antigravity, and Ollama. Personas declare an abstract `tier:` resolved via `model-map.yaml`; `install_ai_teams.sh` emits each tool's format and `/team` routes tasks to the right team/member. [See ai/teams/GEMINI.md](./ai/teams/GEMINI.md).
 
 ## Usage Guidelines
 
