@@ -37,8 +37,13 @@ else
   for t in $ALLOWED_TIERS; do
     [ "$(yq ".tiers | has(\"$t\")" "$MODEL_MAP")" = "true" ] || err "model-map: missing tier '$t'"
     for tool in $TOOLS; do
-      [ "$(yq ".tiers.\"$t\" | has(\"$tool\")" "$MODEL_MAP")" = "true" ] \
-        || err "model-map: tier '$t' missing tool '$tool'"
+      if [ "$(yq ".tiers.\"$t\" | has(\"$tool\")" "$MODEL_MAP")" = "true" ]; then
+        # leaf check: a missing model would resolve to literal "null" in emitted agents
+        [ "$(yq ".tiers.\"$t\".\"$tool\".model" "$MODEL_MAP")" != "null" ] \
+          || err "model-map: tier '$t' tool '$tool' missing 'model'"
+      else
+        err "model-map: tier '$t' missing tool '$tool'"
+      fi
     done
   done
 fi
@@ -81,6 +86,8 @@ while IFS= read -r f; do
 
   if [ -z "$(_fm_end "$f")" ]; then err "$rel: no YAML frontmatter"; continue; fi
   if ! get_fm "$f" | yq '.' >/dev/null 2>&1; then err "$rel: frontmatter does not parse"; continue; fi
+  # A triple-quote anywhere would terminate the Ollama Modelfile SYSTEM """...""" block early.
+  grep -q '"""' "$f" && err "$rel: contains '\"\"\"' which would corrupt the Ollama Modelfile"
 
   for k in $REQUIRED_KEYS; do
     v="$(fmq "$f" ".$k")"

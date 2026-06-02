@@ -94,6 +94,18 @@ assert_nofile "$H3/.config/ollama/teams" "--tool claude does not emit ollama"
 H4="$(mktemp -d)"; TEAMS_DEST_HOME="$H4" bash "$INSTALLER" --dry-run >/dev/null 2>&1
 assert_nofile "$H4/.claude" "--dry-run writes no files"
 
+# --- prune: a renamed/removed persona leaves no zombie agent ---------------------------
+ZOMBIE="$H/.claude/agents/teams/web/zzz_zombie.md"
+printf -- '---\nname: web-zzz\n---\nstale\n' > "$ZOMBIE"
+run_install "$H"
+assert_nofile "$ZOMBIE" "prune removes zombie claude agent on re-run"
+assert_eq "prune keeps the real 21 claude agents" \
+  "$(find "$H/.claude/agents/teams" -name '*.md' | wc -l | tr -d ' ')" "21"
+
+# --- no claude agent may emit a literal null color (guard the optional-color path) -----
+assert_eq "no claude agent emits a literal null color" \
+  "$(grep -rlE '^color:[[:space:]]*"?null"?' "$H/.claude/agents/teams" 2>/dev/null | wc -l | tr -d ' ')" "0"
+
 rm -rf "$H" "$H2" "$H3" "$H4"
 
 echo "== result: ${PASS} passed, ${FAIL} failed =="

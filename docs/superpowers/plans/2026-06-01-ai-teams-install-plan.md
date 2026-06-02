@@ -42,7 +42,14 @@ phase so any wakeup can resume cleanly.
 ---
 
 ## STATE
-- **Current phase:** P10 (final review) in progress.
+- **STATUS: COMPLETE.** All phases P1–P10 done, committed, checkpointed to PR #92.
+  Final suite green: bash -n all shells; validate.sh ✓ 21; install_ai_teams_test 29/29;
+  route-eval --check OK (49); gen-index no drift; teams-eval.yml YAML OK. Final principal
+  review verdict READY; its 2 latent-Major findings (ollama `"""`, color=null) FIXED +
+  guarded by validate + tests; prune added (zombie agents removed); spec reconciled
+  (CI-gate advisory-until-runner-CLI, single-call eval, antigravity name). Loop stopped.
+- **P10 DONE.** Earlier-phase notes retained below for history.
+- **(historic) Current phase:** P10 (final review) in progress.
 - **P8 DONE:** eval/cases.yaml (49 cases, all 21 members + 6 squad/ambiguous),
   eval/route-eval.sh (roster-built candidates, claude/gemini runners, top-1 team+member,
   confusion matrix, exit 0/1/77, deterministic --check), .github/workflows/teams-eval.yml

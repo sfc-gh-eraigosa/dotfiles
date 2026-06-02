@@ -128,9 +128,12 @@ emit_claude() {
   local model effort color
   model="$(mm "$tier" claude model)"; effort="$(mm "$tier" claude effort)"
   color="$(fmq "$f" '.color')"
+  local expr='.name=strenv(name) | .description=strenv(desc) | .model=strenv(model) | .effort=strenv(effort)'
+  # Only emit color when set — strenv would otherwise write a literal `color: "null"`.
+  [ -n "$color" ] && [ "$color" != "null" ] && expr="${expr} | .color=strenv(color)"
   local fm
   fm="$(name="$name" desc="$desc" model="$model" effort="$effort" color="$color" \
-        yq -n '.name=strenv(name) | .description=strenv(desc) | .model=strenv(model) | .effort=strenv(effort) | .color=strenv(color)')"
+        yq -n "$expr")"
   atomic_write "${CLAUDE_AGENTS}/${team}/${role}.md" "$(printf -- '---\n%s\n---\n\n%s\n' "$fm" "$prompt")"
 }
 
@@ -181,6 +184,16 @@ if [ -x "$VALIDATE" ]; then
   if ! "$VALIDATE"; then warn "validation failed — aborting teams install"; exit 1; fi
 elif [ -f "$VALIDATE" ]; then
   if ! bash "$VALIDATE"; then warn "validation failed — aborting teams install"; exit 1; fi
+fi
+
+# Prune managed subtrees first so renamed/removed personas don't leave zombie agents.
+# Only the dedicated teams/ dirs are cleared (wholly ours). Antigravity shares its agents/
+# dir with possible user agents, so it is additive (overwrite-by-name, no prune); likewise
+# `ollama` models created in the registry are not removed here.
+if [ "$DRY_RUN" -ne 1 ]; then
+  if want_tool claude; then rm -rf "${CLAUDE_AGENTS}"; fi
+  if want_tool gemini; then rm -rf "${GEMINI_AGENTS}"; fi
+  if want_tool ollama; then rm -rf "${OLLAMA_DIR}"; fi
 fi
 
 count=0

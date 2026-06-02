@@ -395,9 +395,14 @@ cases:
 
 ### 11.2 Runner — `route-eval.sh`
 For each case, feed the **compiled descriptions + task** to the model in **headless mode**
-and capture a single constrained pick (the agent id). Runs against **both** Claude and
-Gemini headless. Determinism mitigations: pinned model IDs, fixed sampling, best-of-N
-with majority vote.
+(`claude -p` / `gemini -p`) and capture a single constrained pick (the agent id). Runs
+against **both** Claude and Gemini headless. The candidate roster and pick→team/member
+resolution are built from the source frontmatter (the pick is matched against the full
+roster, not split on `-`, so hyphenated team names like `terraform-aws` score correctly).
+A deterministic `--check` mode validates the dataset (every expectation resolves to a real
+team/member/squad) with no model calls — this is what runs in CI without credentials.
+Determinism mitigations: pinned model IDs + fixed sampling. *(As-built: one call per case;
+best-of-N majority vote is a future enhancement, not yet implemented.)*
 
 ### 11.3 Scoring & gate
 - **Top-1 team accuracy** and **top-1 member accuracy** per runner.
@@ -408,9 +413,14 @@ with majority vote.
 ### 11.4 CI-gate risk & mitigations (explicit, per design discussion)
 LLM routing is non-deterministic; a hard two-runner gate needs Anthropic + Google
 credentials, adds per-PR cost, and can flake. Mitigations baked into the spec:
-- Pinned model IDs + fixed sampling + best-of-N majority vote to reduce variance.
-- Secrets via GitHub Actions OIDC/secrets; the job is skipped (not failed) when
-  credentials are absent on forks, and required only on the protected merge path.
+- Pinned model IDs + fixed sampling to reduce variance (best-of-N is a future option).
+- Secrets via GitHub Actions secrets; `route-eval.sh` exits `77` (neutral skip, not
+  failure) when no runner is available, so forks/PRs without secrets aren't blocked, while
+  exit `1` (below threshold) fails the job.
+- **As-built caveat:** the gate also requires the runner **CLI** to be present in the CI
+  job, not just credentials — `ubuntu-latest` ships neither `claude` nor `gemini`, so until
+  the job provisions a runner CLI the gate is **advisory** (always neutral-skips). The
+  `validate` job (validate.sh + unit tests + gen-index drift) IS enforcing today.
 - Option to move the gate to `merge_group` / nightly if per-push cost or flake proves
   unacceptable — recorded as a follow-up toggle, not a redesign.
 
@@ -496,6 +506,8 @@ Because edits target the source of truth, improvements persist across every rege
 ai/teams/teams.yaml
 ai/teams/model-map.yaml
 ai/teams/validate.sh
+ai/teams/gen-index.sh          (regenerates INDEX.md + nav + /team command)
+ai/teams/INDEX.md              (generated, committed)
 ai/teams/GEMINI.md            (+ CLAUDE.md symlink)
 ai/teams/_partials/{common-safety,repo-conventions,handoff-footer}.md
 ai/teams/<team>/GEMINI.md     (+ CLAUDE.md symlink) × 5
@@ -525,6 +537,11 @@ CLAUDE.md (root)                Repository-Structure row for ai/teams install
 ```
 ~/.claude/agents/teams/<team>/<role>.md
 ~/.gemini/agents/teams/<team>/<role>.md
-~/.config/antigravity/agents/team-<team>-<role>.yaml
+~/.config/antigravity/agents/<team>-<role>.yaml
 ~/.config/ollama/teams/<team>/<role>.Modelfile
 ```
+
+**Install is prune-then-emit** for the dedicated `teams/` subtrees (Claude, Gemini, Ollama
+Modelfiles) so renamed/removed personas leave no zombie agents. Antigravity (shared
+`agents/` dir) and the Ollama model registry are overwrite-by-name / additive — stale
+entries there are not auto-pruned (documented limitation).
