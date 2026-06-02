@@ -11,7 +11,7 @@
 # expect.squad  : OPTIONAL — a squad name in teams.yaml. When present the case is
 #                 cross-domain/ambiguous and a squad answer is the defensible target.
 #
-# Coverage: >= 2 discriminating cases per member across all 21 members, plus a
+# Coverage: >= 2 discriminating cases per member across all 22 members, plus a
 # block of squad/ambiguous cross-domain cases at the end.
 schema_version: 1
 
@@ -146,6 +146,18 @@ cases:
   - task: "Translate the Q3 business goals into engineering objectives and a plain-language stakeholder summary."
     expect: { team: architecture, member: em }
 
+  # ---------------- architecture/adversary — The Adversarial Reviewer ----------------
+  - task: "Independently verify whether this reported SQL-injection finding is real before we file it as a bug."
+    expect: { team: architecture, member: adversary }
+  - task: "Stress-test the audit's claim that the worktree code has a race condition — confirm or refute it against the source."
+    expect: { team: architecture, member: adversary }
+
+  # --------- go boundary discriminators: implementation bug (godev) vs interface/contract design (goarch) ---------
+  - task: "Decide whether the worktree Backend interface should take a context.Context parameter and how that reshapes the contract."
+    expect: { team: go, member: goarch }
+  - task: "Fix the goroutine in the log streamer that leaks because the worker never checks ctx.Done()."
+    expect: { team: go, member: godev }
+
   # ================= Squad / ambiguous / cross-domain cases =================
   # These span multiple teams; a squad is the defensible routing target.
 
@@ -166,3 +178,9 @@ cases:
     expect: { squad: infra-rollout }
   - task: "Stand up the VPC and ECS workload with its deploy pipeline and a checkov security scan in one coordinated rollout."
     expect: { squad: infra-rollout }
+
+  # adversarial-review: independently verify/harden another team's findings before trusting them.
+  - task: "Before we trust the security audit, get an independent skeptic plus the principal engineer to confirm or refute the critical findings."
+    expect: { squad: adversarial-review }
+  - task: "Run an adversarial second-opinion pass over the migration review and filter out any false positives before sign-off."
+    expect: { squad: adversarial-review }

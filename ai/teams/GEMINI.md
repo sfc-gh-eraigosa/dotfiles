@@ -14,4 +14,4 @@ concrete models via [model-map.yaml](./model-map.yaml). Registry + cross-team sq
 | 🐹 [go](./go/) — Go Development | goarch,godev goqa,gosec | standard |
 | ☁️ [terraform-aws](./terraform-aws/) — Terraform & AWS | cloudarch,cloudsec infra,platform | standard |
 | 🤖 [ai-ci](./ai-ci/) — AI & CI | aiarch,aidev ci,modelops | standard |
-| 🏛️ [architecture](./architecture/) — Architecture | em,principal secarch,sysarch | deep-think |
+| 🏛️ [architecture](./architecture/) — Architecture | adversary,em principal,secarch sysarch | deep-think |

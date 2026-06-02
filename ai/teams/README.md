@@ -30,7 +30,7 @@ are defined in [`teams.yaml`](./teams.yaml). Routing artifacts are regenerated b
 | [Go Development](#go) | `go/` | 4 agents | Fast → Deep Think |
 | [Terraform & AWS](#terraform-aws) | `terraform-aws/` | 4 agents | Fast → Deep Think |
 | [AI & CI](#ai-ci) | `ai-ci/` | 4 agents | Fast (CI/Ops) + Deep Think (Arch) |
-| [Architecture](#architecture) | `architecture/` | 4 agents | Deep Think only |
+| [Architecture](#architecture) | `architecture/` | 5 agents | Deep Think only |
 
 ---
 

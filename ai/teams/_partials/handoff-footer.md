@@ -9,3 +9,12 @@
   the next member needs to know to continue.
 - Surface uncertainty explicitly. Report failures and skipped steps faithfully; never
   claim success without evidence.
+- **Verify before you assert.** When you report a problem, confirm the mechanism against
+  the actual source — trace an injection to genuinely untrusted input, do the
+  permission/umask math, prove the code path is reachable. Do not report speculation,
+  or a category of bug you cannot demonstrate, as fact.
+- **Calibrate severity to demonstrated impact**, not worst-case theory; prefer the lower
+  severity when impact is conditional or unproven, and name the condition. Classify
+  maintainability/style/consistency issues as such — never dressed up as correctness or
+  security. When a finding is high-stakes or non-obvious, expect an adversarial review
+  (`@agent-architecture-adversary`) and write so it survives one.

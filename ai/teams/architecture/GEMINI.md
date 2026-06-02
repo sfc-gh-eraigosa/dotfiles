@@ -6,6 +6,7 @@ Members of the **architecture** team. See [../INDEX.md](../INDEX.md) for full ro
 
 | member | invoke | tier | owns |
 |--------|--------|------|------|
+| adversary | `architecture-adversary` | deep-think | Independent adversarial verification: refuting or confirming another agent's findings, claims, and answers against ground truth before they are trusted |
 | em | `architecture-em` | deep-think | Architecture team leadership: requirement translation, priority arbitration, roadmap and risk register ownership, stakeholder communication |
 | principal | `architecture-principal` | deep-think | Engineering standards, critical code reviews, tech-debt registry, and the cross-team design pattern library |
 | secarch | `architecture-secarch` | deep-think | Security design, threat modeling, identity/secrets architecture, and compliance posture |

@@ -8,7 +8,7 @@ domain: "Go service architecture: interface design, package boundaries, gRPC/pro
 file_globs: ["**/*.proto", "go.mod", "go.sum", "docs/architecture/**", "docs/performance/**", "**/internal/**/*.go", "**/cmd/**/*.go"]
 keywords: [architecture, microservices, grpc, protobuf, interfaces, patterns, design]
 use_when: "Designing or reviewing service boundaries, defining Go interfaces before implementation, governing .proto/RPC contracts, modeling goroutine lifecycles, or planning cross-service refactors and distributed tracing topology."
-avoid_when: "Routine feature implementation (delegate to The Go Developer), test authoring or QA gating (The Go QA Engineer), or dependency/security vulnerability work (The Go Security Engineer)."
+avoid_when: "Routine feature implementation (delegate to The Go Developer), test authoring or QA gating (The Go QA Engineer), or dependency/security vulnerability work (The Go Security Engineer). Report structural, boundary, or interface-contract defects with system-wide consequences — not isolated implementation bugs, which go to The Go Developer."
 color: cyan
 symbol: "🏗️"
 context_strategy: deep

@@ -28,15 +28,15 @@ echo "== install_ai_teams_test =="
 H="$(mktemp -d)"
 run_install "$H" || bad "installer exited non-zero"
 
-# counts: 21 personas -> 21 files for claude + gemini + antigravity; ollama Modelfiles
-assert_eq "claude emits 21 agents" \
-  "$(find "$H/.claude/agents/teams" -name '*.md' | wc -l | tr -d ' ')" "21"
-assert_eq "gemini emits 21 agents" \
-  "$(find "$H/.gemini/agents/teams" -name '*.md' | wc -l | tr -d ' ')" "21"
-assert_eq "antigravity emits 21 agents" \
-  "$(find "$H/.config/antigravity/agents" -name '*.yaml' | wc -l | tr -d ' ')" "21"
-assert_eq "ollama emits 21 Modelfiles" \
-  "$(find "$H/.config/ollama/teams" -name '*.Modelfile' | wc -l | tr -d ' ')" "21"
+# counts: 22 personas -> 22 files for claude + gemini + antigravity; ollama Modelfiles
+assert_eq "claude emits 22 agents" \
+  "$(find "$H/.claude/agents/teams" -name '*.md' | wc -l | tr -d ' ')" "22"
+assert_eq "gemini emits 22 agents" \
+  "$(find "$H/.gemini/agents/teams" -name '*.md' | wc -l | tr -d ' ')" "22"
+assert_eq "antigravity emits 22 agents" \
+  "$(find "$H/.config/antigravity/agents" -name '*.yaml' | wc -l | tr -d ' ')" "22"
+assert_eq "ollama emits 22 Modelfiles" \
+  "$(find "$H/.config/ollama/teams" -name '*.Modelfile' | wc -l | tr -d ' ')" "22"
 
 # grouped layout / naming
 assert_file "$H/.claude/agents/teams/web/fe.md"
@@ -99,8 +99,8 @@ ZOMBIE="$H/.claude/agents/teams/web/zzz_zombie.md"
 printf -- '---\nname: web-zzz\n---\nstale\n' > "$ZOMBIE"
 run_install "$H"
 assert_nofile "$ZOMBIE" "prune removes zombie claude agent on re-run"
-assert_eq "prune keeps the real 21 claude agents" \
-  "$(find "$H/.claude/agents/teams" -name '*.md' | wc -l | tr -d ' ')" "21"
+assert_eq "prune keeps the real 22 claude agents" \
+  "$(find "$H/.claude/agents/teams" -name '*.md' | wc -l | tr -d ' ')" "22"
 
 # --- no claude agent may emit a literal null color (guard the optional-color path) -----
 assert_eq "no claude agent emits a literal null color" \

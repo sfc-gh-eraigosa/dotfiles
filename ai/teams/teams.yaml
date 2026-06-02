@@ -44,3 +44,6 @@ squads:
   infra-rollout:
     description: "Provision and ship infrastructure changes safely."
     members: [terraform-aws/infra, terraform-aws/platform, terraform-aws/cloudsec]
+  adversarial-review:
+    description: "Independently verify and harden another team's findings/answers before they are trusted (skeptic + critical reviewer)."
+    members: [architecture/adversary, architecture/principal]

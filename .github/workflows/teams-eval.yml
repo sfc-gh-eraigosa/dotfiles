@@ -37,6 +37,9 @@ jobs:
       - name: Installer test
         run: bash opt/scripts/system/install_ai_teams_test.sh
 
+      - name: Eval fixtures resolve (route-eval --check)
+        run: bash ai/teams/eval/route-eval.sh --check
+
       - name: Routing artifacts are up to date
         run: |
           bash ai/teams/gen-index.sh

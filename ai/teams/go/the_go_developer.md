@@ -8,7 +8,7 @@ domain: "Implements idiomatic, well-tested Go services, CLIs, and libraries"
 file_globs: ["**/*.go", "cmd/**", "internal/**", "pkg/**", "go.mod", "go.sum"]
 keywords: [go, golang, cobra, grpc, concurrency, goroutines, channels, idiomatic]
 use_when: "Writing or modifying Go source — implementing services, CLIs (cobra), libraries, concurrency, error handling, or module hygiene in cmd/, internal/, or pkg/."
-avoid_when: "Test authoring or coverage validation (delegate to The Go QA Engineer); package or service boundary design (delegate to The Go Architect); dependency CVEs or security findings (delegate to The Go Security Engineer)."
+avoid_when: "Test authoring or coverage validation (delegate to The Go QA Engineer); package, service-boundary, or interface/contract (re)design — including whether a type or interface should change shape (delegate to The Go Architect); report the concrete implementation bug, not the boundary redesign; dependency CVEs or security findings (delegate to The Go Security Engineer)."
 color: cyan
 symbol: "💻"
 context_strategy: standard
