@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# install_ai_teams_test.sh — unit tests for install_ai_teams.sh.
+# Emits into a throwaway TEAMS_DEST_HOME and asserts tier resolution, emitter validity,
+# idempotency, graceful-skip, and compose ordering. No network, no real tool dirs touched.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALLER="${HERE}/install_ai_teams.sh"
+TEAMS_DIR="$(cd "${HERE}/../../.." && pwd)/ai/teams"
+
+PASS=0; FAIL=0
+ok()   { echo "  ✓ $*"; PASS=$((PASS + 1)); }
+bad()  { echo "  ✗ $*" >&2; FAIL=$((FAIL + 1)); }
+assert_eq()       { [ "$2" = "$3" ] && ok "$1" || bad "$1 (want '$3', got '$2')"; }
+assert_file()     { [ -f "$1" ] && ok "file exists: ${1##*/teams/}" || bad "missing file: $1"; }
+assert_nofile()   { [ ! -e "$1" ] && ok "$2" || bad "$2 (file unexpectedly present: $1)"; }
+assert_contains() { case "$2" in *"$3"*) ok "$1";; *) bad "$1 (missing '$3')";; esac; }
+
+# frontmatter reader (mirrors installer)
+fm_end() { grep -n '^---[[:space:]]*$' "$1" | sed -n '2p' | cut -d: -f1; }
+fmget()  { local e; e="$(fm_end "$1")"; sed -n "2,$((e-1))p" "$1" | yq "$2"; }
+
+run_install() { TEAMS_DEST_HOME="$1" SKIP_OLLAMA_CREATE=1 bash "$INSTALLER" "${@:2}" >/dev/null 2>&1; }
+
+echo "== install_ai_teams_test =="
+
+# --- full emit into temp HOME ----------------------------------------------------------
+H="$(mktemp -d)"
+run_install "$H" || bad "installer exited non-zero"
+
+# counts: 21 personas -> 21 files for claude + gemini + antigravity; ollama Modelfiles
+assert_eq "claude emits 21 agents" \
+  "$(find "$H/.claude/agents/teams" -name '*.md' | wc -l | tr -d ' ')" "21"
+assert_eq "gemini emits 21 agents" \
+  "$(find "$H/.gemini/agents/teams" -name '*.md' | wc -l | tr -d ' ')" "21"
+assert_eq "antigravity emits 21 agents" \
+  "$(find "$H/.config/antigravity/agents" -name '*.yaml' | wc -l | tr -d ' ')" "21"
+assert_eq "ollama emits 21 Modelfiles" \
+  "$(find "$H/.config/ollama/teams" -name '*.Modelfile' | wc -l | tr -d ' ')" "21"
+
+# grouped layout / naming
+assert_file "$H/.claude/agents/teams/web/fe.md"
+assert_file "$H/.config/antigravity/agents/web-fe.yaml"
+
+# --- tier resolution -------------------------------------------------------------------
+CFE="$H/.claude/agents/teams/web/fe.md"           # standard
+CSY="$H/.claude/agents/teams/architecture/sysarch.md"  # deep-think
+CWQ="$H/.claude/agents/teams/web/webqa.md"        # fast
+GSY="$H/.gemini/agents/teams/architecture/sysarch.md"
+OGD="$H/.config/ollama/teams/go/godev.Modelfile"  # standard
+
+assert_eq "standard -> claude sonnet"      "$(fmget "$CFE" '.model')"  "sonnet"
+assert_eq "standard -> claude effort med"  "$(fmget "$CFE" '.effort')" "medium"
+assert_eq "deep-think -> claude opus"      "$(fmget "$CSY" '.model')"  "opus"
+assert_eq "deep-think -> claude effort hi" "$(fmget "$CSY" '.effort')" "high"
+assert_eq "fast -> claude haiku"           "$(fmget "$CWQ" '.model')"  "haiku"
+assert_eq "deep-think -> gemini pro"       "$(fmget "$GSY" '.model')"  "gemini-2.5-pro"
+assert_eq "deep-think -> gemini temp 0.2"  "$(fmget "$GSY" '.temperature')" "0.2"
+assert_contains "ollama standard FROM"  "$(cat "$OGD")" "FROM qwen2.5-coder:7b"
+assert_contains "ollama num_ctx"        "$(cat "$OGD")" "PARAMETER num_ctx 8192"
+
+# --- emitter validity ------------------------------------------------------------------
+fmget "$CFE" '.name' >/dev/null 2>&1 && [ "$(fmget "$CFE" '.name')" = "web-fe" ] \
+  && ok "claude frontmatter parses, name=web-fe" || bad "claude frontmatter invalid"
+[ "$(yq '.name' "$H/.config/antigravity/agents/web-fe.yaml")" = "web-fe" ] \
+  && ok "antigravity yaml parses, name=web-fe" || bad "antigravity yaml invalid"
+assert_contains "gemini temperature numeric" "$(fmget "$GSY" '.temperature | tag')" "!!float"
+
+# description is compiled (non-empty, has negative scoping)
+DESC="$(fmget "$CFE" '.description')"
+assert_contains "description compiled (PROACTIVELY)" "$DESC" "Use PROACTIVELY for:"
+assert_contains "description negative-scoped (Do NOT)" "$DESC" "Do NOT use for:"
+
+# --- compose ordering: safety, then conventions, then body, then handoff footer --------
+BODY="$(sed -n "$(( $(fm_end "$CFE") + 1 )),\$p" "$CFE")"
+s=$(printf '%s\n' "$BODY" | grep -n 'SAFETY & PRIVACY' | head -1 | cut -d: -f1)
+c=$(printf '%s\n' "$BODY" | grep -n 'REPOSITORY CONVENTIONS' | head -1 | cut -d: -f1)
+h=$(printf '%s\n' "$BODY" | grep -n 'HANDOFF PROTOCOL (shared)' | head -1 | cut -d: -f1)
+{ [ -n "$s" ] && [ -n "$c" ] && [ -n "$h" ] && [ "$s" -lt "$c" ] && [ "$c" -lt "$h" ]; } \
+  && ok "compose order: safety < conventions < handoff-footer" \
+  || bad "compose order wrong (safety=$s conventions=$c handoff=$h)"
+
+# --- idempotency -----------------------------------------------------------------------
+H2="$(mktemp -d)"; run_install "$H2"
+diff -r "$H" "$H2" >/dev/null 2>&1 && ok "idempotent: re-run byte-identical" || bad "not idempotent"
+
+# --- graceful skip / tool filter -------------------------------------------------------
+H3="$(mktemp -d)"; run_install "$H3" --tool claude
+assert_file "$H3/.claude/agents/teams/web/fe.md"
+assert_nofile "$H3/.gemini/agents/teams" "--tool claude does not emit gemini"
+assert_nofile "$H3/.config/ollama/teams" "--tool claude does not emit ollama"
+
+# --- dry-run writes nothing ------------------------------------------------------------
+H4="$(mktemp -d)"; TEAMS_DEST_HOME="$H4" bash "$INSTALLER" --dry-run >/dev/null 2>&1
+assert_nofile "$H4/.claude" "--dry-run writes no files"
+
+rm -rf "$H" "$H2" "$H3" "$H4"
+
+echo "== result: ${PASS} passed, ${FAIL} failed =="
+[ "$FAIL" -eq 0 ]

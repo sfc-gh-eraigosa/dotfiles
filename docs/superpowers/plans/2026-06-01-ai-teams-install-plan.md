@@ -42,20 +42,20 @@ phase so any wakeup can resume cleanly.
 ---
 
 ## STATE
-- **Current phase:** P5 (tests) next
-- **Completed:** spec (#92); plan; P1 (322316d); **P2** 21 personas refactored
-  (workflow wawbe034d; principal review ok=true; 2 minor naming nits fixed);
-  **P3** install_ai_teams.sh (4 emitters; idempotent — byte-identical on re-run;
-  dry-run msg bug fixed); **P4** validate.sh (✓ 21 personas). All four tools emit
-  correct artifacts; composed partials present.
+- **Current phase:** P7 (wiring/docs) next
+- **Completed:** spec (#92); plan; P1 (322316d); **P2** 21 personas (review ok=true);
+  **P3** installer (4 emitters, idempotent); **P4** validate.sh (✓21);
+  **P5** install_ai_teams_test.sh (26/26 pass); **P6** gen-index.sh → INDEX.md,
+  root+per-team GEMINI.md (+CLAUDE.md symlinks), `/team` command (claude team.md +
+  gemini team.toml, TOML parses, table embedded, deterministic).
 - **Next action:**
-  1. P5 `opt/scripts/system/install_ai_teams_test.sh` — tier resolution, emitter
-     validity, idempotency, graceful-skip, compose ordering. Run + pass.
-  2. P6 INDEX.md generator, `/team` (claude .md + gemini .toml), per-team GEMINI.md +
-     CLAUDE.md→GEMINI.md symlinks, root CLAUDE.md row.
-  3. P7 wire install.sh, `sync-teams` alias, rewrite MODEL_PARAMS.md, README, registry.
-  4. P8 eval/cases.yaml + route-eval.sh + CI gate (use `ci`+`aiarch`).
-  5. P9 src/teams-tune/skill/SKILL.md.  6. P10 final principal review + checkpoint.
+  1. P7 wire install.sh (call install_ai_teams.sh after sync-plugins); `sync-teams`
+     alias; add ai/teams row to root CLAUDE.md/GEMINI.md Repository Structure; rewrite
+     MODEL_PARAMS.md to reference model-map.yaml; update ai/teams/README.md +
+     opt/scripts/system registry. (gen-index is dev/CI-run, NOT install-run.)
+  2. P8 eval/cases.yaml + route-eval.sh + CI gate (use `ci`+`aiarch`); CI also runs
+     validate.sh + install_ai_teams_test.sh + `gen-index.sh && git diff --exit-code`.
+  3. P9 src/teams-tune/skill/SKILL.md.  4. P10 final principal review + checkpoint.
 - **Notes:** yq v4.44.6; ollama installed (create best-effort); antigravity path
   unconfirmed (emit anyway, harmless). Installer test override:
   TEAMS_DEST_HOME=<dir> + SKIP_OLLAMA_CREATE=1.
