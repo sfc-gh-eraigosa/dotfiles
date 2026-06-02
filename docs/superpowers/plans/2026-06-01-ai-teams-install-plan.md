@@ -42,8 +42,20 @@ phase so any wakeup can resume cleanly.
 ---
 
 ## STATE
-- **Current phase:** P1 (in progress)
-- **Completed:** spec (#92), this plan
-- **Next action:** write model-map.yaml, teams.yaml, _partials/*; then launch P2 workflow
-- **Notes:** yq v4.44.6 present; ollama IS installed (ollama create best-effort);
-  antigravity path unconfirmed (emitter warns+skips if dir absent).
+- **Current phase:** P5 (tests) next
+- **Completed:** spec (#92); plan; P1 (322316d); **P2** 21 personas refactored
+  (workflow wawbe034d; principal review ok=true; 2 minor naming nits fixed);
+  **P3** install_ai_teams.sh (4 emitters; idempotent — byte-identical on re-run;
+  dry-run msg bug fixed); **P4** validate.sh (✓ 21 personas). All four tools emit
+  correct artifacts; composed partials present.
+- **Next action:**
+  1. P5 `opt/scripts/system/install_ai_teams_test.sh` — tier resolution, emitter
+     validity, idempotency, graceful-skip, compose ordering. Run + pass.
+  2. P6 INDEX.md generator, `/team` (claude .md + gemini .toml), per-team GEMINI.md +
+     CLAUDE.md→GEMINI.md symlinks, root CLAUDE.md row.
+  3. P7 wire install.sh, `sync-teams` alias, rewrite MODEL_PARAMS.md, README, registry.
+  4. P8 eval/cases.yaml + route-eval.sh + CI gate (use `ci`+`aiarch`).
+  5. P9 src/teams-tune/skill/SKILL.md.  6. P10 final principal review + checkpoint.
+- **Notes:** yq v4.44.6; ollama installed (create best-effort); antigravity path
+  unconfirmed (emit anyway, harmless). Installer test override:
+  TEAMS_DEST_HOME=<dir> + SKIP_OLLAMA_CREATE=1.
