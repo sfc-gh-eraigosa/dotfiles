@@ -72,14 +72,14 @@ get_body() {  # print everything after the closing fence, verbatim
   [ -n "$end" ] || return 1
   tail -n +"$((end + 1))" "$f"
 }
-fmq() { get_fm "$1" | yq "$2"; }  # query a frontmatter field
 
 # Resolve a model-map cell: tier, tool, field -> value
 mm() { yq ".tiers.\"$1\".\"$2\".\"$3\"" "$MODEL_MAP"; }
 
 # Assemble the composed system prompt from the persona's compose: list.
+# $2 is the persona metadata as JSON (already extracted).
 compose_prompt() {
-  local f="$1" item body
+  local f="$1" fm_data="$2" item body
   body="$(get_body "$f")"
   local out="" first=1
   while IFS= read -r item; do
@@ -93,21 +93,22 @@ compose_prompt() {
     else
       warn "compose partial not found: ${item} (in $f)"
     fi
-  done < <(fmq "$f" '.compose[]' 2>/dev/null || true)
+  done < <(echo "$fm_data" | yq -r '.compose[]' 2>/dev/null || true)
   # Default: body only, if compose was empty/absent.
   [ -n "$out" ] && printf '%s\n' "$out" || printf '%s\n' "$body"
 }
 
 # Compile the routing-grade description (unless the author set one explicitly).
+# $2 is the persona metadata as JSON (already extracted).
 compile_description() {
-  local f="$1" team role domain globs kw uw aw desc
-  desc="$(fmq "$f" '.description // ""')"
+  local f="$1" fm_data="$2" team role domain globs kw uw aw desc
+  desc="$(echo "$fm_data" | yq -r '.description // ""')"
   if [ -n "$desc" ] && [ "$desc" != "null" ]; then printf '%s' "$desc"; return; fi
-  team="$(fmq "$f" '.team')"; role="$(fmq "$f" '.role')"
-  domain="$(fmq "$f" '.domain')"
-  globs="$(fmq "$f" '.file_globs | join(", ")')"
-  kw="$(fmq "$f" '.keywords | join(", ")')"
-  uw="$(fmq "$f" '.use_when')"; aw="$(fmq "$f" '.avoid_when')"
+  team="$(echo "$fm_data" | yq -r '.team')"; role="$(echo "$fm_data" | yq -r '.role')"
+  domain="$(echo "$fm_data" | yq -r '.domain')"
+  globs="$(echo "$fm_data" | yq -r '.file_globs | join(", ")')"
+  kw="$(echo "$fm_data" | yq -r '.keywords | join(", ")')"
+  uw="$(echo "$fm_data" | yq -r '.use_when')"; aw="$(echo "$fm_data" | yq -r '.avoid_when')"
   printf '[%s team · %s] %s. Use PROACTIVELY for: %s. Matches files: %s. Keywords: %s. Do NOT use for: %s.' \
     "$team" "$role" "$domain" "$uw" "$globs" "$kw" "$aw"
 }
@@ -124,10 +125,9 @@ atomic_write() {
 
 # --- per-tool emitters -----------------------------------------------------------------
 emit_claude() {
-  local f="$1" team="$2" role="$3" tier="$4" name="${2}-${3}" desc="$5" prompt="$6"
-  local model effort color
+  local f="$1" team="$2" role="$3" tier="$4" name="${2}-${3}" desc="$5" prompt="$6" color="$7"
+  local model effort
   model="$(mm "$tier" claude model)"; effort="$(mm "$tier" claude effort)"
-  color="$(fmq "$f" '.color')"
   local expr='.name=strenv(name) | .description=strenv(desc) | .model=strenv(model) | .effort=strenv(effort)'
   # Only emit color when set — strenv would otherwise write a literal `color: "null"`.
   [ -n "$color" ] && [ "$color" != "null" ] && expr="${expr} | .color=strenv(color)"
@@ -197,20 +197,43 @@ if [ "$DRY_RUN" -ne 1 ]; then
 fi
 
 count=0
-while IFS= read -r f; do
+while IFS= read -r -d '' f; do
   [ -e "$f" ] || continue
-  team="$(fmq "$f" '.team')"; role="$(fmq "$f" '.role')"; tier="$(fmq "$f" '.tier')"
+
+  # Extract all needed fields in ONE yq call to avoid ~10 subprocesses per file
+  fm_data="$(get_fm "$f" | yq -o=json '{
+    "team": .team,
+    "role": .role,
+    "tier": .tier,
+    "color": .color,
+    "description": .description,
+    "domain": .domain,
+    "file_globs": .file_globs,
+    "keywords": .keywords,
+    "use_when": .use_when,
+    "avoid_when": .avoid_when,
+    "compose": .compose
+  }' 2>/dev/null)"
+
+  if [ -z "$fm_data" ]; then warn "skipping $f (frontmatter does not parse)"; continue; fi
+
+  team="$(echo "$fm_data" | yq -r '.team')"; role="$(echo "$fm_data" | yq -r '.role')"
+  tier="$(echo "$fm_data" | yq -r '.tier')"
+  color="$(echo "$fm_data" | yq -r '.color')"
+
   if [ -z "$team" ] || [ "$team" = "null" ] || [ -z "$role" ] || [ "$role" = "null" ]; then
     warn "skipping $f (missing team/role)"; continue
   fi
-  desc="$(compile_description "$f")"
-  prompt="$(compose_prompt "$f")"
-  want_tool claude      && emit_claude      "$f" "$team" "$role" "$tier" "$desc" "$prompt"
+
+  desc="$(compile_description "$f" "$fm_data")"
+  prompt="$(compose_prompt "$f" "$fm_data")"
+
+  want_tool claude      && emit_claude      "$f" "$team" "$role" "$tier" "$desc" "$prompt" "$color"
   want_tool gemini      && emit_gemini      "$f" "$team" "$role" "$tier" "$desc" "$prompt"
   want_tool antigravity && emit_antigravity "$f" "$team" "$role" "$tier" "$desc" "$prompt"
   want_tool ollama      && emit_ollama      "$f" "$team" "$role" "$tier" "$desc" "$prompt"
   count=$((count + 1))
-done < <(find "$TEAMS_DIR" -mindepth 2 -maxdepth 2 -name 'the_*.md' | sort)
+done < <(find "$TEAMS_DIR" -mindepth 2 -maxdepth 2 -name 'the_*.md' -print0 | sort -z)
 
 suffix=""; [ "$DRY_RUN" -eq 1 ] && suffix=" (dry-run)"
 echo "AI teams install complete: ${count} personas processed${suffix}."
