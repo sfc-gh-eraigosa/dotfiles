@@ -56,22 +56,48 @@ This is the same portability rule already in `CLAUDE.md` ("the repo can be
 cloned anywhere and the config must still work") — applied to the AI-tool
 global config, which currently breaks it.
 
-## 3. Findings — every place global config reaches into the repo
+## 3. Findings — corrected classification
 
-| # | File | Line | Reference | Verdict |
-|---|---|---|---|---|
-| F1 | `ai/claude/settings.json.template` | 70 | `$HOME/git/dotfiles/ai/hooks/safety_guard.sh` | ❌ repo-internal path in global config |
-| F2 | `ai/claude/settings.json.template` | 79 | `$HOME/git/dotfiles/ai/hooks/privacy_guard.sh` | ❌ repo-internal path in global config |
-| F3 | `ai/claude/settings.json.template` | 3 | `env.DOTFILES_DIR=$HOME/git/dotfiles` | ⚠️ dead (referenced nowhere) |
-| F4 | `opt/scripts/system/install_claude_skills.sh` | ~62–66 | "We don't symlink hooks" | ❌ hooks are the lone un-installed artifact |
-| F5 | `opt/scripts/system/install_claude_skills.sh` | ~33–37 | seed-once `if [ ! -f settings.json ]` | ❌ template changes never reach provisioned hosts |
-| F6 | `ai/claude/scripts/sanity_check.sh` | 64 | validates `$BASE_DIR/ai/hooks/safety_guard.sh` (repo path) | ❌ never validates the *configured* path in `~/.claude/settings.json`; passes green while unwired; `privacy_guard` not checked at all |
-| F7 | `ai/gemini/scripts/sanity_check.sh` | 57 | `$HOME/git/dotfiles/ai/claude/scripts/sanity_check.sh` | ❌ hardcoded repo path — breaks on any non-`~/git/dotfiles` clone |
-| F8 | `ai/gemini/settings.json` | 25 | `$GEMINI_PROJECT_DIR/ai/hooks/privacy_guard.sh` | ⚠️ repo-relative via Gemini runtime var — *different mechanism* (see §6); only `privacy_guard` wired, no `safety_guard` |
+**Live reproduction (primary host, 2026-06-03):** `~/.claude/settings.json` →
+(symlink) `~/git/dotfiles/ai/claude/settings.json` wires **only** `safety_guard`
+at the **dead** path `$HOME/git/dotfiles/ai/claude/hooks/safety_guard.sh` (the
+pre-reorg `ai/claude/hooks/`, not `ai/hooks/`) and **no `privacy_guard` at
+all** — so both PreToolUse security controls are absent on this host *right now*,
+yet `make` (`sanity_check.sh`) passes green. That is #111, reproduced.
 
-**Two silent failures stack:** F5 means the dead path never gets corrected on
-existing hosts; F6 means our own health check can't see it. A host looks
-configured and passes sanity_check while both security hooks are absent.
+The findings sort into three buckets. **Only bucket A is a convention
+violation** — an earlier draft over-flagged the rest (corrected after owner
+review).
+
+### A. Convention violations — config references a raw repo-checkout path
+| # | File:line | Reference | Why it violates |
+|---|---|---|---|
+| F1/F2 | `ai/claude/settings.json(.template)` hooks (live l.70; template l.70/79) | `$HOME/git/dotfiles/ai/(claude/)hooks/*.sh` | A raw checkout path. No `~/` symlink covers `ai/` (only `~/opt → repo/opt` exists; there is no `~/ai`), so the hooks are reached by **neither** sanctioned mechanism. Breaks on any non-`~/git/dotfiles` clone (worktrees, CI). This is the #111 bug. |
+| F7 | `ai/gemini/scripts/sanity_check.sh:57` | `$HOME/git/dotfiles/ai/claude/scripts/sanity_check.sh` | Same defect — hardcoded checkout path; breaks if cloned elsewhere. |
+
+### B. Robustness / validation gaps — why the breakage is *silent* (not path violations)
+| # | File:line | Issue |
+|---|---|---|
+| F6 | `ai/claude/scripts/sanity_check.sh:51,64` | `BASE_DIR` is the **repo root** (`dirname/../../..`, i.e. `~/git/dotfiles` — **not** `$HOME`). The check stats `$BASE_DIR/ai/hooks/safety_guard.sh` (the repo copy) and runs its self-test; it **never reads `~/.claude/settings.json`** to confirm the *configured* command resolves. Proven: this host's live settings is broken yet sanity-check is green. `privacy_guard` is not checked at all. → fix = validate (and *exercise*) the live configured path (D3). |
+| F8 | `ai/gemini/settings.json:25`, installed **globally** at `~/.gemini/settings.json` (install.sh:334) | `$GEMINI_PROJECT_DIR` resolves to the **active project root at runtime** ([Gemini docs](https://geminicli.com/docs/hooks/): "absolute path to the project root … regardless of the agent's working directory"). A *global* hook anchored to it resolves to `<whatever-project-Gemini-is-in>/ai/hooks/privacy_guard.sh`, so the privacy guard fires **only when Gemini runs inside the dotfiles repo**; in any other project the path doesn't exist and it silently no-ops — same fail-open class. Only `privacy_guard` is wired (no `safety_guard`). → see revised D4. |
+
+### C. Deliberate design to preserve — NOT a defect
+| # | File:line | Note |
+|---|---|---|
+| F5 | seed-once + gitignored `settings.json` (`install_claude_skills.sh` ~l.33-37) | **Working as intended.** It protects real host-local customization: the live file carries `enabledPlugins` (13 plugins), `extraKnownMarketplaces` (2), and `agentPushNotifEnabled` — none of which are in the template. That is the desired "configurable but not committed to the repo" property. The *only* downside is the side effect that template **wiring** changes never reach the host. **Any fix must keep the customization ability** — which is exactly what D2's `settings.local.json` split does. |
+| F3 | `ai/claude/settings.json.template:3` `env.DOTFILES_DIR` | Dead (referenced nowhere) — minor cleanup, not load-bearing. |
+
+**On the earlier F4 (installer "We don't symlink hooks"):** *not* an independent
+violation. `~/opt → ~/git/dotfiles/opt` is confirmed, so the installer itself
+runs from a well-known path; the comment is a design choice whose only problem
+is its *consequence* (F1/F2). Folded into F1/F2.
+
+**Why the breakage is silent:** F1/F2 put a dead path in the config; F5's
+seed-once (correctly protecting customizations) means that dead path is never
+re-reconciled; and F6 means our own health check stats the repo copy instead of
+the live reference — so a host passes sanity-check while both hooks are absent.
+The fix targets F1/F2 (path) and F6 (validation) **without** disabling F5
+(customization).
 
 ## 4. The convention, formalized
 
@@ -133,13 +159,31 @@ drifts.
   while the *reference* from settings.json is broken — the test must traverse
   the reference, because the reference is what breaks.
 
-### D4 — Gemini stays on `$GEMINI_PROJECT_DIR` (documented asymmetry)
-Do **not** force `~/.gemini/hooks/` symlinks for false symmetry.
-`$GEMINI_PROJECT_DIR` is a harness-provided *runtime* variable resolved
-per-invocation against the active project — the Gemini-native equivalent of
-well-known indirection, not a hardcoded `~/git/dotfiles`. Keep it, extend the
-Gemini sanity_check (D3-style), **fix F7** (the hardcoded cross-call path), and
-record the asymmetry in `ai/GEMINI.md` so it's a decision, not an accident.
+### D4 — Gemini: `$GEMINI_PROJECT_DIR` is the wrong anchor for a *global* hook (revised)
+*(This supersedes an earlier draft that called `$GEMINI_PROJECT_DIR` a benign
+"documented asymmetry" — F8 shows it is not, for a global settings file.)*
+
+`ai/gemini/settings.json` is installed **globally** at `~/.gemini/settings.json`
+(install.sh:334), but `$GEMINI_PROJECT_DIR` resolves to the **active project
+root at runtime** ([Gemini docs](https://geminicli.com/docs/hooks/)). So the
+hook only fires when Gemini runs *inside the dotfiles repo*; everywhere else it
+silently no-ops (F8).
+
+**Decision (2026-06-03): D4a** — the Gemini privacy guard should protect *all*
+Gemini sessions (matching Claude's global guard). Install the hook into a fixed
+well-known path: symlink `ai/hooks/privacy_guard.sh` → `~/.gemini/hooks/`
+(convention option 1) and reference `$HOME/.gemini/hooks/privacy_guard.sh` in the
+global settings. This mirrors the Claude D1 fix and makes the guard
+project-independent.
+
+> Alternative rejected (D4b): moving the hook to a project-level
+> `<repo>/.gemini/settings.json` would scope it to dotfiles-repo edits only —
+> not the intent.
+
+Either way: also wire `safety_guard` for Gemini (currently only `privacy_guard`
+is present), **fix F7** (the hardcoded cross-call path → resolve from the
+script's own location), extend the Gemini `sanity_check` (D3-style, exercising
+the configured command), and record the chosen model in `ai/GEMINI.md`.
 
 ### D5 — Optional hardening: a fail-closed dispatcher (security team)
 The strongest defense against *future* drift: point settings at one stable
@@ -164,6 +208,11 @@ below Critical only because harm is conditional on a second triggering event
 (someone attempting a dangerous/leaky action); held firmly above Medium because
 the controls are *entirely absent*, fleet-wide, and one class (privacy)
 produces irreversible, outbound disclosure.
+
+**Gemini's global guard fails open too (F8):** because `~/.gemini/settings.json`
+anchors the hook to `$GEMINI_PROJECT_DIR`, the privacy guard only runs when
+Gemini operates inside the dotfiles repo — every other project runs with no
+guard, silently. Same severity logic; D4 resolves it.
 
 **Supply chain:** symlinking repo hooks into `~/.claude/hooks/` is
 integrity-**neutral** vs today — settings already executes hooks straight from
@@ -193,7 +242,7 @@ two-ways directive. The comparison that informed the call:
 | Drift risk | eliminated | masked, not removed |
 | Host-local prefs | `~/.claude/settings.local.json` (untracked) | inline in the gitignored copy |
 | `.gitignore` | invert: **track** `ai/claude/settings.json`, ignore `settings.local.json` | unchanged |
-| Risk to verify first | no real secrets currently in any host `settings.json` | n/a |
+| Risk to verify first | verified on primary host: the live `settings.json` carries `enabledPlugins`/`extraKnownMarketplaces`/`agentPushNotifEnabled` but **no secrets** (no `apiKeyHelper`/tokens) — safe to track the wiring and move those three keys to `settings.local.json` | n/a |
 
 **Rejected outright:** using `$DOTFILES_DIR`/`$BASE_DIR` in the hook command (a
 naive reading of #111) — it still references a repo-internal path (violates the
@@ -219,8 +268,11 @@ environment: the same silent-fail class as #111.
   symlink hooks" comment; implement the §7 settings model.
 
 **Phase 2 — Gemini parity.**
-- Fix F7 (hardcoded cross-call path → resolve from script location / `$GEMINI_PROJECT_DIR`).
-- Add D3-style validation to `ai/gemini/scripts/sanity_check.sh`.
+- Per the D4a decision: symlink `privacy_guard` into `~/.gemini/hooks/` and
+  reference `$HOME/.gemini/hooks/...` in the global `~/.gemini/settings.json`.
+- Wire `safety_guard` for Gemini too (today only `privacy_guard` is present).
+- Fix F7 (hardcoded cross-call path → resolve from the script's own location).
+- Add D3-style validation (exercise the configured command) to `ai/gemini/scripts/sanity_check.sh`.
 
 **Phase 3 — stale-host migration.**
 - On next install, detect a `~/.claude/settings.json` whose hook command does
