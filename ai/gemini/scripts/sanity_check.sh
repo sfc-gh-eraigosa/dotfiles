@@ -54,11 +54,29 @@ echo "PASS: System tools present"
 
 # 6. Claude Code integration (skips if claude not installed in the test image)
 echo "Verifying Claude Code integration links..."
-CLAUDE_SANITY="$HOME/git/dotfiles/ai/claude/scripts/sanity_check.sh"
+# Resolve the Claude sanity check from THIS script's own location — never a
+# hardcoded ~/git/dotfiles path, which breaks on worktrees / alternate clones /
+# CI (F7 in docs/designs/2026-06-02-ai-config-home-provisioning.md).
+GEMINI_SANITY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+REPO_ROOT="$(cd "$GEMINI_SANITY_DIR/../../.." && pwd)"
+CLAUDE_SANITY="$REPO_ROOT/ai/claude/scripts/sanity_check.sh"
 if command -v claude > /dev/null 2>&1 && [ -x "$CLAUDE_SANITY" ]; then
     "$CLAUDE_SANITY"
 else
     echo "SKIP: claude CLI not installed in this environment"
+fi
+
+# 7. Gemini's OWN configured hook wiring resolves + is exercised (D3). Uses the
+# event-agnostic validator, which handles Gemini's BeforeTool hook layout.
+echo "Verifying Gemini hook wiring..."
+VALIDATE_HOOKS="$REPO_ROOT/ai/claude/scripts/validate_hooks.sh"
+if [ -x "$VALIDATE_HOOKS" ] && [ -f "$HOME/.gemini/settings.json" ]; then
+    if ! "$VALIDATE_HOOKS" "$HOME/.gemini/settings.json"; then
+        echo "FAIL: configured hook wiring in ~/.gemini/settings.json is broken (see above)"
+        exit 1
+    fi
+else
+    echo "SKIP: ~/.gemini/settings.json or validator not present"
 fi
 
 echo "--------------------------------------------------"
