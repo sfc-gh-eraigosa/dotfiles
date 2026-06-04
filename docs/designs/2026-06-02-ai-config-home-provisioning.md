@@ -1,6 +1,6 @@
 # AI config provisioning into `$HOME` — convention + hook-wiring fix
 
-- **Status:** Proposed — revised 2026-06-04 per PR #113 review (drafted 2026-06-02)
+- **Status:** Implemented in PR #113 (revised 2026-06-04 per review; drafted 2026-06-02) — see [§11](#11-implementation-status)
 - **Relates to:** issue #111 (*safety_guard hook silently not installed*)
 - **Authors:** design pass with the architecture team (systems + security architects)
 - **Decision owner:** repo owner. Key calls: **copy, not symlink** (no new symlinks); settings via a **forced-field merge** ([§7](#7-decision-settings-model-revised-in-pr-113-review)); Gemini drops `$GEMINI_PROJECT_DIR` ([D4](#d4--gemini-drop-gemini_project_dir-copy-into-geminihooks-revised)).
@@ -371,3 +371,22 @@ the `GEMINI.md` source; the `CLAUDE.md` symlink follows):
 - The forced-field merge updates a host's `hooks` wiring while preserving an
   undeclared custom field (e.g. `enabledPlugins`).
 - Both PreToolUse hooks fire on an already-provisioned host after migration.
+
+## 11. Implementation status
+
+Landed in PR #113 (TDD; `make shell-test` green — 17/17 drivers):
+
+| Area | Change |
+|---|---|
+| Forced merge | `opt/scripts/system/apply-forced-settings.sh` (+ `_test.sh`, 15 cases) — deep-merge declared subset, strip `_`-doc keys, fail loud without clobbering |
+| Claude config | `ai/claude/settings.forced.json` (new immutable subset); `settings.json.template` → `$HOME/.claude/hooks/...`, dead `DOTFILES_DIR` removed |
+| Gemini config | `ai/gemini/settings.forced.json` (new); `settings.json` drops `$GEMINI_PROJECT_DIR` → `$HOME/.gemini/hooks/...`, wires `safety_guard` too |
+| Claude installer | `install_claude_skills.sh` — **copies** hooks (+`strip_heredocs.awk`) into `~/.claude/hooks/`; seeds host file; forced-merge; legacy-symlink migration; one-time `.bak` (+ `_test.sh`, 13 cases) |
+| Gemini installer | `install_gemini_skills.sh` — copies hooks into `~/.gemini/hooks/`; seed + forced-merge; migration + `.bak` (+ `_test.sh`, 9 cases) |
+| install.sh | removed the duplicate settings-symlink blocks (skill installers now own provisioning) |
+| Validation (D3) | `ai/claude/scripts/validate_hooks.sh` (+ `_test.sh`, 4 cases) — event-agnostic; validates the **live configured** command resolves and **exercises** safety_guard (known-bad→block); wired into both sanity checks; `privacy_guard_test.sh` now also run; Gemini F7 hardcoded path fixed |
+| Directive | recorded in root `CLAUDE.md`/`GEMINI.md` (no new symlinks; copy into well-known `$HOME`) |
+
+Deferred to follow-ups (out of scope here): D5 fail-closed dispatcher; the
+retrospective privacy leak scan (§6); migrating the *existing* statusline /
+commands / skills symlinks to copies (legacy, allowed to remain).

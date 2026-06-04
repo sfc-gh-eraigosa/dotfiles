@@ -322,17 +322,9 @@ if [ -f "${BASE_DIR}/opt/scripts/system/google-cli-setup.sh" ]; then
     "${BASE_DIR}/opt/scripts/system/google-cli-setup.sh"
 fi
 
-# Gemini settings
-if [ -f "${BASE_DIR}/ai/gemini/settings.json" ]; then
-    echo "Configuring Gemini settings..."
-    mkdir -p "${HOME}/.gemini"
-    # If it's a real file (not a symlink), back it up
-    if [ -f "${HOME}/.gemini/settings.json" ] && [ ! -L "${HOME}/.gemini/settings.json" ]; then
-        echo "  Backing up existing settings.json to settings.json.bak"
-        mv "${HOME}/.gemini/settings.json" "${HOME}/.gemini/settings.json.bak"
-    fi
-    ln -sf "${BASE_DIR}/ai/gemini/settings.json" "${HOME}/.gemini/settings.json"
-fi
+# Gemini settings + hooks are provisioned by install_gemini_skills.sh (called
+# above): ~/.gemini/settings.json is a host-owned file with the forced hook
+# subset merged in, and hooks are copied into ~/.gemini/hooks/. No symlink here.
 
 # install Claude Code CLI (macOS via brew cask, Linux/WSL via npm)
 if [ -f "${BASE_DIR}/opt/scripts/system/claude_install.sh" ]; then
@@ -340,24 +332,10 @@ if [ -f "${BASE_DIR}/opt/scripts/system/claude_install.sh" ]; then
     "${BASE_DIR}/opt/scripts/system/claude_install.sh"
 fi
 
-# Claude settings (re-link in case install order matters)
-# settings.json is gitignored per-host. Seed from .template on first run, then
-# symlink ~/.claude/settings.json to the local copy.
-CLAUDE_SETTINGS="${BASE_DIR}/ai/claude/settings.json"
-CLAUDE_SETTINGS_TEMPLATE="${BASE_DIR}/ai/claude/settings.json.template"
-if [ ! -f "${CLAUDE_SETTINGS}" ] && [ -f "${CLAUDE_SETTINGS_TEMPLATE}" ]; then
-    echo "Seeding ai/claude/settings.json from template (first run)"
-    cp "${CLAUDE_SETTINGS_TEMPLATE}" "${CLAUDE_SETTINGS}"
-fi
-if [ -f "${CLAUDE_SETTINGS}" ]; then
-    echo "Configuring Claude Code settings..."
-    mkdir -p "${HOME}/.claude"
-    if [ -f "${HOME}/.claude/settings.json" ] && [ ! -L "${HOME}/.claude/settings.json" ]; then
-        echo "  Backing up existing settings.json to settings.json.bak"
-        mv "${HOME}/.claude/settings.json" "${HOME}/.claude/settings.json.bak"
-    fi
-    ln -sf "${CLAUDE_SETTINGS}" "${HOME}/.claude/settings.json"
-fi
+# Claude settings + hooks are provisioned by install_claude_skills.sh (called
+# above): ~/.claude/settings.json is a host-owned file with the forced subset
+# (hooks, statusLine, deny/ask) merged in, and hooks are copied into
+# ~/.claude/hooks/. No symlink and no repo-internal host copy here.
 
 # Sync AI plugins from the manifest (ai/plugins.yaml). Ensure-only: installs +
 # enables the listed plugins; never removes anything. Runs after the Claude CLI

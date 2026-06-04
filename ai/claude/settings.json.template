@@ -1,7 +1,4 @@
 {
-  "env": {
-    "DOTFILES_DIR": "$HOME/git/dotfiles"
-  },
   "permissions": {
     "allow": [
       "Bash(gss status:*)",
@@ -67,7 +64,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/git/dotfiles/ai/hooks/safety_guard.sh"
+            "command": "$HOME/.claude/hooks/safety_guard.sh"
           }
         ]
       },
@@ -76,7 +73,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/git/dotfiles/ai/hooks/privacy_guard.sh"
+            "command": "$HOME/.claude/hooks/privacy_guard.sh"
           }
         ]
       }

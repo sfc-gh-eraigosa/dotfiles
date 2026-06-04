@@ -1,0 +1,57 @@
+{
+  "_comment": "FORCED (immutable) Claude settings subset. install_claude_skills.sh deep-merges this over the host-owned ~/.claude/settings.json on every run (see opt/scripts/system/apply-forced-settings.sh and docs/designs/2026-06-02-ai-config-home-provisioning.md). These fields are re-applied from the repo; every other host field is preserved. Hooks reference well-known $HOME paths populated by copy (no symlink, no repo-internal path).",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/safety_guard.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/privacy_guard.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/statusline-command.sh"
+  },
+  "permissions": {
+    "deny": [
+      "Bash(rm -rf /:*)",
+      "Bash(rm -rf ~:*)",
+      "Bash(rm -rf $HOME:*)",
+      "Bash(dd if=:*)",
+      "Bash(mkfs:*)",
+      "Bash(mkfs.:*)",
+      "Bash(fdisk:*)",
+      "Bash(parted:*)",
+      "Bash(sfdisk:*)",
+      "Bash(mkswap:*)",
+      "Bash(init 0)",
+      "Bash(init 6)"
+    ],
+    "ask": [
+      "Bash(gss push:*)",
+      "Bash(gss pr:*)",
+      "Bash(gss sync:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(reboot:*)",
+      "Bash(shutdown:*)",
+      "Bash(poweroff:*)",
+      "Bash(halt:*)",
+      "Bash(sudo:*)"
+    ]
+  }
+}

@@ -64,10 +64,16 @@ assert_grep "symlink idempotency guard present" \
 NAKED_LN_S=$(grep -nE '(^|[[:space:]])ln[[:space:]]+-s[[:space:]]+[^f]' "$INSTALL" || true)
 assert_eq "$NAKED_LN_S" "" "no naked 'ln -s' (need -sf for idempotency)"
 
-# Existing-file backup pattern: when ~/.claude/settings.json or similar
-# exists as a real file, the installer moves it aside instead of clobbering.
-# This is what makes re-running safe on a machine with pre-existing config.
-assert_grep "backup-on-conflict guard present" \
-    'settings\.json\.bak' "$INSTALL"
+# Existing-file backup pattern: when ~/.claude or ~/.gemini settings.json
+# exists as a real file, the installer backs it up before applying the
+# forced-field merge, so re-running is safe on a machine with pre-existing
+# config. Settings provisioning now lives in the per-tool skill installers
+# (install.sh delegates to them), so assert the guard there.
+CLAUDE_SKILLS="${SELF_DIR}/opt/scripts/system/install_claude_skills.sh"
+GEMINI_SKILLS="${SELF_DIR}/opt/scripts/system/install_gemini_skills.sh"
+assert_grep "claude settings backup-on-conflict guard present" \
+    'settings\.json\.bak' "$CLAUDE_SKILLS"
+assert_grep "gemini settings backup-on-conflict guard present" \
+    'settings\.json\.bak' "$GEMINI_SKILLS"
 
 _test_report
