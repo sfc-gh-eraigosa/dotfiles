@@ -63,6 +63,20 @@ assert_eq "$(cat "$tmp/bad.json")" "$before" "invalid host file left unchanged"
 # --- Case 4: missing forced file fails loud ---
 assert_exit_code 1 "missing forced file fails" bash "$APPLY" "$tmp/host.json" "$tmp/nope.json"
 
+# --- Case 6: permissions.allow is UNIONED (host additions preserved, forced
+# entries guaranteed), while deny/ask are still replaced. ---
+cat > "$tmp/host6.json" <<'JSON'
+{ "permissions": { "allow": ["Bash(host-only:*)", "Bash(gss status:*)"], "ask": ["Bash(gss push:*)"] } }
+JSON
+cat > "$tmp/forced6.json" <<'JSON'
+{ "permissions": { "allow": ["Bash(gss push:*)", "Bash(gss status:*)"], "ask": ["Bash(sudo:*)"] } }
+JSON
+bash "$APPLY" "$tmp/host6.json" "$tmp/forced6.json"
+assert_eq "$(jq -r '.permissions.allow | any(. == "Bash(host-only:*)")' "$tmp/host6.json")" "true" "host-only allow entry preserved (union)"
+assert_eq "$(jq -r '.permissions.allow | any(. == "Bash(gss push:*)")' "$tmp/host6.json")" "true" "forced allow entry added (union)"
+assert_eq "$(jq -r '[.permissions.allow[] | select(. == "Bash(gss status:*)")] | length' "$tmp/host6.json")" "1" "duplicate allow entry deduped"
+assert_eq "$(jq -r '.permissions.ask' "$tmp/host6.json")" "$(printf '[\n  "Bash(sudo:*)"\n]')" "ask is replaced (not unioned)"
+
 # --- Case 5: doc keys (leading underscore) in the forced file are NOT merged
 # into the live settings (they are self-documentation, not config). ---
 cat > "$tmp/host5.json" <<'JSON'

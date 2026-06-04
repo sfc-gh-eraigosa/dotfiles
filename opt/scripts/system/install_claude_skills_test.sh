@@ -46,6 +46,12 @@ assert_eq "$(jq -r '[.hooks.PreToolUse[].hooks[].command] | map(select(test("pri
     "1" "privacy_guard wired"
 assert_eq "$(jq -r '.permissions.deny | any(. == "Bash(rm -rf /:*)")' "$A/.claude/settings.json")" \
     "true" "forced permissions.deny applied"
+assert_eq "$(jq -r '.permissions.allow | any(. == "Bash(gss push:*)")' "$A/.claude/settings.json")" \
+    "true" "gss push is auto-allowed (no harness prompt)"
+assert_eq "$(jq -r '.permissions.ask | any(. == "Bash(gss push:*)")' "$A/.claude/settings.json")" \
+    "false" "gss push is NOT in ask (no double prompt)"
+assert_eq "$(jq -r '.permissions.ask | any(. == "Bash(sudo:*)")' "$A/.claude/settings.json")" \
+    "true" "genuinely dangerous verbs (sudo) stay in ask"
 assert_grep_negative "no repo-internal path in fresh settings" "git/dotfiles" "$A/.claude/settings.json"
 
 # --- B: existing host with customizations + a stale repo-internal hook path ---

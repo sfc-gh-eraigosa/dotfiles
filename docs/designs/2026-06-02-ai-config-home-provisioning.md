@@ -378,7 +378,8 @@ Landed in PR #113 (TDD; `make shell-test` green — 17/17 drivers):
 
 | Area | Change |
 |---|---|
-| Forced merge | `opt/scripts/system/apply-forced-settings.sh` (+ `_test.sh`, 15 cases) — deep-merge declared subset, strip `_`-doc keys, fail loud without clobbering |
+| Forced merge | `opt/scripts/system/apply-forced-settings.sh` (+ `_test.sh`, 19 cases) — deep-merge declared subset (hooks/statusLine/deny/ask **replaced**; `permissions.allow` **unioned** so host additions survive), strip `_`-doc keys, fail loud without clobbering |
+| Permissions | `gss push`/`pr`/`sync` moved from `ask` → `allow` (template + forced): auto-approved at the harness level so they no longer double-prompt, while still gated by the `safety_guard` approval-token hook (which runs *before* permission checks — verified against Claude Code docs) and the gss skill's mandatory confirmation. Genuinely dangerous verbs (`git push --force`, `sudo`, `reboot`, …) stay in `ask`. |
 | Claude config | `ai/claude/settings.forced.json` (new immutable subset); `settings.json.template` → `$HOME/.claude/hooks/...`, dead `DOTFILES_DIR` removed |
 | Gemini config | `ai/gemini/settings.forced.json` (new); `settings.json` drops `$GEMINI_PROJECT_DIR` → `$HOME/.gemini/hooks/...`, wires `safety_guard` too |
 | Claude installer | `install_claude_skills.sh` — **copies** hooks (+`strip_heredocs.awk`) into `~/.claude/hooks/`; seeds host file; forced-merge; legacy-symlink migration; one-time `.bak` (+ `_test.sh`, 13 cases) |

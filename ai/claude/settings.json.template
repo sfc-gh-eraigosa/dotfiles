@@ -4,6 +4,9 @@
       "Bash(gss status:*)",
       "Bash(gss scan:*)",
       "Bash(gss version:*)",
+      "Bash(gss push:*)",
+      "Bash(gss pr:*)",
+      "Bash(gss sync:*)",
       "Bash(tmux-mgr session:*)",
       "Bash(tmux-mgr window:*)",
       "Bash(tmux-mgr capture:*)",
@@ -44,9 +47,6 @@
       "Bash(init 6)"
     ],
     "ask": [
-      "Bash(gss push:*)",
-      "Bash(gss pr:*)",
-      "Bash(gss sync:*)",
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
       "Bash(reboot:*)",
