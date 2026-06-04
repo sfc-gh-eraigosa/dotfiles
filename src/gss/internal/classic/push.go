@@ -75,8 +75,12 @@ func (p *Pusher) Push(ctx context.Context, opts PushOpts) error {
 	fmt.Fprintf(p.Out, "Backup branch: %s\n", name)
 
 	fmt.Fprintf(p.Out, "Step 2: Syncing %s with origin/%s...\n", opts.RepoPath, branch)
-	if _, err := p.Sync.Sync(ctx, opts.RepoPath); err != nil {
+	syncRes, err := p.Sync.Sync(ctx, opts.RepoPath)
+	if err != nil {
 		return fmt.Errorf("classic push: sync: %w", err)
+	}
+	if syncRes.NewBranch {
+		fmt.Fprintf(p.Out, "  New branch — no origin counterpart yet; creating it with --set-upstream.\n")
 	}
 
 	fmt.Fprintf(p.Out, "Step 3: Pushing %s to origin/%s...\n", opts.RepoPath, branch)

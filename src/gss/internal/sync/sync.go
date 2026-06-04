@@ -24,9 +24,13 @@ type Service struct {
 func NewService(gitr git.Runner) *Service { return &Service{Git: gitr} }
 
 // Result carries the resolved branch and git's combined output for display.
+// NewBranch is true when the branch has no origin/<branch> counterpart yet, so
+// the rebase was skipped (there is nothing to rebase onto) and the caller's
+// push must create it with --set-upstream.
 type Result struct {
-	Branch string
-	Output string
+	Branch    string
+	Output    string
+	NewBranch bool
 }
 
 // Sync resolves the current branch (defaulting to main), runs
@@ -38,6 +42,16 @@ func (s *Service) Sync(ctx context.Context, repoPath string) (Result, error) {
 
 	if out, err := s.Git.Run(ctx, "-C", repoPath, "fetch", "origin"); err != nil {
 		return Result{Branch: branch}, fmt.Errorf("sync: fetch origin: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+
+	// A brand-new branch has no origin/<branch> counterpart, so there is nothing
+	// to rebase onto. Rebasing anyway fails with git's "couldn't find remote
+	// ref" — which, in the push flow, aborts after the approval token is already
+	// consumed and forces a second confirmation. Detect the missing remote ref
+	// (exit-code based, robust to git's wording/locale) and skip the rebase; the
+	// caller's `push -u` will create the branch.
+	if _, err := s.Git.Run(ctx, "-C", repoPath, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+branch); err != nil {
+		return Result{Branch: branch, NewBranch: true, Output: "new branch — no origin counterpart yet; skipping rebase"}, nil
 	}
 
 	out, err := s.Git.Run(ctx, "-C", repoPath, "pull", "--rebase", "origin", branch)
