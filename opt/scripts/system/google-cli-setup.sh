@@ -203,14 +203,19 @@ setup_all() {
     echo -e "\n${GREEN}${BOLD}Success: Google CLI setup complete!${NC}"
 }
 
-case "$1" in
-    status)
-        show_status
-        ;;
-    gcloud)
-        install_gcloud
-        ;;
-    *)
-        setup_all
-        ;;
-esac
+# Only dispatch when executed directly. Sourcing this file (e.g. from a
+# test driver) loads helpers like `load_node_env` without firing the
+# install flow. Required by opt/scripts/system/google-cli-setup_test.sh.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    case "${1:-}" in
+        status)
+            show_status
+            ;;
+        gcloud)
+            install_gcloud
+            ;;
+        *)
+            setup_all
+            ;;
+    esac
+fi

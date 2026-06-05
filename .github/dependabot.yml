@@ -1,0 +1,25 @@
+# Dependabot configuration (issue #46 phase 5).
+#
+# Scope: github-actions only. We pin every action in .github/workflows/* to a
+# full 40-char commit SHA (see the top-of-file comment in docker-image.yml).
+# Dependabot understands that convention and raises PRs that bump both the
+# SHA and the trailing `# vX.Y.Z` version comment in lockstep.
+#
+# Other ecosystems (gomod, npm, pip) are intentionally NOT enabled here —
+# those bumps land via dedicated PRs that exercise the unit-test / shell-test
+# matrix manually. Revisit if the manual cadence becomes a burden.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(ci)"
+      include: scope
+    labels:
+      - "dependencies"
+      - "github-actions"

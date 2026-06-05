@@ -1,0 +1,31 @@
+# EditorConfig — https://editorconfig.org/
+# Baseline formatting rules for the dotfiles repo. Phase 1 of GitHub issue #46
+# (CI hygiene: lint + format baseline). Conservative defaults — editors and
+# CI linters should treat these as the single source of truth.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Makefiles require literal tab characters in recipe lines.
+[{Makefile,*.mk}]
+indent_style = tab
+
+# YAML / JSON ecosystems conventionally use 2-space indent.
+[*.{yml,yaml,json,jsonc}]
+indent_size = 2
+
+# Go code uses tabs (gofmt enforces this).
+[*.go]
+indent_style = tab
+
+# Markdown uses two trailing spaces to encode a hard line break. Stripping
+# them silently rewraps prose, so we keep trailing whitespace as-is here.
+[*.{md,markdown}]
+trim_trailing_whitespace = false

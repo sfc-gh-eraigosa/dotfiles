@@ -37,19 +37,19 @@ func TestAgentStartCmd_NoTaskID(t *testing.T) {
 }
 
 func TestAgentListCmd(t *testing.T) {
-    // Should run successfully even if no sessions exist
-    _, err := executeCommand("agent", "list")
-    if err != nil {
-        t.Errorf("agent list failed: %v", err)
-    }
+	// Should run successfully even if no sessions exist
+	_, err := executeCommand("agent", "list")
+	if err != nil {
+		t.Errorf("agent list failed: %v", err)
+	}
 }
 
 func TestAgentCleanupCmd_NoArgs(t *testing.T) {
-    // Should fail because session-id is required
-    _, err := executeCommand("agent", "cleanup")
-    if err == nil {
-        t.Error("Expected error when calling cleanup without args")
-    }
+	// Should fail because session-id is required
+	_, err := executeCommand("agent", "cleanup")
+	if err == nil {
+		t.Error("Expected error when calling cleanup without args")
+	}
 }
 
 func TestBuildInvocationCmd_Claude(t *testing.T) {

@@ -25,10 +25,14 @@ func init() {
 			dir := args[0]
 			var tmuxArg string
 			switch dir {
-			case "left": tmuxArg = "-L"
-			case "right": tmuxArg = "-R"
-			case "up": tmuxArg = "-U"
-			case "down": tmuxArg = "-D"
+			case "left":
+				tmuxArg = "-L"
+			case "right":
+				tmuxArg = "-R"
+			case "up":
+				tmuxArg = "-U"
+			case "down":
+				tmuxArg = "-D"
 			default:
 				fmt.Println("Invalid direction. Use left|right|up|down")
 				return
@@ -99,10 +103,14 @@ func init() {
 			dir := args[0]
 			var tmuxArg string
 			switch dir {
-			case "left": tmuxArg = "-L"
-			case "right": tmuxArg = "-R"
-			case "up": tmuxArg = "-U"
-			case "down": tmuxArg = "-D"
+			case "left":
+				tmuxArg = "-L"
+			case "right":
+				tmuxArg = "-R"
+			case "up":
+				tmuxArg = "-U"
+			case "down":
+				tmuxArg = "-D"
 			default:
 				fmt.Println("Invalid direction. Use left|right|up|down")
 				return
@@ -178,10 +186,14 @@ func init() {
 
 			var tmuxArg string
 			switch dir {
-			case "left": tmuxArg = "-L"
-			case "right": tmuxArg = "-R"
-			case "up": tmuxArg = "-U"
-			case "down": tmuxArg = "-D"
+			case "left":
+				tmuxArg = "-L"
+			case "right":
+				tmuxArg = "-R"
+			case "up":
+				tmuxArg = "-U"
+			case "down":
+				tmuxArg = "-D"
 			default:
 				fmt.Println("Invalid direction. Use left|right|up|down or width/height with %")
 				return

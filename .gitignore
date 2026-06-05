@@ -6,6 +6,7 @@
 !CONTRIBUTING.md
 !Makefile
 !install.sh
+!install_test.sh
 !.go-version
 !LICENSE
 !azure-pipelines.yml
@@ -16,6 +17,16 @@
 !**/CLAUDE.md
 # WORKER.md is per-worktree scratch state (gss feature worker add seeds it);
 # keep it local-only so it never lands in a PR or the main branch.
+
+# CI hygiene config (issue #46 phase 1). These are repo-root linter configs
+# read by editors, golangci-lint, shellcheck, and markdownlint-cli2. They MUST
+# be opt-in explicitly because the leading `*` rule above would otherwise hide
+# them silently.
+!.editorconfig
+!.golangci.yml
+!.shellcheckrc
+!.markdownlint.jsonc
+!.ci-baseline-issues.md
 
 # Repository Structure Exceptions
 !.github/
@@ -43,6 +54,8 @@ opt/bin/*
 !opt/bin/pkg-install-apt
 !opt/bin/pkg-install-brew
 !opt/bin/install_windows.sh
+# Test drivers for the committed opt/bin tools (issue #46 phase 2)
+!opt/bin/pkg-install_test.sh
 
 # Opt Subdirectory Configuration
 opt/.DS_Store

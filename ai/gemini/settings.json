@@ -17,12 +17,22 @@
   "hooks": {
     "BeforeTool": [
       {
+        "matcher": "run_shell_command",
+        "hooks": [
+          {
+            "name": "safety-guard",
+            "type": "command",
+            "command": "$HOME/.gemini/hooks/safety_guard.sh"
+          }
+        ]
+      },
+      {
         "matcher": "write_file|replace|run_shell_command",
         "hooks": [
           {
             "name": "privacy-guard",
             "type": "command",
-            "command": "$GEMINI_PROJECT_DIR/ai/hooks/privacy_guard.sh"
+            "command": "$HOME/.gemini/hooks/privacy_guard.sh"
           }
         ]
       }

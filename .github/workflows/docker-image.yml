@@ -1,43 +1,194 @@
 name: Docker Image CI
 
+# Pin-to-SHA convention (issue #46 phase 5):
+# Every third-party GitHub Action used below is pinned to a full 40-char
+# commit SHA, with a trailing `# vX.Y.Z` comment naming the human-readable
+# release tag. This protects us from a compromised tag being silently
+# repointed at malicious code (a published `vX.Y.Z` tag can be moved by
+# anyone who controls the upstream repo; a 40-char SHA cannot). Dependabot
+# (.github/dependabot.yml) raises PRs that bump both the SHA and the
+# trailing comment together when a new release ships.
+#
+# When bumping a pin by hand:
+#   tag=$(gh api repos/<owner>/<repo>/releases/latest --jq .tag_name)
+#   sha=$(gh api repos/<owner>/<repo>/git/ref/tags/$tag --jq .object.sha)
+#   # then write: uses: <owner>/<repo>@$sha # $tag
+
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+    # Phase 7 of CI hygiene (issue #46 / PR #48): draft-PR fast path. GitHub's
+    # DEFAULT pull_request activity types are opened/synchronize/reopened. None
+    # of those fire when a PR flips draft->ready or when a label is added or
+    # removed — so without the extra types below, the `build-and-validate` gate
+    # (which keys off draft-status and the `ready-for-merge` label) would never
+    # re-evaluate after promotion or labeling, and the heavy job would stay
+    # skipped until the next code push. We therefore opt in explicitly:
+    #   - opened/synchronize/reopened: the defaults, RE-STATED — once you
+    #     specify `types:` the implicit default list is REPLACED, not extended,
+    #     so omitting these would silently drop normal push-to-PR CI for every
+    #     job in this file (the fast jobs share this trigger block too).
+    #   - ready_for_review: fires when a draft is marked "Ready for review";
+    #     this is what lets build-and-validate start the moment a PR leaves draft.
+    #   - labeled / unlabeled: fire when `ready-for-merge` is added or removed,
+    #     so the gate re-runs (or correctly re-skips) on label churn even while
+    #     the PR is still a draft.
+    types: [ opened, synchronize, reopened, ready_for_review, labeled, unlabeled ]
+  # Phase 6 of CI hygiene (issue #46). `merge_group:` is the synthetic-commit
+  # event GitHub's merge queue dispatches BEFORE landing a PR on main. Every
+  # job below is wired in as a required check via branch protection, so they
+  # must execute on this trigger or the queue will block indefinitely waiting
+  # for status. No `branches:` filter — `merge_group` always targets the
+  # queue's configured base branch (main in our case).
+  # Admin setup runbook: .github/MERGE_QUEUE_SETUP.md
+  merge_group:
 
 jobs:
+  lint:
+    name: Lint (go + shell + markdown + actions)
+    runs-on: ubuntu-latest
+    # Phase 1 of CI hygiene (issue #46). This job runs first and unit-tests
+    # / shell-tests depend on it (`needs: lint`), so once the backlog is
+    # cleared and the warn-only flags below are dropped, a lint regression
+    # will short-circuit the rest of CI. Until then the lint steps are
+    # warn-only (see the per-step notes) so the merge queue isn't blocked by
+    # the pre-existing baseline. Tool versions are pinned in
+    # .ci-baseline-issues.md. Phase 5 added actionlint (MIT,
+    # https://github.com/rhysd/actionlint/blob/main/LICENSE.txt) to lint
+    # the workflow YAML itself.
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: '1.26'
+          # setup-go@v5 enables module caching by default (cache: true);
+          # cache-dependency-path scopes the cache key to our four Go modules.
+          cache-dependency-path: "src/**/*.sum"
+
+      - name: Install golangci-lint
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.0.2
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Install markdownlint-cli2
+        run: npm install -g markdownlint-cli2@0.22.1
+
+      - name: Install actionlint
+        # Pinned to the same Go release line we use for the rest of the
+        # workflow; bumps land via the same PR that bumps actionlint usage.
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Run make lint
+        # WARN-ONLY: the phase-1 baseline ships a known backlog (121 Go +
+        # ~90 shell + ~979 markdown findings, see .ci-baseline-issues.md).
+        # `continue-on-error: true` keeps every linter RUNNING and surfacing
+        # findings in the step log, but does not fail the job — so the lint
+        # job stays green and the merge queue (phase 6) isn't deadlocked by
+        # the pre-existing backlog. Follow-up phases that burn the backlog
+        # down should drop this flag (per linter as each category reaches
+        # zero) to make the gate strict.
+        continue-on-error: true
+        run: make lint
+
+      - name: Run actionlint
+        # Lints the workflow YAML itself. Run AFTER make lint so a missing
+        # shellcheck/golangci-lint shows up first (clearer failure mode).
+        # Warn-only for the same reason as `make lint` above.
+        continue-on-error: true
+        run: actionlint .github/workflows/*.yml
+
   unit-tests:
     name: Run Unit Tests
+    needs: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version: '1.26'
           cache-dependency-path: "src/**/*.sum"
       - name: Run Go Unit Tests
         run: make unit-test
+      - name: Upload coverage report
+        # Phase 3 of CI hygiene (issue #46). scripts/test.sh emits per-module
+        # `<mod>.out` profiles + `<mod>.html` HTML reports into coverage/.
+        # `if: always()` so the artifact is still uploaded when the coverage
+        # gate (the previous step) FAILS — that's exactly when reviewers want
+        # to inspect which package is dragging the module under its floor.
+        # Phase 5 bumped this to upload-artifact@v4 (v3 is sunset).
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
       - name: gss dependency + license gate
         run: |
           go install github.com/google/go-licenses@latest
-          export PATH="$(go env GOPATH)/bin:$PATH"
+          PATH="$(go env GOPATH)/bin:$PATH"
+          export PATH
           GSS_STRICT_CHECK=1 bash src/gss/scripts/check-deps.sh
+
+  shell-tests:
+    name: Run Shell Test Drivers
+    needs: lint
+    runs-on: ubuntu-latest
+    # Phase 2 of CI hygiene (issue #46). Runs every `*_test.sh` driver
+    # discovered by `make shell-test` — install_test.sh, the migrated
+    # aliases_test.sh, the safety_guard hook test suite, plus the new
+    # drivers for sync-skills, google-cli-setup, open-url, pkg-install.
+    # Parallel to unit-tests (Go) so a shell-driver regression doesn't
+    # gate the Go suite and vice-versa.
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Install jq
+        # safety_guard_test.sh builds its tool_input payloads with jq.
+        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Run make shell-test
+        run: make shell-test
 
   build-and-validate:
     name: Build and Integration Test
+    # Phase 7 of CI hygiene (issue #46 / PR #48). This is the SLOW job (docker
+    # build + integration suite + docker-in-docker), so we keep it OFF the
+    # draft-PR critical path while leaving the fast jobs (lint/unit/shell)
+    # running on every push. The gate runs build-and-validate when:
+    #   - the event is NOT a pull_request  -> covers `merge_group` (the merge
+    #     queue's required check; it MUST run or the queue hangs — see the
+    #     phase-6 note above) and `push` to main (post-merge validation). This
+    #     clause is the escape hatch: merge_group/push payloads carry no
+    #     `github.event.pull_request` object, so the two PR-specific clauses
+    #     below evaluate to null/false there rather than erroring.
+    #   - OR the PR is not a draft (`draft == false`, i.e. ready-for-review).
+    #   - OR the PR carries the `ready-for-merge` label, which forces the heavy
+    #     job to run even while the PR is still a draft (explicit opt-in).
+    # The pull_request `types:` list above (ready_for_review, labeled) is what
+    # makes GitHub re-dispatch the workflow when draft/label state changes so
+    # this gate is actually re-evaluated.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ready-for-merge')
     needs: unit-tests
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: dotfiles:latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: Build the Docker image
         run: make build
-      
+
       - name: Run Integration Tests
         run: make integration-test
 
       - name: Build Docker in Docker (Legacy Check)
-        run: docker run --privileged -v $(pwd):/dotfiles -w /dotfiles dotfiles:latest docker build --tag test opt/docker/helloworld
+        run: docker run --privileged -v "$(pwd):/dotfiles" -w /dotfiles dotfiles:latest docker build --tag test opt/docker/helloworld

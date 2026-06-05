@@ -59,24 +59,37 @@ done < <(find "$BASE_DIR" -name "CLAUDE.md" -not -path "*/node_modules/*" -not -
 [ "$missing" -gt 0 ] && exit 1
 echo "PASS: CLAUDE.md links resolve"
 
-# 6. Hooks executable + test suite passes
-echo "Verifying safety_guard hook..."
+# 6. Hooks: the LIVE configured wiring resolves + repo self-tests pass
+echo "Verifying hooks..."
 HOOK="$BASE_DIR/ai/hooks/safety_guard.sh"
 HOOK_TEST="$BASE_DIR/ai/hooks/safety_guard_test.sh"
+PRIV_TEST="$BASE_DIR/ai/hooks/privacy_guard_test.sh"
+VALIDATE="$BASE_DIR/ai/claude/scripts/validate_hooks.sh"
 if [ ! -x "$HOOK" ]; then
     echo "FAIL: safety_guard hook missing or not executable"
     exit 1
 fi
+# D3: validate the wiring CONFIGURED in the live ~/.claude/settings.json and
+# exercise it through the configured command. This is the check that catches
+# #111 — a settings.json pointing at a moved/dead hook path that a stat of the
+# repo copy (the old check below) would miss while both guards are silently off.
+if [ -x "$VALIDATE" ]; then
+    if ! "$VALIDATE" "$HOME/.claude/settings.json"; then
+        echo "FAIL: configured hook wiring in ~/.claude/settings.json is broken (see above)"
+        exit 1
+    fi
+fi
 if command -v jq > /dev/null 2>&1; then
-    if [ -x "$HOOK_TEST" ]; then
-        if ! "$HOOK_TEST" > /dev/null 2>&1; then
-            echo "FAIL: safety_guard hook self-test failed (run $HOOK_TEST to see details)"
+    for t in "$HOOK_TEST" "$PRIV_TEST"; do
+        [ -x "$t" ] || continue
+        if ! "$t" > /dev/null 2>&1; then
+            echo "FAIL: hook self-test failed (run $t to see details)"
             exit 1
         fi
-    fi
-    echo "PASS: safety_guard hook (27 test cases)"
+    done
+    echo "PASS: hooks wired (validated via the configured command) + self-tests pass"
 else
-    echo "SKIP: jq not installed — hook self-test skipped"
+    echo "SKIP: jq not installed — hook self-tests skipped"
 fi
 
 echo "--------------------------------------------------"

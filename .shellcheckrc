@@ -1,0 +1,32 @@
+# ShellCheck baseline for the dotfiles repo.
+# Phase 1 of GitHub issue #46 (CI hygiene). Keep this conservative —
+# we only disable codes that produce noise in the current codebase
+# (verified by running shellcheck over opt/scripts/**, ai/**/*.sh, and
+# install.sh at baseline). Future phases should ratchet to lower
+# severities once the warning-level backlog is cleaned up.
+#
+# NOTE on severity: shellcheck's .shellcheckrc does NOT honor a `severity=`
+# directive (that's a CLI-only flag, despite some third-party docs implying
+# otherwise as of shellcheck 0.10). The Makefile target `lint-shell` passes
+# `-S warning` on the command line so CI and local runs match.
+
+# Allow shellcheck to follow `source` / `.` directives where the path is
+# a constant string. This catches more real bugs (undefined vars, etc).
+external-sources=true
+
+# --- Disabled codes (justified below) -------------------------------------
+#
+# SC1090 — "ShellCheck can't follow non-constant source." Many of our
+#   profile fragments source files via "$HOME/..." or dynamically computed
+#   paths (oh-my-zsh, conditional plugin loaders). The construction is
+#   intentional and SC1090 emits one noise line per source. We disable
+#   globally; if you have a CONSTANT path, prefer wiring a per-file
+#   `# shellcheck source=...` directive over re-enabling this.
+disable=SC1090
+
+# SC1091 — "Not following: file was not specified as input." Same root
+#   cause as SC1090 when external-sources can't resolve a path during a
+#   non-aware CI run (e.g. sourced file lives outside the repo). Disabling
+#   here keeps CI runs reproducible across machines that have or lack the
+#   sibling file on disk.
+disable=SC1091
