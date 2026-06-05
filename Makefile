@@ -13,8 +13,8 @@ help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: bin
-bin: ## Rebuild all binaries in ./src and ./sdk
-	@for d in src/* sdk/*; do \
+bin: ## Rebuild all binaries in ./sdk
+	@for d in sdk/*; do \
 		if [ -f "$$d/build.sh" ]; then \
 			echo "Building $$d..."; \
 			bash "$$d/build.sh"; \
@@ -65,18 +65,33 @@ claude-hook-test: ## Run safety_guard hook test suite only
 # -----------------------------------------------------------------------------
 
 .PHONY: lint
-lint: lint-go lint-shell lint-markdown ## Run all linters (go, shell, markdown)
+lint: check-legacy-paths lint-go lint-shell lint-markdown ## Run all linters (go, shell, markdown)
 
+
+.PHONY: check-legacy-paths
+check-legacy-paths: ## Fail if a legacy Go module path or src/<tool> reappears (Go lives in sdk/)
+	@echo "==> checking for legacy Go module paths (must be 0)..."
+	@if grep -rInE 'github\.com/(wenlock|eraigosa)/dotfiles' \
+		--include='*.go' --include='go.mod' --include='build.sh' --exclude-dir=.git . ; then \
+		echo "ERROR: legacy module path in Go source — use github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>"; \
+		exit 1; \
+	fi
+	@for t in gss gsl wol tmux-mgr; do \
+		if [ -e "src/$$t/go.mod" ]; then \
+			echo "ERROR: Go module src/$$t exists — Go modules live in sdk/"; exit 1; \
+		fi; \
+	done
+	@echo "OK: no legacy Go module paths; no Go modules under src/"
 .PHONY: lint-go
 lint-go: ## Lint Go modules (gofmt + golangci-lint, per-module)
-	@echo "==> gofmt check across src/ and sdk/..."
-	@unformatted=$$(gofmt -l ./src ./sdk 2>/dev/null); \
+	@echo "==> gofmt check across sdk/..."
+	@unformatted=$$(gofmt -l ./sdk 2>/dev/null); \
 		if [ -n "$$unformatted" ]; then \
 			echo "gofmt found unformatted files:"; \
 			echo "$$unformatted"; \
 			exit 1; \
 		fi
-	@for d in src/* sdk/*; do \
+	@for d in sdk/*; do \
 		if [ -f "$$d/go.mod" ]; then \
 			echo "==> golangci-lint run ($$d)"; \
 			(cd "$$d" && golangci-lint run ./...) || exit 1; \
