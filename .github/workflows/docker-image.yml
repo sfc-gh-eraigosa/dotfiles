@@ -143,7 +143,7 @@ jobs:
           go install github.com/google/go-licenses@latest
           PATH="$(go env GOPATH)/bin:$PATH"
           export PATH
-          GSS_STRICT_CHECK=1 bash src/gss/scripts/check-deps.sh
+          GSS_STRICT_CHECK=1 bash sdk/gss/scripts/check-deps.sh
 
   shell-tests:
     name: Run Shell Test Drivers

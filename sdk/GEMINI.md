@@ -14,7 +14,7 @@ tag of the form `sdk/<tool>/vX.Y.Z`.
 | Module | Path | Binary | Notes |
 | :----- | :--- | :----- | :---- |
 | [`gsl/`](./gsl/GEMINI.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl` | `gsl` | Go status line for Claude Code / Gemini CLI. |
-| `gss/` | `github.com/sfc-gh-eraigosa/dotfiles/sdk/gss` | `gss` | Git Safe Sync. *(migration pending)* |
+| [`gss/`](./gss/GEMINI.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/gss` | `gss` | Git Safe Sync. |
 | [`wol/`](./wol/GEMINI.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/wol` | `wol` | Wake-on-LAN utility. |
 | `tmux-mgr/` | `github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr` | `tmux-mgr` | tmux session + agent orchestration. *(migration pending)* |
 

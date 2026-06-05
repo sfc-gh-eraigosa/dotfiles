@@ -6,7 +6,7 @@
 # Pinned tool version (CI must match, see .github/workflows/docker-image.yml):
 #   golangci-lint v2.0.2 (latest stable line as of January 2026)
 #
-# This repo contains FOUR separate Go modules: src/gss, src/tmux-mgr, sdk/gsl,
+# This repo contains FOUR separate Go modules: sdk/gss, src/tmux-mgr, sdk/gsl,
 # sdk/wol. golangci-lint v2 auto-discovers each module when invoked from its
 # directory, so we keep this config free of repo-root path assumptions and
 # rely on the Makefile's `lint-go` target to iterate per-module.
