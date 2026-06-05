@@ -1,4 +1,4 @@
-module github.com/eraigosa/dotfiles/src/tmux-mgr
+module github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr
 
 go 1.26.1
 

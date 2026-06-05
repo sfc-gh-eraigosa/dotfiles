@@ -1173,7 +1173,7 @@ Implications:
 
 ## tmux-mgr refactor plan
 
-Today's `tmux-mgr` (at `src/tmux-mgr/`) owns its own worktree creation
+Today's `tmux-mgr` (at `sdk/tmux-mgr/`) owns its own worktree creation
 under `~/.config/tmux-mgr/worktrees/<session-id>` and shells out to
 `git worktree add` directly (`pkg/workspace/workspace.go:24–58`). Once
 `gss` ships, that responsibility moves to `gss feature worker add` and
@@ -1337,14 +1337,14 @@ captures the concrete deltas so the refactor can be scheduled.
 There are two distinct skill audiences and they should not be conflated:
 
 1. **Orchestrator agents** (running outside any worker; using
-   `tmux-mgr` to spawn workers) → `src/tmux-mgr/skill/SKILL.md`.
+   `tmux-mgr` to spawn workers) → `sdk/tmux-mgr/skill/SKILL.md`.
 2. **Worker agents** (running *inside* a worker worktree, driving the
    actual code change) → `sdk/gss/skill/SKILL.md`.
 
 The boundary mirrors the code dependency: skill files don't leak
 implementation across the boundary, just like the tools don't.
 
-#### `src/tmux-mgr/skill/SKILL.md` — orchestrator surface only
+#### `sdk/tmux-mgr/skill/SKILL.md` — orchestrator surface only
 
 The orchestrator skill should **not** mention `gss` at all. From the
 orchestrator's point of view, `tmux-mgr agent start` produces a pane

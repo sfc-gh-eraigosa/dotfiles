@@ -856,7 +856,7 @@ Per [`design.md` → Next steps](./design.md#next-steps):
 
 #### PR-53: `tmux-mgr` `Session` schema (`+WorkerRef`, `-RepoRoot`)
 - [ ] Design: [tmux-mgr refactor plan → What changes](./design.md#what-changes).
-- **Files**: `src/tmux-mgr/pkg/agent/session.go`,
+- **Files**: `sdk/tmux-mgr/pkg/agent/session.go`,
   `session_test.go`.
 - **Tests first**: round-trip with `WorkerRef`; absence of
   `RepoRoot`; back-compat read of existing session JSON files.
@@ -867,8 +867,8 @@ Per [`design.md` → Next steps](./design.md#next-steps):
 
 #### PR-54: `tmux-mgr` `cmd/internal.go` + `pane-wrap` shim
 - [ ] Design: [tmux-mgr refactor plan → What's new (1)](./design.md#whats-new); resolution #5 (close-hook).
-- **Files**: `src/tmux-mgr/cmd/internal.go` (new),
-  `src/tmux-mgr/cmd/pane_wrap.go`, tests.
+- **Files**: `sdk/tmux-mgr/cmd/internal.go` (new),
+  `sdk/tmux-mgr/cmd/pane_wrap.go`, tests.
 - **Tests first**: shim execs the agent CLI; on exit runs
   `gss feature checkpoint --auto --worker <ref>` (mocked); exit
   code forwarded; signals propagated to child (PGID handling).
@@ -879,7 +879,7 @@ Per [`design.md` → Next steps](./design.md#next-steps):
 
 #### PR-55: `tmux-mgr` `runAgentStart` shells out to `gss feature worker add`
 - [ ] Design: [tmux-mgr refactor plan](./design.md#tmux-mgr-refactor-plan).
-- **Files**: modified `src/tmux-mgr/cmd/agent.go`.
+- **Files**: modified `sdk/tmux-mgr/cmd/agent.go`.
 - **Tests first**: shells out with all required flags
   (`--purpose`, `--description`, `--user`, `--engine`,
   `--session-id`, `--pane-id`, `--tmux-mgr-session`, `--json`);
@@ -892,7 +892,7 @@ Per [`design.md` → Next steps](./design.md#next-steps):
 
 #### PR-56: `tmux-mgr` `runAgentCleanup` shells out to `gss feature done`
 - [ ] Design: [tmux-mgr refactor plan](./design.md#tmux-mgr-refactor-plan).
-- **Files**: modified `src/tmux-mgr/cmd/agent.go`.
+- **Files**: modified `sdk/tmux-mgr/cmd/agent.go`.
 - **Tests first**: cleanup reads `WorkerRef` from session JSON;
   forwards `--force`; tmux pane killed afterwards.
 - **Acceptance**: behavioural equivalence to current
@@ -902,7 +902,7 @@ Per [`design.md` → Next steps](./design.md#next-steps):
 
 #### PR-57: `tmux-mgr feature start | add-agent | status` convenience verbs
 - [ ] Design: [tmux-mgr refactor plan → What's new (2,3,4)](./design.md#whats-new).
-- **Files**: `src/tmux-mgr/cmd/feature.go` (new) + tests.
+- **Files**: `sdk/tmux-mgr/cmd/feature.go` (new) + tests.
 - **Tests first**: each verb wraps the equivalent gss feature call.
 - **Acceptance**: orchestrator skill (PR-60) instructs agents to use
   these.
@@ -911,7 +911,7 @@ Per [`design.md` → Next steps](./design.md#next-steps):
 
 #### PR-58: `tmux-mgr internal migrate-to-gss` full migrator
 - [ ] Design: [tmux-mgr refactor plan → One-shot migration](./design.md#whats-new); resolution #21.
-- **Files**: `src/tmux-mgr/cmd/migrate.go` + tests.
+- **Files**: `sdk/tmux-mgr/cmd/migrate.go` + tests.
 - **Tests first**: 9-step per-session procedure with a controlled
   legacy fixture set; `--dry-run` mode prints all planned actions
   without execution; idempotent re-runs read updated `WorkerRef`
@@ -926,7 +926,7 @@ Per [`design.md` → Next steps](./design.md#next-steps):
 
 #### PR-59: Delete `tmux-mgr/pkg/workspace/`
 - [ ] Design: [tmux-mgr refactor plan → What goes away](./design.md#what-goes-away).
-- **Files**: removed `src/tmux-mgr/pkg/workspace/*`; removed
+- **Files**: removed `sdk/tmux-mgr/pkg/workspace/*`; removed
   `currentRepoRoot()` from `cmd/agent.go`; removed timestamp branch
   naming.
 - **Tests first**: no test consumes `pkg/workspace`; grep guard in CI.
@@ -935,8 +935,8 @@ Per [`design.md` → Next steps](./design.md#next-steps):
 - **Reviewers**: Lead Developer, QA, Architect.
 
 #### PR-60: `tmux-mgr/skill/SKILL.md` updates (no gss leakage)
-- [ ] Design: [Skill doc updates → src/tmux-mgr/skill](./design.md#srctmux-mgrskillskillmd--orchestrator-surface-only).
-- **Files**: `src/tmux-mgr/skill/SKILL.md`.
+- [ ] Design: [Skill doc updates → sdk/tmux-mgr/skill](./design.md#srctmux-mgrskillskillmd--orchestrator-surface-only).
+- **Files**: `sdk/tmux-mgr/skill/SKILL.md`.
 - **Tests first**: none (doc); content checks: no `gss feature`
   mentions; "isolated working directory" replaces "git worktree";
   auto-checkpoint described as an observable side effect.

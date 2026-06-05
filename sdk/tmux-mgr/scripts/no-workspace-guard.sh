@@ -6,7 +6,7 @@
 # Usage: scripts/no-workspace-guard.sh   (run from anywhere)
 set -uo pipefail
 
-DIR="$(cd "$(dirname "$0")/.." && pwd)" # src/tmux-mgr
+DIR="$(cd "$(dirname "$0")/.." && pwd)" # sdk/tmux-mgr
 fail=0
 
 if [ -d "$DIR/pkg/workspace" ]; then

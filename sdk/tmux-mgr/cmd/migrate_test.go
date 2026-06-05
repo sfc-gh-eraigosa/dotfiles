@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eraigosa/dotfiles/src/tmux-mgr/pkg/agent"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/pkg/agent"
 )
 
 // --- fakes -----------------------------------------------------------------

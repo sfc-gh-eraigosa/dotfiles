@@ -4,9 +4,8 @@ This directory contains the source code for custom tools and specialized agent s
 
 ## Projects
 
-- `tmux-mgr/`: A Go-based tool for managing tmux sessions, windows, and layouts, and orchestrating multi-agent teams.
-  - [Project Documentation](./tmux-mgr/GEMINI.md)
-  - [Agent Skill Instructions](./tmux-mgr/skill/SKILL.md)
+> **Go modules now live in [`sdk/`](../sdk/GEMINI.md)**, not here — `gss`, `gsl`, `wol`, and `tmux-mgr` moved out of `src/` in the `src/` → `sdk/` cutover. `src/` holds non-Go tooling and agent skills.
+
 - `ssh-host-finder/`: A skill for finding SSH hosts on the local network.
   - [Agent Skill Instructions](./ssh-host-finder/SKILL.md)
 

@@ -12,7 +12,7 @@
           "branch": "feature/gsl/edward-raigosa/impl",
           "worktree": "/wt/gsl",
           "base_branch": "main",
-          "pr_url": "https://github.com/wenlock/dotfiles/pull/21",
+          "pr_url": "https://github.com/sfc-gh-eraigosa/dotfiles/pull/21",
           "pr_state": "OPEN"
         }
       ]

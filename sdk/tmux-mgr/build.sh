@@ -30,10 +30,10 @@ if ! git -C "$DIR" diff --quiet 2>/dev/null; then
     DIRTY="true"
 fi
 
-LDFLAGS="-X github.com/eraigosa/dotfiles/src/tmux-mgr/cmd.Version=$VERSION \
-         -X github.com/eraigosa/dotfiles/src/tmux-mgr/cmd.Commit=$COMMIT \
-         -X github.com/eraigosa/dotfiles/src/tmux-mgr/cmd.BuildDate=$DATE \
-         -X github.com/eraigosa/dotfiles/src/tmux-mgr/cmd.Dirty=$DIRTY"
+LDFLAGS="-X github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/cmd.Version=$VERSION \
+         -X github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/cmd.Commit=$COMMIT \
+         -X github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/cmd.BuildDate=$DATE \
+         -X github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/cmd.Dirty=$DIRTY"
 
 mkdir -p "$BIN_DIR"
 mkdir -p "$SKILL_INSTALL_DIR"

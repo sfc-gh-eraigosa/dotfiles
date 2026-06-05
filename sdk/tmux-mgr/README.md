@@ -25,7 +25,7 @@ cd ~/git/dotfiles
 ### Manual/Developer Build
 If you have Go installed, you can build and install the tool and its Gemini skill directly:
 ```bash
-cd ~/git/dotfiles/src/tmux-mgr
+cd ~/git/dotfiles/sdk/tmux-mgr
 ./build.sh
 ```
 *This will install the binary to `~/opt/bin/tmux-mgr` and link the Gemini skill to `~/.agents/skills/tmux`.*
