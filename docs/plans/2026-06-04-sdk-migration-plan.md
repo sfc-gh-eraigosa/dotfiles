@@ -56,6 +56,17 @@ The repo owner reviewed the Cross-Cutting Decisions (§4) and ratified the follo
   (`src/tmux-mgr/tmux-mg`, missing trailing `r`) is a verified non-functional rule. Re-path it to the
   correct `sdk/tmux-mgr/tmux-mgr` so the local build artifact is actually ignored under the new tree.
   Do not preserve the typo. Lands with the tmux-mgr move (Phase 5).
+- **D12 — Execution shape: concurrent per-module PRs + transitional dual-scan (RESOLVED; reconciles
+  D8/D9).** Four per-module PRs, **authored concurrently** (parallel worktree agents), merged in any
+  order. Ordering:
+  - **PR-A (foundation, first):** shared-harness changes that are *harmless while `sdk/` is empty* —
+    `.gitignore` `!sdk/` + `!sdk/**`; `scripts/test.sh` + `Makefile` discovery scans **both** `src/`
+    and `sdk/` (transitional); `gofmt -l ./src ./sdk`; CI cache tolerant of both. No module moves.
+  - **PR-1..4 (concurrent):** the four module moves (`git mv` + go.mod + imports + build.sh + per-module
+    docs + install.sh block + rebuilt binary). Mergeable in any order; dual-scan keeps `main` green.
+  - **PR-Z (final flip):** collapse discovery to **`sdk/`-only** (D9 end state), fix `.gitignore:75`,
+    add the anti-regression grep-guard, cut the first tags.
+  Keeps per-module review (D8) and the `sdk/`-only end state (D9) while maximizing concurrent build.
 
 > Repo visibility per D1 confirmed: `sfc-gh-eraigosa/dotfiles` is **public**.
 
