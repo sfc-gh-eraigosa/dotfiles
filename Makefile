@@ -13,8 +13,8 @@ help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: bin
-bin: ## Rebuild all binaries in ./src
-	@for d in src/*; do \
+bin: ## Rebuild all binaries in ./src and ./sdk
+	@for d in src/* sdk/*; do \
 		if [ -f "$$d/build.sh" ]; then \
 			echo "Building $$d..."; \
 			bash "$$d/build.sh"; \
@@ -69,14 +69,14 @@ lint: lint-go lint-shell lint-markdown ## Run all linters (go, shell, markdown)
 
 .PHONY: lint-go
 lint-go: ## Lint Go modules (gofmt + golangci-lint, per-module)
-	@echo "==> gofmt check across src/..."
-	@unformatted=$$(gofmt -l ./src 2>/dev/null); \
+	@echo "==> gofmt check across src/ and sdk/..."
+	@unformatted=$$(gofmt -l ./src ./sdk 2>/dev/null); \
 		if [ -n "$$unformatted" ]; then \
 			echo "gofmt found unformatted files:"; \
 			echo "$$unformatted"; \
 			exit 1; \
 		fi
-	@for d in src/*; do \
+	@for d in src/* sdk/*; do \
 		if [ -f "$$d/go.mod" ]; then \
 			echo "==> golangci-lint run ($$d)"; \
 			(cd "$$d" && golangci-lint run ./...) || exit 1; \
