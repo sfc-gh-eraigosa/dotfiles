@@ -20,6 +20,9 @@ import (
 	"bytes"
 	"context"
 	"os/exec"
+
+	"github.com/sirupsen/logrus"
+	"github.com/wenlock/dotfiles/gsl/internal/observe"
 )
 
 // Runner is the single entry point for git invocations in the gsl codebase.
@@ -91,6 +94,12 @@ func (r *SystemRunner) Run(ctx context.Context, name string, args ...string) ([]
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 	if err := cmd.Run(); err != nil {
+		observe.Default().WithFields(logrus.Fields{
+			"event":   "git.subprocess_error",
+			"command": bin,
+			"args":    full,
+			"error":   err.Error(),
+		}).Warn("git subprocess failed")
 		return buf.Bytes(), err
 	}
 	return buf.Bytes(), nil

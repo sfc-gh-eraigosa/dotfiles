@@ -29,7 +29,7 @@ alias tmux-start='tmux-mgr session new gemini -a'
 			home, _ := os.UserHomeDir()
 			configDir := filepath.Join(home, ".config", "tmux-mgr")
 			os.MkdirAll(configDir, 0755)
-			
+
 			aliasFile := filepath.Join(configDir, "aliases.sh")
 			err := os.WriteFile(aliasFile, []byte(aliases), 0644)
 			if err != nil {
@@ -71,7 +71,7 @@ fi
 			f.Close()
 
 			sourceLine := "\n# Added by tmux-mgr\n[ -f ${HOME}/.config/tmux-mgr/aliases.sh ] && source ${HOME}/.config/tmux-mgr/aliases.sh\n"
-			
+
 			shellConfigs := []string{".zshrc", ".bashrc"}
 			for _, cfg := range shellConfigs {
 				cfgPath := filepath.Join(home, cfg)

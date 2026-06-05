@@ -79,4 +79,60 @@ if [ -f "$BASE_DIR/ai/gemini/aliases.sh" ]; then
     ln -sf "$BASE_DIR/ai/gemini/aliases.sh" "$GEMINI_XDG_DIR/aliases.sh"
 fi
 
+# --- Hooks (COPIED into ~/.gemini/hooks; settings.json references the
+# well-known $HOME path). Copy, not symlink, per the provisioning directive
+# (CLAUDE.md -> Shell & Dotfiles Conventions). safety_guard.sh loads
+# strip_heredocs.awk from its own dir, so the .awk sibling is copied too.
+# Test drivers (*_test.sh) stay in the repo and are not copied. ---
+if [ -d "$BASE_DIR/ai/hooks" ]; then
+    echo "  Copying hooks into ~/.gemini/hooks..."
+    HOOKS_DEST="${HOME}/.gemini/hooks"
+    mkdir -p "$HOOKS_DEST"
+    for f in "$BASE_DIR/ai/hooks"/*.sh "$BASE_DIR/ai/hooks"/*.awk; do
+        [ -e "$f" ] || continue
+        case "$(basename "$f")" in
+            *_test.sh) continue ;;
+        esac
+        cp "$f" "$HOOKS_DEST/$(basename "$f")"
+    done
+    chmod +x "$HOOKS_DEST"/*.sh 2>/dev/null || true
+fi
+
+# --- settings.json (host-owned real file; forced subset merged on every run) ---
+# Mirrors the Claude model: the host OWNS ~/.gemini/settings.json (theme, auth,
+# vimMode, ...); the immutable hook wiring (settings.forced.json) is deep-merged
+# over it on every run. ai/gemini/settings.json is the first-run seed. No
+# symlink. See docs/designs/2026-06-02-ai-config-home-provisioning.md (D4).
+GEMINI_HOME="${HOME}/.gemini"
+GSETTINGS_DEST="$GEMINI_HOME/settings.json"
+GSETTINGS_SEED="$BASE_DIR/ai/gemini/settings.json"
+GSETTINGS_FORCED="$BASE_DIR/ai/gemini/settings.forced.json"
+APPLY_FORCED="$BASE_DIR/opt/scripts/system/apply-forced-settings.sh"
+mkdir -p "$GEMINI_HOME"
+# Back up a pre-existing real host settings.json once before we first mutate it.
+if [ -f "$GSETTINGS_DEST" ] && [ ! -L "$GSETTINGS_DEST" ] && [ ! -e "$GSETTINGS_DEST.bak" ]; then
+    echo "  Backing up existing settings.json -> settings.json.bak"
+    cp "$GSETTINGS_DEST" "$GSETTINGS_DEST.bak"
+fi
+if [ -L "$GSETTINGS_DEST" ]; then
+    echo "  Migrating legacy settings.json symlink to a host-owned file"
+    legacy_target="$(readlink -f "$GSETTINGS_DEST" 2>/dev/null || true)"
+    rm -f "$GSETTINGS_DEST"
+    if [ -n "$legacy_target" ] && [ -f "$legacy_target" ]; then
+        cp "$legacy_target" "$GSETTINGS_DEST"
+    fi
+fi
+if [ ! -f "$GSETTINGS_DEST" ] && [ -f "$GSETTINGS_SEED" ]; then
+    echo "  Seeding ~/.gemini/settings.json from repo seed (first run)"
+    cp "$GSETTINGS_SEED" "$GSETTINGS_DEST"
+fi
+if [ -f "$GSETTINGS_DEST" ] && [ -f "$GSETTINGS_FORCED" ]; then
+    if command -v jq > /dev/null 2>&1; then
+        echo "  Applying forced Gemini settings subset (hooks)"
+        bash "$APPLY_FORCED" "$GSETTINGS_DEST" "$GSETTINGS_FORCED"
+    else
+        echo "  WARNING: jq not installed — cannot merge forced Gemini settings; hook wiring may be stale" >&2
+    fi
+fi
+
 echo "Gemini CLI Configuration complete."

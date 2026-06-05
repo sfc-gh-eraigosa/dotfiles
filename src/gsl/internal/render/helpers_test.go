@@ -44,6 +44,17 @@ func fixedClock() func() time.Time {
 func strptr(s string) *string   { return &s }
 func f64ptr(v float64) *float64 { return &v }
 
+// resetTimePtr builds a *payload.ResetTime from an RFC3339 string for use
+// in fixtures. Panics on parse failure (test fixtures must use valid input).
+func resetTimePtr(s string) *payload.ResetTime {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		panic("resetTimePtr: invalid RFC3339 " + s + ": " + err.Error())
+	}
+	r := payload.NewResetTime(t)
+	return &r
+}
+
 // samplePayload returns a fully-populated Claude payload fixture used by the
 // AI-segment and golden tests.
 func samplePayload() payload.Payload {
@@ -56,7 +67,7 @@ func samplePayload() payload.Payload {
 			ContextWindowSize: f64ptr(200000),
 		},
 		RateLimits: &payload.RateLimits{
-			FiveHour: &payload.RateWindow{UsedPercentage: f64ptr(80), ResetsAt: strptr("2026-05-25T19:00:00Z")},
+			FiveHour: &payload.RateWindow{UsedPercentage: f64ptr(80), ResetsAt: resetTimePtr("2026-05-25T19:00:00Z")},
 			SevenDay: &payload.RateWindow{UsedPercentage: f64ptr(15)},
 		},
 	}

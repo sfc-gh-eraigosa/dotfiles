@@ -105,7 +105,7 @@ for file in $(find "${BASE_DIR}/opt/profiles" -type f); do
 done
 
 # force a few
-for file in ".profile" ".zshrc" ".bash_logout" ".bashrc"; do
+for file in ".profile" ".zshenv" ".zshrc" ".bash_logout" ".bashrc"; do
   ln -sf "${BASE_DIR}/opt/profiles/${file}" "${HOME}/${file}"
 done 
 
@@ -322,17 +322,9 @@ if [ -f "${BASE_DIR}/opt/scripts/system/google-cli-setup.sh" ]; then
     "${BASE_DIR}/opt/scripts/system/google-cli-setup.sh"
 fi
 
-# Gemini settings
-if [ -f "${BASE_DIR}/ai/gemini/settings.json" ]; then
-    echo "Configuring Gemini settings..."
-    mkdir -p "${HOME}/.gemini"
-    # If it's a real file (not a symlink), back it up
-    if [ -f "${HOME}/.gemini/settings.json" ] && [ ! -L "${HOME}/.gemini/settings.json" ]; then
-        echo "  Backing up existing settings.json to settings.json.bak"
-        mv "${HOME}/.gemini/settings.json" "${HOME}/.gemini/settings.json.bak"
-    fi
-    ln -sf "${BASE_DIR}/ai/gemini/settings.json" "${HOME}/.gemini/settings.json"
-fi
+# Gemini settings + hooks are provisioned by install_gemini_skills.sh (called
+# above): ~/.gemini/settings.json is a host-owned file with the forced hook
+# subset merged in, and hooks are copied into ~/.gemini/hooks/. No symlink here.
 
 # install Claude Code CLI (macOS via brew cask, Linux/WSL via npm)
 if [ -f "${BASE_DIR}/opt/scripts/system/claude_install.sh" ]; then
@@ -340,24 +332,10 @@ if [ -f "${BASE_DIR}/opt/scripts/system/claude_install.sh" ]; then
     "${BASE_DIR}/opt/scripts/system/claude_install.sh"
 fi
 
-# Claude settings (re-link in case install order matters)
-# settings.json is gitignored per-host. Seed from .template on first run, then
-# symlink ~/.claude/settings.json to the local copy.
-CLAUDE_SETTINGS="${BASE_DIR}/ai/claude/settings.json"
-CLAUDE_SETTINGS_TEMPLATE="${BASE_DIR}/ai/claude/settings.json.template"
-if [ ! -f "${CLAUDE_SETTINGS}" ] && [ -f "${CLAUDE_SETTINGS_TEMPLATE}" ]; then
-    echo "Seeding ai/claude/settings.json from template (first run)"
-    cp "${CLAUDE_SETTINGS_TEMPLATE}" "${CLAUDE_SETTINGS}"
-fi
-if [ -f "${CLAUDE_SETTINGS}" ]; then
-    echo "Configuring Claude Code settings..."
-    mkdir -p "${HOME}/.claude"
-    if [ -f "${HOME}/.claude/settings.json" ] && [ ! -L "${HOME}/.claude/settings.json" ]; then
-        echo "  Backing up existing settings.json to settings.json.bak"
-        mv "${HOME}/.claude/settings.json" "${HOME}/.claude/settings.json.bak"
-    fi
-    ln -sf "${CLAUDE_SETTINGS}" "${HOME}/.claude/settings.json"
-fi
+# Claude settings + hooks are provisioned by install_claude_skills.sh (called
+# above): ~/.claude/settings.json is a host-owned file with the forced subset
+# (hooks, statusLine, deny/ask) merged in, and hooks are copied into
+# ~/.claude/hooks/. No symlink and no repo-internal host copy here.
 
 # Sync AI plugins from the manifest (ai/plugins.yaml). Ensure-only: installs +
 # enables the listed plugins; never removes anything. Runs after the Claude CLI
@@ -365,6 +343,14 @@ fi
 if [ -f "${BASE_DIR}/opt/scripts/system/sync-plugins.sh" ]; then
     echo "Syncing AI plugins..."
     "${BASE_DIR}/opt/scripts/system/sync-plugins.sh" || echo "WARNING: plugin sync reported problems; continuing."
+fi
+
+# Install AI teams: transform ai/teams personas into native agents for Claude, Gemini,
+# Antigravity, and Ollama. Runs after yq + the assistant configs. Validates the source
+# first; each tool emit degrades gracefully, so a teams problem never aborts bootstrap.
+if [ -f "${BASE_DIR}/opt/scripts/system/install_ai_teams.sh" ]; then
+    echo "Installing AI teams..."
+    "${BASE_DIR}/opt/scripts/system/install_ai_teams.sh" || echo "WARNING: AI teams install reported problems; continuing."
 fi
 
 # build and install gss
@@ -413,6 +399,35 @@ if [ -f "${BASE_DIR}/src/gsl/build.sh" ]; then
     fi
 fi
 
+# Configure the Nerd Font (MesloLGS Nerd Font) used by gsl's powerline style.
+# Runs AFTER the gsl build so both the gsl skill files (linked by sync-skills
+# above) and the freshly-built ~/opt/bin/gsl exist. OS-dispatch to the
+# gsl-packaged installers under src/gsl/scripts/.
+GSL_FONT_SCRIPTS="${BASE_DIR}/src/gsl/scripts"
+case "$(uname -s)" in
+  Darwin)
+    if [ -f "${GSL_FONT_SCRIPTS}/install_nerd_font_macos.sh" ]; then
+      echo "Configuring Nerd Font (macOS)..."
+      bash "${GSL_FONT_SCRIPTS}/install_nerd_font_macos.sh" || \
+        echo "WARNING: macOS Nerd Font setup reported problems; continuing."
+    fi
+    ;;
+  Linux)
+    if [ ! -f "$NIX_MANAGED_FILE" ] && [ -f "${GSL_FONT_SCRIPTS}/install_nerd_font_linux.sh" ]; then
+      echo "Configuring Nerd Font (Linux/WSL)..."
+      bash "${GSL_FONT_SCRIPTS}/install_nerd_font_linux.sh" || \
+        echo "WARNING: Linux Nerd Font setup reported problems; continuing."
+    fi
+    ;;
+esac
+
+# Prove the installed font covers every codepoint gsl renders (non-fatal).
+if [ -f "${GSL_FONT_SCRIPTS}/check-font-glyphs.sh" ] && command -v go >/dev/null 2>&1; then
+  echo "Validating gsl glyph coverage..."
+  bash "${GSL_FONT_SCRIPTS}/check-font-glyphs.sh" || \
+    echo "WARNING: glyph-coverage check failed; gsl powerline glyphs may not render."
+fi
+
 # install fnm
 if ! command -v fnm &> /dev/null; then
   echo "Installing fnm..."
@@ -438,3 +453,77 @@ for shell_config in "$HOME/.zshrc" "$HOME/.profile"; do
         fi
     fi
 done
+
+# Final reminder (WSL): if the interactive Windows setup ran this invocation, the
+# one thing that can't be scripted is Wispr Flow's shortcuts — surface it last so
+# it isn't scrolled away by earlier output. install_windows.sh sets this marker.
+WIN_SETUP_MARKER="${HOME}/.config/dotfiles/.windows-setup-just-ran"
+if [ -f "$WIN_SETUP_MARKER" ]; then
+  rm -f "$WIN_SETUP_MARKER" 2>/dev/null || true
+  _b=$'\033[1m'; _x=$'\033[0m'
+  if [ -t 1 ]; then
+    # Soft pastel-rainbow palette (xterm-256) — friendly, not alarming.
+    _hues=(210 216 222 157 117 147 183 219)
+    _sky=$'\033[38;5;117m'; _mint=$'\033[38;5;157m'; _dim=$'\033[38;5;245m'
+    # Render an ASCII string with a flowing pastel rainbow at phase $2 (no newline).
+    _rainbow() {
+      local s="$1" phase="${2:-0}" i out=""
+      for ((i=0; i<${#s}; i++)); do
+        out+=$'\033[38;5;'"${_hues[$(((i+phase) % ${#_hues[@]}))]}"'m'"${s:i:1}"
+      done
+      printf '%s%s' "$out" "$_x"
+    }
+    _rule="------------------------------------------------------------------------"
+    _title="All set!  Just one quick Wispr Flow step to finish up"
+    printf '\n'
+    # Gentle flowing-rainbow animation on the title (~0.5s; skipped if no sleep).
+    for _p in 0 1 2 3 4 5 6 7; do
+      printf '\r  🌈 %s 🌈' "$(_rainbow "$_title" "$_p")"
+      sleep 0.06 2>/dev/null || true
+    done
+    printf '\n'
+    printf '%s\n' "$(_rainbow "$_rule" 0)"
+    printf '%s\n' "  In ${_b}Wispr Flow${_x} → ${_sky}Settings › General › Shortcuts${_x}, set ${_b}all three${_x} shortcuts"
+    printf '%s\n' "  off the Win key (Flow's ${_b}Ctrl+Win${_x} default just overlaps the macOS hotkeys):"
+    printf '\n'
+    printf '%s\n' "    ${_mint}♪${_x} ${_b}Push-to-talk${_x} : any non-Win combo  (e.g. ${_sky}Ctrl+Shift+F12${_x})"
+    printf '%s\n' "    ${_mint}♪${_x} ${_b}Hands-free${_x}   : any non-Win combo  (e.g. ${_sky}Ctrl+Shift+F11${_x})"
+    printf '%s\n' "    ${_mint}♪${_x} ${_b}Command mode${_x} : any non-Win combo  (e.g. ${_sky}Ctrl+Shift+F10${_x})"
+    printf '\n'
+    printf '%s\n' "  ${_dim}The Copilot key itself needs no Flow shortcut — PowerToys + macos.ahk drive it.${_x}"
+    printf '%s\n' "  ${_dim}This step is manual — Flow keeps its settings in a binary, cloud-synced store.${_x}"
+    printf '%s\n' "  ${_dim}Full guide:${_x} ${_sky}<Desktop>\\Apps\\scripts\\WISPR-FLOW.md${_x}"
+    printf '\n'
+    printf '%s\n' "  ${_mint}♪${_x} ${_b}Dictation starts OFF${_x} — press ${_sky}F10${_x} once to turn the dictation toggle ${_b}ON${_x}."
+    printf '%s\n' "  ${_dim}The AutoHotkey setup (macos.ahk) powers a hotkey-automation workflow: extra${_x}"
+    printf '%s\n' "  ${_dim}trigger keys via ${_x}${_sky}F9${_x}${_dim}, calibrate via ${_x}${_sky}F11${_x}${_dim}, hold ${_x}${_sky}F1${_x}${_dim} for help — and it overrides${_x}"
+    printf '%s\n' "  ${_dim}Flow's built-in hands-free mode so the Copilot key drives dictation instead.${_x}"
+    printf '%s\n' "$(_rainbow "$_rule" 4)"
+    printf '\n'
+    unset -f _rainbow; unset _hues _sky _mint _dim _p _rule _title
+  else
+    cat <<'BANNER'
+
+------------------------------------------------------------------------
+  All set! Just one quick Wispr Flow step to finish up.
+------------------------------------------------------------------------
+  In Wispr Flow -> Settings > General > Shortcuts, set all three shortcuts
+  off the Win key (Flow's Ctrl+Win default just overlaps the macOS hotkeys):
+
+    - Push-to-talk : any non-Win combo  (e.g. Ctrl+Shift+F12)
+    - Hands-free   : any non-Win combo  (e.g. Ctrl+Shift+F11)
+    - Command mode : any non-Win combo  (e.g. Ctrl+Shift+F10)
+
+  The Copilot key itself needs no Flow shortcut - PowerToys + macos.ahk drive it.
+  This step is manual - Flow keeps its settings in a binary, cloud-synced store.
+  Full guide: <Desktop>\Apps\scripts\WISPR-FLOW.md
+
+  - Dictation starts OFF - press F10 once to turn the dictation toggle ON.
+  The AutoHotkey setup (macos.ahk) powers a hotkey-automation workflow: extra
+  trigger keys via F9, calibrate via F11, hold F1 for help - and it overrides
+  Flow's built-in hands-free mode so the Copilot key drives dictation instead.
+------------------------------------------------------------------------
+BANNER
+  fi
+  unset _b _x
+fi

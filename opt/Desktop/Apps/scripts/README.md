@@ -9,6 +9,16 @@ shortcut to this folder ("Scripts") sits on the Desktop for quick access.
 | Script | Purpose |
 |--------|---------|
 | `setup-apps.ps1` | Full machine provisioning: WSL + Ubuntu distros, Ubuntu Mono font, Windows Terminal themes/profiles, and a standard set of **winget** desktop apps. Every phase is idempotent. A `-Status` mode reports WSL + app state. |
+| `install-wisprflow.ps1` | Install/update/uninstall the **Wispr Flow** voice-dictation app (its own MSI — not on winget). Idempotent; `-Status` / `-Latest` / `-Force` / `-Uninstall`. See **[WISPR-FLOW.md](./WISPR-FLOW.md)**. |
+| `suppress-copilot-key.ps1` | Configure **PowerToys** for Copilot-key dictation: KBM remap `Win+Shift+F23` → `F24` (so Windows never opens its Copilot Settings page), enable Keyboard Manager, disable FancyZones/PowerToys Run/Shortcut Guide (they fight the Cmd=Win layer), restart PowerToys. Idempotent, backs up; `-Status` / `-Remove`. Run by `install-wisprflow.ps1`. See **[WISPR-FLOW.md](./WISPR-FLOW.md)**. |
+| `macos.ahk` | macOS-style Windows shortcuts (Cmd→Ctrl, screenshots, hot corners) **and** the Wispr Flow hover-dictate driver: the Copilot key (via the KBM `F24` remap) clicks Flow's overlay to dictate into the field under the mouse. `Esc` cancels; `F10` toggles dictation; **`F11`** opens calibration mode to re-tune the overlay offsets. |
+| `setup-autostart.ps1` | Registers the `macOS Hotkeys` scheduled task that runs `macos.ahk` at logon (elevated). |
+| `copilot-key-detect.ahk` | One-off diagnostic: logs the vk/sc the Copilot key emits. |
+| `copilot-key-probe.ahk` | Diagnostic: confirms whether the Copilot key auto-repeats/holds (`F23` events). |
+| `screenshot-window.ps1` | DPI-aware active-window capture, called by `macos.ahk` on Ctrl+Shift+C. |
+
+> **Voice dictation:** see **[WISPR-FLOW.md](./WISPR-FLOW.md)** — Wispr Flow replaced
+> the AutoHotkey Copilot-key voice macro (archived at `archive/macos-copilot-claude-voice.ahk`).
 
 ## setup-apps.ps1
 
@@ -17,8 +27,8 @@ Runs six idempotent phases in order:
 1. **WSL** — installs the WSL platform if missing (skips if already set up). Installing the platform on a machine that lacks it needs an elevated run + reboot; everything else works un-elevated.
 2. **Distros** — ensures exactly two Ubuntu distributions exist and creates the Linux user:
    - `Ubuntu` — Ubuntu 26.04 LTS ("Latest", pre-existing)
-   - `Ubuntu-24.04` — Ubuntu 24.04 LTS ("LTS", installed with user `wenlock` + passwordless sudo)
-3. **GitHub link** — symlinks the Windows GitHub folder into each distro at `~/GitHub`. It follows the Windows symlink (`C:\Users\edwar\GitHub` → `C:\Users\edwar\OneDrive\GitHub`) to its real OneDrive target, so the link works for sync.
+   - `Ubuntu-24.04` — Ubuntu 24.04 LTS ("LTS", installed with the configured Linux user (`$DistroUser` in `setup-apps.ps1`) + passwordless sudo)
+3. **GitHub link** — symlinks the Windows GitHub folder into each distro at `~/GitHub`. It follows the Windows symlink (`%USERPROFILE%\GitHub` → `%USERPROFILE%\OneDrive\GitHub`) to its real OneDrive target, so the link works for sync.
 4. **Font** — (re)installs **Ubuntu Mono** per-user and clears any stale font-registry entry, fixing Terminal's "Unable to find the following fonts: Ubuntu Mono" warning.
 5. **Windows Terminal** — adds five color schemes (Solarized Dark, Solarized Light, Ocean, Green, GitHub Dark) and one profile per scheme **per distro** (10 profiles), each with a 100,000-line scrollback and the Ubuntu Mono font. settings.json is backed up first (`settings.json.bak-<timestamp>`).
 6. **Apps** — winget-installs the list below, skipping anything already present.
@@ -39,6 +49,7 @@ The two-distro pairing, the Linux username, the GitHub folder, the font, the scr
 - Claude
 - GitHub Desktop
 - Docker Desktop
+- Microsoft PowerToys
 - Google Chrome
 - Mozilla Firefox
 

@@ -24,22 +24,47 @@ cleanup_broken_links() {
     fi
 }
 
-# --- settings.json (seed from template if absent, then symlink) ---
-# settings.json is gitignored so each host can hold its own customizations
-# (apiKeyHelper paths, ANTHROPIC_BASE_URL, enabledPlugins, etc.) without
-# leaking them into the repo. The .template file is the tracked baseline.
-SETTINGS_SRC="$BASE_DIR/ai/claude/settings.json"
+# --- settings.json (host-owned real file; forced subset merged on every run) ---
+# The host OWNS ~/.claude/settings.json: it keeps host-local fields
+# (apiKeyHelper, ANTHROPIC_BASE_URL, enabledPlugins, theme, ...). On first run
+# we seed it from the tracked template; on EVERY run we deep-merge the immutable
+# subset (settings.forced.json: hooks, statusLine, security deny/ask) over it,
+# so the security wiring stays current without clobbering host customizations.
+# No symlink and no repo-internal host copy (provisioning directive — CLAUDE.md).
+# See docs/designs/2026-06-02-ai-config-home-provisioning.md (D2) and
+# apply-forced-settings.sh.
+SETTINGS_DEST="$CLAUDE_HOME/settings.json"
 SETTINGS_TEMPLATE="$BASE_DIR/ai/claude/settings.json.template"
-if [ ! -f "$SETTINGS_SRC" ] && [ -f "$SETTINGS_TEMPLATE" ]; then
-    echo "  Seeding ai/claude/settings.json from template (first run)"
-    cp "$SETTINGS_TEMPLATE" "$SETTINGS_SRC"
+SETTINGS_FORCED="$BASE_DIR/ai/claude/settings.forced.json"
+APPLY_FORCED="$BASE_DIR/opt/scripts/system/apply-forced-settings.sh"
+# Back up a pre-existing real host settings.json ONCE before we first mutate it,
+# so a host's pre-migration config is always recoverable (.bak is not churned on
+# re-run). A legacy symlink needs no backup — its target lives in the repo.
+if [ -f "$SETTINGS_DEST" ] && [ ! -L "$SETTINGS_DEST" ] && [ ! -e "$SETTINGS_DEST.bak" ]; then
+    echo "  Backing up existing settings.json -> settings.json.bak"
+    cp "$SETTINGS_DEST" "$SETTINGS_DEST.bak"
 fi
-if [ -f "$SETTINGS_SRC" ]; then
-    if [ -f "$CLAUDE_HOME/settings.json" ] && [ ! -L "$CLAUDE_HOME/settings.json" ]; then
-        echo "  Backing up existing settings.json -> settings.json.bak"
-        mv "$CLAUDE_HOME/settings.json" "$CLAUDE_HOME/settings.json.bak"
+# Migrate a legacy symlinked settings.json into a real host-owned file,
+# preserving whatever the host had configured (the merge re-applies wiring).
+if [ -L "$SETTINGS_DEST" ]; then
+    echo "  Migrating legacy settings.json symlink to a host-owned file"
+    legacy_target="$(readlink -f "$SETTINGS_DEST" 2>/dev/null || true)"
+    rm -f "$SETTINGS_DEST"
+    if [ -n "$legacy_target" ] && [ -f "$legacy_target" ]; then
+        cp "$legacy_target" "$SETTINGS_DEST"
     fi
-    ln -sf "$SETTINGS_SRC" "$CLAUDE_HOME/settings.json"
+fi
+if [ ! -f "$SETTINGS_DEST" ] && [ -f "$SETTINGS_TEMPLATE" ]; then
+    echo "  Seeding ~/.claude/settings.json from template (first run)"
+    cp "$SETTINGS_TEMPLATE" "$SETTINGS_DEST"
+fi
+if [ -f "$SETTINGS_DEST" ] && [ -f "$SETTINGS_FORCED" ]; then
+    if command -v jq > /dev/null 2>&1; then
+        echo "  Applying forced settings subset (hooks, statusLine, deny/ask)"
+        bash "$APPLY_FORCED" "$SETTINGS_DEST" "$SETTINGS_FORCED"
+    else
+        echo "  WARNING: jq not installed — cannot merge forced settings; hook wiring may be stale" >&2
+    fi
 fi
 
 # --- Commands (.md slash commands) ---
@@ -59,11 +84,22 @@ cleanup_broken_links "$CLAUDE_HOME/commands"
 # Handled by sync-skills.sh, which links every discovered SKILL.md into
 # ~/.claude/skills (and ~/.agents/skills for Gemini). Nothing to do here.
 
-# --- Hooks (referenced by absolute path from settings.json) ---
-# We don't symlink hooks — settings.json points at them in-place. Just ensure
-# they remain executable in case a checkout dropped the bit.
-if [ -d "$BASE_DIR/ai/claude/hooks" ]; then
-    chmod +x "$BASE_DIR/ai/claude/hooks"/*.sh 2>/dev/null || true
+# --- Hooks (COPIED into ~/.claude/hooks; settings.json references the
+# well-known $HOME path). Copy, not symlink, per the provisioning directive
+# (CLAUDE.md -> Shell & Dotfiles Conventions). safety_guard.sh loads
+# strip_heredocs.awk from its own directory, so the .awk sibling is copied too.
+# Test drivers (*_test.sh) stay in the repo and are not copied. ---
+if [ -d "$BASE_DIR/ai/hooks" ]; then
+    HOOKS_DEST="$CLAUDE_HOME/hooks"
+    mkdir -p "$HOOKS_DEST"
+    for f in "$BASE_DIR/ai/hooks"/*.sh "$BASE_DIR/ai/hooks"/*.awk; do
+        [ -e "$f" ] || continue
+        case "$(basename "$f")" in
+            *_test.sh) continue ;;
+        esac
+        cp "$f" "$HOOKS_DEST/$(basename "$f")"
+    done
+    chmod +x "$HOOKS_DEST"/*.sh 2>/dev/null || true
 fi
 
 # --- Shell aliases (~/.config/claude/aliases.sh, sourced by .zshrc and .bashrc) ---

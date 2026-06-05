@@ -10,6 +10,7 @@ This directory contains scripts for configuring the operating system, environmen
 - `install_gemini_skills.sh`: Gemini-specific config (policies, commands, aliases). Skill links are handled by `sync-skills.sh`.
 - `claude_install.sh`: Installs (or updates) the Claude Code CLI binary.
 - `install_claude_skills.sh`: Claude-specific config (settings.json, slash commands, hooks, aliases). Skill links are handled by `sync-skills.sh`.
+- `install_ai_teams.sh`: **Transforms `ai/teams/` personas into native agents for all four tools** (Claude `~/.claude/agents/teams/`, Gemini `~/.gemini/agents/teams/`, Antigravity `~/.config/antigravity/agents/`, Ollama Modelfiles). Resolves each persona's `tier:` via `ai/teams/model-map.yaml`, composes the system prompt from `_partials/`, and compiles a routing `description`. Idempotent; graceful-skip per tool. Exposed as the `sync-teams` alias (`--dry-run`/`--tool`). Validates first via `ai/teams/validate.sh`. Companion test: `install_ai_teams_test.sh`.
 - `install_sops.sh`: Installs the `sops` secrets-management binary into `~/opt/bin` (Linux/WSL fetches the official release; macOS uses the Brewfile).
 - `install_yq.sh`: Installs the mikefarah `yq` (YAML processor) binary into `~/opt/bin` (Linux/WSL fetches the official release; macOS uses the Brewfile/`packages.tsv`). The apt `yq` is the incompatible kislyuk Python variant, so it is intentionally not used. Needed by `sync-plugins.sh`.
 - `setup_gh_apt_repo.sh`: Registers GitHub CLI's official apt repo + signing key so `gh` installs the latest upstream release instead of Ubuntu's stale `universe` version. Idempotent; called automatically by `pkg-install-apt` before it installs. Force a key/repo refresh with `GH_REPO_FORCE=1`.
@@ -21,6 +22,7 @@ This directory contains scripts for configuring the operating system, environmen
 - `enable-vmx.sh`: Helper to check/enable virtualization support.
 - `coco_install.sh`: Installer for the COCO dataset tools or similar.
 - `crouton-alias.sh`: Aliases for Crouton (Chromebook) environments.
+- `retire-ahk-voice-macro.sh`: **WSL migration helper.** Removes the old AutoHotkey Copilot-key voice macro from a machine's deployed `macos.ahk` (backs it up locally, re-deploys the cleaned copy, restarts AutoHotkey). One-off cleanup for hosts provisioned before voice dictation moved to Wispr Flow. Idempotent; `--dry-run` to preview. See `opt/Desktop/Apps/scripts/WISPR-FLOW.md`.
 
 ## Environment Profile
 

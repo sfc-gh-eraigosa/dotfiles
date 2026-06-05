@@ -31,6 +31,7 @@ func TestSync_SuccessFetchPrecedesPull(t *testing.T) {
 	gitr := &gitfake.Runner{Script: []gitfake.Response{
 		resp("feature\n"),           // rev-parse --abbrev-ref HEAD
 		resp(""),                    // fetch origin
+		resp("abc123\n"),            // rev-parse --verify refs/remotes/origin/feature (exists)
 		resp("Already up to date."), // pull --rebase
 	}}
 	s := sync.NewService(gitr)
@@ -42,14 +43,17 @@ func TestSync_SuccessFetchPrecedesPull(t *testing.T) {
 	if res.Branch != "feature" {
 		t.Errorf("branch = %q; want feature", res.Branch)
 	}
-	if len(gitr.Calls) != 3 {
-		t.Fatalf("calls = %d; want 3 (rev-parse, fetch, pull)", len(gitr.Calls))
+	if res.NewBranch {
+		t.Errorf("res.NewBranch = true; want false when origin/feature exists")
+	}
+	if len(gitr.Calls) != 4 {
+		t.Fatalf("calls = %d; want 4 (rev-parse, fetch, verify, pull)", len(gitr.Calls))
 	}
 	if !argsContain(gitr.Calls[1].Args, "fetch") {
 		t.Errorf("call[1] not fetch: %+v", gitr.Calls[1])
 	}
-	if !argsContain(gitr.Calls[2].Args, "pull") || !argsContain(gitr.Calls[2].Args, "feature") {
-		t.Errorf("call[2] not `pull … feature`: %+v", gitr.Calls[2])
+	if !argsContain(gitr.Calls[3].Args, "pull") || !argsContain(gitr.Calls[3].Args, "feature") {
+		t.Errorf("call[3] not `pull … feature`: %+v", gitr.Calls[3])
 	}
 }
 
@@ -72,6 +76,7 @@ func TestSync_RebaseConflict(t *testing.T) {
 	gitr := &gitfake.Runner{Script: []gitfake.Response{
 		resp("main\n"),
 		resp(""),
+		resp("abc123\n"), // rev-parse --verify refs/remotes/origin/main (exists)
 		errResp("CONFLICT (content): Merge conflict in a.go"),
 	}}
 	s := sync.NewService(gitr)
@@ -85,11 +90,42 @@ func TestSync_RebaseConflict(t *testing.T) {
 	}
 }
 
+// A brand-new branch has no origin/<branch> counterpart yet. Sync must NOT
+// try to rebase onto a non-existent remote ref (which fails with "couldn't
+// find remote ref" and, in the push flow, burns the approval token and forces
+// a second confirmation prompt). Instead it reports NewBranch so the caller's
+// push creates the branch with --set-upstream.
+func TestSync_NewBranchSkipsRebase(t *testing.T) {
+	gitr := &gitfake.Runner{Script: []gitfake.Response{
+		resp("feature\n"), // rev-parse --abbrev-ref HEAD
+		resp(""),          // fetch origin
+		errResp(""),       // rev-parse --verify refs/remotes/origin/feature → MISSING (exit 1)
+	}}
+	s := sync.NewService(gitr)
+
+	res, err := s.Sync(t.Context(), "/repo")
+	if err != nil {
+		t.Fatalf("Sync on a new branch should not error: %v", err)
+	}
+	if !res.NewBranch {
+		t.Errorf("res.NewBranch = false; want true for a branch with no origin counterpart")
+	}
+	if len(gitr.Calls) != 3 {
+		t.Fatalf("calls = %d; want 3 (rev-parse, fetch, verify) — pull must be skipped", len(gitr.Calls))
+	}
+	for _, c := range gitr.Calls {
+		if argsContain(c.Args, "pull") {
+			t.Errorf("pull must be skipped for a new branch, but it ran: %+v", c)
+		}
+	}
+}
+
 func TestSync_DefaultsToMain(t *testing.T) {
 	gitr := &gitfake.Runner{Script: []gitfake.Response{
-		errResp(""), // rev-parse fails → default main
-		resp(""),    // fetch
-		resp(""),    // pull
+		errResp(""),      // rev-parse --abbrev-ref HEAD fails → default main
+		resp(""),         // fetch
+		resp("abc123\n"), // rev-parse --verify refs/remotes/origin/main (exists)
+		resp(""),         // pull
 	}}
 	s := sync.NewService(gitr)
 
@@ -100,7 +136,7 @@ func TestSync_DefaultsToMain(t *testing.T) {
 	if res.Branch != "main" {
 		t.Errorf("branch = %q; want main (rev-parse failed)", res.Branch)
 	}
-	if !argsContain(gitr.Calls[2].Args, "main") {
-		t.Errorf("pull should target main: %+v", gitr.Calls[2])
+	if !argsContain(gitr.Calls[3].Args, "main") {
+		t.Errorf("pull should target main: %+v", gitr.Calls[3])
 	}
 }

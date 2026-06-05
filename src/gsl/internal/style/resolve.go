@@ -140,12 +140,12 @@ func mergeIntoWithFillFlag(base Style, user Style, applyFill bool) Style {
 //     or crashes — unknown style ≠ fatal error).
 //
 //  2. Deep-merging any same-named entry from userStyles OVER the built-in:
-//   - Scalar fields (Separator, Fill, Glyphs) from the user entry overwrite the
+//     - Scalar fields (Separator, Fill, Glyphs) from the user entry overwrite the
 //     built-in only when the user entry carries a non-zero value for that field.
 //     (Empty string "" or false bool are treated as "not set" for scalars.)
-//   - Icons and Theme maps are merged key-by-key: user keys win, unspecified
+//     - Icons and Theme maps are merged key-by-key: user keys win, unspecified
 //     keys are inherited from the built-in.
-//   - A brand-new style name (not a built-in) in userStyles resolves to the
+//     - A brand-new style name (not a built-in) in userStyles resolves to the
 //     user entry deep-merged over the powerline base.
 //
 //  3. If the resolved Glyphs is "ascii" OR forceASCII is true, the effective

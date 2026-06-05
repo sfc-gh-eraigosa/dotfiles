@@ -24,20 +24,32 @@ NC='\033[0m'
 
 # 1. Environment Sourcing
 load_node_env() {
-    # Prefer user-managed Node environments (fnm, nodenv, nvm)
-    export PATH="${HOME}/.local/share/fnm:${HOME}/.nodenv/shims:${HOME}/.nvm/versions/node/$(ls -1 ${HOME}/.nvm/versions/node 2>/dev/null | tail -1)/bin:${HOME}/opt/bin:${PATH}"
-    
-    # Try to load fnm environment specifically if binary exists
-    if [ -x "${HOME}/.local/share/fnm/fnm" ]; then
-        eval "$("${HOME}/.local/share/fnm/fnm" env)"
+    # Respect the user's already-active node manager first. Only fall back to
+    # discovery (fnm -> nodenv -> nvm-latest) if no npm is on PATH. Crucial:
+    # do NOT pre-pend nvm-latest unconditionally — that shadowed fnm's current
+    # node and caused globals (e.g. gws) to land in an unused node version.
+    if ! command -v npm >/dev/null 2>&1; then
+        if [ -x "${HOME}/.local/share/fnm/fnm" ]; then
+            eval "$("${HOME}/.local/share/fnm/fnm" env)"
+        fi
+        if ! command -v npm >/dev/null 2>&1 && [ -d "${HOME}/.nodenv" ]; then
+            export PATH="${HOME}/.nodenv/shims:${PATH}"
+        fi
+        if ! command -v npm >/dev/null 2>&1 && [ -d "${HOME}/.nvm/versions/node" ]; then
+            local latest_nvm
+            latest_nvm=$(ls -1 "${HOME}/.nvm/versions/node" 2>/dev/null | tail -1)
+            [ -n "$latest_nvm" ] && export PATH="${HOME}/.nvm/versions/node/${latest_nvm}/bin:${PATH}"
+        fi
     fi
 
-    # Final check
+    # Always make ~/opt/bin reachable for locally-installed tools.
+    export PATH="${HOME}/opt/bin:${PATH}"
+
     if ! command -v npm >/dev/null 2>&1; then
         echo -e "${RED}Error: npm not found. Please ensure Node.js is installed.${NC}"
         exit 1
     fi
-    
+
     # Decide if sudo is needed
     NPM_PREFIX=$(npm config get prefix)
     if [[ "$NPM_PREFIX" == "/usr" ]] || [[ "$NPM_PREFIX" == "/usr/local" ]]; then
@@ -191,14 +203,19 @@ setup_all() {
     echo -e "\n${GREEN}${BOLD}Success: Google CLI setup complete!${NC}"
 }
 
-case "$1" in
-    status)
-        show_status
-        ;;
-    gcloud)
-        install_gcloud
-        ;;
-    *)
-        setup_all
-        ;;
-esac
+# Only dispatch when executed directly. Sourcing this file (e.g. from a
+# test driver) loads helpers like `load_node_env` without firing the
+# install flow. Required by opt/scripts/system/google-cli-setup_test.sh.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    case "${1:-}" in
+        status)
+            show_status
+            ;;
+        gcloud)
+            install_gcloud
+            ;;
+        *)
+            setup_all
+            ;;
+    esac
+fi

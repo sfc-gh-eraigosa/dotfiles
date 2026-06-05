@@ -1,14 +1,14 @@
 #!/bin/bash
-# safety_guard.sh — Claude Code PreToolUse hook
+# safety_guard.sh — AI Agent PreToolUse / BeforeTool hook
 #
 # Enforces regex-based safety rules that the prefix-only permission DSL in
-# settings.json cannot express. Mirrors the rule set from
+# assistant settings cannot express. Mirrors the rule set from
 # ai/gemini/policies/safety.toml.
 #
-# Contract (Claude Code PreToolUse):
-#   - stdin: JSON with .tool_name and .tool_input.command
-#   - exit 0: allow the call (stdout optional, may surface to user)
-#   - exit 2: block the call (stderr is fed back to Claude as context)
+# Contract:
+#   - stdin: JSON {tool_name, tool_input}
+#   - exit 0: allow (Gemini: outputs JSON; Claude: no output)
+#   - exit 2: block (Gemini: use stderr; Claude: use stderr)
 #   - other non-zero: non-blocking error
 #
 # Dependencies: jq, bash 3.2+
@@ -18,14 +18,15 @@ set -u
 # Read the hook payload
 PAYLOAD="$(cat)"
 
-# We only inspect Bash tool calls; everything else passes
+# We only inspect shell command tools; everything else passes
 TOOL_NAME="$(printf '%s' "$PAYLOAD" | jq -r '.tool_name // empty')"
-if [ "$TOOL_NAME" != "Bash" ]; then
+if [ "$TOOL_NAME" != "Bash" ] && [ "$TOOL_NAME" != "run_shell_command" ]; then
     exit 0
 fi
 
 CMD="$(printf '%s' "$PAYLOAD" | jq -r '.tool_input.command // empty')"
 if [ -z "$CMD" ]; then
+    [ "$TOOL_NAME" = "run_shell_command" ] && echo '{"decision": "allow"}'
     exit 0
 fi
 
@@ -191,4 +192,5 @@ if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])gss[[:space:]]+feature[[:space:]]+che
 fi
 
 # All checks passed
+[ "$TOOL_NAME" = "run_shell_command" ] && echo '{"decision": "allow"}'
 exit 0

@@ -155,7 +155,7 @@ Batch H  (cobra wiring for feature subtree)
 Batch I  (hardening, mostly parallel after Batch H)
   PR-49  src/git-machete/skill/SKILL.md (companion CLI pin)
   PR-50  build.sh + CI: `go-licenses check ./...` gate
-  PR-51  ai/claude/hooks/safety_guard.sh + safety_guard_test.sh extension
+  PR-51  ai/hooks/safety_guard.sh + safety_guard_test.sh extension
   PR-52  src/gss/skill/SKILL.md (worker / power-user surface)
 
 Batch J  (tmux-mgr refactor, sequential)
@@ -824,8 +824,8 @@ Per [`design.md` → Next steps](./design.md#next-steps):
 
 #### PR-51: `safety_guard.sh` + `safety_guard_test.sh` extension
 - [ ] Design: [Hardening checklist → safety_guard](./design.md#pre-v1-hardening-checklist); resolution #22.
-- **Files**: `ai/claude/hooks/safety_guard.sh` (extended),
-  `ai/claude/hooks/safety_guard_test.sh` (extended).
+- **Files**: `ai/hooks/safety_guard.sh` (extended),
+  `ai/hooks/safety_guard_test.sh` (extended).
 - **Tests first**: per `CLAUDE.md`, add ≥ 1 `assert_exit 0` and
   ≥ 1 `assert_exit 2` per new pattern, **tests added before the
   hook regex**. New patterns gated:
