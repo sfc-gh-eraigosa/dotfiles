@@ -12,7 +12,7 @@
           "branch": "feature/gsl/edward-raigosa/impl",
           "worktree": "/home/wenlock/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gsl/edward-raigosa/impl",
           "base_branch": "main",
-          "pr_url": "https://github.com/wenlock/dotfiles/pull/21",
+          "pr_url": "https://github.com/sfc-gh-eraigosa/dotfiles/pull/21",
           "pr_state": "OPEN"
         },
         {
@@ -35,7 +35,7 @@
           "branch": "feature/other-feature/bob/impl",
           "worktree": "/home/bob/.config/gss/worktrees/sfc-gh-bob/dotfiles/other-feature/bob/impl",
           "base_branch": "main",
-          "pr_url": "https://github.com/wenlock/dotfiles/pull/42",
+          "pr_url": "https://github.com/sfc-gh-eraigosa/dotfiles/pull/42",
           "pr_state": "MERGED"
         }
       ]

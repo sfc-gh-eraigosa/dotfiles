@@ -12,9 +12,9 @@ This document outlines the requirements for the `tmux-mgr` tool and how each is 
 | **4. Session Management** | List, create, attach, and kill tmux sessions. | **Met**: `session [list\|new\|attach\|kill]` provides full lifecycle management. |
 | **5. Windowing Desktop** | Navigate between windows/layouts easily. | **Met**: `desktop [list\|switch]` allows quick navigation by window name or index. |
 | **6. Gemini CLI Skill** | "tmux" skill for natural language control and introspection. | **Met**: `SKILL.md` instructs Gemini on using `tmux-mgr` for management and `capture` for introspection. |
-| **7. Go Implementation** | Written in Go, compiled to `opt/bin`. | **Met**: Source in `src/tmux-mgr`, binary installed to `opt/bin/tmux-mgr`. |
+| **7. Go Implementation** | Written in Go, compiled to `opt/bin`. | **Met**: Source in `sdk/tmux-mgr`, binary installed to `opt/bin/tmux-mgr`. |
 | **8. Build System** | Script to compile and install without checking in binary. | **Met**: `build.sh` handles compilation and skill linking; `.gitignore` excludes the binary. |
-| **9. Repository Structure** | Source and resources in `~/git/dotfiles/src/tmux-mgr`. | **Met**: All code, build scripts, docs, and skills are encapsulated in the requested directory. |
+| **9. Repository Structure** | Source and resources in `~/git/dotfiles/sdk/tmux-mgr`. | **Met**: All code, build scripts, docs, and skills are encapsulated in the requested directory. |
 | **10. AI Agent Orchestration** | Support hybrid fan-out workflows for autonomous agents. | **Met**: `agent [start\|list\|complete\|cleanup]` commands manage isolated workspaces and results. |
 | **11. Test-Driven Development** | Adhere to TDD standards with minimum test coverage. | **Met**: Implementations under `pkg/` maintain `>60%` test coverage using native Go testing. |
 

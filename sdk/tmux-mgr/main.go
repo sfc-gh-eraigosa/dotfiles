@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/eraigosa/dotfiles/src/tmux-mgr/cmd"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/cmd"
 )
 
 func main() {

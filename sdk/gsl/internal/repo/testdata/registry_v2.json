@@ -7,7 +7,7 @@
         {
           "branch": "feature/future/impl",
           "worktree": "/some/path",
-          "pr_url": "https://github.com/wenlock/dotfiles/pull/99",
+          "pr_url": "https://github.com/sfc-gh-eraigosa/dotfiles/pull/99",
           "pr_state": "OPEN"
         }
       ]

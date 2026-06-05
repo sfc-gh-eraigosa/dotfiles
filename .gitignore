@@ -74,7 +74,7 @@ opt/google-cloud-sdk/
 !docs/**
 
 # Source Code Build Artifacts
-src/tmux-mgr/tmux-mg
+sdk/tmux-mgr/tmux-mgr
 coverage/
 
 # System & Local Settings (Always Private)

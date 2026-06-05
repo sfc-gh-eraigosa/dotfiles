@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/eraigosa/dotfiles/src/tmux-mgr/pkg/agent"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/pkg/agent"
 )
 
 // gssRunner runs a gss subcommand and returns combined output. Injectable so

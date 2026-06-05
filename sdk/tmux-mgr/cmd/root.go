@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/eraigosa/dotfiles/src/tmux-mgr/pkg/tmux"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/pkg/tmux"
 	"github.com/spf13/cobra"
 )
 

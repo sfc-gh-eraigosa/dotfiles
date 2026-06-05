@@ -118,11 +118,11 @@ ones.
 
 | Path | Change |
 |------|--------|
-| `src/tmux-mgr/cmd/remote.go` | New file — `remote` command + subcommands |
-| `src/tmux-mgr/pkg/remote/session.go` | New package — SSH + session logic |
-| `src/tmux-mgr/pkg/remote/session_test.go` | Unit tests (mock SSH runner) |
-| `src/tmux-mgr/cmd/root.go` | Register `remoteCmd` |
-| `src/tmux-mgr/GEMINI.md` | Add `tmux-mgr remote` to the command summary |
+| `sdk/tmux-mgr/cmd/remote.go` | New file — `remote` command + subcommands |
+| `sdk/tmux-mgr/pkg/remote/session.go` | New package — SSH + session logic |
+| `sdk/tmux-mgr/pkg/remote/session_test.go` | Unit tests (mock SSH runner) |
+| `sdk/tmux-mgr/cmd/root.go` | Register `remoteCmd` |
+| `sdk/tmux-mgr/GEMINI.md` | Add `tmux-mgr remote` to the command summary |
 | `ai/skills/remote-claude-session/SKILL.md` | Update "Future path" note to "use `tmux-mgr remote start`" once merged |
 
 ---

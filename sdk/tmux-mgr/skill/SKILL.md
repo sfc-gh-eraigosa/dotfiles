@@ -33,7 +33,7 @@ No flag is needed — detection is automatic from the host shell's environment.
 
 ### 2. Evaluation Suite
 - **Evaluate Agent Orchestration**: "tmux evaluate the agent"
-  - This command instructs your assistant to run the self-validation suite located in `src/tmux-mgr/evaluation/AGENT_EVAL.md`.
+  - This command instructs your assistant to run the self-validation suite located in `sdk/tmux-mgr/evaluation/AGENT_EVAL.md`.
   - It proves the ability to spawn agents, isolate working directories, and fan-in results.
 
 ### 3. Session Management
@@ -79,7 +79,7 @@ No flag is needed — detection is automatic from the host shell's environment.
 
 ## Guidelines for Natural Language Interaction
 
-- **Self-Evaluation**: If a user asks to "evaluate the agent" or "test your team features," activate this skill and follow the instructions in `src/tmux-mgr/evaluation/AGENT_EVAL.md`.
+- **Self-Evaluation**: If a user asks to "evaluate the agent" or "test your team features," activate this skill and follow the instructions in `sdk/tmux-mgr/evaluation/AGENT_EVAL.md`.
 - **Orchestrate Effectively**: If a task is complex or requires parallel execution, proactively suggest using the `tmux-mgr agent` features with a direct task description.
 - **Isolate for Safety**: Explain that `tmux-mgr` gives each agent its own isolated working directory to prevent file-system conflicts.
 - **Durable Progress**: Each agent's work is automatically checkpointed to a draft pull request as it runs, so an interrupted or failed agent still leaves a recoverable trail you can inspect — you don't have to babysit a pane to avoid losing work.

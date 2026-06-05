@@ -365,9 +365,9 @@ if [ -f "${BASE_DIR}/sdk/gss/build.sh" ]; then
 fi
 
 # build and install tmux-mg
-if [ -f "${BASE_DIR}/src/tmux-mgr/build.sh" ]; then
+if [ -f "${BASE_DIR}/sdk/tmux-mgr/build.sh" ]; then
     echo "Installing tmux-mgr..."
-    bash "${BASE_DIR}/src/tmux-mgr/build.sh"
+    bash "${BASE_DIR}/sdk/tmux-mgr/build.sh"
     if [ -f "${HOME}/opt/bin/tmux-mgr" ]; then
         echo "--------------------------------------------------"
         "${HOME}/opt/bin/tmux-mgr" version
