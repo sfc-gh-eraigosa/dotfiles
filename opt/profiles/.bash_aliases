@@ -225,7 +225,6 @@ fi
 if [ -f ~/opt/bin/snowsql ]; then
     alias snowsql=~/opt/bin/snowsql
 fi
-export GOPRIVATE=github.com/snowflake-eng/*
 alias cursor='/Applications/Cursor.app/Contents/MacOS/Cursor'
 
 function sfhelp() {
