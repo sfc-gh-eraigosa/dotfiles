@@ -7,7 +7,8 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - `opt/bin/`: A collection of utility scripts and binaries. [See opt/bin/GEMINI.md](./opt/bin/GEMINI.md) for a categorized registry of these tools.
 - `opt/profiles/`: Shell configuration files (.zshrc, .bashrc, .tmux.conf, etc.). [See opt/profiles/GEMINI.md](./opt/profiles/GEMINI.md) for details.
 - `opt/docs/`: Legacy and reference documentation for various tools and setups. [See opt/docs/GEMINI.md](./opt/docs/GEMINI.md).
-- `src/`: Source code for custom tools and agent skills. [See src/GEMINI.md](./src/GEMINI.md).
+- `src/`: Non-Go custom tools and agent skills (shell/skill tooling). **Go code no longer lives here** — all Go modules live under `sdk/`. [See src/GEMINI.md](./src/GEMINI.md).
+- `sdk/`: Go modules (`gss`, `gsl`, `wol`, `tmux-mgr`), each independently `go install`-able as `github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>`. **All Go code lives here, not under `src/`.** (Cutover in progress — see [docs/plans/2026-06-04-sdk-migration-plan.md](./docs/plans/2026-06-04-sdk-migration-plan.md).)
 - `opt/Desktop/Apps/scripts/`: Windows-side automation deployed to the Desktop (macOS-style hotkeys + Wispr Flow voice dictation in `macos.ahk`, PowerToys/app/font setup). [See opt/Desktop/Apps/scripts/GEMINI.md](./opt/Desktop/Apps/scripts/GEMINI.md) for the inventory, the WSL→Windows dev loop, and AutoHotkey v2 gotchas.
 - `archive/`: Retired-but-kept artifacts (not wired into install). [See archive/GEMINI.md](./archive/GEMINI.md) for the inventory and restore instructions.
 - `ai/hooks/`: Unified agent hooks (safety, privacy) shared across CLIs.

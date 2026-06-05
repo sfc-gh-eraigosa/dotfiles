@@ -42,6 +42,20 @@ The repo owner reviewed the Cross-Cutting Decisions (§4) and ratified the follo
 - **D8 — Per-module atomic PRs (RESOLVED).** Migrate **one module per PR** (four sequential atomic
   PRs); `main` stays green at every boundary; each merges as ready ("merge as needed"). The e2e guard
   is meaningful at the gss → tmux-mgr boundary, so Phase 4 (gss) merges before Phase 5 (tmux-mgr).
+- **D9 — Discovery targets `sdk/` only; no Go in `src/` (RESOLVED; overrides §4.9 + the Phase-2
+  dual-scan step).** Going forward **no `.go` files live under `src/`** — all Go modules live under
+  `sdk/`. `scripts/test.sh` and the `Makefile` Go loops scan **`sdk/` only** (not both). The flip
+  lands *with* the first module move in Phase 2 (flipping before any module exists under `sdk/` makes
+  discovery find zero modules and silently drops the still-in-`src/` modules from CI). Root
+  `CLAUDE.md`/`GEMINI.md` document the convention.
+- **D10 — Cold-turkey cutover; nothing left behind as `src/` for Go (RESOLVED; overrides §4.10).** No
+  exclude-list and no "historical record" exception: the old module-path / `src/<tool>` strings in
+  `docs/plans/gsl-status-line*.md` (and anywhere else) are **updated too**. The acceptance grep must
+  come back **fully empty** — there is no sanctioned-leftover list.
+- **D11 — Fix the dead `.gitignore` rule (RESOLVED; confirms §4.11).** `.gitignore:75`
+  (`src/tmux-mgr/tmux-mg`, missing trailing `r`) is a verified non-functional rule. Re-path it to the
+  correct `sdk/tmux-mgr/tmux-mgr` so the local build artifact is actually ignored under the new tree.
+  Do not preserve the typo. Lands with the tmux-mgr move (Phase 5).
 
 > Repo visibility per D1 confirmed: `sfc-gh-eraigosa/dotfiles` is **public**.
 
