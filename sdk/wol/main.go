@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/wenlock/dotfiles/wol/cmd"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/wol/cmd"
 )
 
 func main() {

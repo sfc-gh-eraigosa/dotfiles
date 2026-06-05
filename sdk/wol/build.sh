@@ -29,10 +29,10 @@ if ! git -C "$SCRIPT_DIR" diff --quiet 2>/dev/null; then
     DIRTY="true"
 fi
 
-LDFLAGS="-X github.com/wenlock/dotfiles/wol/cmd.Version=$VERSION \
-         -X github.com/wenlock/dotfiles/wol/cmd.Commit=$COMMIT \
-         -X github.com/wenlock/dotfiles/wol/cmd.BuildDate=$DATE \
-         -X github.com/wenlock/dotfiles/wol/cmd.Dirty=$DIRTY"
+LDFLAGS="-X github.com/sfc-gh-eraigosa/dotfiles/sdk/wol/cmd.Version=$VERSION \
+         -X github.com/sfc-gh-eraigosa/dotfiles/sdk/wol/cmd.Commit=$COMMIT \
+         -X github.com/sfc-gh-eraigosa/dotfiles/sdk/wol/cmd.BuildDate=$DATE \
+         -X github.com/sfc-gh-eraigosa/dotfiles/sdk/wol/cmd.Dirty=$DIRTY"
 
 mkdir -p "$BIN_DIR"
 echo "Building wol v$VERSION with $($GO_BIN version)..."

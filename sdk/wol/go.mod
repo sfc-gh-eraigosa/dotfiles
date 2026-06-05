@@ -1,4 +1,4 @@
-module github.com/wenlock/dotfiles/wol
+module github.com/sfc-gh-eraigosa/dotfiles/sdk/wol
 
 go 1.26.1
 
