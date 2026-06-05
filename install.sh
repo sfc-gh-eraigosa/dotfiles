@@ -389,9 +389,9 @@ if [ -f "${BASE_DIR}/src/wol/build.sh" ]; then
 fi
 
 # build and install gsl
-if [ -f "${BASE_DIR}/src/gsl/build.sh" ]; then
+if [ -f "${BASE_DIR}/sdk/gsl/build.sh" ]; then
     echo "Installing gsl (Go status line)..."
-    bash "${BASE_DIR}/src/gsl/build.sh"
+    bash "${BASE_DIR}/sdk/gsl/build.sh"
     if [ -f "${HOME}/opt/bin/gsl" ]; then
         echo "--------------------------------------------------"
         "${HOME}/opt/bin/gsl" version
@@ -402,8 +402,8 @@ fi
 # Configure the Nerd Font (MesloLGS Nerd Font) used by gsl's powerline style.
 # Runs AFTER the gsl build so both the gsl skill files (linked by sync-skills
 # above) and the freshly-built ~/opt/bin/gsl exist. OS-dispatch to the
-# gsl-packaged installers under src/gsl/scripts/.
-GSL_FONT_SCRIPTS="${BASE_DIR}/src/gsl/scripts"
+# gsl-packaged installers under sdk/gsl/scripts/.
+GSL_FONT_SCRIPTS="${BASE_DIR}/sdk/gsl/scripts"
 case "$(uname -s)" in
   Darwin)
     if [ -f "${GSL_FONT_SCRIPTS}/install_nerd_font_macos.sh" ]; then

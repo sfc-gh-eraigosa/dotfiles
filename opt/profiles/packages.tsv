@@ -52,7 +52,7 @@ watch                -
 -                    psmisc
 
 # Nerd Font (gsl) prerequisites. install.sh's font step
-# (src/gsl/scripts/install_nerd_font_linux.sh) needs unzip + fontconfig (fc-cache)
+# (sdk/gsl/scripts/install_nerd_font_linux.sh) needs unzip + fontconfig (fc-cache)
 # + curl; installing them here guarantees they exist BEFORE that step runs. macOS
 # ships all three and uses its own font path, so the BREW column is '-'.
 -                    unzip
