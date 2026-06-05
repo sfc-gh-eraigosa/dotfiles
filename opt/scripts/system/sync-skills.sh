@@ -107,7 +107,7 @@ for dir in "$BASE_DIR/src"/*/; do
     [ -d "$dir" ] || continue
     name=$(basename "$dir")
     
-    # Priority 1: 'skill/' subdirectory (like src/gss/skill)
+    # Priority 1: 'skill/' subdirectory (like sdk/gss/skill)
     if [ -d "${dir}skill" ]; then
         # Map specific names if needed, otherwise use the directory name
         dest_name="$name"

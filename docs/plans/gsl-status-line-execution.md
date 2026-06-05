@@ -15,7 +15,7 @@ on sequencing and acceptance gates.
 - Every task carries an **acceptance gate** — the objective check that closes it.
   A checkpoint is done only when all its task gates pass **and** the global gates
   (`go build ./...`, `check-deps.sh`, `go test ./... -cover` ≥ target) are green.
-- Conventions are inherited verbatim from `src/gss`: goenv-aware `build.sh`,
+- Conventions are inherited verbatim from `sdk/gss`: goenv-aware `build.sh`,
   version stamping via `-X .../internal/version.*`, an `os/exec` **seam** confined
   to `internal/{git,mcp,gh}` and enforced by `scripts/check-deps.sh`, TDD with
   `≥60%` coverage per package (`src/CLAUDE.md`).
@@ -29,9 +29,9 @@ on sequencing and acceptance gates.
 | # | Task | Files | Gate |
 | --- | --- | --- | --- |
 | 1.1 | Create `sdk/gsl/` module (`go mod init github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl`), `VERSION`, `LICENSE` (Apache-2.0), `README.md` stub | `sdk/gsl/{go.mod,VERSION,LICENSE,README.md}` | `go build ./...` succeeds on empty tree |
-| 1.2 | Copy `src/gss/build.sh` → `sdk/gsl/build.sh`, swap names/paths/module to `gsl`; output `~/opt/bin/gsl`; stamp version | `sdk/gsl/build.sh` | `bash sdk/gsl/build.sh` builds & installs; `gsl version` prints stamped version |
-| 1.3 | Copy `src/gss/scripts/check-deps.sh`, adjust seam allowlist to `internal/{git,mcp,gh}`; allow cobra in `cmd/`, bubbletea in `internal/preview` | `sdk/gsl/scripts/check-deps.sh` | check-deps green on scaffold; fails if `os/exec` added outside seams |
-| 1.4 | cobra root + `Execute()` (mirror `src/gss/cmd/root.go`); wire `main.go` | `sdk/gsl/main.go`, `sdk/gsl/cmd/root.go` | `gsl --help` lists command stubs |
+| 1.2 | Copy `sdk/gss/build.sh` → `sdk/gsl/build.sh`, swap names/paths/module to `gsl`; output `~/opt/bin/gsl`; stamp version | `sdk/gsl/build.sh` | `bash sdk/gsl/build.sh` builds & installs; `gsl version` prints stamped version |
+| 1.3 | Copy `sdk/gss/scripts/check-deps.sh`, adjust seam allowlist to `internal/{git,mcp,gh}`; allow cobra in `cmd/`, bubbletea in `internal/preview` | `sdk/gsl/scripts/check-deps.sh` | check-deps green on scaffold; fails if `os/exec` added outside seams |
+| 1.4 | cobra root + `Execute()` (mirror `sdk/gss/cmd/root.go`); wire `main.go` | `sdk/gsl/main.go`, `sdk/gsl/cmd/root.go` | `gsl --help` lists command stubs |
 | 1.5 | `internal/version` (var + `Get()` fallback, copy gss) | `sdk/gsl/internal/version/version.go` | `gsl version --json` returns version/commit/date |
 | 1.6 | `internal/payload` — defensive parse of Claude stdin JSON; **all fields pointers**; empty stdin → empty struct, no error | `sdk/gsl/internal/payload/payload.go` + `testdata/` | unit tests in 2.x; compiles, parses sample fixture |
 | 1.7 | `internal/config` — `Config`, `Default()`, `Load/Save`, segment + style fields, toggle helpers; missing file → defaults | `sdk/gsl/internal/config/config.go` | `Default()` returns working config; round-trips |

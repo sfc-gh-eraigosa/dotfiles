@@ -161,7 +161,7 @@ function run_integration_tests() {
     # the message (internal/approval) and pins exit code 22
     # (ExitApprovalTokenMissing). Assert BOTH the declared stable string and
     # the exit code, so a future reword or exit-code drift is caught.
-    # See src/gss/docs/plan.md -> "Stable output strings".
+    # See sdk/gss/docs/plan.md -> "Stable output strings".
     # `gss push` exits non-zero by design here; bracket with `set +e` so the
     # intentional refusal doesn't trip the script-level `set -e` (the original
     # survived only because its failing command sat inside an `if` pipeline).

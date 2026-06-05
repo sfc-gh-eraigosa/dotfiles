@@ -26,7 +26,7 @@ import (
 )
 
 // Runner is the single entry point for git invocations in the gsl codebase.
-// The interface signature mirrors src/gss/internal/git.Runner for consistency.
+// The interface signature mirrors sdk/gss/internal/git.Runner for consistency.
 //
 // name is the git subcommand (e.g. "status", "rev-parse"); implementations
 // prepend the git binary path. args is forwarded verbatim.

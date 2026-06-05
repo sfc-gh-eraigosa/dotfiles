@@ -139,7 +139,7 @@ styles**, switch glyphs/theme, and watch the clock tick before saving config.
 
 ### New tool: `sdk/gsl/` (module `github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl`)
 
-Mirror the `src/gss` conventions: `build.sh` (goenv-aware `go`, version stamped via
+Mirror the `sdk/gss` conventions: `build.sh` (goenv-aware `go`, version stamped via
 `-X github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/version.*` from a `VERSION` file, output to
 `~/opt/bin/gsl`, then run `scripts/check-deps.sh`), an `os/exec` **seam** confined to
 `internal/git`, `internal/mcp`, and `internal/gh` and enforced by `check-deps.sh`, a
@@ -300,17 +300,17 @@ state), and a `spacious` style (no fill, fg-only glyphs, wide separators).
 
 ### Patterns to reuse (don't reinvent)
 
-- `src/gss/build.sh` — copy the goenv-aware, version-stamping build script verbatim, swapping
+- `sdk/gss/build.sh` — copy the goenv-aware, version-stamping build script verbatim, swapping
   names/paths to `gsl`.
-- `src/gss/cmd/root.go` — cobra root + `Execute()` shape.
-- `src/gss/internal/git` + its `fake/` runner — the `os/exec` seam + fakeable Runner pattern
-  reused for `git`, `mcp`, and `gh`; `src/gss/scripts/check-deps.sh` — copy and adjust the seam
+- `sdk/gss/cmd/root.go` — cobra root + `Execute()` shape.
+- `sdk/gss/internal/git` + its `fake/` runner — the `os/exec` seam + fakeable Runner pattern
+  reused for `git`, `mcp`, and `gh`; `sdk/gss/scripts/check-deps.sh` — copy and adjust the seam
   allowlist to `internal/git` + `internal/mcp` + `internal/gh` (and allow cobra/bubbletea in
   `cmd/`/`preview`).
 - `gss feature list --json` / `~/.config/gss/worktrees/registry.json` — the worker rows
   (`branch`, `worktree`, `pr_url`, `pr_state`, parent `name`) the `internal/repo` registry reader
   parses; guard on the top-level `schema_version`.
-- `src/gss/internal/version` — version var + `Get()` fallback pattern.
+- `sdk/gss/internal/version` — version var + `Get()` fallback pattern.
 - `opt/profiles/.p10k.zsh` `my_git_formatter` — authoritative glyph semantics
   (`⇡`/`⇣` ahead/behind, `+`/`!`/`?` staged/unstaged/untracked) to mirror.
 - `ai/gemini/commands/gss.toml` — exact TOML command format for `gsl-status.toml`.

@@ -354,9 +354,9 @@ if [ -f "${BASE_DIR}/opt/scripts/system/install_ai_teams.sh" ]; then
 fi
 
 # build and install gss
-if [ -f "${BASE_DIR}/src/gss/build.sh" ]; then
+if [ -f "${BASE_DIR}/sdk/gss/build.sh" ]; then
     echo "Installing gss (dotfiles manager)..."
-    bash "${BASE_DIR}/src/gss/build.sh"
+    bash "${BASE_DIR}/sdk/gss/build.sh"
     if [ -f "${HOME}/opt/bin/gss" ]; then
         echo "--------------------------------------------------"
         "${HOME}/opt/bin/gss" version
