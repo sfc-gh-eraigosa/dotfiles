@@ -95,15 +95,21 @@ build_component() {
 # 1. Component Builds (for tools with source code)
 # Explicitly build known binaries if --build is passed
 for component in "gss" "tmux-mgr" "wol" "gsl"; do
-    build_component "$BASE_DIR/src/$component" "$component"
+    # Go modules are migrating src/ -> sdk/; prefer sdk/, fall back to src/.
+    for root in "sdk" "src"; do
+        if [ -d "$BASE_DIR/$root/$component" ]; then
+            build_component "$BASE_DIR/$root/$component" "$component"
+            break
+        fi
+    done
 done
 
 # 2. Dynamic Skill Discovery
 echo "Discovering and linking skills..."
 
-# A. Skills in src/ (either as a 'skill/' subdirectory or a top-level 'SKILL.md')
-# We look for src/*/skill/ or src/*/SKILL.md
-for dir in "$BASE_DIR/src"/*/; do
+# A. Skills in src/ and sdk/ (either a 'skill/' subdirectory or a top-level 'SKILL.md')
+# We look for {src,sdk}/*/skill/ or {src,sdk}/*/SKILL.md (the sdk/ glob is inert if absent).
+for dir in "$BASE_DIR/src"/*/ "$BASE_DIR/sdk"/*/; do
     [ -d "$dir" ] || continue
     name=$(basename "$dir")
     
