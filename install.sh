@@ -378,9 +378,9 @@ if [ -f "${BASE_DIR}/src/tmux-mgr/build.sh" ]; then
 fi
 
 # build and install wol
-if [ -f "${BASE_DIR}/src/wol/build.sh" ]; then
+if [ -f "${BASE_DIR}/sdk/wol/build.sh" ]; then
     echo "Installing wol (Wake-on-LAN utility)..."
-    bash "${BASE_DIR}/src/wol/build.sh"
+    bash "${BASE_DIR}/sdk/wol/build.sh"
     if [ -f "${HOME}/opt/bin/wol" ]; then
         echo "--------------------------------------------------"
         "${HOME}/opt/bin/wol" version
