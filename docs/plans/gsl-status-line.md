@@ -10,7 +10,7 @@ changes (each a reviewer comment) are folded into the design below:
    logic in `internal/`, matching gss); bubbletea for the **preview TUI only — never in the
    per-turn render hot path**. Licenses verified: cobra **Apache-2.0**, bubbletea **MIT** →
    both allowed by `src/CLAUDE.md`; the license gate stays green.
-2. **`src/gsl`** (was: `src/statusline`) + module path `github.com/wenlock/dotfiles/gsl`,
+2. **`sdk/gsl`** (was: `src/statusline`) + module path `github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl`,
    cascaded through `build.sh` LDFLAGS and the `sync-skills.sh` case map.
 3. **First-class `gsl preview`** — `--once` (single snapshot, for CI/golden tests) **and** an
    interactive bubbletea TUI (live-toggle segments/glyphs/theme, 1s clock tick), rendered
@@ -69,7 +69,7 @@ covered too. Research established:
   missing hook.**
 
 **Decisions (confirmed with the user; revised per review):**
-1. Build a new **cobra-based** Go binary named **`gsl`** (Go Status Line) at **`src/gsl/`**,
+1. Build a new **cobra-based** Go binary named **`gsl`** (Go Status Line) at **`sdk/gsl/`**,
    compiled to `~/opt/bin/gsl`. **bubbletea** powers the preview TUI only.
 2. Gemini: a **pretty on-demand `/gsl-status`** slash command (+ skill `gsl-status`) that runs
    the same binary in plain-text mode; document Gemini's built-in footer toggles.
@@ -137,10 +137,10 @@ styles**, switch glyphs/theme, and watch the clock tick before saving config.
 
 ## Approach
 
-### New tool: `src/gsl/` (module `github.com/wenlock/dotfiles/gsl`)
+### New tool: `sdk/gsl/` (module `github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl`)
 
 Mirror the `src/gss` conventions: `build.sh` (goenv-aware `go`, version stamped via
-`-X github.com/wenlock/dotfiles/gsl/internal/version.*` from a `VERSION` file, output to
+`-X github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/version.*` from a `VERSION` file, output to
 `~/opt/bin/gsl`, then run `scripts/check-deps.sh`), an `os/exec` **seam** confined to
 `internal/git`, `internal/mcp`, and `internal/gh` and enforced by `check-deps.sh`, a
 `skill/SKILL.md`, Apache-2.0 `LICENSE`. **cobra** for dispatch (`cmd.Execute()` in `main.go`);
@@ -148,7 +148,7 @@ Mirror the `src/gss` conventions: `build.sh` (goenv-aware `go`, version stamped 
 `cmd/` + `internal/preview`, and keeps `os/exec` out of everything except the three seams.
 
 ```
-src/gsl/
+sdk/gsl/
   main.go  go.mod  go.sum  VERSION  build.sh  README.md  LICENSE
   cmd/            root.go (cobra root + Execute()) render.go status.go config.go
                   preview.go version.go (+ _test)
@@ -282,7 +282,7 @@ state), and a `spacious` style (no fill, fg-only glyphs, wide separators).
   `description` + a pretty `prompt` blurb with `!{gsl status}` substitution and `{{args}}`.
   Auto-linked — `install_gemini_skills.sh` already globs `ai/gemini/commands/*.toml`
   (line 56), no script edit needed.
-- **No edits required** to: `.gitignore` (`!src/**` already tracks `src/gsl/**`; the
+- **No edits required** to: `.gitignore` (`!src/**` already tracks `sdk/gsl/**`; the
   binary lives outside the repo), `install.sh` (already runs sync-skills + both install
   scripts), `Makefile` (`make bin` auto-discovers `src/*/build.sh`), and
   `ai/claude/settings.json.template` (the existing `Bash($HOME/opt/bin/*:*)` allow rule already
@@ -292,7 +292,7 @@ state), and a `spacious` style (no fill, fg-only glyphs, wide separators).
 
 | Action | Path |
 | --- | --- |
-| NEW (tool tree) | `src/gsl/**` — cobra Go source, `build.sh`, `VERSION`, `internal/{repo,gh}` (worktree + PR# detection), `internal/style` (powerline + emoji built-ins), `internal/preview` (bubbletea), `skill/SKILL.md`, `scripts/check-deps.sh`, tests |
+| NEW (tool tree) | `sdk/gsl/**` — cobra Go source, `build.sh`, `VERSION`, `internal/{repo,gh}` (worktree + PR# detection), `internal/style` (powerline + emoji built-ins), `internal/preview` (bubbletea), `skill/SKILL.md`, `scripts/check-deps.sh`, tests |
 | NEW | `ai/claude/statusline-command.sh` (shim) |
 | NEW | `ai/gemini/commands/gsl-status.toml` |
 | EDIT | `opt/scripts/system/install_claude_skills.sh` (symlink shim) |
@@ -324,7 +324,7 @@ state), and a `spacious` style (no fill, fg-only glyphs, wide separators).
 Conservative sizing; the value is the sequencing. CP1↔CP2 are mostly parallelizable after the
 seams land; CP3 depends on both; CP4 is final.
 
-- **CP1 — Scaffolding & core.** `src/gsl` tree; cobra root + `Execute()`; `build.sh` +
+- **CP1 — Scaffolding & core.** `sdk/gsl` tree; cobra root + `Execute()`; `build.sh` +
   `scripts/check-deps.sh` (from gss, seam allowlist adjusted); `internal/{version,payload,config}`
   and the `git`/`mcp` seam interfaces + `fake/` runners. Gate: `go build ./...`, check-deps
   green, no panic on missing config.
@@ -345,11 +345,11 @@ seams land; CP3 depends on both; CP4 is final.
 
 ## Verification
 
-1. **Build**: `bash src/gsl/build.sh` → `gsl built and installed to ~/opt/bin/gsl`,
+1. **Build**: `bash sdk/gsl/build.sh` → `gsl built and installed to ~/opt/bin/gsl`,
    check-deps passes. (`make bin` also works.)
 2. **Tests/coverage** (TDD, ≥60% per pkg per `src/CLAUDE.md`; targets: payload ~95, git 70,
    mcp 60, repo 70, gh 60, style 80, config 70, render 75, cmd 80, preview 60):
-   `cd src/gsl && go test ./... -cover`. Seams faked via `git/fake` + `mcp/fake` + `gh/fake`;
+   `cd sdk/gsl && go test ./... -cover`. Seams faked via `git/fake` + `mcp/fake` + `gh/fake`;
    payload fixtures under `internal/payload/testdata/`, registry fixtures under
    `internal/repo/testdata/`. Cases per package:
    - payload: full fixture; malformed JSON → error; **empty stdin → empty struct, no error**;

@@ -28,14 +28,14 @@ on sequencing and acceptance gates.
 
 | # | Task | Files | Gate |
 | --- | --- | --- | --- |
-| 1.1 | Create `src/gsl/` module (`go mod init github.com/wenlock/dotfiles/gsl`), `VERSION`, `LICENSE` (Apache-2.0), `README.md` stub | `src/gsl/{go.mod,VERSION,LICENSE,README.md}` | `go build ./...` succeeds on empty tree |
-| 1.2 | Copy `src/gss/build.sh` → `src/gsl/build.sh`, swap names/paths/module to `gsl`; output `~/opt/bin/gsl`; stamp version | `src/gsl/build.sh` | `bash src/gsl/build.sh` builds & installs; `gsl version` prints stamped version |
-| 1.3 | Copy `src/gss/scripts/check-deps.sh`, adjust seam allowlist to `internal/{git,mcp,gh}`; allow cobra in `cmd/`, bubbletea in `internal/preview` | `src/gsl/scripts/check-deps.sh` | check-deps green on scaffold; fails if `os/exec` added outside seams |
-| 1.4 | cobra root + `Execute()` (mirror `src/gss/cmd/root.go`); wire `main.go` | `src/gsl/main.go`, `src/gsl/cmd/root.go` | `gsl --help` lists command stubs |
-| 1.5 | `internal/version` (var + `Get()` fallback, copy gss) | `src/gsl/internal/version/version.go` | `gsl version --json` returns version/commit/date |
-| 1.6 | `internal/payload` — defensive parse of Claude stdin JSON; **all fields pointers**; empty stdin → empty struct, no error | `src/gsl/internal/payload/payload.go` + `testdata/` | unit tests in 2.x; compiles, parses sample fixture |
-| 1.7 | `internal/config` — `Config`, `Default()`, `Load/Save`, segment + style fields, toggle helpers; missing file → defaults | `src/gsl/internal/config/config.go` | `Default()` returns working config; round-trips |
-| 1.8 | Define seam interfaces + `fake/` runners for `git`, `mcp`, `gh` (no real exec yet) | `src/gsl/internal/{git,mcp,gh}/exec.go`, `.../fake/runner.go` | interfaces compile; fakes satisfy them |
+| 1.1 | Create `sdk/gsl/` module (`go mod init github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl`), `VERSION`, `LICENSE` (Apache-2.0), `README.md` stub | `sdk/gsl/{go.mod,VERSION,LICENSE,README.md}` | `go build ./...` succeeds on empty tree |
+| 1.2 | Copy `src/gss/build.sh` → `sdk/gsl/build.sh`, swap names/paths/module to `gsl`; output `~/opt/bin/gsl`; stamp version | `sdk/gsl/build.sh` | `bash sdk/gsl/build.sh` builds & installs; `gsl version` prints stamped version |
+| 1.3 | Copy `src/gss/scripts/check-deps.sh`, adjust seam allowlist to `internal/{git,mcp,gh}`; allow cobra in `cmd/`, bubbletea in `internal/preview` | `sdk/gsl/scripts/check-deps.sh` | check-deps green on scaffold; fails if `os/exec` added outside seams |
+| 1.4 | cobra root + `Execute()` (mirror `src/gss/cmd/root.go`); wire `main.go` | `sdk/gsl/main.go`, `sdk/gsl/cmd/root.go` | `gsl --help` lists command stubs |
+| 1.5 | `internal/version` (var + `Get()` fallback, copy gss) | `sdk/gsl/internal/version/version.go` | `gsl version --json` returns version/commit/date |
+| 1.6 | `internal/payload` — defensive parse of Claude stdin JSON; **all fields pointers**; empty stdin → empty struct, no error | `sdk/gsl/internal/payload/payload.go` + `testdata/` | unit tests in 2.x; compiles, parses sample fixture |
+| 1.7 | `internal/config` — `Config`, `Default()`, `Load/Save`, segment + style fields, toggle helpers; missing file → defaults | `sdk/gsl/internal/config/config.go` | `Default()` returns working config; round-trips |
+| 1.8 | Define seam interfaces + `fake/` runners for `git`, `mcp`, `gh` (no real exec yet) | `sdk/gsl/internal/{git,mcp,gh}/exec.go`, `.../fake/runner.go` | interfaces compile; fakes satisfy them |
 
 **CP1 done when:** `go build ./...` + check-deps green; `gsl --help`/`version` work; no panic with no config file present.
 
@@ -67,7 +67,7 @@ on sequencing and acceptance gates.
 | 3.7 | **EDIT** `install_claude_skills.sh`: symlink shim with backup-if-not-symlink guard + `chmod +x` | `opt/scripts/system/install_claude_skills.sh` | re-run → `~/.claude/statusline-command.sh` symlink, executable |
 | 3.8 | **EDIT** `sync-skills.sh`: add `"gsl"` to build loop; add `gsl) dest_name="gsl-status" ;;` to name case | `opt/scripts/system/sync-skills.sh` | `--build` builds gsl, links `~/.claude/skills/gsl-status` + `~/.agents/skills/gsl-status` |
 | 3.9 | **NEW** `ai/gemini/commands/gsl-status.toml` (mirror `gss.toml`): `description` + prompt with `!{gsl status}` + `{{args}}` | `ai/gemini/commands/gsl-status.toml` | `install_gemini_skills.sh` auto-links it (glob, no script edit) |
-| 3.10 | `skill/SKILL.md` for gsl (drives `gsl-status` skill) | `src/gsl/skill/SKILL.md` | links via sync-skills |
+| 3.10 | `skill/SKILL.md` for gsl (drives `gsl-status` skill) | `sdk/gsl/skill/SKILL.md` | links via sync-skills |
 
 **CP3 done when:** all subcommands work; both wiring scripts link correctly on a clean re-run; Gemini command linked; shim fallback verified with binary moved aside.
 
@@ -75,8 +75,8 @@ on sequencing and acceptance gates.
 
 | # | Task | Files | Gate |
 | --- | --- | --- | --- |
-| 4.1 | `src/gsl/README.md` (usage, subcommands, config schema, styles) | `src/gsl/README.md` | renders; matches behavior |
-| 4.2 | `src/gsl/docs/design.md` (in-tree design pointer) + polish `SKILL.md` | `src/gsl/docs/design.md` | consistent with this plan |
+| 4.1 | `sdk/gsl/README.md` (usage, subcommands, config schema, styles) | `sdk/gsl/README.md` | renders; matches behavior |
+| 4.2 | `sdk/gsl/docs/design.md` (in-tree design pointer) + polish `SKILL.md` | `sdk/gsl/docs/design.md` | consistent with this plan |
 | 4.3 | Fold final decisions back into `docs/plans/gsl-status-line.md` + check this execution plan's boxes | `docs/plans/*` | plan reflects shipped reality |
 
 ---
@@ -85,24 +85,24 @@ on sequencing and acceptance gates.
 
 | Action | Path | CP | Purpose |
 | --- | --- | --- | --- |
-| NEW | `src/gsl/go.mod`, `go.sum` | 1 | module `github.com/wenlock/dotfiles/gsl`; deps cobra (Apache-2.0), bubbletea (MIT), yaml |
-| NEW | `src/gsl/VERSION`, `LICENSE` | 1 | version source; Apache-2.0 |
-| NEW | `src/gsl/build.sh` | 1 | goenv-aware build, version stamp, install to `~/opt/bin/gsl`, run check-deps |
-| NEW | `src/gsl/scripts/check-deps.sh` | 1 | seam + license gate (`os/exec` only in `internal/{git,mcp,gh}`) |
-| NEW | `src/gsl/main.go`, `cmd/root.go` | 1 | cobra root + `Execute()` |
-| NEW | `src/gsl/cmd/{render,status,config,preview,version}.go` | 3 | subcommand tree |
-| NEW | `src/gsl/internal/version/version.go` | 1 | version var + `Get()` |
-| NEW | `src/gsl/internal/payload/payload.go` (+ `testdata/`) | 1 | Claude stdin JSON parse (pointer fields) |
-| NEW | `src/gsl/internal/config/config.go` | 1 | config schema, defaults, load/save, toggles |
-| NEW | `src/gsl/internal/git/{exec,status,worktree}.go` + `fake/runner.go` | 1–2 | git seam, porcelain v2, worktree |
-| NEW | `src/gsl/internal/mcp/{detect,cache}.go` + `fake/runner.go` | 1–2 | configured (instant) + active (cached) MCP counts |
-| NEW | `src/gsl/internal/repo/{detect,registry,pr}.go` (+ `testdata/registry.json`) | 2 | root/worktree, gss registry reader, PR# resolve |
-| NEW | `src/gsl/internal/gh/{exec,pr}.go` + `fake/runner.go` | 1–2 | gh seam, cached `gh pr view` fallback |
-| NEW | `src/gsl/internal/style/{style,builtins,resolve}.go` | 2 | style struct, powerline+emoji built-ins, merge |
-| NEW | `src/gsl/internal/render/{segment,glyphs,render,seg_dirgit,seg_repo,seg_ai,seg_time}.go` | 2 | concurrent segment renderer |
-| NEW | `src/gsl/internal/preview/{ui,fixtures}.go` | 3 | bubbletea preview TUI + fixtures |
-| NEW | `src/gsl/skill/SKILL.md` | 3 | `gsl-status` skill |
-| NEW | `src/gsl/README.md`, `docs/design.md` | 4 | docs |
+| NEW | `sdk/gsl/go.mod`, `go.sum` | 1 | module `github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl`; deps cobra (Apache-2.0), bubbletea (MIT), yaml |
+| NEW | `sdk/gsl/VERSION`, `LICENSE` | 1 | version source; Apache-2.0 |
+| NEW | `sdk/gsl/build.sh` | 1 | goenv-aware build, version stamp, install to `~/opt/bin/gsl`, run check-deps |
+| NEW | `sdk/gsl/scripts/check-deps.sh` | 1 | seam + license gate (`os/exec` only in `internal/{git,mcp,gh}`) |
+| NEW | `sdk/gsl/main.go`, `cmd/root.go` | 1 | cobra root + `Execute()` |
+| NEW | `sdk/gsl/cmd/{render,status,config,preview,version}.go` | 3 | subcommand tree |
+| NEW | `sdk/gsl/internal/version/version.go` | 1 | version var + `Get()` |
+| NEW | `sdk/gsl/internal/payload/payload.go` (+ `testdata/`) | 1 | Claude stdin JSON parse (pointer fields) |
+| NEW | `sdk/gsl/internal/config/config.go` | 1 | config schema, defaults, load/save, toggles |
+| NEW | `sdk/gsl/internal/git/{exec,status,worktree}.go` + `fake/runner.go` | 1–2 | git seam, porcelain v2, worktree |
+| NEW | `sdk/gsl/internal/mcp/{detect,cache}.go` + `fake/runner.go` | 1–2 | configured (instant) + active (cached) MCP counts |
+| NEW | `sdk/gsl/internal/repo/{detect,registry,pr}.go` (+ `testdata/registry.json`) | 2 | root/worktree, gss registry reader, PR# resolve |
+| NEW | `sdk/gsl/internal/gh/{exec,pr}.go` + `fake/runner.go` | 1–2 | gh seam, cached `gh pr view` fallback |
+| NEW | `sdk/gsl/internal/style/{style,builtins,resolve}.go` | 2 | style struct, powerline+emoji built-ins, merge |
+| NEW | `sdk/gsl/internal/render/{segment,glyphs,render,seg_dirgit,seg_repo,seg_ai,seg_time}.go` | 2 | concurrent segment renderer |
+| NEW | `sdk/gsl/internal/preview/{ui,fixtures}.go` | 3 | bubbletea preview TUI + fixtures |
+| NEW | `sdk/gsl/skill/SKILL.md` | 3 | `gsl-status` skill |
+| NEW | `sdk/gsl/README.md`, `docs/design.md` | 4 | docs |
 | NEW | `ai/claude/statusline-command.sh` | 3 | shim the settings template already references |
 | NEW | `ai/gemini/commands/gsl-status.toml` | 3 | Gemini on-demand command |
 | EDIT | `opt/scripts/system/install_claude_skills.sh` | 3 | symlink shim (backup-guard + chmod) |
@@ -113,7 +113,7 @@ on sequencing and acceptance gates.
 
 ## Test plan
 
-**Strategy:** TDD; seams faked via `git/fake` + `mcp/fake` + `gh/fake`; payload fixtures under `internal/payload/testdata/`, registry fixtures under `internal/repo/testdata/`. Run `cd src/gsl && go test ./... -cover`. Per-package coverage targets (floor `60%` per `src/CLAUDE.md`):
+**Strategy:** TDD; seams faked via `git/fake` + `mcp/fake` + `gh/fake`; payload fixtures under `internal/payload/testdata/`, registry fixtures under `internal/repo/testdata/`. Run `cd sdk/gsl && go test ./... -cover`. Per-package coverage targets (floor `60%` per `src/CLAUDE.md`):
 
 | Package | Target | Key cases |
 | --- | --- | --- |
@@ -138,7 +138,7 @@ on sequencing and acceptance gates.
 
 **Order matters** — build the binary before linking the skill, link the shim before relying on the live status line.
 
-1. **Build & install:** `bash src/gsl/build.sh` → `~/opt/bin/gsl`; check-deps green. (`make bin` auto-discovers it.)
+1. **Build & install:** `bash sdk/gsl/build.sh` → `~/opt/bin/gsl`; check-deps green. (`make bin` auto-discovers it.)
 2. **Skill sync:** `sync-skills.sh` build loop gains `gsl`; the name `case` maps `gsl) dest_name="gsl-status"`, so `bash opt/scripts/system/sync-skills.sh --build` links `~/.claude/skills/gsl-status` and `~/.agents/skills/gsl-status`.
 3. **Claude shim:** `install_claude_skills.sh` symlinks `ai/claude/statusline-command.sh` → `~/.claude/statusline-command.sh` (backup-if-not-symlink guard, `chmod +x`). The settings template's `statusLine.command` already points at this path, and the `Bash($HOME/opt/bin/*:*)` allow-rule already covers `gsl render`.
 4. **Gemini command:** `ai/gemini/commands/gsl-status.toml` is auto-linked by `install_gemini_skills.sh`'s existing `*.toml` glob — no script edit.
@@ -158,7 +158,7 @@ on sequencing and acceptance gates.
 
 Mirrors the design doc's Verification section as closable gates:
 
-- [x] **Build:** `bash src/gsl/build.sh` installs `~/opt/bin/gsl`; check-deps passes
+- [x] **Build:** `bash sdk/gsl/build.sh` installs `~/opt/bin/gsl`; check-deps passes
 - [x] **Tests:** `go test ./... -cover` ≥ target per package (git 94.3, repo 94.9, style 96.5, render 91.6, preview 83.5, cmd 80.7, payload 90.0, config 79.1, mcp 65.1, gh 63.0; `-race` clean)
 - [x] **Render (Claude):** sample payload piped to `gsl render` → 4-part powerline line
 - [x] **On-demand (Gemini/CLI):** `gsl status` (no stdin) → dir+git+repo+time, ai omitted
