@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # privacy_guard.sh — AI Agent PreToolUse / BeforeTool hook
 #
 # Stops local IDENTITY (home paths, the login username, the hostname) and

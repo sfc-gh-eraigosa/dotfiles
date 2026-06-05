@@ -105,6 +105,30 @@ assert 2 "$(pl_write "$TRACKED" '-----BEGIN OPENSSH PRIVATE KEY-----')" "tracked
 assert 2 "$(pl_write "$TRACKED" 'ghp_abcdefghijklmnopqrstuvwxyz0123456789')" "tracked Write: GitHub PAT (Rule D)"
 assert 2 "$(pl_write "$TRACKED" 'password=hunter2SuperSecretValue')" "tracked Write: hard-coded password (Rule D heuristic)"
 
+# ============ REGRESSION: hook must run under its production invocation ========
+# The asserts above all prepend `bash "$HOOK"`. Production does NOT: the harness
+# runs `$HOME/.claude/hooks/privacy_guard.sh` directly, so the shebang selects the
+# interpreter. With NO shebang the kernel falls back to /bin/sh (dash on Debian),
+# which chokes on the bash arrays / [[ ]] and the guard crashes — failing CLOSED
+# on every clean publishing command. Exercise that path directly so the bug can
+# never regress unseen. (See issue: privacy_guard crashes under dash.)
+if head -1 "$HOOK" | grep -q '^#!'; then
+    echo "PASS: hook declares a #! shebang"; PASS=$((PASS+1))
+else
+    echo "FAIL: hook is missing a #! shebang (production execs it directly -> /bin/sh)"; FAIL=$((FAIL+1))
+fi
+# Direct (shebang-driven) exec of a clean publishing payload must ALLOW (exit 0),
+# not crash. Pre-fix, a shebang-less executable yields ENOEXEC (126).
+set +e
+rc_direct=$(printf '%s' "$(pl_bash 'git commit -m "fix: tidy the docs"')" \
+    | env -i PATH="$PATH" USER="$ID_USER" HOME="$ID_HOME" HOSTNAME="$ID_HOST" "$HOOK" > /dev/null 2>&1; echo $?)
+set -e
+if [ "$rc_direct" = 0 ]; then
+    echo "PASS: clean commit allowed under shebang-driven direct exec (exit 0)"; PASS=$((PASS+1))
+else
+    echo "FAIL: direct exec of hook did not allow a clean commit (got $rc_direct) -- shebang/interpreter regression"; FAIL=$((FAIL+1))
+fi
+
 echo "----"
 echo "privacy_guard_test: $PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ] && exit 0 || exit 1
