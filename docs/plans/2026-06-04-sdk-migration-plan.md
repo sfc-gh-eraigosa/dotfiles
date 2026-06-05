@@ -8,6 +8,45 @@
 
 ---
 
+## 0. Decision Log — owner ratifications (2026-06-04)
+
+The repo owner reviewed the Cross-Cutting Decisions (§4) and ratified the following.
+**These supersede the correspondingly-numbered items in §4.**
+
+- **D1 — Public posture (RESOLVED).** The module tree is **public**: `github.com/sfc-gh-eraigosa/dotfiles`
+  is a public repo and the new `sdk/<tool>` paths resolve via the public proxy. The unrelated
+  Snowflake-internal `GOPRIVATE=github.com/snowflake-eng/*` has been **removed** from the shared
+  dotfiles (PR #118) — it never affected this repo's paths and is no longer shipped to clones.
+  **No `GOPRIVATE` is required to install these tools.**
+- **D3 — Old namespaces: ignore; do not retain `eraigosa` (RESOLVED).** The maintainer **owns
+  `github.com/wenlock`** (and intends to return to that namespace later) but does **not** own
+  `github.com/eraigosa` and will not acquire it. After the sweep we **reference neither old
+  namespace anywhere**, so the typosquat/namespace-takeover concern is mitigated by *complete
+  reference removal* — **not** by namespace retention. Do **not** escalate `eraigosa` as a blocker;
+  the exhaustive sweep (§7) is the security control.
+- **D4 — Automate tagging on merge to `main` (DIRECTION SET).** Instead of manual tags, **CI cuts the
+  signed `sdk/<tool>/vX.Y.Z` tags automatically on merge to `main`**. Keep: start at `v0.x`, signed
+  annotated tags, `sdk/<tool>/v*` tag protection. Phase 6 (CI) designs the GitHub Actions job.
+  **Open sub-question for the Phase-1 ADR:** per-module version derivation — a path-filtered trigger
+  plus either a per-module `VERSION` file or a conventional-commit/semver bump.
+- **D5 — Coverage is out of scope (RESOLVED).** We are **not** addressing coverage in this migration.
+  File motion does not change coverage %; backlog #50 (tmux-mgr) / #51 (wol) stay independent and
+  untouched. The migration must neither be blocked by nor claim to fix coverage; leave
+  `scripts/test.sh` behavior as-is.
+- **D6 — No-tag interim window: not a concern (RESOLVED).** These are quick changes; we will not
+  worry about the between-Phase-2-and-6 `@latest`-resolves-to-nothing window or an interim consumer
+  install contract. No special handling or consumer comms needed.
+- **D7 — PR #115 (RESOLVED).** #115 is **closed (won't-do)**, but its design content (the problem
+  statement: broken external `go install`) is **repurposed into the umbrella ADR** in Phase 1 rather
+  than discarded. Its narrower in-place `src/gss` solution stays superseded.
+- **D8 — Per-module atomic PRs (RESOLVED).** Migrate **one module per PR** (four sequential atomic
+  PRs); `main` stays green at every boundary; each merges as ready ("merge as needed"). The e2e guard
+  is meaningful at the gss → tmux-mgr boundary, so Phase 4 (gss) merges before Phase 5 (tmux-mgr).
+
+> Repo visibility per D1 confirmed: `sfc-gh-eraigosa/dotfiles` is **public**.
+
+---
+
 ## 1. Goal & Scope
 
 Move **all four Go modules** out of `src/` into a new top-level `sdk/` tree so their module paths become the canonical, externally-installable `github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>`. Each tool is then installable via:
