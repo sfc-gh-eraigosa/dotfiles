@@ -39,6 +39,8 @@
 !opt/**
 !src/
 !src/**
+!sdk/
+!sdk/**
 # Retired-but-kept artifacts (e.g. the old AHK Copilot-key voice macro). Tracked
 # so we can restore them later; see archive/README.md.
 !archive/
