@@ -68,7 +68,6 @@ jobs:
           # setup-go@v5 enables module caching by default (cache: true);
           # cache-dependency-path scopes the cache key to our four Go modules.
           cache-dependency-path: |
-            src/**/*.sum
             sdk/**/*.sum
 
       - name: Install golangci-lint
@@ -121,7 +120,6 @@ jobs:
         with:
           go-version: '1.26'
           cache-dependency-path: |
-            src/**/*.sum
             sdk/**/*.sum
       - name: Run Go Unit Tests
         run: make unit-test

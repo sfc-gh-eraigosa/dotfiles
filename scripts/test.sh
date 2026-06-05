@@ -74,7 +74,7 @@ function run_unit_tests() {
     modules=()
     while IFS= read -r line; do
         modules+=("$line")
-    done < <(find "$REPO_ROOT/src" "$REPO_ROOT/sdk" -name "go.mod" -exec dirname {} + 2>/dev/null | xargs -n1 basename | sort)
+    done < <(find "$REPO_ROOT/sdk" -name "go.mod" -exec dirname {} + 2>/dev/null | xargs -n1 basename | sort)
 
     if [ ${#modules[@]} -eq 0 ]; then
         log "No Go modules found in src/"
@@ -88,7 +88,7 @@ function run_unit_tests() {
     for mod in "${modules[@]}"; do
         log "Testing module: $mod"
         # Find the full path to the module (search both src/ and sdk/)
-        mod_path=$(find "$REPO_ROOT/src" "$REPO_ROOT/sdk" -path "*/$mod/go.mod" -exec dirname {} \; 2>/dev/null | head -n 1)
+        mod_path=$(find "$REPO_ROOT/sdk" -path "*/$mod/go.mod" -exec dirname {} \; 2>/dev/null | head -n 1)
         (cd "$mod_path" && go test -coverprofile="$REPO_ROOT/coverage/$mod.out" ./...)
         (cd "$mod_path" && go tool cover -func="$REPO_ROOT/coverage/$mod.out" | tail -n 1)
 
