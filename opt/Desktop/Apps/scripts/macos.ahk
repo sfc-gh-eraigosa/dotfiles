@@ -154,7 +154,7 @@ cmdTabActive := false
 ;  Click points are OFFSETS within the "Status" overlay window (anchored via
 ;  WinGetPos so they survive the widget moving). Re-capture live with the F11
 ;  calibration mode if the overlay layout changes. See WISPR-FLOW.md and
-;  docs/superpowers/specs/2026-05-31-flow-calibration-mode-design.md.
+;  docs/mbo/specs/2026-05-31-flow-calibration-mode-design.md.
 ; ==============================================================================
 FlowState := "IDLE"          ; IDLE | DICTATING | AWAITING_CLIP
 FlowWin   := 0

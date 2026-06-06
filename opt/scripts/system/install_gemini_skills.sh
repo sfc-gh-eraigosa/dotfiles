@@ -102,7 +102,7 @@ fi
 # Mirrors the Claude model: the host OWNS ~/.gemini/settings.json (theme, auth,
 # vimMode, ...); the immutable hook wiring (settings.forced.json) is deep-merged
 # over it on every run. ai/gemini/settings.json is the first-run seed. No
-# symlink. See docs/designs/2026-06-02-ai-config-home-provisioning.md (D4).
+# symlink. See docs/mbo/designs/2026-06-02-ai-config-home-provisioning.md (D4).
 GEMINI_HOME="${HOME}/.gemini"
 GSETTINGS_DEST="$GEMINI_HOME/settings.json"
 GSETTINGS_SEED="$BASE_DIR/ai/gemini/settings.json"

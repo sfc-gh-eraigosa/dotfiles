@@ -2,7 +2,7 @@
 # Test driver for apply-forced-settings.sh — the forced-field settings merge.
 #
 # Verifies the core guarantee of the AI-config provisioning design
-# (docs/designs/2026-06-02-ai-config-home-provisioning.md §7, D2):
+# (docs/mbo/designs/2026-06-02-ai-config-home-provisioning.md §7, D2):
 #   forced fields are applied from the repo; undeclared host fields are
 #   preserved; bad input fails loud without clobbering the host file.
 set -u

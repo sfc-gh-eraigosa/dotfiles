@@ -56,7 +56,7 @@ echo "PASS: System tools present"
 echo "Verifying Claude Code integration links..."
 # Resolve the Claude sanity check from THIS script's own location — never a
 # hardcoded ~/git/dotfiles path, which breaks on worktrees / alternate clones /
-# CI (F7 in docs/designs/2026-06-02-ai-config-home-provisioning.md).
+# CI (F7 in docs/mbo/designs/2026-06-02-ai-config-home-provisioning.md).
 GEMINI_SANITY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 REPO_ROOT="$(cd "$GEMINI_SANITY_DIR/../../.." && pwd)"
 CLAUDE_SANITY="$REPO_ROOT/ai/claude/scripts/sanity_check.sh"

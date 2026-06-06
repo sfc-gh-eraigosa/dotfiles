@@ -15,7 +15,7 @@ name: Tag SDK modules
 # NOTE: tags are created ANNOTATED but UNSIGNED — CI signing needs a GPG/SSH
 # signing key provisioned in repo secrets (a Phase-0 security follow-up), and a
 # tag-protection ruleset on `sdk/<tool>/v*` should be added so released tags
-# cannot be force-moved. See docs/plans/2026-06-04-sdk-migration-plan.md (D4).
+# cannot be force-moved. See docs/mbo/plans/2026-06-04-sdk-migration-plan.md (D4).
 
 on:
   push:
