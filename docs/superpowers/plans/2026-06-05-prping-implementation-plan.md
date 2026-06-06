@@ -1,5 +1,15 @@
 # prping — Implementation Plan
 
+> ⚠️ **SUPERSEDED (2026-06-06) — pending regeneration.** This plan targets the original
+> **bash-script** design (`src/prping/{pr-status,notify-diff,prping}.sh` + shell `*_test.sh` +
+> `make shell-test` wiring). The spec was revised to a **single Go CLI** under `sdk/prping`
+> (cobra + `internal/` packages + mockable `gh` runner + Go table tests + coverage gate) — see
+> the rewritten `docs/superpowers/specs/2026-06-05-prping-design.md` §3/§7/§9 and §12.7. The
+> Go form also dissolves this plan's "Blocker 1" (shell-test not scanning `src/`): Go tests run
+> via the existing `scripts/test.sh` discovery. **A new Go-CLI implementation plan will replace
+> this file.** The §8→§9 evaluation/traceability content below remains valid (the event rules
+> are unchanged; they now live in `internal/diff`).
+
 A Claude-native PR/push notifier. This plan operationalizes the approved design
 `docs/superpowers/specs/2026-06-05-prping-design.md` into a concrete, TDD-ordered,
 buildable sequence with exact artifact paths. Every must-fix from the adversarial plan

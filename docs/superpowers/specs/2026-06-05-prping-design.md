@@ -1,293 +1,226 @@
-# prping — a Claude-native PR/push notifier
+# prping — a Claude-native PR/push notifier (Go CLI + skill)
 
-- **Date:** 2026-06-05
-- **Status:** Approved (design) — pending spec review → implementation plan
-- **Author:** brainstormed with the user
+- **Date:** 2026-06-05 · **Revised:** 2026-06-06 — the deterministic core is now a **single Go
+  CLI** (`sdk/prping`, mirroring the other sdk tools) instead of a set of bash scripts.
+- **Status:** Approved (design) — pending plan regen to the Go-CLI shape.
+- **Relates to:** PR #127.
+- **Author:** brainstormed with the user; architecture team reviewed.
 
 ## 1. Goal
 
-Get a phone notification, via Claude's own Remote Control / mobile-app channel, when:
-1. an **open PR's branch head advances** on origin (a push landed), and
-2. an open PR becomes **ready to merge** or **needs a branch update**.
+Get a phone notification, via Claude's own Remote Control / mobile-app channel, when a
+**watched** PR (see §5 scope) changes state: a push lands, it becomes **ready to merge** or
+**needs a branch update**, a check fails, or it merges/closes.
 
-(v1 keys all events on open PRs; bare-branch pushes with no PR yet are §10 out-of-scope.)
-
-No OS-level desktop notifications, no changes to the `gss` binary, no shell wrappers.
+No OS-level desktop notifications, no changes to `gss`, no shell-script soup — one Go binary
+`prping` owns the deterministic work; a thin agent skill relays its output to the phone.
 
 ## 2. Why this shape (the load-bearing constraint)
 
-`PushNotification` (the mobile/terminal push) is **agent-loop-only**: it requires a
-running Claude session with **Remote Control** attached (Claude Code ≥ v2.1.110, mobile
-app signed in, "Push when Claude decides" enabled). It auto-suppresses while the user is
-active (<60s since last keystroke).
+`PushNotification` (the mobile/terminal push) is **agent-loop-only**: it needs a running Claude
+session with **Remote Control** attached (Claude Code ≥ v2.1.110, mobile app signed in, "Push
+when Claude decides" enabled); it auto-suppresses while the user is active (<60s idle). There is
+**no standalone shell→phone path** (verified against the Remote Control / headless / hooks /
+channels docs). So we don't hook `gss` or use OS notifiers — a **persistent agent watcher**
+observes git/gh effects and relays. The watcher's deterministic work (fetch state, decide which
+events fire, persist) lives in the `prping` binary; the only agent-side action is calling
+`PushNotification` once per event line the binary prints.
 
-There is **no standalone shell→phone path** — no HTTP endpoint or CLI a Go binary like
-`gss` can call to reach the phone without a live agent. Headless `-p` mode does not expose
-PushNotification; hooks can only react (desktop), not push to mobile; Channels push *into*
-a session (and no GitHub channel exists yet — research preview). Sources:
-`code.claude.com/docs/en/{remote-control,headless,hooks-guide,channels}`.
+## 3. Architecture — a single Go CLI + a thin skill
 
-**Consequence:** rather than hooking `gss`, run **one persistent agent watcher** that
-*observes the effects* of pushes/PRs (via `git ls-remote` + `gh`) and pushes to the phone
-from inside its own agent loop. This is 100% Claude-native and needs no gss/OS changes.
-
-## 3. Architecture
-
-A single reusable **`prping` skill** that the user starts in a Remote-Control-attached
-session. It runs a self-paced `/loop` (dynamic pacing) over the current repo (default) and,
-on each iteration, diffs current state against a persisted snapshot, emitting one
-`PushNotification` per **state transition**.
+`prping` is a Go module at `sdk/prping`, built and tested exactly like `sdk/gss` (cobra
+commands, `internal/` packages, a mockable runner, `internal/version` ldflags, `go install`-able
+as `github.com/sfc-gh-eraigosa/dotfiles/sdk/prping`). The agent **skill** drives a self-paced
+loop that calls `prping tick` each iteration and relays its printed lines to `PushNotification`.
 
 ```
-prping skill (agent /loop — thin orchestrator/RELAY only)
-  ├─ pr-status.sh <owner/repo>              → JSON snapshot (branch heads + open-PR states)
-  ├─ notify-diff.sh <prev.json> <now.json>  → event lines (the NOTIFICATION DECISION, pure)
-  ├─ state file ~/.config/prping/<owner>-<repo>.json  (last-seen snapshot)
-  └─ for each event line → PushNotification  [agent loop → Remote Control → phone]
+prping skill (agent /loop — relay only)            sdk/prping (Go CLI — all determinism)
+  each tick:                                          prping tick --scope <s> --repo <r>
+   └─ run `prping tick ...`  ──────────────────────►   ├─ internal/gh.Runner  → gh / git (mockable)
+   └─ for each printed line → PushNotification         ├─ internal/snapshot.Build(runner, scope) → Snapshot
+   └─ exit 10 ⇒ watched set empty ⇒ stop the loop      ├─ internal/state (load prev; atomic persist; lock)
+   └─ else re-arm Monitor / sleep ~270s, repeat        ├─ internal/diff.Diff(prev, now) → []Event  (§8 rules)
+                                                        └─ persist now, THEN print event lines (at-most-once)
 ```
 
-**Testability rule (load-bearing for confidence — §8/§9):** *every* notification decision
-lives in `notify-diff.sh`, a pure function of two snapshots. The agent never decides
-*whether* to notify — it only relays the lines `notify-diff.sh` prints. This shrinks the
-non-deterministic agent surface to a trivial "print → PushNotification" relay and makes the
-entire decision surface deterministically testable in CI. The orchestrator also supports a
-`--print` mode that runs the full pipeline but echoes the would-be notifications instead of
-calling PushNotification, enabling end-to-end testing with **no agent / no Remote Control**.
+### 3.1 CLI surface (subcommands)
 
-### 3.1 Components & boundaries
+| Command | Purpose | Output / exit |
+| :-- | :-- | :-- |
+| `prping snapshot --scope <s> [--repo <owner/repo>]` | Pure-ish: build the JSON snapshot of the watched set from `gh`/`git` | snapshot JSON on stdout |
+| `prping diff <prev.json> <now.json>` | **Pure decision**: emit the event lines for the prev→now transition (the §8 rules) | 0+ lines on stdout |
+| `prping tick --scope <s> [--repo <r>] [--state-dir <d>] [--dry-run]` | One watch iteration: load prev → `snapshot` → `diff` → **persist** → print events | event lines; **exit 10 = watched set empty (done)** |
+| `prping label add\|remove <#…> [--label prping]` | Mark/unmark PRs to watch (`gh pr edit --add-label/--remove-label`) | — |
+| `prping version` | ldflags version (like every sdk tool) | version block |
 
-| Unit | Responsibility | Interface | Depends on |
-| :--- | :--- | :--- | :--- |
-| `pr-status.sh` | Emit a deterministic JSON snapshot of the repo's current state (pure I/O→JSON, no decisions) | `pr-status.sh <owner/repo>` → JSON on stdout | `gh`, `git`, `jq` |
-| `notify-diff.sh` | **Pure decision**: given prev + now snapshots, print the exact event lines to notify (the §8 rules) | `notify-diff.sh <prev.json> <now.json>` → 0+ lines on stdout | `jq` only |
-| state file | Persist last-seen snapshot across loop iterations / context compaction | JSON at `~/.config/prping/<owner>-<repo>.json` (gitignored, local) | — |
-| `prping` SKILL.md | Orchestrate + relay: snapshot → diff → PushNotification per line → persist; cadence; prereq checks; `--print` dry-run | invoked as a skill; current repo by default, optional `<owner/repo>` arg | the two scripts, PushNotification, ScheduleWakeup |
+`--scope` ∈ `current` (the PR for the current branch, or `#N`) · `all` · `label:<name>`
+(default label `prping`). Default scope: `current` when on a PR branch, else `label:prping`.
+`--dry-run` computes + prints but does not persist (test/inspection aid). The skill normally
+runs `tick`; `snapshot`/`diff` are exposed for composition and golden testing.
 
-Both `pr-status.sh` and `notify-diff.sh` are pure/mockable and unit-testable in isolation;
-the agent owns only orchestration, persistence, and the relay.
+### 3.2 Package layout (`sdk/prping/`, mirrors `sdk/gss`)
 
-### 3.2 Snapshot shape (`pr-status.sh` output)
+```
+sdk/prping/
+  main.go                      → cmd.Execute()
+  cmd/                         cobra: root.go, snapshot.go, diff.go, tick.go, label.go, version.go (+ *_test.go)
+  internal/
+    gh/        Runner interface { Run(ctx, name string, args ...string) ([]byte, error) }
+               exec.go (real) + fake/ (records calls, returns scripted output) — mirrors gss internal/git
+    snapshot/  Build(runner, scope) (Snapshot, error): runs gh/git, parses → Snapshot  (table-tested w/ fake)
+    diff/      Diff(prev, now Snapshot) []Event + Event.Line() formatting (sanitize, <200 chars)  (golden-tested — the heart)
+    state/     load/persist (temp-file+rename, 0700 dir / 0600 file, umask 077), per-repo lockfile, filename derivation, seed-silent
+    version/   ldflags vars (Version/Commit/BuildDate/Dirty)
+  build.sh  VERSION  LICENSE  README.md  go.mod  go.sum
+  skill/SKILL.md               the agent skill (drives the loop, relays, prereqs, manual-acceptance checklist)
+  GEMINI.md  CLAUDE.md→GEMINI.md
+```
+
+The `gh.Runner` interface is the testability seam (exactly like gss's `git.Runner`): real impl
+shells out to `gh`/`git`; the `fake` returns fixture payloads so `snapshot` and `tick` are
+deterministic in unit tests. `diff` is pure (two snapshots in, lines out) and needs no runner.
+
+### 3.3 Snapshot + state JSON (schema-closed)
 
 ```json
-{
-  "repo": "sfc-gh-eraigosa/dotfiles",
-  "branchHeads": { "feature/x": "<sha>", "...": "..." },
+{ "repo": "acme/widgets", "scope": "label:prping",
   "prs": [
-    { "number": 126, "title": "...", "branch": "feature/x", "headSha": "<sha>",
-      "isDraft": false, "mergeStateStatus": "CLEAN|BEHIND|BLOCKED|DIRTY|UNKNOWN",
-      "mergeable": "MERGEABLE|CONFLICTING|UNKNOWN", "failingChecks": ["Build and Integration Test"] }
-  ]
-}
+    { "number": 126, "title": "…", "branch": "feature/x", "headSha": "<sha>",
+      "state": "OPEN|MERGED|CLOSED", "isDraft": false,
+      "mergeStateStatus": "CLEAN|BEHIND|BLOCKED|DIRTY|UNKNOWN",
+      "mergeable": "MERGEABLE|CONFLICTING|UNKNOWN",
+      "failingChecks": ["Build and Integration Test"] } ] }
 ```
-Derived from `git ls-remote --heads origin` and
-`gh pr list --json number,title,headRefName,headRefOid,isDraft,mergeStateStatus,mergeable,statusCheckRollup`.
-(`branchHeads` is collected for forward use — v1 events read each PR's own `headSha`; the
-full `branchHeads` map enables the bare-branch-push case noted in §10 without a schema change.)
+`snapshot` queries the watched set with `gh pr list/view … --state all` (so a just-merged PR is
+present with `state:"MERGED"` — §8.6 keys on a *state transition*, not on a PR vanishing, which
+keeps `diff` a pure two-snapshot comparison). The state file is the last-seen snapshot at
+`~/.config/prping/<owner>-<repo>.json` (gitignored, local; never committed).
 
-## 4. Notification events (transitions only)
+### 3.4 Determinism boundary
+Everything except the literal `PushNotification` call is in the binary and unit-testable. The
+agent does exactly two non-deterministic things: relay each printed line to PushNotification, and
+pace the loop. `prping tick` is the contract between them.
 
-Emit at most one push per PR per iteration, only when state changed vs. the snapshot:
+## 4. Notification events (produced by `prping diff`)
 
-| Event | Trigger (prev → now) | Sample push |
-| :--- | :--- | :--- |
-| PR opened | PR number not previously seen | `📬 PR #126 opened — <title>` |
-| Push landed | open PR's `headSha` advanced | `✓ pushed to PR #126 (feature/x)` |
-| Ready to merge | `mergeStateStatus` → `CLEAN` | `🟢 PR #126 ready to merge — checks green, up to date` |
-| Needs update | `mergeStateStatus` → `BEHIND` (checks not failing) | `🔄 PR #126 needs branch update (behind main)` |
-| Check failed | a required check rolled up to failure | `❌ PR #126 check failed: Build and Integration Test` |
-| Closed/merged | PR no longer open | (optional) `✅ PR #126 merged` — then drop from tracking |
+`diff` emits at most one line per PR per tick, only on a genuine prev→now transition. Sample
+lines (full rules in §8): `📬 PR #126 opened — <title> (<status>)` · `✓ pushed to PR #126
+(feature/x) <sha>` · `🟢 PR #126 ready to merge` · `🔄 PR #126 needs branch update (behind main)`
+· `❌ PR #126 check failed: <check>` · `✅ PR #126 merged` / `🚪 PR #126 closed (not merged)` ·
+final `🏁 watch complete — stopping` when the watched set empties (drives self-terminate).
 
-De-dup rule: a transition fires once; the new state is written to the state file so it will
-not re-fire until it changes again. "Push landed" also covers the first-push case once the
-PR exists (the PR-opened + push events may coincide — collapse to a single `opened` push).
+## 5. Pacing, scope & lifecycle
 
-**Out of scope for v1:** a bare-branch push with *no* PR yet (we key on open PRs). Noted as
-a possible later addition via `branchHeads` tracking independent of PRs.
+- **Self-paced loop** via the `loop` skill; fallback heartbeat ~270s; optional `Monitor`
+  (persistent, re-armed each iteration to survive its ~1h cap) for early wake on in-flight CI.
+  (`ScheduleWakeup`/`CronCreate` are **not** used — the former doesn't exist as a primitive here
+  and cron auto-expires / only fires while idle.)
+- **Scope** (§3.1) chosen on start: `current` / `all` / `label:<name>`. `prping label add <#>`
+  lets the user mark PRs to watch under the default `prping` label.
+- **Self-terminate:** when every watched PR has merged/closed (or none match the label),
+  `prping tick` exits 10; the skill emits the final line and stops the loop.
+- Notifications self-suppress while the user is active — they land once they've stepped away.
 
-## 5. Pacing
+## 6. Prerequisites (skill checks on start; warns if missing)
 
-Self-paced `/loop` (dynamic mode). Fallback heartbeat ~270s (cache-warm, and CI checks take
-minutes, so sub-5-min re-checks are appropriate). Optionally arm a `Monitor` on the in-flight
-CI run for earlier wake; the heartbeat is the safety net. The loop runs until the user stops
-it or no open PRs remain. Notifications self-suppress while the user is active (harness
-behavior) — so they land when the user has actually stepped away.
+Claude Code ≥ v2.1.110; a **Remote Control** session attached ("Push when Claude decides" on,
+mobile app signed in — the repo's `remote-claude-session` skill establishes one); `gh`
+authenticated; the `prping` binary on `PATH` (`install.sh` builds it to `~/opt/bin/prping`). If
+Remote Control is absent the skill still runs but warns pushes are terminal-only.
 
-## 6. Prerequisites (skill checks at start, warns if missing)
+## 7. Packaging & sdk integration
 
-- Claude Code ≥ v2.1.110.
-- A **Remote Control** session attached ("Push when Claude decides" enabled, mobile app
-  signed into the same account). The repo's existing `remote-claude-session` skill can
-  establish one; the skill links to it.
-- `gh` authenticated; `jq` present.
+`prping` is a first-class sdk module — everything that applies to `gss/gsl/wol/tmux-mgr` applies:
 
-If Remote Control is not detected, the skill still runs but warns that pushes will only show
-as terminal notifications (no phone), and points at `remote-claude-session`.
-
-## 7. Packaging & repo fit
-
-- Skill dir `src/prping/`:
-  - `SKILL.md` — orchestrator/relay + `--print` mode + the §9.4 manual-acceptance checklist
-  - `pr-status.sh`, `notify-diff.sh` — the two pure scripts
-  - `pr-status_test.sh`, `notify-diff_test.sh`, `scenario_test.sh` — the §9 harness layers
-  - `testdata/` — snapshot fixtures + the `scenario/` tick sequence + golden transcripts
-  `sync-skills` discovers it (now dual-scans `src/`+`sdk/`); add a name mapping if a friendly
-  slash name is wanted. `src/` is the right home (non-Go tooling/skills).
-- State dir `~/.config/prping/` is local/gitignored (never committed).
-- Add `src/prping/GEMINI.md` + `CLAUDE.md -> GEMINI.md` symlink per repo convention,
-  and link it from `src/GEMINI.md`.
+- **Module path** `github.com/sfc-gh-eraigosa/dotfiles/sdk/prping`; `build.sh` injects version via
+  `-ldflags -X …/internal/version.*`; `VERSION` starts `0.1.0`; `LICENSE` Apache-2.0; tag scheme
+  `sdk/prping/vX.Y.Z` (the existing tag-automation workflow picks it up from `VERSION`).
+- **install.sh:** add a build+install block (mirrors the gss block) → `~/opt/bin/prping`.
+- **Tests/coverage:** `scripts/test.sh` discovers it under `sdk/` automatically; add a
+  `COVERAGE_MIN[prping]=70` entry (the `diff`/`snapshot` packages are pure → easily >85%). CI runs
+  it via the existing Go path — **no shell-test harness changes needed** (this supersedes the
+  prior plan's "patch `make shell-test`" blocker; that was an artifact of the bash design).
+- **Skill:** `sdk/prping/skill/SKILL.md` is discovered by `sync-skills` (which dual-scans
+  `src/`+`sdk/` since the gss migration); name maps to bare `prping` (add a case-map entry only if
+  a friendlier slash name is later wanted).
+- **Docs:** `sdk/prping/GEMINI.md` + `CLAUDE.md→GEMINI.md`; add a row to `sdk/GEMINI.md`’s module
+  table; `.golangci.yml` module comment lists it.
+- **Lint:** golangci-lint per-module via the existing `make lint-go` sdk loop; `go vet` clean.
 
 ## 8. Evaluation criteria (per feature)
 
-Each feature is a precise predicate over `(prev, now)` snapshots with explicit
-**fires / must-not-fire / edge / pass** rules. `notify-diff.sh` is the single source of
-truth; **every rule below maps to ≥1 golden test case in §9.2** (rule-to-test traceability
-is part of the Definition of Done).
+Each feature is a predicate over `(prev, now)` snapshots with explicit **fires / must-not-fire /
+edge / pass** rules, implemented in `internal/diff` and **mapped 1:1 to a golden test case in
+§9.2** (traceability is a DoD item).
 
-**First-sight rule (global):** a PR absent in `prev` emits exactly one consolidated `opened`
-line naming its current status, and its state is seeded — so status/push/check events do
-**not** also fire on first sight. All other events fire only on a genuine prev→now transition.
+**First-sight rule (global):** a PR absent in `prev` emits one consolidated `opened` line naming
+its current status and seeds its state — status/push/check events do not also fire on first sight.
 
-### 8.1 PR opened
-- **Trigger:** `now.prs[N]` exists ∧ `prev.prs[N]` absent.
-- **Fires:** exactly one `📬 PR #N opened — <title> (<status>)`.
-- **Must NOT fire:** any later tick where N was already present.
-- **Edge:** opened-as-draft → `(draft)`; opened-already-CLEAN → `(ready)`, and §8.3 does **not** separately fire that tick.
-- **Pass:** first sight ⇒ 1 opened line; identical next tick ⇒ 0 lines.
+### 8.1 PR opened — `now.prs[N]` exists ∧ `prev` absent ⇒ one `📬 …opened…(<status>)`; never re-fires; draft→`(draft)`, already-CLEAN→`(ready)` (no separate ready that tick).
+### 8.2 Push landed — `prev.headSha ≠ now.headSha` (both present) ⇒ one `✓ pushed…<sha>`; not on unchanged sha; a push resetting checks to pending is not a status event that tick.
+### 8.3 Ready to merge — `now.mergeStateStatus==CLEAN ∧ ¬draft ∧ prev≠CLEAN ∧ prev≠UNKNOWN` ⇒ one `🟢 ready`; not when already CLEAN, draft, or recovering from a transient `UNKNOWN` flap.
+### 8.4 Needs update — `now==BEHIND ∧ prev≠BEHIND ∧ now.failingChecks==[]` ⇒ one `🔄 needs update`; not when already BEHIND or a check is failing (§8.5 wins).
+### 8.5 Check failed — `now.failingChecks` has a check ∉ `prev.failingChecks` (and `now≠UNKNOWN`) ⇒ one `❌ check failed: <new failures>`; not for an unchanged failing set; a transient empty-then-refill must not manufacture a failure.
+### 8.6 Merged / closed — `prev.state==OPEN ∧ now.state∈{MERGED,CLOSED}` ⇒ `✅ merged` or `🚪 closed (not merged)`, then drop N. (Snapshot carries `state` via `--state all`, so `diff` stays pure.)
+### 8.7 Global invariants — `Diff(now,now)==[]`; `prev==now ⇒ []`; lines ordered by PR number, stable; restart reloads state with no re-fire; every line is one line, <200 chars, no markdown. **Totality:** `UNKNOWN`/missing/null/malformed fields ⇒ seed-silent, emit nothing, never panic.
+### 8.8 Precedence (when several could fire in one tick) — check-failed > needs-update; push-landed is independent and may co-emit; opened collapses status on first sight; merged/closed is terminal for that PR.
 
-### 8.2 Push landed
-- **Trigger:** `prev.prs[N].headSha ≠ now.prs[N].headSha` (both present; not first-sight).
-- **Fires:** exactly one `✓ pushed to PR #N (<branch>) <shortSha>`.
-- **Must NOT fire:** headSha unchanged.
-- **Edge:** a push usually resets checks to pending (CLEAN→BLOCKED); only the push line fires that tick (pending is not an event).
-- **Pass:** sha advance ⇒ 1 push line; same sha ⇒ 0.
+## 9. Verification harness (Go testing)
 
-### 8.3 Ready to merge
-- **Trigger:** `now.mergeStateStatus == CLEAN ∧ ¬now.isDraft ∧ prev.mergeStateStatus ≠ CLEAN`.
-- **Fires:** one `🟢 PR #N ready to merge`.
-- **Must NOT fire:** already CLEAN last tick; or `isDraft` (drafts are never "ready").
-- **Pass:** ¬CLEAN→CLEAN(¬draft) ⇒ 1; CLEAN→CLEAN ⇒ 0; →CLEAN(draft) ⇒ 0.
+The Go form makes confidence cheaper than the bash form: the decision surface is a pure function
+under test, and everything runs through the existing `scripts/test.sh` → CI Go path.
 
-### 8.4 Needs update
-- **Trigger:** `now.mergeStateStatus == BEHIND ∧ prev ≠ BEHIND ∧ now.failingChecks == []`.
-- **Fires:** one `🔄 PR #N needs branch update (behind main)`.
-- **Must NOT fire:** already BEHIND; or a check is failing (§8.5 wins).
-- **Pass:** →BEHIND(green) ⇒ 1; BEHIND→BEHIND ⇒ 0; →BEHIND(failing) ⇒ 0 (1 check-failed instead).
+- **9.1 `internal/diff` golden table tests (the heart).** One+ named case per §8.1–8.8 rule
+  (fires + must-not-fire) + §8.7 invariants + totality on degraded payloads + the eventual-
+  consistency flap guards (CLEAN→UNKNOWN→CLEAN must not re-fire ready; empty→refill must not
+  manufacture check-failed). Pure, deterministic; a coverage assert maps every rule id to a case.
+- **9.2 `internal/snapshot` tests with the fake `gh.Runner`.** Feed fixture `gh`/`git` payloads;
+  assert the exact `Snapshot` (field extraction, draft, `failingChecks` from `statusCheckRollup`,
+  `state` from `--state all`, scope filtering, merged/closed). Cases: 0 PRs, each status, multi,
+  draft, conflicting, UNKNOWN, missing fields.
+- **9.3 `internal/state` tests.** Atomic write (temp+rename; truncation-safe), perms, lockfile
+  (second writer no-ops/refuses), filename derivation (`owner/repo`→safe name, collision-free),
+  seed-silent on absent/empty/malformed prev.
+- **9.4 `cmd/tick` lifecycle integration test (in-process, fake runner + temp `--state-dir`).**
+  Drive an ordered fixture sequence (open(draft) → ready-for-review → push → pending → CLEAN →
+  behind → update → CLEAN → merged) and assert the printed transcript == golden, plus restart-
+  resume (no replay) and the exit-10 empty-set signal. This is the §9.3 lifecycle proof in Go.
+- **9.5 Coverage gate.** `COVERAGE_MIN[prping]=70` via `scripts/test.sh`; `go vet` + golangci-lint
+  clean. Runs in CI through the existing Go discovery.
+- **9.6 Skill-trigger eval (human-evidenced).** A phrasings→expected set ("watch my PRs", "ping me
+  when a PR's ready") with variance analysis; **target ≥90% top-1**; tune the description, not
+  behavior. Fallback if it plateaus: add an explicit trigger phrase, do not soften the gate.
+- **9.7 Manual phone-acceptance (human-evidenced; CI can't do it).** Start `prping` in a Remote-
+  Control session, push to a watched PR, confirm the phone push (suppressed while typing). The one
+  hop CI cannot cover; a one-line relay; checklist in `SKILL.md`, signed off on the PR.
+- **DoD:** 9.1–9.5 green in CI; every §8 rule → ≥1 named test; trigger-eval ≥90% recorded; one
+  manual sign-off. Automated vs human-evidenced gates are kept explicitly separate.
 
-### 8.5 Check failed
-- **Trigger:** `now.failingChecks` contains a check ∉ `prev.failingChecks`.
-- **Fires:** one `❌ PR #N check failed: <comma-joined new failures>`.
-- **Must NOT fire:** identical failing set as last tick.
-- **Edge:** multiple new failures ⇒ one consolidated line; a failure that clears then recurs ⇒ fires again (new transition).
-- **Pass:** new failure ⇒ 1; unchanged failures ⇒ 0.
+## 10. Explicitly NOT in scope (v1)
 
-### 8.6 Closed / merged
-- **Trigger:** `prev.prs[N]` present ∧ `now.prs[N]` absent.
-- **Fires:** if merged, one `✅ PR #N merged`; if only closed, none. Then drop N from state.
-- **Must NOT fire:** any event for N afterward.
-- **Pass:** disappearance ⇒ ≤1 line then 0; state no longer contains N.
-
-### 8.7 Global invariants (cross-feature)
-- **Idempotence:** `notify-diff(now, now)` ⇒ 0 lines.
-- **No-op tick:** `prev == now` ⇒ 0 lines.
-- **Deterministic order:** PRs transitioning in one tick ⇒ lines ordered by PR number, stable across runs.
-- **Restart-safe dedup:** reloading the state file across a process restart ⇒ no re-fire of already-emitted transitions.
-- **Format:** every emitted line is one line, <200 chars, no markdown (PushNotification limits).
-
-## 9. Verification harness
-
-Confidence comes from collapsing the non-deterministic surface to near zero: all decisions
-are in `notify-diff.sh` (pure), all I/O is in `pr-status.sh` (mockable), the agent only
-relays. Three automated layers + one manual gate.
-
-### 9.1 Layer 1 — snapshot unit tests (`pr-status_test.sh`)
-Shim `gh` and `git` on `PATH` to return fixture payloads; assert `pr-status.sh` emits the
-exact snapshot JSON (field extraction, draft flag, `failingChecks` derived from
-`statusCheckRollup`, `branchHeads` from `ls-remote`). Cases: 0 PRs; one PR per status;
-multi-PR; draft; conflicting; missing/empty fields. Uses `ai/_test_helpers.sh`.
-
-### 9.2 Layer 2 — decision golden tests (`notify-diff_test.sh`) — the heart of the confidence story
-Each §8 rule is ≥1 case: feed `(prev.json, now.json)` fixtures, assert the **exact** event
-lines (golden). Every *Fires* and every *Must-NOT-fire* in §8.1–8.7, plus the §8.7
-invariants, is a named case. Pure, deterministic, fast → 100% reproducible. The §8 table is
-the executable spec; a coverage check asserts every rule id has a test.
-
-### 9.3 Layer 3 — lifecycle scenario (`scenario_test.sh`)
-Drive the orchestrator in `--print` mode over an ordered fixture sequence
-(`testdata/scenario/tick-00.json … tick-NN.json`) simulating a real lifecycle:
-open(draft) → ready-for-review → push → checks-pending → CLEAN → behind → update-push →
-CLEAN → merged. Assert the concatenated notification transcript == a golden transcript.
-Proves state persistence, cross-tick dedup, multi-PR interleaving, and restart-safety
-(resume from a mid-sequence state file ⇒ no replay).
-
-### 9.4 Layer 4 — manual acceptance (documented; CI cannot do it)
-CI has no Remote Control, so the literal PushNotification→phone hop is verified once by a
-human: start `prping` in a Remote-Control session, push to a PR branch, confirm the phone
-push lands (and is suppressed while typing). The **only** step CI can't cover; it exercises a
-one-line relay. Recorded as a checklist in `src/prping/SKILL.md` and signed off in the PR.
-
-### 9.5 Skill-trigger eval (does the skill activate on intent?)
-Separate from behavior: measure that the skill's *description* triggers on real phrasings
-("watch my PRs", "ping me when a PR's ready to merge", "tell me when #127 can merge") and
-does **not** on near-misses ("review this PR", "merge this"). Use the skill-creator eval
-methodology (phrasings→expected set + variance analysis); **target ≥90% top-1 trigger
-accuracy**. Tune the description, never the behavior, to hit it.
-
-### 9.6 CI wiring & Definition of Done
-Layers 1–3 are `*_test.sh` drivers under `src/prping/`, auto-discovered by `make shell-test`
-→ run on every PR. **Done when:** all three layers green; every §8 rule maps to ≥1 named
-§9.2 case (traceability table in the PR); skill-trigger eval ≥90%; one manual-acceptance run
-signed off. Residual non-determinism = the agent's print→PushNotification relay — bounded to
-one line and covered by §9.4.
-
-## 10. Explicitly NOT in scope (and why)
-
-- **Manual `gss push` in a bare terminal with no watcher running → phone:** impossible
-  Claude-natively (no shell→phone API). The always-on watcher is the answer.
-- **gss code changes / shell `gss()` wrapper / OS `notify-send` / tmux tier:** dropped — the
-  watcher observes effects instead.
-- **Cross-repo watching:** current repo only (v1).
-- **Channels/webhook ingestion:** revisit if/when a GitHub channel ships.
+- Manual `gss push` in a bare terminal with no watcher → phone (impossible Claude-natively).
+- gss/OS/tmux notifiers; cross-repo watching; Channels/webhook ingestion.
+- Fork/external-contributor PRs (private/single-author assumption → title/branch sanitization is
+  integrity hygiene, not an external-attacker path).
+- The `prping` binary calling `PushNotification` itself (it can't — agent-only; binary prints, agent relays).
 
 ## 11. Rollback
 
-Pure addition (a skill dir + a local state file). Remove `src/prping/` and the
-`~/.config/prping/` dir; nothing else is touched.
+Pure addition: a new `sdk/prping` module + a local state dir. Remove `sdk/prping/` and
+`~/.config/prping/`, revert the `install.sh` / `scripts/test.sh` / `sdk/GEMINI.md` / `.golangci.yml`
+additions; nothing else is touched. (Same shape as the sdk-migration module adds.)
 
-## 12. Resolved design decisions (owner, 2026-06-05) — supersede earlier sections where noted
+## 12. Resolved design decisions (owner) — carried forward, mapped to the CLI
 
-1. **Delivery = at-most-once** (persist-snapshot-THEN-relay). A crash mid-notify may drop one
-   push, never duplicates. Confirms the orchestrator ordering; no emitted-ids ledger in v1.
-
-2. **Watch scope is selectable + label-driven** (expands §1 / §3 / §5). On start, prping
-   resolves a **watched set** of PRs by one of:
-   - `current` — the PR for the current branch (or an explicit `#N`);
-   - `all` — every open PR in the repo;
-   - `label:<name>` — open PRs carrying a watch label (default label `prping`).
-   The skill asks which scope on start (default `current` when on a PR branch, else `label`).
-   prping can **add/remove the watch label** on PRs (`gh pr edit <n> --add-label/--remove-label`)
-   so the user marks exactly which PRs to watch. `pr-status.sh` gains a `--scope` filter; only
-   the watched set enters the snapshot. This refines §1 ("current repo") to a scoped set.
-
-3. **Self-terminate when the watched set is empty** (supersedes §5's "or no open PRs remain").
-   When every watched PR has merged/closed — or no PR matches the label — prping emits a final
-   `🏁 watch complete — stopping` line and exits the loop. (A `label:` scope may optionally be
-   kept standing to catch newly-labeled PRs; v1 default is self-terminate on empty.)
-
-4. **§8.6 distinguishes merged vs closed — via the snapshot, not absence.** To keep
-   `notify-diff.sh` pure, `pr-status.sh` reports each *watched* PR's `state`
-   (`OPEN | MERGED | CLOSED`), not just open ones — so a just-merged PR still appears in `now`
-   with `state:"MERGED"`. The §8.6 trigger therefore keys on a **state transition**
-   (`prev.state == OPEN ∧ now.state ∈ {MERGED, CLOSED}`), not on a PR vanishing from the list,
-   and emits `✅ PR #N merged` vs `🚪 PR #N closed (not merged)`, then drops it from tracking.
-   Mechanics by scope: `current`/`#N` query that PR's state directly (always known);
-   `label:<name>` uses `gh pr list --label <name> --state all` (the label persists post-merge);
-   `all` uses `--state all` with a recency limit to catch just-closed PRs. `notify-diff` stays a
-   pure two-snapshot diff (§9.2 goldens unaffected); the cost is `pr-status` querying `--state all`
-   for the watched set.
-
-5. **Name = bare `prping`** (no sync-skills casemap entry).
-
-6. **Remaining TODO defaults:** fork/external PRs are **out of scope for v1** (private /
-   single-author assumption → identity sanitization is integrity hygiene, not an
-   external-attacker path); if §9.5 trigger tuning plateaus <90%, add an explicit trigger
-   phrase / the `prping` keyword rather than soften the ≥90% gate.
+1. **Delivery = at-most-once** — `tick` persists the new snapshot **before** printing events; a
+   crash drops at most one line, never duplicates. No emitted-ids ledger in v1.
+2. **Scope = selectable + label-driven** — `--scope current|all|label:<name>` (default label
+   `prping`); `prping label add/remove` marks PRs; skill asks scope on start.
+3. **Self-terminate on empty watched set** — `tick` exit 10; skill stops.
+4. **Merged vs closed distinguished** — via `snapshot --state all` carrying `state`; §8.6 keys on
+   the state transition; `diff` stays pure.
+5. **Name = bare `prping`** (no case-map entry).
+6. **TODO defaults** — fork PRs out of scope v1; trigger-eval fallback = explicit phrase.
+7. **(New, this revision)** The deterministic core is a **Go CLI**, not bash — same standards as
+   the other sdk tools (cobra, `internal/` + mockable runner, ldflags version, `go install`-able,
+   coverage-gated). This removes the bash shell-test wiring (and its CI blocker) entirely.
