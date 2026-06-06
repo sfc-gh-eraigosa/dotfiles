@@ -50,7 +50,7 @@ The repo owner reviewed the Cross-Cutting Decisions (§4) and ratified the follo
   `CLAUDE.md`/`GEMINI.md` document the convention.
 - **D10 — Cold-turkey cutover; nothing left behind as `src/` for Go (RESOLVED; overrides §4.10).** No
   exclude-list and no "historical record" exception: the old module-path / `src/<tool>` strings in
-  `docs/plans/gsl-status-line*.md` (and anywhere else) are **updated too**. The acceptance grep must
+  `docs/mbo/plans/gsl-status-line*.md` (and anywhere else) are **updated too**. The acceptance grep must
   come back **fully empty** — there is no sanctioned-leftover list.
 - **D11 — Fix the dead `.gitignore` rule (RESOLVED; confirms §4.11).** `.gitignore:75`
   (`src/tmux-mgr/tmux-mg`, missing trailing `r`) is a verified non-functional rule. Re-path it to the
@@ -137,7 +137,7 @@ These are recorded here and ratified in the umbrella ADR (Phase 1). Several are 
 
 9. **Discovery-loop end state.** Keep `test.sh`/`Makefile` scanning **both** `src/` and `sdk/` permanently (safer; supports any future `src/` Go tool) rather than collapsing to `sdk/`-only. **Owner: Go QA + CI.**
 
-10. **`docs/plans/gsl-status-line*.md` disposition.** Leave the old module-path strings as historical record, annotate with a one-line "superseded by sdk/" note, and add to the acceptance-grep exclude-list. **Owner: Architecture.**
+10. **`docs/mbo/plans/gsl-status-line*.md` disposition.** Leave the old module-path strings as historical record, annotate with a one-line "superseded by sdk/" note, and add to the acceptance-grep exclude-list. **Owner: Architecture.**
 
 11. **`.gitignore:75` correction (verified DEAD rule).** The rule reads `src/tmux-mgr/tmux-mg` (truncated — missing trailing `r`). `git check-ignore -v src/tmux-mgr/tmux-mgr` proves the binary is matched by `!src/**` (line 41), **not** by line 75 — the rule is non-functional today and the local binary is currently trackable. **Do not preserve the typo.** Re-path to the correct `sdk/tmux-mgr/tmux-mgr` so the local build artifact is actually ignored under the new tree. (Resolves adversary must-fix #3.) **Owner: CI.**
 
@@ -154,7 +154,7 @@ These are recorded here and ratified in the umbrella ADR (Phase 1). Several are 
 
 ### Phase 1 — Umbrella ADR + RFC; reconcile PR #115
 - **Owning team:** Architecture
-- **Steps:** Author the ADR under `docs/adr/` (tracked via `!docs/**`) recording the path scheme, the path-prefixed tag scheme + `@latest`-until-first-tag consequence, the interim `@<commit>/@<branch>` install contract, and three alternatives (in-place `src/` rename / flat `sdk/` no path segment / `sdk/<tool>` with path segment — **chosen**). Repurpose PR #115 into this ADR. Run the **RFC 2-business-day comment window** (cross-team: Go, CI, Security). Freeze the per-module Definition-of-Done and the two-grep acceptance gate. Decide the `docs/plans/gsl-status-line*.md` disposition (Decision 10).
+- **Steps:** Author the ADR under `docs/adr/` (tracked via `!docs/**`) recording the path scheme, the path-prefixed tag scheme + `@latest`-until-first-tag consequence, the interim `@<commit>/@<branch>` install contract, and three alternatives (in-place `src/` rename / flat `sdk/` no path segment / `sdk/<tool>` with path segment — **chosen**). Repurpose PR #115 into this ADR. Run the **RFC 2-business-day comment window** (cross-team: Go, CI, Security). Freeze the per-module Definition-of-Done and the two-grep acceptance gate. Decide the `docs/mbo/plans/gsl-status-line*.md` disposition (Decision 10).
 - **Deliverable:** Merged ADR; PR #115 reconciled; published DoD + acceptance-grep spec.
 - **Depends on:** Phase 0.
 - **Done when:** ADR merged to `main`; PR #115 closed-or-rebased; DoD + exclude-list agreed by Go + CI + Security leads after the comment window.
@@ -201,7 +201,7 @@ These are recorded here and ratified in the umbrella ADR (Phase 1). Several are 
 
 ### Phase 6 — Final cleanup, anti-regression guard, first tags, stakeholder summary
 - **Owning team:** CI
-- **Steps:** Keep dual-scan in test.sh/Makefile (Decision 9). Update `.golangci.yml:9-12` comment to `sdk/<tool>` paths; refresh `.ci-baseline-issues.md` (~20 lines) and `GEMINI.md` example lines (55/58) to `sdk/`; annotate `docs/plans/gsl-status-line*.md` as historical. Add an **anti-regression guard**: extend `safety_guard_test.sh` (and the hook) to reject new `github.com/wenlock/dotfiles` or `github.com/eraigosa/dotfiles/src` imports in `.go` files — add one `assert_exit 0` (legit) and one `assert_exit 2` (blocked) case; run the driver to green before committing. Generalize the supply-chain gate: add `check-deps.sh` + a `govulncheck` CI step to gsl/wol/tmux-mgr (only gss has one today). Cut the first **signed** `sdk/<tool>/v0.x.y` tags per Phase-0 posture, then run the clean-cache `go install …@sdk/<tool>/v0.x.y` acceptance per module and confirm `<tool> version` shows the new path. EM publishes a plain-language stakeholder summary (what moved, the new install command per tool, PR #115 reconciled, backlog #50/#51 untouched).
+- **Steps:** Keep dual-scan in test.sh/Makefile (Decision 9). Update `.golangci.yml:9-12` comment to `sdk/<tool>` paths; refresh `.ci-baseline-issues.md` (~20 lines) and `GEMINI.md` example lines (55/58) to `sdk/`; annotate `docs/mbo/plans/gsl-status-line*.md` as historical. Add an **anti-regression guard**: extend `safety_guard_test.sh` (and the hook) to reject new `github.com/wenlock/dotfiles` or `github.com/eraigosa/dotfiles/src` imports in `.go` files — add one `assert_exit 0` (legit) and one `assert_exit 2` (blocked) case; run the driver to green before committing. Generalize the supply-chain gate: add `check-deps.sh` + a `govulncheck` CI step to gsl/wol/tmux-mgr (only gss has one today). Cut the first **signed** `sdk/<tool>/v0.x.y` tags per Phase-0 posture, then run the clean-cache `go install …@sdk/<tool>/v0.x.y` acceptance per module and confirm `<tool> version` shows the new path. EM publishes a plain-language stakeholder summary (what moved, the new install command per tool, PR #115 reconciled, backlog #50/#51 untouched).
 - **Deliverable:** Cleaned harness + baseline docs; anti-regression hook with passing tests; per-module govulncheck/check-deps gates; first signed tags + passing go-install acceptance; executive summary.
 - **Depends on:** Phases 2–5.
 - **Done when:** `safety_guard_test.sh` passes with new block/allow cases; `go install …@sdk/<tool>/<tag>` succeeds and prints the new path for all four; no stale-path linter refs remain except sanctioned historical docs; summary published.
@@ -249,7 +249,7 @@ Per module, every box checked before the PR is mergeable:
 
 **Two-grep acceptance gate** (single `grep` on the bare org string yields 3 confirmed false positives in gsl testdata `/pull/` URLs):
 1. `grep -rn 'github.com/wenlock/dotfiles/<tool>\b' . --exclude-dir=.git` (tmux-mgr: also `github.com/eraigosa/dotfiles/src/tmux-mgr\b`) → empty.
-2. `grep -rn 'src/<tool>\b' . | grep -v '/pull/'` → only sanctioned historical-doc lines (the `docs/plans/gsl-status-line*.md` exclude-list).
+2. `grep -rn 'src/<tool>\b' . | grep -v '/pull/'` → only sanctioned historical-doc lines (the `docs/mbo/plans/gsl-status-line*.md` exclude-list).
 
 ---
 

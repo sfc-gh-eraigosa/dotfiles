@@ -4,14 +4,14 @@
 > **bash-script** design (`src/prping/{pr-status,notify-diff,prping}.sh` + shell `*_test.sh` +
 > `make shell-test` wiring). The spec was revised to a **single Go CLI** under `sdk/prping`
 > (cobra + `internal/` packages + mockable `gh` runner + Go table tests + coverage gate) — see
-> the rewritten `docs/superpowers/specs/2026-06-05-prping-design.md` §3/§7/§9 and §12.7. The
+> the rewritten `docs/mbo/specs/2026-06-05-prping-design.md` §3/§7/§9 and §12.7. The
 > Go form also dissolves this plan's "Blocker 1" (shell-test not scanning `src/`): Go tests run
 > via the existing `scripts/test.sh` discovery. **A new Go-CLI implementation plan will replace
 > this file.** The §8→§9 evaluation/traceability content below remains valid (the event rules
 > are unchanged; they now live in `internal/diff`).
 
 A Claude-native PR/push notifier. This plan operationalizes the approved design
-`docs/superpowers/specs/2026-06-05-prping-design.md` into a concrete, TDD-ordered,
+`docs/mbo/specs/2026-06-05-prping-design.md` into a concrete, TDD-ordered,
 buildable sequence with exact artifact paths. Every must-fix from the adversarial plan
 review is resolved inline (see the **Resolution** notes), or explicitly deferred with a
 reason.
@@ -23,7 +23,7 @@ All paths are absolute-from-repo-root ``$HOME/git/dotfiles/``.
 ## 1. Status
 
 - **Date:** 2026-06-05
-- **Relates to:** the approved spec `docs/superpowers/specs/2026-06-05-prping-design.md`
+- **Relates to:** the approved spec `docs/mbo/specs/2026-06-05-prping-design.md`
   and **PR #127** (the open PR tracking prping). This plan is the implementation contract
   that PR #127's review gates against.
 - **Verdict:** **plan-with-fixes — approved to build.** The spec is sound and buildable.

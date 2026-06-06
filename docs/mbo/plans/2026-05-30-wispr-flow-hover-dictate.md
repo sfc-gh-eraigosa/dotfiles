@@ -18,7 +18,7 @@
 | `opt/Desktop/Apps/scripts/macos.ahk` | Replace the single-line `*F23` shim with the hover-dictate state machine | Modify (the `*F23` block only) |
 | `opt/Desktop/Apps/scripts/WISPR-FLOW.md` | Document the new hold-to-talk + hover behavior and the Flow clipboard setting | Modify |
 
-**Spec:** `docs/superpowers/specs/2026-05-30-wispr-flow-hover-dictate-design.md`
+**Spec:** `docs/mbo/specs/2026-05-30-wispr-flow-hover-dictate-design.md`
 
 **Deploy + reload (used by several tasks).** macos.ahk runs from the local Desktop copy; after editing the repo file, sync and reload the elevated instance:
 ```bash
@@ -110,7 +110,7 @@ Replace the existing line `*F23::Send "{LWin up}{LShift up}^+{F12}"` (and update
 ```ahk
 ; The Copilot key now drives Flow "hover-dictate": hold to record into the field
 ; under the mouse; on release Flow transcribes to the clipboard; we then re-focus
-; that field and paste. See WISPR-FLOW.md and docs/superpowers/specs/.
+; that field and paste. See WISPR-FLOW.md and docs/mbo/specs/.
 global FlowState := "IDLE"          ; IDLE | DICTATING | AWAITING_CLIP
 global FlowWin   := 0
 global FlowX     := 0
@@ -267,7 +267,7 @@ If Flow can't copy-to-clipboard, drop the clipboard paste and let Flow type into
 
 - [ ] **Step 1: Update the AHK shim section**
 
-In the "AutoHotkey shim" section, replace the single-line shim description with the hover-dictate behavior: hold (or tap-tap, per the spike) the Copilot key to dictate into the field under the mouse; Flow set to `Ctrl+Shift+F12` as push-to-talk (or toggle), and — for Model B — copy-to-clipboard enabled. Note the `~15s` safety timeout and that other macOS shortcuts are unaffected. Reference `docs/superpowers/specs/2026-05-30-wispr-flow-hover-dictate-design.md`.
+In the "AutoHotkey shim" section, replace the single-line shim description with the hover-dictate behavior: hold (or tap-tap, per the spike) the Copilot key to dictate into the field under the mouse; Flow set to `Ctrl+Shift+F12` as push-to-talk (or toggle), and — for Model B — copy-to-clipboard enabled. Note the `~15s` safety timeout and that other macOS shortcuts are unaffected. Reference `docs/mbo/specs/2026-05-30-wispr-flow-hover-dictate-design.md`.
 
 - [ ] **Step 2: Commit**
 

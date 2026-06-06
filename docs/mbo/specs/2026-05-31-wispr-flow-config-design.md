@@ -331,8 +331,8 @@ get persisted and bound; labels are presentation only.
 | `opt/Desktop/Apps/scripts/flow-triggers-test.ahk` | **new** — headless test |
 | `opt/Desktop/Apps/scripts/macos.ahk` | handler refactor, startup dynamic-bind, F9 manage mode + InputHook + reserved-key guard, F1 help HUD + tooltip hints, F10-off cleanup, `#Include flow-triggers.ahk` |
 | `opt/Desktop/Apps/scripts/WISPR-FLOW.md` | document F9 manage-triggers, F1 help, the new `flow-triggers.ini`, RWin guidance |
-| `docs/superpowers/specs/2026-05-31-wispr-flow-config-design.md` | this spec |
-| `docs/superpowers/plans/2026-05-31-wispr-flow-config.md` | implementation plan (next step) |
+| `docs/mbo/specs/2026-05-31-wispr-flow-config-design.md` | this spec |
+| `docs/mbo/plans/2026-05-31-wispr-flow-config.md` | implementation plan (next step) |
 
 No `.gitignore` change: `flow-triggers.ini` lives under `%LOCALAPPDATA%`, outside
 the repo, exactly like `flow-calib.ini`.

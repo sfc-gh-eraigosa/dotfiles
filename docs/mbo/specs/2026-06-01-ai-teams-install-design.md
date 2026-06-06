@@ -153,7 +153,7 @@ ai/teams/
 
 All of `ai/teams/**` is already git-tracked via the `!ai/**` allowlist rule, so new
 files appear in `git status` without new `.gitignore` entries. (Verified during design:
-`docs/superpowers/specs/` is likewise covered by `!docs/**`.)
+`docs/mbo/specs/` is likewise covered by `!docs/**`.)
 
 ---
 
@@ -519,7 +519,7 @@ ai/claude/commands/team.md
 ai/gemini/commands/team.toml
 src/teams-tune/skill/SKILL.md
 .github/workflows/teams-eval.yml   (or extend existing CI)
-docs/superpowers/specs/2026-06-01-ai-teams-install-design.md  (this doc)
+docs/mbo/specs/2026-06-01-ai-teams-install-design.md  (this doc)
 ```
 
 **Modified**

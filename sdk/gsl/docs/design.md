@@ -1,6 +1,6 @@
 # gsl — In-Tree Design Summary
 
-This document describes the package layout, the key architectural seams, the concurrent render model, and the style system as they actually shipped in CP1–CP3. The full design rationale and the multi-agent review that shaped them live in `docs/plans/gsl-status-line.md` and `docs/plans/gsl-status-line-execution.md` (PR #21) — those files are in the repo's top-level `docs/plans/` directory, present on `main` and after this feature merges; they are not part of this impl worktree tree.
+This document describes the package layout, the key architectural seams, the concurrent render model, and the style system as they actually shipped in CP1–CP3. The full design rationale and the multi-agent review that shaped them live in `docs/mbo/plans/gsl-status-line.md` and `docs/mbo/plans/gsl-status-line-execution.md` (PR #21) — those files are in the repo's top-level `docs/mbo/plans/` directory, present on `main` and after this feature merges; they are not part of this impl worktree tree.
 
 ## Package layout
 
@@ -105,4 +105,4 @@ The resolved `Style` is passed into `render.BuildSegments` and then into every `
 
 ## Full design rationale
 
-Full design rationale and the multi-agent review that shaped this implementation live in `docs/plans/gsl-status-line.md` and `docs/plans/gsl-status-line-execution.md` (PR #21) — both in the repo's top-level `docs/plans/` directory (present on `main` / after this feature merges).
+Full design rationale and the multi-agent review that shaped this implementation live in `docs/mbo/plans/gsl-status-line.md` and `docs/mbo/plans/gsl-status-line-execution.md` (PR #21) — both in the repo's top-level `docs/mbo/plans/` directory (present on `main` / after this feature merges).
