@@ -15,6 +15,33 @@ Get a phone notification, via Claude's own Remote Control / mobile-app channel, 
 No OS-level desktop notifications, no changes to `gss`, no shell-script soup — one Go binary
 `prping` owns the deterministic work; a thin agent skill relays its output to the phone.
 
+### 1.1 Use cases
+
+**UC1 — Draft-worktree auto-watch.** *Actor:* a developer working in a `gss feature` worktree on
+a draft PR. *Trigger:* runs bare `prping` ("watch this when it's ready"). *Flow:* the skill
+defaults `--scope current`, auto-detecting the PR for the checked-out branch (`gh pr view`); the
+loop runs `prping tick` on the interval and pushes when that PR is **ready = CLEAN** — checks
+green **AND** rebased on main (not `BEHIND`), per §8.3. *Acceptance:* a phone push fires exactly
+when the current PR first reaches `CLEAN`; nothing while it's pending/behind; self-terminates
+(exit 10) when the PR merges. (Notify-only by default; if the user asks, offer `gss feature pr
+--ready` to flip the draft to ready — the skill proposes, never auto-promotes.)
+
+**UC2 — Remote-control, multi-goal watch.** *Actor:* a developer with a Remote-Control session
+where Claude is working several PRs at once. *Trigger:* starts `prping` with `--scope all` or
+`--scope label:prping`. *Flow:* one watcher tracks every in-flight PR; each tick diffs the whole
+watched set and pushes per-PR ready/needs-update/merged events. The loop's ~270s heartbeat + the
+self-suppress-while-active behavior keep it from starving the agent's real work (it's a thin
+`prping tick` call, not a blocking poll). *Acceptance:* each PR independently triggers one
+ready-to-merge push when it reaches `CLEAN`; no cross-PR spam; the watched set shrinks as PRs
+merge and the loop stops when empty.
+
+**UC3 — Status table (one-shot, `prping status`).** *Actor:* a developer who asks "what's the
+state of all my PRs?". *Trigger:* `prping status` (no loop, no notifications). *Flow:* prints a
+table — one row per watched PR — with the columns in §3.5. *Acceptance:* the table shows, per PR:
+its number/title, the linked issue(s), a short description, mergeable status, last-updated, and a
+count/list of **open PR comments with no response** (unresolved review threads whose latest
+comment isn't the PR author's). A `--json` form is available for scripting.
+
 ## 2. Why this shape (the load-bearing constraint)
 
 `PushNotification` (the mobile/terminal push) is **agent-loop-only**: it needs a running Claude
@@ -51,6 +78,7 @@ prping skill (agent /loop — relay only)            sdk/prping (Go CLI — all 
 | `prping diff <prev.json> <now.json>` | **Pure decision**: emit the event lines for the prev→now transition (the §8 rules) | 0+ lines on stdout |
 | `prping tick --scope <s> [--repo <r>] [--state-dir <d>] [--dry-run]` | One watch iteration: load prev → `snapshot` → `diff` → **persist** → print events | event lines; **exit 10 = watched set empty (done)** |
 | `prping label add\|remove <#…> [--label prping]` | Mark/unmark PRs to watch (`gh pr edit --add-label/--remove-label`) | — |
+| `prping status --scope <s> [--repo <r>] [--json]` | **One-shot read-only** PR status table (UC3, §3.5) — no loop, no notifications | ASCII table (or JSON) on stdout |
 | `prping version` | ldflags version (like every sdk tool) | version block |
 
 `--scope` ∈ `current` (the PR for the current branch, or `#N`) · `all` · `label:<name>`
@@ -63,12 +91,13 @@ runs `tick`; `snapshot`/`diff` are exposed for composition and golden testing.
 ```
 sdk/prping/
   main.go                      → cmd.Execute()
-  cmd/                         cobra: root.go, snapshot.go, diff.go, tick.go, label.go, version.go (+ *_test.go)
+  cmd/                         cobra: root.go, snapshot.go, diff.go, tick.go, label.go, status.go, version.go (+ *_test.go)
   internal/
     gh/        Runner interface { Run(ctx, name string, args ...string) ([]byte, error) }
                exec.go (real) + fake/ (records calls, returns scripted output) — mirrors gss internal/git
     snapshot/  Build(runner, scope) (Snapshot, error): runs gh/git, parses → Snapshot  (table-tested w/ fake)
     diff/      Diff(prev, now Snapshot) []Event + Event.Line() formatting (sanitize, <200 chars)  (golden-tested — the heart)
+    status/    Enrich(runner, Snapshot) []Row (linked issues + unanswered review threads) + Render(rows)→table/JSON (UC3 §3.5; pure, table-tested)
     state/     load/persist (temp-file+rename, 0700 dir / 0600 file, umask 077), per-repo lockfile, filename derivation, seed-silent
     version/   ldflags vars (Version/Commit/BuildDate/Dirty)
   build.sh  VERSION  LICENSE  README.md  go.mod  go.sum
@@ -100,6 +129,32 @@ keeps `diff` a pure two-snapshot comparison). The state file is the last-seen sn
 Everything except the literal `PushNotification` call is in the binary and unit-testable. The
 agent does exactly two non-deterministic things: relay each printed line to PushNotification, and
 pace the loop. `prping tick` is the contract between them.
+
+### 3.5 The `status` command (UC3 — one-shot table)
+
+A read-only sibling to `tick`: it reuses `internal/snapshot` for the watched set and adds an
+`internal/status` package that enriches each PR with issue links + unanswered-comment detection,
+then renders a table. No state file, no notifications. Columns:
+
+| Column | Source |
+| :-- | :-- |
+| **PR** (`#num title`) | snapshot |
+| **Issue(s)** | `gh pr view <n> --json closingIssuesReferences` (the "Closes #" links) ∪ `#NN` refs parsed from the PR body |
+| **Description** | first sentence of the PR body (truncated) |
+| **Mergeable** | `mergeStateStatus` + `mergeable` from the snapshot (`CLEAN`/`BEHIND`/`BLOCKED`/`CONFLICTING`…) |
+| **Updated** | `updatedAt` (relative, e.g. "2h ago") |
+| **Unanswered** | count + ids of **open PR comments with no response** (see definition) |
+
+**"Open PR comment with no response" (the load-bearing definition):** an **unresolved review
+thread** whose **latest comment's author ≠ the PR author** — i.e. a reviewer asked something and
+the author hasn't replied or resolved it. Source: `gh api graphql` on
+`pullRequest.reviewThreads(isResolved:false){ comments(last:1){ author } }`. Bot authors are
+excluded. (Top-level issue-comments are noisier and excluded from v1 — review threads are the
+actionable "you owe a reply" signal.) Like `diff`, the enrichment is a **pure function** of the
+fetched data → table-tested with the fake `gh.Runner`.
+
+Rendering: fixed-width ASCII columns with per-cell truncation; `--json` emits the structured rows
+(same data) for scripting. Scope follows §3.1 (`current`/`all`/`label:<name>`).
 
 ## 4. Notification events (produced by `prping diff`)
 
