@@ -10,7 +10,7 @@ Get a phone notification, via Claude's own Remote Control / mobile-app channel, 
 1. an **open PR's branch head advances** on origin (a push landed), and
 2. an open PR becomes **ready to merge** or **needs a branch update**.
 
-(v1 keys all events on open PRs; bare-branch pushes with no PR yet are §9 out-of-scope.)
+(v1 keys all events on open PRs; bare-branch pushes with no PR yet are §10 out-of-scope.)
 
 No OS-level desktop notifications, no changes to the `gss` binary, no shell wrappers.
 
@@ -39,23 +39,32 @@ on each iteration, diffs current state against a persisted snapshot, emitting on
 `PushNotification` per **state transition**.
 
 ```
-prping skill (agent /loop)
-  ├─ pr-status.sh <owner/repo>   → JSON snapshot of branch heads + open-PR states
-  ├─ state file  ~/.config/prping/<owner>-<repo>.json  (last-seen snapshot)
-  ├─ diff(prev, now) → list of transition events
-  └─ PushNotification(one line per event)   [agent loop → Remote Control → phone]
+prping skill (agent /loop — thin orchestrator/RELAY only)
+  ├─ pr-status.sh <owner/repo>              → JSON snapshot (branch heads + open-PR states)
+  ├─ notify-diff.sh <prev.json> <now.json>  → event lines (the NOTIFICATION DECISION, pure)
+  ├─ state file ~/.config/prping/<owner>-<repo>.json  (last-seen snapshot)
+  └─ for each event line → PushNotification  [agent loop → Remote Control → phone]
 ```
+
+**Testability rule (load-bearing for confidence — §8/§9):** *every* notification decision
+lives in `notify-diff.sh`, a pure function of two snapshots. The agent never decides
+*whether* to notify — it only relays the lines `notify-diff.sh` prints. This shrinks the
+non-deterministic agent surface to a trivial "print → PushNotification" relay and makes the
+entire decision surface deterministically testable in CI. The orchestrator also supports a
+`--print` mode that runs the full pipeline but echoes the would-be notifications instead of
+calling PushNotification, enabling end-to-end testing with **no agent / no Remote Control**.
 
 ### 3.1 Components & boundaries
 
 | Unit | Responsibility | Interface | Depends on |
 | :--- | :--- | :--- | :--- |
-| `pr-status.sh` | Emit a deterministic JSON snapshot of the repo's current state | `pr-status.sh <owner/repo>` → JSON on stdout | `gh`, `git`, `jq` |
+| `pr-status.sh` | Emit a deterministic JSON snapshot of the repo's current state (pure I/O→JSON, no decisions) | `pr-status.sh <owner/repo>` → JSON on stdout | `gh`, `git`, `jq` |
+| `notify-diff.sh` | **Pure decision**: given prev + now snapshots, print the exact event lines to notify (the §8 rules) | `notify-diff.sh <prev.json> <now.json>` → 0+ lines on stdout | `jq` only |
 | state file | Persist last-seen snapshot across loop iterations / context compaction | JSON at `~/.config/prping/<owner>-<repo>.json` (gitignored, local) | — |
-| `prping` SKILL.md | Drive the loop: snapshot → diff → notify → persist; cadence; prereq checks | invoked as a skill; current repo by default, optional `<owner/repo>` arg | `pr-status.sh`, PushNotification, ScheduleWakeup |
+| `prping` SKILL.md | Orchestrate + relay: snapshot → diff → PushNotification per line → persist; cadence; prereq checks; `--print` dry-run | invoked as a skill; current repo by default, optional `<owner/repo>` arg | the two scripts, PushNotification, ScheduleWakeup |
 
-`pr-status.sh` is pure I/O→JSON (no notification logic) so it is unit-testable in isolation.
-The skill owns the diff/notify/persist logic and the agent-only PushNotification calls.
+Both `pr-status.sh` and `notify-diff.sh` are pure/mockable and unit-testable in isolation;
+the agent owns only orchestration, persistence, and the relay.
 
 ### 3.2 Snapshot shape (`pr-status.sh` output)
 
@@ -73,7 +82,7 @@ The skill owns the diff/notify/persist logic and the agent-only PushNotification
 Derived from `git ls-remote --heads origin` and
 `gh pr list --json number,title,headRefName,headRefOid,isDraft,mergeStateStatus,mergeable,statusCheckRollup`.
 (`branchHeads` is collected for forward use — v1 events read each PR's own `headSha`; the
-full `branchHeads` map enables the bare-branch-push case noted in §9 without a schema change.)
+full `branchHeads` map enables the bare-branch-push case noted in §10 without a schema change.)
 
 ## 4. Notification events (transitions only)
 
@@ -116,24 +125,121 @@ as terminal notifications (no phone), and points at `remote-claude-session`.
 
 ## 7. Packaging & repo fit
 
-- Skill dir: `src/prping/` with `SKILL.md` + `pr-status.sh` (+ `pr-status_test.sh`).
+- Skill dir `src/prping/`:
+  - `SKILL.md` — orchestrator/relay + `--print` mode + the §9.4 manual-acceptance checklist
+  - `pr-status.sh`, `notify-diff.sh` — the two pure scripts
+  - `pr-status_test.sh`, `notify-diff_test.sh`, `scenario_test.sh` — the §9 harness layers
+  - `testdata/` — snapshot fixtures + the `scenario/` tick sequence + golden transcripts
   `sync-skills` discovers it (now dual-scans `src/`+`sdk/`); add a name mapping if a friendly
   slash name is wanted. `src/` is the right home (non-Go tooling/skills).
 - State dir `~/.config/prping/` is local/gitignored (never committed).
 - Add `src/prping/GEMINI.md` + `CLAUDE.md -> GEMINI.md` symlink per repo convention,
   and link it from `src/GEMINI.md`.
 
-## 8. Testing
+## 8. Evaluation criteria (per feature)
 
-- `pr-status_test.sh` (repo shell-test framework, `ai/_test_helpers.sh`): feed mocked
-  `gh`/`git` output (via PATH shims) and assert the JSON snapshot shape + field extraction.
-- Diff/transition logic: a small pure function (in the helper or a tiny `notify-diff.sh`)
-  fed two snapshots, asserting the exact event set — positive (each transition) and negative
-  (no event when unchanged) cases.
-- Manual end-to-end: start the watcher, push to a PR branch, confirm the agent emits the
-  expected PushNotification lines (terminal-visible even when phone is suppressed).
+Each feature is a precise predicate over `(prev, now)` snapshots with explicit
+**fires / must-not-fire / edge / pass** rules. `notify-diff.sh` is the single source of
+truth; **every rule below maps to ≥1 golden test case in §9.2** (rule-to-test traceability
+is part of the Definition of Done).
 
-## 9. Explicitly NOT in scope (and why)
+**First-sight rule (global):** a PR absent in `prev` emits exactly one consolidated `opened`
+line naming its current status, and its state is seeded — so status/push/check events do
+**not** also fire on first sight. All other events fire only on a genuine prev→now transition.
+
+### 8.1 PR opened
+- **Trigger:** `now.prs[N]` exists ∧ `prev.prs[N]` absent.
+- **Fires:** exactly one `📬 PR #N opened — <title> (<status>)`.
+- **Must NOT fire:** any later tick where N was already present.
+- **Edge:** opened-as-draft → `(draft)`; opened-already-CLEAN → `(ready)`, and §8.3 does **not** separately fire that tick.
+- **Pass:** first sight ⇒ 1 opened line; identical next tick ⇒ 0 lines.
+
+### 8.2 Push landed
+- **Trigger:** `prev.prs[N].headSha ≠ now.prs[N].headSha` (both present; not first-sight).
+- **Fires:** exactly one `✓ pushed to PR #N (<branch>) <shortSha>`.
+- **Must NOT fire:** headSha unchanged.
+- **Edge:** a push usually resets checks to pending (CLEAN→BLOCKED); only the push line fires that tick (pending is not an event).
+- **Pass:** sha advance ⇒ 1 push line; same sha ⇒ 0.
+
+### 8.3 Ready to merge
+- **Trigger:** `now.mergeStateStatus == CLEAN ∧ ¬now.isDraft ∧ prev.mergeStateStatus ≠ CLEAN`.
+- **Fires:** one `🟢 PR #N ready to merge`.
+- **Must NOT fire:** already CLEAN last tick; or `isDraft` (drafts are never "ready").
+- **Pass:** ¬CLEAN→CLEAN(¬draft) ⇒ 1; CLEAN→CLEAN ⇒ 0; →CLEAN(draft) ⇒ 0.
+
+### 8.4 Needs update
+- **Trigger:** `now.mergeStateStatus == BEHIND ∧ prev ≠ BEHIND ∧ now.failingChecks == []`.
+- **Fires:** one `🔄 PR #N needs branch update (behind main)`.
+- **Must NOT fire:** already BEHIND; or a check is failing (§8.5 wins).
+- **Pass:** →BEHIND(green) ⇒ 1; BEHIND→BEHIND ⇒ 0; →BEHIND(failing) ⇒ 0 (1 check-failed instead).
+
+### 8.5 Check failed
+- **Trigger:** `now.failingChecks` contains a check ∉ `prev.failingChecks`.
+- **Fires:** one `❌ PR #N check failed: <comma-joined new failures>`.
+- **Must NOT fire:** identical failing set as last tick.
+- **Edge:** multiple new failures ⇒ one consolidated line; a failure that clears then recurs ⇒ fires again (new transition).
+- **Pass:** new failure ⇒ 1; unchanged failures ⇒ 0.
+
+### 8.6 Closed / merged
+- **Trigger:** `prev.prs[N]` present ∧ `now.prs[N]` absent.
+- **Fires:** if merged, one `✅ PR #N merged`; if only closed, none. Then drop N from state.
+- **Must NOT fire:** any event for N afterward.
+- **Pass:** disappearance ⇒ ≤1 line then 0; state no longer contains N.
+
+### 8.7 Global invariants (cross-feature)
+- **Idempotence:** `notify-diff(now, now)` ⇒ 0 lines.
+- **No-op tick:** `prev == now` ⇒ 0 lines.
+- **Deterministic order:** PRs transitioning in one tick ⇒ lines ordered by PR number, stable across runs.
+- **Restart-safe dedup:** reloading the state file across a process restart ⇒ no re-fire of already-emitted transitions.
+- **Format:** every emitted line is one line, <200 chars, no markdown (PushNotification limits).
+
+## 9. Verification harness
+
+Confidence comes from collapsing the non-deterministic surface to near zero: all decisions
+are in `notify-diff.sh` (pure), all I/O is in `pr-status.sh` (mockable), the agent only
+relays. Three automated layers + one manual gate.
+
+### 9.1 Layer 1 — snapshot unit tests (`pr-status_test.sh`)
+Shim `gh` and `git` on `PATH` to return fixture payloads; assert `pr-status.sh` emits the
+exact snapshot JSON (field extraction, draft flag, `failingChecks` derived from
+`statusCheckRollup`, `branchHeads` from `ls-remote`). Cases: 0 PRs; one PR per status;
+multi-PR; draft; conflicting; missing/empty fields. Uses `ai/_test_helpers.sh`.
+
+### 9.2 Layer 2 — decision golden tests (`notify-diff_test.sh`) — the heart of the confidence story
+Each §8 rule is ≥1 case: feed `(prev.json, now.json)` fixtures, assert the **exact** event
+lines (golden). Every *Fires* and every *Must-NOT-fire* in §8.1–8.7, plus the §8.7
+invariants, is a named case. Pure, deterministic, fast → 100% reproducible. The §8 table is
+the executable spec; a coverage check asserts every rule id has a test.
+
+### 9.3 Layer 3 — lifecycle scenario (`scenario_test.sh`)
+Drive the orchestrator in `--print` mode over an ordered fixture sequence
+(`testdata/scenario/tick-00.json … tick-NN.json`) simulating a real lifecycle:
+open(draft) → ready-for-review → push → checks-pending → CLEAN → behind → update-push →
+CLEAN → merged. Assert the concatenated notification transcript == a golden transcript.
+Proves state persistence, cross-tick dedup, multi-PR interleaving, and restart-safety
+(resume from a mid-sequence state file ⇒ no replay).
+
+### 9.4 Layer 4 — manual acceptance (documented; CI cannot do it)
+CI has no Remote Control, so the literal PushNotification→phone hop is verified once by a
+human: start `prping` in a Remote-Control session, push to a PR branch, confirm the phone
+push lands (and is suppressed while typing). The **only** step CI can't cover; it exercises a
+one-line relay. Recorded as a checklist in `src/prping/SKILL.md` and signed off in the PR.
+
+### 9.5 Skill-trigger eval (does the skill activate on intent?)
+Separate from behavior: measure that the skill's *description* triggers on real phrasings
+("watch my PRs", "ping me when a PR's ready to merge", "tell me when #127 can merge") and
+does **not** on near-misses ("review this PR", "merge this"). Use the skill-creator eval
+methodology (phrasings→expected set + variance analysis); **target ≥90% top-1 trigger
+accuracy**. Tune the description, never the behavior, to hit it.
+
+### 9.6 CI wiring & Definition of Done
+Layers 1–3 are `*_test.sh` drivers under `src/prping/`, auto-discovered by `make shell-test`
+→ run on every PR. **Done when:** all three layers green; every §8 rule maps to ≥1 named
+§9.2 case (traceability table in the PR); skill-trigger eval ≥90%; one manual-acceptance run
+signed off. Residual non-determinism = the agent's print→PushNotification relay — bounded to
+one line and covered by §9.4.
+
+## 10. Explicitly NOT in scope (and why)
 
 - **Manual `gss push` in a bare terminal with no watcher running → phone:** impossible
   Claude-natively (no shell→phone API). The always-on watcher is the answer.
@@ -142,7 +248,7 @@ as terminal notifications (no phone), and points at `remote-claude-session`.
 - **Cross-repo watching:** current repo only (v1).
 - **Channels/webhook ingestion:** revisit if/when a GitHub channel ships.
 
-## 10. Rollback
+## 11. Rollback
 
 Pure addition (a skill dir + a local state file). Remove `src/prping/` and the
 `~/.config/prping/` dir; nothing else is touched.
