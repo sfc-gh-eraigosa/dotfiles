@@ -1,0 +1,23 @@
+{
+  "skill_name": "mbo-plan",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Issue #114 is about gss not being go-install-able. Let's plan this out properly — I want a design and an implementation plan tracked the right way.",
+      "expected_output": "Captures the objective from gh issue #114, classifies it as an sdk/Go-CLI change, routes to brainstorming->writing-plans, writes docs/mbo/specs/<slug>.md + docs/mbo/plans/<slug>.md from the templates, and adds a row to docs/mbo/index.md with the issue and state.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "I'm on a gss draft PR for a new status-line widget. Can you scope this and write up a plan before I start coding?",
+      "expected_output": "Auto-detects the current branch's draft PR via gh pr view, derives a slug, classifies (sdk Go / dotfiles feature), produces a spec + plan under docs/mbo/ from templates, registers it in index.md tied to the PR, and notes confirmation is needed before committing.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "We want a brand-new skill that summarizes my unread Slack threads each morning. Help me design it.",
+      "expected_output": "Recognizes this is a new-skill objective, routes to skill-creator (per the docs/mbo routing table), and tracks the objective in docs/mbo/index.md rather than treating it as a generic build.",
+      "files": []
+    }
+  ]
+}
