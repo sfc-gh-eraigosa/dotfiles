@@ -252,3 +252,42 @@ one line and covered by §9.4.
 
 Pure addition (a skill dir + a local state file). Remove `src/prping/` and the
 `~/.config/prping/` dir; nothing else is touched.
+
+## 12. Resolved design decisions (owner, 2026-06-05) — supersede earlier sections where noted
+
+1. **Delivery = at-most-once** (persist-snapshot-THEN-relay). A crash mid-notify may drop one
+   push, never duplicates. Confirms the orchestrator ordering; no emitted-ids ledger in v1.
+
+2. **Watch scope is selectable + label-driven** (expands §1 / §3 / §5). On start, prping
+   resolves a **watched set** of PRs by one of:
+   - `current` — the PR for the current branch (or an explicit `#N`);
+   - `all` — every open PR in the repo;
+   - `label:<name>` — open PRs carrying a watch label (default label `prping`).
+   The skill asks which scope on start (default `current` when on a PR branch, else `label`).
+   prping can **add/remove the watch label** on PRs (`gh pr edit <n> --add-label/--remove-label`)
+   so the user marks exactly which PRs to watch. `pr-status.sh` gains a `--scope` filter; only
+   the watched set enters the snapshot. This refines §1 ("current repo") to a scoped set.
+
+3. **Self-terminate when the watched set is empty** (supersedes §5's "or no open PRs remain").
+   When every watched PR has merged/closed — or no PR matches the label — prping emits a final
+   `🏁 watch complete — stopping` line and exits the loop. (A `label:` scope may optionally be
+   kept standing to catch newly-labeled PRs; v1 default is self-terminate on empty.)
+
+4. **§8.6 distinguishes merged vs closed — via the snapshot, not absence.** To keep
+   `notify-diff.sh` pure, `pr-status.sh` reports each *watched* PR's `state`
+   (`OPEN | MERGED | CLOSED`), not just open ones — so a just-merged PR still appears in `now`
+   with `state:"MERGED"`. The §8.6 trigger therefore keys on a **state transition**
+   (`prev.state == OPEN ∧ now.state ∈ {MERGED, CLOSED}`), not on a PR vanishing from the list,
+   and emits `✅ PR #N merged` vs `🚪 PR #N closed (not merged)`, then drops it from tracking.
+   Mechanics by scope: `current`/`#N` query that PR's state directly (always known);
+   `label:<name>` uses `gh pr list --label <name> --state all` (the label persists post-merge);
+   `all` uses `--state all` with a recency limit to catch just-closed PRs. `notify-diff` stays a
+   pure two-snapshot diff (§9.2 goldens unaffected); the cost is `pr-status` querying `--state all`
+   for the watched set.
+
+5. **Name = bare `prping`** (no sync-skills casemap entry).
+
+6. **Remaining TODO defaults:** fork/external PRs are **out of scope for v1** (private /
+   single-author assumption → identity sanitization is integrity hygiene, not an
+   external-attacker path); if §9.5 trigger tuning plateaus <90%, add an explicit trigger
+   phrase / the `prping` keyword rather than soften the ≥90% gate.

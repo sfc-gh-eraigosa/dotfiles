@@ -380,7 +380,17 @@ Go toolchain / Nerd Font; wiring them in is out of scope for prping.
 
 ---
 
-## 9. Open decisions to resolve during the build (carried as plan TODOs)
+## 9. Open decisions — RESOLVED 2026-06-05 (authoritative text: spec §12)
+
+> Owner resolved all six: **delivery = at-most-once** (persist-then-relay); **scope =
+> selectable + label-driven** (`current` / `all` / `label:<name>`, default label `prping`) with
+> the ability to add/remove the watch label on PRs and **self-terminate when the watched set is
+> empty**; **merged vs closed distinguished** via `pr-status.sh` reporting each watched PR's
+> `state` (so `notify-diff` stays a pure diff); **name = bare `prping`**; fork PRs **out of
+> scope v1**; §9.5 fallback = explicit trigger phrase rather than soften the ≥90% gate.
+> Implementation impact: `pr-status.sh` gains `--scope` + `--state all`; a small watch-label
+> add/remove helper in `prping.sh`; SKILL.md asks scope on start and stops on empty. The
+> original options below are retained for rationale.
 
 1. **Merged-vs-closed (§8.6):** recommend v1 single neutral `closed` handling (keeps
    notify-diff a pure two-list diff). **Resolve + freeze schema in Phase 1** (input gate to
