@@ -27,5 +27,19 @@ Each spec evaluation rule → its named test case (traceability).
 ## 6. Integration & rollout
 Wiring (build/test discovery, docs, skills), and any manual acceptance checklist.
 
+### 6.1 Build leaves / DAG (fill in only if the build will be broken out — `mbo-plan` CAP-B)
+The **authoritative** dependency graph for parallel execution. A leaf owns a disjoint set of
+paths and depends on others only through a *frozen interface* declared in §3. Edge `A → B` =
+"B depends on A's interface" (must be a DAG; a cycle means re-cut the split). **Blocking** leaves
+(whose interface others import) are built first (Interface-First).
+
+| Leaf | Owns (paths) | Consumes (in-edges) | `done-when` gate | Blocking? |
+| :-- | :-- | :-- | :-- | :-- |
+| <iface> | <paths> | — | <gate> | yes (base) |
+| <impl>  | <paths> | <iface> | <gate> | no |
+
+This table is mirrored (not re-authored) into the design-issue body (as a small mermaid/ASCII
+DAG) and realized as `gss feature` workers (`--base` = the in-edge). See the `mbo-plan` skill.
+
 > Produced via `superpowers:writing-plans`. Execute with `superpowers:executing-plans` /
 > `subagent-driven-development`, TDD throughout. Update `../index.md` state as it moves.
