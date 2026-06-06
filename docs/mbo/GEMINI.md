@@ -65,4 +65,33 @@ ADR may be design-only. **Always** register it in `index.md`.
 - Per-directory docs rule still applies: this dir has `GEMINI.md` + `CLAUDE.md → GEMINI.md`,
   linked from the root `GEMINI.md`/`CLAUDE.md` Repository Structure.
 
+## Build-breakout policy (CAP-B/C)
+
+When an objective's build is parallelized (the `mbo-plan` skill's optional breakout), these rules
+are **policy** — the skill is the procedure that applies them.
+
+**Single source of truth for the dependency graph.** The plan doc `docs/mbo/plans/<slug>.md` §6
+("Build leaves / DAG" — an edge list + per-leaf `done-when` gate + blocking-first order) is the
+**authoritative, reviewable** graph. Everything else is a generated/mirrored projection:
+- the **design issue body** mirrors it as a small mermaid/ASCII DAG (GitHub renders mermaid);
+- GitHub's native **sub-issue tree + progress bar** show per-leaf state automatically;
+- the **gss registry** (`gss feature list`) is the live *runtime* projection (worker `--base` = the
+  in-edge);
+- `index.md`'s per-objective leaf sub-table is an **index**, not a second source.
+
+Edit the graph in the plan doc; everything else regenerates from it.
+
+**One isolation mechanism per leaf** — they don't compose over the same paths:
+
+| Mechanism | Owns | Use for a leaf when… |
+| :-- | :-- | :-- |
+| `gss feature worker` worktree | branch + draft PR + stack/registry (system of record) | the leaf **produces committed code + a draft PR** (the default for every build leaf) |
+| harness worktree isolation (`EnterWorktree`; the Workflow tool's worktree-isolation option only if its schema exposes one — confirm at call time) | an ephemeral throwaway worktree for one agent run | the leaf is **read-only / analysis** (an audit, survey, design probe) that emits findings, not commits |
+| tmux-mgr panes | long-lived interactive agent sessions across worktrees | you want **human-observable** agents to attach to and steer, driving the gss-worker worktrees |
+
+Normal build path: `gss feature worker add` creates each leaf's worktree + draft PR (system of
+record); the Workflow / `/team` agent works **inside that existing worktree** — it does not create
+a second one. Reserve ephemeral harness worktree isolation for read-only leaves. Never point an
+ephemeral worktree and a gss worker at the same paths.
+
 See [`README.md`](./README.md) for the human-facing overview.

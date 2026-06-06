@@ -105,14 +105,13 @@ search by slug, create only on a miss, confirm the create, record the resulting 
 `index.md` immediately so the next run finds them there. The **issue body** and **PR description**
 link the `docs/mbo/` artifacts; `index.md` records issue#, PR#, and state. The slug is the join key.
 
-> **Where the dependency graph lives (single source) — POLICY (pending migration to
-> `docs/mbo/GEMINI.md`, architect sign-off):** the **plan doc** `docs/mbo/plans/<slug>.md` §6's
-> **"Build leaves / DAG"** subsection (see §6b for its shape: an edge list + per-leaf `done-when`
-> gate + blocking-first order) is the authoritative, reviewable graph. The **design issue body**
-> mirrors it as a small mermaid/ASCII DAG; GitHub's native **sub-issue tree + progress bar** show
-> per-leaf state automatically. The **gss registry** (`gss feature list`) is the live *runtime*
-> projection (worker bases = edges). `index.md`'s leaf sub-table is an index, not a second source.
-> Edit the graph in the plan doc; everything else is generated/mirrored from it.
+> **Where the dependency graph lives (single source):** the **plan doc**
+> `docs/mbo/plans/<slug>.md` §6's **"Build leaves / DAG"** subsection (see §6b for its shape: an
+> edge list + per-leaf `done-when` gate + blocking-first order) is the authoritative, reviewable
+> graph; everything else (design-issue mermaid DAG, GitHub sub-issue tree, `gss feature list`,
+> `index.md`'s leaf sub-table) is a generated/mirrored projection. This is **policy** — the
+> normative statement lives in [`docs/mbo/GEMINI.md` § Build-breakout policy](../../../docs/mbo/GEMINI.md);
+> this skill is the procedure that applies it.
 
 ### 6 — BUILD breakout: decompose → dependency graph → Workflow fan-out (CAP-B, optional)
 When the **plan is approved** and it's time to build, **ASK the user** (via the interactive prompt)
@@ -164,14 +163,10 @@ leaves with the **Workflow tool** (`/workflows`), routing each leaf to the right
 (go → go-team, web → web-team, CI → ai-ci, infra → terraform-aws) per the same routing table in
 `docs/mbo/GEMINI.md`.
 
-**Pick ONE isolation mechanism per leaf — they don't compose over the same paths.** This table is
-durable **POLICY (pending migration to `docs/mbo/GEMINI.md`, architect sign-off)**:
-
-| Mechanism | Owns | Use for a leaf when… |
-| :-- | :-- | :-- |
-| `gss feature worker` worktree | branch + draft PR + stack/registry (system of record) | the leaf **produces committed code + a draft PR** (the CAP-C default for every build leaf) |
-| harness worktree isolation (`EnterWorktree`, or the Workflow tool's worktree-isolation option if it exposes one) | an ephemeral throwaway worktree for one agent run | the leaf is **read-only / analysis** (an audit, a survey, a design probe) that emits findings, not commits |
-| tmux-mgr panes | long-lived interactive agent sessions across worktrees | you want **human-observable** agents to attach to and steer, driving the *gss worker* worktrees |
+**Pick ONE isolation mechanism per leaf — they don't compose over the same paths.** Which mechanism
+maps to which kind of leaf (`gss feature worker` for code-producing leaves, ephemeral harness
+worktree isolation for read-only leaves, tmux-mgr panes for human-observable sessions) is **policy**,
+stated normatively in [`docs/mbo/GEMINI.md` § Build-breakout policy](../../../docs/mbo/GEMINI.md).
 
 So the normal build path is: `gss feature worker add` creates each leaf's worktree+PR (system of
 record), then the Workflow/`/team` agent (optionally surfaced via tmux-mgr) *works inside that
