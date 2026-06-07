@@ -51,6 +51,10 @@ claude-test: ## Run Claude Code sanity check (CLI, links, hooks, 27-case hook te
 claude-hook-test: ## Run safety_guard hook test suite only
 	./ai/hooks/safety_guard_test.sh
 
+.PHONY: skill-evals
+skill-evals: ## Validate agent-skill eval corpora (ai/skills/*/evals/evals.json) deterministically
+	./opt/scripts/system/skill-eval.sh --check
+
 # -----------------------------------------------------------------------------
 # Lint targets (issue #46 phase 1)
 # -----------------------------------------------------------------------------

@@ -12,6 +12,7 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - `opt/Desktop/Apps/scripts/`: Windows-side automation deployed to the Desktop (macOS-style hotkeys + Wispr Flow voice dictation in `macos.ahk`, PowerToys/app/font setup). [See opt/Desktop/Apps/scripts/GEMINI.md](./opt/Desktop/Apps/scripts/GEMINI.md) for the inventory, the WSL→Windows dev loop, and AutoHotkey v2 gotchas.
 - `archive/`: Retired-but-kept artifacts (not wired into install). [See archive/GEMINI.md](./archive/GEMINI.md) for the inventory and restore instructions.
 - `ai/hooks/`: Unified agent hooks (safety, privacy) shared across CLIs.
+- `ai/skills/`: Shared agent skills (each a `SKILL.md` folder) linked into Claude + Gemini by `sync-skills`; each should ship an `evals/evals.json` validated by `make skill-evals`. [See ai/skills/GEMINI.md](./ai/skills/GEMINI.md).
 - `ai/gemini/`: Gemini-specific commands, TOML policies, and settings.
 - `ai/claude/`: Claude-specific commands, settings, and hook templates.
 - `ai/plugins.yaml`: Declarative manifest of the Claude Code plugins this repo installs/enables (ensure-only via `sync-plugins`). See [docs/ai-plugins.md](./docs/ai-plugins.md) for the plugin summary, first-usage examples, and the Gemini-extension path.
@@ -25,6 +26,7 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - **Progressive Loading**: Only read subdirectory `GEMINI.md` (or `CLAUDE.md` — same file) when specifically needing information about that section, to conserve context.
 - **GEMINI.md + CLAUDE.md in every documented directory**: Whenever a new directory is added that contains tools, scripts, or documentation worth describing to AI agents, create a `GEMINI.md` in that directory and a `CLAUDE.md -> GEMINI.md` symlink alongside it (`ln -s GEMINI.md CLAUDE.md`). This ensures both Gemini CLI and Claude Code can navigate the repo from any subdirectory. The symlink keeps both agents in sync from a single source file. Add a link to the new `GEMINI.md` in this root file's Repository Structure section.
 - **Skills are shared**: any `SKILL.md` under `src/` (e.g. `src/ssh-host-finder/SKILL.md`, `src/wispr-flow-debug/SKILL.md`, or a tool's `src/<tool>/skill/`) drives both assistants — `sync-skills` discovers every `SKILL.md` and links it into `~/.claude/skills` and `~/.agents/skills`. Edit once, benefit twice.
+- **Skills should ship evals**: a skill folder should carry an `evals/evals.json` (the `skill-creator` format — `{ "skill_name", "evals": [ { "id", "prompt", "expected_output" } ] }`) capturing its trigger/behavior cases. `make skill-evals` (→ `opt/scripts/system/skill-eval.sh --check`) deterministically validates every skill's corpus and reports a **SKIP** for any skill folder that has none — no model calls, CI-safe. Behavioral grading (with-skill vs baseline accuracy) is the on-demand `skill-creator` loop, not this gate. See [`ai/skills/GEMINI.md`](./ai/skills/GEMINI.md).
 
 ## Asking the User (blocking questions must be colorized)
 
