@@ -77,7 +77,7 @@ on sequencing and acceptance gates.
 | --- | --- | --- | --- |
 | 4.1 | `sdk/gsl/README.md` (usage, subcommands, config schema, styles) | `sdk/gsl/README.md` | renders; matches behavior |
 | 4.2 | `sdk/gsl/docs/design.md` (in-tree design pointer) + polish `SKILL.md` | `sdk/gsl/docs/design.md` | consistent with this plan |
-| 4.3 | Fold final decisions back into `docs/plans/gsl-status-line.md` + check this execution plan's boxes | `docs/plans/*` | plan reflects shipped reality |
+| 4.3 | Fold final decisions back into `docs/mbo/plans/gsl-status-line.md` + check this execution plan's boxes | `docs/mbo/plans/*` | plan reflects shipped reality |
 
 ---
 

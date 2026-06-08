@@ -8,4 +8,4 @@ See `SKILL.md` for the full step-by-step workflow (validate alias → detect Cla
 → check existing session → start → verify → report attach command).
 
 **Planned integration:** `tmux-mgr remote start <alias>` — see
-`docs/designs/tmux-mgr-remote-command.md` for the design.
+`docs/mbo/designs/tmux-mgr-remote-command.md` for the design.

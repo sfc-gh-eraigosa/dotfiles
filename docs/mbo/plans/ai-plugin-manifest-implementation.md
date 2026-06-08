@@ -8,7 +8,7 @@
 
 **Tech Stack:** Bash, mikefarah `yq` (Go YAML processor), Claude Code plugin CLI, Gemini CLI extensions.
 
-**Reference spec:** `docs/plans/ai-plugin-manifest.md`
+**Reference spec:** `docs/mbo/plans/ai-plugin-manifest.md`
 
 **Working location:** All edits happen in the gss worktree on branch
 `feature/ai-plugins/edward-raigosa/plan` (PR #24). Never edit on `main`. After
@@ -187,7 +187,7 @@ git commit -m "feat(packages): add yq (brew mikefarah build) to common core"
 
 ```yaml
 # AI-assistant plugins/extensions — source of truth.
-# See docs/plans/ai-plugin-manifest.md for the design.
+# See docs/mbo/plans/ai-plugin-manifest.md for the design.
 #
 # Ensure-only (additive): opt/scripts/system/sync-plugins.sh installs + enables
 # what's listed here; it never removes anything. Parsed with mikefarah `yq`.

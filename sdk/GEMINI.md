@@ -7,7 +7,7 @@ tag of the form `sdk/<tool>/vX.Y.Z`.
 
 > **Go code lives here, not under `src/`.** `src/` is for non-Go tooling and agent
 > skills. This relocation is the `src/` → `sdk/` cutover tracked in
-> [docs/plans/2026-06-04-sdk-migration-plan.md](../docs/plans/2026-06-04-sdk-migration-plan.md).
+> [docs/mbo/plans/2026-06-04-sdk-migration-plan.md](../docs/mbo/plans/2026-06-04-sdk-migration-plan.md).
 
 ## Modules
 

@@ -1,0 +1,41 @@
+{
+  "skill_name": "mbo-plan",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Issue #114 is about gss not being go-install-able. Let's plan this out properly — I want a design and an implementation plan tracked the right way.",
+      "expected_output": "Captures the objective from gh issue #114, classifies it as an sdk/Go-CLI change, routes to brainstorming->writing-plans, writes docs/mbo/specs/<slug>.md + docs/mbo/plans/<slug>.md from the templates, and adds a row to docs/mbo/index.md with the issue and state.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "I'm on a gss draft PR for a new status-line widget. Can you scope this and write up a plan before I start coding?",
+      "expected_output": "Auto-detects the current branch's draft PR via gh pr view, derives a slug, classifies (sdk Go / dotfiles feature), produces a spec + plan under docs/mbo/ from templates, registers it in index.md tied to the PR, and notes confirmation is needed before committing.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "We want a brand-new skill that summarizes my unread Slack threads each morning. Help me design it.",
+      "expected_output": "Recognizes this is a new-skill objective, routes to skill-creator (per the docs/mbo routing table), and tracks the objective in docs/mbo/index.md rather than treating it as a generic build.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "The plan for the multi-region cache feature is approved. Break it out so the teams can work the independent pieces in parallel and we integrate at the end.",
+      "expected_output": "Recognizes this is the CAP-B build breakout. ASKS the user to confirm parallel vs sequential, then cuts the plan into LEAF tasks (disjoint file sets behind a frozen interface), builds a dependency-graph edge list, sequences BLOCKING leaves (the interface/contract) first (Interface-First), and fans the parallel leaves out via a Workflow routed per the docs/mbo/GEMINI.md team table. Reserves Workflow isolation:'worktree' for read-only leaves; code-producing leaves use gss feature workers.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Set up the parallel work for this objective — each piece needs its own worktree, draft PR, and a sub-issue under the design issue so we can track it.",
+      "expected_output": "Recognizes this is CAP-C tracking setup. Uses one gss feature per objective and one gss feature worker per leaf (worker = worktree + draft PR; --base encodes the dependency edge). Creates a GitHub sub-issue per leaf linked to the design issue via the REST sub_issues endpoint (sub_issue_id is the child's REST database .id, NOT the issue number). Uses gss feature conflicts to detect false splits and mirrors per-leaf state into index.md.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "The blocking interface PR for the auth-refactor objective just merged — reconcile the downstream worktrees and land the rest.",
+      "expected_output": "Recognizes this is CAP-C integration. Lands blocking leaves first, runs gss feature merged to re-target children onto the merged base (with gated auto-promote of a single linear successor), uses gss feature restack --onto for manually moved edges, tears down finished leaves with gss feature done, closes each leaf's sub-issue, advances index.md state, and closes the design issue only once all sub-issues are closed. gss remains the single writer for PRs and the registry.",
+      "files": []
+    }
+  ]
+}

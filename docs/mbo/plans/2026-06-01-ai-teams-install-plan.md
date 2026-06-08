@@ -1,6 +1,6 @@
 # AI Teams Install — Implementation Plan (resumable)
 
-Spec: `docs/superpowers/specs/2026-06-01-ai-teams-install-design.md`
+Spec: `docs/mbo/specs/2026-06-01-ai-teams-install-design.md`
 Branch: `feature/ai-teams-install/edward-raigosa/design` · Draft PR #92
 
 Build order follows dependencies. Each phase ends with validation + a

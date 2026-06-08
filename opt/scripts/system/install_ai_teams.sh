@@ -7,7 +7,7 @@
 # temperature, assembles the system prompt from the `compose:` partial list, compiles a
 # routing-grade `description`, and emits each tool's native format.
 #
-# Design: docs/superpowers/specs/2026-06-01-ai-teams-install-design.md
+# Design: docs/mbo/specs/2026-06-01-ai-teams-install-design.md
 # Mirrors install_gemini_skills.sh / install_claude_skills.sh. Idempotent; each tool
 # emit is independent and degrades gracefully (warn + continue) when a tool is absent.
 set -euo pipefail

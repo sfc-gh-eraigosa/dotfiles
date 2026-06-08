@@ -2,7 +2,7 @@
 # Test driver for install_claude_skills.sh — verifies the copy-not-symlink hook
 # install and the forced-field settings merge against a throwaway $HOME.
 #
-# Guarantees under test (docs/designs/2026-06-02-ai-config-home-provisioning.md):
+# Guarantees under test (docs/mbo/designs/2026-06-02-ai-config-home-provisioning.md):
 #   - hooks land in ~/.claude/hooks/ as executable *copies* (not symlinks)
 #   - ~/.claude/settings.json is a real host-owned file (not a symlink)
 #   - the forced subset (hooks/statusLine/deny/ask) is applied, referencing

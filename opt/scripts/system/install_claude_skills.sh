@@ -31,7 +31,7 @@ cleanup_broken_links() {
 # subset (settings.forced.json: hooks, statusLine, security deny/ask) over it,
 # so the security wiring stays current without clobbering host customizations.
 # No symlink and no repo-internal host copy (provisioning directive — CLAUDE.md).
-# See docs/designs/2026-06-02-ai-config-home-provisioning.md (D2) and
+# See docs/mbo/designs/2026-06-02-ai-config-home-provisioning.md (D2) and
 # apply-forced-settings.sh.
 SETTINGS_DEST="$CLAUDE_HOME/settings.json"
 SETTINGS_TEMPLATE="$BASE_DIR/ai/claude/settings.json.template"
