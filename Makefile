@@ -55,6 +55,10 @@ claude-hook-test: ## Run safety_guard hook test suite only
 skill-evals: ## Validate agent-skill eval corpora (ai/skills/*/evals/evals.json) deterministically
 	./opt/scripts/system/skill-eval.sh --check
 
+.PHONY: sdk-bump
+sdk-bump: ## Report sdk/<tool> modules whose source changed since their last tag (conventional-commit semver). Read-only; CI applies the bump on merge.
+	./opt/scripts/system/bump-sdk-version.sh --check
+
 # -----------------------------------------------------------------------------
 # Lint targets (issue #46 phase 1)
 # -----------------------------------------------------------------------------
