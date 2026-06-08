@@ -22,7 +22,7 @@ done` (also `parked`, `superseded`).
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
 | `prping` | — | [spec](./specs/2026-06-05-prping-design.md) | [plan](./plans/2026-06-05-prping-implementation-plan.md) | — | #127 | in-review |
 | `mbo` | this folder + the `mbo-plan` skill (`ai/skills/mbo-plan/`) | — | — | — | #127 | in-review |
-| `worker-md-placement` | [design](./designs/worker-md-placement.md) | — | — | [#132](https://github.com/sfc-gh-eraigosa/dotfiles/issues/132) | — | designing |
+| `worker-md-placement` | [design](./designs/worker-md-placement.md) | — | — | [#132](https://github.com/sfc-gh-eraigosa/dotfiles/issues/132) | #133 | in-review |
 
 ## Merged / historical (pre-MBO — tracking columns best-effort)
 
