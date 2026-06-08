@@ -6,6 +6,16 @@ lifecycle state. **Update this whenever an artifact is added or a state changes.
 State lifecycle: `idea → designing → specifying → planning → building → in-review → merged →
 done` (also `parked`, `superseded`).
 
+## TODO
+
+- **Move state tracking out of this hand-maintained table → [#131](https://github.com/sfc-gh-eraigosa/dotfiles/issues/131).**
+  The **catalog** here (objectives → design/spec/plan + issue/PR links) is worth keeping, but the
+  `State` column and the **Active vs Merged/historical** split are painful to maintain by hand and
+  drift from reality (a PR merges, the row still says `in-review`). The plan is to adopt
+  [GitHub Project #4](https://github.com/users/sfc-gh-eraigosa/projects/4) as the live state
+  source-of-truth, with skills to register objectives and keep `Status` in sync — leaving this file
+  as the catalog (hand-edited or generated). See #131 for the full problem statement and scope.
+
 ## Active
 
 | Slug | Design | Spec | Plan | Issue(s) | PR(s) | State |
