@@ -102,6 +102,17 @@ if [ -d "$BASE_DIR/ai/hooks" ]; then
     chmod +x "$HOOKS_DEST"/*.sh 2>/dev/null || true
 fi
 
+# --- Account memories (issue #134): seed the repo's scope:account Claude
+# memories into this machine's live project-memory store
+# (~/.claude/projects/<computed-slug>/memory). Delegated to a standalone,
+# tested provisioner (mirrors apply-forced-settings.sh): seed-and-preserve,
+# never clobbers host-local memories, regenerates the index from the union. ---
+if [ -f "$BASE_DIR/opt/scripts/system/provision-claude-memory.sh" ]; then
+    echo "  Provisioning Claude account memories (~/.claude/projects/<slug>/memory)"
+    BASE_DIR="$BASE_DIR" CLAUDE_HOME="$CLAUDE_HOME" \
+        bash "$BASE_DIR/opt/scripts/system/provision-claude-memory.sh" || true
+fi
+
 # --- Shell aliases (~/.config/claude/aliases.sh, sourced by .zshrc and .bashrc) ---
 # Mirrors the tmux-mgr convention of ~/.config/<tool>/aliases.sh. The state
 # file (yolo.enabled) lives in the same directory.

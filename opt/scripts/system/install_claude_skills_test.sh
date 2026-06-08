@@ -54,6 +54,14 @@ assert_eq "$(jq -r '.permissions.ask | any(. == "Bash(sudo:*)")' "$A/.claude/set
     "true" "genuinely dangerous verbs (sudo) stay in ask"
 assert_grep_negative "no repo-internal path in fresh settings" "git/dotfiles" "$A/.claude/settings.json"
 
+# --- memory provisioning (#134): account memories seeded into the per-machine
+# computed live slug dir; the index is regenerated. ---
+MEM_SLUG="$(printf '%s' "$(cd "$REPO_ROOT" && pwd -P)" | sed 's#/#-#g')"
+assert_file_exists "$A/.claude/projects/$MEM_SLUG/memory/gss-agent-cli-gotchas.md" \
+    "account memory provisioned into the computed live slug dir"
+assert_grep "provisioned MEMORY.md lists an account memory" "capture ids" \
+    "$A/.claude/projects/$MEM_SLUG/memory/MEMORY.md"
+
 # --- B: existing host with customizations + a stale repo-internal hook path ---
 mkdir -p "$B/.claude"
 cat > "$B/.claude/settings.json" <<'JSON'
