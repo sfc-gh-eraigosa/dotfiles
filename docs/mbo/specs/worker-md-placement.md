@@ -2,7 +2,7 @@
 
 - **Slug:** worker-md-placement
 - **Date:** 2026-06-08
-- **Status:** Draft
+- **Status:** Approved
 - **Relates to:** issue #132 · PR #133 · design `../designs/worker-md-placement.md`
 
 ## 1. Goal
@@ -42,11 +42,13 @@ parents are best-effort removed on full-feature delete. *Acceptance:* after `don
 `os.Remove(featDir)` is not wedged by a leftover.
 
 **UC-5 — Legacy worktree migration.** *Actor:* a worktree created under the old layout (root
-`WORKER.md`). *Trigger:* the next `worker add` WRITE path **or** the next `appendAutoLog`.
-*Flow:* `migrateLegacyWorkerMD(worktree)` renames the root file to the meta path (preserving
-human edits + appended log) and, if it was git-tracked, runs `git rm --cached --quiet WORKER.md`.
-*Acceptance:* the file is at the meta path with content intact; `git status --porcelain` in the
-worktree is clean of `WORKER.md` afterward.
+`WORKER.md`). *Trigger:* the next `gss feature checkpoint --auto` over that worktree (this is the
+only path that meets a pre-existing worktree — `worker add` always creates a *fresh* one, so it
+never has a legacy file). *Flow:* `migrateLegacyWorkerMD(ctx, worktree)` runs at `AutoCheckpoint`
+entry: it renames the root file to the meta path (preserving human edits + appended log) and, if
+it was git-tracked, runs `git rm --cached --ignore-unmatch -- WORKER.md`. *Acceptance:* the file is
+at the meta path with content intact; a tracked legacy file is dropped from the index; a worktree
+with no legacy file is untouched (no git call).
 
 ## 3. Architecture
 

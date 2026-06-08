@@ -58,7 +58,7 @@ func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (Checkpoi
 	}
 
 	body := renderPRBody(feat, ref)
-	title := fmt.Sprintf("%s: %s", ref.Feature, ref.Purpose) // first H1 of WORKER.md
+	title := fmt.Sprintf("%s: %s", ref.Feature, ref.Purpose) // from worker_ref; WORKER.md is never read
 
 	// Adopt-existing-PR: a registry row may have no pr_url yet an open PR
 	// already exists on GitHub for this head branch (opened on another

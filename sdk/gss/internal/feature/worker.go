@@ -125,7 +125,14 @@ func (s *Service) WorkerAdd(ctx context.Context, opts WorkerAddOpts) (WorkerResu
 	if err != nil {
 		return WorkerResult{}, err
 	}
-	if err := os.WriteFile(filepath.Join(res.Worktree, "WORKER.md"), []byte(content), 0o644); err != nil {
+	// Seed WORKER.md OUTSIDE the worktree (issue #132) so it can never appear
+	// in the consumer repo's git status. WorkerMetaPath is leaf-keyed, so
+	// sibling workers under one (feature,user) get distinct files.
+	metaPath := WorkerMetaPath(res.Worktree)
+	if err := os.MkdirAll(filepath.Dir(metaPath), 0o755); err != nil {
+		return WorkerResult{}, fmt.Errorf("feature: create WORKER.md dir: %w", err)
+	}
+	if err := os.WriteFile(metaPath, []byte(content), 0o644); err != nil {
 		return WorkerResult{}, fmt.Errorf("feature: write WORKER.md: %w", err)
 	}
 	return res, nil

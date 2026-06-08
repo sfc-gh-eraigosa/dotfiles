@@ -69,6 +69,12 @@ func (s *Service) Done(ctx context.Context, opts DoneOpts) (DoneResult, error) {
 	if err := s.Backend.Remove(w.Worktree, opts.Force); err != nil {
 		return res, fmt.Errorf("feature done: remove worktree: %w", err)
 	}
+	// Tear down the worker's external WORKER.md home (issue #132). Nothing else
+	// touches the <feature>/<user>/.gss-meta tree, so without this the meta dir
+	// would accrete forever under the worktrees root. Best-effort-remove the now
+	// possibly-empty .gss-meta parent too (fails harmlessly if a sibling remains).
+	_ = os.RemoveAll(workerMetaDir(w.Worktree))
+	_ = os.Remove(filepath.Join(filepath.Dir(w.Worktree), ".gss-meta"))
 
 	// Decide empty-feature cleanup BEFORE mutating the registry.
 	willEmpty := len(feat.Workers) == 1

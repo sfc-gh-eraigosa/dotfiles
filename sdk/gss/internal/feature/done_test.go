@@ -58,6 +58,57 @@ func oneWorker() []registry.Worker {
 	return []registry.Worker{{User: "erai", Purpose: "api", Branch: "feature/auth/erai/api", Worktree: "/wt/api", BaseBranch: "main", Description: "api", PRState: "merged"}}
 }
 
+// TestDone_RemovesMetaDir proves teardown cleans up the worker's external
+// .gss-meta/<leaf>/ dir (issue #132) without disturbing a sibling worker's
+// meta dir under the same (feature,user).
+func TestDone_RemovesMetaDir(t *testing.T) {
+	root := t.TempDir()
+	wtA := filepath.Join(root, "octo/proj/auth/erai/api")
+	wtB := filepath.Join(root, "octo/proj/auth/erai/impl")
+	for _, wt := range []string{wtA, wtB} {
+		if err := os.MkdirAll(filepath.Dir(feature.WorkerMetaPath(wt)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(feature.WorkerMetaPath(wt), []byte("# worker\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	featDir := filepath.Join(root, "octo/proj", "auth")
+	if err := os.MkdirAll(featDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(featDir, "FEATURE.md"), []byte(cleanFeatureMD(t)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	store := registry.NewStore(filepath.Join(root, "registry.json"))
+	if err := store.Update(func(r *registry.Registry) error {
+		*r = registry.Registry{SchemaVersion: 1, Features: []registry.Feature{{
+			Name: "auth", StartedAt: "2026-05-21T12:00:00Z", DefaultBaseBranch: "main", Description: "login work",
+			Workers: []registry.Worker{
+				{User: "erai", Purpose: "api", Branch: "feature/auth/erai/api", Worktree: wtA, BaseBranch: "main", PRState: "merged"},
+				{User: "erai", Purpose: "impl", Branch: "feature/auth/erai/impl", Worktree: wtB, BaseBranch: "main", PRState: "merged"},
+			},
+		}}}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	svc := &feature.Service{
+		Store: store, Backend: &fakeBackend{},
+		Git:          &gitfake.Runner{Default: gitfake.Response{Stdout: []byte("")}}, // clean porcelain
+		WorktreeRoot: root, NWO: "octo/proj",
+	}
+	if _, err := svc.Done(context.Background(), feature.DoneOpts{WorkerRef: "auth/erai/api"}); err != nil {
+		t.Fatalf("Done: %v", err)
+	}
+	if _, err := os.Stat(filepath.Dir(feature.WorkerMetaPath(wtA))); !os.IsNotExist(err) {
+		t.Errorf("api meta dir should be removed after done; stat err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Dir(feature.WorkerMetaPath(wtB))); err != nil {
+		t.Errorf("sibling impl meta dir must survive; got err=%v", err)
+	}
+}
+
 func TestDoneOnEmptyFeatureMatchingTemplate(t *testing.T) {
 	svc, store, featDir := doneService(t, cleanFeatureMD(t), "", oneWorker())
 	res, err := svc.Done(context.Background(), feature.DoneOpts{WorkerRef: "auth/erai/api"})

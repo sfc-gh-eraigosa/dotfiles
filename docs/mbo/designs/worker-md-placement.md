@@ -127,4 +127,15 @@ Pure-additive path move with no schema migration, so rollback is low-cost:
 - **On-disk state:** worktrees created while the fix was live have `WORKER.md` under `.gss-meta/<leaf>/`. After rollback, the reverted code looks for it at the worktree root and won't find it; the auto-log path simply recreates a root-level file on next append (no data corruption, only the relocated history is stranded). A one-line operator cleanup (`find ~/.config/gss/worktrees -type d -name .gss-meta -prune -exec rm -rf {} +`) removes the stranded meta dirs if desired — they are gss-private and safe to delete.
 - **No consumer-repo footprint** was ever created (no `.gitignore`/`info/exclude` writes), so there is nothing to unwind in any consumer checkout — a key reason Option C was rejected.
 
+## 7. Implementation note (reconciled post-build)
+
+One refinement surfaced during implementation and is reflected in the spec/plan and code:
+**migration runs once at `AutoCheckpoint` entry**, not on "both writer paths." `worker add`
+*always* materializes a **fresh** worktree (`worker.go` calls `Backend.Create` on a new path),
+so a legacy root-level `WORKER.md` can only be encountered by `auto-checkpoint` over a
+pre-existing (old-layout) worktree. Placing the single `migrateLegacyWorkerMD` call at the top of
+`AutoCheckpoint` (which has `ctx` for the `git rm --cached` on a tracked legacy file) covers that
+sole case without dead code on the seed path. The `WorkerMetaPath` helper is **exported** (used by
+the write, append, cleanup sites and tests); `migrateLegacyWorkerMD` stays unexported.
+
 > Produced via an architecture-team `Workflow` (sysarch · principal · secarch · adversary). Register in `../index.md`. Spec → `../specs/worker-md-placement.md`.

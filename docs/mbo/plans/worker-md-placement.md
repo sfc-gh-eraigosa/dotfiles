@@ -2,7 +2,7 @@
 
 - **Slug:** worker-md-placement
 - **Date:** 2026-06-08
-- **Status:** Draft
+- **Status:** In-progress
 - **Relates to:** spec `../specs/worker-md-placement.md` · issue #132 · PR #133
 
 ## 1. Summary & verdict
@@ -26,8 +26,8 @@ breakout (see §6.1).
 | `sdk/gss/internal/feature/paths_test.go` *(new)* | helper table test + migration unit test | F1, F5 |
 | `sdk/gss/internal/feature/worker.go` | WRITE → meta path; `MkdirAll`; call migration | F2, F5 |
 | `sdk/gss/internal/feature/worker_test.go` | **invert**: assert WORKER.md outside worktree, at meta path; #132 regression; two-sibling guard | F2, UC-2 |
-| `sdk/gss/internal/feature/auto.go` | APPEND → meta path; `MkdirAll`; call migration | F3, F5 |
-| `sdk/gss/internal/feature/auto_test.go` | **repoint** reads (`:98`,`:154`) to meta path; first-writer case | F3 |
+| `sdk/gss/internal/feature/auto.go` | APPEND → meta path + `MkdirAll`; call `migrateLegacyWorkerMD` once at `AutoCheckpoint` entry | F3, F5 |
+| `sdk/gss/internal/feature/auto_test.go` | **repoint** reads (`:98`,`:154`) to meta path — these run over an empty worktree, doubling as the first-writer coverage | F3 |
 | `sdk/gss/internal/feature/done.go` | `os.RemoveAll` leaf meta dir after `Backend.Remove`; best-effort empty-parent cleanup on feature delete | F4 |
 | `sdk/gss/internal/feature/done_test.go` *(new or extend)* | post-`done` meta dir gone; sibling survives | F4 |
 | `sdk/gss/internal/feature/checkpoint.go` | fix stale `:61` comment (no behavior change) | F6 |
@@ -82,9 +82,10 @@ in `done.go` after `Backend.Remove` (and in the `deleteFeature` branch). *Verify
 
 **Phase 5 — legacy migration (F5).** *Write first:* `paths_test.go` migration cases — (a)
 untracked root `WORKER.md` → moved to meta path, content byte-identical; (b) tracked root file →
-moved **and** `git status --porcelain` clean of `WORKER.md`; (c) no legacy file → no-op. *Then:*
-implement `migrateLegacyWorkerMD` and call it at the top of the WRITE path and before the append
-in `appendAutoLog`. *Verify:* `go test ./internal/feature -run 'TestMigrat'`. **Done-when:** all
+`git rm --cached -- WORKER.md` issued; (c) no legacy file → no-op (no git call). *Then:*
+implement `migrateLegacyWorkerMD` and call it **once at `AutoCheckpoint` entry** (the only path
+that meets a pre-existing worktree — `worker add` always creates a fresh one, so the seed path has
+nothing to migrate). *Verify:* `go test ./internal/feature -run 'TestMigrat'`. **Done-when:** all
 three migration cases green.
 
 **Phase 6 — docs/skill + comment (F6).** Remove the `WORKER.md` delete clause from
