@@ -292,10 +292,20 @@ invariant on every build.
             └── <feature-name>/
                 ├── FEATURE.md           # shared feature-level metadata
                 └── <user>/
+                    ├── .gss-meta/                   # gss-internal scaffolding, OUTSIDE the worktrees (#132)
+                    │   └── <purpose>[-<suffix>]/
+                    │       └── WORKER.md            # worker notes + resume info; auto-removed by `feature done`
                     └── <purpose>[-<suffix>]/
-                        ├── WORKER.md    # worker-specific notes + resume info
-                        └── …            # checkout of feature/<name>/<user>/<purpose>[-<sfx>]
+                        └── …            # checkout of feature/<name>/<user>/<purpose>[-<sfx>] (NO WORKER.md inside)
 ```
+
+> **WORKER.md placement (issue #132).** `WORKER.md` is **leaf-keyed** under
+> `<user>/.gss-meta/<purpose>[-<suffix>]/`, deliberately one level keyed by the
+> worker leaf so two workers under the same `<feature>/<user>/` (e.g. `api` and
+> `impl`) get **distinct** files. It is written **outside** the git worktree so
+> it can never appear in the consumer repo's `git status` — without touching the
+> consumer's `.gitignore`. `feature worker add` seeds it, `checkpoint --auto`
+> appends its log there, and `feature done` removes the leaf's `.gss-meta` dir.
 
 `registry.json` schema:
 

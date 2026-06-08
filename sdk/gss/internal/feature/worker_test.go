@@ -39,12 +39,44 @@ func TestWorkerAdd_CreatesWorker(t *testing.T) {
 	if n := len(reg.Features[0].Workers); n != 1 {
 		t.Fatalf("workers = %d; want 1", n)
 	}
-	// Worktree materialized via backend + WORKER.md written.
+	// Worktree materialized via backend.
 	if len(be.created) != 1 || be.created[0].Branch != res.Branch {
 		t.Errorf("backend.Create = %+v; want one with branch %s", be.created, res.Branch)
 	}
-	if _, err := os.Stat(filepath.Join(res.Worktree, "WORKER.md")); err != nil {
-		t.Errorf("WORKER.md not written: %v", err)
+	// WORKER.md is seeded OUTSIDE the worktree (issue #132): present at the
+	// meta path, absent from the worktree root so it can never appear in the
+	// consumer repo's git status.
+	if _, err := os.Stat(feature.WorkerMetaPath(res.Worktree)); err != nil {
+		t.Errorf("WORKER.md not written at meta path: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(res.Worktree, "WORKER.md")); !os.IsNotExist(err) {
+		t.Errorf("WORKER.md must NOT exist in the worktree root (#132); stat err=%v", err)
+	}
+}
+
+// TestWorkerAdd_SiblingLeavesDistinct is the regression guard that proves the
+// leaf-keyed location (Option B) over the issue's shared-parent proposal
+// (Option A): two workers under the same (feature,user) get DISTINCT WORKER.md
+// files that do not clobber each other.
+func TestWorkerAdd_SiblingLeavesDistinct(t *testing.T) {
+	svc, _, _ := startedFeature(t)
+	ctx := context.Background()
+	a, err := svc.WorkerAdd(ctx, feature.WorkerAddOpts{Feature: "auth", Purpose: "api", Description: "first"})
+	if err != nil {
+		t.Fatalf("first add: %v", err)
+	}
+	b, err := svc.WorkerAdd(ctx, feature.WorkerAddOpts{Feature: "auth", Purpose: "api", Description: "second"})
+	if err != nil {
+		t.Fatalf("second add: %v", err)
+	}
+	pa, pb := feature.WorkerMetaPath(a.Worktree), feature.WorkerMetaPath(b.Worktree)
+	if pa == pb {
+		t.Fatalf("sibling workers share a WORKER.md path %q — Option A collision", pa)
+	}
+	for _, p := range []string{pa, pb} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("sibling WORKER.md missing at %q: %v", p, err)
+		}
 	}
 }
 

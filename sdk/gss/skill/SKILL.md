@@ -133,11 +133,17 @@ classic `--force-autonomous` inside a worker worktree.
 - Give every feature and worker a short, specific `--description`; it seeds
   FEATURE.md / WORKER.md and the PR body (NFC-normalised; control chars and
   injection markers stripped).
-- **Cleanup (Mandatory)**: `WORKER.md` and `FEATURE.md` are transient
-  scaffolding files used for development tracking and PR seeding. They MUST NOT
-  remain in the repository once the work is finalized. Delete and commit the
-  removal of `WORKER.md` (and `FEATURE.md` if present and unneeded) as the last
-  step before running `gss feature pr --ready` or merging.
+- **`WORKER.md` placement (issue #132)**: `WORKER.md` is seeded **outside** the
+  worker's git worktree, at
+  `<worktrees-root>/<owner>/<repo>/<feature>/<user>/.gss-meta/<leaf>/WORKER.md`,
+  so it never appears in the consumer repo's `git status` and **cannot** be
+  accidentally committed. There is **no manual cleanup step** — `gss feature
+  done` removes the worker's `.gss-meta/<leaf>/` automatically. (An older gss
+  may have left a root-level `WORKER.md` inside the worktree; the next
+  `checkpoint --auto` relocates it to the meta path.)
+- **`FEATURE.md` cleanup**: `FEATURE.md` is transient feature-level scaffolding;
+  `gss feature done` removes it when the feature empties and it carries no human
+  edits (an edited FEATURE.md is retained with a notice). No manual step needed.
 - `spawned_by` (engine/session/pane) is **informational only** — never the
   basis for a trust or control decision (design.md resolution #8).
 

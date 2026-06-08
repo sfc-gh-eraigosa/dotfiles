@@ -95,9 +95,14 @@ func TestAuto_DetachedHEADSkipsWithDiagnostic(t *testing.T) {
 	if !strings.Contains(res.Skipped, "detached") {
 		t.Errorf("Skipped = %q; want detached-HEAD reason", res.Skipped)
 	}
-	data, _ := os.ReadFile(filepath.Join(wt, "WORKER.md"))
+	// The diagnostic lands at the meta path OUTSIDE the worktree (issue #132),
+	// even though appendAutoLog is the first writer here (empty worktree).
+	if _, err := os.Stat(filepath.Join(wt, "WORKER.md")); !os.IsNotExist(err) {
+		t.Errorf("auto-log must not write WORKER.md into the worktree root (#132); err=%v", err)
+	}
+	data, _ := os.ReadFile(feature.WorkerMetaPath(wt))
 	if !strings.Contains(string(data), "detached") {
-		t.Errorf("WORKER.md missing diagnostic:\n%s", data)
+		t.Errorf("WORKER.md (meta path) missing diagnostic:\n%s", data)
 	}
 }
 
@@ -151,9 +156,9 @@ func TestAuto_RebaseConflictSkips(t *testing.T) {
 	if !strings.Contains(res.Skipped, "rebase conflict") {
 		t.Errorf("Skipped = %q; want rebase-conflict reason", res.Skipped)
 	}
-	data, _ := os.ReadFile(filepath.Join(wt, "WORKER.md"))
+	data, _ := os.ReadFile(feature.WorkerMetaPath(wt))
 	if !strings.Contains(string(data), "rebase conflict") {
-		t.Errorf("WORKER.md missing conflict diagnostic:\n%s", data)
+		t.Errorf("WORKER.md (meta path) missing conflict diagnostic:\n%s", data)
 	}
 }
 

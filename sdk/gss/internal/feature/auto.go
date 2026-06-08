@@ -56,6 +56,12 @@ func (s *Service) AutoCheckpoint(ctx context.Context, opts AutoOpts) (AutoResult
 	w := reg.Features[fi].Workers[wi]
 	res := AutoResult{Ref: ref.String()}
 
+	// Upgrade path (issue #132): a worktree seeded by an older gss has a
+	// root-level WORKER.md. Relocate it to the meta path before any diagnostic
+	// append, so the legacy file doesn't linger in `git status`. No-op on
+	// worktrees already on the new layout.
+	_ = s.migrateLegacyWorkerMD(ctx, w.Worktree)
+
 	branch, _ := s.gitOut(ctx, w.Worktree, "rev-parse", "--abbrev-ref", "HEAD")
 	if branch == "" || branch == "HEAD" {
 		return s.autoSkip(w, "detached HEAD; skipping auto-checkpoint")
@@ -140,7 +146,13 @@ func (s *Service) autoSkip(w registry.Worker, reason string) (AutoResult, error)
 }
 
 func (s *Service) appendAutoLog(worktree, reason string) {
-	path := filepath.Join(worktree, "WORKER.md")
+	// WORKER.md lives OUTSIDE the worktree (issue #132). appendAutoLog can be
+	// the first writer (a skip before any seed/manual checkpoint), so ensure
+	// the leaf meta dir exists before opening with O_CREATE.
+	path := WorkerMetaPath(worktree)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return
+	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return
