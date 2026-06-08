@@ -35,6 +35,17 @@ opts in per machine. Renames the former `claude-toggle` (YOLO-only) to
   `${CLAUDE_YOLO_FILE:-}` and calls `command claude` directly · *acceptance:* it
   still applies YOLO from the same sentinel and is never given `--remote-control`
   (see §7 contract).
+- **Single canonical binary** — *actor:* user running `install.sh` · *trigger:*
+  `claude_install.sh` (invoked by `install.sh`) · *flow:* installs/updates the
+  orchestrated binary (npm on Linux/WSL, brew cask on macOS), then removes the
+  non-orchestrated native install (`~/.local/bin/claude` →
+  `~/.local/share/claude/…`, `~/.local/state/claude`) when a canonical binary is
+  confirmed · *acceptance:* exactly one `claude` on PATH afterwards; `~/.claude/`
+  untouched; idempotent on re-run.
+- **Diagnose which binary is in use** — *actor:* user · *trigger:*
+  `claude-config doctor` · *flow:* scans `$PATH`, prints the resolved binary,
+  warns + exits non-zero if more than one is found · *acceptance:* one binary ⇒
+  exit 0, no warning; two ⇒ warning + non-zero.
 
 ## 3. Architecture
 
@@ -60,6 +71,11 @@ shell is always bash or zsh). Components, each independently testable:
 5. Remote sentinel present **and** interactive TTY **and** not print mode ⇒ inject
    `--remote-control "$(basename "$PWD")"` (explicit name).
 6. No `_`-prefixed helper functions anywhere in the file.
+7. `claude_install.sh` is the single source of the binary: installs the
+   orchestrated copy then removes the native-installer copy (guarded:
+   only a `~/.local/bin/claude` symlink that points into `~/.local/share/claude/`,
+   only when a canonical claude outside `~/.local` is confirmed; never `~/.claude/`).
+8. `claude-config doctor` reports the resolved binary and flags duplicates.
 
 ## 5. Evaluation criteria (per feature)
 
@@ -75,20 +91,37 @@ shell is always bash or zsh). Components, each independently testable:
 | 5d | **prompt-swallow guard** | remote on ⇒ `--remote-control` carries an explicit name | the user's prompt is **never** an element of `CLAUDE_LAUNCH_FLAGS` | prompt with spaces | prompt preserved as `"$@"` |
 | 5e | print false-positive | prompt containing token `-p` is **not** print mode | — | `claude "about -p"` | `--remote-control` still injected |
 | 6 | no `_` helpers | — | no `^_name()` in file | — | grep-negative passes |
+| 7a | native cleanup | canonical confirmed ⇒ native link+data+state removed | no canonical ⇒ native kept | canonical under `~/.local` ⇒ skip | one binary remains |
+| 7b | cleanup safety | — | convenience symlink to canonical ⇒ kept; `~/.claude/` never touched | no native link ⇒ no-op | idempotent |
+| 8a | doctor report | always prints `command claude -> …` | — | binary not found ⇒ `<not found>` | header present |
+| 8b | doctor duplicates | ≥2 on PATH ⇒ WARNING + non-zero | 1 on PATH ⇒ exit 0, no warning | repeated PATH entries de-duped | correct verdict |
 
 ## 6. Verification harness
 
-`ai/claude/aliases_test.sh` (run: `bash ai/claude/aliases_test.sh`). Layers:
-source-level greps (no `_` helpers; `CLAUDE_YOLO_FILE=` contract var present;
-explicit-name injection present) + runtime behavioral cases that call
-`claude_launch_flags` directly and inspect `CLAUDE_LAUNCH_FLAGS` (deterministic,
-no binary shell-out). **31 cases, all green.** `bash -n` syntax-clean. The
-prompt-swallow regression (rule 5d) is empirically grounded: the real binary
+- `ai/claude/aliases_test.sh` (run: `bash ai/claude/aliases_test.sh`) — source-level
+  greps (no `_` helpers; `CLAUDE_YOLO_FILE=` contract var present; explicit-name
+  injection present) + behavioral cases that call `claude_launch_flags` and
+  inspect `CLAUDE_LAUNCH_FLAGS` (deterministic, no binary shell-out) + `doctor`
+  cases against a controlled `$PATH`. **35 cases.**
+- `opt/scripts/system/claude_install_test.sh` — sources the (now sourceable)
+  installer and exercises `cleanup_conflicting_installs` against a sandboxed
+  `$HOME` with `$CLAUDE_CANONICAL_BIN` overridden. **10 cases.**
+- Both auto-discovered by `make shell-test`. `bash -n` + shellcheck clean.
+
+The prompt-swallow regression (rule 5d) is empirically grounded: the real binary
 binds the optional `--remote-control [name]` arg greedily, so a bare flag would
 consume the prompt — the explicit name prevents it.
 
 ## 7. Prerequisites / dependencies
 
+- **Install flow:** `install.sh` → `opt/scripts/system/claude_install.sh` is the
+  single orchestrated installer (npm-global `@anthropic-ai/claude-code` on
+  Linux/WSL; brew cask `claude-code` on macOS). The official native installer
+  (`curl claude.ai/install.sh`, layout `~/.local/bin/claude` →
+  `~/.local/share/claude/versions/<v>`) is a *second*, self-updating copy that
+  dotfiles does not orchestrate; the installer consolidates it away. The wrapper
+  resolves the binary purely via `$PATH` (no hard-coded path → stays portable
+  across nvm node versions and macOS).
 - **CROSS-REPO CONTRACT (frozen):** the shell variable **`CLAUDE_YOLO_FILE`** —
   name and value semantics (absolute path to the YOLO sentinel) — is read by
   playground PR #73's nano-carried `claude-local` (`~/.config/nano/ollama-client.sh`),

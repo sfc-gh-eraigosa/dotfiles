@@ -88,6 +88,20 @@ assert_in_subshell "claude-config status reports yolo OFF by default" \
 assert_in_subshell "claude-config rejects unknown setting (exit 2)" \
     "export XDG_CONFIG_HOME=\$(mktemp -d); . '$ALIASES'; claude-config bogus >/dev/null 2>&1; [ \$? -eq 2 ]"
 
+# === claude-config doctor (single-binary diagnostic) ===
+# Header line always printed.
+assert_in_subshell "doctor prints the resolved binary line" \
+    "export XDG_CONFIG_HOME=\$(mktemp -d); . '$ALIASES'; claude-config doctor 2>&1 | grep -q 'command claude ->'"
+# Exactly one claude on a controlled PATH: no warning, exit 0, resolves to it.
+assert_in_subshell "doctor: single binary => no warning, exit 0" \
+    "H=\$(mktemp -d); mkdir -p \"\$H/b1\"; : > \"\$H/b1/claude\"; chmod +x \"\$H/b1/claude\"; export PATH=\"\$H/b1:/usr/bin:/bin\"; . '$ALIASES'; out=\$(claude-config doctor 2>&1); rc=\$?; [ \$rc -eq 0 ] && printf '%s' \"\$out\" | grep -q \"\$H/b1/claude\" && ! printf '%s' \"\$out\" | grep -q WARNING"
+# Two claude binaries on PATH: warns and returns non-zero.
+assert_in_subshell "doctor: multiple binaries => WARNING + nonzero" \
+    "H=\$(mktemp -d); mkdir -p \"\$H/b1\" \"\$H/b2\"; : > \"\$H/b1/claude\"; : > \"\$H/b2/claude\"; chmod +x \"\$H/b1/claude\" \"\$H/b2/claude\"; export PATH=\"\$H/b1:\$H/b2:/usr/bin:/bin\"; . '$ALIASES'; claude-config doctor >/dev/null 2>&1; [ \$? -ne 0 ]"
+# De-dups a binary that appears under repeated PATH entries (one logical claude).
+assert_in_subshell "doctor: dedups repeated PATH entries (no false warning)" \
+    "H=\$(mktemp -d); mkdir -p \"\$H/b1\"; : > \"\$H/b1/claude\"; chmod +x \"\$H/b1/claude\"; export PATH=\"\$H/b1:\$H/b1:/usr/bin:/bin\"; . '$ALIASES'; claude-config doctor >/dev/null 2>&1; [ \$? -eq 0 ]"
+
 # === Flag-injection behavior (the headline feature — exercised directly) ===
 # Default (nothing opted in), interactive, with a prompt: NO flags injected.
 assert_in_subshell "default opt-out: no flags injected for interactive prompt" \

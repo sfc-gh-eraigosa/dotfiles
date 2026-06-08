@@ -26,12 +26,21 @@ in PR #126) and folds in the architecture-team review verdict.
 - **Contract drift risk**: `CLAUDE_YOLO_FILE` marked as a frozen cross-repo
   contract (comment + guard test).
 
+**Follow-up scope (binary consolidation):** a machine could accumulate two
+`claude` binaries — the orchestrated npm/brew one and the official native
+installer's `~/.local` copy — differing in version with a PATH-order foot-gun.
+`claude_install.sh` is made the single source of truth: after installing the
+canonical copy it removes the native install (guarded/idempotent), and
+`claude-config doctor` reports the resolved binary and flags duplicates.
+
 ## 2. File inventory
 
 | Path | Purpose | Implements |
 | :-- | :-- | :-- |
-| `ai/claude/aliases.sh` | `claude` wrapper, `claude_launch_flags`, `claude-config` tool, config vars, contract comment, security note | spec §3, §4, §7 |
-| `ai/claude/aliases_test.sh` | 31-case driver: source-level + behavioral | spec §5, §6 |
+| `ai/claude/aliases.sh` | `claude` wrapper, `claude_launch_flags`, `claude-config` tool (+`doctor`), config vars, contract comment, security note | spec §3, §4, §7 |
+| `ai/claude/aliases_test.sh` | 35-case driver: source-level + behavioral + doctor | spec §5, §6 |
+| `opt/scripts/system/claude_install.sh` | sourceable refactor; `resolve_canonical_claude` + `cleanup_conflicting_installs` (single canonical binary) | spec §4.7, §7 |
+| `opt/scripts/system/claude_install_test.sh` | 10-case driver for the cleanup decision (sandboxed `$HOME`) | spec §5.7 |
 | `docs/machine-local-overrides.md` | refreshed override example (drop removed `_claude_yolo_enabled`); opt-in note | spec §2, §8 |
 | `opt/profiles/.zshrc` | comment refresh (`claude-config`) | — |
 | `opt/profiles/.bashrc` | comment refresh (`claude-config`) | — |
@@ -39,8 +48,9 @@ in PR #126) and folds in the architecture-team review verdict.
 | `docs/mbo/plans/claude-config.md` | this plan | — |
 | `docs/mbo/index.md` | Active-table registration | — |
 
-No changes to `install.sh`/`scripts/test.sh`/`sync-skills` — `install_claude_skills.sh`
-already symlinks `aliases.sh`; the test driver runs under the existing shell-test path.
+`install.sh` already calls `claude_install.sh` (no edit). Both `*_test.sh` are
+auto-discovered by `make shell-test` (no wiring). `install_claude_skills.sh`
+already symlinks `aliases.sh`.
 
 ## 3. Interface contracts
 
@@ -87,6 +97,10 @@ Frozen: `CLAUDE_YOLO_FILE` = abs path to YOLO sentinel (read by playground
 | 5d prompt-swallow | `user prompt is NOT captured into the flags`, `yolo+remote on: … prompt preserved` |
 | 5e print false-positive | `prompt containing '-p' is not mistaken for print mode` |
 | 6 no `_` helpers | `no underscore-prefixed helper functions` |
+| 7a native cleanup | `removes native install when canonical is confirmed`, `keeps native install when no canonical is confirmed`, `skips when canonical also resolves under ~/.local` |
+| 7b cleanup safety | `keeps a convenience symlink that points at the canonical binary`, `no-op when there is no native install`, `cleanup never touches ~/.claude (documented)` |
+| 8a doctor report | `doctor prints the resolved binary line` |
+| 8b doctor duplicates | `doctor: single binary => no warning, exit 0`, `doctor: multiple binaries => WARNING + nonzero`, `doctor: dedups repeated PATH entries` |
 | §7 contract | `CLAUDE_YOLO_FILE cross-repo contract var preserved`, `remote-control passes an explicit session name` |
 
 ## 6. Integration & rollout

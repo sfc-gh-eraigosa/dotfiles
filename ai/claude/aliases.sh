@@ -20,6 +20,8 @@
 #                     claude-config                 # show current state
 #                     claude-config yolo   on|off   # --dangerously-skip-permissions
 #                     claude-config remote on|off   # --remote-control on interactive sessions
+#                     claude-config doctor          # report the installed claude binary,
+#                                                   # warn if more than one is on PATH
 #
 # Config is expressed as sentinel files under $XDG_CONFIG_HOME/claude
 # (defaults to ~/.config/claude/), kept out of ~/.claude/ (owned by Claude Code).
@@ -127,17 +129,47 @@ claude-config() {
                 *)   echo "usage: claude-config remote on|off" >&2; return 2 ;;
             esac
             ;;
+        doctor)
+            # Report which claude binary the wrapper actually runs (via PATH —
+            # `command claude` bypasses this function but still does a PATH
+            # lookup) and warn if more than one is installed. The canonical
+            # binary is the one installed by claude_install.sh (run by
+            # install.sh): npm on Linux/WSL, brew cask on macOS. Extra copies
+            # (e.g. the native `curl claude.ai/install.sh` install under
+            # ~/.local) are consolidated away by re-running install.sh.
+            claude_all="$(
+                IFS=:
+                for claude_d in $PATH; do
+                    [ -x "$claude_d/claude" ] && printf '%s\n' "$claude_d/claude"
+                done | awk '!seen[$0]++'
+            )"
+            claude_resolved="$(printf '%s\n' "$claude_all" | sed '/^$/d' | head -1)"
+            claude_n="$(printf '%s\n' "$claude_all" | grep -c .)"
+            echo "Claude binary diagnostics:"
+            echo "  command claude -> ${claude_resolved:-<not found>}"
+            echo "  on PATH ($claude_n):"
+            printf '%s\n' "$claude_all" | sed '/^$/d; s/^/    /'
+            if [ "$claude_n" -gt 1 ]; then
+                echo "  WARNING: more than one claude binary is installed. The dotfiles"
+                echo "  installer (claude_install.sh, run by install.sh) keeps ONE canonical"
+                echo "  binary (npm on Linux/WSL, brew cask on macOS) and removes the"
+                echo "  non-orchestrated native install. Re-run install.sh to consolidate."
+                return 1
+            fi
+            ;;
         ""|status)
             [ -f "$CLAUDE_YOLO_FILE" ] && yolo_state="ON" || yolo_state="OFF"
             [ -f "$CLAUDE_REMOTE_ENABLED_FILE" ] && remote_state="ON" || remote_state="OFF"
             echo "Claude launch config:"
             echo "  yolo    $yolo_state   (claude-config yolo on|off)"
             echo "  remote  $remote_state   (claude-config remote on|off)"
+            echo "  (run 'claude-config doctor' to check the installed binary)"
             ;;
         *)
             echo "usage: claude-config [status]" >&2
             echo "       claude-config yolo on|off" >&2
             echo "       claude-config remote on|off" >&2
+            echo "       claude-config doctor" >&2
             return 2
             ;;
     esac
