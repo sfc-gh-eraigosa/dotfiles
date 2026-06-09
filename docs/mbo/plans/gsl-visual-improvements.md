@@ -19,6 +19,14 @@ detect-once (SYS-1 sysarch), layer-painting (SYS-3/4), preview call site (SYS-1 
 testable width seam (SYS-2 principal), theme boundary (SYS-5), sink + settings hardening
 (SEC-4/5/7), and `uniseg`-is-transitive (principal SYS-3). See design §7.
 
+**Emoji-coverage review (design §7.1):** 7 confirmed / 4 refuted — emoji is now a first-class
+case, not an afterthought. Folded in: every palette variant defines all 5 segment keys with
+mid-luminance fg legibility (emoji is fg-tint-only); a **final compaction tier** (glyph-drop →
+segment-drop) since emoji's 2-col glyph floor makes text-trim alone unable to fit `COLUMNS≈20`;
+emoji byte-equal goldens scoped to the **default palette** with **per-palette emoji goldens**
+proving the fg-tint changes; per-icon width fixtures (not all emoji are 2-col); and the `uniseg`
+measure pinned for determinism. See the spec "Style coverage" matrix.
+
 ## 2. File inventory
 
 | Path (under `sdk/gsl/`) | Purpose | Implements |
@@ -26,18 +34,21 @@ testable width seam (SYS-2 principal), theme boundary (SYS-5), sink + settings h
 | `internal/render/segment.go` | `Segment.Render` → `(text, colorKey string, ok bool)`; doc the raw-text/self-omit contract | spec §3, F1 |
 | `internal/render/render.go` | Detect-once → `[]segmentData`; `Render` gains `compactLevel`; both call sites | F1, F3 |
 | `internal/render/glyphs.go` | Color-aware `join([]segmentBlock)`; bridged-chevron emission; harden `colorCode` | F1, F4 |
-| `internal/render/seg_ai.go` | Return raw text + `"ai"`; compaction levels 1–3 | F1, F3 |
-| `internal/render/seg_time.go` | Return raw text + `"time"`; compaction levels 1–3 | F1, F3 |
-| `internal/render/seg_dirgit.go` | Return raw text + `"dirgit"`; branch abbreviation 1–3 | F1, F3 |
+| `internal/render/seg_ai.go` | Return raw text + `"ai"`; compaction levels 1–3; final-tier glyph drop | F1, F3 |
+| `internal/render/seg_time.go` | Return raw text + `"time"`; compaction levels 1–3; final-tier glyph drop | F1, F3 |
+| `internal/render/seg_dirgit.go` | Return raw text + `"dirgit"`; branch abbreviation 1–3; final-tier glyph drop | F1, F3 |
 | `internal/render/seg_repo.go` | Return raw text + dynamic `"repo_root"`/`"repo_worktree"`; pass level through | F1 |
+| `internal/render/render.go` (fit loop) | Final tier drops lowest-priority segments (`time`→`repo` extras) when glyph-drop still overflows | F3 |
 | `internal/render/testdata/golden_powerline_*.txt` | Regenerate (`-update`) for bridged sequences | F1 |
+| `internal/render/testdata/golden_emoji_*.txt` | Byte-equal **default palette only**; **add `golden_emoji_<palette>_*.txt`** (light, dark-daltonism) asserting fg-tint `38;5;N` change | F2 |
 | `internal/theme/resolve.go` | **New.** `Resolve(toolCtx, env, home) → paletteName`; detection only | F2 |
 | `internal/theme/resolve_test.go` | **New.** Priority-chain + gemini-keyword + settings-anomaly tests | F2, F5 |
 | `internal/theme/settings.go` | **New.** Bounded/typed/symlink-safe settings read (Lstat, LimitReader 256 KiB, degrade) | F5 |
-| `internal/style/builtins.go` | Add `light` / `dark-daltonism` / 8-color palettes | F2 |
+| `internal/style/builtins.go` | Add `light` / `dark-daltonism` / 8-color palettes — **each defines all 5 segment keys, mid-luminance for emoji fg-only legibility** | F2 |
 | `internal/style/resolve.go` | `ResolveConfig` merges auto-theme (user keys win) | F2, F5 |
-| `internal/term/width.go` | **New.** `Columns(source)` (injected: `$COLUMNS`→ioctl→80); grapheme `DisplayWidth` | F3 |
-| `internal/term/width_test.go` | **New.** Injected-source + emoji/CJK width tests | F3 |
+| `internal/term/width.go` | **New.** `Columns(source)` (injected: `$COLUMNS`→ioctl→80); grapheme `DisplayWidth` (the `uniseg` measure) | F3 |
+| `internal/term/width_test.go` | **New.** Injected-source + **per-icon width fixtures** (2-col 📁🏠🌳🤖🔌⏰🌿🧠📦, 1-col ⬆⬇✚✎✦⑂, from `emojiStyle.Icons`) + CJK; assert the `uniseg` value, not terminal cells | F3 |
+| `internal/style/builtins_test.go` | **New.** Palette-bounds test: every palette's 5 segment keys are mid-luminance (emoji fg-only legibility) | F2 |
 | `cmd/statusline.go` | Derive `toolCtx`; wire `term.Columns`; run fit loop | F2, F3 |
 | `internal/preview/model.go` | Apply compaction in `renderLine` (≈:193) for fidelity | F3 |
 | `cmd/statusline_test.go` | Narrow→fits / wide→level-0 / **detection-count==1** integration tests | F3 |
@@ -87,19 +98,24 @@ for level := 0; level <= 3; level++ {
 1. **Interface + layer painting (F1 core).** Tests first: `segment_test` for the new
    `(text,colorKey,ok)` shape; `glyphs_test` for `join([]segmentBlock)` powerline bridge +
    trailing fade and emoji unchanged. Then update the four segments to return raw text + key and
-   move `paint` into `join`. Regenerate powerline goldens (`-update`); assert emoji byte-equal.
-   *done-when:* `go test ./internal/render/...` green, emoji goldens unchanged.
+   move `paint` into `join`. Regenerate powerline goldens (`-update`); assert emoji byte-equal
+   **(default palette)**. *done-when:* `go test ./internal/render/...` green, emoji default goldens unchanged.
 2. **Detect-once / format split (F3 core).** Tests first: a counting fake runner asserting
-   detection runs **once** across levels; per-segment level 1–3 tables. Then split `render` into
-   `Detect`→`[]segmentData` and pure `Format(data,st,level)`; add `internal/term` (injected
-   source + `DisplayWidth`) with its tests. Promote `uniseg` to direct.
-   *done-when:* per-level tables green; detection-count test == 1.
+   detection runs **once** across levels; per-segment level 1–3 tables; the **final tier**
+   (glyph-drop then segment-drop) incl. the **emoji `COLUMNS=20`** case; `internal/term` **per-icon
+   width fixtures** (asserting the `uniseg` value, not terminal cells). Then split `render` into
+   `Detect`→`[]segmentData` and pure `Format(data,st,level)`; add `internal/term`. Promote `uniseg` to direct.
+   *done-when:* per-level + final-tier tables green; emoji/`COLUMNS=20` ≤ 20; detection-count test == 1.
 3. **Sink hardening (F4).** Tests first: `colorCode` injection/validation vectors. Then add the
    `trusted` path. *done-when:* injection rejected, valid config values still render.
 4. **Settings read + theme detection (F2/F5).** Tests first: `theme.Resolve` priority chain,
-   gemini keyword bridge, and `settings.go` anomaly fixtures (fifo/socket/symlink/oversize/
-   malformed → degrade). Then implement detection + palettes in `style` + the `ResolveConfig`
-   merge. *done-when:* priority/keyword/anomaly tables green; user-override-wins test passes.
+   gemini keyword bridge, `settings.go` anomaly fixtures (fifo/socket/symlink/oversize/malformed →
+   degrade), the **palette-bounds** test (every palette's 5 segment keys mid-luminance for emoji),
+   and **per-palette emoji goldens** (light, dark-daltonism) asserting the fg-tint `38;5;N` changes
+   + the **emoji user-override-wins** rendered-fg case. Then implement detection + palettes in
+   `style` (all 5 segment keys per variant) + the `ResolveConfig` merge.
+   *done-when:* priority/keyword/anomaly/palette-bounds tables green; emoji per-palette + override
+   goldens assert the expected fg codes.
 5. **Wire-up (F2/F3 integration).** Tests first: `cmd/statusline_test` narrow→fits, wide→level-0,
    detection-count==1; add `toolCtx` derivation. Then wire `cmd` + `preview`.
    *done-when:* integration tests green under both styles; `go test ./...` green; coverage ≥ 60%.
@@ -109,13 +125,18 @@ for level := 0; level <= 3; level++ {
 | Spec rule | Test |
 | :-- | :-- |
 | F1 interior chevron `bg=next,fg=prev`; trailing `fg=last` | `glyphs_test` bridge cases + powerline golden |
-| F1 emoji unchanged | `golden_emoji_*` byte-equal assertion (both styles) |
+| F1 emoji unchanged (**default palette only**) | `golden_emoji_*` byte-equal assertion |
 | F1 single/zero segment edges | `glyphs_test` edge cases |
 | F2 claude enum / gemini keyword / terminal fallback | `theme/resolve_test` priority tables |
 | F2 user override wins; unknown gemini → dark | `style/resolve_test`, `theme/resolve_test` |
+| F2 **emoji fg-tint changes per palette** | `golden_emoji_<palette>_*` (light, dark-daltonism) — `38;5;N` differs from default |
+| F2 **emoji user-override wins (rendered fg)** | emoji golden/table asserts the user fg code, not the palette code |
+| F2 **emoji palette legibility (mid-luminance)** | `style/builtins_test` palette-bounds |
 | F3 escalate-until-fit; level-0 when fits | `cmd/statusline_test` narrow/wide |
 | F3 detection runs once | counting-fake test (render + cmd) |
-| F3 emoji 2-col width | `term/width_test` emoji/CJK |
+| F3 **emoji binding case at COLUMNS=20** | `cmd/statusline_test` emoji/`COLUMNS=20` → `displayWidth ≤ 20` |
+| F3 **final tier drops glyph then segments** | `glyphs_test`/`render_test` deepest-level cases |
+| F3 per-icon width (not all emoji 2-col) | `term/width_test` per-icon fixtures (assert `uniseg` value) |
 | F4 injection rejected; valid config renders | `glyphs_test` `colorCode` vectors |
 | F5 settings anomalies degrade | `theme/resolve_test` + `settings` fixtures |
 
@@ -128,7 +149,8 @@ for level := 0; level <= 3; level++ {
 - **Docs:** update `sdk/gsl/README.md` + `sdk/gsl/docs/` for the theme/width behavior; refresh
   `index.md` state.
 - **Manual acceptance (PR evidence):** `gsl preview --once` wall-to-wall; theme toggle changes
-  colors (Claude + Gemini); `COLUMNS=60 gsl status` fits under `powerline` and `emoji`.
+  colors **under both styles — emoji visibly re-tints (fg)**; `COLUMNS=60` *and* the binding
+  `COLUMNS=20` `gsl status` fit under `powerline` and `emoji`.
 
 ### 6.1 Build leaves / DAG (only if the build is parallelized — `mbo-plan` CAP-B)
 

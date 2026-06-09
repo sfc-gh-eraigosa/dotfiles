@@ -65,7 +65,11 @@ Components (each independently testable; all under `sdk/gsl/`):
   contains **no** palettes and **no** merge logic.
 - **`internal/style` (modified)** — keeps palettes (incl. new `light`/`dark-daltonism`/8-color
   sets) and the merge. `ResolveConfig` gains the auto-theme merge (user keys win). `colorCode`
-  hardened against untrusted `;`-bearing input.
+  hardened against untrusted `;`-bearing input. **Every palette variant must define all five
+  segment colorKeys (`repo_root`,`repo_worktree`,`ai`,`dirgit`,`time`)**: for `emoji` (`Fill:false`)
+  `paint()` reads *only* the segment key — `accent`/`fg`/`bg` are inert — so a variant that omits a
+  segment key (or only redefines `accent`/`fg`) leaves emoji un-themed. Making `accent` tint emoji
+  would require a `paint()` change and is out of scope.
 - **`internal/term` (new)** — `Columns(source) int` with an **injected** width source
   (`$COLUMNS` → ioctl(stdout) → 80) and grapheme-aware display-width measurement over
   ANSI-stripped text (via the now-direct `github.com/rivo/uniseg`).
@@ -83,6 +87,15 @@ palette from `theme`) → color-aware `join` → string.
 - **F4 Sink hardening** — `colorCode` validates non-config color values.
 - **F5 Settings-read hardening** — bounded, symlink/type-checked, degrade-on-error.
 
+**Style coverage (explicit — emoji is a first-class case, not an afterthought).**
+
+| Feature | `powerline` (`Fill:true`, 1-col Nerd glyphs) | `emoji` (`Fill:false`, mixed 1/2-col glyphs) |
+| :-- | :-- | :-- |
+| F1 bridges | full color-bridged chevrons | **none — unchanged** (no bg block to bridge; thin `·` separator stays) |
+| F2 theme | palette as bg blocks + fg | palette as **fg tint only**; needs all 5 segment keys + fg-legibility on light *and* dark |
+| F3 compaction | applies | **binding case** — 2-col glyph floor means text-trim alone can't fit COLUMNS≈20; needs the glyph/segment-drop tier |
+| F4 / F5 | applies | applies (style-independent) |
+
 ## 5. Evaluation criteria (per feature — every rule is a test)
 
 **F1 Bridges** — *fires:* `Separator=="powerline"` & `Fill` → interior chevron carries
@@ -92,16 +105,28 @@ fade only, no interior chevron; zero segments → empty string. *pass:* powerlin
 deterministic; emoji golden unchanged.
 
 **F2 Auto-theme** — *fires:* claude `theme` enum and gemini `ui.theme` keyword map to the
-documented palette; terminal fallback when no settings. *must-not-fire:* a user-set `Theme` key
-is never overwritten; unknown gemini theme → dark (not terminal fallthrough). *edge:* missing/
-unreadable settings → terminal → default. *pass:* table-driven tests per priority level with
-temp settings files + injected env; render golden injects a fixed palette via `Deps`.
+documented palette; terminal fallback when no settings; **for `emoji`, the resolved segment-key
+colors apply as fg tint** (the rendered `38;5;N` codes change vs the default palette).
+*must-not-fire:* a user-set `Theme` key is never overwritten — **verified for emoji via the
+rendered fg code (the tint is emoji's only visible theme signal), not just the palette name**;
+unknown gemini theme → dark (not terminal fallthrough). *edge:* missing/unreadable settings →
+terminal → default; **emoji legibility — each palette's five segment-key indices are mid-luminance
+and readable as bare fg on both a light and a dark terminal (emoji has no bg block for contrast,
+and detection yields a palette *name*, not background luminance).** *pass:* table-driven tests per
+priority level with temp settings files + injected env; render golden injects a fixed palette via
+`Deps`; a palette-bounds unit test asserts no segment-key index sits within N steps of either
+luminance extreme.
 
-**F3 Compaction** — *fires:* level-0 width > cols → escalate until ≤ cols or level 3.
-*must-not-fire:* level-0 width ≤ cols → return level 0 (no compaction); **detection runs exactly
-once regardless of level count** (assert via a counting fake runner). *edge:* `$COLUMNS` ≥ 20
-under both styles; wide emoji glyphs (2 cols) counted correctly. *pass:* per-level table tests +
-an integration test asserting `displayWidth(output) ≤ cols` and a detection-call-count of 1.
+**F3 Compaction** — *fires:* level-0 width > cols → escalate until ≤ cols or the deepest level.
+The deepest tier may **drop the per-segment leading glyph, then drop lowest-priority segments**
+(e.g. `time`, then `repo` extras) — text-trimming alone cannot fit `emoji` at COLUMNS≈20 because
+each emoji glyph is an irreducible 2 cols + space (a 4-segment bar's glyph+separator floor is ~19
+cols before any text). *must-not-fire:* level-0 width ≤ cols → return level 0 (no compaction);
+**detection runs exactly once regardless of level count** (assert via a counting fake runner).
+*edge:* **`emoji` at `COLUMNS == 20` is the binding case** — `displayWidth ≤ 20` must hold;
+mixed-width icons counted correctly (2-col: 📁🏠🌳🤖🔌⏰🌿🧠📦; **1-col: ⬆⬇✚✎✦⑂** — not all emoji
+icons are 2 cols). *pass:* per-level table tests + an integration test asserting
+`displayWidth(output) ≤ cols` (incl. the `emoji`/`COLUMNS=20` row) and a detection-call-count of 1.
 
 **F4 Sink hardening** — *fires:* a non-config color value that is not a bare 256-index or a
 well-formed `38;2;r;g;b` is rejected (no escape emitted). *must-not-fire:* valid user-config
@@ -114,14 +139,21 @@ malformed → degrade to next priority. *must-not-fire:* a normal small settings
 
 ## 6. Verification harness
 
-- **Unit (table-driven):** `theme` priority chain; gemini keyword bridge; `colorCode`
-  validation/injection; `term` width incl. emoji/CJK; per-segment compaction levels; settings
-  anomaly handling.
+- **Unit (table-driven):** `theme` priority chain; gemini keyword bridge; palette-bounds
+  (emoji fg-legibility); `colorCode` validation/injection; `term` width — **each real emoji icon
+  pinned to its expected column count** (2-col 📁🏠🌳🤖🔌⏰🌿🧠📦, 1-col ⬆⬇✚✎✦⑂; source of truth
+  = `emojiStyle.Icons`) plus CJK; per-segment compaction levels incl. the glyph/segment-drop tier;
+  settings anomaly handling. **Width is the `uniseg.StringWidth` value (font/terminal-independent,
+  deterministic); tests assert that value and that the fit loop consumes it — never the physical
+  cells a specific terminal paints** (so a flaky test is never "fixed" by hardcoding a terminal width).
 - **Golden:** `internal/render/testdata/golden_powerline_*.txt` regenerated behind `-update`
-  for bridged sequences (reviewed with `cat -v`); `golden_emoji_*.txt` **must remain
-  byte-identical** (asserted under both styles).
-- **Integration (`cmd`):** narrow `cols` → `displayWidth ≤ cols` under both styles; wide `cols` →
-  level-0 returned; **detection-call-count == 1** across the fit loop (counting fake).
+  for bridged sequences (reviewed with `cat -v`); `golden_emoji_*.txt` **byte-identical only under
+  the DEFAULT palette** (F1 does not touch emoji). **F2 adds `golden_emoji_<palette>_*.txt` per
+  non-default palette (light, dark-daltonism) asserting the segment fg-tint `38;5;N` codes change**
+  — without this the default-only byte-equal assertion lets an emoji fg-tint regression ship silently.
+- **Integration (`cmd`):** narrow `cols` → `displayWidth ≤ cols` under both styles **incl. the
+  binding `emoji` / `COLUMNS=20` case**; wide `cols` → level-0 returned; **detection-call-count == 1**
+  across the fit loop (counting fake).
 - **Gate:** `go test ./...` green; module-wide coverage ≥ 60% (`scripts/test.sh` `COVERAGE_MIN[gsl]`).
 - **Human-evidenced:** `gsl preview --once` shows wall-to-wall blocks; toggling Claude/Gemini
   theme changes colors; `COLUMNS=60 gsl status` fits under both styles. Capture as PR evidence.

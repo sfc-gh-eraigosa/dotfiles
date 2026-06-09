@@ -98,13 +98,24 @@ default (today's values). It returns a chosen palette; `style.ResolveConfig`
 (`sdk/gsl/internal/style/resolve.go:16` — the real entrypoint, **not** `Resolve`) merges it into
 `Style.Theme` for keys the user did not set. **User config always wins.** Both styles share the
 same `Theme` keys; in `emoji` (`Fill:false`) the palette applies as foreground tint only.
+**Emoji constraint (the review's "don't leave emoji behind" item):** `paint()`'s `Fill:false`
+branch reads *only* the per-segment colorKey — `accent`/`fg`/`bg` are inert for emoji — so every
+palette variant (`light`/`dark-daltonism`/8-color) **must define all five segment keys**, and
+those indices must be **mid-luminance / legible as bare fg on both light *and* dark terminals**
+(emoji has no background block for contrast, and detection knows only a palette *name*, not the
+terminal's background luminance). See §7 EMOJI-F2-01/02.
 
 **4.3 Dynamic width compaction.**
-Detection runs once. The fit loop formats the cached data at levels 0→3 and returns the first
-whose display width ≤ terminal columns (or level 3). Width is measured with grapheme-aware
-counting (East-Asian-wide & ZWJ emoji = correct columns) after stripping ANSI. Per-segment
-compaction tables for `ai` / `time` / `dirgit` (branch abbreviation). Terminal width comes from
-an **injected** source (`$COLUMNS` → ioctl on stdout → 80) so the ioctl path stays testable.
+Detection runs once. The fit loop formats the cached data at escalating levels and returns the
+first whose display width ≤ terminal columns (or the deepest level). Width is measured with
+grapheme-aware counting (East-Asian-wide & ZWJ emoji = correct columns; note **not all emoji icons
+are 2-col** — ⬆⬇✚✎✦⑂ are 1-col) after stripping ANSI. Per-segment text-compaction tables for
+`ai` / `time` / `dirgit` (branch abbreviation), **plus a final tier that drops the per-segment
+leading glyph and then the lowest-priority segments** (`time`, then `repo` extras). The final tier
+is required because `emoji` is the **binding case**: each emoji glyph is an irreducible 2 cols +
+space, so a 4-segment bar floors at ~19 cols before any text — text-trimming alone cannot meet
+`COLUMNS ≈ 20`. (§7 EMOJI-F3-01/02.) Terminal width comes from an **injected** source
+(`$COLUMNS` → ioctl on stdout → 80) so the ioctl path stays testable.
 
 **Security: harden the color sink first.** `colorCode()` (`glyphs.go:89`) currently passes any
 value containing `;` verbatim into an ANSI SGR escape. Today its only source is the user's own
@@ -169,6 +180,23 @@ compaction-loop cost — which the sysarch lens summary itself calls "an archite
 
 **Open question carried to the spec:** the canonical environment variable Gemini CLI sets when
 launching a status-line command (for `toolCtx == "gemini"`) is unconfirmed; fallback is `""`.
+
+### 7.1 Emoji-coverage review (2026-06-09)
+
+A second `Workflow` (sysarch + principal, adversarially verified with the §7 design-stage rule
+inlined) asked specifically what the **`emoji`** style must get so it is not left behind.
+**11 recommendations: 7 confirmed, 4 refuted** (the refuted ones correctly note F1-no-bridge is
+already specified and two are redundant/not-emoji-specific). Acted on:
+- *EMOJI-F2-01* emoji `paint()` reads only the segment key → every palette variant must define all
+  five segment keys; `accent`/`fg`/`bg` inert for emoji → §4.2 + spec §3/§4/§5.
+- *EMOJI-F2-02* fg-only legibility on light *and* dark → §4.2 + spec §5 (palette-bounds test).
+- *EMOJI-F3-01* emoji is the binding width case; text-trim can't fit COLUMNS≈20 → §4.3 final
+  glyph/segment-drop tier + spec §5 `emoji`/`COLUMNS=20` assertion.
+- *EMOJI-F3-02* mixed-width icons (not all emoji are 2-col) → spec §6 per-icon width fixtures.
+- *P1* `emoji` golden byte-equal holds only for the DEFAULT palette; add per-palette emoji goldens
+  asserting the fg-tint changes → spec §6 + plan §5.
+- *P2* emoji user-override-wins asserted via rendered fg code → spec §5 + plan §5.
+- *P4* width tests pin the `uniseg` measure, not terminal cells (determinism) → spec §6 + plan §4.
 
 > Produced via an architecture-team `Workflow`. Registered in `../index.md`.
 > Matching spec: `../specs/gsl-visual-improvements.md`.
