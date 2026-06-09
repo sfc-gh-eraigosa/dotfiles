@@ -160,10 +160,103 @@ func separator(st style.Style) string {
 	}
 }
 
-// join assembles the surviving segment texts into the final status line using
-// the style's separator. Empty segments are already filtered by the caller.
-func join(st style.Style, parts []string) string {
+// segmentBlock carries the raw (unpainted) text from a segment together with
+// the theme colorKey the join layer should paint it with. The join layer owns
+// all ANSI emission — segments never embed escape sequences.
+type segmentBlock struct {
+	text     string
+	colorKey string
+}
+
+// join assembles the surviving segment blocks into the final status line.
+//
+// For powerline + Fill it emits:
+//   - each block painted with its own bg+fg via paint()
+//   - between adjacent blocks: a color-bridged chevron (bg=next color,
+//     fg=prev color, glyph, reset)
+//   - after the last block: a trailing fade chevron (fg=last color, glyph, reset)
+//
+// For thin/space/emoji (or when Fill is false) it falls through to the
+// classic space-padded-glyph separator path, preserving existing behavior
+// exactly — no bridged chevrons, just the old fg-tint paint per block.
+func join(st style.Style, blocks []segmentBlock) string {
+	if len(blocks) == 0 {
+		return ""
+	}
+
+	if st.Separator == "powerline" && st.Fill {
+		return joinPowerline(st, blocks)
+	}
+
+	// Classic path: paint each block with fg tint (or bg fill if Fill is true
+	// but separator is not "powerline"), join with the style separator.
+	parts := make([]string, 0, len(blocks))
+	for _, b := range blocks {
+		parts = append(parts, paint(st, b.colorKey, b.text))
+	}
 	return strings.Join(parts, separator(st))
+}
+
+// joinPowerline builds the powerline wall-to-wall ribbon with color-bridged
+// chevrons. Each interior boundary carries bg=next,fg=prev; the trailing
+// chevron fades fg=last to the terminal background.
+func joinPowerline(st style.Style, blocks []segmentBlock) string {
+	sepGlyph := glyph(st, "sep_right")
+	if sepGlyph == "" {
+		// No glyph available: fall back to classic path without bridges.
+		parts := make([]string, 0, len(blocks))
+		for _, b := range blocks {
+			parts = append(parts, paint(st, b.colorKey, b.text))
+		}
+		return strings.Join(parts, separator(st))
+	}
+
+	var sb strings.Builder
+
+	for i, b := range blocks {
+		// Paint the block: bg=this color, fg=global "fg" (or white fallback).
+		// paint() adds a trailing ansiReset — we need the raw sequences instead
+		// so we can emit the bridge chevron with the correct context. We
+		// reproduce paint()'s Fill:true logic inline here.
+		color := themeColor(st, b.colorKey)
+		bg := bgSeq(color)
+		fg := fgSeq(themeColor(st, "fg"))
+		if fg == "" {
+			fg = fgSeq("white")
+		}
+		if bg != "" {
+			sb.WriteString(bg)
+			sb.WriteString(fg)
+		}
+		// Space pad before and after the text (mirrors the existing style).
+		sb.WriteString(" ")
+		sb.WriteString(b.text)
+		sb.WriteString(" ")
+
+		// Emit the bridge chevron.
+		if i < len(blocks)-1 {
+			// Interior chevron: bg=next block's color, fg=this block's color.
+			nextColor := themeColor(st, blocks[i+1].colorKey)
+			nextBG := bgSeq(nextColor)
+			thisFG := fgSeq(color)
+			if nextBG != "" {
+				sb.WriteString(nextBG)
+			}
+			if thisFG != "" {
+				sb.WriteString(thisFG)
+			}
+		} else {
+			// Trailing chevron: reset bg (fade to terminal), fg=this block's color.
+			thisFG := fgSeq(color)
+			sb.WriteString(ansiReset)
+			if thisFG != "" {
+				sb.WriteString(thisFG)
+			}
+		}
+		sb.WriteString(sepGlyph)
+		sb.WriteString(ansiReset)
+	}
+	return sb.String()
 }
 
 // countBadge renders a "<glyph><n>" badge, e.g. "+3" / "⇡2". The glyph is

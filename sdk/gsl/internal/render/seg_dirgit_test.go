@@ -15,9 +15,12 @@ func TestDirGit_WithGit_ASCII(t *testing.T) {
 	r := &gitfake.Runner{Script: gitStatusResponses("main")}
 	seg := &DirGitSegment{Cwd: "/home/user/project", Git: r, home: "/home/user"}
 
-	got, ok := seg.Render(context.Background(), st)
+	got, colorKey, ok := seg.Render(context.Background(), st, 0)
 	if !ok {
 		t.Fatal("dirgit: want ok=true")
+	}
+	if colorKey != "dirgit" {
+		t.Errorf("dirgit: want colorKey=dirgit, got %q", colorKey)
 	}
 	// ascii glyphs: [dir] dir, br: branch, *1 staged, !1 unstaged, ?1 untracked,
 	// $1 stash, +2 ahead (ascii table: staged=*, unstaged=!, untracked=?,
@@ -35,7 +38,7 @@ func TestDirGit_NotARepo_ShowsCwdOnly(t *testing.T) {
 	r := &gitfake.Runner{Default: gitfake.Response{Err: errors.New("not a git repo")}}
 	seg := &DirGitSegment{Cwd: "/home/user/project", Git: r, home: "/home/user"}
 
-	got, ok := seg.Render(context.Background(), st)
+	got, _, ok := seg.Render(context.Background(), st, 0)
 	if !ok {
 		t.Fatal("dirgit: want ok=true even outside a repo")
 	}
@@ -52,7 +55,7 @@ func TestDirGit_HomeAbbreviation(t *testing.T) {
 	r := &gitfake.Runner{Default: gitfake.Response{Err: errors.New("nope")}}
 
 	seg := &DirGitSegment{Cwd: "/home/user", Git: r, home: "/home/user"}
-	got, _ := seg.Render(context.Background(), st)
+	got, _, _ := seg.Render(context.Background(), st, 0)
 	if !strings.Contains(got, "~") {
 		t.Errorf("dirgit: home dir should abbreviate to ~, got %q", got)
 	}
@@ -67,7 +70,7 @@ func TestDirGit_CancelledContext_OmitsGitDetail(t *testing.T) {
 	r := &gitfake.Runner{Script: gitStatusResponses("main")}
 	seg := &DirGitSegment{Cwd: "/home/user/project", Git: r, home: "/home/user"}
 
-	got, ok := seg.Render(ctx, st)
+	got, _, ok := seg.Render(ctx, st, 0)
 	if !ok {
 		t.Fatal("dirgit: want ok=true (cwd still renders)")
 	}

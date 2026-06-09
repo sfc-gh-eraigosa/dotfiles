@@ -26,7 +26,7 @@ func TestAI_NoPayload_Omits(t *testing.T) {
 	isolateMCPEnv(t)
 	st := asciiStyle()
 	seg := NewAISegment(payload.Payload{}, "", nil, mcp.ActiveCountOptions{})
-	if _, ok := seg.Render(context.Background(), st); ok {
+	if _, _, ok := seg.Render(context.Background(), st, 0); ok {
 		t.Error("ai: empty payload should self-omit (ok=false)")
 	}
 }
@@ -43,9 +43,12 @@ func TestAI_FullPayload_ASCII(t *testing.T) {
 	opts := mcp.ActiveCountOptions{CacheFile: filepath.Join(cwd, "active.json")}
 
 	seg := NewAISegment(samplePayload(), cwd, r, opts)
-	got, ok := seg.Render(context.Background(), st)
+	got, colorKey, ok := seg.Render(context.Background(), st, 0)
 	if !ok {
 		t.Fatal("ai: full payload should render (ok=true)")
+	}
+	if colorKey != "ai" {
+		t.Errorf("ai: want colorKey=ai, got %q", colorKey)
 	}
 	for _, want := range []string{"Opus 4.7", "42%", "84k", "200k", "1/2", "5h 80%", "7d 15%"} {
 		if !strings.Contains(got, want) {
@@ -60,7 +63,7 @@ func TestAI_NilFieldsSkippedGracefully(t *testing.T) {
 	// Only a model name; context + rate limits absent.
 	p := payload.Payload{Model: &payload.Model{DisplayName: strptr("Sonnet")}}
 	seg := NewAISegment(p, "", nil, mcp.ActiveCountOptions{})
-	got, ok := seg.Render(context.Background(), st)
+	got, _, ok := seg.Render(context.Background(), st, 0)
 	if !ok {
 		t.Fatal("ai: model-only payload should render")
 	}
@@ -79,7 +82,7 @@ func TestAI_ModelOnlyNoName_ShowsAnchorWhenOtherDataPresent(t *testing.T) {
 		ContextWindow: &payload.ContextWindow{UsedPercentage: f64ptr(10)},
 	}
 	seg := NewAISegment(p, "", nil, mcp.ActiveCountOptions{})
-	got, ok := seg.Render(context.Background(), st)
+	got, _, ok := seg.Render(context.Background(), st, 0)
 	if !ok {
 		t.Fatal("ai: ctx-only payload should render")
 	}
