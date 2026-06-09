@@ -59,7 +59,8 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 	}
 
 	rawStyles := configToRawStyles(cfg.Styles)
-	st := style.ResolveConfig(os.Stderr, cfg.Style, rawStyles, false)
+	// autoPalette="" until Phase 5 wires toolCtx derivation + theme.Resolve.
+	st := style.ResolveConfig(os.Stderr, cfg.Style, rawStyles, false, "")
 
 	deps := render.Deps{
 		Payload:      p,

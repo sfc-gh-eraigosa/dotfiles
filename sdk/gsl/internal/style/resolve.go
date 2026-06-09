@@ -3,7 +3,75 @@ package style
 import (
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 )
+
+// knownNamedColors mirrors render.namedColor. Kept in sync manually; these
+// are the eight conventional color names the style package documents.
+var knownNamedColors = map[string]bool{
+	"black":   true,
+	"red":     true,
+	"green":   true,
+	"yellow":  true,
+	"blue":    true,
+	"magenta": true,
+	"cyan":    true,
+	"white":   true,
+}
+
+// validateUntrustedColor returns true when value is a valid color for an
+// untrusted (non-config) source:
+//   - a known named color ("blue", "cyan", …)
+//   - a bare decimal ANSI-256 index in [0, 255]
+//   - a well-formed truecolor fragment "38;2;r;g;b" or "48;2;r;g;b"
+//   - the special value "default"
+//
+// Any other ';'-bearing string, control character, ESC byte, or
+// out-of-range index returns false. This mirrors render.colorCode(v, _, false)
+// but lives in the style package to avoid an import cycle.
+func validateUntrustedColor(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" || value == "default" {
+		return true // empty / "default" → no escape emitted; treated as valid
+	}
+	if strings.ContainsRune(value, '\x1b') {
+		return false
+	}
+	if strings.Contains(value, ";") {
+		return validateTruecolorFrag(value)
+	}
+	if knownNamedColors[value] {
+		return true
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil {
+		return false
+	}
+	return n >= 0 && n <= 255
+}
+
+// validateTruecolorFrag returns true for "38;2;r;g;b" or "48;2;r;g;b" with
+// each component in [0, 255]. Mirrors render.validateTruecolor.
+func validateTruecolorFrag(s string) bool {
+	parts := strings.SplitN(s, ";", 6)
+	if len(parts) != 5 {
+		return false
+	}
+	if parts[0] != "38" && parts[0] != "48" {
+		return false
+	}
+	if parts[1] != "2" {
+		return false
+	}
+	for _, p := range parts[2:] {
+		n, err := strconv.Atoi(p)
+		if err != nil || n < 0 || n > 255 {
+			return false
+		}
+	}
+	return true
+}
 
 // ResolveConfig is like Resolve but accepts user style overrides as raw
 // map[string]any (the shape config.Styles carries after JSON decode). This
@@ -12,8 +80,17 @@ import (
 // problem where a user's `{"separator":"thin"}` silently sets fill=false on a
 // builtin that has fill=true.
 //
+// autoPalette is the palette name returned by internal/theme.Resolve (e.g.
+// "dark", "light", "dark-daltonism", "dark8"). When non-empty, its color
+// values are merged into the resulting Style.Theme for the five segment keys
+// that the user did NOT set in their config. User-set keys always win.
+// Auto-merged values are validated through the untrusted colorCode path
+// (trusted=false) before admission — our own palette constants will pass;
+// this enforces the "non-config source is validated" invariant (SEC-4).
+// Pass "" to skip auto-palette merging (backward-compatible, same as before).
+//
 // This is the variant that cmd/ should call when wiring config.Styles.
-func ResolveConfig(w io.Writer, styleName string, rawUserStyles map[string]map[string]any, forceASCII bool) Style {
+func ResolveConfig(w io.Writer, styleName string, rawUserStyles map[string]map[string]any, forceASCII bool, autoPalette string) Style {
 	// Convert raw entries to Style, preserving fill-presence information.
 	typed := make(map[string]Style, len(rawUserStyles))
 	hasFill := make(map[string]bool, len(rawUserStyles))
@@ -40,6 +117,41 @@ func ResolveConfig(w io.Writer, styleName string, rawUserStyles map[string]map[s
 	// ── 2. Deep-merge user override (if any), respecting fill presence ───────
 	if user, ok := typed[styleName]; ok {
 		base = mergeIntoWithFillFlag(base, user, hasFill[styleName])
+	}
+
+	// ── 2b. Auto-palette merge (F2) ──────────────────────────────────────────
+	// Apply auto-theme colors ONLY for segment keys the user did NOT set.
+	// User keys always win. Values are validated through the untrusted path
+	// before admission (SEC-4): our own palette constants pass; injection
+	// attempts from a compromised palette are rejected.
+	if autoPalette != "" {
+		if paletteColors, ok := Palette(autoPalette); ok {
+			// Collect the set of theme keys the user explicitly set.
+			userTheme := map[string]bool{}
+			if user, ok := typed[styleName]; ok {
+				for k := range user.Theme {
+					userTheme[k] = true
+				}
+			}
+			if base.Theme == nil {
+				base.Theme = make(map[string]string, len(paletteColors))
+			}
+			for _, key := range segmentColorKeys {
+				if userTheme[key] {
+					// User explicitly set this key → do not overwrite.
+					continue
+				}
+				v, hasPalette := paletteColors[key]
+				if !hasPalette {
+					continue
+				}
+				// Validate through the untrusted path before admitting.
+				if !validateUntrustedColor(v) {
+					continue
+				}
+				base.Theme[key] = v
+			}
+		}
 	}
 
 	// ── 3. ASCII fallback ─────────────────────────────────────────────────────
