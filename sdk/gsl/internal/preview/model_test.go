@@ -174,3 +174,107 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// ─── Preview compaction tests ─────────────────────────────────────────────────
+
+// TestRenderLine_CompactsAtNarrowWidth verifies that when the model's
+// windowWidth is set to a small value (20), renderLine produces output whose
+// display width ≤ 20. This ensures the preview matches real output fidelity.
+func TestRenderLine_CompactsAtNarrowWidth(t *testing.T) {
+	m := preview.NewModel(preview.FixedClock())
+	narrow := m.WithWindowWidth(20)
+	line := narrow.RenderLineForTest()
+	if line == "" {
+		t.Skip("no output from renderLine — fixture may self-omit all segments")
+	}
+	// Import term indirectly through the exported DisplayWidth function path.
+	// We measure width by stripping ANSI and counting runes via the term package.
+	w := termDisplayWidth(line)
+	if w > 20 {
+		t.Errorf("renderLine with windowWidth=20: output width %d > 20\noutput: %q", w, line)
+	}
+}
+
+// TestRenderLine_NarrowIsNotWiderThanWide verifies that narrow output is ≤ wide
+// output in display width. Compaction must never make output wider.
+func TestRenderLine_NarrowIsNotWiderThanWide(t *testing.T) {
+	m := preview.NewModel(preview.FixedClock())
+	narrow := m.WithWindowWidth(40).RenderLineForTest()
+	wide := m.WithWindowWidth(500).RenderLineForTest()
+	if narrow == "" && wide == "" {
+		t.Skip("no output from renderLine")
+	}
+	narrowW := termDisplayWidth(narrow)
+	wideW := termDisplayWidth(wide)
+	if narrowW > 40 {
+		t.Errorf("narrow output (width=40): display width %d > 40\noutput: %q", narrowW, narrow)
+	}
+	if narrowW > wideW {
+		t.Errorf("narrow output (%d) should not be wider than wide output (%d)", narrowW, wideW)
+	}
+}
+
+// TestModel_WindowWidth_UpdatedByWindowSizeMsg verifies that tea.WindowSizeMsg
+// is handled and stored in the model.
+func TestModel_WindowWidth_UpdatedByWindowSizeMsg(t *testing.T) {
+	m := preview.NewModel(preview.FixedClock())
+	if m.WindowWidth() != 0 {
+		t.Errorf("initial WindowWidth: want 0, got %d", m.WindowWidth())
+	}
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = updated.(preview.Model)
+	if m.WindowWidth() != 120 {
+		t.Errorf("after WindowSizeMsg(120): want 120, got %d", m.WindowWidth())
+	}
+}
+
+// TestModel_WindowWidth_ZeroIgnored verifies that a zero-width WindowSizeMsg
+// does not clobber a previously set width.
+func TestModel_WindowWidth_ZeroIgnored(t *testing.T) {
+	m := preview.NewModel(preview.FixedClock())
+	m = m.WithWindowWidth(80)
+
+	// Zero-width message should not overwrite.
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 0, Height: 40})
+	m = updated.(preview.Model)
+	if m.WindowWidth() != 80 {
+		t.Errorf("after zero WindowSizeMsg: want 80, got %d", m.WindowWidth())
+	}
+}
+
+// termDisplayWidth measures display width by stripping ANSI SGR sequences
+// and counting grapheme clusters. This mirrors term.DisplayWidth without
+// importing the internal/term package directly from the external test package.
+func termDisplayWidth(s string) int {
+	// Strip ESC [ ... m sequences.
+	stripped := strings.Builder{}
+	i := 0
+	for i < len(s) {
+		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
+			j := i + 2
+			for j < len(s) && (s[j] < 0x40 || s[j] > 0x7E) {
+				j++
+			}
+			if j < len(s) {
+				j++
+			}
+			i = j
+			continue
+		}
+		stripped.WriteByte(s[i])
+		i++
+	}
+	// Count rune width using a simple approximation: non-ASCII runes with
+	// East Asian width are 2 cols, everything else 1. For test assertions
+	// at COLUMNS=20 this is conservative and sufficient.
+	count := 0
+	for _, r := range stripped.String() {
+		if r >= 0x1100 { // broad East-Asian / emoji range
+			count += 2
+		} else {
+			count += 1
+		}
+	}
+	return count
+}

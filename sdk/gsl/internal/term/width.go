@@ -13,6 +13,12 @@
 //	                  (grapheme-cluster-aware, East-Asian-wide-aware).
 //	                  The value is the uniseg.StringWidth result — deterministic
 //	                  and font/terminal-independent.
+//
+//	StdoutWidthSource() — returns the production width source: wraps
+//	                      charmbracelet/x/term.GetSize(os.Stdout.Fd()). Returns
+//	                      (0, false) when stdout is not a TTY (piped, as under
+//	                      Claude Code), allowing Columns to fall back to $COLUMNS
+//	                      then 80.
 package term
 
 import (
@@ -20,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 
+	cxterm "github.com/charmbracelet/x/term"
 	"github.com/rivo/uniseg"
 )
 
@@ -46,6 +53,26 @@ func Columns(source func() (int, bool)) int {
 	}
 	// 3. Fallback.
 	return 80
+}
+
+// StdoutWidthSource returns the production ioctl width source. It queries
+// the terminal size of os.Stdout via TIOCGWINSZ (on Unix) using the
+// charmbracelet/x/term package (already in the module graph via bubbletea).
+//
+// Returns (0, false) when:
+//   - stdout is not a TTY (piped output, as under Claude Code's status-line
+//     command), so Columns falls back to $COLUMNS then 80.
+//   - GetSize returns an error (unsupported platform, closed fd, etc.).
+//
+// The source signature matches the func() (int, bool) expected by Columns.
+func StdoutWidthSource() func() (int, bool) {
+	return func() (int, bool) {
+		w, _, err := cxterm.GetSize(os.Stdout.Fd())
+		if err != nil || w <= 0 {
+			return 0, false
+		}
+		return w, true
+	}
 }
 
 // ansiStripper removes ANSI SGR escape sequences (ESC [ ... m) from s.
