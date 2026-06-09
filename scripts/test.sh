@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 # -----------------------------------------------------------------------------
 # Per-module coverage thresholds (issue #46 phase 3)
 # -----------------------------------------------------------------------------
-# Each Go module under src/ has a minimum line-coverage floor enforced
+# Each Go module under src/ and sdk/ has a minimum line-coverage floor enforced
 # by run_unit_tests. Plan defaults (per the issue): gss=70, tmux-mgr=60,
 # gsl=60, wol=60. Where a module is currently BELOW the planned floor we
 # document the gap in .ci-baseline-issues.md and either lower the gate

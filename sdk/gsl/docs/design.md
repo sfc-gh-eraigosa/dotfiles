@@ -103,6 +103,39 @@ An `asciiIcons` fallback table is substituted into `Icons` whenever `Glyphs == "
 
 The resolved `Style` is passed into `render.BuildSegments` and then into every `Segment.Render` call. Glyphs are looked up by logical key at render time (`glyph(st, "branch")`); missing keys yield `""` — no crash.
 
+## Auto theme colors (shipped in the visual-improvements phase)
+
+Theme color resolution is handled by a detection-only package (`internal/theme`) that returns a **palette name** string; `internal/style` owns the actual palette definitions and the merge logic.
+
+Resolution priority (see `internal/theme/resolve.go`):
+1. Host-tool settings file — Claude `~/.claude/settings.json` `"theme"` enum, or Gemini `~/.gemini/settings.json` `"ui"."theme"` free-form string via keyword bridge (`"light"`, `"daltonism"`/`"colorblind"`, else dark).
+2. Terminal env — `$COLORTERM`/`$TERM` selects `dark` (truecolor/256color) or `dark8` (8-color).
+3. Hardcoded default: `dark`.
+
+Palette names: `dark`, `light`, `dark-daltonism`, `dark8`. All five segment color keys (`repo_root`, `repo_worktree`, `ai`, `dirgit`, `time`) are defined in every palette so the `emoji` style (which applies colors as fg-tint only, `Fill: false`) can always tint every segment.
+
+`style.ResolveConfig` merges the resolved palette into `Style.Theme` for keys the user did not explicitly set. User config always wins. See `internal/style/resolve.go` (`ResolveConfig`) and `internal/style/builtins.go` (`palettes`, `Palette`, `SegmentColorKeys`).
+
+The settings reader (`internal/theme/settings.go`) applies hardened I/O: Lstat + file-type check, symlink resolve + out-of-home rejection, 256 KiB `io.LimitReader`. Any error degrades to `""` so Resolve falls through to the next level.
+
+For the full design rationale, architecture-review findings, and emoji-coverage decisions, see `docs/mbo/designs/gsl-visual-improvements.md`.
+
+## Dynamic width compaction (shipped in the visual-improvements phase)
+
+Width detection runs once per render (`internal/term/width.go`):
+- `$COLUMNS` → ioctl on stdout (`StdoutWidthSource`, returns `(0, false)` when not a TTY) → 80.
+
+The Detect/Format/Fit split (`internal/render/detect.go`) keeps I/O to exactly one pass:
+- `Detect` runs all subprocess work concurrently and returns a `[]segmentData` slice.
+- `Format` is pure: it formats cached data at a given compaction level and emits the joined output.
+- `Fit` calls `Format` at levels 0 through `finalCompactLevel` (currently 4), returning the first output whose `term.DisplayWidth` ≤ terminal columns, then progressively drops segments from the right if still too wide.
+
+`DisplayWidth` uses `uniseg.StringWidth` after stripping ANSI SGR sequences — deterministic regardless of font or terminal.
+
+## Separator bridges (powerline only)
+
+The join layer (not individual segments) owns all ANSI painting. Segments return raw text plus a `colorKey`; the layer emits the background fill, bridges between adjacent segments (chevron with `fg = prev color`, `bg = next color`), and a trailing fade to the terminal background. The `emoji`/`thin` path is unchanged (no fill block, no bridge needed).
+
 ## Full design rationale
 
 Full design rationale and the multi-agent review that shaped this implementation live in `docs/mbo/plans/gsl-status-line.md` and `docs/mbo/plans/gsl-status-line-execution.md` (PR #21) — both in the repo's top-level `docs/mbo/plans/` directory (present on `main` / after this feature merges).
