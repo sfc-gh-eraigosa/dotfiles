@@ -95,7 +95,10 @@ func TestPaint_NoColor_PlainText(t *testing.T) {
 	}
 }
 
-func TestColorCode(t *testing.T) {
+// TestColorCode_Trusted confirms the trusted path retains full backward
+// compatibility: named colors, decimal indices, and verbatim raw fragments
+// (including ';'-bearing strings) all pass through unchanged.
+func TestColorCode_Trusted(t *testing.T) {
 	cases := []struct {
 		value string
 		layer string
@@ -104,15 +107,80 @@ func TestColorCode(t *testing.T) {
 		{"blue", "38", "38;5;4"},
 		{"magenta", "48", "48;5;5"},
 		{"12", "38", "38;5;12"},
-		{"38;5;201", "38", "38;5;201"}, // raw fragment passes through
+		// Raw fragment with ';' passes through verbatim on the trusted path.
+		{"38;5;201", "38", "38;5;201"},
 		{"default", "38", ""},
 		{"", "48", ""},
 		{"notacolor", "38", ""},
+		// Trusted path: arbitrary ';'-bearing string passes through (user config
+		// owns it; back-compat guarantee).
+		{"38;5;1;48;5;2", "38", "38;5;1;48;5;2"},
+		{"0;31", "38", "0;31"},
 	}
 	for _, tc := range cases {
-		if got := colorCode(tc.value, tc.layer); got != tc.want {
-			t.Errorf("colorCode(%q,%q) = %q, want %q", tc.value, tc.layer, got, tc.want)
+		if got := colorCode(tc.value, tc.layer, true); got != tc.want {
+			t.Errorf("colorCode(%q,%q,trusted) = %q, want %q", tc.value, tc.layer, got, tc.want)
 		}
+	}
+}
+
+// TestColorCode_Untrusted validates that the untrusted path strictly accepts
+// only well-formed color values and rejects injection attempts.
+func TestColorCode_Untrusted(t *testing.T) {
+	cases := []struct {
+		name    string
+		value   string
+		layer   string
+		want    string // "" means rejection (no escape emitted)
+		wantNot string // when non-empty, asserts this substring is absent (injection guard)
+	}{
+		// Valid: bare decimal ANSI-256 index.
+		{name: "valid index 0", value: "0", layer: "38", want: "38;5;0"},
+		{name: "valid index 123", value: "123", layer: "38", want: "38;5;123"},
+		{name: "valid index 255", value: "255", layer: "48", want: "48;5;255"},
+		// Valid: known named colors.
+		{name: "valid named green", value: "green", layer: "38", want: "38;5;2"},
+		{name: "valid named white", value: "white", layer: "48", want: "48;5;7"},
+		// Valid: well-formed truecolor fg sequence.
+		{name: "valid truecolor fg 38;2;10;20;30", value: "38;2;10;20;30", layer: "38", want: "38;2;10;20;30"},
+		{name: "valid truecolor bg 48;2;0;128;255", value: "48;2;0;128;255", layer: "48", want: "48;2;0;128;255"},
+		// Valid: truecolor with layer mismatch (value is authoritative, not retargeted).
+		{name: "valid truecolor layer mismatch", value: "38;2;255;0;0", layer: "48", want: "38;2;255;0;0"},
+		// Empty / default → always "" regardless of trust.
+		{name: "empty", value: "", layer: "38", want: ""},
+		{name: "default", value: "default", layer: "38", want: ""},
+		// Rejected: out-of-range ANSI-256 index.
+		{name: "reject index 256", value: "256", layer: "38", want: ""},
+		{name: "reject index 999", value: "999", layer: "38", want: ""},
+		// Rejected: unknown named color (not in namedColor map).
+		{name: "reject unknown name", value: "notacolor", layer: "38", want: ""},
+		// Injection: composite escape + semicolon injection.
+		{name: "reject SGR reset injection 0m ESC", value: "0m\x1b[2J", layer: "38", want: "", wantNot: "\x1b"},
+		// Injection: stacked SGR (fg + bg in one value — not a valid truecolor).
+		{name: "reject stacked SGR 38;5;1;48;5;2", value: "38;5;1;48;5;2", layer: "38", want: "", wantNot: "48;5;2"},
+		// Injection: command injection via semicolon.
+		{name: "reject shell injection ; rm -rf", value: "; rm -rf", layer: "38", want: ""},
+		// Injection: raw ESC byte.
+		{name: "reject raw ESC byte", value: "\x1b[31m", layer: "38", want: "", wantNot: "\x1b"},
+		// Injection: truecolor with out-of-range component.
+		{name: "reject truecolor r=256", value: "38;2;256;0;0", layer: "38", want: ""},
+		{name: "reject truecolor g=256", value: "38;2;0;256;0", layer: "38", want: ""},
+		{name: "reject truecolor b=256", value: "38;2;0;0;256", layer: "38", want: ""},
+		// Injection: negative component.
+		{name: "reject truecolor negative r", value: "38;2;-1;0;0", layer: "38", want: ""},
+		// Rejection: truecolor with wrong leading byte (not 38 or 48).
+		{name: "reject truecolor bad prefix 99", value: "99;2;10;20;30", layer: "38", want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := colorCode(tc.value, tc.layer, false)
+			if got != tc.want {
+				t.Errorf("colorCode(%q,%q,untrusted) = %q, want %q", tc.value, tc.layer, got, tc.want)
+			}
+			if tc.wantNot != "" && strings.Contains(got, tc.wantNot) {
+				t.Errorf("colorCode(%q,%q,untrusted): result %q must not contain %q (injection)", tc.value, tc.layer, got, tc.wantNot)
+			}
+		})
 	}
 }
 

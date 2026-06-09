@@ -183,16 +183,16 @@ func prBadge(st style.Style, number int, state string) string {
 	default:
 		return text
 	}
-	seq := fgSeq(colorKey)
+	seq := fgSeq(colorKey, true)
 	if seq == "" {
 		return text
 	}
 	if st.Fill {
 		// Re-emit the segment foreground after the tinted number so that
 		// subsequent parts of the same segment retain the powerline background.
-		segFG := fgSeq(themeColor(st, "fg"))
+		segFG := fgSeq(themeColor(st, "fg"), true)
 		if segFG == "" {
-			segFG = fgSeq("white")
+			segFG = fgSeq("white", true)
 		}
 		return seq + text + segFG
 	}
