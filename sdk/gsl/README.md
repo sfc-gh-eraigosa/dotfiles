@@ -289,6 +289,16 @@ The `glyphs` field of a style controls the icon repertoire:
 - `emoji` — Unicode emoji; no font dependency.
 - `ascii` — plain printable ASCII fallback; also forced when the terminal reports no color support.
 
+### Fonts and remote terminals
+
+The `powerline` style (the default) draws its icons and separators with **Nerd Font private-use-area glyphs** (`U+E0B0` chevron, `U+F07B` folder, …). They render **only** if the terminal's font is a patched **Nerd Font**. If yours is not, those glyphs appear as blank gaps or missing-glyph boxes — the bytes are correct, the font just has no glyph for them.
+
+- **Canonical font:** **MesloLGS Nerd Font** (v3.4.0). On Windows it is installed and wired into the Windows Terminal profiles automatically by `sdk/gsl/scripts/install_nerd_font_windows.ps1` (invoked by the repo's `install.sh` → `setup-apps.ps1`). On macOS/Linux, install any Nerd Font and select it in your terminal.
+- **Installing is not enough — you must _select_ it.** Set the font in your terminal's profile (e.g. Windows Terminal → Settings → *profile* → Appearance → Font face → `MesloLGS Nerd Font`). The default Windows Terminal font (Cascadia Mono) lacks these glyphs.
+- **SSH / WSL — the font must live on the _client_, not the remote host.** Glyph rendering is done by the terminal emulator you are sitting in front of. Installing a Nerd Font on a headless box you `ssh` into does nothing; the font must be installed and selected in the **local** terminal that draws the screen.
+- **No-font fallback:** the `emoji` style needs no special font and works in any terminal — `gsl config style emoji` (or press `s` in `gsl preview`).
+- **Verify a font** actually covers every glyph gsl emits: `go run ./cmd/glyphcheck /path/to/Font.ttf` (exit 0 = all 17 codepoints present).
+
 ### User style overrides
 
 Add an entry to `styles` in `config.json` whose key matches a built-in name to deep-merge overrides onto that built-in. Only the fields you specify are changed; the rest inherit from the built-in.
@@ -318,6 +328,7 @@ A `styles` key that does not match any built-in name creates a brand-new user st
 
 ## Known limitations
 
+- **Nerd Font must be on the rendering terminal**: the `powerline` style requires a Nerd Font installed *and selected* in the terminal that draws the screen — for SSH/WSL sessions that is the **local client**, not the remote host. See [Fonts and remote terminals](#fonts-and-remote-terminals). Use the `emoji` style for a no-font alternative.
 - **Gemini status-line environment variable**: The canonical environment variable that Gemini CLI sets when invoking a status-line command has not been confirmed. `gsl` checks `GEMINI_CLI`, `GEMINI_API_KEY`, and `GEMINI_CLI_CONTEXT` as a best-effort heuristic. If none is set, `toolCtx` is `""` and theme resolution falls through to terminal detection. This has no effect on rendering correctness — it only means auto-theme may not pick the Gemini-settings palette on some Gemini CLI versions.
 
 ## Two on/off layers
