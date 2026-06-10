@@ -90,6 +90,10 @@ A `Style` struct (`internal/style`) bundles four fields:
 
 An `asciiIcons` fallback table is substituted into `Icons` whenever `Glyphs == "ascii"` or `forceASCII` is true.
 
+### Font dependency (powerline = Nerd Font)
+
+The `powerline` built-in emits Nerd Font private-use-area codepoints (`U+E0B0`, `U+F07B`, …); they render only on a terminal whose font is a patched **Nerd Font**. gsl emits the correct bytes regardless — a blank glyph is a *font-coverage* gap in the rendering terminal, not a gsl bug. The canonical font is **MesloLGS Nerd Font**, installed and wired into Windows Terminal by `sdk/gsl/scripts/install_nerd_font_windows.ps1` (kept in-tree so the font set stays in sync with the codepoints `powerline` uses; `cmd/glyphcheck` is the verifier — it asserts a font covers every emitted rune). Because rendering happens in the terminal emulator the user sits in front of, an SSH/WSL session needs the font on the **client**, not the remote host. The `emoji` built-in is the no-font fallback. See the README "Fonts and remote terminals" section for the user-facing version.
+
 ### Resolution (`ResolveConfig`)
 
 `cmd/statusline.go` calls `style.ResolveConfig(os.Stderr, cfg.Style, rawUserStyles, false)`:
