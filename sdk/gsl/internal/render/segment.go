@@ -8,14 +8,19 @@
 //
 // # Architecture
 //
-//	Segment        — the unit contract. Render(ctx, style) → (text, ok).
+//	Segment        — the unit contract. Render(ctx, style, compactLevel) →
+//	                  (text, colorKey, ok). text is RAW (unpainted); colorKey
+//	                  is the theme key the join layer paints with (e.g. "ai",
+//	                  "time", "dirgit", "repo_root", "repo_worktree").
 //	                  ok == false means "self-omit" (no data, disabled, error,
 //	                  field nil, …); the segment contributes nothing to the line.
+//	                  compactLevel 0 = full detail (levels 1–3 are PHASE 2).
 //	Render(...)    — the orchestrator. Runs the enabled segments CONCURRENTLY,
-//	                  each under its own child-context deadline, then joins the
-//	                  surviving texts in config order using the style's
-//	                  separator / fill / theme.
+//	                  each under its own child-context deadline, then assembles
+//	                  segmentBlocks (raw text + colorKey) in config order and
+//	                  passes them to the color-aware join layer.
 //	glyphs.go      — all glyph lookup + ANSI colouring is contained here.
+//	                  join owns all painting: fill blocks AND bridged chevrons.
 //	seg_*.go       — the four concrete segments (dirgit, repo, ai, time).
 //
 // Every dependency a segment needs (runners, the parsed payload, a clock, the
@@ -31,11 +36,20 @@ import (
 
 // Segment is the contract every status-line segment implements.
 //
-// Render returns the segment's rendered text (already glyph- and colour-
-// applied for the given style) and an ok flag. When ok is false the segment
-// self-omits: the caller drops it and renders the remaining segments. A
-// segment must NEVER panic and must honour ctx cancellation/deadline by
-// returning ("", false) promptly.
+// Render returns the segment's RAW (unpainted) text, the theme colorKey it
+// should be painted with (e.g. "ai", "time", "dirgit", "repo_root",
+// "repo_worktree"), and an ok flag. When ok is false the segment self-omits:
+// the caller drops it and renders the remaining segments. A segment must NEVER
+// panic and must honour ctx cancellation/deadline by returning ("", "", false)
+// promptly.
+//
+// compactLevel controls the compaction detail: 0 = full detail. Levels 1–3
+// are reserved for PHASE 2 (dynamic width compaction); implementations must
+// accept the parameter and treat any non-zero value as level 0 until PHASE 2
+// lands.
+//
+// text must be the raw, unpainted segment content — no embedded ANSI escape
+// sequences. The join layer owns all ANSI painting.
 type Segment interface {
-	Render(ctx context.Context, st style.Style) (text string, ok bool)
+	Render(ctx context.Context, st style.Style, compactLevel int) (text, colorKey string, ok bool)
 }

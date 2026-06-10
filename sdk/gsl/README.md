@@ -186,6 +186,84 @@ Field reference:
 | `style` | string | `"powerline"` | Active style name. |
 | `styles` | object | `{}` | User-defined style overrides (see Styles section). |
 
+## Auto theme colors
+
+Segment colors are resolved automatically from the host tool's settings, then the terminal, then a hardcoded default. The user's `~/.config/gsl/config.json` `theme` map always wins over auto-resolved colors.
+
+### Resolution priority
+
+1. **Host-tool settings file** (read once per render, degrading gracefully on any error):
+   - **Claude Code** — `~/.claude/settings.json` field `"theme"` (enum). Values: `"dark"` → dark palette; `"light"` → light palette; `"dark-daltonism"` → daltonism palette; `"system"` or absent → dark palette.
+   - **Gemini CLI** — `~/.gemini/settings.json` field `"ui.theme"` (free-form string, keyword bridge): contains `"light"` → light palette; contains `"daltonism"` or `"colorblind"` → daltonism palette; any other non-empty value → dark palette. If the file is missing or unreadable, falls through to terminal detection.
+
+2. **Terminal environment** (only when no host-tool context is detected, or the settings file is absent/unreadable for Gemini):
+   - `$COLORTERM == "truecolor"` or `"24bit"` → `dark` palette
+   - `$TERM` contains `"256color"` → `dark` palette
+   - Otherwise → `dark8` palette (8-color named-color palette; no 256-color escapes emitted)
+
+3. **Hardcoded default**: the `dark` palette (same as the pre-existing built-in style theme values).
+
+### Palette names
+
+| Palette | When used | Notes |
+|---------|-----------|-------|
+| `dark` | Dark terminals, truecolor / 256-color | Named ANSI colors (system 8): green, blue, magenta, cyan, yellow |
+| `light` | Light-background terminals | ANSI-256 indices, darker shades for fg readability |
+| `dark-daltonism` | Red-green colorblind users | Blue/orange/teal ANSI-256; avoids red/green for segment identity |
+| `dark8` | 8-color terminals | Named ANSI colors (same as `dark`); no 256-color escapes |
+
+### What changes per palette
+
+The five **segment color keys** change: `repo_root`, `repo_worktree`, `ai`, `dirgit`, `time`. All five are defined in every palette.
+
+For the `emoji` style (`Fill: false`), the palette is applied as a **foreground tint only** — there is no background block, so `accent`, `fg`, and `bg` theme keys are inert for that style.
+
+### Settings-file security hardening
+
+The settings reader applies these checks before reading any file:
+- Lstat + reject FIFOs, sockets, and device files before opening.
+- Symlinks are resolved and the target must remain under `$HOME`; out-of-home symlinks are rejected.
+- The file body is bounded to 256 KiB via `io.LimitReader`.
+- Any error at any stage degrades to `""` so `Resolve` falls through to the next priority level. The status line always renders.
+
+## Separator bridges (powerline style)
+
+When `style == "powerline"` (the default), adjacent segments connect wall-to-wall via color-transition chevrons — no terminal background bleeds through the gap:
+
+- Each interior boundary emits a chevron painted with `bg = next segment's color` and `fg = previous segment's color`.
+- A trailing chevron after the last segment fades from the last segment's color to the terminal background.
+- Painting is owned by the join layer, not by individual segments. Segments return raw text plus a `colorKey`; the layer emits all ANSI color sequences in one pass.
+
+The `emoji` and `thin` separator styles are unchanged — they use a plain `|` bar with no fill block, so no bridge chevron is needed or emitted.
+
+## Dynamic width compaction
+
+The status bar fits the available terminal width automatically.
+
+### Width detection
+
+Width is resolved once per render in this order:
+
+1. `$COLUMNS` environment variable (if set and a positive integer).
+2. `ioctl TIOCGWINSZ` on stdout (via `charmbracelet/x/term`). Returns no result when stdout is not a TTY (e.g. piped output under Claude Code's status-line command), so this step is effectively a no-op in normal Claude Code usage.
+3. Hard fallback: **80** columns.
+
+### Fit loop
+
+Detection (`Detect`) runs all subprocess I/O once, concurrently. The fit loop (`Fit`) is pure — it calls `Format` at escalating compaction levels using the cached detection data, with no further I/O:
+
+| Level | What changes |
+|-------|-------------|
+| 0 | Full detail — all text, all glyphs |
+| 1 | Per-segment text compaction (abbreviated model name, shorter branch, condensed time) |
+| 2 | More aggressive text abbreviation |
+| 3 | Deepest text abbreviation |
+| 4 (final tier) | Leading glyph dropped from every segment, then lowest-priority segments dropped from the right (`time` → `ai` → `dirgit` → `repo`) until the output fits or one segment remains |
+
+`Fit` returns the first level whose `DisplayWidth` (grapheme-cluster-aware, ANSI-stripped, `uniseg.StringWidth`) is ≤ terminal columns, or the most compact form if nothing fits.
+
+The `emoji` style is the binding case: each emoji icon is an irreducible ~2 columns plus a space, so a four-segment bar has a large floor before any text. Text-compaction alone cannot reach `COLUMNS ≈ 20`; the final glyph-drop tier exists for this reason.
+
 ## Styles
 
 ### Built-in styles
@@ -210,6 +288,16 @@ The `glyphs` field of a style controls the icon repertoire:
 - `nerdfont` — Nerd Font private-use-area codepoints; requires a patched font.
 - `emoji` — Unicode emoji; no font dependency.
 - `ascii` — plain printable ASCII fallback; also forced when the terminal reports no color support.
+
+### Fonts and remote terminals
+
+The `powerline` style (the default) draws its icons and separators with **Nerd Font private-use-area glyphs** (`U+E0B0` chevron, `U+F07B` folder, …). They render **only** if the terminal's font is a patched **Nerd Font**. If yours is not, those glyphs appear as blank gaps or missing-glyph boxes — the bytes are correct, the font just has no glyph for them.
+
+- **Canonical font:** **MesloLGS Nerd Font** (v3.4.0). On Windows it is installed and wired into the Windows Terminal profiles automatically by `sdk/gsl/scripts/install_nerd_font_windows.ps1` (invoked by the repo's `install.sh` → `setup-apps.ps1`). On macOS/Linux, install any Nerd Font and select it in your terminal.
+- **Installing is not enough — you must _select_ it.** Set the font in your terminal's profile (e.g. Windows Terminal → Settings → *profile* → Appearance → Font face → `MesloLGS Nerd Font`). The default Windows Terminal font (Cascadia Mono) lacks these glyphs.
+- **SSH / WSL — the font must live on the _client_, not the remote host.** Glyph rendering is done by the terminal emulator you are sitting in front of. Installing a Nerd Font on a headless box you `ssh` into does nothing; the font must be installed and selected in the **local** terminal that draws the screen.
+- **No-font fallback:** the `emoji` style needs no special font and works in any terminal — `gsl config style emoji` (or press `s` in `gsl preview`).
+- **Verify a font** actually covers every glyph gsl emits: `go run ./cmd/glyphcheck /path/to/Font.ttf` (exit 0 = all 17 codepoints present).
 
 ### User style overrides
 
@@ -237,6 +325,11 @@ Example — override powerline to use thin separators without changing fill or g
 ```
 
 A `styles` key that does not match any built-in name creates a brand-new user style, resolved by merging the user entry over the `powerline` base. Activate it with `gsl config style <name>`.
+
+## Known limitations
+
+- **Nerd Font must be on the rendering terminal**: the `powerline` style requires a Nerd Font installed *and selected* in the terminal that draws the screen — for SSH/WSL sessions that is the **local client**, not the remote host. See [Fonts and remote terminals](#fonts-and-remote-terminals). Use the `emoji` style for a no-font alternative.
+- **Gemini status-line environment variable**: The canonical environment variable that Gemini CLI sets when invoking a status-line command has not been confirmed. `gsl` checks `GEMINI_CLI`, `GEMINI_API_KEY`, and `GEMINI_CLI_CONTEXT` as a best-effort heuristic. If none is set, `toolCtx` is `""` and theme resolution falls through to terminal detection. This has no effect on rendering correctness — it only means auto-theme may not pick the Gemini-settings palette on some Gemini CLI versions.
 
 ## Two on/off layers
 

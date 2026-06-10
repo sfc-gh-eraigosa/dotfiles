@@ -14,21 +14,27 @@ import (
 )
 
 // stubSegment is a deterministic Segment for orchestration tests.
+// colorKey defaults to "test" when empty.
 type stubSegment struct {
-	text  string
-	ok    bool
-	delay time.Duration // simulate slow work; honours ctx cancellation
+	text     string
+	colorKey string
+	ok       bool
+	delay    time.Duration // simulate slow work; honours ctx cancellation
 }
 
-func (s *stubSegment) Render(ctx context.Context, _ style.Style) (string, bool) {
+func (s *stubSegment) Render(ctx context.Context, _ style.Style, _ int) (string, string, bool) {
 	if s.delay > 0 {
 		select {
 		case <-time.After(s.delay):
 		case <-ctx.Done():
-			return "", false // timed out → omit
+			return "", "", false // timed out → omit
 		}
 	}
-	return s.text, s.ok
+	ck := s.colorKey
+	if ck == "" {
+		ck = "test"
+	}
+	return s.text, ck, s.ok
 }
 
 func spaceStyle() style.Style { return style.Style{Separator: "space"} }
@@ -116,7 +122,7 @@ func TestRender_PanickingSegmentRecovered(t *testing.T) {
 
 type panicSegment struct{}
 
-func (panicSegment) Render(context.Context, style.Style) (string, bool) {
+func (panicSegment) Render(context.Context, style.Style, int) (string, string, bool) {
 	panic("boom")
 }
 

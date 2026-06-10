@@ -153,6 +153,112 @@ var builtins = map[string]Style{
 	"emoji":     emojiStyle,
 }
 
+// segmentColorKeys lists the five theme keys that every palette must define so
+// the emoji style (Fill:false) can apply fg-tint colors to every segment.
+// See EMOJI-F2-01/F2-02 in the design doc.
+var segmentColorKeys = []string{
+	"repo_root",
+	"repo_worktree",
+	"ai",
+	"dirgit",
+	"time",
+}
+
+// palettes holds the compiled-in color palettes keyed by palette name.
+//
+// Each palette defines at minimum all five segment color keys
+// (repo_root, repo_worktree, ai, dirgit, time). Indices in the
+// non-default palettes are chosen to be mid-luminance (approximate
+// luminance 30–220 out of 255) so they are legible as bare foreground
+// color on both light and dark terminal backgrounds. This is required
+// because the emoji style (Fill:false) renders color as fg-tint only —
+// there is no background block for contrast.
+//
+// Palette selection:
+//
+//   - "dark"           — default; uses ANSI named-color strings (system 8)
+//     that map to the terminal's own dark-palette colors (green, blue, …).
+//   - "light"          — for light-background terminals; uses ANSI-256
+//     indices with lower luminance (darker shades) for fg readability.
+//   - "dark-daltonism" — red-green colorblind friendly; avoids red/green;
+//     uses blue/orange/teal ANSI-256 indices.
+//   - "dark8"          — 8-color terminals; uses named-color strings so the
+//     terminal's own palette applies (no 256-color escapes emitted).
+var palettes = map[string]map[string]string{
+	// "dark" is the default palette — named colors (system 8) matching the
+	// existing powerline/emoji built-in style theme values.
+	"dark": {
+		"repo_root":     "blue",    // ANSI 4 / system blue
+		"repo_worktree": "magenta", // ANSI 5 / system magenta
+		"ai":            "cyan",    // ANSI 6 / system cyan
+		"dirgit":        "green",   // ANSI 2 / system green
+		"time":          "yellow",  // ANSI 3 / system yellow
+	},
+	// "light" — darker ANSI-256 shades for readability on light backgrounds.
+	// Each index is mid-luminance (~44–138/255) and legible on dark too.
+	//   repo_root     26: (r=0,g=1,b=4) medium-dark blue           lum~83
+	//   repo_worktree 92: (r=2,g=0,b=4) medium purple              lum~44
+	//   ai            37: (r=0,g=3,b=3) medium teal/cyan           lum~138
+	//   dirgit        34: (r=0,g=3,b=0) medium green               lum~125
+	//   time         136: (r=3,g=2,b=0) medium amber/brown         lum~134
+	"light": {
+		"repo_root":     "26",
+		"repo_worktree": "92",
+		"ai":            "37",
+		"dirgit":        "34",
+		"time":          "136",
+	},
+	// "dark-daltonism" — red-green colorblind friendly; avoids red/green
+	// for segment identity. Uses blue/orange/teal ANSI-256 indices.
+	//   repo_root     69: (r=1,g=2,b=5) medium blue-violet         lum~135
+	//   repo_worktree 208: (r=5,g=2,b=0) medium orange             lum~151
+	//   ai            44: (r=0,g=4,b=4) medium cyan                lum~169
+	//   dirgit        73: (r=1,g=3,b=3) medium teal                lum~158
+	//   time         178: (r=4,g=3,b=0) medium golden amber        lum~171
+	"dark-daltonism": {
+		"repo_root":     "69",
+		"repo_worktree": "208",
+		"ai":            "44",
+		"dirgit":        "73",
+		"time":          "178",
+	},
+	// "dark8" — 8-color terminals; named-color strings so no 256-color
+	// escapes are emitted; the terminal's own palette applies.
+	"dark8": {
+		"repo_root":     "blue",
+		"repo_worktree": "magenta",
+		"ai":            "cyan",
+		"dirgit":        "green",
+		"time":          "yellow",
+	},
+}
+
+// Palette returns the color map for the named palette, and whether it was
+// found. The returned map is a defensive copy.
+//
+// Callers use the returned map to merge auto-theme colors into a Style.Theme
+// for the five segment keys that the user did not override.
+func Palette(name string) (map[string]string, bool) {
+	p, ok := palettes[name]
+	if !ok {
+		return nil, false
+	}
+	out := make(map[string]string, len(p))
+	for k, v := range p {
+		out[k] = v
+	}
+	return out, true
+}
+
+// SegmentColorKeys returns the canonical list of theme keys that every palette
+// must define — one per segment type. Used by tests to verify palette
+// completeness and by ResolveConfig to drive the auto-theme merge.
+func SegmentColorKeys() []string {
+	out := make([]string, len(segmentColorKeys))
+	copy(out, segmentColorKeys)
+	return out
+}
+
 // Builtin returns the built-in style with the given name and whether it was
 // found. The returned Style is a defensive copy — callers may modify it safely.
 func Builtin(name string) (Style, bool) {

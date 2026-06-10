@@ -25,6 +25,7 @@ done` (also `parked`, `superseded`).
 | `worker-md-placement` | [design](./designs/worker-md-placement.md) | [spec](./specs/worker-md-placement.md) | [plan](./plans/worker-md-placement.md) | [#132](https://github.com/sfc-gh-eraigosa/dotfiles/issues/132) | #133 | merged |
 | `memory-provisioning` | [design](./designs/memory-provisioning.md) | [spec](./specs/memory-provisioning.md) | [plan](./plans/memory-provisioning.md) | [#134](https://github.com/sfc-gh-eraigosa/dotfiles/issues/134) | #135 | in-review |
 | `shell-portability` | — | [spec](./specs/shell-portability.md) | — | — | (this PR) | building |
+| `gsl-visual-improvements` | [design](./designs/gsl-visual-improvements.md) | [spec](./specs/gsl-visual-improvements.md) | [plan](./plans/gsl-visual-improvements.md) | [#54](https://github.com/sfc-gh-eraigosa/dotfiles/issues/54) | #55 | in-review |
 
 ## Merged / historical (pre-MBO — tracking columns best-effort)
 

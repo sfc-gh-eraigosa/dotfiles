@@ -59,14 +59,19 @@ func NewRepoSegment(gitRunner git.Runner, ghRunner gh.Runner, branch, registryPa
 }
 
 // Render implements Segment.
-func (s *RepoSegment) Render(ctx context.Context, st style.Style) (string, bool) {
+//
+// Returns raw (unpainted) text plus a dynamic colorKey: "repo_root" for the
+// main worktree, "repo_worktree" for a linked worktree. compactLevel is
+// accepted but only level 0 (full detail) is implemented; PHASE 2 will pass
+// the level through for future compaction.
+func (s *RepoSegment) Render(ctx context.Context, st style.Style, _ int) (text, colorKey string, ok bool) {
 	if s.Git == nil {
-		return "", false
+		return "", "", false
 	}
 	loc, err := repo.Locate(ctx, s.Git, "")
 	if err != nil {
 		// Not a git repo (or git unavailable) → omit the whole segment.
-		return "", false
+		return "", "", false
 	}
 
 	// PR / feature lookup (best-effort; nil or error ⇒ omit those parts).
@@ -100,6 +105,12 @@ func (s *RepoSegment) Render(ctx context.Context, st style.Style) (string, bool)
 		if b.Len() > 0 {
 			b.WriteString(" ")
 		}
+		// prBadge inlines ANSI tints for the PR state color, but these are
+		// sub-field tints within the segment text — they are NOT the segment's
+		// primary colorKey and are acceptable as embedded sequences here because
+		// they restore the segment's own fg color before returning. This is a
+		// known exception: prBadge's tinting is scoped to the number only and
+		// does not embed a full reset that would interfere with the join layer.
 		b.WriteString(prBadge(st, info.PRNumber, info.PRState))
 	}
 
@@ -111,9 +122,9 @@ func (s *RepoSegment) Render(ctx context.Context, st style.Style) (string, bool)
 	}
 
 	if b.Len() == 0 {
-		return "", false
+		return "", "", false
 	}
-	return paint(st, themeKey, b.String()), true
+	return b.String(), themeKey, true
 }
 
 // nameLabel resolves the segment's name label per NameMode.
@@ -172,16 +183,16 @@ func prBadge(st style.Style, number int, state string) string {
 	default:
 		return text
 	}
-	seq := fgSeq(colorKey)
+	seq := fgSeq(colorKey, true)
 	if seq == "" {
 		return text
 	}
 	if st.Fill {
 		// Re-emit the segment foreground after the tinted number so that
 		// subsequent parts of the same segment retain the powerline background.
-		segFG := fgSeq(themeColor(st, "fg"))
+		segFG := fgSeq(themeColor(st, "fg"), true)
 		if segFG == "" {
-			segFG = fgSeq("white")
+			segFG = fgSeq("white", true)
 		}
 		return seq + text + segFG
 	}

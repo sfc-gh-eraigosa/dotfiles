@@ -16,6 +16,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/render"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/term"
 )
 
 // tickMsg is sent on every 1-second timer tick (unexported for TUI use).
@@ -63,6 +64,8 @@ type Model struct {
 	clock func() time.Time
 	// quitting is set to true when the user presses q/ctrl+c.
 	quitting bool
+	// windowWidth is the terminal width from the last tea.WindowSizeMsg (0 = unknown).
+	windowWidth int
 }
 
 // NewModel creates a new Model with the default (clean-repo) fixture, powerline
@@ -133,6 +136,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.now = time.Time(msg)
 		}
 		return m, tickCmd()
+
+	case tea.WindowSizeMsg:
+		// Track the terminal width so renderLine can apply compaction for fidelity.
+		if msg.Width > 0 {
+			m.windowWidth = msg.Width
+		}
 	}
 
 	return m, nil
@@ -184,13 +193,25 @@ type discardWriter struct{}
 func (discardWriter) Write(p []byte) (int, error) { return len(p), nil }
 
 // renderLine renders one status-line frame against the current fixture, style,
-// and segment toggles.
+// and segment toggles. It applies the detect-once / fit loop so the preview
+// matches what the real status-line command renders at the current window width.
 func (m Model) renderLine() string {
 	cfg := m.buildConfig()
 	st := style.Resolve(discardWriter{}, m.currentStyleName(), nil, false)
 	deps := m.buildDeps()
 	segs := render.BuildSegments(cfg, deps)
-	return render.Render(context.Background(), cfg, st, segs)
+
+	// Detect-once: all subprocess I/O happens here, exactly once.
+	ctx := context.Background()
+	datas := render.Detect(ctx, cfg, st, segs)
+
+	// Use the known window width when available; fall back to $COLUMNS then 80.
+	cols := m.windowWidth
+	if cols <= 0 {
+		cols = term.Columns(nil) // nil source → $COLUMNS then 80
+	}
+
+	return render.Fit(datas, st, cols)
 }
 
 // buildConfig returns a config derived from m.cfg with segment enables applied.
@@ -267,3 +288,18 @@ func (m Model) Quitting() bool { return m.quitting }
 
 // Now returns the current time tracked by the model.
 func (m Model) Now() time.Time { return m.now }
+
+// WindowWidth returns the terminal width tracked by the model (0 = unknown).
+func (m Model) WindowWidth() int { return m.windowWidth }
+
+// WithWindowWidth returns a copy of the model with the given window width set.
+// Used in tests to inject a synthetic terminal width without sending a real
+// tea.WindowSizeMsg.
+func (m Model) WithWindowWidth(w int) Model {
+	m.windowWidth = w
+	return m
+}
+
+// RenderLineForTest calls renderLine and returns the result. Exported for
+// testing only so external test packages can assert on compaction behaviour.
+func (m Model) RenderLineForTest() string { return m.renderLine() }
