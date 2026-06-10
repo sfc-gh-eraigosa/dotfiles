@@ -1,3 +1,5 @@
+# shellcheck shell=bash
+
 echo "crouton aliases installed, use crouton-help for more info."
 alias startchroot='sudo enter-chroot -n precise'
 alias startxfce4='sudo startxfce4 -n ${CHROOT_NAME:-xfce}'

@@ -108,7 +108,7 @@ lint-go: ## Lint Go modules (gofmt + golangci-lint, per-module)
 
 .PHONY: lint-shell
 lint-shell: ## Lint shell scripts with shellcheck
-	@echo "==> shellcheck (opt/scripts, ai, opt/profiles, install.sh)"
+	@echo "==> shellcheck (all *.sh files)"
 	# Phase 5 (issue #46) extended the scope to opt/profiles/ so the
 	# user-facing shell entrypoints (.bashrc, .profile, .bash_aliases,
 	# .docker.sh, .goenv.sh, .nano_profile, .xsessionrc, .bash_logout)
@@ -123,7 +123,19 @@ lint-shell: ## Lint shell scripts with shellcheck
 	# fail the whole job regardless of `-S warning`. Zsh-specific linting
 	# would need a different tool (zsh-syntax-check or `zsh -n`); see
 	# .ci-baseline-issues.md for the deferred-work note.
-	@files=$$(find opt/scripts ai -name '*.sh' -type f 2>/dev/null) ; \
+	#
+	# Phase 8 (issue #46 / shell-portability) extended coverage to sdk/**,
+	# src/**, and opt/bin/** to close the gap on ~17 previously-unlinted
+	# scripts (build.sh, test helpers, setup scripts, utilities).
+	#
+	# This target is STRICT — it exits non-zero on any finding (shellcheck
+	# -S warning returns non-zero even for warnings). That is intentional and
+	# matches lint-go / lint-markdown: `make lint` locally surfaces the full
+	# backlog with a non-zero exit (see .ci-baseline-issues.md). The warn-only
+	# gate lives at the WORKFLOW level (`continue-on-error: true` in
+	# docker-image.yml and shell-lint.yml), NOT here — so do not add `|| true`.
+	# Drop the workflow continue-on-error once the shell backlog reaches zero.
+	@files=$$(find opt/scripts ai sdk src opt/bin -name '*.sh' -type f ! -path '*/.*' ! -path '*/opt/google-cloud-sdk/*' 2>/dev/null) ; \
 		profile_dotfiles="opt/profiles/.bashrc opt/profiles/.profile opt/profiles/.bash_aliases opt/profiles/.bash_logout opt/profiles/.docker.sh opt/profiles/.goenv.sh opt/profiles/.nano_profile opt/profiles/.xsessionrc" ; \
 		profile_sh=$$(find opt/profiles -maxdepth 1 -name '*.sh' -type f 2>/dev/null) ; \
 		shellcheck -x -S warning install.sh $$files $$profile_sh $$profile_dotfiles

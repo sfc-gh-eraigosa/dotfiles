@@ -38,6 +38,13 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 
 ## Portability & Best Practices
 
+- **Shell Portability Standard (read before writing any `.sh`)**: All shell scripts and sourced
+  profile fragments MUST follow [docs/mbo/specs/shell-portability.md](./docs/mbo/specs/shell-portability.md) —
+  the normative contract for working identically across **WSL2-Ubuntu, macOS (zsh + BSD coreutils + bash 3.2),
+  and Linux (Raspberry Pi / Jetson Nano)**. It covers shebang policy, banned zsh-isms (`read -A`), BSD-vs-GNU
+  coreutil traps (`sed -i`, `stat`, `date`, …), the mandatory `eval "$(tool init)"` PATH-clobber guard (the
+  bug that broke macOS `install.sh`), and a per-script checklist. CI enforces the mechanical parts via
+  `make lint-shell` and the `shell-lint` workflow; review enforces the rest.
 - **Use $HOME**: Always use `${HOME}` or `~` instead of absolute home paths (e.g., `/home/wenlock` or `/Users/eraigosa`) in scripts, aliases, and configuration files to ensure they are portable across different systems and users.
 - **Avoid Hardcoded Usernames**: Never hardcode usernames in paths or instructions; use environment variables like `$USER` if needed.
 - **Avoid Hardcoded Paths**: Use relative paths or environment variables (like `BASE_DIR` in `install.sh`) whenever possible.

@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # goenv configuration
 export GOENV_ROOT="$HOME/go"
 export GOENV_PATH_ORDER=front
@@ -24,7 +25,19 @@ if [[ "$(uname -r | awk -F'-' '{print $3}')" = "Microsoft" ]] ; then
 fi
 
 # Initialize goenv
+# PATH-clobber guard (macOS): a misconfigured `goenv init -` can emit a PATH
+# assignment that drops the system bin dirs (/usr/bin, /bin, …), breaking every
+# coreutil in the login shell. Capture a known-good PATH and restore it if the
+# eval strips the system dirs. Shell-agnostic (bash + zsh). See the
+# shell-portability standard referenced in CLAUDE.md.
+__goenv_path_safe="$PATH"
 eval "$(goenv init -)"
+case ":${PATH}:" in
+    *":/usr/bin:"*) : ;;                          # system PATH survived
+    *) PATH="${PATH}:${__goenv_path_safe}" ;;     # init clobbered PATH; restore
+esac
+export PATH
+unset __goenv_path_safe
 
 # Set shell version to latest installed version if not already set by .go-version or local
 if [ -z "$GOENV_VERSION" ]; then

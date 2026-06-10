@@ -247,7 +247,21 @@ fi
 # Falls back to "latest" only if .go-version is missing.
 export PATH="${HOME}/.goenv/bin:${PATH}"
 if command -v goenv &> /dev/null; then
+  # PATH-clobber guard (macOS): a misconfigured `goenv init -` — observed on
+  # Homebrew goenv builds — can emit a PATH assignment that drops the system
+  # bin dirs (/usr/bin, /bin, …). When that happens every subsequent coreutil
+  # (tr, uname, git, mkdir, curl…) becomes "command not found" and the rest of
+  # the install silently collapses. Capture a known-good PATH first; if the
+  # eval strips the system dirs, restore it. See the shell-portability standard
+  # referenced in CLAUDE.md (docs/mbo/specs/shell-portability.md).
+  __goenv_path_safe="${PATH}"
   eval "$(goenv init -)"
+  case ":${PATH}:" in
+    *":/usr/bin:"*) : ;;                          # system PATH survived
+    *) PATH="${PATH}:${__goenv_path_safe}" ;;     # init clobbered PATH; restore
+  esac
+  export PATH
+  unset __goenv_path_safe
   if [ -f "${BASE_DIR}/.go-version" ]; then
     PINNED_GO_VERSION=$(tr -d '[:space:]' < "${BASE_DIR}/.go-version")
     echo "Ensuring Go ${PINNED_GO_VERSION} is installed (pinned via .go-version)..."
