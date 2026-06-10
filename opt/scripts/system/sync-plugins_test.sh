@@ -177,6 +177,46 @@ EOF
     assert_contains "$TTYOUT" "headless-ok" "setsid detaches the controlling terminal so claude runs headless"
 fi
 
+# --- Behavioral: macOS keg-only util-linux setsid is discovered via brew -------
+# On macOS `command -v setsid` fails (no native setsid), so sync-plugins must
+# probe Homebrew's keg-only util-linux (`brew --prefix util-linux`) — otherwise
+# the detach guard no-ops and a fresh `claude plugin install` hangs on /dev/tty.
+# Simulate macOS: a curated PATH with NO setsid, a fake `brew` whose
+# `--prefix util-linux` points at a keg holding a fake setsid, and fake CLIs.
+# Assert the keg setsid actually gets invoked.
+KEG_ROOT="$(mktemp -d)"
+mkdir -p "$KEG_ROOT/bin"
+cat > "$KEG_ROOT/bin/setsid" <<'EOF'
+#!/usr/bin/env bash
+echo "KEG_SETSID_USED" >&2
+[ "$1" = "-w" ] && shift   # sync-plugins passes -w; then exec the rest
+exec "$@"
+EOF
+chmod +x "$KEG_ROOT/bin/setsid"
+KEGBIN="$(mktemp -d)"
+# Curated PATH: symlink the real tools sync-plugins needs, but deliberately NOT
+# setsid (so the keg probe is exercised) and NOT timeout (so GUARD = setsid only).
+for _t in bash sh env yq grep egrep awk sed tr cat head cut sort uniq dirname basename readlink mktemp; do
+    _src="$(command -v "$_t" 2>/dev/null)" && ln -s "$_src" "$KEGBIN/$_t" 2>/dev/null
+done
+cat > "$KEGBIN/brew" <<EOF
+#!/usr/bin/env bash
+[ "\$1" = "--prefix" ] && [ "\$2" = "util-linux" ] && { printf '%s\n' "$KEG_ROOT"; exit 0; }
+exit 0
+EOF
+cat > "$KEGBIN/claude" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+cat > "$KEGBIN/gemini" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$KEGBIN/brew" "$KEGBIN/claude" "$KEGBIN/gemini"
+KEGOUT="$(PATH="$KEGBIN" bash "$SYNC" 2>&1 || true)"
+rm -rf "$KEGBIN" "$KEG_ROOT"
+assert_contains "$KEGOUT" "KEG_SETSID_USED" "discovers keg-only util-linux setsid via 'brew --prefix' when setsid is off PATH (macOS)"
+
 echo "----"
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
