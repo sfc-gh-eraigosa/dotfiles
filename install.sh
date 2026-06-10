@@ -247,15 +247,17 @@ fi
 # Falls back to "latest" only if .go-version is missing.
 export PATH="${HOME}/.goenv/bin:${PATH}"
 if command -v goenv &> /dev/null; then
-  # PATH-clobber guard (macOS): a misconfigured `goenv init -` — observed on
-  # Homebrew goenv builds — can emit a PATH assignment that drops the system
-  # bin dirs (/usr/bin, /bin, …). When that happens every subsequent coreutil
-  # (tr, uname, git, mkdir, curl…) becomes "command not found" and the rest of
-  # the install silently collapses. Capture a known-good PATH first; if the
-  # eval strips the system dirs, restore it. See the shell-portability standard
-  # referenced in CLAUDE.md (docs/mbo/specs/shell-portability.md).
+  # Pass the shell to `goenv init` EXPLICITLY. Bare `goenv init -` infers the
+  # shell from $SHELL, so on a host whose login shell is zsh it emits zsh code
+  # (a `while IFS=: read -rA …` PATH loop) even though this script runs under
+  # bash — bash then errors `read: -A: invalid option`, the loop's `_NEW_PATH`
+  # stays empty, and `export PATH="$_NEW_PATH"` wipes PATH, after which every
+  # coreutil (tr, uname, git…) is "command not found" and the install collapses.
+  # `goenv init - bash` forces bash-safe output. The guard below is a belt-and-
+  # suspenders backstop: if any goenv build still drops the system bin dirs,
+  # restore a known-good PATH. See docs/mbo/specs/shell-portability.md.
   __goenv_path_safe="${PATH}"
-  eval "$(goenv init -)"
+  eval "$(goenv init - bash)"
   case ":${PATH}:" in
     *":/usr/bin:"*) : ;;                          # system PATH survived
     *) PATH="${PATH}:${__goenv_path_safe}" ;;     # init clobbered PATH; restore

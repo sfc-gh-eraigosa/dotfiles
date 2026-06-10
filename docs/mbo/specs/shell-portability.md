@@ -72,14 +72,35 @@ script takes.
 | `find -printf` | yes | no | `find … -exec` / `-print0 | while read`. |
 | `timeout` | yes | not by default | Guard with `command -v timeout`. |
 
-### 2.6 `eval "$(tool init -)"` MUST NOT be able to clobber `PATH`
-`goenv`/`pyenv`/`rbenv`/`nvm` init evals can (and on macOS *did*) emit a `PATH` assignment that
-drops the system bin dirs. **Always guard** so `/usr/bin` survives — capture a known-good `PATH`
-before the eval and restore it if the system dirs vanish:
+### 2.6 `eval "$(tool init -)"` — pass the shell explicitly, and guard `PATH`
+Two distinct hazards, both real and both observed on macOS:
+
+**(a) Pass the shell name — do not let the tool infer it.** `goenv init -` (and
+`pyenv`/`rbenv`) infer the target shell from **`$SHELL`**, *not* the shell actually running the
+script. On a host whose login shell is zsh (`$SHELL=…/zsh`), a **bash** script that runs bare
+`eval "$(goenv init -)"` gets **zsh** code back — including a `while IFS=: read -rA … done <<<
+"$PATH"` PATH-rebuild loop. Bash errors `read: -A: invalid option`, the loop's accumulator stays
+empty, and the trailing `export PATH="$_NEW_PATH"` **wipes PATH** — after which every coreutil is
+"command not found". Always name the shell:
+
+```sh
+eval "$(goenv init - bash)"        # in a bash script — forces bash-safe output
+```
+
+In a fragment sourced by *either* shell (`.goenv.sh`), detect the live shell and pass it
+(`$ZSH_VERSION` → `zsh`, `$BASH_VERSION` → `bash`, empty → let the tool detect):
+
+```sh
+if [ -n "${ZSH_VERSION:-}" ]; then _sh=zsh; elif [ -n "${BASH_VERSION:-}" ]; then _sh=bash; else _sh=""; fi
+eval "$(goenv init - "$_sh")"
+```
+
+**(b) Guard `PATH` anyway (belt-and-suspenders).** Even with (a), keep a restore guard so any
+future tool/version that drops the system bin dirs cannot break the rest of the script:
 
 ```sh
 __path_safe="$PATH"
-eval "$(goenv init -)"
+eval "$(goenv init - bash)"
 case ":${PATH}:" in
     *":/usr/bin:"*) : ;;                      # system PATH survived
     *) PATH="${PATH}:${__path_safe}" ;;       # init clobbered PATH; restore
