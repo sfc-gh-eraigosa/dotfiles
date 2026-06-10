@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 #
 # alias files
 #
@@ -29,7 +30,9 @@ alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo
 # See /usr/share/doc/bash-doc/examples in the bash-doc package.
 
 alias dockerup='bash ~/opt/bin/docker_up.sh'
+# shellcheck disable=SC2142 # novassh and novassh1 are intentional wrapper aliases around functions
 alias novassh='function nova_ssh { ssh-keygen -f ~/.ssh/known_hosts -R $1;ssh -i ~/.ssh/nova-USWest-AZ3.pem -l ubuntu $1;};nova_ssh'
+# shellcheck disable=SC2142
 alias novassh1='function nova_ssh1 { ssh-keygen -f ~/.ssh/known_hosts -R $1;ssh -i ~/.ssh/nova-USWest-AZ1.pem -l ubuntu $1;};nova_ssh1'
 alias sshhost='cat ~/.ssh/config|grep "Host\s"|sed "s/Host /ssh /g"'
 alias irc=irssi

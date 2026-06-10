@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Nano Platform Path Configuration
 
 if [ -d "$HOME/opt/nano/bin" ]; then
