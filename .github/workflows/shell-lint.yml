@@ -76,3 +76,26 @@ jobs:
           done < <(find . -name '*.sh' -type f ! -path '*/.*' ! -path '*/opt/google-cloud-sdk/*')
           if [ "$rc" -eq 0 ]; then echo "All *.sh files are bash-syntax-valid"; fi
           exit "$rc"
+
+      - name: Guard — no zsh-only `read -A` in bash scripts
+        # ENFORCING gate (not warn-only): `read -A` is zsh array-read; under
+        # bash it errors ("read: -A: invalid option") — the exact failure that
+        # collapsed macOS install.sh. shellcheck does NOT flag it, so we guard
+        # explicitly. Scans *.sh plus the bash-sourced profile dotfiles, but
+        # NOT .zshrc (where `read -A` is legitimate zsh). Comment lines are
+        # ignored. See docs/mbo/specs/shell-portability.md §2.3.
+        run: |
+          bash_profiles="opt/profiles/.bashrc opt/profiles/.profile opt/profiles/.bash_aliases opt/profiles/.bash_logout opt/profiles/.docker.sh opt/profiles/.goenv.sh opt/profiles/.nano_profile opt/profiles/.xsessionrc"
+          sh_files=$(find . -name '*.sh' -type f ! -path '*/.*' ! -path '*/opt/google-cloud-sdk/*')
+          # grep -H always prints filename; drop comment-only matches (… :NN: #…).
+          # SC2086 intentionally suppressed: $sh_files / $bash_profiles MUST
+          # word-split to expand into the argument list grep scans.
+          # shellcheck disable=SC2086
+          hits=$(grep -nHE 'read[[:space:]]+-[A-Za-z]*A([[:space:]]|$)' $sh_files $bash_profiles 2>/dev/null \
+                   | grep -vE ':[0-9]+:[[:space:]]*#' || true)
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo "::error::zsh-only 'read -A' found in a bash script. Use 'read -a' or mapfile/readarray. See docs/mbo/specs/shell-portability.md §2.3"
+            exit 1
+          fi
+          echo "OK: no zsh-only 'read -A' in bash scripts"
