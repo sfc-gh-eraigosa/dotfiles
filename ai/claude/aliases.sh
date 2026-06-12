@@ -1,4 +1,6 @@
 #!/bin/sh
+# shellcheck shell=bash
+# shellcheck disable=SC2139  # the sync-* aliases expand $HOME at definition time on purpose ($HOME is stable for the shell's lifetime)
 # Shell helpers for the Claude Code CLI.
 # Sourced from opt/profiles/.zshrc and opt/profiles/.bashrc (so the runtime
 # shell is always bash or zsh — both support arrays/`local`, which the flag
@@ -137,9 +139,11 @@ claude-config() {
             # install.sh): npm on Linux/WSL, brew cask on macOS. Extra copies
             # (e.g. the native `curl claude.ai/install.sh` install under
             # ~/.local) are consolidated away by re-running install.sh.
+            # Split PATH via tr, not `for d in $PATH`: zsh does not word-split
+            # unquoted variables, so the for-loop form sees PATH as ONE word
+            # and doctor reports <not found> in the user's login shell.
             claude_all="$(
-                IFS=:
-                for claude_d in $PATH; do
+                printf '%s\n' "$PATH" | tr ':' '\n' | while IFS= read -r claude_d; do
                     [ -x "$claude_d/claude" ] && printf '%s\n' "$claude_d/claude"
                 done | awk '!seen[$0]++'
             )"

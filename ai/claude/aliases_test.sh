@@ -101,6 +101,11 @@ assert_in_subshell "doctor: multiple binaries => WARNING + nonzero" \
 # De-dups a binary that appears under repeated PATH entries (one logical claude).
 assert_in_subshell "doctor: dedups repeated PATH entries (no false warning)" \
     "H=\$(mktemp -d); mkdir -p \"\$H/b1\"; : > \"\$H/b1/claude\"; chmod +x \"\$H/b1/claude\"; export PATH=\"\$H/b1:\$H/b1:/usr/bin:/bin\"; . '$ALIASES'; claude-config doctor >/dev/null 2>&1; [ \$? -eq 0 ]"
+# Cross-shell regression: zsh does not word-split unquoted variables, so a
+# 'for d in \$PATH' scan sees PATH as ONE word and doctor reports <not found>
+# in the user's login shell. Skips (passes) when zsh is not installed.
+assert_in_subshell "doctor: resolves the binary under zsh (PATH-split regression)" \
+    "command -v zsh >/dev/null 2>&1 || exit 0; H=\$(mktemp -d); mkdir -p \"\$H/b1\"; : > \"\$H/b1/claude\"; chmod +x \"\$H/b1/claude\"; export H ALIASES='$ALIASES'; zsh -c 'export PATH=\"\$H/b1:/usr/bin:/bin\"; . \"\$ALIASES\"; claude-config doctor 2>&1 | grep -q \"\$H/b1/claude\"'"
 
 # === Flag-injection behavior (the headline feature — exercised directly) ===
 # Default (nothing opted in), interactive, with a prompt: NO flags injected.
