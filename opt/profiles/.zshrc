@@ -51,10 +51,6 @@ run_daily_maintenance() {
   if [ "$(uname -s)" = "Darwin" ] && command -v brew >/dev/null 2>&1 ; then
     brew bundle check || brew bundle
   fi
-  # Ensure Snowflake CLI is available (install if missing)
-  if command -v python >/dev/null 2>&1 && command -v pip3 >/dev/null 2>&1 ; then
-    snow --version >/dev/null 2>&1 || ( pip3 install --upgrade pip && python -m pip install snowflake-cli-labs )
-  fi
 }
 
 # Trigger daily maintenance only in non-editor terminals
