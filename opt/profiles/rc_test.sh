@@ -73,8 +73,8 @@ if command -v zsh >/dev/null 2>&1; then
     STDERR_FILE="${TMPHOME}/zshrc.stderr"
     set +e
     # TERM_PROGRAM=vscode -> EDITOR_TERMINAL=true: skips the
-    # zsh-completions `git clone` (line ~146) and the Snowflake CLI
-    # `pip install` (line ~56) — both write to the host, which we MUST
+    # zsh-completions `git clone` (line ~146) and the daily-maintenance
+    # background job — both write to the host, which we MUST
     # avoid in a test. ZDOTDIR=$TMPHOME so zsh's startup files (.zshenv
     # etc.) are also sourced from the sandbox, not from $HOME.
     env -i HOME="${TMPHOME}" PATH=/usr/bin:/bin TERM=dumb \
