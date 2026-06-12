@@ -399,8 +399,12 @@ else
   _comp_mtime=$(stat -c %Y "$_comp_dumpfile" 2>/dev/null || echo 0)
 fi
 
+# -i: ignore (don't prompt about) insecure $fpath dirs. Without it, an
+# insecure completion dir makes compinit try to prompt, which on a
+# non-interactive/headless shell aborts with "not interactive and can't open
+# terminal" — breaking startup and the rc_test.sh clean-source check.
 if (( $(date +%s) - _comp_mtime > 86400 )); then
-  compinit
+  compinit -i
 else
   compinit -C
 fi
