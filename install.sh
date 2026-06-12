@@ -203,6 +203,15 @@ if [ -f "${BASE_DIR}/opt/scripts/system/install_yq.sh" ]; then
     "${BASE_DIR}/opt/scripts/system/install_yq.sh" || echo "WARNING: yq install reported problems; continuing."
 fi
 
+# Install the Snowflake CLI (`snow`). Replaces the old .zshrc daily-maintenance
+# pip auto-install, which broke on PEP 668 (externally-managed-environment)
+# systems. macOS uses the homebrew-core formula; Linux uses pipx so the system
+# Python is untouched.
+if [ -f "${BASE_DIR}/opt/scripts/system/install_snowflake_cli.sh" ]; then
+    echo "Installing snowflake-cli..."
+    "${BASE_DIR}/opt/scripts/system/install_snowflake_cli.sh" || echo "WARNING: snowflake-cli install reported problems; continuing."
+fi
+
 # only setup these scripts when docker is installed and responsive
 if command -v docker &> /dev/null; then
     # Setup docker permissions for the current use
