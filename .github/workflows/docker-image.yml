@@ -155,9 +155,11 @@ jobs:
     # gate the Go suite and vice-versa.
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - name: Install jq
-        # safety_guard_test.sh builds its tool_input payloads with jq.
-        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Install jq + zsh
+        # safety_guard_test.sh builds its tool_input payloads with jq; zsh is
+        # needed so aliases_test.sh's cross-shell doctor regression case runs
+        # for real here (it skips gracefully where zsh is absent).
+        run: sudo apt-get update && sudo apt-get install -y jq zsh
       - name: Run make shell-test
         run: make shell-test
 

@@ -270,5 +270,5 @@ source <(openclaw completion --shell bash)
 # Gemini CLI helpers: gemini() wrapper with tmux auto-anchor
 [ -f "${HOME}/.config/gemini/aliases.sh" ] && . "${HOME}/.config/gemini/aliases.sh"
 
-# Claude Code CLI helpers: claude (wrapper) and claude-toggle (YOLO on/off)
+# Claude Code CLI helpers: claude (wrapper) and claude-config (yolo/remote on/off)
 [ -f "${HOME}/.config/claude/aliases.sh" ] && . "${HOME}/.config/claude/aliases.sh"
