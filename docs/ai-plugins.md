@@ -6,6 +6,10 @@ This repository provides a **unified, declarative framework** for managing the c
 - **Infrastructure Hub**: [`ai/GEMINI.md`](../ai/GEMINI.md)
 - **Sync Engine**: [`opt/scripts/system/sync-plugins.sh`](../opt/scripts/system/sync-plugins.sh)
 
+> **Raw MCP servers** (e.g. NotebookLM) are a *separate* concern with their own manifest and
+> engine — see [`docs/ai-mcp.md`](./ai-mcp.md) (`ai/mcp.yaml` + `sync-mcp.sh`). This file covers
+> Claude marketplace plugins + Gemini git extensions only.
+
 ## 🔄 The Sync Workflow
 
 The `install.sh` script automatically provisions the extensions listed in the manifest. You can also re-sync manually at any time using the `sync-plugins` command.

@@ -1,0 +1,42 @@
+# Raw MCP servers — source of truth.
+# Human reference (catalog + setup): docs/ai-mcp.md
+# Design / spec / plan: docs/mbo/{designs,specs,plans}/notebooklm-mcp.md
+#
+# Distinct concern from ai/plugins.yaml: that manifest installs Claude *marketplace
+# plugins* + Gemini *git extensions*; this one registers standalone **MCP servers**
+# (`claude mcp add` / `gemini mcp add`). Different CLI verbs, different config files,
+# different idempotency — hence a separate manifest + engine (opt/scripts/system/sync-mcp.sh).
+#
+# Ensure-only (additive): sync-mcp.sh registers what's listed here at USER scope
+# (global, project-independent) for each tool block present; it never removes
+# anything. Parsed with mikefarah `yq`.
+#
+#   enabled: true   -> register for each tool block present (claude/gemini)
+#   enabled: false  -> parked: documented but not registered
+#   transport       -> stdio only (http/SSE is intentionally unsupported — see SECURITY)
+#   command + args  -> the stdio subprocess; args is a YAML list splatted after `--`
+#   per-server claude:/gemini: blocks (even empty `{}`) opt that tool in; omit to skip it.
+#
+# SECURITY (why the values look the way they do — see docs/ai-mcp.md "Security"):
+#   * VERSION IS PINNED, never `@latest`. `@latest` runs an unpinned third-party,
+#     browser-automating, Google-auth package on every start (supply-chain RCE reach
+#     over your Google session). Bump the pin deliberately after review.
+#   * stdio transport ONLY. Never `--transport http`/`--host 0.0.0.0`: that exposes an
+#     unauthenticated MCP endpoint that can drive a browser holding your Google session.
+#   * Registration ONLY. `install.sh`/sync-mcp write the server definition; they NEVER
+#     run the interactive Google browser login (`setup_auth`). Auth is a manual,
+#     user-run, one-time runtime step (docs/ai-mcp.md). The persisted Chrome profile is
+#     a live Google session — it stays at its default $HOME path, never inside this repo.
+
+servers:
+  # NotebookLM access via PleasePrompto/notebooklm-mcp (https://github.com/PleasePrompto/notebooklm-mcp).
+  # Desktop-only capability: needs Node >=18 + Chrome/Chromium at runtime. On headless
+  # hosts (Pi/Jetson/CI) registration is a harmless config write; auth/usage is simply
+  # unavailable (install never fails). First use needs a one-time `setup_auth` browser login.
+  - name: notebooklm
+    enabled: true
+    transport: stdio
+    command: npx
+    args: ["-y", "notebooklm-mcp@2.0.0"]
+    claude: {}   # register for Claude Code  (claude mcp add --scope user ...)
+    gemini: {}   # register for Gemini CLI   (gemini mcp add --scope user ...)

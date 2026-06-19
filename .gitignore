@@ -90,6 +90,13 @@ ai/claude/settings.json
 # credential and must never be committed.
 ai/gws/config.json
 ai/gws/client_secret.json
+# notebooklm-mcp's Chrome profile is a LIVE Google session (auth cookies/tokens).
+# It belongs at its default $HOME path (~/.local/share/notebooklm-mcp/... etc.),
+# NEVER inside the repo. These rules are defense-in-depth: the !ai/** / !opt/**
+# allowlist above would otherwise make a mistakenly-relocated profile trackable,
+# and a single `git add` could commit a live Google session. See docs/ai-mcp.md.
+**/chrome_profile/
+**/notebooklm-mcp/chrome_profile/
 .custom_alias
 *.swp
 

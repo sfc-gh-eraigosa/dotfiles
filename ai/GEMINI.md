@@ -34,13 +34,15 @@ We enforce identical security boundaries across all assistants:
 | [`claude/`](./claude/) | Claude Code settings, slash commands, and hook templates. |
 | [`gemini/`](./gemini/) | Gemini CLI settings, custom commands, and policies. |
 | [`skills/`](./skills/) | Repository-wide agent skills (linked via `sync-skills`). |
-| [`plugins.yaml`](./plugins.yaml) | Declarative manifest for assistant extensions. |
+| [`plugins.yaml`](./plugins.yaml) | Declarative manifest for assistant extensions (marketplace plugins + git extensions). |
+| [`mcp.yaml`](./mcp.yaml) | Declarative manifest for standalone **MCP servers** (`sync-mcp`; see [docs/ai-mcp.md](../docs/ai-mcp.md)). |
 
 ## 🚀 Key Commands
 
 - **`sync-plugins`**: Reads `plugins.yaml` and installs/enables missing extensions for the active assistant.
+- **`sync-mcp.sh`**: Reads `mcp.yaml` and registers standalone MCP servers (e.g. NotebookLM) at user scope for Claude + Gemini. Ensure-only, stdio-only, registration-only (never runs browser auth). See [docs/ai-mcp.md](../docs/ai-mcp.md).
 - **`sync-skills`**: Re-links all `SKILL.md` files from `src/` and `ai/skills/` to the assistant's runtime directories.
-- **`install.sh`**: The root installer — calls both of the above as part of a fresh system bootstrap.
+- **`install.sh`**: The root installer — calls all of the above as part of a fresh system bootstrap.
 
 ---
 *This configuration ensures that no matter which assistant you choose, it has the same knowledge, follows the same rules, and uses the same toolset.*

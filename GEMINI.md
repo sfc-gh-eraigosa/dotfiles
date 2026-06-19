@@ -16,6 +16,7 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - `ai/gemini/`: Gemini-specific commands, TOML policies, and settings.
 - `ai/claude/`: Claude-specific commands, settings, and hook templates.
 - `ai/plugins.yaml`: Declarative manifest of the Claude Code plugins this repo installs/enables (ensure-only via `sync-plugins`). See [docs/ai-plugins.md](./docs/ai-plugins.md) for the plugin summary, first-usage examples, and the Gemini-extension path.
+- `ai/mcp.yaml`: Declarative manifest of standalone **MCP servers** (e.g. NotebookLM) this repo registers for Claude + Gemini (ensure-only via `sync-mcp.sh`; a separate concern from plugins — different CLI verbs, config files, idempotency). stdio-only, pinned versions, registration-only (never runs browser auth). See [docs/ai-mcp.md](./docs/ai-mcp.md).
 - `ai/teams/`: Specialized agent teams installed as native subagents for Claude, Gemini, Antigravity, and Ollama. Personas declare an abstract `tier:` resolved via `model-map.yaml`; `install_ai_teams.sh` emits each tool's format and `/team` routes tasks to the right team/member. [See ai/teams/GEMINI.md](./ai/teams/GEMINI.md).
 - `docs/`: Repository documentation. **Objective-driven design work — issues, `gss` draft PRs, new features/skills/CLIs/services — starts in [`docs/mbo/`](./docs/mbo/GEMINI.md)**: the Management-By-Objective `design → spec → plan` pipeline, per-task skill routing, and the objective tracker (`docs/mbo/index.md`). [See docs/GEMINI.md](./docs/GEMINI.md).
 

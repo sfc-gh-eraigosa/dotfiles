@@ -127,6 +127,19 @@ if [[ "$CMD_SCRUBBED" =~ \>[[:space:]]*/dev/(sd[a-z]|nvme[0-9]+n[0-9]+|mapper/|h
     deny "Direct redirection to block devices is prohibited."
 fi
 
+# --- 9. notebooklm-mcp bound to all interfaces ---
+# notebooklm-mcp drives a Chrome browser holding the user's persisted Google
+# session. Binding its HTTP transport to 0.0.0.0 exposes an UNAUTHENTICATED MCP
+# endpoint — a network-reachable proxy for that Google session — to the whole
+# LAN. The repo registers it as stdio only (ai/mcp.yaml); a 0.0.0.0 bind is never
+# legitimate. Loopback (127.0.0.1) and stdio are unaffected. SAFE_CHARS scopes the
+# match to one command segment so the two tokens must be in the same invocation.
+# `[[:space:]=]` + optional quote catches `--host 0.0.0.0`, `--host=0.0.0.0`, and
+# the quoted forms (Node arg parsers accept all three).
+if [[ "$CMD_SCRUBBED" =~ notebooklm-mcp${SAFE_CHARS}*--host[[:space:]=]+[\"\']?0\.0\.0\.0 ]]; then
+    deny "notebooklm-mcp bound to 0.0.0.0 exposes an unauthenticated endpoint that proxies your Google session. Use stdio (the default) or bind --host 127.0.0.1."
+fi
+
 # Shared gss context for the rules below: resolve the effective working dir
 # (target of a leading `cd <path> &&`, else the hook's CWD) and whether it is
 # inside a registered feature worker worktree (under the gss worktree root).
