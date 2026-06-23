@@ -22,8 +22,8 @@ should_run_daily_maintenance() {
   local mtime
   now=$(date +%s)
   if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS
-    mtime=$(stat -f %m "${DAILY_STAMP_FILE}" 2>/dev/null || echo 0)
+    # macOS: stat -f %m broke in Darwin 25+ (macOS 16), use date -r instead
+    mtime=$(date -r "${DAILY_STAMP_FILE}" +%s 2>/dev/null || echo 0)
   else
     # Linux / Raspberry Pi
     mtime=$(stat -c %Y "${DAILY_STAMP_FILE}" 2>/dev/null || echo 0)
@@ -390,7 +390,7 @@ fi
 autoload -Uz compinit
 _comp_dumpfile="${ZSH_COMPDUMP:-$HOME/.zcompdump}"
 if [[ "$OSTYPE" == "darwin"* ]]; then
-  _comp_mtime=$(stat -f %m "$_comp_dumpfile" 2>/dev/null || echo 0)
+  _comp_mtime=$(date -r "$_comp_dumpfile" +%s 2>/dev/null || echo 0)
 else
   _comp_mtime=$(stat -c %Y "$_comp_dumpfile" 2>/dev/null || echo 0)
 fi
