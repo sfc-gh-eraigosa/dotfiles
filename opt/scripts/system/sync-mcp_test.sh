@@ -41,6 +41,7 @@ assert_eq() {
 OUT="$(bash "$SYNC" --dry-run 2>&1)"
 assert_contains "$OUT" "DRY-RUN: claude mcp add --scope user notebooklm -- npx -y notebooklm-mcp@2.0.0" "plans the Claude add at user scope with the pinned version"
 assert_contains "$OUT" "DRY-RUN: gemini mcp add --scope user --transport stdio notebooklm npx -y notebooklm-mcp@2.0.0" "plans the Gemini add at user scope, stdio, pinned version"
+assert_contains "$OUT" "DRY-RUN: post_install: npx --yes playwright install chromium" "dry-run shows the notebooklm playwright post_install command"
 assert_not_contains "$OUT" "@latest" "never registers an unpinned @latest version"
 
 CLAUDE_ADDS="$(printf '%s' "$OUT" | grep -c 'DRY-RUN: claude mcp add ')"
@@ -156,7 +157,7 @@ REC2="$(mktemp)"
 RUN2="$(REC="$REC2" FAKE_DUP=1 PATH="$FAKE_BIN:$PATH" bash "$SYNC" 2>&1)"
 assert_contains "$RUN2" "(notebooklm already registered for Claude)" "tolerates Claude 'already exists' as a quiet skip"
 assert_contains "$RUN2" "(notebooklm already registered for Gemini)" "tolerates Gemini 'already configured' as a quiet skip"
-assert_not_contains "$RUN2" "WARNING" "no WARNING on an idempotent re-run"
+assert_not_contains "$RUN2" "sync-mcp: WARNING" "no sync-mcp WARNING on an idempotent re-run"
 rm -f "$REC2"
 
 # Missing-CLI graceful skip: yq present, no claude/gemini on a curated PATH.
@@ -269,6 +270,73 @@ chmod +x "$KEGBIN/brew" "$KEGBIN/claude" "$KEGBIN/gemini"
 KEGOUT="$(PATH="$KEGBIN" bash "$SYNC" 2>&1 || true)"
 rm -rf "$KEGBIN" "$KEG_ROOT"
 assert_contains "$KEGOUT" "KEG_SETSID_USED" "discovers keg-only util-linux setsid via 'brew --prefix' when setsid is off PATH (macOS)"
+
+# --- post_install: dry-run shows command from fixture --------------------------
+FIX="$(mktemp -d)"
+cat > "$FIX/postinstall.yaml" <<'EOF'
+servers:
+  - name: withpostinstall
+    enabled: true
+    transport: stdio
+    command: npx
+    args: ["-y", "some-mcp@1.0.0"]
+    post_install:
+      - "echo POST_INSTALL_CMD"
+    claude: {}
+EOF
+PIOUT_DRY="$(SYNC_MCP_MANIFEST="$FIX/postinstall.yaml" bash "$SYNC" --dry-run 2>&1)"
+assert_contains "$PIOUT_DRY" "DRY-RUN: post_install: echo POST_INSTALL_CMD" "dry-run shows post_install command from fixture"
+
+# --- post_install: command executes on live run ---------------------------------
+cat > "$FIX/postinstall.yaml" <<'EOF'
+servers:
+  - name: withpostinstall
+    enabled: true
+    transport: stdio
+    command: npx
+    args: ["-y", "some-mcp@1.0.0"]
+    post_install:
+      - "echo POST_INSTALL_RAN"
+    claude: {}
+EOF
+PIBIN="$(mktemp -d)"
+cat > "$PIBIN/claude" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$PIBIN/claude"
+PIOUT_LIVE="$(SYNC_MCP_MANIFEST="$FIX/postinstall.yaml" PATH="$PIBIN:$PATH" bash "$SYNC" 2>&1)"
+assert_contains "$PIOUT_LIVE" "POST_INSTALL_RAN" "post_install command executes on a live run"
+rm -rf "$PIBIN"
+
+# --- post_install: failure emits WARNING but exit 0 (non-fatal) ----------------
+cat > "$FIX/postinstall_fail.yaml" <<'EOF'
+servers:
+  - name: failinstall
+    enabled: true
+    transport: stdio
+    command: npx
+    args: ["-y", "some-mcp@1.0.0"]
+    post_install:
+      - "exit 42"
+    claude: {}
+EOF
+FAILBIN="$(mktemp -d)"
+cat > "$FAILBIN/claude" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$FAILBIN/claude"
+FAILRC=0
+FAILOUT="$(SYNC_MCP_MANIFEST="$FIX/postinstall_fail.yaml" PATH="$FAILBIN:$PATH" bash "$SYNC" 2>&1)" || FAILRC=$?
+assert_eq "$FAILRC" "0" "post_install failure is non-fatal (exit 0)"
+assert_contains "$FAILOUT" "WARNING" "post_install failure emits a WARNING"
+rm -rf "$FAILBIN"
+
+# --- post_install: absent field produces no post_install output ----------------
+NOPI_DRY="$(SYNC_MCP_MANIFEST="$FIX/parked.yaml" bash "$SYNC" --dry-run 2>&1)"
+assert_not_contains "$NOPI_DRY" "post_install" "no post_install output when field is absent"
+rm -rf "$FIX"
 
 echo "----"
 echo "PASS=$PASS FAIL=$FAIL"

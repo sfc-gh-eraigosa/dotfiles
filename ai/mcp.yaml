@@ -16,6 +16,10 @@
 #   transport       -> stdio only (http/SSE is intentionally unsupported — see SECURITY)
 #   command + args  -> the stdio subprocess; args is a YAML list splatted after `--`
 #   per-server claude:/gemini: blocks (even empty `{}`) opt that tool in; omit to skip it.
+#   post_install    -> optional list of shell commands run after registration (e.g. browser
+#                      binary downloads). Non-auth setup steps only — never opens a
+#                      credentialed browser or performs Google login. Omit when the server
+#                      has no extra runtime deps.
 #
 # SECURITY (why the values look the way they do — see docs/ai-mcp.md "Security"):
 #   * VERSION IS PINNED, never `@latest`. `@latest` runs an unpinned third-party,
@@ -38,5 +42,7 @@ servers:
     transport: stdio
     command: npx
     args: ["-y", "notebooklm-mcp@2.0.0"]
+    post_install:
+      - "npx --yes playwright install chromium"  # headless browser binary required at runtime
     claude: {}   # register for Claude Code  (claude mcp add --scope user ...)
     gemini: {}   # register for Gemini CLI   (gemini mcp add --scope user ...)

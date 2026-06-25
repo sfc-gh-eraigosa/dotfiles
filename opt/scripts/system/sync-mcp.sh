@@ -99,6 +99,28 @@ server_has_tool() {
     [ "$val" = "true" ]
 }
 
+# Run a server's post_install commands (e.g. download a browser binary). These are
+# non-auth setup steps declared in the manifest — distinct from the auth security
+# boundary (never opens a credentialed browser session; never performs Google login).
+run_post_install() {
+    local name="$1" cmd
+    while IFS= read -r cmd; do
+        { [ -z "$cmd" ] || [ "$cmd" = "null" ]; } && continue
+        if [ "$DRY_RUN" = "1" ]; then
+            echo "DRY-RUN: post_install: $cmd"
+            continue
+        fi
+        echo "  post_install: $cmd"
+        local rc=0
+        "${GUARD[@]+"${GUARD[@]}"}" sh -c "$cmd" </dev/null || rc=$?
+        if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+            echo "sync-mcp: WARNING — post_install '$cmd' timed out after ${CMD_TIMEOUT}s; continuing." >&2
+        elif [ "$rc" -ne 0 ]; then
+            echo "sync-mcp: WARNING — post_install '$cmd' failed (rc=$rc); continuing." >&2
+        fi
+    done < <(yq ".servers[] | select(.name == \"$name\") | .post_install[]?" "$MANIFEST")
+}
+
 # Splat a server's args list into the global ARGV array (bash 3.2 safe — no mapfile).
 ARGV=()
 load_server_args() {
@@ -198,6 +220,7 @@ while IFS= read -r name; do
     if [ "$gemini_available" = "1" ] && server_has_tool "$name" gemini; then
         add_gemini_server "$name" "$transport" "$command_bin" "${ARGV[@]+"${ARGV[@]}"}"
     fi
+    run_post_install "$name"
 done < <(yq '.servers[] | select(.enabled == true) | .name' "$MANIFEST")
 
 [ "$any" = "0" ] && echo "sync-mcp: no enabled MCP servers in manifest (nothing to do)."
