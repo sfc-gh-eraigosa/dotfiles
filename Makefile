@@ -140,6 +140,17 @@ lint-shell: ## Lint shell scripts with shellcheck
 		profile_sh=$$(find opt/profiles -maxdepth 1 -name '*.sh' -type f 2>/dev/null) ; \
 		shellcheck -x -S warning install.sh $$files $$profile_sh $$profile_dotfiles
 
+# Cross-shell / cross-OS portability scan. Catches the class that shellcheck
+# and `bash -n` MISS: dash (/bin/sh) parse breakage — the Raspberry Pi LightDM
+# login-loop class — and macOS BSD-coreutil / bash-3.2 hazards. WARN-ONLY by
+# design: the scanner exits 0 and prints ::warning:: lines, so it never blocks
+# a PR while the cross-shell backlog is triaged (see the tracking issue +
+# docs/mbo/specs/shell-portability.md). Pass --strict to make a non-empty
+# Tier-1 (POSIX breakage) a hard failure once that list reaches zero.
+.PHONY: lint-portability
+lint-portability: ## Cross-shell/OS portability scan (dash + macOS) — WARN-only
+	@opt/scripts/system/shell-portability-scan.sh
+
 .PHONY: lint-markdown
 lint-markdown: ## Lint markdown files with markdownlint-cli2
 	@echo "==> markdownlint-cli2"

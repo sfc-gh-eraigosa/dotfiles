@@ -99,3 +99,19 @@ jobs:
             exit 1
           fi
           echo "OK: no zsh-only 'read -A' in bash scripts"
+
+      - name: Cross-shell portability scan (dash + macOS) — WARN-only
+        # WARN-ONLY (advisory): this catches the class that shellcheck and the
+        # `bash -n` gate above MISS — dash (/bin/sh) PARSE breakage (the
+        # Raspberry Pi LightDM login-loop class: a bash `function name { … }`
+        # block in a dash-sourced profile fragment fatally aborts the Xsession)
+        # and macOS BSD-coreutil / bash-3.2 hazards. `opt/scripts/system/shell-
+        # portability-scan.sh` exits 0 and emits ::warning:: annotations, so it
+        # surfaces every finding in the run summary WITHOUT blocking the PR
+        # while the cross-shell backlog is triaged (tracking issue lists it).
+        # `continue-on-error` is belt-and-suspenders (the scanner is already
+        # non-failing). Flip the script to `--strict` once Tier 1 reaches zero
+        # so POSIX-/bin/sh regressions become hard failures. Needs dash, which
+        # is preinstalled on ubuntu-latest (it is /bin/sh).
+        continue-on-error: true
+        run: make lint-portability

@@ -167,17 +167,35 @@ alias bazel='bazelisk'
 # added by Snowflake SnowSQL installer
 export PATH=${HOME}/opt/bin:$PATH
 
-# ruby docker environment aliases
+# ruby docker environment aliases + git environment shortcuts.
 #
-if [ -f ${HOME}/.ruby.env ] ; then
-    source ${HOME}/.ruby.env
-else
-    case "$-" in
-        *i*) echo ".ruby.env is missing, you can install with : . opt/scripts/docker/setup_ruby-docker.sh" ;;
-    esac
-fi
-# Source git environment shortcuts
-[ -f ${HOME}/.dindcenv ] && . ${HOME}/.dindcenv
+# ~/.ruby.env and ~/.dindcenv define interactive Docker/UCP helper aliases and
+# functions written in bash/zsh-only syntax: the `function name { ... }` form
+# and hyphenated names (e.g. dindc-login). They are NOT POSIX sh, and sourcing
+# them from the wrong shell at login breaks login on two of our platforms:
+#   * Linux / Raspberry Pi / WSL — /bin/sh is dash; a parse error in a
+#     dot-sourced file is FATAL (exit 2) even under `set +e`. On the Pi this
+#     aborts the LightDM Xsession before the desktop starts → blank screen →
+#     bounced back to the greeter (a login loop).
+#   * macOS — /bin/sh is bash in POSIX mode, which rejects the hyphenated
+#     function names ("not a valid identifier") and bails as well.
+# Every one of those failure paths is a NON-INTERACTIVE shell, and these helpers
+# are only useful interactively. So gate on an interactive shell that is real
+# bash or zsh; non-interactive logins (the Xsession, `sh -c`, ssh commands)
+# skip the block entirely and can never choke on it.
+case "$-" in
+    *i*)
+        if [ -n "$BASH_VERSION" ] || [ -n "$ZSH_VERSION" ]; then
+            if [ -f "${HOME}/.ruby.env" ] ; then
+                . "${HOME}/.ruby.env"
+            else
+                echo ".ruby.env is missing, you can install with : . opt/scripts/docker/setup_ruby-docker.sh"
+            fi
+            # Source git environment shortcuts
+            [ -f "${HOME}/.dindcenv" ] && . "${HOME}/.dindcenv"
+        fi
+        ;;
+esac
 
 # Load Gemini CLI environment
 [ -f "$HOME/.gemini.profile" ] && . "$HOME/.gemini.profile"
