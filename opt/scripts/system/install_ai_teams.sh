@@ -16,7 +16,6 @@ set -euo pipefail
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 TEAMS_DIR="${BASE_DIR}/ai/teams"
 MODEL_MAP="${TEAMS_DIR}/model-map.yaml"
-TEAMS_YAML="${TEAMS_DIR}/teams.yaml"
 VALIDATE="${TEAMS_DIR}/validate.sh"
 
 # Output roots. DEST_HOME lets tests redirect every tool dir under a temp root.

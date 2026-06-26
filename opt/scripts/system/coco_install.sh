@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 # TODO: need a way to check if cortext cli is installed and if not prompt and ask to install it
 if ! cortex --version; then

@@ -14,6 +14,7 @@ echo "PASS: claude CLI present ($(claude --version 2>/dev/null || echo unknown))
 
 # 2. Symlinked config
 echo "Verifying ~/.claude configuration links..."
+# shellcheck disable=SC2043 # single config link today; loop kept for future entries
 for link in settings.json; do
     if [ ! -L "$HOME/.claude/$link" ] && [ ! -f "$HOME/.claude/$link" ]; then
         echo "FAIL: ~/.claude/$link missing"

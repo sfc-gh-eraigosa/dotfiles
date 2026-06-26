@@ -21,13 +21,13 @@ if [ -n "${1}" ]; then
 fi
 
 if [ -z "${SEARCH_TERM}" ]; then
-    echo "Usage: $o [--force] regex"
+    echo "Usage: $0 [--force] regex"
     exit 1
 fi
 
 if [ ! "${cleanup}" = "Y" ]; then
   echo "Current directory $(pwd) and repo $(git rev-parse --show-toplevel)"
-  echo -n "Would you like to cleanup ($(printf '%s' $(git branch -l 2>&1 |grep "^\s\s${SEARCH_TERM}"|wc -l))) all branches? [Y]:" && \
+  echo -n "Would you like to cleanup ($(git branch -l 2>&1 |grep "^\s\s${SEARCH_TERM}"|wc -l|tr -d ' ')) all branches? [Y]:" && \
     read -r cleanup
 fi
 
