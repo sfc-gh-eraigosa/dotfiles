@@ -133,6 +133,7 @@ Reference implementations: `install.sh` (goenv block) and `opt/profiles/.goenv.s
 | Local/CI lint | `make lint-shell` → `shellcheck -x -S warning` | all `*.sh` + listed profile dotfiles |
 | Dedicated CI | `.github/workflows/shell-lint.yml` | **every** `*.sh` on push/PR |
 | Syntax gate | `bash -n` in the shell-test harness | per script |
+| **Portability gate (enforcing)** | `make lint-portability` → `opt/scripts/system/shell-portability-scan.sh --strict` in `shell-lint.yml` — **fails CI** on Tier 1 (dash `/bin/sh` parse breakage) or Tier 2 (BSD/bash-3.2 hazard); Tier 3 informational. Opt out a reviewed line with `# portability-ok: <reason>`. | every `*.sh` + dash-sourced profile fragments |
 | Review | This standard | everything shellcheck can't see (runtime `PATH`, BSD/GNU, bash-3.2) |
 
 `make lint-shell` historically scanned only `install.sh` + `opt/scripts/**` + `ai/**` +
@@ -160,6 +161,7 @@ shape for any tool whose flags differ across coreutils.
 
 - [ ] `#!/usr/bin/env bash` (script) **or** `# shellcheck shell=bash` (sourced fragment).
 - [ ] `shellcheck -x -S warning` clean; `bash -n` clean.
+- [ ] `make lint-portability` clean — the **enforcing** dash + macOS scan (`shell-portability-scan.sh --strict`); it fails CI on any Tier 1 (dash `/bin/sh` parse breakage) or Tier 2 (BSD/bash-3.2 hazard). Reviewed exceptions carry a trailing `# portability-ok: <reason>`.
 - [ ] No `read -A` / zsh-isms in bash; no unguarded bash-4+ in `/bin/bash`-reachable or sourced code.
 - [ ] Every coreutil flag verified on **both** BSD and GNU (or probed with a fallback).
 - [ ] Any `eval "$(tool init)"` wrapped in the §2.6 `PATH` guard.

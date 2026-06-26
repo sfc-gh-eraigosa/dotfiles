@@ -3,7 +3,7 @@ export DOCKER_MACHINE_HOME="${HOME}/opt/bin"
 export DOCKER_MACHINE_VERSION='latest'
 
 function get_detected_os {
-    uname_bin=$(which uname)
+    uname_bin=$(command -v uname)
     if [ -f "${uname_bin}" ]; then
         # uname is Darwin or Linux?
         os_type="$(uname -s)"

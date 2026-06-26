@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/usr/bin/env bash
+# shellcheck shell=bash
 # Shell helpers for the Gemini CLI.
 # Sourced from opt/profiles/.zshrc and opt/profiles/.bashrc after .gemini.profile.
 #

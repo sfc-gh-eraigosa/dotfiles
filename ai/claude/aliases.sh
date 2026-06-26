@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # shellcheck shell=bash
 # shellcheck disable=SC2139  # the sync-* aliases expand $HOME at definition time on purpose ($HOME is stable for the shell's lifetime)
 # Shell helpers for the Claude Code CLI.

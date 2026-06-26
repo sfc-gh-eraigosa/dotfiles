@@ -149,10 +149,10 @@ parse_pick() {  # stdin -> pick on stdout (empty if none)
   last="$(printf '%s' "$raw" | grep -v '^[[:space:]]*$' | tail -1 | tr -d '[:space:]')"
   last="${last//\`/}"; last="${last//\"/}"; last="${last//\'/}"; last="${last//./}"; last="${last//\*/}"
   for i in "${!CAND_ID[@]}"; do
-    [ "${last,,}" = "${CAND_ID[$i],,}" ] && { echo "${CAND_ID[$i]}"; return; }
+    [ "${last,,}" = "${CAND_ID[$i],,}" ] && { echo "${CAND_ID[$i]}"; return; } # portability-ok: bash 4+ harness (env bash -> Homebrew bash 5 on macOS)
   done
   while IFS= read -r sq; do
-    [ -n "$sq" ] && [ "${last,,}" = "${sq,,}" ] && { echo "$sq"; return; }
+    [ -n "$sq" ] && [ "${last,,}" = "${sq,,}" ] && { echo "$sq"; return; } # portability-ok: bash 4+ harness (env bash -> Homebrew bash 5 on macOS)
   done < <(yq -r '.squads | keys | .[]' "$TEAMS_YAML")
   # 2) Else first roster id / squad that appears as a whole word anywhere in the output.
   for i in "${!CAND_ID[@]}"; do
@@ -224,7 +224,7 @@ run_eval() {
   local total team_hit=0 member_hit=0 scored=0
   total="$(yq '.cases | length' "$CASES")"
   declare -a MISROUTES=()
-  declare -A EXP_TEAM_CT=() GOT_TEAM_CT=()
+  declare -A EXP_TEAM_CT=() GOT_TEAM_CT=() # portability-ok: bash 4+ harness (env bash -> Homebrew bash 5 on macOS)
 
   local n
   for ((n=0; n<total; n++)); do

@@ -1,5 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Unified testing entry point for dotfiles
+# Requires bash 4+ (associative arrays below). `env bash` selects Homebrew bash 5
+# on macOS (install.sh provides it); /bin/bash there is the unsupported 3.2 relic.
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -38,7 +40,7 @@ NC='\033[0m' # No Color
 # COVERAGE_ENFORCE=1 in the CI job) so the gate becomes strict. Real test
 # failures (a failing `go test`) are ALWAYS hard regardless of this flag —
 # only the threshold comparison is softened.
-declare -A COVERAGE_MIN=(
+declare -A COVERAGE_MIN=( # portability-ok: bash 4+ (assoc array); env bash -> Homebrew bash 5 on macOS
     [gss]=70
     [tmux-mgr]=60
     [gsl]=60
@@ -154,7 +156,7 @@ function run_integration_tests() {
     docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && gss version && tmux-mgr version && wol version"
 
     log "Verifying Script PATH Discovery..."
-    docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && which git_add.sh && which gemini_install.sh && which claude_install.sh"
+    docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && command -v git_add.sh && command -v gemini_install.sh && command -v claude_install.sh"
 
     log "Verifying GSS Technical Guardrail..."
     # gss push must refuse without a HEAD-bound approval token. v1.0 reworded

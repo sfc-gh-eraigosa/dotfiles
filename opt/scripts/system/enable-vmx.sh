@@ -70,7 +70,8 @@ sleep 3 && echo
 echo "## 4.Edit the config files and add 'disablevmx=off' to the config line"
 if grep --color disablevmx=off vmxoff-config$C_KERNEL.txt ; then echo; error 1 "*** Kernel already modified - exiting"; fi 
 echo -n "Editing vmxoff-config$C_KERNEL.txt to append = "
-sed -i -e 's/$/ disablevmx=off lsm.module_locking=0/' vmxoff-config$C_KERNEL.txt || ( echo; error 2 "*** Couldn't edit config file" )
+# sed -i.bak (suffix attached) is in-place on both GNU and BSD; remove the backup.
+sed -i.bak -e 's/$/ disablevmx=off lsm.module_locking=0/' vmxoff-config$C_KERNEL.txt && rm -f vmxoff-config$C_KERNEL.txt.bak || ( echo; error 2 "*** Couldn't edit config file" )
 echo "disablevmx=off"
 sleep 3 && echo
 

@@ -18,7 +18,7 @@
 ETH0_IP=""
 WLAN_IP=""
 TUN0_IP=""
-IFCONFIG_BIN=$(which ifconfig)
+IFCONFIG_BIN=$(command -v ifconfig)
 if [ -x "${IFCONFIG_BIN}" ] ; then
     if $IFCONFIG_BIN|grep 'Link encap'|awk '{print $1}'|grep eth0 > /dev/null ; then
         ETH0_IP=$($IFCONFIG_BIN eth0|grep 'inet addr'|awk -F: '{print $2}'|awk '{print $1}')

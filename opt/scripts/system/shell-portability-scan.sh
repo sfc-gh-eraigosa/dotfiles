@@ -23,8 +23,10 @@
 #                       bashisms, so most entries here are expected; the list is
 #                       the full "which scripts are not dash-portable" picture.
 #
-# WARN-ONLY by default: always exits 0 so it can run as a non-blocking CI gate.
-# `--strict` makes a non-empty TIER 1 exit non-zero (for a future hard gate).
+# `--strict` makes a non-empty TIER 1 or TIER 2 exit non-zero — this is the
+# enforcing CI gate (`make lint-portability`). Without it the scan is advisory
+# and always exits 0. To intentionally exempt a reviewed line, add a trailing
+# `# portability-ok: <reason>` comment and the scanner will skip it.
 # `--md` emits a GitHub-flavoured-markdown report (used to seed the issue body).
 #
 # Usage:
@@ -124,13 +126,13 @@ HAZARDS='declare[[:space:]]+-A	bash-4 associative array (breaks macOS bash 3.2)
 \$\{[A-Za-z_][A-Za-z0-9_]*(\^\^|,,|\^|,)[}/:]	bash-4 case-conversion ${v,,}/${v^^} (breaks macOS bash 3.2)
 \b(mapfile|readarray)\b	bash-4 mapfile/readarray (breaks macOS bash 3.2)
 \|&([^]]|$)	bash-4 |& pipe (breaks macOS bash 3.2)
-\bsed[[:space:]]+-i\b	sed -i: GNU vs BSD differ (BSD needs `-i ""`); use a tmpfile+mv
+\bsed[[:space:]]+-i[[:space:]]	sed -i with a space arg differs GNU vs BSD; use the portable `sed -i.bak … && rm -f …bak` (suffix attached) or a tmpfile+mv
 \bstat[[:space:]]+-c\b	stat -c is GNU; BSD uses `stat -f`
 \breadlink[[:space:]]+-f\b	readlink -f is GNU; old BSD lacks it; ship a realpath shim
 \bgrep[[:space:]]+-[A-Za-z]*P\b	grep -P (PCRE) is GNU-only; use -E (ERE)
 \bbase64[[:space:]]+-w\b	base64 -w is GNU-only; use `base64 | tr -d "\\n"`
 \bdate[[:space:]]+-d\b	date -d is GNU; BSD uses `date -r`/`-v`
-\bwhich\b	use `command -v`, not `which` (not guaranteed installed; BSD/GNU differ)
+(^|[;&|]|\$\()[[:space:]]*which[[:space:]]	use `command -v`, not `which` (not guaranteed installed; BSD/GNU differ)
 \bread[[:space:]]+-[A-Za-z]*A\b	zsh-only `read -A`; bash errors. Use `read -a`/mapfile'
 
 scan_count=0
@@ -156,6 +158,9 @@ for f in $CANDIDATES; do
 
   # --- macOS hazard heuristics (skip zsh files; read -A check also skips .zshrc handled above) ---
   is_zsh "$f" && continue
+  # The scanner's own HAZARDS table necessarily contains every pattern it greps
+  # for, so don't let it flag itself. (dash -n / Tier 1 / Tier 3 still apply.)
+  case "$f" in */shell-portability-scan.sh) continue ;; esac
   while IFS=$(printf '\t') read -r pat desc; do
     [ -n "$pat" ] || continue
     # Suppress the stat -c hazard when the file already has a BSD `stat -f`
@@ -163,8 +168,10 @@ for f in $CANDIDATES; do
     case "$desc" in
       *"stat -c"*) grep -q 'stat -f' "$f" && continue ;;
     esac
-    # Drop comment-only matches (line whose first non-space char is #).
-    hits=$(grep -nE "$pat" "$f" 2>/dev/null | grep -vE '^[0-9]+:[[:space:]]*#' || true)
+    # Drop comment-only matches (first non-space char is #) and any line that
+    # carries a `# portability-ok` opt-out (reviewed/intentional exceptions;
+    # see docs/mbo/specs/shell-portability.md + CLAUDE.md).
+    hits=$(grep -nE "$pat" "$f" 2>/dev/null | grep -vE '^[0-9]+:[[:space:]]*#' | grep -vF 'portability-ok' || true)
     if [ -n "$hits" ]; then
       while IFS= read -r h; do
         [ -n "$h" ] || continue
@@ -224,8 +231,10 @@ else
   fi
 fi
 
-# WARN-ONLY unless --strict explicitly asks Tier 1 to gate.
-if [ "$STRICT" -eq 1 ] && [ "$n1" -gt 0 ]; then
+# In --strict mode a non-empty Tier 1 OR Tier 2 fails the gate; Tier 3 is
+# informational and never gates. Without --strict the scan is purely advisory
+# (always exits 0).
+if [ "$STRICT" -eq 1 ] && { [ "$n1" -gt 0 ] || [ "$n2" -gt 0 ]; }; then
   exit 1
 fi
 exit 0

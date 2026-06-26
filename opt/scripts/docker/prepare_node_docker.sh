@@ -129,7 +129,10 @@ DO_SUDO puppet apply $PUPPET_DEBUG -e 'user {'"'${CURRENT_USER}'"': ensure => pr
 
 # build a docker image bare_precise_puppet
 # This docker image should have puppet and required modules installed.
-export DOCKER_HOME=$(readlink -f $GIT_HOME/../docker)
+# Portable replacement for `readlink -f` (GNU-only; absent on macOS/BSD):
+# resolve the existing parent dir with `cd ... && pwd -P` then append /docker,
+# so it works even though the docker/ dir may not exist yet (created below).
+export DOCKER_HOME="$(cd -- "$GIT_HOME/.." >/dev/null 2>&1 && pwd -P)/docker"
 [ ! -d "${DOCKER_HOME}" ] && mkdir -p "${DOCKER_HOME}"
 [ ! -d "${DOCKER_HOME}/precise" ] && mkdir -p "${DOCKER_HOME}/precise"
 [ ! -d "${DOCKER_HOME}/trusty" ] && mkdir -p "${DOCKER_HOME}/trusty"

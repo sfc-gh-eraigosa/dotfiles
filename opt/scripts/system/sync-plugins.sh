@@ -10,8 +10,10 @@
 set -u
 
 # Resolve the real repo root even when invoked via the ~/opt symlink.
-SCRIPT_PATH="$(readlink -f "$0")"
-BASE_DIR="$(cd "$(dirname "$SCRIPT_PATH")/../../.." && pwd)"
+# Portable replacement for `readlink -f "$0"` (GNU-only; absent on macOS/BSD):
+# `cd ... && pwd -P` resolves symlinks to the physical script dir.
+SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd -P)"
+BASE_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd -P)"
 MANIFEST="${BASE_DIR}/ai/plugins.yaml"
 
 DRY_RUN=0

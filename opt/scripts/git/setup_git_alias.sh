@@ -32,7 +32,7 @@ else
 fi
 
 # VERIFY THAT CORKSCREW IS INSTALLED
-which corkscrew | grep -q corkscrew
+command -v corkscrew | grep -q corkscrew
 CORKSCREW_IS_AVAILABLE=$?
 
 if ! [ $CORKSCREW_IS_AVAILABLE -eq 0 ]; then
@@ -413,7 +413,7 @@ function fgit-tunelkill {
     else
 # Get-WmiObject win32_process -Filter "name='ssh.exe' and CommandLine like '%-N -L%'" | select ProcessID,Name,CommandLine
         _command="Get-WmiObject win32_process -Filter \\"name='ssh.exe' and CommandLine like '%-N -L%'\\" | select ProcessID|Format-Wide -Property ProcessID"
-        _pid=\$(\$(which powershell.exe) -NoProfile -ExecutionPolicy unrestricted -Command "\$_command")
+        _pid=\$(\$(command -v powershell.exe) -NoProfile -ExecutionPolicy unrestricted -Command "\$_command")
         _pid=\$(echo \$_pid |tr -d '\\n' | tr -d '\\r')
     fi
 
@@ -529,7 +529,7 @@ function fgit-addalias {
             echo "  Port \$_ssh_port" >> ~/.ssh/config
             echo "  ServerAliveInterval 300" >> ~/.ssh/config
             echo "  ServerAliveCountMax 120" >> ~/.ssh/config
-            echo "  ProxyCommand \$(which corkscrew) \${_current_proxy_host} \${_current_proxy_port} 8080 %h %p" >> ~/.ssh/config
+            echo "  ProxyCommand \$(command -v corkscrew) \${_current_proxy_host} \${_current_proxy_port} 8080 %h %p" >> ~/.ssh/config
             echo "  identityfile ~/.ssh/gerrit_keys" >> ~/.ssh/config
             echo "git alias, \$_alias_proxy, has been added!"
         fi
@@ -1144,9 +1144,9 @@ function fgit-reset {
     _CWD=\$(pwd)
     if git rev-parse --show-toplevel >/dev/null 2<&1 ; then
         _GIT_REPO_ROOT=\$(git rev-parse --show-toplevel)
-        # Normalize paths for comparison
-        _REAL_REPO_ROOT=\$(readlink -f "\${_GIT_REPO_ROOT}")
-        _REAL_HOME=\$(readlink -f "\$HOME")
+        # Normalize paths for comparison (portable: readlink -f is GNU-only, absent on macOS BSD)
+        _REAL_REPO_ROOT=\$(cd -- "\${_GIT_REPO_ROOT}" 2>/dev/null && pwd -P)
+        _REAL_HOME=\$(cd -- "\$HOME" 2>/dev/null && pwd -P)
         
         if [ "\${_REAL_REPO_ROOT}" = "\${_REAL_HOME}" ]; then
             echo "WARNING: you are about to reset your home folder!!! [\$_GIT_REPO_ROOT] "
