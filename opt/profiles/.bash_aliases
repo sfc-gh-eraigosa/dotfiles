@@ -158,7 +158,7 @@ alias vpn="osascript -e 'tell application \"Viscosity\" to connectall'"
 alias novpn="osascript -e 'tell application \"Viscosity\" to disconnectall'"
 
 export NAMESPACE="${NAMESPACE:-default}"
-alias k="kubectl --namespace=$NAMESPACE"
+alias k='kubectl --namespace=$NAMESPACE'
 alias kpodjson='k get pod -o=json'
 alias kpod='kpodjson|jq -r ".items[0].metadata.name"'
 
@@ -189,7 +189,7 @@ export DOCKER_STACK_ORCHESTRATOR=swarm
 # 1.8, 11, 12, 1.7
 if [ -d "/usr/libexec/java_home" ] ; then
   export JAVA_VERSION=1.8
-  export JAVA_HOME=$(/usr/libexec/java_home -v ${JAVA_VERSION})
+  JAVA_HOME=$(/usr/libexec/java_home -v "${JAVA_VERSION}"); export JAVA_HOME
 fi
 
 if [ "$(uname -s)" = "Darwin" ]; then
@@ -252,7 +252,7 @@ EOF
 
 function sfcode() {
     local NAME="gco2"
-    local PROJECT_FILE="~/$(whoami).code-workspace"
+    local PROJECT_FILE; PROJECT_FILE="$HOME/$(whoami).code-workspace"
     local IDE="cursor"
     
     while [[ $# -gt 0 ]]; do
@@ -330,7 +330,7 @@ function tmux4() {
         attach
 }
 alias tdev='tmux attach -t dev'
-gorun() { local f=$(mktemp -t gorun-XXXX).go; cat >"$f"; go run "$f"; rm "$f"; }
+gorun() { local f; f=$(mktemp -t gorun-XXXX).go; cat >"$f"; go run "$f"; rm "$f"; }
 alias avalanche_up='GODEBUG="x509ignoreCN=0" go run ./cmd/avaServer -yes-i-really-want-to-disable-authentication -mig-bypass-sha256 -overridedb 127.0.0.1'
 if command -v sf &> /dev/null; then
     eval "$(sf aliases)"

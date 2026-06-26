@@ -31,8 +31,8 @@ install_tailscale() {
 install_nomachine() {
     echo -e "${BLUE}${BOLD}[2/2] Preparing NoMachine (GUI Desktop)...${NC}"
     # grep -P/\K is GNU-only (absent on macOS BSD grep); use -oE + sed (both portable).
-    NOMACHINE_VER=$(curl -s https://www.nomachine.com/download/download&id=116 | grep -oE "nomachine_[0-9]+\.[0-9]+" | sed -E 's/^nomachine_//' | head -n1 || echo "8.16")
-    NOMACHINE_SUB=$(curl -s https://www.nomachine.com/download/download&id=116 | grep -oE "nomachine_[0-9]+\.[0-9]+\._[0-9]+" | sed -E 's/.*\._//' | head -n1 || echo "1")
+    NOMACHINE_VER=$(curl -s "https://www.nomachine.com/download/download&id=116" | grep -oE "nomachine_[0-9]+\.[0-9]+" | sed -E 's/^nomachine_//' | head -n1 || echo "8.16")
+    NOMACHINE_SUB=$(curl -s "https://www.nomachine.com/download/download&id=116" | grep -oE "nomachine_[0-9]+\.[0-9]+\._[0-9]+" | sed -E 's/.*\._//' | head -n1 || echo "1")
     DEB_FILE="nomachine_${NOMACHINE_VER}.${NOMACHINE_SUB}_arm64.deb"
     
     if command -v nxserver >/dev/null 2>&1; then

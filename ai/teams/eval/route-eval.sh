@@ -148,11 +148,13 @@ parse_pick() {  # stdin -> pick on stdout (empty if none)
   # 1) Prefer the model's final non-empty line as an EXACT id/squad (strict answer).
   last="$(printf '%s' "$raw" | grep -v '^[[:space:]]*$' | tail -1 | tr -d '[:space:]')"
   last="${last//\`/}"; last="${last//\"/}"; last="${last//\'/}"; last="${last//./}"; last="${last//\*/}"
+  # lowercase once via tr (bash-3.2 safe; ${v,,} is bash 4+)
+  local last_lc; last_lc="$(printf '%s' "$last" | tr '[:upper:]' '[:lower:]')"
   for i in "${!CAND_ID[@]}"; do
-    [ "${last,,}" = "${CAND_ID[$i],,}" ] && { echo "${CAND_ID[$i]}"; return; } # portability-ok: bash 4+ harness (env bash -> Homebrew bash 5 on macOS)
+    [ "$last_lc" = "$(printf '%s' "${CAND_ID[$i]}" | tr '[:upper:]' '[:lower:]')" ] && { echo "${CAND_ID[$i]}"; return; }
   done
   while IFS= read -r sq; do
-    [ -n "$sq" ] && [ "${last,,}" = "${sq,,}" ] && { echo "$sq"; return; } # portability-ok: bash 4+ harness (env bash -> Homebrew bash 5 on macOS)
+    [ -n "$sq" ] && [ "$last_lc" = "$(printf '%s' "$sq" | tr '[:upper:]' '[:lower:]')" ] && { echo "$sq"; return; }
   done < <(yq -r '.squads | keys | .[]' "$TEAMS_YAML")
   # 2) Else first roster id / squad that appears as a whole word anywhere in the output.
   for i in "${!CAND_ID[@]}"; do
@@ -224,7 +226,9 @@ run_eval() {
   local total team_hit=0 member_hit=0 scored=0
   total="$(yq '.cases | length' "$CASES")"
   declare -a MISROUTES=()
-  declare -A EXP_TEAM_CT=() GOT_TEAM_CT=() # portability-ok: bash 4+ harness (env bash -> Homebrew bash 5 on macOS)
+  # bash-3.2 portable counters: append each occurrence as a line, count later
+  # with grep -cxF (associative arrays are bash 4+).
+  local EXP_TEAM_LIST="" GOT_TEAM_LIST=""
 
   local n
   for ((n=0; n<total; n++)); do
@@ -243,12 +247,12 @@ run_eval() {
     if [ -n "$esq" ]; then
       # Squad case: a correct squad pick counts for BOTH team and member metrics.
       expect_label="$esq"
-      EXP_TEAM_CT["$esq"]=$(( ${EXP_TEAM_CT["$esq"]:-0} + 1 ))
+      EXP_TEAM_LIST="${EXP_TEAM_LIST}${esq}"$'\n'
       if [ "$pick" = "$esq" ]; then
         team_hit=$((team_hit + 1)); member_hit=$((member_hit + 1))
-        GOT_TEAM_CT["$esq"]=$(( ${GOT_TEAM_CT["$esq"]:-0} + 1 ))
+        GOT_TEAM_LIST="${GOT_TEAM_LIST}${esq}"$'\n'
       else
-        GOT_TEAM_CT["${pick:-<none>}"]=$(( ${GOT_TEAM_CT["${pick:-<none>}"]:-0} + 1 ))
+        GOT_TEAM_LIST="${GOT_TEAM_LIST}${pick:-<none>}"$'\n'
         MISROUTES+=("${task} :: expected=${esq} got=${pick:-<none>}")
       fi
       continue
@@ -266,8 +270,8 @@ run_eval() {
         fi
       done
     fi
-    EXP_TEAM_CT["$etea"]=$(( ${EXP_TEAM_CT["$etea"]:-0} + 1 ))
-    GOT_TEAM_CT["${gteam:-<none>}"]=$(( ${GOT_TEAM_CT["${gteam:-<none>}"]:-0} + 1 ))
+    EXP_TEAM_LIST="${EXP_TEAM_LIST}${etea}"$'\n'
+    GOT_TEAM_LIST="${GOT_TEAM_LIST}${gteam:-<none>}"$'\n'
 
     local th=0
     if [ "$gteam" = "$etea" ]; then team_hit=$((team_hit + 1)); th=1; fi
@@ -289,9 +293,11 @@ run_eval() {
   echo "member top-1      : ${member_hit}/${scored}  (${member_pct}%)"
   echo
   echo "--- per-team counts (expected vs predicted) ---"
-  local key
-  for key in $(printf '%s\n' "${!EXP_TEAM_CT[@]}" "${!GOT_TEAM_CT[@]}" | sort -u); do
-    printf '  %-22s expected=%-3s predicted=%-3s\n' "$key" "${EXP_TEAM_CT[$key]:-0}" "${GOT_TEAM_CT[$key]:-0}"
+  printf '%s%s' "$EXP_TEAM_LIST" "$GOT_TEAM_LIST" | grep -v '^[[:space:]]*$' | sort -u | while IFS= read -r key; do
+    [ -n "$key" ] || continue
+    exp="$(printf '%s' "$EXP_TEAM_LIST" | grep -cxF -- "$key")"
+    got="$(printf '%s' "$GOT_TEAM_LIST" | grep -cxF -- "$key")"
+    printf '  %-22s expected=%-3s predicted=%-3s\n' "$key" "$exp" "$got"
   done
 
   if [ "${#MISROUTES[@]}" -gt 0 ]; then

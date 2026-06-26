@@ -6,7 +6,6 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALLER="${HERE}/install_ai_teams.sh"
-TEAMS_DIR="$(cd "${HERE}/../../.." && pwd)/ai/teams"
 
 PASS=0; FAIL=0
 ok()   { echo "  ✓ $*"; PASS=$((PASS + 1)); }

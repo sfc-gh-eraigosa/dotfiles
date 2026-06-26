@@ -20,6 +20,7 @@ show_help() {
     echo "Usage: sync-skills [FLAGS]"
     echo ""
     echo "Synchronizes agent skills from the dotfiles repository into both"
+    # shellcheck disable=SC2088 # literal tilde paths shown in help text, not meant to expand
     echo "~/.agents/skills (Gemini CLI) and ~/.claude/skills (Claude Code)."
     echo ""
     echo "Flags:"

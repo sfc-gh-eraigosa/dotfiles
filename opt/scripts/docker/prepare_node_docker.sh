@@ -24,7 +24,8 @@ GIT_HOME=${GIT_HOME:-~/prepare/git}
 REVIEW_SERVER=${REVIEW_SERVER:-https://review.forj.io}
 export DEBUG=${DEBUG:-0}
 export AS_ROOT=${AS_ROOT:-0}
-export SCRIPT_TEMP=$(mktemp -d)
+SCRIPT_TEMP=$(mktemp -d)
+export SCRIPT_TEMP
 trap 'rm -rf $SCRIPT_TEMP' EXIT
 
 [ $DEBUG -eq 1 ] && set -x -v
@@ -46,6 +47,7 @@ function DO_SUDO {
   if [ $AS_ROOT -eq 0 ] ; then
     sudo "$@"
   else
+    # shellcheck disable=SC2294 # eval required to honor env-var-prefixed commands (e.g. DEBIAN_FRONTEND=... apt-get) passed as args
     eval "$@"
   fi
 }
@@ -68,7 +70,7 @@ function GIT_CLONE {
 
 # prepare a node with docker installed
 # * we need puppet commandline setup, along with expected modules
-[ ! $(id -u) -eq 0 ] && [ $AS_ROOT -eq 1 ] \
+[ ! "$(id -u)" -eq 0 ] && [ $AS_ROOT -eq 1 ] \
    && ERROR_EXIT  ${LINENO} "SCRIPT should be run as sudo or root with export AS_ROOT=1" 2
 
 
@@ -132,7 +134,8 @@ DO_SUDO puppet apply $PUPPET_DEBUG -e 'user {'"'${CURRENT_USER}'"': ensure => pr
 # Portable replacement for `readlink -f` (GNU-only; absent on macOS/BSD):
 # resolve the existing parent dir with `cd ... && pwd -P` then append /docker,
 # so it works even though the docker/ dir may not exist yet (created below).
-export DOCKER_HOME="$(cd -- "$GIT_HOME/.." >/dev/null 2>&1 && pwd -P)/docker"
+DOCKER_HOME="$(cd -- "$GIT_HOME/.." >/dev/null 2>&1 && pwd -P)/docker"
+export DOCKER_HOME
 [ ! -d "${DOCKER_HOME}" ] && mkdir -p "${DOCKER_HOME}"
 [ ! -d "${DOCKER_HOME}/precise" ] && mkdir -p "${DOCKER_HOME}/precise"
 [ ! -d "${DOCKER_HOME}/trusty" ] && mkdir -p "${DOCKER_HOME}/trusty"

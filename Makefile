@@ -129,12 +129,12 @@ lint-shell: ## Lint shell scripts with shellcheck
 	# scripts (build.sh, test helpers, setup scripts, utilities).
 	#
 	# This target is STRICT — it exits non-zero on any finding (shellcheck
-	# -S warning returns non-zero even for warnings). That is intentional and
-	# matches lint-go / lint-markdown: `make lint` locally surfaces the full
-	# backlog with a non-zero exit (see .ci-baseline-issues.md). The warn-only
-	# gate lives at the WORKFLOW level (`continue-on-error: true` in
-	# docker-image.yml and shell-lint.yml), NOT here — so do not add `|| true`.
-	# Drop the workflow continue-on-error once the shell backlog reaches zero.
+	# -S warning returns non-zero even for warnings) — so do not add `|| true`.
+	# The shellcheck backlog has been driven to ZERO, and the shell-lint.yml
+	# workflow now runs this WITHOUT continue-on-error: a new shellcheck warning
+	# is a hard CI failure. Genuinely-intentional patterns carry an inline
+	# `# shellcheck disable=SCxxxx # <reason>`. (docker-image.yml's broader
+	# `make lint` may still be warn-only for its own non-shell backlog.)
 	@files=$$(find opt/scripts ai sdk src opt/bin -name '*.sh' -type f ! -path '*/.*' ! -path '*/opt/google-cloud-sdk/*' 2>/dev/null) ; \
 		profile_dotfiles="opt/profiles/.bashrc opt/profiles/.profile opt/profiles/.bash_aliases opt/profiles/.bash_logout opt/profiles/.docker.sh opt/profiles/.goenv.sh opt/profiles/.nano_profile opt/profiles/.xsessionrc" ; \
 		profile_sh=$$(find opt/profiles -maxdepth 1 -name '*.sh' -type f 2>/dev/null) ; \

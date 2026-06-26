@@ -54,14 +54,14 @@ jobs:
           sudo apt-get install -y shellcheck
 
       - name: Run make lint-shell
-        # WARN-ONLY: the phase-1 baseline ships ~90 shell findings (see
-        # .ci-baseline-issues.md). `continue-on-error: true` keeps shellcheck
-        # RUNNING and surfacing every finding in the step log without blocking
-        # the PR — mirroring `make lint` in docker-image.yml. The `make
-        # lint-shell` target itself is STRICT (exits non-zero); the warn-only
-        # gate is here. Drop this line once the shell backlog reaches zero so
-        # shell-portability regressions become hard failures.
-        continue-on-error: true
+        # ENFORCING gate (no longer warn-only): the shellcheck backlog was
+        # driven to ZERO, so `make lint-shell` (shellcheck -x -S warning over
+        # install.sh + opt/scripts/** + ai/** + sdk/** + src/** + opt/bin/** +
+        # the profile dotfiles) now blocks the PR on ANY finding. `make
+        # lint-shell` is STRICT (exits non-zero on warnings); with
+        # continue-on-error removed, a new shellcheck warning fails CI.
+        # Genuinely-intentional patterns carry an inline `# shellcheck
+        # disable=SCxxxx # <reason>`.
         run: make lint-shell
 
       - name: Syntax check — bash -n over all *.sh

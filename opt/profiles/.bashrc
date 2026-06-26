@@ -32,7 +32,7 @@ dotfiles_run_daily_maintenance() {
       (
         cd "${HOME}" || exit 0
         [ -d "${HOME}/.git" ] && \
-          GIT_TERMINAL_PROMPT=0 git pull origin "$(git branch | grep '*' | awk '{print $2}')" 2>/dev/null
+          GIT_TERMINAL_PROMPT=0 git pull origin "$(git branch | grep -F '*' | awk '{print $2}')" 2>/dev/null
         GIT_TERMINAL_PROMPT=0 "${HOME}/.gitrepos" > /dev/null 2>&1
       )
     fi
@@ -243,7 +243,10 @@ export PATH="$PATH:/usr/local/bin"
 export NVM_DIR="$HOME/.nvm"
 if [[ "$EDITOR_TERMINAL" == "true" ]]; then
     # Fast loading - just add node to PATH if available
-    [ -d "$NVM_DIR/versions/node" ] && export PATH="$NVM_DIR/versions/node/$(ls $NVM_DIR/versions/node | tail -1)/bin:$PATH"
+    if [ -d "$NVM_DIR/versions/node" ]; then
+        _nvm_node_latest=$(ls "$NVM_DIR/versions/node" | tail -1)
+        export PATH="$NVM_DIR/versions/node/$_nvm_node_latest/bin:$PATH"
+    fi
 else
     # Full NVM initialization
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm

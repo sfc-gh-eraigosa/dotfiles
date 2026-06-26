@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 # Unified testing entry point for dotfiles
-# Requires bash 4+ (associative arrays below). `env bash` selects Homebrew bash 5
-# on macOS (install.sh provides it); /bin/bash there is the unsupported 3.2 relic.
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -40,12 +38,17 @@ NC='\033[0m' # No Color
 # COVERAGE_ENFORCE=1 in the CI job) so the gate becomes strict. Real test
 # failures (a failing `go test`) are ALWAYS hard regardless of this flag —
 # only the threshold comparison is softened.
-declare -A COVERAGE_MIN=( # portability-ok: bash 4+ (assoc array); env bash -> Homebrew bash 5 on macOS
-    [gss]=70
-    [tmux-mgr]=60
-    [gsl]=60
-    [wol]=60
-)
+# Per-module minimum coverage % — a function (not a bash-4 associative array) so
+# it runs under macOS system bash 3.2. Empty output = no threshold configured.
+coverage_min() {
+    case "$1" in
+        gss)      echo 70 ;;
+        tmux-mgr) echo 60 ;;
+        gsl)      echo 60 ;;
+        wol)      echo 60 ;;
+        *)        echo "" ;;
+    esac
+}
 
 # 1 = a module under its COVERAGE_MIN floor fails the build; 0 = warn only.
 # Default warn-only until the backfill PRs (#50/#51) clear the gap.
@@ -105,8 +108,8 @@ function run_unit_tests() {
         # is mature enough to gate on.
         local pct
         pct=$(coverage_total_pct "$mod_path" "$REPO_ROOT/coverage/$mod.out")
-        if [ -n "${COVERAGE_MIN[$mod]+set}" ]; then
-            local min="${COVERAGE_MIN[$mod]}"
+        local min; min="$(coverage_min "$mod")"
+        if [ -n "$min" ]; then
             if [ "$pct" -lt "$min" ]; then
                 if [ "$COVERAGE_ENFORCE" = "1" ]; then
                     echo -e "${RED}FAIL${NC}: coverage for ${mod} is ${pct}% (minimum: ${min}%)"
@@ -118,7 +121,7 @@ function run_unit_tests() {
                 echo -e "${GREEN}OK${NC}: coverage for ${mod} is ${pct}% (minimum: ${min}%)"
             fi
         else
-            echo -e "${YELLOW}WARN${NC}: no coverage threshold configured for module '${mod}' (current: ${pct}%) — add it to COVERAGE_MIN in scripts/test.sh"
+            echo -e "${YELLOW}WARN${NC}: no coverage threshold configured for module '${mod}' (current: ${pct}%) — add it to coverage_min() in scripts/test.sh"
         fi
     done
 

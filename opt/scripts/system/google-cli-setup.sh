@@ -149,7 +149,7 @@ show_status() {
     echo -e "\n${BOLD}--- Google CLI Status ---${NC}"
     
     # gcloud
-    local gcloud_ver=$(get_gcloud_version)
+    local gcloud_ver; gcloud_ver=$(get_gcloud_version)
     if [[ "$gcloud_ver" != "Missing" ]]; then
         echo -e "${GREEN}[OK]${NC} gcloud CLI: $gcloud_ver"
     else

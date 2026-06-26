@@ -10,6 +10,7 @@
 #umask 022
 
 if [ ! -z "${GREP_OPTIONS}" ]; then
+  # shellcheck disable=SC2139  # intentional: bake the current GREP_OPTIONS into the alias, then unset it
   alias grep="grep ${GREP_OPTIONS}"
   unset GREP_OPTIONS
 fi
@@ -41,6 +42,7 @@ if [ -d "${HOME}/.cabal/bin" ] ; then
       PATH="${HOME}/.cabal/bin:$PATH"
 fi
 
+# shellcheck disable=SC2034  # set here for parity with .bashrc/.zshrc; consumed by interactive prompt setup
 force_color_prompt=yes
 # Detect if we're in VSCode/Cursor terminal
 if [ "$TERM_PROGRAM" = "vscode" ] || [ "$TERM_PROGRAM" = "cursor" ] || [ -n "$VSCODE_PID" ] || [ -n "$CURSOR_PID" ]; then
@@ -150,7 +152,7 @@ if [ "$EDITOR_TERMINAL" = "false" ]; then
     if ! pgrep -u "${USER:-$(id -un)}" ssh-agent > /dev/null 2>&1; then
       eval "$(ssh-agent -s)" > /dev/null
     fi
-    export GPG_TTY=$(tty 2>/dev/null)
+    GPG_TTY=$(tty 2>/dev/null); export GPG_TTY
     # Only launch zsh if we are not already in it and it exists
     case "$-" in
         *i*)

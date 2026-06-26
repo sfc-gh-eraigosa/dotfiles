@@ -117,7 +117,7 @@ fi
 # never clobbers host-local memories, regenerates the index from the union. ---
 if [ -f "$BASE_DIR/opt/scripts/system/provision-claude-memory.sh" ]; then
     echo "  Provisioning Claude account memories (~/.claude/projects/<slug>/memory)"
-    BASE_DIR="$BASE_DIR" CLAUDE_HOME="$CLAUDE_HOME" \
+    env BASE_DIR="$BASE_DIR" CLAUDE_HOME="$CLAUDE_HOME" \
         bash "$BASE_DIR/opt/scripts/system/provision-claude-memory.sh" || true
 fi
 

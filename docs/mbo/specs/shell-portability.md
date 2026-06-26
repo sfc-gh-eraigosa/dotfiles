@@ -130,7 +130,7 @@ Reference implementations: `install.sh` (goenv block) and `opt/profiles/.goenv.s
 | Layer | Mechanism | Scope |
 | :-- | :-- | :-- |
 | Config | `.shellcheckrc` (`external-sources=true`, SC1090/91 disabled) | repo-wide |
-| Local/CI lint | `make lint-shell` → `shellcheck -x -S warning` | all `*.sh` + listed profile dotfiles |
+| Local/CI lint (enforcing) | `make lint-shell` → `shellcheck -x -S warning` — **hard-fails CI** (backlog is zero; intentional patterns carry an inline `# shellcheck disable=SCxxxx # <reason>`) | all `*.sh` + listed profile dotfiles |
 | Dedicated CI | `.github/workflows/shell-lint.yml` | **every** `*.sh` on push/PR |
 | Syntax gate | `bash -n` in the shell-test harness | per script |
 | **Portability gate (enforcing)** | `make lint-portability` → `opt/scripts/system/shell-portability-scan.sh --strict` in `shell-lint.yml` — **fails CI** on Tier 1 (dash `/bin/sh` parse breakage) or Tier 2 (BSD/bash-3.2 hazard); Tier 3 informational. Opt out a reviewed line with `# portability-ok: <reason>`. | every `*.sh` + dash-sourced profile fragments |

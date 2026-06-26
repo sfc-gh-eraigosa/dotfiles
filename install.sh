@@ -5,14 +5,15 @@ function install_zsh_centos7() {
     sudo yum install -y git make ncurses-devel gcc autoconf man
     git clone -b zsh-5.7.1 https://github.com/zsh-users/zsh.git /tmp/zsh
     (
-        cd /tmp/zsh
+        cd /tmp/zsh || exit 1
         ./Util/preconfig
         ./configure
         sudo make -j 20 install.bin install.modules install.fns
     )
 }
 
-export BASE_DIR="$(cd "$(dirname $0)" && pwd)"
+BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
+export BASE_DIR
 
 # --- Authenticate sudo up front -------------------------------------------
 # The rest of this installer runs several privileged steps (apt/yum installs,
@@ -91,7 +92,7 @@ if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
   fi
 fi
 
-for file in $(find "${BASE_DIR}/opt/profiles" -type f); do
+while IFS= read -r file; do
     filename=$(basename "$file")
     # Skip metadata and non-profile files
     [[ "$filename" == "Brewfile" ]] && continue
@@ -99,10 +100,10 @@ for file in $(find "${BASE_DIR}/opt/profiles" -type f); do
     [[ "$filename" == "requirements.txt" ]] && continue
     [[ "$filename" == "GEMINI.md" ]] && continue
     [[ "$filename" == "CLAUDE.md" ]] && continue
-    
+
     echo "Creating symlink to $file in home directory."
     ln -sf "${file}" "${HOME}/${filename}"
-done
+done < <(find "${BASE_DIR}/opt/profiles" -type f)
 
 # force a few
 for file in ".profile" ".zshenv" ".zshrc" ".bash_logout" ".bashrc"; do
@@ -465,7 +466,7 @@ if [ -f "${HOME}/.sshd.env" ]; then
 fi
 
 if [ -f "${HOME}/.gitrepos" ] ; then
-  cd "${HOME}"
+  cd "${HOME}" || exit 1
   "${HOME}/.gitrepos"
 fi
 

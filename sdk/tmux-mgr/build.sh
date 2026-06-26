@@ -2,7 +2,6 @@
 set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "$DIR/../../" && pwd)"
 BIN_DIR="${HOME}/opt/bin"
 SKILL_INSTALL_DIR="${HOME}/.agents/skills"
 
