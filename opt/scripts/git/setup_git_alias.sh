@@ -21,7 +21,7 @@
 #
 
 # VERIFY THAT GIT IS INSTALLED
-git --version 2>&1 >/dev/null
+git --version >/dev/null 2>&1
 GIT_IS_AVAILABLE=$?
 if [ $GIT_IS_AVAILABLE -eq 0 ]; then
     git --version
@@ -32,7 +32,7 @@ else
 fi
 
 # VERIFY THAT CORKSCREW IS INSTALLED
-which corkscrew | grep -q corkscrew
+command -v corkscrew | grep -q corkscrew
 CORKSCREW_IS_AVAILABLE=$?
 
 if ! [ $CORKSCREW_IS_AVAILABLE -eq 0 ]; then
@@ -408,12 +408,12 @@ function fgit-tunelkill {
     fi
 
     fgit-isWindows
-    if [[ $? -eq 0 ]] ; then
+    if [[ \$? -eq 0 ]] ; then
         _pid=\$(ps -ef|grep "ssh -N -L" | grep -v grep | awk '{printf \$2" "}')
     else
 # Get-WmiObject win32_process -Filter "name='ssh.exe' and CommandLine like '%-N -L%'" | select ProcessID,Name,CommandLine
         _command="Get-WmiObject win32_process -Filter \\"name='ssh.exe' and CommandLine like '%-N -L%'\\" | select ProcessID|Format-Wide -Property ProcessID"
-        _pid=\$(\$(which powershell.exe) -NoProfile -ExecutionPolicy unrestricted -Command "\$_command")
+        _pid=\$(\$(command -v powershell.exe) -NoProfile -ExecutionPolicy unrestricted -Command "\$_command")
         _pid=\$(echo \$_pid |tr -d '\\n' | tr -d '\\r')
     fi
 
@@ -529,7 +529,7 @@ function fgit-addalias {
             echo "  Port \$_ssh_port" >> ~/.ssh/config
             echo "  ServerAliveInterval 300" >> ~/.ssh/config
             echo "  ServerAliveCountMax 120" >> ~/.ssh/config
-            echo "  ProxyCommand \$(which corkscrew) \${_current_proxy_host} \${_current_proxy_port} 8080 %h %p" >> ~/.ssh/config
+            echo "  ProxyCommand \$(command -v corkscrew) \${_current_proxy_host} \${_current_proxy_port} 8080 %h %p" >> ~/.ssh/config
             echo "  identityfile ~/.ssh/gerrit_keys" >> ~/.ssh/config
             echo "git alias, \$_alias_proxy, has been added!"
         fi
@@ -631,7 +631,7 @@ function fgit-createknown_host {
 
     rm ./tmp_key
     rm ./keyhost.txt
-    cd $_cwd > /dev/null 2>&1
+    cd \$_cwd > /dev/null 2>&1
     return 0
 }
 
@@ -774,7 +774,7 @@ function fgit-keys {
     popd > /dev/null 2<&1
     if [[ -f ~/.ssh/\$_key_name.pub ]] ; then
         clip < ~/.ssh/\$_key_name.pub
-        if [[ $? -eq 0 ]] ; then
+        if [[ \$? -eq 0 ]] ; then
             echo "Keys created, ~/.ssh/\${_key_name}.pub is copied to the clip-board"
         fi
     else
@@ -815,7 +815,7 @@ function fgit-login {
         export GIT_USER=\$_user
     fi
     ssh-add \$_pem_file
-    if [[ ! $? -eq 0 ]] ; then
+    if [[ ! \$? -eq 0 ]] ; then
         echo "Failed to add key, maybe agent is the problem, try running git-sshkill then this command again."
     fi
 }
@@ -1053,7 +1053,7 @@ function fgit-tunel {
     # spawn tunnel
     echo "Spawning ssh tunnel to \$_ssh_host on port \$_ssh_port"
     ssh -N -L \$_ssh_port:127.0.0.1:\$_ssh_port -i \$_pem_file \$_user@\$_ssh_host &
-    if [[ $? -eq 0 ]] ; then
+    if [[ \$? -eq 0 ]] ; then
         echo "Tunel created!  use git-testt and tunel alias to connect"
         echo "  Use git-refresh to update your origin to the tunel url."
     fi
@@ -1144,9 +1144,9 @@ function fgit-reset {
     _CWD=\$(pwd)
     if git rev-parse --show-toplevel >/dev/null 2<&1 ; then
         _GIT_REPO_ROOT=\$(git rev-parse --show-toplevel)
-        # Normalize paths for comparison
-        _REAL_REPO_ROOT=\$(readlink -f "\${_GIT_REPO_ROOT}")
-        _REAL_HOME=\$(readlink -f "\$HOME")
+        # Normalize paths for comparison (portable: readlink -f is GNU-only, absent on macOS BSD)
+        _REAL_REPO_ROOT=\$(cd -- "\${_GIT_REPO_ROOT}" 2>/dev/null && pwd -P)
+        _REAL_HOME=\$(cd -- "\$HOME" 2>/dev/null && pwd -P)
         
         if [ "\${_REAL_REPO_ROOT}" = "\${_REAL_HOME}" ]; then
             echo "WARNING: you are about to reset your home folder!!! [\$_GIT_REPO_ROOT] "
@@ -1219,7 +1219,7 @@ function fgit-gerrit-rebase {
 }
 
 function fgit-reset-all {
-    find . -maxdepth 1 -mindepth 1 -type d  -printf "%f\n"|xargs -i bash -c 'cd {};git rev-parse --show-toplevel 2>/dev/null;if [ $? -eq 0 ]; then git reset --hard;git clean -x -d -f;git pull origin stable; else echo "{} is not a git repository"; fi;';
+    find . -maxdepth 1 -mindepth 1 -type d  -printf "%f\n"|xargs -i bash -c 'cd {};git rev-parse --show-toplevel 2>/dev/null;if [ \$? -eq 0 ]; then git reset --hard;git clean -x -d -f;git pull origin stable; else echo "{} is not a git repository"; fi;';
 }
 
 function fgit-ssl {

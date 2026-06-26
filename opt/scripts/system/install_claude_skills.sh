@@ -48,7 +48,15 @@ fi
 # preserving whatever the host had configured (the merge re-applies wiring).
 if [ -L "$SETTINGS_DEST" ]; then
     echo "  Migrating legacy settings.json symlink to a host-owned file"
-    legacy_target="$(readlink -f "$SETTINGS_DEST" 2>/dev/null || true)"
+    # Portable replacement for `readlink -f` (GNU-only; absent on macOS/BSD):
+    # plain `readlink` (BSD+GNU) reads the link, then anchor a relative target
+    # to the symlink's physical dir via `cd ... && pwd -P`.
+    legacy_link="$(readlink "$SETTINGS_DEST" 2>/dev/null || true)"
+    case "$legacy_link" in
+        "") legacy_target="" ;;
+        /*) legacy_target="$legacy_link" ;;
+        *)  legacy_target="$(cd -- "$(dirname -- "$SETTINGS_DEST")" >/dev/null 2>&1 && pwd -P)/$legacy_link" ;;
+    esac
     rm -f "$SETTINGS_DEST"
     if [ -n "$legacy_target" ] && [ -f "$legacy_target" ]; then
         cp "$legacy_target" "$SETTINGS_DEST"
@@ -109,7 +117,7 @@ fi
 # never clobbers host-local memories, regenerates the index from the union. ---
 if [ -f "$BASE_DIR/opt/scripts/system/provision-claude-memory.sh" ]; then
     echo "  Provisioning Claude account memories (~/.claude/projects/<slug>/memory)"
-    BASE_DIR="$BASE_DIR" CLAUDE_HOME="$CLAUDE_HOME" \
+    env BASE_DIR="$BASE_DIR" CLAUDE_HOME="$CLAUDE_HOME" \
         bash "$BASE_DIR/opt/scripts/system/provision-claude-memory.sh" || true
 fi
 

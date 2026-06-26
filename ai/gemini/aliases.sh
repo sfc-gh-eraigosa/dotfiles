@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/usr/bin/env bash
+# shellcheck shell=bash
 # Shell helpers for the Gemini CLI.
 # Sourced from opt/profiles/.zshrc and opt/profiles/.bashrc after .gemini.profile.
 #
@@ -29,6 +30,6 @@ gemini-yolo() {
     command gemini -y "$@"
 }
 
-alias sync-skills="bash $HOME/opt/scripts/system/sync-skills.sh"
-alias sync-teams="bash $HOME/opt/scripts/system/install_ai_teams.sh"
-alias sync-forks="bash $HOME/opt/scripts/../../ai/skills/sync-forks/scripts/check_and_sync_forks.sh"
+alias sync-skills="bash \$HOME/opt/scripts/system/sync-skills.sh"
+alias sync-teams="bash \$HOME/opt/scripts/system/install_ai_teams.sh"
+alias sync-forks="bash \$HOME/opt/scripts/../../ai/skills/sync-forks/scripts/check_and_sync_forks.sh"

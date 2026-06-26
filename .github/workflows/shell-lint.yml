@@ -54,14 +54,14 @@ jobs:
           sudo apt-get install -y shellcheck
 
       - name: Run make lint-shell
-        # WARN-ONLY: the phase-1 baseline ships ~90 shell findings (see
-        # .ci-baseline-issues.md). `continue-on-error: true` keeps shellcheck
-        # RUNNING and surfacing every finding in the step log without blocking
-        # the PR — mirroring `make lint` in docker-image.yml. The `make
-        # lint-shell` target itself is STRICT (exits non-zero); the warn-only
-        # gate is here. Drop this line once the shell backlog reaches zero so
-        # shell-portability regressions become hard failures.
-        continue-on-error: true
+        # ENFORCING gate (no longer warn-only): the shellcheck backlog was
+        # driven to ZERO, so `make lint-shell` (shellcheck -x -S warning over
+        # install.sh + opt/scripts/** + ai/** + sdk/** + src/** + opt/bin/** +
+        # the profile dotfiles) now blocks the PR on ANY finding. `make
+        # lint-shell` is STRICT (exits non-zero on warnings); with
+        # continue-on-error removed, a new shellcheck warning fails CI.
+        # Genuinely-intentional patterns carry an inline `# shellcheck
+        # disable=SCxxxx # <reason>`.
         run: make lint-shell
 
       - name: Syntax check — bash -n over all *.sh
@@ -99,3 +99,17 @@ jobs:
             exit 1
           fi
           echo "OK: no zsh-only 'read -A' in bash scripts"
+
+      - name: Cross-shell portability scan (dash + macOS) — ENFORCING
+        # ENFORCING gate (not warn-only): catches the class that shellcheck and
+        # the `bash -n` gate above MISS — dash (/bin/sh) PARSE breakage (the
+        # Raspberry Pi LightDM login-loop class: a bash `function name { … }`
+        # block in a dash-sourced profile fragment fatally aborts the Xsession)
+        # and macOS BSD-coreutil / bash-3.2 hazards. `make lint-portability`
+        # runs the scanner with `--strict`, which exits non-zero on any Tier 1
+        # or Tier 2 finding, so a newly introduced non-portable script FAILS the
+        # build. The backlog is at zero; a reviewed exception is opted out with
+        # a trailing `# portability-ok: <reason>` comment on the line. Needs
+        # dash, preinstalled on ubuntu-latest (it is /bin/sh). Tier 3 (bash
+        # scripts that aren't POSIX) is informational and never gates.
+        run: make lint-portability

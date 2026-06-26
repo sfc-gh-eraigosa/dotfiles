@@ -3,7 +3,7 @@ export DOCKER_MACHINE_HOME="${HOME}/opt/bin"
 export DOCKER_MACHINE_VERSION='latest'
 
 function get_detected_os {
-    uname_bin=$(which uname)
+    uname_bin=$(command -v uname)
     if [ -f "${uname_bin}" ]; then
         # uname is Darwin or Linux?
         os_type="$(uname -s)"
@@ -46,11 +46,12 @@ if [ "$1" = "-f" ] ; then
 fi
 # setup $DOCKER_MACHINE_HOME/docker-machine
 if [ "$DOCKER_MACHINE_VERSION" = "latest" ] ; then
-    if [ -z "$(echo $(python --version 2>&1|grep Python))" ] ; then
+    if [ -z "$(python --version 2>&1|grep Python)" ] ; then
         echo "ERROR: configure DOCKER_MACHINE_VERSION or install python to download"
         exit 1
     fi
-    export DOCKER_MACHINE_VERSION=$(curl -s  https://api.github.com/repos/docker/machine/releases/latest |  python -c 'import sys, json; print json.load(sys.stdin)["name"]')
+    DOCKER_MACHINE_VERSION=$(curl -s  https://api.github.com/repos/docker/machine/releases/latest |  python -c 'import sys, json; print json.load(sys.stdin)["name"]')
+    export DOCKER_MACHINE_VERSION
 fi
 if [ ! -f $DOCKER_MACHINE_HOME/docker-machine ] ; then
     get_detected_os

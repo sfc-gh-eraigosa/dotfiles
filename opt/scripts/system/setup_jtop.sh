@@ -41,7 +41,8 @@ if [ -f "$JTOP_VARS" ]; then
     if ! grep -q "$TARGET_MAPPING" "$JTOP_VARS"; then
         echo "Patching $JTOP_VARS for JetPack 6.2.1 support..."
         # Insert after JP6 comment or first mapping
-        sudo sed -i '/# -------- JP6 --------/a \    "36.4.7": "6.2.1",' "$JTOP_VARS"
+        # sed -i.bak (suffix attached) is portable in-place on GNU and BSD; drop the backup.
+        sudo sed -i.bak '/# -------- JP6 --------/a \    "36.4.7": "6.2.1",' "$JTOP_VARS" && sudo rm -f "${JTOP_VARS}.bak"
         echo "Patch applied."
     else
         echo "Mapping for 36.4.7 already exists in $JTOP_VARS."

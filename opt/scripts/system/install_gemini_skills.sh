@@ -116,7 +116,15 @@ if [ -f "$GSETTINGS_DEST" ] && [ ! -L "$GSETTINGS_DEST" ] && [ ! -e "$GSETTINGS_
 fi
 if [ -L "$GSETTINGS_DEST" ]; then
     echo "  Migrating legacy settings.json symlink to a host-owned file"
-    legacy_target="$(readlink -f "$GSETTINGS_DEST" 2>/dev/null || true)"
+    # Portable replacement for `readlink -f` (GNU-only; absent on macOS/BSD):
+    # plain `readlink` (BSD+GNU) reads the link, then anchor a relative target
+    # to the symlink's physical dir via `cd ... && pwd -P`.
+    legacy_link="$(readlink "$GSETTINGS_DEST" 2>/dev/null || true)"
+    case "$legacy_link" in
+        "") legacy_target="" ;;
+        /*) legacy_target="$legacy_link" ;;
+        *)  legacy_target="$(cd -- "$(dirname -- "$GSETTINGS_DEST")" >/dev/null 2>&1 && pwd -P)/$legacy_link" ;;
+    esac
     rm -f "$GSETTINGS_DEST"
     if [ -n "$legacy_target" ] && [ -f "$legacy_target" ]; then
         cp "$legacy_target" "$GSETTINGS_DEST"

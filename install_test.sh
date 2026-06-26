@@ -45,9 +45,11 @@ BAD_CD=$(grep -nE '(^|[[:space:](])cd[[:space:]]+/' "$INSTALL" \
     || true)
 assert_eq "$BAD_CD" "" "every absolute cd uses \$HOME / \$BASE_DIR / /tmp"
 
-# BASE_DIR is exported (so child scripts can reuse it).
+# BASE_DIR is exported (so child scripts can reuse it). Accept both the
+# combined `export BASE_DIR=...` and the SC2155-safe split form
+# (`BASE_DIR=...` then `export BASE_DIR` on its own line).
 assert_grep "BASE_DIR is exported" \
-    '^export[[:space:]]+BASE_DIR=' "$INSTALL"
+    '^export[[:space:]]+BASE_DIR([[:space:]]|=|$)' "$INSTALL"
 
 # === 3. Idempotency shape ===
 # An installer that re-runs cleanly must guard symlink creation: the

@@ -3,6 +3,7 @@ set -e
 ## Launch Docker Daemon
 echo "==> Launching the Docker daemon..."
 LOG_FILE="/tmp/dockerd.log"
+# shellcheck disable=SC2024 # LOG_FILE is in /tmp and user-writable; redirect by the invoking shell (not sudo) is intended
 sudo dind dockerd $DOCKER_EXTRA_OPTS > "$LOG_FILE" 2>&1 &
 counter=1
 while ! docker info > /dev/null 2>&1; do
