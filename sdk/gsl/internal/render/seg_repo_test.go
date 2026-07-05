@@ -28,7 +28,7 @@ func TestRepo_NotARepo_Omits(t *testing.T) {
 	st := asciiStyle()
 	r := &gitfake.Runner{Default: gitfake.Response{Err: errors.New("not a repo")}}
 	seg := NewRepoSegment(r, &ghfake.Runner{}, testBranch, registryPath(), nil)
-	if _, ok := seg.Render(context.Background(), st); ok {
+	if _, _, ok := seg.Render(context.Background(), st, 0); ok {
 		t.Error("repo: outside a git repo should self-omit")
 	}
 }
@@ -36,31 +36,35 @@ func TestRepo_NotARepo_Omits(t *testing.T) {
 func TestRepo_Indicator_Powerline(t *testing.T) {
 	pl := powerlineStyleFixture()
 
-	// root
+	// root: the segment returns raw text + colorKey "repo_root".
+	// Painting happens in the join layer, so we verify the raw content + colorKey.
 	seg, _ := newRepoSeg(false, 1, nil)
-	got, ok := seg.Render(context.Background(), pl)
+	got, colorKey, ok := seg.Render(context.Background(), pl, 0)
 	if !ok {
 		t.Fatal("repo root: want ok=true")
 	}
 	if !strings.Contains(got, pl.Icons["repo_root"]) {
 		t.Errorf("repo root powerline: want repo_root glyph in %q", got)
 	}
-	// blue tint (theme repo_root = blue → 38;5;4 fg under fill bg 48;5;4)
-	if !strings.Contains(got, "48;5;4") {
-		t.Errorf("repo root powerline: want blue bg tint, got %q", got)
+	if colorKey != "repo_root" {
+		t.Errorf("repo root: want colorKey=repo_root, got %q", colorKey)
+	}
+	// raw text must NOT contain bg escape sequences (painting is in the join layer)
+	if strings.Contains(got, "48;5;") {
+		t.Errorf("repo root: raw text should not contain bg escape, got %q", got)
 	}
 
 	// worktree
 	seg, _ = newRepoSeg(true, 2, nil)
-	got, ok = seg.Render(context.Background(), pl)
+	got, colorKey, ok = seg.Render(context.Background(), pl, 0)
 	if !ok {
 		t.Fatal("repo worktree: want ok=true")
 	}
 	if !strings.Contains(got, pl.Icons["repo_worktree"]) {
 		t.Errorf("repo worktree powerline: want repo_worktree glyph in %q", got)
 	}
-	if !strings.Contains(got, "48;5;5") {
-		t.Errorf("repo worktree powerline: want magenta bg tint, got %q", got)
+	if colorKey != "repo_worktree" {
+		t.Errorf("repo worktree: want colorKey=repo_worktree, got %q", colorKey)
 	}
 }
 
@@ -68,13 +72,13 @@ func TestRepo_Indicator_Emoji(t *testing.T) {
 	em := emojiStyleFixture()
 
 	seg, _ := newRepoSeg(false, 1, nil)
-	got, _ := seg.Render(context.Background(), em)
+	got, _, _ := seg.Render(context.Background(), em, 0)
 	if !strings.Contains(got, "🏠") {
 		t.Errorf("repo root emoji: want 🏠 in %q", got)
 	}
 
 	seg, _ = newRepoSeg(true, 1, nil)
-	got, _ = seg.Render(context.Background(), em)
+	got, _, _ = seg.Render(context.Background(), em, 0)
 	if !strings.Contains(got, "🌳") {
 		t.Errorf("repo worktree emoji: want 🌳 in %q", got)
 	}
@@ -85,14 +89,14 @@ func TestRepo_PR_Shown_And_Omitted(t *testing.T) {
 
 	// Registry match has PR #21 OPEN → shown by default.
 	seg, _ := newRepoSeg(true, 1, nil)
-	got, _ := seg.Render(context.Background(), st)
+	got, _, _ := seg.Render(context.Background(), st, 0)
 	if !strings.Contains(got, "PR#21") {
 		t.Errorf("repo: want PR#21, got %q", got)
 	}
 
 	// show_pr=false → no PR.
 	seg, _ = newRepoSeg(true, 1, map[string]any{"show_pr": false})
-	got, _ = seg.Render(context.Background(), st)
+	got, _, _ = seg.Render(context.Background(), st, 0)
 	if strings.Contains(got, "PR#") {
 		t.Errorf("repo: show_pr=false should omit PR, got %q", got)
 	}
@@ -103,21 +107,21 @@ func TestRepo_Count_Threshold_And_Option(t *testing.T) {
 
 	// count < 2 → no badge.
 	seg, _ := newRepoSeg(false, 1, nil)
-	got, _ := seg.Render(context.Background(), st)
+	got, _, _ := seg.Render(context.Background(), st, 0)
 	if strings.Contains(got, "wt2") || strings.Contains(got, "wt1") {
 		t.Errorf("repo: count<2 should omit count badge, got %q", got)
 	}
 
 	// count >= 2 → badge "wt3" (ascii worktree_count glyph is "wt").
 	seg, _ = newRepoSeg(true, 3, nil)
-	got, _ = seg.Render(context.Background(), st)
+	got, _, _ = seg.Render(context.Background(), st, 0)
 	if !strings.Contains(got, "wt3") {
 		t.Errorf("repo: count>=2 should show wt3, got %q", got)
 	}
 
 	// show_count=false → no badge even at count 3.
 	seg, _ = newRepoSeg(true, 3, map[string]any{"show_count": false})
-	got, _ = seg.Render(context.Background(), st)
+	got, _, _ = seg.Render(context.Background(), st, 0)
 	if strings.Contains(got, "wt3") {
 		t.Errorf("repo: show_count=false should omit badge, got %q", got)
 	}
@@ -139,7 +143,7 @@ func TestRepo_NameModes(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.mode, func(t *testing.T) {
 			seg, _ := newRepoSeg(true, 1, map[string]any{"name": tc.mode})
-			got, ok := seg.Render(context.Background(), st)
+			got, _, ok := seg.Render(context.Background(), st, 0)
 			if !ok {
 				t.Fatalf("repo name=%s: want ok=true", tc.mode)
 			}

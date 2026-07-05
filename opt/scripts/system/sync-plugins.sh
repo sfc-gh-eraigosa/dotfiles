@@ -10,8 +10,10 @@
 set -u
 
 # Resolve the real repo root even when invoked via the ~/opt symlink.
-SCRIPT_PATH="$(readlink -f "$0")"
-BASE_DIR="$(cd "$(dirname "$SCRIPT_PATH")/../../.." && pwd)"
+# Portable replacement for `readlink -f "$0"` (GNU-only; absent on macOS/BSD):
+# `cd ... && pwd -P` resolves symlinks to the physical script dir.
+SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd -P)"
+BASE_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd -P)"
 MANIFEST="${BASE_DIR}/ai/plugins.yaml"
 
 DRY_RUN=0
@@ -36,6 +38,20 @@ TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
 # can't open /dev/tty, and fall back to non-interactive mode. Empty on macOS
 # (no setsid); the per-call </dev/null + timeout guards still apply there.
 SETSID_BIN="$(command -v setsid || true)"
+# macOS ships no native setsid, so the detach guard above no-ops there — and a
+# FRESH `claude plugin install` then opens /dev/tty, renders its TUI, and hangs
+# until the timeout SIGKILLs it (≈CMD_TIMEOUT *per uninstalled plugin* on a clean
+# machine — tens of minutes). Homebrew's keg-only util-linux provides a working
+# setsid but does not symlink it onto PATH, so probe the keg explicitly. Install
+# it via opt/profiles/Brewfile (`brew 'util-linux'`). No-op when util-linux is
+# absent: the </dev/null + timeout guards remain the (slower) fallback.
+if [ -z "$SETSID_BIN" ] && command -v brew >/dev/null 2>&1; then
+    _ul_prefix="$(brew --prefix util-linux 2>/dev/null || true)"
+    for _ul_cand in "$_ul_prefix/bin/setsid" "$_ul_prefix/sbin/setsid"; do
+        if [ -n "$_ul_prefix" ] && [ -x "$_ul_cand" ]; then SETSID_BIN="$_ul_cand"; break; fi
+    done
+    unset _ul_prefix _ul_cand
+fi
 # Per-call ceiling so a hung network fetch or an unexpected interactive prompt
 # can't wedge install.sh indefinitely (the orphaned-process failure mode this
 # guards against). Override with SYNC_PLUGINS_TIMEOUT for slow links.

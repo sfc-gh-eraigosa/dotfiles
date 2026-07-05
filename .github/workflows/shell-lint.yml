@@ -1,0 +1,115 @@
+name: Shell Lint
+
+# Shell Lint — dedicated CI job that runs shellcheck over all *.sh files
+# and detects shell-portability issues (issue #46 / shell-portability spec).
+# This workflow is path-filtered to avoid running on every repo push; it
+# runs when shell-related files change or the workflow itself is updated.
+#
+# Pin-to-SHA convention (issue #46 phase 5): Every third-party GitHub
+# Action is pinned to a full 40-char commit SHA with a trailing `# vX.Y.Z`
+# comment. See docker-image.yml for the full rationale.
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '**/*.sh'
+      - '**/.bashrc'
+      - '**/.profile'
+      - 'Makefile'
+      - '.shellcheckrc'
+      - 'opt/profiles/**'
+      - '.github/workflows/shell-lint.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**/*.sh'
+      - '**/.bashrc'
+      - '**/.profile'
+      - 'Makefile'
+      - '.shellcheckrc'
+      - 'opt/profiles/**'
+      - '.github/workflows/shell-lint.yml'
+  workflow_dispatch:
+
+concurrency:
+  # Cancel in-flight runs of the same workflow if a new push arrives on the
+  # same branch/ref. This reduces runner usage when a developer pushes
+  # multiple commits in quick succession.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shell-lint:
+    name: Shell Lint (shellcheck)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Run make lint-shell
+        # ENFORCING gate (no longer warn-only): the shellcheck backlog was
+        # driven to ZERO, so `make lint-shell` (shellcheck -x -S warning over
+        # install.sh + opt/scripts/** + ai/** + sdk/** + src/** + opt/bin/** +
+        # the profile dotfiles) now blocks the PR on ANY finding. `make
+        # lint-shell` is STRICT (exits non-zero on warnings); with
+        # continue-on-error removed, a new shellcheck warning fails CI.
+        # Genuinely-intentional patterns carry an inline `# shellcheck
+        # disable=SCxxxx # <reason>`.
+        run: make lint-shell
+
+      - name: Syntax check — bash -n over all *.sh
+        # ENFORCING gate (not warn-only): a real bash syntax error is never
+        # "backlog", so it must block. Excludes .zshrc (zsh syntax), dotfiles
+        # /.git, and opt/google-cloud-sdk (vendored). find's exit status does
+        # NOT reflect -exec failures, so track failures explicitly and exit.
+        run: |
+          rc=0
+          while IFS= read -r f; do
+            bash -n "$f" || { echo "::error file=$f::bash -n reported a syntax error"; rc=1; }
+          done < <(find . -name '*.sh' -type f ! -path '*/.*' ! -path '*/opt/google-cloud-sdk/*')
+          if [ "$rc" -eq 0 ]; then echo "All *.sh files are bash-syntax-valid"; fi
+          exit "$rc"
+
+      - name: Guard — no zsh-only `read -A` in bash scripts
+        # ENFORCING gate (not warn-only): `read -A` is zsh array-read; under
+        # bash it errors ("read: -A: invalid option") — the exact failure that
+        # collapsed macOS install.sh. shellcheck does NOT flag it, so we guard
+        # explicitly. Scans *.sh plus the bash-sourced profile dotfiles, but
+        # NOT .zshrc (where `read -A` is legitimate zsh). Comment lines are
+        # ignored. See docs/mbo/specs/shell-portability.md §2.3.
+        run: |
+          bash_profiles="opt/profiles/.bashrc opt/profiles/.profile opt/profiles/.bash_aliases opt/profiles/.bash_logout opt/profiles/.docker.sh opt/profiles/.goenv.sh opt/profiles/.nano_profile opt/profiles/.xsessionrc"
+          sh_files=$(find . -name '*.sh' -type f ! -path '*/.*' ! -path '*/opt/google-cloud-sdk/*')
+          # grep -H always prints filename; drop comment-only matches (… :NN: #…).
+          # SC2086 intentionally suppressed: $sh_files / $bash_profiles MUST
+          # word-split to expand into the argument list grep scans.
+          # shellcheck disable=SC2086
+          hits=$(grep -nHE 'read[[:space:]]+-[A-Za-z]*A([[:space:]]|$)' $sh_files $bash_profiles 2>/dev/null \
+                   | grep -vE ':[0-9]+:[[:space:]]*#' || true)
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo "::error::zsh-only 'read -A' found in a bash script. Use 'read -a' or mapfile/readarray. See docs/mbo/specs/shell-portability.md §2.3"
+            exit 1
+          fi
+          echo "OK: no zsh-only 'read -A' in bash scripts"
+
+      - name: Cross-shell portability scan (dash + macOS) — ENFORCING
+        # ENFORCING gate (not warn-only): catches the class that shellcheck and
+        # the `bash -n` gate above MISS — dash (/bin/sh) PARSE breakage (the
+        # Raspberry Pi LightDM login-loop class: a bash `function name { … }`
+        # block in a dash-sourced profile fragment fatally aborts the Xsession)
+        # and macOS BSD-coreutil / bash-3.2 hazards. `make lint-portability`
+        # runs the scanner with `--strict`, which exits non-zero on any Tier 1
+        # or Tier 2 finding, so a newly introduced non-portable script FAILS the
+        # build. The backlog is at zero; a reviewed exception is opted out with
+        # a trailing `# portability-ok: <reason>` comment on the line. Needs
+        # dash, preinstalled on ubuntu-latest (it is /bin/sh). Tier 3 (bash
+        # scripts that aren't POSIX) is informational and never gates.
+        run: make lint-portability

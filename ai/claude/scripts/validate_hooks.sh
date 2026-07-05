@@ -36,7 +36,9 @@ hook_rc() { local path="$1" payload="$2"; printf '%s' "$payload" | bash "$path" 
 
 # Event-agnostic: gather hook commands across every hook event so this validates
 # both Claude (.hooks.PreToolUse[]) and Gemini (.hooks.BeforeTool[]) settings.
-mapfile -t HOOK_CMDS < <(jq -r '[.hooks[]?[]?.hooks[]?.command] | .[]' "$SETTINGS" 2>/dev/null)
+# mapfile is bash-4 only; use a bash-3.2-safe read loop (macOS system bash is 3.2).
+HOOK_CMDS=()
+while IFS= read -r _hc; do HOOK_CMDS+=("$_hc"); done < <(jq -r '[.hooks[]?[]?.hooks[]?.command] | .[]' "$SETTINGS" 2>/dev/null)
 STATUS_CMD="$(jq -r '.statusLine.command // empty' "$SETTINGS" 2>/dev/null)"
 
 if [ "${#HOOK_CMDS[@]}" -eq 0 ]; then

@@ -108,7 +108,7 @@ lint-go: ## Lint Go modules (gofmt + golangci-lint, per-module)
 
 .PHONY: lint-shell
 lint-shell: ## Lint shell scripts with shellcheck
-	@echo "==> shellcheck (opt/scripts, ai, opt/profiles, install.sh)"
+	@echo "==> shellcheck (all *.sh files)"
 	# Phase 5 (issue #46) extended the scope to opt/profiles/ so the
 	# user-facing shell entrypoints (.bashrc, .profile, .bash_aliases,
 	# .docker.sh, .goenv.sh, .nano_profile, .xsessionrc, .bash_logout)
@@ -123,10 +123,33 @@ lint-shell: ## Lint shell scripts with shellcheck
 	# fail the whole job regardless of `-S warning`. Zsh-specific linting
 	# would need a different tool (zsh-syntax-check or `zsh -n`); see
 	# .ci-baseline-issues.md for the deferred-work note.
-	@files=$$(find opt/scripts ai -name '*.sh' -type f 2>/dev/null) ; \
+	#
+	# Phase 8 (issue #46 / shell-portability) extended coverage to sdk/**,
+	# src/**, and opt/bin/** to close the gap on ~17 previously-unlinted
+	# scripts (build.sh, test helpers, setup scripts, utilities).
+	#
+	# This target is STRICT — it exits non-zero on any finding (shellcheck
+	# -S warning returns non-zero even for warnings) — so do not add `|| true`.
+	# The shellcheck backlog has been driven to ZERO, and the shell-lint.yml
+	# workflow now runs this WITHOUT continue-on-error: a new shellcheck warning
+	# is a hard CI failure. Genuinely-intentional patterns carry an inline
+	# `# shellcheck disable=SCxxxx # <reason>`. (docker-image.yml's broader
+	# `make lint` may still be warn-only for its own non-shell backlog.)
+	@files=$$(find opt/scripts ai sdk src opt/bin -name '*.sh' -type f ! -path '*/.*' ! -path '*/opt/google-cloud-sdk/*' 2>/dev/null) ; \
 		profile_dotfiles="opt/profiles/.bashrc opt/profiles/.profile opt/profiles/.bash_aliases opt/profiles/.bash_logout opt/profiles/.docker.sh opt/profiles/.goenv.sh opt/profiles/.nano_profile opt/profiles/.xsessionrc" ; \
 		profile_sh=$$(find opt/profiles -maxdepth 1 -name '*.sh' -type f 2>/dev/null) ; \
 		shellcheck -x -S warning install.sh $$files $$profile_sh $$profile_dotfiles
+
+# Cross-shell / cross-OS portability scan. Catches the class that shellcheck
+# and `bash -n` MISS: dash (/bin/sh) parse breakage — the Raspberry Pi LightDM
+# login-loop class — and macOS BSD-coreutil / bash-3.2 hazards. ENFORCING:
+# `--strict` exits non-zero on any Tier 1 (POSIX breakage) or Tier 2 (macOS
+# hazard) finding, so a newly introduced non-portable script fails CI. The
+# backlog is at zero (see docs/mbo/specs/shell-portability.md); to exempt a
+# reviewed line add a trailing `# portability-ok: <reason>` comment.
+.PHONY: lint-portability
+lint-portability: ## Cross-shell/OS portability scan (dash + macOS) — ENFORCING
+	@opt/scripts/system/shell-portability-scan.sh --strict
 
 .PHONY: lint-markdown
 lint-markdown: ## Lint markdown files with markdownlint-cli2

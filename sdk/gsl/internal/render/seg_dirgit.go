@@ -34,7 +34,11 @@ func NewDirGitSegment(cwd string, gitRunner git.Runner) *DirGitSegment {
 }
 
 // Render implements Segment.
-func (s *DirGitSegment) Render(ctx context.Context, st style.Style) (string, bool) {
+//
+// Returns raw (unpainted) text plus the colorKey "dirgit". compactLevel is
+// accepted but only level 0 (full detail) is implemented; PHASE 2 will add
+// branch abbreviation and compaction for levels 1–3.
+func (s *DirGitSegment) Render(ctx context.Context, st style.Style, _ int) (text, colorKey string, ok bool) {
 	cwd := s.Cwd
 	if cwd == "" {
 		if wd, err := os.Getwd(); err == nil {
@@ -42,7 +46,7 @@ func (s *DirGitSegment) Render(ctx context.Context, st style.Style) (string, boo
 		}
 	}
 	if cwd == "" {
-		return "", false
+		return "", "", false
 	}
 
 	var b strings.Builder
@@ -59,7 +63,7 @@ func (s *DirGitSegment) Render(ctx context.Context, st style.Style) (string, boo
 		}
 	}
 
-	return paint(st, "dirgit", b.String()), true
+	return b.String(), "dirgit", true
 }
 
 // abbrev returns the basename of dir, with $HOME collapsed to "~" and the

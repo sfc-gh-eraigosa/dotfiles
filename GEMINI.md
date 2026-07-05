@@ -38,6 +38,29 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 
 ## Portability & Best Practices
 
+- **Shell Portability Standard (read before writing any `.sh`)**: All shell scripts and sourced
+  profile fragments MUST follow [docs/mbo/specs/shell-portability.md](./docs/mbo/specs/shell-portability.md) —
+  the normative contract for working identically across **WSL2-Ubuntu, macOS (zsh + BSD coreutils + bash 3.2),
+  and Linux (Raspberry Pi / Jetson Nano)**. It covers shebang policy, banned zsh-isms (`read -A`), BSD-vs-GNU
+  coreutil traps (`sed -i`, `stat`, `date`, …), the mandatory `eval "$(tool init)"` PATH-clobber guard (the
+  bug that broke macOS `install.sh`), and a per-script checklist. CI enforces the mechanical parts via
+  `make lint-shell` and the `shell-lint` workflow; review enforces the rest.
+- **Cross-shell portability gate is ENFORCING — run `make lint-portability` before pushing any shell change.**
+  `opt/scripts/system/shell-portability-scan.sh --strict` runs in the `shell-lint` workflow and **fails CI**
+  on any Tier 1 (dash `/bin/sh` parse breakage — the class that caused the Raspberry Pi GUI **login loop**)
+  or Tier 2 (macOS BSD-coreutil / bash-3.2 hazard) finding. It catches what `shellcheck` and `bash -n` miss
+  (both pass bashisms). When writing or editing a script, conform to these rules so you don't trip the gate:
+  - **Shebang:** executable scripts use `#!/usr/bin/env bash` (never `#!/bin/bash` — that's the macOS 3.2
+    relic; never `#!/bin/sh` unless the script is genuinely POSIX). Sourced fragments use `# shellcheck shell=bash`.
+  - **Anything dash sources at login is POSIX-only:** `~/.profile`, `~/.xsessionrc`, and every file they
+    unconditionally dot-source (e.g. `~/.nano_profile`). Use `name() { … }` (never `function name { … }`),
+    no `[[ … ]]`, no arrays — a parse error here aborts the LightDM Xsession and bounces you to the greeter.
+  - **Use portable tools:** `command -v` not `which`; `grep -E` not `grep -P`/`\K`; `cd -- "$(dirname "$0")" && pwd -P`
+    not `readlink -f`; `sed -i.bak … && rm -f ….bak` not bare `sed -i`; probe `stat -f` then `stat -c`.
+  - **Bash-4 features** (`declare -A`, `mapfile`, `${v,,}`) break macOS system bash 3.2 — rewrite them, or
+    require bash 4+ via `#!/usr/bin/env bash` (picks up Homebrew bash 5 on macOS) and document it.
+  - **Opt-out for a reviewed exception:** add a trailing `# portability-ok: <reason>` comment on the line and
+    the scanner skips it. Use sparingly and always with a reason.
 - **Use $HOME**: Always use `${HOME}` or `~` instead of absolute home paths (e.g., `/home/wenlock` or `/Users/eraigosa`) in scripts, aliases, and configuration files to ensure they are portable across different systems and users.
 - **Avoid Hardcoded Usernames**: Never hardcode usernames in paths or instructions; use environment variables like `$USER` if needed.
 - **Avoid Hardcoded Paths**: Use relative paths or environment variables (like `BASE_DIR` in `install.sh`) whenever possible.

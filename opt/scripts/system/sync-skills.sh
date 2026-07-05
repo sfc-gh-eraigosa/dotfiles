@@ -4,9 +4,10 @@
 set -e
 
 # Determine the root of the dotfiles repository
-# Use readlink -f to handle symlinks (like ~/opt) and find the physical repo root
-SCRIPT_PATH="$(readlink -f "$0")"
-BASE_DIR="$(cd "$(dirname "$SCRIPT_PATH")/../../.." && pwd)"
+# Portable replacement for `readlink -f "$0"` (GNU-only; absent on macOS/BSD):
+# `cd ... && pwd -P` resolves symlinks (like ~/opt) to the physical script dir.
+SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd -P)"
+BASE_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd -P)"
 
 # Destinations that receive the synced skills. Gemini CLI reads ~/.agents/skills;
 # Claude Code reads ~/.claude/skills. The SKILL.md format is shared between both
@@ -19,6 +20,7 @@ show_help() {
     echo "Usage: sync-skills [FLAGS]"
     echo ""
     echo "Synchronizes agent skills from the dotfiles repository into both"
+    # shellcheck disable=SC2088 # literal tilde paths shown in help text, not meant to expand
     echo "~/.agents/skills (Gemini CLI) and ~/.claude/skills (Claude Code)."
     echo ""
     echo "Flags:"

@@ -46,7 +46,11 @@ const (
 
 // Render implements Segment. It never returns ok=false (time is always
 // available) and never panics on a bad tz.
-func (s *TimeSegment) Render(_ context.Context, st style.Style) (string, bool) {
+//
+// Returns raw (unpainted) text plus the colorKey "time". compactLevel is
+// accepted but only level 0 (full detail) is implemented; PHASE 2 will add
+// compaction logic for levels 1–3.
+func (s *TimeSegment) Render(_ context.Context, st style.Style, _ int) (text, colorKey string, ok bool) {
 	now := time.Now
 	if s.Now != nil {
 		now = s.Now
@@ -87,5 +91,5 @@ func (s *TimeSegment) Render(_ context.Context, st style.Style) (string, bool) {
 		b.WriteString(abbr)
 	}
 
-	return paint(st, "time", b.String()), true
+	return b.String(), "time", true
 }

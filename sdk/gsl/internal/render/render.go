@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git"
@@ -15,6 +14,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/observe"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
+	"github.com/sirupsen/logrus"
 )
 
 // segmentTypeName returns the concrete type name of a Segment for log
@@ -104,13 +104,23 @@ func BuildSegments(cfg config.Config, deps Deps) []Segment {
 //     per-segment deadline (segmentDeadline) so one slow segment cannot stall
 //     the line; a segment that times out, returns ok=false, or panics is
 //     dropped and the remaining segments still render.
-//   - Surviving segment texts are assembled IN INPUT ORDER (the order in segs,
-//     which BuildSegments derived from config order) and joined with the
-//     style's separator.
+//   - Surviving segment blocks (raw text + colorKey) are assembled IN INPUT
+//     ORDER (the order in segs, which BuildSegments derived from config order)
+//     and passed to the color-aware join layer.
 //
 // Render never hangs (bounded by segmentDeadline per segment, run in parallel)
 // and never panics (each segment goroutine recovers).
+//
+// compactLevel is forwarded to every segment. 0 = full detail. Levels 1–3
+// are reserved for PHASE 2 (dynamic width compaction); pass 0 until then.
 func Render(ctx context.Context, cfg config.Config, st style.Style, segs []Segment) string {
+	return RenderAt(ctx, cfg, st, segs, 0)
+}
+
+// RenderAt is like Render but accepts an explicit compactLevel (0 = full
+// detail). Callers that implement the PHASE 2 fit loop use this entry point
+// to format cached detection results at escalating compaction levels.
+func RenderAt(ctx context.Context, cfg config.Config, st style.Style, segs []Segment, compactLevel int) string {
 	if !cfg.Enabled {
 		return ""
 	}
@@ -119,8 +129,9 @@ func Render(ctx context.Context, cfg config.Config, st style.Style, segs []Segme
 	}
 
 	type result struct {
-		text string
-		ok   bool
+		text     string
+		colorKey string
+		ok       bool
 	}
 	results := make([]result, len(segs))
 
@@ -144,7 +155,7 @@ func Render(ctx context.Context, cfg config.Config, st style.Style, segs []Segme
 			sctx, cancel := context.WithTimeout(ctx, segmentDeadline)
 			defer cancel()
 
-			text, ok := s.Render(sctx, st)
+			text, colorKey, ok := s.Render(sctx, st, compactLevel)
 			if sctx.Err() == context.DeadlineExceeded {
 				observe.Default().WithFields(logrus.Fields{
 					"event":       "segment.timeout",
@@ -154,19 +165,19 @@ func Render(ctx context.Context, cfg config.Config, st style.Style, segs []Segme
 				results[idx] = result{ok: false}
 				return
 			}
-			results[idx] = result{text: text, ok: ok}
+			results[idx] = result{text: text, colorKey: colorKey, ok: ok}
 		}(i, seg)
 	}
 	wg.Wait()
 
-	parts := make([]string, 0, len(segs))
+	blocks := make([]segmentBlock, 0, len(segs))
 	for _, r := range results {
 		if r.ok && r.text != "" {
-			parts = append(parts, r.text)
+			blocks = append(blocks, segmentBlock{text: r.text, colorKey: r.colorKey})
 		}
 	}
-	if len(parts) == 0 {
+	if len(blocks) == 0 {
 		return ""
 	}
-	return join(st, parts)
+	return join(st, blocks)
 }

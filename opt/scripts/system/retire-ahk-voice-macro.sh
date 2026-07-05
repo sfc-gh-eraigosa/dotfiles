@@ -31,8 +31,10 @@ case "${1:-}" in
 esac
 
 # Repo root, resolved from this script's location (works via the ~/opt symlink).
-SCRIPT_PATH="$(readlink -f "$0")"
-BASE_DIR="$(cd "$(dirname "$SCRIPT_PATH")/../../.." && pwd)"
+# Portable replacement for `readlink -f "$0"` (GNU-only; absent on macOS/BSD):
+# `cd ... && pwd -P` resolves symlinks to the physical script dir.
+SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd -P)"
+BASE_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd -P)"
 REPO_AHK="${BASE_DIR}/opt/Desktop/Apps/scripts/macos.ahk"
 
 # Markers that identify the retired voice block in a deployed macos.ahk.

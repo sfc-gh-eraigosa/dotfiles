@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # goenv configuration
 export GOENV_ROOT="$HOME/go"
 export GOENV_PATH_ORDER=front
@@ -23,8 +24,24 @@ if [[ "$(uname -r | awk -F'-' '{print $3}')" = "Microsoft" ]] ; then
     alias go='go.exe'
 fi
 
-# Initialize goenv
-eval "$(goenv init -)"
+# Initialize goenv. Pass the CURRENT shell explicitly: bare `goenv init -`
+# infers it from $SHELL, so a bash session sourcing this while $SHELL=zsh would
+# eval zsh code (a `read -rA` PATH loop) under bash and error out, emptying PATH.
+# Detect the live shell instead; empty falls back to goenv's own detection.
+if [ -n "${ZSH_VERSION:-}" ]; then _goenv_shell=zsh
+elif [ -n "${BASH_VERSION:-}" ]; then _goenv_shell=bash
+else _goenv_shell=""; fi
+# PATH-clobber guard (belt-and-suspenders): if any goenv build still drops the
+# system bin dirs (/usr/bin, /bin, …), restore a known-good PATH so the login
+# shell keeps working. See the shell-portability standard referenced in CLAUDE.md.
+__goenv_path_safe="$PATH"
+eval "$(goenv init - "${_goenv_shell}")"
+case ":${PATH}:" in
+    *":/usr/bin:"*) : ;;                          # system PATH survived
+    *) PATH="${PATH}:${__goenv_path_safe}" ;;     # init clobbered PATH; restore
+esac
+export PATH
+unset __goenv_path_safe _goenv_shell
 
 # Set shell version to latest installed version if not already set by .go-version or local
 if [ -z "$GOENV_VERSION" ]; then

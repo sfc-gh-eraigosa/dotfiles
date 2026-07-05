@@ -5,14 +5,15 @@ function install_zsh_centos7() {
     sudo yum install -y git make ncurses-devel gcc autoconf man
     git clone -b zsh-5.7.1 https://github.com/zsh-users/zsh.git /tmp/zsh
     (
-        cd /tmp/zsh
+        cd /tmp/zsh || exit 1
         ./Util/preconfig
         ./configure
         sudo make -j 20 install.bin install.modules install.fns
     )
 }
 
-export BASE_DIR="$(cd "$(dirname $0)" && pwd)"
+BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
+export BASE_DIR
 
 # --- Authenticate sudo up front -------------------------------------------
 # The rest of this installer runs several privileged steps (apt/yum installs,
@@ -91,7 +92,7 @@ if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
   fi
 fi
 
-for file in $(find "${BASE_DIR}/opt/profiles" -type f); do
+while IFS= read -r file; do
     filename=$(basename "$file")
     # Skip metadata and non-profile files
     [[ "$filename" == "Brewfile" ]] && continue
@@ -99,10 +100,10 @@ for file in $(find "${BASE_DIR}/opt/profiles" -type f); do
     [[ "$filename" == "requirements.txt" ]] && continue
     [[ "$filename" == "GEMINI.md" ]] && continue
     [[ "$filename" == "CLAUDE.md" ]] && continue
-    
+
     echo "Creating symlink to $file in home directory."
     ln -sf "${file}" "${HOME}/${filename}"
-done
+done < <(find "${BASE_DIR}/opt/profiles" -type f)
 
 # force a few
 for file in ".profile" ".zshenv" ".zshrc" ".bash_logout" ".bashrc"; do
@@ -203,6 +204,15 @@ if [ -f "${BASE_DIR}/opt/scripts/system/install_yq.sh" ]; then
     "${BASE_DIR}/opt/scripts/system/install_yq.sh" || echo "WARNING: yq install reported problems; continuing."
 fi
 
+# Install the Snowflake CLI (`snow`). Replaces the old .zshrc daily-maintenance
+# pip auto-install, which broke on PEP 668 (externally-managed-environment)
+# systems. macOS uses the homebrew-core formula; Linux uses pipx so the system
+# Python is untouched.
+if [ -f "${BASE_DIR}/opt/scripts/system/install_snowflake_cli.sh" ]; then
+    echo "Installing snowflake-cli..."
+    "${BASE_DIR}/opt/scripts/system/install_snowflake_cli.sh" || echo "WARNING: snowflake-cli install reported problems; continuing."
+fi
+
 # only setup these scripts when docker is installed and responsive
 if command -v docker &> /dev/null; then
     # Setup docker permissions for the current use
@@ -247,7 +257,23 @@ fi
 # Falls back to "latest" only if .go-version is missing.
 export PATH="${HOME}/.goenv/bin:${PATH}"
 if command -v goenv &> /dev/null; then
-  eval "$(goenv init -)"
+  # Pass the shell to `goenv init` EXPLICITLY. Bare `goenv init -` infers the
+  # shell from $SHELL, so on a host whose login shell is zsh it emits zsh code
+  # (a `while IFS=: read -rA …` PATH loop) even though this script runs under
+  # bash — bash then errors `read: -A: invalid option`, the loop's `_NEW_PATH`
+  # stays empty, and `export PATH="$_NEW_PATH"` wipes PATH, after which every
+  # coreutil (tr, uname, git…) is "command not found" and the install collapses.
+  # `goenv init - bash` forces bash-safe output. The guard below is a belt-and-
+  # suspenders backstop: if any goenv build still drops the system bin dirs,
+  # restore a known-good PATH. See docs/mbo/specs/shell-portability.md.
+  __goenv_path_safe="${PATH}"
+  eval "$(goenv init - bash)"
+  case ":${PATH}:" in
+    *":/usr/bin:"*) : ;;                          # system PATH survived
+    *) PATH="${PATH}:${__goenv_path_safe}" ;;     # init clobbered PATH; restore
+  esac
+  export PATH
+  unset __goenv_path_safe
   if [ -f "${BASE_DIR}/.go-version" ]; then
     PINNED_GO_VERSION=$(tr -d '[:space:]' < "${BASE_DIR}/.go-version")
     echo "Ensuring Go ${PINNED_GO_VERSION} is installed (pinned via .go-version)..."
@@ -440,7 +466,7 @@ if [ -f "${HOME}/.sshd.env" ]; then
 fi
 
 if [ -f "${HOME}/.gitrepos" ] ; then
-  cd "${HOME}"
+  cd "${HOME}" || exit 1
   "${HOME}/.gitrepos"
 fi
 

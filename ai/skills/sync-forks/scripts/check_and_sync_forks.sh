@@ -42,15 +42,15 @@ check_repo() {
   local SYNC=$2
   local FORCE=$3
   
-  local REPO_INFO=$(gh api "repos/$REPO" --jq '{parent: .parent.full_name, branch: .default_branch}' 2>/dev/null || echo "")
-  local PARENT=$(echo "$REPO_INFO" | jq -r '.parent // empty')
-  local BRANCH=$(echo "$REPO_INFO" | jq -r '.branch // empty')
+  local REPO_INFO; REPO_INFO=$(gh api "repos/$REPO" --jq '{parent: .parent.full_name, branch: .default_branch}' 2>/dev/null || echo "")
+  local PARENT; PARENT=$(echo "$REPO_INFO" | jq -r '.parent // empty')
+  local BRANCH; BRANCH=$(echo "$REPO_INFO" | jq -r '.branch // empty')
 
   if [[ -n "$PARENT" && -n "$BRANCH" ]]; then
     local OWNER=${REPO%/*}
-    local COMPARE=$(gh api "repos/$PARENT/compare/$BRANCH...$OWNER:$BRANCH" 2>/dev/null || echo "")
-    local STATUS=$(echo "$COMPARE" | jq -r '.status // "unknown"')
-    local BEHIND=$(echo "$COMPARE" | jq -r '.behind_by // 0')
+    local COMPARE; COMPARE=$(gh api "repos/$PARENT/compare/$BRANCH...$OWNER:$BRANCH" 2>/dev/null || echo "")
+    local STATUS; STATUS=$(echo "$COMPARE" | jq -r '.status // "unknown"')
+    local BEHIND; BEHIND=$(echo "$COMPARE" | jq -r '.behind_by // 0')
     
     if [[ "$STATUS" == "behind" || "$STATUS" == "diverged" ]] && [[ "$BEHIND" -gt 0 ]]; then
       echo "[$REPO] Status: $STATUS, Behind by: $BEHIND commits."

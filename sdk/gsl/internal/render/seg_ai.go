@@ -37,11 +37,15 @@ func NewAISegment(p payload.Payload, cwd string, mcpRunner mcp.Runner, mcpOpts m
 }
 
 // Render implements Segment.
-func (s *AISegment) Render(ctx context.Context, st style.Style) (string, bool) {
+//
+// Returns raw (unpainted) text plus the colorKey "ai". compactLevel is
+// accepted but only level 0 (full detail) is implemented; PHASE 2 will add
+// compaction logic for levels 1–3.
+func (s *AISegment) Render(ctx context.Context, st style.Style, _ int) (text, colorKey string, ok bool) {
 	p := s.Payload
 	// No payload at all (Gemini/CLI mode): every payload pointer is nil.
 	if p.Model == nil && p.ContextWindow == nil && p.RateLimits == nil {
-		return "", false
+		return "", "", false
 	}
 
 	parts := make([]string, 0, 5)
@@ -84,9 +88,9 @@ func (s *AISegment) Render(ctx context.Context, st style.Style) (string, bool) {
 	}
 
 	if len(parts) == 0 {
-		return "", false
+		return "", "", false
 	}
-	return paint(st, "ai", strings.Join(parts, " ")), true
+	return strings.Join(parts, " "), "ai", true
 }
 
 // contextPart renders the context-window usage, e.g. "<ctx-glyph> 42% 50k/200k".

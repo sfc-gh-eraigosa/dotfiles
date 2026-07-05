@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # ~/.profile: executed by the command interpreter for login shells.
 # This file is not read by bash(1), if ~/.bash_profile or ~/.bash_login
 # exists.
@@ -9,6 +10,7 @@
 #umask 022
 
 if [ ! -z "${GREP_OPTIONS}" ]; then
+  # shellcheck disable=SC2139  # intentional: bake the current GREP_OPTIONS into the alias, then unset it
   alias grep="grep ${GREP_OPTIONS}"
   unset GREP_OPTIONS
 fi
@@ -40,6 +42,7 @@ if [ -d "${HOME}/.cabal/bin" ] ; then
       PATH="${HOME}/.cabal/bin:$PATH"
 fi
 
+# shellcheck disable=SC2034  # set here for parity with .bashrc/.zshrc; consumed by interactive prompt setup
 force_color_prompt=yes
 # Detect if we're in VSCode/Cursor terminal
 if [ "$TERM_PROGRAM" = "vscode" ] || [ "$TERM_PROGRAM" = "cursor" ] || [ -n "$VSCODE_PID" ] || [ -n "$CURSOR_PID" ]; then
@@ -149,7 +152,7 @@ if [ "$EDITOR_TERMINAL" = "false" ]; then
     if ! pgrep -u "${USER:-$(id -un)}" ssh-agent > /dev/null 2>&1; then
       eval "$(ssh-agent -s)" > /dev/null
     fi
-    export GPG_TTY=$(tty 2>/dev/null)
+    GPG_TTY=$(tty 2>/dev/null); export GPG_TTY
     # Only launch zsh if we are not already in it and it exists
     case "$-" in
         *i*)
@@ -166,17 +169,35 @@ alias bazel='bazelisk'
 # added by Snowflake SnowSQL installer
 export PATH=${HOME}/opt/bin:$PATH
 
-# ruby docker environment aliases
+# ruby docker environment aliases + git environment shortcuts.
 #
-if [ -f ${HOME}/.ruby.env ] ; then
-    source ${HOME}/.ruby.env
-else
-    case "$-" in
-        *i*) echo ".ruby.env is missing, you can install with : . opt/scripts/docker/setup_ruby-docker.sh" ;;
-    esac
-fi
-# Source git environment shortcuts
-[ -f ${HOME}/.dindcenv ] && . ${HOME}/.dindcenv
+# ~/.ruby.env and ~/.dindcenv define interactive Docker/UCP helper aliases and
+# functions written in bash/zsh-only syntax: the `function name { ... }` form
+# and hyphenated names (e.g. dindc-login). They are NOT POSIX sh, and sourcing
+# them from the wrong shell at login breaks login on two of our platforms:
+#   * Linux / Raspberry Pi / WSL — /bin/sh is dash; a parse error in a
+#     dot-sourced file is FATAL (exit 2) even under `set +e`. On the Pi this
+#     aborts the LightDM Xsession before the desktop starts → blank screen →
+#     bounced back to the greeter (a login loop).
+#   * macOS — /bin/sh is bash in POSIX mode, which rejects the hyphenated
+#     function names ("not a valid identifier") and bails as well.
+# Every one of those failure paths is a NON-INTERACTIVE shell, and these helpers
+# are only useful interactively. So gate on an interactive shell that is real
+# bash or zsh; non-interactive logins (the Xsession, `sh -c`, ssh commands)
+# skip the block entirely and can never choke on it.
+case "$-" in
+    *i*)
+        if [ -n "$BASH_VERSION" ] || [ -n "$ZSH_VERSION" ]; then
+            if [ -f "${HOME}/.ruby.env" ] ; then
+                . "${HOME}/.ruby.env"
+            else
+                echo ".ruby.env is missing, you can install with : . opt/scripts/docker/setup_ruby-docker.sh"
+            fi
+            # Source git environment shortcuts
+            [ -f "${HOME}/.dindcenv" ] && . "${HOME}/.dindcenv"
+        fi
+        ;;
+esac
 
 # Load Gemini CLI environment
 [ -f "$HOME/.gemini.profile" ] && . "$HOME/.gemini.profile"

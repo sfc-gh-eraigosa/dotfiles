@@ -10,9 +10,12 @@ func TestTime_ValidTZ(t *testing.T) {
 	st := asciiStyle()
 	seg := NewTimeSegment(fixedClock(), "America/Los_Angeles", "15:04", "Mon 01-02")
 
-	got, ok := seg.Render(context.Background(), st)
+	got, colorKey, ok := seg.Render(context.Background(), st, 0)
 	if !ok {
 		t.Fatal("time: want ok=true")
+	}
+	if colorKey != "time" {
+		t.Errorf("time: want colorKey=time, got %q", colorKey)
 	}
 	// 2026-05-25 14:30 UTC → 07:30 PDT, Monday May 25.
 	if !strings.Contains(got, "07:30") {
@@ -31,7 +34,7 @@ func TestTime_BadTZ_FallsBackToUTC(t *testing.T) {
 	seg := NewTimeSegment(fixedClock(), "Not/AReal_Zone", "15:04", "Mon 01-02")
 
 	// Must not panic.
-	got, ok := seg.Render(context.Background(), st)
+	got, _, ok := seg.Render(context.Background(), st, 0)
 	if !ok {
 		t.Fatal("time: want ok=true even with a bad tz")
 	}
@@ -46,7 +49,7 @@ func TestTime_BadTZ_FallsBackToUTC(t *testing.T) {
 func TestTime_EmptyTZ_UsesUTC(t *testing.T) {
 	st := asciiStyle()
 	seg := NewTimeSegment(fixedClock(), "", "", "")
-	got, ok := seg.Render(context.Background(), st)
+	got, _, ok := seg.Render(context.Background(), st, 0)
 	if !ok {
 		t.Fatal("time: want ok=true")
 	}
@@ -63,21 +66,21 @@ func TestTime_GlyphModes(t *testing.T) {
 	// nerdfont
 	pl := powerlineStyleFixture()
 	seg := NewTimeSegment(fixedClock(), "UTC", "15:04", "Mon 01-02")
-	got, _ := seg.Render(context.Background(), pl)
+	got, _, _ := seg.Render(context.Background(), pl, 0)
 	if !strings.Contains(got, pl.Icons["time"]) {
 		t.Errorf("time nerdfont: want time glyph %q in %q", pl.Icons["time"], got)
 	}
 
 	// emoji
 	em := emojiStyleFixture()
-	got, _ = seg.Render(context.Background(), em)
+	got, _, _ = seg.Render(context.Background(), em, 0)
 	if !strings.Contains(got, "⏰") {
 		t.Errorf("time emoji: want ⏰ in %q", got)
 	}
 
 	// ascii
 	as := asciiStyle()
-	got, _ = seg.Render(context.Background(), as)
+	got, _, _ = seg.Render(context.Background(), as, 0)
 	if !strings.Contains(got, "[time]") {
 		t.Errorf("time ascii: want [time] in %q", got)
 	}
