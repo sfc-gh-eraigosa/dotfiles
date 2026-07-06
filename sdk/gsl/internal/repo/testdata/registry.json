@@ -4,7 +4,7 @@
     {
       "name": "gsl",
       "default_base_branch": "main",
-      "description": "gsl: Go status line for Claude Code (live) + Gemini on-demand",
+      "description": "gsl: Go status line for Claude Code (live) + Antigravity on-demand",
       "workers": [
         {
           "user": "edward-raigosa",

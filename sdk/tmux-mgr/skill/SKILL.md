@@ -15,7 +15,7 @@ This skill provides expertise in managing tmux sessions and windows using the `t
 **Host-aware assistant selection.** `tmux-mgr` auto-detects which AI CLI is driving the orchestration and spawns the matching assistant inside each agent pane:
 
 - Inside Claude Code (`CLAUDECODE=1`): each pane runs `claude -p "<task>" --dangerously-skip-permissions` and exits when the task completes. The spawned Claude can further fan out via its native `Task()` subagents inside its own pane — so a single `agent start` invocation already gives you a full agent team.
-- Otherwise (default): each pane runs `gemini -y -p "<task>"` with model fallback, preserving the original behavior.
+- Otherwise (default): each pane runs `agy -p "<task>" --dangerously-skip-permissions` (Antigravity CLI) with model fallback.
 
 No flag is needed — detection is automatic from the host shell's environment.
 
@@ -23,7 +23,7 @@ No flag is needed — detection is automatic from the host shell's environment.
 
 - **Start Agent**: `tmux-mgr agent start <agent-name> --task-description "<task>"`
   - The session is tagged with the current repo's git root so `agent list` can scope to it later. Sessions live globally under `~/.config/tmux-mgr/sessions/`, so the same binary works from any repo without per-repo setup.
-  - **Agent definitions**: `<agent-name>` is matched against `./.ai/agents/<name>.md` first, then `~/.ai/agents/<name>.md`; both directories are also scanned for files whose `# Aliases:` frontmatter contains the name. When matched, the file's `# Persona:` becomes the pane label, `# Symbol:` becomes the pane emoji, and `# Model:` (Ollama-style, e.g. `qwen2.5:1.5b` or `smollm:360m`) is mapped by parameter size to a Claude/Gemini tier (Haiku/Flash for <3B, Sonnet/Pro for 3–7B, Opus/Pro for ≥8B). Unrecognized models cause the spawn to inherit the host CLI's default model. When no file matches, `generalist` defaults apply: the cheapest tier (Haiku 4.5 / gemini-2.5-flash) and the 🤖 emoji.
+  - **Agent definitions**: `<agent-name>` is matched against `./.ai/agents/<name>.md` first, then `~/.ai/agents/<name>.md`; both directories are also scanned for files whose `# Aliases:` frontmatter contains the name. When matched, the file's `# Persona:` becomes the pane label, `# Symbol:` becomes the pane emoji, and `# Model:` (Ollama-style, e.g. `qwen2.5:1.5b` or `smollm:360m`) is mapped by parameter size to a Claude/Antigravity tier (Haiku/Flash for <3B, Sonnet/Pro for 3–7B, Opus/Pro for ≥8B). Unrecognized models cause the spawn to inherit the host CLI's default model. When no file matches, `generalist` defaults apply: the cheapest tier (Haiku 4.5 / gemini-2.5-flash) and the 🤖 emoji.
 - **Check Progress**: `tmux-mgr agent list`
   - Defaults to sessions started from the current repo; pass `--all` to see every session (including global / legacy ones with no repo binding). Status reconciles live: `RUNNING` while the pane is alive, `COMPLETED` once `RESULT.md` is written, `FAILED` if the pane exits without one.
 - **Get Results (Fan-In)**: `tmux-mgr agent complete <session-id>`
@@ -47,8 +47,8 @@ No flag is needed — detection is automatic from the host shell's environment.
 - **Anchor root pane**: `tmux-mgr pane anchor [title]`
   - Run once from your terminal to mark the active pane as the orchestration root.
   - Stores the pane ID in the tmux global environment (`TMUX_MGR_ROOT_PANE`) so any AI process can target it.
-  - Required before any AI process (Claude, Gemini) can split or spawn panes correctly from outside tmux.
-  - Default title is `root`; pass a custom label (e.g. `claude`, `gemini`) if desired.
+  - Required before any AI process (Claude, Antigravity) can split or spawn panes correctly from outside tmux.
+  - Default title is `root`; pass a custom label (e.g. `claude`, `antigravity`) if desired.
 - **Adopt pane from outside tmux**: `tmux-mgr pane adopt`
   - Creates a new tmux window from a non-tmux shell, registers it as the root anchor, and prints its pane ID.
   - Use this when an AI process needs an anchor but was not launched from inside tmux.

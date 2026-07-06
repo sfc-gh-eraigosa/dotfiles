@@ -66,10 +66,15 @@ func gssWorkerAdd(run gssRunner, feature, purpose, description, user, engine, se
 // engineSessionID reads the engine-native session id from the environment,
 // keyed by the detected host.
 func engineSessionID(host agent.Assistant, getenv func(string) string) string {
-	switch host {
+	switch agent.NormalizeAssistant(host) {
 	case agent.AssistantClaude:
 		return getenv("CLAUDE_SESSION_ID")
-	case agent.AssistantGemini:
+	case agent.AssistantAntigravity:
+		if id := getenv("ANTIGRAVITY_SESSION_ID"); id != "" {
+			return id
+		}
+		// Legacy Gemini CLI var — Antigravity reuses the ~/.gemini config
+		// tree, so honor the old session var too.
 		return getenv("GEMINI_SESSION_ID")
 	default:
 		return ""

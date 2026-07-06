@@ -42,7 +42,7 @@ GitHub issue, a `gss feature` draft PR, or a cross-team initiative — flows thr
   `docs/mbo/{designs,specs,plans}/<slug>.md` from the templates, and registers the objective in
   `index.md`. Always go through the skill so the whole team automatically inherits every
   improvement we make to it. The routing policy + conventions are the skill's source of truth:
-  `docs/mbo/GEMINI.md`.
+  `docs/mbo/AGENTS.md`.
 - When you arbitrate a decision or convene an architecture review, **capture the outcome as the
   objective's design/ADR** in `docs/mbo/designs/`, and keep its `index.md` **state** current
   (`idea → designing → specifying → planning → building → in-review → merged`).

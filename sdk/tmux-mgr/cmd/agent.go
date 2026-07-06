@@ -77,10 +77,19 @@ func resolveModel(def *agent.Definition, host agent.Assistant) string {
 	if host == agent.AssistantClaude && os.Getenv("TMUX_MGR_CLAUDE_LAUNCHER") != "" {
 		return ""
 	}
-	if host == agent.AssistantGemini && os.Getenv("TMUX_MGR_GEMINI_LAUNCHER") != "" {
+	if agent.NormalizeAssistant(host) == agent.AssistantAntigravity && os.Getenv(antigravityLauncherEnv()) != "" {
 		return ""
 	}
 	return model
+}
+
+// antigravityLauncherEnv returns the launcher env var name for the Antigravity
+// CLI, honoring the legacy Gemini-era name when the new one is unset.
+func antigravityLauncherEnv() string {
+	if os.Getenv("TMUX_MGR_ANTIGRAVITY_LAUNCHER") == "" && os.Getenv("TMUX_MGR_GEMINI_LAUNCHER") != "" {
+		return "TMUX_MGR_GEMINI_LAUNCHER"
+	}
+	return "TMUX_MGR_ANTIGRAVITY_LAUNCHER"
 }
 
 // spawnAgentPane launches the agent for an already-created gss worker: build
@@ -91,7 +100,7 @@ func spawnAgentPane(host agent.Assistant, def *agent.Definition, model, agentNam
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
-	assistantBinary := string(host)
+	assistantBinary := host.Binary()
 	assistantPath, err := exec.LookPath(assistantBinary)
 	if err != nil {
 		assistantPath = assistantBinary // fallback; child will surface the error
@@ -129,13 +138,16 @@ func runAgentExecute(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("task description is empty")
 	}
 
-	host := agent.Assistant(os.Getenv("TMUX_MGR_ASSISTANT"))
+	// Normalize so a legacy TMUX_MGR_ASSISTANT='gemini' (old panes/wrappers)
+	// runs the Antigravity loop.
+	host := agent.NormalizeAssistant(agent.Assistant(os.Getenv("TMUX_MGR_ASSISTANT")))
 	if host == "" {
-		host = agent.AssistantGemini
+		host = agent.AssistantAntigravity
 	}
 	assistantPath := os.Getenv("TMUX_MGR_ASSISTANT_PATH")
-	// Back-compat: respect legacy GEMINI_PATH if the new var is absent and host is gemini.
-	if assistantPath == "" && host == agent.AssistantGemini {
+	// Back-compat: respect legacy GEMINI_PATH if the new var is absent and host
+	// is antigravity (the Gemini CLI successor).
+	if assistantPath == "" && host == agent.AssistantAntigravity {
 		assistantPath = os.Getenv("GEMINI_PATH")
 	}
 
@@ -147,7 +159,7 @@ func runAgentExecute(cmd *cobra.Command, args []string) error {
 	case agent.AssistantClaude:
 		return runClaudeLoop(task, assistantPath, model)
 	default:
-		return runGeminiLoop(task, assistantPath, model)
+		return runAntigravityLoop(task, assistantPath, model)
 	}
 }
 
@@ -189,7 +201,7 @@ func resolveLauncher(envName, defaultExec, fallbackPath string) (string, []strin
 // inside a freshly-created tmux pane. Exposed at package scope so it can be unit-tested
 // without spawning tmux.
 //
-// model is the resolved Claude/Gemini model ID (or "" to let the spawned CLI
+// model is the resolved Claude/Antigravity model ID (or "" to let the spawned CLI
 // inherit its default). It is forwarded via TMUX_MGR_MODEL so the child
 // `agent execute` process can attach the right CLI flag.
 func buildInvocationCmd(host agent.Assistant, assistantPath, executablePath, taskDescription, model string) string {
@@ -202,7 +214,7 @@ func buildInvocationCmd(host agent.Assistant, assistantPath, executablePath, tas
 	// command via /bin/sh -c, which does NOT source the user's shell rc, so
 	// vars set in ~/.zshrc.local would otherwise be lost in the spawned pane.
 	extraEnv := ""
-	for _, name := range []string{"TMUX_MGR_CLAUDE_LAUNCHER", "TMUX_MGR_GEMINI_LAUNCHER"} {
+	for _, name := range []string{"TMUX_MGR_CLAUDE_LAUNCHER", "TMUX_MGR_ANTIGRAVITY_LAUNCHER", "TMUX_MGR_GEMINI_LAUNCHER"} {
 		if v := os.Getenv(name); v != "" {
 			escaped := strings.ReplaceAll(v, "'", "'\\''")
 			extraEnv += fmt.Sprintf("%s='%s' ", name, escaped)
@@ -214,9 +226,10 @@ func buildInvocationCmd(host agent.Assistant, assistantPath, executablePath, tas
 	)
 }
 
-// buildInstruction produces the prompt handed to the spawned assistant. The shape differs
-// per host: Gemini uses its @generalist extension prefix; Claude takes a plain task plus
-// the RESULT.md mandate.
+// buildInstruction produces the prompt handed to the spawned assistant. Both
+// hosts take a plain task plus the RESULT.md mandate; Claude's wording names
+// its Write tool explicitly. (The Gemini-era @generalist extension prefix
+// retired with Gemini CLI — Antigravity has no such extension syntax.)
 func buildInstruction(host agent.Assistant, task string) string {
 	if host == agent.AssistantClaude {
 		return fmt.Sprintf(
@@ -225,16 +238,17 @@ func buildInstruction(host agent.Assistant, task string) string {
 		)
 	}
 	return fmt.Sprintf(
-		"@generalist Execute the following task: %s. When finished, you MUST ensure the final result is written to RESULT.md in the current directory, then exit.",
+		"Execute the following task: %s. When finished, you MUST ensure the final result is written to RESULT.md in the current directory, then exit.",
 		task,
 	)
 }
 
-func runGeminiLoop(task, geminiPath, requestedModel string) error {
-	// Launcher resolution mirrors runClaudeLoop — see TMUX_MGR_GEMINI_LAUNCHER.
-	execPath, prefixArgs := resolveLauncher("TMUX_MGR_GEMINI_LAUNCHER", "gemini", geminiPath)
+func runAntigravityLoop(task, agyPath, requestedModel string) error {
+	// Launcher resolution mirrors runClaudeLoop — see TMUX_MGR_ANTIGRAVITY_LAUNCHER
+	// (the legacy TMUX_MGR_GEMINI_LAUNCHER is honored when the new var is unset).
+	execPath, prefixArgs := resolveLauncher(antigravityLauncherEnv(), "agy", agyPath)
 
-	instruction := buildInstruction(agent.AssistantGemini, task)
+	instruction := buildInstruction(agent.AssistantAntigravity, task)
 
 	// When the caller requested a specific model (via TMUX_MGR_MODEL), try it
 	// first. The rest of the list provides quota fallback. The empty string
@@ -256,9 +270,9 @@ func runGeminiLoop(task, geminiPath, requestedModel string) error {
 			fmt.Printf("Starting cognitive loop with fallback model: %s...\n", model)
 		}
 
-		execArgs := []string{"-y", "-p", instruction}
+		execArgs := []string{"-p", instruction, "--dangerously-skip-permissions"}
 		if model != "" {
-			execArgs = append([]string{"-m", model}, execArgs...)
+			execArgs = append([]string{"--model", model}, execArgs...)
 		}
 		execArgs = append(append([]string{}, prefixArgs...), execArgs...)
 

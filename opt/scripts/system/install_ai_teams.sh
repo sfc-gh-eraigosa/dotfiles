@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # install_ai_teams.sh — transform ai/teams/<team>/the_*.md persona files into native
-# agent artifacts for Claude Code, Gemini CLI, Antigravity, and Ollama.
+# agent artifacts for Claude Code, Antigravity, and Ollama.
 #
 # Personas declare an abstract `tier:` in their YAML frontmatter; this script resolves
 # the tier through ai/teams/model-map.yaml into each tool's concrete model + effort/
@@ -8,7 +8,7 @@
 # routing-grade `description`, and emits each tool's native format.
 #
 # Design: docs/mbo/specs/2026-06-01-ai-teams-install-design.md
-# Mirrors install_gemini_skills.sh / install_claude_skills.sh. Idempotent; each tool
+# Mirrors install_antigravity_skills.sh / install_claude_skills.sh. Idempotent; each tool
 # emit is independent and degrades gracefully (warn + continue) when a tool is absent.
 set -euo pipefail
 
@@ -21,7 +21,6 @@ VALIDATE="${TEAMS_DIR}/validate.sh"
 # Output roots. DEST_HOME lets tests redirect every tool dir under a temp root.
 DEST_HOME="${TEAMS_DEST_HOME:-$HOME}"
 CLAUDE_AGENTS="${DEST_HOME}/.claude/agents/teams"
-GEMINI_AGENTS="${DEST_HOME}/.gemini/agents/teams"
 ANTIGRAVITY_AGENTS="${DEST_HOME}/.config/antigravity/agents"
 OLLAMA_DIR="${DEST_HOME}/.config/ollama/teams"
 
@@ -31,9 +30,9 @@ ONLY_TOOL=""
 
 usage() {
   cat <<'EOF'
-Usage: install_ai_teams.sh [--dry-run] [--tool claude|gemini|antigravity|ollama] [--skip-ollama-create]
+Usage: install_ai_teams.sh [--dry-run] [--tool claude|antigravity|ollama] [--skip-ollama-create]
 
-Transforms ai/teams personas into native agents for all four tools.
+Transforms ai/teams personas into native agents for all three tools.
   --dry-run             Print the plan; write nothing, run no ollama create.
   --tool <name>         Emit for only one tool.
   --skip-ollama-create  Generate Modelfiles but do not run `ollama create`.
@@ -136,16 +135,6 @@ emit_claude() {
   atomic_write "${CLAUDE_AGENTS}/${team}/${role}.md" "$(printf -- '---\n%s\n---\n\n%s\n' "$fm" "$prompt")"
 }
 
-emit_gemini() {
-  local f="$1" team="$2" role="$3" tier="$4" name="${2}-${3}" desc="$5" prompt="$6"
-  local model temp
-  model="$(mm "$tier" gemini model)"; temp="$(mm "$tier" gemini temperature)"
-  local fm
-  fm="$(name="$name" desc="$desc" model="$model" temp="$temp" \
-        yq -n '.name=strenv(name) | .description=strenv(desc) | .model=strenv(model) | .temperature=(strenv(temp)|from_yaml)')"
-  atomic_write "${GEMINI_AGENTS}/${team}/${role}.md" "$(printf -- '---\n%s\n---\n\n%s\n' "$fm" "$prompt")"
-}
-
 emit_antigravity() {
   local team="$2" role="$3" tier="$4" name="${2}-${3}" desc="$5" prompt="$6"
   local model; model="$(mm "$tier" antigravity model)"
@@ -176,7 +165,7 @@ emit_ollama() {
 }
 
 # --- main ------------------------------------------------------------------------------
-echo "Installing AI teams (claude/gemini/antigravity/ollama)..."
+echo "Installing AI teams (claude/antigravity/ollama)..."
 
 # Validate source before emitting anything (a failure aborts teams install only).
 if [ -x "$VALIDATE" ]; then
@@ -191,7 +180,8 @@ fi
 # `ollama` models created in the registry are not removed here.
 if [ "$DRY_RUN" -ne 1 ]; then
   if want_tool claude; then rm -rf "${CLAUDE_AGENTS}"; fi
-  if want_tool gemini; then rm -rf "${GEMINI_AGENTS}"; fi
+  # Legacy Gemini CLI teams dir (tool retired 2026-06-18): always pruned.
+  rm -rf "${DEST_HOME}/.gemini/agents/teams"
   if want_tool ollama; then rm -rf "${OLLAMA_DIR}"; fi
 fi
 
@@ -228,7 +218,6 @@ while IFS= read -r -d '' f; do
   prompt="$(compose_prompt "$f" "$fm_data")"
 
   want_tool claude      && emit_claude      "$f" "$team" "$role" "$tier" "$desc" "$prompt" "$color"
-  want_tool gemini      && emit_gemini      "$f" "$team" "$role" "$tier" "$desc" "$prompt"
   want_tool antigravity && emit_antigravity "$f" "$team" "$role" "$tier" "$desc" "$prompt"
   want_tool ollama      && emit_ollama      "$f" "$team" "$role" "$tier" "$desc" "$prompt"
   count=$((count + 1))

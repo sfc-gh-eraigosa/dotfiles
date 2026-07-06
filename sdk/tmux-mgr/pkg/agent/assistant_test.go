@@ -9,9 +9,9 @@ func TestDetectHost(t *testing.T) {
 		want Assistant
 	}{
 		{"claude code present", map[string]string{"CLAUDECODE": "1"}, AssistantClaude},
-		{"claude code empty string", map[string]string{"CLAUDECODE": ""}, AssistantGemini},
-		{"claude code zero", map[string]string{"CLAUDECODE": "0"}, AssistantGemini},
-		{"claude code unset", map[string]string{}, AssistantGemini},
+		{"claude code empty string", map[string]string{"CLAUDECODE": ""}, AssistantAntigravity},
+		{"claude code zero", map[string]string{"CLAUDECODE": "0"}, AssistantAntigravity},
+		{"claude code unset", map[string]string{}, AssistantAntigravity},
 		{"claude wins when both set", map[string]string{"CLAUDECODE": "1", "GEMINI_CLI": "1"}, AssistantClaude},
 	}
 
@@ -23,5 +23,40 @@ func TestDetectHost(t *testing.T) {
 				t.Errorf("DetectHost() = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestNormalizeAssistant(t *testing.T) {
+	cases := []struct {
+		in   Assistant
+		want Assistant
+	}{
+		{AssistantClaude, AssistantClaude},
+		{AssistantAntigravity, AssistantAntigravity},
+		// Legacy Gemini CLI identifier normalizes to its Antigravity successor.
+		{AssistantGemini, AssistantAntigravity},
+		{Assistant(""), Assistant("")},
+	}
+	for _, tc := range cases {
+		if got := NormalizeAssistant(tc.in); got != tc.want {
+			t.Errorf("NormalizeAssistant(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestAssistantBinary(t *testing.T) {
+	cases := []struct {
+		in   Assistant
+		want string
+	}{
+		{AssistantClaude, "claude"},
+		{AssistantAntigravity, "agy"},
+		// Legacy identifier still resolves to the Antigravity binary.
+		{AssistantGemini, "agy"},
+	}
+	for _, tc := range cases {
+		if got := tc.in.Binary(); got != tc.want {
+			t.Errorf("(%q).Binary() = %q, want %q", tc.in, got, tc.want)
+		}
 	}
 }

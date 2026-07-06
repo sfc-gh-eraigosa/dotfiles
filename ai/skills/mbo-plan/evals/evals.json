@@ -22,7 +22,7 @@
     {
       "id": 4,
       "prompt": "The plan for the multi-region cache feature is approved. Break it out so the teams can work the independent pieces in parallel and we integrate at the end.",
-      "expected_output": "Recognizes this is the CAP-B build breakout. ASKS the user to confirm parallel vs sequential, then cuts the plan into LEAF tasks (disjoint file sets behind a frozen interface), builds a dependency-graph edge list, sequences BLOCKING leaves (the interface/contract) first (Interface-First), and fans the parallel leaves out via a Workflow routed per the docs/mbo/GEMINI.md team table. Reserves Workflow isolation:'worktree' for read-only leaves; code-producing leaves use gss feature workers.",
+      "expected_output": "Recognizes this is the CAP-B build breakout. ASKS the user to confirm parallel vs sequential, then cuts the plan into LEAF tasks (disjoint file sets behind a frozen interface), builds a dependency-graph edge list, sequences BLOCKING leaves (the interface/contract) first (Interface-First), and fans the parallel leaves out via a Workflow routed per the docs/mbo/AGENTS.md team table. Reserves Workflow isolation:'worktree' for read-only leaves; code-producing leaves use gss feature workers.",
       "files": []
     },
     {

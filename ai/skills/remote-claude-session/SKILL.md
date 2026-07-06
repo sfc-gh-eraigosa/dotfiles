@@ -107,5 +107,5 @@ Tell the user:
 ## Convention checklist (when creating this skill's directory)
 
 - [ ] `ai/skills/remote-claude-session/SKILL.md` — this file
-- [ ] `ai/skills/remote-claude-session/GEMINI.md` — brief agent context
-- [ ] `ai/skills/remote-claude-session/CLAUDE.md -> GEMINI.md` — symlink
+- [ ] `ai/skills/remote-claude-session/AGENTS.md` — brief agent context
+- [ ] `ai/skills/remote-claude-session/CLAUDE.md -> AGENTS.md` — symlink

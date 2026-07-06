@@ -1,6 +1,6 @@
 # gsl — Go Status Line (`sdk/gsl`)
 
-`gsl` renders a powerline-style status bar for Claude Code and Gemini CLI.
+`gsl` renders a powerline-style status bar for Claude Code and Antigravity CLI.
 
 - **Module path:** `github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl`
 - **Binary:** `gsl` (installed to `~/opt/bin/gsl` by `install.sh`)

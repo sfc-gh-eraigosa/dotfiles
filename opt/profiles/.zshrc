@@ -185,7 +185,7 @@ source $ZSH/oh-my-zsh.sh
 
 # oh-my-zsh's git plugin defines `alias gss='git status -s'` which shadows
 # our gss binary at ~/opt/bin/gss. Drop the alias so the binary wins —
-# critical for any AI assistant (Claude, Gemini) that calls `gss push`.
+# critical for any AI assistant (Claude, Antigravity) that calls `gss push`.
 unalias gss 2>/dev/null
 
 # Claude Code CLI helpers: claude (wrapper) and claude-config (yolo/remote on/off)
@@ -384,7 +384,7 @@ fi
 
 # OpenClaw Completion
 
-# --- Performance Optimizations by Gemini ---
+# --- Performance Optimizations (AI-suggested) ---
 
 # Optimize compinit to run once per day
 autoload -Uz compinit
@@ -432,10 +432,10 @@ openclaw() {
 # Added by tmux-mgr
 [ -f ${HOME}/.config/tmux-mgr/aliases.sh ] && source ${HOME}/.config/tmux-mgr/aliases.sh
 
-# Load Gemini CLI environment
-[[ -f "$HOME/.gemini.profile" ]] && source "$HOME/.gemini.profile"
-# Gemini CLI helpers: gemini() wrapper with tmux auto-anchor
-[ -f "${HOME}/.config/gemini/aliases.sh" ] && . "${HOME}/.config/gemini/aliases.sh"
+# Load Antigravity CLI environment
+[[ -f "$HOME/.antigravity.profile" ]] && source "$HOME/.antigravity.profile"
+# Antigravity CLI helpers: agy() wrapper with tmux auto-anchor
+[ -f "${HOME}/.config/antigravity/aliases.sh" ] && . "${HOME}/.config/antigravity/aliases.sh"
 
 # Load Nano Platform environment
 [ -f "$HOME/.nano_profile" ] && . "$HOME/.nano_profile"

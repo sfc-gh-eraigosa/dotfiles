@@ -14,7 +14,7 @@ Always run `sync-skills` using the established alias, which points to the versio
 Using the `~/opt` path ensures that you are running the scripts as they are installed in the user's environment, maintaining consistency across different machines and installations.
 
 ### 1. Synchronize Skills
-Link all available skills into **both** `~/.agents/skills` (Gemini CLI) and `~/.claude/skills` (Claude Code). The single discovery pass keeps both assistants in sync from one source of truth.
+Link all available skills into **both** `~/.gemini/config/skills` (Antigravity CLI) and `~/.claude/skills` (Claude Code). The single discovery pass keeps both assistants in sync from one source of truth.
 
 ```bash
 bash ~/opt/scripts/system/sync-skills.sh
@@ -36,5 +36,5 @@ bash ~/opt/scripts/system/sync-skills.sh --build
 
 After running `sync-skills`, the agent **MUST** inform the user that they need to manually reload their session for the newly-linked skills to be discovered:
 
-- **Gemini CLI**: Run `/skills reload`
+- **Antigravity CLI (`agy`)**: Restart the session (skills are scanned from `~/.gemini/config/skills` at startup).
 - **Claude Code**: Restart Claude Code (skills are scanned from `~/.claude/skills` at startup; a running session will not see new links until relaunched).

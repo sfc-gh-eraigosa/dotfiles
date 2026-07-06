@@ -34,11 +34,16 @@ expand() { local s="$1"; s="${s/#\~/$HOME}"; s="${s//\$HOME/$HOME}"; printf '%s'
 # rc of running a hook script at $1 with the JSON payload $2 on stdin.
 hook_rc() { local path="$1" payload="$2"; printf '%s' "$payload" | bash "$path" > /dev/null 2>&1; echo $?; }
 
-# Event-agnostic: gather hook commands across every hook event so this validates
-# both Claude (.hooks.PreToolUse[]) and Gemini (.hooks.BeforeTool[]) settings.
+# Event-agnostic: gather hook commands across every hook event. Two layouts:
+#   Claude settings.json:      {hooks: {Event: [{matcher, hooks: [{command}]}]}}
+#   Antigravity hooks.json:    {name: {Event: [{matcher, hooks: [{command}]}]}}
 # mapfile is bash-4 only; use a bash-3.2-safe read loop (macOS system bash is 3.2).
 HOOK_CMDS=()
-while IFS= read -r _hc; do HOOK_CMDS+=("$_hc"); done < <(jq -r '[.hooks[]?[]?.hooks[]?.command] | .[]' "$SETTINGS" 2>/dev/null)
+if jq -e '.hooks' "$SETTINGS" > /dev/null 2>&1; then
+    while IFS= read -r _hc; do HOOK_CMDS+=("$_hc"); done < <(jq -r '[.hooks[]?[]?.hooks[]?.command] | .[]' "$SETTINGS" 2>/dev/null)
+else
+    while IFS= read -r _hc; do HOOK_CMDS+=("$_hc"); done < <(jq -r '[.[]?[]?[]?.hooks[]?.command] | .[]' "$SETTINGS" 2>/dev/null)
+fi
 STATUS_CMD="$(jq -r '.statusLine.command // empty' "$SETTINGS" 2>/dev/null)"
 
 if [ "${#HOOK_CMDS[@]}" -eq 0 ]; then
@@ -62,6 +67,29 @@ for cmd in "${HOOK_CMDS[@]:-}"; do
         privacy_guard.sh)
             [ "$(hook_rc "$path" '{"tool_name":"Write","tool_input":{"file_path":"/tmp/_vh_clean.md","content":"hello world"}}')" = "0" ] \
                 || fail "privacy_guard errored on clean input via the configured path ($path)"
+            ;;
+        antigravity_adapter.sh)
+            # Antigravity wiring: "adapter.sh <guard.sh>". Validate the guard
+            # arg resolves, then drive the pair with agy-dialect payloads and
+            # check the JSON verdict on stdout.
+            guard="$(expand "${cmd#* }")"
+            if [ ! -x "$guard" ]; then
+                fail "adapter's guard argument not executable: '$cmd' (resolved: $guard)"
+                continue
+            fi
+            adapter_decision() { printf '%s' "$2" | bash "$path" "$guard" 2>/dev/null | jq -r '.decision // empty'; }
+            case "$(basename "$guard")" in
+                safety_guard.sh)
+                    [ "$(adapter_decision "$guard" '{"toolCall":{"name":"run_command","args":{"CommandLine":"rm -rf /"}}}')" = "deny" ] \
+                        || fail "adapter+safety_guard did NOT deny a known-bad command ($cmd) — fail-open"
+                    [ "$(adapter_decision "$guard" '{"toolCall":{"name":"run_command","args":{"CommandLine":"ls -la"}}}')" = "allow" ] \
+                        || fail "adapter+safety_guard did NOT allow a known-good command ($cmd)"
+                    ;;
+                privacy_guard.sh)
+                    [ "$(adapter_decision "$guard" '{"toolCall":{"name":"write_to_file","args":{"TargetFile":"/tmp/_vh_clean.md","CodeContent":"hello world"}}}')" = "allow" ] \
+                        || fail "adapter+privacy_guard did not allow clean input ($cmd)"
+                    ;;
+            esac
             ;;
     esac
 done

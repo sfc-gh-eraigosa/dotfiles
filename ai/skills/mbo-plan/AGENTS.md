@@ -6,5 +6,5 @@ produce `design/spec/plan` artifacts under `docs/mbo/{designs,specs,plans}/<slug
 templates → register in `docs/mbo/index.md` → attach to a `gss` draft PR.
 
 The agent-facing instructions are in [`SKILL.md`](./SKILL.md); routing policy + conventions
-live in [`docs/mbo/GEMINI.md`](../../../docs/mbo/GEMINI.md). `evals/evals.json` holds trigger
+live in [`docs/mbo/AGENTS.md`](../../../docs/mbo/AGENTS.md). `evals/evals.json` holds trigger
 test prompts.

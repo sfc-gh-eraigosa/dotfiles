@@ -1,6 +1,6 @@
 # gsl — Go Status Line
 
-`gsl` is a Go-based powerline-style status line with two integration points: it renders live context after every Claude Code assistant turn (receiving a JSON payload on stdin) and produces an on-demand status snapshot for Gemini/CLI (via `/gsl-status`). Four independently configurable segments — `dirgit`, `repo`, `ai`, and `time` — run concurrently and self-omit gracefully when their data is absent, so the line is always fast and never blocks.
+`gsl` is a Go-based powerline-style status line with two integration points: it renders live context after every Claude Code assistant turn (receiving a JSON payload on stdin) and produces an on-demand status snapshot for Antigravity CLI and plain shells (via `gsl status`, e.g. wired to Antigravity's built-in `/statusline` command). Four independently configurable segments — `dirgit`, `repo`, `ai`, and `time` — run concurrently and self-omit gracefully when their data is absent, so the line is always fast and never blocks.
 
 ## Install
 
@@ -15,7 +15,7 @@ bash build.sh
 
 `build.sh` stamps version, commit, build date, and dirty flag via `-ldflags`, then runs `scripts/check-deps.sh` as a seam/license gate.
 
-### Wire into Claude Code and Gemini
+### Wire into Claude Code and Antigravity
 
 `./install.sh` (from the repo root) does three things for gsl:
 
@@ -31,7 +31,7 @@ sync-skills.sh --build       # rebuild gsl + refresh skill links
 make bin                     # same as bash sdk/gsl/build.sh (if using the Makefile)
 ```
 
-The Gemini `/gsl-status` command is auto-discovered from `ai/gemini/commands/gsl-status.toml` — no extra step needed.
+For Antigravity CLI (`agy`), point its built-in `/statusline` custom command at `gsl status` — no custom command file is needed (the old Gemini `/gsl-status` TOML command is gone with Gemini CLI).
 
 ## Subcommands
 
@@ -46,7 +46,7 @@ echo '{"cwd":"/home/user/myproject","model":{"display_name":"claude-sonnet-4-5"}
 
 ### `gsl status`
 
-Renders the status line without reading stdin. The `ai` segment self-omits (no Claude payload). Useful for Gemini CLI and shell scripts:
+Renders the status line without reading stdin. The `ai` segment self-omits (no Claude payload). Useful for Antigravity CLI (its `/statusline` custom command can run it) and shell scripts:
 
 ```sh
 gsl status
@@ -129,7 +129,7 @@ Segment options (set in the `options` map of the `repo` segment in `config.json`
 
 ### `ai`
 
-**Payload-dependent — self-omits when no Claude payload is present** (i.e., in `gsl status` / Gemini mode). When a payload is present, shows:
+**Payload-dependent — self-omits when no Claude payload is present** (i.e., in `gsl status` / Antigravity mode). When a payload is present, shows:
 
 - Model display name (e.g. `claude-sonnet-4-5`)
 - Context-window usage: `<pct>% <used>k/<total>k` (token counts abbreviated with k/m suffixes)
@@ -194,9 +194,9 @@ Segment colors are resolved automatically from the host tool's settings, then th
 
 1. **Host-tool settings file** (read once per render, degrading gracefully on any error):
    - **Claude Code** — `~/.claude/settings.json` field `"theme"` (enum). Values: `"dark"` → dark palette; `"light"` → light palette; `"dark-daltonism"` → daltonism palette; `"system"` or absent → dark palette.
-   - **Gemini CLI** — `~/.gemini/settings.json` field `"ui.theme"` (free-form string, keyword bridge): contains `"light"` → light palette; contains `"daltonism"` or `"colorblind"` → daltonism palette; any other non-empty value → dark palette. If the file is missing or unreadable, falls through to terminal detection.
+   - **Antigravity CLI** — `~/.gemini/antigravity-cli/settings.json` field `"ui.theme"`, falling back to the legacy Gemini CLI file `~/.gemini/settings.json` (free-form string, keyword bridge): contains `"light"` → light palette; contains `"daltonism"` or `"colorblind"` → daltonism palette; any other non-empty value → dark palette. If both files are missing or unreadable, falls through to terminal detection.
 
-2. **Terminal environment** (only when no host-tool context is detected, or the settings file is absent/unreadable for Gemini):
+2. **Terminal environment** (only when no host-tool context is detected, or the settings file is absent/unreadable for Antigravity):
    - `$COLORTERM == "truecolor"` or `"24bit"` → `dark` palette
    - `$TERM` contains `"256color"` → `dark` palette
    - Otherwise → `dark8` palette (8-color named-color palette; no 256-color escapes emitted)
@@ -329,7 +329,7 @@ A `styles` key that does not match any built-in name creates a brand-new user st
 ## Known limitations
 
 - **Nerd Font must be on the rendering terminal**: the `powerline` style requires a Nerd Font installed *and selected* in the terminal that draws the screen — for SSH/WSL sessions that is the **local client**, not the remote host. See [Fonts and remote terminals](#fonts-and-remote-terminals). Use the `emoji` style for a no-font alternative.
-- **Gemini status-line environment variable**: The canonical environment variable that Gemini CLI sets when invoking a status-line command has not been confirmed. `gsl` checks `GEMINI_CLI`, `GEMINI_API_KEY`, and `GEMINI_CLI_CONTEXT` as a best-effort heuristic. If none is set, `toolCtx` is `""` and theme resolution falls through to terminal detection. This has no effect on rendering correctness — it only means auto-theme may not pick the Gemini-settings palette on some Gemini CLI versions.
+- **Antigravity status-line environment variable**: The canonical environment variable that Antigravity CLI (`agy`) sets when invoking its `/statusline` command has not been confirmed. `gsl` checks `ANTIGRAVITY_CLI` and `ANTIGRAVITY_CLI_CONTEXT`, plus the legacy `GEMINI_CLI`, `GEMINI_API_KEY`, and `GEMINI_CLI_CONTEXT`, as a best-effort heuristic. If none is set, `toolCtx` is `""` and theme resolution falls through to terminal detection. This has no effect on rendering correctness — it only means auto-theme may not pick the Antigravity-settings palette on some versions.
 
 ## Two on/off layers
 

@@ -25,8 +25,8 @@
 #
 # Contract:
 #   stdin : JSON {tool_name, tool_input}
-#   exit 0: allow (Gemini: outputs JSON; Claude: no output)
-#   exit 2: block (Gemini: use stderr; Claude: use stderr)
+#   exit 0: allow (run_shell_command dialect: outputs JSON; Claude: no output)
+#   exit 2: block (stderr carries the reason for both dialects)
 #   other : non-blocking error
 #
 # Dependencies: jq, grep -E, bash 3.2+, git (optional; absence = fail-open scan)
@@ -106,7 +106,8 @@ deny() {
     
     printf '%s\n' "$reason" >&2
     
-    # Gemini requires JSON on stdout even for a deny (if exit 0) or just uses stderr (if exit 2).
+    # The legacy-Gemini dialect (kept for the antigravity adapter) expects JSON on stdout for a
+    # deny (if exit 0) or just stderr (if exit 2).
     # We exit 2 to be consistent with Claude's blocking behavior.
     exit 2
 }
@@ -178,7 +179,7 @@ if printf '%s' "$TEXT" | grep -Eiq "$ASSIGN"; then
     fi
 fi
 
-# If we reached here, it's allowed. Gemini CLI needs JSON on stdout.
+# If we reached here, it's allowed. The run_shell_command dialect needs JSON on stdout.
 [[ "$TOOL_NAME" =~ ^[a-z_]+$ ]] && echo '{"decision": "allow"}'
 exit 0
 

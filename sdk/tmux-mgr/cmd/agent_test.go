@@ -71,12 +71,12 @@ func TestBuildInvocationCmd_Claude(t *testing.T) {
 	}
 }
 
-func TestBuildInvocationCmd_Gemini(t *testing.T) {
-	got := buildInvocationCmd(agent.AssistantGemini, "/usr/local/bin/gemini", "/usr/local/bin/tmux-mgr", "say hi", "")
+func TestBuildInvocationCmd_Antigravity(t *testing.T) {
+	got := buildInvocationCmd(agent.AssistantAntigravity, "/usr/local/bin/agy", "/usr/local/bin/tmux-mgr", "say hi", "")
 
 	wantParts := []string{
-		"TMUX_MGR_ASSISTANT='gemini'",
-		"TMUX_MGR_ASSISTANT_PATH='/usr/local/bin/gemini'",
+		"TMUX_MGR_ASSISTANT='antigravity'",
+		"TMUX_MGR_ASSISTANT_PATH='/usr/local/bin/agy'",
 	}
 	for _, want := range wantParts {
 		if !strings.Contains(got, want) {
@@ -107,9 +107,6 @@ func TestBuildInvocationCmd_PropagatesModel(t *testing.T) {
 
 func TestBuildInstruction_Claude(t *testing.T) {
 	got := buildInstruction(agent.AssistantClaude, "Write hello to RESULT.md")
-	if strings.Contains(got, "@generalist") {
-		t.Errorf("Claude instruction must not include Gemini-specific @generalist prefix\n  got: %s", got)
-	}
 	if !strings.Contains(got, "RESULT.md") {
 		t.Errorf("Claude instruction must mandate RESULT.md\n  got: %s", got)
 	}
@@ -118,12 +115,15 @@ func TestBuildInstruction_Claude(t *testing.T) {
 	}
 }
 
-func TestBuildInstruction_Gemini(t *testing.T) {
-	got := buildInstruction(agent.AssistantGemini, "Write hello to RESULT.md")
-	if !strings.Contains(got, "@generalist") {
-		t.Errorf("Gemini instruction must include @generalist prefix\n  got: %s", got)
+func TestBuildInstruction_Antigravity(t *testing.T) {
+	got := buildInstruction(agent.AssistantAntigravity, "Write hello to RESULT.md")
+	if strings.Contains(got, "@generalist") {
+		t.Errorf("Antigravity instruction must not include the retired Gemini-CLI @generalist prefix\n  got: %s", got)
 	}
 	if !strings.Contains(got, "RESULT.md") {
-		t.Errorf("Gemini instruction must mandate RESULT.md\n  got: %s", got)
+		t.Errorf("Antigravity instruction must mandate RESULT.md\n  got: %s", got)
+	}
+	if !strings.Contains(got, "Write hello to RESULT.md") {
+		t.Errorf("Antigravity instruction must embed the task\n  got: %s", got)
 	}
 }

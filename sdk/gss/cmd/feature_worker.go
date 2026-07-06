@@ -38,9 +38,16 @@ var (
 // buildSpawnedBy assembles the spawned_by provenance from the per-flag values,
 // or nil when none are set (a human-started worker). The cmd stamps
 // started_at; spawned_by is informational only (resolution #8).
+//
+// The legacy engine value "gemini" (retired Gemini CLI, EOL June 2026) is
+// still accepted but normalized to "antigravity" so new registry rows carry
+// the current identifier; old persisted rows are never rewritten.
 func buildSpawnedBy(engine, sessionID, paneID, tmuxMgrSession, startedAt string) *registry.SpawnedBy {
 	if engine == "" && sessionID == "" && paneID == "" && tmuxMgrSession == "" {
 		return nil
+	}
+	if engine == "gemini" {
+		engine = "antigravity"
 	}
 	return &registry.SpawnedBy{
 		Engine: engine, SessionID: sessionID, PaneID: paneID,
@@ -112,7 +119,7 @@ func init() {
 	f.BoolVar(&workerForce, "force-suffix", false, "Force a random suffix even when the bare ref is free")
 	f.StringVar(&workerGoal, "goal", "", "Worker goal (seeds WORKER.md)")
 	f.BoolVar(&workerJSON, "json", false, "Emit the created worker as JSON (worker_ref/branch/worktree_path/base_branch)")
-	f.StringVar(&workerEngine, "engine", "", "spawned_by engine (e.g. claude/gemini/manual)")
+	f.StringVar(&workerEngine, "engine", "", "spawned_by engine (e.g. claude/antigravity/manual; legacy \"gemini\" is normalized to antigravity)")
 	f.StringVar(&workerSessionID, "session-id", "", "spawned_by session id")
 	f.StringVar(&workerPaneID, "pane-id", "", "spawned_by tmux pane id")
 	f.StringVar(&workerTmuxMgrSession, "tmux-mgr-session", "", "spawned_by tmux-mgr session record id")

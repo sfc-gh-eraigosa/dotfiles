@@ -98,7 +98,7 @@ while IFS= read -r file; do
     [[ "$filename" == "Brewfile" ]] && continue
     [[ "$filename" == "packages.tsv" ]] && continue
     [[ "$filename" == "requirements.txt" ]] && continue
-    [[ "$filename" == "GEMINI.md" ]] && continue
+    [[ "$filename" == "AGENTS.md" ]] && continue
     [[ "$filename" == "CLAUDE.md" ]] && continue
 
     echo "Creating symlink to $file in home directory."
@@ -110,16 +110,17 @@ for file in ".profile" ".zshenv" ".zshrc" ".bash_logout" ".bashrc"; do
   ln -sf "${BASE_DIR}/opt/profiles/${file}" "${HOME}/${file}"
 done 
 
-# Shared skill sync — links every SKILL.md into BOTH ~/.agents/skills (Gemini)
-# and ~/.claude/skills (Claude). Single source of truth for both assistants.
+# Shared skill sync — links every SKILL.md into BOTH ~/.gemini/config/skills
+# (Antigravity) and ~/.claude/skills (Claude). Single source of truth for both
+# assistants.
 if [ -f "${BASE_DIR}/opt/scripts/system/sync-skills.sh" ]; then
     bash "${BASE_DIR}/opt/scripts/system/sync-skills.sh"
 fi
 
-# Gemini CLI Configuration (Policies, Commands, Aliases)
-if [ -f "${BASE_DIR}/opt/scripts/system/install_gemini_skills.sh" ]; then
-    # sync-skills handles the skill links now; this only does Gemini-specific config.
-    "${BASE_DIR}/opt/scripts/system/install_gemini_skills.sh"
+# Antigravity CLI Configuration (Hooks, Aliases, legacy Gemini cleanup)
+if [ -f "${BASE_DIR}/opt/scripts/system/install_antigravity_skills.sh" ]; then
+    # sync-skills handles the skill links now; this only does Antigravity-specific config.
+    "${BASE_DIR}/opt/scripts/system/install_antigravity_skills.sh"
 fi
 
 # Claude Code Configuration (Settings, Commands, Hooks, Aliases)
@@ -335,22 +336,23 @@ if [ ! -d "${HOME}/.nvm" ]; then
   curl -fsSL -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash > /dev/null 2>&1
 fi
 
-# install Gemini CLI
-if [ -f "${BASE_DIR}/opt/scripts/system/gemini_install.sh" ]; then
-    echo "Installing Gemini CLI..."
-    "${BASE_DIR}/opt/scripts/system/gemini_install.sh"
+# install Antigravity CLI (agy) — Gemini CLI's successor (Gemini CLI EOL 2026-06-18)
+if [ -f "${BASE_DIR}/opt/scripts/system/antigravity_install.sh" ]; then
+    echo "Installing Antigravity CLI..."
+    "${BASE_DIR}/opt/scripts/system/antigravity_install.sh"
 fi
 
-# Google CLI (Gemini & Workspace) Setup
+# Google CLI (Antigravity & Workspace) Setup
 if [ -f "${BASE_DIR}/opt/scripts/system/google-cli-setup.sh" ]; then
-    # This configures gws for BOTH Gemini CLI and Claude Code via shared skills.
-    echo "Setting up Google CLI (Gemini & Workspace)..."
+    # This configures gws for BOTH Antigravity CLI and Claude Code via shared skills.
+    echo "Setting up Google CLI (Antigravity & Workspace)..."
     "${BASE_DIR}/opt/scripts/system/google-cli-setup.sh"
 fi
 
-# Gemini settings + hooks are provisioned by install_gemini_skills.sh (called
-# above): ~/.gemini/settings.json is a host-owned file with the forced hook
-# subset merged in, and hooks are copied into ~/.gemini/hooks/. No symlink here.
+# Antigravity hooks are provisioned by install_antigravity_skills.sh (called
+# above): guard scripts are copied into ~/.gemini/config/hooks/ and the wiring
+# is rendered to ~/.gemini/config/hooks.json. agy owns its own settings file
+# (~/.gemini/antigravity-cli/settings.json) — nothing to merge or symlink here.
 
 # install Claude Code CLI (macOS via brew cask, Linux/WSL via npm)
 if [ -f "${BASE_DIR}/opt/scripts/system/claude_install.sh" ]; then
@@ -371,7 +373,7 @@ if [ -f "${BASE_DIR}/opt/scripts/system/sync-plugins.sh" ]; then
     "${BASE_DIR}/opt/scripts/system/sync-plugins.sh" || echo "WARNING: plugin sync reported problems; continuing."
 fi
 
-# Install AI teams: transform ai/teams personas into native agents for Claude, Gemini,
+# Install AI teams: transform ai/teams personas into native agents for Claude,
 # Antigravity, and Ollama. Runs after yq + the assistant configs. Validates the source
 # first; each tool emit degrades gracefully, so a teams problem never aborts bootstrap.
 if [ -f "${BASE_DIR}/opt/scripts/system/install_ai_teams.sh" ]; then

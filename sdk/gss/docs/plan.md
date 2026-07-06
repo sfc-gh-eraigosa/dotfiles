@@ -33,7 +33,7 @@ gate checks.
 
 | Tool | Install | First used in | Why |
 |------|---------|--------------|-----|
-| `go-licenses` | `go install github.com/google/go-licenses@latest` | PR-50 | License CI gate per [src/GEMINI.md → Library standards](../../src/GEMINI.md). |
+| `go-licenses` | `go install github.com/google/go-licenses@latest` | PR-50 | License CI gate per [src/AGENTS.md → Library standards](../../src/AGENTS.md). |
 | `git-machete` | `brew install git-machete` | PR-49 | Companion rebase skill the agent invokes on conflicts. |
 | `gofrs/flock` (Go module) | added via `go get` inside PR-18 | PR-18 | Registry advisory lock. |
 | `gopkg.in/yaml.v3` (Go module) | added via `go get` inside PR-05 | PR-05 | Config YAML parsing. |

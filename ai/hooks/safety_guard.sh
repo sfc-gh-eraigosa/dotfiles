@@ -2,13 +2,13 @@
 # safety_guard.sh — AI Agent PreToolUse / BeforeTool hook
 #
 # Enforces regex-based safety rules that the prefix-only permission DSL in
-# assistant settings cannot express. Mirrors the rule set from
-# ai/gemini/policies/safety.toml.
+# assistant settings cannot express. Single source of truth for the shared
+# rule set (Claude Code natively; Antigravity CLI via antigravity_adapter.sh).
 #
 # Contract:
 #   - stdin: JSON {tool_name, tool_input}
-#   - exit 0: allow (Gemini: outputs JSON; Claude: no output)
-#   - exit 2: block (Gemini: use stderr; Claude: use stderr)
+#   - exit 0: allow (run_shell_command dialect: outputs JSON; Claude: no output)
+#   - exit 2: block (stderr carries the reason for both dialects)
 #   - other non-zero: non-blocking error
 #
 # Dependencies: jq, bash 3.2+

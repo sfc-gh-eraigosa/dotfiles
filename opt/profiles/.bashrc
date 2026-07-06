@@ -266,12 +266,12 @@ fi
 # OpenClaw Completion
 source <(openclaw completion --shell bash)
 
-# Gemini tmux aliases
+# tmux aliases
 # Added by tmux-mgr
 [ -f ${HOME}/.config/tmux-mgr/aliases.sh ] && source ${HOME}/.config/tmux-mgr/aliases.sh
 
-# Gemini CLI helpers: gemini() wrapper with tmux auto-anchor
-[ -f "${HOME}/.config/gemini/aliases.sh" ] && . "${HOME}/.config/gemini/aliases.sh"
+# Antigravity CLI helpers: agy() wrapper with tmux auto-anchor
+[ -f "${HOME}/.config/antigravity/aliases.sh" ] && . "${HOME}/.config/antigravity/aliases.sh"
 
 # Claude Code CLI helpers: claude (wrapper) and claude-config (yolo/remote on/off)
 [ -f "${HOME}/.config/claude/aliases.sh" ] && . "${HOME}/.config/claude/aliases.sh"

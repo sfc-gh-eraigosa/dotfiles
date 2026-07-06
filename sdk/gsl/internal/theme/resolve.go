@@ -11,12 +11,14 @@ import "strings"
 //     - toolCtx == "claude": read <home>/.claude/settings.json field "theme".
 //     Enum values: "dark" → "dark"; "light" → "light";
 //     "dark-daltonism" → "dark-daltonism"; "system"/absent → "dark".
-//     - toolCtx == "gemini": read <home>/.gemini/settings.json field "ui.theme"
-//     (free-form string). Keyword bridge:
+//     - toolCtx == "antigravity" (or the legacy alias "gemini"): read the
+//     "ui.theme" field (free-form string) from
+//     <home>/.gemini/antigravity-cli/settings.json, falling back to the
+//     legacy <home>/.gemini/settings.json. Keyword bridge:
 //     contains "light" → "light";
 //     contains "daltonism" or "colorblind" → "dark-daltonism";
 //     any other non-empty value (including unknown themes) → "dark".
-//     (Unknown non-empty gemini theme → "dark", NOT terminal fallthrough.)
+//     (Unknown non-empty antigravity theme → "dark", NOT terminal fallthrough.)
 //
 //  2. Terminal fallback (only when toolCtx=="" OR the settings file is
 //     missing/unreadable AND toolCtx==""):
@@ -35,13 +37,13 @@ func Resolve(toolCtx string, env func(string) string, home string) string {
 		raw := readClaudeTheme(home)
 		return claudeEnumToPalette(raw)
 
-	case "gemini":
-		raw := readGeminiTheme(home)
+	case "antigravity", "gemini": // "gemini" is the legacy alias for the retired Gemini CLI
+		raw := readAntigravityTheme(home)
 		if raw == "" {
 			// Missing/unreadable → terminal fallback.
 			return terminalPalette(env)
 		}
-		return geminiKeywordToPalette(raw)
+		return antigravityKeywordToPalette(raw)
 
 	default:
 		// toolCtx == "" (or unknown): terminal fallback only.
@@ -65,15 +67,15 @@ func claudeEnumToPalette(raw string) string {
 	}
 }
 
-// geminiKeywordToPalette maps a free-form Gemini ui.theme string to a palette
-// name using keyword matching.
+// antigravityKeywordToPalette maps a free-form Antigravity ui.theme string to
+// a palette name using keyword matching.
 //
 // Rule: contains "light" → "light"; contains "daltonism" or "colorblind" →
 // "dark-daltonism"; anything else non-empty → "dark".
 //
 // An empty input should never reach here (Resolve handles the empty case
 // before calling this), but "" returns "dark" defensively.
-func geminiKeywordToPalette(raw string) string {
+func antigravityKeywordToPalette(raw string) string {
 	lower := strings.ToLower(raw)
 	if strings.Contains(lower, "light") {
 		return "light"

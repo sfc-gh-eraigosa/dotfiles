@@ -68,13 +68,24 @@ func TestGssWorkerAdd_ErrorPropagated(t *testing.T) {
 }
 
 func TestEngineSessionID(t *testing.T) {
-	env := map[string]string{"CLAUDE_SESSION_ID": "c1", "GEMINI_SESSION_ID": "g1"}
+	env := map[string]string{"CLAUDE_SESSION_ID": "c1", "ANTIGRAVITY_SESSION_ID": "a1", "GEMINI_SESSION_ID": "g1"}
 	get := func(k string) string { return env[k] }
 	if got := engineSessionID(agent.AssistantClaude, get); got != "c1" {
 		t.Errorf("claude session = %q; want c1", got)
 	}
-	if got := engineSessionID(agent.AssistantGemini, get); got != "g1" {
-		t.Errorf("gemini session = %q; want g1", got)
+	if got := engineSessionID(agent.AssistantAntigravity, get); got != "a1" {
+		t.Errorf("antigravity session = %q; want a1", got)
+	}
+	// Legacy "gemini" host normalizes to antigravity and resolves the same way.
+	if got := engineSessionID(agent.AssistantGemini, get); got != "a1" {
+		t.Errorf("legacy gemini session = %q; want a1", got)
+	}
+
+	// Without the new var, the legacy GEMINI_SESSION_ID is still honored.
+	legacyEnv := map[string]string{"GEMINI_SESSION_ID": "g1"}
+	getLegacy := func(k string) string { return legacyEnv[k] }
+	if got := engineSessionID(agent.AssistantAntigravity, getLegacy); got != "g1" {
+		t.Errorf("antigravity legacy fallback session = %q; want g1", got)
 	}
 }
 

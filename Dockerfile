@@ -114,7 +114,7 @@ WORKDIR /home/$USERNAME
 COPY --chown=$USERNAME:$USERNAME . git/dotfiles/
 USER $USERNAME
 RUN /home/$USERNAME/git/dotfiles/install.sh
-RUN /home/$USERNAME/git/dotfiles/ai/gemini/scripts/sanity_check.sh
+RUN /home/$USERNAME/git/dotfiles/ai/antigravity/scripts/sanity_check.sh
 # Explicit Claude sanity at build-time — fails the image if the npm install or hook setup broke.
 # Sources .profile so the nvm-managed `claude` binary is on PATH.
 RUN bash -c "source ~/.profile && /home/$USERNAME/git/dotfiles/ai/claude/scripts/sanity_check.sh"

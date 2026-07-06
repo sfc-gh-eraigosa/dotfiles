@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Google CLI Setup & Configuration Tool (Gemini & Workspace)
+# Google CLI Setup & Configuration Tool (Antigravity & Workspace)
 # ==============================================================================
 set -e
 
 # --- Configuration ---
-GEMINI_DIR="${HOME}/.gemini"
+# Antigravity CLI reuses ~/.gemini: CLI settings live in
+# ~/.gemini/antigravity-cli/, the global customization root in ~/.gemini/config/.
+AGY_CONFIG_ROOT="${HOME}/.gemini/config"
 GWS_DIR="${HOME}/.gws"
 GWS_CONFIG_DIR="${HOME}/.config/gws"
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-GEMINI_DOT_DIR="${DOTFILES_DIR}/ai/gemini"
 GWS_DOT_DIR="${DOTFILES_DIR}/ai/gws"
 INSTALL_LOG="/tmp/google-cli-setup.log"
 
@@ -73,6 +74,19 @@ install_or_upgrade() {
     fi
 }
 
+install_agy() {
+    # Antigravity CLI (agy) — native binary via Google's checksummed
+    # bootstrapper; no npm involved (successor to the retired Gemini CLI).
+    if command -v agy >/dev/null 2>&1; then
+        echo -e "${BLUE}Updating Antigravity CLI (agy)...${NC}"
+        agy update >> "$INSTALL_LOG" 2>&1 || true
+    else
+        echo -e "${BLUE}Installing Antigravity CLI (agy)... (log: ${INSTALL_LOG})${NC}"
+        curl -fsSL https://antigravity.google/cli/install.sh | bash >> "$INSTALL_LOG" 2>&1
+        export PATH="${HOME}/.local/bin:${PATH}"
+    fi
+}
+
 install_gcloud() {
     # Check if gcloud is in PATH or in the standard install location
     if command -v gcloud >/dev/null 2>&1 || [ -f "${HOME}/opt/google-cloud-sdk/bin/gcloud" ]; then
@@ -95,23 +109,10 @@ install_gcloud() {
 init_configs() {
     echo -e "${BLUE}Initializing configurations...${NC}"
     
-    # Gemini
-    mkdir -p "${GEMINI_DIR}/skills"
-    
-    if [ -f "${GEMINI_DOT_DIR}/settings.json" ]; then
-        ln -sf "${GEMINI_DOT_DIR}/settings.json" "${GEMINI_DIR}/settings.json"
-        echo -e "${GREEN}Symlinked Gemini settings.${NC}"
-    fi
-
-    if [ -d "${GEMINI_DOT_DIR}/policies" ]; then
-        mkdir -p "${GEMINI_DIR}/policies"
-        # Link files inside policies rather than the directory itself for flexibility
-        for f in "${GEMINI_DOT_DIR}/policies"/*; do
-            [ -e "$f" ] || continue
-            ln -sf "$f" "${GEMINI_DIR}/policies/$(basename "$f")"
-        done
-        echo -e "${GREEN}Symlinked Gemini policies.${NC}"
-    fi
+    # Antigravity: the global customization root (skills/, hooks/, hooks.json)
+    # is provisioned by install_antigravity_skills.sh + sync-skills.sh; just
+    # make sure the skills root exists so a fresh agy sees it.
+    mkdir -p "${AGY_CONFIG_ROOT}/skills"
 
     # GWS
     mkdir -p "${GWS_DIR}"
@@ -156,11 +157,11 @@ show_status() {
         echo -e "${RED}[MISSING]${NC} gcloud CLI"
     fi
 
-    # Gemini
-    if command -v gemini >/dev/null 2>&1; then
-        echo -e "${GREEN}[OK]${NC} Gemini CLI: $(gemini --version 2>/dev/null | head -n 1 || echo 'Installed')"
+    # Antigravity
+    if command -v agy >/dev/null 2>&1 || [ -x "${HOME}/.local/bin/agy" ]; then
+        echo -e "${GREEN}[OK]${NC} Antigravity CLI (agy)"
     else
-        echo -e "${RED}[MISSING]${NC} Gemini CLI (@google/gemini-cli)"
+        echo -e "${RED}[MISSING]${NC} Antigravity CLI (agy)"
     fi
 
     # GWS
@@ -171,7 +172,7 @@ show_status() {
     fi
 
     # Auth checks
-    [ -f "${GEMINI_DIR}/oauth_creds.json" ] && echo -e "${GREEN}[OK]${NC} Gemini Auth found." || echo -e "${RED}[!]${NC} Gemini Auth missing (run 'gemini auth login')"
+    [ -d "${HOME}/.gemini/antigravity-cli" ] && echo -e "${GREEN}[OK]${NC} Antigravity CLI initialized." || echo -e "${RED}[!]${NC} Antigravity CLI not initialized (run 'agy' to complete the OAuth flow)"
     
     if command -v gws >/dev/null 2>&1; then
         if [ -f "${GWS_CONFIG_DIR}/client_secret.json" ] && ! grep -q "YOUR_CLIENT_ID" "${GWS_CONFIG_DIR}/client_secret.json"; then
@@ -196,7 +197,7 @@ setup_all() {
     echo -e "${BLUE}Starting Google CLI setup... Full log at ${INSTALL_LOG}${NC}"
     load_node_env
     install_gcloud
-    install_or_upgrade "gemini" "@google/gemini-cli"
+    install_agy
     install_or_upgrade "gws" "@googleworkspace/cli"
     init_configs
     show_status

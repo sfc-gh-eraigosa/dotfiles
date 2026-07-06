@@ -34,7 +34,7 @@ brew 'readline'
 brew 'sqlite'
 brew 'sops'
 # util-linux provides `setsid`, which macOS lacks natively. sync-plugins.sh runs
-# `claude`/`gemini` plugin installs under setsid so they get no controlling
+# `claude`/`agy` plugin installs under setsid so they get no controlling
 # terminal and fall back to non-interactive mode — without it a fresh
 # `claude plugin install` opens /dev/tty, renders its TUI, and hangs until the
 # timeout SIGKILLs it. Keg-only; sync-plugins.sh probes `brew --prefix util-linux`.
@@ -111,4 +111,5 @@ brew 'zns'
 
 # jira stuff - https://github.com/ankitpokhrel/jira-cli?tab=readme-ov-file
 brew 'jira-cli'
-brew 'gemini-cli'
+# Antigravity CLI (agy) is not in homebrew-core; installed by
+# opt/scripts/system/antigravity_install.sh via Google's bootstrapper.

@@ -1,33 +1,34 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
-# Shell helpers for the Gemini CLI.
-# Sourced from opt/profiles/.zshrc and opt/profiles/.bashrc after .gemini.profile.
+# Shell helpers for the Antigravity CLI (agy).
+# Sourced from opt/profiles/.zshrc and opt/profiles/.bashrc after .antigravity.profile.
 #
 # Commands:
 #
-#   gemini          Auto-anchors in tmux when possible, then runs gemini.
-#                     - If running inside a tmux pane: anchors the pane as "gemini"
+#   agy             Auto-anchors in tmux when possible, then runs agy.
+#                     - If running inside a tmux pane: anchors the pane as "antigravity"
 #                       so AI-driven 'tmux-mgr window split' targets it correctly.
 #                     - If not in tmux but a server is running: prints a nudge.
 #
-#   gemini-yolo     Run gemini with -y (auto-approve) for the current invocation.
+#   agy-yolo        Run agy with --dangerously-skip-permissions (auto-approve)
+#                   for the current invocation.
 
-gemini() {
+agy() {
     # Auto-anchor in tmux so AI-driven pane splits target this pane.
     if [ -n "$TMUX_PANE" ]; then
-        command -v tmux-mgr >/dev/null 2>&1 && tmux-mgr pane anchor "gemini" 2>/dev/null || true
+        command -v tmux-mgr >/dev/null 2>&1 && tmux-mgr pane anchor "antigravity" 2>/dev/null || true
     elif tmux info >/dev/null 2>&1; then
         echo "Tip: run inside a tmux pane for AI pane-split support." \
              "Use 'tmux-start' or 'tmux new-session -A -s main' first." >&2
     fi
-    command gemini "$@"
+    command agy "$@"
 }
 
-gemini-yolo() {
+agy-yolo() {
     if [ -n "$TMUX_PANE" ]; then
-        command -v tmux-mgr >/dev/null 2>&1 && tmux-mgr pane anchor "gemini" 2>/dev/null || true
+        command -v tmux-mgr >/dev/null 2>&1 && tmux-mgr pane anchor "antigravity" 2>/dev/null || true
     fi
-    command gemini -y "$@"
+    command agy --dangerously-skip-permissions "$@"
 }
 
 alias sync-skills="bash \$HOME/opt/scripts/system/sync-skills.sh"

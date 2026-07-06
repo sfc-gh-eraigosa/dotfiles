@@ -52,8 +52,8 @@ assert_json_match() {
 
 # === Allowed (exit 0) ===
 assert_exit 0 Bash "ls -la"                          "plain ls"
-assert_exit 0 run_shell_command "ls -la"             "plain ls (Gemini)"
-assert_json_match 0 run_shell_command "ls -la"       "plain ls (Gemini) JSON check" '{"decision": "allow"}'
+assert_exit 0 run_shell_command "ls -la"             "plain ls (shared dialect)"
+assert_json_match 0 run_shell_command "ls -la"       "plain ls (shared dialect) JSON check" '{"decision": "allow"}'
 assert_exit 0 Bash "git status"                      "git status"
 assert_exit 0 Bash "rm -rf /tmp/foo"                 "rm -rf safe subdir"
 assert_exit 0 Bash "dd --help"                       "dd --help allowed"

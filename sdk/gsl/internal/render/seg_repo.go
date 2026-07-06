@@ -23,7 +23,7 @@ const (
 // branch name label, an optional PR number (tinted by state), and an optional
 // worktree count badge.
 //
-// It needs NO payload, so it renders in both Claude (live) and Gemini/CLI
+// It needs NO payload, so it renders in both Claude (live) and Antigravity/CLI
 // (on-demand) modes. Outside a git repository the whole segment self-omits
 // (ok == false).
 type RepoSegment struct {

@@ -2,9 +2,9 @@
 # install_claude_skills.sh - Idempotently install Claude Code's assistant-specific
 # config: settings.json, slash commands, hooks, and shell aliases.
 #
-# Mirrors install_gemini_skills.sh (which handles Gemini's policies/commands/aliases).
+# Mirrors install_antigravity_skills.sh (which handles Antigravity's hooks/aliases).
 # Skill linking is NOT done here — sync-skills.sh is the single canonical linker that
-# discovers every SKILL.md and links it into BOTH ~/.agents/skills (Gemini) and
+# discovers every SKILL.md and links it into BOTH ~/.gemini/config/skills (Antigravity) and
 # ~/.claude/skills (Claude). Run sync-skills.sh (or the `sync-skills` alias) to refresh
 # skills; this script only owns the Claude-specific config below.
 
@@ -90,7 +90,7 @@ cleanup_broken_links "$CLAUDE_HOME/commands"
 
 # --- Skills ---
 # Handled by sync-skills.sh, which links every discovered SKILL.md into
-# ~/.claude/skills (and ~/.agents/skills for Gemini). Nothing to do here.
+# ~/.claude/skills (and ~/.gemini/config/skills for Antigravity). Nothing to do here.
 
 # --- Hooks (COPIED into ~/.claude/hooks; settings.json references the
 # well-known $HOME path). Copy, not symlink, per the provisioning directive

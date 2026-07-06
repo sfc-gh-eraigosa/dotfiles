@@ -47,4 +47,4 @@ done` (also `parked`, `superseded`).
 
 > Legacy entries were migrated into MBO on 2026-06-06 from `docs/{designs,plans}` and
 > `docs/superpowers/{specs,plans}`. Filenames are kept as-was; new objectives use the bare
-> `<slug>` convention (see `GEMINI.md`).
+> `<slug>` convention (see `AGENTS.md`).

@@ -1,9 +1,9 @@
 # ai/skills — shared agent skills
 
 This directory holds **generic agent skills** (each a folder with a `SKILL.md`) that drive
-**both** Claude Code and Gemini CLI. `opt/scripts/system/sync-skills.sh` discovers every
+**both** Claude Code and Antigravity CLI (`agy`). `opt/scripts/system/sync-skills.sh` discovers every
 `SKILL.md` here (and under `src/<tool>/`, `sdk/<tool>/skill/`) and links it into
-`~/.claude/skills` and `~/.agents/skills` — edit once, benefit twice.
+`~/.claude/skills` and `~/.gemini/config/skills` — edit once, benefit twice.
 
 ## Anatomy of a skill folder
 
@@ -16,7 +16,7 @@ ai/skills/<name>/
 
 A tool can instead host its skill at `<tool>/skill/SKILL.md` (e.g. `sdk/gss/skill/`); the
 skill is named after `<tool>` in that layout. New skills are typically authored with the
-`skill-creator` skill and routed through the [`docs/mbo`](../../docs/mbo/GEMINI.md) pipeline
+`skill-creator` skill and routed through the [`docs/mbo`](../../docs/mbo/AGENTS.md) pipeline
 (the "A new skill" row of its task→workflow table).
 
 ## Evals are part of a skill (the requirement)
@@ -53,5 +53,5 @@ realistic trigger/behavior cases used to prove the skill activates and behaves c
 > Validate before you commit a skill change: `make skill-evals`. A skill with no corpus is
 > reported as SKIP — acceptable, but adding one is how the skill earns a regression signal.
 
-Per-directory docs rule: this dir has `GEMINI.md` + `CLAUDE.md → GEMINI.md`, linked from the
-root `GEMINI.md` Repository Structure section.
+Per-directory docs rule: this dir has `AGENTS.md` + `CLAUDE.md → AGENTS.md`, linked from the
+root `AGENTS.md` Repository Structure section.

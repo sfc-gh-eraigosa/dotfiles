@@ -1,7 +1,7 @@
 package cmd
 
 // Integration tests for the Phase 5 wire-up:
-//   - deriveToolCtx: claude/gemini/unknown detection
+//   - deriveToolCtx: claude/antigravity/unknown detection
 //   - narrow COLUMNS → output fits
 //   - wide COLUMNS → level-0 output (no compaction)
 //   - emoji at COLUMNS=20 fits (binding case)
@@ -71,7 +71,19 @@ func TestDeriveToolCtx(t *testing.T) {
 			want: "claude",
 		},
 		{
-			name:    "gemini: GEMINI_CLI set",
+			name:    "antigravity: ANTIGRAVITY_CLI set",
+			payload: payload.Payload{},
+			env: func(k string) string {
+				if k == "ANTIGRAVITY_CLI" {
+					return "1"
+				}
+				return ""
+			},
+			want: "antigravity",
+		},
+		{
+			// Legacy Gemini-era env vars still map to the Antigravity context.
+			name:    "antigravity: legacy GEMINI_CLI set",
 			payload: payload.Payload{},
 			env: func(k string) string {
 				if k == "GEMINI_CLI" {
@@ -79,10 +91,10 @@ func TestDeriveToolCtx(t *testing.T) {
 				}
 				return ""
 			},
-			want: "gemini",
+			want: "antigravity",
 		},
 		{
-			name:    "gemini: GEMINI_API_KEY set",
+			name:    "antigravity: legacy GEMINI_API_KEY set",
 			payload: payload.Payload{},
 			env: func(k string) string {
 				if k == "GEMINI_API_KEY" {
@@ -90,15 +102,15 @@ func TestDeriveToolCtx(t *testing.T) {
 				}
 				return ""
 			},
-			want: "gemini",
+			want: "antigravity",
 		},
 		{
-			name: "claude wins over gemini env",
+			name: "claude wins over antigravity env",
 			payload: payload.Payload{
 				Cwd: func() *string { s := "/tmp"; return &s }(),
 			},
 			env: func(k string) string {
-				if k == "GEMINI_CLI" {
+				if k == "ANTIGRAVITY_CLI" {
 					return "1"
 				}
 				return ""

@@ -33,7 +33,7 @@
   // and skill docs (details/summary, br, img with alt).
   "MD033": { "allowed_elements": ["br", "details", "summary", "img", "kbd", "sub", "sup"] },
 
-  // MD041 — first-line-h1. Disabled. Subdirectory GEMINI.md / CLAUDE.md
+  // MD041 — first-line-h1. Disabled. Subdirectory AGENTS.md / CLAUDE.md
   // files sometimes lead with a YAML front-matter block or a callout.
   "MD041": false
 }

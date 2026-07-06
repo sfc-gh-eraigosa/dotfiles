@@ -6,10 +6,10 @@ echo "Starting Sanity Check..."
 
 # 1. Path Discovery
 echo "Verifying PATH discovery..."
-source ~/.gemini.profile
+source ~/.antigravity.profile
 
 # Check subdirectories of opt/scripts are in PATH
-for tool in git_add.sh gemini_install.sh docker_up.sh rclone_sync.sh; do
+for tool in git_add.sh antigravity_install.sh docker_up.sh rclone_sync.sh; do
     if ! command -v "$tool" > /dev/null; then
         echo "FAIL: $tool not found in PATH"
         exit 1
@@ -29,7 +29,7 @@ echo "PASS: Binaries functional"
 
 # 3. Environment Files
 echo "Verifying configuration files..."
-for file in .zshrc .profile .gemini.profile .gitenv .tmux.conf; do
+for file in .zshrc .profile .antigravity.profile .gitenv .tmux.conf; do
     if [ ! -f "$HOME/$file" ]; then
         echo "FAIL: $file missing from HOME"
         exit 1
@@ -57,8 +57,8 @@ echo "Verifying Claude Code integration links..."
 # Resolve the Claude sanity check from THIS script's own location — never a
 # hardcoded ~/git/dotfiles path, which breaks on worktrees / alternate clones /
 # CI (F7 in docs/mbo/designs/2026-06-02-ai-config-home-provisioning.md).
-GEMINI_SANITY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-REPO_ROOT="$(cd "$GEMINI_SANITY_DIR/../../.." && pwd)"
+AGY_SANITY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+REPO_ROOT="$(cd "$AGY_SANITY_DIR/../../.." && pwd)"
 CLAUDE_SANITY="$REPO_ROOT/ai/claude/scripts/sanity_check.sh"
 if command -v claude > /dev/null 2>&1 && [ -x "$CLAUDE_SANITY" ]; then
     "$CLAUDE_SANITY"
@@ -66,17 +66,18 @@ else
     echo "SKIP: claude CLI not installed in this environment"
 fi
 
-# 7. Gemini's OWN configured hook wiring resolves + is exercised (D3). Uses the
-# event-agnostic validator, which handles Gemini's BeforeTool hook layout.
-echo "Verifying Gemini hook wiring..."
+# 7. Antigravity's OWN configured hook wiring resolves + is exercised (D3).
+# Uses the event-agnostic validator, which handles agy's named-hook
+# hooks.json layout (and drives the antigravity_adapter.sh dialect bridge).
+echo "Verifying Antigravity hook wiring..."
 VALIDATE_HOOKS="$REPO_ROOT/ai/claude/scripts/validate_hooks.sh"
-if [ -x "$VALIDATE_HOOKS" ] && [ -f "$HOME/.gemini/settings.json" ]; then
-    if ! "$VALIDATE_HOOKS" "$HOME/.gemini/settings.json"; then
-        echo "FAIL: configured hook wiring in ~/.gemini/settings.json is broken (see above)"
+if [ -x "$VALIDATE_HOOKS" ] && [ -f "$HOME/.gemini/config/hooks.json" ]; then
+    if ! "$VALIDATE_HOOKS" "$HOME/.gemini/config/hooks.json"; then
+        echo "FAIL: configured hook wiring in ~/.gemini/config/hooks.json is broken (see above)"
         exit 1
     fi
 else
-    echo "SKIP: ~/.gemini/settings.json or validator not present"
+    echo "SKIP: ~/.gemini/config/hooks.json or validator not present"
 fi
 
 echo "--------------------------------------------------"

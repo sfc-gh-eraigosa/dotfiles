@@ -3,7 +3,7 @@
 ## Problem
 
 A single repo checkout can only hold one branch's working state. When two
-Claude/Gemini sessions try to build different features in the same repo at the
+Claude/Antigravity sessions try to build different features in the same repo at the
 same time, they collide: branch hops blow away the other session's working
 state, `gss push` sweeps in unrelated dirty files, and there is no way to keep
 each session's mental model intact.
@@ -32,7 +32,7 @@ chooses what to do next.
 `tmux-mgr` is the **process / pane orchestrator**. It owns:
 
 - Spawning a pane at a given cwd with a given command.
-- Deciding which agent CLI (`claude`, `gemini`, …) to launch.
+- Deciding which agent CLI (`claude`, `agy`, …) to launch.
 - Tracking pane ↔ worker mappings.
 - Firing close hooks when a pane / session ends.
 
@@ -44,7 +44,7 @@ calls `tmux-mgr`. The dependency arrow goes one way.
 
 - One isolated working directory per in-flight worker.
 - Multiple workers per feature, each owned by a named agent / purpose.
-- A new Claude/Gemini session for a new worker is a single command away.
+- A new Claude/Antigravity session for a new worker is a single command away.
 - No accidental pushes; no accidental cleanup.
 - Draft PRs as durable, sharable checkpoints — including enough metadata to
   resume work after a long pause.
@@ -352,7 +352,7 @@ invariant on every build.
           "started_at": "2026-05-17T11:02:00Z",
           "description": "Wire feature list / conflicts output rendering",
           "spawned_by": {
-            "engine": "gemini",
+            "engine": "antigravity",
             "session_id": "g-9z8y7x6w-5v4u-3t2s",
             "pane_id": "%19",
             "tmux_mgr_session": "ui-1715893740",
@@ -385,12 +385,14 @@ session that created it.
 
 - **`spawned_by`** (object, required when the caller is a non-human
   agent). Captures the AI session provenance at creation. Fields:
-  - `engine` — `claude` | `gemini` | `manual` | other identifier the
-    caller chooses. `manual` is used when a human ran `gss feature
-    worker add` directly.
+  - `engine` — `claude` | `antigravity` | `manual` | other identifier
+    the caller chooses. `manual` is used when a human ran `gss feature
+    worker add` directly. The legacy value `gemini` (retired Gemini CLI)
+    may appear in old rows and is still accepted; new records are
+    normalized to `antigravity`.
   - `session_id` — the engine's native session identifier. Claude
     Code exposes one (e.g. via `$CLAUDE_SESSION_ID` or its config);
-    Gemini CLI has its own. gss does not introspect the engine — it
+    Antigravity CLI has its own. gss does not introspect the engine — it
     persists whatever the caller passes.
   - `pane_id` — tmux pane id (e.g. `%17`) when the worker is being
     driven from a tmux pane. Optional.
@@ -1120,7 +1122,7 @@ The expected `tmux-mgr` flow:
 1. User asks `tmux-mgr` to start an agent on a new worker for a feature.
 2. `tmux-mgr` shells out to `gss feature worker add … --json` and reads
    the returned worktree path + branch + base.
-3. `tmux-mgr` decides which agent CLI to launch (`claude` / `gemini` / …)
+3. `tmux-mgr` decides which agent CLI to launch (`claude` / `antigravity` / …)
    — engine detection, env, parent-process inspection are entirely on
    the `tmux-mgr` side.
 4. `tmux-mgr` spawns a pane at the worktree path, runs the chosen agent
@@ -1217,8 +1219,8 @@ captures the concrete deltas so the refactor can be scheduled.
        --purpose <p> \
        --description "<task-description>" \
        --user <u> \
-       --engine <claude|gemini|…> \
-       --session-id "$CLAUDE_SESSION_ID"  # or $GEMINI_SESSION_ID \
+       --engine <claude|antigravity|…> \
+       --session-id "$CLAUDE_SESSION_ID"  # or $ANTIGRAVITY_SESSION_ID \
        --pane-id "<tmux pane id>" \
        --tmux-mgr-session "<session record id>" \
        --json
@@ -1248,7 +1250,7 @@ captures the concrete deltas so the refactor can be scheduled.
    - Continue to `tmux kill-pane` and remove `<id>.json`.
 
 4. **`cmd/agent.go` `DetectHost()` / `pkg/agent/model.go`**: unchanged.
-   Engine detection (Claude vs Gemini, model tier selection) stays in
+   Engine detection (Claude vs Antigravity, model tier selection) stays in
    `tmux-mgr` by the boundary rule.
 
 5. **`pkg/tmux/tmux.go` `CreatePane()`**: minor — set
@@ -1662,7 +1664,7 @@ Conventions:
 
 ### Pinned external dependencies
 
-Per [src/GEMINI.md → Library standards](../../GEMINI.md), every direct
+Per [src/AGENTS.md → Library standards](../../AGENTS.md), every direct
 dep is pinned at design time with its LICENSE blob cited at the
 introducing PR. v1 starts with:
 
@@ -1674,7 +1676,7 @@ introducing PR. v1 starts with:
 | `golang.org/x/sys`              | BSD-3-Clause           | `unix.Flock`, `syscall.Stat`. |
 
 Anything beyond this list is an additive PR with explicit license citation per
-the GEMINI.md process. CI must run `go-licenses check ./...` (Apache-2.0)
+the AGENTS.md process. CI must run `go-licenses check ./...` (Apache-2.0)
 as a required step in `build.sh`.
 
 ### Test seams (interfaces every external boundary flows through)
@@ -1749,7 +1751,7 @@ Stacked-PR workflows generate non-trivial rebase / restack work:
 
 `gss` itself does not ship a stack-rebase implementation. Everything below
 respects the project's permissive-license policy
-(see [src/GEMINI.md → Library standards & license selection](../../GEMINI.md)):
+(see [src/AGENTS.md → Library standards & license selection](../../AGENTS.md)):
 GPL / AGPL / LGPL CLIs are ineligible regardless of feature fit, and
 cloud-gated proprietary CLIs are likewise ruled out. The choices are:
 
@@ -1771,8 +1773,8 @@ cloud-gated proprietary CLIs are likewise ruled out. The choices are:
    enough to drive. Verbs we'd lean on: `git machete status`,
    `git machete traverse` (interactive restack with conflict prompts),
    `git machete update --no-interactive-rebase`, `git machete fork-point`.
-   Small, stable verb set ideal for wrapping as a Claude Code / Gemini
-   CLI plugin skill that the agent invokes when
+   Small, stable verb set ideal for wrapping as a Claude Code /
+   Antigravity CLI plugin skill that the agent invokes when
    `gss feature conflicts` reports overlap or when a rebase aborts.
 
 3. **Rescue mode (opt-in, advanced)**:
@@ -2446,7 +2448,7 @@ cannot accidentally drop them.
 >
 > 1. `go test ./...` green.
 > 2. `go-licenses check ./...` clean (no banned licenses per
->    `src/GEMINI.md`).
+>    `src/AGENTS.md`).
 > 3. `build.sh` produces a working binary.
 > 4. `safety_guard_test.sh` green if the hook is touched.
 > 5. Deliverable-specific manual smoke step from `plan.md` is

@@ -14,7 +14,7 @@ import (
 // context-window usage, the MCP active/configured count, and the 5h / 7d
 // rate-limit usage.
 //
-// It is the ONLY payload-dependent segment. In Gemini/CLI mode the payload is
+// It is the ONLY payload-dependent segment. In Antigravity/CLI mode the payload is
 // the empty struct (all pointer fields nil), so the segment self-omits
 // (ok == false). Individual nil fields inside a present payload are skipped
 // gracefully.
@@ -43,7 +43,7 @@ func NewAISegment(p payload.Payload, cwd string, mcpRunner mcp.Runner, mcpOpts m
 // compaction logic for levels 1–3.
 func (s *AISegment) Render(ctx context.Context, st style.Style, _ int) (text, colorKey string, ok bool) {
 	p := s.Payload
-	// No payload at all (Gemini/CLI mode): every payload pointer is nil.
+	// No payload at all (Antigravity/CLI mode): every payload pointer is nil.
 	if p.Model == nil && p.ContextWindow == nil && p.RateLimits == nil {
 		return "", "", false
 	}

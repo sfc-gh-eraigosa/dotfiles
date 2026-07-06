@@ -20,7 +20,7 @@ func init() {
 		Long: `Saves the current $TMUX_PANE as TMUX_MGR_ROOT_PANE in the tmux global
 environment and renames the pane. Must be run from inside a tmux pane.
 
-After anchoring, AI processes (Claude, Gemini) that call 'tmux-mgr window split'
+After anchoring, AI processes (Claude, Antigravity — or a legacy Gemini pane) that call 'tmux-mgr window split'
 or 'tmux-mgr agent start' will correctly target this pane.`,
 		Args: cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
@@ -46,7 +46,7 @@ or 'tmux-mgr agent start' will correctly target this pane.`,
 		Long: `Creates a new tmux window from outside tmux, saves its pane ID as
 TMUX_MGR_ROOT_PANE, and prints the pane ID. Requires a running tmux server.
 
-Use this when an AI process (Claude, Gemini) needs a tmux anchor but was not
+Use this when an AI process (Claude, Antigravity) needs a tmux anchor but was not
 started from inside a tmux pane.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			paneID, err := tmux.AdoptPane()

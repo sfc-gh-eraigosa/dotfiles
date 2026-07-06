@@ -25,26 +25,29 @@ import (
 // Rules (in priority order):
 //  1. If the Claude payload is populated (Cwd, Model, ContextWindow, or
 //     RateLimits is non-nil), the caller is "claude".
-//  2. If any recognized Gemini environment variable is set and non-empty, the
-//     caller is "gemini".
+//  2. If any recognized Antigravity environment variable — or a legacy
+//     Gemini-era variable (Antigravity CLI deliberately reuses the ~/.gemini
+//     config tree, and Gemini CLI is EOL) — is set and non-empty, the caller
+//     is "antigravity".
 //  3. Otherwise "" (unknown / plain shell usage).
 //
 // env is the env-lookup function (os.Getenv in production; injected in tests).
 //
-// NOTE: The canonical Gemini status-line environment variable is unconfirmed
-// at the time of writing. We check GEMINI_CLI and GEMINI_API_KEY as a
-// best-effort heuristic.
-// TODO(gsl): confirm canonical Gemini status-line env var and update this list.
+// NOTE: The canonical Antigravity (agy) status-line environment variable is
+// unconfirmed at the time of writing. We check ANTIGRAVITY_CLI plus the
+// Gemini-era vars as a best-effort heuristic.
+// TODO(gsl): confirm canonical Antigravity status-line env var and update this list.
 func deriveToolCtx(p payload.Payload, env func(string) string) string {
 	// Claude: the render subcommand populates the payload from stdin.
 	if p.Cwd != nil || p.Model != nil || p.ContextWindow != nil || p.RateLimits != nil {
 		return "claude"
 	}
-	// Gemini: best-effort heuristic — check known Gemini env vars.
-	// TODO(gsl): confirm canonical Gemini status-line env var.
-	for _, key := range []string{"GEMINI_CLI", "GEMINI_API_KEY", "GEMINI_CLI_CONTEXT"} {
+	// Antigravity: best-effort heuristic — check known Antigravity env vars
+	// and the legacy Gemini-era vars it inherits.
+	// TODO(gsl): confirm canonical Antigravity status-line env var.
+	for _, key := range []string{"ANTIGRAVITY_CLI", "ANTIGRAVITY_CLI_CONTEXT", "GEMINI_CLI", "GEMINI_API_KEY", "GEMINI_CLI_CONTEXT"} {
 		if env(key) != "" {
-			return "gemini"
+			return "antigravity"
 		}
 	}
 	return ""

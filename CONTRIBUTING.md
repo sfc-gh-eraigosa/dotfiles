@@ -23,7 +23,7 @@ This repository uses a `Makefile` to orchestrate development tasks. This ensures
 
 1.  **Make your changes**: Adhere to the project's style and architectural patterns.
 2.  **Validate locally**: Run `make test` to ensure your changes don't break existing functionality.
-3.  **Use your AI assistant**: This repo is agent-first. Either Gemini CLI or Claude Code can help you refactor, test, or document your changes — both read the same skills and progressive context.
+3.  **Use your AI assistant**: This repo is agent-first. Either Antigravity CLI (`agy`) or Claude Code can help you refactor, test, or document your changes — both read the same skills and progressive context.
 
 ## 🧪 Testing Infrastructure
 
