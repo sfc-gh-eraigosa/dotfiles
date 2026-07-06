@@ -86,6 +86,12 @@ assert_exit 0 Bash "dd if=/dev/zero of=zeros.bin count=10"    "dd reading from /
 assert_exit 0 Bash "parted --list"                            "parted --list (read-only)"
 assert_exit 0 Bash "parted -l"                                "parted -l short"
 
+# notebooklm-mcp: the default stdio launch + the repo's registration command are
+# legitimate; only the network-exposing 0.0.0.0 bind (below) is blocked.
+assert_exit 0 Bash "npx -y notebooklm-mcp@2.0.0"                                  "notebooklm-mcp default stdio launch"
+assert_exit 0 Bash "claude mcp add --scope user notebooklm -- npx -y notebooklm-mcp@2.0.0" "notebooklm-mcp user-scope registration"
+assert_exit 0 Bash "npx notebooklm-mcp@2.0.0 --transport http --host 127.0.0.1 --port 3000" "notebooklm-mcp http bound to loopback"
+
 # === Denied (exit 2) ===
 assert_exit 2 Bash "rm -rf *"                        "rm -rf wildcard"
 assert_exit 2 Bash "rm -f *"                         "rm -f wildcard (deletes all in cwd)"
@@ -98,6 +104,10 @@ assert_exit 2 Bash "dd if=/dev/zero of=/dev/sda"     "dd disk wipe"
 assert_exit 2 Bash "dd if=/dev/zero of=/dev/disk2 bs=1m"  "dd disk wipe (macOS disk*)"
 assert_exit 2 Bash "dd if=img.iso of=/dev/nvme0n1"   "dd to nvme"
 assert_exit 2 Bash "parted /dev/sda mkpart primary 0 100" "parted with device target"
+assert_exit 2 Bash "npx notebooklm-mcp@2.0.0 --transport http --host 0.0.0.0 --port 3000" "notebooklm-mcp bound to 0.0.0.0 (exposes Google session)"
+assert_exit 2 Bash "npx -y notebooklm-mcp@latest --host 0.0.0.0"                            "notebooklm-mcp --host 0.0.0.0 (any order)"
+assert_exit 2 Bash "npx notebooklm-mcp@2.0.0 --host=0.0.0.0"                                "notebooklm-mcp --host=0.0.0.0 (equals form)"
+assert_exit 2 Bash "npx notebooklm-mcp@2.0.0 --host \"0.0.0.0\""                            "notebooklm-mcp --host quoted 0.0.0.0"
 assert_exit 2 Bash "mkfs.ext4 /dev/sda1"             "mkfs"
 assert_exit 2 Bash "fdisk /dev/sda"                  "fdisk"
 assert_exit 2 Bash "chmod -R 777 /"                  "chmod -R /"

@@ -371,6 +371,17 @@ if [ -f "${BASE_DIR}/opt/scripts/system/sync-plugins.sh" ]; then
     "${BASE_DIR}/opt/scripts/system/sync-plugins.sh" || echo "WARNING: plugin sync reported problems; continuing."
 fi
 
+# Sync standalone MCP servers from the manifest (ai/mcp.yaml). Ensure-only:
+# registers the listed servers at USER scope for Claude + Gemini; never removes
+# anything. Registration only — it writes the server definition but NEVER runs the
+# interactive Google browser login (notebooklm-mcp's setup_auth), which is a manual
+# runtime step. Runs after the Claude/Gemini CLIs and yq are installed, same as
+# sync-plugins. Non-fatal: a headless host (no Chrome) still registers fine.
+if [ -f "${BASE_DIR}/opt/scripts/system/sync-mcp.sh" ]; then
+    echo "Syncing MCP servers..."
+    "${BASE_DIR}/opt/scripts/system/sync-mcp.sh" || echo "WARNING: MCP sync reported problems; continuing."
+fi
+
 # Install AI teams: transform ai/teams personas into native agents for Claude, Gemini,
 # Antigravity, and Ollama. Runs after yq + the assistant configs. Validates the source
 # first; each tool emit degrades gracefully, so a teams problem never aborts bootstrap.

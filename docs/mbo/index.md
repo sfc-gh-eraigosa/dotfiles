@@ -27,6 +27,7 @@ done` (also `parked`, `superseded`).
 | `shell-portability` | — | [spec](./specs/shell-portability.md) | — | — | (this PR) | building |
 | `gsl-visual-improvements` | [design](./designs/gsl-visual-improvements.md) | [spec](./specs/gsl-visual-improvements.md) | [plan](./plans/gsl-visual-improvements.md) | [#54](https://github.com/sfc-gh-eraigosa/dotfiles/issues/54) | #55 | in-review |
 | `claude-config` | — | [spec](./specs/claude-config.md) | [plan](./plans/claude-config.md) | — | #126 | in-review |
+| `notebooklm-mcp` | [design](./designs/notebooklm-mcp.md) | [spec](./specs/notebooklm-mcp.md) | [plan](./plans/notebooklm-mcp.md) | — | (this PR) | in-review |
 
 ## Merged / historical (pre-MBO — tracking columns best-effort)
 
