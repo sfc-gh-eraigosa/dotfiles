@@ -87,16 +87,25 @@ cp "$REPO_ROOT/ai/hooks/safety_guard.sh" "$REPO_ROOT/ai/hooks/privacy_guard.sh" 
 chmod +x "$H/.gemini/config/hooks/"*.sh
 cat > "$H/.gemini/config/hooks.json" <<'JSON'
 {
-  "safety-guard": { "PreToolUse": [
-    { "matcher": "run_command", "hooks": [ { "type": "command", "command": "$HOME/.gemini/config/hooks/antigravity_adapter.sh $HOME/.gemini/config/hooks/safety_guard.sh" } ] }
-  ] },
-  "privacy-guard": { "PreToolUse": [
-    { "matcher": "run_command|write_to_file|replace_file_content|multi_replace_file_content", "hooks": [ { "type": "command", "command": "$HOME/.gemini/config/hooks/antigravity_adapter.sh $HOME/.gemini/config/hooks/privacy_guard.sh" } ] }
+  "guards": { "PreToolUse": [
+    { "matcher": "run_command|write_to_file|replace_file_content|multi_replace_file_content|edit_file", "hooks": [ { "type": "command", "command": "$HOME/.gemini/config/hooks/antigravity_adapter.sh safety_guard.sh privacy_guard.sh" } ] }
   ] }
 }
 JSON
-assert_exit_code 0 "Antigravity hooks.json validates (adapter + guards exercised)" \
+assert_exit_code 0 "Antigravity hooks.json validates (adapter + both guards, bare names)" \
     env HOME="$H" bash "$VALIDATE" "$H/.gemini/config/hooks.json"
+
+# Adapter configured WITHOUT a guard argument: the exact fail-open shape the
+# validator exists to catch (adapter alone answers ask/allow for everything).
+cat > "$H/.gemini/config/noguard.json" <<'JSON'
+{
+  "guards": { "PreToolUse": [
+    { "matcher": "run_command", "hooks": [ { "type": "command", "command": "$HOME/.gemini/config/hooks/antigravity_adapter.sh" } ] }
+  ] }
+}
+JSON
+assert_exit_code 1 "adapter with NO guard argument FAILS validation" \
+    env HOME="$H" bash "$VALIDATE" "$H/.gemini/config/noguard.json"
 
 # Antigravity fail-open shape: adapter wired to an inert guard must FAIL.
 cp "$H/.claude/statusline-command.sh" "$H/.gemini/config/hooks/safety_guard_inert.sh"

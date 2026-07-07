@@ -13,7 +13,7 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - `archive/`: Retired-but-kept artifacts (not wired into install). [See archive/AGENTS.md](./archive/AGENTS.md) for the inventory and restore instructions.
 - `ai/hooks/`: Unified agent hooks (safety, privacy) shared across CLIs.
 - `ai/skills/`: Shared agent skills (each a `SKILL.md` folder) linked into Claude + Antigravity by `sync-skills`; each should ship an `evals/evals.json` validated by `make skill-evals`. [See ai/skills/AGENTS.md](./ai/skills/AGENTS.md).
-- `ai/antigravity/`: Antigravity CLI (`agy`) aliases, hook-wiring template, and sanity-check scripts.
+- [`ai/antigravity/`](./ai/antigravity/AGENTS.md): Antigravity CLI (`agy`) aliases, hook-wiring template, and sanity-check scripts.
 - `ai/claude/`: Claude-specific commands, settings, and hook templates.
 - `ai/plugins.yaml`: Declarative manifest of the Claude Code plugins this repo installs/enables (ensure-only via `sync-plugins`). See [docs/ai-plugins.md](./docs/ai-plugins.md) for the plugin summary, first-usage examples, and the Antigravity plugin path.
 - `ai/teams/`: Specialized agent teams installed as native subagents for Claude, Antigravity, and Ollama. Personas declare an abstract `tier:` resolved via `model-map.yaml`; `install_ai_teams.sh` emits each tool's format and `/team` routes tasks to the right team/member. [See ai/teams/AGENTS.md](./ai/teams/AGENTS.md).

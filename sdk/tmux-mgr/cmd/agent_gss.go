@@ -70,12 +70,18 @@ func engineSessionID(host agent.Assistant, getenv func(string) string) string {
 	case agent.AssistantClaude:
 		return getenv("CLAUDE_SESSION_ID")
 	case agent.AssistantAntigravity:
-		if id := getenv("ANTIGRAVITY_SESSION_ID"); id != "" {
+		// Prefer the var matching the raw (un-normalized) host: the Antigravity
+		// CLI sets ANTIGRAVITY_SESSION_ID, while a legacy "gemini" host sets
+		// GEMINI_SESSION_ID. Fall back to the other so mixed setups still resolve
+		// (Antigravity reuses the ~/.gemini config tree).
+		primary, fallback := "ANTIGRAVITY_SESSION_ID", "GEMINI_SESSION_ID"
+		if host == agent.AssistantGemini {
+			primary, fallback = fallback, primary
+		}
+		if id := getenv(primary); id != "" {
 			return id
 		}
-		// Legacy Gemini CLI var — Antigravity reuses the ~/.gemini config
-		// tree, so honor the old session var too.
-		return getenv("GEMINI_SESSION_ID")
+		return getenv(fallback)
 	default:
 		return ""
 	}

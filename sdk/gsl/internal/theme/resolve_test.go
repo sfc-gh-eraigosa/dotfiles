@@ -237,6 +237,19 @@ func TestResolve_Antigravity_LegacyGeminiSettingsFallback(t *testing.T) {
 	}
 }
 
+func TestResolve_Antigravity_PresentFileWithoutTheme_NoLegacyFallback(t *testing.T) {
+	// When the antigravity-cli settings file exists but lacks ui.theme, it is
+	// authoritative: the legacy ~/.gemini/settings.json must NOT be consulted
+	// (avoids a second file read per render), so we get the terminal fallback.
+	home := t.TempDir()
+	writeAntigravitySettings(t, home, "") // present, no ui.theme
+	writeLegacyGeminiSettings(t, home, "Ayu Light")
+	got := theme.Resolve("antigravity", noEnv(), home)
+	if got != "dark8" {
+		t.Errorf("antigravity present-without-theme: got %q, want %q (no legacy fallback)", got, "dark8")
+	}
+}
+
 func TestResolve_Antigravity_NewFileWinsOverLegacy(t *testing.T) {
 	// The antigravity-cli settings file takes priority over the legacy one.
 	home := t.TempDir()
@@ -245,16 +258,6 @@ func TestResolve_Antigravity_NewFileWinsOverLegacy(t *testing.T) {
 	got := theme.Resolve("antigravity", noEnv(), home)
 	if got != "light" {
 		t.Errorf("antigravity priority: got %q, want %q", got, "light")
-	}
-}
-
-func TestResolve_LegacyGeminiToolCtx_Alias(t *testing.T) {
-	// The legacy "gemini" toolCtx is still accepted as an alias.
-	home := t.TempDir()
-	writeAntigravitySettings(t, home, "Ayu Light")
-	got := theme.Resolve("gemini", noEnv(), home)
-	if got != "light" {
-		t.Errorf("legacy gemini alias: got %q, want %q", got, "light")
 	}
 }
 

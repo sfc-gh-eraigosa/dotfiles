@@ -4,7 +4,7 @@ export GOENV_ROOT="$HOME/go"
 export GOENV_PATH_ORDER=front
 
 # Detect if we're in an automated/editor environment
-if [[ "$TERM_PROGRAM" == "vscode" ]] || [[ "$TERM_PROGRAM" == "cursor" ]] || [[ -n "$VSCODE_PID" ]] || [[ -n "$CURSOR_PID" ]] || [[ -n "${GEMINI_CLI:-}" ]]; then
+if [[ "$TERM_PROGRAM" == "vscode" ]] || [[ "$TERM_PROGRAM" == "cursor" ]] || [[ -n "$VSCODE_PID" ]] || [[ -n "$CURSOR_PID" ]] || [[ -n "${GEMINI_CLI:-}" ]] || [[ -n "${ANTIGRAVITY_AGENT:-}" ]]; then
     export EDITOR_TERMINAL=true
 else
     export EDITOR_TERMINAL=false

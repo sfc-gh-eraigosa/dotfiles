@@ -69,24 +69,43 @@ for cmd in "${HOOK_CMDS[@]:-}"; do
                 || fail "privacy_guard errored on clean input via the configured path ($path)"
             ;;
         antigravity_adapter.sh)
-            # Antigravity wiring: "adapter.sh <guard.sh>". Validate the guard
-            # arg resolves, then drive the pair with agy-dialect payloads and
-            # check the JSON verdict on stdout.
-            guard="$(expand "${cmd#* }")"
-            if [ ! -x "$guard" ]; then
-                fail "adapter's guard argument not executable: '$cmd' (resolved: $guard)"
+            # Antigravity wiring: "adapter.sh <guard.sh> [guard2.sh ...]".
+            # Bare guard names resolve relative to the adapter's directory
+            # (mirroring the adapter's own resolution). Validate every guard
+            # resolves, then drive the FULL configured command with
+            # agy-dialect payloads and check the JSON verdict on stdout.
+            read -r -a _tokens <<< "$cmd"
+            if [ "${#_tokens[@]}" -lt 2 ]; then
+                fail "adapter configured with NO guard argument ('$cmd') — it would answer ask/allow for everything"
                 continue
             fi
-            adapter_decision() { printf '%s' "$2" | bash "$path" "$guard" 2>/dev/null | jq -r '.decision // empty'; }
-            case "$(basename "$guard")" in
-                safety_guard.sh)
-                    [ "$(adapter_decision "$guard" '{"toolCall":{"name":"run_command","args":{"CommandLine":"rm -rf /"}}}')" = "deny" ] \
+            guards_ok=1
+            for _g in "${_tokens[@]:1}"; do
+                _gpath="$(expand "$_g")"
+                case "$_gpath" in
+                    */*) ;;
+                    *) _gpath="$(dirname "$path")/$_gpath" ;;
+                esac
+                if [ ! -x "$_gpath" ]; then
+                    fail "adapter's guard argument not executable: '$_g' (resolved: $_gpath)"
+                    guards_ok=0
+                fi
+            done
+            [ "$guards_ok" = "1" ] || continue
+            adapter_decision() { printf '%s' "$1" | bash "$path" "${_tokens[@]:1}" 2>/dev/null | jq -r '.decision // empty'; }
+            case " ${_tokens[*]:1} " in
+                *safety_guard.sh*)
+                    [ "$(adapter_decision '{"toolCall":{"name":"run_command","args":{"CommandLine":"rm -rf /"}}}')" = "deny" ] \
                         || fail "adapter+safety_guard did NOT deny a known-bad command ($cmd) — fail-open"
-                    [ "$(adapter_decision "$guard" '{"toolCall":{"name":"run_command","args":{"CommandLine":"ls -la"}}}')" = "allow" ] \
+                    [ "$(adapter_decision '{"toolCall":{"name":"run_command","args":{"CommandLine":"ls -la"}}}')" = "allow" ] \
                         || fail "adapter+safety_guard did NOT allow a known-good command ($cmd)"
+                    [ "$(adapter_decision '{"toolCall":{"name":"run_command","args":{"CommandLine":"sudo reboot"}}}')" = "ask" ] \
+                        || fail "adapter+safety_guard did NOT map the confirmation tier to ask ($cmd)"
                     ;;
-                privacy_guard.sh)
-                    [ "$(adapter_decision "$guard" '{"toolCall":{"name":"write_to_file","args":{"TargetFile":"/tmp/_vh_clean.md","CodeContent":"hello world"}}}')" = "allow" ] \
+            esac
+            case " ${_tokens[*]:1} " in
+                *privacy_guard.sh*)
+                    [ "$(adapter_decision '{"toolCall":{"name":"write_to_file","args":{"TargetFile":"/tmp/_vh_clean.md","CodeContent":"hello world"}}}')" = "allow" ] \
                         || fail "adapter+privacy_guard did not allow clean input ($cmd)"
                     ;;
             esac

@@ -88,7 +88,7 @@ The shim is installed by `opt/scripts/system/install_claude_skills.sh`:
 ```
 
 The skill directory is linked by `opt/scripts/system/sync-skills.sh` into
-`~/.claude/skills/gsl-status` and `~/.agents/skills/gsl-status`.
+`~/.gemini/config/skills/gsl-status` (Antigravity) and `~/.claude/skills/gsl-status` (Claude).
 
 Run `sync-skills --build` to rebuild the binary and refresh all skill links.
 

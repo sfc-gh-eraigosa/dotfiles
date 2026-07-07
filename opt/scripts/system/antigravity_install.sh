@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Antigravity CLI Installation Script
 # Installs Google's Antigravity CLI (agy) — the successor to the retired

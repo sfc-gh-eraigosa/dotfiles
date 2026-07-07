@@ -85,6 +85,20 @@ func TestBuildInvocationCmd_Antigravity(t *testing.T) {
 	}
 }
 
+func TestBuildInvocationCmd_ForwardsOnlyCurrentLauncherVars(t *testing.T) {
+	t.Setenv("TMUX_MGR_ANTIGRAVITY_LAUNCHER", "sf ai agy --")
+	t.Setenv("TMUX_MGR_GEMINI_LAUNCHER", "sf ai gemini --")
+
+	got := buildInvocationCmd(agent.AssistantAntigravity, "/usr/local/bin/agy", "/usr/local/bin/tmux-mgr", "say hi", "")
+	if !strings.Contains(got, "TMUX_MGR_ANTIGRAVITY_LAUNCHER='sf ai agy --'") {
+		t.Errorf("expected TMUX_MGR_ANTIGRAVITY_LAUNCHER to be forwarded\n  got: %s", got)
+	}
+	// The retired Gemini-era launcher var must not be resurrected in panes.
+	if strings.Contains(got, "TMUX_MGR_GEMINI_LAUNCHER") {
+		t.Errorf("legacy TMUX_MGR_GEMINI_LAUNCHER must not be forwarded\n  got: %s", got)
+	}
+}
+
 func TestBuildInvocationCmd_EscapesSingleQuotes(t *testing.T) {
 	got := buildInvocationCmd(agent.AssistantClaude, "claude", "tmux-mgr", "it's fine", "")
 	if !strings.Contains(got, `it'\''s fine`) {

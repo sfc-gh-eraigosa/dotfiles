@@ -144,12 +144,15 @@ sync_claude() {
     done < <(yq '.plugins[] | select(.enabled == true) | select(.claude.plugin != null) | .claude.plugin' "$MANIFEST")
 }
 
-# Names of currently-installed Antigravity plugins, one per line. Take the
-# first field of every non-indented row; the empty state prints
-# "No imported plugins." which must not be mistaken for a plugin named "No".
-# Empty on any error.
+# Names of currently-installed Antigravity plugins, one per line. The empty
+# state prints "No imported plugins." (must not be mistaken for a plugin
+# named "No"); the populated row format is unpinned, so emit the first TWO
+# fields of every non-indented row — that covers both "name (version)" and a
+# glyph-prefixed "<glyph> name (version)" layout (the retired gemini CLI used
+# the latter). Stray version/glyph tokens are harmless: callers match with
+# grep -qxF against a repo basename. Empty on any error.
 agy_installed_names() {
-    agy plugin list 2>&1 | awk '!/^[[:space:]]/ && !/^No imported plugins/ && NF>=1 {print $1}'
+    agy plugin list 2>&1 | awk '!/^[[:space:]]/ && !/^No imported plugins/ && NF>=1 {print $1; if (NF>=2) print $2}'
 }
 
 # Install one Antigravity plugin, stdin/timeout-guarded. Treat "already

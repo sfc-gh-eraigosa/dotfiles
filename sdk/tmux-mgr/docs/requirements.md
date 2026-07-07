@@ -39,7 +39,7 @@ Layouts are stored as JSON objects containing window indices, names, and their c
 The `capture` command uses `tmux capture-pane -pt` to stream the contents of any pane directly to the host AI CLI (Antigravity or Claude Code). This allows the model to "see" and analyze what is happening in background windows or other sessions.
 
 ### Installation & Build
-The `build.sh` script is designed to be idempotent and safe. It checks for the `go` compiler before attempting a build and manages the symlinking of the agent skill to the user's global `.agents/skills` directory.
+The `build.sh` script is designed to be idempotent and safe. It checks for the `go` compiler before attempting a build and manages the symlinking of the agent skill into the shared skill roots (`~/.gemini/config/skills/tmux` and `~/.claude/skills/tmux`).
 
 ## Coding Standards and Go Best Practices
 

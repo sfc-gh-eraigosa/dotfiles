@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # install_antigravity_skills.sh - Idempotently install Antigravity CLI (agy)
 # assistant-specific config: lifecycle hooks, shell aliases, and legacy
 # Gemini CLI cleanup. Skill links are handled by sync-skills.sh (the
@@ -21,14 +21,22 @@ echo "Configuring Antigravity CLI..."
 
 AGY_CONFIG_ROOT="${HOME}/.gemini/config"
 
-# Function to clean up broken symlinks in a directory
-cleanup_broken_links() {
+# Remove symlinks in $1 (depth 1) that point into this repo checkout.
+# Relative link targets are resolved against the directory before matching so
+# relative repo-pointing links are cleaned too.
+remove_repo_links() {
     local dir="$1"
-    if [ -d "$dir" ]; then
-        echo "  Cleaning up broken links in $dir..."
-        # Portable way to find and delete broken symlinks
-        find "$dir" -type l ! -exec test -e {} \; -delete
-    fi
+    [ -d "$dir" ] || return 0
+    find "$dir" -maxdepth 1 -type l | while read -r link; do
+        target="$(readlink "$link")"
+        case "$target" in
+            /*) ;;
+            *) target="$dir/$target" ;;
+        esac
+        case "$target" in
+            "$BASE_DIR"/*) rm -f "$link" ;;
+        esac
+    done
 }
 
 # --- Hooks (COPIED into ~/.gemini/config/hooks; hooks.json references the
@@ -55,25 +63,36 @@ fi
 # Unlike the retired Gemini CLI (hooks lived inside settings.json and needed
 # a forced-subset merge), agy keeps hook wiring in a dedicated hooks.json —
 # so the whole file is ours to render. __HOME__ is substituted because agy
-# does not expand env vars in hook command strings.
+# does not expand env vars in hook command strings; the replacement escapes
+# sed's metacharacters (& | \) so an unusual $HOME cannot corrupt the file.
+# Guard scripts are referenced by bare name — the adapter resolves them
+# relative to its own directory.
 HOOKS_JSON_SRC="$BASE_DIR/ai/antigravity/hooks.json.template"
 if [ -f "$HOOKS_JSON_SRC" ]; then
     echo "  Rendering ~/.gemini/config/hooks.json..."
     mkdir -p "$AGY_CONFIG_ROOT"
-    sed "s|__HOME__|${HOME}|g" "$HOOKS_JSON_SRC" > "$AGY_CONFIG_ROOT/hooks.json"
+    home_escaped="$(printf '%s' "$HOME" | sed -e 's/[&|\\]/\\&/g')"
+    sed "s|__HOME__|${home_escaped}|g" "$HOOKS_JSON_SRC" > "$AGY_CONFIG_ROOT/hooks.json"
 fi
 
 # --- Shell aliases (~/.config/antigravity/aliases.sh, sourced by .zshrc and
-# .bashrc). Provides the agy() wrapper with tmux auto-anchor support. ---
+# .bashrc). Provides the agy() wrapper with tmux auto-anchor support.
+# COPIED, not symlinked, per the provisioning directive (root AGENTS.md:
+# copy is the forward mechanism; a symlink would couple the shell config to
+# this checkout's location and break under gss worktrees/CI). ---
 AGY_XDG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/antigravity"
 if [ -f "$BASE_DIR/ai/antigravity/aliases.sh" ]; then
-    echo "  Linking antigravity aliases.sh..."
+    echo "  Installing antigravity aliases.sh..."
     mkdir -p "$AGY_XDG_DIR"
-    if [ -e "$AGY_XDG_DIR/aliases.sh" ] && [ ! -L "$AGY_XDG_DIR/aliases.sh" ]; then
+    if [ -L "$AGY_XDG_DIR/aliases.sh" ]; then
+        rm -f "$AGY_XDG_DIR/aliases.sh"
+    elif [ -e "$AGY_XDG_DIR/aliases.sh" ] \
+         && ! cmp -s "$BASE_DIR/ai/antigravity/aliases.sh" "$AGY_XDG_DIR/aliases.sh" \
+         && [ ! -e "$AGY_XDG_DIR/aliases.sh.bak" ]; then
         echo "    Backing up existing aliases.sh -> aliases.sh.bak"
-        mv "$AGY_XDG_DIR/aliases.sh" "$AGY_XDG_DIR/aliases.sh.bak"
+        cp "$AGY_XDG_DIR/aliases.sh" "$AGY_XDG_DIR/aliases.sh.bak"
     fi
-    ln -sf "$BASE_DIR/ai/antigravity/aliases.sh" "$AGY_XDG_DIR/aliases.sh"
+    cp "$BASE_DIR/ai/antigravity/aliases.sh" "$AGY_XDG_DIR/aliases.sh"
 fi
 
 # --- Legacy Gemini CLI cleanup (one-time migration, idempotent) ---
@@ -83,14 +102,8 @@ fi
 echo "  Cleaning up retired Gemini CLI artifacts..."
 # 1. Policy/command symlinks that pointed into this repo
 for legacy_dir in "${HOME}/.gemini/policies" "${HOME}/.gemini/commands"; do
-    if [ -d "$legacy_dir" ]; then
-        find "$legacy_dir" -maxdepth 1 -type l | while read -r link; do
-            case "$(readlink "$link")" in
-                "$BASE_DIR"/*) rm -f "$link" ;;
-            esac
-        done
-        rmdir "$legacy_dir" 2>/dev/null || true
-    fi
+    remove_repo_links "$legacy_dir"
+    rmdir "$legacy_dir" 2>/dev/null || true
 done
 # 2. Gemini's hook copies (agy reads ~/.gemini/config/hooks instead)
 if [ -d "${HOME}/.gemini/hooks" ]; then
@@ -104,16 +117,7 @@ if [ -L "$LEGACY_GEMINI_XDG/aliases.sh" ]; then
 fi
 # 4. Gemini CLI's global skills root (~/.agents/skills): remove only links
 #    that point into this repo; sync-skills.sh targets ~/.gemini/config/skills.
-if [ -d "${HOME}/.agents/skills" ]; then
-    find "${HOME}/.agents/skills" -maxdepth 1 -type l | while read -r link; do
-        case "$(readlink "$link")" in
-            "$BASE_DIR"/*) rm -f "$link" ;;
-        esac
-    done
-    rmdir "${HOME}/.agents/skills" "${HOME}/.agents" 2>/dev/null || true
-fi
-
-cleanup_broken_links "${AGY_CONFIG_ROOT}/hooks"
-cleanup_broken_links "${AGY_CONFIG_ROOT}/skills"
+remove_repo_links "${HOME}/.agents/skills"
+rmdir "${HOME}/.agents/skills" "${HOME}/.agents" 2>/dev/null || true
 
 echo "Antigravity CLI Configuration complete."

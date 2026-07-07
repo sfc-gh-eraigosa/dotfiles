@@ -77,19 +77,10 @@ func resolveModel(def *agent.Definition, host agent.Assistant) string {
 	if host == agent.AssistantClaude && os.Getenv("TMUX_MGR_CLAUDE_LAUNCHER") != "" {
 		return ""
 	}
-	if agent.NormalizeAssistant(host) == agent.AssistantAntigravity && os.Getenv(antigravityLauncherEnv()) != "" {
+	if agent.NormalizeAssistant(host) == agent.AssistantAntigravity && os.Getenv("TMUX_MGR_ANTIGRAVITY_LAUNCHER") != "" {
 		return ""
 	}
 	return model
-}
-
-// antigravityLauncherEnv returns the launcher env var name for the Antigravity
-// CLI, honoring the legacy Gemini-era name when the new one is unset.
-func antigravityLauncherEnv() string {
-	if os.Getenv("TMUX_MGR_ANTIGRAVITY_LAUNCHER") == "" && os.Getenv("TMUX_MGR_GEMINI_LAUNCHER") != "" {
-		return "TMUX_MGR_GEMINI_LAUNCHER"
-	}
-	return "TMUX_MGR_ANTIGRAVITY_LAUNCHER"
 }
 
 // spawnAgentPane launches the agent for an already-created gss worker: build
@@ -145,11 +136,6 @@ func runAgentExecute(cmd *cobra.Command, args []string) error {
 		host = agent.AssistantAntigravity
 	}
 	assistantPath := os.Getenv("TMUX_MGR_ASSISTANT_PATH")
-	// Back-compat: respect legacy GEMINI_PATH if the new var is absent and host
-	// is antigravity (the Gemini CLI successor).
-	if assistantPath == "" && host == agent.AssistantAntigravity {
-		assistantPath = os.Getenv("GEMINI_PATH")
-	}
 
 	model := os.Getenv("TMUX_MGR_MODEL")
 
@@ -214,7 +200,7 @@ func buildInvocationCmd(host agent.Assistant, assistantPath, executablePath, tas
 	// command via /bin/sh -c, which does NOT source the user's shell rc, so
 	// vars set in ~/.zshrc.local would otherwise be lost in the spawned pane.
 	extraEnv := ""
-	for _, name := range []string{"TMUX_MGR_CLAUDE_LAUNCHER", "TMUX_MGR_ANTIGRAVITY_LAUNCHER", "TMUX_MGR_GEMINI_LAUNCHER"} {
+	for _, name := range []string{"TMUX_MGR_CLAUDE_LAUNCHER", "TMUX_MGR_ANTIGRAVITY_LAUNCHER"} {
 		if v := os.Getenv(name); v != "" {
 			escaped := strings.ReplaceAll(v, "'", "'\\''")
 			extraEnv += fmt.Sprintf("%s='%s' ", name, escaped)
@@ -244,9 +230,8 @@ func buildInstruction(host agent.Assistant, task string) string {
 }
 
 func runAntigravityLoop(task, agyPath, requestedModel string) error {
-	// Launcher resolution mirrors runClaudeLoop — see TMUX_MGR_ANTIGRAVITY_LAUNCHER
-	// (the legacy TMUX_MGR_GEMINI_LAUNCHER is honored when the new var is unset).
-	execPath, prefixArgs := resolveLauncher(antigravityLauncherEnv(), "agy", agyPath)
+	// Launcher resolution mirrors runClaudeLoop — see TMUX_MGR_ANTIGRAVITY_LAUNCHER.
+	execPath, prefixArgs := resolveLauncher("TMUX_MGR_ANTIGRAVITY_LAUNCHER", "agy", agyPath)
 
 	instruction := buildInstruction(agent.AssistantAntigravity, task)
 

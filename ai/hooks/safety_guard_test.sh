@@ -86,6 +86,18 @@ assert_exit 0 Bash "dd if=/dev/zero of=zeros.bin count=10"    "dd reading from /
 assert_exit 0 Bash "parted --list"                            "parted --list (read-only)"
 assert_exit 0 Bash "parted -l"                                "parted -l short"
 
+# === Confirmation tier (exit 3) — restored from the retired safety.toml ask rules ===
+assert_exit 3 Bash "sudo reboot"                     "reboot asks for confirmation"
+assert_exit 3 Bash "shutdown -h now"                 "shutdown asks for confirmation"
+assert_exit 3 Bash "sudo systemctl poweroff"         "systemctl poweroff asks"
+assert_exit 3 Bash "sudo init 0"                     "init 0 asks"
+assert_exit 3 Bash "git push -f origin main"         "git push -f asks"
+assert_exit 3 Bash "git push --force origin main"    "git push --force asks"
+assert_exit 3 Bash "git push --force-with-lease origin main" "git push --force-with-lease asks"
+assert_exit 0 Bash "git push origin main"            "plain git push allowed"
+assert_exit 0 Bash "echo reboot required after upgrade" "reboot as argument (not command) allowed"
+assert_exit 0 Bash "systemctl status nginx"          "systemctl status allowed"
+
 # === Denied (exit 2) ===
 assert_exit 2 Bash "rm -rf *"                        "rm -rf wildcard"
 assert_exit 2 Bash "rm -f *"                         "rm -f wildcard (deletes all in cwd)"

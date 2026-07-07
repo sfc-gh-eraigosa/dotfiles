@@ -36,12 +36,12 @@ assert_in_subshell "hooks are real files, not symlinks" \
 assert_file_exists "$A/.gemini/config/hooks.json" "hooks.json rendered into ~/.gemini/config"
 assert_in_subshell "hooks.json is valid JSON" "jq -e . '$A/.gemini/config/hooks.json' >/dev/null"
 assert_grep_negative "no unsubstituted __HOME__ in hooks.json" "__HOME__" "$A/.gemini/config/hooks.json"
-assert_eq "$(jq -r '[.[] | objects | .PreToolUse[]?.hooks[]?.command] | map(select(test("antigravity_adapter"))) | length' "$A/.gemini/config/hooks.json")" \
-    "2" "both guards wired through the antigravity adapter"
+assert_eq "$(jq -r '[.[] | objects | .PreToolUse[]?.hooks[]?.command] | map(select(test("antigravity_adapter.sh safety_guard.sh privacy_guard.sh"))) | length' "$A/.gemini/config/hooks.json")" \
+    "1" "single hook entry runs both guards through the adapter"
 assert_in_subshell "hook commands use the rendered real HOME" \
     "jq -r '[.[] | objects | .PreToolUse[]?.hooks[]?.command] | first' '$A/.gemini/config/hooks.json' | grep -qF '$A/.gemini/config/hooks/'"
-assert_in_subshell "aliases.sh symlinked into ~/.config/antigravity" \
-    "[ -L '$A/.config/antigravity/aliases.sh' ]"
+assert_in_subshell "aliases.sh copied (not symlinked) into ~/.config/antigravity" \
+    "[ -f '$A/.config/antigravity/aliases.sh' ] && [ ! -L '$A/.config/antigravity/aliases.sh' ]"
 
 # --- A: idempotency (re-run changes nothing structurally) ---
 run_install "$A"

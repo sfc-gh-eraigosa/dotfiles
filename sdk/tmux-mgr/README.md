@@ -28,7 +28,7 @@ If you have Go installed, you can build and install the tool and its agent skill
 cd ~/git/dotfiles/sdk/tmux-mgr
 ./build.sh
 ```
-*This will install the binary to `~/opt/bin/tmux-mgr` and link the agent skill to `~/.agents/skills/tmux`.*
+*This will install the binary to `~/opt/bin/tmux-mgr` and link the agent skill to `~/.gemini/config/skills/tmux` and `~/.claude/skills/tmux`.*
 
 ## 📖 Getting Started
 

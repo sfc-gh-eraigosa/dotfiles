@@ -60,13 +60,20 @@ func readClaudeTheme(home string) string {
 }
 
 // readAntigravityTheme reads the `ui.theme` field for the Antigravity CLI.
-// It checks the Antigravity settings file <home>/.gemini/antigravity-cli/
-// settings.json first, then falls back to the legacy Gemini CLI file
-// <home>/.gemini/settings.json (Antigravity deliberately reuses the ~/.gemini
-// directory). Returns "" on any error. The value is a free-form string.
+// It reads the Antigravity settings file <home>/.gemini/antigravity-cli/
+// settings.json when it exists; only when that file is absent does it fall
+// back to the legacy Gemini CLI file <home>/.gemini/settings.json (Antigravity
+// deliberately reuses the ~/.gemini directory). Gating the fallback on file
+// absence — not on an empty ui.theme — avoids a second open+parse on every
+// statusline render in the steady state where the Antigravity file exists but
+// simply lacks ui.theme. Returns "" on any error. The value is a free-form
+// string.
 func readAntigravityTheme(home string) string {
-	if v := readUITheme(home, filepath.Join(home, ".gemini", "antigravity-cli", "settings.json")); v != "" {
-		return v
+	agyPath := filepath.Join(home, ".gemini", "antigravity-cli", "settings.json")
+	if _, err := os.Lstat(agyPath); !errors.Is(err, os.ErrNotExist) {
+		// The Antigravity file exists (or is anomalous): it is authoritative,
+		// even when it lacks ui.theme.
+		return readUITheme(home, agyPath)
 	}
 	// Legacy Gemini CLI settings file.
 	return readUITheme(home, filepath.Join(home, ".gemini", "settings.json"))

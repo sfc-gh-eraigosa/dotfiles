@@ -20,7 +20,7 @@ bash build.sh
 `./install.sh` (from the repo root) does three things for gsl:
 
 1. Builds the `gsl` binary via its own `sdk/gsl/build.sh` block (same pattern as `gss`, `tmux-mgr`, `wol`).
-2. Calls `sync-skills.sh` (no flags) to link `sdk/gsl/skill/` into `~/.claude/skills/gsl-status` and `~/.agents/skills/gsl-status`.
+2. Calls `sync-skills.sh` (no flags) to link `sdk/gsl/skill/` into `~/.gemini/config/skills/gsl-status` (Antigravity) and `~/.claude/skills/gsl-status` (Claude).
 3. Calls `install_claude_skills.sh` to symlink `ai/claude/statusline-command.sh` to `~/.claude/statusline-command.sh` — the shim that Claude Code calls after every assistant turn.
 
 You can also build the binary or refresh skill links independently:

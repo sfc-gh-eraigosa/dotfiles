@@ -3,7 +3,9 @@ set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 BIN_DIR="${HOME}/opt/bin"
-SKILL_INSTALL_DIR="${HOME}/.agents/skills"
+# Shared skill destinations (mirrors opt/scripts/system/sync-skills.sh):
+# Antigravity CLI + Claude Code both read their own skills root.
+SKILL_INSTALL_DIRS=("${HOME}/.gemini/config/skills" "${HOME}/.claude/skills")
 
 # Drop any inherited GOROOT/GOTOOLCHAIN so the resolved `go` binary uses its
 # own matching stdlib (prevents brew-go vs goenv-go version-mismatch).
@@ -35,7 +37,6 @@ LDFLAGS="-X github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/cmd.Version=$VERSIO
          -X github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/cmd.Dirty=$DIRTY"
 
 mkdir -p "$BIN_DIR"
-mkdir -p "$SKILL_INSTALL_DIR"
 
 # Guard: pkg/workspace was deleted in PR-59 (gss owns worktrees). Fail the
 # build if it creeps back rather than silently re-coupling tmux-mgr to it.
@@ -46,7 +47,9 @@ cd "$DIR"
 "$GO_BIN" build -ldflags "$LDFLAGS" -o "$BIN_DIR/tmux-mgr" main.go
 
 echo "Installing tmux skill..."
-mkdir -p "$SKILL_INSTALL_DIR"
-ln -sfn "$DIR/skill" "$SKILL_INSTALL_DIR/tmux"
+for skill_dir in "${SKILL_INSTALL_DIRS[@]}"; do
+    mkdir -p "$skill_dir"
+    ln -sfn "$DIR/skill" "$skill_dir/tmux"
+done
 
 echo "tmux-mgr built and skill installed."

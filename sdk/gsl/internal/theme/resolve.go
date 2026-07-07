@@ -11,10 +11,11 @@ import "strings"
 //     - toolCtx == "claude": read <home>/.claude/settings.json field "theme".
 //     Enum values: "dark" → "dark"; "light" → "light";
 //     "dark-daltonism" → "dark-daltonism"; "system"/absent → "dark".
-//     - toolCtx == "antigravity" (or the legacy alias "gemini"): read the
+//     - toolCtx == "antigravity": read the
 //     "ui.theme" field (free-form string) from
 //     <home>/.gemini/antigravity-cli/settings.json, falling back to the
-//     legacy <home>/.gemini/settings.json. Keyword bridge:
+//     legacy <home>/.gemini/settings.json only when that file is absent.
+//     Keyword bridge:
 //     contains "light" → "light";
 //     contains "daltonism" or "colorblind" → "dark-daltonism";
 //     any other non-empty value (including unknown themes) → "dark".
@@ -37,7 +38,7 @@ func Resolve(toolCtx string, env func(string) string, home string) string {
 		raw := readClaudeTheme(home)
 		return claudeEnumToPalette(raw)
 
-	case "antigravity", "gemini": // "gemini" is the legacy alias for the retired Gemini CLI
+	case "antigravity":
 		raw := readAntigravityTheme(home)
 		if raw == "" {
 			// Missing/unreadable → terminal fallback.

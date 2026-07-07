@@ -46,6 +46,15 @@ load_node_env() {
     # Always make ~/opt/bin reachable for locally-installed tools.
     export PATH="${HOME}/opt/bin:${PATH}"
 
+    # Last resort on a fresh machine: install.sh has installed nvm but no
+    # Node version yet (the retired gemini_install.sh used to run this).
+    if ! command -v npm >/dev/null 2>&1 && [ -s "${HOME}/.nvm/nvm.sh" ]; then
+        echo -e "${BLUE}npm not found — installing Node LTS via nvm...${NC}"
+        # shellcheck source=/dev/null
+        \. "${HOME}/.nvm/nvm.sh"
+        nvm install --lts >> "$INSTALL_LOG" 2>&1 && nvm use --lts >> "$INSTALL_LOG" 2>&1
+    fi
+
     if ! command -v npm >/dev/null 2>&1; then
         echo -e "${RED}Error: npm not found. Please ensure Node.js is installed.${NC}"
         exit 1
@@ -197,7 +206,11 @@ setup_all() {
     echo -e "${BLUE}Starting Google CLI setup... Full log at ${INSTALL_LOG}${NC}"
     load_node_env
     install_gcloud
-    install_agy
+    # agy itself is installed/updated by antigravity_install.sh (install.sh
+    # runs it right before this script); install only when absent so a full
+    # bootstrap doesn't hit Google's updater twice. `google-cli-setup.sh agy`
+    # forces the install/update path explicitly.
+    command -v agy >/dev/null 2>&1 || install_agy
     install_or_upgrade "gws" "@googleworkspace/cli"
     init_configs
     show_status
@@ -214,6 +227,9 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
             ;;
         gcloud)
             install_gcloud
+            ;;
+        agy)
+            install_agy
             ;;
         *)
             setup_all
