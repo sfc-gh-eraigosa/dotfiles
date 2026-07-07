@@ -109,6 +109,27 @@ jobs:
         continue-on-error: true
         run: actionlint .github/workflows/*.yml
 
+  shell-lint:
+    name: Shell Lint (shellcheck)
+    runs-on: ubuntu-latest
+    # Dedicated shellcheck check, wired in as a required status context via
+    # branch protection. shellcheck also runs inside the `lint` job's
+    # `make lint` step, but that job is warn-only across all linters; this
+    # job isolates the shell signal under its own required context so a
+    # future strict flip can gate on shell alone. WARN-ONLY for now to match
+    # the phase-1 baseline backlog (~90 shell findings, .ci-baseline-issues.md)
+    # so the merge queue isn't deadlocked; drop continue-on-error once the
+    # shell backlog reaches zero.
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+      - name: Run make lint-shell
+        continue-on-error: true
+        run: make lint-shell
+
   unit-tests:
     name: Run Unit Tests
     needs: lint
