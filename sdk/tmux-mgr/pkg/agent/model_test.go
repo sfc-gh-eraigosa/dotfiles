@@ -56,8 +56,12 @@ func TestSelectModel_GeneralistFallsBackToCheapest(t *testing.T) {
 	if got := SelectModel(nil, AssistantClaude); got != claudeModels[ModelTierSmall] {
 		t.Errorf("generalist Claude = %q, want %q", got, claudeModels[ModelTierSmall])
 	}
-	if got := SelectModel(nil, AssistantGemini); got != geminiModels[ModelTierSmall] {
-		t.Errorf("generalist Gemini = %q, want %q", got, geminiModels[ModelTierSmall])
+	if got := SelectModel(nil, AssistantAntigravity); got != antigravityModels[ModelTierSmall] {
+		t.Errorf("generalist Antigravity = %q, want %q", got, antigravityModels[ModelTierSmall])
+	}
+	// Legacy "gemini" host values (old session records) resolve like antigravity.
+	if got := SelectModel(nil, AssistantGemini); got != antigravityModels[ModelTierSmall] {
+		t.Errorf("generalist legacy Gemini = %q, want %q", got, antigravityModels[ModelTierSmall])
 	}
 }
 
@@ -69,7 +73,8 @@ func TestSelectModel_NamedAgentMapsBySize(t *testing.T) {
 		want  string
 	}{
 		{"captain ollama 1.8b → claude small", "internlm2:1.8b", AssistantClaude, claudeModels[ModelTierSmall]},
-		{"researcher 360m → gemini small", "smollm:360m", AssistantGemini, geminiModels[ModelTierSmall]},
+		{"researcher 360m → antigravity small", "smollm:360m", AssistantAntigravity, antigravityModels[ModelTierSmall]},
+		{"legacy gemini host 360m → antigravity small", "smollm:360m", AssistantGemini, antigravityModels[ModelTierSmall]},
 		{"hypothetical 7b → claude medium", "llama3.1:7b", AssistantClaude, claudeModels[ModelTierMedium]},
 		{"hypothetical 70b → claude large", "llama3.1:70b", AssistantClaude, claudeModels[ModelTierLarge]},
 	}
@@ -89,7 +94,7 @@ func TestSelectModel_UnparseableInherits(t *testing.T) {
 	if got := SelectModel(&Definition{Model: "some-custom-model"}, AssistantClaude); got != "" {
 		t.Errorf("expected empty (inherit), got %q", got)
 	}
-	if got := SelectModel(&Definition{Model: ""}, AssistantGemini); got != "" {
+	if got := SelectModel(&Definition{Model: ""}, AssistantAntigravity); got != "" {
 		t.Errorf("expected empty (inherit) for missing Model, got %q", got)
 	}
 }

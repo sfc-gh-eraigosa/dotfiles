@@ -83,7 +83,7 @@ cat > "$tmp/host5.json" <<'JSON'
 { "theme": "x" }
 JSON
 cat > "$tmp/forced5.json" <<'JSON'
-{ "_comment": "explains $GEMINI_PROJECT_DIR and why we avoid it", "statusLine": { "type": "command", "command": "bash ~/.claude/statusline-command.sh" } }
+{ "_comment": "explains why hooks use well-known $HOME paths", "statusLine": { "type": "command", "command": "bash ~/.claude/statusline-command.sh" } }
 JSON
 bash "$APPLY" "$tmp/host5.json" "$tmp/forced5.json"
 assert_eq "$(jq -r 'has("_comment")' "$tmp/host5.json")" "false" "forced _comment doc key not merged into live settings"

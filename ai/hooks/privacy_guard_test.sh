@@ -48,7 +48,7 @@ pl_write() { jq -n --arg fp "$1" --arg c "$2" '{tool_name:"Write",  tool_input:{
 pl_edit()  { jq -n --arg fp "$1" --arg s "$2" '{tool_name:"Edit",   tool_input:{file_path:$fp, old_string:"x", new_string:$s}}'; }
 pl_bash()  { jq -n --arg c "$1"               '{tool_name:"Bash",   tool_input:{command:$c}}'; }
 
-# Gemini tool variants
+# Shared-dialect tool variants (write_file/replace; used by the antigravity adapter)
 pl_write_file() { jq -n --arg fp "$1" --arg c "$2" '{tool_name:"write_file", tool_input:{file_path:$fp, content:$c}}'; }
 pl_replace()    { jq -n --arg fp "$1" --arg s "$2" '{tool_name:"replace",    tool_input:{file_path:$fp, old_string:"x", new_string:$s}}'; }
 pl_shell()      { jq -n --arg c "$1"               '{tool_name:"run_shell_command", tool_input:{command:$c}}'; }
@@ -74,8 +74,8 @@ assert_json() {
 
 # ============================ ALLOWED (exit 0) =================================
 assert 0 "$(pl_write "$TRACKED" 'Path is $HOME/git/dotfiles and ~/.ssh/config')" "tracked: \$HOME + ~ variables"
-assert 0 "$(pl_write_file "$TRACKED" 'Path is $HOME/git/dotfiles and ~/.ssh/config')" "tracked: write_file (Gemini)"
-assert_json 0 "$(pl_write_file "$TRACKED" 'Path is $HOME/git/dotfiles and ~/.ssh/config')" "tracked: write_file (Gemini) JSON check" '{"decision": "allow"}'
+assert 0 "$(pl_write_file "$TRACKED" 'Path is $HOME/git/dotfiles and ~/.ssh/config')" "tracked: write_file (shared dialect)"
+assert_json 0 "$(pl_write_file "$TRACKED" 'Path is $HOME/git/dotfiles and ~/.ssh/config')" "tracked: write_file (shared dialect) JSON check" '{"decision": "allow"}'
 assert 0 "$(pl_write "$TRACKED" 'Use ${USER} or <user> as the account placeholder')" "tracked: \${USER} + <user> placeholder"
 assert 0 "$(pl_write "$TRACKED" 'See C:\Users\<user>\AppData for the path')"   "tracked: Windows path with <user> placeholder"
 assert 0 "$(pl_write "$TRACKED" 'export DB_PASS=${DB_PASS}  # from env')"        "tracked: password references a variable"
@@ -83,7 +83,7 @@ assert 0 "$(pl_write "$TRACKED" 'password: <your-password-here>')"              
 assert 0 "$(pl_write "$LOCAL"   "leaked $WSL and $USERLEAK")"                   "ignored file: leak allowed (local only)"
 assert 0 "$(pl_write "$OUTSIDE" "leaked $WIN and $UNIXHOME")"                   "outside any repo: leak allowed (local only)"
 assert 0 "$(pl_bash  "ls -la $WSL && grep alice /etc/passwd")"                  "non-publish Bash: out of scope"
-assert 0 "$(pl_shell "ls -la $WSL && grep alice /etc/passwd")"                  "non-publish shell (Gemini): out of scope"
+assert 0 "$(pl_shell "ls -la $WSL && grep alice /etc/passwd")"                  "non-publish shell (shared dialect): out of scope"
 assert 0 "$(pl_bash  'git commit -m "fix: tidy the docs"')"                     "clean commit message"
 assert 0 "$(pl_write "$TRACKED" 'Generic system path /home/linuxbrew/.linuxbrew is fine')" "tracked: non-user system /home path"
 assert 0 "$(jq -n '{tool_name:"Read", tool_input:{file_path:"/x"}}')"           "non-write/non-bash tool passes through"
@@ -98,7 +98,7 @@ assert 2 "$(pl_write "$TRACKED" "config lives at $UNIXHOME")"   "tracked Write: 
 assert 2 "$(pl_write "$TRACKED" "$USERLEAK")"                   "tracked Write: bare login username (Rule C)"
 assert 2 "$(pl_write "$TRACKED" "$HOSTLEAK")"                   "tracked Write: bare hostname (Rule C)"
 assert 2 "$(pl_bash  "gh pr create --title x --body '$WSL is the path'")" "gh pr create body: WSL user path"
-assert 2 "$(pl_shell "gh pr create --title x --body '$WSL is the path'")" "gh pr create body (Gemini): WSL user path"
+assert 2 "$(pl_shell "gh pr create --title x --body '$WSL is the path'")" "gh pr create body (shared dialect): WSL user path"
 assert 2 "$(pl_bash  "git commit -m 'docs: path $WIN'")"        "git commit message: Windows user path"
 assert 2 "$(pl_write "$TRACKED" 'key AKIA1234567890ABCDEF rotated')" "tracked Write: AWS access key (Rule D)"
 assert 2 "$(pl_write "$TRACKED" '-----BEGIN OPENSSH PRIVATE KEY-----')" "tracked Write: PEM private key (Rule D)"

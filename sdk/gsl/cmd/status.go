@@ -7,7 +7,7 @@ import (
 
 var statusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Render the status line for Gemini/CLI (no stdin payload)",
+	Short: "Render the status line for Antigravity/CLI (no stdin payload)",
 	Long: `status renders the status line without reading stdin. The AI segment
 self-omits because no Claude payload is supplied. The dirgit, repo, and
 time segments still render.`,

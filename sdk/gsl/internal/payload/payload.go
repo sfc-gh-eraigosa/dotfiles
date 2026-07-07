@@ -5,7 +5,7 @@
 // from zero values. Callers MUST test for nil before dereferencing any field.
 //
 // Empty or whitespace-only input returns an empty Payload and a nil error —
-// this is the "gsl is invoked without a Claude payload" case (e.g. Gemini
+// this is the "gsl is invoked without a Claude payload" case (e.g. Antigravity
 // on-demand calls, integration tests, plain shell usage).
 package payload
 

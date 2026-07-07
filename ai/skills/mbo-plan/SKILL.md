@@ -9,7 +9,7 @@ description: >-
   for #N", "start an MBO / a design doc", or when they're working in a gss draft
   PR and want to scope the work — even if they don't say "mbo". Routes the task to
   the right skill workflow (skill-creator, brainstorming→writing-plans, the go/web
-  teams) per docs/mbo/GEMINI.md. Also anchors the objective to a GitHub design issue
+  teams) per docs/mbo/AGENTS.md. Also anchors the objective to a GitHub design issue
   + a gss draft PR, and — when the plan is ready and it's time to BUILD — asks whether to
   "break out the work / parallelize / divide it across the teams": a dependency graph of
   leaf tasks, each a gss feature worker with its own worktree, draft PR, and linked
@@ -23,9 +23,9 @@ This repo keeps all objective-driven design work in **`docs/mbo/`** as consisten
 pipeline so every objective is captured, classified, routed to the right workflow, written
 in the right place with the right shape, and tracked — instead of ad-hoc docs scattered around.
 
-**Source of truth:** read `docs/mbo/GEMINI.md` first. It owns the pipeline, the task-type →
+**Source of truth:** read `docs/mbo/AGENTS.md` first. It owns the pipeline, the task-type →
 skill-workflow routing table, the slug/naming conventions, and the state lifecycle. This skill
-is the *procedure*; that file is the *policy*. If they ever disagree, GEMINI.md wins.
+is the *procedure*; that file is the *policy*. If they ever disagree, AGENTS.md wins.
 
 ## Procedure
 
@@ -44,7 +44,7 @@ Find out what you're planning and pin a short **slug** (e.g. `prping`, `sdk-migr
 
 ### 2 — Classify and route
 Decide the task type and pick the matching **skill workflow** from the routing table in
-`docs/mbo/GEMINI.md`. The common cases:
+`docs/mbo/AGENTS.md`. The common cases:
 
 | Objective is… | Workflow to run |
 | :-- | :-- |
@@ -110,7 +110,7 @@ link the `docs/mbo/` artifacts; `index.md` records issue#, PR#, and state. The s
 > edge list + per-leaf `done-when` gate + blocking-first order) is the authoritative, reviewable
 > graph; everything else (design-issue mermaid DAG, GitHub sub-issue tree, `gss feature list`,
 > `index.md`'s leaf sub-table) is a generated/mirrored projection. This is **policy** — the
-> normative statement lives in [`docs/mbo/GEMINI.md` § Build-breakout policy](../../../docs/mbo/GEMINI.md);
+> normative statement lives in [`docs/mbo/AGENTS.md` § Build-breakout policy](../../../docs/mbo/AGENTS.md);
 > this skill is the procedure that applies it.
 
 ### 6 — BUILD breakout: decompose → dependency graph → Workflow fan-out (CAP-B, optional)
@@ -161,12 +161,12 @@ blocking-first sequence for §6c / CAP-C. Keep this table in sync with the gss w
 **6c. Fan out via a Workflow.** Sequence the blocking leaves first; then dispatch the parallel
 leaves with the **Workflow tool** (`/workflows`), routing each leaf to the right team via `/team`
 (go → go-team, web → web-team, CI → ai-ci, infra → terraform-aws) per the same routing table in
-`docs/mbo/GEMINI.md`.
+`docs/mbo/AGENTS.md`.
 
 **Pick ONE isolation mechanism per leaf — they don't compose over the same paths.** Which mechanism
 maps to which kind of leaf (`gss feature worker` for code-producing leaves, ephemeral harness
 worktree isolation for read-only leaves, tmux-mgr panes for human-observable sessions) is **policy**,
-stated normatively in [`docs/mbo/GEMINI.md` § Build-breakout policy](../../../docs/mbo/GEMINI.md).
+stated normatively in [`docs/mbo/AGENTS.md` § Build-breakout policy](../../../docs/mbo/AGENTS.md).
 
 So the normal build path is: `gss feature worker add` creates each leaf's worktree+PR (system of
 record), then the Workflow/`/team` agent (optionally surfaced via tmux-mgr) *works inside that

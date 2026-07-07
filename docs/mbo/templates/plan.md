@@ -10,7 +10,7 @@ What this builds; any evaluation/review verdict and how must-fixes are addressed
 
 ## 2. File inventory
 Exact paths for every artifact + what each contains + which spec section it implements.
-Include touch-points OUTSIDE the new dir (install.sh, scripts/test.sh, sync-skills, GEMINI.md, CI…).
+Include touch-points OUTSIDE the new dir (install.sh, scripts/test.sh, sync-skills, AGENTS.md, CI…).
 
 | Path | Purpose | Implements |
 | :-- | :-- | :-- |

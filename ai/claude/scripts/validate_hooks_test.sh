@@ -66,7 +66,7 @@ JSON
 assert_exit_code 1 "fail-open safety_guard (allows known-bad) FAILS the exercise" \
     env HOME="$H" bash "$VALIDATE" "$H/.claude/brokenhook.json"
 
-# Event-agnostic: a Gemini-style settings file (BeforeTool) also validates.
+# Event-agnostic: a legacy Gemini-style settings file (BeforeTool) also validates.
 cp "$REPO_ROOT/ai/hooks/safety_guard.sh" "$H/.claude/hooks/"   # reuse the copied hooks
 cat > "$H/.gemini-style.json" <<'JSON'
 {
@@ -77,5 +77,42 @@ cat > "$H/.gemini-style.json" <<'JSON'
 JSON
 assert_exit_code 0 "Gemini-style BeforeTool hooks validate (event-agnostic)" \
     env HOME="$H" bash "$VALIDATE" "$H/.gemini-style.json"
+
+# Antigravity hooks.json layout (named hooks, no top-level "hooks" key), with
+# the adapter bridging agy's {toolCall}/{decision} dialect to the shared guards.
+mkdir -p "$H/.gemini/config/hooks"
+cp "$REPO_ROOT/ai/hooks/safety_guard.sh" "$REPO_ROOT/ai/hooks/privacy_guard.sh" \
+   "$REPO_ROOT/ai/hooks/strip_heredocs.awk" "$REPO_ROOT/ai/hooks/antigravity_adapter.sh" \
+   "$H/.gemini/config/hooks/"
+chmod +x "$H/.gemini/config/hooks/"*.sh
+cat > "$H/.gemini/config/hooks.json" <<'JSON'
+{
+  "guards": { "PreToolUse": [
+    { "matcher": "run_command|write_to_file|replace_file_content|multi_replace_file_content|edit_file", "hooks": [ { "type": "command", "command": "$HOME/.gemini/config/hooks/antigravity_adapter.sh safety_guard.sh privacy_guard.sh" } ] }
+  ] }
+}
+JSON
+assert_exit_code 0 "Antigravity hooks.json validates (adapter + both guards, bare names)" \
+    env HOME="$H" bash "$VALIDATE" "$H/.gemini/config/hooks.json"
+
+# Adapter configured WITHOUT a guard argument: the exact fail-open shape the
+# validator exists to catch (adapter alone answers ask/allow for everything).
+cat > "$H/.gemini/config/noguard.json" <<'JSON'
+{
+  "guards": { "PreToolUse": [
+    { "matcher": "run_command", "hooks": [ { "type": "command", "command": "$HOME/.gemini/config/hooks/antigravity_adapter.sh" } ] }
+  ] }
+}
+JSON
+assert_exit_code 1 "adapter with NO guard argument FAILS validation" \
+    env HOME="$H" bash "$VALIDATE" "$H/.gemini/config/noguard.json"
+
+# Antigravity fail-open shape: adapter wired to an inert guard must FAIL.
+cp "$H/.claude/statusline-command.sh" "$H/.gemini/config/hooks/safety_guard_inert.sh"
+chmod +x "$H/.gemini/config/hooks/safety_guard_inert.sh"
+mv "$H/.gemini/config/hooks/safety_guard.sh" "$H/.gemini/config/hooks/_real_safety_guard.sh"
+mv "$H/.gemini/config/hooks/safety_guard_inert.sh" "$H/.gemini/config/hooks/safety_guard.sh"
+assert_exit_code 1 "Antigravity fail-open guard behind the adapter FAILS the exercise" \
+    env HOME="$H" bash "$VALIDATE" "$H/.gemini/config/hooks.json"
 
 _test_report

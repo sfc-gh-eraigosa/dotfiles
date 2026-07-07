@@ -11,7 +11,7 @@ This document outlines the requirements for the `tmux-mgr` tool and how each is 
 | **3. Save States** | Save/Restore layouts to/from `$HOME/.config/tmux-mgr`. | **Met**: `save` and `restore` commands persist window names and layouts as JSON files in `~/.config/tmux-mgr/`. |
 | **4. Session Management** | List, create, attach, and kill tmux sessions. | **Met**: `session [list\|new\|attach\|kill]` provides full lifecycle management. |
 | **5. Windowing Desktop** | Navigate between windows/layouts easily. | **Met**: `desktop [list\|switch]` allows quick navigation by window name or index. |
-| **6. Gemini CLI Skill** | "tmux" skill for natural language control and introspection. | **Met**: `SKILL.md` instructs Gemini on using `tmux-mgr` for management and `capture` for introspection. |
+| **6. Agent CLI Skill** | "tmux" skill for natural language control and introspection. | **Met**: `SKILL.md` instructs the assistant (Antigravity CLI, Claude Code) on using `tmux-mgr` for management and `capture` for introspection. |
 | **7. Go Implementation** | Written in Go, compiled to `opt/bin`. | **Met**: Source in `sdk/tmux-mgr`, binary installed to `opt/bin/tmux-mgr`. |
 | **8. Build System** | Script to compile and install without checking in binary. | **Met**: `build.sh` handles compilation and skill linking; `.gitignore` excludes the binary. |
 | **9. Repository Structure** | Source and resources in `~/git/dotfiles/sdk/tmux-mgr`. | **Met**: All code, build scripts, docs, and skills are encapsulated in the requested directory. |
@@ -26,7 +26,7 @@ The tool supports AI agent orchestration using a hybrid approach. To prevent fil
 **Result Fan-In Mechanism:** 
 1. Sub-agents are instructed to write their results to a `RESULT.md` file in their worktree.
 2. The primary agent retrieves these results using `tmux-mgr agent complete <session-id>`.
-3. This complements the native Gemini `tracker`, providing both high-level task status and low-level detailed results.
+3. This complements the assistant's native task tracking, providing both high-level task status and low-level detailed results.
 
 
 ### Window Management & Resizing
@@ -35,11 +35,11 @@ The tool uses `tmux select-pane` for movement and `tmux resize-pane` for resizin
 ### Layout Persistence
 Layouts are stored as JSON objects containing window indices, names, and their corresponding tmux layout strings (retrieved via `#{window_layout}`). This ensures that `restore` can accurately recreate the visual arrangement.
 
-### Gemini Introspection
-The `capture` command uses `tmux capture-pane -pt` to stream the contents of any pane directly to the Gemini CLI. This allows the model to "see" and analyze what is happening in background windows or other sessions.
+### Assistant Introspection
+The `capture` command uses `tmux capture-pane -pt` to stream the contents of any pane directly to the host AI CLI (Antigravity or Claude Code). This allows the model to "see" and analyze what is happening in background windows or other sessions.
 
 ### Installation & Build
-The `build.sh` script is designed to be idempotent and safe. It checks for the `go` compiler before attempting a build and manages the symlinking of the Gemini skill to the user's global `.agents/skills` directory.
+The `build.sh` script is designed to be idempotent and safe. It checks for the `go` compiler before attempting a build and manages the symlinking of the agent skill into the shared skill roots (`~/.gemini/config/skills/tmux` and `~/.claude/skills/tmux`).
 
 ## Coding Standards and Go Best Practices
 

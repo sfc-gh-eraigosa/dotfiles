@@ -1,6 +1,6 @@
 # tmux-mgr 🧩
 
-`tmux-mgr` is a powerful, Go-based management tool for `tmux`, designed to bridge the gap between your terminal and your AI CLI (Gemini or Claude Code). It provides structured session management, window arrangements, layout persistence, and a host-aware Agent Team Orchestrator — spawned panes run `claude` when invoked from Claude Code and `gemini` otherwise, automatically.
+`tmux-mgr` is a powerful, Go-based management tool for `tmux`, designed to bridge the gap between your terminal and your AI CLI (Antigravity or Claude Code). It provides structured session management, window arrangements, layout persistence, and a host-aware Agent Team Orchestrator — spawned panes run `claude` when invoked from Claude Code and `agy` (Antigravity CLI) otherwise, automatically.
 
 ## 🚀 Key Features
 
@@ -8,7 +8,7 @@
 - **Session Management**: Full lifecycle control (`list`, `new`, `attach`, `kill`).
 - **Smart Windowing**: Directional focus and percentage-based resizing (e.g., `width 50%`).
 - **Layout Persistence**: Save and restore complex window arrangements to `~/.config/tmux-mgr/`.
-- **Introspection**: A `capture` feature that allows Gemini to "see" into any tmux pane.
+- **Introspection**: A `capture` feature that allows the AI assistant to "see" into any tmux pane.
 - **Logging**: All actions are logged to `~/.config/tmux-mgr/tmux-mgr.log` for troubleshooting.
 
 ## 🛠 Installation
@@ -23,12 +23,12 @@ cd ~/git/dotfiles
 ```
 
 ### Manual/Developer Build
-If you have Go installed, you can build and install the tool and its Gemini skill directly:
+If you have Go installed, you can build and install the tool and its agent skill directly:
 ```bash
 cd ~/git/dotfiles/sdk/tmux-mgr
 ./build.sh
 ```
-*This will install the binary to `~/opt/bin/tmux-mgr` and link the Gemini skill to `~/.agents/skills/tmux`.*
+*This will install the binary to `~/opt/bin/tmux-mgr` and link the agent skill to `~/.gemini/config/skills/tmux` and `~/.claude/skills/tmux`.*
 
 ## 📖 Getting Started
 
@@ -66,14 +66,14 @@ tmux-mgr save dev-layout
 
 ## 🤖 AI CLI Integration
 
-Once installed, you can talk to tmux via either Gemini CLI or Claude Code:
+Once installed, you can talk to tmux via either Antigravity CLI or Claude Code:
 - `tmux: what's running in my other window?`
 - `tmux: resize this pane to be 30% height`
 - `tmux: list all my active sessions`
 
 When you spawn agents with `tmux-mgr agent start`, the assistant inside each pane is auto-selected based on the host CLI:
 - Inside Claude Code (`CLAUDECODE=1`): each pane runs `claude -p ... --dangerously-skip-permissions`. The spawned Claude can use its native `Task()` subagents for further fan-out.
-- Otherwise: each pane runs `gemini -y -p ...` with model fallback.
+- Otherwise: each pane runs `agy -p ... --dangerously-skip-permissions` (Antigravity CLI) with model fallback.
 
 No flags or config — detection is automatic.
 

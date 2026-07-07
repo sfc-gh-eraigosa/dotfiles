@@ -153,13 +153,13 @@ function run_integration_tests() {
     fi
     
     log "Running System Sanity Check inside container..."
-    docker run --privileged --rm "$IMAGE_NAME" /home/agent/git/dotfiles/ai/gemini/scripts/sanity_check.sh
+    docker run --privileged --rm "$IMAGE_NAME" /home/agent/git/dotfiles/ai/antigravity/scripts/sanity_check.sh
     
     log "Verifying Version Commands..."
     docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && gss version && tmux-mgr version && wol version"
 
     log "Verifying Script PATH Discovery..."
-    docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && command -v git_add.sh && command -v gemini_install.sh && command -v claude_install.sh"
+    docker run --privileged --rm "$IMAGE_NAME" bash -c "source ~/.profile && command -v git_add.sh && command -v antigravity_install.sh && command -v claude_install.sh"
 
     log "Verifying GSS Technical Guardrail..."
     # gss push must refuse without a HEAD-bound approval token. v1.0 reworded

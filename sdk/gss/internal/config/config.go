@@ -15,7 +15,7 @@
 //
 // This package pins gopkg.in/yaml.v3 (dual MIT + Apache-2.0; see
 // https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE) — both licenses are
-// on the project's Allowed list (src/GEMINI.md → Library standards).
+// on the project's Allowed list (src/AGENTS.md → Library standards).
 package config
 
 import (

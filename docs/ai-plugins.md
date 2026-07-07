@@ -1,9 +1,9 @@
 # AI Assistant Plugins & Extensions
 
-This repository provides a **unified, declarative framework** for managing the capabilities of your AI assistants. By using a single source of truth, we ensure that both **Claude Code** and **Gemini CLI** have the tools they need to be effective while staying reproducible across different machines.
+This repository provides a **unified, declarative framework** for managing the capabilities of your AI assistants. By using a single source of truth, we ensure that both **Claude Code** and **Antigravity CLI** (`agy`) have the tools they need to be effective while staying reproducible across different machines.
 
 - **Manifest**: [`ai/plugins.yaml`](../ai/plugins.yaml)
-- **Infrastructure Hub**: [`ai/GEMINI.md`](../ai/GEMINI.md)
+- **Infrastructure Hub**: [`ai/AGENTS.md`](../ai/AGENTS.md)
 - **Sync Engine**: [`opt/scripts/system/sync-plugins.sh`](../opt/scripts/system/sync-plugins.sh)
 
 ## 🔄 The Sync Workflow
@@ -26,9 +26,9 @@ The synchronization is **ensure-only**: it installs and enables what is listed b
 Plugins are installed from Anthropic's official marketplace (`claude-plugins-official`), plus any extra marketplaces listed in `plugins.yaml` (e.g. `karpathy-skills` ← `forrestchang/andrej-karpathy-skills`).
 - **Manage**: `claude plugin list` / `install` / `enable`; `claude plugin marketplace add <owner/repo>`.
 
-### Gemini CLI
-Extensions are git-URL based and sourced from repositories (e.g., the `gemini-cli-extensions` organization).
-- **Manage**: `gemini extensions list` / `install` / `update`.
+### Antigravity CLI
+Plugins are git-source based, installed via `agy plugin install <source>`. Legacy Gemini CLI extension repositories (e.g., the `gemini-cli-extensions` organization) remain valid sources.
+- **Manage**: `agy plugin list` / `install` / `enable`; `agy plugin import gemini|claude` imports a legacy setup.
 
 ---
 
@@ -36,7 +36,7 @@ Extensions are git-URL based and sourced from repositories (e.g., the `gemini-cl
 
 We maintain a mapping of equivalent capabilities across both assistants.
 
-| Feature / Tool | Claude Plugin | Gemini Extension Source |
+| Feature / Tool | Claude Plugin | Antigravity Plugin Source |
 | :--- | :--- | :--- |
 | **Workflow Skills** | `superpowers` | `https://github.com/obra/superpowers` |
 | **GitHub Integration** | `github` | `https://github.com/gemini-cli-extensions/conductor` |
@@ -54,11 +54,11 @@ We maintain a mapping of equivalent capabilities across both assistants.
 ### **superpowers — Workflow Intelligence**
 Provides the core skills that drive *how* work gets done: brainstorming, writing/executing plans, TDD, systematic debugging, and requesting code reviews. 
 - **Claude**: Automatically activates via the `Skill` tool.
-- **Gemini**: Automatically activates via the `activate_skill` tool.
+- **Antigravity**: Automatically activates via `agy`'s skill mechanism.
 
 ### **code-review — Quality Assurance**
 Focused correctness review of the current diff or a specific PR.
-- **Try**: `/code-review` (Claude) or use the code-review agent (Gemini).
+- **Try**: `/code-review` (Claude) or use the code-review agent (Antigravity).
 
 ---
 
@@ -70,7 +70,7 @@ To add an extension to your environment, add a row to [`ai/plugins.yaml`](../ai/
   - name: my-new-tool
     enabled: true
     claude: { plugin: my-tool@claude-plugins-official }
-    gemini: { source: https://github.com/owner/repo }
+    antigravity: { source: https://github.com/owner/repo }
 ```
 
-After editing, run `sync-plugins`. The sync engine handles the platform-specific installation commands (e.g., using `--consent` and `--skip-settings` for Gemini to ensure a non-interactive bootstrap).
+After editing, run `sync-plugins`. The sync engine handles the platform-specific installation commands (e.g., running `agy plugin install <source>` non-interactively with a timeout guard).

@@ -24,7 +24,7 @@ alias tmux-a='tmux-mgr session attach'
 alias tmux-ls='tmux-mgr session list'
 alias tmux-new='tmux-mgr session new'
 alias tmux-kill='tmux-mgr session kill'
-alias tmux-start='tmux-mgr session new gemini -a'
+alias tmux-start='tmux-mgr session new antigravity -a'
 `
 			home, _ := os.UserHomeDir()
 			configDir := filepath.Join(home, ".config", "tmux-mgr")

@@ -75,7 +75,7 @@ The 16 carry-forward notes in `STATE.md` fall into three buckets:
 - [ ] Confirm `tmux-mgr` docs (`docs/user_guide.md`, `README.md`,
       `skill/SKILL.md`) carry no `gss feature` / `git worktree` leakage
       (PR-60 covered `SKILL.md`; spot-check the others).
-- [ ] Update top-level `CLAUDE.md` / `opt/.../GEMINI.md` registries if the
+- [ ] Update top-level `CLAUDE.md` / `opt/.../AGENTS.md` registries if the
       `gss feature` surface should be discoverable there.
 
 ---

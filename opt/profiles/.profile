@@ -199,8 +199,8 @@ case "$-" in
         ;;
 esac
 
-# Load Gemini CLI environment
-[ -f "$HOME/.gemini.profile" ] && . "$HOME/.gemini.profile"
+# Load Antigravity CLI environment
+[ -f "$HOME/.antigravity.profile" ] && . "$HOME/.antigravity.profile"
 
 # Load Nano Platform environment
 [ -f "$HOME/.nano_profile" ] && . "$HOME/.nano_profile"

@@ -4,7 +4,7 @@ This directory contains the source code for custom tools and specialized agent s
 
 ## Projects
 
-> **Go modules now live in [`sdk/`](../sdk/GEMINI.md)**, not here — `gss`, `gsl`, `wol`, and `tmux-mgr` moved out of `src/` in the `src/` → `sdk/` cutover. `src/` holds non-Go tooling and agent skills.
+> **Go modules now live in [`sdk/`](../sdk/AGENTS.md)**, not here — `gss`, `gsl`, `wol`, and `tmux-mgr` moved out of `src/` in the `src/` → `sdk/` cutover. `src/` holds non-Go tooling and agent skills.
 
 - `ssh-host-finder/`: A skill for finding SSH hosts on the local network.
   - [Agent Skill Instructions](./ssh-host-finder/SKILL.md)

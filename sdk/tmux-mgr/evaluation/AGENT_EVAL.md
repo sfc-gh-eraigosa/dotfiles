@@ -54,20 +54,20 @@ tmux-mgr agent cleanup <session_id_B>
 - [ ] The `agent complete` command successfully retrieves the "Hello World" outputs.
 - [ ] Worktrees and session tracking files are removed after `agent cleanup` is run.
 
-## Pass 2: Host-Aware Assistant Selection (Claude vs Gemini)
+## Pass 2: Host-Aware Assistant Selection (Claude vs Antigravity)
 
 `tmux-mgr` auto-detects whether it was invoked from Claude Code or another shell, and spawns the matching assistant. This pass verifies both branches.
 
-### Gemini path (default)
+### Antigravity path (default)
 Run from a shell where `CLAUDECODE` is unset or not `1`:
 ```bash
 unset CLAUDECODE
-tmux-mgr agent start regression-gemini --task-description "Write 'Hello from Gemini' to RESULT.md and exit."
+tmux-mgr agent start regression-antigravity --task-description "Write 'Hello from Antigravity' to RESULT.md and exit."
 ```
 Verify:
-- The `agent start` output reads `assistant=gemini`.
-- `tmux-mgr capture <pane>` shows the spawned process is `gemini -y -p ...`.
-- `tmux-mgr agent complete <session-id>` returns "Hello from Gemini".
+- The `agent start` output reads `assistant=antigravity`.
+- `tmux-mgr capture <pane>` shows the spawned process is `agy -p ... --dangerously-skip-permissions`.
+- `tmux-mgr agent complete <session-id>` returns "Hello from Antigravity".
 
 ### Claude path (host-detected)
 Run from a Claude Code session (the CLI sets `CLAUDECODE=1` automatically):
@@ -89,7 +89,7 @@ tmux-mgr agent start team-test --task-description "Use your Task tool to spawn t
 Confirms the in-pane Claude can fan out further. This is the "agent teams" capability — exposed via the spawned Claude itself, not a new tmux-mgr subcommand.
 
 ## Pass 2 Success Criteria
-- [ ] With `CLAUDECODE` unset, `agent start` spawns `gemini` and reports `assistant=gemini`.
+- [ ] With `CLAUDECODE` unset, `agent start` spawns `agy` and reports `assistant=antigravity`.
 - [ ] With `CLAUDECODE=1`, `agent start` spawns `claude --dangerously-skip-permissions` and reports `assistant=claude`.
 - [ ] Both branches write `RESULT.md` and fan-in correctly via `agent complete`.
 - [ ] The team-test agent demonstrates Claude's native sub-agent fan-out.

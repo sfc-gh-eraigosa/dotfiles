@@ -10,5 +10,5 @@
   invisible to git until you add a rule — verify with `git status` / `git check-ignore`.
 - **Minimal alias surface:** prefer one canonical alias per workflow; don't proliferate
   variants.
-- **Docs discoverability:** any new tool/doc directory gets a `GEMINI.md` plus a
-  `CLAUDE.md -> GEMINI.md` symlink so both assistants can navigate it.
+- **Docs discoverability:** any new tool/doc directory gets a `AGENTS.md` plus a
+  `CLAUDE.md -> AGENTS.md` symlink so both assistants can navigate it.

@@ -1,6 +1,6 @@
 ---
 name: gsl-status
-description: Query and configure the gsl (Go Status Line) that renders a powerline-style status bar in Claude Code and Gemini CLI.
+description: Query and configure the gsl (Go Status Line) that renders a powerline-style status bar in Claude Code and Antigravity CLI.
 ---
 # gsl — Go Status Line
 
@@ -10,10 +10,10 @@ description: Query and configure the gsl (Go Status Line) that renders a powerli
   `~/.claude/statusline-command.sh` after every assistant turn; the shim `exec`s
   `gsl render` so the payload flows straight to the binary and the rendered line
   appears in the Claude Code status bar.
-- **Gemini CLI**: Use `/gsl-status` (the `ai/gemini/commands/gsl-status.toml` command)
-  to render the status line on demand without a JSON payload. The `ai` segment
-  self-omits because no Claude payload is supplied; `dirgit`, `repo`, and `time`
-  still render.
+- **Antigravity CLI** (`agy`): point its built-in `/statusline` custom command at
+  `gsl status` to render the status line on demand without a JSON payload. The
+  `ai` segment self-omits because no Claude payload is supplied; `dirgit`,
+  `repo`, and `time` still render.
 
 ## Segments
 
@@ -21,7 +21,7 @@ description: Query and configure the gsl (Go Status Line) that renders a powerli
 |----------|---------------|
 | `dirgit` | Current directory name (basename, `~` for `$HOME`) + branch + staged/unstaged/untracked/stash/ahead/behind badges |
 | `repo`   | Root-or-worktree indicator glyph + optional feature/worker/branch name + optional PR badge (tinted by state) + optional worktree count badge; self-omits outside a git repo |
-| `ai`     | Model display name + context-window usage + MCP active/configured count + 5h/7d rate-limit percentages; **self-omits when no Claude payload is present** (Gemini/CLI mode) |
+| `ai`     | Model display name + context-window usage + MCP active/configured count + 5h/7d rate-limit percentages; **self-omits when no Claude payload is present** (Antigravity/CLI mode) |
 | `time`   | Date + time formatted by config Go layouts + timezone abbreviation; always renders |
 
 Each segment is independently enabled/disabled via `gsl config enable/disable/toggle <segment>`.
@@ -88,7 +88,7 @@ The shim is installed by `opt/scripts/system/install_claude_skills.sh`:
 ```
 
 The skill directory is linked by `opt/scripts/system/sync-skills.sh` into
-`~/.claude/skills/gsl-status` and `~/.agents/skills/gsl-status`.
+`~/.gemini/config/skills/gsl-status` (Antigravity) and `~/.claude/skills/gsl-status` (Claude).
 
 Run `sync-skills --build` to rebuild the binary and refresh all skill links.
 
@@ -112,11 +112,12 @@ bash sdk/gsl/scripts/check-font-glyphs.sh
 # expect: OK: all 17 gsl codepoints present in .../MesloLGSNerdFont-Regular.ttf
 ```
 
-## Gemini command
+## Antigravity command
 
-`/gsl-status` — defined in `ai/gemini/commands/gsl-status.toml`. Renders the
-current status line via `!{gsl status}` and shows the command reference.
-No script edit is needed; Gemini auto-discovers `ai/gemini/commands/*.toml`.
+Antigravity CLI ships a built-in `/statusline` slash command that supports a
+custom command — set it to `gsl status` to render the current status line on
+demand. (The Gemini-era `/gsl-status` TOML custom command retired with
+Gemini CLI.)
 
 ## Fallback behaviour
 

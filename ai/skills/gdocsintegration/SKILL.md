@@ -4,7 +4,7 @@ description: Integration for interacting with Google Docs and Google Workspace u
 ---
 # Google Docs Integration Skill
 
-This skill allows Gemini and Claude to interact with Google Workspace (Docs, Drive, Gmail, etc.) using the `gws` CLI.
+This skill allows Antigravity and Claude to interact with Google Workspace (Docs, Drive, Gmail, etc.) using the `gws` CLI.
 
 ## Capabilities
 

@@ -3,7 +3,7 @@
 #
 # sync-skills.sh has no --dry-run flag, so we isolate side effects by
 # pointing HOME at a tempdir for the duration of the run. The script
-# only writes under "$HOME/.agents/skills" and "$HOME/.claude/skills",
+# only writes under "$HOME/.gemini/config/skills" and "$HOME/.claude/skills",
 # so swapping HOME is a clean sandbox.
 #
 # Run: bash opt/scripts/system/sync-skills_test.sh
@@ -40,8 +40,8 @@ fi
 # === 4. Sandbox isolation — outputs land under TMP_HOME, not real ~ ===
 assert_file_exists "${TMP_HOME}/.claude/skills" \
     "skills directory created under sandboxed HOME (.claude)"
-assert_file_exists "${TMP_HOME}/.agents/skills" \
-    "skills directory created under sandboxed HOME (.agents)"
+assert_file_exists "${TMP_HOME}/.gemini/config/skills" \
+    "skills directory created under sandboxed HOME (.gemini/config)"
 
 # === 5. Skills are SYMLINKS, not copies ===
 # Pick the first symlinked entry under .claude/skills and verify it's a
@@ -71,7 +71,7 @@ fi
 # the same timestamps. We only verify the test's HOME swap mechanism by
 # asserting the script's destination references go through "$HOME".
 assert_grep "sync-skills.sh uses \$HOME (not hardcoded /home/wenlock)" \
-    'SKILLS_DESTS=\("\$\{HOME\}/\.agents/skills"[[:space:]]+"\$\{HOME\}/\.claude/skills"' \
+    'SKILLS_DESTS=\("\$\{HOME\}/\.gemini/config/skills"[[:space:]]+"\$\{HOME\}/\.claude/skills"' \
     "$SCRIPT"
 
 _test_report

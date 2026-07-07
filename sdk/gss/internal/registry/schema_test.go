@@ -97,7 +97,9 @@ func TestRestackCountDefaultsZero(t *testing.T) {
 }
 
 func TestUnknownFieldsPreserved(t *testing.T) {
-	// A worker carries a v1.1 "sessions" array this build doesn't model.
+	// A worker carries a v1.1 "sessions" array this build doesn't model. The
+	// row deliberately uses the legacy engine value "gemini" (retired Gemini
+	// CLI): old persisted rows must round-trip verbatim, never rewritten.
 	js := `{"schema_version":1,"features":[{"name":"f","started_at":"t","base_commit":"c","default_base_branch":"main","workers":[{"user":"u","purpose":"p","suffix":"","branch":"b","worktree":"w","base_branch":"main","backend":"git","started_at":"t","description":"d","sessions":[{"engine":"gemini","session_id":"resume-1"}]}]}]}`
 	reg, err := registry.Unmarshal([]byte(js))
 	if err != nil {

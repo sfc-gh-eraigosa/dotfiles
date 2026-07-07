@@ -13,14 +13,14 @@ tag of the form `sdk/<tool>/vX.Y.Z`.
 
 | Module | Path | Binary | Notes |
 | :----- | :--- | :----- | :---- |
-| [`gsl/`](./gsl/GEMINI.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl` | `gsl` | Go status line for Claude Code / Gemini CLI. |
-| [`gss/`](./gss/GEMINI.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/gss` | `gss` | Git Safe Sync. |
-| [`wol/`](./wol/GEMINI.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/wol` | `wol` | Wake-on-LAN utility. |
-| [`tmux-mgr/`](./tmux-mgr/GEMINI.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr` | `tmux-mgr` | tmux session + agent orchestration. |
+| [`gsl/`](./gsl/AGENTS.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl` | `gsl` | Go status line for Claude Code / Gemini CLI. |
+| [`gss/`](./gss/AGENTS.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/gss` | `gss` | Git Safe Sync. |
+| [`wol/`](./wol/AGENTS.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/wol` | `wol` | Wake-on-LAN utility. |
+| [`tmux-mgr/`](./tmux-mgr/AGENTS.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr` | `tmux-mgr` | tmux session + agent orchestration. |
 
 ## Conventions
 
 - **Module path = `github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>`** (canonical org **and** the `sdk/` segment). External install: `go install github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>@<tag>`.
 - **Build** each module with its own `build.sh` (injects version via `-ldflags -X`); `install.sh` builds them into `~/opt/bin/`.
 - **Test/lint discovery**: `scripts/test.sh` and the `Makefile` Go loops discover modules by directory under `sdk/` (the migration keeps `src/` scanned transitionally until the cutover completes).
-- **Per-directory docs**: every module has a `GEMINI.md` + a `CLAUDE.md -> GEMINI.md` symlink.
+- **Per-directory docs**: every module has a `AGENTS.md` + a `CLAUDE.md -> AGENTS.md` symlink.

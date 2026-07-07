@@ -12,7 +12,7 @@ var rootCmd = &cobra.Command{
 	Short: "gsl is a Go Status Line tool",
 	Long: `gsl renders a powerline-style status line for Claude Code (piped a JSON
 payload on stdin after every assistant turn) and an on-demand line for
-Gemini/CLI.
+Antigravity CLI / plain shell use.
 
 Segments: dirgit, repo, ai, time — configurable via ~/.config/gsl/config.json`,
 	SilenceUsage:  true,

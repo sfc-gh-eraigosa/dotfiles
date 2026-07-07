@@ -20,6 +20,14 @@ func TestBuildSpawnedBy(t *testing.T) {
 		sb.TmuxMgrSession != "team-a" || sb.StartedAt != "2026-05-21T00:00:00Z" {
 		t.Errorf("spawned_by not populated correctly: %+v", sb)
 	}
+	if sb := buildSpawnedBy("antigravity", "sess2", "", "", "2026-05-21T00:00:00Z"); sb == nil || sb.Engine != "antigravity" {
+		t.Errorf("antigravity engine → want antigravity; got %+v", sb)
+	}
+	// The legacy Gemini CLI engine value is accepted but normalized so new
+	// registry rows carry the current identifier.
+	if sb := buildSpawnedBy("gemini", "sess3", "", "", "2026-05-21T00:00:00Z"); sb == nil || sb.Engine != "antigravity" {
+		t.Errorf("legacy gemini engine → want normalized to antigravity; got %+v", sb)
+	}
 }
 
 func TestWorkerAddJSON(t *testing.T) {

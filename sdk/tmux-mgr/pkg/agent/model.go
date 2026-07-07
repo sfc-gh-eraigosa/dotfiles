@@ -7,7 +7,7 @@ import (
 )
 
 // Model tiers used to translate Ollama-style model hints into hosted Claude /
-// Gemini equivalents. Sized brackets are deliberately loose because the
+// Antigravity equivalents. Sized brackets are deliberately loose because the
 // frontmatter Model field is a context clue, not a precise spec.
 const (
 	ModelTierSmall  = "small"
@@ -23,9 +23,10 @@ var claudeModels = map[string]string{
 	ModelTierLarge:  "claude-opus-4-7",
 }
 
-// geminiModels lists Gemini model IDs per tier. Gemini's tier ladder is
-// shallower than Claude's, so medium and large currently share the same model.
-var geminiModels = map[string]string{
+// antigravityModels lists model IDs per tier for the Antigravity CLI (which
+// serves Google's Gemini model family). The tier ladder is shallower than
+// Claude's, so medium and large currently share the same model.
+var antigravityModels = map[string]string{
 	ModelTierSmall:  "gemini-2.5-flash",
 	ModelTierMedium: "gemini-2.5-pro",
 	ModelTierLarge:  "gemini-2.5-pro",
@@ -80,11 +81,11 @@ func SelectModel(def *Definition, host Assistant) string {
 	} else {
 		return ""
 	}
-	switch host {
+	switch NormalizeAssistant(host) {
 	case AssistantClaude:
 		return claudeModels[tier]
-	case AssistantGemini:
-		return geminiModels[tier]
+	case AssistantAntigravity:
+		return antigravityModels[tier]
 	default:
 		return ""
 	}

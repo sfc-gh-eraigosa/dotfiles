@@ -15,7 +15,7 @@ in three flat folders here:
 [`index.md`](./index.md) tracks every objective — its artifacts, linked issue(s) and PR(s),
 and lifecycle state. [`templates/`](./templates) holds the starting skeletons.
 
-**Start here:** read [`GEMINI.md`](./GEMINI.md) — it routes each task type to the right skill
+**Start here:** read [`AGENTS.md`](./AGENTS.md) — it routes each task type to the right skill
 workflow and explains the pipeline and conventions. For the common case, use the **`mbo-plan`**
 skill, which automates capture → classify → design/spec/plan → index registration.
 

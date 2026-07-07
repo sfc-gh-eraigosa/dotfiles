@@ -10,7 +10,7 @@ sdk/gsl/
 ├── cmd/
 │   ├── root.go               Root cobra command (gsl)
 │   ├── render.go             gsl render — reads Claude JSON from stdin
-│   ├── status.go             gsl status — no-payload render (Gemini/CLI)
+│   ├── status.go             gsl status — no-payload render (Antigravity/CLI)
 │   ├── statusline.go         Shared wiring: load config, resolve style, build deps, render
 │   ├── config.go             gsl config get|set|enable|disable|toggle|style
 │   ├── preview.go            gsl preview [--once] — bubbletea TUI
@@ -69,7 +69,7 @@ A segment that times out, returns `ok=false`, or panics is **dropped** — the s
 |---------|----------------|
 | `dirgit` | Working directory unavailable (extremely rare) |
 | `repo` | Not inside a git repo, or git unavailable |
-| `ai` | No Claude payload (all pointer fields nil — Gemini/CLI mode) |
+| `ai` | No Claude payload (all pointer fields nil — Antigravity/CLI mode) |
 | `time` | Never (time is always available) |
 
 ## Style system
@@ -112,7 +112,7 @@ The resolved `Style` is passed into `render.BuildSegments` and then into every `
 Theme color resolution is handled by a detection-only package (`internal/theme`) that returns a **palette name** string; `internal/style` owns the actual palette definitions and the merge logic.
 
 Resolution priority (see `internal/theme/resolve.go`):
-1. Host-tool settings file — Claude `~/.claude/settings.json` `"theme"` enum, or Gemini `~/.gemini/settings.json` `"ui"."theme"` free-form string via keyword bridge (`"light"`, `"daltonism"`/`"colorblind"`, else dark).
+1. Host-tool settings file — Claude `~/.claude/settings.json` `"theme"` enum, or Antigravity `~/.gemini/antigravity-cli/settings.json` (legacy fallback `~/.gemini/settings.json`) `"ui"."theme"` free-form string via keyword bridge (`"light"`, `"daltonism"`/`"colorblind"`, else dark).
 2. Terminal env — `$COLORTERM`/`$TERM` selects `dark` (truecolor/256color) or `dark8` (8-color).
 3. Hardcoded default: `dark`.
 

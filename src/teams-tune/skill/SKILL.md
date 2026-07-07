@@ -8,7 +8,7 @@ description: Improve AI-team routing accuracy. Use when the routing eval misrout
 Closes the loop from the routing **eval** back to the **source** persona files so the
 AI teams route tasks to the right team and member with ≥90% top-1 accuracy.
 
-Shared by Claude Code and Gemini CLI (linked via `sync-skills`). It edits only the
+Shared by Claude Code and Antigravity CLI (linked via `sync-skills`). It edits only the
 source of truth in `ai/teams/`; generated agents are always re-derived.
 
 ## When to use
@@ -26,7 +26,7 @@ source of truth in `ai/teams/`; generated agents are always re-derived.
 ## The tuning loop
 
 1. **Baseline.** Run the eval against each runner you have creds for:
-   `bash ai/teams/eval/route-eval.sh --runner claude` (and `--runner gemini`).
+   `bash ai/teams/eval/route-eval.sh --runner claude` (and `--runner agy`).
    Note team% and member% and read the confusion matrix + the listed misroutes.
 2. **Diagnose each misroute.** For `expected X, got Y`, the cause is almost always a
    `description` collision. Compare X's and Y's `use_when` / `avoid_when` / `keywords` /
@@ -36,7 +36,7 @@ source of truth in `ai/teams/`; generated agents are always re-derived.
    - Add a **negative-scope** clause to the **loser's** `avoid_when` that routes this task
      to the correct member by name (e.g. "test authoring → The Go QA Engineer").
    - Tighten `file_globs`/`keywords` so they don't overlap across teams.
-   Never edit `~/.claude/agents/**`, `~/.gemini/agents/**`, etc. — those are generated.
+   Never edit `~/.claude/agents/**`, `~/.config/antigravity/agents/**`, etc. — those are generated.
 4. **Regenerate + re-validate.**
    `bash ai/teams/validate.sh && bash ai/teams/gen-index.sh && sync-teams`
 5. **Re-eval.** Re-run step 1. Keep the change only if it improves the misrouted case

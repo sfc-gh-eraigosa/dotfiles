@@ -13,7 +13,7 @@
 #   1   gate failed OR --check found an invalid expectation
 #   77  SKIPPED — selected runner binary/credentials unavailable
 #
-# Zero hard deps beyond `yq` and the chosen CLI (claude|gemini).
+# Zero hard deps beyond `yq` and the chosen CLI (claude|agy).
 set -uo pipefail
 
 # --- locate source tree ---------------------------------------------------------------
@@ -28,7 +28,7 @@ MODE="run"
 
 usage() {
   cat <<'EOF'
-Usage: route-eval.sh [--check] [--runner claude|gemini] [--threshold N] [--cases FILE]
+Usage: route-eval.sh [--check] [--runner claude|agy] [--threshold N] [--cases FILE]
 
   --check            Validate cases.yaml against the source tree only (no model
                      calls): every expect.team is a real folder, every
@@ -103,19 +103,19 @@ runner_available() {
   command -v "$RUNNER" >/dev/null 2>&1 || return 1
   case "$RUNNER" in
     claude) [ -n "${ANTHROPIC_API_KEY:-}" ] || [ -d "${HOME}/.claude" ] || [ -f "${HOME}/.claude.json" ] ;;
-    gemini) [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${GOOGLE_API_KEY:-}" ] || [ -d "${HOME}/.gemini" ] ;;
+    agy) [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${GOOGLE_API_KEY:-}" ] || [ -d "${HOME}/.gemini" ] ;;
     *) return 1 ;;
   esac
 }
 
-# Run the model from a neutral, project-free cwd so a repo CLAUDE.md/GEMINI.md does not
+# Run the model from a neutral, project-free cwd so a repo CLAUDE.md/AGENTS.md does not
 # contaminate the routing decision — the classifier must judge from the prompt alone.
 NEUTRAL_CWD="$(mktemp -d 2>/dev/null || echo /tmp)"
 trap 'rm -rf "$NEUTRAL_CWD" 2>/dev/null || true' EXIT
 call_model() {  # $1=prompt -> raw stdout
   case "$RUNNER" in
     claude) ( cd "$NEUTRAL_CWD" && claude -p "$1" 2>/dev/null ) ;;
-    gemini) ( cd "$NEUTRAL_CWD" && gemini -p "$1" 2>/dev/null ) ;;
+    agy) ( cd "$NEUTRAL_CWD" && agy -p "$1" 2>/dev/null ) ;;
     *) echo "route-eval: unknown runner '$RUNNER'" >&2; return 1 ;;
   esac
 }

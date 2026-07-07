@@ -32,7 +32,7 @@ var versionCmd = &cobra.Command{
 			Commit:      v.Commit,
 			Dirty:       v.Dirty,
 			BuildDate:   v.BuildDate,
-			Description: "gsl — Go Status Line for Claude Code and Gemini CLI",
+			Description: "gsl — Go Status Line for Claude Code and Antigravity CLI",
 			Path:        execPath,
 		}
 

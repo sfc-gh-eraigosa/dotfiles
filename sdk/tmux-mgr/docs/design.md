@@ -9,7 +9,7 @@ To solve the challenges of running multiple autonomous agents concurrently, `tmu
 1.  **File System Conflicts:** Solved by provisioning unique Git worktrees for each agent session.
 2.  **Cognitive Coordination:** Solved by `tmux-mgr` self-invoking in a new "agent execution" mode, making it the central orchestrator.
 
-This new model eliminates the fragile dependency on an external `gemini` or `gemini-cli` binary and avoids `PATH` and environment-related issues.
+This new model eliminates the fragile dependency on an external assistant binary (`agy`, formerly `gemini`) and avoids `PATH` and environment-related issues.
 
 ## 1. Orchestration and Isolation (`tmux-mgr`)
 
@@ -37,7 +37,7 @@ The `tmux-mgr agent execute` command is the new entry point for the spawned agen
 - This command will house the core logic for the agent. Initially, this can be a simple placeholder.
 - In the future, this command will be responsible for:
     1.  Parsing the `--task-description`.
-    2.  Interfacing with a Gemini model via a Go SDK or direct API calls.
+    2.  Interfacing with a hosted model (via the Antigravity CLI, a Go SDK, or direct API calls).
     3.  Executing tools (shell commands, file edits) as required by the task.
     4.  Writing the final, summarized result to `RESULT.md`.
 
@@ -61,7 +61,7 @@ The cognitive loop inside `tmux-mgr agent execute` dispatches to the AI CLI matc
 Detection happens **once in the parent** (`runAgentStart`) via `agent.DetectHost(os.Getenv)`:
 
 - `CLAUDECODE=1` → `AssistantClaude`
-- otherwise → `AssistantGemini` (default; preserves original behavior)
+- otherwise → `AssistantAntigravity` (default; preserves the original Gemini-era behavior — legacy `"gemini"` values normalize to antigravity)
 
 The child (`runAgentExecute`) never re-detects — the inherited tmux environment is unreliable for this. Instead, the parent encodes its decision into the invocation command for the child.
 
@@ -70,13 +70,13 @@ The parent serializes two env vars into the shell command it hands to `tmux.Crea
 
 | Var | Value |
 |-----|-------|
-| `TMUX_MGR_ASSISTANT` | `"claude"` or `"gemini"` |
+| `TMUX_MGR_ASSISTANT` | `"claude"` or `"antigravity"` (legacy `"gemini"` is still accepted and normalized) |
 | `TMUX_MGR_ASSISTANT_PATH` | absolute path of the assistant binary (from `exec.LookPath`), or the bare name as a fallback |
 
-For backward compatibility the child still reads the legacy `GEMINI_PATH` env var when `TMUX_MGR_ASSISTANT_PATH` is unset and the host is Gemini.
+For backward compatibility the child still reads the legacy `GEMINI_PATH` env var when `TMUX_MGR_ASSISTANT_PATH` is unset and the host is Antigravity (Gemini CLI's successor).
 
 ### 3.3 Per-Host Cognitive Loops
-- **`runGeminiLoop`**: runs `gemini -y -p "<instruction>"` with the existing model-fallback chain (`gemini-3.1-pro-preview` → `gemini-2.5-pro` → `gemini-2.5-flash`) on quota errors. Instruction is prefixed with `@generalist` (Gemini extension syntax).
+- **`runAntigravityLoop`**: runs `agy -p "<instruction>" --dangerously-skip-permissions` with the existing model-fallback chain (`gemini-3.1-pro-preview` → `gemini-2.5-pro` → `gemini-2.5-flash`) on quota errors. Instruction is plain task text plus the `RESULT.md` write mandate (the Gemini-era `@generalist` extension prefix is gone).
 - **`runClaudeLoop`**: runs `claude -p "<instruction>" --dangerously-skip-permissions` once. No model fallback (Claude doesn't surface quota errors in a string-matchable way; one-shot semantics are cleaner). Instruction is plain task text plus the `RESULT.md` write mandate.
 
 Both branches write `RESULT.md` in the worktree, so `runAgentComplete` is host-agnostic.

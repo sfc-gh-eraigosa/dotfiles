@@ -41,10 +41,24 @@ func writeClaudeSettings(t *testing.T, home, theme string) {
 	}
 }
 
-// writeGeminiSettings writes <home>/.gemini/settings.json with ui.theme set.
-func writeGeminiSettings(t *testing.T, home, uiTheme string) {
+// writeAntigravitySettings writes <home>/.gemini/antigravity-cli/settings.json
+// with ui.theme set (the Antigravity CLI reuses the ~/.gemini directory).
+func writeAntigravitySettings(t *testing.T, home, uiTheme string) {
 	t.Helper()
-	dir := filepath.Join(home, ".gemini")
+	writeUIThemeSettings(t, filepath.Join(home, ".gemini", "antigravity-cli"), uiTheme)
+}
+
+// writeLegacyGeminiSettings writes the legacy Gemini CLI file
+// <home>/.gemini/settings.json with ui.theme set.
+func writeLegacyGeminiSettings(t *testing.T, home, uiTheme string) {
+	t.Helper()
+	writeUIThemeSettings(t, filepath.Join(home, ".gemini"), uiTheme)
+}
+
+// writeUIThemeSettings writes <dir>/settings.json with ui.theme set. An empty
+// uiTheme omits the field.
+func writeUIThemeSettings(t *testing.T, dir, uiTheme string) {
+	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir %s: %v", dir, err)
 	}
@@ -117,9 +131,9 @@ func TestResolve_Claude_MissingFile_MappsToDark(t *testing.T) {
 	}
 }
 
-// ── Resolve: gemini toolCtx ───────────────────────────────────────────────────
+// ── Resolve: antigravity toolCtx ─────────────────────────────────────────────
 
-func TestResolve_Gemini_LightKeyword(t *testing.T) {
+func TestResolve_Antigravity_LightKeyword(t *testing.T) {
 	tests := []struct {
 		name  string
 		theme string
@@ -131,16 +145,16 @@ func TestResolve_Gemini_LightKeyword(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
-			writeGeminiSettings(t, home, tc.theme)
-			got := theme.Resolve("gemini", noEnv(), home)
+			writeAntigravitySettings(t, home, tc.theme)
+			got := theme.Resolve("antigravity", noEnv(), home)
 			if got != "light" {
-				t.Errorf("gemini %q: got %q, want %q", tc.theme, got, "light")
+				t.Errorf("antigravity %q: got %q, want %q", tc.theme, got, "light")
 			}
 		})
 	}
 }
 
-func TestResolve_Gemini_DarkKeyword(t *testing.T) {
+func TestResolve_Antigravity_DarkKeyword(t *testing.T) {
 	tests := []struct {
 		name  string
 		theme string
@@ -152,16 +166,16 @@ func TestResolve_Gemini_DarkKeyword(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
-			writeGeminiSettings(t, home, tc.theme)
-			got := theme.Resolve("gemini", noEnv(), home)
+			writeAntigravitySettings(t, home, tc.theme)
+			got := theme.Resolve("antigravity", noEnv(), home)
 			if got != "dark" {
-				t.Errorf("gemini %q: got %q, want %q", tc.theme, got, "dark")
+				t.Errorf("antigravity %q: got %q, want %q", tc.theme, got, "dark")
 			}
 		})
 	}
 }
 
-func TestResolve_Gemini_DaltonismKeyword(t *testing.T) {
+func TestResolve_Antigravity_DaltonismKeyword(t *testing.T) {
 	tests := []struct {
 		name  string
 		theme string
@@ -172,43 +186,78 @@ func TestResolve_Gemini_DaltonismKeyword(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
-			writeGeminiSettings(t, home, tc.theme)
-			got := theme.Resolve("gemini", noEnv(), home)
+			writeAntigravitySettings(t, home, tc.theme)
+			got := theme.Resolve("antigravity", noEnv(), home)
 			if got != "dark-daltonism" {
-				t.Errorf("gemini %q: got %q, want %q", tc.theme, got, "dark-daltonism")
+				t.Errorf("antigravity %q: got %q, want %q", tc.theme, got, "dark-daltonism")
 			}
 		})
 	}
 }
 
-func TestResolve_Gemini_UnknownNonEmpty_MapsToDark_NotTerminalFallthrough(t *testing.T) {
-	// An unknown non-empty Gemini theme must map to "dark", NOT fall through
+func TestResolve_Antigravity_UnknownNonEmpty_MapsToDark_NotTerminalFallthrough(t *testing.T) {
+	// An unknown non-empty Antigravity theme must map to "dark", NOT fall through
 	// to terminal detection (even if COLORTERM would say "light").
 	home := t.TempDir()
-	writeGeminiSettings(t, home, "Gruvbox Material")
+	writeAntigravitySettings(t, home, "Gruvbox Material")
 	// Even with a truecolor terminal env (which would normally yield "dark"),
 	// the key invariant is that we return "dark" not "dark8" or anything from
-	// terminal detection — it comes from the gemini keyword bridge, not env.
-	got := theme.Resolve("gemini", envMap(map[string]string{"COLORTERM": "truecolor"}), home)
+	// terminal detection — it comes from the antigravity keyword bridge, not env.
+	got := theme.Resolve("antigravity", envMap(map[string]string{"COLORTERM": "truecolor"}), home)
 	if got != "dark" {
-		t.Errorf("gemini unknown: got %q, want %q", got, "dark")
+		t.Errorf("antigravity unknown: got %q, want %q", got, "dark")
 	}
 }
 
-func TestResolve_Gemini_MissingFile_TerminalFallthrough(t *testing.T) {
-	// Missing gemini settings → falls through to terminal.
+func TestResolve_Antigravity_MissingFile_TerminalFallthrough(t *testing.T) {
+	// Missing antigravity settings → falls through to terminal.
 	home := t.TempDir()
-	got := theme.Resolve("gemini", envMap(map[string]string{"COLORTERM": "truecolor"}), home)
+	got := theme.Resolve("antigravity", envMap(map[string]string{"COLORTERM": "truecolor"}), home)
 	if got != "dark" {
-		t.Errorf("gemini missing file truecolor: got %q, want %q", got, "dark")
+		t.Errorf("antigravity missing file truecolor: got %q, want %q", got, "dark")
 	}
 }
 
-func TestResolve_Gemini_MissingFile_8ColorFallthrough(t *testing.T) {
+func TestResolve_Antigravity_MissingFile_8ColorFallthrough(t *testing.T) {
 	home := t.TempDir()
-	got := theme.Resolve("gemini", noEnv(), home)
+	got := theme.Resolve("antigravity", noEnv(), home)
 	if got != "dark8" {
-		t.Errorf("gemini missing file 8-color: got %q, want %q", got, "dark8")
+		t.Errorf("antigravity missing file 8-color: got %q, want %q", got, "dark8")
+	}
+}
+
+func TestResolve_Antigravity_LegacyGeminiSettingsFallback(t *testing.T) {
+	// With no antigravity-cli settings file, the legacy Gemini CLI
+	// ~/.gemini/settings.json is still honored.
+	home := t.TempDir()
+	writeLegacyGeminiSettings(t, home, "Ayu Light")
+	got := theme.Resolve("antigravity", noEnv(), home)
+	if got != "light" {
+		t.Errorf("antigravity legacy fallback: got %q, want %q", got, "light")
+	}
+}
+
+func TestResolve_Antigravity_PresentFileWithoutTheme_NoLegacyFallback(t *testing.T) {
+	// When the antigravity-cli settings file exists but lacks ui.theme, it is
+	// authoritative: the legacy ~/.gemini/settings.json must NOT be consulted
+	// (avoids a second file read per render), so we get the terminal fallback.
+	home := t.TempDir()
+	writeAntigravitySettings(t, home, "") // present, no ui.theme
+	writeLegacyGeminiSettings(t, home, "Ayu Light")
+	got := theme.Resolve("antigravity", noEnv(), home)
+	if got != "dark8" {
+		t.Errorf("antigravity present-without-theme: got %q, want %q (no legacy fallback)", got, "dark8")
+	}
+}
+
+func TestResolve_Antigravity_NewFileWinsOverLegacy(t *testing.T) {
+	// The antigravity-cli settings file takes priority over the legacy one.
+	home := t.TempDir()
+	writeAntigravitySettings(t, home, "One Light")
+	writeLegacyGeminiSettings(t, home, "Tokyo Night")
+	got := theme.Resolve("antigravity", noEnv(), home)
+	if got != "light" {
+		t.Errorf("antigravity priority: got %q, want %q", got, "light")
 	}
 }
 

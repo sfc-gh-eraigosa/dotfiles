@@ -4,7 +4,7 @@
 
 ## Anchoring the Root Pane
 
-AI processes (Claude, Gemini) run outside your tmux session and don't inherit `$TMUX_PANE`. Without an anchor, commands like `tmux-mgr window split` have no reliable target and will error or hit the wrong pane.
+AI processes (Claude, Antigravity) run outside your tmux session and don't inherit `$TMUX_PANE`. Without an anchor, commands like `tmux-mgr window split` have no reliable target and will error or hit the wrong pane.
 
 **One-time setup — run from your terminal, inside tmux:**
 ```bash
@@ -15,7 +15,7 @@ tmux-mgr pane anchor claude
 
 This saves your current pane's ID to the tmux global environment (`TMUX_MGR_ROOT_PANE`). All subsequent AI-driven splits and agent spawns will target it correctly.
 
-**The `claude` and `gemini` shell wrappers do this automatically** when launched from inside a tmux pane — you only need the manual command if you start your AI session outside tmux first.
+**The `claude` and `agy` shell wrappers do this automatically** when launched from inside a tmux pane — you only need the manual command if you start your AI session outside tmux first.
 
 **If you're not in tmux at all:**
 ```bash
@@ -58,7 +58,7 @@ This integrated model removes external dependencies and ensures the agent has th
 `tmux-mgr` auto-detects which AI CLI is driving you and runs the matching assistant inside each spawned pane — no flags required:
 
 - **Inside Claude Code** (detected via `CLAUDECODE=1`): each pane runs `claude -p "<task>" --dangerously-skip-permissions`. Because Claude has built-in `Task()` sub-agents, a single `agent start` invocation already gives you a full fan-out / fan-in team inside that pane.
-- **Otherwise (default)**: each pane runs `gemini -y -p "<task>"` with model fallback — the original behavior, untouched.
+- **Otherwise (default)**: each pane runs `agy -p "<task>" --dangerously-skip-permissions` (Antigravity CLI) with model fallback.
 
 `tmux-mgr agent start` prints the detected host (e.g. `assistant=claude`) so you can confirm which branch fired.
 

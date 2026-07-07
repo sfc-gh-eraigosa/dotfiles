@@ -36,7 +36,7 @@ ADR may be design-only. **Always** register it in `index.md`.
 
 | If the objective is… | Run this workflow | Artifacts |
 | :-- | :-- | :-- |
-| **A new skill** (or editing one) | `skill-creator:skill-creator` → `superpowers:writing-skills` | spec (optional) + the skill + its `evals/evals.json` (validate with `make skill-evals`; see [`ai/skills/GEMINI.md`](../../ai/skills/GEMINI.md)) |
+| **A new skill** (or editing one) | `skill-creator:skill-creator` → `superpowers:writing-skills` | spec (optional) + the skill + its `evals/evals.json` (validate with `make skill-evals`; see [`ai/skills/AGENTS.md`](../../ai/skills/AGENTS.md)) |
 | **A dotfiles feature** (shell, `opt/`, `ai/`, profiles, install) | `superpowers:brainstorming` → `superpowers:writing-plans` → `superpowers:test-driven-development`; obey the root `CLAUDE.md` conventions | spec + plan |
 | **A Go CLI under `sdk/`** | `brainstorming` → `superpowers:writing-plans` → `tdd`; mirror `sdk/gss` (cobra `cmd/`, `internal/` + mockable runner, `internal/version` ldflags); engage **go-team** agents (`go-goarch` for interfaces) | design + spec + plan |
 | **A Go RPC / gRPC service** | `go-goarch` (proto/interface + boundaries) → `writing-plans` → `go-godev` / `go-goqa` | design + spec + plan |
@@ -62,8 +62,8 @@ ADR may be design-only. **Always** register it in `index.md`.
   artifact is added or a state changes.
 - **State lifecycle:** `idea → designing → specifying → planning → building → in-review → merged
   → done` (or `parked` / `superseded`).
-- Per-directory docs rule still applies: this dir has `GEMINI.md` + `CLAUDE.md → GEMINI.md`,
-  linked from the root `GEMINI.md`/`CLAUDE.md` Repository Structure.
+- Per-directory docs rule still applies: this dir has `AGENTS.md` + `CLAUDE.md → AGENTS.md`,
+  linked from the root `AGENTS.md`/`CLAUDE.md` Repository Structure.
 
 ## Build-breakout policy (CAP-B/C)
 

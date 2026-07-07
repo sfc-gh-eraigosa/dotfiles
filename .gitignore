@@ -12,7 +12,7 @@
 !azure-pipelines.yml
 !Dockerfile
 !.gitignore
-!**/GEMINI.md
+!**/AGENTS.md
 !**/FEATURE.md
 !**/CLAUDE.md
 # WORKER.md is per-worktree scratch state (gss feature worker add seeds it);
@@ -50,7 +50,7 @@
 # We ignore everything in opt/bin except for the registry documentation and a
 # few committed, hand-maintained tools (locally built binaries stay ignored).
 opt/bin/*
-!opt/bin/GEMINI.md
+!opt/bin/AGENTS.md
 !opt/bin/CLAUDE.md
 !opt/bin/pkg-install
 !opt/bin/pkg-install-apt
@@ -82,7 +82,7 @@ coverage/
 !system/**
 !ai/
 !ai/**
-# Per-host Claude/Gemini settings stay local; install.sh seeds them from the
+# Per-host Claude/Antigravity settings stay local; install.sh seeds them from the
 # tracked .template files so each machine can customize without leaking values.
 ai/claude/settings.json
 # Per-host gws (Google Workspace CLI) config + OAuth client secret stay local;

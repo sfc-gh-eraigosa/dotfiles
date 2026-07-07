@@ -1,7 +1,7 @@
 # 🛠️ Dotfiles & Agent Environment
 
 [![Docker Image CI](https://github.com/sfc-gh-eraigosa/dotfiles/actions/workflows/docker-image.yml/badge.svg)](https://github.com/sfc-gh-eraigosa/dotfiles/actions/workflows/docker-image.yml)
-[![Gemini CLI](https://img.shields.io/badge/Gemini_CLI-0.42.0-blue)](https://geminicli.com)
+[![Antigravity CLI](https://img.shields.io/badge/Antigravity_CLI-1.0.16-blue)](https://antigravity.google)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-supported-orange)](https://claude.com/claude-code)
 
 A modernized, agent-first development environment for macOS and Linux. This repository bridges the gap between traditional terminal tools and **AI-assisted engineering** — and supports more than one assistant.
@@ -11,10 +11,10 @@ A modernized, agent-first development environment for macOS and Linux. This repo
 ## ✨ Core Pillars
 
 ### 🤖 Multi-Assistant Workflow
-First-class integration with both [Gemini CLI](https://geminicli.com) and [Claude Code](https://claude.com/claude-code). Each assistant reads the **same** skills, the **same** progressive context, and the **same** safety rules — driven by a single source of truth in `src/` and `ai/`.
+First-class integration with both [Antigravity CLI](https://antigravity.google) (`agy`, the successor to the retired Gemini CLI) and [Claude Code](https://claude.com/claude-code). Each assistant reads the **same** skills, the **same** progressive context, and the **same** safety rules — driven by a single source of truth in `src/` and `ai/`.
 - **Custom Skills**: Specialized instructions for Git (`gss`), Tmux (`tmux-mgr`), and SSH management — shared across assistants via symlinks.
-- **Slash Commands**: `/gss`, `/gss-scan`, `/gss-pr`, `/tmux-agent`, `/ssh-find`, `/ssh-keys` (Claude); `/gss` (Gemini).
-- **Safety Hooks**: A `PreToolUse` hook (Claude) and TOML policies (Gemini) enforce the same rules — block `rm -rf *`, require explicit confirmation for `gss push`, etc.
+- **Slash Commands**: `/gss`, `/gss-scan`, `/gss-pr`, `/tmux-agent`, `/ssh-find`, `/ssh-keys` (Claude); the same shared skills load in Antigravity.
+- **Safety Hooks**: The same guard scripts run as a `PreToolUse` hook (Claude) and via Antigravity's `hooks.json` + adapter — block `rm -rf *`, require explicit confirmation for `gss push`, etc.
 - **Continuous Validation**: CI/CD pipeline runs unit tests, integration tests, and a 27-case hook test suite on every push.
 
 ### 🔄 Safe Repository Management (`gss`)
@@ -34,7 +34,7 @@ Gives your AI agents "eyes" into your terminal state.
 ## 🤖 AI Configuration Framework
 This repository treats the AI assistant as a first-class citizen of the developer environment. 
 
-- **Unified Infrastructure**: Manage settings, policies, and manifests for both Claude and Gemini. [See ai/GEMINI.md](ai/GEMINI.md).
+- **Unified Infrastructure**: Manage settings, hooks, and manifests for both Claude and Antigravity. [See ai/AGENTS.md](ai/AGENTS.md).
 - **Declarative Plugins**: Extensions are defined in code and auto-synced. [See docs/ai-plugins.md](docs/ai-plugins.md).
 - **Portable Skills**: Write a skill once in `src/`, use it in any assistant. [See ai/skills/](ai/skills/).
 - **Automated Sync**: `sync-plugins` and `sync-skills` keep your environment in state.
@@ -54,23 +54,23 @@ git clone https://github.com/sfc-gh-eraigosa/dotfiles.git ~/git/dotfiles
 ### 2. What to Expect
 - **Seamless Linking**: Core configs (`.zshrc`, `.tmux.conf`, etc.) are symlinked to your `$HOME`.
 - **Toolchain Readiness**: `nvm`, `pyenv`, `goenv`, and `rbenv` are initialized and ready.
-- **Assistant Activation**: Both Gemini CLI and Claude Code are installed and pre-loaded with the custom skills from `src/`.
+- **Assistant Activation**: Both Antigravity CLI (`agy`) and Claude Code are installed and pre-loaded with the custom skills from `src/`.
 
 ---
 
 ## 🤔 Choosing Your Assistant
 
-Both Gemini and Claude have access to the same skills and tools — pick by workflow fit.
+Both Antigravity and Claude have access to the same skills and tools — pick by workflow fit.
 
 | Use case | Best fit | Why |
 | :--- | :--- | :--- |
 | Long-context refactor across many files | **Claude Code** | Larger context window, strong multi-file editing |
-| Fast tool-call loops with short prompts | **Gemini CLI** | Lower latency per turn |
+| Fast tool-call loops with short prompts | **Antigravity CLI** | Lower latency per turn |
 | Headless autonomous runs in tmux panes | Either | `tmux-mgr agent start` works with both |
 | Slash-command driven workflows | **Claude Code** | More slash commands wired (`/gss-scan`, `/gss-pr`, `/tmux-agent`, `/ssh-find`, `/ssh-keys`) |
-| Repos with `.gemini/` policies already present | **Gemini CLI** | Native TOML policy support |
+| Repos with `.agents/` workspace config present | **Antigravity CLI** | Native workspace skills/rules/hooks support |
 
-You can switch between them in the same project — they read the same `GEMINI.md`/`CLAUDE.md` context (the latter is a symlink to the former).
+You can switch between them in the same project — they read the same `AGENTS.md`/`CLAUDE.md` context (the latter is a symlink to the former).
 
 ---
 
@@ -91,9 +91,9 @@ This repository is designed to be maintained **with** your AI assistant.
 | `opt/bin/` | Specialized scripts and binaries (in your `$PATH`). |
 | `opt/profiles/` | Core shell and tool configurations. |
 | `src/` | Source code for custom tools and **Agent Skills** (`SKILL.md` files, shared across assistants). |
-| `ai/gemini/` | Gemini-specific commands, policies, settings. |
+| `ai/antigravity/` | Antigravity-specific aliases, hooks template, scripts. |
 | `ai/claude/` | Claude-specific commands, settings, hooks. |
-| `GEMINI.md` / `CLAUDE.md` | Progressive context (CLAUDE.md is a symlink to GEMINI.md at each level). |
+| `AGENTS.md` / `CLAUDE.md` | Progressive context (CLAUDE.md is a symlink to AGENTS.md at each level). |
 
 ---
 
