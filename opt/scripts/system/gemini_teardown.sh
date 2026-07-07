@@ -66,8 +66,10 @@ if command -v npm >/dev/null 2>&1 && npm ls -g @google/gemini-cli >/dev/null 2>&
     [ -z "$GEMINI_BIN" ] && FOUND+=("retired npm package: @google/gemini-cli")
 fi
 
+# -L catches the common post-migration state: a DANGLING symlink whose repo
+# target (ai/gemini/aliases.sh) no longer exists ([ -e ] alone misses it).
 LEGACY_ALIASES="${XDG_CONFIG_HOME:-$HOME/.config}/gemini/aliases.sh"
-[ -e "$LEGACY_ALIASES" ] && FOUND+=("legacy shell wrappers (gemini()/gemini-yolo()): $LEGACY_ALIASES")
+{ [ -e "$LEGACY_ALIASES" ] || [ -L "$LEGACY_ALIASES" ]; } && FOUND+=("legacy shell wrappers (gemini()/gemini-yolo()): $LEGACY_ALIASES")
 
 [ -f "$HOME/.gemini.profile" ] && FOUND+=("legacy environment profile: ~/.gemini.profile")
 
@@ -145,7 +147,7 @@ if [ -n "$GEMINI_BIN" ]; then
     esac
 fi
 
-if [ -e "$LEGACY_ALIASES" ]; then
+if [ -e "$LEGACY_ALIASES" ] || [ -L "$LEGACY_ALIASES" ]; then
     echo "  Removing $LEGACY_ALIASES..."
     rm -f "$LEGACY_ALIASES" "$LEGACY_ALIASES.bak"
     rmdir "$(dirname "$LEGACY_ALIASES")" 2>/dev/null || true

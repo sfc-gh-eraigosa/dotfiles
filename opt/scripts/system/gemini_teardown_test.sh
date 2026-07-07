@@ -40,7 +40,9 @@ esac
 exit 0
 NPM
     chmod +x "$H/bin/npm"
-    printf 'gemini() { command gemini "$@"; }\n' > "$H/.config/gemini/aliases.sh"
+    # A DANGLING symlink — the real-world post-migration state (the repo
+    # target ai/gemini/aliases.sh was deleted); [ -e ] alone would miss it.
+    ln -s "$H/repo-target-that-does-not-exist/aliases.sh" "$H/.config/gemini/aliases.sh"
     printf '# Gemini CLI Environment Setup\n' > "$H/.gemini.profile"
     cat > "$H/.zshrc" <<'RC'
 # something unrelated
@@ -74,7 +76,7 @@ H1="$(make_sandbox)"
 OUT1="$(run_teardown "$H1" </dev/null)"
 assert_contains "$OUT1" "leftovers found" "non-TTY prompt mode only reports"
 assert_in_subshell "non-TTY: gemini binary untouched" "[ -x '$H1/bin/gemini' ]"
-assert_in_subshell "non-TTY: aliases untouched" "[ -f '$H1/.config/gemini/aliases.sh' ]"
+assert_in_subshell "non-TTY: aliases untouched" "[ -L '$H1/.config/gemini/aliases.sh' ]"
 rm -rf "$H1"
 
 # === 4. --yes cleans everything, spares ~/.gemini ===
@@ -84,7 +86,7 @@ assert_contains "$OUT2" "Retired Gemini CLI leftovers detected" "--yes shows fin
 assert_contains "$OUT2" "developers.googleblog.com" "references included in the ask"
 assert_in_subshell "--yes: npm uninstall invoked (via fake npm)" "grep -q 'NPM_UNINSTALL_CALLED @google/gemini-cli' '$H2/npm.log'"
 assert_in_subshell "--yes: HOME-local gemini binary removed" "[ ! -e '$H2/bin/gemini' ]"
-assert_in_subshell "--yes: legacy aliases removed (dir pruned)" "[ ! -e '$H2/.config/gemini/aliases.sh' ]"
+assert_in_subshell "--yes: dangling legacy aliases symlink removed (dir pruned)" "[ ! -e '$H2/.config/gemini/aliases.sh' ] && [ ! -L '$H2/.config/gemini/aliases.sh' ]"
 assert_in_subshell "--yes: ~/.gemini.profile removed" "[ ! -e '$H2/.gemini.profile' ]"
 assert_grep_negative "--yes: stale source lines removed from real .zshrc" '\.gemini\.profile' "$H2/.zshrc"
 assert_grep_negative "--yes: stale aliases line removed from real .zshrc" 'config/gemini/aliases' "$H2/.zshrc"
