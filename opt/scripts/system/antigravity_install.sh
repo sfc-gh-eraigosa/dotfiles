@@ -22,15 +22,9 @@ else
     curl -fsSL https://antigravity.google/cli/install.sh | bash
 fi
 
-# 2. Remove the retired Gemini CLI (npm package) if present.
-# Gemini CLI stopped serving requests on 2026-06-18; Antigravity CLI is
-# the replacement. Keep ~/.gemini itself — Antigravity deliberately reuses
-# it (~/.gemini/antigravity-cli/ for CLI settings, ~/.gemini/config/ for
-# the global customization root).
-if command -v npm &> /dev/null && npm ls -g @google/gemini-cli &> /dev/null; then
-    echo "Removing retired Gemini CLI (@google/gemini-cli)..."
-    npm uninstall -g @google/gemini-cli || true
-fi
+# 2. Leftover Gemini CLI artifacts (the retired npm package, the old
+# gemini() aliases, ~/.gemini.profile) are handled by the consent-based
+# gemini_teardown.sh, which install.sh runs right after this script.
 
 # 3. Create environment profile
 ANTIGRAVITY_PROFILE="$HOME/.antigravity.profile"
@@ -100,24 +94,7 @@ alias tmux-ls="tmux ls 2>/dev/null || echo 'No tmux sessions running'"
 
 PROFOF
 
-# 4. Migrate legacy ~/.gemini.profile: our profiles now source
-# ~/.antigravity.profile; drop the old file and any source lines the old
-# installer appended directly to shell configs (skip symlinks — those are
-# repo-managed and already updated).
-if [ -f "$HOME/.gemini.profile" ]; then
-    echo "Removing legacy ~/.gemini.profile..."
-    rm -f "$HOME/.gemini.profile"
-fi
-for shell_config in "$HOME/.zshrc" "$HOME/.profile"; do
-    if [ -f "$shell_config" ] && [ ! -L "$shell_config" ]; then
-        if grep -q '\.gemini\.profile' "$shell_config"; then
-            echo "Removing legacy .gemini.profile source line from $shell_config..."
-            sed -i.bak '/# Load Gemini CLI environment/d;/\.gemini\.profile/d' "$shell_config"
-        fi
-    fi
-done
-
-# 5. Ensure the profile is sourced in .zshrc and .profile (only when they
+# 4. Ensure the profile is sourced in .zshrc and .profile (only when they
 # are real files; the repo-managed symlinked profiles already source it).
 for shell_config in "$HOME/.zshrc" "$HOME/.profile"; do
     if [ -f "$shell_config" ] && [ ! -L "$shell_config" ]; then
@@ -133,6 +110,16 @@ for shell_config in "$HOME/.zshrc" "$HOME/.profile"; do
         fi
     fi
 done
+
+# 5. The bootstrapper's `agy install` step appends a hardcoded-$HOME PATH
+# export to every rc file it can find — through our repo-managed symlinks,
+# dirtying the repo with an unportable path. Strip it from symlinked rc
+# files (the repo profiles already export ~/.local/bin portably). Rerunnable
+# any time an agy self-update re-appends it.
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+if [ -x "$SCRIPT_DIR/strip-agy-rc-appends.sh" ]; then
+    "$SCRIPT_DIR/strip-agy-rc-appends.sh"
+fi
 
 # 6. Verify installation
 if command -v agy &> /dev/null; then

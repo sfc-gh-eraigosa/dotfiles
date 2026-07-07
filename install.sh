@@ -342,6 +342,12 @@ if [ -f "${BASE_DIR}/opt/scripts/system/antigravity_install.sh" ]; then
     "${BASE_DIR}/opt/scripts/system/antigravity_install.sh"
 fi
 
+# Retired Gemini CLI leftovers: consent-based teardown (prompts when leftovers
+# are found; --keep marker suppresses the ask forever; no-op in CI/non-TTY).
+if [ -f "${BASE_DIR}/opt/scripts/system/gemini_teardown.sh" ]; then
+    "${BASE_DIR}/opt/scripts/system/gemini_teardown.sh" || echo "WARNING: gemini teardown reported problems; continuing."
+fi
+
 # Google CLI (Antigravity & Workspace) Setup
 if [ -f "${BASE_DIR}/opt/scripts/system/google-cli-setup.sh" ]; then
     # This configures gws for BOTH Antigravity CLI and Claude Code via shared skills.
