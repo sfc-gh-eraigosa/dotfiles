@@ -162,19 +162,32 @@ func TestAuto_RebaseConflictSkips(t *testing.T) {
 	}
 }
 
-func TestAuto_ReadyPRBodyOnlyNoNewCommits(t *testing.T) {
+func TestAuto_ReadyPRWithPendingWorkSkipsLoudly(t *testing.T) {
+	// The silent-success shape this guards against (observed live on PR #153):
+	// a ready-for-review PR + local commits ahead of origin → the pre-fix code
+	// refreshed the body, pushed NOTHING, printed "updated the draft PR", and
+	// exited 0. A ready PR with pending work is a prompt-condition: body
+	// refresh is fine, but the result must be a SKIP (non-zero) with a
+	// diagnostic, never success.
 	ghc := ghfake.NewClient()
 	ghc.SeedPR(gh.PR{Number: 9, Head: "feature/auth/erai/api", State: "OPEN", IsDraft: false, URL: "https://github.com/o/r/pull/9"})
-	// dirty → commit, then ready-PR → body edit only (no fetch/rebase/push).
-	svc, gitr, _ := autoService(t, "https://github.com/o/r/pull/9",
+	// dirty → WIP commit, then ready-PR → body edit + loud skip (no fetch/rebase/push).
+	svc, gitr, wt := autoService(t, "https://github.com/o/r/pull/9",
 		[]gitfake.Response{resp("feature/auth/erai/api"), resp(" M a.go\n"), resp("aaa"), resp("bbb"), resp(""), resp("")}, ghc)
 
-	if _, err := svc.AutoCheckpoint(context.Background(), feature.AutoOpts{WorkerRef: "auth/erai/api"}); err != nil {
-		t.Fatalf("AutoCheckpoint: %v", err)
+	res, err := svc.AutoCheckpoint(context.Background(), feature.AutoOpts{WorkerRef: "auth/erai/api"})
+	if err == nil {
+		t.Fatal("ready PR with pending work: want non-zero (skip) result, got success")
 	}
-	// A ready PR must NOT get new pushed commits → Checkpoint never runs → no fetch.
-	if gitCallsHave(gitr, "fetch") {
-		t.Error("ready PR must not push new commits (no fetch/rebase via Checkpoint)")
+	if !strings.Contains(res.Skipped, "ready-for-review") || !strings.Contains(res.Skipped, "NOT push") {
+		t.Errorf("Skipped = %q; want ready-for-review draft-only reason", res.Skipped)
+	}
+	if !res.Committed {
+		t.Error("the WIP commit made before the ready-PR check should be reported")
+	}
+	// A ready PR must NOT get new pushed commits → Checkpoint never runs → no fetch/push.
+	if gitCallsHave(gitr, "fetch") || gitCallsHave(gitr, "push") {
+		t.Error("ready PR must not push new commits (no fetch/rebase/push via Checkpoint)")
 	}
 	edited := false
 	for _, c := range ghc.Calls() {
@@ -183,6 +196,11 @@ func TestAuto_ReadyPRBodyOnlyNoNewCommits(t *testing.T) {
 		}
 	}
 	if !edited {
-		t.Error("ready PR should get a body refresh (PREdit)")
+		t.Error("ready PR should still get a body refresh (PREdit)")
+	}
+	// The skip diagnostic must land in the worker's meta WORKER.md.
+	data, _ := os.ReadFile(feature.WorkerMetaPath(wt))
+	if !strings.Contains(string(data), "ready-for-review") {
+		t.Errorf("WORKER.md (meta path) missing ready-PR diagnostic:\n%s", data)
 	}
 }
