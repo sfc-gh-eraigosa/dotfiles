@@ -37,8 +37,10 @@ type AutoResult struct {
 //     untracked files in the commit body;
 //   - never prompts: on detached HEAD / rebase conflict it skips, writes a
 //     diagnostic to WORKER.md, and returns a non-zero (error) result;
-//   - only ever touches DRAFT PRs (a ready PR gets a body refresh, no new
-//     commits pushed);
+//   - only ever touches DRAFT PRs: a ready PR gets a body refresh but new
+//     commits are never pushed — and because reaching that state means work
+//     is pending, it is reported as a SKIP (non-zero + WORKER.md
+//     diagnostic), never as silent success;
 //   - --dry-run prints the plan without executing.
 func (s *Service) AutoCheckpoint(ctx context.Context, opts AutoOpts) (AutoResult, error) {
 	ref, err := identity.ParseWorkerRef(opts.WorkerRef)
@@ -111,13 +113,19 @@ func (s *Service) AutoCheckpoint(ctx context.Context, opts AutoOpts) (AutoResult
 	}
 
 	// Only ever touch draft PRs: a ready PR gets a body refresh, never new
-	// pushed commits (avoids surprising reviewers).
+	// pushed commits (avoids surprising reviewers). Reaching here means there
+	// IS something to push (the clean+synced case no-opped above), so this is
+	// a prompt-condition and must surface as a SKIP — not silent success. The
+	// pre-fix behaviour ("updated the draft PR", exit 0, branch still ahead of
+	// origin) was the worst failure shape for an unattended hook.
 	if w.PRURL != "" {
 		if pr, err := s.GH.PRView(ctx, prNumber(w.PRURL)); err == nil && !pr.IsDraft {
 			if err := s.GH.PREdit(ctx, prNumber(w.PRURL), gh.PREditOpts{Body: renderPRBody(reg.Features[fi], ref)}); err != nil {
 				return res, err
 			}
-			return res, nil
+			skipped, err := s.autoSkip(w, "PR is ready-for-review; auto-checkpoint is draft-only and did NOT push local commits (body refreshed). Run 'gss feature checkpoint' to push, or convert the PR back to draft.")
+			skipped.Committed = res.Committed // a WIP commit may have landed above; it stays local
+			return skipped, err
 		}
 	}
 
