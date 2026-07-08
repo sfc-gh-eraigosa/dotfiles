@@ -275,3 +275,9 @@ source <(openclaw completion --shell bash)
 
 # Claude Code CLI helpers: claude (wrapper) and claude-config (yolo/remote on/off)
 [ -f "${HOME}/.config/claude/aliases.sh" ] && . "${HOME}/.config/claude/aliases.sh"
+
+# Machine-local overrides — NOT committed to dotfiles. External tools
+# (e.g. clawdad's OpenClaw shell integration) append here instead of
+# editing this managed file. Mirrors the .zshrc.local hook in .zshrc.
+# Keep this LAST so local settings win.
+[ -f "$HOME/.bashrc.local" ] && source "$HOME/.bashrc.local"
