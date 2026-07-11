@@ -256,6 +256,20 @@ func TestRunStatusLine_Powerline_COLUMNS20(t *testing.T) {
 	}
 }
 
+// TestRunStatusLine_TerminalWidthFallback checks that when COLUMNS is unset and stdout is not a TTY,
+// the terminal_width from the payload is used as the column count.
+func TestRunStatusLine_TerminalWidthFallback(t *testing.T) {
+	payloadJSON := `{"cwd":"/tmp","terminal_width":30}`
+	out := strings.TrimRight(fitOutput(t, "emoji", 0, payloadJSON), "\n")
+	if out == "" {
+		t.Skip("no output (not in a git repo or all segments self-omit)")
+	}
+	w := term.DisplayWidth(out)
+	if w > 30 {
+		t.Errorf("expected output to fit in terminal_width=30, got width %d: %q", w, out)
+	}
+}
+
 // ─── End-to-end theme change ──────────────────────────────────────────────────
 
 // TestRunStatusLine_ThemeChangeAffectsColors verifies that when a tool-specific

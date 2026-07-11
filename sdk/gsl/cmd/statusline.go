@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
@@ -120,8 +121,23 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 	datas := render.Detect(ctx, cfg, st, segs)
 
 	// Resolve terminal width: $COLUMNS wins, then ioctl on stdout (returns
-	// ok=false when not a TTY, e.g. piped under Claude Code), then 80.
+	// ok=false when not a TTY, e.g. piped under Claude Code), then the payload's
+	// terminal_width if present, then fallback 80.
 	cols := term.Columns(term.StdoutWidthSource())
+	columnsEnv := os.Getenv("COLUMNS")
+	var isColumnsValid bool
+	if columnsEnv != "" {
+		if val, err := strconv.Atoi(columnsEnv); err == nil && val > 0 {
+			isColumnsValid = true
+		}
+	}
+	if !isColumnsValid {
+		if _, isTTY := term.StdoutWidthSource()(); !isTTY {
+			if p.TerminalWidth != nil && *p.TerminalWidth > 0 {
+				cols = *p.TerminalWidth
+			}
+		}
+	}
 
 	// Fit: escalate compaction levels until the output fits, or use the most
 	// compact form. No additional I/O after Detect.
