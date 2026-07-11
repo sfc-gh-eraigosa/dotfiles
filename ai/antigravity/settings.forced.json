@@ -1,0 +1,7 @@
+{
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.gemini/config/statusline-command.sh",
+    "enabled": true
+  }
+}

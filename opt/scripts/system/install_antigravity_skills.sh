@@ -95,6 +95,43 @@ if [ -f "$BASE_DIR/ai/antigravity/aliases.sh" ]; then
     cp "$BASE_DIR/ai/antigravity/aliases.sh" "$AGY_XDG_DIR/aliases.sh"
 fi
 
+# --- statusline-command.sh (shim for gsl status line) ---
+# Point agy's statusLine settings to a decoupled shim in ~/.gemini/config/.
+if [ -f "$BASE_DIR/ai/claude/statusline-command.sh" ]; then
+    echo "  Installing statusline shim for agy..."
+    mkdir -p "$AGY_CONFIG_ROOT"
+    cp "$BASE_DIR/ai/claude/statusline-command.sh" "$AGY_CONFIG_ROOT/statusline-command.sh"
+    chmod +x "$AGY_CONFIG_ROOT/statusline-command.sh"
+fi
+
+# --- settings.json (host-owned real file; forced subset merged on every run) ---
+AGY_SETTINGS_DEST="${HOME}/.gemini/antigravity-cli/settings.json"
+AGY_SETTINGS_FORCED="$BASE_DIR/ai/antigravity/settings.forced.json"
+APPLY_FORCED="$BASE_DIR/opt/scripts/system/apply-forced-settings.sh"
+
+if [ -f "$AGY_SETTINGS_FORCED" ]; then
+    echo "  Configuring statusLine in ~/.gemini/antigravity-cli/settings.json..."
+    mkdir -p "$(dirname "$AGY_SETTINGS_DEST")"
+    
+    # Back up the settings file once if it exists and is a real file
+    if [ -f "$AGY_SETTINGS_DEST" ] && [ ! -L "$AGY_SETTINGS_DEST" ] && [ ! -e "$AGY_SETTINGS_DEST.bak" ]; then
+        echo "    Backing up existing settings.json -> settings.json.bak"
+        cp "$AGY_SETTINGS_DEST" "$AGY_SETTINGS_DEST.bak"
+    fi
+    
+    # Seed with an empty JSON object if absent
+    if [ ! -f "$AGY_SETTINGS_DEST" ]; then
+        echo '{}' > "$AGY_SETTINGS_DEST"
+    fi
+    
+    # Deep-merge the forced settings
+    if command -v jq > /dev/null 2>&1; then
+        bash "$APPLY_FORCED" "$AGY_SETTINGS_DEST" "$AGY_SETTINGS_FORCED"
+    else
+        echo "    WARNING: jq not installed — cannot merge forced settings; statusLine wiring may be stale" >&2
+    fi
+fi
+
 # --- Legacy Gemini CLI cleanup (one-time migration, idempotent) ---
 # Gemini CLI was retired 2026-06-18. Remove the repo-managed artifacts it
 # left behind; leave host-owned files (settings.json, oauth creds, history)
