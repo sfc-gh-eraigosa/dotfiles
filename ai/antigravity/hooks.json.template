@@ -1,5 +1,4 @@
 {
-  "_comment": "Antigravity CLI (agy) lifecycle hooks. install_antigravity_skills.sh renders this template to ~/.gemini/config/hooks.json, replacing __HOME__ with the real $HOME (agy does not expand env vars in hook commands). One hook entry runs BOTH shared guards (ai/hooks/safety_guard.sh + privacy_guard.sh) through antigravity_adapter.sh, which translates agy's {toolCall:{name,args}} payload / {decision} verdict dialect once and pipes the same translated payload to each guard — each guard self-selects the tools it cares about. Bare guard names are resolved by the adapter relative to its own directory, so only the adapter path needs rendering. The matcher uses agy's native tool names: run_command (shell), write_to_file / replace_file_content / multi_replace_file_content / edit_file (file writes). An allow verdict auto-approves the call, deliberately mirroring the retired Gemini trusted-tools.toml tier; guard denies map to deny, guard exit 3 maps to ask.",
   "guards": {
     "PreToolUse": [
       {

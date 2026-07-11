@@ -123,6 +123,19 @@ type Model struct {
 	DisplayName *string `json:"display_name"`
 }
 
+// QuotaWindow holds the quota data for one window in the Antigravity payload.
+type QuotaWindow struct {
+	RemainingFraction *float64 `json:"remaining_fraction"`
+}
+
+// Quotas groups the quota windows in the Antigravity payload.
+type Quotas struct {
+	ThreePHour   *QuotaWindow `json:"3p-5h"`
+	ThreePWeekly *QuotaWindow `json:"3p-weekly"`
+	GeminiHour   *QuotaWindow `json:"gemini-5h"`
+	GeminiWeekly *QuotaWindow `json:"gemini-weekly"`
+}
+
 // Payload is the top-level structure parsed from Claude's stdin JSON.
 // All fields are pointers; an entirely empty/whitespace stdin yields a
 // zero-valued Payload (all nil) and no error.
@@ -131,6 +144,8 @@ type Payload struct {
 	Model         *Model         `json:"model"`
 	ContextWindow *ContextWindow `json:"context_window"`
 	RateLimits    *RateLimits    `json:"rate_limits"`
+	TerminalWidth *int           `json:"terminal_width"`
+	Quota         *Quotas        `json:"quota"`
 }
 
 // Parse decodes a Claude stdin JSON payload from the given byte slice.
@@ -144,6 +159,27 @@ func Parse(data []byte) (Payload, error) {
 	if err := json.Unmarshal(data, &p); err != nil {
 		return Payload{}, fmt.Errorf("payload: parse: %w", err)
 	}
+
+	// Synthesize RateLimits from Quota if running under Antigravity
+	if p.RateLimits == nil && p.Quota != nil {
+		p.RateLimits = &RateLimits{}
+		if q := p.Quota.GeminiHour; q != nil && q.RemainingFraction != nil {
+			used := (1.0 - *q.RemainingFraction) * 100.0
+			p.RateLimits.FiveHour = &RateWindow{UsedPercentage: &used}
+		} else if q := p.Quota.ThreePHour; q != nil && q.RemainingFraction != nil {
+			used := (1.0 - *q.RemainingFraction) * 100.0
+			p.RateLimits.FiveHour = &RateWindow{UsedPercentage: &used}
+		}
+
+		if q := p.Quota.GeminiWeekly; q != nil && q.RemainingFraction != nil {
+			used := (1.0 - *q.RemainingFraction) * 100.0
+			p.RateLimits.SevenDay = &RateWindow{UsedPercentage: &used}
+		} else if q := p.Quota.ThreePWeekly; q != nil && q.RemainingFraction != nil {
+			used := (1.0 - *q.RemainingFraction) * 100.0
+			p.RateLimits.SevenDay = &RateWindow{UsedPercentage: &used}
+		}
+	}
+
 	return p, nil
 }
 

@@ -233,3 +233,41 @@ func TestParseFromReaderEmpty(t *testing.T) {
 		t.Errorf("expected empty Payload from empty reader, got %+v", p)
 	}
 }
+
+// TestParseQuotaSynthesis verifies that when quota is present in the payload,
+// it is correctly synthesized into RateLimits for the AI segment.
+func TestParseQuotaSynthesis(t *testing.T) {
+	data := []byte(`{
+		"cwd": "/tmp",
+		"quota": {
+			"gemini-5h": {
+				"remaining_fraction": 0.83
+			},
+			"gemini-weekly": {
+				"remaining_fraction": 0.93
+			}
+		}
+	}`)
+	p, err := payload.Parse(data)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if p.RateLimits == nil {
+		t.Fatal("expected RateLimits to be synthesized, got nil")
+	}
+	if p.RateLimits.FiveHour == nil || p.RateLimits.FiveHour.UsedPercentage == nil {
+		t.Fatal("expected synthesized FiveHour UsedPercentage")
+	}
+	// (1.0 - 0.83) * 100 = 17.0 (with float precision)
+	if got, want := *p.RateLimits.FiveHour.UsedPercentage, 17.0; got < want-0.01 || got > want+0.01 {
+		t.Errorf("FiveHour.UsedPercentage: got %f, want %f", got, want)
+	}
+
+	if p.RateLimits.SevenDay == nil || p.RateLimits.SevenDay.UsedPercentage == nil {
+		t.Fatal("expected synthesized SevenDay UsedPercentage")
+	}
+	// (1.0 - 0.93) * 100 = 7.0 (with float precision)
+	if got, want := *p.RateLimits.SevenDay.UsedPercentage, 7.0; got < want-0.01 || got > want+0.01 {
+		t.Errorf("SevenDay.UsedPercentage: got %f, want %f", got, want)
+	}
+}

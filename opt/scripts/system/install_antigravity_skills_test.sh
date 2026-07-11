@@ -42,6 +42,12 @@ assert_in_subshell "hook commands use the rendered real HOME" \
     "jq -r '[.[] | objects | .PreToolUse[]?.hooks[]?.command] | first' '$A/.gemini/config/hooks.json' | grep -qF '$A/.gemini/config/hooks/'"
 assert_in_subshell "aliases.sh copied (not symlinked) into ~/.config/antigravity" \
     "[ -f '$A/.config/antigravity/aliases.sh' ] && [ ! -L '$A/.config/antigravity/aliases.sh' ]"
+assert_file_exists "$A/.gemini/config/statusline-command.sh" "statusline shim copied"
+assert_file_exists "$A/.gemini/antigravity-cli/settings.json" "agy settings.json created"
+assert_eq "$(jq -r '.statusLine.command' "$A/.gemini/antigravity-cli/settings.json")" \
+    "bash ~/.gemini/config/statusline-command.sh" "statusLine command configured in settings.json"
+assert_eq "$(jq -r '.statusLine.enabled' "$A/.gemini/antigravity-cli/settings.json")" \
+    "true" "statusLine enabled in settings.json"
 
 # --- A: idempotency (re-run changes nothing structurally) ---
 run_install "$A"
@@ -49,17 +55,21 @@ assert_in_subshell "re-run keeps hooks.json valid" "jq -e . '$A/.gemini/config/h
 
 # --- B: legacy Gemini CLI artifacts are cleaned up ---
 mkdir -p "$B/.gemini/hooks" "$B/.gemini/policies" "$B/.gemini/commands" \
-         "$B/.config/gemini" "$B/.agents/skills"
+         "$B/.config/gemini" "$B/.agents/skills" "$B/.gemini/antigravity-cli"
 touch "$B/.gemini/hooks/privacy_guard.sh"
 ln -s "$REPO_ROOT/ai/hooks/safety_guard.sh" "$B/.gemini/policies/safety.toml"   # repo-pointing link
 ln -s "$REPO_ROOT/ai/antigravity/aliases.sh" "$B/.config/gemini/aliases.sh"
 ln -s "$REPO_ROOT/ai/skills/sync-skills" "$B/.agents/skills/sync-skills"        # repo-pointing skill link
 echo '{ "ui": { "theme": "myTheme" } }' > "$B/.gemini/settings.json"             # host-owned, must survive
+echo '{ "colorScheme": "light" }' > "$B/.gemini/antigravity-cli/settings.json"    # pre-existing keys to preserve
 run_install "$B"
 assert_in_subshell "legacy ~/.gemini/hooks removed" "[ ! -e '$B/.gemini/hooks' ]"
 assert_in_subshell "legacy repo-pointing policy link removed" "[ ! -e '$B/.gemini/policies/safety.toml' ]"
 assert_in_subshell "legacy ~/.config/gemini aliases link removed" "[ ! -e '$B/.config/gemini/aliases.sh' ]"
 assert_in_subshell "legacy ~/.agents/skills repo link removed" "[ ! -e '$B/.agents/skills/sync-skills' ]"
 assert_eq "$(jq -r '.ui.theme' "$B/.gemini/settings.json")" "myTheme" "host-owned legacy settings.json left alone"
+assert_file_exists "$B/.gemini/antigravity-cli/settings.json.bak" "original agy settings backed up"
+assert_eq "$(jq -r '.colorScheme' "$B/.gemini/antigravity-cli/settings.json")" "light" "existing settings keys preserved"
+assert_eq "$(jq -r '.statusLine.enabled' "$B/.gemini/antigravity-cli/settings.json")" "true" "statusLine configured when settings.json pre-exists"
 
 _test_report

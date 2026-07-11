@@ -178,7 +178,11 @@ rm -f "$HOME/.config/gss/approval.token"
 # === gss --force-autonomous inside a worker worktree (resolution #22) ===
 # A fresh token is present so the token gate would otherwise ALLOW these — the
 # block must come from the wrong-mode (worker-cwd) rule, not the token rule.
-WT_PROBE="$HOME/.config/gss/worktrees/octo/repo/auth/erai/api"
+#
+# Mock the worktree root directory to prevent the test suite's own worktree path
+# from triggering false positives on regular checkout tests.
+export GSS_WORKTREE_ROOT="/tmp/gss-worktrees-mock-root"
+WT_PROBE="/tmp/gss-worktrees-mock-root/octo/repo/auth/erai/api"
 git rev-parse HEAD > "$HOME/.config/gss/approval.token" 2>/dev/null || echo token > "$HOME/.config/gss/approval.token"
 assert_exit 2 Bash "cd $WT_PROBE && gss push --force-autonomous" "push --force-autonomous in a worker worktree (wrong mode)"
 assert_exit 2 Bash "cd $WT_PROBE && gss pr --force-autonomous"   "pr --force-autonomous in a worker worktree (wrong mode)"
