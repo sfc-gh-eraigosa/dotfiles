@@ -80,6 +80,28 @@ else
     echo "SKIP: ~/.gemini/config/hooks.json or validator not present"
 fi
 
+# 8. Antigravity's configured statusLine command resolves (D3).
+echo "Verifying Antigravity statusLine command..."
+AGY_SETTINGS="$HOME/.gemini/antigravity-cli/settings.json"
+if [ -f "$AGY_SETTINGS" ]; then
+    STATUS_CMD="$(jq -r '.statusLine.command // empty' "$AGY_SETTINGS" 2>/dev/null)"
+    if [ -n "$STATUS_CMD" ]; then
+        # Expand leading ~ and $HOME
+        sl_path="${STATUS_CMD##* }"
+        sl_path="${sl_path/#\~/$HOME}"
+        sl_path="${sl_path//\$HOME/$HOME}"
+        if [ ! -r "$sl_path" ]; then
+            echo "FAIL: statusLine script not readable: '$STATUS_CMD' (resolved: $sl_path)"
+            exit 1
+        fi
+        echo "PASS: statusLine command resolves ($sl_path)"
+    else
+        echo "SKIP: statusLine command not configured"
+    fi
+else
+    echo "SKIP: ~/.gemini/antigravity-cli/settings.json not present"
+fi
+
 echo "--------------------------------------------------"
 echo "SANITY CHECK PASSED SUCCESSFULLY"
 echo "--------------------------------------------------"
