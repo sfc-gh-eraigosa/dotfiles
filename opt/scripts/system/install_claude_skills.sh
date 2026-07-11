@@ -2,9 +2,9 @@
 # install_claude_skills.sh - Idempotently install Claude Code's assistant-specific
 # config: settings.json, slash commands, hooks, and shell aliases.
 #
-# Mirrors install_gemini_skills.sh (which handles Gemini's policies/commands/aliases).
+# Mirrors install_antigravity_skills.sh (which handles Antigravity's hooks/aliases).
 # Skill linking is NOT done here — sync-skills.sh is the single canonical linker that
-# discovers every SKILL.md and links it into BOTH ~/.agents/skills (Gemini) and
+# discovers every SKILL.md and links it into BOTH ~/.gemini/config/skills (Antigravity) and
 # ~/.claude/skills (Claude). Run sync-skills.sh (or the `sync-skills` alias) to refresh
 # skills; this script only owns the Claude-specific config below.
 
@@ -31,7 +31,7 @@ cleanup_broken_links() {
 # subset (settings.forced.json: hooks, statusLine, security deny/ask) over it,
 # so the security wiring stays current without clobbering host customizations.
 # No symlink and no repo-internal host copy (provisioning directive — CLAUDE.md).
-# See docs/designs/2026-06-02-ai-config-home-provisioning.md (D2) and
+# See docs/mbo/designs/2026-06-02-ai-config-home-provisioning.md (D2) and
 # apply-forced-settings.sh.
 SETTINGS_DEST="$CLAUDE_HOME/settings.json"
 SETTINGS_TEMPLATE="$BASE_DIR/ai/claude/settings.json.template"
@@ -48,7 +48,15 @@ fi
 # preserving whatever the host had configured (the merge re-applies wiring).
 if [ -L "$SETTINGS_DEST" ]; then
     echo "  Migrating legacy settings.json symlink to a host-owned file"
-    legacy_target="$(readlink -f "$SETTINGS_DEST" 2>/dev/null || true)"
+    # Portable replacement for `readlink -f` (GNU-only; absent on macOS/BSD):
+    # plain `readlink` (BSD+GNU) reads the link, then anchor a relative target
+    # to the symlink's physical dir via `cd ... && pwd -P`.
+    legacy_link="$(readlink "$SETTINGS_DEST" 2>/dev/null || true)"
+    case "$legacy_link" in
+        "") legacy_target="" ;;
+        /*) legacy_target="$legacy_link" ;;
+        *)  legacy_target="$(cd -- "$(dirname -- "$SETTINGS_DEST")" >/dev/null 2>&1 && pwd -P)/$legacy_link" ;;
+    esac
     rm -f "$SETTINGS_DEST"
     if [ -n "$legacy_target" ] && [ -f "$legacy_target" ]; then
         cp "$legacy_target" "$SETTINGS_DEST"
@@ -82,7 +90,7 @@ cleanup_broken_links "$CLAUDE_HOME/commands"
 
 # --- Skills ---
 # Handled by sync-skills.sh, which links every discovered SKILL.md into
-# ~/.claude/skills (and ~/.agents/skills for Gemini). Nothing to do here.
+# ~/.claude/skills (and ~/.gemini/config/skills for Antigravity). Nothing to do here.
 
 # --- Hooks (COPIED into ~/.claude/hooks; settings.json references the
 # well-known $HOME path). Copy, not symlink, per the provisioning directive
@@ -100,6 +108,17 @@ if [ -d "$BASE_DIR/ai/hooks" ]; then
         cp "$f" "$HOOKS_DEST/$(basename "$f")"
     done
     chmod +x "$HOOKS_DEST"/*.sh 2>/dev/null || true
+fi
+
+# --- Account memories (issue #134): seed the repo's scope:account Claude
+# memories into this machine's live project-memory store
+# (~/.claude/projects/<computed-slug>/memory). Delegated to a standalone,
+# tested provisioner (mirrors apply-forced-settings.sh): seed-and-preserve,
+# never clobbers host-local memories, regenerates the index from the union. ---
+if [ -f "$BASE_DIR/opt/scripts/system/provision-claude-memory.sh" ]; then
+    echo "  Provisioning Claude account memories (~/.claude/projects/<slug>/memory)"
+    env BASE_DIR="$BASE_DIR" CLAUDE_HOME="$CLAUDE_HOME" \
+        bash "$BASE_DIR/opt/scripts/system/provision-claude-memory.sh" || true
 fi
 
 # --- Shell aliases (~/.config/claude/aliases.sh, sourced by .zshrc and .bashrc) ---

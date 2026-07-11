@@ -2,7 +2,7 @@
 # Test driver for install_claude_skills.sh — verifies the copy-not-symlink hook
 # install and the forced-field settings merge against a throwaway $HOME.
 #
-# Guarantees under test (docs/designs/2026-06-02-ai-config-home-provisioning.md):
+# Guarantees under test (docs/mbo/designs/2026-06-02-ai-config-home-provisioning.md):
 #   - hooks land in ~/.claude/hooks/ as executable *copies* (not symlinks)
 #   - ~/.claude/settings.json is a real host-owned file (not a symlink)
 #   - the forced subset (hooks/statusLine/deny/ask) is applied, referencing
@@ -53,6 +53,14 @@ assert_eq "$(jq -r '.permissions.ask | any(. == "Bash(gss push:*)")' "$A/.claude
 assert_eq "$(jq -r '.permissions.ask | any(. == "Bash(sudo:*)")' "$A/.claude/settings.json")" \
     "true" "genuinely dangerous verbs (sudo) stay in ask"
 assert_grep_negative "no repo-internal path in fresh settings" "git/dotfiles" "$A/.claude/settings.json"
+
+# --- memory provisioning (#134): account memories seeded into the per-machine
+# computed live slug dir; the index is regenerated. ---
+MEM_SLUG="$(printf '%s' "$(cd "$REPO_ROOT" && pwd -P)" | sed 's#/#-#g')"
+assert_file_exists "$A/.claude/projects/$MEM_SLUG/memory/gss-agent-cli-gotchas.md" \
+    "account memory provisioned into the computed live slug dir"
+assert_grep "provisioned MEMORY.md lists an account memory" "capture ids" \
+    "$A/.claude/projects/$MEM_SLUG/memory/MEMORY.md"
 
 # --- B: existing host with customizations + a stale repo-internal hook path ---
 mkdir -p "$B/.claude"

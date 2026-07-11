@@ -6,7 +6,7 @@
 
 
 # lets make sure we're doing this on a branch other than master
-branch_name="$(printf '%s' $(git branch -l 2>&1|grep '^*'|awk -F' ' '{print $2}'))"
+branch_name="$(git branch -l 2>&1|grep '^\*'|awk -F' ' '{print $2}')"
 if [ -z "${branch_name}" ] || [ "${branch_name}" = 'master' ] ; then
   echo "ERROR no branch found or the current branch is master, you need to use a branch for this command"
   exit 1

@@ -5,14 +5,15 @@ function install_zsh_centos7() {
     sudo yum install -y git make ncurses-devel gcc autoconf man
     git clone -b zsh-5.7.1 https://github.com/zsh-users/zsh.git /tmp/zsh
     (
-        cd /tmp/zsh
+        cd /tmp/zsh || exit 1
         ./Util/preconfig
         ./configure
         sudo make -j 20 install.bin install.modules install.fns
     )
 }
 
-export BASE_DIR="$(cd "$(dirname $0)" && pwd)"
+BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
+export BASE_DIR
 
 # --- Authenticate sudo up front -------------------------------------------
 # The rest of this installer runs several privileged steps (apt/yum installs,
@@ -91,34 +92,35 @@ if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
   fi
 fi
 
-for file in $(find "${BASE_DIR}/opt/profiles" -type f); do
+while IFS= read -r file; do
     filename=$(basename "$file")
     # Skip metadata and non-profile files
     [[ "$filename" == "Brewfile" ]] && continue
     [[ "$filename" == "packages.tsv" ]] && continue
     [[ "$filename" == "requirements.txt" ]] && continue
-    [[ "$filename" == "GEMINI.md" ]] && continue
+    [[ "$filename" == "AGENTS.md" ]] && continue
     [[ "$filename" == "CLAUDE.md" ]] && continue
-    
+
     echo "Creating symlink to $file in home directory."
     ln -sf "${file}" "${HOME}/${filename}"
-done
+done < <(find "${BASE_DIR}/opt/profiles" -type f)
 
 # force a few
 for file in ".profile" ".zshenv" ".zshrc" ".bash_logout" ".bashrc"; do
   ln -sf "${BASE_DIR}/opt/profiles/${file}" "${HOME}/${file}"
 done 
 
-# Shared skill sync — links every SKILL.md into BOTH ~/.agents/skills (Gemini)
-# and ~/.claude/skills (Claude). Single source of truth for both assistants.
+# Shared skill sync — links every SKILL.md into BOTH ~/.gemini/config/skills
+# (Antigravity) and ~/.claude/skills (Claude). Single source of truth for both
+# assistants.
 if [ -f "${BASE_DIR}/opt/scripts/system/sync-skills.sh" ]; then
     bash "${BASE_DIR}/opt/scripts/system/sync-skills.sh"
 fi
 
-# Gemini CLI Configuration (Policies, Commands, Aliases)
-if [ -f "${BASE_DIR}/opt/scripts/system/install_gemini_skills.sh" ]; then
-    # sync-skills handles the skill links now; this only does Gemini-specific config.
-    "${BASE_DIR}/opt/scripts/system/install_gemini_skills.sh"
+# Antigravity CLI Configuration (Hooks, Aliases, legacy Gemini cleanup)
+if [ -f "${BASE_DIR}/opt/scripts/system/install_antigravity_skills.sh" ]; then
+    # sync-skills handles the skill links now; this only does Antigravity-specific config.
+    "${BASE_DIR}/opt/scripts/system/install_antigravity_skills.sh"
 fi
 
 # Claude Code Configuration (Settings, Commands, Hooks, Aliases)
@@ -203,6 +205,15 @@ if [ -f "${BASE_DIR}/opt/scripts/system/install_yq.sh" ]; then
     "${BASE_DIR}/opt/scripts/system/install_yq.sh" || echo "WARNING: yq install reported problems; continuing."
 fi
 
+# Install the Snowflake CLI (`snow`). Replaces the old .zshrc daily-maintenance
+# pip auto-install, which broke on PEP 668 (externally-managed-environment)
+# systems. macOS uses the homebrew-core formula; Linux uses pipx so the system
+# Python is untouched.
+if [ -f "${BASE_DIR}/opt/scripts/system/install_snowflake_cli.sh" ]; then
+    echo "Installing snowflake-cli..."
+    "${BASE_DIR}/opt/scripts/system/install_snowflake_cli.sh" || echo "WARNING: snowflake-cli install reported problems; continuing."
+fi
+
 # only setup these scripts when docker is installed and responsive
 if command -v docker &> /dev/null; then
     # Setup docker permissions for the current use
@@ -247,7 +258,23 @@ fi
 # Falls back to "latest" only if .go-version is missing.
 export PATH="${HOME}/.goenv/bin:${PATH}"
 if command -v goenv &> /dev/null; then
-  eval "$(goenv init -)"
+  # Pass the shell to `goenv init` EXPLICITLY. Bare `goenv init -` infers the
+  # shell from $SHELL, so on a host whose login shell is zsh it emits zsh code
+  # (a `while IFS=: read -rA …` PATH loop) even though this script runs under
+  # bash — bash then errors `read: -A: invalid option`, the loop's `_NEW_PATH`
+  # stays empty, and `export PATH="$_NEW_PATH"` wipes PATH, after which every
+  # coreutil (tr, uname, git…) is "command not found" and the install collapses.
+  # `goenv init - bash` forces bash-safe output. The guard below is a belt-and-
+  # suspenders backstop: if any goenv build still drops the system bin dirs,
+  # restore a known-good PATH. See docs/mbo/specs/shell-portability.md.
+  __goenv_path_safe="${PATH}"
+  eval "$(goenv init - bash)"
+  case ":${PATH}:" in
+    *":/usr/bin:"*) : ;;                          # system PATH survived
+    *) PATH="${PATH}:${__goenv_path_safe}" ;;     # init clobbered PATH; restore
+  esac
+  export PATH
+  unset __goenv_path_safe
   if [ -f "${BASE_DIR}/.go-version" ]; then
     PINNED_GO_VERSION=$(tr -d '[:space:]' < "${BASE_DIR}/.go-version")
     echo "Ensuring Go ${PINNED_GO_VERSION} is installed (pinned via .go-version)..."
@@ -309,22 +336,29 @@ if [ ! -d "${HOME}/.nvm" ]; then
   curl -fsSL -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash > /dev/null 2>&1
 fi
 
-# install Gemini CLI
-if [ -f "${BASE_DIR}/opt/scripts/system/gemini_install.sh" ]; then
-    echo "Installing Gemini CLI..."
-    "${BASE_DIR}/opt/scripts/system/gemini_install.sh"
+# install Antigravity CLI (agy) — Gemini CLI's successor (Gemini CLI EOL 2026-06-18)
+if [ -f "${BASE_DIR}/opt/scripts/system/antigravity_install.sh" ]; then
+    echo "Installing Antigravity CLI..."
+    "${BASE_DIR}/opt/scripts/system/antigravity_install.sh"
 fi
 
-# Google CLI (Gemini & Workspace) Setup
+# Retired Gemini CLI leftovers: consent-based teardown (prompts when leftovers
+# are found; --keep marker suppresses the ask forever; no-op in CI/non-TTY).
+if [ -f "${BASE_DIR}/opt/scripts/system/gemini_teardown.sh" ]; then
+    "${BASE_DIR}/opt/scripts/system/gemini_teardown.sh" || echo "WARNING: gemini teardown reported problems; continuing."
+fi
+
+# Google CLI (Antigravity & Workspace) Setup
 if [ -f "${BASE_DIR}/opt/scripts/system/google-cli-setup.sh" ]; then
-    # This configures gws for BOTH Gemini CLI and Claude Code via shared skills.
-    echo "Setting up Google CLI (Gemini & Workspace)..."
+    # This configures gws for BOTH Antigravity CLI and Claude Code via shared skills.
+    echo "Setting up Google CLI (Antigravity & Workspace)..."
     "${BASE_DIR}/opt/scripts/system/google-cli-setup.sh"
 fi
 
-# Gemini settings + hooks are provisioned by install_gemini_skills.sh (called
-# above): ~/.gemini/settings.json is a host-owned file with the forced hook
-# subset merged in, and hooks are copied into ~/.gemini/hooks/. No symlink here.
+# Antigravity hooks are provisioned by install_antigravity_skills.sh (called
+# above): guard scripts are copied into ~/.gemini/config/hooks/ and the wiring
+# is rendered to ~/.gemini/config/hooks.json. agy owns its own settings file
+# (~/.gemini/antigravity-cli/settings.json) — nothing to merge or symlink here.
 
 # install Claude Code CLI (macOS via brew cask, Linux/WSL via npm)
 if [ -f "${BASE_DIR}/opt/scripts/system/claude_install.sh" ]; then
@@ -345,7 +379,7 @@ if [ -f "${BASE_DIR}/opt/scripts/system/sync-plugins.sh" ]; then
     "${BASE_DIR}/opt/scripts/system/sync-plugins.sh" || echo "WARNING: plugin sync reported problems; continuing."
 fi
 
-# Install AI teams: transform ai/teams personas into native agents for Claude, Gemini,
+# Install AI teams: transform ai/teams personas into native agents for Claude,
 # Antigravity, and Ollama. Runs after yq + the assistant configs. Validates the source
 # first; each tool emit degrades gracefully, so a teams problem never aborts bootstrap.
 if [ -f "${BASE_DIR}/opt/scripts/system/install_ai_teams.sh" ]; then
@@ -354,9 +388,9 @@ if [ -f "${BASE_DIR}/opt/scripts/system/install_ai_teams.sh" ]; then
 fi
 
 # build and install gss
-if [ -f "${BASE_DIR}/src/gss/build.sh" ]; then
+if [ -f "${BASE_DIR}/sdk/gss/build.sh" ]; then
     echo "Installing gss (dotfiles manager)..."
-    bash "${BASE_DIR}/src/gss/build.sh"
+    bash "${BASE_DIR}/sdk/gss/build.sh"
     if [ -f "${HOME}/opt/bin/gss" ]; then
         echo "--------------------------------------------------"
         "${HOME}/opt/bin/gss" version
@@ -365,9 +399,9 @@ if [ -f "${BASE_DIR}/src/gss/build.sh" ]; then
 fi
 
 # build and install tmux-mg
-if [ -f "${BASE_DIR}/src/tmux-mgr/build.sh" ]; then
+if [ -f "${BASE_DIR}/sdk/tmux-mgr/build.sh" ]; then
     echo "Installing tmux-mgr..."
-    bash "${BASE_DIR}/src/tmux-mgr/build.sh"
+    bash "${BASE_DIR}/sdk/tmux-mgr/build.sh"
     if [ -f "${HOME}/opt/bin/tmux-mgr" ]; then
         echo "--------------------------------------------------"
         "${HOME}/opt/bin/tmux-mgr" version
@@ -378,9 +412,9 @@ if [ -f "${BASE_DIR}/src/tmux-mgr/build.sh" ]; then
 fi
 
 # build and install wol
-if [ -f "${BASE_DIR}/src/wol/build.sh" ]; then
+if [ -f "${BASE_DIR}/sdk/wol/build.sh" ]; then
     echo "Installing wol (Wake-on-LAN utility)..."
-    bash "${BASE_DIR}/src/wol/build.sh"
+    bash "${BASE_DIR}/sdk/wol/build.sh"
     if [ -f "${HOME}/opt/bin/wol" ]; then
         echo "--------------------------------------------------"
         "${HOME}/opt/bin/wol" version
@@ -389,9 +423,9 @@ if [ -f "${BASE_DIR}/src/wol/build.sh" ]; then
 fi
 
 # build and install gsl
-if [ -f "${BASE_DIR}/src/gsl/build.sh" ]; then
+if [ -f "${BASE_DIR}/sdk/gsl/build.sh" ]; then
     echo "Installing gsl (Go status line)..."
-    bash "${BASE_DIR}/src/gsl/build.sh"
+    bash "${BASE_DIR}/sdk/gsl/build.sh"
     if [ -f "${HOME}/opt/bin/gsl" ]; then
         echo "--------------------------------------------------"
         "${HOME}/opt/bin/gsl" version
@@ -402,8 +436,8 @@ fi
 # Configure the Nerd Font (MesloLGS Nerd Font) used by gsl's powerline style.
 # Runs AFTER the gsl build so both the gsl skill files (linked by sync-skills
 # above) and the freshly-built ~/opt/bin/gsl exist. OS-dispatch to the
-# gsl-packaged installers under src/gsl/scripts/.
-GSL_FONT_SCRIPTS="${BASE_DIR}/src/gsl/scripts"
+# gsl-packaged installers under sdk/gsl/scripts/.
+GSL_FONT_SCRIPTS="${BASE_DIR}/sdk/gsl/scripts"
 case "$(uname -s)" in
   Darwin)
     if [ -f "${GSL_FONT_SCRIPTS}/install_nerd_font_macos.sh" ]; then
@@ -440,7 +474,7 @@ if [ -f "${HOME}/.sshd.env" ]; then
 fi
 
 if [ -f "${HOME}/.gitrepos" ] ; then
-  cd "${HOME}"
+  cd "${HOME}" || exit 1
   "${HOME}/.gitrepos"
 fi
 

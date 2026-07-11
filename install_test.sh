@@ -45,9 +45,11 @@ BAD_CD=$(grep -nE '(^|[[:space:](])cd[[:space:]]+/' "$INSTALL" \
     || true)
 assert_eq "$BAD_CD" "" "every absolute cd uses \$HOME / \$BASE_DIR / /tmp"
 
-# BASE_DIR is exported (so child scripts can reuse it).
+# BASE_DIR is exported (so child scripts can reuse it). Accept both the
+# combined `export BASE_DIR=...` and the SC2155-safe split form
+# (`BASE_DIR=...` then `export BASE_DIR` on its own line).
 assert_grep "BASE_DIR is exported" \
-    '^export[[:space:]]+BASE_DIR=' "$INSTALL"
+    '^export[[:space:]]+BASE_DIR([[:space:]]|=|$)' "$INSTALL"
 
 # === 3. Idempotency shape ===
 # An installer that re-runs cleanly must guard symlink creation: the
@@ -64,16 +66,18 @@ assert_grep "symlink idempotency guard present" \
 NAKED_LN_S=$(grep -nE '(^|[[:space:]])ln[[:space:]]+-s[[:space:]]+[^f]' "$INSTALL" || true)
 assert_eq "$NAKED_LN_S" "" "no naked 'ln -s' (need -sf for idempotency)"
 
-# Existing-file backup pattern: when ~/.claude or ~/.gemini settings.json
-# exists as a real file, the installer backs it up before applying the
-# forced-field merge, so re-running is safe on a machine with pre-existing
-# config. Settings provisioning now lives in the per-tool skill installers
-# (install.sh delegates to them), so assert the guard there.
+# Existing-file backup pattern: when ~/.claude settings.json exists as a
+# real file, the installer backs it up before applying the forced-field
+# merge, so re-running is safe on a machine with pre-existing config.
+# Settings provisioning lives in the per-tool skill installers (install.sh
+# delegates to them), so assert the guard there. Antigravity needs no such
+# guard: agy owns its settings file and we only render hooks.json (wholly
+# repo-owned) — but its aliases link must keep the backup pattern.
 CLAUDE_SKILLS="${SELF_DIR}/opt/scripts/system/install_claude_skills.sh"
-GEMINI_SKILLS="${SELF_DIR}/opt/scripts/system/install_gemini_skills.sh"
+ANTIGRAVITY_SKILLS="${SELF_DIR}/opt/scripts/system/install_antigravity_skills.sh"
 assert_grep "claude settings backup-on-conflict guard present" \
     'settings\.json\.bak' "$CLAUDE_SKILLS"
-assert_grep "gemini settings backup-on-conflict guard present" \
-    'settings\.json\.bak' "$GEMINI_SKILLS"
+assert_grep "antigravity aliases backup-on-conflict guard present" \
+    'aliases\.sh\.bak' "$ANTIGRAVITY_SKILLS"
 
 _test_report

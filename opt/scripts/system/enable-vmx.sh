@@ -1,4 +1,5 @@
-#!/bin/sh -e 
+#!/usr/bin/env bash
+set -e
 C_ROOT=''
 C_KERNEL=''
 ##
@@ -70,7 +71,8 @@ sleep 3 && echo
 echo "## 4.Edit the config files and add 'disablevmx=off' to the config line"
 if grep --color disablevmx=off vmxoff-config$C_KERNEL.txt ; then echo; error 1 "*** Kernel already modified - exiting"; fi 
 echo -n "Editing vmxoff-config$C_KERNEL.txt to append = "
-sed -i -e 's/$/ disablevmx=off lsm.module_locking=0/' vmxoff-config$C_KERNEL.txt || ( echo; error 2 "*** Couldn't edit config file" )
+# sed -i.bak (suffix attached) is in-place on both GNU and BSD; remove the backup.
+sed -i.bak -e 's/$/ disablevmx=off lsm.module_locking=0/' vmxoff-config$C_KERNEL.txt && rm -f vmxoff-config$C_KERNEL.txt.bak || ( echo; error 2 "*** Couldn't edit config file" )
 echo "disablevmx=off"
 sleep 3 && echo
 
@@ -96,7 +98,7 @@ sleep 3 && echo
 ## 7.If verifying works, then it should just be a matter of:
 echo "## 7.If verifying works, then it should just be a matter of:"
 echo "Copying modified kernel back to = ${ROOTDEVICEPREFIX}$C_KERNEL"
-echo -n "[ press ENTER to continue - Ctrl-C to abort ] "; read DOIT
+echo -n "[ press ENTER to continue - Ctrl-C to abort ] "; read -r _
 sudo dd if=repacked$C_KERNEL of=${ROOTDEVICEPREFIX}$C_KERNEL || ( echo; error 2 "*** Couldn't create new kernel" )
 sleep 3 && echo
 
@@ -104,6 +106,6 @@ sleep 3 && echo
 ## 8.reboot, and enjoy VT-x extensions
 echo "## 8.reboot, and enjoy VT-x extensions"
 echo "All done - rebooting..."
-echo -n "[ press ENTER to continue - Ctrl-C to abort ] "; read DOIT
+echo -n "[ press ENTER to continue - Ctrl-C to abort ] "; read -r _
 sudo reboot
 exit

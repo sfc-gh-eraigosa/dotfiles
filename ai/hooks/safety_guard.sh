@@ -1,14 +1,14 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # safety_guard.sh — AI Agent PreToolUse / BeforeTool hook
 #
 # Enforces regex-based safety rules that the prefix-only permission DSL in
-# assistant settings cannot express. Mirrors the rule set from
-# ai/gemini/policies/safety.toml.
+# assistant settings cannot express. Single source of truth for the shared
+# rule set (Claude Code natively; Antigravity CLI via antigravity_adapter.sh).
 #
 # Contract:
 #   - stdin: JSON {tool_name, tool_input}
-#   - exit 0: allow (Gemini: outputs JSON; Claude: no output)
-#   - exit 2: block (Gemini: use stderr; Claude: use stderr)
+#   - exit 0: allow (run_shell_command dialect: outputs JSON; Claude: no output)
+#   - exit 2: block (stderr carries the reason for both dialects)
 #   - other non-zero: non-blocking error
 #
 # Dependencies: jq, bash 3.2+
@@ -49,6 +49,16 @@ deny() {
     printf 'BLOCKED by safety_guard: %s\n' "$1" >&2
     printf 'Command: %s\n' "$CMD" >&2
     exit 2
+}
+
+ask() {
+    # Confirmation tier (mirrors the retired Gemini safety.toml ask_user
+    # rules). Exit 3: antigravity_adapter.sh maps it to {"decision": "ask"}
+    # so agy prompts the user; Claude Code treats any non-0/2 exit as a
+    # non-blocking warning (its own permission system still applies).
+    printf 'CONFIRM (safety_guard): %s\n' "$1" >&2
+    printf 'Command: %s\n' "$CMD" >&2
+    exit 3
 }
 
 # Pattern note: bash regex `.*` matches newlines and command separators (; | &),
@@ -110,6 +120,26 @@ fi
 # Match: chmod -R <anything> / (with / as the last meaningful arg)
 if [[ "$CMD_SCRUBBED" =~ (chmod|chown)[[:space:]]+(-[a-zA-Z]*R[a-zA-Z]*|--recursive)([[:space:]]+[^/[:space:]][^[:space:]]*)*[[:space:]]+/([[:space:]]|$) ]]; then
     deny "Recursive permission/ownership change on the root filesystem is prohibited."
+fi
+
+# --- 5b. System power state (confirmation tier) ---
+# Carried over from the retired Gemini safety.toml ask_user rule: a mid-task
+# reboot/shutdown kills tmux sessions and every in-flight worktree agent.
+# CMD_START anchors the keyword to command position (start of line or right
+# after a separator) so arguments like `echo reboot required` don't trip it.
+CMD_START='(^[[:space:]]*|[;&|][[:space:]]*)'
+if [[ "$CMD_SCRUBBED" =~ ${CMD_START}(sudo[[:space:]]+)?(shutdown|reboot|poweroff|halt)([[:space:]]|$) ]] \
+   || [[ "$CMD_SCRUBBED" =~ ${CMD_START}(sudo[[:space:]]+)?init[[:space:]]+[06]([[:space:]]|$) ]] \
+   || [[ "$CMD_SCRUBBED" =~ ${CMD_START}(sudo[[:space:]]+)?systemctl[[:space:]]+(reboot|poweroff|halt|suspend|hibernate)([[:space:]]|$) ]]; then
+    ask "System power-state change requires explicit confirmation."
+fi
+
+# --- 5c. Force push (confirmation tier) ---
+# Carried over from the retired Gemini safety.toml ask_user rule. Covers -f,
+# --force, and --force-with-lease on raw `git push` — gss's own force pushes
+# run inside the gss binary and never pass through assistant hooks.
+if [[ "$CMD_SCRUBBED" =~ ${CMD_START}git[[:space:]]+${SAFE_CHARS}*push${SAFE_CHARS}*[[:space:]](-f|--force(-with-lease(=[^[:space:]]*)?)?)([[:space:]]|$) ]]; then
+    ask "Force push rewrites remote history and requires explicit confirmation."
 fi
 
 # --- 6. Fork bomb ---

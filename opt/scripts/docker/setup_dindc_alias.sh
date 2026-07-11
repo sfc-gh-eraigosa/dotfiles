@@ -25,7 +25,7 @@ SCRIPT_NAME=.dindcenv
 ALIAS_ENV_SCRIPT="$HOME/$SCRIPT_NAME"
 
 # VERIFY THAT docker is installed
-docker --version 2>&1 >/dev/null
+docker --version >/dev/null 2>&1
 DOCKER_IS_AVAILABLE=$?
 if [ $DOCKER_IS_AVAILABLE -eq 0 ]; then
     docker --version

@@ -47,12 +47,12 @@ assert_eq "$INSTALL_COUNT" "13" "plans install for all 13 plugins"
 ENABLE_COUNT="$(printf '%s' "$OUT" | grep -c 'DRY-RUN: claude plugin enable ')"
 assert_eq "$ENABLE_COUNT" "13" "plans enable for all 13 plugins"
 
-GEMINI_COUNT="$(printf '%s' "$OUT" | grep -c 'DRY-RUN: gemini extensions install ')"
-assert_eq "$GEMINI_COUNT" "7" "plans install for all 7 gemini extension sources"
+AGY_COUNT="$(printf '%s' "$OUT" | grep -c 'DRY-RUN: agy plugin install ')"
+assert_eq "$AGY_COUNT" "7" "plans install for all 7 antigravity plugin sources"
 
 # --- Behavioral: idempotent skip + no-hang (hermetic, fake CLIs on PATH) -------
-# Real `yq` still resolves (the fakes only shadow claude/gemini), so the manifest
-# is parsed for real. The fake gemini reports superpowers as already installed and
+# Real `yq` still resolves (the fakes only shadow claude/agy), so the manifest
+# is parsed for real. The fake agy reports superpowers as already installed and
 # reads stdin on install — if install.sh ever attached an interactive stdin the
 # read would block and this test would hang, so completing here is itself the
 # hang-guard assertion.
@@ -61,22 +61,22 @@ cat > "$FAKE_BIN/claude" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
-cat > "$FAKE_BIN/gemini" <<'EOF'
+cat > "$FAKE_BIN/agy" <<'EOF'
 #!/usr/bin/env bash
-if [ "$1 $2" = "extensions list" ]; then
-    echo "✓ superpowers (5.1.0)" >&2   # real gemini prints the list to stderr
-elif [ "$1 $2" = "extensions install" ]; then
+if [ "$1 $2" = "plugin list" ]; then
+    echo "superpowers (1.0.0)"
+elif [ "$1 $2" = "plugin install" ]; then
     IFS= read -r _ </dev/stdin 2>/dev/null || true   # must hit EOF, never block
     case "$3" in
-        # Simulate a source whose extension name differs from its repo basename
+        # Simulate a source whose plugin name differs from its repo basename
         # and is already installed: the name pre-skip cannot catch it, so the
         # install path must treat "already installed" as a quiet skip.
         *gemini-agent-creator*)
-            echo 'Extension "agent-creator" is already installed. Please uninstall it first.' >&2
+            echo 'Plugin "agent-creator" is already installed. Please uninstall it first.' >&2
             exit 1 ;;
-        # FAKE_HANG=1 makes this source mimic the real gemini CLI: ignore SIGTERM
-        # and refuse to die, so only the timeout's -k SIGKILL escalation can stop
-        # it. Off by default so the idempotency run (OUT2) stays fast.
+        # FAKE_HANG=1 makes this source mimic a SIGTERM-ignoring CLI: refuse to
+        # die, so only the timeout's -k SIGKILL escalation can stop it. Off by
+        # default so the idempotency run (OUT2) stays fast.
         *mcp-toolbox*)
             if [ "${FAKE_HANG:-0}" = "1" ]; then
                 trap '' TERM
@@ -87,10 +87,10 @@ elif [ "$1 $2" = "extensions install" ]; then
     esac
 fi
 EOF
-chmod +x "$FAKE_BIN/claude" "$FAKE_BIN/gemini"
+chmod +x "$FAKE_BIN/claude" "$FAKE_BIN/agy"
 OUT2="$(PATH="$FAKE_BIN:$PATH" bash "$SYNC" 2>&1)"
 
-assert_contains "$OUT2" "(superpowers already installed)" "skips an already-installed gemini extension"
+assert_contains "$OUT2" "(superpowers already installed)" "skips an already-installed antigravity plugin"
 CR_INSTALLS="$(printf '%s' "$OUT2" | grep -c 'INSTALL_CALLED https://github.com/gemini-cli-extensions/code-review')"
 assert_eq "$CR_INSTALLS" "1" "installs the duplicated code-review source only once"
 SP_INSTALLS="$(printf '%s' "$OUT2" | grep -c 'INSTALL_CALLED https://github.com/obra/superpowers')"
@@ -99,10 +99,10 @@ assert_eq "$SP_INSTALLS" "0" "does not reinstall the already-installed superpowe
 # Name-mismatch source (repo basename != extension name) that is already
 # installed: must be reported as a quiet skip, never a WARNING.
 assert_contains "$OUT2" "(https://github.com/jduncan-rva/gemini-agent-creator already installed)" "treats name-mismatched 'already installed' as a quiet skip"
-assert_not_contains "$OUT2" "WARNING — gemini install https://github.com/jduncan-rva/gemini-agent-creator" "does not warn on a name-mismatched already-installed extension"
+assert_not_contains "$OUT2" "WARNING — agy install https://github.com/jduncan-rva/gemini-agent-creator" "does not warn on a name-mismatched already-installed plugin"
 
 # --- Behavioral: timeout actually kills a SIGTERM-ignoring install (-k) --------
-# The gemini CLI ignores SIGTERM, so a plain `timeout N` would wait forever. With
+# A SIGTERM-ignoring CLI would make a plain `timeout N` wait forever. With
 # FAKE_HANG=1 the mcp-toolbox fake ignores SIGTERM too. A short timeout (2s) + kill
 # grace (2s) must SIGKILL it. The outer `timeout 40` is the test's own backstop:
 # if -k were missing the inner run would hang and this would exit 124, failing the
@@ -115,7 +115,7 @@ assert_eq "$T3RC" "0" "sync completes (no hang) when an install ignores SIGTERM"
 assert_contains "$OUT3" "timed out after 2s" "escalates to SIGKILL on a SIGTERM-ignoring install"
 
 # --- Behavioral: plugin calls run under setsid (no controlling terminal) -------
-# The real claude/gemini plugin subcommands open /dev/tty directly and render an
+# The real claude/agy plugin subcommands open /dev/tty directly and render an
 # interactive TUI when a controlling terminal is present — bypassing the
 # </dev/null stdin guard and wedging the unattended installer (observed as a
 # job-control-stopped `claude`). sync-plugins must run them under `setsid` so the
@@ -133,12 +133,12 @@ cat > "$GUARD_BIN/claude" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
-cat > "$GUARD_BIN/gemini" <<'EOF'
+cat > "$GUARD_BIN/agy" <<'EOF'
 #!/usr/bin/env bash
-[ "$1 $2" = "extensions list" ] && exit 0
+[ "$1 $2" = "plugin list" ] && exit 0
 exit 0
 EOF
-chmod +x "$GUARD_BIN/setsid" "$GUARD_BIN/claude" "$GUARD_BIN/gemini"
+chmod +x "$GUARD_BIN/setsid" "$GUARD_BIN/claude" "$GUARD_BIN/agy"
 GUARDOUT="$(PATH="$GUARD_BIN:$PATH" bash "$SYNC" 2>&1)"
 rm -rf "$GUARD_BIN"
 assert_contains "$GUARDOUT" "SETSID_USED" "runs plugin commands under setsid to detach the controlling terminal"
@@ -162,11 +162,11 @@ else
 fi
 exit 0
 EOF
-    cat > "$TTY_BIN/gemini" <<'EOF'
+    cat > "$TTY_BIN/agy" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
-    chmod +x "$TTY_BIN/claude" "$TTY_BIN/gemini"
+    chmod +x "$TTY_BIN/claude" "$TTY_BIN/agy"
     # Short per-call timeout bounds the pre-fix blocking case; outer `timeout 60`
     # backstops the whole pty run so a regression fails loudly instead of wedging.
     TTYOUT="$(SYNC_PLUGINS_TIMEOUT=3 SYNC_PLUGINS_KILL_GRACE=2 PATH="$TTY_BIN:$PATH" \
@@ -176,6 +176,46 @@ EOF
     assert_eq "$TTYRC" "0" "sync completes under a pty when the CLI would grab /dev/tty"
     assert_contains "$TTYOUT" "headless-ok" "setsid detaches the controlling terminal so claude runs headless"
 fi
+
+# --- Behavioral: macOS keg-only util-linux setsid is discovered via brew -------
+# On macOS `command -v setsid` fails (no native setsid), so sync-plugins must
+# probe Homebrew's keg-only util-linux (`brew --prefix util-linux`) — otherwise
+# the detach guard no-ops and a fresh `claude plugin install` hangs on /dev/tty.
+# Simulate macOS: a curated PATH with NO setsid, a fake `brew` whose
+# `--prefix util-linux` points at a keg holding a fake setsid, and fake CLIs.
+# Assert the keg setsid actually gets invoked.
+KEG_ROOT="$(mktemp -d)"
+mkdir -p "$KEG_ROOT/bin"
+cat > "$KEG_ROOT/bin/setsid" <<'EOF'
+#!/usr/bin/env bash
+echo "KEG_SETSID_USED" >&2
+[ "$1" = "-w" ] && shift   # sync-plugins passes -w; then exec the rest
+exec "$@"
+EOF
+chmod +x "$KEG_ROOT/bin/setsid"
+KEGBIN="$(mktemp -d)"
+# Curated PATH: symlink the real tools sync-plugins needs, but deliberately NOT
+# setsid (so the keg probe is exercised) and NOT timeout (so GUARD = setsid only).
+for _t in bash sh env yq grep egrep awk sed tr cat head cut sort uniq dirname basename readlink mktemp; do
+    _src="$(command -v "$_t" 2>/dev/null)" && ln -s "$_src" "$KEGBIN/$_t" 2>/dev/null
+done
+cat > "$KEGBIN/brew" <<EOF
+#!/usr/bin/env bash
+[ "\$1" = "--prefix" ] && [ "\$2" = "util-linux" ] && { printf '%s\n' "$KEG_ROOT"; exit 0; }
+exit 0
+EOF
+cat > "$KEGBIN/claude" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+cat > "$KEGBIN/agy" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$KEGBIN/brew" "$KEGBIN/claude" "$KEGBIN/agy"
+KEGOUT="$(PATH="$KEGBIN" bash "$SYNC" 2>&1 || true)"
+rm -rf "$KEGBIN" "$KEG_ROOT"
+assert_contains "$KEGOUT" "KEG_SETSID_USED" "discovers keg-only util-linux setsid via 'brew --prefix' when setsid is off PATH (macOS)"
 
 echo "----"
 echo "PASS=$PASS FAIL=$FAIL"

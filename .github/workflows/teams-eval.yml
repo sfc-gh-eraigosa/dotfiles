@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install yq (mikefarah)
         run: |
@@ -45,9 +45,9 @@ jobs:
           bash ai/teams/gen-index.sh
           git diff --exit-code -- \
             ai/teams/INDEX.md \
-            'ai/teams/**/GEMINI.md' \
+            'ai/teams/**/AGENTS.md' \
             ai/claude/commands/team.md \
-            ai/gemini/commands/team.toml
+            ai/skills/team/SKILL.md
 
   # route-eval:
   #   name: Route eval gate (>=90%)
@@ -58,7 +58,7 @@ jobs:
   #     GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
   #   steps:
   #     - name: Checkout
-  #       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+  #       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
   #     - name: Install yq (mikefarah)
   #       run: |
@@ -77,14 +77,14 @@ jobs:
   #         fi
   #         exit "$rc"
 
-  #     - name: Route eval (gemini runner, threshold 90)
+  #     - name: Route eval (agy runner, threshold 90)
   #       run: |
   #         set +e
-  #         bash ai/teams/eval/route-eval.sh --runner gemini --threshold 90
+  #         bash ai/teams/eval/route-eval.sh --runner agy --threshold 90
   #         rc=$?
   #         set -e
   #         if [ "$rc" -eq 77 ]; then
-  #           echo "::notice title=route-eval (gemini)::SKIPPED — no model credentials (exit 77), treating as neutral."
+  #           echo "::notice title=route-eval (agy)::SKIPPED — no model credentials (exit 77), treating as neutral."
   #           exit 0
   #         fi
   #         exit "$rc"

@@ -13,8 +13,8 @@ help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: bin
-bin: ## Rebuild all binaries in ./src
-	@for d in src/*; do \
+bin: ## Rebuild all binaries in ./sdk
+	@for d in sdk/*; do \
 		if [ -f "$$d/build.sh" ]; then \
 			echo "Building $$d..."; \
 			bash "$$d/build.sh"; \
@@ -51,6 +51,14 @@ claude-test: ## Run Claude Code sanity check (CLI, links, hooks, 27-case hook te
 claude-hook-test: ## Run safety_guard hook test suite only
 	./ai/hooks/safety_guard_test.sh
 
+.PHONY: skill-evals
+skill-evals: ## Validate agent-skill eval corpora (ai/skills/*/evals/evals.json) deterministically
+	./opt/scripts/system/skill-eval.sh --check
+
+.PHONY: sdk-bump
+sdk-bump: ## Report sdk/<tool> modules whose source changed since their last tag (conventional-commit semver). Read-only; CI applies the bump on merge.
+	./opt/scripts/system/bump-sdk-version.sh --check
+
 # -----------------------------------------------------------------------------
 # Lint targets (issue #46 phase 1)
 # -----------------------------------------------------------------------------
@@ -65,18 +73,33 @@ claude-hook-test: ## Run safety_guard hook test suite only
 # -----------------------------------------------------------------------------
 
 .PHONY: lint
-lint: lint-go lint-shell lint-markdown ## Run all linters (go, shell, markdown)
+lint: check-legacy-paths lint-go lint-shell lint-markdown ## Run all linters (go, shell, markdown)
 
+
+.PHONY: check-legacy-paths
+check-legacy-paths: ## Fail if a legacy Go module path or src/<tool> reappears (Go lives in sdk/)
+	@echo "==> checking for legacy Go module paths (must be 0)..."
+	@if grep -rInE 'github\.com/(wenlock|eraigosa)/dotfiles' \
+		--include='*.go' --include='go.mod' --include='build.sh' --exclude-dir=.git . ; then \
+		echo "ERROR: legacy module path in Go source — use github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>"; \
+		exit 1; \
+	fi
+	@for t in gss gsl wol tmux-mgr; do \
+		if [ -e "src/$$t/go.mod" ]; then \
+			echo "ERROR: Go module src/$$t exists — Go modules live in sdk/"; exit 1; \
+		fi; \
+	done
+	@echo "OK: no legacy Go module paths; no Go modules under src/"
 .PHONY: lint-go
 lint-go: ## Lint Go modules (gofmt + golangci-lint, per-module)
-	@echo "==> gofmt check across src/..."
-	@unformatted=$$(gofmt -l ./src 2>/dev/null); \
+	@echo "==> gofmt check across sdk/..."
+	@unformatted=$$(gofmt -l ./sdk 2>/dev/null); \
 		if [ -n "$$unformatted" ]; then \
 			echo "gofmt found unformatted files:"; \
 			echo "$$unformatted"; \
 			exit 1; \
 		fi
-	@for d in src/*; do \
+	@for d in sdk/*; do \
 		if [ -f "$$d/go.mod" ]; then \
 			echo "==> golangci-lint run ($$d)"; \
 			(cd "$$d" && golangci-lint run ./...) || exit 1; \
@@ -85,7 +108,7 @@ lint-go: ## Lint Go modules (gofmt + golangci-lint, per-module)
 
 .PHONY: lint-shell
 lint-shell: ## Lint shell scripts with shellcheck
-	@echo "==> shellcheck (opt/scripts, ai, opt/profiles, install.sh)"
+	@echo "==> shellcheck (all *.sh files)"
 	# Phase 5 (issue #46) extended the scope to opt/profiles/ so the
 	# user-facing shell entrypoints (.bashrc, .profile, .bash_aliases,
 	# .docker.sh, .goenv.sh, .nano_profile, .xsessionrc, .bash_logout)
@@ -100,10 +123,33 @@ lint-shell: ## Lint shell scripts with shellcheck
 	# fail the whole job regardless of `-S warning`. Zsh-specific linting
 	# would need a different tool (zsh-syntax-check or `zsh -n`); see
 	# .ci-baseline-issues.md for the deferred-work note.
-	@files=$$(find opt/scripts ai -name '*.sh' -type f 2>/dev/null) ; \
+	#
+	# Phase 8 (issue #46 / shell-portability) extended coverage to sdk/**,
+	# src/**, and opt/bin/** to close the gap on ~17 previously-unlinted
+	# scripts (build.sh, test helpers, setup scripts, utilities).
+	#
+	# This target is STRICT — it exits non-zero on any finding (shellcheck
+	# -S warning returns non-zero even for warnings) — so do not add `|| true`.
+	# The shellcheck backlog has been driven to ZERO, and the shell-lint.yml
+	# workflow now runs this WITHOUT continue-on-error: a new shellcheck warning
+	# is a hard CI failure. Genuinely-intentional patterns carry an inline
+	# `# shellcheck disable=SCxxxx # <reason>`. (docker-image.yml's broader
+	# `make lint` may still be warn-only for its own non-shell backlog.)
+	@files=$$(find opt/scripts ai sdk src opt/bin -name '*.sh' -type f ! -path '*/.*' ! -path '*/opt/google-cloud-sdk/*' 2>/dev/null) ; \
 		profile_dotfiles="opt/profiles/.bashrc opt/profiles/.profile opt/profiles/.bash_aliases opt/profiles/.bash_logout opt/profiles/.docker.sh opt/profiles/.goenv.sh opt/profiles/.nano_profile opt/profiles/.xsessionrc" ; \
 		profile_sh=$$(find opt/profiles -maxdepth 1 -name '*.sh' -type f 2>/dev/null) ; \
 		shellcheck -x -S warning install.sh $$files $$profile_sh $$profile_dotfiles
+
+# Cross-shell / cross-OS portability scan. Catches the class that shellcheck
+# and `bash -n` MISS: dash (/bin/sh) parse breakage — the Raspberry Pi LightDM
+# login-loop class — and macOS BSD-coreutil / bash-3.2 hazards. ENFORCING:
+# `--strict` exits non-zero on any Tier 1 (POSIX breakage) or Tier 2 (macOS
+# hazard) finding, so a newly introduced non-portable script fails CI. The
+# backlog is at zero (see docs/mbo/specs/shell-portability.md); to exempt a
+# reviewed line add a trailing `# portability-ok: <reason>` comment.
+.PHONY: lint-portability
+lint-portability: ## Cross-shell/OS portability scan (dash + macOS) — ENFORCING
+	@opt/scripts/system/shell-portability-scan.sh --strict
 
 .PHONY: lint-markdown
 lint-markdown: ## Lint markdown files with markdownlint-cli2

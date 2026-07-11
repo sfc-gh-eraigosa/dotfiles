@@ -1,0 +1,108 @@
+name: SDK auto-bump
+
+# Closes the "stale VERSION ships nothing" gap (issue #139): when SDK module
+# SOURCE lands on main without a matching VERSION bump, this workflow computes
+# the next semver from conventional-commit subjects (via the tested helper
+# opt/scripts/system/bump-sdk-version.sh), writes the VERSION file(s), commits
+# the bump to main, and CUTS THE TAGS ITSELF.
+#
+# Why cut tags here instead of letting the existing tag-sdk-modules.yml do it:
+# a push made with the default GITHUB_TOKEN does NOT trigger further workflow
+# runs (a documented GitHub Actions guard against recursion). So the bot's
+# VERSION commit would never trigger tag-sdk-modules.yml — the tag would never
+# appear. Creating the tag in this same job is the simplest robust fix.
+# tag-sdk-modules.yml remains the idempotent path for a human VERSION bump
+# landed via a normal PR (e.g. the manual gss 0.1.0 -> 0.2.0 in #139), where a
+# real user push DOES trigger it.
+#
+# Recursion terminates two ways: (1) the trigger paths below EXCLUDE the VERSION
+# file, so the bot's VERSION-only commit does not re-trigger this workflow; and
+# (2) the helper is idempotent — on any re-run it computes the same version,
+# sees VERSION already equals it, writes nothing, and the "nothing to commit"
+# guard exits before pushing.
+#
+# Tags are ANNOTATED but UNSIGNED — CI signing + an `sdk/<tool>/v*` tag-protection
+# ruleset remain Phase-0 follow-ups (see docs/mbo/plans/2026-06-04-sdk-migration-plan.md, D4).
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'sdk/**/*.go'
+      - 'sdk/**/go.mod'
+      - 'sdk/**/go.sum'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sdk-auto-bump
+  cancel-in-progress: false
+
+jobs:
+  bump-and-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history + tags)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Compute, write, commit and tag SDK version bumps
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          set -euo pipefail
+
+          # 1. Apply conventional-commit-derived bumps to sdk/*/VERSION.
+          #    Idempotent: a no-op when every module is already at its computed
+          #    version (this is what breaks the re-run loop).
+          bash opt/scripts/system/bump-sdk-version.sh --write
+
+          # 2. Nothing changed -> no release to cut. Exit cleanly.
+          if git diff --quiet -- 'sdk/*/VERSION'; then
+            echo "No VERSION changes — nothing to release."
+            exit 0
+          fi
+
+          echo "VERSION changes detected:"
+          git --no-pager diff -- 'sdk/*/VERSION'
+
+          # 3. Commit the bump and push it to main. A rejected push (e.g. branch
+          #    protection blocking the bot) fails the job LOUDLY rather than
+          #    silently dropping the release — the repo owner must allow
+          #    github-actions[bot] to push to main, or relax the protection.
+          git add -- sdk/*/VERSION
+          git commit -m "chore(sdk): auto-bump VERSION from conventional commits [auto]"
+          if ! git push origin "HEAD:${GITHUB_REF_NAME:-main}"; then
+            echo "::error::Failed to push the VERSION bump to main. Allow github-actions[bot] to push to the protected branch (or add a bypass) and re-run." >&2
+            exit 1
+          fi
+
+          # 4. Cut the per-module tags ourselves (the GITHUB_TOKEN push above will
+          #    NOT trigger tag-sdk-modules.yml). Idempotent: skip any tag that
+          #    already exists — identical logic to tag-sdk-modules.yml.
+          created=0
+          for vf in sdk/*/VERSION; do
+            [ -f "$vf" ] || continue
+            dir="$(dirname "$vf")"
+            tool="$(basename "$dir")"
+            [ -f "$dir/go.mod" ] || { echo "skip $tool: no go.mod"; continue; }
+            ver="$(tr -d ' \t\r\n' < "$vf")"
+            [ -n "$ver" ] || { echo "skip $tool: empty VERSION"; continue; }
+            ver="${ver#v}"
+            tag="sdk/${tool}/v${ver}"
+            if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+              echo "exists: ${tag}"
+            else
+              echo "creating: ${tag}"
+              git tag -a "${tag}" -m "Release ${tool} v${ver}"
+              git push origin "refs/tags/${tag}"
+              created=$((created + 1))
+            fi
+          done
+          echo "tags created this run: ${created}"

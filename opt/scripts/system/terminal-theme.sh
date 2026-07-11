@@ -1,7 +1,7 @@
 #!/bin/bash
 # for chrome in console
 # prefs.js
-if [[ GEN_PREFS = "true" ]] ; then
+if [[ "${GEN_PREFS:-}" = "true" ]] ; then
 cat > prefs.js << PREFS_JS
 // Disable bold. 
 term_.prefs_.set('enable-bold', false) 

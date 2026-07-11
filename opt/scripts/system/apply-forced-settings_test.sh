@@ -2,7 +2,7 @@
 # Test driver for apply-forced-settings.sh — the forced-field settings merge.
 #
 # Verifies the core guarantee of the AI-config provisioning design
-# (docs/designs/2026-06-02-ai-config-home-provisioning.md §7, D2):
+# (docs/mbo/designs/2026-06-02-ai-config-home-provisioning.md §7, D2):
 #   forced fields are applied from the repo; undeclared host fields are
 #   preserved; bad input fails loud without clobbering the host file.
 set -u
@@ -83,7 +83,7 @@ cat > "$tmp/host5.json" <<'JSON'
 { "theme": "x" }
 JSON
 cat > "$tmp/forced5.json" <<'JSON'
-{ "_comment": "explains $GEMINI_PROJECT_DIR and why we avoid it", "statusLine": { "type": "command", "command": "bash ~/.claude/statusline-command.sh" } }
+{ "_comment": "explains why hooks use well-known $HOME paths", "statusLine": { "type": "command", "command": "bash ~/.claude/statusline-command.sh" } }
 JSON
 bash "$APPLY" "$tmp/host5.json" "$tmp/forced5.json"
 assert_eq "$(jq -r 'has("_comment")' "$tmp/host5.json")" "false" "forced _comment doc key not merged into live settings"

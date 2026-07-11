@@ -18,7 +18,7 @@ ok()  { :; }
 
 ALLOWED_TIERS="fast standard think deep-think"
 ALLOWED_COLORS="red blue green yellow purple orange pink cyan"
-TOOLS="claude gemini antigravity ollama"
+TOOLS="claude antigravity ollama"
 
 # frontmatter helpers (mirror install_ai_teams.sh)
 _fm_end() { grep -n '^---[[:space:]]*$' "$1" | sed -n '2p' | cut -d: -f1; }

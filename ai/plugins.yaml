@@ -1,14 +1,18 @@
 # AI-assistant plugins/extensions — source of truth.
 # Human reference (summary + first-usage examples): docs/ai-plugins.md
-# Design: docs/plans/ai-plugin-manifest.md
+# Design: docs/mbo/plans/ai-plugin-manifest.md
 #
 # Ensure-only (additive): opt/scripts/system/sync-plugins.sh installs + enables
 # what's listed here; it never removes anything. Parsed with mikefarah `yq`.
 #
 #   enabled: true   -> install AND enable for each platform block present
 #   enabled: false  -> parked: documented but not installed/enabled
-#   per-plugin `claude:` / `gemini:` blocks are optional; a missing block means
-#   that tool is skipped for that row.
+#   per-plugin `claude:` / `antigravity:` blocks are optional; a missing block
+#   means that tool is skipped for that row.
+#
+#   antigravity sources are git repos passed to `agy plugin install`. Legacy
+#   Gemini CLI extensions remain compatible (agy imports/installs them; see
+#   also `agy plugin import gemini` for one-off migrations of a live host).
 
 marketplaces:
   claude-plugins-official:
@@ -20,33 +24,33 @@ plugins:
   - name: superpowers
     enabled: true
     claude: { plugin: superpowers@claude-plugins-official }
-    gemini: { source: https://github.com/obra/superpowers }
+    antigravity: { source: https://github.com/obra/superpowers }
   - name: github
     enabled: true
     claude: { plugin: github@claude-plugins-official }
-    gemini: { source: https://github.com/gemini-cli-extensions/conductor }
+    antigravity: { source: https://github.com/gemini-cli-extensions/conductor }
   - name: code-review
     enabled: true
     claude: { plugin: code-review@claude-plugins-official }
-    gemini: { source: https://github.com/gemini-cli-extensions/code-review }
+    antigravity: { source: https://github.com/gemini-cli-extensions/code-review }
   - name: skill-creator
     enabled: true
     claude: { plugin: skill-creator@claude-plugins-official }
-    gemini: { source: https://github.com/jduncan-rva/gemini-agent-creator }
+    antigravity: { source: https://github.com/jduncan-rva/gemini-agent-creator }
   - name: claude-md-management
     enabled: true
     claude: { plugin: claude-md-management@claude-plugins-official }
   - name: pr-review-toolkit
     enabled: true
     claude: { plugin: pr-review-toolkit@claude-plugins-official }
-    gemini: { source: https://github.com/gemini-cli-extensions/code-review }
+    antigravity: { source: https://github.com/gemini-cli-extensions/code-review }
   - name: gopls-lsp
     enabled: true
     claude: { plugin: gopls-lsp@claude-plugins-official }
   - name: remember
     enabled: true
     claude: { plugin: remember@claude-plugins-official }
-    gemini: { source: https://github.com/Beledarian/mcp-local-memory }
+    antigravity: { source: https://github.com/Beledarian/mcp-local-memory }
   - name: deploy-on-aws
     enabled: true
     claude: { plugin: deploy-on-aws@claude-plugins-official }
@@ -59,7 +63,7 @@ plugins:
   - name: mcp-apps
     enabled: true
     claude: { plugin: mcp-apps@claude-plugins-official }
-    gemini: { source: https://github.com/gemini-cli-extensions/mcp-toolbox }
+    antigravity: { source: https://github.com/gemini-cli-extensions/mcp-toolbox }
   # Andrej Karpathy's behavioral guidelines (CLAUDE.md-style). Claude-only;
   # marketplace 'karpathy-skills' = forrestchang/andrej-karpathy-skills.
   - name: andrej-karpathy-skills

@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
-SYNC=true; LIST=false; DELETE=false; PRUNE=false; KEY_NAMES=()
+SYNC=true; LIST=false; PRUNE=false; KEY_NAMES=()
 while [[ $# -gt 0 ]]; do
     case $1 in
         --no-sync) SYNC=false; shift ;;
         --list) LIST=true; shift ;;
-        --delete) DELETE=true; shift ;;
+        --delete) shift ;;
         --prune) PRUNE=true; shift ;;
         *) KEY_NAMES+=("$1"); shift ;;
     esac
@@ -13,7 +13,7 @@ done
 if [ "$PRUNE" = true ]; then
     HOSTS=""
     if [ -f "$HOME/.ssh/config" ]; then
-        HOSTS=$(grep "^Host " "$HOME/.ssh/config" | awk "{print \$2}" | grep -v "*" || true)
+        HOSTS=$(grep "^Host " "$HOME/.ssh/config" | awk "{print \$2}" | grep -vF "*" || true)
     fi
     MANAGED=""
     for k in "$HOME/.ssh"/*.pub; do
@@ -30,7 +30,7 @@ fi
 if [ "$LIST" = true ]; then
     HOSTS=""
     if [ -f "$HOME/.ssh/config" ]; then
-        HOSTS=$(grep "^Host " "$HOME/.ssh/config" | awk "{print \$2}" | grep -v "*" || true)
+        HOSTS=$(grep "^Host " "$HOME/.ssh/config" | awk "{print \$2}" | grep -vF "*" || true)
     fi
     for k in "$HOME/.ssh"/*.pub; do
         if [[ -f "$k" && ! "$k" == *authorized_keys* ]]; then
@@ -57,7 +57,7 @@ for K in "${KEY_NAMES[@]}"; do
     if [ "$SYNC" = true ]; then
         HOSTS=""
         if [ -f "$HOME/.ssh/config" ]; then
-            HOSTS=$(grep "^Host " "$HOME/.ssh/config" | awk "{print \$2}" | grep -v "*" || true)
+            HOSTS=$(grep "^Host " "$HOME/.ssh/config" | awk "{print \$2}" | grep -vF "*" || true)
         fi
         for h in $HOSTS; do
             scp "$P" "$P.pub" "$h:~/.ssh/" 2>/dev/null && ssh -n "$h" "grep -qF \"$PK\" ~/.ssh/authorized_keys || echo \"$PK\" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys" 2>/dev/null || true

@@ -1,0 +1,26 @@
+# SDK — Go modules (`sdk/`)
+
+This tree holds the repository's **Go modules**. Each subdirectory is an independent
+module, `go install`-able by its canonical path
+`github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>` and versioned with a path-prefixed
+tag of the form `sdk/<tool>/vX.Y.Z`.
+
+> **Go code lives here, not under `src/`.** `src/` is for non-Go tooling and agent
+> skills. This relocation is the `src/` → `sdk/` cutover tracked in
+> [docs/mbo/plans/2026-06-04-sdk-migration-plan.md](../docs/mbo/plans/2026-06-04-sdk-migration-plan.md).
+
+## Modules
+
+| Module | Path | Binary | Notes |
+| :----- | :--- | :----- | :---- |
+| [`gsl/`](./gsl/AGENTS.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl` | `gsl` | Go status line for Claude Code / Gemini CLI. |
+| [`gss/`](./gss/AGENTS.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/gss` | `gss` | Git Safe Sync. |
+| [`wol/`](./wol/AGENTS.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/wol` | `wol` | Wake-on-LAN utility. |
+| [`tmux-mgr/`](./tmux-mgr/AGENTS.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr` | `tmux-mgr` | tmux session + agent orchestration. |
+
+## Conventions
+
+- **Module path = `github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>`** (canonical org **and** the `sdk/` segment). External install: `go install github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>@<tag>`.
+- **Build** each module with its own `build.sh` (injects version via `-ldflags -X`); `install.sh` builds them into `~/opt/bin/`.
+- **Test/lint discovery**: `scripts/test.sh` and the `Makefile` Go loops discover modules by directory under `sdk/` (the migration keeps `src/` scanned transitionally until the cutover completes).
+- **Per-directory docs**: every module has a `AGENTS.md` + a `CLAUDE.md -> AGENTS.md` symlink.

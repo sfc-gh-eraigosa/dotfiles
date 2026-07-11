@@ -176,9 +176,9 @@ function Get-WslReport {
 function Install-NerdFont {
     Write-Host "`n=== [4/6] Nerd Font (MesloLGS NF) ===" -ForegroundColor Cyan
     # setup-apps.ps1 sits at opt/Desktop/Apps/scripts/; the gsl script is at
-    # src/gsl/scripts/ — four levels up, then into src/gsl/scripts.
+    # sdk/gsl/scripts/ — four levels up, then into sdk/gsl/scripts.
     $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
-    $fontScript = Join-Path $repoRoot 'src\gsl\scripts\install_nerd_font_windows.ps1'
+    $fontScript = Join-Path $repoRoot 'sdk\gsl\scripts\install_nerd_font_windows.ps1'
     if (-not (Test-Path $fontScript)) {
         Write-Host "Nerd Font installer not found at $fontScript -- skipping." -ForegroundColor Yellow
         return

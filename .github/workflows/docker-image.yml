@@ -59,15 +59,16 @@ jobs:
     # https://github.com/rhysd/actionlint/blob/main/LICENSE.txt) to lint
     # the workflow YAML itself.
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Set up Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: '1.26'
           # setup-go@v5 enables module caching by default (cache: true);
           # cache-dependency-path scopes the cache key to our four Go modules.
-          cache-dependency-path: "src/**/*.sum"
+          cache-dependency-path: |
+            sdk/**/*.sum
 
       - name: Install golangci-lint
         run: |
@@ -108,17 +109,39 @@ jobs:
         continue-on-error: true
         run: actionlint .github/workflows/*.yml
 
+  shell-lint:
+    name: Shell Lint (shellcheck)
+    runs-on: ubuntu-latest
+    # Dedicated shellcheck check, wired in as a required status context via
+    # branch protection. shellcheck also runs inside the `lint` job's
+    # `make lint` step, but that job is warn-only across all linters; this
+    # job isolates the shell signal under its own required context so a
+    # future strict flip can gate on shell alone. WARN-ONLY for now to match
+    # the phase-1 baseline backlog (~90 shell findings, .ci-baseline-issues.md)
+    # so the merge queue isn't deadlocked; drop continue-on-error once the
+    # shell backlog reaches zero.
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+      - name: Run make lint-shell
+        continue-on-error: true
+        run: make lint-shell
+
   unit-tests:
     name: Run Unit Tests
     needs: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Set up Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: '1.26'
-          cache-dependency-path: "src/**/*.sum"
+          cache-dependency-path: |
+            sdk/**/*.sum
       - name: Run Go Unit Tests
         run: make unit-test
       - name: Upload coverage report
@@ -139,7 +162,7 @@ jobs:
           go install github.com/google/go-licenses@latest
           PATH="$(go env GOPATH)/bin:$PATH"
           export PATH
-          GSS_STRICT_CHECK=1 bash src/gss/scripts/check-deps.sh
+          GSS_STRICT_CHECK=1 bash sdk/gss/scripts/check-deps.sh
 
   shell-tests:
     name: Run Shell Test Drivers
@@ -152,10 +175,12 @@ jobs:
     # Parallel to unit-tests (Go) so a shell-driver regression doesn't
     # gate the Go suite and vice-versa.
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - name: Install jq
-        # safety_guard_test.sh builds its tool_input payloads with jq.
-        run: sudo apt-get update && sudo apt-get install -y jq
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Install jq + zsh
+        # safety_guard_test.sh builds its tool_input payloads with jq; zsh is
+        # needed so aliases_test.sh's cross-shell doctor regression case runs
+        # for real here (it skips gracefully where zsh is absent).
+        run: sudo apt-get update && sudo apt-get install -y jq zsh
       - name: Run make shell-test
         run: make shell-test
 
@@ -183,7 +208,7 @@ jobs:
     env:
       IMAGE_NAME: dotfiles:latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Build the Docker image
         run: make build
 

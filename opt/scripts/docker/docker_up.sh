@@ -36,7 +36,6 @@ EOF
 # Read in Complete Set of Coordinates from the Command Line
 _options=
 _hostname=
-OPTION=
 _auto=0
 _clear=0
 # Default container: use jammy (22.04) as it has good multi-arch support
@@ -64,7 +63,7 @@ while [[ $# -gt 0 ]]; do
     "-t"|"--container"  ) _arg_container=$1; shift;;
     "-n"|"--name"       ) _hostname="$1"; shift;;
     "-o"|"--opts"       ) _options="$1"; shift;;
-    *                   ) echo "ERROR: Invalid option: \""$opt"\"" >&2;
+    *                   ) echo "ERROR: Invalid option: \"$opt\"" >&2;
     usage;
     exit 1;;
   esac
@@ -86,9 +85,9 @@ function dirnamef
 {
 _cwd=$(pwd); _dir=$(dirname $1);
 cd $_dir && _dir=$(git rev-parse --show-toplevel)
-cd $_dir/..
+cd $_dir/.. || return 1
   _dir=$(pwd)
-  cd $_cwd
+  cd $_cwd || return 1
   echo -n $_dir
 }
 _VOLUMES="-v $(dirnamef $0):/opt/workspace/git:rw -v /lib/modules:/lib/modules:rw"
@@ -111,7 +110,7 @@ else
   fi
   echo -n $_session > ~/.$SESSION_NAME
   echo "checking if $_session running"
-  docker ps |grep $(echo $_session|cut -c1-12)
+  docker ps |grep "$(echo $_session|cut -c1-12)"
   if [ ! $? -eq 0 ]; then
     echo "starting docker session"
     docker start $_session

@@ -22,8 +22,8 @@ should_run_daily_maintenance() {
   local mtime
   now=$(date +%s)
   if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS
-    mtime=$(stat -f %m "${DAILY_STAMP_FILE}" 2>/dev/null || echo 0)
+    # macOS: stat -f %m broke in Darwin 25+ (macOS 16), use date -r instead
+    mtime=$(date -r "${DAILY_STAMP_FILE}" +%s 2>/dev/null || echo 0)
   else
     # Linux / Raspberry Pi
     mtime=$(stat -c %Y "${DAILY_STAMP_FILE}" 2>/dev/null || echo 0)
@@ -50,10 +50,6 @@ run_daily_maintenance() {
   # Setup any missing brew packages from the $HOME/Brewfile
   if [ "$(uname -s)" = "Darwin" ] && command -v brew >/dev/null 2>&1 ; then
     brew bundle check || brew bundle
-  fi
-  # Ensure Snowflake CLI is available (install if missing)
-  if command -v python >/dev/null 2>&1 && command -v pip3 >/dev/null 2>&1 ; then
-    snow --version >/dev/null 2>&1 || ( pip3 install --upgrade pip && python -m pip install snowflake-cli-labs )
   fi
 }
 
@@ -189,10 +185,10 @@ source $ZSH/oh-my-zsh.sh
 
 # oh-my-zsh's git plugin defines `alias gss='git status -s'` which shadows
 # our gss binary at ~/opt/bin/gss. Drop the alias so the binary wins —
-# critical for any AI assistant (Claude, Gemini) that calls `gss push`.
+# critical for any AI assistant (Claude, Antigravity) that calls `gss push`.
 unalias gss 2>/dev/null
 
-# Claude Code CLI helpers: claude (wrapper) and claude-toggle (YOLO on/off)
+# Claude Code CLI helpers: claude (wrapper) and claude-config (yolo/remote on/off)
 [ -f "${HOME}/.config/claude/aliases.sh" ] && . "${HOME}/.config/claude/aliases.sh"
 
 # You may need to manually set your language environment
@@ -388,19 +384,23 @@ fi
 
 # OpenClaw Completion
 
-# --- Performance Optimizations by Gemini ---
+# --- Performance Optimizations (AI-suggested) ---
 
 # Optimize compinit to run once per day
 autoload -Uz compinit
 _comp_dumpfile="${ZSH_COMPDUMP:-$HOME/.zcompdump}"
 if [[ "$OSTYPE" == "darwin"* ]]; then
-  _comp_mtime=$(stat -f %m "$_comp_dumpfile" 2>/dev/null || echo 0)
+  _comp_mtime=$(date -r "$_comp_dumpfile" +%s 2>/dev/null || echo 0)
 else
   _comp_mtime=$(stat -c %Y "$_comp_dumpfile" 2>/dev/null || echo 0)
 fi
 
+# -i: ignore (don't prompt about) insecure $fpath dirs. Without it, an
+# insecure completion dir makes compinit try to prompt, which on a
+# non-interactive/headless shell aborts with "not interactive and can't open
+# terminal" — breaking startup and the rc_test.sh clean-source check.
 if (( $(date +%s) - _comp_mtime > 86400 )); then
-  compinit
+  compinit -i
 else
   compinit -C
 fi
@@ -432,10 +432,10 @@ openclaw() {
 # Added by tmux-mgr
 [ -f ${HOME}/.config/tmux-mgr/aliases.sh ] && source ${HOME}/.config/tmux-mgr/aliases.sh
 
-# Load Gemini CLI environment
-[[ -f "$HOME/.gemini.profile" ]] && source "$HOME/.gemini.profile"
-# Gemini CLI helpers: gemini() wrapper with tmux auto-anchor
-[ -f "${HOME}/.config/gemini/aliases.sh" ] && . "${HOME}/.config/gemini/aliases.sh"
+# Load Antigravity CLI environment
+[[ -f "$HOME/.antigravity.profile" ]] && source "$HOME/.antigravity.profile"
+# Antigravity CLI helpers: agy() wrapper with tmux auto-anchor
+[ -f "${HOME}/.config/antigravity/aliases.sh" ] && . "${HOME}/.config/antigravity/aliases.sh"
 
 # Load Nano Platform environment
 [ -f "$HOME/.nano_profile" ] && . "$HOME/.nano_profile"

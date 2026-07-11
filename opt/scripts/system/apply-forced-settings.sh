@@ -4,7 +4,7 @@
 # Deep-merge the repo's "forced" (immutable) settings subset over a host-owned
 # settings file, in place. Forced fields win; every undeclared host field is
 # preserved. This is the reconcile mechanism for the AI-config provisioning
-# design (docs/designs/2026-06-02-ai-config-home-provisioning.md §7 / D2) — it
+# design (docs/mbo/designs/2026-06-02-ai-config-home-provisioning.md §7 / D2) — it
 # keeps security wiring (hooks, statusLine, deny/ask) current on every install
 # without clobbering host customizations (enabledPlugins, theme, apiKeyHelper…).
 #

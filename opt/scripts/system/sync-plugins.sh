@@ -6,12 +6,14 @@
 # Usage:
 #   sync-plugins.sh            install + enable per the manifest
 #   sync-plugins.sh --dry-run  print planned actions, change nothing (and
-#                              previews even when the claude/gemini CLIs are absent)
+#                              previews even when the claude/agy CLIs are absent)
 set -u
 
 # Resolve the real repo root even when invoked via the ~/opt symlink.
-SCRIPT_PATH="$(readlink -f "$0")"
-BASE_DIR="$(cd "$(dirname "$SCRIPT_PATH")/../../.." && pwd)"
+# Portable replacement for `readlink -f "$0"` (GNU-only; absent on macOS/BSD):
+# `cd ... && pwd -P` resolves symlinks to the physical script dir.
+SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" >/dev/null 2>&1 && pwd -P)"
+BASE_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd -P)"
 MANIFEST="${BASE_DIR}/ai/plugins.yaml"
 
 DRY_RUN=0
@@ -28,7 +30,7 @@ esac
 # Resolve a timeout binary (GNU 'timeout', or 'gtimeout' from coreutils on macOS).
 # Empty when neither exists — calls then run unwrapped but still stdin-guarded.
 TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
-# Resolve setsid (util-linux). The claude/gemini plugin subcommands open
+# Resolve setsid (util-linux). The claude/agy plugin subcommands open
 # /dev/tty directly and render an interactive TUI when a controlling terminal is
 # present — bypassing the </dev/null stdin guard below and wedging an unattended
 # `./install.sh` (the CLI ends up job-control-stopped on a SIGTTOU/SIGTTIN). Run
@@ -36,17 +38,31 @@ TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
 # can't open /dev/tty, and fall back to non-interactive mode. Empty on macOS
 # (no setsid); the per-call </dev/null + timeout guards still apply there.
 SETSID_BIN="$(command -v setsid || true)"
+# macOS ships no native setsid, so the detach guard above no-ops there — and a
+# FRESH `claude plugin install` then opens /dev/tty, renders its TUI, and hangs
+# until the timeout SIGKILLs it (≈CMD_TIMEOUT *per uninstalled plugin* on a clean
+# machine — tens of minutes). Homebrew's keg-only util-linux provides a working
+# setsid but does not symlink it onto PATH, so probe the keg explicitly. Install
+# it via opt/profiles/Brewfile (`brew 'util-linux'`). No-op when util-linux is
+# absent: the </dev/null + timeout guards remain the (slower) fallback.
+if [ -z "$SETSID_BIN" ] && command -v brew >/dev/null 2>&1; then
+    _ul_prefix="$(brew --prefix util-linux 2>/dev/null || true)"
+    for _ul_cand in "$_ul_prefix/bin/setsid" "$_ul_prefix/sbin/setsid"; do
+        if [ -n "$_ul_prefix" ] && [ -x "$_ul_cand" ]; then SETSID_BIN="$_ul_cand"; break; fi
+    done
+    unset _ul_prefix _ul_cand
+fi
 # Per-call ceiling so a hung network fetch or an unexpected interactive prompt
 # can't wedge install.sh indefinitely (the orphaned-process failure mode this
 # guards against). Override with SYNC_PLUGINS_TIMEOUT for slow links.
 CMD_TIMEOUT="${SYNC_PLUGINS_TIMEOUT:-300}"
-# The gemini CLI (a Node process) ignores SIGTERM, so a plain `timeout N` would
-# send SIGTERM and then wait forever for a process that never dies — defeating
-# the guard. `-k KILL_GRACE` escalates to SIGKILL KILL_GRACE seconds after the
-# initial signal, guaranteeing the call actually terminates.
+# Some CLIs ignore SIGTERM (the retired gemini CLI famously did), so a plain
+# `timeout N` would send SIGTERM and then wait forever for a process that never
+# dies — defeating the guard. `-k KILL_GRACE` escalates to SIGKILL KILL_GRACE
+# seconds after the initial signal, guaranteeing the call actually terminates.
 KILL_GRACE="${SYNC_PLUGINS_KILL_GRACE:-15}"
 
-# Guard prefix applied to every claude/gemini plugin invocation:
+# Guard prefix applied to every claude/agy plugin invocation:
 #   setsid -w  → new session, no controlling terminal (see SETSID_BIN above);
 #                -w makes setsid wait and return the child's real exit code so
 #                the timeout rc detection below still works.
@@ -69,8 +85,8 @@ run() {
     echo "+ $*"
     local rc=0
     "${GUARD[@]+"${GUARD[@]}"}" "$@" </dev/null || rc=$?
-    # 124 = timed out (SIGTERM); 137 = had to SIGKILL after -k grace (the gemini
-    # CLI ignores SIGTERM, so this is the common timeout outcome, not a crash).
+    # 124 = timed out (SIGTERM); 137 = had to SIGKILL after -k grace (a
+    # SIGTERM-ignoring CLI makes this the common timeout outcome, not a crash).
     if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
         echo "sync-plugins: WARNING — '$*' timed out after ${CMD_TIMEOUT}s; continuing." >&2
     elif [ "$rc" -ne 0 ]; then
@@ -128,49 +144,49 @@ sync_claude() {
     done < <(yq '.plugins[] | select(.enabled == true) | select(.claude.plugin != null) | .claude.plugin' "$MANIFEST")
 }
 
-# Names of currently-installed Gemini extensions, one per line. The list output
-# is "<glyph> <name> (<version>)" for each extension followed by indented detail
-# lines, so the name is field 2 of every non-indented row. `gemini extensions
-# list` prints to stderr, so capture 2>&1. Empty on any error.
-gemini_installed_names() {
-    gemini extensions list 2>&1 | awk '!/^[[:space:]]/ && NF>=2 {print $2}'
+# Names of currently-installed Antigravity plugins, one per line. The empty
+# state prints "No imported plugins." (must not be mistaken for a plugin
+# named "No"); the populated row format is unpinned, so emit the first TWO
+# fields of every non-indented row — that covers both "name (version)" and a
+# glyph-prefixed "<glyph> name (version)" layout (the retired gemini CLI used
+# the latter). Stray version/glyph tokens are harmless: callers match with
+# grep -qxF against a repo basename. Empty on any error.
+agy_installed_names() {
+    agy plugin list 2>&1 | awk '!/^[[:space:]]/ && !/^No imported plugins/ && NF>=1 {print $1; if (NF>=2) print $2}'
 }
 
-# Install one Gemini extension, stdin/timeout-guarded. `gemini extensions install`
-# is not idempotent — it exits non-zero with "already installed" when the
-# extension is present — so treat that as a quiet skip (mirrors how
-# enable_claude_plugin treats "already enabled"). This is the safety net for
-# sources whose extension name differs from the repo basename (e.g. the
-# gemini-agent-creator repo installs as "agent-creator"), which the name-based
-# pre-skip in sync_gemini cannot match.
-install_gemini_extension() {
+# Install one Antigravity plugin, stdin/timeout-guarded. Treat "already
+# installed" as a quiet skip (mirrors how enable_claude_plugin treats
+# "already enabled"). This is the safety net for sources whose plugin name
+# differs from the repo basename, which the name-based pre-skip in
+# sync_antigravity cannot match.
+install_agy_plugin() {
     local source="$1" out rc=0
-    echo "+ gemini extensions install $source --consent --skip-settings"
-    out="$("${GUARD[@]+"${GUARD[@]}"}" gemini extensions install "$source" --consent --skip-settings </dev/null 2>&1)" || rc=$?
+    echo "+ agy plugin install $source"
+    out="$("${GUARD[@]+"${GUARD[@]}"}" agy plugin install "$source" </dev/null 2>&1)" || rc=$?
     if [ "$rc" -eq 0 ]; then
         [ -n "$out" ] && echo "$out"
     elif [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
-        echo "sync-plugins: WARNING — gemini install $source timed out after ${CMD_TIMEOUT}s; continuing." >&2
+        echo "sync-plugins: WARNING — agy install $source timed out after ${CMD_TIMEOUT}s; continuing." >&2
     elif printf '%s' "$out" | grep -qi "already installed"; then
         echo "  ($source already installed)"
     else
         printf '%s\n' "$out" >&2
-        echo "sync-plugins: WARNING — gemini install $source failed (rc=$rc); continuing." >&2
+        echo "sync-plugins: WARNING — agy install $source failed (rc=$rc); continuing." >&2
     fi
 }
 
-sync_gemini() {
-    if [ "$DRY_RUN" = "0" ] && ! command -v gemini >/dev/null 2>&1; then
-        echo "sync-plugins: 'gemini' CLI not on PATH; skipping Gemini extensions."
+sync_antigravity() {
+    if [ "$DRY_RUN" = "0" ] && ! command -v agy >/dev/null 2>&1; then
+        echo "sync-plugins: 'agy' CLI not on PATH; skipping Antigravity plugins."
         return 0
     fi
-    # Snapshot installed extensions so re-runs skip them instead of erroring with
-    # "already installed, please uninstall first" (which, unguarded, could hang).
-    # `gemini extensions install` names an extension after its repo basename, so
-    # match on that. The set also grows as we install, so an in-manifest duplicate
-    # (the code-review source is shared by two plugins) is only installed once.
+    # Snapshot installed plugins so re-runs skip them instead of erroring.
+    # Plugins are named after their repo basename, so match on that. The set
+    # also grows as we install, so an in-manifest duplicate (the code-review
+    # source is shared by two plugins) is only installed once.
     local seen=""
-    [ "$DRY_RUN" = "0" ] && seen="$(gemini_installed_names)"
+    [ "$DRY_RUN" = "0" ] && seen="$(agy_installed_names)"
     local any=0
     while IFS= read -r source; do
         { [ -z "$source" ] || [ "$source" = "null" ]; } && continue
@@ -183,16 +199,16 @@ sync_gemini() {
             fi
             seen="${seen}
 ${name}"
-            install_gemini_extension "$source"
+            install_agy_plugin "$source"
             continue
         fi
         # Dry-run path: keep printing the planned action via run().
-        run gemini extensions install "$source" --consent --skip-settings
-    done < <(yq '.plugins[] | select(.enabled == true) | select(.gemini.source != null) | .gemini.source' "$MANIFEST")
-    [ "$any" = "0" ] && echo "sync-plugins: no Gemini extension sources in manifest (nothing to do)."
+        run agy plugin install "$source"
+    done < <(yq '.plugins[] | select(.enabled == true) | select(.antigravity.source != null) | .antigravity.source' "$MANIFEST")
+    [ "$any" = "0" ] && echo "sync-plugins: no Antigravity plugin sources in manifest (nothing to do)."
 }
 
 echo "Syncing AI plugins from ${MANIFEST}$([ "$DRY_RUN" = "1" ] && echo ' (dry-run)')..."
 sync_claude
-sync_gemini
+sync_antigravity
 echo "sync-plugins: done."

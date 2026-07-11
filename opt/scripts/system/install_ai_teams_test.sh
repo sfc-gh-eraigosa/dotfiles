@@ -6,7 +6,6 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALLER="${HERE}/install_ai_teams.sh"
-TEAMS_DIR="$(cd "${HERE}/../../.." && pwd)/ai/teams"
 
 PASS=0; FAIL=0
 ok()   { echo "  ✓ $*"; PASS=$((PASS + 1)); }
@@ -28,11 +27,10 @@ echo "== install_ai_teams_test =="
 H="$(mktemp -d)"
 run_install "$H" || bad "installer exited non-zero"
 
-# counts: 22 personas -> 22 files for claude + gemini + antigravity; ollama Modelfiles
+# counts: 22 personas -> 22 files for claude + antigravity; ollama Modelfiles
 assert_eq "claude emits 22 agents" \
   "$(find "$H/.claude/agents/teams" -name '*.md' | wc -l | tr -d ' ')" "22"
-assert_eq "gemini emits 22 agents" \
-  "$(find "$H/.gemini/agents/teams" -name '*.md' | wc -l | tr -d ' ')" "22"
+assert_nofile "$H/.gemini/agents/teams" "retired gemini emitter writes nothing"
 assert_eq "antigravity emits 22 agents" \
   "$(find "$H/.config/antigravity/agents" -name '*.yaml' | wc -l | tr -d ' ')" "22"
 assert_eq "ollama emits 22 Modelfiles" \
@@ -46,7 +44,7 @@ assert_file "$H/.config/antigravity/agents/web-fe.yaml"
 CFE="$H/.claude/agents/teams/web/fe.md"           # standard
 CSY="$H/.claude/agents/teams/architecture/sysarch.md"  # deep-think
 CWQ="$H/.claude/agents/teams/web/webqa.md"        # fast
-GSY="$H/.gemini/agents/teams/architecture/sysarch.md"
+ASY="$H/.config/antigravity/agents/architecture-sysarch.yaml"
 OGD="$H/.config/ollama/teams/go/godev.Modelfile"  # standard
 
 assert_eq "standard -> claude sonnet"      "$(fmget "$CFE" '.model')"  "sonnet"
@@ -54,8 +52,7 @@ assert_eq "standard -> claude effort med"  "$(fmget "$CFE" '.effort')" "medium"
 assert_eq "deep-think -> claude opus"      "$(fmget "$CSY" '.model')"  "opus"
 assert_eq "deep-think -> claude effort hi" "$(fmget "$CSY" '.effort')" "high"
 assert_eq "fast -> claude haiku"           "$(fmget "$CWQ" '.model')"  "haiku"
-assert_eq "deep-think -> gemini pro"       "$(fmget "$GSY" '.model')"  "gemini-2.5-pro"
-assert_eq "deep-think -> gemini temp 0.2"  "$(fmget "$GSY" '.temperature')" "0.2"
+assert_eq "deep-think -> antigravity o3"   "$(yq '.model' "$ASY")"  "o3"
 assert_contains "ollama standard FROM"  "$(cat "$OGD")" "FROM qwen2.5-coder:7b"
 assert_contains "ollama num_ctx"        "$(cat "$OGD")" "PARAMETER num_ctx 8192"
 
@@ -64,7 +61,6 @@ fmget "$CFE" '.name' >/dev/null 2>&1 && [ "$(fmget "$CFE" '.name')" = "web-fe" ]
   && ok "claude frontmatter parses, name=web-fe" || bad "claude frontmatter invalid"
 [ "$(yq '.name' "$H/.config/antigravity/agents/web-fe.yaml")" = "web-fe" ] \
   && ok "antigravity yaml parses, name=web-fe" || bad "antigravity yaml invalid"
-assert_contains "gemini temperature numeric" "$(fmget "$GSY" '.temperature | tag')" "!!float"
 
 # description is compiled (non-empty, has negative scoping)
 DESC="$(fmget "$CFE" '.description')"
@@ -87,7 +83,7 @@ diff -r "$H" "$H2" >/dev/null 2>&1 && ok "idempotent: re-run byte-identical" || 
 # --- graceful skip / tool filter -------------------------------------------------------
 H3="$(mktemp -d)"; run_install "$H3" --tool claude
 assert_file "$H3/.claude/agents/teams/web/fe.md"
-assert_nofile "$H3/.gemini/agents/teams" "--tool claude does not emit gemini"
+assert_nofile "$H3/.config/antigravity/agents" "--tool claude does not emit antigravity"
 assert_nofile "$H3/.config/ollama/teams" "--tool claude does not emit ollama"
 
 # --- dry-run writes nothing ------------------------------------------------------------

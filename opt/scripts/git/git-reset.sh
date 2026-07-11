@@ -1,5 +1,5 @@
 #!/bin/bash
-branch_name="$(printf '%s' $(git branch -l 2>&1|grep '^*'|awk -F' ' '{print $2}'))"
+branch_name="$(git branch -l 2>&1|grep '^\*'|awk -F' ' '{print $2}')"
 if [ -z "${branch_name}" ]; then
   echo "ERROR no default branch found"
   exit 1
