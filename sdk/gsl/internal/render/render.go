@@ -58,6 +58,20 @@ type Deps struct {
 	// RegistryPath is the gss registry path for repo.PR.
 	RegistryPath string
 
+	// GitInfo is a PRE-COMPUTED git status, threaded in by the caller.
+	//
+	// cmd/statusline.go currently runs git.Status SERIALLY before Detect, purely
+	// to obtain Branch — and then DirGitSegment runs git.Status again inside
+	// Detect. That is two redundant subprocesses (4 git execs instead of 2), and
+	// the serial call happens INSIDE the shared 1s context, draining the budget
+	// the concurrent segments are about to need. Under slow git (≥250ms/call)
+	// the dirgit segment loses its deadline and vanishes from the line entirely.
+	//
+	// When GitInfo is non-nil, DirGitSegment MUST reuse it instead of shelling
+	// out again. Nil means "not pre-computed; detect it yourself" — which keeps
+	// every existing caller (tests, preview) working unchanged.
+	GitInfo *git.Info
+
 	// Runners (injected seams). Any may be nil; the affected detail is omitted.
 	Git git.Runner
 	GH  gh.Runner
