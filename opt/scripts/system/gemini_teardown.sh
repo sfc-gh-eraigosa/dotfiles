@@ -132,7 +132,20 @@ fi
 # --- Cleanup ---------------------------------------------------------------
 if [ "$NPM_HAS_GEMINI" = "1" ]; then
     echo "  Removing @google/gemini-cli (npm)..."
-    npm uninstall -g @google/gemini-cli || true
+    # A system-wide npm prefix (/usr, /usr/local via apt/system node) makes the
+    # global node_modules root-owned, so an unprivileged uninstall dies with
+    # EACCES; escalate like google-cli-setup.sh does for install.
+    NPM_SUDO=""
+    NPM_ROOT="$(npm root -g 2>/dev/null || true)"
+    if [ -n "$NPM_ROOT" ] && [ -e "$NPM_ROOT" ] && [ ! -w "$NPM_ROOT" ]; then
+        if command -v sudo >/dev/null 2>&1; then
+            NPM_SUDO="sudo"
+            echo "  (global npm prefix is system-wide ($NPM_ROOT); using sudo)"
+        else
+            echo "  NOTE: $NPM_ROOT is not writable and sudo is unavailable; run 'npm uninstall -g @google/gemini-cli' as root."
+        fi
+    fi
+    $NPM_SUDO npm uninstall -g @google/gemini-cli || true
 fi
 # A gemini binary that survives the npm uninstall (or was never npm-managed)
 # only gets removed from user-owned locations; system installs are reported.
