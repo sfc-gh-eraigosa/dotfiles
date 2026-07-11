@@ -107,7 +107,60 @@ OUT3b="$(run_teardown "$H3" </dev/null)"
 assert_contains "$OUT3b" "leftovers found" "--reset re-enables the ask"
 rm -rf "$H3"
 
-# === 6. Interactive 'k' answer persists the marker ===
+# === 6. System-wide npm prefix (EACCES case) -> escalates via sudo ===
+H5="$(make_sandbox)"
+# Non-writable global node_modules, like /usr/lib/node_modules on apt-node hosts.
+mkdir -p "$H5/npmroot/@google/gemini-cli"
+chmod 555 "$H5/npmroot"
+cat > "$H5/bin/npm" <<NPM
+#!/usr/bin/env bash
+case "\$1 \$2" in
+    "ls -g") exit 0 ;;
+    "root -g") echo "$H5/npmroot"; exit 0 ;;
+    "uninstall -g") echo "NPM_UNINSTALL_CALLED \$3" >> "$H5/npm.log"; rm -f "$H5/bin/gemini"; exit 0 ;;
+esac
+exit 0
+NPM
+chmod +x "$H5/bin/npm"
+# Fake sudo: logs the escalation, then runs the command (finds the fake npm).
+cat > "$H5/bin/sudo" <<SUDO
+#!/usr/bin/env bash
+echo "SUDO_CALLED \$*" >> "$H5/sudo.log"
+exec "\$@"
+SUDO
+chmod +x "$H5/bin/sudo"
+OUT5="$(run_teardown "$H5" --yes)"
+assert_in_subshell "system prefix: npm uninstall escalated via sudo" "grep -q 'SUDO_CALLED npm uninstall -g @google/gemini-cli' '$H5/sudo.log'"
+assert_in_subshell "system prefix: uninstall reached npm" "grep -q 'NPM_UNINSTALL_CALLED @google/gemini-cli' '$H5/npm.log'"
+assert_contains "$OUT5" "using sudo" "system prefix: escalation is announced"
+chmod 755 "$H5/npmroot"
+rm -rf "$H5"
+
+# User-writable global node_modules -> no escalation.
+H6="$(make_sandbox)"
+mkdir -p "$H6/npmroot/@google/gemini-cli"
+cat > "$H6/bin/npm" <<NPM
+#!/usr/bin/env bash
+case "\$1 \$2" in
+    "ls -g") exit 0 ;;
+    "root -g") echo "$H6/npmroot"; exit 0 ;;
+    "uninstall -g") echo "NPM_UNINSTALL_CALLED \$3" >> "$H6/npm.log"; rm -f "$H6/bin/gemini"; exit 0 ;;
+esac
+exit 0
+NPM
+chmod +x "$H6/bin/npm"
+cat > "$H6/bin/sudo" <<SUDO
+#!/usr/bin/env bash
+echo "SUDO_CALLED \$*" >> "$H6/sudo.log"
+exec "\$@"
+SUDO
+chmod +x "$H6/bin/sudo"
+run_teardown "$H6" --yes >/dev/null
+assert_in_subshell "writable prefix: no sudo escalation" "[ ! -e '$H6/sudo.log' ]"
+assert_in_subshell "writable prefix: uninstall still runs" "grep -q 'NPM_UNINSTALL_CALLED @google/gemini-cli' '$H6/npm.log'"
+rm -rf "$H6"
+
+# === 7. Interactive 'k' answer persists the marker ===
 H4="$(make_sandbox)"
 # Feed 'k' on stdin; the script only prompts on a TTY, so emulate via script(1)
 # when available, else fall back to asserting the --keep path (covered above).
