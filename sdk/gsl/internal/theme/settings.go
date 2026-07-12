@@ -59,29 +59,43 @@ func readClaudeTheme(home string) string {
 	return v
 }
 
-// readAntigravityTheme reads the `ui.theme` field for the Antigravity CLI.
+// readAntigravityTheme reads the theme for the Antigravity CLI.
+//
 // It reads the Antigravity settings file <home>/.gemini/antigravity-cli/
 // settings.json when it exists; only when that file is absent does it fall
 // back to the legacy Gemini CLI file <home>/.gemini/settings.json (Antigravity
 // deliberately reuses the ~/.gemini directory). Gating the fallback on file
-// absence — not on an empty ui.theme — avoids a second open+parse on every
+// absence — not on an empty theme — avoids a second open+parse on every
 // statusline render in the steady state where the Antigravity file exists but
-// simply lacks ui.theme. Returns "" on any error. The value is a free-form
-// string.
+// simply lacks a theme key. Returns "" on any error.
 func readAntigravityTheme(home string) string {
 	agyPath := filepath.Join(home, ".gemini", "antigravity-cli", "settings.json")
 	if _, err := os.Lstat(agyPath); !errors.Is(err, os.ErrNotExist) {
 		// The Antigravity file exists (or is anomalous): it is authoritative,
-		// even when it lacks ui.theme.
-		return readUITheme(home, agyPath)
+		// even when it lacks a theme key.
+		return readAgyTheme(home, agyPath)
 	}
 	// Legacy Gemini CLI settings file.
-	return readUITheme(home, filepath.Join(home, ".gemini", "settings.json"))
+	return readAgyTheme(home, filepath.Join(home, ".gemini", "settings.json"))
 }
 
-// readUITheme reads the `ui.theme` field from a settings.json at path.
+// readAgyTheme reads the theme from an Antigravity settings.json at path.
+//
+// Key precedence:
+//
+//  1. TOP-LEVEL "colorScheme" — what agy actually writes. Verified against a
+//     real ~/.gemini/antigravity-cli/settings.json from agy v1.1.1:
+//
+//     { "colorScheme": "light", "enableTelemetry": false, ... }
+//
+//  2. "ui"."theme" — LEGACY fallback. gsl originally read only this key, but
+//     agy never writes it, so readAntigravityTheme returned "" for every real
+//     agy user and Resolve fell through to terminal detection — meaning a user
+//     on a light agy theme got a dark status line, permanently. Kept as a
+//     fallback for any settings file that still carries it.
+//
 // Returns "" on any error (missing file, bad type, anomalous file).
-func readUITheme(home, path string) string {
+func readAgyTheme(home, path string) string {
 	data, err := readSettingsFile(home, path)
 	if err != nil {
 		return ""
@@ -96,7 +110,15 @@ func readUITheme(home, path string) string {
 		return ""
 	}
 
-	// Dig into "ui" sub-object.
+	// 1. Top-level colorScheme (what agy writes).
+	if raw, ok := obj["colorScheme"]; ok {
+		var v string
+		if err := json.Unmarshal(raw, &v); err == nil && v != "" {
+			return v
+		}
+	}
+
+	// 2. Legacy ui.theme.
 	uiRaw, ok := obj["ui"]
 	if !ok {
 		return ""

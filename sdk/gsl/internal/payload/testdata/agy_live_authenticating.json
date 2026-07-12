@@ -1,0 +1,27 @@
+{
+  "cwd": "/home/user/git/dotfiles",
+  "session_id": "",
+  "conversation_id": "",
+  "transcript_path": "/home/user/.gemini/antigravity/brain/.system_generated/logs/transcript.jsonl",
+  "model": null,
+  "workspace": {
+    "current_dir": "/home/user/git/dotfiles",
+    "project_dir": "/home/user/git/dotfiles"
+  },
+  "version": "1.1.1",
+  "context_window": {
+    "total_input_tokens": 0,
+    "total_output_tokens": 0,
+    "context_window_size": 0,
+    "used_percentage": 0,
+    "remaining_percentage": 0,
+    "current_usage": null
+  },
+  "exceeds_200k_tokens": null,
+  "product": "antigravity",
+  "agent_state": "authenticating",
+  "sandbox": {
+    "enabled": false
+  },
+  "terminal_width": 80
+}
