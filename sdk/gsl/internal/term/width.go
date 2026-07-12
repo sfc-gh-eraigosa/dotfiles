@@ -32,6 +32,22 @@ import (
 
 // Columns resolves the current terminal column count.
 //
+// Deprecated: Columns implements the SUPERSEDED resolution order and must not be
+// used on any new path. Use cmd.resolveColumns (spec F1) instead, which resolves
+// payload.terminal_width → ioctl(stdout) → ioctl(stderr) → $COLUMNS →
+// cfg.FallbackColumns and reports which source won.
+//
+// Two defects are preserved here only because internal/preview still calls this
+// for its pre-WindowSizeMsg first frame:
+//
+//   - $COLUMNS is ranked ABOVE the ioctl probes. It is a shell variable that is
+//     not exported to child processes, so in practice it is absent — but when a
+//     user DOES export it, it wrongly overrides the real terminal width.
+//   - There is no ioctl(stderr) probe, and the hard fallback is 80. Claude Code
+//     pipes stdout, so this function returns 80 on a 200-column terminal. That is
+//     precisely the bug the width leaf exists to fix; do not reintroduce it by
+//     reaching for this helper.
+//
 // Resolution order:
 //  1. $COLUMNS environment variable (if set and parses as a positive integer).
 //  2. The injected source (production: wraps ioctl TIOCGWINSZ on stdout).
@@ -74,6 +90,33 @@ func StdoutWidthSource() func() (int, bool) {
 		return w, true
 	}
 }
+
+// StderrWidthSource returns an ioctl width source for os.Stderr.
+//
+// This is the source that makes gsl work under Claude Code. Claude invokes the
+// status-line command with stdout attached to a PIPE (it captures the line), so
+// the stdout ioctl always fails — but it leaves stderr attached to the real
+// terminal. Probing stderr is therefore a free, accurate read of the user's
+// actual terminal width in exactly the case where every other source is blind.
+//
+// Returns (0, false) when stderr is not a TTY or GetSize fails.
+func StderrWidthSource() func() (int, bool) {
+	return func() (int, bool) {
+		w, _, err := cxterm.GetSize(os.Stderr.Fd())
+		if err != nil || w <= 0 {
+			return 0, false
+		}
+		return w, true
+	}
+}
+
+// StripANSI removes ANSI SGR escape sequences from s, returning the raw text.
+//
+// Truncation must operate on raw text: cutting a string mid-escape-sequence
+// emits the sequence's tail as literal garbage. Callers that need to shorten a
+// possibly-painted string strip first, cut second, and let the paint layer
+// re-apply the colour.
+func StripANSI(s string) string { return ansiStripper(s) }
 
 // ansiStripper removes ANSI SGR escape sequences (ESC [ ... m) from s.
 // It handles only the SGR form this codebase emits; other OSC / DEC sequences

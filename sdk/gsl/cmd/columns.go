@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"strconv"
+	"strings"
+
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload"
 )
 
@@ -45,11 +48,11 @@ const fallbackColumns = 120
 // the width so tests can assert WHICH branch fired (not merely that the number
 // looks plausible) and so the choice can be logged at Debug.
 const (
-	sourcePayload = "payload"       // payload.terminal_width (the host told us)
-	sourceStdout  = "ioctl:stdout"  // stdout is a tty
-	sourceStderr  = "ioctl:stderr"  // stdout piped, stderr still on the tty
-	sourceColumns = "env:COLUMNS"   // exported COLUMNS (rare; honoured if present)
-	sourceDefault = "default"       // nothing knew; fallbackColumns
+	sourcePayload = "payload"      // payload.terminal_width (the host told us)
+	sourceStdout  = "ioctl:stdout" // stdout is a tty
+	sourceStderr  = "ioctl:stderr" // stdout piped, stderr still on the tty
+	sourceColumns = "env:COLUMNS"  // exported COLUMNS (rare; honoured if present)
+	sourceDefault = "default"      // nothing knew; fallbackColumns
 )
 
 // resolveColumns determines the terminal width and the source that supplied it.
@@ -78,6 +81,43 @@ func resolveColumns(
 	ttyStdout func() (int, bool),
 	ttyStderr func() (int, bool),
 ) (cols int, source string) {
-	// Implemented in the `width` leaf.
+	// 1. The host explicitly told us. Nothing beats that.
+	if p.TerminalWidth != nil && *p.TerminalWidth > 0 {
+		return *p.TerminalWidth, sourcePayload
+	}
+
+	// 2. stdout is a terminal (plain interactive shell usage).
+	if n, ok := probe(ttyStdout); ok {
+		return n, sourceStdout
+	}
+
+	// 3. stdout is a pipe but stderr is still on the tty. THIS is the Claude
+	//    Code case, and the branch that did not exist before.
+	if n, ok := probe(ttyStderr); ok {
+		return n, sourceStderr
+	}
+
+	// 4. An explicitly EXPORTED COLUMNS. Usually absent (it is a shell variable,
+	//    not an environment variable), but honour it when a user exports it.
+	if env != nil {
+		if n, err := strconv.Atoi(strings.TrimSpace(env("COLUMNS"))); err == nil && n > 0 {
+			return n, sourceColumns
+		}
+	}
+
+	// 5. Nothing knew.
 	return fallbackColumns, sourceDefault
+}
+
+// probe calls a tty width source defensively: a nil source, a source reporting
+// "not a tty", and a source reporting a nonsensical width are all "unknown".
+func probe(src func() (int, bool)) (int, bool) {
+	if src == nil {
+		return 0, false
+	}
+	n, ok := src()
+	if !ok || n <= 0 {
+		return 0, false
+	}
+	return n, true
 }

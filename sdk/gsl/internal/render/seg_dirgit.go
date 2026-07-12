@@ -23,6 +23,10 @@ type DirGitSegment struct {
 	Cwd string
 	// Git is the injected git.Runner used for git.Status.
 	Git git.Runner
+	// Priority is the DROP priority used by the fit loop (config.Segment.Priority,
+	// or the built-in default for this type when unset). It is independent of the
+	// segment's position in the line.
+	Priority int
 	// home overrides $HOME for ~-abbreviation (tests). Empty → os.UserHomeDir.
 	home string
 }

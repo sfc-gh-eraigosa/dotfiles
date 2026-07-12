@@ -4,19 +4,20 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/observe"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/render"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/term"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/theme"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -120,24 +121,18 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 	// Detect-once: ALL subprocess I/O happens here, exactly once.
 	datas := render.Detect(ctx, cfg, st, segs)
 
-	// Resolve terminal width: $COLUMNS wins, then ioctl on stdout (returns
-	// ok=false when not a TTY, e.g. piped under Claude Code), then the payload's
-	// terminal_width if present, then fallback 80.
-	cols := term.Columns(term.StdoutWidthSource())
-	columnsEnv := os.Getenv("COLUMNS")
-	var isColumnsValid bool
-	if columnsEnv != "" {
-		if val, err := strconv.Atoi(columnsEnv); err == nil && val > 0 {
-			isColumnsValid = true
-		}
+	// Resolve the terminal width through the single, testable resolver.
+	// Precedence: payload.terminal_width → ioctl(stdout) → ioctl(stderr) →
+	// $COLUMNS → cfg.FallbackColumns.
+	cols, source := resolveColumns(p, os.Getenv, term.StdoutWidthSource(), term.StderrWidthSource())
+	if source == sourceDefault {
+		cols = cfg.EffectiveFallbackColumns()
 	}
-	if !isColumnsValid {
-		if _, isTTY := term.StdoutWidthSource()(); !isTTY {
-			if p.TerminalWidth != nil && *p.TerminalWidth > 0 {
-				cols = *p.TerminalWidth
-			}
-		}
-	}
+	observe.Default().WithFields(logrus.Fields{
+		"event":  "width.resolved",
+		"cols":   cols,
+		"source": source,
+	}).Debug("resolved terminal width")
 
 	// Fit: escalate compaction levels until the output fits, or use the most
 	// compact form. No additional I/O after Detect.

@@ -88,21 +88,35 @@ type Deps struct {
 // cfg.Segments, preserving config order and skipping disabled entries.
 // Unknown segment types are skipped. The returned slice is ready to pass to
 // Render.
+//
+// Each segment also carries its DROP priority (cfg.Segment.EffectivePriority),
+// which is what Fit sacrifices by when the line will not fit. Config ORDER is
+// presentation (left-to-right); config PRIORITY is policy (what survives). They
+// are separate on purpose — see the prioritized interface in detect.go.
 func BuildSegments(cfg config.Config, deps Deps) []Segment {
 	segs := make([]Segment, 0, len(cfg.Segments))
 	for _, sc := range cfg.Segments {
 		if !sc.Enabled {
 			continue
 		}
+		prio := sc.EffectivePriority()
 		switch sc.Type {
 		case "dirgit":
-			segs = append(segs, NewDirGitSegment(deps.Cwd, deps.Git))
+			s := NewDirGitSegment(deps.Cwd, deps.Git)
+			s.Priority = prio
+			segs = append(segs, s)
 		case "repo":
-			segs = append(segs, NewRepoSegment(deps.Git, deps.GH, deps.Branch, deps.RegistryPath, sc.Options))
+			s := NewRepoSegment(deps.Git, deps.GH, deps.Branch, deps.RegistryPath, sc.Options)
+			s.Priority = prio
+			segs = append(segs, s)
 		case "ai":
-			segs = append(segs, NewAISegment(deps.Payload, deps.Cwd, deps.MCP, deps.MCPOpts))
+			s := NewAISegment(deps.Payload, deps.Cwd, deps.MCP, deps.MCPOpts)
+			s.Priority = prio
+			segs = append(segs, s)
 		case "time":
-			segs = append(segs, NewTimeSegment(deps.Clock, cfg.Timezone, cfg.TimeFormat, cfg.DateFormat))
+			s := NewTimeSegment(deps.Clock, cfg.Timezone, cfg.TimeFormat, cfg.DateFormat)
+			s.Priority = prio
+			segs = append(segs, s)
 		default:
 			// Unknown segment type: skip silently.
 		}

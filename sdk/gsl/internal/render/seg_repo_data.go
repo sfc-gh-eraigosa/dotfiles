@@ -2,17 +2,32 @@ package render
 
 // seg_repo_data.go — repoData segmentData + RepoSegment.detect().
 //
-// The repo segment has no per-level compaction in Phase 2 (it's a "repo extra"
-// that is dropped whole in the final tier). detect() captures all the data;
-// format() renders the same content at all levels 0-3.
+// Compaction levels for the repo segment:
+//
+//	level 0: <glyph> <label> PR#157 ⑂4
+//	level 1: drop the worktree-count badge   → <glyph> <label> PR#157
+//	level 2: shorten the PR badge            → <glyph> <label> #157
+//	level 3: ellipsize the repo label        → <glyph> <lab…> #157
+//
+// Until now repoData's format signature was `format(st style.Style, _ int)` — it
+// DISCARDED the level. Its width was therefore flat (~13-44 columns depending on
+// the repo name) at every level of the ladder, which meant the repo segment never
+// contributed a single column to compaction. Fit had to reach the segment-drop
+// tier to shed any width at all, so a long repo name deleted whole segments from
+// the line that a few characters of compaction would have saved.
 
 import (
 	"context"
 	"strings"
 
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
 )
+
+// repoLabelBudget is the display-width cap applied to the repo label at the
+// deepest compaction level.
+const repoLabelBudget = 10
 
 // repoData is the detect-once intermediate for the repo segment.
 type repoData struct {
@@ -30,6 +45,18 @@ type repoData struct {
 	// showPR / showCount mirror the segment options.
 	showPR    bool
 	showCount bool
+	// prio is the drop priority (config.Segment.EffectivePriority).
+	prio int
+}
+
+// priority implements prioritized. The repo/PR you are working in is the last
+// thing worth losing from a narrow line — it is the fact that is NOT recoverable
+// from anywhere else on screen.
+func (d *repoData) priority() int {
+	if d.prio != 0 {
+		return d.prio
+	}
+	return config.PriorityRepo
 }
 
 // detect implements detectable for RepoSegment. Runs repo.Locate + repo.PR once.
@@ -62,6 +89,7 @@ func (s *RepoSegment) detect(ctx context.Context) (segmentData, bool) {
 		label:        s.nameLabel(info),
 		showPR:       s.ShowPR,
 		showCount:    s.ShowCount,
+		prio:         s.Priority,
 		worktreeCount: func() int {
 			if s.ShowCount && loc.WorktreeCount >= 2 {
 				return loc.WorktreeCount
@@ -79,30 +107,47 @@ func (s *RepoSegment) detect(ctx context.Context) (segmentData, bool) {
 }
 
 // format implements segmentData.format for repoData. Pure; no I/O.
-// The repo segment has no per-level text compaction in Phase 2 (it is dropped
-// whole by the final tier if needed).
-func (d *repoData) format(st style.Style, _ int) (text, colorKey string) {
+//
+// Width is monotonically non-increasing in level (spec E5): each level removes
+// or shortens exactly one element and never adds one back.
+func (d *repoData) format(st style.Style, level int) (text, colorKey string) {
 	var b strings.Builder
 
 	if g := glyph(st, d.indicatorKey); g != "" {
 		b.WriteString(g)
 	}
 
+	// Label. Level 3+ ellipsizes it — grapheme-safely, so a CJK or emoji repo
+	// name is cut on a cluster boundary and its true display width is respected.
 	if d.label != "" {
-		if b.Len() > 0 {
-			b.WriteString(" ")
+		label := d.label
+		if level >= 3 {
+			label = truncateText(label, repoLabelBudget)
 		}
-		b.WriteString(d.label)
+		if label != "" {
+			if b.Len() > 0 {
+				b.WriteString(" ")
+			}
+			b.WriteString(label)
+		}
 	}
 
+	// PR badge. Level 2+ drops the redundant "PR" prefix: in a status line whose
+	// segment is already the repo, "#157" is unambiguous.
 	if d.showPR && d.prNumber > 0 {
+		prefix := "PR#"
+		if level >= 2 {
+			prefix = "#"
+		}
 		if b.Len() > 0 {
 			b.WriteString(" ")
 		}
-		b.WriteString(prBadge(st, d.prNumber, d.prState))
+		b.WriteString(prBadgeWithPrefix(st, prefix, d.prNumber, d.prState))
 	}
 
-	if d.showCount && d.worktreeCount >= 2 {
+	// Worktree-count badge: the first thing to go. It is a nice-to-have, and the
+	// worktree GLYPH already tells you that you are in a linked worktree.
+	if level < 1 && d.showCount && d.worktreeCount >= 2 {
 		if b.Len() > 0 {
 			b.WriteString(" ")
 		}

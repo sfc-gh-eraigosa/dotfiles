@@ -26,6 +26,10 @@ type TimeSegment struct {
 	TimeFormat string
 	// DateFormat is the Go layout for the date (default "Mon 01-02").
 	DateFormat string
+	// Priority is the DROP priority used by the fit loop (config.Segment.Priority,
+	// or the built-in default for this type when unset). It is independent of the
+	// segment's position in the line.
+	Priority int
 }
 
 // NewTimeSegment builds a TimeSegment from config values. now may be nil to use

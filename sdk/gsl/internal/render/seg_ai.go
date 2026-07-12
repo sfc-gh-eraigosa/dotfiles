@@ -29,6 +29,10 @@ type AISegment struct {
 	MCP mcp.Runner
 	// MCPOpts is forwarded to mcp.ActiveCount (cache file / clock injection).
 	MCPOpts mcp.ActiveCountOptions
+	// Priority is the DROP priority used by the fit loop (config.Segment.Priority,
+	// or the built-in default for this type when unset). It is independent of the
+	// segment's position in the line.
+	Priority int
 }
 
 // NewAISegment builds an AISegment.
