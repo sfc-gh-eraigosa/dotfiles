@@ -136,14 +136,28 @@ fi
 
 # --- statusline-command.sh (shim for gsl status line) ---
 # The settings.json template points statusLine.command at ~/.claude/statusline-command.sh.
-# This block symlinks the repo shim into place, backing up any existing plain file.
+# COPY the repo shim into that well-known $HOME path — do not symlink it.
+#
+# Per CLAUDE.md ("AI-tool config provisioning"), copy is the forward mechanism and
+# new repo-pointing symlinks must not be introduced. The old `ln -sf` was actively
+# dangerous here: running the installer from a `gss feature` worktree pointed
+# ~/.claude/statusline-command.sh at a TRANSIENT worktree path, so the user's global
+# status line broke the moment that worktree was cleaned up. install_antigravity_skills.sh
+# already copies this same shim (cp + chmod +x); this brings Claude to parity.
 if [ -f "$BASE_DIR/ai/claude/statusline-command.sh" ]; then
-    if [ -e "$CLAUDE_HOME/statusline-command.sh" ] && [ ! -L "$CLAUDE_HOME/statusline-command.sh" ]; then
+    if [ -L "$CLAUDE_HOME/statusline-command.sh" ]; then
+        # Legacy symlink (possibly into a stale checkout). Drop it so `install`
+        # writes a fresh regular file instead of following it back into the repo.
+        echo "  Replacing legacy statusline-command.sh symlink with a copy"
+        rm -f "$CLAUDE_HOME/statusline-command.sh"
+    elif [ -e "$CLAUDE_HOME/statusline-command.sh" ] &&
+        ! cmp -s "$BASE_DIR/ai/claude/statusline-command.sh" "$CLAUDE_HOME/statusline-command.sh"; then
+        # A different real file is present (hand-edited, or from an older revision).
+        # Back it up once; an identical copy is left alone so re-runs stay idempotent.
         echo "  Backing up existing statusline-command.sh -> statusline-command.sh.bak"
         mv "$CLAUDE_HOME/statusline-command.sh" "$CLAUDE_HOME/statusline-command.sh.bak"
     fi
-    ln -sf "$BASE_DIR/ai/claude/statusline-command.sh" "$CLAUDE_HOME/statusline-command.sh"
-    chmod +x "$BASE_DIR/ai/claude/statusline-command.sh"
+    install -m 0755 "$BASE_DIR/ai/claude/statusline-command.sh" "$CLAUDE_HOME/statusline-command.sh"
 fi
 
 echo "Claude Code configuration complete."
