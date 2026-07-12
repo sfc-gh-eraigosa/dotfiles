@@ -102,9 +102,12 @@ func BuildSegments(cfg config.Config, deps Deps) []Segment {
 		prio := sc.EffectivePriority()
 		switch sc.Type {
 		case "dirgit":
-			s := NewDirGitSegment(deps.Cwd, deps.Git)
-			s.Priority = prio
-			segs = append(segs, s)
+			dg := NewDirGitSegment(deps.Cwd, deps.Git)
+			dg.Priority = prio
+			// Reuse the caller's pre-computed status instead of re-running
+			// git.Status inside Detect (WS3/F12). Nil ⇒ detect it ourselves.
+			dg.Info = deps.GitInfo
+			segs = append(segs, dg)
 		case "repo":
 			s := NewRepoSegment(deps.Git, deps.GH, deps.Branch, deps.RegistryPath, sc.Options)
 			s.Priority = prio
@@ -175,7 +178,7 @@ func RenderAt(ctx context.Context, cfg config.Config, st style.Style, segs []Seg
 						"event":   "segment.panic",
 						"segment": segmentTypeName(s),
 						"panic":   fmt.Sprintf("%v", r),
-					}).Warn("segment panicked; dropping")
+					}).Error("segment panicked; dropping")
 					results[idx] = result{ok: false}
 				}
 			}()

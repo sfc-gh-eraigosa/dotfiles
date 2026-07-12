@@ -19,8 +19,7 @@ import (
 	"context"
 	"os/exec"
 
-	"github.com/sirupsen/logrus"
-	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/observe"
+	gslexec "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/exec"
 )
 
 // Runner is the single entry point for MCP subprocess invocations in gsl.
@@ -52,6 +51,11 @@ func NewSystemRunner() *SystemRunner {
 // given args and context. name is the full executable, not a subcommand
 // — unlike the git/gh seams which prepend a fixed binary. Stdout and
 // Stderr are merged into a single buffer.
+//
+// Containment (F12/E18): hardened via internal/exec — own process group,
+// group-wide kill on cancellation, WaitDelay bound on the I/O pipes. `claude
+// mcp list` DIALS EVERY SERVER, so it is the likeliest of the three seams to
+// leave a transport child holding the stdout pipe after its own deadline.
 func (r *SystemRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	bin := name
 	if r.Path != "" {
@@ -62,13 +66,9 @@ func (r *SystemRunner) Run(ctx context.Context, name string, args ...string) ([]
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
+	gslexec.Harden(cmd)
 	if err := cmd.Run(); err != nil {
-		observe.Default().WithFields(logrus.Fields{
-			"event":   "mcp.subprocess_error",
-			"command": bin,
-			"args":    args,
-			"error":   err.Error(),
-		}).Warn("mcp subprocess failed")
+		gslexec.LogSubprocessError("mcp", bin, args, err)
 		return buf.Bytes(), err
 	}
 	return buf.Bytes(), nil

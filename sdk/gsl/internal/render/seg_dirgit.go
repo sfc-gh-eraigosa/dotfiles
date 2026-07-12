@@ -27,14 +27,41 @@ type DirGitSegment struct {
 	// or the built-in default for this type when unset). It is independent of the
 	// segment's position in the line.
 	Priority int
+
+	// Info is a PRE-COMPUTED git status (from Deps.GitInfo, threaded through
+	// BuildSegments). When non-nil the segment MUST NOT shell out: the caller
+	// already paid for those two execs. Nil means "not pre-computed; detect it
+	// yourself", which keeps every other caller (tests, internal/preview)
+	// working unchanged.
+	Info *git.Info
 	// home overrides $HOME for ~-abbreviation (tests). Empty → os.UserHomeDir.
 	home string
 }
 
 // NewDirGitSegment builds a DirGitSegment. cwd may be "" to fall back to
 // os.Getwd at render time.
+//
+// The signature is deliberately unchanged (out-of-package callers depend on it);
+// a pre-computed status is supplied by setting the Info field, which
+// BuildSegments does from Deps.GitInfo.
 func NewDirGitSegment(cwd string, gitRunner git.Runner) *DirGitSegment {
 	return &DirGitSegment{Cwd: cwd, Git: gitRunner}
+}
+
+// status returns the git status for dir, reusing the pre-computed Info when the
+// caller threaded one in and shelling out only otherwise.
+func (s *DirGitSegment) status(ctx context.Context, dir string) (git.Info, bool) {
+	if s.Info != nil {
+		return *s.Info, true
+	}
+	if s.Git == nil {
+		return git.Info{}, false
+	}
+	info, err := git.Status(ctx, s.Git, dir)
+	if err != nil {
+		return git.Info{}, false
+	}
+	return info, true
 }
 
 // Render implements Segment.
@@ -61,10 +88,8 @@ func (s *DirGitSegment) Render(ctx context.Context, st style.Style, _ int) (text
 	b.WriteString(s.abbrev(cwd))
 
 	// Git detail (best-effort; omit on any error / cancellation).
-	if s.Git != nil {
-		if info, err := git.Status(ctx, s.Git, cwd); err == nil {
-			s.appendGit(&b, st, info)
-		}
+	if info, ok := s.status(ctx, cwd); ok {
+		s.appendGit(&b, st, info)
 	}
 
 	return b.String(), "dirgit", true

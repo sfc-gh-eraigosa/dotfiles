@@ -100,7 +100,7 @@ func Detect(ctx context.Context, cfg config.Config, st style.Style, segs []Segme
 						"event":   "segment.panic",
 						"segment": segmentTypeName(s),
 						"panic":   fmt.Sprintf("%v", r),
-					}).Warn("segment panicked during detect; dropping")
+					}).Error("segment panicked during detect; dropping")
 					items[idx] = item{ok: false}
 				}
 			}()

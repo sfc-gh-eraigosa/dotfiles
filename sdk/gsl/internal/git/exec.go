@@ -21,8 +21,7 @@ import (
 	"context"
 	"os/exec"
 
-	"github.com/sirupsen/logrus"
-	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/observe"
+	gslexec "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/exec"
 )
 
 // Runner is the single entry point for git invocations in the gsl codebase.
@@ -80,6 +79,12 @@ func buildArgs(dir, subcommand string, extra ...string) []string {
 // Stdout and Stderr are merged into a single buffer. The buffer is returned
 // even when the command exits non-zero so that callers can surface git's
 // own error message verbatim.
+//
+// Containment (F12/E18): the command is hardened via internal/exec — its own
+// process group, a group-wide kill on cancellation, and a WaitDelay bound on
+// the I/O pipes. Without that, a grandchild inheriting the stdout pipe keeps
+// Wait() blocked long past ctx's deadline (measured: 5004 ms against an 800 ms
+// deadline).
 func (r *SystemRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	bin := r.Path
 	if bin == "" {
@@ -93,13 +98,9 @@ func (r *SystemRunner) Run(ctx context.Context, name string, args ...string) ([]
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
+	gslexec.Harden(cmd)
 	if err := cmd.Run(); err != nil {
-		observe.Default().WithFields(logrus.Fields{
-			"event":   "git.subprocess_error",
-			"command": bin,
-			"args":    full,
-			"error":   err.Error(),
-		}).Warn("git subprocess failed")
+		gslexec.LogSubprocessError("git", bin, full, err)
 		return buf.Bytes(), err
 	}
 	return buf.Bytes(), nil
