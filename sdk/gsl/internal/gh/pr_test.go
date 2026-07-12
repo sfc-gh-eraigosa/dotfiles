@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,14 +24,15 @@ func setupCacheDir(t *testing.T) string {
 }
 
 // writeFreshCache manually writes a cache entry that is < 60 s old.
-func writeFreshCache(t *testing.T, cacheDir, branch string, info gh.PRInfo) {
+//
+// The path comes from the production key function (via the test-only export) so
+// that seeding cannot silently drift from where PR() actually looks — a hardcoded
+// key here would make every cache-hit test vacuously pass the day the key
+// changes, which is precisely how a repo-scoped key could have shipped broken.
+func writeFreshCache(t *testing.T, _ string, branch string, info gh.PRInfo) {
 	t.Helper()
-	safe := branch
-	for _, ch := range []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|"} {
-		safe = replaceAll(safe, ch, "-")
-	}
-	dir := filepath.Join(cacheDir, "gsl")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	path := gh.CacheFilePathForTest(branch)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	type cacheEntry struct {
@@ -43,7 +45,6 @@ func writeFreshCache(t *testing.T, cacheDir, branch string, info gh.PRInfo) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	path := filepath.Join(dir, "pr-"+safe+".json")
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatalf("write cache: %v", err)
 	}
@@ -318,8 +319,152 @@ func TestPRBranchSanitization(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 cache file, got %d entries", len(entries))
 	}
+	// The slashes must be flattened to dashes. The filename carries a trailing
+	// repo-scope discriminator (pr-<branch>-<scope>.json) so that two different
+	// repositories sharing a branch name cannot share a cache entry — see
+	// TestPR_NegativeCacheIsScopedToRepo — hence a prefix match, not equality.
 	name := entries[0].Name()
-	if name != "pr-feature-foo-bar.json" {
-		t.Errorf("cache filename = %q; want pr-feature-foo-bar.json", name)
+	const wantPrefix = "pr-feature-foo-bar-"
+	if !strings.HasPrefix(name, wantPrefix) || !strings.HasSuffix(name, ".json") {
+		t.Errorf("cache filename = %q; want %q<scope>.json", name, wantPrefix)
+	}
+	// The point of the sanitisation: no path separators and no traversal.
+	if strings.ContainsAny(name, `/\`) || strings.Contains(name, "..") {
+		t.Errorf("cache filename %q must not contain a path separator or traversal", name)
+	}
+	// And it must be the file PR() actually reads back.
+	if got := filepath.Base(gh.CacheFilePathForTest("feature/foo/bar")); got != name {
+		t.Errorf("on-disk cache file %q is not the one PR() looks up (%q)", name, got)
+	}
+}
+
+// ─── E19 / F13 — negative caching ────────────────────────────────────────────
+
+// TestPR_NegativeCacheOnError is E19.
+//
+// The NORMAL case on `main` is that no PR exists for the branch, and gh signals
+// that by EXITING 1 — not by printing `{"number":0}`. gh.PR's error path
+// returned (nil, nil) without writing the cache, so nothing was ever cached and
+// `gh pr view` — a ~760ms NETWORK call that itself forks three more git
+// subprocesses — re-ran on EVERY render, forever, for any branch without a PR.
+//
+// The spy counts invocations: the runner must be called exactly ONCE across two
+// PR() calls inside the TTL.
+func TestPR_NegativeCacheOnError(t *testing.T) {
+	cacheDir := setupCacheDir(t)
+
+	spy := &fake.Runner{
+		// The real shape of "no PR for this branch": gh exits 1.
+		Default: fake.Response{
+			Stderr:   []byte("no pull requests found for branch \"main\"\n"),
+			ExitCode: 1,
+			Err:      errors.New("exit status 1"),
+		},
+	}
+
+	// First call — the runner runs, gh exits 1, and the NEGATIVE result must be
+	// persisted.
+	info1, err := gh.PR(context.Background(), spy, "main")
+	if err != nil {
+		t.Fatalf("first call: unexpected error: %v", err)
+	}
+	if info1 != nil {
+		t.Fatalf("first call: expected nil PRInfo (no PR), got %+v", info1)
+	}
+	if got := spy.CallCount(); got != 1 {
+		t.Fatalf("first call: CallCount() = %d; want 1", got)
+	}
+
+	// A cache entry MUST exist on disk after the error path.
+	entries, err := os.ReadDir(filepath.Join(cacheDir, "gsl"))
+	if err != nil {
+		t.Fatalf("no cache directory was created on the gh-error path: %v "+
+			"(the negative result was not cached — E19/F13)", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected exactly 1 cache file after the gh-error path, got %d: %v "+
+			"(the negative result was not cached — E19/F13)", len(entries), entries)
+	}
+
+	// Second call within the TTL — the runner must NOT be invoked again.
+	info2, err := gh.PR(context.Background(), spy, "main")
+	if err != nil {
+		t.Fatalf("second call: unexpected error: %v", err)
+	}
+	if info2 != nil {
+		t.Fatalf("second call: expected nil PRInfo (cached negative), got %+v", info2)
+	}
+	if got := spy.CallCount(); got != 1 {
+		t.Errorf("second call: CallCount() = %d; want still 1 — `gh pr view` (a ~760ms "+
+			"network call) re-ran on a cached negative result (E19/F13)", got)
+	}
+}
+
+// TestPR_NegativeCacheOnEmptyOutput asserts the OTHER silent-omit path — gh
+// exits 0 but prints nothing — is negatively cached too.
+func TestPR_NegativeCacheOnEmptyOutput(t *testing.T) {
+	setupCacheDir(t)
+
+	spy := &fake.Runner{Default: fake.Response{Stdout: nil, Err: nil}}
+
+	if _, err := gh.PR(context.Background(), spy, "main"); err != nil {
+		t.Fatalf("first call: unexpected error: %v", err)
+	}
+	if _, err := gh.PR(context.Background(), spy, "main"); err != nil {
+		t.Fatalf("second call: unexpected error: %v", err)
+	}
+	if got := spy.CallCount(); got != 1 {
+		t.Errorf("CallCount() = %d; want 1 — the empty-output result must be negatively cached (E19/F13)", got)
+	}
+}
+
+// TestPR_TimeoutUsesShorterTTL asserts the EDGE of E19: a timeout-class failure
+// is cached too (so we don't hammer a hanging gh every render), but with a much
+// shorter TTL than a clean "no PR" — a network blip must not blind us to a PR
+// for a full minute.
+func TestPR_TimeoutUsesShorterTTL(t *testing.T) {
+	setupCacheDir(t)
+
+	// An already-cancelled context reaches the runner as a context error.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	spy := &fake.Runner{}
+	if _, err := gh.PR(ctx, spy, "main"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(gh.CacheFilePathForTest("main"))
+	if err != nil {
+		t.Fatalf("timeout result was not cached at all: %v (E19 edge)", err)
+	}
+	var entry struct {
+		TTLSeconds int `json:"ttl_seconds"`
+	}
+	if err := json.Unmarshal(data, &entry); err != nil {
+		t.Fatalf("unmarshal cache entry: %v", err)
+	}
+	if entry.TTLSeconds <= 0 {
+		t.Fatalf("timeout cache entry has no explicit TTL (ttl_seconds=%d); a "+
+			"timeout must use a SHORTER TTL than a clean no-PR result (E19 edge)", entry.TTLSeconds)
+	}
+	if entry.TTLSeconds >= 60 {
+		t.Errorf("timeout TTL = %ds; want shorter than the 60s no-PR TTL (E19 edge)", entry.TTLSeconds)
+	}
+}
+
+// TestPR_NilRunner_NoPanic pins the degraded path: gh.PR must not panic when the
+// Runner is nil (Deps{GH: nil}). The panic was invisible because render's
+// recover() swallowed it and dropped the segment — a test could stay green on a
+// panicking path.
+func TestPR_NilRunner_NoPanic(t *testing.T) {
+	setupCacheDir(t)
+
+	info, err := gh.PR(context.Background(), nil, "main")
+	if err != nil {
+		t.Fatalf("nil runner: unexpected error: %v", err)
+	}
+	if info != nil {
+		t.Fatalf("nil runner: expected nil PRInfo, got %+v", info)
 	}
 }

@@ -96,7 +96,11 @@ func BuildSegments(cfg config.Config, deps Deps) []Segment {
 		}
 		switch sc.Type {
 		case "dirgit":
-			segs = append(segs, NewDirGitSegment(deps.Cwd, deps.Git))
+			dg := NewDirGitSegment(deps.Cwd, deps.Git)
+			// Reuse the caller's pre-computed status instead of re-running
+			// git.Status inside Detect (WS3/F12). Nil ⇒ detect it ourselves.
+			dg.Info = deps.GitInfo
+			segs = append(segs, dg)
 		case "repo":
 			segs = append(segs, NewRepoSegment(deps.Git, deps.GH, deps.Branch, deps.RegistryPath, sc.Options))
 		case "ai":
@@ -161,7 +165,7 @@ func RenderAt(ctx context.Context, cfg config.Config, st style.Style, segs []Seg
 						"event":   "segment.panic",
 						"segment": segmentTypeName(s),
 						"panic":   fmt.Sprintf("%v", r),
-					}).Warn("segment panicked; dropping")
+					}).Error("segment panicked; dropping")
 					results[idx] = result{ok: false}
 				}
 			}()

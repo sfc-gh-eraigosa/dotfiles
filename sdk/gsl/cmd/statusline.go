@@ -87,10 +87,20 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 		}
 	}
 
-	// Best-effort branch from git.Status.
+	// Git status, computed EXACTLY ONCE (WS3 / F12).
+	//
+	// The repo segment needs the branch before Detect starts (BuildSegments takes
+	// it as a construction arg), so this one call cannot be folded into the
+	// concurrent phase. What CAN go is the duplicate: DirGitSegment used to run
+	// git.Status a second time inside Detect, for 4 git execs where 2 suffice —
+	// and those two extra execs were spent inside the SHARED 1s context, draining
+	// the budget the concurrent segments were about to need. Threading the result
+	// through Deps.GitInfo makes the segment reuse it.
 	branch := ""
+	var gitInfo *git.Info
 	if cwd != "" {
 		if info, err := git.Status(ctx, gitRunner, cwd); err == nil {
+			gitInfo = &info
 			branch = info.Branch
 		}
 	}
@@ -107,6 +117,7 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 		Payload:      p,
 		Cwd:          cwd,
 		Branch:       branch,
+		GitInfo:      gitInfo,
 		RegistryPath: repo.DefaultRegistryPath(),
 		Git:          gitRunner,
 		GH:           ghRunner,

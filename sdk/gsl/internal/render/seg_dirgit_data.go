@@ -51,11 +51,13 @@ func (s *DirGitSegment) detect(ctx context.Context) (segmentData, bool) {
 
 	d := &dirGitData{cwd: cwd, home: home}
 
-	if s.Git != nil {
-		if info, err := git.Status(ctx, s.Git, cwd); err == nil {
-			d.gitInfo = &info
-			d.hasGit = true
-		}
+	// Reuse the pre-threaded status when the caller already computed it
+	// (Deps.GitInfo); shell out only when it is nil. This is the OTHER half of
+	// the 4-execs-where-2-suffice fix — cmd used to run git.Status serially for
+	// the branch and then this segment ran it AGAIN inside Detect.
+	if info, ok := s.status(ctx, cwd); ok {
+		d.gitInfo = &info
+		d.hasGit = true
 	}
 
 	return d, true
