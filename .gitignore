@@ -56,8 +56,10 @@ opt/bin/*
 !opt/bin/pkg-install-apt
 !opt/bin/pkg-install-brew
 !opt/bin/install_windows.sh
+!opt/bin/sshd-setup
 # Test drivers for the committed opt/bin tools (issue #46 phase 2)
 !opt/bin/pkg-install_test.sh
+!opt/bin/sshd-setup_test.sh
 
 # Opt Subdirectory Configuration
 opt/.DS_Store

@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# sshd-setup — on-demand native sshd install/enable + GitHub-key seeding.
+# Only acts when invoked; see docs/sshd-setup.md. Windows: setup-sshd.ps1.
+set -euo pipefail
+
+DRY_RUN=0
+run() { if [ "$DRY_RUN" = 1 ]; then echo "DRY: $*"; else "$@"; fi; }
+
+detect_platform() {
+    case "$(uname -s)" in
+        Darwin) echo macos; return ;;
+        Linux)
+            local pv="${SSHD_SETUP_PROC_VERSION:-/proc/version}"
+            if [ -r "$pv" ] && grep -qi microsoft "$pv"; then echo wsl; else echo linux; fi ;;
+        *) echo "sshd-setup: unsupported platform $(uname -s)" >&2; exit 1 ;;
+    esac
+}
+
+usage() { echo "Usage: sshd-setup [--dry-run] {status|enable|keys}" >&2; exit 1; }
+
+main() {
+    [ $# -ge 1 ] || usage
+    if [ "$1" = "--dry-run" ]; then DRY_RUN=1; shift; fi
+    case "${1:-}" in
+        _detect) detect_platform ;;   # test hook
+        status|enable|keys) "cmd_$1" ;;
+        *) usage ;;
+    esac
+}
+main "$@"
