@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# claude-rc-boot — start a named Claude remote-control session.
+#
+# Intended to be auto-started when a WSL terminal opens at Windows logon (see
+# opt/Desktop/Apps/scripts/install-claude-rc-autostart.ps1), but usable anywhere.
+# The session name is "<prefix>-<YYYY-MM-DD_HHMM>" so it records when it came up.
+#
+# Prefix precedence: $1 arg  >  $CLAUDE_RC_PREFIX env  >  short hostname.
+#
+# Usage:
+#   claude-rc-boot [prefix]                  # start the remote-control session
+#   claude-rc-boot --print-name [prefix]     # print the computed name, don't launch
+#   claude-rc-boot --help
+set -u
+
+rc_prefix() {
+    local p="${1:-${CLAUDE_RC_PREFIX:-}}"
+    [ -z "$p" ] && p="$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo host)"
+    # sanitize to a safe token: non [A-Za-z0-9_-] -> '-', squeeze, trim edges
+    printf '%s' "$p" | tr -c 'A-Za-z0-9_-' '-' | sed 's/-\{2,\}/-/g; s/^-//; s/-*$//'
+}
+
+rc_name() { echo "$(rc_prefix "${1:-}")-$(date +%Y-%m-%d_%H%M)"; }
+
+usage() {
+    cat <<'EOF'
+Usage: claude-rc-boot [prefix]
+       claude-rc-boot --print-name [prefix]   print the computed session name, don't launch
+       claude-rc-boot --help
+
+Starts an interactive Claude session with Remote Control enabled, named
+"<prefix>-<date>_<time>". Prefix defaults to $CLAUDE_RC_PREFIX or the short hostname.
+EOF
+}
+
+main() {
+    case "${1:-}" in
+        --help|-h) usage; exit 0 ;;
+        --print-name) shift; rc_name "${1:-}"; exit 0 ;;
+    esac
+    local name; name="$(rc_name "${1:-}")"
+    export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+    # shellcheck source=/dev/null
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1
+    if ! command -v claude >/dev/null 2>&1; then
+        echo "claude-rc-boot: 'claude' not found on PATH (is Claude Code installed?)" >&2
+        exit 1
+    fi
+    cd "$HOME" || exit 1
+    echo "Starting Claude remote-control session: $name"
+    exec claude --remote-control "$name"
+}
+main "$@"
