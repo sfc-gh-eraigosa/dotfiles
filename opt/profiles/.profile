@@ -135,11 +135,9 @@ test -e "/workspace/Human-Connection/.devcontainer/profile_devcontainer_alias.sh
 if [ -d "/home/linuxbrew" ]; then
     eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 fi
-# docker windows
-if [ -d "/mnt/c/Program\ Files/Docker/Docker" ]; then
-    alias docker='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker.exe'
-    alias docker-compose='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker-compose.exe'
-fi
+# docker windows: handled in .bash_aliases (WSL-aware guard). The block that
+# lived here was dead code — the backslash inside the quoted -d path meant the
+# test never matched, so these aliases were never actually defined from here.
 
 # pyenv, rbenv, goenv paths
 [ -d "$HOME/.pyenv/bin" ] && export PATH="$PATH:$HOME/.pyenv/bin"
