@@ -151,24 +151,65 @@ assert_eq "$RC" "1" "empty keys response exits 1"
 assert_eq "$(wc -l < "${FAKE_HOME}/.ssh/authorized_keys" | tr -d ' ')" "2" "authorized_keys untouched on empty response"
 
 # === Task 5: enable — native-first, sshd.env, dry-run ===
-# native-first: sshd already running -> no pkg-install call
+# Mock the package manager (apt-get) and sudo so we can observe install calls
+# without touching the real system. sudo just runs its remaining args.
+cat > "${TMPDIR_TEST}/mocks/sudo" <<'EOF'
+#!/usr/bin/env bash
+exec "$@"
+EOF
+chmod +x "${TMPDIR_TEST}/mocks/sudo"
+cat > "${TMPDIR_TEST}/mocks/apt-get" <<'EOF'
+#!/usr/bin/env bash
+echo "APT-GET $*" >> "${PKG_LOG:?}"
+EOF
+chmod +x "${TMPDIR_TEST}/mocks/apt-get"
+printf 'ssh-ed25519 AAAA-k\n' > "${TMPDIR_TEST}/keys_fixture2"
+
+# native-first: sshd already running -> no apt-get install call
 cat > "${TMPDIR_TEST}/mocks/systemctl" <<'EOF'
 #!/usr/bin/env bash
 [ "$1" = "is-active" ] && exit 0
 exit 0
 EOF
 chmod +x "${TMPDIR_TEST}/mocks/systemctl"
-cat > "${TMPDIR_TEST}/mocks/pkg-install" <<'EOF'
-#!/usr/bin/env bash
-echo "PKG-INSTALL-CALLED" >> "${PKG_LOG:?}"
-EOF
-chmod +x "${TMPDIR_TEST}/mocks/pkg-install"
-printf 'ssh-ed25519 AAAA-k\n' > "${TMPDIR_TEST}/keys_fixture2"
 PKG_LOG="${TMPDIR_TEST}/pkg.log"; : > "$PKG_LOG"
 PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" HOME="$FAKE_HOME" PKG_LOG="$PKG_LOG" \
   SSHD_SETUP_KEYS_URL="${TMPDIR_TEST}/keys_fixture2" bash "$SSHD_SETUP" enable >/dev/null 2>&1
-assert_eq "$(cat "$PKG_LOG")" "" "enable skips pkg-install when sshd running"
+assert_eq "$(cat "$PKG_LOG")" "" "enable skips install when sshd already running"
 assert_grep "sshd.env written with SSHD_LOGIN" "SSHD_LOGIN=true" "${FAKE_HOME}/.sshd.env"
+
+# NOT running + NOT installed -> installs openssh-server via apt-get
+cat > "${TMPDIR_TEST}/mocks/systemctl" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  is-active) exit 3 ;;
+  list-unit-files) echo "ssh.service enabled"; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "${TMPDIR_TEST}/mocks/systemctl"
+cat > "${TMPDIR_TEST}/mocks/pgrep" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+chmod +x "${TMPDIR_TEST}/mocks/pgrep"
+: > "$PKG_LOG"
+INST_HOME="${TMPDIR_TEST}/insthome"; mkdir -p "$INST_HOME"
+PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" HOME="$INST_HOME" PKG_LOG="$PKG_LOG" \
+  SSHD_SETUP_SSHD_PATH=/nonexistent SSHD_SETUP_KEYS_URL="${TMPDIR_TEST}/keys_fixture2" \
+  bash "$SSHD_SETUP" enable >/dev/null 2>&1
+case "$(cat "$PKG_LOG")" in
+  *"install -y openssh-server"*) echo "PASS: enable installs openssh-server when absent"; PASS=$((PASS+1));;
+  *) echo "FAIL: enable did not apt-get install openssh-server (got: $(cat "$PKG_LOG"))"; FAIL=$((FAIL+1));;
+esac
+# restore a "running" systemctl + present pgrep for any later cases
+cat > "${TMPDIR_TEST}/mocks/systemctl" <<'EOF'
+#!/usr/bin/env bash
+[ "$1" = "is-active" ] && exit 0
+exit 0
+EOF
+chmod +x "${TMPDIR_TEST}/mocks/systemctl"
+rm -f "${TMPDIR_TEST}/mocks/pgrep"
 
 # dry-run mutates nothing: fresh HOME stays empty
 DRY_HOME="${TMPDIR_TEST}/dryhome"; mkdir -p "$DRY_HOME"

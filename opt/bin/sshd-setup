@@ -85,8 +85,21 @@ seed_keys() {
 cmd_keys() { seed_keys; }
 
 install_sshd() {
+    # macOS ships sshd; nothing to install. Elsewhere install openssh-server
+    # directly with the native package manager. NOTE: do NOT use the repo's
+    # `pkg-install` here — that installs the curated common-core manifest and
+    # ignores its argument, so it would never install openssh-server.
     [ "$(detect_platform)" = macos ] && return 0
-    run pkg-install openssh-server
+    if command -v apt-get >/dev/null 2>&1; then
+        run sudo apt-get install -y openssh-server
+    elif command -v dnf >/dev/null 2>&1; then
+        run sudo dnf install -y openssh-server
+    elif command -v yum >/dev/null 2>&1; then
+        run sudo yum install -y openssh-server
+    else
+        echo "sshd-setup: no supported package manager (apt-get/dnf/yum) to install openssh-server" >&2
+        return 1
+    fi
 }
 
 enable_service() {
