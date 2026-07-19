@@ -3,7 +3,7 @@
 - **Slug:** sshd-setup
 - **Date:** 2026-07-16
 - **Status:** Approved
-- **Relates to:** plan `../plans/sshd-setup.md` · issue #169 · PR #(pending)
+- **Relates to:** plan `../plans/sshd-setup.md` · issue #169 · PR #170
 
 ## 1. Goal
 

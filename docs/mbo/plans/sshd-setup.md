@@ -7,7 +7,7 @@
 - **Slug:** sshd-setup
 - **Date:** 2026-07-16
 - **Status:** Draft
-- **Relates to:** spec `../specs/sshd-setup.md` · issue #169 · PR #(pending)
+- **Relates to:** spec `../specs/sshd-setup.md` · issue #169 · PR #170
 
 **Goal:** An on-demand `sshd-setup` bash tool (+ `setup-sshd.ps1` for Windows-native) that
 installs/starts the OS-native sshd, opens the firewall, and seeds `authorized_keys` from the
