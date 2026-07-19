@@ -16,6 +16,34 @@ detect_platform() {
     esac
 }
 
+sshd_running() {
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl is-active --quiet ssh 2>/dev/null && return 0
+        systemctl is-active --quiet sshd 2>/dev/null && return 0
+    fi
+    if [ "$(detect_platform)" = macos ]; then
+        systemsetup -getremotelogin 2>/dev/null | grep -qi "on" && return 0
+    fi
+    pgrep -x sshd >/dev/null 2>&1
+}
+
+sshd_installed() {
+    [ "$(detect_platform)" = macos ] && return 0
+    command -v sshd >/dev/null 2>&1 && return 0
+    [ -x "${SSHD_SETUP_SSHD_PATH:-/usr/sbin/sshd}" ]
+}
+
+cmd_status() {
+    echo "platform: $(detect_platform)"
+    if sshd_running; then echo "sshd: running"
+    elif sshd_installed; then echo "sshd: installed, not running"
+    else echo "sshd: not installed"; fi
+    [ -f "${HOME}/.sshd.env" ] && echo "sshd.env: present" || echo "sshd.env: absent"
+    [ -f "${HOME}/.ssh/authorized_keys" ] \
+        && echo "authorized_keys: $(wc -l < "${HOME}/.ssh/authorized_keys" | tr -d ' ') line(s)" \
+        || echo "authorized_keys: absent"
+}
+
 usage() { echo "Usage: sshd-setup [--dry-run] {status|enable|keys}" >&2; exit 1; }
 
 main() {

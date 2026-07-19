@@ -35,4 +35,41 @@ echo "Linux version 6.6 (gcc)" > "${TMPDIR_TEST}/proc_version"
 OUT=$(SSHD_SETUP_PROC_VERSION="${TMPDIR_TEST}/proc_version" bash "$SSHD_SETUP" _detect 2>&1)
 assert_eq "$OUT" "linux" "detects plain linux"
 
+# === Task 2: status (read-only probes) ===
+# status with mocked systemctl "active" -> reports running, exit 0
+cat > "${TMPDIR_TEST}/mocks/systemctl" <<'EOF'
+#!/usr/bin/env bash
+[ "$1" = "is-active" ] && exit 0
+exit 0
+EOF
+chmod +x "${TMPDIR_TEST}/mocks/systemctl"
+OUT=$(PATH="${TMPDIR_TEST}/mocks:$PATH" bash "$SSHD_SETUP" status 2>&1)
+case "$OUT" in *"running"*) echo "PASS: status reports running"; PASS=$((PASS+1));;
+  *) echo "FAIL: status missing 'running' (got: $OUT)"; FAIL=$((FAIL+1));; esac
+
+# status with everything absent -> still exit 0, reports not installed
+cat > "${TMPDIR_TEST}/mocks/systemctl" <<'EOF'
+#!/usr/bin/env bash
+exit 3
+EOF
+chmod +x "${TMPDIR_TEST}/mocks/systemctl"
+cat > "${TMPDIR_TEST}/mocks/pgrep" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+chmod +x "${TMPDIR_TEST}/mocks/pgrep"
+cat > "${TMPDIR_TEST}/mocks/sshd" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+# NOTE: mocks/sshd intentionally NOT created and not executable — we want
+# `command -v sshd` to miss; remove it in case a later test adds one.
+rm -f "${TMPDIR_TEST}/mocks/sshd"
+set +e
+OUT=$(PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" SSHD_SETUP_SSHD_PATH=/nonexistent bash "$SSHD_SETUP" status 2>&1); RC=$?
+set -e
+assert_eq "$RC" "0" "status exits 0 even when sshd absent"
+case "$OUT" in *"not installed"*) echo "PASS: status reports not installed"; PASS=$((PASS+1));;
+  *) echo "FAIL: status missing 'not installed' (got: $OUT)"; FAIL=$((FAIL+1));; esac
+
 _test_report
