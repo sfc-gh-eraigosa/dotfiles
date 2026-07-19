@@ -38,13 +38,15 @@ fi
 # registers the handler at boot; if it has gone missing (interop disabled, or a
 # flaky restart), re-register it at runtime. binfmt_misc REFUSES a duplicate name,
 # so only register when BOTH known handler names are absent. Session-only; the
-# persistent fix is `[interop] enabled=true` in /etc/wsl.conf.
+# persistent fix is the wsl-interop-binfmt.service unit installed by
+# opt/scripts/system/wsl_interop_binfmt.sh (called later from install.sh) —
+# WSL's own systemd-binfmt self-heal is condition-blocked under WSL.
 # ---------------------------------------------------------------------------
 if [ ! -e /proc/sys/fs/binfmt_misc/WSLInterop ] && [ ! -e /proc/sys/fs/binfmt_misc/WSLInterop-late ]; then
   if [ -e /proc/sys/fs/binfmt_misc/register ]; then
     echo "WSL interop handler not registered; enabling it (may prompt for sudo)..."
     # install.sh caches sudo up front, so this is normally non-interactive.
-    sudo bash -c 'echo ":WSLInterop:M::MZ::/init:PF" > /proc/sys/fs/binfmt_misc/register' 2>/dev/null \
+    sudo bash -c 'echo ":WSLInterop:M::MZ::/init:P" > /proc/sys/fs/binfmt_misc/register' 2>/dev/null \
       && echo "  WSL interop registered." \
       || echo "  WARNING: could not register WSL interop (need root?)." >&2
   else
@@ -86,7 +88,12 @@ fi
 # Deploy opt/Desktop/* onto the Windows Desktop.
 # ---------------------------------------------------------------------------
 echo "Deploying opt/Desktop -> ${win_desktop}"
-cp -r "${BASE_DIR}/opt/Desktop/." "${win_desktop}/"
+# --remove-destination is load-bearing: OneDrive can dehydrate previously
+# deployed files into cloud placeholders (NTFS reparse points) that drvfs
+# cannot open for read or truncate ("Invalid argument" / I/O error on cp).
+# Unlinking first always works, so overwrite via unlink+create. GNU-only
+# flag is fine: this deploy path only runs under WSL (Ubuntu coreutils).
+cp -r --remove-destination "${BASE_DIR}/opt/Desktop/." "${win_desktop}/"
 
 # ---------------------------------------------------------------------------
 # Interactive Windows Customization (WSL only)
