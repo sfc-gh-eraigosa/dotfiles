@@ -61,6 +61,15 @@ if [ -f "${BASE_DIR}/opt/bin/install_windows.sh" ]; then
   bash "${BASE_DIR}/opt/bin/install_windows.sh" "${BASE_DIR}"
 fi
 
+# WSL only: keep the WSLInterop binfmt registration alive so Windows .exe
+# interop survives (a wiped registration makes every .exe fail with
+# "exec format error"; WSL's own self-heal unit is condition-blocked under
+# WSL). No-op outside WSL; may prompt for sudo once.
+if [ -f "${BASE_DIR}/opt/scripts/system/wsl_interop_binfmt.sh" ]; then
+  bash "${BASE_DIR}/opt/scripts/system/wsl_interop_binfmt.sh" || \
+    echo "WARNING: WSL interop binfmt setup reported problems; continuing."
+fi
+
 # Source hardware detection
 if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
   . "${BASE_DIR}/opt/lib/hardware.sh"

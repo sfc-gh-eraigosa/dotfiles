@@ -192,10 +192,19 @@ if [ -d "/usr/libexec/java_home" ] ; then
   JAVA_HOME=$(/usr/libexec/java_home -v "${JAVA_VERSION}"); export JAVA_HOME
 fi
 
+# Windows paths (WSL): prefer the install-time cache written by
+# opt/bin/install_windows.sh (resolved from the real Windows env via
+# wslpath, so a custom automount root or relocated ProgramFiles is honored);
+# fall back to the standard /mnt/c layout so a missing cache never breaks login.
+# shellcheck disable=SC1091
+[ -f "${HOME}/.cache/dotfiles/winenv.sh" ] && . "${HOME}/.cache/dotfiles/winenv.sh"
+WIN_PROGRAM_FILES="${WIN_PROGRAM_FILES:-/mnt/c/Program Files}"
+
+# shellcheck disable=SC2139  # intentional: bake the install-time-resolved path into the alias
 if [ "$(uname -s)" = "Darwin" ]; then
     alias code="open '/Applications/Visual Studio Code.app'"
 else
-    alias code="/mnt/c/Program\ Files/Microsoft\ VS\ Code/Code.exe"
+    alias code="\"${WIN_PROGRAM_FILES}/Microsoft VS Code/Code.exe\""
 fi
 
 # gpg
@@ -213,11 +222,29 @@ alias python=python3
 alias pip=pip3
 alias vault-login=vault-login.sh
 
-# docker windows
-if [ -d /mnt/c/Program\ Files/Docker/Docker/resources/bin/ ]; then
-   alias docker='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker.exe'
-   alias kubectl='/mnt/c/Program\ Files/Docker/Docker/resources/bin/kubectl.exe'
-   alias docker-compose='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker-compose.exe'
+# docker windows (WSL): Docker Desktop's Windows CLIs are a fallback only.
+# Never shadow a working Linux CLI, and only alias the .exe when Windows-exe
+# interop actually works — the WSLInterop binfmt registration can get wiped
+# (systemd/WSL race), and then every .exe fails with "exec format error".
+# Note: Docker Desktop's /usr/bin/docker shim dangles when Desktop isn't
+# running, so test executability, not just presence.
+# shellcheck disable=SC2139  # intentional: bake the install-time-resolved path into the aliases
+if [ -d "${WIN_PROGRAM_FILES}/Docker/Docker/resources/bin/" ]; then
+   if grep -qs '^enabled' /proc/sys/fs/binfmt_misc/WSLInterop /proc/sys/fs/binfmt_misc/WSLInterop-late; then
+      [ -x "$(command -v docker 2>/dev/null)" ]         || alias docker="\"${WIN_PROGRAM_FILES}/Docker/Docker/resources/bin/docker.exe\""
+      [ -x "$(command -v kubectl 2>/dev/null)" ]        || alias kubectl="\"${WIN_PROGRAM_FILES}/Docker/Docker/resources/bin/kubectl.exe\""
+      [ -x "$(command -v docker-compose 2>/dev/null)" ] || alias docker-compose="\"${WIN_PROGRAM_FILES}/Docker/Docker/resources/bin/docker-compose.exe\""
+   elif ! [ -x "$(command -v docker 2>/dev/null)" ]; then
+      # No working Linux docker AND no Windows-exe interop: fail loud and clear
+      # instead of "exec format error" / "no such file or directory".
+      docker() {
+         echo "docker: Docker Desktop isn't running (its /usr/bin/docker shim is dangling)" >&2
+         echo "        and Windows-exe interop is unavailable (WSLInterop binfmt not registered)." >&2
+         echo "Fix:    start Docker Desktop on Windows, or restore interop with:" >&2
+         echo "        sudo sh -c 'echo \":WSLInterop:M::MZ::/init:PF\" > /proc/sys/fs/binfmt_misc/register'" >&2
+         return 127
+      }
+   fi
 fi
 
 # snowsql for mac

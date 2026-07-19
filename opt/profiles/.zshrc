@@ -137,6 +137,15 @@ ZSH_THEME="agnoster"
 # plugins=(git)
 plugins=(git docker golang zsh-completions kubectl)
 
+# Drop plugins whose CLI is missing or a dangling shim. Docker Desktop's WSL
+# integration leaves /usr/bin/docker as a dangling symlink when Desktop isn't
+# running, which passes the omz plugin's existence check but then fails its
+# `command docker --version` probe with "command not found" at every login.
+for _p in docker kubectl; do
+  [[ -x "$(whence -p $_p 2>/dev/null)" ]] || plugins=(${plugins:#$_p})
+done
+unset _p
+
 # Only clone zsh-completions if not in editor terminal (expensive git operation)
 if [[ "$EDITOR_TERMINAL" == "false" ]] && [ ! -d "${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions" ] ; then
   git clone https://github.com/zsh-users/zsh-completions ${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions
