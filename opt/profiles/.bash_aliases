@@ -200,6 +200,7 @@ fi
 [ -f "${HOME}/.cache/dotfiles/winenv.sh" ] && . "${HOME}/.cache/dotfiles/winenv.sh"
 WIN_PROGRAM_FILES="${WIN_PROGRAM_FILES:-/mnt/c/Program Files}"
 
+# shellcheck disable=SC2139  # intentional: bake the install-time-resolved path into the alias
 if [ "$(uname -s)" = "Darwin" ]; then
     alias code="open '/Applications/Visual Studio Code.app'"
 else
@@ -227,6 +228,7 @@ alias vault-login=vault-login.sh
 # (systemd/WSL race), and then every .exe fails with "exec format error".
 # Note: Docker Desktop's /usr/bin/docker shim dangles when Desktop isn't
 # running, so test executability, not just presence.
+# shellcheck disable=SC2139  # intentional: bake the install-time-resolved path into the aliases
 if [ -d "${WIN_PROGRAM_FILES}/Docker/Docker/resources/bin/" ]; then
    if grep -qs '^enabled' /proc/sys/fs/binfmt_misc/WSLInterop /proc/sys/fs/binfmt_misc/WSLInterop-late; then
       [ -x "$(command -v docker 2>/dev/null)" ]         || alias docker="\"${WIN_PROGRAM_FILES}/Docker/Docker/resources/bin/docker.exe\""
