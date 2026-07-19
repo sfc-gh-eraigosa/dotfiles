@@ -118,4 +118,36 @@ PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" bash "$SSHD_SETUP" _github_user >/de
 set -e
 assert_eq "$RC" "1" "no derivation source exits 1"
 
+# === Task 4: key seeding (refuse-empty, idempotent) ===
+# curl mock serves the file named in SSHD_SETUP_KEYS_URL (last arg)
+cat > "${TMPDIR_TEST}/mocks/curl" <<'EOF'
+#!/usr/bin/env bash
+for a in "$@"; do :; done
+cat "$a"
+EOF
+chmod +x "${TMPDIR_TEST}/mocks/curl"
+printf 'ssh-ed25519 AAAA-test-key-1\nssh-ed25519 AAAA-test-key-2\n' > "${TMPDIR_TEST}/keys_fixture"
+FAKE_HOME="${TMPDIR_TEST}/home"; mkdir -p "$FAKE_HOME"
+cat > "${TMPDIR_TEST}/mocks/gh" <<'EOF'
+#!/usr/bin/env bash
+echo "fixture-user"
+EOF
+chmod +x "${TMPDIR_TEST}/mocks/gh"
+
+PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" HOME="$FAKE_HOME" \
+  SSHD_SETUP_KEYS_URL="${TMPDIR_TEST}/keys_fixture" bash "$SSHD_SETUP" keys >/dev/null
+assert_eq "$(wc -l < "${FAKE_HOME}/.ssh/authorized_keys" | tr -d ' ')" "2" "first keys run adds 2 lines"
+# idempotent: run again, still 2
+PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" HOME="$FAKE_HOME" \
+  SSHD_SETUP_KEYS_URL="${TMPDIR_TEST}/keys_fixture" bash "$SSHD_SETUP" keys >/dev/null
+assert_eq "$(wc -l < "${FAKE_HOME}/.ssh/authorized_keys" | tr -d ' ')" "2" "second keys run adds nothing"
+# refuse-empty: empty fixture -> exit 1, file untouched
+: > "${TMPDIR_TEST}/keys_fixture"
+set +e
+PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" HOME="$FAKE_HOME" \
+  SSHD_SETUP_KEYS_URL="${TMPDIR_TEST}/keys_fixture" bash "$SSHD_SETUP" keys >/dev/null 2>&1; RC=$?
+set -e
+assert_eq "$RC" "1" "empty keys response exits 1"
+assert_eq "$(wc -l < "${FAKE_HOME}/.ssh/authorized_keys" | tr -d ' ')" "2" "authorized_keys untouched on empty response"
+
 _test_report

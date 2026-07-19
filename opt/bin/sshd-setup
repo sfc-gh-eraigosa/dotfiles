@@ -59,6 +59,31 @@ derive_github_user() {
     return 1
 }
 
+seed_keys() {
+    local user url keys line added=0
+    user=$(derive_github_user)
+    url="${SSHD_SETUP_KEYS_URL:-https://github.com/${user}.keys}"
+    keys=$(curl -fsS "$url")
+    if [ -z "$keys" ]; then
+        echo "sshd-setup: no public keys returned for '$user' — refusing to continue" >&2
+        return 1
+    fi
+    run mkdir -p "${HOME}/.ssh"
+    run chmod 700 "${HOME}/.ssh"
+    [ -f "${HOME}/.ssh/authorized_keys" ] || run touch "${HOME}/.ssh/authorized_keys"
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        if ! grep -qxF "$line" "${HOME}/.ssh/authorized_keys" 2>/dev/null; then
+            if [ "$DRY_RUN" = 1 ]; then echo "DRY: append key to authorized_keys"
+            else printf '%s\n' "$line" >> "${HOME}/.ssh/authorized_keys"; fi
+            added=$((added + 1))
+        fi
+    done <<< "$keys"
+    run chmod 600 "${HOME}/.ssh/authorized_keys"
+    echo "sshd-setup: seeded ${added} new key(s) from ${url} (user: ${user})"
+}
+cmd_keys() { seed_keys; }
+
 usage() { echo "Usage: sshd-setup [--dry-run] {status|enable|keys}" >&2; exit 1; }
 
 main() {
