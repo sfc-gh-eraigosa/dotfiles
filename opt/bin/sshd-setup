@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# sshd-setup — on-demand native sshd install/enable + GitHub-key seeding.
+# Only acts when invoked; see docs/sshd-setup.md. Windows: setup-sshd.ps1.
+set -euo pipefail
+
+DRY_RUN=0
+run() { if [ "$DRY_RUN" = 1 ]; then echo "DRY: $*"; else "$@"; fi; }
+
+detect_platform() {
+    case "$(uname -s)" in
+        Darwin) echo macos; return ;;
+        Linux)
+            local pv="${SSHD_SETUP_PROC_VERSION:-/proc/version}"
+            if [ -r "$pv" ] && grep -qi microsoft "$pv"; then echo wsl; else echo linux; fi ;;
+        *) echo "sshd-setup: unsupported platform $(uname -s)" >&2; exit 1 ;;
+    esac
+}
+
+sshd_running() {
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl is-active --quiet ssh 2>/dev/null && return 0
+        systemctl is-active --quiet sshd 2>/dev/null && return 0
+    fi
+    if [ "$(detect_platform)" = macos ]; then
+        systemsetup -getremotelogin 2>/dev/null | grep -qi "on" && return 0
+    fi
+    pgrep -x sshd >/dev/null 2>&1
+}
+
+sshd_installed() {
+    [ "$(detect_platform)" = macos ] && return 0
+    command -v sshd >/dev/null 2>&1 && return 0
+    [ -x "${SSHD_SETUP_SSHD_PATH:-/usr/sbin/sshd}" ]
+}
+
+cmd_status() {
+    echo "platform: $(detect_platform)"
+    if sshd_running; then echo "sshd: running"
+    elif sshd_installed; then echo "sshd: installed, not running"
+    else echo "sshd: not installed"; fi
+    [ -f "${HOME}/.sshd.env" ] && echo "sshd.env: present" || echo "sshd.env: absent"
+    [ -f "${HOME}/.ssh/authorized_keys" ] \
+        && echo "authorized_keys: $(wc -l < "${HOME}/.ssh/authorized_keys" | tr -d ' ') line(s)" \
+        || echo "authorized_keys: absent"
+}
+
+derive_github_user() {
+    local u
+    if command -v gh >/dev/null 2>&1; then
+        u=$(gh api user --jq .login 2>/dev/null || true)
+        [ -n "$u" ] && { echo "$u"; return; }
+    fi
+    u=$(git remote get-url origin 2>/dev/null \
+        | sed -nE 's#^(git@[^:]+:|https?://[^/]+/)([^/]+)/.*#\2#p' || true)
+    [ -n "$u" ] && { echo "$u"; return; }
+    u=$(git config github.user 2>/dev/null || true)
+    [ -n "$u" ] && { echo "$u"; return; }
+    echo "sshd-setup: cannot derive GitHub user (need gh auth, an origin remote, or git config github.user)" >&2
+    return 1
+}
+
+seed_keys() {
+    local user url keys line added=0
+    user=$(derive_github_user)
+    url="${SSHD_SETUP_KEYS_URL:-https://github.com/${user}.keys}"
+    keys=$(curl -fsS "$url")
+    if [ -z "$keys" ]; then
+        echo "sshd-setup: no public keys returned for '$user' — refusing to continue" >&2
+        return 1
+    fi
+    run mkdir -p "${HOME}/.ssh"
+    run chmod 700 "${HOME}/.ssh"
+    [ -f "${HOME}/.ssh/authorized_keys" ] || run touch "${HOME}/.ssh/authorized_keys"
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        if ! grep -qxF "$line" "${HOME}/.ssh/authorized_keys" 2>/dev/null; then
+            if [ "$DRY_RUN" = 1 ]; then echo "DRY: append key to authorized_keys"
+            else printf '%s\n' "$line" >> "${HOME}/.ssh/authorized_keys"; fi
+            added=$((added + 1))
+        fi
+    done <<< "$keys"
+    run chmod 600 "${HOME}/.ssh/authorized_keys"
+    echo "sshd-setup: seeded ${added} new key(s) from ${url} (user: ${user})"
+}
+cmd_keys() { seed_keys; }
+
+install_sshd() {
+    # macOS ships sshd; nothing to install. Elsewhere install openssh-server
+    # directly with the native package manager. NOTE: do NOT use the repo's
+    # `pkg-install` here — that installs the curated common-core manifest and
+    # ignores its argument, so it would never install openssh-server.
+    [ "$(detect_platform)" = macos ] && return 0
+    if command -v apt-get >/dev/null 2>&1; then
+        run sudo apt-get install -y openssh-server
+    elif command -v dnf >/dev/null 2>&1; then
+        run sudo dnf install -y openssh-server
+    elif command -v yum >/dev/null 2>&1; then
+        run sudo yum install -y openssh-server
+    else
+        echo "sshd-setup: no supported package manager (apt-get/dnf/yum) to install openssh-server" >&2
+        return 1
+    fi
+}
+
+enable_service() {
+    if [ "$(detect_platform)" = macos ]; then
+        run sudo systemsetup -setremotelogin on
+    elif systemctl list-unit-files ssh.service >/dev/null 2>&1; then
+        run sudo systemctl enable --now ssh
+    else
+        run sudo systemctl enable --now sshd
+    fi
+}
+
+configure_firewall() {
+    if command -v ufw >/dev/null 2>&1 && sudo ufw status 2>/dev/null | grep -qi "active"; then
+        run sudo ufw allow 22/tcp
+    elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
+        run sudo firewall-cmd --permanent --add-service=ssh
+        run sudo firewall-cmd --reload
+    else
+        echo "sshd-setup: no active firewall manager detected — skipping firewall step"
+    fi
+}
+
+write_sshd_env() {
+    if ! grep -qs "^SSHD_LOGIN=true" "${HOME}/.sshd.env" 2>/dev/null; then
+        if [ "$DRY_RUN" = 1 ]; then echo "DRY: write SSHD_LOGIN=true to ~/.sshd.env"
+        else echo "SSHD_LOGIN=true" >> "${HOME}/.sshd.env"; fi
+    fi
+}
+
+wsl_handoff() {
+    cat <<'EOF'
+sshd-setup: WSL detected. The sshd above serves THIS distro. For the
+Windows-native sshd (port 22, survives reboots) run in an ADMIN PowerShell:
+
+  powershell -ExecutionPolicy Bypass -File <dotfiles>\opt\Desktop\Apps\scripts\setup-sshd.ps1
+
+Add -WslPortProxy to also expose this WSL sshd to your LAN (default port 2222).
+EOF
+}
+
+cmd_enable() {
+    if sshd_running; then
+        echo "sshd-setup: native sshd already running — skipping install/start"
+    else
+        sshd_installed || install_sshd
+        enable_service
+    fi
+    configure_firewall
+    seed_keys
+    write_sshd_env
+    if [ "$(detect_platform)" = wsl ]; then wsl_handoff; fi
+    echo "sshd-setup: done. Rollback: see docs/sshd-setup.md#rollback"
+}
+
+usage() { echo "Usage: sshd-setup [--dry-run] {status|enable|keys}" >&2; exit 1; }
+
+main() {
+    [ $# -ge 1 ] || usage
+    if [ "$1" = "--dry-run" ]; then DRY_RUN=1; shift; fi
+    case "${1:-}" in
+        _detect) detect_platform ;;         # test hook
+        _github_user) derive_github_user ;; # test hook
+        status|enable|keys) "cmd_$1" ;;
+        *) usage ;;
+    esac
+}
+main "$@"
