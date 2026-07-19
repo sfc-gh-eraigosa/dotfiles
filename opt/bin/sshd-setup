@@ -44,13 +44,29 @@ cmd_status() {
         || echo "authorized_keys: absent"
 }
 
+derive_github_user() {
+    local u
+    if command -v gh >/dev/null 2>&1; then
+        u=$(gh api user --jq .login 2>/dev/null || true)
+        [ -n "$u" ] && { echo "$u"; return; }
+    fi
+    u=$(git remote get-url origin 2>/dev/null \
+        | sed -nE 's#^(git@[^:]+:|https?://[^/]+/)([^/]+)/.*#\2#p' || true)
+    [ -n "$u" ] && { echo "$u"; return; }
+    u=$(git config github.user 2>/dev/null || true)
+    [ -n "$u" ] && { echo "$u"; return; }
+    echo "sshd-setup: cannot derive GitHub user (need gh auth, an origin remote, or git config github.user)" >&2
+    return 1
+}
+
 usage() { echo "Usage: sshd-setup [--dry-run] {status|enable|keys}" >&2; exit 1; }
 
 main() {
     [ $# -ge 1 ] || usage
     if [ "$1" = "--dry-run" ]; then DRY_RUN=1; shift; fi
     case "${1:-}" in
-        _detect) detect_platform ;;   # test hook
+        _detect) detect_platform ;;         # test hook
+        _github_user) derive_github_user ;; # test hook
         status|enable|keys) "cmd_$1" ;;
         *) usage ;;
     esac

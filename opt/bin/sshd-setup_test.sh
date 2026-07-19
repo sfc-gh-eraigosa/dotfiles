@@ -72,4 +72,50 @@ assert_eq "$RC" "0" "status exits 0 even when sshd absent"
 case "$OUT" in *"not installed"*) echo "PASS: status reports not installed"; PASS=$((PASS+1));;
   *) echo "FAIL: status missing 'not installed' (got: $OUT)"; FAIL=$((FAIL+1));; esac
 
+# === Task 3: GitHub account derivation ===
+# gh present wins
+cat > "${TMPDIR_TEST}/mocks/gh" <<'EOF'
+#!/usr/bin/env bash
+echo "gh-user"
+EOF
+chmod +x "${TMPDIR_TEST}/mocks/gh"
+OUT=$(PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" bash "$SSHD_SETUP" _github_user 2>&1)
+assert_eq "$OUT" "gh-user" "gh api user wins precedence"
+
+# gh absent -> origin owner (https)
+rm -f "${TMPDIR_TEST}/mocks/gh"
+cat > "${TMPDIR_TEST}/mocks/git" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  "remote get-url origin") echo "https://github.com/origin-owner/repo.git" ;;
+  "config github.user") exit 1 ;;
+esac
+EOF
+chmod +x "${TMPDIR_TEST}/mocks/git"
+OUT=$(PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" bash "$SSHD_SETUP" _github_user 2>&1)
+assert_eq "$OUT" "origin-owner" "falls back to origin owner (https URL)"
+
+# ssh-style URL parses too
+cat > "${TMPDIR_TEST}/mocks/git" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  "remote get-url origin") echo "git@github.com:ssh-owner/repo.git" ;;
+  "config github.user") exit 1 ;;
+esac
+EOF
+chmod +x "${TMPDIR_TEST}/mocks/git"
+OUT=$(PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" bash "$SSHD_SETUP" _github_user 2>&1)
+assert_eq "$OUT" "ssh-owner" "falls back to origin owner (ssh URL)"
+
+# nothing available -> exit 1
+cat > "${TMPDIR_TEST}/mocks/git" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+chmod +x "${TMPDIR_TEST}/mocks/git"
+set +e
+PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" bash "$SSHD_SETUP" _github_user >/dev/null 2>&1; RC=$?
+set -e
+assert_eq "$RC" "1" "no derivation source exits 1"
+
 _test_report
