@@ -51,8 +51,20 @@ your existing keys are never truncated. Pass `-GithubUser <login>` to the ps1 to
 3. From another machine: `ssh <winuser>@<host>` (Windows) or `ssh -p 2222 <wsluser>@<host>` (WSL).
 
 Note: the WSL sshd only answers while the distro is running; the Windows one always does.
-The portproxy pins the WSL IP at setup time — rerun `setup-sshd.ps1 -WslPortProxy` if it
-changes.
+
+The portproxy pins the WSL IP at setup time, and **WSL's NAT IP changes on most
+reboots**, silently breaking the forward. `refresh-wsl-portproxy.ps1` re-resolves
+the IP and rewrites the rule (no-op when current), logging each decision to
+`%LOCALAPPDATA%\dotfiles\refresh-wsl-portproxy.log`. Run once in an admin
+PowerShell to make it self-healing:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File opt\Desktop\Apps\scripts\refresh-wsl-portproxy.ps1 -RegisterTask
+```
+
+`-RegisterTask` installs an elevated at-logon Scheduled Task (`RefreshWslPortProxy`,
+30s delay) that repeats the refresh on every boot without UAC prompts; remove it
+with `-UnregisterTask`. `-ListenPort`/`-Distro` mirror the setup defaults.
 
 ## Integration with dotfiles
 
@@ -78,6 +90,7 @@ Remove-WindowsCapability -Online -Name (Get-WindowsCapability -Online -Name 'Ope
 Remove-NetFirewallRule -Name 'OpenSSH-Server-In-TCP'
 netsh interface portproxy delete v4tov4 listenport=2222 listenaddress=0.0.0.0
 Remove-NetFirewallRule -Name 'WSL-SSH-2222'
+Unregister-ScheduledTask -TaskName RefreshWslPortProxy -Confirm:$false   # if -RegisterTask was used
 ```
 
 Key seeding is additive only — edit `~/.ssh/authorized_keys` (and on Windows

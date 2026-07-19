@@ -33,4 +33,37 @@ OUT=$(bash "$T" --print-name 'My Host!!' 2>&1)
 case "$OUT" in My-Host-2[0-9][0-9][0-9]-*) echo "PASS: prefix sanitized"; PASS=$((PASS+1));;
   *) echo "FAIL: prefix sanitize (got: $OUT)"; FAIL=$((FAIL+1));; esac
 
+# --- idempotency + logging (mock pgrep/claude via PATH; log via CLAUDE_RC_LOG) ---
+TMPD="$(mktemp -d)"
+trap 'rm -rf "$TMPD"' EXIT
+mkdir -p "$TMPD/bin"
+MARKER="$TMPD/claude-invoked"
+LOG="$TMPD/boot.log"
+printf '#!/usr/bin/env bash\necho "$@" > %s\n' "$MARKER" > "$TMPD/bin/claude"
+chmod +x "$TMPD/bin/claude"
+
+# already-running: pgrep reports a live session -> exit 0, no launch, logged skip
+printf '#!/usr/bin/env bash\necho 12345\nexit 0\n' > "$TMPD/bin/pgrep"
+chmod +x "$TMPD/bin/pgrep"
+OUT=$(PATH="$TMPD/bin:$PATH" CLAUDE_RC_LOG="$LOG" NVM_DIR="$TMPD" bash "$T" testhost 2>&1)
+RC=$?
+assert_eq "$RC" 0 "already-running exits 0"
+case "$OUT" in *"already running"*) echo "PASS: already-running message"; PASS=$((PASS+1));;
+  *) echo "FAIL: already-running message (got: $OUT)"; FAIL=$((FAIL+1));; esac
+if [ -e "$MARKER" ]; then echo "FAIL: claude launched despite running session"; FAIL=$((FAIL+1));
+else echo "PASS: no second launch when session running"; PASS=$((PASS+1)); fi
+assert_grep "log records skip" "already-running.*pid.*12345" "$LOG"
+
+# not running: pgrep finds nothing -> launches claude with computed name, logged start
+rm -f "$LOG"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$TMPD/bin/pgrep"
+OUT=$(PATH="$TMPD/bin:$PATH" CLAUDE_RC_LOG="$LOG" NVM_DIR="$TMPD" bash "$T" testhost 2>&1)
+assert_file_exists "$MARKER" "claude launched when nothing running"
+if [ -e "$MARKER" ]; then
+    ARGS="$(cat "$MARKER")"
+    case "$ARGS" in --remote-control\ testhost-2*) echo "PASS: launch args carry session name"; PASS=$((PASS+1));;
+      *) echo "FAIL: launch args (got: $ARGS)"; FAIL=$((FAIL+1));; esac
+fi
+assert_grep "log records start" "start name=testhost-2" "$LOG"
+
 _test_report

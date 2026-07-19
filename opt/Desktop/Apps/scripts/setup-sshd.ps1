@@ -85,6 +85,8 @@ if ($WslPortProxy) {
         New-NetFirewallRule -Name "WSL-SSH-$WslPort" -DisplayName "WSL sshd ($WslPort)" `
             -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort $WslPort | Out-Null
     }
-    Write-Host "Portproxy: host :$WslPort -> WSL ${wslIp}:22 (rerun after WSL IP changes)"
+    Write-Host "Portproxy: host :$WslPort -> WSL ${wslIp}:22"
+    Write-Host "  WSL's NAT IP changes on most reboots; run refresh-wsl-portproxy.ps1 -RegisterTask"
+    Write-Host "  once to install an at-logon task that keeps this forward current."
 }
 Write-Host "Done. Rollback: docs/sshd-setup.md#rollback"

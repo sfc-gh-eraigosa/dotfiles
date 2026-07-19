@@ -11,10 +11,18 @@ control for Claude. **Opt-in: not wired into `install.sh`.**
 | File | Role |
 | :-- | :-- |
 | `opt/bin/claude-rc-boot` | WSL launcher: runs `claude --remote-control "<prefix>-<date>_<time>"` |
-| `opt/Desktop/Apps/scripts/install-claude-rc-autostart.ps1` | Creates/removes the Windows logon shortcut |
+| `opt/Desktop/Apps/scripts/install-claude-rc-autostart.ps1` | Creates/removes the logon + Desktop shortcuts |
 
 The session name records **when it came up**, e.g. `gigabyte-2026-07-19_0948`.
 Prefix precedence: argument → `$CLAUDE_RC_PREFIX` → short hostname.
+
+The launcher is **idempotent**: if a `claude --remote-control` session is already
+running for your user it exits 0 without starting a second one. This matters at
+logon, where more than one thing can race to launch it (the Startup shortcut plus
+e.g. Windows Terminal's restored window layout — with
+`"firstWindowPreference": "persistedWindowLayout"`, WT replays the saved tab's
+commandline, which is a second launch). Every decision is appended to
+`~/.local/state/claude-rc-boot.log` (override with `$CLAUDE_RC_LOG`).
 
 ## Install
 
@@ -28,11 +36,18 @@ powershell -ExecutionPolicy Bypass -File opt\Desktop\Apps\scripts\install-claude
 
 Options: `-Distro <name>` (default `Ubuntu`), `-Prefix <name>` (default: hostname).
 
+The installer creates **two** shortcuts from the same template: the Startup-folder
+one (runs at logon) and a Desktop copy (manual start/restart), both with the WSL
+penguin icon so they're easy to spot. `-Uninstall` removes both. The Desktop path
+follows OneDrive redirection.
+
 ## Test / use
 
-- Double-click `…\Startup\claude-remote.lnk`, or sign out and back in — a
-  Windows Terminal window opens with Claude in remote-control mode.
+- Double-click the `claude-remote` Desktop shortcut (or the Startup one), or sign
+  out and back in — a Windows Terminal window opens with Claude in remote-control
+  mode. If a session is already running, the launcher says so and exits.
 - Preview the name without launching: `claude-rc-boot --print-name gigabyte`.
+- Audit what happened at logon: `cat ~/.local/state/claude-rc-boot.log`.
 
 ## Notes & caveats
 

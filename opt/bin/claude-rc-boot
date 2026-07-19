@@ -11,7 +11,24 @@
 #   claude-rc-boot [prefix]                  # start the remote-control session
 #   claude-rc-boot --print-name [prefix]     # print the computed name, don't launch
 #   claude-rc-boot --help
+#
+# Idempotent: if a `claude --remote-control` session is already running for this
+# user, exits 0 without starting a second one (multiple logon launchers — e.g. the
+# Startup shortcut plus Windows Terminal's restored window layout — would otherwise
+# race and collide on the session name).
+# Logs each decision to $CLAUDE_RC_LOG (default ~/.local/state/claude-rc-boot.log).
 set -u
+
+rc_log_file() { echo "${CLAUDE_RC_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/claude-rc-boot.log}"; }
+
+rc_log() {
+    local f; f="$(rc_log_file)"
+    mkdir -p "$(dirname "$f")" 2>/dev/null || return 0
+    printf '%s [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$$" "$*" >>"$f" 2>/dev/null || true
+}
+
+# PIDs of this user's running remote-control sessions (exit 1 when none).
+rc_running_pids() { pgrep -u "$(id -un)" -f 'claude --remote-control' 2>/dev/null; }
 
 rc_prefix() {
     local p="${1:-${CLAUDE_RC_PREFIX:-}}"
@@ -30,6 +47,8 @@ Usage: claude-rc-boot [prefix]
 
 Starts an interactive Claude session with Remote Control enabled, named
 "<prefix>-<date>_<time>". Prefix defaults to $CLAUDE_RC_PREFIX or the short hostname.
+If a remote-control session is already running it exits 0 without starting another.
+Decisions are logged to $CLAUDE_RC_LOG (default ~/.local/state/claude-rc-boot.log).
 EOF
 }
 
@@ -39,15 +58,24 @@ main() {
         --print-name) shift; rc_name "${1:-}"; exit 0 ;;
     esac
     local name; name="$(rc_name "${1:-}")"
+    local pids
+    if pids="$(rc_running_pids)"; then
+        pids="${pids//$'\n'/ }"
+        echo "claude-rc-boot: a Claude remote-control session is already running (pid: $pids) — not starting another."
+        rc_log "skip name=$name already-running pid=$pids"
+        exit 0
+    fi
     export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
     # shellcheck source=/dev/null
     [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1
     if ! command -v claude >/dev/null 2>&1; then
         echo "claude-rc-boot: 'claude' not found on PATH (is Claude Code installed?)" >&2
+        rc_log "error claude-not-found name=$name"
         exit 1
     fi
     cd "$HOME" || exit 1
     echo "Starting Claude remote-control session: $name"
+    rc_log "start name=$name"
     exec claude --remote-control "$name"
 }
 main "$@"
