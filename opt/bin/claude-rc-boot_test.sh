@@ -54,10 +54,10 @@ if [ -e "$MARKER" ]; then echo "FAIL: claude launched despite running session"; 
 else echo "PASS: no second launch when session running"; PASS=$((PASS+1)); fi
 assert_grep "log records skip" "already-running.*pid.*12345" "$LOG"
 
-# not running: pgrep finds nothing -> launches claude with computed name, logged start
+# not running, already inside tmux -> launches claude directly, logged start
 rm -f "$LOG"
 printf '#!/usr/bin/env bash\nexit 1\n' > "$TMPD/bin/pgrep"
-OUT=$(PATH="$TMPD/bin:$PATH" CLAUDE_RC_LOG="$LOG" NVM_DIR="$TMPD" bash "$T" testhost 2>&1)
+OUT=$(TMUX=fake PATH="$TMPD/bin:$PATH" CLAUDE_RC_LOG="$LOG" NVM_DIR="$TMPD" bash "$T" testhost 2>&1)
 assert_file_exists "$MARKER" "claude launched when nothing running"
 if [ -e "$MARKER" ]; then
     ARGS="$(cat "$MARKER")"
@@ -65,5 +65,22 @@ if [ -e "$MARKER" ]; then
       *) echo "FAIL: launch args (got: $ARGS)"; FAIL=$((FAIL+1));; esac
 fi
 assert_grep "log records start" "start name=testhost-2" "$LOG"
+
+# not running, outside tmux, tmux available -> wraps in a persistent tmux session
+rm -f "$LOG" "$MARKER"
+TMUX_MARKER="$TMPD/tmux-invoked"
+printf '#!/usr/bin/env bash\necho "$@" > %s\n' "$TMUX_MARKER" > "$TMPD/bin/tmux"
+chmod +x "$TMPD/bin/tmux"
+OUT=$(env -u TMUX PATH="$TMPD/bin:$PATH" CLAUDE_RC_LOG="$LOG" NVM_DIR="$TMPD" bash "$T" testhost 2>&1)
+assert_file_exists "$TMUX_MARKER" "tmux used when outside tmux"
+if [ -e "$TMUX_MARKER" ]; then
+    ARGS="$(cat "$TMUX_MARKER")"
+    case "$ARGS" in new-session\ -A\ -s\ claude-rc\ claude\ --remote-control\ testhost-2*)
+        echo "PASS: tmux wraps claude with stable session name"; PASS=$((PASS+1));;
+      *) echo "FAIL: tmux args (got: $ARGS)"; FAIL=$((FAIL+1));; esac
+fi
+if [ -e "$MARKER" ]; then echo "FAIL: claude exec'd directly despite tmux path"; FAIL=$((FAIL+1));
+else echo "PASS: no direct claude exec when tmux wraps"; PASS=$((PASS+1)); fi
+assert_grep "log records tmux session" "start name=testhost-2.* tmux=claude-rc" "$LOG"
 
 _test_report

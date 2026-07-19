@@ -24,6 +24,11 @@ e.g. Windows Terminal's restored window layout — with
 commandline, which is a second launch). Every decision is appended to
 `~/.local/state/claude-rc-boot.log` (override with `$CLAUDE_RC_LOG`).
 
+When launched outside tmux (and tmux is installed), Claude runs **inside a
+persistent tmux session** (`$CLAUDE_RC_TMUX_SESSION`, default `claude-rc`), so
+closing the Windows Terminal window doesn't kill the remote session — reattach
+from any shell (including over SSH) with `tmux attach -t claude-rc`.
+
 ## Install
 
 The launcher must be reachable inside WSL — either on your PATH (via the

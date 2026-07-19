@@ -48,6 +48,9 @@ Usage: claude-rc-boot [prefix]
 Starts an interactive Claude session with Remote Control enabled, named
 "<prefix>-<date>_<time>". Prefix defaults to $CLAUDE_RC_PREFIX or the short hostname.
 If a remote-control session is already running it exits 0 without starting another.
+When launched outside tmux (and tmux is installed) the session runs inside a
+persistent tmux session — $CLAUDE_RC_TMUX_SESSION, default "claude-rc" — so it
+survives the launching window; reattach with: tmux attach -t claude-rc
 Decisions are logged to $CLAUDE_RC_LOG (default ~/.local/state/claude-rc-boot.log).
 EOF
 }
@@ -74,6 +77,16 @@ main() {
         exit 1
     fi
     cd "$HOME" || exit 1
+    # Run inside tmux so the session survives its launching window and can be
+    # reattached later (e.g. over SSH: `tmux attach -t claude-rc`). Skipped when
+    # already inside tmux or when tmux is absent. -A attaches if the session
+    # already exists instead of failing.
+    local ts="${CLAUDE_RC_TMUX_SESSION:-claude-rc}"
+    if [ -z "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
+        echo "Starting Claude remote-control session: $name (tmux session: $ts)"
+        rc_log "start name=$name tmux=$ts"
+        exec tmux new-session -A -s "$ts" claude --remote-control "$name"
+    fi
     echo "Starting Claude remote-control session: $name"
     rc_log "start name=$name"
     exec claude --remote-control "$name"
