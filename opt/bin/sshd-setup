@@ -84,6 +84,64 @@ seed_keys() {
 }
 cmd_keys() { seed_keys; }
 
+install_sshd() {
+    [ "$(detect_platform)" = macos ] && return 0
+    run pkg-install openssh-server
+}
+
+enable_service() {
+    if [ "$(detect_platform)" = macos ]; then
+        run sudo systemsetup -setremotelogin on
+    elif systemctl list-unit-files ssh.service >/dev/null 2>&1; then
+        run sudo systemctl enable --now ssh
+    else
+        run sudo systemctl enable --now sshd
+    fi
+}
+
+configure_firewall() {
+    if command -v ufw >/dev/null 2>&1 && sudo ufw status 2>/dev/null | grep -qi "active"; then
+        run sudo ufw allow 22/tcp
+    elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
+        run sudo firewall-cmd --permanent --add-service=ssh
+        run sudo firewall-cmd --reload
+    else
+        echo "sshd-setup: no active firewall manager detected — skipping firewall step"
+    fi
+}
+
+write_sshd_env() {
+    if ! grep -qs "^SSHD_LOGIN=true" "${HOME}/.sshd.env" 2>/dev/null; then
+        if [ "$DRY_RUN" = 1 ]; then echo "DRY: write SSHD_LOGIN=true to ~/.sshd.env"
+        else echo "SSHD_LOGIN=true" >> "${HOME}/.sshd.env"; fi
+    fi
+}
+
+wsl_handoff() {
+    cat <<'EOF'
+sshd-setup: WSL detected. The sshd above serves THIS distro. For the
+Windows-native sshd (port 22, survives reboots) run in an ADMIN PowerShell:
+
+  powershell -ExecutionPolicy Bypass -File <dotfiles>\opt\Desktop\Apps\scripts\setup-sshd.ps1
+
+Add -WslPortProxy to also expose this WSL sshd to your LAN (default port 2222).
+EOF
+}
+
+cmd_enable() {
+    if sshd_running; then
+        echo "sshd-setup: native sshd already running — skipping install/start"
+    else
+        sshd_installed || install_sshd
+        enable_service
+    fi
+    configure_firewall
+    seed_keys
+    write_sshd_env
+    if [ "$(detect_platform)" = wsl ]; then wsl_handoff; fi
+    echo "sshd-setup: done. Rollback: see docs/sshd-setup.md#rollback"
+}
+
 usage() { echo "Usage: sshd-setup [--dry-run] {status|enable|keys}" >&2; exit 1; }
 
 main() {

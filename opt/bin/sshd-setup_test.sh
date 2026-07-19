@@ -150,4 +150,31 @@ set -e
 assert_eq "$RC" "1" "empty keys response exits 1"
 assert_eq "$(wc -l < "${FAKE_HOME}/.ssh/authorized_keys" | tr -d ' ')" "2" "authorized_keys untouched on empty response"
 
+# === Task 5: enable — native-first, sshd.env, dry-run ===
+# native-first: sshd already running -> no pkg-install call
+cat > "${TMPDIR_TEST}/mocks/systemctl" <<'EOF'
+#!/usr/bin/env bash
+[ "$1" = "is-active" ] && exit 0
+exit 0
+EOF
+chmod +x "${TMPDIR_TEST}/mocks/systemctl"
+cat > "${TMPDIR_TEST}/mocks/pkg-install" <<'EOF'
+#!/usr/bin/env bash
+echo "PKG-INSTALL-CALLED" >> "${PKG_LOG:?}"
+EOF
+chmod +x "${TMPDIR_TEST}/mocks/pkg-install"
+printf 'ssh-ed25519 AAAA-k\n' > "${TMPDIR_TEST}/keys_fixture2"
+PKG_LOG="${TMPDIR_TEST}/pkg.log"; : > "$PKG_LOG"
+PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" HOME="$FAKE_HOME" PKG_LOG="$PKG_LOG" \
+  SSHD_SETUP_KEYS_URL="${TMPDIR_TEST}/keys_fixture2" bash "$SSHD_SETUP" enable >/dev/null 2>&1
+assert_eq "$(cat "$PKG_LOG")" "" "enable skips pkg-install when sshd running"
+assert_grep "sshd.env written with SSHD_LOGIN" "SSHD_LOGIN=true" "${FAKE_HOME}/.sshd.env"
+
+# dry-run mutates nothing: fresh HOME stays empty
+DRY_HOME="${TMPDIR_TEST}/dryhome"; mkdir -p "$DRY_HOME"
+PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" HOME="$DRY_HOME" \
+  SSHD_SETUP_KEYS_URL="${TMPDIR_TEST}/keys_fixture2" bash "$SSHD_SETUP" --dry-run enable >/dev/null 2>&1
+assert_exit_code 1 "dry-run wrote no sshd.env" test -f "${DRY_HOME}/.sshd.env"
+assert_exit_code 1 "dry-run wrote no authorized_keys" test -f "${DRY_HOME}/.ssh/authorized_keys"
+
 _test_report
