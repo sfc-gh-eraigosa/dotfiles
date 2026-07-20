@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# docker-compose — v1-style entry point for non-interactive shells,
+# delegating to Compose v2 (`docker compose`) through the sibling docker
+# shim so make/scripts that still invoke `docker-compose` keep working.
+set -eu
+exec "$(cd -- "$(dirname "$0")" && pwd -P)/docker" compose "$@"
