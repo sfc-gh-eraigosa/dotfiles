@@ -115,7 +115,7 @@ while IFS= read -r file; do
 done < <(find "${BASE_DIR}/opt/profiles" -type f)
 
 # force a few
-for file in ".profile" ".zshenv" ".zshrc" ".bash_logout" ".bashrc"; do
+for file in ".profile" ".zprofile" ".zshenv" ".zshrc" ".bash_logout" ".bashrc"; do
   ln -sf "${BASE_DIR}/opt/profiles/${file}" "${HOME}/${file}"
 done 
 
