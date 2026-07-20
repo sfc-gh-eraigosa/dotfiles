@@ -12,6 +12,7 @@ These tools are built from source (typically in `src/`) and deposited here durin
 - `discuss`: Communication tool.
 - `vault`: HashiCorp Vault binary.
 - `git-sizer`: Git repository analyzer.
+- `docker` / `docker-compose`: **Committed WSL shims, not binaries.** Real executables so non-interactive shells (make, scripts) resolve a working docker — the `.bash_aliases` docker.exe fallback is an alias and only exists interactively. Resolution order: Docker Desktop's WSL-integration Linux CLI → any other real docker on PATH → `docker.exe` over interop (with its credential helper dir appended to PATH). `docker-compose` delegates to `docker compose` (v2).
 
 ## Usage
 

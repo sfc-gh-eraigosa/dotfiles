@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# docker — real-executable shim for WSL so NON-INTERACTIVE shells (make,
+# scripts, CI-ish tooling) resolve a working docker. The interactive
+# fallback in opt/profiles/.bash_aliases is an *alias*, which only exists
+# in interactive shells — `make docker` in a fresh shell dies with
+# "make: docker: No such file or directory" even while Docker Desktop is
+# up. This shim lives in ~/opt/bin (on PATH for any properly-loaded
+# shell) and picks the best available CLI, in order:
+#
+#   1. Docker Desktop's Linux CLI (the WSL-integration mount) — native,
+#      fastest, present only while integration for this distro is active.
+#   2. Any other real docker later in PATH (skipping this shim and the
+#      dangling /usr/bin/docker symlink Desktop leaves when not running).
+#   3. Docker Desktop's Windows docker.exe over interop (requires the
+#      WSLInterop binfmt registration; talks to the same engine).
+#
+# Mirrors the decision logic (and the fail-loud message) of the
+# .bash_aliases block — keep the two in sync.
+set -eu
+
+DD_LINUX="/mnt/wsl/docker-desktop/cli-tools/usr/bin/docker"
+if [ -x "${DD_LINUX}" ]; then
+    exec "${DD_LINUX}" "$@"
+fi
+
+# Next real docker on PATH: -a lists all candidates in PATH order; skip
+# ourselves (any copy/symlink of this shim resolves to the same file) and
+# anything not actually executable (a dangling /usr/bin/docker symlink
+# fails -x).
+self="$(cd -- "$(dirname "$0")" && pwd -P)/$(basename "$0")"
+for cand in $(command -v -a docker 2>/dev/null); do
+    [ "${cand}" = "${self}" ] && continue
+    [ "$(cd -- "$(dirname "${cand}")" 2>/dev/null && pwd -P)/$(basename "${cand}")" = "${self}" ] && continue
+    if [ -x "${cand}" ]; then
+        exec "${cand}" "$@"
+    fi
+done
+
+# Windows docker.exe over interop. WIN_PROGRAM_FILES comes from the
+# install_windows.sh env cache when available; default to the standard
+# mount point.
+# shellcheck disable=SC1091
+[ -f "${HOME}/.cache/dotfiles/winenv.sh" ] && . "${HOME}/.cache/dotfiles/winenv.sh"
+DD_EXE="${WIN_PROGRAM_FILES:-/mnt/c/Program Files}/Docker/Docker/resources/bin/docker.exe"
+if [ -x "${DD_EXE}" ] && grep -qs '^enabled' /proc/sys/fs/binfmt_misc/WSLInterop /proc/sys/fs/binfmt_misc/WSLInterop-late; then
+    # docker.exe shells out to its credential helper
+    # (docker-credential-desktop.exe) by bare name — it must be on the PATH
+    # the Windows process inherits, or builds/pulls die with "error getting
+    # credentials". Its home is docker.exe's own directory.
+    PATH="${PATH}:$(dirname "${DD_EXE}")"
+    export PATH
+    exec "${DD_EXE}" "$@"
+fi
+
+echo "docker: Docker Desktop isn't running (its /usr/bin/docker shim is dangling)" >&2
+echo "        and Windows-exe interop is unavailable (WSLInterop binfmt not registered)." >&2
+echo "Fix:    start Docker Desktop on Windows, or restore interop with:" >&2
+echo "        sudo systemctl restart wsl-interop-binfmt" >&2
+exit 127
