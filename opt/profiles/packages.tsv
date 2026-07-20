@@ -58,3 +58,11 @@ watch                -
 -                    unzip
 -                    fontconfig
 -                    curl
+
+# Kubernetes toolchain. apt has no kind package at all, and kubectl/helm need
+# third-party apt repos that lag upstream — so Linux/WSL gets the official
+# release binaries via opt/scripts/system/install_k8s_tools.sh (wired into
+# install.sh), hence the '-' APT column. macOS installs all three via brew.
+kubernetes-cli       -
+helm                 -
+kind                 -

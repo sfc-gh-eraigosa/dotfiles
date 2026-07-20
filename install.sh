@@ -214,6 +214,15 @@ if [ -f "${BASE_DIR}/opt/scripts/system/install_yq.sh" ]; then
     "${BASE_DIR}/opt/scripts/system/install_yq.sh" || echo "WARNING: yq install reported problems; continuing."
 fi
 
+# Install the Kubernetes toolchain (kubectl, helm, kind). macOS gets them from
+# packages.tsv (brew); Linux/WSL fetches the official release binaries because
+# apt has no kind package and kubectl/helm apt repos lag upstream. Local k8s
+# dev flows (kind cluster -> helm install -> kubectl) need all three.
+if [ -f "${BASE_DIR}/opt/scripts/system/install_k8s_tools.sh" ]; then
+    echo "Installing Kubernetes toolchain (kubectl, helm, kind)..."
+    "${BASE_DIR}/opt/scripts/system/install_k8s_tools.sh" || echo "WARNING: k8s toolchain install reported problems; continuing."
+fi
+
 # Install the Snowflake CLI (`snow`). Replaces the old .zshrc daily-maintenance
 # pip auto-install, which broke on PEP 668 (externally-managed-environment)
 # systems. macOS uses the homebrew-core formula; Linux uses pipx so the system
