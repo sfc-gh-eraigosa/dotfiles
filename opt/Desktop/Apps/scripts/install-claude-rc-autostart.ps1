@@ -6,7 +6,7 @@
 
 .DESCRIPTION
   Creates ~\...\Startup\claude-remote.lnk pointing at
-  Windows Terminal -> wsl -d <Distro> -> bash -c -> claude-rc-boot.
+  Windows Terminal -> wsl -d <Distro> -> bash -lc -> claude-rc-boot.
   Also drops a copy of the shortcut on the Desktop so the session can be
   (re)started manually without digging into shell:startup.
   The launcher's absolute path inside WSL is resolved at install time (prefers
@@ -76,7 +76,10 @@ if (-not $launcher) {
 
 $prefixArg = if ($Prefix) { " " + $Prefix } else { '' }
 $inner  = "exec '$launcher'$prefixArg"
-$wtArgs = "wsl.exe -d $Distro -- bash -c `"$inner`""
+# -l (login) is load-bearing: it makes bash source ~/.profile, so the Claude
+# session (and everything it spawns) inherits the full dotfiles environment.
+# A plain `bash -c` here is how autostarted sessions ended up with a bare PATH.
+$wtArgs = "wsl.exe -d $Distro -- bash -lc `"$inner`""
 
 # Distinct icon (WSL penguin) so the shortcut doesn't blend in with plain
 # Windows Terminal launchers; skipped silently on hosts without System32\wsl.exe.
