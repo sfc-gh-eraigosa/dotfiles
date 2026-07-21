@@ -45,6 +45,9 @@ func (p *PRer) PR(ctx context.Context, opts PROpts) error {
 
 	branch := p.currentBranch(ctx, opts.RepoPath)
 	if branch == opts.DefaultBranch {
+		if err := p.preflightDefault(ctx, opts); err != nil {
+			return err
+		}
 		branch = "feature/gss-" + p.Clock.Now().Format("20060102-150405")
 		fmt.Fprintf(p.Out, "On default branch; creating feature branch in %s: %s\n", opts.RepoPath, branch)
 		if out, err := p.Git.Run(ctx, "-C", opts.RepoPath, "checkout", "-b", branch); err != nil {
@@ -78,6 +81,29 @@ func (p *PRer) PR(ctx context.Context, opts PROpts) error {
 	}
 	fmt.Fprintf(p.Out, "Pull Request created: %s\n", pr.URL)
 	return nil
+}
+
+// preflightDefault guards the "cut a feature branch from the default
+// branch" path. A branch cut at origin/<default>'s tip has nothing to
+// PR — GitHub rejects the create with the opaque "No commits between
+// <default> and <branch>", but only AFTER the empty branch has been
+// created and pushed (and the approval token consumed on a doomed run).
+// Fail fast instead, and name the usual culprit: uncommitted work the
+// caller expected `gss pr` to carry over — gss never commits; the
+// git-safe-sync flow commits first, then runs gss pr.
+//
+// When origin/<default> is unresolvable (fresh repo or remote), the
+// ahead-count is meaningless and the preflight steps aside.
+func (p *PRer) preflightDefault(ctx context.Context, opts PROpts) error {
+	statusOut, statusErr := p.Git.Run(ctx, "-C", opts.RepoPath, "status", "--porcelain")
+	aheadOut, aheadErr := p.Git.Run(ctx, "-C", opts.RepoPath, "rev-list", "--count", "origin/"+opts.DefaultBranch+"..HEAD")
+	if aheadErr != nil || strings.TrimSpace(string(aheadOut)) != "0" {
+		return nil
+	}
+	if statusErr == nil && strings.TrimSpace(string(statusOut)) != "" {
+		return fmt.Errorf("classic pr: nothing to PR: %s has no commits ahead of origin/%s, but the working tree has uncommitted changes — commit them first (git add <files>; git commit), then re-run gss pr", opts.DefaultBranch, opts.DefaultBranch)
+	}
+	return fmt.Errorf("classic pr: nothing to PR: %s has no commits ahead of origin/%s", opts.DefaultBranch, opts.DefaultBranch)
 }
 
 func (p *PRer) currentBranch(ctx context.Context, repoPath string) string {
