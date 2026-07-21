@@ -62,6 +62,7 @@ opt/bin/*
 # docker even in non-interactive shells (see opt/profiles/.bash_aliases).
 !opt/bin/docker
 !opt/bin/docker-compose
+!opt/bin/docker-credential-desktop.exe
 # Test drivers for the committed opt/bin tools (issue #46 phase 2)
 !opt/bin/pkg-install_test.sh
 !opt/bin/sshd-setup_test.sh
