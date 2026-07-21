@@ -42,9 +42,27 @@ diff -q <(tr -d '\r' < "$DEPLOYED") opt/Desktop/Apps/scripts/macos.ahk && echo "
 AutoHotkey does **not** hot-reload a changed `.ahk` — you must restart it.
 
 ### 2. Reload AutoHotkey (non-elevated is enough for trigger testing)
+
+**First check for an ELEVATED instance** — the logon task starts one, and a
+non-elevated `Stop-Process` CANNOT kill it (the failure is silent). It also
+shrugs off `#SingleInstance Force` (UIPI blocks the replace message), so starting
+a second copy next to it used to yield duplicate keyboard hooks — one instance
+draws a HUD while the other wins the keypress, i.e. a stuck overlay that ignores
+Esc. (`macos.ahk` now guards this with a named mutex: the second copy detects the
+first across integrity levels and exits with a pointer to `setup-autostart.ps1`.)
+
+```bash
+"$PS" -NoProfile -Command 'Get-Process AutoHotkey* -EA SilentlyContinue | Select-Object Id,Path'
+```
+An **empty `Path`** means that instance is elevated → reload it via
+`setup-autostart.ps1` (self-elevates, one UAC click) instead of the snippet below.
+
 ```bash
 "$PS" -NoProfile -Command '
-$exe = "$env:LOCALAPPDATA\Programs\AutoHotkey\v2\AutoHotkey64.exe"
+$exe = @("$env:ProgramFiles\AutoHotkey\v2\AutoHotkey64.exe",
+         "$env:LOCALAPPDATA\Programs\AutoHotkey\v2\AutoHotkey64.exe") |
+    Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $exe) { "WARN: AutoHotkey64.exe not found (Program Files / LOCALAPPDATA)"; exit 1 }
 $script = Join-Path ([Environment]::GetFolderPath("Desktop")) "Apps\scripts\macos.ahk"
 Get-Process AutoHotkey* -EA SilentlyContinue | Stop-Process -Force -EA SilentlyContinue
 Start-Sleep -Milliseconds 400

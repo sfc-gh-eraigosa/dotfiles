@@ -36,7 +36,12 @@ essentials:
    **Non-elevated is enough to test trigger keys**; elevation only matters for
    dictating into admin windows and for the logon-task that survives reboot. **KBM
    and AHK must run at the same integrity** or PowerToys' injected F24 never reaches
-   AHK's keyboard hook.
+   AHK's keyboard hook. **A non-elevated `Stop-Process` cannot kill the elevated
+   logon-task instance** (silent failure — `Get-Process AutoHotkey*` showing an
+   empty `Path` means elevated): reload that one via `setup-autostart.ps1` (UAC).
+   `macos.ahk`'s named-mutex guard makes a second copy started next to it exit
+   instead of creating duplicate keyboard hooks (the old "stuck HUD that ignores
+   Esc" failure).
 3. **Observe:** add temporary `FileAppend(..., A_Temp "\flow-dbg.txt")` lines tagged
    `; DEBUG (temporary)`, then read the log from WSL at
    `$(wslpath "$(powershell.exe '$env:TEMP')")/flow-dbg.txt`. **Strip every DEBUG

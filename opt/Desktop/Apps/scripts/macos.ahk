@@ -1,5 +1,34 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
+
+; --- Cross-integrity single-instance guard --------------------------------------
+; #SingleInstance Force replaces a prior instance via a window message, which UIPI
+; BLOCKS across integrity levels — a non-elevated debug reload next to the elevated
+; logon-task instance leaves TWO live keyboard hooks: one instance shows a HUD
+; while the other wins the keypress ("stuck overlay that ignores Esc"). A named
+; mutex is visible across integrity within the session, so the second copy can
+; detect the first and bow out. ERROR_ALREADY_EXISTS (183) and ACCESS_DENIED (5,
+; possible when the holder is elevated) both mean "someone already owns it".
+; Retry briefly: during a legitimate same-integrity replace (Reload / Force),
+; the outgoing process can still hold the mutex for a moment — only a holder
+; that NEVER releases (a live instance at another integrity) should abort us.
+_flowInstanceMutex := 0
+loop 15 {
+    _flowInstanceMutex := DllCall("CreateMutex", "Ptr", 0, "Int", 0, "Str", "dotfiles-macos-ahk", "Ptr")
+    if (A_LastError = 0)
+        break
+    if (_flowInstanceMutex)
+        DllCall("CloseHandle", "Ptr", _flowInstanceMutex), _flowInstanceMutex := 0
+    Sleep 200
+}
+if (!_flowInstanceMutex) {
+    MsgBox "macos.ahk is already running (possibly at another integrity level)."
+        . "`n`nThis copy will exit. To reload the elevated instance, run"
+        . "`nsetup-autostart.ps1 (UAC prompt) instead of starting a second copy.",
+        "macos.ahk", "Iconi T10"
+    ExitApp
+}
+
 #Include flow-calib.ahk      ; overlay-offset calibration data layer (DEFAULT + ini load/save)
 #Include flow-triggers.ahk   ; extra-trigger-key data + policy layer (load/save/normalize/compose/validate/manifest)
 #Include lib\hotcorners.ahk  ; outer-corner-only hot-corner geometry layer (multi-monitor, hotplug-safe)
@@ -276,7 +305,17 @@ _FlowCalibStopDirty() {
 _FlowCalibDestroy() {
     global _flowCalibGui
     if (_flowCalibGui) {
-        try _flowCalibGui.Destroy()
+        ; A failed Destroy() would orphan the HUD forever once the reference is
+        ; dropped below — no code path could ever close it again ("stuck
+        ; overlay"). Fall back to killing the OS window by handle.
+        hwnd := 0
+        try hwnd := _flowCalibGui.Hwnd
+        try
+            _flowCalibGui.Destroy()
+        catch {
+            if (hwnd)
+                try WinKill("ahk_id " hwnd)
+        }
         _flowCalibGui := ""
     }
 }
@@ -365,7 +404,14 @@ _FlowManageShow() {
 _FlowManageDestroyGui() {
     global _flowTriggerGui
     if (_flowTriggerGui) {
-        try _flowTriggerGui.Destroy()
+        hwnd := 0
+        try hwnd := _flowTriggerGui.Hwnd
+        try
+            _flowTriggerGui.Destroy()
+        catch {
+            if (hwnd)                        ; orphan-proof: see _FlowCalibDestroy
+                try WinKill("ahk_id " hwnd)
+        }
         _flowTriggerGui := ""
     }
 }
@@ -525,7 +571,14 @@ _FlowHelpShow() {
 _FlowHelpDestroy() {
     global _flowHelpGui
     if (_flowHelpGui) {
-        try _flowHelpGui.Destroy()
+        hwnd := 0
+        try hwnd := _flowHelpGui.Hwnd
+        try
+            _flowHelpGui.Destroy()
+        catch {
+            if (hwnd)                        ; orphan-proof: see _FlowCalibDestroy
+                try WinKill("ahk_id " hwnd)
+        }
         _flowHelpGui := ""
     }
 }
