@@ -32,15 +32,24 @@ fi
 # never run). Skip ourselves (any copy/symlink of this shim resolves to
 # the same physical file) and anything not actually executable (a
 # dangling /usr/bin/docker symlink fails -x).
+#
+# The candidates MUST be collected before exec'ing (mapfile, not
+# `while read ... done < <(...)`): a redirect-fed loop makes the pipe the
+# loop body's stdin, so the exec'd docker inherits the *unread rest of the
+# candidate list* as its stdin instead of ours. Anything piping data
+# through this shim gets that list as payload — kind ships kubeadm.conf
+# via `docker exec -i ... cp /dev/stdin` and got the leftover line
+# "/bin/docker" as its cluster config.
 self="$(cd -- "$(dirname "$0")" && pwd -P)/$(basename "$0")"
-while IFS= read -r cand; do
+mapfile -t cands < <(type -aP docker 2>/dev/null)
+for cand in "${cands[@]}"; do
     [ -n "${cand}" ] || continue
     [ "${cand}" = "${self}" ] && continue
     [ "$(cd -- "$(dirname "${cand}")" 2>/dev/null && pwd -P)/$(basename "${cand}")" = "${self}" ] && continue
     if [ -x "${cand}" ]; then
         exec "${cand}" "$@"
     fi
-done < <(type -aP docker 2>/dev/null)
+done
 
 # Windows docker.exe over interop. WIN_PROGRAM_FILES comes from the
 # install_windows.sh env cache when available; default to the standard
