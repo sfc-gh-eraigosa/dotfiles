@@ -1,0 +1,153 @@
+# gff — git fast features — spec
+
+- **Slug:** gff
+- **Date:** 2026-07-23
+- **Status:** Approved
+- **Relates to:** design `../designs/gff.md` / issue (pending) / PR (pending)
+
+## 1. Goal
+
+A generic feature-flag engine (`sdk/gff`, Go, cobra + bubbletea) whose flag *schema* is
+defined by protobuf and whose flag *data* is persisted in git: each repo tracks its own
+`.gff/features.yaml` defaults, `gff install` deploys them machine-wide, and users flip
+flags via a well-known override file or the TUI. The dotfiles repo becomes the first
+consumer: every `install.sh` component (Linux and Windows sides) gets a bool flag,
+all defaulting on, so components can be disabled per machine later without editing
+scripts.
+
+## 2. Use cases
+
+**UC1 — gate an install step (shell)**
+- *Actor:* `install.sh` (and `setup-apps.ps1`/`setup-elevated.ps1` via env).
+- *Trigger:* bootstrap run on any host.
+- *Flow:* install.sh builds gff after the Go toolchain → `eval "$(gff export --shell)"`
+  → each later step checks its `GFF_*` var (or `gff enabled <key>`) → disabled steps
+  print `SKIP (gff: <key>=false)` and continue.
+- *Acceptance:* disabling `install.windows.wispr-flow` in `~/.config/gff/config.yaml`
+  skips the Wispr Flow MSI/AHK workflow on the next run; deleting the override restores
+  it; a host with no gff binary runs everything (fail-open).
+
+**UC2 — inspect and flip flags (human)**
+- *Actor:* user at a terminal.
+- *Trigger:* `gff` / `gff tui` / `gff list`.
+- *Flow:* TUI tree area→component→feature; each row shows description, default,
+  effective value, and the layer that set it; toggling a bool or picking a choice
+  writes `~/.config/gff/config.yaml` only.
+- *Acceptance:* a toggle round-trips (visible in `gff get`, survives restart); the
+  repo defaults file is never modified by the TUI/CLI.
+
+**UC3 — a repo adopts gff**
+- *Actor:* maintainer of any git repo.
+- *Trigger:* adds `.gff/features.yaml` declaring area(s) + features; runs `gff lint`,
+  then `gff install`.
+- *Acceptance:* inside the repo, `gff get` resolves live from the tracked file; after
+  install, the same keys resolve from any CWD via the snapshot; a second repo claiming
+  an already-owned area is rejected with the owner named.
+
+**UC4 — Go code reads a flag**
+- *Actor:* a Go program importing `pkg/gff`.
+- *Flow:* `gff.Bool("install.ai.claude")` resolves the full chain; optionally the repo
+  runs `gff gen` for typed accessors.
+- *Acceptance:* SDK and CLI agree on the effective value for every key in every layer
+  combination (shared resolver, table-tested).
+
+## 3. Architecture
+
+Components (each independently testable; see design §4 for full detail):
+
+- `proto/gff/v1/features.proto` — generic schema; committed generated Go; regeneration
+  pinned in `build.sh`, CI-checked clean.
+- `internal/schema` — parse + validate + lint `.gff/features.yaml|json`
+  (protojson-compatible encodings of `FeatureSet`).
+- `internal/resolve` — layer chain (design §4): source snapshots (`/opt/conf/gff/`,
+  `~/opt/conf/gff/`) → live repo file (git-style discovery, `[gff] source` redirect) →
+  overrides (`/var/opt/conf/gff/config.yaml`, `~/.config/gff/config.yaml`); sparse
+  per-key merge; winning-layer attribution.
+- `internal/registry` — `~/.config/gff/sources.yaml`; exclusive area claims; snapshots.
+- `cmd/` — cobra: `get`, `enabled`, `set`, `unset`, `list`, `install`, `export`,
+  `gen`, `lint`, `tui`, `version`.
+- `internal/tui` — bubbletea tree view; writes user override only.
+- `pkg/gff` — public runtime SDK; `gff gen` typed accessors (P4).
+- Filesystem + git access behind interfaces (mockable, like gss's runner) so resolver
+  tests need no real repo.
+
+Data flow: features.yaml (git) ──gff install──▶ snapshot + registry ──resolver──▶
+effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerShell}.
+
+## 4. Behavior / features
+
+- **F1 canonical keys:** dotted `area.component.feature`; lint enforces uniqueness,
+  lowercase-kebab segments, and 3-level depth.
+- **F2 bool type:** values strictly `true`/`false`; lint rejects negative names
+  (`no-*`, `disable-*`, `skip-*`) so `true` always means ON.
+- **F3 choice type:** `options: map<int,string>` (index → description) +
+  `default/selected: int`; setting an out-of-range index is an error.
+- **F4 layered resolution:** design §4 chain; overrides sparse; unknown key ⇒ CLI
+  error (exit 2), distinct from `enabled`'s false (exit 1).
+- **F5 git-persisted defaults:** tracked `.gff/features.yaml`; upward discovery from
+  CWD; `git config gff.source` redirect honored.
+- **F6 machine registry:** `gff install` registers/refreshes {name, url, areas,
+  commit} + snapshot; exclusive area claims.
+- **F7 shell interface:** `gff enabled <key>` (0=on, 1=off, 2=unknown key);
+  `gff export --shell` emits `GFF_<AREA>_<COMPONENT>_<FEATURE>=true|false|<int>`
+  (dots/dashes → underscores, uppercased).
+- **F8 write path:** `set`/`unset`/TUI mutate only `~/.config/gff/config.yaml`
+  (created 0600 on first write, parent dirs as needed).
+- **F9 install.sh instrumentation:** ~36 bool flags per design §4, all default on;
+  gff built immediately after the goenv/Go step; every gate fails open; PS phases
+  receive `GFF_*` env and treat unset as on.
+- **F10 TUI:** tree nav, description/default/effective/winning-layer per row, bool
+  toggle + choice picker, quit-without-write safety.
+
+## 5. Evaluation criteria (per feature)
+
+| Feature | Fires | Must not fire | Edge | Pass |
+| :-- | :-- | :-- | :-- | :-- |
+| F1/F2 lint | dup path, negative bool name, bad depth → non-zero + named finding | clean file | 2-level or 4-level path | table tests |
+| F3 choice | out-of-range set rejected | valid index | empty options map (lint error) | table tests |
+| F4 resolve | higher layer wins per key | lower layer leaking through | key defined in no layer ⇒ unknown (exit 2) | matrix test over all 5 layers |
+| F5 discovery | finds `.gff/` from nested CWD; follows `gff.source` redirect | files outside a repo | worktree (`.git` file not dir) | temp-repo tests |
+| F6 registry | second claim of owned area rejected, owner named | re-install same repo (refresh) | moved clone (snapshot still serves) | registry tests |
+| F7 export | emits every key, correct mangling | injection via description text (values only, quoted) | choice flags export the int | golden-file test |
+| F8 writes | only user override mtime changes | any write to repo/system files | no `~/.config/gff` dir yet | fs-mock test |
+| F9 gating | `false` ⇒ step body skipped, SKIP line printed | enabled steps changing behavior | gff binary absent ⇒ all run | bats-style harness on an extracted gate function |
+| F10 TUI | toggle writes override; `q` without change writes nothing | writes on navigation | terminal too small | teatest golden frames |
+
+## 6. Verification harness
+
+- Go: table-driven unit tests per package; resolver matrix (every layer × bool/choice ×
+  set/unset); ≥60% coverage (repo `sdk/` gate); `go vet` + lint in CI.
+- Golden files: `export --shell` output, `gen` output, `list --json`.
+- Proto: CI job regenerates and fails on diff.
+- Shell: `make lint-shell` + `make lint-portability` on install.sh edits; a test
+  sourcing the gate helper proving enabled/disabled/missing-binary behavior.
+- TUI: bubbletea `teatest` snapshot tests (P3).
+- Human-evidenced gate (P2): one full `install.sh` run on WSL with
+  `install.windows.wispr-flow=false` showing the SKIP line; recorded in the PR.
+
+## 7. Prerequisites / dependencies
+
+- Go toolchain pinned by `.go-version` (already installed by install.sh before sdk builds).
+- New deps: `google.golang.org/protobuf`, `github.com/charmbracelet/bubbletea`
+  (+lipgloss/bubbles), buf or pinned protoc in `build.sh` (generator only; not needed
+  by contributors since generated code is committed).
+- `.gitignore`: `sdk/**` coverage exists for gss-era paths — verify `!`-rules cover
+  `sdk/gff/**` and the new top-level `.gff/` before staging (repo allowlist gotcha).
+
+## 8. Out of scope (and why)
+
+- Flag servers, remote fetch, percentage rollouts, per-user targeting — gff is a local,
+  git-backed system by design.
+- Non-Go language SDKs — shell gets the CLI/env interface; anything else is future work.
+- Migrating existing config mechanisms (`~/.zshrc.local`, `ai/plugins.yaml`) onto gff —
+  candidates later, not part of this objective.
+- Auto-disabling any component — this objective only enumerates (all on); disabling
+  decisions come after the switches exist.
+
+## 9. Rollback
+
+Per design §6: additive feature; fail-open gates degrade to current behavior; P2 is the
+only phase touching existing files and reverts independently.
+
+> Produced via `superpowers:brainstorming`. Plan: `../plans/gff.md` (next).
+> Registered in `../index.md`.
