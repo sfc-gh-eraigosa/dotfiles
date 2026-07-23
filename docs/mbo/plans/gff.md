@@ -1,0 +1,740 @@
+# gff — git fast features — implementation plan
+
+- **Slug:** gff
+- **Date:** 2026-07-23
+- **Status:** Draft
+- **Relates to:** spec `../specs/gff.md` · design `../designs/gff.md` · issue #180 · PR #181
+
+> **For agentic workers:** REQUIRED SUB-SKILL: use `superpowers:subagent-driven-development`
+> (recommended) or `superpowers:executing-plans` to implement task-by-task. Steps use
+> checkbox (`- [ ]`) syntax. TDD throughout: test → red → code → green → commit.
+
+**Goal:** Build `sdk/gff`, a generic git-persisted feature-flag engine (proto schema,
+layered resolver, cobra CLI, bubbletea TUI, Go SDK), and instrument `install.sh` +
+the Windows PowerShell phases with per-component flags, all defaulting on.
+
+**Architecture:** proto defines only the *shape* (FeatureSet/Feature/bool/choice);
+flag *data* lives in each repo's tracked `.gff/features.yaml`. A 5-layer resolver
+(system snapshot → user snapshot → live repo file → system override → user override)
+computes effective values with winning-layer attribution. Shell consumes flags via
+`gff export --shell` env vars + a fail-open `gff_on` helper.
+
+**Tech stack:** Go 1.26.1 (repo `.go-version`), `google.golang.org/protobuf`
+(+ `buf` as a go tool — no C++ protoc), cobra, `gopkg.in/yaml.v3`, bubbletea
+(+ bubbles/lipgloss, P3 only), bash + PowerShell touch-points.
+
+## Global constraints
+
+- Module path `github.com/sfc-gh-eraigosa/dotfiles/sdk/gff`; go directive `1.26.1`.
+- Mirror `sdk/gss`/`sdk/gsl` layout: `cmd/`, `internal/`, `main.go`, `VERSION`,
+  `build.sh` stamping `internal/version` via ldflags only (no build vars in `cmd`/`main`).
+- ≥60% Go test coverage (repo `sdk/` gate); table-driven tests; no network in tests.
+- Generated proto Go code is **committed** under `gen/gff/v1/` (Go package name
+  `gffv1`, import path `…/sdk/gff/gen/gff/v1`); regeneration must be clean in CI.
+- Bool flags: `true`=on, `false`=off; lint rejects negative names (`no-*`, `not-*`,
+  `disable-*`, `disabled-*`, `skip-*`, `off-*`).
+- Canonical keys: exactly 3 dotted segments `area.component.feature`, each segment
+  `[a-z0-9]+(-[a-z0-9]+)*`.
+- Env mangling: uppercase, `.` and `-` → `_` (e.g. `install.windows.wispr-flow` →
+  `GFF_INSTALL_WINDOWS_WISPR_FLOW`).
+- `gff enabled` exit codes: 0=on, 1=off, 2=unknown key. All other verbs: 0 ok, 1 error.
+- Writes go ONLY to `~/.config/gff/` (config.yaml 0600, sources.yaml). Never write
+  repo or system files.
+- Every shell edit obeys `docs/mbo/specs/shell-portability.md`; run `make lint-shell`
+  and `make lint-portability` before each shell commit. All shell gates FAIL OPEN.
+- Per-directory docs rule: new documented dirs get `AGENTS.md` + `CLAUDE.md → AGENTS.md`.
+- Commits end with `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`; stage
+  files by explicit name.
+
+## 1. Summary & verdict
+
+Four phases, each an independently landable PR: **P1** engine (proto + schema + paths +
+resolver + registry + core CLI + SDK + CI), **P2** dotfiles instrumentation
+(`.gff/features.yaml` inventory, `opt/lib/gff.sh`, install.sh + PowerShell gating),
+**P3** TUI, **P4** `gff gen` typed accessors. P1 blocks the rest; P2/P3/P4 are
+path-disjoint after P1 (see §6.1). Spec coverage verified in §5.
+
+## 2. File inventory
+
+| Path | Purpose | Implements |
+| :-- | :-- | :-- |
+| `sdk/gff/go.mod`, `go.sum`, `main.go`, `VERSION`, `build.sh`, `README.md`, `AGENTS.md`, `CLAUDE.md→AGENTS.md`, `LICENSE` | module scaffold, build + version stamping | spec §3 |
+| `sdk/gff/internal/version/version.go` | ldflags-stamped version vars | repo sdk convention |
+| `sdk/gff/proto/gff/v1/features.proto` | generic schema messages | F1–F3, design §4 |
+| `sdk/gff/buf.yaml`, `buf.gen.yaml`, `scripts/genproto.sh` | buf-based codegen (go tool, committed output) | spec §3 proto |
+| `sdk/gff/gen/gff/v1/*.pb.go` | committed generated code | spec §3 proto |
+| `sdk/gff/internal/schema/{schema.go,lint.go,schema_test.go,lint_test.go}` | load/validate/lint features files | F1–F3, F5 (format) |
+| `sdk/gff/internal/paths/paths.go` (+test) | well-known layer paths, overridable for tests | F4 |
+| `sdk/gff/internal/gitx/{gitx.go,gitx_test.go}` | repo-root discovery + `gff.source` redirect; mockable runner | F5 |
+| `sdk/gff/internal/resolve/{resolve.go,resolve_test.go}` | 5-layer merge, provenance, unknown-key | F4 |
+| `sdk/gff/internal/registry/{registry.go,registry_test.go}` | sources.yaml, exclusive area claims, snapshots | F6 |
+| `sdk/gff/cmd/{root,version,get,enabled,set,unset,list,lint,export,install}.go` (+tests) | cobra verbs | F4–F8 |
+| `sdk/gff/pkg/gff/{gff.go,gff_test.go}` | public runtime SDK | UC4 |
+| `.github/workflows/gff-ci.yml` | go vet+test+cover gate, proto-regen-clean | spec §6 |
+| `.gff/features.yaml` | dotfiles flag inventory (all on) | F9 |
+| `.gitignore` | add `!.gff/`, `!.gff/**` | F9 (allowlist gotcha) |
+| `opt/lib/gff.sh` (+ `opt/lib/gff_test.sh`) | POSIX fail-open `gff_on` helper + test driver | F9, UC1 |
+| `install.sh` | gff build block after Go toolchain; `eval export`; per-step gates | F9 |
+| `opt/bin/install_windows.sh` | WSLENV pass-through of `GFF_INSTALL_WINDOWS_*` | F9 |
+| `opt/Desktop/Apps/scripts/lib/gff.ps1` | `Test-GffOn` PS helper (unset ⇒ on) | F9 |
+| `opt/Desktop/Apps/scripts/{setup-apps.ps1,setup-elevated.ps1}` | phase gating | F9 |
+| `sdk/gff/internal/tui/{model.go,view.go,tui_test.go}` + `cmd/tui.go` | bubbletea TUI | F10, UC2 |
+| `sdk/gff/cmd/gen.go` (+ golden tests) | typed-accessor codegen | UC4 (P4) |
+
+## 3. Interface contracts (frozen)
+
+### 3.1 Proto (`proto/gff/v1/features.proto`) — the whole schema
+
+```proto
+syntax = "proto3";
+package gff.v1;
+option go_package = "github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/gen/gff/v1;gffv1";
+
+// A repo's tracked flag definitions (.gff/features.yaml = YAML/protojson encoding).
+message FeatureFile { repeated FeatureSet sets = 1; }
+message FeatureSet {
+  string area = 1;                 // claimed exclusively per machine
+  repeated Feature features = 2;
+}
+message Feature {
+  string path = 1;                 // canonical: area.component.feature
+  string description = 2;
+  oneof default {
+    bool bool_default = 3;         // true is always ON; no negative names
+    ChoiceDefault choice_default = 4;
+  }
+}
+message ChoiceDefault {
+  int32 selected = 1;              // must be a key of options
+  map<int32, string> options = 2;  // index -> human description
+}
+// Sparse override value (override files decode into this).
+message Value {
+  oneof kind { bool bool_value = 1; int32 choice_value = 2; }
+}
+message Source {                   // one registered repo
+  string name = 1; string url = 2;
+  repeated string areas = 3; string commit = 4;
+}
+message SourceRegistry { repeated Source sources = 1; }
+```
+
+### 3.2 File formats
+
+`.gff/features.yaml` (protojson field names, YAML syntax):
+
+```yaml
+sets:
+  - area: install
+    features:
+      - path: install.windows.wispr-flow
+        description: Wispr Flow MSI + AHK dictation workflow (Windows)
+        boolDefault: true
+      - path: install.pkg.manager        # (example of a choice flag)
+        description: Package manager selection
+        choiceDefault: {selected: 0, options: {0: auto, 1: apt, 2: brew}}
+```
+
+Override files (`/var/opt/conf/gff/config.yaml`, `~/.config/gff/config.yaml`) are a
+**plain scalar map** for hand-editability (decoded into `map[string]*gffv1.Value`;
+bool → BoolValue, int → ChoiceValue; anything else = parse error):
+
+```yaml
+install.windows.wispr-flow: false
+install.pkg.manager: 2
+```
+
+`~/.config/gff/sources.yaml` = YAML encoding of `SourceRegistry`
+(`sources: [{name, url, areas, commit}]`). Snapshots are verbatim copies of the
+source's features file at `<layer>/gff/<source-name>.yaml`.
+
+### 3.3 Go interfaces
+
+```go
+// internal/paths
+type Paths struct {
+    SystemSnapshotDir string // /opt/conf/gff
+    UserSnapshotDir   string // $HOME/opt/conf/gff
+    SystemOverride    string // /var/opt/conf/gff/config.yaml
+    UserOverride      string // $HOME/.config/gff/config.yaml
+    RegistryFile      string // $HOME/.config/gff/sources.yaml
+    WorkDir           string // CWD for repo discovery
+}
+func Default() (Paths, error)
+
+// internal/gitx — mockable like gss's runner
+type Runner interface { Output(dir string, args ...string) (string, error) }
+func RepoRoot(startDir string) (string, bool)              // walk up to .git (dir OR file)
+func SourcePath(r Runner, repoRoot string) string          // `git config gff.source` or ".gff/features.yaml"
+
+// internal/schema
+func LoadFeatureFile(path string) (*gffv1.FeatureFile, error)   // .yaml|.yml|.json
+func LoadOverrides(path string) (map[string]*gffv1.Value, error) // missing file => empty map, nil err
+func Lint(f *gffv1.FeatureFile) []Finding                        // Finding{Path, Rule, Msg}
+
+// internal/resolve
+type Layer int
+const ( LayerNone Layer = iota; LayerSystemSnapshot; LayerUserSnapshot
+        LayerRepoLive; LayerSystemOverride; LayerUserOverride )
+type Resolved struct {
+    Feature *gffv1.Feature // definition (description, default, choice options)
+    Value   *gffv1.Value   // effective value
+    Layer   Layer          // layer that set the effective value (Def layers => default)
+}
+var ErrUnknownKey = errors.New("unknown flag key")
+type Resolver struct { P paths.Paths; R gitx.Runner }
+func (r *Resolver) All() ([]Resolved, error)          // sorted by Feature.Path
+func (r *Resolver) Resolve(key string) (Resolved, error)
+
+// internal/registry
+type Registry struct { P paths.Paths }
+var ErrAreaClaimed = errors.New("area already claimed")     // wraps owner name
+func (g *Registry) Install(repoRoot, name, url, commit string, ff *gffv1.FeatureFile) error
+func (g *Registry) Sources() ([]*gffv1.Source, error)
+
+// pkg/gff — public SDK
+func Bool(key string) (bool, error)     // full-chain resolve from Default() paths
+func Choice(key string) (int32, error)
+```
+
+### 3.4 CLI contract
+
+```
+gff get <key>            -> prints "true"|"false"|<int>; exit 2 unknown key
+gff enabled <key>        -> no output; exit 0 on / 1 off / 2 unknown (choice: exit 2 + stderr)
+gff set <key> <value>    -> writes ~/.config/gff/config.yaml (0600); validates type/range
+gff unset <key>          -> removes key from user override
+gff list [--json]        -> table: PATH TYPE VALUE LAYER DESCRIPTION; --json = []Resolved
+gff lint [path]          -> lints features file (default: discovered repo file); exit 1 on findings
+gff export --shell       -> lines: GFF_<MANGLED>=<value> (values only from bool/int — injection-safe)
+gff install              -> registers CWD repo + snapshot into user layer; exit 1 on area clash
+gff version              -> gss-style version block
+```
+
+### 3.5 Shell contract (`opt/lib/gff.sh`)
+
+```sh
+gff_on <key>   # returns 0 (run the step) unless the mangled env var is exactly "false"
+```
+
+Windows: bash appends each `GFF_INSTALL_WINDOWS_*` name to `WSLENV` (`/u` flag) before
+invoking `powershell.exe`; `lib/gff.ps1` provides `Test-GffOn "install.windows.x"`
+(true unless env var is exactly `"false"`).
+
+## 4. TDD build order
+
+Tasks are bite-sized; every code step shows the real code or the exact content sketch a
+skilled Go engineer needs. Run all Go commands from `sdk/gff/`.
+
+---
+
+### P1-T1: module scaffold + version
+
+**Files:** create `sdk/gff/{go.mod,main.go,VERSION,build.sh,README.md,AGENTS.md,LICENSE}`,
+`sdk/gff/cmd/{root.go,version.go,root_test.go}`, `sdk/gff/internal/version/version.go`;
+symlink `sdk/gff/CLAUDE.md → AGENTS.md`.
+
+**Interfaces:** produces `cmd.Execute()`, `cmd.NewRootCmd() *cobra.Command` (all later
+verbs register on it in their own files via `rootCmd.AddCommand` in `init()` — copy the
+`sdk/gsl/cmd` pattern).
+
+- [ ] Copy `sdk/gsl/build.sh` to `sdk/gff/build.sh`; replace every `gsl` with `gff`.
+      `VERSION` = `0.1.0`. `LICENSE` = copy of `sdk/gsl/LICENSE`.
+- [ ] `go.mod`: module `github.com/sfc-gh-eraigosa/dotfiles/sdk/gff`, `go 1.26.1`.
+- [ ] `internal/version/version.go`: vars `Version, Commit, BuildDate, Dirty = "dev","none","unknown","false"`
+      + `func String() string` formatting them (mirror gsl's).
+- [ ] Failing test `cmd/root_test.go`:
+
+```go
+func TestVersionCommand(t *testing.T) {
+    var out bytes.Buffer
+    cmd := NewRootCmd()
+    cmd.SetOut(&out); cmd.SetErr(&out)
+    cmd.SetArgs([]string{"version"})
+    if err := cmd.Execute(); err != nil { t.Fatal(err) }
+    if !strings.Contains(out.String(), "gff") { t.Fatalf("want version output, got %q", out.String()) }
+}
+```
+
+- [ ] Run `go test ./cmd/` → FAIL (NewRootCmd undefined).
+- [ ] Implement `cmd/root.go` (`NewRootCmd` returns cobra root, Use `gff`, Short
+      "git fast features — layered feature flags persisted in git") + `cmd/version.go`
+      printing `version.String()`; `main.go` calls `cmd.Execute()`.
+- [ ] `go test ./... && go vet ./...` → PASS. `bash build.sh` → installs `~/opt/bin/gff`.
+- [ ] Commit: `feat(gff): scaffold sdk/gff module with cobra root + version`
+
+### P1-T2: proto schema + committed codegen
+
+**Files:** create `sdk/gff/proto/gff/v1/features.proto` (§3.1 verbatim), `sdk/gff/buf.yaml`,
+`sdk/gff/buf.gen.yaml`, `sdk/gff/scripts/genproto.sh`, committed `sdk/gff/gen/gff/v1/*.pb.go`.
+
+**Interfaces:** produces package `gen/gffv1` (all messages in §3.1).
+
+- [ ] Add tools: `go get google.golang.org/protobuf@latest && go get -tool github.com/bufbuild/buf/cmd/buf@latest && go get -tool google.golang.org/protobuf/cmd/protoc-gen-go@latest`
+- [ ] `buf.yaml`: `version: v2` with `modules: [{path: proto}]`. `buf.gen.yaml`:
+
+```yaml
+version: v2
+plugins:
+  - local: ["go", "tool", "protoc-gen-go"]
+    out: gen
+    opt: paths=source_relative
+```
+
+  and `scripts/genproto.sh`:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(cd "$(dirname "$0")/.." && pwd)"
+go tool buf generate
+```
+
+  With `paths=source_relative` + the `;gffv1` go_package suffix, output lands at
+  `gen/gff/v1/features.pb.go`, package `gffv1` — no post-processing.
+- [ ] Write `features.proto` exactly as §3.1. Run `bash scripts/genproto.sh` → `gen/gff/v1/features.pb.go` exists; `go build ./...` PASS.
+- [ ] Sanity test `gen/gffv1` round-trip in `internal/schema/schema_test.go` (next task covers it) — for now: `go vet ./...` PASS.
+- [ ] Re-run `bash scripts/genproto.sh`; `git status --short sdk/gff/gen` shows no diff (idempotent).
+- [ ] Commit: `feat(gff): proto v1 schema + buf go-tool codegen (committed output)`
+
+### P1-T3: schema load + lint
+
+**Files:** create `internal/schema/{schema.go,lint.go,schema_test.go,lint_test.go}`.
+
+**Interfaces:** consumes `gen/gffv1`; produces §3.3 `LoadFeatureFile`, `LoadOverrides`, `Lint`.
+
+- [ ] Failing tests first — `schema_test.go` (temp-dir fixtures):
+
+```go
+func TestLoadFeatureFileYAML(t *testing.T) {
+    p := writeFile(t, "features.yaml", `
+sets:
+  - area: install
+    features:
+      - {path: install.ai.claude, description: Claude CLI, boolDefault: true}
+      - path: install.pkg.manager
+        description: Package manager
+        choiceDefault: {selected: 0, options: {0: auto, 1: apt}}
+`)
+    ff, err := LoadFeatureFile(p)
+    if err != nil { t.Fatal(err) }
+    if got := ff.Sets[0].Features[0].GetBoolDefault(); !got { t.Fatal("bool default") }
+    if got := ff.Sets[0].Features[1].GetChoiceDefault().Options[1]; got != "apt" { t.Fatal("choice") }
+}
+func TestLoadOverrides(t *testing.T) {
+    p := writeFile(t, "config.yaml", "install.ai.claude: false\ninstall.pkg.manager: 1\n")
+    o, err := LoadOverrides(p)
+    if err != nil { t.Fatal(err) }
+    if o["install.ai.claude"].GetBoolValue() != false { t.Fatal("bool override") }
+    if o["install.pkg.manager"].GetChoiceValue() != 1 { t.Fatal("choice override") }
+}
+func TestLoadOverridesMissingFile(t *testing.T) { // sparse layer absent => empty, no error
+    o, err := LoadOverrides(filepath.Join(t.TempDir(), "nope.yaml"))
+    if err != nil || len(o) != 0 { t.Fatalf("want empty/nil, got %v/%v", o, err) }
+}
+```
+
+  `lint_test.go` table test — cases (rule, input, wantFinding): duplicate path;
+  negative name each prefix (`install.ai.no-claude` etc.); depth 2 (`install.claude`)
+  and 4; uppercase/underscore segment; choice `selected` not in `options`; empty
+  `options`; path not starting with the set's `area.`; clean file ⇒ no findings.
+- [ ] `go test ./internal/schema/` → FAIL.
+- [ ] Implement. `LoadFeatureFile`: read file; if `.json` → `protojson.Unmarshal`;
+      else `yaml.Unmarshal` into `any`, normalize map keys to strings
+      (`map[string]any` recursively, ints→strings for option keys), `json.Marshal`,
+      `protojson.Unmarshal` with `DiscardUnknown: false`. `LoadOverrides`:
+      `os.IsNotExist ⇒ (map{}, nil)`; yaml scalar map; bool→BoolValue,
+      int→ChoiceValue, else error naming the key. `Lint`: iterate with a
+      `map[string]bool` seen-set; regex `^[a-z0-9]+(-[a-z0-9]+)*$` per segment;
+      negative prefixes from Global Constraints on the last segment.
+- [ ] `go test ./internal/schema/ -cover` → PASS, ≥80% for this package.
+- [ ] Commit: `feat(gff): schema loader (yaml/json protojson) + lint rules`
+
+### P1-T4: paths + git discovery
+
+**Files:** create `internal/paths/paths.go` (+`paths_test.go`), `internal/gitx/{gitx.go,gitx_test.go}`.
+
+**Interfaces:** produces §3.3 `Paths`, `Default()`, `Runner`, `RepoRoot`, `SourcePath`.
+
+- [ ] Failing tests: `Default()` fields end with the exact §3.3 suffixes (use
+      `os.UserHomeDir`); `RepoRoot`: temp dir tree `a/b/c` with `.git` **dir** at `a`
+      → found from `c`; `.git` **file** (worktree case: `gitdir: ...`) at `a` → found;
+      no `.git` anywhere → `("", false)`. `SourcePath`: fake Runner returning
+      `custom/flags.yaml` → joined path; Runner returning error → default
+      `.gff/features.yaml`.
+
+```go
+type fakeRunner struct{ out string; err error }
+func (f fakeRunner) Output(dir string, args ...string) (string, error) { return f.out, f.err }
+```
+
+- [ ] Implement. `RepoRoot`: `os.Stat(filepath.Join(dir, ".git"))` accepting dir or
+      file, walking to filesystem root. `SourcePath`: `r.Output(repoRoot, "config",
+      "--get", "gff.source")`, trim; relative ⇒ join to repoRoot. Real runner execs
+      `git -C <dir> <args...>` via `os/exec`.
+- [ ] `go test ./internal/paths/ ./internal/gitx/` → PASS.
+- [ ] Commit: `feat(gff): well-known paths + git-style repo discovery with gff.source redirect`
+
+### P1-T5: resolver (the core)
+
+**Files:** create `internal/resolve/{resolve.go,resolve_test.go}`.
+
+**Interfaces:** consumes schema/paths/gitx; produces §3.3 `Resolver`, `Resolved`,
+`Layer`, `ErrUnknownKey`.
+
+- [ ] Failing matrix test. Helper builds a full fake world in `t.TempDir()`:
+
+```go
+// world lays out: sysSnap/gff/src.yaml, userSnap/gff/src.yaml, repo/.gff/features.yaml,
+// sysOverride config.yaml, userOverride config.yaml — each optional per case.
+type world struct{ sysSnap, userSnap, repo, sysOvr, usrOvr string } // file contents ("" = absent)
+func newResolver(t *testing.T, w world) *Resolver { /* writes files, returns Resolver with Paths pointing at temp dirs, WorkDir=repo */ }
+```
+
+  Cases (each asserts `.Value` AND `.Layer`):
+  1. key only in system snapshot ⇒ default, `LayerSystemSnapshot`
+  2. same key in user snapshot too ⇒ user snapshot def wins, `LayerUserSnapshot`
+  3. live repo file redefines default ⇒ `LayerRepoLive`
+  4. system override flips ⇒ `LayerSystemOverride`
+  5. user override flips back ⇒ `LayerUserOverride`
+  6. override for UNKNOWN key ⇒ ignored by `All()`, `Resolve` ⇒ `ErrUnknownKey`
+  7. choice flag: default selected; override to valid index ⇒ value; override to
+     out-of-range index ⇒ error naming key and range
+  8. no repo (WorkDir outside any git repo) ⇒ snapshots+overrides still resolve
+  9. `All()` sorted by path; sparse overrides never invent keys
+- [ ] `go test ./internal/resolve/` → FAIL.
+- [ ] Implement: load def layers in order (every `*.yaml|*.json` in SystemSnapshotDir,
+      then UserSnapshotDir, then live file via `gitx.RepoRoot(P.WorkDir)`+`SourcePath`);
+      later def layer replaces a path's `(Feature, defLayer)`. Then apply the two
+      override maps in order; validate choice range against the winning def. Effective
+      value = default unless overridden; `Layer` = winning layer.
+- [ ] `go test ./internal/resolve/ -cover` → PASS, ≥85% here (this is the heart).
+- [ ] Commit: `feat(gff): 5-layer resolver with provenance + choice validation`
+
+### P1-T6: registry + install
+
+**Files:** create `internal/registry/{registry.go,registry_test.go}`.
+
+**Interfaces:** consumes paths/schema; produces §3.3 `Registry`, `ErrAreaClaimed`.
+
+- [ ] Failing tests: fresh install writes `sources.yaml` (name/url/areas/commit) and
+      snapshot `<UserSnapshotDir>/<name>.yaml` byte-identical to the source file;
+      re-install same name refreshes commit + snapshot (no dup entry); second repo
+      claiming an owned area ⇒ `ErrAreaClaimed` and error text contains owner name;
+      `Sources()` on missing registry ⇒ empty, nil error.
+- [ ] Implement (yaml encode of `SourceRegistry` via the same protojson-normalize
+      trick as schema; `os.MkdirAll` + atomic write temp+rename).
+- [ ] `go test ./internal/registry/` → PASS. Commit:
+      `feat(gff): machine source registry with exclusive area claims + snapshots`
+
+### P1-T7: read verbs — get / enabled / list / lint
+
+**Files:** create `cmd/{get.go,enabled.go,list.go,lint.go}` + `cmd/read_test.go`.
+
+**Interfaces:** consumes Resolver; produces CLI contract §3.4. All verbs build
+`resolve.Resolver{P: paths.Default(), R: gitx.ExecRunner{}}`; tests inject temp
+paths via an unexported `newResolver` hook variable (`var newResolver = defaultResolver`
+in root.go, swapped in tests — same pattern gss uses for its runner).
+
+- [ ] Failing tests: `gff get k` prints `true\n` / choice prints `1\n`; unknown key ⇒
+      exit-2 (assert via returned `*ExitError`-style sentinel: root maps
+      `resolve.ErrUnknownKey` to `SilenceUsage` + `os.Exit(2)` in `main.go`; in tests
+      assert the sentinel error); `enabled` on/off/unknown; `list` table contains
+      `install.ai.claude  bool  true  default(user-snapshot)`-style row and
+      `--json` unmarshals; `lint` on a bad file exits non-zero listing findings.
+- [ ] Implement the four files (~30 lines each). Exit-code mapping lives ONLY in
+      `main.go`: `errors.Is(err, resolve.ErrUnknownKey) ⇒ 2`, else non-nil ⇒ 1.
+- [ ] `go test ./cmd/` → PASS. Commit: `feat(gff): get/enabled/list/lint verbs`
+
+### P1-T8: write verbs — set / unset
+
+**Files:** create `cmd/{set.go,unset.go}` + `cmd/write_test.go`.
+
+- [ ] Failing tests: `set k false` creates `~cfg/config.yaml` mode 0600 containing
+      only that key; `set` choice out-of-range ⇒ error, file untouched; `set` unknown
+      key ⇒ ErrUnknownKey; `unset` removes key, keeps others; round-trip
+      `set→get` agrees; NO test writes outside `t.TempDir()`.
+- [ ] Implement: read-modify-write `LoadOverrides` map + yaml marshal, atomic
+      temp+rename, `os.Chmod(0600)`; validate via Resolver before writing.
+- [ ] PASS → Commit: `feat(gff): set/unset writing the user override only`
+
+### P1-T9: export + install verbs
+
+**Files:** create `cmd/{export.go,install.go}` + `cmd/export_test.go`, golden file
+`cmd/testdata/export.golden`.
+
+- [ ] Failing tests: mangling table (`install.windows.wispr-flow` →
+      `GFF_INSTALL_WINDOWS_WISPR_FLOW`); golden: world with 3 flags (one overridden
+      false, one choice) ⇒ exact lines sorted:
+
+```
+GFF_INSTALL_AI_CLAUDE=true
+GFF_INSTALL_PKG_MANAGER=1
+GFF_INSTALL_WINDOWS_WISPR_FLOW=false
+```
+
+      (values come only from bool/int — nothing user-authored is emitted, so no quoting
+      needed; assert description text can contain `$(rm -rf)` without appearing);
+      `install` in a temp repo registers + snapshots (delegates to registry; assert via
+      `Sources()`), outside a repo ⇒ clear error.
+- [ ] Implement `export.go` (`--shell` flag required for now) + `install.go`
+      (name = repo dir basename; url = `git config --get remote.origin.url` via
+      gitx Runner, tolerate absence; commit = `rev-parse --short HEAD`).
+- [ ] PASS → Commit: `feat(gff): shell export + repo install verbs`
+
+### P1-T10: public SDK + CI + coverage gate
+
+**Files:** create `pkg/gff/{gff.go,gff_test.go}`, `.github/workflows/gff-ci.yml`.
+
+- [ ] Failing test: `pkg/gff` `Bool`/`Choice` agree with a Resolver over the same
+      temp world (SDK takes an optional `WithPaths(p)` functional option so the test
+      can point it at temp dirs; default = `paths.Default()`).
+- [ ] Implement thin wrapper. PASS.
+- [ ] `gff-ci.yml`: on PR paths `sdk/gff/**`: setup-go from `.go-version`, run
+      `go vet ./... && go test ./... -coverprofile=cover.out`, fail if
+      `go tool cover -func=cover.out | tail -1` < 60%, then
+      `bash scripts/genproto.sh && git diff --exit-code -- gen/` (regen clean).
+- [ ] Full `go test ./... -cover` ≥60% total. Commit:
+      `feat(gff): public SDK + CI (vet, tests, coverage gate, proto-regen check)`
+      → **P1 done-when gate:** all green + `bash build.sh` installs a working
+      `gff version`.
+
+---
+
+### P2-T1: dotfiles flag inventory (`.gff/features.yaml`)
+
+**Files:** create `.gff/features.yaml`; modify `.gitignore` (add `!.gff/` + `!.gff/**`
+next to the other top-level opt-ins, with a comment).
+
+- [ ] `.gitignore` rules FIRST, then create the file; verify
+      `git status --short -- .gff/` shows it (allowlist gotcha).
+- [ ] Author the inventory — ONE `sets:` entry, `area: install`, every feature
+      `boolDefault: true`, description = one plain sentence naming the install.sh
+      block it gates. Full key list (43 flags — the enumeration deliverable):
+
+```
+install.system.wsl-interop      install.runtime.goenv        install.sdk.gss
+install.system.jetson           install.runtime.pyenv        install.sdk.tmux-mgr
+install.system.gitrepos         install.runtime.rbenv        install.sdk.wol
+install.system.nano-profile     install.runtime.nvm          install.sdk.gsl
+install.shell.profiles          install.runtime.fnm          install.sdk.gff
+install.shell.default-zsh       install.ai.skills            install.fonts.nerd-font
+install.pkg.common-core         install.ai.antigravity       install.network.sshd
+install.pkg.brewfile            install.ai.claude            install.windows.desktop-deploy
+install.tools.sops              install.ai.google-cli        install.windows.wsl-platform
+install.tools.yq                install.ai.plugins           install.windows.nerd-font
+install.tools.k8s               install.ai.teams             install.windows.terminal-themes
+install.tools.snowflake                                      install.windows.apps
+install.tools.docker                                         install.windows.wispr-flow
+install.tools.git-aliases                                    install.windows.copilot-key
+                                                             install.windows.ahk-autostart
+                                                             install.windows.claude-rc-autostart
+                                                             install.windows.sshd
+                                                             install.windows.portproxy
+```
+
+- [ ] Verify: `~/opt/bin/gff lint .gff/features.yaml` → exit 0, no findings; and
+      from repo root `gff list` shows all 43 with `LayerRepoLive` defaults.
+- [ ] Commit: `feat(gff): enumerate dotfiles install components as flags (all on)`
+
+### P2-T2: shell helper `opt/lib/gff.sh`
+
+**Files:** create `opt/lib/gff.sh`, `opt/lib/gff_test.sh` (mirror
+`ai/hooks/safety_guard_test.sh`'s assert style).
+
+- [ ] Write the test driver first — cases: var unset ⇒ `gff_on` returns 0;
+      `=true` ⇒ 0; `=false` ⇒ 1; `=FALSE` ⇒ 0 (only exact lowercase `false` disables);
+      key mangling (`install.windows.wispr-flow` reads
+      `GFF_INSTALL_WINDOWS_WISPR_FLOW`); `gff_skip_msg` echoes
+      `SKIP (gff: <key>=false)`.
+- [ ] Implement (POSIX-only — dash-safe, no `[[`, no arrays):
+
+```sh
+# shellcheck shell=bash
+# gff.sh — fail-open feature-flag gate for install scripts.
+# Usage: gff_on <area.component.feature>  (0 = run the step)
+gff_on() {
+  _gff_key=$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]' | tr '.-' '__')
+  eval "_gff_val=\${GFF_${_gff_key}:-}"
+  [ "${_gff_val}" != "false" ]
+}
+gff_skip_msg() { echo "SKIP (gff: $1=false)"; }
+```
+
+- [ ] `bash opt/lib/gff_test.sh` all pass; `sh opt/lib/gff_test.sh` (dash) all pass;
+      `make lint-shell && make lint-portability` clean.
+- [ ] Commit: `feat(gff): fail-open gff_on shell gate helper + test driver`
+
+### P2-T3: instrument install.sh (Linux/common)
+
+**Files:** modify `install.sh`; modify `sdk/gff/build.sh` nothing (already installs to
+`~/opt/bin`).
+
+- [ ] Insert the gff bootstrap immediately AFTER the goenv/Go block (line ~309),
+      BEFORE pyenv:
+
+```bash
+# build gff first so every later step can be feature-flag gated (fail-open:
+# if the build fails or gff is absent, all steps run — flags only ever skip).
+if gff_bootstrap_ok=false; command -v go >/dev/null 2>&1 && [ -f "${BASE_DIR}/sdk/gff/build.sh" ]; then
+  bash "${BASE_DIR}/sdk/gff/build.sh" && gff_bootstrap_ok=true || echo "WARNING: gff build failed; all components will run."
+fi
+if [ "$gff_bootstrap_ok" = "true" ] && [ -x "${HOME}/opt/bin/gff" ]; then
+  eval "$(cd "${BASE_DIR}" && "${HOME}/opt/bin/gff" export --shell 2>/dev/null || true)"
+fi
+. "${BASE_DIR}/opt/lib/gff.sh"
+```
+
+- [ ] Wrap each existing block in-place (NO reordering, NO logic changes inside) with
+      its P2-T1 key. Pattern, using sops as the exemplar:
+
+```bash
+if gff_on install.tools.sops; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_sops.sh" ]; then
+    echo "Installing sops..."
+    "${BASE_DIR}/opt/scripts/system/install_sops.sh" || echo "WARNING: sops install reported problems; continuing."
+  fi
+else gff_skip_msg install.tools.sops; fi
+```
+
+  Blocks BEFORE the bootstrap point (`install.system.wsl-interop`, `install.system.jetson`,
+  `install.shell.profiles`, `install.ai.skills`, antigravity/claude config,
+  `install.pkg.*`, `install.shell.default-zsh`, tools, docker, git-aliases, goenv)
+  still get `gff_on` gates — they read env from a PREVIOUS run's flags only if the
+  caller pre-exported; document with one comment line at the top: flags for
+  pre-bootstrap steps take effect via `gff export` in the calling shell or on the
+  next run. (`install.sdk.gff` gates only the LATER duplicate build guard —
+  the bootstrap build itself is never gated.)
+- [ ] Verify: `bash -n install.sh`; `make lint-shell && make lint-portability` clean;
+      manual: `GFF_INSTALL_TOOLS_SOPS=false bash -c '. opt/lib/gff.sh; gff_on install.tools.sops || gff_skip_msg install.tools.sops'` prints the SKIP line.
+- [ ] Commit: `feat(install): gate every install.sh component behind gff flags (fail-open)`
+
+### P2-T4: Windows pass-through + PS gating
+
+**Files:** modify `opt/bin/install_windows.sh`; create
+`opt/Desktop/Apps/scripts/lib/gff.ps1`; modify
+`opt/Desktop/Apps/scripts/{setup-apps.ps1,setup-elevated.ps1}`.
+
+- [ ] `install_windows.sh`: top-level `gff_on install.windows.desktop-deploy || { gff_skip_msg …; exit 0; }`;
+      before each `powershell.exe` invocation, build `WSLENV` so `GFF_INSTALL_WINDOWS_*`
+      crosses into Windows:
+
+```bash
+_gff_wslenv="${WSLENV:-}"
+for _v in $(env | sed -n 's/^\(GFF_INSTALL_WINDOWS_[A-Z_]*\)=.*/\1/p'); do
+  case ":${_gff_wslenv}:" in *":${_v}/u:"*) : ;; *) _gff_wslenv="${_gff_wslenv:+${_gff_wslenv}:}${_v}/u" ;; esac
+done
+export WSLENV="${_gff_wslenv}"
+```
+
+- [ ] `lib/gff.ps1`:
+
+```powershell
+function Test-GffOn([string]$Key) {
+    $var = 'GFF_' + ($Key.ToUpper() -replace '[.-]', '_')
+    $val = [Environment]::GetEnvironmentVariable($var)
+    return $val -ne 'false'   # fail-open: unset/anything-else => on
+}
+```
+
+- [ ] Gate `setup-apps.ps1` phases: WSL platform (`install.windows.wsl-platform`),
+      Nerd Font, Terminal themes, winget apps; gate `setup-elevated.ps1` items:
+      Wispr Flow MSI (`install.windows.wispr-flow`), PowerToys Copilot remap
+      (`install.windows.copilot-key`), AHK autostart task
+      (`install.windows.ahk-autostart`); gate the standalone scripts' invocation sites
+      for `claude-rc-autostart`, `sshd`, `portproxy`. Each disabled phase prints
+      `SKIP (gff: <key>=false)`.
+- [ ] Verify: `make lint-shell && make lint-portability` (bash file);
+      `pwsh -NoProfile -Command ". opt/Desktop/Apps/scripts/lib/gff.ps1; Test-GffOn 'install.windows.wispr-flow'"`
+      → True; with `$env:GFF_INSTALL_WINDOWS_WISPR_FLOW='false'` → False (if pwsh
+      unavailable in WSL, this check moves to the P2-T5 human run).
+- [ ] Commit: `feat(install): gff gating for Windows setup phases via WSLENV pass-through`
+
+### P2-T5: human-evidenced acceptance (spec §6)
+
+- [ ] On WSL: `gff set install.windows.wispr-flow false`, run `install.sh` in a real
+      terminal, capture the `SKIP (gff: install.windows.wispr-flow=false)` line;
+      `gff unset install.windows.wispr-flow`; paste evidence into PR #181 (or the P2
+      leaf PR). **P2 done-when gate.**
+
+---
+
+### P3-T1: TUI
+
+**Files:** create `internal/tui/{model.go,view.go,tui_test.go}`, `cmd/tui.go`; modify
+`cmd/root.go` (bare `gff` with no args + a TTY runs the TUI, else help).
+
+- [ ] Deps: `go get github.com/charmbracelet/bubbletea github.com/charmbracelet/lipgloss github.com/charmbracelet/x/exp/teatest@latest`
+- [ ] Failing teatest tests: initial frame lists areas collapsed; navigating
+      (`enter` on area → components → features) shows a feature row containing
+      description + `default`/`override` + winning layer; pressing `space` on a bool
+      writes ONLY the user override file (temp paths world) and the row flips;
+      `space` on a choice opens the option picker (indexed list from
+      `ChoiceDefault.Options`); `q` after no toggles writes nothing (mtime unchanged).
+- [ ] Implement: `Model{items []resolve.Resolved, cursor, expanded map[string]bool, w io.Writer}`;
+      reuse `cmd`'s resolver hook; writes go through the same code path as `gff set`
+      (extract `internal/overrides.Write(paths, key, value)` from P1-T8 if not already
+      shared — refactor `set.go` to call it, tests stay green).
+- [ ] `go test ./... -cover` ≥60% overall still. Commit:
+      `feat(gff): bubbletea TUI — browse, provenance, toggle` → **P3 done-when gate.**
+
+### P4-T1: `gff gen` typed accessors
+
+**Files:** create `cmd/gen.go`, `cmd/gen_test.go`, `cmd/testdata/gen.golden`.
+
+- [ ] Failing golden test: for the P1-T9 world, `gff gen --pkg gffgen --out <tmp>`
+      writes `<tmp>/gffgen.go` matching the golden — for each flag a var chain
+      `var Install = struct{ Ai struct{ Claude BoolFlag } … }` with
+      `func (f BoolFlag) Bool() (bool, error)` delegating to `pkg/gff` by literal key
+      string; segment names Title-cased, dashes camel-cased (`wispr-flow` → `WisprFlow`).
+      Golden compiles: test runs `go vet` on a scratch module embedding the output.
+- [ ] Implement using `text/template` + `go/format.Source`.
+- [ ] PASS → Commit: `feat(gff): gen — typed accessor codegen` → **P4 done-when gate.**
+
+---
+
+## 5. Verification mapping (spec §5 → test)
+
+| Spec rule | Test |
+| :-- | :-- |
+| F1/F2 lint (dup, negative, depth, casing) | `internal/schema/lint_test.go` table |
+| F3 choice validation | `lint_test.go` (def side) + `resolve_test.go` case 7 + `write_test.go` (set side) |
+| F4 layer matrix, unknown ⇒ exit 2 | `resolve_test.go` cases 1–9; `cmd/read_test.go` sentinel |
+| F5 discovery + `gff.source` redirect, worktree `.git` file | `internal/gitx/gitx_test.go` |
+| F6 exclusive claims, refresh, moved clone | `internal/registry/registry_test.go` |
+| F7 export mangling, injection-safety, choice ints | `cmd/export_test.go` + `testdata/export.golden` |
+| F8 user-override-only writes, 0600, no-dir | `cmd/write_test.go` |
+| F9 gating fail-open (unset/true/false/FALSE), skip msg | `opt/lib/gff_test.sh` (bash AND dash) |
+| F9 Windows pass-through | P2-T4 pwsh check or P2-T5 human run |
+| F10 TUI toggle/no-write-on-quit | `internal/tui/tui_test.go` (teatest) |
+| Proto regen clean; ≥60% cover | `.github/workflows/gff-ci.yml` |
+| UC1 end-to-end wispr-flow skip | P2-T5 human-evidenced run |
+
+## 6. Integration & rollout
+
+- `install.sh` builds gff via the P2-T3 bootstrap block; `sdk-auto-bump.yml` and
+  `tag-sdk-modules.yml` cover `sdk/gff` automatically (path-filtered on `sdk/**`).
+- Docs: `sdk/gff/AGENTS.md` (+`CLAUDE.md` symlink) written in P1-T1; add a `sdk/gff`
+  line to root `CLAUDE.md` Repository Structure and `opt/bin/AGENTS.md` is untouched
+  (gff installs to `~/opt/bin` but is sdk-owned, like gss).
+- Rollback per design §6: revert P2 commit(s) to restore unconditional installs;
+  P1/P3/P4 are additive.
+- After merge: close #180 only when all four leaves land; update `docs/mbo/index.md`
+  state per leaf.
+
+### 6.1 Build leaves / DAG
+
+| Leaf | Owns (paths) | Consumes (in-edges) | `done-when` gate | Blocking? |
+| :-- | :-- | :-- | :-- | :-- |
+| `p1-engine` | `sdk/gff/**` (excl. `internal/tui`, `cmd/gen.go`), `.github/workflows/gff-ci.yml` | — | gff-ci green: vet+tests, ≥60% cover, regen clean; `build.sh` installs working binary | **yes (base)** |
+| `p2-instrument` | `.gff/**`, `.gitignore`, `opt/lib/gff.sh*`, `install.sh`, `opt/bin/install_windows.sh`, `opt/Desktop/Apps/scripts/{lib/gff.ps1,setup-apps.ps1,setup-elevated.ps1}` | `p1-engine` (§3.4 CLI, §3.5 shell contract) | lint-shell + lint-portability clean; gff lint clean; P2-T5 human evidence | no |
+| `p3-tui` | `sdk/gff/internal/tui/**`, `sdk/gff/cmd/tui.go` | `p1-engine` (§3.3 Resolver, overrides writer) | teatest suite green; overall cover ≥60% | no |
+| `p4-gen` | `sdk/gff/cmd/gen.go`, `cmd/gen_test.go`, `cmd/testdata/gen.golden` | `p1-engine` (§3.3 pkg/gff) | golden test green; generated output vets | no |
+
+(`p3-tui` and `p4-gen` both add one `AddCommand` line in `cmd/` — each registers from
+its own file via `init()`, so no shared-file edits; `p2/p3/p4` are pairwise disjoint
+and can run in parallel once `p1-engine` merges.)
+
+> Produced via `superpowers:writing-plans`. Execute with
+> `superpowers:subagent-driven-development` / `executing-plans`, TDD throughout.
+> Update `../index.md` state as it moves.

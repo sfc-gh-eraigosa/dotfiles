@@ -29,7 +29,7 @@ done` (also `parked`, `superseded`).
 | `sshd-setup` | — | [spec](./specs/sshd-setup.md) | [plan](./plans/sshd-setup.md) | [#169](https://github.com/sfc-gh-eraigosa/dotfiles/issues/169) | [#170](https://github.com/sfc-gh-eraigosa/dotfiles/pull/170) | building |
 | `gsl-visual-improvements` | [design](./designs/gsl-visual-improvements.md) | [spec](./specs/gsl-visual-improvements.md) | [plan](./plans/gsl-visual-improvements.md) | [#54](https://github.com/sfc-gh-eraigosa/dotfiles/issues/54) | #55 | in-review |
 | `claude-config` | — | [spec](./specs/claude-config.md) | [plan](./plans/claude-config.md) | — | #126 | in-review |
-| `gff` | [design](./designs/gff.md) | [spec](./specs/gff.md) | — | — | — | specifying |
+| `gff` | [design](./designs/gff.md) | [spec](./specs/gff.md) | [plan](./plans/gff.md) | [#180](https://github.com/sfc-gh-eraigosa/dotfiles/issues/180) | [#181](https://github.com/sfc-gh-eraigosa/dotfiles/pull/181) | planning |
 
 ## Merged / historical (pre-MBO — tracking columns best-effort)
 
