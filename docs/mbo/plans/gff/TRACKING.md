@@ -124,7 +124,7 @@ proof passes; record which task proved it in Notes.
 | **F3** choice (modes, ids, typed values) | [ ] lint/resolve/write tests | [ ] IH-4, IH-6, IA-1, IA-2 | [ ] demo steps 1, 3 | |
 | **F4** layered resolution + provenance | [ ] resolve matrix 1–10 | [ ] IH-5, IH-9 | [ ] demo step 2 | |
 | **F5** discovery + `gff.source` redirect | [ ] `gitx_test.go` | [ ] IH-3, IA-12 | [ ] demo step 2 | |
-| **F6** registry + area claims | [ ] `registry_test.go` | [ ] IH-2, IA-6, IA-7, IA-13, IA-14 | [ ] demo step 5 | |
+| **F6** registry + namespace identity | [ ] `registry_test.go` | [ ] IH-2, IA-6, IA-7, IA-13, IA-14 | [ ] demo step 5 | |
 | **F7** export formats + injection safety | [ ] export golden | [ ] IH-7, IH-8, IA-5, IA-15 | [ ] demo steps 4, 6 | |
 | **F8** write path (0600, user-only) | [ ] `write_test.go` | [ ] IH-5, IA-8, IA-11, IA-13 | [ ] demo step 3 | |
 | **F9** fail-open gating | [ ] `gff_test.sh` bash + dash (binary-absent is unit-only) | [ ] IH-7, IA-7 | [ ] P2-T5 evidence | |
@@ -159,7 +159,7 @@ Errors must be *clean*: correct exit code, message names the offender, zero part
 - [ ] **IA-3** malformed flag file (truncated mid-list, bad indent) ⇒ `lint` and every read verb fail naming file+line; never a panic/stacktrace
 - [ ] **IA-4** malformed override yaml ⇒ read verbs error cleanly (not silently skipped); other layers unaffected afterward
 - [ ] **IA-5** injection: description containing `$(rm -rf /tmp/pwned)` never reaches export output; option id `evil;rm` rejected by lint; exported bytes assert against `[A-Z0-9_=,.\n-]`-only
-- [ ] **IA-6** second repo claiming an owned area ⇒ `ErrAreaClaimed` naming the owner; registry file unchanged
+- [ ] **IA-6** different url installing an already-registered namespace ⇒ `ErrNamespaceTaken` naming the existing url; registry unchanged; same short keys coexist across namespaces
 - [ ] **IA-7** corrupt `sources.yaml` ⇒ verbs degrade with a clear error — and the shell gate stays fail-open
 - [ ] **IA-8** read-only `~/.config` ⇒ `set` exits 1, no temp-file litter
 - [ ] **IA-9** `HOME` unset ⇒ clear error; nothing written to CWD

@@ -183,14 +183,14 @@ committed `sdk/gff/gen/gff/v1/*.pb.go`; modify root `Makefile` + `.gitignore`.
 
 **Files:** `internal/registry/{registry.go,registry_test.go}`.
 
-- [ ] RED: fresh `Install` writes `sources.yaml` with `{name, url, areas, commit}` **and** a snapshot at `<UserSnapshotDir>/<name>.yaml` byte-identical to the source file
+- [ ] RED: fresh `Install` writes `sources.yaml` with `{namespace, url, commit}` **and** a snapshot at `<UserSnapshotDir>/<namespace>.yaml` byte-identical to the source file
 - [ ] RED: re-installing the same name refreshes commit + snapshot with **no duplicate** registry entry
-- [ ] RED: a second repo claiming an already-owned area ⇒ `ErrAreaClaimed`, and the error text contains the **owner name**
+- [ ] RED: a DIFFERENT url installing an already-registered namespace ⇒ `ErrNamespaceTaken`, error text contains the **existing url**; `Snapshot(namespace)` returns path/`ok=false` (the `resolve.SourceLookup` impl)
 - [ ] RED: `Sources()` against a missing registry file ⇒ empty slice, nil error
 - [ ] RUN-RED: `go test ./internal/registry/` → expect **FAIL**
 - [ ] GREEN: implement `Registry.Install` / `Sources` — yaml encoding of `SourceRegistry` via the same protojson-normalize trick as `schema`; `os.MkdirAll`; atomic temp+rename
 - [ ] RUN-GREEN: `go test ./internal/registry/` → expect **PASS**
-- [ ] COMMIT: `feat(gff): machine source registry with exclusive area claims + snapshots`
+- [ ] COMMIT: `feat(gff): source registry keyed by reverse-DNS namespace + snapshots`
 - [ ] LEDGER: tick F6 **unit** cell; CHECKPOINT
 
 **Done when:** registry tests pass, including the area-claim rejection naming the owner.
@@ -319,7 +319,7 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 - [ ] RED: **IA-3** malformed flag file (truncated mid-list, bad indent) ⇒ `lint` and every read verb fail naming file+line; never a panic/stacktrace
 - [ ] RED: **IA-4** malformed override yaml ⇒ read verbs error cleanly (never silently skipped); other layers unaffected afterward
 - [ ] RED: **IA-5** injection: description containing `$(rm -rf /tmp/pwned)` never reaches export output; option id `evil;rm` rejected by lint; exported bytes assert against a `[A-Z0-9_=,.\n-]`-only set
-- [ ] RED: **IA-6** second repo claiming an owned area ⇒ `ErrAreaClaimed` naming the owner; registry file unchanged
+- [ ] RED: **IA-6** different url installing an already-registered namespace ⇒ `ErrNamespaceTaken` naming the existing url; registry unchanged; same short keys resolve in both namespaces when qualified
 - [ ] RED: **IA-7** corrupt `sources.yaml` ⇒ verbs degrade with a clear error — and the shell gate stays fail-open (a broken gff still runs every step)
 - [ ] RED: **IA-8** read-only `~/.config` ⇒ `set` exits 1, no temp-file litter
 - [ ] RED: **IA-9** `HOME` unset ⇒ clear error; nothing written to CWD

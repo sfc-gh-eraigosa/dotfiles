@@ -39,6 +39,11 @@ output is committed), cobra, `gopkg.in/yaml.v3`, bubbletea
   `gffv1`, import path `…/sdk/gff/gen/gff/v1`); regeneration must be clean in CI.
 - Bool flags: `true`=on, `false`=off; lint rejects negative names (`no-*`, `not-*`,
   `disable-*`, `disabled-*`, `skip-*`, `off-*`).
+- Namespace scoping: every flag file declares a reverse-DNS `namespace` derived from
+  its origin URL (e.g. `com.github.sfc-gh-eraigosa.dotfiles` — §3.2); uniqueness is
+  (namespace, key); fully-qualified form `<namespace>:<key>` (colon separator);
+  unqualified keys resolve via the CWD repo or `--source`. Env mangling always uses
+  the short key.
 - Canonical keys: exactly 3 dotted segments `area.component.feature`, each segment
   `[a-z0-9]+(-[a-z0-9]+)*`.
 - Env mangling: uppercase, `.` and `-` → `_` (e.g. `install.windows.wispr-flow` →
@@ -79,7 +84,7 @@ path-disjoint after P1 (see §6.1). Spec coverage verified in §5.
 | `sdk/gff/internal/paths/paths.go` (+test) | well-known layer paths, overridable for tests | F4 |
 | `sdk/gff/internal/gitx/{gitx.go,gitx_test.go}` | repo-root discovery + `gff.source` redirect; mockable runner | F5 |
 | `sdk/gff/internal/resolve/{resolve.go,resolve_test.go}` | 5-layer merge, provenance, unknown-key | F4 |
-| `sdk/gff/internal/registry/{registry.go,registry_test.go}` | sources.yaml, exclusive area claims, snapshots | F6 |
+| `sdk/gff/internal/registry/{registry.go,registry_test.go}` | sources.yaml keyed by derived reverse-DNS namespace, snapshots | F6 |
 | `sdk/gff/cmd/{root,version,get,enabled,set,unset,list,lint,export,install}.go` (+tests) | cobra verbs | F4–F8 |
 | `sdk/gff/pkg/gff/{gff.go,gff_test.go}` | public runtime SDK | UC4 |
 | `.github/workflows/gff-ci.yml` | go vet+test+cover gate, proto-regen-clean | spec §6 |
@@ -105,9 +110,14 @@ package gff.v1;
 option go_package = "github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/gen/gff/v1;gffv1";
 
 // A repo's tracked flag definitions (the repo flag file = YAML/protojson encoding).
-message FeatureFile { repeated FeatureSet sets = 1; }
+message FeatureFile {
+  string namespace = 1;            // REQUIRED reverse-DNS repo identity (§3.2),
+                                   // e.g. com.github.sfc-gh-eraigosa.dotfiles
+  repeated FeatureSet sets = 2;
+}
 message FeatureSet {
-  string area = 1;                 // claimed exclusively per machine
+  string area = 1;                 // first key segment — grouping only, NOT claimed
+                                   // (uniqueness = namespace + key; see FeatureFile)
   repeated Feature features = 2;
 }
 message Feature {
@@ -143,9 +153,9 @@ message Value {
   oneof kind { bool bool_value = 1; ChoiceSelection choice_value = 2; }
 }
 message ChoiceSelection { repeated string selected = 1; } // option ids; exactly 1 when SINGLE
-message Source {                   // one registered repo
-  string name = 1; string url = 2;
-  repeated string areas = 3; string commit = 4;
+message Source {                   // one registered repo, keyed by its namespace
+  string namespace = 1;            // reverse-DNS identity — THE claim (no area claims)
+  string url = 2; string commit = 3;
 }
 message SourceRegistry { repeated Source sources = 1; }
 ```
@@ -156,6 +166,7 @@ The repo flag file — `.gff/features.yaml` or `.github/gff/features.yaml`, prob
 that order (`.gff/` wins when both exist); protojson field names, YAML syntax:
 
 ```yaml
+namespace: com.github.sfc-gh-eraigosa.dotfiles
 sets:
   - area: install
     features:
@@ -183,9 +194,26 @@ shell.zsh.plugins: [fzf, starship]  # multi-select: zero or more option ids
 ```
 
 `~/.config/gff/sources.yaml` = YAML encoding of `SourceRegistry`
-(`sources: [{name, url, areas, commit}]`). Snapshots are verbatim copies of the
-source's features file at `<snapshot-dir>/<source-name>.yaml` — the `Paths` snapshot
+(`sources: [{namespace, url, commit}]`). Snapshots are verbatim copies of the
+source's features file at `<snapshot-dir>/<namespace>.yaml` — the `Paths` snapshot
 dirs are leaf directories; nothing nests below them.
+
+**Namespace identity (replaces area claims).** Every flag file MUST declare
+`namespace:` — the repo's reverse-DNS identity derived from `remote.origin.url`:
+strip scheme/`user@`/port and a trailing `.git`, lowercase, reverse the host labels,
+append the path segments with `/`→`.`. Examples:
+`git@github.com:sfc-gh-eraigosa/dotfiles.git` → `com.github.sfc-gh-eraigosa.dotfiles`;
+`https://githubenterprise.com/org/repo` → `com.githubenterprise.org.repo`. Lint
+enforces the charset (dotted `[a-z0-9]+(-[a-z0-9]+)*` segments, ≥2) and WARNS when
+the declaration differs from the origin-derived value (forks keep upstream identity
+deliberately); repos with no remote rely on the declaration alone. Keys stay short
+(3 segments); the fully-qualified form is `<namespace>:<key>` — colon separator,
+because reverse-DNS is variable-depth so dots alone cannot delimit namespace from
+key. Uniqueness = (namespace, key). Unqualified keys resolve against the CWD repo's
+namespace or `--source`; if neither applies and more than one registered source
+defines the key, resolution fails (exit 2) naming the candidate namespaces. `Areas`
+are just the first key segment — grouping, never claimed — so two repos may both
+define `install.*` flags without conflict.
 
 ### 3.3 Go interfaces
 
@@ -251,6 +279,7 @@ func (l Layer) String() string // "none","system-snapshot","user-snapshot","repo
 // json|yaml` (the cross-language bridge). Never serialize Resolved directly:
 // protoc-gen-go oneof members are interface-typed and break encoding/json round-trips.
 type ResolvedJSON struct {
+    Namespace   string          `json:"namespace"` // owning source's reverse-DNS identity
     Path        string          `json:"path"`
     Description string          `json:"description"`
     Type        string          `json:"type"`    // "bool" | "choice"
@@ -260,11 +289,12 @@ type ResolvedJSON struct {
 }
 func (r Resolved) JSON() (ResolvedJSON, error) // yaml format = same DTO re-encoded
 
-// internal/registry
+// internal/registry — keyed by namespace; no area claims exist anymore
 type Registry struct { P paths.Paths }
-var ErrAreaClaimed = errors.New("area already claimed")     // wraps owner name
-func (g *Registry) Install(repoRoot, name, url, commit string, ff *gffv1.FeatureFile) error
+var ErrNamespaceTaken = errors.New("namespace registered by a different url") // wraps existing url
+func (g *Registry) Install(repoRoot, namespace, url, commit string, ff *gffv1.FeatureFile) error
 func (g *Registry) Sources() ([]*gffv1.Source, error)
+func (g *Registry) Snapshot(namespace string) (path string, ok bool) // implements resolve.SourceLookup
 
 // pkg/gff — public SDK. Options must not leak internal types (a WithPaths(paths.Paths)
 // option would be uncallable outside the module — import-of-internal compile error).
@@ -309,12 +339,15 @@ gff export --format shell|dotenv|json|yaml [-o <file>]
                             values are bool literals or comma-joined lint-constrained
                             kebab option ids — injection-safe by construction;
                             --shell is kept as an alias for --format shell
-gff install              -> registers CWD repo + snapshot into user layer; exit 1 on area clash
+gff install              -> registers CWD repo (declared namespace, lint-checked vs
+                            origin) + snapshot into user layer; exit 1 when the
+                            namespace is already registered by a DIFFERENT url
 gff version              -> gss-style version block
 ```
 
-**Global flag (all read verbs):** `--source <name|path>` scopes resolution to one
-source instead of CWD discovery — a registered *name* resolves that source's snapshot
+**Global flag (all read verbs):** `--source <namespace|path>` scopes resolution to
+one source instead of CWD discovery (a registered source's *name* IS its namespace) —
+a registered namespace resolves that source's snapshot
 layers (plus its live clone when CWD happens to be inside it); a local *path* is used
 as the repo root for the live layer. Unknown name/path ⇒ `ErrUnknownSource`, exit 2.
 Purely local; never a network fetch at resolution time.
@@ -445,6 +478,7 @@ PATH="${PWD}/.bin:${PATH}" protoc \
 ```go
 func TestLoadFeatureFileYAML(t *testing.T) {
     p := writeFile(t, "features.yaml", `
+namespace: com.example.demo
 sets:
   - area: install
     features:
@@ -485,7 +519,8 @@ func TestLoadOverridesMissingFile(t *testing.T) { // sparse layer absent => empt
   and 4; uppercase/underscore segment; choice: empty `options`, duplicate/non-kebab
   option ids, mixed value types within one feature, `single` mode with zero or two
   default-selected options, `mode` unspecified; path not starting with the set's
-  `area.`; clean file ⇒ no findings.
+  `area.`; missing or bad-charset `namespace` (error); namespace ≠ origin-derived
+  value (WARN-level finding — forks keep upstream identity); clean file ⇒ no findings.
 - [ ] `go test ./internal/schema/` → FAIL.
 - [ ] Implement. `LoadFeatureFile`: read file; if `.json` → `protojson.Unmarshal`;
       else `yaml.Unmarshal` into `any`, normalize nested map keys to strings
@@ -576,13 +611,16 @@ func newResolver(t *testing.T, w world) *Resolver { /* writes files, returns Res
 
 **Files:** create `internal/registry/{registry.go,registry_test.go}`.
 
-**Interfaces:** consumes paths/schema; produces §3.3 `Registry`, `ErrAreaClaimed`.
+**Interfaces:** consumes paths/schema; produces §3.3 `Registry`, `ErrNamespaceTaken`,
+and the `resolve.SourceLookup` implementation.
 
-- [ ] Failing tests: fresh install writes `sources.yaml` (name/url/areas/commit) and
-      snapshot `<UserSnapshotDir>/<name>.yaml` byte-identical to the source file;
-      re-install same name refreshes commit + snapshot (no dup entry); second repo
-      claiming an owned area ⇒ `ErrAreaClaimed` and error text contains owner name;
-      `Sources()` on missing registry ⇒ empty, nil error.
+- [ ] Failing tests: fresh install writes `sources.yaml` (namespace/url/commit) and
+      snapshot `<UserSnapshotDir>/<namespace>.yaml` byte-identical to the source file;
+      re-install same namespace + same url refreshes commit + snapshot (no dup entry);
+      a DIFFERENT url installing an already-registered namespace ⇒ `ErrNamespaceTaken`
+      and error text contains the existing url; `Snapshot(namespace)` returns the
+      snapshot path / `ok=false` for unknown; `Sources()` on missing registry ⇒
+      empty, nil error.
 - [ ] Implement (yaml encode of `SourceRegistry` via the same protojson-normalize
       trick as schema; `os.MkdirAll` + atomic write: `os.CreateTemp` in the target
       dir — unique temp name per writer — then `os.Rename`; when P1-T8 extracts the
@@ -590,7 +628,7 @@ func newResolver(t *testing.T, w world) *Resolver { /* writes files, returns Res
       `Registry` also implements the §3.3 `resolve.SourceLookup` seam
       (`Snapshot(name) (path, ok)` over sources.yaml + UserSnapshotDir).
 - [ ] `go test ./internal/registry/` → PASS. Commit:
-      `feat(gff): machine source registry with exclusive area claims + snapshots`
+      `feat(gff): source registry keyed by reverse-DNS namespace + snapshots`
 
 ### P1-T7: read verbs — get / enabled / selected / list / lint
 
@@ -732,7 +770,9 @@ clean per design; no root `.gff/` in this repo).
       it NOT ignored (`!.github/**` already opts it in — expect no new `.gitignore`
       rules; if a deeper deny rule surprises us, add a narrow `!` rule with a comment).
       Then create the file and confirm `git status --short -- .github/gff/` shows it.
-- [ ] Author the inventory — ONE `sets:` entry, `area: install`, every feature
+- [ ] Author the inventory — top-level
+      `namespace: com.github.sfc-gh-eraigosa.dotfiles`, ONE `sets:` entry,
+      `area: install` (grouping only — never claimed), every feature
       `boolDefault: true`, description = one plain sentence naming the install.sh
       block it gates. Full key list (43 flags — the enumeration deliverable):
 
@@ -1054,8 +1094,10 @@ exit code, message names the offender, zero partial writes):**
 5. **IA-5** injection attempts: description containing `$(rm -rf /tmp/pwned)` never
    reaches export output; option id `evil;rm` rejected by lint; exported bytes assert
    against a `[A-Z0-9_=,.\n-]`-only set.
-6. **IA-6** second repo claiming an owned area ⇒ `ErrAreaClaimed` naming the owner;
-   registry file unchanged.
+6. **IA-6** a different repo url installing an already-registered namespace ⇒
+   `ErrNamespaceTaken` naming the existing url; registry file unchanged. (Two repos
+   defining the same short keys under different namespaces is NOT a conflict —
+   assert both resolve when qualified.)
 7. **IA-7** corrupt `sources.yaml` ⇒ verbs degrade with a clear error — and the shell
    gate stays fail-open (a broken gff still runs every step).
 8. **IA-8** read-only `~/.config` ⇒ `set` exits 1, no temp-file litter.
@@ -1089,7 +1131,9 @@ missing binary ⇒ run.
 3. Gate a toy script with `gff_on`; `set` the bool off; rerun shows the SKIP line;
    flip it back. (Post-P3: same toggle via the TUI, captured.)
 4. `export` all four formats; eval the shell form in dash; parse the `.env`.
-5. A second repo claims the same area ⇒ the rejection message (the guardrail moment).
+5. A second repo (different url) tries to install an already-registered namespace ⇒
+   the rejection message; the same repo's short keys coexist with the first repo's
+   under its own namespace (the guardrail moment).
 6. Finale from an empty directory with no gff on PATH:
    `eval "$(go run <module>@<tag> export --format shell --source demo)"`.
 

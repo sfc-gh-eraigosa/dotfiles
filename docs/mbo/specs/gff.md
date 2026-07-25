@@ -43,11 +43,13 @@ scripts.
 **UC3 — a repo adopts gff**
 - *Actor:* maintainer of any git repo.
 - *Trigger:* adds a flag file (either probe path: `.gff/features.yaml` or
-  `.github/gff/features.yaml`) declaring area(s) + features; runs `gff lint`,
-  then `gff install`.
+  `.github/gff/features.yaml`) declaring its `namespace:` (reverse-DNS of the origin
+  URL) + features; runs `gff lint`, then `gff install`.
 - *Acceptance:* inside the repo, `gff get` resolves live from the tracked file; after
   install, the same keys resolve from any CWD via the snapshot; a second repo claiming
-  an already-owned area is rejected with the owner named; a script in an unrelated
+  an already-registered namespace (different url) is rejected with the owner named
+  — while a second repo's identical short keys coexist under its own namespace; a
+  script in an unrelated
   repo can gate on the flags with **no gff installed** via
   `eval "$(go run github.com/sfc-gh-eraigosa/dotfiles/sdk/gff@<tag> export --format shell --source <name>)"`.
 
@@ -72,7 +74,8 @@ Components (each independently testable; see design §4 for full detail):
   live repo file (git-style discovery, `[gff] source` redirect) →
   overrides (`/var/opt/conf/gff/config.yaml`, `~/.config/gff/config.yaml`); sparse
   per-key merge; winning-layer attribution.
-- `internal/registry` — `~/.config/gff/sources.yaml`; exclusive area claims; snapshots.
+- `internal/registry` — `~/.config/gff/sources.yaml`, keyed by reverse-DNS
+  namespace (derived from origin URL); snapshots.
 - `cmd/` — cobra: `get`, `enabled`, `set`, `unset`, `list`, `install`, `export`,
   `gen`, `lint`, `tui`, `version`.
 - `internal/tui` — bubbletea tree view; writes user override only.
@@ -85,8 +88,13 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
 
 ## 4. Behavior / features
 
-- **F1 canonical keys:** dotted `area.component.feature`; lint enforces uniqueness,
-  lowercase-kebab segments, and 3-level depth.
+- **F1 canonical keys:** dotted `area.component.feature`, scoped by a required
+  reverse-DNS `namespace` declared in the flag file and derived from the origin URL
+  (e.g. `com.github.sfc-gh-eraigosa.dotfiles`; fully-qualified form
+  `<namespace>:<key>`; uniqueness = namespace + key; areas are grouping only, never
+  claimed). Lint enforces key uniqueness within the namespace, lowercase-kebab
+  segments, 3-level depth, namespace presence/charset, and warns when the declared
+  namespace differs from the origin-derived value (fork case).
 - **F2 bool type:** values strictly `true`/`false`; lint rejects negative names
   (`no-*`, `disable-*`, `skip-*`) so `true` always means ON.
 - **F3 choice type:** an option set with `mode: single|multi` — `single` renders as a
@@ -101,8 +109,10 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
 - **F5 git-persisted defaults:** tracked flag file; upward discovery from CWD probing
   `.gff/features.yaml` then `.github/gff/features.yaml` (`.gff/` wins if both);
   `git config gff.source` redirect overrides the probe entirely.
-- **F6 machine registry:** `gff install` registers/refreshes {name, url, areas,
-  commit} + snapshot; exclusive area claims.
+- **F6 machine registry:** `gff install` registers/refreshes {namespace, url,
+  commit} + snapshot, keyed by the repo's reverse-DNS namespace; a different url
+  installing an existing namespace is rejected naming the current owner. No area
+  claims — two repos may both ship `install.*` keys under their own namespaces.
 - **F7 shell/bridge interface:** `gff enabled <key>` (0=on, 1=off, 2=unknown key,
   unknown option id, or type the verb can't express — any exit ≥2 is a
   usage/definition error and shell callers MUST treat it as fail-open; never use
@@ -138,7 +148,7 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
 | F3 choice | unknown id rejected; 2 ids on `single` rejected | valid selection (1 id single / n ids multi) | empty options, dup ids, mixed value types, `single` with ≠1 default (all lint errors) | table tests |
 | F4 resolve | higher layer wins per key | lower layer leaking through | key defined in no layer ⇒ unknown (exit 2) | matrix test over all 5 layers |
 | F5 discovery | finds flag file at either probe path from nested CWD; follows `gff.source` redirect | files outside a repo | worktree (`.git` file not dir); both probe paths present (`.gff/` wins) | temp-repo tests |
-| F6 registry | second claim of owned area rejected, owner named | re-install same repo (refresh) | moved clone (snapshot still serves) | registry tests |
+| F6 registry | different url on an existing namespace rejected, owner named | re-install same repo (refresh); same short keys in two namespaces | moved clone (snapshot still serves) | registry tests |
 | F7 export | emits every key, correct mangling | injection via description text (values are bool literals / kebab ids only) | choice flags export selected ids CSV | golden-file test |
 | F8 writes | only user override mtime changes | any write to repo/system files | no `~/.config/gff` dir yet | fs-mock test |
 | F9 gating | `false` ⇒ step body skipped, SKIP line printed | enabled steps changing behavior | gff binary absent ⇒ all run | `opt/lib/gff_test.sh` driver on the gate function (bash + dash) |

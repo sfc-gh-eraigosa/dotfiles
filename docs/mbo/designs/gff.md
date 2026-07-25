@@ -47,8 +47,11 @@ Verified facts grounding this design:
   and a typed payload value (int/float/string/bool; homogeneous within one feature).
 - Repo-dictated defaults persisted in git (tracked, diffable, PR-reviewed) + personal
   and system overrides at well-known paths.
-- Multi-repo: any repo can define flags for its own claimed area(s); `gff install`
-  registers + snapshots them machine-wide; one CLI reads the merged set anywhere.
+- Multi-repo: every repo owns a reverse-DNS namespace derived from its origin URL
+  (`com.github.sfc-gh-eraigosa.dotfiles`); `gff install` registers + snapshots it
+  machine-wide; one CLI reads the merged set anywhere. Keys stay short — the
+  namespace is a scope, and areas are grouping only (never claimed), so any number
+  of repos can ship `install.*` flags.
 - Cobra CLI + bubbletea TUI; Go client SDK (runtime API + optional typed codegen).
 - Instrument `install.sh` (and the Windows PowerShell phases) with per-step flags,
   all defaulting **on**.
@@ -91,8 +94,11 @@ the proto — defeats generalization; the engine must stay data-free.
 **Machine-wide deployment**
 
 1. **Registry + snapshot on install (chosen):** `gff install` registers the repo as a
-   source (url, owned areas, commit) in `~/.config/gff/sources.yaml` and snapshots its
-   defaults into the defaults layer. Areas are claimed exclusively.
+   source ({namespace, url, commit}) in `~/.config/gff/sources.yaml` and snapshots its
+   defaults into the defaults layer. Identity = the reverse-DNS namespace derived
+   from the origin URL — originally this option claimed *areas* exclusively; the
+   2026-07-25 review showed that lets the first consumer land-grab generic names
+   like `install`, so claims moved to derived namespaces instead.
 2. `go:embed` provider binaries per repo — go-install native but N binaries + exec per
    read.
 3. Live refs to clone paths only — breaks when a clone moves; nothing on checkout-less
@@ -115,7 +121,8 @@ the proto — defeats generalization; the engine must stay data-free.
   `ChoiceDefault{mode: single|multi, options[]}`,
   `ChoiceOption{id, description, selected, oneof value: int64|double|string|bool}`,
   `Value{oneof: bool | ChoiceSelection{selected ids[]}}`,
-  `Source{name, url, areas[], commit}`, `SourceRegistry`. Generated Go is committed so
+  `FeatureFile{namespace, sets[]}`, `Source{namespace, url, commit}`,
+  `SourceRegistry`. Generated Go is committed so
   contributors don't need protoc; regeneration is raw `protoc` + a go.mod-pinned
   `protoc-gen-go` behind `make gff-proto` (buf was considered and rejected as
   unreliable — no buf anywhere in the toolchain).
@@ -135,8 +142,10 @@ the proto — defeats generalization; the engine must stay data-free.
      `~/.config/gff/config.yaml` (user — the **only** file gff ever writes).
   Sparse per-key merge; effective value = highest layer that sets the key. The resolver
   reports *which* layer won (surfaced in `list`/TUI).
-- **`internal/registry`** — `~/.config/gff/sources.yaml` management; exclusive area
-  claims; snapshot refresh on `gff install`.
+- **`internal/registry`** — `~/.config/gff/sources.yaml` management, keyed by the
+  repo's reverse-DNS namespace (declared in the flag file, lint-checked against the
+  origin URL; a different url on an existing namespace is rejected); snapshot
+  refresh on `gff install`.
 - **`cmd/`** — cobra verbs: `get`, `enabled` + `selected` (exit-code gates), `set`/
   `unset` (user override only), `list [--json]`, `install`,
   `export --format shell|dotenv|json|yaml` (`GFF_<AREA>_<COMPONENT>_<FEATURE>=…`;
@@ -175,8 +184,10 @@ enumeration + install.sh/PowerShell gating → **P3** TUI → **P4** `gff gen`.
   reordering), and a bats-style test proving disabled ⇒ skipped / enabled ⇒ runs.
 - **Proto toolchain drift**: committed generated code + pinned generator in `build.sh`;
   CI check that regeneration is clean.
-- **Area-claim collisions** across repos: registry rejects a second claim; error
-  message names the existing owner.
+- **Namespace collisions** across repos: impossible by construction for honest
+  origins (identity is derived from the origin URL); a different url installing an
+  existing namespace is rejected naming the current owner (covers forks that keep
+  upstream identity deliberately — they must uninstall the original first).
 - **Shell portability**: all shell edits obey `docs/mbo/specs/shell-portability.md`;
   `make lint-shell` + `lint-portability` gate them.
 - **Windows/PowerShell coupling**: env-var handoff only; PS phases treat an unset
@@ -227,9 +238,10 @@ The intersection gff occupies is not covered by any single existing tool:
 3. **Layered local precedence** — system snapshot → user snapshot → live repo → system
    override → user override, XDG-style, with the winning layer reported. Flag engines
    have environments/namespaces, not machine-local override layering.
-4. **Multi-repo area registry** — several repos each claiming an area, merged by one
-   CLI on the machine (`gff install`, exclusive claims). Nothing comparable exists;
-   the closest analogue is package-manager metadata, not flag tooling.
+4. **Multi-repo namespace registry** — several repos, each identified by a
+   reverse-DNS namespace derived from its origin URL, merged by one CLI on the
+   machine (`gff install`; short keys coexist across namespaces). Nothing comparable
+   exists; the closest analogue is package-manager metadata, not flag tooling.
 5. **Opinionated minimal typing** — bool (negatives rejected by lint) + indexed choice.
    Deliberately smaller than every surveyed tool.
 
@@ -348,5 +360,9 @@ it up front.
 > dirty a worktree); `gff.sh` sourced at the top of install.sh (pre-bootstrap gates
 > would otherwise fail closed); exit-2 defined as fail-open usage error; frozen
 > `ResolvedJSON` wire DTO, `SourceLookup` seam, `ErrUnknownOption`/`ErrWrongFlagType`
-> sentinels added; flag count corrected to 43. Open decision: the `install` area name
-> (see PR #181 review thread).
+> sentinels added; flag count corrected to 43.
+> 2026-07-25 (post-review decision): area claims REPLACED by reverse-DNS namespace
+> identity derived from the origin URL (`com.github.sfc-gh-eraigosa.dotfiles`) —
+> declared in the flag file, lint-checked, scope-not-key (short keys + `ns:key`
+> qualified form). Resolves the `install` land-grab question from the PR #181
+> review thread.
