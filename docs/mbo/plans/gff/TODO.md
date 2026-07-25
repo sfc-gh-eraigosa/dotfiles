@@ -285,7 +285,7 @@ modify `cmd/root.go` (test seam + `--source` persistent flag).
 - [x] VERIFY: `bash build.sh` installs a working `${HOME}/opt/bin/gff version`
 - [x] ALLOWLIST: `git check-ignore -v .github/workflows/gff-ci.yml` — expect `!.github/**` coverage
 - [x] COMMIT: `feat(gff): public SDK + CI (vet, tests, coverage gate, proto-regen check)`
-- [ ] CHECKPOINT, then confirm the **gff-ci run is green** on the draft PR
+- [x] CHECKPOINT, then confirm the **gff-ci run is green** on the draft PR
 - [x] LEDGER: tick F11 **unit** (CI smoke) cell
 
 **Done when:** CI is green end-to-end and total coverage is ≥90%.
@@ -342,7 +342,7 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ## Leaf `p1-engine` closeout
 
-- [ ] VERIFY the §4 gate: gff-ci green (vet + tests, ≥90% cover, proto regen clean, e2e job green) and `bash build.sh` installs a working binary
+- [x] VERIFY the §4 gate: gff-ci green (vet + tests, ≥90% cover, proto regen clean, e2e job green) and `bash build.sh` installs a working binary
 - [ ] Token call 1: `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token`
 - [ ] Token call 2 (separate Bash call): `gss feature pr --ready --worker <p1 worker_ref>`
 - [ ] After merge: `gss feature merged --worker <p1 worker_ref>` (token-gated, same two-call recipe)
