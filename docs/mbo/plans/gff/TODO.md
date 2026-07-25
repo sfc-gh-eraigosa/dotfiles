@@ -155,25 +155,25 @@ committed `sdk/gff/gen/gff/v1/*.pb.go`; modify root `Makefile` + `.gitignore`.
 
 **Files:** `internal/resolve/{resolve.go,resolve_test.go}`.
 
-- [ ] RED: build the fixture — `type world struct{ sysSnap, userSnap, repo, sysOvr, usrOvr string }` and `newResolver(t, w)` writing each non-empty layer into `t.TempDir()`, WorkDir = repo (plan snippet)
-- [ ] RED: case 1 — key only in system snapshot ⇒ default value, `Layer == LayerSystemSnapshot`
-- [ ] RED: case 2 — same key also in user snapshot ⇒ user-snapshot definition wins, `LayerUserSnapshot`
-- [ ] RED: case 3 — live repo file redefines the default ⇒ `LayerRepoLive`
-- [ ] RED: case 4 — system override flips the value ⇒ `LayerSystemOverride`
-- [ ] RED: case 5 — user override flips it back ⇒ `LayerUserOverride`
-- [ ] RED: case 6 — override for an UNKNOWN key ⇒ ignored by `All()`; `Resolve` ⇒ `ErrUnknownKey`
-- [ ] RED: case 7 — choice: default selection wins with no override; override to valid id(s) ⇒ that selection; unknown id, or two ids on a `single`-mode flag ⇒ error naming the key and the offending ids
-- [ ] RED: case 8 — WorkDir outside any git repo ⇒ snapshots + overrides still resolve
-- [ ] RED: case 9 — `All()` sorted by `Feature.Path`; sparse overrides never invent keys
-- [ ] RED: case 10 — `Source: <local path>` resolves that repo's live file though WorkDir is elsewhere; `Source: <registered name>` resolves from that source's snapshot from any CWD; unknown name/path ⇒ `ErrUnknownSource`
-- [ ] RUN-RED: `go test ./internal/resolve/` → expect **FAIL**
-- [ ] GREEN: load definition layers in order — every `*.yaml|*.json` in `SystemSnapshotDir`, then `UserSnapshotDir`, then the live file via `gitx.RepoRoot(P.WorkDir)` + `SourcePath`; a later def layer replaces a path's `(Feature, defLayer)`
-- [ ] GREEN: apply the two override maps in order; validate choice ids + mode arity against the **winning** definition
-- [ ] GREEN: effective value = default unless overridden; `Layer` = the winning layer; expose `All()` (sorted) and `Resolve(key)` per §3.3
-- [ ] RUN-GREEN: `go test ./internal/resolve/` → expect **PASS**
-- [ ] VERIFY: `go test ./internal/resolve/ -cover` → **≥95%**; record in `TRACKING.md` §9
-- [ ] COMMIT: `feat(gff): 5-layer resolver with provenance + choice validation`
-- [ ] LEDGER: tick F4 **unit** cell (matrix 1–10); CHECKPOINT
+- [x] RED: build the fixture — `type world struct{ sysSnap, userSnap, repo, sysOvr, usrOvr string }` and `newResolver(t, w)` writing each non-empty layer into `t.TempDir()`, WorkDir = repo (plan snippet)
+- [x] RED: case 1 — key only in system snapshot ⇒ default value, `Layer == LayerSystemSnapshot`
+- [x] RED: case 2 — same key also in user snapshot ⇒ user-snapshot definition wins, `LayerUserSnapshot`
+- [x] RED: case 3 — live repo file redefines the default ⇒ `LayerRepoLive`
+- [x] RED: case 4 — system override flips the value ⇒ `LayerSystemOverride`
+- [x] RED: case 5 — user override flips it back ⇒ `LayerUserOverride`
+- [x] RED: case 6 — override for an UNKNOWN key ⇒ ignored by `All()`; `Resolve` ⇒ `ErrUnknownKey`
+- [x] RED: case 7 — choice: default selection wins with no override; override to valid id(s) ⇒ that selection; unknown id, or two ids on a `single`-mode flag ⇒ error naming the key and the offending ids
+- [x] RED: case 8 — WorkDir outside any git repo ⇒ snapshots + overrides still resolve
+- [x] RED: case 9 — `All()` sorted by `Feature.Path`; sparse overrides never invent keys
+- [x] RED: case 10 — `Source: <local path>` resolves that repo's live file though WorkDir is elsewhere; `Source: <registered name>` resolves from that source's snapshot from any CWD; unknown name/path ⇒ `ErrUnknownSource`
+- [x] RUN-RED: `go test ./internal/resolve/` → expect **FAIL**
+- [x] GREEN: load definition layers in order — every `*.yaml|*.json` in `SystemSnapshotDir`, then `UserSnapshotDir`, then the live file via `gitx.RepoRoot(P.WorkDir)` + `SourcePath`; a later def layer replaces a path's `(Feature, defLayer)`
+- [x] GREEN: apply the two override maps in order; validate choice ids + mode arity against the **winning** definition
+- [x] GREEN: effective value = default unless overridden; `Layer` = the winning layer; expose `All()` (sorted) and `Resolve(key)` per §3.3
+- [x] RUN-GREEN: `go test ./internal/resolve/` → expect **PASS**
+- [x] VERIFY: `go test ./internal/resolve/ -cover` → **≥95%**; record in `TRACKING.md` §9
+- [x] COMMIT: `feat(gff): 5-layer resolver with provenance + choice validation`
+- [x] LEDGER: tick F4 **unit** cell (matrix 1–10); CHECKPOINT
 
 **Done when:** all 10 matrix cases pass at ≥95% coverage.
 
@@ -183,15 +183,15 @@ committed `sdk/gff/gen/gff/v1/*.pb.go`; modify root `Makefile` + `.gitignore`.
 
 **Files:** `internal/registry/{registry.go,registry_test.go}`.
 
-- [ ] RED: fresh `Install` writes `sources.yaml` with `{namespace, url, commit}` **and** a snapshot at `<UserSnapshotDir>/<namespace>.yaml` byte-identical to the source file
-- [ ] RED: re-installing the same name refreshes commit + snapshot with **no duplicate** registry entry
-- [ ] RED: a DIFFERENT url installing an already-registered namespace ⇒ `ErrNamespaceTaken`, error text contains the **existing url**; `Snapshot(namespace)` returns path/`ok=false` (the `resolve.SourceLookup` impl)
-- [ ] RED: `Sources()` against a missing registry file ⇒ empty slice, nil error
-- [ ] RUN-RED: `go test ./internal/registry/` → expect **FAIL**
-- [ ] GREEN: implement `Registry.Install` / `Sources` — yaml encoding of `SourceRegistry` via the same protojson-normalize trick as `schema`; `os.MkdirAll`; atomic temp+rename
-- [ ] RUN-GREEN: `go test ./internal/registry/` → expect **PASS**
-- [ ] COMMIT: `feat(gff): source registry keyed by reverse-DNS namespace + snapshots`
-- [ ] LEDGER: tick F6 **unit** cell; CHECKPOINT
+- [x] RED: fresh `Install` writes `sources.yaml` with `{namespace, url, commit}` **and** a snapshot at `<UserSnapshotDir>/<namespace>.yaml` byte-identical to the source file
+- [x] RED: re-installing the same name refreshes commit + snapshot with **no duplicate** registry entry
+- [x] RED: a DIFFERENT url installing an already-registered namespace ⇒ `ErrNamespaceTaken`, error text contains the **existing url**; `Snapshot(namespace)` returns path/`ok=false` (the `resolve.SourceLookup` impl)
+- [x] RED: `Sources()` against a missing registry file ⇒ empty slice, nil error
+- [x] RUN-RED: `go test ./internal/registry/` → expect **FAIL**
+- [x] GREEN: implement `Registry.Install` / `Sources` — yaml encoding of `SourceRegistry` via the same protojson-normalize trick as `schema`; `os.MkdirAll`; atomic temp+rename
+- [x] RUN-GREEN: `go test ./internal/registry/` → expect **PASS**
+- [x] COMMIT: `feat(gff): source registry keyed by reverse-DNS namespace + snapshots`
+- [x] LEDGER: tick F6 **unit** cell; CHECKPOINT
 
 **Done when:** registry tests pass, including the area-claim rejection naming the owner.
 
