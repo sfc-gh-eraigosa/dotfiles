@@ -64,7 +64,7 @@ P2-T5 human evidence posted.
 | :-- | :-- | :-- | :-- | :-- |
 | P2-T1 dotfiles flag inventory (43 flags) | todo | | | allowlist check first |
 | P2-T2 shell helper `opt/lib/gff.sh` | todo | | | bash **and** dash |
-| P2-T3 instrument `install.sh` (Linux/common) | todo | | | no reordering |
+| P2-T3 instrument `install.sh` (Linux/common) | todo | | | no reordering. NOTE (from p1 sandbox demo): shell-export lines are plain `VAR=v` (shell-local) — wrap the bootstrap eval in `set -a` / `set +a` so `GFF_*` reach child scripts (`install_windows.sh`), whose P2-T4 WSLENV builder greps `env` and only sees EXPORTED vars |
 | P2-T4 Windows pass-through + PS gating | todo | | | pwsh check or defer to P2-T5 |
 | P2-T5 human-evidenced acceptance | todo | — | | real terminal, WSL |
 | **P2 done-when gate** | todo | — | | evidence posted on PR |
