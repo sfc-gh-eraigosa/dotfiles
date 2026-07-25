@@ -37,7 +37,7 @@ e2e harness green; `build.sh` installs a working binary.
 
 | Task | Status | Commit | Evidence (test run / gate) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| P1-T1 module scaffold + version | done | _(fill at commit)_ | `go test ./... && go vet ./...` -> ok (cmd 0.002s); `bash build.sh` -> installed; `${HOME}/opt/bin/gff version` prints `gff v0.1.0` block | RED verified: `undefined: NewRootCmd` |
+| P1-T1 module scaffold + version | done | b3ed141 | `go test ./... && go vet ./...` -> ok (cmd 0.002s); `bash build.sh` -> installed; `${HOME}/opt/bin/gff version` prints `gff v0.1.0` block | RED verified: `undefined: NewRootCmd` |
 | P1-T2 proto schema + committed codegen | todo | | | |
 | P1-T3 schema load + lint | todo | | | ≥90% pkg cover |
 | P1-T4 paths + git discovery | todo | | | |
