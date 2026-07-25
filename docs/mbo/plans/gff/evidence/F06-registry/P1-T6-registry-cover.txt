@@ -1,0 +1,4 @@
+date: Sat Jul 25 07:59:35 PM UTC 2026
+task: P1-T6
+command: go test ./internal/registry/ -cover 2>&1
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/registry	0.021s	coverage: 78.4% of statements
