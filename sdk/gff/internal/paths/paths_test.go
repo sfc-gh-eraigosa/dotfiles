@@ -50,3 +50,10 @@ func TestDefaultXDGDataHome(t *testing.T) {
 	assert.Equal(t, dir+"/gff/snapshots", p.UserSnapshotDir,
 		"UserSnapshotDir should use XDG_DATA_HOME when set")
 }
+
+func TestDefaultNoHomeErrors(t *testing.T) {
+	t.Setenv("HOME", "")
+	if _, err := paths.Default(); err == nil {
+		t.Fatal("want error when HOME is empty")
+	}
+}

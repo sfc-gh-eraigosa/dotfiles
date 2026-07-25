@@ -135,6 +135,7 @@ func TestExportShellGolden(t *testing.T) {
 // carry the full ResolvedJSON (including description) per §3.3 contract, so
 // they are not checked for description suppression here.
 func TestExportNoInjection(t *testing.T) {
+	t.Chdir(t.TempDir()) // dotenv without -o defaults to ./.env — keep it in the temp dir
 	p := goldenWorld(t)
 	installExportResolver(t, p)
 
@@ -299,6 +300,7 @@ func TestExportEmptyWorld(t *testing.T) {
 		WorkDir:           filepath.Join(dir, "workdir"),
 	}
 	require.NoError(t, os.MkdirAll(p.WorkDir, 0o755))
+	t.Chdir(t.TempDir()) // dotenv without -o defaults to ./.env — keep it in the temp dir
 	installExportResolver(t, p)
 
 	// All formats must succeed with empty/valid output.

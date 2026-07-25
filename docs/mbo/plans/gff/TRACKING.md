@@ -45,8 +45,8 @@ e2e harness green; `build.sh` installs a working binary.
 | P1-T6 registry + install | done | 20b3e7f | `go test ./internal/registry/ -cover` -> ok, 78.4%; `go vet ./...` clean; RED verified: `no non-test Go files in internal/registry`; snapshot byte-identical + ErrNamespaceTaken names existing url | evidence: F06-registry/P1-T6-registry-cover.txt |
 | P1-T7 read verbs — get/enabled/selected/list/lint | done | e1051b2 | `go test ./cmd/ -cover` -> ok, 74.6% (24 tests); full `go test ./...` green; `go vet ./...` clean; RED verified: `undefined: errOff` | evidence: F11-gorun/P1-T7-read-verbs.txt; exit mapping only in main.go (silent exit-1 via cmd.IsExit1Silent); F4/F11 unit cells partially proven here, cmd paths finish via e2e |
 | P1-T8 write verbs — set/unset | done | 9c24776 | `go test ./cmd/ -cover` -> ok, 78.2% (38 tests); `go test ./...` green; `go vet ./...` clean; RED verified: `unknown command \"set\"` | evidence: F08-write-path/P1-T8-write.txt; internal/overrides.Write/Unset extracted (P3 seam) + WriteFileAtomic shared with registry; adversary fix: single-mode arity error de-wrapped from ErrUnknownOption so IA-2 gets exit 1 not 2; testify added (test-only dep) |
-| P1-T9 export + install verbs | done | _(next commit)_ | `go test ./cmd/ -cover` -> ok, 72.6% (~53 tests); golden = AI_CLAUDE=true / PKG_MANAGER=auto / WISPR_FLOW=false byte-exact; dotenv round-trips go-envparse v0.1.0; json/yaml -> identical []ResolvedJSON; `go vet` clean; RED verified: `undefined: mangleKey` | evidence: F07-export/P1-T9-export-golden.txt; injection assert narrowed to shell/dotenv (json/yaml carry description BY CONTRACT §3.3) + value-regex assert |
-| P1-T10 public SDK + CI + coverage gate | todo | | | ≥90% overall |
+| P1-T9 export + install verbs | done | e55c762 | `go test ./cmd/ -cover` -> ok, 72.6% (~53 tests); golden = AI_CLAUDE=true / PKG_MANAGER=auto / WISPR_FLOW=false byte-exact; dotenv round-trips go-envparse v0.1.0; json/yaml -> identical []ResolvedJSON; `go vet` clean; RED verified: `undefined: mangleKey` | evidence: F07-export/P1-T9-export-golden.txt; injection assert narrowed to shell/dotenv (json/yaml carry description BY CONTRACT §3.3) + value-regex assert |
+| P1-T10 public SDK + CI + coverage gate | done | _(next commit)_ | coverpkg-excl-gen total 91.6% (bar ≥90), resolve 96.0% (≥95), schema 95.6%/92.0% (≥90); `go test ./...` + `go vet` green; `go run . version` smoke ok; `bash build.sh` installs working binary; CI gate dry-run GATE-PASSES | QA fan-out twice tried to lower the total gate (77→85) — REJECTED; closed the gap with real tests instead (overrides/version/main-exitCode/cmd error paths/pkg typed accessors + white-box helpers). Also fixed: dotenv default `-o .env` test leak (t.Chdir), IA-10 resolve fix — non-repo `--source` path now ErrUnknownSource (was silently empty world) |
 | P1-T11 binary-level e2e harness | todo | | | IH-* + IA-* |
 | **P1 done-when gate** | todo | — | | P1-T10 green **plus** e2e green |
 
@@ -194,9 +194,9 @@ Update on each measurement; keep the latest observed number and the command that
 
 | Scope | Bar | Latest observed | Command |
 | :-- | :-- | :-- | :-- |
-| `internal/resolve` | ≥95% | 95.9% (2026-07-25) | `go test ./internal/resolve/ -cover` |
-| `internal/schema` | ≥90% | 90.5% (2026-07-25) | `go test ./internal/schema/ -cover` |
-| `sdk/gff` overall | **≥90%** | _(not measured)_ | `go test ./... -coverprofile=cover.out && go tool cover -func=cover.out \| tail -1` |
+| `internal/resolve` | ≥95% | 96.0% (2026-07-25) | `go test ./internal/resolve/ -cover` |
+| `internal/schema` | ≥90% | 95.6% (2026-07-25) | `go test ./internal/schema/ -cover` |
+| `sdk/gff` overall | **≥90%** | 91.6% (2026-07-25, coverpkg excl /gen/) | `go test ./... -coverprofile=cover.out && go tool cover -func=cover.out \| tail -1` |
 
 ---
 

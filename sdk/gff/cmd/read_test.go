@@ -518,6 +518,6 @@ func TestGetNonRepoPath(t *testing.T) {
 	sourceFlag = dir
 	_, err := runCmd(t, "get", "install.ai.claude")
 	require.Error(t, err)
-	// A non-repo path still resolves (live layer absent, no snapshots) => ErrUnknownKey.
-	assert.True(t, errors.Is(err, resolve.ErrUnknownKey), "want ErrUnknownKey for non-repo path, got %v", err)
+	// A non-repo path is an unknown source (plan §7.2 IA-10 => exit 2).
+	assert.True(t, errors.Is(err, resolve.ErrUnknownSource), "want ErrUnknownSource for non-repo path, got %v", err)
 }

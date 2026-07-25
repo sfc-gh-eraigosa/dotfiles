@@ -498,3 +498,86 @@ func TestLintFindingFields(t *testing.T) {
 		t.Error("finding Msg is empty")
 	}
 }
+
+// TestValueTypeNameAllBranches covers all value type switches in lintChoiceValueTypes.
+func TestValueTypeNameAllBranches(t *testing.T) {
+	tests := []struct {
+		name        string
+		feature     *gffv1.Feature
+		wantError   bool
+		description string
+	}{
+		{
+			name: "int_value option",
+			feature: choiceFeature("install.test.int", gffv1.ChoiceMode_CHOICE_MODE_SINGLE,
+				[]*gffv1.ChoiceOption{
+					{
+						Id:       "opt1",
+						Selected: true,
+						Value:    &gffv1.ChoiceOption_IntValue{IntValue: 42},
+					},
+				}),
+			wantError:   false,
+			description: "int option should be valid",
+		},
+		{
+			name: "float_value option",
+			feature: choiceFeature("install.test.float", gffv1.ChoiceMode_CHOICE_MODE_SINGLE,
+				[]*gffv1.ChoiceOption{
+					{
+						Id:       "opt1",
+						Selected: true,
+						Value:    &gffv1.ChoiceOption_FloatValue{FloatValue: 3.14},
+					},
+				}),
+			wantError:   false,
+			description: "float option should be valid",
+		},
+		{
+			name: "bool_value option",
+			feature: choiceFeature("install.test.bool", gffv1.ChoiceMode_CHOICE_MODE_SINGLE,
+				[]*gffv1.ChoiceOption{
+					{
+						Id:       "opt1",
+						Selected: true,
+						Value:    &gffv1.ChoiceOption_BoolValue{BoolValue: true},
+					},
+				}),
+			wantError:   false,
+			description: "bool option should be valid",
+		},
+		{
+			name: "string_value option",
+			feature: choiceFeature("install.test.string", gffv1.ChoiceMode_CHOICE_MODE_SINGLE,
+				[]*gffv1.ChoiceOption{
+					{
+						Id:       "opt1",
+						Selected: true,
+						Value:    &gffv1.ChoiceOption_StringValue{StringValue: "val"},
+					},
+				}),
+			wantError:   false,
+			description: "string option should be valid",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ff := &gffv1.FeatureFile{
+				Namespace: "com.example.test",
+				Sets: []*gffv1.FeatureSet{
+					{
+						Area:     "install",
+						Features: []*gffv1.Feature{tt.feature},
+					},
+				},
+			}
+
+			findings := schema.Lint(ff)
+			hasError := len(findings) > 0
+			if hasError != tt.wantError {
+				t.Errorf("%s: wantError=%v, got %d findings", tt.description, tt.wantError, len(findings))
+			}
+		})
+	}
+}

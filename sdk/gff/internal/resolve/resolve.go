@@ -218,8 +218,14 @@ func (r *Resolver) resolveLivePath() (string, error) {
 	}
 
 	// Local path: starts with "/", "./", "../", or stat says it exists as a dir.
+	// A path that is not (inside) a git repository is an unknown source (plan
+	// §7.2 IA-10: exit 2), never silently an empty world.
 	if isLocalPath(src) {
-		return gitx.SourcePath(r.R, src), nil
+		repoRoot, ok := gitx.RepoRoot(src)
+		if !ok {
+			return "", fmt.Errorf("resolve: source path %q is not a git repository: %w", src, ErrUnknownSource)
+		}
+		return gitx.SourcePath(r.R, repoRoot), nil
 	}
 
 	// Registered name.

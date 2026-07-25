@@ -273,20 +273,20 @@ modify `cmd/root.go` (test seam + `--source` persistent flag).
 
 **Files:** `pkg/gff/{gff.go,gff_test.go}`, `.github/workflows/gff-ci.yml`.
 
-- [ ] RED: `pkg/gff/gff_test.go` — `Bool` / `Selected` / `IsSelected` / `StringValues` agree with a `Resolver` over the same temp world; SDK takes a `WithPaths(p)` functional option (default `paths.Default()`)
-- [ ] RUN-RED: `go test ./pkg/gff/` → expect **FAIL**
-- [ ] GREEN: implement `pkg/gff/gff.go` — thin wrapper exposing `Bool`, `Selected`, `IsSelected`, `IntValues`, `FloatValues`, `StringValues`, `BoolValues` per §3.3; a wrong-type accessor errors naming the actual type
-- [ ] RUN-GREEN: `go test ./pkg/gff/` → expect **PASS**
-- [ ] GREEN: write `.github/workflows/gff-ci.yml` — PR path filter `sdk/gff/**`; setup-go from `.go-version`
-- [ ] GREEN: CI step — `go run . version` (zero-install entrypoint smoke, proves the module stays `go run`-able)
-- [ ] GREEN: CI step — `go vet ./... && go test ./... -coverprofile=cover.out`; **fail if** `go tool cover -func=cover.out | tail -1` < **90%**
-- [ ] GREEN: CI step — `sudo apt-get install -y protobuf-compiler` then `make gff-proto-check` (regeneration clean)
-- [ ] VERIFY: locally `go test ./... -coverprofile=cover.out && go tool cover -func=cover.out | tail -1` → **≥90%**; record in `TRACKING.md` §9
-- [ ] VERIFY: `bash build.sh` installs a working `${HOME}/opt/bin/gff version`
-- [ ] ALLOWLIST: `git check-ignore -v .github/workflows/gff-ci.yml` — expect `!.github/**` coverage
-- [ ] COMMIT: `feat(gff): public SDK + CI (vet, tests, coverage gate, proto-regen check)`
+- [x] RED: `pkg/gff/gff_test.go` — `Bool` / `Selected` / `IsSelected` / `StringValues` agree with a `Resolver` over the same temp world; SDK takes a `WithPaths(p)` functional option (default `paths.Default()`)
+- [x] RUN-RED: `go test ./pkg/gff/` → expect **FAIL**
+- [x] GREEN: implement `pkg/gff/gff.go` — thin wrapper exposing `Bool`, `Selected`, `IsSelected`, `IntValues`, `FloatValues`, `StringValues`, `BoolValues` per §3.3; a wrong-type accessor errors naming the actual type
+- [x] RUN-GREEN: `go test ./pkg/gff/` → expect **PASS**
+- [x] GREEN: write `.github/workflows/gff-ci.yml` — PR path filter `sdk/gff/**`; setup-go from `.go-version`
+- [x] GREEN: CI step — `go run . version` (zero-install entrypoint smoke, proves the module stays `go run`-able)
+- [x] GREEN: CI step — `go vet ./... && go test ./... -coverprofile=cover.out`; **fail if** `go tool cover -func=cover.out | tail -1` < **90%**
+- [x] GREEN: CI step — `sudo apt-get install -y protobuf-compiler` then `make gff-proto-check` (regeneration clean)
+- [x] VERIFY: locally `go test ./... -coverprofile=cover.out && go tool cover -func=cover.out | tail -1` → **≥90%**; record in `TRACKING.md` §9
+- [x] VERIFY: `bash build.sh` installs a working `${HOME}/opt/bin/gff version`
+- [x] ALLOWLIST: `git check-ignore -v .github/workflows/gff-ci.yml` — expect `!.github/**` coverage
+- [x] COMMIT: `feat(gff): public SDK + CI (vet, tests, coverage gate, proto-regen check)`
 - [ ] CHECKPOINT, then confirm the **gff-ci run is green** on the draft PR
-- [ ] LEDGER: tick F11 **unit** (CI smoke) cell
+- [x] LEDGER: tick F11 **unit** (CI smoke) cell
 
 **Done when:** CI is green end-to-end and total coverage is ≥90%.
 

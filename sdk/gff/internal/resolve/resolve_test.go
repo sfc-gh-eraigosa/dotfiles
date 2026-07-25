@@ -379,6 +379,7 @@ func TestCase10a_SourceLocalPath(t *testing.T) {
 	repoDir := filepath.Join(dir, "myrepo")
 	gffDir := filepath.Join(repoDir, ".gff")
 	require.NoError(t, os.MkdirAll(gffDir, 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(repoDir, ".git"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(gffDir, "features.yaml"), []byte(boolFeatureYAML), 0o644))
 
 	// WorkDir is somewhere else with no features.
@@ -700,6 +701,7 @@ func TestIsLocalPathViaStatExists(t *testing.T) {
 	repoDir := filepath.Join(dir, "localrepo")
 	gffDir := filepath.Join(repoDir, ".gff")
 	require.NoError(t, os.MkdirAll(gffDir, 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(repoDir, ".git"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(gffDir, "features.yaml"), []byte(boolFeatureYAML), 0o644))
 
 	workDir := filepath.Join(dir, "workdir")
@@ -776,6 +778,7 @@ func TestIsLocalPathRelativePrefix(t *testing.T) {
 	repoDir := filepath.Join(dir, "myrepo")
 	gffDir := filepath.Join(repoDir, ".gff")
 	require.NoError(t, os.MkdirAll(gffDir, 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(repoDir, ".git"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(gffDir, "features.yaml"), []byte(boolFeatureYAML), 0o644))
 
 	childDir := filepath.Join(dir, "parent", "child")
@@ -801,10 +804,11 @@ func TestIsLocalPathRelativePrefix(t *testing.T) {
 	// return the default .gff/features.yaml path which also won't exist, so the
 	// live layer is absent. But the isLocalPath "../" branch IS exercised.
 	r2 := resolve.New(p2, fakeRunner{}, "../sibling")
-	// No features are available (live file absent, no snapshots), but no error.
-	all, err := r2.All()
-	require.NoError(t, err)
-	assert.Empty(t, all)
+	// A "../" path that is not (inside) a git repository is an unknown source
+	// (plan §7.2 IA-10) — the "../" prefix branch of isLocalPath IS exercised.
+	_, err := r2.All()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, resolve.ErrUnknownSource)
 }
 
 // TestValidateOverrideNilKind: an override Value with nil Kind is accepted for bool flags.
@@ -852,10 +856,10 @@ func TestSourceWithDotSlashPrefix(t *testing.T) {
 	require.NoError(t, os.MkdirAll(p.WorkDir, 0o755))
 
 	r := resolve.New(p, fakeRunner{}, "./nonexistent")
-	// No features defined anywhere; should return empty without error.
-	all, err := r.All()
-	require.NoError(t, err)
-	assert.Empty(t, all)
+	// A "./" path that is not a git repository is an unknown source (IA-10).
+	_, err := r.All()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, resolve.ErrUnknownSource)
 }
 
 // TestFeatureNoDefaultWithOverride: a feature with no default type and an override
