@@ -44,8 +44,8 @@ e2e harness green; `build.sh` installs a working binary.
 | P1-T5 resolver (the core) | done | a20c15b | `go test ./internal/resolve/ -cover` -> ok, 95.9% (bar ≥95); `go vet ./...` clean; RED verified: `no non-test Go files in internal/resolve`; 31 subtests incl. matrix 1–10 | evidence: F04-layers/P1-T5-resolve-matrix-cover.txt; Resolved carries an unexported namespace field for JSON() (frozen exported surface unchanged); unqualified multi-namespace key -> error wrapping ErrUnknownKey naming candidates |
 | P1-T6 registry + install | done | 20b3e7f | `go test ./internal/registry/ -cover` -> ok, 78.4%; `go vet ./...` clean; RED verified: `no non-test Go files in internal/registry`; snapshot byte-identical + ErrNamespaceTaken names existing url | evidence: F06-registry/P1-T6-registry-cover.txt |
 | P1-T7 read verbs — get/enabled/selected/list/lint | done | e1051b2 | `go test ./cmd/ -cover` -> ok, 74.6% (24 tests); full `go test ./...` green; `go vet ./...` clean; RED verified: `undefined: errOff` | evidence: F11-gorun/P1-T7-read-verbs.txt; exit mapping only in main.go (silent exit-1 via cmd.IsExit1Silent); F4/F11 unit cells partially proven here, cmd paths finish via e2e |
-| P1-T8 write verbs — set/unset | done | _(next commit)_ | `go test ./cmd/ -cover` -> ok, 78.2% (38 tests); `go test ./...` green; `go vet ./...` clean; RED verified: `unknown command \"set\"` | evidence: F08-write-path/P1-T8-write.txt; internal/overrides.Write/Unset extracted (P3 seam) + WriteFileAtomic shared with registry; adversary fix: single-mode arity error de-wrapped from ErrUnknownOption so IA-2 gets exit 1 not 2; testify added (test-only dep) |
-| P1-T9 export + install verbs | todo | | | |
+| P1-T8 write verbs — set/unset | done | 9c24776 | `go test ./cmd/ -cover` -> ok, 78.2% (38 tests); `go test ./...` green; `go vet ./...` clean; RED verified: `unknown command \"set\"` | evidence: F08-write-path/P1-T8-write.txt; internal/overrides.Write/Unset extracted (P3 seam) + WriteFileAtomic shared with registry; adversary fix: single-mode arity error de-wrapped from ErrUnknownOption so IA-2 gets exit 1 not 2; testify added (test-only dep) |
+| P1-T9 export + install verbs | done | _(next commit)_ | `go test ./cmd/ -cover` -> ok, 72.6% (~53 tests); golden = AI_CLAUDE=true / PKG_MANAGER=auto / WISPR_FLOW=false byte-exact; dotenv round-trips go-envparse v0.1.0; json/yaml -> identical []ResolvedJSON; `go vet` clean; RED verified: `undefined: mangleKey` | evidence: F07-export/P1-T9-export-golden.txt; injection assert narrowed to shell/dotenv (json/yaml carry description BY CONTRACT §3.3) + value-regex assert |
 | P1-T10 public SDK + CI + coverage gate | todo | | | ≥90% overall |
 | P1-T11 binary-level e2e harness | todo | | | IH-* + IA-* |
 | **P1 done-when gate** | todo | — | | P1-T10 green **plus** e2e green |
@@ -125,7 +125,7 @@ proof passes; record which task proved it in Notes.
 | **F4** layered resolution + provenance | [x] resolve matrix 1–10 | [ ] IH-5, IH-9 | [ ] demo step 2 | |
 | **F5** discovery + `gff.source` redirect | [x] `gitx_test.go` | [ ] IH-3, IA-12 | [ ] demo step 2 | |
 | **F6** registry + namespace identity | [x] `registry_test.go` | [ ] IH-2, IA-6, IA-7, IA-13, IA-14 | [ ] demo step 5 | |
-| **F7** export formats + injection safety | [ ] export golden | [ ] IH-7, IH-8, IA-5, IA-15 | [ ] demo steps 4, 6 | |
+| **F7** export formats + injection safety | [x] export golden | [ ] IH-7, IH-8, IA-5, IA-15 | [ ] demo steps 4, 6 | |
 | **F8** write path (0600, user-only) | [x] `write_test.go` | [ ] IH-5, IA-8, IA-11, IA-13 | [ ] demo step 3 | |
 | **F9** fail-open gating | [ ] `gff_test.sh` bash + dash (binary-absent is unit-only) | [ ] IH-7, IA-7 | [ ] P2-T5 evidence | |
 | **F10** TUI | [ ] teatest goldens | [ ] (visual — teatest is the harness) | [ ] post-P3 capture | |

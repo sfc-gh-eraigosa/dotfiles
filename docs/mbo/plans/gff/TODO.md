@@ -250,20 +250,20 @@ modify `cmd/root.go` (test seam + `--source` persistent flag).
 
 **Files:** `cmd/{export.go,install.go}` + `cmd/export_test.go`, golden `cmd/testdata/export.golden`.
 
-- [ ] RED: env-mangling table — `install.windows.wispr-flow` → `GFF_INSTALL_WINDOWS_WISPR_FLOW` (uppercase, `.` and `-` → `_`)
-- [ ] RED: golden test — world with 3 flags (one overridden false, one choice) produces exactly the sorted lines `GFF_INSTALL_AI_CLAUDE=true` / `GFF_INSTALL_PKG_MANAGER=apt` / `GFF_INSTALL_WINDOWS_WISPR_FLOW=false`
-- [ ] RED: injection assert — a description containing `$(rm -rf)` never appears in export output; values are bool literals or lint-constrained kebab ids only
-- [ ] RED: `--format dotenv -o <tmp>/.env` writes the same lines as shell and round-trips through `hashicorp/go-envparse` (test-only dep)
-- [ ] RED: `--format json` unmarshals into `[]Resolved` and carries choice option ids + typed values
-- [ ] RED: `--format yaml` round-trips to the **same** `[]Resolved` as the json form (equality assert)
-- [ ] RED: `--shell` alias behaves identically to `--format shell`
-- [ ] RED: `install` inside a temp repo registers + snapshots (assert via `Sources()`); outside a repo ⇒ a clear error
-- [ ] RUN-RED: `go test ./cmd/` → expect **FAIL**
-- [ ] GREEN: implement `export.go` — `--format shell|dotenv|json|yaml`, `-o <file>` (dotenv defaults to `.env`), `--shell` alias; stdout carries only export lines
-- [ ] GREEN: implement `install.go` — name = repo dir basename; url = `git config --get remote.origin.url` via the gitx Runner (tolerate absence); commit = `rev-parse --short HEAD`; delegates to `internal/registry`
-- [ ] RUN-GREEN: `go test ./cmd/` → expect **PASS**
-- [ ] COMMIT: `feat(gff): shell export + repo install verbs`
-- [ ] LEDGER: tick F6 / F7 **unit** cells; CHECKPOINT
+- [x] RED: env-mangling table — `install.windows.wispr-flow` → `GFF_INSTALL_WINDOWS_WISPR_FLOW` (uppercase, `.` and `-` → `_`)
+- [x] RED: golden test — world with 3 flags (one overridden false, one choice) produces exactly the sorted lines `GFF_INSTALL_AI_CLAUDE=true` / `GFF_INSTALL_PKG_MANAGER=apt` / `GFF_INSTALL_WINDOWS_WISPR_FLOW=false`
+- [x] RED: injection assert — a description containing `$(rm -rf)` never appears in export output; values are bool literals or lint-constrained kebab ids only
+- [x] RED: `--format dotenv -o <tmp>/.env` writes the same lines as shell and round-trips through `hashicorp/go-envparse` (test-only dep)
+- [x] RED: `--format json` unmarshals into `[]Resolved` and carries choice option ids + typed values
+- [x] RED: `--format yaml` round-trips to the **same** `[]Resolved` as the json form (equality assert)
+- [x] RED: `--shell` alias behaves identically to `--format shell`
+- [x] RED: `install` inside a temp repo registers + snapshots (assert via `Sources()`); outside a repo ⇒ a clear error
+- [x] RUN-RED: `go test ./cmd/` → expect **FAIL**
+- [x] GREEN: implement `export.go` — `--format shell|dotenv|json|yaml`, `-o <file>` (dotenv defaults to `.env`), `--shell` alias; stdout carries only export lines
+- [x] GREEN: implement `install.go` — name = repo dir basename; url = `git config --get remote.origin.url` via the gitx Runner (tolerate absence); commit = `rev-parse --short HEAD`; delegates to `internal/registry`
+- [x] RUN-GREEN: `go test ./cmd/` → expect **PASS**
+- [x] COMMIT: `feat(gff): shell export + repo install verbs`
+- [x] LEDGER: tick F6 / F7 **unit** cells; CHECKPOINT
 
 **Done when:** the export golden matches byte-for-byte and all four formats round-trip.
 
