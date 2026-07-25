@@ -19,13 +19,23 @@ Include touch-points OUTSIDE the new dir (install.sh, scripts/test.sh, sync-skil
 CLI/stdin-stdout, schemas, key function signatures, orchestration pseudocode.
 
 ## 4. TDD build order
-Numbered phases, **tests first**, each with: what to write · how to verify · **done-when** gate.
+Numbered phases, **tests first**, each with: what to write · how to verify ·
+**done-when** gate · **evidence capture** (the gate command's output `tee`'d into
+`plans/<slug>/evidence/`, committed with the task).
 
 ## 5. Verification mapping
 Each spec evaluation rule → its named test case (traceability).
 
 ## 6. Integration & rollout
 Wiring (build/test discovery, docs, skills), and any manual acceptance checklist.
+
+## 7. Validation & evidence (show the work)
+Coverage bars and how they're enforced; integration/e2e scenarios (happy path +
+adversarial); demo plan; and the **evidence protocol**: a tracked
+`plans/<slug>/evidence/` tree with one folder per feature (plus `e2e/`, `demo/`),
+where every task's done-when output is captured (`tee`, dated header, append-only)
+and committed alongside the code — realizing the design's §7 evidence expectations.
+A feature without captured evidence is not done.
 
 ### 6.1 Build leaves / DAG (fill in only if the build will be broken out — `mbo-plan` CAP-B)
 The **authoritative** dependency graph for parallel execution. A leaf owns a disjoint set of

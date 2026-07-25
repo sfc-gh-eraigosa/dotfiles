@@ -22,7 +22,9 @@ scripts.
 - *Actor:* `install.sh` (and `setup-apps.ps1`/`setup-elevated.ps1` via env).
 - *Trigger:* bootstrap run on any host.
 - *Flow:* install.sh builds gff after the Go toolchain → `eval "$(gff export --shell)"`
-  → each later step checks its `GFF_*` var (or `gff enabled <key>`) → disabled steps
+  → each later step checks its `GFF_*` var via the fail-open `gff_on` helper —
+  **never `gff enabled` as a gate**: its non-zero exits on corrupt config or unknown
+  keys would fail CLOSED, the top install.sh regression risk — → disabled steps
   print `SKIP (gff: <key>=false)` and continue.
 - *Acceptance:* disabling `install.windows.wispr-flow` in `~/.config/gff/config.yaml`
   skips the Wispr Flow MSI/AHK workflow on the next run; deleting the override restores
@@ -64,8 +66,10 @@ Components (each independently testable; see design §4 for full detail):
   pinned in `build.sh`, CI-checked clean.
 - `internal/schema` — parse + validate + lint the repo flag file (`.yaml|.json`,
   protojson-compatible encodings of `FeatureSet`).
-- `internal/resolve` — layer chain (design §4): source snapshots (`/opt/conf/gff/`,
-  `~/opt/conf/gff/`) → live repo file (git-style discovery, `[gff] source` redirect) →
+- `internal/resolve` — layer chain (design §4): source snapshots (`/opt/conf/gff/`
+  system read-only, `${XDG_DATA_HOME:-~/.local/share}/gff/snapshots/` user — the only
+  snapshot dir gff writes; never under `~/opt`, a symlink into the repo worktree) →
+  live repo file (git-style discovery, `[gff] source` redirect) →
   overrides (`/var/opt/conf/gff/config.yaml`, `~/.config/gff/config.yaml`); sparse
   per-key merge; winning-layer attribution.
 - `internal/registry` — `~/.config/gff/sources.yaml`; exclusive area claims; snapshots.
@@ -99,7 +103,10 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
   `git config gff.source` redirect overrides the probe entirely.
 - **F6 machine registry:** `gff install` registers/refreshes {name, url, areas,
   commit} + snapshot; exclusive area claims.
-- **F7 shell/bridge interface:** `gff enabled <key>` (0=on, 1=off, 2=unknown key);
+- **F7 shell/bridge interface:** `gff enabled <key>` (0=on, 1=off, 2=unknown key,
+  unknown option id, or type the verb can't express — any exit ≥2 is a
+  usage/definition error and shell callers MUST treat it as fail-open; never use
+  `gff enabled` as an install gate — that's `gff_on`'s job);
   `gff selected <key> <option-id>` (0=selected, 1=not, 2=unknown key/id);
   `gff export --format shell|dotenv|json|yaml [-o <file>]` — shell/dotenv emit
   `GFF_<AREA>_<COMPONENT>_<FEATURE>=true|false|<id[,id…]>` (dots/dashes →
@@ -110,7 +117,7 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
   language bridge).
 - **F8 write path:** `set`/`unset`/TUI mutate only `~/.config/gff/config.yaml`
   (created 0600 on first write, parent dirs as needed).
-- **F9 install.sh instrumentation:** ~36 bool flags per design §4, all default on;
+- **F9 install.sh instrumentation:** 43 bool flags per plan P2-T1, all default on;
   gff built immediately after the goenv/Go step; every gate fails open; PS phases
   receive `GFF_*` env and treat unset as on.
 - **F10 TUI:** tree nav, description/default/effective/winning-layer per row, bool
@@ -134,14 +141,15 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
 | F6 registry | second claim of owned area rejected, owner named | re-install same repo (refresh) | moved clone (snapshot still serves) | registry tests |
 | F7 export | emits every key, correct mangling | injection via description text (values are bool literals / kebab ids only) | choice flags export selected ids CSV | golden-file test |
 | F8 writes | only user override mtime changes | any write to repo/system files | no `~/.config/gff` dir yet | fs-mock test |
-| F9 gating | `false` ⇒ step body skipped, SKIP line printed | enabled steps changing behavior | gff binary absent ⇒ all run | bats-style harness on an extracted gate function |
+| F9 gating | `false` ⇒ step body skipped, SKIP line printed | enabled steps changing behavior | gff binary absent ⇒ all run | `opt/lib/gff_test.sh` driver on the gate function (bash + dash) |
 | F10 TUI | toggle writes override; `q` without change writes nothing | writes on navigation | terminal too small | teatest golden frames |
 | F11 go-run + `--source` | `--source` path & registered name resolve from foreign CWD; `go run .` entrypoint works | network fetch during resolution | unknown source name/path (exit 2) | CI `go run . version` smoke + `cmd/read_test.go` cases |
 
 ## 6. Verification harness
 
 - Go: table-driven unit tests per package; resolver matrix (every layer × bool/choice ×
-  set/unset); ≥90% coverage (gff's own CI bar; the repo `sdk/` floor is 60%);
+  set/unset); ≥90% overall coverage, ≥95% `internal/resolve`, ≥90% `internal/schema`
+  (gff's own CI bars, enforced per-package; the repo `sdk/` floor is 60%);
   `go vet` + lint in CI; binary-level e2e harness + adversarial suite + scripted
   demo per plan §7.
 - Golden files: `export --shell` output, `gen` output, `list --json`.

@@ -21,5 +21,12 @@ The chosen shape; boundaries; what each unit does, how it's used, what it depend
 
 ## 6. Rollback
 
+## 7. Evidence expectations
+How "it works" will be *shown*, not just asserted, during the build: name the proof
+classes the eventual plan must capture (test-run captures, transcripts, demo
+recordings, real-machine evidence) and any per-feature demo worth planning now. The
+plan realizes this as `plans/<slug>/evidence/` folders — deciding the expectations at
+design time is what makes the plan's validation section complete.
+
 > Produced via `superpowers:brainstorming` (or an architecture-team `Workflow` for large work).
 > Register the objective in `../index.md`. The matching spec goes in `../specs/<slug>.md`.

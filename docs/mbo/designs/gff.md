@@ -26,8 +26,10 @@ Verified facts grounding this design:
 - `sdk/` is the home for Go CLIs; `sdk/gss` is the structural template (cobra `cmd/`,
   `internal/` with a mockable runner, `build.sh`, `internal/version` via ldflags,
   `go install github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>`).
-- `~/opt` is a symlink to the repo's `opt/` (created by `install.sh`), so a repo-shipped
-  defaults snapshot under `opt/conf/` is visible at `~/opt/conf/` on installed machines.
+- `~/opt` is a symlink to the repo's `opt/` (created by `install.sh`) — which means
+  gff must NEVER write under it: anything written there lands in the git worktree
+  (`!opt/**` tracks it) and dirties every machine's checkout. Writable state lives
+  under `~/.config/gff/` and `${XDG_DATA_HOME:-~/.local/share}/gff/` only.
 - No protobuf toolchain exists in the repo yet; gff introduces it.
 - `install.sh` installs the Go toolchain (goenv + pinned `.go-version`) *before* the
   `sdk/` builds — so gff can be built mid-install and gate every step after it.
@@ -122,8 +124,10 @@ the proto — defeats generalization; the engine must stay data-free.
   names, unique paths, unique/kebab option ids, homogeneous option value types,
   `single`-mode arity).
 - **`internal/resolve`** — the layer chain (lowest → highest):
-  1. source-default snapshots: `/opt/conf/gff/<source>.yaml` (system), then
-     `~/opt/conf/gff/<source>.yaml` (user/repo-shipped);
+  1. source-default snapshots: `/opt/conf/gff/<source>.yaml` (system,
+     admin-provisioned, read-only to gff), then
+     `${XDG_DATA_HOME:-~/.local/share}/gff/snapshots/<source>.yaml` (user — the only
+     snapshot dir `gff install` writes; never under the `~/opt` repo symlink);
   2. live repo defaults: the repo flag file (probe `.gff/features.yaml` →
      `.github/gff/features.yaml`) when CWD is inside a registered repo (git-style
      upward discovery; `[gff] source` git-config redirect honored);
@@ -152,7 +156,7 @@ the proto — defeats generalization; the engine must stay data-free.
   network fetch at resolution time.
 - **Dotfiles instrumentation** — `.github/gff/features.yaml` (probe path 2; no new
   repo-root entry) enumerating
-  ~36 flags (all default on) across `install.shell.*`, `install.pkg.*`,
+  43 flags (all default on) across `install.shell.*`, `install.pkg.*`,
   `install.tools.*`, `install.runtime.*`, `install.ai.*`, `install.sdk.*`,
   `install.fonts.*`, `install.network.*`, and `install.windows.*` (incl.
   `install.windows.wispr-flow`). `install.sh` builds gff right after the Go toolchain,
@@ -307,6 +311,26 @@ with a decided shape:
 Escalate to the FFI approach only if a consumer needs live in-process resolution
 without a snapshot; reassess then.
 
+## 9. Evidence expectations (added 2026-07-25)
+
+"It works" must be shown, not asserted, as the build advances — each merged component
+carries captured proof so later phases build on demonstrated behavior. Proof classes
+the plan must realize (plan §7.6: `plans/gff/evidence/` — one folder per feature
+F1–F11, plus `e2e/` and `demo/`):
+
+- **Test-run captures** — every task's done-when command `tee`'d to a dated file,
+  committed with the code (unit gates, coverage output, lint runs).
+- **Harness transcripts** — full IH-\*/IA-\* e2e runs (the happy-path and adversarial
+  suites) as run logs.
+- **Demo recordings** — the VD-1 scripted walkthrough transcript and, post-P3, a short
+  TUI capture.
+- **Real-machine evidence** — the P2-T5 `install.sh` run with
+  `install.windows.wispr-flow=false` showing the SKIP line on WSL.
+
+This section exists because the gap was found late here: evidence retention is now a
+standing design-template section (`templates/design.md` §7) so future objectives plan
+it up front.
+
 > Produced via `superpowers:brainstorming`. Registered in `../index.md`; spec at
 > `../specs/gff.md`. §7 prior-art survey added 2026-07-25 at user request. Choice type
 > generalized 2026-07-25: single (radio) / multi (checkbox) modes, stable string
@@ -319,3 +343,10 @@ without a snapshot; reassess then.
 > keeping its root clean); `export` gained a `yaml` format; buf dropped for raw
 > protoc behind `make gff-proto`; validation raised to a 90% unit bar + binary-level
 > e2e harness + scripted demo (plan §7).
+> 2026-07-25 (team review, PR #181): user snapshot layer moved off the `~/opt` repo
+> symlink to `${XDG_DATA_HOME:-~/.local/share}/gff/snapshots/` (installs must never
+> dirty a worktree); `gff.sh` sourced at the top of install.sh (pre-bootstrap gates
+> would otherwise fail closed); exit-2 defined as fail-open usage error; frozen
+> `ResolvedJSON` wire DTO, `SourceLookup` seam, `ErrUnknownOption`/`ErrWrongFlagType`
+> sentinels added; flag count corrected to 43. Open decision: the `install` area name
+> (see PR #181 review thread).

@@ -44,9 +44,14 @@ output is committed), cobra, `gopkg.in/yaml.v3`, bubbletea
 - Env mangling: uppercase, `.` and `-` → `_` (e.g. `install.windows.wispr-flow` →
   `GFF_INSTALL_WINDOWS_WISPR_FLOW`).
 - `gff enabled` / `gff selected` exit codes: 0=on/selected, 1=off/not-selected,
-  2=unknown key or option id. All other verbs: 0 ok, 1 error.
-- Writes go ONLY to `~/.config/gff/` (config.yaml 0600, sources.yaml). Never write
-  repo or system files.
+  2=unknown key, unknown option id, or a key whose type the verb cannot express
+  (e.g. `enabled` on a choice — diagnostic on stderr). Any exit ≥2 is a
+  *usage/definition* error, not a value: shell callers MUST treat it as fail-open
+  (run the step). All other verbs: 0 ok, 1 error.
+- Writes go ONLY to `~/.config/gff/` (config.yaml 0600, sources.yaml) and the user
+  snapshot dir `${XDG_DATA_HOME:-$HOME/.local/share}/gff/snapshots/` (`gff install`).
+  NEVER under `~/opt/` — that is a symlink into the dotfiles repo worktree, so writing
+  there dirties a tracked tree. Never write repo or system files.
 - Every shell edit obeys `docs/mbo/specs/shell-portability.md`; run `make lint-shell`
   and `make lint-portability` before each shell commit. All shell gates FAIL OPEN.
 - Per-directory docs rule: new documented dirs get `AGENTS.md` + `CLAUDE.md → AGENTS.md`.
@@ -179,15 +184,20 @@ shell.zsh.plugins: [fzf, starship]  # multi-select: zero or more option ids
 
 `~/.config/gff/sources.yaml` = YAML encoding of `SourceRegistry`
 (`sources: [{name, url, areas, commit}]`). Snapshots are verbatim copies of the
-source's features file at `<layer>/gff/<source-name>.yaml`.
+source's features file at `<snapshot-dir>/<source-name>.yaml` — the `Paths` snapshot
+dirs are leaf directories; nothing nests below them.
 
 ### 3.3 Go interfaces
 
 ```go
-// internal/paths
+// internal/paths — snapshot dirs are LEAF directories holding <source-name>.yaml
+// files directly (no nesting). gff NEVER writes SystemSnapshotDir; UserSnapshotDir
+// is the ONLY snapshot dir `gff install` writes — it lives under XDG data, NOT under
+// ~/opt (which is a symlink into the dotfiles repo worktree; writing there would
+// dirty a tracked tree — see review finding on PR #181).
 type Paths struct {
-    SystemSnapshotDir string // /opt/conf/gff
-    UserSnapshotDir   string // $HOME/opt/conf/gff
+    SystemSnapshotDir string // /opt/conf/gff (admin-provisioned, read-only to gff)
+    UserSnapshotDir   string // ${XDG_DATA_HOME:-$HOME/.local/share}/gff/snapshots
     SystemOverride    string // /var/opt/conf/gff/config.yaml
     UserOverride      string // $HOME/.config/gff/config.yaml
     RegistryFile      string // $HOME/.config/gff/sources.yaml
@@ -197,6 +207,7 @@ func Default() (Paths, error)
 
 // internal/gitx — mockable like gss's runner
 type Runner interface { Output(dir string, args ...string) (string, error) }
+type ExecRunner struct{} // real impl: `git -C <dir> <args...>` via os/exec
 func RepoRoot(startDir string) (string, bool)              // walk up to .git (dir OR file)
 func SourcePath(r Runner, repoRoot string) string          // `git config gff.source` redirect,
                                                            // else probe .gff/features.yaml,
@@ -216,14 +227,38 @@ type Resolved struct {
     Value   *gffv1.Value   // effective value
     Layer   Layer          // layer that set the effective value (Def layers => default)
 }
-var ErrUnknownKey = errors.New("unknown flag key")
+var ErrUnknownKey    = errors.New("unknown flag key")
 var ErrUnknownSource = errors.New("unknown source")
+var ErrUnknownOption = errors.New("unknown option id")
+var ErrWrongFlagType = errors.New("flag type not expressible by this verb") // e.g. `enabled` on a choice
+
+// SourceLookup is the seam that lets --source <registered-name> resolve without
+// resolve importing registry (registry implements it; dependency stays registry→resolve-free).
+type SourceLookup interface { Snapshot(name string) (path string, ok bool) }
+
 type Resolver struct {
     P paths.Paths; R gitx.Runner
-    Source string // "" = CWD discovery; else a registered source name or local repo path
+    S SourceLookup // nil ⇒ named --source lookups return ErrUnknownSource
+    Source string  // "" = CWD discovery; else registered source name or local repo path
+                   // (path if it contains a separator or stats as a dir; else name)
 }
+func New(p paths.Paths, r gitx.Runner, source string) *Resolver // S wired by cmd via registry
 func (r *Resolver) All() ([]Resolved, error)          // sorted by Feature.Path
 func (r *Resolver) Resolve(key string) (Resolved, error)
+func (l Layer) String() string // "none","system-snapshot","user-snapshot","repo-live","system-override","user-override"
+
+// ResolvedJSON is the FROZEN wire shape for `list --json` and `export --format
+// json|yaml` (the cross-language bridge). Never serialize Resolved directly:
+// protoc-gen-go oneof members are interface-typed and break encoding/json round-trips.
+type ResolvedJSON struct {
+    Path        string          `json:"path"`
+    Description string          `json:"description"`
+    Type        string          `json:"type"`    // "bool" | "choice"
+    Layer       string          `json:"layer"`   // Layer.String()
+    Value       json.RawMessage `json:"value"`   // protojson of gffv1.Value (int64 renders as string)
+    Feature     json.RawMessage `json:"feature"` // protojson of gffv1.Feature
+}
+func (r Resolved) JSON() (ResolvedJSON, error) // yaml format = same DTO re-encoded
 
 // internal/registry
 type Registry struct { P paths.Paths }
@@ -231,8 +266,12 @@ var ErrAreaClaimed = errors.New("area already claimed")     // wraps owner name
 func (g *Registry) Install(repoRoot, name, url, commit string, ff *gffv1.FeatureFile) error
 func (g *Registry) Sources() ([]*gffv1.Source, error)
 
-// pkg/gff — public SDK
-func Bool(key string) (bool, error)                 // full-chain resolve from Default() paths
+// pkg/gff — public SDK. Options must not leak internal types (a WithPaths(paths.Paths)
+// option would be uncallable outside the module — import-of-internal compile error).
+type Option func(*config)
+func WithRoot(dir string) Option          // derive every layer path under dir (tests: t.TempDir())
+func WithSource(nameOrPath string) Option // same semantics as the --source flag
+func Bool(key string, opts ...Option) (bool, error) // full-chain resolve from Default() paths
 func Selected(key string) ([]string, error)         // effective selected option ids
 func IsSelected(key, optionID string) (bool, error) // one radio/checkbox state; unknown id = error
 // typed payloads of the selected options (feature's value type is lint-homogeneous;
@@ -252,10 +291,12 @@ gff selected <key> <id>  -> no output; exit 0 selected / 1 not / 2 unknown key O
 gff set <key> <value>    -> writes ~/.config/gff/config.yaml (0600); bool: true|false;
                             choice: id or comma-list of ids (single mode: exactly one)
 gff unset <key>          -> removes key from user override
-gff list [--json]        -> table: PATH TYPE VALUE LAYER DESCRIPTION; --json = []Resolved
+gff list [--json]        -> table: PATH TYPE VALUE LAYER DESCRIPTION; --json = []ResolvedJSON (§3.3)
 gff lint [path]          -> lints features file (default: discovered repo file); exit 1 on findings
 gff export --format shell|dotenv|json|yaml [-o <file>]
-                         -> shell:  eval-able GFF_<MANGLED>=<value> lines (stdout)
+                         -> -o semantics: truncate-and-overwrite an existing target;
+                            unwritable target => clean error, no partial write
+                            shell:  eval-able GFF_<MANGLED>=<value> lines (stdout)
                             dotenv: identical KEY=value lines, default -o .env; must
                                     parse with dotenv-family libs (hashicorp
                                     go-envparse, joho/godotenv, python-dotenv, …)
@@ -309,6 +350,11 @@ invoking `powershell.exe`; `lib/gff.ps1` provides `Test-GffOn "install.windows.x
 
 Tasks are bite-sized; every code step shows the real code or the exact content sketch a
 skilled Go engineer needs. Run all Go commands from `sdk/gff/`.
+
+**Evidence rule (applies to every task):** each task's final PASS step is *captured*,
+not just run — pipe the gate command through `tee` into the owning feature's evidence
+folder (`docs/mbo/plans/gff/evidence/` — layout in §7.6) and commit the capture with
+the task's commit. A task without its evidence file is not done.
 
 ---
 
@@ -393,7 +439,8 @@ PATH="${PWD}/.bin:${PATH}" protoc \
 
 **Interfaces:** consumes `gen/gffv1`; produces §3.3 `LoadFeatureFile`, `LoadOverrides`, `Lint`.
 
-- [ ] Failing tests first — `schema_test.go` (temp-dir fixtures):
+- [ ] Failing tests first — `schema_test.go` (temp-dir fixtures; shared helper:
+      `func writeFile(t *testing.T, name, content string) string { p := filepath.Join(t.TempDir(), name); if err := os.WriteFile(p, []byte(content), 0o644); err != nil { t.Fatal(err) }; return p }`):
 
 ```go
 func TestLoadFeatureFileYAML(t *testing.T) {
@@ -441,11 +488,13 @@ func TestLoadOverridesMissingFile(t *testing.T) { // sparse layer absent => empt
   `area.`; clean file ⇒ no findings.
 - [ ] `go test ./internal/schema/` → FAIL.
 - [ ] Implement. `LoadFeatureFile`: read file; if `.json` → `protojson.Unmarshal`;
-      else `yaml.Unmarshal` into `any`, normalize map keys to strings
-      (`map[string]any` recursively, ints→strings for option keys), `json.Marshal`,
+      else `yaml.Unmarshal` into `any`, normalize nested map keys to strings
+      (yaml.v3 already yields `map[string]any` at the top level), `json.Marshal`,
       `protojson.Unmarshal` with `DiscardUnknown: false`. `LoadOverrides`:
       `os.IsNotExist ⇒ (map{}, nil)`; yaml scalar map; bool→BoolValue,
-      int→ChoiceValue, else error naming the key. `Lint`: iterate with a
+      string→ChoiceSelection{[s]}, []string→ChoiceSelection{s…}, anything else
+      (int, float, nested map, mixed-type list) ⇒ error naming the key and the
+      offending type. `Lint`: iterate with a
       `map[string]bool` seen-set; regex `^[a-z0-9]+(-[a-z0-9]+)*$` per segment;
       negative prefixes from Global Constraints on the last segment.
 - [ ] `go test ./internal/schema/ -cover` → PASS, ≥90% for this package.
@@ -482,13 +531,16 @@ func (f fakeRunner) Output(dir string, args ...string) (string, error) { return 
 
 **Files:** create `internal/resolve/{resolve.go,resolve_test.go}`.
 
-**Interfaces:** consumes schema/paths/gitx; produces §3.3 `Resolver`, `Resolved`,
-`Layer`, `ErrUnknownKey`.
+**Interfaces:** consumes schema/paths/gitx (+ the `SourceLookup` seam, satisfied by
+registry in P1-T6); produces §3.3 `Resolver`, `New`, `Resolved`, `ResolvedJSON`,
+`Layer` (+`String()`), `ErrUnknownKey`, `ErrUnknownSource`, `ErrUnknownOption`,
+`ErrWrongFlagType`.
 
 - [ ] Failing matrix test. Helper builds a full fake world in `t.TempDir()`:
 
 ```go
-// world lays out: sysSnap/gff/src.yaml, userSnap/gff/src.yaml, repo/.gff/features.yaml,
+// world lays out: sysSnap/src.yaml, userSnap/src.yaml, repo/.gff/features.yaml,
+// (snapshot dirs are leaf dirs per §3.3 — no gff/ nesting below them)
 // sysOverride config.yaml, userOverride config.yaml — each optional per case.
 type world struct{ sysSnap, userSnap, repo, sysOvr, usrOvr string } // file contents ("" = absent)
 func newResolver(t *testing.T, w world) *Resolver { /* writes files, returns Resolver with Paths pointing at temp dirs, WorkDir=repo */ }
@@ -507,8 +559,10 @@ func newResolver(t *testing.T, w world) *Resolver { /* writes files, returns Res
   8. no repo (WorkDir outside any git repo) ⇒ snapshots+overrides still resolve
   9. `All()` sorted by path; sparse overrides never invent keys
   10. `Source: <local path>` resolves that repo's live file even though WorkDir is
-      elsewhere; `Source: <registered name>` resolves from that source's snapshot
-      from any CWD; unknown name/path ⇒ `ErrUnknownSource`
+      elsewhere; `Source: <registered name>` resolves via a **fake `SourceLookup`**
+      (the seam in §3.3 — registry doesn't exist until P1-T6; the real
+      registered-name path is asserted in P1-T7's `cmd/read_test.go` where the
+      registry is wired in); `S == nil` or unknown name/path ⇒ `ErrUnknownSource`
 - [ ] `go test ./internal/resolve/` → FAIL.
 - [ ] Implement: load def layers in order (every `*.yaml|*.json` in SystemSnapshotDir,
       then UserSnapshotDir, then live file via `gitx.RepoRoot(P.WorkDir)`+`SourcePath`);
@@ -530,18 +584,25 @@ func newResolver(t *testing.T, w world) *Resolver { /* writes files, returns Res
       claiming an owned area ⇒ `ErrAreaClaimed` and error text contains owner name;
       `Sources()` on missing registry ⇒ empty, nil error.
 - [ ] Implement (yaml encode of `SourceRegistry` via the same protojson-normalize
-      trick as schema; `os.MkdirAll` + atomic write temp+rename).
+      trick as schema; `os.MkdirAll` + atomic write: `os.CreateTemp` in the target
+      dir — unique temp name per writer — then `os.Rename`; when P1-T8 extracts the
+      shared `internal/overrides` atomic-write helper, migrate this call to it).
+      `Registry` also implements the §3.3 `resolve.SourceLookup` seam
+      (`Snapshot(name) (path, ok)` over sources.yaml + UserSnapshotDir).
 - [ ] `go test ./internal/registry/` → PASS. Commit:
       `feat(gff): machine source registry with exclusive area claims + snapshots`
 
-### P1-T7: read verbs — get / enabled / list / lint
+### P1-T7: read verbs — get / enabled / selected / list / lint
 
 **Files:** create `cmd/{get.go,enabled.go,selected.go,list.go,lint.go}` + `cmd/read_test.go`.
 
-**Interfaces:** consumes Resolver; produces CLI contract §3.4. All verbs build
-`resolve.Resolver{P: paths.Default(), R: gitx.ExecRunner{}}`; tests inject temp
-paths via an unexported `newResolver` hook variable (`var newResolver = defaultResolver`
-in root.go, swapped in tests — same pattern gss uses for its runner).
+**Interfaces:** consumes Resolver; produces CLI contract §3.4. All verbs build the
+resolver via `p, err := paths.Default()` then `resolve.New(p, gitx.ExecRunner{},
+sourceFlag)` (propagating the error), wiring `S` to `&registry.Registry{P: p}`; tests
+inject temp paths via an unexported `newResolver` hook variable
+(`var newResolver = defaultResolver` in root.go, swapped in tests — same pattern gss
+uses for its runner). `list --json` and every machine-readable output serialize
+`ResolvedJSON` (never `Resolved` — §3.3).
 
 - [ ] Failing tests: `gff get k` prints `true\n` / choice prints `apt\n` (comma-joined
       ids when multi); `selected k apt` on/off/unknown-id (exit 0/1/2); unknown key ⇒
@@ -554,9 +615,12 @@ in root.go, swapped in tests — same pattern gss uses for its runner).
       repo from an unrelated CWD, `--source <registered-name>` resolves via its
       snapshot, unknown source ⇒ exit-2 sentinel (`ErrUnknownSource` maps like
       `ErrUnknownKey` in main.go).
-- [ ] Implement the four files (~30 lines each). Exit-code mapping lives ONLY in
-      `main.go`: `errors.Is(err, resolve.ErrUnknownKey) ⇒ 2`, else non-nil ⇒ 1.
-- [ ] `go test ./cmd/` → PASS. Commit: `feat(gff): get/enabled/list/lint verbs`
+- [ ] Implement the five files (~30 lines each). Exit-code mapping lives ONLY in
+      `main.go`: `switch { case errors.Is(err, resolve.ErrUnknownKey),
+      errors.Is(err, resolve.ErrUnknownOption), errors.Is(err, resolve.ErrUnknownSource),
+      errors.Is(err, resolve.ErrWrongFlagType): exit 2; case err != nil: exit 1 }`.
+      `enabled` on a choice-typed key returns `ErrWrongFlagType` (⇒ exit 2 + stderr).
+- [ ] `go test ./cmd/` → PASS. Commit: `feat(gff): get/enabled/selected/list/lint verbs`
 
 ### P1-T8: write verbs — set / unset
 
@@ -567,9 +631,16 @@ in root.go, swapped in tests — same pattern gss uses for its runner).
       flag ⇒ error, file untouched; `set` unknown
       key ⇒ ErrUnknownKey; `unset` removes key, keeps others; round-trip
       `set→get` agrees; NO test writes outside `t.TempDir()`.
-- [ ] Implement: read-modify-write `LoadOverrides` map + yaml marshal, atomic
-      temp+rename, `os.Chmod(0600)`; validate via Resolver before writing.
-- [ ] PASS → Commit: `feat(gff): set/unset writing the user override only`
+- [ ] Implement as `internal/overrides.Write(p paths.Paths, key string, v *gffv1.Value)`
+      (+`Unset`) with `set.go`/`unset.go` as thin callers — P3's TUI reuses this same
+      writer, so extracting it NOW keeps the §6.1 leaves disjoint. Recipe:
+      read-modify-write `LoadOverrides` map + yaml marshal; atomic write via
+      `f, _ := os.CreateTemp(dir, ".config-*.yaml.tmp")` (unique name per writer —
+      a fixed temp name would let concurrent writers interleave before rename),
+      write + `f.Chmod(0600)` + close, then `os.Rename(f.Name(), target)`; validate
+      via Resolver before writing. P1-T6's registry/snapshot writes use this same
+      helper.
+- [ ] PASS → Commit: `feat(gff): overrides writer + set/unset (user override only)`
 
 ### P1-T9: export + install verbs
 
@@ -582,9 +653,12 @@ in root.go, swapped in tests — same pattern gss uses for its runner).
 
 ```
 GFF_INSTALL_AI_CLAUDE=true
-GFF_INSTALL_PKG_MANAGER=apt
+GFF_INSTALL_PKG_MANAGER=auto
 GFF_INSTALL_WINDOWS_WISPR_FLOW=false
 ```
+
+      (`auto` because the §3.2 fixture's default selection is `auto` and this world
+      defines no choice override — the golden must be traceable to the fixture);
 
       (values are bool literals or option ids; ids are lint-constrained
       `^[a-z0-9]+(-[a-z0-9]+)*$` so no quoting/injection vector exists; assert
@@ -606,14 +680,24 @@ GFF_INSTALL_WINDOWS_WISPR_FLOW=false
 **Files:** create `pkg/gff/{gff.go,gff_test.go}`, `.github/workflows/gff-ci.yml`.
 
 - [ ] Failing test: `pkg/gff` `Bool`/`Selected`/`IsSelected`/`StringValues` agree with a Resolver over the same
-      temp world (SDK takes an optional `WithPaths(p)` functional option so the test
-      can point it at temp dirs; default = `paths.Default()`).
+      temp world, using `WithRoot(t.TempDir())` (§3.3 — exported options only; never
+      a `WithPaths(internal/paths.Paths)` that external importers couldn't call).
 - [ ] Implement thin wrapper. PASS.
 - [ ] `gff-ci.yml`: on PR paths `sdk/gff/**`: setup-go from `.go-version`, run
       `go run . version` (zero-install entrypoint smoke — proves the module stays
-      `go run`-able), then `go vet ./... && go test ./... -coverprofile=cover.out`, fail if
-      `go tool cover -func=cover.out | tail -1` < 90%, then
-      `sudo apt-get install -y protobuf-compiler` and `make gff-proto-check` (regen clean).
+      `go run`-able), then `go vet ./...` and
+      `go test ./... -coverpkg=./... -coverprofile=cover.out`, then the RUNNABLE
+      per-package gate (not prose — `tail -1` alone compares nothing):
+
+```sh
+cov() { go tool cover -func=cover.out | awk -v pat="$1" '$0 ~ pat {gsub(/%/,"",$NF); print $NF}'; }
+awk -v t="$(cov '^total:')" 'BEGIN { exit (t+0 < 90) }'                    # overall ≥90
+awk -v r="$(cov 'internal/resolve/')"  'BEGIN { exit (r+0 < 95) }'         # resolve ≥95 (per-func min)
+awk -v s="$(cov 'internal/schema/')"   'BEGIN { exit (s+0 < 90) }'         # schema ≥90 (per-func min)
+```
+
+      then `sudo apt-get install -y protobuf-compiler` and `make gff-proto-check`
+      (regen clean).
 - [ ] Full `go test ./... -cover` ≥90% total. Commit:
       `feat(gff): public SDK + CI (vet, tests, coverage gate, proto-regen check)`
       → all green + `bash build.sh` installs a working `gff version`.
@@ -626,11 +710,13 @@ modify `.github/workflows/gff-ci.yml` (add `e2e` job) and root `Makefile` (`gff-
 Unit tests exercise packages; this harness exercises the **compiled binary** the way a
 user does. `scripts/e2e.sh` builds `gff` into a temp dir, then runs
 `go test -tags e2e ./e2e/`, which drives the binary via `os/exec` against a fake
-`$HOME` and temp git repos (real `git`, zero network). Every §7.2 scenario (IH-\*,
-IA-\*) is one named subtest — the scenario list in §7.2 is the authoritative spec.
+`$HOME` and temp git repos (real `git`, zero network; set `HOME`, `XDG_DATA_HOME`,
+`GIT_CONFIG_GLOBAL`, and `GIT_CONFIG_NOSYSTEM=1` in the child env so the real user's
+git/gff state can never leak in). Every §7.2 scenario (IH-\*, IA-\*) is one named
+subtest — the scenario list in §7.2 is the authoritative spec.
 
 - [ ] Failing subtests first: happy-path chain IH-1…IH-10 as ordered subtests sharing
-      one world; adversarial IA-1…IA-12 each in an isolated world.
+      one world; adversarial IA-1…IA-15 each in an isolated world.
 - [ ] `make gff-e2e` runs the same thing locally; CI `e2e` job runs after the unit job.
 - [ ] Commit: `test(gff): binary-level e2e harness — happy path + adversarial suite`
       → **P1 done-when gate:** P1-T10 all green **plus** e2e harness green.
@@ -708,8 +794,19 @@ gff_skip_msg() { echo "SKIP (gff: $1=false)"; }
 **Files:** modify `install.sh`; modify `sdk/gff/build.sh` nothing (already installs to
 `~/opt/bin`).
 
-- [ ] Insert the gff bootstrap immediately AFTER the goenv/Go block (line ~309),
-      BEFORE pyenv:
+- [ ] Source the helper FIRST — at the top of install.sh, immediately after
+      `BASE_DIR` is set and BEFORE any gated block:
+
+```bash
+# gff_on is env-only and fail-open; it must exist before the FIRST gate. Sourcing
+# it here (not at the bootstrap point) is load-bearing: a gate that calls an
+# undefined gff_on gets exit 127, takes the else branch, and SKIPS the step —
+# failing CLOSED on exactly the fresh machines gff must be harmless on.
+. "${BASE_DIR}/opt/lib/gff.sh"
+```
+
+- [ ] Insert the gff bootstrap (build + export only — the helper is already sourced)
+      immediately AFTER the goenv/Go block (line ~309), BEFORE pyenv:
 
 ```bash
 # build gff first so every later step can be feature-flag gated (fail-open:
@@ -720,7 +817,6 @@ fi
 if [ "$gff_bootstrap_ok" = "true" ] && [ -x "${HOME}/opt/bin/gff" ]; then
   eval "$(cd "${BASE_DIR}" && "${HOME}/opt/bin/gff" export --shell 2>/dev/null || true)"
 fi
-. "${BASE_DIR}/opt/lib/gff.sh"
 ```
 
 - [ ] Wrap each existing block in-place (NO reordering, NO logic changes inside) with
@@ -744,6 +840,8 @@ else gff_skip_msg install.tools.sops; fi
   next run. (`install.sdk.gff` gates only the LATER duplicate build guard —
   the bootstrap build itself is never gated.)
 - [ ] Verify: `bash -n install.sh`; `make lint-shell && make lint-portability` clean;
+      `grep -n 'opt/lib/gff.sh' install.sh` shows the source line BEFORE the first
+      `gff_on` call (the fail-closed guard above);
       manual: `GFF_INSTALL_TOOLS_SOPS=false bash -c '. opt/lib/gff.sh; gff_on install.tools.sops || gff_skip_msg install.tools.sops'` prints the SKIP line.
 - [ ] Commit: `feat(install): gate every install.sh component behind gff flags (fail-open)`
 
@@ -811,9 +909,14 @@ function Test-GffOn([string]$Key) {
       checkbox list for `multi` (from `ChoiceDefault.Options`, showing id +
       description + typed value); `q` after no toggles writes nothing (mtime unchanged).
 - [ ] Implement: `Model{items []resolve.Resolved, cursor, expanded map[string]bool, w io.Writer}`;
-      reuse `cmd`'s resolver hook; writes go through the same code path as `gff set`
-      (extract `internal/overrides.Write(paths, key, value)` from P1-T8 if not already
-      shared — refactor `set.go` to call it, tests stay green).
+      reuse `cmd`'s resolver hook; writes go through `internal/overrides.Write` —
+      already extracted in P1-T8, so this leaf only CONSUMES it (no `set.go` refactor
+      here; the sole shared-file edit this leaf makes is the `cmd/root.go` TTY
+      dispatch line declared in §6.1).
+- [ ] Coverage note: teatest cases are ordinary `go test` tests driving the bubbletea
+      `Model` in-process, so they count toward `cover.out` like any unit test; every
+      `Model` conditional (nav, toggle, picker, quit-no-write) must be exercised by
+      at least one case — the same per-package CI gate measures it.
 - [ ] `go test ./... -cover` ≥90% overall still. Commit:
       `feat(gff): bubbletea TUI — browse, provenance, toggle` → **P3 done-when gate.**
 
@@ -885,12 +988,14 @@ step echoes what it is about to prove. It runs against a scratch `$HOME`
 | `p1-engine` | `sdk/gff/**` (excl. `internal/tui`, `cmd/gen.go`), `.github/workflows/gff-ci.yml` | — | gff-ci green: vet+tests, ≥90% cover, regen clean, e2e harness green; `build.sh` installs working binary | **yes (base)** |
 | `p2-instrument` | `.github/gff/**`, `opt/lib/gff.sh*`, `install.sh`, `opt/bin/install_windows.sh`, `opt/Desktop/Apps/scripts/{lib/gff.ps1,setup-apps.ps1,setup-elevated.ps1}` | `p1-engine` (§3.4 CLI, §3.5 shell contract) | lint-shell + lint-portability clean; gff lint clean; P2-T5 human evidence | no |
 | `vd-demo` | `sdk/gff/scripts/demo.sh` | `p1-engine` + `p2-instrument` (TUI segment additionally `p3-tui`) | demo transcript + evidence posted on the PR (§7.3, VD-1) | no |
-| `p3-tui` | `sdk/gff/internal/tui/**`, `sdk/gff/cmd/tui.go` | `p1-engine` (§3.3 Resolver, overrides writer) | teatest suite green; overall cover ≥90% | no |
+| `p3-tui` | `sdk/gff/internal/tui/**`, `sdk/gff/cmd/tui.go`, `sdk/gff/cmd/root.go` (TTY-dispatch line only) | `p1-engine` (§3.3 Resolver, `internal/overrides.Write`) | teatest suite green; overall cover ≥90% | no |
 | `p4-gen` | `sdk/gff/cmd/gen.go`, `cmd/gen_test.go`, `cmd/testdata/gen.golden` | `p1-engine` (§3.3 pkg/gff) | golden test green; generated output vets | no |
 
-(`p3-tui` and `p4-gen` both add one `AddCommand` line in `cmd/` — each registers from
-its own file via `init()`, so no shared-file edits; `p2/p3/p4` are pairwise disjoint
-and can run in parallel once `p1-engine` merges.)
+(`p4-gen` adds only `cmd/gen.go`, registered via its own `init()` — no shared-file
+edits. `p3-tui` additionally edits `cmd/root.go` (the bare-`gff` TTY dispatch line) —
+that single declared line is the DAG's only shared-file edit; the `overrides.Write`
+extraction lives in P1-T8 so p3 merely consumes it. `p2/p3/p4` are otherwise pairwise
+disjoint and can run in parallel once `p1-engine` merges.)
 
 ## 7. End-to-end validation plan
 
@@ -904,9 +1009,9 @@ green.
 
 | Scope | Bar | Enforced by |
 | :-- | :-- | :-- |
-| `internal/resolve` | ≥95% | P1-T5 gate |
-| `internal/schema` | ≥90% | P1-T3 gate |
-| `sdk/gff` overall | **≥90%** | `gff-ci.yml` cover gate (P1-T10) |
+| `internal/resolve` | ≥95% | `gff-ci.yml` per-package check (P1-T10; local gate at P1-T5) |
+| `internal/schema` | ≥90% | `gff-ci.yml` per-package check (P1-T10; local gate at P1-T3) |
+| `sdk/gff` overall | **≥90%** | `gff-ci.yml` cover gate (P1-T10, `-coverpkg=./...`) |
 | repo-wide `sdk/` floor | 60% | unchanged; gff deliberately exceeds it |
 
 Rationale: `resolve` + `schema` hold nearly all branching logic, so they carry the
@@ -956,10 +1061,19 @@ exit code, message names the offender, zero partial writes):**
 8. **IA-8** read-only `~/.config` ⇒ `set` exits 1, no temp-file litter.
 9. **IA-9** `HOME` unset ⇒ clear error; nothing written to CWD.
 10. **IA-10** `--source` with an unknown name and with a non-repo path ⇒ exit 2.
-11. **IA-11** 10 concurrent `set` calls ⇒ final override is valid yaml equal to one
-    of the written values (atomic temp+rename; no interleaved corruption).
+11. **IA-11** 10 concurrent `set` calls, each writing a distinct key/value ⇒ final
+    file is valid YAML and is exactly ONE writer's complete snapshot — never an
+    interleaved/merged state (`os.CreateTemp` + rename guarantees consistency, not
+    merge; lost-update semantics under concurrent read-modify-write are accepted and
+    documented — no locking is planned).
 12. **IA-12** `gff.source` redirect pointing at a missing file / outside the repo ⇒
     clean error; no path-traversal surprises.
+13. **IA-13** after `gff install`, `git status --porcelain` in the SOURCE repo is
+    empty — installing must never dirty the registered repo's worktree.
+14. **IA-14** registered repo's checkout is moved on disk ⇒ the registry snapshot
+    still resolves every key from any CWD (spec F6 "moved clone" edge).
+15. **IA-15** empty feature set ⇒ all four export formats emit valid empty output
+    (`[]` / empty doc / zero lines — never null or malformed) and exit 0.
 
 Shell-side negatives live in `opt/lib/gff_test.sh` (F9, P2): unset var ⇒ run; exactly
 `"false"` ⇒ skip; `"FALSE"`/`"0"`/garbage ⇒ run (fail-open is literal-false only);
@@ -991,10 +1105,10 @@ Real-install evidence: P2-T5's human-evidenced `install.sh` run with
 | F3 choice (modes, ids, typed values) | lint/resolve/write tests | IH-4, IH-6, IA-1, IA-2 | steps 1, 3 |
 | F4 layered resolution + provenance | resolve matrix 1–10 | IH-5, IH-9 | step 2 |
 | F5 discovery + redirect | `gitx_test.go` | IH-3 (foreign CWD), IA-12 | step 2 |
-| F6 registry + claims | `registry_test.go` | IH-2, IA-6, IA-7 | step 5 |
-| F7 export formats + injection safety | export golden | IH-7, IH-8, IA-5 | steps 4, 6 |
-| F8 write path (0600, user-only) | `write_test.go` | IH-5, IA-8, IA-11 | step 3 |
-| F9 fail-open gating | `gff_test.sh` (bash + dash) | IH-7, IA-7 | P2-T5 evidence |
+| F6 registry + claims | `registry_test.go` | IH-2, IA-6, IA-7, IA-13, IA-14 (moved clone) | step 5 |
+| F7 export formats + injection safety | export golden | IH-7, IH-8, IA-5, IA-15 | steps 4, 6 |
+| F8 write path (0600, user-only) | `write_test.go` | IH-5, IA-8, IA-11, IA-13 | step 3 |
+| F9 fail-open gating | `gff_test.sh` (bash + dash; binary-absent case is unit-only — no e2e twin) | IH-7, IA-7 | P2-T5 evidence |
 | F10 TUI | teatest goldens | (visual — teatest is the harness) | post-P3 capture |
 | F11 go-run + `--source` | CI smoke, read tests | IH-10, IA-10 | step 6 |
 
@@ -1002,9 +1116,46 @@ Real-install evidence: P2-T5's human-evidenced `install.sh` run with
 
 - `gff-ci.yml` fully green: vet, unit tests with **≥90%** coverage, `e2e` job (all
   IH-\* and IA-\* subtests), proto-regen clean, `go run .` smoke.
+- Post-first-tag zero-install verification (the real F11 proof — `go run .` cannot
+  exercise tag/proxy resolution): from an empty dir,
+  `GOMODCACHE=$(mktemp -d) go run github.com/sfc-gh-eraigosa/dotfiles/sdk/gff@v0.1.0 version`
+  prints the version block only; captured into `evidence/F11-gorun/`.
 - Demo transcript (VD-1) and P2-T5 real-install evidence posted on the PR(s).
 - Every §7.4 row checked off in the leaf PR descriptions — a feature without all
   three proofs is not done.
+- **Every §7.6 evidence folder populated** — each feature's folder holds at least one
+  captured, dated proof per §7.4 column that applies to it; `TRACKING.md` links each
+  task's Evidence cell to its capture file.
+
+### 7.6 Evidence capture — show the work as it happens
+
+Proof is committed alongside code so the implementation can advance on *demonstrated*
+working components, not green-checkmark memory. Layout (tracked; `!docs/**` covers it):
+
+```
+docs/mbo/plans/gff/evidence/
+  README.md            # this protocol + an index table (feature → captures)
+  F01-keys/ … F11-gorun/   # one folder per spec feature F1–F11
+  e2e/                 # IH-*/IA-* harness run captures (one file per full run)
+  demo/                # VD-1 transcript + post-P3 TUI capture
+```
+
+Rules:
+
+1. **Capture at the gate.** When a task's done-when command goes green, re-run it as
+   `<command> 2>&1 | tee docs/mbo/plans/gff/evidence/F<NN>-<slug>/<task>-<what>.txt`
+   (from the repo root). The file starts with a 3-line header: date (UTC), task id,
+   exact command. Multi-feature tasks capture into each feature they prove.
+2. **Evidence is append-only.** A re-run after a fix gets a new dated file; never
+   overwrite a capture — the folder is the project's lab notebook.
+3. **Committed with the work.** The capture rides the same commit as the code that
+   produced it (stage by explicit name), so `git log` pairs every claim with its proof.
+4. **Leaf ownership stays disjoint** (§6.1): `p1-engine` writes `F01–F08`, `F11`, and
+   `e2e/`; `p2-instrument` writes `F09`; `p3-tui` writes `F10`; `vd-demo` writes
+   `demo/`. No leaf touches another leaf's folders.
+5. **Human-checkable.** Each feature folder gets a short `README.md` stub up front
+   stating which §7.4 proofs it expects; a reviewer opens the folder and compares
+   expected vs captured without running anything.
 
 > Produced via `superpowers:writing-plans`. Execute with
 > `superpowers:subagent-driven-development` / `executing-plans`, TDD throughout.
