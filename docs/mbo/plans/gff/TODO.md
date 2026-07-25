@@ -229,18 +229,18 @@ modify `cmd/root.go` (test seam + `--source` persistent flag).
 
 **Files:** `cmd/{set.go,unset.go}` + `cmd/write_test.go`.
 
-- [ ] RED: `set k false` creates `<tmp cfg>/config.yaml` with mode **0600**, containing only that key
-- [ ] RED: `set` a choice with an unknown option id ⇒ error and the override file is **byte-identical** before/after
-- [ ] RED: `set` two ids on a `single`-mode choice ⇒ error, file untouched
-- [ ] RED: `set` an unknown key ⇒ `ErrUnknownKey`
-- [ ] RED: `unset k` removes that key and keeps the others
-- [ ] RED: round-trip — `set` then `get` agree
-- [ ] RED: assert **no** test writes outside `t.TempDir()` (no repo/system writes)
-- [ ] RUN-RED: `go test ./cmd/` → expect **FAIL**
-- [ ] GREEN: implement `set.go` / `unset.go` — read-modify-write the `LoadOverrides` map + yaml marshal, atomic temp+rename, `os.Chmod(0600)`, create parent dirs; **validate via the Resolver before writing**
-- [ ] RUN-GREEN: `go test ./cmd/` → expect **PASS**
-- [ ] COMMIT: `feat(gff): set/unset writing the user override only`
-- [ ] LEDGER: tick F3 / F8 **unit** cells; CHECKPOINT
+- [x] RED: `set k false` creates `<tmp cfg>/config.yaml` with mode **0600**, containing only that key
+- [x] RED: `set` a choice with an unknown option id ⇒ error and the override file is **byte-identical** before/after
+- [x] RED: `set` two ids on a `single`-mode choice ⇒ error, file untouched
+- [x] RED: `set` an unknown key ⇒ `ErrUnknownKey`
+- [x] RED: `unset k` removes that key and keeps the others
+- [x] RED: round-trip — `set` then `get` agree
+- [x] RED: assert **no** test writes outside `t.TempDir()` (no repo/system writes)
+- [x] RUN-RED: `go test ./cmd/` → expect **FAIL**
+- [x] GREEN: implement `set.go` / `unset.go` — read-modify-write the `LoadOverrides` map + yaml marshal, atomic temp+rename, `os.Chmod(0600)`, create parent dirs; **validate via the Resolver before writing**
+- [x] RUN-GREEN: `go test ./cmd/` → expect **PASS**
+- [x] COMMIT: `feat(gff): set/unset writing the user override only`
+- [x] LEDGER: tick F3 / F8 **unit** cells; CHECKPOINT
 
 **Done when:** write tests pass and nothing outside the user override is ever written.
 

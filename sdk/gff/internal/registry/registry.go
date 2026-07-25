@@ -19,6 +19,7 @@ import (
 
 	gffv1 "github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/gen/gff/v1"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/gitx"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/overrides"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/paths"
 	"google.golang.org/protobuf/encoding/protojson"
 	"gopkg.in/yaml.v3"
@@ -79,7 +80,7 @@ func (g *Registry) Install(repoRoot, namespace, url, commit string, ff *gffv1.Fe
 
 	// Write the snapshot (verbatim bytes) atomically.
 	snapshotPath := filepath.Join(g.P.UserSnapshotDir, namespace+".yaml")
-	if err := atomicWrite(snapshotPath, raw, 0o644); err != nil {
+	if err := overrides.WriteFileAtomic(snapshotPath, raw, 0o644); err != nil {
 		return fmt.Errorf("registry.Install: write snapshot: %w", err)
 	}
 
@@ -99,7 +100,7 @@ func (g *Registry) Install(repoRoot, namespace, url, commit string, ff *gffv1.Fe
 	if err != nil {
 		return fmt.Errorf("registry.Install: marshal: %w", err)
 	}
-	if err := atomicWrite(g.P.RegistryFile, regBytes, 0o644); err != nil {
+	if err := overrides.WriteFileAtomic(g.P.RegistryFile, regBytes, 0o644); err != nil {
 		return fmt.Errorf("registry.Install: write registry: %w", err)
 	}
 	return nil
@@ -181,48 +182,6 @@ func marshalSourceRegistry(reg *gffv1.SourceRegistry) ([]byte, error) {
 		return nil, fmt.Errorf("yaml marshal: %w", err)
 	}
 	return out, nil
-}
-
-// atomicWrite writes data to path using a temp file + rename so concurrent
-// readers never see a partial write. The temp file is created in the same
-// directory as path to ensure rename stays on the same filesystem.
-func atomicWrite(path string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("mkdir %s: %w", dir, err)
-	}
-
-	// Create temp in the same dir so os.Rename is atomic on POSIX.
-	tmp, err := os.CreateTemp(dir, ".gff-*.tmp")
-	if err != nil {
-		return fmt.Errorf("create temp: %w", err)
-	}
-	tmpName := tmp.Name()
-
-	// Clean up the temp file on any error path.
-	success := false
-	defer func() {
-		if !success {
-			_ = os.Remove(tmpName)
-		}
-	}()
-
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("write temp: %w", err)
-	}
-	if err := tmp.Chmod(perm); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("chmod temp: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temp: %w", err)
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		return fmt.Errorf("rename to %s: %w", path, err)
-	}
-	success = true
-	return nil
 }
 
 // normalizeMapKeys recursively converts map[any]any to map[string]any so that
