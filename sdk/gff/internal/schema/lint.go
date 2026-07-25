@@ -49,6 +49,15 @@ func Lint(f *gffv1.FeatureFile) []Finding {
 			// Path segment checks.
 			findings = append(findings, lintPath(path, set.GetArea())...)
 
+			// Every feature must declare a default (bool or choice).
+			if feat.GetDefault() == nil {
+				findings = append(findings, Finding{
+					Path: path,
+					Rule: "missing-default",
+					Msg:  "feature declares neither boolDefault nor choiceDefault",
+				})
+			}
+
 			// Choice-specific checks.
 			if cd := feat.GetChoiceDefault(); cd != nil {
 				findings = append(findings, lintChoice(path, cd)...)

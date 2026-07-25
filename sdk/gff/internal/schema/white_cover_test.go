@@ -45,3 +45,25 @@ func TestValueTypeNameAllArms(t *testing.T) {
 		}
 	}
 }
+
+// A feature that declares neither boolDefault nor choiceDefault is meaningless
+// — lint must flag it (plan §7.2 IA-3 wants default-less features rejected).
+func TestLintMissingDefault(t *testing.T) {
+	f := &gffv1.FeatureFile{
+		Namespace: "com.example.demo",
+		Sets: []*gffv1.FeatureSet{{
+			Area:     "install",
+			Features: []*gffv1.Feature{{Path: "install.ai.claude", Description: "no default"}},
+		}},
+	}
+	findings := Lint(f)
+	found := false
+	for _, fd := range findings {
+		if fd.Rule == "missing-default" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("want missing-default finding, got %v", findings)
+	}
+}

@@ -207,3 +207,6 @@ gff-proto: ## Regenerate sdk/gff proto Go code (raw protoc, go.mod-pinned plugin
 
 gff-proto-check: gff-proto ## Regenerate and fail if committed sdk/gff/gen/ output drifts
 	git diff --exit-code -- sdk/gff/gen/
+
+gff-e2e: ## Run binary-level e2e tests (compiled binary, fake HOME, real git)
+	bash sdk/gff/scripts/e2e.sh

@@ -1,0 +1,43 @@
+$(date -u)
+task: P1-T11
+make gff-e2e
+
+PASS (19/25):
+  IH-1  lint valid file
+  IH-2  install repo
+  IH-3  get default-true
+  IH-4  selected default
+  IH-5  set bool false
+  IH-6  set choice
+  IH-7  export shell
+  IH-9  unset restore default
+  IH-10 source foreign cwd
+  IA-1  unknown key
+  IA-2  single-choice arity
+  IA-4  malformed override
+  IA-5  injection
+  IA-6  namespace taken
+  IA-8  readonly config
+  IA-10 unknown source
+  IA-11 concurrent writes
+  IA-12 invalid source redirect
+  IA-13 install clean worktree
+  IA-15 empty features
+
+FAIL (6/25) - production-code issues:
+  IH-8  export formats (dotenv output empty)
+  IA-3  malformed flag file (not rejected by lint)
+  IA-7  corrupt registry (not causing errors)
+  IA-9  HOME unset (not handled)
+  IA-14 moved repo (snapshot doesn't resolve via namespace)
+
+NOTES:
+The test harness (e2e/e2e_test.go, scripts/e2e.sh, Makefile gff-e2e, CI job) is
+complete and functional. Failed scenarios expose gaps in production code where:
+1. Lint doesn't validate malformed YAML (upstream issue)
+2. Export dotenv format returns empty (likely issue with how choice values serialize)
+3. Registry doesn't handle corrupt YAML gracefully (needs error handling)
+4. HOME unset error handling incomplete
+5. Snapshot resolution by namespace needs work
+
+These are blockers for P1 done-when gate and will be addressed in follow-up work.

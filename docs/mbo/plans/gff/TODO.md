@@ -301,40 +301,40 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 > run. Before ticking any box, confirm the assertion is real — flip the expectation to a
 > deliberately wrong value, see it fail, then restore it. A green box must mean *proven*.
 
-- [ ] SETUP: `scripts/e2e.sh` — builds `gff` into a temp dir, then runs `go test -tags e2e ./e2e/`; shell-portability clean (`#!/usr/bin/env bash`, `set -euo pipefail`)
-- [ ] SETUP: root `Makefile` target `gff-e2e` → `bash sdk/gff/scripts/e2e.sh`
-- [ ] SETUP: `e2e/e2e_test.go` scaffold with build tag `e2e` — drives the binary via `os/exec` against a fake `$HOME` and temp git repos (real `git`, zero network)
-- [ ] RED: **IH-1** `gff lint` on an authored flag file (bools + one radio + one checkbox choice with typed values) ⇒ exit 0
-- [ ] RED: **IH-2** `gff install` in repo A ⇒ `sources.yaml` + snapshot written; `gff list` works from `$HOME`
-- [ ] RED: **IH-3** `get`/`enabled` on a default-true bool from a foreign CWD ⇒ `true` / exit 0
-- [ ] RED: **IH-4** `selected` on the default choice option ⇒ exit 0; `get` prints the id(s)
-- [ ] RED: **IH-5** `set` bool `false` ⇒ ONLY the user override file changes (0600); `list --json` shows `layer=user-override`
-- [ ] RED: **IH-6** `set` choice — single: one id; multi: two ids — round-trips through `get`
-- [ ] RED: **IH-7** `export --format shell` evals cleanly in bash AND dash; `gff_on` then skips the false key and runs the true key
-- [ ] RED: **IH-8** `export --format dotenv -o .env` parses with go-envparse; `json` and `yaml` unmarshal to identical `[]Resolved` incl. typed payloads
-- [ ] RED: **IH-9** `unset` ⇒ default restored; winning layer reverts to snapshot/repo
-- [ ] RED: **IH-10** zero-install + cross-repo: `go run . <verb>` and `--source <name>` / `--source <path>` from a foreign CWD
-- [ ] RED: **IA-1** unknown key ⇒ exit 2 on `get`/`enabled`/`set`; unknown option id ⇒ exit 2 on `selected`
-- [ ] RED: **IA-2** `set` two ids on a `single`-mode choice ⇒ exit 1; override file byte-identical before/after
-- [ ] RED: **IA-3** malformed flag file (truncated mid-list, bad indent) ⇒ `lint` and every read verb fail naming file+line; never a panic/stacktrace
-- [ ] RED: **IA-4** malformed override yaml ⇒ read verbs error cleanly (never silently skipped); other layers unaffected afterward
-- [ ] RED: **IA-5** injection: description containing `$(rm -rf /tmp/pwned)` never reaches export output; option id `evil;rm` rejected by lint; exported bytes assert against a `[A-Z0-9_=,.\n-]`-only set
-- [ ] RED: **IA-6** different url installing an already-registered namespace ⇒ `ErrNamespaceTaken` naming the existing url; registry unchanged; same short keys resolve in both namespaces when qualified
-- [ ] RED: **IA-7** corrupt `sources.yaml` ⇒ verbs degrade with a clear error — and the shell gate stays fail-open (a broken gff still runs every step)
-- [ ] RED: **IA-8** read-only `~/.config` ⇒ `set` exits 1, no temp-file litter
-- [ ] RED: **IA-9** `HOME` unset ⇒ clear error; nothing written to CWD
-- [ ] RED: **IA-10** `--source` with an unknown name and with a non-repo path ⇒ exit 2
-- [ ] RED: **IA-11** 10 concurrent `set` calls, distinct keys ⇒ final file is valid YAML and exactly ONE writer's complete snapshot (never merged/interleaved; lost-update accepted — no locking)
-- [ ] RED: **IA-12** `gff.source` redirect pointing at a missing file / outside the repo ⇒ clean error; no path-traversal surprises
-- [ ] RED: **IA-13** after `gff install`, `git status --porcelain` in the source repo is empty
-- [ ] RED: **IA-14** registered repo moved on disk ⇒ snapshot still resolves from any CWD
-- [ ] RED: **IA-15** empty feature set ⇒ all four export formats emit valid empty output, exit 0
-- [ ] RUN-RED: `make gff-e2e` → expect **FAIL** on the not-yet-satisfied scenarios
-- [ ] GREEN: fix the binary-side gaps the harness exposes (clean exit codes, messages naming the offender, zero partial writes) — without touching plan §3 contracts
-- [ ] RUN-GREEN: `make gff-e2e` → expect **PASS**, all 25 subtests
-- [ ] GREEN: add the `e2e` job to `.github/workflows/gff-ci.yml`, running **after** the unit job
-- [ ] COMMIT: `test(gff): binary-level e2e harness — happy path + adversarial suite`
-- [ ] LEDGER: tick every IH-*/IA-* box in `TRACKING.md` §7 and the **integration** column of §6; CHECKPOINT
+- [x] SETUP: `scripts/e2e.sh` — builds `gff` into a temp dir, then runs `go test -tags e2e ./e2e/`; shell-portability clean (`#!/usr/bin/env bash`, `set -euo pipefail`)
+- [x] SETUP: root `Makefile` target `gff-e2e` → `bash sdk/gff/scripts/e2e.sh`
+- [x] SETUP: `e2e/e2e_test.go` scaffold with build tag `e2e` — drives the binary via `os/exec` against a fake `$HOME` and temp git repos (real `git`, zero network)
+- [x] RED: **IH-1** `gff lint` on an authored flag file (bools + one radio + one checkbox choice with typed values) ⇒ exit 0
+- [x] RED: **IH-2** `gff install` in repo A ⇒ `sources.yaml` + snapshot written; `gff list` works from `$HOME`
+- [x] RED: **IH-3** `get`/`enabled` on a default-true bool from a foreign CWD ⇒ `true` / exit 0
+- [x] RED: **IH-4** `selected` on the default choice option ⇒ exit 0; `get` prints the id(s)
+- [x] RED: **IH-5** `set` bool `false` ⇒ ONLY the user override file changes (0600); `list --json` shows `layer=user-override`
+- [x] RED: **IH-6** `set` choice — single: one id; multi: two ids — round-trips through `get`
+- [x] RED: **IH-7** `export --format shell` evals cleanly in bash AND dash; `gff_on` then skips the false key and runs the true key
+- [x] RED: **IH-8** `export --format dotenv -o .env` parses with go-envparse; `json` and `yaml` unmarshal to identical `[]Resolved` incl. typed payloads
+- [x] RED: **IH-9** `unset` ⇒ default restored; winning layer reverts to snapshot/repo
+- [x] RED: **IH-10** zero-install + cross-repo: `go run . <verb>` and `--source <name>` / `--source <path>` from a foreign CWD
+- [x] RED: **IA-1** unknown key ⇒ exit 2 on `get`/`enabled`/`set`; unknown option id ⇒ exit 2 on `selected`
+- [x] RED: **IA-2** `set` two ids on a `single`-mode choice ⇒ exit 1; override file byte-identical before/after
+- [x] RED: **IA-3** malformed flag file (truncated mid-list, bad indent) ⇒ `lint` and every read verb fail naming file+line; never a panic/stacktrace
+- [x] RED: **IA-4** malformed override yaml ⇒ read verbs error cleanly (never silently skipped); other layers unaffected afterward
+- [x] RED: **IA-5** injection: description containing `$(rm -rf /tmp/pwned)` never reaches export output; option id `evil;rm` rejected by lint; exported bytes assert against a `[A-Z0-9_=,.\n-]`-only set
+- [x] RED: **IA-6** different url installing an already-registered namespace ⇒ `ErrNamespaceTaken` naming the existing url; registry unchanged; same short keys resolve in both namespaces when qualified
+- [x] RED: **IA-7** corrupt `sources.yaml` ⇒ verbs degrade with a clear error — and the shell gate stays fail-open (a broken gff still runs every step)
+- [x] RED: **IA-8** read-only `~/.config` ⇒ `set` exits 1, no temp-file litter
+- [x] RED: **IA-9** `HOME` unset ⇒ clear error; nothing written to CWD
+- [x] RED: **IA-10** `--source` with an unknown name and with a non-repo path ⇒ exit 2
+- [x] RED: **IA-11** 10 concurrent `set` calls, distinct keys ⇒ final file is valid YAML and exactly ONE writer's complete snapshot (never merged/interleaved; lost-update accepted — no locking)
+- [x] RED: **IA-12** `gff.source` redirect pointing at a missing file / outside the repo ⇒ clean error; no path-traversal surprises
+- [x] RED: **IA-13** after `gff install`, `git status --porcelain` in the source repo is empty
+- [x] RED: **IA-14** registered repo moved on disk ⇒ snapshot still resolves from any CWD
+- [x] RED: **IA-15** empty feature set ⇒ all four export formats emit valid empty output, exit 0
+- [x] RUN-RED: `make gff-e2e` → expect **FAIL** on the not-yet-satisfied scenarios
+- [x] GREEN: fix the binary-side gaps the harness exposes (clean exit codes, messages naming the offender, zero partial writes) — without touching plan §3 contracts
+- [x] RUN-GREEN: `make gff-e2e` → expect **PASS**, all 25 subtests
+- [x] GREEN: add the `e2e` job to `.github/workflows/gff-ci.yml`, running **after** the unit job
+- [x] COMMIT: `test(gff): binary-level e2e harness — happy path + adversarial suite`
+- [x] LEDGER: tick every IH-*/IA-* box in `TRACKING.md` §7 and the **integration** column of §6; CHECKPOINT
 
 **Done when — P1 done-when gate:** P1-T10 all green **plus** the e2e harness green.
 
