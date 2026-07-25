@@ -131,21 +131,21 @@ committed `sdk/gff/gen/gff/v1/*.pb.go`; modify root `Makefile` + `.gitignore`.
 
 **Files:** `internal/paths/{paths.go,paths_test.go}`, `internal/gitx/{gitx.go,gitx_test.go}`.
 
-- [ ] RED: `paths_test.go` — `Default()` fields end with the exact §3.3 suffixes: `/opt/conf/gff`, `${HOME}/opt/conf/gff`, `/var/opt/conf/gff/config.yaml`, `${HOME}/.config/gff/config.yaml`, `${HOME}/.config/gff/sources.yaml` (resolve home via `os.UserHomeDir`)
-- [ ] RED: `gitx_test.go` — `RepoRoot`: temp tree `a/b/c` with `.git` **dir** at `a` ⇒ found from `c`
-- [ ] RED: `gitx_test.go` — `RepoRoot`: `.git` **file** (`gitdir: …`, the worktree case) at `a` ⇒ found
-- [ ] RED: `gitx_test.go` — `RepoRoot`: no `.git` anywhere ⇒ `("", false)`
-- [ ] RED: `gitx_test.go` — add the `fakeRunner{out, err}` helper from the plan snippet
-- [ ] RED: `gitx_test.go` — `SourcePath`: runner returns `custom/flags.yaml` ⇒ joined to repoRoot (redirect wins over probing)
-- [ ] RED: `gitx_test.go` — `SourcePath` probe order (runner errors): only `.gff/features.yaml` ⇒ that path; only `.github/gff/features.yaml` ⇒ that path; both present ⇒ `.gff/features.yaml` wins; neither ⇒ `.gff/features.yaml` (missing live layer is simply absent)
-- [ ] RUN-RED: `go test ./internal/paths/ ./internal/gitx/` → expect **FAIL**
-- [ ] GREEN: `paths.go` — `Paths` struct + `Default() (Paths, error)` exactly per §3.3, `WorkDir` = CWD, all fields overridable so tests can point at temp dirs
-- [ ] GREEN: `gitx.go` — `RepoRoot`: `os.Stat(filepath.Join(dir, ".git"))` accepting dir **or** file, walking up to the filesystem root
-- [ ] GREEN: `gitx.go` — `SourcePath`: `r.Output(repoRoot, "config", "--get", "gff.source")`, trim; relative ⇒ join to repoRoot; on error ⇒ probe order above
-- [ ] GREEN: `gitx.go` — real `ExecRunner` implementing `Runner`, execing `git -C <dir> <args...>` via `os/exec`
-- [ ] RUN-GREEN: `go test ./internal/paths/ ./internal/gitx/` → expect **PASS**
-- [ ] COMMIT: `feat(gff): well-known paths + git-style repo discovery with gff.source redirect`
-- [ ] LEDGER: tick F5 **unit** cell; CHECKPOINT
+- [x] RED: `paths_test.go` — `Default()` fields end with the exact §3.3 suffixes: `/opt/conf/gff`, `${HOME}/opt/conf/gff`, `/var/opt/conf/gff/config.yaml`, `${HOME}/.config/gff/config.yaml`, `${HOME}/.config/gff/sources.yaml` (resolve home via `os.UserHomeDir`)
+- [x] RED: `gitx_test.go` — `RepoRoot`: temp tree `a/b/c` with `.git` **dir** at `a` ⇒ found from `c`
+- [x] RED: `gitx_test.go` — `RepoRoot`: `.git` **file** (`gitdir: …`, the worktree case) at `a` ⇒ found
+- [x] RED: `gitx_test.go` — `RepoRoot`: no `.git` anywhere ⇒ `("", false)`
+- [x] RED: `gitx_test.go` — add the `fakeRunner{out, err}` helper from the plan snippet
+- [x] RED: `gitx_test.go` — `SourcePath`: runner returns `custom/flags.yaml` ⇒ joined to repoRoot (redirect wins over probing)
+- [x] RED: `gitx_test.go` — `SourcePath` probe order (runner errors): only `.gff/features.yaml` ⇒ that path; only `.github/gff/features.yaml` ⇒ that path; both present ⇒ `.gff/features.yaml` wins; neither ⇒ `.gff/features.yaml` (missing live layer is simply absent)
+- [x] RUN-RED: `go test ./internal/paths/ ./internal/gitx/` → expect **FAIL**
+- [x] GREEN: `paths.go` — `Paths` struct + `Default() (Paths, error)` exactly per §3.3, `WorkDir` = CWD, all fields overridable so tests can point at temp dirs
+- [x] GREEN: `gitx.go` — `RepoRoot`: `os.Stat(filepath.Join(dir, ".git"))` accepting dir **or** file, walking up to the filesystem root
+- [x] GREEN: `gitx.go` — `SourcePath`: `r.Output(repoRoot, "config", "--get", "gff.source")`, trim; relative ⇒ join to repoRoot; on error ⇒ probe order above
+- [x] GREEN: `gitx.go` — real `ExecRunner` implementing `Runner`, execing `git -C <dir> <args...>` via `os/exec`
+- [x] RUN-GREEN: `go test ./internal/paths/ ./internal/gitx/` → expect **PASS**
+- [x] COMMIT: `feat(gff): well-known paths + git-style repo discovery with gff.source redirect`
+- [x] LEDGER: tick F5 **unit** cell; CHECKPOINT
 
 **Done when:** both packages' tests pass, including the `.git`-file worktree case.
 

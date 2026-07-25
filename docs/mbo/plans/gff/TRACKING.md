@@ -39,8 +39,8 @@ e2e harness green; `build.sh` installs a working binary.
 | :-- | :-- | :-- | :-- | :-- |
 | P1-T1 module scaffold + version | done | b3ed141 | `go test ./... && go vet ./...` -> ok (cmd 0.002s); `bash build.sh` -> installed; `${HOME}/opt/bin/gff version` prints `gff v0.1.0` block | RED verified: `undefined: NewRootCmd` |
 | P1-T2 proto schema + committed codegen | done | 678a69e | `make gff-proto` -> gen/gff/v1/features.pb.go (package gffv1); `go build ./... && go vet ./...` ok; `make gff-proto-check` -> clean; `make lint-shell` rc=0. `make lint-portability` fails on a PRE-EXISTING `opt/bin/docker:44 mapfile` Tier-2 finding already on origin/main — zero findings for gff files (build.sh, genproto.sh) | genproto.sh needed `mkdir -p gen` (protoc doesn't create --go_out root); noted as procedure fix |
-| P1-T3 schema load + lint | done | _(next commit)_ | `go test ./internal/schema/ -cover` -> ok, 90.5% (bar ≥90); `go vet ./...` clean; RED verified: `no non-test Go files in internal/schema` | evidence: F01/F02/F03 P1-T3-schema-lint-cover.txt; namespace-vs-origin WARN deferred to CLI verb (frozen Lint(f) has no origin param) |
-| P1-T4 paths + git discovery | todo | | | |
+| P1-T3 schema load + lint | done | 83cc7d7 | `go test ./internal/schema/ -cover` -> ok, 90.5% (bar ≥90); `go vet ./...` clean; RED verified: `no non-test Go files in internal/schema` | evidence: F01/F02/F03 P1-T3-schema-lint-cover.txt; namespace-vs-origin WARN deferred to CLI verb (frozen Lint(f) has no origin param) |
+| P1-T4 paths + git discovery | done | _(next commit)_ | `go test ./internal/paths/ ./internal/gitx/` -> ok (80.0% / 72.4%); `go vet ./...` clean; RED verified: `no non-test Go files` in both pkgs | evidence: F05-discovery/P1-T4-gitx-paths.txt; no per-pkg bar here — watch overall ≥90% at P1-T10 |
 | P1-T5 resolver (the core) | todo | | | ≥95% pkg cover |
 | P1-T6 registry + install | todo | | | |
 | P1-T7 read verbs — get/enabled/selected/list/lint | todo | | | |
@@ -123,7 +123,7 @@ proof passes; record which task proved it in Notes.
 | **F2** bool semantics | [x] schema/resolve tests | [ ] IH-3, IH-5 | [ ] demo steps 2–3 | |
 | **F3** choice (modes, ids, typed values) | [x] lint/resolve/write tests | [ ] IH-4, IH-6, IA-1, IA-2 | [ ] demo steps 1, 3 | |
 | **F4** layered resolution + provenance | [ ] resolve matrix 1–10 | [ ] IH-5, IH-9 | [ ] demo step 2 | |
-| **F5** discovery + `gff.source` redirect | [ ] `gitx_test.go` | [ ] IH-3, IA-12 | [ ] demo step 2 | |
+| **F5** discovery + `gff.source` redirect | [x] `gitx_test.go` | [ ] IH-3, IA-12 | [ ] demo step 2 | |
 | **F6** registry + namespace identity | [ ] `registry_test.go` | [ ] IH-2, IA-6, IA-7, IA-13, IA-14 | [ ] demo step 5 | |
 | **F7** export formats + injection safety | [ ] export golden | [ ] IH-7, IH-8, IA-5, IA-15 | [ ] demo steps 4, 6 | |
 | **F8** write path (0600, user-only) | [ ] `write_test.go` | [ ] IH-5, IA-8, IA-11, IA-13 | [ ] demo step 3 | |
