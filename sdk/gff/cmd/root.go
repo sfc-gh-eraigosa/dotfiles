@@ -4,8 +4,32 @@
 package cmd
 
 import (
+	"fmt"
+
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/gitx"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/paths"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/registry"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve"
 	"github.com/spf13/cobra"
 )
+
+// sourceFlag holds the value of the persistent --source flag.
+var sourceFlag string
+
+// newResolver is the test seam: tests swap this to inject a pre-built Resolver
+// over temp-world fixtures. Production code uses defaultResolver.
+var newResolver = defaultResolver
+
+// defaultResolver builds a Resolver from Default() paths wired to the real registry.
+func defaultResolver() (*resolve.Resolver, error) {
+	p, err := paths.Default()
+	if err != nil {
+		return nil, fmt.Errorf("gff: resolving paths: %w", err)
+	}
+	r := resolve.New(p, gitx.ExecRunner{}, sourceFlag)
+	r.S = &registry.Registry{P: p}
+	return r, nil
+}
 
 var rootCmd = newRoot()
 
@@ -16,6 +40,7 @@ func newRoot() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	c.PersistentFlags().StringVar(&sourceFlag, "source", "", "resolve flags from a registered source name or local repo path")
 	return c
 }
 

@@ -42,8 +42,8 @@ e2e harness green; `build.sh` installs a working binary.
 | P1-T3 schema load + lint | done | 83cc7d7 | `go test ./internal/schema/ -cover` -> ok, 90.5% (bar ≥90); `go vet ./...` clean; RED verified: `no non-test Go files in internal/schema` | evidence: F01/F02/F03 P1-T3-schema-lint-cover.txt; namespace-vs-origin WARN deferred to CLI verb (frozen Lint(f) has no origin param) |
 | P1-T4 paths + git discovery | done | fa24cd1 | `go test ./internal/paths/ ./internal/gitx/` -> ok (80.0% / 72.4%); `go vet ./...` clean; RED verified: `no non-test Go files` in both pkgs | evidence: F05-discovery/P1-T4-gitx-paths.txt; no per-pkg bar here — watch overall ≥90% at P1-T10 |
 | P1-T5 resolver (the core) | done | a20c15b | `go test ./internal/resolve/ -cover` -> ok, 95.9% (bar ≥95); `go vet ./...` clean; RED verified: `no non-test Go files in internal/resolve`; 31 subtests incl. matrix 1–10 | evidence: F04-layers/P1-T5-resolve-matrix-cover.txt; Resolved carries an unexported namespace field for JSON() (frozen exported surface unchanged); unqualified multi-namespace key -> error wrapping ErrUnknownKey naming candidates |
-| P1-T6 registry + install | done | _(next commit)_ | `go test ./internal/registry/ -cover` -> ok, 78.4%; `go vet ./...` clean; RED verified: `no non-test Go files in internal/registry`; snapshot byte-identical + ErrNamespaceTaken names existing url | evidence: F06-registry/P1-T6-registry-cover.txt |
-| P1-T7 read verbs — get/enabled/selected/list/lint | todo | | | |
+| P1-T6 registry + install | done | 20b3e7f | `go test ./internal/registry/ -cover` -> ok, 78.4%; `go vet ./...` clean; RED verified: `no non-test Go files in internal/registry`; snapshot byte-identical + ErrNamespaceTaken names existing url | evidence: F06-registry/P1-T6-registry-cover.txt |
+| P1-T7 read verbs — get/enabled/selected/list/lint | done | _(next commit)_ | `go test ./cmd/ -cover` -> ok, 74.6% (24 tests); full `go test ./...` green; `go vet ./...` clean; RED verified: `undefined: errOff` | evidence: F11-gorun/P1-T7-read-verbs.txt; exit mapping only in main.go (silent exit-1 via cmd.IsExit1Silent); F4/F11 unit cells partially proven here, cmd paths finish via e2e |
 | P1-T8 write verbs — set/unset | todo | | | |
 | P1-T9 export + install verbs | todo | | | |
 | P1-T10 public SDK + CI + coverage gate | todo | | | ≥90% overall |
@@ -129,7 +129,7 @@ proof passes; record which task proved it in Notes.
 | **F8** write path (0600, user-only) | [ ] `write_test.go` | [ ] IH-5, IA-8, IA-11, IA-13 | [ ] demo step 3 | |
 | **F9** fail-open gating | [ ] `gff_test.sh` bash + dash (binary-absent is unit-only) | [ ] IH-7, IA-7 | [ ] P2-T5 evidence | |
 | **F10** TUI | [ ] teatest goldens | [ ] (visual — teatest is the harness) | [ ] post-P3 capture | |
-| **F11** go-run + `--source` | [ ] CI smoke, read tests | [ ] IH-10, IA-10 | [ ] demo step 6 | |
+| **F11** go-run + `--source` | [~] CI smoke pending (T10) — read tests done (T7) | [ ] IH-10, IA-10 | [ ] demo step 6 | |
 
 ---
 

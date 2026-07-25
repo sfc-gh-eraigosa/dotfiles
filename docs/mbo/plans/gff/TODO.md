@@ -202,24 +202,24 @@ committed `sdk/gff/gen/gff/v1/*.pb.go`; modify root `Makefile` + `.gitignore`.
 **Files:** `cmd/{get.go,enabled.go,selected.go,list.go,lint.go}` + `cmd/read_test.go`;
 modify `cmd/root.go` (test seam + `--source` persistent flag).
 
-- [ ] SETUP: add the test seam in `cmd/root.go`: `var newResolver = defaultResolver` (swapped in tests — the pattern gss uses for its runner)
-- [ ] SETUP: register the global persistent flag `--source <name|path>` on the root command (plan §3.4)
-- [ ] RED: `get k` prints `true\n`; a choice key prints `apt\n` (comma-joined ids when multi)
-- [ ] RED: `selected k apt` ⇒ exit 0 selected / 1 not selected / 2 unknown option id
-- [ ] RED: `enabled k` ⇒ 0 on / 1 off; unknown key ⇒ the `ErrUnknownKey` sentinel (exit mapping lives only in `main.go`, so tests assert the sentinel)
-- [ ] RED: `enabled` on a **choice** key ⇒ exit 2 + stderr message (per §3.4)
-- [ ] RED: `list` renders a table containing an `install.ai.claude  bool  true  default(user-snapshot)`-style row (PATH TYPE VALUE LAYER DESCRIPTION)
-- [ ] RED: `list --json` output unmarshals into `[]Resolved`
-- [ ] RED: `lint` on a bad file exits non-zero and lists the findings; on the discovered repo file by default
-- [ ] RED: `get --source <path>` resolves a second temp repo from an unrelated CWD
-- [ ] RED: `get --source <registered-name>` resolves via that source's snapshot
-- [ ] RED: unknown `--source` name and non-repo path ⇒ `ErrUnknownSource` sentinel
-- [ ] RUN-RED: `go test ./cmd/` → expect **FAIL**
-- [ ] GREEN: implement the five verb files (~30 lines each), each self-registering via `init()`; all build `resolve.Resolver{P: paths.Default(), R: gitx.ExecRunner{}}` through the `newResolver` hook
-- [ ] GREEN: exit-code mapping **only** in `main.go` — `errors.Is(err, resolve.ErrUnknownKey)` or `resolve.ErrUnknownSource` ⇒ exit 2; other non-nil ⇒ exit 1; set `SilenceUsage`
-- [ ] RUN-GREEN: `go test ./cmd/` → expect **PASS**
-- [ ] COMMIT: `feat(gff): get/enabled/list/lint verbs`
-- [ ] LEDGER: tick F4 / F11 **unit** cells; CHECKPOINT
+- [x] SETUP: add the test seam in `cmd/root.go`: `var newResolver = defaultResolver` (swapped in tests — the pattern gss uses for its runner)
+- [x] SETUP: register the global persistent flag `--source <name|path>` on the root command (plan §3.4)
+- [x] RED: `get k` prints `true\n`; a choice key prints `apt\n` (comma-joined ids when multi)
+- [x] RED: `selected k apt` ⇒ exit 0 selected / 1 not selected / 2 unknown option id
+- [x] RED: `enabled k` ⇒ 0 on / 1 off; unknown key ⇒ the `ErrUnknownKey` sentinel (exit mapping lives only in `main.go`, so tests assert the sentinel)
+- [x] RED: `enabled` on a **choice** key ⇒ exit 2 + stderr message (per §3.4)
+- [x] RED: `list` renders a table containing an `install.ai.claude  bool  true  default(user-snapshot)`-style row (PATH TYPE VALUE LAYER DESCRIPTION)
+- [x] RED: `list --json` output unmarshals into `[]Resolved`
+- [x] RED: `lint` on a bad file exits non-zero and lists the findings; on the discovered repo file by default
+- [x] RED: `get --source <path>` resolves a second temp repo from an unrelated CWD
+- [x] RED: `get --source <registered-name>` resolves via that source's snapshot
+- [x] RED: unknown `--source` name and non-repo path ⇒ `ErrUnknownSource` sentinel
+- [x] RUN-RED: `go test ./cmd/` → expect **FAIL**
+- [x] GREEN: implement the five verb files (~30 lines each), each self-registering via `init()`; all build `resolve.Resolver{P: paths.Default(), R: gitx.ExecRunner{}}` through the `newResolver` hook
+- [x] GREEN: exit-code mapping **only** in `main.go` — `errors.Is(err, resolve.ErrUnknownKey)` or `resolve.ErrUnknownSource` ⇒ exit 2; other non-nil ⇒ exit 1; set `SilenceUsage`
+- [x] RUN-GREEN: `go test ./cmd/` → expect **PASS**
+- [x] COMMIT: `feat(gff): get/enabled/list/lint verbs`
+- [x] LEDGER: tick F4 / F11 **unit** cells; CHECKPOINT
 
 **Done when:** `go test ./cmd/` passes including the exit-code sentinels and `--source` cases.
 
