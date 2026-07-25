@@ -37,7 +37,8 @@ computes effective values with winning-layer attribution. Shell consumes flags v
   `[a-z0-9]+(-[a-z0-9]+)*`.
 - Env mangling: uppercase, `.` and `-` → `_` (e.g. `install.windows.wispr-flow` →
   `GFF_INSTALL_WINDOWS_WISPR_FLOW`).
-- `gff enabled` exit codes: 0=on, 1=off, 2=unknown key. All other verbs: 0 ok, 1 error.
+- `gff enabled` / `gff selected` exit codes: 0=on/selected, 1=off/not-selected,
+  2=unknown key or option id. All other verbs: 0 ok, 1 error.
 - Writes go ONLY to `~/.config/gff/` (config.yaml 0600, sources.yaml). Never write
   repo or system files.
 - Every shell edit obeys `docs/mbo/specs/shell-portability.md`; run `make lint-shell`
@@ -104,14 +105,31 @@ message Feature {
     ChoiceDefault choice_default = 4;
   }
 }
+enum ChoiceMode {
+  CHOICE_MODE_UNSPECIFIED = 0;
+  CHOICE_MODE_SINGLE = 1;          // radio: exactly one option selected
+  CHOICE_MODE_MULTI = 2;           // checkbox: zero or more options selected
+}
 message ChoiceDefault {
-  int32 selected = 1;              // must be a key of options
-  map<int32, string> options = 2;  // index -> human description
+  ChoiceMode mode = 1;
+  repeated ChoiceOption options = 2;
+}
+message ChoiceOption {
+  string id = 1;                   // stable kebab-case slug, unique within the feature
+  string description = 2;          // human description of this option
+  bool selected = 3;               // default selection state
+  oneof value {                    // typed payload; ONE type per feature (lint-enforced)
+    int64 int_value = 4;
+    double float_value = 5;
+    string string_value = 6;
+    bool bool_value = 7;
+  }
 }
 // Sparse override value (override files decode into this).
 message Value {
-  oneof kind { bool bool_value = 1; int32 choice_value = 2; }
+  oneof kind { bool bool_value = 1; ChoiceSelection choice_value = 2; }
 }
+message ChoiceSelection { repeated string selected = 1; } // option ids; exactly 1 when SINGLE
 message Source {                   // one registered repo
   string name = 1; string url = 2;
   repeated string areas = 3; string commit = 4;
@@ -130,18 +148,24 @@ sets:
       - path: install.windows.wispr-flow
         description: Wispr Flow MSI + AHK dictation workflow (Windows)
         boolDefault: true
-      - path: install.pkg.manager        # (example of a choice flag)
+      - path: install.pkg.manager        # single-select choice (radio)
         description: Package manager selection
-        choiceDefault: {selected: 0, options: {0: auto, 1: apt, 2: brew}}
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: auto, description: Auto-detect, stringValue: auto, selected: true}
+            - {id: apt,  description: Debian/Ubuntu apt, stringValue: apt}
+            - {id: brew, description: Homebrew, stringValue: brew}
 ```
 
 Override files (`/var/opt/conf/gff/config.yaml`, `~/.config/gff/config.yaml`) are a
 **plain scalar map** for hand-editability (decoded into `map[string]*gffv1.Value`;
-bool → BoolValue, int → ChoiceValue; anything else = parse error):
+bool → BoolValue, string or string-list → ChoiceSelection; anything else = parse error):
 
 ```yaml
 install.windows.wispr-flow: false
-install.pkg.manager: 2
+install.pkg.manager: apt            # single-select: exactly one option id
+shell.zsh.plugins: [fzf, starship]  # multi-select: zero or more option ids
 ```
 
 `~/.config/gff/sources.yaml` = YAML encoding of `SourceRegistry`
@@ -193,20 +217,39 @@ func (g *Registry) Install(repoRoot, name, url, commit string, ff *gffv1.Feature
 func (g *Registry) Sources() ([]*gffv1.Source, error)
 
 // pkg/gff — public SDK
-func Bool(key string) (bool, error)     // full-chain resolve from Default() paths
-func Choice(key string) (int32, error)
+func Bool(key string) (bool, error)                 // full-chain resolve from Default() paths
+func Selected(key string) ([]string, error)         // effective selected option ids
+func IsSelected(key, optionID string) (bool, error) // one radio/checkbox state; unknown id = error
+// typed payloads of the selected options (feature's value type is lint-homogeneous;
+// wrong-type accessor = error naming the actual type):
+func IntValues(key string) ([]int64, error)
+func FloatValues(key string) ([]float64, error)
+func StringValues(key string) ([]string, error)
+func BoolValues(key string) ([]bool, error)
 ```
 
 ### 3.4 CLI contract
 
 ```
-gff get <key>            -> prints "true"|"false"|<int>; exit 2 unknown key
+gff get <key>            -> prints "true"|"false"|<id[,id...]>; exit 2 unknown key
 gff enabled <key>        -> no output; exit 0 on / 1 off / 2 unknown (choice: exit 2 + stderr)
-gff set <key> <value>    -> writes ~/.config/gff/config.yaml (0600); validates type/range
+gff selected <key> <id>  -> no output; exit 0 selected / 1 not / 2 unknown key OR option id
+gff set <key> <value>    -> writes ~/.config/gff/config.yaml (0600); bool: true|false;
+                            choice: id or comma-list of ids (single mode: exactly one)
 gff unset <key>          -> removes key from user override
 gff list [--json]        -> table: PATH TYPE VALUE LAYER DESCRIPTION; --json = []Resolved
 gff lint [path]          -> lints features file (default: discovered repo file); exit 1 on findings
-gff export --shell       -> lines: GFF_<MANGLED>=<value> (values only from bool/int — injection-safe)
+gff export --format shell|dotenv|json [-o <file>]
+                         -> shell:  eval-able GFF_<MANGLED>=<value> lines (stdout)
+                            dotenv: identical KEY=value lines, default -o .env; must
+                                    parse with dotenv-family libs (hashicorp
+                                    go-envparse, joho/godotenv, python-dotenv, …)
+                            json:   full resolved snapshot (list --json shape incl.
+                                    typed choice payloads) — the bridge artifact for
+                                    non-Go languages
+                            values are bool literals or comma-joined lint-constrained
+                            kebab option ids — injection-safe by construction;
+                            --shell is kept as an alias for --format shell
 gff install              -> registers CWD repo + snapshot into user layer; exit 1 on area clash
 gff version              -> gss-style version block
 ```
@@ -314,19 +357,28 @@ sets:
       - {path: install.ai.claude, description: Claude CLI, boolDefault: true}
       - path: install.pkg.manager
         description: Package manager
-        choiceDefault: {selected: 0, options: {0: auto, 1: apt}}
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: auto, description: Auto-detect, stringValue: auto, selected: true}
+            - {id: apt, description: Debian/Ubuntu apt, stringValue: apt}
 `)
     ff, err := LoadFeatureFile(p)
     if err != nil { t.Fatal(err) }
     if got := ff.Sets[0].Features[0].GetBoolDefault(); !got { t.Fatal("bool default") }
-    if got := ff.Sets[0].Features[1].GetChoiceDefault().Options[1]; got != "apt" { t.Fatal("choice") }
+    cd := ff.Sets[0].Features[1].GetChoiceDefault()
+    if cd.Mode != gffv1.ChoiceMode_CHOICE_MODE_SINGLE { t.Fatal("mode") }
+    if cd.Options[1].Id != "apt" || cd.Options[1].GetStringValue() != "apt" { t.Fatal("choice option") }
+    if !cd.Options[0].Selected { t.Fatal("default selection") }
 }
 func TestLoadOverrides(t *testing.T) {
-    p := writeFile(t, "config.yaml", "install.ai.claude: false\ninstall.pkg.manager: 1\n")
+    p := writeFile(t, "config.yaml",
+        "install.ai.claude: false\ninstall.pkg.manager: apt\nshell.zsh.plugins: [fzf, starship]\n")
     o, err := LoadOverrides(p)
     if err != nil { t.Fatal(err) }
     if o["install.ai.claude"].GetBoolValue() != false { t.Fatal("bool override") }
-    if o["install.pkg.manager"].GetChoiceValue() != 1 { t.Fatal("choice override") }
+    if got := o["install.pkg.manager"].GetChoiceValue().Selected; len(got) != 1 || got[0] != "apt" { t.Fatal("single choice override") }
+    if got := o["shell.zsh.plugins"].GetChoiceValue().Selected; len(got) != 2 { t.Fatal("multi choice override") }
 }
 func TestLoadOverridesMissingFile(t *testing.T) { // sparse layer absent => empty, no error
     o, err := LoadOverrides(filepath.Join(t.TempDir(), "nope.yaml"))
@@ -336,8 +388,10 @@ func TestLoadOverridesMissingFile(t *testing.T) { // sparse layer absent => empt
 
   `lint_test.go` table test — cases (rule, input, wantFinding): duplicate path;
   negative name each prefix (`install.ai.no-claude` etc.); depth 2 (`install.claude`)
-  and 4; uppercase/underscore segment; choice `selected` not in `options`; empty
-  `options`; path not starting with the set's `area.`; clean file ⇒ no findings.
+  and 4; uppercase/underscore segment; choice: empty `options`, duplicate/non-kebab
+  option ids, mixed value types within one feature, `single` mode with zero or two
+  default-selected options, `mode` unspecified; path not starting with the set's
+  `area.`; clean file ⇒ no findings.
 - [ ] `go test ./internal/schema/` → FAIL.
 - [ ] Implement. `LoadFeatureFile`: read file; if `.json` → `protojson.Unmarshal`;
       else `yaml.Unmarshal` into `any`, normalize map keys to strings
@@ -398,15 +452,16 @@ func newResolver(t *testing.T, w world) *Resolver { /* writes files, returns Res
   4. system override flips ⇒ `LayerSystemOverride`
   5. user override flips back ⇒ `LayerUserOverride`
   6. override for UNKNOWN key ⇒ ignored by `All()`, `Resolve` ⇒ `ErrUnknownKey`
-  7. choice flag: default selected; override to valid index ⇒ value; override to
-     out-of-range index ⇒ error naming key and range
+  7. choice flag: default selection wins with no override; override to valid id(s) ⇒
+     that selection; override naming an unknown id, or two ids on a `single`-mode
+     flag ⇒ error naming the key and the offending ids
   8. no repo (WorkDir outside any git repo) ⇒ snapshots+overrides still resolve
   9. `All()` sorted by path; sparse overrides never invent keys
 - [ ] `go test ./internal/resolve/` → FAIL.
 - [ ] Implement: load def layers in order (every `*.yaml|*.json` in SystemSnapshotDir,
       then UserSnapshotDir, then live file via `gitx.RepoRoot(P.WorkDir)`+`SourcePath`);
       later def layer replaces a path's `(Feature, defLayer)`. Then apply the two
-      override maps in order; validate choice range against the winning def. Effective
+      override maps in order; validate choice ids + mode arity against the winning def. Effective
       value = default unless overridden; `Layer` = winning layer.
 - [ ] `go test ./internal/resolve/ -cover` → PASS, ≥85% here (this is the heart).
 - [ ] Commit: `feat(gff): 5-layer resolver with provenance + choice validation`
@@ -429,14 +484,15 @@ func newResolver(t *testing.T, w world) *Resolver { /* writes files, returns Res
 
 ### P1-T7: read verbs — get / enabled / list / lint
 
-**Files:** create `cmd/{get.go,enabled.go,list.go,lint.go}` + `cmd/read_test.go`.
+**Files:** create `cmd/{get.go,enabled.go,selected.go,list.go,lint.go}` + `cmd/read_test.go`.
 
 **Interfaces:** consumes Resolver; produces CLI contract §3.4. All verbs build
 `resolve.Resolver{P: paths.Default(), R: gitx.ExecRunner{}}`; tests inject temp
 paths via an unexported `newResolver` hook variable (`var newResolver = defaultResolver`
 in root.go, swapped in tests — same pattern gss uses for its runner).
 
-- [ ] Failing tests: `gff get k` prints `true\n` / choice prints `1\n`; unknown key ⇒
+- [ ] Failing tests: `gff get k` prints `true\n` / choice prints `apt\n` (comma-joined
+      ids when multi); `selected k apt` on/off/unknown-id (exit 0/1/2); unknown key ⇒
       exit-2 (assert via returned `*ExitError`-style sentinel: root maps
       `resolve.ErrUnknownKey` to `SilenceUsage` + `os.Exit(2)` in `main.go`; in tests
       assert the sentinel error); `enabled` on/off/unknown; `list` table contains
@@ -451,7 +507,8 @@ in root.go, swapped in tests — same pattern gss uses for its runner).
 **Files:** create `cmd/{set.go,unset.go}` + `cmd/write_test.go`.
 
 - [ ] Failing tests: `set k false` creates `~cfg/config.yaml` mode 0600 containing
-      only that key; `set` choice out-of-range ⇒ error, file untouched; `set` unknown
+      only that key; `set` choice with an unknown id, or two ids on a `single`-mode
+      flag ⇒ error, file untouched; `set` unknown
       key ⇒ ErrUnknownKey; `unset` removes key, keeps others; round-trip
       `set→get` agrees; NO test writes outside `t.TempDir()`.
 - [ ] Implement: read-modify-write `LoadOverrides` map + yaml marshal, atomic
@@ -469,15 +526,20 @@ in root.go, swapped in tests — same pattern gss uses for its runner).
 
 ```
 GFF_INSTALL_AI_CLAUDE=true
-GFF_INSTALL_PKG_MANAGER=1
+GFF_INSTALL_PKG_MANAGER=apt
 GFF_INSTALL_WINDOWS_WISPR_FLOW=false
 ```
 
-      (values come only from bool/int — nothing user-authored is emitted, so no quoting
-      needed; assert description text can contain `$(rm -rf)` without appearing);
+      (values are bool literals or option ids; ids are lint-constrained
+      `^[a-z0-9]+(-[a-z0-9]+)*$` so no quoting/injection vector exists; assert
+      description text can contain `$(rm -rf)` without appearing);
       `install` in a temp repo registers + snapshots (delegates to registry; assert via
-      `Sources()`), outside a repo ⇒ clear error.
-- [ ] Implement `export.go` (`--shell` flag required for now) + `install.go`
+      `Sources()`), outside a repo ⇒ clear error. Format tests: `--format dotenv -o
+      <tmp>/.env` writes the same lines as shell and round-trips through
+      `hashicorp/go-envparse` (test dep only — parity with dotenv-family parsers);
+      `--format json` output unmarshals into `[]Resolved` and carries choice option
+      ids + typed values; `--shell` alias behaves as `--format shell`.
+- [ ] Implement `export.go` (`--format shell|dotenv|json`, `-o`, `--shell` alias) + `install.go`
       (name = repo dir basename; url = `git config --get remote.origin.url` via
       gitx Runner, tolerate absence; commit = `rev-parse --short HEAD`).
 - [ ] PASS → Commit: `feat(gff): shell export + repo install verbs`
@@ -486,7 +548,7 @@ GFF_INSTALL_WINDOWS_WISPR_FLOW=false
 
 **Files:** create `pkg/gff/{gff.go,gff_test.go}`, `.github/workflows/gff-ci.yml`.
 
-- [ ] Failing test: `pkg/gff` `Bool`/`Choice` agree with a Resolver over the same
+- [ ] Failing test: `pkg/gff` `Bool`/`Selected`/`IsSelected`/`StringValues` agree with a Resolver over the same
       temp world (SDK takes an optional `WithPaths(p)` functional option so the test
       can point it at temp dirs; default = `paths.Default()`).
 - [ ] Implement thin wrapper. PASS.
@@ -669,8 +731,9 @@ function Test-GffOn([string]$Key) {
       (`enter` on area → components → features) shows a feature row containing
       description + `default`/`override` + winning layer; pressing `space` on a bool
       writes ONLY the user override file (temp paths world) and the row flips;
-      `space` on a choice opens the option picker (indexed list from
-      `ChoiceDefault.Options`); `q` after no toggles writes nothing (mtime unchanged).
+      `space` on a choice opens the option picker — radio list for `single` mode,
+      checkbox list for `multi` (from `ChoiceDefault.Options`, showing id +
+      description + typed value); `q` after no toggles writes nothing (mtime unchanged).
 - [ ] Implement: `Model{items []resolve.Resolved, cursor, expanded map[string]bool, w io.Writer}`;
       reuse `cmd`'s resolver hook; writes go through the same code path as `gff set`
       (extract `internal/overrides.Write(paths, key, value)` from P1-T8 if not already
@@ -702,7 +765,7 @@ function Test-GffOn([string]$Key) {
 | F4 layer matrix, unknown ⇒ exit 2 | `resolve_test.go` cases 1–9; `cmd/read_test.go` sentinel |
 | F5 discovery + `gff.source` redirect, worktree `.git` file | `internal/gitx/gitx_test.go` |
 | F6 exclusive claims, refresh, moved clone | `internal/registry/registry_test.go` |
-| F7 export mangling, injection-safety, choice ints | `cmd/export_test.go` + `testdata/export.golden` |
+| F7 export mangling, injection-safety, choice id CSV | `cmd/export_test.go` + `testdata/export.golden` |
 | F8 user-override-only writes, 0600, no-dir | `cmd/write_test.go` |
 | F9 gating fail-open (unset/true/false/FALSE), skip msg | `opt/lib/gff_test.sh` (bash AND dash) |
 | F9 Windows pass-through | P2-T4 pwsh check or P2-T5 human run |

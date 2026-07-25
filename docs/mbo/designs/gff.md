@@ -38,9 +38,11 @@ Verified facts grounding this design:
 
 - A generic feature-flag engine (`sdk/gff`) with zero repo-specific keys compiled in.
 - Hierarchical canonical keys: `area → component → feature` (dotted paths).
-- Two value types: **bool** (strictly `true`=on / `false`=off; negative-named flags are
-  rejected by lint) and **choice** (`selected int` over an indexed option set
-  `map<int,string>` where the string is the human description).
+- Two value types: **bool** (strictly `true`=on / `false`=off; negative-named flags
+  are rejected by lint) and **choice** — an option set with `mode: single` (radio:
+  exactly one selected) or `mode: multi` (checkboxes: zero or more selected), where
+  each option has a stable string id, a human description, a default selected state,
+  and a typed payload value (int/float/string/bool; homogeneous within one feature).
 - Repo-dictated defaults persisted in git (tracked, diffable, PR-reviewed) + personal
   and system overrides at well-known paths.
 - Multi-repo: any repo can define flags for its own claimed area(s); `gff install`
@@ -103,8 +105,10 @@ the proto — defeats generalization; the engine must stay data-free.
 `sdk/gff` — a Go module mirroring `sdk/gss` structure:
 
 - **`proto/gff/v1/features.proto`** — generic messages only: `FeatureSet{area,
-  features[]}`, `Feature{path, type, description, default_value}`, `BoolValue`,
-  `ChoiceValue{selected, options map<int32,string>}`, `Config{overrides}`,
+  features[]}`, `Feature{path, description, oneof default}`,
+  `ChoiceDefault{mode: single|multi, options[]}`,
+  `ChoiceOption{id, description, selected, oneof value: int64|double|string|bool}`,
+  `Value{oneof: bool | ChoiceSelection{selected ids[]}}`,
   `Source{name, url, areas[], commit}`, `SourceRegistry`. Generated Go is committed so
   contributors don't need protoc; `buf` (or pinned protoc in `build.sh`) regenerates.
 - **`internal/schema`** — load/validate `.gff/features.yaml|json` (protojson-compatible
@@ -121,11 +125,14 @@ the proto — defeats generalization; the engine must stay data-free.
   reports *which* layer won (surfaced in `list`/TUI).
 - **`internal/registry`** — `~/.config/gff/sources.yaml` management; exclusive area
   claims; snapshot refresh on `gff install`.
-- **`cmd/`** — cobra verbs: `get`, `enabled` (exit-code gate), `set`/`unset` (user
-  override only), `list [--json]`, `install`, `export --shell`
-  (`GFF_<AREA>_<COMPONENT>_<FEATURE>=…`), `gen`, `lint`, `tui`, `version`.
+- **`cmd/`** — cobra verbs: `get`, `enabled` + `selected` (exit-code gates), `set`/
+  `unset` (user override only), `list [--json]`, `install`,
+  `export --format shell|dotenv|json` (`GFF_<AREA>_<COMPONENT>_<FEATURE>=…`; dotenv
+  parses with dotenv-family libs; json = full resolved snapshot with typed choice
+  payloads), `gen`, `lint`, `tui`, `version`.
 - **`internal/tui`** — bubbletea tree: area → component → feature; shows description,
-  default, effective value + winning layer; toggling writes the user override.
+  default, effective value + winning layer; bool rows toggle, choice rows open a
+  radio (`single`) or checkbox (`multi`) picker; all writes go to the user override.
 - **`pkg/gff`** — the public Go SDK (runtime API); `gff gen` emits typed accessors.
 - **Dotfiles instrumentation** — `.gff/features.yaml` at the repo root enumerating
   ~36 flags (all default on) across `install.shell.*`, `install.pkg.*`,
@@ -233,5 +240,35 @@ never grow them; that tier is served well by Unleash/GrowthBook et al.
   [OpenFeature](https://openfeature.dev/) file-provider so app code in registered repos
   can consume the same flags through the standard API. Noted for a post-P4 objective.
 
+## 8. Cross-language consumption strategy (future work, recorded 2026-07-25)
+
+In-scope today: the Go SDK (`pkg/gff`) plus two universal bridges — the CLI exit-code
+gates (`enabled`/`selected`) for shell and any language willing to exec, and
+`export --format dotenv|json` for anything that can read a file (dotenv-family libs:
+hashicorp/go-envparse, joho/godotenv, python-dotenv, dotenv-java/npm; env/dotenv carry
+selected ids only — typed choice payloads require the json form). Neither bridge is
+ever deprecated.
+
+Native SDKs for Python/Java/TypeScript (no shelling out) are a **post-P4 objective**
+with a decided shape:
+
+1. **Types are free** — `buf generate` emits each language's message types from the
+   same `features.proto`; the typed choice options survive codegen.
+2. **Semantics stay in one place** — rather than reimplementing the 5-layer resolver
+   per language (drift; would demand a cross-language conformance corpus) or shipping
+   a cgo `libgff` FFI (cross-compile/packaging toil), non-Go SDKs read the
+   **resolved JSON snapshot** produced by `gff export --format json`: ~100 lines per
+   language, the Go resolver remains the single semantic authority, offline-safe.
+   Staleness (re-export after flag changes) is acceptable for machine-config flags.
+3. **API surface via [OpenFeature](https://openfeature.dev/)** — each language gets a
+   thin OpenFeature provider over the snapshot, reusing the existing OpenFeature SDKs
+   instead of inventing per-language APIs.
+
+Escalate to the FFI approach only if a consumer needs live in-process resolution
+without a snapshot; reassess then.
+
 > Produced via `superpowers:brainstorming`. Registered in `../index.md`; spec at
-> `../specs/gff.md`. §7 prior-art survey added 2026-07-25 at user request.
+> `../specs/gff.md`. §7 prior-art survey added 2026-07-25 at user request. Choice type
+> generalized 2026-07-25: single (radio) / multi (checkbox) modes, stable string
+> option ids, per-option typed values (int/float/string/bool, homogeneous per
+> feature) — replaces the original `selected int` + `map<int,string>` scheme.

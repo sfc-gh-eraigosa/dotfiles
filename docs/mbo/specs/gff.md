@@ -31,8 +31,9 @@ scripts.
 - *Actor:* user at a terminal.
 - *Trigger:* `gff` / `gff tui` / `gff list`.
 - *Flow:* TUI tree area→component→feature; each row shows description, default,
-  effective value, and the layer that set it; toggling a bool or picking a choice
-  writes `~/.config/gff/config.yaml` only.
+  effective value, and the layer that set it; toggling a bool, or picking choice
+  options (radio for `single` mode, checkboxes for `multi`), writes
+  `~/.config/gff/config.yaml` only.
 - *Acceptance:* a toggle round-trips (visible in `gff get`, survives restart); the
   repo defaults file is never modified by the TUI/CLI.
 
@@ -80,35 +81,46 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
   lowercase-kebab segments, and 3-level depth.
 - **F2 bool type:** values strictly `true`/`false`; lint rejects negative names
   (`no-*`, `disable-*`, `skip-*`) so `true` always means ON.
-- **F3 choice type:** `options: map<int,string>` (index → description) +
-  `default/selected: int`; setting an out-of-range index is an error.
+- **F3 choice type:** an option set with `mode: single|multi` — `single` renders as a
+  radio group (exactly one option selected; lint + `set` enforce arity), `multi` as
+  checkboxes (zero or more selected). Each option carries a stable string `id`
+  (kebab-case, unique within the feature), a human `description`, a default
+  `selected` state, and a typed payload `value` (int, float, string, or bool; all
+  options within one feature must share the same value type — lint-enforced).
+  Selecting an unknown option id is an error.
 - **F4 layered resolution:** design §4 chain; overrides sparse; unknown key ⇒ CLI
   error (exit 2), distinct from `enabled`'s false (exit 1).
 - **F5 git-persisted defaults:** tracked `.gff/features.yaml`; upward discovery from
   CWD; `git config gff.source` redirect honored.
 - **F6 machine registry:** `gff install` registers/refreshes {name, url, areas,
   commit} + snapshot; exclusive area claims.
-- **F7 shell interface:** `gff enabled <key>` (0=on, 1=off, 2=unknown key);
-  `gff export --shell` emits `GFF_<AREA>_<COMPONENT>_<FEATURE>=true|false|<int>`
-  (dots/dashes → underscores, uppercased).
+- **F7 shell/bridge interface:** `gff enabled <key>` (0=on, 1=off, 2=unknown key);
+  `gff selected <key> <option-id>` (0=selected, 1=not, 2=unknown key/id);
+  `gff export --format shell|dotenv|json [-o <file>]` — shell/dotenv emit
+  `GFF_<AREA>_<COMPONENT>_<FEATURE>=true|false|<id[,id…]>` (dots/dashes →
+  underscores, uppercased; option ids are lint-constrained kebab so values stay
+  injection-safe; dotenv output must parse with dotenv-family libs such as
+  hashicorp/go-envparse and python-dotenv), json emits the full resolved snapshot
+  including typed choice payloads (the non-Go language bridge).
 - **F8 write path:** `set`/`unset`/TUI mutate only `~/.config/gff/config.yaml`
   (created 0600 on first write, parent dirs as needed).
 - **F9 install.sh instrumentation:** ~36 bool flags per design §4, all default on;
   gff built immediately after the goenv/Go step; every gate fails open; PS phases
   receive `GFF_*` env and treat unset as on.
 - **F10 TUI:** tree nav, description/default/effective/winning-layer per row, bool
-  toggle + choice picker, quit-without-write safety.
+  toggle + choice picker (radio/checkbox per mode, options show id + description +
+  typed value), quit-without-write safety.
 
 ## 5. Evaluation criteria (per feature)
 
 | Feature | Fires | Must not fire | Edge | Pass |
 | :-- | :-- | :-- | :-- | :-- |
 | F1/F2 lint | dup path, negative bool name, bad depth → non-zero + named finding | clean file | 2-level or 4-level path | table tests |
-| F3 choice | out-of-range set rejected | valid index | empty options map (lint error) | table tests |
+| F3 choice | unknown id rejected; 2 ids on `single` rejected | valid selection (1 id single / n ids multi) | empty options, dup ids, mixed value types, `single` with ≠1 default (all lint errors) | table tests |
 | F4 resolve | higher layer wins per key | lower layer leaking through | key defined in no layer ⇒ unknown (exit 2) | matrix test over all 5 layers |
 | F5 discovery | finds `.gff/` from nested CWD; follows `gff.source` redirect | files outside a repo | worktree (`.git` file not dir) | temp-repo tests |
 | F6 registry | second claim of owned area rejected, owner named | re-install same repo (refresh) | moved clone (snapshot still serves) | registry tests |
-| F7 export | emits every key, correct mangling | injection via description text (values only, quoted) | choice flags export the int | golden-file test |
+| F7 export | emits every key, correct mangling | injection via description text (values are bool literals / kebab ids only) | choice flags export selected ids CSV | golden-file test |
 | F8 writes | only user override mtime changes | any write to repo/system files | no `~/.config/gff` dir yet | fs-mock test |
 | F9 gating | `false` ⇒ step body skipped, SKIP line printed | enabled steps changing behavior | gff binary absent ⇒ all run | bats-style harness on an extracted gate function |
 | F10 TUI | toggle writes override; `q` without change writes nothing | writes on navigation | terminal too small | teatest golden frames |
@@ -138,7 +150,10 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
 
 - Flag servers, remote fetch, percentage rollouts, per-user targeting — gff is a local,
   git-backed system by design.
-- Non-Go language SDKs — shell gets the CLI/env interface; anything else is future work.
+- Non-Go language SDKs — shell gets the CLI/env interface, and any language can
+  consume `export --format dotenv|json` today; native SDKs (generated proto types +
+  OpenFeature providers over the JSON snapshot) are a recorded post-P4 objective
+  (design §8), not part of this one.
 - Migrating existing config mechanisms (`~/.zshrc.local`, `ai/plugins.yaml`) onto gff —
   candidates later, not part of this objective.
 - Auto-disabling any component — this objective only enumerates (all on); disabling
