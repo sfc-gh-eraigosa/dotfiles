@@ -74,9 +74,13 @@ the proto — defeats generalization; the engine must stay data-free.
 
 **Git persistence of defaults**
 
-1. **Tracked file + git-config discovery (chosen):** `.gff/features.yaml` tracked in the
-   repo; discovery walks up from CWD to the repo root (like `.git` discovery); a
-   `[gff] source` git-config key can redirect to another path/repo.
+1. **Tracked file + git-config discovery (chosen):** a flag file tracked in the repo;
+   discovery walks up from CWD to the repo root (like `.git` discovery), probing
+   `.gff/features.yaml` then `.github/gff/features.yaml` (`.gff/` wins if both — the
+   dotfiles repo uses the `.github/gff/` form to keep its root clean); a
+   `[gff] source` git-config key can redirect to another path/repo entirely.
+   (`.git/.gff` was ruled out: `.git/` contents are untracked, uncloned, and
+   un-reviewable — it would break the git-persisted premise.)
 2. Pure git-config storage (`git config -f .gffconfig`) — dotted keys map naturally but
    descriptions/choice sets don't fit flat config values.
 3. Dedicated ref (`refs/gff/*`) — most git-native but bypasses PR review and needs
@@ -110,15 +114,19 @@ the proto — defeats generalization; the engine must stay data-free.
   `ChoiceOption{id, description, selected, oneof value: int64|double|string|bool}`,
   `Value{oneof: bool | ChoiceSelection{selected ids[]}}`,
   `Source{name, url, areas[], commit}`, `SourceRegistry`. Generated Go is committed so
-  contributors don't need protoc; `buf` (or pinned protoc in `build.sh`) regenerates.
-- **`internal/schema`** — load/validate `.gff/features.yaml|json` (protojson-compatible
-  encodings of `FeatureSet`); lint rules (no negative bool names, unique paths, valid
-  choice indices).
+  contributors don't need protoc; regeneration is raw `protoc` + a go.mod-pinned
+  `protoc-gen-go` behind `make gff-proto` (buf was considered and rejected as
+  unreliable — no buf anywhere in the toolchain).
+- **`internal/schema`** — load/validate the repo flag file (`.yaml|.json`,
+  protojson-compatible encodings of `FeatureSet`); lint rules (no negative bool
+  names, unique paths, unique/kebab option ids, homogeneous option value types,
+  `single`-mode arity).
 - **`internal/resolve`** — the layer chain (lowest → highest):
   1. source-default snapshots: `/opt/conf/gff/<source>.yaml` (system), then
      `~/opt/conf/gff/<source>.yaml` (user/repo-shipped);
-  2. live repo defaults: `<repo>/.gff/features.yaml` when CWD is inside a registered
-     repo (git-style upward discovery; `[gff] source` git-config redirect honored);
+  2. live repo defaults: the repo flag file (probe `.gff/features.yaml` →
+     `.github/gff/features.yaml`) when CWD is inside a registered repo (git-style
+     upward discovery; `[gff] source` git-config redirect honored);
   3. overrides: `/var/opt/conf/gff/config.yaml` (system), then
      `~/.config/gff/config.yaml` (user — the **only** file gff ever writes).
   Sparse per-key merge; effective value = highest layer that sets the key. The resolver
@@ -127,9 +135,9 @@ the proto — defeats generalization; the engine must stay data-free.
   claims; snapshot refresh on `gff install`.
 - **`cmd/`** — cobra verbs: `get`, `enabled` + `selected` (exit-code gates), `set`/
   `unset` (user override only), `list [--json]`, `install`,
-  `export --format shell|dotenv|json` (`GFF_<AREA>_<COMPONENT>_<FEATURE>=…`; dotenv
-  parses with dotenv-family libs; json = full resolved snapshot with typed choice
-  payloads), `gen`, `lint`, `tui`, `version`.
+  `export --format shell|dotenv|json|yaml` (`GFF_<AREA>_<COMPONENT>_<FEATURE>=…`;
+  dotenv parses with dotenv-family libs; json/yaml = the full resolved snapshot with
+  typed choice payloads in two encodings), `gen`, `lint`, `tui`, `version`.
 - **`internal/tui`** — bubbletea tree: area → component → feature; shows description,
   default, effective value + winning layer; bool rows toggle, choice rows open a
   radio (`single`) or checkbox (`multi`) picker; all writes go to the user override.
@@ -142,7 +150,8 @@ the proto — defeats generalization; the engine must stay data-free.
   reproducibility; `@latest` allowed). The global `--source <registered-name|path>`
   flag scopes resolution to another repo's flags from any CWD — purely local, no
   network fetch at resolution time.
-- **Dotfiles instrumentation** — `.gff/features.yaml` at the repo root enumerating
+- **Dotfiles instrumentation** — `.github/gff/features.yaml` (probe path 2; no new
+  repo-root entry) enumerating
   ~36 flags (all default on) across `install.shell.*`, `install.pkg.*`,
   `install.tools.*`, `install.runtime.*`, `install.ai.*`, `install.sdk.*`,
   `install.fonts.*`, `install.network.*`, and `install.windows.*` (incl.
@@ -171,7 +180,7 @@ enumeration + install.sh/PowerShell gating → **P3** TUI → **P4** `gff gen`.
 
 ## 6. Rollback
 
-- gff is additive: removing the `.gff/` dir, the `sdk/gff` build block, and the
+- gff is additive: removing `.github/gff/`, the `sdk/gff` build block, and the
   `gff_on`-style gates restores today's unconditional install.sh behavior.
 - Fail-open means a broken/missing gff binary already degrades to current behavior.
 - Per-phase PRs (P1–P4) revert independently; P2 (instrumentation) is the only one
@@ -274,7 +283,7 @@ never grow them; that tier is served well by Unleash/GrowthBook et al.
 
 In-scope today: the Go SDK (`pkg/gff`) plus two universal bridges — the CLI exit-code
 gates (`enabled`/`selected`) for shell and any language willing to exec, and
-`export --format dotenv|json` for anything that can read a file (dotenv-family libs:
+`export --format dotenv|json|yaml` for anything that can read a file (dotenv-family libs:
 hashicorp/go-envparse, joho/godotenv, python-dotenv, dotenv-java/npm; env/dotenv carry
 selected ids only — typed choice payloads require the json form). Neither bridge is
 ever deprecated.
@@ -282,8 +291,9 @@ ever deprecated.
 Native SDKs for Python/Java/TypeScript (no shelling out) are a **post-P4 objective**
 with a decided shape:
 
-1. **Types are free** — `buf generate` emits each language's message types from the
-   same `features.proto`; the typed choice options survive codegen.
+1. **Types are free** — raw `protoc` emits each language's message types from the
+   same `features.proto` (`--python_out`, `--java_out`, community TS plugins); the
+   typed choice options survive codegen.
 2. **Semantics stay in one place** — rather than reimplementing the 5-layer resolver
    per language (drift; would demand a cross-language conformance corpus) or shipping
    a cgo `libgff` FFI (cross-compile/packaging toil), non-Go SDKs read the
@@ -304,3 +314,8 @@ without a snapshot; reassess then.
 > feature) — replaces the original `selected int` + `map<int,string>` scheme.
 > 2026-07-25 (later): zero-install `go run <module>@<tag>` promoted to a first-class
 > invocation mode and global `--source <name|path>` added for cross-repo resolution.
+> 2026-07-25 (later still): flag-file discovery became a probe list
+> (`.gff/features.yaml` → `.github/gff/features.yaml`; dotfiles adopts the latter,
+> keeping its root clean); `export` gained a `yaml` format; buf dropped for raw
+> protoc behind `make gff-proto`; validation raised to a 90% unit bar + binary-level
+> e2e harness + scripted demo (plan §7).

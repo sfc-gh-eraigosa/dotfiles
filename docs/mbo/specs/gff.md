@@ -9,7 +9,8 @@
 
 A generic feature-flag engine (`sdk/gff`, Go, cobra + bubbletea) whose flag *schema* is
 defined by protobuf and whose flag *data* is persisted in git: each repo tracks its own
-`.gff/features.yaml` defaults, `gff install` deploys them machine-wide, and users flip
+flag file — probed at `.gff/features.yaml` then `.github/gff/features.yaml` (dotfiles
+uses the latter; repo root stays clean) — `gff install` deploys it machine-wide, and users flip
 flags via a well-known override file or the TUI. The dotfiles repo becomes the first
 consumer: every `install.sh` component (Linux and Windows sides) gets a bool flag,
 all defaulting on, so components can be disabled per machine later without editing
@@ -39,7 +40,8 @@ scripts.
 
 **UC3 — a repo adopts gff**
 - *Actor:* maintainer of any git repo.
-- *Trigger:* adds `.gff/features.yaml` declaring area(s) + features; runs `gff lint`,
+- *Trigger:* adds a flag file (either probe path: `.gff/features.yaml` or
+  `.github/gff/features.yaml`) declaring area(s) + features; runs `gff lint`,
   then `gff install`.
 - *Acceptance:* inside the repo, `gff get` resolves live from the tracked file; after
   install, the same keys resolve from any CWD via the snapshot; a second repo claiming
@@ -60,8 +62,8 @@ Components (each independently testable; see design §4 for full detail):
 
 - `proto/gff/v1/features.proto` — generic schema; committed generated Go; regeneration
   pinned in `build.sh`, CI-checked clean.
-- `internal/schema` — parse + validate + lint `.gff/features.yaml|json`
-  (protojson-compatible encodings of `FeatureSet`).
+- `internal/schema` — parse + validate + lint the repo flag file (`.yaml|.json`,
+  protojson-compatible encodings of `FeatureSet`).
 - `internal/resolve` — layer chain (design §4): source snapshots (`/opt/conf/gff/`,
   `~/opt/conf/gff/`) → live repo file (git-style discovery, `[gff] source` redirect) →
   overrides (`/var/opt/conf/gff/config.yaml`, `~/.config/gff/config.yaml`); sparse
@@ -92,18 +94,20 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
   Selecting an unknown option id is an error.
 - **F4 layered resolution:** design §4 chain; overrides sparse; unknown key ⇒ CLI
   error (exit 2), distinct from `enabled`'s false (exit 1).
-- **F5 git-persisted defaults:** tracked `.gff/features.yaml`; upward discovery from
-  CWD; `git config gff.source` redirect honored.
+- **F5 git-persisted defaults:** tracked flag file; upward discovery from CWD probing
+  `.gff/features.yaml` then `.github/gff/features.yaml` (`.gff/` wins if both);
+  `git config gff.source` redirect overrides the probe entirely.
 - **F6 machine registry:** `gff install` registers/refreshes {name, url, areas,
   commit} + snapshot; exclusive area claims.
 - **F7 shell/bridge interface:** `gff enabled <key>` (0=on, 1=off, 2=unknown key);
   `gff selected <key> <option-id>` (0=selected, 1=not, 2=unknown key/id);
-  `gff export --format shell|dotenv|json [-o <file>]` — shell/dotenv emit
+  `gff export --format shell|dotenv|json|yaml [-o <file>]` — shell/dotenv emit
   `GFF_<AREA>_<COMPONENT>_<FEATURE>=true|false|<id[,id…]>` (dots/dashes →
   underscores, uppercased; option ids are lint-constrained kebab so values stay
   injection-safe; dotenv output must parse with dotenv-family libs such as
-  hashicorp/go-envparse and python-dotenv), json emits the full resolved snapshot
-  including typed choice payloads (the non-Go language bridge).
+  hashicorp/go-envparse and python-dotenv), json/yaml emit the full resolved snapshot
+  including typed choice payloads — two encodings of the same struct (the non-Go
+  language bridge).
 - **F8 write path:** `set`/`unset`/TUI mutate only `~/.config/gff/config.yaml`
   (created 0600 on first write, parent dirs as needed).
 - **F9 install.sh instrumentation:** ~36 bool flags per design §4, all default on;
@@ -126,7 +130,7 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
 | F1/F2 lint | dup path, negative bool name, bad depth → non-zero + named finding | clean file | 2-level or 4-level path | table tests |
 | F3 choice | unknown id rejected; 2 ids on `single` rejected | valid selection (1 id single / n ids multi) | empty options, dup ids, mixed value types, `single` with ≠1 default (all lint errors) | table tests |
 | F4 resolve | higher layer wins per key | lower layer leaking through | key defined in no layer ⇒ unknown (exit 2) | matrix test over all 5 layers |
-| F5 discovery | finds `.gff/` from nested CWD; follows `gff.source` redirect | files outside a repo | worktree (`.git` file not dir) | temp-repo tests |
+| F5 discovery | finds flag file at either probe path from nested CWD; follows `gff.source` redirect | files outside a repo | worktree (`.git` file not dir); both probe paths present (`.gff/` wins) | temp-repo tests |
 | F6 registry | second claim of owned area rejected, owner named | re-install same repo (refresh) | moved clone (snapshot still serves) | registry tests |
 | F7 export | emits every key, correct mangling | injection via description text (values are bool literals / kebab ids only) | choice flags export selected ids CSV | golden-file test |
 | F8 writes | only user override mtime changes | any write to repo/system files | no `~/.config/gff` dir yet | fs-mock test |
@@ -137,7 +141,9 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
 ## 6. Verification harness
 
 - Go: table-driven unit tests per package; resolver matrix (every layer × bool/choice ×
-  set/unset); ≥60% coverage (repo `sdk/` gate); `go vet` + lint in CI.
+  set/unset); ≥90% coverage (gff's own CI bar; the repo `sdk/` floor is 60%);
+  `go vet` + lint in CI; binary-level e2e harness + adversarial suite + scripted
+  demo per plan §7.
 - Golden files: `export --shell` output, `gen` output, `list --json`.
 - Proto: CI job regenerates and fails on diff.
 - Shell: `make lint-shell` + `make lint-portability` on install.sh edits; a test
@@ -150,17 +156,19 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
 
 - Go toolchain pinned by `.go-version` (already installed by install.sh before sdk builds).
 - New deps: `google.golang.org/protobuf`, `github.com/charmbracelet/bubbletea`
-  (+lipgloss/bubbles), buf or pinned protoc in `build.sh` (generator only; not needed
-  by contributors since generated code is committed).
+  (+lipgloss/bubbles); regeneration only: system `protoc` + go.mod-pinned
+  `protoc-gen-go` via `make gff-proto` (no buf; not needed by contributors since
+  generated code is committed).
 - `.gitignore`: `sdk/**` coverage exists for gss-era paths — verify `!`-rules cover
-  `sdk/gff/**` and the new top-level `.gff/` before staging (repo allowlist gotcha).
+  `sdk/gff/**`, and that `!.github/**` covers `.github/gff/` (expected: yes — no new
+  rules needed) before staging (repo allowlist gotcha).
 
 ## 8. Out of scope (and why)
 
 - Flag servers, remote fetch, percentage rollouts, per-user targeting — gff is a local,
   git-backed system by design.
 - Non-Go language SDKs — shell gets the CLI/env interface, and any language can
-  consume `export --format dotenv|json` today; native SDKs (generated proto types +
+  consume `export --format dotenv|json|yaml` today; native SDKs (generated proto types +
   OpenFeature providers over the JSON snapshot) are a recorded post-P4 objective
   (design §8), not part of this one.
 - Migrating existing config mechanisms (`~/.zshrc.local`, `ai/plugins.yaml`) onto gff —
