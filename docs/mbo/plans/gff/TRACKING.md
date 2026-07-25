@@ -1,7 +1,7 @@
 # gff — live state ledger
 
 - **Slug:** gff
-- **Started:** _(not started)_
+- **Started:** 2026-07-25
 - **Playbook:** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) · **Cursor:** [`TODO.md`](./TODO.md)
 - **Plan (source of truth):** [`../gff.md`](../gff.md) · spec [`../../specs/gff.md`](../../specs/gff.md)
 - **Objective anchors:** issue #180 · design PR #181 · `docs/mbo/index.md` row `gff`
@@ -19,7 +19,7 @@ Fill in from the `gss feature worker add --json` output — **verbatim**, never 
 
 | Leaf | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| `p1-engine` | _(pending)_ | _(pending)_ | _(pending)_ | _(pending)_ | todo |
+| `p1-engine` | `gff/edward-raigosa/p1-engine` | `feature/gff/edward-raigosa/p1-engine` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p1-engine` | _(pending)_ | building |
 | `p2-instrument` | _(pending)_ | _(pending)_ | _(pending)_ | _(pending)_ | todo |
 | `p3-tui` | _(pending)_ | _(pending)_ | _(pending)_ | _(pending)_ | todo |
 | `p4-gen` | _(pending)_ | _(pending)_ | _(pending)_ | _(pending)_ | todo |
@@ -37,7 +37,7 @@ e2e harness green; `build.sh` installs a working binary.
 
 | Task | Status | Commit | Evidence (test run / gate) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| P1-T1 module scaffold + version | todo | | | |
+| P1-T1 module scaffold + version | done | _(fill at commit)_ | `go test ./... && go vet ./...` -> ok (cmd 0.002s); `bash build.sh` -> installed; `${HOME}/opt/bin/gff version` prints `gff v0.1.0` block | RED verified: `undefined: NewRootCmd` |
 | P1-T2 proto schema + committed codegen | todo | | | |
 | P1-T3 schema load + lint | todo | | | ≥90% pkg cover |
 | P1-T4 paths + git discovery | todo | | | |
@@ -218,3 +218,4 @@ One line per working session. Never rewrite history here — append.
 | Date | Session | Leaf(s) | What advanced |
 | :-- | :-- | :-- | :-- |
 | 2026-07-25 | planning | — | Tracking files authored (`IMPLEMENTATION.md`, `TRACKING.md`, `TODO.md`); build not yet started |
+| 2026-07-25 | build-1 | p1-engine | Preflight green (plan on origin/main; go 1.26.3 toolchain, go directive stays 1.26.1; protoc 3.21.12; gh authed). NOTE: gff feature row was absent from the gss registry post-#181-merge; ran `gss feature start gff` to recreate it, then added the p1-engine worker. |

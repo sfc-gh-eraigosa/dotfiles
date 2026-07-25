@@ -22,12 +22,12 @@
 
 ## Preflight (once, before any leaf)
 
-- [ ] Confirm design PR #181 is merged: `git -C "${HOME}/git/dotfiles" fetch origin && git -C "${HOME}/git/dotfiles" show origin/main:docs/mbo/plans/gff.md | head -5`
-- [ ] Confirm toolchain: `go version` (matches `.go-version` = 1.26.1), `git --version`, `gh auth status`, `gss feature list`
-- [ ] Confirm `command -v protoc` (needed only for P1-T2 / regen checks); install if absent
-- [ ] Read plan §3 in full — the frozen contracts (proto, file formats, Go interfaces, CLI, shell)
-- [ ] Read plan §6.1 (leaf DAG) and §7 (validation plan, IH-*/IA-*, §7.4 matrix, §7.5 done-when)
-- [ ] Read `IMPLEMENTATION.md` §3 (the per-task loop) and §5 (hard rules)
+- [x] Confirm design PR #181 is merged: `git -C "${HOME}/git/dotfiles" fetch origin && git -C "${HOME}/git/dotfiles" show origin/main:docs/mbo/plans/gff.md | head -5`
+- [x] Confirm toolchain: `go version` (matches `.go-version` = 1.26.1), `git --version`, `gh auth status`, `gss feature list`
+- [x] Confirm `command -v protoc` (needed only for P1-T2 / regen checks); install if absent
+- [x] Read plan §3 in full — the frozen contracts (proto, file formats, Go interfaces, CLI, shell)
+- [x] Read plan §6.1 (leaf DAG) and §7 (validation plan, IH-*/IA-*, §7.4 matrix, §7.5 done-when)
+- [x] Read `IMPLEMENTATION.md` §3 (the per-task loop) and §5 (hard rules)
 
 ---
 
@@ -35,9 +35,9 @@
 
 ## Leaf setup
 
-- [ ] `gss feature worker add --feature gff --purpose p1-engine --engine claude --json --description "P1 engine: proto schema, resolver, registry, core CLI, SDK, CI, e2e harness (#180)"`
-- [ ] Record `worker_ref` / `branch` / `worktree_path` **verbatim** in `TRACKING.md` §0
-- [ ] `cd <WT>` and confirm you are on the worker branch (`git status -sb`)
+- [x] `gss feature worker add --feature gff --purpose p1-engine --engine claude --json --description "P1 engine: proto schema, resolver, registry, core CLI, SDK, CI, e2e harness (#180)"`
+- [x] Record `worker_ref` / `branch` / `worktree_path` **verbatim** in `TRACKING.md` §0
+- [x] `cd <WT>` and confirm you are on the worker branch (`git status -sb`)
 
 ---
 
@@ -47,22 +47,22 @@
 `sdk/gff/cmd/{root.go,version.go,root_test.go}`, `sdk/gff/internal/version/version.go`,
 symlink `sdk/gff/CLAUDE.md → AGENTS.md`.
 
-- [ ] SETUP: `mkdir -p <WT>/sdk/gff/{cmd,internal/version}`
-- [ ] SETUP: copy `sdk/gsl/build.sh` → `sdk/gff/build.sh`; replace every `gsl` with `gff` (stamps `internal/version` via ldflags only — no build vars in `cmd`/`main`)
-- [ ] SETUP: write `sdk/gff/VERSION` = `0.1.0`; copy `sdk/gsl/LICENSE` → `sdk/gff/LICENSE`
-- [ ] SETUP: `go.mod` — module `github.com/sfc-gh-eraigosa/dotfiles/sdk/gff`, `go 1.26.1`; `go get github.com/spf13/cobra`
-- [ ] SETUP: `internal/version/version.go` — vars `Version, Commit, BuildDate, Dirty = "dev","none","unknown","false"` + `func String() string` (mirror gsl's format)
-- [ ] RED: write `cmd/root_test.go` `TestVersionCommand` exactly as the plan's snippet (buffers on `NewRootCmd()`, args `{"version"}`, asserts output contains `gff`)
-- [ ] RUN-RED: `go test ./cmd/` → expect **FAIL** (`NewRootCmd` undefined)
-- [ ] GREEN: `cmd/root.go` — `NewRootCmd() *cobra.Command` (Use `gff`, Short "git fast features — layered feature flags persisted in git") + `Execute()`; later verbs self-register via `init()` + `rootCmd.AddCommand` (copy the `sdk/gsl/cmd` pattern)
-- [ ] GREEN: `cmd/version.go` printing `version.String()`; `main.go` calling `cmd.Execute()`
-- [ ] RUN-GREEN: `go test ./... && go vet ./...` → expect **PASS**
-- [ ] VERIFY: `bash build.sh` installs `${HOME}/opt/bin/gff`; `${HOME}/opt/bin/gff version` prints the version block
-- [ ] DOCS: write `sdk/gff/README.md` and `sdk/gff/AGENTS.md`; `ln -s AGENTS.md sdk/gff/CLAUDE.md`
-- [ ] DOCS: add the `sdk/gff` line to the root `CLAUDE.md` Repository Structure (plan §6)
-- [ ] ALLOWLIST: `git status --short -- sdk/gff/` and `git check-ignore -v sdk/gff/go.mod` — expect `!sdk/**` coverage, no new rules
-- [ ] COMMIT: `feat(gff): scaffold sdk/gff module with cobra root + version`
-- [ ] LEDGER + CHECKPOINT
+- [x] SETUP: `mkdir -p <WT>/sdk/gff/{cmd,internal/version}`
+- [x] SETUP: copy `sdk/gsl/build.sh` → `sdk/gff/build.sh`; replace every `gsl` with `gff` (stamps `internal/version` via ldflags only — no build vars in `cmd`/`main`)
+- [x] SETUP: write `sdk/gff/VERSION` = `0.1.0`; copy `sdk/gsl/LICENSE` → `sdk/gff/LICENSE`
+- [x] SETUP: `go.mod` — module `github.com/sfc-gh-eraigosa/dotfiles/sdk/gff`, `go 1.26.1`; `go get github.com/spf13/cobra`
+- [x] SETUP: `internal/version/version.go` — vars `Version, Commit, BuildDate, Dirty = "dev","none","unknown","false"` + `func String() string` (mirror gsl's format)
+- [x] RED: write `cmd/root_test.go` `TestVersionCommand` exactly as the plan's snippet (buffers on `NewRootCmd()`, args `{"version"}`, asserts output contains `gff`)
+- [x] RUN-RED: `go test ./cmd/` → expect **FAIL** (`NewRootCmd` undefined)
+- [x] GREEN: `cmd/root.go` — `NewRootCmd() *cobra.Command` (Use `gff`, Short "git fast features — layered feature flags persisted in git") + `Execute()`; later verbs self-register via `init()` + `rootCmd.AddCommand` (copy the `sdk/gsl/cmd` pattern)
+- [x] GREEN: `cmd/version.go` printing `version.String()`; `main.go` calling `cmd.Execute()`
+- [x] RUN-GREEN: `go test ./... && go vet ./...` → expect **PASS**
+- [x] VERIFY: `bash build.sh` installs `${HOME}/opt/bin/gff`; `${HOME}/opt/bin/gff version` prints the version block
+- [x] DOCS: write `sdk/gff/README.md` and `sdk/gff/AGENTS.md`; `ln -s AGENTS.md sdk/gff/CLAUDE.md`
+- [x] DOCS: add the `sdk/gff` line to the root `CLAUDE.md` Repository Structure (plan §6)
+- [x] ALLOWLIST: `git status --short -- sdk/gff/` and `git check-ignore -v sdk/gff/go.mod` — expect `!sdk/**` coverage, no new rules
+- [x] COMMIT: `feat(gff): scaffold sdk/gff module with cobra root + version`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** `go test ./... && go vet ./...` pass and `bash build.sh` yields a working `gff version`.
 
