@@ -43,7 +43,9 @@ scripts.
   then `gff install`.
 - *Acceptance:* inside the repo, `gff get` resolves live from the tracked file; after
   install, the same keys resolve from any CWD via the snapshot; a second repo claiming
-  an already-owned area is rejected with the owner named.
+  an already-owned area is rejected with the owner named; a script in an unrelated
+  repo can gate on the flags with **no gff installed** via
+  `eval "$(go run github.com/sfc-gh-eraigosa/dotfiles/sdk/gff@<tag> export --format shell --source <name>)"`.
 
 **UC4 — Go code reads a flag**
 - *Actor:* a Go program importing `pkg/gff`.
@@ -110,6 +112,12 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
 - **F10 TUI:** tree nav, description/default/effective/winning-layer per row, bool
   toggle + choice picker (radio/checkbox per mode, options show id + description +
   typed value), quit-without-write safety.
+- **F11 zero-install invocation + cross-repo source:** every verb also works with no
+  gff installed via `go run github.com/sfc-gh-eraigosa/dotfiles/sdk/gff@<tag> …`
+  (pinned `sdk/gff/vX.Y.Z` tag recommended, `@latest` allowed; stdout carries only
+  command output so `eval` is safe); the global `--source <registered-name|path>`
+  flag scopes resolution to another repo's flags from any CWD (local only — never a
+  network fetch at resolution time; unknown source ⇒ exit 2).
 
 ## 5. Evaluation criteria (per feature)
 
@@ -124,6 +132,7 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
 | F8 writes | only user override mtime changes | any write to repo/system files | no `~/.config/gff` dir yet | fs-mock test |
 | F9 gating | `false` ⇒ step body skipped, SKIP line printed | enabled steps changing behavior | gff binary absent ⇒ all run | bats-style harness on an extracted gate function |
 | F10 TUI | toggle writes override; `q` without change writes nothing | writes on navigation | terminal too small | teatest golden frames |
+| F11 go-run + `--source` | `--source` path & registered name resolve from foreign CWD; `go run .` entrypoint works | network fetch during resolution | unknown source name/path (exit 2) | CI `go run . version` smoke + `cmd/read_test.go` cases |
 
 ## 6. Verification harness
 

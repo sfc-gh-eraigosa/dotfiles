@@ -206,7 +206,11 @@ type Resolved struct {
     Layer   Layer          // layer that set the effective value (Def layers => default)
 }
 var ErrUnknownKey = errors.New("unknown flag key")
-type Resolver struct { P paths.Paths; R gitx.Runner }
+var ErrUnknownSource = errors.New("unknown source")
+type Resolver struct {
+    P paths.Paths; R gitx.Runner
+    Source string // "" = CWD discovery; else a registered source name or local repo path
+}
 func (r *Resolver) All() ([]Resolved, error)          // sorted by Feature.Path
 func (r *Resolver) Resolve(key string) (Resolved, error)
 
@@ -254,10 +258,33 @@ gff install              -> registers CWD repo + snapshot into user layer; exit 
 gff version              -> gss-style version block
 ```
 
+**Global flag (all read verbs):** `--source <name|path>` scopes resolution to one
+source instead of CWD discovery — a registered *name* resolves that source's snapshot
+layers (plus its live clone when CWD happens to be inside it); a local *path* is used
+as the repo root for the live layer. Unknown name/path ⇒ `ErrUnknownSource`, exit 2.
+Purely local; never a network fetch at resolution time.
+
+**Zero-install invocation (first-class, CI-smoked):** every recipe that works with an
+installed `gff` must also work as
+`go run github.com/sfc-gh-eraigosa/dotfiles/sdk/gff@<tag> <verb> …` — the `main.go`
+at the module root makes the module `go run`-able; `tag-sdk-modules.yml` cuts pinned
+`sdk/gff/vX.Y.Z` tags (pin one for reproducibility; `@latest` is the convenience
+form). Canonical example, needing only a Go toolchain + module proxy:
+
+```sh
+eval "$(go run github.com/sfc-gh-eraigosa/dotfiles/sdk/gff@v0.1.0 export --format shell --source dotfiles)"
+```
+
+`go run` build/download noise goes to stderr, stdout carries only export lines, so
+`eval` stays safe.
+
 ### 3.5 Shell contract (`opt/lib/gff.sh`)
 
 ```sh
 gff_on <key>   # returns 0 (run the step) unless the mangled env var is exactly "false"
+GFF_CMD        # optional: how scripts invoke gff for export/refresh (default: gff on PATH);
+               # e.g. GFF_CMD="go run github.com/sfc-gh-eraigosa/dotfiles/sdk/gff@v0.1.0"
+               # — gff_on itself stays env-only/fail-open and never invokes a binary
 ```
 
 Windows: bash appends each `GFF_INSTALL_WINDOWS_*` name to `WSLENV` (`/u` flag) before
@@ -457,6 +484,9 @@ func newResolver(t *testing.T, w world) *Resolver { /* writes files, returns Res
      flag ⇒ error naming the key and the offending ids
   8. no repo (WorkDir outside any git repo) ⇒ snapshots+overrides still resolve
   9. `All()` sorted by path; sparse overrides never invent keys
+  10. `Source: <local path>` resolves that repo's live file even though WorkDir is
+      elsewhere; `Source: <registered name>` resolves from that source's snapshot
+      from any CWD; unknown name/path ⇒ `ErrUnknownSource`
 - [ ] `go test ./internal/resolve/` → FAIL.
 - [ ] Implement: load def layers in order (every `*.yaml|*.json` in SystemSnapshotDir,
       then UserSnapshotDir, then live file via `gitx.RepoRoot(P.WorkDir)`+`SourcePath`);
@@ -497,7 +527,11 @@ in root.go, swapped in tests — same pattern gss uses for its runner).
       `resolve.ErrUnknownKey` to `SilenceUsage` + `os.Exit(2)` in `main.go`; in tests
       assert the sentinel error); `enabled` on/off/unknown; `list` table contains
       `install.ai.claude  bool  true  default(user-snapshot)`-style row and
-      `--json` unmarshals; `lint` on a bad file exits non-zero listing findings.
+      `--json` unmarshals; `lint` on a bad file exits non-zero listing findings;
+      root persistent flag `--source`: `get --source <path>` resolves a second temp
+      repo from an unrelated CWD, `--source <registered-name>` resolves via its
+      snapshot, unknown source ⇒ exit-2 sentinel (`ErrUnknownSource` maps like
+      `ErrUnknownKey` in main.go).
 - [ ] Implement the four files (~30 lines each). Exit-code mapping lives ONLY in
       `main.go`: `errors.Is(err, resolve.ErrUnknownKey) ⇒ 2`, else non-nil ⇒ 1.
 - [ ] `go test ./cmd/` → PASS. Commit: `feat(gff): get/enabled/list/lint verbs`
@@ -553,7 +587,8 @@ GFF_INSTALL_WINDOWS_WISPR_FLOW=false
       can point it at temp dirs; default = `paths.Default()`).
 - [ ] Implement thin wrapper. PASS.
 - [ ] `gff-ci.yml`: on PR paths `sdk/gff/**`: setup-go from `.go-version`, run
-      `go vet ./... && go test ./... -coverprofile=cover.out`, fail if
+      `go run . version` (zero-install entrypoint smoke — proves the module stays
+      `go run`-able), then `go vet ./... && go test ./... -coverprofile=cover.out`, fail if
       `go tool cover -func=cover.out | tail -1` < 60%, then
       `bash scripts/genproto.sh && git diff --exit-code -- gen/` (regen clean).
 - [ ] Full `go test ./... -cover` ≥60% total. Commit:
@@ -770,6 +805,7 @@ function Test-GffOn([string]$Key) {
 | F9 gating fail-open (unset/true/false/FALSE), skip msg | `opt/lib/gff_test.sh` (bash AND dash) |
 | F9 Windows pass-through | P2-T4 pwsh check or P2-T5 human run |
 | F10 TUI toggle/no-write-on-quit | `internal/tui/tui_test.go` (teatest) |
+| F11 zero-install go-run; `--source` scoping | `gff-ci.yml` `go run . version` smoke; `resolve_test.go` case 10; `cmd/read_test.go` `--source` cases |
 | Proto regen clean; ≥60% cover | `.github/workflows/gff-ci.yml` |
 | UC1 end-to-end wispr-flow skip | P2-T5 human-evidenced run |
 

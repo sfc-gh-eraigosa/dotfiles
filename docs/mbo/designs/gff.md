@@ -134,6 +134,14 @@ the proto — defeats generalization; the engine must stay data-free.
   default, effective value + winning layer; bool rows toggle, choice rows open a
   radio (`single`) or checkbox (`multi`) picker; all writes go to the user override.
 - **`pkg/gff`** — the public Go SDK (runtime API); `gff gen` emits typed accessors.
+- **Invocation modes** — (1) installed binary (`build.sh` → `~/opt/bin/gff`, or
+  `go install …/sdk/gff@<tag>`); (2) **zero-install, first-class**:
+  `go run github.com/sfc-gh-eraigosa/dotfiles/sdk/gff@<tag> <verb> …` — the main
+  package sits at the module root and CI smokes `go run .`, so any repo's scripts can
+  gate on flags with only a Go toolchain (pin a `sdk/gff/vX.Y.Z` tag for
+  reproducibility; `@latest` allowed). The global `--source <registered-name|path>`
+  flag scopes resolution to another repo's flags from any CWD — purely local, no
+  network fetch at resolution time.
 - **Dotfiles instrumentation** — `.gff/features.yaml` at the repo root enumerating
   ~36 flags (all default on) across `install.shell.*`, `install.pkg.*`,
   `install.tools.*`, `install.runtime.*`, `install.ai.*`, `install.sdk.*`,
@@ -199,6 +207,10 @@ The intersection gff occupies is not covered by any single existing tool:
 2. **Shell as a first-class consumer** — `gff enabled <key>` exit codes and
    `eval "$(gff export --shell)"` for bash *and* PowerShell (WSLENV handoff). Every
    surveyed engine targets application SDKs; shell gating is an afterthought at best.
+   The same interface works **zero-install** —
+   `eval "$(go run github.com/sfc-gh-eraigosa/dotfiles/sdk/gff@<tag> export --format shell --source <name>)"`
+   compiles gff inline from the module proxy, so a repo's scripts can gate on flags
+   on machines that never installed it.
 3. **Layered local precedence** — system snapshot → user snapshot → live repo → system
    override → user override, XDG-style, with the winning layer reported. Flag engines
    have environments/namespaces, not machine-local override layering.
@@ -272,3 +284,5 @@ without a snapshot; reassess then.
 > generalized 2026-07-25: single (radio) / multi (checkbox) modes, stable string
 > option ids, per-option typed values (int/float/string/bool, homogeneous per
 > feature) — replaces the original `selected int` + `map<int,string>` scheme.
+> 2026-07-25 (later): zero-install `go run <module>@<tag>` promoted to a first-class
+> invocation mode and global `--source <name|path>` added for cross-repo resolution.
