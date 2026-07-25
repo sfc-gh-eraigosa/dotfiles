@@ -73,19 +73,19 @@ symlink `sdk/gff/CLAUDE.md → AGENTS.md`.
 **Files:** `sdk/gff/proto/gff/v1/features.proto`, `sdk/gff/scripts/genproto.sh`,
 committed `sdk/gff/gen/gff/v1/*.pb.go`; modify root `Makefile` + `.gitignore`.
 
-- [ ] SETUP: `go get google.golang.org/protobuf@latest`
-- [ ] SETUP: `go get -tool google.golang.org/protobuf/cmd/protoc-gen-go@latest` (pins the plugin version in `go.mod`)
-- [ ] SETUP: confirm `command -v protoc` (regeneration only — contributors build from committed output)
-- [ ] GREEN: write `proto/gff/v1/features.proto` **verbatim from plan §3.1** — frozen contract, no additions
-- [ ] GREEN: write `scripts/genproto.sh` exactly as the plan's snippet (raw protoc, `GOBIN="${PWD}/.bin" go install`, `--proto_path=proto --go_out=gen --go_opt=paths=source_relative`); `chmod +x`
-- [ ] GREEN: root `Makefile` — `gff-proto` → `bash sdk/gff/scripts/genproto.sh`; `gff-proto-check` → `gff-proto` then `git diff --exit-code -- sdk/gff/gen/`
-- [ ] ALLOWLIST: add an **ignore** rule for `sdk/gff/.bin/` in `.gitignore` with a comment (otherwise `!sdk/**` tracks the plugin binary); verify `git check-ignore -v sdk/gff/.bin/protoc-gen-go`
-- [ ] RUN-GREEN: `make gff-proto` → `sdk/gff/gen/gff/v1/features.pb.go` exists, package `gffv1`
-- [ ] VERIFY: `go build ./...` PASS; `go vet ./...` PASS
-- [ ] VERIFY: `make gff-proto-check` → clean (regeneration idempotent)
-- [ ] ALLOWLIST: `git status --short -- sdk/gff/gen/` shows the generated file as trackable
-- [ ] COMMIT: `feat(gff): proto v1 schema + raw-protoc codegen behind make gff-proto (committed output)`
-- [ ] LEDGER + CHECKPOINT
+- [x] SETUP: `go get google.golang.org/protobuf@latest`
+- [x] SETUP: `go get -tool google.golang.org/protobuf/cmd/protoc-gen-go@latest` (pins the plugin version in `go.mod`)
+- [x] SETUP: confirm `command -v protoc` (regeneration only — contributors build from committed output)
+- [x] GREEN: write `proto/gff/v1/features.proto` **verbatim from plan §3.1** — frozen contract, no additions
+- [x] GREEN: write `scripts/genproto.sh` exactly as the plan's snippet (raw protoc, `GOBIN="${PWD}/.bin" go install`, `--proto_path=proto --go_out=gen --go_opt=paths=source_relative`); `chmod +x`
+- [x] GREEN: root `Makefile` — `gff-proto` → `bash sdk/gff/scripts/genproto.sh`; `gff-proto-check` → `gff-proto` then `git diff --exit-code -- sdk/gff/gen/`
+- [x] ALLOWLIST: add an **ignore** rule for `sdk/gff/.bin/` in `.gitignore` with a comment (otherwise `!sdk/**` tracks the plugin binary); verify `git check-ignore -v sdk/gff/.bin/protoc-gen-go`
+- [x] RUN-GREEN: `make gff-proto` → `sdk/gff/gen/gff/v1/features.pb.go` exists, package `gffv1`
+- [x] VERIFY: `go build ./...` PASS; `go vet ./...` PASS
+- [x] VERIFY: `make gff-proto-check` → clean (regeneration idempotent)
+- [x] ALLOWLIST: `git status --short -- sdk/gff/gen/` shows the generated file as trackable
+- [x] COMMIT: `feat(gff): proto v1 schema + raw-protoc codegen behind make gff-proto (committed output)`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** `make gff-proto-check` is clean and `go build ./...` passes against committed `gen/`.
 

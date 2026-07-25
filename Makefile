@@ -201,3 +201,9 @@ shell-test: ## Run all *_test.sh shell test drivers (uses ai/_test_helpers.sh)
 		echo "Failed drivers:$$failed_files"; \
 		exit 1; \
 	fi
+
+gff-proto: ## Regenerate sdk/gff proto Go code (raw protoc, go.mod-pinned plugin; output is committed)
+	bash sdk/gff/scripts/genproto.sh
+
+gff-proto-check: gff-proto ## Regenerate and fail if committed sdk/gff/gen/ output drifts
+	git diff --exit-code -- sdk/gff/gen/

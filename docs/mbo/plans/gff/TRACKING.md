@@ -19,7 +19,7 @@ Fill in from the `gss feature worker add --json` output — **verbatim**, never 
 
 | Leaf | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| `p1-engine` | `gff/edward-raigosa/p1-engine` | `feature/gff/edward-raigosa/p1-engine` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p1-engine` | _(pending)_ | building |
+| `p1-engine` | `gff/edward-raigosa/p1-engine` | `feature/gff/edward-raigosa/p1-engine` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p1-engine` | [#182](https://github.com/sfc-gh-eraigosa/dotfiles/pull/182) | building |
 | `p2-instrument` | _(pending)_ | _(pending)_ | _(pending)_ | _(pending)_ | todo |
 | `p3-tui` | _(pending)_ | _(pending)_ | _(pending)_ | _(pending)_ | todo |
 | `p4-gen` | _(pending)_ | _(pending)_ | _(pending)_ | _(pending)_ | todo |
@@ -38,7 +38,7 @@ e2e harness green; `build.sh` installs a working binary.
 | Task | Status | Commit | Evidence (test run / gate) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
 | P1-T1 module scaffold + version | done | b3ed141 | `go test ./... && go vet ./...` -> ok (cmd 0.002s); `bash build.sh` -> installed; `${HOME}/opt/bin/gff version` prints `gff v0.1.0` block | RED verified: `undefined: NewRootCmd` |
-| P1-T2 proto schema + committed codegen | todo | | | |
+| P1-T2 proto schema + committed codegen | done | _(next commit)_ | `make gff-proto` -> gen/gff/v1/features.pb.go (package gffv1); `go build ./... && go vet ./...` ok; `make gff-proto-check` -> clean; `make lint-shell` rc=0. `make lint-portability` fails on a PRE-EXISTING `opt/bin/docker:44 mapfile` Tier-2 finding already on origin/main — zero findings for gff files (build.sh, genproto.sh) | genproto.sh needed `mkdir -p gen` (protoc doesn't create --go_out root); noted as procedure fix |
 | P1-T3 schema load + lint | todo | | | ≥90% pkg cover |
 | P1-T4 paths + git discovery | todo | | | |
 | P1-T5 resolver (the core) | todo | | | ≥95% pkg cover |

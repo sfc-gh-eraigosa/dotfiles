@@ -84,6 +84,9 @@ opt/google-cloud-sdk/
 
 # Source Code Build Artifacts
 sdk/tmux-mgr/tmux-mgr
+# protoc-gen-go plugin binary installed by sdk/gff/scripts/genproto.sh (GOBIN=.bin);
+# without this rule !sdk/** would track the compiled plugin.
+sdk/gff/.bin/
 coverage/
 
 # System & Local Settings (Always Private)
