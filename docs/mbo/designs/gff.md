@@ -243,11 +243,29 @@ never grow them; that tier is served well by Unleash/GrowthBook et al.
   repo has delivered repeatedly (gss, gsl, tmux-mgr).
 - **Fail-open keeps the downside bounded.** Worst case, gff misbehaves and every gate
   degrades to today's unconditional behavior (§6 rollback).
-- **Caveat:** if scope were ever cut to *only* bool-gating `install.sh` on one repo — no
-  choice type, no TUI, no multi-repo — a ~50-line sourced `features.conf` would deliver
-  ~70% of the value, and building an engine would be over-engineering. The multi-repo
-  registry (UC3), choice flags, and the TUI (UC2) are what justify the engine; if P3/P4
-  and the registry get dropped during build, revisit this verdict.
+- **Per-installation optionality is the adoption unlock.** Today the repo is
+  all-or-nothing: if 10% of the flow or tools don't fit an instance, the only outs are
+  editing the shared repo (a fork in spirit — machine-specific decisions leak into
+  everyone's defaults) or not adopting at all. One size won't fit all, and we currently
+  have no room to flex. gff's override layers make partial adoption the normal case:
+  keep the 90% that works, turn off the 10% that doesn't, stay fully functional — per
+  installation via `~/.config/gff/config.yaml`, and per system or account via the
+  system/user layer split — **without a single edit to the dotfiles repo**.
+- **A safe runway for experimental features.** There is currently no way to ship a
+  feature before it's hardened: landing it in `install.sh` imposes it on every machine
+  at once. With gff, a new component can land defaulted *off* (or on for the author's
+  machines only, via their override) and be flipped on per installation as it matures —
+  the TUI and layered config make that per-machine state easy to see (winning-layer
+  provenance) and cheap to maintain. Graduation = flipping the tracked default in one
+  reviewed PR.
+- **Caveat, narrowed:** if scope were ever cut to *only* bool-gating `install.sh` — no
+  choice type, no TUI, no multi-repo — a ~50-line sourced `features.conf` could deliver
+  the mechanical gating. But note what it could **not** deliver: a repo-tracked conf is
+  still an edit-the-shared-repo-per-machine model, so it solves none of the two points
+  above — machine-local overrides, per-system/account layering, and provenance are the
+  engine's core, not garnish. The revisit trigger is therefore narrower than first
+  stated: reconsider only if the *override layering itself* were ever dropped — losing
+  the registry (UC3) or TUI (UC2) alone would weaken but not void the case.
 - **Future option, not a blocker:** gff's file format could later be exposed via an
   [OpenFeature](https://openfeature.dev/) file-provider so app code in registered repos
   can consume the same flags through the standard API. Noted for a post-P4 objective.
