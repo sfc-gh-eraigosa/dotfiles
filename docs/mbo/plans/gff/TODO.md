@@ -100,28 +100,28 @@ committed `sdk/gff/gen/gff/v1/*.pb.go`; modify root `Makefile` + `.gitignore`.
 > prose now agree: **bool → BoolValue, string/[]string → ChoiceSelection, anything
 > else = parse error naming key and type.** No inconsistency to log.
 
-- [ ] RED: `schema_test.go` — `TestLoadFeatureFileYAML` exactly as the plan's snippet (asserts bool default, `CHOICE_MODE_SINGLE`, option id `apt` + `stringValue`, default `selected`)
-- [ ] RED: `schema_test.go` — `TestLoadOverrides` (bool override, single-choice `apt` ⇒ 1 selected id, multi `[fzf, starship]` ⇒ 2 selected ids)
-- [ ] RED: `schema_test.go` — `TestLoadOverridesMissingFile` (absent sparse layer ⇒ empty map, nil error)
-- [ ] RED: `lint_test.go` table case — duplicate `path` within a file ⇒ finding
-- [ ] RED: `lint_test.go` table case — negative name per prefix: `no-*`, `not-*`, `disable-*`, `disabled-*`, `skip-*`, `off-*` on the last segment ⇒ finding each
-- [ ] RED: `lint_test.go` table case — depth 2 (`install.claude`) and depth 4 ⇒ finding (exactly 3 dotted segments)
-- [ ] RED: `lint_test.go` table case — uppercase segment and underscore segment ⇒ finding (segment regex `^[a-z0-9]+(-[a-z0-9]+)*$`)
-- [ ] RED: `lint_test.go` table case — choice with empty `options` ⇒ finding
-- [ ] RED: `lint_test.go` table case — duplicate option ids, and non-kebab option id ⇒ finding
-- [ ] RED: `lint_test.go` table case — mixed value types within one feature ⇒ finding (homogeneous per feature)
-- [ ] RED: `lint_test.go` table case — `single` mode with zero and with two default-selected options ⇒ finding
-- [ ] RED: `lint_test.go` table case — `mode` unspecified (`CHOICE_MODE_UNSPECIFIED`) ⇒ finding
-- [ ] RED: `lint_test.go` table case — `path` not starting with its set's `area.` ⇒ finding
-- [ ] RED: `lint_test.go` table case — clean file ⇒ zero findings
-- [ ] RUN-RED: `go test ./internal/schema/` → expect **FAIL** (undefined `LoadFeatureFile`/`LoadOverrides`/`Lint`)
-- [ ] GREEN: `schema.go` `LoadFeatureFile` — `.json` ⇒ `protojson.Unmarshal`; `.yaml|.yml` ⇒ `yaml.Unmarshal` into `any`, recursively normalize map keys to strings, `json.Marshal`, `protojson.Unmarshal` with `DiscardUnknown: false`
-- [ ] GREEN: `schema.go` `LoadOverrides` — `os.IsNotExist` ⇒ `(map{}, nil)`; yaml scalar map; bool ⇒ `BoolValue`; string or string-list ⇒ `ChoiceSelection`; anything else ⇒ error naming the key
-- [ ] GREEN: `lint.go` `Lint(f) []Finding{Path, Rule, Msg}` — seen-set for duplicates, per-segment regex, 3-segment depth, negative-prefix check on the last segment, area-prefix check, and the choice rules (non-empty options, unique kebab ids, homogeneous value type, `single` arity, mode set)
-- [ ] RUN-GREEN: `go test ./internal/schema/` → expect **PASS**
-- [ ] VERIFY: `go test ./internal/schema/ -cover` → **≥90%**; record the number in `TRACKING.md` §9
-- [ ] COMMIT: `feat(gff): schema loader (yaml/json protojson) + lint rules`
-- [ ] LEDGER: tick F1 / F2 / F3 **unit** cells; CHECKPOINT
+- [x] RED: `schema_test.go` — `TestLoadFeatureFileYAML` exactly as the plan's snippet (asserts bool default, `CHOICE_MODE_SINGLE`, option id `apt` + `stringValue`, default `selected`)
+- [x] RED: `schema_test.go` — `TestLoadOverrides` (bool override, single-choice `apt` ⇒ 1 selected id, multi `[fzf, starship]` ⇒ 2 selected ids)
+- [x] RED: `schema_test.go` — `TestLoadOverridesMissingFile` (absent sparse layer ⇒ empty map, nil error)
+- [x] RED: `lint_test.go` table case — duplicate `path` within a file ⇒ finding
+- [x] RED: `lint_test.go` table case — negative name per prefix: `no-*`, `not-*`, `disable-*`, `disabled-*`, `skip-*`, `off-*` on the last segment ⇒ finding each
+- [x] RED: `lint_test.go` table case — depth 2 (`install.claude`) and depth 4 ⇒ finding (exactly 3 dotted segments)
+- [x] RED: `lint_test.go` table case — uppercase segment and underscore segment ⇒ finding (segment regex `^[a-z0-9]+(-[a-z0-9]+)*$`)
+- [x] RED: `lint_test.go` table case — choice with empty `options` ⇒ finding
+- [x] RED: `lint_test.go` table case — duplicate option ids, and non-kebab option id ⇒ finding
+- [x] RED: `lint_test.go` table case — mixed value types within one feature ⇒ finding (homogeneous per feature)
+- [x] RED: `lint_test.go` table case — `single` mode with zero and with two default-selected options ⇒ finding
+- [x] RED: `lint_test.go` table case — `mode` unspecified (`CHOICE_MODE_UNSPECIFIED`) ⇒ finding
+- [x] RED: `lint_test.go` table case — `path` not starting with its set's `area.` ⇒ finding
+- [x] RED: `lint_test.go` table case — clean file ⇒ zero findings
+- [x] RUN-RED: `go test ./internal/schema/` → expect **FAIL** (undefined `LoadFeatureFile`/`LoadOverrides`/`Lint`)
+- [x] GREEN: `schema.go` `LoadFeatureFile` — `.json` ⇒ `protojson.Unmarshal`; `.yaml|.yml` ⇒ `yaml.Unmarshal` into `any`, recursively normalize map keys to strings, `json.Marshal`, `protojson.Unmarshal` with `DiscardUnknown: false`
+- [x] GREEN: `schema.go` `LoadOverrides` — `os.IsNotExist` ⇒ `(map{}, nil)`; yaml scalar map; bool ⇒ `BoolValue`; string or string-list ⇒ `ChoiceSelection`; anything else ⇒ error naming the key
+- [x] GREEN: `lint.go` `Lint(f) []Finding{Path, Rule, Msg}` — seen-set for duplicates, per-segment regex, 3-segment depth, negative-prefix check on the last segment, area-prefix check, and the choice rules (non-empty options, unique kebab ids, homogeneous value type, `single` arity, mode set)
+- [x] RUN-GREEN: `go test ./internal/schema/` → expect **PASS**
+- [x] VERIFY: `go test ./internal/schema/ -cover` → **≥90%**; record the number in `TRACKING.md` §9
+- [x] COMMIT: `feat(gff): schema loader (yaml/json protojson) + lint rules`
+- [x] LEDGER: tick F1 / F2 / F3 **unit** cells; CHECKPOINT
 
 **Done when:** schema package tests pass at ≥90% coverage.
 

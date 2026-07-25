@@ -1,0 +1,4 @@
+Sat Jul 25 07:53:46 PM UTC 2026
+task: P1-T3
+cd sdk/gff && go test ./internal/schema/ -cover
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/schema	(cached)	coverage: 90.5% of statements
