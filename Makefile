@@ -210,3 +210,14 @@ gff-proto-check: gff-proto ## Regenerate and fail if committed sdk/gff/gen/ outp
 
 gff-e2e: ## Run binary-level e2e tests (compiled binary, fake HOME, real git)
 	bash sdk/gff/scripts/e2e.sh
+
+gff-build: ## Compile gff (no install)
+	cd sdk/gff && go build ./...
+
+gff-test: ## Run the gff unit suite with the coverage bars (90/95/90)
+	cd sdk/gff && COVERPKG=$$(go list ./... | grep -v '/gen/' | paste -sd, -) && \
+	go test ./... -count=1 -coverpkg="$$COVERPKG" -coverprofile=cover.out && \
+	go tool cover -func=cover.out | tail -1 && rm -f cover.out
+
+gff-install: ## Build and install gff to ~/opt/bin (ldflags-stamped from VERSION)
+	bash sdk/gff/build.sh
