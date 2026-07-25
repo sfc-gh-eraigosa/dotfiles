@@ -162,5 +162,76 @@ enumeration + install.sh/PowerShell gating → **P3** TUI → **P4** `gff gen`.
 - Per-phase PRs (P1–P4) revert independently; P2 (instrumentation) is the only one
   touching existing behavior.
 
+## 7. Prior art & landscape comparison (added 2026-07-25)
+
+Survey of how feature flags are managed elsewhere, simple → complex, and where gff sits.
+Sources: [GrowthBook's 2026 OSS comparison](https://www.growthbook.io/blog/best-open-source-feature-flagging-tools-compared),
+[GO Feature Flag's tool survey](https://gofeatureflag.org/blog/best-opensource-feature-flag-tools),
+[Flipt](https://github.com/flipt-io/flipt), [flagd](https://github.com/open-feature/flagd),
+[GO Feature Flag](https://github.com/thomaspoignant/go-feature-flag),
+[Fowler on feature toggles](https://martinfowler.com/articles/feature-toggles.html),
+[Home Manager](https://nixos.wiki/wiki/Home_Manager),
+[chezmoi cross-platform patterns](https://recca0120.github.io/en/2026/04/13/chezmoi-dotfiles-management/).
+
+### 7.1 The landscape, simple → complex
+
+| Tier | Representatives | Model | Overlap with gff | Why it doesn't fit this problem |
+| :-- | :-- | :-- | :-- | :-- |
+| Ad-hoc toggles | env vars, `features.conf` sourced by shell, Makefile vars (the classic "toggle configuration" pattern) | Flat `KEY=val`, no schema | The `GFF_*` export surface is exactly this tier | No descriptions, no choice type, no layered precedence, no discovery (`list`/TUI), no lint — every consumer reinvents parsing and defaults |
+| Dotfiles-manager native | Nix Home Manager (`programs.X.enable`), chezmoi (Go templates + `.chezmoidata` + `.chezmoiignore`) | Per-machine conditional config baked into the dotfiles framework | Closest in *purpose*: toggling install components per machine, declaratively | All-or-nothing adoption — replaces the symlink/`install.sh` model entirely rather than instrumenting it; toggles aren't runtime-queryable by arbitrary scripts or a second repo |
+| Git/file-native flag engines | **Flipt v2** (git-native storage, read-only GitOps mode), **GO Feature Flag** (single flag file, retrievers incl. GitHub/git), **flagd** (OpenFeature daemon, file sources) | Flags-as-code in git, evaluated by a daemon/relay or an in-process app SDK | Same core philosophy as gff: flags tracked in git, PR-reviewed, no vendor DB | Built for *long-running application processes* (HTTP/gRPC evaluation, streaming updates, percentage rollouts). Gating a bootstrap shell script would mean running a daemon during install or embedding their Go SDK — and none has local 5-layer system/user override precedence, exit-code gating, or a multi-repo area registry |
+| Spec/standard | **OpenFeature** (CNCF) | Vendor-neutral evaluation API; flagd is its reference daemon | Key naming + bool/typed-value evaluation semantics | A standard, not an engine — still needs a provider backing it |
+| Server platforms | Unleash, Flagsmith, GrowthBook, PostHog, LaunchDarkly (commercial) | Central service + DB + dashboard; targeting, approvals, experiments, analytics | Concepts only (flag, default, override) | Requires a running service and network at evaluation time; dotfiles install must work offline on a fresh machine. Their differentiators (targeting, A/B, audit workflows) are explicit non-goals (§2) |
+
+### 7.2 What no surveyed tool provides
+
+The intersection gff occupies is not covered by any single existing tool:
+
+1. **Process-less local evaluation** — one static binary, no daemon, works mid-bootstrap
+   and offline. Flipt/flagd/GOFF all assume a serving process or an app-embedded SDK.
+2. **Shell as a first-class consumer** — `gff enabled <key>` exit codes and
+   `eval "$(gff export --shell)"` for bash *and* PowerShell (WSLENV handoff). Every
+   surveyed engine targets application SDKs; shell gating is an afterthought at best.
+3. **Layered local precedence** — system snapshot → user snapshot → live repo → system
+   override → user override, XDG-style, with the winning layer reported. Flag engines
+   have environments/namespaces, not machine-local override layering.
+4. **Multi-repo area registry** — several repos each claiming an area, merged by one
+   CLI on the machine (`gff install`, exclusive claims). Nothing comparable exists;
+   the closest analogue is package-manager metadata, not flag tooling.
+5. **Opinionated minimal typing** — bool (negatives rejected by lint) + indexed choice.
+   Deliberately smaller than every surveyed tool.
+
+Where gff deliberately trails the field: no percentage rollouts, targeting,
+experimentation, audit dashboards, or streaming updates (§2 non-goals) — and it should
+never grow them; that tier is served well by Unleash/GrowthBook et al.
+
+### 7.3 Is it still worth implementing?
+
+**Yes — with one honest caveat.**
+
+- **The niche is real and unserved.** "Gate the steps of an offline bootstrap script,
+  per machine, with repo-dictated defaults, across two OSes and multiple repos" is not
+  what any surveyed tool does. Adopting the nearest engines (flagd/GOFF/Flipt) would
+  import daemon lifecycle or app-SDK assumptions *and* still leave the shell interface,
+  override layering, and area registry to be built — i.e., most of gff's actual work.
+- **The tools that do solve install-toggling (Home Manager, chezmoi) cost a migration
+  of the entire dotfiles model** — abandoning `install.sh` + symlinks for Nix or
+  chezmoi templating. That blast radius dwarfs adding one more Go CLI to an `sdk/`
+  that already ships four, built with the same conventions.
+- **The expensive parts of flag systems are the parts we excluded.** Targeting engines,
+  analytics, streaming, dashboards — the man-years in Unleash/LaunchDarkly — are
+  non-goals. What remains (file schema, layered merge, cobra CLI, TUI) is a scope this
+  repo has delivered repeatedly (gss, gsl, tmux-mgr).
+- **Fail-open keeps the downside bounded.** Worst case, gff misbehaves and every gate
+  degrades to today's unconditional behavior (§6 rollback).
+- **Caveat:** if scope were ever cut to *only* bool-gating `install.sh` on one repo — no
+  choice type, no TUI, no multi-repo — a ~50-line sourced `features.conf` would deliver
+  ~70% of the value, and building an engine would be over-engineering. The multi-repo
+  registry (UC3), choice flags, and the TUI (UC2) are what justify the engine; if P3/P4
+  and the registry get dropped during build, revisit this verdict.
+- **Future option, not a blocker:** gff's file format could later be exposed via an
+  [OpenFeature](https://openfeature.dev/) file-provider so app code in registered repos
+  can consume the same flags through the standard API. Noted for a post-P4 objective.
+
 > Produced via `superpowers:brainstorming`. Registered in `../index.md`; spec at
-> `../specs/gff.md`.
+> `../specs/gff.md`. §7 prior-art survey added 2026-07-25 at user request.
