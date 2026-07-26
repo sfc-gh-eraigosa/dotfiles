@@ -188,6 +188,84 @@ func TestSystemRunner_EmptyPathDefaultsToGit(t *testing.T) {
 	}
 }
 
+// TestSystemRunner_ForcesNoninteractiveEditor — the Runner must make git's
+// editor a no-op regardless of what the caller has exported, so an automated
+// git op can never open an interactive editor. `git var GIT_EDITOR` reports
+// the editor git would actually use; through the Runner it must be "true".
+func TestSystemRunner_ForcesNoninteractiveEditor(t *testing.T) {
+	skipIfNoGit(t)
+	// Simulate the real footgun: the ambient environment points GIT_EDITOR at
+	// an interactive editor. The Runner must override it.
+	t.Setenv("GIT_EDITOR", "vim")
+	r := git.NewSystemRunner()
+	out, err := r.Run(context.Background(), "var", "GIT_EDITOR")
+	if err != nil {
+		t.Fatalf("git var GIT_EDITOR: %v\n%s", err, out)
+	}
+	if got := strings.TrimSpace(string(out)); got != "true" {
+		t.Errorf("effective GIT_EDITOR = %q; want \"true\" (Runner did not force a non-interactive editor)", got)
+	}
+}
+
+// TestSystemRunner_DoesNotInvokeHostileEditor is the regression proof for the
+// checkpoint-hang bug: a git operation that opens an editor must NOT invoke the
+// user's core.editor at all, so it can never block on it (the real editor that
+// stranded a checkpoint blocked forever, holding index.lock). The hostile
+// editor here records that it ran and exits non-zero; with the Runner's
+// GIT_EDITOR=true, `commit --amend` reuses the existing message and succeeds
+// without ever touching it. If the fix regresses, git invokes the hostile
+// editor: the amend fails (editor exited non-zero) and the sentinel appears —
+// either assertion fails this test. A bounded context is kept as a safety net
+// so a future blocking editor still fails fast rather than wedging the suite.
+func TestSystemRunner_DoesNotInvokeHostileEditor(t *testing.T) {
+	skipIfNoGit(t)
+	dir := initRepo(t)
+	r := git.NewSystemRunner()
+
+	// One real commit to amend.
+	if err := writeFile(filepath.Join(dir, "a.txt"), "hello\n"); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := r.Run(context.Background(), "-C", dir, "add", "a.txt"); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+	if out, err := r.Run(context.Background(), "-C", dir, "commit", "-m", "init"); err != nil {
+		t.Fatalf("commit: %v\n%s", err, out)
+	}
+
+	// A hostile editor: if git ever invokes it, it records the fact and exits
+	// non-zero (a blocking editor is what stranded the real checkpoint; failing
+	// fast here keeps the test deterministic and orphan-free). The Runner must
+	// ensure it is never called.
+	sentinel := filepath.Join(dir, "editor-was-invoked")
+	editor := filepath.Join(dir, "hostile-editor.sh")
+	script := "#!/bin/sh\ntouch " + sentinel + "\nexit 1\n"
+	if err := os.WriteFile(editor, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Point BOTH the ambient env and git config at the hostile editor — this
+	// is how it reaches gss in the wild (inherited EDITOR / repo core.editor).
+	t.Setenv("GIT_EDITOR", editor)
+	t.Setenv("EDITOR", editor)
+	if out, err := r.Run(context.Background(), "-C", dir, "config", "core.editor", editor); err != nil {
+		t.Fatalf("config core.editor: %v\n%s", err, out)
+	}
+
+	// `commit --amend` (no -m/--no-edit) opens the editor.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	out, err := r.Run(ctx, "-C", dir, "commit", "--amend")
+	if ctx.Err() == context.DeadlineExceeded {
+		t.Fatal("git hung on the editor — the Runner is not forcing a non-interactive editor (regression)")
+	}
+	if _, statErr := os.Stat(sentinel); statErr == nil {
+		t.Fatal("the hostile core.editor was invoked — GIT_EDITOR override is missing (regression)")
+	}
+	if err != nil {
+		t.Fatalf("amend should succeed with a non-interactive editor: %v\n%s", err, out)
+	}
+}
+
 // writeFile is a tiny helper so the test files don't pull in io/fs ceremony.
 // Implemented at the bottom to keep the table of tests above readable.
 func writeFile(path, content string) error {
