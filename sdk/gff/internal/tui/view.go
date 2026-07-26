@@ -363,6 +363,8 @@ func (m *Model) viewHelp() string {
 	sb.WriteString("\n")
 	sb.WriteString(dim.Render("  key: ▶ current scope · ● registered · ○ discovered (not registered)"))
 	sb.WriteString("\n")
+	sb.WriteString(dim.Render("  (CLI twin: `gff sources` — same list, plus --json)"))
+	sb.WriteString("\n")
 
 	sb.WriteString("\n")
 	sb.WriteString(dim.Render("Esc/?/q close"))

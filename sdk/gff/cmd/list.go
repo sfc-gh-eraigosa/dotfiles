@@ -36,7 +36,12 @@ styled table, NO_COLOR suppresses the automatic styling.
 
 An optional pattern narrows the output by key: glob characters (*?[) match
 the full dotted key via path.Match ("install.ai.*", "*.claude"); a bare
-string matches as a segment prefix ("install.ai").`,
+string matches as a segment prefix ("install.ai").
+
+Tip: --source <namespace|path> scopes the list to one source instead of CWD
+discovery — a registered source's snapshot layers from any directory, or a
+local repo path's live flag file. Run 'gff sources' to see every namespace
+--source accepts and where each one comes from.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runList,
 }

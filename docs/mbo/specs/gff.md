@@ -113,6 +113,13 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
   commit} + snapshot, keyed by the repo's reverse-DNS namespace; a different url
   installing an existing namespace is rejected naming the current owner. No area
   claims — two repos may both ship `install.*` keys under their own namespaces.
+  **Owner-approved extension (PR #187 review, 2026-07-26):** `gff sources
+  [--json]` lists every source flags can resolve from — registry entries
+  (namespace, url, commit, `registered`) plus the discovered current-repo
+  origin (`discovered — not registered`), current repo marked and sorted
+  first; `--json` emits a stable `[]{namespace,url,commit,registered,
+  currentRepo}` array (empty list, never null). Any listed namespace is valid
+  for `--source`; `gff list --help` and the TUI help overlay cross-reference it.
 - **F7 shell/bridge interface:** `gff enabled <key>` (0=on, 1=off, 2=unknown key,
   unknown option id, or type the verb can't express — any exit ≥2 is a
   usage/definition error and shell callers MUST treat it as fail-open; never use
