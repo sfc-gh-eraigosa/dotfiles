@@ -1,0 +1,4 @@
+Sat Jul 25 09:05:05 PM UTC 2026
+task: P1-T10 (final gate)
+command: COVERPKG=$(go list ./... | grep -v /gen/ | paste -sd, -); go test ./... -coverpkg=$COVERPKG -coverprofile=cover.out; gate 90/95/90
+total=91.6% resolve=96.0% schema=95.6% -> GATE-PASSES

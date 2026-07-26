@@ -1,0 +1,86 @@
+Sat Jul 25 08:06:17 PM UTC 2026
+task: P1-T5
+command: go test ./internal/resolve/ -cover -v
+=== RUN   TestLayerString
+--- PASS: TestLayerString (0.00s)
+=== RUN   TestResolvedJSON
+--- PASS: TestResolvedJSON (0.00s)
+=== RUN   TestResolvedJSONNamespaceFromResolver
+--- PASS: TestResolvedJSONNamespaceFromResolver (0.00s)
+=== RUN   TestCase1_SysSnapOnly
+--- PASS: TestCase1_SysSnapOnly (0.00s)
+=== RUN   TestCase2_UserSnapWins
+--- PASS: TestCase2_UserSnapWins (0.00s)
+=== RUN   TestCase3_RepoLiveWins
+--- PASS: TestCase3_RepoLiveWins (0.00s)
+=== RUN   TestCase4_SysOverride
+--- PASS: TestCase4_SysOverride (0.00s)
+=== RUN   TestCase5_UserOverrideWins
+--- PASS: TestCase5_UserOverrideWins (0.00s)
+=== RUN   TestCase6_UnknownKeyOverride
+--- PASS: TestCase6_UnknownKeyOverride (0.00s)
+=== RUN   TestCase7a_ChoiceDefault
+--- PASS: TestCase7a_ChoiceDefault (0.00s)
+=== RUN   TestCase7b_ChoiceOverride
+--- PASS: TestCase7b_ChoiceOverride (0.00s)
+=== RUN   TestCase7c_ChoiceUnknownOption
+--- PASS: TestCase7c_ChoiceUnknownOption (0.00s)
+=== RUN   TestCase7d_ChoiceSingleModeTwoIds
+--- PASS: TestCase7d_ChoiceSingleModeTwoIds (0.00s)
+=== RUN   TestCase8_NonRepoWorkDir
+--- PASS: TestCase8_NonRepoWorkDir (0.00s)
+=== RUN   TestCase9_AllSorted
+--- PASS: TestCase9_AllSorted (0.00s)
+=== RUN   TestCase10a_SourceLocalPath
+--- PASS: TestCase10a_SourceLocalPath (0.00s)
+=== RUN   TestCase10b_SourceRegisteredName
+--- PASS: TestCase10b_SourceRegisteredName (0.00s)
+=== RUN   TestCase10c_SourceNilLookup
+--- PASS: TestCase10c_SourceNilLookup (0.00s)
+=== RUN   TestCase10d_SourceUnknownName
+--- PASS: TestCase10d_SourceUnknownName (0.00s)
+=== RUN   TestQualifiedKey
+--- PASS: TestQualifiedKey (0.00s)
+=== RUN   TestUnqualifiedSingleNamespace
+--- PASS: TestUnqualifiedSingleNamespace (0.00s)
+=== RUN   TestQualifiedUnknownNamespace
+--- PASS: TestQualifiedUnknownNamespace (0.00s)
+=== RUN   TestMalformedOverrideFile
+--- PASS: TestMalformedOverrideFile (0.00s)
+=== RUN   TestAllReturnsAllKeys
+--- PASS: TestAllReturnsAllKeys (0.00s)
+=== RUN   TestWrongFlagTypeDetection
+--- PASS: TestWrongFlagTypeDetection (0.00s)
+=== RUN   TestBoolOverrideOnChoiceInAll
+--- PASS: TestBoolOverrideOnChoiceInAll (0.00s)
+=== RUN   TestChoiceOverrideOnBoolFlag
+--- PASS: TestChoiceOverrideOnBoolFlag (0.00s)
+=== RUN   TestResolvedJSONChoiceType
+--- PASS: TestResolvedJSONChoiceType (0.00s)
+=== RUN   TestLayerStringUnknown
+--- PASS: TestLayerStringUnknown (0.00s)
+=== RUN   TestMalformedSnapshotFile
+--- PASS: TestMalformedSnapshotFile (0.00s)
+=== RUN   TestMalformedUserOverrideFile
+--- PASS: TestMalformedUserOverrideFile (0.00s)
+=== RUN   TestIsLocalPathViaStatExists
+--- PASS: TestIsLocalPathViaStatExists (0.00s)
+=== RUN   TestResolveEffectiveValueError
+--- PASS: TestResolveEffectiveValueError (0.00s)
+=== RUN   TestMultiLayerReplace
+--- PASS: TestMultiLayerReplace (0.00s)
+=== RUN   TestFeatureNoDefault
+--- PASS: TestFeatureNoDefault (0.00s)
+=== RUN   TestIsLocalPathRelativePrefix
+--- PASS: TestIsLocalPathRelativePrefix (0.00s)
+=== RUN   TestValidateOverrideNilKind
+--- PASS: TestValidateOverrideNilKind (0.00s)
+=== RUN   TestSourceWithDotSlashPrefix
+--- PASS: TestSourceWithDotSlashPrefix (0.00s)
+=== RUN   TestFeatureNoDefaultWithOverride
+--- PASS: TestFeatureNoDefaultWithOverride (0.00s)
+=== RUN   TestLiveFileAbsent
+--- PASS: TestLiveFileAbsent (0.00s)
+PASS
+coverage: 95.9% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve	0.035s	coverage: 95.9% of statements

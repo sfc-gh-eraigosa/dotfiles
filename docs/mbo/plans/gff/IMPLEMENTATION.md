@@ -361,5 +361,39 @@ Paste the text below verbatim to start the one-shot run.
 
 ---
 
+## 8.1 Phase-2 kickoff prompt (post-P1 merge — the remaining DAG)
+
+Paste verbatim once PR #182 has merged — designed for a FRESH context (no
+prior session state assumed). P1 lessons are already folded into `TODO.md`'s
+P2/P3 sections as NOTE lines — the prompt below assumes them.
+
+---
+
+> Great news, PR #182 (p1-engine) has landed. Use the **go team and architecture team** to **/loop** on the implementation with the **/goal** of completing the remaining gff DAG end to end. Don't stop till you are done.
+>
+> **Resume the gff build — execute the remaining DAG (p2-instrument, p3-tui, p4-gen, vd-demo), end to end, one shot.**
+>
+> **Orchestration (this made P1 succeed — repeat it):** you are the orchestrator; delegate implementation to team subagents and keep verification + git in your own hands. Run the three post-P1 leaves as PARALLEL background agents, each confined to its own gss worker worktree: `go-godev` for Go implementation (p3-tui, p4-gen), `go-goqa` for test-heavy work, the architecture team's `adversary` to re-check any finding you doubt; p2-instrument is shell — implement it with the same TDD rigor (its gates are lint-shell/lint-portability + bash AND dash test drivers). Subagents NEVER commit, never touch another leaf's paths, and must report RED output, PASS output, and coverage numbers verbatim; you re-run each leaf's gate commands YOURSELF before committing (evidence before assertions — P1's QA agents twice tried to lower a coverage gate and once left a broken debris file; catch that). One commit per plan task with the plan's exact message; `gss feature checkpoint --worker <ref>` after every task so the run is resumable; pass `--worker`, not cwd, to gss (safety_guard requirement), and use `${HOME}`-style paths everywhere (privacy_guard blocks absolute home paths).
+>
+> `p1-engine` is MERGED (PR #182): the engine, its CI (gff-ci: vet, ≥90/95/90 coverage gates, 25-subtest e2e, proto-regen, go-run smoke) and the §3 contracts are now on `main` — do not re-plan, re-design, or re-litigate them.
+>
+> **Read first, in this order, completely:**
+> 1. `docs/mbo/plans/gff/IMPLEMENTATION.md` — the procedure (§2 worker map, §3 per-task loop, §5 hard rules).
+> 2. `docs/mbo/plans/gff/TRACKING.md` — the ledger: P1 rows are proof of what exists; the §10 blockers table and §11 session log carry the P1 lessons (set -a bootstrap, exec-bit verification, focus-namespace binding, -count=1 CI coverage).
+> 3. `docs/mbo/plans/gff/TODO.md` — the cursor. The first unchecked box is `p1-engine` closeout (`gss feature merged`), then the Leaf 2a setup. **The P2/P3 sections carry NOTE lines encoding the P1 lessons — they are binding.**
+> 4. `docs/mbo/plans/gff.md` §4 P2-T1…P2-T5, P3-T1, P4-T1, VD-1 — the task specs (code sketches are normative); §3.4/§3.5 (CLI + shell contracts, frozen); §6.1 (leaf ownership — the ONLY shared-file edit in the whole fan-out is p3's `cmd/root.go` TTY-dispatch line); §7.2 shell-side negatives, §7.3 demo script, §7.4 matrix, §7.5 done-when.
+>
+> **Then execute:** first `gss feature merged --worker gff/<user>/p1-engine` (token-gated, two-call recipe) and tick the p1 closeout boxes. Then create the three parallel workers per §2.1 (`p2-instrument`, `p3-tui`, `p4-gen`) off the updated `main`, capture each `worker_ref`/`branch`/`worktree_path` **verbatim** from `--json` into TRACKING §0, and run the three leaves **concurrently** — they are path-disjoint; work only inside each worktree. `vd-demo` starts only after `p1` AND `p2` merge.
+>
+> **For every task, the IMPLEMENTATION.md §3 loop, strictly TDD:** read the TODO entry + plan task → failing test FIRST (shell leaves: `opt/lib/gff_test.sh` drives bash AND dash; TUI: teatest) → RUN-RED and record the failure → minimum implementation per the frozen contract → RUN-GREEN → gates (`make lint-shell` + `make lint-portability` for EVERY shell edit — the scan is clean now, keep it at Tier1=0/Tier2=0; `gff lint` on the inventory; coverage ≥90% overall for the p3 leaf; `git check-ignore -v` for every new path; exec bits verified via `git ls-files -s` for executable scripts) → tick TODO boxes + update TRACKING (task row, §6 matrix F9/F10 cells, §7.3 shell negatives, session log) → commit with the plan's **exact** message, staging by explicit name → `gss feature checkpoint` after EVERY task.
+>
+> **Hard rules unchanged** (IMPLEMENTATION.md §5): §3 contracts frozen — escalate, never edit; `opt/lib/gff.sh` POSIX/dash-safe, all shell gates FAIL OPEN (only literal lowercase `false` skips); `install.sh` blocks wrapped IN-PLACE — no reordering, no logic changes; writes only to `~/.config/gff/`; two-call token recipe for `pr --ready`/`merged`; `${HOME}`-style paths only; never run `install.sh` from a worker worktree.
+>
+> **Human-in-the-loop stops (do NOT fake these):** P2-T4's pwsh check (defer to P2-T5 if pwsh is absent), P2-T5's real-terminal `install.sh` run on WSL (the wispr-flow SKIP evidence), VD-1's transcript run, and the post-P3 TUI capture. When a leaf's done-when gate is green, checkpoint, then ASK before `gss feature pr --ready` — promotion and merge always re-confirm.
+>
+> **Do not stop otherwise** until §7.5 is fully green: every §7.4 row three-proofed and mirrored in the leaf PR bodies, demo + real-install evidence posted, `docs/mbo/index.md` per-leaf states current, #180 closed only when all leaves land. Blocked → TRACKING §10 with the real failing output, checkpoint, move to the next independent task. Never claim a gate you did not run.
+
+---
+
 > Companion to plan `../gff.md`. Update `../../index.md` state as each leaf moves
 > (`planning → building → in-review → merged`).

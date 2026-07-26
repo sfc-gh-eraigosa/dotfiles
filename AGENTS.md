@@ -8,7 +8,8 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - `opt/profiles/`: Shell configuration files (.zshrc, .bashrc, .tmux.conf, etc.). [See opt/profiles/AGENTS.md](./opt/profiles/AGENTS.md) for details.
 - `opt/docs/`: Legacy and reference documentation for various tools and setups. [See opt/docs/AGENTS.md](./opt/docs/AGENTS.md).
 - `src/`: Non-Go custom tools and agent skills (shell/skill tooling). **Go code no longer lives here** — all Go modules live under `sdk/`. [See src/AGENTS.md](./src/AGENTS.md).
-- `sdk/`: Go modules (`gss`, `gsl`, `wol`, `tmux-mgr`), each independently `go install`-able as `github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>`. **All Go code lives here, not under `src/`.** (Cutover in progress — see [docs/mbo/plans/2026-06-04-sdk-migration-plan.md](./docs/mbo/plans/2026-06-04-sdk-migration-plan.md).)
+- `sdk/`: Go modules (`gss`, `gsl`, `wol`, `tmux-mgr`, `gff`), each independently `go install`-able as `github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>`. **All Go code lives here, not under `src/`.** (Cutover in progress — see [docs/mbo/plans/2026-06-04-sdk-migration-plan.md](./docs/mbo/plans/2026-06-04-sdk-migration-plan.md).)
+- `sdk/gff/`: **git fast features** — a git-persisted, layered feature-flag engine (proto schema, 5-layer resolver with provenance, cobra CLI, Go SDK) gating `install.sh` components. [See sdk/gff/AGENTS.md](./sdk/gff/AGENTS.md).
 - `opt/Desktop/Apps/scripts/`: Windows-side automation deployed to the Desktop (macOS-style hotkeys + Wispr Flow voice dictation in `macos.ahk`, PowerToys/app/font setup). [See opt/Desktop/Apps/scripts/AGENTS.md](./opt/Desktop/Apps/scripts/AGENTS.md) for the inventory, the WSL→Windows dev loop, and AutoHotkey v2 gotchas.
 - `archive/`: Retired-but-kept artifacts (not wired into install). [See archive/AGENTS.md](./archive/AGENTS.md) for the inventory and restore instructions.
 - `ai/hooks/`: Unified agent hooks (safety, privacy) shared across CLIs.

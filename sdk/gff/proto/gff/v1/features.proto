@@ -1,0 +1,53 @@
+syntax = "proto3";
+package gff.v1;
+option go_package = "github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/gen/gff/v1;gffv1";
+
+// A repo's tracked flag definitions (the repo flag file = YAML/protojson encoding).
+message FeatureFile {
+  string namespace = 1;            // REQUIRED reverse-DNS repo identity (§3.2),
+                                   // e.g. com.github.sfc-gh-eraigosa.dotfiles
+  repeated FeatureSet sets = 2;
+}
+message FeatureSet {
+  string area = 1;                 // first key segment — grouping only, NOT claimed
+                                   // (uniqueness = namespace + key; see FeatureFile)
+  repeated Feature features = 2;
+}
+message Feature {
+  string path = 1;                 // canonical: area.component.feature
+  string description = 2;
+  oneof default {
+    bool bool_default = 3;         // true is always ON; no negative names
+    ChoiceDefault choice_default = 4;
+  }
+}
+enum ChoiceMode {
+  CHOICE_MODE_UNSPECIFIED = 0;
+  CHOICE_MODE_SINGLE = 1;          // radio: exactly one option selected
+  CHOICE_MODE_MULTI = 2;           // checkbox: zero or more options selected
+}
+message ChoiceDefault {
+  ChoiceMode mode = 1;
+  repeated ChoiceOption options = 2;
+}
+message ChoiceOption {
+  string id = 1;                   // stable kebab-case slug, unique within the feature
+  string description = 2;          // human description of this option
+  bool selected = 3;               // default selection state
+  oneof value {                    // typed payload; ONE type per feature (lint-enforced)
+    int64 int_value = 4;
+    double float_value = 5;
+    string string_value = 6;
+    bool bool_value = 7;
+  }
+}
+// Sparse override value (override files decode into this).
+message Value {
+  oneof kind { bool bool_value = 1; ChoiceSelection choice_value = 2; }
+}
+message ChoiceSelection { repeated string selected = 1; } // option ids; exactly 1 when SINGLE
+message Source {                   // one registered repo, keyed by its namespace
+  string namespace = 1;            // reverse-DNS identity — THE claim (no area claims)
+  string url = 2; string commit = 3;
+}
+message SourceRegistry { repeated Source sources = 1; }

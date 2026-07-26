@@ -201,3 +201,23 @@ shell-test: ## Run all *_test.sh shell test drivers (uses ai/_test_helpers.sh)
 		echo "Failed drivers:$$failed_files"; \
 		exit 1; \
 	fi
+
+gff-proto: ## Regenerate sdk/gff proto Go code (raw protoc, go.mod-pinned plugin; output is committed)
+	bash sdk/gff/scripts/genproto.sh
+
+gff-proto-check: gff-proto ## Regenerate and fail if committed sdk/gff/gen/ output drifts
+	git diff --exit-code -- sdk/gff/gen/
+
+gff-e2e: ## Run binary-level e2e tests (compiled binary, fake HOME, real git)
+	bash sdk/gff/scripts/e2e.sh
+
+gff-build: ## Compile gff (no install)
+	cd sdk/gff && go build ./...
+
+gff-test: ## Run the gff unit suite with the coverage bars (90/95/90)
+	cd sdk/gff && COVERPKG=$$(go list ./... | grep -v '/gen/' | paste -sd, -) && \
+	go test ./... -count=1 -coverpkg="$$COVERPKG" -coverprofile=cover.out && \
+	go tool cover -func=cover.out | tail -1 && rm -f cover.out
+
+gff-install: ## Build and install gff to ~/opt/bin (ldflags-stamped from VERSION)
+	bash sdk/gff/build.sh

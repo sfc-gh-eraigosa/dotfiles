@@ -41,15 +41,16 @@ fi
 # via `docker exec -i ... cp /dev/stdin` and got the leftover line
 # "/bin/docker" as its cluster config.
 self="$(cd -- "$(dirname "$0")" && pwd -P)/$(basename "$0")"
-mapfile -t cands < <(type -aP docker 2>/dev/null)
-for cand in "${cands[@]}"; do
+# Read candidates on fd 3 (not stdin) for the same reason — and via a plain
+# while-read because mapfile is bash-4-only and breaks macOS system bash 3.2.
+while IFS= read -r cand <&3; do
     [ -n "${cand}" ] || continue
     [ "${cand}" = "${self}" ] && continue
     [ "$(cd -- "$(dirname "${cand}")" 2>/dev/null && pwd -P)/$(basename "${cand}")" = "${self}" ] && continue
     if [ -x "${cand}" ]; then
         exec "${cand}" "$@"
     fi
-done
+done 3< <(type -aP docker 2>/dev/null)
 
 # Windows docker.exe over interop. WIN_PROGRAM_FILES comes from the
 # install_windows.sh env cache when available; default to the standard

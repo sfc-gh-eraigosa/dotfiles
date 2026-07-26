@@ -1,0 +1,113 @@
+name: gff CI
+
+# gff CI — go vet, tests, coverage gate, proto-regen clean check.
+#
+# Pin-to-SHA convention: every third-party Action is pinned to a full 40-char
+# commit SHA with a trailing # vX.Y.Z comment (matches the repo-wide policy in
+# docker-image.yml and shell-lint.yml).
+#
+# Coverage gate rationale:
+#   The plan §4 P1-T10 specifies total ≥90%. We exclude only generated code
+#   from measurement (COVERPKG excludes /gen/ packages) per spec: internal/overrides,
+#   internal/version, cmd, pkg/gff, and the root main package ALL stay in to
+#   ensure behavioral coverage at the public surface and internal helpers.
+#   Per-package bars: internal/resolve ≥95%, internal/schema ≥90%.
+#   Total gate: ≥90% — a hard floor, never to be lowered.
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'sdk/gff/**'
+      - '.github/workflows/gff-ci.yml'
+      - 'Makefile'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'sdk/gff/**'
+      - '.github/workflows/gff-ci.yml'
+      - 'Makefile'
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: unit tests + coverage gate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/gff
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache-dependency-path: sdk/gff/go.sum
+
+      - name: Zero-install smoke (module must stay go-run-able)
+        run: go run . version
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Tests + coverage profile
+        # COVERPKG excludes only /gen/ (generated protobuf code).
+        # All others (internal/overrides, internal/version, cmd, pkg/gff, root main)
+        # remain in the measurement set to ensure behavioral coverage.
+        run: |
+          COVERPKG=$(go list ./... | grep -v '/gen/' | paste -sd, -)
+          # -count=1 defeats the restored build cache: replayed cached test
+          # results merge stale profile fragments and misreport the total.
+          go test ./... -count=1 -coverpkg="$COVERPKG" -coverprofile=cover.out
+
+      - name: Coverage gate
+        # Bars per plan §7.1: total >=90 (COVERPKG excludes /gen/ only),
+        # internal/resolve >=95, internal/schema >=90 (per-package self-coverage,
+        # the same `go test ./<pkg>/ -cover` measurement TRACKING.md §9 records).
+        run: |
+          total=$(go tool cover -func=cover.out | awk '/^total:/ { gsub(/%/, "", $NF); print $NF }')
+          pkgcov() { go test "$1" -count=1 -cover 2>&1 | grep -o 'coverage: [0-9.]*' | awk '{print $2}' | tail -1; }
+          r=$(pkgcov ./internal/resolve/)
+          s=$(pkgcov ./internal/schema/)
+          echo "total coverage (gen excluded): ${total}%"
+          echo "internal/resolve package: ${r}%"
+          echo "internal/schema  package: ${s}%"
+          awk -v t="${total}" 'BEGIN { if (t+0 < 90) { print "FAIL: total " t "% < 90%"; exit 1 } }'
+          awk -v r="${r}" 'BEGIN { if (r+0 < 95) { print "FAIL: resolve " r "% < 95%"; exit 1 } }'
+          awk -v s="${s}" 'BEGIN { if (s+0 < 90) { print "FAIL: schema " s "% < 90%"; exit 1 } }'
+
+      - name: Proto regen clean check
+        working-directory: .
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y protobuf-compiler
+          make gff-proto-check
+
+  e2e:
+    name: binary-level e2e tests
+    runs-on: ubuntu-latest
+    needs: unit
+    defaults:
+      run:
+        working-directory: sdk/gff
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache-dependency-path: sdk/gff/go.sum
+
+      - name: E2E tests (compiled binary, fake HOME, real git)
+        working-directory: .
+        run: make gff-e2e
