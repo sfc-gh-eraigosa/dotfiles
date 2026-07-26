@@ -185,7 +185,7 @@ Errors must be *clean*: correct exit code, message names the offender, zero part
 - [x] P2-T5 real-install evidence posted: `SKIP (gff: install.windows.apps=false)` (key switched from wispr-flow — the elevated batch cannot receive env across UAC, §10; evidence F09-gating/P2-T5-real-install.txt + #180 comment)
 - [x] Every §6 feature→proof row checked (F9-demo closed by P2-T5 2026-07-26), and reproduced in the leaf PR descriptions (#182/#184/#187/#188 bodies carry their matrices)
 - [x] `docs/mbo/index.md` state updated per leaf (gff → done, closeout branch)
-- [ ] Issue #180 closed (only once all four leaves have landed)
+- [x] Issue #180 closed 2026-07-26 with the evidence comment (all four leaves + fix #191 landed)
 
 ---
 

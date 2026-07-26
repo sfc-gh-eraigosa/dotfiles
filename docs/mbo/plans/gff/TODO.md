@@ -604,5 +604,5 @@ wispr-flow SKIP run stands alongside it as the real-install proof.
 - [x] VERIFY the P2-T5 real-install evidence is posted (evidence/F09-gating/P2-T5-real-install.txt + #180 comment; key = install.windows.apps per TRACKING §10)
 - [x] VERIFY every §7.4 feature→proof row is checked in `TRACKING.md` §6 **and** reproduced in the leaf PR descriptions (F9-demo was the last cell — closed 2026-07-26)
 - [x] Update `docs/mbo/index.md` — `gff` state → `done`, all leaf PRs linked
-- [ ] Close issue #180 (only once all four leaves have landed)
+- [x] Close issue #180 — closed 2026-07-26 with the evidence comment (all four leaves + #191 landed)
 - [x] Final session-log entry in `TRACKING.md` §11
