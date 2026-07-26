@@ -177,12 +177,12 @@ func (r *Resolver) load() (*resolvedState, error) {
 	}
 
 	// Layer 3: live repo file.
-	livePath, err := r.resolveLivePath()
+	livePath, liveLayer, err := r.resolveLivePath()
 	if err != nil {
 		return nil, err
 	}
 	if livePath != "" {
-		if err := r.loadFile(livePath, LayerRepoLive, st); err != nil {
+		if err := r.loadFile(livePath, liveLayer, st); err != nil {
 			return nil, err
 		}
 	}
@@ -205,16 +205,19 @@ func (r *Resolver) load() (*resolvedState, error) {
 }
 
 // resolveLivePath determines the live repo file path based on Resolver.Source.
-func (r *Resolver) resolveLivePath() (string, error) {
+// resolveLivePath returns the definition file for the "live" slot plus the
+// layer it truthfully belongs to: repo-live for CWD discovery and local
+// paths, user-snapshot when a registered name resolves via its snapshot.
+func (r *Resolver) resolveLivePath() (string, Layer, error) {
 	src := r.Source
 
 	// "" => CWD discovery.
 	if src == "" {
 		repoRoot, ok := gitx.RepoRoot(r.P.WorkDir)
 		if !ok {
-			return "", nil // not in a git repo; live layer absent
+			return "", LayerNone, nil // not in a git repo; live layer absent
 		}
-		return gitx.SourcePath(r.R, repoRoot), nil
+		return gitx.SourcePath(r.R, repoRoot), LayerRepoLive, nil
 	}
 
 	// Local path: starts with "/", "./", "../", or stat says it exists as a dir.
@@ -223,21 +226,21 @@ func (r *Resolver) resolveLivePath() (string, error) {
 	if isLocalPath(src) {
 		repoRoot, ok := gitx.RepoRoot(src)
 		if !ok {
-			return "", fmt.Errorf("resolve: source path %q is not a git repository: %w", src, ErrUnknownSource)
+			return "", LayerNone, fmt.Errorf("resolve: source path %q is not a git repository: %w", src, ErrUnknownSource)
 		}
-		return gitx.SourcePath(r.R, repoRoot), nil
+		return gitx.SourcePath(r.R, repoRoot), LayerRepoLive, nil
 	}
 
 	// Registered name.
 	if r.S == nil {
-		return "", fmt.Errorf("resolve: source %q: %w", src, ErrUnknownSource)
+		return "", LayerNone, fmt.Errorf("resolve: source %q: %w", src, ErrUnknownSource)
 	}
 	snapPath, ok := r.S.Snapshot(src)
 	if !ok {
-		return "", fmt.Errorf("resolve: source %q: %w", src, ErrUnknownSource)
+		return "", LayerNone, fmt.Errorf("resolve: source %q: %w", src, ErrUnknownSource)
 	}
-	// The registered path is a snapshot file (not a repo dir), so use it directly.
-	return snapPath, nil
+	// The registered path IS a snapshot file — attribute it truthfully.
+	return snapPath, LayerUserSnapshot, nil
 }
 
 // isLocalPath returns true when src should be treated as a filesystem path

@@ -434,8 +434,10 @@ func TestCase10b_SourceRegisteredName(t *testing.T) {
 
 	res, err := r.Resolve("install.ai.claude")
 	require.NoError(t, err)
-	// The registered snapshot path is used as the live layer.
 	assert.True(t, res.Value.GetBoolValue())
+	// Provenance: a registered-name source resolves via its SNAPSHOT, so the
+	// winning definition layer must say user-snapshot, never repo-live.
+	assert.Equal(t, resolve.LayerUserSnapshot, res.Layer)
 }
 
 // Case 10c: S == nil, Source="some-name" => ErrUnknownSource.
