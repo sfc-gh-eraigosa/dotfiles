@@ -96,7 +96,14 @@ LAYER column names it. Resolution order (later wins):
 | 5 | `user-override` | `~/.config/gff/config.yaml` (0600 — the ONLY file `set` writes) | you ran `gff set <key> <value>` |
 
 Layers 1–3 are *definition* layers (they carry the flag's schema + default);
-4–5 are sparse *override* maps (just `key: value` lines). So the column flips
+4–5 are sparse *override* maps (just `key: value` lines).
+
+**Multi-repo keys:** uniqueness is `(namespace, key)`, so two repos may declare
+the same short key. Unqualified keys bind to the *focus* namespace — the CWD
+repo's, or the `--source` target's — first; with no focus and several
+namespaces defining the key, gff refuses (exit 2) and tells you to qualify as
+`<namespace>:<key>`. A second URL can never claim a registered namespace
+(`gff install` rejects it naming the existing url). So the column flips
 are meaningful, not noise:
 
 ```sh

@@ -912,3 +912,77 @@ func TestLiveFileAbsent(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, resolve.LayerSystemSnapshot, res.Layer)
 }
+
+// §3.2: unqualified keys resolve against the CWD repo's namespace first —
+// a same-named key in another registered namespace must NOT make it ambiguous.
+func TestUnqualifiedPrefersCwdRepoNamespace(t *testing.T) {
+	dir := t.TempDir()
+	// Registered snapshot for com.example.beta defines the same short key.
+	snapDir := filepath.Join(dir, "user-snap")
+	require.NoError(t, os.MkdirAll(snapDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(snapDir, "com.example.beta.yaml"), []byte(`namespace: com.example.beta
+sets:
+  - area: tune
+    features:
+      - {path: tune.cache.enabled, description: beta cache, boolDefault: false}
+`), 0o644))
+	// Live repo (the CWD) declares com.example.alpha with the same key.
+	repo := filepath.Join(dir, "repo")
+	require.NoError(t, os.MkdirAll(filepath.Join(repo, ".gff"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(repo, ".git"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(repo, ".gff", "features.yaml"), []byte(`namespace: com.example.alpha
+sets:
+  - area: tune
+    features:
+      - {path: tune.cache.enabled, description: alpha cache, boolDefault: true}
+`), 0o644))
+
+	p := paths.Paths{
+		SystemSnapshotDir: filepath.Join(dir, "sys-snap"),
+		UserSnapshotDir:   snapDir,
+		SystemOverride:    filepath.Join(dir, "sys-config.yaml"),
+		UserOverride:      filepath.Join(dir, "user-config.yaml"),
+		WorkDir:           repo,
+	}
+	r := resolve.New(p, fakeRunner{}, "")
+	res, err := r.Resolve("tune.cache.enabled")
+	require.NoError(t, err, "CWD namespace must win, not ambiguity")
+	assert.True(t, res.Value.GetBoolValue(), "alpha's default")
+	assert.Equal(t, resolve.LayerRepoLive, res.Layer)
+}
+
+// §3.2: with --source <name>, unqualified keys bind to that source's namespace.
+func TestUnqualifiedPrefersSourceNamespace(t *testing.T) {
+	dir := t.TempDir()
+	snapDir := filepath.Join(dir, "user-snap")
+	require.NoError(t, os.MkdirAll(snapDir, 0o755))
+	// Both namespaces registered as snapshots.
+	require.NoError(t, os.WriteFile(filepath.Join(snapDir, "com.example.alpha.yaml"), []byte(`namespace: com.example.alpha
+sets:
+  - area: tune
+    features:
+      - {path: tune.cache.enabled, description: alpha cache, boolDefault: true}
+`), 0o644))
+	betaSnap := filepath.Join(snapDir, "com.example.beta.yaml")
+	require.NoError(t, os.WriteFile(betaSnap, []byte(`namespace: com.example.beta
+sets:
+  - area: tune
+    features:
+      - {path: tune.cache.enabled, description: beta cache, boolDefault: false}
+`), 0o644))
+	workDir := filepath.Join(dir, "workdir")
+	require.NoError(t, os.MkdirAll(workDir, 0o755))
+
+	p := paths.Paths{
+		SystemSnapshotDir: filepath.Join(dir, "sys-snap"),
+		UserSnapshotDir:   snapDir,
+		SystemOverride:    filepath.Join(dir, "sys-config.yaml"),
+		UserOverride:      filepath.Join(dir, "user-config.yaml"),
+		WorkDir:           workDir,
+	}
+	r := resolve.New(p, fakeRunner{}, "com.example.beta")
+	r.S = fakeSourceLookup{m: map[string]string{"com.example.beta": betaSnap}}
+	res, err := r.Resolve("tune.cache.enabled")
+	require.NoError(t, err, "--source namespace must win, not ambiguity")
+	assert.False(t, res.Value.GetBoolValue(), "beta's default")
+}

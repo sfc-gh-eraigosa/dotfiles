@@ -156,6 +156,8 @@ type resolvedState struct {
 	byKey     map[defKey]int      // defKey → index in defs
 	sysOvr    map[string]*gffv1.Value
 	usrOvr    map[string]*gffv1.Value
+	focusNS   string              // namespace unqualified keys bind to first (§3.2):
+	                              // the CWD repo's flag file or the --source target
 }
 
 // load builds the resolved state from all layers.
@@ -182,9 +184,13 @@ func (r *Resolver) load() (*resolvedState, error) {
 		return nil, err
 	}
 	if livePath != "" {
-		if err := r.loadFile(livePath, liveLayer, st); err != nil {
+		ns, err := r.loadFile(livePath, liveLayer, st)
+		if err != nil {
 			return nil, err
 		}
+		// The live-slot file is the focus: unqualified keys bind to its
+		// namespace before any cross-namespace ambiguity check (§3.2).
+		st.focusNS = ns
 	}
 
 	// ── override layers ──────────────────────────────────────────────────────
@@ -276,21 +282,21 @@ func (r *Resolver) loadSnapshotDir(dir string, layer Layer, st *resolvedState) e
 	sort.Strings(files) // deterministic order
 
 	for _, f := range files {
-		if err := r.loadFile(f, layer, st); err != nil {
+		if _, err := r.loadFile(f, layer, st); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// loadFile loads a single feature file into st.
-func (r *Resolver) loadFile(path string, layer Layer, st *resolvedState) error {
+// loadFile loads a single feature file into st, returning its namespace.
+func (r *Resolver) loadFile(path string, layer Layer, st *resolvedState) (string, error) {
 	ff, err := schema.LoadFeatureFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil // absent live file is ok
+			return "", nil // absent live file is ok
 		}
-		return fmt.Errorf("resolve: loading %s: %w", path, err)
+		return "", fmt.Errorf("resolve: loading %s: %w", path, err)
 	}
 
 	ns := ff.GetNamespace()
@@ -307,7 +313,7 @@ func (r *Resolver) loadFile(path string, layer Layer, st *resolvedState) error {
 			}
 		}
 	}
-	return nil
+	return ns, nil
 }
 
 // effectiveValue computes the effective value and layer for a definition,
@@ -473,7 +479,15 @@ func (r *Resolver) Resolve(key string) (Resolved, error) {
 		return effectiveValue(def, st.sysOvr, st.usrOvr)
 	}
 
-	// Unqualified: collect all definitions for this path across all namespaces.
+	// Unqualified: the focus namespace (CWD repo / --source target) wins
+	// outright when it defines the key (§3.2).
+	if st.focusNS != "" {
+		if idx, ok := st.byKey[defKey{namespace: st.focusNS, path: path}]; ok {
+			return effectiveValue(st.defs[idx], st.sysOvr, st.usrOvr)
+		}
+	}
+
+	// Otherwise collect all definitions for this path across all namespaces.
 	var candidates []definition
 	for k, idx := range st.byKey {
 		if k.path == path {
