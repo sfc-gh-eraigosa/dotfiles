@@ -1,0 +1,18 @@
+# Owner polish: the SOURCES symbol key moves BELOW the entries, separated and labeled 'key:'
+# date UTC: 2026-07-26T17:26:35Z
+
+== S1: help from the FIRST scope (com.example.quickstart row) ==
+SOURCES — where flags come from. Namespaces are disjoint worlds: uniqueness is
+(namespace, key); an area name like 'install' is grouping only, never claimed.
+  ▶ ● com.example.quickstart
+    ○ com.github.sfc-gh-eraigosa.dotfiles  · discovered in the current repo — not registered
+
+  key: ▶ current scope · ● registered · ○ discovered (not registered)
+
+== S2: help from INSIDE the dotfiles breadcrumb scope ==
+SOURCES — where flags come from. Namespaces are disjoint worlds: uniqueness is
+(namespace, key); an area name like 'install' is grouping only, never claimed.
+  ▶ ○ com.github.sfc-gh-eraigosa.dotfiles  · discovered in the current repo — not registered
+    ● com.example.quickstart
+
+  key: ▶ current scope · ● registered · ○ discovered (not registered)

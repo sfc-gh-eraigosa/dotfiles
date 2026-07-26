@@ -1,0 +1,27 @@
+# Owner-reported: drilling into an overlapping key showed the WRONG source's detail
+# Cause: openDetail passed the unqualified path to Explain; §3.2 binds unqualified keys
+# focus-(CWD-repo)-first, discarding the row's namespace. Fix: every TUI Explain call
+# uses the fully-qualified <namespace>:<key> form; resolve.All() gained a deterministic
+# (path, namespace) tie-break so overlapping rows order stably.
+# date UTC: 2026-07-26T18:30:36Z
+
+installed com.example.demo (demo)
+
+=== O1 launch — the same key exists in BOTH sources (two install groups) ===
+com.github.sfc-gh-eraigosa.dotfiles ▸ [install (All)] · ai · fonts · network · pkg · runtime · sdk · shell · system · to
+> ▶ install  · com.github.sfc-gh-eraigosa.dotfiles
+  ▶ install  · com.example.demo
+↑/↓ move  ←/→ category  PgUp/PgDn page  Enter expand/details  Space toggle  u clear  ? help  q quit
+
+=== O2 detail of the DEMO source's install.ai.claude — must show com.example.demo / user-snapshot ===
+install.ai.claude  (bool)
+Claude CLI setup
+namespace: com.example.demo
+Effective: true  (user-snapshot)
+LAYERS — every level this key passes through, lowest to highest
+  system-snapshot   —
+  user-snapshot     default: true  ◀ winning
+  repo-live         —
+  system-override   —
+  user-override     —
+Space toggle/pick  u clear user override  Esc/Enter back  ? help

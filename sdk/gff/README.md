@@ -74,11 +74,14 @@ gff list [--json]          table or JSON of every resolved flag + winning layer
 gff lint [path]            lint a flag file (default: the discovered repo file)
 gff export --format shell|dotenv|json|yaml [-o <file>]
 gff install                register the CWD repo + snapshot into the user layer
+gff sources [--json]       list registered sources + the discovered current-repo
+                           origin (NAMESPACE URL COMMIT STATUS; current repo first)
 gff version                version block
 ```
 
 All read verbs accept `--source <namespace|path>` to scope resolution to one
-registered source or a local repo path instead of CWD discovery. Exit code 2
+registered source or a local repo path instead of CWD discovery — `gff sources`
+enumerates every namespace `--source` accepts and where each one comes from. Exit code 2
 always means a usage/definition error (unknown key/option/source, wrong type) —
 shell callers treat ≥2 as fail-open.
 

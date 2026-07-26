@@ -113,6 +113,13 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
   commit} + snapshot, keyed by the repo's reverse-DNS namespace; a different url
   installing an existing namespace is rejected naming the current owner. No area
   claims — two repos may both ship `install.*` keys under their own namespaces.
+  **Owner-approved extension (PR #187 review, 2026-07-26):** `gff sources
+  [--json]` lists every source flags can resolve from — registry entries
+  (namespace, url, commit, `registered`) plus the discovered current-repo
+  origin (`discovered — not registered`), current repo marked and sorted
+  first; `--json` emits a stable `[]{namespace,url,commit,registered,
+  currentRepo}` array (empty list, never null). Any listed namespace is valid
+  for `--source`; `gff list --help` and the TUI help overlay cross-reference it.
 - **F7 shell/bridge interface:** `gff enabled <key>` (0=on, 1=off, 2=unknown key,
   unknown option id, or type the verb can't express — any exit ≥2 is a
   usage/definition error and shell callers MUST treat it as fail-open; never use
@@ -133,6 +140,44 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
 - **F10 TUI:** tree nav, description/default/effective/winning-layer per row, bool
   toggle + choice picker (radio/checkbox per mode, options show id + description +
   typed value), quit-without-write safety.
+  **Owner-approved extensions (PR #187 review, 2026-07-26):**
+  - *Theme-aware palette:* the TUI and the styled `gff list` table resolve a palette
+    (dark / light / dark8) per the gsl model — `GFF_THEME` env override → basic-ANSI
+    fallback on low-color terminals (the terminal's own theme recolors them) →
+    terminal background query (OSC-11 / COLORFGBG). Light palette follows gsl's
+    mid-luminance layout. Inside tmux/screen (where OSC-11 cannot pass through)
+    with no COLORFGBG, basic ANSI is used as well — the terminal's own theme
+    recolors it, keeping contrast correct on any background; `GFF_THEME` still
+    overrides.
+  - *Category breadcrumb paging:* a fixed header lists the All page plus one page
+    per distinct second path segment, alphabetically ("install (All) · ai · pkg …";
+    bare "(All)" when multiple areas exist). ←/→ cycle pages; a category page shows
+    only its features, flat.
+  - *Feature detail view:* Enter on a feature row opens a detail pane — path, type,
+    description, namespace, effective value, the full 5-layer table (each layer's
+    contribution + the winning layer marked) via the additive `resolve.Explain`
+    API, and the option list for choices. Esc/Enter/q returns. (Enter on an area
+    row still expands/collapses.)
+  - *Viewport-aware rendering:* rows render windowed to the terminal height under
+    the fixed breadcrumb; the window follows the cursor; PgUp/PgDn page; overflow
+    is indicated ("… N more above/below") — the terminal never hard-wraps the UI.
+  - *Help overlay everywhere (`?`/`h`):* every view (list, detail, picker) opens a
+    help overlay showing the tool name, version, the current view's key legend, and
+    the SOURCES story — registry entries (●) plus discovered-but-unregistered
+    origins (○, e.g. the CWD repo's live flag file) so the multi-source picture is
+    complete. The launch frame itself stays clean (no always-on about panel); the
+    footer advertises `? help`.
+  - *Namespace-separated area rows + scoped breadcrumb:* one area row per
+    (namespace, area) pair — two sources sharing an area name are visibly separate
+    worlds — and the breadcrumb pages rescope to the cursor row's namespace
+    (prefixed `<namespace> ▸` when several are present).
+  - *Detail-view actions (existing writers only):* in the detail view, Space
+    toggles the bool or opens the choice picker (the same `overrides.Write` path
+    as `gff set`; the picker returns to the detail), and `u` clears the user
+    override via `overrides.Unset` (the `gff unset` path); the layer table
+    refreshes in place so cause and effect are visible.
+  - *Width-aware `gff list`:* the styled table constrains itself to the terminal
+    width (TTY size, else `$COLUMNS`) and wraps within cells — borders stay intact.
 - **F11 zero-install invocation + cross-repo source:** every verb also works with no
   gff installed via `go run github.com/sfc-gh-eraigosa/dotfiles/sdk/gff@<tag> …`
   (pinned `sdk/gff/vX.Y.Z` tag recommended, `@latest` allowed; stdout carries only

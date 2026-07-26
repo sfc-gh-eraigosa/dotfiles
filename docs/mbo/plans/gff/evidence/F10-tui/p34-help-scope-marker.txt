@@ -1,0 +1,16 @@
+# Owner-reported: help SOURCES ignored the current navigation scope
+# date UTC: 2026-07-26T16:48:59Z
+# Fix: the overlay marks the source of the scope help was opened from (breadcrumb
+# namespace; the item's own namespace when opened from the detail view), listed first.
+
+== S1: help from the FIRST scope (com.example.quickstart row) ==
+SOURCES — where flags come from. Namespaces are disjoint worlds: uniqueness is
+(namespace, key); an area name like 'install' is grouping only, never claimed.
+  ● com.example.quickstart  ← current scope
+  ○ com.github.sfc-gh-eraigosa.dotfiles  · discovered in the current repo — not registered
+
+== S2: help from INSIDE the dotfiles breadcrumb scope ==
+SOURCES — where flags come from. Namespaces are disjoint worlds: uniqueness is
+(namespace, key); an area name like 'install' is grouping only, never claimed.
+  ○ com.github.sfc-gh-eraigosa.dotfiles  · discovered in the current repo — not registered  ← current scope
+  ● com.example.quickstart
