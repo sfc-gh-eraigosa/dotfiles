@@ -41,7 +41,11 @@ case "$(uname -s)" in
         if ! command -v pipx >/dev/null 2>&1; then
             if command -v apt-get >/dev/null 2>&1; then
                 echo -e "${BLUE}Installing pipx via apt...${NC}"
-                sudo apt-get install -y -qq pipx
+                # DEBIAN_FRONTEND=noninteractive is load-bearing: pipx pulls in
+                # tzdata, whose debconf prompt blocks forever in non-interactive
+                # contexts (this hung the Docker image build for hours once the
+                # exec-bit fix let this script actually run there).
+                sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends pipx
             else
                 echo -e "${RED}install_snowflake_cli: pipx not found and no apt-get — install pipx manually, then re-run.${NC}"
                 exit 1

@@ -207,6 +207,7 @@ A frozen-contract (plan §3) defect goes here and is escalated — never silentl
 
 | Date | Task | Blocker | Command + observed output | Resolution |
 | :-- | :-- | :-- | :-- | :-- |
+| 2026-07-26 | (branch-wide CI) | Docker Image CI hung 1.5h+ ("Build the Docker image"): the exec-bit fix let install_snowflake_cli.sh actually RUN inside docker build for the first time, and its `sudo apt-get install pipx` hit tzdata's interactive debconf prompt (latent bug — script predates gff). Note: the heavy job only runs for NON-draft PRs, so it first fired when #182 left draft. | cancelled-run log: `Configuring tzdata / Please select the geographic area` then stdin-wait | Fixed: `sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends pipx`; verified in clean jammy container (rc=0, ~2min, no prompt); stale duplicate runs cancelled |
 | 2026-07-25 | (branch-wide CI) | shell-lint workflow red on any gff PR: pre-existing `opt/bin/docker:44` bash-4 `mapfile` (landed via #178/#179; main never re-scanned due to path filters) | `make lint-portability` -> `TIER 2 … opt/bin/docker:44 — bash-4 mapfile/readarray` | Fixed in-branch (fd-3 while-read keeps the #179 stdin-preservation fix; behaviorally tested); scan now Tier1=0 Tier2=0 |
 
 ---
