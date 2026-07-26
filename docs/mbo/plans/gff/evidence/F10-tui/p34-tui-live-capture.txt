@@ -1,0 +1,41 @@
+
+=== TUI FRAME 1 — initial view (areas collapsed) ===
+> ▶ demo
+↑/↓ navigate  Enter expand/collapse  Space toggle  q quit
+
+=== TUI FRAME 2 — Enter expands area 'demo' (provenance column; dashboard=false via CLI override) ===
+> ▼ demo
+  demo.pkg.manager                          auto  default  repo-live  Package manager selection
+  demo.shell.plugins                        fzf,starship  default  repo-live  Optional shell plugins
+  demo.ui.dashboard                         false  override  user-override  Render the dashboard pane
+↑/↓ navigate  Enter expand/collapse  Space toggle  q quit
+
+=== TUI FRAME 3 — Space on demo.ui.dashboard: bool toggled false->true, layer=user-override ===
+  ▼ demo
+  demo.pkg.manager                          auto  default  repo-live  Package manager selection
+  demo.shell.plugins                        fzf,starship  default  repo-live  Optional shell plugins
+>   demo.ui.dashboard                         true    override   user-override  Render the dashboard pane
+↑/↓ navigate  Enter expand/collapse  Space toggle  q quit
+
+=== TUI FRAME 4 — Space on demo.pkg.manager: radio picker opens (typed values shown) ===
+Pick option for: demo.pkg.manager (radio (single))
+> (●)  auto              Auto-detect                     auto
+  ( )  apt               Debian/Ubuntu apt               apt
+  ( )  brew              Homebrew                        brew
+↑/↓ navigate  Enter select  Esc cancel
+
+=== TUI FRAME 5 — Down+Enter in radio picker: 'apt' selected + confirmed, back in list ===
+  ▼ demo
+>   demo.pkg.manager                          apt     override   user-override  Package manager selection
+  demo.shell.plugins                        fzf,starship  default  repo-live  Optional shell plugins
+  demo.ui.dashboard                         true  override  user-override  Render the dashboard pane
+↑/↓ navigate  Enter expand/collapse  Space toggle  q quit
+
+=== CLI verification after quitting the TUI (same scratch world) ===
+$ gff get demo.ui.dashboard
+true
+$ gff get demo.pkg.manager
+apt
+$ cat ~/.config/gff/config.yaml (scratch HOME)
+demo.pkg.manager: apt
+demo.ui.dashboard: true
