@@ -408,6 +408,11 @@ independent task. Done when: <this session's done-when>.
 >      `gff set install.windows.desktop-deploy false` — so gff becomes the
 >      single source of skip state (visible in `gff list`/TUI, reversible via
 >      `unset`). Honor + migrate the legacy sentinel file if present.
+>    - Move the elevated batch's log off admin-only `C:\Windows\Temp\`
+>      (setup-elevated.ps1:15) to a user-readable path (e.g.
+>      `$env:USERPROFILE\setup-elevated.log`), or copy it back post-batch —
+>      today reading the SKIP evidence needs a second UAC elevation (hit
+>      during P2-T5 capture, 2026-07-26).
 >    - Real-terminal WSL validation of all four paths (y / n / s / flag-off)
 >      + evidence transcript.
 > 2. **UAC env-propagation follow-up** — resolve TRACKING §10 row 5 per what
