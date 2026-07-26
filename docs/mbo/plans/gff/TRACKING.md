@@ -62,12 +62,12 @@ P2-T5 human evidence posted.
 
 | Task | Status | Commit | Evidence (test run / gate) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| P2-T1 dotfiles flag inventory (43 flags) | todo | | | allowlist check first |
-| P2-T2 shell helper `opt/lib/gff.sh` | todo | | | bash **and** dash |
-| P2-T3 instrument `install.sh` (Linux/common) | todo | | | no reordering. NOTE (from p1 sandbox demo): shell-export lines are plain `VAR=v` (shell-local) — wrap the bootstrap eval in `set -a` / `set +a` so `GFF_*` reach child scripts (`install_windows.sh`), whose P2-T4 WSLENV builder greps `env` and only sees EXPORTED vars |
-| P2-T4 Windows pass-through + PS gating | todo | | | pwsh check or defer to P2-T5 |
-| P2-T5 human-evidenced acceptance | todo | — | | real terminal, WSL |
-| **P2 done-when gate** | todo | — | | evidence posted on PR |
+| P2-T1 dotfiles flag inventory (43 flags) | done | 5dd5e1b | allowlist: `.gitignore:33:!.github/**` NOT ignored; `gff lint` exit 0; 43 keys counted (grep + `gff list --json` jq), all repo-live | evidence F09-gating/p2-t1-lint-list.txt |
+| P2-T2 shell helper `opt/lib/gff.sh` | done | 6d00762 | orchestrator re-ran: `bash opt/lib/gff_test.sh` 10/10 PASS **and** `sh` (dash) 10/10 PASS; RED verified (helper missing ⇒ FAIL 1); driver mode 100755 confirmed via `git ls-files -s` | plan snippet verbatim + shellcheck disable comment lines only; evidence p2-t2-*.txt (append-only re-capture) |
+| P2-T3 instrument `install.sh` (Linux/common) | done | a131195 | orchestrator re-ran: `bash -n` clean; helper sourced line 23 (before first gate line 67, fail-closed guard comment); `set -a`/`set +a` wrap at the bootstrap eval (the binding NOTE); 35 `gff_on` sites / 33 keys; sops SKIP line reproduced | new later `install.sdk.gff`-gated duplicate build block added (plan presupposed one; bootstrap build stays ungated) |
+| P2-T4 Windows pass-through + PS gating | done | 0a2820e | orchestrator re-ran: `bash -n` clean on install_windows.sh; `make lint-shell` clean; `make lint-portability` Tier1=0 Tier2=0; WSLENV builder verbatim + dedup proven (2-pass dash test); Test-GffOn per plan | **pwsh absent — both Test-GffOn checks defer to P2-T5 human run (not faked)**; WSLENV loop inserted once after `ps_exe` (precedes every powershell.exe call, dedup makes it equivalent) |
+| P2-T5 human-evidenced acceptance | todo | — | | real terminal, WSL; **must `eval "$(gff export --shell)"` in the calling shell first** — see §10 row 3 |
+| **P2 done-when gate** | todo | — | lint gates clean + `gff lint` clean (done); P2-T5 evidence pending | PR [#184](https://github.com/sfc-gh-eraigosa/dotfiles/pull/184) |
 
 ---
 
@@ -127,7 +127,7 @@ proof passes; record which task proved it in Notes.
 | **F6** registry + namespace identity | [x] `registry_test.go` | [x] IH-2, IA-6, IA-7, IA-13, IA-14 | [ ] demo step 5 | |
 | **F7** export formats + injection safety | [x] export golden | [x] IH-7, IH-8, IA-5, IA-15 | [ ] demo steps 4, 6 | |
 | **F8** write path (0600, user-only) | [x] `write_test.go` | [x] IH-5, IA-8, IA-11, IA-13 | [ ] demo step 3 | |
-| **F9** fail-open gating | [ ] `gff_test.sh` bash + dash (binary-absent is unit-only) | [ ] IH-7, IA-7 | [ ] P2-T5 evidence | |
+| **F9** fail-open gating | [x] `gff_test.sh` bash + dash (binary-absent is unit-only) | [x] IH-7, IA-7 (proven by P1-T11 e2e) | [ ] P2-T5 evidence | P2-T2 (6d00762): 10/10 under bash AND dash |
 | **F10** TUI | [x] teatest goldens | [x] (visual — teatest is the harness) | [ ] post-P3 capture | P3-T1; unit+integration = the 16-case teatest suite (6bfa4c3) |
 | **F11** go-run + `--source` | [x] CI smoke (T10, `go run . version` in gff-ci) + read tests (T7) | [x] IH-10, IA-10 | [ ] demo step 6 | |
 
@@ -172,8 +172,8 @@ Errors must be *clean*: correct exit code, message names the offender, zero part
 
 ### 7.3 Shell-side negatives (plan §7.2 tail, proven by P2-T2 `opt/lib/gff_test.sh`)
 
-- [ ] unset var ⇒ run · [ ] exactly `"false"` ⇒ skip · [ ] `"FALSE"` / `"0"` / garbage ⇒ run · [ ] missing binary ⇒ run
-- [ ] all of the above pass under **bash** · [ ] and under **dash** (`sh`)
+- [x] unset var ⇒ run · [x] exactly `"false"` ⇒ skip · [x] `"FALSE"` / `"0"` / garbage ⇒ run · [x] missing binary ⇒ run
+- [x] all of the above pass under **bash** · [x] and under **dash** (`sh`) — P2-T2, 10/10 each, evidence p2-t2-gff-test-bash-dash*.txt
 
 ---
 
@@ -209,6 +209,8 @@ A frozen-contract (plan §3) defect goes here and is escalated — never silentl
 | :-- | :-- | :-- | :-- | :-- |
 | 2026-07-26 | (branch-wide CI) | Docker Image CI hung 1.5h+ ("Build the Docker image"): the exec-bit fix let install_snowflake_cli.sh actually RUN inside docker build for the first time, and its `sudo apt-get install pipx` hit tzdata's interactive debconf prompt (latent bug — script predates gff). Note: the heavy job only runs for NON-draft PRs, so it first fired when #182 left draft. | cancelled-run log: `Configuring tzdata / Please select the geographic area` then stdin-wait | Fixed: `sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends pipx`; verified in clean jammy container (rc=0, ~2min, no prompt); stale duplicate runs cancelled |
 | 2026-07-25 | (branch-wide CI) | shell-lint workflow red on any gff PR: pre-existing `opt/bin/docker:44` bash-4 `mapfile` (landed via #178/#179; main never re-scanned due to path filters) | `make lint-portability` -> `TIER 2 … opt/bin/docker:44 — bash-4 mapfile/readarray` | Fixed in-branch (fd-3 while-read keeps the #179 stdin-preservation fix; behaviorally tested); scan now Tier1=0 Tier2=0 |
+| 2026-07-26 | P2-T4 | `install.windows.{claude-rc-autostart,sshd,portproxy}` have NO invocation site in any owned file — `install-claude-rc-autostart.ps1`, `setup-sshd.ps1`, `refresh-wsl-portproxy.ps1` are standalone by design ("not wired into install.sh") | grep across install_windows.sh / setup-apps.ps1 / setup-elevated.ps1: no call sites | ORCHESTRATOR DECISION: leave the 3 flags declared-but-unenforced (fail-open no-ops today); gating activates if/when the scripts gain an invocation site. Documented in the PR body; NOT silently wired (would change behavior + exceed §6.1 ownership) |
+| 2026-07-26 | P2-T5 (upcoming) | Windows deploy invocation (install.sh line ~67) runs BEFORE the in-script gff bootstrap eval (~line 360, placed after goenv per the frozen plan §4 P2-T3) — on a plain run, `gff set` overrides are not yet exported when the PowerShell chain executes | code inspection: source line 23 / windows gate line 67 / bootstrap 357–365 | The plan's own pre-bootstrap caveat applies to the whole Windows path: P2-T5 must `eval "$(gff export --shell)"` in the calling shell before `install.sh` (TODO amended — procedure fix, not a contract edit). UAC boundary env propagation (`Start-Process -Verb RunAs`) remains a P2-T5 observation point; if the flag doesn't cross, escalate as plan-level |
 
 ---
 
