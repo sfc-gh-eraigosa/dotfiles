@@ -341,20 +341,24 @@ func (m *Model) viewHelp() string {
 		seen[ns] = true
 		lines = append(lines, srcLine{ns: ns, text: "○ " + ns + "  · discovered in the current repo — not registered"})
 	}
+	// Legend: the LEFT pointer follows the scope; the dot is registration
+	// status only — two orthogonal signals, spelled out so neither is guessed.
+	sb.WriteString(dim.Render("  ▶ current scope · ● registered · ○ discovered (not registered)"))
+	sb.WriteString("\n")
 	if len(lines) == 0 {
 		sb.WriteString(dim.Render("  (no sources registered — run `gff install` in a repo with a flag file)"))
 		sb.WriteString("\n")
 	}
-	// Current-scope source first, marked; the rest keep their order, dim.
+	// Current-scope source first, carrying the pointer; the rest stay dim.
 	sort.SliceStable(lines, func(i, j int) bool {
 		return lines[i].ns == curNS && lines[j].ns != curNS
 	})
 	cur := lipgloss.NewStyle().Bold(true).Foreground(pal.Text)
 	for _, l := range lines {
 		if l.ns == curNS && curNS != "" {
-			sb.WriteString(cur.Render("  " + l.text + "  ← current scope"))
+			sb.WriteString(cur.Render("  ▶ " + l.text))
 		} else {
-			sb.WriteString(dim.Render("  " + l.text))
+			sb.WriteString(dim.Render("    " + l.text))
 		}
 		sb.WriteString("\n")
 	}

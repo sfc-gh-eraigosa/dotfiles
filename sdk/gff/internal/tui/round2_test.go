@@ -194,10 +194,23 @@ func TestSpaceToggleOnAllPageKeepsRowInItsNamespaceGroup(t *testing.T) {
 }
 
 // Owner-reported: help opened from inside a namespace scope must SAY which
-// source that scope belongs to — the SOURCES list marks the current one.
+// source that scope belongs to. The LEFT pointer (▶) follows the scope; the
+// dot is registration status only (● registered / ○ discovered) — a legend
+// spells this out after the owner read the filled dot as "current".
 func helpLineWith(v, needle string) string {
 	for _, line := range strings.Split(v, "\n") {
 		if strings.Contains(line, needle) {
+			return line
+		}
+	}
+	return ""
+}
+
+// scopePointerLine returns the SOURCES entry line carrying the ▶ scope pointer
+// (entries render as "▶ ● ns" / "▶ ○ ns"; the legend line has no dot after ▶).
+func scopePointerLine(v string) string {
+	for _, line := range strings.Split(v, "\n") {
+		if strings.Contains(line, "▶ ●") || strings.Contains(line, "▶ ○") {
 			return line
 		}
 	}
@@ -209,17 +222,21 @@ func TestHelpMarksCurrentScopeSource(t *testing.T) {
 
 	// Initial scope: the repo namespace (com.example.tui-test).
 	m = press(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
-	line := helpLineWith(m.View(), "current scope")
-	require.NotEmpty(t, line, "help must mark the current scope's source")
+	v := m.View()
+	assert.Contains(t, helpLineWith(v, "SOURCES"), "SOURCES")
+	require.Contains(t, v, "▶ current scope", "legend explains the pointer")
+	require.Contains(t, v, "● registered", "legend explains the dots")
+	line := scopePointerLine(v)
+	require.NotEmpty(t, line, "help must point at the current scope's source")
 	assert.Contains(t, line, "com.example.tui-test")
 	m = press(m, tea.KeyMsg{Type: tea.KeyEscape})
 
-	// Rescope to the second namespace, reopen help: the marker must move.
+	// Rescope to the second namespace, reopen help: the pointer must move.
 	m = press(m, tea.KeyMsg{Type: tea.KeyDown})
 	m = press(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
-	line = helpLineWith(m.View(), "current scope")
+	line = scopePointerLine(m.View())
 	require.NotEmpty(t, line)
-	assert.Contains(t, line, "com.example.other", "marker follows the breadcrumb scope")
+	assert.Contains(t, line, "com.example.other", "pointer follows the breadcrumb scope")
 	assert.NotContains(t, line, "com.example.tui-test")
 }
 
@@ -229,9 +246,9 @@ func TestHelpFromDetailMarksTheItemsSource(t *testing.T) {
 	m = press(m, tea.KeyMsg{Type: tea.KeyDown})  // install.ai.claude
 	m = press(m, tea.KeyMsg{Type: tea.KeyEnter}) // detail
 	m = press(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
-	line := helpLineWith(m.View(), "current scope")
+	line := scopePointerLine(m.View())
 	require.NotEmpty(t, line)
-	assert.Contains(t, line, "com.example.tui-test", "detail help marks the item's own source")
+	assert.Contains(t, line, "com.example.tui-test", "detail help points at the item's own source")
 }
 
 // Owner ask: 'u' clears the user override from the LIST view too, mirroring

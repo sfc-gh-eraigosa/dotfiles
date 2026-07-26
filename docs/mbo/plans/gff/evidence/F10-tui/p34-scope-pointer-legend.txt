@@ -1,0 +1,21 @@
+# Owner question: the ● dot looked like a 'current scope' marker and didn't follow navigation.
+# Answer: the dot was registration status (● registered / ○ discovered) — never scope. That
+# ambiguity is now removed: a LEFT pointer (▶) follows the current scope, dots keep
+# registration status, and a legend line spells out both.
+# date UTC: 2026-07-26T17:06:15Z
+
+== S1: help from the FIRST scope (com.example.quickstart row) ==
+SOURCES — where flags come from. Namespaces are disjoint worlds: uniqueness is
+(namespace, key); an area name like 'install' is grouping only, never claimed.
+  ▶ current scope · ● registered · ○ discovered (not registered)
+  ▶ ● com.example.quickstart
+    ○ com.github.sfc-gh-eraigosa.dotfiles  · discovered in the current repo — not registered
+
+
+== S2: help from INSIDE the dotfiles breadcrumb scope ==
+SOURCES — where flags come from. Namespaces are disjoint worlds: uniqueness is
+(namespace, key); an area name like 'install' is grouping only, never claimed.
+  ▶ current scope · ● registered · ○ discovered (not registered)
+  ▶ ○ com.github.sfc-gh-eraigosa.dotfiles  · discovered in the current repo — not registered
+    ● com.example.quickstart
+
