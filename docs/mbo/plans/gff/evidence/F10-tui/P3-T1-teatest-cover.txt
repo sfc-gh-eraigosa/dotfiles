@@ -1,0 +1,5 @@
+# date UTC: 2026-07-26T04:16:29Z
+# task id: P3-T1
+# command: go test ./internal/tui/ -cover
+
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui	0.973s	coverage: 90.6% of statements

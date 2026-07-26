@@ -5,12 +5,14 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/gitx"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/paths"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/registry"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 // sourceFlag holds the value of the persistent --source flag.
@@ -39,6 +41,13 @@ func newRoot() *cobra.Command {
 		Short:         "git fast features — layered feature flags persisted in git",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Bare `gff` with no args on a TTY runs the TUI; non-TTY prints help.
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if term.IsTerminal(int(os.Stdout.Fd())) {
+				return runTUI(cmd, args)
+			}
+			return cmd.Help()
+		},
 	}
 	c.PersistentFlags().StringVar(&sourceFlag, "source", "", "resolve flags from a registered source name or local repo path")
 	return c

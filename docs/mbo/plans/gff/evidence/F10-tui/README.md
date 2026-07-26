@@ -6,4 +6,5 @@
 Captures land here per plan SS7.6: gate command output via tee, 3-line dated header,
 append-only (never overwrite), committed with the code that produced it.
 
-_No captures yet._
+- `P3-T1-teatest-cover.txt` — teatest suite green at 90.6% package coverage (unit proof).
+- Post-P3 TUI capture (demo proof) — pending, VD-1 addendum.
