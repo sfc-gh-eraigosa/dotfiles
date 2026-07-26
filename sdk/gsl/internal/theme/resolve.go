@@ -90,15 +90,23 @@ func antigravityKeywordToPalette(raw string) string {
 
 // terminalPalette resolves a palette from terminal environment variables.
 //
+//   - inside tmux/screen ($TMUX set, or $TERM tmux*/screen*) → "dark8":
+//     the true background is unknowable from env alone there, and basic ANSI
+//     indices are recolored by the outer terminal's own theme, so contrast
+//     stays correct on any background (mirrors gff's rule, dotfiles#187)
 //   - $COLORTERM == "truecolor" or "24bit" → "dark"
 //   - $TERM contains "256color"            → "dark"
 //   - otherwise                            → "dark8"
 func terminalPalette(env func(string) string) string {
+	term := strings.ToLower(env("TERM"))
+	if env("TMUX") != "" || strings.HasPrefix(term, "tmux") || strings.HasPrefix(term, "screen") {
+		return "dark8"
+	}
 	ct := strings.ToLower(env("COLORTERM"))
 	if ct == "truecolor" || ct == "24bit" {
 		return "dark"
 	}
-	if strings.Contains(strings.ToLower(env("TERM")), "256color") {
+	if strings.Contains(term, "256color") {
 		return "dark"
 	}
 	return "dark8"
