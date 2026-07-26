@@ -450,14 +450,14 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 > **Human-in-the-loop.** Requires a real interactive WSL terminal. Never run `install.sh`
 > from a worker worktree — it creates absolute symlinks in `${HOME}`.
 
-- [ ] SETUP: switch to `${HOME}/git/dotfiles`, checkout the branch carrying P2, and run from there. NOTE: rebuild first (`make gff-install`) so `${HOME}/opt/bin/gff` is the merged binary; leftover test registrations in `~/.config/gff/sources.yaml` (e.g. `com.example.demo`) are harmless — the focus-namespace rule binds unqualified keys to the dotfiles repo when run from inside it
-- [ ] RUN: `gff set install.windows.wispr-flow false`; confirm `gff get install.windows.wispr-flow` prints `false` and `gff list` shows layer `user-override`
-- [ ] RUN: `eval "$(gff export --shell)"` **in the calling shell** before install.sh — the Windows deploy phase runs BEFORE the in-script bootstrap (TRACKING §10), so the flag must be pre-exported to cross into install_windows.sh/WSLENV
-- [ ] RUN: execute `install.sh` in a **real interactive terminal** (answer the Windows customization prompt) — not backgrounded, not piped
-- [ ] CAPTURE: the `SKIP (gff: install.windows.wispr-flow=false)` line from the transcript
-- [ ] RUN: `gff unset install.windows.wispr-flow`; confirm the default is restored
-- [ ] POST: paste the evidence into PR #181 (or the `p2-instrument` leaf PR)
-- [ ] LEDGER: tick F9 **demo** cell and the P2 done-when gate; CHECKPOINT
+- [x] SETUP: switch to `${HOME}/git/dotfiles`, checkout the branch carrying P2, and run from there. NOTE: rebuild first (`make gff-install`) so `${HOME}/opt/bin/gff` is the merged binary; leftover test registrations in `~/.config/gff/sources.yaml` (e.g. `com.example.demo`) are harmless — the focus-namespace rule binds unqualified keys to the dotfiles repo when run from inside it. (Ran on `fix/gff-wslenv-w-flag` @ 0435b9d — the WSLENV `/w` fix, PR #191, was required for the flag to cross)
+- [x] RUN: `gff set` the flag false; confirmed via `gff get` + `env`. KEY SWITCHED wispr-flow → **install.windows.apps**: the elevated batch cannot receive env across UAC (TRACKING §10), so the evidence uses a non-elevated gate on the identical chain
+- [x] RUN: **`set -a; eval "$(gff export --shell)"; set +a`** in the calling shell — bare eval is NOT enough, export lines are plain `VAR=v` (TRACKING §10)
+- [x] RUN: `install.sh` in a real interactive terminal, prompt answered `y` (owner, 2026-07-26)
+- [x] CAPTURE: `SKIP (gff: install.windows.apps=false)` replaced the whole `[5/6] Desktop apps` phase — evidence/F09-gating/P2-T5-real-install.txt
+- [x] RUN: `gff unset install.windows.apps` (+ the earlier wispr-flow override); defaults restored
+- [x] POST: evidence committed to the tree + posted on issue #180 (closeout)
+- [x] LEDGER: F9 **demo** cell + P2 done-when gate ticked (TRACKING §2/§6/§8)
 
 **Done when — P2 done-when gate:** lint gates clean, `gff lint` clean, and this evidence posted.
 
@@ -599,10 +599,10 @@ wispr-flow SKIP run stands alongside it as the real-install proof.
 
 # Objective closeout (plan §7.5 — the stop condition)
 
-- [ ] VERIFY `gff-ci.yml` fully green on `main`: vet, unit tests **≥90%** coverage, `e2e` job (all IH-* and IA-* subtests), proto-regen clean, `go run .` smoke
-- [ ] VERIFY the VD-1 demo transcript is posted on the PR
-- [ ] VERIFY the P2-T5 real-install evidence is posted on the PR
-- [ ] VERIFY every §7.4 feature→proof row is checked in `TRACKING.md` §6 **and** reproduced in the leaf PR descriptions (a feature without all three proofs is not done)
-- [ ] Update `docs/mbo/index.md` — `gff` state → `merged`, per-leaf states current
+- [x] VERIFY `gff-ci.yml` fully green on `main`: green on the #182/#184/#187 merges; post-tag zero-install additionally proven (F11-gorun/post-tag-zero-install.txt)
+- [x] VERIFY the VD-1 demo transcript is posted on the PR (#188 body + evidence/demo/)
+- [x] VERIFY the P2-T5 real-install evidence is posted (evidence/F09-gating/P2-T5-real-install.txt + #180 comment; key = install.windows.apps per TRACKING §10)
+- [x] VERIFY every §7.4 feature→proof row is checked in `TRACKING.md` §6 **and** reproduced in the leaf PR descriptions (F9-demo was the last cell — closed 2026-07-26)
+- [x] Update `docs/mbo/index.md` — `gff` state → `done`, all leaf PRs linked
 - [ ] Close issue #180 (only once all four leaves have landed)
-- [ ] Final session-log entry in `TRACKING.md` §11
+- [x] Final session-log entry in `TRACKING.md` §11
