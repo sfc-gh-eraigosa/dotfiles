@@ -69,3 +69,51 @@ func TestListFilterGlobAndPrefix(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(out), &rows))
 	assert.Empty(t, rows)
 }
+
+func TestListPrettyStyledTable(t *testing.T) {
+	p, _ := worldPaths(t, boolFeatYAML)
+	withResolver(t, p)
+
+	out, err := runCmd(t, "list", "--pretty")
+	require.NoError(t, err)
+
+	// Bordered lipgloss table: rounded corners + column rules + header.
+	for _, glyph := range []string{"╭", "╰", "│", "─"} {
+		assert.Contains(t, out, glyph, "styled table border glyph %q", glyph)
+	}
+	for _, col := range []string{"PATH", "TYPE", "VALUE", "LAYER"} {
+		assert.Contains(t, out, col)
+	}
+	assert.Contains(t, out, "install.ai.claude")
+
+	// Filter composes with --pretty.
+	out, err = runCmd(t, "list", "--pretty", "*.claude")
+	require.NoError(t, err)
+	assert.Contains(t, out, "install.ai.claude")
+	assert.NotContains(t, out, "install.ai.tools")
+}
+
+func TestListPlainWhenPiped(t *testing.T) {
+	p, _ := worldPaths(t, boolFeatYAML)
+	withResolver(t, p)
+
+	// runCmd writes to a buffer (not a TTY): default stays the plain table.
+	out, err := runCmd(t, "list")
+	require.NoError(t, err)
+	assert.NotContains(t, out, "╭", "non-TTY default must stay plain/greppable")
+	assert.Contains(t, out, "PATH")
+}
+
+func TestListJSONRawCompact(t *testing.T) {
+	p, _ := worldPaths(t, boolFeatYAML)
+	withResolver(t, p)
+
+	out, err := runCmd(t, "list", "--json", "--raw")
+	require.NoError(t, err)
+	assert.False(t, strings.Contains(strings.TrimRight(out, "\n"), "\n"), "--raw must be a single compact line")
+	assert.True(t, strings.HasPrefix(out, "[{"), "compact array, got %q", out[:min(len(out), 10)])
+
+	var rows []resolve.ResolvedJSON
+	require.NoError(t, json.Unmarshal([]byte(out), &rows))
+	assert.Len(t, rows, 2)
+}
