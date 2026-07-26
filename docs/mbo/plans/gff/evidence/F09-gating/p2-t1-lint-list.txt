@@ -1,0 +1,6 @@
+2026-07-26T04:10:29Z (UTC)
+task: P2-T1 — dotfiles flag inventory (.github/gff/features.yaml)
+command: gff lint .github/gff/features.yaml; gff list --json | jq '[.[] | select(.namespace=="com.github.sfc-gh-eraigosa.dotfiles")] | length'
+gff lint exit: 0
+43
+repo-live
