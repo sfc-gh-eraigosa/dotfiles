@@ -84,15 +84,18 @@ fi
 
 # ---------------------------------------------------------------------------
 # gff flag pass-through: append every exported GFF_INSTALL_WINDOWS_* name to
-# WSLENV (/u = WSL->Win32 direction) BEFORE any powershell.exe invocation, so
-# the PowerShell setup scripts' Test-GffOn gates see the same flags. Runs here
+# WSLENV (/w = include when invoking Win32 from WSL) BEFORE any powershell.exe
+# invocation, so the PowerShell setup scripts' Test-GffOn gates see the same
+# flags. NOTE: the flag was originally /u per the plan — refuted empirically
+# 2026-07-26 (P2-T5): /u means Win32->WSL only, so the vars never crossed;
+# /w is the WSL->Win32 direction (learn.microsoft.com WSLENV flags). Runs here
 # — after ps_exe resolution, ahead of every $ps_exe call — and de-duplicates,
 # so re-runs never grow WSLENV. Requires install.sh's `set -a` bootstrap
 # export; unset vars simply never appear (fail-open on the Windows side too).
 # ---------------------------------------------------------------------------
 _gff_wslenv="${WSLENV:-}"
 for _v in $(env | sed -n 's/^\(GFF_INSTALL_WINDOWS_[A-Z_]*\)=.*/\1/p'); do
-  case ":${_gff_wslenv}:" in *":${_v}/u:"*) : ;; *) _gff_wslenv="${_gff_wslenv:+${_gff_wslenv}:}${_v}/u" ;; esac
+  case ":${_gff_wslenv}:" in *":${_v}/w:"*) : ;; *) _gff_wslenv="${_gff_wslenv:+${_gff_wslenv}:}${_v}/w" ;; esac
 done
 export WSLENV="${_gff_wslenv}"
 
