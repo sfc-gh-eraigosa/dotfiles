@@ -218,5 +218,6 @@ One line per working session. Never rewrite history here — append.
 | Date | Session | Leaf(s) | What advanced |
 | :-- | :-- | :-- | :-- |
 | 2026-07-25 | planning | — | Tracking files authored (`IMPLEMENTATION.md`, `TRACKING.md`, `TODO.md`); build not yet started |
+| 2026-07-26 | build-1 | p1-engine | Review round: user guide + gff-build/test/install make targets; snowflake exec-bit fix; OWNER-APPROVED §3.4 extension (requested on PR review): `gff list [pattern]` glob/prefix filter, aligned table header, indented --json (wire shape []ResolvedJSON unchanged) — TDD'd in cmd/list_enhance_test.go |
 | 2026-07-25 | build-1 | p1-engine | P1-T1..T11 all done; PR #182 fully green; extra fixes: opt/bin/docker portability (unblocks shell-lint repo-wide), CI -count=1 profile fix, IA-10 resolve ErrUnknownSource fix, missing-default lint rule. Coverage 91.7/96.0/95.7. Awaiting --ready confirmation. |
 | 2026-07-25 | build-1 | p1-engine | Preflight green (plan on origin/main; go 1.26.3 toolchain, go directive stays 1.26.1; protoc 3.21.12; gh authed). NOTE: gff feature row was absent from the gss registry post-#181-merge; ran `gss feature start gff` to recreate it, then added the p1-engine worker. |

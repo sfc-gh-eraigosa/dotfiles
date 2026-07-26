@@ -3,27 +3,54 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"path"
 	"strings"
+	"text/tabwriter"
 
 	gffv1 "github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/gen/gff/v1"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve"
 	"github.com/spf13/cobra"
 )
 
 var listJSON bool
 
 var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all feature flags with their effective values and layer",
-	Args:  cobra.NoArgs,
-	RunE:  runList,
+	Use:   "list [pattern]",
+	Short: "List feature flags with their effective values and winning layer",
+	Long: `List every resolved flag as an aligned table (PATH TYPE VALUE LAYER
+DESCRIPTION) or, with --json, as an indented []ResolvedJSON array.
+
+An optional pattern narrows the output by key: glob characters (*?[) match
+the full dotted key via path.Match ("install.ai.*", "*.claude"); a bare
+string matches as a segment prefix ("install.ai").`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runList,
 }
 
 func init() {
-	listCmd.Flags().BoolVar(&listJSON, "json", false, "emit JSON array of ResolvedJSON")
+	listCmd.Flags().BoolVar(&listJSON, "json", false, "emit an indented JSON array of ResolvedJSON")
 	rootCmd.AddCommand(listCmd)
 }
 
-func runList(cmd *cobra.Command, _ []string) error {
+// matchKey reports whether key matches pattern: glob when pattern carries
+// glob metacharacters, else exact key or dotted-segment prefix.
+func matchKey(pattern, key string) bool {
+	if pattern == "" {
+		return true
+	}
+	if strings.ContainsAny(pattern, "*?[") {
+		ok, err := path.Match(pattern, key)
+		return err == nil && ok
+	}
+	return key == pattern || strings.HasPrefix(key, pattern+".")
+}
+
+func runList(cmd *cobra.Command, args []string) error {
+	pattern := ""
+	if len(args) == 1 {
+		pattern = args[0]
+	}
+
 	r, err := newResolver()
 	if err != nil {
 		return err
@@ -34,20 +61,23 @@ func runList(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	filtered := all[:0:0]
+	for _, res := range all {
+		if matchKey(pattern, res.Feature.GetPath()) {
+			filtered = append(filtered, res)
+		}
+	}
+
 	if listJSON {
-		out := make([]json.RawMessage, 0, len(all))
-		for _, res := range all {
+		rows := make([]resolve.ResolvedJSON, 0, len(filtered))
+		for _, res := range filtered {
 			rj, err := res.JSON()
 			if err != nil {
 				return fmt.Errorf("list: %w", err)
 			}
-			b, err := json.Marshal(rj)
-			if err != nil {
-				return fmt.Errorf("list: marshal: %w", err)
-			}
-			out = append(out, json.RawMessage(b))
+			rows = append(rows, rj)
 		}
-		b, err := json.Marshal(out)
+		b, err := json.MarshalIndent(rows, "", "  ")
 		if err != nil {
 			return fmt.Errorf("list: marshal array: %w", err)
 		}
@@ -55,8 +85,9 @@ func runList(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	// Human-readable table: PATH  TYPE  VALUE  LAYER  DESCRIPTION
-	for _, res := range all {
+	w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "PATH\tTYPE\tVALUE\tLAYER\tDESCRIPTION")
+	for _, res := range filtered {
 		var typ, value string
 		switch v := res.Value.GetKind().(type) {
 		case *gffv1.Value_BoolValue:
@@ -69,13 +100,8 @@ func runList(cmd *cobra.Command, _ []string) error {
 			typ = "unknown"
 			value = ""
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "%-40s  %-6s  %-10s  %-20s  %s\n",
-			res.Feature.GetPath(),
-			typ,
-			value,
-			res.Layer.String(),
-			res.Feature.GetDescription(),
-		)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+			res.Feature.GetPath(), typ, value, res.Layer.String(), res.Feature.GetDescription())
 	}
-	return nil
+	return w.Flush()
 }
