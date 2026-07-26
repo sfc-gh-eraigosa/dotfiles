@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -90,7 +91,26 @@ func valueStyle(value string) lipgloss.Style {
 	return lipgloss.NewStyle()
 }
 
-func renderPrettyTable(rows [][]string) string {
+// terminalWidth returns the usable column count: the real terminal size when
+// stdout is a TTY, else $COLUMNS, else 0 (unconstrained).
+func terminalWidth() int {
+	if term.IsTerminal(int(os.Stdout.Fd())) {
+		if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 {
+			return w
+		}
+	}
+	if c := os.Getenv("COLUMNS"); c != "" {
+		if w, err := strconv.Atoi(c); err == nil && w > 0 {
+			return w
+		}
+	}
+	return 0
+}
+
+// renderPrettyTable renders the styled table. width > 0 constrains the whole
+// table to that many columns (lipgloss wraps cell content within its column)
+// so the terminal never hard-wraps mid-cell and mangles the borders.
+func renderPrettyTable(rows [][]string, width int) string {
 	cell := lipgloss.NewStyle().Padding(0, 1)
 	t := lgtable.New().
 		Border(lipgloss.RoundedBorder()).
@@ -112,6 +132,9 @@ func renderPrettyTable(rows [][]string) string {
 			}
 			return cell
 		})
+	if width > 0 {
+		t = t.Width(width)
+	}
 	return t.Render()
 }
 
@@ -190,7 +213,7 @@ func runList(cmd *cobra.Command, args []string) error {
 		pretty = term.IsTerminal(int(os.Stdout.Fd()))
 	}
 	if pretty {
-		fmt.Fprintln(out, renderPrettyTable(rows))
+		fmt.Fprintln(out, renderPrettyTable(rows, terminalWidth()))
 		return nil
 	}
 
