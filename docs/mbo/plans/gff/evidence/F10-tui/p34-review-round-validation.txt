@@ -1,0 +1,110 @@
+
+=== V1 launch — breadcrumb + help + SOURCES registry panel ===
+[install (All)] · ai · fonts · network · pkg · runtime · sdk · shell · system · tools · windows
+> ▶ install  · com.github.sfc-gh-eraigosa.dotfiles
+git fast features — layered flags persisted in git
+  ↑/↓ move · ←/→ category pages · PgUp/PgDn page
+  Enter expand an area or open feature details · Space toggle (bool) or pick (choice) · q quit
+SOURCES — the registry (~/.config/gff/sources.yaml) each area resolves from
+  ● com.github.sfc-gh-eraigosa.dotfiles  git@github.com:sfc-gh-eraigosa/dotfiles.git  @cebd663
+↑/↓ move  ←/→ category  PgUp/PgDn page  Enter expand/details  Space toggle  q quit
+
+=== V2 Enter expands install — viewport windows 43 rows to the terminal height ===
+[install (All)] · ai · fonts · network · pkg · runtime · sdk · shell · system · tools · windows
+> ▼ install  · com.github.sfc-gh-eraigosa.dotfiles
+  install.ai.antigravity                    true  default  repo-live  Runs the Antigravity blocks (install_ant
+  install.ai.claude                         true  default  repo-live  Runs the Claude Code blocks (install_cla
+  install.ai.google-cli                     true  default  repo-live  Runs the google-cli-setup.sh block.
+  install.ai.plugins                        true  default  repo-live  Runs the sync-plugins.sh block that sync
+  install.ai.skills                         true  default  repo-live  Runs the sync-skills.sh block that links
+  install.ai.teams                          true  default  repo-live  Runs the install_ai_teams.sh block.
+  install.fonts.nerd-font                   true  default  repo-live  Runs the Nerd Font configuration block (
+  install.network.sshd                      true  default  repo-live  Runs the sshd_run.sh block when ~/.sshd.
+  install.pkg.brewfile                      true  default  repo-live  Runs the macOS brew bundle block for the
+  install.pkg.common-core                   true  default  repo-live  Runs the pkg-install block that installs
+  install.runtime.fnm                       true  default  repo-live  Runs the fnm install block.
+  install.runtime.goenv                     true  default  repo-live  Runs the goenv install/update and pinned
+  install.runtime.nvm                       true  default  repo-live  Runs the nvm install block.
+  install.runtime.pyenv                     true  default  repo-live  Runs the pyenv install/update block.
+  install.runtime.rbenv                     true  default  repo-live  Runs the rbenv install/update block with
+  install.sdk.gff                           true  default  repo-live  Runs the later duplicate gff build block
+  install.sdk.gsl                           true  default  repo-live  Runs the gsl build-and-install block.
+  … 26 more below
+↑/↓ move  ←/→ category  PgUp/PgDn page  Enter expand/details  Space toggle  q quit
+
+=== V3 Right arrow — 'ai' category page, filtered ===
+install (All) · [ai] · fonts · network · pkg · runtime · sdk · shell · system · tools · windows
+>   install.ai.antigravity                    true    default    repo-live  Runs the Antigravity blocks (insta
+  install.ai.claude                         true  default  repo-live  Runs the Claude Code blocks (install_cla
+  install.ai.google-cli                     true  default  repo-live  Runs the google-cli-setup.sh block.
+  install.ai.plugins                        true  default  repo-live  Runs the sync-plugins.sh block that sync
+  install.ai.skills                         true  default  repo-live  Runs the sync-skills.sh block that links
+  install.ai.teams                          true  default  repo-live  Runs the install_ai_teams.sh block.
+↑/↓ move  ←/→ category  PgUp/PgDn page  Enter expand/details  Space toggle  q quit
+
+=== V4 Enter on a feature — detail view: attributes + 5-layer provenance ===
+install.ai.google-cli  (bool)
+Runs the google-cli-setup.sh block.
+namespace: com.github.sfc-gh-eraigosa.dotfiles
+Effective: true  (repo-live)
+LAYERS — every level this key passes through, lowest to highest
+  system-snapshot   —
+  user-snapshot     default: true
+  repo-live         default: true  ◀ winning
+  system-override   —
+  user-override     —
+Esc/Enter back  q back
+
+=== V5 Esc back — still on the ai page ===
+install (All) · [ai] · fonts · network · pkg · runtime · sdk · shell · system · tools · windows
+  install.ai.antigravity                    true  default  repo-live  Runs the Antigravity blocks (install_ant
+  install.ai.claude                         true  default  repo-live  Runs the Claude Code blocks (install_cla
+>   install.ai.google-cli                     true    default    repo-live  Runs the google-cli-setup.sh block
+  install.ai.plugins                        true  default  repo-live  Runs the sync-plugins.sh block that sync
+  install.ai.skills                         true  default  repo-live  Runs the sync-skills.sh block that links
+  install.ai.teams                          true  default  repo-live  Runs the install_ai_teams.sh block.
+↑/↓ move  ←/→ category  PgUp/PgDn page  Enter expand/details  Space toggle  q quit
+
+=== V6 gff list at 100 cols — width-constrained table (no mid-cell terminal wrap) ===
+install.fonts.nerd-font              bool  true   repo-live  Runs the Nerd Font configuration block
+(OS dispatch plus the glyph-coverage check).
+install.network.sshd                 bool  true   repo-live  Runs the sshd_run.sh block when ~/.sshd
+.env is present.
+install.pkg.brewfile                 bool  true   repo-live  Runs the macOS brew bundle block for th
+e Brewfile extras including vault-setup.
+install.pkg.common-core              bool  true   repo-live  Runs the pkg-install block that install
+s the curated common-core packages plus the legacy yum path.
+install.runtime.fnm                  bool  true   repo-live  Runs the fnm install block.
+install.runtime.goenv                bool  true   repo-live  Runs the goenv install/update and pinne
+d Go toolchain block.
+install.runtime.nvm                  bool  true   repo-live  Runs the nvm install block.
+install.runtime.pyenv                bool  true   repo-live  Runs the pyenv install/update block.
+install.runtime.rbenv                bool  true   repo-live  Runs the rbenv install/update block wit
+h the ruby-build plugin.
+install.sdk.gff                      bool  true   repo-live  Runs the later duplicate gff build bloc
+k (the bootstrap build itself is never gated).
+install.sdk.gsl                      bool  true   repo-live  Runs the gsl build-and-install block.
+install.sdk.gss                      bool  true   repo-live  Runs the gss build-and-install block.
+install.sdk.tmux-mgr                 bool  true   repo-live  Runs the tmux-mgr build-and-install blo
+ck.
+install.sdk.wol                      bool  true   repo-live  Runs the wol build-and-install block.
+install.shell.default-zsh            bool  true   repo-live  Runs the chsh block that sets zsh as th
+e default login shell.
+install.shell.profiles               bool  true   repo-live  Runs the block that symlinks opt/profil
+es dotfiles into the home directory.
+install.system.gitrepos              bool  true   repo-live  Runs the ~/.gitrepos clone block near t
+he end of install.sh.
+install.system.jetson                bool  true   repo-live  Runs the Jetson hardware-detection bloc
+k (jtop setup and Chromium default browser).
+install.system.nano-profile          bool  true   repo-live  Runs the block that wires .nano_profile
+ sourcing into .zshrc and .profile.
+install.system.wsl-interop           bool  true   repo-live  Runs the wsl_interop_binfmt.sh block th
+at keeps the WSLInterop binfmt registration alive.
+install.tools.docker                 bool  true   repo-live  Runs the docker setup block (permission
+s plus ruby-docker and dindc aliases).
+install.tools.git-aliases            bool  true   repo-live  Runs the setup_git_alias.sh block.
+install.tools.k8s                    bool  true   repo-live  Runs the install_k8s_tools.sh block (ku
+bectl, helm, kind).
+
+=== V6b max rendered line width (must be <= 100) ===
+max line width: 100

@@ -133,6 +133,29 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
 - **F10 TUI:** tree nav, description/default/effective/winning-layer per row, bool
   toggle + choice picker (radio/checkbox per mode, options show id + description +
   typed value), quit-without-write safety.
+  **Owner-approved extensions (PR #187 review, 2026-07-26):**
+  - *Theme-aware palette:* the TUI and the styled `gff list` table resolve a palette
+    (dark / light / dark8) per the gsl model — `GFF_THEME` env override → basic-ANSI
+    fallback on low-color terminals (the terminal's own theme recolors them) →
+    terminal background query (OSC-11 / COLORFGBG). Light palette follows gsl's
+    mid-luminance layout.
+  - *Category breadcrumb paging:* a fixed header lists the All page plus one page
+    per distinct second path segment, alphabetically ("install (All) · ai · pkg …";
+    bare "(All)" when multiple areas exist). ←/→ cycle pages; a category page shows
+    only its features, flat.
+  - *Feature detail view:* Enter on a feature row opens a detail pane — path, type,
+    description, namespace, effective value, the full 5-layer table (each layer's
+    contribution + the winning layer marked) via the additive `resolve.Explain`
+    API, and the option list for choices. Esc/Enter/q returns. (Enter on an area
+    row still expands/collapses.)
+  - *Viewport-aware rendering:* rows render windowed to the terminal height under
+    the fixed breadcrumb; the window follows the cursor; PgUp/PgDn page; overflow
+    is indicated ("… N more above/below") — the terminal never hard-wraps the UI.
+  - *Launch help + sources:* the first frame (nothing expanded) presents the key
+    legend and a SOURCES panel listing the registry (namespace, url, commit) so it
+    is clear where each area's flags come from; area rows carry their namespace.
+  - *Width-aware `gff list`:* the styled table constrains itself to the terminal
+    width (TTY size, else `$COLUMNS`) and wraps within cells — borders stay intact.
 - **F11 zero-install invocation + cross-repo source:** every verb also works with no
   gff installed via `go run github.com/sfc-gh-eraigosa/dotfiles/sdk/gff@<tag> …`
   (pinned `sdk/gff/vX.Y.Z` tag recommended, `@latest` allowed; stdout carries only
