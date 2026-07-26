@@ -1,9 +1,4 @@
-# Evidence: VD-1 demo transcript + TUI capture
+# Evidence: VD-1 demo (+ P2-T5 real-install slot)
 
-- **Owning leaf:** vd-demo (plan SS7.6 rule 4)
-- **Expected proofs (plan SS7.4):** demo.sh transcript; post-P3 TUI capture
-
-Captures land here per plan SS7.6: gate command output via tee, 3-line dated header,
-append-only (never overwrite), committed with the code that produced it.
-
-_No captures yet._
+- VD-1-demo-transcript.txt — full narrated run of scripts/demo.sh (steps 1-6 per plan §7.3).
+- P2-T5 real-install evidence (human, real terminal, WSL) — pending; posted to the PR when run.
