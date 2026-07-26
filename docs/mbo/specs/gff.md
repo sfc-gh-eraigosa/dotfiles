@@ -151,9 +151,21 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
   - *Viewport-aware rendering:* rows render windowed to the terminal height under
     the fixed breadcrumb; the window follows the cursor; PgUp/PgDn page; overflow
     is indicated ("… N more above/below") — the terminal never hard-wraps the UI.
-  - *Launch help + sources:* the first frame (nothing expanded) presents the key
-    legend and a SOURCES panel listing the registry (namespace, url, commit) so it
-    is clear where each area's flags come from; area rows carry their namespace.
+  - *Help overlay everywhere (`?`/`h`):* every view (list, detail, picker) opens a
+    help overlay showing the tool name, version, the current view's key legend, and
+    the SOURCES story — registry entries (●) plus discovered-but-unregistered
+    origins (○, e.g. the CWD repo's live flag file) so the multi-source picture is
+    complete. The launch frame itself stays clean (no always-on about panel); the
+    footer advertises `? help`.
+  - *Namespace-separated area rows + scoped breadcrumb:* one area row per
+    (namespace, area) pair — two sources sharing an area name are visibly separate
+    worlds — and the breadcrumb pages rescope to the cursor row's namespace
+    (prefixed `<namespace> ▸` when several are present).
+  - *Detail-view actions (existing writers only):* in the detail view, Space
+    toggles the bool or opens the choice picker (the same `overrides.Write` path
+    as `gff set`; the picker returns to the detail), and `u` clears the user
+    override via `overrides.Unset` (the `gff unset` path); the layer table
+    refreshes in place so cause and effect are visible.
   - *Width-aware `gff list`:* the styled table constrains itself to the terminal
     width (TTY size, else `$COLUMNS`) and wraps within cells — borders stay intact.
 - **F11 zero-install invocation + cross-repo source:** every verb also works with no
