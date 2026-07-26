@@ -20,6 +20,19 @@ if [ -z "$BASE_DIR" ]; then
   exit 1
 fi
 
+# gff gate (fail-open): source the helper relative to THIS script's location so
+# direct runs work too; a missing helper must never block the deploy, so stub
+# gff_on/gff_skip_msg to "always run" when the lib is absent.
+_gff_lib="$(cd -- "$(dirname "$0")" && pwd -P)/../lib/gff.sh"
+if [ -f "$_gff_lib" ]; then
+  # shellcheck source=opt/lib/gff.sh
+  . "$_gff_lib"
+else
+  gff_on() { return 0; }
+  gff_skip_msg() { echo "SKIP (gff: $1=false)"; }
+fi
+gff_on install.windows.desktop-deploy || { gff_skip_msg install.windows.desktop-deploy; exit 0; }
+
 # Per-run marker: set only when the interactive Windows setup actually runs, so
 # install.sh can print the Wispr Flow reminder banner at the very end. Cleared on
 # every invocation (even non-WSL) so a stale marker never triggers a false banner.
@@ -68,6 +81,20 @@ if [ -z "$ps_exe" ]; then
   echo "NOTE: powershell.exe not found; skipping Windows Desktop deploy."
   exit 0
 fi
+
+# ---------------------------------------------------------------------------
+# gff flag pass-through: append every exported GFF_INSTALL_WINDOWS_* name to
+# WSLENV (/u = WSL->Win32 direction) BEFORE any powershell.exe invocation, so
+# the PowerShell setup scripts' Test-GffOn gates see the same flags. Runs here
+# — after ps_exe resolution, ahead of every $ps_exe call — and de-duplicates,
+# so re-runs never grow WSLENV. Requires install.sh's `set -a` bootstrap
+# export; unset vars simply never appear (fail-open on the Windows side too).
+# ---------------------------------------------------------------------------
+_gff_wslenv="${WSLENV:-}"
+for _v in $(env | sed -n 's/^\(GFF_INSTALL_WINDOWS_[A-Z_]*\)=.*/\1/p'); do
+  case ":${_gff_wslenv}:" in *":${_v}/u:"*) : ;; *) _gff_wslenv="${_gff_wslenv:+${_gff_wslenv}:}${_v}/u" ;; esac
+done
+export WSLENV="${_gff_wslenv}"
 
 # ---------------------------------------------------------------------------
 # Resolve the real Desktop path (may be OneDrive-redirected).

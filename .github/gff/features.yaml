@@ -1,0 +1,146 @@
+# gff feature inventory for the dotfiles repo — every install.sh component is a
+# flag (all on by default; only an explicit `false` skips a step — fail-open).
+# Schema: sdk/gff proto (protojson field names, YAML syntax). See plan §4 P2-T1.
+namespace: com.github.sfc-gh-eraigosa.dotfiles
+sets:
+  - area: install
+    features:
+      # --- system (4) ---
+      - path: install.system.wsl-interop
+        description: Runs the wsl_interop_binfmt.sh block that keeps the WSLInterop binfmt registration alive.
+        boolDefault: true
+      - path: install.system.jetson
+        description: Runs the Jetson hardware-detection block (jtop setup and Chromium default browser).
+        boolDefault: true
+      - path: install.system.gitrepos
+        description: Runs the ~/.gitrepos clone block near the end of install.sh.
+        boolDefault: true
+      - path: install.system.nano-profile
+        description: Runs the block that wires .nano_profile sourcing into .zshrc and .profile.
+        boolDefault: true
+      # --- shell (2) ---
+      - path: install.shell.profiles
+        description: Runs the block that symlinks opt/profiles dotfiles into the home directory.
+        boolDefault: true
+      - path: install.shell.default-zsh
+        description: Runs the chsh block that sets zsh as the default login shell.
+        boolDefault: true
+      # --- pkg (2) ---
+      - path: install.pkg.common-core
+        description: Runs the pkg-install block that installs the curated common-core packages plus the legacy yum path.
+        boolDefault: true
+      - path: install.pkg.brewfile
+        description: Runs the macOS brew bundle block for the Brewfile extras including vault-setup.
+        boolDefault: true
+      # --- tools (6) ---
+      - path: install.tools.sops
+        description: Runs the install_sops.sh block that fetches the sops release binary.
+        boolDefault: true
+      - path: install.tools.yq
+        description: Runs the install_yq.sh block that fetches the mikefarah yq binary.
+        boolDefault: true
+      - path: install.tools.k8s
+        description: Runs the install_k8s_tools.sh block (kubectl, helm, kind).
+        boolDefault: true
+      - path: install.tools.snowflake
+        description: Runs the install_snowflake_cli.sh block.
+        boolDefault: true
+      - path: install.tools.docker
+        description: Runs the docker setup block (permissions plus ruby-docker and dindc aliases).
+        boolDefault: true
+      - path: install.tools.git-aliases
+        description: Runs the setup_git_alias.sh block.
+        boolDefault: true
+      # --- runtime (5) ---
+      - path: install.runtime.goenv
+        description: Runs the goenv install/update and pinned Go toolchain block.
+        boolDefault: true
+      - path: install.runtime.pyenv
+        description: Runs the pyenv install/update block.
+        boolDefault: true
+      - path: install.runtime.rbenv
+        description: Runs the rbenv install/update block with the ruby-build plugin.
+        boolDefault: true
+      - path: install.runtime.nvm
+        description: Runs the nvm install block.
+        boolDefault: true
+      - path: install.runtime.fnm
+        description: Runs the fnm install block.
+        boolDefault: true
+      # --- ai (6) ---
+      - path: install.ai.skills
+        description: Runs the sync-skills.sh block that links shared skills into both assistants.
+        boolDefault: true
+      - path: install.ai.antigravity
+        description: Runs the Antigravity blocks (install_antigravity_skills.sh, antigravity_install.sh, gemini_teardown.sh).
+        boolDefault: true
+      - path: install.ai.claude
+        description: Runs the Claude Code blocks (install_claude_skills.sh and claude_install.sh).
+        boolDefault: true
+      - path: install.ai.google-cli
+        description: Runs the google-cli-setup.sh block.
+        boolDefault: true
+      - path: install.ai.plugins
+        description: Runs the sync-plugins.sh block that syncs the AI plugin manifest.
+        boolDefault: true
+      - path: install.ai.teams
+        description: Runs the install_ai_teams.sh block.
+        boolDefault: true
+      # --- sdk (5) ---
+      - path: install.sdk.gss
+        description: Runs the gss build-and-install block.
+        boolDefault: true
+      - path: install.sdk.tmux-mgr
+        description: Runs the tmux-mgr build-and-install block.
+        boolDefault: true
+      - path: install.sdk.wol
+        description: Runs the wol build-and-install block.
+        boolDefault: true
+      - path: install.sdk.gsl
+        description: Runs the gsl build-and-install block.
+        boolDefault: true
+      - path: install.sdk.gff
+        description: Runs the later duplicate gff build block (the bootstrap build itself is never gated).
+        boolDefault: true
+      # --- fonts (1) ---
+      - path: install.fonts.nerd-font
+        description: Runs the Nerd Font configuration block (OS dispatch plus the glyph-coverage check).
+        boolDefault: true
+      # --- network (1) ---
+      - path: install.network.sshd
+        description: Runs the sshd_run.sh block when ~/.sshd.env is present.
+        boolDefault: true
+      # --- windows (11) ---
+      - path: install.windows.desktop-deploy
+        description: Runs the install_windows.sh invocation that deploys opt/Desktop onto the Windows Desktop.
+        boolDefault: true
+      - path: install.windows.wsl-platform
+        description: Runs the WSL platform phase in setup-apps.ps1.
+        boolDefault: true
+      - path: install.windows.nerd-font
+        description: Runs the Nerd Font phase in setup-apps.ps1.
+        boolDefault: true
+      - path: install.windows.terminal-themes
+        description: Runs the Windows Terminal themes and profiles phase in setup-apps.ps1.
+        boolDefault: true
+      - path: install.windows.apps
+        description: Runs the winget desktop apps phase in setup-apps.ps1.
+        boolDefault: true
+      - path: install.windows.wispr-flow
+        description: Runs the Wispr Flow MSI step in setup-elevated.ps1.
+        boolDefault: true
+      - path: install.windows.copilot-key
+        description: Runs the PowerToys Copilot-key remap step in setup-elevated.ps1.
+        boolDefault: true
+      - path: install.windows.ahk-autostart
+        description: Runs the macOS-hotkeys AutoHotkey logon task step in setup-elevated.ps1.
+        boolDefault: true
+      - path: install.windows.claude-rc-autostart
+        description: Gates the standalone install-claude-rc-autostart.ps1 script on the Windows side.
+        boolDefault: true
+      - path: install.windows.sshd
+        description: Gates the standalone setup-sshd.ps1 script on the Windows side.
+        boolDefault: true
+      - path: install.windows.portproxy
+        description: Gates the standalone refresh-wsl-portproxy.ps1 script on the Windows side.
+        boolDefault: true

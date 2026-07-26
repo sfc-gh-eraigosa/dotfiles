@@ -343,10 +343,10 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 ## Leaf `p1-engine` closeout
 
 - [x] VERIFY the §4 gate: gff-ci green (vet + tests, ≥90% cover, proto regen clean, e2e job green) and `bash build.sh` installs a working binary
-- [ ] Token call 1: `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token`
-- [ ] Token call 2 (separate Bash call): `gss feature pr --ready --worker <p1 worker_ref>`
-- [ ] After merge: `gss feature merged --worker <p1 worker_ref>` (token-gated, same two-call recipe)
-- [ ] LEDGER: `p1-engine` state → `merged`; session-log line; update `docs/mbo/index.md`
+- [x] Token call 1: `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token`
+- [x] Token call 2 (separate Bash call): `gss feature pr --ready --worker <p1 worker_ref>` (promotion + merge happened via the user's review of PR #182; state MERGED confirmed via `gh pr view`)
+- [x] After merge: `gss feature merged <p1 worker_ref>` (token-gated; note: the ref is **positional** — `merged` has no `--worker` flag)
+- [x] LEDGER: `p1-engine` state → `merged`; session-log line; update `docs/mbo/index.md`
 
 ---
 
@@ -354,31 +354,31 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ## Leaf setup
 
-- [ ] `gss feature worker add --feature gff --purpose p2-instrument --engine claude --json --description "P2: dotfiles flag inventory + gff_on shell gate + install.sh/PowerShell gating (#180)"`
-- [ ] Record `worker_ref` / `branch` / `worktree_path` verbatim in `TRACKING.md` §0
-- [ ] Confirm `${HOME}/opt/bin/gff` is the P1 binary (`gff version`) — P2 verification uses it
+- [x] `gss feature worker add --feature gff --purpose p2-instrument --engine claude --json --description "P2: dotfiles flag inventory + gff_on shell gate + install.sh/PowerShell gating (#180)"`
+- [x] Record `worker_ref` / `branch` / `worktree_path` verbatim in `TRACKING.md` §0
+- [x] Confirm `${HOME}/opt/bin/gff` is the P1 binary (`gff version`) — P2 verification uses it (rebuilt from main 6f1003f, Dirty:false)
 
 ---
 
 ### P2-T1 — dotfiles flag inventory (`.github/gff/features.yaml`)  (plan §4 P2-T1)
 
-- [ ] ALLOWLIST **FIRST**: `git check-ignore -v .github/gff/features.yaml` must show it **NOT** ignored (`!.github/**` already opts it in — expect no new `.gitignore` rules; if a deeper deny rule surprises you, add a narrow `!` rule with a comment)
-- [ ] GREEN: create `.github/gff/features.yaml` — ONE `sets:` entry, `area: install`, every feature `boolDefault: true`, description = one plain sentence naming the `install.sh` block it gates
-- [ ] GREEN: `install.system.*` (4) — `wsl-interop`, `jetson`, `gitrepos`, `nano-profile`
-- [ ] GREEN: `install.shell.*` (2) — `profiles`, `default-zsh`
-- [ ] GREEN: `install.pkg.*` (2) — `common-core`, `brewfile`
-- [ ] GREEN: `install.tools.*` (6) — `sops`, `yq`, `k8s`, `snowflake`, `docker`, `git-aliases`
-- [ ] GREEN: `install.runtime.*` (5) — `goenv`, `pyenv`, `rbenv`, `nvm`, `fnm`
-- [ ] GREEN: `install.ai.*` (6) — `skills`, `antigravity`, `claude`, `google-cli`, `plugins`, `teams`
-- [ ] GREEN: `install.sdk.*` (5) — `gss`, `tmux-mgr`, `wol`, `gsl`, `gff`
-- [ ] GREEN: `install.fonts.nerd-font` (1) and `install.network.sshd` (1)
-- [ ] GREEN: `install.windows.*` (11) — `desktop-deploy`, `wsl-platform`, `nerd-font`, `terminal-themes`, `apps`, `wispr-flow`, `copilot-key`, `ahk-autostart`, `claude-rc-autostart`, `sshd`, `portproxy`
-- [ ] VERIFY: the file declares exactly **43** flags (4+2+2+6+5+6+5+1+1+11)
-- [ ] VERIFY: `git status --short -- .github/gff/` shows the file as trackable
-- [ ] VERIFY: `${HOME}/opt/bin/gff lint .github/gff/features.yaml` → exit 0, no findings
-- [ ] VERIFY: from the worktree root, `gff list` shows all 43 keys with `repo-live` layer. NOTE (P1 lesson): other registered namespaces (e.g. test repos in `~/.config/gff/sources.yaml`) also appear in `list` — count OUR rows precisely with `gff list --json | jq '[.[] | select(.namespace=="com.github.sfc-gh-eraigosa.dotfiles")] | length'` = 43; the new `gff list 'install.*'` filter and `--pretty`/`--raw` flags are available. Every feature MUST carry `boolDefault: true` — P1 added a `missing-default` lint rule that fails default-less features
-- [ ] COMMIT: `feat(gff): enumerate dotfiles install components as flags (all on)`
-- [ ] LEDGER + CHECKPOINT
+- [x] ALLOWLIST **FIRST**: `git check-ignore -v .github/gff/features.yaml` must show it **NOT** ignored (`!.github/**` already opts it in — expect no new `.gitignore` rules; if a deeper deny rule surprises you, add a narrow `!` rule with a comment)
+- [x] GREEN: create `.github/gff/features.yaml` — ONE `sets:` entry, `area: install`, every feature `boolDefault: true`, description = one plain sentence naming the `install.sh` block it gates
+- [x] GREEN: `install.system.*` (4) — `wsl-interop`, `jetson`, `gitrepos`, `nano-profile`
+- [x] GREEN: `install.shell.*` (2) — `profiles`, `default-zsh`
+- [x] GREEN: `install.pkg.*` (2) — `common-core`, `brewfile`
+- [x] GREEN: `install.tools.*` (6) — `sops`, `yq`, `k8s`, `snowflake`, `docker`, `git-aliases`
+- [x] GREEN: `install.runtime.*` (5) — `goenv`, `pyenv`, `rbenv`, `nvm`, `fnm`
+- [x] GREEN: `install.ai.*` (6) — `skills`, `antigravity`, `claude`, `google-cli`, `plugins`, `teams`
+- [x] GREEN: `install.sdk.*` (5) — `gss`, `tmux-mgr`, `wol`, `gsl`, `gff`
+- [x] GREEN: `install.fonts.nerd-font` (1) and `install.network.sshd` (1)
+- [x] GREEN: `install.windows.*` (11) — `desktop-deploy`, `wsl-platform`, `nerd-font`, `terminal-themes`, `apps`, `wispr-flow`, `copilot-key`, `ahk-autostart`, `claude-rc-autostart`, `sshd`, `portproxy`
+- [x] VERIFY: the file declares exactly **43** flags (4+2+2+6+5+6+5+1+1+11)
+- [x] VERIFY: `git status --short -- .github/gff/` shows the file as trackable
+- [x] VERIFY: `${HOME}/opt/bin/gff lint .github/gff/features.yaml` → exit 0, no findings
+- [x] VERIFY: from the worktree root, `gff list` shows all 43 keys with `repo-live` layer. NOTE (P1 lesson): other registered namespaces (e.g. test repos in `~/.config/gff/sources.yaml`) also appear in `list` — count OUR rows precisely with `gff list --json | jq '[.[] | select(.namespace=="com.github.sfc-gh-eraigosa.dotfiles")] | length'` = 43; the new `gff list 'install.*'` filter and `--pretty`/`--raw` flags are available. Every feature MUST carry `boolDefault: true` — P1 added a `missing-default` lint rule that fails default-less features
+- [x] COMMIT: `feat(gff): enumerate dotfiles install components as flags (all on)`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** `gff lint` is clean and `gff list` shows 43 repo-live flags.
 
@@ -386,19 +386,19 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ### P2-T2 — shell helper `opt/lib/gff.sh`  (plan §4 P2-T2)
 
-- [ ] RED: write `opt/lib/gff_test.sh` **first**, mirroring `ai/hooks/safety_guard_test.sh`'s assert style. NOTE (P1 lesson — the snowflake bug): commit executable scripts WITH the exec bit — after staging, verify `git ls-files -s opt/lib/gff_test.sh` shows `100755` (`gff.sh` itself is SOURCED, stays 100644 with the `# shellcheck shell=bash` header)
-- [ ] RED: case — var unset ⇒ `gff_on` returns 0 (fail-open)
-- [ ] RED: case — `=true` ⇒ 0; `=false` ⇒ 1
-- [ ] RED: case — `=FALSE` ⇒ 0, `=0` ⇒ 0, garbage ⇒ 0 (only exact lowercase `false` disables)
-- [ ] RED: case — key mangling: `install.windows.wispr-flow` reads `GFF_INSTALL_WINDOWS_WISPR_FLOW`
-- [ ] RED: case — `gff_skip_msg <key>` echoes `SKIP (gff: <key>=false)`
-- [ ] RUN-RED: `bash opt/lib/gff_test.sh` → expect **FAIL** (`opt/lib/gff.sh` missing)
-- [ ] GREEN: implement `opt/lib/gff.sh` exactly as the plan's snippet — POSIX only (dash-safe, no `[[`, no arrays), `# shellcheck shell=bash` header, `gff_on()` + `gff_skip_msg()`
-- [ ] RUN-GREEN: `bash opt/lib/gff_test.sh` → expect **PASS** (all cases)
-- [ ] RUN-GREEN: `sh opt/lib/gff_test.sh` (dash) → expect **PASS** (all cases)
-- [ ] VERIFY: `make lint-shell && make lint-portability` → clean
-- [ ] COMMIT: `feat(gff): fail-open gff_on shell gate helper + test driver`
-- [ ] LEDGER: tick F9 **unit** cell and `TRACKING.md` §7.3 shell negatives; CHECKPOINT
+- [x] RED: write `opt/lib/gff_test.sh` **first**, mirroring `ai/hooks/safety_guard_test.sh`'s assert style. NOTE (P1 lesson — the snowflake bug): commit executable scripts WITH the exec bit — after staging, verify `git ls-files -s opt/lib/gff_test.sh` shows `100755` (`gff.sh` itself is SOURCED, stays 100644 with the `# shellcheck shell=bash` header)
+- [x] RED: case — var unset ⇒ `gff_on` returns 0 (fail-open)
+- [x] RED: case — `=true` ⇒ 0; `=false` ⇒ 1
+- [x] RED: case — `=FALSE` ⇒ 0, `=0` ⇒ 0, garbage ⇒ 0 (only exact lowercase `false` disables)
+- [x] RED: case — key mangling: `install.windows.wispr-flow` reads `GFF_INSTALL_WINDOWS_WISPR_FLOW`
+- [x] RED: case — `gff_skip_msg <key>` echoes `SKIP (gff: <key>=false)`
+- [x] RUN-RED: `bash opt/lib/gff_test.sh` → expect **FAIL** (`opt/lib/gff.sh` missing)
+- [x] GREEN: implement `opt/lib/gff.sh` exactly as the plan's snippet — POSIX only (dash-safe, no `[[`, no arrays), `# shellcheck shell=bash` header, `gff_on()` + `gff_skip_msg()`
+- [x] RUN-GREEN: `bash opt/lib/gff_test.sh` → expect **PASS** (all cases)
+- [x] RUN-GREEN: `sh opt/lib/gff_test.sh` (dash) → expect **PASS** (all cases)
+- [x] VERIFY: `make lint-shell && make lint-portability` → clean
+- [x] COMMIT: `feat(gff): fail-open gff_on shell gate helper + test driver`
+- [x] LEDGER: tick F9 **unit** cell and `TRACKING.md` §7.3 shell negatives; CHECKPOINT
 
 **Done when:** the driver passes under both bash and dash and both lint gates are clean.
 
@@ -406,22 +406,22 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ### P2-T3 — instrument `install.sh` (Linux/common)  (plan §4 P2-T3)
 
-- [ ] SETUP: locate the goenv/Go block in `install.sh` (~line 309) and the pyenv block that follows it
-- [ ] GREEN: insert the gff bootstrap block **verbatim from the plan** immediately AFTER the goenv/Go block and BEFORE pyenv (conditional `build.sh`, `eval "$(… export --shell)"`, then `. "${BASE_DIR}/opt/lib/gff.sh"`) — fail-open: a failed build warns and runs everything. **NOTE (P1 lesson, verified in sandbox): wrap the eval in `set -a` / `set +a`** — export lines are plain `VAR=v` (shell-local); without allexport the `GFF_*` vars never reach child scripts, and P2-T4's WSLENV builder greps `env` which only sees EXPORTED vars
-- [ ] GREEN: add ONE comment line at the top documenting that flags for pre-bootstrap steps take effect via `gff export` in the calling shell or on the next run
-- [ ] GREEN: wrap `install.system.*` blocks in-place with `if gff_on <key>; then … else gff_skip_msg <key>; fi` — NO reordering, NO logic changes inside
-- [ ] GREEN: wrap `install.shell.*` blocks (profiles, default-zsh)
-- [ ] GREEN: wrap `install.pkg.*` blocks (common-core, brewfile)
-- [ ] GREEN: wrap `install.tools.*` blocks (sops — the exemplar pattern in the plan — yq, k8s, snowflake, docker, git-aliases)
-- [ ] GREEN: wrap `install.runtime.*` blocks (goenv, pyenv, rbenv, nvm, fnm)
-- [ ] GREEN: wrap `install.ai.*` blocks (skills, antigravity, claude, google-cli, plugins, teams)
-- [ ] GREEN: wrap `install.sdk.*` blocks — **note:** `install.sdk.gff` gates only the LATER duplicate build guard; the bootstrap build itself is never gated
-- [ ] GREEN: wrap `install.fonts.nerd-font`, `install.network.sshd`, and the `install.windows.desktop-deploy` invocation site
-- [ ] VERIFY: `bash -n install.sh` → clean
-- [ ] VERIFY: `make lint-shell && make lint-portability` → clean
-- [ ] VERIFY manual: `GFF_INSTALL_TOOLS_SOPS=false bash -c '. opt/lib/gff.sh; gff_on install.tools.sops || gff_skip_msg install.tools.sops'` prints the SKIP line
-- [ ] COMMIT: `feat(install): gate every install.sh component behind gff flags (fail-open)`
-- [ ] LEDGER + CHECKPOINT
+- [x] SETUP: locate the goenv/Go block in `install.sh` (~line 309) and the pyenv block that follows it
+- [x] GREEN: insert the gff bootstrap block **verbatim from the plan** immediately AFTER the goenv/Go block and BEFORE pyenv (conditional `build.sh`, `eval "$(… export --shell)"`, then `. "${BASE_DIR}/opt/lib/gff.sh"`) — fail-open: a failed build warns and runs everything. **NOTE (P1 lesson, verified in sandbox): wrap the eval in `set -a` / `set +a`** — export lines are plain `VAR=v` (shell-local); without allexport the `GFF_*` vars never reach child scripts, and P2-T4's WSLENV builder greps `env` which only sees EXPORTED vars
+- [x] GREEN: add ONE comment line at the top documenting that flags for pre-bootstrap steps take effect via `gff export` in the calling shell or on the next run
+- [x] GREEN: wrap `install.system.*` blocks in-place with `if gff_on <key>; then … else gff_skip_msg <key>; fi` — NO reordering, NO logic changes inside
+- [x] GREEN: wrap `install.shell.*` blocks (profiles, default-zsh)
+- [x] GREEN: wrap `install.pkg.*` blocks (common-core, brewfile)
+- [x] GREEN: wrap `install.tools.*` blocks (sops — the exemplar pattern in the plan — yq, k8s, snowflake, docker, git-aliases)
+- [x] GREEN: wrap `install.runtime.*` blocks (goenv, pyenv, rbenv, nvm, fnm)
+- [x] GREEN: wrap `install.ai.*` blocks (skills, antigravity, claude, google-cli, plugins, teams)
+- [x] GREEN: wrap `install.sdk.*` blocks — **note:** `install.sdk.gff` gates only the LATER duplicate build guard; the bootstrap build itself is never gated
+- [x] GREEN: wrap `install.fonts.nerd-font`, `install.network.sshd`, and the `install.windows.desktop-deploy` invocation site
+- [x] VERIFY: `bash -n install.sh` → clean
+- [x] VERIFY: `make lint-shell && make lint-portability` → clean
+- [x] VERIFY manual: `GFF_INSTALL_TOOLS_SOPS=false bash -c '. opt/lib/gff.sh; gff_on install.tools.sops || gff_skip_msg install.tools.sops'` prints the SKIP line
+- [x] COMMIT: `feat(install): gate every install.sh component behind gff flags (fail-open)`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** every component block is gated, `bash -n` is clean, and both lint gates pass.
 
@@ -429,17 +429,17 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ### P2-T4 — Windows pass-through + PowerShell gating  (plan §4 P2-T4)
 
-- [ ] GREEN: `opt/bin/install_windows.sh` — top-level `gff_on install.windows.desktop-deploy || { gff_skip_msg install.windows.desktop-deploy; exit 0; }`
-- [ ] GREEN: `opt/bin/install_windows.sh` — before each `powershell.exe` invocation, insert the WSLENV builder loop verbatim from the plan (appends each `GFF_INSTALL_WINDOWS_*` name with the `/u` flag, de-duplicated). NOTE: this loop reads `env`, so it REQUIRES P2-T3's `set -a` bootstrap wrapping — verify with `env | grep -c GFF_INSTALL_WINDOWS_` inside a child shell
-- [ ] GREEN: create `opt/Desktop/Apps/scripts/lib/gff.ps1` with `Test-GffOn([string]$Key)` exactly as the plan's snippet (unset ⇒ on; only the literal string `false` disables)
-- [ ] GREEN: gate `setup-apps.ps1` phases — WSL platform (`install.windows.wsl-platform`), Nerd Font, Terminal themes, winget apps; each disabled phase prints `SKIP (gff: <key>=false)`
-- [ ] GREEN: gate `setup-elevated.ps1` items — Wispr Flow MSI (`install.windows.wispr-flow`), PowerToys Copilot remap (`install.windows.copilot-key`), AHK autostart task (`install.windows.ahk-autostart`)
-- [ ] GREEN: gate the standalone scripts' invocation sites — `install.windows.claude-rc-autostart`, `install.windows.sshd`, `install.windows.portproxy`
-- [ ] VERIFY: `make lint-shell && make lint-portability` → clean (the bash file)
-- [ ] VERIFY: `pwsh -NoProfile -Command ". opt/Desktop/Apps/scripts/lib/gff.ps1; Test-GffOn 'install.windows.wispr-flow'"` → `True`; with `$env:GFF_INSTALL_WINDOWS_WISPR_FLOW='false'` → `False`
-- [ ] If `pwsh` is unavailable in WSL: record in `TRACKING.md` that this check **defers to the P2-T5 human run** (do not tick it as passed)
-- [ ] COMMIT: `feat(install): gff gating for Windows setup phases via WSLENV pass-through`
-- [ ] LEDGER + CHECKPOINT
+- [x] GREEN: `opt/bin/install_windows.sh` — top-level `gff_on install.windows.desktop-deploy || { gff_skip_msg install.windows.desktop-deploy; exit 0; }`
+- [x] GREEN: `opt/bin/install_windows.sh` — before each `powershell.exe` invocation, insert the WSLENV builder loop verbatim from the plan (appends each `GFF_INSTALL_WINDOWS_*` name with the `/u` flag, de-duplicated). NOTE: this loop reads `env`, so it REQUIRES P2-T3's `set -a` bootstrap wrapping — verify with `env | grep -c GFF_INSTALL_WINDOWS_` inside a child shell
+- [x] GREEN: create `opt/Desktop/Apps/scripts/lib/gff.ps1` with `Test-GffOn([string]$Key)` exactly as the plan's snippet (unset ⇒ on; only the literal string `false` disables)
+- [x] GREEN: gate `setup-apps.ps1` phases — WSL platform (`install.windows.wsl-platform`), Nerd Font, Terminal themes, winget apps; each disabled phase prints `SKIP (gff: <key>=false)`
+- [x] GREEN: gate `setup-elevated.ps1` items — Wispr Flow MSI (`install.windows.wispr-flow`), PowerToys Copilot remap (`install.windows.copilot-key`), AHK autostart task (`install.windows.ahk-autostart`)
+- [x] GREEN: gate the standalone scripts' invocation sites — `install.windows.claude-rc-autostart`, `install.windows.sshd`, `install.windows.portproxy`
+- [x] VERIFY: `make lint-shell && make lint-portability` → clean (the bash file)
+- [x] VERIFY: `pwsh -NoProfile -Command ". opt/Desktop/Apps/scripts/lib/gff.ps1; Test-GffOn 'install.windows.wispr-flow'"` → `True`; with `$env:GFF_INSTALL_WINDOWS_WISPR_FLOW='false'` → `False`
+- [x] If `pwsh` is unavailable in WSL: record in `TRACKING.md` that this check **defers to the P2-T5 human run** (do not tick it as passed)
+- [x] COMMIT: `feat(install): gff gating for Windows setup phases via WSLENV pass-through`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** the WSLENV handoff is in place, every PS phase is gated, and lint is clean.
 
@@ -452,6 +452,7 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 - [ ] SETUP: switch to `${HOME}/git/dotfiles`, checkout the branch carrying P2, and run from there. NOTE: rebuild first (`make gff-install`) so `${HOME}/opt/bin/gff` is the merged binary; leftover test registrations in `~/.config/gff/sources.yaml` (e.g. `com.example.demo`) are harmless — the focus-namespace rule binds unqualified keys to the dotfiles repo when run from inside it
 - [ ] RUN: `gff set install.windows.wispr-flow false`; confirm `gff get install.windows.wispr-flow` prints `false` and `gff list` shows layer `user-override`
+- [ ] RUN: `eval "$(gff export --shell)"` **in the calling shell** before install.sh — the Windows deploy phase runs BEFORE the in-script bootstrap (TRACKING §10), so the flag must be pre-exported to cross into install_windows.sh/WSLENV
 - [ ] RUN: execute `install.sh` in a **real interactive terminal** (answer the Windows customization prompt) — not backgrounded, not piped
 - [ ] CAPTURE: the `SKIP (gff: install.windows.wispr-flow=false)` line from the transcript
 - [ ] RUN: `gff unset install.windows.wispr-flow`; confirm the default is restored
@@ -475,8 +476,8 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ## Leaf setup
 
-- [ ] `gss feature worker add --feature gff --purpose p3-tui --engine claude --json --description "P3: bubbletea TUI — browse, provenance, toggle (#180)"`
-- [ ] Record `worker_ref` / `branch` / `worktree_path` verbatim in `TRACKING.md` §0
+- [x] `gss feature worker add --feature gff --purpose p3-tui --engine claude --json --description "P3: bubbletea TUI — browse, provenance, toggle (#180)"`
+- [x] Record `worker_ref` / `branch` / `worktree_path` verbatim in `TRACKING.md` §0
 
 ---
 
@@ -484,22 +485,22 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 **Files:** `internal/tui/{model.go,view.go,tui_test.go}`, `cmd/tui.go`; modify `cmd/root.go`.
 
-- [ ] SETUP: `go get github.com/charmbracelet/bubbletea github.com/charmbracelet/lipgloss github.com/charmbracelet/x/exp/teatest@latest`
-- [ ] ~~REFACTOR: extract `internal/overrides.Write`~~ ALREADY DONE in P1-T8 (`internal/overrides` with `Write`/`Unset`/`WriteFileAtomic`; `set.go`/`unset.go` are thin callers) — just consume it. Also: `lipgloss` + `x/term` are already deps (P1 styled `list`); only bubbletea/teatest need `go get`
-- [ ] VERIFY: `go test ./cmd/` still **PASS** after the refactor (no behavior change)
-- [ ] RED: teatest — the initial frame lists areas **collapsed**
-- [ ] RED: teatest — navigating (`enter` on area → components → features) shows a feature row containing description + `default`/`override` + the winning layer
-- [ ] RED: teatest — `space` on a bool writes ONLY the user override file (temp-paths world) and the row flips
-- [ ] RED: teatest — `space` on a choice opens the option picker: **radio** list for `single` mode, **checkbox** list for `multi`, built from `ChoiceDefault.Options`, showing id + description + typed value
-- [ ] RED: teatest — `q` after no toggles writes **nothing** (override file mtime unchanged)
-- [ ] RUN-RED: `go test ./internal/tui/` → expect **FAIL**
-- [ ] GREEN: implement `model.go` — `Model{items []resolve.Resolved, cursor, expanded map[string]bool, w io.Writer}`, reusing `cmd`'s resolver hook; all writes go through `internal/overrides.Write` (same path as `gff set`)
-- [ ] GREEN: implement `view.go` rendering the tree + provenance column
-- [ ] GREEN: `cmd/tui.go` registering the `tui` verb; modify `cmd/root.go` so bare `gff` with no args **and a TTY** runs the TUI, else prints help
-- [ ] RUN-GREEN: `go test ./internal/tui/` → expect **PASS**
-- [ ] VERIFY: `go test ./... -cover` → overall still **≥90%**; record in `TRACKING.md` §9
-- [ ] COMMIT: `feat(gff): bubbletea TUI — browse, provenance, toggle`
-- [ ] LEDGER: tick F10 **unit** + **integration** cells; CHECKPOINT
+- [x] SETUP: `go get github.com/charmbracelet/bubbletea github.com/charmbracelet/lipgloss github.com/charmbracelet/x/exp/teatest@latest`
+- [x] ~~REFACTOR: extract `internal/overrides.Write`~~ ALREADY DONE in P1-T8 (`internal/overrides` with `Write`/`Unset`/`WriteFileAtomic`; `set.go`/`unset.go` are thin callers) — just consume it. Also: `lipgloss` + `x/term` are already deps (P1 styled `list`); only bubbletea/teatest need `go get`
+- [x] VERIFY: `go test ./cmd/` still **PASS** after the refactor (no behavior change)
+- [x] RED: teatest — the initial frame lists areas **collapsed**
+- [x] RED: teatest — navigating (`enter` on area → components → features) shows a feature row containing description + `default`/`override` + the winning layer
+- [x] RED: teatest — `space` on a bool writes ONLY the user override file (temp-paths world) and the row flips
+- [x] RED: teatest — `space` on a choice opens the option picker: **radio** list for `single` mode, **checkbox** list for `multi`, built from `ChoiceDefault.Options`, showing id + description + typed value
+- [x] RED: teatest — `q` after no toggles writes **nothing** (override file mtime unchanged)
+- [x] RUN-RED: `go test ./internal/tui/` → expect **FAIL**
+- [x] GREEN: implement `model.go` — `Model{items []resolve.Resolved, cursor, expanded map[string]bool, w io.Writer}`, reusing `cmd`'s resolver hook; all writes go through `internal/overrides.Write` (same path as `gff set`)
+- [x] GREEN: implement `view.go` rendering the tree + provenance column
+- [x] GREEN: `cmd/tui.go` registering the `tui` verb; modify `cmd/root.go` so bare `gff` with no args **and a TTY** runs the TUI, else prints help
+- [x] RUN-GREEN: `go test ./internal/tui/` → expect **PASS**
+- [x] VERIFY: `go test ./... -cover` → overall still **≥90%**; record in `TRACKING.md` §9
+- [x] COMMIT: `feat(gff): bubbletea TUI — browse, provenance, toggle`
+- [x] LEDGER: tick F10 **unit** + **integration** cells; CHECKPOINT
 
 **Done when — P3 done-when gate:** teatest suite green and overall coverage ≥90%.
 
@@ -518,8 +519,8 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ## Leaf setup
 
-- [ ] `gss feature worker add --feature gff --purpose p4-gen --engine claude --json --description "P4: gff gen typed-accessor codegen (#180)"`
-- [ ] Record `worker_ref` / `branch` / `worktree_path` verbatim in `TRACKING.md` §0
+- [x] `gss feature worker add --feature gff --purpose p4-gen --engine claude --json --description "P4: gff gen typed-accessor codegen (#180)"`
+- [x] Record `worker_ref` / `branch` / `worktree_path` verbatim in `TRACKING.md` §0
 
 ---
 
@@ -527,16 +528,16 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 **Files:** `cmd/gen.go`, `cmd/gen_test.go`, `cmd/testdata/gen.golden`.
 
-- [ ] RED: golden test — against the P1-T9 world, `gff gen --pkg gffgen --out <tmp>` writes `<tmp>/gffgen.go` matching `cmd/testdata/gen.golden`
-- [ ] RED: assert the emitted shape — per flag a var chain `var Install = struct{ Ai struct{ Claude BoolFlag } … }` with `func (f BoolFlag) Bool() (bool, error)` delegating to `pkg/gff` by **literal key string**
-- [ ] RED: assert naming — segments Title-cased, dashes camel-cased (`wispr-flow` → `WisprFlow`)
-- [ ] RED: assert the golden **compiles** — the test runs `go vet` on a scratch module embedding the output
-- [ ] RUN-RED: `go test ./cmd/` → expect **FAIL**
-- [ ] GREEN: implement `cmd/gen.go` using `text/template` + `go/format.Source`; self-register via `init()` (no shared-file edits)
-- [ ] RUN-GREEN: `go test ./cmd/` → expect **PASS**
-- [ ] VERIFY: `go test ./... -cover` → overall still **≥90%**
-- [ ] COMMIT: `feat(gff): gen — typed accessor codegen`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: golden test — against the P1-T9 world, `gff gen --pkg gffgen --out <tmp>` writes `<tmp>/gffgen.go` matching `cmd/testdata/gen.golden`
+- [x] RED: assert the emitted shape — per flag a var chain `var Install = struct{ Ai struct{ Claude BoolFlag } … }` with `func (f BoolFlag) Bool() (bool, error)` delegating to `pkg/gff` by **literal key string**
+- [x] RED: assert naming — segments Title-cased, dashes camel-cased (`wispr-flow` → `WisprFlow`)
+- [x] RED: assert the golden **compiles** — the test runs `go vet` on a scratch module embedding the output
+- [x] RUN-RED: `go test ./cmd/` → expect **FAIL**
+- [x] GREEN: implement `cmd/gen.go` using `text/template` + `go/format.Source`; self-register via `init()` (no shared-file edits)
+- [x] RUN-GREEN: `go test ./cmd/` → expect **PASS**
+- [x] VERIFY: `go test ./... -cover` → overall still **≥90%**
+- [x] COMMIT: `feat(gff): gen — typed accessor codegen`
+- [x] LEDGER + CHECKPOINT
 
 **Done when — P4 done-when gate:** golden test green and the generated output vets.
 

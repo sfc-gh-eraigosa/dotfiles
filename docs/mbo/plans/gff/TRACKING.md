@@ -19,10 +19,11 @@ Fill in from the `gss feature worker add --json` output — **verbatim**, never 
 
 | Leaf | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| `p1-engine` | `gff/edward-raigosa/p1-engine` | `feature/gff/edward-raigosa/p1-engine` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p1-engine` | [#182](https://github.com/sfc-gh-eraigosa/dotfiles/pull/182) | building |
-| `p2-instrument` | _(pending)_ | _(pending)_ | _(pending)_ | _(pending)_ | todo |
-| `p3-tui` | _(pending)_ | _(pending)_ | _(pending)_ | _(pending)_ | todo |
-| `p4-gen` | _(pending)_ | _(pending)_ | _(pending)_ | _(pending)_ | todo |
+| `p1-engine` | `gff/edward-raigosa/p1-engine` | `feature/gff/edward-raigosa/p1-engine` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p1-engine` | [#182](https://github.com/sfc-gh-eraigosa/dotfiles/pull/182) | merged |
+| `p2-instrument` | `gff/edward-raigosa/p2-instrument` | `feature/gff/edward-raigosa/p2-instrument` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p2-instrument` | [#184](https://github.com/sfc-gh-eraigosa/dotfiles/pull/184) | building |
+| `p3-tui` | `gff/edward-raigosa/p3-tui` | `feature/gff/edward-raigosa/p3-tui` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p3-tui` | [#186](https://github.com/sfc-gh-eraigosa/dotfiles/pull/186) (closed) | superseded → `p34-tui-gen` |
+| `p4-gen` | `gff/edward-raigosa/p4-gen` | `feature/gff/edward-raigosa/p4-gen` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p4-gen` | [#185](https://github.com/sfc-gh-eraigosa/dotfiles/pull/185) (closed) | superseded → `p34-tui-gen` |
+| `p34-tui-gen` | `gff/edward-raigosa/p34-tui-gen` | `feature/gff/edward-raigosa/p34-tui-gen` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p34-tui-gen` | [#187](https://github.com/sfc-gh-eraigosa/dotfiles/pull/187) | building (draft, per owner) |
 | `vd-demo` | _(pending)_ | _(pending)_ | _(pending)_ | _(pending)_ | todo |
 
 Leaf state vocabulary (mirrors `docs/mbo/index.md`): `todo → building → in-review → merged`.
@@ -62,12 +63,12 @@ P2-T5 human evidence posted.
 
 | Task | Status | Commit | Evidence (test run / gate) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| P2-T1 dotfiles flag inventory (43 flags) | todo | | | allowlist check first |
-| P2-T2 shell helper `opt/lib/gff.sh` | todo | | | bash **and** dash |
-| P2-T3 instrument `install.sh` (Linux/common) | todo | | | no reordering. NOTE (from p1 sandbox demo): shell-export lines are plain `VAR=v` (shell-local) — wrap the bootstrap eval in `set -a` / `set +a` so `GFF_*` reach child scripts (`install_windows.sh`), whose P2-T4 WSLENV builder greps `env` and only sees EXPORTED vars |
-| P2-T4 Windows pass-through + PS gating | todo | | | pwsh check or defer to P2-T5 |
-| P2-T5 human-evidenced acceptance | todo | — | | real terminal, WSL |
-| **P2 done-when gate** | todo | — | | evidence posted on PR |
+| P2-T1 dotfiles flag inventory (43 flags) | done | 5dd5e1b | allowlist: `.gitignore:33:!.github/**` NOT ignored; `gff lint` exit 0; 43 keys counted (grep + `gff list --json` jq), all repo-live | evidence F09-gating/p2-t1-lint-list.txt |
+| P2-T2 shell helper `opt/lib/gff.sh` | done | 6d00762 | orchestrator re-ran: `bash opt/lib/gff_test.sh` 10/10 PASS **and** `sh` (dash) 10/10 PASS; RED verified (helper missing ⇒ FAIL 1); driver mode 100755 confirmed via `git ls-files -s` | plan snippet verbatim + shellcheck disable comment lines only; evidence p2-t2-*.txt (append-only re-capture) |
+| P2-T3 instrument `install.sh` (Linux/common) | done | a131195 | orchestrator re-ran: `bash -n` clean; helper sourced line 23 (before first gate line 67, fail-closed guard comment); `set -a`/`set +a` wrap at the bootstrap eval (the binding NOTE); 35 `gff_on` sites / 33 keys; sops SKIP line reproduced | new later `install.sdk.gff`-gated duplicate build block added (plan presupposed one; bootstrap build stays ungated) |
+| P2-T4 Windows pass-through + PS gating | done | 0a2820e | orchestrator re-ran: `bash -n` clean on install_windows.sh; `make lint-shell` clean; `make lint-portability` Tier1=0 Tier2=0; WSLENV builder verbatim + dedup proven (2-pass dash test); Test-GffOn per plan | **pwsh absent — both Test-GffOn checks defer to P2-T5 human run (not faked)**; WSLENV loop inserted once after `ps_exe` (precedes every powershell.exe call, dedup makes it equivalent) |
+| P2-T5 human-evidenced acceptance | todo | — | | real terminal, WSL; **must `eval "$(gff export --shell)"` in the calling shell first** — see §10 row 3 |
+| **P2 done-when gate** | todo | — | lint gates clean + `gff lint` clean (done); P2-T5 evidence pending | PR [#184](https://github.com/sfc-gh-eraigosa/dotfiles/pull/184) |
 
 ---
 
@@ -79,8 +80,8 @@ P2-T5 human evidence posted.
 
 | Task | Status | Commit | Evidence (test run / gate) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| P3-T1 TUI (model, view, teatest, `cmd/tui.go`) | todo | | | extract `internal/overrides.Write` |
-| **P3 done-when gate** | todo | — | | `go test ./... -cover` ≥90% |
+| P3-T1 TUI (model, view, teatest, `cmd/tui.go`) | done | 6bfa4c3 | orchestrator re-ran in p3 worktree: `go vet ./...` clean; full `go test ./... -count=1` green (16 tui tests); CI-style coverpkg-excl-gen total 90.4% (≥90), resolve 96.1% (≥95), schema 95.7% (≥90), tui pkg 90.6%; evidence F10-tui/P3-T1-teatest-cover.txt | RED verified: `no non-test Go files in internal/tui`; `internal/overrides.Write` consumed (extracted in P1-T8 — no refactor needed); sole shared-file edit = root.go TTY-dispatch RunE per §6.1; deps bubbletea v1.3.10 + teatest; 3 cover*.out debris files caught + removed before commit |
+| **P3 done-when gate** | done | — | teatest suite green; overall ≥90% holds (90.4%); PR [#186](https://github.com/sfc-gh-eraigosa/dotfiles/pull/186) | promotion awaits user confirmation |
 
 ---
 
@@ -92,8 +93,8 @@ P2-T5 human evidence posted.
 
 | Task | Status | Commit | Evidence (test run / gate) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| P4-T1 `gff gen` typed accessors | todo | | | golden compiles + vets |
-| **P4 done-when gate** | todo | — | | |
+| P4-T1 `gff gen` typed accessors | done | be17f88 | orchestrator re-ran in p4 worktree: `go vet ./...` clean; `go test ./...` all 10 pkgs ok (cmd incl. 7 Gen tests: golden byte-exact, shape, scratch-module `go vet` compile, empty world, bad --out, naming, update-golden); CI-style coverpkg-excl-gen total 91.4% (≥90), resolve 96.1% (≥95), schema 95.7% (≥90) | RED verified: `undefined: resetGenFlags/segmentToTitle`; agent-reported, gates re-run by orchestrator; one debris file (tmux-mgr scheduled_tasks.lock) caught + restored before commit |
+| **P4 done-when gate** | done | — | golden test green + generated output vets (TestGenGoldenCompiles runs `go vet` on a scratch module embedding the output, offline via replace directive); PR [#185](https://github.com/sfc-gh-eraigosa/dotfiles/pull/185) | promotion awaits user confirmation |
 
 ---
 
@@ -127,8 +128,8 @@ proof passes; record which task proved it in Notes.
 | **F6** registry + namespace identity | [x] `registry_test.go` | [x] IH-2, IA-6, IA-7, IA-13, IA-14 | [ ] demo step 5 | |
 | **F7** export formats + injection safety | [x] export golden | [x] IH-7, IH-8, IA-5, IA-15 | [ ] demo steps 4, 6 | |
 | **F8** write path (0600, user-only) | [x] `write_test.go` | [x] IH-5, IA-8, IA-11, IA-13 | [ ] demo step 3 | |
-| **F9** fail-open gating | [ ] `gff_test.sh` bash + dash (binary-absent is unit-only) | [ ] IH-7, IA-7 | [ ] P2-T5 evidence | |
-| **F10** TUI | [ ] teatest goldens | [ ] (visual — teatest is the harness) | [ ] post-P3 capture | |
+| **F9** fail-open gating | [x] `gff_test.sh` bash + dash (binary-absent is unit-only) | [x] IH-7, IA-7 (proven by P1-T11 e2e) | [ ] P2-T5 evidence | P2-T2 (6d00762): 10/10 under bash AND dash |
+| **F10** TUI | [x] teatest goldens + 3 real-terminal key-shape tests | [x] live tmux drive of the compiled binary (#187) | [x] `F10-tui/p34-tui-live-capture.txt` (frames: browse → toggle → provenance → picker) | P3-T1 + the #187 KeySpace fix; a video/gif capture remains optional at owner discretion |
 | **F11** go-run + `--source` | [x] CI smoke (T10, `go run . version` in gff-ci) + read tests (T7) | [x] IH-10, IA-10 | [ ] demo step 6 | |
 
 ---
@@ -172,8 +173,8 @@ Errors must be *clean*: correct exit code, message names the offender, zero part
 
 ### 7.3 Shell-side negatives (plan §7.2 tail, proven by P2-T2 `opt/lib/gff_test.sh`)
 
-- [ ] unset var ⇒ run · [ ] exactly `"false"` ⇒ skip · [ ] `"FALSE"` / `"0"` / garbage ⇒ run · [ ] missing binary ⇒ run
-- [ ] all of the above pass under **bash** · [ ] and under **dash** (`sh`)
+- [x] unset var ⇒ run · [x] exactly `"false"` ⇒ skip · [x] `"FALSE"` / `"0"` / garbage ⇒ run · [x] missing binary ⇒ run
+- [x] all of the above pass under **bash** · [x] and under **dash** (`sh`) — P2-T2, 10/10 each, evidence p2-t2-gff-test-bash-dash*.txt
 
 ---
 
@@ -196,7 +197,7 @@ Update on each measurement; keep the latest observed number and the command that
 | :-- | :-- | :-- | :-- |
 | `internal/resolve` | ≥95% | 96.0% (2026-07-25) | `go test ./internal/resolve/ -cover` |
 | `internal/schema` | ≥90% | 95.6% (2026-07-25) | `go test ./internal/schema/ -cover` |
-| `sdk/gff` overall | **≥90%** | 91.6% (2026-07-25, coverpkg excl /gen/) | `go test ./... -coverprofile=cover.out && go tool cover -func=cover.out \| tail -1` |
+| `sdk/gff` overall | **≥90%** | 90.4% (2026-07-26, p3 worktree post-TUI; 91.4% in p4 worktree — coverpkg excl /gen/, -count=1) | `COVERPKG=$(go list ./... \| grep -v /gen/ \| paste -sd, -); go test ./... -count=1 -coverpkg="$COVERPKG" -coverprofile=cover.out && go tool cover -func=cover.out \| tail -1` |
 
 ---
 
@@ -209,6 +210,8 @@ A frozen-contract (plan §3) defect goes here and is escalated — never silentl
 | :-- | :-- | :-- | :-- | :-- |
 | 2026-07-26 | (branch-wide CI) | Docker Image CI hung 1.5h+ ("Build the Docker image"): the exec-bit fix let install_snowflake_cli.sh actually RUN inside docker build for the first time, and its `sudo apt-get install pipx` hit tzdata's interactive debconf prompt (latent bug — script predates gff). Note: the heavy job only runs for NON-draft PRs, so it first fired when #182 left draft. | cancelled-run log: `Configuring tzdata / Please select the geographic area` then stdin-wait | Fixed: `sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends pipx`; verified in clean jammy container (rc=0, ~2min, no prompt); stale duplicate runs cancelled |
 | 2026-07-25 | (branch-wide CI) | shell-lint workflow red on any gff PR: pre-existing `opt/bin/docker:44` bash-4 `mapfile` (landed via #178/#179; main never re-scanned due to path filters) | `make lint-portability` -> `TIER 2 … opt/bin/docker:44 — bash-4 mapfile/readarray` | Fixed in-branch (fd-3 while-read keeps the #179 stdin-preservation fix; behaviorally tested); scan now Tier1=0 Tier2=0 |
+| 2026-07-26 | P2-T4 | `install.windows.{claude-rc-autostart,sshd,portproxy}` have NO invocation site in any owned file — `install-claude-rc-autostart.ps1`, `setup-sshd.ps1`, `refresh-wsl-portproxy.ps1` are standalone by design ("not wired into install.sh") | grep across install_windows.sh / setup-apps.ps1 / setup-elevated.ps1: no call sites | ORCHESTRATOR DECISION: leave the 3 flags declared-but-unenforced (fail-open no-ops today); gating activates if/when the scripts gain an invocation site. Documented in the PR body; NOT silently wired (would change behavior + exceed §6.1 ownership) |
+| 2026-07-26 | P2-T5 (upcoming) | Windows deploy invocation (install.sh line ~67) runs BEFORE the in-script gff bootstrap eval (~line 360, placed after goenv per the frozen plan §4 P2-T3) — on a plain run, `gff set` overrides are not yet exported when the PowerShell chain executes | code inspection: source line 23 / windows gate line 67 / bootstrap 357–365 | The plan's own pre-bootstrap caveat applies to the whole Windows path: P2-T5 must `eval "$(gff export --shell)"` in the calling shell before `install.sh` (TODO amended — procedure fix, not a contract edit). UAC boundary env propagation (`Start-Process -Verb RunAs`) remains a P2-T5 observation point; if the flag doesn't cross, escalate as plan-level |
 
 ---
 
@@ -223,3 +226,5 @@ One line per working session. Never rewrite history here — append.
 | 2026-07-26 | build-1 | p1-engine | Review round: user guide + gff-build/test/install make targets; snowflake exec-bit fix; OWNER-APPROVED §3.4 extension (requested on PR review): `gff list [pattern]` glob/prefix filter, aligned table header, indented --json (default) + `--raw` compact form, lipgloss styled table (TTY auto / `--pretty` / NO_COLOR-aware; piped output stays plain) — TDD'd in cmd/list_enhance_test.go; deps lipgloss + x/term added |
 | 2026-07-25 | build-1 | p1-engine | P1-T1..T11 all done; PR #182 fully green; extra fixes: opt/bin/docker portability (unblocks shell-lint repo-wide), CI -count=1 profile fix, IA-10 resolve ErrUnknownSource fix, missing-default lint rule. Coverage 91.7/96.0/95.7. Awaiting --ready confirmation. |
 | 2026-07-25 | build-1 | p1-engine | Preflight green (plan on origin/main; go 1.26.3 toolchain, go directive stays 1.26.1; protoc 3.21.12; gh authed). NOTE: gff feature row was absent from the gss registry post-#181-merge; ran `gss feature start gff` to recreate it, then added the p1-engine worker. |
+| 2026-07-26 | build-2 | p1-engine, p2/p3/p4 | p1 closeout: PR #182 merged; `gss feature merged gff/edward-raigosa/p1-engine` run (positional ref — `--worker` flag doesn't exist on `merged`; procedure note). Created p2-instrument/p3-tui/p4-gen workers; gss branched them from a stale local `main` (2b49b6c, pre-#182) so each fresh branch was reset onto origin/main 6f1003f before any work. `${HOME}/opt/bin/gff` rebuilt from 6f1003f (Dirty:false). Ledger discipline for the parallel phase: TODO/TRACKING/index edits are single-writer (orchestrator), riding the p2 branch (then vd-demo) — p3/p4 branches touch only their owned code paths to keep merges conflict-free. |
+| 2026-07-26 | build-2 | p3+p4 → p34-tui-gen | OWNER-DIRECTED restructure: p3-tui + p4-gen combined into one integration PR #187 (draft; #185/#186 closed as superseded). Combined-tree gates all green (11 pkgs, total 90.2%, e2e 25/25). The tmux e2e demo of the REAL binary caught a bug all teatests missed: bubbletea delivers spacebar as KeySpace, model only matched KeyRunes{' '} — toggle dead in a real terminal; fixed TDD (3 real-key-shape tests) + write errors now surfaced in the footer instead of silently discarded (3dba587). Demo evidence committed: e2e/p34-integration-demo.txt (engine→gen compile+run→export) + F10-tui/p34-tui-live-capture.txt (live TUI frames). |

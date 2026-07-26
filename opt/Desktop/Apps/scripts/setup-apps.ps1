@@ -38,6 +38,13 @@ $env:WSL_UTF8 = '1'  # make wsl.exe emit parseable UTF-8 instead of UTF-16
 [Net.ServicePointManager]::SecurityProtocol =
     [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
+# gff feature gates (fail-open): flags cross from WSL via WSLENV (see
+# opt/bin/install_windows.sh). A missing lib must never block setup, so fall
+# back to an always-on Test-GffOn when lib\gff.ps1 is absent.
+$gffLib = Join-Path $PSScriptRoot 'lib\gff.ps1'
+if (Test-Path $gffLib) { . $gffLib }
+else { function Test-GffOn([string]$Key) { return $true } }
+
 # ============================ Configuration =================================
 
 # The two (and only two) Ubuntu distributions. Key = wsl distro name,
@@ -375,7 +382,12 @@ if ($Status) {
 # =============================== Install mode ===============================
 
 # [1/6] WSL platform
-$wslOk = Ensure-Wsl
+if (Test-GffOn 'install.windows.wsl-platform') {
+    $wslOk = Ensure-Wsl
+} else {
+    Write-Host "SKIP (gff: install.windows.wsl-platform=false)"
+    $wslOk = $false
+}
 
 if ($wslOk) {
     # [2/6] Distros
@@ -401,9 +413,11 @@ if ($wslOk) {
 }
 
 # [4/6] Font
-Install-NerdFont
+if (Test-GffOn 'install.windows.nerd-font') { Install-NerdFont }
+else { Write-Host "SKIP (gff: install.windows.nerd-font=false)" }
 
 # [5/6] Desktop apps (winget)
+if (Test-GffOn 'install.windows.apps') {
 Write-Host "`n=== [5/6] Desktop apps (winget) ===" -ForegroundColor Cyan
 if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     Write-Host "winget not available -- skipping app installs." -ForegroundColor Red
@@ -462,9 +476,11 @@ if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     }
     Write-Host "===================================================" -ForegroundColor Yellow
 }
+} else { Write-Host "SKIP (gff: install.windows.apps=false)" }
 
 # [6/6] Windows Terminal configuration
-Configure-Terminal
+if (Test-GffOn 'install.windows.terminal-themes') { Configure-Terminal }
+else { Write-Host "SKIP (gff: install.windows.terminal-themes=false)" }
 
 # === Elevated setup (one UAC prompt) =======================================
 # Everything that needs admin -- the macOS-hotkeys logon task, the iTunes Win32
