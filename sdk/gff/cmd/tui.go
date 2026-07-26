@@ -2,6 +2,7 @@ package cmd
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/registry"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui"
 	"github.com/spf13/cobra"
 )
@@ -35,6 +36,16 @@ func runTUI(_ *cobra.Command, _ []string) error {
 	}
 
 	m := tui.NewModel(items, r.P)
+	m.Explain = r.Explain
+	if reg := (&registry.Registry{P: r.P}); reg != nil {
+		if srcs, err := reg.Sources(); err == nil {
+			for _, s := range srcs {
+				m.Sources = append(m.Sources, tui.SourceInfo{
+					Namespace: s.GetNamespace(), URL: s.GetUrl(), Commit: s.GetCommit(),
+				})
+			}
+		}
+	}
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err = p.Run()
 	return err

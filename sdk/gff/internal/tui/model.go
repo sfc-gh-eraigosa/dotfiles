@@ -4,6 +4,7 @@ package tui
 
 import (
 	"io"
+	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -19,7 +20,22 @@ type screenMode int
 const (
 	modeList   screenMode = iota // normal collapsible tree view
 	modePicker                   // option picker overlay (choice flags)
+	modeDetail                   // per-feature detail: attributes + layer provenance
 )
+
+// SourceInfo is one registry entry for the launch panel.
+type SourceInfo struct {
+	Namespace string
+	URL       string
+	Commit    string
+}
+
+// page is one breadcrumb entry: the All view or one second-path-segment
+// category (alphabetical), navigated with ←/→.
+type page struct {
+	label     string
+	component string // "" = All
+}
 
 // row is a rendered line in the list: either an area header or a feature row.
 type row struct {
@@ -61,6 +77,24 @@ type Model struct {
 	// errMsg surfaces a failed override write in the footer; cleared on the
 	// next successful write. A failed write must never flip the row.
 	errMsg string
+
+	// Explain provides the per-layer provenance story for the detail view.
+	// Wired by cmd to resolve.Resolver.Explain; nil => definition-only detail.
+	Explain func(key string) (resolve.Resolved, []resolve.LayerInfo, error)
+
+	// Sources is the registry listing rendered on the launch panel so it is
+	// clear where each area's flags come from. Wired by cmd.
+	Sources []SourceInfo
+
+	// breadcrumb pager + viewport state
+	pages      []page
+	pageIdx    int
+	scrollTop  int // first visible row index (viewport windowing)
+	lastInner  int // body rows shown in the last render (PgUp/PgDn stride)
+
+	// detail state
+	detailItem   resolve.Resolved
+	detailLayers []resolve.LayerInfo
 }
 
 // NewModel constructs a Model from a resolved item slice and a Paths for writes.
@@ -71,8 +105,46 @@ func NewModel(items []resolve.Resolved, p paths.Paths) *Model {
 		p:        p,
 		expanded: make(map[string]bool),
 	}
+	m.buildPages()
 	m.buildRows()
 	return m
+}
+
+// componentOf returns the second dotted segment of a canonical key path.
+func componentOf(path string) string {
+	parts := strings.Split(path, ".")
+	if len(parts) >= 2 {
+		return parts[1]
+	}
+	return ""
+}
+
+// buildPages derives the breadcrumb: the All page first, then one page per
+// distinct second path segment, alphabetically.
+func (m *Model) buildPages() {
+	areas := map[string]bool{}
+	comps := map[string]bool{}
+	for _, item := range m.items {
+		areas[areaOf(item.Feature.GetPath())] = true
+		if c := componentOf(item.Feature.GetPath()); c != "" {
+			comps[c] = true
+		}
+	}
+	allLabel := "(All)"
+	if len(areas) == 1 {
+		for a := range areas {
+			allLabel = a + " (All)"
+		}
+	}
+	m.pages = []page{{label: allLabel}}
+	names := make([]string, 0, len(comps))
+	for c := range comps {
+		names = append(names, c)
+	}
+	sort.Strings(names)
+	for _, c := range names {
+		m.pages = append(m.pages, page{label: c, component: c})
+	}
 }
 
 // Init satisfies tea.Model; no initial commands needed.
@@ -89,10 +161,46 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		if m.mode == modePicker {
+		switch m.mode {
+		case modePicker:
 			return m.updatePicker(msg)
+		case modeDetail:
+			return m.updateDetail(msg)
 		}
 		return m.updateList(msg)
+	}
+	return m, nil
+}
+
+// openDetail enters the detail view for a feature row, resolving the
+// per-layer story through the Explain hook when wired.
+func (m *Model) openDetail(r row) {
+	if m.Explain != nil {
+		res, layers, err := m.Explain(r.item.Feature.GetPath())
+		if err != nil {
+			m.errMsg = "explain failed: " + err.Error()
+			return
+		}
+		m.detailItem, m.detailLayers = res, layers
+	} else {
+		m.detailItem, m.detailLayers = r.item, nil
+	}
+	m.errMsg = ""
+	m.mode = modeDetail
+}
+
+// updateDetail handles key events in the detail view.
+func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEscape, tea.KeyEnter:
+		m.mode = modeList
+	case tea.KeyRunes:
+		if len(msg.Runes) > 0 {
+			switch msg.Runes[0] {
+			case 'q', 'Q':
+				m.mode = modeList
+			}
+		}
 	}
 	return m, nil
 }
@@ -124,7 +232,38 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if m.cursor < 0 {
 					m.cursor = 0
 				}
+			} else {
+				// Feature row: open the detail view (attributes + layers).
+				m.openDetail(r)
 			}
+		}
+
+	case tea.KeyLeft, tea.KeyRight:
+		if n := len(m.pages); n > 1 {
+			if msg.Type == tea.KeyRight {
+				m.pageIdx = (m.pageIdx + 1) % n
+			} else {
+				m.pageIdx = (m.pageIdx - 1 + n) % n
+			}
+			m.cursor, m.scrollTop = 0, 0
+			m.buildRows()
+		}
+
+	case tea.KeyPgUp, tea.KeyPgDown:
+		stride := m.lastInner
+		if stride < 1 {
+			stride = 10
+		}
+		if msg.Type == tea.KeyPgDown {
+			m.cursor += stride
+		} else {
+			m.cursor -= stride
+		}
+		if m.cursor > len(m.rows)-1 {
+			m.cursor = len(m.rows) - 1
+		}
+		if m.cursor < 0 {
+			m.cursor = 0
 		}
 
 	// Real terminals deliver the spacebar as KeySpace (bubbletea key.go maps
@@ -300,8 +439,19 @@ func (m *Model) confirmPicker() {
 }
 
 // buildRows rebuilds the flattened row list from m.items and m.expanded.
-// Areas are sorted in the order they first appear in m.items.
+// On a category page the rows are the matching features, flat (no area
+// headers, nothing to expand). Areas are sorted in first-appearance order.
 func (m *Model) buildRows() {
+	if m.pageIdx > 0 && m.pageIdx < len(m.pages) {
+		comp := m.pages[m.pageIdx].component
+		m.rows = nil
+		for i, item := range m.items {
+			if componentOf(item.Feature.GetPath()) == comp {
+				m.rows = append(m.rows, row{item: item, itemIdx: i})
+			}
+		}
+		return
+	}
 	// Collect unique ordered areas.
 	var areas []string
 	seen := make(map[string]bool)
