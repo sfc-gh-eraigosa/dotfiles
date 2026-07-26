@@ -145,7 +145,10 @@ effective values ──▶ {CLI, TUI, SDK, `export --shell` env for bash/PowerSh
     (dark / light / dark8) per the gsl model — `GFF_THEME` env override → basic-ANSI
     fallback on low-color terminals (the terminal's own theme recolors them) →
     terminal background query (OSC-11 / COLORFGBG). Light palette follows gsl's
-    mid-luminance layout.
+    mid-luminance layout. Inside tmux/screen (where OSC-11 cannot pass through)
+    with no COLORFGBG, basic ANSI is used as well — the terminal's own theme
+    recolors it, keeping contrast correct on any background; `GFF_THEME` still
+    overrides.
   - *Category breadcrumb paging:* a fixed header lists the All page plus one page
     per distinct second path segment, alphabetically ("install (All) · ai · pkg …";
     bare "(All)" when multiple areas exist). ←/→ cycle pages; a category page shows

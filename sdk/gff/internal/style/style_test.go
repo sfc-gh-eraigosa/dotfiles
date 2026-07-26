@@ -77,3 +77,33 @@ func TestActiveFollowsGFFTheme(t *testing.T) {
 		t.Errorf("Active() with GFF_THEME=light = %+v, want light palette", got)
 	}
 }
+
+// Owner-reported: under tmux the OSC-11 background query does not pass
+// through and COLORFGBG is absent, so the probe silently defaulted to dark —
+// near-white text on light terminals. Inside tmux with no explicit signal,
+// resolve to the ANSI palette: the terminal's own theme recolors basic ANSI,
+// so contrast is always correct.
+func TestResolve_TmuxWithoutSignalsUsesANSI(t *testing.T) {
+	for _, env := range []map[string]string{
+		{"TMUX": "/tmp/tmux-1000/default,123,0", "TERM": "tmux-256color"},
+		{"TERM": "screen-256color"}, // tmux/screen TERM even without $TMUX
+	} {
+		got := Resolve(envOf(env), func() bool { return true })
+		if got != "dark8" {
+			t.Errorf("env %v: got %q, want dark8 (terminal-themed ANSI)", env, got)
+		}
+	}
+}
+
+func TestResolve_TmuxExplicitSignalsStillWin(t *testing.T) {
+	// GFF_THEME override wins inside tmux…
+	got := Resolve(envOf(map[string]string{"TMUX": "x", "TERM": "tmux-256color", "GFF_THEME": "light"}), func() bool { return true })
+	if got != "light" {
+		t.Errorf("GFF_THEME in tmux: got %q, want light", got)
+	}
+	// …and an explicit COLORFGBG means the background IS known: honor it.
+	got = Resolve(envOf(map[string]string{"TMUX": "x", "TERM": "tmux-256color", "COLORFGBG": "0;15"}), func() bool { return false })
+	if got != "light" {
+		t.Errorf("COLORFGBG in tmux: got %q, want light", got)
+	}
+}

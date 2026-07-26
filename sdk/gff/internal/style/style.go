@@ -73,6 +73,16 @@ func Resolve(env func(string) string, hasDarkBg func() bool) string {
 	if !truecolor && !strings.Contains(strings.ToLower(env("TERM")), "256color") {
 		return "dark8"
 	}
+	// Inside tmux/screen the OSC-11 background query does not pass through, so
+	// hasDarkBg silently reports the termenv default (dark) — near-invisible
+	// text on light terminals. With no explicit signal (GFF_THEME handled
+	// above, COLORFGBG below), prefer basic ANSI: the terminal's own theme
+	// recolors those indices, so contrast is correct on any background.
+	inTmux := env("TMUX") != "" ||
+		strings.HasPrefix(env("TERM"), "tmux") || strings.HasPrefix(env("TERM"), "screen")
+	if inTmux && env("COLORFGBG") == "" {
+		return "dark8"
+	}
 	if hasDarkBg() {
 		return "dark"
 	}

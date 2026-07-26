@@ -1,0 +1,9 @@
+# Owner-reported: pale/invisible text when the TUI runs under tmux on a light terminal
+# Cause: tmux blocks the OSC-11 background query and sets no COLORFGBG, so the probe
+# defaulted to dark (near-white text on cream). Fix: inside tmux/screen with no explicit
+# signal, resolve to basic ANSI — the terminal's own theme recolors it. GFF_THEME and
+# COLORFGBG still override.
+# date UTC: 2026-07-26T18:31:55Z
+
+SGR codes emitted under TERM=tmux-256color, no COLORFGBG (basic ANSI only, no 38;5;x):
+  12 [39m / 11 [37m / 3 [1m / 2 [33m / 1 [35m / 1 [34m
