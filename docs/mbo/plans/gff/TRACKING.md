@@ -20,11 +20,11 @@ Fill in from the `gss feature worker add --json` output — **verbatim**, never 
 | Leaf | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | `p1-engine` | `gff/edward-raigosa/p1-engine` | `feature/gff/edward-raigosa/p1-engine` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p1-engine` | [#182](https://github.com/sfc-gh-eraigosa/dotfiles/pull/182) | merged |
-| `p2-instrument` | `gff/edward-raigosa/p2-instrument` | `feature/gff/edward-raigosa/p2-instrument` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p2-instrument` | [#184](https://github.com/sfc-gh-eraigosa/dotfiles/pull/184) | building |
+| `p2-instrument` | `gff/edward-raigosa/p2-instrument` | `feature/gff/edward-raigosa/p2-instrument` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p2-instrument` | [#184](https://github.com/sfc-gh-eraigosa/dotfiles/pull/184) | merged |
 | `p3-tui` | `gff/edward-raigosa/p3-tui` | `feature/gff/edward-raigosa/p3-tui` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p3-tui` | [#186](https://github.com/sfc-gh-eraigosa/dotfiles/pull/186) (closed) | superseded → `p34-tui-gen` |
 | `p4-gen` | `gff/edward-raigosa/p4-gen` | `feature/gff/edward-raigosa/p4-gen` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p4-gen` | [#185](https://github.com/sfc-gh-eraigosa/dotfiles/pull/185) (closed) | superseded → `p34-tui-gen` |
-| `p34-tui-gen` | `gff/edward-raigosa/p34-tui-gen` | `feature/gff/edward-raigosa/p34-tui-gen` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p34-tui-gen` | [#187](https://github.com/sfc-gh-eraigosa/dotfiles/pull/187) | building (draft, per owner) |
-| `vd-demo` | _(pending)_ | _(pending)_ | _(pending)_ | _(pending)_ | todo |
+| `p34-tui-gen` | `gff/edward-raigosa/p34-tui-gen` | `feature/gff/edward-raigosa/p34-tui-gen` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p34-tui-gen` | [#187](https://github.com/sfc-gh-eraigosa/dotfiles/pull/187) | in-review (ready, rebased onto #184 merge) |
+| `vd-demo` | `gff/edward-raigosa/vd-demo` | `feature/gff/edward-raigosa/vd-demo` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/vd-demo` | _(pending)_ | building |
 
 Leaf state vocabulary (mirrors `docs/mbo/index.md`): `todo → building → in-review → merged`.
 
@@ -67,8 +67,8 @@ P2-T5 human evidence posted.
 | P2-T2 shell helper `opt/lib/gff.sh` | done | 6d00762 | orchestrator re-ran: `bash opt/lib/gff_test.sh` 10/10 PASS **and** `sh` (dash) 10/10 PASS; RED verified (helper missing ⇒ FAIL 1); driver mode 100755 confirmed via `git ls-files -s` | plan snippet verbatim + shellcheck disable comment lines only; evidence p2-t2-*.txt (append-only re-capture) |
 | P2-T3 instrument `install.sh` (Linux/common) | done | a131195 | orchestrator re-ran: `bash -n` clean; helper sourced line 23 (before first gate line 67, fail-closed guard comment); `set -a`/`set +a` wrap at the bootstrap eval (the binding NOTE); 35 `gff_on` sites / 33 keys; sops SKIP line reproduced | new later `install.sdk.gff`-gated duplicate build block added (plan presupposed one; bootstrap build stays ungated) |
 | P2-T4 Windows pass-through + PS gating | done | 0a2820e | orchestrator re-ran: `bash -n` clean on install_windows.sh; `make lint-shell` clean; `make lint-portability` Tier1=0 Tier2=0; WSLENV builder verbatim + dedup proven (2-pass dash test); Test-GffOn per plan | **pwsh absent — both Test-GffOn checks defer to P2-T5 human run (not faked)**; WSLENV loop inserted once after `ps_exe` (precedes every powershell.exe call, dedup makes it equivalent) |
-| P2-T5 human-evidenced acceptance | todo | — | | real terminal, WSL; **must `eval "$(gff export --shell)"` in the calling shell first** — see §10 row 3 |
-| **P2 done-when gate** | todo | — | lint gates clean + `gff lint` clean (done); P2-T5 evidence pending | PR [#184](https://github.com/sfc-gh-eraigosa/dotfiles/pull/184) |
+| P2-T5 human-evidenced acceptance | todo | — | | real terminal, WSL; **must `eval "$(gff export --shell)"` in the calling shell first** — see §10 row 3. #184 merged ahead of this evidence (owner call) — run it from `${HOME}/git/dotfiles` on main now |
+| **P2 done-when gate** | todo | — | lint gates clean + `gff lint` clean (done); P2-T5 evidence pending | PR [#184](https://github.com/sfc-gh-eraigosa/dotfiles/pull/184) MERGED 2026-07-26 (adf80cc); P2-T5 evidence still owed for §7.5 |
 
 ---
 
@@ -106,8 +106,8 @@ P2-T5 human evidence posted.
 
 | Task | Status | Commit | Evidence (test run / gate) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| VD-1 demo script (`scripts/demo.sh`) | todo | | | scratch `$HOME`, re-runnable |
-| VD-1 run on WSL + transcript posted | todo | — | | |
+| VD-1 demo script (`scripts/demo.sh`) | done | _(this commit)_ | 3 consecutive runs exit 0 (fresh scratch HOME each); steps 1–6 per §7.3 incl. dash eval, .env parse, namespace-claim rejection naming the existing url, zero-install `go run .` finale; `make lint-shell` clean, portability Tier1=0/Tier2=0; real `~/.config/gff` mtime-verified untouched | step 6 uses the module-local `go run .` stand-in by default; `GFF_DEMO_TAG=<tag>` opts into the true `@tag` form |
+| VD-1 run on WSL + transcript posted | in-progress | — | transcript captured on linux/arm64 (evidence/demo/VD-1-demo-transcript.txt), posted to the leaf PR | a WSL re-run is a one-liner if the owner wants the exact-platform capture |
 | VD-1 post-P3 TUI segment (~30s) captured | todo | — | | after `p3-tui` merges |
 | **VD-1 done-when gate** | todo | — | | + P2-T5 real-install proof |
 
@@ -228,3 +228,4 @@ One line per working session. Never rewrite history here — append.
 | 2026-07-25 | build-1 | p1-engine | Preflight green (plan on origin/main; go 1.26.3 toolchain, go directive stays 1.26.1; protoc 3.21.12; gh authed). NOTE: gff feature row was absent from the gss registry post-#181-merge; ran `gss feature start gff` to recreate it, then added the p1-engine worker. |
 | 2026-07-26 | build-2 | p1-engine, p2/p3/p4 | p1 closeout: PR #182 merged; `gss feature merged gff/edward-raigosa/p1-engine` run (positional ref — `--worker` flag doesn't exist on `merged`; procedure note). Created p2-instrument/p3-tui/p4-gen workers; gss branched them from a stale local `main` (2b49b6c, pre-#182) so each fresh branch was reset onto origin/main 6f1003f before any work. `${HOME}/opt/bin/gff` rebuilt from 6f1003f (Dirty:false). Ledger discipline for the parallel phase: TODO/TRACKING/index edits are single-writer (orchestrator), riding the p2 branch (then vd-demo) — p3/p4 branches touch only their owned code paths to keep merges conflict-free. |
 | 2026-07-26 | build-2 | p3+p4 → p34-tui-gen | OWNER-DIRECTED restructure: p3-tui + p4-gen combined into one integration PR #187 (draft; #185/#186 closed as superseded). Combined-tree gates all green (11 pkgs, total 90.2%, e2e 25/25). The tmux e2e demo of the REAL binary caught a bug all teatests missed: bubbletea delivers spacebar as KeySpace, model only matched KeyRunes{' '} — toggle dead in a real terminal; fixed TDD (3 real-key-shape tests) + write errors now surfaced in the footer instead of silently discarded (3dba587). Demo evidence committed: e2e/p34-integration-demo.txt (engine→gen compile+run→export) + F10-tui/p34-tui-live-capture.txt (live TUI frames). |
+| 2026-07-26 | build-3 | p2, p34, vd-demo | #184 (p2) landed: auto-merge completed after the docker Build+Integration job; `gss feature merged` run; #187 promoted READY via `gh pr ready` (safety_guard/gss token double-bind blocks `gss feature pr --ready` when session cwd branch != worker branch — recorded in memory + here), rebased onto new main via checkpoint, body re-applied, CI re-running. vd-demo worker created off adf80cc; demo.sh authored + 3 clean runs; transcript in evidence/demo/. P2-T5 evidence still owed (merged ahead of it, owner call). |

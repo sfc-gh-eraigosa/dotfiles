@@ -465,10 +465,10 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ## Leaf `p2-instrument` closeout
 
-- [ ] Token call 1: `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token`
-- [ ] Token call 2 (separate Bash call): `gss feature pr --ready --worker <p2 worker_ref>`
-- [ ] After merge: `gss feature merged --worker <p2 worker_ref>`
-- [ ] LEDGER: `p2-instrument` → `merged`; session-log line; update `docs/mbo/index.md`
+- [x] Token call 1: `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token`
+- [x] Token call 2: promotion done by owner on GitHub (gss `pr --ready` blocked by the safety_guard/gss token double-bind — TRACKING §11)
+- [x] After merge: `gss feature merged <p2 worker_ref>` (positional ref)
+- [x] LEDGER: `p2-instrument` → `merged`; session-log line; update `docs/mbo/index.md`
 
 ---
 
@@ -556,8 +556,8 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ## Leaf setup
 
-- [ ] `gss feature worker add --feature gff --purpose vd-demo --engine claude --json --description "VD-1: narrated end-to-end demo script + recorded evidence (#180)"`
-- [ ] Record `worker_ref` / `branch` / `worktree_path` verbatim in `TRACKING.md` §0
+- [x] `gss feature worker add --feature gff --purpose vd-demo --engine claude --json --description "VD-1: narrated end-to-end demo script + recorded evidence (#180)"`
+- [x] Record `worker_ref` / `branch` / `worktree_path` verbatim in `TRACKING.md` §0
 
 ---
 
@@ -565,15 +565,15 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 **Files:** `sdk/gff/scripts/demo.sh` (shell-portability-lint clean).
 
-- [ ] SETUP: create `sdk/gff/scripts/demo.sh` — narrated, re-runnable, running against a scratch `$HOME` (`GFF_DEMO_HOME` temp dir) so it never touches real config; each step echoes what it is about to prove
-- [ ] GREEN: step 1 — scaffold a demo repo; author a flag file with 1 bool + 1 radio choice + 1 checkbox choice (typed values shown)
-- [ ] GREEN: step 2 — `lint` → `install` → `list`, calling out the winning-layer/provenance column
-- [ ] GREEN: step 3 — gate a toy script with `gff_on`; `set` the bool off; rerun shows the SKIP line; flip it back
-- [ ] GREEN: step 4 — `export` all four formats; eval the shell form in **dash**; parse the `.env`
-- [ ] GREEN: step 5 — a second repo claims the same area ⇒ show the rejection message (the guardrail moment)
-- [ ] GREEN: step 6 — finale from an empty directory with no gff on PATH: `eval "$(go run <module>@<tag> export --format shell --source demo)"`
-- [ ] VERIFY: `make lint-shell && make lint-portability` → clean
-- [ ] VERIFY: `bash sdk/gff/scripts/demo.sh` runs clean **twice in a row** (re-runnable) and never touches `${HOME}/.config/gff`
+- [x] SETUP: create `sdk/gff/scripts/demo.sh` — narrated, re-runnable, running against a scratch `$HOME` (`GFF_DEMO_HOME` temp dir) so it never touches real config; each step echoes what it is about to prove
+- [x] GREEN: step 1 — scaffold a demo repo; author a flag file with 1 bool + 1 radio choice + 1 checkbox choice (typed values shown)
+- [x] GREEN: step 2 — `lint` → `install` → `list`, calling out the winning-layer/provenance column
+- [x] GREEN: step 3 — gate a toy script with `gff_on`; `set` the bool off; rerun shows the SKIP line; flip it back
+- [x] GREEN: step 4 — `export` all four formats; eval the shell form in **dash**; parse the `.env`
+- [x] GREEN: step 5 — a second repo claims the same area ⇒ show the rejection message (the guardrail moment)
+- [x] GREEN: step 6 — finale from an empty directory with no gff on PATH: `eval "$(go run <module>@<tag> export --format shell --source demo)"`
+- [x] VERIFY: `make lint-shell && make lint-portability` → clean
+- [x] VERIFY: `bash sdk/gff/scripts/demo.sh` runs clean **twice in a row** (re-runnable) and never touches `${HOME}/.config/gff`
 - [ ] RUN: execute the demo on WSL and capture the **full transcript**
 - [ ] POST: paste the transcript into PR #181 (or the `vd-demo` leaf PR)
 - [ ] COMMIT: `docs(gff): end-to-end demo script + recorded evidence`
