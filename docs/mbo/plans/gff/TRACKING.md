@@ -20,9 +20,9 @@ Fill in from the `gss feature worker add --json` output — **verbatim**, never 
 | Leaf | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | `p1-engine` | `gff/edward-raigosa/p1-engine` | `feature/gff/edward-raigosa/p1-engine` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p1-engine` | [#182](https://github.com/sfc-gh-eraigosa/dotfiles/pull/182) | merged |
-| `p2-instrument` | `gff/edward-raigosa/p2-instrument` | `feature/gff/edward-raigosa/p2-instrument` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p2-instrument` | _(pending)_ | building |
-| `p3-tui` | `gff/edward-raigosa/p3-tui` | `feature/gff/edward-raigosa/p3-tui` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p3-tui` | _(pending)_ | building |
-| `p4-gen` | `gff/edward-raigosa/p4-gen` | `feature/gff/edward-raigosa/p4-gen` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p4-gen` | _(pending)_ | building |
+| `p2-instrument` | `gff/edward-raigosa/p2-instrument` | `feature/gff/edward-raigosa/p2-instrument` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p2-instrument` | [#184](https://github.com/sfc-gh-eraigosa/dotfiles/pull/184) | building |
+| `p3-tui` | `gff/edward-raigosa/p3-tui` | `feature/gff/edward-raigosa/p3-tui` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p3-tui` | [#186](https://github.com/sfc-gh-eraigosa/dotfiles/pull/186) | building |
+| `p4-gen` | `gff/edward-raigosa/p4-gen` | `feature/gff/edward-raigosa/p4-gen` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p4-gen` | [#185](https://github.com/sfc-gh-eraigosa/dotfiles/pull/185) | building |
 | `vd-demo` | _(pending)_ | _(pending)_ | _(pending)_ | _(pending)_ | todo |
 
 Leaf state vocabulary (mirrors `docs/mbo/index.md`): `todo → building → in-review → merged`.
@@ -79,8 +79,8 @@ P2-T5 human evidence posted.
 
 | Task | Status | Commit | Evidence (test run / gate) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| P3-T1 TUI (model, view, teatest, `cmd/tui.go`) | todo | | | extract `internal/overrides.Write` |
-| **P3 done-when gate** | todo | — | | `go test ./... -cover` ≥90% |
+| P3-T1 TUI (model, view, teatest, `cmd/tui.go`) | done | 6bfa4c3 | orchestrator re-ran in p3 worktree: `go vet ./...` clean; full `go test ./... -count=1` green (16 tui tests); CI-style coverpkg-excl-gen total 90.4% (≥90), resolve 96.1% (≥95), schema 95.7% (≥90), tui pkg 90.6%; evidence F10-tui/P3-T1-teatest-cover.txt | RED verified: `no non-test Go files in internal/tui`; `internal/overrides.Write` consumed (extracted in P1-T8 — no refactor needed); sole shared-file edit = root.go TTY-dispatch RunE per §6.1; deps bubbletea v1.3.10 + teatest; 3 cover*.out debris files caught + removed before commit |
+| **P3 done-when gate** | done | — | teatest suite green; overall ≥90% holds (90.4%); PR [#186](https://github.com/sfc-gh-eraigosa/dotfiles/pull/186) | promotion awaits user confirmation |
 
 ---
 
@@ -92,8 +92,8 @@ P2-T5 human evidence posted.
 
 | Task | Status | Commit | Evidence (test run / gate) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| P4-T1 `gff gen` typed accessors | todo | | | golden compiles + vets |
-| **P4 done-when gate** | todo | — | | |
+| P4-T1 `gff gen` typed accessors | done | be17f88 | orchestrator re-ran in p4 worktree: `go vet ./...` clean; `go test ./...` all 10 pkgs ok (cmd incl. 7 Gen tests: golden byte-exact, shape, scratch-module `go vet` compile, empty world, bad --out, naming, update-golden); CI-style coverpkg-excl-gen total 91.4% (≥90), resolve 96.1% (≥95), schema 95.7% (≥90) | RED verified: `undefined: resetGenFlags/segmentToTitle`; agent-reported, gates re-run by orchestrator; one debris file (tmux-mgr scheduled_tasks.lock) caught + restored before commit |
+| **P4 done-when gate** | done | — | golden test green + generated output vets (TestGenGoldenCompiles runs `go vet` on a scratch module embedding the output, offline via replace directive); PR [#185](https://github.com/sfc-gh-eraigosa/dotfiles/pull/185) | promotion awaits user confirmation |
 
 ---
 
@@ -128,7 +128,7 @@ proof passes; record which task proved it in Notes.
 | **F7** export formats + injection safety | [x] export golden | [x] IH-7, IH-8, IA-5, IA-15 | [ ] demo steps 4, 6 | |
 | **F8** write path (0600, user-only) | [x] `write_test.go` | [x] IH-5, IA-8, IA-11, IA-13 | [ ] demo step 3 | |
 | **F9** fail-open gating | [ ] `gff_test.sh` bash + dash (binary-absent is unit-only) | [ ] IH-7, IA-7 | [ ] P2-T5 evidence | |
-| **F10** TUI | [ ] teatest goldens | [ ] (visual — teatest is the harness) | [ ] post-P3 capture | |
+| **F10** TUI | [x] teatest goldens | [x] (visual — teatest is the harness) | [ ] post-P3 capture | P3-T1; unit+integration = the 16-case teatest suite (6bfa4c3) |
 | **F11** go-run + `--source` | [x] CI smoke (T10, `go run . version` in gff-ci) + read tests (T7) | [x] IH-10, IA-10 | [ ] demo step 6 | |
 
 ---
@@ -196,7 +196,7 @@ Update on each measurement; keep the latest observed number and the command that
 | :-- | :-- | :-- | :-- |
 | `internal/resolve` | ≥95% | 96.0% (2026-07-25) | `go test ./internal/resolve/ -cover` |
 | `internal/schema` | ≥90% | 95.6% (2026-07-25) | `go test ./internal/schema/ -cover` |
-| `sdk/gff` overall | **≥90%** | 91.6% (2026-07-25, coverpkg excl /gen/) | `go test ./... -coverprofile=cover.out && go tool cover -func=cover.out \| tail -1` |
+| `sdk/gff` overall | **≥90%** | 90.4% (2026-07-26, p3 worktree post-TUI; 91.4% in p4 worktree — coverpkg excl /gen/, -count=1) | `COVERPKG=$(go list ./... \| grep -v /gen/ \| paste -sd, -); go test ./... -count=1 -coverpkg="$COVERPKG" -coverprofile=cover.out && go tool cover -func=cover.out \| tail -1` |
 
 ---
 

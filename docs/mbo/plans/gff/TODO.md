@@ -484,22 +484,22 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 **Files:** `internal/tui/{model.go,view.go,tui_test.go}`, `cmd/tui.go`; modify `cmd/root.go`.
 
-- [ ] SETUP: `go get github.com/charmbracelet/bubbletea github.com/charmbracelet/lipgloss github.com/charmbracelet/x/exp/teatest@latest`
-- [ ] ~~REFACTOR: extract `internal/overrides.Write`~~ ALREADY DONE in P1-T8 (`internal/overrides` with `Write`/`Unset`/`WriteFileAtomic`; `set.go`/`unset.go` are thin callers) — just consume it. Also: `lipgloss` + `x/term` are already deps (P1 styled `list`); only bubbletea/teatest need `go get`
-- [ ] VERIFY: `go test ./cmd/` still **PASS** after the refactor (no behavior change)
-- [ ] RED: teatest — the initial frame lists areas **collapsed**
-- [ ] RED: teatest — navigating (`enter` on area → components → features) shows a feature row containing description + `default`/`override` + the winning layer
-- [ ] RED: teatest — `space` on a bool writes ONLY the user override file (temp-paths world) and the row flips
-- [ ] RED: teatest — `space` on a choice opens the option picker: **radio** list for `single` mode, **checkbox** list for `multi`, built from `ChoiceDefault.Options`, showing id + description + typed value
-- [ ] RED: teatest — `q` after no toggles writes **nothing** (override file mtime unchanged)
-- [ ] RUN-RED: `go test ./internal/tui/` → expect **FAIL**
-- [ ] GREEN: implement `model.go` — `Model{items []resolve.Resolved, cursor, expanded map[string]bool, w io.Writer}`, reusing `cmd`'s resolver hook; all writes go through `internal/overrides.Write` (same path as `gff set`)
-- [ ] GREEN: implement `view.go` rendering the tree + provenance column
-- [ ] GREEN: `cmd/tui.go` registering the `tui` verb; modify `cmd/root.go` so bare `gff` with no args **and a TTY** runs the TUI, else prints help
-- [ ] RUN-GREEN: `go test ./internal/tui/` → expect **PASS**
-- [ ] VERIFY: `go test ./... -cover` → overall still **≥90%**; record in `TRACKING.md` §9
-- [ ] COMMIT: `feat(gff): bubbletea TUI — browse, provenance, toggle`
-- [ ] LEDGER: tick F10 **unit** + **integration** cells; CHECKPOINT
+- [x] SETUP: `go get github.com/charmbracelet/bubbletea github.com/charmbracelet/lipgloss github.com/charmbracelet/x/exp/teatest@latest`
+- [x] ~~REFACTOR: extract `internal/overrides.Write`~~ ALREADY DONE in P1-T8 (`internal/overrides` with `Write`/`Unset`/`WriteFileAtomic`; `set.go`/`unset.go` are thin callers) — just consume it. Also: `lipgloss` + `x/term` are already deps (P1 styled `list`); only bubbletea/teatest need `go get`
+- [x] VERIFY: `go test ./cmd/` still **PASS** after the refactor (no behavior change)
+- [x] RED: teatest — the initial frame lists areas **collapsed**
+- [x] RED: teatest — navigating (`enter` on area → components → features) shows a feature row containing description + `default`/`override` + the winning layer
+- [x] RED: teatest — `space` on a bool writes ONLY the user override file (temp-paths world) and the row flips
+- [x] RED: teatest — `space` on a choice opens the option picker: **radio** list for `single` mode, **checkbox** list for `multi`, built from `ChoiceDefault.Options`, showing id + description + typed value
+- [x] RED: teatest — `q` after no toggles writes **nothing** (override file mtime unchanged)
+- [x] RUN-RED: `go test ./internal/tui/` → expect **FAIL**
+- [x] GREEN: implement `model.go` — `Model{items []resolve.Resolved, cursor, expanded map[string]bool, w io.Writer}`, reusing `cmd`'s resolver hook; all writes go through `internal/overrides.Write` (same path as `gff set`)
+- [x] GREEN: implement `view.go` rendering the tree + provenance column
+- [x] GREEN: `cmd/tui.go` registering the `tui` verb; modify `cmd/root.go` so bare `gff` with no args **and a TTY** runs the TUI, else prints help
+- [x] RUN-GREEN: `go test ./internal/tui/` → expect **PASS**
+- [x] VERIFY: `go test ./... -cover` → overall still **≥90%**; record in `TRACKING.md` §9
+- [x] COMMIT: `feat(gff): bubbletea TUI — browse, provenance, toggle`
+- [x] LEDGER: tick F10 **unit** + **integration** cells; CHECKPOINT
 
 **Done when — P3 done-when gate:** teatest suite green and overall coverage ≥90%.
 
@@ -527,16 +527,16 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 **Files:** `cmd/gen.go`, `cmd/gen_test.go`, `cmd/testdata/gen.golden`.
 
-- [ ] RED: golden test — against the P1-T9 world, `gff gen --pkg gffgen --out <tmp>` writes `<tmp>/gffgen.go` matching `cmd/testdata/gen.golden`
-- [ ] RED: assert the emitted shape — per flag a var chain `var Install = struct{ Ai struct{ Claude BoolFlag } … }` with `func (f BoolFlag) Bool() (bool, error)` delegating to `pkg/gff` by **literal key string**
-- [ ] RED: assert naming — segments Title-cased, dashes camel-cased (`wispr-flow` → `WisprFlow`)
-- [ ] RED: assert the golden **compiles** — the test runs `go vet` on a scratch module embedding the output
-- [ ] RUN-RED: `go test ./cmd/` → expect **FAIL**
-- [ ] GREEN: implement `cmd/gen.go` using `text/template` + `go/format.Source`; self-register via `init()` (no shared-file edits)
-- [ ] RUN-GREEN: `go test ./cmd/` → expect **PASS**
-- [ ] VERIFY: `go test ./... -cover` → overall still **≥90%**
-- [ ] COMMIT: `feat(gff): gen — typed accessor codegen`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: golden test — against the P1-T9 world, `gff gen --pkg gffgen --out <tmp>` writes `<tmp>/gffgen.go` matching `cmd/testdata/gen.golden`
+- [x] RED: assert the emitted shape — per flag a var chain `var Install = struct{ Ai struct{ Claude BoolFlag } … }` with `func (f BoolFlag) Bool() (bool, error)` delegating to `pkg/gff` by **literal key string**
+- [x] RED: assert naming — segments Title-cased, dashes camel-cased (`wispr-flow` → `WisprFlow`)
+- [x] RED: assert the golden **compiles** — the test runs `go vet` on a scratch module embedding the output
+- [x] RUN-RED: `go test ./cmd/` → expect **FAIL**
+- [x] GREEN: implement `cmd/gen.go` using `text/template` + `go/format.Source`; self-register via `init()` (no shared-file edits)
+- [x] RUN-GREEN: `go test ./cmd/` → expect **PASS**
+- [x] VERIFY: `go test ./... -cover` → overall still **≥90%**
+- [x] COMMIT: `feat(gff): gen — typed accessor codegen`
+- [x] LEDGER + CHECKPOINT
 
 **Done when — P4 done-when gate:** golden test green and the generated output vets.
 
