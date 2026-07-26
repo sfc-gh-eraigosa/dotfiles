@@ -31,8 +31,9 @@ func (fakeRunner) Output(_ string, _ ...string) (string, error) {
 
 // tuiWorld collects the layer YAML content used to build a test Resolver.
 type tuiWorld struct {
-	repo   string // .gff/features.yaml content
-	usrOvr string // user override config.yaml content (optional)
+	repo     string // .gff/features.yaml content
+	usrOvr   string // user override config.yaml content (optional)
+	userSnap string // a user-snapshot file (optional; second namespace worlds)
 }
 
 // newTestPaths builds a Paths struct with all dirs under t.TempDir() and
@@ -67,6 +68,12 @@ func newTestPaths(t *testing.T, w tuiWorld) (paths.Paths, string) {
 
 	if w.usrOvr != "" {
 		require.NoError(t, os.WriteFile(p.UserOverride, []byte(w.usrOvr), 0o600))
+	}
+
+	if w.userSnap != "" {
+		require.NoError(t, os.MkdirAll(p.UserSnapshotDir, 0o755))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(p.UserSnapshotDir, "other.yaml"), []byte(w.userSnap), 0o644))
 	}
 
 	return p, p.UserOverride

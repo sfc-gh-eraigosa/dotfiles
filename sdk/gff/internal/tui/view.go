@@ -9,6 +9,7 @@ import (
 	gffv1 "github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/gen/gff/v1"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/style"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/version"
 )
 
 // noColor returns true when the NO_COLOR env variable is set or stdout is not
@@ -80,6 +81,8 @@ func (m *Model) View() string {
 		return m.viewPicker()
 	case modeDetail:
 		return m.viewDetail()
+	case modeHelp:
+		return m.viewHelp()
 	}
 	return m.viewList()
 }
@@ -98,12 +101,10 @@ func (m *Model) viewList() string {
 	sb.WriteString(m.renderBreadcrumb(pal))
 	sb.WriteString("\n\n")
 
-	launch := m.pageIdx == 0 && !m.anyExpanded()
-
-	// Viewport windowing (skipped in the tiny launch state).
+	// Viewport windowing.
 	rowsStart, rowsEnd := 0, len(m.rows)
 	moreAbove, moreBelow := 0, 0
-	if !launch && m.height > 0 {
+	if m.height > 0 {
 		overhead := 4 // breadcrumb + blank + blank + help line
 		if m.errMsg != "" {
 			overhead++
@@ -153,7 +154,7 @@ func (m *Model) viewList() string {
 
 		if r.isArea {
 			indicator := "▶"
-			if m.expanded[r.area] {
+			if m.expanded[r.ns+"\x00"+r.area] {
 				indicator = "▼"
 			}
 			line := fmt.Sprintf("%s%s %s", cursor, indicator, r.area)
@@ -162,8 +163,8 @@ func (m *Model) viewList() string {
 			} else {
 				sb.WriteString(headerStyle.Render(line))
 			}
-			if ns := m.areaNamespaces(r.area); ns != "" {
-				sb.WriteString(dimStyle.Render("  · " + ns))
+			if r.ns != "" {
+				sb.WriteString(dimStyle.Render("  · " + r.ns))
 			}
 		} else {
 			item := r.item
@@ -199,10 +200,6 @@ func (m *Model) viewList() string {
 		sb.WriteString("\n")
 	}
 
-	if launch {
-		sb.WriteString(m.renderLaunchPanel(pal))
-	}
-
 	sb.WriteString("\n")
 	if m.errMsg != "" {
 		errStyle := lipgloss.NewStyle().Foreground(pal.Red)
@@ -212,7 +209,7 @@ func (m *Model) viewList() string {
 		sb.WriteString(errStyle.Render(m.errMsg))
 		sb.WriteString("\n")
 	}
-	sb.WriteString(dimStyle.Render("↑/↓ move  ←/→ category  PgUp/PgDn page  Enter expand/details  Space toggle  q quit"))
+	sb.WriteString(dimStyle.Render("↑/↓ move  ←/→ category  PgUp/PgDn page  Enter expand/details  Space toggle  ? help  q quit"))
 	return sb.String()
 }
 
@@ -221,6 +218,10 @@ func (m *Model) viewList() string {
 func (m *Model) renderBreadcrumb(pal style.Colors) string {
 	act := lipgloss.NewStyle().Bold(true).Foreground(pal.Text)
 	dim := lipgloss.NewStyle().Foreground(pal.Grey)
+	prefix := ""
+	if m.multiNS() && m.scopeNS != "" {
+		prefix = dim.Render(m.scopeNS + " ▸ ") // the scope the pages belong to
+	}
 	parts := make([]string, 0, len(m.pages))
 	for i, p := range m.pages {
 		if i == m.pageIdx {
@@ -229,7 +230,22 @@ func (m *Model) renderBreadcrumb(pal style.Colors) string {
 			parts = append(parts, dim.Render(p.label))
 		}
 	}
-	return strings.Join(parts, " · ")
+	return prefix + strings.Join(parts, " · ")
+}
+
+// multiNS reports whether the items span more than one namespace.
+func (m *Model) multiNS() bool {
+	first := ""
+	for _, it := range m.items {
+		if first == "" {
+			first = it.Namespace()
+			continue
+		}
+		if it.Namespace() != first {
+			return true
+		}
+	}
+	return false
 }
 
 // anyExpanded reports whether any area is currently expanded.
@@ -242,43 +258,61 @@ func (m *Model) anyExpanded() bool {
 	return false
 }
 
-// areaNamespaces returns the comma-joined namespaces defining an area.
-func (m *Model) areaNamespaces(area string) string {
-	seen := map[string]bool{}
-	var out []string
-	for _, item := range m.items {
-		if areaOf(item.Feature.GetPath()) == area {
-			if ns := item.Namespace(); ns != "" && !seen[ns] {
-				seen[ns] = true
-				out = append(out, ns)
-			}
-		}
-	}
-	return strings.Join(out, ", ")
-}
-
-// renderLaunchPanel shows first-run help plus the sources/registry story.
-func (m *Model) renderLaunchPanel(pal style.Colors) string {
+// viewHelp is the ?/h overlay: about + version, the key legend for the view
+// it was opened from, and the full sources story (registry + discovered).
+func (m *Model) viewHelp() string {
+	pal := style.Active()
 	dim := lipgloss.NewStyle().Foreground(pal.Grey)
 	bold := lipgloss.NewStyle().Bold(true).Foreground(pal.Purple)
+	title := lipgloss.NewStyle().Bold(true).Foreground(pal.Text)
 	var sb strings.Builder
 
+	sb.WriteString(title.Render("gff — git fast features"))
+	sb.WriteString(dim.Render("  · layered feature flags persisted in git"))
 	sb.WriteString("\n")
-	sb.WriteString(dim.Render("git fast features — layered flags persisted in git"))
-	sb.WriteString("\n\n")
-	sb.WriteString(dim.Render("  ↑/↓ move · ←/→ category pages · PgUp/PgDn page"))
-	sb.WriteString("\n")
-	sb.WriteString(dim.Render("  Enter expand an area or open feature details · Space toggle (bool) or pick (choice) · q quit"))
+	sb.WriteString(dim.Render(fmt.Sprintf("gff v%s (commit %s)", version.Version, version.Commit)))
 	sb.WriteString("\n\n")
 
-	sb.WriteString(bold.Render("SOURCES"))
-	sb.WriteString(dim.Render(" — the registry (~/.config/gff/sources.yaml) each area resolves from"))
+	sb.WriteString(bold.Render("KEYS"))
+	switch m.helpReturn {
+	case modeDetail:
+		sb.WriteString(dim.Render(" — detail view"))
+		sb.WriteString("\n")
+		sb.WriteString(dim.Render("  Space  toggle the bool / pick choice options (same writer as `gff set`)"))
+		sb.WriteString("\n")
+		sb.WriteString(dim.Render("  u      clear the user override for this key (same as `gff unset`)"))
+		sb.WriteString("\n")
+		sb.WriteString(dim.Render("  Esc/Enter  back to the list · q back · ?/h this help"))
+		sb.WriteString("\n")
+	case modePicker:
+		sb.WriteString(dim.Render(" — option picker"))
+		sb.WriteString("\n")
+		sb.WriteString(dim.Render("  ↑/↓ move · Space toggle an option (multi) · Enter select/confirm · Esc cancel"))
+		sb.WriteString("\n")
+	default:
+		sb.WriteString(dim.Render(" — flag list"))
+		sb.WriteString("\n")
+		sb.WriteString(dim.Render("  ↑/↓ move · ←/→ category pages · PgUp/PgDn page"))
+		sb.WriteString("\n")
+		sb.WriteString(dim.Render("  Enter  expand an area / open feature details (attributes + layers)"))
+		sb.WriteString("\n")
+		sb.WriteString(dim.Render("  Space  toggle a bool / pick choice options · q quit"))
+		sb.WriteString("\n")
+	}
 	sb.WriteString("\n")
+
+	sb.WriteString(bold.Render("SOURCES"))
+	sb.WriteString(dim.Render(" — where flags come from. Namespaces are disjoint worlds: uniqueness is"))
+	sb.WriteString("\n")
+	sb.WriteString(dim.Render("(namespace, key); an area name like 'install' is grouping only, never claimed."))
+	sb.WriteString("\n")
+	registered := map[string]bool{}
 	if len(m.Sources) == 0 {
 		sb.WriteString(dim.Render("  (no sources registered — run `gff install` in a repo with a flag file)"))
 		sb.WriteString("\n")
 	}
 	for _, src := range m.Sources {
+		registered[src.Namespace] = true
 		line := "  ● " + src.Namespace
 		if src.URL != "" {
 			line += "  " + src.URL
@@ -289,6 +323,21 @@ func (m *Model) renderLaunchPanel(pal style.Colors) string {
 		sb.WriteString(dim.Render(line))
 		sb.WriteString("\n")
 	}
+	// Discovered origins (e.g. the CWD repo's live flag file) that are not in
+	// the registry — listed so the two-source picture is complete.
+	seen := map[string]bool{}
+	for _, it := range m.items {
+		ns := it.Namespace()
+		if ns == "" || registered[ns] || seen[ns] {
+			continue
+		}
+		seen[ns] = true
+		sb.WriteString(dim.Render("  ○ " + ns + "  · discovered in the current repo — not registered"))
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString("\n")
+	sb.WriteString(dim.Render("Esc/?/q close"))
 	return sb.String()
 }
 
@@ -394,7 +443,7 @@ func (m *Model) viewDetail() string {
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(dim.Render("Esc/Enter back  q back"))
+	sb.WriteString(dim.Render("Space toggle/pick  u clear user override  Esc/Enter back  ? help"))
 	return sb.String()
 }
 

@@ -21,6 +21,7 @@ const (
 	modeList   screenMode = iota // normal collapsible tree view
 	modePicker                   // option picker overlay (choice flags)
 	modeDetail                   // per-feature detail: attributes + layer provenance
+	modeHelp                     // help overlay (?/h from any view)
 )
 
 // SourceInfo is one registry entry for the launch panel.
@@ -40,9 +41,10 @@ type page struct {
 // row is a rendered line in the list: either an area header or a feature row.
 type row struct {
 	isArea  bool
-	area    string          // set when isArea == true
+	area    string           // set when isArea == true
+	ns      string           // owning namespace (area AND feature rows)
 	item    resolve.Resolved // set when isArea == false
-	itemIdx int             // index into m.items (for toggle)
+	itemIdx int              // index into m.items (for toggle)
 }
 
 // pickerEntry is one option in the picker overlay.
@@ -63,16 +65,16 @@ type Model struct {
 	w        io.Writer // used by tests to capture output (nil = unused)
 	width    int
 	height   int
-	cursor   int            // index into m.rows (the rendered row list)
+	cursor   int             // index into m.rows (the rendered row list)
 	expanded map[string]bool // area name → expanded
 	rows     []row           // flattened render list rebuilt on each expand/collapse
 	mode     screenMode
 
 	// picker state
-	pickerItemIdx  int           // which m.items entry is being picked
-	pickerEntries  []pickerEntry // copy of options with transient selection state
-	pickerCursor   int
-	pickerIsMulti  bool
+	pickerItemIdx int           // which m.items entry is being picked
+	pickerEntries []pickerEntry // copy of options with transient selection state
+	pickerCursor  int
+	pickerIsMulti bool
 
 	// errMsg surfaces a failed override write in the footer; cleared on the
 	// next successful write. A failed write must never flip the row.
@@ -87,14 +89,19 @@ type Model struct {
 	Sources []SourceInfo
 
 	// breadcrumb pager + viewport state
-	pages      []page
-	pageIdx    int
-	scrollTop  int // first visible row index (viewport windowing)
-	lastInner  int // body rows shown in the last render (PgUp/PgDn stride)
+	pages     []page
+	pageIdx   int
+	scrollTop int // first visible row index (viewport windowing)
+	lastInner int // body rows shown in the last render (PgUp/PgDn stride)
 
 	// detail state
 	detailItem   resolve.Resolved
 	detailLayers []resolve.LayerInfo
+	detailIdx    int // index into m.items backing the detail view
+
+	scopeNS      string     // namespace the breadcrumb pages derive from
+	helpReturn   screenMode // view to return to when help closes
+	pickerReturn screenMode // view to return to when the picker closes
 }
 
 // NewModel constructs a Model from a resolved item slice and a Paths for writes.
@@ -105,8 +112,11 @@ func NewModel(items []resolve.Resolved, p paths.Paths) *Model {
 		p:        p,
 		expanded: make(map[string]bool),
 	}
-	m.buildPages()
 	m.buildRows()
+	if len(m.rows) > 0 {
+		m.scopeNS = m.rows[0].ns
+	}
+	m.buildPages()
 	return m
 }
 
@@ -119,12 +129,15 @@ func componentOf(path string) string {
 	return ""
 }
 
-// buildPages derives the breadcrumb: the All page first, then one page per
-// distinct second path segment, alphabetically.
+// buildPages derives the breadcrumb for the current namespace scope: the All
+// page first, then one page per distinct second path segment, alphabetically.
 func (m *Model) buildPages() {
 	areas := map[string]bool{}
 	comps := map[string]bool{}
 	for _, item := range m.items {
+		if m.scopeNS != "" && item.Namespace() != m.scopeNS {
+			continue
+		}
 		areas[areaOf(item.Feature.GetPath())] = true
 		if c := componentOf(item.Feature.GetPath()); c != "" {
 			comps[c] = true
@@ -166,15 +179,31 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updatePicker(msg)
 		case modeDetail:
 			return m.updateDetail(msg)
+		case modeHelp:
+			return m.updateHelp(msg)
 		}
 		return m.updateList(msg)
 	}
 	return m, nil
 }
 
+// rescope re-derives the breadcrumb pages when the cursor crosses into a row
+// owned by a different namespace (All page only — category pages are already
+// single-namespace).
+func (m *Model) rescope() {
+	if m.pageIdx != 0 || m.cursor < 0 || m.cursor >= len(m.rows) {
+		return
+	}
+	if ns := m.rows[m.cursor].ns; ns != "" && ns != m.scopeNS {
+		m.scopeNS = ns
+		m.buildPages()
+	}
+}
+
 // openDetail enters the detail view for a feature row, resolving the
 // per-layer story through the Explain hook when wired.
 func (m *Model) openDetail(r row) {
+	m.detailIdx = r.itemIdx
 	if m.Explain != nil {
 		res, layers, err := m.Explain(r.item.Feature.GetPath())
 		if err != nil {
@@ -189,16 +218,83 @@ func (m *Model) openDetail(r row) {
 	m.mode = modeDetail
 }
 
-// updateDetail handles key events in the detail view.
+// updateDetail handles key events in the detail view. Space acts through the
+// SAME writers the list uses (overrides.Write via toggle/picker); 'u' clears
+// the user override via overrides.Unset — no new write paths.
 func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyEscape, tea.KeyEnter:
 		m.mode = modeList
+
+	case tea.KeySpace:
+		m.detailAct()
+
 	case tea.KeyRunes:
 		if len(msg.Runes) > 0 {
 			switch msg.Runes[0] {
 			case 'q', 'Q':
 				m.mode = modeList
+			case '?', 'h', 'H':
+				m.helpReturn = modeDetail
+				m.mode = modeHelp
+			case ' ':
+				m.detailAct()
+			case 'u', 'U':
+				if err := overrides.Unset(m.p, m.detailItem.Feature.GetPath()); err != nil {
+					m.errMsg = "unset failed: " + err.Error()
+					return m, nil
+				}
+				m.errMsg = ""
+				m.refreshDetail()
+			}
+		}
+	}
+	return m, nil
+}
+
+// detailAct is Space in the detail view: toggle a bool in place, or open the
+// picker for a choice (returning here on confirm/cancel).
+func (m *Model) detailAct() {
+	item := m.detailItem
+	switch item.Feature.Default.(type) {
+	case *gffv1.Feature_BoolDefault:
+		newVal := &gffv1.Value{Kind: &gffv1.Value_BoolValue{BoolValue: !item.Value.GetBoolValue()}}
+		if err := overrides.Write(m.p, item.Feature.GetPath(), newVal); err != nil {
+			m.errMsg = "write failed: " + err.Error()
+			return
+		}
+		m.errMsg = ""
+		m.refreshDetail()
+	case *gffv1.Feature_ChoiceDefault:
+		m.openPicker(m.detailIdx, item, modeDetail)
+	}
+}
+
+// refreshDetail re-resolves the detail item after a write so the layer table
+// tells the current truth, and mirrors the new state into the list items.
+func (m *Model) refreshDetail() {
+	path := m.detailItem.Feature.GetPath()
+	if m.Explain != nil {
+		if res, layers, err := m.Explain(path); err == nil {
+			m.detailItem, m.detailLayers = res, layers
+			if m.detailIdx >= 0 && m.detailIdx < len(m.items) {
+				m.items[m.detailIdx] = res
+			}
+			m.buildRows()
+		}
+	}
+}
+
+// updateHelp closes the overlay back to wherever it was opened from.
+func (m *Model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEscape, tea.KeyEnter:
+		m.mode = m.helpReturn
+	case tea.KeyRunes:
+		if len(msg.Runes) > 0 {
+			switch msg.Runes[0] {
+			case 'q', 'Q', '?', 'h', 'H':
+				m.mode = m.helpReturn
 			}
 		}
 	}
@@ -212,18 +308,21 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.cursor > 0 {
 			m.cursor--
 		}
+		m.rescope()
 
 	case tea.KeyDown:
 		if m.cursor < len(m.rows)-1 {
 			m.cursor++
 		}
+		m.rescope()
 
 	case tea.KeyEnter:
 		if m.cursor >= 0 && m.cursor < len(m.rows) {
 			r := m.rows[m.cursor]
 			if r.isArea {
-				// Toggle expand/collapse.
-				m.expanded[r.area] = !m.expanded[r.area]
+				// Toggle expand/collapse (namespace-qualified group key).
+				k := r.ns + "\x00" + r.area
+				m.expanded[k] = !m.expanded[k]
 				m.buildRows()
 				// Keep cursor in-bounds after rebuild.
 				if m.cursor >= len(m.rows) {
@@ -284,6 +383,10 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case 'q', 'Q':
 			return m, tea.Quit
 
+		case '?', 'h', 'H':
+			m.helpReturn = modeList
+			m.mode = modeHelp
+
 		case ' ':
 			if m.cursor >= 0 && m.cursor < len(m.rows) {
 				r := m.rows[m.cursor]
@@ -320,24 +423,26 @@ func (m *Model) activateFeature(r row) (tea.Model, tea.Cmd) {
 		m.buildRows()
 
 	case *gffv1.Feature_ChoiceDefault:
-		// Open picker.
-		cd := item.Feature.GetChoiceDefault()
-		// Build picker entries with the current effective selection.
-		currentSel := selectedSet(item.Value)
-		entries := make([]pickerEntry, len(cd.GetOptions()))
-		for i, opt := range cd.GetOptions() {
-			entries[i] = pickerEntry{
-				opt:      opt,
-				selected: currentSel[opt.GetId()],
-			}
-		}
-		m.pickerItemIdx = r.itemIdx
-		m.pickerEntries = entries
-		m.pickerCursor = 0
-		m.pickerIsMulti = cd.GetMode() == gffv1.ChoiceMode_CHOICE_MODE_MULTI
-		m.mode = modePicker
+		m.openPicker(r.itemIdx, item, modeList)
 	}
 	return m, nil
+}
+
+// openPicker opens the option picker for a choice item; ret names the view to
+// return to on confirm/cancel (list or detail).
+func (m *Model) openPicker(itemIdx int, item resolve.Resolved, ret screenMode) {
+	cd := item.Feature.GetChoiceDefault()
+	currentSel := selectedSet(item.Value)
+	entries := make([]pickerEntry, len(cd.GetOptions()))
+	for i, opt := range cd.GetOptions() {
+		entries[i] = pickerEntry{opt: opt, selected: currentSel[opt.GetId()]}
+	}
+	m.pickerItemIdx = itemIdx
+	m.pickerEntries = entries
+	m.pickerCursor = 0
+	m.pickerIsMulti = cd.GetMode() == gffv1.ChoiceMode_CHOICE_MODE_MULTI
+	m.pickerReturn = ret
+	m.mode = modePicker
 }
 
 // selectedSet builds a set of currently-selected option ids from a Value.
@@ -365,16 +470,19 @@ func (m *Model) updatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyEscape:
-		m.mode = modeList
+		m.mode = m.pickerExitMode()
 
 	case tea.KeyEnter:
 		// For radio (single) mode, Enter on a cursor item selects it and confirms.
 		if !m.pickerIsMulti {
 			m.togglePickerEntry()
 		}
-		// Confirm the picker: write the selection and return to list.
+		// Confirm the picker: write the selection and return whence we came.
 		m.confirmPicker()
-		m.mode = modeList
+		m.mode = m.pickerExitMode()
+		if m.mode == modeDetail {
+			m.refreshDetail()
+		}
 
 	// Same real-terminal semantics as updateList: the spacebar is KeySpace.
 	case tea.KeySpace:
@@ -389,10 +497,21 @@ func (m *Model) updatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// Toggle the focused picker entry.
 			m.togglePickerEntry()
 		case 'q', 'Q':
-			m.mode = modeList
+			m.mode = m.pickerExitMode()
+		case '?', 'h', 'H':
+			m.helpReturn = modePicker
+			m.mode = modeHelp
 		}
 	}
 	return m, nil
+}
+
+// pickerExitMode returns the view the picker should fall back to.
+func (m *Model) pickerExitMode() screenMode {
+	if m.pickerReturn == modeDetail {
+		return modeDetail
+	}
+	return modeList
 }
 
 // togglePickerEntry toggles the selection of the current picker entry.
@@ -446,36 +565,37 @@ func (m *Model) buildRows() {
 		comp := m.pages[m.pageIdx].component
 		m.rows = nil
 		for i, item := range m.items {
-			if componentOf(item.Feature.GetPath()) == comp {
-				m.rows = append(m.rows, row{item: item, itemIdx: i})
+			if componentOf(item.Feature.GetPath()) != comp {
+				continue
 			}
+			if m.scopeNS != "" && item.Namespace() != m.scopeNS {
+				continue
+			}
+			m.rows = append(m.rows, row{item: item, ns: item.Namespace(), itemIdx: i})
 		}
 		return
 	}
-	// Collect unique ordered areas.
-	var areas []string
-	seen := make(map[string]bool)
-	for _, item := range m.items {
-		area := areaOf(item.Feature.GetPath())
-		if !seen[area] {
-			seen[area] = true
-			areas = append(areas, area)
-		}
-	}
-
-	// Build item index by area.
-	byArea := make(map[string][]int)
+	// One area row per (namespace, area) pair, first-appearance order, so two
+	// sources sharing an area name stay visibly separate worlds.
+	type nsArea struct{ ns, area string }
+	var groups []nsArea
+	seen := make(map[nsArea]bool)
+	byGroup := make(map[nsArea][]int)
 	for idx, item := range m.items {
-		area := areaOf(item.Feature.GetPath())
-		byArea[area] = append(byArea[area], idx)
+		g := nsArea{ns: item.Namespace(), area: areaOf(item.Feature.GetPath())}
+		if !seen[g] {
+			seen[g] = true
+			groups = append(groups, g)
+		}
+		byGroup[g] = append(byGroup[g], idx)
 	}
 
 	m.rows = m.rows[:0]
-	for _, area := range areas {
-		m.rows = append(m.rows, row{isArea: true, area: area})
-		if m.expanded[area] {
-			for _, idx := range byArea[area] {
-				m.rows = append(m.rows, row{isArea: false, item: m.items[idx], itemIdx: idx})
+	for _, g := range groups {
+		m.rows = append(m.rows, row{isArea: true, area: g.area, ns: g.ns})
+		if m.expanded[g.ns+"\x00"+g.area] {
+			for _, idx := range byGroup[g] {
+				m.rows = append(m.rows, row{item: m.items[idx], ns: g.ns, itemIdx: idx})
 			}
 		}
 	}

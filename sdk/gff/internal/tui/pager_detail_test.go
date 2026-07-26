@@ -127,43 +127,6 @@ func TestViewportFollowsCursor(t *testing.T) {
 	assert.NotContains(t, v, "install.ai.claude", "top rows scrolled out")
 }
 
-func TestLaunchShowsHelpAndSources(t *testing.T) {
-	r, p := newResolver(t, tuiWorld{repo: pagerYAML})
-	items, err := r.All()
-	require.NoError(t, err)
-	m := tui.NewModel(items, p)
-	m.Sources = []tui.SourceInfo{{
-		Namespace: "com.example.tui-test",
-		URL:       "https://example.com/tui-test.git",
-		Commit:    "abc1234",
-	}}
-
-	v := m.View()
-	// Launch state presents help…
-	assert.Contains(t, v, "Space", "launch help lists the toggle key")
-	assert.Contains(t, v, "category", "launch help mentions ←/→ category paging")
-	// …and the sources/registry story.
-	assert.Contains(t, v, "SOURCES")
-	assert.Contains(t, v, "com.example.tui-test")
-	assert.Contains(t, v, "https://example.com/tui-test.git")
-	// The area row names its namespace so provenance is visible at a glance.
-	assert.Contains(t, v, "install")
-}
-
-func TestHelpPanelYieldsToRowsWhenExpanded(t *testing.T) {
-	r, p := newResolver(t, tuiWorld{repo: pagerYAML})
-	items, err := r.All()
-	require.NoError(t, err)
-	m := tui.NewModel(items, p)
-	m.Sources = []tui.SourceInfo{{Namespace: "com.example.tui-test", URL: "https://example.com/tui-test.git"}}
-
-	var tm tea.Model = m
-	tm = press(tm, tea.KeyMsg{Type: tea.KeyEnter}) // expand install
-	v := tm.View()
-	assert.Contains(t, v, "install.ai.claude", "rows take over after expand")
-	assert.NotContains(t, v, "https://example.com/tui-test.git", "sources panel yields to content")
-}
-
 func TestDetailWithoutExplainHook(t *testing.T) {
 	r, p := newResolver(t, tuiWorld{repo: pagerYAML})
 	items, err := r.All()
@@ -218,11 +181,12 @@ func TestPgDnPgUpMoveCursorAcrossViewport(t *testing.T) {
 	assert.Contains(t, v, "install.ai.claude", "PgUp returned to the top")
 }
 
-func TestLaunchPanelWithoutSources(t *testing.T) {
+func TestHelpOverlayWithoutSources(t *testing.T) {
 	r, p := newResolver(t, tuiWorld{repo: pagerYAML})
 	items, err := r.All()
 	require.NoError(t, err)
-	m := tui.NewModel(items, p)
+	var m tea.Model = tui.NewModel(items, p)
+	m = press(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
 	assert.Contains(t, m.View(), "no sources registered")
 }
 
