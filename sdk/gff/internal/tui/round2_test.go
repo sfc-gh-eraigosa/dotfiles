@@ -283,3 +283,56 @@ func TestListUOnAreaRowIsHarmless(t *testing.T) {
 	m = press(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}}) // cursor on an area row
 	assert.Equal(t, before, m.View(), "u on an area row is a no-op")
 }
+
+// Owner-reported: with the SAME key path in two sources (e.g. install.ai.claude
+// in the CWD repo AND in an installed snapshot), drilling into the snapshot
+// namespace's row showed the REPO namespace's detail. Cause: openDetail passed
+// the unqualified path to Explain, and §3.2 binding is focus-(CWD-repo)-first —
+// the row's own namespace was discarded.
+// cursorLine returns the rendered line carrying the "> " cursor marker.
+func cursorLine(v string) string {
+	for _, line := range strings.Split(v, "\n") {
+		if strings.HasPrefix(strings.TrimLeft(line, " "), "> ") || strings.HasPrefix(line, "> ") {
+			return line
+		}
+	}
+	return ""
+}
+
+const overlapNSYAML = `
+namespace: com.example.other
+sets:
+  - area: install
+    features:
+      - {path: install.ai.claude, description: Other-source Claude setup, boolDefault: false}
+`
+
+func TestDetailBindsToTheRowsNamespaceOnOverlap(t *testing.T) {
+	r, p := newResolver(t, tuiWorld{repo: pagerYAML, userSnap: overlapNSYAML})
+	items, err := r.All()
+	require.NoError(t, err)
+	m := tui.NewModel(items, p)
+	m.Explain = r.Explain
+	var tm tea.Model = m
+
+	// Navigate BY INSPECTION to com.example.other's area row (group order is
+	// an implementation detail), then open its only feature.
+	for i := 0; i < 6 && !strings.Contains(cursorLine(tm.View()), "com.example.other"); i++ {
+		tm = press(tm, tea.KeyMsg{Type: tea.KeyDown})
+	}
+	require.Contains(t, cursorLine(tm.View()), "com.example.other", "cursor on the other-source area row")
+	tm = press(tm, tea.KeyMsg{Type: tea.KeyEnter}) // expand it
+	tm = press(tm, tea.KeyMsg{Type: tea.KeyDown})  // its only feature row
+	tm = press(tm, tea.KeyMsg{Type: tea.KeyEnter}) // detail
+
+	v := tm.View()
+	require.Contains(t, v, "LAYERS", "detail view open")
+	assert.Contains(t, v, "com.example.other", "detail binds to the row's namespace")
+	assert.Contains(t, v, "Other-source Claude setup", "the row's own definition renders")
+	assert.NotContains(t, v, "Claude CLI\n", "not the focus namespace's definition")
+	// The other-source flag defaults false via user-snapshot — the winner must
+	// be that namespace's layer, not the repo's repo-live.
+	idx := strings.Index(v, "user-snapshot")
+	require.GreaterOrEqual(t, idx, 0)
+	assert.Contains(t, v[idx:], "winning", "winner comes from the row's namespace")
+}

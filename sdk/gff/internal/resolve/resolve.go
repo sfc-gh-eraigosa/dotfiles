@@ -467,8 +467,14 @@ func (r *Resolver) All() ([]Resolved, error) {
 		results = append(results, res)
 	}
 
+	// Stable, fully-deterministic order: path, then namespace. The tie-break
+	// matters when two sources define the same path — without it the sort is
+	// unstable and the UI's row/group order flips between runs.
 	sort.Slice(results, func(i, j int) bool {
-		return results[i].Feature.GetPath() < results[j].Feature.GetPath()
+		if results[i].Feature.GetPath() != results[j].Feature.GetPath() {
+			return results[i].Feature.GetPath() < results[j].Feature.GetPath()
+		}
+		return results[i].namespace < results[j].namespace
 	})
 
 	return results, nil

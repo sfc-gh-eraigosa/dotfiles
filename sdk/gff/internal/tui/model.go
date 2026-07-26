@@ -187,6 +187,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// qualifiedKey returns the §3.2 fully-qualified form <namespace>:<key> for an
+// item. Every Explain call MUST use it: unqualified keys bind focus-first (the
+// CWD repo), which is the WRONG item when the same path exists in two sources
+// (owner-reported: drilling into a snapshot row showed the repo's detail).
+func qualifiedKey(item resolve.Resolved) string {
+	if ns := item.Namespace(); ns != "" {
+		return ns + ":" + item.Feature.GetPath()
+	}
+	return item.Feature.GetPath()
+}
+
 // rescope re-derives the breadcrumb pages when the cursor crosses into a row
 // owned by a different namespace (All page only — category pages are already
 // single-namespace).
@@ -205,7 +216,7 @@ func (m *Model) rescope() {
 func (m *Model) openDetail(r row) {
 	m.detailIdx = r.itemIdx
 	if m.Explain != nil {
-		res, layers, err := m.Explain(r.item.Feature.GetPath())
+		res, layers, err := m.Explain(qualifiedKey(r.item))
 		if err != nil {
 			m.errMsg = "explain failed: " + err.Error()
 			return
@@ -273,9 +284,8 @@ func (m *Model) detailAct() {
 // refreshDetail re-resolves the detail item after a write so the layer table
 // tells the current truth, and mirrors the new state into the list items.
 func (m *Model) refreshDetail() {
-	path := m.detailItem.Feature.GetPath()
 	if m.Explain != nil {
-		if res, layers, err := m.Explain(path); err == nil {
+		if res, layers, err := m.Explain(qualifiedKey(m.detailItem)); err == nil {
 			m.detailItem, m.detailLayers = res, layers
 			if m.detailIdx >= 0 && m.detailIdx < len(m.items) {
 				m.items[m.detailIdx] = res
@@ -292,7 +302,7 @@ func (m *Model) refreshItem(idx int) {
 	if m.Explain == nil || idx < 0 || idx >= len(m.items) {
 		return
 	}
-	if res, _, err := m.Explain(m.items[idx].Feature.GetPath()); err == nil {
+	if res, _, err := m.Explain(qualifiedKey(m.items[idx])); err == nil {
 		m.items[idx] = res
 		m.buildRows()
 	}
