@@ -8,17 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	gffv1 "github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/gen/gff/v1"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve"
-)
-
-// Color constants — match the list.go palette so the TUI and table share a look.
-const (
-	colorGrey   = lipgloss.Color("245")
-	colorGreen  = lipgloss.Color("42")
-	colorBlue   = lipgloss.Color("39")
-	colorOrange = lipgloss.Color("214")
-	colorRed    = lipgloss.Color("203")
-	colorPurple = lipgloss.Color("63")
-	colorWhite  = lipgloss.Color("255")
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/style"
 )
 
 // noColor returns true when the NO_COLOR env variable is set or stdout is not
@@ -28,23 +18,23 @@ func noColor() bool {
 	return os.Getenv("NO_COLOR") != ""
 }
 
-// layerColor returns a lipgloss style for the given layer string.
-// Mirrors list.go's layerStyle.
-func layerColor(layer string) lipgloss.Style {
+// layerColor returns a lipgloss style for the given layer string, using the
+// theme-resolved palette (internal/style — shared with list.go).
+func layerColor(pal style.Colors, layer string) lipgloss.Style {
 	if noColor() {
 		return lipgloss.NewStyle()
 	}
 	switch layer {
 	case "user-override":
-		return lipgloss.NewStyle().Foreground(colorOrange)
+		return lipgloss.NewStyle().Foreground(pal.Orange)
 	case "system-override":
-		return lipgloss.NewStyle().Foreground(colorRed)
+		return lipgloss.NewStyle().Foreground(pal.Red)
 	case "repo-live":
-		return lipgloss.NewStyle().Foreground(colorGreen)
+		return lipgloss.NewStyle().Foreground(pal.Green)
 	case "user-snapshot":
-		return lipgloss.NewStyle().Foreground(colorBlue)
+		return lipgloss.NewStyle().Foreground(pal.Blue)
 	default:
-		return lipgloss.NewStyle().Foreground(colorGrey)
+		return lipgloss.NewStyle().Foreground(pal.Grey)
 	}
 }
 
@@ -95,9 +85,10 @@ func (m *Model) View() string {
 func (m *Model) viewList() string {
 	var sb strings.Builder
 
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorPurple)
-	cursorStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
-	dimStyle := lipgloss.NewStyle().Foreground(colorGrey)
+	pal := style.Active()
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(pal.Purple)
+	cursorStyle := lipgloss.NewStyle().Bold(true).Foreground(pal.Text)
+	dimStyle := lipgloss.NewStyle().Foreground(pal.Grey)
 
 	for i, r := range m.rows {
 		cursor := "  "
@@ -127,7 +118,7 @@ func (m *Model) viewList() string {
 			desc := item.Feature.GetDescription()
 			path := item.Feature.GetPath()
 
-			layerRendered := layerColor(layer).Render(layer)
+			layerRendered := layerColor(pal, layer).Render(layer)
 			line := fmt.Sprintf("%s  %-40s  %-6s  %-9s  %s  %s",
 				cursor, path, val, marker, layerRendered, desc)
 
@@ -152,7 +143,7 @@ func (m *Model) viewList() string {
 
 	sb.WriteString("\n")
 	if m.errMsg != "" {
-		errStyle := lipgloss.NewStyle().Foreground(colorRed)
+		errStyle := lipgloss.NewStyle().Foreground(pal.Red)
 		if noColor() {
 			errStyle = lipgloss.NewStyle()
 		}
@@ -174,10 +165,11 @@ func (m *Model) viewPicker() string {
 		modeStr = "checkbox (multi)"
 	}
 
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(colorPurple)
-	cursorStyle := lipgloss.NewStyle().Bold(true).Foreground(colorWhite)
-	dimStyle := lipgloss.NewStyle().Foreground(colorGrey)
-	selectedStyle := lipgloss.NewStyle().Foreground(colorGreen)
+	pal := style.Active()
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(pal.Purple)
+	cursorStyle := lipgloss.NewStyle().Bold(true).Foreground(pal.Text)
+	dimStyle := lipgloss.NewStyle().Foreground(pal.Grey)
+	selectedStyle := lipgloss.NewStyle().Foreground(pal.Green)
 
 	sb.WriteString(headerStyle.Render(
 		fmt.Sprintf("Pick option for: %s (%s)", item.Feature.GetPath(), modeStr),

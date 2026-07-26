@@ -12,6 +12,7 @@ import (
 	lgtable "github.com/charmbracelet/lipgloss/table"
 	gffv1 "github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/gen/gff/v1"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/style"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -59,28 +60,32 @@ func matchKey(pattern, key string) bool {
 	return key == pattern || strings.HasPrefix(key, pattern+".")
 }
 
-// layerStyle color-codes the winning layer: overrides pop, definitions stay calm.
+// layerStyle color-codes the winning layer: overrides pop, definitions stay
+// calm. Colors come from the theme-resolved palette (internal/style), so the
+// table follows the shell's light/dark theme like the TUI does.
 func layerStyle(layer string) lipgloss.Style {
+	pal := style.Active()
 	switch layer {
 	case "user-override":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("214")) // orange
+		return lipgloss.NewStyle().Foreground(pal.Orange)
 	case "system-override":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("203")) // red
+		return lipgloss.NewStyle().Foreground(pal.Red)
 	case "repo-live":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("42")) // green
+		return lipgloss.NewStyle().Foreground(pal.Green)
 	case "user-snapshot":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("39")) // blue
+		return lipgloss.NewStyle().Foreground(pal.Blue)
 	default: // system-snapshot, none
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("245")) // grey
+		return lipgloss.NewStyle().Foreground(pal.Grey)
 	}
 }
 
 func valueStyle(value string) lipgloss.Style {
+	pal := style.Active()
 	switch value {
 	case "true":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+		return lipgloss.NewStyle().Foreground(pal.Green)
 	case "false":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
+		return lipgloss.NewStyle().Foreground(pal.Red)
 	}
 	return lipgloss.NewStyle()
 }
@@ -89,12 +94,12 @@ func renderPrettyTable(rows [][]string) string {
 	cell := lipgloss.NewStyle().Padding(0, 1)
 	t := lgtable.New().
 		Border(lipgloss.RoundedBorder()).
-		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+		BorderStyle(lipgloss.NewStyle().Foreground(style.Active().Border)).
 		Headers("PATH", "TYPE", "VALUE", "LAYER", "DESCRIPTION").
 		Rows(rows...).
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == lgtable.HeaderRow {
-				return cell.Bold(true).Foreground(lipgloss.Color("63"))
+				return cell.Bold(true).Foreground(style.Active().Purple)
 			}
 			if row < 0 || row >= len(rows) {
 				return cell
