@@ -376,7 +376,7 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 - [ ] VERIFY: the file declares exactly **43** flags (4+2+2+6+5+6+5+1+1+11)
 - [ ] VERIFY: `git status --short -- .github/gff/` shows the file as trackable
 - [ ] VERIFY: `${HOME}/opt/bin/gff lint .github/gff/features.yaml` → exit 0, no findings
-- [ ] VERIFY: from the worktree root, `gff list` shows all 43 keys with `LayerRepoLive` defaults
+- [ ] VERIFY: from the worktree root, `gff list` shows all 43 keys with `repo-live` layer. NOTE (P1 lesson): other registered namespaces (e.g. test repos in `~/.config/gff/sources.yaml`) also appear in `list` — count OUR rows precisely with `gff list --json | jq '[.[] | select(.namespace=="com.github.sfc-gh-eraigosa.dotfiles")] | length'` = 43; the new `gff list 'install.*'` filter and `--pretty`/`--raw` flags are available. Every feature MUST carry `boolDefault: true` — P1 added a `missing-default` lint rule that fails default-less features
 - [ ] COMMIT: `feat(gff): enumerate dotfiles install components as flags (all on)`
 - [ ] LEDGER + CHECKPOINT
 
@@ -386,7 +386,7 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ### P2-T2 — shell helper `opt/lib/gff.sh`  (plan §4 P2-T2)
 
-- [ ] RED: write `opt/lib/gff_test.sh` **first**, mirroring `ai/hooks/safety_guard_test.sh`'s assert style
+- [ ] RED: write `opt/lib/gff_test.sh` **first**, mirroring `ai/hooks/safety_guard_test.sh`'s assert style. NOTE (P1 lesson — the snowflake bug): commit executable scripts WITH the exec bit — after staging, verify `git ls-files -s opt/lib/gff_test.sh` shows `100755` (`gff.sh` itself is SOURCED, stays 100644 with the `# shellcheck shell=bash` header)
 - [ ] RED: case — var unset ⇒ `gff_on` returns 0 (fail-open)
 - [ ] RED: case — `=true` ⇒ 0; `=false` ⇒ 1
 - [ ] RED: case — `=FALSE` ⇒ 0, `=0` ⇒ 0, garbage ⇒ 0 (only exact lowercase `false` disables)
@@ -407,7 +407,7 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 ### P2-T3 — instrument `install.sh` (Linux/common)  (plan §4 P2-T3)
 
 - [ ] SETUP: locate the goenv/Go block in `install.sh` (~line 309) and the pyenv block that follows it
-- [ ] GREEN: insert the gff bootstrap block **verbatim from the plan** immediately AFTER the goenv/Go block and BEFORE pyenv (conditional `build.sh`, `eval "$(… export --shell)"`, then `. "${BASE_DIR}/opt/lib/gff.sh"`) — fail-open: a failed build warns and runs everything
+- [ ] GREEN: insert the gff bootstrap block **verbatim from the plan** immediately AFTER the goenv/Go block and BEFORE pyenv (conditional `build.sh`, `eval "$(… export --shell)"`, then `. "${BASE_DIR}/opt/lib/gff.sh"`) — fail-open: a failed build warns and runs everything. **NOTE (P1 lesson, verified in sandbox): wrap the eval in `set -a` / `set +a`** — export lines are plain `VAR=v` (shell-local); without allexport the `GFF_*` vars never reach child scripts, and P2-T4's WSLENV builder greps `env` which only sees EXPORTED vars
 - [ ] GREEN: add ONE comment line at the top documenting that flags for pre-bootstrap steps take effect via `gff export` in the calling shell or on the next run
 - [ ] GREEN: wrap `install.system.*` blocks in-place with `if gff_on <key>; then … else gff_skip_msg <key>; fi` — NO reordering, NO logic changes inside
 - [ ] GREEN: wrap `install.shell.*` blocks (profiles, default-zsh)
@@ -430,7 +430,7 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 ### P2-T4 — Windows pass-through + PowerShell gating  (plan §4 P2-T4)
 
 - [ ] GREEN: `opt/bin/install_windows.sh` — top-level `gff_on install.windows.desktop-deploy || { gff_skip_msg install.windows.desktop-deploy; exit 0; }`
-- [ ] GREEN: `opt/bin/install_windows.sh` — before each `powershell.exe` invocation, insert the WSLENV builder loop verbatim from the plan (appends each `GFF_INSTALL_WINDOWS_*` name with the `/u` flag, de-duplicated)
+- [ ] GREEN: `opt/bin/install_windows.sh` — before each `powershell.exe` invocation, insert the WSLENV builder loop verbatim from the plan (appends each `GFF_INSTALL_WINDOWS_*` name with the `/u` flag, de-duplicated). NOTE: this loop reads `env`, so it REQUIRES P2-T3's `set -a` bootstrap wrapping — verify with `env | grep -c GFF_INSTALL_WINDOWS_` inside a child shell
 - [ ] GREEN: create `opt/Desktop/Apps/scripts/lib/gff.ps1` with `Test-GffOn([string]$Key)` exactly as the plan's snippet (unset ⇒ on; only the literal string `false` disables)
 - [ ] GREEN: gate `setup-apps.ps1` phases — WSL platform (`install.windows.wsl-platform`), Nerd Font, Terminal themes, winget apps; each disabled phase prints `SKIP (gff: <key>=false)`
 - [ ] GREEN: gate `setup-elevated.ps1` items — Wispr Flow MSI (`install.windows.wispr-flow`), PowerToys Copilot remap (`install.windows.copilot-key`), AHK autostart task (`install.windows.ahk-autostart`)
@@ -450,7 +450,7 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 > **Human-in-the-loop.** Requires a real interactive WSL terminal. Never run `install.sh`
 > from a worker worktree — it creates absolute symlinks in `${HOME}`.
 
-- [ ] SETUP: switch to `${HOME}/git/dotfiles`, checkout the branch carrying P2, and run from there
+- [ ] SETUP: switch to `${HOME}/git/dotfiles`, checkout the branch carrying P2, and run from there. NOTE: rebuild first (`make gff-install`) so `${HOME}/opt/bin/gff` is the merged binary; leftover test registrations in `~/.config/gff/sources.yaml` (e.g. `com.example.demo`) are harmless — the focus-namespace rule binds unqualified keys to the dotfiles repo when run from inside it
 - [ ] RUN: `gff set install.windows.wispr-flow false`; confirm `gff get install.windows.wispr-flow` prints `false` and `gff list` shows layer `user-override`
 - [ ] RUN: execute `install.sh` in a **real interactive terminal** (answer the Windows customization prompt) — not backgrounded, not piped
 - [ ] CAPTURE: the `SKIP (gff: install.windows.wispr-flow=false)` line from the transcript
@@ -485,7 +485,7 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 **Files:** `internal/tui/{model.go,view.go,tui_test.go}`, `cmd/tui.go`; modify `cmd/root.go`.
 
 - [ ] SETUP: `go get github.com/charmbracelet/bubbletea github.com/charmbracelet/lipgloss github.com/charmbracelet/x/exp/teatest@latest`
-- [ ] REFACTOR: extract `internal/overrides.Write(paths, key, value)` from P1-T8's `set.go` if not already shared, and refactor `set.go` to call it
+- [ ] ~~REFACTOR: extract `internal/overrides.Write`~~ ALREADY DONE in P1-T8 (`internal/overrides` with `Write`/`Unset`/`WriteFileAtomic`; `set.go`/`unset.go` are thin callers) — just consume it. Also: `lipgloss` + `x/term` are already deps (P1 styled `list`); only bubbletea/teatest need `go get`
 - [ ] VERIFY: `go test ./cmd/` still **PASS** after the refactor (no behavior change)
 - [ ] RED: teatest — the initial frame lists areas **collapsed**
 - [ ] RED: teatest — navigating (`enter` on area → components → features) shows a feature row containing description + `default`/`override` + the winning layer
