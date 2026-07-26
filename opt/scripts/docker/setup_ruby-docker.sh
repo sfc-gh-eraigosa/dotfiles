@@ -92,7 +92,7 @@ function f-ruby-install-rails {
                      -e HTTPS_PROXY \
                      -e NO_PROXY \
     ruby bash -c "apt-get update && \
-    apt-get install -y --no-install-recommends \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         nodejs \
         mysql-client \
         postgresql-client \
