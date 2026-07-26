@@ -29,7 +29,7 @@ done` (also `parked`, `superseded`).
 | `sshd-setup` | — | [spec](./specs/sshd-setup.md) | [plan](./plans/sshd-setup.md) | [#169](https://github.com/sfc-gh-eraigosa/dotfiles/issues/169) | [#170](https://github.com/sfc-gh-eraigosa/dotfiles/pull/170) | building |
 | `gsl-visual-improvements` | [design](./designs/gsl-visual-improvements.md) | [spec](./specs/gsl-visual-improvements.md) | [plan](./plans/gsl-visual-improvements.md) | [#54](https://github.com/sfc-gh-eraigosa/dotfiles/issues/54) | #55 | in-review |
 | `claude-config` | — | [spec](./specs/claude-config.md) | [plan](./plans/claude-config.md) | — | #126 | in-review |
-| `gff` | [design](./designs/gff.md) | [spec](./specs/gff.md) | [plan](./plans/gff.md) | [#180](https://github.com/sfc-gh-eraigosa/dotfiles/issues/180) | [#181](https://github.com/sfc-gh-eraigosa/dotfiles/pull/181) · p1-engine [#182](https://github.com/sfc-gh-eraigosa/dotfiles/pull/182) | building (p1-engine merged; p2/p3/p4 building; vd todo) |
+| `gff` | [design](./designs/gff.md) | [spec](./specs/gff.md) | [plan](./plans/gff.md) | [#180](https://github.com/sfc-gh-eraigosa/dotfiles/issues/180) | [#181](https://github.com/sfc-gh-eraigosa/dotfiles/pull/181) · p1-engine [#182](https://github.com/sfc-gh-eraigosa/dotfiles/pull/182) | building (p1+p2+p3/p4 merged — p3+p4 landed combined as #187; vd-demo in-review #188; P2-T5 evidence + #180 close remain) |
 
 ## Merged / historical (pre-MBO — tracking columns best-effort)
 

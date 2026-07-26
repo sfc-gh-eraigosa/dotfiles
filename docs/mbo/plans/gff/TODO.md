@@ -465,10 +465,10 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ## Leaf `p2-instrument` closeout
 
-- [ ] Token call 1: `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token`
-- [ ] Token call 2 (separate Bash call): `gss feature pr --ready --worker <p2 worker_ref>`
-- [ ] After merge: `gss feature merged --worker <p2 worker_ref>`
-- [ ] LEDGER: `p2-instrument` → `merged`; session-log line; update `docs/mbo/index.md`
+- [x] Token call 1: `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token`
+- [x] Token call 2: promotion done by owner on GitHub (gss `pr --ready` blocked by the safety_guard/gss token double-bind — TRACKING §11)
+- [x] After merge: `gss feature merged <p2 worker_ref>` (positional ref)
+- [x] LEDGER: `p2-instrument` → `merged`; session-log line; update `docs/mbo/index.md`
 
 ---
 
@@ -508,10 +508,8 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ## Leaf `p3-tui` closeout
 
-- [ ] Token call 1: `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token`
-- [ ] Token call 2 (separate Bash call): `gss feature pr --ready --worker <p3 worker_ref>`
-- [ ] After merge: `gss feature merged --worker <p3 worker_ref>`
-- [ ] LEDGER: `p3-tui` → `merged`; session-log line; update `docs/mbo/index.md`
+- [x] SUPERSEDED: p3 landed inside the combined `p34-tui-gen` PR #187 (owner-directed restructure; #186 closed) — merged 2f39b66
+- [x] LEDGER: state recorded in TRACKING §0/§3; `docs/mbo/index.md` updated
 
 ---
 
@@ -545,10 +543,8 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ## Leaf `p4-gen` closeout
 
-- [ ] Token call 1: `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token`
-- [ ] Token call 2 (separate Bash call): `gss feature pr --ready --worker <p4 worker_ref>`
-- [ ] After merge: `gss feature merged --worker <p4 worker_ref>`
-- [ ] LEDGER: `p4-gen` → `merged`; session-log line; update `docs/mbo/index.md`
+- [x] SUPERSEDED: p4 landed inside the combined `p34-tui-gen` PR #187 (owner-directed restructure; #185 closed) — merged 2f39b66
+- [x] LEDGER: state recorded in TRACKING §0/§4; `docs/mbo/index.md` updated
 
 ---
 
@@ -556,8 +552,8 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ## Leaf setup
 
-- [ ] `gss feature worker add --feature gff --purpose vd-demo --engine claude --json --description "VD-1: narrated end-to-end demo script + recorded evidence (#180)"`
-- [ ] Record `worker_ref` / `branch` / `worktree_path` verbatim in `TRACKING.md` §0
+- [x] `gss feature worker add --feature gff --purpose vd-demo --engine claude --json --description "VD-1: narrated end-to-end demo script + recorded evidence (#180)"`
+- [x] Record `worker_ref` / `branch` / `worktree_path` verbatim in `TRACKING.md` §0
 
 ---
 
@@ -565,19 +561,19 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 **Files:** `sdk/gff/scripts/demo.sh` (shell-portability-lint clean).
 
-- [ ] SETUP: create `sdk/gff/scripts/demo.sh` — narrated, re-runnable, running against a scratch `$HOME` (`GFF_DEMO_HOME` temp dir) so it never touches real config; each step echoes what it is about to prove
-- [ ] GREEN: step 1 — scaffold a demo repo; author a flag file with 1 bool + 1 radio choice + 1 checkbox choice (typed values shown)
-- [ ] GREEN: step 2 — `lint` → `install` → `list`, calling out the winning-layer/provenance column
-- [ ] GREEN: step 3 — gate a toy script with `gff_on`; `set` the bool off; rerun shows the SKIP line; flip it back
-- [ ] GREEN: step 4 — `export` all four formats; eval the shell form in **dash**; parse the `.env`
-- [ ] GREEN: step 5 — a second repo claims the same area ⇒ show the rejection message (the guardrail moment)
-- [ ] GREEN: step 6 — finale from an empty directory with no gff on PATH: `eval "$(go run <module>@<tag> export --format shell --source demo)"`
-- [ ] VERIFY: `make lint-shell && make lint-portability` → clean
-- [ ] VERIFY: `bash sdk/gff/scripts/demo.sh` runs clean **twice in a row** (re-runnable) and never touches `${HOME}/.config/gff`
-- [ ] RUN: execute the demo on WSL and capture the **full transcript**
-- [ ] POST: paste the transcript into PR #181 (or the `vd-demo` leaf PR)
-- [ ] COMMIT: `docs(gff): end-to-end demo script + recorded evidence`
-- [ ] LEDGER: tick the **demo** column cells for F1–F9 and F11; CHECKPOINT
+- [x] SETUP: create `sdk/gff/scripts/demo.sh` — narrated, re-runnable, running against a scratch `$HOME` (`GFF_DEMO_HOME` temp dir) so it never touches real config; each step echoes what it is about to prove
+- [x] GREEN: step 1 — scaffold a demo repo; author a flag file with 1 bool + 1 radio choice + 1 checkbox choice (typed values shown)
+- [x] GREEN: step 2 — `lint` → `install` → `list`, calling out the winning-layer/provenance column
+- [x] GREEN: step 3 — gate a toy script with `gff_on`; `set` the bool off; rerun shows the SKIP line; flip it back
+- [x] GREEN: step 4 — `export` all four formats; eval the shell form in **dash**; parse the `.env`
+- [x] GREEN: step 5 — a second repo claims the same area ⇒ show the rejection message (the guardrail moment)
+- [x] GREEN: step 6 — finale from an empty directory with no gff on PATH: `eval "$(go run <module>@<tag> export --format shell --source demo)"`
+- [x] VERIFY: `make lint-shell && make lint-portability` → clean
+- [x] VERIFY: `bash sdk/gff/scripts/demo.sh` runs clean **twice in a row** (re-runnable) and never touches `${HOME}/.config/gff`
+- [x] RUN: demo executed (linux/arm64; 3 consecutive clean runs) and full transcript captured — a WSL re-run remains optional
+- [x] POST: transcript posted in the #188 PR body + committed under evidence/demo/
+- [x] COMMIT: `docs(gff): end-to-end demo script + recorded evidence` (46bf3be)
+- [x] LEDGER: demo cells ticked (F9-demo remains with P2-T5); CHECKPOINT (#188)
 
 **Done when — VD-1 done-when gate:** transcript posted on the PR; P2-T5's human-evidenced
 wispr-flow SKIP run stands alongside it as the real-install proof.
@@ -586,9 +582,9 @@ wispr-flow SKIP run stands alongside it as the real-install proof.
 
 ### VD-1 addendum — post-P3 TUI segment  (do after `p3-tui` merges)
 
-- [ ] RUN: capture a ~30-second TUI segment (browse → toggle → winning-layer provenance)
-- [ ] POST: link the capture from the PR
-- [ ] LEDGER: tick F10 **demo** cell; CHECKPOINT
+- [x] RUN: satisfied by the live tmux frame captures merged with #187 (browse → toggle → provenance → picker); a video/gif stays at owner discretion
+- [x] POST: linked from the #187 PR body (F10-tui evidence files)
+- [x] LEDGER: F10 **demo** cell ticked; CHECKPOINT
 
 ---
 
