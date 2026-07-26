@@ -363,12 +363,17 @@ Paste the text below verbatim to start the one-shot run.
 
 ## 8.1 Phase-2 kickoff prompt (post-P1 merge — the remaining DAG)
 
-Paste verbatim once PR #182 has merged. P1 lessons are already folded into
-`TODO.md`'s P2/P3 sections as NOTE lines — the prompt below assumes them.
+Paste verbatim once PR #182 has merged — designed for a FRESH context (no
+prior session state assumed). P1 lessons are already folded into `TODO.md`'s
+P2/P3 sections as NOTE lines — the prompt below assumes them.
 
 ---
 
+> Great news, PR #182 (p1-engine) has landed. Use the **go team and architecture team** to **/loop** on the implementation with the **/goal** of completing the remaining gff DAG end to end. Don't stop till you are done.
+>
 > **Resume the gff build — execute the remaining DAG (p2-instrument, p3-tui, p4-gen, vd-demo), end to end, one shot.**
+>
+> **Orchestration (this made P1 succeed — repeat it):** you are the orchestrator; delegate implementation to team subagents and keep verification + git in your own hands. Run the three post-P1 leaves as PARALLEL background agents, each confined to its own gss worker worktree: `go-godev` for Go implementation (p3-tui, p4-gen), `go-goqa` for test-heavy work, the architecture team's `adversary` to re-check any finding you doubt; p2-instrument is shell — implement it with the same TDD rigor (its gates are lint-shell/lint-portability + bash AND dash test drivers). Subagents NEVER commit, never touch another leaf's paths, and must report RED output, PASS output, and coverage numbers verbatim; you re-run each leaf's gate commands YOURSELF before committing (evidence before assertions — P1's QA agents twice tried to lower a coverage gate and once left a broken debris file; catch that). One commit per plan task with the plan's exact message; `gss feature checkpoint --worker <ref>` after every task so the run is resumable; pass `--worker`, not cwd, to gss (safety_guard requirement), and use `${HOME}`-style paths everywhere (privacy_guard blocks absolute home paths).
 >
 > `p1-engine` is MERGED (PR #182): the engine, its CI (gff-ci: vet, ≥90/95/90 coverage gates, 25-subtest e2e, proto-regen, go-run smoke) and the §3 contracts are now on `main` — do not re-plan, re-design, or re-litigate them.
 >
