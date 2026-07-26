@@ -30,7 +30,8 @@ case "$OS" in
             echo "Updating package list..."
             sudo apt-get update
             echo "Installing rclone and inotify-tools..."
-            sudo apt-get install -y rclone inotify-tools
+            # noninteractive: a debconf prompt would hang non-tty contexts (see PR #182's tzdata hang)
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y rclone inotify-tools
         elif command -v snap >/dev/null 2>&1; then
             echo "apt-get not found, attempting installation via snap..."
             sudo snap install rclone

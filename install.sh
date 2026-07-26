@@ -87,7 +87,10 @@ if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
     # Set Chromium as default browse
     if command -v apt-get &> /dev/null; then
       echo "Ensuring Chromium is installed and set as default..."
-      sudo apt-get install -y -qq chromium-browse
+      # DEBIAN_FRONTEND=noninteractive on the sudo env is load-bearing: a
+      # debconf prompt (tzdata-class) blocks forever when this runs without a
+      # tty — e.g. inside `docker build` (the Docker Image CI hang, PR #182).
+      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq chromium-browse
       
       # Set as default in update-alternatives
       sudo update-alternatives --set x-www-browser /usr/bin/chromium-browser 2>/dev/null || true

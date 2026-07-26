@@ -45,10 +45,19 @@ on:
   # Admin setup runbook: .github/MERGE_QUEUE_SETUP.md
   merge_group:
 
+# Cancel superseded runs on the same ref: without this, a hung build (e.g. the
+# PR #182 tzdata-prompt hang) piles up one 6-hour run per push. main and the
+# merge queue never cancel (their runs validate distinct commits).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   lint:
     name: Lint (go + shell + markdown + actions)
     runs-on: ubuntu-latest
+    # A hang must die in minutes, not burn the 6-hour default (PR #182 lesson).
+    timeout-minutes: 15
     # Phase 1 of CI hygiene (issue #46). This job runs first and unit-tests
     # / shell-tests depend on it (`needs: lint`), so once the backlog is
     # cleared and the warn-only flags below are dropped, a lint regression
@@ -112,6 +121,8 @@ jobs:
   shell-lint:
     name: Shell Lint (shellcheck)
     runs-on: ubuntu-latest
+    # A hang must die in minutes, not burn the 6-hour default (PR #182 lesson).
+    timeout-minutes: 15
     # Dedicated shellcheck check, wired in as a required status context via
     # branch protection. shellcheck also runs inside the `lint` job's
     # `make lint` step, but that job is warn-only across all linters; this
@@ -134,6 +145,8 @@ jobs:
     name: Run Unit Tests
     needs: lint
     runs-on: ubuntu-latest
+    # A hang must die in minutes, not burn the 6-hour default (PR #182 lesson).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Set up Go
@@ -168,6 +181,8 @@ jobs:
     name: Run Shell Test Drivers
     needs: lint
     runs-on: ubuntu-latest
+    # A hang must die in minutes, not burn the 6-hour default (PR #182 lesson).
+    timeout-minutes: 15
     # Phase 2 of CI hygiene (issue #46). Runs every `*_test.sh` driver
     # discovered by `make shell-test` — install_test.sh, the migrated
     # aliases_test.sh, the safety_guard hook test suite, plus the new
@@ -205,6 +220,9 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ready-for-merge')
     needs: unit-tests
     runs-on: ubuntu-latest
+    # A hang must die in minutes, not burn the 6-hour default (PR #182 lesson).
+    # Heavy job baseline is ~6 min; 30 gives headroom without hiding a hang for hours.
+    timeout-minutes: 30
     env:
       IMAGE_NAME: dotfiles:latest
     steps:
