@@ -133,7 +133,8 @@ HAZARDS='declare[[:space:]]+-A	bash-4 associative array (breaks macOS bash 3.2)
 \bbase64[[:space:]]+-w\b	base64 -w is GNU-only; use `base64 | tr -d "\\n"`
 \bdate[[:space:]]+-d\b	date -d is GNU; BSD uses `date -r`/`-v`
 (^|[;&|]|\$\()[[:space:]]*which[[:space:]]	use `command -v`, not `which` (not guaranteed installed; BSD/GNU differ)
-\bread[[:space:]]+-[A-Za-z]*A\b	zsh-only `read -A`; bash errors. Use `read -a`/mapfile'
+\bread[[:space:]]+-[A-Za-z]*A\b	zsh-only `read -A`; bash errors. Use `read -a`/mapfile
+(^|[;&|])[[:space:]]*(sudo[[:space:]]+)?apt(-get)?[[:space:]]+install\b	apt install without DEBIAN_FRONTEND=noninteractive — a debconf prompt (tzdata-class) hangs non-tty contexts like docker build/CI (the PR #182 hang); use `sudo DEBIAN_FRONTEND=noninteractive apt-get install …`'
 
 scan_count=0
 for f in $CANDIDATES; do
@@ -172,6 +173,10 @@ for f in $CANDIDATES; do
     # carries a `# portability-ok` opt-out (reviewed/intentional exceptions;
     # see docs/mbo/specs/shell-portability.md + CLAUDE.md).
     hits=$(grep -nE "$pat" "$f" 2>/dev/null | grep -vE '^[0-9]+:[[:space:]]*#' | grep -vF 'portability-ok' || true)
+    # The apt rule only fires when the invocation line lacks the guard.
+    case "$desc" in
+      *"DEBIAN_FRONTEND"*) hits=$(printf '%s\n' "$hits" | grep -vF 'DEBIAN_FRONTEND' || true) ;;
+    esac
     if [ -n "$hits" ]; then
       while IFS= read -r h; do
         [ -n "$h" ] || continue
@@ -221,7 +226,7 @@ else
   echo "TIER 1 — MUST FIX (POSIX /bin/sh breakage; login-loop class): $n1"
   if [ "$n1" -gt 0 ]; then printf '%s' "$TIER1" | while IFS=$(printf '\t') read -r f r; do [ -n "$f" ] && echo "  ✗ $f — $r"; done; fi
   echo
-  echo "TIER 2 — macOS hazards (BSD coreutils / bash 3.2): $n2"
+  echo "TIER 2 — environment hazards (macOS bash 3.2 / BSD coreutils / non-interactive apt): $n2"
   if [ "$n2" -gt 0 ]; then printf '%s' "$TIER2" | while IFS=$(printf '\t') read -r fl d; do [ -n "$fl" ] && echo "  ⚠ $fl — $d"; done; fi
   echo
   echo "TIER 3 — informational (all non-POSIX-clean files): $n3 (run with --md for the full list)"
