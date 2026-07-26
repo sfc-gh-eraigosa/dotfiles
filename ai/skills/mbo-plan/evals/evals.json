@@ -36,6 +36,12 @@
       "prompt": "The blocking interface PR for the auth-refactor objective just merged — reconcile the downstream worktrees and land the rest.",
       "expected_output": "Recognizes this is CAP-C integration. Lands blocking leaves first, runs gss feature merged to re-target children onto the merged base (with gated auto-promote of a single linear successor), uses gss feature restack --onto for manually moved edges, tears down finished leaves with gss feature done, closes each leaf's sub-issue, advances index.md state, and closes the design issue only once all sub-issues are closed. gss remains the single writer for PRs and the registry.",
       "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "The spec and plan for the cache-warmup objective are approved — get it ready to execute.",
+      "expected_output": "Before offering any execution handoff, creates the execution trio docs/mbo/plans/<slug>/{IMPLEMENTATION.md,TRACKING.md,TODO.md} from templates/{implementation,tracking,todo}.md — IMPLEMENTATION.md holding the per-task loop, hard rules, and a single always-current §8 kickoff prompt; TRACKING.md as the evidence ledger where a task row is done only with a commit SHA plus observed command output; TODO.md as the resumable micro-step checkbox cursor — and states that a plan without its trio is not ready to execute.",
+      "files": []
     }
   ]
 }

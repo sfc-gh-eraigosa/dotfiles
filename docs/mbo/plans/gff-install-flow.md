@@ -8,6 +8,7 @@
 - **Date:** 2026-07-26
 - **Status:** Approved
 - **Spec (source of truth):** [`../specs/gff-install-flow.md`](../specs/gff-install-flow.md) · PR #193 · worker `gff-install-flow/edward-raigosa/impl`
+- **Execution trio:** [`gff-install-flow/IMPLEMENTATION.md`](./gff-install-flow/IMPLEMENTATION.md) (procedure + kickoff) · [`TRACKING.md`](./gff-install-flow/TRACKING.md) (evidence ledger) · [`TODO.md`](./gff-install-flow/TODO.md) (cursor — first unchecked box is the next action)
 
 **Goal:** `gff set install.windows.<x> false && ./install.sh` works with zero manual
 export steps on any machine state, including the UAC-elevated gates; prompts stay

@@ -68,8 +68,24 @@ Copy the relevant starter(s) from `docs/mbo/templates/` and let the routed workf
   goal, use cases, evaluation criteria per feature, verification harness.
 - **Plan** → `docs/mbo/plans/<slug>.md` (from `templates/plan.md`) — the `writing-plans` output:
   file inventory, TDD build order, traceability.
+- **Execution trio (REQUIRED with every plan that will be built — not optional):**
+  `docs/mbo/plans/<slug>/` containing `IMPLEMENTATION.md`, `TRACKING.md`, `TODO.md`, from
+  `templates/{implementation,tracking,todo}.md`. A plan without its trio is NOT ready to
+  execute — do not offer execution handoff until they exist. Their contract:
+  - `IMPLEMENTATION.md` — the *procedure*: preconditions with verify commands, worker map,
+    the per-task loop, hard rules, and the §8 **kickoff prompt** (exactly ONE, always the
+    NEXT session's — replaced at session end; history lives in git).
+  - `TRACKING.md` — the *evidence ledger*: per-task status/commit/evidence rows (a row is
+    `done` only with a commit SHA **and** observed command output), the feature→proof
+    matrix from spec §5, the tickable stop condition, blockers, an append-only session log.
+  - `TODO.md` — the *cursor*: every plan task expanded into ordered micro-step checkboxes
+    (RED/RUN-RED/GREEN/RUN-GREEN/VERIFY/COMMIT/LEDGER/CHECKPOINT); the first unchecked box
+    is always the next action, which is what makes the run resumable across sessions.
+  Skip the trio ONLY for objectives that produce no build (a pure ADR / design-only).
+  Reference implementation: `docs/mbo/plans/gff/` (the run that proved the pattern).
 
-Keep the slug identical across the three so they correlate. Use the bare slug as the filename.
+Keep the slug identical across all artifacts so they correlate. Use the bare slug as the
+filename; the trio lives in the folder named by the slug.
 
 ### 4 — Register in the index
 Add or update the objective's row in `docs/mbo/index.md`: slug, links to whichever artifacts
