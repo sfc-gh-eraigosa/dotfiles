@@ -224,8 +224,12 @@ func TestHelpMarksCurrentScopeSource(t *testing.T) {
 	m = press(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
 	v := m.View()
 	assert.Contains(t, helpLineWith(v, "SOURCES"), "SOURCES")
-	require.Contains(t, v, "▶ current scope", "legend explains the pointer")
+	require.Contains(t, v, "key: ▶ current scope", "legend explains the pointer, labeled as a key")
 	require.Contains(t, v, "● registered", "legend explains the dots")
+	// The key sits BELOW the entries, separated — not cluttering the top.
+	legendIdx := strings.Index(v, "key: ▶ current scope")
+	lastEntryIdx := strings.LastIndex(v, "com.example.")
+	require.Greater(t, legendIdx, lastEntryIdx, "legend renders after the source entries")
 	line := scopePointerLine(v)
 	require.NotEmpty(t, line, "help must point at the current scope's source")
 	assert.Contains(t, line, "com.example.tui-test")

@@ -341,10 +341,6 @@ func (m *Model) viewHelp() string {
 		seen[ns] = true
 		lines = append(lines, srcLine{ns: ns, text: "○ " + ns + "  · discovered in the current repo — not registered"})
 	}
-	// Legend: the LEFT pointer follows the scope; the dot is registration
-	// status only — two orthogonal signals, spelled out so neither is guessed.
-	sb.WriteString(dim.Render("  ▶ current scope · ● registered · ○ discovered (not registered)"))
-	sb.WriteString("\n")
 	if len(lines) == 0 {
 		sb.WriteString(dim.Render("  (no sources registered — run `gff install` in a repo with a flag file)"))
 		sb.WriteString("\n")
@@ -362,6 +358,11 @@ func (m *Model) viewHelp() string {
 		}
 		sb.WriteString("\n")
 	}
+	// The section's key, separated below the entries: the LEFT pointer follows
+	// the scope; the dot is registration status — two orthogonal signals.
+	sb.WriteString("\n")
+	sb.WriteString(dim.Render("  key: ▶ current scope · ● registered · ○ discovered (not registered)"))
+	sb.WriteString("\n")
 
 	sb.WriteString("\n")
 	sb.WriteString(dim.Render("Esc/?/q close"))
