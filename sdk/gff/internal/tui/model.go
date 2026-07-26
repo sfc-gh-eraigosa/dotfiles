@@ -285,6 +285,19 @@ func (m *Model) refreshDetail() {
 	}
 }
 
+// refreshItem re-resolves one item after a write/unset so the row tells the
+// current truth (needs the Explain hook; without it the row goes stale until
+// the next full resolve).
+func (m *Model) refreshItem(idx int) {
+	if m.Explain == nil || idx < 0 || idx >= len(m.items) {
+		return
+	}
+	if res, _, err := m.Explain(m.items[idx].Feature.GetPath()); err == nil {
+		m.items[idx] = res
+		m.buildRows()
+	}
+}
+
 // updateHelp closes the overlay back to wherever it was opened from.
 func (m *Model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
@@ -386,6 +399,21 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case '?', 'h', 'H':
 			m.helpReturn = modeList
 			m.mode = modeHelp
+
+		case 'u', 'U':
+			// Clear the user override for the cursor row — same
+			// overrides.Unset path as `gff unset` and the detail view.
+			if m.cursor >= 0 && m.cursor < len(m.rows) {
+				r := m.rows[m.cursor]
+				if !r.isArea {
+					if err := overrides.Unset(m.p, r.item.Feature.GetPath()); err != nil {
+						m.errMsg = "unset failed: " + err.Error()
+						return m, nil
+					}
+					m.errMsg = ""
+					m.refreshItem(r.itemIdx)
+				}
+			}
 
 		case ' ':
 			if m.cursor >= 0 && m.cursor < len(m.rows) {

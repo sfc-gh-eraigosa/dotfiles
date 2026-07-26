@@ -210,7 +210,7 @@ func (m *Model) viewList() string {
 		sb.WriteString(errStyle.Render(m.errMsg))
 		sb.WriteString("\n")
 	}
-	sb.WriteString(dimStyle.Render("↑/↓ move  ←/→ category  PgUp/PgDn page  Enter expand/details  Space toggle  ? help  q quit"))
+	sb.WriteString(dimStyle.Render("↑/↓ move  ←/→ category  PgUp/PgDn page  Enter expand/details  Space toggle  u clear  ? help  q quit"))
 	return sb.String()
 }
 
@@ -297,7 +297,7 @@ func (m *Model) viewHelp() string {
 		sb.WriteString("\n")
 		sb.WriteString(dim.Render("  Enter  expand an area / open feature details (attributes + layers)"))
 		sb.WriteString("\n")
-		sb.WriteString(dim.Render("  Space  toggle a bool / pick choice options · q quit"))
+		sb.WriteString(dim.Render("  Space  toggle a bool / pick choice options · u clear the user override · q quit"))
 		sb.WriteString("\n")
 	}
 	sb.WriteString("\n")

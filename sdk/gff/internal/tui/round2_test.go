@@ -233,3 +233,32 @@ func TestHelpFromDetailMarksTheItemsSource(t *testing.T) {
 	require.NotEmpty(t, line)
 	assert.Contains(t, line, "com.example.tui-test", "detail help marks the item's own source")
 }
+
+// Owner ask: 'u' clears the user override from the LIST view too, mirroring
+// the detail view — same overrides.Unset path.
+func TestListUClearsUserOverrideOnCursorRow(t *testing.T) {
+	r, p := newResolver(t, tuiWorld{repo: pagerYAML, usrOvr: "install.ai.claude: false\n"})
+	items, err := r.All()
+	require.NoError(t, err)
+	m := tui.NewModel(items, p)
+	m.Explain = r.Explain
+	var tm tea.Model = m
+	tm = press(tm, tea.KeyMsg{Type: tea.KeyRight}) // ai page; cursor 0 = claude
+	require.Contains(t, tm.View(), "user-override")
+
+	tm = press(tm, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	v := tm.View()
+	assert.Contains(t, v, "install.ai.claude", "row stays after clearing")
+	assert.Contains(t, v, "repo-live", "provenance reverts to the definition layer")
+	assert.NotContains(t, v, "user-override", "override cleared from the list view")
+
+	data, _ := os.ReadFile(p.UserOverride)
+	assert.NotContains(t, string(data), "install.ai.claude")
+}
+
+func TestListUOnAreaRowIsHarmless(t *testing.T) {
+	m, _ := newTwoNSModel(t)
+	before := m.View()
+	m = press(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}}) // cursor on an area row
+	assert.Equal(t, before, m.View(), "u on an area row is a no-op")
+}
