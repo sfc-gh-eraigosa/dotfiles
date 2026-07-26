@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -306,25 +307,31 @@ func (m *Model) viewHelp() string {
 	sb.WriteString("\n")
 	sb.WriteString(dim.Render("(namespace, key); an area name like 'install' is grouping only, never claimed."))
 	sb.WriteString("\n")
-	registered := map[string]bool{}
-	if len(m.Sources) == 0 {
-		sb.WriteString(dim.Render("  (no sources registered — run `gff install` in a repo with a flag file)"))
-		sb.WriteString("\n")
+	// The source the user is currently scoped to: the breadcrumb namespace,
+	// or the detail item's own namespace when help was opened from the detail.
+	curNS := m.scopeNS
+	if m.helpReturn == modeDetail {
+		curNS = m.detailItem.Namespace()
 	}
+
+	type srcLine struct {
+		ns, text string
+	}
+	var lines []srcLine
+	registered := map[string]bool{}
 	for _, src := range m.Sources {
 		registered[src.Namespace] = true
-		line := "  ● " + src.Namespace
+		text := "● " + src.Namespace
 		if src.URL != "" {
-			line += "  " + src.URL
+			text += "  " + src.URL
 		}
 		if src.Commit != "" {
-			line += "  @" + src.Commit
+			text += "  @" + src.Commit
 		}
-		sb.WriteString(dim.Render(line))
-		sb.WriteString("\n")
+		lines = append(lines, srcLine{ns: src.Namespace, text: text})
 	}
 	// Discovered origins (e.g. the CWD repo's live flag file) that are not in
-	// the registry — listed so the two-source picture is complete.
+	// the registry — listed so the multi-source picture is complete.
 	seen := map[string]bool{}
 	for _, it := range m.items {
 		ns := it.Namespace()
@@ -332,7 +339,23 @@ func (m *Model) viewHelp() string {
 			continue
 		}
 		seen[ns] = true
-		sb.WriteString(dim.Render("  ○ " + ns + "  · discovered in the current repo — not registered"))
+		lines = append(lines, srcLine{ns: ns, text: "○ " + ns + "  · discovered in the current repo — not registered"})
+	}
+	if len(lines) == 0 {
+		sb.WriteString(dim.Render("  (no sources registered — run `gff install` in a repo with a flag file)"))
+		sb.WriteString("\n")
+	}
+	// Current-scope source first, marked; the rest keep their order, dim.
+	sort.SliceStable(lines, func(i, j int) bool {
+		return lines[i].ns == curNS && lines[j].ns != curNS
+	})
+	cur := lipgloss.NewStyle().Bold(true).Foreground(pal.Text)
+	for _, l := range lines {
+		if l.ns == curNS && curNS != "" {
+			sb.WriteString(cur.Render("  " + l.text + "  ← current scope"))
+		} else {
+			sb.WriteString(dim.Render("  " + l.text))
+		}
 		sb.WriteString("\n")
 	}
 

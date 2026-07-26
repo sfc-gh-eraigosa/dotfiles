@@ -187,7 +187,11 @@ func TestHelpOverlayWithoutSources(t *testing.T) {
 	require.NoError(t, err)
 	var m tea.Model = tui.NewModel(items, p)
 	m = press(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
-	assert.Contains(t, m.View(), "no sources registered")
+	v := m.View()
+	// No registry — but the CWD repo's namespace is still discovered and shown,
+	// labeled, so the picture is honest rather than a blanket "none".
+	assert.Contains(t, v, "not registered")
+	assert.Contains(t, v, "com.example.tui-test")
 }
 
 const twoAreaYAML = `

@@ -192,3 +192,44 @@ func TestSpaceToggleOnAllPageKeepsRowInItsNamespaceGroup(t *testing.T) {
 	assert.Contains(t, v, "install.ai.claude", "row stays inside its namespace group")
 	assert.NotContains(t, v, "▶ install  · \n", "no phantom empty-namespace group appears")
 }
+
+// Owner-reported: help opened from inside a namespace scope must SAY which
+// source that scope belongs to — the SOURCES list marks the current one.
+func helpLineWith(v, needle string) string {
+	for _, line := range strings.Split(v, "\n") {
+		if strings.Contains(line, needle) {
+			return line
+		}
+	}
+	return ""
+}
+
+func TestHelpMarksCurrentScopeSource(t *testing.T) {
+	m, _ := newTwoNSModel(t)
+
+	// Initial scope: the repo namespace (com.example.tui-test).
+	m = press(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	line := helpLineWith(m.View(), "current scope")
+	require.NotEmpty(t, line, "help must mark the current scope's source")
+	assert.Contains(t, line, "com.example.tui-test")
+	m = press(m, tea.KeyMsg{Type: tea.KeyEscape})
+
+	// Rescope to the second namespace, reopen help: the marker must move.
+	m = press(m, tea.KeyMsg{Type: tea.KeyDown})
+	m = press(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	line = helpLineWith(m.View(), "current scope")
+	require.NotEmpty(t, line)
+	assert.Contains(t, line, "com.example.other", "marker follows the breadcrumb scope")
+	assert.NotContains(t, line, "com.example.tui-test")
+}
+
+func TestHelpFromDetailMarksTheItemsSource(t *testing.T) {
+	m, _ := newTwoNSModel(t)
+	m = press(m, tea.KeyMsg{Type: tea.KeyEnter}) // expand tui-test group
+	m = press(m, tea.KeyMsg{Type: tea.KeyDown})  // install.ai.claude
+	m = press(m, tea.KeyMsg{Type: tea.KeyEnter}) // detail
+	m = press(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	line := helpLineWith(m.View(), "current scope")
+	require.NotEmpty(t, line)
+	assert.Contains(t, line, "com.example.tui-test", "detail help marks the item's own source")
+}
