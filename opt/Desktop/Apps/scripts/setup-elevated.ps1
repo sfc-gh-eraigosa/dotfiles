@@ -33,13 +33,22 @@ if (-not $admin) {
 # Local deployed scripts dir (this file is admin-launched from a local path).
 $dir = $PSScriptRoot
 
+# gff feature gates (fail-open): flags cross from WSL via WSLENV (see
+# opt/bin/install_windows.sh). A missing lib must never block setup, so fall
+# back to an always-on Test-GffOn when lib\gff.ps1 is absent.
+$gffLib = Join-Path $dir 'lib\gff.ps1'
+if (Test-Path $gffLib) { . $gffLib }
+else { function Test-GffOn([string]$Key) { return $true } }
+
 # 1) macOS-style hotkeys logon task. setup-autostart.ps1 skips its own self-elevate
 #    because we are already admin, registers the task, and reloads AutoHotkey.
-try {
-    Log '== [1/4] macOS hotkeys logon task =='
-    & (Join-Path $dir 'setup-autostart.ps1')
-    Log "  setup-autostart.ps1 exit=$LASTEXITCODE"
-} catch { Log "  task registration FAILED: $($_.Exception.Message)" }
+if (Test-GffOn 'install.windows.ahk-autostart') {
+    try {
+        Log '== [1/4] macOS hotkeys logon task =='
+        & (Join-Path $dir 'setup-autostart.ps1')
+        Log "  setup-autostart.ps1 exit=$LASTEXITCODE"
+    } catch { Log "  task registration FAILED: $($_.Exception.Message)" }
+} else { Log 'SKIP (gff: install.windows.ahk-autostart=false)' }
 
 # 2) iTunes Win32 (the Store build was removed non-elevated by setup-apps.ps1).
 try {
@@ -55,18 +64,22 @@ try {
 } catch { Log "  iTunes install FAILED: $($_.Exception.Message)" }
 
 # 3) Wispr Flow MSI via the shared core (already admin -> no nested UAC).
-try {
-    Log '== [3/4] Wispr Flow =='
-    . (Join-Path $dir 'wispr-install-core.ps1')
-    if (Install-WisprMsi) { Log '  Wispr Flow install ok.' } else { Log '  Wispr Flow install reported a failure (see above).' }
-} catch { Log "  Wispr install FAILED: $($_.Exception.Message)" }
+if (Test-GffOn 'install.windows.wispr-flow') {
+    try {
+        Log '== [3/4] Wispr Flow =='
+        . (Join-Path $dir 'wispr-install-core.ps1')
+        if (Install-WisprMsi) { Log '  Wispr Flow install ok.' } else { Log '  Wispr Flow install reported a failure (see above).' }
+    } catch { Log "  Wispr install FAILED: $($_.Exception.Message)" }
+} else { Log 'SKIP (gff: install.windows.wispr-flow=false)' }
 
 # 4) PowerToys Copilot-key remap (best-effort; warns if PowerToys absent).
-try {
-    Log '== [4/4] PowerToys Copilot-key remap =='
-    $suppressor = Join-Path $dir 'suppress-copilot-key.ps1'
-    if (Test-Path $suppressor) { & $suppressor } else { Log '  suppress-copilot-key.ps1 not found -- skipping.' }
-} catch { Log "  suppress-copilot-key FAILED: $($_.Exception.Message)" }
+if (Test-GffOn 'install.windows.copilot-key') {
+    try {
+        Log '== [4/4] PowerToys Copilot-key remap =='
+        $suppressor = Join-Path $dir 'suppress-copilot-key.ps1'
+        if (Test-Path $suppressor) { & $suppressor } else { Log '  suppress-copilot-key.ps1 not found -- skipping.' }
+    } catch { Log "  suppress-copilot-key FAILED: $($_.Exception.Message)" }
+} else { Log 'SKIP (gff: install.windows.copilot-key=false)' }
 
 Log "=== done $(Get-Date -Format o) ==="
 Write-Host ''

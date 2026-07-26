@@ -1,0 +1,10 @@
+2026-07-26T04:23:23Z (UTC)
+task: P2-T4 — Windows pass-through (WSLENV) + PowerShell Test-GffOn gating
+command: bash -n opt/bin/install_windows.sh; shellcheck -x -S warning opt/bin/install_windows.sh; WSLENV builder dedup exercise (dash); command -v pwsh
+bash -n opt/bin/install_windows.sh: clean (exit 0)
+shellcheck: clean (exit 0)
+--- WSLENV builder loop exercised under dash (2 exported GFF_INSTALL_WINDOWS_* vars, run twice to prove dedup) ---
+pass1: EXISTING/u:GFF_INSTALL_WINDOWS_WISPR_FLOW/u:GFF_INSTALL_WINDOWS_APPS/u
+pass2 (dedup): EXISTING/u:GFF_INSTALL_WINDOWS_WISPR_FLOW/u:GFF_INSTALL_WINDOWS_APPS/u
+--- pwsh availability ---
+pwsh absent — the two pwsh Test-GffOn checks defer to the P2-T5 human run
