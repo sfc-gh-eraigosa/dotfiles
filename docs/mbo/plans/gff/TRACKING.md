@@ -19,10 +19,10 @@ Fill in from the `gss feature worker add --json` output — **verbatim**, never 
 
 | Leaf | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| `p1-engine` | `gff/edward-raigosa/p1-engine` | `feature/gff/edward-raigosa/p1-engine` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p1-engine` | [#182](https://github.com/sfc-gh-eraigosa/dotfiles/pull/182) | building |
-| `p2-instrument` | _(pending)_ | _(pending)_ | _(pending)_ | _(pending)_ | todo |
-| `p3-tui` | _(pending)_ | _(pending)_ | _(pending)_ | _(pending)_ | todo |
-| `p4-gen` | _(pending)_ | _(pending)_ | _(pending)_ | _(pending)_ | todo |
+| `p1-engine` | `gff/edward-raigosa/p1-engine` | `feature/gff/edward-raigosa/p1-engine` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p1-engine` | [#182](https://github.com/sfc-gh-eraigosa/dotfiles/pull/182) | merged |
+| `p2-instrument` | `gff/edward-raigosa/p2-instrument` | `feature/gff/edward-raigosa/p2-instrument` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p2-instrument` | _(pending)_ | building |
+| `p3-tui` | `gff/edward-raigosa/p3-tui` | `feature/gff/edward-raigosa/p3-tui` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p3-tui` | _(pending)_ | building |
+| `p4-gen` | `gff/edward-raigosa/p4-gen` | `feature/gff/edward-raigosa/p4-gen` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p4-gen` | _(pending)_ | building |
 | `vd-demo` | _(pending)_ | _(pending)_ | _(pending)_ | _(pending)_ | todo |
 
 Leaf state vocabulary (mirrors `docs/mbo/index.md`): `todo → building → in-review → merged`.
@@ -223,3 +223,4 @@ One line per working session. Never rewrite history here — append.
 | 2026-07-26 | build-1 | p1-engine | Review round: user guide + gff-build/test/install make targets; snowflake exec-bit fix; OWNER-APPROVED §3.4 extension (requested on PR review): `gff list [pattern]` glob/prefix filter, aligned table header, indented --json (default) + `--raw` compact form, lipgloss styled table (TTY auto / `--pretty` / NO_COLOR-aware; piped output stays plain) — TDD'd in cmd/list_enhance_test.go; deps lipgloss + x/term added |
 | 2026-07-25 | build-1 | p1-engine | P1-T1..T11 all done; PR #182 fully green; extra fixes: opt/bin/docker portability (unblocks shell-lint repo-wide), CI -count=1 profile fix, IA-10 resolve ErrUnknownSource fix, missing-default lint rule. Coverage 91.7/96.0/95.7. Awaiting --ready confirmation. |
 | 2026-07-25 | build-1 | p1-engine | Preflight green (plan on origin/main; go 1.26.3 toolchain, go directive stays 1.26.1; protoc 3.21.12; gh authed). NOTE: gff feature row was absent from the gss registry post-#181-merge; ran `gss feature start gff` to recreate it, then added the p1-engine worker. |
+| 2026-07-26 | build-2 | p1-engine, p2/p3/p4 | p1 closeout: PR #182 merged; `gss feature merged gff/edward-raigosa/p1-engine` run (positional ref — `--worker` flag doesn't exist on `merged`; procedure note). Created p2-instrument/p3-tui/p4-gen workers; gss branched them from a stale local `main` (2b49b6c, pre-#182) so each fresh branch was reset onto origin/main 6f1003f before any work. `${HOME}/opt/bin/gff` rebuilt from 6f1003f (Dirty:false). Ledger discipline for the parallel phase: TODO/TRACKING/index edits are single-writer (orchestrator), riding the p2 branch (then vd-demo) — p3/p4 branches touch only their owned code paths to keep merges conflict-free. |

@@ -343,10 +343,10 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 ## Leaf `p1-engine` closeout
 
 - [x] VERIFY the §4 gate: gff-ci green (vet + tests, ≥90% cover, proto regen clean, e2e job green) and `bash build.sh` installs a working binary
-- [ ] Token call 1: `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token`
-- [ ] Token call 2 (separate Bash call): `gss feature pr --ready --worker <p1 worker_ref>`
-- [ ] After merge: `gss feature merged --worker <p1 worker_ref>` (token-gated, same two-call recipe)
-- [ ] LEDGER: `p1-engine` state → `merged`; session-log line; update `docs/mbo/index.md`
+- [x] Token call 1: `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token`
+- [x] Token call 2 (separate Bash call): `gss feature pr --ready --worker <p1 worker_ref>` (promotion + merge happened via the user's review of PR #182; state MERGED confirmed via `gh pr view`)
+- [x] After merge: `gss feature merged <p1 worker_ref>` (token-gated; note: the ref is **positional** — `merged` has no `--worker` flag)
+- [x] LEDGER: `p1-engine` state → `merged`; session-log line; update `docs/mbo/index.md`
 
 ---
 
@@ -354,9 +354,9 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ## Leaf setup
 
-- [ ] `gss feature worker add --feature gff --purpose p2-instrument --engine claude --json --description "P2: dotfiles flag inventory + gff_on shell gate + install.sh/PowerShell gating (#180)"`
-- [ ] Record `worker_ref` / `branch` / `worktree_path` verbatim in `TRACKING.md` §0
-- [ ] Confirm `${HOME}/opt/bin/gff` is the P1 binary (`gff version`) — P2 verification uses it
+- [x] `gss feature worker add --feature gff --purpose p2-instrument --engine claude --json --description "P2: dotfiles flag inventory + gff_on shell gate + install.sh/PowerShell gating (#180)"`
+- [x] Record `worker_ref` / `branch` / `worktree_path` verbatim in `TRACKING.md` §0
+- [x] Confirm `${HOME}/opt/bin/gff` is the P1 binary (`gff version`) — P2 verification uses it (rebuilt from main 6f1003f, Dirty:false)
 
 ---
 
@@ -475,8 +475,8 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ## Leaf setup
 
-- [ ] `gss feature worker add --feature gff --purpose p3-tui --engine claude --json --description "P3: bubbletea TUI — browse, provenance, toggle (#180)"`
-- [ ] Record `worker_ref` / `branch` / `worktree_path` verbatim in `TRACKING.md` §0
+- [x] `gss feature worker add --feature gff --purpose p3-tui --engine claude --json --description "P3: bubbletea TUI — browse, provenance, toggle (#180)"`
+- [x] Record `worker_ref` / `branch` / `worktree_path` verbatim in `TRACKING.md` §0
 
 ---
 
@@ -518,8 +518,8 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ## Leaf setup
 
-- [ ] `gss feature worker add --feature gff --purpose p4-gen --engine claude --json --description "P4: gff gen typed-accessor codegen (#180)"`
-- [ ] Record `worker_ref` / `branch` / `worktree_path` verbatim in `TRACKING.md` §0
+- [x] `gss feature worker add --feature gff --purpose p4-gen --engine claude --json --description "P4: gff gen typed-accessor codegen (#180)"`
+- [x] Record `worker_ref` / `branch` / `worktree_path` verbatim in `TRACKING.md` §0
 
 ---
 
