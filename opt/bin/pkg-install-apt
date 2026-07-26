@@ -55,11 +55,12 @@ echo "Installing ${#PKGS[@]} core packages via apt..."
 # apt-get install is all-or-nothing within one invocation: a single bad name
 # makes the whole batch install nothing. So if the grouped install fails, retry
 # each package on its own to keep one missing package from blocking the rest.
-if ! sudo apt-get install -y -qq "${PKGS[@]}"; then
+# noninteractive: a debconf prompt (tzdata-class) hangs non-tty contexts (see PR #183)
+if ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${PKGS[@]}"; then
   echo "WARNING: grouped install failed; retrying packages individually..."
   failed=()
   for pkg in "${PKGS[@]}"; do
-    sudo apt-get install -y -qq "$pkg" || failed+=("$pkg")
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$pkg" || failed+=("$pkg")
   done
   if [ "${#failed[@]}" -gt 0 ]; then
     echo "WARNING: could not install these apt packages: ${failed[*]}"
