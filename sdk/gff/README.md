@@ -82,6 +82,40 @@ registered source or a local repo path instead of CWD discovery. Exit code 2
 always means a usage/definition error (unknown key/option/source, wrong type) —
 shell callers treat ≥2 as fail-open.
 
+## Layers & provenance — reading the LAYER column
+
+Every value gff prints was won by exactly one of five layers; `gff list`'s
+LAYER column names it. Resolution order (later wins):
+
+| # | Layer | Backing file | When it wins |
+| :-- | :-- | :-- | :-- |
+| 1 | `system-snapshot` | `/opt/conf/gff/<ns>.yaml` (admin-provisioned) | fleet-wide defaults, nothing else defines the key |
+| 2 | `user-snapshot` | `${XDG_DATA_HOME:-~/.local/share}/gff/snapshots/<ns>.yaml` (written by `gff install`) | resolving from OUTSIDE the repo — incl. `--source <namespace>` — via the installed snapshot |
+| 3 | `repo-live` | the repo's tracked `.gff/features.yaml` / `.github/gff/features.yaml` | you are standing inside the repo (or used `--source <path>`), so the live tracked file supplies the definition |
+| 4 | `system-override` | `/var/opt/conf/gff/config.yaml` | an admin flipped the key machine-wide |
+| 5 | `user-override` | `~/.config/gff/config.yaml` (0600 — the ONLY file `set` writes) | you ran `gff set <key> <value>` |
+
+Layers 1–3 are *definition* layers (they carry the flag's schema + default);
+4–5 are sparse *override* maps (just `key: value` lines). So the column flips
+are meaningful, not noise:
+
+```sh
+cd myrepo && gff list          # repo-live      — the tracked file's defaults
+gff set install.ai.claude false
+gff list                       # user-override  — your set is winning
+gff unset install.ai.claude
+gff list                       # repo-live      — default restored
+cd / && gff list               # user-snapshot  — resolved via the installed snapshot
+gff list --source com.example.demo   # user-snapshot from anywhere
+```
+
+Machine state lives in exactly three files: the registry
+(`~/.config/gff/sources.yaml`: namespace/url/commit per `gff install`), the
+snapshots dir (byte-identical copies of each repo's flag file — flags keep
+resolving after a clone moves or disappears), and your override file. Delete
+the override entry (`gff unset`) and the layer visibly reverts — that
+round-trip is the quickest health-check that the whole chain works.
+
 ## Use cases
 
 - **Gate installer steps per machine** — the dotfiles repo enumerates every
