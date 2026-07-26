@@ -15,6 +15,13 @@ function install_zsh_centos7() {
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 export BASE_DIR
 
+# Flags for pre-bootstrap steps take effect via `gff export` in the calling shell or on the next run.
+# gff_on is env-only and fail-open; it must exist before the FIRST gate. Sourcing
+# it here (not at the bootstrap point) is load-bearing: a gate that calls an
+# undefined gff_on gets exit 127, takes the else branch, and SKIPS the step —
+# failing CLOSED on exactly the fresh machines gff must be harmless on.
+. "${BASE_DIR}/opt/lib/gff.sh"
+
 # --- Authenticate sudo up front -------------------------------------------
 # The rest of this installer runs several privileged steps (apt/yum installs,
 # the GitHub CLI apt-repo setup, chsh). Caching sudo credentials once here means
@@ -57,20 +64,25 @@ fi
 
 # Windows/WSL only: deploy opt/Desktop/* onto the real Windows Desktop.
 # Logic is isolated in opt/bin/install_windows.sh for clarity.
-if [ -f "${BASE_DIR}/opt/bin/install_windows.sh" ]; then
-  bash "${BASE_DIR}/opt/bin/install_windows.sh" "${BASE_DIR}"
-fi
+if gff_on install.windows.desktop-deploy; then
+  if [ -f "${BASE_DIR}/opt/bin/install_windows.sh" ]; then
+    bash "${BASE_DIR}/opt/bin/install_windows.sh" "${BASE_DIR}"
+  fi
+else gff_skip_msg install.windows.desktop-deploy; fi
 
 # WSL only: keep the WSLInterop binfmt registration alive so Windows .exe
 # interop survives (a wiped registration makes every .exe fail with
 # "exec format error"; WSL's own self-heal unit is condition-blocked under
 # WSL). No-op outside WSL; may prompt for sudo once.
-if [ -f "${BASE_DIR}/opt/scripts/system/wsl_interop_binfmt.sh" ]; then
-  bash "${BASE_DIR}/opt/scripts/system/wsl_interop_binfmt.sh" || \
-    echo "WARNING: WSL interop binfmt setup reported problems; continuing."
-fi
+if gff_on install.system.wsl-interop; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/wsl_interop_binfmt.sh" ]; then
+    bash "${BASE_DIR}/opt/scripts/system/wsl_interop_binfmt.sh" || \
+      echo "WARNING: WSL interop binfmt setup reported problems; continuing."
+  fi
+else gff_skip_msg install.system.wsl-interop; fi
 
 # Source hardware detection
+if gff_on install.system.jetson; then
 if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
   . "${BASE_DIR}/opt/lib/hardware.sh"
   if is_jetson; then
@@ -103,7 +115,9 @@ if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
     fi
   fi
 fi
+else gff_skip_msg install.system.jetson; fi
 
+if gff_on install.shell.profiles; then
 while IFS= read -r file; do
     filename=$(basename "$file")
     # Skip metadata and non-profile files
@@ -120,26 +134,33 @@ done < <(find "${BASE_DIR}/opt/profiles" -type f)
 # force a few
 for file in ".profile" ".zprofile" ".zshenv" ".zshrc" ".bash_logout" ".bashrc"; do
   ln -sf "${BASE_DIR}/opt/profiles/${file}" "${HOME}/${file}"
-done 
+done
+else gff_skip_msg install.shell.profiles; fi
 
 # Shared skill sync — links every SKILL.md into BOTH ~/.gemini/config/skills
 # (Antigravity) and ~/.claude/skills (Claude). Single source of truth for both
 # assistants.
-if [ -f "${BASE_DIR}/opt/scripts/system/sync-skills.sh" ]; then
+if gff_on install.ai.skills; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/sync-skills.sh" ]; then
     bash "${BASE_DIR}/opt/scripts/system/sync-skills.sh"
-fi
+  fi
+else gff_skip_msg install.ai.skills; fi
 
 # Antigravity CLI Configuration (Hooks, Aliases, legacy Gemini cleanup)
-if [ -f "${BASE_DIR}/opt/scripts/system/install_antigravity_skills.sh" ]; then
+if gff_on install.ai.antigravity; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_antigravity_skills.sh" ]; then
     # sync-skills handles the skill links now; this only does Antigravity-specific config.
     "${BASE_DIR}/opt/scripts/system/install_antigravity_skills.sh"
-fi
+  fi
+else gff_skip_msg install.ai.antigravity; fi
 
 # Claude Code Configuration (Settings, Commands, Hooks, Aliases)
-if [ -f "${BASE_DIR}/opt/scripts/system/install_claude_skills.sh" ]; then
+if gff_on install.ai.claude; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_claude_skills.sh" ]; then
     # sync-skills handles the skill links now; this only does Claude-specific config.
     "${BASE_DIR}/opt/scripts/system/install_claude_skills.sh"
-fi
+  fi
+else gff_skip_msg install.ai.claude; fi
 
 NIX_MANAGED_FILE="${HOME}/.config/nix_managed"
 
@@ -151,6 +172,7 @@ else
   # that list to the right package manager (apt on Debian/Ubuntu/WSL, Homebrew
   # on macOS). These can also be run by hand: `pkg-install` (auto-detect) o
   # `pkg-install-apt` / `pkg-install-brew` directly.
+  if gff_on install.pkg.common-core; then
   if [ -x "${BASE_DIR}/opt/bin/pkg-install" ]; then
     "${BASE_DIR}/opt/bin/pkg-install" || echo "WARNING: package install reported problems; continuing."
   fi
@@ -167,10 +189,12 @@ else
 
     install_zsh_centos7
   fi
+  else gff_skip_msg install.pkg.common-core; fi
 
   # Set zsh as the default shell on every platform — but only when zsh is
   # actually installed, so we never blank the login shell by passing an empty
   # path to chsh.
+  if gff_on install.shell.default-zsh; then
   ZSH_PATH="$(command -v zsh || true)"
   if [ -n "$ZSH_PATH" ]; then
     if [ "$SHELL" != "$ZSH_PATH" ]; then
@@ -181,10 +205,12 @@ else
   else
     echo "WARNING: zsh is not installed; leaving the default shell unchanged."
   fi
+  else gff_skip_msg install.shell.default-zsh; fi
 fi
 
 # brew script for macOS: install the macOS-only extras from the Brewfile.
 # (The cross-platform common core is installed above via pkg-install.)
+if gff_on install.pkg.brewfile; then
 if [[ "$(uname -s)" == "Darwin" ]]; then
   if command -v brew &> /dev/null; then
     echo "Detected macOS. Running brew bundle for macOS extras..."
@@ -200,42 +226,52 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     echo "WARNING: Homebrew not found. Please install it: https://brew.sh/"
   fi
 fi
+else gff_skip_msg install.pkg.brewfile; fi
 
 # Install sops (secrets management). macOS gets it from the Brewfile above;
 # Linux/WSL has no usable apt package, so install_sops.sh fetches the official
 # static release binary into ~/opt/bin. Safe to re-run on any platform.
-if [ -f "${BASE_DIR}/opt/scripts/system/install_sops.sh" ]; then
+if gff_on install.tools.sops; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_sops.sh" ]; then
     echo "Installing sops..."
     "${BASE_DIR}/opt/scripts/system/install_sops.sh" || echo "WARNING: sops install reported problems; continuing."
-fi
+  fi
+else gff_skip_msg install.tools.sops; fi
 
 # Install yq (YAML processor). Same rationale as sops: macOS gets the mikefarah
 # build from packages.tsv (brew); Linux/WSL fetches the official binary because
 # the apt `yq` is the incompatible kislyuk variant. Needed by sync-plugins.sh.
-if [ -f "${BASE_DIR}/opt/scripts/system/install_yq.sh" ]; then
+if gff_on install.tools.yq; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_yq.sh" ]; then
     echo "Installing yq..."
     "${BASE_DIR}/opt/scripts/system/install_yq.sh" || echo "WARNING: yq install reported problems; continuing."
-fi
+  fi
+else gff_skip_msg install.tools.yq; fi
 
 # Install the Kubernetes toolchain (kubectl, helm, kind). macOS gets them from
 # packages.tsv (brew); Linux/WSL fetches the official release binaries because
 # apt has no kind package and kubectl/helm apt repos lag upstream. Local k8s
 # dev flows (kind cluster -> helm install -> kubectl) need all three.
-if [ -f "${BASE_DIR}/opt/scripts/system/install_k8s_tools.sh" ]; then
+if gff_on install.tools.k8s; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_k8s_tools.sh" ]; then
     echo "Installing Kubernetes toolchain (kubectl, helm, kind)..."
     "${BASE_DIR}/opt/scripts/system/install_k8s_tools.sh" || echo "WARNING: k8s toolchain install reported problems; continuing."
-fi
+  fi
+else gff_skip_msg install.tools.k8s; fi
 
 # Install the Snowflake CLI (`snow`). Replaces the old .zshrc daily-maintenance
 # pip auto-install, which broke on PEP 668 (externally-managed-environment)
 # systems. macOS uses the homebrew-core formula; Linux uses pipx so the system
 # Python is untouched.
-if [ -f "${BASE_DIR}/opt/scripts/system/install_snowflake_cli.sh" ]; then
+if gff_on install.tools.snowflake; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_snowflake_cli.sh" ]; then
     echo "Installing snowflake-cli..."
     "${BASE_DIR}/opt/scripts/system/install_snowflake_cli.sh" || echo "WARNING: snowflake-cli install reported problems; continuing."
-fi
+  fi
+else gff_skip_msg install.tools.snowflake; fi
 
 # only setup these scripts when docker is installed and responsive
+if gff_on install.tools.docker; then
 if command -v docker &> /dev/null; then
     # Setup docker permissions for the current use
     "${BASE_DIR}/opt/scripts/docker/setup_docker_perms.sh"
@@ -251,13 +287,17 @@ if command -v docker &> /dev/null; then
         echo "NOTE: Docker is installed but the daemon is not running. Skipping Docker-dependent setup."
     fi
 fi
+else gff_skip_msg install.tools.docker; fi
 
 # Setup git environment aliases
-if [ -f "${BASE_DIR}/opt/scripts/git/setup_git_alias.sh" ]; then
+if gff_on install.tools.git-aliases; then
+  if [ -f "${BASE_DIR}/opt/scripts/git/setup_git_alias.sh" ]; then
     source "${BASE_DIR}/opt/scripts/git/setup_git_alias.sh"
-fi
+  fi
+else gff_skip_msg install.tools.git-aliases; fi
 
 # install/update goenv
+if gff_on install.runtime.goenv; then
 if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
   if ! command -v goenv &> /dev/null; then
     echo "Installing goenv..."
@@ -310,8 +350,23 @@ if command -v goenv &> /dev/null; then
     fi
   fi
 fi
+else gff_skip_msg install.runtime.goenv; fi
+
+# build gff first so every later step can be feature-flag gated (fail-open:
+# if the build fails or gff is absent, all steps run — flags only ever skip).
+if gff_bootstrap_ok=false; command -v go >/dev/null 2>&1 && [ -f "${BASE_DIR}/sdk/gff/build.sh" ]; then
+  bash "${BASE_DIR}/sdk/gff/build.sh" && gff_bootstrap_ok=true || echo "WARNING: gff build failed; all components will run."
+fi
+if [ "$gff_bootstrap_ok" = "true" ] && [ -x "${HOME}/opt/bin/gff" ]; then
+  # set -a exports the plain VAR=v lines gff emits so GFF_* reaches child
+  # scripts (install_windows.sh reads them via `env` for the WSLENV handoff).
+  set -a
+  eval "$(cd "${BASE_DIR}" && "${HOME}/opt/bin/gff" export --shell 2>/dev/null || true)"
+  set +a
+fi
 
 # install/update pyenv
+if gff_on install.runtime.pyenv; then
 if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
   if ! command -v pyenv &> /dev/null; then
     echo "Installing pyenv..."
@@ -327,8 +382,10 @@ else
     (cd "${HOME}/.pyenv" && git pull)
   fi
 fi
+else gff_skip_msg install.runtime.pyenv; fi
 
 # install/update rbenv
+if gff_on install.runtime.rbenv; then
 if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
   if ! command -v rbenv &> /dev/null; then
     echo "Installing rbenv..."
@@ -350,31 +407,38 @@ else
     fi
   fi
 fi
+else gff_skip_msg install.runtime.rbenv; fi
 
 # install nvm
-if [ ! -d "${HOME}/.nvm" ]; then
-  echo "Installing nvm..."
-  curl -fsSL -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash > /dev/null 2>&1
-fi
+if gff_on install.runtime.nvm; then
+  if [ ! -d "${HOME}/.nvm" ]; then
+    echo "Installing nvm..."
+    curl -fsSL -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash > /dev/null 2>&1
+  fi
+else gff_skip_msg install.runtime.nvm; fi
 
 # install Antigravity CLI (agy) — Gemini CLI's successor (Gemini CLI EOL 2026-06-18)
-if [ -f "${BASE_DIR}/opt/scripts/system/antigravity_install.sh" ]; then
+if gff_on install.ai.antigravity; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/antigravity_install.sh" ]; then
     echo "Installing Antigravity CLI..."
     "${BASE_DIR}/opt/scripts/system/antigravity_install.sh"
-fi
+  fi
 
-# Retired Gemini CLI leftovers: consent-based teardown (prompts when leftovers
-# are found; --keep marker suppresses the ask forever; no-op in CI/non-TTY).
-if [ -f "${BASE_DIR}/opt/scripts/system/gemini_teardown.sh" ]; then
+  # Retired Gemini CLI leftovers: consent-based teardown (prompts when leftovers
+  # are found; --keep marker suppresses the ask forever; no-op in CI/non-TTY).
+  if [ -f "${BASE_DIR}/opt/scripts/system/gemini_teardown.sh" ]; then
     "${BASE_DIR}/opt/scripts/system/gemini_teardown.sh" || echo "WARNING: gemini teardown reported problems; continuing."
-fi
+  fi
+else gff_skip_msg install.ai.antigravity; fi
 
 # Google CLI (Antigravity & Workspace) Setup
-if [ -f "${BASE_DIR}/opt/scripts/system/google-cli-setup.sh" ]; then
+if gff_on install.ai.google-cli; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/google-cli-setup.sh" ]; then
     # This configures gws for BOTH Antigravity CLI and Claude Code via shared skills.
     echo "Setting up Google CLI (Antigravity & Workspace)..."
     "${BASE_DIR}/opt/scripts/system/google-cli-setup.sh"
-fi
+  fi
+else gff_skip_msg install.ai.google-cli; fi
 
 # Antigravity hooks are provisioned by install_antigravity_skills.sh (called
 # above): guard scripts are copied into ~/.gemini/config/hooks/ and the wiring
@@ -382,10 +446,12 @@ fi
 # (~/.gemini/antigravity-cli/settings.json) — nothing to merge or symlink here.
 
 # install Claude Code CLI (macOS via brew cask, Linux/WSL via npm)
-if [ -f "${BASE_DIR}/opt/scripts/system/claude_install.sh" ]; then
+if gff_on install.ai.claude; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/claude_install.sh" ]; then
     echo "Installing Claude Code CLI..."
     "${BASE_DIR}/opt/scripts/system/claude_install.sh"
-fi
+  fi
+else gff_skip_msg install.ai.claude; fi
 
 # Claude settings + hooks are provisioned by install_claude_skills.sh (called
 # above): ~/.claude/settings.json is a host-owned file with the forced subset
@@ -395,21 +461,26 @@ fi
 # Sync AI plugins from the manifest (ai/plugins.yaml). Ensure-only: installs +
 # enables the listed plugins; never removes anything. Runs after the Claude CLI
 # (claude_install.sh) and yq are installed.
-if [ -f "${BASE_DIR}/opt/scripts/system/sync-plugins.sh" ]; then
+if gff_on install.ai.plugins; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/sync-plugins.sh" ]; then
     echo "Syncing AI plugins..."
     "${BASE_DIR}/opt/scripts/system/sync-plugins.sh" || echo "WARNING: plugin sync reported problems; continuing."
-fi
+  fi
+else gff_skip_msg install.ai.plugins; fi
 
 # Install AI teams: transform ai/teams personas into native agents for Claude,
 # Antigravity, and Ollama. Runs after yq + the assistant configs. Validates the source
 # first; each tool emit degrades gracefully, so a teams problem never aborts bootstrap.
-if [ -f "${BASE_DIR}/opt/scripts/system/install_ai_teams.sh" ]; then
+if gff_on install.ai.teams; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_ai_teams.sh" ]; then
     echo "Installing AI teams..."
     "${BASE_DIR}/opt/scripts/system/install_ai_teams.sh" || echo "WARNING: AI teams install reported problems; continuing."
-fi
+  fi
+else gff_skip_msg install.ai.teams; fi
 
 # build and install gss
-if [ -f "${BASE_DIR}/sdk/gss/build.sh" ]; then
+if gff_on install.sdk.gss; then
+  if [ -f "${BASE_DIR}/sdk/gss/build.sh" ]; then
     echo "Installing gss (dotfiles manager)..."
     bash "${BASE_DIR}/sdk/gss/build.sh"
     if [ -f "${HOME}/opt/bin/gss" ]; then
@@ -417,10 +488,12 @@ if [ -f "${BASE_DIR}/sdk/gss/build.sh" ]; then
         "${HOME}/opt/bin/gss" version
         echo "--------------------------------------------------"
     fi
-fi
+  fi
+else gff_skip_msg install.sdk.gss; fi
 
 # build and install tmux-mg
-if [ -f "${BASE_DIR}/sdk/tmux-mgr/build.sh" ]; then
+if gff_on install.sdk.tmux-mgr; then
+  if [ -f "${BASE_DIR}/sdk/tmux-mgr/build.sh" ]; then
     echo "Installing tmux-mgr..."
     bash "${BASE_DIR}/sdk/tmux-mgr/build.sh"
     if [ -f "${HOME}/opt/bin/tmux-mgr" ]; then
@@ -430,10 +503,12 @@ if [ -f "${BASE_DIR}/sdk/tmux-mgr/build.sh" ]; then
         # install aliases
         "${HOME}/opt/bin/tmux-mgr" alias install
     fi
-fi
+  fi
+else gff_skip_msg install.sdk.tmux-mgr; fi
 
 # build and install wol
-if [ -f "${BASE_DIR}/sdk/wol/build.sh" ]; then
+if gff_on install.sdk.wol; then
+  if [ -f "${BASE_DIR}/sdk/wol/build.sh" ]; then
     echo "Installing wol (Wake-on-LAN utility)..."
     bash "${BASE_DIR}/sdk/wol/build.sh"
     if [ -f "${HOME}/opt/bin/wol" ]; then
@@ -441,10 +516,12 @@ if [ -f "${BASE_DIR}/sdk/wol/build.sh" ]; then
         "${HOME}/opt/bin/wol" version
         echo "--------------------------------------------------"
     fi
-fi
+  fi
+else gff_skip_msg install.sdk.wol; fi
 
 # build and install gsl
-if [ -f "${BASE_DIR}/sdk/gsl/build.sh" ]; then
+if gff_on install.sdk.gsl; then
+  if [ -f "${BASE_DIR}/sdk/gsl/build.sh" ]; then
     echo "Installing gsl (Go status line)..."
     bash "${BASE_DIR}/sdk/gsl/build.sh"
     if [ -f "${HOME}/opt/bin/gsl" ]; then
@@ -452,12 +529,30 @@ if [ -f "${BASE_DIR}/sdk/gsl/build.sh" ]; then
         "${HOME}/opt/bin/gsl" version
         echo "--------------------------------------------------"
     fi
-fi
+  fi
+else gff_skip_msg install.sdk.gsl; fi
+
+# build and install gff (git fast features). This is the LATER duplicate of the
+# bootstrap build above — it exists so the version banner matches the other sdk
+# tools and so the rebuild can be flag-skipped. Only THIS duplicate is gated;
+# the bootstrap build itself is never gated (it is what makes gating possible).
+if gff_on install.sdk.gff; then
+  if [ -f "${BASE_DIR}/sdk/gff/build.sh" ]; then
+    echo "Installing gff (git fast features)..."
+    bash "${BASE_DIR}/sdk/gff/build.sh"
+    if [ -f "${HOME}/opt/bin/gff" ]; then
+        echo "--------------------------------------------------"
+        "${HOME}/opt/bin/gff" version
+        echo "--------------------------------------------------"
+    fi
+  fi
+else gff_skip_msg install.sdk.gff; fi
 
 # Configure the Nerd Font (MesloLGS Nerd Font) used by gsl's powerline style.
 # Runs AFTER the gsl build so both the gsl skill files (linked by sync-skills
 # above) and the freshly-built ~/opt/bin/gsl exist. OS-dispatch to the
 # gsl-packaged installers under sdk/gsl/scripts/.
+if gff_on install.fonts.nerd-font; then
 GSL_FONT_SCRIPTS="${BASE_DIR}/sdk/gsl/scripts"
 case "$(uname -s)" in
   Darwin)
@@ -482,24 +577,32 @@ if [ -f "${GSL_FONT_SCRIPTS}/check-font-glyphs.sh" ] && command -v go >/dev/null
   bash "${GSL_FONT_SCRIPTS}/check-font-glyphs.sh" || \
     echo "WARNING: glyph-coverage check failed; gsl powerline glyphs may not render."
 fi
+else gff_skip_msg install.fonts.nerd-font; fi
 
 # install fnm
-if ! command -v fnm &> /dev/null; then
-  echo "Installing fnm..."
-  curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell > /dev/null 2>&1
-fi
+if gff_on install.runtime.fnm; then
+  if ! command -v fnm &> /dev/null; then
+    echo "Installing fnm..."
+    curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell > /dev/null 2>&1
+  fi
+else gff_skip_msg install.runtime.fnm; fi
 
 # setup sshd server if requested
-if [ -f "${HOME}/.sshd.env" ]; then
+if gff_on install.network.sshd; then
+  if [ -f "${HOME}/.sshd.env" ]; then
     "${BASE_DIR}/opt/scripts/network/sshd_run.sh"
-fi
+  fi
+else gff_skip_msg install.network.sshd; fi
 
-if [ -f "${HOME}/.gitrepos" ] ; then
-  cd "${HOME}" || exit 1
-  "${HOME}/.gitrepos"
-fi
+if gff_on install.system.gitrepos; then
+  if [ -f "${HOME}/.gitrepos" ] ; then
+    cd "${HOME}" || exit 1
+    "${HOME}/.gitrepos"
+  fi
+else gff_skip_msg install.system.gitrepos; fi
 
 # Load Nano Platform environment
+if gff_on install.system.nano-profile; then
 for shell_config in "$HOME/.zshrc" "$HOME/.profile"; do
     if [ -f "$shell_config" ]; then
         if ! grep -q "\.nano_profile" "$shell_config"; then
@@ -508,6 +611,7 @@ for shell_config in "$HOME/.zshrc" "$HOME/.profile"; do
         fi
     fi
 done
+else gff_skip_msg install.system.nano-profile; fi
 
 # Final reminder (WSL): if the interactive Windows setup ran this invocation, the
 # one thing that can't be scripted is Wispr Flow's shortcuts — surface it last so
