@@ -31,8 +31,38 @@ package git
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
 )
+
+// nonInteractiveEnv is layered on top of the caller's environment for every
+// git invocation. gss git operations are automated — they run in hooks,
+// background jobs, and worktrees with no controlling terminal — so a git
+// subprocess must NEVER block on a human prompt. Without this, a git command
+// that wants an editor (a merge commit recreated during a rebase, an
+// autosquash, a commit that needs a message) or a credential/passphrase prompt
+// opens the user's interactive editor or a terminal prompt and blocks forever
+// with no TTY. Worse, while it blocks it holds `.git/index.lock`, which then
+// wedges every subsequent git operation in the repository until the hung
+// process is killed by hand (observed as `gss feature checkpoint` hanging on a
+// rebase and leaving a stale index.lock behind).
+//
+//   - GIT_EDITOR=true / GIT_SEQUENCE_EDITOR=true make git's editor a no-op
+//     that "succeeds" immediately, accepting the prepared default message
+//     instead of opening vi/nano. A rebase that would have opened an editor
+//     either completes with the default message or fails non-zero (which
+//     callers already handle, e.g. checkpoint's rebase --abort) — never hangs.
+//   - GIT_TERMINAL_PROMPT=0 makes git fail fast instead of prompting on the
+//     terminal for credentials.
+//
+// These are appended after the inherited environment so they win over any
+// value the caller happened to export (last occurrence wins; verified against
+// git's `var GIT_EDITOR`).
+var nonInteractiveEnv = []string{
+	"GIT_EDITOR=true",
+	"GIT_SEQUENCE_EDITOR=true",
+	"GIT_TERMINAL_PROMPT=0",
+}
 
 // Runner is the single entry point for git invocations in the gss
 // codebase. The interface signature is pinned by sdk/gss/docs/design.md
@@ -93,6 +123,9 @@ func (r *SystemRunner) Run(ctx context.Context, name string, args ...string) ([]
 	full = append(full, args...)
 
 	cmd := exec.CommandContext(ctx, bin, full...)
+	// Run git non-interactively so it can never block on an editor or a
+	// terminal prompt (and thus never wedge the repo holding index.lock).
+	cmd.Env = append(os.Environ(), nonInteractiveEnv...)
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
