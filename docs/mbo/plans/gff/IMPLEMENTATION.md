@@ -359,56 +359,74 @@ merge. Blocked → TRACKING §10 with the real failing output, move to the next
 independent task. Done when: <this session's done-when>.
 ```
 
-### 8.2 CURRENT prompt — gff finishing moves (post-#188; owner evaluation complete)
+### 8.2 CURRENT prompt — install.sh flag-flow refactor (owner-proposed 2026-07-26)
 
-> **Finish the gff objective: capture the P2-T5 evidence, close #180, tidy up.**
+> **Plan and build the install.sh flag-flow refactor — prompt-early /
+> Windows-last + early export — then drain the gff backlog.**
 >
-> Read first, completely: `docs/mbo/plans/gff/IMPLEMENTATION.md` (§5 hard rules,
-> §7.1 run corrections), `docs/mbo/plans/gff/TRACKING.md` (§8 — the remaining
-> unticked items), `docs/mbo/plans/gff/TODO.md` ("Objective closeout" section).
+> Read first, completely: `docs/mbo/plans/gff/IMPLEMENTATION.md` (§5 hard
+> rules, §7.1 run corrections), `docs/mbo/plans/gff/TRACKING.md` (§8 — should
+> be fully green; §10 rows 3–5 — the open observations this session inherits),
+> then plan `../gff.md` §3.5 (the frozen shell contract) and §4 P2-T3/P2-T4
+> (the gating sites being refactored).
 >
-> State on entry: ALL FOUR LEAVES ARE MERGED — #182 (engine), #184
-> (instrumentation), #187 (TUI+gen combined), #188 (demo + ledgers). The owner
-> has evaluated gff and approved proceeding. The gss registry no longer has gff
-> worker rows; any remaining docs work rides a small closeout branch (plain git
-> + `gh pr`). Open elsewhere: gsl #190 (tmux theme rule, draft).
+> State on entry: the gff objective is CLOSED — #180 closed, all leaves merged
+> (#182/#184/#187/#188), P2-T5 evidence posted, `docs/mbo/index.md` says
+> `done`. This session opens a NEW small objective (mbo-plan it: spec + plan,
+> design optional) building on gff. Work rides a `gss feature` worker or a
+> plain branch + `gh pr` at the owner's choice.
 >
-> Scope, in order:
-> 1. **P2-T5 evidence (human-in-the-loop — the last §7.5 proof).** Hand the
->    owner this exact sheet, run from `${HOME}/git/dotfiles` on main in a real
->    interactive terminal:
->    ```sh
->    gff set install.windows.wispr-flow false
->    gff get install.windows.wispr-flow          # -> false, layer user-override
->    eval "$(gff export --shell)"                # REQUIRED: the Windows phase
->                                                # runs before the in-script
->                                                # bootstrap (TRACKING §10)
->    ./install.sh                                # answer prompts; watch for
->                                                # SKIP (gff: install.windows.wispr-flow=false)
->    gff unset install.windows.wispr-flow
->    ```
->    Post the captured SKIP line as a comment on issue #180; commit it to
->    `docs/mbo/plans/gff/evidence/F09-gating/P2-T5-real-install.txt` on the
->    closeout branch; tick TRACKING §7.3 tail, the F9 demo cell, and §8.
->    (If the UAC boundary drops the env var on the Windows side, record it in
->    TRACKING §10 as the known plan-level observation — the Linux-side SKIP
->    line is the required evidence.)
-> 2. **Close the objective.** Comment-and-close #180: link the four merged PRs,
->    the spec's owner-approved extensions (F6/F10), and the evidence tree.
->    Final TRACKING §11 session-log line; `docs/mbo/index.md` gff state →
->    `done`. Land these ledger edits via the closeout branch PR.
-> 3. **Housekeeping.** Prune the stale gff worktrees under
->    `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/` — verify
->    each branch is merged/superseded (`git log --oneline -1` vs `origin/main`,
->    PR state) BEFORE `git worktree remove`; ask before deleting anything that
->    shows unpushed work.
-> 4. **gsl #190.** Shepherd it through owner review; on approval merge and
->    clean up its worker (`gsl-tmux-theme`).
-> 5. **Set up the next iteration.** Replace THIS §8.2 with the next prompt via
->    the §8.1 template. Backlog candidates (TRACKING §10 + review notes): wire
->    the three unenforced `install.windows.*` flags when their scripts gain
->    invocation sites; UAC env-propagation follow-up; multi-source install.sh
->    story (`gff sources`-driven); optional TUI gif for the README.
+> Orchestration: you are the orchestrator — verify every gate YOURSELF before
+> committing (evidence before assertions), stage by explicit name, one commit
+> per task, `make lint-shell && make lint-portability` before every shell
+> commit, validate interactive flows in a REAL terminal (never backgrounded /
+> piped — the prompt is silently skipped), commit transcripts into
+> `docs/mbo/plans/gff/evidence/`.
+>
+> Scope for this session (the lead item is owner-proposed, 2026-07-26):
+> 1. **install.sh: prompt-early / Windows-last + early flag export.**
+>    - Move the Windows phase EXECUTION (the `install.windows.desktop-deploy`
+>      gate + `install_windows.sh` call, today ~line 67) to the END of
+>      install.sh — after the gff bootstrap eval (~line 355–366) — so `GFF_*`
+>      is materialized in-script and `install.windows.*` overrides work with
+>      zero calling-shell steps, INCLUDING on a fresh system (requirement
+>      chain: goenv → Go 1.26.1 → `sdk/gff/build.sh` → bootstrap eval, all
+>      satisfied by then).
+>    - Keep interactivity front-loaded: capture the y/n/s answer EARLY
+>      (extend install_windows.sh's sentinel mechanism: `--ask` records the
+>      choice up front, `--deferred` executes it at the end without
+>      re-prompting). The UAC prompt then fires at the END of the run — it
+>      MUST fail loud if it times out unattended (clear message + rerun hint),
+>      never silently skip.
+>    - Add a top-of-script EARLY EXPORT: if `command -v gff` succeeds,
+>      `set -a; eval "$(gff export --shell …)"; set +a` before the first gate,
+>      fail-open — so the pre-bootstrap gates (`install.system/shell/pkg/
+>      tools.*`, today lines ~67–297) honor overrides from run 2 onward. The
+>      mid-script bootstrap stays as the authoritative refresh.
+>    - **gff-controlled permanent skip (owner note):** replace the "[s] skip
+>      and never ask again" sentinel FILE with a gff user-override —
+>      `gff set install.windows.desktop-deploy false` — so gff becomes the
+>      single source of skip state (visible in `gff list`/TUI, reversible via
+>      `unset`). Honor + migrate the legacy sentinel file if present.
+>    - Real-terminal WSL validation of all four paths (y / n / s / flag-off)
+>      + evidence transcript.
+> 2. **UAC env-propagation follow-up** — resolve TRACKING §10 row 5 per what
+>    the P2-T5 run actually showed (var crossed ⇒ close the observation; var
+>    dropped ⇒ design the pass-through fix, e.g. args instead of env across
+>    `Start-Process -Verb RunAs`).
+> 3. **Wire the three unenforced `install.windows.*` flags**
+>    (`claude-rc-autostart`, `sshd`, `portproxy`) ONLY if their standalone
+>    scripts gain invocation sites (TRACKING §10 row 4); otherwise leave
+>    declared-but-unenforced and documented.
+> 4. **Multi-source install.sh story** (`gff sources`-driven) — design sketch
+>    only, no build.
+> 5. Optional: TUI gif/asciinema for `sdk/gff/README.md`.
+>
+> Human-in-the-loop stops (never fake): every real-terminal install.sh
+> validation run, every merge. ASK before any PR promotion or merge. Blocked →
+> TRACKING §10 with the real failing output. Done when: item 1 is merged with
+> real-terminal evidence and items 2–3 are either resolved or explicitly
+> re-documented as deferred.
 >
 > Human-in-the-loop stops (never fake): the P2-T5 run itself, every merge,
 > every worktree deletion. Blocked → TRACKING §10 with the real failing output.
