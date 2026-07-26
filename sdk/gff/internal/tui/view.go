@@ -151,6 +151,14 @@ func (m *Model) viewList() string {
 	}
 
 	sb.WriteString("\n")
+	if m.errMsg != "" {
+		errStyle := lipgloss.NewStyle().Foreground(colorRed)
+		if noColor() {
+			errStyle = lipgloss.NewStyle()
+		}
+		sb.WriteString(errStyle.Render(m.errMsg))
+		sb.WriteString("\n")
+	}
 	sb.WriteString(dimStyle.Render("↑/↓ navigate  Enter expand/collapse  Space toggle  q quit"))
 	return sb.String()
 }

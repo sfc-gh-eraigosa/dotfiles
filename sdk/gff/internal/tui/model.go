@@ -57,6 +57,10 @@ type Model struct {
 	pickerEntries  []pickerEntry // copy of options with transient selection state
 	pickerCursor   int
 	pickerIsMulti  bool
+
+	// errMsg surfaces a failed override write in the footer; cleared on the
+	// next successful write. A failed write must never flip the row.
+	errMsg string
 }
 
 // NewModel constructs a Model from a resolved item slice and a Paths for writes.
@@ -123,6 +127,16 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	// Real terminals deliver the spacebar as KeySpace (bubbletea key.go maps
+	// the ' ' rune to it); KeyRunes{' '} only occurs from synthetic input.
+	case tea.KeySpace:
+		if m.cursor >= 0 && m.cursor < len(m.rows) {
+			r := m.rows[m.cursor]
+			if !r.isArea {
+				return m.activateFeature(r)
+			}
+		}
+
 	case tea.KeyRunes:
 		if len(msg.Runes) == 0 {
 			break
@@ -153,7 +167,11 @@ func (m *Model) activateFeature(r row) (tea.Model, tea.Cmd) {
 		newVal := &gffv1.Value{
 			Kind: &gffv1.Value_BoolValue{BoolValue: !cur},
 		}
-		_ = overrides.Write(m.p, item.Feature.GetPath(), newVal)
+		if err := overrides.Write(m.p, item.Feature.GetPath(), newVal); err != nil {
+			m.errMsg = "write failed: " + err.Error()
+			return m, nil // file unchanged — do not flip the row
+		}
+		m.errMsg = ""
 		// Refresh the item in m.items so the view reflects the new state.
 		m.items[r.itemIdx] = resolve.Resolved{
 			Feature: item.Feature,
@@ -219,6 +237,10 @@ func (m *Model) updatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.confirmPicker()
 		m.mode = modeList
 
+	// Same real-terminal semantics as updateList: the spacebar is KeySpace.
+	case tea.KeySpace:
+		m.togglePickerEntry()
+
 	case tea.KeyRunes:
 		if len(msg.Runes) == 0 {
 			break
@@ -264,7 +286,11 @@ func (m *Model) confirmPicker() {
 		},
 	}
 	item := m.items[m.pickerItemIdx]
-	_ = overrides.Write(m.p, item.Feature.GetPath(), newVal)
+	if err := overrides.Write(m.p, item.Feature.GetPath(), newVal); err != nil {
+		m.errMsg = "write failed: " + err.Error()
+		return // file unchanged — do not flip the row
+	}
+	m.errMsg = ""
 	m.items[m.pickerItemIdx] = resolve.Resolved{
 		Feature: item.Feature,
 		Value:   newVal,
