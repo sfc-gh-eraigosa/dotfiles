@@ -51,9 +51,14 @@ var palettes = map[string]Colors{
 		Grey: "241", Green: "34", Blue: "26", Orange: "136",
 		Red: "124", Purple: "92", Text: "16", Border: "247",
 	},
+	// dark8: basic ANSI, recolored by the terminal's own theme. Emphasis
+	// text uses the DEFAULT foreground (empty color) — legible by definition
+	// on any theme; grey/borders use ANSI 8 (bright black — a themed grey in
+	// light and dark schemes alike). ANSI 7 "white" is deliberately avoided:
+	// light schemes render it nearly invisible.
 	"dark8": {
-		Grey: "7", Green: "2", Blue: "4", Orange: "3",
-		Red: "1", Purple: "5", Text: "7", Border: "7",
+		Grey: "8", Green: "2", Blue: "4", Orange: "3",
+		Red: "1", Purple: "5", Text: "", Border: "8",
 	},
 }
 

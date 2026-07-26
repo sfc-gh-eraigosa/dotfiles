@@ -7,3 +7,9 @@
 
 SGR codes emitted under TERM=tmux-256color, no COLORFGBG (basic ANSI only, no 38;5;x):
   12 [39m / 11 [37m / 3 [1m / 2 [33m / 1 [35m / 1 [34m
+# Follow-up hardening: dark8 avoided ANSI 7 (white) — light schemes render it near-invisible.
+# Emphasis text now uses the terminal DEFAULT foreground; grey/border use ANSI 8 (bright black).
+# date UTC: 2026-07-26T19:05:15Z
+
+SGR histogram under TERM=tmux-256color (no 37, no 38;5;x):
+  13 [39m / 10 [90m / 3 [1m / 2 [33m / 1 [35m / 1 [34m

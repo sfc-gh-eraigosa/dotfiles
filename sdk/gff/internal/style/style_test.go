@@ -53,14 +53,38 @@ func TestPalette_AllNamesExistAndDiffer(t *testing.T) {
 		if !ok {
 			t.Fatalf("Palette(%q) not found", name)
 		}
-		if p.Blue == "" || p.Grey == "" || p.Orange == "" || p.Text == "" {
+		if p.Blue == "" || p.Grey == "" || p.Orange == "" {
 			t.Errorf("Palette(%q) has empty slots: %+v", name, p)
+		}
+		if name != "dark8" && p.Text == "" {
+			t.Errorf("Palette(%q).Text empty (only dark8 uses the default fg)", name)
 		}
 	}
 	d, _ := Palette("dark")
 	l, _ := Palette("light")
 	if d.Blue == l.Blue || d.Grey == l.Grey {
 		t.Error("dark and light palettes must differ (light uses mid-luminance tones per gsl)")
+	}
+}
+
+// dark8 hardening: emphasis text must be the terminal's DEFAULT foreground
+// (empty color — always legible by definition), and grey must be ANSI 8
+// (bright black, a themed grey in both light and dark schemes). ANSI 7
+// ("white") washes out on light themes — the exact failure mode the tmux
+// fallback exists to prevent.
+func TestDark8AvoidsWhiteOnLightThemes(t *testing.T) {
+	p, ok := Palette("dark8")
+	if !ok {
+		t.Fatal("dark8 missing")
+	}
+	if p.Text != "" {
+		t.Errorf("dark8.Text = %q, want \"\" (terminal default foreground)", p.Text)
+	}
+	if p.Grey != "8" {
+		t.Errorf("dark8.Grey = %q, want 8 (bright black — themed grey)", p.Grey)
+	}
+	if p.Border != "8" {
+		t.Errorf("dark8.Border = %q, want 8", p.Border)
 	}
 }
 
