@@ -359,45 +359,60 @@ merge. Blocked → TRACKING §10 with the real failing output, move to the next
 independent task. Done when: <this session's done-when>.
 ```
 
-### 8.2 CURRENT prompt — gff closeout iteration (post-#187)
+### 8.2 CURRENT prompt — gff finishing moves (post-#188; owner evaluation complete)
 
-> **Close out the gff objective: land vd-demo, capture P2-T5, close #180.**
+> **Finish the gff objective: capture the P2-T5 evidence, close #180, tidy up.**
 >
-> Read first, completely: `docs/mbo/plans/gff/IMPLEMENTATION.md` (§5, §7.1),
-> `docs/mbo/plans/gff/TRACKING.md` (§8 — two items remain), and
-> `docs/mbo/plans/gff/TODO.md` ("Objective closeout" section).
+> Read first, completely: `docs/mbo/plans/gff/IMPLEMENTATION.md` (§5 hard rules,
+> §7.1 run corrections), `docs/mbo/plans/gff/TRACKING.md` (§8 — the remaining
+> unticked items), `docs/mbo/plans/gff/TODO.md` ("Objective closeout" section).
 >
-> State on entry: PRs #182/#184/#187 are MERGED; #188 (vd-demo: demo.sh,
-> transcripts, F11 post-tag proof, ledger sweep) is in-review on branch
-> `feature/gff/edward-raigosa/vd-demo` — its gss registry row was pruned, so it
-> is driven with plain git + `gh`. Companion gsl PR #190 (tmux theme rule) is
-> in draft review.
+> State on entry: ALL FOUR LEAVES ARE MERGED — #182 (engine), #184
+> (instrumentation), #187 (TUI+gen combined), #188 (demo + ledgers). The owner
+> has evaluated gff and approved proceeding. The gss registry no longer has gff
+> worker rows; any remaining docs work rides a small closeout branch (plain git
+> + `gh pr`). Open elsewhere: gsl #190 (tmux theme rule, draft).
 >
 > Scope, in order:
-> 1. When the owner approves #188: merge it (squash, title `gff: vd-demo (#188)`),
->    update ledgers on main-side follow-up if needed.
-> 2. **P2-T5 (human-in-the-loop):** hand the owner the exact command sheet —
->    from `${HOME}/git/dotfiles` on main, real terminal:
->    `gff set install.windows.wispr-flow false` →
->    `eval "$(gff export --shell)"` (the Windows phase runs before the
->    in-script bootstrap — TRACKING §10) → run `install.sh` interactively →
->    capture the `SKIP (gff: install.windows.wispr-flow=false)` line →
->    `gff unset install.windows.wispr-flow`. Post the evidence on #188 (or
->    #180) and tick TRACKING §7.3/§8 + the F9 demo cell.
-> 3. Close issue #180 with a summary comment linking the four landed PRs and
->    the evidence tree; final TRACKING §11 session-log line;
->    `docs/mbo/index.md` gff state → `merged/done`.
-> 4. Housekeeping: prune the six stale gff worktrees under
->    `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/` (all
->    branches are merged or superseded — verify with `git log` before removal);
->    shepherd gsl #190 through review if the owner engages.
-> 5. Then replace THIS §8.2 with the next iteration's prompt (candidates from
->    TRACKING §10: the three unenforced `install.windows.*` flags, UAC env
->    propagation observation, a `gff sources`-driven install.sh multi-source
->    story, TUI gif capture).
+> 1. **P2-T5 evidence (human-in-the-loop — the last §7.5 proof).** Hand the
+>    owner this exact sheet, run from `${HOME}/git/dotfiles` on main in a real
+>    interactive terminal:
+>    ```sh
+>    gff set install.windows.wispr-flow false
+>    gff get install.windows.wispr-flow          # -> false, layer user-override
+>    eval "$(gff export --shell)"                # REQUIRED: the Windows phase
+>                                                # runs before the in-script
+>                                                # bootstrap (TRACKING §10)
+>    ./install.sh                                # answer prompts; watch for
+>                                                # SKIP (gff: install.windows.wispr-flow=false)
+>    gff unset install.windows.wispr-flow
+>    ```
+>    Post the captured SKIP line as a comment on issue #180; commit it to
+>    `docs/mbo/plans/gff/evidence/F09-gating/P2-T5-real-install.txt` on the
+>    closeout branch; tick TRACKING §7.3 tail, the F9 demo cell, and §8.
+>    (If the UAC boundary drops the env var on the Windows side, record it in
+>    TRACKING §10 as the known plan-level observation — the Linux-side SKIP
+>    line is the required evidence.)
+> 2. **Close the objective.** Comment-and-close #180: link the four merged PRs,
+>    the spec's owner-approved extensions (F6/F10), and the evidence tree.
+>    Final TRACKING §11 session-log line; `docs/mbo/index.md` gff state →
+>    `done`. Land these ledger edits via the closeout branch PR.
+> 3. **Housekeeping.** Prune the stale gff worktrees under
+>    `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/` — verify
+>    each branch is merged/superseded (`git log --oneline -1` vs `origin/main`,
+>    PR state) BEFORE `git worktree remove`; ask before deleting anything that
+>    shows unpushed work.
+> 4. **gsl #190.** Shepherd it through owner review; on approval merge and
+>    clean up its worker (`gsl-tmux-theme`).
+> 5. **Set up the next iteration.** Replace THIS §8.2 with the next prompt via
+>    the §8.1 template. Backlog candidates (TRACKING §10 + review notes): wire
+>    the three unenforced `install.windows.*` flags when their scripts gain
+>    invocation sites; UAC env-propagation follow-up; multi-source install.sh
+>    story (`gff sources`-driven); optional TUI gif for the README.
 >
-> Human-in-the-loop stops: the P2-T5 run itself, every merge, worktree
-> deletion. Done when: TRACKING §8 is fully green and #180 is closed.
+> Human-in-the-loop stops (never fake): the P2-T5 run itself, every merge,
+> every worktree deletion. Blocked → TRACKING §10 with the real failing output.
+> Done when: TRACKING §8 is fully green, #180 is closed, index.md says done.
 
 > Companion to plan `../gff.md`. Update `../../index.md` state as each leaf moves
 > (`planning → building → in-review → merged`).
