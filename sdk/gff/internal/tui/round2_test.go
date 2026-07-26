@@ -166,3 +166,29 @@ func TestHelpFromPickerDescribesPickerKeys(t *testing.T) {
 	m = press(m, tea.KeyMsg{Type: tea.KeyEscape})
 	assert.Contains(t, m.View(), "Pick option", "Esc returns to the picker")
 }
+
+// Owner-reported bug: toggling a feature with Space on a CATEGORY page made
+// the row disappear. Cause: the list toggle rebuilt the item as a bare
+// Resolved literal, silently dropping the unexported namespace — the category
+// filter (Namespace() == scopeNS) then excluded it from the rebuilt rows.
+func TestSpaceToggleOnCategoryPageKeepsTheRow(t *testing.T) {
+	m := newPagerModel(t)
+	m = press(m, tea.KeyMsg{Type: tea.KeyRight}) // ai page
+	require.Contains(t, m.View(), "install.ai.claude")
+
+	m = press(m, tea.KeyMsg{Type: tea.KeySpace}) // toggle the first ai feature
+	v := m.View()
+	assert.Contains(t, v, "install.ai.claude", "the toggled row must NOT disappear")
+	assert.Contains(t, v, "false", "the toggle itself must have applied")
+	assert.Contains(t, v, "user-override", "provenance updates in place")
+}
+
+func TestSpaceToggleOnAllPageKeepsRowInItsNamespaceGroup(t *testing.T) {
+	m, _ := newTwoNSModel(t)
+	m = press(m, tea.KeyMsg{Type: tea.KeyEnter}) // expand the first (tui-test) group
+	m = press(m, tea.KeyMsg{Type: tea.KeyDown})  // onto install.ai.claude
+	m = press(m, tea.KeyMsg{Type: tea.KeySpace}) // toggle
+	v := m.View()
+	assert.Contains(t, v, "install.ai.claude", "row stays inside its namespace group")
+	assert.NotContains(t, v, "▶ install  · \n", "no phantom empty-namespace group appears")
+}

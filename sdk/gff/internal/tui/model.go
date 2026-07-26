@@ -414,12 +414,10 @@ func (m *Model) activateFeature(r row) (tea.Model, tea.Cmd) {
 			return m, nil // file unchanged — do not flip the row
 		}
 		m.errMsg = ""
-		// Refresh the item in m.items so the view reflects the new state.
-		m.items[r.itemIdx] = resolve.Resolved{
-			Feature: item.Feature,
-			Value:   newVal,
-			Layer:   resolve.LayerUserOverride,
-		}
+		// Refresh the item in place — WithValue preserves the unexported
+		// namespace; a bare literal would drop it and the row would vanish
+		// from namespace-scoped pages (owner-reported bug).
+		m.items[r.itemIdx] = item.WithValue(newVal, resolve.LayerUserOverride)
 		m.buildRows()
 
 	case *gffv1.Feature_ChoiceDefault:
@@ -549,11 +547,7 @@ func (m *Model) confirmPicker() {
 		return // file unchanged — do not flip the row
 	}
 	m.errMsg = ""
-	m.items[m.pickerItemIdx] = resolve.Resolved{
-		Feature: item.Feature,
-		Value:   newVal,
-		Layer:   resolve.LayerUserOverride,
-	}
+	m.items[m.pickerItemIdx] = item.WithValue(newVal, resolve.LayerUserOverride)
 	m.buildRows()
 }
 

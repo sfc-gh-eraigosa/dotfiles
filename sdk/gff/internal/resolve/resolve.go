@@ -101,6 +101,17 @@ type ResolvedJSON struct {
 // resolution (additive accessor; the field itself stays unexported).
 func (r Resolved) Namespace() string { return r.namespace }
 
+// WithValue returns a copy of r carrying a new effective value and winning
+// layer while PRESERVING the unexported namespace. Callers that rebuild a
+// Resolved after a write (e.g. the TUI's optimistic refresh) must use this —
+// a bare struct literal silently drops the namespace and breaks any
+// namespace-scoped filtering downstream.
+func (r Resolved) WithValue(v *gffv1.Value, l Layer) Resolved {
+	r.Value = v
+	r.Layer = l
+	return r
+}
+
 func (r Resolved) JSON() (ResolvedJSON, error) {
 	valBytes, err := protojson.Marshal(r.Value)
 	if err != nil {
