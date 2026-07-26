@@ -23,7 +23,14 @@ issue  ──►  classify  ──►  design  ──►  spec  ──►  plan 
 4. **Spec** (`mbo/specs/<slug>.md`) — validated requirements + acceptance/eval criteria
    (produced by `superpowers:brainstorming`).
 5. **Plan** (`mbo/plans/<slug>.md`) — the TDD-ordered implementation plan
-   (produced by `superpowers:writing-plans`).
+   (produced by `superpowers:writing-plans`). **A plan that will be BUILT must ship the
+   execution trio** in `mbo/plans/<slug>/`: `IMPLEMENTATION.md` (procedure + kickoff
+   prompt), `TRACKING.md` (live evidence ledger), `TODO.md` (resumable checkbox cursor) —
+   from `templates/{implementation,tracking,todo}.md`. The plan says *what*; the trio
+   guarantees the execution flow: resumable at any point (first unchecked TODO box =
+   next action), evidence-backed (a TRACKING row is `done` only with a commit SHA +
+   observed output), session-bridging (the IMPLEMENTATION §8 kickoff prompt). Proven by
+   the `gff` run ([`plans/gff/`](./plans/gff/)). Design-only / ADR objectives skip it.
 6. **Register** the objective in [`index.md`](./index.md) (slug, artifact links, issue(s),
    PR(s), state).
 7. **Build** on a `gss feature` worktree (draft PR), TDD, then land via `gss`. Update the
@@ -56,7 +63,9 @@ ADR may be design-only. **Always** register it in `index.md`.
   type; the filename is the objective. Dates live *inside* the doc + in `index.md`, not in the
   filename (legacy date-prefixed files are kept as-is; new work uses the bare slug).
 - **Templates** live in [`templates/`](./templates) — copy `design.md` / `spec.md` / `plan.md`
-  to start, so every artifact has the same headers (status, relates-to, evaluation criteria…).
+  to start, so every artifact has the same headers (status, relates-to, evaluation criteria…);
+  `implementation.md` / `tracking.md` / `todo.md` are the execution-trio starters for any
+  objective that reaches the build phase (pipeline step 5).
 - **One objective per PR** where practical; the PR description links its `mbo/` artifacts.
 - **`index.md` is the source of truth** for what exists and its state — update it whenever an
   artifact is added or a state changes.
