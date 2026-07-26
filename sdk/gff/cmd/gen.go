@@ -1,0 +1,300 @@
+package cmd
+
+import (
+	"bytes"
+	"fmt"
+	"go/format"
+	"os"
+	"path/filepath"
+	"strings"
+	"text/template"
+
+	gffv1 "github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/gen/gff/v1"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve"
+	"github.com/spf13/cobra"
+)
+
+// ── flag vars ─────────────────────────────────────────────────────────────────
+
+var (
+	genPkg string
+	genOut string
+)
+
+// resetGenFlags resets the gen-verb flag vars to defaults.
+// Tests call this via t.Cleanup so package-level state doesn't leak.
+func resetGenFlags() {
+	genPkg = ""
+	genOut = ""
+}
+
+// ── registration ──────────────────────────────────────────────────────────────
+
+var genCmd = &cobra.Command{
+	Use:   "gen",
+	Short: "Generate a type-safe Go accessor package for the resolved feature flags",
+	Long: `gen reads the resolved feature flags and emits a Go source file in --out
+containing a nested struct var tree and BoolFlag / ChoiceFlag types whose
+methods delegate to pkg/gff by literal key string.
+
+Example:
+  gff gen --pkg gffflags --out ./internal/gffflags`,
+	Args: cobra.NoArgs,
+	RunE: runGen,
+}
+
+func init() {
+	genCmd.Flags().StringVar(&genPkg, "pkg", "", "Go package name for the generated file (required)")
+	genCmd.Flags().StringVar(&genOut, "out", "", "output directory to write <pkg>.go into (required)")
+	_ = genCmd.MarkFlagRequired("pkg")
+	_ = genCmd.MarkFlagRequired("out")
+	rootCmd.AddCommand(genCmd)
+}
+
+// ── naming helpers ────────────────────────────────────────────────────────────
+
+// segmentToTitle converts a single key segment (possibly dash-separated) to a
+// Title-cased Go identifier: "wispr-flow" → "WisprFlow", "claude" → "Claude".
+func segmentToTitle(s string) string {
+	parts := strings.Split(s, "-")
+	var b strings.Builder
+	for _, p := range parts {
+		if len(p) == 0 {
+			continue
+		}
+		b.WriteString(strings.ToUpper(p[:1]) + p[1:])
+	}
+	return b.String()
+}
+
+// ── tree builder ──────────────────────────────────────────────────────────────
+
+// flagNode represents one leaf in the generated accessor tree.
+type flagNode struct {
+	// GoName is the Title-cased identifier for this segment (e.g. "WisprFlow").
+	GoName string
+	// LiteralKey is the full flag key (e.g. "install.windows.wispr-flow").
+	LiteralKey string
+	// IsBool is true for bool flags; false for choice flags.
+	IsBool bool
+}
+
+// areaNode is the second-level struct (the "component" segment).
+type componentNode struct {
+	GoName string
+	Flags  []flagNode
+}
+
+// areaNode is the top-level struct (the "area" segment of area.component.feature).
+type areaNode struct {
+	GoName     string
+	Components []componentNode
+}
+
+// buildTree groups a flat []Resolved into a two-level tree keyed by the first
+// two path segments. Keys must be exactly 3 dotted segments (lint-enforced).
+// Keys that do not have exactly 3 segments are silently skipped.
+func buildTree(resolved []resolve.Resolved) []areaNode {
+	type compKey struct{ area, comp string }
+	type flagEntry struct {
+		comp       compKey
+		featureSeg string
+		key        string
+		isBool     bool
+	}
+
+	var entries []flagEntry
+	areaOrder := []string{}
+	areaSeen := map[string]bool{}
+	compOrder := map[string][]string{}
+	compSeen := map[string]map[string]bool{}
+
+	for _, r := range resolved {
+		parts := strings.SplitN(r.Feature.GetPath(), ".", 3)
+		if len(parts) != 3 {
+			continue
+		}
+		area, comp, feat := parts[0], parts[1], parts[2]
+		_, isBool := r.Feature.GetDefault().(*gffv1.Feature_BoolDefault)
+
+		if !areaSeen[area] {
+			areaSeen[area] = true
+			areaOrder = append(areaOrder, area)
+		}
+		if compSeen[area] == nil {
+			compSeen[area] = map[string]bool{}
+		}
+		if !compSeen[area][comp] {
+			compSeen[area][comp] = true
+			compOrder[area] = append(compOrder[area], comp)
+		}
+		entries = append(entries, flagEntry{
+			comp:       compKey{area, comp},
+			featureSeg: feat,
+			key:        r.Feature.GetPath(),
+			isBool:     isBool,
+		})
+	}
+
+	// Index entries by (area, comp) for fast lookup.
+	byComp := map[compKey][]flagEntry{}
+	for _, e := range entries {
+		byComp[e.comp] = append(byComp[e.comp], e)
+	}
+
+	var areas []areaNode
+	for _, area := range areaOrder {
+		an := areaNode{GoName: segmentToTitle(area)}
+		for _, comp := range compOrder[area] {
+			cn := componentNode{GoName: segmentToTitle(comp)}
+			ck := compKey{area, comp}
+			for _, fe := range byComp[ck] {
+				cn.Flags = append(cn.Flags, flagNode{
+					GoName:     segmentToTitle(fe.featureSeg),
+					LiteralKey: fe.key,
+					IsBool:     fe.isBool,
+				})
+			}
+			an.Components = append(an.Components, cn)
+		}
+		areas = append(areas, an)
+	}
+	return areas
+}
+
+// ── template ──────────────────────────────────────────────────────────────────
+
+// genTemplate is the text/template source for the generated Go file.
+// It is rendered then passed through go/format.Source for canonical formatting.
+const genTemplate = `// Code generated by gff gen; DO NOT EDIT.
+package {{.Pkg}}
+
+import (
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/pkg/gff"
+)
+
+// BoolFlag is a typed accessor for a boolean feature flag.
+// Bool() delegates to pkg/gff.Bool with the literal key embedded at code-gen time.
+type BoolFlag struct{ key string }
+
+// Bool returns the effective boolean value of the flag across all 5 resolver layers.
+func (f BoolFlag) Bool() (bool, error) { return gff.Bool(f.key) }
+
+// ChoiceFlag is a typed accessor for a choice (single- or multi-select) feature flag.
+// All methods delegate to pkg/gff with the literal key embedded at code-gen time.
+type ChoiceFlag struct{ key string }
+
+// Selected returns the effective selected option ids.
+func (f ChoiceFlag) Selected() ([]string, error) { return gff.Selected(f.key) }
+
+// IsSelected reports whether optionID is currently selected.
+func (f ChoiceFlag) IsSelected(optionID string) (bool, error) { return gff.IsSelected(f.key, optionID) }
+
+// StringValues returns the string payloads of the currently-selected options.
+func (f ChoiceFlag) StringValues() ([]string, error) { return gff.StringValues(f.key) }
+
+// IntValues returns the int64 payloads of the currently-selected options.
+func (f ChoiceFlag) IntValues() ([]int64, error) { return gff.IntValues(f.key) }
+
+// FloatValues returns the float64 payloads of the currently-selected options.
+func (f ChoiceFlag) FloatValues() ([]float64, error) { return gff.FloatValues(f.key) }
+
+// BoolValues returns the bool payloads of the currently-selected options.
+func (f ChoiceFlag) BoolValues() ([]bool, error) { return gff.BoolValues(f.key) }
+
+{{- range .Areas}}
+// {{.GoName}} groups the {{.GoName | lower}}.* feature flags.
+var {{.GoName}} = struct {
+{{- range .Components}}
+	{{.GoName}} struct {
+{{- range .Flags}}
+{{- if .IsBool}}
+		{{.GoName}} BoolFlag
+{{- else}}
+		{{.GoName}} ChoiceFlag
+{{- end}}
+{{- end}}
+	}
+{{- end}}
+}{
+{{- range .Components}}
+	{{.GoName}}: struct {
+{{- range .Flags}}
+{{- if .IsBool}}
+		{{.GoName}} BoolFlag
+{{- else}}
+		{{.GoName}} ChoiceFlag
+{{- end}}
+{{- end}}
+	}{
+{{- range .Flags}}
+{{- if .IsBool}}
+		{{.GoName}}: BoolFlag{key: "{{.LiteralKey}}"},
+{{- else}}
+		{{.GoName}}: ChoiceFlag{key: "{{.LiteralKey}}"},
+{{- end}}
+{{- end}}
+	},
+{{- end}}
+}
+{{- end}}
+`
+
+// ── template data ─────────────────────────────────────────────────────────────
+
+type genTemplateData struct {
+	Pkg   string
+	Areas []areaNode
+}
+
+// ── runGen ────────────────────────────────────────────────────────────────────
+
+func runGen(_ *cobra.Command, _ []string) error {
+	r, err := newResolver()
+	if err != nil {
+		return err
+	}
+
+	all, err := r.All()
+	if err != nil {
+		return err
+	}
+
+	areas := buildTree(all)
+
+	funcMap := template.FuncMap{
+		"lower": strings.ToLower,
+	}
+	tmpl, err := template.New("gen").Funcs(funcMap).Parse(genTemplate)
+	if err != nil {
+		return fmt.Errorf("gen: parse template: %w", err)
+	}
+
+	data := genTemplateData{
+		Pkg:   genPkg,
+		Areas: areas,
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return fmt.Errorf("gen: execute template: %w", err)
+	}
+
+	formatted, err := format.Source(buf.Bytes())
+	if err != nil {
+		// Return the unformatted source in the error to aid debugging.
+		return fmt.Errorf("gen: format source: %w\nraw output:\n%s", err, buf.String())
+	}
+
+	outPath := filepath.Join(genOut, genPkg+".go")
+
+	if err := os.MkdirAll(genOut, 0o755); err != nil {
+		return fmt.Errorf("gen: mkdir %s: %w", genOut, err)
+	}
+
+	if err := os.WriteFile(outPath, formatted, 0o644); err != nil {
+		return fmt.Errorf("gen: write %s: %w", outPath, err)
+	}
+
+	return nil
+}

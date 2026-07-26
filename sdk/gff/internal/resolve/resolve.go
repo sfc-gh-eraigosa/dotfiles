@@ -2,11 +2,11 @@
 //
 // Layers (lowest to highest priority):
 //
-//	1. SystemSnapshot  – every *.yaml|*.json file in P.SystemSnapshotDir
-//	2. UserSnapshot    – every *.yaml|*.json file in P.UserSnapshotDir
-//	3. RepoLive        – live feature file in the repo pointed to by P.WorkDir / Resolver.Source
-//	4. SystemOverride  – sparse override file at P.SystemOverride
-//	5. UserOverride    – sparse override file at P.UserOverride
+//  1. SystemSnapshot  – every *.yaml|*.json file in P.SystemSnapshotDir
+//  2. UserSnapshot    – every *.yaml|*.json file in P.UserSnapshotDir
+//  3. RepoLive        – live feature file in the repo pointed to by P.WorkDir / Resolver.Source
+//  4. SystemOverride  – sparse override file at P.SystemOverride
+//  5. UserOverride    – sparse override file at P.UserOverride
 package resolve
 
 import (
@@ -97,6 +97,21 @@ type ResolvedJSON struct {
 
 // JSON converts r into a JSON-friendly struct. Value and Feature are encoded
 // with protojson so proto oneofs are represented correctly.
+// Namespace returns the owning source's reverse-DNS identity for this
+// resolution (additive accessor; the field itself stays unexported).
+func (r Resolved) Namespace() string { return r.namespace }
+
+// WithValue returns a copy of r carrying a new effective value and winning
+// layer while PRESERVING the unexported namespace. Callers that rebuild a
+// Resolved after a write (e.g. the TUI's optimistic refresh) must use this —
+// a bare struct literal silently drops the namespace and breaks any
+// namespace-scoped filtering downstream.
+func (r Resolved) WithValue(v *gffv1.Value, l Layer) Resolved {
+	r.Value = v
+	r.Layer = l
+	return r
+}
+
 func (r Resolved) JSON() (ResolvedJSON, error) {
 	valBytes, err := protojson.Marshal(r.Value)
 	if err != nil {
@@ -152,18 +167,23 @@ type definition struct {
 
 // resolvedState is the full resolution result.
 type resolvedState struct {
-	defs      []definition        // all definitions, in definition-layer order (last wins)
-	byKey     map[defKey]int      // defKey → index in defs
-	sysOvr    map[string]*gffv1.Value
-	usrOvr    map[string]*gffv1.Value
-	focusNS   string              // namespace unqualified keys bind to first (§3.2):
-	                              // the CWD repo's flag file or the --source target
+	defs    []definition   // all definitions, in definition-layer order (last wins)
+	byKey   map[defKey]int // defKey → index in defs
+	sysOvr  map[string]*gffv1.Value
+	usrOvr  map[string]*gffv1.Value
+	focusNS string // namespace unqualified keys bind to first (§3.2):
+	// the CWD repo's flag file or the --source target
+
+	// defHistory retains every definition layer's entry for a key (byKey/defs
+	// keep only the winner). Feeds Explain's per-layer provenance story.
+	defHistory map[defKey]map[Layer]definition
 }
 
 // load builds the resolved state from all layers.
 func (r *Resolver) load() (*resolvedState, error) {
 	st := &resolvedState{
-		byKey: make(map[defKey]int),
+		byKey:      make(map[defKey]int),
+		defHistory: make(map[defKey]map[Layer]definition),
 	}
 
 	// ── definition layers ────────────────────────────────────────────────────
@@ -303,6 +323,10 @@ func (r *Resolver) loadFile(path string, layer Layer, st *resolvedState) (string
 	for _, set := range ff.GetSets() {
 		for _, feat := range set.GetFeatures() {
 			k := defKey{namespace: ns, path: feat.GetPath()}
+			if st.defHistory[k] == nil {
+				st.defHistory[k] = make(map[Layer]definition)
+			}
+			st.defHistory[k][layer] = definition{feature: feat, layer: layer, namespace: ns}
 			idx, exists := st.byKey[k]
 			if exists {
 				// Replace: update layer and feature.
@@ -316,17 +340,11 @@ func (r *Resolver) loadFile(path string, layer Layer, st *resolvedState) (string
 	return ns, nil
 }
 
-// effectiveValue computes the effective value and layer for a definition,
-// taking overrides into account.
-func effectiveValue(def definition, sysOvr, usrOvr map[string]*gffv1.Value) (Resolved, error) {
-	feat := def.feature
-	defLayer := def.layer
-
-	// Compute the default value from the feature definition.
-	var defaultVal *gffv1.Value
+// defaultValue computes the default value carried by a feature definition.
+func defaultValue(feat *gffv1.Feature) *gffv1.Value {
 	switch feat.Default.(type) {
 	case *gffv1.Feature_BoolDefault:
-		defaultVal = &gffv1.Value{Kind: &gffv1.Value_BoolValue{BoolValue: feat.GetBoolDefault()}}
+		return &gffv1.Value{Kind: &gffv1.Value_BoolValue{BoolValue: feat.GetBoolDefault()}}
 	case *gffv1.Feature_ChoiceDefault:
 		cd := feat.GetChoiceDefault()
 		var ids []string
@@ -335,14 +353,22 @@ func effectiveValue(def definition, sysOvr, usrOvr map[string]*gffv1.Value) (Res
 				ids = append(ids, opt.GetId())
 			}
 		}
-		defaultVal = &gffv1.Value{Kind: &gffv1.Value_ChoiceValue{
+		return &gffv1.Value{Kind: &gffv1.Value_ChoiceValue{
 			ChoiceValue: &gffv1.ChoiceSelection{Selected: ids},
 		}}
 	default:
-		// Unknown default type — use bool false as fallback.
-		defaultVal = &gffv1.Value{Kind: &gffv1.Value_BoolValue{BoolValue: false}}
+		// Unknown default type — bool false fallback.
+		return &gffv1.Value{Kind: &gffv1.Value_BoolValue{BoolValue: false}}
 	}
+}
 
+// effectiveValue computes the effective value and layer for a definition,
+// taking overrides into account.
+func effectiveValue(def definition, sysOvr, usrOvr map[string]*gffv1.Value) (Resolved, error) {
+	feat := def.feature
+	defLayer := def.layer
+
+	defaultVal := defaultValue(feat)
 	effectiveVal := defaultVal
 	effectiveLayer := defLayer
 
@@ -441,8 +467,14 @@ func (r *Resolver) All() ([]Resolved, error) {
 		results = append(results, res)
 	}
 
+	// Stable, fully-deterministic order: path, then namespace. The tie-break
+	// matters when two sources define the same path — without it the sort is
+	// unstable and the UI's row/group order flips between runs.
 	sort.Slice(results, func(i, j int) bool {
-		return results[i].Feature.GetPath() < results[j].Feature.GetPath()
+		if results[i].Feature.GetPath() != results[j].Feature.GetPath() {
+			return results[i].Feature.GetPath() < results[j].Feature.GetPath()
+		}
+		return results[i].namespace < results[j].namespace
 	})
 
 	return results, nil
@@ -458,7 +490,17 @@ func (r *Resolver) Resolve(key string) (Resolved, error) {
 	if err != nil {
 		return Resolved{}, err
 	}
+	def, err := bindKey(st, key)
+	if err != nil {
+		return Resolved{}, err
+	}
+	return effectiveValue(def, st.sysOvr, st.usrOvr)
+}
 
+// bindKey resolves a user-supplied key to its winning definition per the §3.2
+// binding rules (qualified form, focus-namespace-first, ambiguity => error).
+// Shared by Resolve and Explain.
+func bindKey(st *resolvedState, key string) (definition, error) {
 	// Split on first colon.
 	var ns, path string
 	if idx := strings.IndexByte(key, ':'); idx >= 0 {
@@ -473,17 +515,16 @@ func (r *Resolver) Resolve(key string) (Resolved, error) {
 		k := defKey{namespace: ns, path: path}
 		idx, ok := st.byKey[k]
 		if !ok {
-			return Resolved{}, fmt.Errorf("resolve: %w: %s", ErrUnknownKey, key)
+			return definition{}, fmt.Errorf("resolve: %w: %s", ErrUnknownKey, key)
 		}
-		def := st.defs[idx]
-		return effectiveValue(def, st.sysOvr, st.usrOvr)
+		return st.defs[idx], nil
 	}
 
 	// Unqualified: the focus namespace (CWD repo / --source target) wins
 	// outright when it defines the key (§3.2).
 	if st.focusNS != "" {
 		if idx, ok := st.byKey[defKey{namespace: st.focusNS, path: path}]; ok {
-			return effectiveValue(st.defs[idx], st.sysOvr, st.usrOvr)
+			return st.defs[idx], nil
 		}
 	}
 
@@ -497,9 +538,9 @@ func (r *Resolver) Resolve(key string) (Resolved, error) {
 
 	switch len(candidates) {
 	case 0:
-		return Resolved{}, fmt.Errorf("resolve: %w: %s", ErrUnknownKey, key)
+		return definition{}, fmt.Errorf("resolve: %w: %s", ErrUnknownKey, key)
 	case 1:
-		return effectiveValue(candidates[0], st.sysOvr, st.usrOvr)
+		return candidates[0], nil
 	default:
 		// Ambiguous: collect namespace names for a helpful error message.
 		nsList := make([]string, 0, len(candidates))
@@ -507,7 +548,7 @@ func (r *Resolver) Resolve(key string) (Resolved, error) {
 			nsList = append(nsList, c.namespace)
 		}
 		sort.Strings(nsList)
-		return Resolved{}, fmt.Errorf("resolve: %w: %q is defined in multiple namespaces (%s); qualify as <namespace>:%s",
+		return definition{}, fmt.Errorf("resolve: %w: %q is defined in multiple namespaces (%s); qualify as <namespace>:%s",
 			ErrUnknownKey, path, strings.Join(nsList, ", "), path)
 	}
 }

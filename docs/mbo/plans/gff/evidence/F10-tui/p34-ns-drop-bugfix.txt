@@ -1,0 +1,27 @@
+# Owner-reported bug: Space on a category page made the feature row disappear
+# date UTC: 2026-07-26T16:46:04Z
+# Cause: list toggle rebuilt the item as a bare resolve.Resolved literal, dropping the
+# UNEXPORTED namespace field; category pages filter rows by Namespace()==scopeNS, so the
+# freshly-toggled item was excluded from the rebuilt row list.
+# Fix: additive resolve.Resolved.WithValue(v, layer) preserves the namespace; both
+# rebuild sites (list toggle, picker confirm) now use it. Regression tests:
+# TestSpaceToggleOnCategoryPageKeepsTheRow, TestSpaceToggleOnAllPageKeepsRowInItsNamespaceGroup.
+
+## REPRODUCED (pre-fix binary): install.runtime.fnm vanished after Space (5 rows -> 4)
+## FIXED (post-fix binary, same steps):
+== runtime page BEFORE Space ==
+com.github.sfc-gh-eraigosa.dotfiles ▸ install (All) · ai · fonts · network · pkg · [runtime] · sdk · shell · s
+>   install.runtime.fnm                       true    override   user-override  Runs the fnm install block.
+  install.runtime.goenv                     true  default  repo-live  Runs the goenv install/update and pinned
+  install.runtime.nvm                       true  default  repo-live  Runs the nvm install block.
+  install.runtime.pyenv                     true  default  repo-live  Runs the pyenv install/update block.
+  install.runtime.rbenv                     true  default  repo-live  Runs the rbenv install/update block with
+↑/↓ move  ←/→ category  PgUp/PgDn page  Enter expand/details  Space toggle  ? help  q quit
+== AFTER Space ==
+com.github.sfc-gh-eraigosa.dotfiles ▸ install (All) · ai · fonts · network · pkg · [runtime] · sdk · shell · s
+>   install.runtime.fnm                       false   override   user-override  Runs the fnm install block.
+  install.runtime.goenv                     true  default  repo-live  Runs the goenv install/update and pinned
+  install.runtime.nvm                       true  default  repo-live  Runs the nvm install block.
+  install.runtime.pyenv                     true  default  repo-live  Runs the pyenv install/update block.
+  install.runtime.rbenv                     true  default  repo-live  Runs the rbenv install/update block with
+↑/↓ move  ←/→ category  PgUp/PgDn page  Enter expand/details  Space toggle  ? help  q quit
