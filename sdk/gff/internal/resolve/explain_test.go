@@ -9,6 +9,8 @@ import (
 	"errors"
 	"testing"
 
+	gffv1 "github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/gen/gff/v1"
+
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -93,4 +95,22 @@ func TestExplainQualifiedKey(t *testing.T) {
 	require.Len(t, layers, 5)
 	assert.Equal(t, resolve.LayerUserOverride, res.Layer)
 	assert.False(t, res.Value.GetBoolValue())
+}
+
+func TestNamespaceAccessorAndWithValue(t *testing.T) {
+	r := newResolver(t, world{repo: explainDefYAML})
+	res, err := r.Resolve("demo.ui.dash")
+	require.NoError(t, err)
+	require.Equal(t, "com.example.a", res.Namespace(), "accessor exposes the owning namespace")
+
+	// WithValue must carry the namespace through — a bare literal drops it
+	// (the exact bug that made TUI rows vanish from namespace-scoped pages).
+	updated := res.WithValue(
+		&gffv1.Value{Kind: &gffv1.Value_BoolValue{BoolValue: false}},
+		resolve.LayerUserOverride,
+	)
+	assert.Equal(t, "com.example.a", updated.Namespace(), "namespace preserved")
+	assert.False(t, updated.Value.GetBoolValue())
+	assert.Equal(t, resolve.LayerUserOverride, updated.Layer)
+	assert.Same(t, res.Feature, updated.Feature, "definition pointer unchanged")
 }
