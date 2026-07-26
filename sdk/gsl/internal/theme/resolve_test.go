@@ -393,3 +393,32 @@ func TestResolve_Claude_ThemeWrongType_Degrades(t *testing.T) {
 		t.Errorf("wrong type: got %q, want %q (should degrade to dark)", got, "dark")
 	}
 }
+
+// tmux/screen: the terminal fallback must prefer the 8-color named palette.
+// Inside a multiplexer the true background is unknowable from env alone
+// (COLORTERM/TERM say "capable", nothing says light vs dark), and basic ANSI
+// indices are recolored by the outer terminal's own theme — contrast stays
+// correct on any background. Mirrors the gff rule shipped on dotfiles#187.
+func TestResolve_TerminalFallback_TmuxPrefersDark8(t *testing.T) {
+	home := t.TempDir()
+	cases := []map[string]string{
+		{"TMUX": "/tmp/tmux-1000/default,123,0", "TERM": "tmux-256color", "COLORTERM": "truecolor"},
+		{"TERM": "screen-256color"},
+		{"TERM": "tmux-256color"},
+	}
+	for _, env := range cases {
+		if got := theme.Resolve("", envMap(env), home); got != "dark8" {
+			t.Errorf("env %v: got %q, want dark8 (terminal-themed ANSI)", env, got)
+		}
+	}
+}
+
+func TestResolve_ToolSettingsStillWinInsideTmux(t *testing.T) {
+	// A host-tool settings signal must keep beating the tmux rule.
+	home := t.TempDir()
+	writeClaudeSettings(t, home, "light")
+	got := theme.Resolve("claude", envMap(map[string]string{"TMUX": "x", "TERM": "tmux-256color"}), home)
+	if got != "light" {
+		t.Errorf("claude settings inside tmux: got %q, want light", got)
+	}
+}
