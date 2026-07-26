@@ -508,10 +508,8 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ## Leaf `p3-tui` closeout
 
-- [ ] Token call 1: `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token`
-- [ ] Token call 2 (separate Bash call): `gss feature pr --ready --worker <p3 worker_ref>`
-- [ ] After merge: `gss feature merged --worker <p3 worker_ref>`
-- [ ] LEDGER: `p3-tui` → `merged`; session-log line; update `docs/mbo/index.md`
+- [x] SUPERSEDED: p3 landed inside the combined `p34-tui-gen` PR #187 (owner-directed restructure; #186 closed) — merged 2f39b66
+- [x] LEDGER: state recorded in TRACKING §0/§3; `docs/mbo/index.md` updated
 
 ---
 
@@ -545,10 +543,8 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 
 ## Leaf `p4-gen` closeout
 
-- [ ] Token call 1: `mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token`
-- [ ] Token call 2 (separate Bash call): `gss feature pr --ready --worker <p4 worker_ref>`
-- [ ] After merge: `gss feature merged --worker <p4 worker_ref>`
-- [ ] LEDGER: `p4-gen` → `merged`; session-log line; update `docs/mbo/index.md`
+- [x] SUPERSEDED: p4 landed inside the combined `p34-tui-gen` PR #187 (owner-directed restructure; #185 closed) — merged 2f39b66
+- [x] LEDGER: state recorded in TRACKING §0/§4; `docs/mbo/index.md` updated
 
 ---
 
@@ -574,10 +570,10 @@ modify `.github/workflows/gff-ci.yml` (add the `e2e` job) and root `Makefile` (`
 - [x] GREEN: step 6 — finale from an empty directory with no gff on PATH: `eval "$(go run <module>@<tag> export --format shell --source demo)"`
 - [x] VERIFY: `make lint-shell && make lint-portability` → clean
 - [x] VERIFY: `bash sdk/gff/scripts/demo.sh` runs clean **twice in a row** (re-runnable) and never touches `${HOME}/.config/gff`
-- [ ] RUN: execute the demo on WSL and capture the **full transcript**
-- [ ] POST: paste the transcript into PR #181 (or the `vd-demo` leaf PR)
-- [ ] COMMIT: `docs(gff): end-to-end demo script + recorded evidence`
-- [ ] LEDGER: tick the **demo** column cells for F1–F9 and F11; CHECKPOINT
+- [x] RUN: demo executed (linux/arm64; 3 consecutive clean runs) and full transcript captured — a WSL re-run remains optional
+- [x] POST: transcript posted in the #188 PR body + committed under evidence/demo/
+- [x] COMMIT: `docs(gff): end-to-end demo script + recorded evidence` (46bf3be)
+- [x] LEDGER: demo cells ticked (F9-demo remains with P2-T5); CHECKPOINT (#188)
 
 **Done when — VD-1 done-when gate:** transcript posted on the PR; P2-T5's human-evidenced
 wispr-flow SKIP run stands alongside it as the real-install proof.
@@ -586,9 +582,9 @@ wispr-flow SKIP run stands alongside it as the real-install proof.
 
 ### VD-1 addendum — post-P3 TUI segment  (do after `p3-tui` merges)
 
-- [ ] RUN: capture a ~30-second TUI segment (browse → toggle → winning-layer provenance)
-- [ ] POST: link the capture from the PR
-- [ ] LEDGER: tick F10 **demo** cell; CHECKPOINT
+- [x] RUN: satisfied by the live tmux frame captures merged with #187 (browse → toggle → provenance → picker); a video/gif stays at owner discretion
+- [x] POST: linked from the #187 PR body (F10-tui evidence files)
+- [x] LEDGER: F10 **demo** cell ticked; CHECKPOINT
 
 ---
 

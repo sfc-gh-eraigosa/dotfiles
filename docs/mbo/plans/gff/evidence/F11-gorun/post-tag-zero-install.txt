@@ -1,0 +1,13 @@
+# §7.5 post-first-tag zero-install verification (the real F11 proof)
+# date UTC: 2026-07-26T19:17:29Z
+# command: from an empty dir with a FRESH GOMODCACHE:
+#   GOMODCACHE=$(mktemp -d) go run github.com/sfc-gh-eraigosa/dotfiles/sdk/gff@v0.1.0 version
+# result: tag resolved, module built, stdout carried ONLY the version block:
+
+gff vdev
+  Commit:      none
+  Dirty:       false
+  Build Date:  unknown
+  Description: gff — git fast features: layered feature flags persisted in git
+
+# (vdev/none is expected: go-run builds without build.sh's ldflags stamping — documented)

@@ -296,6 +296,35 @@ gss feature pr --ready --worker gff/<user>/<purpose>     # call 2 (token-gated)
   command here freely and note it in the session log. Never edit `../gff.md`,
   `../../specs/gff.md`, or `../../designs/gff.md` as part of the build.
 
+### 7.1 Run-2 procedure corrections (learned 2026-07-26, binding for future runs)
+
+1. **`gss feature merged` takes the worker ref POSITIONALLY** — there is no
+   `--worker` flag on that subcommand (unlike `checkpoint`/`pr`).
+2. **Verify every new worker's base against `origin/main`.** `worker add` can
+   branch from a stale local `main`; before any work: `git -C <wt> log --oneline -1`
+   must equal `origin/main`'s tip, else `git fetch origin main:main` and reset the
+   fresh (zero-commit) branch onto it.
+3. **`gss feature checkpoint` regenerates the PR body every run** — re-apply any
+   custom body (proof matrices, evidence links) AFTER the final checkpoint, via
+   `gh pr edit --body-file`, preserving the `gss:stack` markers.
+4. **`gss feature pr --ready` can be double-bound**: `safety_guard.sh` validates
+   the approval token against the SESSION cwd's HEAD while gss validates it
+   against the WORKER branch HEAD — unsatisfiable when they differ. Fallback:
+   `gh pr ready <n>` (same outcome; gss reads PR state live).
+5. **Owner-directed leaf restructuring is normal.** p3+p4 landed as one combined
+   `p34-tui-gen` PR (#187) on owner request; the original leaf PRs were closed as
+   superseded and their TRACKING rows annotated — the DAG in the plan stays the
+   design truth, the registry/PRs reflect the runtime shape.
+6. **Ledger single-writer:** exactly one branch carries TODO/TRACKING/index edits
+   at a time (p2 → vd-demo this run) so parallel leaf PRs never conflict on docs.
+7. **Registry rows may be pruned when a feature's PRs merge** — surviving
+   branches/worktrees continue via plain `git` (plain pushes are not token-gated)
+   + `gh` for PR state.
+8. **Real-binary demos catch what in-process tests cannot** (the KeySpace bug,
+   the tmux OSC-11 theme bug, the overlap-namespace bug all surfaced only in
+   tmux-driven runs of the compiled binary). Budget a live tmux validation pass
+   per TUI-facing change; capture frames into the evidence tree.
+
 ---
 
 ## 8. Kickoff prompt

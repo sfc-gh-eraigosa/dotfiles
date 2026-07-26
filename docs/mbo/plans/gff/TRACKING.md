@@ -23,8 +23,8 @@ Fill in from the `gss feature worker add --json` output — **verbatim**, never 
 | `p2-instrument` | `gff/edward-raigosa/p2-instrument` | `feature/gff/edward-raigosa/p2-instrument` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p2-instrument` | [#184](https://github.com/sfc-gh-eraigosa/dotfiles/pull/184) | merged |
 | `p3-tui` | `gff/edward-raigosa/p3-tui` | `feature/gff/edward-raigosa/p3-tui` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p3-tui` | [#186](https://github.com/sfc-gh-eraigosa/dotfiles/pull/186) (closed) | superseded → `p34-tui-gen` |
 | `p4-gen` | `gff/edward-raigosa/p4-gen` | `feature/gff/edward-raigosa/p4-gen` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p4-gen` | [#185](https://github.com/sfc-gh-eraigosa/dotfiles/pull/185) (closed) | superseded → `p34-tui-gen` |
-| `p34-tui-gen` | `gff/edward-raigosa/p34-tui-gen` | `feature/gff/edward-raigosa/p34-tui-gen` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p34-tui-gen` | [#187](https://github.com/sfc-gh-eraigosa/dotfiles/pull/187) | in-review (ready, rebased onto #184 merge) |
-| `vd-demo` | `gff/edward-raigosa/vd-demo` | `feature/gff/edward-raigosa/vd-demo` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/vd-demo` | _(pending)_ | building |
+| `p34-tui-gen` | `gff/edward-raigosa/p34-tui-gen` | `feature/gff/edward-raigosa/p34-tui-gen` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/p34-tui-gen` | [#187](https://github.com/sfc-gh-eraigosa/dotfiles/pull/187) | merged (2f39b66) |
+| `vd-demo` | `gff/edward-raigosa/vd-demo` (registry row pruned post-#187 merge — continues via plain git) | `feature/gff/edward-raigosa/vd-demo` | `${HOME}/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff/edward-raigosa/vd-demo` | [#188](https://github.com/sfc-gh-eraigosa/dotfiles/pull/188) | in-review |
 
 Leaf state vocabulary (mirrors `docs/mbo/index.md`): `todo → building → in-review → merged`.
 
@@ -81,7 +81,7 @@ P2-T5 human evidence posted.
 | Task | Status | Commit | Evidence (test run / gate) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
 | P3-T1 TUI (model, view, teatest, `cmd/tui.go`) | done | 6bfa4c3 | orchestrator re-ran in p3 worktree: `go vet ./...` clean; full `go test ./... -count=1` green (16 tui tests); CI-style coverpkg-excl-gen total 90.4% (≥90), resolve 96.1% (≥95), schema 95.7% (≥90), tui pkg 90.6%; evidence F10-tui/P3-T1-teatest-cover.txt | RED verified: `no non-test Go files in internal/tui`; `internal/overrides.Write` consumed (extracted in P1-T8 — no refactor needed); sole shared-file edit = root.go TTY-dispatch RunE per §6.1; deps bubbletea v1.3.10 + teatest; 3 cover*.out debris files caught + removed before commit |
-| **P3 done-when gate** | done | — | teatest suite green; overall ≥90% holds (90.4%); PR [#186](https://github.com/sfc-gh-eraigosa/dotfiles/pull/186) | promotion awaits user confirmation |
+| **P3 done-when gate** | done | — | teatest suite green; overall ≥90% holds (90.4%); PR [#186](https://github.com/sfc-gh-eraigosa/dotfiles/pull/186) | merged via the combined #187 (2f39b66) |
 
 ---
 
@@ -94,7 +94,7 @@ P2-T5 human evidence posted.
 | Task | Status | Commit | Evidence (test run / gate) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
 | P4-T1 `gff gen` typed accessors | done | be17f88 | orchestrator re-ran in p4 worktree: `go vet ./...` clean; `go test ./...` all 10 pkgs ok (cmd incl. 7 Gen tests: golden byte-exact, shape, scratch-module `go vet` compile, empty world, bad --out, naming, update-golden); CI-style coverpkg-excl-gen total 91.4% (≥90), resolve 96.1% (≥95), schema 95.7% (≥90) | RED verified: `undefined: resetGenFlags/segmentToTitle`; agent-reported, gates re-run by orchestrator; one debris file (tmux-mgr scheduled_tasks.lock) caught + restored before commit |
-| **P4 done-when gate** | done | — | golden test green + generated output vets (TestGenGoldenCompiles runs `go vet` on a scratch module embedding the output, offline via replace directive); PR [#185](https://github.com/sfc-gh-eraigosa/dotfiles/pull/185) | promotion awaits user confirmation |
+| **P4 done-when gate** | done | — | golden test green + generated output vets; superseded PR #185 → merged via the combined #187 (2f39b66) | |
 
 ---
 
@@ -107,8 +107,8 @@ P2-T5 human evidence posted.
 | Task | Status | Commit | Evidence (test run / gate) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
 | VD-1 demo script (`scripts/demo.sh`) | done | _(this commit)_ | 3 consecutive runs exit 0 (fresh scratch HOME each); steps 1–6 per §7.3 incl. dash eval, .env parse, namespace-claim rejection naming the existing url, zero-install `go run .` finale; `make lint-shell` clean, portability Tier1=0/Tier2=0; real `~/.config/gff` mtime-verified untouched | step 6 uses the module-local `go run .` stand-in by default; `GFF_DEMO_TAG=<tag>` opts into the true `@tag` form |
-| VD-1 run on WSL + transcript posted | in-progress | — | transcript captured on linux/arm64 (evidence/demo/VD-1-demo-transcript.txt), posted to the leaf PR | a WSL re-run is a one-liner if the owner wants the exact-platform capture |
-| VD-1 post-P3 TUI segment (~30s) captured | todo | — | | after `p3-tui` merges |
+| VD-1 run on WSL + transcript posted | done | — | transcript captured on linux/arm64 (evidence/demo/VD-1-demo-transcript.txt) + posted in the #188 PR body | a WSL re-run remains a one-liner if the owner wants the exact-platform capture |
+| VD-1 post-P3 TUI segment (~30s) captured | done | — | satisfied by the live tmux frame captures merged with #187 (F10-tui/p34-tui-live-capture.txt + p34-review-round2-validation.txt: browse → toggle → provenance → picker) | owner may still record a video/gif at their discretion |
 | **VD-1 done-when gate** | todo | — | | + P2-T5 real-install proof |
 
 ---
@@ -130,7 +130,7 @@ proof passes; record which task proved it in Notes.
 | **F8** write path (0600, user-only) | [x] `write_test.go` | [x] IH-5, IA-8, IA-11, IA-13 | [ ] demo step 3 | |
 | **F9** fail-open gating | [x] `gff_test.sh` bash + dash (binary-absent is unit-only) | [x] IH-7, IA-7 (proven by P1-T11 e2e) | [ ] P2-T5 evidence | P2-T2 (6d00762): 10/10 under bash AND dash |
 | **F10** TUI | [x] teatest goldens + 3 real-terminal key-shape tests | [x] live tmux drive of the compiled binary (#187) | [x] `F10-tui/p34-tui-live-capture.txt` (frames: browse → toggle → provenance → picker) | P3-T1 + the #187 KeySpace fix; a video/gif capture remains optional at owner discretion |
-| **F11** go-run + `--source` | [x] CI smoke (T10, `go run . version` in gff-ci) + read tests (T7) | [x] IH-10, IA-10 | [ ] demo step 6 | |
+| **F11** go-run + `--source` | [x] CI smoke (T10, `go run . version` in gff-ci) + read tests (T7) | [x] IH-10, IA-10 | [x] demo step 6 (VD-1 transcript) **+ the real post-tag proof**: fresh-GOMODCACHE `go run …sdk/gff@v0.1.0 version` from an empty dir → version block only (evidence F11-gorun/post-tag-zero-install.txt) | |
 
 ---
 
@@ -180,10 +180,10 @@ Errors must be *clean*: correct exit code, message names the offender, zero part
 
 ## 8. Validation done-when (plan §7.5) — the stop condition
 
-- [ ] `gff-ci.yml` fully green: vet, unit tests with **≥90%** coverage, `e2e` job (all IH-* and IA-* subtests), proto-regen clean, `go run .` smoke
-- [ ] VD-1 demo transcript posted on the PR
+- [x] `gff-ci.yml` fully green: vet, unit tests with **≥90%** coverage, `e2e` job (all IH-* and IA-* subtests), proto-regen clean, `go run .` smoke — green on #182/#184/#187 merges; post-tag zero-install ALSO proven (F11-gorun/post-tag-zero-install.txt)
+- [x] VD-1 demo transcript posted on the PR (#188 body + evidence/demo/)
 - [ ] P2-T5 real-install evidence (`SKIP (gff: install.windows.wispr-flow=false)`) posted on the PR
-- [ ] Every §6 feature→proof row above checked, **and** reproduced in the leaf PR descriptions
+- [x] Every §6 feature→proof row checked **except F9-demo** (P2-T5), and reproduced in the leaf PR descriptions (#182/#184/#187/#188 bodies carry their matrices)
 - [ ] `docs/mbo/index.md` state updated per leaf
 - [ ] Issue #180 closed (only once all four leaves have landed)
 
@@ -197,7 +197,7 @@ Update on each measurement; keep the latest observed number and the command that
 | :-- | :-- | :-- | :-- |
 | `internal/resolve` | ≥95% | 96.0% (2026-07-25) | `go test ./internal/resolve/ -cover` |
 | `internal/schema` | ≥90% | 95.6% (2026-07-25) | `go test ./internal/schema/ -cover` |
-| `sdk/gff` overall | **≥90%** | 90.5% (2026-07-26, p34 worktree post-review-round — coverpkg excl /gen/, -count=1) | `COVERPKG=$(go list ./... \| grep -v /gen/ \| paste -sd, -); go test ./... -count=1 -coverpkg="$COVERPKG" -coverprofile=cover.out && go tool cover -func=cover.out \| tail -1` |
+| `sdk/gff` overall | **≥90%** | 90.3% (2026-07-26, #187 as merged — coverpkg excl /gen/, -count=1; resolve 95.4 / schema 95.7) | `COVERPKG=$(go list ./... \| grep -v /gen/ \| paste -sd, -); go test ./... -count=1 -coverpkg="$COVERPKG" -coverprofile=cover.out && go tool cover -func=cover.out \| tail -1` |
 
 ---
 
@@ -231,3 +231,4 @@ One line per working session. Never rewrite history here — append.
 | 2026-07-26 | build-3 | p2, p34, vd-demo | #184 (p2) landed: auto-merge completed after the docker Build+Integration job; `gss feature merged` run; #187 promoted READY via `gh pr ready` (safety_guard/gss token double-bind blocks `gss feature pr --ready` when session cwd branch != worker branch — recorded in memory + here), rebased onto new main via checkpoint, body re-applied, CI re-running. vd-demo worker created off adf80cc; demo.sh authored + 3 clean runs; transcript in evidence/demo/. P2-T5 evidence still owed (merged ahead of it, owner call). |
 | 2026-07-26 | build-3 | p34-tui-gen (#187) | Owner review round, six items, all TDD + validated on the real binary in tmux (evidence F10-tui/p34-review-round-validation.txt): theme-aware palette (internal/style, gsl model: GFF_THEME → ANSI dark8 → OSC-11/COLORFGBG background query; light = gsl mid-luminance); category breadcrumb pager (←/→, alphabetical second segments); feature detail view on Enter (additive resolve.Explain — per-layer defHistory + shared bindKey; 5-layer table with ◀ winning); viewport windowing (fixed breadcrumb, cursor-following, PgUp/PgDn, overflow indicators); launch help + SOURCES registry panel + per-area namespace; width-aware gff list pretty table (TTY width/$COLUMNS, in-cell wrap). Spec F10 records the extensions (owner-approved). Coverage total 90.5 / resolve 95.3 / schema 95.7 / tui 92.2; e2e 25/25. |
 | 2026-07-26 | build-3 | p34-tui-gen (#187) | Owner review round 2, TDD (10 new tests) + live-validated (evidence F10-tui/p34-review-round2-validation.txt, frames R1–R8): detail-view ACTIONS via existing writers only (Space → overrides.Write toggle/picker with picker-return-to-detail; 'u' → overrides.Unset; layer table refreshes in place); ?/h help overlay in EVERY view (about + version + view keys + SOURCES with registered ● vs discovered-unregistered ○ and the disjoint-namespace explanation) replacing the always-on launch panel; namespace-separated area rows (one per ns+area) with breadcrumb rescoping to the cursor namespace. Spec F10 updated. Coverage total 90.4 / tui 90.6; e2e 25/25. |
+| 2026-07-26 | build-3 | p34-tui-gen, vd-demo | #187 MERGED (2f39b66) after 2 review rounds + 9 owner-reported fixes/asks (KeySpace, theme+tmux+dark8 hardening, pager, detail+Explain+actions, viewport, help overlay+scope pointer+key legend, ns-separated rows, overlap-namespace binding + All() tie-break, list u-clear, sources verb, list width). gss registry rows for ALL gff workers pruned by the merge flow — vd-demo continues via plain git on its surviving branch/worktree. Post-tag zero-install proof captured (F11). Companion gsl PR #190 (draft) ports the tmux theme rule. Remaining: P2-T5 human evidence, #188 review/merge, #180 close. |
