@@ -92,13 +92,15 @@
 
 ### Task 5 — docs + ledgers  (plan Task 5)
 
-- [ ] DOCS: root `AGENTS.md` install.sh bullet — prompt-early/Windows-last flow, UAC at
-  END on `[y]`, `[s]` = gff override (undo: `gff unset install.windows.desktop-deploy`)
-- [ ] DOCS: `opt/Desktop/Apps/scripts/AGENTS.md` — update any old-flow/log-path text
-- [ ] LEDGER: `docs/mbo/index.md` row → state `building`; gff `TRACKING.md` §10 row 5
-  resolution += "Fix built in gff-install-flow (PR #193): -GffEnv argument hand-off"
-- [ ] COMMIT: `docs(gff-install-flow): flow docs + ledger updates (plan, index, §10 row-5 closure)`
-- [ ] LEDGER + CHECKPOINT
+- [x] DOCS: root `AGENTS.md` install.sh bullet rewritten — prompt-early/Windows-last flow,
+  UAC at END on `[y]`, `[s]` = gff override + sentinel migration, per-run deploy note,
+  user-profile log path
+- [x] DOCS: `opt/Desktop/Apps/scripts/AGENTS.md` — grepped: no stale flow/log-path text
+  (only AHK elevation notes, still accurate); no edit needed
+- [x] LEDGER: `docs/mbo/index.md` row → `building`, build PR #194 linked; gff `TRACKING.md`
+  §10 row 5 resolution += RESOLVED via build PR #194 (-GffEnv hand-off)
+- [x] COMMIT: `docs(gff-install-flow): flow docs + ledger updates (plan, index, §10 row-5 closure)`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** no doc still describes deploy-before-prompt or the admin-only log.
 
