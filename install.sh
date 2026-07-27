@@ -15,12 +15,21 @@ function install_zsh_centos7() {
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 export BASE_DIR
 
-# Flags for pre-bootstrap steps take effect via `gff export` in the calling shell or on the next run.
 # gff_on is env-only and fail-open; it must exist before the FIRST gate. Sourcing
 # it here (not at the bootstrap point) is load-bearing: a gate that calls an
 # undefined gff_on gets exit 127, takes the else branch, and SKIPS the step —
 # failing CLOSED on exactly the fresh machines gff must be harmless on.
 . "${BASE_DIR}/opt/lib/gff.sh"
+
+# Early flag export (fail-open): pre-bootstrap gates read env only. If a gff
+# binary already exists (any run after the first), materialize the overrides
+# now so install.system/shell/pkg/tools/windows gates honor them. The
+# mid-script bootstrap below remains the authoritative refresh.
+if command -v gff >/dev/null 2>&1; then
+  set -a
+  eval "$(cd "${BASE_DIR}" && gff export --shell 2>/dev/null || true)"
+  set +a
+fi
 
 # --- Authenticate sudo up front -------------------------------------------
 # The rest of this installer runs several privileged steps (apt/yum installs,
@@ -62,11 +71,13 @@ else
   ln -sf "${BASE_DIR}/opt" "${HOME}/opt"
 fi
 
-# Windows/WSL only: deploy opt/Desktop/* onto the real Windows Desktop.
-# Logic is isolated in opt/bin/install_windows.sh for clarity.
+# Windows/WSL only — ASK phase: capture the y/n/s customization answer up front
+# (all interactivity front-loaded). The deploy + PowerShell EXECUTION runs at
+# the END of this script (--deferred), after the gff bootstrap has exported
+# GFF_* — so install.windows.* overrides work with zero calling-shell steps.
 if gff_on install.windows.desktop-deploy; then
   if [ -f "${BASE_DIR}/opt/bin/install_windows.sh" ]; then
-    bash "${BASE_DIR}/opt/bin/install_windows.sh" "${BASE_DIR}"
+    bash "${BASE_DIR}/opt/bin/install_windows.sh" "${BASE_DIR}" --ask
   fi
 else gff_skip_msg install.windows.desktop-deploy; fi
 
@@ -612,6 +623,15 @@ for shell_config in "$HOME/.zshrc" "$HOME/.profile"; do
     fi
 done
 else gff_skip_msg install.system.nano-profile; fi
+
+# Windows/WSL only — DEFERRED execution (the y/n/s answer was captured up top):
+# runs AFTER the gff bootstrap so install.windows.* overrides are exported —
+# including on a fresh system. See docs/mbo/specs/gff-install-flow.md.
+if gff_on install.windows.desktop-deploy; then
+  if [ -f "${BASE_DIR}/opt/bin/install_windows.sh" ]; then
+    bash "${BASE_DIR}/opt/bin/install_windows.sh" "${BASE_DIR}" --deferred
+  fi
+else gff_skip_msg install.windows.desktop-deploy; fi
 
 # Final reminder (WSL): if the interactive Windows setup ran this invocation, the
 # one thing that can't be scripted is Wispr Flow's shortcuts — surface it last so

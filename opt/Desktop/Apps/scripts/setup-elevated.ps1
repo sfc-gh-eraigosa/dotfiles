@@ -4,15 +4,17 @@
 # ONE prompt instead of one per installer. Safe to run standalone too: if launched
 # non-elevated it self-elevates (one UAC), then performs every admin task here.
 #
-# Each step is best-effort and logged to C:\Windows\Temp\setup-elevated.log so one
-# failure never aborts the rest. Tasks:
+# Each step is best-effort and logged to %USERPROFILE%\setup-elevated.log (user-
+# readable -- no second elevation needed to inspect it) so one failure never
+# aborts the rest. Tasks:
 #   1. macOS-style hotkeys logon task  (setup-autostart.ps1)
 #   2. iTunes Win32 build              (winget Apple.iTunes; Store build removed by setup-apps.ps1)
 #   3. Wispr Flow MSI                  (wispr-install-core.ps1)
 #   4. PowerToys Copilot-key -> F24    (suppress-copilot-key.ps1)
+param([string]$GffEnv = '')
 
 $ErrorActionPreference = 'Continue'   # one failing step must not abort the rest
-$log = 'C:\Windows\Temp\setup-elevated.log'
+$log = Join-Path $env:USERPROFILE 'setup-elevated.log'
 "=== setup-elevated $(Get-Date -Format o) ===" | Set-Content $log -Encoding utf8
 
 function Log($m) { Write-Host $m; "$m" | Add-Content $log -Encoding utf8 }
@@ -20,13 +22,15 @@ function Log($m) { Write-Host $m; "$m" | Add-Content $log -Encoding utf8 }
 # --- self-elevate if launched standalone without admin ----------------------
 # Use a LOCAL deployed copy + local CWD so the elevated child does not inherit an
 # inaccessible \\wsl.localhost\... path/CWD (which would kill it on startup).
+# -GffEnv is forwarded: the elevated child gets a FRESH environment, so the flag
+# state must ride the command line (see the seeding block below).
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
           ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $admin) {
     $selfDeployed = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Apps\scripts\setup-elevated.ps1'
     $self = if ($PSCommandPath -like '\\*' -and (Test-Path $selfDeployed)) { $selfDeployed } else { $PSCommandPath }
     Start-Process powershell -Verb RunAs -WorkingDirectory $env:SystemRoot -ArgumentList @(
-        '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$self`"") -Wait
+        '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$self`"",'-GffEnv',"`"$GffEnv`"") -Wait
     return
 }
 
@@ -39,6 +43,17 @@ $dir = $PSScriptRoot
 $gffLib = Join-Path $dir 'lib\gff.ps1'
 if (Test-Path $gffLib) { . $gffLib }
 else { function Test-GffOn([string]$Key) { return $true } }
+
+# GFF_* does NOT survive the UAC boundary as environment (Start-Process -Verb
+# RunAs starts the child with a fresh env -- dotfiles gff TRACKING sec 10, proven
+# 2026-07-26). The parent passes the flag states as -GffEnv "NAME=value;...";
+# seed them into $env: so Test-GffOn works unchanged. Strictly validated;
+# malformed pairs are logged and ignored (fail-open).
+foreach ($pair in ($GffEnv -split ';' | Where-Object { $_ })) {
+    if ($pair -match '^(GFF_INSTALL_WINDOWS_[A-Z_]+)=(true|false|[a-z0-9,-]+)$') {
+        Set-Item -Path ('env:' + $Matches[1]) -Value $Matches[2]
+    } else { Log "  WARNING: ignored malformed -GffEnv pair: $pair" }
+}
 
 # 1) macOS-style hotkeys logon task. setup-autostart.ps1 skips its own self-elevate
 #    because we are already admin, registers the task, and reloads AutoHotkey.

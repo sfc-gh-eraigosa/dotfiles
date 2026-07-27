@@ -14,25 +14,25 @@
 
 ## Preflight (once)
 
-- [ ] `git log --oneline origin/main | grep -m1 191` → the `/w` fix (cd87074) on main
-- [ ] `gss feature list | grep -A2 gff-install-flow` → worker row present
-- [ ] Read plan fully (code blocks normative) + spec §5 + the plan's behavior invariants
+- [x] `git log --oneline origin/main | grep -m1 191` → the `/w` fix (cd87074) on main
+- [x] `gss feature list | grep -A2 gff-install-flow` → worker row present (build worker; impl merged with #193)
+- [x] Read plan fully (code blocks normative) + spec §5 + the plan's behavior invariants
 
 ---
 
 ### Task 1 — `opt/lib/winsetup.sh` + test driver  (plan Task 1)
 
-- [ ] RED: write `opt/lib/winsetup_test.sh` verbatim from the plan (9 cases: choice
+- [x] RED: write `opt/lib/winsetup_test.sh` verbatim from the plan (9 cases: choice
   round-trip, take-absent→none, sentinel-honored, sentinel-migrates, env-override-skip,
   clean-not-skipped, record_skip-gff, record_skip-sentinel-fallback, no-tty→`__notty__`)
-- [ ] RUN-RED: `bash opt/lib/winsetup_test.sh` → expect **FAIL** (`winsetup.sh: No such file`)
-- [ ] GREEN: implement `opt/lib/winsetup.sh` verbatim from the plan (POSIX/dash-safe)
-- [ ] RUN-GREEN: `bash opt/lib/winsetup_test.sh` → **0 failed**
-- [ ] RUN-GREEN: `sh opt/lib/winsetup_test.sh` → **0 failed** (dash)
-- [ ] VERIFY: `make lint-shell && make lint-portability` → rc 0 both
-- [ ] ALLOWLIST: `git status --short -- opt/lib/winsetup.sh opt/lib/winsetup_test.sh` (both visible via `!opt/**`); `chmod +x opt/lib/winsetup_test.sh`
-- [ ] COMMIT: `feat(install): winsetup.sh — choice persistence + gff-owned skip state (TDD)`
-- [ ] LEDGER (T1 row + F3 automated cell) + CHECKPOINT
+- [x] RUN-RED: `bash opt/lib/winsetup_test.sh` → **FAIL observed**: 17 failed, `winsetup.sh: No such file`
+- [x] GREEN: implement `opt/lib/winsetup.sh` (POSIX/dash-safe; deviation: tty OPEN-probe replaces `[ -r /dev/tty ]` — see TRACKING T1 note)
+- [x] RUN-GREEN: `bash opt/lib/winsetup_test.sh` → 18 passed, **0 failed**
+- [x] RUN-GREEN: `sh opt/lib/winsetup_test.sh` → 18 passed, **0 failed** (dash)
+- [x] VERIFY: `make lint-shell && make lint-portability` → rc 0 both
+- [x] ALLOWLIST: `git status --short` showed both `??` via `!opt/**`; driver mode 0755
+- [x] COMMIT: `feat(install): winsetup.sh — choice persistence + gff-owned skip state (TDD)` (5bdcd45)
+- [x] LEDGER (T1 row + F3 automated cell) + CHECKPOINT
 
 **Done when:** driver green under both shells, gates clean.
 
@@ -40,17 +40,19 @@
 
 ### Task 2 — `install_windows.sh` `--ask` / `--deferred` split  (plan Task 2)
 
-- [ ] GREEN: restructure per the plan layout — mode arg, `#!/usr/bin/env bash` shebang
+- [x] GREEN: restructure per the plan layout — mode arg, `#!/usr/bin/env bash` shebang
   fix, winsetup sourcing, `print_prompt_text` (with the new `[s]` gff-override text),
   `notty_guidance`, `deploy_windows_files`, `run_windows_customization` (WSLENV builder
-  moves inside), `--ask`/`--deferred`/`--full` dispatch; delete the SENTINEL block
-- [ ] VERIFY: `bash -n opt/bin/install_windows.sh` → clean
-- [ ] VERIFY: non-WSL smoke — `bash opt/bin/install_windows.sh "$PWD" --ask; echo rc=$?` → silent, `rc=0`; same for `--deferred`
-- [ ] VERIFY: structural greps — `winsetup.sh` sourced before first `winsetup_` call;
-  WSLENV builder appears once, inside `run_windows_customization`; `grep -n SENTINEL` → no hits
-- [ ] VERIFY: `make lint-shell && make lint-portability` → rc 0 both
-- [ ] COMMIT: `feat(install): split install_windows.sh into --ask/--deferred around the prompt`
-- [ ] LEDGER (T2 row + F2 automated cell) + CHECKPOINT
+  moves inside), `--ask`/`--deferred`/`--full` dispatch; SENTINEL block deleted.
+  Detail: `--ask` does NOT clear `WIN_SETUP_MARKER` (the deferred half of the same
+  run writes it; clearing stays in `--deferred`/`--full`)
+- [x] VERIFY: `bash -n opt/bin/install_windows.sh` → clean
+- [x] VERIFY: non-WSL smoke — `--ask` rc=0 silent; `--deferred` rc=0 silent
+- [x] VERIFY: structural greps — winsetup sourced line 48, first call line 228;
+  WSLENV builder ×1 inside `run_windows_customization`; `grep -n SENTINEL` → no hits
+- [x] VERIFY: `make lint-shell && make lint-portability` → rc 0 both
+- [x] COMMIT: `feat(install): split install_windows.sh into --ask/--deferred around the prompt`
+- [x] LEDGER (T2 row + F2 automated cell) + CHECKPOINT
 
 **Done when:** all greps hit as specified; gates clean; smoke rc=0.
 
@@ -58,13 +60,14 @@
 
 ### Task 3 — `install.sh` early export + Windows-last  (plan Task 3)
 
-- [ ] GREEN: insert the early-export block after the `opt/lib/gff.sh` source (~line 23)
-- [ ] GREEN: early Windows gate call gains `--ask` (~line 67)
-- [ ] GREEN: insert the `--deferred` gate block before the `WIN_SETUP_MARKER` banner (~line 619)
-- [ ] VERIFY: order grep — gff.sh source → early export → `--ask` → bootstrap → `--deferred` → banner
-- [ ] VERIFY: `bash -n install.sh` → clean; `make lint-shell && make lint-portability` → rc 0
-- [ ] COMMIT: `feat(install): early gff export + prompt-early/Windows-last execution`
-- [ ] LEDGER (T3 row + F1 automated cell) + CHECKPOINT
+- [x] GREEN: early-export block inserted after the `opt/lib/gff.sh` source (l.22→28); the
+  stale "or on the next run" comment line replaced by the early-export doc
+- [x] GREEN: early Windows gate call gains `--ask` (l.80)
+- [x] GREEN: `--deferred` gate block inserted before the `WIN_SETUP_MARKER` banner (l.632)
+- [x] VERIFY: order grep exact — source 22 → export 28 → --ask 80 → bootstrap 368 → --deferred 632 → banner 639
+- [x] VERIFY: `bash -n install.sh` clean; `make lint-shell` rc=0; `make lint-portability` rc=0
+- [x] COMMIT: `feat(install): early gff export + prompt-early/Windows-last execution`
+- [x] LEDGER (T3 row + F1 automated cell) + CHECKPOINT
 
 **Done when:** order grep exact; gates clean.
 
@@ -72,15 +75,16 @@
 
 ### Task 4 — PowerShell `-GffEnv` + log + loud failure  (plan Task 4)
 
-- [ ] GREEN: `setup-elevated.ps1` — `param([string]$GffEnv = '')` first statement; log →
-  `$env:USERPROFILE\setup-elevated.log` (+ header comment); self-elevate ArgumentList
-  forwards `-GffEnv`; seeding loop after the gff.ps1 fallback (validated pairs → `$env:`)
-- [ ] GREEN: `setup-apps.ps1` — `$gffPairs` collection; `Start-Process … -PassThru` with
-  `-GffEnv`; exit-code warning + rerun hints; catch text aligned ("cancelled, timed out, or failed")
-- [ ] VERIFY: pwsh AST parse of both files → 0 errors — or record "deferred to Task 6
-  human run" in TRACKING (do NOT tick as passed without running it)
-- [ ] COMMIT: `feat(install): -GffEnv argument hand-off across UAC + user-readable elevated log`
-- [ ] LEDGER (T4 row + F6 automated cell; F4 parse cell per what actually ran) + CHECKPOINT
+- [x] GREEN: `setup-elevated.ps1` — `param([string]$GffEnv = '')` first statement (comments
+  precede, legal); log → `$env:USERPROFILE\setup-elevated.log` (+ header comment);
+  self-elevate ArgumentList forwards `-GffEnv`; seeding loop after the gff.ps1 fallback
+  (regex-validated pairs → `$env:`, malformed logged + ignored)
+- [x] GREEN: `setup-apps.ps1` — `$gffPairs` collection; `Start-Process … -Wait -PassThru`
+  with `-GffEnv`; ExitCode≠0 warning + rerun hints; catch text "cancelled, timed out, or failed"
+- [x] VERIFY: pwsh ABSENT on the build host → **AST parse DEFERRED to the Task 6 human
+  run** (recorded in TRACKING T4 row; not ticked as passed)
+- [x] COMMIT: `feat(install): -GffEnv argument hand-off across UAC + user-readable elevated log`
+- [x] LEDGER (T4 row + F6 automated cell; F4 parse deferred) + CHECKPOINT
 
 **Done when:** both files edited per plan; parse status honestly recorded.
 
@@ -88,13 +92,15 @@
 
 ### Task 5 — docs + ledgers  (plan Task 5)
 
-- [ ] DOCS: root `AGENTS.md` install.sh bullet — prompt-early/Windows-last flow, UAC at
-  END on `[y]`, `[s]` = gff override (undo: `gff unset install.windows.desktop-deploy`)
-- [ ] DOCS: `opt/Desktop/Apps/scripts/AGENTS.md` — update any old-flow/log-path text
-- [ ] LEDGER: `docs/mbo/index.md` row → state `building`; gff `TRACKING.md` §10 row 5
-  resolution += "Fix built in gff-install-flow (PR #193): -GffEnv argument hand-off"
-- [ ] COMMIT: `docs(gff-install-flow): flow docs + ledger updates (plan, index, §10 row-5 closure)`
-- [ ] LEDGER + CHECKPOINT
+- [x] DOCS: root `AGENTS.md` install.sh bullet rewritten — prompt-early/Windows-last flow,
+  UAC at END on `[y]`, `[s]` = gff override + sentinel migration, per-run deploy note,
+  user-profile log path
+- [x] DOCS: `opt/Desktop/Apps/scripts/AGENTS.md` — grepped: no stale flow/log-path text
+  (only AHK elevation notes, still accurate); no edit needed
+- [x] LEDGER: `docs/mbo/index.md` row → `building`, build PR #194 linked; gff `TRACKING.md`
+  §10 row 5 resolution += RESOLVED via build PR #194 (-GffEnv hand-off)
+- [x] COMMIT: `docs(gff-install-flow): flow docs + ledger updates (plan, index, §10 row-5 closure)`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** no doc still describes deploy-before-prompt or the admin-only log.
 
@@ -102,16 +108,15 @@
 
 ### Task 6 — human validation matrix (owner, real WSL — never fake)  (plan Task 6)
 
-- [ ] RUN 1 (owner): `[y]` + `gff set install.windows.wispr-flow false` → elevated log
-  (user-profile path) shows `SKIP (gff: install.windows.wispr-flow=false)`; then unset
-- [ ] RUN 2 (owner): `[n]` → deploy still happens at the end; no PS customization
-- [ ] RUN 3 (owner): `[s]` → `gff list install.windows.desktop-deploy` = `false ·
-  user-override`; `~/.config/dotfiles/.skip_windows_setup` absent
-- [ ] RUN 4 (owner): flag-off → no prompt, single `SKIP (gff: install.windows.desktop-deploy=false)`; then unset
-- [ ] CAPTURE: transcript slices → `../gff/evidence/F09-gating/gff-install-flow-matrix.txt`
-  (usernames/hostnames redacted)
-- [ ] COMMIT evidence; LEDGER (F1–F6 human cells, §3 stop-condition boxes)
-- [ ] CHECKPOINT, re-apply any custom PR body AFTER this final checkpoint
-- [ ] PROMOTE: `gh pr ready 193` — **owner-confirmed only**; merge — owner-gated
+- [x] RUN 1 (owner): `[y]` + wispr-flow=false → **elevated log SKIP via -GffEnv** (2 fix
+  rounds first: .ps1 em-dash/ANSI parse bug, then success; both recorded in TRACKING §4)
+- [x] RUN 2 (owner): `[n]` → deploy at the end, no PS customization
+- [x] RUN 3/3b (owner): `[s]` → attempt 1 proved the sentinel fallback (CWD bug, fixed
+  TDD); 3b proved live migration → `gff list` = `false · user-override`, sentinel gone
+- [x] RUN 4 (owner): flag-off → NO prompt, SKIP at top (ask gate) + tail (deferred gate); unset restored
+- [x] CAPTURE: `../gff/evidence/F09-gating/gff-install-flow-matrix.txt` (redacted)
+- [x] COMMIT evidence; LEDGER (F1–F6 human cells, §3 stop-condition boxes)
+- [x] CHECKPOINT, re-apply any custom PR body AFTER this final checkpoint
+- [ ] PROMOTE: `gh pr ready 194` — **owner-confirmed only**; merge — owner-gated
 
 **Done when — objective gate:** TRACKING §3 fully green.
