@@ -14,25 +14,25 @@
 
 ## Preflight (once)
 
-- [ ] `git log --oneline origin/main | grep -m1 191` → the `/w` fix (cd87074) on main
-- [ ] `gss feature list | grep -A2 gff-install-flow` → worker row present
-- [ ] Read plan fully (code blocks normative) + spec §5 + the plan's behavior invariants
+- [x] `git log --oneline origin/main | grep -m1 191` → the `/w` fix (cd87074) on main
+- [x] `gss feature list | grep -A2 gff-install-flow` → worker row present (build worker; impl merged with #193)
+- [x] Read plan fully (code blocks normative) + spec §5 + the plan's behavior invariants
 
 ---
 
 ### Task 1 — `opt/lib/winsetup.sh` + test driver  (plan Task 1)
 
-- [ ] RED: write `opt/lib/winsetup_test.sh` verbatim from the plan (9 cases: choice
+- [x] RED: write `opt/lib/winsetup_test.sh` verbatim from the plan (9 cases: choice
   round-trip, take-absent→none, sentinel-honored, sentinel-migrates, env-override-skip,
   clean-not-skipped, record_skip-gff, record_skip-sentinel-fallback, no-tty→`__notty__`)
-- [ ] RUN-RED: `bash opt/lib/winsetup_test.sh` → expect **FAIL** (`winsetup.sh: No such file`)
-- [ ] GREEN: implement `opt/lib/winsetup.sh` verbatim from the plan (POSIX/dash-safe)
-- [ ] RUN-GREEN: `bash opt/lib/winsetup_test.sh` → **0 failed**
-- [ ] RUN-GREEN: `sh opt/lib/winsetup_test.sh` → **0 failed** (dash)
-- [ ] VERIFY: `make lint-shell && make lint-portability` → rc 0 both
-- [ ] ALLOWLIST: `git status --short -- opt/lib/winsetup.sh opt/lib/winsetup_test.sh` (both visible via `!opt/**`); `chmod +x opt/lib/winsetup_test.sh`
-- [ ] COMMIT: `feat(install): winsetup.sh — choice persistence + gff-owned skip state (TDD)`
-- [ ] LEDGER (T1 row + F3 automated cell) + CHECKPOINT
+- [x] RUN-RED: `bash opt/lib/winsetup_test.sh` → **FAIL observed**: 17 failed, `winsetup.sh: No such file`
+- [x] GREEN: implement `opt/lib/winsetup.sh` (POSIX/dash-safe; deviation: tty OPEN-probe replaces `[ -r /dev/tty ]` — see TRACKING T1 note)
+- [x] RUN-GREEN: `bash opt/lib/winsetup_test.sh` → 18 passed, **0 failed**
+- [x] RUN-GREEN: `sh opt/lib/winsetup_test.sh` → 18 passed, **0 failed** (dash)
+- [x] VERIFY: `make lint-shell && make lint-portability` → rc 0 both
+- [x] ALLOWLIST: `git status --short` showed both `??` via `!opt/**`; driver mode 0755
+- [x] COMMIT: `feat(install): winsetup.sh — choice persistence + gff-owned skip state (TDD)` (5bdcd45)
+- [x] LEDGER (T1 row + F3 automated cell) + CHECKPOINT
 
 **Done when:** driver green under both shells, gates clean.
 
