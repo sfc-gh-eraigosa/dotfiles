@@ -2,7 +2,7 @@
 
 - **Slug:** gsl-ultra
 - **Date:** 2026-07-11
-- **Status:** Draft
+- **Status:** In progress — 4 of 7 leaves built (see §6.2)
 - **Relates to:** spec `../specs/gsl-ultra.md` · design `../designs/gsl-ultra.md` · issue [#158](https://github.com/sfc-gh-eraigosa/dotfiles/issues/158) · absorbs #31
 
 ## 1. Summary & verdict
@@ -274,6 +274,23 @@ sequenced (`style` → `tui` via the `width` chain), and `mcp` bases on `latency
 is not function-disjoint, **merge the leaves** rather than rebasing around it.
 
 **Landing order:** `iface` → (`width` ∥ `latency` ∥ `agy`) → `mcp` → `style` → `tui`.
+
+### 6.2 Execution ledger (updated 2026-07-26)
+
+| Leaf | PR | State | Gate evidence |
+| :-- | :-- | :-- | :-- |
+| `iface` | [#161](https://github.com/sfc-gh-eraigosa/dotfiles/pull/161) | in-review (rebased on main) | `go build ./...` + `go vet ./...` green — P0 gate met |
+| `width` | [#165](https://github.com/sfc-gh-eraigosa/dotfiles/pull/165) | in-review (stacked on iface) | full `go test ./...` green incl. `fit_property_test.go` (E1–E7) |
+| `latency` | [#166](https://github.com/sfc-gh-eraigosa/dotfiles/pull/166) | in-review (stacked on iface) | full suite green incl. procgroup/gh-cache tests (E18, E19, E24) |
+| `agy` | [#167](https://github.com/sfc-gh-eraigosa/dotfiles/pull/167) | in-review (stacked on iface) | full suite green; `FuzzParse` 20 s smoke clean (E20, E21); reconciled with main's tmux-palette rule (#190) |
+| `mcp` | — | **not started** | blocked on `latency` (exec seam) |
+| `style` | — | **not started** | blocked on `width` (raw-text-aware truncation) |
+| `tui` | — | **not started** | blocked on `width` + `mcp` + `style` |
+
+Deviation log: main's [#190](https://github.com/sfc-gh-eraigosa/dotfiles/pull/190) added a
+tmux/screen → `dark8` rule to `theme/resolve.go` after this plan was written; the `agy` leaf's
+`keywordToPalette` bridge composes with it (host-tool settings still take precedence; the tmux rule
+only affects the terminal-env fallback). No interface change required.
 
 > Produced via `superpowers:writing-plans` from the audit synthesis. Execute with TDD throughout.
 > Update `../index.md` state as it moves.
