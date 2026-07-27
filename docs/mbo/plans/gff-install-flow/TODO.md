@@ -108,16 +108,15 @@
 
 ### Task 6 — human validation matrix (owner, real WSL — never fake)  (plan Task 6)
 
-- [ ] RUN 1 (owner): `[y]` + `gff set install.windows.wispr-flow false` → elevated log
-  (user-profile path) shows `SKIP (gff: install.windows.wispr-flow=false)`; then unset
-- [ ] RUN 2 (owner): `[n]` → deploy still happens at the end; no PS customization
-- [ ] RUN 3 (owner): `[s]` → `gff list install.windows.desktop-deploy` = `false ·
-  user-override`; `~/.config/dotfiles/.skip_windows_setup` absent
-- [ ] RUN 4 (owner): flag-off → no prompt, single `SKIP (gff: install.windows.desktop-deploy=false)`; then unset
-- [ ] CAPTURE: transcript slices → `../gff/evidence/F09-gating/gff-install-flow-matrix.txt`
-  (usernames/hostnames redacted)
-- [ ] COMMIT evidence; LEDGER (F1–F6 human cells, §3 stop-condition boxes)
-- [ ] CHECKPOINT, re-apply any custom PR body AFTER this final checkpoint
-- [ ] PROMOTE: `gh pr ready 193` — **owner-confirmed only**; merge — owner-gated
+- [x] RUN 1 (owner): `[y]` + wispr-flow=false → **elevated log SKIP via -GffEnv** (2 fix
+  rounds first: .ps1 em-dash/ANSI parse bug, then success; both recorded in TRACKING §4)
+- [x] RUN 2 (owner): `[n]` → deploy at the end, no PS customization
+- [x] RUN 3/3b (owner): `[s]` → attempt 1 proved the sentinel fallback (CWD bug, fixed
+  TDD); 3b proved live migration → `gff list` = `false · user-override`, sentinel gone
+- [x] RUN 4 (owner): flag-off → NO prompt, SKIP at top (ask gate) + tail (deferred gate); unset restored
+- [x] CAPTURE: `../gff/evidence/F09-gating/gff-install-flow-matrix.txt` (redacted)
+- [x] COMMIT evidence; LEDGER (F1–F6 human cells, §3 stop-condition boxes)
+- [x] CHECKPOINT, re-apply any custom PR body AFTER this final checkpoint
+- [ ] PROMOTE: `gh pr ready 194` — **owner-confirmed only**; merge — owner-gated
 
 **Done when — objective gate:** TRACKING §3 fully green.
