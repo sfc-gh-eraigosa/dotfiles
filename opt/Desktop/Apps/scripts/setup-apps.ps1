@@ -499,7 +499,7 @@ if (-not $SkipElevated) {
             else { Join-Path $PSScriptRoot 'setup-elevated.ps1' }
     if (Test-Path $elev) {
         Write-Host "Finishing setup (hotkey task, iTunes, Wispr Flow, Copilot-key remap)..." -ForegroundColor Cyan
-        # Collect the WSLENV-delivered gff flags for the elevated child — env does
+        # Collect the WSLENV-delivered gff flags for the elevated child -- env does
         # NOT cross the UAC boundary (Start-Process -Verb RunAs starts a fresh
         # environment), so the flag states ride the command line as -GffEnv and
         # setup-elevated.ps1 seeds them back into $env: (validated there).
@@ -511,7 +511,7 @@ if (-not $SkipElevated) {
                 '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$elev`"",'-GffEnv',"`"$gffPairs`"") -Wait -PassThru
             Write-Host "Elevated setup finished. Details: $env:USERPROFILE\setup-elevated.log" -ForegroundColor Green
             if ($p.ExitCode -ne 0) {
-                Write-Warning "Elevated setup exited with code $($p.ExitCode) — it may have been cancelled or timed out at the UAC prompt."
+                Write-Warning "Elevated setup exited with code $($p.ExitCode) -- it may have been cancelled or timed out at the UAC prompt."
                 Write-Warning "Re-run it from a native PowerShell (approve UAC):"
                 Write-Warning "  powershell -ExecutionPolicy Bypass -File `"$elev`""
             }

@@ -5,7 +5,7 @@
 # non-elevated it self-elevates (one UAC), then performs every admin task here.
 #
 # Each step is best-effort and logged to %USERPROFILE%\setup-elevated.log (user-
-# readable — no second elevation needed to inspect it) so one failure never
+# readable -- no second elevation needed to inspect it) so one failure never
 # aborts the rest. Tasks:
 #   1. macOS-style hotkeys logon task  (setup-autostart.ps1)
 #   2. iTunes Win32 build              (winget Apple.iTunes; Store build removed by setup-apps.ps1)
@@ -45,8 +45,8 @@ if (Test-Path $gffLib) { . $gffLib }
 else { function Test-GffOn([string]$Key) { return $true } }
 
 # GFF_* does NOT survive the UAC boundary as environment (Start-Process -Verb
-# RunAs starts the child with a fresh env — dotfiles gff TRACKING §10, proven
-# 2026-07-26). The parent passes the flag states as -GffEnv "NAME=value;…";
+# RunAs starts the child with a fresh env -- dotfiles gff TRACKING sec 10, proven
+# 2026-07-26). The parent passes the flag states as -GffEnv "NAME=value;...";
 # seed them into $env: so Test-GffOn works unchanged. Strictly validated;
 # malformed pairs are logged and ignored (fail-open).
 foreach ($pair in ($GffEnv -split ';' | Where-Object { $_ })) {

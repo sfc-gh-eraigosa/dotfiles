@@ -202,8 +202,16 @@ run_windows_customization() {
   # prompt appears during the run — approve it.
   # </dev/null is load-bearing: powershell.exe consumes the parent shell's stdin
   # under WSL interop (see the Desktop-path lookup above for the same guard).
-  "$ps_exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${BASE_DIR}/opt/Desktop/Apps/scripts/setup-apps.ps1" </dev/null > /tmp/setup_apps.log 2>&1
+  # NOT bare: under `set -e` a non-zero powershell exit would kill this script
+  # BEFORE the log cat below — the exact silent-death mode that hid the first
+  # deferred-run failure (2026-07-26). Capture rc, always show the log, warn loud.
+  _sa_rc=0
+  "$ps_exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${BASE_DIR}/opt/Desktop/Apps/scripts/setup-apps.ps1" </dev/null > /tmp/setup_apps.log 2>&1 || _sa_rc=$?
   cat /tmp/setup_apps.log
+  if [ "$_sa_rc" -ne 0 ]; then
+    echo "WARNING: setup-apps.ps1 exited with code ${_sa_rc} — see the output above." >&2
+    echo "         Re-run just the Windows phase: bash \"${BASE_DIR}/opt/bin/install_windows.sh\" \"${BASE_DIR}\"" >&2
+  fi
 
   # The app/MSI/task elevation all happens inside that single batch. Only Flow's
   # one-time ACCOUNT setup can't be scripted (sign-in, mic, shortcuts off the Win
