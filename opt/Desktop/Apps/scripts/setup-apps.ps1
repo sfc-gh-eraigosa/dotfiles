@@ -499,13 +499,25 @@ if (-not $SkipElevated) {
             else { Join-Path $PSScriptRoot 'setup-elevated.ps1' }
     if (Test-Path $elev) {
         Write-Host "Finishing setup (hotkey task, iTunes, Wispr Flow, Copilot-key remap)..." -ForegroundColor Cyan
+        # Collect the WSLENV-delivered gff flags for the elevated child — env does
+        # NOT cross the UAC boundary (Start-Process -Verb RunAs starts a fresh
+        # environment), so the flag states ride the command line as -GffEnv and
+        # setup-elevated.ps1 seeds them back into $env: (validated there).
+        $gffPairs = (Get-ChildItem env: |
+            Where-Object { $_.Name -match '^GFF_INSTALL_WINDOWS_[A-Z_]+$' } |
+            ForEach-Object { "$($_.Name)=$($_.Value)" }) -join ';'
         try {
-            Start-Process powershell -Verb RunAs -WorkingDirectory $env:SystemRoot -ArgumentList @(
-                '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$elev`"") -Wait
-            Write-Host "Elevated setup finished. Details: C:\Windows\Temp\setup-elevated.log" -ForegroundColor Green
+            $p = Start-Process powershell -Verb RunAs -WorkingDirectory $env:SystemRoot -ArgumentList @(
+                '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$elev`"",'-GffEnv',"`"$gffPairs`"") -Wait -PassThru
+            Write-Host "Elevated setup finished. Details: $env:USERPROFILE\setup-elevated.log" -ForegroundColor Green
+            if ($p.ExitCode -ne 0) {
+                Write-Warning "Elevated setup exited with code $($p.ExitCode) — it may have been cancelled or timed out at the UAC prompt."
+                Write-Warning "Re-run it from a native PowerShell (approve UAC):"
+                Write-Warning "  powershell -ExecutionPolicy Bypass -File `"$elev`""
+            }
         } catch {
-            Write-Warning "Elevated setup was cancelled or failed: $($_.Exception.Message)"
-            Write-Warning "Run it later from a native PowerShell (approve UAC):"
+            Write-Warning "Elevated setup was cancelled, timed out, or failed: $($_.Exception.Message)"
+            Write-Warning "Re-run it from a native PowerShell (approve UAC):"
             Write-Warning "  powershell -ExecutionPolicy Bypass -File `"$elev`""
         }
     } else {

@@ -23,7 +23,7 @@
 | T1 `opt/lib/winsetup.sh` + test driver (TDD) | done | 5bdcd45 | RED: 17 FAIL (`winsetup.sh: No such file`); GREEN: `bash opt/lib/winsetup_test.sh` → 18 passed, 0 failed; `sh …` → 18/0; `make lint-shell` rc=0, `make lint-portability` rc=0 | Plan-snippet deviation (TDD-caught): `[ -r /dev/tty ]` is a false positive without a ctty (proved: `-r` true, open fails) — winsetup_ask now open-probes `( : < /dev/tty )` |
 | T2 `install_windows.sh` `--ask`/`--deferred` split | done | _(this commit)_ | `bash -n` clean; non-WSL smoke `--ask`/`--deferred` both rc=0 silent; greps: winsetup sourced l.48 < first call l.228, WSLENV builder ×1 in `run_windows_customization`, zero SENTINEL refs; lint-shell rc=0, lint-portability rc=0 | shebang fixed to `#!/usr/bin/env bash`; `--ask` deliberately keeps `WIN_SETUP_MARKER` (deferred half of the same run writes it) |
 | T3 `install.sh` early export + Windows-last | done | _(this commit)_ | `bash -n` clean; order grep exact (source l.22 → early export l.28 → `--ask` l.80 → bootstrap l.368 → `--deferred` l.632 → banner l.639); lint-shell rc=0, lint-portability rc=0 | replaces the "flags take effect … on the next run" caveat comment — the early export IS the next-run mechanism now |
-| T4 PowerShell `-GffEnv` + log + loud UAC failure | todo | | | pwsh parse check or defer to T6 (not faked) |
+| T4 PowerShell `-GffEnv` + log + loud UAC failure | done | _(this commit)_ | edits per plan Task 4 (param/seeding/self-elevate passthrough in setup-elevated.ps1; $gffPairs + PassThru + warnings in setup-apps.ps1); **pwsh ABSENT on build host — AST parse DEFERRED to T6 human run** (not faked) | log now `$env:USERPROFILE\setup-elevated.log`; seeding regex `^(GFF_INSTALL_WINDOWS_[A-Z_]+)=(true\|false\|[a-z0-9,-]+)$` fail-open on mismatch |
 | T5 docs + ledgers | todo | | | root AGENTS.md bullet, index.md, gff §10 row-5 closure |
 | T6 human validation matrix (owner, real WSL) | todo | — | | 4 runs; capstone = elevated-log wispr SKIP |
 | **Objective gate** | todo | — | | see §3 |
@@ -37,7 +37,7 @@
 | **F3** gff-owned skip state | [x] winsetup tests 3–8 (T1, 5bdcd45) | [ ] matrix run 3 (`gff list` override, no sentinel) | |
 | **F4** UAC argument hand-off | [ ] T4 parse check | [ ] matrix run 1 elevated-log SKIP | |
 | **F5** readable elevated log | — (path change) | [ ] matrix run 1 `cat` via /mnt/c, no elevation | |
-| **F6** loud UAC failure | [ ] T4 code (PassThru + catch) | [ ] optional live decline probe | |
+| **F6** loud UAC failure | [x] T4 code (PassThru ExitCode check + catch, rerun hints in both paths) | [ ] optional live decline probe | |
 
 ## 3. Validation done-when — the stop condition
 

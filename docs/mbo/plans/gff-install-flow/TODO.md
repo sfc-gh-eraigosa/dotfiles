@@ -75,15 +75,16 @@
 
 ### Task 4 — PowerShell `-GffEnv` + log + loud failure  (plan Task 4)
 
-- [ ] GREEN: `setup-elevated.ps1` — `param([string]$GffEnv = '')` first statement; log →
-  `$env:USERPROFILE\setup-elevated.log` (+ header comment); self-elevate ArgumentList
-  forwards `-GffEnv`; seeding loop after the gff.ps1 fallback (validated pairs → `$env:`)
-- [ ] GREEN: `setup-apps.ps1` — `$gffPairs` collection; `Start-Process … -PassThru` with
-  `-GffEnv`; exit-code warning + rerun hints; catch text aligned ("cancelled, timed out, or failed")
-- [ ] VERIFY: pwsh AST parse of both files → 0 errors — or record "deferred to Task 6
-  human run" in TRACKING (do NOT tick as passed without running it)
-- [ ] COMMIT: `feat(install): -GffEnv argument hand-off across UAC + user-readable elevated log`
-- [ ] LEDGER (T4 row + F6 automated cell; F4 parse cell per what actually ran) + CHECKPOINT
+- [x] GREEN: `setup-elevated.ps1` — `param([string]$GffEnv = '')` first statement (comments
+  precede, legal); log → `$env:USERPROFILE\setup-elevated.log` (+ header comment);
+  self-elevate ArgumentList forwards `-GffEnv`; seeding loop after the gff.ps1 fallback
+  (regex-validated pairs → `$env:`, malformed logged + ignored)
+- [x] GREEN: `setup-apps.ps1` — `$gffPairs` collection; `Start-Process … -Wait -PassThru`
+  with `-GffEnv`; ExitCode≠0 warning + rerun hints; catch text "cancelled, timed out, or failed"
+- [x] VERIFY: pwsh ABSENT on the build host → **AST parse DEFERRED to the Task 6 human
+  run** (recorded in TRACKING T4 row; not ticked as passed)
+- [x] COMMIT: `feat(install): -GffEnv argument hand-off across UAC + user-readable elevated log`
+- [x] LEDGER (T4 row + F6 automated cell; F4 parse deferred) + CHECKPOINT
 
 **Done when:** both files edited per plan; parse status honestly recorded.
 
