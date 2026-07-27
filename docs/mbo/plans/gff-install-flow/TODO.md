@@ -60,13 +60,14 @@
 
 ### Task 3 — `install.sh` early export + Windows-last  (plan Task 3)
 
-- [ ] GREEN: insert the early-export block after the `opt/lib/gff.sh` source (~line 23)
-- [ ] GREEN: early Windows gate call gains `--ask` (~line 67)
-- [ ] GREEN: insert the `--deferred` gate block before the `WIN_SETUP_MARKER` banner (~line 619)
-- [ ] VERIFY: order grep — gff.sh source → early export → `--ask` → bootstrap → `--deferred` → banner
-- [ ] VERIFY: `bash -n install.sh` → clean; `make lint-shell && make lint-portability` → rc 0
-- [ ] COMMIT: `feat(install): early gff export + prompt-early/Windows-last execution`
-- [ ] LEDGER (T3 row + F1 automated cell) + CHECKPOINT
+- [x] GREEN: early-export block inserted after the `opt/lib/gff.sh` source (l.22→28); the
+  stale "or on the next run" comment line replaced by the early-export doc
+- [x] GREEN: early Windows gate call gains `--ask` (l.80)
+- [x] GREEN: `--deferred` gate block inserted before the `WIN_SETUP_MARKER` banner (l.632)
+- [x] VERIFY: order grep exact — source 22 → export 28 → --ask 80 → bootstrap 368 → --deferred 632 → banner 639
+- [x] VERIFY: `bash -n install.sh` clean; `make lint-shell` rc=0; `make lint-portability` rc=0
+- [x] COMMIT: `feat(install): early gff export + prompt-early/Windows-last execution`
+- [x] LEDGER (T3 row + F1 automated cell) + CHECKPOINT
 
 **Done when:** order grep exact; gates clean.
 

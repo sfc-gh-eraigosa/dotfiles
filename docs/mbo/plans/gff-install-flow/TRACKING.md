@@ -22,7 +22,7 @@
 | :-- | :-- | :-- | :-- | :-- |
 | T1 `opt/lib/winsetup.sh` + test driver (TDD) | done | 5bdcd45 | RED: 17 FAIL (`winsetup.sh: No such file`); GREEN: `bash opt/lib/winsetup_test.sh` → 18 passed, 0 failed; `sh …` → 18/0; `make lint-shell` rc=0, `make lint-portability` rc=0 | Plan-snippet deviation (TDD-caught): `[ -r /dev/tty ]` is a false positive without a ctty (proved: `-r` true, open fails) — winsetup_ask now open-probes `( : < /dev/tty )` |
 | T2 `install_windows.sh` `--ask`/`--deferred` split | done | _(this commit)_ | `bash -n` clean; non-WSL smoke `--ask`/`--deferred` both rc=0 silent; greps: winsetup sourced l.48 < first call l.228, WSLENV builder ×1 in `run_windows_customization`, zero SENTINEL refs; lint-shell rc=0, lint-portability rc=0 | shebang fixed to `#!/usr/bin/env bash`; `--ask` deliberately keeps `WIN_SETUP_MARKER` (deferred half of the same run writes it) |
-| T3 `install.sh` early export + Windows-last | todo | | | 3 surgical edits; order-grep verify |
+| T3 `install.sh` early export + Windows-last | done | _(this commit)_ | `bash -n` clean; order grep exact (source l.22 → early export l.28 → `--ask` l.80 → bootstrap l.368 → `--deferred` l.632 → banner l.639); lint-shell rc=0, lint-portability rc=0 | replaces the "flags take effect … on the next run" caveat comment — the early export IS the next-run mechanism now |
 | T4 PowerShell `-GffEnv` + log + loud UAC failure | todo | | | pwsh parse check or defer to T6 (not faked) |
 | T5 docs + ledgers | todo | | | root AGENTS.md bullet, index.md, gff §10 row-5 closure |
 | T6 human validation matrix (owner, real WSL) | todo | — | | 4 runs; capstone = elevated-log wispr SKIP |
@@ -32,7 +32,7 @@
 
 | Feature | Automated proof | Human/live proof | Notes |
 | :-- | :-- | :-- | :-- |
-| **F1** early export | [ ] T3 order-grep | [ ] matrix runs 2–4 (no manual eval anywhere) | |
+| **F1** early export | [x] T3 order-grep (source→export→ask→bootstrap→deferred verified) | [ ] matrix runs 2–4 (no manual eval anywhere) | |
 | **F2** prompt-early / Windows-last | [x] winsetup tests 1–2, 9 (T1) + T2 mode dispatch greps/smoke | [ ] matrix run ordering (prompt ≤1 min, exec last) | |
 | **F3** gff-owned skip state | [x] winsetup tests 3–8 (T1, 5bdcd45) | [ ] matrix run 3 (`gff list` override, no sentinel) | |
 | **F4** UAC argument hand-off | [ ] T4 parse check | [ ] matrix run 1 elevated-log SKIP | |
