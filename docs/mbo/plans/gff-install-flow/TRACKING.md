@@ -33,10 +33,10 @@
 | Feature | Automated proof | Human/live proof | Notes |
 | :-- | :-- | :-- | :-- |
 | **F1** early export | [x] T3 order-grep (source→export→ask→bootstrap→deferred verified) | [ ] matrix runs 2–4 (no manual eval anywhere) | |
-| **F2** prompt-early / Windows-last | [x] winsetup tests 1–2, 9 (T1) + T2 mode dispatch greps/smoke | [ ] matrix run ordering (prompt ≤1 min, exec last) | |
+| **F2** prompt-early / Windows-last | [x] winsetup tests 1–2, 9 (T1) + T2 mode dispatch greps/smoke | [x] matrix run 1: prompt in the first minute, deploy + phases + UAC at the very end, banner after | |
 | **F3** gff-owned skip state | [x] winsetup tests 3–8 (T1, 5bdcd45) | [ ] matrix run 3 (`gff list` override, no sentinel) | |
-| **F4** UAC argument hand-off | [ ] T4 parse check | [ ] matrix run 1 elevated-log SKIP | |
-| **F5** readable elevated log | — (path change) | [ ] matrix run 1 `cat` via /mnt/c, no elevation | |
+| **F4** UAC argument hand-off | [x] T4 parse — proven live by the run (a parse error WAS caught+fixed first, TRACKING §4) | [x] matrix run 1: elevated log shows `SKIP (gff: install.windows.wispr-flow=false)` at [3/4] | the line unreachable on pre-#194 main |
+| **F5** readable elevated log | — (path change) | [x] matrix run 1: `cat /mnt/c/.../setup-elevated.log` read with no elevation; "Details:" names the user-profile path | |
 | **F6** loud UAC failure | [x] T4 code (PassThru ExitCode check + catch, rerun hints in both paths) | [ ] optional live decline probe | |
 
 ## 3. Validation done-when — the stop condition

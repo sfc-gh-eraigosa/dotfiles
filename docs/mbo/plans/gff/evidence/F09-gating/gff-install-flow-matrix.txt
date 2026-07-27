@@ -1,0 +1,50 @@
+# gff-install-flow — Task 6 human validation matrix (owner-run, real WSL2 terminal)
+# Date: 2026-07-26 · Branch: feature/gff-install-flow/edward-raigosa/build @ 89bb01d
+# Spec: docs/mbo/specs/gff-install-flow.md §5-6 · Plan Task 6 · PR #194
+# No `set -a` / `eval` appears anywhere in these runs — the early export (F1)
+# and the in-script bootstrap materialize all flags.
+
+## RUN 1 — [y] + install.windows.wispr-flow=false (F1/F2/F4/F5 capstone)
+
+    $ gff set install.windows.wispr-flow false
+    $ gff get install.windows.wispr-flow
+    false
+    $ ./install.sh
+    ...
+    Windows Desktop Customization detected.        <- prompt in the FIRST minute
+    ...
+      [s] Skip and never ask again (recorded as a gff override).
+    Choice [y/n/s]: y
+    Windows customization will run at the END of this install (the UAC prompt appears then).
+    ... (full Linux install: apt, tools, runtimes, AI CLIs, sdk builds) ...
+    Cached Windows paths -> ~/.cache/dotfiles/winenv.sh    <- Windows phase LAST
+    Deploying opt/Desktop -> /mnt/c/Users/<winuser>/OneDrive/Desktop
+    Starting Windows customization... (this may take a few minutes)
+    === [1/6] WSL platform === ... === [5/6] Desktop apps (winget) === ...   <- phases visible (log cat'ed)
+    === Elevated setup (approve ONE UAC prompt) ===
+    Finishing setup (hotkey task, iTunes, Wispr Flow, Copilot-key remap)...
+    Elevated setup finished. Details: C:\Users\<winuser>\setup-elevated.log  <- user-readable path (F5)
+
+    $ cat /mnt/c/Users/<winuser>/setup-elevated.log        <- read WITHOUT elevation (F5)
+    === setup-elevated 2026-07-26T17:56:15... ===
+    == [1/4] macOS hotkeys logon task ==
+    == [2/4] iTunes (Win32) ==
+      ... winget exit=-1978335189 (already installed; benign)
+    SKIP (gff: install.windows.wispr-flow=false)           <- F4: the flag CROSSED the UAC
+    == [4/4] PowerToys Copilot-key remap ==                   boundary via -GffEnv (env alone
+    === done 2026-07-26T17:56:18... ===                       cannot; gff TRACKING §10 row 5)
+
+# The [3/4] Wispr Flow phase was replaced by the SKIP line inside the ELEVATED
+# batch — the line unreachable on pre-#194 main. First attempt of this run also
+# caught (and fixed) a real defect: an em-dash inside a .ps1 string parses as a
+# curly-quote terminator under PS 5.1's ANSI read of BOM-less files
+# (gff-install-flow TRACKING §4).
+
+## RUN 2 — [n] (deploy still runs at the end; no PS customization)
+(pending)
+
+## RUN 3 — [s] (permanent skip becomes a gff override; no sentinel file)
+(pending)
+
+## RUN 4 — flag-off (no prompt at all; single early SKIP line)
+(pending)
