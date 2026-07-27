@@ -40,17 +40,19 @@
 
 ### Task 2 — `install_windows.sh` `--ask` / `--deferred` split  (plan Task 2)
 
-- [ ] GREEN: restructure per the plan layout — mode arg, `#!/usr/bin/env bash` shebang
+- [x] GREEN: restructure per the plan layout — mode arg, `#!/usr/bin/env bash` shebang
   fix, winsetup sourcing, `print_prompt_text` (with the new `[s]` gff-override text),
   `notty_guidance`, `deploy_windows_files`, `run_windows_customization` (WSLENV builder
-  moves inside), `--ask`/`--deferred`/`--full` dispatch; delete the SENTINEL block
-- [ ] VERIFY: `bash -n opt/bin/install_windows.sh` → clean
-- [ ] VERIFY: non-WSL smoke — `bash opt/bin/install_windows.sh "$PWD" --ask; echo rc=$?` → silent, `rc=0`; same for `--deferred`
-- [ ] VERIFY: structural greps — `winsetup.sh` sourced before first `winsetup_` call;
-  WSLENV builder appears once, inside `run_windows_customization`; `grep -n SENTINEL` → no hits
-- [ ] VERIFY: `make lint-shell && make lint-portability` → rc 0 both
-- [ ] COMMIT: `feat(install): split install_windows.sh into --ask/--deferred around the prompt`
-- [ ] LEDGER (T2 row + F2 automated cell) + CHECKPOINT
+  moves inside), `--ask`/`--deferred`/`--full` dispatch; SENTINEL block deleted.
+  Detail: `--ask` does NOT clear `WIN_SETUP_MARKER` (the deferred half of the same
+  run writes it; clearing stays in `--deferred`/`--full`)
+- [x] VERIFY: `bash -n opt/bin/install_windows.sh` → clean
+- [x] VERIFY: non-WSL smoke — `--ask` rc=0 silent; `--deferred` rc=0 silent
+- [x] VERIFY: structural greps — winsetup sourced line 48, first call line 228;
+  WSLENV builder ×1 inside `run_windows_customization`; `grep -n SENTINEL` → no hits
+- [x] VERIFY: `make lint-shell && make lint-portability` → rc 0 both
+- [x] COMMIT: `feat(install): split install_windows.sh into --ask/--deferred around the prompt`
+- [x] LEDGER (T2 row + F2 automated cell) + CHECKPOINT
 
 **Done when:** all greps hit as specified; gates clean; smoke rc=0.
 

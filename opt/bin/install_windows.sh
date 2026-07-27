@@ -1,13 +1,24 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
-# install_windows.sh — Windows/WSL-only deploy step
+# install_windows.sh — Windows/WSL-only deploy + customization step
 #
-# Copies opt/Desktop/* onto the real Windows Desktop. The Desktop folder is
-# often OneDrive-redirected, so we ask Windows for its actual path via
-# PowerShell and translate it with wslpath.
+# Copies opt/Desktop/* onto the real Windows Desktop and runs the PowerShell
+# customization chain. The Desktop folder is often OneDrive-redirected, so we
+# ask Windows for its actual path via PowerShell and translate it with wslpath.
 #
 # Usage (called from install.sh):
-#   bash "${BASE_DIR}/opt/bin/install_windows.sh" "<BASE_DIR>"
+#   bash "${BASE_DIR}/opt/bin/install_windows.sh" "<BASE_DIR>" [--ask|--deferred]
+#
+#   --ask       WSL-detect, check the skip state, prompt y/n/s, persist the
+#               choice (~/.cache/dotfiles/win-setup-choice). Runs EARLY in
+#               install.sh so all interactivity is front-loaded.
+#   --deferred  Consume the recorded choice: deploy Desktop files (always,
+#               per-run — independent of the y/n answer), then run the
+#               PowerShell customization only for a recorded "y"; record a
+#               permanent skip for "s". Runs at the END of install.sh, after
+#               the gff bootstrap has exported GFF_* (so the WSLENV hand-off
+#               below actually carries the flags).
+#   (no mode)   Legacy standalone flow: ask, then execute immediately.
 #
 # No-op when not running inside WSL / Windows.
 # =============================================================================
@@ -15,6 +26,7 @@
 set -euo pipefail
 
 BASE_DIR="${1:-}"
+MODE="${2:---full}"
 if [ -z "$BASE_DIR" ]; then
   echo "ERROR: install_windows.sh requires BASE_DIR as the first argument." >&2
   exit 1
@@ -31,194 +43,221 @@ else
   gff_on() { return 0; }
   gff_skip_msg() { echo "SKIP (gff: $1=false)"; }
 fi
+# Choice persistence + gff-owned skip state (needs gff_on, so sourced after).
+# shellcheck source=opt/lib/winsetup.sh
+. "$(cd -- "$(dirname "$0")" && pwd -P)/../lib/winsetup.sh"
+
 gff_on install.windows.desktop-deploy || { gff_skip_msg install.windows.desktop-deploy; exit 0; }
 
 # Per-run marker: set only when the interactive Windows setup actually runs, so
 # install.sh can print the Wispr Flow reminder banner at the very end. Cleared on
 # every invocation (even non-WSL) so a stale marker never triggers a false banner.
+# NOTE: --ask deliberately does NOT clear it — the marker is written by the
+# deferred execution later in the same install.sh run and must survive to the
+# banner check at the tail.
 WIN_SETUP_MARKER="${HOME}/.config/dotfiles/.windows-setup-just-ran"
-rm -f "$WIN_SETUP_MARKER" 2>/dev/null || true
+if [ "$MODE" != "--ask" ]; then
+  rm -f "$WIN_SETUP_MARKER" 2>/dev/null || true
+fi
 
 # Only run inside WSL (Windows Subsystem for Linux).
 if ! grep -qi microsoft /proc/version 2>/dev/null; then
   exit 0
 fi
 
-# ---------------------------------------------------------------------------
-# Ensure Windows interop is live. Without the WSLInterop binfmt handler, every
-# Windows .exe (powershell.exe, winget, the wslpath targets below) fails with
-# "exec format error" and this entire Windows setup silently no-ops. WSL normally
-# registers the handler at boot; if it has gone missing (interop disabled, or a
-# flaky restart), re-register it at runtime. binfmt_misc REFUSES a duplicate name,
-# so only register when BOTH known handler names are absent. Session-only; the
-# persistent fix is the wsl-interop-binfmt.service unit installed by
-# opt/scripts/system/wsl_interop_binfmt.sh (called later from install.sh) —
-# WSL's own systemd-binfmt self-heal is condition-blocked under WSL.
-# ---------------------------------------------------------------------------
-if [ ! -e /proc/sys/fs/binfmt_misc/WSLInterop ] && [ ! -e /proc/sys/fs/binfmt_misc/WSLInterop-late ]; then
-  if [ -e /proc/sys/fs/binfmt_misc/register ]; then
-    echo "WSL interop handler not registered; enabling it (may prompt for sudo)..."
-    # install.sh caches sudo up front, so this is normally non-interactive.
-    sudo bash -c 'echo ":WSLInterop:M::MZ::/init:P" > /proc/sys/fs/binfmt_misc/register' 2>/dev/null \
-      && echo "  WSL interop registered." \
-      || echo "  WARNING: could not register WSL interop (need root?)." >&2
-  else
-    echo "WARNING: binfmt_misc not mounted; cannot enable WSL interop." >&2
+print_prompt_text() {
+  echo ""
+  echo "Windows Desktop Customization detected."
+  echo "Would you like to run the PowerShell setup scripts to configure Windows Terminal,"
+  echo "install desktop apps (Discord, Slack, AutoHotkey, etc.), and set up macOS-style hotkeys?"
+  echo ""
+  echo "Options:"
+  echo "  [y] Yes, run setup now."
+  echo "  [n] No, skip for now (will ask again next time)."
+  echo "  [s] Skip and never ask again (recorded as a gff override)."
+  echo ""
+}
+
+notty_guidance() {
+  # No controlling terminal (CI / fully non-interactive). Windows WAS detected,
+  # so don't pretend we asked and don't silently skip — point at the exact
+  # command to finish setup interactively.
+  echo "No terminal available to prompt; Windows customization not run."
+  echo "Windows detected — to configure it, run from an interactive shell:"
+  echo "    bash \"${BASE_DIR}/opt/bin/install_windows.sh\" \"${BASE_DIR}\""
+}
+
+deploy_windows_files() {
+  # -------------------------------------------------------------------------
+  # Ensure Windows interop is live. Without the WSLInterop binfmt handler, every
+  # Windows .exe (powershell.exe, winget, the wslpath targets below) fails with
+  # "exec format error" and this entire Windows setup silently no-ops. WSL normally
+  # registers the handler at boot; if it has gone missing (interop disabled, or a
+  # flaky restart), re-register it at runtime. binfmt_misc REFUSES a duplicate name,
+  # so only register when BOTH known handler names are absent. Session-only; the
+  # persistent fix is the wsl-interop-binfmt.service unit installed by
+  # opt/scripts/system/wsl_interop_binfmt.sh (called later from install.sh) —
+  # WSL's own systemd-binfmt self-heal is condition-blocked under WSL.
+  # -------------------------------------------------------------------------
+  if [ ! -e /proc/sys/fs/binfmt_misc/WSLInterop ] && [ ! -e /proc/sys/fs/binfmt_misc/WSLInterop-late ]; then
+    if [ -e /proc/sys/fs/binfmt_misc/register ]; then
+      echo "WSL interop handler not registered; enabling it (may prompt for sudo)..."
+      # install.sh caches sudo up front, so this is normally non-interactive.
+      sudo bash -c 'echo ":WSLInterop:M::MZ::/init:P" > /proc/sys/fs/binfmt_misc/register' 2>/dev/null \
+        && echo "  WSL interop registered." \
+        || echo "  WARNING: could not register WSL interop (need root?)." >&2
+    else
+      echo "WARNING: binfmt_misc not mounted; cannot enable WSL interop." >&2
+    fi
   fi
-fi
 
-# ---------------------------------------------------------------------------
-# Locate powershell.exe: prefer PATH, fall back to the standard System32 path.
-# (Windows exes are not always on the WSL PATH, e.g. appendWindowsPath=false.)
-# ---------------------------------------------------------------------------
-ps_exe="$(command -v powershell.exe 2>/dev/null || true)"
-if [ -z "$ps_exe" ]; then
-  _ps_fallback="$(wslpath -u 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' 2>/dev/null)"
-  [ -n "$_ps_fallback" ] && [ -x "$_ps_fallback" ] && ps_exe="$_ps_fallback"
-fi
+  # -------------------------------------------------------------------------
+  # Locate powershell.exe: prefer PATH, fall back to the standard System32 path.
+  # (Windows exes are not always on the WSL PATH, e.g. appendWindowsPath=false.)
+  # -------------------------------------------------------------------------
+  ps_exe="$(command -v powershell.exe 2>/dev/null || true)"
+  if [ -z "$ps_exe" ]; then
+    _ps_fallback="$(wslpath -u 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' 2>/dev/null)"
+    [ -n "$_ps_fallback" ] && [ -x "$_ps_fallback" ] && ps_exe="$_ps_fallback"
+  fi
 
-if [ -z "$ps_exe" ]; then
-  echo "NOTE: powershell.exe not found; skipping Windows Desktop deploy."
-  exit 0
-fi
-
-# ---------------------------------------------------------------------------
-# gff flag pass-through: append every exported GFF_INSTALL_WINDOWS_* name to
-# WSLENV (/w = include when invoking Win32 from WSL) BEFORE any powershell.exe
-# invocation, so the PowerShell setup scripts' Test-GffOn gates see the same
-# flags. NOTE: the flag was originally /u per the plan — refuted empirically
-# 2026-07-26 (P2-T5): /u means Win32->WSL only, so the vars never crossed;
-# /w is the WSL->Win32 direction (learn.microsoft.com WSLENV flags). Runs here
-# — after ps_exe resolution, ahead of every $ps_exe call — and de-duplicates,
-# so re-runs never grow WSLENV. Requires install.sh's `set -a` bootstrap
-# export; unset vars simply never appear (fail-open on the Windows side too).
-# ---------------------------------------------------------------------------
-_gff_wslenv="${WSLENV:-}"
-for _v in $(env | sed -n 's/^\(GFF_INSTALL_WINDOWS_[A-Z_]*\)=.*/\1/p'); do
-  case ":${_gff_wslenv}:" in *":${_v}/w:"*) : ;; *) _gff_wslenv="${_gff_wslenv:+${_gff_wslenv}:}${_v}/w" ;; esac
-done
-export WSLENV="${_gff_wslenv}"
-
-# ---------------------------------------------------------------------------
-# Resolve the real Desktop path (may be OneDrive-redirected).
-# ---------------------------------------------------------------------------
-# NOTE: </dev/null is load-bearing. powershell.exe (and Windows console exes in
-# general) consume the parent shell's stdin under WSL interop. Without this, the
-# Desktop lookup drains stdin and the interactive "Choice [y/n/s]" read below gets
-# EOF -> empty -> silently skips Windows setup on a freshly-detected Windows box.
-win_desktop_raw="$("$ps_exe" -NoProfile -Command "[Environment]::GetFolderPath('Desktop')" </dev/null 2>/dev/null | tr -d '\r')"
-win_desktop="$(wslpath -u "$win_desktop_raw" 2>/dev/null)"
-
-if [ -z "$win_desktop" ] || [ ! -d "$win_desktop" ]; then
-  echo "WARNING: could not resolve Windows Desktop (${win_desktop_raw}); skipping desktop deploy."
-  exit 0
-fi
-
-# ---------------------------------------------------------------------------
-# Cache resolved Windows paths for login-time consumers (.bash_aliases).
-# Login fragments must not spawn Windows processes: each costs seconds, and
-# the docker fallback block exists precisely for when interop is broken. So
-# resolve the dynamic values once here — where interop is guaranteed — and
-# cache them; consumers fall back to the standard /mnt/c layout if absent.
-# ---------------------------------------------------------------------------
-# shellcheck disable=SC2016  # intentional: $env:ProgramFiles is PowerShell syntax, not shell
-win_program_files_raw="$("$ps_exe" -NoProfile -Command '$env:ProgramFiles' </dev/null 2>/dev/null | tr -d '\r')"
-win_program_files="$(wslpath -u "$win_program_files_raw" 2>/dev/null)"
-winenv_cache_dir="${HOME}/.cache/dotfiles"
-mkdir -p "$winenv_cache_dir"
-{
-  echo "# Generated by opt/bin/install_windows.sh — Windows paths in WSL form,"
-  echo "# resolved from the real Windows env (\$env:ProgramFiles etc.) via wslpath."
-  echo "# Sourced by opt/profiles/.bash_aliases at login; do not edit."
-  [ -n "$win_program_files" ] && [ -d "$win_program_files" ] && \
-    printf 'WIN_PROGRAM_FILES="%s"\n' "$win_program_files"
-  [ -n "$win_desktop" ] && [ -d "$win_desktop" ] && \
-    printf 'WIN_DESKTOP="%s"\n' "$win_desktop"
-} > "${winenv_cache_dir}/winenv.sh"
-echo "Cached Windows paths -> ${winenv_cache_dir}/winenv.sh"
-
-# ---------------------------------------------------------------------------
-# Deploy opt/Desktop/* onto the Windows Desktop.
-# ---------------------------------------------------------------------------
-echo "Deploying opt/Desktop -> ${win_desktop}"
-# --remove-destination is load-bearing: OneDrive can dehydrate previously
-# deployed files into cloud placeholders (NTFS reparse points) that drvfs
-# cannot open for read or truncate ("Invalid argument" / I/O error on cp).
-# Unlinking first always works, so overwrite via unlink+create. GNU-only
-# flag is fine: this deploy path only runs under WSL (Ubuntu coreutils).
-cp -r --remove-destination "${BASE_DIR}/opt/Desktop/." "${win_desktop}/"
-
-# ---------------------------------------------------------------------------
-# Interactive Windows Customization (WSL only)
-# ---------------------------------------------------------------------------
-SENTINEL_DIR="${HOME}/.config/dotfiles"
-SENTINEL_FILE="${SENTINEL_DIR}/.skip_windows_setup"
-
-if [ -f "$SENTINEL_FILE" ]; then
+  if [ -z "$ps_exe" ]; then
+    echo "NOTE: powershell.exe not found; skipping Windows Desktop deploy."
     exit 0
-fi
+  fi
 
-echo ""
-echo "Windows Desktop Customization detected."
-echo "Would you like to run the PowerShell setup scripts to configure Windows Terminal,"
-echo "install desktop apps (Discord, Slack, AutoHotkey, etc.), and set up macOS-style hotkeys?"
-echo ""
-echo "Options:"
-echo "  [y] Yes, run setup now."
-echo "  [n] No, skip for now (will ask again next time)."
-echo "  [s] Skip and never ask again (creates sentinel file)."
-echo ""
-# Prompt on the controlling terminal, NOT stdin. Even with the </dev/null guards
-# above, stdin can still be non-interactive here: piped installs (curl | bash) have
-# no tty on stdin at all. /dev/tty reaches the real terminal in that case; if there
-# is genuinely no terminal (CI), we say so rather than silently skipping.
-if [ -r /dev/tty ]; then
-    read -rp "Choice [y/n/s]: " choice < /dev/tty
-else
-    choice="__notty__"
-fi
+  # -------------------------------------------------------------------------
+  # Resolve the real Desktop path (may be OneDrive-redirected).
+  # -------------------------------------------------------------------------
+  # NOTE: </dev/null is load-bearing. powershell.exe (and Windows console exes in
+  # general) consume the parent shell's stdin under WSL interop. Without this, the
+  # Desktop lookup drains stdin and later interactive reads get EOF.
+  win_desktop_raw="$("$ps_exe" -NoProfile -Command "[Environment]::GetFolderPath('Desktop')" </dev/null 2>/dev/null | tr -d '\r')"
+  win_desktop="$(wslpath -u "$win_desktop_raw" 2>/dev/null)"
 
-case "$choice" in
-    y|Y)
-        echo "Starting Windows customization... (this may take a few minutes)"
-        # setup-apps.ps1 does the non-elevated app installs, then fires ONE
-        # Start-Process -Verb RunAs (setup-elevated.ps1) that performs all admin work
-        # in a single elevated child: the macOS-hotkeys logon task, the iTunes Win32
-        # MSI, the Wispr Flow MSI, and the PowerToys Copilot-key remap. A single UAC
-        # prompt appears during the run — approve it.
-        # </dev/null is load-bearing: powershell.exe consumes the parent shell's stdin
-        # under WSL interop (see the Desktop-path lookup above for the same guard).
-        "$ps_exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${BASE_DIR}/opt/Desktop/Apps/scripts/setup-apps.ps1" </dev/null > /tmp/setup_apps.log 2>&1
-        cat /tmp/setup_apps.log
+  if [ -z "$win_desktop" ] || [ ! -d "$win_desktop" ]; then
+    echo "WARNING: could not resolve Windows Desktop (${win_desktop_raw}); skipping desktop deploy."
+    exit 0
+  fi
 
-        # The app/MSI/task elevation all happens inside that single batch. Only Flow's
-        # one-time ACCOUNT setup can't be scripted (sign-in, mic, shortcuts off the Win
-        # key, start-at-login) — point at the runbook for it.
-        wispr_doc_w="$(wslpath -w "${win_desktop}/Apps/scripts/WISPR-FLOW.md" 2>/dev/null)"
-        echo ""
-        echo "Wispr Flow one-time manual setup (sign-in, mic, shortcuts off Win, start-at-login):"
-        echo "    ${wispr_doc_w:-%USERPROFILE%\\Desktop\\Apps\\scripts\\WISPR-FLOW.md}"
-        echo ""
+  # -------------------------------------------------------------------------
+  # Cache resolved Windows paths for login-time consumers (.bash_aliases).
+  # Login fragments must not spawn Windows processes: each costs seconds, and
+  # the docker fallback block exists precisely for when interop is broken. So
+  # resolve the dynamic values once here — where interop is guaranteed — and
+  # cache them; consumers fall back to the standard /mnt/c layout if absent.
+  # -------------------------------------------------------------------------
+  # shellcheck disable=SC2016  # intentional: $env:ProgramFiles is PowerShell syntax, not shell
+  win_program_files_raw="$("$ps_exe" -NoProfile -Command '$env:ProgramFiles' </dev/null 2>/dev/null | tr -d '\r')"
+  win_program_files="$(wslpath -u "$win_program_files_raw" 2>/dev/null)"
+  winenv_cache_dir="${HOME}/.cache/dotfiles"
+  mkdir -p "$winenv_cache_dir"
+  {
+    echo "# Generated by opt/bin/install_windows.sh — Windows paths in WSL form,"
+    echo "# resolved from the real Windows env (\$env:ProgramFiles etc.) via wslpath."
+    echo "# Sourced by opt/profiles/.bash_aliases at login; do not edit."
+    [ -n "$win_program_files" ] && [ -d "$win_program_files" ] && \
+      printf 'WIN_PROGRAM_FILES="%s"\n' "$win_program_files"
+    [ -n "$win_desktop" ] && [ -d "$win_desktop" ] && \
+      printf 'WIN_DESKTOP="%s"\n' "$win_desktop"
+  } > "${winenv_cache_dir}/winenv.sh"
+  echo "Cached Windows paths -> ${winenv_cache_dir}/winenv.sh"
 
-        # Mark that the Windows setup ran so install.sh prints the Wispr Flow
-        # shortcut reminder banner at the very end (after all other output).
-        mkdir -p "$(dirname "$WIN_SETUP_MARKER")"
-        : > "$WIN_SETUP_MARKER"
+  # -------------------------------------------------------------------------
+  # Deploy opt/Desktop/* onto the Windows Desktop.
+  # -------------------------------------------------------------------------
+  echo "Deploying opt/Desktop -> ${win_desktop}"
+  # --remove-destination is load-bearing: OneDrive can dehydrate previously
+  # deployed files into cloud placeholders (NTFS reparse points) that drvfs
+  # cannot open for read or truncate ("Invalid argument" / I/O error on cp).
+  # Unlinking first always works, so overwrite via unlink+create. GNU-only
+  # flag is fine: this deploy path only runs under WSL (Ubuntu coreutils).
+  cp -r --remove-destination "${BASE_DIR}/opt/Desktop/." "${win_desktop}/"
+}
+
+run_windows_customization() {
+  echo "Starting Windows customization... (this may take a few minutes)"
+
+  # -------------------------------------------------------------------------
+  # gff flag pass-through: append every exported GFF_INSTALL_WINDOWS_* name to
+  # WSLENV (/w = include when invoking Win32 from WSL) BEFORE the powershell.exe
+  # invocation, so the PowerShell setup scripts' Test-GffOn gates see the same
+  # flags. NOTE: the flag was originally /u per the plan — refuted empirically
+  # 2026-07-26 (P2-T5): /u means Win32->WSL only, so the vars never crossed;
+  # /w is the WSL->Win32 direction (learn.microsoft.com WSLENV flags). Runs at
+  # DEFERRED time — after install.sh's gff bootstrap `set -a` export — and
+  # de-duplicates, so re-runs never grow WSLENV. Unset vars simply never appear
+  # (fail-open on the Windows side too).
+  # -------------------------------------------------------------------------
+  _gff_wslenv="${WSLENV:-}"
+  for _v in $(env | sed -n 's/^\(GFF_INSTALL_WINDOWS_[A-Z_]*\)=.*/\1/p'); do
+    case ":${_gff_wslenv}:" in *":${_v}/w:"*) : ;; *) _gff_wslenv="${_gff_wslenv:+${_gff_wslenv}:}${_v}/w" ;; esac
+  done
+  export WSLENV="${_gff_wslenv}"
+
+  # setup-apps.ps1 does the non-elevated app installs, then fires ONE
+  # Start-Process -Verb RunAs (setup-elevated.ps1) that performs all admin work
+  # in a single elevated child: the macOS-hotkeys logon task, the iTunes Win32
+  # MSI, the Wispr Flow MSI, and the PowerToys Copilot-key remap. A single UAC
+  # prompt appears during the run — approve it.
+  # </dev/null is load-bearing: powershell.exe consumes the parent shell's stdin
+  # under WSL interop (see the Desktop-path lookup above for the same guard).
+  "$ps_exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${BASE_DIR}/opt/Desktop/Apps/scripts/setup-apps.ps1" </dev/null > /tmp/setup_apps.log 2>&1
+  cat /tmp/setup_apps.log
+
+  # The app/MSI/task elevation all happens inside that single batch. Only Flow's
+  # one-time ACCOUNT setup can't be scripted (sign-in, mic, shortcuts off the Win
+  # key, start-at-login) — point at the runbook for it.
+  wispr_doc_w="$(wslpath -w "${win_desktop}/Apps/scripts/WISPR-FLOW.md" 2>/dev/null)"
+  echo ""
+  echo "Wispr Flow one-time manual setup (sign-in, mic, shortcuts off Win, start-at-login):"
+  echo "    ${wispr_doc_w:-%USERPROFILE%\\Desktop\\Apps\\scripts\\WISPR-FLOW.md}"
+  echo ""
+
+  # Mark that the Windows setup ran so install.sh prints the Wispr Flow
+  # shortcut reminder banner at the very end (after all other output).
+  mkdir -p "$(dirname "$WIN_SETUP_MARKER")"
+  : > "$WIN_SETUP_MARKER"
+}
+
+case "$MODE" in
+  --ask)
+    # Skip state: legacy sentinel (migrated when gff is available) or the gff
+    # override install.windows.desktop-deploy=false (env-based via install.sh's
+    # early export). Skipped => no prompt, and no choice file for --deferred.
+    winsetup_skip_state && exit 0
+    print_prompt_text
+    choice="$(winsetup_ask)"
+    case "$choice" in
+      __notty__) notty_guidance ;;
+      y)
+        winsetup_save_choice y
+        echo "Windows customization will run at the END of this install (the UAC prompt appears then)."
         ;;
-    s|S)
-        echo "Creating sentinel file at $SENTINEL_FILE. Will not ask again."
-        mkdir -p "$SENTINEL_DIR"
-        echo "User chose to skip Windows setup on $(date)" > "$SENTINEL_FILE"
-        ;;
-    __notty__)
-        # No controlling terminal (CI / fully non-interactive). Windows WAS detected,
-        # so don't pretend we asked and don't silently skip — point at the exact
-        # command to finish setup interactively.
-        echo "No terminal available to prompt; Windows customization not run."
-        echo "Windows detected — to configure it, run from an interactive shell:"
-        echo "    bash \"${BASE_DIR}/opt/bin/install_windows.sh\" \"${BASE_DIR}\""
-        ;;
-    *)
-        echo "Skipping Windows customization for now."
-        ;;
+      s) winsetup_save_choice s ;;
+      *) winsetup_save_choice n ;;
+    esac
+    ;;
+  --deferred)
+    # Deploy runs per-run regardless of the y/n answer (matches the historical
+    # behavior where the file deploy preceded the prompt); the customization
+    # and the permanent-skip recording follow the recorded choice.
+    deploy_windows_files
+    case "$(winsetup_take_choice)" in
+      y) run_windows_customization ;;
+      s) winsetup_record_skip ;;
+      *) : ;;   # n, or none (ask never ran/answered): skip customization this run
+    esac
+    ;;
+  --full|*)
+    winsetup_skip_state && exit 0
+    deploy_windows_files
+    print_prompt_text
+    case "$(winsetup_ask)" in
+      __notty__) notty_guidance ;;
+      y) run_windows_customization ;;
+      s) winsetup_record_skip ;;
+      *) echo "Skipping Windows customization for now." ;;
+    esac
+    ;;
 esac
