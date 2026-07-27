@@ -41,9 +41,33 @@
 # (gff-install-flow TRACKING §4).
 
 ## RUN 2 — [n] (deploy still runs at the end; no PS customization)
-(pending)
+
+    Choice [y/n/s]: n
+    ... (full Linux install) ...
+    Cached Windows paths -> ~/.cache/dotfiles/winenv.sh    <- per-run deploy preserved
+    Deploying opt/Desktop -> /mnt/c/Users/<winuser>/OneDrive/Desktop
+    (run ends -- NO "Starting Windows customization", no UAC)               PASS
 
 ## RUN 3 — [s] (permanent skip becomes a gff override; no sentinel file)
+
+  Attempt 1 (branch @ 89bb01d) surfaced a REAL bug — the fail-open fallback fired:
+
+    Choice [y/n/s]: s
+    ... Deploying opt/Desktop -> ... (deferred phase, CWD is now $HOME) ...
+    gff: resolve: unknown flag key: install.windows.desktop-deploy
+    gff unavailable; wrote legacy sentinel ~/.config/dotfiles/.skip_windows_setup
+
+  Root cause: install.sh does `cd "${HOME}"` at line ~610 (nano-profile block),
+  so the deferred `gff set` ran outside the repo and lost the repo-live layer.
+  Fixed TDD (winsetup_run_gff subshell-cd's to WINSETUP_REPO_DIR = BASE_DIR;
+  test 8b proves gff's CWD). Side proof: the sentinel FALLBACK branch of
+  winsetup_record_skip works in production (fail-open held).
+
+  Attempt 2 (post-fix): the leftover sentinel exercises the MIGRATION path live —
+  see the continuation below.
+(migration + override verification pending)
+
+## RUN 3b — migration run (sentinel from attempt 1 + working gff)
 (pending)
 
 ## RUN 4 — flag-off (no prompt at all; single early SKIP line)

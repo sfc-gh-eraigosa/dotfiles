@@ -44,6 +44,10 @@ else
   gff_skip_msg() { echo "SKIP (gff: $1=false)"; }
 fi
 # Choice persistence + gff-owned skip state (needs gff_on, so sourced after).
+# WINSETUP_REPO_DIR anchors winsetup's gff calls to the checkout: install.sh
+# cd's to $HOME late in the run, and gff needs the repo CWD for the repo-live
+# layer to resolve install.windows.* keys.
+export WINSETUP_REPO_DIR="${BASE_DIR}"
 # shellcheck source=opt/lib/winsetup.sh
 . "$(cd -- "$(dirname "$0")" && pwd -P)/../lib/winsetup.sh"
 

@@ -16,7 +16,7 @@ fixture() {  # $1=with_gff(yes|no) -> sets WS_TMP, exports the override vars
     mkdir -p "${WS_TMP}/bin"
     cat > "${WS_TMP}/bin/gff" <<'STUB'
 #!/bin/sh
-echo "$@" >> "${GFF_STUB_LOG}"
+echo "pwd=$PWD args=$@" >> "${GFF_STUB_LOG}"
 exit 0
 STUB
     chmod +x "${WS_TMP}/bin/gff"
@@ -91,6 +91,19 @@ for sh_bin in bash sh; do
   fixture no
   run_case "$sh_bin" "record_skip sentinel fallback" '
     winsetup_record_skip >/dev/null && [ -f "$WINSETUP_SENTINEL" ]'
+  rm -rf "$WS_TMP"
+
+  # 8b. gff runs with CWD = WINSETUP_REPO_DIR (the repo), NOT the caller CWD.
+  # Regression: install.sh cd's to $HOME late in the run (line ~610), so a
+  # deferred `gff set` from there loses the repo-live layer -> unknown key
+  # (hit live 2026-07-26, run 3 of the validation matrix).
+  fixture yes
+  mkdir -p "${WS_TMP}/repo"
+  export WINSETUP_REPO_DIR="${WS_TMP}/repo"
+  run_case "$sh_bin" "record_skip runs gff from WINSETUP_REPO_DIR" '
+    cd / && winsetup_record_skip >/dev/null &&
+    grep -q "pwd=${WINSETUP_REPO_DIR} " "$GFF_STUB_LOG"'
+  unset WINSETUP_REPO_DIR
   rm -rf "$WS_TMP"
 
   # 9. ask with no controlling tty -> __notty__ (setsid detaches; skip if absent)

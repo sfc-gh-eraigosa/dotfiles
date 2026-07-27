@@ -8,6 +8,15 @@ winsetup_choice_file() { printf '%s\n' "${WINSETUP_CHOICE_FILE:-${HOME}/.cache/d
 winsetup_sentinel()    { printf '%s\n' "${WINSETUP_SENTINEL:-${HOME}/.config/dotfiles/.skip_windows_setup}"; }
 winsetup_gff()         { printf '%s\n' "${WINSETUP_GFF:-gff}"; }
 
+# Run gff from WINSETUP_REPO_DIR (the dotfiles checkout) in a subshell so the
+# repo-live layer resolves the install.windows.* keys regardless of the
+# caller's CWD — install.sh cd's to $HOME late in the run, which made a
+# deferred `gff set` fail with "unknown flag key" (live regression 2026-07-26).
+# Mirrors install.sh's own bootstrap: eval "$(cd "$BASE_DIR" && gff export …)".
+winsetup_run_gff() {
+  ( cd "${WINSETUP_REPO_DIR:-.}" 2>/dev/null || :; "$(winsetup_gff)" "$@" )
+}
+
 # 0 = Windows setup is permanently skipped. Single source of truth is the gff
 # override install.windows.desktop-deploy=false; a legacy sentinel file is
 # migrated to it when a working gff exists, and honored as-is when not.
@@ -15,7 +24,7 @@ winsetup_skip_state() {
   _ws_sent="$(winsetup_sentinel)"
   if [ -f "$_ws_sent" ]; then
     if command -v "$(winsetup_gff)" >/dev/null 2>&1 \
-       && "$(winsetup_gff)" set install.windows.desktop-deploy false >/dev/null 2>&1; then
+       && winsetup_run_gff set install.windows.desktop-deploy false >/dev/null 2>&1; then
       rm -f "$_ws_sent"
       echo "Migrated legacy skip sentinel to gff override: install.windows.desktop-deploy=false"
     fi
@@ -30,7 +39,7 @@ winsetup_skip_state() {
 # Record the "[s] never ask again" choice: gff override first, sentinel fallback.
 winsetup_record_skip() {
   if command -v "$(winsetup_gff)" >/dev/null 2>&1 \
-     && "$(winsetup_gff)" set install.windows.desktop-deploy false; then
+     && winsetup_run_gff set install.windows.desktop-deploy false; then
     echo "Recorded permanent skip as a gff override (undo: gff unset install.windows.desktop-deploy)."
   else
     _ws_sent="$(winsetup_sentinel)"
