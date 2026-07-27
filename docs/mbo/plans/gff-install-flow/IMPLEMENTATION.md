@@ -104,17 +104,26 @@ learned in THIS run get appended here as §7.1.
 
 ### 8.1 CURRENT prompt — execute the build
 
-> **Execute the gff-install-flow build, Tasks 1–5, then hand the owner the Task 6 matrix.**
+> **Drain the gff tail backlog — four small independent items, one small PR each (or
+> batched where natural).**
 >
-> Read first, completely: `docs/mbo/plans/gff-install-flow/IMPLEMENTATION.md` (this
-> procedure), `TRACKING.md` (what is proven), `TODO.md` (first unchecked box), then the
-> plan `docs/mbo/plans/gff-install-flow.md` — its task code blocks are normative — and
-> spec §5. Work only in the `gff-install-flow/edward-raigosa/impl` worktree.
+> Read first: `docs/mbo/plans/gff-install-flow/TRACKING.md` (§3 green — the objective is
+> DONE, merged as #193+#194; §4 for the two matrix-caught defect writeups), gff
+> `TRACKING.md` §10 (rows 3–4 still-open observations). These items are small enough to
+> skip a new MBO objective — plain branches + `gh pr`, each with its own verification.
 >
-> Strict TDD where tests exist (Task 1: RED observed before GREEN, bash AND dash).
-> Both lint gates before every shell commit. One commit per task with the plan's exact
-> message; checkpoint after every task; tick TODO + update TRACKING in the same breath.
+> Backlog, in rough priority order:
+> 1. **`.ps1` ASCII lint guard** — a cheap check (extend `shell-portability-scan.sh` or a
+>    standalone grep gate in `make lint-shell`) failing on non-ASCII bytes inside
+>    `opt/Desktop/Apps/scripts/*.ps1` STRINGS (comments tolerable, strings fatal): the
+>    PS 5.1 ANSI/em-dash parse landmine from this run must not return. TDD the checker.
+> 2. **Wire the three unenforced `install.windows.*` flags** (`claude-rc-autostart`,
+>    `sshd`, `portproxy`) ONLY if/when their standalone scripts gain invocation sites —
+>    else leave documented (gff TRACKING §10 row 4).
+> 3. **Multi-source install.sh story** (`gff sources`-driven) — design sketch only
+>    (docs/mbo/designs/), no build.
+> 4. Optional: TUI gif/asciinema for `sdk/gff/README.md`.
 >
-> Human-in-the-loop stops (never fake): the four Task 6 validation runs (owner, real
-> WSL terminal), PR promotion, merge. Blocked → TRACKING §4 with the real failing
-> output. Done when: the TRACKING §3 stop condition is fully green.
+> Rules unchanged: both lint gates per shell commit, evidence before assertions,
+> `${HOME}`-style paths only, ASK before any merge. Done when: item 1 is merged and
+> items 2–4 are each done or explicitly re-parked with a dated note here.
