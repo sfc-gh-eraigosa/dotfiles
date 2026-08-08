@@ -26,7 +26,7 @@
 | T4 PowerShell `-GffEnv` + log + loud UAC failure | done | _(this commit)_ | edits per plan Task 4 (param/seeding/self-elevate passthrough in setup-elevated.ps1; $gffPairs + PassThru + warnings in setup-apps.ps1); **pwsh ABSENT on build host — AST parse DEFERRED to T6 human run** (not faked) | log now `$env:USERPROFILE\setup-elevated.log`; seeding regex `^(GFF_INSTALL_WINDOWS_[A-Z_]+)=(true\|false\|[a-z0-9,-]+)$` fail-open on mismatch |
 | T5 docs + ledgers | done | _(this commit)_ | root AGENTS.md bullet rewritten (flow, UAC-at-end, gff-owned [s], per-run deploy, log path); scripts AGENTS.md grepped clean (no edit needed); index.md → building + #194; gff §10 row 5 → RESOLVED via #194 | |
 | T6 human validation matrix (owner, real WSL) | done | _(this commit)_ | all 4 runs green (evidence `../gff/evidence/F09-gating/gff-install-flow-matrix.txt`): run 1 elevated-log wispr SKIP via -GffEnv; run 2 [n] deploy-only; run 3/3b sentinel-fallback + live migration + `gff list` override; run 4 flag-off early+tail SKIP, no prompt. Zero manual exports in any run | two live-caught defects fixed TDD mid-matrix (§4): .ps1 em-dash/ANSI parse; $HOME-CWD unknown-key |
-| **Objective gate** | in-progress | — | matrix + tasks green; awaiting PR #194 ready-promotion + merge (owner-gated) | see §3 |
+| **Objective gate** | done | 1bc1928 | #194 promoted READY by the owner, CI green, MERGED 2026-07-26 (1bc1928); §3 stop condition fully green | |
 
 ## 2. Feature → proof matrix (spec §5)
 
@@ -46,8 +46,8 @@
 - [x] Four-run human matrix captured → `../gff/evidence/F09-gating/gff-install-flow-matrix.txt`
 - [x] Run 1 shows `SKIP (gff: install.windows.wispr-flow=false)` in the **elevated** log (via -GffEnv)
 - [x] gff TRACKING §10 row 5 (UAC env-strip) resolution updated; root AGENTS.md flow text updated
-- [ ] `docs/mbo/index.md` state advanced (building → in-review → merged)
-- [ ] Build PR #194 ready (owner-confirmed) and merged (owner-gated)
+- [x] `docs/mbo/index.md` state advanced (building → in-review → done)
+- [x] Build PR #194 ready (owner-promoted) and MERGED 2026-07-26 (1bc1928); both workers reconciled via `gss feature merged`
 
 ## 4. Blockers & escalations
 
@@ -63,3 +63,4 @@
 | 2026-07-26 | planning | Spec + plan authored and approved (owner); worker + draft PR #193 created; execution trio (this file, IMPLEMENTATION, TODO) scaffolded; templates added to `docs/mbo/templates/` and the mbo-plan skill now requires the trio for build objectives |
 | 2026-07-26 | build-1 | Owner merged #193 (planning artifacts on main @ 7a97171) — kickoff's "work in the impl worktree" corrected to the new `build` worker branched from the merged tip (`gss feature merged` run on impl first). T1 done TDD: RED 17-fail observed, GREEN 18/18 under bash AND dash; `[ -r /dev/tty ]` false-positive found empirically and fixed with an open-probe (plan-snippet deviation, recorded on the T1 row). |
 | 2026-07-26 | build-1 | T2–T5 built and checkpointed (PR #194). T6 matrix run with the owner on real WSL — two REAL defects surfaced, root-caused, fixed TDD, re-proven live: (1) em-dash in a .ps1 string parses as a curly-quote terminator under PS 5.1's ANSI read of BOM-less files (whole-file ParserError; also hardened the setup-apps invocation against silent set-e death); (2) install.sh's late `cd $HOME` stripped the repo-live layer from deferred `gff set` → winsetup_run_gff now anchors to WINSETUP_REPO_DIR (test 8b). Matrix complete: elevated wispr SKIP via -GffEnv (run 1), [n] deploy-only (run 2), sentinel fallback + live migration + override (runs 3/3b), flag-off early+tail SKIP (run 4). Zero manual exports anywhere. Awaiting ready+merge. |
+| 2026-07-26 | closeout | Owner promoted + MERGED #194 (1bc1928, CI green). Both workers reconciled (`gss feature merged`); index → done; §3 stop condition fully green; §8 kickoff replaced with the tail-backlog prompt (unenforced flags, multi-source sketch, .ps1 ASCII lint guard, optional TUI gif). Objective COMPLETE. |
