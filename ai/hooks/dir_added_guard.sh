@@ -15,7 +15,9 @@ INPUT="$(cat 2>/dev/null || true)"
 DIR="$(printf '%s' "$INPUT" | jq -r '.directory_path // .directory // .path // empty' 2>/dev/null)"
 [ -n "$DIR" ] || exit 0
 
-# Normalize: expand a leading ~ and strip a trailing slash.
+# Normalize: expand a leading ~ and strip a trailing slash. The quoted tilde
+# is deliberate — we are matching a literal "~" in the JSON payload string.
+# shellcheck disable=SC2088
 case "$DIR" in
   "~"|"~/"*) DIR="${HOME}${DIR#\~}" ;;
 esac

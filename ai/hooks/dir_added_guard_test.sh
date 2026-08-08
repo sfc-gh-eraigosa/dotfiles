@@ -35,7 +35,7 @@ run_case() {
 run_case "benign project dir is silent" \
   "{\"hook_event_name\":\"DirectoryAdded\",\"directory_path\":\"$HOME/git/some-repo\"}" silent
 
-run_case "~/.ssh warns" \
+run_case "adding HOME/.ssh warns" \
   "{\"hook_event_name\":\"DirectoryAdded\",\"directory_path\":\"$HOME/.ssh\"}" warn
 
 run_case "subdir of ~/.aws warns" \
