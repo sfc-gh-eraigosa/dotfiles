@@ -17,3 +17,5 @@ Reference guides and the repo's objective-driven design system.
 - [`ai-plugins.md`](./ai-plugins.md) — the Claude/Antigravity plugin catalog + mapping.
 - [`machine-local-overrides.md`](./machine-local-overrides.md) — the `~/.zshrc.local` pattern.
 - [`claude-code-support.md`](./claude-code-support.md) — supported Claude Code version range, cross-version compatibility rules, and the upgrade-audit runbook.
+- [`gitignore-allowlist.md`](./gitignore-allowlist.md) — the `*`-default `.gitignore` allowlist: opted-in paths, verification recipe, worked examples.
+- [`install-windows.md`](./install-windows.md) — `install.sh` Windows/WSL interactivity flow, `[y]/[s]` semantics, gff overrides.
