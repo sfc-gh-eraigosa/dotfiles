@@ -16,3 +16,4 @@ Reference guides and the repo's objective-driven design system.
 
 - [`ai-plugins.md`](./ai-plugins.md) — the Claude/Antigravity plugin catalog + mapping.
 - [`machine-local-overrides.md`](./machine-local-overrides.md) — the `~/.zshrc.local` pattern.
+- [`claude-code-support.md`](./claude-code-support.md) — supported Claude Code version range, cross-version compatibility rules, and the upgrade-audit runbook.
