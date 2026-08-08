@@ -24,6 +24,12 @@
       "prompt": "Can you check out that hermes agent harness on github and propose how we'd use it with our k8s project and standalone?",
       "expected_output": "Identifies the canonical repo, runs the full rubric, and includes a dedicated proposed-usage section covering both an integrated deployment against the user's cluster (least-privilege, sandboxed sidecar posture) and a standalone docker-compose path, ending with a verdict.",
       "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "For each tool we've researched, what features are we missing in our own setup, and should we just build them ourselves instead of adopting the tool?",
+      "expected_output": "Runs the (h) borrowable-features / build-vs-adopt dimension across the evaluations: for each valuable capability the tool has that the user's stack lacks, tables gap -> value to us -> build-it-ourselves sketch (grounded in existing hooks/.remember/MEMORY.md/gss/skills/skill-creator evals) -> worth it, and where the in-house build is simpler/safer flips the verdict to reject-but-build-the-feature rather than adopting.",
+      "files": []
     }
   ]
 }
