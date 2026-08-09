@@ -76,7 +76,7 @@ stages:
             COMMIT_SHA: $(CommitSHA)
             DEFAULT_BRANCH: main
 
-        - bash: echo "##vso[task.setvariable variable=BuildVersion]$(cat ./Dockerfile|grep 'USER_ID'| awk -F'=' '{print $2}')"
+        - bash: echo "##vso[task.setvariable variable=BuildVersion]$(cat ./docker/Dockerfile|grep 'USER_ID'| awk -F'=' '{print $2}')"
           displayName: Set Base Version
           workingDirectory: $(ghaeUsageRootPath)
         - bash: echo "##vso[task.setvariable variable=Image_1]$(echo "1")"

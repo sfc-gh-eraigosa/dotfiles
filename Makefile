@@ -23,13 +23,20 @@ bin: ## Rebuild all binaries in ./sdk
 
 BASE_IMAGE ?= ghcr.io/sfc-gh-eraigosa/dotfiles-base:latest
 
+# Layer-cache args, empty by default so `make build` works anywhere. CI sets
+# BUILD_CACHE to persist/reuse layers across runs, e.g.:
+#   make build BUILD_CACHE="--cache-from=type=gha --cache-to=type=gha,mode=max"
+# The two-phase Dockerfile means an unchanged deps layer is a cache HIT, so a
+# typical source-only PR skips the expensive toolchain install entirely.
+BUILD_CACHE ?=
+
 .PHONY: build
-build: ## Build the docker test image (FROM the GHCR base; run build-base first on a pull miss)
-	docker build --build-arg BASE_IMAGE=$(BASE_IMAGE) -t $(IMAGE_NAME) .
+build: ## Build the docker test image (buildx; FROM the GHCR base; run build-base first on a pull miss)
+	docker buildx build -f docker/Dockerfile --build-arg BASE_IMAGE=$(BASE_IMAGE) $(BUILD_CACHE) -t $(IMAGE_NAME) --load .
 
 .PHONY: build-base
 build-base: ## Build the base image locally (fallback when the GHCR pull is unavailable; login: gh auth token | docker login ghcr.io -u <user> --password-stdin)
-	docker build -f Dockerfile.base -t $(BASE_IMAGE) .
+	docker build -f docker/Dockerfile.base -t $(BASE_IMAGE) .
 
 .PHONY: test
 test: shell-test ## Run all tests (shell-test + scripts/test.sh all)
