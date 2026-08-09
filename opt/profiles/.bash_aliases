@@ -108,17 +108,12 @@ alias f12='xdotool key F12'
 alias delkey='xdotool key Delete'
 
 #
-# Source git environment shortcuts
+# Git shortcuts (git-reset, git-reset-all, git-clean, git-help) — the slim
+# replacement for the retired Gerrit-era ~/.gitenv generator. No startup side
+# effects; safe to source unconditionally.
 #
-
-if [ -f ~/.gitenv ] ; then
-    source ~/.gitenv
-    if [ ! -f ~/.gitenv.nologin ]; then
-        echo "running git-login, to disable execute: touch ~/.gitenv.nologin"
-        fgit-login
-    fi
-else
-    echo ".gitenv is missing, you can install with : . opt/scripts/git/setup_git_alias.sh"
+if [ -f "$HOME/.gitools.sh" ] ; then
+    . "$HOME/.gitools.sh"
 fi
 # Some git shortcuts
 alias git-branches-rm='$HOME/opt/scripts/git/git-rm-mybranches.sh'
