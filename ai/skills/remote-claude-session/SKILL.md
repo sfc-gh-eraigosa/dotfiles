@@ -21,7 +21,8 @@ Collect these from the user's message, conversation context, or by asking:
 |-------|---------|-------|
 | `SSH_ALIAS` | (required) | Must match a `Host` entry in `~/.ssh/config` |
 | `REPO_PATH` | auto-detect | Path to the repo on the **remote** host. If not given, probe `~/git/<repo-name>` then `~/github/<repo-name>` on the remote — both layouts exist across this user's hosts. |
-| `SESSION_NAME` | `claude-remote` | tmux session name on the remote |
+| `SESSION_NAME` | `claude-<purpose>` (e.g. `claude-dns`) | tmux session name on the remote. Prefer a purpose-based name over the generic `claude-remote` — derive `<purpose>` from what the user is starting the session for. |
+| `RC_NAME` | `<SSH_ALIAS>-<SESSION_NAME>` (e.g. `<host>-claude-dns`) | **Display name for the Remote Control session** (the `/rc` list). Passing it makes the session self-identifying by host **and** purpose — so you never end up staring at an auto-generated placeholder (e.g. `<host>-linear-fiddle`) and having to guess which box/task it is. Must be shell-safe (no spaces). |
 
 If `REPO_PATH` is not specified, derive `<repo-name>` from the basename of the active local repo (or ask). The actual path on the remote is then resolved in step 2.
 
@@ -74,21 +75,39 @@ ssh <SSH_ALIAS> "tmux ls 2>/dev/null | grep '^<SESSION_NAME>:'"
 If the session exists, check whether Claude is already healthy:
 
 ```bash
-ssh <SSH_ALIAS> "tmux capture-pane -t <SESSION_NAME> -p 2>/dev/null | grep -c 'Remote Control active'"
+ssh <SSH_ALIAS> "tmux capture-pane -t <SESSION_NAME> -p 2>/dev/null | grep -Ec 'Remote Control active|/rc'"
 ```
+
+Match either signal: older builds print a **`Remote Control active`** banner;
+newer builds (Opus 4.8+) surface it as **`/rc`** in the status bar (transitioning
+from `/rc connecting…` to a bare `/rc` once connected) with no standing banner.
 
 - **Claude is active** → report the session as healthy, show the attach command, and stop. Nothing more to do.
 - **Session exists but Claude is not running** → kill it and proceed to step 4.
 
 ### 4. Start the session
 
-Kill any stale session then create a fresh one in the target repo:
+Kill any stale session then create a fresh one in the target repo. Pass
+`<RC_NAME>` to `--remote-control` so the session is self-identifying in the `/rc`
+list:
 
 ```bash
 ssh <SSH_ALIAS> "tmux kill-session -t <SESSION_NAME> 2>/dev/null; \
   tmux new-session -d -s <SESSION_NAME> -c <REPO_PATH> -x 220 -y 50 && \
-  tmux send-keys -t <SESSION_NAME> '<NVM_PREFIX>claude --remote-control' Enter"
+  tmux send-keys -t <SESSION_NAME> '<NVM_PREFIX>claude --remote-control <RC_NAME>' Enter"
 ```
+
+**If any `tmux` command reports `server exited unexpectedly`** (a crashed server
+left a stale socket — its file lingers but no server is behind it), the whole tmux
+CLI is wedged until it's cleared. Remove **only** the dead default socket, then
+retry — this does not touch any other live tmux server (each server has its own
+socket):
+
+```bash
+ssh <SSH_ALIAS> "rm -f /tmp/tmux-\$(id -u)/default"
+```
+
+A socket that instead reports `no server running` is already clean — leave it.
 
 ### 5. Verify startup (poll up to 15 s)
 
@@ -101,14 +120,16 @@ ssh <SSH_ALIAS> "tmux capture-pane -t <SESSION_NAME> -p 2>/dev/null | tail -5"
   ssh <SSH_ALIAS> "tmux send-keys -t <SESSION_NAME> '1' Enter"
   ```
   Then re-poll.
-- Success when the status bar contains **`Remote Control active`**.
-- If not seen within 15 s, capture and show the full pane to help diagnose.
+- Success when the status bar shows **`Remote Control active`** (older builds) **or
+  `/rc`** with the `connecting…` suffix cleared (Opus 4.8+). Poll for either.
+- If neither is seen within 15 s, capture and show the full pane to help diagnose.
 
 ### 6. Report success
 
 Tell the user:
 - Claude Remote Control is active on `<SSH_ALIAS>` in `<REPO_PATH>`
-- Session: `<SESSION_NAME>` (persists after disconnect — tmux keeps it alive)
+- Remote Control session (in the `/rc` list): `<RC_NAME>` — self-identifying by host + purpose
+- tmux session: `<SESSION_NAME>` (persists after disconnect — tmux keeps it alive)
 - Attach any time with:
   ```
   ssh <SSH_ALIAS> -t tmux attach -t <SESSION_NAME>
