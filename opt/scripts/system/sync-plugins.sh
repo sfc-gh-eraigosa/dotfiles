@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # sync-plugins.sh — ensure the AI-assistant plugins declared in ai/plugins.yaml
-# are installed and enabled. Ensure-only (additive): never removes anything.
-# Mirrors sync-skills.sh. Safe to re-run.
+# are installed, enabled, and UPDATED to latest. Ensure-only (additive): never
+# removes anything. Mirrors sync-skills.sh. Safe to re-run.
 #
 # Usage:
 #   sync-plugins.sh            install + enable per the manifest
@@ -136,11 +136,19 @@ sync_claude() {
         { [ -z "$src" ] || [ "$src" = "null" ]; } && continue
         run claude plugin marketplace add "$src"
     done < <(yq '.marketplaces[] | select(.claude != null) | .claude' "$MANIFEST")
-    # Install + enable each enabled plugin that has a claude.plugin.
+    # Refresh every marketplace catalog from its source BEFORE installing, so
+    # fresh installs resolve against current manifests. Without an explicit
+    # update pass, plugins stay PINNED at their first-installed version:
+    # `claude plugin install` is a no-op on an existing install, and the
+    # per-marketplace autoUpdate setting is unset by default.
+    run claude plugin marketplace update
+    # Install + enable + update each enabled plugin that has a claude.plugin.
     while IFS= read -r plugin; do
         { [ -z "$plugin" ] || [ "$plugin" = "null" ]; } && continue
         run claude plugin install "$plugin"
         enable_claude_plugin "$plugin"
+        # Converge to latest (no-op when current; a restart picks up changes).
+        run claude plugin update "$plugin"
     done < <(yq '.plugins[] | select(.enabled == true) | select(.claude.plugin != null) | .claude.plugin' "$MANIFEST")
 }
 
