@@ -3,6 +3,8 @@ package cmd
 import (
 	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // TestPreviewCmd_Once verifies that --once prints one non-empty line.
@@ -27,17 +29,28 @@ func TestPreviewCmd_Once(t *testing.T) {
 	}
 }
 
-// TestPreviewCmd_Interactive_NoTTY verifies that runPreview without --once
-// returns an error in a non-TTY test environment (which is expected behavior).
-// We just check that it does not panic.
-func TestPreviewCmd_Interactive_NoTTY(t *testing.T) {
+// TestPreviewCmd_Interactive_QuitOnQ runs the interactive path with an
+// injected input that immediately sends 'q', so the program starts, processes
+// one quit key, and exits — deterministically, with or without a TTY.
+//
+// The previous version of this test ran the bubbletea program on the real
+// stdin, assuming the test environment never has a TTY. Under an interactive
+// `make test` stdin IS a TTY, so the full interactive UI launched and blocked
+// forever waiting for a keypress (the "make test hangs on gsl" bug).
+func TestPreviewCmd_Interactive_QuitOnQ(t *testing.T) {
 	previewOnce = false
-	defer func() { previewOnce = false }()
+	previewTeaOpts = []tea.ProgramOption{
+		tea.WithInput(strings.NewReader("q")),
+		tea.WithoutRenderer(),
+	}
+	defer func() {
+		previewOnce = false
+		previewTeaOpts = nil
+	}()
 
-	// This will fail with a bubbletea error because there is no real TTY in
-	// the test environment. We accept either nil or a non-nil error.
-	// The important invariant is: no panic.
 	_ = captureStdout(t, func() {
-		_ = runPreview(previewCmd, nil)
+		if err := runPreview(previewCmd, nil); err != nil {
+			t.Errorf("runPreview interactive with injected 'q': %v", err)
+		}
 	})
 }
