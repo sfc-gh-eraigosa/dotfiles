@@ -26,12 +26,13 @@ on:
       - 'sdk/gff/**'
       - '.github/workflows/gff-ci.yml'
       - 'Makefile'
+  # No paths filter on pull_request: this workflow's checks are REQUIRED by
+  # the main ruleset, and the Mergify queue waits on required contexts — a
+  # path-skipped check never reports, so a PR not touching gff would sit in
+  # "waiting for queue conditions" forever. Both jobs are sub-minute; the
+  # push trigger above keeps its filter.
   pull_request:
     branches: [ main ]
-    paths:
-      - 'sdk/gff/**'
-      - '.github/workflows/gff-ci.yml'
-      - 'Makefile'
   workflow_dispatch: {}
 
 concurrency:
