@@ -20,6 +20,16 @@
           }
         ]
       }
+    ],
+    "DirectoryAdded": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/dir_added_guard.sh"
+          }
+        ]
+      }
     ]
   },
   "statusLine": {
