@@ -11,6 +11,7 @@
 !LICENSE
 !azure-pipelines.yml
 !Dockerfile
+!Dockerfile.base
 !.gitignore
 !**/AGENTS.md
 !**/FEATURE.md
