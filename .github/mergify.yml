@@ -1,0 +1,33 @@
+# Mergify merge queue — the queue GitHub reserves for org-owned repos,
+# provided by the Mergify app instead (installed on this personal-account
+# repo; free tier). Docs: https://docs.mergify.com/merge-queue/
+#
+# How to land a PR through the queue:
+#   - add the `ready-for-merge` label (it ALSO force-runs the heavy
+#     build-and-validate job on drafts — same label, one meaning: "land it"),
+#     then mark the PR ready for review; or
+#   - comment `@mergifyio queue` on the PR (works ad hoc, no label).
+#
+# Mergify updates the PR in place against the latest main (update_method:
+# merge — satisfies the ruleset's strict up-to-date requirement without
+# force-pushing the branch), waits for the ruleset's REQUIRED checks on the
+# updated code, then squash-merges. Queue entries are serialized, so two
+# green-but-conflicting PRs can never land stale.
+
+queue_rules:
+  - name: default
+    merge_method: squash
+    update_method: merge
+    # No extra merge_conditions: the branch ruleset's required status checks
+    # are enforced by GitHub and honored by Mergify automatically. Add
+    # conditions here only for gates that are NOT ruleset-required.
+    merge_conditions: []
+
+pull_request_rules:
+  - name: queue PRs labeled ready-for-merge
+    conditions:
+      - label = ready-for-merge
+      - -draft
+    actions:
+      queue:
+        name: default
