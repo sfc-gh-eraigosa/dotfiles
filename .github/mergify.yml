@@ -42,6 +42,18 @@ merge_protections:
       - check-success = Shell Lint (shellcheck)
       - check-success = Run Unit Tests
 
+  # External-contribution gate: any PR not authored by the maintainer (or
+  # dependabot, a GitHub-operated trusted source) requires the maintainer's
+  # approving review. GitHub's native "require 1 approval" can't do this —
+  # authors can't approve their own PRs, so it would deadlock solo work.
+  # See docs/mergify.md for the full policy.
+  - name: external contributions need the maintainer's review
+    if:
+      - author != sfc-gh-eraigosa
+      - author != dependabot[bot]
+    success_conditions:
+      - approved-reviews-by = sfc-gh-eraigosa
+
 queue_rules:
   - name: default
     batch_size: 1
@@ -56,6 +68,12 @@ pull_request_rules:
     conditions:
       - label = ready-for-merge
       - -draft
+      # Author guard (belt to the merge_protections suspenders): external
+      # PRs enter the queue only after the maintainer's approving review.
+      - or:
+          - author = sfc-gh-eraigosa
+          - author = dependabot[bot]
+          - approved-reviews-by = sfc-gh-eraigosa
     actions:
       queue:
         name: default
