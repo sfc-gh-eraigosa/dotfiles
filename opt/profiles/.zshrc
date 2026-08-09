@@ -146,9 +146,13 @@ for _p in docker kubectl; do
 done
 unset _p
 
-# Only clone zsh-completions if not in editor terminal (expensive git operation)
+# Only clone zsh-completions if not in editor terminal (expensive git operation).
+# Non-fatal + shallow + time-bounded: a network stall or failure here must never
+# hang or abort shell startup — nor a script that sources this file under `set -e`
+# (a CI image build sanity-checks the shell exactly that way).
 if [[ "$EDITOR_TERMINAL" == "false" ]] && [ ! -d "${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions" ] ; then
-  git clone https://github.com/zsh-users/zsh-completions ${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions
+  timeout 30 git clone --depth 1 https://github.com/zsh-users/zsh-completions "${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions" 2>/dev/null \
+    || print -u2 "zsh-completions: clone skipped (offline/slow) — will retry next shell"
 fi
 
 # User configuration

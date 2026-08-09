@@ -31,6 +31,41 @@ if command -v gff >/dev/null 2>&1; then
   set +a
 fi
 
+# --- Build-phase gating (Docker layer caching; no effect on real machines) --
+# `--phase deps|config` lets a CONTAINER build run the repo-INDEPENDENT work
+# (runtime toolchains, external tools, OS packages) in a cache-friendly EARLY
+# image layer, and the repo-DEPENDENT work (shell profiles, AI skills, sdk
+# builds) in a LATER layer — so a source change only re-runs config. Default
+# `all` applies NO overrides, so a normal `./install.sh` is byte-for-byte the
+# same as before. Implemented purely by toggling the same GFF_* env that
+# gff_on already reads, so there are zero per-section changes below. Because
+# both gff `export` blocks (above and at the bootstrap) can overwrite GFF_*,
+# apply_install_phase is re-invoked after each of them.
+INSTALL_PHASE=all
+_ip_prev=""
+for _ip_arg in "$@"; do
+  case "$_ip_arg" in
+    --phase=*) INSTALL_PHASE="${_ip_arg#--phase=}" ;;
+  esac
+  [ "$_ip_prev" = "--phase" ] && INSTALL_PHASE="$_ip_arg"
+  _ip_prev="$_ip_arg"
+done
+unset _ip_prev _ip_arg
+
+# Repo-DEPENDENT (config) vs repo-INDEPENDENT (deps) gff keys, sans GFF_ prefix.
+_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES"
+_IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_K8S INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM"
+apply_install_phase() {
+  case "$INSTALL_PHASE" in
+    deps)   for _f in $_IP_CONFIG_FLAGS; do export "GFF_${_f}=false"; done ;;
+    config) for _f in $_IP_DEPS_FLAGS;   do export "GFF_${_f}=false"; done ;;
+    all|"") : ;;
+    *) echo "WARNING: unknown --phase '${INSTALL_PHASE}' (use deps|config|all); running as all"; INSTALL_PHASE=all ;;
+  esac
+}
+[ "$INSTALL_PHASE" != "all" ] && echo "install.sh: build phase = ${INSTALL_PHASE}"
+apply_install_phase
+
 # --- Authenticate sudo up front -------------------------------------------
 # The rest of this installer runs several privileged steps (apt/yum installs,
 # the GitHub CLI apt-repo setup, chsh). Caching sudo credentials once here means
@@ -385,6 +420,9 @@ if [ "$gff_bootstrap_ok" = "true" ] && [ -x "${HOME}/opt/bin/gff" ]; then
   eval "$(cd "${BASE_DIR}" && "${HOME}/opt/bin/gff" export --shell 2>/dev/null || true)"
   set +a
 fi
+# Re-assert build-phase overrides: the gff export above can have overwritten the
+# GFF_* the later runtime gates (pyenv/rbenv/nvm) read.
+apply_install_phase
 
 # install/update pyenv
 if gff_on install.runtime.pyenv; then
