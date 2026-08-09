@@ -21,9 +21,15 @@ bin: ## Rebuild all binaries in ./sdk
 		fi; \
 	done
 
+BASE_IMAGE ?= ghcr.io/sfc-gh-eraigosa/dotfiles-base:latest
+
 .PHONY: build
-build: ## Build the docker image used for testing
-	docker build -t $(IMAGE_NAME) .
+build: ## Build the docker test image (FROM the GHCR base; run build-base first on a pull miss)
+	docker build --build-arg BASE_IMAGE=$(BASE_IMAGE) -t $(IMAGE_NAME) .
+
+.PHONY: build-base
+build-base: ## Build the base image locally (fallback when the GHCR pull is unavailable; login: gh auth token | docker login ghcr.io -u <user> --password-stdin)
+	docker build -f Dockerfile.base -t $(BASE_IMAGE) .
 
 .PHONY: test
 test: shell-test ## Run all tests (shell-test + scripts/test.sh all)
