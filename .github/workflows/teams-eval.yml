@@ -1,6 +1,11 @@
 name: AI Teams Eval
 
 on:
+  # Merge-queue coverage: produces the REQUIRED "Validate teams source +
+  # routing artifacts" check, so it must report on the queue's ephemeral
+  # branches — merge_group takes no path filters by design.
+  merge_group:
+    branches: [ main ]
   push:
     branches: [ main ]
     paths:

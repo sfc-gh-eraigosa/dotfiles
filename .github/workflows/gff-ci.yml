@@ -15,6 +15,11 @@ name: gff CI
 #   Total gate: ≥90% — a hard floor, never to be lowered.
 
 on:
+  # Merge-queue coverage: this workflow produces REQUIRED checks (binary-level
+  # e2e tests, unit tests + coverage gate), so it must report on the queue's
+  # ephemeral branches — merge_group takes no path filters by design.
+  merge_group:
+    branches: [ main ]
   push:
     branches: [ main ]
     paths:

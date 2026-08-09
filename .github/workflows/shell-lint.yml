@@ -10,6 +10,11 @@ name: Shell Lint
 # comment. See docker-image.yml for the full rationale.
 
 on:
+  # Merge-queue coverage: produces the REQUIRED "Shell Lint (shellcheck)"
+  # check, so it must report on the queue's ephemeral branches — merge_group
+  # takes no path filters by design.
+  merge_group:
+    branches: [ main ]
   push:
     branches: [ main ]
     paths:
