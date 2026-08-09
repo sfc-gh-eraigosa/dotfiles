@@ -38,10 +38,14 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # Cancel in-flight runs of the same workflow if a new push arrives on the
-  # same branch/ref. This reduces runner usage when a developer pushes
-  # multiple commits in quick succession.
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Cancel superseded PR runs to save runners, but never cancel push (main) or
+  # merge_group runs — those validate distinct commits and must each conclude
+  # (a cancelled run reddens the badge). The per-run discriminator keeps PR runs
+  # sharing a group (cancellable) while giving each push/merge_group run a unique
+  # group via github.run_id so it is alone and cannot be cancelled by a sibling.
+  # (A ref-only group + cancel-in-progress: true cancelled main runs once the
+  # merge queue started landing PRs back-to-back onto main.)
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
   cancel-in-progress: true
 
 jobs:

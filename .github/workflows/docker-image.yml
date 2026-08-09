@@ -46,11 +46,22 @@ on:
   merge_group:
 
 # Cancel superseded runs on the same ref: without this, a hung build (e.g. the
-# PR #182 tzdata-prompt hang) piles up one 6-hour run per push. main and the
-# merge queue never cancel (their runs validate distinct commits).
+# PR #182 tzdata-prompt hang) piles up one 6-hour run per push. PR runs cancel;
+# push (main) and merge_group runs must NOT — their runs validate distinct
+# commits and must all reach a conclusion (a cancelled run reddens the badge).
+#
+# The group therefore carries a per-run discriminator for non-PR events:
+#   - pull_request -> "pr", so the group is stable per PR ref and a new commit
+#     cancels the older in-flight run (the intended cost saving).
+#   - push / merge_group -> github.run_id, a UNIQUE value per run, so each run
+#     is alone in its group and can never be cancelled by a sibling.
+# This replaces `cancel-in-progress: ${{ github.event_name == 'pull_request' }}`,
+# which did NOT protect push runs: once the merge queue went live, rapid
+# back-to-back main landings put two main runs in the same ref-keyed group and
+# the in-flight (slow Docker build) run was cancelled, failing the badge.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   lint:
