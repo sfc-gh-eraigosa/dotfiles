@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
 )
@@ -28,6 +29,16 @@ type dirGitData struct {
 	gitInfo *git.Info
 	// hasGit is true when gitInfo was populated.
 	hasGit bool
+	// prio is the drop priority (config.Segment.EffectivePriority).
+	prio int
+}
+
+// priority implements prioritized.
+func (d *dirGitData) priority() int {
+	if d.prio != 0 {
+		return d.prio
+	}
+	return config.PriorityDirGit
 }
 
 // detect implements detectable for DirGitSegment. Runs git.Status once.
@@ -49,13 +60,15 @@ func (s *DirGitSegment) detect(ctx context.Context) (segmentData, bool) {
 		}
 	}
 
-	d := &dirGitData{cwd: cwd, home: home}
+	d := &dirGitData{cwd: cwd, home: home, prio: s.Priority}
 
-	if s.Git != nil {
-		if info, err := git.Status(ctx, s.Git, cwd); err == nil {
-			d.gitInfo = &info
-			d.hasGit = true
-		}
+	// Reuse the pre-threaded status when the caller already computed it
+	// (Deps.GitInfo); shell out only when it is nil. This is the OTHER half of
+	// the 4-execs-where-2-suffice fix — cmd used to run git.Status serially for
+	// the branch and then this segment ran it AGAIN inside Detect.
+	if info, ok := s.status(ctx, cwd); ok {
+		d.gitInfo = &info
+		d.hasGit = true
 	}
 
 	return d, true

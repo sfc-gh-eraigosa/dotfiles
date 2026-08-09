@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp"
 )
@@ -99,4 +100,44 @@ func execLookPath(name string) (string, error) {
 		}
 	}
 	return "", os.ErrNotExist
+}
+
+// ─── E18 / F12 — subprocess containment ──────────────────────────────────────
+
+const (
+	e18Deadline = 800 * time.Millisecond
+	e18Budget   = 1500 * time.Millisecond
+	// e18Script exits IMMEDIATELY but leaves a grandchild holding the inherited
+	// stdout pipe for 5s. SystemRunner sets cmd.Stdout to a *bytes.Buffer, so
+	// os/exec allocates an os.Pipe and Wait() blocks until every writer closes
+	// it. Without WaitDelay + a process-group kill the deadline is DEFEATED.
+	//
+	// This is the `claude mcp list` shape: the CLI dials every server and can
+	// leave transport children behind.
+	e18Script = "( sleep 5 ) & exit 0"
+)
+
+// TestRun_ReturnsWithinDeadline_WhenGrandchildHoldsPipe is E18 for the mcp seam.
+func TestRun_ReturnsWithinDeadline_WhenGrandchildHoldsPipe(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX shell semantics; not applicable on Windows")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), e18Deadline)
+	defer cancel()
+
+	// The mcp seam treats `name` as the executable itself.
+	r := mcp.NewSystemRunner()
+
+	start := time.Now()
+	_, _ = r.Run(ctx, "/bin/sh", "-c", e18Script)
+	elapsed := time.Since(start)
+
+	if elapsed > e18Budget {
+		t.Fatalf("mcp.Run took %v with an %v deadline; want <= %v. "+
+			"An orphaned grandchild holding the stdout pipe defeats the deadline (E18/F12).",
+			elapsed.Round(time.Millisecond), e18Deadline, e18Budget)
+	}
+	t.Logf("mcp.Run returned in %v (deadline %v, budget %v)",
+		elapsed.Round(time.Millisecond), e18Deadline, e18Budget)
 }

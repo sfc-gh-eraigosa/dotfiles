@@ -21,8 +21,63 @@ type Segment struct {
 	Type string `json:"type"`
 	// Enabled controls whether this segment is rendered.
 	Enabled bool `json:"enabled"`
+	// Priority is the DROP priority used by the render fit loop when text
+	// compaction alone cannot make the line fit: the LOWEST priority segment is
+	// dropped first, and the highest-priority segment is the last one standing.
+	//
+	// It is deliberately independent of the segment's POSITION in Segments,
+	// which controls only the left-to-right VISUAL order. Before this field
+	// existed the fit loop dropped the right-most slice element, so simply
+	// reordering the line silently changed which information survived a narrow
+	// terminal — the user's cosmetic preference decided what they could still
+	// read at 40 columns.
+	//
+	// 0 (the zero value, i.e. "unset") means "use the built-in default for this
+	// segment type" — see DefaultSegmentPriority. That keeps every existing
+	// config.json working unchanged.
+	Priority int `json:"priority,omitempty"`
 	// Options holds segment-specific key-value overrides.
 	Options map[string]any `json:"options,omitempty"`
+}
+
+// Built-in drop priorities. Higher survives longer; the fit loop drops the
+// lowest first. The ordering encodes "what does the user most need to still see
+// on a 40-column split pane": which repo/PR you are in beats where you are on
+// disk, beats the model, beats the clock (which every OS already shows).
+//
+// The gaps leave room for a user to interleave a custom value without having to
+// renumber the others.
+const (
+	PriorityTime   = 10 // dropped first
+	PriorityAI     = 20
+	PriorityDirGit = 30
+	PriorityRepo   = 40 // dropped last
+)
+
+// DefaultSegmentPriority returns the built-in drop priority for a segment type.
+// Unknown types sort with the first-dropped group.
+func DefaultSegmentPriority(segType string) int {
+	switch segType {
+	case "repo":
+		return PriorityRepo
+	case "dirgit":
+		return PriorityDirGit
+	case "ai":
+		return PriorityAI
+	case "time":
+		return PriorityTime
+	default:
+		return 0
+	}
+}
+
+// EffectivePriority returns the segment's drop priority: the user's explicit
+// Priority when set, otherwise the built-in default for its type.
+func (s Segment) EffectivePriority() int {
+	if s.Priority != 0 {
+		return s.Priority
+	}
+	return DefaultSegmentPriority(s.Type)
 }
 
 // Config is the top-level gsl configuration.
@@ -42,7 +97,20 @@ type Config struct {
 	// Styles holds user-defined style overrides keyed by segment type or
 	// element name. Kept as map[string]any for CP1; CP2 will type it further.
 	Styles map[string]any `json:"styles,omitempty"`
+	// FallbackColumns is the terminal width assumed when NO source knows it —
+	// no terminal_width in the payload, neither stdout nor stderr is a tty, and
+	// COLUMNS is not exported. See cmd.resolveColumns.
+	//
+	// DefaultFallbackColumns (120), not 80. 80 is a teletype default that
+	// under-serves every modern terminal; when guessing, guess generously — an
+	// over-wide guess is corrected by the fit loop's truncation (now a hard
+	// guarantee), whereas an under-wide guess silently discards information the
+	// user had room for.
+	FallbackColumns int `json:"fallback_columns,omitempty"`
 }
+
+// DefaultFallbackColumns is the assumed terminal width when nothing knows it.
+const DefaultFallbackColumns = 120
 
 // Default returns a fully usable Config with all 4 segments enabled in the
 // canonical order: dirgit, repo, ai, time.
@@ -55,11 +123,21 @@ func Default() Config {
 			{Type: "ai", Enabled: true},
 			{Type: "time", Enabled: true},
 		},
-		Timezone:   "America/Los_Angeles",
-		TimeFormat: "15:04:05",
-		DateFormat: "2006-01-02",
-		Style:      "powerline",
+		Timezone:        "America/Los_Angeles",
+		TimeFormat:      "15:04:05",
+		DateFormat:      "2006-01-02",
+		Style:           "powerline",
+		FallbackColumns: DefaultFallbackColumns,
 	}
+}
+
+// EffectiveFallbackColumns returns the configured fallback width, or
+// DefaultFallbackColumns when it is unset or nonsensical.
+func (c Config) EffectiveFallbackColumns() int {
+	if c.FallbackColumns > 0 {
+		return c.FallbackColumns
+	}
+	return DefaultFallbackColumns
 }
 
 // DefaultPath returns the default config file path, respecting

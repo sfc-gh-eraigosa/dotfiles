@@ -9,6 +9,7 @@ package render
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -39,7 +40,34 @@ type detectable interface {
 type segmentData interface {
 	// format returns raw (unpainted) text and the theme colorKey at the given
 	// compaction level. PURE: no I/O. Returns ("", "") to self-omit at this level.
+	//
+	// format MUST be monotonically non-increasing in width as level rises
+	// (spec E5): a segment that ignores its level silently defeats the entire
+	// compaction ladder and forces Fit into the segment-drop tier far earlier
+	// than necessary.
 	format(st style.Style, level int) (text, colorKey string)
+}
+
+// prioritized is the optional interface a segmentData implements to declare its
+// DROP priority — which segment Fit sacrifices first when the line still does
+// not fit after text compaction.
+//
+// Priority is deliberately NOT slice position. Before this existed, Fit dropped
+// the right-most element of cfg.Segments, so a user who merely REORDERED their
+// status line (a cosmetic preference) silently changed which information they
+// could still read on a narrow terminal. Position is presentation; priority is
+// policy. They are different questions and now have different answers.
+type prioritized interface {
+	priority() int
+}
+
+// priorityOf returns d's drop priority. A segmentData that declares none sorts
+// with the first-dropped group.
+func priorityOf(d segmentData) int {
+	if p, ok := d.(prioritized); ok {
+		return p.priority()
+	}
+	return 0
 }
 
 // Detect runs the enabled segments CONCURRENTLY (one goroutine each, with a
@@ -72,7 +100,7 @@ func Detect(ctx context.Context, cfg config.Config, st style.Style, segs []Segme
 						"event":   "segment.panic",
 						"segment": segmentTypeName(s),
 						"panic":   fmt.Sprintf("%v", r),
-					}).Warn("segment panicked during detect; dropping")
+					}).Error("segment panicked during detect; dropping")
 					items[idx] = item{ok: false}
 				}
 			}()
@@ -181,6 +209,17 @@ func Format(datas []segmentData, st style.Style, level int) string {
 // Both powerline and emoji use this tier; emoji is the binding case because
 // each emoji glyph is an irreducible ~2 cols + space.
 func formatFinalTier(datas []segmentData, st style.Style) string {
+	blocks := finalTierBlocks(datas, st)
+	if len(blocks) == 0 {
+		return ""
+	}
+	return join(st, blocks)
+}
+
+// finalTierBlocks is formatFinalTier's block list, before the join. Fit's
+// truncation tier needs the blocks themselves (it has to shorten their text),
+// not the already-assembled string.
+func finalTierBlocks(datas []segmentData, st style.Style) []segmentBlock {
 	textLevel := finalCompactLevel - 1
 
 	blocks := make([]segmentBlock, 0, len(datas))
@@ -199,11 +238,7 @@ func formatFinalTier(datas []segmentData, st style.Style) string {
 		}
 		blocks = append(blocks, segmentBlock{text: text, colorKey: colorKey})
 	}
-
-	if len(blocks) == 0 {
-		return ""
-	}
-	return join(st, blocks)
+	return blocks
 }
 
 // dropLeadingGlyph removes the leading non-ASCII glyph (emoji or Nerd Font
@@ -239,55 +274,111 @@ func dropLeadingGlyph(text string) string {
 	return text
 }
 
-// Fit runs Format at escalating compaction levels (0 → finalCompactLevel)
-// and returns the first output whose term.DisplayWidth ≤ cols, or the most
-// compact if none fits.
+// Fit renders datas into a line that is GUARANTEED to be at most cols display
+// columns wide (spec E3), and non-empty whenever any segment has content (E4).
 //
-// After the final text tier (glyph-drop), Fit progressively drops segments
-// from the right (lowest priority first: time → AI → dirgit → repo) until
-// the output fits or only one segment remains.
+// The ladder, cheapest concession first:
+//
+//	Phase 1  escalate text-compaction levels 0..finalCompactLevel.
+//	Phase 2  drop whole segments, LOWEST PRIORITY FIRST (E6) — not right-most.
+//	Phase 3  truncate the survivor, grapheme-safely, with an ellipsis (E3).
+//
+// Phases 1 and 2 are best-effort: they make the line smaller, but neither can
+// make it small ENOUGH. Only phase 3 is bounded by construction. The shipped
+// code stopped after phase 2 with `for len(active) > 1`, which left the final
+// surviving segment un-truncated — a 27-column line on a 20-column terminal.
 //
 // Fit is PURE (no I/O) — all data is already in datas from a prior Detect call.
 func Fit(datas []segmentData, st style.Style, cols int) string {
-	if len(datas) == 0 {
+	if len(datas) == 0 || cols <= 0 {
 		return ""
 	}
 
-	// Phase 1: escalate through text levels 0..finalCompactLevel.
-	var last string
+	// ── Phase 1: escalate through text levels 0..finalCompactLevel. ──────────
 	for level := 0; level <= finalCompactLevel; level++ {
 		out := Format(datas, st, level)
-		last = out
+		if out == "" {
+			// Nothing to render at all (every segment self-omitted).
+			return ""
+		}
 		if term.DisplayWidth(out) <= cols {
 			return out
 		}
 	}
 
-	// Phase 2: progressively drop segments from the right end.
-	// Build the active set (indices of non-nil datas), then drop from the right.
-	active := make([]int, 0, len(datas))
-	for i, d := range datas {
-		if d != nil {
-			active = append(active, i)
-		}
-	}
+	// ── Phase 2: drop segments, lowest priority first. ───────────────────────
+	//
+	// The VISUAL order of the survivors is unchanged (pruned keeps each segment
+	// at its original index); only the DROP order is by priority.
+	pruned := make([]segmentData, len(datas))
+	copy(pruned, datas)
 
-	for len(active) > 1 {
-		// Drop the last (lowest-priority) segment.
-		active = active[:len(active)-1]
-
-		// Build a pruned datas slice.
-		pruned := make([]segmentData, len(datas))
-		for _, idx := range active {
-			pruned[idx] = datas[idx]
+	for _, idx := range dropOrder(datas) {
+		if countActive(pruned) <= 1 {
+			break
 		}
+		pruned[idx] = nil
 
 		out := formatFinalTier(pruned, st)
-		last = out
-		if out == "" || term.DisplayWidth(out) <= cols {
+		if out == "" {
+			break
+		}
+		if term.DisplayWidth(out) <= cols {
 			return out
 		}
 	}
 
-	return last
+	// ── Phase 3: truncate the survivor. ──────────────────────────────────────
+	blocks := finalTierBlocks(pruned, st)
+	if len(blocks) == 0 {
+		return ""
+	}
+
+	if fitted := truncateToWidth(blocks, st, cols); len(fitted) > 0 {
+		if out := join(st, fitted); term.DisplayWidth(out) <= cols {
+			return out
+		}
+	}
+
+	// The decoration itself does not fit (e.g. cols=2 with powerline, whose
+	// padding + chevron alone costs 3 columns). Emit an UNDECORATED, painted,
+	// grapheme-safe truncation: no padding, no separator, no chevron — just as
+	// much of the highest-priority segment as the terminal can physically hold.
+	text := truncateText(term.StripANSI(blocks[0].text), cols)
+	if text == "" {
+		return ""
+	}
+	return paint(st, blocks[0].colorKey, text)
+}
+
+// dropOrder returns the indices of the non-nil segments in the order Fit should
+// sacrifice them: ASCENDING priority, and — among equal priorities — right-most
+// first, which preserves the historical behaviour for segments that declare no
+// priority of their own.
+func dropOrder(datas []segmentData) []int {
+	order := make([]int, 0, len(datas))
+	for i, d := range datas {
+		if d != nil {
+			order = append(order, i)
+		}
+	}
+	sort.SliceStable(order, func(a, b int) bool {
+		pa, pb := priorityOf(datas[order[a]]), priorityOf(datas[order[b]])
+		if pa != pb {
+			return pa < pb
+		}
+		return order[a] > order[b]
+	})
+	return order
+}
+
+// countActive returns the number of non-nil entries in datas.
+func countActive(datas []segmentData) int {
+	n := 0
+	for _, d := range datas {
+		if d != nil {
+			n++
+		}
+	}
+	return n
 }

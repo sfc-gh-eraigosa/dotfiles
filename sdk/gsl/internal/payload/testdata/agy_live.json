@@ -1,0 +1,62 @@
+{
+  "cwd": "/home/user/git/dotfiles",
+  "session_id": "00000000-0000-4000-8000-000000000000",
+  "conversation_id": "00000000-0000-4000-8000-000000000000",
+  "transcript_path": "/home/user/.gemini/antigravity/brain/00000000-0000-4000-8000-000000000000/.system_generated/logs/transcript.jsonl",
+  "model": {
+    "id": "Gemini 3.5 Flash (Medium)",
+    "display_name": "Gemini 3.5 Flash (Medium)"
+  },
+  "workspace": {
+    "current_dir": "/home/user/git/dotfiles",
+    "project_dir": "/home/user/git/dotfiles"
+  },
+  "version": "1.1.1",
+  "context_window": {
+    "total_input_tokens": 157,
+    "total_output_tokens": 819,
+    "context_window_size": 1048576,
+    "used_percentage": 0.014972686767578125,
+    "remaining_percentage": 99.98502731323242,
+    "current_usage": {
+      "input_tokens": 23571,
+      "output_tokens": 815,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+    }
+  },
+  "exceeds_200k_tokens": false,
+  "product": "antigravity",
+  "quota": {
+    "3p-5h": {
+      "remaining_fraction": 1,
+      "reset_time": "2026-07-12T04:36:42Z",
+      "reset_in_seconds": 17995
+    },
+    "3p-weekly": {
+      "remaining_fraction": 1,
+      "reset_time": "2026-07-18T23:36:42Z",
+      "reset_in_seconds": 604795
+    },
+    "gemini-5h": {
+      "remaining_fraction": 1,
+      "reset_time": "2026-07-12T04:36:42Z",
+      "reset_in_seconds": 17995
+    },
+    "gemini-weekly": {
+      "remaining_fraction": 0.86283696,
+      "reset_time": "2026-07-14T14:49:20Z",
+      "reset_in_seconds": 227553
+    }
+  },
+  "agent_state": "idle",
+  "vcs": {
+    "type": "git"
+  },
+  "sandbox": {
+    "enabled": false
+  },
+  "plan_tier": "Google AI Pro",
+  "email": "user@example.com",
+  "terminal_width": 80
+}

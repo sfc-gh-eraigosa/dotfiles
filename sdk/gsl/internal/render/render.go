@@ -58,6 +58,20 @@ type Deps struct {
 	// RegistryPath is the gss registry path for repo.PR.
 	RegistryPath string
 
+	// GitInfo is a PRE-COMPUTED git status, threaded in by the caller.
+	//
+	// cmd/statusline.go currently runs git.Status SERIALLY before Detect, purely
+	// to obtain Branch — and then DirGitSegment runs git.Status again inside
+	// Detect. That is two redundant subprocesses (4 git execs instead of 2), and
+	// the serial call happens INSIDE the shared 1s context, draining the budget
+	// the concurrent segments are about to need. Under slow git (≥250ms/call)
+	// the dirgit segment loses its deadline and vanishes from the line entirely.
+	//
+	// When GitInfo is non-nil, DirGitSegment MUST reuse it instead of shelling
+	// out again. Nil means "not pre-computed; detect it yourself" — which keeps
+	// every existing caller (tests, preview) working unchanged.
+	GitInfo *git.Info
+
 	// Runners (injected seams). Any may be nil; the affected detail is omitted.
 	Git git.Runner
 	GH  gh.Runner
@@ -74,21 +88,38 @@ type Deps struct {
 // cfg.Segments, preserving config order and skipping disabled entries.
 // Unknown segment types are skipped. The returned slice is ready to pass to
 // Render.
+//
+// Each segment also carries its DROP priority (cfg.Segment.EffectivePriority),
+// which is what Fit sacrifices by when the line will not fit. Config ORDER is
+// presentation (left-to-right); config PRIORITY is policy (what survives). They
+// are separate on purpose — see the prioritized interface in detect.go.
 func BuildSegments(cfg config.Config, deps Deps) []Segment {
 	segs := make([]Segment, 0, len(cfg.Segments))
 	for _, sc := range cfg.Segments {
 		if !sc.Enabled {
 			continue
 		}
+		prio := sc.EffectivePriority()
 		switch sc.Type {
 		case "dirgit":
-			segs = append(segs, NewDirGitSegment(deps.Cwd, deps.Git))
+			dg := NewDirGitSegment(deps.Cwd, deps.Git)
+			dg.Priority = prio
+			// Reuse the caller's pre-computed status instead of re-running
+			// git.Status inside Detect (WS3/F12). Nil ⇒ detect it ourselves.
+			dg.Info = deps.GitInfo
+			segs = append(segs, dg)
 		case "repo":
-			segs = append(segs, NewRepoSegment(deps.Git, deps.GH, deps.Branch, deps.RegistryPath, sc.Options))
+			s := NewRepoSegment(deps.Git, deps.GH, deps.Branch, deps.RegistryPath, sc.Options)
+			s.Priority = prio
+			segs = append(segs, s)
 		case "ai":
-			segs = append(segs, NewAISegment(deps.Payload, deps.Cwd, deps.MCP, deps.MCPOpts))
+			s := NewAISegment(deps.Payload, deps.Cwd, deps.MCP, deps.MCPOpts)
+			s.Priority = prio
+			segs = append(segs, s)
 		case "time":
-			segs = append(segs, NewTimeSegment(deps.Clock, cfg.Timezone, cfg.TimeFormat, cfg.DateFormat))
+			s := NewTimeSegment(deps.Clock, cfg.Timezone, cfg.TimeFormat, cfg.DateFormat)
+			s.Priority = prio
+			segs = append(segs, s)
 		default:
 			// Unknown segment type: skip silently.
 		}
@@ -147,7 +178,7 @@ func RenderAt(ctx context.Context, cfg config.Config, st style.Style, segs []Seg
 						"event":   "segment.panic",
 						"segment": segmentTypeName(s),
 						"panic":   fmt.Sprintf("%v", r),
-					}).Warn("segment panicked; dropping")
+					}).Error("segment panicked; dropping")
 					results[idx] = result{ok: false}
 				}
 			}()

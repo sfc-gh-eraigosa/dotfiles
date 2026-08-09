@@ -544,7 +544,15 @@ else gff_skip_msg install.sdk.wol; fi
 if gff_on install.sdk.gsl; then
   if [ -f "${BASE_DIR}/sdk/gsl/build.sh" ]; then
     echo "Installing gsl (Go status line)..."
-    bash "${BASE_DIR}/sdk/gsl/build.sh"
+    # This script has NO `set -e`, so an unchecked build.sh failure is silently
+    # SWALLOWED: install.sh would go on to print "Installation complete!" and exit
+    # 0 while gsl had not built at all. build.sh ends with the dependency + seam
+    # gate (sdk/gsl/scripts/check-deps.sh), so swallowing its exit status defeats
+    # the gate entirely — the exact hole this closes.
+    if ! bash "${BASE_DIR}/sdk/gsl/build.sh"; then
+        echo "ERROR: gsl build failed (see the build/seam-gate output above)." >&2
+        exit 1
+    fi
     if [ -f "${HOME}/opt/bin/gsl" ]; then
         echo "--------------------------------------------------"
         "${HOME}/opt/bin/gsl" version

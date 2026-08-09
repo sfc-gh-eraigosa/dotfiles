@@ -14,8 +14,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"time"
+
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/observe"
 )
 
 // NewResetTime wraps a time.Time as a ResetTime. Convenience constructor
@@ -123,60 +126,219 @@ type Model struct {
 	DisplayName *string `json:"display_name"`
 }
 
-// QuotaWindow holds the quota data for one window in the Antigravity payload.
+// QuotaWindow holds the quota data for one bucket in the Antigravity payload.
+//
+// Shape confirmed against a real agy v1.1.1 capture (see
+// testdata/agy_live.json and the provenance note on TestParse_AgyLive):
+//
+//	"gemini-weekly": {
+//	  "remaining_fraction": 0.86283696,
+//	  "reset_time": "2026-07-14T14:49:20Z",
+//	  "reset_in_seconds": 227553
+//	}
+//
+// PR #157 modelled only remaining_fraction and dropped the other two.
 type QuotaWindow struct {
-	RemainingFraction *float64 `json:"remaining_fraction"`
+	RemainingFraction *float64   `json:"remaining_fraction"`
+	ResetTime         *ResetTime `json:"reset_time"`
+	ResetInSeconds    *float64   `json:"reset_in_seconds"`
 }
 
-// Quotas groups the quota windows in the Antigravity payload.
-type Quotas struct {
-	ThreePHour   *QuotaWindow `json:"3p-5h"`
-	ThreePWeekly *QuotaWindow `json:"3p-weekly"`
-	GeminiHour   *QuotaWindow `json:"gemini-5h"`
-	GeminiWeekly *QuotaWindow `json:"gemini-weekly"`
+// Quotas maps an Antigravity quota-bucket key to its window.
+//
+// It is deliberately a MAP and not a struct with four hardcoded keys. agy
+// v1.1.1 sends "3p-5h", "3p-weekly", "gemini-5h" and "gemini-weekly", but
+// those keys are agy's private naming, not a contract: they encode a model
+// vendor ("3p" = third-party, "gemini" = first-party) and a window length,
+// both of which move as Google ships models. With the previous hardcoded
+// struct an upstream rename would have decoded to all-nil and SILENTLY
+// deleted the quota display. Buckets are now classified by suffix heuristic
+// (ClassifyQuotaBucket), so an unrecognised key still resolves to a window
+// and the segment degrades gracefully instead of disappearing.
+type Quotas map[string]QuotaWindow
+
+// QuotaKind is the rolling window a quota bucket belongs to.
+type QuotaKind int
+
+const (
+	// QuotaUnknown means the bucket key matched no window heuristic.
+	QuotaUnknown QuotaKind = iota
+	// QuotaFiveHour is the short rolling window (agy: "*-5h").
+	QuotaFiveHour
+	// QuotaSevenDay is the long rolling window (agy: "*-weekly").
+	QuotaSevenDay
+)
+
+// ClassifyQuotaBucket maps a quota-bucket key to its rolling window using a
+// suffix heuristic (F15):
+//
+//	contains "week" or "7d"          → QuotaSevenDay
+//	contains "5h"   or "hour"        → QuotaFiveHour
+//	otherwise                        → QuotaUnknown
+//
+// The seven-day test runs FIRST so a hypothetical "168-hour-weekly" is
+// classified as the long window rather than the short one.
+func ClassifyQuotaBucket(key string) QuotaKind {
+	k := strings.ToLower(key)
+	if strings.Contains(k, "week") || strings.Contains(k, "7d") {
+		return QuotaSevenDay
+	}
+	if strings.Contains(k, "5h") || strings.Contains(k, "hour") {
+		return QuotaFiveHour
+	}
+	return QuotaUnknown
+}
+
+// pick returns the quota bucket to use for the given window.
+//
+// Map iteration order is randomised in Go, so selection must be deterministic
+// or the rendered percentage would flap between the "gemini" and "3p" buckets
+// from one render to the next. Candidate keys are sorted, and a first-party
+// ("gemini") bucket wins over any other — preserving the precedence PR #157
+// established with its explicit if/else chain.
+func (q Quotas) pick(kind QuotaKind) (QuotaWindow, bool) {
+	var keys []string
+	for k := range q {
+		if ClassifyQuotaBucket(k) == kind {
+			keys = append(keys, k)
+		}
+	}
+	if len(keys) == 0 {
+		return QuotaWindow{}, false
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if strings.Contains(strings.ToLower(k), "gemini") {
+			return q[k], true
+		}
+	}
+	return q[keys[0]], true
+}
+
+// toRateWindow converts an agy quota bucket into the RateWindow shape the
+// renderer consumes. remaining_fraction (1.0 = untouched) inverts into a
+// used percentage; reset_time carries through to ResetsAt.
+func (w QuotaWindow) toRateWindow() *RateWindow {
+	if w.RemainingFraction == nil {
+		return nil
+	}
+	used := (1.0 - *w.RemainingFraction) * 100.0
+	rw := &RateWindow{UsedPercentage: &used}
+	if w.ResetTime != nil && !w.ResetTime.Time().IsZero() {
+		rt := *w.ResetTime
+		rw.ResetsAt = &rt
+	}
+	return rw
 }
 
 // Payload is the top-level structure parsed from Claude's stdin JSON.
 // All fields are pointers; an entirely empty/whitespace stdin yields a
 // zero-valued Payload (all nil) and no error.
+//
+// IMPORTANT: every field here must have a matching decodeField call in Parse.
+// A field added to the struct but not to Parse decodes to nil FOREVER, silently.
+// TestParse_EveryFieldIsDecoded (reflection over the json tags) is the guard.
 type Payload struct {
 	Cwd           *string        `json:"cwd"`
 	Model         *Model         `json:"model"`
 	ContextWindow *ContextWindow `json:"context_window"`
 	RateLimits    *RateLimits    `json:"rate_limits"`
 	TerminalWidth *int           `json:"terminal_width"`
-	Quota         *Quotas        `json:"quota"`
+	Quota         Quotas         `json:"quota"`
+
+	// Product is the host tool's self-identification. agy v1.1.1 sends
+	// "antigravity" in EVERY payload (confirmed in the live capture — see
+	// testdata/agy_live.json); Claude Code sends no such key.
+	//
+	// This is the only reliable in-band discriminator between the two hosts.
+	// Both CLIs invoke the SAME shim (`gsl render`, payload on stdin), and the
+	// payload shapes overlap almost completely, so without this key an agy
+	// render is indistinguishable from a Claude render and gets the Claude
+	// theme resolved against ~/.claude/settings.json. See cmd.deriveToolCtx.
+	Product *string `json:"product"`
 }
 
-// Parse decodes a Claude stdin JSON payload from the given byte slice.
+// IsAntigravity reports whether the payload came from the Antigravity CLI,
+// using the in-band `product` key agy sends on every render.
+func (p Payload) IsAntigravity() bool {
+	return p.Product != nil && strings.EqualFold(strings.TrimSpace(*p.Product), "antigravity")
+}
+
+// decodeField decodes one top-level field into dst, IN ISOLATION.
+//
+// This is the heart of the per-field tolerance contract (F14 / #31). A field
+// whose JSON type does not match its Go type is DROPPED — dst is left at its
+// zero value and the failure is logged at Debug — while every other field in
+// the payload still decodes. Absent and null fields are no-ops.
+//
+// Before this existed, Parse ran a single json.Unmarshal over the whole
+// Payload struct, so the first type mismatch aborted the entire decode: the
+// caller got a zero Payload and the AI segment vanished for the rest of the
+// session. That was #30 (a number-shaped resets_at) and, generalised, #31.
+func decodeField[T any](raw map[string]json.RawMessage, key string, dst *T) {
+	r, ok := raw[key]
+	if !ok {
+		return
+	}
+	trimmed := bytes.TrimSpace(r)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return
+	}
+	var v T
+	if err := json.Unmarshal(trimmed, &v); err != nil {
+		// Drop ONLY this field. The payload survives.
+		observe.Default().WithField("field", key).
+			WithError(err).
+			Debug("payload: dropping field with unexpected type")
+		return
+	}
+	*dst = v
+}
+
+// Parse decodes a Claude Code / Antigravity stdin JSON payload.
+//
 // Empty or whitespace-only input returns an empty Payload{} and a nil error.
-// Malformed JSON returns a non-nil error.
+// Input that is not a JSON object returns a non-nil error.
+//
+// Tolerance is per-FIELD, not per-byte: once the input is a valid JSON object,
+// each known field is decoded independently and a field with an unexpected
+// type is dropped on its own rather than discarding the whole payload (F14 /
+// #31). See decodeField.
 func Parse(data []byte) (Payload, error) {
 	if strings.TrimSpace(string(data)) == "" {
 		return Payload{}, nil
 	}
-	var p Payload
-	if err := json.Unmarshal(data, &p); err != nil {
+
+	// One shallow decode establishes that this IS a JSON object; field values
+	// stay raw so each can be decoded (and fail) independently.
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return Payload{}, fmt.Errorf("payload: parse: %w", err)
 	}
 
-	// Synthesize RateLimits from Quota if running under Antigravity
-	if p.RateLimits == nil && p.Quota != nil {
-		p.RateLimits = &RateLimits{}
-		if q := p.Quota.GeminiHour; q != nil && q.RemainingFraction != nil {
-			used := (1.0 - *q.RemainingFraction) * 100.0
-			p.RateLimits.FiveHour = &RateWindow{UsedPercentage: &used}
-		} else if q := p.Quota.ThreePHour; q != nil && q.RemainingFraction != nil {
-			used := (1.0 - *q.RemainingFraction) * 100.0
-			p.RateLimits.FiveHour = &RateWindow{UsedPercentage: &used}
-		}
+	var p Payload
+	decodeField(raw, "cwd", &p.Cwd)
+	decodeField(raw, "model", &p.Model)
+	decodeField(raw, "context_window", &p.ContextWindow)
+	decodeField(raw, "rate_limits", &p.RateLimits)
+	decodeField(raw, "terminal_width", &p.TerminalWidth)
+	decodeField(raw, "quota", &p.Quota)
+	decodeField(raw, "product", &p.Product)
 
-		if q := p.Quota.GeminiWeekly; q != nil && q.RemainingFraction != nil {
-			used := (1.0 - *q.RemainingFraction) * 100.0
-			p.RateLimits.SevenDay = &RateWindow{UsedPercentage: &used}
-		} else if q := p.Quota.ThreePWeekly; q != nil && q.RemainingFraction != nil {
-			used := (1.0 - *q.RemainingFraction) * 100.0
-			p.RateLimits.SevenDay = &RateWindow{UsedPercentage: &used}
+	// Antigravity sends `quota` and NO `rate_limits` at all (confirmed across
+	// 14 captured agy v1.1.1 payloads), so synthesis is the ONLY source of the
+	// AI segment's rate data under agy. Buckets are matched by heuristic, not
+	// by hardcoded key.
+	if p.RateLimits == nil && len(p.Quota) > 0 {
+		rl := &RateLimits{}
+		if w, ok := p.Quota.pick(QuotaFiveHour); ok {
+			rl.FiveHour = w.toRateWindow()
+		}
+		if w, ok := p.Quota.pick(QuotaSevenDay); ok {
+			rl.SevenDay = w.toRateWindow()
+		}
+		if rl.FiveHour != nil || rl.SevenDay != nil {
+			p.RateLimits = rl
 		}
 	}
 

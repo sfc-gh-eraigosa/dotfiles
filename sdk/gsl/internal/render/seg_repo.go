@@ -42,6 +42,11 @@ type RepoSegment struct {
 	ShowPR    bool   // default true
 	ShowCount bool   // default true
 	NameMode  string // "feature" | "worker" | "branch" | "off"; default "feature"
+
+	// Priority is the DROP priority used by the fit loop (config.Segment.Priority,
+	// or the built-in default for this type when unset). It is independent of the
+	// segment's position in the line.
+	Priority int
 }
 
 // NewRepoSegment builds a RepoSegment, applying option defaults from opts.
@@ -171,7 +176,14 @@ func workerLabel(branch string) string {
 // background block. The single trailing ansiReset for the whole segment is
 // owned by paint(), NOT by this helper.
 func prBadge(st style.Style, number int, state string) string {
-	text := "PR#" + strconv.Itoa(number)
+	return prBadgeWithPrefix(st, "PR#", number, state)
+}
+
+// prBadgeWithPrefix is prBadge with a caller-chosen prefix, so the compaction
+// ladder can shrink "PR#157" to "#157" at deeper levels without duplicating the
+// state-tinting logic.
+func prBadgeWithPrefix(st style.Style, prefix string, number int, state string) string {
+	text := prefix + strconv.Itoa(number)
 	var colorKey string
 	switch strings.ToUpper(state) {
 	case "OPEN":

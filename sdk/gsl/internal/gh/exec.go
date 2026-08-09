@@ -19,8 +19,7 @@ import (
 	"context"
 	"os/exec"
 
-	"github.com/sirupsen/logrus"
-	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/observe"
+	gslexec "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/exec"
 )
 
 // Runner is the single entry point for gh invocations in gsl.
@@ -48,6 +47,11 @@ func NewSystemRunner() *SystemRunner {
 
 // Run invokes `<Path> <name> <args...>` with the given context.
 // Stdout and Stderr are merged into a single buffer.
+//
+// Containment (F12/E18): hardened via internal/exec — own process group,
+// group-wide kill on cancellation, WaitDelay bound on the I/O pipes. This seam
+// needs it most: `gh` forks git subprocesses of its own (remote -v, config,
+// remote get-url), any of which can outlive it holding the stdout pipe.
 func (r *SystemRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	bin := r.Path
 	if bin == "" {
@@ -61,13 +65,9 @@ func (r *SystemRunner) Run(ctx context.Context, name string, args ...string) ([]
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
+	gslexec.Harden(cmd)
 	if err := cmd.Run(); err != nil {
-		observe.Default().WithFields(logrus.Fields{
-			"event":   "gh.subprocess_error",
-			"command": bin,
-			"args":    full,
-			"error":   err.Error(),
-		}).Warn("gh subprocess failed")
+		gslexec.LogSubprocessError("gh", bin, full, err)
 		return buf.Bytes(), err
 	}
 	return buf.Bytes(), nil

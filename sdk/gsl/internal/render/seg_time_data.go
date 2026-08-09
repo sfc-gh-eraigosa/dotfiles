@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
 )
 
@@ -26,6 +27,17 @@ type timeData struct {
 	timeLayout string
 	// tz is the timezone abbreviation string (e.g. "UTC", "PST").
 	tz string
+	// prio is the drop priority (config.Segment.EffectivePriority).
+	prio int
+}
+
+// priority implements prioritized. The clock is the first thing to go: every
+// desktop environment already shows the time somewhere.
+func (d *timeData) priority() int {
+	if d.prio != 0 {
+		return d.prio
+	}
+	return config.PriorityTime
 }
 
 // detect implements detectable for TimeSegment. Captures the current time once.
@@ -58,6 +70,7 @@ func (s *TimeSegment) detect(_ context.Context) (segmentData, bool) {
 		dateLayout: dateLayout,
 		timeLayout: timeLayout,
 		tz:         t.Format("MST"),
+		prio:       s.Priority,
 	}, true
 }
 
