@@ -49,7 +49,7 @@ sets:
         description: Runs the docker setup block (permissions plus ruby-docker and dindc aliases).
         boolDefault: true
       - path: install.tools.git-aliases
-        description: Runs the setup_git_alias.sh block.
+        description: Migration cleanup for the retired ~/.gitenv generator (removes stale generated artifacts); the surviving git shortcuts live in opt/profiles/.gitools.sh.
         boolDefault: true
       # --- runtime (5) ---
       - path: install.runtime.goenv

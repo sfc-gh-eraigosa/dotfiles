@@ -29,7 +29,7 @@ echo "PASS: Binaries functional"
 
 # 3. Environment Files
 echo "Verifying configuration files..."
-for file in .zshrc .profile .antigravity.profile .gitenv .tmux.conf; do
+for file in .zshrc .profile .antigravity.profile .gitools.sh .tmux.conf; do
     if [ ! -f "$HOME/$file" ]; then
         echo "FAIL: $file missing from HOME"
         exit 1
