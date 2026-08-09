@@ -270,13 +270,6 @@ test -f ${HOME}/.rbenv/shims/gh && rm -f ${HOME}/.rbenv/shims/gh
 # node in path
 export PATH="$PATH:$HOME/.nodenv/shims"
 
-#
-# GITHUB_TOKEN is deliberately NOT exported here (removed 2026-08-08). The old
-# credential-fill export froze a startup-time copy of the gh token in every
-# shell, which shadowed gh's keyring (gh prefers the env var) and kept stale
-# scopes alive after `gh auth refresh`. Tools that need a token should fetch
-# the current one on demand: `gh auth token`.
-
 test -n "$(alias ruby)" && unalias ruby
 
 #
