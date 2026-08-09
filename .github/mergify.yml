@@ -21,6 +21,27 @@
 merge_queue:
   max_parallel_checks: 1
 
+# Branch-protection-as-code: the merge gate list lives HERE, reviewable in
+# PRs, and reports as the single "Mergify Merge Protections" check. Rollout:
+# (1) merge this, (2) verify the check reports on a PR, (3) add it to the
+# GitHub ruleset's required checks and slim the native list to just it
+# (then `make ruleset-snapshot` + commit). Until step 3 the GitHub ruleset's
+# native check list remains the enforcer and this is a parallel dry run.
+merge_protections:
+  - name: required CI green (managed as code)
+    description: Mirror of the main ruleset's required checks — edit via PR.
+    if:
+      - base = main
+    success_conditions:
+      - check-success = Build and Integration Test
+      - check-success = Lint (go + shell + markdown + actions)
+      - check-success = Validate teams source + routing artifacts
+      - check-success = binary-level e2e tests
+      - check-success = unit tests + coverage gate
+      - check-success = Run Shell Test Drivers
+      - check-success = Shell Lint (shellcheck)
+      - check-success = Run Unit Tests
+
 queue_rules:
   - name: default
     batch_size: 1
