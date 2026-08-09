@@ -244,14 +244,34 @@ jobs:
       BASE_IMAGE: ghcr.io/${{ github.repository_owner }}/dotfiles-base:latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Pull base image (build locally on miss)
+      - name: Provide base image (rebuild locally when this PR changes the base)
         # The slow foundation layers live in ghcr.io/…/dotfiles-base, published
-        # by docker-base.yml. Fall back to a local base build when the pull
-        # fails (first run, forks, GHCR outage) so this job never hard-fails
-        # on registry availability.
+        # from MAIN ONLY by docker-base.yml. So if THIS PR edits Dockerfile.base
+        # or the dind entrypoint, the published base is stale for it — build the
+        # base locally so the PR's change is actually validated (see AGENTS.md
+        # "Docker build layering"). Otherwise pull, falling back to a local build
+        # on any pull miss (first run, forks, GHCR outage).
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin || true
-          docker pull "$BASE_IMAGE" || make build-base
+          base_changed=""
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base_changed=$(gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" \
+              --jq '.[].filename' \
+              | grep -E '^(Dockerfile\.base|opt/scripts/docker/dockerd-entrypoint\.sh)$' || true)
+          fi
+          if [ -n "$base_changed" ]; then
+            echo "PR changes the base image ($base_changed) — building base locally to validate."
+            make build-base
+          else
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin || true
+            docker pull "$BASE_IMAGE" || make build-base
+          fi
 
       - name: Set up Docker Buildx
         # docker-container driver is required for the type=gha layer cache below.

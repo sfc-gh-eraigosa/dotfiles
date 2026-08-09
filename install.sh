@@ -53,6 +53,16 @@ done
 unset _ip_prev _ip_arg
 
 # Repo-DEPENDENT (config) vs repo-INDEPENDENT (deps) gff keys, sans GFF_ prefix.
+#
+# ADDING A NEW gff-gated section below? Put its key in EXACTLY ONE list here, or
+# the Docker build's deps/config layer split silently regresses (see AGENTS.md
+# "Docker build layering", and the two-phase Dockerfile). Rule of thumb:
+#   - EXTERNAL INSTALL DEPENDENCY (apt/brew package, a downloaded tool/CLI, a
+#     language runtime/toolchain) -> _IP_DEPS_FLAGS. Runs in the CACHED deps
+#     layer; omitting it makes the step re-run on every commit (slow).
+#   - CONFIG / SKILL / SYMLINK / any repo-content step -> _IP_CONFIG_FLAGS. Runs
+#     in the per-commit config layer; omitting it BAKES the step into the cached
+#     deps layer, so later edits to it stop taking effect per commit (a bug).
 _IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES"
 _IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_K8S INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM"
 apply_install_phase() {
