@@ -11,6 +11,12 @@ import (
 
 var previewOnce bool
 
+// previewTeaOpts holds extra bubbletea program options appended after the
+// defaults. Production leaves it nil; tests inject a deterministic input
+// (and disable the renderer) so the interactive path never binds to the
+// real terminal — binding to a live TTY makes a test block on user input.
+var previewTeaOpts []tea.ProgramOption
+
 var previewCmd = &cobra.Command{
 	Use:   "preview",
 	Short: "Preview the status line interactively (or --once for a single frame)",
@@ -42,7 +48,8 @@ func runPreview(cmd *cobra.Command, args []string) error {
 	}
 
 	m := preview.NewModel(nil) // nil clock → real time.Now
-	p := tea.NewProgram(m, tea.WithOutput(os.Stdout))
+	opts := append([]tea.ProgramOption{tea.WithOutput(os.Stdout)}, previewTeaOpts...)
+	p := tea.NewProgram(m, opts...)
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("gsl preview: %w", err)
 	}
