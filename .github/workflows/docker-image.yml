@@ -223,10 +223,25 @@ jobs:
     # A hang must die in minutes, not burn the 6-hour default (PR #182 lesson).
     # Heavy job baseline is ~6 min; 30 gives headroom without hiding a hang for hours.
     timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
     env:
-      IMAGE_NAME: dotfiles:latest
+      # dotfiles-test matches scripts/test.sh's IMAGE_NAME so the integration
+      # suite reuses this build instead of building a second image.
+      IMAGE_NAME: dotfiles-test
+      BASE_IMAGE: ghcr.io/${{ github.repository_owner }}/dotfiles-base:latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Pull base image (build locally on miss)
+        # The slow foundation layers live in ghcr.io/…/dotfiles-base, published
+        # by docker-base.yml. Fall back to a local base build when the pull
+        # fails (first run, forks, GHCR outage) so this job never hard-fails
+        # on registry availability.
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin || true
+          docker pull "$BASE_IMAGE" || make build-base
+
       - name: Build the Docker image
         run: make build
 
@@ -234,4 +249,4 @@ jobs:
         run: make integration-test
 
       - name: Build Docker in Docker (Legacy Check)
-        run: docker run --privileged -v "$(pwd):/dotfiles" -w /dotfiles dotfiles:latest docker build --tag test opt/docker/helloworld
+        run: docker run --privileged -v "$(pwd):/dotfiles" -w /dotfiles "$IMAGE_NAME" docker build --tag test opt/docker/helloworld
