@@ -18,7 +18,7 @@ sync-plugins --dry-run
 sync-plugins
 ```
 
-The synchronization is **ensure-only**: it installs and enables what is listed but never removes existing extensions.
+The synchronization is **ensure-only**: it installs, enables, and **updates to latest** what is listed, but never removes existing extensions.
 
 ## 🤖 Supported Assistants
 
