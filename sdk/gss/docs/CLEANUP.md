@@ -17,7 +17,7 @@ must not outlive the release.
       cursor) — its job ends the moment PR-61 lands. Close, don't merge.
 - [ ] **Delete the `wip/gss-v1-staging` branch** (local + remote) once
       PR #13 is closed.
-- [ ] **Archive the private test repo's stack** in `~/GitHub/<private-test-repo>`: the
+- [ ] **Archive the private test repo's stack** in `$HOME/<REPO_ROOT>`: the
       `test_gss` trunk and every `pr01-*`…`pr60-*` branch. Keep the repo
       for history if desired, but delete or tag the per-PR branches so a
       future reader doesn't mistake them for live work.

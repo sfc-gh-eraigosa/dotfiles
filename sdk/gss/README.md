@@ -20,10 +20,10 @@ Run from within a repository:
 gss push
 
 Run from outside a repository:
-gss status --repo ~/GitHub/wenlock/project-a
+gss status --repo ~/git/project-a
 
 Scan for dirty repositories:
-gss scan ~/GitHub/wenlock
+gss scan ~/git
 
 ## Safety Features
 - Auto-Backup: Every push creates a backup/gss-TIMESTAMP branch.
