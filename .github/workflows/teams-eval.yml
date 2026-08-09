@@ -12,11 +12,12 @@ on:
       - 'ai/teams/**'
       - 'opt/scripts/system/install_ai_teams.sh'
       - '.github/workflows/teams-eval.yml'
+  # No paths filter on pull_request: the "Validate teams source + routing
+  # artifacts" check is REQUIRED by the main ruleset, and the Mergify queue
+  # waits on required contexts — a path-skipped check never reports, so a PR
+  # not touching ai/teams would sit in "waiting for queue conditions"
+  # forever. The job is ~40s; the push trigger above keeps its filter.
   pull_request:
-    paths:
-      - 'ai/teams/**'
-      - 'opt/scripts/system/install_ai_teams.sh'
-      - '.github/workflows/teams-eval.yml'
 
 # Cancel superseded runs on the same ref so only the latest commit is evaluated.
 concurrency:
