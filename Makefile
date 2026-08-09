@@ -57,6 +57,10 @@ claude-test: ## Run Claude Code sanity check (CLI, links, hooks, 27-case hook te
 claude-hook-test: ## Run safety_guard hook test suite only
 	./ai/hooks/safety_guard_test.sh
 
+.PHONY: git-doctor
+git-doctor: ## Check git identity (user.email/name) against the authenticated GitHub account (pass extra repos as args to the script directly)
+	./opt/scripts/git/git_identity_doctor.sh .
+
 .PHONY: skill-evals
 skill-evals: ## Validate agent-skill eval corpora (ai/skills/*/evals/evals.json) deterministically
 	./opt/scripts/system/skill-eval.sh --check
