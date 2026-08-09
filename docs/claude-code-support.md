@@ -10,7 +10,7 @@ for auditing new Claude Code releases.
 | Bound | Version | Why | Last verified |
 |---|---|---|---|
 | **Floor** | `v2.1.195` | Newest host that predates `/rc` (Remote Control, introduced v2.1.196, 2026-06-29) | 2026-08-08 |
-| **Latest verified** | `v2.1.224` | Primary WSL host (`claude --version`) | 2026-08-08 |
+| **Latest verified** | `v2.1.226` | Primary WSL host (`claude --version`; CLI auto-updater tracks the `latest` channel) | 2026-08-09 |
 
 When a floor host is upgraded, raise the floor here and delete any version guards the new
 floor makes unnecessary. When auditing a new release, update "Latest verified" + the log below.
