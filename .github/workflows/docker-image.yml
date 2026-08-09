@@ -68,7 +68,7 @@ jobs:
     # https://github.com/rhysd/actionlint/blob/main/LICENSE.txt) to lint
     # the workflow YAML itself.
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -132,7 +132,7 @@ jobs:
     # so the merge queue isn't deadlocked; drop continue-on-error once the
     # shell backlog reaches zero.
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install shellcheck
         run: |
           sudo apt-get update
@@ -148,7 +148,7 @@ jobs:
     # A hang must die in minutes, not burn the 6-hour default (PR #182 lesson).
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -190,7 +190,7 @@ jobs:
     # Parallel to unit-tests (Go) so a shell-driver regression doesn't
     # gate the Go suite and vice-versa.
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install jq + zsh
         # safety_guard_test.sh builds its tool_input payloads with jq; zsh is
         # needed so aliases_test.sh's cross-shell doctor regression case runs
@@ -226,7 +226,7 @@ jobs:
     env:
       IMAGE_NAME: dotfiles:latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the Docker image
         run: make build
 
