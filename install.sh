@@ -312,6 +312,11 @@ if gff_on install.tools.git-aliases; then
   done
 else gff_skip_msg install.tools.git-aliases; fi
 
+# Non-fatal git identity check: flags user.email/GitHub-account mismatches
+# (e.g. GitHub's email-privacy push block) at install time instead of at the
+# next failed push. Also runnable on demand via `make git-doctor`.
+bash "${BASE_DIR}/opt/scripts/git/git_identity_doctor.sh" || true
+
 # install/update goenv
 if gff_on install.runtime.goenv; then
 if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
