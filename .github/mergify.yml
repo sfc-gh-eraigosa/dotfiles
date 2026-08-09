@@ -59,3 +59,14 @@ pull_request_rules:
     actions:
       queue:
         name: default
+
+  # Label hygiene: when Mergify performs the merge, swap the trigger label
+  # for an audit label so merged PRs are scannable at a glance.
+  - name: label swap after a Mergify merge
+    conditions:
+      - merged
+      - merged-by = mergify[bot]
+    actions:
+      label:
+        remove: [ready-for-merge]
+        add: [merged-by-mergify]
