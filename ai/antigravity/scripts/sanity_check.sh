@@ -37,10 +37,12 @@ for file in .zshrc .profile .antigravity.profile .gitools.sh .tmux.conf; do
 done
 echo "PASS: Configurations present"
 
-# 4. Aliases (Zsh check)
-echo "Verifying aliases in Zsh..."
-zsh -c "source ~/.zshrc; alias git-help" > /dev/null
-echo "PASS: Aliases functional"
+# 4. Git shortcuts (Zsh check) — git-help is a shell function from
+# ~/.gitools.sh (not an alias) since the ~/.gitenv generator retirement, so
+# probe with `type`, which accepts aliases and functions alike.
+echo "Verifying git shortcuts in Zsh..."
+zsh -c "source ~/.zshrc; type git-help" > /dev/null
+echo "PASS: Git shortcuts functional"
 
 # 5. Homebrew/Tools (Mock check)
 echo "Verifying tools installed by install.sh..."
