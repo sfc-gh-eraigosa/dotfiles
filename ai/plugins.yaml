@@ -13,6 +13,11 @@
 #   antigravity sources are git repos passed to `agy plugin install`. Legacy
 #   Gemini CLI extensions remain compatible (agy imports/installs them; see
 #   also `agy plugin import gemini` for one-off migrations of a live host).
+#
+#   Supply-chain hardening candidate: Claude Code marketplace/plugin sources
+#   support `ref:` and 40-hex `sha:` commit pinning (settings-declared sources,
+#   v2.1.224-verified). sync-plugins does not pin yet — tracked in
+#   docs/claude-code-support.md (adoption log).
 
 marketplaces:
   claude-plugins-official:

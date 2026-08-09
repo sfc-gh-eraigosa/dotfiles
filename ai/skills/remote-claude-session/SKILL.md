@@ -35,13 +35,16 @@ ssh -G <SSH_ALIAS> 2>/dev/null | grep -E "^(hostname|user) "
 
 Stop and report the error if the alias is not found in `~/.ssh/config`.
 
-### 2. Check the remote (tmux, Claude, and REPO_PATH)
+### 2. Check the remote (tmux, Claude + version, and REPO_PATH)
 
 ```bash
 # tmux + Claude detection
 ssh <SSH_ALIAS> "command -v tmux 2>/dev/null && \
   (command -v claude 2>/dev/null || \
    find ~/.nvm/versions/node/*/bin -name claude 2>/dev/null | sort -V | tail -1)"
+
+# Claude version probe (use the claude path found above; nvm prefix if needed)
+ssh <SSH_ALIAS> "<NVM_PREFIX>claude --version"
 
 # REPO_PATH probe (skip if an explicit path was supplied)
 ssh <SSH_ALIAS> "for d in ~/git/<repo-name> ~/github/<repo-name>; do \
@@ -52,6 +55,13 @@ ssh <SSH_ALIAS> "for d in ~/git/<repo-name> ~/github/<repo-name>; do \
 - **claude on PATH** → use `claude` directly.
 - **claude found via nvm** → prefix the launch command with `export NVM_DIR=~/.nvm && source ~/.nvm/nvm.sh && `.
 - **claude not found** → stop; tell the user to install Claude Code on the remote (`npm i -g @anthropic-ai/claude-code` after sourcing nvm).
+- **Version gate** (the fleet spans Claude Code versions — see
+  [docs/claude-code-support.md](../../../docs/claude-code-support.md)): the
+  `claude --remote-control` flag used in step 4 needs **≥ v2.1.154**. Below that, stop and
+  tell the user to update Claude Code on the remote first. The `/rc` in-session command
+  (≥ v2.1.196) and `claude remote-control` server mode (≥ v2.1.200) are newer surfaces —
+  do not substitute them for the step-4 launch command unless the probed version supports
+  them.
 - **REPO_PATH probe printed a path** → use it.
 - **REPO_PATH probe empty** → stop; show both candidates (`~/git/<repo-name>`, `~/github/<repo-name>`) and ask the user which path to use.
 

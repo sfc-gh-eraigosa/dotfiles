@@ -62,4 +62,26 @@ assert_in_subshell "alias 'python' maps to python3" \
 assert_in_subshell "function 'sfssh' (Snowflake ws ssh) is defined" \
     "set +u; . '${FILE}' >/dev/null 2>&1; alias sfssh >/dev/null 2>&1 || type sfssh >/dev/null 2>&1"
 
+# === 4. sfcreate flag composition ===
+# sfcreate echoes the composed `sf ws create` command before eval'ing
+# it. Run it in a subshell with a no-op `sf` stub and assert on that
+# echo line — locks in the flag plumbing (-s → --instance-profile
+# small, -nc → --customization off) without touching a real workspace.
+SFOUT=$(mktemp -d)
+run_sfcreate() {
+    bash -c "set +u; . '${FILE}' >/dev/null 2>&1; sf() { :; }; sfcreate $*" 2>/dev/null
+}
+run_sfcreate           > "${SFOUT}/default"
+run_sfcreate -s        > "${SFOUT}/small"
+run_sfcreate -s -nc myws > "${SFOUT}/combo"
+assert_grep "sfcreate default composes unchanged command" \
+    'sf ws create --name gco2 +--os rocky9 *$' "${SFOUT}/default"
+assert_grep_negative "sfcreate default omits --instance-profile" \
+    'instance-profile' "${SFOUT}/default"
+assert_grep "sfcreate -s appends --instance-profile small" \
+    'sf ws create --name gco2 +--os rocky9 --instance-profile small' "${SFOUT}/small"
+assert_grep "sfcreate -s -nc <name> composes all flags" \
+    'sf ws create --name myws --customization off --os rocky9 --instance-profile small' "${SFOUT}/combo"
+rm -rf "${SFOUT}"
+
 _test_report

@@ -1,17 +1,23 @@
 name: AI Teams Eval
 
 on:
+  # Merge-queue coverage: produces the REQUIRED "Validate teams source +
+  # routing artifacts" check, so it must report on the queue's ephemeral
+  # branches — merge_group takes no path filters by design.
+  merge_group:
+    branches: [ main ]
   push:
     branches: [ main ]
     paths:
       - 'ai/teams/**'
       - 'opt/scripts/system/install_ai_teams.sh'
       - '.github/workflows/teams-eval.yml'
+  # No paths filter on pull_request: the "Validate teams source + routing
+  # artifacts" check is REQUIRED by the main ruleset, and the Mergify queue
+  # waits on required contexts — a path-skipped check never reports, so a PR
+  # not touching ai/teams would sit in "waiting for queue conditions"
+  # forever. The job is ~40s; the push trigger above keeps its filter.
   pull_request:
-    paths:
-      - 'ai/teams/**'
-      - 'opt/scripts/system/install_ai_teams.sh'
-      - '.github/workflows/teams-eval.yml'
 
 # Cancel superseded runs on the same ref so only the latest commit is evaluated.
 concurrency:
@@ -24,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install yq (mikefarah)
         run: |
@@ -58,7 +64,7 @@ jobs:
   #     GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
   #   steps:
   #     - name: Checkout
-  #       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+  #       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
   #     - name: Install yq (mikefarah)
   #       run: |

@@ -20,6 +20,7 @@ done` (also `parked`, `superseded`).
 
 | Slug | Design | Spec | Plan | Issue(s) | PR(s) | State |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| `research-evaluation` | the `ai/skills/research-evaluation/` skill (rubric: value · setup/licensing · adversarial · security · stability · quality · docker-or-skip demo) | — | — | playground [#235–#240](https://github.com/sfc-gh-eraigosa/playground/issues/235) (first six-target run) | (this PR) | in-review |
 | `prping` | — | [spec](./specs/2026-06-05-prping-design.md) | [plan](./plans/2026-06-05-prping-implementation-plan.md) | — | #127 | in-review |
 | `agy-gsl-integration` | — | [spec](./specs/agy-gsl-integration.md) | [plan](./plans/agy-gsl-integration.md) | — | (this PR) | building |
 | `mbo` | this folder + the `mbo-plan` skill (`ai/skills/mbo-plan/`) | — | — | — | #127 | in-review |

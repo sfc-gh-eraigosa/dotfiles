@@ -21,9 +21,15 @@ bin: ## Rebuild all binaries in ./sdk
 		fi; \
 	done
 
+BASE_IMAGE ?= ghcr.io/sfc-gh-eraigosa/dotfiles-base:latest
+
 .PHONY: build
-build: ## Build the docker image used for testing
-	docker build -t $(IMAGE_NAME) .
+build: ## Build the docker test image (FROM the GHCR base; run build-base first on a pull miss)
+	docker build --build-arg BASE_IMAGE=$(BASE_IMAGE) -t $(IMAGE_NAME) .
+
+.PHONY: build-base
+build-base: ## Build the base image locally (fallback when the GHCR pull is unavailable; login: gh auth token | docker login ghcr.io -u <user> --password-stdin)
+	docker build -f Dockerfile.base -t $(BASE_IMAGE) .
 
 .PHONY: test
 test: shell-test ## Run all tests (shell-test + scripts/test.sh all)
@@ -50,6 +56,10 @@ claude-test: ## Run Claude Code sanity check (CLI, links, hooks, 27-case hook te
 .PHONY: claude-hook-test
 claude-hook-test: ## Run safety_guard hook test suite only
 	./ai/hooks/safety_guard_test.sh
+
+.PHONY: git-doctor
+git-doctor: ## Check git identity (user.email/name) against the authenticated GitHub account (pass extra repos as args to the script directly)
+	./opt/scripts/git/git_identity_doctor.sh .
 
 .PHONY: skill-evals
 skill-evals: ## Validate agent-skill eval corpora (ai/skills/*/evals/evals.json) deterministically

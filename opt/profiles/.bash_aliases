@@ -108,17 +108,12 @@ alias f12='xdotool key F12'
 alias delkey='xdotool key Delete'
 
 #
-# Source git environment shortcuts
+# Git shortcuts (git-reset, git-reset-all, git-clean, git-help) — the slim
+# replacement for the retired Gerrit-era ~/.gitenv generator. No startup side
+# effects; safe to source unconditionally.
 #
-
-if [ -f ~/.gitenv ] ; then
-    source ~/.gitenv
-    if [ ! -f ~/.gitenv.nologin ]; then
-        echo "running git-login, to disable execute: touch ~/.gitenv.nologin"
-        fgit-login
-    fi
-else
-    echo ".gitenv is missing, you can install with : . opt/scripts/git/setup_git_alias.sh"
+if [ -f "$HOME/.gitools.sh" ] ; then
+    . "$HOME/.gitools.sh"
 fi
 # Some git shortcuts
 alias git-branches-rm='$HOME/opt/scripts/git/git-rm-mybranches.sh'
@@ -265,9 +260,10 @@ function sfhelp() {
     sfssh - ssh to the workspace, alias for "sf ws ssh gco2"
 
     sfcreate - create a new workspace, alias for "sf ws create --os rocky9 --name gco2 --customization off"
-       usage: sfcreate [-nc] [-nr] [<name>]
+       usage: sfcreate [-nc] [-nr] [-s] [<name>]
          -nc - no customization, default is customization on
          -nr - no rocky9, default is rocky9
+         -s  - small workspace (1 unit, for directed tests / non-monorepo work)
          <name> - name of the workspace, default is gco2
 
     sfcode - code editor for the workspace, alias for "sf ws code gco2 --file <project-file> --ide cursor"
@@ -316,6 +312,7 @@ function sfcreate() {
     local NAME="gco2"
     local NO_CUSTOMIZATION=
     local ROCKY9="--os rocky9"
+    local INSTANCE_PROFILE=
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -331,6 +328,10 @@ function sfcreate() {
                 NO_CUSTOMIZATION="--customization off"
                 shift
                 ;;
+            -s)
+                INSTANCE_PROFILE="--instance-profile small"
+                shift
+                ;;
             *)
                 NAME="$1"
                 shift
@@ -339,8 +340,8 @@ function sfcreate() {
     done
     echo "using name = ${NAME}"
 
-    echo "sf ws create --name ${NAME} ${NO_CUSTOMIZATION} ${ROCKY9}"
-    eval sf ws create --name ${NAME} ${NO_CUSTOMIZATION} ${ROCKY9}
+    echo "sf ws create --name ${NAME} ${NO_CUSTOMIZATION} ${ROCKY9} ${INSTANCE_PROFILE}"
+    eval sf ws create --name ${NAME} ${NO_CUSTOMIZATION} ${ROCKY9} ${INSTANCE_PROFILE}
     eval sf ws ssh ${NAME}
 }
 

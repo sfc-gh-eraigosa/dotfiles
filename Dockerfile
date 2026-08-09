@@ -1,114 +1,11 @@
 #
-# Easy dockerfile to test my stuff
-FROM ubuntu:jammy
-LABEL Description="Dotfiles & Agent Environment" Vendor="Agent LTD." Version="0.0.1" Maintainer="agent@github.com"
-
-# Lets setup Docker in Docker using https://github.com/microsoft/vscode-dev-containers/tree/master/script-library
-
-# See https://aka.ms/vscode-remote/containers/non-root-user for details.
+# CI test image: the repo installed on top of the prebuilt base (ubuntu + apt
+# tooling + docker-ce/dind — see Dockerfile.base, published to GHCR by
+# .github/workflows/docker-base.yml). Only these per-commit layers rebuild in
+# CI; pull or build the base first (`make build-base` on a GHCR miss).
+ARG BASE_IMAGE=ghcr.io/sfc-gh-eraigosa/dotfiles-base:latest
+FROM ${BASE_IMAGE}
 ARG USERNAME=agent
-ARG USER_UID=1000
-ARG USER_GID=$USER_UID
-# Common debian config
-ARG UPGRADE_PACKAGES="true"
-ARG INSTALL_ZSH="true"
-ARG COMMON_SCRIPT_SOURCE="https://raw.githubusercontent.com/microsoft/vscode-dev-containers/master/script-library/common-debian.sh"
-ARG COMMON_SCRIPT_SHA="dev-mode"
-# Docker script args, location, and expected SHA - SHA generated on release
-ARG DOCKER_SCRIPT_SOURCE="https://raw.githubusercontent.com/microsoft/vscode-dev-containers/master/script-library/docker-debian.sh"
-ARG DOCKER_SCRIPT_SHA="dev-mode"
-ARG ENABLE_NONROOT_DOCKER="true"
-ARG SOURCE_SOCKET=/var/run/docker-host.sock
-ARG TARGET_SOCKET=/var/run/docker.sock
-RUN export DEBIAN_FRONTEND=noninteractive \
-    && apt-get update -y \
-    && apt-get -y install --no-install-recommends \
-       apt-transport-https \    
-       apt-utils \
-       dialog \
-       ca-certificates \
-       coreutils \
-       curl \
-       git \
-       gnupg \
-       gnupg2 \
-       gnupg-agent \
-       gosu \
-       less \
-       lsb-release \
-       openssh-client \
-       procps \
-       socat \
-       software-properties-common \
-       sudo \
-    2>&1 \
-    #
-    # common debian config like sudo, add user, etc
-    && curl -sSL  ${COMMON_SCRIPT_SOURCE} -o /tmp/common-setup.sh \
-    && ([ "${COMMON_SCRIPT_SHA}" = "dev-mode" ] || (echo "${COMMON_SCRIPT_SHA} */tmp/common-setup.sh" | sha256sum -c -)) \
-    && /bin/bash /tmp/common-setup.sh "${INSTALL_ZSH}" "${USERNAME}" "${USER_UID}" "${USER_GID}" "${UPGRADE_PACKAGES}" \
-    && rm /tmp/common-setup.sh \
-    #
-    # Ensure sudo is configured for the user
-    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
-    && chmod 0440 /etc/sudoers.d/$USERNAME \
-    #
-    # Install dockerd
-    && sudo install -m 0755 -d /etc/apt/keyrings \
-    && curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
-    && chmod a+r /etc/apt/keyrings/docker.gpg \
-    # Add the repository to Apt sources:
-    && echo \
-      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-        $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-        tee /etc/apt/sources.list.d/docker.list > /dev/null \
-    && apt-get update
-    #
-    # old stuff 
-    # && curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add - \
-    # && add-apt-repository \
-    #     "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
-    #     $(lsb_release -cs) \
-    #     stable" \
-    # && apt-get update \
-RUN export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install --no-install-recommends \
-        docker-ce \
-        docker-ce-cli \
-        containerd.io \
-        docker-buildx-plugin \
-        docker-compose-plugin \
-    #
-    # Use Docker script from script library to set things up (installs: docker, docker-compose, sets up dind, and a bunch of other stuff)
-    && LATEST_COMPOSE_VERSION="v2.23.3" \
-    && ARCH=$(uname -m) \
-    && curl -SL "https://github.com/docker/compose/releases/download/${LATEST_COMPOSE_VERSION}/docker-compose-linux-${ARCH}" -o /usr/local/bin/docker-compose \
-    && chmod +x /usr/local/bin/docker-compose \
-    && ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose \
-    && curl -sSL $DOCKER_SCRIPT_SOURCE -o /tmp/docker-setup.sh \
-    && ([ "${DOCKER_SCRIPT_SHA}" = "dev-mode" ] || (echo "${DOCKER_SCRIPT_SHA} */tmp/docker-setup.sh" | sha256sum -c -)) \
-    && /bin/bash /tmp/docker-setup.sh "${ENABLE_NONROOT_DOCKER}" "${SOURCE_SOCKET}" "${TARGET_SOCKET}" "${USERNAME}" \
-    && rm /tmp/docker-setup.sh \
-    #
-    # Clean up
-    && apt-get autoremove -y \
-    && apt-get clean -y \
-    && rm -rf /var/lib/apt/lists/*
-# try running as root
-RUN docker-compose --version \
-    && docker --version
-
-VOLUME /var/lib/docker
-
-ENV DOCKER_CHANNEL=stable
-ENV DOCKER_EXTRA_OPTS="--default-address-pool base=10.88.0.0/22,size=28 --storage-driver overlay2 --log-level error"
-ENV DIND_COMMIT=52379fa76dee07ca038624d639d9e14f4fb719ff
-
-COPY opt/scripts/docker/dockerd-entrypoint.sh /usr/local/bin/dockerd-entrypoint.sh
-RUN curl -fL -o /usr/local/bin/dind "https://raw.githubusercontent.com/moby/moby/${DIND_COMMIT}/hack/dind" \
-    && chmod +x /usr/local/bin/dind \
-    && chmod +x /usr/local/bin/dockerd-entrypoint.sh \
-    && usermod -a -G docker $USERNAME
 
 WORKDIR /home/$USERNAME
 COPY --chown=$USERNAME:$USERNAME . git/dotfiles/
@@ -119,5 +16,5 @@ RUN /home/$USERNAME/git/dotfiles/ai/antigravity/scripts/sanity_check.sh
 # Sources .profile so the nvm-managed `claude` binary is on PATH.
 RUN bash -c "source ~/.profile && /home/$USERNAME/git/dotfiles/ai/claude/scripts/sanity_check.sh"
 
-ENTRYPOINT ["/usr/local/bin/dockerd-entrypoint.sh"]
-CMD ["sleep", "infinity"]
+# ENTRYPOINT and CMD (dockerd-entrypoint.sh / sleep infinity) are inherited
+# from the base image.
