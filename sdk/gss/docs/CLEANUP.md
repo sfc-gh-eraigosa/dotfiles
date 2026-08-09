@@ -17,7 +17,7 @@ must not outlive the release.
       cursor) — its job ends the moment PR-61 lands. Close, don't merge.
 - [ ] **Delete the `wip/gss-v1-staging` branch** (local + remote) once
       PR #13 is closed.
-- [ ] **Archive the playground stack** in `~/GitHub/playground`: the
+- [ ] **Archive the private test repo's stack** in `~/GitHub/<private-test-repo>`: the
       `test_gss` trunk and every `pr01-*`…`pr60-*` branch. Keep the repo
       for history if desired, but delete or tag the per-PR branches so a
       future reader doesn't mistake them for live work.
@@ -83,7 +83,7 @@ The 16 carry-forward notes in `STATE.md` fall into three buckets:
 ## Done criteria
 
 Cleanup is complete when: PR #13 is closed and its branch deleted; the
-playground per-PR branches are archived; `STATE.md` is gone or
+the private test repo's per-PR branches are archived; `STATE.md` is gone or
 tombstoned; every carry-forward item is either resolved, folded into a
 hardening PR, or promoted to `roadmap.md`/an issue; and `git grep` finds
 no `wip/gss-v1-staging`, no stray backend sub-packages, and no

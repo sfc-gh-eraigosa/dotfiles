@@ -48,7 +48,7 @@
 CLAUDE_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/claude"
 # CROSS-REPO CONTRACT — DO NOT RENAME OR INLINE.
 # The shell variable CLAUDE_YOLO_FILE (name + value semantics: absolute path to
-# the YOLO sentinel) is read by the playground project's nano-carried
+# the YOLO sentinel) is read by a private companion repo's nano-carried
 # `claude-local` helper (~/.config/nano/ollama-client.sh), which sources into the
 # same interactive shell, reads ${CLAUDE_YOLO_FILE:-}, and re-applies the YOLO
 # policy itself before calling `command claude`. Renaming this var, changing its

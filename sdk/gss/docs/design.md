@@ -1971,7 +1971,7 @@ else lives in feature requests rather than the design.
 ## Design review (deep pass)
 
 The design was reviewed end-to-end by four reviewer personas drawn from
-`~/GitHub/playground/.agents/workflows/` — Architect, Security Engineer,
+`~/GitHub/<private-test-repo>/.agents/workflows/` — Architect, Security Engineer,
 QA Specialist, Lead Developer — surfacing roughly seventy distinct
 items across structural integrity, security, testability, and
 implementation feasibility. This section captures the **resolutions
@@ -2280,7 +2280,7 @@ cannot accidentally drop them.
 > trace code to intent without re-reading the design.
 >
 > **Reviewer personas**: agent definitions live at
-> `/Users/eraigosa/GitHub/playground/.agents/workflows/`
+> `/Users/eraigosa/GitHub/<private-test-repo>/.agents/workflows/`
 > — `the_architect.md`, `the_lead_developer.md`,
 > `the_qa_specialist.md`, `the_security_engineer.md`,
 > `the_devops_engineer.md`, `the_tech_writer.md`, `the_planner.md`,
@@ -2391,7 +2391,7 @@ cannot accidentally drop them.
 >
 > #### Phase 2 — Set up the validation workspace
 >
-> 1. In `~/GitHub/playground`, create a branch named `test_gss`
+> 1. In `~/GitHub/<private-test-repo>`, create a branch named `test_gss`
 >    off the current default branch. This is the integration
 >    trunk for the stacked PR series; we don't push to `dotfiles`
 >    until v1.0 is validated end-to-end.

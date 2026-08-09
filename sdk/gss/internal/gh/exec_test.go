@@ -69,7 +69,7 @@ func TestSystemClient_ImplementsClient(t *testing.T) {
 }
 
 func TestPRCreate_ArgsAndParse(t *testing.T) {
-	stub := &stubExec{out: [][]byte{[]byte("https://github.com/sfc-gh-eraigosa/playground/pull/42\n")}}
+	stub := &stubExec{out: [][]byte{[]byte("https://github.com/sfc-gh-eraigosa/sample-repo/pull/42\n")}}
 	c := gh.NewClientWithExec(stub)
 
 	pr, err := c.PRCreate(context.Background(), gh.PRCreateOpts{
@@ -97,7 +97,7 @@ func TestPRCreate_ArgsAndParse(t *testing.T) {
 	if pr.Number != 42 {
 		t.Errorf("PR.Number = %d; want 42 (parsed from create URL)", pr.Number)
 	}
-	if pr.URL != "https://github.com/sfc-gh-eraigosa/playground/pull/42" {
+	if pr.URL != "https://github.com/sfc-gh-eraigosa/sample-repo/pull/42" {
 		t.Errorf("PR.URL = %q", pr.URL)
 	}
 	if !pr.IsDraft || pr.Base != "pr02-internal-git-runner" || pr.Head != "pr03-internal-gh-client" {
@@ -239,8 +239,8 @@ func TestRepoView_ParsesNested(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RepoView: %v", err)
 	}
-	if info.Owner != "sfc-gh-eraigosa" || info.Name != "playground" ||
-		info.NameWithOwner != "sfc-gh-eraigosa/playground" || info.DefaultBranch != "main" {
+	if info.Owner != "sfc-gh-eraigosa" || info.Name != "sample-repo" ||
+		info.NameWithOwner != "sfc-gh-eraigosa/sample-repo" || info.DefaultBranch != "main" {
 		t.Errorf("RepoInfo wrong: %+v", info)
 	}
 }

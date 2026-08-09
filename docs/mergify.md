@@ -1,7 +1,7 @@
 # Merge model: solo maintainer, AI-accelerated, Mergify-queued
 
 This doc is the canonical explanation of how changes land on `main` in this
-repo (and, by mirror, in `playground`): the rules, why each exists, and how
+repo: the rules, why each exists, and how
 the model keeps AI-accelerated PR velocity **traceable and safe**. The
 machine-readable versions live in [`.github/mergify.yml`](../.github/mergify.yml)
 (merge gates as code) and [`.github/rulesets/main.json`](../.github/rulesets/main.json)
@@ -40,7 +40,7 @@ the repos ever move to an org.
 | Strict up-to-date checks | ruleset `strict_required_status_checks_policy: true` | A PR can only merge with CI validated against the exact `main` it lands on. The queue satisfies this automatically; manual merges get the same guarantee. |
 | In-place queue, no speculative trains | `merge_queue.max_parallel_checks: 1`, `batch_size: 1` | Compatible with strict up-to-date (speculative draft-PR checks are not); serial landing is the right shape for solo velocity. |
 | Required checks always run on PRs | workflow `pull_request` triggers, unfiltered | A path-skipped required check never reports, deadlocking the queue ("waiting for queue conditions" forever). Fast checks always run; slow suites are demoted instead (below). |
-| Slow suites demoted, not required | e.g. playground `e2e`: weekly schedule + `urgent` issue on failure | Keeps per-PR latency low without losing the signal — a scheduled failure opens/bumps an `urgent`-labeled issue automatically. |
+| Slow suites demoted, not required | e.g. a kind-cluster e2e suite: weekly schedule + `urgent` issue on failure | Keeps per-PR latency low without losing the signal — a scheduled failure opens/bumps an `urgent`-labeled issue automatically. |
 | Merge gates as code | `merge_protections` in `.mergify.yml` | Gate changes are reviewable PRs, not silent settings edits. Reports as the single "Mergify Merge Protections" check. |
 | Ruleset snapshots | `.github/rulesets/*.json` + `make ruleset-snapshot` | Rulesets are settings with no file form; the snapshot is the PR-reviewable audit trail. Refresh after any settings change. |
 

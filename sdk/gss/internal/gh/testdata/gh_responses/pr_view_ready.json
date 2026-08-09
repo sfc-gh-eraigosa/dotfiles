@@ -7,5 +7,5 @@
   "mergeable": "MERGEABLE",
   "baseRefName": "test_gss",
   "headRefName": "pr02-internal-git-runner",
-  "url": "https://github.com/sfc-gh-eraigosa/playground/pull/24"
+  "url": "https://github.com/sfc-gh-eraigosa/sample-repo/pull/24"
 }

@@ -3,7 +3,7 @@
 - **Slug:** claude-config
 - **Date:** 2026-06-07
 - **Status:** Approved
-- **Relates to:** PR #126 · consumer: playground PR #73 (`claude-local`)
+- **Relates to:** PR #126 · consumer: a private repo PR (`claude-local`)
 
 ## 1. Goal
 
@@ -30,7 +30,7 @@ opts in per machine. Renames the former `claude-toggle` (YOLO-only) to
 - **Inspect state** — *actor:* user · *trigger:* `claude-config` /
   `claude-config status` · *flow:* prints `yolo` and `remote` as `ON`/`OFF` ·
   *acceptance:* both default to `OFF` with no sentinels present.
-- **Local-model sibling keeps working** — *actor:* playground `claude-local` ·
+- **Local-model sibling keeps working** — *actor:* the private companion repo's `claude-local` ·
   *trigger:* user runs `claude-local` in the same shell · *flow:* it reads
   `${CLAUDE_YOLO_FILE:-}` and calls `command claude` directly · *acceptance:* it
   still applies YOLO from the same sentinel and is never given `--remote-control`
@@ -124,7 +124,7 @@ consume the prompt — the explicit name prevents it.
   across nvm node versions and macOS).
 - **CROSS-REPO CONTRACT (frozen):** the shell variable **`CLAUDE_YOLO_FILE`** —
   name and value semantics (absolute path to the YOLO sentinel) — is read by
-  playground PR #73's nano-carried `claude-local` (`~/.config/nano/ollama-client.sh`),
+  a private repo PR's nano-carried `claude-local` (`~/.config/nano/ollama-client.sh`),
   which sources into the same interactive shell, reads `${CLAUDE_YOLO_FILE:-}`,
   and calls `command claude` directly (never the `claude()` wrapper). Therefore:
   (a) `CLAUDE_YOLO_FILE` must not be renamed/inlined or have its path semantics

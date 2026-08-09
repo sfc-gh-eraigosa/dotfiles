@@ -8,7 +8,7 @@
 #   * Debian/Ubuntu/WSL apt has no kind package at all, and kubectl/helm require
 #     third-party apt repos that lag upstream — so Linux/WSL fetches the
 #     official release binaries instead (mirrors install_yq.sh / install_sops.sh).
-#   * Local k8s dev flows (e.g. playground bots `make e2e`: kind cluster ->
+#   * Local k8s dev flows (e.g. a kind-based `make e2e`: kind cluster ->
 #     helm install -> kubectl wait) fail with a bare `command not found`
 #     without them.
 #
