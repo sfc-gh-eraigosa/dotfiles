@@ -2,8 +2,9 @@
 # Human reference (summary + first-usage examples): docs/ai-plugins.md
 # Design: docs/mbo/plans/ai-plugin-manifest.md
 #
-# Ensure-only (additive): opt/scripts/system/sync-plugins.sh installs + enables
-# what's listed here; it never removes anything. Parsed with mikefarah `yq`.
+# Ensure-only (additive): opt/scripts/system/sync-plugins.sh installs, enables,
+# and updates-to-latest what is listed here; it never removes anything.
+# Parsed with mikefarah `yq`.
 #
 #   enabled: true   -> install AND enable for each platform block present
 #   enabled: false  -> parked: documented but not installed/enabled
