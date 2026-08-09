@@ -1,0 +1,41 @@
+{
+  "skill_name": "remote-claude-session",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Spin up a Claude session on labpi so I can work on local DNS options.",
+      "expected_output": "Validates the labpi SSH alias with ssh -G, detects tmux + claude on the remote (adding the nvm source prefix when claude is only under ~/.nvm), resolves the repo path by probing ~/git/<repo> then ~/github/<repo>, and starts a detached tmux session. Uses a purpose-based tmux SESSION_NAME like claude-dns (not the generic claude-remote) and passes an RC_NAME of labpi-claude-dns to `claude --remote-control` so the Remote Control session is self-identifying by host and purpose. Reports the attach command.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Is my remote Claude session on buildbox still running?",
+      "expected_output": "Checks for the existing tmux session with tmux ls, then inspects the pane for health, matching EITHER the older `Remote Control active` banner OR the newer `/rc` status-bar indicator (Opus 4.8+). If healthy, reports the session as up and shows the ssh -t tmux attach command WITHOUT recreating it. Does not start a new session when a healthy one already exists.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Restart the remote Claude session on labpi — it seems stuck.",
+      "expected_output": "Checks the existing session; when Claude is not healthy, kills the tmux session and recreates it fresh in the target repo, re-passing the host+purpose RC_NAME to `claude --remote-control`. Re-verifies startup (handling a trust prompt by sending '1' then re-polling) and reports the attach command.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Every tmux command on labpi is failing with 'server exited unexpectedly' — I still need the remote session up.",
+      "expected_output": "Recognizes a crashed tmux server left a stale socket wedging the tmux CLI, and removes ONLY the dead default socket (rm -f /tmp/tmux-$(id -u)/default) — explicitly not touching other live tmux servers, which each own their own socket. Then retries the session creation. Leaves any socket reporting 'no server running' alone since it is already clean.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Give me the command to attach to the Claude session I have running on buildbox.",
+      "expected_output": "Reports the attach command `ssh buildbox -t tmux attach -t <SESSION_NAME>` for the existing session, noting the tmux session persists across disconnects. Does not create or restart a session.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "Set up remote control for Claude on labpi in my dotfiles repo.",
+      "expected_output": "Resolves REPO_PATH to the dotfiles checkout on the remote (probing ~/git/dotfiles then ~/github/dotfiles), starts the tmux session there, and launches `claude --remote-control` with an RC_NAME of labpi-<session> so the /rc entry names the host and purpose. Confirms success only when the status bar shows `Remote Control active` or a settled `/rc` (connecting… cleared).",
+      "files": []
+    }
+  ]
+}
