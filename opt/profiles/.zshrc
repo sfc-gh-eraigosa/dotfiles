@@ -271,16 +271,11 @@ test -f ${HOME}/.rbenv/shims/gh && rm -f ${HOME}/.rbenv/shims/gh
 export PATH="$PATH:$HOME/.nodenv/shims"
 
 #
-# GITHUB_TOKEN setup from stored credential (skip expensive git credential call in editor terminals)
-if [[ ! -f .no_github_token ]] ; then
-  if [[ "$EDITOR_TERMINAL" == "true" ]] && [[ -n "$GITHUB_TOKEN" ]]; then
-    # Use existing GITHUB_TOKEN if available
-    export GITHUB_TOKEN
-  elif [[ "$EDITOR_TERMINAL" == "false" ]]; then
-    # Only fetch credentials in regular terminals
-    export GITHUB_TOKEN=${GITHUB_TOKEN:-$( printf "protocol=https\\nhost=github.com\\npath=github\\n" | GIT_TERMINAL_PROMPT=0 git credential fill 2>/dev/null | awk -F'=' '/password=/{print $2}')}
-  fi
-fi
+# GITHUB_TOKEN is deliberately NOT exported here (removed 2026-08-08). The old
+# credential-fill export froze a startup-time copy of the gh token in every
+# shell, which shadowed gh's keyring (gh prefers the env var) and kept stale
+# scopes alive after `gh auth refresh`. Tools that need a token should fetch
+# the current one on demand: `gh auth token`.
 
 test -n "$(alias ruby)" && unalias ruby
 
