@@ -3,7 +3,7 @@
 - **Slug:** claude-config
 - **Date:** 2026-06-07
 - **Status:** In-progress
-- **Relates to:** spec `../specs/claude-config.md` · PR #126 · consumer: playground PR #73
+- **Relates to:** spec `../specs/claude-config.md` · PR #126 · consumer: a private repo PR
 
 ## 1. Summary & verdict
 
@@ -64,7 +64,7 @@ claude()                                       # tmux-anchor; command claude "${
 claude-config [status] | yolo on|off | remote on|off
 ```
 
-Frozen: `CLAUDE_YOLO_FILE` = abs path to YOLO sentinel (read by playground
+Frozen: `CLAUDE_YOLO_FILE` = abs path to YOLO sentinel (read by a private repo's
 `claude-local`; see spec §7).
 
 ## 4. TDD build order

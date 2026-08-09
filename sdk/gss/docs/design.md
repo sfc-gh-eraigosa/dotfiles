@@ -1971,7 +1971,7 @@ else lives in feature requests rather than the design.
 ## Design review (deep pass)
 
 The design was reviewed end-to-end by four reviewer personas drawn from
-`~/GitHub/playground/.agents/workflows/` — Architect, Security Engineer,
+`$HOME/<REPO_ROOT>/.agents/workflows/` — Architect, Security Engineer,
 QA Specialist, Lead Developer — surfacing roughly seventy distinct
 items across structural integrity, security, testability, and
 implementation feasibility. This section captures the **resolutions
@@ -2274,13 +2274,13 @@ cannot accidentally drop them.
 > compatible with human-reviewable stacked PRs and a working test
 > suite at every step.
 >
-> **Source of truth**: `/Users/eraigosa/git/dotfiles/sdk/gss/docs/design.md`.
+> **Source of truth**: `$HOME/<REPO_ROOT>/sdk/gss/docs/design.md`.
 > Every PR description and every plan entry must cite the design
 > section(s) it implements (anchor + line range) so the reviewer can
 > trace code to intent without re-reading the design.
 >
 > **Reviewer personas**: agent definitions live at
-> `/Users/eraigosa/GitHub/playground/.agents/workflows/`
+> `$HOME/<REPO_ROOT>/.agents/workflows/`
 > — `the_architect.md`, `the_lead_developer.md`,
 > `the_qa_specialist.md`, `the_security_engineer.md`,
 > `the_devops_engineer.md`, `the_tech_writer.md`, `the_planner.md`,
@@ -2297,7 +2297,7 @@ cannot accidentally drop them.
 >
 > #### Phase 1 — Write the plan
 >
-> Author `/Users/eraigosa/git/dotfiles/sdk/gss/docs/plan.md`. It must:
+> Author `$HOME/<REPO_ROOT>/sdk/gss/docs/plan.md`. It must:
 >
 > 1. Translate every step of the design's
 >    [TDD implementation order](#tdd-implementation-order) (steps
@@ -2391,7 +2391,7 @@ cannot accidentally drop them.
 >
 > #### Phase 2 — Set up the validation workspace
 >
-> 1. In `~/GitHub/playground`, create a branch named `test_gss`
+> 1. In `$HOME/<REPO_ROOT>`, create a branch named `test_gss`
 >    off the current default branch. This is the integration
 >    trunk for the stacked PR series; we don't push to `dotfiles`
 >    until v1.0 is validated end-to-end.

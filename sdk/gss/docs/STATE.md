@@ -2,7 +2,7 @@
 
 > **This cursor is retired.** gss v1.0 shipped — the final integration
 > (PR-61) merged to `main` on 2026-05-24 as commit `0131d1c`. The
-> long-running staging branch `wip/gss-v1-staging` and the playground
+> long-running staging branch `wip/gss-v1-staging` and the private test repo's
 > stacked-PR series (`pr01-…`–`pr43-…`, `test_gss`) have been closed and
 > their branches deleted.
 

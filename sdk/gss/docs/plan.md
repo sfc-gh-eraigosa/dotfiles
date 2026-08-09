@@ -19,10 +19,10 @@ deliverable.
   tests-first (TDD per [`src/CLAUDE.md`](../../CLAUDE.md)), acceptance
   criteria, upstream PR it stacks on, reviewer personas.
 - Reviewer personas come from
-  `/Users/eraigosa/GitHub/playground/.agents/workflows/` — subagents
+  `$HOME/<REPO_ROOT>/.agents/workflows/` — subagents
   adopt them by reading the relevant file first.
 - The executor flips each `- [ ]` to `- [x]` as PRs merge into
-  `test_gss` (in `~/GitHub/playground`). Final integration PR opens
+  `test_gss` (in `$HOME/<REPO_ROOT>`). Final integration PR opens
   against `dotfiles:main` only after all deliverables are merged.
 
 ## Phase 3 prerequisites (install before "execute the plan" fires)
@@ -985,7 +985,7 @@ release.
 
 ## Definition of Done (v1.0)
 
-- [ ] Every PR-NN above merged into `test_gss` in `~/GitHub/playground`.
+- [ ] Every PR-NN above merged into `test_gss` in `$HOME/<REPO_ROOT>`.
 - [ ] [Resolutions coverage table](#resolutions-coverage-table) fully
       populated — every row cites a merged deliverable.
 - [ ] [Pre-v1 hardening checklist](./design.md#pre-v1-hardening-checklist)
