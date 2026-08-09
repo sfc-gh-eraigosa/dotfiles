@@ -1,0 +1,95 @@
+{
+  "bypass_actors": [
+    {
+      "actor_id": 5,
+      "actor_type": "RepositoryRole",
+      "bypass_mode": "always"
+    }
+  ],
+  "conditions": {
+    "ref_name": {
+      "exclude": [],
+      "include": [
+        "~DEFAULT_BRANCH"
+      ]
+    }
+  },
+  "enforcement": "active",
+  "id": 20600414,
+  "name": "main",
+  "rules": [
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "parameters": {
+        "allowed_merge_methods": [
+          "merge",
+          "squash",
+          "rebase"
+        ],
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_approving_review_count": 0,
+        "required_review_thread_resolution": false,
+        "required_reviewers": []
+      },
+      "type": "pull_request"
+    },
+    {
+      "parameters": {
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          {
+            "context": "Build and Integration Test",
+            "integration_id": 15368
+          },
+          {
+            "context": "Lint (go + shell + markdown + actions)",
+            "integration_id": 15368
+          },
+          {
+            "context": "Validate teams source + routing artifacts",
+            "integration_id": 15368
+          },
+          {
+            "context": "binary-level e2e tests",
+            "integration_id": 15368
+          },
+          {
+            "context": "unit tests + coverage gate",
+            "integration_id": 15368
+          },
+          {
+            "context": "Run Shell Test Drivers",
+            "integration_id": 15368
+          },
+          {
+            "context": "Shell Lint (shellcheck)",
+            "integration_id": 15368
+          },
+          {
+            "context": "Run Unit Tests",
+            "integration_id": 15368
+          }
+        ],
+        "strict_required_status_checks_policy": true
+      },
+      "type": "required_status_checks"
+    },
+    {
+      "parameters": {
+        "review_draft_pull_requests": false,
+        "review_on_push": true
+      },
+      "type": "copilot_code_review"
+    }
+  ],
+  "source": "sfc-gh-eraigosa/dotfiles",
+  "source_type": "Repository",
+  "target": "branch"
+}

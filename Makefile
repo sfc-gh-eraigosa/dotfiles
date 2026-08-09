@@ -57,6 +57,10 @@ claude-test: ## Run Claude Code sanity check (CLI, links, hooks, 27-case hook te
 claude-hook-test: ## Run safety_guard hook test suite only
 	./ai/hooks/safety_guard_test.sh
 
+.PHONY: ruleset-snapshot
+ruleset-snapshot: ## Refresh .github/rulesets/*.json from the live GitHub rulesets (reviewable audit trail; run after any ruleset change)
+	./opt/scripts/git/ruleset_snapshot.sh
+
 .PHONY: git-doctor
 git-doctor: ## Check git identity (user.email/name) against the authenticated GitHub account (pass extra repos as args to the script directly)
 	./opt/scripts/git/git_identity_doctor.sh .
