@@ -6,11 +6,12 @@ description: >-
   doc + tracking issue per target. Use when the user wants to "research X", "evaluate
   X before we adopt it", "look up X and tell me if it's useful", "start a research
   MBO for X", or gives a list of candidate tools to investigate — even a single
-  target. Runs the eight-dimension rubric: (a) value to us, (b) setup cost +
+  target. Runs the nine-dimension rubric: (a) value to us, (b) setup cost +
   licensing, (c) adversarial review, (d) security & safety, (e) stability,
   (f) quality & support, (g) a docker-sandboxed hands-on demo (docker-or-skip),
   (h) borrowable features (build-vs-adopt — could we build just the valuable
-  bits ourselves instead of adopting the whole tool?).
+  bits ourselves instead of adopting the whole tool?), (i) business outcomes
+  (the financial/ROI vector). Dimension weights are tunable gff feature flags.
   Fans multiple targets out to parallel research agents; NOT_FOUND is a valid,
   recorded outcome for targets that can't be identified through searches.
 ---
@@ -20,7 +21,7 @@ description: >-
 Turn "should we use <tool>?" into a consistent, evidence-backed evaluation instead of
 an ad-hoc impression. Works for one target or a batch; generalizes to any repo.
 
-## The rubric (all eight, every target)
+## The rubric (all nine, every target)
 
 | Dim | Question |
 | :-- | :-- |
@@ -32,6 +33,25 @@ an ad-hoc impression. Works for one target or a batch; generalizes to any repo.
 | (f) **Quality & support** | Maintenance signals **with the observation date**: stars, contributors/bus factor, release cadence, issue responsiveness, docs, last commit. |
 | (g) **Demo** | A workable sandboxed demo to validate first-hand: quickstart + real use case + success criteria. **Docker if possible; otherwise skip the demo entirely** — no unsandboxed demos. |
 | (h) **Borrowable features (build-vs-adopt)** | For each valuable capability the tool has that our stack lacks, could we implement *just that feature* in our existing setup more simply than adopting the whole tool? Table it: gap → value → build-it-ourselves sketch → worth it? Ground the sketches in what we already run. This can flip the verdict to **reject-but-build-the-feature** — often the simpler, safer conclusion. |
+| (i) **Business outcomes** | The financial/ROI vector: does this move us toward financially positive — efficiency gains, hard-time saved, cost that pays for itself, or a step toward a self-propelling revenue outlet? Tag qualitative tiers (low/med/high) for **time saved**, **cost savings**, and **revenue potential**; fold them in at this dimension's weight. Even small value counts — the point is to add a money vector to a decision that is otherwise all opinion. |
+
+### Weighting (tunable, not hard-coded)
+
+Each dimension carries a **weight** read at eval time from `gff` feature flags under
+`research-rubric.*` (tiers `none·low·medium·high·critical` = `0·1·2·3·4`; public defaults
+skew to **value + security + adversarial + borrowable**, with **business** modest). Read
+them with `gff get research-rubric.weight.<dim>` / `gff list`, and **state the active
+weighting in the output** so a reader sees the lens behind the verdict. Weightings are
+meant to be overridden per person/team via the gff user layer — see
+[`references/tuning.md`](./references/tuning.md). Two gate flags:
+`research-rubric.require.adversarial` and `research-rubric.require.docker-demo`.
+
+### Explaining terms (clickable, not wordier)
+
+Link jargon to [`references/glossary.md`](./references/glossary.md) on its **first use** in
+a doc — e.g. `[bus factor](./references/glossary.md#bus-factor)`. A link adds no prose;
+it just makes the output learnable. Glossary covers bus factor, blast radius, supply-chain
+surface, fail-open, prompt cache, CCR, prompt injection, SSRF, MCP, CalVer, CVE, SBOM.
 
 ## Procedure
 
@@ -54,11 +74,13 @@ target) that must:
    variants; rule out name collisions explicitly. If no confident identification
    after honest searching → verdict **NOT_FOUND**, listing the searches tried and
    closest candidates — this is a valid terminal outcome, not a failure.
-2. Gather evidence for all eight dimensions. Ground (f) in the repo API (stars,
+2. Gather evidence for all nine dimensions. Ground (f) in the repo API (stars,
    contributors, last push, open issues) and **state the observation date**. Mine
    the issue tracker for (c)/(d)/(e) — open bugs are the adversarial goldmine. For
    (h), diff the tool's capabilities against what we already run and ask which
-   valuable gaps are cheaply buildable in-house.
+   valuable gaps are cheaply buildable in-house. For (i), tag the ROI tiers. Read
+   the active `research-rubric.*` weights via `gff` and weight the dimensions
+   accordingly; link jargon to the glossary on first use.
 3. Draft the (g) demo as concrete commands (compose file / docker run), sandboxed:
    throwaway dirs, localhost-only ports, never real credentials or OAuth tokens,
    full teardown. If docker genuinely can't work, write "no docker demo — skip".

@@ -1,4 +1,20 @@
 {
+  "_comment": "New-host baseline (host-owned after install; forced subset re-applied separately). NEVER add a `model` key here — the fleet spans Claude Code versions and model aliases differ across them (see docs/claude-code-support.md). Keys unknown to older versions are silently ignored, so additive new-version keys are safe. The sandbox block ships DISABLED: before flipping `enabled`, populate network.allowedDomains and keep ~/.config/gss readable (the gss approval token lives there).",
+  "isolatePeerMachines": true,
+  "sandbox": {
+    "enabled": false,
+    "network": {
+      "allowedDomains": [],
+      "strictAllowlist": true
+    },
+    "credentials": {
+      "files": [
+        { "path": "~/.ssh", "mode": "deny" },
+        { "path": "~/.aws", "mode": "deny" },
+        { "path": "~/.gnupg", "mode": "deny" }
+      ]
+    }
+  },
   "permissions": {
     "allow": [
       "Bash(gss status:*)",
