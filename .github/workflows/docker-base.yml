@@ -15,7 +15,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'Dockerfile.base'
+      - 'docker/Dockerfile.base'
       - 'opt/scripts/docker/dockerd-entrypoint.sh'
       - '.github/workflows/docker-base.yml'
   schedule:
@@ -42,7 +42,7 @@ jobs:
 
       - name: Build base image
         run: |
-          docker build -f Dockerfile.base \
+          docker build -f docker/Dockerfile.base \
             -t "$BASE_IMAGE:latest" \
             -t "$BASE_IMAGE:$(date -u +%Y%m%d)" \
             .

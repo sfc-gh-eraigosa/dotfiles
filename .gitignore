@@ -12,6 +12,10 @@
 !azure-pipelines.yml
 !Dockerfile
 !Dockerfile.base
+# docker/ holds all build Dockerfiles (app + base) + example/fixture images and
+# their AGENTS.md. Opt the whole tree in so new files there are tracked.
+!docker/
+!docker/**
 !.gitignore
 !**/AGENTS.md
 !**/FEATURE.md

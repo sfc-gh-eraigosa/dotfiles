@@ -263,7 +263,7 @@ jobs:
           if [ "$EVENT_NAME" = "pull_request" ]; then
             base_changed=$(gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" \
               --jq '.[].filename' \
-              | grep -E '^(Dockerfile\.base|opt/scripts/docker/dockerd-entrypoint\.sh)$' || true)
+              | grep -E '^(docker/Dockerfile\.base|opt/scripts/docker/dockerd-entrypoint\.sh)$' || true)
           fi
           if [ -n "$base_changed" ]; then
             echo "PR changes the base image ($base_changed) — building base locally to validate."
@@ -287,4 +287,4 @@ jobs:
         run: make integration-test
 
       - name: Build Docker in Docker (Legacy Check)
-        run: docker run --privileged -v "$(pwd):/dotfiles" -w /dotfiles "$IMAGE_NAME" docker build --tag test opt/docker/helloworld
+        run: docker run --privileged -v "$(pwd):/dotfiles" -w /dotfiles "$IMAGE_NAME" docker build --tag test docker/helloworld

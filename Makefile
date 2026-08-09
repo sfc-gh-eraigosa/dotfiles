@@ -32,11 +32,11 @@ BUILD_CACHE ?=
 
 .PHONY: build
 build: ## Build the docker test image (buildx; FROM the GHCR base; run build-base first on a pull miss)
-	docker buildx build --build-arg BASE_IMAGE=$(BASE_IMAGE) $(BUILD_CACHE) -t $(IMAGE_NAME) --load .
+	docker buildx build -f docker/Dockerfile --build-arg BASE_IMAGE=$(BASE_IMAGE) $(BUILD_CACHE) -t $(IMAGE_NAME) --load .
 
 .PHONY: build-base
 build-base: ## Build the base image locally (fallback when the GHCR pull is unavailable; login: gh auth token | docker login ghcr.io -u <user> --password-stdin)
-	docker build -f Dockerfile.base -t $(BASE_IMAGE) .
+	docker build -f docker/Dockerfile.base -t $(BASE_IMAGE) .
 
 .PHONY: test
 test: shell-test ## Run all tests (shell-test + scripts/test.sh all)

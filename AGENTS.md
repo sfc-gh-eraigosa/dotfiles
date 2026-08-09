@@ -11,6 +11,7 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - `sdk/`: Go modules (`gss`, `gsl`, `wol`, `tmux-mgr`, `gff`), each independently `go install`-able as `github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>`. **All Go code lives here, not under `src/`.** (Cutover in progress — see [docs/mbo/plans/2026-06-04-sdk-migration-plan.md](./docs/mbo/plans/2026-06-04-sdk-migration-plan.md).)
 - `sdk/gff/`: **git fast features** — a git-persisted, layered feature-flag engine (proto schema, 5-layer resolver with provenance, cobra CLI, Go SDK) gating `install.sh` components. [See sdk/gff/AGENTS.md](./sdk/gff/AGENTS.md).
 - `opt/Desktop/Apps/scripts/`: Windows-side automation deployed to the Desktop (macOS-style hotkeys + Wispr Flow voice dictation in `macos.ahk`, PowerToys/app/font setup). [See opt/Desktop/Apps/scripts/AGENTS.md](./opt/Desktop/Apps/scripts/AGENTS.md) for the inventory, the WSL→Windows dev loop, and AutoHotkey v2 gotchas.
+- `docker/`: All build Dockerfiles — the CI test image (`Dockerfile`, two-phase deps/config) + the GHCR base (`Dockerfile.base`) + example/fixture images. **Read [docker/AGENTS.md](./docker/AGENTS.md) before adding any install step, tool, or package** — it holds the three-tier layering rule (base vs `install.sh --phase deps` vs `--phase config`) that keeps the expensive Build CI job fast.
 - `archive/`: Retired-but-kept artifacts (not wired into install). [See archive/AGENTS.md](./archive/AGENTS.md) for the inventory and restore instructions.
 - `ai/hooks/`: Unified agent hooks (safety, privacy) shared across CLIs.
 - `ai/skills/`: Shared agent skills (each a `SKILL.md` folder) linked into Claude + Antigravity by `sync-skills`; each should ship an `evals/evals.json` validated by `make skill-evals`. [See ai/skills/AGENTS.md](./ai/skills/AGENTS.md).
@@ -65,43 +66,6 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 - **Worktree safety & `install.sh` (critical)**: NEVER run `install.sh` from a `gss feature` worktree. The script creates absolute symlinks in your `$HOME` (e.g., `~/.zshrc -> .../dotfiles/opt/profiles/zshrc`). Running it from a worktree will link your global configuration to a transient, task-specific path. Always switch to the main repository (`~/git/dotfiles`), checkout the desired branch, and run `install.sh` from there to ensure your system remains in a predictable, stable state.
 - **`install.sh` is interactive — never run it non-interactively or backgrounded**: prompts are front-loaded, but on Windows/WSL the Desktop deploy + UAC elevation runs at the **END** of the script — stay nearby after answering `[y]`. Prompt timing, `[y]/[s]`/no-TTY semantics, and the gff `install.windows.*` overrides: [docs/install-windows.md](./docs/install-windows.md).
 - **AI-tool config provisioning — copy into well-known `$HOME` paths; no new symlinks**: the repo configures AI tools by **copying** files into well-known paths (`~/.claude`, `~/.gemini`, …); symlinks into the checkout are legacy — do not introduce new ones. Settings must reference well-known `$HOME` paths (e.g. `~/.claude/hooks/safety_guard.sh`), never repo-internal paths like `$HOME/git/dotfiles/ai/hooks/...` (breaks on worktrees/CI). Forced-field merge semantics: [docs/mbo/designs/2026-06-02-ai-config-home-provisioning.md](./docs/mbo/designs/2026-06-02-ai-config-home-provisioning.md).
-
-## Docker build layering — where a new install step belongs (CI performance)
-
-The CI **Build and Integration Test** job (the most expensive job) is kept fast
-by a **three-tier layering**. When you add a new dependency, tool, package, or
-config step, put it in the RIGHT tier or you silently regress build time (or,
-worse, correctness). Decision guide:
-
-1. **OS-level foundation → `Dockerfile.base`** (published to GHCR from **main
-   only**, rebuilt weekly). For truly foundational, rarely-changing things:
-   base apt packages, docker/dind, the shell itself. Changing the base is
-   costly to validate — see the base-change note below.
-2. **App-level external install dependency → `install.sh` `--phase deps`**
-   (the **cached** deps layer of the app `Dockerfile`). This is where the *rule
-   of thumb* lands: **if it's an external install — an apt/brew package, a
-   downloaded tool/CLI, or a language runtime/toolchain (goenv/pyenv/rbenv/nvm)
-   — it's a `deps` step.** Gate it with a `gff` flag and add that flag's key to
-   **`_IP_DEPS_FLAGS`** in `install.sh`. Kept in the app (not the base) so a PR
-   that changes a deps installer still busts that layer and is **validated per
-   PR**; unchanged, it's a cache hit and skipped.
-3. **Config / skill / symlink / repo-content step → `install.sh` `--phase
-   config`** (the per-commit layer). **If it consumes repo content — links a
-   dotfile, syncs a skill/plugin, builds an sdk binary, runs a project script —
-   it does NOT belong in deps.** Add its flag key to **`_IP_CONFIG_FLAGS`**.
-
-**Keep the two lists in `install.sh` in sync with new sections.** Omitting a
-deps key makes the step re-run every commit (slow); omitting a config key bakes
-it into the cached deps layer so later edits stop taking effect per commit (a
-correctness bug). `--phase all` (a normal `./install.sh`) applies no overrides,
-so real machines are unaffected.
-
-**Changing `Dockerfile.base` in a PR? CI detects it automatically.** Because the
-base publishes from main only, the Build job checks the PR's changed files and
-**builds the base locally** (instead of pulling the stale published one) when a
-PR touches `Dockerfile.base` or `opt/scripts/docker/dockerd-entrypoint.sh`, so
-your base change is actually validated in that PR. Deps/config changes need no
-special handling — their app layers re-validate on their own.
 
 ## Git Workflow
 
