@@ -57,8 +57,6 @@ git config --global push.default current
 
 [ ! -d "${HOME}/git" ] && mkdir -p "${HOME}/git"
 
-# skip login check for sshd
-touch "${HOME}/.gitenv.nologin"
 
 # Ensure ~/opt is a symlink to the repo's opt directory
 if [ -L "${HOME}/opt" ] && [ "$(readlink "${HOME}/opt")" = "${BASE_DIR}/opt" ]; then
@@ -300,11 +298,18 @@ if command -v docker &> /dev/null; then
 fi
 else gff_skip_msg install.tools.docker; fi
 
-# Setup git environment aliases
+# Git shortcuts: the Gerrit-era ~/.gitenv generator (setup_git_alias.sh) is
+# retired — the surviving tools live in opt/profiles/.gitools.sh, symlinked by
+# the profiles block above and sourced from .bash_aliases. This block only
+# migrates old hosts: remove the generated artifacts so stale fgit-* functions
+# (and the fgit-login autorun they carried) can't shadow the new ones.
 if gff_on install.tools.git-aliases; then
-  if [ -f "${BASE_DIR}/opt/scripts/git/setup_git_alias.sh" ]; then
-    source "${BASE_DIR}/opt/scripts/git/setup_git_alias.sh"
-  fi
+  for _stale in "${HOME}/.gitenv" "${HOME}/.gitenv.nologin"; do
+    if [ -f "${_stale}" ]; then
+      echo "Removing retired git-alias artifact: ${_stale}"
+      rm -f "${_stale}"
+    fi
+  done
 else gff_skip_msg install.tools.git-aliases; fi
 
 # install/update goenv

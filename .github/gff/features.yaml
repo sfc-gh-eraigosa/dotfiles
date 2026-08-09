@@ -49,7 +49,7 @@ sets:
         description: Runs the docker setup block (permissions plus ruby-docker and dindc aliases).
         boolDefault: true
       - path: install.tools.git-aliases
-        description: Runs the setup_git_alias.sh block.
+        description: Migration cleanup for the retired ~/.gitenv generator (removes stale generated artifacts); the surviving git shortcuts live in opt/profiles/.gitools.sh.
         boolDefault: true
       # --- runtime (5) ---
       - path: install.runtime.goenv
@@ -143,4 +143,118 @@ sets:
         boolDefault: true
       - path: install.windows.portproxy
         description: Gates the standalone refresh-wsl-portproxy.ps1 script on the Windows side.
+        boolDefault: true
+
+  # research-rubric.* — tunable weights for the research-evaluation skill's rubric.
+  # Smart PUBLIC defaults live here; anyone tunes them on demand via the gff user
+  # layer (`gff set research-rubric.weight.security critical` / `gff tui`) or a repo
+  # override — dissenting weightings never require editing the skill. Weight tiers:
+  # none=0 low=1 medium=2 high=3 critical=4 (the selected option's intValue is the
+  # weight the skill multiplies each dimension score by). See the skill's
+  # references/tuning.md.
+  - area: research-rubric
+    features:
+      - path: research-rubric.weight.value
+        description: "Weight for dimension (a) Value — what the tool is worth to us / problems it solves."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1}
+            - {id: medium,   description: normal factor,         intValue: 2}
+            - {id: high,     description: strong factor,         intValue: 3, selected: true}
+            - {id: critical, description: decisive factor,       intValue: 4}
+      - path: research-rubric.weight.setup-licensing
+        description: "Weight for dimension (b) Setup cost & licensing."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1}
+            - {id: medium,   description: normal factor,         intValue: 2, selected: true}
+            - {id: high,     description: strong factor,         intValue: 3}
+            - {id: critical, description: decisive factor,       intValue: 4}
+      - path: research-rubric.weight.adversarial
+        description: "Weight for dimension (c) Adversarial review — the case against adopting."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1}
+            - {id: medium,   description: normal factor,         intValue: 2}
+            - {id: high,     description: strong factor,         intValue: 3, selected: true}
+            - {id: critical, description: decisive factor,       intValue: 4}
+      - path: research-rubric.weight.security
+        description: "Weight for dimension (d) Security & safety."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1}
+            - {id: medium,   description: normal factor,         intValue: 2}
+            - {id: high,     description: strong factor,         intValue: 3}
+            - {id: critical, description: decisive factor,       intValue: 4, selected: true}
+      - path: research-rubric.weight.stability
+        description: "Weight for dimension (e) Stability — blast radius / destabilization risk."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1}
+            - {id: medium,   description: normal factor,         intValue: 2, selected: true}
+            - {id: high,     description: strong factor,         intValue: 3}
+            - {id: critical, description: decisive factor,       intValue: 4}
+      - path: research-rubric.weight.quality-support
+        description: "Weight for dimension (f) Quality & support — maintenance, bus factor, cadence."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1}
+            - {id: medium,   description: normal factor,         intValue: 2, selected: true}
+            - {id: high,     description: strong factor,         intValue: 3}
+            - {id: critical, description: decisive factor,       intValue: 4}
+      - path: research-rubric.weight.demo
+        description: "Weight for dimension (g) Demo — first-hand docker-sandboxed validation."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1, selected: true}
+            - {id: medium,   description: normal factor,         intValue: 2}
+            - {id: high,     description: strong factor,         intValue: 3}
+            - {id: critical, description: decisive factor,       intValue: 4}
+      - path: research-rubric.weight.borrowable
+        description: "Weight for dimension (h) Borrowable features — build-vs-adopt leverage."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1}
+            - {id: medium,   description: normal factor,         intValue: 2}
+            - {id: high,     description: strong factor,         intValue: 3, selected: true}
+            - {id: critical, description: decisive factor,       intValue: 4}
+      - path: research-rubric.weight.business
+        description: "Weight for dimension (i) Business outcomes — the financial/ROI vector (modest default)."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1}
+            - {id: medium,   description: normal factor,         intValue: 2, selected: true}
+            - {id: high,     description: strong factor,         intValue: 3}
+            - {id: critical, description: decisive factor,       intValue: 4}
+      - path: research-rubric.decision.mode
+        description: "Verdict-threshold posture applied to the weighted score."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: strict,   description: high bar; reject unless strongly positive, stringValue: strict}
+            - {id: balanced, description: default posture,                          stringValue: balanced, selected: true}
+            - {id: lenient,  description: adopt-friendly; low bar,                  stringValue: lenient}
+      - path: research-rubric.require.adversarial
+        description: "Require a non-empty adversarial (case-against) section; a verdict without one is invalid."
+        boolDefault: true
+      - path: research-rubric.require.docker-demo
+        description: "Require the demo be docker-sandboxed or explicitly skipped — no unsandboxed demos."
         boolDefault: true
