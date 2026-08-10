@@ -143,12 +143,12 @@
 
 ### Task 9 — keys diff core  (plan Task 9)
 
-- [ ] RED: `TestComputeAddsMissingAndFlagsForeignForRemoval`, `TestComputeNeverReturnsAnEmptyRemoteAsWholesaleRemoval`, `TestComputeIsNoOpWhenIdentical`
-- [ ] RUN-RED: `cd sdk/fleet && go test ./internal/keys/ -v` → **FAIL** (`undefined: Compute`)
-- [ ] GREEN: implement `Diff` + `Compute(local, remote)` — reports removals, never applies
-- [ ] RUN-GREEN: `cd sdk/fleet && go test ./internal/keys/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task09/keys-diff.txt` → **PASS** (3 tests)
-- [ ] COMMIT: `feat(fleet): authorized_keys diff (report removals, never apply)`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestComputeAddsMissingAndFlagsForeignForRemoval`, `TestComputeNeverReturnsAnEmptyRemoteAsWholesaleRemoval`, `TestComputeIsNoOpWhenIdentical`
+- [x] RUN-RED: `cd sdk/fleet && go test ./internal/keys/ -v` → **FAIL** (`undefined: Compute`)
+- [x] GREEN: implement `Diff` + `Compute(local, remote)` — reports removals, never applies
+- [x] RUN-GREEN: `cd sdk/fleet && go test ./internal/keys/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task09/keys-diff.txt` → **PASS** (3 tests)
+- [x] COMMIT: `feat(fleet): authorized_keys diff (report removals, never apply)`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** the three diff tests pass, including the defect-2 regression.
 
@@ -156,13 +156,13 @@
 
 ### Task 10 — `keys list` / `keys sync`  (plan Task 10)
 
-- [ ] RED: `TestKeysSyncSendsOnlyPublicKeyMaterial`, `TestKeysSyncReportsPerHostFailure` (+ `recordingRunner`, `errFake`)
-- [ ] RUN-RED: `cd sdk/fleet && go test ./cmd/ -run TestKeysSync -v` → **FAIL** (`undefined: syncKeyToHost`)
-- [ ] GREEN: `cmd/keys.go` — `syncKeyToHost` (public key only), `keysCmd`, `list`, `sync`
-- [ ] RUN-GREEN: `cd sdk/fleet && go test ./cmd/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task10/keys.txt` → **PASS**
-- [ ] VERIFY: no `scp`, no `id_*` private path anywhere in the sync path (`grep -rn "scp\|id_ed25519\b" sdk/fleet/cmd/keys.go`)
-- [ ] COMMIT: `feat(fleet): keys list/sync (public-key-only, per-host results)`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestKeysSyncSendsOnlyPublicKeyMaterial`, `TestKeysSyncReportsPerHostFailure` (+ `recordingRunner`, `errFake`)
+- [x] RUN-RED: `cd sdk/fleet && go test ./cmd/ -run TestKeysSync -v` → **FAIL** (`undefined: syncKeyToHost`)
+- [x] GREEN: `cmd/keys.go` — `syncKeyToHost` (public key only), `keysCmd`, `list`, `sync`
+- [x] RUN-GREEN: `cd sdk/fleet && go test ./cmd/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task10/keys.txt` → **PASS**
+- [x] VERIFY: no `scp`, no `id_*` private path anywhere in the sync path (`grep -rn "scp\|id_ed25519\b" sdk/fleet/cmd/keys.go`)
+- [x] COMMIT: `feat(fleet): keys list/sync (public-key-only, per-host results)`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** no-private-key and per-host-failure tests pass.
 
