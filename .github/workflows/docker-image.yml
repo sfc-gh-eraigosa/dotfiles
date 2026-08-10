@@ -277,10 +277,48 @@ jobs:
         # docker-container driver is required for the type=gha layer cache below.
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
+      - name: Expose GitHub Actions runtime credentials (for the type=gha build cache)
+        # The `type=gha` cache backend authenticates with the per-job runtime
+        # credentials. GitHub mints those automatically, but only injects them
+        # into `docker/build-push-action` — NOT into a plain
+        # `run: docker buildx build` like our `make build`. Without this step the
+        # cache silently no-ops: buildx neither imports nor exports, prints no
+        # error, and the build still succeeds — which is exactly how #217 shipped
+        # a dead cache while CI stayed green. This action re-exports the runtime
+        # env into $GITHUB_ENV so the following steps can see it.
+        #
+        # NOTE: these credentials are EPHEMERAL — minted per job, expiring with
+        # the job. There is no secret to create, store, or rotate. Runbook + the
+        # rejected PAT-backed alternative: docs/ci-build-cache.md
+        uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+
+      - name: Assert the build cache backend is live (fail hard)
+        # A silently-disabled cache is a slow, invisible regression, so make its
+        # absence LOUD and FATAL here rather than letting the build "succeed"
+        # uncached. If this fails, the runtime step above did not run or GitHub
+        # renamed the variables — see docs/ci-build-cache.md.
+        run: |
+          missing=""
+          [ -n "${ACTIONS_RUNTIME_TOKEN:-}" ] || missing="$missing ACTIONS_RUNTIME_TOKEN"
+          [ -n "${ACTIONS_RESULTS_URL:-}" ] || missing="$missing ACTIONS_RESULTS_URL"
+          if [ -n "$missing" ]; then
+            echo "::error::BUILD CACHE BROKEN: missing runtime env:$missing — see docs/ci-build-cache.md"
+            exit 1
+          fi
+          echo "Build cache backend reachable (runtime credentials present)."
+
       - name: Build the Docker image
         # type=gha persists the two-phase Dockerfile's layers across runs: a PR
         # that doesn't touch opt/ or sdk/ or install.sh reuses the cached deps
         # layer and skips the expensive toolchain install.
+        #
+        # No `ignore-error=true` here on purpose: buildx defaults it to false, so
+        # once the credentials ARE present (guaranteed by the preflight above) a
+        # cache export failure is fatal via the exit code. Credentials-absent is
+        # the only mode that degrades silently, and the preflight covers it — so
+        # those two checks together are sufficient. Deliberately NOT grepping the
+        # progress output for "exporting cache": that text varies with
+        # --progress mode, TTY, and BuildKit version. See docs/ci-build-cache.md.
         run: make build BUILD_CACHE="--cache-from=type=gha --cache-to=type=gha,mode=max"
 
       - name: Run Integration Tests

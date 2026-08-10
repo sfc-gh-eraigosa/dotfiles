@@ -63,7 +63,7 @@ unset _ip_prev _ip_arg
 #   - CONFIG / SKILL / SYMLINK / any repo-content step -> _IP_CONFIG_FLAGS. Runs
 #     in the per-commit config layer; omitting it BAKES the step into the cached
 #     deps layer, so later edits to it stop taking effect per commit (a bug).
-_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES"
+_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
 _IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_K8S INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM"
 apply_install_phase() {
   case "$INSTALL_PHASE" in
@@ -417,6 +417,49 @@ if command -v goenv &> /dev/null; then
   fi
 fi
 else gff_skip_msg install.runtime.goenv; fi
+
+# --- Go PATH activation (phase-independent) --------------------------------
+# goenv INSTALLATION is a deps-phase step (repo-independent → cached layer), but
+# PATH is NOT inherited across Docker RUN layers. So in the `config` layer goenv
+# is present on disk while `go` is absent from PATH, and every later Go build —
+# the gff bootstrap just below and all sdk/*/build.sh — degrades to
+# "WARNING: 'go' not found" and skips. Post-#217 that was invisible: the sdk
+# builds also ran in the deps layer, so the image still shipped binaries, just
+# ones baked into the cached layer and stamped `Commit: none` (that layer's
+# partial COPY carries no .git). This re-activates an ALREADY-INSTALLED goenv;
+# it installs nothing and touches no network. It is a strict no-op whenever `go`
+# is already on PATH (the real-machine / `--phase all` case), so behavior there
+# is unchanged.
+ensure_go_on_path() {
+  if command -v go >/dev/null 2>&1; then
+    return 0
+  fi
+  [ -d "${HOME}/.goenv" ] && export PATH="${HOME}/.goenv/bin:${PATH}"
+  command -v goenv >/dev/null 2>&1 || return 0
+  # Same bash-safe init + PATH-clobber guard as the goenv section above; see
+  # docs/mbo/specs/shell-portability.md for why `- bash` is passed explicitly.
+  __goenv_path_safe="${PATH}"
+  eval "$(goenv init - bash)"
+  case ":${PATH}:" in
+    *":/usr/bin:"*) : ;;                          # system PATH survived
+    *) PATH="${PATH}:${__goenv_path_safe}" ;;     # init clobbered PATH; restore
+  esac
+  export PATH
+  unset __goenv_path_safe
+}
+ensure_go_on_path
+# FAIL HARD in a container build. On a real machine (`--phase all`) a missing Go
+# is tolerable — the sdk build scripts warn and skip, and the user may simply not
+# want Go. Inside the two-phase Docker build it is a BUG: the config layer would
+# silently ship whatever binaries the cached deps layer happened to bake in
+# (stamped `Commit: none`), which is exactly how #217 regressed unnoticed while
+# CI stayed green. Surface it as a build failure instead of a WARNING.
+if [ "$INSTALL_PHASE" != "all" ] && ! command -v go >/dev/null 2>&1; then
+  echo "ERROR: install.sh --phase ${INSTALL_PHASE}: no 'go' on PATH after goenv activation." >&2
+  echo "       The sdk/*/build.sh steps would silently skip and the image would ship" >&2
+  echo "       stale binaries. Check the goenv deps layer and ensure_go_on_path()." >&2
+  exit 1
+fi
 
 # build gff first so every later step can be feature-flag gated (fail-open:
 # if the build fails or gff is absent, all steps run — flags only ever skip).
