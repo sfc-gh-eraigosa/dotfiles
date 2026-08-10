@@ -14,29 +14,29 @@
 
 ## Preflight (once)
 
-- [ ] P1: `git rev-parse --abbrev-ref HEAD` → the fleet worker branch
-- [ ] P2: `go version` → ≥ `.go-version`
-- [ ] P3: `git log --oneline origin/main..HEAD` → **only this objective's commits** (a foreign commit ⇒ `git rebase --onto origin/main <foreign-sha>` first)
-- [ ] P4: `ssh -o BatchMode=yes -o ConnectTimeout=5 <host> true; echo $?` → `0`
-- [ ] P5: `git status --porcelain` → empty
-- [ ] P6: `mkdir -p docs/mbo/plans/fleet/evidence`
+- [x] P1: `git rev-parse --abbrev-ref HEAD` → the fleet worker branch
+- [x] P2: `go version` → ≥ `.go-version`
+- [x] P3: `git log --oneline origin/main..HEAD` → **only this objective's commits** (a foreign commit ⇒ `git rebase --onto origin/main <foreign-sha>` first)
+- [x] P4: `ssh -o BatchMode=yes -o ConnectTimeout=5 <host> true; echo $?` → `0`
+- [x] P5: `git status --porcelain` → empty
+- [x] P6: `mkdir -p docs/mbo/plans/fleet/evidence`
 
 ---
 
 ### Task 1 — Module scaffold + repo wiring  (plan Task 1) — **BLOCKING**
 
-- [ ] RED: write `sdk/fleet/cmd/version_test.go::TestVersionStringIncludesVersionAndCommit`
-- [ ] RUN-RED: `cd sdk/fleet && go test ./cmd/ -run TestVersionString -v` → **FAIL** (`undefined: versionString`)
-- [ ] GREEN: create `go.mod`, `main.go`, `VERSION` (`0.1.0`), `cmd/root.go`, `cmd/version.go`; copy `sdk/wol/build.sh` → `sdk/fleet/build.sh` (s/wol/fleet/)
-- [ ] RUN-GREEN: `cd sdk/fleet && go test ./... -v` → **PASS**
-- [ ] VERIFY: `Makefile:108` loop includes `fleet`
-- [ ] VERIFY: `scripts/test.sh` `coverage_min()` has `fleet)    echo 60 ;;`
-- [ ] VERIFY: `.github/gff/features.yaml` has `install.sdk.fleet`; header comment says `sdk (6)`
-- [ ] VERIFY: `install.sh` has the `gff_on install.sdk.fleet` block after the `wol` block
-- [ ] VERIFY: `bash -n install.sh` → silent
-- [ ] VERIFY: `./scripts/test.sh 2>&1 | grep -i fleet | tee docs/mbo/plans/fleet/evidence/task01/wiring.txt`
-- [ ] COMMIT: `feat(fleet): module scaffold + build/test/install wiring`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: write `sdk/fleet/cmd/version_test.go::TestVersionStringIncludesVersionAndCommit`
+- [x] RUN-RED: `cd sdk/fleet && go test ./cmd/ -run TestVersionString -v` → **FAIL** (`undefined: versionString`)
+- [x] GREEN: create `go.mod`, `main.go`, `VERSION` (`0.1.0`), `cmd/root.go`, `cmd/version.go`; copy `sdk/wol/build.sh` → `sdk/fleet/build.sh` (s/wol/fleet/)
+- [x] RUN-GREEN: `cd sdk/fleet && go test ./... -v` → **PASS**
+- [x] VERIFY: `Makefile:108` loop includes `fleet`
+- [x] VERIFY: `scripts/test.sh` `coverage_min()` has `fleet)    echo 60 ;;`
+- [x] VERIFY: `.github/gff/features.yaml` has `install.sdk.fleet`; header comment says `sdk (6)`
+- [x] VERIFY: `install.sh` has the `gff_on install.sdk.fleet` block after the `wol` block
+- [x] VERIFY: `bash -n install.sh` → silent
+- [x] VERIFY: `./scripts/test.sh 2>&1 | grep -i fleet | tee docs/mbo/plans/fleet/evidence/task01/wiring.txt`
+- [x] COMMIT: `feat(fleet): module scaffold + build/test/install wiring`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** `go test ./...` passes, `scripts/test.sh` lists `fleet`, `bash -n` clean.
 

@@ -32,7 +32,7 @@
 
 | Task | Leaf | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| 1 — module scaffold + wiring | scaffold | todo | | | BLOCKING; also adds the `fleet` coverage floor |
+| 1 — module scaffold + wiring | scaffold | **done** | (this commit) | `./scripts/test.sh` → `OK: coverage for fleet is 70% (minimum: 60%)`; `go vet` clean; `~/opt/bin/fleet version` → `fleet 0.1.0 (1e7eca0)`; `bash -n install.sh` clean → `evidence/task01/wiring.txt` | BLOCKING; coverage floor added. **Deviation:** version vars must be EXPORTED (`Version`/`Commit`/`Dirty`/`BuildDate`) to match build.sh's `-X` paths — lowercase would silently no-op. Test `TestLdflagsTargetsExist` pins it. |
 | 2 — install.sh stamp | stamp-sh | todo | | | independent; phase-gated |
 | 3 — sshconf reader | sshconf | todo | | | |
 | 4 — sshconf writer (add/unmark/purge) | sshconf | todo | | | idempotency is the key property |
@@ -105,4 +105,5 @@ silently patched.
 
 | Date | Session | What advanced |
 | :-- | :-- | :-- |
+| 2026-08-10 | build s1 | Task 1 done: sdk/fleet scaffold + Makefile/coverage-floor/gff-flag/install.sh wiring; binary builds, ldflags verified. Preflight P3 caught the foreign-commit hazard again (worktree based on stale local main) — reset to origin/main. P4: the Jetson host is currently UNREACHABLE (blocks Task 14). |
 | 2026-08-09 | design | Design + spec written and committed; issue #222 and draft PR #223 opened; scope extended with membership + keys (absorbing `ssh-key-sync`, four defects documented); plan + execution trio authored. Build not started. |

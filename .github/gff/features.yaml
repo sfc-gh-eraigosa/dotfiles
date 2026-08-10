@@ -86,7 +86,7 @@ sets:
       - path: install.ai.teams
         description: Runs the install_ai_teams.sh block.
         boolDefault: true
-      # --- sdk (5) ---
+      # --- sdk (6) ---
       - path: install.sdk.gss
         description: Runs the gss build-and-install block.
         boolDefault: true
@@ -98,6 +98,9 @@ sets:
         boolDefault: true
       - path: install.sdk.gsl
         description: Runs the gsl build-and-install block.
+        boolDefault: true
+      - path: install.sdk.fleet
+        description: Runs the fleet build-and-install block.
         boolDefault: true
       - path: install.sdk.gff
         description: Runs the later duplicate gff build block (the bootstrap build itself is never gated).
