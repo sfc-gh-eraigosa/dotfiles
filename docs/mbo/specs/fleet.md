@@ -10,8 +10,10 @@
 Run one command and see, for every host in your fleet, whether it is running the latest
 dotfiles: is it reachable, which commit did `install.sh` last install, how long ago, and how
 many commits behind `origin/main` is that. When a host is stale, update it from the same
-tool — interactively, so sudo and other credential prompts still work. The host list comes
-from `~/.ssh/config` (never committed); everything runs on demand, never in the background.
+tool — interactively, so sudo and other credential prompts still work. Manage the fleet
+itself from the same place: add and remove targets, and generate/distribute/audit the SSH
+keys that grant access to them. The host list comes from `~/.ssh/config` (never committed);
+everything runs on demand, never in the background.
 
 ## 2. Use cases
 
@@ -45,6 +47,31 @@ before the fast-forward proceeds.
 *Acceptance:* stable machine-readable output on stdout; non-zero exit when any host is not
 up to date; no interactive prompts and no TUI when stdout is not a TTY.
 
+**UC-5 — "add a machine to the fleet."**
+*Actor:* operator with a new box. *Trigger:* `fleet add <alias> --hostname <h> [--user] [--port] [--identity]`.
+*Flow:* the tool backs up `~/.ssh/config`, appends (or updates) a `Host` block carrying the
+`#fleet` marker, and the alias shows up in the next `status`.
+*Acceptance:* re-running with the same alias updates only the supplied fields and never
+duplicates a block; unrelated blocks are byte-identical afterwards; a timestamped backup
+exists; `--dry-run` prints the diff and writes nothing.
+
+**UC-6 — "take a machine out of the fleet."**
+*Actor:* operator decommissioning or parking a host. *Trigger:* `fleet remove <alias>`.
+*Flow:* the `#fleet` marker is dropped so the host leaves fleet scope; the `Host` block —
+and therefore the operator's ability to SSH there — is left intact. `--purge` deletes the
+whole block for a machine that is genuinely gone.
+*Acceptance:* after `remove`, the alias is absent from `status` but still usable with `ssh`;
+after `--purge` the block is gone; both take a backup first.
+
+**UC-7 — "give the fleet my key / see who has it."**
+*Actor:* operator onboarding a host or auditing access.
+*Trigger:* `fleet keys sync [name...]` · `fleet keys list` · `fleet keys prune|delete`.
+*Flow:* `sync` generates an ed25519 key if absent and authorizes its **public** key on each
+fleet host; `list` prints the key → hosts matrix; `prune`/`delete` show a diff of exactly
+what would be removed and wait for confirmation.
+*Acceptance:* only public key material leaves the workstation; per-host success/failure is
+reported and a failure yields a non-zero exit; a declined prune changes nothing anywhere.
+
 ## 3. Architecture
 
 Four units; the first three are pure and independently testable, the fourth is the only one
@@ -57,6 +84,8 @@ that touches a remote machine destructively.
 | `stamp` | `sdk/fleet/internal/stamp` | parse stamp text → struct | text only |
 | `drift` | `sdk/fleet/internal/drift` | classify + format age | stamp + baseline + injected `now` |
 | runner/TUI | `sdk/fleet/cmd` | SSH fan-out, table/JSON render, TUI, update handoff | the three above |
+| `sshconf` (writer) | `sdk/fleet/internal/sshconf` | add/update/unmark/purge a `Host` block; backup; render diff | file content only |
+| `keys` | `sdk/fleet/internal/keys` | key discovery, authorized_keys diff computation | text only (SSH I/O injected) |
 
 **Data flow:** `~/.ssh/config` → aliases → (SSH `cat` stamp, concurrent) → parse → classify
 against `origin/main` → render (table · JSON · TUI). The update path is a separate,
@@ -83,6 +112,17 @@ injected `now`.
   running fetch → checkout main → `pull --ff-only` → `install.sh`; one host at a time.
 - **F8 — dirty-clone safety.** Default skip with reason; `--force` preserves the dirty state
   in a rescue worktree under `~/.local/state/dotfiles/rescue/<ts>` before proceeding.
+- **F9 — add target.** `fleet add <alias> --hostname <h> [--user] [--port] [--identity]`
+  writes an idempotent `#fleet`-marked `Host` block; backup first; `--dry-run` shows the diff.
+- **F10 — remove target.** `fleet remove <alias>` unmarks (keeps SSH access);
+  `--purge` deletes the block. Backup first; `--dry-run` supported.
+- **F11 — keys list.** Matrix of managed key → hosts that authorize it (parity with
+  `ssh-key-sync.sh --list`, scoped to fleet hosts).
+- **F12 — keys sync.** Generate ed25519 if absent; authorize the **public** key on each fleet
+  host. Private key material never leaves the workstation. Per-host result reported.
+- **F13 — keys prune/delete.** Diff-first: show exactly which entries would be removed from
+  which hosts, then require confirmation (`--yes` for non-interactive). Never blanket-
+  overwrites `authorized_keys`.
 
 ## 5. Evaluation criteria (per feature)
 
@@ -96,6 +136,11 @@ injected `now`.
 | F6 | TTY + no subcommand | TUI renders host rows | in a pipe/redirect | terminal narrower than the table → no panic | manual capture + a render unit test on the model |
 | F7 | `u` / `update` invoked | interactive session; stamp refreshed after | parallel updates; captured/suppressed stdin | `install.sh` fails → row keeps prior state, error surfaced | real transcript on the stale host + row flip |
 | F8 | clone dirty or divergent | default: skip + reason | any mutation of a dirty host without `--force` | `--force` on a clean clone → normal path, no rescue worktree | dirty-host capture (skip) + `--force` capture (rescue exists, changes recoverable) |
+| F9 | `add` with a new alias | `#fleet`-marked block appended; backup written | duplicate block on re-add; edits to unmarked blocks | alias already exists → update supplied fields only; `--dry-run` writes nothing | fixture round-trip: unrelated bytes unchanged; re-add is idempotent |
+| F10 | `remove <alias>` | marker dropped, block retained | block deletion without `--purge`; loss of SSH reachability | alias not present → clear error, no write; `--purge` removes whole block | after `remove` the host is absent from `status` but `ssh` config still resolves it |
+| F11 | `keys list` | key → authorizing-hosts matrix | hosts outside fleet scope | key present locally but on no host → listed with empty host set | matrix matches `ssh-key-sync.sh --list` on the same hosts (parity capture) |
+| F12 | `keys sync` | public key authorized on each fleet host; per-host result | **any private key leaving the workstation**; silent per-host failure | key already authorized → no-op, still reported; unreachable host → failure + non-zero exit | transcript shows only `.pub` transferred; declined/failed hosts named |
+| F13 | `keys prune`/`delete` | diff of entries to remove, then confirmation | any change before confirmation; blanket overwrite of `authorized_keys` | declined prune → nothing changes anywhere; `--yes` proceeds non-interactively | a foreign `authorized_keys` entry survives a declined prune (the defect-2 regression test) |
 
 ## 6. Verification harness
 
@@ -107,9 +152,21 @@ injected `now`.
 - **Shell-level.** A test for the `install.sh` stamp block asserting it writes under
   `INSTALL_PHASE=all` and does not under `deps`/`config` (fits the existing
   `install_test.sh` / shell test-driver pattern).
-- **Human-evidenced gates (cannot be unit-tested).** F7 and F8 require real transcripts: an
-  actual update of the stale host, and a dirty-clone skip plus a `--force` rescue. Recorded
-  under `plans/fleet/evidence/` per `superpowers:verification-before-completion`.
+- **Config-writer round-trip (F9, F10).** Golden-file tests over fixture `~/.ssh/config`
+  inputs: add / re-add / unmark / purge, asserting the target block changes and **every other
+  byte is identical**. This is the highest-consequence unit in the tool, so it is tested
+  purely on text with no filesystem or SSH involved.
+- **Key-diff logic (F11–F13).** The authorized_keys diff is computed by a pure function over
+  (local keys, remote keys) pairs and table-tested, including the case that killed the
+  original script: a remote entry absent locally must be reported as a *removal requiring
+  confirmation*, never applied silently.
+- **Human-evidenced gates (cannot be unit-tested).** F7, F8, F12, F13 require real
+  transcripts: an actual update of the stale host; a dirty-clone skip plus a `--force`
+  rescue; a `sync` proving only public key material transfers; and a declined `prune` leaving
+  a foreign `authorized_keys` entry intact. Recorded under `plans/fleet/evidence/` per
+  `superpowers:verification-before-completion`.
+- **Migration parity gate.** `fleet keys list` must be shown matching `ssh-key-sync.sh
+  --list` on the same hosts before `src/ssh-key-sync/` is retired.
 
 ## 7. Prerequisites / dependencies
 
@@ -119,6 +176,9 @@ injected `now`.
 - cobra (as used by the other `sdk/` CLIs) and Bubble Tea for the TUI.
 - SSH access to the hosts via `~/.ssh/config` aliases with non-interactive auth (keys).
 - Each host keeps its dotfiles clone at `~/git/dotfiles` (true for all current hosts).
+- `ssh-keygen` available locally for `fleet keys sync` (already a dotfiles dependency).
+- `src/ssh-key-sync/ssh-key-sync.sh` stays in place until the §6 parity gate passes; its
+  skill is the fallback during the migration window.
 
 ## 8. Out of scope (and why)
 
@@ -130,6 +190,16 @@ injected `now`.
 - **Managing non-dotfiles state** (packages, services) — different problem, different tool.
 - **Retroactive history** — the stamp only knows about runs after it ships; reconstructing
   past installs is not possible and not worth approximating.
+- **Private-key distribution** — deliberately *not* reimplemented from `ssh-key-sync.sh`.
+  Copying one private key to every host means a single compromised machine yields an identity
+  valid everywhere. If a shared identity is ever genuinely required it needs its own design,
+  not a silently inherited default.
+- **Discovering/adding hosts by network scan** — `opt/scripts/network/ssh-find` already finds
+  a host on the LAN and refreshes its `HostName`; `fleet add` takes an explicit hostname.
+  Wiring the two together is a reasonable later step, not part of this objective.
+- **Managing keys for non-fleet hosts** — the absorbed tool is scoped to `#fleet`-marked
+  hosts. This is a deliberate behavior change from the script's "every host in the config"
+  and must be stated at retirement.
 
 ## 9. Rollback
 
@@ -137,6 +207,13 @@ Revert the stamp commit (~5 lines at the end of `install.sh`); stray stamp files
 inert. Delete `sdk/fleet` plus its `gff_on install.sdk.fleet` block and Makefile entry; the
 binary in `~/opt/bin` can be removed on next install or by hand. No schema, service, or
 shared state is introduced, so there is nothing to migrate.
+
+Config writes (F9, F10) restore from the `~/.ssh/config.bak-<ts>` taken before each one. Key
+changes (F12, F13) are the only partially-irreversible action — a removed `authorized_keys`
+entry is re-added with `fleet keys sync` rather than "undone", which is why those verbs are
+diff-first and confirmation-gated instead of relying on rollback. `ssh-key-sync.sh` remains
+available until the §6 parity gate passes, so the migration itself is reversible by simply
+continuing to use it.
 
 > Produced via `superpowers:brainstorming`. The matching plan goes in `../plans/fleet.md`.
 > Register / update `../index.md`.

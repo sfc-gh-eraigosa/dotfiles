@@ -17,6 +17,11 @@ to each one and eyeballing it. Two verified gaps cause this:
    "installed" are different facts, and today we can observe neither.
 2. **There is no host inventory.** The set of machines exists only in `~/.ssh/config`, and
    by explicit requirement it must **not** be committed to this repo.
+3. **Managing fleet membership and its access keys is manual and partly broken.** Nothing in
+   the repo *adds* or *removes* a `Host` block — `opt/scripts/network/ssh-find` only rewrites
+   the `HostName` of an alias that already exists. Key distribution does exist, as
+   `src/ssh-key-sync/ssh-key-sync.sh` (66 lines, skill-wrapped), but auditing it against
+   this objective found four defects (see §3 "Absorbing ssh-key-sync").
 
 Measured today (2026-08-09) by ad-hoc SSH against the three known hosts, using clone
 freshness as a stand-in signal:
@@ -39,6 +44,10 @@ precisely the argument for a deterministic tool over a remembered one-liner.
 - Deterministic and testable — drift and age math is unit-tested, not eyeballed.
 - Update a stale host from the same tool, interactively, so sudo and other credential
   prompts still work.
+- **Manage fleet membership** — add a target, remove one, without hand-editing
+  `~/.ssh/config`.
+- **Manage fleet access keys** — generate, distribute, and audit SSH keys across fleet
+  hosts, absorbing (and fixing) today's `ssh-key-sync.sh`.
 
 **Non-goals (YAGNI)**
 
@@ -65,6 +74,24 @@ becoming permanent, and the migration re-does the work.
 **Decision: A.** The explicit ask was for a *deterministic* tool; the repo's convention for
 reusable CLIs is Go-in-`sdk/`-with-tests; the drift math deserves real tests. The
 `install.sh` stamp addition is identical under all three options.
+
+### Absorbing `ssh-key-sync` (decided: absorb, not wrap)
+
+`src/ssh-key-sync/ssh-key-sync.sh` already generates/distributes/audits keys across every
+host in `~/.ssh/config`. Options were absorb into `fleet keys`, delegate to the script, or
+leave it alone. **Decision: absorb** — one host model (`#fleet`-marked, not "every host in
+the config"), one tool, and the logic becomes testable. Auditing the script line-by-line
+found four defects that make porting-as-is the wrong move:
+
+| # | Defect (line) | Consequence | Disposition in `fleet` |
+| :-- | :-- | :-- | :-- |
+| 1 | `scp "$P" "$P.pub"` (63) copies the **private** key to every host | any single compromised host yields an identity valid everywhere | **Fixed.** Public-key-only distribution by default. Private-key propagation is not reimplemented; if a shared identity is ever genuinely needed it must be an explicit, separately-designed opt-in. |
+| 2 | `--prune` **overwrites** local and remote `authorized_keys` with only the workstation's `*.pub` (24, 26) | silently deletes any key not on the workstation — CI keys, other machines, colleagues; real lockout risk | **Fixed.** `fleet keys prune` is diff-first: prints what would be removed and requires explicit confirmation (`--yes` non-interactively); never blanket-overwrites. |
+| 3 | `--delete` is a **no-op** (8) — consumes the flag, then falls through to the *generate* loop | `ssh-key-sync --delete foo` creates and syncs `foo` instead of deleting it; the skill documents deletion that does not exist | **Fixed.** Deletion is a real, tested verb with the same diff-first confirmation. |
+| 4 | Failures swallowed by `\|\| true` / `2>/dev/null` (43, 63) | no report of which hosts failed; partial syncs look successful | **Fixed.** Per-host success/failure is reported and reflected in the exit code. |
+
+Migration: `fleet keys` supersedes the script and its skill. Retire
+`src/ssh-key-sync/` once parity is proven by the evidence in §7 — not before.
 
 ## 4. Decision
 
@@ -124,6 +151,30 @@ git worktree add ~/.local/state/dotfiles/rescue/$ts fleet-rescue/$ts
 
 The rescue worktree is left on the host for inspection; the tool never deletes it.
 
+**Unit 5 — membership (`fleet add` / `fleet remove`).** Turns `~/.ssh/config` from a
+read-only input into something `fleet` also *writes*. This is the one place the design's
+original "we only read the config" boundary moves, so it is deliberately narrow:
+
+- `fleet add <alias> --hostname <h> [--user u] [--port p] [--identity f]` appends a `Host`
+  block carrying the `#fleet` marker. Idempotent: re-adding an existing alias updates only
+  the fields given and never duplicates the block.
+- `fleet remove <alias>` **unmarks** — drops `#fleet`, leaving the `Host` block intact.
+  Removing a machine from the fleet is not the same as losing the ability to SSH to it, and
+  the safe default must be the non-destructive one.
+- `fleet remove <alias> --purge` deletes the whole block, for a machine that is truly gone.
+- Every write takes a timestamped backup (`~/.ssh/config.bak-<ts>`) first, preserves
+  comments/ordering/formatting elsewhere in the file, and never touches an unmarked block.
+- `--dry-run` prints the resulting diff without writing.
+
+**Unit 6 — keys (`fleet keys list|sync|prune|delete`).** The absorbed, corrected
+`ssh-key-sync`, scoped to `#fleet` hosts:
+
+- `list` — matrix of managed key → which hosts authorize it (parity with `--list`).
+- `sync [name...]` — generate an ed25519 key if absent, then authorize its **public** key on
+  each fleet host; per-host success/failure reported.
+- `prune` / `delete` — diff-first reconciliation: show exactly which authorized entries would
+  disappear from which hosts and require confirmation before touching anything.
+
 ## 5. Risks & blast radius
 
 - **The stamp is not retroactive.** Every host reports `unknown` until it next runs
@@ -135,6 +186,17 @@ The rescue worktree is left on the host for inspection; the tool never deletes i
 - **The Jetson/ARM host is both the only stale machine and the least-tested target**
   (unlike the other two). Its first update is the real validation of the update path.
 - **Reading is safe.** `status` is read-only SSH; a broken checker cannot damage a host.
+- **`fleet` now writes `~/.ssh/config` (Unit 5).** A malformed write could cost SSH access to
+  every machine — the highest-consequence failure in the design. Mitigated by a timestamped
+  backup before every write, `--dry-run`, idempotent block editing that never touches
+  unmarked hosts, and unmark-not-delete as the default for `remove`.
+- **Key operations touch `authorized_keys` on real hosts (Unit 6).** The absorbed script's
+  blanket-overwrite prune is the specific behavior that could lock you out; the replacement
+  is diff-first and confirmation-gated. Distribution is public-key-only, so a compromised
+  host no longer yields a reusable private identity.
+- **Migration risk.** Retiring `ssh-key-sync.sh` before `fleet keys` reaches parity would
+  leave a gap; §7 requires parity evidence first, and the scoping change (all-config-hosts →
+  `#fleet`-marked) must be called out at retirement since it is a deliberate behavior change.
 
 ## 6. Rollback
 
@@ -143,6 +205,12 @@ The rescue worktree is left on the host for inspection; the tool never deletes i
 - `sdk/fleet` is a standalone binary in `~/opt/bin`; deleting it and its `gff_on
   install.sdk.fleet` block removes the feature with no residue.
 - No schema, service, or shared state is introduced, so there is nothing to migrate back.
+- **Config writes** are recoverable from the `~/.ssh/config.bak-<ts>` taken before each one.
+- **Key changes** are the only partially-irreversible action: a removed `authorized_keys`
+  entry must be re-synced (`fleet keys sync`) rather than "undone". This is why prune/delete
+  are diff-first and confirmation-gated rather than rollback-dependent.
+- **`ssh-key-sync.sh` stays in place until parity is proven**, so rollback during the
+  migration window is simply "keep using the script".
 
 ## 7. Evidence expectations
 
@@ -160,6 +228,19 @@ The plan must capture, in `plans/fleet/evidence/`:
 - **A dirty-clone capture** proving default-skip refuses, and a `--force` run showing the
   rescue worktree created and the local changes still recoverable.
 - **A TUI screen capture** (asciinema or a still) showing the host list and the update key.
+- **Membership round-trip (Unit 5):** `add` a throwaway alias → it appears in `status` →
+  `remove` (unmark) → it leaves fleet scope while the `Host` block survives → `--purge`
+  removes the block. Captured with the `~/.ssh/config` diff at each step and the backup file
+  listed, proving nothing else in the config moved.
+- **Config-write safety:** a `--dry-run` capture showing the diff without a write, and a
+  before/after showing unrelated (unmarked) blocks byte-identical.
+- **Key parity + the four fixes (Unit 6):** `fleet keys list` output matching
+  `ssh-key-sync.sh --list` on the same hosts (parity); a `sync` transcript showing **only the
+  public key** landing on a host (defect 1); a `prune` capture showing the diff and the
+  confirmation gate, with a deliberately foreign `authorized_keys` entry **surviving** a
+  declined prune (defect 2); a `delete` capture proving it deletes rather than generating
+  (defect 3); and a run against an unreachable host showing per-host failure reported with a
+  non-zero exit (defect 4).
 
 > Produced via `superpowers:brainstorming`. Register the objective in `../index.md`.
 > The matching spec goes in `../specs/fleet.md`.
