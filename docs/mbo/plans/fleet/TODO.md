@@ -87,12 +87,12 @@
 
 ### Task 5 — stamp parser  (plan Task 5)
 
-- [ ] RED: `TestParseWellFormed`, `TestParseEmptyIsError`, `TestParseTruncatedIsError` (helper is `repeat`, **not** `strings`)
-- [ ] RUN-RED: `cd sdk/fleet && go test ./internal/stamp/ -v` → **FAIL** (`undefined: Parse`)
-- [ ] GREEN: implement `Stamp` + `Parse` (40-char commit required; epoch parsed)
-- [ ] RUN-GREEN: `cd sdk/fleet && go test ./internal/stamp/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task05/stamp.txt` → **PASS**
-- [ ] COMMIT: `feat(fleet): parse the install stamp`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestParseWellFormed`, `TestParseEmptyIsError`, `TestParseTruncatedIsError` (helper is `repeat`, **not** `strings`)
+- [x] RUN-RED: `cd sdk/fleet && go test ./internal/stamp/ -v` → **FAIL** (`undefined: Parse`)
+- [x] GREEN: implement `Stamp` + `Parse` (40-char commit required; epoch parsed)
+- [x] RUN-GREEN: `cd sdk/fleet && go test ./internal/stamp/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task05/stamp.txt` → **PASS**
+- [x] COMMIT: `feat(fleet): parse the install stamp`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** well-formed parses; empty and truncated both error.
 
@@ -100,13 +100,13 @@
 
 ### Task 6 — drift classify + age  (plan Task 6)
 
-- [ ] RED: `TestClassifyAllFiveClasses`, `TestClassifyNeverReportsBehindWhenCommitsMatch`, `TestFormatAge`
-- [ ] RUN-RED: `cd sdk/fleet && go test ./internal/drift/ -v` → **FAIL** (`undefined: Classify`)
-- [ ] GREEN: implement `Class`, `Input`, `Result`, `Classify`, `FormatAge(now, then)`
-- [ ] RUN-GREEN: `cd sdk/fleet && go test ./internal/drift/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task06/drift.txt` → **PASS**
-- [ ] VERIFY: `now` is injected — no `time.Now()` inside the package
-- [ ] COMMIT: `feat(fleet): classify install drift and format age`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestClassifyAllFiveClasses`, `TestClassifyNeverReportsBehindWhenCommitsMatch`, `TestFormatAge`
+- [x] RUN-RED: `cd sdk/fleet && go test ./internal/drift/ -v` → **FAIL** (`undefined: Classify`)
+- [x] GREEN: implement `Class`, `Input`, `Result`, `Classify`, `FormatAge(now, then)`
+- [x] RUN-GREEN: `cd sdk/fleet && go test ./internal/drift/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task06/drift.txt` → **PASS**
+- [x] VERIFY: `now` is injected — no `time.Now()` inside the package
+- [x] COMMIT: `feat(fleet): classify install drift and format age`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** all five classes + the age table pass.
 
