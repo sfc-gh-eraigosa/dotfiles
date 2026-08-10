@@ -3,7 +3,7 @@
 - **Slug:** fleet
 - **Date:** 2026-08-09
 - **Status:** Draft
-- **Relates to:** issue [#222](https://github.com/sfc-gh-eraigosa/dotfiles/issues/222) · PR: (this PR) · design [`../designs/fleet.md`](../designs/fleet.md)
+- **Relates to:** issue [#222](https://github.com/sfc-gh-eraigosa/dotfiles/issues/222) · PR [#223](https://github.com/sfc-gh-eraigosa/dotfiles/pull/223) · design [`../designs/fleet.md`](../designs/fleet.md)
 
 ## 1. Goal
 
