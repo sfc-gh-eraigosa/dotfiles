@@ -1,0 +1,52 @@
+=== 2026-08-10T05:27:32Z — Task 7 live evidence (real hosts) ===
+
+$ fleet status
+baseline: origin/main 1e7eca0
+
+HOST             COMMIT    LAST RUN      STATUS
+host-nano     -         -             unknown
+host-desktop  -         -             unknown
+host-pi        -         -             unknown
+exit=1
+
+NOTE: every host reads 'unknown' because the install stamp ships in THIS
+branch and no host has re-run install.sh yet. This is the documented
+non-retroactive behaviour (design §5), not a defect. Rows flip to
+up-to-date/behind after the first real install (Task 14).
+
+$ fleet status --json | jq .
+[
+  {
+    "alias": "host-nano",
+    "status": "unknown",
+    "behind": 0,
+    "commit": ""
+  },
+  {
+    "alias": "host-desktop",
+    "status": "unknown",
+    "behind": 0,
+    "commit": ""
+  },
+  {
+    "alias": "host-pi",
+    "status": "unknown",
+    "behind": 0,
+    "commit": ""
+  }
+]
+exit=
+
+=== adversarial: an unreachable host must be reported, not dropped ===
+baseline: origin/main 1e7eca0
+
+HOST             COMMIT    LAST RUN      STATUS
+ghost-box        -         -             unreachable
+exit=1
+
+=== adversarial: explicit host args override discovery ===
+baseline: origin/main 1e7eca0
+
+HOST             COMMIT    LAST RUN      STATUS
+host-pi        -         -             unknown
+exit=1

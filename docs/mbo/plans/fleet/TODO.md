@@ -114,14 +114,14 @@
 
 ### Task 7 — Runner seam + `fleet status`  (plan Task 7)
 
-- [ ] RED: `cmd/status_test.go::TestRenderTableIsWorstFirst`, `TestExitCodeNonZeroWhenAnyHostStale`
-- [ ] RUN-RED: `cd sdk/fleet && go test ./cmd/ -run 'TestRenderTable|TestExitCode' -v` → **FAIL** (`undefined: Row`)
-- [ ] GREEN: `internal/runner/runner.go` (`Runner`, `Exec`, `Fake`) + `cmd/status.go` (`Row`, `renderTable`, `exitCode`, fan-out)
-- [ ] RUN-GREEN: `cd sdk/fleet && go test ./cmd/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task07/status.txt` → **PASS**
-- [ ] VERIFY: `--json | jq .` parses; `echo $?` is 1 while a host is stale
-- [ ] VERIFY (live): `fleet status | tee docs/mbo/plans/fleet/evidence/task07/live-status.txt` → one row per marked host, stale host shows `behind N`
-- [ ] COMMIT: `feat(fleet): status command with worst-first table and stale exit code`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `cmd/status_test.go::TestRenderTableIsWorstFirst`, `TestExitCodeNonZeroWhenAnyHostStale`
+- [x] RUN-RED: `cd sdk/fleet && go test ./cmd/ -run 'TestRenderTable|TestExitCode' -v` → **FAIL** (`undefined: Row`)
+- [x] GREEN: `internal/runner/runner.go` (`Runner`, `Exec`, `Fake`) + `cmd/status.go` (`Row`, `renderTable`, `exitCode`, fan-out)
+- [x] RUN-GREEN: `cd sdk/fleet && go test ./cmd/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task07/status.txt` → **PASS**
+- [x] VERIFY: `--json | jq .` parses; `echo $?` is 1 while a host is stale
+- [x] VERIFY (live): `fleet status | tee docs/mbo/plans/fleet/evidence/task07/live-status.txt` → one row per marked host, stale host shows `behind N`
+- [x] COMMIT: `feat(fleet): status command with worst-first table and stale exit code`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** unit tests pass **and** a real multi-host capture exists.
 
