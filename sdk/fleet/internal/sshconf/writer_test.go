@@ -126,3 +126,41 @@ func TestUnknownAliasIsAnError(t *testing.T) {
 		t.Fatal("Purge: expected an error for an unknown alias")
 	}
 }
+
+// A config that ended with a newline must still end with exactly one after
+// any edit. Found live: add->purge round-trip dropped the trailing newline,
+// which shows up as a spurious "\ No newline at end of file" in every
+// subsequent diff.
+func TestEditsPreserveExactlyOneTrailingNewline(t *testing.T) {
+	base := "Host beta\n    HostName 10.0.0.2\n"
+	added, err := Add(base, Host{Alias: "tmp", HostName: "10.0.0.99"}, "#fleet")
+	if err != nil {
+		t.Fatal(err)
+	}
+	purged, err := Purge(added, "tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if purged != base {
+		t.Fatalf("add->purge is not a round-trip:\nwant %q\ngot  %q", base, purged)
+	}
+	for name, got := range map[string]string{"Add": added, "Purge": purged} {
+		if !strings.HasSuffix(got, "\n") {
+			t.Errorf("%s dropped the trailing newline: %q", name, got)
+		}
+		if strings.HasSuffix(got, "\n\n") {
+			t.Errorf("%s left a doubled trailing newline: %q", name, got)
+		}
+	}
+}
+
+func TestUnmarkPreservesTrailingNewline(t *testing.T) {
+	cfg := "Host a  # fleet\n    HostName 1\n"
+	out, err := Unmark(cfg, "a", "#fleet")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(out, "\n") || strings.HasSuffix(out, "\n\n") {
+		t.Fatalf("Unmark mangled the trailing newline: %q", out)
+	}
+}

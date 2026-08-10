@@ -129,13 +129,13 @@
 
 ### Task 8 — `fleet add` / `fleet remove`  (plan Task 8)
 
-- [ ] RED: `TestWriteConfigTakesBackupFirst`, `TestDryRunWritesNothing`
-- [ ] RUN-RED: `cd sdk/fleet && go test ./cmd/ -run 'TestWriteConfig|TestDryRun' -v` → **FAIL** (`undefined: writeConfig`)
-- [ ] GREEN: `cmd/add.go` (`writeConfig`, `applyConfig`, `addCmd`), `cmd/remove.go` (`removeCmd`, `--purge`)
-- [ ] RUN-GREEN: `cd sdk/fleet && go test ./cmd/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task08/membership.txt` → **PASS**
-- [ ] VERIFY (live, on a COPY of the config): add → status shows it → remove → still `ssh`-able → `--purge` → block gone; diff into `evidence/task08/roundtrip.txt`
-- [ ] COMMIT: `feat(fleet): add/remove fleet targets with backup and dry-run`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestWriteConfigTakesBackupFirst`, `TestDryRunWritesNothing`
+- [x] RUN-RED: `cd sdk/fleet && go test ./cmd/ -run 'TestWriteConfig|TestDryRun' -v` → **FAIL** (`undefined: writeConfig`)
+- [x] GREEN: `cmd/add.go` (`writeConfig`, `applyConfig`, `addCmd`), `cmd/remove.go` (`removeCmd`, `--purge`)
+- [x] RUN-GREEN: `cd sdk/fleet && go test ./cmd/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task08/membership.txt` → **PASS**
+- [x] VERIFY (live, on a COPY of the config): add → status shows it → remove → still `ssh`-able → `--purge` → block gone; diff into `evidence/task08/roundtrip.txt`
+- [x] COMMIT: `feat(fleet): add/remove fleet targets with backup and dry-run`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** backup-per-write, dry-run-writes-nothing, live round-trip all pass.
 

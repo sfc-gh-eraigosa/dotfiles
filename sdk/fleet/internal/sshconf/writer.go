@@ -27,6 +27,19 @@ func blockRange(lines []string, alias string) (start, end int, ok bool) {
 	return 0, 0, false
 }
 
+// normalize guarantees a non-empty config ends with exactly one newline.
+// Every edit path runs through this: an add->purge round-trip that silently
+// dropped the trailing newline showed up as a spurious "\ No newline at end
+// of file" in every later diff — a collateral edit, which this package must
+// never make.
+func normalize(cfg string) string {
+	trimmed := strings.TrimRight(cfg, "\n")
+	if strings.TrimSpace(trimmed) == "" {
+		return ""
+	}
+	return trimmed + "\n"
+}
+
 // render emits a marked Host block. Only non-empty fields are written, so a
 // caller cannot accidentally blank a directive by omitting it.
 func render(h Host, marker string) string {
@@ -58,9 +71,9 @@ func Add(cfg string, h Host, marker string) (string, error) {
 	}
 	body := strings.TrimRight(cfg, "\n")
 	if strings.TrimSpace(body) == "" {
-		return render(h, marker), nil
+		return normalize(render(h, marker)), nil
 	}
-	return body + "\n\n" + render(h, marker), nil
+	return normalize(body + "\n\n" + render(h, marker)), nil
 }
 
 // Unmark removes the fleet marker but keeps the Host block. Leaving the fleet
@@ -88,7 +101,7 @@ func Unmark(cfg, alias, marker string) (string, error) {
 		// Trailing marker on a directive: keep the directive, drop the comment.
 		out = append(out, strings.TrimRight(l[:strings.Index(l, "#")], " \t"))
 	}
-	return strings.Join(out, "\n"), nil
+	return normalize(strings.Join(out, "\n")), nil
 }
 
 // Purge deletes the whole Host block — for a machine that is genuinely gone.
@@ -107,5 +120,5 @@ func Purge(cfg, alias string) (string, error) {
 		start--
 	}
 	out := append(append([]string{}, lines[:start]...), lines[end:]...)
-	return strings.Join(out, "\n"), nil
+	return normalize(strings.Join(out, "\n")), nil
 }
