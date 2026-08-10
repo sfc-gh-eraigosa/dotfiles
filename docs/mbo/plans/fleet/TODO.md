@@ -170,14 +170,14 @@
 
 ### Task 11 — `keys prune` / `delete` (diff-first)  (plan Task 11)
 
-- [ ] RED: `TestPruneRequiresConfirmationAndChangesNothingWhenDeclined`, `TestPruneAppliesOnlyWhenConfirmed`
-- [ ] RUN-RED: `cd sdk/fleet && go test ./cmd/ -run TestPrune -v` → **FAIL** (`undefined: pruneHost`)
-- [ ] GREEN: implement `pruneHost` (compute diff → print → apply only when confirmed) + `--yes`
-- [ ] RUN-GREEN: `cd sdk/fleet && go test ./cmd/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task11/prune.txt` → **PASS**
+- [x] RED: `TestPruneRequiresConfirmationAndChangesNothingWhenDeclined`, `TestPruneAppliesOnlyWhenConfirmed`
+- [x] RUN-RED: `cd sdk/fleet && go test ./cmd/ -run TestPrune -v` → **FAIL** (`undefined: pruneHost`)
+- [x] GREEN: implement `pruneHost` (compute diff → print → apply only when confirmed) + `--yes`
+- [x] RUN-GREEN: `cd sdk/fleet && go test ./cmd/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task11/prune.txt` → **PASS**
 - [ ] 🛑 **HUMAN STOP** — the next step writes to a real host's `authorized_keys`. Get confirmation.
 - [ ] VERIFY (live): add a throwaway `ssh-ed25519 ZZZ test@foreign` entry on one host; run `fleet keys prune`; answer **no**; confirm the entry survives → `evidence/task11/declined.txt`
-- [ ] COMMIT: `feat(fleet): diff-first keys prune/delete with confirmation gate`
-- [ ] LEDGER + CHECKPOINT
+- [x] COMMIT: `feat(fleet): diff-first keys prune/delete with confirmation gate`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** a declined prune provably changes nothing on a real host.
 
@@ -185,14 +185,14 @@
 
 ### Task 12 — `fleet update` + dirty-clone policy  (plan Task 12)
 
-- [ ] RED: `TestUpdateSkipsDirtyCloneByDefault`, `TestUpdateProceedsOnCleanClone`
-- [ ] RUN-RED: `cd sdk/fleet && go test ./cmd/ -run TestUpdate -v` → **FAIL** (`undefined: updateHost`)
-- [ ] GREEN: `cmd/update.go` — `UpdateResult`, `updateHost`, `remoteUpdate`, `rescueWorktree`
-- [ ] RUN-GREEN: `cd sdk/fleet && go test ./cmd/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task12/update.txt` → **PASS**
-- [ ] 🛑 **HUMAN STOP** — verify the rescue mechanism before relying on it.
-- [ ] VERIFY: run the scratch-clone stash→branch→worktree check (plan Task 12 Step 5) → prints `b`. **If it fails: file a blocker and switch to the temp-commit fallback.**
-- [ ] COMMIT: `feat(fleet): headless update with skip-on-dirty and --force rescue`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestUpdateSkipsDirtyCloneByDefault`, `TestUpdateProceedsOnCleanClone`
+- [x] RUN-RED: `cd sdk/fleet && go test ./cmd/ -run TestUpdate -v` → **FAIL** (`undefined: updateHost`)
+- [x] GREEN: `cmd/update.go` — `UpdateResult`, `updateHost`, `remoteUpdate`, `rescueWorktree`
+- [x] RUN-GREEN: `cd sdk/fleet && go test ./cmd/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task12/update.txt` → **PASS**
+- [x] 🛑 **HUMAN STOP** — verify the rescue mechanism before relying on it.
+- [x] VERIFY: run the scratch-clone stash→branch→worktree check (plan Task 12 Step 5) → prints `b`. **If it fails: file a blocker and switch to the temp-commit fallback.**
+- [x] COMMIT: `feat(fleet): headless update with skip-on-dirty and --force rescue`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** both unit tests pass and the rescue mechanism is proven (or a blocker filed).
 

@@ -65,3 +65,58 @@ func TestKeysSyncIsIdempotentOnTheRemoteSide(t *testing.T) {
 		t.Fatalf("append must be guarded by a grep so re-syncing is a no-op: %v", sent)
 	}
 }
+
+// Defect 2 regression, at the command layer: a declined prune must not touch
+// the host at all. The shell script blanket-overwrote authorized_keys.
+func TestPruneRequiresConfirmationAndChangesNothingWhenDeclined(t *testing.T) {
+	var sent []string
+	r := recordingRunner{fake: runner.Fake{Out: map[string]string{
+		"alpha": "ssh-ed25519 AAA me@box\nssh-ed25519 ZZZ ci@runner",
+	}}, log: &sent}
+	var sb strings.Builder
+	changed, err := pruneHost(&sb, r, "alpha", []string{"ssh-ed25519 AAA me@box"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed {
+		t.Fatal("a declined prune must report no change")
+	}
+	for _, c := range sent {
+		if strings.Contains(c, ">>") || strings.Contains(c, "sed -i") || strings.Contains(c, "> ~/.ssh") {
+			t.Fatalf("declined prune still mutated the host: %q", c)
+		}
+	}
+	if !strings.Contains(sb.String(), "ci@runner") {
+		t.Fatalf("prune must SHOW what it would remove:\n%s", sb.String())
+	}
+}
+
+func TestPruneAppliesOnlyWhenConfirmed(t *testing.T) {
+	var sent []string
+	r := recordingRunner{fake: runner.Fake{Out: map[string]string{
+		"alpha": "ssh-ed25519 AAA me@box\nssh-ed25519 ZZZ ci@runner",
+	}}, log: &sent}
+	var sb strings.Builder
+	changed, err := pruneHost(&sb, r, "alpha", []string{"ssh-ed25519 AAA me@box"}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Fatal("a confirmed prune should report a change")
+	}
+}
+
+func TestPruneIsANoOpWhenNothingForeign(t *testing.T) {
+	var sent []string
+	r := recordingRunner{fake: runner.Fake{Out: map[string]string{
+		"alpha": "ssh-ed25519 AAA me@box",
+	}}, log: &sent}
+	var sb strings.Builder
+	changed, err := pruneHost(&sb, r, "alpha", []string{"ssh-ed25519 AAA me@box"}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed {
+		t.Fatal("nothing foreign means nothing to do, even when confirmed")
+	}
+}
