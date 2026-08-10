@@ -42,6 +42,25 @@ it into the cached deps layer so later edits stop taking effect per commit (a
 correctness bug). `--phase all` (a normal `./install.sh`) applies no overrides,
 so real machines are unaffected.
 
+> **A key in NEITHER list runs in BOTH phases** — the failure mode that shipped
+> in #217. The `install.sdk.*` keys were in neither, so every Go binary built
+> twice: once in the cached deps layer (where it got baked in and stamped
+> `Commit: none`, because that layer's partial `COPY` has no `.git`) and again in
+> config, where it silently degraded to `WARNING: 'go' not found` — `go` is on
+> `PATH` only in the layer where goenv ran, and `PATH` does not survive across
+> `RUN` layers. CI stayed green throughout, because the deps-layer binaries
+> existed and `gss version` worked.
+>
+> Two safeguards now exist: `ensure_go_on_path()` re-activates an
+> already-installed goenv in any phase (a no-op when `go` is already present), and
+> `install.sh` **exits non-zero** when a container phase (`deps`/`config`) still
+> has no `go`, instead of letting the sdk builds skip with a warning.
+
+**Go binaries belong in `--phase config`, never the base image.** They are
+repo-content builds: they need the full `COPY` (including `.git`, for the version
+stamp) and must rebuild per commit. Building them in the base image or the deps
+layer ships stale, mis-stamped binaries.
+
 **Changing `Dockerfile.base` in a PR? CI detects it automatically.** Because the
 base publishes from main only, the Build job checks the PR's changed files and
 **builds the base locally** (instead of pulling the stale published one) when a
