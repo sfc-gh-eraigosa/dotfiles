@@ -200,15 +200,15 @@
 
 ### Task 13 — TUI  (plan Task 13)
 
-- [ ] SETUP: confirm Task 12 has landed — `cmd/tui.go` reuses `remoteUpdate` from `cmd/update.go`
-- [ ] RED: `TestTUIModelRendersOneLinePerHost`, `TestTUISelectionMovesWithinBounds`, `TestInteractiveUpdateUsesTTYAndTheSharedRemoteScript`
-- [ ] RUN-RED: `cd sdk/fleet && go test ./cmd/ -run TestTUI -v` → **FAIL** (`undefined: newModel`)
-- [ ] GREEN: `cmd/tui.go` — `model`, `newModel`, `moveCursor`, `View`, `Update` (`u` → `tea.Exec`)
-- [ ] RUN-GREEN: `cd sdk/fleet && go test ./cmd/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task13/tui.txt` → **PASS**
-- [ ] VERIFY (live): run `fleet tui`; capture a still/asciinema → `evidence/task13/`
-- [ ] VERIFY: `u` releases the terminal (sudo prompt is answerable), does not capture stdin
-- [ ] COMMIT: `feat(fleet): TUI host list with update key`
-- [ ] LEDGER + CHECKPOINT
+- [x] SETUP: confirm Task 12 has landed — `cmd/tui.go` reuses `remoteUpdate` from `cmd/update.go`
+- [x] RED: `TestTUIModelRendersOneLinePerHost`, `TestTUISelectionMovesWithinBounds`, `TestInteractiveUpdateUsesTTYAndTheSharedRemoteScript`
+- [x] RUN-RED: `cd sdk/fleet && go test ./cmd/ -run TestTUI -v` → **FAIL** (`undefined: newModel`)
+- [x] GREEN: `cmd/tui.go` — `model`, `newModel`, `moveCursor`, `View`, `Update` (`u` → `tea.Exec`)
+- [x] RUN-GREEN: `cd sdk/fleet && go test ./cmd/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task13/tui.txt` → **PASS**
+- [x] VERIFY (live): run `fleet tui`; capture a still/asciinema → `evidence/task13/`
+- [x] VERIFY: `u` releases the terminal (sudo prompt is answerable), does not capture stdin
+- [x] COMMIT: `feat(fleet): TUI host list with update key`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** model tests pass and a screen capture exists.
 
