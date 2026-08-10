@@ -59,13 +59,13 @@
 
 ### Task 3 — sshconf reader  (plan Task 3)
 
-- [ ] RED: `sshconf_test.go` — `TestParseReturnsOnlyMarkedConcreteHosts`, `TestParseSkipsPatternHostsEntirely`, `TestParseCapturesFields`
-- [ ] RUN-RED: `cd sdk/fleet && go test ./internal/sshconf/ -v` → **FAIL** (`undefined: Parse`)
-- [ ] GREEN: implement `Host` + `Parse(cfg, marker)`
-- [ ] RUN-GREEN: `cd sdk/fleet && go test ./internal/sshconf/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task03/parse.txt` → **PASS** (3 tests)
-- [ ] VERIFY: pattern hosts (`*`, `?`) provably excluded; unmarked hosts not in fleet scope
-- [ ] COMMIT: `feat(fleet): parse ~/.ssh/config for marked fleet hosts`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `sshconf_test.go` — `TestParseReturnsOnlyMarkedConcreteHosts`, `TestParseSkipsPatternHostsEntirely`, `TestParseCapturesFields`
+- [x] RUN-RED: `cd sdk/fleet && go test ./internal/sshconf/ -v` → **FAIL** (`undefined: Parse`)
+- [x] GREEN: implement `Host` + `Parse(cfg, marker)`
+- [x] RUN-GREEN: `cd sdk/fleet && go test ./internal/sshconf/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task03/parse.txt` → **PASS** (3 tests)
+- [x] VERIFY: pattern hosts (`*`, `?`) provably excluded; unmarked hosts not in fleet scope
+- [x] COMMIT: `feat(fleet): parse ~/.ssh/config for marked fleet hosts`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** all three tests pass.
 
@@ -73,13 +73,13 @@
 
 ### Task 4 — sshconf writer (add / unmark / purge)  (plan Task 4)
 
-- [ ] RED: `TestAddIsIdempotentAndPreservesOtherBlocks`, `TestUnmarkKeepsBlockButLeavesFleet`, `TestPurgeRemovesOnlyTheTargetBlock`, `TestUnknownAliasIsAnError`
-- [ ] RUN-RED: `cd sdk/fleet && go test ./internal/sshconf/ -run 'TestAdd|TestUnmark|TestPurge|TestUnknown' -v` → **FAIL** (`undefined: Add`)
-- [ ] GREEN: implement `blockRange`, `Add`, `Unmark`, `Purge`
-- [ ] RUN-GREEN: `cd sdk/fleet && go test ./internal/sshconf/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task04/writer.txt` → **PASS**
-- [ ] VERIFY: `Add` twice is byte-identical; `Unmark` keeps the block; `Purge` touches only the target
-- [ ] COMMIT: `feat(fleet): idempotent ssh-config add/unmark/purge`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestAddIsIdempotentAndPreservesOtherBlocks`, `TestUnmarkKeepsBlockButLeavesFleet`, `TestPurgeRemovesOnlyTheTargetBlock`, `TestUnknownAliasIsAnError`
+- [x] RUN-RED: `cd sdk/fleet && go test ./internal/sshconf/ -run 'TestAdd|TestUnmark|TestPurge|TestUnknown' -v` → **FAIL** (`undefined: Add`)
+- [x] GREEN: implement `blockRange`, `Add`, `Unmark`, `Purge`
+- [x] RUN-GREEN: `cd sdk/fleet && go test ./internal/sshconf/ -v -cover | tee ../../docs/mbo/plans/fleet/evidence/task04/writer.txt` → **PASS**
+- [x] VERIFY: `Add` twice is byte-identical; `Unmark` keeps the block; `Purge` touches only the target
+- [x] COMMIT: `feat(fleet): idempotent ssh-config add/unmark/purge`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** idempotency + unmark-keeps-block + purge-only-target + unknown-alias-errors pass.
 
