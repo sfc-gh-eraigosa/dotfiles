@@ -44,14 +44,14 @@
 
 ### Task 2 — install.sh stamp  (plan Task 2) — *independent*
 
-- [ ] RED: add `test_stamp_written_only_for_phase_all` to `install_test.sh`
-- [ ] RUN-RED: `bash install_test.sh 2>&1 | grep stamp` → **FAIL**
-- [ ] GREEN: append the phase-gated stamp block (`install.sh.stampblock`, sourced from `install.sh`)
-- [ ] RUN-GREEN: `bash install_test.sh 2>&1 | tee docs/mbo/plans/fleet/evidence/task02/stamp.txt | grep stamp` → **PASS**
-- [ ] VERIFY: `bash -n install.sh` → silent
-- [ ] VERIFY: stamp is written **last** and skipped for `INSTALL_PHASE=deps|config`
-- [ ] COMMIT: `feat(install): record an install stamp for fleet (phase-gated)`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: add `test_stamp_written_only_for_phase_all` to `install_test.sh`
+- [x] RUN-RED: `bash install_test.sh 2>&1 | grep stamp` → **FAIL**
+- [x] GREEN: append the phase-gated stamp block (`install.sh.stampblock`, sourced from `install.sh`)
+- [x] RUN-GREEN: `bash install_test.sh 2>&1 | tee docs/mbo/plans/fleet/evidence/task02/stamp.txt | grep stamp` → **PASS**
+- [x] VERIFY: `bash -n install.sh` → silent
+- [x] VERIFY: stamp is written **last** and skipped for `INSTALL_PHASE=deps|config`
+- [x] COMMIT: `feat(install): record an install stamp for fleet (phase-gated)`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** phase-gating test passes; `bash -n` clean.
 

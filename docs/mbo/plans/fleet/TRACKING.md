@@ -32,8 +32,8 @@
 
 | Task | Leaf | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| 1 — module scaffold + wiring | scaffold | **done** | (this commit) | `./scripts/test.sh` → `OK: coverage for fleet is 70% (minimum: 60%)`; `go vet` clean; `~/opt/bin/fleet version` → `fleet 0.1.0 (1e7eca0)`; `bash -n install.sh` clean → `evidence/task01/wiring.txt` | BLOCKING; coverage floor added. **Deviation:** version vars must be EXPORTED (`Version`/`Commit`/`Dirty`/`BuildDate`) to match build.sh's `-X` paths — lowercase would silently no-op. Test `TestLdflagsTargetsExist` pins it. |
-| 2 — install.sh stamp | stamp-sh | todo | | | independent; phase-gated |
+| 1 — module scaffold + wiring | scaffold | **done** | `d25235b` | `./scripts/test.sh` → `OK: coverage for fleet is 70% (minimum: 60%)`; `go vet` clean; `~/opt/bin/fleet version` → `fleet 0.1.0 (1e7eca0)`; `bash -n install.sh` clean → `evidence/task01/wiring.txt` | BLOCKING; coverage floor added. **Deviation:** version vars must be EXPORTED (`Version`/`Commit`/`Dirty`/`BuildDate`) to match build.sh's `-X` paths — lowercase would silently no-op. Test `TestLdflagsTargetsExist` pins it. |
+| 2 — install.sh stamp | stamp-sh | **done** | (this commit) | `install-stamp_test.sh` → PASS=12 FAIL=0; `install_test.sh` → PASS=13 FAIL=0; `bash -n` clean → `evidence/task02/stamp.txt` | **Deviation:** implemented as `opt/scripts/system/install-stamp.sh` + its own `*_test.sh` rather than the plan's root-level `install.sh.stampblock`. Reason: `install_test.sh` deliberately never EXECUTES install.sh, and the repo already has the executable-script + sibling-test pattern. Added a guard asserting nothing runs after the stamp. |
 | 3 — sshconf reader | sshconf | todo | | | |
 | 4 — sshconf writer (add/unmark/purge) | sshconf | todo | | | idempotency is the key property |
 | 5 — stamp parser | drift | todo | | | |

@@ -828,3 +828,12 @@ BANNER
   fi
   unset _b _x
 fi
+
+# --- install stamp (fleet) -------------------------------------------------
+# LAST action of a successful run: record the commit that was installed so
+# `fleet status` can tell "pulled" from "actually installed". Phase-gated
+# inside the script (a Docker deps/config layer must never stamp), and it
+# never fails the install.
+if [ -f "${BASE_DIR}/opt/scripts/system/install-stamp.sh" ]; then
+  bash "${BASE_DIR}/opt/scripts/system/install-stamp.sh" "${BASE_DIR}" || true
+fi
