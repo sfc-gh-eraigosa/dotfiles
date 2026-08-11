@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -100,5 +102,60 @@ func TestRenderJSONIsParseable(t *testing.T) {
 	}
 	if parsed[0]["alias"] != "a" || parsed[0]["status"] != "behind" {
 		t.Fatalf("unexpected JSON shape: %v", parsed[0])
+	}
+}
+
+// Bug 3: os.Exit inside RunE bypasses cobra's error path and cleanup, and
+// makes the stale-exit path untestable. It must surface as a typed error.
+func TestStaleFleetSurfacesAsTypedErrorNotOsExit(t *testing.T) {
+	err := exitErrorFor([]Row{{Class: "behind", Behind: 2}})
+	if err == nil {
+		t.Fatal("a stale fleet must produce an error carrying the exit code")
+	}
+	var ee exitError
+	if !errors.As(err, &ee) || ee.code != 1 {
+		t.Fatalf("want exitError{1}, got %#v", err)
+	}
+	if exitErrorFor([]Row{{Class: "up-to-date"}}) != nil {
+		t.Fatal("an all-current fleet must produce no error")
+	}
+}
+
+// Bug 5: a CORRUPT stamp must not be silently indistinguishable from NO
+// stamp — the parser is strict precisely to catch truncated writes.
+func TestCorruptStampIsReportedDistinctlyFromNoStamp(t *testing.T) {
+	base := fakeBaseline{head: strings.Repeat("a", 40)}
+	r := runner.Fake{Out: map[string]string{
+		"bare":    "",
+		"corrupt": "commit=abc\ninstalled_at=nonsense\n",
+	}}
+	rows := collect([]sshconf.Host{{Alias: "bare"}, {Alias: "corrupt"}}, r, base, testNow)
+	got := map[string]Row{}
+	for _, r := range rows {
+		got[r.Alias] = r
+	}
+	if got["bare"].Note != "" {
+		t.Fatalf("a missing stamp needs no note, got %q", got["bare"].Note)
+	}
+	if got["corrupt"].Note == "" {
+		t.Fatal("a corrupt stamp must carry a note so it is distinguishable from no stamp")
+	}
+	if !strings.Contains(renderTable(rows, testNow), got["corrupt"].Note) {
+		t.Fatal("the note must reach the rendered table")
+	}
+}
+
+// Regression: SilenceErrors (needed so the exitError path prints nothing)
+// must not swallow REAL errors. Execute() is responsible for printing them.
+func TestSilenceErrorsDoesNotHideRealErrors(t *testing.T) {
+	if !statusCmd.SilenceErrors {
+		t.Skip("SilenceErrors not set; nothing to guard")
+	}
+	src, err := os.ReadFile("root.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), `fmt.Fprintln(os.Stderr, "Error:", err)`) {
+		t.Fatal("Execute() must print non-exitError errors, or SilenceErrors makes them vanish")
 	}
 }

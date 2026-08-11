@@ -158,8 +158,14 @@ var keysSyncCmd = &cobra.Command{
 		}
 		r := runner.Exec{}
 		var failures int
+		names := make([]string, 0, len(mine))
+		for n := range mine {
+			names = append(names, n)
+		}
+		sort.Strings(names) // deterministic output across runs
 		for _, h := range hosts {
-			for name, pub := range mine {
+			for _, name := range names {
+				pub := mine[name]
 				if err := syncKeyToHost(r, h.Alias, pub); err != nil {
 					fmt.Fprintf(cmd.ErrOrStderr(), "FAIL %s <- %s: %v\n", h.Alias, name, err)
 					failures++
@@ -189,43 +195,60 @@ func keysDiffFor(r runner.Runner, host string, local []string) (keys.Diff, error
 	return keys.Compute(local, rk), nil
 }
 
-// pruneHost computes which authorized keys are foreign to the managed set and
+// PruneResult separates "there was nothing foreign" from "the operator said
+// no". Collapsing both into a bare false made the command prompt
+// "remove the above key(s)?" with nothing printed above it.
+type PruneResult struct {
+	Found   int  // foreign keys detected
+	Changed bool // removals actually applied
+}
+
+// removeKeyCmd builds the remote command that deletes ONE exact line from an
+// authorized_keys file.
+//
+// `grep -vxF` exits 1 when it selects no lines, which is the normal case when
+// removing a host's LAST key — so the status must be tolerated explicitly.
+// Chaining with && (as this first did) aborted and left the key in place.
+// Exit >1 is a real grep error and still fails.
+func removeKeyCmd(path, key string) string {
+	return fmt.Sprintf(
+		`tmp=$(mktemp) && { grep -vxF %[2]q %[1]s > "$tmp"; s=$?; [ "$s" -le 1 ]; } `+
+			`&& cat "$tmp" > %[1]s && rm -f "$tmp" && chmod 600 %[1]s`,
+		path, key)
+}
+
+// pruneHost reports which authorized keys are foreign to the managed set and
 // applies the removal ONLY when confirmed.
 //
-// This is the direct replacement for the absorbed script's --prune, which
-// blanket-overwrote authorized_keys from the workstation's *.pub and so
-// silently deleted CI keys, other machines and colleagues. Here removals are
-// printed first, one per line, and nothing is sent to the host unless the
-// caller confirms. Each removal is a targeted delete of that exact line —
-// never a wholesale rewrite.
-func pruneHost(out io.Writer, r runner.Runner, host string, local []string, confirmed bool) (bool, error) {
+// This replaces the absorbed script's --prune, which blanket-overwrote
+// authorized_keys from the workstation's *.pub and so silently deleted CI
+// keys, other machines and colleagues. Removals are printed first, one per
+// line, and each is a targeted delete of that exact line.
+func pruneHost(out io.Writer, r runner.Runner, host string, local []string, confirmed bool) (PruneResult, error) {
 	d, err := keysDiffFor(r, host, local)
 	if err != nil {
-		return false, err
+		return PruneResult{}, err
 	}
-	if len(d.ToRemove) == 0 {
-		return false, nil
+	res := PruneResult{Found: len(d.ToRemove)}
+	if res.Found == 0 {
+		return res, nil
 	}
-	fmt.Fprintf(out, "%s: would remove %d authorized key(s):\n", host, len(d.ToRemove))
+	fmt.Fprintf(out, "%s: would remove %d authorized key(s):\n", host, res.Found)
 	for _, k := range d.ToRemove {
 		fmt.Fprintf(out, "  - %s\n", k)
 	}
 	if !confirmed {
 		fmt.Fprintf(out, "%s: not confirmed — nothing changed\n", host)
-		return false, nil
+		return res, nil
 	}
 	for _, k := range d.ToRemove {
-		// grep -vxF selects everything EXCEPT this exact line, so only the
-		// named key goes; a rewrite from local state can't happen here.
-		cmdline := fmt.Sprintf(
-			"tmp=$(mktemp) && grep -vxF %[2]q %[1]s > \"$tmp\" && cat \"$tmp\" > %[1]s && rm -f \"$tmp\" && chmod 600 %[1]s",
-			authorizedKeys, k)
-		if _, err := r.Run(host, cmdline); err != nil {
-			return false, fmt.Errorf("%s: removing key: %w", host, err)
+		if _, err := r.Run(host, removeKeyCmd(authorizedKeys, k)); err != nil {
+			return res, fmt.Errorf("%s: removing key: %w", host, err)
 		}
 	}
-	fmt.Fprintf(out, "%s: removed %d key(s)\n", host, len(d.ToRemove))
-	return true, nil
+	res.Changed = true
+	fmt.Fprintf(out, "%s: removed %d key(s)\n", host, res.Found)
+	return res, nil
 }
 
 var pruneYes bool
@@ -249,22 +272,21 @@ var keysPruneCmd = &cobra.Command{
 		r := runner.Exec{}
 		out := cmd.OutOrStdout()
 		for _, h := range hosts {
-			confirmed := pruneYes
-			if !confirmed {
-				// Show the diff first, decline, then ask.
-				changed, err := pruneHost(out, r, h.Alias, local, false)
-				if err != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
-					continue
-				}
-				if !changed {
-					if !askYesNo(cmd, fmt.Sprintf("remove the above key(s) from %s?", h.Alias)) {
-						continue
-					}
-					confirmed = true
-				}
+			// One diff pass per host. Prompt only when something was
+			// actually found, then apply in a second, confirmed pass.
+			res, err := pruneHost(out, r, h.Alias, local, pruneYes)
+			if err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
+				continue
 			}
-			if _, err := pruneHost(out, r, h.Alias, local, confirmed); err != nil {
+			if res.Found == 0 || res.Changed {
+				continue // nothing foreign, or --yes already applied it
+			}
+			if !askYesNo(cmd, fmt.Sprintf("remove the above key(s) from %s?", h.Alias)) {
+				fmt.Fprintf(out, "%s: skipped\n", h.Alias)
+				continue
+			}
+			if _, err := pruneHost(out, r, h.Alias, local, true); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
 			}
 		}

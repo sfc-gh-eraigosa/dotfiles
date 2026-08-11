@@ -127,4 +127,7 @@ var tuiCmd = &cobra.Command{
 	},
 }
 
-func init() { rootCmd.AddCommand(tuiCmd) }
+func init() {
+	tuiCmd.Flags().StringVar(&flagRef, "ref", "origin/main", "baseline git ref")
+	rootCmd.AddCommand(tuiCmd)
+}

@@ -25,6 +25,10 @@ type Row struct {
 	Behind int
 	Commit string
 	Age    time.Time
+	// Note carries a qualifier the class alone cannot express — notably a
+	// stamp that exists but does not parse, which must not look identical
+	// to a host that has never been stamped.
+	Note string
 }
 
 // Baseliner answers "what is current, and how far off is this commit?".
@@ -49,12 +53,19 @@ func collect(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time.Tim
 			out, err := r.Run(h.Alias, "cat "+stampPath+" 2>/dev/null || true")
 			in := drift.Input{Reachable: err == nil, Baseline: base.Head()}
 			if err == nil {
-				if s, perr := stamp.Parse(out); perr == nil {
+				s, perr := stamp.Parse(out)
+				switch {
+				case perr == nil:
 					in.HaveStamp = true
 					in.Commit = s.Commit
 					in.IsAncestor, in.BehindCount = base.Compare(s.Commit)
 					row.Commit = short(s.Commit)
 					row.Age = s.InstalledAt
+				case strings.TrimSpace(out) != "":
+					// A stamp file exists but does not parse — a truncated or
+					// corrupted write. Reporting this as a plain "unknown"
+					// would hide a real problem behind "never installed".
+					row.Note = "corrupt stamp"
 				}
 			}
 			res := drift.Classify(in)
@@ -106,7 +117,11 @@ func renderTable(rows []Row, now time.Time) string {
 		if commit == "" {
 			commit = "-"
 		}
-		fmt.Fprintf(&b, "%-16s %-9s %-13s %s\n", r.Alias, commit, drift.FormatAge(now, r.Age), statusLabel(r))
+		status := statusLabel(r)
+		if r.Note != "" {
+			status += " (" + r.Note + ")"
+		}
+		fmt.Fprintf(&b, "%-16s %-9s %-13s %s\n", r.Alias, commit, drift.FormatAge(now, r.Age), status)
 	}
 	return b.String()
 }
@@ -118,11 +133,12 @@ func renderJSON(rows []Row) string {
 		Status      string `json:"status"`
 		Behind      int    `json:"behind"`
 		Commit      string `json:"commit"`
+		Note        string `json:"note,omitempty"`
 		InstalledAt string `json:"installed_at,omitempty"`
 	}
 	out := make([]jsonRow, 0, len(rows))
 	for _, r := range rows {
-		j := jsonRow{Alias: r.Alias, Status: r.Class, Behind: r.Behind, Commit: r.Commit}
+		j := jsonRow{Alias: r.Alias, Status: r.Class, Behind: r.Behind, Commit: r.Commit, Note: r.Note}
 		if !r.Age.IsZero() {
 			j.InstalledAt = r.Age.UTC().Format(time.RFC3339)
 		}
@@ -130,6 +146,21 @@ func renderJSON(rows []Row) string {
 	}
 	b, _ := json.MarshalIndent(out, "", "  ")
 	return string(b)
+}
+
+// exitError carries a process exit code out of RunE. Calling os.Exit inside
+// a command bypasses cobra's error handling and any deferred cleanup, and
+// makes the stale path impossible to test end-to-end.
+type exitError struct{ code int }
+
+func (e exitError) Error() string { return fmt.Sprintf("fleet: %d host(s) not up to date", e.code) }
+
+// exitErrorFor returns a non-nil exitError when any host is not up to date.
+func exitErrorFor(rows []Row) error {
+	if exitCode(rows) != 0 {
+		return exitError{code: 1}
+	}
+	return nil
 }
 
 // exitCode is non-zero when any host is not up to date, so `fleet status`
@@ -149,7 +180,13 @@ type gitBaseline struct {
 }
 
 func newGitBaseline(repo, ref string) (*gitBaseline, error) {
-	_ = exec.Command("git", "-C", repo, "fetch", "-q", "origin").Run()
+	// A failed fetch is not fatal (fleet must work offline) but it MUST be
+	// reported: classifying against a stale origin/main can call a host
+	// up-to-date when it is not, and silence there is indistinguishable
+	// from a correct answer.
+	if err := exec.Command("git", "-C", repo, "fetch", "-q", "origin").Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not fetch %s (%v) — baseline may be stale\n", repo, err)
+	}
 	out, err := exec.Command("git", "-C", repo, "rev-parse", ref).Output()
 	if err != nil {
 		return nil, fmt.Errorf("resolving %s in %s: %w", ref, repo, err)
@@ -172,8 +209,10 @@ func (g *gitBaseline) Compare(sha string) (bool, int) {
 }
 
 var statusCmd = &cobra.Command{
-	Use:   "status [host...]",
-	Short: "Show which hosts are out of sync with the latest dotfiles install",
+	Use:           "status [host...]",
+	Short:         "Show which hosts are out of sync with the latest dotfiles install",
+	SilenceErrors: true,
+	SilenceUsage:  true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		raw, err := os.ReadFile(flagConfig)
 		if err != nil {
@@ -185,6 +224,9 @@ var statusCmd = &cobra.Command{
 		}
 		hosts := selectHosts(all, args)
 		if len(hosts) == 0 {
+			if len(args) > 0 {
+				return fmt.Errorf("unknown host(s) %s in %s", strings.Join(args, ", "), flagConfig)
+			}
 			return fmt.Errorf("no fleet hosts found — mark hosts with %q in %s, or pass aliases explicitly", flagMarker, flagConfig)
 		}
 		base, err := newGitBaseline(flagRepo, flagRef)
@@ -198,10 +240,7 @@ var statusCmd = &cobra.Command{
 			fmt.Fprintf(cmd.OutOrStdout(), "baseline: %s %s\n\n", flagRef, short(base.Head()))
 			fmt.Fprint(cmd.OutOrStdout(), renderTable(rows, time.Now()))
 		}
-		if code := exitCode(rows); code != 0 {
-			os.Exit(code)
-		}
-		return nil
+		return exitErrorFor(rows)
 	},
 }
 

@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -19,11 +21,24 @@ var rootCmd = &cobra.Command{
 	Short: "Report and manage dotfiles install status across your hosts",
 }
 
-// Execute runs the root command.
+// Execute runs the root command. An exitError carries a deliberate exit code
+// (e.g. `status` finding a stale host) and is NOT an operational failure, so
+// it exits quietly; anything else prints as an error.
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
+	err := rootCmd.Execute()
+	if err == nil {
+		return
 	}
+	var ee exitError
+	if errors.As(err, &ee) {
+		// A deliberate exit code (e.g. `status` found a stale host). Not an
+		// operational failure, so nothing is printed.
+		os.Exit(ee.code)
+	}
+	// SilenceErrors is set on commands that return exitError, so real errors
+	// would otherwise vanish. Print them here.
+	fmt.Fprintln(os.Stderr, "Error:", err)
+	os.Exit(1)
 }
 
 func init() {

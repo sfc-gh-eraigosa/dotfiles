@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -78,7 +81,7 @@ func TestPruneRequiresConfirmationAndChangesNothingWhenDeclined(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if changed {
+	if changed.Changed {
 		t.Fatal("a declined prune must report no change")
 	}
 	for _, c := range sent {
@@ -101,7 +104,7 @@ func TestPruneAppliesOnlyWhenConfirmed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !changed {
+	if !changed.Changed {
 		t.Fatal("a confirmed prune should report a change")
 	}
 }
@@ -116,7 +119,69 @@ func TestPruneIsANoOpWhenNothingForeign(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if changed {
+	if changed.Changed {
 		t.Fatal("nothing foreign means nothing to do, even when confirmed")
+	}
+}
+
+// Bug 1: "nothing to remove" and "declined" must be distinguishable, or the
+// command prompts "remove the above key(s)?" with nothing shown above.
+func TestPruneDistinguishesNothingToRemoveFromDeclined(t *testing.T) {
+	var sb strings.Builder
+	clean := runner.Fake{Out: map[string]string{"alpha": "ssh-ed25519 AAA me@box"}}
+	res, err := pruneHost(&sb, clean, "alpha", []string{"ssh-ed25519 AAA me@box"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Found != 0 {
+		t.Fatalf("nothing foreign: Found = %d, want 0", res.Found)
+	}
+	if res.Changed {
+		t.Fatal("nothing foreign must not report a change")
+	}
+
+	var sb2 strings.Builder
+	dirty := runner.Fake{Out: map[string]string{"alpha": "ssh-ed25519 AAA me@box\nssh-ed25519 ZZZ ci@runner"}}
+	res2, err := pruneHost(&sb2, dirty, "alpha", []string{"ssh-ed25519 AAA me@box"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res2.Found != 1 {
+		t.Fatalf("one foreign key: Found = %d, want 1", res2.Found)
+	}
+	if res2.Changed {
+		t.Fatal("unconfirmed prune must not change anything")
+	}
+}
+
+// Bug 2: `grep -vxF` exits 1 when it selects NO lines, so removing a host's
+// last authorized key aborted the && chain and changed nothing.
+func TestRemoveKeyCommandHandlesRemovingTheLastKey(t *testing.T) {
+	dir := t.TempDir()
+	ak := filepath.Join(dir, "authorized_keys")
+	key := "ssh-ed25519 ZZZ ci@runner"
+	if err := os.WriteFile(ak, []byte(key+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("bash", "-c", removeKeyCmd(ak, key)).CombinedOutput()
+	if err != nil {
+		t.Fatalf("removing the last key failed: %v\n%s", err, out)
+	}
+	got, _ := os.ReadFile(ak)
+	if strings.TrimSpace(string(got)) != "" {
+		t.Fatalf("last key not removed, file still holds: %q", got)
+	}
+}
+
+func TestRemoveKeyCommandKeepsOtherKeys(t *testing.T) {
+	dir := t.TempDir()
+	ak := filepath.Join(dir, "authorized_keys")
+	os.WriteFile(ak, []byte("ssh-ed25519 AAA me@box\nssh-ed25519 ZZZ ci@runner\n"), 0o600)
+	if out, err := exec.Command("bash", "-c", removeKeyCmd(ak, "ssh-ed25519 ZZZ ci@runner")).CombinedOutput(); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	got, _ := os.ReadFile(ak)
+	if !strings.Contains(string(got), "AAA") || strings.Contains(string(got), "ZZZ") {
+		t.Fatalf("wrong lines removed: %q", got)
 	}
 }
