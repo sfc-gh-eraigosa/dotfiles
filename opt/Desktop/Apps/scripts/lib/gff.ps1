@@ -9,3 +9,11 @@ function Test-GffOn([string]$Key) {
     $val = [Environment]::GetEnvironmentVariable($var)
     return $val -ne 'false'   # fail-open: unset/anything-else => on
 }
+
+# Test-GffOptIn - FAIL-CLOSED mirror of opt/lib/gff.sh gff_opt_in for opt-in
+# (boolDefault: false) steps: ON only when the env var is exactly 'true'.
+function Test-GffOptIn([string]$Key) {
+    $var = 'GFF_' + ($Key.ToUpper() -replace '[.-]', '_')
+    return ([Environment]::GetEnvironmentVariable($var) -eq 'true')
+}
+

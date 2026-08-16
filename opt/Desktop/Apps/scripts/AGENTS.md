@@ -19,6 +19,16 @@ keyboard shortcuts, Wispr Flow voice dictation, app/font setup, and PowerToys.
 - **`setup-autostart.ps1`** — registers the elevated logon task for `macos.ahk` and,
   re-run standalone, **reloads** AutoHotkey after a re-deploy (self-elevates → UAC).
 - **`setup-apps.ps1`** — winget app install + Windows Terminal profiles/themes.
+- **`setup-security-audit.ps1`** — opt-in (gff `install.windows.security-audit`,
+  **fail-closed**) installer for the unattended weekly security audit: registers the
+  user-level `ClaudeSecurityAuditCollector` daily task, installs the collector to
+  `%USERPROFILE%\Claude\SecurityAudit`, and seeds the Claude analysis task prompt
+  (never overwrites an evolving baseline). `-Status` / `-Uninstall` / `-At HH:mm`.
+  See `docs/security-audit.md`.
+- **`security-audit-collect.ps1`** — the read-only collector that task runs:
+  snapshots services / scheduled tasks / startup commands / AppData processes /
+  Defender into `latest-audit.txt` (+ a copy into the Claude task folder, dated
+  history, optional Google Drive fallback copy).
 
 User-facing runbook: **`WISPR-FLOW.md`**. Overview: **`README.md`**.
 

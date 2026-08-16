@@ -144,6 +144,9 @@ sets:
       - path: install.windows.portproxy
         description: Gates the standalone refresh-wsl-portproxy.ps1 script on the Windows side.
         boolDefault: true
+      - path: install.windows.security-audit
+        description: Opt-in (fail-closed) unattended weekly security audit - setup-security-audit.ps1 registers the ClaudeSecurityAuditCollector task and seeds the Claude analysis task. Enable with gff set install.windows.security-audit true.
+        boolDefault: false
 
   # research-rubric.* — tunable weights for the research-evaluation skill's rubric.
   # Smart PUBLIC defaults live here; anyone tunes them on demand via the gff user
