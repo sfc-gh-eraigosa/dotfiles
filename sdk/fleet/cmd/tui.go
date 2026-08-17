@@ -47,6 +47,7 @@ func (m model) View() string {
 	b.WriteString("fleet — u: update  r: refresh  q: quit\n\n")
 	if len(m.rows) == 0 {
 		b.WriteString("  no fleet hosts found\n")
+		b.WriteString("  run `fleet discover` to see adoptable ssh-config hosts, then `fleet add <alias>`\n")
 		return b.String()
 	}
 	fmt.Fprintf(&b, "  %-16s %-9s %-13s %s\n", "HOST", "COMMIT", "LAST RUN", "STATUS")

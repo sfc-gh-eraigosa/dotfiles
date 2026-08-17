@@ -37,6 +37,10 @@ Host web-01          # fleet
 Pattern hosts (`Host *.internal`) are skipped — only concrete aliases are polled.
 Override the config path with `--config` and the marker with `--marker`.
 
+Most of your hosts are probably in `~/.ssh/config` already. You don't re-declare
+them — `fleet discover` shows which are adoptable and `fleet add <alias>` marks
+one in place (see below), no hostname re-typing required.
+
 ## Subcommands
 
 ### `fleet status [host...]`
@@ -81,20 +85,41 @@ proceeds, but first preserves the host's uncommitted work in a rescue worktree
 (`git add -A` onto a `fleet-rescue/<ts>` branch — not `git stash`, which silently
 drops untracked files). Nothing is ever discarded.
 
-### `fleet add` / `fleet remove`
+### `fleet discover`
 
-Edit the ssh-config inventory. Every write takes a timestamped backup first and
-keeps `0600`.
+Lists every concrete host in `~/.ssh/config` and whether it's already in the
+fleet — the `available` rows are the ones you can adopt. `--json` for scripts.
 
 ```sh
-fleet add web-02 --hostname 10.0.0.22 --user deploy    # add a #fleet Host block
-fleet add web-02 --hostname 10.0.0.22 --dry-run        # print the diff, write nothing
+fleet discover
+# HOST             HOSTNAME             STATUS
+# nano             10.0.0.5             available
+# web              10.0.0.1             in-fleet
+#
+# 1 host(s) available — adopt one with `fleet add <alias>`
+```
+
+### `fleet add` / `fleet remove`
+
+`add` has two modes and picks automatically:
+
+- **Adopt** — if the alias is *already* a Host block in `~/.ssh/config`, `add`
+  just marks it `#fleet` in place, preserving every directive. No `--hostname`,
+  because ssh already knows how to reach it. This is the common case.
+- **Create** — if the alias is *not* in the config, `add` writes a new marked
+  block; that genuinely needs `--hostname`.
+
+```sh
+fleet add nano                                         # adopt an existing entry
+fleet add web-02 --hostname 10.0.0.22 --user deploy    # create a new #fleet block
+fleet add nano --dry-run                               # print the diff, write nothing
 fleet remove web-02                                    # unmark — keeps SSH access
 fleet remove web-02 --purge                            # delete the Host block entirely
 ```
 
-`remove` only **unmarks** by default: leaving the fleet never costs you SSH access.
-`--purge` is the destructive form.
+Adopting is idempotent (`already in the fleet`) and reversible (`remove` unmarks
+it, restoring the original block). `remove` only **unmarks** by default: leaving
+the fleet never costs you SSH access. `--purge` is the destructive form.
 
 ### `fleet keys list` / `sync` / `prune`
 

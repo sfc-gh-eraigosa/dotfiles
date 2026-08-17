@@ -17,9 +17,10 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | Command | Does |
 | :-- | :-- |
 | `fleet status [host...]` | table of host · commit · last run · status; `--json`; exits non-zero if any host is stale |
+| `fleet discover` | list every concrete ssh-config host as `in-fleet` / `available`; `--json` |
 | `fleet tui` | same rows interactively; `u` updates the selected host |
 | `fleet update <host>...` | fetch → `pull --ff-only` → `install.sh` over `ssh -t`, one host at a time |
-| `fleet add <alias> --hostname H` | add a `#fleet`-marked Host block (`--dry-run`) |
+| `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
 | `fleet remove <alias> [--purge]` | unmark (keeps SSH access); `--purge` deletes the block |
 | `fleet keys list\|sync\|prune` | audit / authorize / remove authorized keys |
 
@@ -42,6 +43,10 @@ without opening a socket.
 - **No private key ever leaves the workstation.** Sync authorizes public keys only.
 - **`prune` is diff-first**: prints each removal, applies nothing without confirmation, and
   deletes only that exact line — never rewrites `authorized_keys` from local state.
+- **`add` adopts before it creates.** An alias already in `~/.ssh/config` is marked
+  in place (`sshconf.Mark`), preserving every directive — `--hostname` is required
+  *only* when writing a genuinely new block. Adoption is idempotent and reversible
+  by `remove`.
 - **`remove` unmarks; only `--purge` deletes.** Leaving the fleet never costs SSH access.
 - **Every ssh-config write takes a timestamped backup first** and keeps `0600`.
 - **A dirty clone is skipped** unless `--force`, which *preserves* work in a rescue worktree

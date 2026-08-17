@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
@@ -50,9 +51,51 @@ var (
 	addHost   sshconf.Host
 )
 
+// addAction records what resolveAdd did, so the command can print the right
+// message and skip a pointless write when nothing changed.
+type addAction int
+
+const (
+	actionCreated addAction = iota // a brand-new Host block written from flags
+	actionAdopted                  // an existing ssh-config block marked in place
+	actionAlready                  // already in the fleet — no change
+)
+
+// resolveAdd decides how <alias> joins the fleet:
+//   - already a concrete Host block and marked -> nothing to do.
+//   - already a concrete Host block, unmarked  -> adopt it (Mark in place),
+//     ignoring any connection flags so the operator need not re-type details
+//     ssh already knows.
+//   - absent -> create a new block; that genuinely needs a --hostname.
+//
+// It is a pure function of the config text so the branch logic is unit-tested.
+func resolveAdd(cfg string, h sshconf.Host, marker string) (string, addAction, error) {
+	hosts, err := sshconf.Parse(cfg, marker)
+	if err != nil {
+		return "", 0, err
+	}
+	for _, e := range hosts {
+		if e.Alias != h.Alias {
+			continue
+		}
+		if e.Fleet {
+			return cfg, actionAlready, nil
+		}
+		next, err := sshconf.Mark(cfg, h.Alias, marker)
+		return next, actionAdopted, err
+	}
+	if strings.TrimSpace(h.HostName) == "" {
+		return "", 0, fmt.Errorf(
+			"%q is not in the ssh config; pass --hostname to add a new host, or run `fleet discover` to adopt an existing one",
+			h.Alias)
+	}
+	next, err := sshconf.Add(cfg, h, marker)
+	return next, actionCreated, err
+}
+
 var addCmd = &cobra.Command{
 	Use:   "add <alias>",
-	Short: "Add a host to the fleet",
+	Short: "Add a host to the fleet (adopts an existing ssh-config entry, or creates one with --hostname)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cur, err := readConfig(flagConfig)
@@ -60,15 +103,25 @@ var addCmd = &cobra.Command{
 			return err
 		}
 		addHost.Alias = args[0]
-		next, err := sshconf.Add(cur, addHost, flagMarker)
+		next, act, err := resolveAdd(cur, addHost, flagMarker)
 		if err != nil {
 			return err
 		}
-		if err := applyConfig(cmd.OutOrStdout(), flagConfig, next, addDryRun); err != nil {
+		out := cmd.OutOrStdout()
+		if act == actionAlready {
+			fmt.Fprintf(out, "%s is already in the fleet\n", addHost.Alias)
+			return nil
+		}
+		if err := applyConfig(out, flagConfig, next, addDryRun); err != nil {
 			return err
 		}
 		if !addDryRun {
-			fmt.Fprintf(cmd.OutOrStdout(), "added %s to the fleet\n", addHost.Alias)
+			switch act {
+			case actionAdopted:
+				fmt.Fprintf(out, "adopted %s into the fleet (marked its existing ssh config entry)\n", addHost.Alias)
+			default:
+				fmt.Fprintf(out, "added %s to the fleet\n", addHost.Alias)
+			}
 		}
 		return nil
 	},
@@ -112,12 +165,11 @@ var removeCmd = &cobra.Command{
 }
 
 func init() {
-	addCmd.Flags().StringVar(&addHost.HostName, "hostname", "", "hostname or IP (required)")
+	addCmd.Flags().StringVar(&addHost.HostName, "hostname", "", "hostname or IP (required only when creating a new host)")
 	addCmd.Flags().StringVar(&addHost.User, "user", "", "ssh user")
 	addCmd.Flags().StringVar(&addHost.Port, "port", "", "ssh port")
 	addCmd.Flags().StringVar(&addHost.Identity, "identity", "", "identity file")
 	addCmd.Flags().BoolVar(&addDryRun, "dry-run", false, "print the result without writing")
-	_ = addCmd.MarkFlagRequired("hostname")
 
 	removeCmd.Flags().BoolVar(&rmPurge, "purge", false, "delete the Host block entirely")
 	removeCmd.Flags().BoolVar(&rmDryRun, "dry-run", false, "print the result without writing")

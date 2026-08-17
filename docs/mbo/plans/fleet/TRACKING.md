@@ -105,6 +105,7 @@ silently patched.
 
 | Date | Session | What advanced |
 | :-- | :-- | :-- |
+| 2026-08-16 | adopt + discover | Usability gap: `add <alias>` required `--hostname` even when the alias was already in `~/.ssh/config`. Added `sshconf.Mark` (in-place adoption, inverse of `Unmark`), taught `add` to adopt-before-create, and added `fleet discover` (in-fleet vs available) + TUI empty-state hint. TDD; live smoke test proved `add nano` adopts and preserves `User pi`. Also added the missing `sdk/fleet/README.md`. Gate: 74%. |
 | 2026-08-11 | review fixes | Self-review of PR #224 found 5 real gaps + 3 convention gaps; all fixed TDD. Two were correctness bugs in `keys prune` — the highest-stakes feature. Also caught a regression introduced BY the fix (SilenceErrors hid real errors) before it shipped. |
 | 2026-08-10 | build s3 | Tasks 9-12. keys diff 100%, public-key-only sync (live `keys list` across 3 hosts), diff-first prune, update+dirty policy. Caught and fixed a data-loss defect in the plan's rescue mechanism. Gate: 73%. |
 | 2026-08-10 | build s2 | Tasks 7-8. Live status against 3 real hosts (all `unknown` — correct, stamp not yet deployed). Membership round-trip byte-identical. Scrubbed local identity from evidence + rewrote branch history (unpushed) after finding hostnames/paths in a committed capture. |

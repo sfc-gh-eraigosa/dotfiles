@@ -5,7 +5,67 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
 )
+
+// Adopting a host that is ALREADY in ~/.ssh/config must not require re-typing
+// its connection details — that was the whole friction. resolveAdd marks the
+// existing block in place and keeps its directives.
+func TestResolveAddAdoptsExistingHostWithoutHostname(t *testing.T) {
+	cfg := "Host box\n    HostName 10.0.0.7\n    User ops\n"
+	next, act, err := resolveAdd(cfg, sshconf.Host{Alias: "box"}, "#fleet")
+	if err != nil {
+		t.Fatalf("resolveAdd: %v", err)
+	}
+	if act != actionAdopted {
+		t.Fatalf("expected actionAdopted, got %v", act)
+	}
+	hosts, _ := sshconf.Parse(next, "#fleet")
+	if len(hosts) != 1 || !hosts[0].Fleet || hosts[0].HostName != "10.0.0.7" || hosts[0].User != "ops" {
+		t.Fatalf("adoption lost fields or marker: %+v\n%s", hosts, next)
+	}
+}
+
+// Creating a genuinely new host still needs a hostname — you can't write a
+// usable Host block without one. The error must point the user at discovery.
+func TestResolveAddCreateRequiresHostname(t *testing.T) {
+	_, _, err := resolveAdd("", sshconf.Host{Alias: "ghost"}, "#fleet")
+	if err == nil {
+		t.Fatal("expected an error creating a new host with no hostname")
+	}
+	if !strings.Contains(err.Error(), "discover") {
+		t.Fatalf("error should mention `discover`: %v", err)
+	}
+}
+
+func TestResolveAddCreatesNewHostWithHostname(t *testing.T) {
+	next, act, err := resolveAdd("", sshconf.Host{Alias: "web", HostName: "10.0.0.9"}, "#fleet")
+	if err != nil {
+		t.Fatalf("resolveAdd: %v", err)
+	}
+	if act != actionCreated {
+		t.Fatalf("expected actionCreated, got %v", act)
+	}
+	hosts, _ := sshconf.Parse(next, "#fleet")
+	if len(hosts) != 1 || !hosts[0].Fleet || hosts[0].HostName != "10.0.0.9" {
+		t.Fatalf("create did not produce a marked host: %+v\n%s", hosts, next)
+	}
+}
+
+func TestResolveAddAlreadyInFleetIsNoOp(t *testing.T) {
+	cfg := "Host box  #fleet\n    HostName 10.0.0.7\n"
+	next, act, err := resolveAdd(cfg, sshconf.Host{Alias: "box"}, "#fleet")
+	if err != nil {
+		t.Fatalf("resolveAdd: %v", err)
+	}
+	if act != actionAlready {
+		t.Fatalf("expected actionAlready, got %v", act)
+	}
+	if next != cfg {
+		t.Fatalf("no-op must not change the config:\n%s", next)
+	}
+}
 
 func TestWriteConfigTakesBackupFirst(t *testing.T) {
 	dir := t.TempDir()

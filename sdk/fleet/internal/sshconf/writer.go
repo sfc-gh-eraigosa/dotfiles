@@ -104,6 +104,36 @@ func Unmark(cfg, alias, marker string) (string, error) {
 	return normalize(strings.Join(out, "\n")), nil
 }
 
+// Mark adds the fleet marker to an existing Host block in place, keeping every
+// directive. It is the inverse of Unmark and the basis of "adopting" a host
+// already present in ~/.ssh/config: no HostName/User need be re-typed. Marking
+// an already-marked block is a no-op (idempotent); an unknown alias is an error.
+func Mark(cfg, alias, marker string) (string, error) {
+	lines := strings.Split(cfg, "\n")
+	start, end, ok := blockRange(lines, alias)
+	if !ok {
+		return "", fmt.Errorf("sshconf: host %q not found", alias)
+	}
+	for i := start; i < end; i++ {
+		_, comment := splitComment(strings.TrimSpace(lines[i]))
+		if hasMarker(comment, marker) {
+			return normalize(cfg), nil // already in the fleet
+		}
+	}
+	if _, comment := splitComment(strings.TrimSpace(lines[start])); comment == "" {
+		// No comment on the Host line: append the marker there.
+		lines[start] = strings.TrimRight(lines[start], " \t") + "  " + marker
+	} else {
+		// The Host line already carries a comment; add an own-line marker just
+		// below it so the operator's comment is left untouched. Parse detects a
+		// marker on any comment line in the block, and Unmark removes it.
+		out := append([]string{}, lines[:start+1]...)
+		out = append(out, "    "+marker)
+		lines = append(out, lines[start+1:]...)
+	}
+	return normalize(strings.Join(lines, "\n")), nil
+}
+
 // Purge deletes the whole Host block — for a machine that is genuinely gone.
 func Purge(cfg, alias string) (string, error) {
 	lines := strings.Split(cfg, "\n")

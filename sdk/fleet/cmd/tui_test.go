@@ -40,6 +40,14 @@ func TestTUIEmptyFleetDoesNotPanic(t *testing.T) {
 	}
 }
 
+// An empty fleet is the first thing a new user sees — it must tell them how to
+// populate it, not just say "none found".
+func TestTUIEmptyStatePointsAtDiscover(t *testing.T) {
+	if !strings.Contains(newModel(nil, testNow).View(), "fleet discover") {
+		t.Fatalf("empty state must guide the user to `fleet discover`:\n%s", newModel(nil, testNow).View())
+	}
+}
+
 func TestTUIShowsWorstFirstLikeTheTable(t *testing.T) {
 	m := newModel([]Row{
 		{Alias: "good", Class: "up-to-date"},

@@ -164,3 +164,79 @@ func TestUnmarkPreservesTrailingNewline(t *testing.T) {
 		t.Fatalf("Unmark mangled the trailing newline: %q", out)
 	}
 }
+
+// Adopting a host already present in ~/.ssh/config must NOT re-render the block
+// from scratch (that would drop directives the operator never re-typed). Mark
+// adds the marker in place and preserves every field.
+func TestMarkAdoptsExistingBlockInPlace(t *testing.T) {
+	cfg := "Host box\n    HostName 10.0.0.7\n    User ops\n    Port 2222\n"
+	out, err := Mark(cfg, "box", "#fleet")
+	if err != nil {
+		t.Fatalf("Mark: %v", err)
+	}
+	hosts, _ := Parse(out, "#fleet")
+	if len(hosts) != 1 {
+		t.Fatalf("expected one block, got %d:\n%s", len(hosts), out)
+	}
+	h := hosts[0]
+	if !h.Fleet {
+		t.Fatalf("Mark did not add the marker:\n%s", out)
+	}
+	if h.HostName != "10.0.0.7" || h.User != "ops" || h.Port != "2222" {
+		t.Fatalf("Mark lost a directive: %+v\n%s", h, out)
+	}
+}
+
+func TestMarkIsIdempotent(t *testing.T) {
+	cfg := "Host box\n    HostName 10.0.0.7\n"
+	once, err := Mark(cfg, "box", "#fleet")
+	if err != nil {
+		t.Fatalf("Mark: %v", err)
+	}
+	twice, err := Mark(once, "box", "#fleet")
+	if err != nil {
+		t.Fatalf("Mark twice: %v", err)
+	}
+	if once != twice {
+		t.Fatalf("Mark not idempotent:\n--- once ---\n%s\n--- twice ---\n%s", once, twice)
+	}
+}
+
+func TestMarkUnknownAliasIsAnError(t *testing.T) {
+	if _, err := Mark("Host beta\n", "nope", "#fleet"); err == nil {
+		t.Fatal("Mark: expected an error for an unknown alias")
+	}
+}
+
+// Mark then Unmark restores the original block when it had no prior comment —
+// adoption is fully reversible.
+func TestMarkThenUnmarkRoundTrips(t *testing.T) {
+	cfg := "Host box\n    HostName 10.0.0.7\n"
+	marked, err := Mark(cfg, "box", "#fleet")
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, err := Unmark(marked, "box", "#fleet")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if back != cfg {
+		t.Fatalf("Mark->Unmark not a round-trip:\nwant %q\ngot  %q", cfg, back)
+	}
+}
+
+// A pre-existing, non-marker comment on the Host line must survive adoption.
+func TestMarkPreservesExistingComment(t *testing.T) {
+	cfg := "Host box  # my jump box\n    HostName 10.0.0.7\n"
+	out, err := Mark(cfg, "box", "#fleet")
+	if err != nil {
+		t.Fatalf("Mark: %v", err)
+	}
+	if !strings.Contains(out, "my jump box") {
+		t.Fatalf("Mark clobbered an existing comment:\n%s", out)
+	}
+	hosts, _ := Parse(out, "#fleet")
+	if len(hosts) != 1 || !hosts[0].Fleet {
+		t.Fatalf("Mark did not adopt the host:\n%s", out)
+	}
+}
