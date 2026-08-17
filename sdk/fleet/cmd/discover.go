@@ -54,9 +54,42 @@ func renderDiscoverJSON(rows []discoverRow) string {
 	return string(buf)
 }
 
+// adoptAll marks every available host in ONE pass, returning the new config
+// and the aliases adopted (table order). A single pass matters: N separate
+// `fleet add` runs would take N backups and rewrite the file N times, widening
+// the window in which a partial write costs SSH access to every machine.
+//
+// It returns the config unchanged when nothing is available, so the caller can
+// skip the write — and therefore the backup — entirely.
+func adoptAll(cfg, marker string) (string, []string, error) {
+	next := cfg
+	var adopted []string
+	for _, r := range discoverRows(cfg, marker) {
+		if r.InFleet {
+			continue
+		}
+		marked, err := sshconf.Mark(next, r.Alias, marker)
+		if err != nil {
+			return "", nil, fmt.Errorf("adopting %s: %w", r.Alias, err)
+		}
+		next = marked
+		adopted = append(adopted, r.Alias)
+	}
+	if len(adopted) == 0 {
+		return cfg, nil, nil
+	}
+	return next, adopted, nil
+}
+
+var (
+	discoverAddAll bool
+	discoverYes    bool
+	discoverDryRun bool
+)
+
 var discoverCmd = &cobra.Command{
 	Use:   "discover",
-	Short: "List ssh-config hosts and which are in the fleet (adopt an available one with `fleet add`)",
+	Short: "List ssh-config hosts and which are in the fleet (`--add-all` adopts every available one)",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := readConfig(flagConfig)
@@ -65,24 +98,56 @@ var discoverCmd = &cobra.Command{
 		}
 		rows := discoverRows(cfg, flagMarker)
 		out := cmd.OutOrStdout()
-		if flagJSON {
+		if flagJSON && !discoverAddAll {
 			fmt.Fprintln(out, renderDiscoverJSON(rows))
 			return nil
 		}
 		fmt.Fprint(out, renderDiscoverTable(rows))
-		var available int
+
+		var available []string
 		for _, r := range rows {
 			if !r.InFleet {
-				available++
+				available = append(available, r.Alias)
 			}
 		}
-		if available > 0 {
-			fmt.Fprintf(out, "\n%d host(s) available — adopt one with `fleet add <alias>`\n", available)
+		if !discoverAddAll {
+			if len(available) > 0 {
+				fmt.Fprintf(out, "\n%d host(s) available — adopt one with `fleet add <alias>`,"+
+					" or all of them with `fleet discover --add-all`\n", len(available))
+			}
+			return nil
 		}
+
+		if len(available) == 0 {
+			fmt.Fprintln(out, "\nnothing to adopt — every ssh-config host is already in the fleet")
+			return nil
+		}
+		// Name every host before touching anything: this edits the file every
+		// remote command depends on.
+		fmt.Fprintf(out, "\nwill adopt %d host(s): %s\n", len(available), strings.Join(available, ", "))
+
+		next, adopted, err := adoptAll(cfg, flagMarker)
+		if err != nil {
+			return err
+		}
+		if discoverDryRun {
+			return applyConfig(out, flagConfig, next, true)
+		}
+		if !discoverYes && !askYesNo(cmd, "adopt them into the fleet?") {
+			fmt.Fprintln(out, "nothing changed")
+			return nil
+		}
+		if err := applyConfig(out, flagConfig, next, false); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "adopted %d host(s) into the fleet: %s\n", len(adopted), strings.Join(adopted, ", "))
 		return nil
 	},
 }
 
 func init() {
+	discoverCmd.Flags().BoolVar(&discoverAddAll, "add-all", false, "adopt every available ssh-config host into the fleet")
+	discoverCmd.Flags().BoolVar(&discoverYes, "yes", false, "skip the confirmation prompt (non-interactive)")
+	discoverCmd.Flags().BoolVar(&discoverDryRun, "dry-run", false, "print the resulting config without writing")
 	rootCmd.AddCommand(discoverCmd)
 }

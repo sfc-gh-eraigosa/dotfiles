@@ -17,7 +17,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | Command | Does |
 | :-- | :-- |
 | `fleet status [host...]` | table of host · commit · last run · status; `--json`; exits non-zero if any host is stale |
-| `fleet discover` | list every concrete ssh-config host as `in-fleet` / `available`; `--json` |
+| `fleet discover` | list every concrete ssh-config host as `in-fleet` / `available`; `--json`; `--add-all` bulk-adopts (one pass, one backup; `--dry-run` / `--yes`) |
 | `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v` selection, concurrent background updates (`--jobs`), `s` ssh, `?` help |
 | `fleet update <host>...` | fetch → checkout `--ref` (default `main`) → `pull --ff-only` → `install.sh` over `ssh -t`, one host at a time |
 | `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
@@ -71,6 +71,10 @@ without opening a socket.
   timestamp is tty/session-scoped, so a separate priming connection may not
   carry; `sudo -n true` gates the install so it can't run with every privileged
   step silently skipping (exit 91 = bad password, 92 = did not persist).
+- **Bulk adopt is one pass, one write.** `discover --add-all` accumulates every
+  `Mark` into a single config then writes once — N separate writes would mean N
+  backups and N windows in which a partial write costs SSH access. Nothing
+  available ⇒ no write at all.
 - **The answer form starts empty every wave** — no inherited answers.
 - **TUI cursor/selection are alias-keyed**, never index-keyed — rows re-sort as they
   stream in.

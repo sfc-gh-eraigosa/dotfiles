@@ -163,8 +163,20 @@ fleet discover
 # nano             10.0.0.5             available
 # web              10.0.0.1             in-fleet
 #
-# 1 host(s) available — adopt one with `fleet add <alias>`
+# 1 host(s) available — adopt one with `fleet add <alias>`,
+# or all of them with `fleet discover --add-all`
+
+fleet discover --add-all              # adopt every available host (confirms first)
+fleet discover --add-all --dry-run    # show the resulting config, write nothing
+fleet discover --add-all --yes        # non-interactive
 ```
+
+`--add-all` marks every available host in **one pass**, so the whole batch is a
+single write and a single backup rather than one per host — a partial write to
+`~/.ssh/config` would cost SSH access to every machine. It names the hosts and
+asks before touching anything, does nothing when everything is already in the
+fleet (no write, no backup), and is fully reversible: `fleet remove <alias>`
+restores the original block byte-for-byte.
 
 ### `fleet add` / `fleet remove`
 
