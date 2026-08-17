@@ -63,13 +63,51 @@ distinct from never-installed.
 
 ### `fleet tui`
 
-The same rows, interactively (Bubble Tea). Arrow keys move within bounds; `u`
-updates the selected host (releases the terminal so an `ssh -t` sudo prompt reaches
-you); `q` / `Ctrl+C` quits. `--ref` selects the git ref to update toward.
+The interactive dashboard. Opens **instantly** and streams rows in as each host
+answers — a slow or unreachable host never blocks the view.
 
 ```sh
 fleet tui
+fleet tui --jobs 8                       # more concurrent updates
+fleet tui --update-ref feature/x         # update targets that ref instead of main
 ```
+
+| Key | Does |
+|-----|------|
+| `j` `k` `↓` `↑` | move cursor |
+| `gg` / `G` | first / last host |
+| `ctrl+d` / `ctrl+u` | half page down / up |
+| `ctrl+f` / `ctrl+b` | page down / up |
+| `/` | regex search — smartcase, live match count, inline error on a bad pattern |
+| `n` / `N` | next / previous match (wraps) |
+| `space` | toggle selection on the cursor host |
+| `v` | visual range select (extend with motions) |
+| `esc` | clear search / selection |
+| `u` | update the selection (or the cursor host) |
+| `s` | ssh to the cursor host |
+| `r` | refresh |
+| `?` | help overlay |
+| `q` | quit (guarded while updates run) |
+
+Rows are colored by status (green up-to-date · yellow behind · magenta
+divergent · dim unknown · red unreachable) and degrade cleanly on terminals
+without color.
+
+**Updates run concurrently in the background.** `u` prechecks each target with
+`sudo -n true`, then updates up to `--jobs` (default 4) hosts at once *without
+taking the terminal* — each row shows `queued → updating → ok/FAIL`, and the
+TUI stays fully interactive: you can navigate, search, and even `r` refresh
+while a wave runs (hosts being updated are excluded from the re-poll).
+
+Background runs use `ssh -o BatchMode=yes`, so a host that unexpectedly asks
+for a password **fails fast with the reason on its row** instead of hanging on
+input it cannot receive. Hosts whose precheck says they *need* a password are
+routed to a serial interactive handoff that runs after the background wave —
+there the terminal is genuinely released so the sudo prompt reaches you.
+
+Selection and cursor are keyed by host **alias**, not row position, so the
+worst-first re-sort that happens as rows stream in never moves your cursor or
+corrupts a selection.
 
 ### `fleet update <host>...`
 

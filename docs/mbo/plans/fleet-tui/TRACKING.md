@@ -20,20 +20,20 @@
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| 1 — mechanical split + alias cursor | todo | | | zero behavior change; tui.go < 60 lines |
-| 2 — theme + styled frames (F3) | todo | | | Ascii-profile goldens |
-| 3 — viewport + resize (F4c,d) | todo | | | clampViewport invariant |
-| 4 — vim motions (F4a,b) | todo | | | gg pending-key state |
-| 5 — streaming collect + spinner (F1) | todo | | | collectOne extraction; headless frozen |
-| 6 — refresh `r` (F2) | todo | | | v1's dead key becomes real |
-| 7 — `/` search (F5) | todo | | | smartcase; invalid-regex UX |
-| 8 — `n`/`N` (F6) | todo | | | wraparound both ways |
-| 9 — selection + visual (F7) | todo | | | alias-keyed; survives refresh |
-| 10 — concurrent bg update engine (F8,F9,F2b) | todo | | | ≤ jobs slots; BatchMode fast-FAIL; TUI stays live; refresh excludes updating |
-| 11 — interactive fallback queue (F13) | todo | | | sudo-precheck routing; serial handoffs after the wave |
-| 12 — `s` ssh action (F10) | todo | | | argv exactly `ssh <alias>`; blocked while updating |
-| 13 — help overlay + polish (F11,F12) | todo | | | overlay from the keymap table; quit guard |
-| 14 — docs + gate | todo | | | fleet ≥60%, cmd ≥55%, vet, leak sweep |
+| 1 — mechanical split + alias cursor | **done** | see log | `go build` OK; tui.go 55 lines; TestRowArrivalResortsButKeepsCursorOnItsAlias | zero behavior change; tui.go < 60 lines |
+| 2 — theme + styled frames (F3) | **done** | see log | 11 demo frames render + fit width; `evidence/demo/frames.txt` | Ascii-profile goldens |
+| 3 — viewport + resize (F4c,d) | **done** | see log | TestWindowResizeKeepsCursorVisible, TestHalfPageMovesAndStaysInBounds | clampViewport invariant |
+| 4 — vim motions (F4a,b) | **done** | see log | TestGGJumpsTopAndGJumpsBottom, TestLoneGIsCancelledByTheNextKey | gg pending-key state |
+| 5 — streaming collect + spinner (F1) | **done** | see log | probeHost extracted; headless status tests unchanged-green | collectOne extraction; headless frozen |
+| 6 — refresh `r` (F2) | **done** | see log | TestRefreshRepollsKeepingCursorAndSelection | v1's dead key becomes real |
+| 7 — `/` search (F5) | **done** | see log | smartcase + invalid-regex + mode-swallow tests | smartcase; invalid-regex UX |
+| 8 — `n`/`N` (F6) | **done** | see log | TestNextPrevMatchWrapsBothWays | wraparound both ways |
+| 9 — selection + visual (F7) | **done** | see log | TestSpaceTogglesSelectionByAliasAcrossResort | alias-keyed; survives refresh |
+| 10 — concurrent bg update engine (F8,F9,F2b) | **done** | see log | TestBackgroundWaveNeverExceedsJobLimit (running<=jobs at every step), FailedUpdateAdvances, RefreshSkipsUpdating | ≤ jobs slots; BatchMode fast-FAIL; TUI stays live; refresh excludes updating |
+| 11 — interactive fallback queue (F13) | **done** | see log | TestPrecheckRoutes..., TestInteractiveFallbackRunsOnlyAfterTheWaveDrains | sudo-precheck routing; serial handoffs after the wave |
+| 12 — `s` ssh action (F10) | **done** | see log | TestSSHIsBlockedWhileThatHostUpdates | argv exactly `ssh <alias>`; blocked while updating |
+| 13 — help overlay + polish (F11,F12) | **done** | see log | overlay from keyHelp; TestQuitIsGuardedWhileUpdatesRun | overlay from the keymap table; quit guard |
+| 14 — docs + gate | **done** | see log | `scripts/test.sh` -> OK: coverage for fleet is 80% (min 60); go vet clean; 67 tests | fleet ≥60%, cmd ≥55%, vet, leak sweep |
 | 15 — HUMAN STOP: live capture | todo | | | tmux; 2 concurrent updates + navigation; sudo prompt on fallback |
 
 ## 2. Feature → proof matrix (spec §5)
@@ -85,5 +85,6 @@
 
 | Date | Session | What advanced |
 | :-- | :-- | :-- |
+| 2026-08-16 | build | Tasks 1-14 implemented in PR #227 (same-PR per operator). Split tui.go into model/view/keys/cmds; probeHost extracted so headless status is untouched. Concurrent background update engine + sudo-precheck fallback. 67 tests pass, `go vet` clean, **coverage 58.4% cmd / 80% fleet** (was 40.3/74). Two real defects caught by the new gates: lipgloss profile 0 is TrueColor not ASCII (goldens would have been colour-dependent), and a long remote failure log overflowed the row (now truncated). Demo: `evidence/demo/frames.txt`, 11 frames. Task 15 (live capture) still human-gated. |
 | 2026-08-16 | mbo-amend | Operator: make sync + update concurrent in the TUI. Root cause named: ExecProcess suspends the whole TUI, so anything routed through it is inherently serial. Redesigned F8 as a background-first engine (≤ --jobs concurrent, BatchMode fast-FAIL, per-row log) with sudo-precheck routing to a serial interactive fallback (new F13); refresh works mid-wave excluding updating hosts (F2b); in-flight ownership invariant added. Plan now 15 tasks. |
 | 2026-08-16 | mbo | Design + spec + plan + trio authored; worktree reset off a stale local main (hazard hit again — 3rd time); index.md registered; issue + draft PR pending. |

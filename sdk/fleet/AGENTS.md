@@ -18,7 +18,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | :-- | :-- |
 | `fleet status [host...]` | table of host · commit · last run · status; `--json`; exits non-zero if any host is stale |
 | `fleet discover` | list every concrete ssh-config host as `in-fleet` / `available`; `--json` |
-| `fleet tui` | same rows interactively; `u` updates the selected host |
+| `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v` selection, concurrent background updates (`--jobs`), `s` ssh, `?` help |
 | `fleet update <host>...` | fetch → checkout `--ref` (default `main`) → `pull --ff-only` → `install.sh` over `ssh -t`, one host at a time |
 | `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
 | `fleet remove <alias> [--purge]` | unmark (keeps SSH access); `--purge` deletes the block |
@@ -29,6 +29,10 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | Path | Responsibility |
 | :-- | :-- |
 | `cmd/` | cobra commands, rendering, SSH fan-out |
+| `cmd/tui_model.go` | TUI state machine: modes, alias-keyed cursor/selection, update engine |
+| `cmd/tui_view.go` | pure `View()` + the one lipgloss `theme` |
+| `cmd/tui_keys.go` | keymap + mode routing (`keyHelp` is the single source of truth) |
+| `cmd/tui_cmds.go` | tea.Cmd producers: poll, precheck, background update, handoffs |
 | `internal/sshconf` | parse **and edit** `~/.ssh/config` (the only inventory) |
 | `internal/stamp` | parse the install stamp |
 | `internal/drift` | classify drift + format age (`now` injected — never `time.Now()`) |
@@ -52,6 +56,15 @@ without opening a socket.
 - **A dirty clone is skipped** unless `--force`, which *preserves* work in a rescue worktree
   (`git add -A` onto a branch — **not** `stash@{0}`, which silently drops untracked files).
 - **Failures are named per host** and reflected in the exit code; never swallowed.
+- **TUI in-flight ownership**: a host is in exactly one of `pending` / `updating` /
+  resolved. Refresh skips hosts the update engine owns; every update completion
+  re-polls its host. Two async paths must never own one row.
+- **TUI updates are background-first**: `tea.ExecProcess` suspends the WHOLE TUI, so
+  it is reserved for the sudo-precheck fallback and the `s` ssh action. The default
+  lane runs over the runner seam with `BatchMode=yes` so a surprise prompt fails
+  fast and visibly instead of hanging.
+- **TUI cursor/selection are alias-keyed**, never index-keyed — rows re-sort as they
+  stream in.
 
 ## Gotchas
 

@@ -40,6 +40,35 @@ type Baseliner interface {
 // stampPath is where install-stamp.sh writes its record.
 const stampPath = "~/.local/state/dotfiles/install-stamp"
 
+// probeHost classifies ONE host. Extracted from collect so the TUI can poll
+// hosts individually and stream each result as it lands (spec F1) while the
+// headless path keeps probing them all at once. Both callers share this exact
+// logic, so classification can never diverge between the two.
+func probeHost(h sshconf.Host, r runner.Runner, base Baseliner) Row {
+	row := Row{Alias: h.Alias}
+	out, err := r.Run(h.Alias, "cat "+stampPath+" 2>/dev/null || true")
+	in := drift.Input{Reachable: err == nil, Baseline: base.Head()}
+	if err == nil {
+		s, perr := stamp.Parse(out)
+		switch {
+		case perr == nil:
+			in.HaveStamp = true
+			in.Commit = s.Commit
+			in.IsAncestor, in.BehindCount = base.Compare(s.Commit)
+			row.Commit = short(s.Commit)
+			row.Age = s.InstalledAt
+		case strings.TrimSpace(out) != "":
+			// A stamp file exists but does not parse — a truncated or
+			// corrupted write. Reporting this as a plain "unknown"
+			// would hide a real problem behind "never installed".
+			row.Note = "corrupt stamp"
+		}
+	}
+	res := drift.Classify(in)
+	row.Class, row.Behind = string(res.Class), res.Behind
+	return row
+}
+
 // collect probes every host concurrently and classifies it. Pure apart from
 // the injected runner and baseliner, so it is fully unit-testable.
 func collect(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time.Time) []Row {
@@ -49,28 +78,7 @@ func collect(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time.Tim
 		wg.Add(1)
 		go func(i int, h sshconf.Host) {
 			defer wg.Done()
-			row := Row{Alias: h.Alias}
-			out, err := r.Run(h.Alias, "cat "+stampPath+" 2>/dev/null || true")
-			in := drift.Input{Reachable: err == nil, Baseline: base.Head()}
-			if err == nil {
-				s, perr := stamp.Parse(out)
-				switch {
-				case perr == nil:
-					in.HaveStamp = true
-					in.Commit = s.Commit
-					in.IsAncestor, in.BehindCount = base.Compare(s.Commit)
-					row.Commit = short(s.Commit)
-					row.Age = s.InstalledAt
-				case strings.TrimSpace(out) != "":
-					// A stamp file exists but does not parse — a truncated or
-					// corrupted write. Reporting this as a plain "unknown"
-					// would hide a real problem behind "never installed".
-					row.Note = "corrupt stamp"
-				}
-			}
-			res := drift.Classify(in)
-			row.Class, row.Behind = string(res.Class), res.Behind
-			rows[i] = row
+			rows[i] = probeHost(h, r, base)
 		}(i, h)
 	}
 	wg.Wait()
