@@ -42,6 +42,35 @@ Result: a "scheduled" audit that stalls until the user replies and pastes.
   `(none)`, and documents how to light them up (Event Log Readers / elevation).
 - **R2d — detection only**: the collector never changes configuration (spec
   scope is anomaly reporting for a weekly review, not remediation).
+- **R11 — availability-tolerant cadence**: a laptop is frequently asleep at any
+  fixed time, so collection must not depend on the machine being up at one
+  moment. The task fires **hourly across an evening window** (default
+  17:00→00:00) with `StartWhenAvailable`, and the collector carries a
+  `-OncePerDay` gate so only the first fire of the day does real work. Measured:
+  a real collection is ~28s wall / ~19s CPU; the gate is ~4ms. Net contract:
+  **at most one collection per day, at the first moment the host is available.**
+- **R12 — cheap and stable**: the repeated fires must not be a CPU tax. Task
+  `Priority 7`, collector `-LowPriority` (BelowNormal),
+  `MultipleInstances=IgnoreNew` (a slow run is never double-started by the next
+  hourly fire), 10-minute `ExecutionTimeLimit`. The gate keys on the canonical
+  report's write date, so a run that dies before writing leaves the gate open and
+  the next hour retries — self-healing, not sticky.
+- **R13 — separate urgency from summary**: the full inventory is wanted weekly
+  (Saturday), but anything *urgent* is wanted the same day. Two Claude prompts:
+  `weekly-security-audit` (full summary, owns the baseline) and
+  `daily-security-triage` (urgent-only, keeps no baseline, one line when clean).
+  A daily task that always speaks trains the reader to ignore it, so silence is
+  the triage task's designed default.
+- **R14 — provable provenance**: it must be answerable, not assumable, *which*
+  collector is actually running. Three copies exist (repo → deployed → installed)
+  and only `install.sh` refreshes the middle one, so `-Status` compares the
+  installed and deployed copies by `COLLECTOR_VERSION` **and** SHA-256 and states
+  `UP TO DATE` / `STALE` outright. Each report also self-identifies via its
+  `COLLECTOR: vN` header line.
+- **R15 — provable liveness**: `-Status` must answer "is the job set up and
+  running?" without the reader decoding HRESULTs — it decodes `LastTaskResult`
+  (e.g. `267011` → "task has NOT YET RUN"), shows the schedule incl. repetition,
+  report freshness, and the dated `history\` count as the strongest evidence.
 - **R3 — opt-in, fail-closed**: gated by `install.windows.security-audit`
   (`boolDefault: false`); absent gff/flag ⇒ the step must NOT run. This
   inverts the repo's fail-open `gff_on` convention deliberately.

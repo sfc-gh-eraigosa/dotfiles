@@ -26,11 +26,26 @@
   Event-log look-back window in days (default 7).
 .PARAMETER StdOut
   Emit the report to stdout and skip ALL file writes (for tests / ad-hoc runs).
+
+.PARAMETER OncePerDay
+  Exit immediately (rc 0) when a report for TODAY already exists. This is what
+  makes hourly polling cheap: the scheduled task fires every hour in the evening
+  window so a machine that was asleep still gets a run, but only the FIRST fire
+  of the day does real work. Measured on the reference host: a full collection is
+  ~28s wall / ~19s CPU, this gate is ~4ms - so 7 of the 8 daily fires cost
+  essentially nothing.
+
+.PARAMETER LowPriority
+  Drop the process to BelowNormal priority so a background collection never
+  competes with foreground work. The scheduled task passes this; manual runs
+  should not (you want your ad-hoc run to finish promptly).
 #>
 param(
     [string]$BaseDir = (Join-Path $env:USERPROFILE 'Claude\SecurityAudit'),
     [int]$Days = 7,
     [switch]$StdOut,
+    [switch]$OncePerDay,
+    [switch]$LowPriority,
     # Test-only: append one deliberately-throwing lens so the driver can prove the
     # throw -> '!! COLLECTION ERROR' contract, RC still 0, later sections render.
     [switch]$FaultInject
@@ -41,9 +56,33 @@ param(
 # stderr nobody reads and the section is written EMPTY - indistinguishable from
 # "nothing suspicious found".
 $ErrorActionPreference = 'Stop'
-$COLLECTOR_VERSION = '2'
+$COLLECTOR_VERSION = '3'
 $SELF_PATH = $MyInvocation.MyCommand.Path
 $WINDOW    = (Get-Date).AddDays(-[Math]::Abs($Days))
+
+# --- cheap once-per-day gate (must run BEFORE any lens) ---------------------
+# The evening schedule fires hourly so an off/asleep machine still gets a daily
+# collection, but re-collecting every hour would burn ~19s CPU x 8. Gate on the
+# canonical report's write date: that file IS the artifact the analysis reads, so
+# "written today" is the true 'we already have today's data' signal. A run that
+# died before writing it leaves the gate open, so the next hour retries - the
+# self-healing behavior we want.
+if ($OncePerDay) {
+    $__canonical = Join-Path $BaseDir 'latest-audit.txt'
+    if (Test-Path -LiteralPath $__canonical) {
+        try {
+            if ((Get-Item -LiteralPath $__canonical).LastWriteTime.Date -eq (Get-Date).Date) {
+                Write-Host "SKIP: today's report already collected ($__canonical). -OncePerDay gate."
+                exit 0
+            }
+        } catch { }   # unreadable stat => fall through and collect
+    }
+}
+
+# Background collection must never compete with foreground work.
+if ($LowPriority) {
+    try { [Diagnostics.Process]::GetCurrentProcess().PriorityClass = 'BelowNormal' } catch { }
+}
 
 # ---- helpers ---------------------------------------------------------------
 $script:sections = @()

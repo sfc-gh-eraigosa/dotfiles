@@ -67,8 +67,12 @@ batch and the standalone installer below.
 PowerShell window (it self-elevates; approve the UAC prompt):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\Desktop\Apps\scripts\install-wisprflow.ps1"
+& "$([Environment]::GetFolderPath('Desktop'))\Apps\scripts\install-wisprflow.ps1"
 ```
+
+> Resolve the Desktop rather than hardcoding `%USERPROFILE%\Desktop`: with OneDrive
+> Backup enabled (the Windows 11 default) the real Desktop is `…\OneDrive\Desktop`
+> and `%USERPROFILE%\Desktop` does not exist.
 
 Idempotent (skips if installed), pins a known-good version, caches the download,
 falls back to "latest" if the pin ages out. Switches: `-Status` / `-Latest` /
@@ -94,7 +98,7 @@ falls back to "latest" if the pin ages out. Switches: `-Status` / `-Latest` /
 3. **restarts PowerToys** to apply.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\Desktop\Apps\scripts\suppress-copilot-key.ps1"
+& "$([Environment]::GetFolderPath('Desktop'))\Apps\scripts\suppress-copilot-key.ps1"
 ```
 
 `install-wisprflow.ps1` runs it automatically. Switches: `-Status` (report remap +

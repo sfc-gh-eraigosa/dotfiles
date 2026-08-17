@@ -52,7 +52,16 @@ also runs, that chain raises its own separate prompt.)
 Or run it standalone from PowerShell (a manual run is explicit intent, so no flag needed):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\Desktop\Apps\scripts\setup-security-hardening.ps1
+& "$([Environment]::GetFolderPath('Desktop'))\Apps\scripts\setup-security-hardening.ps1"
+```
+
+**Resolve the Desktop, never hardcode `%USERPROFILE%\Desktop`** — with OneDrive Backup on
+(the Windows 11 default) the real Desktop is `…\OneDrive\Desktop` and
+`%USERPROFILE%\Desktop` does not exist at all. From **cmd.exe** (where `$env:` is not
+expanded either), use:
+
+```bat
+powershell -ExecutionPolicy Bypass -Command "& ([Environment]::GetFolderPath('Desktop') + '\Apps\scripts\setup-security-hardening.ps1') -Status"
 ```
 
 > ### ⚠️ Group membership takes effect at your NEXT LOGON
