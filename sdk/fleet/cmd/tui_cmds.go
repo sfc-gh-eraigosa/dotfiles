@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
 )
@@ -27,6 +28,11 @@ type (
 		err   error
 		ssh   bool // true = plain ssh visit, false = interactive update handoff
 	}
+	wakeDoneMsg struct {
+		alias, via string
+		woke       bool
+		attempts   []reach.Attempt
+	}
 	spinnerTickMsg int
 )
 
@@ -38,7 +44,26 @@ func spinnerTick(n int) tea.Cmd {
 
 // pollHost probes one host off the UI thread and streams the row back (F1).
 func pollHost(h sshconf.Host, r runner.Runner, base Baseliner) tea.Cmd {
-	return func() tea.Msg { return hostRowMsg{row: probeHost(h, r, base)} }
+	return pollHostWake(h, nil, r, base, nil)
+}
+
+// pollHostWake is pollHost with auto-wake. The TUI reaches the ladder through
+// the SAME probe path as the headless command, so the two can never disagree
+// about what `unreachable` means.
+func pollHostWake(h sshconf.Host, peers []reach.Peer, r runner.Runner, base Baseliner, w waker) tea.Cmd {
+	return func() tea.Msg {
+		return hostRowMsg{row: probeHostWake(h, func() []reach.Peer { return peers }, r, base, w)}
+	}
+}
+
+// wakeHost runs the reachability ladder for one host off the UI thread. It
+// goes through the runner seam, never tea.ExecProcess: suspending the whole
+// dashboard to wake one row would reintroduce the freeze this feature removes.
+func wakeHost(h sshconf.Host, peers []reach.Peer, r runner.Runner, p reach.Policy) tea.Cmd {
+	return func() tea.Msg {
+		res := newWaker(r, p)(h, peers)
+		return wakeDoneMsg{alias: h.Alias, via: res.Via, woke: res.Woke, attempts: res.Attempts}
+	}
 }
 
 // sudoPrecheck decides which lane a host updates in. `sudo -n true` succeeds

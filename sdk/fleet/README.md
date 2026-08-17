@@ -61,6 +61,65 @@ never run the stamped installer reads `unknown` (the stamp is **not** retroactiv
 a stamp that exists but won't parse reads `unknown (corrupt stamp)` — deliberately
 distinct from never-installed.
 
+A host that only *looked* unreachable and was roused by the wake ladder reads its
+real class with provenance attached: `up-to-date (woke via nano-01)`.
+
+### `fleet wake [host...]`
+
+Some hosts are asleep, not dead. A Wi-Fi NIC with power saving enabled sleeps
+through the **broadcast** ARP requests that a cold neighbour cache has to send, so
+your workstation never resolves its MAC and gives up at layer 2 — before a single
+SSH packet is sent. The host is up; you simply cannot address it.
+
+`fleet wake` escalates a bounded ladder against each target and prints it rung by
+rung, because the ladder *is* the diagnostic:
+
+```sh
+fleet wake pi-01                   # one host
+fleet wake                         # every #fleet host
+fleet wake pi-01 --json | jq .     # full ladder, machine-readable
+```
+
+```text
+pi-01
+  retry        x   still unreachable after 1 retries
+  local-prime  x   skipped: workstation is not on the target's subnet
+  peer-relay   OK via nano-01
+  => reachable (woke via nano-01)
+```
+
+| Rung | What it does | When it applies |
+| :-- | :-- | :-- |
+| `retry` | re-probe after a short backoff | always; catches a neighbour entry that just expired |
+| `local-prime` | ping the target so the local stack ARPs for it | only when this machine shares the target's subnet |
+| `peer-relay` | ask a reachable peer for `$SSH_CONNECTION` to learn this workstation's LAN address, reach the target **through** that peer, and tell it to send traffic back | whenever another fleet host answers |
+
+`peer-relay` is the rung that resolves the common case, and the only one that works
+when your workstation has no layer-2 presence on the fleet's subnet at all — under
+WSL2's NAT the ARP table that matters belongs to Windows, so `local-prime` correctly
+skips itself there.
+
+Two properties worth knowing:
+
+- **Wake never modifies a target.** It sends ICMP, reads `$SSH_CONNECTION`, and probes.
+- **Only a direct re-probe counts as success.** A working relay proves the *peer* can
+  reach the target, not that you can — so a real network partition can never be
+  reported as a wake.
+
+Wake also runs **automatically** whenever a probe would report `unreachable`, inside
+`status`, `tui`, and `update` alike. It runs within the existing concurrent fan-out,
+so ten sleeping hosts cost about one budget of wall clock rather than ten. Use
+`--no-wake` when you want the fast, literal answer (CI, cron, scripts).
+
+> **The permanent fix lives on the host, not here.** If a machine needs waking on
+> every run, disable Wi-Fi power save on it — check with
+> `iw dev wlan0 get power_save`, and make it stick with a NetworkManager drop-in at
+> `/etc/NetworkManager/conf.d/wifi-powersave-off.conf` containing
+> `[connection]` and `wifi.powersave = 2`.
+>
+> fleet deliberately will not do this for you: reconfiguring a machine's networking
+> as a side effect of *looking* at it is a worse surprise than a slow probe.
+
 ### `fleet tui`
 
 The interactive dashboard. Opens **instantly** and streams rows in as each host
@@ -84,6 +143,7 @@ fleet tui --update-ref feature/x         # update targets that ref instead of ma
 | `v` | visual range select (extend with motions) |
 | `esc` | clear search / selection |
 | `u` | update the selection (or the cursor host) |
+| `w` | wake the selection (or the cursor host) — rows tick `waking ⠋` |
 | `s` | ssh to the cursor host |
 | `r` | refresh |
 | `?` | help overlay |
@@ -232,6 +292,8 @@ fleet version --json
 | `--marker` | `#fleet` | comment that marks a `Host` block as in-fleet |
 | `--repo` | `~/git/dotfiles` | local dotfiles clone used as the up-to-date baseline |
 | `--json` | off | machine-readable output |
+| `--no-wake` | off | never try to rouse an unreachable host — fast, literal answer |
+| `--wake-timeout` | `12s` | per-host budget for the reachability ladder |
 
 ## Safety invariants
 
@@ -245,6 +307,8 @@ against real machines:
 - A dirty clone is skipped unless `--force`, which *preserves* work in a rescue
   worktree.
 - Failures are named per host and reflected in the exit code.
+- Wake never mutates a target: ICMP, `$SSH_CONNECTION`, and the probe, nothing else.
+- Only a direct re-probe can report a host woken — a working relay is not enough.
 
 ## Design
 

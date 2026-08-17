@@ -1,0 +1,36 @@
+# Task 19 — reach ladder
+=== RUN   TestLadderStopsAtTheFirstRungThatWorks
+--- PASS: TestLadderStopsAtTheFirstRungThatWorks (0.00s)
+=== RUN   TestRelaySuccessAloneNeverReportsWoke
+--- PASS: TestRelaySuccessAloneNeverReportsWoke (0.00s)
+=== RUN   TestRelayWakeReportsThePeerItWokeThrough
+--- PASS: TestRelayWakeReportsThePeerItWokeThrough (0.00s)
+=== RUN   TestLocalPrimeOnlyRunsWhenTheWorkstationSharesTheTargetSubnet
+=== RUN   TestLocalPrimeOnlyRunsWhenTheWorkstationSharesTheTargetSubnet/on-subnet_fires_the_prime
+=== RUN   TestLocalPrimeOnlyRunsWhenTheWorkstationSharesTheTargetSubnet/off-subnet_skips_it
+--- PASS: TestLocalPrimeOnlyRunsWhenTheWorkstationSharesTheTargetSubnet (0.00s)
+    --- PASS: TestLocalPrimeOnlyRunsWhenTheWorkstationSharesTheTargetSubnet/on-subnet_fires_the_prime (0.00s)
+    --- PASS: TestLocalPrimeOnlyRunsWhenTheWorkstationSharesTheTargetSubnet/off-subnet_skips_it (0.00s)
+=== RUN   TestPeerRankingPrefersReachableThenSameSubnet
+--- PASS: TestPeerRankingPrefersReachableThenSameSubnet (0.00s)
+=== RUN   TestTargetIsNeverItsOwnPeer
+--- PASS: TestTargetIsNeverItsOwnPeer (0.00s)
+=== RUN   TestSingleHostFleetDegradesGracefully
+--- PASS: TestSingleHostFleetDegradesGracefully (0.00s)
+=== RUN   TestRetryRungCannotStarveThePeerRelay
+--- PASS: TestRetryRungCannotStarveThePeerRelay (0.15s)
+=== RUN   TestExhaustedBudgetStopsTheLadder
+--- PASS: TestExhaustedBudgetStopsTheLadder (0.00s)
+=== RUN   TestLadderSleepsOnlyThroughTheInjectedClock
+--- PASS: TestLadderSleepsOnlyThroughTheInjectedClock (0.00s)
+=== RUN   TestDisabledPolicyRunsNothing
+--- PASS: TestDisabledPolicyRunsNothing (0.00s)
+=== RUN   TestNudgeIsFireAndForgetAndNeverUsesDashW
+--- PASS: TestNudgeIsFireAndForgetAndNeverUsesDashW (0.00s)
+=== RUN   TestWorkstationIPRejectsUnparseableSSHConnection
+--- PASS: TestWorkstationIPRejectsUnparseableSSHConnection (0.00s)
+=== RUN   TestWorkstationIPParsesTheClientAddress
+--- PASS: TestWorkstationIPParsesTheClientAddress (0.00s)
+PASS
+coverage: 82.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach	0.156s	coverage: 82.4% of statements

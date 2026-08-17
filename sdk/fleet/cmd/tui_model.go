@@ -8,6 +8,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
 )
@@ -65,9 +67,10 @@ type viewport struct{ top, height, width int }
 // tuiModel is the whole dashboard as one value: pure data in, pure frame out.
 //
 // In-flight ownership invariant: a host is in EXACTLY ONE of pending (being
-// polled), updating (owned by the update engine), or resolved. Refresh skips
-// `updating` hosts; an update completion clears `updating` and re-polls. No
-// row is ever owned by two async paths at once.
+// polled), updating (owned by the update engine), waking (owned by the
+// reachability ladder), or resolved. Refresh skips `updating` and `waking`
+// hosts; either completion clears its claim and re-polls. No row is ever
+// owned by two async paths at once.
 type tuiModel struct {
 	rows    []Row
 	pending map[string]bool
@@ -89,6 +92,10 @@ type tuiModel struct {
 	ans       answers     // pre-supplied answers for this wave (password: memory only)
 	ansField  answerField // cursor in the answer form
 
+	// reachability ladder — its own ownership set, same invariant as updating
+	waking map[string]bool
+	wake   waker // nil = --no-wake
+
 	hosts   map[string]sshconf.Host
 	run     runner.Runner
 	base    Baseliner
@@ -103,6 +110,7 @@ func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time
 		pending:   map[string]bool{},
 		selected:  map[string]bool{},
 		updating:  map[string]updState{},
+		waking:    map[string]bool{},
 		hosts:     map[string]sshconf.Host{},
 		jobs:      jobs,
 		updateRef: ref,
@@ -127,7 +135,7 @@ func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time
 func (m tuiModel) Init() tea.Cmd {
 	cmds := make([]tea.Cmd, 0, len(m.rows))
 	for _, r := range m.rows {
-		cmds = append(cmds, pollHost(m.hosts[r.Alias], m.run, m.base))
+		cmds = append(cmds, pollHostWake(m.hosts[r.Alias], m.peersFor(r.Alias), m.run, m.base, m.wake))
 	}
 	return tea.Batch(cmds...)
 }
@@ -409,7 +417,7 @@ func (m *tuiModel) finishUpdate(alias, log string, err error) tea.Cmd {
 
 // busy reports whether the engine still owns work — used by the quit guard.
 func (m tuiModel) busy() bool {
-	if m.running > 0 || len(m.bgQueue) > 0 || len(m.iaQueue) > 0 {
+	if m.running > 0 || len(m.bgQueue) > 0 || len(m.iaQueue) > 0 || len(m.waking) > 0 {
 		return true
 	}
 	for _, s := range m.updating {
@@ -420,10 +428,63 @@ func (m tuiModel) busy() bool {
 	return false
 }
 
-// inFlight is true while the engine owns this host; refresh must skip it.
+// inFlight is true while an async path owns this host; refresh must skip it,
+// and neither `u` nor `s` may claim it. Wake counts: a ladder that gets its
+// row re-polled underneath it produces a verdict for a probe nobody asked for.
 func (m tuiModel) inFlight(alias string) bool {
+	if m.waking[alias] {
+		return true
+	}
 	s, ok := m.updating[alias]
 	return ok && (s.phase == updQueued || s.phase == updPrecheck || s.phase == updRunning)
+}
+
+// startWake claims each target and runs its ladder in the BACKGROUND lane.
+// tea.ExecProcess would suspend the entire dashboard, which is the freeze this
+// whole feature exists to remove.
+func (m *tuiModel) startWake(targets []string) tea.Cmd {
+	var cmds []tea.Cmd
+	for _, a := range targets {
+		if m.inFlight(a) {
+			continue
+		}
+		m.waking[a] = true
+		cmds = append(cmds, wakeHost(m.hosts[a], m.peersFor(a), m.run, m.wakePolicy()))
+	}
+	if len(cmds) == 0 {
+		return nil
+	}
+	m.status = fmt.Sprintf("waking %d host(s)", len(cmds))
+	return tea.Batch(cmds...)
+}
+
+// peersFor offers every other fleet host as a relay candidate, marking the
+// ones whose rows have already resolved to something other than unreachable —
+// relaying through a second sleeping host helps nobody.
+func (m tuiModel) peersFor(target string) []reach.Peer {
+	out := make([]reach.Peer, 0, len(m.rows))
+	for _, r := range m.rows {
+		if r.Alias == target {
+			continue
+		}
+		h := m.hosts[r.Alias]
+		name := h.HostName
+		if name == "" {
+			name = r.Alias
+		}
+		out = append(out, reach.Peer{
+			Alias:     r.Alias,
+			HostName:  name,
+			Reachable: !m.pending[r.Alias] && r.Class != string(drift.Unreachable) && r.Class != "polling",
+		})
+	}
+	return out
+}
+
+// wakePolicy is the model's ladder budget. The TUI always allows the ladder
+// when the operator asks for it explicitly with `w`.
+func (m tuiModel) wakePolicy() reach.Policy {
+	return reach.Policy{Enabled: true, Budget: flagWakeTimeout, Retries: 2}
 }
 
 // refresh re-polls every host the update engine does not currently own (F2b).
@@ -434,7 +495,7 @@ func (m *tuiModel) refresh() tea.Cmd {
 			continue
 		}
 		m.pending[r.Alias] = true
-		cmds = append(cmds, pollHost(m.hosts[r.Alias], m.run, m.base))
+		cmds = append(cmds, pollHostWake(m.hosts[r.Alias], m.peersFor(r.Alias), m.run, m.base, m.wake))
 	}
 	m.status = fmt.Sprintf("refreshing %d host(s)", len(cmds))
 	return tea.Batch(cmds...)
@@ -454,6 +515,21 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setRow(msg.row)
 		m.resort()
 		return m, nil
+
+	case wakeDoneMsg:
+		// Release the claim FIRST and unconditionally: a host left owned by a
+		// failed ladder would be skipped by every later refresh, silently
+		// freezing its row for the rest of the session.
+		delete(m.waking, msg.alias)
+		if msg.woke {
+			m.status = fmt.Sprintf("%s woke via %s", msg.alias, msg.via)
+		} else {
+			m.status = fmt.Sprintf("%s stayed unreachable", msg.alias)
+		}
+		// Re-poll so the row shows its real drift class, not the stale
+		// unreachable verdict that triggered the wake.
+		m.pending[msg.alias] = true
+		return m, pollHostWake(m.hosts[msg.alias], m.peersFor(msg.alias), m.run, m.base, m.wake)
 
 	case precheckMsg:
 		// Route the host: passwordless sudo → background wave; otherwise the

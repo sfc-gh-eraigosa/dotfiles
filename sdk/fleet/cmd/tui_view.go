@@ -104,6 +104,12 @@ func (m tuiModel) rowView(i int) string {
 	if m.pending[r.Alias] {
 		status = m.spinner + " polling"
 	}
+	// Waking wins over polling: the ladder is the slower, more interesting
+	// thing happening to this row, and a row that looked merely "polling" for
+	// eight seconds reads as a hang.
+	if m.waking[r.Alias] {
+		status = m.spinner + " waking"
+	}
 	style, ok := th.byClass[r.Class]
 	if !ok {
 		style = lipgloss.NewStyle()

@@ -40,9 +40,15 @@ var tuiCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		p, err := wakePolicy()
+		if err != nil {
+			return err
+		}
 		// No synchronous probing here: the model opens instantly and streams
 		// rows in as each host answers (spec F1).
-		m := newTUIModel(selectHosts(all, nil), runner.Exec{}, base, time.Now(), tuiUpdateRef, tuiJobs)
+		r := runner.Exec{}
+		m := newTUIModel(selectHosts(all, nil), r, base, time.Now(), tuiUpdateRef, tuiJobs)
+		m.wake = newWaker(r, p)
 		_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()
 		return err
 	},

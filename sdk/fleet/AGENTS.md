@@ -23,6 +23,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
 | `fleet remove <alias> [--purge]` | unmark (keeps SSH access); `--purge` deletes the block |
 | `fleet keys list\|sync\|prune` | audit / authorize / remove authorized keys |
+| `fleet wake [host...]` | rouse hosts asleep at layer 2: ladder `retry → local-prime → peer-relay`, printed rung by rung; `--json`; exits non-zero if any target stayed down |
 
 ## Layout
 
@@ -37,6 +38,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `internal/stamp` | parse the install stamp |
 | `internal/drift` | classify drift + format age (`now` injected — never `time.Now()`) |
 | `internal/keys` | authorized_keys diff (reports removals, never applies them) |
+| `internal/reach` | the wake ladder: rung order, peer ranking, provenance (pure; every impure edge injected via `Deps`) |
 | `internal/runner` | the **only** seam that touches a remote host (`Exec` real, `Fake` for tests) |
 
 Everything but `runner` is pure text-in/struct-out, so the decision surface is unit-tested
@@ -78,6 +80,26 @@ without opening a socket.
 - **The answer form starts empty every wave** — no inherited answers.
 - **TUI cursor/selection are alias-keyed**, never index-keyed — rows re-sort as they
   stream in.
+- **Wake never mutates a target.** The ladder sends ICMP, reads `$SSH_CONNECTION` on a
+  peer, and probes — nothing else. It runs automatically inside `status`, a *read* path,
+  so anything that wrote to a host would be a side effect of merely looking at it. Pinned
+  by `TestWakeNeverSendsAnythingThatWritesToATarget` (argv allowlist + banned-substring
+  sweep).
+- **Only a DIRECT re-probe may report `Woke`.** A successful `ssh -J` proves the *peer*
+  can route to the target, which is strictly weaker than "this workstation can". Reporting
+  wake on relay success alone would turn a real network partition into a green row. Pinned
+  by `TestRelaySuccessAloneNeverReportsWoke`.
+- **The cheap rung may not starve the effective one.** `retry` gets at most `Budget/3`;
+  the rest is reserved for `peer-relay`. Found by live testing, not review: two retries
+  against a dead host ate a 20s budget whole and the relay never ran. Pinned by
+  `TestRetryRungCannotStarveThePeerRelay`.
+- **`waking` joins the in-flight ownership set.** A host is in exactly one of `pending` /
+  `updating` / `waking` / resolved; refresh skips the first two, `u` and `s` cannot claim
+  a waking host, and every wake completion releases its claim **unconditionally** — a
+  failed ladder that kept ownership would freeze that row for the rest of the session.
+- **No `ping -W` anywhere.** It means *seconds* on GNU and *milliseconds* on BSD. Local
+  pings are bounded by `exec.CommandContext`; the relay nudge is detached and never waited
+  on at all.
 
 ## Gotchas
 
@@ -88,6 +110,18 @@ without opening a socket.
   feature branch to prove the stamp before it merges.
 - A stamp that exists but won't parse reports `unknown (corrupt stamp)` — deliberately
   distinct from never-installed.
+- **A host that needs waking every run is not healthy — it is power-saving.** The `woke via
+  <peer>` note exists to keep that visible instead of smoothing it away. The permanent cure
+  is on the host, not in fleet: a Wi-Fi NIC with `power_save on` sleeps through the
+  *broadcast* ARP requests a cold neighbour cache must send (`iw dev wlan0 get power_save`
+  to check). Disable it persistently with a NetworkManager drop-in —
+  `/etc/NetworkManager/conf.d/wifi-powersave-off.conf` containing `[connection]` /
+  `wifi.powersave = 2`. Fleet deliberately does **not** apply this for you; see the
+  non-mutation invariant.
+- **`local-prime` is a no-op under WSL2 NAT and that is expected.** The workstation's
+  `eth0` is a private `172.x` link with no layer-2 presence on the fleet subnet, so the
+  rung reports `skipped: workstation is not on the target's subnet`. It earns its place
+  when fleet runs *on* a fleet member, which is genuinely on the LAN.
 - `build.sh` injects `cmd.Version`/`Commit`/`Dirty`/`BuildDate` by exact symbol path. Keep
   them exported, or the ldflags silently no-op and every binary reports `dev`.
 - The coverage floor lives in `scripts/test.sh` `coverage_min()`; a module missing from that

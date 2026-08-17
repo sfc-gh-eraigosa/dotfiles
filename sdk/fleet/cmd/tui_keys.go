@@ -17,6 +17,7 @@ var keyHelp = []struct{ keys, what string }{
 	{"v", "visual range select"},
 	{"esc", "clear search / selection"},
 	{"u", "update selection (or cursor host)"},
+	{"w", "wake selection (or cursor host)"},
 	{"tab / enter", "(answer form) next field · esc cancels"},
 	{"s", "ssh to cursor host"},
 	{"r", "refresh"},
@@ -227,6 +228,12 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.ans = answers{}
 			m.ansField = fieldSudo
 			m.mode = modeAnswers
+		}
+	case "w":
+		// Wake needs no confirm strip: it mutates nothing on the target, so
+		// the worst case of a stray `w` is a few seconds of ICMP.
+		if t := m.updateTargets(); len(t) > 0 {
+			return m, m.startWake(t)
 		}
 	case "s":
 		// An ssh visit while the engine owns the host would race its update.

@@ -41,6 +41,21 @@ to plain `ssh <host>` / on exit the TUI resumes exactly where it was.
 the update against that ref (validRef-guarded) / acceptance: identical
 semantics to `fleet update --ref feature/x`.
 
+**UC6 — the host that is asleep, not dead.** A Wi-Fi power-saving host has
+dropped out of the workstation's ARP cache; a direct probe fails at layer 2
+before SSH is attempted / fleet escalates the wake ladder inside the normal
+concurrent poll, reaches the host through a peer, and the host's own return
+traffic repopulates the cache / acceptance: the row resolves to its real drift
+class annotated `woke via <peer>` instead of a permanent red `unreachable`;
+the operator did nothing and the fleet's wall-clock poll time grew by at most
+one wake budget. **Negative case:** a genuinely powered-off host still resolves
+`unreachable` after the ladder is exhausted — wake must never report a host
+reachable on the strength of a relay hop alone.
+
+**UC7 — deliberate wake.** Operator knows a box is asleep / `fleet wake <host>`
+(or `w` on the TUI row) / acceptance: the ladder prints rung by rung, exits
+non-zero if the host stayed down, and mutates nothing on the target.
+
 ## 3. Architecture
 
 Per design §4: one package `sdk/fleet/cmd`, files `tui.go` (wiring),
@@ -61,8 +76,29 @@ confirm · help), `search {input, re, err, matches}`, `selected map[alias]bool`
 (slots free), `status string`.
 
 **In-flight ownership invariant:** a host is in exactly one of `pending`,
-`updating`, or resolved; refresh excludes `updating` hosts; every update
-completion clears `updating`, records ok/fail, and re-fires `collectOne`.
+`updating`, `waking`, or resolved; refresh excludes `updating` and `waking`
+hosts; every update or wake completion clears its claim, records the outcome,
+and re-fires `collectOne`.
+
+Per design §3.1/§4.1, wake lives in a new pure package `internal/reach`, not in
+`cmd` and not in the `runner` decorator chain. Its public surface:
+
+```go
+type Peer struct{ Alias, HostName string }
+type Policy struct { Enabled bool; Budget time.Duration; Retries int }
+type Attempt struct { Rung, Via string; OK bool; Err string }   // Rung: retry|local-prime|peer-relay
+type Result  struct { Woke bool; Via string; Attempts []Attempt }
+
+func Wake(ctx context.Context, target Peer, peers []Peer, p Policy, d Deps) Result
+```
+
+`Deps` injects every impure edge — `Probe func(alias string) error`,
+`runner.Runner`, `Resolve func(string) ([]net.IP, error)`,
+`LocalAddrs func() ([]net.IPNet, error)`, `PingLocal func(ctx, ip string) error`,
+`Sleep func(time.Duration)` — so the escalation policy is tested with zero
+sockets and zero real elapsed time. `runner.Runner` gains one method,
+`RunVia(peer, host string, argv ...string)`, implemented by `Exec` (`ssh -J`)
+and `Fake`.
 
 ## 4. Behavior / features
 
@@ -81,6 +117,11 @@ completion clears `updating`, records ok/fail, and re-fires `collectOne`.
 | F10 | `s` SSH shell to cursor host via terminal handoff; TUI resumes after |
 | F11 | `?` help overlay listing all keys; any key closes |
 | F12 | Empty fleet: guidance to `fleet discover` / `fleet add` (kept from v1) |
+| F14 | Wake ladder (`internal/reach`): `retry` → `local-prime` → `peer-relay`, whole sequence under one deadline, stops at the first rung whose **direct** re-probe succeeds |
+| F15 | Auto-wake: any probe classifying `unreachable` runs the ladder once inside the existing concurrent fan-out, then re-probes; success annotates the row `woke via <via>`; applies to `status`, `tui`, and `update` alike |
+| F16 | `fleet wake [host...]`: explicit verb, prints the ladder rung by rung, `--json`, exit non-zero if any target stayed unreachable |
+| F17 | TUI `w`: wake the selection (or cursor host) in the background lane; row ticks `waking ⠋ → woke/unreachable`; listed in `keyHelp` |
+| F18 | Flags: `--no-wake` disables the ladder everywhere; `--wake-timeout` (default 8s) bounds it; both persistent on the root command |
 
 ## 5. Evaluation criteria (per feature)
 
@@ -115,6 +156,27 @@ Every rule below becomes a named test. Format: **trigger · fires · must-not-fi
 - **F10a** `s` · `ssh <host>` ExecProcess for cursor alias; on return TUI intact · no-op on empty fleet · cmd-construction test.
 - **F11a** `?` · overlay renders complete keymap; any key closes · overlay suppresses normal-mode keys underneath · overlay test.
 - **F12a** zero hosts · discover/add guidance rendered · no panic on any key · kept v1 test.
+- **F14a** probe fails, ladder runs · rungs attempted in order retry → local-prime → peer-relay · a later rung must never run once an earlier one's direct re-probe succeeded · fake `Probe` succeeding at rung 1 records exactly one `Attempt`.
+- **F14b** peer relay succeeds at the hop but the direct re-probe still fails · `Result.Woke == false`, class stays `unreachable` · **never** report woke on relay success alone · fake where `RunVia` returns nil but `Probe` keeps erroring.
+- **F14c** `local-prime` rung · runs **only** when a `LocalAddrs` subnet contains a `Resolve`d target IP · must be skipped when the workstation is off-subnet (the WSL2 NAT case) · two-table test: on-subnet fires `PingLocal`, off-subnet records the rung skipped and fires nothing.
+- **F14d** peer ordering · already-reachable-this-run peers first, then same-subnet · an unreachable peer must not be tried before a reachable one · ordering test over a mixed candidate set.
+- **F14e** budget exhausted mid-ladder · ladder returns with `Woke false` and the attempts so far · no rung may outlive the deadline · cancelled `context` test asserting the next rung never fires.
+- **F14f** no peers available (single-host fleet) · ladder degrades to retry (+ local-prime if on-subnet) · must not panic or dial itself · single-host test; target is never its own peer.
+- **F14g** ladder work `Sleep`s only through the injected clock · unit tests complete with no real elapsed time · timing assertion in the reach suite.
+- **F15a** `collect` with one unreachable host · ladder fires once for that host, then re-probes · a **reachable** host must never invoke the ladder · call-count assertion on a fake.
+- **F15b** wake succeeds · `Row.Note == "woke via <via>"` and the class is the *re-probed* class, not `unreachable` · note must not appear for hosts that never slept · row-content test.
+- **F15c** N unreachable hosts · all ladders run concurrently within the existing fan-out · wall clock ≈ one budget, not N · saturation test asserting max observed concurrency > 1 and total elapsed < N × budget.
+- **F15d** `--no-wake` · no rung runs anywhere; `unreachable` reported immediately · the flag must also suppress auto-wake in the TUI · flag test across `status` + model.
+- **F16a** `fleet wake <host>` on a wakeable host · prints each rung with its outcome, exits 0 · silent success is a failure (the ladder is the diagnostic) · golden-output test.
+- **F16b** `fleet wake` on a dead host · exits non-zero, prints the exhausted ladder · must not report success · exit-code test.
+- **F16c** `fleet wake --json` · emits the full `[]Attempt` per target · schema stable · JSON round-trip test.
+- **F16d** wake against any target · issues only `echo $SSH_CONNECTION`, `ping`, and the probe · **no** command that writes to the target · recordingRunner argv assertion (mirrors F8e's discipline).
+- **F17a** `w` with a selection · every selected host enters `waking` in the background lane · must not use `tea.ExecProcess` (never suspends the TUI) · argv + cmd-type assertion.
+- **F17b** host in `waking` · `r` refresh skips it; `u` cannot claim it · the in-flight ownership invariant extends to wake · double-ownership test with mixed `updating`/`waking` rows.
+- **F17c** wake completion · clears `waking`, records the outcome, re-fires `collectOne` for that host · queue must never wedge on a failed wake · completion-advance test.
+- **F17d** `?` help · lists `w` · `keyHelp` stays the single source of truth (no second hand-written list) · overlay test asserting `w` present.
+- **F18a** `--wake-timeout 0`/negative · rejected at command start · valid durations accepted · flag-validation test.
+- **F18b** `ping` invocation · never passes `-W` · bounded by `exec.CommandContext` instead · argv assertion (GNU seconds vs BSD milliseconds trap, design §4.1).
 
 ## 6. Verification harness
 
@@ -128,6 +190,11 @@ Every rule below becomes a named test. Format: **trigger · fires · must-not-fi
   **two hosts updating concurrently while the operator navigates and
   refreshes**, an interactive-fallback handoff with a real sudo prompt, ssh
   action, post-update re-poll. Evidence committed per design §7.
+- **Layer 5 — wake reproduction (human-gated):** the §1.1 incident replayed on
+  real hardware — local neighbour table showing **no entry** for the sleeper,
+  `fleet wake` escalating to `peer-relay`, the neighbour table then showing a
+  resolved MAC, and the row landing on its true class with `woke via <peer>`.
+  Only this layer proves the mechanism; every other layer proves the policy.
 - **Coverage:** fleet module stays ≥ 60% floor; target cmd package ≥ 55%
   (view/model split makes previously-unreachable render logic testable).
 
@@ -142,6 +209,20 @@ license gate must stay green. No install.sh / gff / CI wiring changes — the
 Mouse, keymap config, watch mode, bubbles/table (design §3), any change to
 headless command semantics, Windows-native terminal testing (lipgloss owns
 degradation).
+
+**Wake specifically excludes:**
+
+- **Remediating the sleeper** (disabling Wi-Fi power save on the target).
+  That is the real cure, but it reconfigures a machine's networking as a side
+  effect of a read path — see design §2 non-goals. Documented as an operator
+  runbook step instead.
+- **Wake-on-LAN** (`sdk/wol`). WoL addresses a *powered-off* host and needs
+  layer-2 reach plus a MAC map; this problem is a *powered-on* host that is
+  merely asleep, and the workstation may have no layer-2 presence at all
+  (design §1.1). Different failure, different tool.
+- **Raw ARP / `arping` from the workstation.** A no-op under WSL2 NAT, which is
+  the environment that exhibits the bug (design §1.1).
+- **Persistent wake state / "known dead" caching** (design §3.1 option C).
 
 ## 9. Rollback
 

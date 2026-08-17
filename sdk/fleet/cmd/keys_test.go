@@ -26,6 +26,13 @@ func (r recordingRunner) RunInteractive(h string, a ...string) error {
 	return r.fake.RunInteractive(h, a...)
 }
 
+// Logs the relayed command so a wake test can assert exactly which commands
+// reach a target — the non-mutation invariant (spec F16d) is checked here.
+func (r recordingRunner) RunVia(peer, h string, a ...string) (string, error) {
+	*r.log = append(*r.log, strings.Join(a, " "))
+	return r.fake.RunVia(peer, h, a...)
+}
+
 // Records the command but deliberately NOT the piped stdin: a test asserting
 // "the credential never reaches the command log" would be worthless if this
 // helper copied it in. Use runner.Fake{Stdin: …} when the piped bytes are what

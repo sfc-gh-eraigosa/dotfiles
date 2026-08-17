@@ -47,4 +47,31 @@
 - [ ] **HUMAN STOP** Task 15: live tmux capture — streaming, search, **two hosts
       updating concurrently while navigating + `r`**, FAIL refills its slot,
       fallback handoff with sudo prompt, ssh action, fresh stamps after
+
+## Phase 6 — reachability rescue (Tasks 18–24)
+
+> Motivated by the design §1.1 incident: a Wi-Fi power-saving host missed the
+> broadcast ARP that a cold neighbour cache must send, so it read as
+> `unreachable` for hours while a peer on the same AP reached it in 6 ms.
+
+- [x] Task 18: `RunVia(peer, host, argv…)` on the `Runner` interface + `Exec`
+      (`ssh -J`) + `Fake` (records the hop) — **blocks Task 17**
+- [x] Task 19: `internal/reach` ladder (retry → local-prime → peer-relay), one
+      context deadline, peer ranking, injected clock. Write **F14b first** — the
+      relay-succeeds-but-direct-probe-fails guard is the invariant that keeps
+      wake from turning a partition into a false green
+- [x] Task 20: auto-wake in `probeHost` + `--no-wake` / `--wake-timeout`;
+      `woke via <peer>` note; concurrency assertion (N sleepers ≈ one budget)
+- [x] Task 21: `fleet wake [host…]` verb — rung-by-rung output, `--json`, exit
+      code, **non-mutation argv assertion**, no `ping -W`
+- [x] Task 22: TUI `w` key, `waking` ownership state, `keyHelp` row, re-poll on
+      completion
+- [x] Task 23: README/AGENTS (incl. the operator note that the permanent cure is
+      disabling Wi-Fi power save on the sleeper) + full gate + portability lint
+- [ ] **HUMAN STOP** Task 24: hardware reproduction — neighbour table with **no
+      entry** → `fleet wake` escalating to `peer-relay` → neighbour table with a
+      resolved MAC → row at its true class with `woke via <peer>`
+
+## Phase 7 — land
+
 - [ ] index.md → `in-review`; decide PR promotion with operator
