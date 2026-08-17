@@ -14,10 +14,35 @@ type UpdateResult struct {
 	Reason  string
 }
 
-// remoteUpdate is the update script, shared by the headless path and the TUI
-// so there is exactly one definition of "update a host".
-const remoteUpdate = `cd ~/git/dotfiles && git fetch origin && git checkout main && ` +
-	`git pull --ff-only origin main && ./install.sh`
+// validRef guards the operator-supplied update target. The ref is interpolated
+// into a command that runs over ssh, so it is constrained to the git ref
+// charset (letters, digits, and . _ / -). Anything else — shell metacharacters,
+// spaces, command substitution — is rejected before it can run.
+func validRef(ref string) bool {
+	if ref == "" {
+		return false
+	}
+	for _, r := range ref {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '.', r == '_', r == '/', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// remoteUpdateScript is the update command for one host, parameterised by the
+// git ref to move to (default `main`). Fetch, switch to the ref, fast-forward
+// it, then re-run install.sh. Shared by the headless path and the TUI so there
+// is exactly one definition of "update a host". Callers pass only refs that
+// have passed validRef.
+func remoteUpdateScript(ref string) string {
+	return fmt.Sprintf(
+		"cd ~/git/dotfiles && git fetch origin && git checkout %[1]s && "+
+			"git pull --ff-only origin %[1]s && ./install.sh", ref)
+}
 
 // rescueWorktree preserves uncommitted work before a --force update.
 //
@@ -43,7 +68,7 @@ const rescueWorktree = `cd ~/git/dotfiles && ts=$(date -u +%Y%m%dT%H%M%SZ) && ` 
 // updateHost fetches, fast-forwards and re-runs install.sh on one host.
 // A dirty clone is SKIPPED by default — never mutate a machine carrying local
 // work — and with --force the work is rescued first, not thrown away.
-func updateHost(r runner.Runner, host string, force bool) (UpdateResult, error) {
+func updateHost(r runner.Runner, host, ref string, force bool) (UpdateResult, error) {
 	dirty, err := r.Run(host, "git -C ~/git/dotfiles status --porcelain")
 	if err != nil {
 		return UpdateResult{}, fmt.Errorf("%s: checking clone state: %w", host, err)
@@ -59,22 +84,28 @@ func updateHost(r runner.Runner, host string, force bool) (UpdateResult, error) 
 			return UpdateResult{}, fmt.Errorf("%s: rescuing local work (refusing to continue): %w", host, err)
 		}
 	}
-	return UpdateResult{}, r.RunInteractive(host, remoteUpdate)
+	return UpdateResult{}, r.RunInteractive(host, remoteUpdateScript(ref))
 }
 
-var updateForce bool
+var (
+	updateForce bool
+	updateRef   string
+)
 
 var updateCmd = &cobra.Command{
 	Use:   "update <host>...",
 	Short: "Pull and re-run install.sh on a host, interactively",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if !validRef(updateRef) {
+			return fmt.Errorf("invalid --ref %q: must be a git ref (letters, digits, . _ / -)", updateRef)
+		}
 		r := runner.Exec{}
 		var failures int
 		// One host at a time: interactive sessions cannot share a terminal.
 		for _, host := range args {
 			fmt.Fprintf(cmd.OutOrStdout(), "\n=== %s ===\n", host)
-			res, err := updateHost(r, host, updateForce)
+			res, err := updateHost(r, host, updateRef, updateForce)
 			switch {
 			case err != nil:
 				fmt.Fprintf(cmd.ErrOrStderr(), "FAIL %s: %v\n", host, err)
@@ -95,5 +126,6 @@ var updateCmd = &cobra.Command{
 
 func init() {
 	updateCmd.Flags().BoolVar(&updateForce, "force", false, "rescue uncommitted work into a worktree, then update")
+	updateCmd.Flags().StringVar(&updateRef, "ref", "main", "git ref (branch or tag) to update the host to")
 	rootCmd.AddCommand(updateCmd)
 }

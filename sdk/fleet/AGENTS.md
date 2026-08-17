@@ -19,7 +19,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `fleet status [host...]` | table of host · commit · last run · status; `--json`; exits non-zero if any host is stale |
 | `fleet discover` | list every concrete ssh-config host as `in-fleet` / `available`; `--json` |
 | `fleet tui` | same rows interactively; `u` updates the selected host |
-| `fleet update <host>...` | fetch → `pull --ff-only` → `install.sh` over `ssh -t`, one host at a time |
+| `fleet update <host>...` | fetch → checkout `--ref` (default `main`) → `pull --ff-only` → `install.sh` over `ssh -t`, one host at a time |
 | `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
 | `fleet remove <alias> [--purge]` | unmark (keeps SSH access); `--purge` deletes the block |
 | `fleet keys list\|sync\|prune` | audit / authorize / remove authorized keys |
@@ -55,7 +55,11 @@ without opening a socket.
 
 ## Gotchas
 
-- The stamp is **not retroactive**: hosts report `unknown` until they next run `install.sh`.
+- The stamp is **not retroactive**: a host reports `unknown` until it runs an
+  `install.sh` that *contains* the stamp step. Pre-merge, `fleet update <host>`
+  (default target `main`) pulls a `main` whose `install.sh` has no stamp step yet,
+  so status stays `unknown` — expected, not a bug. Point `update --ref` at the
+  feature branch to prove the stamp before it merges.
 - A stamp that exists but won't parse reports `unknown (corrupt stamp)` — deliberately
   distinct from never-installed.
 - `build.sh` injects `cmd.Version`/`Commit`/`Dirty`/`BuildDate` by exact symbol path. Keep

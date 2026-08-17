@@ -22,6 +22,7 @@ func (r recordingRunner) Run(host string, argv ...string) (string, error) {
 	return r.fake.Run(host, argv...)
 }
 func (r recordingRunner) RunInteractive(h string, a ...string) error {
+	*r.log = append(*r.log, strings.Join(a, " "))
 	return r.fake.RunInteractive(h, a...)
 }
 

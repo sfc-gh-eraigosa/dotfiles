@@ -71,9 +71,11 @@ func (m model) View() string {
 
 // interactiveUpdate builds the command tea.Exec runs with the terminal handed
 // over, so install.sh's sudo prompt reaches the operator. It reuses
-// remoteUpdate from the headless path — one definition of "update a host".
+// remoteUpdateScript from the headless path — one definition of "update a
+// host" — targeting main (the TUI's --ref is the drift baseline, not the
+// update target).
 func interactiveUpdate(host string) *exec.Cmd {
-	return exec.Command("ssh", "-t", host, remoteUpdate)
+	return exec.Command("ssh", "-t", host, remoteUpdateScript("main"))
 }
 
 type refreshMsg struct{}

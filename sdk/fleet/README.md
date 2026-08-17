@@ -73,17 +73,30 @@ fleet tui
 
 ### `fleet update <host>...`
 
-Brings a host current, one at a time: `fetch` → `pull --ff-only` → run `install.sh`
-over `ssh -t` so you can answer credential and sudo prompts live.
+Brings a host current, one at a time: `fetch` → checkout the target ref →
+`pull --ff-only` → run `install.sh` over `ssh -t` so you can answer credential
+and sudo prompts live.
 
 ```sh
-fleet update web-01
+fleet update web-01                      # update to main (the default)
+fleet update web-01 --ref v1.2.0         # or to a tag / branch
 ```
+
+The target defaults to `main`. `--ref` points a host at a branch or tag instead
+— useful to validate a change **before** it lands on main (e.g. confirming the
+install-stamp writes, so `fleet status` starts reporting real data for that
+host). The ref is constrained to the git ref charset before it's used in the
+remote command.
 
 A **dirty** remote clone is skipped by default rather than clobbered. `--force`
 proceeds, but first preserves the host's uncommitted work in a rescue worktree
 (`git add -A` onto a `fleet-rescue/<ts>` branch — not `git stash`, which silently
 drops untracked files). Nothing is ever discarded.
+
+> **Note:** the install-stamp that `status` reads is written by `install.sh`, so
+> a host only starts reporting a real commit/age once it has run an `install.sh`
+> that *contains* the stamp step. Until then it reads `unknown` — correctly, not
+> as an error.
 
 ### `fleet discover`
 
