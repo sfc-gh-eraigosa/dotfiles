@@ -279,6 +279,47 @@ run_security_audit_setup() {
   return 0
 }
 
+# -----------------------------------------------------------------------------
+# Opt-in Windows security hardening (docs/security-hardening.md). FAIL-CLOSED,
+# exactly like run_security_audit_setup above: runs ONLY when
+# install.windows.security-hardening resolves to 'true' (gff_opt_in). A step that
+# edits group membership, an event channel, and Defender policy must never fire
+# by accident, so absent-gff/unset means SKIP.
+# The PS script SELF-ELEVATES, so this raises its own UAC prompt — a SECOND one
+# when the y/n customization also runs (that chain has its own). It is
+# independent of the y/n/s answer and rides --deferred right after the deploy,
+# so the deployed Desktop scripts are guaranteed present.
+# -----------------------------------------------------------------------------
+run_security_hardening_setup() {
+  if ! gff_opt_in install.windows.security-hardening; then
+    echo "SKIP (gff: install.windows.security-hardening is opt-in and not enabled)"
+    return 0
+  fi
+  if [ -z "${ps_exe:-}" ] || [ -z "${win_desktop:-}" ] || [ ! -d "${win_desktop}" ]; then
+    echo "WARNING: Windows paths unresolved; cannot run security-hardening setup." >&2
+    return 0
+  fi
+  export_gff_wslenv
+  _ssh_ps1_w="$(wslpath -w "${win_desktop}/Apps/scripts/setup-security-hardening.ps1" 2>/dev/null || true)"
+  if [ -z "${_ssh_ps1_w}" ]; then
+    echo "WARNING: could not resolve setup-security-hardening.ps1 as a Windows path; skipping." >&2
+    return 0
+  fi
+  echo "Applying opt-in Windows security hardening (opt-in flag is ON)..."
+  echo "  A UAC prompt will appear — approve it (the script self-elevates)."
+  # Same rc-capture pattern as setup-apps.ps1: never die silently under set -e;
+  # always surface the log. </dev/null: powershell.exe eats parent stdin (above).
+  _ssh_rc=0
+  "$ps_exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${_ssh_ps1_w}" </dev/null > /tmp/setup_security_hardening.log 2>&1 || _ssh_rc=$?
+  cat /tmp/setup_security_hardening.log
+  if [ "${_ssh_rc}" -ne 0 ]; then
+    echo "WARNING: setup-security-hardening.ps1 exited with code ${_ssh_rc} — see the output above." >&2
+    echo "         Re-run standalone: powershell.exe -ExecutionPolicy Bypass -File \"${_ssh_ps1_w}\"" >&2
+    echo "         Inspect state:     powershell.exe -ExecutionPolicy Bypass -File \"${_ssh_ps1_w}\" -Status" >&2
+  fi
+  return 0
+}
+
 case "$MODE" in
   --ask)
     # Skip state: legacy sentinel (migrated when gff is available) or the gff
@@ -303,6 +344,7 @@ case "$MODE" in
     # and the permanent-skip recording follow the recorded choice.
     deploy_windows_files
     run_security_audit_setup
+    run_security_hardening_setup
     case "$(winsetup_take_choice)" in
       y) run_windows_customization ;;
       s) winsetup_record_skip ;;
@@ -313,6 +355,7 @@ case "$MODE" in
     winsetup_skip_state && exit 0
     deploy_windows_files
     run_security_audit_setup
+    run_security_hardening_setup
     print_prompt_text
     case "$(winsetup_ask)" in
       __notty__) notty_guidance ;;
