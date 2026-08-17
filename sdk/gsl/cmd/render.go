@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/observe"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
 )
 
 var renderCmd = &cobra.Command{

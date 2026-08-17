@@ -5,8 +5,8 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/spf13/cobra"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/config"
+	"github.com/spf13/cobra"
 )
 
 var configCmd = &cobra.Command{
