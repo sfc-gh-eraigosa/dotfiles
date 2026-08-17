@@ -3,7 +3,7 @@
 - **Slug:** fleet-tui
 - **Date:** 2026-08-16
 - **Status:** Draft
-- **Relates to:** spec `../specs/fleet-tui.md` · design `../designs/fleet-tui.md` · issue [#226](https://github.com/sfc-gh-eraigosa/dotfiles/issues/226) · PR TBD
+- **Relates to:** spec `../specs/fleet-tui.md` · design `../designs/fleet-tui.md` · issue [#226](https://github.com/sfc-gh-eraigosa/dotfiles/issues/226) · design PR [#227](https://github.com/sfc-gh-eraigosa/dotfiles/pull/227)
 
 ## 1. Summary & verdict
 

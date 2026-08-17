@@ -13,7 +13,7 @@
 
 | Worker | Worker ref | Branch | PR | State |
 | :-- | :-- | :-- | :-- | :-- |
-| design (this) | `fleet-tui/<user>/mbo` | `feature/fleet-tui/<user>/mbo` | TBD | active |
+| design (this) | `fleet-tui/<user>/mbo` | `feature/fleet-tui/<user>/mbo` | [#227](https://github.com/sfc-gh-eraigosa/dotfiles/pull/227) | active |
 | build | `fleet-tui/<user>/build` | `feature/fleet-tui/<user>/build` | TBD | not created |
 
 ## 1. Task ledger

@@ -3,7 +3,7 @@
 - **Slug:** fleet-tui
 - **Date:** 2026-08-16
 - **Status:** Proposed
-- **Relates to:** builds on `fleet` (design `./fleet.md`, merged PR #224); issue [#226](https://github.com/sfc-gh-eraigosa/dotfiles/issues/226) / draft PR TBD
+- **Relates to:** builds on `fleet` (design `./fleet.md`, merged PR #224); issue [#226](https://github.com/sfc-gh-eraigosa/dotfiles/issues/226) / design PR [#227](https://github.com/sfc-gh-eraigosa/dotfiles/pull/227)
 - **Author(s):** operator + assistant
 
 ## 1. Problem / context
