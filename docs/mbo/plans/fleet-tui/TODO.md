@@ -72,6 +72,26 @@
       entry** → `fleet wake` escalating to `peer-relay` → neighbour table with a
       resolved MAC → row at its true class with `woke via <peer>`
 
-## Phase 7 — land
+## Phase 8 — sticky answers + branch visibility (Tasks 25–30)
+
+> Two gaps found by using it: the answer form forgot everything on every wave
+> (so a fleet-wide update could not be applied *consistently*), and there was no
+> way to see which branch a host is actually on before targeting it.
+
+- [x] Task 25: probe carries the live branch in the SAME round-trip; `Row.Branch`
+      + `Row.InstalledBranch` (the stamp field `probeHost` currently discards)
+- [x] Task 26: `BRANCH` column (headless + JSON + TUI), mismatch marked,
+      `detached`/`-` edges, branch added to the search haystack
+- [x] Task 27: sticky answers — `esc` keeps, `u` skips the form when remembered.
+      Write **F19a first**: it replaces `TestEscapingTheFormDiscardsTheSecret`,
+      and that deletion IS the invariant reversal — it must be visible in the diff
+- [x] Task 28: confirm-strip answer summary (secret masked), `e` edit, `F` forget.
+      **F20a is the gate that makes a session-lived credential acceptable**: the
+      plaintext secret must not appear in any rendered frame
+- [x] Task 29: `~/.config/fleet/answers.json` (0600), non-secrets only —
+      marshal-and-assert the secret's bytes are absent; hostile file ignored
+- [x] Task 30: `a` select-all respecting the `/` filter + README/AGENTS + gate
+
+## Phase 9 — land
 
 - [ ] index.md → `in-review`; decide PR promotion with operator

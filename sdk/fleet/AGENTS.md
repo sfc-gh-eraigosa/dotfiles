@@ -16,9 +16,9 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 
 | Command | Does |
 | :-- | :-- |
-| `fleet status [host...]` | table of host · commit · last run · status; `--json`; exits non-zero if any host is stale |
+| `fleet status [host...]` | table of host · commit · **branch** · last run · status; `--json`; exits non-zero if any host is stale |
 | `fleet discover` | list every concrete ssh-config host as `in-fleet` / `available`; `--json`; `--add-all` bulk-adopts (one pass, one backup; `--dry-run` / `--yes`) |
-| `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v` selection, concurrent background updates (`--jobs`), `s` ssh, `?` help |
+| `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v`/`a` selection, concurrent background updates (`--jobs`), `w` wake, `s` ssh, `F` forget answers, `?` help |
 | `fleet update <host>...` | fetch → checkout `--ref` (default `main`) → `pull --ff-only` → `install.sh` over `ssh -t`, one host at a time |
 | `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
 | `fleet remove <alias> [--purge]` | unmark (keeps SSH access); `--purge` deletes the block |
@@ -39,6 +39,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `internal/drift` | classify drift + format age (`now` injected — never `time.Now()`) |
 | `internal/keys` | authorized_keys diff (reports removals, never applies them) |
 | `internal/reach` | the wake ladder: rung order, peer ranking, provenance (pure; every impure edge injected via `Deps`) |
+| `cmd/answers_store.go` | the non-secret prompt preferences on disk (`0600`); the on-disk type has no credential field |
 | `internal/runner` | the **only** seam that touches a remote host (`Exec` real, `Fake` for tests) |
 
 Everything but `runner` is pure text-in/struct-out, so the decision surface is unit-tested
@@ -59,7 +60,7 @@ without opening a socket.
   (`git add -A` onto a branch — **not** `stash@{0}`, which silently drops untracked files).
 - **Failures are named per host** and reflected in the exit code; never swallowed.
 - **TUI in-flight ownership**: a host is in exactly one of `pending` / `updating` /
-  resolved. Refresh skips hosts the update engine owns; every update completion
+  `waking` / resolved. Refresh skips hosts an async path owns; every completion
   re-polls its host. Two async paths must never own one row.
 - **TUI updates are background-first**: `tea.ExecProcess` suspends the WHOLE TUI, so
   it is reserved for the sudo-precheck fallback and the `s` ssh action. The default
@@ -77,7 +78,31 @@ without opening a socket.
   `Mark` into a single config then writes once — N separate writes would mean N
   backups and N windows in which a partial write costs SSH access. Nothing
   available ⇒ no write at all.
-- **The answer form starts empty every wave** — no inherited answers.
+- **Answers are sticky for the session; the confirm strip is the gate.** This
+  deliberately *reverses* the earlier "form starts empty every wave" rule. That rule
+  forced a retype for every wave of a fleet-wide update, and retyping is exactly how two
+  waves end up applying *different* answers — the opposite of what the form is for. `esc`
+  now backs out without forgetting, `u` skips the form when answers are remembered, and
+  the protection against stale answers comes from the confirm strip **displaying** them
+  (masked) rather than from throwing them away. `F` forgets on purpose; process exit
+  forgets unconditionally. Don't "restore" the old behaviour thinking it was an oversight.
+- **The credential is session-scoped and never serialised.** Sticky answers widened its
+  lifetime from one wave to one process — a bounded, deliberate trade. `~/.config/fleet/answers.json`
+  (`0600`) holds `windows` and `gemini` only: the on-disk type has no field for a
+  credential, so the mistake is unrepresentable rather than merely avoided. Pinned by
+  `TestSavedAnswersNeverContainTheCredential` (asserts on the marshalled bytes) and
+  `TestLoadIgnoresACredentialPlantedInTheFile`.
+- **The persistence path is INJECTED (`tuiModel.ansPath`), never resolved inside the model.**
+  A model that called `answersPath()` itself made every test write to the developer's real
+  `~/.config/fleet`. Empty path = no persistence, which is what tests get.
+- **Branch costs no extra round-trip.** The live checked-out branch rides in the *same*
+  remote command as the stamp read, split on `probeDelim`. A second dial per host would
+  double the poll for one column. Pinned by `TestBranchCostsNoExtraRoundTrip`.
+- **Row width is derived, not guessed.** `rowPrefixWidth` sums the same numbers as
+  `rowView`'s format string and `failWidth` budgets from it; the failure cause is dropped
+  rather than clamped to a floor when nothing fits. Adding the BRANCH column against a
+  hardcoded prefix overflowed the row, and a minimum-width floor pushed it past the edge
+  anyway — both caught by the demo width guard.
 - **TUI cursor/selection are alias-keyed**, never index-keyed — rows re-sort as they
   stream in.
 - **Wake never mutates a target.** The ladder sends ICMP, reads `$SSH_CONNECTION` on a
@@ -118,6 +143,16 @@ without opening a socket.
   `/etc/NetworkManager/conf.d/wifi-powersave-off.conf` containing `[connection]` /
   `wifi.powersave = 2`. Fleet deliberately does **not** apply this for you; see the
   non-mutation invariant.
+- **`BRANCH` shows the LIVE checkout, not the stamp.** `feature/x≠main` means "checked
+  out feature/x, last installed from main" — usually the explanation for an
+  `ahead/divergent` row. `detached` is a detached HEAD; `-` means no clone (or a host too
+  old to answer the two-part probe). Branch is in the search haystack, so `/feature` → `a`
+  → `u` targets every feature-branch host.
+- **`BRANCH` shows the LIVE checkout, not the stamp.** `feature/x≠main` means "checked out
+  feature/x, last installed from main" — usually the explanation for an `ahead/divergent`
+  row. `detached` is a detached HEAD; `-` means no clone, no git, or a host too old to
+  answer the two-part probe. Branch is in the search haystack, so `/feature` → `a` → `u`
+  targets every feature-branch host in three keystrokes.
 - **`local-prime` is a no-op under WSL2 NAT and that is expected.** The workstation's
   `eth0` is a private `172.x` link with no layer-2 presence on the fleet subnet, so the
   rung reports `skipped: workstation is not on the target's subnet`. It earns its place

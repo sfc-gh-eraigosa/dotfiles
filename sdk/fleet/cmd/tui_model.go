@@ -96,6 +96,13 @@ type tuiModel struct {
 	waking map[string]bool
 	wake   waker // nil = --no-wake
 
+	// ansPath is where the non-secret prompt preferences persist. INJECTED,
+	// not resolved here: a model that reached os.UserConfigDir() itself made
+	// every test write to the developer's real config, which is both a
+	// hermeticity bug and a rude thing to do to someone's home directory.
+	// Empty (the test default) disables persistence entirely.
+	ansPath string
+
 	hosts   map[string]sshconf.Host
 	run     runner.Runner
 	base    Baseliner
@@ -236,7 +243,9 @@ func (m *tuiModel) move(d int) {
 // rowText is what a search pattern matches against: the rendered line, so
 // `/behind` and `/unreachable` work as naturally as `/hostname`.
 func (m tuiModel) rowText(r Row) string {
-	return strings.Join([]string{r.Alias, r.Commit, statusLabel(r), r.Note}, " ")
+	// Branch is in the haystack on purpose: `/feature` + select-all + `u` is
+	// the targeting workflow the branch column exists to enable.
+	return strings.Join([]string{r.Alias, r.Commit, branchCell(r), statusLabel(r), r.Note}, " ")
 }
 
 // compileSearch applies vim smartcase: case-insensitive unless the pattern
@@ -343,6 +352,50 @@ func (m tuiModel) selectedAliases() []string {
 		}
 	}
 	return out
+}
+
+// filteredRows is what the operator can currently see through the search: the
+// rows an action should apply to. With no active pattern it is every row.
+func (m tuiModel) filteredRows() []Row {
+	if m.search.re == nil {
+		return m.rows
+	}
+	var out []Row
+	for _, r := range m.rows {
+		if m.matches(r) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// selectAllFiltered selects every visible row, or clears them when they are
+// already all selected. A PARTIAL selection is completed rather than toggled
+// off, so the key never destroys a selection the operator built by hand.
+func (m *tuiModel) selectAllFiltered() {
+	rows := m.filteredRows()
+	if len(rows) == 0 {
+		return
+	}
+	all := true
+	for _, r := range rows {
+		if !m.selected[r.Alias] {
+			all = false
+			break
+		}
+	}
+	for _, r := range rows {
+		if all {
+			delete(m.selected, r.Alias)
+		} else {
+			m.selected[r.Alias] = true
+		}
+	}
+	if all {
+		m.status = "selection cleared"
+	} else {
+		m.status = fmt.Sprintf("%d host(s) selected", len(m.selected))
+	}
 }
 
 // updateTargets is the selection, or the cursor row when nothing is selected.

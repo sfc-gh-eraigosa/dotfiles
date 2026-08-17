@@ -90,15 +90,66 @@ func (e *fakeErr) Error() string { return e.s }
 
 // `u` opens the answer form first (operator chose "ask me per wave"), and it
 // must start empty so a wave never inherits a previous wave's answers.
-func TestUpdateOpensAnEmptyAnswerForm(t *testing.T) {
+// remembered builds an answer set as if a previous wave had filled it in,
+// without spelling a credential literal into a struct field.
+func remembered() answers {
+	var a answers
+	a.appendSecret(probeMarker)
+	a.windows, a.gemini = "y", "keep"
+	return a
+}
+
+// F19b — the FIRST wave of a session has nothing remembered, so `u` must open
+// the form.
+//
+// This replaces TestUpdateOpensAnEmptyAnswerForm, which asserted the form was
+// emptied on EVERY `u`. That rule existed to stop a wave inheriting stale
+// answers; in practice it forced the operator to retype the password for every
+// wave of a fleet-wide update, and retyping is precisely how two waves end up
+// applying different answers. The protection now comes from the confirm strip
+// showing what will be applied (F20a) rather than from forgetting it.
+func TestFirstWaveOpensTheAnswerForm(t *testing.T) {
 	m := testModel("a", "b")
-	m.ans = answers{sudoSecret: probeMarker, windows: "y"}
 	m2, _ := send(m, "u")
 	if m2.mode != modeAnswers {
-		t.Fatalf("u must open the answer form, mode=%v", m2.mode)
+		t.Fatalf("u must open the answer form when nothing is remembered, mode=%v", m2.mode)
 	}
 	if m2.ans.secretLen() != 0 || m2.ans.windows != "" {
-		t.Fatalf("the form must start empty, got %+v", m2.ans)
+		t.Fatalf("the first form of a session must start empty, got %+v", m2.ans)
+	}
+}
+
+// F19c — a later wave skips the form: the answers are already known, and the
+// confirm strip is where they get one last look.
+func TestLaterWaveSkipsStraightToConfirm(t *testing.T) {
+	m := testModel("a", "b")
+	m.ans = remembered()
+
+	m2, _ := send(m, "u")
+	if m2.mode != modeConfirm {
+		t.Fatalf("u with remembered answers must go straight to confirm, mode=%v", m2.mode)
+	}
+	if m2.ans.secretLen() == 0 || m2.ans.windows != "y" {
+		t.Fatalf("remembered answers must survive into the wave, got %+v", m2.ans)
+	}
+}
+
+// F19d — the whole point: change the targets, keep the answers. Re-typing a
+// password because the selection changed is what made fleet-wide updates
+// inconsistent in the first place.
+func TestAnswersSurviveASelectionChange(t *testing.T) {
+	m := testModel("a", "b")
+	m2, _ := send(m, "u")       // form
+	m3, _ := send(m2, "p", "w") // type a credential
+	m4, _ := send(m3, "esc")    // back out
+	m5, _ := send(m4, "j", " ") // move and select a different host
+
+	if m5.ans.secretLen() != 2 {
+		t.Fatalf("changing the selection must not forget the answers, got %+v", m5.ans)
+	}
+	m6, _ := send(m5, "u")
+	if m6.mode != modeConfirm {
+		t.Fatalf("the next wave should reuse them, mode=%v", m6.mode)
 	}
 }
 
@@ -133,14 +184,21 @@ func TestAnswerFormMasksTheSecret(t *testing.T) {
 	}
 }
 
-// Cancelling must drop it rather than keeping it in memory.
-func TestEscapingTheFormDiscardsTheSecret(t *testing.T) {
+// F19a — esc backs OUT of the form; it no longer forgets.
+//
+// This replaces TestEscapingTheFormDiscardsTheSecret. Its deletion is the
+// deliberate reversal of the v2 invariant, not an oversight: forgetting on esc
+// meant an operator who glanced away from the form paid for it with a retype.
+// Forgetting is now an explicit act (`F`, see TestForgetClearsEverything) and
+// still unconditional at process exit.
+func TestEscapingTheFormKeepsTheAnswers(t *testing.T) {
 	m := testModel("a")
 	m2, _ := send(m, "u")
 	m3, _ := send(m2, "p", "w")
 	m4, _ := send(m3, "esc")
-	if m4.ans.secretLen() != 0 {
-		t.Fatal("cancelling the form must discard the credential")
+
+	if m4.ans.secretLen() != 2 {
+		t.Fatal("esc must back out of the form without forgetting the answers")
 	}
 	if m4.mode != modeNormal {
 		t.Fatal("esc must return to normal mode")

@@ -55,6 +55,13 @@ fleet status web-01 db-01          # just these two
 fleet status --json | jq .         # machine-readable
 ```
 
+The `BRANCH` column is the branch **checked out on the host right now**. When it
+differs from the one the host last installed from, both are shown —
+`feature/gff≠main` reads *"checked out feature/gff, last installed from main"*,
+which is usually the explanation for an `ahead/divergent` row. `detached` is a
+detached HEAD and `-` means no clone. It costs nothing: the live branch rides in
+the same SSH round-trip fleet already spends reading the install stamp.
+
 Classes: `up-to-date`, `behind`, `divergent`, `unknown`, `unreachable`. An
 unreachable host is reported in the table, never silently dropped. A host that has
 never run the stamped installer reads `unknown` (the stamp is **not** retroactive);
@@ -142,8 +149,11 @@ fleet tui --update-ref feature/x         # update targets that ref instead of ma
 | `space` | toggle selection on the cursor host |
 | `v` | visual range select (extend with motions) |
 | `esc` | clear search / selection |
+| `a` | select all — respects an active `/` filter |
 | `u` | update the selection (or the cursor host) |
 | `w` | wake the selection (or the cursor host) — rows tick `waking ⠋` |
+| `F` | forget the remembered answers (including the saved preferences) |
+| `e` | on the confirm strip: edit the remembered answers |
 | `s` | ssh to the cursor host |
 | `r` | refresh |
 | `?` | help overlay |
@@ -165,8 +175,8 @@ input it cannot receive. Hosts whose precheck says they *need* a password are
 routed to a serial interactive handoff that runs after the background wave —
 there the terminal is genuinely released so the sudo prompt reaches you.
 
-**Unattended answers.** `u` opens a short form before anything runs, asked once
-per wave (nothing is pre-filled, so a wave never inherits stale answers):
+**Unattended answers.** `u` opens a short form before anything runs — asked once
+per **session**, not once per wave:
 
 | Field | Feeds |
 |-------|-------|
@@ -180,6 +190,31 @@ not guaranteed to carry), and the prime is **verified** with `sudo -n true`
 before the install starts — otherwise a long run would proceed with every
 privileged step silently skipping. A rejected password and a credential that
 did not persist are reported as distinct, named failures on the row.
+
+**Answers are sticky.** They survive `esc`, selection changes, and every later
+wave, so a fleet-wide update applies *the same* answers everywhere without you
+retyping them — retyping is exactly how two waves end up diverging. On later
+waves `u` skips the form and goes straight to the confirm strip, which shows
+what is about to be applied:
+
+```text
+update 7 host(s) → main: web-01, web-02, db-01, …
+  answers: sudo •••••• · windows s · gemini keep   y: go  e: edit answers  n/esc: cancel
+```
+
+That display is the point: the old design forgot the answers between waves, so
+it never had to show them. This one remembers, so it shows them every time.
+
+- `e` on the confirm strip reopens the form, pre-filled.
+- `F` forgets everything, credential included, and deletes the saved preferences.
+- The **credential is never written to disk** and dies with the process. Only
+  `windows` and `gemini` persist, to `~/.config/fleet/answers.json` (`0600`) —
+  the on-disk type has no field for a credential, so it cannot leak there even
+  by accident.
+
+**Targeting a subset.** `a` selects everything currently visible, and it respects
+an active search — so `/feature` then `a` then `u` updates exactly the hosts on
+a feature branch, which is what the `BRANCH` column is for.
 
 Selection and cursor are keyed by host **alias**, not row position, so the
 worst-first re-sort that happens as rows stream in never moves your cursor or

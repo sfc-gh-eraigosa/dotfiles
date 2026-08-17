@@ -100,8 +100,39 @@ func (a *answers) trimSecret() {
 // secretLen is what the view is allowed to know — enough to draw a mask.
 func (a answers) secretLen() int { return len(a.sudoSecret) }
 
-// needsSudo reports whether we have a password to prime with.
+// needsSudo reports whether we have a credential to prime with.
 func (a answers) needsSudo() bool { return a.sudoSecret != "" }
+
+// remembered reports whether a previous wave (or the persisted preferences)
+// already filled anything in. It decides whether `u` opens the form or goes
+// straight to the confirm strip.
+func (a answers) remembered() bool {
+	return a.sudoSecret != "" || a.windows != "" || a.gemini != ""
+}
+
+// summary is what the confirm strip prints. It is the compensating control for
+// answers that outlive their wave: the operator sees exactly what is about to
+// be applied, every time. The credential appears ONLY as a length mask.
+func (a answers) summary() string {
+	parts := []string{"sudo " + maskOrNone(a.secretLen())}
+	parts = append(parts, "windows "+orUnset(a.windows))
+	parts = append(parts, "gemini "+orUnset(a.gemini))
+	return strings.Join(parts, " · ")
+}
+
+func maskOrNone(n int) string {
+	if n == 0 {
+		return "(none)"
+	}
+	return strings.Repeat("•", n)
+}
+
+func orUnset(s string) string {
+	if s == "" {
+		return "(unset)"
+	}
+	return s
+}
 
 // envPrefix renders the pre-answers as environment assignments for the remote
 // shell. Only the two prompt answers travel this way — the password never

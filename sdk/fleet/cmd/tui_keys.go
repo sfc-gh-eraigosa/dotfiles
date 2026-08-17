@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -14,11 +16,14 @@ var keyHelp = []struct{ keys, what string }{
 	{"/", "regex search (smartcase)"},
 	{"n / N", "next / previous match"},
 	{"space", "toggle selection"},
+	{"a", "select all (respects an active search)"},
 	{"v", "visual range select"},
 	{"esc", "clear search / selection"},
 	{"u", "update selection (or cursor host)"},
 	{"w", "wake selection (or cursor host)"},
-	{"tab / enter", "(answer form) next field · esc cancels"},
+	{"F", "forget answers (incl. saved preferences)"},
+	{"tab / enter", "(answer form) next field · esc backs out, keeping answers"},
+	{"e", "(confirm) edit the remembered answers"},
 	{"s", "ssh to cursor host"},
 	{"r", "refresh"},
 	{"?", "toggle this help"},
@@ -48,8 +53,10 @@ func route(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 func routeAnswers(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch k.String() {
 	case "esc":
+		// Backs OUT of the form; it does NOT forget. Answers persist for the
+		// session so a fleet-wide update applies the same ones to every wave —
+		// `F` in normal mode is the deliberate way to forget them.
 		m.mode = modeNormal
-		m.ans = answers{} // abandoning the form must not retain the secret
 		m.status = "update cancelled"
 		return m, nil
 	case "tab", "down":
@@ -65,6 +72,10 @@ func routeAnswers(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.ansField++
 			return m, nil
 		}
+		// Persist the non-secret preferences as the form commits, so the next
+		// session starts where this one left off. A failed write is not worth
+		// interrupting a wave for — it costs a retype next time, nothing more.
+		_ = saveAnswers(m.ansPath, m.ans)
 		m.mode = modeConfirm
 		return m, nil
 	}
@@ -141,6 +152,11 @@ func routeSearch(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func routeConfirm(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch k.String() {
+	case "e":
+		// Correct a remembered set without throwing it away first.
+		m.ansField = fieldSudo
+		m.mode = modeAnswers
+		return m, nil
 	case "y", "Y", "enter":
 		targets := m.updateTargets()
 		m.mode = modeNormal
@@ -222,13 +238,30 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.selected = map[string]bool{}
 		m.search = searchState{}
 	case "u":
-		// The answer form always comes first (operator choice: no defaults),
-		// so an unattended wave never inherits stale answers from a prior one.
+		// The form is asked once per session, not once per wave: retyping a
+		// credential for every wave is what made a fleet-wide update apply
+		// INCONSISTENT answers. Staleness is guarded by the confirm strip,
+		// which shows exactly what is about to be applied.
 		if len(m.updateTargets()) > 0 {
-			m.ans = answers{}
-			m.ansField = fieldSudo
-			m.mode = modeAnswers
+			if m.ans.remembered() {
+				m.mode = modeConfirm
+			} else {
+				m.ansField = fieldSudo
+				m.mode = modeAnswers
+			}
 		}
+	case "a":
+		m.selectAllFiltered()
+	case "F":
+		// esc no longer forgets, so forgetting is explicit. Normal mode only:
+		// in search or the answer form an F is a character the operator typed.
+		// "Forget" means forget: the saved preferences go too, or a restart
+		// would quietly bring back what the operator just discarded.
+		m.ans = answers{}
+		if m.ansPath != "" {
+			_ = os.Remove(m.ansPath)
+		}
+		m.status = "answers forgotten"
 	case "w":
 		// Wake needs no confirm strip: it mutates nothing on the target, so
 		// the worst case of a stray `w` is a few seconds of ICMP.

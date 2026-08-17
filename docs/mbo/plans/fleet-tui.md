@@ -25,6 +25,18 @@ how it woke. Adds one `Runner` method (`RunVia` = `ssh -J`), one verb
 automatable, 1 human-gated hardware reproduction. Rationale and the incident
 that motivated it: design §1.1/§4.1.
 
+**Increment 3 — sticky answers + branch visibility (F19–F23, Tasks 25–30).**
+Two gaps found by using the thing. The answer form forgot everything on every
+wave, so a *fleet-wide* update could not be applied consistently without
+re-typing (and re-typing is how two waves diverge) — answers now persist for the
+session, `u` skips straight to a confirm strip that shows them, `F` forgets, and
+the non-secret half persists across sessions. And there was no way to see which
+branch a host is on before targeting it — the probe now carries the live
+checked-out branch in the **same** round-trip it already spends on the stamp.
+This deliberately **reverses** the v2 "answer form starts empty every wave"
+invariant; design §4.2 records why, and §4.3 covers the branch work. 6 tasks,
+all automatable.
+
 **Standing rules (from the fleet build — apply to every task):**
 
 - TDD: RED (write the failing test) → RUN-RED (observe it fail) → GREEN →
@@ -59,6 +71,11 @@ that motivated it: design §1.1/§4.1.
 | `sdk/fleet/cmd/status.go` | `probeHost` runs the ladder on an unreachable first probe, re-probes, sets `Row.Note` | F15 |
 | `sdk/fleet/cmd/root.go` | persistent `--no-wake`, `--wake-timeout` | F18 |
 | `sdk/fleet/cmd/tui_model.go` · `tui_keys.go` · `tui_cmds.go` | `waking` ownership set, `w` key + `keyHelp` row, `wakeHost` cmd + `wakeDoneMsg` | F17 |
+
+| `sdk/fleet/cmd/status.go` | two-part probe (stamp + live branch, one round-trip); `Row.Branch` / `Row.InstalledBranch`; `BRANCH` column + JSON fields | F23 |
+| `sdk/fleet/cmd/answers_store.go` · `answers_store_test.go` | **new** — `~/.config/fleet/answers.json` (`0600`), non-secrets only; secret-never-serialised test | F21 |
+| `sdk/fleet/cmd/tui_keys.go` | `esc` keeps answers; `a` select-all (filtered); `F` forget; `e` on the confirm strip; `keyHelp` rows | F19, F20, F22 |
+| `sdk/fleet/cmd/tui_view.go` | confirm-strip answer summary (masked); `BRANCH` column | F20, F23 |
 
 Touch-points outside `sdk/fleet`: **none** (no install.sh/gff/CI changes — the
 binary and build path are unchanged).
@@ -371,12 +388,73 @@ Done-when: all four captures committed (sanitized); TRACKING row cites them.
 This is the only evidence that the *mechanism* works — the unit suite proves
 only the policy.
 
+### Increment 3 — sticky answers + branch visibility
+
+**Task 25 — probe carries the live branch (F23a–b, F23e).**
+Extend the probe to `cat <stamp>; echo '<delim>'; git -C ~/git/dotfiles
+rev-parse --abbrev-ref HEAD 2>/dev/null || true` and split on the delimiter.
+`Row` gains `Branch` + `InstalledBranch` (the latter from the stamp field
+`stamp.Parse` already returns and `probeHost` currently discards).
+RED: F23a one runner call carries both (call-count on a recording runner) ·
+F23b stamp half still parses, corrupt stamp still detected, a mangled second
+half leaves the drift class untouched · F23e empty second half ⇒ `-`.
+Done-when: green; every existing status test unchanged and passing.
+Evidence: `task25/probe-branch.txt`.
+
+**Task 26 — branch column (F23c–d, F23f).**
+Headless `BRANCH` column + JSON `branch`/`installed_branch`; TUI column;
+mismatch marked; `detached`; branch added to `rowText`.
+RED: F23c mismatch marked / match plain · F23d detached · F23f `/feature`
+matches on branch. Regenerate the affected golden frames.
+Done-when: green; goldens updated deliberately, diff reviewed.
+Evidence: `task26/branch-column.txt`.
+
+**Task 27 — sticky answers (F19a–d).**
+Stop wiping `m.ans`: `esc` keeps, `u` opens the form only when nothing is
+remembered and otherwise jumps to `modeConfirm`.
+RED: **F19a first** — it replaces `TestEscapingTheFormDiscardsTheSecret`, whose
+deletion is the deliberate invariant reversal and must be visible in the diff ·
+F19b first wave opens the form · F19c second wave skips it · F19d answers
+survive a selection change.
+Done-when: green; `TestUpdateOpensAnEmptyAnswerForm` replaced by its
+sticky counterpart, not silently deleted.
+Evidence: `task27/sticky.txt`.
+
+**Task 28 — confirm summary, `e` edit, `F` forget (F20a–d).**
+Answer summary on the confirm strip with the secret masked; `e` reopens the
+pre-filled form; `F` clears everything; `keyHelp` rows for `a`, `F`, `e`.
+RED: F20a **the plaintext secret must not appear in ANY rendered frame** (the
+gate that makes a longer-lived credential acceptable) · F20b `e` pre-fills ·
+F20c `F` clears and does not fire in search/answers mode · F20d help lists them.
+Done-when: green.
+Evidence: `task28/confirm-summary.txt`.
+
+**Task 29 — answers persistence (F21a–c).**
+`~/.config/fleet/answers.json`, `0600`, non-secrets only; loaded at TUI start,
+saved when the form commits.
+RED: F21a **marshal a fully-populated `answers` and assert the secret's bytes
+are absent** · F21b a hand-edited secret in the file is ignored, never adopted ·
+F21c missing/unreadable/corrupt degrades to "nothing remembered".
+Done-when: green; file mode asserted `0600`.
+Evidence: `task29/persistence.txt`.
+
+**Task 30 — select-all + docs + gate (F22a–c).**
+`a` toggles selection over the **filtered** rows; then README/AGENTS (new keys,
+branch column, the sticky-answer invariant reversal and why, the answers file)
+and the full gate.
+RED: F22a no filter · F22b respects an active `/` filter · F22c three-state
+toggle.
+Done-when: gate green ≥ 60% (fleet); vet, gofmt, portability, markdownlint at
+baseline; identity-leak sweep clean.
+Evidence: `task30/gate.txt`.
+
 ## 5. Verification mapping
 
 Every spec §5 rule maps to the named test written in its task: F1a–c → Task 5,
 F2a → 6, F2b → 10, F3a → 2, F4a–d → 3–4, F5a–c → 7, F6a → 8, F7a–b → 9,
 F8a–f + F9a–b → 10, F13a–b → 11, F10a → 12, F11a + F12a → 13,
-F14a–g → 19, F15a–d → 20, F16a–d → 21, F17a–d → 22, F18a → 20, F18b → 21.
+F14a–g → 19, F15a–d → 20, F16a–d → 21, F17a–d → 22, F18a → 20, F18b → 21,
+F19a–d → 27, F20a–d → 28, F21a–c → 29, F22a–c → 30, F23a–b/e → 25, F23c–d/f → 26.
 The mapping is restated per-row in TRACKING.md as tasks complete.
 
 ## 6. Integration & rollout
@@ -403,6 +481,11 @@ A feature without captured evidence is not done.
 Default: single worker (`fleet-tui/<user>/build`), sequential Tasks 1–15 —
 the tasks chain through one model struct, so parallel leaves would fight over
 the same files. No CAP-B breakout.
+
+Increment 3 splits cleanly in two: Tasks 25–26 (branch) touch the probe and
+renderers; Tasks 27–30 (answers/selection) touch the model and keys. They share
+no state and could run as parallel leaves, but at two-to-four tasks each the
+coordination costs more than it saves — single worker, 25 → 30 in order.
 
 Increment 2 is likewise sequential, with one hard edge: **Task 18 (`RunVia`)
 blocks Task 17**, and Task 19 (`internal/reach`) blocks 20–22, which all consume

@@ -122,6 +122,11 @@ and `Fake`.
 | F16 | `fleet wake [host...]`: explicit verb, prints the ladder rung by rung, `--json`, exit non-zero if any target stayed unreachable |
 | F17 | TUI `w`: wake the selection (or cursor host) in the background lane; row ticks `waking ⠋ → woke/unreachable`; listed in `keyHelp` |
 | F18 | Flags: `--no-wake` disables the ladder everywhere; `--wake-timeout` (default 8s) bounds it; both persistent on the root command |
+| F19 | Sticky answers: `m.ans` survives `esc` and selection changes; `u` opens the form only when nothing is remembered, else goes straight to confirm |
+| F20 | Confirm strip renders the answer summary (`sudo ****** · windows s · gemini keep`); `e` reopens the pre-filled form; `F` (normal mode) forgets everything incl. the secret |
+| F21 | Non-secret answers persist to `~/.config/fleet/answers.json` (`0600`); the sudo secret is **never** serialised; an unreadable/corrupt file degrades to "nothing remembered" |
+| F22 | `a` toggles selection over the currently **filtered** rows (all filtered selected ⇒ clear; else select all filtered) |
+| F23 | Branch column: live checked-out branch + stamped install branch, both from **one** SSH round-trip; mismatch marked; `detached` / `-` edge cases; branch joins the search haystack |
 
 ## 5. Evaluation criteria (per feature)
 
@@ -177,6 +182,26 @@ Every rule below becomes a named test. Format: **trigger · fires · must-not-fi
 - **F17d** `?` help · lists `w` · `keyHelp` stays the single source of truth (no second hand-written list) · overlay test asserting `w` present.
 - **F18a** `--wake-timeout 0`/negative · rejected at command start · valid durations accepted · flag-validation test.
 - **F18b** `ping` invocation · never passes `-W` · bounded by `exec.CommandContext` instead · argv assertion (GNU seconds vs BSD milliseconds trap, design §4.1).
+- **F19a** `esc` in the answer form · mode returns to normal, answers **kept** · the secret must NOT be wiped (deliberate reversal of the v2 rule) · replaces `TestEscapingTheFormDiscardsTheSecret`.
+- **F19b** `u` with nothing remembered · opens the form · must not skip to confirm on a first wave · fresh-model test.
+- **F19c** `u` with answers remembered · goes straight to `modeConfirm` · the form must not reopen · second-wave test.
+- **F19d** selection changed between waves · remembered answers survive · re-typing must never be required to change targets · sequence test (`u`→esc→`space`→`u`).
+- **F20a** confirm strip with remembered answers · renders the summary with the secret **masked** · the plaintext secret must never appear in any frame · golden + substring assertion.
+- **F20b** `e` on the confirm strip · reopens the form pre-filled with the remembered values · must not clear them first · transition test.
+- **F20c** `F` in normal mode · every answer cleared incl. the secret; next `u` opens an empty form · must not fire in search/answers mode (it is a literal character there) · mode-routing test.
+- **F20d** `?` help · lists `a`, `F`, and the confirm-strip `e` · `keyHelp` stays the single source of truth · overlay test.
+- **F21a** save · writes only `windows` + `gemini`; file mode `0600` · **the secret's bytes must be absent from the marshalled output** · marshal a fully-populated `answers`, assert the secret substring is not present.
+- **F21b** load at startup · pre-populates the two prompt answers, leaves the secret empty · a stored secret (hand-edited in) must be ignored, never adopted · hostile-file test.
+- **F21c** missing / unreadable / corrupt JSON · degrades to "nothing remembered", TUI still starts · a bad file must never fail the dashboard · three-case table test.
+- **F22a** `a` with no filter · selects every row; pressing again clears · alias-keyed, survives re-sort · toggle test.
+- **F22b** `a` with an active `/` filter · selects exactly the matching rows · must NOT select non-matching rows · filtered-selection test.
+- **F22c** `a` when all filtered rows are already selected · clears them · partial selection ⇒ selects the rest · three-state test.
+- **F23a** probe output · one runner call carries both stamp and live branch · a second SSH round-trip must not be issued · call-count assertion on a recording runner.
+- **F23b** delimiter split · stamp half parses exactly as before; corrupt-stamp detection unchanged · a malformed second half must not affect the drift class · mixed-fixture test.
+- **F23c** live branch differs from stamped · row shows the mismatch · a matching pair renders plainly (no noise) · render test both ways.
+- **F23d** detached HEAD (`rev-parse` prints `HEAD`) · renders `detached` · must not render the literal `HEAD` · edge test.
+- **F23e** no clone / git error (empty second half) · renders `-` · must not blank the whole row or error the probe · edge test.
+- **F23f** search · `/feature` matches a host whose live branch is `feature/x` · branch is in `rowText` · search-haystack test.
 
 ## 6. Verification harness
 

@@ -37,11 +37,11 @@ func TestDemoFrames(t *testing.T) {
 
 	// A realistic mixed fleet: one of every status class.
 	resolved := []Row{
-		{Alias: "host-desktop", Class: "up-to-date", Commit: "72392c9", Age: testNow.Add(-2 * time.Hour)},
-		{Alias: "host-nano", Class: "behind", Behind: 24, Commit: "9484943", Age: testNow.Add(-16 * 24 * time.Hour)},
+		{Alias: "host-desktop", Class: "up-to-date", Commit: "72392c9", Age: testNow.Add(-2 * time.Hour), Branch: "main", InstalledBranch: "main"},
+		{Alias: "host-nano", Class: "behind", Behind: 24, Commit: "9484943", Age: testNow.Add(-16 * 24 * time.Hour), Branch: "main", InstalledBranch: "main"},
 		{Alias: "host-pi", Class: "unreachable"},
 		{Alias: "host-edge", Class: "unknown", Note: "corrupt stamp"},
-		{Alias: "host-lab", Class: "divergent", Commit: "abc1234", Age: testNow.Add(-3 * time.Hour)},
+		{Alias: "host-lab", Class: "divergent", Commit: "abc1234", Age: testNow.Add(-3 * time.Hour), Branch: "feature/gff", InstalledBranch: "main"},
 	}
 	settled := func() tuiModel {
 		m := build()

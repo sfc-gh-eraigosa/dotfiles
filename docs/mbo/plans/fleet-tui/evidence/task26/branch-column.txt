@@ -1,0 +1,13 @@
+# Task 26 — branch column
+=== RUN   TestRenderTableShowsTheBranchColumn
+--- PASS: TestRenderTableShowsTheBranchColumn (0.00s)
+=== RUN   TestRenderJSONCarriesBothBranches
+--- PASS: TestRenderJSONCarriesBothBranches (0.00s)
+=== RUN   TestSearchMatchesOnBranch
+--- PASS: TestSearchMatchesOnBranch (0.00s)
+=== RUN   TestRowNeverExceedsTerminalWidth
+--- PASS: TestRowNeverExceedsTerminalWidth (0.00s)
+=== RUN   TestBranchCellMarksAMismatchAndStaysQuietOtherwise
+--- PASS: TestBranchCellMarksAMismatchAndStaysQuietOtherwise (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.005s

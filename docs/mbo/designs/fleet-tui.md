@@ -75,6 +75,27 @@ Two facts from the incident constrain everything below:
   interrogation and no platform-specific code. That address is precisely the
   ping target a sleeping host must be given.
 
+### 1.2 Two gaps found by using it (2026-08-17)
+
+**The answer form forgets everything, constantly.** v2 deliberately reset the
+pre-wave answers on every `u` and discarded them on `esc` ("no inherited
+answers"). In practice an operator updating a *fleet* runs several waves — some
+hosts fail, some route to the interactive fallback, some are added to the
+selection afterwards — and each wave demanded the sudo password and both
+install.sh choices again from scratch. Worse, re-typing by hand is exactly how
+two waves end up with *different* answers, which is the opposite of the
+consistency the form exists to provide. The invariant was protecting against
+stale answers being applied silently; it was paying for that with a guarantee
+nobody asked for and a real risk it did not prevent.
+
+**You cannot see which branch a host is actually on.** `status` reports a
+commit and a drift class, so a host sitting on a feature branch reads
+`ahead/divergent` with no indication of *why*. Deciding "which machines should
+I target" therefore meant SSHing in to look. The stamp has recorded `branch`
+since day one and `stamp.Parse` already returns it (`stamp.go:47`) — `probeHost`
+simply discarded it. Even that is only the branch a host last *installed from*;
+what an operator wants before targeting is what is *checked out right now*.
+
 ## 2. Goals & non-goals
 
 **Goals**
@@ -125,8 +146,29 @@ Two facts from the incident constrain everything below:
     power-save host rather than a flaky one. Automatic everywhere, with an
     explicit `fleet wake` verb and a TUI `w` key for on-demand use, and
     `--no-wake` for scripted runs that want the fast, literal answer.
+11. **Answers persist for the session (sticky answers)** — the pre-wave answers
+    survive `esc`, selection changes, and repeated waves, so a fleet-wide update
+    applies *the same* answers to every host without re-typing them. `u` opens
+    the form only when nothing is remembered; otherwise it goes straight to the
+    confirm strip, which now shows what will be applied. Forgetting becomes an
+    explicit act (`F`), and the whole set dies with the process. `a` selects
+    every currently-filtered row, so `/pattern` → `a` → `u` is one workflow.
+12. **See what each host is on before targeting it** — the table gains the
+    host's **live** checked-out dotfiles branch, read in the same SSH
+    round-trip as the stamp, alongside the branch it last installed from.
+    Branch joins the search haystack, so `/feature` finds every host on one.
 
 **Non-goals**
+
+- **The sudo credential still never touches disk.** Sticky answers extend its
+  lifetime from one wave to one session — a deliberate, bounded change — but
+  nothing persists it, logs it, renders it unmasked, or places it in argv/env.
+  Cross-session credential storage (an OS keyring) was considered and rejected:
+  it would make fleet a credential store, a threat surface it has no business
+  owning.
+- **No dirty-worktree column.** The probe could carry it for free, but `update`
+  already refuses a dirty clone, so it would be a second signal for a case that
+  is already handled.
 
 - **No remote remediation.** Wake never mutates a target host. The permanent
   cure for this failure is disabling Wi-Fi power save on the sleeper (a
@@ -277,6 +319,58 @@ resolves the same failure without needing a third machine to exist.
   `CLAUDE.md` portability standard, applied to an exec'd tool rather than a
   shell script.)
 
+### 4.2 Sticky answers
+
+The v2 invariant "the answer form starts empty every wave" is **deliberately
+reversed**. It was written to stop a wave silently inheriting stale answers; the
+replacement gets the same protection from a *visible* gate rather than an
+amnesiac one:
+
+- `m.ans` survives `esc` and selection changes. `u` opens the form only when
+  nothing is remembered; otherwise it goes straight to the **confirm strip**,
+  which now renders the answer summary (`sudo ****** · windows s · gemini keep`).
+  Nothing runs without the operator seeing exactly what will be applied — which
+  the old design never showed at all.
+- `e` on the confirm strip reopens the pre-filled form; `F` in normal mode
+  forgets the whole set, secret included.
+- **Only the non-secret answers persist across sessions**, to
+  `~/.config/fleet/answers.json` (`0600`). The sudo secret is never serialised —
+  pinned by a test that marshals a fully-populated `answers` and asserts the
+  secret's bytes are absent from the output.
+
+This introduces fleet's first on-disk state, which reads as a contradiction of
+§3.1's rejection of a wake cache. It is not the same category. The wake cache
+would have stored **inferred** state — a conclusion about a host that goes stale
+and then *lies* (a machine that has come back still reads dead). The answers
+file stores a **stated preference**, which does not decay: `windows: s` means
+the same thing next week. Inferred state needs invalidation; stated preference
+needs only a way to change it, which is the form.
+
+The credential's lifetime does genuinely widen, from one wave to one process.
+That is the cost the operator chose, bounded by: never on disk, never rendered,
+never in argv/env, still stdin-only to `sudo -S`, explicitly forgettable, and
+gone on exit.
+
+### 4.3 Branch visibility
+
+The probe already spends an SSH round-trip reading the stamp. It now carries
+both facts in that *same* connection — no extra dial:
+
+```sh
+cat <stamp> 2>/dev/null; echo '<delim>'; git -C ~/git/dotfiles rev-parse --abbrev-ref HEAD 2>/dev/null || true
+```
+
+Splitting on the delimiter keeps `stamp.Parse` fed with exactly the stamp text,
+so corrupt-stamp detection is untouched. `Row` gains `Branch` (live) and
+`InstalledBranch` (stamped, previously parsed and thrown away).
+
+The two differing is the informative case, not an error: *checked out
+`feature/x`, installed from `main`* is precisely the state an operator is
+looking for, and it explains an otherwise mysterious `ahead/divergent` row. The
+column shows it rather than hiding it. Detached HEAD renders `detached`; a
+missing clone renders `-`. Branch joins the search haystack, so `/feature` then
+`a` then `u` targets every feature-branch host in three keystrokes.
+
 ## 5. Risks & blast radius
 
 - **Blast radius is `sdk/fleet/cmd` only** — no other tool imports it; the
@@ -313,6 +407,24 @@ resolves the same failure without needing a third machine to exist.
 - **Blast radius of the new seam method**: adding `RunVia` to the `Runner`
   interface touches every implementation — `Exec` and the test `Fake` — and
   nothing else; no existing call site changes behaviour.
+- **A longer-lived credential is a wider window.** The sudo secret now sits in
+  process memory for the session rather than one wave. Bounded by: never
+  serialised (pinned), never rendered unmasked, never in argv/env, `F` forgets
+  it on demand, and process exit forgets it unconditionally. The operator made
+  this trade knowingly; the design records it so a future reader does not
+  "restore" the old behaviour thinking it was an oversight.
+- **A pre-filled form invites blind confirmation.** Mitigated by moving the
+  answer summary into the confirm strip: the previous design showed the answers
+  only while typing them, so a second wave ran with answers nobody could see.
+  The new flow always displays them at the gate.
+- **The probe's wire format is now two-part.** A remote whose shell mangles the
+  delimiter would misparse. Contained by choosing a delimiter no stamp or branch
+  name can contain, and by parsing each half independently — a broken second
+  half costs the branch column, never the drift verdict.
+- **`~/.config/fleet/answers.json` is fleet's first on-disk state** (§4.2 argues
+  why it is a different category from the rejected wake cache). It is `0600`,
+  contains no secret, and a corrupt or unreadable file degrades to "no
+  remembered answers" rather than failing the TUI.
 
 ## 6. Rollback
 

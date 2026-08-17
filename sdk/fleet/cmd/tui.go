@@ -49,6 +49,10 @@ var tuiCmd = &cobra.Command{
 		r := runner.Exec{}
 		m := newTUIModel(selectHosts(all, nil), r, base, time.Now(), tuiUpdateRef, tuiJobs)
 		m.wake = newWaker(r, p)
+		// Persistence is wired HERE, not in newTUIModel, so the model stays a
+		// pure value and tests never touch a real config directory.
+		m.ansPath = answersPath()
+		m.ans = loadAnswers(m.ansPath)
 		_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()
 		return err
 	},

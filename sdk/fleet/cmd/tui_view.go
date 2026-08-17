@@ -63,8 +63,8 @@ func (m tuiModel) View() string {
 		return b.String() + "\n"
 	}
 
-	b.WriteString("  " + th.header.Render(fmt.Sprintf("%-16s %-9s %-13s %-22s %s",
-		"HOST", "COMMIT", "LAST RUN", "STATUS", "UPDATE")) + "\n")
+	b.WriteString("  " + th.header.Render(fmt.Sprintf("%-16s %-9s %-*s %-13s %-22s %s",
+		"HOST", "COMMIT", branchColWidth, "BRANCH", "LAST RUN", "STATUS", "UPDATE")) + "\n")
 
 	h := m.visibleRows()
 	end := m.vp.top + h
@@ -115,15 +115,20 @@ func (m tuiModel) rowView(i int) string {
 		style = lipgloss.NewStyle()
 	}
 
-	alias := r.Alias
+	// Truncate BEFORE padding: %-16s pads a short alias but does nothing to a
+	// long one, so a 30-character hostname silently pushed the row past the
+	// terminal edge regardless of width.
+	name := truncate(r.Alias, aliasColWidth)
+	alias := name
 	if m.matches(r) {
-		alias = th.match.Render(alias)
-		alias += strings.Repeat(" ", max0(16-len(r.Alias)))
+		alias = th.match.Render(name)
+		alias += strings.Repeat(" ", max0(aliasColWidth-lipgloss.Width(name)))
 	} else {
-		alias = fmt.Sprintf("%-16s", alias)
+		alias = fmt.Sprintf("%-*s", aliasColWidth, name)
 	}
 
-	line := fmt.Sprintf("%s%s%s %-9s %-13s %s", cur, mark, alias, commit, age,
+	line := fmt.Sprintf("%s%s%s %-9s %-*s %-13s %s", cur, mark, alias, commit,
+		branchColWidth, truncate(branchCell(r), branchColWidth), age,
 		style.Render(fmt.Sprintf("%-22s", status)))
 	return line + " " + m.updateCell(r.Alias)
 }
@@ -146,10 +151,12 @@ func (m tuiModel) updateCell(alias string) string {
 		return th.ok.Render("ok")
 	case updFail:
 		msg := "FAIL"
-		if s.log != "" {
-			// A remote failure can emit an arbitrarily long line; the row must
-			// stay inside the terminal, so the cause is truncated to fit.
-			msg += ": " + truncate(firstLine(s.log), m.failWidth())
+		// A remote failure can emit an arbitrarily long line; the row must stay
+		// inside the terminal, so the cause is truncated to whatever is left.
+		// When nothing useful is left, the cause is dropped entirely rather
+		// than clamped to a minimum that would overflow the row.
+		if w := m.failWidth(); s.log != "" && w >= 8 {
+			msg += ": " + truncate(firstLine(s.log), w)
 		}
 		return th.fail.Render(msg)
 	}
@@ -157,12 +164,32 @@ func (m tuiModel) updateCell(alias string) string {
 }
 
 // failWidth is the space left for a failure message after the fixed columns.
+// branchColWidth is the BRANCH column. `feature/x\u2260main` — a live/installed
+// mismatch — is 14, so 16 fits the common cases without crowding the failure
+// message, and anything longer truncates (the full value is still searchable
+// and present in --json).
+const aliasColWidth = 16
+
+const branchColWidth = 16
+
+// failPrefix is what precedes a truncated failure cause.
+const failPrefix = "FAIL: "
+
+// rowPrefixWidth is EVERY column rowView prints before the update cell, summed
+// from the same numbers as its format string:
+//
+//	2 cursor + 1 mark + 16 alias + 1 + 9 commit + 1 + branch + 1 + 13 age + 1 + 22 status + 1
+//
+// Keep it in sync with rowView. failWidth budgets the remaining space from it,
+// so a stale value silently overflows the row — precisely what happened when
+// the BRANCH column was added, and what the demo width guard caught.
+const rowPrefixWidth = 2 + 1 + aliasColWidth + 1 + 9 + 1 + branchColWidth + 1 + 13 + 1 + 22 + 1
+
+// failWidth is the space left for a failure cause. It can legitimately go
+// negative on a narrow terminal; callers must drop the cause rather than clamp
+// to a floor, because a floor is what pushes the line past the terminal edge.
 func (m tuiModel) failWidth() int {
-	w := m.vp.width - 73
-	if w < 12 {
-		w = 12
-	}
-	return w
+	return m.vp.width - rowPrefixWidth - len(failPrefix)
 }
 
 func truncate(s string, n int) string {
@@ -189,9 +216,14 @@ func (m tuiModel) statusView() string {
 		return m.answersView()
 	case modeConfirm:
 		t := m.updateTargets()
+		// The answer summary is shown HERE, at the gate, because answers now
+		// outlive their wave: an operator on wave three must be able to see
+		// what is about to be applied without reopening the form. The
+		// credential appears only as a length mask.
 		return th.statusBar.Render(fmt.Sprintf("update %d host(s) → %s: %s",
-			len(t), m.updateRef, strings.Join(t, ", "))) +
-			th.dim.Render("   y: go  n/esc: cancel")
+			len(t), m.updateRef, strings.Join(t, ", "))) + "\n  " +
+			th.dim.Render("answers: "+m.ans.summary()) +
+			th.dim.Render("   y: go  e: edit answers  n/esc: cancel")
 	}
 
 	pos := fmt.Sprintf("%d/%d", m.indexOf(m.cursor)+1, len(m.rows))
