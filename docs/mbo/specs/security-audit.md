@@ -14,16 +14,34 @@ Result: a "scheduled" audit that stalls until the user replies and pastes.
 
 - **R1 — no human in the loop**: a weekly audit run completes with zero
   approvals, zero pastes, zero computer-use calls.
-- **R2 — same lenses**: collection preserves the five audit sections and their
-  format so the existing baseline comparison carries over. Two deliberate
-  filter refinements (safe while the baseline is still in bootstrap mode, and
-  strictly additive — they only ever surface *more*): section 1 no longer
-  excludes `C:\Windows\Temp\` (user-writable, a standard persistence location),
-  and services with a null `PathName` stay visible.
-- **R2a — no silent blindness**: every section resolves to items, `(none)`, or
-  `!! COLLECTION ERROR: <msg>`. A lens that fails must be reported as
-  unverified; the analysis may not call the host clean while one is present.
-  (Previously a failed lens wrote an empty section that read as "clean".)
+- **R2 — comprehensive anomaly lenses (v2)**: collection covers ~40 read-only,
+  non-admin lenses across persistence (registry ASEPs, services, tasks, WMI
+  subscriptions), defense evasion (Defender health/exclusions/events, log
+  integrity), network exposure + C2 (firewall, listeners, portproxy, outbound,
+  hosts/DNS/proxy), process anomaly (user-writable paths, masquerade), accounts
+  & privilege, patch/integrity posture, and 7-day event-log signals (7045/7040/
+  4104/CodeIntegrity). Each lens is ATT&CK-mapped and grounded in what a non-admin
+  user can actually read (verified by live host probing). Section 1 does not
+  exclude `C:\Windows\Temp\`; null-`PathName` services stay visible.
+- **R2a — no silent blindness**: every section resolves to items, `(none)`,
+  `!! COLLECTION ERROR: <msg>`, or `## ADMIN-REQUIRED (<Type>)`. A lens that
+  fails is reported as unverified; a lens that needs elevation renders a
+  byte-stable admin-gap marker (exception TYPE only). The analysis may not call
+  the host clean while any COLLECTION ERROR is present. (Previously a failed
+  lens wrote an empty section that read as "clean".)
+- **R2b — false-positive discipline**: version strings normalized to `X.X`;
+  `[USER-WRITABLE-PATH]` alarms only on unsigned images; scheduled-task
+  suspicion keys on the executable not incidental args; Defender 5007 churn
+  collapses to a count; servicing start-type flaps `[CHURN]`-tagged; 4104
+  self-excludes the collector's own script; `[STABLE]` vs `[VOLATILE]` blocks
+  separate strict-diff from triage-only surfaces. Validated by a live read-only
+  run against a real Windows 11 host (non-admin).
+- **R2c — non-admin coverage honesty**: the Security event log, Defender
+  exclusion contents, and Secure Boot state are admin-only; the collector
+  surfaces each as an explicit `## ADMIN-REQUIRED` gap, never a misleading
+  `(none)`, and documents how to light them up (Event Log Readers / elevation).
+- **R2d — detection only**: the collector never changes configuration (spec
+  scope is anomaly reporting for a weekly review, not remediation).
 - **R3 — opt-in, fail-closed**: gated by `install.windows.security-audit`
   (`boolDefault: false`); absent gff/flag ⇒ the step must NOT run. This
   inverts the repo's fail-open `gff_on` convention deliberately.
