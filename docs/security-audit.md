@@ -73,8 +73,18 @@ Or run it standalone from PowerShell (manual run = explicit intent, no flag
 needed; no admin either — it is a per-user scheduled task):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\Desktop\Apps\scripts\setup-security-audit.ps1
+& "$([Environment]::GetFolderPath('Desktop'))\Apps\scripts\setup-security-audit.ps1"
 ```
+
+> **Always resolve the Desktop, never hardcode `%USERPROFILE%\Desktop`.** With
+> OneDrive Backup enabled (the Windows 11 default) the real Desktop is
+> `…\OneDrive\Desktop` and `%USERPROFILE%\Desktop` **does not exist** — the path
+> fails outright. `[Environment]::GetFolderPath('Desktop')` returns the true
+> location either way. From **cmd.exe**, `$env:` is not expanded at all, so use:
+>
+> ```bat
+> powershell -ExecutionPolicy Bypass -Command "& ([Environment]::GetFolderPath('Desktop') + '\Apps\scripts\setup-security-audit.ps1') -Status"
+> ```
 
 Note the Desktop may be OneDrive-redirected; the deploy step handles that, and
 the installer copies the collector to `%USERPROFILE%\Claude\SecurityAudit` so
@@ -160,7 +170,7 @@ its own SKILL.md.
 current script?". It is read-only and needs no elevation:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\Desktop\Apps\scripts\setup-security-audit.ps1 -Status
+& "$([Environment]::GetFolderPath('Desktop'))\Apps\scripts\setup-security-audit.ps1" -Status
 ```
 
 ```text
@@ -193,7 +203,7 @@ There are **three** copies of the collector and they can drift:
 repo  opt/Desktop/Apps/scripts/security-audit-collect.ps1
   │  install.sh  (Desktop deploy — every run)
   ▼
-deployed  %USERPROFILE%\Desktop\Apps\scripts\security-audit-collect.ps1
+deployed  <Desktop>\Apps\scripts\security-audit-collect.ps1     (<Desktop> may be under OneDrive)
   │  setup-security-audit.ps1  (ONLY when the installer is re-run)
   ▼
 installed %USERPROFILE%\Claude\SecurityAudit\security-audit-collect.ps1   ← what the task runs
@@ -216,8 +226,8 @@ Two independent cross-checks, in case you don't trust the tool reporting on itse
 - **Hash it yourself**:
 
   ```powershell
-  Get-FileHash $env:USERPROFILE\Claude\SecurityAudit\security-audit-collect.ps1 -Algorithm SHA256
-  Get-FileHash $env:USERPROFILE\Desktop\Apps\scripts\security-audit-collect.ps1 -Algorithm SHA256
+  Get-FileHash "$env:USERPROFILE\Claude\SecurityAudit\security-audit-collect.ps1" -Algorithm SHA256
+  Get-FileHash "$([Environment]::GetFolderPath('Desktop'))\Apps\scripts\security-audit-collect.ps1" -Algorithm SHA256
   ```
 
 ### 2. Proving the job is set up and running

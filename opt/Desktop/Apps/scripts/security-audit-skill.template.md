@@ -17,7 +17,9 @@ daily. You never run commands; you read one text file and reason about it.
 3. If a Google Drive connector is available, search it for `security-audit-latest.txt`.
 4. If none are readable: report that the collection pipeline is broken - the Windows task
    `ClaudeSecurityAuditCollector` may be missing or failing. Suggest running:
-   `powershell -ExecutionPolicy Bypass -File %USERPROFILE%\Desktop\Apps\scripts\setup-security-audit.ps1 -Status`
+   `powershell -ExecutionPolicy Bypass -Command "& ([Environment]::GetFolderPath('Desktop') + '\Apps\scripts\setup-security-audit.ps1') -Status"`
+   (resolve the Desktop like that — with OneDrive Backup on, `%USERPROFILE%\Desktop`
+   does not exist)
    Do NOT fall back to computer use.
 
 ## REPORT SHAPE
