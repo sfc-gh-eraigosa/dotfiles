@@ -23,6 +23,11 @@ ClaudeSecurityAuditCollector (daily 09:00)      weekly-security-audit
 exactly `true`, so it can never install itself by accident on a machine where
 gff (or the flag export) is missing.
 
+> **Companion feature:** [`security-hardening.md`](./security-hardening.md) applies the
+> opt-in posture changes that close this audit's two visibility gaps (Security-log access
+> and the TaskScheduler event channel) and adds Defender ASR rules in audit mode. Detection
+> lives here; the reversible hardening lives there.
+
 ## Pieces
 
 | File | Role |
@@ -128,7 +133,9 @@ setup-security-audit.ps1 -Uninstall   # removes task + collector; keeps data + b
   (`HideExclusionsFromLocalUsers=True` on this host — an attacker-added exclusion
   is then detectable non-admin *only* via the C4 5007 config-change event echo),
   and **Secure Boot state**. To light these up, add the collector account to
-  *Event Log Readers* or run it elevated.
+  *Event Log Readers* or run it elevated — that is exactly what the companion
+  **[security-hardening](./security-hardening.md)** feature does (opt-in, one UAC
+  prompt, reversible), after which section K reports data instead of a gap.
 - **False-positive discipline is built in.** Version strings in paths/service
   names are normalized to `X.X`; the `[USER-WRITABLE-PATH]` alarm fires only on
   *unsigned* binaries (so Defender's own `ProgramData\...\Platform` services

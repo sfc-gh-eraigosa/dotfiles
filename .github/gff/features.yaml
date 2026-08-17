@@ -147,6 +147,9 @@ sets:
       - path: install.windows.security-audit
         description: Opt-in (fail-closed) unattended weekly security audit - setup-security-audit.ps1 registers the ClaudeSecurityAuditCollector task and seeds the Claude analysis task. Enable with gff set install.windows.security-audit true.
         boolDefault: false
+      - path: install.windows.security-hardening
+        description: Opt-in (fail-closed) Windows security hardening - setup-security-hardening.ps1 adds the user to Event Log Readers, enables the TaskScheduler/Operational channel, and configures 5 Defender ASR rules in AUDIT MODE only (never enforce). Self-elevating, idempotent, -Uninstall reverts only what it changed. Enable with gff set install.windows.security-hardening true.
+        boolDefault: false
 
   # research-rubric.* — tunable weights for the research-evaluation skill's rubric.
   # Smart PUBLIC defaults live here; anyone tunes them on demand via the gff user

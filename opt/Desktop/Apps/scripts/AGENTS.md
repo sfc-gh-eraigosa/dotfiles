@@ -25,6 +25,17 @@ keyboard shortcuts, Wispr Flow voice dictation, app/font setup, and PowerToys.
   `%USERPROFILE%\Claude\SecurityAudit`, and seeds the Claude analysis task prompt
   (never overwrites an evolving baseline). `-Status` / `-Uninstall` / `-At HH:mm`.
   See `docs/security-audit.md`.
+- **`setup-security-hardening.ps1`** — opt-in (gff `install.windows.security-hardening`,
+  **fail-closed**) hardening, the follow-up to the audit: adds the user to `Event Log Readers`
+  (by well-known SID `S-1-5-32-573` — the name is localized), enables the
+  `Microsoft-Windows-TaskScheduler/Operational` channel, and sets 5 Defender ASR rules to
+  **AuditMode only** (never Block — this is a dev machine; promotion is a separate decision).
+  Self-elevates once; `-Status` is read-only and does **not** elevate. Each action is
+  idempotent and **read-back verified**; `Add-MpPreference` (never `Set-`) so existing rules
+  survive. `-Uninstall` reverts only what a state file
+  (`%ProgramData%\dotfiles\security-hardening.state.json`) records it changed, and skips any
+  ASR rule since promoted to Block. Touches nothing under `%USERPROFILE%\Claude\` — the weekly
+  audit detects the posture change itself. See `docs/security-hardening.md`.
 - **`security-audit-collect.ps1`** — the read-only collector that task runs:
   ~40 anomaly lenses (persistence ASEPs, Defender health, network exposure/C2,
   process masquerade, accounts/privilege, patch posture, 7d event-log signals)
