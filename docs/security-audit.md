@@ -32,9 +32,10 @@ gff (or the flag export) is missing.
 
 | File | Role |
 | :-- | :-- |
-| `opt/Desktop/Apps/scripts/setup-security-audit.ps1` | Installer: registers the collector task, seeds the Claude task prompt. `-Status` / `-Uninstall` / `-At HH:mm` |
-| `opt/Desktop/Apps/scripts/security-audit-collect.ps1` | Read-only collector — ~40 anomaly lenses (below). Params `-StdOut` / `-BaseDir` / `-Days` for ad-hoc/test runs |
-| `opt/Desktop/Apps/scripts/security-audit-skill.template.md` | Claude analysis-task prompt: per-section triage (CRITICAL/WARN/INFO), STABLE-vs-VOLATILE handling, known-benign rules, bootstrap-baseline mode |
+| `opt/Desktop/Apps/scripts/setup-security-audit.ps1` | Installer: registers the collector task (hourly evening window), seeds **both** Claude task prompts. `-Status` (health + version proof) / `-Uninstall` / `-At HH:mm` / `-WindowHours N` |
+| `opt/Desktop/Apps/scripts/security-audit-collect.ps1` | Read-only collector — ~40 anomaly lenses (below). Params `-StdOut` / `-BaseDir` / `-Days` / `-OncePerDay` / `-LowPriority` |
+| `opt/Desktop/Apps/scripts/security-audit-skill.template.md` | **Weekly** analysis prompt: per-section triage (CRITICAL/WARN/INFO), STABLE-vs-VOLATILE handling, known-benign rules, bootstrap-baseline mode |
+| `opt/Desktop/Apps/scripts/security-triage-skill.template.md` | **Daily** urgent-only triage prompt: one line when clean, escalates only what needs action today; keeps no baseline of its own |
 | `opt/scripts/system/security-audit-collect_test.sh` | Test driver — static contract checks (CI) + live read-only run assertion (WSL/Windows) |
 | `opt/lib/gff.sh` (`gff_opt_in`) + `lib/gff.ps1` (`Test-GffOptIn`) | Fail-closed opt-in gates |
 | `opt/bin/install_windows.sh` (`run_security_audit_setup`) | install.sh wiring — runs at the deferred Windows phase, after the Desktop deploy |
@@ -79,15 +80,64 @@ Note the Desktop may be OneDrive-redirected; the deploy step handles that, and
 the installer copies the collector to `%USERPROFILE%\Claude\SecurityAudit` so
 the scheduled task never executes from a OneDrive-dehydratable path.
 
-## One-time Claude-side step
+## Collection schedule (why hourly, not one fixed time)
 
-The installer seeds the analysis prompt at
-`%USERPROFILE%\Claude\Scheduled\weekly-security-audit\SKILL.md` **only if it does
-not already exist** — the audit baseline lives inside that file and evolves with
-each accepted change, so the installer must never clobber it. Registering the
-schedule itself is app-managed: open Claude and say
-"schedule the weekly-security-audit task for Saturdays at 10:00" (any time after
-the daily 09:00 collection works).
+A single fixed daily time is fragile: if the laptop is asleep at that moment, the
+day is simply missed. So the Windows task fires **every hour across an evening
+window** — by default **17:00 → 00:00** — and the collector's `-OncePerDay` gate
+makes every fire after the first one essentially free:
+
+| | Cost |
+| :-- | :-- |
+| Real collection (first fire of the day) | ~28s wall, ~19s CPU |
+| Gate check (every later fire) | ~4ms — a single file stat |
+
+The gate keys on the canonical `latest-audit.txt` write date, so "already have
+today's data" is the real signal. A run that dies *before* writing it leaves the
+gate open, so the next hour retries automatically. Combined with
+`StartWhenAvailable`, a machine that was off all evening still collects at the
+next opportunity. Net: **at most one real collection per day, at the first moment
+the machine is actually available.**
+
+CPU hygiene is deliberate: task `Priority 7` (background tier), the collector runs
+`-LowPriority` (BelowNormal), `MultipleInstances=IgnoreNew` so a slow run is never
+double-started by the next hourly fire, and a 10-minute `ExecutionTimeLimit` caps
+any runaway.
+
+Change the window with `-At` / `-WindowHours`:
+
+```powershell
+setup-security-audit.ps1 -At 18:00 -WindowHours 6   # 18:00 -> 00:00
+setup-security-audit.ps1 -At 09:00 -WindowHours 0   # single fixed fire, old behavior
+```
+
+## Two Claude tasks: weekly summary + daily triage
+
+The installer seeds **two** prompts, each **only if it does not already exist** —
+the audit baseline lives inside the weekly one and evolves with each accepted
+change, so the installer must never clobber it.
+
+| Task | Cadence | Job |
+| :-- | :-- | :-- |
+| `weekly-security-audit` | Saturday | The **full summary** — complete inventory, baseline diff, and baseline maintenance |
+| `daily-security-triage` | Daily (evening) | **Urgent-only smoke alarm** — one line when clean, speaks up only for things that need action *today* |
+
+The split exists so a daily cadence doesn't destroy the signal: a task that says
+something every day trains you to ignore it. The triage prompt keeps **no baseline
+of its own** (the weekly task owns that) and is explicitly instructed to stay
+quiet — its urgent list is limited to live malware detections, protection being
+turned off, log clears, new admins/hidden users, high-signal ASEP entries,
+unsigned processes from user-writable paths, and network-pivot changes.
+
+Registering the schedules is app-managed. Open Claude and say:
+
+```text
+schedule the weekly-security-audit task for Saturdays at 10:00
+schedule the daily-security-triage task daily at 23:30
+```
+
+Pick analysis times *after* the collection window so each run reads a fresh
+report.
 
 On the first analysis run the task is in **bootstrap-baseline mode**: it
 summarizes the report, explicitly lists the higher-risk items (unsigned
@@ -104,11 +154,116 @@ its own SKILL.md.
 > section; if it can't, treat the weekly output as a fresh full inventory rather
 > than a diff.
 
+## Verifying the pipeline
+
+`-Status` is the single command that answers both "is it running?" and "is it the
+current script?". It is read-only and needs no elevation:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\Desktop\Apps\scripts\setup-security-audit.ps1 -Status
+```
+
+```text
+Task     : ClaudeSecurityAuditCollector  [Ready]
+Schedule : daily at 17:00  repeating every PT1H for PT7H
+LastRun  : 8/17/2026 17:04:11
+LastResult: 0 (0x00000000 : success)
+NextRun  : 8/17/2026 18:00:00
+Runs     : powershell.exe ... -File "...\security-audit-collect.ps1" -OncePerDay -LowPriority
+
+Collector identity (what the task actually executes):
+  installed : v3     sha256 11DFF4D54302B021  2026-08-16 19:23
+  deployed  : v3     sha256 11DFF4D54302B021  2026-08-16 19:23
+  => UP TO DATE (installed is byte-identical to the deployed copy)
+
+Report   : C:\Users\<you>\Claude\SecurityAudit\latest-audit.txt
+           produced by v3, written 8/17/2026 17:04 (1h ago, 22157 bytes)
+History  : 6 dated report(s) (newest audit-2026-08-17.txt)
+
+Claude task prompts:
+  weekly-security-audit  SKILL.md present
+  daily-security-triage  SKILL.md present
+```
+
+### 1. Proving you're running the latest collector
+
+There are **three** copies of the collector and they can drift:
+
+```text
+repo  opt/Desktop/Apps/scripts/security-audit-collect.ps1
+  │  install.sh  (Desktop deploy — every run)
+  ▼
+deployed  %USERPROFILE%\Desktop\Apps\scripts\security-audit-collect.ps1
+  │  setup-security-audit.ps1  (ONLY when the installer is re-run)
+  ▼
+installed %USERPROFILE%\Claude\SecurityAudit\security-audit-collect.ps1   ← what the task runs
+```
+
+The drift that matters is the second hop: `install.sh` refreshes the **deployed**
+copy on every run, but the **installed** copy only updates when the installer is
+re-run. `-Status` compares them by **SHA-256** and by the `COLLECTOR_VERSION`
+marker, and states the verdict outright:
+
+- `=> UP TO DATE` — installed is byte-identical to deployed. This is proof, not inference.
+- `=> STALE: installed differs from deployed` — the task is running an old script.
+  Fix by re-running the installer (it prints the exact command).
+
+Two independent cross-checks, in case you don't trust the tool reporting on itself:
+
+- **Every report carries the version that produced it** — line 2 of
+  `latest-audit.txt` reads `COLLECTOR: v3 …`. If the report says `v2`, a `v2`
+  collector produced it, regardless of what is installed now.
+- **Hash it yourself**:
+
+  ```powershell
+  Get-FileHash $env:USERPROFILE\Claude\SecurityAudit\security-audit-collect.ps1 -Algorithm SHA256
+  Get-FileHash $env:USERPROFILE\Desktop\Apps\scripts\security-audit-collect.ps1 -Algorithm SHA256
+  ```
+
+### 2. Proving the job is set up and running
+
+`-Status` reports task health directly, including a **decoded** `LastTaskResult`
+(Task Scheduler returns raw HRESULTs, which are meaningless as bare integers):
+
+| Result | Meaning |
+| :-- | :-- |
+| `0 (0x00000000)` | success — the last run completed |
+| `267011 (0x41303)` | **task has NOT YET RUN** — registered but never fired |
+| `267009 (0x41301)` | currently running |
+| `267010 (0x41302)` | task is disabled |
+| `267014 (0x41306)` | terminated by the user |
+| `2147750687 (0x8004131F)` | an instance was already running (expected with hourly fires) |
+
+**The strongest evidence is the data, not the task metadata.** A dated file in
+`history\` per day proves it really ran, unattended, repeatedly:
+
+```powershell
+Get-ChildItem $env:USERPROFILE\Claude\SecurityAudit\history | Sort-Object Name -Descending | Select-Object -First 7
+```
+
+Raw Windows equivalents, if you'd rather not trust the wrapper:
+
+```powershell
+Get-ScheduledTask -TaskName ClaudeSecurityAuditCollector | Get-ScheduledTaskInfo
+Get-ScheduledTask -TaskName ClaudeSecurityAuditCollector | Select-Object -Expand Triggers
+Start-ScheduledTask -TaskName ClaudeSecurityAuditCollector      # force a run right now
+```
+
+`Start-ScheduledTask` is the fastest end-to-end smoke test: run it, wait ~30s, then
+re-run `-Status` and confirm `LastResult: 0` and a fresh `written` timestamp. (If
+today's report already exists the run will hit the `-OncePerDay` gate and exit in
+milliseconds without rewriting it — that is the gate working, not a failure. To
+force a real collection, run the collector directly without `-OncePerDay`.)
+
+If the task never seems to fire, check Task Scheduler's own history — it is
+**disabled by default**, which the companion
+[security-hardening](./security-hardening.md) feature turns on.
+
 ## Operations
 
 ```powershell
-setup-security-audit.ps1 -Status      # task state, last/next run, report freshness
-setup-security-audit.ps1 -At 07:30    # reinstall with a different collection time
+setup-security-audit.ps1 -Status      # task health, version proof, report freshness
+setup-security-audit.ps1 -At 18:00 -WindowHours 6   # reinstall with a different window
 setup-security-audit.ps1 -Uninstall   # removes task + collector; keeps data + baseline
 ```
 

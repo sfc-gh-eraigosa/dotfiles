@@ -20,11 +20,22 @@ keyboard shortcuts, Wispr Flow voice dictation, app/font setup, and PowerToys.
   re-run standalone, **reloads** AutoHotkey after a re-deploy (self-elevates → UAC).
 - **`setup-apps.ps1`** — winget app install + Windows Terminal profiles/themes.
 - **`setup-security-audit.ps1`** — opt-in (gff `install.windows.security-audit`,
-  **fail-closed**) installer for the unattended weekly security audit: registers the
-  user-level `ClaudeSecurityAuditCollector` daily task, installs the collector to
-  `%USERPROFILE%\Claude\SecurityAudit`, and seeds the Claude analysis task prompt
-  (never overwrites an evolving baseline). `-Status` / `-Uninstall` / `-At HH:mm`.
+  **fail-closed**) installer for the unattended security audit: registers the
+  user-level `ClaudeSecurityAuditCollector` task (daily at `-At`, **repeating hourly
+  for `-WindowHours`** — default 17:00→00:00 — so an asleep machine still collects;
+  `StartWhenAvailable`, Priority 7, `IgnoreNew`), installs the collector to
+  `%USERPROFILE%\Claude\SecurityAudit`, and seeds **both** Claude prompts
+  (`weekly-security-audit` = full Saturday summary, `daily-security-triage` =
+  urgent-only) — never overwriting an evolving baseline. **`-Status` is the
+  verification command**: task health with a *decoded* `LastTaskResult`, the
+  schedule, report freshness/history, and **proof of which collector is running**
+  (installed vs deployed `COLLECTOR_VERSION` + SHA-256 → `UP TO DATE` / `STALE`).
   See `docs/security-audit.md`.
+- **`security-triage-skill.template.md`** — the **daily** urgent-only Claude prompt.
+  Deliberately quiet: one line when clean, escalates only live detections, protection
+  turned off, log clears, new admins/hidden users, high-signal ASEPs, unsigned
+  user-writable processes, and network-pivot changes. Keeps **no baseline** — the
+  weekly task owns that.
 - **`setup-security-hardening.ps1`** — opt-in (gff `install.windows.security-hardening`,
   **fail-closed**) hardening, the follow-up to the audit: adds the user to `Event Log Readers`
   (by well-known SID `S-1-5-32-573` — the name is localized), enables the

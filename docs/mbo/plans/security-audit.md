@@ -19,6 +19,10 @@ Small feature: spec → plan, built in a single PR (no execution trio).
 | T9 | **v2 collector expansion**: ~40 ATT&CK-mapped non-admin lenses (persistence/defense-evasion/network/process/accounts/posture/event-logs), STABLE-vs-VOLATILE fencing, version normalization, admin-gap markers, 4104 self-exclusion — designed via an adversarially-reviewed lens-catalog workflow and validated by a live read-only run on a real Win11 host | `opt/Desktop/Apps/scripts/security-audit-collect.ps1` |
 | T10 | Analysis prompt rewrite for the v2 sections: CRITICAL/WARN/INFO triage, STABLE/VOLATILE + event-set handling, known-benign rules, admin-gap handling | `opt/Desktop/Apps/scripts/security-audit-skill.template.md` |
 | T11 | Collector test driver: static contract checks (CI) + live read-only run assertion (WSL/Windows) | `opt/scripts/system/security-audit-collect_test.sh` |
+| T12 | **Availability-tolerant cadence** (R11/R12): collector `-OncePerDay` gate (keyed on the canonical report's write date) + `-LowPriority`; task becomes daily at `-At` with hourly repetition for `-WindowHours` (default 17:00→00:00), `Priority 7`, `IgnoreNew` | `security-audit-collect.ps1`, `setup-security-audit.ps1` |
+| T13 | **Daily urgent-only triage** (R13): second Claude prompt seeded alongside the weekly one; quiet-by-default, no baseline of its own | `security-triage-skill.template.md`, `setup-security-audit.ps1` |
+| T14 | **Verification surface** (R14/R15): `-Status` reports installed-vs-deployed version + SHA-256 with an `UP TO DATE`/`STALE` verdict, decoded `LastTaskResult`, schedule incl. repetition, report provenance + history count, and both prompts' presence | `setup-security-audit.ps1`, `docs/security-audit.md` |
+| T15 | Gate regression tests: `-OncePerDay` open/closed behavior against a throwaway `-BaseDir`, plus a static assertion that the gate precedes the first lens | `opt/scripts/system/security-audit-collect_test.sh` |
 
 ## Validation
 

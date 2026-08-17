@@ -91,6 +91,24 @@ has_lit   "-StdOut param (no-write mode)"           "[switch]\$StdOut"
 has_lit   "-BaseDir param"                          "\$BaseDir"
 has_lit   "-Days param"                             "\$Days"
 
+# Scheduling contract: the evening window fires hourly, so the collector MUST
+# have a cheap once-per-day gate (a full run is ~19s CPU; the gate is ~4ms) and
+# a way to stay off the foreground's back.
+has_lit   "-OncePerDay gate param"                  "[switch]\$OncePerDay"
+has_lit   "-LowPriority param"                      "[switch]\$LowPriority"
+has_lit   "gate keys on the canonical report date"  "LastWriteTime.Date -eq (Get-Date).Date"
+has_lit   "low priority drops to BelowNormal"       "PriorityClass = 'BelowNormal'"
+# The gate must precede any lens, or it saves nothing. Assert the guard appears
+# before the first Add-Section call in the file.
+# shellcheck disable=SC2016 # intentional: matching the literal PowerShell token $OncePerDay
+gate_line=$(grep -n 'if ($OncePerDay)' "$COLLECTOR" | head -1 | cut -d: -f1)
+lens_line=$(grep -n "^Add-Section" "$COLLECTOR" | head -1 | cut -d: -f1)
+if [ -n "$gate_line" ] && [ -n "$lens_line" ] && [ "$gate_line" -lt "$lens_line" ]; then
+    ok "once-per-day gate runs before the first lens (line $gate_line < $lens_line)"
+else
+    bad "once-per-day gate must precede the first Add-Section (gate=$gate_line lens=$lens_line)"
+fi
+
 # Expected section set (a representative sample across every category group).
 for marker in \
     "A1. RUN / RUNONCE" "A3. WINLOGON" "A4. IFEO" "A5. COM hijack" \
@@ -172,6 +190,43 @@ else
     if [ "$FRC" -eq 0 ]; then ok "fault-inject run still exits 0"; else bad "fault-inject run exit $FRC (a thrown lens aborted the script)"; fi
     if printf '%s\n' "$FOUT" | grep -Fq '!! COLLECTION ERROR: injected fault'; then ok "thrown lens renders a COLLECTION ERROR marker"; else bad "thrown lens did not produce a marker"; fi
     if printf '%s\n' "$FOUT" | grep -Fq 'sentinel-ok'; then ok "section AFTER the fault still renders (no abort)"; else bad "post-fault sentinel missing (script aborted at the throw)"; fi
+
+    # The once-per-day gate must SKIP fast when today's report already exists and
+    # COLLECT when it does not. Exercise both against a throwaway BaseDir so the
+    # real report is never touched.
+    TMP_BASE=$(mktemp -d)
+    TMP_BASE_WIN=$(wslpath -w "$TMP_BASE" 2>/dev/null || echo "$TMP_BASE")
+
+    # (a) empty dir -> gate open -> a real report is produced
+    "$PS_EXE" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$COLLECTOR_WIN" \
+        -OncePerDay -Days 1 -BaseDir "$TMP_BASE_WIN" </dev/null >/dev/null 2>&1
+    if [ -f "$TMP_BASE/latest-audit.txt" ]; then
+        ok "gate OPEN with no prior report -> collected"
+    else
+        bad "gate OPEN case did not produce $TMP_BASE/latest-audit.txt"
+    fi
+
+    # (b) same dir again -> gate closed -> skip message, report NOT rewritten.
+    # Compare CONTENT via POSIX `cksum` rather than an mtime stat: `stat -c` is
+    # GNU-only (BSD/macOS uses -f) and would trip the portability gate, and
+    # content equality is the stronger claim anyway - a real re-collection would
+    # rewrite the AUDIT TIMESTAMP line. Reading from stdin keeps the filename out
+    # of cksum's output so the two values compare cleanly.
+    BEFORE=$(cksum < "$TMP_BASE/latest-audit.txt")
+    SKIP_OUT=$("$PS_EXE" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$COLLECTOR_WIN" \
+        -OncePerDay -Days 1 -BaseDir "$TMP_BASE_WIN" </dev/null 2>/dev/null | tr -d '\r')
+    AFTER=$(cksum < "$TMP_BASE/latest-audit.txt")
+    if printf '%s\n' "$SKIP_OUT" | grep -q "already collected"; then
+        ok "gate CLOSED on a same-day re-run -> skip message"
+    else
+        bad "gate CLOSED case did not emit the skip message"
+    fi
+    if [ "$BEFORE" = "$AFTER" ]; then
+        ok "gate CLOSED left the existing report byte-identical"
+    else
+        bad "gate CLOSED rewrote the report (content changed)"
+    fi
+    rm -rf "$TMP_BASE"
 fi
 
 echo "----"
