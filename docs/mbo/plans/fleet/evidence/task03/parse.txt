@@ -1,0 +1,1 @@
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf	0.003s	coverage: 95.2% of statements

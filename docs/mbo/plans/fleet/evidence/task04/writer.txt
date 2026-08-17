@@ -1,0 +1,33 @@
+=== RUN   TestParseReturnsOnlyMarkedConcreteHosts
+--- PASS: TestParseReturnsOnlyMarkedConcreteHosts (0.00s)
+=== RUN   TestParseSkipsPatternHostsEntirely
+--- PASS: TestParseSkipsPatternHostsEntirely (0.00s)
+=== RUN   TestParseCapturesFields
+--- PASS: TestParseCapturesFields (0.00s)
+=== RUN   TestParseUnmarkedHostIsNotInFleet
+--- PASS: TestParseUnmarkedHostIsNotInFleet (0.00s)
+=== RUN   TestParseMarkerIsNotMatchedLoosely
+--- PASS: TestParseMarkerIsNotMatchedLoosely (0.00s)
+=== RUN   TestParseAcceptsBothMarkerSpellings
+--- PASS: TestParseAcceptsBothMarkerSpellings (0.00s)
+=== RUN   TestParseEmptyConfigIsNotAnError
+--- PASS: TestParseEmptyConfigIsNotAnError (0.00s)
+=== RUN   TestAddIsIdempotentAndPreservesOtherBlocks
+--- PASS: TestAddIsIdempotentAndPreservesOtherBlocks (0.00s)
+=== RUN   TestAddUpdatesOnlySuppliedFields
+--- PASS: TestAddUpdatesOnlySuppliedFields (0.00s)
+=== RUN   TestAddRequiresAlias
+--- PASS: TestAddRequiresAlias (0.00s)
+=== RUN   TestUnmarkKeepsBlockButLeavesFleet
+--- PASS: TestUnmarkKeepsBlockButLeavesFleet (0.00s)
+=== RUN   TestUnmarkHandlesOwnLineMarker
+--- PASS: TestUnmarkHandlesOwnLineMarker (0.00s)
+=== RUN   TestPurgeRemovesOnlyTheTargetBlock
+--- PASS: TestPurgeRemovesOnlyTheTargetBlock (0.00s)
+=== RUN   TestPurgeKeepsTrailingBlocksIntact
+--- PASS: TestPurgeKeepsTrailingBlocksIntact (0.00s)
+=== RUN   TestUnknownAliasIsAnError
+--- PASS: TestUnknownAliasIsAnError (0.00s)
+PASS
+coverage: 93.9% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf	0.003s	coverage: 93.9% of statements

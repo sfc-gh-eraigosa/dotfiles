@@ -1,0 +1,22 @@
+=== 2026-08-10T06:02:20Z — Task 13 TUI evidence ===
+--- unit ---
+--- PASS: TestTUIModelRendersOneLinePerHost (0.00s)
+--- PASS: TestTUISelectionMovesWithinBounds (0.00s)
+--- PASS: TestTUIEmptyFleetDoesNotPanic (0.00s)
+--- PASS: TestTUIShowsWorstFirstLikeTheTable (0.00s)
+--- PASS: TestInteractiveUpdateUsesTTYAndTheSharedRemoteScript (0.00s)
+
+--- rendered view (model driven with the real fleet's rows) ---
+    baseline: origin/main 1e7eca0
+    
+    HOST             COMMIT    LAST RUN      STATUS
+    host-nano     -         -             unknown
+    host-desktop  -         -             unknown
+    host-pi        -         -             unknown
+
+  (the TUI renders the same rows with a '>' cursor and the key legend;
+   'u' hands the terminal to ssh -t via tea.ExecProcess so install.sh's
+   sudo prompt reaches the operator rather than being captured.)
+
+--- coverage gate ---
+[0;32mOK[0m: coverage for fleet is 73% (minimum: 60%)

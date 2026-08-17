@@ -46,6 +46,7 @@ coverage_min() {
         tmux-mgr) echo 60 ;;
         gsl)      echo 60 ;;
         wol)      echo 60 ;;
+        fleet)    echo 60 ;;
         *)        echo "" ;;
     esac
 }

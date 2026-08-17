@@ -631,6 +631,19 @@ if gff_on install.sdk.wol; then
   fi
 else gff_skip_msg install.sdk.wol; fi
 
+# build and install fleet
+if gff_on install.sdk.fleet; then
+  if [ -f "${BASE_DIR}/sdk/fleet/build.sh" ]; then
+    echo "Installing fleet (dotfiles install-status checker)..."
+    bash "${BASE_DIR}/sdk/fleet/build.sh"
+    if [ -f "${HOME}/opt/bin/fleet" ]; then
+        echo "--------------------------------------------------"
+        "${HOME}/opt/bin/fleet" version
+        echo "--------------------------------------------------"
+    fi
+  fi
+else gff_skip_msg install.sdk.fleet; fi
+
 # build and install gsl
 if gff_on install.sdk.gsl; then
   if [ -f "${BASE_DIR}/sdk/gsl/build.sh" ]; then
@@ -814,4 +827,13 @@ if [ -f "$WIN_SETUP_MARKER" ]; then
 BANNER
   fi
   unset _b _x
+fi
+
+# --- install stamp (fleet) -------------------------------------------------
+# LAST action of a successful run: record the commit that was installed so
+# `fleet status` can tell "pulled" from "actually installed". Phase-gated
+# inside the script (a Docker deps/config layer must never stamp), and it
+# never fails the install.
+if [ -f "${BASE_DIR}/opt/scripts/system/install-stamp.sh" ]; then
+  bash "${BASE_DIR}/opt/scripts/system/install-stamp.sh" "${BASE_DIR}" || true
 fi

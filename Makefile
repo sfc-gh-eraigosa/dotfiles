@@ -105,7 +105,7 @@ check-legacy-paths: ## Fail if a legacy Go module path or src/<tool> reappears (
 		echo "ERROR: legacy module path in Go source — use github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>"; \
 		exit 1; \
 	fi
-	@for t in gss gsl wol tmux-mgr; do \
+	@for t in gss gsl wol tmux-mgr fleet; do \
 		if [ -e "src/$$t/go.mod" ]; then \
 			echo "ERROR: Go module src/$$t exists — Go modules live in sdk/"; exit 1; \
 		fi; \

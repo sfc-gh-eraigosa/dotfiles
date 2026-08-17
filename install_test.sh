@@ -80,4 +80,14 @@ assert_grep "claude settings backup-on-conflict guard present" \
 assert_grep "antigravity aliases backup-on-conflict guard present" \
     'aliases\.sh\.bak' "$ANTIGRAVITY_SKILLS"
 
+# === Install stamp (fleet F1) must be invoked, and be the last action ===
+assert_grep "install.sh invokes the install stamp" \
+    'opt/scripts/system/install-stamp\.sh' "$INSTALL"
+# The stamp must be the final executable block: anything after it could fail
+# AFTER a success marker was written.
+STAMP_LINE="$(grep -n 'install-stamp\.sh' "$INSTALL" | tail -1 | cut -d: -f1)"
+TAIL_CODE="$(tail -n "+$((STAMP_LINE + 1))" "$INSTALL" | sed 's/#.*//' | tr -d '[:space:]')"
+assert_eq "$TAIL_CODE" "fi" \
+    "nothing runs after the stamp (only its closing 'fi')"
+
 _test_report
