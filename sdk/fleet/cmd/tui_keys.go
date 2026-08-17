@@ -17,6 +17,7 @@ var keyHelp = []struct{ keys, what string }{
 	{"v", "visual range select"},
 	{"esc", "clear search / selection"},
 	{"u", "update selection (or cursor host)"},
+	{"tab / enter", "(answer form) next field · esc cancels"},
 	{"s", "ssh to cursor host"},
 	{"r", "refresh"},
 	{"?", "toggle this help"},
@@ -32,10 +33,84 @@ func route(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case modeSearch:
 		return routeSearch(m, k)
+	case modeAnswers:
+		return routeAnswers(m, k)
 	case modeConfirm:
 		return routeConfirm(m, k)
 	}
 	return routeNormal(m, k)
+}
+
+// routeAnswers drives the pre-wave form. It is deliberately its own mode: the
+// sudo field accepts arbitrary text (including 'j', 'y', 'q'…) and none of it
+// may leak into a normal-mode action.
+func routeAnswers(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch k.String() {
+	case "esc":
+		m.mode = modeNormal
+		m.ans = answers{} // abandoning the form must not retain the secret
+		m.status = "update cancelled"
+		return m, nil
+	case "tab", "down":
+		m.ansField = (m.ansField + 1) % answerFieldCount
+		return m, nil
+	case "shift+tab", "up":
+		m.ansField = (m.ansField + answerFieldCount - 1) % answerFieldCount
+		return m, nil
+	case "enter":
+		// Advance field by field; committing from the last one opens the
+		// confirm strip, so there is always one final look before anything runs.
+		if m.ansField < answerFieldCount-1 {
+			m.ansField++
+			return m, nil
+		}
+		m.mode = modeConfirm
+		return m, nil
+	}
+
+	switch m.ansField {
+	case fieldSudo:
+		if k.String() == "backspace" {
+			m.ans.trimSecret()
+		} else if r := k.Runes; len(r) > 0 {
+			m.ans.appendSecret(string(r))
+		}
+	case fieldWindows:
+		// Fixed choices, not free text: these map onto install.sh's own y/n/s.
+		switch k.String() {
+		case "y", "n", "s":
+			m.ans.windows = k.String()
+		case " ", "right", "left":
+			m.ans.windows = cycle(m.ans.windows, []string{"", "n", "s", "y"}, k.String() != "left")
+		}
+	case fieldGemini:
+		switch k.String() {
+		case "y":
+			m.ans.gemini = "yes"
+		case "k":
+			m.ans.gemini = "keep"
+		case "n":
+			m.ans.gemini = "skip"
+		case " ", "right", "left":
+			m.ans.gemini = cycle(m.ans.gemini, []string{"", "skip", "keep", "yes"}, k.String() != "left")
+		}
+	}
+	return m, nil
+}
+
+// cycle steps through a fixed option ring in either direction.
+func cycle(cur string, ring []string, fwd bool) string {
+	i := 0
+	for j, v := range ring {
+		if v == cur {
+			i = j
+			break
+		}
+	}
+	if fwd {
+		return ring[(i+1)%len(ring)]
+	}
+	return ring[(i+len(ring)-1)%len(ring)]
 }
 
 func routeSearch(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -146,8 +221,12 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.selected = map[string]bool{}
 		m.search = searchState{}
 	case "u":
+		// The answer form always comes first (operator choice: no defaults),
+		// so an unattended wave never inherits stale answers from a prior one.
 		if len(m.updateTargets()) > 0 {
-			m.mode = modeConfirm
+			m.ans = answers{}
+			m.ansField = fieldSudo
+			m.mode = modeAnswers
 		}
 	case "s":
 		// An ssh visit while the engine owns the host would race its update.

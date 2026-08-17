@@ -348,9 +348,10 @@ func TestUpdateTargetsSelectionElseCursor(t *testing.T) {
 func TestDecliningConfirmRunsNothing(t *testing.T) {
 	m := testModel("a", "b")
 	m.selected["a"] = true
-	m2, _ := send(m, "u")
+	// u opens the answer form; three enters walk its fields to the confirm strip.
+	m2, _ := send(m, "u", "enter", "enter", "enter")
 	if m2.mode != modeConfirm {
-		t.Fatal("u must ask for confirmation first")
+		t.Fatal("u must reach a confirmation before running anything")
 	}
 	m3, cmd := send(m2, "n")
 	if cmd != nil {
@@ -371,7 +372,7 @@ func TestBackgroundWaveNeverExceedsJobLimit(t *testing.T) {
 	for _, a := range []string{"a", "b", "c", "d", "e"} {
 		m.selected[a] = true
 	}
-	m2, _ := send(m, "u")
+	m2, _ := send(m, "u", "enter", "enter", "enter")
 	m3, _ := send(m2, "y")
 	// Every host prechecks as background-capable.
 	cur := m3

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -70,12 +71,19 @@ func TestDemoFrames(t *testing.T) {
 			m, _ := send(settled(), "v", "j")
 			return m
 		}},
-		{"6. confirm strip — targets listed before anything runs", "y: go", func() tuiModel {
+		{"6. unattended answers — asked once per wave, credential masked", "unattended answers", func() tuiModel {
 			m, _ := send(settled(), "v", "j", " ", "u")
+			m, _ = send(m, "h", "u", "n", "t", "e", "r") // masked credential
+			m, _ = send(m, "tab", "s")                   // windows: skip forever
+			m, _ = send(m, "tab", "k")                   // gemini: keep
 			return m
 		}},
-		{"7. CONCURRENT UPDATE — 2 running at once (jobs=2), 1 queued", "updating", func() tuiModel {
-			m, _ := send(settled(), "v", "j", " ", "u")
+		{"7. confirm strip — targets listed before anything runs", "y: go", func() tuiModel {
+			m, _ := send(settled(), "v", "j", " ", "u", "enter", "enter", "enter")
+			return m
+		}},
+		{"8. CONCURRENT UPDATE — 2 running at once (jobs=2), 1 queued", "updating", func() tuiModel {
+			m, _ := send(settled(), "v", "j", " ", "u", "enter", "enter", "enter")
 			m, _ = send(m, "y")
 			var mm = m
 			for _, a := range []string{"host-pi", "host-nano", "host-edge"} {
@@ -84,7 +92,7 @@ func TestDemoFrames(t *testing.T) {
 			}
 			return mm
 		}},
-		{"8. mid-wave: one FAILED with its cause, slot refilled, UI still live", "FAIL", func() tuiModel {
+		{"9. mid-wave: one FAILED with its cause, slot refilled, UI still live", "FAIL", func() tuiModel {
 			m := settled()
 			m.jobs = 2
 			m.updating["host-pi"] = updState{phase: updRunning}
@@ -95,24 +103,27 @@ func TestDemoFrames(t *testing.T) {
 				log: "fatal: could not read Username for 'https://github.com'", err: fmt.Errorf("exit status 128")})
 			return x.(tuiModel)
 		}},
-		{"9. interactive fallback — host needing sudo waits its turn", "queued", func() tuiModel {
+		{"10. interactive fallback — host needing sudo waits its turn", "queued", func() tuiModel {
 			m := settled()
 			m.updating["host-nano"] = updState{phase: updRunning}
 			m.running = 1
 			x, _ := m.Update(precheckMsg{alias: "host-pi", interactive: true})
 			return x.(tuiModel)
 		}},
-		{"10. help overlay", "toggle this help", func() tuiModel {
+		{"11. help overlay", "toggle this help", func() tuiModel {
 			m, _ := send(settled(), "?")
 			return m
 		}},
-		{"11. empty fleet — points at discover/add", "fleet discover", build2Empty},
+		{"12. empty fleet — points at discover/add", "fleet discover", build2Empty},
 	}
 
 	for _, f := range frames {
 		m := f.build()
 		out := m.View()
-		if !strings.Contains(out, f.must) {
+		// Assert on CONTENT, not styling: lipgloss can split a styled run with
+		// escape codes between characters, so a raw Contains would pass in the
+		// ASCII profile and fail under colour for the same frame.
+		if !strings.Contains(stripANSI(out), f.must) {
 			t.Errorf("frame %q missing %q:\n%s", f.name, f.must, out)
 		}
 		for _, line := range strings.Split(out, "\n") {
@@ -125,6 +136,11 @@ func TestDemoFrames(t *testing.T) {
 		}
 	}
 }
+
+// stripANSI removes SGR escape sequences so assertions compare text.
+func stripANSI(s string) string { return ansiRE.ReplaceAllString(s, "") }
+
+var ansiRE = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
 func build2Empty() tuiModel {
 	m := newTUIModel(nil, nil, fakeBaseline{head: "72392c9"}, testNow, "main", 2)

@@ -33,7 +33,22 @@ set -u
 KEEP_MARKER="${XDG_CONFIG_HOME:-$HOME/.config}/antigravity/gemini-keep"
 
 MODE="prompt"
-case "${1:-}" in
+
+# GEMINI_TEARDOWN_ANSWER pre-answers the prompt for callers with no terminal —
+# notably install.sh driven by `fleet tui`'s unattended concurrent updates,
+# where the operator decides once for the whole wave. An explicit command-line
+# flag always wins over the environment.
+_gt_arg="${1:-}"
+if [ -z "$_gt_arg" ] && [ -n "${GEMINI_TEARDOWN_ANSWER:-}" ]; then
+    case "$GEMINI_TEARDOWN_ANSWER" in
+        yes|y)  _gt_arg="--yes" ;;
+        keep|k) _gt_arg="--keep" ;;
+        skip|n) echo "gemini_teardown: skipped for this run (GEMINI_TEARDOWN_ANSWER=skip)."; exit 0 ;;
+        *)      echo "gemini_teardown: ignoring unknown GEMINI_TEARDOWN_ANSWER='$GEMINI_TEARDOWN_ANSWER'" >&2 ;;
+    esac
+fi
+
+case "$_gt_arg" in
     --yes) MODE="yes" ;;
     --keep)
         mkdir -p "$(dirname "$KEEP_MARKER")"

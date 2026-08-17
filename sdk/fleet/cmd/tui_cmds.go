@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -52,21 +53,116 @@ func precheckSudo(alias string, r runner.Runner) tea.Cmd {
 	}
 }
 
-// batchModeUpdate wraps the shared update script so it can never block on a
-// prompt it has no terminal to answer. BatchMode makes ssh fail fast instead
-// of hanging invisibly, so an unexpected password request surfaces as a
-// visible FAIL with its cause in the row's log.
-func batchModeUpdate(ref string) string {
-	return fmt.Sprintf("BatchMode=yes %s", remoteUpdateScript(ref))
+// answers are the operator's pre-supplied responses to install.sh's prompts,
+// collected once per wave so an unattended run never reaches a prompt nobody
+// is watching. Password is memory-only: never persisted, never logged, never
+// placed in argv.
+type answers struct {
+	sudoSecret string // memory only: never persisted, logged, or put in argv
+	windows    string // y | n | s          -> WINSETUP_ANSWER
+	gemini     string // yes | keep | skip  -> GEMINI_TEARDOWN_ANSWER
+}
+
+// appendSecret / trimSecret keep the secret's mutation in one place so the
+// rest of the model never handles it directly.
+func (a *answers) appendSecret(s string) { a.sudoSecret += s }
+func (a *answers) trimSecret() {
+	if n := len(a.sudoSecret); n > 0 {
+		a.sudoSecret = a.sudoSecret[:n-1]
+	}
+}
+
+// secretLen is what the view is allowed to know — enough to draw a mask.
+func (a answers) secretLen() int { return len(a.sudoSecret) }
+
+// needsSudo reports whether we have a password to prime with.
+func (a answers) needsSudo() bool { return a.sudoSecret != "" }
+
+// envPrefix renders the pre-answers as environment assignments for the remote
+// shell. Only the two prompt answers travel this way — the password never
+// does, because environment (like argv) is readable via /proc.
+func (a answers) envPrefix() string {
+	var b []string
+	if a.windows != "" {
+		b = append(b, "WINSETUP_ANSWER="+a.windows)
+	}
+	if a.gemini != "" {
+		b = append(b, "GEMINI_TEARDOWN_ANSWER="+a.gemini)
+	}
+	if len(b) == 0 {
+		return ""
+	}
+	return strings.Join(b, " ") + " "
+}
+
+// Exit codes the remote preamble uses to distinguish sudo problems from a
+// genuine install failure, so a row's FAIL says which one happened.
+const (
+	rcSudoAuth    = 91 // the password was rejected
+	rcSudoNoCache = 92 // authentication worked but the credential did not persist
+)
+
+// unattendedUpdate builds the remote script for a background update.
+//
+// Everything runs in ONE ssh session on purpose. sudo's timestamp is scoped
+// (tty_tickets), so priming in a separate connection is not guaranteed to be
+// visible to a later one — the credential is primed and consumed in the same
+// session as install.sh.
+//
+// The prime is then VERIFIED with `sudo -n true` rather than assumed: if the
+// credential did not persist we fail immediately with a distinct code instead
+// of running a long install whose privileged steps all silently skip.
+func unattendedUpdate(ref string, a answers) string {
+	var b strings.Builder
+	if a.needsSudo() {
+		// -S reads the password from stdin (never argv); -p '' suppresses the
+		// prompt text that would otherwise pollute the captured log.
+		fmt.Fprintf(&b, "sudo -S -p '' -v 2>/dev/null || exit %d; ", rcSudoAuth)
+		fmt.Fprintf(&b, "sudo -n true 2>/dev/null || exit %d; ", rcSudoNoCache)
+	}
+	b.WriteString(a.envPrefix())
+	b.WriteString(remoteUpdateScript(ref))
+	return b.String()
+}
+
+// explainExit turns the preamble's exit codes into something an operator can
+// act on. A bare "exit status 91" on a row would be useless.
+func explainExit(err error) string {
+	if err == nil {
+		return ""
+	}
+	s := err.Error()
+	switch {
+	case strings.Contains(s, fmt.Sprint(rcSudoAuth)):
+		return "sudo authentication failed (wrong password?)"
+	case strings.Contains(s, fmt.Sprint(rcSudoNoCache)):
+		return "sudo credential did not persist on this host; use the interactive lane"
+	}
+	return s
 }
 
 // bgUpdate runs an update WITHOUT taking the terminal, so many hosts update
 // at once and the TUI stays interactive. This is the default lane; the
-// ExecProcess handoff below is reserved for hosts that need to prompt.
-func bgUpdate(alias, ref string, r runner.Runner) tea.Cmd {
+// ExecProcess handoff is reserved for hosts that must prompt.
+//
+// The password reaches the remote `sudo -S` over ssh's encrypted channel via
+// stdin. It is never an argument and never an environment variable, both of
+// which are world-readable through /proc.
+func bgUpdate(alias, ref string, a answers, r runner.Runner) tea.Cmd {
+	script := unattendedUpdate(ref, a)
 	return func() tea.Msg {
-		out, err := r.Run(alias, batchModeUpdate(ref))
-		return bgUpdateDoneMsg{alias: alias, log: tailLines(out, 3), err: err}
+		var out string
+		var err error
+		if a.needsSudo() {
+			out, err = r.RunStdin(alias, a.sudoSecret+"\n", script)
+		} else {
+			out, err = r.Run(alias, script)
+		}
+		log := tailLines(out, 3)
+		if e := explainExit(err); e != "" && err != nil {
+			log = strings.TrimSpace(e + " " + log)
+		}
+		return bgUpdateDoneMsg{alias: alias, log: log, err: err}
 	}
 }
 

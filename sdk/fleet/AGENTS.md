@@ -63,6 +63,15 @@ without opening a socket.
   it is reserved for the sudo-precheck fallback and the `s` ssh action. The default
   lane runs over the runner seam with `BatchMode=yes` so a surprise prompt fails
   fast and visibly instead of hanging.
+- **The sudo credential is memory-only and stdin-only.** It is never persisted,
+  logged, rendered (the form masks it), placed in argv, or exported as an env
+  var — `/proc/<pid>/{cmdline,environ}` are world-readable. `runner.RunStdin` is
+  the only channel. Pinned by `TestSudoSecretNeverAppearsInTheRemoteCommand`.
+- **Prime and install share one ssh session, and the prime is verified.** sudo's
+  timestamp is tty/session-scoped, so a separate priming connection may not
+  carry; `sudo -n true` gates the install so it can't run with every privileged
+  step silently skipping (exit 91 = bad password, 92 = did not persist).
+- **The answer form starts empty every wave** — no inherited answers.
 - **TUI cursor/selection are alias-keyed**, never index-keyed — rows re-sort as they
   stream in.
 

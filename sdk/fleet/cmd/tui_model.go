@@ -19,8 +19,19 @@ type tuiMode int
 const (
 	modeNormal tuiMode = iota
 	modeSearch
+	modeAnswers // pre-wave form: sudo password + install.sh prompt answers
 	modeConfirm
 	modeHelp
+)
+
+// answerField is the cursor within the pre-wave answer form.
+type answerField int
+
+const (
+	fieldSudo answerField = iota
+	fieldWindows
+	fieldGemini
+	answerFieldCount
 )
 
 // updPhase is where a host sits in the update engine.
@@ -75,6 +86,8 @@ type tuiModel struct {
 	jobs      int // max concurrent background updates
 	running   int // slots in use
 	updateRef string
+	ans       answers     // pre-supplied answers for this wave (password: memory only)
+	ansField  answerField // cursor in the answer form
 
 	hosts   map[string]sshconf.Host
 	run     runner.Runner
@@ -362,7 +375,7 @@ func (m *tuiModel) pump() tea.Cmd {
 		m.bgQueue = m.bgQueue[1:]
 		m.updating[a] = updState{phase: updRunning}
 		m.running++
-		cmds = append(cmds, bgUpdate(a, m.updateRef, m.run))
+		cmds = append(cmds, bgUpdate(a, m.updateRef, m.ans, m.run))
 	}
 	// Interactive handoffs need the terminal to themselves, so they only run
 	// once no background update can print over them.

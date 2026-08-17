@@ -105,6 +105,22 @@ input it cannot receive. Hosts whose precheck says they *need* a password are
 routed to a serial interactive handoff that runs after the background wave —
 there the terminal is genuinely released so the sudo prompt reaches you.
 
+**Unattended answers.** `u` opens a short form before anything runs, asked once
+per wave (nothing is pre-filled, so a wave never inherits stale answers):
+
+| Field | Feeds |
+|-------|-------|
+| sudo password | primes `sudo -S -v` on the host so install.sh's privileged steps actually run. Masked on screen; held in memory only; sent over ssh **stdin** — never argv or env, both of which are world-readable via `/proc`. Leave empty to skip privileged steps. |
+| windows setup `[y/n/s]` | `WINSETUP_ANSWER` — install.sh's Windows desktop prompt (`s` = never ask again, recorded as a gff override) |
+| gemini leftovers `[y/k/n]` | `GEMINI_TEARDOWN_ANSWER` — `yes` clean up, `keep` never ask again, `skip` this run only |
+
+The credential is primed and used in the **same ssh session** as install.sh
+(sudo's timestamp is tty/session-scoped, so priming in a separate connection is
+not guaranteed to carry), and the prime is **verified** with `sudo -n true`
+before the install starts — otherwise a long run would proceed with every
+privileged step silently skipping. A rejected password and a credential that
+did not persist are reported as distinct, named failures on the row.
+
 Selection and cursor are keyed by host **alias**, not row position, so the
 worst-first re-sort that happens as rows stream in never moves your cursor or
 corrupts a selection.

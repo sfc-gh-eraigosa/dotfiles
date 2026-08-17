@@ -34,6 +34,7 @@
 | 12 — `s` ssh action (F10) | **done** | see log | TestSSHIsBlockedWhileThatHostUpdates | argv exactly `ssh <alias>`; blocked while updating |
 | 13 — help overlay + polish (F11,F12) | **done** | see log | overlay from keyHelp; TestQuitIsGuardedWhileUpdatesRun | overlay from the keymap table; quit guard |
 | 14 — docs + gate | **done** | see log | `scripts/test.sh` -> OK: coverage for fleet is 80% (min 60); go vet clean; 67 tests | fleet ≥60%, cmd ≥55%, vet, leak sweep |
+| 16 — unattended answers (sudo + prompt pre-answers) | **done** | see log | winsetup_ask/gemini_teardown env contracts EXECUTED (y/n/s + skip/bogus/flag-wins); 12 demo frames; secret-never-in-argv + stdin-only + prime-verified tests |
 | 15 — HUMAN STOP: live capture | todo | | | tmux; 2 concurrent updates + navigation; sudo prompt on fallback |
 
 ## 2. Feature → proof matrix (spec §5)
@@ -85,6 +86,7 @@
 
 | Date | Session | What advanced |
 | :-- | :-- | :-- |
+| 2026-08-16 | unattended | Operator: automate install.sh's password + y/n prompts for concurrent waves. Found both prompts already had unattended paths (gff override / --yes / --keep) and neither HANGS without a tty — the real blocker was sudo. Added: `WINSETUP_ANSWER` + `GEMINI_TEARDOWN_ANSWER` env contracts (verified by executing them, incl. flag-wins-over-env and unknown-value-warns), `runner.RunStdin` so the credential never touches argv/env, a pre-wave answer form (masked, empty each wave, esc discards), one-session prime + `sudo -n true` VERIFY with distinct exit codes 91/92. 79 tests, coverage 80%, shellcheck clean. |
 | 2026-08-16 | build | Tasks 1-14 implemented in PR #227 (same-PR per operator). Split tui.go into model/view/keys/cmds; probeHost extracted so headless status is untouched. Concurrent background update engine + sudo-precheck fallback. 67 tests pass, `go vet` clean, **coverage 58.4% cmd / 80% fleet** (was 40.3/74). Two real defects caught by the new gates: lipgloss profile 0 is TrueColor not ASCII (goldens would have been colour-dependent), and a long remote failure log overflowed the row (now truncated). Demo: `evidence/demo/frames.txt`, 11 frames. Task 15 (live capture) still human-gated. |
 | 2026-08-16 | mbo-amend | Operator: make sync + update concurrent in the TUI. Root cause named: ExecProcess suspends the whole TUI, so anything routed through it is inherently serial. Redesigned F8 as a background-first engine (≤ --jobs concurrent, BatchMode fast-FAIL, per-row log) with sudo-precheck routing to a serial interactive fallback (new F13); refresh works mid-wave excluding updating hosts (F2b); in-flight ownership invariant added. Plan now 15 tasks. |
 | 2026-08-16 | mbo | Design + spec + plan + trio authored; worktree reset off a stale local main (hazard hit again — 3rd time); index.md registered; issue + draft PR pending. |

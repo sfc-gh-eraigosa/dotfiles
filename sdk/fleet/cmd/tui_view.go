@@ -179,6 +179,8 @@ func (m tuiModel) statusView() string {
 		}
 		return th.statusBar.Render(s) + th.dim.Render(
 			fmt.Sprintf("   %d match(es)  enter: keep  esc: cancel", len(m.matchIndexes())))
+	case modeAnswers:
+		return m.answersView()
 	case modeConfirm:
 		t := m.updateTargets()
 		return th.statusBar.Render(fmt.Sprintf("update %d host(s) → %s: %s",
@@ -206,6 +208,33 @@ func (m tuiModel) statusView() string {
 		line += th.dim.Render("   " + m.status)
 	}
 	return line
+}
+
+// answersView renders the pre-wave form. The sudo entry is masked — the
+// secret is never rendered, only its length.
+func (m tuiModel) answersView() string {
+	sel := func(f answerField, s string) string {
+		if m.ansField == f {
+			return th.cursor.Render("> " + s)
+		}
+		return "  " + s
+	}
+	val := func(v, empty string) string {
+		if v == "" {
+			return th.dim.Render(empty)
+		}
+		return th.statusBar.Render(v)
+	}
+	var b strings.Builder
+	b.WriteString(th.header.Render("unattended answers") +
+		th.dim.Render("  tab: field  enter: next  esc: cancel") + "\n")
+	b.WriteString(sel(fieldSudo, fmt.Sprintf("%-25s %s", "sudo password",
+		val(strings.Repeat("•", m.ans.secretLen()), "(empty = skip privileged steps)"))) + "\n")
+	b.WriteString(sel(fieldWindows, fmt.Sprintf("%-25s %s", "windows setup [y/n/s]",
+		val(m.ans.windows, "(unset = host decides)"))) + "\n")
+	b.WriteString(sel(fieldGemini, fmt.Sprintf("%-25s %s", "gemini leftovers [y/k/n]",
+		val(m.ans.gemini, "(unset = host decides)"))) + "\n")
+	return b.String()
 }
 
 func (m tuiModel) helpView() string {
