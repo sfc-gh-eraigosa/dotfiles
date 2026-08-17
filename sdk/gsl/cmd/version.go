@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/version"
+	"github.com/spf13/cobra"
 )
 
 // VersionInfo is the shape returned by `gsl version --json`.

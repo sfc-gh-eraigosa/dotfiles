@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/version"
+	"github.com/spf13/cobra"
 )
 
 type VersionInfo struct {

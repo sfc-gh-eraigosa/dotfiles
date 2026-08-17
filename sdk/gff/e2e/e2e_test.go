@@ -1,3 +1,4 @@
+//go:build e2e
 // +build e2e
 
 package e2e_test
@@ -172,7 +173,7 @@ func TestHappyPath(t *testing.T) {
 		// Install requires CWD to be the repo; create a wrapper command
 		bin := getGffBinary(t)
 		cmd := exec.Command(bin, "install")
-		cmd.Dir = repoA  // CWD = the repo
+		cmd.Dir = repoA // CWD = the repo
 		cmd.Env = []string{
 			"HOME=" + world,
 			"XDG_DATA_HOME=" + filepath.Join(world, ".local", "share"),
@@ -440,7 +441,7 @@ gff_on install.pkg.manager && echo "pkg-on" || echo "pkg-off"
 
 		bin := getGffBinary(t)
 		cmd := exec.Command(bin, "get", "--source", repoA, "install.ai.claude")
-		cmd.Dir = otherCwd  // CWD is unrelated to repoA
+		cmd.Dir = otherCwd // CWD is unrelated to repoA
 		cmd.Env = []string{
 			"HOME=" + world,
 			"XDG_DATA_HOME=" + filepath.Join(world, ".local", "share"),

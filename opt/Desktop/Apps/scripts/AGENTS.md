@@ -19,6 +19,26 @@ keyboard shortcuts, Wispr Flow voice dictation, app/font setup, and PowerToys.
 - **`setup-autostart.ps1`** — registers the elevated logon task for `macos.ahk` and,
   re-run standalone, **reloads** AutoHotkey after a re-deploy (self-elevates → UAC).
 - **`setup-apps.ps1`** — winget app install + Windows Terminal profiles/themes.
+- **`setup-security-audit.ps1`** — opt-in (gff `install.windows.security-audit`,
+  **fail-closed**) installer for the unattended weekly security audit: registers the
+  user-level `ClaudeSecurityAuditCollector` daily task, installs the collector to
+  `%USERPROFILE%\Claude\SecurityAudit`, and seeds the Claude analysis task prompt
+  (never overwrites an evolving baseline). `-Status` / `-Uninstall` / `-At HH:mm`.
+  See `docs/security-audit.md`.
+- **`security-audit-collect.ps1`** — the read-only collector that task runs:
+  ~40 anomaly lenses (persistence ASEPs, Defender health, network exposure/C2,
+  process masquerade, accounts/privilege, patch posture, 7d event-log signals)
+  into `latest-audit.txt` (+ a copy into the Claude task folder, dated history,
+  optional Google Drive fallback copy). **Detection only — never changes config.**
+  Every section resolves to items, `(none)`, `!! COLLECTION ERROR`, or
+  `## ADMIN-REQUIRED` — **never** an empty section, which the analysis would read
+  as "clean". Keep that contract when editing a lens: wrap it in `Add-Section`
+  (never hand-append to `$sections`), use `Deny-Marker` for admin-gaps (type name
+  only, byte-stable), version-normalize churny paths via `Norm-Ver`, and split
+  high-churn surfaces into `[STABLE]`/`[VOLATILE]` blocks. Params `-StdOut` (emit
+  to stdout, no writes), `-BaseDir`, `-Days` support ad-hoc + test runs.
+  **Tested by `opt/scripts/system/security-audit-collect_test.sh`** — static
+  contract checks in CI + a live read-only run assertion on WSL/Windows.
 
 User-facing runbook: **`WISPR-FLOW.md`**. Overview: **`README.md`**.
 

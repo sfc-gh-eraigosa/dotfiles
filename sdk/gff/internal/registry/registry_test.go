@@ -102,8 +102,8 @@ func TestInstallRefresh(t *testing.T) {
 	reg := &registry.Registry{P: p}
 
 	const (
-		ns     = "com.example.demo"
-		url    = "https://github.com/example/demo"
+		ns      = "com.example.demo"
+		url     = "https://github.com/example/demo"
 		commit1 = "abc1234"
 		commit2 = "def5678"
 	)
@@ -141,10 +141,10 @@ func TestInstallNamespaceTaken(t *testing.T) {
 	reg := &registry.Registry{P: p}
 
 	const (
-		ns      = "com.example.demo"
-		url1    = "https://github.com/example/demo"
-		url2    = "https://github.com/OTHER/demo"
-		commit  = "abc1234"
+		ns     = "com.example.demo"
+		url1   = "https://github.com/example/demo"
+		url2   = "https://github.com/OTHER/demo"
+		commit = "abc1234"
 	)
 
 	content := "namespace: com.example.demo\nsets: []\n"

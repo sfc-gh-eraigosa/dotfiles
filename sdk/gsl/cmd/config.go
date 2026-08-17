@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
+	"github.com/spf13/cobra"
 )
 
 var configCmd = &cobra.Command{

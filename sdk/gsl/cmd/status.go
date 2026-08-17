@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/spf13/cobra"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload"
+	"github.com/spf13/cobra"
 )
 
 var statusCmd = &cobra.Command{
