@@ -28,6 +28,15 @@ THE REPORT has 5 sections: (1) NON-MICROSOFT AUTO-START SERVICES,
 (2) NON-MICROSOFT ACTIVE SCHEDULED TASKS, (3) STARTUP COMMANDS,
 (4) PROCESSES FROM APPDATA/TEMP, (5) DEFENDER.
 
+SECTION STATES - each section is exactly one of these; do not confuse the last two:
+
+- items listed        -> analyze them normally against the baseline.
+- "(none)"            -> the lens ran and genuinely found nothing. Clean.
+- `!! COLLECTION ERROR: <msg>` -> the lens FAILED. This is NOT a clean result.
+  Report the section as unverified this run, quote the message, and say which
+  lens is blind. Never summarize a machine as "all clean" when any section
+  carries a COLLECTION ERROR - say explicitly which lenses did and did not run.
+
 COMPARE against the BASELINE below and report ONLY:
 
 - new or removed items (identify what a new item belongs to before alarming the user;
@@ -40,7 +49,8 @@ COMPARE against the BASELINE below and report ONLY:
   "Vendor Updater Service (NNN)" as the same item across versions)
 - expected: the collector's own artifacts (task 'ClaudeSecurityAuditCollector';
   Win32 lens quirks vary by machine - see baseline notes once established).
-If everything matches, tell the user in one or two sentences that all is clean.
+If everything matches AND every section ran (no COLLECTION ERROR), tell the user in
+one or two sentences that all is clean.
 
 BASELINE: none recorded yet - BOOTSTRAP MODE. On the first successful run: treat the
 report as the baseline candidate. Summarize each section briefly, ask the user to

@@ -80,6 +80,18 @@ setup-security-audit.ps1 -Uninstall   # removes task + collector; keeps data + b
   only write outside `%USERPROFILE%\Claude` is an optional copy of the report
   into a local Google Drive sync folder (`My Drive`) when one exists, giving the
   analysis run a fallback read path via the Drive connector.
+- **A broken lens is never silence.** Each section resolves to one of three
+  states — items, `(none)` (ran, found nothing), or
+  `!! COLLECTION ERROR: <msg>` (the lens itself failed). The analysis prompt is
+  required to report an errored section as *unverified* and is forbidden from
+  calling the machine clean while one is present. Without this an unavailable
+  `Get-MpComputerStatus` produced an empty DEFENDER section that read exactly
+  like "Defender is fine".
+- **Section 1 deliberately does not exclude `C:\Windows\Temp\`.** The
+  non-Microsoft heuristic skips services under `\Windows\`, but that directory
+  is user-writable by default and is a standard persistence location, so
+  excluding it would blind the audit's highest-value lens. Services with a null
+  `PathName` also stay visible rather than being filtered away.
 - The collector task itself shows up in audit section 2 — the analysis prompt
   expects it (`ClaudeSecurityAuditCollector`).
 - `StartWhenAvailable` + battery-friendly settings mean a laptop asleep at 09:00

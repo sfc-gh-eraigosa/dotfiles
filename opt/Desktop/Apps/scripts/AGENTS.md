@@ -28,7 +28,10 @@ keyboard shortcuts, Wispr Flow voice dictation, app/font setup, and PowerToys.
 - **`security-audit-collect.ps1`** — the read-only collector that task runs:
   snapshots services / scheduled tasks / startup commands / AppData processes /
   Defender into `latest-audit.txt` (+ a copy into the Claude task folder, dated
-  history, optional Google Drive fallback copy).
+  history, optional Google Drive fallback copy). Every section resolves to
+  items, `(none)`, or `!! COLLECTION ERROR: <msg>` — **never** an empty section,
+  which the analysis run would read as "clean". Keep that contract when editing
+  a lens: wrap it in `Add-Section`, don't hand-append to `$sections`.
 
 User-facing runbook: **`WISPR-FLOW.md`**. Overview: **`README.md`**.
 

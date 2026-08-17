@@ -42,6 +42,10 @@
   powershell -ExecutionPolicy Bypass -File setup-security-audit.ps1 -Uninstall
 #>
 param(
+    # Validated here rather than letting New-ScheduledTaskTrigger fail later:
+    # -At is parsed culture-sensitively, so an unvalidated string can register a
+    # task at an unintended hour instead of erroring. HH:mm, 24-hour, only.
+    [ValidatePattern('^([01]\d|2[0-3]):[0-5]\d$')]
     [string]$At = '09:00',
     [switch]$Uninstall,
     [switch]$Status

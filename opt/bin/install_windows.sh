@@ -32,15 +32,20 @@ if [ -z "$BASE_DIR" ]; then
   exit 1
 fi
 
-# gff gate (fail-open): source the helper relative to THIS script's location so
-# direct runs work too; a missing helper must never block the deploy, so stub
-# gff_on/gff_skip_msg to "always run" when the lib is absent.
+# gff gate: source the helper relative to THIS script's location so direct runs
+# work too. Stubs mirror each helper's DIRECTION when the lib is absent:
+#   gff_on      fail-OPEN  — a missing helper must never block the deploy.
+#   gff_opt_in  fail-CLOSED — an opt-in step must never install itself by
+#               accident. Without this stub the call would merely be a
+#               "command not found" (rc 127) that happens to read as false;
+#               state the contract explicitly rather than lean on that.
 _gff_lib="$(cd -- "$(dirname "$0")" && pwd -P)/../lib/gff.sh"
 if [ -f "$_gff_lib" ]; then
   # shellcheck source=opt/lib/gff.sh
   . "$_gff_lib"
 else
   gff_on() { return 0; }
+  gff_opt_in() { return 1; }
   gff_skip_msg() { echo "SKIP (gff: $1=false)"; }
 fi
 # Choice persistence + gff-owned skip state (needs gff_on, so sourced after).

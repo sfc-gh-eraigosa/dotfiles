@@ -20,4 +20,3 @@ gff_opt_in() {
   eval "_gff_val=\${GFF_${_gff_key}:-}"
   [ "${_gff_val}" = "true" ]
 }
-

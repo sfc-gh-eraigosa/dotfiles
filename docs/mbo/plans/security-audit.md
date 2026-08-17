@@ -15,16 +15,21 @@ Small feature: spec → plan, built in a single PR (no execution trio).
 | T5 | Claude analysis prompt template (bootstrap-baseline mode, data-source fallback chain, no-computer-use rule) | `opt/Desktop/Apps/scripts/security-audit-skill.template.md` |
 | T6 | install.sh wiring at the deferred Windows phase: extract `export_gff_wslenv`, add `run_security_audit_setup` (gated, rc-captured, logged) | `opt/bin/install_windows.sh` |
 | T7 | Docs: user guide, scripts inventory, docs index, MBO registration | `docs/security-audit.md`, `opt/Desktop/Apps/scripts/AGENTS.md`, `docs/AGENTS.md`, `docs/mbo/*` |
+| T8 | Tests for the fail-closed gate: `gff_opt_in` truth table + the `gff_on`/`gff_opt_in` inversion assertion, green under bash **and** dash | `opt/lib/gff_test.sh` |
 
 ## Validation
 
 Run in the build sandbox (Linux — no Windows/PowerShell available):
 
 - `bash -n` + dash `sh -n` on every touched shell file — pass.
+- `bash opt/lib/gff_test.sh` **and** `sh opt/lib/gff_test.sh` — 20/20 pass.
 - `opt/scripts/system/shell-portability-scan.sh --strict` (whole repo) — Tier 1: 0, Tier 2: 0.
-- `.github/gff/features.yaml` YAML parse + flag-shape check — pass.
-- markdownlint on added/changed markdown — run locally/CI (`make lint-markdown`);
-  shellcheck via `make lint-shell` in CI (neither tool was available in the sandbox).
+- `.github/gff/features.yaml` YAML parse + flag-shape check — pass; `gff export --shell`
+  emits `GFF_INSTALL_WINDOWS_SECURITY_AUDIT=false` by default (fail-closed confirmed).
+- `make lint-shell` (shellcheck) and `make lint-markdown` (markdownlint-cli2) — pass.
+
+**Not verifiable in the Linux sandbox** (no PowerShell): the four `.ps1` files are
+review-verified only. Spec AC1–AC5 remain the Windows-host gate.
 
 Requires a Windows host (the enabling machine, at flag-flip time):
 
