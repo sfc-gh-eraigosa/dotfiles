@@ -31,15 +31,20 @@
 - [ ] Task 8: n/N wraparound
 - [ ] Task 9: space toggle, v visual range, alias-keyed persistence
 
-## Phase 4 — act (Tasks 10–12)
+## Phase 4 — act (Tasks 10–13)
 
-- [ ] Task 10: batch update queue + confirm strip + --update-ref (validRef)
-- [ ] Task 11: `s` ssh handoff
-- [ ] Task 12: `?` overlay (from keymap table) + quit-during-batch guard
+- [ ] Task 10: concurrent bg update engine — precheck routing, ≤ `--jobs` slots,
+      BatchMode fast-FAIL, TUI stays live, refresh excludes updating, confirm
+      strip, `--update-ref` (validRef) + `--jobs`
+- [ ] Task 11: interactive fallback queue (precheck-failed hosts, serial `ssh -t`
+      handoffs after the wave)
+- [ ] Task 12: `s` ssh handoff (blocked while that host updates)
+- [ ] Task 13: `?` overlay (from keymap table) + quit-during-updates guard
 
-## Phase 5 — prove (Tasks 13–14)
+## Phase 5 — prove (Tasks 14–15)
 
-- [ ] Task 13: README/AGENTS + full gate (fleet ≥60%, cmd ≥55%, vet, leak sweep)
-- [ ] **HUMAN STOP** Task 14: live tmux capture — streaming, search, 2-host batch
-      with sudo prompt, FAIL-advances-queue, ssh action, fresh stamp after
+- [ ] Task 14: README/AGENTS + full gate (fleet ≥60%, cmd ≥55%, vet, leak sweep)
+- [ ] **HUMAN STOP** Task 15: live tmux capture — streaming, search, **two hosts
+      updating concurrently while navigating + `r`**, FAIL refills its slot,
+      fallback handoff with sudo prompt, ssh action, fresh stamps after
 - [ ] index.md → `in-review`; decide PR promotion with operator

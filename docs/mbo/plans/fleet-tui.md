@@ -11,7 +11,10 @@ Upgrade `fleet tui` from the v1 skeleton to a streaming, vim-navigable,
 searchable, multi-select, colorful dashboard — spec F1–F12 — without touching
 any headless command's semantics. Pure-model/pure-view discipline throughout so
 every visual state is a golden frame and every keystroke a table-driven test.
-14 tasks; 13 automatable, 1 human-gated live capture.
+Updates run **concurrently in the background** (bounded `--jobs`), with the
+interactive terminal-handoff kept only as the fallback for prompt-needing
+hosts — the TUI never blocks during a batch. 15 tasks; 14 automatable, 1
+human-gated live capture.
 
 **Standing rules (from the fleet build — apply to every task):**
 
@@ -57,11 +60,15 @@ type tuiModel struct {
     search   searchState         // input, compiled *regexp.Regexp, err, committed
     selected map[string]bool     // alias set
     vAnchor  *string             // visual-mode anchor alias (nil = not in visual)
-    queue    []string            // batch-update aliases, head = in flight
-    results  map[string]string   // alias → "ok"/"FAIL: …" from the last batch
-    updateRef string             // from --update-ref (validRef-guarded)
+    // update engine — background-first (design §4). A host is in exactly ONE
+    // of pending / updating / resolved; refresh excludes `updating`.
+    updating map[string]updState  // alias → {phase: queued|precheck|running|ok|fail; log string}
+    bgQueue  []string             // background wave; feeds free job slots
+    iaQueue  []string             // interactive fallback (precheck failed); serial, after the wave
+    jobs     int                  // --jobs: max concurrent background updates (default 4)
+    updateRef string              // from --update-ref (validRef-guarded)
     spin     spinner.Model
-    now      time.Time           // injected — never time.Now() in view code
+    now      time.Time            // injected — never time.Now() in view code
     status   string
 }
 
@@ -69,7 +76,13 @@ type tuiModel struct {
 func collectOne(h sshconf.Host, r runner.Runner, base Baseliner, now time.Time) tea.Cmd
     // → hostRowMsg{Row}
 type hostRowMsg struct{ row Row }
-type execDoneMsg struct{ alias string; err error }   // update or ssh returned
+func precheckSudo(alias string, r runner.Runner) tea.Cmd     // ssh <alias> sudo -n true
+type precheckMsg struct{ alias string; interactive bool }
+func bgUpdate(alias, ref string, r runner.Runner) tea.Cmd
+    // runner.Run with BatchMode=yes wrapping remoteUpdateScript(ref);
+    // NEVER tea.ExecProcess — must not suspend the TUI.
+type bgUpdateDoneMsg struct{ alias, log string; err error }
+type execDoneMsg struct{ alias string; err error }           // ia-handoff or ssh returned
 
 // Key routing: exactly one function owns it.
 func route(m tuiModel, k tea.KeyMsg) (tuiModel, tea.Cmd)
@@ -83,9 +96,15 @@ good matches, render `err` inline, never crash.
 Viewport invariant (F4): `vp.top ≤ indexOf(cursor) < vp.top+vp.height` after
 every transition — one `clampViewport()` called at the end of `route`.
 
-Batch contract (F8): confirm builds `queue` from `selected` (table order,
-fallback cursor); each `execDoneMsg` records ok/fail, fires `collectOne` for
-that alias, pops the queue, fires the next handoff. Errors advance, never wedge.
+Batch contract (F8/F13): confirm snapshots targets (table order, fallback
+cursor) and fires `precheckSudo` per host; each `precheckMsg` routes the host
+to `bgQueue` or `iaQueue`. The background wave fills up to `jobs` slots with
+`bgUpdate` cmds; each `bgUpdateDoneMsg` records ok/fail + log, re-fires
+`collectOne`, and hands the slot to the next queued host. When `bgQueue` and
+all slots drain, the `iaQueue` runs serially via `tea.ExecProcess` handoffs
+(`ssh -t`), each `execDoneMsg` advancing it. Errors advance, never wedge —
+in either path. Refresh (`r`) at any moment re-polls only hosts not in
+`updating` (F2b).
 
 ## 4. TDD build order
 
@@ -160,71 +179,90 @@ RED: toggle/re-sort, visual range extend+commit+cancel, refresh-survival.
 Done-when: green; selection golden frame.
 Evidence: `task09/select.txt`.
 
-**Task 10 — batch update + --update-ref (F8, F9).**
+**Task 10 — concurrent background update engine (F8, F9, F2b).**
 `u`: targets = selection (table order) else cursor; modeConfirm strip lists
-targets + ref; `y` builds queue and fires first `ExecProcess` handoff
-(reusing `remoteUpdateScript(updateRef)`); `execDoneMsg` records result,
-re-polls that host, advances; `n`/`esc` = nothing. `--update-ref` on tuiCmd,
-`validRef` at RunE start.
-RED: target-list rules, declined-changes-nothing, queue-advances-past-failure
-(erroring fake), injection ref rejected before program start, ref reaches the
-script (recordingRunner).
-Done-when: all green; confirm-strip golden.
-Evidence: `task10/batch.txt`.
+targets + ref; `y` fires `precheckSudo` per target; passing hosts fill
+`bgQueue`; wave runs ≤ `jobs` concurrent `bgUpdate` cmds (BatchMode ssh over
+the runner seam wrapping `remoteUpdateScript(updateRef)` — **never
+ExecProcess**); each `bgUpdateDoneMsg` records ok/FAIL + log tail, re-polls
+the host, refills the slot; `n`/`esc` = nothing. `r` during the wave re-polls
+only non-updating hosts. Flags: `--update-ref` (validRef) + `--jobs`
+(default 4, ≥1) on tuiCmd.
+RED: target-list rules (F8a), declined-changes-nothing (F8b), slot-advance
+past a failing fake (F8c), saturation ≤ jobs at every step (F8d), BatchMode
+argv + no-ExecProcess (F8e), keystrokes interleave with completions (F8f),
+refresh exclusion (F2b), injection ref + bad --jobs rejected (F9a, F9b).
+Done-when: all green; confirm-strip + updating-rows goldens.
+Evidence: `task10/batch-bg.txt`.
 
-**Task 11 — ssh action (F10).**
+**Task 11 — interactive fallback queue (F13).**
+Hosts whose precheck fails route to `iaQueue`; when the background wave
+drains, serial `ssh -t` ExecProcess handoffs run (the v1 path, unchanged
+lesson: sudo prompts need a real terminal); each `execDoneMsg` records,
+re-polls, advances. A host is never in both queues.
+RED: mixed-fleet routing (F13a), fallback-advance incl. declined/error
+(F13b), never-both-queues invariant.
+Done-when: green.
+Evidence: `task11/fallback.txt`.
+
+**Task 12 — ssh action (F10).**
 `s` → `ssh <cursor alias>` ExecProcess; `execDoneMsg` restores UI, re-polls
 that host (an ssh visit often changes nothing, but the re-poll is free and
-keeps the invariant "handoff returns ⇒ row refreshed").
-RED: cmd-construction (argv exactly `ssh <alias>`), empty-fleet no-op.
+keeps the invariant "handoff returns ⇒ row refreshed"). Disabled while that
+host is updating.
+RED: cmd-construction (argv exactly `ssh <alias>`), empty-fleet no-op,
+blocked-while-updating.
 Done-when: green.
-Evidence: `task11/ssh.txt`.
+Evidence: `task12/ssh.txt`.
 
-**Task 12 — help overlay + polish (F11, F12).**
+**Task 13 — help overlay + polish (F11, F12).**
 `?` overlay from the single keymap table (no second hand-written list to
-drift); any key closes; empty-fleet guidance kept; quit guard while a batch
-queue is non-empty ("update in progress — q again to force").
+drift); any key closes; empty-fleet guidance kept; quit guard while updates
+are in flight ("updates in progress — q again to force").
 RED: overlay golden, overlay-swallows-keys, double-q guard, empty-fleet keys.
 Done-when: green.
-Evidence: `task12/help.txt`.
+Evidence: `task13/help.txt`.
 
-**Task 13 — docs + gate.**
-README TUI section (keys table, search, selection, batch, `--update-ref`),
-AGENTS.md command row + invariants; `scripts/test.sh` full run.
+**Task 14 — docs + gate.**
+README TUI section (keys table, search, selection, concurrent batch +
+fallback, `--update-ref`, `--jobs`), AGENTS.md command row + invariants;
+`scripts/test.sh` full run.
 Done-when: gate green ≥ 60% (fleet), cmd ≥ 55%; `go vet` clean; no identity
 leak in diff (`grep` sweep).
-Evidence: `task13/gate.txt`.
+Evidence: `task14/gate.txt`.
 
-**Task 14 — HUMAN STOP: live capture.**
-Real fleet: streaming arrival, `/` search, select 2, batch update with a
-visible sudo prompt (proves terminal handoff), a FAIL row advancing the
-queue, `s` ssh in/out, post-update fresh stamp. `tmux capture-pane`
-sequence, sanitized, committed to `evidence/task14/`.
+**Task 15 — HUMAN STOP: live capture.**
+Real fleet: streaming arrival, `/` search, select 2+, **two hosts updating
+concurrently while navigating and pressing `r`**, a FAIL row refilling its
+slot, an interactive-fallback handoff with a visible sudo prompt (proves the
+terminal release), `s` ssh in/out, post-update fresh stamps. `tmux
+capture-pane` sequence, sanitized, committed to `evidence/task15/`.
 Done-when: capture shows every F-feature live; TRACKING row cites it.
 
 ## 5. Verification mapping
 
 Every spec §5 rule maps to the named test written in its task: F1a–c → Task 5,
-F2a → 6, F3a → 2, F4a–d → 3–4, F5a–c → 7, F6a → 8, F7a–b → 9, F8a–c + F9a
-→ 10, F10a → 11, F11a + F12a → 12. The mapping is restated per-row in
-TRACKING.md as tasks complete.
+F2a → 6, F2b → 10, F3a → 2, F4a–d → 3–4, F5a–c → 7, F6a → 8, F7a–b → 9,
+F8a–f + F9a–b → 10, F13a–b → 11, F10a → 12, F11a + F12a → 13. The mapping is
+restated per-row in TRACKING.md as tasks complete.
 
 ## 6. Integration & rollout
 
 No wiring changes: same binary, same build.sh, same coverage floor entry.
-Rollout = merge; rollback = revert (spec §9). Manual acceptance = Task 14.
+Rollout = merge; rollback = revert (spec §9). Manual acceptance = Task 15.
 
 ## 7. Validation & evidence (show the work)
 
-Evidence tree `docs/mbo/plans/fleet-tui/evidence/task01..14/`, append-only,
+Evidence tree `docs/mbo/plans/fleet-tui/evidence/task01..15/`, append-only,
 dated headers, committed with each task (privacy-sanitized). Coverage bars in
-§4 Task 13. Adversarial scenarios covered: invalid regex (F5b), erroring host
-mid-batch (F8c), injection ref (F9a), resize-under-cursor (F4d), empty fleet
-(F12a), quit-during-batch (Task 12). A feature without captured evidence is
-not done.
+§4 Task 14. Adversarial scenarios covered: invalid regex (F5b), erroring host
+mid-wave (F8c), slot saturation (F8d), a background prompt hanging → BatchMode
+fast-FAIL (design §5), precheck misrouting (F13a), injection ref (F9a),
+resize-under-cursor (F4d), empty fleet (F12a), quit-during-updates (Task 13).
+A feature without captured evidence is not done.
 
 ### 6.1 Build leaves / DAG
 
-Default: single worker (`fleet-tui/<user>/build`), sequential Tasks 1–14 —
+Default: single worker (`fleet-tui/<user>/build`), sequential Tasks 1–15 —
 the tasks chain through one model struct, so parallel leaves would fight over
 the same files. No CAP-B breakout.

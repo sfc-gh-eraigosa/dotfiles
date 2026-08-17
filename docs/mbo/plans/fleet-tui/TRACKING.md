@@ -29,36 +29,38 @@
 | 7 — `/` search (F5) | todo | | | smartcase; invalid-regex UX |
 | 8 — `n`/`N` (F6) | todo | | | wraparound both ways |
 | 9 — selection + visual (F7) | todo | | | alias-keyed; survives refresh |
-| 10 — batch update + --update-ref (F8,F9) | todo | | | declined = nothing; queue survives failure |
-| 11 — `s` ssh action (F10) | todo | | | argv exactly `ssh <alias>` |
-| 12 — help overlay + polish (F11,F12) | todo | | | overlay from the keymap table |
-| 13 — docs + gate | todo | | | fleet ≥60%, cmd ≥55%, vet, leak sweep |
-| 14 — HUMAN STOP: live capture | todo | | | tmux; sudo prompt visible; FAIL advances queue |
+| 10 — concurrent bg update engine (F8,F9,F2b) | todo | | | ≤ jobs slots; BatchMode fast-FAIL; TUI stays live; refresh excludes updating |
+| 11 — interactive fallback queue (F13) | todo | | | sudo-precheck routing; serial handoffs after the wave |
+| 12 — `s` ssh action (F10) | todo | | | argv exactly `ssh <alias>`; blocked while updating |
+| 13 — help overlay + polish (F11,F12) | todo | | | overlay from the keymap table; quit guard |
+| 14 — docs + gate | todo | | | fleet ≥60%, cmd ≥55%, vet, leak sweep |
+| 15 — HUMAN STOP: live capture | todo | | | tmux; 2 concurrent updates + navigation; sudo prompt on fallback |
 
 ## 2. Feature → proof matrix (spec §5)
 
 | Feature | Automated proof | Live proof (Task 14) |
 | :-- | :-- | :-- |
 | F1 streaming | [ ] F1a/F1b/F1c tests | [ ] rows arrive independently |
-| F2 refresh | [ ] F2a | [ ] r re-polls in place |
+| F2 refresh | [ ] F2a · [ ] F2b (during updates) | [ ] r re-polls in place mid-wave |
 | F3 theme | [ ] F3a goldens | [ ] colors on a real terminal |
 | F4 motion+paging | [ ] F4a–d | [ ] big-fleet paging |
 | F5 search | [ ] F5a–c | [ ] /regex highlight |
 | F6 n/N | [ ] F6a | [ ] |
 | F7 selection | [ ] F7a–b | [ ] visual range |
-| F8 batch update | [ ] F8a–c | [ ] sudo prompt + FAIL advances |
-| F9 --update-ref | [ ] F9a | [ ] optional |
+| F8 concurrent bg update | [ ] F8a–f | [ ] 2 hosts updating at once, TUI live |
+| F9 --update-ref/--jobs | [ ] F9a–b | [ ] optional |
 | F10 ssh action | [ ] F10a | [ ] in and back out |
 | F11 help | [ ] F11a | [ ] |
 | F12 empty fleet | [ ] F12a | — |
+| F13 interactive fallback | [ ] F13a–b | [ ] sudo prompt reaches operator |
 
 ## 3. Done-when — the stop condition
 
-- [ ] Tasks 1–14 `done` with SHAs + evidence
+- [ ] Tasks 1–15 `done` with SHAs + evidence
 - [ ] `scripts/test.sh` green; fleet ≥ 60%, cmd ≥ 55%
 - [ ] `go vet ./...` clean in sdk/fleet
 - [ ] Headless status/update tests unmodified (except Task 5's addition)
-- [ ] Live capture committed (Task 14)
+- [ ] Live capture committed (Task 15) — incl. concurrent updates + mid-wave refresh
 - [ ] README/AGENTS updated; no identity leak
 - [ ] `docs/mbo/index.md` → `in-review`
 
@@ -74,11 +76,14 @@
 | :-- | :-- | :-- |
 | Stale local main under a new worktree (hit 3× on fleet) | worker creation | preflight §2.1; reset to origin/main |
 | Golden frames vary across lipgloss/termenv versions | Tasks 2+ | pin Ascii profile in TestMain; goldens assert the Ascii frame only |
-| ExecProcess error paths differ by tea version | Tasks 10–11 | F8c test drives via messages, not a real terminal |
+| ExecProcess error paths differ by tea version | Tasks 11–12 | F13b test drives via messages, not a real terminal |
 | Spinner ticks make frames nondeterministic | Task 5 | fixed spinner frame injected in tests (no Tick in test path) |
+| `sudo -n` passes but a later prompt appears (cred-cache expiry mid-run) | Task 10 | BatchMode=yes turns any prompt into a fast FAIL with the cause in the row log; operator re-runs via fallback |
+| A background update and a refresh poll race on one host | Tasks 6/10 | in-flight ownership invariant (one of pending/updating/resolved); F2b test pins it |
 
 ## 5. Session log (append-only)
 
 | Date | Session | What advanced |
 | :-- | :-- | :-- |
+| 2026-08-16 | mbo-amend | Operator: make sync + update concurrent in the TUI. Root cause named: ExecProcess suspends the whole TUI, so anything routed through it is inherently serial. Redesigned F8 as a background-first engine (≤ --jobs concurrent, BatchMode fast-FAIL, per-row log) with sudo-precheck routing to a serial interactive fallback (new F13); refresh works mid-wave excluding updating hosts (F2b); in-flight ownership invariant added. Plan now 15 tasks. |
 | 2026-08-16 | mbo | Design + spec + plan + trio authored; worktree reset off a stale local main (hazard hit again — 3rd time); index.md registered; issue + draft PR pending. |

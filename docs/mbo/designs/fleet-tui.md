@@ -39,8 +39,10 @@ vim-like selection, and a colorful look.
 1. **Streaming async collect** — the TUI opens instantly; rows appear as each
    host answers, with a spinner on hosts still being polled. Unreachable hosts
    resolve to a red row, never a hang.
-2. **Working refresh** — `r` re-polls all hosts in place, preserving cursor and
-   selection.
+2. **Working refresh, concurrent with everything else** — `r` re-polls all
+   hosts in place, preserving cursor and selection — including **while updates
+   are in flight** (hosts currently updating are excluded from the re-poll;
+   their row state is owned by the update engine until it reports).
 3. **Colorful, legible table** — lipgloss theme keyed by status class
    (up-to-date green · behind yellow · divergent magenta · unknown dim ·
    unreachable red), styled header, cursor row, selection marks, search
@@ -55,11 +57,20 @@ vim-like selection, and a colorful look.
 6. **Vim-like selection** — `space` toggles the cursor row, `v` starts a visual
    range extended by motions, `esc` clears. Selection is keyed by **host
    alias**, not row index, so it survives re-sorts and refreshes.
-7. **Batch update** — `u` acts on the selection when non-empty (else the cursor
-   row): shows the target list, confirms, then runs the existing interactive
-   update per host sequentially (terminal handed over each time), re-polling
-   each row afterward. A `--update-ref` flag (validRef-guarded, default `main`)
-   brings the headless `update --ref` capability to the TUI.
+7. **Concurrent batch update, background-first** — `u` acts on the selection
+   when non-empty (else the cursor row): shows the target list, confirms, then
+   updates hosts **concurrently in the background** (bounded by `--jobs`,
+   default 4) with no terminal handoff — each row streams
+   `queued → updating ⠋ → ok/FAIL`, output captured per host, and the TUI
+   stays fully interactive throughout (navigate, search, refresh). The
+   **interactive terminal-handoff path survives as the fallback** for hosts
+   that genuinely need a prompt: a `sudo -n true` precheck classifies each
+   target; prompt-needing hosts queue serially for handoff *after* the
+   background wave. Background runs use `ssh -o BatchMode=yes` so an
+   unexpected prompt fails fast as a visible FAIL — a background update can
+   never hang waiting for input it cannot receive. Every completion re-polls
+   its host. A `--update-ref` flag (validRef-guarded, default `main`) brings
+   the headless `update --ref` capability to the TUI.
 8. **SSH action** — `s` (or `enter`) hands the terminal to a plain
    `ssh <host>`; the TUI resumes on exit.
 9. **Help overlay** — `?` toggles a key reference.
@@ -116,9 +127,20 @@ Key design points:
   `tea.KeyMsg` is routed by mode. No hidden flag combinations.
 - **Selection is a `map[alias]bool`** + an optional visual anchor. Batch
   actions snapshot it into an ordered list at confirm time.
-- **The update/ssh handoff reuses `tea.ExecProcess`** exactly as v1 does (the
-  sudo-prompt lesson), one host at a time; between hosts the model advances a
-  queue and re-fires `collectOne` for the host just updated.
+- **The update engine is background-first.** `tea.ExecProcess` *suspends the
+  entire TUI* while the terminal is handed over — so anything routed through
+  it is inherently serial and blocking. v2 therefore runs updates as captured
+  `tea.Cmd`s over the existing `runner` seam (BatchMode ssh, output captured,
+  bounded concurrency via a job-slot counter in the model), and reserves
+  `tea.ExecProcess` for the two things that truly need a terminal: the
+  interactive-fallback update queue (hosts whose `sudo -n` precheck fails)
+  and the `s` ssh action. Between fallback handoffs the model advances the
+  queue; every update completion (background or interactive) re-fires
+  `collectOne` for its host.
+- **In-flight ownership:** a host is in exactly one of `pending` (poll),
+  `updating`, or resolved. Refresh skips `updating` hosts; an update
+  completion clears `updating` and triggers the re-poll. No state is ever
+  owned by two async paths at once.
 - **The theme is one struct** consumed only by `tui_view.go`; tests pin
   `lipgloss.SetColorProfile(termenv.Ascii)` so frames are byte-stable.
 
@@ -129,9 +151,16 @@ Key design points:
   (guarded by their existing tests).
 - **bubbles/spinner becomes a direct dependency** (it's already transitively
   present). License check runs in CI as for every charm dep.
-- **Interactive handoff mid-batch**: a failed `ssh -t` in a queue must not
-  wedge the TUI — every ExecProcess completion (error or not) re-enters
-  `Update()` and advances the queue; the error is rendered on the row.
+- **Interactive handoff mid-batch**: a failed `ssh -t` in the fallback queue
+  must not wedge the TUI — every ExecProcess completion (error or not)
+  re-enters `Update()` and advances the queue; the error is rendered on the row.
+- **Sudo-precheck misclassification**: a host that passes `sudo -n true` but
+  later prompts anyway (credential cache expiry mid-run) would hang a naive
+  background run — BatchMode turns that into a fast FAIL; the row's captured
+  log names the cause and the operator re-runs that host via the interactive
+  path.
+- **Concurrent updates racing a refresh**: excluded by construction (the
+  in-flight ownership rule above); pinned by a test.
 - **Terminal capability variance**: lipgloss degrades automatically; tests pin
   ASCII so CI never depends on a TTY.
 
@@ -152,9 +181,11 @@ The plan must capture, per task, under `plans/fleet-tui/evidence/`:
   rule in spec §5.
 - **A live capture** (human-gated): `tmux capture-pane` sequence of the real
   TUI against the real fleet — streaming arrival, search, select-two,
-  batch-update handoff (sudo prompt visible = terminal genuinely released),
-  ssh action, and the post-update re-poll showing a fresh stamp. This is the
-  one thing CI cannot fake.
+  **concurrent background updates (two rows updating at once while the
+  operator navigates and refreshes)**, an interactive-fallback handoff (sudo
+  prompt visible = terminal genuinely released), ssh action, and the
+  post-update re-poll showing a fresh stamp. This is the one thing CI cannot
+  fake.
 - **Coverage** — `scripts/test.sh` gate output showing fleet ≥ 60% (expect
   cmd% to *rise*; the pure view/model split exists to make that cheap).
 
