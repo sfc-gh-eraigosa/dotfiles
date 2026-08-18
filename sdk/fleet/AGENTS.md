@@ -16,23 +16,30 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 
 | Command | Does |
 | :-- | :-- |
-| `fleet status [host...]` | table of host · commit · last run · status; `--json`; exits non-zero if any host is stale |
-| `fleet discover` | list every concrete ssh-config host as `in-fleet` / `available`; `--json` |
-| `fleet tui` | same rows interactively; `u` updates the selected host |
+| `fleet status [host...]` | table of host · commit · **branch** · last run · status; `--json`; exits non-zero if any host is stale |
+| `fleet discover` | list every concrete ssh-config host as `in-fleet` / `available`; `--json`; `--add-all` bulk-adopts (one pass, one backup; `--dry-run` / `--yes`) |
+| `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v`/`a` selection, concurrent background updates (`--jobs`), `w` wake, `s` ssh, `F` forget answers, `?` help |
 | `fleet update <host>...` | fetch → checkout `--ref` (default `main`) → `pull --ff-only` → `install.sh` over `ssh -t`, one host at a time |
 | `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
 | `fleet remove <alias> [--purge]` | unmark (keeps SSH access); `--purge` deletes the block |
 | `fleet keys list\|sync\|prune` | audit / authorize / remove authorized keys |
+| `fleet wake [host...]` | rouse hosts asleep at layer 2: ladder `retry → local-prime → peer-relay`, printed rung by rung; `--json`; exits non-zero if any target stayed down |
 
 ## Layout
 
 | Path | Responsibility |
 | :-- | :-- |
 | `cmd/` | cobra commands, rendering, SSH fan-out |
+| `cmd/tui_model.go` | TUI state machine: modes, alias-keyed cursor/selection, update engine |
+| `cmd/tui_view.go` | pure `View()` + the one lipgloss `theme` |
+| `cmd/tui_keys.go` | keymap + mode routing (`keyHelp` is the single source of truth) |
+| `cmd/tui_cmds.go` | tea.Cmd producers: poll, precheck, background update, handoffs |
 | `internal/sshconf` | parse **and edit** `~/.ssh/config` (the only inventory) |
 | `internal/stamp` | parse the install stamp |
 | `internal/drift` | classify drift + format age (`now` injected — never `time.Now()`) |
 | `internal/keys` | authorized_keys diff (reports removals, never applies them) |
+| `internal/reach` | the wake ladder: rung order, peer ranking, provenance (pure; every impure edge injected via `Deps`) |
+| `cmd/answers_store.go` | the non-secret prompt preferences on disk (`0600`); the on-disk type has no credential field |
 | `internal/runner` | the **only** seam that touches a remote host (`Exec` real, `Fake` for tests) |
 
 Everything but `runner` is pure text-in/struct-out, so the decision surface is unit-tested
@@ -52,6 +59,72 @@ without opening a socket.
 - **A dirty clone is skipped** unless `--force`, which *preserves* work in a rescue worktree
   (`git add -A` onto a branch — **not** `stash@{0}`, which silently drops untracked files).
 - **Failures are named per host** and reflected in the exit code; never swallowed.
+- **TUI in-flight ownership**: a host is in exactly one of `pending` / `updating` /
+  `waking` / resolved. Refresh skips hosts an async path owns; every completion
+  re-polls its host. Two async paths must never own one row.
+- **TUI updates are background-first**: `tea.ExecProcess` suspends the WHOLE TUI, so
+  it is reserved for the sudo-precheck fallback and the `s` ssh action. The default
+  lane runs over the runner seam with `BatchMode=yes` so a surprise prompt fails
+  fast and visibly instead of hanging.
+- **The sudo credential is memory-only and stdin-only.** It is never persisted,
+  logged, rendered (the form masks it), placed in argv, or exported as an env
+  var — `/proc/<pid>/{cmdline,environ}` are world-readable. `runner.RunStdin` is
+  the only channel. Pinned by `TestSudoSecretNeverAppearsInTheRemoteCommand`.
+- **Prime and install share one ssh session, and the prime is verified.** sudo's
+  timestamp is tty/session-scoped, so a separate priming connection may not
+  carry; `sudo -n true` gates the install so it can't run with every privileged
+  step silently skipping (exit 91 = bad password, 92 = did not persist).
+- **Bulk adopt is one pass, one write.** `discover --add-all` accumulates every
+  `Mark` into a single config then writes once — N separate writes would mean N
+  backups and N windows in which a partial write costs SSH access. Nothing
+  available ⇒ no write at all.
+- **Answers are sticky for the session; the confirm strip is the gate.** This
+  deliberately *reverses* the earlier "form starts empty every wave" rule. That rule
+  forced a retype for every wave of a fleet-wide update, and retyping is exactly how two
+  waves end up applying *different* answers — the opposite of what the form is for. `esc`
+  now backs out without forgetting, `u` skips the form when answers are remembered, and
+  the protection against stale answers comes from the confirm strip **displaying** them
+  (masked) rather than from throwing them away. `F` forgets on purpose; process exit
+  forgets unconditionally. Don't "restore" the old behaviour thinking it was an oversight.
+- **The credential is session-scoped and never serialised.** Sticky answers widened its
+  lifetime from one wave to one process — a bounded, deliberate trade. `~/.config/fleet/answers.json`
+  (`0600`) holds `windows` and `gemini` only: the on-disk type has no field for a
+  credential, so the mistake is unrepresentable rather than merely avoided. Pinned by
+  `TestSavedAnswersNeverContainTheCredential` (asserts on the marshalled bytes) and
+  `TestLoadIgnoresACredentialPlantedInTheFile`.
+- **The persistence path is INJECTED (`tuiModel.ansPath`), never resolved inside the model.**
+  A model that called `answersPath()` itself made every test write to the developer's real
+  `~/.config/fleet`. Empty path = no persistence, which is what tests get.
+- **Branch costs no extra round-trip.** The live checked-out branch rides in the *same*
+  remote command as the stamp read, split on `probeDelim`. A second dial per host would
+  double the poll for one column. Pinned by `TestBranchCostsNoExtraRoundTrip`.
+- **Row width is derived, not guessed.** `rowPrefixWidth` sums the same numbers as
+  `rowView`'s format string and `failWidth` budgets from it; the failure cause is dropped
+  rather than clamped to a floor when nothing fits. Adding the BRANCH column against a
+  hardcoded prefix overflowed the row, and a minimum-width floor pushed it past the edge
+  anyway — both caught by the demo width guard.
+- **TUI cursor/selection are alias-keyed**, never index-keyed — rows re-sort as they
+  stream in.
+- **Wake never mutates a target.** The ladder sends ICMP, reads `$SSH_CONNECTION` on a
+  peer, and probes — nothing else. It runs automatically inside `status`, a *read* path,
+  so anything that wrote to a host would be a side effect of merely looking at it. Pinned
+  by `TestWakeNeverSendsAnythingThatWritesToATarget` (argv allowlist + banned-substring
+  sweep).
+- **Only a DIRECT re-probe may report `Woke`.** A successful `ssh -J` proves the *peer*
+  can route to the target, which is strictly weaker than "this workstation can". Reporting
+  wake on relay success alone would turn a real network partition into a green row. Pinned
+  by `TestRelaySuccessAloneNeverReportsWoke`.
+- **The cheap rung may not starve the effective one.** `retry` gets at most `Budget/3`;
+  the rest is reserved for `peer-relay`. Found by live testing, not review: two retries
+  against a dead host ate a 20s budget whole and the relay never ran. Pinned by
+  `TestRetryRungCannotStarveThePeerRelay`.
+- **`waking` joins the in-flight ownership set.** A host is in exactly one of `pending` /
+  `updating` / `waking` / resolved; refresh skips the first two, `u` and `s` cannot claim
+  a waking host, and every wake completion releases its claim **unconditionally** — a
+  failed ladder that kept ownership would freeze that row for the rest of the session.
+- **No `ping -W` anywhere.** It means *seconds* on GNU and *milliseconds* on BSD. Local
+  pings are bounded by `exec.CommandContext`; the relay nudge is detached and never waited
+  on at all.
 
 ## Gotchas
 
@@ -62,6 +135,28 @@ without opening a socket.
   feature branch to prove the stamp before it merges.
 - A stamp that exists but won't parse reports `unknown (corrupt stamp)` — deliberately
   distinct from never-installed.
+- **A host that needs waking every run is not healthy — it is power-saving.** The `woke via
+  <peer>` note exists to keep that visible instead of smoothing it away. The permanent cure
+  is on the host, not in fleet: a Wi-Fi NIC with `power_save on` sleeps through the
+  *broadcast* ARP requests a cold neighbour cache must send (`iw dev wlan0 get power_save`
+  to check). Disable it persistently with a NetworkManager drop-in —
+  `/etc/NetworkManager/conf.d/wifi-powersave-off.conf` containing `[connection]` /
+  `wifi.powersave = 2`. Fleet deliberately does **not** apply this for you; see the
+  non-mutation invariant.
+- **`BRANCH` shows the LIVE checkout, not the stamp.** `feature/x≠main` means "checked
+  out feature/x, last installed from main" — usually the explanation for an
+  `ahead/divergent` row. `detached` is a detached HEAD; `-` means no clone (or a host too
+  old to answer the two-part probe). Branch is in the search haystack, so `/feature` → `a`
+  → `u` targets every feature-branch host.
+- **`BRANCH` shows the LIVE checkout, not the stamp.** `feature/x≠main` means "checked out
+  feature/x, last installed from main" — usually the explanation for an `ahead/divergent`
+  row. `detached` is a detached HEAD; `-` means no clone, no git, or a host too old to
+  answer the two-part probe. Branch is in the search haystack, so `/feature` → `a` → `u`
+  targets every feature-branch host in three keystrokes.
+- **`local-prime` is a no-op under WSL2 NAT and that is expected.** The workstation's
+  `eth0` is a private `172.x` link with no layer-2 presence on the fleet subnet, so the
+  rung reports `skipped: workstation is not on the target's subnet`. It earns its place
+  when fleet runs *on* a fleet member, which is genuinely on the LAN.
 - `build.sh` injects `cmd.Version`/`Commit`/`Dirty`/`BuildDate` by exact symbol path. Keep
   them exported, or the ldflags silently no-op and every binary reports `dev`.
 - The coverage floor lives in `scripts/test.sh` `coverage_min()`; a module missing from that

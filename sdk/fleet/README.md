@@ -55,21 +55,170 @@ fleet status web-01 db-01          # just these two
 fleet status --json | jq .         # machine-readable
 ```
 
+The `BRANCH` column is the branch **checked out on the host right now**. When it
+differs from the one the host last installed from, both are shown —
+`feature/gff≠main` reads *"checked out feature/gff, last installed from main"*,
+which is usually the explanation for an `ahead/divergent` row. `detached` is a
+detached HEAD and `-` means no clone. It costs nothing: the live branch rides in
+the same SSH round-trip fleet already spends reading the install stamp.
+
 Classes: `up-to-date`, `behind`, `divergent`, `unknown`, `unreachable`. An
 unreachable host is reported in the table, never silently dropped. A host that has
 never run the stamped installer reads `unknown` (the stamp is **not** retroactive);
 a stamp that exists but won't parse reads `unknown (corrupt stamp)` — deliberately
 distinct from never-installed.
 
+A host that only *looked* unreachable and was roused by the wake ladder reads its
+real class with provenance attached: `up-to-date (woke via nano-01)`.
+
+### `fleet wake [host...]`
+
+Some hosts are asleep, not dead. A Wi-Fi NIC with power saving enabled sleeps
+through the **broadcast** ARP requests that a cold neighbour cache has to send, so
+your workstation never resolves its MAC and gives up at layer 2 — before a single
+SSH packet is sent. The host is up; you simply cannot address it.
+
+`fleet wake` escalates a bounded ladder against each target and prints it rung by
+rung, because the ladder *is* the diagnostic:
+
+```sh
+fleet wake pi-01                   # one host
+fleet wake                         # every #fleet host
+fleet wake pi-01 --json | jq .     # full ladder, machine-readable
+```
+
+```text
+pi-01
+  retry        x   still unreachable after 1 retries
+  local-prime  x   skipped: workstation is not on the target's subnet
+  peer-relay   OK via nano-01
+  => reachable (woke via nano-01)
+```
+
+| Rung | What it does | When it applies |
+| :-- | :-- | :-- |
+| `retry` | re-probe after a short backoff | always; catches a neighbour entry that just expired |
+| `local-prime` | ping the target so the local stack ARPs for it | only when this machine shares the target's subnet |
+| `peer-relay` | ask a reachable peer for `$SSH_CONNECTION` to learn this workstation's LAN address, reach the target **through** that peer, and tell it to send traffic back | whenever another fleet host answers |
+
+`peer-relay` is the rung that resolves the common case, and the only one that works
+when your workstation has no layer-2 presence on the fleet's subnet at all — under
+WSL2's NAT the ARP table that matters belongs to Windows, so `local-prime` correctly
+skips itself there.
+
+Two properties worth knowing:
+
+- **Wake never modifies a target.** It sends ICMP, reads `$SSH_CONNECTION`, and probes.
+- **Only a direct re-probe counts as success.** A working relay proves the *peer* can
+  reach the target, not that you can — so a real network partition can never be
+  reported as a wake.
+
+Wake also runs **automatically** whenever a probe would report `unreachable`, inside
+`status`, `tui`, and `update` alike. It runs within the existing concurrent fan-out,
+so ten sleeping hosts cost about one budget of wall clock rather than ten. Use
+`--no-wake` when you want the fast, literal answer (CI, cron, scripts).
+
+> **The permanent fix lives on the host, not here.** If a machine needs waking on
+> every run, disable Wi-Fi power save on it — check with
+> `iw dev wlan0 get power_save`, and make it stick with a NetworkManager drop-in at
+> `/etc/NetworkManager/conf.d/wifi-powersave-off.conf` containing
+> `[connection]` and `wifi.powersave = 2`.
+>
+> fleet deliberately will not do this for you: reconfiguring a machine's networking
+> as a side effect of *looking* at it is a worse surprise than a slow probe.
+
 ### `fleet tui`
 
-The same rows, interactively (Bubble Tea). Arrow keys move within bounds; `u`
-updates the selected host (releases the terminal so an `ssh -t` sudo prompt reaches
-you); `q` / `Ctrl+C` quits. `--ref` selects the git ref to update toward.
+The interactive dashboard. Opens **instantly** and streams rows in as each host
+answers — a slow or unreachable host never blocks the view.
 
 ```sh
 fleet tui
+fleet tui --jobs 8                       # more concurrent updates
+fleet tui --update-ref feature/x         # update targets that ref instead of main
 ```
+
+| Key | Does |
+|-----|------|
+| `j` `k` `↓` `↑` | move cursor |
+| `gg` / `G` | first / last host |
+| `ctrl+d` / `ctrl+u` | half page down / up |
+| `ctrl+f` / `ctrl+b` | page down / up |
+| `/` | regex search — smartcase, live match count, inline error on a bad pattern |
+| `n` / `N` | next / previous match (wraps) |
+| `space` | toggle selection on the cursor host |
+| `v` | visual range select (extend with motions) |
+| `esc` | clear search / selection |
+| `a` | select all — respects an active `/` filter |
+| `u` | update the selection (or the cursor host) |
+| `w` | wake the selection (or the cursor host) — rows tick `waking ⠋` |
+| `F` | forget the remembered answers (including the saved preferences) |
+| `e` | on the confirm strip: edit the remembered answers |
+| `s` | ssh to the cursor host |
+| `r` | refresh |
+| `?` | help overlay |
+| `q` | quit (guarded while updates run) |
+
+Rows are colored by status (green up-to-date · yellow behind · magenta
+divergent · dim unknown · red unreachable) and degrade cleanly on terminals
+without color.
+
+**Updates run concurrently in the background.** `u` prechecks each target with
+`sudo -n true`, then updates up to `--jobs` (default 4) hosts at once *without
+taking the terminal* — each row shows `queued → updating → ok/FAIL`, and the
+TUI stays fully interactive: you can navigate, search, and even `r` refresh
+while a wave runs (hosts being updated are excluded from the re-poll).
+
+Background runs use `ssh -o BatchMode=yes`, so a host that unexpectedly asks
+for a password **fails fast with the reason on its row** instead of hanging on
+input it cannot receive. Hosts whose precheck says they *need* a password are
+routed to a serial interactive handoff that runs after the background wave —
+there the terminal is genuinely released so the sudo prompt reaches you.
+
+**Unattended answers.** `u` opens a short form before anything runs — asked once
+per **session**, not once per wave:
+
+| Field | Feeds |
+|-------|-------|
+| sudo password | primes `sudo -S -v` on the host so install.sh's privileged steps actually run. Masked on screen; held in memory only; sent over ssh **stdin** — never argv or env, both of which are world-readable via `/proc`. Leave empty to skip privileged steps. |
+| windows setup `[y/n/s]` | `WINSETUP_ANSWER` — install.sh's Windows desktop prompt (`s` = never ask again, recorded as a gff override) |
+| gemini leftovers `[y/k/n]` | `GEMINI_TEARDOWN_ANSWER` — `yes` clean up, `keep` never ask again, `skip` this run only |
+
+The credential is primed and used in the **same ssh session** as install.sh
+(sudo's timestamp is tty/session-scoped, so priming in a separate connection is
+not guaranteed to carry), and the prime is **verified** with `sudo -n true`
+before the install starts — otherwise a long run would proceed with every
+privileged step silently skipping. A rejected password and a credential that
+did not persist are reported as distinct, named failures on the row.
+
+**Answers are sticky.** They survive `esc`, selection changes, and every later
+wave, so a fleet-wide update applies *the same* answers everywhere without you
+retyping them — retyping is exactly how two waves end up diverging. On later
+waves `u` skips the form and goes straight to the confirm strip, which shows
+what is about to be applied:
+
+```text
+update 7 host(s) → main: web-01, web-02, db-01, …
+  answers: sudo •••••• · windows s · gemini keep   y: go  e: edit answers  n/esc: cancel
+```
+
+That display is the point: the old design forgot the answers between waves, so
+it never had to show them. This one remembers, so it shows them every time.
+
+- `e` on the confirm strip reopens the form, pre-filled.
+- `F` forgets everything, credential included, and deletes the saved preferences.
+- The **credential is never written to disk** and dies with the process. Only
+  `windows` and `gemini` persist, to `~/.config/fleet/answers.json` (`0600`) —
+  the on-disk type has no field for a credential, so it cannot leak there even
+  by accident.
+
+**Targeting a subset.** `a` selects everything currently visible, and it respects
+an active search — so `/feature` then `a` then `u` updates exactly the hosts on
+a feature branch, which is what the `BRANCH` column is for.
+
+Selection and cursor are keyed by host **alias**, not row position, so the
+worst-first re-sort that happens as rows stream in never moves your cursor or
+corrupts a selection.
 
 ### `fleet update <host>...`
 
@@ -109,8 +258,20 @@ fleet discover
 # nano             10.0.0.5             available
 # web              10.0.0.1             in-fleet
 #
-# 1 host(s) available — adopt one with `fleet add <alias>`
+# 1 host(s) available — adopt one with `fleet add <alias>`,
+# or all of them with `fleet discover --add-all`
+
+fleet discover --add-all              # adopt every available host (confirms first)
+fleet discover --add-all --dry-run    # show the resulting config, write nothing
+fleet discover --add-all --yes        # non-interactive
 ```
+
+`--add-all` marks every available host in **one pass**, so the whole batch is a
+single write and a single backup rather than one per host — a partial write to
+`~/.ssh/config` would cost SSH access to every machine. It names the hosts and
+asks before touching anything, does nothing when everything is already in the
+fleet (no write, no backup), and is fully reversible: `fleet remove <alias>`
+restores the original block byte-for-byte.
 
 ### `fleet add` / `fleet remove`
 
@@ -166,6 +327,8 @@ fleet version --json
 | `--marker` | `#fleet` | comment that marks a `Host` block as in-fleet |
 | `--repo` | `~/git/dotfiles` | local dotfiles clone used as the up-to-date baseline |
 | `--json` | off | machine-readable output |
+| `--no-wake` | off | never try to rouse an unreachable host — fast, literal answer |
+| `--wake-timeout` | `12s` | per-host budget for the reachability ladder |
 
 ## Safety invariants
 
@@ -179,6 +342,8 @@ against real machines:
 - A dirty clone is skipped unless `--force`, which *preserves* work in a rescue
   worktree.
 - Failures are named per host and reflected in the exit code.
+- Wake never mutates a target: ICMP, `$SSH_CONNECTION`, and the probe, nothing else.
+- Only a direct re-probe can report a host woken — a working relay is not enough.
 
 ## Design
 

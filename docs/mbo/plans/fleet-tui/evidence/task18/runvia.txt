@@ -1,0 +1,11 @@
+# Task 18 — RunVia seam (2026-08-17T06:06:41Z)
+=== RUN   TestViaArgsRelaysThroughPeerWithProxyJump
+--- PASS: TestViaArgsRelaysThroughPeerWithProxyJump (0.00s)
+=== RUN   TestViaArgsIsAlwaysBatchMode
+--- PASS: TestViaArgsIsAlwaysBatchMode (0.00s)
+=== RUN   TestFakeRecordsTheRelayHop
+--- PASS: TestFakeRecordsTheRelayHop (0.00s)
+=== RUN   TestFakeRunViaPropagatesTargetError
+--- PASS: TestFakeRunViaPropagatesTargetError (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	0.002s
