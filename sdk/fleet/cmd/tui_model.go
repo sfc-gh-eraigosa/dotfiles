@@ -86,6 +86,7 @@ type tuiModel struct {
 	updating  map[string]updState
 	bgQueue   []string
 	iaQueue   []string
+	iaTotal   int // interactive-queue size this wave, for the handoff banner
 	jobs      int // max concurrent background updates
 	running   int // slots in use
 	updateRef string
@@ -423,6 +424,7 @@ func (m *tuiModel) startUpdate(targets []string) tea.Cmd {
 		delete(m.pending, a) // ownership moves to the engine
 		cmds = append(cmds, precheckSudo(a, m.run))
 	}
+	m.iaTotal = 0
 	m.status = fmt.Sprintf("updating %d host(s) → %s", len(cmds), m.updateRef)
 	return tea.Batch(cmds...)
 }
@@ -445,7 +447,12 @@ func (m *tuiModel) pump() tea.Cmd {
 		m.iaQueue = m.iaQueue[1:]
 		m.updating[a] = updState{phase: updRunning}
 		m.running++
-		return tea.Batch(append(cmds, interactiveHandoff(a, m.updateRef))...)
+		total := m.iaTotal
+		if total == 0 {
+			total = len(m.iaQueue) + 1
+		}
+		pos := total - len(m.iaQueue)
+		return tea.Batch(append(cmds, interactiveHandoff(a, m.updateRef, m.ans, pos, total))...)
 	}
 	return tea.Batch(cmds...)
 }
@@ -585,11 +592,16 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, pollHostWake(m.hosts[msg.alias], m.peersFor(msg.alias), m.run, m.base, m.wake)
 
 	case precheckMsg:
-		// Route the host: passwordless sudo → background wave; otherwise the
-		// serial interactive queue, where its prompt can reach the operator.
+		// Route the host. The precheck answers "can sudo run without being
+		// asked?" — but a credential the operator supplied answers the same
+		// question, because the background lane primes with it. Sending a
+		// password-needing host to the interactive lane when we HAVE its
+		// password defeats the whole point of collecting one: the operator
+		// typed a password and was prompted for it anyway (live defect).
 		m.updating[msg.alias] = updState{phase: updQueued}
-		if msg.interactive {
+		if msg.interactive && !m.ans.needsSudo() {
 			m.iaQueue = append(m.iaQueue, msg.alias)
+			m.iaTotal++
 		} else {
 			m.bgQueue = append(m.bgQueue, msg.alias)
 		}
