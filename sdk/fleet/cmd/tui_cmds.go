@@ -148,7 +148,13 @@ func (a answers) envPrefix() string {
 	if len(b) == 0 {
 		return ""
 	}
-	return strings.Join(b, " ") + " "
+	// MUST be `export …;`, not the `VAR=x cmd` prefix form. The prefix form
+	// scopes the assignment to that ONE command, so
+	// `WINSETUP_ANSWER=s cd ~/git/dotfiles && ./install.sh` sets it for `cd`
+	// and nothing else — install.sh never sees it and prompts anyway. Live
+	// defect: the answers were collected, transmitted, and silently dropped.
+	// Verified: `sh -c 'FOO=bar cd /tmp && env | grep FOO'` prints nothing.
+	return "export " + strings.Join(b, " ") + "; "
 }
 
 // Exit codes the remote preamble uses to distinguish sudo problems from a
@@ -225,8 +231,31 @@ func bgUpdate(alias, ref string, a answers, r runner.Runner) tea.Cmd {
 // interactiveHandoff gives the terminal away so install.sh's sudo prompt
 // reaches the operator. tea.ExecProcess SUSPENDS the whole TUI, which is why
 // this lane is serial and used only when the precheck says it is required.
-func interactiveHandoff(alias, ref string) tea.Cmd {
-	c := exec.Command("ssh", "-t", alias, remoteUpdateScript(ref))
+// shQuote makes a string safe as a single-quoted POSIX shell word.
+func shQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+
+// handoffWrapper wraps the ssh handoff in a banner naming the host and its
+// position in the queue, plus a footer carrying the exit code.
+//
+// tea.ExecProcess SUSPENDS the whole TUI, so while a handoff runs the screen
+// is bare install.sh output with nothing on it identifying which machine you
+// are looking at — or that more hosts are queued behind it.
+// Extracted so the contract is testable without running ssh.
+func handoffWrapper(alias, ref, remote string, pos, total int) string {
+	banner := fmt.Sprintf("\\n=== fleet: updating %s -> %s   (host %d of %d) ===\\n\\n", alias, ref, pos, total)
+	footer := fmt.Sprintf("\\n=== fleet: %s finished (exit %%s) — returning to the dashboard ===\\n", alias)
+	return fmt.Sprintf("printf %s; ssh -t %s %s; rc=$?; printf %s \"$rc\"; exit $rc",
+		shQuote(banner), shQuote(alias), shQuote(remote), shQuote(footer))
+}
+
+// interactiveHandoff gives the terminal away so install.sh's sudo prompt
+// reaches the operator.
+//
+// It carries the pre-answers too. It previously ran the BARE update script, so
+// a host routed here re-asked every question the operator had already answered.
+func interactiveHandoff(alias, ref string, a answers, pos, total int) tea.Cmd {
+	remote := a.envPrefix() + remoteUpdateScript(ref)
+	c := exec.Command("sh", "-c", handoffWrapper(alias, ref, remote, pos, total))
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return execDoneMsg{alias: alias, err: err}
 	})
@@ -245,6 +274,14 @@ func sshShell(alias string) tea.Cmd {
 func tailLines(s string, n int) string {
 	var keep []string
 	for _, l := range splitNonEmpty(s) {
+		// git emits several "hint:" lines AFTER the real error, so a naive
+		// tail shows only the advice and hides the cause. Observed live as a
+		// row reading: FAIL: exit status 128 hint: | hint: Disable this
+		// message with "git config advice…
+		low := strings.ToLower(l)
+		if strings.HasPrefix(low, "hint:") || strings.HasPrefix(low, "advice:") {
+			continue
+		}
 		keep = append(keep, l)
 	}
 	if len(keep) > n {

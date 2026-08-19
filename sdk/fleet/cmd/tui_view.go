@@ -19,6 +19,7 @@ type theme struct {
 	cursor, selected, match       lipgloss.Style
 	byClass                       map[string]lipgloss.Style
 	ok, fail, running             lipgloss.Style
+	dialog                        lipgloss.Style
 }
 
 func newTheme() theme {
@@ -34,6 +35,8 @@ func newTheme() theme {
 		ok:        lipgloss.NewStyle().Foreground(c("2")),
 		fail:      lipgloss.NewStyle().Foreground(c("1")).Bold(true),
 		running:   lipgloss.NewStyle().Foreground(c("4")),
+		dialog: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("6")).Padding(0, 1),
 		byClass: map[string]lipgloss.Style{
 			string(drift.UpToDate):    lipgloss.NewStyle().Foreground(c("2")),
 			string(drift.Behind):      lipgloss.NewStyle().Foreground(c("3")),
@@ -264,15 +267,20 @@ func (m tuiModel) answersView() string {
 		return th.statusBar.Render(v)
 	}
 	var b strings.Builder
-	b.WriteString(th.header.Render("unattended answers") +
-		th.dim.Render("  tab: field  enter: next  esc: cancel") + "\n")
+	b.WriteString(th.header.Render("unattended answers for this update") + "\n")
+	b.WriteString(th.dim.Render("these pre-answer install.sh so it never stops to ask") + "\n\n")
 	b.WriteString(sel(fieldSudo, fmt.Sprintf("%-25s %s", "sudo password",
 		val(strings.Repeat("•", m.ans.secretLen()), "(empty = skip privileged steps)"))) + "\n")
 	b.WriteString(sel(fieldWindows, fmt.Sprintf("%-25s %s", "windows setup [y/n/s]",
 		val(m.ans.windows, "(unset = host decides)"))) + "\n")
 	b.WriteString(sel(fieldGemini, fmt.Sprintf("%-25s %s", "gemini leftovers [y/k/n]",
 		val(m.ans.gemini, "(unset = host decides)"))) + "\n")
-	return b.String()
+	// j/k are deliberately NOT navigation here: the choice fields use
+	// install.sh's own letters and `k` means "keep", so making it also mean
+	// "up" would silently select the wrong answer. Arrows are the idiom the
+	// host list already uses.
+	b.WriteString("\n" + th.dim.Render("↑/↓ or tab: field   letters set the answer   enter: next   esc: cancel"))
+	return th.dialog.Render(b.String())
 }
 
 func (m tuiModel) helpView() string {
