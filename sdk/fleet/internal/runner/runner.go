@@ -3,7 +3,9 @@
 package runner
 
 import (
+	"bufio"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -27,6 +29,11 @@ type Runner interface {
 	// hop only — authentication stays end-to-end workstation -> host, so the
 	// peer never needs the workstation's keys.
 	RunVia(peer, host string, argv ...string) (string, error)
+	// RunStream is RunStdin that reports progress as it happens: every output
+	// line is delivered on `lines` (closed when the command ends) and the final
+	// error on `done`. It exists because output captured only at completion
+	// tells the operator nothing while a ten-minute install is in flight.
+	RunStream(host, stdin string, argv ...string) (lines <-chan string, done <-chan error)
 }
 
 // Exec is the real SSH-backed runner.
@@ -79,6 +86,42 @@ func (e Exec) RunStdin(host, stdin string, argv ...string) (string, error) {
 	return strings.TrimSpace(string(out)), err
 }
 
+// RunStream pipes the remote command's combined output back line by line.
+// stdout and stderr share one pipe so the log reads in the order the remote
+// produced it — install.sh writes progress to both.
+func (e Exec) RunStream(host, stdin string, argv ...string) (<-chan string, <-chan error) {
+	lines := make(chan string, 256)
+	done := make(chan error, 1)
+
+	base := []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=" + e.timeout(), host}
+	c := exec.Command("ssh", append(base, argv...)...)
+	c.Stdin = strings.NewReader(stdin)
+	pr, pw := io.Pipe()
+	c.Stdout, c.Stderr = pw, pw
+
+	if err := c.Start(); err != nil {
+		close(lines)
+		done <- err
+		return lines, done
+	}
+	go func() {
+		// Closing the writer ends the scanner below; without it the reader
+		// would block forever after the process exits.
+		err := c.Wait()
+		_ = pw.Close()
+		done <- err
+	}()
+	go func() {
+		defer close(lines)
+		sc := bufio.NewScanner(pr)
+		sc.Buffer(make([]byte, 0, 64*1024), 1024*1024) // install logs have long lines
+		for sc.Scan() {
+			lines <- sc.Text()
+		}
+	}()
+	return lines, done
+}
+
 // ErrFake is the canned failure used by Fake.
 var ErrFake = errors.New("runner: fake ssh failure")
 
@@ -117,6 +160,26 @@ func (f Fake) RunVia(peer, host string, _ ...string) (string, error) {
 		return "", err
 	}
 	return f.Out[host], nil
+}
+
+// RunStream replays Out[host] as lines, so a test can drive the streaming
+// path deterministically with no process involved.
+func (f Fake) RunStream(host, stdin string, _ ...string) (<-chan string, <-chan error) {
+	lines := make(chan string, 64)
+	done := make(chan error, 1)
+	if f.Stdin != nil {
+		f.Stdin[host] = stdin
+	}
+	go func() {
+		defer close(lines)
+		for _, l := range strings.Split(f.Out[host], "\n") {
+			if strings.TrimSpace(l) != "" {
+				lines <- l
+			}
+		}
+		done <- f.Err[host]
+	}()
+	return lines, done
 }
 
 func (f Fake) RunStdin(host, stdin string, _ ...string) (string, error) {

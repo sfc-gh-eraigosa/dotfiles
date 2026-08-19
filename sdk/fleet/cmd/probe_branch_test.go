@@ -37,6 +37,16 @@ func (c *countingRunner) RunStdin(h, _ string, a ...string) (string, error) {
 }
 func (c *countingRunner) RunVia(_, h string, a ...string) (string, error) { return c.Run(h, a...) }
 
+// The streaming path is exercised by runner.Fake in the TUI tests; this fake
+// only counts probe calls, so it returns an already-closed stream.
+func (c *countingRunner) RunStream(string, string, ...string) (<-chan string, <-chan error) {
+	lines := make(chan string)
+	done := make(chan error, 1)
+	close(lines)
+	done <- nil
+	return lines, done
+}
+
 // probeReply builds what a real host sends back: the stamp file, the delimiter,
 // then the live branch.
 func probeReply(stamp, liveBranch string) string {

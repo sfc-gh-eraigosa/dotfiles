@@ -17,6 +17,8 @@ var keyHelp = []struct{ keys, what string }{
 	{"n / N", "next / previous match"},
 	{"space", "toggle selection"},
 	{"a", "select all (respects an active search)"},
+	{"l", "show / hide the streaming log pane"},
+	{"J / K", "scroll the log pane (G re-follows the tail)"},
 	{"v", "visual range select"},
 	{"esc", "clear search / selection"},
 	{"u", "update selection (or cursor host)"},
@@ -243,12 +245,34 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// INCONSISTENT answers. Staleness is guarded by the confirm strip,
 		// which shows exactly what is about to be applied.
 		if len(m.updateTargets()) > 0 {
-			if m.ans.remembered() {
-				m.mode = modeConfirm
-			} else {
+			// An empty credential ALWAYS prompts forward, even when the other
+			// answers are remembered. Otherwise a session that had only ever
+			// set `windows` counted as "remembered" and jumped straight to
+			// confirm — so the wave ran with no credential, every privileged
+			// step silently skipped, and the operator was never asked for the
+			// one answer that cannot be defaulted.
+			if m.ans.secretLen() == 0 || !m.ans.remembered() {
 				m.ansField = fieldSudo
 				m.mode = modeAnswers
+			} else {
+				m.mode = modeConfirm // `e` from there edits without discarding
 			}
+		}
+	case "l":
+		// Toggling off restores the host list to the full viewport.
+		m.logOpen = !m.logOpen
+		m.logFollow = true
+		m.clampViewport()
+	case "J":
+		// Scrolling stops the tail from yanking the view away mid-read.
+		if m.logOpen {
+			m.logFollow = false
+			m.logTop = minInt(m.logTop+1, maxInt(0, len(m.logs)-1))
+		}
+	case "K":
+		if m.logOpen {
+			m.logFollow = false
+			m.logTop = maxInt(0, m.logTop-1)
 		}
 	case "a":
 		m.selectAllFiltered()

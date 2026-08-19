@@ -155,6 +155,8 @@ fleet tui --update-ref feature/x         # update targets that ref instead of ma
 | `F` | forget the remembered answers (including the saved preferences) |
 | `e` | on the confirm strip: edit the remembered answers |
 | `s` | ssh to the cursor host |
+| `l` | show / hide the streaming log pane |
+| `J` / `K` | scroll the log pane (re-open to resume following) |
 | `r` | refresh |
 | `?` | help overlay |
 | `q` | quit (guarded while updates run) |
@@ -174,6 +176,14 @@ for a password **fails fast with the reason on its row** instead of hanging on
 input it cannot receive. Hosts whose precheck says they *need* a password are
 routed to a serial interactive handoff that runs after the background wave —
 there the terminal is genuinely released so the sudo prompt reaches you.
+
+**The log pane.** `l` splits the view: the host list keeps the top ~20% and a
+framed pane below streams each in-flight host's output live, tagged with the
+alias so a concurrent wave stays readable. It follows the tail by default;
+`J`/`K` scroll (which pauses following so the tail can't yank the view away
+mid-read). `l` again restores the list to the full height. The per-host
+progress column and `FAIL:` text are unchanged — the pane adds detail, it does
+not replace the summary.
 
 **Unattended answers.** `u` opens a short form before anything runs — asked once
 per **session**, not once per wave:

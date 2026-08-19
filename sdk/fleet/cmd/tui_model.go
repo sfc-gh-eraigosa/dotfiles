@@ -64,6 +64,14 @@ type searchState struct {
 
 type viewport struct{ top, height, width int }
 
+// logEntry is one streamed line tagged with the host that produced it, so a
+// concurrent wave stays readable when several installs interleave.
+type logEntry struct{ alias, line string }
+
+// logCap bounds the buffer: a fleet-wide install emits tens of thousands of
+// lines and the pane only ever shows a screenful.
+const logCap = 2000
+
 // tuiModel is the whole dashboard as one value: pure data in, pure frame out.
 //
 // In-flight ownership invariant: a host is in EXACTLY ONE of pending (being
@@ -86,9 +94,14 @@ type tuiModel struct {
 	updating  map[string]updState
 	bgQueue   []string
 	iaQueue   []string
-	iaTotal   int // interactive-queue size this wave, for the handoff banner
-	jobs      int // max concurrent background updates
-	running   int // slots in use
+	iaTotal   int               // interactive-queue size this wave, for the handoff banner
+	streams   map[string]stream // in-flight output channels, by alias
+	logs      []logEntry        // interleaved, capped ring of streamed lines
+	logOpen   bool              // `l` toggles the pane; off restores a full-height list
+	logFollow bool              // tail the newest line
+	logTop    int               // scroll offset when not following
+	jobs      int               // max concurrent background updates
+	running   int               // slots in use
 	updateRef string
 	ans       answers     // pre-supplied answers for this wave (password: memory only)
 	ansField  answerField // cursor in the answer form
@@ -118,6 +131,8 @@ func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time
 		pending:   map[string]bool{},
 		selected:  map[string]bool{},
 		updating:  map[string]updState{},
+		streams:   map[string]stream{},
+		logFollow: true,
 		waking:    map[string]bool{},
 		hosts:     map[string]sshconf.Host{},
 		jobs:      jobs,
@@ -209,13 +224,9 @@ func (m *tuiModel) clampViewport() {
 }
 
 // visibleRows is the terminal height minus the chrome (title, header, status).
-func (m tuiModel) visibleRows() int {
-	h := m.vp.height - 5
-	if h < 1 {
-		h = 1
-	}
-	return h
-}
+// visibleRows is how many host rows fit — which shrinks when the log pane is
+// open, so every motion/paging calculation follows the split automatically.
+func (m tuiModel) visibleRows() int { return m.listHeight() }
 
 func (m *tuiModel) moveTo(i int) {
 	if len(m.rows) == 0 {
@@ -438,7 +449,7 @@ func (m *tuiModel) pump() tea.Cmd {
 		m.bgQueue = m.bgQueue[1:]
 		m.updating[a] = updState{phase: updRunning}
 		m.running++
-		cmds = append(cmds, bgUpdate(a, m.updateRef, m.ans, m.run))
+		cmds = append(cmds, beginStream(a, m.updateRef, m.ans, m.run))
 	}
 	// Interactive handoffs need the terminal to themselves, so they only run
 	// once no background update can print over them.
@@ -561,6 +572,69 @@ func (m *tuiModel) refresh() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
+// ---- log buffer -----------------------------------------------------------
+
+// appendLog adds a line and enforces the cap. Dropping from the front keeps
+// the newest output, which is what an operator watching an install wants.
+func (m *tuiModel) appendLog(alias, line string) {
+	m.logs = append(m.logs, logEntry{alias: alias, line: line})
+	if len(m.logs) > logCap {
+		m.logs = m.logs[len(m.logs)-logCap:]
+		if m.logTop > 0 {
+			m.logTop -= 1
+		}
+	}
+}
+
+// tailFor returns the last n lines a host produced, used as its FAIL text.
+func (m tuiModel) tailFor(alias string, n int) string {
+	var keep []string
+	for _, e := range m.logs {
+		if e.alias != alias {
+			continue
+		}
+		low := strings.ToLower(e.line)
+		if strings.HasPrefix(low, "hint:") || strings.HasPrefix(low, "advice:") {
+			continue
+		}
+		keep = append(keep, e.line)
+	}
+	if len(keep) > n {
+		keep = keep[len(keep)-n:]
+	}
+	return joinTrim(keep)
+}
+
+// logHeight splits the frame when the pane is open: the host list keeps the
+// top fifth (a floor of 3 rows so it never collapses to nothing) and the log
+// takes the rest. Closed, the list gets the whole viewport back.
+func (m tuiModel) logHeight() int {
+	if !m.logOpen {
+		return 0
+	}
+	h := m.vp.height - m.listHeight() - 6
+	if h < 3 {
+		h = 3
+	}
+	return h
+}
+
+// listHeight is the rows available to the host table.
+func (m tuiModel) listHeight() int {
+	if !m.logOpen {
+		h := m.vp.height - 5
+		if h < 1 {
+			h = 1
+		}
+		return h
+	}
+	h := m.vp.height / 5 // top ~20%
+	if h < 3 {
+		h = 3
+	}
+	return h
+}
+
 // ---- the bubbletea Update -------------------------------------------------
 
 func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -607,8 +681,31 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.pump()
 
+	case streamStartedMsg:
+		m.streams[msg.alias] = msg.st
+		return m, tea.Batch(readLine(msg.alias, msg.st), awaitDone(msg.alias, msg.st))
+
+	case logLineMsg:
+		m.appendLog(msg.alias, msg.line)
+		// Re-issue the reader: one Cmd per line is what turns the channel into
+		// a stream of messages without a goroutine touching the model.
+		return m, readLine(msg.alias, m.streams[msg.alias])
+
+	case logEOFMsg:
+		delete(m.streams, msg.alias)
+		return m, nil
+
 	case bgUpdateDoneMsg:
-		return m, m.finishUpdate(msg.alias, msg.log, msg.err)
+		// The tail of the streamed output is the row's failure explanation —
+		// the same text the non-streaming path used to capture at the end.
+		log := msg.log
+		if log == "" {
+			log = m.tailFor(msg.alias, 3)
+		}
+		if e := explainExit(msg.err); e != "" && msg.err != nil {
+			log = strings.TrimSpace(e + " " + log)
+		}
+		return m, m.finishUpdate(msg.alias, log, msg.err)
 
 	case execDoneMsg:
 		if msg.ssh {

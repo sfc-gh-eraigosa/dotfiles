@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -78,8 +79,99 @@ func (m tuiModel) View() string {
 		b.WriteString(m.rowView(i) + "\n")
 	}
 
+	if m.logOpen {
+		b.WriteString(m.logView() + "\n")
+	}
 	b.WriteString("\n" + m.statusView())
 	return b.String()
+}
+
+// logView is the framed streaming pane. It sits BELOW the host list rather
+// than over it: the progress column and per-host FAIL text stay visible, so
+// the log adds detail instead of replacing the summary.
+func (m tuiModel) logView() string {
+	h := m.logHeight()
+	var body strings.Builder
+
+	live := m.liveAliases()
+	title := "logs"
+	if len(live) > 0 {
+		title = fmt.Sprintf("logs — streaming: %s", strings.Join(live, ", "))
+	}
+	mode := "following"
+	if !m.logFollow {
+		mode = fmt.Sprintf("scrolled %d/%d", m.logTop+1, len(m.logs))
+	}
+	body.WriteString(th.header.Render(title) + th.dim.Render("   "+mode+"   l: hide  J/K: scroll  G: follow") + "\n")
+
+	if len(m.logs) == 0 {
+		body.WriteString(th.dim.Render("(no output yet — logs appear here once an update starts)"))
+		return th.dialog.Width(m.logWidth()).Render(body.String())
+	}
+
+	start := m.logStart(h)
+	for i := start; i < len(m.logs) && i < start+h; i++ {
+		e := m.logs[i]
+		body.WriteString(fmt.Sprintf("%s %s\n",
+			th.statusBar.Render(fmt.Sprintf("%-14s│", trunc(e.alias, 14))),
+			trunc(e.line, m.logWidth()-18)))
+	}
+	return th.dialog.Width(m.logWidth()).Render(strings.TrimRight(body.String(), "\n"))
+}
+
+// logStart is the first visible line: pinned to the tail while following, so
+// a running install keeps its newest output on screen without any input.
+func (m tuiModel) logStart(h int) int {
+	if m.logFollow {
+		if s := len(m.logs) - h; s > 0 {
+			return s
+		}
+		return 0
+	}
+	if m.logTop > len(m.logs)-1 {
+		return maxInt(0, len(m.logs)-1)
+	}
+	return m.logTop
+}
+
+func (m tuiModel) logWidth() int {
+	w := m.vp.width - 4
+	if w < 40 {
+		w = 40
+	}
+	return w
+}
+
+// liveAliases names the hosts currently streaming, so the pane header says
+// whose output is arriving when several run at once.
+func (m tuiModel) liveAliases() []string {
+	var out []string
+	for a := range m.streams {
+		out = append(out, a)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func trunc(s string, n int) string {
+	if n < 1 {
+		n = 1
+	}
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	if n <= 1 {
+		return string(r[:n])
+	}
+	return string(r[:n-1]) + "…"
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func (m tuiModel) rowView(i int) string {
@@ -318,3 +410,10 @@ func splitNonEmpty(s string) []string {
 }
 
 func joinTrim(ss []string) string { return strings.Join(ss, " | ") }
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
