@@ -90,4 +90,50 @@ TAIL_CODE="$(tail -n "+$((STAMP_LINE + 1))" "$INSTALL" | sed 's/#.*//' | tr -d '
 assert_eq "$TAIL_CODE" "fi" \
     "nothing runs after the stamp (only its closing 'fi')"
 
+# === Self-sufficient PATH (fleet update regression) ===
+# install.sh WRITES into ~/opt/bin (yq, sops, kubectl, every sdk/ binary) and
+# ~/.local/bin (pipx CLIs) and then immediately CONSUMES those tools. Those dirs
+# are put on PATH only by ~/.profile — a LOGIN-shell file. `fleet update <host>`
+# runs install.sh over `ssh -t host "... ./install.sh"`, a NON-login shell, so a
+# real run produced "yq not resolvable after install", "sync-plugins: 'yq' not
+# found" and "install_ai_teams: yq is required" on a host where yq had just been
+# installed correctly. install.sh must therefore fix its own PATH.
+#
+# The block is EXECUTED here, extracted verbatim from the shipped install.sh
+# rather than re-implemented, so deleting or breaking it fails these cases.
+PATH_BLOCK="$(awk '/^# --- Self-sufficient PATH/{f=1} f{print} f&&/^export PATH$/{exit}' "$INSTALL")"
+assert_grep "install.sh carries the self-sufficient PATH block" \
+    '^# --- Self-sufficient PATH' "$INSTALL"
+
+# run_path_block <initial PATH> -> resulting PATH, with HOME pinned to a fixture.
+run_path_block() {
+    env HOME=/fixture/home PATH="$1" bash -c "$PATH_BLOCK"'; printf %s "$PATH"'
+}
+
+assert_eq "$(run_path_block '/usr/local/bin:/usr/bin:/bin')" \
+    "/fixture/home/.local/bin:/fixture/home/opt/bin:/usr/local/bin:/usr/bin:/bin" \
+    "non-login PATH gains ~/opt/bin and ~/.local/bin"
+
+# Repeated fleet runs must not accumulate duplicate entries.
+CONFIGURED_PATH="/fixture/home/.local/bin:/fixture/home/opt/bin:/usr/bin:/bin"
+assert_eq "$(run_path_block "$CONFIGURED_PATH")" "$CONFIGURED_PATH" \
+    "already-configured PATH is unchanged (no duplicates)"
+
+assert_eq "$(run_path_block '/fixture/home/opt/bin:/usr/bin')" \
+    "/fixture/home/.local/bin:/fixture/home/opt/bin:/usr/bin" \
+    "only the missing dir is prepended"
+
+# A neighbouring dir that merely shares a prefix must not read as "present".
+assert_eq "$(run_path_block '/fixture/home/opt/bin-extra:/usr/bin')" \
+    "/fixture/home/.local/bin:/fixture/home/opt/bin:/fixture/home/opt/bin-extra:/usr/bin" \
+    "substring match does not count as present"
+
+# The block must precede the first consumer of an installed tool: the gff
+# early-export probes `command -v gff`, and gff lives in ~/opt/bin.
+PATH_BLOCK_LINE="$(grep -n '^# --- Self-sufficient PATH' "$INSTALL" | head -1 | cut -d: -f1)"
+GFF_PROBE_LINE="$(grep -n 'command -v gff' "$INSTALL" | head -1 | cut -d: -f1)"
+assert_eq "$([ -n "$PATH_BLOCK_LINE" ] && [ -n "$GFF_PROBE_LINE" ] && \
+    [ "$PATH_BLOCK_LINE" -lt "$GFF_PROBE_LINE" ] && echo before || echo after)" \
+    "before" "PATH block runs before the gff early-export probe"
+
 _test_report

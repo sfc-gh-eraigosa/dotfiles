@@ -15,6 +15,17 @@
 # Safe to re-run: exits early when `snow` is already resolvable.
 set -e
 
+# pipx installs into ~/.local/bin; brew into its own prefix (already on PATH on
+# macOS). Put ~/.local/bin on PATH for the rest of this script so both the
+# early-exit probe and the post-install verification below reflect reality —
+# install.sh run from a NON-login shell (`fleet update` over ssh) does not get
+# ~/.local/bin from ~/.profile, which is why a correctly-installed `snow`
+# reported "not resolvable after install".
+case ":${PATH}:" in
+    *":${HOME}/.local/bin:"*) ;;
+    *) PATH="${HOME}/.local/bin:${PATH}"; export PATH ;;
+esac
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -67,4 +78,5 @@ if command -v snow >/dev/null 2>&1 && snow --version >/dev/null 2>&1; then
 else
     echo -e "${RED}install_snowflake_cli: snow not resolvable after install — is ~/.local/bin on PATH?${NC}"
     echo -e "${RED}                       (open a new shell or run 'pipx ensurepath' and retry)${NC}"
+    exit 1
 fi

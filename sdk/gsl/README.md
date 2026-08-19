@@ -375,4 +375,4 @@ bash scripts/check-deps.sh
 `scripts/check-deps.sh` enforces two gates:
 
 1. **os/exec seam** — only `internal/git`, `internal/mcp`, and `internal/gh` may import `"os/exec"`. All subprocess work must go through those three runner interfaces so the logic stays testable with fakes.
-2. **License gate** — `go-licenses check ./...` must find no GPL / AGPL / LGPL / forbidden licenses in the dependency tree (skipped with a warning when `go-licenses` is absent; enforced when `GSL_STRICT_CHECK=1`).
+2. **License gate** — `go-licenses check ./...` must find no GPL / AGPL / LGPL / forbidden licenses in the dependency tree (skipped with a warning when `go-licenses` is absent **or not runnable under the active Go toolchain** — e.g. a goenv shim left over from a different Go version; enforced when `GSL_STRICT_CHECK=1`).

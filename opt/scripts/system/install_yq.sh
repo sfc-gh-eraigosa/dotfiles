@@ -16,6 +16,17 @@ set -e
 YQ_VERSION="${YQ_VERSION:-4.44.6}"
 INSTALL_DIR="${HOME}/opt/bin"
 
+# Put the install dir on PATH for the rest of this script. Without it, both the
+# "already installed" probe and the post-install verification below ask a PATH
+# that may not contain ~/opt/bin at all — which is exactly what happens when
+# install.sh runs from a NON-login shell (`fleet update` over ssh): yq gets
+# written correctly, then reports "not resolvable after install", and the
+# downstream yq consumers (sync-plugins, install_ai_teams) fail outright.
+case ":${PATH}:" in
+    *":${INSTALL_DIR}:"*) ;;
+    *) PATH="${INSTALL_DIR}:${PATH}"; export PATH ;;
+esac
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -54,9 +65,17 @@ echo -e "${BLUE}Installing yq ${YQ_VERSION} (${YQ_OS}/${YQ_ARCH}) to ${INSTALL_D
 curl -fsSL "$URL" -o "${INSTALL_DIR}/yq"
 chmod +x "${INSTALL_DIR}/yq"
 
+# Verify the binary we just wrote actually runs, THEN that PATH resolves to it.
+# Separating the two makes the failure message name the real problem instead of
+# blaming PATH for a corrupt download (or vice versa).
+if ! "${INSTALL_DIR}/yq" --version >/dev/null 2>&1; then
+    echo -e "${RED}install_yq: ${INSTALL_DIR}/yq was written but does not run (corrupt download?).${NC}"
+    exit 1
+fi
 if command -v yq >/dev/null 2>&1 && yq --version >/dev/null 2>&1; then
     echo -e "${GREEN}yq installed: $(yq --version 2>&1 | head -1)${NC}"
 else
-    echo -e "${RED}install_yq: yq not resolvable after install — is ${INSTALL_DIR} on PATH?${NC}"
-    echo -e "${RED}            (binary written to ${INSTALL_DIR}/yq)${NC}"
+    echo -e "${RED}install_yq: yq works at ${INSTALL_DIR}/yq but PATH does not resolve it.${NC}"
+    echo -e "${RED}            Add ${INSTALL_DIR} to PATH (see opt/profiles/.profile).${NC}"
+    exit 1
 fi

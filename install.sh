@@ -15,6 +15,27 @@ function install_zsh_centos7() {
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 export BASE_DIR
 
+# --- Self-sufficient PATH -----------------------------------------------------
+# This script INSTALLS into ~/opt/bin (sops, yq, kubectl, helm, kind, and every
+# sdk/ binary) and ~/.local/bin (pipx CLIs, agy, claude) and then immediately
+# CONSUMES those tools — install_ai_teams.sh and sync-plugins.sh both hard-require
+# `yq`, the gff early-export below probes `command -v gff`.
+#
+# Those directories are only added to PATH by ~/.profile, which is sourced by
+# LOGIN shells. `fleet update <host>` runs install.sh over `ssh -t host "...
+# ./install.sh"` — a NON-login shell — so PATH lacked both, and the run failed
+# with a cascade of "installed but not resolvable" errors ("yq not resolvable
+# after install", "sync-plugins: 'yq' not found", "install_ai_teams: yq is
+# required"). Make the script independent of the caller's shell startup files.
+for _ip_dir in "${HOME}/opt/bin" "${HOME}/.local/bin"; do
+  case ":${PATH}:" in
+    *":${_ip_dir}:"*) ;;                    # already present — don't duplicate
+    *) PATH="${_ip_dir}:${PATH}" ;;
+  esac
+done
+unset _ip_dir
+export PATH
+
 # gff_on is env-only and fail-open; it must exist before the FIRST gate. Sourcing
 # it here (not at the bootstrap point) is load-bearing: a gate that calls an
 # undefined gff_on gets exit 127, takes the else branch, and SKIPS the step —
