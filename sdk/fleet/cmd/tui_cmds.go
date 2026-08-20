@@ -192,14 +192,38 @@ const (
 // The prime is then VERIFIED with `sudo -n true` rather than assumed: if the
 // credential did not persist we fail immediately with a distinct code instead
 // of running a long install whose privileged steps all silently skip.
+// sudoGate refuses to start install.sh unless sudo will actually work in THIS
+// session.
+//
+// install.sh treats its own failed `sudo -v` as non-fatal and carries on, so
+// without this gate a credential-less run produced a long cascade —
+//
+//	sudo: a password is required
+//	sudo: a terminal is required to read the password ...
+//	WARNING: apt-get update failed; installs may be incomplete.
+//	WARNING: grouped install failed; retrying packages individually...
+//
+// — and could still exit 0, leaving the row reading `ok` while every
+// privileged step had silently skipped. A half-installed host that reports
+// success is the worst outcome this tool can produce.
+//
+// It is unconditional on purpose. Gating only when a credential was supplied
+// left exactly the case above ungated. It also cannot be inherited from the
+// precheck: that runs in a SEPARATE ssh connection, and sudo's timestamp is
+// scoped, so passing there says nothing about this session.
+//
+// Hosts that need no sudo are exempt rather than blocked: root, and machines
+// with no sudo at all (minimal containers).
+const sudoGate = `{ [ "$(id -u)" = 0 ] || ! command -v sudo >/dev/null 2>&1 || sudo -n true 2>/dev/null; }`
+
 func unattendedUpdate(ref string, a answers) string {
 	var b strings.Builder
 	if a.needsSudo() {
 		// -S reads the password from stdin (never argv); -p '' suppresses the
 		// prompt text that would otherwise pollute the captured log.
 		fmt.Fprintf(&b, "sudo -S -p '' -v 2>/dev/null || exit %d; ", rcSudoAuth)
-		fmt.Fprintf(&b, "sudo -n true 2>/dev/null || exit %d; ", rcSudoNoCache)
 	}
+	fmt.Fprintf(&b, "%s || exit %d; ", sudoGate, rcSudoNoCache)
 	b.WriteString(a.envPrefix())
 	b.WriteString(remoteUpdateScript(ref))
 	return b.String()
@@ -216,7 +240,7 @@ func explainExit(err error) string {
 	case strings.Contains(s, fmt.Sprint(rcSudoAuth)):
 		return "sudo authentication failed (wrong password?)"
 	case strings.Contains(s, fmt.Sprint(rcSudoNoCache)):
-		return "sudo credential did not persist on this host; use the interactive lane"
+		return "sudo unusable in this session (no credential, or it did not persist) — nothing was installed"
 	}
 	return s
 }

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -107,5 +108,53 @@ func TestAnswerFormIsFramedAsADialog(t *testing.T) {
 	}
 	if !strings.Contains(view, "esc: cancel") {
 		t.Fatalf("the dialog must document its keys:\n%s", view)
+	}
+}
+
+// install.sh treats its own failed `sudo -v` as non-fatal and keeps going, so
+// starting it without usable sudo produced a cascade of "sudo: a password is
+// required" and could still exit 0 — leaving the row reading `ok` while every
+// privileged step had silently skipped. The gate must therefore be
+// UNCONDITIONAL, not merely present when a credential was supplied.
+func TestSudoIsGatedEvenWithNoCredential(t *testing.T) {
+	noCred := unattendedUpdate("main", answers{})
+	if !strings.Contains(noCred, "sudo -n true") {
+		t.Fatalf("a credential-less run must still verify sudo before installing:\n%s", noCred)
+	}
+	if i, j := strings.Index(noCred, "sudo -n true"), strings.Index(noCred, "install.sh"); i < 0 || i > j {
+		t.Fatalf("the gate must precede install.sh:\n%s", noCred)
+	}
+	// And it still primes when there IS one.
+	withCred := unattendedUpdate("main", answers{sudoSecret: probeMarker})
+	if !strings.Contains(withCred, "sudo -S -p '' -v") {
+		t.Fatalf("a supplied credential must still be primed:\n%s", withCred)
+	}
+}
+
+// Hosts that legitimately need no sudo must be exempt, not blocked.
+func TestSudoGateExemptsRootAndSudolessHosts(t *testing.T) {
+	if !strings.Contains(sudoGate, `[ "$(id -u)" = 0 ]`) {
+		t.Fatalf("root must be exempt from the gate: %s", sudoGate)
+	}
+	if !strings.Contains(sudoGate, "command -v sudo") {
+		t.Fatalf("a host without sudo must be exempt: %s", sudoGate)
+	}
+	// Executed for real: on a PATH with no `sudo`, the gate must pass.
+	c := exec.Command("/bin/bash", "-c", sudoGate+" && echo exempt")
+	c.Env = []string{"PATH=/nonexistent-for-test"} // a host with no sudo at all
+	out, err := c.CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "exempt") {
+		t.Fatalf("gate blocked a sudoless host: err=%v out=%q", err, out)
+	}
+}
+
+// The failure must name the cause; "exit status 92" alone is useless, and the
+// operator needs to know nothing was installed.
+func TestUnusableSudoIsExplainedAsNothingInstalled(t *testing.T) {
+	got := explainExit(&fakeErr{"exit status 92"})
+	for _, want := range []string{"sudo", "nothing was installed"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("explainExit should mention %q, got %q", want, got)
+		}
 	}
 }
