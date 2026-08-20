@@ -62,10 +62,45 @@ func newTheme() theme {
 
 var th = newTheme()
 
+// skein is a V of geese: a flock that flies in formation, rotates the lead,
+// and moves as one — which is the thing fleet manages. Deliberately plain
+// ASCII so it survives any font or terminal, unlike the emoji beside it.
+var skein = []string{
+	` v           v`,
+	`   v       v`,
+	`     v   v`,
+	`        v`,
+}
+
+// banner is the intro header: the flock on the left, then the tool and its
+// version, then the keys — so the first thing on screen says what this is and
+// what it can do, instead of a bare key strip.
+func (m tuiModel) banner() string {
+	right := []string{
+		th.title.Render(versionString()),
+		th.dim.Render(headerHints(0)),
+		th.dim.Render(headerHints(1)),
+		"",
+	}
+	artW := 0
+	for _, l := range skein {
+		artW = maxInt(artW, lipgloss.Width(l))
+	}
+	var b strings.Builder
+	for i, art := range skein {
+		pad := strings.Repeat(" ", artW-lipgloss.Width(art)+3)
+		line := th.markSel.Render(art) + pad + right[i]
+		b.WriteString(trunc(line, maxInt(20, m.vp.width-2)))
+		if i < len(skein)-1 {
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
+}
+
 func (m tuiModel) View() string {
 	var b strings.Builder
-	b.WriteString(th.title.Render("fleet") + "  " +
-		th.dim.Render(trunc(headerHints(), maxInt(20, m.vp.width-8))))
+	b.WriteString(m.banner())
 	b.WriteString("\n\n")
 
 	if m.mode == modeHelp {
@@ -104,16 +139,21 @@ func (m tuiModel) View() string {
 // logView is the framed streaming pane. It sits BELOW the host list rather
 // than over it: the progress column and per-host FAIL text stay visible, so
 // the log adds detail instead of replacing the summary.
-// headerHints renders the always-visible key strip from keyHelp, so adding a
-// key to the map is enough to make it discoverable.
-func headerHints() string {
-	var parts []string
+// headerHints renders the always-visible key strip from keyHelp, split across
+// two banner rows, so adding a key to the map is enough to make it
+// discoverable. row 0 is the first half, row 1 the second.
+func headerHints(row int) string {
+	var all []string
 	for _, k := range keyHelp {
 		if k.hdr {
-			parts = append(parts, k.icon+" "+k.keys+": "+shortWhat(k.what))
+			all = append(all, k.icon+" "+k.keys+": "+shortWhat(k.what))
 		}
 	}
-	return strings.Join(parts, "  ")
+	half := (len(all) + 1) / 2
+	if row == 0 {
+		return strings.Join(all[:half], "  ")
+	}
+	return strings.Join(all[half:], "  ")
 }
 
 // shortWhat trims the overlay's fuller phrasing down to a header-sized label.

@@ -1,8 +1,11 @@
 # fleet tui — demo frames
-# captured 2026-08-20T04:59:34Z via: FLEET_DEMO=1 go test ./cmd/ -run TestDemoFrames -v
+# captured 2026-08-20T05:04:21Z via: FLEET_DEMO=1 go test ./cmd/ -run TestDemoFrames -v
 
 ━━━ 1. opening — every host still polling (no blocking collect) ━━━
-fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 r…
+ v           v   fleet dev (none)
+   v       v     ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update
+     v   v       📜 l: log pane  🖥️ s: ssh  🔄 r: refresh  🚪 q: quit
+        v        
 
 ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
 │     HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE    │
@@ -19,7 +22,10 @@ fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l
 1/5
 
 ━━━ 2. streamed in — worst-first, status-coloured ━━━
-fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 r…
+ v           v   fleet dev (none)
+   v       v     ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update
+     v   v       📜 l: log pane  🖥️ s: ssh  🔄 r: refresh  🚪 q: quit
+        v        
 
 ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
 │     HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE    │
@@ -36,7 +42,10 @@ fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l
 5/5
 
 ━━━ 3. search: /host-[np] — smartcase, live match count ━━━
-fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 r…
+ v           v   fleet dev (none)
+   v       v     ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update
+     v   v       📜 l: log pane  🖥️ s: ssh  🔄 r: refresh  🚪 q: quit
+        v        
 
 ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
 │     HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE    │
@@ -53,7 +62,10 @@ fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l
 /host-[np]   2 match(es)  enter: keep  esc: cancel
 
 ━━━ 4. invalid regex — inline error, still editable ━━━
-fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 r…
+ v           v   fleet dev (none)
+   v       v     ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update
+     v   v       📜 l: log pane  🖥️ s: ssh  🔄 r: refresh  🚪 q: quit
+        v        
 
 ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
 │     HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE    │
@@ -70,7 +82,10 @@ fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l
 /[  bad pattern: `[`
 
 ━━━ 5. visual selection (v + j) — 2 hosts marked ━━━
-fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 r…
+ v           v   fleet dev (none)
+   v       v     ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update
+     v   v       📜 l: log pane  🖥️ s: ssh  🔄 r: refresh  🚪 q: quit
+        v        
 
 ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
 │     HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE    │
@@ -87,7 +102,10 @@ fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l
 5/5 · 1 selected
 
 ━━━ 6. unattended answers — asked once per wave, credential masked ━━━
-fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 r…
+ v           v   fleet dev (none)
+   v       v     ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update
+     v   v       📜 l: log pane  🖥️ s: ssh  🔄 r: refresh  🚪 q: quit
+        v        
 
 ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
 │     HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE    │
@@ -113,7 +131,10 @@ fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l
 ╰────────────────────────────────────────────────────────────────────────╯
 
 ━━━ 7. confirm dialog — what changes, which hosts, which answers, which keys ━━━
-fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 r…
+ v           v   fleet dev (none)
+   v       v     ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update
+     v   v       📜 l: log pane  🖥️ s: ssh  🔄 r: refresh  🚪 q: quit
+        v        
 
 ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
 │     HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE    │
@@ -137,7 +158,10 @@ fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l
 ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ━━━ 8. CONCURRENT UPDATE — 2 running at once (jobs=2), 1 queued ━━━
-fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 r…
+ v           v   fleet dev (none)
+   v       v     ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update
+     v   v       📜 l: log pane  🖥️ s: ssh  🔄 r: refresh  🚪 q: quit
+        v        
 
 ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
 │     HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE    │
@@ -157,7 +181,10 @@ fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l
 5/5 · 1 selected · 2 updating · 1 queued   updating 1 host(s) → main
 
 ━━━ 9. mid-wave: one FAILED with its cause, slot refilled, UI still live ━━━
-fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 r…
+ v           v   fleet dev (none)
+   v       v     ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update
+     v   v       📜 l: log pane  🖥️ s: ssh  🔄 r: refresh  🚪 q: quit
+        v        
 
 ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
 │     HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE    │
@@ -176,7 +203,10 @@ fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l
 5/5 · 2 updating
 
 ━━━ 10. interactive fallback — host needing sudo waits its turn ━━━
-fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 r…
+ v           v   fleet dev (none)
+   v       v     ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update
+     v   v       📜 l: log pane  🖥️ s: ssh  🔄 r: refresh  🚪 q: quit
+        v        
 
 ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
 │     HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE    │
@@ -194,7 +224,10 @@ fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l
 5/5 · 1 updating · 1 queued
 
 ━━━ 9b. LOG PANE — list shrinks to the top, streaming logs framed below ━━━
-fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 r…
+ v           v   fleet dev (none)
+   v       v     ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update
+     v   v       📜 l: log pane  🖥️ s: ssh  🔄 r: refresh  🚪 q: quit
+        v        
 
 ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
 │     HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE    │
@@ -216,7 +249,10 @@ fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l
 5/5 · 2 updating
 
 ━━━ 11. help overlay ━━━
-fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 r…
+ v           v   fleet dev (none)
+   v       v     ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update
+     v   v       📜 l: log pane  🖥️ s: ssh  🔄 r: refresh  🚪 q: quit
+        v        
 
 ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ keys                                                                                           │
@@ -246,7 +282,10 @@ fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l
 ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ━━━ 12. empty fleet — points at discover/add ━━━
-fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 r…
+ v           v   fleet dev (none)
+   v       v     ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update
+     v   v       📜 l: log pane  🖥️ s: ssh  🔄 r: refresh  🚪 q: quit
+        v        
 
 ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ no fleet hosts found                                                                           │

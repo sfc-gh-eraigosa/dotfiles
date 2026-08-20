@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 )
 
@@ -253,5 +254,57 @@ func TestSectionsAreFramedAsPanels(t *testing.T) {
 	base.appendLog("a", "working")
 	if strings.Count(base.View(), "╭") < 2 {
 		t.Fatalf("the active log pane must be framed:\n%s", base.View())
+	}
+}
+
+// The banner is the first thing on screen: it must say what the tool is, what
+// build is running, and what the keys do — a bare key strip said none of that.
+func TestBannerShowsIdentityVersionAndKeys(t *testing.T) {
+	m := testModel("a")
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	view := stripANSI(mm.(tuiModel).View())
+	head := strings.SplitN(view, "\n\n", 2)[0]
+
+	if !strings.Contains(head, "fleet") {
+		t.Fatalf("the banner must name the tool:\n%s", head)
+	}
+	if !strings.Contains(head, Version) {
+		t.Fatalf("the banner must carry the version %q:\n%s", Version, head)
+	}
+	// Every header-flagged key has to appear across the banner's two hint rows,
+	// or a key is once again implemented but invisible.
+	for _, k := range keyHelp {
+		if k.hdr && !strings.Contains(head, k.keys+":") {
+			t.Fatalf("banner omits header key %q:\n%s", k.keys, head)
+		}
+	}
+	if lines := strings.Count(head, "\n") + 1; lines != len(skein) {
+		t.Fatalf("banner should be %d rows, got %d:\n%s", len(skein), lines, head)
+	}
+}
+
+// The art is plain ASCII on purpose: emoji and box-drawing fail on some fonts,
+// and the banner is the one thing every run renders.
+func TestBannerArtIsPlainASCII(t *testing.T) {
+	for _, line := range skein {
+		for _, r := range line {
+			if r > 127 {
+				t.Fatalf("banner art must stay ASCII, found %q in %q", r, line)
+			}
+		}
+	}
+}
+
+// Narrow terminals must not wrap the banner into a mess.
+func TestBannerFitsNarrowTerminals(t *testing.T) {
+	for _, w := range []int{40, 60, 80, 120} {
+		m := testModel("a")
+		mm, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: 24})
+		head := strings.SplitN(stripANSI(mm.(tuiModel).View()), "\n\n", 2)[0]
+		for _, line := range strings.Split(head, "\n") {
+			if got := lipgloss.Width(line); got > w {
+				t.Errorf("width %d: banner line is %d wide: %q", w, got, line)
+			}
+		}
 	}
 }
