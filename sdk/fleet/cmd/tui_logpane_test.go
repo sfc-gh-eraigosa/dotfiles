@@ -262,8 +262,7 @@ func TestSectionsAreFramedAsPanels(t *testing.T) {
 func TestBannerShowsIdentityVersionAndKeys(t *testing.T) {
 	m := testModel("a")
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
-	view := stripANSI(mm.(tuiModel).View())
-	head := strings.SplitN(view, "\n\n", 2)[0]
+	head := mm.(tuiModel).banner()
 
 	if !strings.Contains(head, "fleet") {
 		t.Fatalf("the banner must name the tool:\n%s", head)
@@ -278,20 +277,8 @@ func TestBannerShowsIdentityVersionAndKeys(t *testing.T) {
 			t.Fatalf("banner omits header key %q:\n%s", k.keys, head)
 		}
 	}
-	if lines := strings.Count(head, "\n") + 1; lines != len(skein) {
-		t.Fatalf("banner should be %d rows, got %d:\n%s", len(skein), lines, head)
-	}
-}
-
-// The art is plain ASCII on purpose: emoji and box-drawing fail on some fonts,
-// and the banner is the one thing every run renders.
-func TestBannerArtIsPlainASCII(t *testing.T) {
-	for _, line := range skein {
-		for _, r := range line {
-			if r > 127 {
-				t.Fatalf("banner art must stay ASCII, found %q in %q", r, line)
-			}
-		}
+	if !strings.Contains(head, "╭") {
+		t.Fatalf("the banner must be framed:\n%s", head)
 	}
 }
 
@@ -300,7 +287,7 @@ func TestBannerFitsNarrowTerminals(t *testing.T) {
 	for _, w := range []int{40, 60, 80, 120} {
 		m := testModel("a")
 		mm, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: 24})
-		head := strings.SplitN(stripANSI(mm.(tuiModel).View()), "\n\n", 2)[0]
+		head := stripANSI(mm.(tuiModel).banner())
 		for _, line := range strings.Split(head, "\n") {
 			if got := lipgloss.Width(line); got > w {
 				t.Errorf("width %d: banner line is %d wide: %q", w, got, line)

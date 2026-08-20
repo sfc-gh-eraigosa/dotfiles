@@ -130,14 +130,15 @@ so ten sleeping hosts cost about one budget of wall clock rather than ten. Use
 ### `fleet tui`
 
 ```
- v           v   fleet 0.1.0 (40b4953)
-   v       v     ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update
-     v   v       📜 l: log pane  🖥️ s: ssh  🔄 r: refresh  🚪 q: quit
-        v
+╭────────────────────────────────────────────────────────────────────────────────╮
+│ 🛰️  fleet 0.1.0 (40b4953)                                                      │
+│ ❓ ?: help   🔍 /: search   ● space: selection   🚀 u: update                  │
+│ 📜 l: log pane   🖥️ s: ssh   🔄 r: refresh   🚪 q: quit                        │
+╰────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-The interactive dashboard. The banner is a skein of geese — a flock that flies
-in formation, rotates the lead, and moves as one. Opens **instantly** and streams rows in as each host
+The interactive dashboard. Framed panels provide unified visual structure and clear
+discoverability for all actions. Opens **instantly** and streams rows in as each host
 answers — a slow or unreachable host never blocks the view.
 
 ```sh
