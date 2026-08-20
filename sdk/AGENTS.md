@@ -22,5 +22,6 @@ tag of the form `sdk/<tool>/vX.Y.Z`.
 
 - **Module path = `github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>`** (canonical org **and** the `sdk/` segment). External install: `go install github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>@<tag>`.
 - **Build** each module with its own `build.sh` (injects version via `-ldflags -X`); `install.sh` builds them into `~/opt/bin/`.
+- **Versioning is tag-driven — there is no `VERSION` file.** `build.sh` sources [`sdk/version.sh`](./version.sh) and derives the version from `git describe --tags --match "sdk/<tool>/v*"`, so a clean release build stamps `X.Y.Z` and a dev build stamps `X.Y.Z-<n>-g<sha>`. Release tags are cut by `.github/workflows/sdk-auto-bump.yml`, which plans the next semver per module with `opt/scripts/system/bump-sdk-version.sh --plan` and pushes `sdk/<tool>/vX.Y.Z` directly — it never commits to `main`.
 - **Test/lint discovery**: `scripts/test.sh` and the `Makefile` Go loops discover modules by directory under `sdk/` (the migration keeps `src/` scanned transitionally until the cutover completes).
 - **Per-directory docs**: every module has a `AGENTS.md` + a `CLAUDE.md -> AGENTS.md` symlink.

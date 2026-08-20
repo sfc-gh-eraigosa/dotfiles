@@ -1506,7 +1506,8 @@ every command name and flag they invoke. The skill file at
 verbs; classic behaviour stays as documented.
 
 **Build / distribution** is preserved:
-- `sdk/gss/VERSION` stays as the version source-of-truth.
+- The `sdk/gss/vX.Y.Z` git tag is the version source-of-truth (superseded the
+  former `sdk/gss/VERSION` file; see `sdk/version.sh`).
 - `sdk/gss/build.sh` still produces the binary; the new layout updates
   the `go build` target to `./cmd/gss` (was `./cmd`).
 - Install destination `~/opt/bin/gss` is unchanged.
@@ -1727,7 +1728,7 @@ single source of truth: `…/gss/internal/version`. Concrete:
 
 ```
 go build \
-  -ldflags "-X $PKG/internal/version.Version=$(cat VERSION) \
+  -ldflags "-X $PKG/internal/version.Version=$(sdk_version gss .) \
             -X $PKG/internal/version.Commit=$(git rev-parse HEAD) \
             -X $PKG/internal/version.BuildDate=$(date -u +%FT%TZ) \
             -X $PKG/internal/version.Dirty=$(git diff --quiet || echo dirty)" \

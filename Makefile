@@ -77,7 +77,7 @@ skill-evals: ## Validate agent-skill eval corpora (ai/skills/*/evals/evals.json)
 	./opt/scripts/system/skill-eval.sh --check
 
 .PHONY: sdk-bump
-sdk-bump: ## Report sdk/<tool> modules whose source changed since their last tag (conventional-commit semver). Read-only; CI applies the bump on merge.
+sdk-bump: ## Report sdk/<tool> modules whose source changed since their last release tag (conventional-commit semver). Read-only; CI cuts the tag on merge.
 	./opt/scripts/system/bump-sdk-version.sh --check
 
 # -----------------------------------------------------------------------------
@@ -240,5 +240,5 @@ gff-test: ## Run the gff unit suite with the coverage bars (90/95/90)
 	go test ./... -count=1 -coverpkg="$$COVERPKG" -coverprofile=cover.out && \
 	go tool cover -func=cover.out | tail -1 && rm -f cover.out
 
-gff-install: ## Build and install gff to ~/opt/bin (ldflags-stamped from VERSION)
+gff-install: ## Build and install gff to ~/opt/bin (ldflags-stamped from the git release tag)
 	bash sdk/gff/build.sh

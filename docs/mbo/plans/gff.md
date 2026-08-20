@@ -355,7 +355,7 @@ Purely local; never a network fetch at resolution time.
 **Zero-install invocation (first-class, CI-smoked):** every recipe that works with an
 installed `gff` must also work as
 `go run github.com/sfc-gh-eraigosa/dotfiles/sdk/gff@<tag> <verb> …` — the `main.go`
-at the module root makes the module `go run`-able; `tag-sdk-modules.yml` cuts pinned
+at the module root makes the module `go run`-able; `sdk-auto-bump.yml` cuts pinned
 `sdk/gff/vX.Y.Z` tags (pin one for reproducibility; `@latest` is the convenience
 form). Canonical example, needing only a Go toolchain + module proxy:
 
@@ -1011,8 +1011,9 @@ step echoes what it is about to prove. It runs against a scratch `$HOME`
 
 ## 6. Integration & rollout
 
-- `install.sh` builds gff via the P2-T3 bootstrap block; `sdk-auto-bump.yml` and
-  `tag-sdk-modules.yml` cover `sdk/gff` automatically (path-filtered on `sdk/**`).
+- `install.sh` builds gff via the P2-T3 bootstrap block; `sdk-auto-bump.yml` covers
+  `sdk/gff` automatically (path-filtered on `sdk/**`), cutting the release tag that
+  `build.sh` then reads back via `git describe`.
 - Docs: `sdk/gff/AGENTS.md` (+`CLAUDE.md` symlink) written in P1-T1; add a `sdk/gff`
   line to root `CLAUDE.md` Repository Structure and `opt/bin/AGENTS.md` is untouched
   (gff installs to `~/opt/bin` but is sdk-owned, like gss).
