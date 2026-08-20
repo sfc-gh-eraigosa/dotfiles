@@ -194,8 +194,13 @@ func (m tuiModel) logView() string {
 	if !m.logActive() {
 		// Collapsed to a single framed line: still visibly its own section, but
 		// it must not cost the fleet view a fifth of the screen to say nothing.
-		return th.panel.Width(m.panelWidth()).Render(
-			th.dim.Render("📜 logs: idle — output appears here during an update  (l: hide)"))
+		hint := "📜 logs: idle — output appears here during an update  (l: hide)"
+		if m.logDir != "" {
+			// Name the directory: the pane is transient, the files are not, and
+			// an operator debugging yesterday's install needs to know they exist.
+			hint += "   saved to " + m.logDir
+		}
+		return th.panel.Width(m.panelWidth()).Render(th.dim.Render(hint))
 	}
 
 	start := m.logStart(h)

@@ -262,13 +262,42 @@ func explainExit(err error) string {
 // update path — where a model built without a runner (tests, the demo) panics,
 // and where a blocking dial would freeze the UI. Update stays pure; only Cmds
 // touch the network.
-func beginStream(alias, ref string, a answers, r runner.Runner) tea.Cmd {
+func beginStream(alias, ref string, a answers, r runner.Runner, dir string) tea.Cmd {
 	script := unattendedUpdate(ref, a)
 	secret := a.sudoSecret + "\n"
+	reset := a.forceReset()
 	return func() tea.Msg {
 		lines, done := r.RunStream(alias, secret, script)
+		// Tee to disk from HERE — inside the Cmd, off the UI thread. The pane
+		// is an in-memory ring that dies with the process; the file is what
+		// survives to be read the morning after.
+		lines = teeToRunLog(dir, alias, ref, reset, lines)
 		return streamStartedMsg{alias: alias, st: stream{lines: lines, done: done}}
 	}
+}
+
+// teeToRunLog forwards every line unchanged while writing it to this run's
+// file. If the file cannot be opened the stream is returned untouched: losing
+// the log must never cost the update.
+func teeToRunLog(dir, alias, ref string, reset bool, in <-chan string) <-chan string {
+	f := openRunLog(dir, alias, ref, nowFn(), reset)
+	if f == nil {
+		return in
+	}
+	out := make(chan string, 64)
+	go func() {
+		defer close(out)
+		defer func() {
+			fmt.Fprintf(f, "# finished %s\n", nowFn().UTC().Format(time.RFC3339))
+			_ = f.Close()
+			pruneRunLogs(dir, alias, logKeepRuns)
+		}()
+		for l := range in {
+			fmt.Fprintf(f, "%s %s\n", nowFn().UTC().Format("15:04:05"), l)
+			out <- l
+		}
+	}()
+	return out
 }
 
 // readLine blocks until the next line (or EOF) and turns it into a Msg. It is

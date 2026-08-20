@@ -109,6 +109,7 @@ type tuiModel struct {
 	logFollow bool              // tail the newest line
 	logTop    int               // scroll offset when not following
 	logColor  map[string]int    // alias -> palette slot, by first appearance
+	logDir    string            // where per-run install logs are written
 	logFocus  bool              // tab moves vim keys from the host list to the log
 	logSearch searchState       // `/` while the log is focused searches log lines
 	jobs      int               // max concurrent background updates
@@ -501,7 +502,7 @@ func (m *tuiModel) pump() tea.Cmd {
 		m.bgQueue = m.bgQueue[1:]
 		m.updating[a] = updState{phase: updRunning}
 		m.running++
-		cmds = append(cmds, beginStream(a, m.updateRef, m.ans, m.run))
+		cmds = append(cmds, beginStream(a, m.updateRef, m.ans, m.run, m.logDir))
 	}
 	// Interactive handoffs need the terminal to themselves, so they only run
 	// once no background update can print over them.

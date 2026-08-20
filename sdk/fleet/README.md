@@ -209,6 +209,18 @@ says so — it never starts a second install on top of a live one. Hosts that
 have *finished* can be updated again freely; re-running clears the previous
 `ok`/`FAIL` from the row.
 
+**Every update is also written to a file.** The pane is an in-memory ring that
+dies with the process; the files are what you read the morning after:
+
+```
+$XDG_STATE_HOME/fleet/logs/   (or ~/.local/state/fleet/logs/)
+    20260820T150718Z__host-nano.log
+```
+
+One file per host per run, headed with the host, ref and mode (`fast-forward`
+or `FORCE RESET`) and timestamped per line. The newest 200 runs per host are
+kept. A log that cannot be written never fails the update.
+
 **Unattended answers.** `u` opens a short form before anything runs — asked once
 per **session**, not once per wave:
 
