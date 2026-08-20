@@ -1,5 +1,5 @@
 # fleet tui — demo frames
-# captured 2026-08-20T04:51:13Z via: FLEET_DEMO=1 go test ./cmd/ -run TestDemoFrames -v
+# captured 2026-08-20T04:59:34Z via: FLEET_DEMO=1 go test ./cmd/ -run TestDemoFrames -v
 
 ━━━ 1. opening — every host still polling (no blocking collect) ━━━
 fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 r…
@@ -112,7 +112,7 @@ fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l
 │ ↑/↓ or tab: field   letters set the answer   enter: next   esc: cancel │
 ╰────────────────────────────────────────────────────────────────────────╯
 
-━━━ 7. confirm strip — targets listed before anything runs ━━━
+━━━ 7. confirm dialog — what changes, which hosts, which answers, which keys ━━━
 fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 r…
 
 ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
@@ -127,8 +127,14 @@ fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l
 │ 📜 logs: idle — output appears here during an update  (l: hide)                                │
 ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
-update 1 host(s) → main: host-desktop
-  answers: sudo (none) · windows (unset) · gemini (unset)   y: go  e: edit answers  n/esc: cancel
+╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ 🚀 update 1 host → main                                                                        │
+│    ● host-desktop                                                                              │
+│                                                                                                │
+│    🔑 sudo (none)   🪟 windows (unset)   🧹 gemini (unset)                                     │
+│                                                                                                │
+│    ⏎ enter: update     ✏️ e: edit answers     ⎋ esc: cancel                                    │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ━━━ 8. CONCURRENT UPDATE — 2 running at once (jobs=2), 1 queued ━━━
 fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 r…
@@ -234,7 +240,7 @@ fleet  ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l
 │   ⏰ w                  wake selection (or cursor host)                                        │
 │   🗑️ F                  forget answers (incl. saved preferences)                               │
 │   ⇥ tab / enter        (answer form) next field · esc backs out, keeping answers               │
-│   ✏️ e                  (confirm) edit the remembered answers                                  │
+│   ✏️ e                  (confirm) edit the remembered answers · enter runs the update          │
 │                                                                                                │
 │ any key to close                                                                               │
 ╰────────────────────────────────────────────────────────────────────────────────────────────────╯

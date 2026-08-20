@@ -78,7 +78,7 @@ func TestDemoFrames(t *testing.T) {
 			m, _ = send(m, "tab", "k")                   // gemini: keep
 			return m
 		}},
-		{"7. confirm strip — targets listed before anything runs", "y: go", func() tuiModel {
+		{"7. confirm dialog — what changes, which hosts, which answers, which keys", "enter: update", func() tuiModel {
 			m, _ := send(settled(), "v", "j", " ", "u", "enter", "enter", "enter")
 			return m
 		}},

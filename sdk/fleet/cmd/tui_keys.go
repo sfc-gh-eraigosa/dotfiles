@@ -40,7 +40,7 @@ var keyHelp = []struct {
 	{"⏰", "w", "wake selection (or cursor host)", false},
 	{"🗑️", "F", "forget answers (incl. saved preferences)", false},
 	{"⇥", "tab / enter", "(answer form) next field · esc backs out, keeping answers", false},
-	{"✏️", "e", "(confirm) edit the remembered answers", false},
+	{"✏️", "e", "(confirm) edit the remembered answers · enter runs the update", false},
 }
 
 // route owns every keystroke. Mode comes first: a key typed in search is text,
@@ -170,7 +170,9 @@ func routeConfirm(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.ansField = fieldSudo
 		m.mode = modeAnswers
 		return m, nil
-	case "y", "Y", "enter":
+	case "enter", "y", "Y":
+		// enter is the primary: it is what the answer form hands off to, so the
+		// whole flow ends on the same key it was driven with.
 		targets := m.updateTargets()
 		m.mode = modeNormal
 		return m, m.startUpdate(targets)

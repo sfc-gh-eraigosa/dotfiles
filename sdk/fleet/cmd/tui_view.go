@@ -385,15 +385,7 @@ func (m tuiModel) statusView() string {
 	case modeAnswers:
 		return m.answersView()
 	case modeConfirm:
-		t := m.updateTargets()
-		// The answer summary is shown HERE, at the gate, because answers now
-		// outlive their wave: an operator on wave three must be able to see
-		// what is about to be applied without reopening the form. The
-		// credential appears only as a length mask.
-		return th.statusBar.Render(fmt.Sprintf("update %d host(s) → %s: %s",
-			len(t), m.updateRef, strings.Join(t, ", "))) + "\n  " +
-			th.dim.Render("answers: "+m.ans.summary()) +
-			th.dim.Render("   y: go  e: edit answers  n/esc: cancel")
+		return m.confirmView()
 	}
 
 	pos := fmt.Sprintf("%d/%d", m.indexOf(m.cursor)+1, len(m.rows))
@@ -458,6 +450,42 @@ func (m tuiModel) panelWidth() int {
 		w = 40
 	}
 	return w
+}
+
+// confirmView is the gate before anything runs. Each thing the operator needs
+// gets its own line — what will change, which hosts, what answers will be
+// applied, and what the keys do — because packing them onto one line made the
+// targets and the key hints read as a single run-on sentence.
+//
+// The answer summary is shown HERE because answers outlive their wave: an
+// operator on wave three must see what is about to be applied without
+// reopening the form. The credential appears only as a length mask.
+func (m tuiModel) confirmView() string {
+	t := m.updateTargets()
+	var b strings.Builder
+
+	host := "hosts"
+	if len(t) == 1 {
+		host = "host"
+	}
+	b.WriteString(th.header.Render(fmt.Sprintf("🚀 update %d %s → %s", len(t), host, m.updateRef)) + "\n")
+
+	// The targets are the consequential part, so they are highlighted rather
+	// than dimmed into the surrounding text.
+	var marked []string
+	for _, a := range t {
+		marked = append(marked, th.markSel.Render("●")+" "+th.cursor.Render(a))
+	}
+	b.WriteString("   " + strings.Join(marked, "   ") + "\n\n")
+
+	b.WriteString(th.dim.Render("   🔑 sudo ") + th.statusBar.Render(maskOrNone(m.ans.secretLen())) +
+		th.dim.Render("   🪟 windows ") + th.statusBar.Render(orUnset(m.ans.windows)) +
+		th.dim.Render("   🧹 gemini ") + th.statusBar.Render(orUnset(m.ans.gemini)) + "\n\n")
+
+	b.WriteString(th.dim.Render("   ⏎ enter: ") + th.statusBar.Render("update") +
+		th.dim.Render("     ✏️ e: edit answers     ⎋ esc: cancel"))
+
+	return th.panel.Width(m.panelWidth()).Render(b.String())
 }
 
 func (m tuiModel) helpView() string {
