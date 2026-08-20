@@ -34,14 +34,31 @@ func validRef(ref string) bool {
 }
 
 // remoteUpdateScript is the update command for one host, parameterised by the
-// git ref to move to (default `main`). Fetch, switch to the ref, fast-forward
-// it, then re-run install.sh. Shared by the headless path and the TUI so there
-// is exactly one definition of "update a host". Callers pass only refs that
-// have passed validRef.
+// git ref to move to (default `main`). Shared by the headless path and the TUI
+// so there is exactly one definition of "update a host". Callers pass only
+// refs that have passed validRef.
+//
+// It makes exactly ONE network call. The previous form ran `git fetch origin`
+// AND `git pull --ff-only origin <ref>`, and a pull performs its own fetch —
+// so every update contacted the remote twice for data the first call had
+// already brought down. That is not merely wasteful: it doubles the exposure
+// to a transient network fault, and one bit us on the Jetson —
+//
+//	From github.com:...  299953c..c6fccf8   <- fetch reached GitHub
+//	Already on 'main'                       <- checkout fine
+//	ssh: Could not resolve hostname github.com: Temporary failure in name
+//	fatal: Could not read from remote repository.
+//
+// — where DNS answered for the fetch and failed for the redundant pull
+// seconds later, failing an update that already had everything it needed
+// locally.
+//
+// Merging FETCH_HEAD rather than origin/<ref> keeps tag and branch refs both
+// working, exactly as the pull form did.
 func remoteUpdateScript(ref string) string {
 	return fmt.Sprintf(
-		"cd ~/git/dotfiles && git fetch origin && git checkout %[1]s && "+
-			"git pull --ff-only origin %[1]s && ./install.sh", ref)
+		"cd ~/git/dotfiles && git fetch origin %[1]s && git checkout %[1]s && "+
+			"git merge --ff-only FETCH_HEAD && ./install.sh", ref)
 }
 
 // rescueWorktree preserves uncommitted work before a --force update.

@@ -82,7 +82,7 @@ func TestUpdateSurfacesProbeFailure(t *testing.T) {
 // fetch, switch to main, fast-forward it, re-run install.sh.
 func TestUpdateScriptDefaultsToMain(t *testing.T) {
 	s := remoteUpdateScript("main")
-	for _, want := range []string{"git fetch origin", "git checkout main", "pull --ff-only origin main", "./install.sh"} {
+	for _, want := range []string{"git fetch origin main", "git checkout main", "merge --ff-only FETCH_HEAD", "./install.sh"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("default update script missing %q:\n%s", want, s)
 		}
@@ -94,7 +94,7 @@ func TestUpdateScriptDefaultsToMain(t *testing.T) {
 func TestUpdateScriptTargetsGivenRef(t *testing.T) {
 	s := remoteUpdateScript("feature/fleet/build")
 	if !strings.Contains(s, "git checkout feature/fleet/build") ||
-		!strings.Contains(s, "pull --ff-only origin feature/fleet/build") {
+		!strings.Contains(s, "git fetch origin feature/fleet/build") {
 		t.Fatalf("update script did not target the ref:\n%s", s)
 	}
 	if strings.Contains(s, " main ") {
@@ -125,5 +125,30 @@ func TestValidRefRejectsShellInjection(t *testing.T) {
 		if validRef(bad) {
 			t.Errorf("dangerous ref accepted: %q", bad)
 		}
+	}
+}
+
+// The update must contact the remote exactly ONCE. `git pull` runs its own
+// fetch, so the old `fetch && pull` form went to the network twice for data
+// the first call already had — doubling the exposure to a transient fault.
+// Observed on a real host: DNS answered for the fetch and failed for the pull
+// seconds later, failing an update that had everything it needed locally.
+func TestUpdateMakesExactlyOneNetworkCall(t *testing.T) {
+	s := remoteUpdateScript("main")
+	if n := strings.Count(s, "git fetch"); n != 1 {
+		t.Fatalf("expected exactly one fetch, got %d:\n%s", n, s)
+	}
+	// `git pull` is banned here precisely because it re-fetches.
+	if strings.Contains(s, "git pull") {
+		t.Fatalf("git pull re-contacts the remote; merge the fetched ref instead:\n%s", s)
+	}
+	// The merge must be local: FETCH_HEAD is already on disk after the fetch.
+	if !strings.Contains(s, "merge --ff-only FETCH_HEAD") {
+		t.Fatalf("the fast-forward must be local:\n%s", s)
+	}
+	// Still fast-forward only — an update must never create a merge commit on
+	// a host, which would leave it permanently divergent.
+	if !strings.Contains(s, "--ff-only") {
+		t.Fatalf("must stay fast-forward-only:\n%s", s)
 	}
 }
