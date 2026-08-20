@@ -430,16 +430,35 @@ func (m tuiModel) updateTargets() []string {
 // to the background wave or the interactive fallback.
 func (m *tuiModel) startUpdate(targets []string) tea.Cmd {
 	var cmds []tea.Cmd
+	var busy []string
 	for _, a := range targets {
-		if _, busy := m.updating[a]; busy {
+		// Guard on the PHASE, not on presence in the map. A finished host
+		// keeps its ok/FAIL entry so the row can still show the outcome, so a
+		// presence test meant a host could be updated exactly ONCE per session
+		// and every later attempt was skipped in silence.
+		if m.inFlight(a) {
+			busy = append(busy, a)
 			continue
 		}
+		// Re-running clears the previous outcome, or the row would show a
+		// stale "ok" while the new attempt is still deciding.
 		m.updating[a] = updState{phase: updPrecheck}
 		delete(m.pending, a) // ownership moves to the engine
 		cmds = append(cmds, precheckSudo(a, m.run))
 	}
 	m.iaTotal = 0
-	m.status = fmt.Sprintf("updating %d host(s) → %s", len(cmds), m.updateRef)
+
+	// Say what happened. A double-press used to report "updating 0 host(s)",
+	// which reads the same as a successful start and hides the reason.
+	switch {
+	case len(cmds) == 0 && len(busy) > 0:
+		m.status = fmt.Sprintf("already updating %s — left it running", strings.Join(busy, ", "))
+	case len(busy) > 0:
+		m.status = fmt.Sprintf("updating %d host(s) → %s (skipped %s: already running)",
+			len(cmds), m.updateRef, strings.Join(busy, ", "))
+	default:
+		m.status = fmt.Sprintf("updating %d host(s) → %s", len(cmds), m.updateRef)
+	}
 	return tea.Batch(cmds...)
 }
 

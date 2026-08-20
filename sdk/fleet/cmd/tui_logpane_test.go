@@ -376,3 +376,91 @@ func TestLogLegendNamesStreamingHosts(t *testing.T) {
 		}
 	}
 }
+
+// --- re-firing an update --------------------------------------------------
+
+// A finished host must be updatable again. The guard tested PRESENCE in the
+// updating map, but a completed host keeps its ok/FAIL entry so the row can
+// show the outcome — so every host could be updated exactly ONCE per session
+// and every later attempt was skipped without a word.
+func TestAHostCanBeUpdatedAgainAfterItFinishes(t *testing.T) {
+	for _, first := range []struct {
+		name string
+		err  error
+	}{{"success", nil}, {"failure", runner.ErrFake}} {
+		t.Run(first.name, func(t *testing.T) {
+			m := testModel("a")
+			m.ans = answers{sudoSecret: "xx"}
+			m2, _ := send(m, "u")
+			m3, _ := send(m2, "enter")
+			mm, _ := m3.Update(bgUpdateDoneMsg{alias: "a", err: first.err})
+			done := mm.(tuiModel)
+
+			m4, _ := send(done, "u")
+			m5, cmd := send(m4, "enter")
+			if cmd == nil {
+				t.Fatalf("a host that finished (%s) must be updatable again; status=%q",
+					first.name, m5.status)
+			}
+			// The previous outcome must not linger on the row while the new
+			// attempt is still deciding.
+			if p := m5.updating["a"].phase; p != updPrecheck {
+				t.Fatalf("re-running must reset the row, phase=%v", p)
+			}
+			if m5.updating["a"].log != "" {
+				t.Fatalf("stale log survived a re-run: %q", m5.updating["a"].log)
+			}
+		})
+	}
+}
+
+// Hitting update twice must NOT start a second run on a host already in
+// flight — install.sh is mid-apt and a concurrent second run would fight it.
+// It also must not look like it worked: "updating 0 host(s)" read exactly
+// like a successful start.
+func TestDoublePressLeavesTheRunningUpdateAloneAndSaysSo(t *testing.T) {
+	m := testModel("a")
+	m.ans = answers{sudoSecret: "xx"}
+	m2, _ := send(m, "u")
+	m3, _ := send(m2, "enter")
+	before := m3.updating["a"]
+
+	m4, _ := send(m3, "u")
+	m5, cmd := send(m4, "enter")
+
+	if cmd != nil {
+		t.Fatal("a second press must not fire another run at an in-flight host")
+	}
+	if m5.updating["a"] != before {
+		t.Fatalf("the running update must be left untouched: %+v -> %+v", before, m5.updating["a"])
+	}
+	if !strings.Contains(m5.status, "already updating") || !strings.Contains(m5.status, "a") {
+		t.Fatalf("the operator must be told why nothing happened, got %q", m5.status)
+	}
+}
+
+// A mixed selection starts the idle hosts and names the ones it skipped,
+// rather than silently doing part of the job.
+func TestMixedSelectionStartsIdleHostsAndNamesSkipped(t *testing.T) {
+	m := testModel("busy", "idle")
+	m.ans = answers{sudoSecret: "xx"}
+	m.updating["busy"] = updState{phase: updRunning}
+	m.running = 1
+	m.selected["busy"] = true
+	m.selected["idle"] = true
+
+	m2, _ := send(m, "u")
+	m3, cmd := send(m2, "enter")
+	if cmd == nil {
+		t.Fatal("the idle host should still have started")
+	}
+	if m3.updating["idle"].phase != updPrecheck {
+		t.Fatalf("idle host did not start, phase=%v", m3.updating["idle"].phase)
+	}
+	if m3.updating["busy"].phase != updRunning {
+		t.Fatal("the in-flight host must be left running")
+	}
+	if !strings.Contains(m3.status, "skipped") || !strings.Contains(m3.status, "busy") {
+		t.Fatalf("status must name what was skipped, got %q", m3.status)
+	}
+}

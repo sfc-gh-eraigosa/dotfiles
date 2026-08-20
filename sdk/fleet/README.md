@@ -201,6 +201,11 @@ mid-read). `l` again restores the list to the full height. The per-host
 progress column and `FAIL:` text are unchanged — the pane adds detail, it does
 not replace the summary.
 
+Pressing `u` again while a host is still updating leaves that run alone and
+says so — it never starts a second install on top of a live one. Hosts that
+have *finished* can be updated again freely; re-running clears the previous
+`ok`/`FAIL` from the row.
+
 **Unattended answers.** `u` opens a short form before anything runs — asked once
 per **session**, not once per wave:
 
