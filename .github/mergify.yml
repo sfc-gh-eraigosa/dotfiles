@@ -35,6 +35,7 @@ merge_protections:
     success_conditions:
       - check-success = Build and Integration Test
       - check-success = Lint (go + shell + markdown + actions)
+      - check-success = Go Lint (golangci-lint)
       - check-success = Validate teams source + routing artifacts
       - check-success = binary-level e2e tests
       - check-success = unit tests + coverage gate
