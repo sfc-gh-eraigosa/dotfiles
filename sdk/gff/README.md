@@ -144,16 +144,19 @@ round-trip is the quickest health-check that the whole chain works.
 
 ## Versioning & releases
 
-`VERSION` in this directory is the source of truth the build stamps into the
-binary (`build.sh` ldflags). Releases are automated repo-wide:
+The git tag `sdk/gff/vX.Y.Z` is the single source of truth. `build.sh` derives
+the version from it via `git describe` (see [`sdk/version.sh`](../version.sh))
+and stamps it into the binary through ldflags — there is no `VERSION` file.
+Releases are automated repo-wide:
 
-1. Merge a conventional-commit PR touching `sdk/gff/**` — `sdk-auto-bump.yml`
-   derives the semver bump and commits the new `sdk/gff/VERSION` on `main`.
-2. `tag-sdk-modules.yml` then cuts the annotated tag `sdk/gff/v<VERSION>`.
-3. Consumers pin it: `go run github.com/sfc-gh-eraigosa/dotfiles/sdk/gff@sdk/gff/v<VERSION>`.
+1. Merge a conventional-commit PR touching `sdk/gff/**`.
+2. `sdk-auto-bump.yml` derives the semver level from the commit subjects since
+   the last tag and cuts the annotated tag `sdk/gff/vX.Y.Z`. It makes no commit.
+3. Consumers pin it: `go run github.com/sfc-gh-eraigosa/dotfiles/sdk/gff@sdk/gff/vX.Y.Z`.
 
-So the default is the committed `VERSION`, and published tags always mirror it —
-no manual tagging.
+Between releases `build.sh` reports the honest `git describe` form — e.g.
+`0.1.0-43-g51c6ed1` means 43 commits past `v0.1.0`. `make sdk-bump` previews
+which modules are due for a release without changing anything.
 
 ## Troubleshooting
 
