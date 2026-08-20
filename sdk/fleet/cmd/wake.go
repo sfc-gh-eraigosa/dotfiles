@@ -63,6 +63,22 @@ func prober(r runner.Runner) runner.Runner {
 // newWaker builds the production waker: the ladder from internal/reach with
 // its impure edges bound to the real network. Returns nil when wake is
 // disabled, which is exactly how every caller turns the feature off.
+// wakeEnv is the environment-facing half of the ladder, held in variables so a
+// test can run it without touching the network.
+//
+// With the real functions wired in directly, a wake test's OUTCOME depended on
+// the machine it ran on: localAddrs() reports this host's own interfaces, so a
+// workstation inside the target's subnet takes the local-prime rung and the
+// ladder never reaches peer-relay. TestRelayNudgeIsDetachedAndFlagPortable
+// passed on a WSL2 box (172.x NAT, local-prime skipped) and failed on any host
+// in the target's /24 — and it shelled out to a real `ping` either way.
+var wakeEnv = struct {
+	Resolve    func(host string) ([]net.IP, error)
+	LocalAddrs func() ([]net.IPNet, error)
+	PingLocal  func(ctx context.Context, ip string) error
+	Sleep      func(time.Duration)
+}{resolveHost, localAddrs, pingLocal, time.Sleep}
+
 func newWaker(r runner.Runner, p reach.Policy) waker {
 	if !p.Enabled {
 		return nil
@@ -79,10 +95,10 @@ func newWaker(r runner.Runner, p reach.Policy) waker {
 			reach.Deps{
 				Probe:      func(alias string) error { _, err := pr.Run(alias, "true"); return err },
 				Runner:     r,
-				Resolve:    resolveHost,
-				LocalAddrs: localAddrs,
-				PingLocal:  pingLocal,
-				Sleep:      time.Sleep,
+				Resolve:    wakeEnv.Resolve,
+				LocalAddrs: wakeEnv.LocalAddrs,
+				PingLocal:  wakeEnv.PingLocal,
+				Sleep:      wakeEnv.Sleep,
 			})
 	}
 }
