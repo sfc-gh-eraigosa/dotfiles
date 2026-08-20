@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -443,11 +442,11 @@ func TestGetSourceRegisteredName(t *testing.T) {
 		[]byte(boolFeatYAML), 0o644))
 
 	// Write sources.yaml pointing at that namespace.
-	sourcesYAML := fmt.Sprintf(`sources:
+	sourcesYAML := `sources:
   - namespace: com.example.test
     url: https://github.com/example/test
     commit: abc1234
-`)
+`
 	registryFile := filepath.Join(dir, "sources.yaml")
 	require.NoError(t, os.WriteFile(registryFile, []byte(sourcesYAML), 0o644))
 

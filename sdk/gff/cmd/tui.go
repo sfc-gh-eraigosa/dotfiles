@@ -37,13 +37,13 @@ func runTUI(_ *cobra.Command, _ []string) error {
 
 	m := tui.NewModel(items, r.P)
 	m.Explain = r.Explain
-	if reg := (&registry.Registry{P: r.P}); reg != nil {
-		if srcs, err := reg.Sources(); err == nil {
-			for _, s := range srcs {
-				m.Sources = append(m.Sources, tui.SourceInfo{
-					Namespace: s.GetNamespace(), URL: s.GetUrl(), Commit: s.GetCommit(),
-				})
-			}
+	// &T{...} is never nil, so the old `reg != nil` guard was dead code.
+	reg := &registry.Registry{P: r.P}
+	if srcs, err := reg.Sources(); err == nil {
+		for _, s := range srcs {
+			m.Sources = append(m.Sources, tui.SourceInfo{
+				Namespace: s.GetNamespace(), URL: s.GetUrl(), Commit: s.GetCommit(),
+			})
 		}
 	}
 	p := tea.NewProgram(m, tea.WithAltScreen())

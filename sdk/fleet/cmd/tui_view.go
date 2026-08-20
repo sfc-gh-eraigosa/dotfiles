@@ -192,9 +192,9 @@ func (m tuiModel) logView() string {
 	start := m.logStart(h)
 	for i := start; i < len(m.logs) && i < start+h; i++ {
 		e := m.logs[i]
-		body.WriteString(fmt.Sprintf("%s %s\n",
+		fmt.Fprintf(&body, "%s %s\n",
 			m.hostStyle(e.alias).Render(fmt.Sprintf("%-14s│", trunc(e.alias, 14))),
-			trunc(e.line, m.logWidth()-18)))
+			trunc(e.line, m.logWidth()-18))
 	}
 	return th.panel.Width(m.panelWidth()).Render(strings.TrimRight(body.String(), "\n"))
 }
@@ -309,7 +309,7 @@ func (m tuiModel) rowView(i int) string {
 	// long one, so a 30-character hostname silently pushed the row past the
 	// terminal edge regardless of width.
 	name := truncate(r.Alias, aliasColWidth)
-	alias := name
+	var alias string
 	if m.matches(r) {
 		alias = th.match.Render(name)
 		alias += strings.Repeat(" ", max0(aliasColWidth-lipgloss.Width(name)))
@@ -538,7 +538,7 @@ func (m tuiModel) helpView() string {
 	var b strings.Builder
 	b.WriteString(th.header.Render("❓ keys") + "\n\n")
 	for _, k := range keyHelp {
-		b.WriteString(fmt.Sprintf("  %s %-18s %s\n", k.icon, k.keys, th.dim.Render(k.what)))
+		fmt.Fprintf(&b, "  %s %-18s %s\n", k.icon, k.keys, th.dim.Render(k.what))
 	}
 	b.WriteString("\n" + th.dim.Render("any key to close"))
 	return th.panel.Width(m.panelWidth()).Render(strings.TrimRight(b.String(), "\n"))

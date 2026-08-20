@@ -109,7 +109,9 @@ func (s *Store) writeLocked(reg Registry) error {
 		return fmt.Errorf("registry: create temp: %w", err)
 	}
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName) // no-op after a successful rename
+	// No-op after a successful rename; nothing to report if the temp file is
+	// already gone.
+	defer func() { _ = os.Remove(tmpName) }()
 	if _, err := tmp.Write(data); err != nil {
 		_ = tmp.Close()
 		return fmt.Errorf("registry: write temp: %w", err)

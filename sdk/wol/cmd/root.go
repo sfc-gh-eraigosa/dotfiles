@@ -27,7 +27,9 @@ var rootCmd = &cobra.Command{
 			if len(args) > 0 {
 				macAddr = args[0]
 			} else {
-				cmd.Help()
+				// Usage text on the way out; a failed write to the help
+				// stream has nowhere left to be reported.
+				_ = cmd.Help()
 				os.Exit(1)
 			}
 		}
@@ -68,7 +70,9 @@ var rootCmd = &cobra.Command{
 			fmt.Printf("Error creating UDP connection: %v\n", err)
 			os.Exit(1)
 		}
-		defer conn.Close()
+		// Datagram socket: Close reports no delivery information, and the
+		// Write below is what actually needs checking.
+		defer func() { _ = conn.Close() }()
 
 		_, err = conn.Write(packet)
 		if err != nil {

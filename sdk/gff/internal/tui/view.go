@@ -249,16 +249,6 @@ func (m *Model) multiNS() bool {
 	return false
 }
 
-// anyExpanded reports whether any area is currently expanded.
-func (m *Model) anyExpanded() bool {
-	for _, v := range m.expanded {
-		if v {
-			return true
-		}
-	}
-	return false
-}
-
 // viewHelp is the ?/h overlay: about + version, the key legend for the view
 // it was opened from, and the full sources story (registry + discovered).
 func (m *Model) viewHelp() string {

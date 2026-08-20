@@ -200,7 +200,7 @@ func TestRemoveKeyCommandHandlesRemovingTheLastKey(t *testing.T) {
 func TestRemoveKeyCommandKeepsOtherKeys(t *testing.T) {
 	dir := t.TempDir()
 	ak := filepath.Join(dir, "authorized_keys")
-	os.WriteFile(ak, []byte("ssh-ed25519 AAA me@box\nssh-ed25519 ZZZ ci@runner\n"), 0o600)
+	mustWriteFile(t, ak, []byte("ssh-ed25519 AAA me@box\nssh-ed25519 ZZZ ci@runner\n"), 0o600)
 	if out, err := exec.Command("bash", "-c", removeKeyCmd(ak, "ssh-ed25519 ZZZ ci@runner")).CombinedOutput(); err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}

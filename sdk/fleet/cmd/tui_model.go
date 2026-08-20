@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
@@ -766,14 +765,4 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return route(m, msg)
 	}
 	return m, nil
-}
-
-// sortedAliases is used by tests and the help overlay for stable ordering.
-func sortedAliases(set map[string]bool) []string {
-	out := make([]string, 0, len(set))
-	for a := range set {
-		out = append(out, a)
-	}
-	sort.Strings(out)
-	return out
 }

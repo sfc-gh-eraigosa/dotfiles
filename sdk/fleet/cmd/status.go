@@ -440,6 +440,3 @@ func init() {
 	statusCmd.Flags().StringVar(&flagRef, "ref", "origin/main", "baseline git ref")
 	rootCmd.AddCommand(statusCmd)
 }
-
-// drift0 renders a row's install age.
-func drift0(now time.Time, r Row) string { return drift.FormatAge(now, r.Age) }

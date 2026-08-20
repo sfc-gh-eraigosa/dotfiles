@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -31,10 +30,8 @@ func TestPathsDefault(t *testing.T) {
 
 func TestPathsDefaultWithXDGDataHome(t *testing.T) {
 	tmpdir := t.TempDir()
-	oldXDG := os.Getenv("XDG_DATA_HOME")
-	defer os.Setenv("XDG_DATA_HOME", oldXDG)
-
-	os.Setenv("XDG_DATA_HOME", tmpdir)
+	// t.Setenv restores the previous value when the test finishes.
+	t.Setenv("XDG_DATA_HOME", tmpdir)
 
 	p, err := paths.Default()
 	require.NoError(t, err)

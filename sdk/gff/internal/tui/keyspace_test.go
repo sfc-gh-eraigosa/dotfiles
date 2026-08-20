@@ -31,7 +31,7 @@ func TestRealTerminalSpaceTogglesBool(t *testing.T) {
 	var m tea.Model = tui.NewModel(items, p)
 	m = press(m, tea.KeyMsg{Type: tea.KeyEnter}) // expand area
 	m = press(m, tea.KeyMsg{Type: tea.KeyDown})  // onto install.ai.claude
-	m = press(m, tea.KeyMsg{Type: tea.KeySpace}) // REAL spacebar
+	press(m, tea.KeyMsg{Type: tea.KeySpace})     // REAL spacebar; asserted via the file it writes
 
 	data, err := os.ReadFile(p.UserOverride)
 	require.NoError(t, err, "real-terminal KeySpace must write the user override")
@@ -58,7 +58,7 @@ func TestRealTerminalSpaceDrivesPicker(t *testing.T) {
 
 	m = press(m, tea.KeyMsg{Type: tea.KeyDown})  // second option
 	m = press(m, tea.KeyMsg{Type: tea.KeySpace}) // REAL spacebar toggles entry
-	m = press(m, tea.KeyMsg{Type: tea.KeyEnter}) // confirm
+	press(m, tea.KeyMsg{Type: tea.KeyEnter})     // confirm; asserted via the file it writes
 
 	data, err := os.ReadFile(p.UserOverride)
 	require.NoError(t, err, "picker confirm after KeySpace toggle must write the override")

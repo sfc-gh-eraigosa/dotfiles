@@ -22,7 +22,7 @@ func TestRenderTableIsWorstFirst(t *testing.T) {
 	}
 	out := renderTable(rows, testNow)
 	iDead, iStale, iGood := strings.Index(out, "dead"), strings.Index(out, "stale"), strings.Index(out, "good")
-	if !(iDead < iStale && iStale < iGood) {
+	if iDead >= iStale || iStale >= iGood {
 		t.Fatalf("rows not worst-first:\n%s", out)
 	}
 	if !strings.Contains(out, "behind 24") {
