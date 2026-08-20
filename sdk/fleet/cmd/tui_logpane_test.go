@@ -464,3 +464,12 @@ func TestMixedSelectionStartsIdleHostsAndNamesSkipped(t *testing.T) {
 		t.Fatalf("status must name what was skipped, got %q", m3.status)
 	}
 }
+
+// commitForm walks the answer form to the confirm strip regardless of how many
+// fields it has, so adding one does not break every test that passes through.
+func commitForm(m tuiModel) tuiModel {
+	for i := 0; i < int(answerFieldCount); i++ {
+		m, _ = send(m, "enter")
+	}
+	return m
+}

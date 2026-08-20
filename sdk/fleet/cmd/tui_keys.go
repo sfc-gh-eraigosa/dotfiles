@@ -108,6 +108,13 @@ func routeAnswers(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case " ", "right", "left":
 			m.ans.windows = cycle(m.ans.windows, []string{"", "n", "s", "y"}, k.String() != "left")
 		}
+	case fieldReset:
+		switch k.String() {
+		case "y", "n":
+			m.ans.reset = k.String()
+		case " ", "right", "left":
+			m.ans.reset = cycle(m.ans.reset, []string{"", "n", "y"}, k.String() != "left")
+		}
 	case fieldGemini:
 		switch k.String() {
 		case "y":
@@ -139,25 +146,36 @@ func cycle(cur string, ring []string, fwd bool) string {
 }
 
 func routeSearch(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// The focused pane owns the pattern, so searching the log never disturbs a
+	// host filter the operator set earlier (and vice versa).
+	inLog := m.logFocus && m.logOpen
+	st := &m.search
+	if inLog {
+		st = &m.logSearch
+	}
 	switch k.String() {
 	case "esc":
-		m.search = searchState{}
+		*st = searchState{}
 		m.mode = modeNormal
 	case "enter":
-		m.search.committed = true
+		st.committed = true
 		m.mode = modeNormal
-		if m.search.re != nil {
-			m.jumpMatch(1)
+		if st.re != nil {
+			if inLog {
+				m.logJump(1)
+			} else {
+				m.jumpMatch(1)
+			}
 		}
 	case "backspace":
-		if n := len(m.search.input); n > 0 {
-			m.search.input = m.search.input[:n-1]
-			m.compileSearch()
+		if n := len(st.input); n > 0 {
+			st.input = st.input[:n-1]
+			compileInto(st)
 		}
 	default:
 		if r := k.Runes; len(r) > 0 {
-			m.search.input += string(r)
-			m.compileSearch()
+			st.input += string(r)
+			compileInto(st)
 		}
 	}
 	return m, nil
@@ -192,13 +210,68 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if pendingG {
 		pendingG = false
 		if key == "g" {
-			m.moveTo(0)
+			// gg goes to the top of whichever pane has the keys.
+			if m.logFocus && m.logOpen {
+				m.logTo(0)
+			} else {
+				m.moveTo(0)
+			}
 			return m, nil
 		}
 		// fall through: the pending g is cancelled, this key acts normally
 	}
 
+	// With the log focused, the vim keys drive it instead of the host list, so
+	// a long install log is navigable with the same muscle memory.
+	if m.logFocus && m.logOpen {
+		switch key {
+		case "j", "down":
+			m.logTo(m.logTop + 1)
+			return m, nil
+		case "k", "up":
+			m.logTo(m.logTop - 1)
+			return m, nil
+		case "ctrl+d":
+			m.logTo(m.logTop + maxInt(1, m.logHeight()/2))
+			return m, nil
+		case "ctrl+u":
+			m.logTo(m.logTop - maxInt(1, m.logHeight()/2))
+			return m, nil
+		case "ctrl+f", "pgdown":
+			m.logTo(m.logTop + maxInt(1, m.logHeight()))
+			return m, nil
+		case "ctrl+b", "pgup":
+			m.logTo(m.logTop - maxInt(1, m.logHeight()))
+			return m, nil
+		case "g":
+			pendingG = true
+			return m, nil
+		case "G":
+			// Jumping to the end means "show me the newest", which is exactly
+			// what following does — so G resumes it rather than pinning a
+			// stale offset that a still-running install would scroll past.
+			m.logFollow = true
+			return m, nil
+		case "/":
+			m.mode = modeSearch
+			m.logSearch = searchState{}
+			return m, nil
+		case "n":
+			m.logJump(1)
+			return m, nil
+		case "N":
+			m.logJump(-1)
+			return m, nil
+		}
+	}
+
 	switch key {
+	case "tab":
+		// Only meaningful when there is a log to focus.
+		if m.logOpen {
+			m.logFocus = !m.logFocus
+		}
+		return m, nil
 	case "q", "ctrl+c":
 		// Quitting mid-update would orphan work the operator can't see.
 		if m.busy() && !m.quitReq {

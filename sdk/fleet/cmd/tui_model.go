@@ -32,6 +32,7 @@ const (
 	fieldSudo answerField = iota
 	fieldWindows
 	fieldGemini
+	fieldReset
 	answerFieldCount
 )
 
@@ -65,7 +66,14 @@ type viewport struct{ top, height, width int }
 
 // logEntry is one streamed line tagged with the host that produced it, so a
 // concurrent wave stays readable when several installs interleave.
-type logEntry struct{ alias, line string }
+type logEntry struct {
+	alias, line string
+	at          time.Time
+}
+
+// nowFn is the clock for log timestamps, swapped in tests so frames stay
+// byte-stable (the package's rule: never time.Now() in render paths).
+var nowFn = time.Now
 
 // logCap bounds the buffer: a fleet-wide install emits tens of thousands of
 // lines and the pane only ever shows a screenful.
@@ -100,6 +108,8 @@ type tuiModel struct {
 	logFollow bool              // tail the newest line
 	logTop    int               // scroll offset when not following
 	logColor  map[string]int    // alias -> palette slot, by first appearance
+	logFocus  bool              // tab moves vim keys from the host list to the log
+	logSearch searchState       // `/` while the log is focused searches log lines
 	jobs      int               // max concurrent background updates
 	running   int               // slots in use
 	updateRef string
@@ -265,6 +275,26 @@ func (m tuiModel) rowText(r Row) string {
 // compileSearch applies vim smartcase: case-insensitive unless the pattern
 // contains an uppercase letter. An invalid pattern keeps the previous compiled
 // regexp so the highlight does not flicker while typing `[a-`.
+// compileInto applies vim smartcase to any search state, so the host filter
+// and the log search cannot drift apart.
+func compileInto(st *searchState) {
+	s := st.input
+	if s == "" {
+		st.re, st.err = nil, ""
+		return
+	}
+	pat := s
+	if s == strings.ToLower(s) {
+		pat = "(?i)" + s
+	}
+	re, err := regexp.Compile(pat)
+	if err != nil {
+		st.err = "bad pattern: " + cleanReErr(err)
+		return
+	}
+	st.re, st.err = re, ""
+}
+
 func (m *tuiModel) compileSearch() {
 	s := m.search.input
 	if s == "" {
@@ -606,7 +636,7 @@ func (m *tuiModel) appendLog(alias, line string) {
 	if _, ok := m.logColor[alias]; !ok {
 		m.logColor[alias] = len(m.logColor)
 	}
-	m.logs = append(m.logs, logEntry{alias: alias, line: line})
+	m.logs = append(m.logs, logEntry{alias: alias, line: line, at: nowFn()})
 	if len(m.logs) > logCap {
 		m.logs = m.logs[len(m.logs)-logCap:]
 		if m.logTop > 0 {
@@ -675,6 +705,63 @@ func (m tuiModel) listHeight() int {
 		h = 3
 	}
 	return h
+}
+
+// ---- log navigation -------------------------------------------------------
+
+// logMatches are the buffer indexes matching the log's own search pattern.
+func (m tuiModel) logMatches() []int {
+	if m.logSearch.re == nil {
+		return nil
+	}
+	var out []int
+	for i, e := range m.logs {
+		if m.logSearch.re.MatchString(e.alias + " " + e.line) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// logJump moves the log viewport to the next/previous match, wrapping. It
+// stops following, or the tail would immediately yank the match off screen.
+func (m *tuiModel) logJump(d int) {
+	idx := m.logMatches()
+	if len(idx) == 0 {
+		m.status = "no matches in the log"
+		return
+	}
+	m.logFollow = false
+	cur := m.logTop
+	if d > 0 {
+		for _, i := range idx {
+			if i > cur {
+				m.logTop = i
+				return
+			}
+		}
+		m.logTop = idx[0]
+		return
+	}
+	for k := len(idx) - 1; k >= 0; k-- {
+		if idx[k] < cur {
+			m.logTop = idx[k]
+			return
+		}
+	}
+	m.logTop = idx[len(idx)-1]
+}
+
+// logTo moves the log viewport, clamped. Any explicit move stops following.
+func (m *tuiModel) logTo(i int) {
+	m.logFollow = false
+	if i < 0 {
+		i = 0
+	}
+	if max := len(m.logs) - 1; i > max {
+		i = maxInt(0, max)
+	}
+	m.logTop = i
 }
 
 // ---- the bubbletea Update -------------------------------------------------

@@ -104,7 +104,12 @@ type answers struct {
 	sudoSecret string // memory only: never persisted, logged, or put in argv
 	windows    string // y | n | s          -> WINSETUP_ANSWER
 	gemini     string // yes | keep | skip  -> GEMINI_TEARDOWN_ANSWER
+	reset      string // y | n — force the clone onto origin before installing
 }
+
+// forceReset reports whether this wave should hard-reset each host onto the
+// fetched commit rather than fast-forwarding.
+func (a answers) forceReset() bool { return a.reset == "y" }
 
 // appendSecret / trimSecret keep the secret's mutation in one place so the
 // rest of the model never handles it directly.
@@ -125,7 +130,7 @@ func (a answers) needsSudo() bool { return a.sudoSecret != "" }
 // already filled anything in. It decides whether `u` opens the form or goes
 // straight to the confirm strip.
 func (a answers) remembered() bool {
-	return a.sudoSecret != "" || a.windows != "" || a.gemini != ""
+	return a.sudoSecret != "" || a.windows != "" || a.gemini != "" || a.reset != ""
 }
 
 func maskOrNone(n int) string {
@@ -215,7 +220,7 @@ func unattendedUpdate(ref string, a answers) string {
 	}
 	fmt.Fprintf(&b, "%s || exit %d; ", sudoGate, rcSudoNoCache)
 	b.WriteString(a.envPrefix())
-	b.WriteString(remoteUpdateScript(ref))
+	b.WriteString(updateScript(ref, a.forceReset()))
 	return b.String()
 }
 
@@ -301,7 +306,7 @@ func handoffWrapper(alias, ref, remote string, pos, total int) string {
 // It carries the pre-answers too. It previously ran the BARE update script, so
 // a host routed here re-asked every question the operator had already answered.
 func interactiveHandoff(alias, ref string, a answers, pos, total int) tea.Cmd {
-	remote := a.envPrefix() + remoteUpdateScript(ref)
+	remote := a.envPrefix() + updateScript(ref, a.forceReset())
 	c := exec.Command("sh", "-c", handoffWrapper(alias, ref, remote, pos, total))
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return execDoneMsg{alias: alias, err: err}
