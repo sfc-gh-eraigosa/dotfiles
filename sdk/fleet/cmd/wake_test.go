@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -75,8 +77,28 @@ func TestWakeJSONCarriesTheWholeLadder(t *testing.T) {
 
 // F16d — THE non-mutation invariant. Wake runs automatically inside a read
 // path (`fleet status`), so it must never change anything on a target. The
+// hermeticWake pins the environment-facing deps so the ladder behaves the same
+// everywhere: no real interfaces, no real ping, no real sleeping. Without it
+// these tests pass or fail according to whether the machine running them
+// happens to share a subnet with the hardcoded target.
+func hermeticWake(t *testing.T) {
+	t.Helper()
+	saved := wakeEnv
+	t.Cleanup(func() { wakeEnv = saved })
+	wakeEnv.LocalAddrs = func() ([]net.IPNet, error) { return nil, nil } // no local subnet => local-prime skipped
+	wakeEnv.PingLocal = func(context.Context, string) error { return nil }
+	wakeEnv.Sleep = func(time.Duration) {}
+	wakeEnv.Resolve = func(h string) ([]net.IP, error) {
+		if ip := net.ParseIP(h); ip != nil {
+			return []net.IP{ip}, nil
+		}
+		return nil, nil
+	}
+}
+
 // only traffic allowed is ICMP, a read of $SSH_CONNECTION, and the probe.
 func TestWakeNeverSendsAnythingThatWritesToATarget(t *testing.T) {
+	hermeticWake(t)
 	var sent []string
 	r := recordingRunner{
 		fake: runner.Fake{Out: map[string]string{"peer-a": "192.168.0.249 49920 192.168.0.63 22"}, Via: map[string]string{}},
@@ -111,6 +133,7 @@ func TestWakeNeverSendsAnythingThatWritesToATarget(t *testing.T) {
 // nudge is also detached: a blocking no-reply ping measured 11.0s on real
 // hardware, more than the entire default budget.
 func TestRelayNudgeIsDetachedAndFlagPortable(t *testing.T) {
+	hermeticWake(t)
 	var sent []string
 	r := recordingRunner{
 		fake: runner.Fake{Out: map[string]string{"peer-a": "192.168.0.249 49920 192.168.0.63 22"}, Via: map[string]string{}},

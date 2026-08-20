@@ -23,8 +23,13 @@ func TestConfirmStripShowsTheAnswersWithTheSecretMasked(t *testing.T) {
 	if strings.Contains(view, "secret") {
 		t.Fatalf("the credential must never be legible in a frame:\n%s", view)
 	}
-	if !strings.Contains(view, "answers:") {
-		t.Fatalf("the confirm strip must state what will be applied:\n%s", view)
+	// Each answer is labelled on its own now, rather than run together behind
+	// a single "answers:" prefix — the intent is unchanged: the operator can
+	// see everything that is about to be applied, at the gate.
+	for _, want := range []string{"sudo", "windows", "gemini"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("the confirm dialog must state %q:\n%s", want, view)
+		}
 	}
 	if !strings.Contains(view, strings.Repeat("•", 6)) {
 		t.Fatalf("expected a 6-character mask on the confirm strip:\n%s", view)
@@ -40,7 +45,9 @@ func TestConfirmSummaryAppearsOnARememberedWave(t *testing.T) {
 	m2, _ := send(m, "u")
 	view := stripANSI(m2.View())
 
-	for _, want := range []string{"answers:", "windows y", "gemini keep"} {
+	// The values still have to be visible at the gate; only the single
+	// "answers:" prefix went away when each got its own labelled cell.
+	for _, want := range []string{"windows y", "gemini keep"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("confirm summary missing %q:\n%s", want, view)
 		}

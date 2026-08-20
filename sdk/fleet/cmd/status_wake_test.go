@@ -54,6 +54,15 @@ func stampFor(sha string) string {
 	return "commit=" + sha + "\ninstalled_at=1754700000\nbranch=main\nhostname=h\n"
 }
 
+// Wake tests never stream; an already-closed stream satisfies the seam.
+func (s *sleeperRunner) RunStream(string, string, ...string) (<-chan string, <-chan error) {
+	lines := make(chan string)
+	done := make(chan error, 1)
+	close(lines)
+	done <- nil
+	return lines, done
+}
+
 // F15a — waking a host that answered on the first try would burn the budget
 // for nothing. The ladder must fire for unreachable hosts and only those.
 func TestWakeFiresOnlyForUnreachableHosts(t *testing.T) {

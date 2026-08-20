@@ -129,7 +129,16 @@ so ten sleeping hosts cost about one budget of wall clock rather than ten. Use
 
 ### `fleet tui`
 
-The interactive dashboard. Opens **instantly** and streams rows in as each host
+```
+╭────────────────────────────────────────────────────────────────────────────────╮
+│ 🛰️  fleet 0.1.0 (40b4953)                                                      │
+│ ❓ ?: help   🔍 /: search   ● space: selection   🚀 u: update                  │
+│ 📜 l: log pane   🖥️ s: ssh   🔄 r: refresh   🚪 q: quit                        │
+╰────────────────────────────────────────────────────────────────────────────────╯
+```
+
+The interactive dashboard. Framed panels provide unified visual structure and clear
+discoverability for all actions. Opens **instantly** and streams rows in as each host
 answers — a slow or unreachable host never blocks the view.
 
 ```sh
@@ -155,9 +164,16 @@ fleet tui --update-ref feature/x         # update targets that ref instead of ma
 | `F` | forget the remembered answers (including the saved preferences) |
 | `e` | on the confirm strip: edit the remembered answers |
 | `s` | ssh to the cursor host |
+| `l` | show / hide the streaming log pane |
+| `J` / `K` | scroll the log pane (re-open to resume following) |
 | `r` | refresh |
 | `?` | help overlay |
 | `q` | quit (guarded while updates run) |
+
+The status dot left of each hostname is **navy** when selected, and flips
+**green** or **red** to report an update's outcome — so a finished wave reads at
+a glance. Each area (host list, log pane, help, answer form) is its own framed
+panel.
 
 Rows are colored by status (green up-to-date · yellow behind · magenta
 divergent · dim unknown · red unreachable) and degrade cleanly on terminals
@@ -174,6 +190,21 @@ for a password **fails fast with the reason on its row** instead of hanging on
 input it cannot receive. Hosts whose precheck says they *need* a password are
 routed to a serial interactive handoff that runs after the background wave —
 there the terminal is genuinely released so the sudo prompt reaches you.
+
+**The log pane is on by default.** While idle it collapses to a single hint
+line, so it costs the host list nothing; once output starts flowing it claims
+its share. `l` splits the view: the host list keeps the top ~20% and a
+framed pane below streams each in-flight host's output live, tagged with the
+alias — each host in its own colour, so a concurrent wave stays readable. It follows the tail by default;
+`J`/`K` scroll (which pauses following so the tail can't yank the view away
+mid-read). `l` again restores the list to the full height. The per-host
+progress column and `FAIL:` text are unchanged — the pane adds detail, it does
+not replace the summary.
+
+Pressing `u` again while a host is still updating leaves that run alone and
+says so — it never starts a second install on top of a live one. Hosts that
+have *finished* can be updated again freely; re-running clears the previous
+`ok`/`FAIL` from the row.
 
 **Unattended answers.** `u` opens a short form before anything runs — asked once
 per **session**, not once per wave:

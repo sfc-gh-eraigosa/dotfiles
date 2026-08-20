@@ -37,6 +37,13 @@ func (r recordingRunner) RunVia(peer, h string, a ...string) (string, error) {
 // "the credential never reaches the command log" would be worthless if this
 // helper copied it in. Use runner.Fake{Stdin: …} when the piped bytes are what
 // is under test.
+// Delegates: these fakes exist to record argv, and the streaming path is
+// exercised by runner.Fake in the TUI tests instead.
+func (r recordingRunner) RunStream(h, stdin string, a ...string) (<-chan string, <-chan error) {
+	*r.log = append(*r.log, strings.Join(a, " "))
+	return r.fake.RunStream(h, stdin, a...)
+}
+
 func (r recordingRunner) RunStdin(h, _ string, a ...string) (string, error) {
 	*r.log = append(*r.log, strings.Join(a, " "))
 	return r.fake.Run(h, a...)

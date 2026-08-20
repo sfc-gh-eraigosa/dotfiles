@@ -187,8 +187,8 @@ func TestWindowResizeKeepsCursorVisible(t *testing.T) {
 
 func TestHalfPageMovesAndStaysInBounds(t *testing.T) {
 	m := testModel("a", "b", "c", "d", "e", "f", "g", "h")
-	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 11}) // 6 visible
-	m2 := mm.(tuiModel)
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 13}) // 6 list rows once framed
+	m2, _ := send(mm.(tuiModel), "l")                           // hide the log pane so the math is the list's alone
 	m3, _ := send(m2, "ctrl+d")
 	if m3.indexOf(m3.cursor) != 3 {
 		t.Fatalf("ctrl+d should move half a page (3), got %d", m3.indexOf(m3.cursor))

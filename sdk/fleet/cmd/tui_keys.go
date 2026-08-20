@@ -8,26 +8,39 @@ import (
 
 // keyHelp is the single source of truth for the keymap: the help overlay
 // renders from it, so there is no second hand-written list to drift.
-var keyHelp = []struct{ keys, what string }{
-	{"j / k / ↓ / ↑", "move cursor"},
-	{"gg / G", "first / last host"},
-	{"ctrl+d / ctrl+u", "half page down / up"},
-	{"ctrl+f / ctrl+b", "page down / up"},
-	{"/", "regex search (smartcase)"},
-	{"n / N", "next / previous match"},
-	{"space", "toggle selection"},
-	{"a", "select all (respects an active search)"},
-	{"v", "visual range select"},
-	{"esc", "clear search / selection"},
-	{"u", "update selection (or cursor host)"},
-	{"w", "wake selection (or cursor host)"},
-	{"F", "forget answers (incl. saved preferences)"},
-	{"tab / enter", "(answer form) next field · esc backs out, keeping answers"},
-	{"e", "(confirm) edit the remembered answers"},
-	{"s", "ssh to cursor host"},
-	{"r", "refresh"},
-	{"?", "toggle this help"},
-	{"q", "quit"},
+// keyHelp is the single source of truth for the keymap: both the always-visible
+// header strip and the `?` overlay render from it, so a key can never again be
+// implemented and documented in the overlay while staying invisible on screen
+// (which is exactly how the log pane shipped undiscoverable).
+//
+// icon is a visual anchor next to the letter — the letter stays authoritative,
+// the icon just makes the strip scannable. hdr marks the few that earn a place
+// in the always-on header; the rest live in the overlay.
+var keyHelp = []struct {
+	icon, keys, what string
+	hdr              bool
+}{
+	{"❓", "?", "toggle this help", true},
+	{"🔍", "/", "regex search (smartcase)", true},
+	{"●", "space", "toggle selection", true},
+	{"🚀", "u", "update selection (or cursor host)", true},
+	{"📜", "l", "show / hide the streaming log pane", true},
+	{"🖥️", "s", "ssh to cursor host", true},
+	{"🔄", "r", "refresh", true},
+	{"🚪", "q", "quit", true},
+	{"⬍", "j / k / ↓ / ↑", "move cursor", false},
+	{"⤒", "gg / G", "first / last host", false},
+	{"⇟", "ctrl+d / ctrl+u", "half page down / up", false},
+	{"⇞", "ctrl+f / ctrl+b", "page down / up", false},
+	{"➡️", "n / N", "next / previous match", false},
+	{"◉", "a", "select all (respects an active search)", false},
+	{"📖", "J / K", "scroll the log pane (G re-follows the tail)", false},
+	{"◍", "v", "visual range select", false},
+	{"⎋", "esc", "clear search / selection", false},
+	{"⏰", "w", "wake selection (or cursor host)", false},
+	{"🗑️", "F", "forget answers (incl. saved preferences)", false},
+	{"⇥", "tab / enter", "(answer form) next field · esc backs out, keeping answers", false},
+	{"✏️", "e", "(confirm) edit the remembered answers · enter runs the update", false},
 }
 
 // route owns every keystroke. Mode comes first: a key typed in search is text,
@@ -157,7 +170,9 @@ func routeConfirm(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.ansField = fieldSudo
 		m.mode = modeAnswers
 		return m, nil
-	case "y", "Y", "enter":
+	case "enter", "y", "Y":
+		// enter is the primary: it is what the answer form hands off to, so the
+		// whole flow ends on the same key it was driven with.
 		targets := m.updateTargets()
 		m.mode = modeNormal
 		return m, m.startUpdate(targets)
@@ -243,12 +258,34 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// INCONSISTENT answers. Staleness is guarded by the confirm strip,
 		// which shows exactly what is about to be applied.
 		if len(m.updateTargets()) > 0 {
-			if m.ans.remembered() {
-				m.mode = modeConfirm
-			} else {
+			// An empty credential ALWAYS prompts forward, even when the other
+			// answers are remembered. Otherwise a session that had only ever
+			// set `windows` counted as "remembered" and jumped straight to
+			// confirm — so the wave ran with no credential, every privileged
+			// step silently skipped, and the operator was never asked for the
+			// one answer that cannot be defaulted.
+			if m.ans.secretLen() == 0 || !m.ans.remembered() {
 				m.ansField = fieldSudo
 				m.mode = modeAnswers
+			} else {
+				m.mode = modeConfirm // `e` from there edits without discarding
 			}
+		}
+	case "l":
+		// Toggling off restores the host list to the full viewport.
+		m.logOpen = !m.logOpen
+		m.logFollow = true
+		m.clampViewport()
+	case "J":
+		// Scrolling stops the tail from yanking the view away mid-read.
+		if m.logOpen {
+			m.logFollow = false
+			m.logTop = minInt(m.logTop+1, maxInt(0, len(m.logs)-1))
+		}
+	case "K":
+		if m.logOpen {
+			m.logFollow = false
+			m.logTop = maxInt(0, m.logTop-1)
 		}
 	case "a":
 		m.selectAllFiltered()

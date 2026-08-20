@@ -78,7 +78,7 @@ func TestDemoFrames(t *testing.T) {
 			m, _ = send(m, "tab", "k")                   // gemini: keep
 			return m
 		}},
-		{"7. confirm strip — targets listed before anything runs", "y: go", func() tuiModel {
+		{"7. confirm dialog — what changes, which hosts, which answers, which keys", "enter: update", func() tuiModel {
 			m, _ := send(settled(), "v", "j", " ", "u", "enter", "enter", "enter")
 			return m
 		}},
@@ -109,6 +109,26 @@ func TestDemoFrames(t *testing.T) {
 			m.running = 1
 			x, _ := m.Update(precheckMsg{alias: "host-pi", interactive: true})
 			return x.(tuiModel)
+		}},
+		{"9b. LOG PANE — list shrinks to the top, streaming logs framed below", "logs", func() tuiModel {
+			m := settled()
+			m.vp = viewport{height: 26, width: 100}
+			m.logOpen = true
+			m.streams = map[string]stream{"host-nano": {}, "host-pi": {}}
+			m.updating["host-nano"] = updState{phase: updRunning}
+			m.updating["host-pi"] = updState{phase: updRunning}
+			m.running = 2
+			for _, l := range []struct{ a, t string }{
+				{"host-nano", "Requesting sudo access up front..."},
+				{"host-pi", "Updating apt package lists..."},
+				{"host-nano", "Installing 28 core packages via apt..."},
+				{"host-pi", "Building gss v0.2.0 with go1.26.1..."},
+				{"host-nano", "gss built and installed to ~/opt/bin/gss"},
+				{"host-pi", "Synchronizing AI agent skills..."},
+			} {
+				m.appendLog(l.a, l.t)
+			}
+			return m
 		}},
 		{"11. help overlay", "toggle this help", func() tuiModel {
 			m, _ := send(settled(), "?")

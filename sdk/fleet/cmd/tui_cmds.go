@@ -34,7 +34,25 @@ type (
 		attempts   []reach.Attempt
 	}
 	spinnerTickMsg int
+
+	// logLineMsg carries one streamed output line from an in-flight update.
+	logLineMsg struct{ alias, line string }
+	// logEOFMsg says a host's stream ended; the completion arrives separately
+	// on doneCh, so the two are joined in the model.
+	logEOFMsg struct{ alias string }
+	// streamStartedMsg hands the freshly-opened channels to the model.
+	streamStartedMsg struct {
+		alias string
+		st    stream
+	}
 )
+
+// stream is one host's in-flight output channels, parked in the model so the
+// reader Cmd can be re-issued after every line.
+type stream struct {
+	lines <-chan string
+	done  <-chan error
+}
 
 var spinFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
@@ -210,27 +228,42 @@ func explainExit(err error) string {
 // The password reaches the remote `sudo -S` over ssh's encrypted channel via
 // stdin. It is never an argument and never an environment variable, both of
 // which are world-readable through /proc.
-func bgUpdate(alias, ref string, a answers, r runner.Runner) tea.Cmd {
+// beginStream launches the update from inside a Cmd and hands the channels
+// back as a message. Starting it in Update() instead would put I/O on the
+// update path — where a model built without a runner (tests, the demo) panics,
+// and where a blocking dial would freeze the UI. Update stays pure; only Cmds
+// touch the network.
+func beginStream(alias, ref string, a answers, r runner.Runner) tea.Cmd {
 	script := unattendedUpdate(ref, a)
+	secret := a.sudoSecret + "\n"
 	return func() tea.Msg {
-		var out string
-		var err error
-		if a.needsSudo() {
-			out, err = r.RunStdin(alias, a.sudoSecret+"\n", script)
-		} else {
-			out, err = r.Run(alias, script)
-		}
-		log := tailLines(out, 3)
-		if e := explainExit(err); e != "" && err != nil {
-			log = strings.TrimSpace(e + " " + log)
-		}
-		return bgUpdateDoneMsg{alias: alias, log: log, err: err}
+		lines, done := r.RunStream(alias, secret, script)
+		return streamStartedMsg{alias: alias, st: stream{lines: lines, done: done}}
 	}
 }
 
-// interactiveHandoff gives the terminal away so install.sh's sudo prompt
-// reaches the operator. tea.ExecProcess SUSPENDS the whole TUI, which is why
-// this lane is serial and used only when the precheck says it is required.
+// readLine blocks until the next line (or EOF) and turns it into a Msg. It is
+// re-issued on every logLineMsg, which is how a channel becomes a stream of
+// bubbletea messages without a goroutine writing into the model.
+func readLine(alias string, st stream) tea.Cmd {
+	return func() tea.Msg {
+		l, ok := <-st.lines
+		if !ok {
+			return logEOFMsg{alias: alias}
+		}
+		return logLineMsg{alias: alias, line: l}
+	}
+}
+
+// awaitDone blocks on the command's exit and reports it once the stream has
+// drained, so a row's ok/FAIL never lands before its last log line.
+func awaitDone(alias string, st stream) tea.Cmd {
+	return func() tea.Msg {
+		err := <-st.done
+		return bgUpdateDoneMsg{alias: alias, err: err}
+	}
+}
+
 // shQuote makes a string safe as a single-quoted POSIX shell word.
 func shQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 

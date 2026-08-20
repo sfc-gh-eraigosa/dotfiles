@@ -33,10 +33,12 @@ func TestSudoSecretNeverAppearsInTheRemoteCommand(t *testing.T) {
 func TestSudoSecretIsSentOnStdinOnly(t *testing.T) {
 	seen := map[string]string{}
 	r := runner.Fake{Stdin: seen}
-	msg := bgUpdate("host-a", "main", answers{sudoSecret: probeMarker}, r)()
-	if _, ok := msg.(bgUpdateDoneMsg); !ok {
+	msg := beginStream("host-a", "main", answers{sudoSecret: probeMarker}, r)()
+	st, ok := msg.(streamStartedMsg)
+	if !ok {
 		t.Fatalf("unexpected message %T", msg)
 	}
+	<-st.st.done // drain so the fake has recorded stdin
 	if got := seen["host-a"]; !strings.HasPrefix(got, probeMarker) {
 		t.Fatalf("credential did not reach stdin, got %q", got)
 	}
