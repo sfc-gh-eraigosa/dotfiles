@@ -621,7 +621,7 @@ func (m tuiModel) logHeight() int {
 	if !m.logActive() {
 		return 0 // collapsed to a single unframed hint line; no rows reserved
 	}
-	h := m.vp.height - m.listHeight() - 6
+	h := m.vp.height - m.listHeight() - 10 // both panels' borders + chrome
 	if h < 3 {
 		h = 3
 	}
@@ -633,16 +633,16 @@ func (m tuiModel) listHeight() int {
 	if !m.logActive() {
 		// Closed, or open-but-empty: the list keeps everything except the
 		// couple of lines the collapsed hint occupies.
-		h := m.vp.height - 5
+		h := m.vp.height - 7 // chrome + the list panel's own border
 		if m.logOpen {
-			h-- // one line for the collapsed hint
+			h -= 3 // the collapsed hint line and its frame
 		}
 		if h < 1 {
 			h = 1
 		}
 		return h
 	}
-	h := m.vp.height / 5 // top ~20% once logs are flowing
+	h := m.vp.height/5 - 2 // top ~20% once logs are flowing, less its border
 	if h < 3 {
 		h = 3
 	}

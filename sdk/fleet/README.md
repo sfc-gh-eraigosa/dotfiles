@@ -161,6 +161,11 @@ fleet tui --update-ref feature/x         # update targets that ref instead of ma
 | `?` | help overlay |
 | `q` | quit (guarded while updates run) |
 
+The status dot left of each hostname is **navy** when selected, and flips
+**green** or **red** to report an update's outcome — so a finished wave reads at
+a glance. Each area (host list, log pane, help, answer form) is its own framed
+panel.
+
 Rows are colored by status (green up-to-date · yellow behind · magenta
 divergent · dim unknown · red unreachable) and degrade cleanly on terminals
 without color.

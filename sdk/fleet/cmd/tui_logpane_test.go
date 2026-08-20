@@ -183,3 +183,75 @@ func TestFailureTextStillComesFromTheStreamedTail(t *testing.T) {
 		t.Fatalf("git advice must still be filtered: %q", st.log)
 	}
 }
+
+// --- status dot + panel framing ------------------------------------------
+
+// The dot means one thing at a time: navy = chosen, green = succeeded,
+// red = failed. Outcome outranks selection, so a finished wave can be read
+// without looking at the UPDATE column.
+func TestSelectionDotReflectsOutcome(t *testing.T) {
+	m := testModel("a", "b", "c")
+	m.selected["a"] = true
+	m.updating["b"] = updState{phase: updOK}
+	m.updating["c"] = updState{phase: updFail, log: "boom"}
+	m.selected["c"] = true // selected AND failed -> the failure must win
+
+	idx := map[string]int{}
+	for i, r := range m.rows {
+		idx[r.Alias] = i
+	}
+	if got := m.markFor(idx["a"]); !strings.Contains(got, "●") {
+		t.Fatalf("a selected host needs a dot, got %q", got)
+	}
+	// Distinct styling per outcome (ASCII profile strips colour, so compare
+	// the three against each other rather than asserting escape codes).
+	sel, ok, fail := m.markFor(idx["a"]), m.markFor(idx["b"]), m.markFor(idx["c"])
+	for _, s := range []string{sel, ok, fail} {
+		if !strings.Contains(s, "●") {
+			t.Fatalf("every state should render a dot, got %q", s)
+		}
+	}
+	// An unselected, un-updated host has no dot at all.
+	m2 := testModel("z")
+	if got := m2.markFor(0); strings.Contains(got, "●") {
+		t.Fatalf("an idle host must not show a dot, got %q", got)
+	}
+}
+
+// The dot must not butt against the hostname.
+func TestSpaceBetweenDotAndHostname(t *testing.T) {
+	m := testModel("alpha")
+	m.selected["alpha"] = true
+	row := stripANSI(m.rowView(0))
+	i := strings.Index(row, "●")
+	if i < 0 {
+		t.Fatalf("expected a dot in %q", row)
+	}
+	if row[i+len("●")] != ' ' {
+		t.Fatalf("the dot needs a space before the hostname: %q", row)
+	}
+}
+
+// Each area is its own framed panel, so the screen reads as separated
+// sections rather than one run-on block.
+func TestSectionsAreFramedAsPanels(t *testing.T) {
+	m := testModel("a", "b")
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	base := mm.(tuiModel)
+
+	// host list + collapsed log line
+	view := base.View()
+	if strings.Count(view, "╭") < 2 {
+		t.Fatalf("expected the list and the log line to be framed:\n%s", view)
+	}
+	// help overlay
+	helped, _ := send(base, "?")
+	if !strings.Contains(helped.View(), "╭") {
+		t.Fatalf("the help overlay must be framed:\n%s", helped.View())
+	}
+	// active log pane
+	base.appendLog("a", "working")
+	if strings.Count(base.View(), "╭") < 2 {
+		t.Fatalf("the active log pane must be framed:\n%s", base.View())
+	}
+}

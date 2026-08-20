@@ -20,7 +20,8 @@ type theme struct {
 	cursor, selected, match       lipgloss.Style
 	byClass                       map[string]lipgloss.Style
 	ok, fail, running             lipgloss.Style
-	dialog                        lipgloss.Style
+	dialog, panel                 lipgloss.Style
+	markSel, markOK, markFail     lipgloss.Style
 }
 
 func newTheme() theme {
@@ -38,6 +39,16 @@ func newTheme() theme {
 		running:   lipgloss.NewStyle().Foreground(c("4")),
 		dialog: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("6")).Padding(0, 1),
+		// Every section gets the same frame as the answers dialog, so the
+		// screen reads as separated panels rather than one run-on block.
+		panel: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("8")).Padding(0, 1),
+		// The selection dot is navy; it only turns red or green to report an
+		// update's OUTCOME. Colour therefore always means the same thing:
+		// blue = chosen, green = succeeded, red = failed.
+		markSel:  lipgloss.NewStyle().Foreground(lipgloss.Color("25")),
+		markOK:   lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
+		markFail: lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true),
 		byClass: map[string]lipgloss.Style{
 			string(drift.UpToDate):    lipgloss.NewStyle().Foreground(c("2")),
 			string(drift.Behind):      lipgloss.NewStyle().Foreground(c("3")),
@@ -61,14 +72,17 @@ func (m tuiModel) View() string {
 		return b.String() + m.helpView()
 	}
 	if len(m.rows) == 0 {
-		b.WriteString("  no fleet hosts found\n")
-		b.WriteString(th.dim.Render(
-			"  run `fleet discover` to see adoptable ssh-config hosts, then `fleet add <alias>`"))
-		return b.String() + "\n"
+		empty := "no fleet hosts found\n" + th.dim.Render(
+			"run `fleet discover` to see adoptable ssh-config hosts, then `fleet add <alias>`")
+		return b.String() + th.panel.Width(m.panelWidth()).Render(empty) + "\n"
 	}
 
-	b.WriteString("  " + th.header.Render(fmt.Sprintf("%-16s %-9s %-*s %-13s %-22s %s",
-		"HOST", "COMMIT", branchColWidth, "BRANCH", "LAST RUN", "STATUS", "UPDATE")) + "\n")
+	var list strings.Builder
+	// The header carries the SAME prefix width as a row (cursor + dot + space),
+	// or every column label sits four cells left of the data under it.
+	list.WriteString(strings.Repeat(" ", rowMarkPrefix) +
+		th.header.Render(fmt.Sprintf("%-16s %-9s %-*s %-13s %-22s %s",
+			"HOST", "COMMIT", branchColWidth, "BRANCH", "LAST RUN", "STATUS", "UPDATE")) + "\n")
 
 	h := m.visibleRows()
 	end := m.vp.top + h
@@ -76,8 +90,9 @@ func (m tuiModel) View() string {
 		end = len(m.rows)
 	}
 	for i := m.vp.top; i < end; i++ {
-		b.WriteString(m.rowView(i) + "\n")
+		list.WriteString(trunc(m.rowView(i), m.panelWidth()) + "\n")
 	}
+	b.WriteString(th.panel.Width(m.panelWidth()).Render(strings.TrimRight(list.String(), "\n")) + "\n")
 
 	if m.logOpen {
 		b.WriteString(m.logView() + "\n")
@@ -134,9 +149,10 @@ func (m tuiModel) logView() string {
 	body.WriteString(th.header.Render(title) + th.dim.Render("   "+mode+"   l: hide  J/K: scroll  G: follow") + "\n")
 
 	if !m.logActive() {
-		// Collapsed: one dim line, no frame. The pane is on by default so it is
-		// discoverable, but an empty box must not cost the fleet view its rows.
-		return th.dim.Render("📜 logs: idle — output appears here during an update  (l: hide)")
+		// Collapsed to a single framed line: still visibly its own section, but
+		// it must not cost the fleet view a fifth of the screen to say nothing.
+		return th.panel.Width(m.panelWidth()).Render(
+			th.dim.Render("📜 logs: idle — output appears here during an update  (l: hide)"))
 	}
 
 	start := m.logStart(h)
@@ -146,7 +162,7 @@ func (m tuiModel) logView() string {
 			th.statusBar.Render(fmt.Sprintf("%-14s│", trunc(e.alias, 14))),
 			trunc(e.line, m.logWidth()-18)))
 	}
-	return th.dialog.Width(m.logWidth()).Render(strings.TrimRight(body.String(), "\n"))
+	return th.panel.Width(m.panelWidth()).Render(strings.TrimRight(body.String(), "\n"))
 }
 
 // logStart is the first visible line: pinned to the tail while following, so
@@ -213,10 +229,7 @@ func maxInt(a, b int) int {
 func (m tuiModel) rowView(i int) string {
 	r := m.rows[i]
 
-	mark := " "
-	if m.isSelected(i) {
-		mark = th.selected.Render("●")
-	}
+	mark := m.markFor(i)
 	cur := "  "
 	if r.Alias == m.cursor {
 		cur = th.cursor.Render("> ")
@@ -258,10 +271,30 @@ func (m tuiModel) rowView(i int) string {
 		alias = fmt.Sprintf("%-*s", aliasColWidth, name)
 	}
 
-	line := fmt.Sprintf("%s%s%s %-9s %-*s %-13s %s", cur, mark, alias, commit,
+	// One space after the mark: without it the dot butted against the hostname.
+	line := fmt.Sprintf("%s%s %s %-9s %-*s %-13s %s", cur, mark, alias, commit,
 		branchColWidth, truncate(branchCell(r), branchColWidth), age,
 		style.Render(fmt.Sprintf("%-22s", status)))
 	return line + " " + m.updateCell(r.Alias)
+}
+
+// markFor is the row's status dot. Selection is navy; a finished update
+// recolours it to its outcome so the list can be read at a glance without
+// looking at the UPDATE column.
+func (m tuiModel) markFor(i int) string {
+	alias := m.rows[i].Alias
+	if st, ok := m.updating[alias]; ok {
+		switch st.phase {
+		case updOK:
+			return th.markOK.Render("●")
+		case updFail:
+			return th.markFail.Render("●")
+		}
+	}
+	if m.isSelected(i) {
+		return th.markSel.Render("●")
+	}
+	return " "
 }
 
 // updateCell renders the update engine's per-host state — the live feedback
@@ -314,13 +347,19 @@ const failPrefix = "FAIL: "
 // Keep it in sync with rowView. failWidth budgets the remaining space from it,
 // so a stale value silently overflows the row — precisely what happened when
 // the BRANCH column was added, and what the demo width guard caught.
-const rowPrefixWidth = 2 + 1 + aliasColWidth + 1 + 9 + 1 + branchColWidth + 1 + 13 + 1 + 22 + 1
+// rowMarkPrefix is "> " + the status dot + its trailing space.
+const rowMarkPrefix = 4
+
+const rowPrefixWidth = 3 + 1 + aliasColWidth + 1 + 9 + 1 + branchColWidth + 1 + 13 + 1 + 22 + 1
 
 // failWidth is the space left for a failure cause. It can legitimately go
 // negative on a narrow terminal; callers must drop the cause rather than clamp
 // to a floor, because a floor is what pushes the line past the terminal edge.
+// failWidth is the room left for a failure message. It budgets against the
+// PANEL's inner width, not the raw terminal: rows are framed now, so the
+// border and padding are not available to the row.
 func (m tuiModel) failWidth() int {
-	return m.vp.width - rowPrefixWidth - len(failPrefix)
+	return m.panelWidth() - rowPrefixWidth - len(failPrefix)
 }
 
 func truncate(s string, n int) string {
@@ -411,6 +450,16 @@ func (m tuiModel) answersView() string {
 	return th.dialog.Render(b.String())
 }
 
+// panelWidth is the inner width every framed section shares, so their borders
+// line up into a single column instead of a ragged stack.
+func (m tuiModel) panelWidth() int {
+	w := m.vp.width - 4
+	if w < 40 {
+		w = 40
+	}
+	return w
+}
+
 func (m tuiModel) helpView() string {
 	var b strings.Builder
 	b.WriteString(th.header.Render("keys") + "\n")
@@ -418,7 +467,7 @@ func (m tuiModel) helpView() string {
 		b.WriteString(fmt.Sprintf("  %s %-18s %s\n", k.icon, k.keys, th.dim.Render(k.what)))
 	}
 	b.WriteString("\n" + th.dim.Render("any key to close"))
-	return b.String()
+	return th.panel.Width(m.panelWidth()).Render(strings.TrimRight(b.String(), "\n"))
 }
 
 func max0(n int) int {
