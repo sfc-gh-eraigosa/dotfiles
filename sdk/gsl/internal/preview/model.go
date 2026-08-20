@@ -155,8 +155,8 @@ func (m Model) View() string {
 	var sb strings.Builder
 
 	sb.WriteString("gsl preview  [s] cycle style  [f] cycle fixture  [1-4] toggle segments  [q] quit\n")
-	sb.WriteString(fmt.Sprintf("style: %-12s  fixture: %s\n", m.currentStyleName(), m.fixtureName))
-	sb.WriteString(fmt.Sprintf("segments: %s\n", m.segmentBadges()))
+	fmt.Fprintf(&sb, "style: %-12s  fixture: %s\n", m.currentStyleName(), m.fixtureName)
+	fmt.Fprintf(&sb, "segments: %s\n", m.segmentBadges())
 	sb.WriteString("─────────────────────────────────────────────────────\n")
 	sb.WriteString(m.renderLine())
 	sb.WriteString("\n")
@@ -208,6 +208,13 @@ func (m Model) renderLine() string {
 	// Use the known window width when available; fall back to $COLUMNS then 80.
 	cols := m.windowWidth
 	if cols <= 0 {
+		// term.Columns is deprecated in favour of cmd.resolveColumns (spec F1),
+		// but its deprecation note names internal/preview as the one caller it
+		// is deliberately preserved for: this is the pre-WindowSizeMsg first
+		// frame, and preview cannot import package cmd. Rewiring preview onto
+		// the F1 resolver is a behaviour change, not a lint fix, so it stays
+		// out of this cleanup.
+		//nolint:staticcheck // SA1019: sanctioned caller, see term.Columns doc
 		cols = term.Columns(nil) // nil source → $COLUMNS then 80
 	}
 

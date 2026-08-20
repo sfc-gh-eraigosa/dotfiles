@@ -39,7 +39,7 @@ func captureStdout(t *testing.T, f func()) string {
 
 	f()
 
-	w.Close()
+	_ = w.Close()
 	var buf bytes.Buffer
 	io.Copy(&buf, r) //nolint:errcheck
 	return buf.String()
@@ -56,7 +56,7 @@ func TestRenderCmd_EmptyStdin(t *testing.T) {
 		origStdin := os.Stdin
 		f, _ := os.Open(os.DevNull)
 		os.Stdin = f
-		defer func() { os.Stdin = origStdin; f.Close() }()
+		defer func() { os.Stdin = origStdin; _ = f.Close() }()
 
 		out := captureStdout(t, func() {
 			cmd := renderCmd
@@ -81,11 +81,11 @@ func TestRenderCmd_WithPayload_ProducesLine(t *testing.T) {
 		// Redirect stdin to the payload.
 		r, w, _ := os.Pipe()
 		fmt.Fprint(w, payload)
-		w.Close()
+		_ = w.Close()
 
 		origStdin := os.Stdin
 		os.Stdin = r
-		defer func() { os.Stdin = origStdin; r.Close() }()
+		defer func() { os.Stdin = origStdin; _ = r.Close() }()
 
 		out := captureStdout(t, func() {
 			if err := runRender(renderCmd, nil); err != nil {
@@ -110,7 +110,7 @@ func TestRenderCmd_MasterDisabled(t *testing.T) {
 		origStdin := os.Stdin
 		f, _ := os.Open(os.DevNull)
 		os.Stdin = f
-		defer func() { os.Stdin = origStdin; f.Close() }()
+		defer func() { os.Stdin = origStdin; _ = f.Close() }()
 
 		out := captureStdout(t, func() {
 			if err := runRender(renderCmd, nil); err != nil {
@@ -129,11 +129,11 @@ func TestRenderCmd_BadJSON(t *testing.T) {
 	withTempConfig(t, cfg, func() {
 		r, w, _ := os.Pipe()
 		fmt.Fprint(w, `{invalid json`)
-		w.Close()
+		_ = w.Close()
 
 		origStdin := os.Stdin
 		os.Stdin = r
-		defer func() { os.Stdin = origStdin; r.Close() }()
+		defer func() { os.Stdin = origStdin; _ = r.Close() }()
 
 		// Must not return an error (degrade gracefully).
 		captureStdout(t, func() {
@@ -157,11 +157,11 @@ func TestRenderCmd_BadJSON_LogsStructuredEvent(t *testing.T) {
 	withTempConfig(t, cfg, func() {
 		r, w, _ := os.Pipe()
 		fmt.Fprint(w, `{invalid json`)
-		w.Close()
+		_ = w.Close()
 
 		origStdin := os.Stdin
 		os.Stdin = r
-		defer func() { os.Stdin = origStdin; r.Close() }()
+		defer func() { os.Stdin = origStdin; _ = r.Close() }()
 
 		captureStdout(t, func() {
 			if err := runRender(renderCmd, nil); err != nil {
@@ -197,7 +197,7 @@ func TestRenderCmd_MalformedConfig_FallsBackToDefaults(t *testing.T) {
 	origStdin := os.Stdin
 	f, _ := os.Open(os.DevNull)
 	os.Stdin = f
-	defer func() { os.Stdin = origStdin; f.Close() }()
+	defer func() { os.Stdin = origStdin; _ = f.Close() }()
 
 	// Capture stderr to assert a warning is emitted.
 	origStderr := os.Stderr
@@ -211,7 +211,7 @@ func TestRenderCmd_MalformedConfig_FallsBackToDefaults(t *testing.T) {
 		}
 	})
 
-	wErr.Close()
+	_ = wErr.Close()
 	os.Stderr = origStderr
 	var errBuf bytes.Buffer
 	io.Copy(&errBuf, rErr) //nolint:errcheck

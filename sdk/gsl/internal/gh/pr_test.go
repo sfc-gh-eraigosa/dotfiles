@@ -50,21 +50,6 @@ func writeFreshCache(t *testing.T, _ string, branch string, info gh.PRInfo) {
 	}
 }
 
-// replaceAll is a minimal strings.ReplaceAll stand-in using stdlib only.
-func replaceAll(s, old, new string) string {
-	out := make([]byte, 0, len(s))
-	for i := 0; i < len(s); {
-		if i+len(old) <= len(s) && s[i:i+len(old)] == old {
-			out = append(out, new...)
-			i += len(old)
-		} else {
-			out = append(out, s[i])
-			i++
-		}
-	}
-	return string(out)
-}
-
 // --- Tests ---
 
 // TestPROpenState verifies that a successful gh pr view response is parsed

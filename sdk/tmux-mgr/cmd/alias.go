@@ -28,7 +28,10 @@ alias tmux-start='tmux-mgr session new antigravity -a'
 `
 			home, _ := os.UserHomeDir()
 			configDir := filepath.Join(home, ".config", "tmux-mgr")
-			os.MkdirAll(configDir, 0755)
+			if err := os.MkdirAll(configDir, 0755); err != nil {
+				fmt.Printf("Error creating %s: %v\n", configDir, err)
+				return
+			}
 
 			aliasFile := filepath.Join(configDir, "aliases.sh")
 			err := os.WriteFile(aliasFile, []byte(aliases), 0644)
@@ -41,12 +44,19 @@ alias tmux-start='tmux-mgr session new antigravity -a'
 
 			// Generate completions
 			completionDir := filepath.Join(configDir, "completions")
-			os.MkdirAll(completionDir, 0755)
+			if err := os.MkdirAll(completionDir, 0755); err != nil {
+				fmt.Printf("Error creating %s: %v\n", completionDir, err)
+				return
+			}
 
 			bashComp := filepath.Join(completionDir, "tmux-mgr.bash")
-			rootCmd.GenBashCompletionFile(bashComp)
+			if err := rootCmd.GenBashCompletionFile(bashComp); err != nil {
+				fmt.Printf("Error writing bash completions: %v\n", err)
+			}
 			zshComp := filepath.Join(completionDir, "tmux-mgr.zsh")
-			rootCmd.GenZshCompletionFile(zshComp)
+			if err := rootCmd.GenZshCompletionFile(zshComp); err != nil {
+				fmt.Printf("Error writing zsh completions: %v\n", err)
+			}
 
 			// Update aliases file to include completions and alias completions
 			completionSource := `
@@ -66,9 +76,19 @@ if command -v compdef >/dev/null 2>&1; then
 fi
 `
 
-			f, _ := os.OpenFile(aliasFile, os.O_APPEND|os.O_WRONLY, 0644)
-			f.WriteString(completionSource)
-			f.Close()
+			// The error here used to be discarded and f used unconditionally: if
+			// OpenFile failed, f was nil and f.WriteString panicked.
+			cf, err := os.OpenFile(aliasFile, os.O_APPEND|os.O_WRONLY, 0644)
+			if err != nil {
+				fmt.Printf("Error appending completions to %s: %v\n", aliasFile, err)
+				return
+			}
+			if _, err := cf.WriteString(completionSource); err != nil {
+				fmt.Printf("Error writing completions to %s: %v\n", aliasFile, err)
+			}
+			if err := cf.Close(); err != nil {
+				fmt.Printf("Error closing %s: %v\n", aliasFile, err)
+			}
 
 			sourceLine := "\n# Added by tmux-mgr\n[ -f ${HOME}/.config/tmux-mgr/aliases.sh ] && source ${HOME}/.config/tmux-mgr/aliases.sh\n"
 
@@ -80,8 +100,12 @@ fi
 					if !contains(string(content), "tmux-mgr/aliases.sh") {
 						f, err := os.OpenFile(cfgPath, os.O_APPEND|os.O_WRONLY, 0644)
 						if err == nil {
-							f.WriteString(sourceLine)
-							f.Close()
+							if _, err := f.WriteString(sourceLine); err != nil {
+								fmt.Printf("Error updating %s: %v\n", cfg, err)
+							}
+							if err := f.Close(); err != nil {
+								fmt.Printf("Error closing %s: %v\n", cfg, err)
+							}
 							fmt.Printf("Updated %s to source aliases\n", cfg)
 						}
 					} else {

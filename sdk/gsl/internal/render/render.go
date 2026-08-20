@@ -26,7 +26,7 @@ func segmentTypeName(s Segment) string {
 		return "unknown"
 	}
 	t := reflect.TypeOf(s)
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if name := t.Name(); name != "" {

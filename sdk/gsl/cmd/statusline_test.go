@@ -159,14 +159,14 @@ func fitOutput(t *testing.T, styleName string, columns int, payloadJSON string) 
 	if payloadJSON == "" {
 		origStdin := os.Stdin
 		f, _ := os.Open(os.DevNull)
-		t.Cleanup(func() { os.Stdin = origStdin; f.Close() })
+		t.Cleanup(func() { os.Stdin = origStdin; _ = f.Close() })
 		os.Stdin = f
 	} else {
 		r, w, _ := os.Pipe()
 		fmt.Fprint(w, payloadJSON)
-		w.Close()
+		_ = w.Close()
 		origStdin := os.Stdin
-		t.Cleanup(func() { os.Stdin = origStdin; r.Close() })
+		t.Cleanup(func() { os.Stdin = origStdin; _ = r.Close() })
 		os.Stdin = r
 	}
 

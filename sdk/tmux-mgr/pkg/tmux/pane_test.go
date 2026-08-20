@@ -18,7 +18,9 @@ func TestRootPaneID_fromEnv(t *testing.T) {
 }
 
 func TestRootPaneID_noEnv_noAnchor(t *testing.T) {
-	os.Unsetenv("TMUX_PANE")
+	if err := os.Unsetenv("TMUX_PANE"); err != nil {
+		t.Fatalf("unset TMUX_PANE: %v", err)
+	}
 	// When there is no tmux server (CI), show-environment will also fail.
 	_, err := RootPaneID()
 	if err == nil {
@@ -30,7 +32,9 @@ func TestRootPaneID_noEnv_noAnchor(t *testing.T) {
 }
 
 func TestAnchorPane_noEnv(t *testing.T) {
-	os.Unsetenv("TMUX_PANE")
+	if err := os.Unsetenv("TMUX_PANE"); err != nil {
+		t.Fatalf("unset TMUX_PANE: %v", err)
+	}
 	_, err := AnchorPane("")
 	if err == nil {
 		t.Fatal("expected error when TMUX_PANE is unset")

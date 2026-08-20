@@ -50,8 +50,8 @@ func TestFakeRunnerScriptFIFO(t *testing.T) {
 
 func TestFakeRunnerRecordsCalls(t *testing.T) {
 	r := &fake.Runner{}
-	r.Run(context.Background(), "status", "--porcelain")
-	r.Run(context.Background(), "rev-parse", "--short", "HEAD")
+	_, _ = r.Run(context.Background(), "status", "--porcelain")
+	_, _ = r.Run(context.Background(), "rev-parse", "--short", "HEAD")
 
 	if r.CallCount() != 2 {
 		t.Errorf("CallCount = %d; want 2", r.CallCount())
@@ -68,7 +68,7 @@ func TestFakeRunnerReset(t *testing.T) {
 	r := &fake.Runner{
 		Script: []fake.Response{{Stdout: []byte("data")}},
 	}
-	r.Run(context.Background(), "status")
+	_, _ = r.Run(context.Background(), "status")
 
 	r.Reset()
 	if r.CallCount() != 0 {
