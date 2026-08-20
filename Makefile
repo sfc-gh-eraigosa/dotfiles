@@ -120,12 +120,20 @@ lint-go: ## Lint Go modules (gofmt + golangci-lint, per-module)
 			echo "$$unformatted"; \
 			exit 1; \
 		fi
-	@for d in sdk/*; do \
+	@# Lint EVERY module before failing. The previous `|| exit 1` bailed on the
+	@# first failing module, and `sdk/*` globs alphabetically — so `sdk/fleet`
+	@# masked the findings of all five other modules from CI for months.
+	@failed=''; \
+	for d in sdk/*; do \
 		if [ -f "$$d/go.mod" ]; then \
 			echo "==> golangci-lint run ($$d)"; \
-			(cd "$$d" && golangci-lint run ./...) || exit 1; \
+			(cd "$$d" && golangci-lint run ./...) || failed="$$failed $$d"; \
 		fi; \
-	done
+	done; \
+	if [ -n "$$failed" ]; then \
+		echo "golangci-lint failed in:$$failed"; \
+		exit 1; \
+	fi
 
 .PHONY: lint-shell
 lint-shell: ## Lint shell scripts with shellcheck
