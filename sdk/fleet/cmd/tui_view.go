@@ -180,7 +180,16 @@ func (m tuiModel) logView() string {
 	if !m.logFollow {
 		mode = fmt.Sprintf("scrolled %d/%d", m.logTop+1, len(m.logs))
 	}
-	body.WriteString(th.header.Render(title) + th.dim.Render("   "+mode+"   l: hide  J/K: scroll  G: follow") + "\n")
+	keys := "tab: focus  l: hide"
+	if m.logFocus {
+		// Say the keys are HERE now, or the operator has no way to know why
+		// j/k stopped moving the host cursor.
+		keys = th.markSel.Render("◀ keys here") + th.dim.Render("   gg/G  /  n/N  tab: back")
+		if m.logSearch.committed && m.logSearch.input != "" {
+			keys += th.dim.Render("   /" + m.logSearch.input)
+		}
+	}
+	body.WriteString(th.header.Render(title) + th.dim.Render("   "+mode+"   ") + keys + "\n")
 
 	if !m.logActive() {
 		// Collapsed to a single framed line: still visibly its own section, but
@@ -192,9 +201,21 @@ func (m tuiModel) logView() string {
 	start := m.logStart(h)
 	for i := start; i < len(m.logs) && i < start+h; i++ {
 		e := m.logs[i]
-		body.WriteString(fmt.Sprintf("%s %s\n",
+		// hh:mm:ss first, then the host, then the line. Short on purpose: the
+		// date is the session's, and seconds are what matter when reading how
+		// long a step took.
+		stamp := "        "
+		if !e.at.IsZero() {
+			stamp = e.at.Format("15:04:05")
+		}
+		text := trunc(e.line, m.logWidth()-logGutter)
+		if m.logSearch.re != nil && m.logSearch.re.MatchString(e.alias+" "+e.line) {
+			text = th.match.Render(text)
+		}
+		body.WriteString(fmt.Sprintf("%s %s %s\n",
+			th.dim.Render(stamp),
 			m.hostStyle(e.alias).Render(fmt.Sprintf("%-14s│", trunc(e.alias, 14))),
-			trunc(e.line, m.logWidth()-18)))
+			text))
 	}
 	return th.panel.Width(m.panelWidth()).Render(strings.TrimRight(body.String(), "\n"))
 }
@@ -225,6 +246,9 @@ func (m tuiModel) logStart(h int) int {
 	}
 	return m.logTop
 }
+
+// logGutter is the timestamp + host columns and their separators.
+const logGutter = 8 + 1 + 14 + 1 + 1 + 1
 
 func (m tuiModel) logWidth() int {
 	w := m.vp.width - 4
@@ -526,7 +550,12 @@ func (m tuiModel) confirmView() string {
 
 	b.WriteString(th.dim.Render("   🔑 sudo ") + th.statusBar.Render(maskOrNone(m.ans.secretLen())) +
 		th.dim.Render("   🪟 windows ") + th.statusBar.Render(orUnset(m.ans.windows)) +
-		th.dim.Render("   🧹 gemini ") + th.statusBar.Render(orUnset(m.ans.gemini)) + "\n\n")
+		th.dim.Render("   🧹 gemini ") + th.statusBar.Render(orUnset(m.ans.gemini)) + "\n")
+	if m.ans.forceReset() {
+		b.WriteString("   " + th.fail.Render("⚠️  force reset") +
+			th.dim.Render(" — each host is hard-reset onto origin; its current state is saved to a fleet-reset/<ts> branch first") + "\n")
+	}
+	b.WriteString("\n")
 
 	b.WriteString(th.dim.Render("   ⏎ enter: ") + th.statusBar.Render("update") +
 		th.dim.Render("     ✏️ e: edit answers     ⎋ esc: cancel"))

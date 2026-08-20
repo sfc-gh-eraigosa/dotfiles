@@ -149,7 +149,7 @@ func TestModelDoesNotPersistWithoutAnInjectedPath(t *testing.T) {
 	// write to some default location.
 	m2, _ := send(m, "u")
 	m3, _ := send(m2, "p", "w")
-	m4, _ := send(m3, "enter", "enter", "enter")
+	m4 := commitForm(m3)
 	if m4.mode != modeConfirm {
 		t.Fatalf("form should still commit without persistence, mode=%v", m4.mode)
 	}
@@ -162,12 +162,12 @@ func TestPreferencesRoundTripThroughTheModel(t *testing.T) {
 	m := testModel("a")
 	m.ansPath = path
 	m2, _ := send(m, "u")
-	m3, _ := send(m2, "p", "w") // credential
-	m4, _ := send(m3, "enter")  // -> windows field
-	m5, _ := send(m4, "s")      // windows = s
-	m6, _ := send(m5, "enter")  // -> gemini field
-	m7, _ := send(m6, "k")      // gemini = keep
-	m8, _ := send(m7, "enter")  // commit -> confirm (and save)
+	m3, _ := send(m2, "p", "w")         // credential
+	m4, _ := send(m3, "enter")          // -> windows field
+	m5, _ := send(m4, "s")              // windows = s
+	m6, _ := send(m5, "enter")          // -> gemini field
+	m7, _ := send(m6, "k")              // gemini = keep
+	m8, _ := send(m7, "enter", "enter") // through the reset field -> confirm (and save)
 
 	if m8.mode != modeConfirm {
 		t.Fatalf("expected confirm, mode=%v", m8.mode)
