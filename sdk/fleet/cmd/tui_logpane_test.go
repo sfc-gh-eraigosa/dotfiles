@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -292,6 +293,86 @@ func TestBannerFitsNarrowTerminals(t *testing.T) {
 			if got := lipgloss.Width(line); got > w {
 				t.Errorf("width %d: banner line is %d wide: %q", w, got, line)
 			}
+		}
+	}
+}
+
+// --- per-host log colours -------------------------------------------------
+
+// Concurrent updates interleave their output, so the host tag is the only way
+// to follow one machine's install. Each host therefore gets its own colour.
+func TestEachHostGetsADistinctLogColour(t *testing.T) {
+	m := testModel("a", "b", "c")
+	m.appendLog("a", "one")
+	m.appendLog("b", "two")
+	m.appendLog("c", "three")
+
+	seen := map[int]string{}
+	for _, alias := range []string{"a", "b", "c"} {
+		slot, ok := m.logColor[alias]
+		if !ok {
+			t.Fatalf("%s never claimed a colour slot", alias)
+		}
+		if other, clash := seen[slot]; clash {
+			t.Fatalf("%s and %s share colour slot %d", alias, other, slot)
+		}
+		seen[slot] = alias
+	}
+}
+
+// The colour must belong to the HOST, not to the line's position: assigning by
+// row would repaint a host every time another one interleaved a line, which is
+// the opposite of telling them apart.
+func TestHostLogColourIsStableAsOutputInterleaves(t *testing.T) {
+	m := testModel("a", "b")
+	m.appendLog("a", "1")
+	first := m.logColor["a"]
+
+	for i := 0; i < 20; i++ {
+		m.appendLog("b", "noise")
+		m.appendLog("a", "more")
+	}
+	if got := m.logColor["a"]; got != first {
+		t.Fatalf("host colour must not drift: was %d, now %d", first, got)
+	}
+	// And it survives the buffer wrapping past its cap.
+	for i := 0; i < logCap+10; i++ {
+		m.appendLog("b", "flood")
+	}
+	if got := m.logColor["a"]; got != first {
+		t.Fatalf("host colour must survive the ring wrapping: was %d, now %d", first, got)
+	}
+}
+
+// More hosts than palette entries must wrap rather than panic.
+func TestLogPaletteWrapsForLargeFleets(t *testing.T) {
+	m := testModel()
+	for i := 0; i < len(th.logHosts)*2+3; i++ {
+		alias := fmt.Sprintf("host-%02d", i)
+		m.appendLog(alias, "x")
+		_ = m.hostStyle(alias) // must not panic on a slot past the palette
+	}
+}
+
+// A host that has said nothing yet has no slot; it must still render.
+func TestUnknownHostStyleFallsBack(t *testing.T) {
+	m := testModel("a")
+	_ = m.hostStyle("never-logged")
+}
+
+// The legend doubles as a colour key, so it lists the streaming hosts.
+func TestLogLegendNamesStreamingHosts(t *testing.T) {
+	m := testModel("a", "b")
+	m.logOpen = true
+	m.streams = map[string]stream{"a": {}, "b": {}}
+	m.appendLog("a", "working")
+	view := stripANSI(m.View())
+	if !strings.Contains(view, "streaming:") {
+		t.Fatalf("the log pane must name what is streaming:\n%s", view)
+	}
+	for _, want := range []string{"a", "b"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("legend missing %q:\n%s", want, view)
 		}
 	}
 }

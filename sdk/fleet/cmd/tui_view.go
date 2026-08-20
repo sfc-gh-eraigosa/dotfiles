@@ -22,6 +22,7 @@ type theme struct {
 	ok, fail, running             lipgloss.Style
 	dialog, panel                 lipgloss.Style
 	markSel, markOK, markFail     lipgloss.Style
+	logHosts                      []lipgloss.Style
 }
 
 func newTheme() theme {
@@ -46,6 +47,20 @@ func newTheme() theme {
 		// The selection dot is navy; it only turns red or green to report an
 		// update's OUTCOME. Colour therefore always means the same thing:
 		// blue = chosen, green = succeeded, red = failed.
+		// One colour per host in the log pane, so interleaved output from a
+		// concurrent wave can be told apart at a glance. Reds are excluded:
+		// red already means "this update failed" everywhere else, and a host
+		// that merely happened to be assigned it would read as broken.
+		logHosts: []lipgloss.Style{
+			lipgloss.NewStyle().Foreground(lipgloss.Color("33")),  // blue
+			lipgloss.NewStyle().Foreground(lipgloss.Color("208")), // orange
+			lipgloss.NewStyle().Foreground(lipgloss.Color("141")), // purple
+			lipgloss.NewStyle().Foreground(lipgloss.Color("37")),  // teal
+			lipgloss.NewStyle().Foreground(lipgloss.Color("178")), // gold
+			lipgloss.NewStyle().Foreground(lipgloss.Color("169")), // pink
+			lipgloss.NewStyle().Foreground(lipgloss.Color("45")),  // cyan
+			lipgloss.NewStyle().Foreground(lipgloss.Color("113")), // light green
+		},
 		markSel:  lipgloss.NewStyle().Foreground(lipgloss.Color("25")),
 		markOK:   lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
 		markFail: lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true),
@@ -154,7 +169,12 @@ func (m tuiModel) logView() string {
 	live := m.liveAliases()
 	title := "logs"
 	if len(live) > 0 {
-		title = fmt.Sprintf("logs — streaming: %s", strings.Join(live, ", "))
+		// The legend is coloured to match the lines, so it doubles as a key.
+		coloured := make([]string, 0, len(live))
+		for _, a := range live {
+			coloured = append(coloured, m.hostStyle(a).Render(a))
+		}
+		title = "logs — streaming: " + strings.Join(coloured, ", ")
 	}
 	mode := "following"
 	if !m.logFollow {
@@ -173,7 +193,7 @@ func (m tuiModel) logView() string {
 	for i := start; i < len(m.logs) && i < start+h; i++ {
 		e := m.logs[i]
 		body.WriteString(fmt.Sprintf("%s %s\n",
-			th.statusBar.Render(fmt.Sprintf("%-14s│", trunc(e.alias, 14))),
+			m.hostStyle(e.alias).Render(fmt.Sprintf("%-14s│", trunc(e.alias, 14))),
 			trunc(e.line, m.logWidth()-18)))
 	}
 	return th.panel.Width(m.panelWidth()).Render(strings.TrimRight(body.String(), "\n"))
@@ -181,6 +201,18 @@ func (m tuiModel) logView() string {
 
 // logStart is the first visible line: pinned to the tail while following, so
 // a running install keeps its newest output on screen without any input.
+// hostStyle is a host's colour in the log pane. Assignment is by first
+// appearance and held in the model, so a host keeps ONE colour for the whole
+// session: colouring by line position instead would make a host's tag change
+// every time another host interleaved a line, which is the opposite of
+// telling them apart.
+func (m tuiModel) hostStyle(alias string) lipgloss.Style {
+	if i, ok := m.logColor[alias]; ok {
+		return th.logHosts[i%len(th.logHosts)]
+	}
+	return th.statusBar
+}
+
 func (m tuiModel) logStart(h int) int {
 	if m.logFollow {
 		if s := len(m.logs) - h; s > 0 {

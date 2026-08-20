@@ -100,6 +100,7 @@ type tuiModel struct {
 	logOpen   bool              // `l` toggles the pane; off restores a full-height list
 	logFollow bool              // tail the newest line
 	logTop    int               // scroll offset when not following
+	logColor  map[string]int    // alias -> palette slot, by first appearance
 	jobs      int               // max concurrent background updates
 	running   int               // slots in use
 	updateRef string
@@ -132,6 +133,7 @@ func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time
 		selected:  map[string]bool{},
 		updating:  map[string]updState{},
 		streams:   map[string]stream{},
+		logColor:  map[string]int{},
 		logFollow: true,
 		logOpen:   true, // on by default: shipped off, it was undiscoverable
 		waking:    map[string]bool{},
@@ -578,6 +580,14 @@ func (m *tuiModel) refresh() tea.Cmd {
 // appendLog adds a line and enforces the cap. Dropping from the front keeps
 // the newest output, which is what an operator watching an install wants.
 func (m *tuiModel) appendLog(alias, line string) {
+	// Claim a colour slot the first time a host says anything, so the mapping
+	// is stable for the session and independent of how the lines interleave.
+	if m.logColor == nil {
+		m.logColor = map[string]int{}
+	}
+	if _, ok := m.logColor[alias]; !ok {
+		m.logColor[alias] = len(m.logColor)
+	}
 	m.logs = append(m.logs, logEntry{alias: alias, line: line})
 	if len(m.logs) > logCap {
 		m.logs = m.logs[len(m.logs)-logCap:]
