@@ -54,7 +54,7 @@ var th = newTheme()
 func (m tuiModel) View() string {
 	var b strings.Builder
 	b.WriteString(th.title.Render("fleet") + "  " +
-		th.dim.Render("?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit"))
+		th.dim.Render(trunc(headerHints(), maxInt(20, m.vp.width-8))))
 	b.WriteString("\n\n")
 
 	if m.mode == modeHelp {
@@ -89,6 +89,35 @@ func (m tuiModel) View() string {
 // logView is the framed streaming pane. It sits BELOW the host list rather
 // than over it: the progress column and per-host FAIL text stay visible, so
 // the log adds detail instead of replacing the summary.
+// headerHints renders the always-visible key strip from keyHelp, so adding a
+// key to the map is enough to make it discoverable.
+func headerHints() string {
+	var parts []string
+	for _, k := range keyHelp {
+		if k.hdr {
+			parts = append(parts, k.icon+" "+k.keys+": "+shortWhat(k.what))
+		}
+	}
+	return strings.Join(parts, "  ")
+}
+
+// shortWhat trims the overlay's fuller phrasing down to a header-sized label.
+func shortWhat(s string) string {
+	if i := strings.IndexAny(s, "(·"); i > 0 {
+		s = strings.TrimSpace(s[:i])
+	}
+	for _, cut := range []string{"toggle this ", "toggle ", "show / hide the streaming ", "regex "} {
+		s = strings.TrimPrefix(s, cut)
+	}
+	if i := strings.Index(s, " selection"); i > 0 {
+		s = s[:i]
+	}
+	if i := strings.Index(s, " to cursor"); i > 0 {
+		s = s[:i]
+	}
+	return s
+}
+
 func (m tuiModel) logView() string {
 	h := m.logHeight()
 	var body strings.Builder
@@ -104,9 +133,10 @@ func (m tuiModel) logView() string {
 	}
 	body.WriteString(th.header.Render(title) + th.dim.Render("   "+mode+"   l: hide  J/K: scroll  G: follow") + "\n")
 
-	if len(m.logs) == 0 {
-		body.WriteString(th.dim.Render("(no output yet — logs appear here once an update starts)"))
-		return th.dialog.Width(m.logWidth()).Render(body.String())
+	if !m.logActive() {
+		// Collapsed: one dim line, no frame. The pane is on by default so it is
+		// discoverable, but an empty box must not cost the fleet view its rows.
+		return th.dim.Render("📜 logs: idle — output appears here during an update  (l: hide)")
 	}
 
 	start := m.logStart(h)
@@ -153,18 +183,24 @@ func (m tuiModel) liveAliases() []string {
 	return out
 }
 
+// trunc cuts to a DISPLAY width, not a rune count: emoji and CJK occupy two
+// cells, so counting runes overflows the frame (caught by the demo's width
+// assertion when icons were added to the header).
 func trunc(s string, n int) string {
 	if n < 1 {
 		n = 1
 	}
-	r := []rune(s)
-	if len(r) <= n {
+	if lipgloss.Width(s) <= n {
 		return s
 	}
-	if n <= 1 {
-		return string(r[:n])
+	var b strings.Builder
+	for _, r := range s {
+		if lipgloss.Width(b.String()+string(r)) > n-1 {
+			break
+		}
+		b.WriteRune(r)
 	}
-	return string(r[:n-1]) + "…"
+	return b.String() + "…"
 }
 
 func maxInt(a, b int) int {
@@ -379,7 +415,7 @@ func (m tuiModel) helpView() string {
 	var b strings.Builder
 	b.WriteString(th.header.Render("keys") + "\n")
 	for _, k := range keyHelp {
-		b.WriteString(fmt.Sprintf("  %-18s %s\n", k.keys, th.dim.Render(k.what)))
+		b.WriteString(fmt.Sprintf("  %s %-18s %s\n", k.icon, k.keys, th.dim.Render(k.what)))
 	}
 	b.WriteString("\n" + th.dim.Render("any key to close"))
 	return b.String()

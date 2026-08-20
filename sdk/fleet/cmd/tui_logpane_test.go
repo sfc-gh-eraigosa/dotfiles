@@ -52,26 +52,41 @@ func TestLogPaneTogglesAndRestoresFullHeight(t *testing.T) {
 	m := testModel("a", "b", "c")
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	full := mm.(tuiModel)
-	fullRows := full.visibleRows()
+	// Baseline = the list with the pane hidden entirely.
+	hidden, _ := send(full, "l")
+	fullRows := hidden.visibleRows()
 
-	open, _ := send(full, "l")
-	if !open.logOpen {
-		t.Fatal("`l` must open the log pane")
+	// The pane ships ON, so it is discoverable without reading the help.
+	if !full.logOpen {
+		t.Fatal("the log pane must be on by default")
 	}
-	if open.visibleRows() >= fullRows {
-		t.Fatalf("the host list must shrink when the pane opens (%d -> %d)",
-			fullRows, open.visibleRows())
+	// ...but while it has nothing to show it collapses to one hint line rather
+	// than claiming a fifth of the screen to display an empty box.
+	if full.logActive() {
+		t.Fatal("an empty pane must not be active")
 	}
-	if open.logHeight() < 3 {
-		t.Fatalf("the log pane needs usable height, got %d", open.logHeight())
+	emptyRows := full.visibleRows()
+
+	// Once output arrives it takes its share and the list shrinks.
+	full.appendLog("a", "Installing...")
+	if !full.logActive() || full.logHeight() < 3 {
+		t.Fatalf("with output the pane must claim height, got %d", full.logHeight())
 	}
-	closed, _ := send(open, "l")
+	if full.visibleRows() >= emptyRows {
+		t.Fatalf("the list must shrink once logs flow (%d -> %d)", emptyRows, full.visibleRows())
+	}
+
+	closed, _ := send(full, "l")
 	if closed.logOpen {
-		t.Fatal("`l` again must hide the pane")
+		t.Fatal("`l` must hide the pane")
 	}
 	if closed.visibleRows() != fullRows {
 		t.Fatalf("hiding must restore the full-height list (%d != %d)",
 			closed.visibleRows(), fullRows)
+	}
+	reopened, _ := send(closed, "l")
+	if !reopened.logOpen {
+		t.Fatal("`l` again must show it")
 	}
 }
 
@@ -80,7 +95,8 @@ func TestLogPaneTogglesAndRestoresFullHeight(t *testing.T) {
 func TestSplitKeepsBothHalvesUsableOnASmallTerminal(t *testing.T) {
 	m := testModel("a", "b")
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
-	open, _ := send(mm.(tuiModel), "l")
+	open := mm.(tuiModel)
+	open.appendLog("a", "line") // make the pane active
 	if open.visibleRows() < 1 || open.logHeight() < 1 {
 		t.Fatalf("split collapsed: list=%d log=%d", open.visibleRows(), open.logHeight())
 	}

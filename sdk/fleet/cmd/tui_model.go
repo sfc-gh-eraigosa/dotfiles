@@ -133,6 +133,7 @@ func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time
 		updating:  map[string]updState{},
 		streams:   map[string]stream{},
 		logFollow: true,
+		logOpen:   true, // on by default: shipped off, it was undiscoverable
 		waking:    map[string]bool{},
 		hosts:     map[string]sshconf.Host{},
 		jobs:      jobs,
@@ -605,12 +606,20 @@ func (m tuiModel) tailFor(alias string, n int) string {
 	return joinTrim(keep)
 }
 
-// logHeight splits the frame when the pane is open: the host list keeps the
-// top fifth (a floor of 3 rows so it never collapses to nothing) and the log
-// takes the rest. Closed, the list gets the whole viewport back.
+// logActive is "the pane is open AND has something to show". The split only
+// costs the host list its rows once output exists: the pane is ON by default
+// so it is discoverable, but an empty box must not shrink the fleet view to a
+// fifth to display nothing.
+func (m tuiModel) logActive() bool { return m.logOpen && len(m.logs) > 0 }
+
+// logHeight splits the frame: the host list keeps the top fifth (floor of 3
+// rows so it never collapses) and the log takes the rest.
 func (m tuiModel) logHeight() int {
 	if !m.logOpen {
 		return 0
+	}
+	if !m.logActive() {
+		return 0 // collapsed to a single unframed hint line; no rows reserved
 	}
 	h := m.vp.height - m.listHeight() - 6
 	if h < 3 {
@@ -621,14 +630,19 @@ func (m tuiModel) logHeight() int {
 
 // listHeight is the rows available to the host table.
 func (m tuiModel) listHeight() int {
-	if !m.logOpen {
+	if !m.logActive() {
+		// Closed, or open-but-empty: the list keeps everything except the
+		// couple of lines the collapsed hint occupies.
 		h := m.vp.height - 5
+		if m.logOpen {
+			h-- // one line for the collapsed hint
+		}
 		if h < 1 {
 			h = 1
 		}
 		return h
 	}
-	h := m.vp.height / 5 // top ~20%
+	h := m.vp.height / 5 // top ~20% once logs are flowing
 	if h < 3 {
 		h = 3
 	}

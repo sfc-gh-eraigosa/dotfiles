@@ -177,7 +177,9 @@ input it cannot receive. Hosts whose precheck says they *need* a password are
 routed to a serial interactive handoff that runs after the background wave —
 there the terminal is genuinely released so the sudo prompt reaches you.
 
-**The log pane.** `l` splits the view: the host list keeps the top ~20% and a
+**The log pane is on by default.** While idle it collapses to a single hint
+line, so it costs the host list nothing; once output starts flowing it claims
+its share. `l` splits the view: the host list keeps the top ~20% and a
 framed pane below streams each in-flight host's output live, tagged with the
 alias so a concurrent wave stays readable. It follows the tail by default;
 `J`/`K` scroll (which pauses following so the tail can't yank the view away

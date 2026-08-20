@@ -8,28 +8,39 @@ import (
 
 // keyHelp is the single source of truth for the keymap: the help overlay
 // renders from it, so there is no second hand-written list to drift.
-var keyHelp = []struct{ keys, what string }{
-	{"j / k / ↓ / ↑", "move cursor"},
-	{"gg / G", "first / last host"},
-	{"ctrl+d / ctrl+u", "half page down / up"},
-	{"ctrl+f / ctrl+b", "page down / up"},
-	{"/", "regex search (smartcase)"},
-	{"n / N", "next / previous match"},
-	{"space", "toggle selection"},
-	{"a", "select all (respects an active search)"},
-	{"l", "show / hide the streaming log pane"},
-	{"J / K", "scroll the log pane (G re-follows the tail)"},
-	{"v", "visual range select"},
-	{"esc", "clear search / selection"},
-	{"u", "update selection (or cursor host)"},
-	{"w", "wake selection (or cursor host)"},
-	{"F", "forget answers (incl. saved preferences)"},
-	{"tab / enter", "(answer form) next field · esc backs out, keeping answers"},
-	{"e", "(confirm) edit the remembered answers"},
-	{"s", "ssh to cursor host"},
-	{"r", "refresh"},
-	{"?", "toggle this help"},
-	{"q", "quit"},
+// keyHelp is the single source of truth for the keymap: both the always-visible
+// header strip and the `?` overlay render from it, so a key can never again be
+// implemented and documented in the overlay while staying invisible on screen
+// (which is exactly how the log pane shipped undiscoverable).
+//
+// icon is a visual anchor next to the letter — the letter stays authoritative,
+// the icon just makes the strip scannable. hdr marks the few that earn a place
+// in the always-on header; the rest live in the overlay.
+var keyHelp = []struct {
+	icon, keys, what string
+	hdr              bool
+}{
+	{"❓", "?", "toggle this help", true},
+	{"🔍", "/", "regex search (smartcase)", true},
+	{"☑️", "space", "toggle selection", true},
+	{"🚀", "u", "update selection (or cursor host)", true},
+	{"📜", "l", "show / hide the streaming log pane", true},
+	{"🖥️", "s", "ssh to cursor host", true},
+	{"🔄", "r", "refresh", true},
+	{"🚪", "q", "quit", true},
+	{"⬍", "j / k / ↓ / ↑", "move cursor", false},
+	{"⤒", "gg / G", "first / last host", false},
+	{"⇟", "ctrl+d / ctrl+u", "half page down / up", false},
+	{"⇞", "ctrl+f / ctrl+b", "page down / up", false},
+	{"➡️", "n / N", "next / previous match", false},
+	{"✅", "a", "select all (respects an active search)", false},
+	{"📖", "J / K", "scroll the log pane (G re-follows the tail)", false},
+	{"🔲", "v", "visual range select", false},
+	{"⎋", "esc", "clear search / selection", false},
+	{"⏰", "w", "wake selection (or cursor host)", false},
+	{"🗑️", "F", "forget answers (incl. saved preferences)", false},
+	{"⇥", "tab / enter", "(answer form) next field · esc backs out, keeping answers", false},
+	{"✏️", "e", "(confirm) edit the remembered answers", false},
 }
 
 // route owns every keystroke. Mode comes first: a key typed in search is text,

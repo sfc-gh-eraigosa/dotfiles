@@ -1,8 +1,8 @@
 # fleet tui — demo frames
-# captured 2026-08-19T14:59:33Z via: FLEET_DEMO=1 go test ./cmd/ -run TestDemoFrames -v
+# captured 2026-08-20T04:41:18Z via: FLEET_DEMO=1 go test ./cmd/ -run TestDemoFrames -v
 
 ━━━ 1. opening — every host still polling (no blocking collect) ━━━
-fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
+fleet  ❓ ?: help  🔍 /: search  ☑️ space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 …
 
   HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE
 >  host-desktop     -         -                -             ⠋ polling              
@@ -10,11 +10,12 @@ fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
    host-lab         -         -                -             ⠋ polling              
    host-nano        -         -                -             ⠋ polling              
    host-pi          -         -                -             ⠋ polling              
+📜 logs: idle — output appears here during an update  (l: hide)
 
 1/5
 
 ━━━ 2. streamed in — worst-first, status-coloured ━━━
-fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
+fleet  ❓ ?: help  🔍 /: search  ☑️ space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 …
 
   HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE
    host-lab         abc1234   feature/gff≠main 3h ago        divergent              
@@ -22,11 +23,12 @@ fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
    host-edge        -         -                -             unknown (corrupt stamp) 
    host-nano        9484943   main             2w ago        behind 24              
 >  host-desktop     72392c9   main             2h ago        up-to-date             
+📜 logs: idle — output appears here during an update  (l: hide)
 
 5/5
 
 ━━━ 3. search: /host-[np] — smartcase, live match count ━━━
-fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
+fleet  ❓ ?: help  🔍 /: search  ☑️ space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 …
 
   HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE
    host-lab         abc1234   feature/gff≠main 3h ago        divergent              
@@ -34,11 +36,12 @@ fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
    host-edge        -         -                -             unknown (corrupt stamp) 
    host-nano        9484943   main             2w ago        behind 24              
 >  host-desktop     72392c9   main             2h ago        up-to-date             
+📜 logs: idle — output appears here during an update  (l: hide)
 
 /host-[np]   2 match(es)  enter: keep  esc: cancel
 
 ━━━ 4. invalid regex — inline error, still editable ━━━
-fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
+fleet  ❓ ?: help  🔍 /: search  ☑️ space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 …
 
   HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE
    host-lab         abc1234   feature/gff≠main 3h ago        divergent              
@@ -46,11 +49,12 @@ fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
    host-edge        -         -                -             unknown (corrupt stamp) 
    host-nano        9484943   main             2w ago        behind 24              
 >  host-desktop     72392c9   main             2h ago        up-to-date             
+📜 logs: idle — output appears here during an update  (l: hide)
 
 /[  bad pattern: `[`
 
 ━━━ 5. visual selection (v + j) — 2 hosts marked ━━━
-fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
+fleet  ❓ ?: help  🔍 /: search  ☑️ space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 …
 
   HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE
    host-lab         abc1234   feature/gff≠main 3h ago        divergent              
@@ -58,11 +62,12 @@ fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
    host-edge        -         -                -             unknown (corrupt stamp) 
    host-nano        9484943   main             2w ago        behind 24              
 > ●host-desktop     72392c9   main             2h ago        up-to-date             
+📜 logs: idle — output appears here during an update  (l: hide)
 
 5/5 · 1 selected
 
 ━━━ 6. unattended answers — asked once per wave, credential masked ━━━
-fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
+fleet  ❓ ?: help  🔍 /: search  ☑️ space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 …
 
   HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE
    host-lab         abc1234   feature/gff≠main 3h ago        divergent              
@@ -70,6 +75,7 @@ fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
    host-edge        -         -                -             unknown (corrupt stamp) 
    host-nano        9484943   main             2w ago        behind 24              
 > ●host-desktop     72392c9   main             2h ago        up-to-date             
+📜 logs: idle — output appears here during an update  (l: hide)
 
 ╭────────────────────────────────────────────────────────────────────────╮
 │ unattended answers for this update                                     │
@@ -83,7 +89,7 @@ fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
 ╰────────────────────────────────────────────────────────────────────────╯
 
 ━━━ 7. confirm strip — targets listed before anything runs ━━━
-fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
+fleet  ❓ ?: help  🔍 /: search  ☑️ space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 …
 
   HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE
    host-lab         abc1234   feature/gff≠main 3h ago        divergent              
@@ -91,12 +97,13 @@ fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
    host-edge        -         -                -             unknown (corrupt stamp) 
    host-nano        9484943   main             2w ago        behind 24              
 > ●host-desktop     72392c9   main             2h ago        up-to-date             
+📜 logs: idle — output appears here during an update  (l: hide)
 
 update 1 host(s) → main: host-desktop
   answers: sudo (none) · windows (unset) · gemini (unset)   y: go  e: edit answers  n/esc: cancel
 
 ━━━ 8. CONCURRENT UPDATE — 2 running at once (jobs=2), 1 queued ━━━
-fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
+fleet  ❓ ?: help  🔍 /: search  ☑️ space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 …
 
   HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE
    host-lab         abc1234   feature/gff≠main 3h ago        divergent              
@@ -104,11 +111,12 @@ fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
    host-edge        -         -                -             unknown (corrupt stamp) queued
    host-nano        9484943   main             2w ago        behind 24              ⠋ updating
 > ●host-desktop     72392c9   main             2h ago        up-to-date             ⠋ precheck
+📜 logs: idle — output appears here during an update  (l: hide)
 
 5/5 · 1 selected · 2 updating · 1 queued   updating 1 host(s) → main
 
 ━━━ 9. mid-wave: one FAILED with its cause, slot refilled, UI still live ━━━
-fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
+fleet  ❓ ?: help  🔍 /: search  ☑️ space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 …
 
   HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE
    host-lab         abc1234   feature/gff≠main 3h ago        divergent              
@@ -116,11 +124,12 @@ fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
    host-edge        -         -                -             unknown (corrupt stamp) ⠋ updating
    host-nano        9484943   main             2w ago        behind 24              ⠋ updating
 >  host-desktop     72392c9   main             2h ago        up-to-date             
+📜 logs: idle — output appears here during an update  (l: hide)
 
 5/5 · 2 updating
 
 ━━━ 10. interactive fallback — host needing sudo waits its turn ━━━
-fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
+fleet  ❓ ?: help  🔍 /: search  ☑️ space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 …
 
   HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE
    host-lab         abc1234   feature/gff≠main 3h ago        divergent              
@@ -128,11 +137,12 @@ fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
    host-edge        -         -                -             unknown (corrupt stamp) 
    host-nano        9484943   main             2w ago        behind 24              ⠋ updating
 >  host-desktop     72392c9   main             2h ago        up-to-date             
+📜 logs: idle — output appears here during an update  (l: hide)
 
 5/5 · 1 updating · 1 queued
 
 ━━━ 9b. LOG PANE — list shrinks to the top, streaming logs framed below ━━━
-fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
+fleet  ❓ ?: help  🔍 /: search  ☑️ space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 …
 
   HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE
    host-lab         abc1234   feature/gff≠main 3h ago        divergent              
@@ -153,35 +163,35 @@ fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
 5/5 · 2 updating
 
 ━━━ 11. help overlay ━━━
-fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
+fleet  ❓ ?: help  🔍 /: search  ☑️ space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 …
 
 keys
-  j / k / ↓ / ↑      move cursor
-  gg / G             first / last host
-  ctrl+d / ctrl+u    half page down / up
-  ctrl+f / ctrl+b    page down / up
-  /                  regex search (smartcase)
-  n / N              next / previous match
-  space              toggle selection
-  a                  select all (respects an active search)
-  l                  show / hide the streaming log pane
-  J / K              scroll the log pane (G re-follows the tail)
-  v                  visual range select
-  esc                clear search / selection
-  u                  update selection (or cursor host)
-  w                  wake selection (or cursor host)
-  F                  forget answers (incl. saved preferences)
-  tab / enter        (answer form) next field · esc backs out, keeping answers
-  e                  (confirm) edit the remembered answers
-  s                  ssh to cursor host
-  r                  refresh
-  ?                  toggle this help
-  q                  quit
+  ❓ ?                  toggle this help
+  🔍 /                  regex search (smartcase)
+  ☑️ space              toggle selection
+  🚀 u                  update selection (or cursor host)
+  📜 l                  show / hide the streaming log pane
+  🖥️ s                  ssh to cursor host
+  🔄 r                  refresh
+  🚪 q                  quit
+  ⬍ j / k / ↓ / ↑      move cursor
+  ⤒ gg / G             first / last host
+  ⇟ ctrl+d / ctrl+u    half page down / up
+  ⇞ ctrl+f / ctrl+b    page down / up
+  ➡️ n / N              next / previous match
+  ✅ a                  select all (respects an active search)
+  📖 J / K              scroll the log pane (G re-follows the tail)
+  🔲 v                  visual range select
+  ⎋ esc                clear search / selection
+  ⏰ w                  wake selection (or cursor host)
+  🗑️ F                  forget answers (incl. saved preferences)
+  ⇥ tab / enter        (answer form) next field · esc backs out, keeping answers
+  ✏️ e                  (confirm) edit the remembered answers
 
 any key to close
 
 ━━━ 12. empty fleet — points at discover/add ━━━
-fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
+fleet  ❓ ?: help  🔍 /: search  ☑️ space: selection  🚀 u: update  📜 l: log pane  🖥️ s: ssh  🔄 …
 
   no fleet hosts found
   run `fleet discover` to see adoptable ssh-config hosts, then `fleet add <alias>`
