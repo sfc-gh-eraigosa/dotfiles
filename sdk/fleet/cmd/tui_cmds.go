@@ -10,6 +10,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	applog "github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/log"
 )
 
 // Messages carrying async results back into Update().
@@ -252,13 +253,48 @@ func explainExit(err error) string {
 // update path — where a model built without a runner (tests, the demo) panics,
 // and where a blocking dial would freeze the UI. Update stays pure; only Cmds
 // touch the network.
-func beginStream(alias, ref string, a answers, r runner.Runner) tea.Cmd {
+func beginStream(alias, ref string, a answers, r runner.Runner, dir string) tea.Cmd {
 	script := unattendedUpdate(ref, a)
 	secret := a.sudoSecret + "\n"
+	reset := a.forceReset()
 	return func() tea.Msg {
 		lines, done := r.RunStream(alias, secret, script)
+		// Tee to disk from HERE — inside the Cmd, off the UI thread. The pane
+		// is an in-memory ring that dies with the process; the capture is what
+		// survives to be read the morning after.
+		lines = teeToRunLog(dir, alias, ref, reset, lines)
 		return streamStartedMsg{alias: alias, st: stream{lines: lines, done: done}}
 	}
+}
+
+// teeToRunLog forwards every line unchanged while writing it to this run's
+// capture. The file's whole lifecycle — location, 0600, header, per-line
+// timestamps, retention — belongs to libs/log; fleet only says what the run
+// is about.
+//
+// A capture that cannot be opened is nil, and a nil capture's Tee returns the
+// stream untouched: losing the log must never cost the update.
+func teeToRunLog(dir, alias, ref string, reset bool, in <-chan string) <-chan string {
+	mode := "fast-forward"
+	if reset {
+		mode = "FORCE RESET"
+	}
+	c := applog.NewCapture(applog.CaptureOptions{
+		Tool:    logTool,
+		Dir:     dir,
+		Subject: alias,
+		Header: fmt.Sprintf("fleet update — host=%s ref=%s mode=%s started=%s",
+			alias, ref, mode, nowFn().UTC().Format(time.RFC3339)),
+		Now: nowFn,
+	})
+	if c != nil {
+		// fleet's own diagnostics now go somewhere too, not just the remote's
+		// output — including where to find that output.
+		applog.Default().WithFields(map[string]any{
+			"host": alias, "ref": ref, "mode": mode, "capture": c.Path(),
+		}).Info("update started")
+	}
+	return c.Tee(in, "finished")
 }
 
 // readLine blocks until the next line (or EOF) and turns it into a Msg. It is
