@@ -9,6 +9,16 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
 )
 
+// mustWriteFile writes a test fixture and fails the test if it cannot. An
+// unchecked fixture write lets the assertions below run against a file that
+// was never created, turning a setup failure into a confusing assertion error.
+func mustWriteFile(t *testing.T, path string, data []byte, perm os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, data, perm); err != nil {
+		t.Fatalf("write fixture %s: %v", path, err)
+	}
+}
+
 // Adopting a host that is ALREADY in ~/.ssh/config must not require re-typing
 // its connection details — that was the whole friction. resolveAdd marks the
 // existing block in place and keeps its directives.
@@ -100,7 +110,7 @@ func TestWriteConfigTakesBackupFirst(t *testing.T) {
 func TestWriteConfigKeepsOwnerOnlyPermissions(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "config")
-	os.WriteFile(p, []byte("Host a\n"), 0o600)
+	mustWriteFile(t, p, []byte("Host a\n"), 0o600)
 	if err := writeConfig(p, "Host a\n    HostName 1\n"); err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +124,7 @@ func TestDryRunWritesNothing(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "config")
 	orig := "Host beta\n    HostName 10.0.0.2\n"
-	os.WriteFile(p, []byte(orig), 0o600)
+	mustWriteFile(t, p, []byte(orig), 0o600)
 
 	var sb strings.Builder
 	if err := applyConfig(&sb, p, "Host beta\n    HostName 10.0.0.9\n", true); err != nil {

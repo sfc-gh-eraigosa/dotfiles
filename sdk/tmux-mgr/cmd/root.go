@@ -30,7 +30,9 @@ var rootCmd = &cobra.Command{
 func init() {
 	home, _ := os.UserHomeDir()
 	logDir := filepath.Join(home, ".config", "tmux-mgr")
-	os.MkdirAll(logDir, 0755)
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		fmt.Printf("Error creating log dir %s: %v\n", logDir, err)
+	}
 
 	f, err := os.OpenFile(filepath.Join(logDir, "tmux-mgr.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -54,6 +56,7 @@ func Execute() {
 // CloseLog closes the log file.
 func CloseLog() {
 	if LogFile != nil {
-		LogFile.Close()
+		// Shutdown path: there is no longer anywhere to report a Close failure.
+		_ = LogFile.Close()
 	}
 }

@@ -3,7 +3,6 @@
 package tui
 
 import (
-	"io"
 	"sort"
 	"strings"
 
@@ -62,7 +61,6 @@ type pickerEntry struct {
 type Model struct {
 	items    []resolve.Resolved
 	p        paths.Paths
-	w        io.Writer // used by tests to capture output (nil = unused)
 	width    int
 	height   int
 	cursor   int             // index into m.rows (the rendered row list)

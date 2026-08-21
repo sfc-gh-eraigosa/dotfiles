@@ -152,6 +152,39 @@ jobs:
         continue-on-error: true
         run: make lint-shell
 
+  go-lint:
+    name: Go Lint (golangci-lint)
+    runs-on: ubuntu-latest
+    # A hang must die in minutes, not burn the 6-hour default (PR #182 lesson).
+    timeout-minutes: 15
+    # Dedicated Go check, STRICT — no continue-on-error. golangci-lint also
+    # runs inside the `lint` job's `make lint` step, but that job is warn-only
+    # across every linter, which is why a 212-finding Go backlog sat on main
+    # under a green "Lint" check for months. This job isolates the Go signal
+    # under its own required context so a regression is a hard failure.
+    #
+    # It is strict because the Go backlog is at ZERO (all six sdk/ modules),
+    # which is the condition the `lint` job's comment names for dropping the
+    # warn-only flag "per linter as each category reaches zero". Shell and
+    # markdown are not there yet, so `make lint` itself stays warn-only.
+    #
+    # Do NOT add a paths filter: a required check that is skipped never
+    # reports, and the merge queue then waits on it forever (docs/mergify.md).
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26'
+          cache-dependency-path: |
+            sdk/**/*.sum
+      - name: Install golangci-lint
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.0.2
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Run make lint-go
+        run: make lint-go
+
   unit-tests:
     name: Run Unit Tests
     needs: lint

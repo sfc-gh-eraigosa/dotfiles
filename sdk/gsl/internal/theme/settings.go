@@ -196,7 +196,8 @@ func readSettingsFile(home, path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("theme: open %s: %w", path, err)
 	}
-	defer f.Close()
+	// Read-only handle: a Close failure cannot affect the bytes already read.
+	defer func() { _ = f.Close() }()
 
 	data, err := io.ReadAll(io.LimitReader(f, maxSettingsBytes+1))
 	if err != nil {

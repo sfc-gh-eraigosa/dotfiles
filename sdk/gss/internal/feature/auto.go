@@ -165,8 +165,11 @@ func (s *Service) appendAutoLog(worktree, reason string) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
-	_, _ = f.WriteString(fmt.Sprintf("\n## Auto-checkpoint log\n- %s %s\n", s.now(), reason))
+	// Best-effort diagnostic: this helper reports nothing to its caller (which
+	// is already returning an error of its own), so a failure to write or close
+	// the log is discarded explicitly rather than silently.
+	defer func() { _ = f.Close() }()
+	_, _ = fmt.Fprintf(f, "\n## Auto-checkpoint log\n- %s %s\n", s.now(), reason)
 }
 
 // splitPorcelain partitions `git status --porcelain` lines into tracked

@@ -99,12 +99,9 @@ func LoadRegistry(path string) (*Registry, error) {
 	for _, rf := range raw.Features {
 		f := Feature{Name: rf.Name, Workers: make([]Worker, 0, len(rf.Workers))}
 		for _, rw := range rf.Workers {
-			f.Workers = append(f.Workers, Worker{
-				Branch:   rw.Branch,
-				Worktree: rw.Worktree,
-				PRUrl:    rw.PRUrl,
-				PRState:  rw.PRState,
-			})
+			// rawWorker and Worker have identical fields; the conversion keeps
+			// them in lockstep (adding a field to only one is a compile error).
+			f.Workers = append(f.Workers, Worker(rw))
 		}
 		reg.Features = append(reg.Features, f)
 	}

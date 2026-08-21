@@ -238,7 +238,7 @@ func listStyles(cfg config.Config) error {
 		if _, ok := builtins[name]; !ok {
 			label = "user"
 		}
-		sb.WriteString(fmt.Sprintf("%s%-16s (%s)\n", marker, name, label))
+		fmt.Fprintf(&sb, "%s%-16s (%s)\n", marker, name, label)
 	}
 	fmt.Print(sb.String())
 	return nil

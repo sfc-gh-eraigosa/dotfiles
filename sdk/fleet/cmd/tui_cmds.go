@@ -128,16 +128,6 @@ func (a answers) remembered() bool {
 	return a.sudoSecret != "" || a.windows != "" || a.gemini != ""
 }
 
-// summary is what the confirm strip prints. It is the compensating control for
-// answers that outlive their wave: the operator sees exactly what is about to
-// be applied, every time. The credential appears ONLY as a length mask.
-func (a answers) summary() string {
-	parts := []string{"sudo " + maskOrNone(a.secretLen())}
-	parts = append(parts, "windows "+orUnset(a.windows))
-	parts = append(parts, "gemini "+orUnset(a.gemini))
-	return strings.Join(parts, " · ")
-}
-
 func maskOrNone(n int) string {
 	if n == 0 {
 		return "(none)"

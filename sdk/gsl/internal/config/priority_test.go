@@ -11,10 +11,9 @@ import (
 
 func TestDefaultSegmentPriority_Order(t *testing.T) {
 	// The drop order the fit loop relies on: time goes first, repo goes last.
-	if !(DefaultSegmentPriority("time") <
-		DefaultSegmentPriority("ai") &&
-		DefaultSegmentPriority("ai") < DefaultSegmentPriority("dirgit") &&
-		DefaultSegmentPriority("dirgit") < DefaultSegmentPriority("repo")) {
+	if DefaultSegmentPriority("time") >= DefaultSegmentPriority("ai") ||
+		DefaultSegmentPriority("ai") >= DefaultSegmentPriority("dirgit") ||
+		DefaultSegmentPriority("dirgit") >= DefaultSegmentPriority("repo") {
 		t.Errorf("want time < ai < dirgit < repo, got time=%d ai=%d dirgit=%d repo=%d",
 			DefaultSegmentPriority("time"), DefaultSegmentPriority("ai"),
 			DefaultSegmentPriority("dirgit"), DefaultSegmentPriority("repo"))

@@ -95,6 +95,32 @@ fire: re-run `make ruleset-snapshot` and commit the diff if settings changed,
 and note the bypass in the PR. Bypass is deliberate friction — never part of
 the routine flow.
 
+## Pending: promote `Go Lint (golangci-lint)` to a ruleset-required check
+
+The `go-lint` job (`.github/workflows/docker-image.yml`) is STRICT — it runs
+`make lint-go` with no `continue-on-error` — and is listed in
+`.mergify.yml`'s `merge_protections`. It is **not yet in the GitHub ruleset's
+native required-check list**, which is still the real enforcer (see Rollout
+state below), so a Go regression currently fails that job without blocking a
+merge.
+
+Order matters, and it is the reverse of the obvious one:
+
+1. **Merge the PR that adds the job first.** Adding the context to the ruleset
+   beforehand would make every open PR wait on a check that cannot report —
+   their branches predate the job — which is the "waiting for queue
+   conditions" deadlock described above.
+2. Then add `Go Lint (golangci-lint)` to the ruleset's required checks.
+3. Then `make ruleset-snapshot` and commit the resulting
+   `.github/rulesets/main.json` diff.
+
+Why this check exists separately from the `lint` job: `make lint` is
+warn-only across every linter, so a 212-finding Go backlog accumulated on
+`main` under a permanently green "Lint" check. The Go category is now at zero
+across all six `sdk/` modules, which is the condition the `lint` job names for
+going strict "per linter as each category reaches zero". Shell (~90) and
+markdown (~979) are not there yet, so `make lint` itself stays warn-only.
+
 ## Rollout state
 
 `merge_protections` currently runs alongside the ruleset's native required
