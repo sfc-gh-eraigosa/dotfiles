@@ -25,3 +25,28 @@ tag of the form `sdk/<tool>/vX.Y.Z`.
 - **Versioning is tag-driven — there is no `VERSION` file.** `build.sh` sources [`sdk/version.sh`](./version.sh) and derives the version from `git describe --tags --match "sdk/<tool>/v*"`, so a clean release build stamps `X.Y.Z` and a dev build stamps `X.Y.Z-<n>-g<sha>`. Release tags are cut by `.github/workflows/sdk-auto-bump.yml`, which plans the next semver per module with `opt/scripts/system/bump-sdk-version.sh --plan` and pushes `sdk/<tool>/vX.Y.Z` directly — it never commits to `main`.
 - **Test/lint discovery**: `scripts/test.sh` and the `Makefile` Go loops discover modules by directory under `sdk/` (the migration keeps `src/` scanned transitionally until the cutover completes).
 - **Per-directory docs**: every module has a `AGENTS.md` + a `CLAUDE.md -> AGENTS.md` symlink.
+
+## Logging
+
+**Every tool logs through [`libs/log`](./libs/AGENTS.md).** Do not hand-roll a
+logger, a file writer, or log rotation.
+
+```go
+import applog "github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/log"
+
+applog.SetDefaultTool("mytool")   // once, at startup
+applog.Default().WithField("host", h).Info("started")
+```
+
+- **Diagnostics** (what the tool did) → `New` / `Default` — logrus JSON,
+  lumberjack rotation, `$MYTOOL_LOG_FILE` / `$MYTOOL_LOG_LEVEL`.
+- **Captured output** (bytes another process produced) → `NewCapture` — plain
+  text per run, because a captured install log's value is being readable
+  as-is; the *lifecycle* is what gets standardized, not the format.
+
+Construction never fails: a logger that cannot open its file discards, and a
+nil `*Capture` is safe to call. Logging must never introduce a failure mode
+into the thing it observes.
+
+gsl established the pattern in `internal/observe` and should migrate to
+`libs/log` when it is next touched.
