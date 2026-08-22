@@ -119,7 +119,7 @@ func TestSubjectCannotEscapeTheDirectory(t *testing.T) {
 
 func TestNamesSortChronologically(t *testing.T) {
 	t0 := time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
-	if a, b := CaptureName("h", t0), CaptureName("h", t0.Add(time.Second)); !(a < b) {
+	if a, b := CaptureName("h", t0), CaptureName("h", t0.Add(time.Second)); a >= b {
 		t.Fatalf("names must sort by time: %q !< %q", a, b)
 	}
 }
@@ -129,10 +129,16 @@ func TestNamesSortChronologically(t *testing.T) {
 func TestPruneKeepsNewestPerSubject(t *testing.T) {
 	dir := t.TempDir()
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	for i := 0; i < 8; i++ {
-		os.WriteFile(filepath.Join(dir, CaptureName("h", base.Add(time.Duration(i)*time.Minute))), []byte("x"), filePerm)
+	write := func(name string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), filePerm); err != nil {
+			t.Fatal(err)
+		}
 	}
-	os.WriteFile(filepath.Join(dir, CaptureName("other", base)), []byte("x"), filePerm)
+	for i := 0; i < 8; i++ {
+		write(CaptureName("h", base.Add(time.Duration(i)*time.Minute)))
+	}
+	write(CaptureName("other", base))
 
 	Prune(dir, "h", 3)
 
