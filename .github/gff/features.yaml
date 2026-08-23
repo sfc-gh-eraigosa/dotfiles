@@ -5,10 +5,13 @@ namespace: com.github.sfc-gh-eraigosa.dotfiles
 sets:
   - area: install
     features:
-      # --- system (4) ---
+      # --- system (5) ---
       - path: install.system.wsl-interop
         description: Runs the wsl_interop_binfmt.sh block that keeps the WSLInterop binfmt registration alive.
         boolDefault: true
+      - path: install.system.wsl-dns
+        description: Opt-in (fail-closed) WSL LAN/VPN name resolution - wsl_dns_lan.sh probes every per-interface DNS server Windows knows and pins the one that resolves the ~/.ssh/config #fleet hosts, taking over /etc/resolv.conf and setting generateResolvConf=false. Off by default because it changes host DNS; --revert restores the snapshot. Enable with gff set install.system.wsl-dns true.
+        boolDefault: false
       - path: install.system.jetson
         description: Runs the Jetson hardware-detection block (jtop setup and Chromium default browser).
         boolDefault: true

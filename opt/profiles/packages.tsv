@@ -51,6 +51,11 @@ watch                -
 -                    net-tools
 -                    psmisc
 
+# dig — used by opt/scripts/system/wsl_dns_lan.sh to probe which of Windows'
+# per-interface DNS servers can actually resolve the LAN/VPN fleet hostnames.
+# macOS gets dig from the system already; the brew formula (bind) is keg-only.
+-                    dnsutils
+
 # Nerd Font (gsl) prerequisites. install.sh's font step
 # (sdk/gsl/scripts/install_nerd_font_linux.sh) needs unzip + fontconfig (fc-cache)
 # + curl; installing them here guarantees they exist BEFORE that step runs. macOS

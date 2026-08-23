@@ -303,6 +303,30 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 fi
 else gff_skip_msg install.pkg.brewfile; fi
 
+# WSL only: make LAN/VPN hostnames resolvable. WSL2 points resolv.conf at the
+# Windows NAT DNS proxy, which answers from whatever resolver Windows considers
+# primary — normally a public/ISP one that has never heard of the local fleet,
+# so `ssh <fleet-host>` stalls for the resolver timeout and then fails while
+# `ssh <ip>` works. wsl_dns_lan.sh probes EVERY per-interface DNS server
+# Windows knows (the right one often lives on a VPN/WireGuard interface, not
+# the default gateway) and pins the one that answers for the `#fleet` hosts in
+# ~/.ssh/config. No-op outside WSL; may prompt for sudo once.
+#
+# OPT-IN (fail-closed): this takes over /etc/resolv.conf and sets
+# generateResolvConf=false, so it stays OFF until you ask for it:
+#   gff set install.system.wsl-dns true
+# Undo everything it did with:
+#   ~/opt/scripts/system/wsl_dns_lan.sh --revert
+#
+# MUST run after the package step above: the probe needs `dig` (dnsutils in
+# packages.tsv). It warns and skips rather than failing when dig is absent.
+if gff_on install.system.wsl-dns; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/wsl_dns_lan.sh" ]; then
+    bash "${BASE_DIR}/opt/scripts/system/wsl_dns_lan.sh" || \
+      echo "WARNING: WSL LAN DNS setup reported problems; continuing."
+  fi
+else gff_skip_msg install.system.wsl-dns; fi
+
 # Install sops (secrets management). macOS gets it from the Brewfile above;
 # Linux/WSL has no usable apt package, so install_sops.sh fetches the official
 # static release binary into ~/opt/bin. Safe to re-run on any platform.

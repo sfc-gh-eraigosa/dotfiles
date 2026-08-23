@@ -21,4 +21,5 @@ Reference guides and the repo's objective-driven design system.
 - [`install-windows.md`](./install-windows.md) — `install.sh` Windows/WSL interactivity flow, `[y]/[s]` semantics, gff overrides.
 - [`security-audit.md`](./security-audit.md) — opt-in unattended weekly security audit: Windows collector task + Claude analysis task, gff-gated **fail-closed**.
 - [`security-hardening.md`](./security-hardening.md) — opt-in Windows hardening (follow-up to the audit): Event Log Readers, TaskScheduler/Operational channel, 5 Defender ASR rules in **audit mode only**. Self-elevating, idempotent, precisely reversible; gff-gated **fail-closed**.
+- [`wsl-dns.md`](./wsl-dns.md) — opt-in WSL LAN/VPN name resolution: why `resolv.conf` is an ordered list and not a routing table, probing every Windows interface's resolver instead of the default gateway, the recursive-resolver guard, `--verify`'s tunnel-up/down matrix, and `--revert`; gff-gated **fail-closed**.
 - [`mergify.md`](./mergify.md) — the merge model: Mergify queue, solo-maintainer rules and rationale, external-contributor review gate, AI-work traceability, break-glass.
