@@ -79,11 +79,11 @@ func TestDemoFrames(t *testing.T) {
 			return m
 		}},
 		{"7. confirm dialog — what changes, which hosts, which answers, which keys", "enter: update", func() tuiModel {
-			m, _ := send(settled(), "v", "j", " ", "u", "enter", "enter", "enter")
+			m := commitForm(mustSend(settled(), "v", "j", " ", "u"))
 			return m
 		}},
 		{"8. CONCURRENT UPDATE — 2 running at once (jobs=2), 1 queued", "updating", func() tuiModel {
-			m, _ := send(settled(), "v", "j", " ", "u", "enter", "enter", "enter")
+			m := commitForm(mustSend(settled(), "v", "j", " ", "u"))
 			m, _ = send(m, "y")
 			var mm = m
 			for _, a := range []string{"host-pi", "host-nano", "host-edge"} {
@@ -110,10 +110,17 @@ func TestDemoFrames(t *testing.T) {
 			x, _ := m.Update(precheckMsg{alias: "host-pi", interactive: true})
 			return x.(tuiModel)
 		}},
+		{"7b. confirm with FORCE RESET — the destructive path is called out", "force reset", func() tuiModel {
+			m := mustSend(settled(), "v", "j", " ", "u")
+			m.ans = answers{sudoSecret: "xxxx", windows: "s", gemini: "keep", reset: "y"}
+			m.mode = modeConfirm
+			return m
+		}},
 		{"9b. LOG PANE — list shrinks to the top, streaming logs framed below", "logs", func() tuiModel {
 			m := settled()
 			m.vp = viewport{height: 26, width: 100}
 			m.logOpen = true
+			m.logFocus = true
 			m.streams = map[string]stream{"host-nano": {}, "host-pi": {}}
 			m.updating["host-nano"] = updState{phase: updRunning}
 			m.updating["host-pi"] = updState{phase: updRunning}
@@ -165,5 +172,11 @@ var ansiRE = regexp.MustCompile("\x1b\\[[0-9;]*m")
 func build2Empty() tuiModel {
 	m := newTUIModel(nil, nil, fakeBaseline{head: "72392c9"}, testNow, "main", 2)
 	m.vp = viewport{height: 16, width: 100}
+	return m
+}
+
+// mustSend applies keys and returns just the model, for building demo frames.
+func mustSend(m tuiModel, keys ...string) tuiModel {
+	m, _ = send(m, keys...)
 	return m
 }
