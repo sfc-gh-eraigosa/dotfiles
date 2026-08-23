@@ -57,7 +57,6 @@ func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (Checkpoi
 		return CheckpointResult{}, fmt.Errorf("%w: rebase onto origin/%s: %s", errors.ErrRebaseConflict, base, strings.TrimSpace(string(out)))
 	}
 
-	body := renderPRBody(feat, ref)
 	title := fmt.Sprintf("%s: %s", ref.Feature, ref.Purpose) // from worker_ref; WORKER.md is never read
 
 	// Adopt-existing-PR: a registry row may have no pr_url yet an open PR
@@ -73,6 +72,10 @@ func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (Checkpoi
 			w.PRState = observedPRState(existing)
 		}
 	}
+
+	// Body is composed after adoption so an adopted PR's existing text is
+	// preserved rather than overwritten on the first checkpoint that finds it.
+	body := renderPRBody(feat, ref, s.currentPRBody(ctx, w.PRURL), s.featureNotes(feat.Name))
 
 	res := CheckpointResult{Ref: ref.String()}
 	if w.PRURL == "" {
@@ -146,9 +149,18 @@ func findWorker(reg registry.Registry, ref identity.WorkerRef) (int, int) {
 	return -1, -1
 }
 
-// renderPRBody builds the PR body: the worker's description as free text
-// plus the stack section (design.md → "PR body — stack section").
-func renderPRBody(f registry.Feature, here identity.WorkerRef) string {
+// renderPRBody builds the PR body from three layers: free-form prose, the
+// feature-notes section, and the stack section. Only the latter two are
+// managed; everything else is preserved verbatim.
+//
+// existing is the PR's current body, or "" when creating. Passing it is what
+// makes human-authored descriptions durable: this used to rebuild the body
+// from the worker's one-line registry Description on every checkpoint and
+// PREdit it back, so any prose a reviewer or author wrote was silently
+// destroyed on the next checkpoint. The stack renderer was always
+// marker-scoped and idempotent — only this call site was discarding the text
+// it was supposed to preserve.
+func renderPRBody(f registry.Feature, here identity.WorkerRef, existing, notes string) string {
 	view := stack.StackView{Feature: f.Name}
 	desc := ""
 	for _, w := range f.Workers {
@@ -167,7 +179,26 @@ func renderPRBody(f registry.Feature, here identity.WorkerRef) string {
 			Here:     isHere,
 		})
 	}
-	return stack.RenderBody(desc, view)
+	base := existing
+	if strings.TrimSpace(base) == "" {
+		base = desc
+	}
+	return stack.RenderBody(stack.RenderNotes(base, notes), view)
+}
+
+// currentPRBody fetches a PR's body so renderPRBody can preserve it. A failed
+// lookup yields "" and the caller falls back to the worker description —
+// degrading to the old behaviour rather than failing a checkpoint whose
+// commits are already pushed.
+func (s *Service) currentPRBody(ctx context.Context, prURL string) string {
+	if s.GH == nil || prURL == "" {
+		return ""
+	}
+	pr, err := s.GH.PRView(ctx, prNumber(prURL))
+	if err != nil {
+		return ""
+	}
+	return pr.Body
 }
 
 // openPRForBranch returns the open PR whose head is branch, if one exists.

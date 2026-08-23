@@ -149,9 +149,17 @@ Two hook-layer behaviours that `--help` will not tell you about:
   the verb, not the flags). Read `sdk/gss/cmd/feature_<verb>.go` for the flag
   set, or pass `--worker` alongside `--help`.
 
-**Add a worker straight after `gss feature start`.** `gss feature done` removes
-a *worker*, deleting the feature only when its last one goes, so a feature
-created with no worker has no supported teardown.
+### PR bodies are yours to write
+
+`checkpoint` manages only the marked sections — the stack, and a feature-notes
+block mirrored from FEATURE.md's "Decisions & notes". Everything else in the
+body is preserved across checkpoints, so write a real PR description and it
+stays. Put decisions that apply to the whole feature in FEATURE.md and they
+propagate to every worker's PR.
+
+Teardown: `gss feature done <worker-ref>` removes a worker;
+`gss feature done --feature <name>` removes a feature that has no workers
+(both refuse to discard an edited FEATURE.md without `--force`).
 
 ### The approval token also gates the publish-class feature verbs
 
