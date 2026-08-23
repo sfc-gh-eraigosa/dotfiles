@@ -76,6 +76,60 @@ else
   echo "FAIL - shim failure misdiagnosed:"; printf '%s\n' "$shim_out" | sed 's/^/       /'; fail=$((fail + 1))
 fi
 
+# ---------------------------------------------------------------------------
+# go-licenses that RUNS but cannot ANALYZE.
+#
+# Observed on darwin/amd64 with Go 1.26.2 running toolchain 1.26.3 out of the
+# module cache: the stdlib has no module info, go-licenses aborts, and the gate
+# used to report "a disallowed license is present" — aborting install.sh over a
+# license finding that did not exist.
+# ---------------------------------------------------------------------------
+LOADDIR="$(mktemp -d)"
+cat > "$LOADDIR/go-licenses" <<'STUB'
+#!/bin/sh
+[ "$1" = "--help" ] && exit 0
+echo "E0821 library.go:117] Package encoding/json does not have module info. Non go modules projects are no longer supported." >&2
+echo "F0821 main.go:77] some errors occurred when loading direct and transitive dependency packages" >&2
+exit 1
+STUB
+chmod +x "$LOADDIR/go-licenses"
+
+# 7) An analyzer that could not run has found nothing: skip, do not fail.
+assert_exit 0 "unanalyzable toolchain skips instead of failing the build" \
+  env PATH="$LOADDIR:$PATH" bash "$CHECK"
+
+# 8) ...and it must NOT be described as a license finding.
+load_out="$(env PATH="$LOADDIR:$PATH" bash "$CHECK" 2>&1 || true)"
+if printf '%s' "$load_out" | grep -q "not a license finding" \
+   && ! printf '%s' "$load_out" | grep -q "disallowed (copyleft/forbidden) license is present"; then
+  echo "ok   - unanalyzable toolchain is diagnosed as a tool limit, not a bad license"; pass=$((pass + 1))
+else
+  echo "FAIL - unanalyzable toolchain misdiagnosed:"; printf '%s\n' "$load_out" | sed 's/^/       /'; fail=$((fail + 1))
+fi
+
+# 9) CI must not silently skip a gate it is meant to enforce.
+assert_exit 1 "unanalyzable toolchain still fails strict/CI mode" \
+  env GSS_STRICT_CHECK=1 PATH="$LOADDIR:$PATH" bash "$CHECK"
+
+# 10) A REAL finding must still fail — the whole point of the gate.
+FINDDIR="$(mktemp -d)"
+cat > "$FINDDIR/go-licenses" <<'STUB'
+#!/bin/sh
+[ "$1" = "--help" ] && exit 0
+echo "forbidden license GPL-3.0 for package github.com/evil/thing" >&2
+exit 1
+STUB
+chmod +x "$FINDDIR/go-licenses"
+assert_exit 1 "a genuine disallowed license still fails the build" \
+  env PATH="$FINDDIR:$PATH" bash "$CHECK"
+find_out="$(env PATH="$FINDDIR:$PATH" bash "$CHECK" 2>&1 || true)"
+if printf '%s' "$find_out" | grep -q "disallowed (copyleft/forbidden) license is present"; then
+  echo "ok   - a real finding is still reported as a license failure"; pass=$((pass + 1))
+else
+  echo "FAIL - real finding was not reported:"; printf '%s\n' "$find_out" | sed 's/^/       /'; fail=$((fail + 1))
+fi
+rm -rf "$LOADDIR" "$FINDDIR"
+
 shim_cleanup
 trap - EXIT
 
