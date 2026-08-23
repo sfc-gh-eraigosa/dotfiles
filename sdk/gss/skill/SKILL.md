@@ -83,6 +83,25 @@ feature worker worktree (design.md → "Command surface"):
 - **Feature / worker** (stacked PRs): the `gss feature …` subtree, for
   developing several dependent branches in parallel isolated worktrees.
 
+### Which lane to pick (read this before publishing anything)
+
+The two modes are not equally reachable to an autonomous assistant, and picking
+the wrong one wastes a round trip per attempt:
+
+| You are… | Use | Because |
+| :--- | :--- | :--- |
+| An assistant publishing your own work | **feature worker → `gss feature checkpoint`** | `checkpoint` is deliberately **not** token-gated: it publishes a *draft* PR, which is safe to create autonomously. |
+| A human doing a one-off push | `gss push` / `gss pr` | Simpler, but **token-gated** — needs a human-minted approval token. |
+
+**`gss push` / `gss pr` are a dead end for an assistant working alone.** They
+require `~/.config/gss/approval.token`, and minting it *is* the human gate — an
+assistant that mints its own token has defeated the control, not satisfied it.
+When there is no human at the keyboard to mint one, do not queue up a `gss pr`
+and wait: **start a feature, add a worker, and `checkpoint`** — that is the lane
+built for you, and it lands a reviewable draft PR without touching the gate.
+
+Promotion stays human: `gss feature pr --ready` *is* token-gated.
+
 ## Feature worker workflow (stacked PRs)
 
 Use this when work splits into multiple dependent branches (a "stack") or when
@@ -105,12 +124,18 @@ design governs.
 ### Typical lifecycle
 
 1. `gss feature start <name> [--base main] [--description "…"]` — create the
-   feature.
+   feature. **Run it from inside the target repo** (see
+   [Traps](#traps-that-cost-real-time) — `-r` does not scope this), and add a
+   worker in the same sitting: a feature with zero workers has no supported
+   teardown.
 2. `gss feature worker add --feature <name> --purpose <p> --description "…"`
-   — add a worker worktree; `cd` into the printed path to work in it.
-3. Inside the worktree: `gss feature checkpoint` — rebase on base, push, and
+   — add a worker worktree. `--json` prints `worker_ref` / `branch` /
+   `worktree_path`; **keep the `worker_ref`** — it is how you address the
+   worker from anywhere.
+3. `gss feature checkpoint --worker <ref>` — rebase on base, push, and
    create/update the draft PR (refreshing the stack section across the
-   feature). Hooks may call `gss feature checkpoint --auto --worker <ref>`.
+   feature). **Prefer `--worker <ref>` over `cd`-ing into the worktree**; see
+   [Traps](#traps-that-cost-real-time). Add `--auto` for hook/pane-close use.
 4. `gss feature list --tree` to see the stack; `gss feature conflicts` to see
    files touched by more than one worker.
 5. When a worker is approved: `gss feature pr --ready` (promote the draft —
@@ -121,6 +146,37 @@ design governs.
    feature if it empties and FEATURE.md is unedited).
 8. `gss feature audit [--repair]` — reconcile the registry against observed
    reality; run it first on a fresh machine (observable state wins).
+
+### Traps that cost real time
+
+Each of these fails **silently or misleadingly** — they are not guessable from
+`--help`, which is why they are written down.
+
+- **`-r/--repo` does not scope `gss feature` commands.** It is a global flag and
+  it is accepted without complaint, but the feature verbs resolve owner/repo
+  from **cwd**. Running `gss -r ~/git/dotfiles feature start x` from a different
+  repo silently registers the feature against *that* repo, with *its* base
+  commit — no error, no warning. **Always `cd` into the target repo** for
+  `feature` verbs; treat `-r` as classic-mode only. Verify afterwards: the
+  printed worktree path must read `…/worktrees/<owner>/<expected-repo>/<name>`.
+- **Do not `cd` into a worktree to run gated verbs — pass `--worker <ref>`.**
+  Two hooks conflict here and make the "run it from inside the worktree" advice
+  impossible to follow from an assistant: `safety_guard.sh` matches the command
+  text **without expanding variables**, so `cd "$HOME/…/worker" && gss feature
+  checkpoint` is refused as "not a feature worker worktree" — while
+  `privacy_guard.sh` blocks writing the expanded `/home/<user>/…` path that
+  would satisfy it. `--worker <feature>/<user>/<purpose>` sidesteps both and
+  works from anywhere in the repo.
+- **`--help` is blocked for gated verbs from the wrong cwd.** `safety_guard.sh`
+  matches on the verb, not the flags, so `gss feature checkpoint --help` is
+  refused outside a worktree. To discover flags, read the cobra source
+  (`sdk/gss/cmd/feature_<verb>.go`) or pass `--worker` alongside `--help`.
+- **A feature with zero workers cannot be torn down.** `gss feature done`
+  removes a *worker*, deleting the feature only when its last worker goes and
+  `FEATURE.md` is unedited. `gss feature start` alone therefore leaves a
+  registry row + `FEATURE.md` with no supported removal path — cleanup means
+  hand-editing `registry.json`. **Add the worker immediately after `start`**, or
+  don't `start` yet.
 
 ### The approval token also gates the publish-class feature verbs
 
