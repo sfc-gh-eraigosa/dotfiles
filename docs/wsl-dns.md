@@ -1,25 +1,46 @@
 # WSL LAN/VPN name resolution (`install.system.wsl-dns`)
 
-**Opt-in, fail-closed.** Off by default because it takes over `/etc/resolv.conf` on the
-host machine. The `install.sh` block is gated with **`gff_opt_in`**, not `gff_on` — it runs
-only when the flag resolves to exactly `true`. An unset flag, a missing `gff` binary, or a
-machine where the flag export never happened all mean **skip**, never "run by default".
-(`gff_on` is deliberately fail-open for ordinary steps; an opt-in step that rewrites host
-DNS must not inherit that.)
+`ssh <fleet-host>` hangs for 20s from WSL and then fails, while `ssh <ip>` works. This
+pins a resolver that actually knows your fleet. **Opt-in and off by default** — it takes
+over `/etc/resolv.conf`, so nothing happens until you ask for it.
 
-`dig` comes from `dnsutils` in `opt/profiles/packages.tsv`, which is part of the default
-core package set on every platform — no flag gates it, and it installs whether or not this
-feature is enabled. macOS ships `dig` in `/usr/bin` already, so its BREW column is `-`.
+## Quickstart
 
 ```sh
-gff set install.system.wsl-dns true            # enable, then re-run install.sh
-~/opt/scripts/system/wsl_dns_lan.sh            # or run it directly, any time
-~/opt/scripts/system/wsl_dns_lan.sh --dry-run  # preview, writes nothing
-~/opt/scripts/system/wsl_dns_lan.sh --verify   # live self-check (see below)
-~/opt/scripts/system/wsl_dns_lan.sh --revert   # undo everything it did
+S=~/opt/scripts/system/wsl_dns_lan.sh
+
+$S --dry-run     # 1. preview: which resolver wins, what would be written
+$S               # 2. apply  : snapshots first, then pins (asks for sudo once)
+$S --verify      # 3. check  : run once with the VPN up, once with it down
+$S --revert      # undo, restoring the exact previous files
 ```
 
+Bring the VPN/tunnel up **before** step 1 and give it a few seconds to finish
+connecting — the adapter appears before its handshake completes, and probing in that
+window finds nothing.
+
+To have `install.sh` do it on every run:
+
+```sh
+gff set install.system.wsl-dns true
+```
+
+Everything below is the reasoning, the failure modes, and the safety design. You do not
+need it to use the tool.
+
 ---
+
+## How it is gated
+
+The `install.sh` block uses **`gff_opt_in`**, not `gff_on` — it runs only when the flag
+resolves to exactly `true`. An unset flag, a missing `gff` binary, or a machine where the
+flag export never happened all mean **skip**, never "run by default". (`gff_on` is
+deliberately fail-open for ordinary steps; an opt-in step that rewrites host DNS must not
+inherit that.)
+
+`dig` comes from `dnsutils` in `opt/profiles/packages.tsv`, part of the default core
+package set — no flag gates it, and it installs whether or not this feature is enabled.
+macOS ships `dig` in `/usr/bin` already, so its BREW column is `-`.
 
 ## The problem
 

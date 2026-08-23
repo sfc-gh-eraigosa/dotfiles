@@ -55,8 +55,9 @@
 #   WSL_DNS_BACKUP_DIR    snapshot location (default /etc/wsl_dns_lan.backup)
 #   WSL_DNS_MAX_FAIL_SECONDS
 #                         --verify: longest acceptable failed lookup, in
-#                         seconds (default 3). A slower miss means the
-#                         resolver timeout tuning regressed.
+#                         seconds. DERIVED from the live resolv.conf by
+#                         default (see expected_fail_budget); set it to pin an
+#                         explicit ceiling instead.
 #   WSL_DNS_WSL_CONF / WSL_DNS_RESOLV_CONF / WSL_DNS_NO_SUDO / WSL_DNS_GETENT
 #                         testing hooks; retarget the files, skip sudo, stub
 #                         the name-resolution call
@@ -110,7 +111,7 @@ HOSTS_FILE="${WSL_DNS_HOSTS_FILE:-/etc/hosts}"
 DIG_BIN="${WSL_DNS_DIG:-dig}"
 BACKUP_DIR="${WSL_DNS_BACKUP_DIR:-/etc/wsl_dns_lan.backup}"
 GETENT_BIN="${WSL_DNS_GETENT:-getent}"
-MAX_FAIL_SECONDS="${WSL_DNS_MAX_FAIL_SECONDS:-3}"
+
 # WSL's stock resolv.conf is a symlink here; the revert fallback recreates it.
 WSL_STOCK_RESOLV=/mnt/wsl/resolv.conf
 # Testing hooks: these let the test driver point the script at throwaway files
@@ -251,7 +252,31 @@ verify_name() {
     printf '%s %s %s\n' "${_vn}" "${_vr}" "$(( SECONDS - _t0 ))"
 }
 
+# Longest a FAILED lookup should plausibly take, derived from the resolver
+# config actually in force rather than guessed. A miss must walk every
+# nameserver, and getent resolves both A and AAAA, so a dead server's timeout
+# is paid once per family:
+#
+#     budget = nameservers x timeout x 2 families + 1s slack
+#
+# With the pinned config (3 nameservers, timeout:1) that is 7s, comfortably
+# above the ~4s a real off-tunnel miss costs, and far below the 20s+ stall
+# this script exists to remove -- so the check still catches the regression it
+# was written for. An unmanaged resolv.conf has no `options` line, where the
+# glibc default timeout is 5s.
+expected_fail_budget() {
+    _ns=$(awk '$1 == "nameserver"' "${RESOLV_CONF}" 2>/dev/null | wc -l | tr -d ' ')
+    [ "${_ns}" -gt 0 ] 2>/dev/null || _ns=1
+    _to=$(awk '/^[[:space:]]*options/ {
+                   for (i = 1; i <= NF; i++)
+                       if ($i ~ /^timeout:/) { split($i, a, ":"); print a[2]; exit }
+               }' "${RESOLV_CONF}" 2>/dev/null)
+    [ -n "${_to}" ] || _to=5          # glibc default when unset
+    echo $(( _ns * _to * 2 + 1 ))
+}
+
 do_verify() {
+    MAX_FAIL_SECONDS="${WSL_DNS_MAX_FAIL_SECONDS:-$(expected_fail_budget)}"
     _pinned="$(awk '$1 == "nameserver" { print $2; exit }' "${RESOLV_CONF}" 2>/dev/null)"
     _public="${WSL_DNS_PUBLIC_PROBE:-github.com}"
     _hosts="$(probe_hosts)"
@@ -277,6 +302,7 @@ do_verify() {
     fi
 
     echo "wsl-dns: verify — pinned resolver: ${_pinned:-<none>} (serves fleet names: ${_tunnel})"
+    echo "wsl-dns: verify — a failed lookup must complete within ${MAX_FAIL_SECONDS}s (derived from ${RESOLV_CONF})"
     echo "wsl-dns: verify — NAME RESULT SECONDS"
 
     _fail=0
