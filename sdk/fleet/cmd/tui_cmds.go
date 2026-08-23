@@ -10,6 +10,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	applog "github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/log"
 )
 
 // Messages carrying async results back into Update().
@@ -104,7 +105,12 @@ type answers struct {
 	sudoSecret string // memory only: never persisted, logged, or put in argv
 	windows    string // y | n | s          -> WINSETUP_ANSWER
 	gemini     string // yes | keep | skip  -> GEMINI_TEARDOWN_ANSWER
+	reset      string // y | n — force the clone onto origin before installing
 }
+
+// forceReset reports whether this wave should hard-reset each host onto the
+// fetched commit rather than fast-forwarding.
+func (a answers) forceReset() bool { return a.reset == "y" }
 
 // appendSecret / trimSecret keep the secret's mutation in one place so the
 // rest of the model never handles it directly.
@@ -125,7 +131,7 @@ func (a answers) needsSudo() bool { return a.sudoSecret != "" }
 // already filled anything in. It decides whether `u` opens the form or goes
 // straight to the confirm strip.
 func (a answers) remembered() bool {
-	return a.sudoSecret != "" || a.windows != "" || a.gemini != ""
+	return a.sudoSecret != "" || a.windows != "" || a.gemini != "" || a.reset != ""
 }
 
 func maskOrNone(n int) string {
@@ -182,16 +188,40 @@ const (
 // The prime is then VERIFIED with `sudo -n true` rather than assumed: if the
 // credential did not persist we fail immediately with a distinct code instead
 // of running a long install whose privileged steps all silently skip.
+// sudoGate refuses to start install.sh unless sudo will actually work in THIS
+// session.
+//
+// install.sh treats its own failed `sudo -v` as non-fatal and carries on, so
+// without this gate a credential-less run produced a long cascade —
+//
+//	sudo: a password is required
+//	sudo: a terminal is required to read the password ...
+//	WARNING: apt-get update failed; installs may be incomplete.
+//	WARNING: grouped install failed; retrying packages individually...
+//
+// — and could still exit 0, leaving the row reading `ok` while every
+// privileged step had silently skipped. A half-installed host that reports
+// success is the worst outcome this tool can produce.
+//
+// It is unconditional on purpose. Gating only when a credential was supplied
+// left exactly the case above ungated. It also cannot be inherited from the
+// precheck: that runs in a SEPARATE ssh connection, and sudo's timestamp is
+// scoped, so passing there says nothing about this session.
+//
+// Hosts that need no sudo are exempt rather than blocked: root, and machines
+// with no sudo at all (minimal containers).
+const sudoGate = `{ [ "$(id -u)" = 0 ] || ! command -v sudo >/dev/null 2>&1 || sudo -n true 2>/dev/null; }`
+
 func unattendedUpdate(ref string, a answers) string {
 	var b strings.Builder
 	if a.needsSudo() {
 		// -S reads the password from stdin (never argv); -p '' suppresses the
 		// prompt text that would otherwise pollute the captured log.
 		fmt.Fprintf(&b, "sudo -S -p '' -v 2>/dev/null || exit %d; ", rcSudoAuth)
-		fmt.Fprintf(&b, "sudo -n true 2>/dev/null || exit %d; ", rcSudoNoCache)
 	}
+	fmt.Fprintf(&b, "%s || exit %d; ", sudoGate, rcSudoNoCache)
 	b.WriteString(a.envPrefix())
-	b.WriteString(remoteUpdateScript(ref))
+	b.WriteString(updateScript(ref, a.forceReset()))
 	return b.String()
 }
 
@@ -206,7 +236,7 @@ func explainExit(err error) string {
 	case strings.Contains(s, fmt.Sprint(rcSudoAuth)):
 		return "sudo authentication failed (wrong password?)"
 	case strings.Contains(s, fmt.Sprint(rcSudoNoCache)):
-		return "sudo credential did not persist on this host; use the interactive lane"
+		return "sudo unusable in this session (no credential, or it did not persist) — nothing was installed"
 	}
 	return s
 }
@@ -223,13 +253,48 @@ func explainExit(err error) string {
 // update path — where a model built without a runner (tests, the demo) panics,
 // and where a blocking dial would freeze the UI. Update stays pure; only Cmds
 // touch the network.
-func beginStream(alias, ref string, a answers, r runner.Runner) tea.Cmd {
+func beginStream(alias, ref string, a answers, r runner.Runner, dir string) tea.Cmd {
 	script := unattendedUpdate(ref, a)
 	secret := a.sudoSecret + "\n"
+	reset := a.forceReset()
 	return func() tea.Msg {
 		lines, done := r.RunStream(alias, secret, script)
+		// Tee to disk from HERE — inside the Cmd, off the UI thread. The pane
+		// is an in-memory ring that dies with the process; the capture is what
+		// survives to be read the morning after.
+		lines = teeToRunLog(dir, alias, ref, reset, lines)
 		return streamStartedMsg{alias: alias, st: stream{lines: lines, done: done}}
 	}
+}
+
+// teeToRunLog forwards every line unchanged while writing it to this run's
+// capture. The file's whole lifecycle — location, 0600, header, per-line
+// timestamps, retention — belongs to libs/log; fleet only says what the run
+// is about.
+//
+// A capture that cannot be opened is nil, and a nil capture's Tee returns the
+// stream untouched: losing the log must never cost the update.
+func teeToRunLog(dir, alias, ref string, reset bool, in <-chan string) <-chan string {
+	mode := "fast-forward"
+	if reset {
+		mode = "FORCE RESET"
+	}
+	c := applog.NewCapture(applog.CaptureOptions{
+		Tool:    logTool,
+		Dir:     dir,
+		Subject: alias,
+		Header: fmt.Sprintf("fleet update — host=%s ref=%s mode=%s started=%s",
+			alias, ref, mode, nowFn().UTC().Format(time.RFC3339)),
+		Now: nowFn,
+	})
+	if c != nil {
+		// fleet's own diagnostics now go somewhere too, not just the remote's
+		// output — including where to find that output.
+		applog.Default().WithFields(map[string]any{
+			"host": alias, "ref": ref, "mode": mode, "capture": c.Path(),
+		}).Info("update started")
+	}
+	return c.Tee(in, "finished")
 }
 
 // readLine blocks until the next line (or EOF) and turns it into a Msg. It is
@@ -277,7 +342,7 @@ func handoffWrapper(alias, ref, remote string, pos, total int) string {
 // It carries the pre-answers too. It previously ran the BARE update script, so
 // a host routed here re-asked every question the operator had already answered.
 func interactiveHandoff(alias, ref string, a answers, pos, total int) tea.Cmd {
-	remote := a.envPrefix() + remoteUpdateScript(ref)
+	remote := a.envPrefix() + updateScript(ref, a.forceReset())
 	c := exec.Command("sh", "-c", handoffWrapper(alias, ref, remote, pos, total))
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return execDoneMsg{alias: alias, err: err}

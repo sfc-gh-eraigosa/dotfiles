@@ -13,7 +13,7 @@ func TestConfirmStripShowsTheAnswersWithTheSecretMasked(t *testing.T) {
 	m := testModel("a", "b")
 	m2, _ := send(m, "u")                           // form
 	m3, _ := send(m2, "s", "e", "c", "r", "e", "t") // type it
-	m4, _ := send(m3, "enter", "enter", "enter")    // commit through to confirm
+	m4 := commitForm(m3)
 
 	if m4.mode != modeConfirm {
 		t.Fatalf("expected the confirm strip, mode=%v", m4.mode)

@@ -165,7 +165,10 @@ fleet tui --update-ref feature/x         # update targets that ref instead of ma
 | `e` | on the confirm strip: edit the remembered answers |
 | `s` | ssh to the cursor host |
 | `l` | show / hide the streaming log pane |
-| `J` / `K` | scroll the log pane (re-open to resume following) |
+| `tab` | move the vim keys between the host list and the log pane |
+| `J` / `K` | scroll the log pane |
+| `gg` / `G` | (log focused) first line / resume following the tail |
+| `/` `n` `N` | (log focused) search the log, next / previous match |
 | `r` | refresh |
 | `?` | help overlay |
 | `q` | quit (guarded while updates run) |
@@ -213,6 +216,7 @@ per **session**, not once per wave:
 |-------|-------|
 | sudo password | primes `sudo -S -v` on the host so install.sh's privileged steps actually run. Masked on screen; held in memory only; sent over ssh **stdin** — never argv or env, both of which are world-readable via `/proc`. Leave empty to skip privileged steps. |
 | windows setup `[y/n/s]` | `WINSETUP_ANSWER` — install.sh's Windows desktop prompt (`s` = never ask again, recorded as a gff override) |
+| force reset `[y/n]` | hard-resets each host onto the fetched commit instead of fast-forwarding — for a host whose branch has diverged. **Destructive**, so the host's entire current state (local commits *and* uncommitted files) is committed to a `fleet-reset/<ts>` branch first. The confirm gate calls it out in red. |
 | gemini leftovers `[y/k/n]` | `GEMINI_TEARDOWN_ANSWER` — `yes` clean up, `keep` never ask again, `skip` this run only |
 
 The credential is primed and used in the **same ssh session** as install.sh

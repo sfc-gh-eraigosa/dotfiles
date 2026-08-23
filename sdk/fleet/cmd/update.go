@@ -55,10 +55,36 @@ func validRef(ref string) bool {
 //
 // Merging FETCH_HEAD rather than origin/<ref> keeps tag and branch refs both
 // working, exactly as the pull form did.
-func remoteUpdateScript(ref string) string {
+func remoteUpdateScript(ref string) string { return updateScript(ref, false) }
+
+// resetToFetched forces the clone onto the fetched commit, for a host whose
+// branch has diverged and can no longer fast-forward.
+//
+// It is destructive, so it preserves first — the same guarantee `--force`
+// makes. EVERYTHING currently on the host (local commits AND uncommitted
+// files) is committed to a `fleet-reset/<ts>` branch before the reset, so a
+// `git reset --hard` can never be the thing that loses an operator's work.
+// `git add -A` rather than a stash: a stash commit's tree excludes untracked
+// files, which is how the original rescue silently dropped them.
+// NOTE: built by concatenation, never fmt.Sprintf — the shell's date format
+// (%Y%m%dT%H%M%SZ) collides with printf verbs, and `go vet` rightly refuses it.
+func resetToFetched(ref string) string {
+	return `ts=$(date -u +%Y%m%dT%H%M%SZ) && ` +
+		`git checkout -q -b "fleet-reset/$ts" && git add -A && ` +
+		`{ git -c user.email=fleet@local -c user.name=fleet commit -q -m "fleet pre-reset $ts" || true; } && ` +
+		`git checkout -q "` + ref + `" && git reset --hard FETCH_HEAD`
+}
+
+// updateScript is the remote update, optionally forcing the clone onto the
+// fetched commit instead of fast-forwarding.
+func updateScript(ref string, reset bool) string {
+	move := "git merge --ff-only FETCH_HEAD"
+	if reset {
+		move = resetToFetched(ref)
+	}
 	return fmt.Sprintf(
 		"cd ~/git/dotfiles && git fetch origin %[1]s && git checkout %[1]s && "+
-			"git merge --ff-only FETCH_HEAD && ./install.sh", ref)
+			"%[2]s && ./install.sh", ref, move)
 }
 
 // rescueWorktree preserves uncommitted work before a --force update.
