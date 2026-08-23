@@ -44,6 +44,7 @@
 #                         (default: the resolvers already in /etc/resolv.conf,
 #                          then 1.1.1.1)
 #   WSL_DNS_SSH_CONFIG    path to the ssh config to scan (default ~/.ssh/config)
+#   WSL_DNS_HOSTS_FILE    hosts file consulted before DNS (default /etc/hosts)
 #   WSL_DNS_DIG           dig binary to probe with (default: dig from PATH)
 #   WSL_DNS_PUBLIC_PROBE  public name used to prove the winner recurses
 #                         (default: github.com)
@@ -105,6 +106,7 @@ for _arg in "$@"; do
 done
 
 SSH_CONFIG="${WSL_DNS_SSH_CONFIG:-${HOME}/.ssh/config}"
+HOSTS_FILE="${WSL_DNS_HOSTS_FILE:-/etc/hosts}"
 DIG_BIN="${WSL_DNS_DIG:-dig}"
 BACKUP_DIR="${WSL_DNS_BACKUP_DIR:-/etc/wsl_dns_lan.backup}"
 GETENT_BIN="${WSL_DNS_GETENT:-getent}"
@@ -336,7 +338,18 @@ do_verify() {
 # Prefer the explicit override; otherwise take every `Host <name>  #fleet`
 # entry from the ssh config. Host lines may carry several names; take them all
 # and drop wildcard patterns, which cannot be resolved.
-probe_hosts() {
+# Names already served by /etc/hosts. nsswitch is "files dns", so these are
+# answered BEFORE any resolver is consulted -- probing DNS for them is
+# meaningless. The local hostname is the usual case: WSL writes it into
+# /etc/hosts, yet a LAN/VPN resolver returns NXDOMAIN for it forever, which
+# would cap the score below 100% and make --verify report a fleet "hit" that
+# actually came from /etc/hosts rather than from the resolver under test.
+hosts_file_names() {
+    [ -r "${HOSTS_FILE}" ] || return 0
+    awk '{ sub(/#.*/, ""); for (i = 2; i <= NF; i++) print $i }' "${HOSTS_FILE}"
+}
+
+probe_hosts_raw() {
     if [ -n "${WSL_DNS_PROBE_HOSTS:-}" ]; then
         to_lines "${WSL_DNS_PROBE_HOSTS}"
         return
@@ -352,6 +365,28 @@ probe_hosts() {
             }
         }
     ' "${SSH_CONFIG}"
+}
+
+probe_hosts() {
+    _local_names="$(hosts_file_names)"
+    probe_hosts_raw | while read -r _ph; do
+        [ -n "${_ph}" ] || continue
+        if printf '%s\n' "${_local_names}" | grep -q -x -F "${_ph}"; then
+            continue
+        fi
+        printf '%s\n' "${_ph}"
+    done
+}
+
+# Reports what probe_hosts dropped, so a capped score is never a mystery.
+skipped_hosts() {
+    _local_names="$(hosts_file_names)"
+    probe_hosts_raw | while read -r _ph; do
+        [ -n "${_ph}" ] || continue
+        if printf '%s\n' "${_local_names}" | grep -q -x -F "${_ph}"; then
+            printf '%s\n' "${_ph}"
+        fi
+    done
 }
 
 # --- 2. candidate DNS servers ---------------------------------------------
@@ -418,6 +453,10 @@ if ! command -v "${DIG_BIN}" > /dev/null 2>&1; then
 fi
 
 HOSTS="$(probe_hosts)"
+_SKIPPED="$(skipped_hosts)"
+if [ -n "${_SKIPPED}" ]; then
+    say "not probing $(printf '%s ' ${_SKIPPED})— already served by ${HOSTS_FILE} (files precedes dns)."
+fi
 if [ -z "${HOSTS}" ]; then
     say "no ${FLEET_MARKER} hosts in ${SSH_CONFIG} and WSL_DNS_PROBE_HOSTS unset; nothing to do."
     exit 0
@@ -439,14 +478,37 @@ BEST_SRV=''
 BEST_HITS=0
 TOTAL=$(printf '%s\n' "${HOSTS}" | wc -l | tr -d ' ')
 
+# A candidate that answers NOTHING at all is a different failure from one that
+# answers but doesn't know the fleet. The first usually means a VPN/tunnel
+# interface is attached while its handshake is still completing (Windows adds
+# the adapter and its DNS server before WireGuard finishes), or the tunnel
+# dropped. Distinguishing them turns a confusing "0/N everywhere" into an
+# actionable "wait and re-run".
+SILENT_SRVS=""
+SILENT_COUNT=0
+CAND_COUNT=0
 for srv in ${CANDIDATES}; do
+    CAND_COUNT=$(( CAND_COUNT + 1 ))
     hits=0
     for h in ${HOSTS}; do
         if resolves "${srv}" "${h}" > /dev/null; then
             hits=$((hits + 1))
         fi
     done
-    say "candidate ${srv}: resolved ${hits}/${TOTAL} fleet host(s)."
+    if [ "${hits}" -eq 0 ]; then
+        if resolves "${srv}" "${WSL_DNS_PUBLIC_PROBE:-github.com}" > /dev/null; then
+            say "candidate ${srv}: reachable, resolved 0/${TOTAL} fleet host(s)."
+        else
+            # Neutral wording on purpose: a silent resolver is often silent
+            # BECAUSE a full-tunnel VPN is up and its network is no longer
+            # routable. Only the all-silent case below implies "not ready".
+            say "candidate ${srv}: NO RESPONSE — not reachable from this network."
+            SILENT_SRVS="${SILENT_SRVS}${srv} "
+            SILENT_COUNT=$(( SILENT_COUNT + 1 ))
+        fi
+    else
+        say "candidate ${srv}: resolved ${hits}/${TOTAL} fleet host(s)."
+    fi
     if [ "${hits}" -gt "${BEST_HITS}" ]; then
         BEST_HITS="${hits}"
         BEST_SRV="${srv}"
@@ -455,7 +517,24 @@ done
 
 if [ -z "${BEST_SRV}" ]; then
     warn "no candidate resolver answered for any of: $(printf '%s ' ${HOSTS})"
-    warn "if this needs a VPN/tunnel, bring it up and re-run: ~/opt/scripts/system/wsl_dns_lan.sh"
+    if [ "${SILENT_COUNT}" -eq "${CAND_COUNT}" ] && [ "${CAND_COUNT}" -gt 0 ]; then
+        # NOTHING answered, not even for a public name. On a machine with a
+        # working internet connection that almost always means a tunnel is
+        # attached but NOT READY: Windows adds the VPN adapter and its DNS
+        # server the moment you click connect, seconds before the handshake
+        # completes -- and while it is half-up the old network is already
+        # unroutable. Retrying after the handshake is the fix.
+        warn "NOT ONE of the ${CAND_COUNT} configured resolvers responded, even for a public name."
+        warn "TUNNEL LIKELY NOT READY: a VPN adapter and its DNS server appear the moment you"
+        warn "click connect, seconds before the handshake finishes, and the old network is"
+        warn "already unroutable by then. Wait for it to finish connecting, then re-run."
+    elif [ -n "${SILENT_SRVS}" ]; then
+        warn "some resolvers answered but none knows these names; unreachable ones: ${SILENT_SRVS}"
+        warn "Is the tunnel that serves these names the one that is up?"
+    else
+        warn "every resolver responded, but none knows these names — is the right VPN/tunnel up?"
+    fi
+    warn "re-run with: ~/opt/scripts/system/wsl_dns_lan.sh"
     exit 0
 fi
 

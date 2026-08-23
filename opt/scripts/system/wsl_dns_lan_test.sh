@@ -122,8 +122,10 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
 
     assert_grep "selects the LAN resolver that answers for the fleet" \
         'selected 192\.168\.0\.1 \(2/2 fleet hosts\)' "$OUT_FILE"
-    assert_grep "reports the public resolver scoring zero" \
-        'candidate 75\.75\.75\.75: resolved 0/2' "$OUT_FILE"
+    # 75.75.75.75 has no stub entries at all, so it answers nothing -- the
+    # script must report that as unreachable, not as "resolved 0/N".
+    assert_grep "an entirely silent candidate is reported as unreachable" \
+        'candidate 75\.75\.75\.75: NO RESPONSE' "$OUT_FILE"
     assert_grep "pins the winner as the FIRST nameserver" \
         '^nameserver 192\.168\.0\.1$' "$OUT_FILE"
     assert_grep "keeps a fallback resolver after the winner" \
@@ -157,6 +159,44 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
     assert_exit_code 0 "exits 0 when no resolver answers (non-fatal)" \
         env PATH="${STUB_DIR}:${PATH}" STUB_ZONE="" STUB_WIN_DNS="75.75.75.75" \
             WSL_DNS_SSH_CONFIG="$SSH_CFG" bash "$SCRIPT" --dry-run
+
+    # === 4b. ALL candidates silent => "tunnel not ready" diagnosis ===
+    # Nothing answers, not even for the public probe. That is the signature of
+    # a VPN adapter attached before its handshake completed.
+    assert_grep "diagnoses an attached-but-not-ready tunnel when nothing answers" \
+        'TUNNEL LIKELY NOT READY' "$OUT3_FILE"
+    assert_grep "reports how many resolvers stayed silent" \
+        'NOT ONE of the 2 configured resolvers responded' "$OUT3_FILE"
+
+    # === 4c. Some answer, none knows the fleet => a DIFFERENT diagnosis ===
+    # Must not be misreported as "not ready" -- the network is plainly working.
+    ZONE_PUBLIC_ONLY="75.75.75.75 github.com 140.82.113.4"
+    OUT3B="$(_run "$ZONE_PUBLIC_ONLY" "75.75.75.75 10.0.0.1" "$SSH_CFG")"
+    OUT3B_FILE="$(mktemp)"; printf '%s\n' "$OUT3B" > "$OUT3B_FILE"
+    assert_grep "a reachable-but-ignorant resolver is labelled reachable" \
+        'candidate 75\.75\.75\.75: reachable, resolved 0/' "$OUT3B_FILE"
+    assert_grep_negative "does NOT blame the tunnel when resolvers are answering" \
+        'TUNNEL LIKELY NOT READY' "$OUT3B_FILE"
+
+    # === 4d. Names served by /etc/hosts are excluded from the DNS probe ===
+    # The local hostname is in /etc/hosts, so nsswitch "files" answers it
+    # before DNS. Probing a resolver for it would cap the score forever and
+    # make --verify count a /etc/hosts hit as resolver evidence.
+    FAKE_HOSTS="$(mktemp)"
+    printf '127.0.0.1\tlocalhost\n127.0.1.1\tselfhost.localdomain\tselfhost\n' > "$FAKE_HOSTS"
+    OUT3C="$(PATH="${STUB_DIR}:${PATH}" \
+        STUB_ZONE="192.168.0.1 wenlockpi 192.168.0.128
+192.168.0.1 github.com 140.82.113.4" \
+        STUB_WIN_DNS="192.168.0.1" \
+        WSL_DNS_PROBE_HOSTS="wenlockpi selfhost" \
+        WSL_DNS_HOSTS_FILE="$FAKE_HOSTS" \
+        WSL_DNS_FALLBACKS="1.1.1.1" \
+        bash "$SCRIPT" --dry-run 2>&1)"
+    OUT3C_FILE="$(mktemp)"; printf '%s\n' "$OUT3C" > "$OUT3C_FILE"
+    assert_grep "announces the /etc/hosts name it is not probing" \
+        'not probing selfhost' "$OUT3C_FILE"
+    assert_grep "scores only the DNS-resolvable hosts (1/1, not 1/2)" \
+        'selected 192\.168\.0\.1 \(1/1 fleet hosts\)' "$OUT3C_FILE"
 
     # === 5. Loopback / link-local candidates are filtered out ===
     OUT4="$(_run "$ZONE_GOOD" "127.0.0.53 169.254.1.1 192.168.0.1" "$SSH_CFG")"

@@ -320,12 +320,17 @@ else gff_skip_msg install.pkg.brewfile; fi
 #
 # MUST run after the package step above: the probe needs `dig` (dnsutils in
 # packages.tsv). It warns and skips rather than failing when dig is absent.
-if gff_on install.system.wsl-dns; then
+# FAIL-CLOSED (gff_opt_in, not gff_on): this rewrites host DNS, so it must
+# never run by accident on a machine where gff or the flag export is missing.
+# It runs ONLY when the flag resolves to exactly 'true'; unset/absent => skip.
+if gff_opt_in install.system.wsl-dns; then
   if [ -f "${BASE_DIR}/opt/scripts/system/wsl_dns_lan.sh" ]; then
     bash "${BASE_DIR}/opt/scripts/system/wsl_dns_lan.sh" || \
       echo "WARNING: WSL LAN DNS setup reported problems; continuing."
   fi
-else gff_skip_msg install.system.wsl-dns; fi
+else
+  echo "SKIP (gff: install.system.wsl-dns is opt-in and not enabled)"
+fi
 
 # Install sops (secrets management). macOS gets it from the Brewfile above;
 # Linux/WSL has no usable apt package, so install_sops.sh fetches the official

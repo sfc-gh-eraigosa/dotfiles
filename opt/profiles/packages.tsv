@@ -51,9 +51,14 @@ watch                -
 -                    net-tools
 -                    psmisc
 
-# dig — used by opt/scripts/system/wsl_dns_lan.sh to probe which of Windows'
-# per-interface DNS servers can actually resolve the LAN/VPN fleet hostnames.
-# macOS gets dig from the system already; the brew formula (bind) is keg-only.
+# Core DNS diagnostics: dig, nslookup, host. Part of the standard toolset on
+# every machine, not a dependency of any one feature (though
+# opt/scripts/system/wsl_dns_lan.sh does need dig and warns when it is absent).
+# BREW is '-' DELIBERATELY: macOS already ships dig/nslookup/host in /usr/bin
+# as part of the base OS, so they are present on every platform without a brew
+# install. Do NOT "fix" this by adding `bind` — that formula is KEG-ONLY, so it
+# would not put dig on PATH (`dig` still resolves to /usr/bin/dig); it would
+# cost a large build and change nothing.
 -                    dnsutils
 
 # Nerd Font (gsl) prerequisites. install.sh's font step

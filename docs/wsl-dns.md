@@ -1,7 +1,15 @@
 # WSL LAN/VPN name resolution (`install.system.wsl-dns`)
 
 **Opt-in, fail-closed.** Off by default because it takes over `/etc/resolv.conf` on the
-host machine.
+host machine. The `install.sh` block is gated with **`gff_opt_in`**, not `gff_on` — it runs
+only when the flag resolves to exactly `true`. An unset flag, a missing `gff` binary, or a
+machine where the flag export never happened all mean **skip**, never "run by default".
+(`gff_on` is deliberately fail-open for ordinary steps; an opt-in step that rewrites host
+DNS must not inherit that.)
+
+`dig` comes from `dnsutils` in `opt/profiles/packages.tsv`, which is part of the default
+core package set on every platform — no flag gates it, and it installs whether or not this
+feature is enabled. macOS ships `dig` in `/usr/bin` already, so its BREW column is `-`.
 
 ```sh
 gff set install.system.wsl-dns true            # enable, then re-run install.sh
@@ -99,11 +107,14 @@ unless you disable that too.
 
 1. **Gates on WSL** — `grep -qi microsoft /proc/version`; a no-op anywhere else.
 2. **Collects probe hostnames** — every `Host … #fleet` entry in `~/.ssh/config`
-   (wildcard patterns skipped), so the probe set follows your ssh config.
+   (wildcard patterns skipped), so the probe set follows your ssh config, **minus any
+   name already in `/etc/hosts`** (see [Names served by `/etc/hosts`](#names-served-by-etchosts)).
 3. **Enumerates candidate resolvers** — `Get-DnsClientServerAddress` over Windows
    interop, across **every** interface. Loopback and link-local addresses are dropped.
 4. **Probes each candidate** with `dig +time=2 +tries=1` for each fleet host, and picks
-   the one resolving the most.
+   the one resolving the most. Each candidate is classified as *resolved N/M*,
+   *reachable but ignorant*, or *no response* — see
+   [Tunnel readiness](#tunnel-readiness).
 5. **Verifies the winner recurses** — see below.
 6. **Pins the winner** as the first `nameserver`, previous resolvers kept as fallbacks.
 7. **Stops WSL overwriting it** — `generateResolvConf = false` in `/etc/wsl.conf`.
@@ -138,6 +149,72 @@ This is the guard against the failure mode described in the architecture section
 `WSL_DNS_PUBLIC_PROBE` at a different name if `github.com` is not a fair test on your
 network, or set `WSL_DNS_ALLOW_NONRECURSIVE=1` if you genuinely want a local-only
 resolver in slot #1 and understand that public DNS will break.
+
+### Names served by `/etc/hosts`
+
+`nsswitch.conf` is `files dns`, so anything in `/etc/hosts` is answered **before any
+resolver is consulted**. The local hostname is the usual case — WSL writes it into
+`/etc/hosts` itself:
+
+```
+127.0.1.1	myhost.localdomain	myhost
+```
+
+Such a name is deliberately **excluded from the DNS probe**, and the script says so:
+
+```
+wsl-dns: not probing myhost — already served by /etc/hosts (files precedes dns).
+```
+
+Two reasons. First, a LAN/VPN resolver returns NXDOMAIN for the local hostname forever,
+so probing it would cap the score below 100% for no reason (`3/4` when the resolver is
+actually perfect). Second — and worse — `--verify` would count it as a fleet *hit*: it
+resolves in 0s even with the tunnel down, because `/etc/hosts` answered, not the resolver
+under test. That is a false positive about the very thing being verified.
+
+Such names keep resolving no matter what gets pinned, because `files` runs first:
+
+```console
+$ getent ahostsv4 myhost
+127.0.1.1       STREAM myhost.localdomain
+$ python3 -c "import socket; print(socket.gethostbyname('myhost'))"
+127.0.1.1
+```
+
+(Note `getent hosts <name>` — without `ahostsv4` — can take an AAAA-first path and fall
+through to DNS, which is misleading. `getent ahostsv4` and `gethostbyname` show what
+applications like `ssh` actually get.)
+
+### Tunnel readiness
+
+A candidate that answers *nothing* is a different failure from one that answers but does
+not know your fleet, so the two are reported differently:
+
+```
+candidate 172.20.10.1:  NO RESPONSE — not reachable from this network.
+candidate 192.168.0.1:  resolved 3/3 fleet host(s).
+candidate 75.75.75.75:  NO RESPONSE — not reachable from this network.
+```
+
+The per-candidate wording is neutral on purpose: with a **full-tunnel** VPN up, the
+ISP's resolvers become unroutable and go silent — reporting that as "tunnel down" would
+be exactly backwards.
+
+The readiness diagnosis therefore fires only when **not one** candidate responds, even
+for a public name:
+
+```
+WARNING — NOT ONE of the 4 configured resolvers responded, even for a public name.
+WARNING — TUNNEL LIKELY NOT READY: a VPN adapter and its DNS server appear the moment
+          you click connect, seconds before the handshake finishes, and the old network
+          is already unroutable by then. Wait for it to finish connecting, then re-run.
+```
+
+This is a real race, not a theoretical one: Windows attaches the VPN adapter and
+publishes its DNS server immediately on connect, while WireGuard's handshake takes a
+further few seconds — and the pre-existing network is already unroutable in that window.
+Running the script in that gap yields `0/N` on every candidate. The fix is simply to wait
+for the tunnel to finish and re-run; nothing is written in the meantime.
 
 ## Reverting
 
@@ -243,6 +320,7 @@ masquerade as a working fleet resolver.
 | `WSL_DNS_SERVERS` | Candidate resolvers to try **first**, before the Windows list. |
 | `WSL_DNS_FALLBACKS` | Fallback resolvers (default: current ones, then `1.1.1.1`). |
 | `WSL_DNS_SSH_CONFIG` | ssh config to scan (default `~/.ssh/config`). |
+| `WSL_DNS_HOSTS_FILE` | Hosts file consulted before DNS (default `/etc/hosts`). |
 | `WSL_DNS_DIG` | `dig` binary to probe with (default: `dig` from `PATH`). |
 | `WSL_DNS_PUBLIC_PROBE` | Public name proving recursion (default `github.com`). |
 | `WSL_DNS_ALLOW_NONRECURSIVE` | `1` pins a local-only resolver anyway. Breaks public DNS. |
