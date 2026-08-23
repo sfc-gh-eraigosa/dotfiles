@@ -346,7 +346,8 @@ If `~/opt/bin/gsl` is missing or fails to exec, `statusline-command.sh` falls ba
 
 ## Logging
 
-gsl writes a structured JSON log so silent regressions get caught on the first failing refresh (Claude Code discards stderr for status-line commands, so any stderr-only message — like the one that hid issue #30 for months — is invisible).
+gsl writes a structured JSON log through the shared
+[`sdk/libs/log`](../libs/AGENTS.md) driver so silent regressions get caught on the first failing refresh (Claude Code discards stderr for status-line commands, so any stderr-only message — like the one that hid issue #30 for months — is invisible).
 
 | Setting | Default | Override |
 |---------|---------|----------|
