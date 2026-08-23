@@ -80,10 +80,51 @@ echo "== license check: no GPL/AGPL/LGPL/forbidden in the dependency tree =="
 # version than the repo-pinned .go-version. Probe that it actually RUNS.
 if command -v go-licenses >/dev/null 2>&1 && go-licenses --help >/dev/null 2>&1; then
   # restricted = GPL/AGPL/LGPL family; forbidden = unlicensed / commercial.
-  if go-licenses check ./... --disallowed_types=forbidden,restricted; then
+  #
+  # go-licenses exits non-zero for two unrelated reasons, and conflating them
+  # is how this gate has produced a false FAIL twice now (see the shim note
+  # above). Capture the output and tell them apart:
+  #
+  #   1. it FOUND a disallowed license   -> a real finding, fail the build
+  #   2. it could not LOAD the packages  -> the tool cannot analyze this
+  #      toolchain, so it has found nothing either way
+  #
+  # (2) is what Go 1.26 produces when the toolchain itself lives in the module
+  # cache (observed on darwin/amd64: go 1.26.2 running toolchain 1.26.3 out of
+  # $GOPATH/pkg/mod/golang.org/toolchain@...). The stdlib then has no module
+  # info for go-licenses to read:
+  #     Package encoding/json does not have module info. Non go modules
+  #     projects are no longer supported.
+  #     main.go:77] some errors occurred when loading direct and transitive
+  #     dependency packages
+  # Reporting that as "a disallowed license is present" is simply false, and
+  # it aborted install.sh on a developer machine. An analyzer that could not
+  # run has found nothing; treat it exactly like an absent tool.
+  # The assignment MUST live in an `if` condition: this script runs under
+  # `set -e`, so a bare `lic_out="$(cmd)"` whose cmd exits non-zero kills the
+  # script before the exit code can be examined — which silently reintroduced
+  # the very failure this block exists to prevent.
+  if lic_out="$(go-licenses check ./... --disallowed_types=forbidden,restricted 2>&1)"; then
+    lic_rc=0
+  else
+    lic_rc=$?
+  fi
+  if [ "$lic_rc" -eq 0 ]; then
     echo "OK: all dependency licenses are permissive."
+  elif printf '%s\n' "$lic_out" | grep -qE 'does not have module info|errors occurred when loading'; then
+    if [ "${GSL_STRICT_CHECK:-0}" = "1" ]; then
+      echo "FAIL: go-licenses could not analyze the dependency tree under this Go toolchain (strict/CI mode)."
+      printf '%s\n' "$lic_out" | tail -3
+      fail=1
+    else
+      echo "SKIP: go-licenses could not analyze the dependency tree under this Go"
+      echo "      toolchain (no module info for stdlib packages), so it found"
+      echo "      NOTHING. This is a tool limitation, not a license finding."
+      echo "      (set GSL_STRICT_CHECK=1 to make this a hard failure)"
+    fi
   else
     echo "FAIL: a disallowed (copyleft/forbidden) license is present in the dep tree."
+    printf '%s\n' "$lic_out" | tail -5
     fail=1
   fi
 elif [ "${GSL_STRICT_CHECK:-0}" = "1" ]; then
