@@ -46,7 +46,7 @@ var pushCmd = &cobra.Command{
 		tokenPath := filepath.Join(home, ".config", "gss", "approval.token")
 		pusher := &classic.Pusher{
 			Git:      runner,
-			GH:       gh.NewSystemClient(),
+			GH:       gh.NewSystemClientInDir(getRepoPath()),
 			Approval: approval.NewVerifier(tokenPath, runner),
 			Backup:   backup.NewService(runner, config.SystemClock{}),
 			Sync:     sync.NewService(runner),

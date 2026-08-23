@@ -44,7 +44,7 @@ var prCmd = &cobra.Command{
 		tokenPath := filepath.Join(home, ".config", "gss", "approval.token")
 		prer := &classic.PRer{
 			Git:      runner,
-			GH:       gh.NewSystemClient(),
+			GH:       gh.NewSystemClientInDir(getRepoPath()),
 			Approval: approval.NewVerifier(tokenPath, runner),
 			Clock:    config.SystemClock{},
 			Out:      os.Stdout,
