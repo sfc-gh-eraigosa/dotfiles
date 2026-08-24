@@ -90,6 +90,14 @@ func NewSystemClient() *SystemClient {
 	return &SystemClient{exec: &systemExec{bin: "gh"}}
 }
 
+// NewSystemClientInDir returns a SystemClient whose gh invocations run in
+// dir, so repo resolution and PR mutations target that repository rather
+// than whatever repo the process cwd happens to be. Pass the same path
+// given to --repo; an empty dir behaves like NewSystemClient.
+func NewSystemClientInDir(dir string) *SystemClient {
+	return &SystemClient{exec: &systemExec{bin: "gh", dir: dir}}
+}
+
 // NewClientWithExec returns a SystemClient backed by a caller-supplied Exec.
 // Production code uses NewSystemClient; this constructor exists so tests can
 // inject a scripted Exec and assert argv/parsing without spawning gh.
@@ -348,6 +356,11 @@ type systemExec struct {
 	// $PATH. Tests of higher layers never reach this — they inject a stub
 	// Exec — but keeping bin configurable mirrors git.SystemRunner.Path.
 	bin string
+	// dir is the working directory gh runs in; empty inherits the process
+	// cwd. gh derives the target repository from its cwd, so a client left
+	// unscoped will resolve and mutate whichever repo the shell happens to
+	// be in — the defect behind --repo silently acting on the wrong repo.
+	dir string
 }
 
 func (s *systemExec) Run(ctx context.Context, args ...string) ([]byte, error) {
@@ -356,6 +369,7 @@ func (s *systemExec) Run(ctx context.Context, args ...string) ([]byte, error) {
 		bin = "gh"
 	}
 	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd.Dir = s.dir
 	var out, errb bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errb

@@ -23,6 +23,40 @@ var managedBlockRe = regexp.MustCompile(`(?s)<!-- gss:stack-begin -->.*?<!-- gss
 // PR-body marker injection (security-review #7).
 var strayMarkerRe = regexp.MustCompile(`<!--\s*gss:stack[^>]*-->`)
 
+// Feature-notes markers. FEATURE.md's "Decisions & notes" is shared across a
+// feature's workers, so it is mirrored into each PR body as a second managed
+// section — same idempotent begin/end contract as the stack section.
+const (
+	notesBegin = "<!-- gss:notes-begin -->"
+	notesEnd   = "<!-- gss:notes-end -->"
+)
+
+var notesBlockRe = regexp.MustCompile(`(?s)<!-- gss:notes-begin -->.*?<!-- gss:notes-end -->`)
+
+// strayNotesRe mirrors strayMarkerRe for the notes markers.
+var strayNotesRe = regexp.MustCompile(`<!--\s*gss:notes[^>]*-->`)
+
+// RenderNotes returns body with the feature-notes section injected/updated,
+// leaving all unmanaged text untouched. Empty notes removes the section, so
+// clearing FEATURE.md's notes clears them from every PR. Idempotent:
+// RenderNotes(RenderNotes(b, n), n) == RenderNotes(b, n).
+func RenderNotes(body, notes string) string {
+	clean := notesBlockRe.ReplaceAllString(body, "")
+	clean = strayNotesRe.ReplaceAllString(clean, "")
+	clean = strings.TrimRight(clean, " \t\r\n")
+
+	notes = strings.TrimSpace(notes)
+	if notes == "" {
+		return clean
+	}
+
+	section := notesBegin + "\n## Feature notes\n\n" + notes + "\n" + notesEnd
+	if clean == "" {
+		return section + "\n"
+	}
+	return clean + "\n\n" + section + "\n"
+}
+
 // Entry is one row of the rendered stack section, bottom→top.
 type Entry struct {
 	PRNumber int    // 0 → "(no PR yet)"

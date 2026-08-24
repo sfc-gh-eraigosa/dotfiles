@@ -121,6 +121,69 @@ func (s *Service) Done(ctx context.Context, opts DoneOpts) (DoneResult, error) {
 	return res, nil
 }
 
+// DoneFeature tears down a whole feature: the registry row, FEATURE.md, and
+// the feature directory.
+//
+// Done removes a *worker* and only deletes the feature as a side effect of
+// removing its last one. That left `gss feature start` with no inverse: a
+// feature created and never populated — the common outcome of a mistyped or
+// abandoned start — had no supported teardown at all, and cleaning it up
+// meant hand-editing registry.json.
+//
+// The guards mirror Done's: refuse while workers remain, and refuse when
+// FEATURE.md carries edits (that text is the only record of the decisions
+// behind the feature). --force overrides both, and is required for the
+// workers case because their worktrees are removed by `feature done`, not
+// here — this verb never touches a worktree.
+func (s *Service) DoneFeature(name string, force bool) (DoneResult, error) {
+	res := DoneResult{}
+	if strings.TrimSpace(name) == "" {
+		return res, fmt.Errorf("%w: feature name is required", errors.ErrInvalidIdent)
+	}
+	reg, err := s.Store.Load()
+	if err != nil {
+		return res, err
+	}
+	fi := -1
+	for i := range reg.Features {
+		if reg.Features[i].Name == name {
+			fi = i
+			break
+		}
+	}
+	if fi < 0 {
+		return res, fmt.Errorf("%w: no such feature %q", errors.ErrInvalidIdent, name)
+	}
+	feat := reg.Features[fi]
+
+	if !force {
+		if n := len(feat.Workers); n > 0 {
+			return res, fmt.Errorf("feature done: %q still has %d worker(s); remove them with 'gss feature done <worker-ref>' first, or pass --force", name, n)
+		}
+		if !s.templateClean(feat) {
+			return res, fmt.Errorf("feature done: FEATURE.md for %q has edits; pass --force to discard them", name)
+		}
+	}
+
+	if err := s.Store.Update(func(r *registry.Registry) error {
+		for i := range r.Features {
+			if r.Features[i].Name == name {
+				r.Features = append(r.Features[:i], r.Features[i+1:]...)
+				return nil
+			}
+		}
+		return nil
+	}); err != nil {
+		return res, err
+	}
+
+	featDir := filepath.Join(s.WorktreeRoot, s.NWO, name)
+	_ = os.Remove(filepath.Join(featDir, "FEATURE.md"))
+	_ = os.Remove(featDir) // best-effort (only if now empty)
+	res.FeatureDeleted = true
+	return res, nil
+}
+
 // templateClean reports whether the feature's on-disk FEATURE.md is
 // byte-identical (whitespace-normalised) to the rendered template — i.e. it
 // carries no human/agent edits.

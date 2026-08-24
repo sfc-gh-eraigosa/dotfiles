@@ -1,35 +1,71 @@
 # SDK — Go modules (`sdk/`)
 
-This tree holds the repository's **Go modules**. Each subdirectory is an independent
-module, `go install`-able by its canonical path
-`github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>` and versioned with a path-prefixed
-tag of the form `sdk/<tool>/vX.Y.Z`.
+One independent Go module per subdirectory, module path
+`github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>` (the `sdk/` segment is part of
+the canonical path — omitting it breaks `go install`), released on
+path-prefixed `sdk/<tool>/vX.Y.Z` tags.
 
-> **Go code lives here, not under `src/`.** `src/` is for non-Go tooling and agent
-> skills. This relocation is the `src/` → `sdk/` cutover tracked in
-> [docs/mbo/plans/2026-06-04-sdk-migration-plan.md](../docs/mbo/plans/2026-06-04-sdk-migration-plan.md).
+> **Go code lives here, not `src/`** (`src/` is non-Go tooling + agent skills) —
+> [cutover plan](../docs/mbo/plans/2026-06-04-sdk-migration-plan.md).
+>
+> **[README.md](./README.md) is the user-facing tour** (per tool: problem, use
+> case, demo). This file is the build + maintenance contract. Adding a module
+> updates both — see [Adding a module](#adding-a-module).
 
 ## Modules
 
-| Module | Path | Binary | Notes |
-| :----- | :--- | :----- | :---- |
-| [`gsl/`](./gsl/AGENTS.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl` | `gsl` | Go status line for Claude Code / Gemini CLI. |
-| [`gss/`](./gss/AGENTS.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/gss` | `gss` | Git Safe Sync. |
-| [`wol/`](./wol/AGENTS.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/wol` | `wol` | Wake-on-LAN utility. |
-| [`tmux-mgr/`](./tmux-mgr/AGENTS.md) | `github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr` | `tmux-mgr` | tmux session + agent orchestration. |
+| Module | Binary | What it does |
+| :----- | :----- | :----------- |
+| [`gss/`](./gss/AGENTS.md) | `gss` | Git Safe Sync — backups, approval-gated pushes, stacked feature worktrees. |
+| [`tmux-mgr/`](./tmux-mgr/AGENTS.md) | `tmux-mgr` | tmux session + parallel-agent orchestration (worktree-isolated). |
+| [`gsl/`](./gsl/AGENTS.md) | `gsl` | Powerline status line for Claude Code / Antigravity CLI. |
+| [`fleet/`](./fleet/AGENTS.md) | `fleet` | Multi-host install-drift status, TUI, wake ladder, SSH key management. |
+| [`gff/`](./gff/AGENTS.md) | `gff` | git fast features — layered feature flags gating `install.sh`. |
+| [`wol/`](./wol/AGENTS.md) | `wol` | Wake-on-LAN magic packets. |
+| [`libs/`](./libs/AGENTS.md) | *(library)* | Shared Go packages — `log`. Not a CLI. |
+
+## Adding a module
+
+`fleet`, `gff`, and `libs` each shipped without being listed above; this
+checklist exists so that stops recurring.
+
+1. Module at `sdk/<tool>/` with the canonical path above.
+2. `build.sh` sourcing [`version.sh`](./version.sh) (stamps version via
+   `-ldflags -X`).
+3. Log through [`libs/log`](#logging) — never hand-roll one.
+4. `AGENTS.md` + a `CLAUDE.md -> AGENTS.md` symlink (`ln -s AGENTS.md CLAUDE.md`).
+5. `README.md` — the module's deep docs.
+6. Wire into `install.sh` (builds into `~/opt/bin/`).
+7. Add a row to [Modules](#modules) **and** to README's "Pick your tool" table.
+8. Add a [README.md](./README.md) section, matching the existing shape:
+   blockquote pitch → **The problem** → **What it does about it** → **Reach for
+   it when** (3–4 triggers) → `console` demo → **Gotchas** → docs footer link.
+   Easiest step to skip, most costly to miss.
+9. Verify tracking: `git status --short -- <path>`. `.gitignore` starts with
+   `*`; `!sdk/**` opts this tree in, but confirm rather than assume
+   ([allowlist](../docs/gitignore-allowlist.md)).
+
+**Renaming/removing**: update both tables + the README section, and grep the old
+name across `install.sh`, `Makefile`, `../README.md`.
+
+**Demos must be real output.** Re-run the command and paste what it prints when
+flags or output change. An invented transcript is worse than no demo — it fails
+only for the reader who trusts it.
 
 ## Conventions
 
-- **Module path = `github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>`** (canonical org **and** the `sdk/` segment). External install: `go install github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>@<tag>`.
-- **Build** each module with its own `build.sh` (injects version via `-ldflags -X`); `install.sh` builds them into `~/opt/bin/`.
-- **Versioning is tag-driven — there is no `VERSION` file.** `build.sh` sources [`sdk/version.sh`](./version.sh) and derives the version from `git describe --tags --match "sdk/<tool>/v*"`, so a clean release build stamps `X.Y.Z` and a dev build stamps `X.Y.Z-<n>-g<sha>`. Release tags are cut by `.github/workflows/sdk-auto-bump.yml`, which plans the next semver per module with `opt/scripts/system/bump-sdk-version.sh --plan` and pushes `sdk/<tool>/vX.Y.Z` directly — it never commits to `main`.
-- **Test/lint discovery**: `scripts/test.sh` and the `Makefile` Go loops discover modules by directory under `sdk/` (the migration keeps `src/` scanned transitionally until the cutover completes).
-- **Per-directory docs**: every module has a `AGENTS.md` + a `CLAUDE.md -> AGENTS.md` symlink.
+- **Versioning is tag-driven — no `VERSION` file.** `build.sh` derives it from
+  `git describe --tags --match "sdk/<tool>/v*"`: clean release → `X.Y.Z`, dev →
+  `X.Y.Z-<n>-g<sha>`. `.github/workflows/sdk-auto-bump.yml` plans the next
+  semver (`opt/scripts/system/bump-sdk-version.sh --plan`) and pushes the tag
+  directly — it never commits to `main`.
+- **Test/lint discovery** is by directory under `sdk/` (`scripts/test.sh` + the
+  `Makefile` Go loops); `src/` stays scanned until the cutover completes.
 
 ## Logging
 
-**Every tool logs through [`libs/log`](./libs/AGENTS.md).** Do not hand-roll a
-logger, a file writer, or log rotation.
+**Every tool logs through [`libs/log`](./libs/AGENTS.md)** — no hand-rolled
+logger, file writer, or rotation.
 
 ```go
 import applog "github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/log"
@@ -41,12 +77,12 @@ applog.Default().WithField("host", h).Info("started")
 - **Diagnostics** (what the tool did) → `New` / `Default` — logrus JSON,
   lumberjack rotation, `$MYTOOL_LOG_FILE` / `$MYTOOL_LOG_LEVEL`.
 - **Captured output** (bytes another process produced) → `NewCapture` — plain
-  text per run, because a captured install log's value is being readable
-  as-is; the *lifecycle* is what gets standardized, not the format.
+  text per run; a captured install log's value is being readable as-is. The
+  *lifecycle* is standardized, not the format.
 
-Construction never fails: a logger that cannot open its file discards, and a
-nil `*Capture` is safe to call. Logging must never introduce a failure mode
-into the thing it observes.
+Construction never fails: a logger that cannot open its file discards, and a nil
+`*Capture` is safe to call. **Logging must never introduce a failure mode into
+the thing it observes.**
 
-gsl established the pattern in `internal/observe` and should migrate to
-`libs/log` when it is next touched.
+gsl still uses its own `internal/observe`; migrate it to `libs/log` when next
+touched.

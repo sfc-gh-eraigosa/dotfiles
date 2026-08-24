@@ -51,16 +51,36 @@ on:
 # commits and must all reach a conclusion (a cancelled run reddens the badge).
 #
 # The group therefore carries a per-run discriminator for non-PR events:
-#   - pull_request -> "pr", so the group is stable per PR ref and a new commit
-#     cancels the older in-flight run (the intended cost saving).
+#   - pull_request CODE events (opened/synchronize/reopened/ready_for_review)
+#     -> "pr", so the group is stable per PR ref and a new commit cancels the
+#     older in-flight run (the intended cost saving).
 #   - push / merge_group -> github.run_id, a UNIQUE value per run, so each run
 #     is alone in its group and can never be cancelled by a sibling.
 # This replaces `cancel-in-progress: ${{ github.event_name == 'pull_request' }}`,
 # which did NOT protect push runs: once the merge queue went live, rapid
 # back-to-back main landings put two main runs in the same ref-keyed group and
 # the in-flight (slow Docker build) run was cancelled, failing the badge.
+#
+#   - pull_request LABEL events (labeled/unlabeled) -> github.run_id too.
+#     These fire on Mergify's own queue-state labels, so folding them into the
+#     shared "pr" group livelocked the merge queue (found in PR #243):
+#       1. Entering the queue adds `queued` AND removes `dequeued` in the same
+#          instant — two label events, so two runs start together.
+#       2. The second cancels the first through this group.
+#       3. A required check whose newest run is `cancelled` is not `success`,
+#          so GitHub refuses the merge with "N of 8 required status checks
+#          have not succeeded".
+#       4. Mergify retries for 10 minutes, dequeues, and removes `queued` —
+#          itself another label event, which restarts the cycle.
+#     Observed as: `Build and Integration Test` green at 19:11:07, a fresh run
+#     cancelled at 19:12:30 one second after starting, dequeued at 19:12. It
+#     bites hardest on PRs whose heavy build (~7 min) is near Mergify's 10-min
+#     retry budget; PRs that skip it merge before the cycle can bite.
+#     A label event carries no new code, so there is nothing to supersede and
+#     nothing saved by cancelling. A unique group breaks the cycle and leaves
+#     the commit-driven cost saving above untouched.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ (github.event_name == 'pull_request' && github.event.action != 'labeled' && github.event.action != 'unlabeled') && 'pr' || github.run_id }}
   cancel-in-progress: true
 
 jobs:

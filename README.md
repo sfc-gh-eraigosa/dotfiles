@@ -4,83 +4,65 @@
 [![Antigravity CLI](https://img.shields.io/badge/Antigravity_CLI-1.0.16-blue)](https://antigravity.google)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-supported-orange)](https://claude.com/claude-code)
 
-A modernized, agent-first development environment for macOS and Linux. This repository bridges the gap between traditional terminal tools and **AI-assisted engineering** — and supports more than one assistant.
+An agent-first development environment for macOS and Linux.
+
+Two things live here: a **shared context and safety layer** that lets
+[Antigravity CLI](https://antigravity.google) (`agy`) and
+[Claude Code](https://claude.com/claude-code) work from the same skills, hooks,
+and rules — and **[the SDK](sdk/README.md)**, a set of small Go tools that make
+letting an agent actually *do* things survivable.
 
 ---
 
-## ✨ Core Pillars
+## 🧰 The SDK
 
-### 🤖 Multi-Assistant Workflow
-First-class integration with both [Antigravity CLI](https://antigravity.google) (`agy`, the successor to the retired Gemini CLI) and [Claude Code](https://claude.com/claude-code). Each assistant reads the **same** skills, the **same** progressive context, and the **same** safety rules — driven by a single source of truth in `src/` and `ai/`.
-- **Custom Skills**: Specialized instructions for Git (`gss`), Tmux (`tmux-mgr`), and SSH management — shared across assistants via symlinks.
-- **Slash Commands**: `/gss`, `/gss-scan`, `/gss-pr`, `/tmux-agent`, `/ssh-find`, `/ssh-keys` (Claude); the same shared skills load in Antigravity.
-- **Safety Hooks**: The same guard scripts run as a `PreToolUse` hook (Claude) and via Antigravity's `hooks.json` + adapter — block `rm -rf *`, require explicit confirmation for `gss push`, etc.
-- **Continuous Validation**: CI/CD pipeline runs unit tests, integration tests, and a 27-case hook test suite on every push.
+Seven single-binary Go tools covering the loop: *let an agent work → let it
+commit without losing anything → see what's happening → roll it out everywhere.*
 
-### 🔄 Safe Repository Management (`gss`)
-Stop worrying about broken rebases or lost work.
-- **Safety Backups**: Every push triggers an automatic timestamped backup branch.
-- **Workspace Scanning**: Instantly identify uncommitted changes across your entire `~/git` tree.
-- **Approval-Token Handshake**: Assistants cannot push autonomously — a fresh `~/.config/gss/approval.token` is required and matched against current `HEAD`.
+| Tool | Reach for it when… |
+| :--- | :--- |
+| [`gss`](sdk/README.md#-gss--never-lose-work-to-git-again) | An agent is about to touch git |
+| [`tmux-mgr`](sdk/README.md#-tmux-mgr--run-five-agents-at-once) | One agent isn't fast enough |
+| [`gsl`](sdk/README.md#-gsl--know-what-your-agent-is-costing-you) | You can't tell how much context is left |
+| [`fleet`](sdk/README.md#-fleet--is-every-machine-actually-updated) | You have more machines than you can `ssh` into |
+| [`gff`](sdk/README.md#-gff--flags-that-live-in-git) | "Skip that step on this machine" |
+| [`wol`](sdk/README.md#-wol--turn-it-on-from-anywhere) | The machine you need is powered off |
+| [`libs`](sdk/README.md#-libs--the-shared-foundation) | You're writing tool #8 |
 
-### 🪟 Terminal Introspection (`tmux-mgr`)
-Gives your AI agents "eyes" into your terminal state.
-- **Content Capture**: Agents can capture and analyze the history of any pane.
-- **Layout Persistence**: Save and restore complex project environments with one command.
-- **Parallel Agent Orchestration**: `tmux-mgr agent start` provisions isolated git worktrees for fan-out work.
-
----
-
-## 🤖 AI Configuration Framework
-This repository treats the AI assistant as a first-class citizen of the developer environment. 
-
-- **Unified Infrastructure**: Manage settings, hooks, and manifests for both Claude and Antigravity. [See ai/AGENTS.md](ai/AGENTS.md).
-- **Declarative Plugins**: Extensions are defined in code and auto-synced. [See docs/ai-plugins.md](docs/ai-plugins.md).
-- **Portable Skills**: Write a skill once in `src/`, use it in any assistant. [See ai/skills/](ai/skills/).
-- **Automated Sync**: `sync-plugins` and `sync-skills` keep your environment in state.
+→ **[What each tool solves, with demos](sdk/README.md)**
 
 ---
 
 ## 🚀 Quick Start
-
-### 1. Installation
-Clone the repo and run the idempotent installer:
 
 ```bash
 git clone https://github.com/sfc-gh-eraigosa/dotfiles.git ~/git/dotfiles
 ~/git/dotfiles/install.sh
 ```
 
-### 2. What to Expect
-- **Seamless Linking**: Core configs (`.zshrc`, `.tmux.conf`, etc.) are symlinked to your `$HOME`.
-- **Toolchain Readiness**: `nvm`, `pyenv`, `goenv`, and `rbenv` are initialized and ready.
-- **Assistant Activation**: Both Antigravity CLI (`agy`) and Claude Code are installed and pre-loaded with the custom skills from `src/`.
+The installer is **interactive** — prompts are front-loaded, but on Windows/WSL
+the Desktop deploy runs at the end, so stay nearby. It symlinks core configs
+(`.zshrc`, `.tmux.conf`, …) into `$HOME`, initializes `nvm`/`pyenv`/`goenv`/`rbenv`,
+builds the SDK binaries into `~/opt/bin/`, and installs both assistants
+pre-loaded with the shared skills.
 
 ---
 
-## 🤔 Choosing Your Assistant
+## 🤖 Agent Configuration
 
-Both Antigravity and Claude have access to the same skills and tools — pick by workflow fit.
+Both assistants read the **same** skills, hooks, and progressive context — write
+a skill once, use it in either.
 
-| Use case | Best fit | Why |
-| :--- | :--- | :--- |
-| Long-context refactor across many files | **Claude Code** | Larger context window, strong multi-file editing |
-| Fast tool-call loops with short prompts | **Antigravity CLI** | Lower latency per turn |
-| Headless autonomous runs in tmux panes | Either | `tmux-mgr agent start` works with both |
-| Slash-command driven workflows | **Claude Code** | More slash commands wired (`/gss-scan`, `/gss-pr`, `/tmux-agent`, `/ssh-find`, `/ssh-keys`) |
-| Repos with `.agents/` workspace config present | **Antigravity CLI** | Native workspace skills/rules/hooks support |
+- **Shared skills** — every `SKILL.md` is linked into both assistants by `sync-skills`. [ai/skills/](ai/skills/AGENTS.md)
+- **Safety hooks** — the same guard scripts block `rm -rf *` and gate `gss push`. [ai/hooks/](ai/hooks/)
+- **Agent teams** — specialized personas installed as native subagents. [ai/teams/](ai/teams/AGENTS.md)
+- **Declarative plugins** — extensions defined in code, auto-synced. [docs/ai-plugins.md](docs/ai-plugins.md)
+- **Progressive context** — `AGENTS.md` at each level (`CLAUDE.md` is a symlink to it).
 
-You can switch between them in the same project — they read the same `AGENTS.md`/`CLAUDE.md` context (the latter is a symlink to the former).
-
----
-
-## 🛠️ Development with Your Assistant
-
-This repository is designed to be maintained **with** your AI assistant.
-
-- **Syncing**: *"Sync my dotfiles"* — the assistant uses `gss` to backup and push safely (always asks first).
-- **Updating**: *"Add a new alias to my zshrc"* or *"Fix my brew permissions"*.
-- **Discovery**: Use `/gss` in either assistant for current repo status; Claude also has `/gss-scan`, `/gss-pr`.
+**Choosing between them:** Claude Code for long-context multi-file refactors and
+slash-command workflows; Antigravity for fast tool-call loops and repos with
+`.agents/` config. Either works headless in a tmux pane. You can switch
+mid-project — they read the same context.
 
 ---
 
@@ -88,24 +70,11 @@ This repository is designed to be maintained **with** your AI assistant.
 
 | Path | Description |
 | :--- | :--- |
-| `opt/bin/` | Specialized scripts and binaries (in your `$PATH`). |
-| `opt/profiles/` | Core shell and tool configurations. |
-| `src/` | Source code for custom tools and **Agent Skills** (`SKILL.md` files, shared across assistants). |
-| `ai/antigravity/` | Antigravity-specific aliases, hooks template, scripts. |
-| `ai/claude/` | Claude-specific commands, settings, hooks. |
-| `AGENTS.md` / `CLAUDE.md` | Progressive context (CLAUDE.md is a symlink to AGENTS.md at each level). |
-
----
-
-## 🖥️ Machine-Local Customization
-
-Some settings differ per host — a different CLI launcher, work credentials, or
-function overrides that would break other machines if committed. Use
-`~/.zshrc.local` for this: it is sourced last by `.zshrc`, overrides anything
-in the shared config, and is never tracked in this repo.
-
-See **[docs/machine-local-overrides.md](docs/machine-local-overrides.md)** for
-usage and examples.
+| [`sdk/`](sdk/README.md) | **Go tools** — `gss`, `tmux-mgr`, `gsl`, `fleet`, `gff`, `wol`, `libs`. |
+| `opt/bin/` · `opt/profiles/` | Utility scripts (on `$PATH`) and shell configuration. |
+| `src/` | Non-Go tooling and agent skills. |
+| [`ai/`](ai/) | Assistant config: skills, hooks, teams, plugin manifest. |
+| [`docs/`](docs/AGENTS.md) | Documentation; design work starts in [`docs/mbo/`](docs/mbo/AGENTS.md). |
 
 ---
 
@@ -113,27 +82,29 @@ usage and examples.
 
 | Command | Action |
 | :--- | :--- |
-| `/gss` | (In either assistant) Quick status summary and help. |
-| `/gss-scan` | (Claude) Find dirty repos across `~/git`. |
-| `/gss-pr` | (Claude) Create a feature branch and open a PR. |
-| `/tmux-agent` | (Claude) Spawn / list / fan-in parallel agents. |
-| `/ssh-find <alias>` | (Claude) Discover SSH host IP on local subnet. |
-| `/ssh-keys` | (Claude) List / generate / delete keys across hosts. |
-| `gss push` | Safely backup, sync, and push the current repo. |
-| `tmux-mgr save` | Save current tmux window layout. |
-| `vimw` / `vimg` | Open Vim with White or Green color profiles. |
+| `/gss` · `/gss-scan` · `/gss-pr` | Repo status · find dirty repos · open a PR |
+| `/tmux-agent` | Spawn / list / fan-in parallel agents |
+| `/ssh-find <alias>` · `/ssh-keys` | Discover a host's IP · manage keys across hosts |
+| `gss push` | Safely backup, sync, and push |
+| `fleet status` · `fleet tui` | Which hosts are out of sync · interactive dashboard |
+
+---
+
+## 🖥️ Machine-Local Customization
+
+Host-specific settings that would break other machines go in `~/.zshrc.local` —
+sourced last, overrides everything, never tracked.
+See [docs/machine-local-overrides.md](docs/machine-local-overrides.md).
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on our development workflow, testing procedures, and how to use the `Makefile` to validate your changes.
-
----
-
-## 📄 License
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and how to
+validate changes with the `Makefile`. Merges go through the Mergify queue —
+[docs/mergify.md](docs/mergify.md).
 
 Licensed under the [Apache License, Version 2.0](LICENSE).
 
 ---
-*Safeguards: 🛡️ Turn Break Mandate, 🛠️ OS-Level GSS Confirmation, 🧪 27-Case Hook Test Suite, and 🧪 Automated CI Validation active.*
+*Safeguards: 🛡️ Turn Break Mandate, 🛠️ OS-Level GSS Confirmation, 🧪 27-Case Hook Test Suite, 🧪 Automated CI Validation.*
