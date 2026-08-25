@@ -151,14 +151,14 @@
 
 ### Phase P8 — `cmd/pin` + `cmd/unpin`  (plan §4 P8)
 
-- [ ] RED: a test per EC rule covering pin/unpin (EC-2…EC-6, EC-13…EC-19); cite each in plan §5
-- [ ] RED: `--dry-run` writes nothing
-- [ ] RUN-RED → expect **FAIL**
-- [ ] GREEN: wire P1–P7 per the plan §3 orchestration pseudocode
-- [ ] RUN-GREEN → expect **PASS**
-- [ ] VERIFY: safe declines exit **0** (no winner · guard tripped · non-WSL · snapshot failed)
-- [ ] EVIDENCE → `evidence/p8/`
-- [ ] COMMIT · LEDGER · CHECKPOINT
+- [x] RED: a test per EC rule covering pin/unpin (EC-2…EC-6, EC-13…EC-19); cite each in plan §5
+- [x] RED: `--dry-run` writes nothing
+- [x] RUN-RED → expect **FAIL**
+- [x] GREEN: wire P1–P7 per the plan §3 orchestration pseudocode
+- [x] RUN-GREEN → expect **PASS**
+- [x] VERIFY: safe declines exit **0** (no winner · guard tripped · non-WSL · snapshot failed)
+- [x] EVIDENCE → `evidence/p8/`
+- [x] COMMIT · LEDGER · CHECKPOINT
 
 **Done when:** all ported pin/unpin cases green; every safe decline exits 0.
 

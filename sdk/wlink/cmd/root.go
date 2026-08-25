@@ -78,6 +78,7 @@ func newRootCmd() *cobra.Command {
 		},
 	}
 	root.Flags().BoolVar(&showVersion, "version", false, "print the stamped build version and exit")
+	root.AddCommand(newPinCmd(), newUnpinCmd())
 	return root
 }
 

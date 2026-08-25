@@ -33,7 +33,7 @@ Phases from plan §4. `P1` and `P2` are blocking — they freeze the `winhost.Ru
 | P5 — `resolvconf` render + derived budget | **done** | *(this commit)* | `go test -cover ./internal/resolvconf/...` → ok, **95.2%**; all five INI shapes byte-exact; budget 7s managed / 11s unmanaged; rendered artifacts captured; `evidence/p5/` | Set→Remove round trip byte-for-byte |
 | P6 — snapshot + drift | **done** | *(this commit)* | `go test -cover ./internal/resolvconf/...` → ok, **80.9%**, 28 cases; snapshot-failure ⇒ no write asserted; round trip byte-for-byte incl. symlink target; `evidence/p6-snapshot/` | all against a temp root — no privileged write in tests |
 | P7 — `fleetsrc` (+ `/etc/hosts` exclusion) | **done** | *(this commit)* | `go test -cover ./internal/fleetsrc/...` → ok, **90.1%**, 10 cases; read-only gate (no WriteFile/Create/OpenFile) → none; `evidence/p7/` | consumes `fleet discover --json`; ssh scan is fallback only |
-| P8 — `cmd/pin` + `cmd/unpin` | todo | | | all 54 ported shell cases green |
+| P8 — `cmd/pin` + `cmd/unpin` | **done** | *(this commit)* | `go test -cover ./cmd/...` → ok, **61.9%**; **module-wide 75.2%**; binary built and run on this machine — agrees with the prototype on exclusion, winner, 3/3 and guard verdict; `evidence/p8/` | one deliberate divergence, EC-22 |
 | P9 — `cmd/status` + `--json` | todo | | | schema validates; status-line budget |
 | P10 — `cmd/verify` | todo | | | both matrix states |
 | P11 — `cmd/wait` + readiness | todo | | | `not-ready` ≠ `down` |
@@ -66,7 +66,8 @@ A rule is proven only when its named Go test passes **and**, where marked, a liv
 | EC-16 | unpin without a snapshot | [x] `resolvconf/TestRestore_WithoutASnapshotRepairsTheStockLayout`| — | restores WSL's stock symlink |
 | EC-17 | symlink → real file | [x] `resolvconf/TestApply_ReplacesTheSharedSymlinkInsteadOfWritingThroughIt`| — | `/mnt/wsl/resolv.conf` is distro-shared |
 | EC-18 | snapshot removed after unpin | [x] `resolvconf/TestRestore_RoundTripsByteForByteAndClearsTheSnapshot`| — | next pin snapshots fresh state |
-| EC-19 | unknown args exit 2 | [ ] `cmd/TestUnknownFlag_ExitTwo` | — | distinct from a safe decline |
+| EC-19 | unknown args exit 2 | [x] `cmd/TestUnknownFlag_IsAUsageError` | — | distinct from a safe decline |
+| EC-22 | fallbacks are not hardcoded | [x] `cmd/TestPin_ExtraFallbacksAreOptIn` | — | **added in P8** — deliberate divergence from the prototype |
 | EC-21 | IP-hostname / alias-vs-Hostname | [x] `fleetsrc/TestResolve_SkipsHostnamesThatAreAlreadyAddresses`, `TestResolve_ProbesTheHostnameNotTheAlias` | — | **added in P7** — spec gap found while wiring the fleet contract |
 | EC-20 | link health / exit code | [x] `linkstate/TestState_Health`, `TestState_NonWSLIsNotDegraded`, `TestState_EmptyFleetIsNotDegraded` | — | **added in P2** — spec gap found while freezing the schema |
 | — | spec §5.1 kept current | [ ] every build-time discovery recorded as an EC rule | — | the prototype is deleted; the spec is the record |
@@ -93,12 +94,13 @@ is deleted the spec is the only record.
 
 | Date | Task | Blocker | Command + observed output | Resolution |
 | :-- | :-- | :-- | :-- | :-- |
-| | | | | |
+| 2026-08-25 | P8 | **Deliberate divergence from the prototype, recorded not absorbed.** The shell script appended `nameserver 1.1.1.1` as a last-resort fallback; `wlink` does not. On WSL the NAT proxy (`10.255.255.254`) is the Windows host and effectively always present, so the third entry is unreachable-in-practice while silently routing a user's DNS to a third party. Now opt-in via `WLINK_FALLBACKS`, pinned as **EC-22**. Everything else matched the prototype exactly on a live side-by-side run. |
 
 ## 5. Session log (append-only)
 
 | Date | Session | What happened |
 | :-- | :-- | :-- |
+| 2026-08-25 | P8 | Commands wired; the binary runs. Cross-validated live against the prototype on this machine: same `/etc/hosts` exclusion, same winner, same 3/3 score, same guard verdict — the port's oracle check, run for real rather than argued. Snapshot is taken **separately** from the write so the two failures stay distinguishable: no undo path is a safe decline (exit 0), a failed write is a real failure (exit 1). |
 | 2026-08-25 | P7 | Host source wired to `fleet discover --json`, killing the duplicate `#fleet` parser; the ssh scan is a **read-only** fallback for machines without fleet, proven by a grep gate (no `WriteFile`/`Create`/`OpenFile` in the package) — fleet stays the only writer of those blocks. **Spec gap found and closed as EC-21:** a fleet entry whose `Hostname` is already an IP must be excluded, not probed — DNS has nothing to resolve for it, so probing would penalise every candidate for a name no resolver was ever asked about, the same false-cap EC-5 prevents. The same rule pinned that the **`Hostname`** is probed, never the alias, since `Hostname` is what ssh actually resolves. |
 | 2026-08-25 | P6 | The safety phase. Every case runs against a temp root, so replacing a symlink and rewriting system files is fully covered with **no privileged write in the suite**. EC-17 is asserted the strong way: the test keeps the distro-shared target file and checks it was **not modified**, which is what proves the pin cannot leak into other WSL distros. Two states the prototype never exercised are now covered because they are the *common* ones on a stock install: **no `/etc/wsl.conf` at all** (pin creates it, so unpin must delete it rather than leave a file the user never had) and an absent `resolv.conf`. Re-running pin is asserted not to re-snapshot — a second snapshot would capture wlink's own managed files and unpin would faithfully restore the pin it exists to remove. |
 | 2026-08-25 | P5 | Render + INI surgery. Three behaviours added beyond the prototype, each with a reason: the winner is **de-duplicated** out of its own fallback list (a repeat wastes a second full timeout on the same dead server); output is capped at **glibc MAXNS=3** (extras are silently ignored, so emitting more is false redundancy); and `Set`→`Remove` is asserted to round-trip **byte-for-byte**, which is the property the whole undo path rests on. Rendering is kept separate from writing so every shape that could clobber a user's `wsl.conf` is covered as a pure string transform, with no privileged write in the tests. |
