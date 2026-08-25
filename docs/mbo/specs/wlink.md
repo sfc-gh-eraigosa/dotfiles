@@ -168,8 +168,8 @@ fixtures in CI and the live checklist covering the rest.
 - One fail-closed gff flag, **`install.sdk.wlink`** (`boolDefault: false`, `gff_opt_in`), gating
   both the build/install and the install-time pin (plan §3.1). The tool is only needed on
   machines reaching their fleet over a VPN/tunnel, so a machine that does not ask for it never
-  builds it. The shell script's `install.system.wsl-dns` is retired in the same cutover PR
-  (plan §3.2).
+  builds it. The prototype's `install.system.wsl-dns` never reaches `main` — it is replaced
+  inside PR #242 rather than migrated (plan §3.1).
 - **No `dig`/`dnsutils`** — removing that dependency is F11. `dnsutils` stays in
   `packages.tsv` on its own merit as a core diagnostic, not as a `wlink` prerequisite.
 

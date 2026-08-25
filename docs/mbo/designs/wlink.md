@@ -164,7 +164,7 @@ The **frozen interface** that lets this be built in parallel is `winhost.Runner`
 | Risk | Severity | Mitigation |
 | :-- | :-- | :-- |
 | **Breaking DNS on the host** — the whole point is rewriting `/etc/resolv.conf` | High | Every safety property from #242 is carried over as a hard requirement, not a nicety: snapshot before first write, refuse to write if the snapshot fails, recursion guard, `unpin` restores byte-for-byte. The spec makes each one a test. |
-| **Two implementations during migration** — shell + Go both able to pin | Medium | The shell script is retired to `archive/` in the same PR that wires the binary; the gff flag points at exactly one implementation at a time. Never both. |
+| **Deleting the oracle too early** — the prototype's 54 cases are the only proof the port is faithful | High | The deletion is its own gated phase (plan §4 P15), run last and only when every case has a passing Go counterpart cited in the plan's §5 traceability table. Until then the prototype stays runnable for side-by-side comparison. |
 | **Native DNS behaves differently from `dig`** | Medium | The Go resolver must reproduce the recorded `dig` behavior for the cases #242 already characterized (NXDOMAIN vs no-response vs NOERROR-no-data). Those become fixture tests, seeded from real captures. |
 | **Windows interop is untestable in CI** | Medium | All interop behind `winhost.Runner`; CI runs against recorded fixtures. A live-machine acceptance checklist covers what fixtures cannot. |
 | **Scope creep into VPN management** | Medium | §2 non-goals are explicit: observe, never manage. |
@@ -209,9 +209,14 @@ Ordered so nothing lands half-migrated:
    any plan that will be built; it is what makes the run resumable and evidence-backed.
 3. **Build**, TDD, in the order the plan's §4 sets out — the frozen `winhost.Runner` seam and
    the `linkstate.State` schema first, since everything else consumes them.
-4. **Cut over in one PR**: wire the binary into `install.sh`, repoint the gff flag, fold
-   `docs/wsl-dns.md` into `sdk/wlink/README.md`, and archive `wsl_dns_lan.sh` **in the same
-   change**. Two live implementations of a DNS rewriter is the one state to avoid.
+4. **Build and retire inside PR #242.** The shell prototype was never meant to ship — it exists
+   to have proven the behavior on real hardware and to have produced this design. None of it has
+   landed on `main`, so there is no cutover, no archival, and no flag migration: the prototype,
+   its test, `docs/wsl-dns.md`, and its `install.system.wsl-dns` entry are **deleted in the same
+   PR that introduced them**, once `wlink` supersedes them (plan §4 P15). `main` only ever sees
+   the Go tool.
+5. **Delete last, not first.** Those 54 cases are the port's behavioral oracle. P15 is gated on
+   every one of them having a passing Go counterpart — see the §5 risk row.
 
 `wlink` is gated by **one** flag, `install.sdk.wlink` — fail-closed, default **off** (plan
 §3.1). It decides whether `install.sh` builds and installs the binary *and* whether the pin
@@ -219,9 +224,3 @@ runs: enabling it already says "this machine uses the tunnel and wants its fleet
 which is the same consent. A machine that has not asked for it never even builds the binary —
 unlike the other `install.sdk.*` flags, which default true because every machine wants those
 tools.
-
-`install.system.wsl-dns`, which gates the shell script in #242, is **retired in the cutover PR**
-(plan §3.2). It is named after the script, so once that script is archived the name refers to
-nothing. The flag gating the script is removed in the same change that adds the flag gating the
-binary — never two flags live at once, for the same reason there are never two
-implementations.

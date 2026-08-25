@@ -15,14 +15,12 @@
 
 ## Preflight (once)
 
-- [ ] **GATE:** `gh pr view 242 --json state --jq .state` → **`MERGED`**. If not, stop — building the successor while the predecessor is unmerged risks two live DNS rewriters.
+- [ ] `git rev-parse --abbrev-ref HEAD` → `feature/wsl-dns-lan/edward-raigosa/dns` (the build happens **in** PR #242, not after it)
 - [ ] `go version` → toolchain present
 - [ ] `grep -qi microsoft /proc/version` → on WSL (needed for P1 fixtures and P14)
 - [ ] `fleet discover --json | head -3` → the contract P7 consumes is live
-- [ ] `bash opt/scripts/system/wsl_dns_lan_test.sh | tail -2` → `PASS=54 FAIL=0` (the oracle)
-- [ ] SETUP: `gss feature start wlink --goal "sdk/wlink — WSL link (tunnel + resolver) management"`
-- [ ] SETUP: `gss feature worker add --feature wlink --purpose cli --description "sdk/wlink Go CLI succeeding wsl_dns_lan.sh" --engine claude --json` → paste **verbatim** into `TRACKING.md` §0
-- [ ] SETUP: `cd` to the worktree path from that JSON; `mkdir -p docs/mbo/plans/wlink/evidence`
+- [ ] `bash opt/scripts/system/wsl_dns_lan_test.sh | tail -2` → `PASS=54 FAIL=0` — **the oracle**; it must keep passing until P15 deletes it
+- [ ] `mkdir -p docs/mbo/plans/wlink/evidence`
 
 ---
 
@@ -220,20 +218,16 @@
 - [ ] `sdk/wlink/AGENTS.md` + `ln -s AGENTS.md CLAUDE.md`
 - [ ] `sdk/wlink/README.md` — absorbs `docs/wsl-dns.md`
 - [ ] `.github/gff/features.yaml`: add `install.sdk.wlink`, **`boolDefault: false`**, description stating it is opt-in/fail-closed and why it differs from the other `install.sdk.*` flags
-- [ ] `.github/gff/features.yaml`: **remove** `install.system.wsl-dns` — same commit as archiving the script (plan §3.2); it is named after a script that no longer exists
 - [ ] `install.sh`: one block gated `gff_opt_in install.sdk.wlink` (**not** `gff_on` — an unset flag must mean *do not build*) that builds/installs the binary and runs the pin
-- [ ] `install.sh`: remove the old `install.system.wsl-dns` block
-- [ ] DOCS: migration note in `sdk/wlink/README.md` — `gff unset install.system.wsl-dns` / `gff set install.sdk.wlink true`
+- [ ] `install.sh`: remove the prototype's block (replaced, not migrated — neither flag reaches `main`)
 - [ ] VERIFY flag behavior on a real `install.sh` run (plan §6):
   - [ ] `install.sdk.wlink=false` (default) → one SKIP line, nothing built, nothing pinned
   - [ ] `install.sdk.wlink=true` → binary built into `~/opt/bin/`, pin runs
   - [ ] `install.sdk.wlink=true` with the tunnel **down** → pin declines, exit 0, `install.sh` still succeeds
-  - [ ] `gff get install.system.wsl-dns` → `false` after removal; a leftover override switches nothing on
 - [ ] Row in `sdk/AGENTS.md` **Modules** table
 - [ ] Row in `sdk/README.md` "Pick your tool" **and** a full section in the house shape — **demo must be real captured output**
 - [ ] `scripts/test.sh` coverage floor: `wlink) echo 60 ;;`
-- [ ] `docs/wsl-dns.md` → pointer to `sdk/wlink/README.md` (keeps the `docs/AGENTS.md` link alive)
-- [ ] `opt/scripts/system/wsl_dns_lan.sh` + `_test.sh` → `archive/` with a restore note, **same commit as the wiring**
+- [ ] `docs/AGENTS.md` row repointed at `sdk/wlink/README.md` (no redirect stub — `docs/wsl-dns.md` never lands on `main`)
 - [ ] `opt/scripts/system/AGENTS.md` entry dropped, points at the module
 - [ ] ALLOWLIST: `git status --short` for every new path
 - [ ] VERIFY: `make lint-shell && make lint-portability && make shell-test`
@@ -261,3 +255,27 @@
 - [ ] COMMIT · CHECKPOINT · promote the draft PR
 
 **Done when:** the §3 stop condition in `TRACKING.md` is fully ticked with captured evidence.
+
+---
+
+### Phase P15 — retire the prototype  (plan §4 P15)
+
+> **Gate:** do not start until plan §5's traceability table is complete, with **every one of the
+> 54 shell cases citing a passing Go test**. Until then the prototype is the only proof this port
+> is faithful — run it side by side when a Go result surprises you.
+
+- [ ] VERIFY: plan §5 table complete — every EC rule and every shell case cites a passing test
+- [ ] VERIFY: `go test ./...` green; coverage ≥60%
+- [ ] DELETE: `opt/scripts/system/wsl_dns_lan.sh`
+- [ ] DELETE: `opt/scripts/system/wsl_dns_lan_test.sh`
+- [ ] DELETE: `docs/wsl-dns.md` (content now lives in `sdk/wlink/README.md`)
+- [ ] DELETE: the `install.system.wsl-dns` entry in `.github/gff/features.yaml`
+- [ ] VERIFY: `grep -rn 'wsl_dns_lan\|install.system.wsl-dns' . | grep -v docs/mbo/` → **empty**
+- [ ] VERIFY: `make shell-test && make lint-shell && make lint-portability` still green
+- [ ] VERIFY: `git diff --stat origin/main...HEAD -- opt/scripts/system/ docs/wsl-dns.md` → prototype absent from the PR's net diff
+- [ ] EVIDENCE → `evidence/p15/`
+- [ ] COMMIT · LEDGER · CHECKPOINT
+- [ ] `docs/mbo/index.md` state → `in-review`; promote the draft PR
+
+**Done when:** `main` will see only `wlink` — no prototype, no `docs/wsl-dns.md`, no
+`install.system.wsl-dns`. Not archived: it never shipped, and git history holds it.

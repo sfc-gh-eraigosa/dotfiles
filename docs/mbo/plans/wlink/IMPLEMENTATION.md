@@ -25,39 +25,35 @@ a claim, the command is the proof.
 
 | # | Precondition | Verify |
 | :-- | :-- | :-- |
-| 1 | PR #242 merged — the shell predecessor is the shipped baseline being replaced | `gh pr view 242 --json state --jq .state` → `MERGED` |
+| 1 | Working in PR #242's worker worktree — the build happens **in** that PR, not after it | `git rev-parse --abbrev-ref HEAD` → `feature/wsl-dns-lan/edward-raigosa/dns` |
 | 2 | Go toolchain present | `go version` |
 | 3 | On a WSL host for the live phases (P1 fixtures, P14) | `grep -qi microsoft /proc/version && echo WSL` |
 | 4 | `fleet` binary available (P7 consumes its contract) | `fleet discover --json \| head -3` |
 | 5 | Worker worktree exists and is current | `gss feature list --feature wlink --json` |
 | 6 | The shell predecessor's 54 cases pass — they are this port's oracle | `bash opt/scripts/system/wsl_dns_lan_test.sh \| tail -2` → `PASS=54 FAIL=0` |
 
-**If precondition 1 is not met, stop.** Building the successor while the predecessor is
-unmerged risks two live implementations of a DNS rewriter — the one state the design forbids.
+**The prototype must stay runnable until P15.** Its 54 cases are the behavioral oracle for this
+port; they are what makes precondition 6 meaningful. Do not delete `wsl_dns_lan.sh` or its test
+before every case has a passing Go counterpart — see hard rule 1 and plan §4 P15.
 
 ## 2. Worker map
 
-Single worker. The plan's §6.1 records a leaf DAG but **recommends against fanning out**: the
-leaves share `internal/`, so a sequential single-PR build is cheaper than the integration
-overhead. Do not create per-leaf workers unless that judgment is revisited and the plan updated.
+**Use the existing worker — do not create a new feature.** The build happens in PR #242, whose
+worker already exists:
 
 | Field | Value |
 | :-- | :-- |
-| Feature | `wlink` |
-| Worker ref | *(fill from `gss feature worker add --json`)* |
-| Branch | *(verbatim from the same output)* |
-| Worktree path | *(verbatim)* |
+| Feature | `wsl-dns-lan` |
+| Worker ref | `wsl-dns-lan/edward-raigosa/dns` |
+| Branch | `feature/wsl-dns-lan/edward-raigosa/dns` |
+| PR | [#242](https://github.com/sfc-gh-eraigosa/dotfiles/pull/242) (draft) |
 | Base | `main` |
 
-Create with:
+Confirm with `gss feature list --feature wsl-dns-lan --json`; push with
+`gss feature checkpoint --worker wsl-dns-lan/edward-raigosa/dns`.
 
-```sh
-gss feature start wlink --goal "sdk/wlink — WSL link (tunnel + resolver) management"
-gss feature worker add --feature wlink --purpose cli \
-  --description "sdk/wlink Go CLI succeeding wsl_dns_lan.sh" --engine claude --json
-```
-
-Capture the JSON **verbatim** into `TRACKING.md` §0 — later steps `cd` to that path.
+The plan's §6.1 records a leaf DAG but **recommends against fanning out**: the leaves share
+`internal/`, so a sequential build in this one worker is cheaper than the integration overhead.
 
 ## 3. The execution loop (every task)
 
@@ -82,16 +78,19 @@ Per phase, from plan §4. The **overall stop condition** (also tickable in `TRAC
 - [ ] `go test ./...` green; module coverage **≥60%** (the `sdk/` floor)
 - [ ] `sdk/AGENTS.md` "Adding a module" checklist complete, all 9 items
 - [ ] `install.sdk.wlink` registered (`boolDefault: false`, `gff_opt_in`); `install.sh` builds and pins only when true
-- [ ] `install.system.wsl-dns` removed in the same commit that archives the script (plan §3.2)
 - [ ] Both flag states verified on a real `install.sh` run (plan §6)
+- [ ] **P15**: prototype, its test, `docs/wsl-dns.md`, and the `install.system.wsl-dns` entry deleted; suite still green
 - [ ] `wsl_dns_lan.sh` + its test archived **in the same PR**
 - [ ] Live acceptance checklist (plan §6) captured under `evidence/e2e/`
 - [ ] Miss timing ≤ the recorded baseline: **20–21s unpinned → 4s pinned**
 
 ## 5. Hard rules
 
-1. **Never two live implementations — or two live flags.** The binary is wired, the script
-   archived, and `install.system.wsl-dns` removed, all in one PR.
+1. **Delete the prototype last, never first.** `wsl_dns_lan.sh` and its 54 cases are the
+   behavioral oracle for this port. P15 removes them — and `docs/wsl-dns.md` and the
+   `install.system.wsl-dns` entry — only once every case has a passing Go counterpart cited in
+   plan §5. `main` never sees any of it; deleting early destroys the only proof the port is
+   faithful.
 2. **No write without an undo path.** If the snapshot cannot be written, `pin` writes nothing
    and exits 0. This is not negotiable — it is the property that makes the tool safe.
 3. **A safe decline is exit 0.** No winner, guard tripped, non-WSL, tunnel down → exit 0.

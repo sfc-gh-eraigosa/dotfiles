@@ -22,10 +22,13 @@ execution trio lives in [`wlink/`](./wlink/) —
 [`TRACKING.md`](./wlink/TRACKING.md) (evidence ledger), [`TODO.md`](./wlink/TODO.md) (the
 resumable cursor).
 
-**One gating precondition remains:** PR #242 must merge first. It ships the shell predecessor
-this plan replaces, and building the successor while it is unmerged risks two live
-implementations of a DNS rewriter — the state the design explicitly forbids. See
-`IMPLEMENTATION.md` §1.
+**Built in PR #242 itself, replacing the shell prototype before that PR merges.**
+`wsl_dns_lan.sh` was never meant to ship: it exists to have proven the behavior on real
+hardware and to have formed this design. Nothing about it has landed on `main` — verified: `git
+ls-tree origin/main` matches none of it. So there is no cutover, no archival, no flag
+retirement, and no migration note. The prototype and its `install.system.wsl-dns` flag are
+simply **deleted in the same PR that introduced them**, once the Go tool supersedes them
+(§4 P15). `main` only ever sees `wlink`.
 
 **The 54 cases in `opt/scripts/system/wsl_dns_lan_test.sh` are this plan's executable
 specification.** Every one gets a Go counterpart (§5). That is what makes this a port with a
@@ -68,14 +71,14 @@ known-good oracle rather than a rewrite from prose.
 
 | Path | Change |
 | :-- | :-- |
-| `install.sh` | One `gff_opt_in install.sdk.wlink` block that builds/installs the binary and runs the pin (§3.1); the old `install.system.wsl-dns` block is removed (§3.2) |
-| `.github/gff/features.yaml` | Add `install.sdk.wlink` (**`boolDefault: false`**, deliberately unlike the other `install.sdk.*` flags); **remove** `install.system.wsl-dns` |
+| `install.sh` | One `gff_opt_in install.sdk.wlink` block that builds/installs the binary and runs the pin (§3.1). The prototype's block is **deleted**, not migrated |
+| `.github/gff/features.yaml` | `install.sdk.wlink` (**`boolDefault: false`**, deliberately unlike the other `install.sdk.*` flags) **replaces** the prototype's `install.system.wsl-dns` entry — neither ever reaches `main` |
 | `sdk/AGENTS.md` | Row in the **Modules** table (checklist #7) |
 | `sdk/README.md` | Row in "Pick your tool" **and** a full section in the house shape: pitch → problem → what it does → reach for it when → `console` demo → gotchas → footer (checklist #7–#8) |
 | `scripts/test.sh` | Coverage floor entry `wlink) echo 60 ;;` |
-| `docs/wsl-dns.md` | Rewritten as a pointer to `sdk/wlink/README.md` (keeps the existing link from `docs/AGENTS.md` alive) |
+| `docs/wsl-dns.md` | **Deleted** — its content becomes `sdk/wlink/README.md`. It never lands on `main`, so no redirect stub is needed; the `docs/AGENTS.md` row is repointed at the module |
 | `docs/mbo/index.md` | State transitions |
-| `opt/scripts/system/wsl_dns_lan.sh` + `_test.sh` | Moved to `archive/` with a restore note **in the same PR that wires the binary** — never two live implementations |
+| `opt/scripts/system/wsl_dns_lan.sh` + `_test.sh` | **Deleted** in P15, after every one of their 54 cases has a passing Go counterpart. Not archived: it never shipped, and git history holds it |
 | `opt/scripts/system/AGENTS.md` | Drop the script's entry, point at the module |
 | `opt/profiles/packages.tsv` | **Unchanged** — `dnsutils` stays on its own merit as a core diagnostic |
 
@@ -151,11 +154,10 @@ has not asked for it never even builds the binary.
 
 **Why not a second flag for the pin.** Setting `install.sdk.wlink=true` already says *"this
 machine uses the tunnel and wants its fleet resolvable"* — that **is** the consent to pin. A
-separate run-gate would add a step without gating anything meaningfully different, and it makes
-the common case a two-command setup for no benefit. Anyone who wants the tool without an
-install-time pin simply runs `wlink pin` when they choose; the install-time pin is safe to
-repeat because it is idempotent (a no-op when already pinned) and declines safely — exit 0, no
-write — whenever the tunnel is down at install time.
+separate run-gate would add a step without gating anything meaningfully different. Anyone who
+wants the tool without an install-time pin simply runs `wlink pin` when they choose; the
+install-time pin is safe to repeat because it is idempotent (a no-op when already pinned) and
+declines safely — exit 0, no write — whenever the tunnel is down at install time.
 
 **This deliberately departs from the other `install.sdk.*` flags**, which are `boolDefault: true`
 and gated with the fail-open `gff_on` — right for tools every machine wants. `wlink` is not
@@ -164,32 +166,10 @@ all mean **do not build**, never "build by default". Hence `gff_opt_in`, matchin
 `install.windows.*` opt-in precedent rather than the sdk one. The `features.yaml` description
 must say so, so the mismatch is not later "corrected".
 
-### 3.2 Retiring `install.system.wsl-dns`
-
-That flag ships in #242 to gate the shell script. It is named after the *script*, so once
-`wsl_dns_lan.sh` moves to `archive/` the name refers to something that no longer exists —
-precisely the drift that makes a flag inventory untrustworthy. **The cutover PR retires it**, in
-the same change that archives the script. Its four references all live in files the cutover
-already edits, so this costs nothing extra:
-
-| Reference | Cutover action |
-| :-- | :-- |
-| `.github/gff/features.yaml` | remove the entry |
-| `install.sh` | the block becomes `gff_opt_in install.sdk.wlink` running the binary |
-| `docs/wsl-dns.md` | already becoming a pointer to `sdk/wlink/README.md` |
-| `opt/scripts/system/AGENTS.md` | entry already being dropped |
-
-A user override left behind is harmless — `gff get` on a retired key resolves `false`, so a
-stale `install.system.wsl-dns=true` cannot switch anything on. The `sdk/wlink/README.md`
-migration note is one line:
-
-```sh
-gff unset install.system.wsl-dns    # retired with the shell script
-gff set install.sdk.wlink true      # its replacement
-```
-
-**Never two flags live at once**, exactly as there are never two implementations: the flag that
-gates the script is removed in the same PR that adds the flag gating the binary.
+**No migration.** `install.system.wsl-dns` gates the prototype inside PR #242 and never reaches
+`main`, so `install.sdk.wlink` **replaces** it in that same PR rather than superseding a shipped
+flag. No retirement, no orphaned user overrides, no migration note — the flag inventory on
+`main` only ever contains the one that matters.
 
 ## 4. TDD build order
 
@@ -213,6 +193,7 @@ Each phase: tests first · how to verify · **done-when** · **evidence** (`tee`
 | **P12** | `sshcfg` + `cmd/doctor` | EC-10 | Flags a missing `ServerAliveInterval`; `--fix` idempotent |
 | **P13** | Integration & rollout | §6 checklist | `install.sdk.wlink` registered fail-closed and `install.system.wsl-dns` removed in the same commit; binary installed only when the flag is true; shell script archived; both sdk tables + README section done |
 | **P14** | Live acceptance | §7 | Real-machine captures committed |
+| **P15** | **Retire the prototype** | — (deletion; the gate is that P0–P14 are green) | `wsl_dns_lan.sh`, `wsl_dns_lan_test.sh`, `docs/wsl-dns.md`, and the `install.system.wsl-dns` entry are **deleted**; `go test ./...` and the full suite stay green afterwards |
 
 ## 5. Verification mapping
 
@@ -246,20 +227,24 @@ house shape (**demo must be real captured output — an invented transcript fail
 reader who trusts it**) · 8. `git status --short -- sdk/wlink` to confirm tracking against the
 `*`-default `.gitignore`.
 
-Plus: coverage floor in `scripts/test.sh`; `docs/wsl-dns.md` becomes a pointer; the shell script
-and its test move to `archive/` **in the same PR** that wires the binary.
+Plus: coverage floor in `scripts/test.sh`; `docs/wsl-dns.md`'s content moves into
+`sdk/wlink/README.md` and `docs/AGENTS.md` is repointed. The prototype's removal is **P15**, not
+part of P13 — see below.
 
-**Flag wiring (§3.1, §3.2)** — add `install.sdk.wlink` (`boolDefault: false`, `gff_opt_in`) and
-**remove** `install.system.wsl-dns` in the same commit that archives the script. Verify both
-states on a real `install.sh` run before calling P13 done:
+**Flag wiring (§3.1)** — `install.sdk.wlink` (`boolDefault: false`, `gff_opt_in`) replaces the
+prototype's entry. Verify both states on a real `install.sh` run before calling P13 done:
 
 | `install.sdk.wlink` | Expected |
 | :-- | :-- |
 | **false** (the default on every machine) | one SKIP line; binary not built; nothing pinned |
 | **true** | binary built into `~/opt/bin/`; pin runs — and declines safely (exit 0, no write) if the tunnel happens to be down |
 
-Also verify the retirement itself: `gff get install.system.wsl-dns` resolves `false` after the
-key is removed, so a leftover user override cannot switch anything on.
+**Retiring the prototype (P15)** — the deletion is gated, not incidental. The 54 shell cases are
+the behavioral oracle for this port; deleting them before their Go counterparts pass would
+destroy the only evidence the port is faithful. So P15 runs **last**, and only when the §5
+traceability table is complete with every row citing a passing test. Deleted, not archived:
+`archive/` is for retired-but-kept artifacts that once shipped, and this never did — git history
+and this PR's early commits hold it.
 
 **Manual acceptance checklist** (cannot run in CI):
 
@@ -271,7 +256,8 @@ key is removed, so a leftover user override cannot switch anything on.
 - [ ] `doctor` flags the missing `ServerAliveInterval`
 - [ ] `unpin` restores both files byte-for-byte
 - [ ] Miss timing ≤ the shell baseline (**20–21s unpinned → 4s pinned**, recorded in #242)
-- [ ] Both flag states from the §6 table behave as specified on a real `install.sh` run, and a leftover `install.system.wsl-dns=true` override switches nothing on
+- [ ] Both flag states from the §6 table behave as specified on a real `install.sh` run
+- [ ] P15 done: prototype, its test, `docs/wsl-dns.md`, and the old flag entry are gone; `grep -rn "wsl_dns_lan\|install.system.wsl-dns" .` returns nothing outside `docs/mbo/`
 
 ### 6.1 Build leaves / DAG
 
@@ -287,7 +273,7 @@ completeness should that judgment change.
 | `probe` | `internal/probe/**` | `seam` (§3 `Runner`, `Interface`) | P3+P4 green, no `dig` | no |
 | `hosts` | `internal/fleetsrc/**`, `internal/sshcfg/**` | — | P7+P12 green | no |
 | `cli` | `cmd/**`, `main.go`, `build.sh` | `seam`, `resolv`, `probe`, `hosts` | P8–P12, all 54 ported cases green | no |
-| `rollout` | `install.sh`, both sdk tables, `sdk/README.md`, `scripts/test.sh`, `archive/` | `cli` | §6 checklist + manual acceptance | no |
+| `rollout` | `install.sh`, both sdk tables, `sdk/README.md`, `scripts/test.sh`, and the P15 deletions | `cli` | §6 checklist + manual acceptance | no |
 
 `resolv` and `hosts` have no in-edges and could start immediately; `probe` needs `seam`'s
 interfaces frozen; `cli` needs all four; `rollout` is last by construction.

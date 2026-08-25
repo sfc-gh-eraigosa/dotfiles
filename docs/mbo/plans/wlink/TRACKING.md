@@ -1,7 +1,7 @@
 # wlink — live state ledger
 
 - **Slug:** `wlink`
-- **Started:** *(not started — gated on PR #242 merging; see `IMPLEMENTATION.md` §1)*
+- **Started:** *(not started — built inside PR #242, in the existing `wsl-dns-lan/edward-raigosa/dns` worker)*
 - **Playbook:** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) · **Cursor:** [`TODO.md`](./TODO.md)
 - **Plan (source of truth):** [`../wlink.md`](../wlink.md) · spec [`../../specs/wlink.md`](../../specs/wlink.md)
 - **Anchors:** issue [#245](https://github.com/sfc-gh-eraigosa/dotfiles/issues/245)
@@ -16,7 +16,7 @@ Fill verbatim from `gss feature worker add --feature wlink --purpose cli … --j
 
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| cli (single worker — plan §6.1 recommends no fan-out) | | | | | not created |
+| cli (single worker — plan §6.1 recommends no fan-out) | `wsl-dns-lan/edward-raigosa/dns` | `feature/wsl-dns-lan/edward-raigosa/dns` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/wsl-dns-lan/edward-raigosa/dns` | [#242](https://github.com/sfc-gh-eraigosa/dotfiles/pull/242) (draft) | exists |
 
 ## 1. Task ledger
 
@@ -40,6 +40,7 @@ Phases from plan §4. `P1` and `P2` are blocking — they freeze the `winhost.Ru
 | P12 — `sshcfg` + `cmd/doctor` | todo | | | keepalive detection; `--fix` idempotent |
 | P13 — integration & rollout | todo | | | sdk checklist ×9; script archived + old flag retired same commit; **one flag, `install.sdk.wlink`, default false, fail-closed** |
 | P14 — live acceptance | todo | | | real-machine captures |
+| P15 — retire the prototype | todo | | | **gated:** only after every one of the 54 cases cites a passing Go test |
 
 ## 2. Feature → proof matrix (spec §5)
 
@@ -68,10 +69,9 @@ A rule is proven only when its named Go test passes **and**, where marked, a liv
 - [ ] `go test ./...` green; module coverage **≥60%**
 - [ ] `sdk/AGENTS.md` "Adding a module" checklist — all 9 items, including the `sdk/README.md` section with a **real captured** demo
 - [ ] `install.sdk.wlink` registered `boolDefault: false`, gated `gff_opt_in`; `install.sh` builds and pins **only** when it is true
-- [ ] `install.system.wsl-dns` **removed** from features.yaml and install.sh in the same commit that archives the script (plan §3.2)
-- [ ] Both flag states verified on a real `install.sh` run; a leftover `install.system.wsl-dns=true` override switches nothing on
-- [ ] `wsl_dns_lan.sh` + `_test.sh` archived **in the same PR** as the wiring
-- [ ] `docs/wsl-dns.md` folded into `sdk/wlink/README.md`, existing links kept alive
+- [ ] Both flag states verified on a real `install.sh` run (plan §6)
+- [ ] **P15**: `grep -rn 'wsl_dns_lan\|install.system.wsl-dns' . | grep -v docs/mbo/` → empty; suite still green
+- [ ] `docs/wsl-dns.md` content folded into `sdk/wlink/README.md`; `docs/AGENTS.md` repointed
 - [ ] Live acceptance checklist (plan §6) captured under `evidence/e2e/`
 - [ ] Miss timing ≤ baseline: **20–21s unpinned → 4s pinned**
 - [ ] `docs/mbo/index.md` state advanced to `merged`
@@ -83,10 +83,10 @@ contract defect and goes here** — it gets escalated, never silently patched.
 
 | Date | Task | Blocker | Command + observed output | Resolution |
 | :-- | :-- | :-- | :-- | :-- |
-| 2026-08-24 | P0 | Gated: PR #242 not yet merged (ships the predecessor) | `gh pr view 242 --json state` → `OPEN` (draft) | Merge #242, then start |
+| | | | | |
 
 ## 5. Session log (append-only)
 
 | Date | Session | What happened |
 | :-- | :-- | :-- |
-| 2026-08-24 | planning | Design approved. Issue #245 opened. Design/spec/plan + this trio laid down. Build **not started** — gated on #242 merging. Baseline recorded from live testing: fleet lookups **20–21s unpinned → 4s pinned**; `--verify` PASS with the tunnel up (3/3 fleet hosts, 0s each) and a real `ssh wenlockpi` login. |
+| 2026-08-24 | planning | Design approved. Issue #245 opened. Design/spec/plan + this trio laid down. Build **not started**. Scope corrected: `wlink` is built **inside** PR #242 and the shell prototype is deleted there too — none of it ever lands on `main` (verified: `git ls-tree origin/main` matches none of it), so there is no cutover, archival, or flag migration. Baseline recorded from live testing: fleet lookups **20–21s unpinned → 4s pinned**; `--verify` PASS with the tunnel up (3/3 fleet hosts, 0s each) and a real `ssh wenlockpi` login. |
