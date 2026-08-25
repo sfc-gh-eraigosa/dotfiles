@@ -202,13 +202,13 @@
 
 ### Phase P12 — `sshcfg` + `cmd/doctor`  (plan §4 P12)
 
-- [ ] RED: EC-10 — flags `ServerAliveInterval 0` for the git host; silent when set; `--fix` idempotent and touches only its own block
-- [ ] RUN-RED → expect **FAIL**
-- [ ] GREEN: `keepalive.go`, `doctor.go` (+ snapshot-missing, `resolv.conf` drift, full-tunnel routing, absent fleet source)
-- [ ] RUN-GREEN → expect **PASS**
-- [ ] VERIFY: every finding explains itself in one line
-- [ ] EVIDENCE → `evidence/p12/`
-- [ ] COMMIT · LEDGER · CHECKPOINT
+- [x] RED: EC-10 — flags `ServerAliveInterval 0` for the git host; silent when set; `--fix` idempotent and touches only its own block
+- [x] RUN-RED → expect **FAIL**
+- [x] GREEN: `keepalive.go`, `doctor.go` (+ snapshot-missing, `resolv.conf` drift, full-tunnel routing, absent fleet source)
+- [x] RUN-GREEN → expect **PASS**
+- [x] VERIFY: every finding explains itself in one line
+- [x] EVIDENCE → `evidence/p12/`
+- [x] COMMIT · LEDGER · CHECKPOINT
 
 ---
 

@@ -60,6 +60,9 @@ func newRuntime(ctx context.Context) *Runtime {
 		},
 	}
 
+	rt.SSHConfigPath = envOr(envSSHConfig, os.ExpandEnv("$HOME/.ssh/config"))
+	rt.GitHost = envOr("WLINK_GIT_HOST", "github.com")
+
 	if ps, err := winhost.NewPowerShell(); err == nil {
 		rt.Host = winhost.New(ps)
 	} else {

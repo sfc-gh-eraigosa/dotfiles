@@ -11,6 +11,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/linkstate"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/probe"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/resolvconf"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/sshcfg"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/winhost"
 )
 
@@ -54,6 +55,13 @@ type Runtime struct {
 	MaxFailSeconds int
 	// PollInterval is how often `wait` re-checks; 0 means the default.
 	PollInterval time.Duration
+
+	// GitHost is the host whose ssh keepalive doctor checks; "" means github.com.
+	GitHost string
+	// SSHCmd runs ssh for the effective-config query; nil means the real one.
+	SSHCmd sshcfg.Cmd
+	// SSHConfigPath is where --fix appends its block.
+	SSHConfigPath string
 
 	Paths resolvconf.Paths
 	Out   io.Writer
