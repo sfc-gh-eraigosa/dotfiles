@@ -89,15 +89,15 @@
 
 ### Phase P4 — scoring + recursion guard  (plan §4 P4)
 
-- [ ] RED: EC-1 — the default-gateway trap (a non-default-route interface resolves all fleet names; the gateway resolves none)
-- [ ] RED: EC-2 — guard refuses a candidate that NXDOMAINs the public sentinel; `--allow-nonrecursive` overrides loudly
-- [ ] RED: silent vs reachable-but-ignorant classification (a SERVFAIL is *reachable*, not silent)
-- [ ] RUN-RED → expect **FAIL**
-- [ ] GREEN: `score.go`, `guard.go`
-- [ ] RUN-GREEN → expect **PASS**
-- [ ] VERIFY: ties resolve deterministically (first by enumeration order)
-- [ ] EVIDENCE → `evidence/p4/`
-- [ ] COMMIT · LEDGER · CHECKPOINT
+- [x] RED: EC-1 — the default-gateway trap (a non-default-route interface resolves all fleet names; the gateway resolves none)
+- [x] RED: EC-2 — guard refuses a candidate that NXDOMAINs the public sentinel; `--allow-nonrecursive` overrides loudly
+- [x] RED: silent vs reachable-but-ignorant classification (a SERVFAIL is *reachable*, not silent)
+- [x] RUN-RED → expect **FAIL**
+- [x] GREEN: `score.go`, `guard.go`
+- [x] RUN-GREEN → expect **PASS**
+- [x] VERIFY: ties resolve deterministically (first by enumeration order)
+- [x] EVIDENCE → `evidence/p4/`
+- [x] COMMIT · LEDGER · CHECKPOINT
 
 **Done when:** EC-1 and EC-2 pass; classification distinguishes silent from ignorant.
 

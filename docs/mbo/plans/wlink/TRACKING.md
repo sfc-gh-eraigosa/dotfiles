@@ -29,7 +29,7 @@ Phases from plan §4. `P1` and `P2` are blocking — they freeze the `winhost.Ru
 | P1 — `winhost` + `Runner` **(BLOCKING)** | **done** | *(this commit)* | `go test -cover ./internal/winhost/...` → ok, **64.3%**; live run against this machine's real Windows parsed all 6 interfaces; interop-outside-seam grep → none; `evidence/p1-winhost/` | seam frozen: `Runner`, `Interface` |
 | P2 — `linkstate.State` **(BLOCKING)** | **done** | *(this commit)* | `go test -cover ./internal/linkstate/...` → ok, **100.0%**; JSON shape asserted against spec §4.1; `evidence/p2/` | schema frozen + documented in README |
 | P3 — `probe` native DNS | **done** | *(this commit)* | `go test -cover ./internal/probe/...` → ok, **87.1%**; all four outcomes distinguished against an in-process DNS server; dig-parity comparison + `grep '"dig"'` → none; `evidence/p3-probe/` | **no DNS library added** — stdlib preserves the distinctions |
-| P4 — `probe` scoring + recursion guard | todo | | | EC-1 default-gateway trap; EC-2 guard |
+| P4 — `probe` scoring + recursion guard | **done** | *(this commit)* | `go test -cover ./internal/probe/...` → ok, **94.7%**, 18 cases; EC-1/EC-2/EC-14 each asserted; `evidence/p4/` | ties resolve to first-enumerated (stable across runs) |
 | P5 — `resolvconf` render + derived budget | todo | | | five INI shapes, golden byte-exact |
 | P6 — snapshot + drift | todo | | | round-trip byte-for-byte; no write without snapshot |
 | P7 — `fleetsrc` (+ `/etc/hosts` exclusion) | todo | | | `fleet discover --json`, ssh fallback |
@@ -48,8 +48,8 @@ A rule is proven only when its named Go test passes **and**, where marked, a liv
 
 | Rule | Feature | Automated proof | Human/live proof | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| EC-1 | F1/F2 candidate selection | [ ] `probe/TestScore_PrefersFleetResolverOverDefaultGateway` | — | the default-gateway trap |
-| EC-2 | F3 recursion guard | [ ] `probe/TestGuard_RefusesNonRecursive` (+`_Override`) | — | NXDOMAIN from ns#1 is final |
+| EC-1 | F1/F2 candidate selection | [x] `probe/TestScore_PrefersTheResolverThatAnswersForTheFleet`| — | the default-gateway trap |
+| EC-2 | F3 recursion guard | [x] `probe/TestGuard_RefusesAResolverThatCannotRecurse`, `TestGuard_OverrideAllowsButStillExplains`| — | NXDOMAIN from ns#1 is final |
 | EC-3 | F4/F5 render | [ ] `resolvconf/TestWslConf_AllFiveShapes` | — | golden byte-exact |
 | EC-4 | F6 snapshot/restore | [ ] `resolvconf/TestSnapshotRoundTrip_ByteForByte`, `TestNoWriteWithoutSnapshot` | [ ] | the safety property |
 | EC-5 | F7 `/etc/hosts` exclusion | [ ] `fleetsrc/TestExcludesHostsFileNames` | — | scores `1/1`, not `1/2` |
@@ -61,7 +61,7 @@ A rule is proven only when its named Go test passes **and**, where marked, a liv
 | EC-11 | F17 drift | [ ] `resolvconf/TestDriftDetection` | — | |
 | EC-12 | non-WSL no-op | [ ] `cmd/TestNonWSL_NoOpExitZero` | — | must never write off-WSL |
 | EC-13 | wildcard Host skipped | [ ] `fleetsrc/TestSkipsWildcardHostPatterns` | — | |
-| EC-14 | candidate filtering | [ ] `probe/TestFiltersLoopbackAndLinkLocal` | — | + de-dup, first-seen order |
+| EC-14 | candidate filtering | [x] `probe/TestFilterCandidates`| — | + de-dup, first-seen order |
 | EC-15 | zero probe hosts | [ ] `cmd/TestNoFleetHosts_CleanNoOp` | — | not an error |
 | EC-16 | unpin without a snapshot | [ ] `resolvconf/TestRepairStockLayout` | — | restores WSL's stock symlink |
 | EC-17 | symlink → real file | [ ] `resolvconf/TestReplacesSharedSymlink` | — | `/mnt/wsl/resolv.conf` is distro-shared |
@@ -98,6 +98,7 @@ is deleted the spec is the only record.
 
 | Date | Session | What happened |
 | :-- | :-- | :-- |
+| 2026-08-25 | P4 | Scoring + guard. EC-1 asserted with the gateway listed **first** in enumeration order, so a naive implementation that trusts ordering fails the test. Tie-breaking pinned to first-enumerated and looped 20× — map iteration order would otherwise change the pinned resolver run to run on an unchanged machine. `Score` deliberately scores **every** candidate even after a winner emerges, because `status` needs the whole picture: "the ISP resolver answered but knew none of your hosts" is the line that explains why the default route is not the answer. |
 | 2026-08-25 | P3 | Native DNS landed; `dig` dependency gone. **No DNS library needed** — checked first, and `net.Resolver` already preserves every distinction wlink needs (timeout→`IsTimeout`, NXDOMAIN→`IsNotFound`, SERVFAIL→neither), so the module still has 14 total deps and works where `dnsutils` never installs. `PreferGo` is load-bearing: without it cgo's resolver reads `/etc/resolv.conf` and answers from the very configuration wlink is trying to evaluate. A test caught cancellation being classified `Unhelpful` (i.e. "the server answered") when nothing came back — a status-line timeout would have looked like a reachable resolver; now checked before the DNSError switch. |
 | 2026-08-25 | P2 | Schema frozen at 100% coverage. **Spec gap found and closed:** the JSON needed a computed `link` verdict so gsl reads one field instead of re-deriving the degraded rules — added to spec §4.1 and pinned as new rule **EC-20**, which also fixes two traps the rules did not state: off-WSL is `ok` (a no-op, not a failure, or install.sh looks broken on machines the feature never applied to) and an **empty** fleet is `ok` (nothing to resolve is not a shortfall). Also pinned: empty collections marshal as `[]`, absences as `null`. |
 | 2026-08-25 | P1 | Seam frozen. Two design calls worth recording: queries ask PowerShell for **JSON** (`ConvertTo-Json`) rather than the default table rendering, because table output is column-truncated and locale-dependent; and `decodeRows` handles the **bare-object-vs-array** shape, since `ConvertTo-Json` emits an object when exactly one row matches — a parser assuming an array silently returns nothing on a single-interface machine. A test also caught the tunnel-alias regex being too narrow (hex-only, so `wg-lab`/`wg-home` failed without adapter data); broadened, code fixed rather than the test. |
