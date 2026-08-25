@@ -52,8 +52,8 @@ watch                -
 -                    psmisc
 
 # Core DNS diagnostics: dig, nslookup, host. Part of the standard toolset on
-# every machine, not a dependency of any one feature (though
-# opt/scripts/system/wsl_dns_lan.sh does need dig and warns when it is absent).
+# every machine, not a dependency of any one feature — sdk/wlink resolves
+# natively in Go precisely so it needs nothing installed.
 # BREW is '-' DELIBERATELY: macOS already ships dig/nslookup/host in /usr/bin
 # as part of the base OS, so they are present on every platform without a brew
 # install. Do NOT "fix" this by adding `bind` — that formula is KEG-ONLY, so it

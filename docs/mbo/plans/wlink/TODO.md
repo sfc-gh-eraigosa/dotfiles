@@ -264,18 +264,18 @@
 > citing a passing Go test**, and spec §5.1 reflecting anything learned during the build. Once
 > the prototype is gone, §5.1 is the only record of what it proved.
 
-- [ ] VERIFY: plan §5 table complete — EC-1…EC-19 each cite a passing test
-- [ ] VERIFY: spec §5.1 current — every build-time discovery recorded there as an EC rule
-- [ ] VERIFY: `go test ./...` green; coverage ≥60%
-- [ ] DELETE: `opt/scripts/system/wsl_dns_lan.sh`
-- [ ] DELETE: `opt/scripts/system/wsl_dns_lan_test.sh`
-- [ ] DELETE: `docs/wsl-dns.md` (content now lives in `sdk/wlink/README.md`)
-- [ ] DELETE: the `install.system.wsl-dns` entry in `.github/gff/features.yaml`
-- [ ] VERIFY: `grep -rn 'wsl_dns_lan\|install.system.wsl-dns' . | grep -v docs/mbo/` → **empty**
-- [ ] VERIFY: `make shell-test && make lint-shell && make lint-portability` still green
-- [ ] VERIFY: `git diff --stat origin/main...HEAD -- opt/scripts/system/ docs/wsl-dns.md` → prototype absent from the PR's net diff
-- [ ] EVIDENCE → `evidence/p15/`
-- [ ] COMMIT · LEDGER · CHECKPOINT
+- [x] VERIFY: plan §5 table complete — EC-1…EC-19 each cite a passing test
+- [x] VERIFY: spec §5.1 current — every build-time discovery recorded there as an EC rule
+- [x] VERIFY: `go test ./...` green; coverage ≥60%
+- [x] DELETE: `opt/scripts/system/wsl_dns_lan.sh`
+- [x] DELETE: `opt/scripts/system/wsl_dns_lan_test.sh`
+- [x] DELETE: `docs/wsl-dns.md` (content now lives in `sdk/wlink/README.md`)
+- [x] DELETE: the `install.system.wsl-dns` entry in `.github/gff/features.yaml`
+- [x] VERIFY: `grep -rn 'wsl_dns_lan\|install.system.wsl-dns' . | grep -v docs/mbo/` → **empty**
+- [x] VERIFY: `make shell-test && make lint-shell && make lint-portability` still green
+- [x] VERIFY: `git diff --stat origin/main...HEAD -- opt/scripts/system/ docs/wsl-dns.md` → prototype absent from the PR's net diff
+- [x] EVIDENCE → `evidence/p15/`
+- [x] COMMIT · LEDGER · CHECKPOINT
 - [ ] `docs/mbo/index.md` state → `in-review`; promote the draft PR
 
 **Done when:** `main` will see only `wlink` — no prototype, no `docs/wsl-dns.md`, no
