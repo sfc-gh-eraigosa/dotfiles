@@ -115,13 +115,14 @@ runner, `internal/version` ldflags), which:
 **Proposed: Option C**, `sdk/wlink`, binary `wlink` — *pending the go/no-go this document exists
 to inform.*
 
-### Why this name
+### The name
 
-`link` was the first choice and had to be dropped: `/usr/bin/link` is the POSIX hard-link
-utility (coreutils/uutils). `install.sh` prepends `~/opt/bin` to `PATH` (position 16 vs
-`/usr/bin` at 40), so a binary named `link` would **shadow a POSIX utility on every machine
-that runs install.sh**. `wlink` keeps the semantics, scopes it to WSL, and collides with
-nothing. It still reads as a pair with `fleet`:
+**`wlink` = WSL link** — the link between this WSL box and the private network its fleet
+lives on. "Link" is the thing the tool reasons about: the tunnel carrying it, the resolver
+that makes its names resolvable, and whether it is currently usable. The `w` scopes it to
+WSL, which is what the tool is — Windows interop, `/etc/wsl.conf`, the WSL NAT proxy.
+
+It reads as a pair with `fleet`:
 
 ```
 fleet status     # who my hosts are, and are they in sync
