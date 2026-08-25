@@ -30,9 +30,11 @@ retirement, and no migration note. The prototype and its `install.system.wsl-dns
 simply **deleted in the same PR that introduced them**, once the Go tool supersedes them
 (§4 P15). `main` only ever sees `wlink`.
 
-**The 54 cases in `opt/scripts/system/wsl_dns_lan_test.sh` are this plan's executable
-specification.** Every one gets a Go counterpart (§5). That is what makes this a port with a
-known-good oracle rather than a rewrite from prose.
+**The prototype's 54 cases are distilled into the spec's EC-1…EC-19**, with their provenance
+recorded in [spec §5.1](../specs/wlink.md#51-provenance--the-prototypes-behavioral-inventory) —
+including which rules came only from running against a live tunnel and would not have been
+written from first principles. The spec, not the shell script, is what `wlink` is built against;
+the prototype's job was to discover the behavior, and it has done it.
 
 ## 2. File inventory
 
@@ -93,7 +95,7 @@ type Runner interface {
 }
 
 type Interface struct {
-    Alias      string   // "wg65d1fe92", "Wi-Fi"
+    Alias      string   // "wg-lab", "Wi-Fi"
     Addresses  []string
     DNSServers []string
     IsTunnel   bool     // heuristic: WireGuard-shaped alias / adapter description
@@ -193,12 +195,12 @@ Each phase: tests first · how to verify · **done-when** · **evidence** (`tee`
 | **P12** | `sshcfg` + `cmd/doctor` | EC-10 | Flags a missing `ServerAliveInterval`; `--fix` idempotent |
 | **P13** | Integration & rollout | §6 checklist | `install.sdk.wlink` registered fail-closed and `install.system.wsl-dns` removed in the same commit; binary installed only when the flag is true; shell script archived; both sdk tables + README section done |
 | **P14** | Live acceptance | §7 | Real-machine captures committed |
-| **P15** | **Retire the prototype** | — (deletion; the gate is that P0–P14 are green) | `wsl_dns_lan.sh`, `wsl_dns_lan_test.sh`, `docs/wsl-dns.md`, and the `install.system.wsl-dns` entry are **deleted**; `go test ./...` and the full suite stay green afterwards |
+| **P15** | **Retire the prototype** | — (deletion; gated on EC-1…EC-19 each citing a passing Go test, and spec §5.1 being current) | `wsl_dns_lan.sh`, `wsl_dns_lan_test.sh`, `docs/wsl-dns.md`, and the `install.system.wsl-dns` entry are **deleted**; `go test ./...` and the full suite stay green afterwards |
 
 ## 5. Verification mapping
 
-Every spec rule → its named test. **And** every one of the 54 shell cases → a Go counterpart;
-the port is not done until this table is complete and each row cites a passing test name.
+Every spec rule → its named test. The table is complete when each of EC-1…EC-19 cites a passing
+test name. (EC-13…EC-19 were added from the prototype's inventory — see spec §5.1.)
 
 | Spec rule | Go test | Shell ancestor |
 | :-- | :-- | :-- |
@@ -239,12 +241,17 @@ prototype's entry. Verify both states on a real `install.sh` run before calling 
 | **false** (the default on every machine) | one SKIP line; binary not built; nothing pinned |
 | **true** | binary built into `~/opt/bin/`; pin runs — and declines safely (exit 0, no write) if the tunnel happens to be down |
 
-**Retiring the prototype (P15)** — the deletion is gated, not incidental. The 54 shell cases are
-the behavioral oracle for this port; deleting them before their Go counterparts pass would
-destroy the only evidence the port is faithful. So P15 runs **last**, and only when the §5
-traceability table is complete with every row citing a passing test. Deleted, not archived:
-`archive/` is for retired-but-kept artifacts that once shipped, and this never did — git history
-and this PR's early commits hold it.
+**Retiring the prototype (P15)** — the deletion is gated on the **spec** carrying the knowledge,
+not on a case-for-case port. P15 runs when every EC-1…EC-19 rule cites a passing Go test in the
+§5 table. Spec §5.1 is what makes that safe: it records the full behavioral inventory and, for
+the non-obvious rules, *how each was discovered*, so the reasoning survives the script.
+
+The corollary is a standing obligation: **anything learned while building `wlink` that the
+prototype had handled must be added to spec §5.1**, not merely fixed in code. Once the script is
+gone the spec is the only record, so a behavior that never reaches it is a behavior that is lost.
+
+Deleted, not archived: `archive/` is for retired-but-kept artifacts that once shipped, and this
+never did — git history and this PR's early commits hold it.
 
 **Manual acceptance checklist** (cannot run in CI):
 

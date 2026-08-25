@@ -84,11 +84,11 @@ _make_stubs "$STUB_DIR"
 # wildcard pattern that must NOT be probed.
 SSH_CFG="$(mktemp)"
 cat > "$SSH_CFG" <<'EOF'
-Host wenlockpi  #fleet
-    Hostname wenlockpi
+Host lab-pi  #fleet
+    Hostname lab-pi
 
-Host wenlockgigabyte  #fleet
-    Hostname wenlockgigabyte
+Host lab-nas  #fleet
+    Hostname lab-nas
 
 Host notfleet
     Hostname notfleet
@@ -114,20 +114,20 @@ _run() {
 if grep -qi microsoft /proc/version 2>/dev/null; then
 
     # === 2. Picks the server that resolves the most fleet hosts ===
-    ZONE_GOOD="192.168.0.1 wenlockpi 192.168.0.128
-192.168.0.1 wenlockgigabyte 192.168.0.196
-192.168.0.1 github.com 140.82.113.4"
-    OUT="$(_run "$ZONE_GOOD" "75.75.75.75 192.168.0.1" "$SSH_CFG")"
+    ZONE_GOOD="10.10.0.1 lab-pi 10.10.0.21
+10.10.0.1 lab-nas 10.10.0.22
+10.10.0.1 github.com 198.51.100.10"
+    OUT="$(_run "$ZONE_GOOD" "198.51.100.53 10.10.0.1" "$SSH_CFG")"
     OUT_FILE="$(mktemp)"; printf '%s\n' "$OUT" > "$OUT_FILE"
 
     assert_grep "selects the LAN resolver that answers for the fleet" \
-        'selected 192\.168\.0\.1 \(2/2 fleet hosts\)' "$OUT_FILE"
-    # 75.75.75.75 has no stub entries at all, so it answers nothing -- the
+        'selected 10\.10\.0\.1 \(2/2 fleet hosts\)' "$OUT_FILE"
+    # 198.51.100.53 has no stub entries at all, so it answers nothing -- the
     # script must report that as unreachable, not as "resolved 0/N".
     assert_grep "an entirely silent candidate is reported as unreachable" \
-        'candidate 75\.75\.75\.75: NO RESPONSE' "$OUT_FILE"
+        'candidate 198\.51\.100\.53: NO RESPONSE' "$OUT_FILE"
     assert_grep "pins the winner as the FIRST nameserver" \
-        '^nameserver 192\.168\.0\.1$' "$OUT_FILE"
+        '^nameserver 10\.10\.0\.1$' "$OUT_FILE"
     assert_grep "keeps a fallback resolver after the winner" \
         '^nameserver 1\.1\.1\.1$' "$OUT_FILE"
     assert_grep "sets a short resolver timeout so off-network fails over fast" \
@@ -140,24 +140,24 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
     # === 3. Default-gateway trap: the WRONG server must not win ===
     # The local gateway answers for an unrelated name only; the tunnel resolver
     # answers for the fleet. Selection must follow the fleet, not the gateway.
-    ZONE_TRAP="10.0.0.1 notfleet 10.0.0.9
-192.168.0.1 wenlockpi 192.168.0.128
-192.168.0.1 wenlockgigabyte 192.168.0.196
-192.168.0.1 github.com 140.82.113.4"
-    OUT2="$(_run "$ZONE_TRAP" "10.0.0.1 192.168.0.1" "$SSH_CFG")"
+    ZONE_TRAP="192.0.2.1 notfleet 192.0.2.9
+10.10.0.1 lab-pi 10.10.0.21
+10.10.0.1 lab-nas 10.10.0.22
+10.10.0.1 github.com 198.51.100.10"
+    OUT2="$(_run "$ZONE_TRAP" "192.0.2.1 10.10.0.1" "$SSH_CFG")"
     OUT2_FILE="$(mktemp)"; printf '%s\n' "$OUT2" > "$OUT2_FILE"
     assert_grep "does not pick the default-gateway resolver" \
-        'selected 192\.168\.0\.1' "$OUT2_FILE"
+        'selected 10\.10\.0\.1' "$OUT2_FILE"
 
     # === 4. No resolver answers -> warn, write nothing, still exit 0 ===
-    OUT3="$(_run "" "75.75.75.75 10.0.0.1" "$SSH_CFG")"
+    OUT3="$(_run "" "198.51.100.53 192.0.2.1" "$SSH_CFG")"
     OUT3_FILE="$(mktemp)"; printf '%s\n' "$OUT3" > "$OUT3_FILE"
     assert_grep "warns when no candidate resolves any fleet host" \
         'no candidate resolver answered' "$OUT3_FILE"
     assert_grep_negative "writes no resolv.conf when nothing resolves" \
         '^nameserver ' "$OUT3_FILE"
     assert_exit_code 0 "exits 0 when no resolver answers (non-fatal)" \
-        env PATH="${STUB_DIR}:${PATH}" STUB_ZONE="" STUB_WIN_DNS="75.75.75.75" \
+        env PATH="${STUB_DIR}:${PATH}" STUB_ZONE="" STUB_WIN_DNS="198.51.100.53" \
             WSL_DNS_SSH_CONFIG="$SSH_CFG" bash "$SCRIPT" --dry-run
 
     # === 4b. ALL candidates silent => "tunnel not ready" diagnosis ===
@@ -170,11 +170,11 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
 
     # === 4c. Some answer, none knows the fleet => a DIFFERENT diagnosis ===
     # Must not be misreported as "not ready" -- the network is plainly working.
-    ZONE_PUBLIC_ONLY="75.75.75.75 github.com 140.82.113.4"
-    OUT3B="$(_run "$ZONE_PUBLIC_ONLY" "75.75.75.75 10.0.0.1" "$SSH_CFG")"
+    ZONE_PUBLIC_ONLY="198.51.100.53 github.com 198.51.100.10"
+    OUT3B="$(_run "$ZONE_PUBLIC_ONLY" "198.51.100.53 192.0.2.1" "$SSH_CFG")"
     OUT3B_FILE="$(mktemp)"; printf '%s\n' "$OUT3B" > "$OUT3B_FILE"
     assert_grep "a reachable-but-ignorant resolver is labelled reachable" \
-        'candidate 75\.75\.75\.75: reachable, resolved 0/' "$OUT3B_FILE"
+        'candidate 198\.51\.100\.53: reachable, resolved 0/' "$OUT3B_FILE"
     assert_grep_negative "does NOT blame the tunnel when resolvers are answering" \
         'TUNNEL LIKELY NOT READY' "$OUT3B_FILE"
 
@@ -185,10 +185,10 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
     FAKE_HOSTS="$(mktemp)"
     printf '127.0.0.1\tlocalhost\n127.0.1.1\tselfhost.localdomain\tselfhost\n' > "$FAKE_HOSTS"
     OUT3C="$(PATH="${STUB_DIR}:${PATH}" \
-        STUB_ZONE="192.168.0.1 wenlockpi 192.168.0.128
-192.168.0.1 github.com 140.82.113.4" \
-        STUB_WIN_DNS="192.168.0.1" \
-        WSL_DNS_PROBE_HOSTS="wenlockpi selfhost" \
+        STUB_ZONE="10.10.0.1 lab-pi 10.10.0.21
+10.10.0.1 github.com 198.51.100.10" \
+        STUB_WIN_DNS="10.10.0.1" \
+        WSL_DNS_PROBE_HOSTS="lab-pi selfhost" \
         WSL_DNS_HOSTS_FILE="$FAKE_HOSTS" \
         WSL_DNS_FALLBACKS="1.1.1.1" \
         bash "$SCRIPT" --dry-run 2>&1)"
@@ -196,27 +196,27 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
     assert_grep "announces the /etc/hosts name it is not probing" \
         'not probing selfhost' "$OUT3C_FILE"
     assert_grep "scores only the DNS-resolvable hosts (1/1, not 1/2)" \
-        'selected 192\.168\.0\.1 \(1/1 fleet hosts\)' "$OUT3C_FILE"
+        'selected 10\.10\.0\.1 \(1/1 fleet hosts\)' "$OUT3C_FILE"
 
     # === 5. Loopback / link-local candidates are filtered out ===
-    OUT4="$(_run "$ZONE_GOOD" "127.0.0.53 169.254.1.1 192.168.0.1" "$SSH_CFG")"
+    OUT4="$(_run "$ZONE_GOOD" "127.0.0.53 169.254.1.1 10.10.0.1" "$SSH_CFG")"
     OUT4_FILE="$(mktemp)"; printf '%s\n' "$OUT4" > "$OUT4_FILE"
     assert_grep_negative "skips loopback candidates" 'candidate 127\.' "$OUT4_FILE"
     assert_grep_negative "skips link-local candidates" 'candidate 169\.254\.' "$OUT4_FILE"
 
     # === 6. WSL_DNS_PROBE_HOSTS overrides the ssh config ===
-    ZONE_OVERRIDE="192.168.0.1 myhost 192.168.0.50
-192.168.0.1 github.com 140.82.113.4"
+    ZONE_OVERRIDE="10.10.0.1 myhost 10.10.0.50
+10.10.0.1 github.com 198.51.100.10"
     OUT5="$(PATH="${STUB_DIR}:${PATH}" STUB_ZONE="$ZONE_OVERRIDE" \
-            STUB_WIN_DNS="192.168.0.1" WSL_DNS_PROBE_HOSTS="myhost" \
+            STUB_WIN_DNS="10.10.0.1" WSL_DNS_PROBE_HOSTS="myhost" \
             WSL_DNS_SSH_CONFIG=/nonexistent WSL_DNS_FALLBACKS="1.1.1.1" \
             bash "$SCRIPT" --dry-run 2>&1)"
     OUT5_FILE="$(mktemp)"; printf '%s\n' "$OUT5" > "$OUT5_FILE"
     assert_grep "WSL_DNS_PROBE_HOSTS drives the probe set" \
-        'selected 192\.168\.0\.1 \(1/1 fleet hosts\)' "$OUT5_FILE"
+        'selected 10\.10\.0\.1 \(1/1 fleet hosts\)' "$OUT5_FILE"
 
     # === 7. No probe hosts at all -> clean no-op ===
-    OUT6="$(PATH="${STUB_DIR}:${PATH}" STUB_ZONE="" STUB_WIN_DNS="192.168.0.1" \
+    OUT6="$(PATH="${STUB_DIR}:${PATH}" STUB_ZONE="" STUB_WIN_DNS="10.10.0.1" \
             WSL_DNS_SSH_CONFIG=/nonexistent bash "$SCRIPT" --dry-run 2>&1)"
     OUT6_FILE="$(mktemp)"; printf '%s\n' "$OUT6" > "$OUT6_FILE"
     assert_grep "no-ops cleanly with no fleet hosts to probe" \
@@ -247,9 +247,9 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
     # resolv.conf is an ordered list, not a routing table -- nameserver #1
     # answers every query and its NXDOMAIN is final, so a resolver that cannot
     # answer for public names would take out public DNS with no fallback.
-    ZONE_LOCAL_ONLY="192.168.0.1 wenlockpi 192.168.0.128
-192.168.0.1 wenlockgigabyte 192.168.0.196"
-    OUT8="$(_run "$ZONE_LOCAL_ONLY" "192.168.0.1" "$SSH_CFG")"
+    ZONE_LOCAL_ONLY="10.10.0.1 lab-pi 10.10.0.21
+10.10.0.1 lab-nas 10.10.0.22"
+    OUT8="$(_run "$ZONE_LOCAL_ONLY" "10.10.0.1" "$SSH_CFG")"
     OUT8_FILE="$(mktemp)"; printf '%s\n' "$OUT8" > "$OUT8_FILE"
     assert_grep "refuses a resolver that cannot answer for public names" \
         'resolves fleet hosts but NOT github\.com' "$OUT8_FILE"
@@ -257,24 +257,24 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
         '^nameserver ' "$OUT8_FILE"
     assert_exit_code 0 "recursion refusal is non-fatal" \
         env PATH="${STUB_DIR}:${PATH}" STUB_ZONE="$ZONE_LOCAL_ONLY" \
-            STUB_WIN_DNS="192.168.0.1" WSL_DNS_SSH_CONFIG="$SSH_CFG" \
+            STUB_WIN_DNS="10.10.0.1" WSL_DNS_SSH_CONFIG="$SSH_CFG" \
             bash "$SCRIPT" --dry-run
 
     # === 10b. The override forces the pin, with a loud warning ===
     OUT9="$(PATH="${STUB_DIR}:${PATH}" STUB_ZONE="$ZONE_LOCAL_ONLY" \
-            STUB_WIN_DNS="192.168.0.1" WSL_DNS_SSH_CONFIG="$SSH_CFG" \
+            STUB_WIN_DNS="10.10.0.1" WSL_DNS_SSH_CONFIG="$SSH_CFG" \
             WSL_DNS_FALLBACKS="1.1.1.1" WSL_DNS_ALLOW_NONRECURSIVE=1 \
             bash "$SCRIPT" --dry-run 2>&1)"
     OUT9_FILE="$(mktemp)"; printf '%s\n' "$OUT9" > "$OUT9_FILE"
     assert_grep "WSL_DNS_ALLOW_NONRECURSIVE=1 pins anyway" \
         'pinning anyway' "$OUT9_FILE"
     assert_grep "override still renders the resolv.conf" \
-        '^nameserver 192\.168\.0\.1$' "$OUT9_FILE"
+        '^nameserver 10\.10\.0\.1$' "$OUT9_FILE"
 
     # === 10c. A custom public probe is honoured ===
     OUT10="$(PATH="${STUB_DIR}:${PATH}" STUB_ZONE="$ZONE_LOCAL_ONLY
-192.168.0.1 example.test 10.9.9.9" \
-            STUB_WIN_DNS="192.168.0.1" WSL_DNS_SSH_CONFIG="$SSH_CFG" \
+10.10.0.1 example.test 10.9.9.9" \
+            STUB_WIN_DNS="10.10.0.1" WSL_DNS_SSH_CONFIG="$SSH_CFG" \
             WSL_DNS_FALLBACKS="1.1.1.1" WSL_DNS_PUBLIC_PROBE=example.test \
             bash "$SCRIPT" --dry-run 2>&1)"
     OUT10_FILE="$(mktemp)"; printf '%s\n' "$OUT10" > "$OUT10_FILE"
@@ -285,13 +285,13 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
     # The pinned resolver answers for a fleet name, so fleet lookups are
     # EXPECTED to succeed. Uses a throwaway resolv.conf via the injection hook.
     VER_DIR="$(mktemp -d)"
-    printf 'nameserver 192.168.0.1\n' > "${VER_DIR}/resolv.conf"
+    printf 'nameserver 10.10.0.1\n' > "${VER_DIR}/resolv.conf"
     VER_UP="$(PATH="${STUB_DIR}:${PATH}" \
         STUB_ZONE="$ZONE_GOOD" \
-        STUB_RESOLVABLE="github.com wenlockpi wenlockgigabyte" \
+        STUB_RESOLVABLE="github.com lab-pi lab-nas" \
         WSL_DNS_RESOLV_CONF="${VER_DIR}/resolv.conf" \
         WSL_DNS_GETENT=getent \
-        WSL_DNS_PROBE_HOSTS="wenlockpi wenlockgigabyte" \
+        WSL_DNS_PROBE_HOSTS="lab-pi lab-nas" \
         bash "$SCRIPT" --verify 2>&1)"
     VER_UP_FILE="$(mktemp)"; printf '%s\n' "$VER_UP" > "$VER_UP_FILE"
     assert_grep "--verify detects the fleet resolver is serving fleet names" \
@@ -300,9 +300,9 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
         'verify — PASS' "$VER_UP_FILE"
     assert_exit_code 0 "--verify exits 0 on a healthy tunnel-up state" \
         env PATH="${STUB_DIR}:${PATH}" STUB_ZONE="$ZONE_GOOD" \
-            STUB_RESOLVABLE="github.com wenlockpi wenlockgigabyte" \
+            STUB_RESOLVABLE="github.com lab-pi lab-nas" \
             WSL_DNS_RESOLV_CONF="${VER_DIR}/resolv.conf" WSL_DNS_GETENT=getent \
-            WSL_DNS_PROBE_HOSTS="wenlockpi wenlockgigabyte" \
+            WSL_DNS_PROBE_HOSTS="lab-pi lab-nas" \
             bash "$SCRIPT" --verify
 
     # === 10e. --verify, fleet resolver DOWN: public resolves, fleet misses FAST ===
@@ -313,7 +313,7 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
         STUB_MISS_DELAY=0 \
         WSL_DNS_RESOLV_CONF="${VER_DIR}/resolv.conf" \
         WSL_DNS_GETENT=getent \
-        WSL_DNS_PROBE_HOSTS="wenlockpi wenlockgigabyte" \
+        WSL_DNS_PROBE_HOSTS="lab-pi lab-nas" \
         bash "$SCRIPT" --verify 2>&1)"
     VER_DOWN_FILE="$(mktemp)"; printf '%s\n' "$VER_DOWN" > "$VER_DOWN_FILE"
     assert_grep "--verify detects the fleet resolver is unreachable" \
@@ -331,7 +331,7 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
         WSL_DNS_MAX_FAIL_SECONDS=1 \
         WSL_DNS_RESOLV_CONF="${VER_DIR}/resolv.conf" \
         WSL_DNS_GETENT=getent \
-        WSL_DNS_PROBE_HOSTS="wenlockpi" \
+        WSL_DNS_PROBE_HOSTS="lab-pi" \
         bash "$SCRIPT" --verify 2>&1 || true)"
     VER_SLOW_FILE="$(mktemp)"; printf '%s\n' "$VER_SLOW" > "$VER_SLOW_FILE"
     assert_grep "--verify flags a miss slower than the limit" \
@@ -342,10 +342,10 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
     # === 10g. --verify FAILS when public DNS is broken, in either state ===
     VER_NOPUB="$(PATH="${STUB_DIR}:${PATH}" \
         STUB_ZONE="$ZONE_GOOD" \
-        STUB_RESOLVABLE="wenlockpi" \
+        STUB_RESOLVABLE="lab-pi" \
         WSL_DNS_RESOLV_CONF="${VER_DIR}/resolv.conf" \
         WSL_DNS_GETENT=getent \
-        WSL_DNS_PROBE_HOSTS="wenlockpi" \
+        WSL_DNS_PROBE_HOSTS="lab-pi" \
         bash "$SCRIPT" --verify 2>&1 || true)"
     VER_NOPUB_FILE="$(mktemp)"; printf '%s\n' "$VER_NOPUB" > "$VER_NOPUB_FILE"
     assert_grep "--verify treats broken public DNS as a hard failure" \
@@ -389,12 +389,12 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
             WSL_DNS_SSH_CONFIG="$SSH_CFG"
             WSL_DNS_FALLBACKS="1.1.1.1"
             STUB_ZONE="$ZONE_GOOD"
-            STUB_WIN_DNS="192.168.0.1")
+            STUB_WIN_DNS="10.10.0.1")
 
     PATH="${STUB_DIR}:${PATH}" env "${RT_ENV[@]}" bash "$SCRIPT" --quiet > /dev/null 2>&1
 
     assert_grep "write replaced the symlink with a managed resolv.conf" \
-        '^nameserver 192\.168\.0\.1$' "${RT}/resolv.conf"
+        '^nameserver 10\.10\.0\.1$' "${RT}/resolv.conf"
     assert_grep "write set generateResolvConf = false" \
         '^generateResolvConf = false$' "${RT}/wsl.conf"
     assert_exit_code 0 "write took a snapshot" test -d "${RT}/backup"

@@ -18,7 +18,7 @@ dependency), and reuse of `fleet`'s `#fleet` contract instead of a second ssh-co
 
 ### UC-1 — "ssh to my Pi hangs for 20 seconds"
 - **Actor:** developer on WSL, fleet reachable only over a WireGuard tunnel.
-- **Trigger:** `ssh wenlockpi` stalls ~20s, then *Temporary failure in name resolution*.
+- **Trigger:** `ssh lab-pi` stalls ~20s, then *Temporary failure in name resolution*.
 - **Flow:** `wlink status` → reports the tunnel up but the resolver unpinned → `wlink pin`
   probes every per-interface resolver Windows knows, picks the one resolving fleet names,
   snapshots, writes.
@@ -119,6 +119,159 @@ Usability decisions worth stating: **no interactive prompts** (scriptable by def
 inverse**; **human output is the default, `--json` is opt-in**; **exit codes are part of the
 contract**, not incidental.
 
+## 4.1 Worked example — what you actually end up with
+
+> **Illustrative, not captured.** `wlink` does not exist yet, so everything below is *target*
+> output describing the intended shape — it is the spec's picture of "done", and the tests in §5
+> are what hold the implementation to it. This is the opposite of the `sdk/README.md` rule, where
+> a demo **must** be real captured output; that rule applies once the tool ships.
+>
+> All names and addresses are fictitious. The lab network is `10.10.0.0/24`; the other networks
+> use the RFC 5737 documentation ranges so they cannot collide with anything real.
+
+### The scenario
+
+A WSL box on a café network (`192.0.2.0/24`), reaching a lab network (`10.10.0.0/24`) over a
+WireGuard tunnel. The lab router at `10.10.0.1` serves both the lab's DHCP names and recursion
+for everything else. The café's ISP resolver knows nothing about the lab.
+
+| Windows interface | Address | Its DNS server | Knows lab names? |
+| :-- | :-- | :-- | :-- |
+| Wi-Fi (**the default route**) | `192.0.2.50` | `198.51.100.53` | ❌ |
+| `wg-lab` (WireGuard) | `10.20.0.5` | **`10.10.0.1`** | ✅ |
+| Bluetooth PAN | — | `203.0.113.1` | ❌ |
+| WSL NAT proxy | — | `10.255.255.254` | ❌ |
+
+Note the trap this exists to avoid: the **default route's** resolver is the one that does *not*
+work.
+
+### Input 1 — `~/.ssh/config` (owned by `fleet`, read by `wlink`)
+
+```sshconfig
+Host lab-pi  #fleet
+    Hostname lab-pi
+    User <user>
+
+Host lab-nas  #fleet
+    Hostname lab-nas
+    User <user>
+
+Host lab-jetson  #fleet
+    Hostname lab-jetson
+    User <user>
+```
+
+`Hostname` stays a **name**, never an IP — that is the point. Resolution is fixed centrally
+instead of pinning addresses per host.
+
+### Input 2 — the feature flag (§3.1 of the plan)
+
+```sh
+gff set install.sdk.wlink true
+```
+
+### `wlink status` — before pinning
+
+```console
+$ wlink status
+link:      DEGRADED
+tunnel:    up          wg-lab (handshake 34s ago)
+resolver:  unpinned    current: 10.255.255.254 (WSL NAT proxy)
+fleet:     0/3 resolvable      (lab-pi, lab-nas, lab-jetson)
+hint:      run `wlink pin` — 10.10.0.1 answers for all 3
+```
+
+### `wlink pin`
+
+```console
+$ wlink pin
+not probing selfhost — already served by /etc/hosts (files precedes dns)
+candidate 203.0.113.1:    NO RESPONSE — not reachable from this network
+candidate 10.10.0.1:      resolved 3/3 fleet host(s)
+candidate 198.51.100.53:  reachable, resolved 0/3 fleet host(s)
+selected 10.10.0.1 (3/3 fleet hosts)
+10.10.0.1 also resolves github.com; safe to pin first
+snapshotted the previous DNS config to /etc/wlink.backup
+pinned 10.10.0.1 in /etc/resolv.conf; /etc/wsl.conf keeps WSL from overwriting it
+verified: lab-pi -> 10.10.0.21
+undo any time: wlink unpin
+```
+
+### Output 1 — `/etc/resolv.conf`
+
+```
+# Managed by wlink — do not edit.
+# Regenerate: wlink pin   ·   Undo: wlink unpin
+# WSL's generated resolv.conf is disabled via /etc/wsl.conf (generateResolvConf).
+options timeout:1 attempts:1
+nameserver 10.10.0.1
+nameserver 10.255.255.254
+nameserver 198.51.100.53
+```
+
+The winner is **first** because nameserver #1 answers every query (§3). The rest are fallbacks
+for when the tunnel is down — reached on **timeout**, never on an NXDOMAIN. `timeout:1
+attempts:1` caps that failover at about a second.
+
+### Output 2 — `/etc/wsl.conf`
+
+Only the one key is added; unrelated sections are preserved verbatim:
+
+```ini
+[boot]
+systemd=true
+
+[user]
+default=<user>
+
+[network]
+generateResolvConf = false
+```
+
+### `wlink status --json` — the contract `gsl` consumes
+
+```json
+{
+  "wsl": true,
+  "tunnel": { "state": "up", "interface": "wg-lab", "handshake_age_seconds": 34 },
+  "pinned": { "resolver": "10.10.0.1", "since": "2026-08-24T21:40:11Z", "managed": true },
+  "candidates": [
+    { "server": "10.10.0.1",      "reachable": true,  "fleet_resolved": 3, "recursive": true },
+    { "server": "198.51.100.53",  "reachable": true,  "fleet_resolved": 0, "recursive": true },
+    { "server": "203.0.113.1",    "reachable": false, "fleet_resolved": 0, "recursive": false }
+  ],
+  "fleet": { "total": 3, "resolved": 3, "excluded_by_hosts_file": ["selfhost"] },
+  "drift": null
+}
+```
+
+### `wlink doctor`
+
+```console
+$ wlink doctor
+[warn] ssh has no keepalive for github.com (ServerAliveInterval 0, ConnectTimeout none)
+       a stalled connection over the tunnel hangs forever instead of failing
+       fix: wlink doctor --fix   (adds ServerAliveInterval 20 / ServerAliveCountMax 3)
+[ok]   resolv.conf matches what wlink wrote (no drift)
+[ok]   snapshot present at /etc/wlink.backup — unpin will restore
+[ok]   pinned resolver 10.10.0.1 answers for public names
+2 checks passed, 1 finding
+```
+
+### Off-network — the same box with the tunnel down
+
+```console
+$ wlink status
+link:      DEGRADED
+tunnel:    down
+resolver:  pinned 10.10.0.1 (unreachable — falling through to 10.255.255.254)
+fleet:     0/3 resolvable
+note:      public DNS unaffected; fleet misses fail in ~1s, not ~20s
+```
+
+Nothing is rewritten when the tunnel drops. The pin stays, the fallbacks carry public DNS, and
+fleet lookups fail *fast* — which is the whole point of `options timeout:1 attempts:1`.
+
 ## 5. Evaluation criteria (per feature)
 
 Format: *trigger predicate · fires · must-not-fire · edge · pass*.
@@ -137,6 +290,38 @@ Format: *trigger predicate · fires · must-not-fire · edge · pass*.
 | EC-10 | F14 | `doctor` flags ssh with `ServerAliveInterval 0` for the git host; silent when set. `--fix` is idempotent and touches only the block it owns. Must not report a finding it cannot explain in one line. |
 | EC-11 | F17 | `resolv.conf` edited after `pin` → drift reported by `status`/`doctor` with what changed. Must not report drift for a byte-identical file. |
 | EC-12 | all | Non-WSL host → every command exits 0 as a no-op with one clear line. Must never write on a non-WSL host. |
+| EC-13 | F2 | Wildcard `Host` patterns (`*`, `?`, `!`) in the ssh config are **never probed** — they are not resolvable names. A `Host *` block carrying the fleet marker contributes nothing. |
+| EC-14 | F1 | Candidate filtering: loopback (`127.*`), link-local (`169.254.*`), and `0.0.0.0` are dropped before probing. Duplicates across interfaces are de-duplicated, preserving first-seen order. |
+| EC-15 | F2 | Zero probe hosts (no fleet markers, no override) → clean no-op: one explanatory line, no writes, exit 0. Must not be reported as an error. |
+| EC-16 | F6 | `unpin` **with no snapshot** still repairs the machine: restore WSL's stock layout (`/etc/resolv.conf` → symlink to `/mnt/wsl/resolv.conf`), drop `generateResolvConf` from `wsl.conf`, remove a `[network]` section left empty by that removal, and leave every other section byte-identical. |
+| EC-17 | F4 | `pin` must replace the `resolv.conf` **symlink** with a real file — WSL ships it as a symlink to the distro-shared `/mnt/wsl/resolv.conf`, so writing through it would leak the pin to other distros and be regenerated. `unpin` restores the symlink *and its original target*. |
+| EC-18 | F6 | After a successful `unpin`, the snapshot directory is removed, so a subsequent `pin` takes a fresh snapshot of the genuinely-current state rather than restoring a stale one. |
+| EC-19 | §3 CLI | Unknown flags/arguments exit **2** (usage error), distinct from a safe decline (0) and a real failure (1). |
+
+### 5.1 Provenance — the prototype's behavioral inventory
+
+EC-1…EC-19 are not invented. They are the distilled inventory of the **54 cases** the shell
+prototype (`opt/scripts/system/wsl_dns_lan_test.sh`) proved on real hardware before it was
+deleted in P15. That prototype existed to discover the behavior; this table exists so the
+discovery outlives it.
+
+The rules that came *only* from running the prototype against a live tunnel — the ones nobody
+would have written from first principles — are worth calling out, because they are exactly what
+a from-scratch Go implementation would get wrong:
+
+| Rule | Why it exists | How it was found |
+| :-- | :-- | :-- |
+| EC-1 | The default route's resolver is often the **wrong** one | A VPN'd machine where the gateway resolved nothing local and a secondary interface resolved everything |
+| EC-2 | `resolv.conf` is an ordered list; an NXDOMAIN from #1 is **final** | Realising a local-only resolver in slot #1 would silently kill public DNS with no fallback |
+| EC-5 | The local hostname is in `/etc/hosts` and no DNS server will ever answer for it | A permanently-capped score (`3/4`) that looked like a resolver defect and was not |
+| EC-6 | A VPN adapter and its DNS server appear **before** the handshake completes | Probing seconds after clicking connect returned `0/N` on every candidate |
+| EC-7 | The failure budget must be **derived**, not guessed | A hardcoded 3s limit failed a run that was actually a 5× improvement |
+| EC-16 | The `resolv.conf` symlink may already be gone when a repair is needed | Designing the undo path for the case where the snapshot itself is missing |
+| EC-17 | WSL's `resolv.conf` is a symlink into a **distro-shared** mount | Writing through it would leak the pin across distros and be regenerated |
+
+**Because the prototype is deleted, this section is load-bearing.** A behavior that is not
+captured as an EC rule here is a behavior that will be lost — so anything discovered while
+building `wlink` that the prototype had handled must be **added here**, not just fixed in code.
 
 ## 6. Verification harness
 
@@ -145,7 +330,7 @@ Format: *trigger predicate · fires · must-not-fire · edge · pass*.
 | **Unit (fixtures)** | EC-1…EC-8, EC-11, EC-12 — `winhost` fed recorded PowerShell output; `probe` against a local in-process DNS server; `resolvconf` against temp files | `go test ./...`, module coverage **≥60%** (the `sdk/` floor in `scripts/test.sh`) |
 | **Golden files** | Rendered `resolv.conf` / `wsl.conf` for all five INI shapes | byte-exact comparison |
 | **Round-trip** | EC-4 — `pin` → re-run → `unpin` restores both files byte-for-byte | temp-dir integration test, no privileged writes |
-| **Ported shell cases** | The 54 cases in `wsl_dns_lan_test.sh` are the executable specification and must all have a Go counterpart | traceability table in the plan §5 |
+| **Rule coverage** | Every EC-1…EC-19 rule has a named Go test (§5.1 explains their provenance) | traceability table in the plan §5 |
 | **Live acceptance** (human-evidenced) | EC-6 readiness during an actual handshake; EC-7 both tunnel states; EC-10 on a real ssh config; timing vs the recorded **20–21s → 4s** baseline | captures committed under `plans/wlink/evidence/` |
 
 Windows interop cannot run in CI; that is precisely why it lives behind `winhost.Runner`, with

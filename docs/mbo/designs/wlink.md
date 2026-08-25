@@ -114,6 +114,12 @@ fleet status     # who my hosts are, and are they in sync
 wlink status     # can I reach them by name from here
 ```
 
+> **What this looks like in practice:** the spec's
+> [§4.1 worked example](../specs/wlink.md#41-worked-example--what-you-actually-end-up-with)
+> walks one fictitious lab through the whole thing — the ssh config in, the `status` / `pin` /
+> `doctor` output, and the resulting `resolv.conf` and `wsl.conf`. Read it before the boundaries
+> below; it makes the shape concrete.
+
 ### Logging
 
 `wlink` uses the repo's shared logger, `sdk/libs/log` — the same one `fleet`, `gsl`, and
@@ -164,7 +170,7 @@ The **frozen interface** that lets this be built in parallel is `winhost.Runner`
 | Risk | Severity | Mitigation |
 | :-- | :-- | :-- |
 | **Breaking DNS on the host** — the whole point is rewriting `/etc/resolv.conf` | High | Every safety property from #242 is carried over as a hard requirement, not a nicety: snapshot before first write, refuse to write if the snapshot fails, recursion guard, `unpin` restores byte-for-byte. The spec makes each one a test. |
-| **Deleting the oracle too early** — the prototype's 54 cases are the only proof the port is faithful | High | The deletion is its own gated phase (plan §4 P15), run last and only when every case has a passing Go counterpart cited in the plan's §5 traceability table. Until then the prototype stays runnable for side-by-side comparison. |
+| **Losing what the prototype proved** when it is deleted | High | Its 54 cases are distilled into spec EC-1…EC-19, and **spec §5.1 records how the non-obvious rules were discovered** — the ones a from-scratch Go implementation would get wrong. P15 is gated on every rule citing a passing test. Standing obligation during the build: anything learned that the prototype had handled goes into §5.1 as a rule, not just into code. |
 | **Native DNS behaves differently from `dig`** | Medium | The Go resolver must reproduce the recorded `dig` behavior for the cases #242 already characterized (NXDOMAIN vs no-response vs NOERROR-no-data). Those become fixture tests, seeded from real captures. |
 | **Windows interop is untestable in CI** | Medium | All interop behind `winhost.Runner`; CI runs against recorded fixtures. A live-machine acceptance checklist covers what fixtures cannot. |
 | **Scope creep into VPN management** | Medium | §2 non-goals are explicit: observe, never manage. |
@@ -189,7 +195,7 @@ The plan must capture, in `docs/mbo/plans/wlink/evidence/`:
 
 | Proof class | What it must show |
 | :-- | :-- |
-| **Fixture-backed unit runs** | Candidate scoring, the recursion guard, `/etc/hosts` exclusion, and all five `wsl.conf` INI shapes — ported from the 54 shell cases, which are the executable specification. |
+| **Fixture-backed unit runs** | Candidate scoring, the recursion guard, `/etc/hosts` exclusion, and all five `wsl.conf` INI shapes — one test per spec rule EC-1…EC-19. |
 | **Round-trip evidence** | `pin` → re-run → `unpin` restoring `resolv.conf` (symlink target included) and `wsl.conf` **byte-for-byte**. Already proven in shell; must not regress. |
 | **The live tunnel matrix** | `wlink verify` with the tunnel **up** and **down**, captured from a real machine. The invariant: the public sentinel resolves in *both* states, fleet names only when up, and a miss completes inside the derived budget. |
 | **The readiness race** | A capture taken *during* a handshake showing `status` reporting `not-ready` rather than a confusing all-zero probe. |
@@ -215,8 +221,9 @@ Ordered so nothing lands half-migrated:
    its test, `docs/wsl-dns.md`, and its `install.system.wsl-dns` entry are **deleted in the same
    PR that introduced them**, once `wlink` supersedes them (plan §4 P15). `main` only ever sees
    the Go tool.
-5. **Delete last, not first.** Those 54 cases are the port's behavioral oracle. P15 is gated on
-   every one of them having a passing Go counterpart — see the §5 risk row.
+5. **Delete last, not first.** P15 is gated on every spec rule EC-1…EC-19 citing a passing Go
+   test, and on spec §5.1 being current — see the §5 risk row. The prototype stays runnable
+   until then, as a reference to compare against rather than as a gate.
 
 `wlink` is gated by **one** flag, `install.sdk.wlink` — fail-closed, default **off** (plan
 §3.1). It decides whether `install.sh` builds and installs the binary *and* whether the pin

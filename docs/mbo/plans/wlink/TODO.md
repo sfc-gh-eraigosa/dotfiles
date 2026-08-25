@@ -19,7 +19,7 @@
 - [ ] `go version` → toolchain present
 - [ ] `grep -qi microsoft /proc/version` → on WSL (needed for P1 fixtures and P14)
 - [ ] `fleet discover --json | head -3` → the contract P7 consumes is live
-- [ ] `bash opt/scripts/system/wsl_dns_lan_test.sh | tail -2` → `PASS=54 FAIL=0` — **the oracle**; it must keep passing until P15 deletes it
+- [ ] `bash opt/scripts/system/wsl_dns_lan_test.sh | tail -2` → `PASS=54 FAIL=0` — the prototype still runs; keep it around for side-by-side comparison until P15
 - [ ] `mkdir -p docs/mbo/plans/wlink/evidence`
 
 ---
@@ -151,7 +151,7 @@
 
 ### Phase P8 — `cmd/pin` + `cmd/unpin`  (plan §4 P8)
 
-- [ ] RED: port every one of the 54 shell cases that exercises pin/unpin; cite each in plan §5
+- [ ] RED: a test per EC rule covering pin/unpin (EC-2…EC-6, EC-13…EC-19); cite each in plan §5
 - [ ] RED: `--dry-run` writes nothing
 - [ ] RUN-RED → expect **FAIL**
 - [ ] GREEN: wire P1–P7 per the plan §3 orchestration pseudocode
@@ -260,11 +260,12 @@
 
 ### Phase P15 — retire the prototype  (plan §4 P15)
 
-> **Gate:** do not start until plan §5's traceability table is complete, with **every one of the
-> 54 shell cases citing a passing Go test**. Until then the prototype is the only proof this port
-> is faithful — run it side by side when a Go result surprises you.
+> **Gate:** do not start until plan §5's traceability table is complete, with **EC-1…EC-19 each
+> citing a passing Go test**, and spec §5.1 reflecting anything learned during the build. Once
+> the prototype is gone, §5.1 is the only record of what it proved.
 
-- [ ] VERIFY: plan §5 table complete — every EC rule and every shell case cites a passing test
+- [ ] VERIFY: plan §5 table complete — EC-1…EC-19 each cite a passing test
+- [ ] VERIFY: spec §5.1 current — every build-time discovery recorded there as an EC rule
 - [ ] VERIFY: `go test ./...` green; coverage ≥60%
 - [ ] DELETE: `opt/scripts/system/wsl_dns_lan.sh`
 - [ ] DELETE: `opt/scripts/system/wsl_dns_lan_test.sh`

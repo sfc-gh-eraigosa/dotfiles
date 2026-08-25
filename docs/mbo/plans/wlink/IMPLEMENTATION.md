@@ -30,11 +30,11 @@ a claim, the command is the proof.
 | 3 | On a WSL host for the live phases (P1 fixtures, P14) | `grep -qi microsoft /proc/version && echo WSL` |
 | 4 | `fleet` binary available (P7 consumes its contract) | `fleet discover --json \| head -3` |
 | 5 | Worker worktree exists and is current | `gss feature list --feature wlink --json` |
-| 6 | The shell predecessor's 54 cases pass — they are this port's oracle | `bash opt/scripts/system/wsl_dns_lan_test.sh \| tail -2` → `PASS=54 FAIL=0` |
+| 6 | The prototype still runs — useful for side-by-side comparison until P15 deletes it | `bash opt/scripts/system/wsl_dns_lan_test.sh \| tail -2` → `PASS=54 FAIL=0` |
 
-**The prototype must stay runnable until P15.** Its 54 cases are the behavioral oracle for this
-port; they are what makes precondition 6 meaningful. Do not delete `wsl_dns_lan.sh` or its test
-before every case has a passing Go counterpart — see hard rule 1 and plan §4 P15.
+**The prototype stays runnable until P15** — not as a gate, but because comparing against a
+working reference is the fastest way to settle "is this Go behavior right?". Its behavioral
+inventory already lives in spec §5.1 as EC-1…EC-19, which is what P15 is actually gated on.
 
 ## 2. Worker map
 
@@ -74,7 +74,7 @@ The plan's §6.1 records a leaf DAG but **recommends against fanning out**: the 
 Per phase, from plan §4. The **overall stop condition** (also tickable in `TRACKING.md` §3):
 
 - [ ] All 12 spec evaluation rules (EC-1…EC-12) have a passing named Go test — plan §5 table complete
-- [ ] All 54 shell cases have a Go counterpart cited in that same table
+- [ ] Spec §5.1 current — anything learned during the build is recorded there as an EC rule
 - [ ] `go test ./...` green; module coverage **≥60%** (the `sdk/` floor)
 - [ ] `sdk/AGENTS.md` "Adding a module" checklist complete, all 9 items
 - [ ] `install.sdk.wlink` registered (`boolDefault: false`, `gff_opt_in`); `install.sh` builds and pins only when true
@@ -86,17 +86,18 @@ Per phase, from plan §4. The **overall stop condition** (also tickable in `TRAC
 
 ## 5. Hard rules
 
-1. **Delete the prototype last, never first.** `wsl_dns_lan.sh` and its 54 cases are the
-   behavioral oracle for this port. P15 removes them — and `docs/wsl-dns.md` and the
-   `install.system.wsl-dns` entry — only once every case has a passing Go counterpart cited in
-   plan §5. `main` never sees any of it; deleting early destroys the only proof the port is
-   faithful.
+1. **The spec carries the knowledge, so keep it current.** The prototype is deleted in P15; once
+   it is gone, spec §5.1 is the only record of what it proved. Anything you learn during the
+   build that the prototype had handled goes **into spec §5.1 as an EC rule**, not just into
+   code. A behavior that never reaches the spec is a behavior that is lost. P15 is gated on
+   EC-1…EC-19 each citing a passing Go test.
 2. **No write without an undo path.** If the snapshot cannot be written, `pin` writes nothing
    and exits 0. This is not negotiable — it is the property that makes the tool safe.
 3. **A safe decline is exit 0.** No winner, guard tripped, non-WSL, tunnel down → exit 0.
    `install.sh` must never fail because a tunnel happens to be down.
-4. **The 54 shell cases are the oracle.** A behavior change versus the shell script is a
-   **finding to escalate**, not a silent improvement. Log it in `TRACKING.md` §4.
+4. **A behavior the spec does not cover is a spec gap.** Diverging from the prototype may well
+   be right — but decide it deliberately: log it in `TRACKING.md` §4 and add or amend the EC rule
+   in spec §5.1. Never a silent change; the spec outlives the script.
 5. **No hand-rolled logging.** `sdk/libs/log` only, `applog.SetDefaultTool("wlink")` once at
    startup (`sdk/AGENTS.md` contract).
 6. **Interop stays behind `winhost.Runner`.** No `powershell.exe` call anywhere else, or the
@@ -142,5 +143,7 @@ Append when this playbook is wrong. Do not silently deviate.
 > before any `git add`/`commit`/`gss` push.
 >
 > Hard rules are §5 — especially: no write without an undo path, a safe decline is exit 0, and
-> the 54 cases in `opt/scripts/system/wsl_dns_lan_test.sh` are the behavioral oracle. A
-> divergence from them is a finding to escalate in `TRACKING.md` §4, not a silent improvement.
+> spec §5.1 (EC-1…EC-19) is the behavioral record, distilled from the prototype. A behavior it
+> does not cover is a spec gap: log it in `TRACKING.md` §4 and add the rule — never a silent
+> change. The prototype in `opt/scripts/system/` still runs until P15; compare against it when a
+> Go result surprises you.

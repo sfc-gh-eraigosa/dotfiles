@@ -40,7 +40,7 @@ Phases from plan §4. `P1` and `P2` are blocking — they freeze the `winhost.Ru
 | P12 — `sshcfg` + `cmd/doctor` | todo | | | keepalive detection; `--fix` idempotent |
 | P13 — integration & rollout | todo | | | sdk checklist ×9; script archived + old flag retired same commit; **one flag, `install.sdk.wlink`, default false, fail-closed** |
 | P14 — live acceptance | todo | | | real-machine captures |
-| P15 — retire the prototype | todo | | | **gated:** only after every one of the 54 cases cites a passing Go test |
+| P15 — retire the prototype | todo | | | **gated:** EC-1…EC-19 each cite a passing Go test and spec §5.1 is current |
 
 ## 2. Feature → proof matrix (spec §5)
 
@@ -60,12 +60,19 @@ A rule is proven only when its named Go test passes **and**, where marked, a liv
 | EC-10 | F14 doctor | [ ] `sshcfg/TestKeepaliveDetection`, `TestFix_Idempotent` | [ ] on a real ssh config | |
 | EC-11 | F17 drift | [ ] `resolvconf/TestDriftDetection` | — | |
 | EC-12 | non-WSL no-op | [ ] `cmd/TestNonWSL_NoOpExitZero` | — | must never write off-WSL |
-| — | 54 shell cases ported | [ ] plan §5 table complete, each row citing a passing test | — | the behavioral oracle |
+| EC-13 | wildcard Host skipped | [ ] `fleetsrc/TestSkipsWildcardHostPatterns` | — | |
+| EC-14 | candidate filtering | [ ] `probe/TestFiltersLoopbackAndLinkLocal` | — | + de-dup, first-seen order |
+| EC-15 | zero probe hosts | [ ] `cmd/TestNoFleetHosts_CleanNoOp` | — | not an error |
+| EC-16 | unpin without a snapshot | [ ] `resolvconf/TestRepairStockLayout` | — | restores WSL's stock symlink |
+| EC-17 | symlink → real file | [ ] `resolvconf/TestReplacesSharedSymlink` | — | `/mnt/wsl/resolv.conf` is distro-shared |
+| EC-18 | snapshot removed after unpin | [ ] `resolvconf/TestUnpinClearsSnapshot` | — | next pin snapshots fresh state |
+| EC-19 | unknown args exit 2 | [ ] `cmd/TestUnknownFlag_ExitTwo` | — | distinct from a safe decline |
+| — | spec §5.1 kept current | [ ] every build-time discovery recorded as an EC rule | — | the prototype is deleted; the spec is the record |
 
 ## 3. Validation done-when — the stop condition
 
-- [ ] EC-1…EC-12 each have a passing named Go test (plan §5 table complete)
-- [ ] All 54 shell cases have a cited Go counterpart
+- [ ] EC-1…EC-19 each have a passing named Go test (plan §5 table complete)
+- [ ] Spec §5.1 current — every build-time discovery recorded there as an EC rule
 - [ ] `go test ./...` green; module coverage **≥60%**
 - [ ] `sdk/AGENTS.md` "Adding a module" checklist — all 9 items, including the `sdk/README.md` section with a **real captured** demo
 - [ ] `install.sdk.wlink` registered `boolDefault: false`, gated `gff_opt_in`; `install.sh` builds and pins **only** when it is true
@@ -78,8 +85,9 @@ A rule is proven only when its named Go test passes **and**, where marked, a liv
 
 ## 4. Blockers & escalations
 
-Failing command + its **real** output. **A behavior divergence from the 54 shell cases is a
-contract defect and goes here** — it gets escalated, never silently patched.
+Failing command + its **real** output. **A behavior the spec does not cover is a spec gap, not a
+free choice** — record it here, add the EC rule to spec §5.1, then implement. Once the prototype
+is deleted the spec is the only record.
 
 | Date | Task | Blocker | Command + observed output | Resolution |
 | :-- | :-- | :-- | :-- | :-- |
@@ -89,4 +97,4 @@ contract defect and goes here** — it gets escalated, never silently patched.
 
 | Date | Session | What happened |
 | :-- | :-- | :-- |
-| 2026-08-24 | planning | Design approved. Issue #245 opened. Design/spec/plan + this trio laid down. Build **not started**. Scope corrected: `wlink` is built **inside** PR #242 and the shell prototype is deleted there too — none of it ever lands on `main` (verified: `git ls-tree origin/main` matches none of it), so there is no cutover, archival, or flag migration. Baseline recorded from live testing: fleet lookups **20–21s unpinned → 4s pinned**; `--verify` PASS with the tunnel up (3/3 fleet hosts, 0s each) and a real `ssh wenlockpi` login. |
+| 2026-08-24 | planning | Design approved. Issue #245 opened. Design/spec/plan + this trio laid down. Build **not started**. Scope corrected: `wlink` is built **inside** PR #242 and the shell prototype is deleted there too — none of it ever lands on `main` (verified: `git ls-tree origin/main` matches none of it), so there is no cutover, archival, or flag migration. Baseline recorded from live testing: fleet lookups **20–21s unpinned → 4s pinned**; `--verify` PASS with the tunnel up (3/3 fleet hosts, 0s each) and a real `ssh lab-pi` login. |

@@ -48,16 +48,20 @@ From WSL, `ssh <fleet-host>` hangs for ~10s and then dies, while the same host b
 connects instantly:
 
 ```console
-$ ssh homelab-pi
-ssh: Could not resolve hostname homelab-pi: Temporary failure in name resolution   # ~10s
-$ ssh <user>@192.168.0.128
-homelab-pi                                                                          # 0.7s
+$ ssh lab-pi
+ssh: Could not resolve hostname lab-pi: Temporary failure in name resolution   # ~10s
+$ ssh <user>@10.10.0.21
+lab-pi                                                                          # 0.7s
 ```
 
 WSL2 points `/etc/resolv.conf` at the Windows NAT DNS proxy (typically
 `10.255.255.254`). That proxy answers from whatever resolver **Windows** considers
 primary — normally the Wi-Fi/Ethernet interface's public or ISP DNS, which has never
 heard of your LAN hostnames. The stall is the resolver timeout, not SSH.
+
+> **All addresses and host names in this document are illustrative.** The lab network is
+> `10.10.0.0/24`; the other networks use the RFC 5737 documentation ranges (`192.0.2.0/24`,
+> `198.51.100.0/24`, `203.0.113.0/24`) so they cannot collide with anything real.
 
 ## Architecture: how a name actually gets resolved
 
@@ -66,27 +70,27 @@ This is the part worth internalising, because it dictates the whole design.
 **`/etc/resolv.conf` is an ordered list, not a routing table.** glibc's resolver has no
 concept of "send `192.168.*` names here and public names there". There is no dispatch by
 address range, and none by name either unless you add a `search`/domain suffix scheme —
-which does not help for bare single-label names like `homelab-pi`.
+which does not help for bare single-label names like `lab-pi`.
 
 What actually happens for **every** query, public or private:
 
 ```
-getent hosts homelab-pi
+getent hosts lab-pi
         │
         ├─ nsswitch.conf: "hosts: files dns"
         │      1. /etc/hosts          → no match
         │      2. DNS                 ↓
         │
         └─ /etc/resolv.conf, IN ORDER:
-               nameserver 192.168.0.1      ← asked FIRST, for every name
+               nameserver 10.10.0.1      ← asked FIRST, for every name
                nameserver 10.255.255.254   ← only on TIMEOUT of the one above
                nameserver 1.1.1.1          ← only on TIMEOUT of the one above
 ```
 
 Two consequences drive everything else:
 
-1. **The first nameserver answers everything.** `github.com` is sent to `192.168.0.1`
-   exactly like `homelab-pi` is. The fallback entries are *not* "the ones that handle
+1. **The first nameserver answers everything.** `github.com` is sent to `10.10.0.1`
+   exactly like `lab-pi` is. The fallback entries are *not* "the ones that handle
    public names".
 2. **An NXDOMAIN is a final answer.** glibc falls through to the next `nameserver` only
    on **timeout or network error** — never on a valid negative reply. A resolver in slot
@@ -110,11 +114,11 @@ frequently *not* on the default route. A worked example from a real machine:
 
 | Windows interface | IP | Its DNS server | Resolves fleet names? |
 | :-- | :-- | :-- | :-- |
-| Wi-Fi (the default route) | 10.0.0.26 | 75.75.75.75 (ISP) | ❌ NOERROR, no records |
-| **wg0** (WireGuard) | 192.168.2.8 | **192.168.0.1** | ✅ all of them |
+| Wi-Fi (the default route) | 192.0.2.50 | 198.51.100.53 (ISP) | ❌ NOERROR, no records |
+| **wg-lab** (WireGuard) | 10.20.0.5 | **10.10.0.1** | ✅ all of them |
 | WSL NAT proxy | — | 10.255.255.254 | ❌ NXDOMAIN |
 
-The default gateway there is `10.0.0.1` — precisely the resolver that does **not** work.
+The default gateway there is `192.0.2.1` — precisely the resolver that does **not** work.
 Gateway-based autodetection picks the wrong server every time on a VPN'd machine. This
 is why the script probes *every* interface's resolver rather than reasoning about routes.
 
@@ -148,7 +152,7 @@ Resulting `/etc/resolv.conf`:
 # Regenerate: ~/opt/scripts/system/wsl_dns_lan.sh
 # WSL's generated resolv.conf is disabled via /etc/wsl.conf (generateResolvConf).
 options timeout:1 attempts:1
-nameserver 192.168.0.1
+nameserver 10.10.0.1
 nameserver 10.255.255.254
 nameserver 1.1.1.1
 ```
@@ -159,7 +163,7 @@ Before writing, the script asks the winning resolver for a public sentinel name
 (`github.com` by default). If it cannot answer, the script **refuses to change anything**:
 
 ```console
-wsl-dns: WARNING — 192.168.0.1 resolves fleet hosts but NOT github.com.
+wsl-dns: WARNING — 10.10.0.1 resolves fleet hosts but NOT github.com.
 wsl-dns: WARNING — Pinning it first would break ALL public DNS: every query goes to
          nameserver #1, and its NXDOMAIN is a final answer — the fallback nameservers
          are only tried on timeout.
@@ -212,9 +216,9 @@ A candidate that answers *nothing* is a different failure from one that answers 
 not know your fleet, so the two are reported differently:
 
 ```
-candidate 172.20.10.1:  NO RESPONSE — not reachable from this network.
-candidate 192.168.0.1:  resolved 3/3 fleet host(s).
-candidate 75.75.75.75:  NO RESPONSE — not reachable from this network.
+candidate 203.0.113.1:  NO RESPONSE — not reachable from this network.
+candidate 10.10.0.1:  resolved 3/3 fleet host(s).
+candidate 198.51.100.53:  NO RESPONSE — not reachable from this network.
 ```
 
 The per-candidate wording is neutral on purpose: with a **full-tunnel** VPN up, the
@@ -296,8 +300,8 @@ $ wsl_dns_lan.sh --verify
 wsl-dns: verify — pinned resolver: 10.255.255.254 (serves fleet names: down)
 wsl-dns: verify — NAME RESULT SECONDS
   github.com OK 0s
-  homelab-pi MISS 20s
-wsl-dns: WARNING — homelab-pi took 20s to fail (limit 3s) — the resolver timeout tuning regressed.
+  lab-pi MISS 20s
+wsl-dns: WARNING — lab-pi took 20s to fail (limit 3s) — the resolver timeout tuning regressed.
 wsl-dns: verify — fleet resolver unreachable: public OK, but a miss exceeded 3s (see the warnings above).
 wsl-dns: verify — that slow miss IS the bug this script fixes; run it without --verify to pin a resolver.
 wsl-dns: verify — FAIL
@@ -316,8 +320,8 @@ masquerade as a working fleet resolver.
 
   ```console
   $ wsl_dns_lan.sh --dry-run          # with the tunnel down
-  wsl-dns: candidate 75.75.75.75: resolved 0/4 fleet host(s).
-  wsl-dns: WARNING — no candidate resolver answered for any of: homelab-pi …
+  wsl-dns: candidate 198.51.100.53: resolved 0/4 fleet host(s).
+  wsl-dns: WARNING — no candidate resolver answered for any of: lab-pi …
   wsl-dns: WARNING — if this needs a VPN/tunnel, bring it up and re-run: …
   ```
 
@@ -354,8 +358,8 @@ masquerade as a working fleet resolver.
 The probe set comes from the `#fleet` marker already used by the `ssh-host-finder` skill:
 
 ```sshconfig
-Host homelab-pi  #fleet
-    Hostname homelab-pi
+Host lab-pi  #fleet
+    Hostname lab-pi
     User <user>
     IdentityFile ~/.ssh/id_ed25519_homelab
 ```
