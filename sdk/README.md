@@ -27,6 +27,7 @@ go install github.com/sfc-gh-eraigosa/dotfiles/sdk/gss@latest
 | **[gsl](#-gsl--know-what-your-agent-is-costing-you)** | You can't tell how much context is left | Powerline status line for Claude Code / Antigravity |
 | **[fleet](#-fleet--is-every-machine-actually-updated)** | You have more machines than you can `ssh` into | Multi-host install-drift dashboard + wake ladder |
 | **[gff](#-gff--flags-that-live-in-git)** | "Skip that step on this machine" | Layered feature flags with full provenance |
+| **[wlink](#-wlink--why-does-ssh-hang-but-the-ip-work)** | `ssh host` hangs from WSL but `ssh <ip>` works | Pins the resolver that actually knows your fleet, reversibly |
 | **[wol](#-wol--turn-it-on-from-anywhere)** | The machine you need is powered off | Wake-on-LAN magic packets |
 | **[libs](#-libs--the-shared-foundation)** | You're writing tool #8 | Shared logging: rotation, capture, XDG paths |
 
@@ -265,6 +266,64 @@ silently disabling your install. Namespaces are reverse-DNS and exclusive — tw
 repos can't claim the same one.
 
 → [Full docs](./gff/README.md) · [Agent context](./gff/AGENTS.md)
+
+---
+
+## 🔗 `wlink` — why does `ssh host` hang, but `ssh <ip>` work?
+
+> Pins the DNS resolver that actually knows your fleet, reversibly — and tells
+> you when the tunnel is merely still handshaking.
+
+**The problem.** From WSL, `ssh lab-pi` sits for twenty seconds and dies with
+*Temporary failure in name resolution*, while `ssh 10.10.0.21` connects
+instantly. WSL2 points `/etc/resolv.conf` at the Windows NAT DNS proxy, which
+answers from whatever resolver Windows treats as primary — normally your ISP's,
+which has never heard of your hosts. And the obvious fix is wrong: the resolver
+that *does* know them is frequently on a VPN interface, **not** the default
+route, so "just use the gateway" picks the one server guaranteed to fail.
+
+**What it does about it.** Probes *every* per-interface resolver Windows knows,
+scores each against the `#fleet` hosts `fleet` already tracks, and pins the
+winner — first in `resolv.conf`, with `options timeout:1 attempts:1` so an
+off-network miss fails in about a second instead of twenty. It refuses to pin a
+resolver that cannot answer public names, because `resolv.conf` is an ordered
+list and an NXDOMAIN from nameserver #1 is *final* — that pin would silently
+kill public DNS. Both files are snapshotted before the first byte is written,
+and **nothing is written at all if no undo point can be recorded**.
+
+**Reach for it when:**
+
+- `ssh <host>` hangs from WSL but the IP works
+- You just clicked connect and everything looks broken (it is still handshaking)
+- `git` hangs forever over the tunnel instead of failing — `wlink doctor`
+- You want one JSON document describing the link, for a status line or CI
+
+```console
+$ wlink status
+link:      OK
+tunnel:    down
+resolver:  10.255.255.254   (present, but NOT written by wlink)
+fleet:     3/3 resolvable
+excluded:  selfhost   (served by /etc/hosts — files precedes dns)
+
+$ wlink doctor
+[warn] ssh has no keepalive for github.com (ServerAliveInterval 0, ConnectTimeout none)
+       over a tunnel a connection can stall with TCP established and no bytes moving; with keepalives off neither end notices, so git hangs forever instead of failing
+       fix: wlink doctor --fix   (adds ServerAliveInterval 20 / ServerAliveCountMax 3)
+```
+
+**Gotchas.**
+
+- **Opt-in, fail-closed.** `gff set install.sdk.wlink true` — it is not built at
+  all otherwise, because it rewrites host DNS and is only useful on a machine
+  that reaches its fleet over a tunnel.
+- **WSL only.** Everywhere else every command is a no-op that exits 0.
+- **A tunnel that is attached is not a tunnel that is ready.** Windows publishes
+  the adapter and its DNS server the moment you click connect, seconds before
+  the handshake finishes. `wlink wait --ready` waits that window out.
+- **`wlink unpin` restores exactly what was there**, symlink target included.
+
+📖 [Deep docs](./wlink/README.md) · [maintenance](./wlink/AGENTS.md)
 
 ---
 

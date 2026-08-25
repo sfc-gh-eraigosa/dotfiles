@@ -38,7 +38,7 @@ Phases from plan §4. `P1` and `P2` are blocking — they freeze the `winhost.Ru
 | P10 — `cmd/verify` | **done** | *(this commit)* | `go test ./cmd/...` → ok; all four EC-7 outcomes asserted; live run on this machine → PASS, budget derived to 11s; `evidence/p10/` | resolves via the **host** path, not direct-to-server |
 | P11 — `cmd/wait` + readiness | **done** | *(this commit)* | `go test ./cmd/...` → ok; live: ready in 1 check, timeout → exit 1, bare verb → exit 2; **latency bug fixed: 11s → 5s**; `evidence/p11/` | sentinel-first short-circuit |
 | P12 — `sshcfg` + `cmd/doctor` | **done** | *(this commit)* | `sshcfg` **84.6%**; live run flags this machine's disabled keepalive, confirmed independently by `ssh -G`; `evidence/p12/` | `--fix` re-asks ssh instead of assuming |
-| P13 — integration & rollout | todo | | | sdk checklist ×9; script archived + old flag retired same commit; **one flag, `install.sdk.wlink`, default false, fail-closed** |
+| P13 — integration & rollout | **done** | *(this commit)* | all 9 `sdk/AGENTS.md` checklist items verified; flag fail-closed both ways; `lint-portability` T1/T2=0; `lint-shell` exit 0; module-wide **79.1%**; `evidence/p13/` | prototype deletion is P15 |
 | P14 — live acceptance | todo | | | real-machine captures |
 | P15 — retire the prototype | todo | | | **gated:** EC-1…EC-19 each cite a passing Go test and spec §5.1 is current |
 
@@ -77,8 +77,8 @@ A rule is proven only when its named Go test passes **and**, where marked, a liv
 - [ ] EC-1…EC-19 each have a passing named Go test (plan §5 table complete)
 - [ ] Spec §5.1 current — every build-time discovery recorded there as an EC rule
 - [ ] `go test ./...` green; module coverage **≥60%**
-- [ ] `sdk/AGENTS.md` "Adding a module" checklist — all 9 items, including the `sdk/README.md` section with a **real captured** demo
-- [ ] `install.sdk.wlink` registered `boolDefault: false`, gated `gff_opt_in`; `install.sh` builds and pins **only** when it is true
+- [x] `sdk/AGENTS.md` "Adding a module" checklist — all 9 items, including the `sdk/README.md` section with a **real captured** demo
+- [x] `install.sdk.wlink` registered `boolDefault: false`, gated `gff_opt_in`; `install.sh` builds and pins **only** when it is true
 - [ ] Both flag states verified on a real `install.sh` run (plan §6)
 - [ ] **P15**: `grep -rn 'wsl_dns_lan\|install.system.wsl-dns' . | grep -v docs/mbo/` → empty; suite still green
 - [ ] `docs/wsl-dns.md` content folded into `sdk/wlink/README.md`; `docs/AGENTS.md` repointed
@@ -100,6 +100,7 @@ is deleted the spec is the only record.
 
 | Date | Session | What happened |
 | :-- | :-- | :-- |
+| 2026-08-25 | P13 | Rollout wired, all 9 checklist items verified rather than assumed. `install.sdk.wlink` is `boolDefault: false` + `gff_opt_in` — the deliberate departure from the other `install.sdk.*` flags, and the features.yaml description says **why** so it is not later "corrected". The `install.sh` block also runs `wlink pin`, which is safe precisely because a decline is exit 0: a tunnel that happens to be down at install time cannot fail the installer. The `sdk/README.md` demo is **real captured output** from this machine (addresses substituted), per the repo's rule that an invented transcript fails exactly the reader who trusts it. |
 | 2026-08-25 | P12 | `doctor` uses **`ssh -G`** rather than parsing the config: ssh's first-match-wins Host resolution is exactly where a hand-rolled checker would quietly disagree with the client it describes, and a wrong "all clear" is worse than no check. That same fact shapes `--fix`: because ssh takes the FIRST value for a keyword, an appended block can be inert if an earlier one already sets it — so `--fix` **re-asks ssh** afterwards and reports what actually took effect. Live run flagged this machine's `ServerAliveInterval 0` / `ConnectTimeout none`, independently confirmed by `ssh -G`. That is the condition behind the observed git hangs (one `ls-remote` hung 45s with TCP established and zero bytes moving; the next three ran in 2–3s). |
 | 2026-08-25 | P11 | **A latency bug that only running the binary could find.** `wait --ready` took **11 seconds** to report a link that was already up. Cause: a dead candidate (a stale Bluetooth adapter here) cost one full 2s timeout *per fleet name* — (3+1) × 2s = 8s of pure waiting on every run, in `status` and `pin` too. Fixed by asking the **sentinel first** and short-circuiting on SILENCE only: a dead server now costs one timeout instead of N+1. **11s → 5s** for `wait`, 4s for `status`. Deliberately narrow: an NXDOMAIN or SERVFAIL proves the server is talking, so its fleet names are still asked about — that is precisely the split-horizon resolver the recursion guard then refuses. Readiness is also defined as "resolves a fleet name", not "answers at all": returning ready on a reachable-but-ignorant resolver would hand back control before the thing being waited for had happened. |
 | 2026-08-25 | P10 | `verify` resolves through the **host resolver path** (nsswitch + resolv.conf ordering), never a direct query to a chosen server — a direct query bypasses the ordering entirely and would prove nothing about what `ssh` experiences, which is the only thing verify exists to establish. All four EC-7 outcomes asserted with a fake system resolver so a 30s stall is testable in milliseconds. Live run passed with the budget derived to **11s** (unmanaged resolv.conf: 1 nameserver × glibc's default 5s × 2 families + 1); it becomes 7s once pinned. |

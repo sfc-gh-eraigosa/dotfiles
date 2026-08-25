@@ -22,6 +22,7 @@ path-prefixed `sdk/<tool>/vX.Y.Z` tags.
 | [`fleet/`](./fleet/AGENTS.md) | `fleet` | Multi-host install-drift status, TUI, wake ladder, SSH key management. |
 | [`gff/`](./gff/AGENTS.md) | `gff` | git fast features — layered feature flags gating `install.sh`. |
 | [`wol/`](./wol/AGENTS.md) | `wol` | Wake-on-LAN magic packets. |
+| [`wlink/`](./wlink/AGENTS.md) | `wlink` | WSL link — pins the resolver that knows your fleet; tunnel readiness, drift, ssh-keepalive doctor. |
 | [`libs/`](./libs/AGENTS.md) | *(library)* | Shared Go packages — `log`. Not a CLI. |
 
 ## Adding a module

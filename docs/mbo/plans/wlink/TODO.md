@@ -214,25 +214,25 @@
 
 ### Phase P13 — integration & rollout  (plan §4 P13, §6)
 
-- [ ] `build.sh` sources `sdk/version.sh` ✓ · logs via `libs/log` ✓
-- [ ] `sdk/wlink/AGENTS.md` + `ln -s AGENTS.md CLAUDE.md`
-- [ ] `sdk/wlink/README.md` — absorbs `docs/wsl-dns.md`
-- [ ] `.github/gff/features.yaml`: add `install.sdk.wlink`, **`boolDefault: false`**, description stating it is opt-in/fail-closed and why it differs from the other `install.sdk.*` flags
-- [ ] `install.sh`: one block gated `gff_opt_in install.sdk.wlink` (**not** `gff_on` — an unset flag must mean *do not build*) that builds/installs the binary and runs the pin
-- [ ] `install.sh`: remove the prototype's block (replaced, not migrated — neither flag reaches `main`)
-- [ ] VERIFY flag behavior on a real `install.sh` run (plan §6):
-  - [ ] `install.sdk.wlink=false` (default) → one SKIP line, nothing built, nothing pinned
-  - [ ] `install.sdk.wlink=true` → binary built into `~/opt/bin/`, pin runs
-  - [ ] `install.sdk.wlink=true` with the tunnel **down** → pin declines, exit 0, `install.sh` still succeeds
-- [ ] Row in `sdk/AGENTS.md` **Modules** table
-- [ ] Row in `sdk/README.md` "Pick your tool" **and** a full section in the house shape — **demo must be real captured output**
-- [ ] `scripts/test.sh` coverage floor: `wlink) echo 60 ;;`
-- [ ] `docs/AGENTS.md` row repointed at `sdk/wlink/README.md` (no redirect stub — `docs/wsl-dns.md` never lands on `main`)
-- [ ] `opt/scripts/system/AGENTS.md` entry dropped, points at the module
-- [ ] ALLOWLIST: `git status --short` for every new path
-- [ ] VERIFY: `make lint-shell && make lint-portability && make shell-test`
-- [ ] EVIDENCE → `evidence/p13/`
-- [ ] COMMIT · LEDGER · CHECKPOINT
+- [x] `build.sh` sources `sdk/version.sh` ✓ · logs via `libs/log` ✓
+- [x] `sdk/wlink/AGENTS.md` + `ln -s AGENTS.md CLAUDE.md`
+- [x] `sdk/wlink/README.md` — absorbs `docs/wsl-dns.md`
+- [x] `.github/gff/features.yaml`: add `install.sdk.wlink`, **`boolDefault: false`**, description stating it is opt-in/fail-closed and why it differs from the other `install.sdk.*` flags
+- [x] `install.sh`: one block gated `gff_opt_in install.sdk.wlink` (**not** `gff_on` — an unset flag must mean *do not build*) that builds/installs the binary and runs the pin
+- [x] `install.sh`: remove the prototype's block (replaced, not migrated — neither flag reaches `main`)
+- [x] VERIFY flag behavior on a real `install.sh` run (plan §6):
+  - [x] `install.sdk.wlink=false` (default) → one SKIP line, nothing built, nothing pinned
+  - [x] `install.sdk.wlink=true` → binary built into `~/opt/bin/`, pin runs
+  - [x] `install.sdk.wlink=true` with the tunnel **down** → pin declines, exit 0, `install.sh` still succeeds
+- [x] Row in `sdk/AGENTS.md` **Modules** table
+- [x] Row in `sdk/README.md` "Pick your tool" **and** a full section in the house shape — **demo must be real captured output**
+- [x] `scripts/test.sh` coverage floor: `wlink) echo 60 ;;`
+- [x] `docs/AGENTS.md` row repointed at `sdk/wlink/README.md` (no redirect stub — `docs/wsl-dns.md` never lands on `main`)
+- [x] `opt/scripts/system/AGENTS.md` entry dropped, points at the module
+- [x] ALLOWLIST: `git status --short` for every new path
+- [x] VERIFY: `make lint-shell && make lint-portability && make shell-test`
+- [x] EVIDENCE → `evidence/p13/`
+- [x] COMMIT · LEDGER · CHECKPOINT
 
 **Done when:** all 9 `sdk/AGENTS.md` checklist items done and exactly one implementation is live.
 
