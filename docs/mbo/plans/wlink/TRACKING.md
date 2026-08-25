@@ -27,7 +27,7 @@ Phases from plan §4. `P1` and `P2` are blocking — they freeze the `winhost.Ru
 | :-- | :-- | :-- | :-- | :-- |
 | P0 — module skeleton + `libs/log` wiring | **done** | *(this commit)* | `go test ./...` → ok; `wlink --version` → `wlink 0.0.0-untagged (18d8436) built … linux/amd64`; hand-rolled-logger grep → none; `evidence/p0/` | `SetDefaultTool("wlink")` once via sync.Once |
 | P1 — `winhost` + `Runner` **(BLOCKING)** | **done** | *(this commit)* | `go test -cover ./internal/winhost/...` → ok, **64.3%**; live run against this machine's real Windows parsed all 6 interfaces; interop-outside-seam grep → none; `evidence/p1-winhost/` | seam frozen: `Runner`, `Interface` |
-| P2 — `linkstate.State` **(BLOCKING)** | todo | | | freezes the `--json` schema |
+| P2 — `linkstate.State` **(BLOCKING)** | **done** | *(this commit)* | `go test -cover ./internal/linkstate/...` → ok, **100.0%**; JSON shape asserted against spec §4.1; `evidence/p2/` | schema frozen + documented in README |
 | P3 — `probe` native DNS | todo | | | must reproduce recorded `dig` outcomes |
 | P4 — `probe` scoring + recursion guard | todo | | | EC-1 default-gateway trap; EC-2 guard |
 | P5 — `resolvconf` render + derived budget | todo | | | five INI shapes, golden byte-exact |
@@ -67,6 +67,7 @@ A rule is proven only when its named Go test passes **and**, where marked, a liv
 | EC-17 | symlink → real file | [ ] `resolvconf/TestReplacesSharedSymlink` | — | `/mnt/wsl/resolv.conf` is distro-shared |
 | EC-18 | snapshot removed after unpin | [ ] `resolvconf/TestUnpinClearsSnapshot` | — | next pin snapshots fresh state |
 | EC-19 | unknown args exit 2 | [ ] `cmd/TestUnknownFlag_ExitTwo` | — | distinct from a safe decline |
+| EC-20 | link health / exit code | [x] `linkstate/TestState_Health`, `TestState_NonWSLIsNotDegraded`, `TestState_EmptyFleetIsNotDegraded` | — | **added in P2** — spec gap found while freezing the schema |
 | — | spec §5.1 kept current | [ ] every build-time discovery recorded as an EC rule | — | the prototype is deleted; the spec is the record |
 
 ## 3. Validation done-when — the stop condition
@@ -97,6 +98,7 @@ is deleted the spec is the only record.
 
 | Date | Session | What happened |
 | :-- | :-- | :-- |
+| 2026-08-25 | P2 | Schema frozen at 100% coverage. **Spec gap found and closed:** the JSON needed a computed `link` verdict so gsl reads one field instead of re-deriving the degraded rules — added to spec §4.1 and pinned as new rule **EC-20**, which also fixes two traps the rules did not state: off-WSL is `ok` (a no-op, not a failure, or install.sh looks broken on machines the feature never applied to) and an **empty** fleet is `ok` (nothing to resolve is not a shortfall). Also pinned: empty collections marshal as `[]`, absences as `null`. |
 | 2026-08-25 | P1 | Seam frozen. Two design calls worth recording: queries ask PowerShell for **JSON** (`ConvertTo-Json`) rather than the default table rendering, because table output is column-truncated and locale-dependent; and `decodeRows` handles the **bare-object-vs-array** shape, since `ConvertTo-Json` emits an object when exactly one row matches — a parser assuming an array silently returns nothing on a single-interface machine. A test also caught the tunnel-alias regex being too narrow (hex-only, so `wg-lab`/`wg-home` failed without adapter data); broadened, code fixed rather than the test. |
 | 2026-08-25 | P0 | Module skeleton landed. **Deviation from plan §2:** version vars stamped into `cmd` (`cmd.Version`/`Commit`/`BuildDate`/`Dirty`), not `internal/version` — mirroring `sdk/fleet`'s actual `build.sh`, which is the live convention. Plan inventory amended. |
 | 2026-08-24 | planning | Design approved. Issue #245 opened. Design/spec/plan + this trio laid down. Build **not started**. Scope corrected: `wlink` is built **inside** PR #242 and the shell prototype is deleted there too — none of it ever lands on `main` (verified: `git ls-tree origin/main` matches none of it), so there is no cutover, archival, or flag migration. Baseline recorded from live testing: fleet lookups **20–21s unpinned → 4s pinned**; `--verify` PASS with the tunnel up (3/3 fleet hosts, 0s each) and a real `ssh lab-pi` login. |

@@ -233,6 +233,7 @@ generateResolvConf = false
 ```json
 {
   "wsl": true,
+  "link": "degraded",
   "tunnel": { "state": "up", "interface": "wg-lab", "handshake_age_seconds": 34 },
   "pinned": { "resolver": "10.10.0.1", "since": "2026-08-24T21:40:11Z", "managed": true },
   "candidates": [
@@ -244,6 +245,11 @@ generateResolvConf = false
   "drift": null
 }
 ```
+
+`link` is the one-word verdict (`ok` | `degraded`) and is what drives the exit code, so a
+consumer reads one field instead of re-deriving the rules. Empty collections are emitted as
+`[]`, never `null`, so `candidates.length` is always meaningful; absences (`pinned`, `drift`)
+*are* `null`, because "not pinned" and "pinned to nothing" must not look alike.
 
 ### `wlink doctor`
 
@@ -297,6 +303,7 @@ Format: *trigger predicate · fires · must-not-fire · edge · pass*.
 | EC-17 | F4 | `pin` must replace the `resolv.conf` **symlink** with a real file — WSL ships it as a symlink to the distro-shared `/mnt/wsl/resolv.conf`, so writing through it would leak the pin to other distros and be regenerated. `unpin` restores the symlink *and its original target*. |
 | EC-18 | F6 | After a successful `unpin`, the snapshot directory is removed, so a subsequent `pin` takes a fresh snapshot of the genuinely-current state rather than restoring a stale one. |
 | EC-19 | §3 CLI | Unknown flags/arguments exit **2** (usage error), distinct from a safe decline (0) and a real failure (1). |
+| EC-20 | F12/F13 | `link` is `degraded` when the tunnel is not `up`, nothing is pinned, drift is present, or a non-empty fleet is only partly resolvable; `ok` otherwise. **Off WSL it is `ok`** — a no-op, not a failure, or `install.sh` looks broken on machines the feature never applied to. An **empty** fleet is `ok`: nothing to resolve is not a shortfall. Empty collections marshal as `[]`, absences (`pinned`, `drift`) as `null`. |
 
 ### 5.1 Provenance — the prototype's behavioral inventory
 

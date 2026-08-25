@@ -60,13 +60,13 @@
 
 ### Phase P2 — `linkstate.State` schema  **(BLOCKING)**  (plan §4 P2)
 
-- [ ] RED: JSON round-trip + golden schema test
-- [ ] RUN-RED: `go test ./internal/linkstate/...` → expect **FAIL**
-- [ ] GREEN: `State`, `TunnelState` (`up|not-ready|down|unknown`), `PinState`, `Candidate`, `FleetSummary`, `DriftReport`
-- [ ] RUN-GREEN: expect **PASS**
-- [ ] DOCS: schema documented in `sdk/wlink/README.md` — it is a public contract `gsl` will consume
-- [ ] EVIDENCE → `evidence/p2/`
-- [ ] COMMIT · LEDGER · CHECKPOINT
+- [x] RED: JSON round-trip + golden schema test
+- [x] RUN-RED: `go test ./internal/linkstate/...` → expect **FAIL**
+- [x] GREEN: `State`, `TunnelState` (`up|not-ready|down|unknown`), `PinState`, `Candidate`, `FleetSummary`, `DriftReport`
+- [x] RUN-GREEN: expect **PASS**
+- [x] DOCS: schema documented in `sdk/wlink/README.md` — it is a public contract `gsl` will consume
+- [x] EVIDENCE → `evidence/p2/`
+- [x] COMMIT · LEDGER · CHECKPOINT
 
 **Done when:** schema frozen and documented. Downstream phases may now consume it.
 
