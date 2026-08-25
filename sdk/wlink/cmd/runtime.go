@@ -44,6 +44,13 @@ type Runtime struct {
 	DryRun            bool
 	JSON              bool
 
+	// System resolves through the host path (nsswitch + resolv.conf ordering),
+	// which is the only thing that proves what ssh will experience. Nil means
+	// the real one.
+	System SystemResolver
+	// MaxFailSeconds overrides the budget derived from resolv.conf; 0 derives.
+	MaxFailSeconds int
+
 	Paths resolvconf.Paths
 	Out   io.Writer
 }

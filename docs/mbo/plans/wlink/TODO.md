@@ -178,12 +178,12 @@
 
 ### Phase P10 — `cmd/verify`  (plan §4 P10)
 
-- [ ] RED: EC-7 — pass (tunnel up) · pass (down, miss within budget) · fail (public unresolvable) · fail (miss over budget)
-- [ ] RUN-RED → expect **FAIL**
-- [ ] GREEN: `verify.go` — resolve through the **host resolver path**, never direct-to-server
-- [ ] RUN-GREEN → expect **PASS**
-- [ ] EVIDENCE → `evidence/p10/`
-- [ ] COMMIT · LEDGER · CHECKPOINT
+- [x] RED: EC-7 — pass (tunnel up) · pass (down, miss within budget) · fail (public unresolvable) · fail (miss over budget)
+- [x] RUN-RED → expect **FAIL**
+- [x] GREEN: `verify.go` — resolve through the **host resolver path**, never direct-to-server
+- [x] RUN-GREEN → expect **PASS**
+- [x] EVIDENCE → `evidence/p10/`
+- [x] COMMIT · LEDGER · CHECKPOINT
 
 **Done when:** all four matrix outcomes correct.
 
