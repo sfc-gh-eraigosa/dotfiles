@@ -120,15 +120,15 @@
 
 ### Phase P6 — snapshot, restore, drift  (plan §4 P6)
 
-- [ ] RED: EC-4 — snapshot written **before** the first byte; round-trip restores `resolv.conf` (symlink target included) and `wsl.conf` byte-for-byte
-- [ ] RED: snapshot-failure ⇒ **no write**, exit 0
-- [ ] RED: re-running `pin` must **not** overwrite a good snapshot
-- [ ] RED: EC-11 — drift detected after a hand-edit; **not** reported for a byte-identical file
-- [ ] RUN-RED → expect **FAIL**
-- [ ] GREEN: `snapshot.go` (atomic privileged writes)
-- [ ] RUN-GREEN → expect **PASS**
-- [ ] EVIDENCE → `evidence/p6-snapshot/` (the round-trip diff)
-- [ ] COMMIT · LEDGER · CHECKPOINT
+- [x] RED: EC-4 — snapshot written **before** the first byte; round-trip restores `resolv.conf` (symlink target included) and `wsl.conf` byte-for-byte
+- [x] RED: snapshot-failure ⇒ **no write**, exit 0
+- [x] RED: re-running `pin` must **not** overwrite a good snapshot
+- [x] RED: EC-11 — drift detected after a hand-edit; **not** reported for a byte-identical file
+- [x] RUN-RED → expect **FAIL**
+- [x] GREEN: `snapshot.go` (atomic privileged writes)
+- [x] RUN-GREEN → expect **PASS**
+- [x] EVIDENCE → `evidence/p6-snapshot/` (the round-trip diff)
+- [x] COMMIT · LEDGER · CHECKPOINT
 
 **Done when:** the undo path is proven byte-for-byte, and no write can happen without it.
 
