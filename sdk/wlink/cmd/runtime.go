@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/linkstate"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/probe"
@@ -50,6 +52,8 @@ type Runtime struct {
 	System SystemResolver
 	// MaxFailSeconds overrides the budget derived from resolv.conf; 0 derives.
 	MaxFailSeconds int
+	// PollInterval is how often `wait` re-checks; 0 means the default.
+	PollInterval time.Duration
 
 	Paths resolvconf.Paths
 	Out   io.Writer
@@ -248,3 +252,8 @@ func readFileOrEmpty(path string) string {
 	}
 	return string(b)
 }
+
+// errNeedsReadyFlag keeps `wlink wait` from silently doing nothing: the bare
+// verb has no useful meaning, and a command that exits 0 having waited for
+// nothing is worse than one that says what it needs.
+var errNeedsReadyFlag = errors.New("wait requires --ready (there is nothing else to wait for yet)")

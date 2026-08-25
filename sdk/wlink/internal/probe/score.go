@@ -49,6 +49,29 @@ func Score(ctx context.Context, lk Lookup, in ScoreInput) []Candidate {
 	out := make([]Candidate, 0, len(in.Servers))
 	for _, server := range in.Servers {
 		c := Candidate{Server: server}
+
+		// Ask the sentinel FIRST, and stop on silence.
+		//
+		// A dead candidate would otherwise cost one full timeout per fleet name:
+		// on a machine with a stale Bluetooth or disconnected adapter, that is
+		// (names+1) x timeout of pure waiting on every run — measured at 8s on a
+		// three-host fleet, which made `wait --ready` take 11s to report a link
+		// that was already up.
+		//
+		// Only SILENCE short-circuits. An NXDOMAIN or SERVFAIL proves the server
+		// is there and talking, so its fleet names are still worth asking about;
+		// a server that answers some names and is silent for others would be
+		// pathological.
+		if in.PublicSentinel != "" {
+			r := lk.LookupA(ctx, server, in.PublicSentinel)
+			c.Recursive = r.HasAddress()
+			if !r.Reachable() {
+				out = append(out, c) // silent: nothing more to learn
+				continue
+			}
+			c.Reachable = true
+		}
+
 		for _, name := range in.Fleet {
 			r := lk.LookupA(ctx, server, name)
 			if r.Reachable() {
@@ -57,13 +80,6 @@ func Score(ctx context.Context, lk Lookup, in ScoreInput) []Candidate {
 			if r.HasAddress() {
 				c.FleetResolved++
 			}
-		}
-		if in.PublicSentinel != "" {
-			r := lk.LookupA(ctx, server, in.PublicSentinel)
-			if r.Reachable() {
-				c.Reachable = true
-			}
-			c.Recursive = r.HasAddress()
 		}
 		out = append(out, c)
 	}

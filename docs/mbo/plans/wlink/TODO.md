@@ -191,12 +191,12 @@
 
 ### Phase P11 — `cmd/wait` + readiness  (plan §4 P11)
 
-- [ ] RED: EC-6 — all-silent ⇒ `not-ready` (not `down`); some answer but none knows the fleet ⇒ **not** a tunnel problem; `wait --ready` 0 on ready, 1 on timeout
-- [ ] RUN-RED → expect **FAIL**
-- [ ] GREEN: `wait.go`
-- [ ] RUN-GREEN → expect **PASS**
-- [ ] EVIDENCE → `evidence/p11/`
-- [ ] COMMIT · LEDGER · CHECKPOINT
+- [x] RED: EC-6 — all-silent ⇒ `not-ready` (not `down`); some answer but none knows the fleet ⇒ **not** a tunnel problem; `wait --ready` 0 on ready, 1 on timeout
+- [x] RUN-RED → expect **FAIL**
+- [x] GREEN: `wait.go`
+- [x] RUN-GREEN → expect **PASS**
+- [x] EVIDENCE → `evidence/p11/`
+- [x] COMMIT · LEDGER · CHECKPOINT
 
 ---
 

@@ -193,3 +193,60 @@ func TestGuard_OverrideAllowsButStillExplains(t *testing.T) {
 		t.Error("an overridden verdict must be marked as such so the caller can warn loudly")
 	}
 }
+
+// countingZone records how many lookups each candidate received.
+type countingZone struct {
+	inner  fakeZone
+	counts map[string]int
+}
+
+func (c *countingZone) LookupA(ctx context.Context, server, name string) Result {
+	if c.counts == nil {
+		c.counts = map[string]int{}
+	}
+	c.counts[server]++
+	return c.inner.LookupA(ctx, server, name)
+}
+
+// A dead candidate must cost ONE timeout, not one per fleet name. On a real
+// machine that difference was 8 seconds of pure waiting per run.
+func TestScore_StopsAfterOneTimeoutOnASilentCandidate(t *testing.T) {
+	z := &countingZone{inner: fakeZone{
+		"10.10.0.1": {"lab-pi": resolved("10.10.0.21"), "lab-nas": resolved("10.10.0.22"), "github.com": resolved("198.51.100.10")},
+		// 203.0.113.1 absent from the table => silent
+	}}
+	Score(context.Background(), z, ScoreInput{
+		Servers:        []string{"203.0.113.1", "10.10.0.1"},
+		Fleet:          []string{"lab-pi", "lab-nas"},
+		PublicSentinel: "github.com",
+	})
+	if got := z.counts["203.0.113.1"]; got != 1 {
+		t.Errorf("silent candidate got %d lookups, want 1 — a dead server must cost one timeout, not one per name", got)
+	}
+	if got := z.counts["10.10.0.1"]; got != 3 {
+		t.Errorf("live candidate got %d lookups, want 3 (sentinel + 2 fleet)", got)
+	}
+}
+
+// Only SILENCE short-circuits. A resolver that NXDOMAINs the sentinel is
+// present and talking, so its fleet names must still be asked about — that is
+// exactly the split-horizon resolver the recursion guard then refuses to pin.
+func TestScore_NXDOMAINOnTheSentinelDoesNotSkipFleetProbes(t *testing.T) {
+	z := &countingZone{inner: fakeZone{
+		"10.10.0.1": {"lab-pi": resolved("10.10.0.21")}, // sentinel => NoAddress
+	}}
+	got := Score(context.Background(), z, ScoreInput{
+		Servers:        []string{"10.10.0.1"},
+		Fleet:          []string{"lab-pi"},
+		PublicSentinel: "github.com",
+	})
+	if z.counts["10.10.0.1"] != 2 {
+		t.Errorf("got %d lookups, want 2 — an answering resolver must still be asked about the fleet", z.counts["10.10.0.1"])
+	}
+	if got[0].FleetResolved != 1 {
+		t.Errorf("FleetResolved = %d, want 1", got[0].FleetResolved)
+	}
+	if got[0].Recursive {
+		t.Error("Recursive must be false when the sentinel had no address")
+	}
+}
