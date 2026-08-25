@@ -136,14 +136,14 @@
 
 ### Phase P7 — `fleetsrc` + `/etc/hosts` exclusion  (plan §4 P7)
 
-- [ ] RED: hosts from a stubbed `fleet discover --json`; ssh-config fallback when `fleet` is absent
-- [ ] RED: EC-5 — a name in `/etc/hosts` is excluded **and announced**; score reflects only DNS-resolvable hosts
-- [ ] RUN-RED → expect **FAIL**
-- [ ] GREEN: `fleet.go`, `hostsfile.go`
-- [ ] RUN-GREEN → expect **PASS**
-- [ ] VERIFY: no ssh-config **writes** anywhere (`fleet` owns that)
-- [ ] EVIDENCE → `evidence/p7/`
-- [ ] COMMIT · LEDGER · CHECKPOINT
+- [x] RED: hosts from a stubbed `fleet discover --json`; ssh-config fallback when `fleet` is absent
+- [x] RED: EC-5 — a name in `/etc/hosts` is excluded **and announced**; score reflects only DNS-resolvable hosts
+- [x] RUN-RED → expect **FAIL**
+- [x] GREEN: `fleet.go`, `hostsfile.go`
+- [x] RUN-GREEN → expect **PASS**
+- [x] VERIFY: no ssh-config **writes** anywhere (`fleet` owns that)
+- [x] EVIDENCE → `evidence/p7/`
+- [x] COMMIT · LEDGER · CHECKPOINT
 
 **Done when:** one owner for `#fleet`; local hostname excluded from DNS probing.
 

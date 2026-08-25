@@ -32,7 +32,7 @@ Phases from plan §4. `P1` and `P2` are blocking — they freeze the `winhost.Ru
 | P4 — `probe` scoring + recursion guard | **done** | *(this commit)* | `go test -cover ./internal/probe/...` → ok, **94.7%**, 18 cases; EC-1/EC-2/EC-14 each asserted; `evidence/p4/` | ties resolve to first-enumerated (stable across runs) |
 | P5 — `resolvconf` render + derived budget | **done** | *(this commit)* | `go test -cover ./internal/resolvconf/...` → ok, **95.2%**; all five INI shapes byte-exact; budget 7s managed / 11s unmanaged; rendered artifacts captured; `evidence/p5/` | Set→Remove round trip byte-for-byte |
 | P6 — snapshot + drift | **done** | *(this commit)* | `go test -cover ./internal/resolvconf/...` → ok, **80.9%**, 28 cases; snapshot-failure ⇒ no write asserted; round trip byte-for-byte incl. symlink target; `evidence/p6-snapshot/` | all against a temp root — no privileged write in tests |
-| P7 — `fleetsrc` (+ `/etc/hosts` exclusion) | todo | | | `fleet discover --json`, ssh fallback |
+| P7 — `fleetsrc` (+ `/etc/hosts` exclusion) | **done** | *(this commit)* | `go test -cover ./internal/fleetsrc/...` → ok, **90.1%**, 10 cases; read-only gate (no WriteFile/Create/OpenFile) → none; `evidence/p7/` | consumes `fleet discover --json`; ssh scan is fallback only |
 | P8 — `cmd/pin` + `cmd/unpin` | todo | | | all 54 ported shell cases green |
 | P9 — `cmd/status` + `--json` | todo | | | schema validates; status-line budget |
 | P10 — `cmd/verify` | todo | | | both matrix states |
@@ -52,7 +52,7 @@ A rule is proven only when its named Go test passes **and**, where marked, a liv
 | EC-2 | F3 recursion guard | [x] `probe/TestGuard_RefusesAResolverThatCannotRecurse`, `TestGuard_OverrideAllowsButStillExplains`| — | NXDOMAIN from ns#1 is final |
 | EC-3 | F4/F5 render | [x] `resolvconf/TestSetGenerateResolvConf_AllFiveShapes`, `TestRenderResolvConf_WinnerFirstThenFallbacks`| — | golden byte-exact |
 | EC-4 | F6 snapshot/restore | [x] `resolvconf/TestApply_SnapshotsBeforeWritingAndRecordsTheSymlinkTarget`, `TestApply_RefusesToWriteWhenTheSnapshotCannotBeTaken`, `TestRestore_RoundTripsByteForByteAndClearsTheSnapshot`, `TestApply_DoesNotOverwriteAGoodSnapshotOnRerun`| [ ] | the safety property |
-| EC-5 | F7 `/etc/hosts` exclusion | [ ] `fleetsrc/TestExcludesHostsFileNames` | — | scores `1/1`, not `1/2` |
+| EC-5 | F7 `/etc/hosts` exclusion | [x] `fleetsrc/TestResolve_ExcludesNamesServedByHostsFile`, `TestHostsFileNames`| — | scores `1/1`, not `1/2` |
 | EC-6 | F8/F15 readiness | [ ] `probe/TestAllSilent_IsNotReady`, `cmd/TestWaitReady_Timeout` | [ ] during a real handshake | the race hit on the first run |
 | EC-7 | F9 verify matrix | [ ] `cmd/TestVerify_Matrix` | [ ] tunnel up **and** down | public resolves in both states |
 | EC-8 | F11 native DNS | [x] `probe/TestLookupA_DistinguishesTheFourOutcomes` (resolved · nxdomain · nodata · servfail · silent) | — | drops the `dig` dependency |
@@ -60,13 +60,14 @@ A rule is proven only when its named Go test passes **and**, where marked, a liv
 | EC-10 | F14 doctor | [ ] `sshcfg/TestKeepaliveDetection`, `TestFix_Idempotent` | [ ] on a real ssh config | |
 | EC-11 | F17 drift | [x] `resolvconf/TestDetectDrift`, `TestDetectDrift_UnmanagedIsNotDrift`, `TestDetectDrift_DeletedManagedFile`| — | |
 | EC-12 | non-WSL no-op | [ ] `cmd/TestNonWSL_NoOpExitZero` | — | must never write off-WSL |
-| EC-13 | wildcard Host skipped | [ ] `fleetsrc/TestSkipsWildcardHostPatterns` | — | |
+| EC-13 | wildcard Host skipped | [x] `fleetsrc/TestResolve_NeverProbesWildcardHostPatterns`| — | |
 | EC-14 | candidate filtering | [x] `probe/TestFilterCandidates`| — | + de-dup, first-seen order |
-| EC-15 | zero probe hosts | [ ] `cmd/TestNoFleetHosts_CleanNoOp` | — | not an error |
+| EC-15 | zero probe hosts | [x] `fleetsrc/TestResolve_NoFleetHostsIsNotAnError`| — | not an error |
 | EC-16 | unpin without a snapshot | [x] `resolvconf/TestRestore_WithoutASnapshotRepairsTheStockLayout`| — | restores WSL's stock symlink |
 | EC-17 | symlink → real file | [x] `resolvconf/TestApply_ReplacesTheSharedSymlinkInsteadOfWritingThroughIt`| — | `/mnt/wsl/resolv.conf` is distro-shared |
 | EC-18 | snapshot removed after unpin | [x] `resolvconf/TestRestore_RoundTripsByteForByteAndClearsTheSnapshot`| — | next pin snapshots fresh state |
 | EC-19 | unknown args exit 2 | [ ] `cmd/TestUnknownFlag_ExitTwo` | — | distinct from a safe decline |
+| EC-21 | IP-hostname / alias-vs-Hostname | [x] `fleetsrc/TestResolve_SkipsHostnamesThatAreAlreadyAddresses`, `TestResolve_ProbesTheHostnameNotTheAlias` | — | **added in P7** — spec gap found while wiring the fleet contract |
 | EC-20 | link health / exit code | [x] `linkstate/TestState_Health`, `TestState_NonWSLIsNotDegraded`, `TestState_EmptyFleetIsNotDegraded` | — | **added in P2** — spec gap found while freezing the schema |
 | — | spec §5.1 kept current | [ ] every build-time discovery recorded as an EC rule | — | the prototype is deleted; the spec is the record |
 
@@ -98,6 +99,7 @@ is deleted the spec is the only record.
 
 | Date | Session | What happened |
 | :-- | :-- | :-- |
+| 2026-08-25 | P7 | Host source wired to `fleet discover --json`, killing the duplicate `#fleet` parser; the ssh scan is a **read-only** fallback for machines without fleet, proven by a grep gate (no `WriteFile`/`Create`/`OpenFile` in the package) — fleet stays the only writer of those blocks. **Spec gap found and closed as EC-21:** a fleet entry whose `Hostname` is already an IP must be excluded, not probed — DNS has nothing to resolve for it, so probing would penalise every candidate for a name no resolver was ever asked about, the same false-cap EC-5 prevents. The same rule pinned that the **`Hostname`** is probed, never the alias, since `Hostname` is what ssh actually resolves. |
 | 2026-08-25 | P6 | The safety phase. Every case runs against a temp root, so replacing a symlink and rewriting system files is fully covered with **no privileged write in the suite**. EC-17 is asserted the strong way: the test keeps the distro-shared target file and checks it was **not modified**, which is what proves the pin cannot leak into other WSL distros. Two states the prototype never exercised are now covered because they are the *common* ones on a stock install: **no `/etc/wsl.conf` at all** (pin creates it, so unpin must delete it rather than leave a file the user never had) and an absent `resolv.conf`. Re-running pin is asserted not to re-snapshot — a second snapshot would capture wlink's own managed files and unpin would faithfully restore the pin it exists to remove. |
 | 2026-08-25 | P5 | Render + INI surgery. Three behaviours added beyond the prototype, each with a reason: the winner is **de-duplicated** out of its own fallback list (a repeat wastes a second full timeout on the same dead server); output is capped at **glibc MAXNS=3** (extras are silently ignored, so emitting more is false redundancy); and `Set`→`Remove` is asserted to round-trip **byte-for-byte**, which is the property the whole undo path rests on. Rendering is kept separate from writing so every shape that could clobber a user's `wsl.conf` is covered as a pure string transform, with no privileged write in the tests. |
 | 2026-08-25 | P4 | Scoring + guard. EC-1 asserted with the gateway listed **first** in enumeration order, so a naive implementation that trusts ordering fails the test. Tie-breaking pinned to first-enumerated and looped 20× — map iteration order would otherwise change the pinned resolver run to run on an unchanged machine. `Score` deliberately scores **every** candidate even after a winner emerges, because `status` needs the whole picture: "the ISP resolver answered but knew none of your hosts" is the line that explains why the default route is not the answer. |
