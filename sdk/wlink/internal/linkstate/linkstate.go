@@ -36,9 +36,10 @@ const (
 type Tunnel struct {
 	State     TunnelState `json:"state"`
 	Interface string      `json:"interface"`
-	// HandshakeAgeSeconds is 0 when unknown — a tunnel that is down has no
-	// handshake, and not every client exposes the age.
-	HandshakeAgeSeconds int `json:"handshake_age_seconds"`
+	// HandshakeAgeSeconds is nil when unobservable. A pointer rather than an
+	// int because a plain 0 would read as "just handshaked" — precisely the
+	// wrong impression — and absences are null everywhere else in this schema.
+	HandshakeAgeSeconds *int `json:"handshake_age_seconds"`
 }
 
 // Pin describes the resolver wlink has pinned. Nil means nothing is pinned.
@@ -94,17 +95,21 @@ type State struct {
 
 // Health derives the verdict.
 //
+// It asks ONE question: can this machine reach its fleet by name? Tunnel state
+// and pin status are reported alongside, but are deliberately NOT inputs —
+// a machine sitting directly on the fleet's LAN resolves everything with no
+// tunnel and nothing pinned, and reporting that as degraded would be the tool
+// crying wolf about a link that plainly works. (Found by running status on a
+// real machine that was healthy in every way that matters and still reported
+// DEGRADED because no tunnel was up.)
+//
 // Off WSL the tool does not apply, so it reports ok — a no-op, not a failure.
-// Reporting degraded there would make install.sh look broken on machines the
-// feature was never meant for.
 func (s State) Health() Health {
 	if !s.WSL {
 		return HealthOK
 	}
 	switch {
-	case s.Tunnel.State != TunnelUp,
-		s.Pinned == nil,
-		s.Drift != nil,
+	case s.Drift != nil,
 		// A zero-size fleet is not a shortfall — there is nothing to resolve.
 		s.Fleet.Total > 0 && s.Fleet.Resolved < s.Fleet.Total:
 		return HealthDegraded

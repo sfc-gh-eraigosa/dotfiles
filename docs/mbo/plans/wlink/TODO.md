@@ -166,13 +166,13 @@
 
 ### Phase P9 — `cmd/status` + `--json`  (plan §4 P9)
 
-- [ ] RED: EC-9 — schema validates; exit 0 healthy / 1 degraded / 2 usage
-- [ ] RUN-RED → expect **FAIL**
-- [ ] GREEN: `status.go`
-- [ ] RUN-GREEN → expect **PASS**
-- [ ] VERIFY: completes inside the status-line budget on a fixture run
-- [ ] EVIDENCE → `evidence/p9/`
-- [ ] COMMIT · LEDGER · CHECKPOINT
+- [x] RED: EC-9 — schema validates; exit 0 healthy / 1 degraded / 2 usage
+- [x] RUN-RED → expect **FAIL**
+- [x] GREEN: `status.go`
+- [x] RUN-GREEN → expect **PASS**
+- [x] VERIFY: completes inside the status-line budget on a fixture run
+- [x] EVIDENCE → `evidence/p9/`
+- [x] COMMIT · LEDGER · CHECKPOINT
 
 ---
 

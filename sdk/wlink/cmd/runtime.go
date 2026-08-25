@@ -42,6 +42,7 @@ type Runtime struct {
 	PublicSentinel    string
 	AllowNonRecursive bool
 	DryRun            bool
+	JSON              bool
 
 	Paths resolvconf.Paths
 	Out   io.Writer

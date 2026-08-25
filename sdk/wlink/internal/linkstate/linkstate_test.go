@@ -12,7 +12,7 @@ func TestState_JSONMatchesTheSpecShape(t *testing.T) {
 	s := State{
 		WSL:    true,
 		Link:   HealthOK,
-		Tunnel: Tunnel{State: TunnelUp, Interface: "wg-lab", HandshakeAgeSeconds: 34},
+		Tunnel: Tunnel{State: TunnelUp, Interface: "wg-lab", HandshakeAgeSeconds: func() *int { n := 34; return &n }()},
 		Pinned: &Pin{Resolver: "10.10.0.1", Since: "2026-08-24T21:40:11Z", Managed: true},
 		Candidates: []Candidate{
 			{Server: "10.10.0.1", Reachable: true, FleetResolved: 3, Recursive: true},
@@ -103,9 +103,6 @@ func TestState_Health(t *testing.T) {
 		name   string
 		mutate func(*State)
 	}{
-		{"tunnel down", func(s *State) { s.Tunnel.State = TunnelDown }},
-		{"tunnel not ready", func(s *State) { s.Tunnel.State = TunnelNotReady }},
-		{"not pinned", func(s *State) { s.Pinned = nil }},
 		{"drift detected", func(s *State) { s.Drift = &Drift{File: "/etc/resolv.conf", Detail: "edited"} }},
 		{"fleet partially resolvable", func(s *State) { s.Fleet.Resolved = 1 }},
 	} {
@@ -116,6 +113,21 @@ func TestState_Health(t *testing.T) {
 				t.Errorf("Health() = %q, want %q", got, HealthDegraded)
 			}
 		})
+	}
+}
+
+// A machine on the fleet's LAN has no tunnel and nothing pinned, and resolves
+// everything. That is healthy: tunnel state and pin status are context, not
+// health inputs. Reporting degraded here is the tool crying wolf.
+func TestState_NoTunnelAndNoPinIsHealthyWhenTheFleetResolves(t *testing.T) {
+	s := State{
+		WSL:    true,
+		Tunnel: Tunnel{State: TunnelDown},
+		Pinned: nil,
+		Fleet:  Fleet{Total: 3, Resolved: 3},
+	}
+	if got := s.Health(); got != HealthOK {
+		t.Errorf("Health() = %q, want %q — the fleet resolves, so the link works", got, HealthOK)
 	}
 }
 
