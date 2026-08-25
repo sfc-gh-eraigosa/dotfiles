@@ -165,11 +165,11 @@ fixtures in CI and the live checklist covering the rest.
   no `pkg/`, only `internal/`).
 - `powershell.exe` reachable — via `PATH` or the absolute fallback, since interop `PATH`
   entries can be missing on an otherwise healthy WSL.
-- Two fail-closed gff flags, both `boolDefault: false` and gated with `gff_opt_in` (plan §3.1):
-  **`install.sdk.wlink`** — whether `install.sh` builds and installs the binary at all — and
-  **`install.system.wsl-dns`** (already exists) — whether the pin runs during install. The tool
-  is only needed on machines reaching their fleet over a VPN/tunnel, so a machine that does not
-  ask for it never builds it.
+- One fail-closed gff flag, **`install.sdk.wlink`** (`boolDefault: false`, `gff_opt_in`), gating
+  both the build/install and the install-time pin (plan §3.1). The tool is only needed on
+  machines reaching their fleet over a VPN/tunnel, so a machine that does not ask for it never
+  builds it. The shell script's `install.system.wsl-dns` is retired in the same cutover PR
+  (plan §3.2).
 - **No `dig`/`dnsutils`** — removing that dependency is F11. `dnsutils` stays in
   `packages.tsv` on its own merit as a core diagnostic, not as a `wlink` prerequisite.
 

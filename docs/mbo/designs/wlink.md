@@ -213,9 +213,15 @@ Ordered so nothing lands half-migrated:
    `docs/wsl-dns.md` into `sdk/wlink/README.md`, and archive `wsl_dns_lan.sh` **in the same
    change**. Two live implementations of a DNS rewriter is the one state to avoid.
 
-`wlink` is gated twice, both fail-closed and both default **off** (plan §3.1): 
-`install.sdk.wlink` decides whether `install.sh` **builds and installs** it at all, and the
-existing `install.system.wsl-dns` decides whether the **pin runs** during install. The tool is
-only useful on a machine that reaches its fleet over a VPN/tunnel, so a machine that has not
-asked for it never even builds the binary — unlike the other `install.sdk.*` flags, which
-default true because every machine wants those tools.
+`wlink` is gated by **one** flag, `install.sdk.wlink` — fail-closed, default **off** (plan
+§3.1). It decides whether `install.sh` builds and installs the binary *and* whether the pin
+runs: enabling it already says "this machine uses the tunnel and wants its fleet resolvable",
+which is the same consent. A machine that has not asked for it never even builds the binary —
+unlike the other `install.sdk.*` flags, which default true because every machine wants those
+tools.
+
+`install.system.wsl-dns`, which gates the shell script in #242, is **retired in the cutover PR**
+(plan §3.2). It is named after the script, so once that script is archived the name refers to
+nothing. The flag gating the script is removed in the same change that adds the flag gating the
+binary — never two flags live at once, for the same reason there are never two
+implementations.

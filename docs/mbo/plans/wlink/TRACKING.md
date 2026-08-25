@@ -38,7 +38,7 @@ Phases from plan §4. `P1` and `P2` are blocking — they freeze the `winhost.Ru
 | P10 — `cmd/verify` | todo | | | both matrix states |
 | P11 — `cmd/wait` + readiness | todo | | | `not-ready` ≠ `down` |
 | P12 — `sshcfg` + `cmd/doctor` | todo | | | keepalive detection; `--fix` idempotent |
-| P13 — integration & rollout | todo | | | sdk checklist ×9; script archived same PR; **both flags fail-closed, `install.sdk.wlink` default false** |
+| P13 — integration & rollout | todo | | | sdk checklist ×9; script archived + old flag retired same commit; **one flag, `install.sdk.wlink`, default false, fail-closed** |
 | P14 — live acceptance | todo | | | real-machine captures |
 
 ## 2. Feature → proof matrix (spec §5)
@@ -67,9 +67,9 @@ A rule is proven only when its named Go test passes **and**, where marked, a liv
 - [ ] All 54 shell cases have a cited Go counterpart
 - [ ] `go test ./...` green; module coverage **≥60%**
 - [ ] `sdk/AGENTS.md` "Adding a module" checklist — all 9 items, including the `sdk/README.md` section with a **real captured** demo
-- [ ] `install.sdk.wlink` registered `boolDefault: false`, gated `gff_opt_in`; `install.sh` builds the binary **only** when it is true
-- [ ] `install.system.wsl-dns` runs the binary, and warns + exits 0 when the binary is absent
-- [ ] All four flag combinations verified on a real `install.sh` run (plan §6 table)
+- [ ] `install.sdk.wlink` registered `boolDefault: false`, gated `gff_opt_in`; `install.sh` builds and pins **only** when it is true
+- [ ] `install.system.wsl-dns` **removed** from features.yaml and install.sh in the same commit that archives the script (plan §3.2)
+- [ ] Both flag states verified on a real `install.sh` run; a leftover `install.system.wsl-dns=true` override switches nothing on
 - [ ] `wsl_dns_lan.sh` + `_test.sh` archived **in the same PR** as the wiring
 - [ ] `docs/wsl-dns.md` folded into `sdk/wlink/README.md`, existing links kept alive
 - [ ] Live acceptance checklist (plan §6) captured under `evidence/e2e/`

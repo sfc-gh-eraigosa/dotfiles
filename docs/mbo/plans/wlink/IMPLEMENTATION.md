@@ -81,16 +81,17 @@ Per phase, from plan §4. The **overall stop condition** (also tickable in `TRAC
 - [ ] All 54 shell cases have a Go counterpart cited in that same table
 - [ ] `go test ./...` green; module coverage **≥60%** (the `sdk/` floor)
 - [ ] `sdk/AGENTS.md` "Adding a module" checklist complete, all 9 items
-- [ ] `install.sdk.wlink` registered (`boolDefault: false`, `gff_opt_in`); `install.sh` builds the binary only when true
-- [ ] The `install.system.wsl-dns` block runs the binary and degrades to a warning + exit 0 when it is absent
-- [ ] All four flag combinations verified on a real `install.sh` run (plan §6)
+- [ ] `install.sdk.wlink` registered (`boolDefault: false`, `gff_opt_in`); `install.sh` builds and pins only when true
+- [ ] `install.system.wsl-dns` removed in the same commit that archives the script (plan §3.2)
+- [ ] Both flag states verified on a real `install.sh` run (plan §6)
 - [ ] `wsl_dns_lan.sh` + its test archived **in the same PR**
 - [ ] Live acceptance checklist (plan §6) captured under `evidence/e2e/`
 - [ ] Miss timing ≤ the recorded baseline: **20–21s unpinned → 4s pinned**
 
 ## 5. Hard rules
 
-1. **Never two live implementations.** The binary is wired and the script archived in one PR.
+1. **Never two live implementations — or two live flags.** The binary is wired, the script
+   archived, and `install.system.wsl-dns` removed, all in one PR.
 2. **No write without an undo path.** If the snapshot cannot be written, `pin` writes nothing
    and exits 0. This is not negotiable — it is the property that makes the tool safe.
 3. **A safe decline is exit 0.** No winner, guard tripped, non-WSL, tunnel down → exit 0.

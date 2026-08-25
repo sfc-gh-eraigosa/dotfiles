@@ -20,7 +20,6 @@
 - [ ] `grep -qi microsoft /proc/version` → on WSL (needed for P1 fixtures and P14)
 - [ ] `fleet discover --json | head -3` → the contract P7 consumes is live
 - [ ] `bash opt/scripts/system/wsl_dns_lan_test.sh | tail -2` → `PASS=54 FAIL=0` (the oracle)
-- [ ] `gff get install.sdk.wlink` → confirms the flag is registered and resolves **false** by default
 - [ ] SETUP: `gss feature start wlink --goal "sdk/wlink — WSL link (tunnel + resolver) management"`
 - [ ] SETUP: `gss feature worker add --feature wlink --purpose cli --description "sdk/wlink Go CLI succeeding wsl_dns_lan.sh" --engine claude --json` → paste **verbatim** into `TRACKING.md` §0
 - [ ] SETUP: `cd` to the worktree path from that JSON; `mkdir -p docs/mbo/plans/wlink/evidence`
@@ -221,14 +220,15 @@
 - [ ] `sdk/wlink/AGENTS.md` + `ln -s AGENTS.md CLAUDE.md`
 - [ ] `sdk/wlink/README.md` — absorbs `docs/wsl-dns.md`
 - [ ] `.github/gff/features.yaml`: add `install.sdk.wlink`, **`boolDefault: false`**, description stating it is opt-in/fail-closed and why it differs from the other `install.sdk.*` flags
-- [ ] `install.sh`: build-and-install block gated `gff_opt_in install.sdk.wlink` (**not** `gff_on` — an unset flag must mean *do not build*)
-- [ ] `install.sh`: the `install.system.wsl-dns` block runs the **binary**, and warns + exits 0 when the binary is absent
-- [ ] RED: a test asserting the pin block no-ops with a clear message when `wlink` is not installed
-- [ ] VERIFY flag matrix on a real `install.sh` run (plan §6):
-  - [ ] `false/false` → two SKIP lines, nothing built, nothing pinned (the default everywhere)
-  - [ ] `true/false` → binary installed, no pin
-  - [ ] `true/true` → binary installed, pin runs
-  - [ ] `false/true` → warns binary absent, exits 0, `install.sh` still succeeds
+- [ ] `.github/gff/features.yaml`: **remove** `install.system.wsl-dns` — same commit as archiving the script (plan §3.2); it is named after a script that no longer exists
+- [ ] `install.sh`: one block gated `gff_opt_in install.sdk.wlink` (**not** `gff_on` — an unset flag must mean *do not build*) that builds/installs the binary and runs the pin
+- [ ] `install.sh`: remove the old `install.system.wsl-dns` block
+- [ ] DOCS: migration note in `sdk/wlink/README.md` — `gff unset install.system.wsl-dns` / `gff set install.sdk.wlink true`
+- [ ] VERIFY flag behavior on a real `install.sh` run (plan §6):
+  - [ ] `install.sdk.wlink=false` (default) → one SKIP line, nothing built, nothing pinned
+  - [ ] `install.sdk.wlink=true` → binary built into `~/opt/bin/`, pin runs
+  - [ ] `install.sdk.wlink=true` with the tunnel **down** → pin declines, exit 0, `install.sh` still succeeds
+  - [ ] `gff get install.system.wsl-dns` → `false` after removal; a leftover override switches nothing on
 - [ ] Row in `sdk/AGENTS.md` **Modules** table
 - [ ] Row in `sdk/README.md` "Pick your tool" **and** a full section in the house shape — **demo must be real captured output**
 - [ ] `scripts/test.sh` coverage floor: `wlink) echo 60 ;;`

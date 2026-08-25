@@ -68,8 +68,8 @@ known-good oracle rather than a rewrite from prose.
 
 | Path | Change |
 | :-- | :-- |
-| `install.sh` | **Two gated blocks** (see §3.1): a `gff_opt_in install.sdk.wlink` build-and-install block, and the existing `gff_opt_in install.system.wsl-dns` block swapped from the shell script to the binary |
-| `.github/gff/features.yaml` | New `install.sdk.wlink`, **`boolDefault: false`** — deliberately unlike the other `install.sdk.*` flags |
+| `install.sh` | One `gff_opt_in install.sdk.wlink` block that builds/installs the binary and runs the pin (§3.1); the old `install.system.wsl-dns` block is removed (§3.2) |
+| `.github/gff/features.yaml` | Add `install.sdk.wlink` (**`boolDefault: false`**, deliberately unlike the other `install.sdk.*` flags); **remove** `install.system.wsl-dns` |
 | `sdk/AGENTS.md` | Row in the **Modules** table (checklist #7) |
 | `sdk/README.md` | Row in "Pick your tool" **and** a full section in the house shape: pitch → problem → what it does → reach for it when → `console` demo → gotchas → footer (checklist #7–#8) |
 | `scripts/test.sh` | Coverage floor entry `wlink) echo 60 ;;` |
@@ -136,32 +136,60 @@ gate WSL → collect fleet names (fleetsrc, minus /etc/hosts)
 
 ### 3.1 Feature-flag contract
 
-`wlink` is only useful on a machine that reaches its fleet over a VPN/tunnel, so **it is not
-built on machines that do not need it.** Two orthogonal opt-in flags, both **fail-closed**:
+**One flag: `install.sdk.wlink`** — `boolDefault: false`, gated with `gff_opt_in`.
+
+```sh
+gff set install.sdk.wlink true      # build + install the tool, and let install.sh pin
+```
 
 | Flag | Default | Gate | Controls |
 | :-- | :-- | :-- | :-- |
-| `install.sdk.wlink` | **false** | `gff_opt_in` | whether `install.sh` **builds and installs** the binary into `~/opt/bin/` |
-| `install.system.wsl-dns` | **false** | `gff_opt_in` | whether `install.sh` **runs the pin** during install (flag already exists) |
+| `install.sdk.wlink` | **false** | `gff_opt_in` | whether `install.sh` builds and installs the binary **and** runs the pin |
 
-Turning it on:
+`wlink` is only useful on a machine that reaches its fleet over a VPN/tunnel, so a machine that
+has not asked for it never even builds the binary.
 
-```sh
-gff set install.sdk.wlink true          # build + install the tool
-gff set install.system.wsl-dns true     # and let install.sh pin DNS on every run
-```
+**Why not a second flag for the pin.** Setting `install.sdk.wlink=true` already says *"this
+machine uses the tunnel and wants its fleet resolvable"* — that **is** the consent to pin. A
+separate run-gate would add a step without gating anything meaningfully different, and it makes
+the common case a two-command setup for no benefit. Anyone who wants the tool without an
+install-time pin simply runs `wlink pin` when they choose; the install-time pin is safe to
+repeat because it is idempotent (a no-op when already pinned) and declines safely — exit 0, no
+write — whenever the tunnel is down at install time.
 
 **This deliberately departs from the other `install.sdk.*` flags**, which are `boolDefault: true`
-and gated with the fail-open `gff_on` — appropriate for tools every machine wants. `wlink` is
-not that: an unset flag, a missing `gff` binary, or a machine where the export never happened
-must all mean **do not build**, never "build by default". Hence `gff_opt_in`, matching the
-`install.windows.*` opt-in precedent rather than the sdk one. The features.yaml description must
-say so, so the mismatch is not later "corrected".
+and gated with the fail-open `gff_on` — right for tools every machine wants. `wlink` is not
+that: an unset flag, a missing `gff` binary, or a machine where the export never happened must
+all mean **do not build**, never "build by default". Hence `gff_opt_in`, matching the
+`install.windows.*` opt-in precedent rather than the sdk one. The `features.yaml` description
+must say so, so the mismatch is not later "corrected".
 
-**The two flags are independent, and the run block must tolerate that.** `install.sdk.wlink=true`
-with `install.system.wsl-dns=false` is a normal, supported state — the tool is installed and
-driven by hand. The reverse (`wsl-dns=true`, binary absent) must degrade to a warning and exit 0,
-exactly like the missing-`dig` path in the shell predecessor: `install.sh` never fails over this.
+### 3.2 Retiring `install.system.wsl-dns`
+
+That flag ships in #242 to gate the shell script. It is named after the *script*, so once
+`wsl_dns_lan.sh` moves to `archive/` the name refers to something that no longer exists —
+precisely the drift that makes a flag inventory untrustworthy. **The cutover PR retires it**, in
+the same change that archives the script. Its four references all live in files the cutover
+already edits, so this costs nothing extra:
+
+| Reference | Cutover action |
+| :-- | :-- |
+| `.github/gff/features.yaml` | remove the entry |
+| `install.sh` | the block becomes `gff_opt_in install.sdk.wlink` running the binary |
+| `docs/wsl-dns.md` | already becoming a pointer to `sdk/wlink/README.md` |
+| `opt/scripts/system/AGENTS.md` | entry already being dropped |
+
+A user override left behind is harmless — `gff get` on a retired key resolves `false`, so a
+stale `install.system.wsl-dns=true` cannot switch anything on. The `sdk/wlink/README.md`
+migration note is one line:
+
+```sh
+gff unset install.system.wsl-dns    # retired with the shell script
+gff set install.sdk.wlink true      # its replacement
+```
+
+**Never two flags live at once**, exactly as there are never two implementations: the flag that
+gates the script is removed in the same PR that adds the flag gating the binary.
 
 ## 4. TDD build order
 
@@ -183,7 +211,7 @@ Each phase: tests first · how to verify · **done-when** · **evidence** (`tee`
 | **P10** | `cmd/verify` | EC-7 | Both matrix states pass on fixtures |
 | **P11** | `cmd/wait` + readiness | EC-6 | `not-ready` distinguished from `down`; timeout ⇒ exit 1 |
 | **P12** | `sshcfg` + `cmd/doctor` | EC-10 | Flags a missing `ServerAliveInterval`; `--fix` idempotent |
-| **P13** | Integration & rollout | §6 checklist; a test that the run block no-ops when the binary is absent | Both flags registered and fail-closed; binary installed only when `install.sdk.wlink=true`; shell script archived; both sdk tables + README section done |
+| **P13** | Integration & rollout | §6 checklist | `install.sdk.wlink` registered fail-closed and `install.system.wsl-dns` removed in the same commit; binary installed only when the flag is true; shell script archived; both sdk tables + README section done |
 | **P14** | Live acceptance | §7 | Real-machine captures committed |
 
 ## 5. Verification mapping
@@ -221,16 +249,17 @@ reader who trusts it**) · 8. `git status --short -- sdk/wlink` to confirm track
 Plus: coverage floor in `scripts/test.sh`; `docs/wsl-dns.md` becomes a pointer; the shell script
 and its test move to `archive/` **in the same PR** that wires the binary.
 
-**Flag wiring (§3.1)** — register `install.sdk.wlink` (`boolDefault: false`) in
-`.github/gff/features.yaml`, gate the build block with `gff_opt_in`, and verify all four
-combinations of the two flags before calling P13 done:
+**Flag wiring (§3.1, §3.2)** — add `install.sdk.wlink` (`boolDefault: false`, `gff_opt_in`) and
+**remove** `install.system.wsl-dns` in the same commit that archives the script. Verify both
+states on a real `install.sh` run before calling P13 done:
 
-| `install.sdk.wlink` | `install.system.wsl-dns` | Expected |
-| :-- | :-- | :-- |
-| false | false | neither builds nor pins; two SKIP lines; **the default on every machine** |
-| true | false | binary installed; no pin — driven by hand |
-| true | true | binary installed and the pin runs |
-| false | true | pin block warns the binary is absent and exits 0 — `install.sh` still succeeds |
+| `install.sdk.wlink` | Expected |
+| :-- | :-- |
+| **false** (the default on every machine) | one SKIP line; binary not built; nothing pinned |
+| **true** | binary built into `~/opt/bin/`; pin runs — and declines safely (exit 0, no write) if the tunnel happens to be down |
+
+Also verify the retirement itself: `gff get install.system.wsl-dns` resolves `false` after the
+key is removed, so a leftover user override cannot switch anything on.
 
 **Manual acceptance checklist** (cannot run in CI):
 
@@ -242,7 +271,7 @@ combinations of the two flags before calling P13 done:
 - [ ] `doctor` flags the missing `ServerAliveInterval`
 - [ ] `unpin` restores both files byte-for-byte
 - [ ] Miss timing ≤ the shell baseline (**20–21s unpinned → 4s pinned**, recorded in #242)
-- [ ] All four flag combinations from the §6 table behave as specified on a real `install.sh` run
+- [ ] Both flag states from the §6 table behave as specified on a real `install.sh` run, and a leftover `install.system.wsl-dns=true` override switches nothing on
 
 ### 6.1 Build leaves / DAG
 
