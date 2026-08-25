@@ -64,7 +64,7 @@ the prototype's job was to discover the behavior, and it has done it.
 | `sdk/wlink/internal/fleetsrc/fleet.go` | `fleet discover --json`; ssh-config fallback | F16 |
 | `sdk/wlink/internal/fleetsrc/hostsfile.go` | `/etc/hosts` exclusion | F7, EC-5 |
 | `sdk/wlink/internal/sshcfg/keepalive.go` | ssh keepalive inspection + `--fix` | F14, EC-10 |
-| `sdk/wlink/internal/version/version.go` | ldflags target | sdk checklist #2 |
+| `sdk/wlink/cmd/root.go` (version vars) | ldflags target — `cmd.Version`/`Commit`/`BuildDate`/`Dirty`, mirroring `sdk/fleet`'s build.sh | sdk checklist #2 |
 | *(no logging package)* | every unit logs via `sdk/libs/log`; `SetDefaultTool("wlink")` in `cmd/root.go` | sdk checklist #3 |
 | `sdk/wlink/AGENTS.md` + `CLAUDE.md` → symlink | Module docs | sdk checklist #4 |
 | `sdk/wlink/README.md` | Deep docs — absorbs `docs/wsl-dns.md` | sdk checklist #5 |

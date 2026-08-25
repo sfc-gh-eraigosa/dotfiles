@@ -1,7 +1,7 @@
 # wlink — live state ledger
 
 - **Slug:** `wlink`
-- **Started:** *(not started — built inside PR #242, in the existing `wsl-dns-lan/edward-raigosa/dns` worker)*
+- **Started:** 2026-08-25 — built inside PR #242, in the existing `wsl-dns-lan/edward-raigosa/dns` worker
 - **Playbook:** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) · **Cursor:** [`TODO.md`](./TODO.md)
 - **Plan (source of truth):** [`../wlink.md`](../wlink.md) · spec [`../../specs/wlink.md`](../../specs/wlink.md)
 - **Anchors:** issue [#245](https://github.com/sfc-gh-eraigosa/dotfiles/issues/245)
@@ -25,7 +25,7 @@ Phases from plan §4. `P1` and `P2` are blocking — they freeze the `winhost.Ru
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| P0 — module skeleton + `libs/log` wiring | todo | | | `SetDefaultTool("wlink")`; no bespoke logger |
+| P0 — module skeleton + `libs/log` wiring | **done** | *(this commit)* | `go test ./...` → ok; `wlink --version` → `wlink 0.0.0-untagged (18d8436) built … linux/amd64`; hand-rolled-logger grep → none; `evidence/p0/` | `SetDefaultTool("wlink")` once via sync.Once |
 | P1 — `winhost` + `Runner` **(BLOCKING)** | todo | | | fixtures captured from a real WSL host |
 | P2 — `linkstate.State` **(BLOCKING)** | todo | | | freezes the `--json` schema |
 | P3 — `probe` native DNS | todo | | | must reproduce recorded `dig` outcomes |
@@ -97,4 +97,5 @@ is deleted the spec is the only record.
 
 | Date | Session | What happened |
 | :-- | :-- | :-- |
+| 2026-08-25 | P0 | Module skeleton landed. **Deviation from plan §2:** version vars stamped into `cmd` (`cmd.Version`/`Commit`/`BuildDate`/`Dirty`), not `internal/version` — mirroring `sdk/fleet`'s actual `build.sh`, which is the live convention. Plan inventory amended. |
 | 2026-08-24 | planning | Design approved. Issue #245 opened. Design/spec/plan + this trio laid down. Build **not started**. Scope corrected: `wlink` is built **inside** PR #242 and the shell prototype is deleted there too — none of it ever lands on `main` (verified: `git ls-tree origin/main` matches none of it), so there is no cutover, archival, or flag migration. Baseline recorded from live testing: fleet lookups **20–21s unpinned → 4s pinned**; `--verify` PASS with the tunnel up (3/3 fleet hosts, 0s each) and a real `ssh lab-pi` login. |

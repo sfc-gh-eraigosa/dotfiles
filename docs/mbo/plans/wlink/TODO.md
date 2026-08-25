@@ -15,28 +15,28 @@
 
 ## Preflight (once)
 
-- [ ] `git rev-parse --abbrev-ref HEAD` → `feature/wsl-dns-lan/edward-raigosa/dns` (the build happens **in** PR #242, not after it)
-- [ ] `go version` → toolchain present
-- [ ] `grep -qi microsoft /proc/version` → on WSL (needed for P1 fixtures and P14)
-- [ ] `fleet discover --json | head -3` → the contract P7 consumes is live
-- [ ] `bash opt/scripts/system/wsl_dns_lan_test.sh | tail -2` → `PASS=54 FAIL=0` — the prototype still runs; keep it around for side-by-side comparison until P15
-- [ ] `mkdir -p docs/mbo/plans/wlink/evidence`
+- [x] `git rev-parse --abbrev-ref HEAD` → `feature/wsl-dns-lan/edward-raigosa/dns` (the build happens **in** PR #242, not after it)
+- [x] `go version` → toolchain present
+- [x] `grep -qi microsoft /proc/version` → on WSL (needed for P1 fixtures and P14)
+- [x] `fleet discover --json | head -3` → the contract P7 consumes is live
+- [x] `bash opt/scripts/system/wsl_dns_lan_test.sh | tail -2` → `PASS=54 FAIL=0` — the prototype still runs; keep it around for side-by-side comparison until P15
+- [x] `mkdir -p docs/mbo/plans/wlink/evidence`
 
 ---
 
 ### Phase P0 — module skeleton + shared logging  (plan §4 P0)
 
-- [ ] RED: `main_test.go` asserting `--version` prints a stamped version
-- [ ] RUN-RED: `go test ./...` → expect **FAIL**
-- [ ] GREEN: `go.mod`, `main.go`, `cmd/root.go`, `internal/version`, `build.sh` sourcing `sdk/version.sh`
-- [ ] GREEN: wire `sdk/libs/log` — `applog.SetDefaultTool("wlink")` once in `cmd/root.go`
-- [ ] RED: a test asserting `SetDefaultTool` runs before any command body
-- [ ] RUN-GREEN: `go test ./...` → expect **PASS**
-- [ ] VERIFY: `./build.sh && ./wlink --version` stamps a version
-- [ ] VERIFY: `grep -rn "logrus\|lumberjack" sdk/wlink --include='*.go' | grep -v libs/log` → **empty** (no hand-rolled logger)
-- [ ] ALLOWLIST: `git status --short -- sdk/wlink` → files listed, not ignored
-- [ ] EVIDENCE → `evidence/p0/`
-- [ ] COMMIT · LEDGER · CHECKPOINT
+- [x] RED: `main_test.go` asserting `--version` prints a stamped version
+- [x] RUN-RED: `go test ./...` → expect **FAIL**
+- [x] GREEN: `go.mod`, `main.go`, `cmd/root.go`, `internal/version`, `build.sh` sourcing `sdk/version.sh`
+- [x] GREEN: wire `sdk/libs/log` — `applog.SetDefaultTool("wlink")` once in `cmd/root.go`
+- [x] RED: a test asserting `SetDefaultTool` runs before any command body
+- [x] RUN-GREEN: `go test ./...` → expect **PASS**
+- [x] VERIFY: `./build.sh && ./wlink --version` stamps a version
+- [x] VERIFY: `grep -rn "logrus\|lumberjack" sdk/wlink --include='*.go' | grep -v libs/log` → **empty** (no hand-rolled logger)
+- [x] ALLOWLIST: `git status --short -- sdk/wlink` → files listed, not ignored
+- [x] EVIDENCE → `evidence/p0/`
+- [x] COMMIT · LEDGER · CHECKPOINT
 
 **Done when:** builds, version stamped, logging via `libs/log` only, tracked by git.
 
