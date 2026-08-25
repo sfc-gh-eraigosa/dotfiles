@@ -28,7 +28,7 @@ Phases from plan §4. `P1` and `P2` are blocking — they freeze the `winhost.Ru
 | P0 — module skeleton + `libs/log` wiring | **done** | *(this commit)* | `go test ./...` → ok; `wlink --version` → `wlink 0.0.0-untagged (18d8436) built … linux/amd64`; hand-rolled-logger grep → none; `evidence/p0/` | `SetDefaultTool("wlink")` once via sync.Once |
 | P1 — `winhost` + `Runner` **(BLOCKING)** | **done** | *(this commit)* | `go test -cover ./internal/winhost/...` → ok, **64.3%**; live run against this machine's real Windows parsed all 6 interfaces; interop-outside-seam grep → none; `evidence/p1-winhost/` | seam frozen: `Runner`, `Interface` |
 | P2 — `linkstate.State` **(BLOCKING)** | **done** | *(this commit)* | `go test -cover ./internal/linkstate/...` → ok, **100.0%**; JSON shape asserted against spec §4.1; `evidence/p2/` | schema frozen + documented in README |
-| P3 — `probe` native DNS | todo | | | must reproduce recorded `dig` outcomes |
+| P3 — `probe` native DNS | **done** | *(this commit)* | `go test -cover ./internal/probe/...` → ok, **87.1%**; all four outcomes distinguished against an in-process DNS server; dig-parity comparison + `grep '"dig"'` → none; `evidence/p3-probe/` | **no DNS library added** — stdlib preserves the distinctions |
 | P4 — `probe` scoring + recursion guard | todo | | | EC-1 default-gateway trap; EC-2 guard |
 | P5 — `resolvconf` render + derived budget | todo | | | five INI shapes, golden byte-exact |
 | P6 — snapshot + drift | todo | | | round-trip byte-for-byte; no write without snapshot |
@@ -55,7 +55,7 @@ A rule is proven only when its named Go test passes **and**, where marked, a liv
 | EC-5 | F7 `/etc/hosts` exclusion | [ ] `fleetsrc/TestExcludesHostsFileNames` | — | scores `1/1`, not `1/2` |
 | EC-6 | F8/F15 readiness | [ ] `probe/TestAllSilent_IsNotReady`, `cmd/TestWaitReady_Timeout` | [ ] during a real handshake | the race hit on the first run |
 | EC-7 | F9 verify matrix | [ ] `cmd/TestVerify_Matrix` | [ ] tunnel up **and** down | public resolves in both states |
-| EC-8 | F11 native DNS | [ ] `probe/TestNativeResolver_MatchesDigOutcomes` | — | drops the `dig` dependency |
+| EC-8 | F11 native DNS | [x] `probe/TestLookupA_DistinguishesTheFourOutcomes` (resolved · nxdomain · nodata · servfail · silent) | — | drops the `dig` dependency |
 | EC-9 | F12/F13 status/json | [ ] `cmd/TestStatusJSON_Schema` | — | exit codes are contract |
 | EC-10 | F14 doctor | [ ] `sshcfg/TestKeepaliveDetection`, `TestFix_Idempotent` | [ ] on a real ssh config | |
 | EC-11 | F17 drift | [ ] `resolvconf/TestDriftDetection` | — | |
@@ -98,6 +98,7 @@ is deleted the spec is the only record.
 
 | Date | Session | What happened |
 | :-- | :-- | :-- |
+| 2026-08-25 | P3 | Native DNS landed; `dig` dependency gone. **No DNS library needed** — checked first, and `net.Resolver` already preserves every distinction wlink needs (timeout→`IsTimeout`, NXDOMAIN→`IsNotFound`, SERVFAIL→neither), so the module still has 14 total deps and works where `dnsutils` never installs. `PreferGo` is load-bearing: without it cgo's resolver reads `/etc/resolv.conf` and answers from the very configuration wlink is trying to evaluate. A test caught cancellation being classified `Unhelpful` (i.e. "the server answered") when nothing came back — a status-line timeout would have looked like a reachable resolver; now checked before the DNSError switch. |
 | 2026-08-25 | P2 | Schema frozen at 100% coverage. **Spec gap found and closed:** the JSON needed a computed `link` verdict so gsl reads one field instead of re-deriving the degraded rules — added to spec §4.1 and pinned as new rule **EC-20**, which also fixes two traps the rules did not state: off-WSL is `ok` (a no-op, not a failure, or install.sh looks broken on machines the feature never applied to) and an **empty** fleet is `ok` (nothing to resolve is not a shortfall). Also pinned: empty collections marshal as `[]`, absences as `null`. |
 | 2026-08-25 | P1 | Seam frozen. Two design calls worth recording: queries ask PowerShell for **JSON** (`ConvertTo-Json`) rather than the default table rendering, because table output is column-truncated and locale-dependent; and `decodeRows` handles the **bare-object-vs-array** shape, since `ConvertTo-Json` emits an object when exactly one row matches — a parser assuming an array silently returns nothing on a single-interface machine. A test also caught the tunnel-alias regex being too narrow (hex-only, so `wg-lab`/`wg-home` failed without adapter data); broadened, code fixed rather than the test. |
 | 2026-08-25 | P0 | Module skeleton landed. **Deviation from plan §2:** version vars stamped into `cmd` (`cmd.Version`/`Commit`/`BuildDate`/`Dirty`), not `internal/version` — mirroring `sdk/fleet`'s actual `build.sh`, which is the live convention. Plan inventory amended. |

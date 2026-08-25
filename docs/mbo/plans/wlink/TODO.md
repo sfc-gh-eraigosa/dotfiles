@@ -74,14 +74,14 @@
 
 ### Phase P3 — native DNS (drops `dig`)  (plan §4 P3)
 
-- [ ] RED: EC-8 against a local in-process DNS server — NXDOMAIN · no-response · SERVFAIL · NOERROR-no-data
-- [ ] RUN-RED: `go test ./internal/probe/...` → expect **FAIL**
-- [ ] GREEN: `dns.go` — query a specific server natively
-- [ ] RUN-GREEN: expect **PASS**
-- [ ] VERIFY: outcomes match the recorded `dig` behavior the shell script characterized
-- [ ] VERIFY: `grep -rn '"dig"' sdk/wlink --include='*.go'` → **empty**
-- [ ] EVIDENCE → `evidence/p3-probe/` (native vs recorded-`dig` comparison)
-- [ ] COMMIT · LEDGER · CHECKPOINT
+- [x] RED: EC-8 against a local in-process DNS server — NXDOMAIN · no-response · SERVFAIL · NOERROR-no-data
+- [x] RUN-RED: `go test ./internal/probe/...` → expect **FAIL**
+- [x] GREEN: `dns.go` — query a specific server natively
+- [x] RUN-GREEN: expect **PASS**
+- [x] VERIFY: outcomes match the recorded `dig` behavior the shell script characterized
+- [x] VERIFY: `grep -rn '"dig"' sdk/wlink --include='*.go'` → **empty**
+- [x] EVIDENCE → `evidence/p3-probe/` (native vs recorded-`dig` comparison)
+- [x] COMMIT · LEDGER · CHECKPOINT
 
 **Done when:** native resolver reproduces `dig` semantics; no `dig` dependency remains.
 
