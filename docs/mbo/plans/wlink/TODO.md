@@ -44,15 +44,15 @@
 
 ### Phase P1 — `winhost` + `Runner` seam  **(BLOCKING)**  (plan §4 P1)
 
-- [ ] SETUP: capture real PowerShell output on a WSL host with Wi-Fi + WireGuard + Bluetooth into `internal/winhost/testdata/`
-- [ ] RED: fixture-driven test parsing that output → `[]Interface`, incl. `IsTunnel` detection
-- [ ] RUN-RED: `go test ./internal/winhost/...` → expect **FAIL**
-- [ ] GREEN: `runner.go` (the interface), `powershell.go` (PATH lookup **plus** the absolute fallback — interop PATH entries can be missing on a healthy WSL), `query.go`
-- [ ] RUN-GREEN: `go test ./internal/winhost/...` → expect **PASS**
-- [ ] VERIFY: `go test -cover ./internal/winhost/...` → **≥60%**
-- [ ] VERIFY: `grep -rn "powershell" sdk/wlink --include='*.go' | grep -v internal/winhost` → **empty** (interop stays behind the seam)
-- [ ] EVIDENCE → `evidence/p1-winhost/`
-- [ ] COMMIT · LEDGER · CHECKPOINT
+- [x] SETUP: capture real PowerShell output on a WSL host with Wi-Fi + WireGuard + Bluetooth into `internal/winhost/testdata/`
+- [x] RED: fixture-driven test parsing that output → `[]Interface`, incl. `IsTunnel` detection
+- [x] RUN-RED: `go test ./internal/winhost/...` → expect **FAIL**
+- [x] GREEN: `runner.go` (the interface), `powershell.go` (PATH lookup **plus** the absolute fallback — interop PATH entries can be missing on a healthy WSL), `query.go`
+- [x] RUN-GREEN: `go test ./internal/winhost/...` → expect **PASS**
+- [x] VERIFY: `go test -cover ./internal/winhost/...` → **≥60%**
+- [x] VERIFY: `grep -rn "powershell" sdk/wlink --include='*.go' | grep -v internal/winhost` → **empty** (interop stays behind the seam)
+- [x] EVIDENCE → `evidence/p1-winhost/`
+- [x] COMMIT · LEDGER · CHECKPOINT
 
 **Done when:** real captures parse correctly; tunnel detection right; no interop outside `winhost`.
 

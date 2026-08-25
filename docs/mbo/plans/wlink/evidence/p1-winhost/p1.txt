@@ -1,0 +1,35 @@
+# P1 — winhost + the Runner seam (BLOCKING)
+# captured 2026-08-25T05:34:56Z
+
+$ go test -cover ./internal/winhost/...
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/winhost	(cached)	coverage: 64.3% of statements
+
+$ go test -v ./internal/winhost/ -run 'Test'  # case names
+--- PASS: TestInterfaces_EnumeratesEveryInterfaceWithItsResolvers (0.00s)
+--- PASS: TestInterfaces_IdentifiesTheTunnel (0.00s)
+--- PASS: TestInterfaces_KeepsInterfacesWithNoResolvers (0.00s)
+--- PASS: TestInterfaces_HandlesSingleObjectJSON (0.00s)
+--- PASS: TestInterfaces_PropagatesRunnerFailure (0.00s)
+--- PASS: TestIsTunnelAdapter (0.00s)
+--- PASS: TestDecodeRows_EmptyOutputIsNotAnError (0.00s)
+--- PASS: TestDecodeRows_StripsUTF8BOM (0.00s)
+--- PASS: TestDecodeRows_MalformedIsAnError (0.00s)
+--- PASS: TestInterfaces_SurvivesAdapterQueryFailure (0.00s)
+--- PASS: TestIsTunnelAdapter_AliasShapesWithoutDescription (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/winhost	0.004s
+
+$ WLINK_LIVE=1 go test ./internal/winhost/ -run TestLive -v   # against THIS machine's real Windows
+    live_test.go:28: alias="vEthernet (WSL (Hyper-V firewall))"     index=31  tunnel=false resolvers=0
+    live_test.go:28: alias="Local Area Connection* 1"               index=6   tunnel=false resolvers=0
+    live_test.go:28: alias="Local Area Connection* 2"               index=13  tunnel=false resolvers=0
+    live_test.go:28: alias="Wi-Fi"                                  index=3   tunnel=false resolvers=1
+    live_test.go:28: alias="Bluetooth Network Connection"           index=8   tunnel=false resolvers=1
+    live_test.go:28: alias="Loopback Pseudo-Interface 1"            index=1   tunnel=false resolvers=0
+--- PASS: TestLive_AgainstRealWindows (3.71s)
+
+$ grep -rn powershell --include=*.go sdk/wlink | grep -v internal/winhost   # seam holds
+(none — interop confined to internal/winhost)
+
+$ go vet ./...
+(clean)
