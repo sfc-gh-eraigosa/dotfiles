@@ -2,15 +2,10 @@
 
 - **Slug:** `wlink`
 - **Date:** 2026-08-24
-- **Status:** Draft — **proposal pending a build/no-build decision**
-- **Relates to:** PR [#242](https://github.com/sfc-gh-eraigosa/dotfiles/pull/242) (the shell
-  predecessor this would succeed) · design issue: *not opened yet, deliberately — see §8*
+- **Status:** Approved
+- **Relates to:** PR [#242](https://github.com/sfc-gh-eraigosa/dotfiles/pull/242) — ships
+  `opt/scripts/system/wsl_dns_lan.sh`, the shell predecessor `wlink` succeeds
 - **Author(s):** edward-raigosa
-
-> **Read this first.** This document exists so the rewrite can be *declined* on the evidence.
-> The shell script in #242 works, is tested (54 cases), and was validated end-to-end on a
-> real WireGuard-connected machine. Nothing here is urgent. §3 includes "do nothing" as a
-> genuine option, and §8 records what would make this **not** worth doing.
 
 ## 1. Problem / context
 
@@ -61,59 +56,49 @@ native DNS, and reuse of another module's contract.
   the WSL NAT proxy). It must **degrade cleanly** elsewhere, not pretend to work.
 - A daemon. Like `fleet`, on-demand only.
 
-## 3. Options considered
+## 3. Alternatives considered
 
-### Option A — do nothing; keep the shell script (the null option)
+Both were rejected. Recorded so the same ground is not re-litigated.
 
-Ship #242, stop. The core problem is solved and tested.
+### Keep extending the shell script — rejected
 
-- **For:** zero cost. 54 tests already pass. No new module, no coverage floor, no tag stream, no
-  second thing to maintain. The adjacent problems are annoyances, not outages.
-- **Against:** every added capability (status, doctor, wait) makes the script worse — it is
-  already ~600 lines of bash doing INI rewriting, DNS parsing, and Windows interop. Structured
-  output (`--json`) in bash is a stringly-typed trap. The `dig` dependency stays. The `#fleet`
-  duplication stays and will drift from `fleet`.
-- **Verdict:** legitimate. Choose this if the adjacent problems stay rare in daily use.
+`wsl_dns_lan.sh` is already ~600 lines of bash doing INI rewriting, DNS parsing, and Windows
+interop. Every capability in §1 makes it worse: structured output (`--json`) in bash is a
+stringly-typed trap, the `dig` dependency cannot be removed from a shell probe, and the
+duplicate `#fleet` parser stays and drifts from `fleet`. The script is a good *solution to one
+problem* and a bad *foundation* — which is why it ships as-is in #242 and is superseded rather
+than grown.
 
-### Option B — fold the behavior into `sdk/fleet` as `fleet link …`
+### Fold it into `sdk/fleet` as `fleet link …` — rejected
 
-- **For:** no new module; `fleet` already owns `#fleet` parsing, so the duplication disappears
-  by construction; one binary for "my hosts".
-- **Against:** `fleet` is cross-platform (it manages hosts, keys, wake, install status). This
-  work is irreducibly WSL/Windows-specific — `powershell.exe` interop, `/etc/wsl.conf`,
-  `/mnt/wsl/resolv.conf`. Pushing that into `fleet` puts platform-gated dead code into a tool
-  that runs on macOS and Raspberry Pi, and widens its blast radius: a bug in resolver pinning
-  could take out `fleet status`. It also muddies a clean boundary — `fleet` answers *who*,
-  this answers *can I reach them*.
-- **Verdict:** rejected on blast radius and platform mismatch, not on convenience.
+Tempting, because `fleet` already owns `#fleet` parsing, so the duplication would vanish by
+construction. Rejected on **blast radius and platform fit**: `fleet` is cross-platform — it runs
+on macOS and Raspberry Pi — while this work is irreducibly WSL/Windows-specific
+(`powershell.exe` interop, `/etc/wsl.conf`, `/mnt/wsl/resolv.conf`). Folding it in would put
+platform-gated dead code into a cross-platform tool and let a bug in resolver pinning take out
+`fleet status`. It also blurs a boundary worth keeping sharp: `fleet` answers *who my hosts
+are*; `wlink` answers *can I reach them from here*.
 
-### Option C — a new `sdk/wlink` module that consumes `fleet`'s contract  ← **recommended**
-
-A small Go CLI mirroring `sdk/gss` conventions (cobra `cmd/`, `internal/` with a mockable
-runner, `internal/version` ldflags), which:
-
-- gets fleet hostnames from `fleet discover --json` (falling back to an ssh-config parse when
-  `fleet` is absent), so the `#fleet` marker has exactly one owner;
-- resolves DNS **natively** in Go against a chosen server, dropping `dig`/`dnsutils`;
-- queries Windows via one interop layer behind an interface, so every probe is unit-testable
-  against recorded fixtures rather than a live machine;
-- emits `--json` on every read command so `gsl` can surface link state in the status line and
-  CI can gate on it.
-
-- **For:** clean boundary; the platform-specific code is quarantined in a WSL-only module;
-  removes both the `dig` dependency and the `#fleet` duplication; makes the untestable parts
-  (Windows interop, privileged writes) testable behind interfaces; gives `gsl` something to
-  consume.
-- **Against:** a real module's worth of overhead — `go.mod`, `build.sh`, tag-driven versioning,
-  a coverage floor in `scripts/test.sh`, `AGENTS.md` + `CLAUDE.md` symlink, `install.sh` build
-  wiring. And a migration: `install.sh`, the gff flag, and `docs/wsl-dns.md` all move.
-- **Verdict:** recommended **if** the adjacent problems in §1 are worth solving. If they are
-  not, Option A is the honest answer.
+The duplication is solved instead by **consuming** `fleet`'s contract — see §4.
 
 ## 4. Decision
 
-**Proposed: Option C**, `sdk/wlink`, binary `wlink` — *pending the go/no-go this document exists
-to inform.*
+Build **`sdk/wlink`**, binary `wlink`: a WSL-only Go CLI mirroring `sdk/gss` conventions
+(cobra `cmd/`, `internal/` behind a mockable runner, `internal/version` ldflags), which
+
+- takes fleet hostnames from `fleet discover --json` — falling back to a read-only ssh-config
+  parse when `fleet` is absent — so the `#fleet` marker has exactly one owner;
+- resolves DNS **natively in Go** against a chosen server, dropping the `dig`/`dnsutils`
+  dependency;
+- reaches Windows through a single interop layer behind an interface, making every probe
+  testable against recorded fixtures instead of a live machine;
+- emits `--json` from every read command, so `gsl` can surface link state in the status line
+  and CI can gate on it;
+- **logs through the shared `sdk/libs/log`**, like every other sdk tool — see below.
+
+It carries over every safety property #242 established — opt-in, fail-closed,
+snapshot-before-write, no write without an undo path, and refusing to pin a non-recursive
+resolver — as hard requirements, each one a test in the spec.
 
 ### The name
 
@@ -129,6 +114,35 @@ fleet status     # who my hosts are, and are they in sync
 wlink status     # can I reach them by name from here
 ```
 
+### Logging
+
+`wlink` uses the repo's shared logger, `sdk/libs/log` — the same one `fleet`, `gsl`, and
+`tmux-mgr` use. **No hand-rolled logger, file writer, or rotation**, per the `sdk/AGENTS.md`
+contract:
+
+```go
+import applog "github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/log"
+
+applog.SetDefaultTool("wlink")    // once, at startup
+applog.Default().WithField("resolver", srv).Info("pinned")
+```
+
+- **Diagnostics** — what `wlink` did and why it decided it — go to `New`/`Default`: logrus
+  JSON with lumberjack rotation, controlled by `$WLINK_LOG_FILE` / `$WLINK_LOG_LEVEL`.
+- **Captured output** — bytes produced by a process `wlink` shelled out to (`powershell.exe`
+  interop, `fleet discover`) — goes to `NewCapture`, kept plain-text per run so a capture is
+  readable as-is.
+
+This matters more here than in a typical tool for two reasons. First, the decisions worth
+auditing are invisible by design: which candidate resolvers were seen, what each answered, why
+one won, and why a write was declined. A structured diagnostic log turns "it did nothing" into
+an answerable question — the failure mode that cost the most time while testing the shell
+predecessor. Second, the interop and privileged-write paths are exactly where post-hoc evidence
+is most valuable, and `libs/log` guarantees the property that makes logging safe there:
+**construction never fails** — a logger that cannot open its file discards, a nil `*Capture` is
+safe to call, so logging can never introduce a failure mode into a tool that rewrites
+`/etc/resolv.conf`.
+
 ### Boundaries
 
 | Unit | Owns | Depends on |
@@ -140,6 +154,7 @@ wlink status     # can I reach them by name from here
 | `internal/resolvconf` | parse/render `/etc/resolv.conf` + `/etc/wsl.conf` INI; snapshot; restore; atomic privileged writes | — |
 | `internal/fleetsrc` | fleet hostnames via `fleet discover --json`, ssh-config fallback, `/etc/hosts` exclusion | — |
 | `internal/sshcfg` | ssh config inspection for the keepalive/`doctor` checks | — |
+| *(logging)* | no bespoke package — every unit logs via `sdk/libs/log` | `libs/log` |
 
 The **frozen interface** that lets this be built in parallel is `winhost.Runner` plus the
 `linkstate.State` struct — everything else consumes them. See the plan's §3 and §6.1.
@@ -153,7 +168,7 @@ The **frozen interface** that lets this be built in parallel is `winhost.Runner`
 | **Native DNS behaves differently from `dig`** | Medium | The Go resolver must reproduce the recorded `dig` behavior for the cases #242 already characterized (NXDOMAIN vs no-response vs NOERROR-no-data). Those become fixture tests, seeded from real captures. |
 | **Windows interop is untestable in CI** | Medium | All interop behind `winhost.Runner`; CI runs against recorded fixtures. A live-machine acceptance checklist covers what fixtures cannot. |
 | **Scope creep into VPN management** | Medium | §2 non-goals are explicit: observe, never manage. |
-| **The module is never finished** and the shell script rots alongside a half-built Go tool | Medium | This is the real risk of saying yes prematurely — hence Option A staying on the table and the trio deliberately deferred (§8). |
+| **The module stalls half-built**, leaving the shell script rotting beside an unfinished Go tool | Medium | The §8 cutover is a single PR: the binary is wired and the script archived together, so `main` never carries two live implementations. Until that PR lands, the shipped shell script remains the only thing `install.sh` can run. The execution trio makes a stalled run resumable rather than abandoned. |
 
 **Blast radius if `wlink` is wrong:** one WSL machine's DNS, recoverable with `wlink unpin` or
 by deleting `/etc/resolv.conf` and letting WSL regenerate it. It is opt-in and fail-closed, so
@@ -185,17 +200,22 @@ Demo worth planning now: a single asciinema-style capture of `wlink status` befo
 during the handshake, and after — because the readiness race is the least obvious behavior and
 the hardest to explain in prose.
 
-## 8. Deliberately not done yet
+## 8. Sequencing
 
-- **No design issue opened.** MBO policy anchors every objective to a design issue; that is
-  skipped here on purpose so a declined proposal leaves no GitHub debris. If this is approved,
-  the issue is the first step.
-- **No execution trio** (`plans/wlink/{IMPLEMENTATION,TRACKING,TODO}.md`). Policy requires it for
-  any plan that will be built — so it is the second step after approval, not part of a proposal.
-- **Migration of `docs/wsl-dns.md`** is planned but not written; it becomes `wlink`'s module docs.
+Ordered so nothing lands half-migrated:
 
-**What would make this NOT worth doing:** if, after living with the shell script for a while,
-the readiness race and the git hangs turn out to be rare enough that the `--verify` warning and
-a one-line ssh config fix cover them. Then Option A wins and this document is marked
-`Superseded`. That verdict needs usage, not argument — which is the strongest reason to ship
-#242 first and decide later.
+1. **Design issue** — the durable tracker and parent for any build sub-issues, per MBO policy.
+2. **Execution trio** (`plans/wlink/{IMPLEMENTATION,TRACKING,TODO}.md`) — policy requires it for
+   any plan that will be built; it is what makes the run resumable and evidence-backed.
+3. **Build**, TDD, in the order the plan's §4 sets out — the frozen `winhost.Runner` seam and
+   the `linkstate.State` schema first, since everything else consumes them.
+4. **Cut over in one PR**: wire the binary into `install.sh`, repoint the gff flag, fold
+   `docs/wsl-dns.md` into `sdk/wlink/README.md`, and archive `wsl_dns_lan.sh` **in the same
+   change**. Two live implementations of a DNS rewriter is the one state to avoid.
+
+`wlink` is gated twice, both fail-closed and both default **off** (plan §3.1): 
+`install.sdk.wlink` decides whether `install.sh` **builds and installs** it at all, and the
+existing `install.system.wsl-dns` decides whether the **pin runs** during install. The tool is
+only useful on a machine that reaches its fleet over a VPN/tunnel, so a machine that has not
+asked for it never even builds the binary — unlike the other `install.sdk.*` flags, which
+default true because every machine wants those tools.

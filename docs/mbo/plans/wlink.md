@@ -2,10 +2,12 @@
 
 - **Slug:** `wlink`
 - **Date:** 2026-08-24
-- **Status:** Draft — **proposal pending a build/no-build decision**
+- **Status:** Approved
 - **Relates to:** spec [`../specs/wlink.md`](../specs/wlink.md) · design
-  [`../designs/wlink.md`](../designs/wlink.md) · PR
-  [#242](https://github.com/sfc-gh-eraigosa/dotfiles/pull/242) (shell predecessor)
+  [`../designs/wlink.md`](../designs/wlink.md) · issue
+  [#245](https://github.com/sfc-gh-eraigosa/dotfiles/issues/245) · execution trio
+  [`wlink/`](./wlink/) · PR [#242](https://github.com/sfc-gh-eraigosa/dotfiles/pull/242)
+  (shell predecessor)
 
 ## 1. Summary & verdict
 
@@ -13,13 +15,17 @@ Builds `sdk/wlink`, a WSL-only Go CLI that succeeds `opt/scripts/system/wsl_dns_
 probes every per-interface DNS server Windows knows, pins the one that resolves `#fleet` names
 (reversibly, with a recursion guard), and adds structured `status`/`doctor`/`wait` on top.
 
-**Verdict: not yet approved.** This plan is written so the objective can be judged, and so it is
-immediately executable if approved. Two deliberate omissions, per the design §8:
+**Approved and ready to execute.** The design's §8 sequencing prerequisites are in place: the
+design issue is [#245](https://github.com/sfc-gh-eraigosa/dotfiles/issues/245), and the
+execution trio lives in [`wlink/`](./wlink/) —
+[`IMPLEMENTATION.md`](./wlink/IMPLEMENTATION.md) (procedure + kickoff prompt),
+[`TRACKING.md`](./wlink/TRACKING.md) (evidence ledger), [`TODO.md`](./wlink/TODO.md) (the
+resumable cursor).
 
-- **No execution trio** (`plans/wlink/{IMPLEMENTATION,TRACKING,TODO}.md`). MBO policy requires it
-  for any plan that will be built — so it is the *first* step after approval, not part of a
-  proposal.
-- **No design issue.** Opened on approval, so a declined proposal leaves no GitHub debris.
+**One gating precondition remains:** PR #242 must merge first. It ships the shell predecessor
+this plan replaces, and building the successor while it is unmerged risks two live
+implementations of a DNS rewriter — the state the design explicitly forbids. See
+`IMPLEMENTATION.md` §1.
 
 **The 54 cases in `opt/scripts/system/wsl_dns_lan_test.sh` are this plan's executable
 specification.** Every one gets a Go counterpart (§5). That is what makes this a port with a
@@ -54,6 +60,7 @@ known-good oracle rather than a rewrite from prose.
 | `sdk/wlink/internal/fleetsrc/hostsfile.go` | `/etc/hosts` exclusion | F7, EC-5 |
 | `sdk/wlink/internal/sshcfg/keepalive.go` | ssh keepalive inspection + `--fix` | F14, EC-10 |
 | `sdk/wlink/internal/version/version.go` | ldflags target | sdk checklist #2 |
+| *(no logging package)* | every unit logs via `sdk/libs/log`; `SetDefaultTool("wlink")` in `cmd/root.go` | sdk checklist #3 |
 | `sdk/wlink/AGENTS.md` + `CLAUDE.md` → symlink | Module docs | sdk checklist #4 |
 | `sdk/wlink/README.md` | Deep docs — absorbs `docs/wsl-dns.md` | sdk checklist #5 |
 
@@ -61,7 +68,8 @@ known-good oracle rather than a rewrite from prose.
 
 | Path | Change |
 | :-- | :-- |
-| `install.sh` | Build `wlink` into `~/opt/bin/`; swap the `gff_opt_in install.system.wsl-dns` block from the shell script to the binary |
+| `install.sh` | **Two gated blocks** (see §3.1): a `gff_opt_in install.sdk.wlink` build-and-install block, and the existing `gff_opt_in install.system.wsl-dns` block swapped from the shell script to the binary |
+| `.github/gff/features.yaml` | New `install.sdk.wlink`, **`boolDefault: false`** — deliberately unlike the other `install.sdk.*` flags |
 | `sdk/AGENTS.md` | Row in the **Modules** table (checklist #7) |
 | `sdk/README.md` | Row in "Pick your tool" **and** a full section in the house shape: pitch → problem → what it does → reach for it when → `console` demo → gotchas → footer (checklist #7–#8) |
 | `scripts/test.sh` | Coverage floor entry `wlink) echo 60 ;;` |
@@ -126,6 +134,35 @@ gate WSL → collect fleet names (fleetsrc, minus /etc/hosts)
          → verify via the host resolver → report
 ```
 
+### 3.1 Feature-flag contract
+
+`wlink` is only useful on a machine that reaches its fleet over a VPN/tunnel, so **it is not
+built on machines that do not need it.** Two orthogonal opt-in flags, both **fail-closed**:
+
+| Flag | Default | Gate | Controls |
+| :-- | :-- | :-- | :-- |
+| `install.sdk.wlink` | **false** | `gff_opt_in` | whether `install.sh` **builds and installs** the binary into `~/opt/bin/` |
+| `install.system.wsl-dns` | **false** | `gff_opt_in` | whether `install.sh` **runs the pin** during install (flag already exists) |
+
+Turning it on:
+
+```sh
+gff set install.sdk.wlink true          # build + install the tool
+gff set install.system.wsl-dns true     # and let install.sh pin DNS on every run
+```
+
+**This deliberately departs from the other `install.sdk.*` flags**, which are `boolDefault: true`
+and gated with the fail-open `gff_on` — appropriate for tools every machine wants. `wlink` is
+not that: an unset flag, a missing `gff` binary, or a machine where the export never happened
+must all mean **do not build**, never "build by default". Hence `gff_opt_in`, matching the
+`install.windows.*` opt-in precedent rather than the sdk one. The features.yaml description must
+say so, so the mismatch is not later "corrected".
+
+**The two flags are independent, and the run block must tolerate that.** `install.sdk.wlink=true`
+with `install.system.wsl-dns=false` is a normal, supported state — the tool is installed and
+driven by hand. The reverse (`wsl-dns=true`, binary absent) must degrade to a warning and exit 0,
+exactly like the missing-`dig` path in the shell predecessor: `install.sh` never fails over this.
+
 ## 4. TDD build order
 
 Each phase: tests first · how to verify · **done-when** · **evidence** (`tee` into
@@ -133,7 +170,7 @@ Each phase: tests first · how to verify · **done-when** · **evidence** (`tee`
 
 | # | Phase | Tests first | Done-when |
 | :-- | :-- | :-- | :-- |
-| **P0** | Module skeleton | `main_test.go` asserts `--version` stamps | `go build` + `build.sh` stamps a version; `git status --short -- sdk/wlink` shows tracked |
+| **P0** | Module skeleton + `libs/log` wiring | `main_test.go` asserts `--version` stamps; a test asserts `SetDefaultTool("wlink")` runs before any command body | `go build` + `build.sh` stamps a version; `git status --short -- sdk/wlink` shows tracked; no bespoke logger anywhere in the module |
 | **P1** | `winhost` + `Runner` **(BLOCKING — freezes the seam)** | Fixture-driven parse of recorded PowerShell output → `[]Interface` | Parses real captures from this machine (Wi-Fi + WireGuard + Bluetooth); tunnel detection correct; ≥60% |
 | **P2** | `linkstate.State` **(BLOCKING — freezes the schema)** | Schema round-trip; `--json` golden | Struct stable; documented in README |
 | **P3** | `probe` (native DNS) | EC-8 against a local in-process DNS server: NXDOMAIN / no-response / SERVFAIL / NOERROR-no-data | Reproduces recorded `dig` outcomes; **no `dig` in the module** |
@@ -146,7 +183,7 @@ Each phase: tests first · how to verify · **done-when** · **evidence** (`tee`
 | **P10** | `cmd/verify` | EC-7 | Both matrix states pass on fixtures |
 | **P11** | `cmd/wait` + readiness | EC-6 | `not-ready` distinguished from `down`; timeout ⇒ exit 1 |
 | **P12** | `sshcfg` + `cmd/doctor` | EC-10 | Flags a missing `ServerAliveInterval`; `--fix` idempotent |
-| **P13** | Integration & rollout | §6 checklist | Binary installed, shell script archived, both sdk tables + README section done |
+| **P13** | Integration & rollout | §6 checklist; a test that the run block no-ops when the binary is absent | Both flags registered and fail-closed; binary installed only when `install.sdk.wlink=true`; shell script archived; both sdk tables + README section done |
 | **P14** | Live acceptance | §7 | Real-machine captures committed |
 
 ## 5. Verification mapping
@@ -184,6 +221,17 @@ reader who trusts it**) · 8. `git status --short -- sdk/wlink` to confirm track
 Plus: coverage floor in `scripts/test.sh`; `docs/wsl-dns.md` becomes a pointer; the shell script
 and its test move to `archive/` **in the same PR** that wires the binary.
 
+**Flag wiring (§3.1)** — register `install.sdk.wlink` (`boolDefault: false`) in
+`.github/gff/features.yaml`, gate the build block with `gff_opt_in`, and verify all four
+combinations of the two flags before calling P13 done:
+
+| `install.sdk.wlink` | `install.system.wsl-dns` | Expected |
+| :-- | :-- | :-- |
+| false | false | neither builds nor pins; two SKIP lines; **the default on every machine** |
+| true | false | binary installed; no pin — driven by hand |
+| true | true | binary installed and the pin runs |
+| false | true | pin block warns the binary is absent and exits 0 — `install.sh` still succeeds |
+
 **Manual acceptance checklist** (cannot run in CI):
 
 - [ ] Tunnel down → `status` = `down`; `pin` declines, writes nothing, exit 0
@@ -194,6 +242,7 @@ and its test move to `archive/` **in the same PR** that wires the binary.
 - [ ] `doctor` flags the missing `ServerAliveInterval`
 - [ ] `unpin` restores both files byte-for-byte
 - [ ] Miss timing ≤ the shell baseline (**20–21s unpinned → 4s pinned**, recorded in #242)
+- [ ] All four flag combinations from the §6 table behave as specified on a real `install.sh` run
 
 ### 6.1 Build leaves / DAG
 

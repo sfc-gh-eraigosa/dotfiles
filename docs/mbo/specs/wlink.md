@@ -2,7 +2,7 @@
 
 - **Slug:** `wlink`
 - **Date:** 2026-08-24
-- **Status:** Draft — **proposal pending a build/no-build decision**
+- **Status:** Approved
 - **Relates to:** design [`../designs/wlink.md`](../designs/wlink.md) · PR
   [#242](https://github.com/sfc-gh-eraigosa/dotfiles/pull/242) (shell predecessor)
 
@@ -153,6 +153,10 @@ fixtures in CI and the live checklist covering the rest.
 
 ## 7. Prerequisites / dependencies
 
+- **Shared logging via `sdk/libs/log`** (`applog.SetDefaultTool("wlink")`; diagnostics to
+  `Default`, shelled-out process output to `NewCapture`; `$WLINK_LOG_FILE` /
+  `$WLINK_LOG_LEVEL`). No hand-rolled logger, writer, or rotation — same contract as `fleet`,
+  `gsl`, and `tmux-mgr`.
 - Go module conventions from [`sdk/AGENTS.md`](../../../sdk/AGENTS.md) — including its
   **"Adding a module"** checklist (build.sh + `version.sh`, `libs/log`, `AGENTS.md` +
   `CLAUDE.md` symlink, `README.md`, `install.sh` wiring, **both** module tables, a
@@ -161,8 +165,11 @@ fixtures in CI and the live checklist covering the rest.
   no `pkg/`, only `internal/`).
 - `powershell.exe` reachable — via `PATH` or the absolute fallback, since interop `PATH`
   entries can be missing on an otherwise healthy WSL.
-- The gff flag `install.system.wsl-dns` (already exists, `boolDefault: false`, gated
-  fail-closed with `gff_opt_in`).
+- Two fail-closed gff flags, both `boolDefault: false` and gated with `gff_opt_in` (plan §3.1):
+  **`install.sdk.wlink`** — whether `install.sh` builds and installs the binary at all — and
+  **`install.system.wsl-dns`** (already exists) — whether the pin runs during install. The tool
+  is only needed on machines reaching their fleet over a VPN/tunnel, so a machine that does not
+  ask for it never builds it.
 - **No `dig`/`dnsutils`** — removing that dependency is F11. `dnsutils` stays in
   `packages.tsv` on its own merit as a core diagnostic, not as a `wlink` prerequisite.
 
