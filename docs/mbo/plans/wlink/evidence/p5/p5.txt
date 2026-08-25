@@ -1,0 +1,53 @@
+# P5 — resolvconf render + derived fail budget (EC-3, EC-7 budget, EC-16 removal)
+# captured 2026-08-25T05:52:35Z
+
+$ go test -v -cover ./internal/resolvconf/...
+--- PASS: TestRenderResolvConf_WinnerFirstThenFallbacks (0.00s)
+--- PASS: TestRenderResolvConf_DeduplicatesTheWinnerFromFallbacks (0.00s)
+--- PASS: TestRenderResolvConf_CapsAtGlibcMaxns (0.00s)
+--- PASS: TestNameservers (0.00s)
+--- PASS: TestFailBudgetSeconds (0.00s)
+    --- PASS: TestFailBudgetSeconds/managed_config (0.00s)
+    --- PASS: TestFailBudgetSeconds/unmanaged_single-resolver_config (0.00s)
+    --- PASS: TestFailBudgetSeconds/no_nameservers_at_all_still_yields_a_usable_floor (0.00s)
+--- PASS: TestSetGenerateResolvConf_AllFiveShapes (0.00s)
+    --- PASS: TestSetGenerateResolvConf_AllFiveShapes/key_present_with_the_wrong_value (0.00s)
+    --- PASS: TestSetGenerateResolvConf_AllFiveShapes/[network]_present,_key_absent (0.00s)
+    --- PASS: TestSetGenerateResolvConf_AllFiveShapes/[network]_present_and_last,_empty (0.00s)
+    --- PASS: TestSetGenerateResolvConf_AllFiveShapes/no_[network]_section_at_all (0.00s)
+    --- PASS: TestSetGenerateResolvConf_AllFiveShapes/empty_file (0.00s)
+--- PASS: TestSetGenerateResolvConf_IsIdempotent (0.00s)
+--- PASS: TestRemoveGenerateResolvConf (0.00s)
+    --- PASS: TestRemoveGenerateResolvConf/section_had_only_our_key_—_section_removed_with_it (0.00s)
+    --- PASS: TestRemoveGenerateResolvConf/section_has_other_keys_—_section_kept,_other_keys_untouched (0.00s)
+    --- PASS: TestRemoveGenerateResolvConf/key_absent_—_file_unchanged (0.00s)
+--- PASS: TestSetThenRemove_RoundTripsToTheOriginal (0.00s)
+--- PASS: TestSetGenerateResolvConf_PreservesCommentsAndOtherSections (0.00s)
+--- PASS: TestRenderedArtifacts_ForEvidence (0.00s)
+coverage: 95.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/resolvconf	0.003s	coverage: 95.2% of statements
+
+## the real rendered artifacts (from TestRenderedArtifacts_ForEvidence)
+--- /etc/resolv.conf ---
+        # Managed by wlink — do not edit.
+        # Regenerate: wlink pin   ·   Undo: wlink unpin
+        # WSL's generated resolv.conf is disabled via /etc/wsl.conf (generateResolvConf).
+        options timeout:1 attempts:1
+        nameserver 10.10.0.1
+        nameserver 10.255.255.254
+        nameserver 198.51.100.53
+FailBudgetSeconds(managed)   = 7
+FailBudgetSeconds(unmanaged) = 11  // 1 nameserver, glibc default timeout 5
+--- /etc/wsl.conf ---
+        [boot]
+        systemd=true
+        
+        [user]
+        default=someone
+        
+        [network]
+        generateResolvConf = false
+--- PASS: TestRenderedArtifacts_ForEvidence (0.00s)
+
+$ go vet ./...
+(clean)

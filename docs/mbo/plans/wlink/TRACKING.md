@@ -30,7 +30,7 @@ Phases from plan §4. `P1` and `P2` are blocking — they freeze the `winhost.Ru
 | P2 — `linkstate.State` **(BLOCKING)** | **done** | *(this commit)* | `go test -cover ./internal/linkstate/...` → ok, **100.0%**; JSON shape asserted against spec §4.1; `evidence/p2/` | schema frozen + documented in README |
 | P3 — `probe` native DNS | **done** | *(this commit)* | `go test -cover ./internal/probe/...` → ok, **87.1%**; all four outcomes distinguished against an in-process DNS server; dig-parity comparison + `grep '"dig"'` → none; `evidence/p3-probe/` | **no DNS library added** — stdlib preserves the distinctions |
 | P4 — `probe` scoring + recursion guard | **done** | *(this commit)* | `go test -cover ./internal/probe/...` → ok, **94.7%**, 18 cases; EC-1/EC-2/EC-14 each asserted; `evidence/p4/` | ties resolve to first-enumerated (stable across runs) |
-| P5 — `resolvconf` render + derived budget | todo | | | five INI shapes, golden byte-exact |
+| P5 — `resolvconf` render + derived budget | **done** | *(this commit)* | `go test -cover ./internal/resolvconf/...` → ok, **95.2%**; all five INI shapes byte-exact; budget 7s managed / 11s unmanaged; rendered artifacts captured; `evidence/p5/` | Set→Remove round trip byte-for-byte |
 | P6 — snapshot + drift | todo | | | round-trip byte-for-byte; no write without snapshot |
 | P7 — `fleetsrc` (+ `/etc/hosts` exclusion) | todo | | | `fleet discover --json`, ssh fallback |
 | P8 — `cmd/pin` + `cmd/unpin` | todo | | | all 54 ported shell cases green |
@@ -50,7 +50,7 @@ A rule is proven only when its named Go test passes **and**, where marked, a liv
 | :-- | :-- | :-- | :-- | :-- |
 | EC-1 | F1/F2 candidate selection | [x] `probe/TestScore_PrefersTheResolverThatAnswersForTheFleet`| — | the default-gateway trap |
 | EC-2 | F3 recursion guard | [x] `probe/TestGuard_RefusesAResolverThatCannotRecurse`, `TestGuard_OverrideAllowsButStillExplains`| — | NXDOMAIN from ns#1 is final |
-| EC-3 | F4/F5 render | [ ] `resolvconf/TestWslConf_AllFiveShapes` | — | golden byte-exact |
+| EC-3 | F4/F5 render | [x] `resolvconf/TestSetGenerateResolvConf_AllFiveShapes`, `TestRenderResolvConf_WinnerFirstThenFallbacks`| — | golden byte-exact |
 | EC-4 | F6 snapshot/restore | [ ] `resolvconf/TestSnapshotRoundTrip_ByteForByte`, `TestNoWriteWithoutSnapshot` | [ ] | the safety property |
 | EC-5 | F7 `/etc/hosts` exclusion | [ ] `fleetsrc/TestExcludesHostsFileNames` | — | scores `1/1`, not `1/2` |
 | EC-6 | F8/F15 readiness | [ ] `probe/TestAllSilent_IsNotReady`, `cmd/TestWaitReady_Timeout` | [ ] during a real handshake | the race hit on the first run |
@@ -98,6 +98,7 @@ is deleted the spec is the only record.
 
 | Date | Session | What happened |
 | :-- | :-- | :-- |
+| 2026-08-25 | P5 | Render + INI surgery. Three behaviours added beyond the prototype, each with a reason: the winner is **de-duplicated** out of its own fallback list (a repeat wastes a second full timeout on the same dead server); output is capped at **glibc MAXNS=3** (extras are silently ignored, so emitting more is false redundancy); and `Set`→`Remove` is asserted to round-trip **byte-for-byte**, which is the property the whole undo path rests on. Rendering is kept separate from writing so every shape that could clobber a user's `wsl.conf` is covered as a pure string transform, with no privileged write in the tests. |
 | 2026-08-25 | P4 | Scoring + guard. EC-1 asserted with the gateway listed **first** in enumeration order, so a naive implementation that trusts ordering fails the test. Tie-breaking pinned to first-enumerated and looped 20× — map iteration order would otherwise change the pinned resolver run to run on an unchanged machine. `Score` deliberately scores **every** candidate even after a winner emerges, because `status` needs the whole picture: "the ISP resolver answered but knew none of your hosts" is the line that explains why the default route is not the answer. |
 | 2026-08-25 | P3 | Native DNS landed; `dig` dependency gone. **No DNS library needed** — checked first, and `net.Resolver` already preserves every distinction wlink needs (timeout→`IsTimeout`, NXDOMAIN→`IsNotFound`, SERVFAIL→neither), so the module still has 14 total deps and works where `dnsutils` never installs. `PreferGo` is load-bearing: without it cgo's resolver reads `/etc/resolv.conf` and answers from the very configuration wlink is trying to evaluate. A test caught cancellation being classified `Unhelpful` (i.e. "the server answered") when nothing came back — a status-line timeout would have looked like a reachable resolver; now checked before the DNSError switch. |
 | 2026-08-25 | P2 | Schema frozen at 100% coverage. **Spec gap found and closed:** the JSON needed a computed `link` verdict so gsl reads one field instead of re-deriving the degraded rules — added to spec §4.1 and pinned as new rule **EC-20**, which also fixes two traps the rules did not state: off-WSL is `ok` (a no-op, not a failure, or install.sh looks broken on machines the feature never applied to) and an **empty** fleet is `ok` (nothing to resolve is not a shortfall). Also pinned: empty collections marshal as `[]`, absences as `null`. |

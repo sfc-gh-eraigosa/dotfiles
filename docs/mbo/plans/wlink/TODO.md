@@ -105,14 +105,14 @@
 
 ### Phase P5 — `resolvconf` render + derived budget  (plan §4 P5)
 
-- [ ] RED: EC-3 — golden `resolv.conf`; `wsl.conf` across **all five** INI shapes (key present / key absent / `[network]` absent / `[network]` last / empty file), other sections untouched
-- [ ] RED: budget = `nameservers × timeout × 2 families + 1`
-- [ ] RUN-RED → expect **FAIL**
-- [ ] GREEN: `resolv.go`, `wslconf.go`
-- [ ] RUN-GREEN → expect **PASS**
-- [ ] VERIFY: golden files byte-exact
-- [ ] EVIDENCE → `evidence/p5/`
-- [ ] COMMIT · LEDGER · CHECKPOINT
+- [x] RED: EC-3 — golden `resolv.conf`; `wsl.conf` across **all five** INI shapes (key present / key absent / `[network]` absent / `[network]` last / empty file), other sections untouched
+- [x] RED: budget = `nameservers × timeout × 2 families + 1`
+- [x] RUN-RED → expect **FAIL**
+- [x] GREEN: `resolv.go`, `wslconf.go`
+- [x] RUN-GREEN → expect **PASS**
+- [x] VERIFY: golden files byte-exact
+- [x] EVIDENCE → `evidence/p5/`
+- [x] COMMIT · LEDGER · CHECKPOINT
 
 **Done when:** all five INI shapes correct; budget derived, not hardcoded.
 
