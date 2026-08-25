@@ -178,7 +178,7 @@ func TestStatus_HintsAtTheRemedyWhenDegraded(t *testing.T) {
 	rt, out := healthyRuntime(t)
 	// Nothing is pinned yet: resolv.conf points at a resolver that knows nothing.
 	rt.Lookup = fakeZone{
-		"10.10.0.1":     {"lab-pi": addr("10.10.0.21"), "github.com": addr("198.51.100.10")},
+		"10.10.0.1":      {"lab-pi": addr("10.10.0.21"), "github.com": addr("198.51.100.10")},
 		"10.255.255.254": {"github.com": addr("198.51.100.10")},
 	}
 	rt.Host = fakeHost{ifaces: []winhost.Interface{

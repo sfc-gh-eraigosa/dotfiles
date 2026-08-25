@@ -130,9 +130,9 @@ func FilterCandidates(servers []string) []string {
 		ip := net.ParseIP(s)
 		switch {
 		case ip == nil, // not an address at all
-			ip.To4() == nil,        // IPv6: wlink pins IPv4 resolvers
-			ip.IsLoopback(),        // 127.0.0.0/8 — the local stub, not a LAN resolver
-			ip.IsUnspecified(),     // 0.0.0.0
+			ip.To4() == nil,         // IPv6: wlink pins IPv4 resolvers
+			ip.IsLoopback(),         // 127.0.0.0/8 — the local stub, not a LAN resolver
+			ip.IsUnspecified(),      // 0.0.0.0
 			ip.IsLinkLocalUnicast(): // 169.254.0.0/16 — an interface with no DHCP
 			continue
 		}
