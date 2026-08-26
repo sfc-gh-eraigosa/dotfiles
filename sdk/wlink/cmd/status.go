@@ -37,6 +37,12 @@ func tunnelStateFor(ifaces []winhost.Interface, scores []probe.Candidate) linkst
 	if !hasTunnel {
 		return linkstate.TunnelDown
 	}
+	if len(scores) == 0 {
+		// A tunnel adapter exists but nothing was probed (no fleet names), so
+		// there is no evidence either way. Reporting "up" would assert a state
+		// nothing was observed for.
+		return linkstate.TunnelUnknown
+	}
 	if probe.AllSilent(scores) {
 		return linkstate.TunnelNotReady
 	}

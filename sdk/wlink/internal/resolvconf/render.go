@@ -21,9 +21,15 @@ const ManagedMarker = "# Managed by wlink"
 // false sense of having fallbacks.
 const MaxNS = 3
 
-// glibcDefaultTimeoutSeconds is what the resolver uses when resolv.conf has no
-// `options timeout:` line.
-const glibcDefaultTimeoutSeconds = 5
+// glibc's defaults when resolv.conf carries no `options` line.
+const (
+	glibcDefaultTimeoutSeconds = 5
+	// Each nameserver is tried `attempts` times, not once. Omitting this is why
+	// the budget came out at 11s on a stock config whose real worst case was
+	// measured at 20–21s — so a perfectly normal miss was reported as a
+	// regression, which is the exact failure the derivation exists to avoid.
+	glibcDefaultAttempts = 2
+)
 
 // Render describes the resolv.conf to produce.
 type Render struct {
@@ -79,7 +85,8 @@ func IsManaged(content string) bool { return strings.Contains(content, ManagedMa
 func Nameservers(content string) []string {
 	var out []string
 	for line := range strings.SplitSeq(content, "\n") {
-		if i := strings.IndexByte(line, '#'); i >= 0 {
+		// resolv.conf accepts both '#' and ';' as comment introducers.
+		if i := strings.IndexAny(line, "#;"); i >= 0 {
 			line = line[:i]
 		}
 		if f := strings.Fields(line); len(f) >= 2 && f[0] == "nameserver" {
@@ -92,7 +99,7 @@ func Nameservers(content string) []string {
 // FailBudgetSeconds is the longest a FAILED lookup should plausibly take under
 // the resolver config actually in force.
 //
-//	budget = nameservers × timeout × 2 families + 1s slack
+//	budget = nameservers × timeout × attempts × 2 families + 1s slack
 //
 // Derived rather than guessed, because a hardcoded limit is exactly what made
 // the prototype's verify report a regression on a run that was in fact a 5×
@@ -103,7 +110,7 @@ func FailBudgetSeconds(content string) int {
 	if ns == 0 {
 		ns = 1
 	}
-	timeout := glibcDefaultTimeoutSeconds
+	timeout, attempts := glibcDefaultTimeoutSeconds, glibcDefaultAttempts
 	for line := range strings.SplitSeq(content, "\n") {
 		if !strings.HasPrefix(strings.TrimSpace(line), "options") {
 			continue
@@ -114,7 +121,12 @@ func FailBudgetSeconds(content string) int {
 					timeout = n
 				}
 			}
+			if v, ok := strings.CutPrefix(f, "attempts:"); ok {
+				if n, err := strconv.Atoi(v); err == nil && n > 0 {
+					attempts = n
+				}
+			}
 		}
 	}
-	return ns*timeout*2 + 1
+	return ns*timeout*attempts*2 + 1
 }

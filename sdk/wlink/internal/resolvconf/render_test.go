@@ -76,21 +76,31 @@ func TestFailBudgetSeconds(t *testing.T) {
 		want    int
 	}{
 		{
-			// 3 nameservers x timeout 1 x 2 families + 1 slack
+			// 3 nameservers x timeout 1 x attempts 1 x 2 families + 1 slack
 			name:    "managed config",
 			content: "options timeout:1 attempts:1\nnameserver 10.10.0.1\nnameserver 10.255.255.254\nnameserver 198.51.100.53\n",
 			want:    7,
 		},
 		{
-			// No options line: glibc's default timeout is 5s.
+			// No options line, so glibc's defaults: timeout 5, ATTEMPTS 2.
+			// 1 x 5 x 2 x 2 + 1 = 21, which matches the 20-21s a real miss was
+			// measured at on exactly this config. The earlier formula omitted
+			// attempts and produced 11, so a normal miss was reported as a
+			// regression — the very failure the derivation exists to prevent.
 			name:    "unmanaged single-resolver config",
 			content: "nameserver 10.255.255.254\n",
-			want:    11,
+			want:    21,
 		},
 		{
 			name:    "no nameservers at all still yields a usable floor",
 			content: "# empty\n",
-			want:    11,
+			want:    21,
+		},
+		{
+			// An explicit attempts: must be honoured, not assumed.
+			name:    "explicit attempts is respected",
+			content: "options timeout:2 attempts:3\nnameserver 10.10.0.1\n",
+			want:    13, // 1 x 2 x 3 x 2 + 1
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -45,7 +45,10 @@ type Tunnel struct {
 // Pin describes the resolver wlink has pinned. Nil means nothing is pinned.
 type Pin struct {
 	Resolver string `json:"resolver"`
-	Since    string `json:"since,omitempty"`
+	// Since is when wlink pinned, taken from the snapshot's mtime. Empty when
+	// unknown — never omitted, because a consumer written against the
+	// documented schema should read "" rather than find the key missing.
+	Since string `json:"since"`
 	// Managed is false when resolv.conf names this resolver but wlink did not
 	// write it — someone else's pin, which wlink must not claim credit for or
 	// silently take over.

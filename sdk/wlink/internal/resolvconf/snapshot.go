@@ -40,12 +40,23 @@ const (
 	snapResolvAbsent  = "resolv.conf.absent"
 	snapWslFile       = "wsl.conf.file"
 	snapWslAbsent     = "wsl.conf.absent"
+	// snapComplete is written LAST. Its absence means the snapshot was
+	// interrupted partway — a directory alone is not an undo point, and
+	// treating it as one lets a later unpin delete resolv.conf and restore
+	// nothing.
+	snapComplete = "complete"
 )
 
-// HasSnapshot reports whether an undo point exists.
+// HasSnapshot reports whether a COMPLETE undo point exists.
+//
+// Completeness matters more than existence. TakeSnapshot creates the directory
+// before writing its records, so an interrupted run (ENOSPC, EACCES on the
+// second write, a signal) leaves a directory with nothing in it. Accepting that
+// as an undo point is how `pin` ends up writing with no way back, and how
+// `unpin` then removes resolv.conf, restores nothing, and reports success.
 func HasSnapshot(p Paths) bool {
-	st, err := os.Stat(p.BackupDir)
-	return err == nil && st.IsDir()
+	_, err := os.Stat(filepath.Join(p.BackupDir, snapComplete))
+	return err == nil
 }
 
 // TakeSnapshot records the current state, ONCE.
@@ -98,7 +109,10 @@ func TakeSnapshot(p Paths) error {
 	default:
 		return err
 	}
-	return nil
+
+	// Marker LAST: everything above must have succeeded for this snapshot to
+	// count as an undo point.
+	return os.WriteFile(filepath.Join(p.BackupDir, snapComplete), nil, 0o644)
 }
 
 // Apply snapshots, then writes both managed files.
@@ -111,26 +125,69 @@ func Apply(p Paths, resolvContent string) error {
 		return fmt.Errorf("refusing to change DNS without an undo path: %w", err)
 	}
 
+	// resolv.conf FIRST, atomically.
+	//
+	// Order matters: doing wsl.conf first and crashing before the resolver is
+	// written would leave the machine with no /etc/resolv.conf AND WSL
+	// forbidden from regenerating one — total DNS loss. This way the worst
+	// interruption leaves a working resolver that WSL may simply overwrite.
+	//
+	// Atomic because os.WriteFile is not: a partial write or ENOSPC between
+	// removing the symlink and finishing the file would leave no resolver at
+	// all. Renaming over the path also replaces the distro-shared symlink in a
+	// single step, so there is never a window with nothing there.
+	if err := writeFileAtomic(p.ResolvConf, []byte(resolvContent)); err != nil {
+		return fmt.Errorf("writing %s: %w", p.ResolvConf, err)
+	}
+
 	wsl, err := os.ReadFile(p.WslConf)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if err := os.WriteFile(p.WslConf, []byte(SetGenerateResolvConf(string(wsl))), 0o644); err != nil {
+	if err := writeFileAtomic(p.WslConf, []byte(SetGenerateResolvConf(string(wsl)))); err != nil {
 		return fmt.Errorf("writing %s: %w", p.WslConf, err)
 	}
-
-	// Replace the symlink rather than writing through it: WSL's stock
-	// resolv.conf points into /mnt/wsl, which is shared across distros, so a
-	// write would leak this machine's pin to all of them — and be regenerated.
-	if fi, lerr := os.Lstat(p.ResolvConf); lerr == nil && fi.Mode()&os.ModeSymlink != 0 {
-		if rerr := os.Remove(p.ResolvConf); rerr != nil {
-			return fmt.Errorf("removing the shared resolv.conf symlink: %w", rerr)
-		}
-	}
-	if err := os.WriteFile(p.ResolvConf, []byte(resolvContent), 0o644); err != nil {
-		return fmt.Errorf("writing %s: %w", p.ResolvConf, err)
-	}
 	return nil
+}
+
+// writeFileAtomic writes via a temp file in the same directory and renames into
+// place, so a reader never sees a partial file and the target is never briefly
+// absent. Same directory because rename is only atomic within a filesystem.
+func writeFileAtomic(path string, content []byte) (err error) {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".wlink-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+
+	// Clean up the temp file on every failure path. Named return so this sees
+	// the error the function is actually returning, and the removal error is
+	// deliberately discarded: it would mask the real failure, and a stray
+	// .wlink-* file is a far smaller problem than the write that just failed.
+	defer func() {
+		if err != nil {
+			_ = tmp.Close() // may already be closed; harmless
+			_ = os.Remove(tmpName)
+		}
+	}()
+
+	if _, err = tmp.Write(content); err != nil {
+		return err
+	}
+	// Sync before rename: without it a crash can leave the renamed file
+	// present but empty, which for resolv.conf means a machine with a resolver
+	// file and no resolvers in it.
+	if err = tmp.Sync(); err != nil {
+		return err
+	}
+	if err = tmp.Close(); err != nil {
+		return err
+	}
+	if err = os.Chmod(tmpName, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 // RestoreReport says how the machine was returned to its prior state.
@@ -149,6 +206,18 @@ type RestoreReport struct {
 // directory still needs a way out.
 func Restore(p Paths) (RestoreReport, error) {
 	if !HasSnapshot(p) {
+		// No snapshot: only repair a file wlink actually wrote.
+		//
+		// `unpin` is advertised as "undo any time" and doctor suggests it
+		// verbatim, so it will be run on machines wlink never touched. Blindly
+		// replacing a hand-maintained or systemd-resolved resolv.conf with
+		// WSL's stock symlink would destroy configuration wlink has no claim
+		// to, with no snapshot to recover from.
+		if !IsManaged(readOrEmpty(p.ResolvConf)) {
+			return RestoreReport{Detail: fmt.Sprintf(
+				"%s was not written by wlink and there is no snapshot; leaving it alone",
+				p.ResolvConf)}, nil
+		}
 		return repairStock(p)
 	}
 
@@ -252,4 +321,35 @@ func DetectDrift(p Paths) (*Drift, error) {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func readOrEmpty(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+// OriginalNameservers returns the resolvers that were in force BEFORE wlink
+// first pinned — from the snapshot when one exists, else from the live file.
+//
+// Seeding fallbacks from the live file is wrong once wlink has pinned: it would
+// re-seed from its own output, so every re-pin demotes the previous winner and
+// eventually evicts the WSL NAT proxy, which is the only fallback guaranteed to
+// answer.
+func OriginalNameservers(p Paths) []string {
+	if HasSnapshot(p) {
+		if content, err := os.ReadFile(filepath.Join(p.BackupDir, snapResolvFile)); err == nil {
+			return Nameservers(string(content))
+		}
+		// A symlink snapshot: read through to whatever it pointed at.
+		if target, err := os.ReadFile(filepath.Join(p.BackupDir, snapResolvSymlink)); err == nil {
+			if content, rerr := os.ReadFile(strings.TrimSpace(string(target))); rerr == nil {
+				return Nameservers(string(content))
+			}
+		}
+		return nil
+	}
+	return Nameservers(readOrEmpty(p.ResolvConf))
 }

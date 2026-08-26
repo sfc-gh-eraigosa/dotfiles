@@ -23,7 +23,7 @@ against the spec's worked example. All values below are illustrative.
 {
   "wsl": true,
   "link": "degraded",
-  "tunnel": { "state": "up", "interface": "wg-lab", "handshake_age_seconds": 34 },
+  "tunnel": { "state": "up", "interface": "wg-lab", "handshake_age_seconds": null },
   "pinned": { "resolver": "10.10.0.1", "since": "2026-08-24T21:40:11Z", "managed": true },
   "candidates": [
     { "server": "10.10.0.1", "reachable": true, "fleet_resolved": 3, "recursive": true }
@@ -36,6 +36,7 @@ against the spec's worked example. All values below are illustrative.
 | Field | Meaning |
 | :-- | :-- |
 | `link` | `ok` \| `degraded` — the one-word verdict; drives the exit code so consumers read one field instead of re-deriving the rules |
+| `tunnel.handshake_age_seconds` | **Always `null` today** — wlink does not yet read the WireGuard handshake clock. Documented as a field so the shape is stable; populate it before relying on it. |
 | `tunnel.state` | `up` \| `not-ready` \| `down` \| `unknown`. **`not-ready` is distinct from `down`**: Windows publishes a VPN adapter and its DNS server the moment you click connect, seconds before the handshake completes, and the old network is already unroutable by then |
 | `pinned` | `null` when nothing is pinned. `managed: false` means `resolv.conf` names this resolver but wlink did not write it — someone else's pin, which wlink will not claim or silently take over |
 | `candidates[].reachable` vs `fleet_resolved` | Deliberately separate: a resolver that answers but does not know the fleet is a *different* situation from one that says nothing, and only the first distinguishes "wrong tunnel" from "tunnel not ready" |

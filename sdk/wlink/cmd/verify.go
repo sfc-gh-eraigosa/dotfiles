@@ -68,7 +68,7 @@ func (r *Runtime) Verify(ctx context.Context) (int, error) {
 	// 1. The public sentinel, in both states.
 	sentinel := r.sentinel()
 	ok, elapsed := sys.Resolve(ctx, sentinel)
-	fmt.Fprintf(r.Out, "  %s %s %ds\n", sentinel, resultWord(ok), int(elapsed.Seconds()))
+	fmt.Fprintf(r.Out, "  %s %s %s\n", sentinel, resultWord(ok), fmtElapsed(elapsed))
 	if !ok {
 		r.sayf("WARNING — %s did NOT resolve: public DNS is broken. That is a FAIL in either tunnel state.", sentinel)
 		failed = true
@@ -78,13 +78,13 @@ func (r *Runtime) Verify(ctx context.Context) (int, error) {
 	resolvedCount := 0
 	for _, name := range r.FleetHosts {
 		ok, elapsed := sys.Resolve(ctx, name)
-		fmt.Fprintf(r.Out, "  %s %s %ds\n", name, resultWord(ok), int(elapsed.Seconds()))
+		fmt.Fprintf(r.Out, "  %s %s %s\n", name, resultWord(ok), fmtElapsed(elapsed))
 		switch {
 		case ok:
 			resolvedCount++
 		case elapsed > limit:
-			r.sayf("WARNING — %s took %ds to fail (limit %ds) — the resolver timeout tuning regressed.",
-				name, int(elapsed.Seconds()), budget)
+			r.sayf("WARNING — %s took %s to fail (limit %ds) — the resolver timeout tuning regressed.",
+				name, fmtElapsed(elapsed), budget)
 			failed = true
 		}
 	}
@@ -109,6 +109,16 @@ func (r *Runtime) Verify(ctx context.Context) (int, error) {
 	}
 	fmt.Fprintln(r.Out, "verify — PASS")
 	return 0, nil
+}
+
+// fmtElapsed keeps sub-second detail. Truncating to whole seconds turned a 1.9s
+// failure into "1s", so a warning could read "took 1s to fail (limit 1s)" while
+// the check was failing — the tool misreporting its own headline measurement.
+func fmtElapsed(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	return fmt.Sprintf("%.1fs", d.Seconds())
 }
 
 func resultWord(ok bool) string {

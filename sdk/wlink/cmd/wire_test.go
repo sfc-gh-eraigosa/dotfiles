@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -61,5 +62,33 @@ func TestUnknownFlag_IsAUsageError(t *testing.T) {
 	root.SetErr(&strings.Builder{})
 	if err := root.Execute(); err == nil {
 		t.Fatal("unknown flag accepted; want a usage error")
+	}
+}
+
+// REVIEW FINDING 5: 2 means "you called it wrong", 1 means "it tried and broke".
+// Mapping every error to 2 made a failed /etc/resolv.conf write look like CLI
+// misuse to any script reading the code.
+func TestExitCodeContract(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want int
+	}{
+		{"unknown flag is usage", errors.New(`unknown flag: --nope`), 2},
+		{"unknown command is usage", errors.New(`unknown command "nope" for "wlink"`), 2},
+		{"explicit UsageError", UsageError{errors.New("wait requires --ready")}, 2},
+		{"a real write failure is not usage", errors.New("writing /etc/resolv.conf: permission denied"), 1},
+		{"a real restore failure is not usage", errors.New("recreating the stock resolv.conf symlink: read-only file system"), 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := 1
+			var ue UsageError
+			if errors.As(tc.err, &ue) || isCobraUsageError(tc.err) {
+				got = 2
+			}
+			if got != tc.want {
+				t.Errorf("exit for %q = %d, want %d", tc.err, got, tc.want)
+			}
+		})
 	}
 }

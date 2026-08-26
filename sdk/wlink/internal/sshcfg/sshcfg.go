@@ -85,6 +85,12 @@ func Effective(ctx context.Context, cmd Cmd, sshBin, host string) (Settings, err
 // own work instead of adding a second copy.
 const ManagedMarker = "# wlink: keepalive"
 
+// markerFor keys the marker to a HOST. A bare marker made --fix for a second
+// host a silent no-op: the file already contained the marker, so nothing was
+// written, doctor re-checked, still saw keepalives disabled, and re-emitted a
+// finding whose fix could never work.
+func markerFor(host string) string { return ManagedMarker + " for " + host }
+
 // KeepaliveInterval and KeepaliveCountMax bound a stall at roughly a minute:
 // long enough not to disturb a healthy idle connection, short enough that a
 // hang becomes a retryable error rather than something to notice by hand.
@@ -105,7 +111,7 @@ func ApplyKeepalive(path, host string) (bool, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return false, err
 	}
-	if strings.Contains(string(existing), ManagedMarker) {
+	if strings.Contains(string(existing), markerFor(host)) {
 		return false, nil // already ours; nothing to do
 	}
 
@@ -121,7 +127,7 @@ func ApplyKeepalive(path, host string) (bool, error) {
 	if len(existing) > 0 {
 		b.WriteString("\n")
 	}
-	fmt.Fprintf(&b, "%s — without this, a stalled connection hangs forever instead of failing.\n", ManagedMarker)
+	fmt.Fprintf(&b, "%s — without this, a stalled connection hangs forever instead of failing.\n", markerFor(host))
 	fmt.Fprintf(&b, "Host %s\n", host)
 	fmt.Fprintf(&b, "    ServerAliveInterval %d\n", KeepaliveInterval)
 	fmt.Fprintf(&b, "    ServerAliveCountMax %d\n", KeepaliveCountMax)

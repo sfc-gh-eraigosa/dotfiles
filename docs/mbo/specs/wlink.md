@@ -234,7 +234,7 @@ generateResolvConf = false
 {
   "wsl": true,
   "link": "degraded",
-  "tunnel": { "state": "up", "interface": "wg-lab", "handshake_age_seconds": 34 },
+  "tunnel": { "state": "up", "interface": "wg-lab", "handshake_age_seconds": null },
   "pinned": { "resolver": "10.10.0.1", "since": "2026-08-24T21:40:11Z", "managed": true },
   "candidates": [
     { "server": "10.10.0.1",      "reachable": true,  "fleet_resolved": 3, "recursive": true },
@@ -245,6 +245,9 @@ generateResolvConf = false
   "drift": null
 }
 ```
+
+`handshake_age_seconds` is **always `null` today** — the WireGuard handshake clock is not read
+yet. It is documented so the shape is stable, not because a value is available.
 
 `link` is the one-word verdict (`ok` | `degraded`) and is what drives the exit code, so a
 consumer reads one field instead of re-deriving the rules. Empty collections are emitted as

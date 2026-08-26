@@ -165,7 +165,14 @@ func (r *Runtime) Pin(ctx context.Context) (int, error) {
 		r.sayf("%s", verdict.Reason)
 	}
 
-	fallbacks := append(resolvconf.Nameservers(readFileOrEmpty(r.Paths.ResolvConf)), r.ExtraFallbacks...)
+	// Fallbacks come from the ORIGINAL resolv.conf, not the current one.
+	//
+	// Re-pinning on a new network would otherwise seed from wlink's own last
+	// output, so each pin pushes the previous winner down the list: after three
+	// moves the list is [winner3, winner2, winner1] and the WSL NAT proxy — the
+	// one fallback that is always reachable — has been evicted by MaxNS, leaving
+	// two dead tunnel resolvers each costing a full timeout.
+	fallbacks := append(resolvconf.OriginalNameservers(r.Paths), r.ExtraFallbacks...)
 	content := resolvconf.RenderResolvConf(resolvconf.Render{
 		Winner:    winner.Server,
 		Fallbacks: fallbacks,
@@ -244,7 +251,17 @@ func (r *Runtime) State(ctx context.Context, scores []probe.Candidate, tunnel li
 	s.Fleet = linkstate.Fleet{Total: len(r.FleetHosts), ExcludedByHostsFile: r.ExcludedHosts}
 	if content := readFileOrEmpty(r.Paths.ResolvConf); content != "" {
 		if ns := resolvconf.Nameservers(content); len(ns) > 0 {
-			s.Pinned = &linkstate.Pin{Resolver: ns[0], Managed: resolvconf.IsManaged(content)}
+			managed := resolvconf.IsManaged(content)
+			pin := &linkstate.Pin{Resolver: ns[0], Managed: managed}
+			// `since` is documented in the schema, so populate it rather than
+			// shipping a field that is always empty. The snapshot is created at
+			// pin time, so its mtime is when the pin happened.
+			if managed {
+				if fi, err := os.Stat(r.Paths.BackupDir); err == nil {
+					pin.Since = fi.ModTime().UTC().Format(time.RFC3339)
+				}
+			}
+			s.Pinned = pin
 		}
 	}
 	if d, err := resolvconf.DetectDrift(r.Paths); err == nil && d != nil {
@@ -264,4 +281,4 @@ func readFileOrEmpty(path string) string {
 // errNeedsReadyFlag keeps `wlink wait` from silently doing nothing: the bare
 // verb has no useful meaning, and a command that exits 0 having waited for
 // nothing is worse than one that says what it needs.
-var errNeedsReadyFlag = errors.New("wait requires --ready (there is nothing else to wait for yet)")
+var errNeedsReadyFlag = UsageError{errors.New("wait requires --ready (there is nothing else to wait for yet)")}

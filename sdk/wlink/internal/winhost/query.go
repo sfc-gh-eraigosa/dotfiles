@@ -68,6 +68,10 @@ func decodeRows[T any](raw []byte) ([]T, error) {
 // distinction entirely — the asymmetry favours matching.
 var wgAlias = regexp.MustCompile(`^(?i)wg([-_]?[0-9a-z]+)?$`)
 
+// tunAlias matches tun0/utun3-style names. Package-level so it is compiled
+// once rather than on every classification.
+var tunAlias = regexp.MustCompile(`^u?tun[0-9]*$`)
+
 // isTunnelAdapter reports whether an adapter is a VPN/tunnel rather than a
 // physical or virtual-switch interface.
 //
@@ -91,7 +95,7 @@ func isTunnelAdapter(alias, description string) bool {
 	}
 	// "tun" as a whole word/prefix on the alias (tun0, utun3) — but not as a
 	// substring of unrelated names.
-	return regexp.MustCompile(`^u?tun[0-9]*$`).MatchString(a)
+	return tunAlias.MatchString(a)
 }
 
 // Interfaces enumerates every Windows interface with its resolvers.

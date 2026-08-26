@@ -215,3 +215,12 @@ func TestStatus_UnknownHandshakeAgeIsAbsentNotZero(t *testing.T) {
 		t.Errorf("handshake_age_seconds = %v, want absent/null while unobservable", v)
 	}
 }
+
+// Reviewer's note: with a tunnel adapter present but nothing probed, "up" would
+// assert a state nothing was observed for.
+func TestTunnelState_UnknownWhenNothingWasProbed(t *testing.T) {
+	ifaces := []winhost.Interface{{Alias: "wg-lab", DNSServers: []string{"10.10.0.1"}, IsTunnel: true}}
+	if got := tunnelStateFor(ifaces, nil); got != linkstate.TunnelUnknown {
+		t.Errorf("tunnelStateFor(tunnel, no scores) = %q, want %q", got, linkstate.TunnelUnknown)
+	}
+}

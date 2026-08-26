@@ -306,3 +306,113 @@ func TestDetectDrift_DeletedManagedFile(t *testing.T) {
 		t.Fatal("a deleted managed resolv.conf reported no drift")
 	}
 }
+
+// REVIEW FINDING 1 (HIGH). A snapshot interrupted after MkdirAll but before its
+// records are written leaves a directory that LOOKS like an undo point. pin
+// then writes believing it can be undone, and unpin deletes resolv.conf,
+// restores nothing, and reports success — total DNS loss with no way back.
+func TestHasSnapshot_RejectsAnIncompleteSnapshot(t *testing.T) {
+	p := tempPaths(t)
+	seedStockLayout(t, p, "nameserver 10.255.255.254\n", "[boot]\nsystemd=true\n")
+
+	// Exactly what an interrupted TakeSnapshot leaves behind.
+	if err := os.MkdirAll(p.BackupDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if HasSnapshot(p) {
+		t.Fatal("an empty backup dir was accepted as an undo point")
+	}
+
+	// And Apply must refuse rather than trust it.
+	if err := Apply(p, RenderResolvConf(Render{Winner: "10.10.0.1"})); err != nil {
+		t.Fatalf("Apply should have completed the snapshot, not failed: %v", err)
+	}
+	if !HasSnapshot(p) {
+		t.Error("Apply did not leave a complete snapshot")
+	}
+	if _, err := os.Readlink(p.ResolvConf); err == nil {
+		t.Error("expected resolv.conf to be a real file after Apply")
+	}
+	// The undo path must actually work afterwards.
+	if _, err := Restore(p); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if _, err := os.Readlink(p.ResolvConf); err != nil {
+		t.Errorf("resolv.conf not restored to its symlink: %v", err)
+	}
+}
+
+// REVIEW FINDING 3 (HIGH). `unpin` is advertised as "undo any time" and is
+// suggested verbatim by doctor. On a machine wlink never touched — a
+// hand-maintained or systemd-resolved resolv.conf — it must NOT delete the
+// user's file and replace it with WSL's stock symlink.
+func TestRestore_RefusesToRepairAFileWlinkNeverWrote(t *testing.T) {
+	p := tempPaths(t)
+	handMaintained := "# hand written\nnameserver 10.10.0.99\n"
+	if err := os.WriteFile(p.ResolvConf, []byte(handMaintained), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p.StockResolvTarget = filepath.Join(filepath.Dir(p.ResolvConf), "stock")
+
+	rep, err := Restore(p)
+	if err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if rep.Repaired {
+		t.Error("reported a repair on a file wlink never wrote")
+	}
+	if got := read(t, p.ResolvConf); got != handMaintained {
+		t.Errorf("destroyed a resolv.conf wlink did not write:\n got: %q\nwant: %q", got, handMaintained)
+	}
+	if rep.Detail == "" {
+		t.Error("must explain why it declined")
+	}
+}
+
+// The repair path still works for a file wlink DID write (EC-16).
+func TestRestore_StillRepairsItsOwnFileWithoutASnapshot(t *testing.T) {
+	p := tempPaths(t)
+	if err := os.WriteFile(p.ResolvConf, []byte(RenderResolvConf(Render{Winner: "10.10.0.1"})), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p.WslConf, []byte("[boot]\nsystemd=true\n\n[network]\ngenerateResolvConf = false\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p.StockResolvTarget = filepath.Join(filepath.Dir(p.ResolvConf), "stock")
+
+	rep, err := Restore(p)
+	if err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if !rep.Repaired {
+		t.Error("should have repaired its own managed file")
+	}
+	if _, err := os.Readlink(p.ResolvConf); err != nil {
+		t.Errorf("not restored to a symlink: %v", err)
+	}
+}
+
+// REVIEW FINDING 7 (MEDIUM). resolv.conf must be replaced atomically, and must
+// exist before generateResolvConf is disabled — otherwise a crash between the
+// two leaves no resolver AND WSL forbidden from regenerating one.
+func TestApply_WritesResolvConfBeforeDisablingRegeneration(t *testing.T) {
+	p := tempPaths(t)
+	seedStockLayout(t, p, "nameserver 10.255.255.254\n", "[boot]\nsystemd=true\n")
+
+	// Make wsl.conf unwritable: the resolv.conf write must already have
+	// succeeded, so the machine still has a working resolver.
+	if err := os.Chmod(p.WslConf, 0o400); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(p.WslConf, 0o600) })
+
+	_ = Apply(p, RenderResolvConf(Render{Winner: "10.10.0.1"}))
+
+	content, err := os.ReadFile(p.ResolvConf)
+	if err != nil {
+		t.Fatalf("resolv.conf is missing after a partial Apply — the machine has no resolver: %v", err)
+	}
+	if !IsManaged(string(content)) {
+		t.Error("resolv.conf was not written before the wsl.conf step")
+	}
+}

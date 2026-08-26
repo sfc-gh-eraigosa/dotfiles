@@ -303,35 +303,6 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 fi
 else gff_skip_msg install.pkg.brewfile; fi
 
-# WSL only, OPT-IN (fail-closed): build wlink and pin the resolver that knows
-# your fleet. From WSL, `ssh <fleet-host>` stalls ~20s and dies with "Temporary
-# failure in name resolution" while `ssh <ip>` works, because WSL2 points
-# resolv.conf at the Windows NAT DNS proxy, which answers from whatever resolver
-# Windows treats as primary -- normally the ISP's, which has never heard of the
-# fleet. wlink probes EVERY per-interface resolver Windows knows (the right one
-# is frequently on a VPN interface, NOT the default route) and pins the one that
-# answers, reversibly.
-#
-# gff_opt_in, NOT gff_on: this rewrites host DNS, so an unset flag, a missing
-# gff binary, or a machine where the export never happened must all mean DO NOT
-# BUILD. That is a deliberate departure from the other install.sdk.* flags.
-#   gff set install.sdk.wlink true
-# Undo on any machine:  wlink unpin
-if gff_opt_in install.sdk.wlink; then
-  if [ -f "${BASE_DIR}/sdk/wlink/build.sh" ]; then
-    echo "Installing wlink (WSL link: tunnel + resolver)..."
-    bash "${BASE_DIR}/sdk/wlink/build.sh" || echo "WARNING: wlink build reported problems; continuing."
-    # Pinning is best-effort by design: it declines safely (exit 0, no write)
-    # when the tunnel is down, so install.sh never fails over a link that
-    # happens to be unavailable right now.
-    if [ -x "${HOME}/opt/bin/wlink" ]; then
-      "${HOME}/opt/bin/wlink" pin || echo "WARNING: wlink pin reported problems; continuing."
-    fi
-  fi
-else
-  echo "SKIP (gff: install.sdk.wlink is opt-in and not enabled)"
-fi
-
 # Install sops (secrets management). macOS gets it from the Brewfile above;
 # Linux/WSL has no usable apt package, so install_sops.sh fetches the official
 # static release binary into ~/opt/bin. Safe to re-run on any platform.
@@ -639,6 +610,47 @@ if gff_on install.ai.teams; then
     "${BASE_DIR}/opt/scripts/system/install_ai_teams.sh" || echo "WARNING: AI teams install reported problems; continuing."
   fi
 else gff_skip_msg install.ai.teams; fi
+
+# WSL only, OPT-IN (fail-closed): build wlink and pin
+#
+# Placed with the other sdk builds ON PURPOSE: it needs `go`, which is not on
+# PATH until the goenv install and ensure_go_on_path above. Higher up, build.sh
+# printed "go not found", exited 0, and wlink was silently never installed. the resolver that knows
+# your fleet. From WSL, `ssh <fleet-host>` stalls ~20s and dies with "Temporary
+# failure in name resolution" while `ssh <ip>` works, because WSL2 points
+# resolv.conf at the Windows NAT DNS proxy, which answers from whatever resolver
+# Windows treats as primary -- normally the ISP's, which has never heard of the
+# fleet. wlink probes EVERY per-interface resolver Windows knows (the right one
+# is frequently on a VPN interface, NOT the default route) and pins the one that
+# answers, reversibly.
+#
+# gff_opt_in, NOT gff_on: this rewrites host DNS, so an unset flag, a missing
+# gff binary, or a machine where the export never happened must all mean DO NOT
+# BUILD. That is a deliberate departure from the other install.sdk.* flags.
+#   gff set install.sdk.wlink true
+# Undo on any machine:  wlink unpin
+if gff_opt_in install.sdk.wlink; then
+  if [ -f "${BASE_DIR}/sdk/wlink/build.sh" ]; then
+    echo "Installing wlink (WSL link: tunnel + resolver)..."
+    bash "${BASE_DIR}/sdk/wlink/build.sh" || echo "WARNING: wlink build reported problems; continuing."
+    # Pinning is best-effort by design: it declines safely (exit 0, no write)
+    # when the tunnel is down, so install.sh never fails over a link that
+    # happens to be unavailable right now.
+    # The pin writes under /etc, so it needs root. install.sh cached sudo
+    # credentials up front, so this does not prompt again mid-run.
+    if [ -x "${HOME}/opt/bin/wlink" ]; then
+      if [ "$(id -u)" -eq 0 ]; then
+        "${HOME}/opt/bin/wlink" pin || echo "WARNING: wlink pin reported problems; continuing."
+      elif command -v sudo >/dev/null 2>&1; then
+        sudo -E "${HOME}/opt/bin/wlink" pin || echo "WARNING: wlink pin reported problems; continuing."
+      else
+        echo "WARNING: wlink installed but cannot pin without root; run: sudo wlink pin"
+      fi
+    fi
+  fi
+else
+  echo "SKIP (gff: install.sdk.wlink is opt-in and not enabled)"
+fi
 
 # build and install gss
 if gff_on install.sdk.gss; then

@@ -6,9 +6,11 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 
 	applog "github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/log"
@@ -82,11 +84,39 @@ func newRootCmd() *cobra.Command {
 	return root
 }
 
+// UsageError marks an error as a misuse of the CLI rather than a failure of the
+// work. Only these exit 2; everything else that fails exits 1.
+type UsageError struct{ Err error }
+
+func (u UsageError) Error() string { return u.Err.Error() }
+func (u UsageError) Unwrap() error { return u.Err }
+
 // Execute runs the CLI. Exit codes are part of the contract (spec §3):
 // 0 success or a safe decline, 1 a real failure, 2 a usage error.
+//
+// The distinction is what a script reads: 2 means "you called it wrong", 1
+// means "it tried and broke". Mapping every error to 2 — as this did — made a
+// failed /etc/resolv.conf write look like CLI misuse.
 func Execute() {
 	if err := newRootCmd().Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "wlink:", err)
-		os.Exit(2)
+		var ue UsageError
+		if errors.As(err, &ue) || isCobraUsageError(err) {
+			os.Exit(2)
+		}
+		os.Exit(1)
 	}
+}
+
+// isCobraUsageError recognises the errors cobra raises for bad invocations —
+// unknown flags, unknown subcommands, bad argument counts.
+func isCobraUsageError(err error) bool {
+	msg := err.Error()
+	for _, p := range []string{"unknown flag", "unknown shorthand flag", "unknown command",
+		"flag needs an argument", "invalid argument", "accepts ", "requires "} {
+		if strings.Contains(msg, p) {
+			return true
+		}
+	}
+	return false
 }
