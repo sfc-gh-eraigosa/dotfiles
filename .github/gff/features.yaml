@@ -105,6 +105,9 @@ sets:
       - path: install.sdk.gff
         description: Runs the later duplicate gff build block (the bootstrap build itself is never gated).
         boolDefault: true
+      - path: install.sdk.wlink
+        description: Opt-in (fail-closed) WSL link tool - builds/installs wlink and pins the resolver that knows your fleet. Unlike the other install.sdk.* flags this defaults FALSE and is gated with gff_opt_in, because wlink is only useful on a machine that reaches its fleet over a VPN/tunnel and it rewrites /etc/resolv.conf. Enable with gff set install.sdk.wlink true.
+        boolDefault: false
       # --- fonts (1) ---
       - path: install.fonts.nerd-font
         description: Runs the Nerd Font configuration block (OS dispatch plus the glyph-coverage check).

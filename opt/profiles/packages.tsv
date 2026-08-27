@@ -51,6 +51,16 @@ watch                -
 -                    net-tools
 -                    psmisc
 
+# Core DNS diagnostics: dig, nslookup, host. Part of the standard toolset on
+# every machine, not a dependency of any one feature — sdk/wlink resolves
+# natively in Go precisely so it needs nothing installed.
+# BREW is '-' DELIBERATELY: macOS already ships dig/nslookup/host in /usr/bin
+# as part of the base OS, so they are present on every platform without a brew
+# install. Do NOT "fix" this by adding `bind` — that formula is KEG-ONLY, so it
+# would not put dig on PATH (`dig` still resolves to /usr/bin/dig); it would
+# cost a large build and change nothing.
+-                    dnsutils
+
 # Nerd Font (gsl) prerequisites. install.sh's font step
 # (sdk/gsl/scripts/install_nerd_font_linux.sh) needs unzip + fontconfig (fc-cache)
 # + curl; installing them here guarantees they exist BEFORE that step runs. macOS

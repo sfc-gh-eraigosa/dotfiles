@@ -1,0 +1,31 @@
+# P11 — wait --ready (EC-6), and a latency bug found by running it
+# captured 2026-08-25T06:25:05Z
+# Addresses substituted 1:1 per the PR's no-real-topology rule.
+
+$ go test -cover ./cmd/ -run Wait
+--- PASS: TestWait_ReturnsZeroOnceTheTunnelAnswers (0.00s)
+--- PASS: TestWait_TimesOutWithExitOne (0.08s)
+--- PASS: TestWait_ReturnsImmediatelyWhenAlreadyReady (0.00s)
+--- PASS: TestWait_ReachableButIgnorantIsNotReady (0.06s)
+--- PASS: TestWait_RespectsContextCancellation (0.00s)
+--- PASS: TestWait_NonWSLIsANoOp (0.00s)
+
+## The bug: a DEAD candidate cost one timeout PER NAME
+   before: wait --ready on an already-reachable link took 11s
+   cause : dead candidate x (3 fleet + 1 sentinel) x 2s = 8s of pure waiting
+   fix   : ask the sentinel first; SILENCE short-circuits the rest
+   after : 5s (wait), 4s (status)
+
+$ wlink wait --ready
+wlink: ready — 10.10.0.1 resolves 3/3 fleet name(s) after 1 check(s).
+exit=0
+
+$ wlink wait --ready --timeout 3s   # fleet unreachable
+wlink: timed out after 3s waiting for a resolver that knows the fleet.
+wlink: If a tunnel is connecting, it may need longer; if it is already up, the
+wlink: resolver serving these names may not be the one that came up.
+exit=1
+
+$ wlink wait        # bare verb is a usage error, not a silent no-op
+wlink: wait requires --ready (there is nothing else to wait for yet)
+exit=2

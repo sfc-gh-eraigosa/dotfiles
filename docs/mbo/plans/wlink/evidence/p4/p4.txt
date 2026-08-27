@@ -1,0 +1,27 @@
+# P4 — candidate scoring + recursion guard (EC-1, EC-2, EC-14)
+# captured 2026-08-25T05:47:34Z
+
+$ go test -v -cover ./internal/probe/...
+--- PASS: TestLookupA_DistinguishesTheFourOutcomes (2.00s)
+    --- PASS: TestLookupA_DistinguishesTheFourOutcomes/resolved (0.00s)
+    --- PASS: TestLookupA_DistinguishesTheFourOutcomes/nxdomain_is_answered-without-an-address (0.00s)
+    --- PASS: TestLookupA_DistinguishesTheFourOutcomes/nodata_is_answered-without-an-address (0.00s)
+    --- PASS: TestLookupA_DistinguishesTheFourOutcomes/servfail_is_reachable-but-unhelpful,_NOT_silent (0.00s)
+    --- PASS: TestLookupA_DistinguishesTheFourOutcomes/no_response_at_all_is_silent (2.00s)
+--- PASS: TestLookupA_AcceptsServerWithoutPort (0.00s)
+--- PASS: TestLookupA_HonoursItsTimeout (0.30s)
+--- PASS: TestLookupA_RespectsContextCancellation (0.00s)
+--- PASS: TestScore_PrefersTheResolverThatAnswersForTheFleet (0.00s)
+--- PASS: TestScore_SeparatesSilentFromReachableButIgnorant (0.00s)
+--- PASS: TestScore_ServfailCountsAsReachable (0.00s)
+--- PASS: TestWinner_TiesResolveToFirstEnumerated (0.00s)
+--- PASS: TestWinner_NoneWhenNothingResolvesTheFleet (0.00s)
+--- PASS: TestAllSilent (0.00s)
+--- PASS: TestFilterCandidates (0.00s)
+--- PASS: TestGuard_RefusesAResolverThatCannotRecurse (0.00s)
+--- PASS: TestGuard_OverrideAllowsButStillExplains (0.00s)
+coverage: 94.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/probe	2.312s	coverage: 94.7% of statements
+
+$ go vet ./...
+(clean)

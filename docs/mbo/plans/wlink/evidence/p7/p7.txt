@@ -1,0 +1,29 @@
+# P7 — fleetsrc: fleet contract + /etc/hosts exclusion (EC-5, EC-13, EC-15, EC-21)
+# captured 2026-08-25T06:01:09Z
+
+$ go test -v -cover ./internal/fleetsrc/...
+--- PASS: TestResolve_PrefersFleetDiscoverJSON (0.00s)
+--- PASS: TestResolve_IgnoresHostsNotInTheFleet (0.00s)
+--- PASS: TestResolve_FallsBackToSSHConfigWhenFleetIsAbsent (0.00s)
+--- PASS: TestResolve_NeverProbesWildcardHostPatterns (0.00s)
+--- PASS: TestResolve_ExcludesNamesServedByHostsFile (0.00s)
+--- PASS: TestResolve_SkipsHostnamesThatAreAlreadyAddresses (0.00s)
+--- PASS: TestResolve_ProbesTheHostnameNotTheAlias (0.00s)
+--- PASS: TestResolve_NoFleetHostsIsNotAnError (0.00s)
+--- PASS: TestResolve_ExplicitOverrideWins (0.00s)
+--- PASS: TestHostsFileNames (0.00s)
+coverage: 90.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/fleetsrc	0.005s	coverage: 90.1% of statements
+
+$ grep WriteFile/os.Create/OpenFile in fleetsrc (non-test)   # fleet owns ssh-config writes
+(none — read-only)
+
+$ go test ./... ; go vet ./...
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/cmd	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/fleetsrc	0.005s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/linkstate	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/probe	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/resolvconf	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/winhost	(cached)
+vet clean

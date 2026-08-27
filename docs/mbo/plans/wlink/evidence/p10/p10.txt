@@ -1,0 +1,34 @@
+# P10 — verify: the tunnel up/down matrix (EC-7)
+# captured 2026-08-25T06:19:32Z
+#
+# NOTE: this is REAL output from a live run. Host names and addresses are
+# substituted 1:1 (lab-pi / lab-nas / lab-jetson / selfhost / 10.10.0.1) per the
+# PR's no-real-topology rule. Structure, results, and timings are untouched.
+
+$ go test -v -cover ./cmd/ -run Verify
+--- PASS: TestVerify_PassesWhenPublicAndFleetBothResolve (0.00s)
+--- PASS: TestVerify_PassesOffTunnelWhenMissesAreFast (0.00s)
+--- PASS: TestVerify_FailsWhenPublicDNSIsBroken (0.00s)
+--- PASS: TestVerify_FailsWhenAMissExceedsTheBudget (0.00s)
+--- PASS: TestVerify_ReportsTheDerivedBudget (0.00s)
+--- PASS: TestVerify_HonoursAnExplicitBudget (0.00s)
+--- PASS: TestVerify_NonWSLIsANoOp (0.00s)
+--- PASS: TestVerify_NoFleetHostsIsACleanPass (0.00s)
+coverage: 16.9% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/cmd	0.005s	coverage: 16.9% of statements
+
+## LIVE — tunnel DOWN, machine sitting on the fleet's LAN
+$ wlink verify
+verify — a failed lookup must complete within 11s (derived from /etc/resolv.conf)
+verify — NAME RESULT SECONDS
+  github.com OK 0s
+  lab-jetson OK 0s
+  lab-nas OK 0s
+  lab-pi OK 0s
+wlink: verify — fleet reachable: public OK, 3/3 fleet names resolve.
+verify — PASS
+exit=0
+
+## Budget: 11s here — the resolv.conf in force is unmanaged (1 nameserver,
+## glibc's default 5s timeout): 1 x 5 x 2 families + 1 = 11. After a pin it is 7s.
+## The tunnel-UP half of the matrix is P14, which needs the tunnel toggled.

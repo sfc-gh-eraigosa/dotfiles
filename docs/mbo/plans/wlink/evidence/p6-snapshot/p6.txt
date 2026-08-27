@@ -1,0 +1,51 @@
+# P6 — snapshot, restore, drift (EC-4, EC-11, EC-16, EC-17, EC-18)
+# captured 2026-08-25T05:57:23Z
+
+All cases run against a temp root: the risky path (replacing a symlink,
+rewriting system files) is fully covered with NO privileged write.
+
+$ go test -v -cover ./internal/resolvconf/...
+--- PASS: TestRenderResolvConf_WinnerFirstThenFallbacks (0.00s)
+--- PASS: TestRenderResolvConf_DeduplicatesTheWinnerFromFallbacks (0.00s)
+--- PASS: TestRenderResolvConf_CapsAtGlibcMaxns (0.00s)
+--- PASS: TestNameservers (0.00s)
+--- PASS: TestFailBudgetSeconds (0.00s)
+    --- PASS: TestFailBudgetSeconds/managed_config (0.00s)
+    --- PASS: TestFailBudgetSeconds/unmanaged_single-resolver_config (0.00s)
+    --- PASS: TestFailBudgetSeconds/no_nameservers_at_all_still_yields_a_usable_floor (0.00s)
+--- PASS: TestSetGenerateResolvConf_AllFiveShapes (0.00s)
+    --- PASS: TestSetGenerateResolvConf_AllFiveShapes/key_present_with_the_wrong_value (0.00s)
+    --- PASS: TestSetGenerateResolvConf_AllFiveShapes/[network]_present,_key_absent (0.00s)
+    --- PASS: TestSetGenerateResolvConf_AllFiveShapes/[network]_present_and_last,_empty (0.00s)
+    --- PASS: TestSetGenerateResolvConf_AllFiveShapes/no_[network]_section_at_all (0.00s)
+    --- PASS: TestSetGenerateResolvConf_AllFiveShapes/empty_file (0.00s)
+--- PASS: TestSetGenerateResolvConf_IsIdempotent (0.00s)
+--- PASS: TestRemoveGenerateResolvConf (0.00s)
+    --- PASS: TestRemoveGenerateResolvConf/section_had_only_our_key_—_section_removed_with_it (0.00s)
+    --- PASS: TestRemoveGenerateResolvConf/section_has_other_keys_—_section_kept,_other_keys_untouched (0.00s)
+    --- PASS: TestRemoveGenerateResolvConf/key_absent_—_file_unchanged (0.00s)
+--- PASS: TestSetThenRemove_RoundTripsToTheOriginal (0.00s)
+--- PASS: TestSetGenerateResolvConf_PreservesCommentsAndOtherSections (0.00s)
+--- PASS: TestRenderedArtifacts_ForEvidence (0.00s)
+--- PASS: TestApply_ReplacesTheSharedSymlinkInsteadOfWritingThroughIt (0.00s)
+--- PASS: TestApply_SnapshotsBeforeWritingAndRecordsTheSymlinkTarget (0.00s)
+--- PASS: TestApply_RefusesToWriteWhenTheSnapshotCannotBeTaken (0.00s)
+--- PASS: TestApply_DoesNotOverwriteAGoodSnapshotOnRerun (0.00s)
+--- PASS: TestRestore_RoundTripsByteForByteAndClearsTheSnapshot (0.00s)
+--- PASS: TestRestore_WithoutASnapshotRepairsTheStockLayout (0.00s)
+--- PASS: TestDetectDrift (0.00s)
+--- PASS: TestDetectDrift_UnmanagedIsNotDrift (0.00s)
+--- PASS: TestRestore_RemovesFilesThatDidNotExistBefore (0.00s)
+--- PASS: TestSnapshot_RecordsAnAbsentResolvConf (0.00s)
+--- PASS: TestDetectDrift_DeletedManagedFile (0.00s)
+coverage: 80.9% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/resolvconf	0.009s	coverage: 80.9% of statements
+
+$ go test ./... ; go vet ./...
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/cmd	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/linkstate	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/probe	2.312s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/resolvconf	0.008s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/winhost	(cached)
+vet clean
