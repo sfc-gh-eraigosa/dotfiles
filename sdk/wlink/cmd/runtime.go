@@ -176,6 +176,9 @@ func (r *Runtime) Pin(ctx context.Context) (int, error) {
 	content := resolvconf.RenderResolvConf(resolvconf.Render{
 		Winner:    winner.Server,
 		Fallbacks: fallbacks,
+		// Carry over search/domain/sortlist from the file being replaced:
+		// wlink owns the nameservers, not the rest of someone's resolver config.
+		Preserve: resolvconf.OriginalContent(r.Paths),
 	})
 
 	if r.DryRun {

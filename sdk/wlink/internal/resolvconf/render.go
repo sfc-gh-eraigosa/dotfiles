@@ -8,6 +8,7 @@ package resolvconf
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -42,7 +43,20 @@ type Render struct {
 	// miss from ~20s into ~1s per dead server.
 	Timeout  int
 	Attempts int
+	// Preserve is the resolv.conf being replaced. Directives wlink does not
+	// own — search, domain, sortlist — are carried across from it.
+	//
+	// wlink owns which NAMESERVERS are consulted. A search domain changes how
+	// every unqualified name resolves and belongs to whoever set it; dropping
+	// one silently was found by live acceptance on a machine carrying
+	// `search localdomain`.
+	Preserve string
 }
+
+// preservedDirectives are resolv.conf keywords wlink carries across untouched.
+// `options` is excluded on purpose: the timeout tuning is the point of pinning,
+// so ours must win over whatever was there.
+var preservedDirectives = []string{"search", "domain", "sortlist"}
 
 // RenderResolvConf produces the managed file.
 func RenderResolvConf(r Render) string {
@@ -75,7 +89,30 @@ func RenderResolvConf(r Render) string {
 	for _, s := range servers {
 		fmt.Fprintf(&b, "nameserver %s\n", s)
 	}
+	for _, line := range preservedLines(r.Preserve) {
+		fmt.Fprintf(&b, "%s\n", line)
+	}
 	return b.String()
+}
+
+// preservedLines extracts the directives wlink does not own, in their original
+// order, so replacing resolv.conf changes only what wlink is responsible for.
+func preservedLines(content string) []string {
+	var out []string
+	for line := range strings.SplitSeq(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, ";") {
+			continue
+		}
+		key, _, found := strings.Cut(trimmed, " ")
+		if !found {
+			continue
+		}
+		if slices.Contains(preservedDirectives, strings.ToLower(key)) {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 
 // IsManaged reports whether wlink wrote this file.

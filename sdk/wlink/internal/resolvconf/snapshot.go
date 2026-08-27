@@ -353,3 +353,21 @@ func OriginalNameservers(p Paths) []string {
 	}
 	return Nameservers(readOrEmpty(p.ResolvConf))
 }
+
+// OriginalContent returns the pre-pin resolv.conf text — from the snapshot when
+// one exists, else the live file. Used to carry across directives wlink does
+// not own, without re-reading its own output on a re-pin.
+func OriginalContent(p Paths) string {
+	if HasSnapshot(p) {
+		if content, err := os.ReadFile(filepath.Join(p.BackupDir, snapResolvFile)); err == nil {
+			return string(content)
+		}
+		if target, err := os.ReadFile(filepath.Join(p.BackupDir, snapResolvSymlink)); err == nil {
+			if content, rerr := os.ReadFile(strings.TrimSpace(string(target))); rerr == nil {
+				return string(content)
+			}
+		}
+		return ""
+	}
+	return readOrEmpty(p.ResolvConf)
+}
