@@ -39,7 +39,7 @@ Phases from plan §4. `P1` and `P2` are blocking — they freeze the `winhost.Ru
 | P11 — `cmd/wait` + readiness | **done** | *(this commit)* | `go test ./cmd/...` → ok; live: ready in 1 check, timeout → exit 1, bare verb → exit 2; **latency bug fixed: 11s → 5s**; `evidence/p11/` | sentinel-first short-circuit |
 | P12 — `sshcfg` + `cmd/doctor` | **done** | *(this commit)* | `sshcfg` **84.6%**; live run flags this machine's disabled keepalive, confirmed independently by `ssh -G`; `evidence/p12/` | `--fix` re-asks ssh instead of assuming |
 | P13 — integration & rollout | **done** | *(this commit)* | all 9 `sdk/AGENTS.md` checklist items verified; flag fail-closed both ways; `lint-portability` T1/T2=0; `lint-shell` exit 0; module-wide **79.1%**; `evidence/p13/` | prototype deletion is P15 |
-| P14 — live acceptance | **SKIPPED by decision** | — | not performed | see the blocker row and session log — tunnel-up behaviour remains fixture-proven only |
+| P14 — live acceptance | **partial** | a3e64f0 | read-only surface + full write round trip proven with the real binary against a temp root; 4 items unproven (see §6) | found review finding 12 before writing a byte |
 | P15 — retire the prototype | todo | | | **gated:** EC-1…EC-19 each cite a passing Go test and spec §5.1 is current |
 
 ## 2. Feature → proof matrix (spec §5)
@@ -94,13 +94,31 @@ is deleted the spec is the only record.
 
 | Date | Task | Blocker | Command + observed output | Resolution |
 | :-- | :-- | :-- | :-- | :-- |
-| 2026-08-25 | P14 | **Live acceptance not performed** — skipped by explicit decision. Consequence: every tunnel-**up** behaviour (pin writing for real, `verify` PASS with the tunnel up, `not-ready` during an actual handshake, `unpin` restoring a real `/etc/resolv.conf`, and the miss-timing improvement) is proven **by fixtures only**. Four defects in this build were found *exclusively* by running on real hardware — the health rule (EC-20), `fleet.resolved` semantics, 8s of per-run latency, and the prototype fallback divergence — so this is a real, if accepted, gap in confidence. | n/a | Open. `wlink verify` run with the tunnel up and down would close it at any later date. |
+| 2026-08-27 | P14 | **Superseded by the partial run below.** Original entry: live acceptance not performed — skipped by explicit decision. Consequence: every tunnel-**up** behaviour (pin writing for real, `verify` PASS with the tunnel up, `not-ready` during an actual handshake, `unpin` restoring a real `/etc/resolv.conf`, and the miss-timing improvement) is proven **by fixtures only**. Four defects in this build were found *exclusively* by running on real hardware — the health rule (EC-20), `fleet.resolved` semantics, 8s of per-run latency, and the prototype fallback divergence — so this is a real, if accepted, gap in confidence. | n/a | Open. `wlink verify` run with the tunnel up and down would close it at any later date. |
 | 2026-08-25 | P8 | **Deliberate divergence from the prototype, recorded not absorbed.** The shell script appended `nameserver 1.1.1.1` as a last-resort fallback; `wlink` does not. On WSL the NAT proxy (`10.255.255.254`) is the Windows host and effectively always present, so the third entry is unreachable-in-practice while silently routing a user's DNS to a third party. Now opt-in via `WLINK_FALLBACKS`, pinned as **EC-22**. Everything else matched the prototype exactly on a live side-by-side run. |
+
+## 6. Open items — NOT proven, do not claim
+
+Each was attempted and could not be demonstrated on this host. None is claimed
+as working anywhere in the docs.
+
+| # | Item | Why it could not be proven | What would prove it |
+| :-- | :-- | :-- | :-- |
+| T1 | `pin` / `unpin` writing to **`/etc`** | needs interactive sudo, which the agent cannot supply | `sudo wlink pin`, then `sudo wlink unpin`, comparing `/etc/wsl.conf` before/after. Everything except the paths is already proven against a temp root. |
+| T2 | Tunnel-**UP** behaviour | no tunnel interface present on this host | bring WireGuard up, then `wlink status` (expect `tunnel: up`) and `wlink verify` (expect PASS) |
+| T3 | `not-ready` during a real handshake | needs the moment between clicking connect and the handshake completing | `wlink status` within a second or two of connecting; expect `tunnel: not-ready`, not `down` |
+| T4 | The miss-timing improvement | this host resolves the fleet via the LAN, so no misses occur | pin, disconnect the tunnel, `wlink verify`; compare a fleet miss against the 20–21s prototype baseline |
+| T5 | Prototype residue on this host | out of scope for the build | `/etc/wsl.conf` carries `generateResolvConf = false` and `/etc/wsl_dns_lan.backup/` still exists, both left by the prototype's Aug-23 pin whose `--revert` never ran. Pristine `wsl.conf` (in that backup) had no `[network]` section. |
+
+Also observed and worth confirming: `/etc/resolv.conf` is a **stock symlink despite
+`generateResolvConf = false`**, so that setting did not survive a WSL restart as the design
+assumed. If it reproduces, EC-3's rationale needs revisiting.
 
 ## 5. Session log (append-only)
 
 | Date | Session | What happened |
 | :-- | :-- | :-- |
+| 2026-08-27 | P14 | Ran partially. The read-only surface and the **full write round trip** (pin → re-pin → status → unpin) are proven with the real binary, real interop and real DNS, against a temp root via the testing hooks — so only the `/etc` paths differ from a production run. It found **review finding 12 before writing a byte**: this host's `resolv.conf` carries `search localdomain`, which the renderer would have silently dropped. Four items remain unproven and are listed in §6 rather than claimed. |
 | 2026-08-25 | P15 | Prototype deleted. The gate did its job: it caught **EC-12 unticked** — the five `NonWSL` tests existed and passed, but the matrix row had never been updated, so the deletion would have proceeded on an incomplete record. Verified the tests, ticked the row, then deleted. Three proofs captured: no reference outside `docs/mbo/`, absent from the PR's net diff vs `main`, and all suites green afterwards. Also corrected a stale `packages.tsv` comment claiming `dnsutils` existed for the prototype — `wlink` resolves natively, which is why it needs nothing installed. |
 | 2026-08-25 | P14 | Skipped by decision. Recorded as an open blocker rather than silently omitted: the automated gate (EC-1…EC-22 each citing a passing Go test) is met, but the human/live column is not, and tunnel-up behaviour is fixture-proven only. Note the P15 gate itself caught EC-12 as unticked — its five `NonWSL` tests existed and passed but the matrix row had never been updated. |
 | 2026-08-25 | P13 | Rollout wired, all 9 checklist items verified rather than assumed. `install.sdk.wlink` is `boolDefault: false` + `gff_opt_in` — the deliberate departure from the other `install.sdk.*` flags, and the features.yaml description says **why** so it is not later "corrected". The `install.sh` block also runs `wlink pin`, which is safe precisely because a decline is exit 0: a tunnel that happens to be down at install time cannot fail the installer. The `sdk/README.md` demo is **real captured output** from this machine (addresses substituted), per the repo's rule that an invented transcript fails exactly the reader who trusts it. |
