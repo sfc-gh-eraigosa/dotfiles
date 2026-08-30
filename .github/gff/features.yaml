@@ -25,6 +25,10 @@ sets:
       - path: install.shell.default-zsh
         description: Runs the chsh block that sets zsh as the default login shell.
         boolDefault: true
+      # --- desktop (1) ---
+      - path: install.desktop.gnome-keys
+        description: Runs gnome-desktop-defaults.sh, which binds macOS-style Super+C/Super+V copy-paste in gnome-terminal and frees Super+V from the GNOME message tray. No-ops off a GNOME session.
+        boolDefault: true
       # --- pkg (2) ---
       - path: install.pkg.common-core
         description: Runs the pkg-install block that installs the curated common-core packages plus the legacy yum path.
