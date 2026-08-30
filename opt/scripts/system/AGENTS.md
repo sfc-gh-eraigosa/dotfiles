@@ -23,6 +23,7 @@ This directory contains scripts for configuring the operating system, environmen
 - `google-cli-setup.sh`: Installs/updates gcloud, the Antigravity CLI (only when absent — `antigravity_install.sh` owns the install), and the `gws` Workspace CLI; `status` subcommand reports their health.
 - `setup_jtop.sh`: Installs and configures jetson-stats (jtop) for NVIDIA Jetson devices.
 - `terminal-theme.sh`: Configures terminal colors and themes.
+- `gnome-desktop-defaults.sh`: Applies GNOME desktop defaults — macOS-style `Super+C`/`Super+V` copy-paste in gnome-terminal (Super is the Linux Cmd analogue, so `Ctrl+C` stays SIGINT), and frees `Super+V` from the GNOME message tray so it can't swallow the paste. The Linux counterpart to the Cmd-key mapping `opt/Desktop/Apps/scripts/macos.ahk` applies on Windows. Idempotent, hand-runnable, and a no-op off a writable GNOME session (CI, docker, WSL, plain SSH, macOS). Gated by `install.desktop.gnome-keys`.
 - `perf-toggle.sh`: Toggles system performance modes (e.g., on Jetson).
 - `enable-vmx.sh`: Helper to check/enable virtualization support.
 - `coco_install.sh`: Installer for the COCO dataset tools or similar.
