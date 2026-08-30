@@ -69,6 +69,16 @@ watch                -
 -                    fontconfig
 -                    curl
 
+# Symbol-font fallback for codepoints the Nerd Font does not carry. MesloLGS NF
+# covers the powerline separators (U+E0Bx) and the Nerd Font PUA icons (U+F0xx),
+# but its cmap stops short of Miscellaneous Technical: U+23F4/U+23F5 (the
+# media-control triangles Claude Code's own status footer renders) fall in NO
+# font shipped with Ubuntu, so they show as tofu on an otherwise-correct setup.
+# Symbola covers U+2190-2426 and carries no PUA range, so it complements the
+# Nerd Font as a fontconfig fallback rather than shadowing it. macOS ships
+# Apple Symbols with the same coverage, hence '-' in the BREW column.
+-                    fonts-symbola
+
 # Kubernetes toolchain. apt has no kind package at all, and kubectl/helm need
 # third-party apt repos that lag upstream — so Linux/WSL gets the official
 # release binaries via opt/scripts/system/install_k8s_tools.sh (wired into

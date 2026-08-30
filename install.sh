@@ -84,7 +84,7 @@ unset _ip_prev _ip_arg
 #   - CONFIG / SKILL / SYMLINK / any repo-content step -> _IP_CONFIG_FLAGS. Runs
 #     in the per-commit config layer; omitting it BAKES the step into the cached
 #     deps layer, so later edits to it stop taking effect per commit (a bug).
-_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
+_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
 _IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_K8S INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM"
 apply_install_phase() {
   case "$INSTALL_PHASE" in
@@ -212,6 +212,16 @@ for file in ".profile" ".zprofile" ".zshenv" ".zshrc" ".bash_logout" ".bashrc"; 
 done
 else gff_skip_msg install.shell.profiles; fi
 
+# GNOME desktop defaults — macOS-style Super+C/Super+V copy/paste for
+# gnome-terminal, the Linux counterpart to the Cmd-key mapping macos.ahk applies
+# on Windows. Self-guarding: a no-op off a writable GNOME session (CI, docker,
+# WSL, plain SSH, macOS), so this is safe to run unconditionally.
+if gff_on install.desktop.gnome-keys; then
+if [ -x "${BASE_DIR}/opt/scripts/system/gnome-desktop-defaults.sh" ]; then
+  "${BASE_DIR}/opt/scripts/system/gnome-desktop-defaults.sh" || echo "WARNING: GNOME desktop defaults reported problems; continuing."
+fi
+else gff_skip_msg install.desktop.gnome-keys; fi
+
 # Shared skill sync — links every SKILL.md into BOTH ~/.gemini/config/skills
 # (Antigravity) and ~/.claude/skills (Claude). Single source of truth for both
 # assistants.
@@ -272,10 +282,36 @@ else
   if gff_on install.shell.default-zsh; then
   ZSH_PATH="$(command -v zsh || true)"
   if [ -n "$ZSH_PATH" ]; then
-    if [ "$SHELL" != "$ZSH_PATH" ]; then
+    # Compare against the PASSWD entry, not $SHELL. $SHELL is frozen at login,
+    # so after a chsh it stays stale for the life of the session — testing it
+    # re-runs `sudo chsh` on every install until the user logs out.
+    # (macOS has no getent; fall back to $SHELL there.)
+    if command -v getent &> /dev/null; then
+      CURRENT_LOGIN_SHELL="$(getent passwd "${USER:-$(id -un)}" | cut -d: -f7)"
+    else
+      CURRENT_LOGIN_SHELL="$SHELL"
+    fi
+    if [ "$CURRENT_LOGIN_SHELL" != "$ZSH_PATH" ]; then
       echo "Changing default shell to zsh ($ZSH_PATH)..."
       # ${USER:-$(id -un)} so chsh still gets a real name in non-login/root shells.
       sudo chsh -s "$ZSH_PATH" "${USER:-$(id -un)}" || echo "WARNING: could not change default shell to zsh."
+    fi
+
+    # chsh only rewrites /etc/passwd. The running session keeps the old $SHELL,
+    # and VTE/gnome-terminal prefers $SHELL OVER the passwd entry — so every new
+    # terminal keeps opening the previous shell until the next logout. Push the
+    # new value into the systemd user manager and the D-Bus activation env so
+    # D-Bus-activated terminals (gnome-terminal-server) pick it up on their next
+    # start. Best-effort: absent on macOS and in containers.
+    if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+      if command -v systemctl &> /dev/null; then
+        systemctl --user set-environment "SHELL=${ZSH_PATH}" 2>/dev/null || true
+      fi
+      # Pass the VALUE explicitly. A bare `--systemd SHELL` re-reads $SHELL from
+      # THIS process — still the OLD shell — and silently clobbers the line above.
+      if command -v dbus-update-activation-environment &> /dev/null; then
+        dbus-update-activation-environment --systemd "SHELL=${ZSH_PATH}" 2>/dev/null || true
+      fi
     fi
   else
     echo "WARNING: zsh is not installed; leaving the default shell unchanged."
