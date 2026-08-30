@@ -153,11 +153,13 @@ Run `sync-skills --build` to rebuild the binary and refresh all skill links.
 | OS | Installer | Notes |
 |----|-----------|-------|
 | macOS | `sdk/gsl/scripts/install_nerd_font_macos.sh` | Writes an iTerm2 Dynamic Profile (`gsl-nerd-font`) |
-| Linux/WSL | `sdk/gsl/scripts/install_nerd_font_linux.sh` | Also invokes Windows installer from WSL for Windows Terminal |
+| Linux/WSL | `sdk/gsl/scripts/install_nerd_font_linux.sh` | Points gnome-terminal's default profile at the font (only when it is still on the system font); also invokes the Windows installer from WSL for Windows Terminal |
 | Windows | `sdk/gsl/scripts/install_nerd_font_windows.ps1` | Called by `setup-apps.ps1 → Install-NerdFont`; touchless (`-NonInteractive -ExecutionPolicy Bypass`) |
 
 After install, `sdk/gsl/scripts/check-font-glyphs.sh` proves the installed font
-covers all 17 PUA codepoints gsl emits. Run it manually to verify:
+covers all 17 PUA codepoints gsl emits. Note it validates the font *file*, not
+the terminal's font *selection* — a terminal still pointed at a non-Nerd font
+renders tofu even though this check passes. Run it manually to verify:
 
 ```bash
 bash sdk/gsl/scripts/check-font-glyphs.sh
