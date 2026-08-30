@@ -40,6 +40,10 @@ type repoData struct {
 	// prNumber / prState are the PR details (0 / "" if absent).
 	prNumber int
 	prState  string
+	// prURL is the PR's web URL. Optional: empty when gh or the gss registry
+	// did not report one, which is why link() gates on it rather than deriving
+	// a URL from prNumber (the host/owner/repo are not known here).
+	prURL string
 	// worktreeCount is the number of linked worktrees (0 if not shown).
 	worktreeCount int
 	// showPR / showCount mirror the segment options.
@@ -101,6 +105,9 @@ func (s *RepoSegment) detect(ctx context.Context) (segmentData, bool) {
 	if s.ShowPR && info != nil && info.PRNumber > 0 {
 		d.prNumber = info.PRNumber
 		d.prState = info.PRState
+		if s.LinkPR {
+			d.prURL = info.PRURL
+		}
 	}
 
 	return d, true
@@ -158,4 +165,16 @@ func (d *repoData) format(st style.Style, level int) (text, colorKey string) {
 		return "", ""
 	}
 	return b.String(), d.themeKey
+}
+
+// link implements linkable: the repo segment addresses its PR.
+//
+// It is gated on the PR badge actually being shown. A hyperlink over a segment
+// that displays no PR would be an invisible click target — the whole repo block
+// would silently become clickable with nothing on screen explaining why.
+func (d *repoData) link() string {
+	if !d.showPR || d.prNumber <= 0 {
+		return ""
+	}
+	return d.prURL
 }

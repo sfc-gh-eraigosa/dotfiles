@@ -61,6 +61,26 @@ type prioritized interface {
 	priority() int
 }
 
+// linkable is the optional interface a segmentData implements when its content
+// addresses something on the web — today, the repo segment's PR badge. The join
+// layer turns a non-empty link into an OSC 8 hyperlink over the painted block.
+//
+// It is deliberately separate from format(): a URL is zero display width, and
+// format's contract is that what it returns IS the width-bearing text. Keeping
+// the link out of that return value is what stops a 50-column PR URL from being
+// measured, truncated, or ellipsized as if it were content.
+type linkable interface {
+	link() string
+}
+
+// linkOf returns d's link, or "" when it declares none.
+func linkOf(d segmentData) string {
+	if l, ok := d.(linkable); ok {
+		return l.link()
+	}
+	return ""
+}
+
 // priorityOf returns d's drop priority. A segmentData that declares none sorts
 // with the first-dropped group.
 func priorityOf(d segmentData) int {
@@ -190,7 +210,7 @@ func Format(datas []segmentData, st style.Style, level int) string {
 		}
 		text, colorKey := d.format(st, level)
 		if text != "" {
-			blocks = append(blocks, segmentBlock{text: text, colorKey: colorKey})
+			blocks = append(blocks, segmentBlock{text: text, colorKey: colorKey, link: linkOf(d)})
 		}
 	}
 	if len(blocks) == 0 {
@@ -236,7 +256,7 @@ func finalTierBlocks(datas []segmentData, st style.Style) []segmentBlock {
 		if text == "" {
 			continue
 		}
-		blocks = append(blocks, segmentBlock{text: text, colorKey: colorKey})
+		blocks = append(blocks, segmentBlock{text: text, colorKey: colorKey, link: linkOf(d)})
 	}
 	return blocks
 }

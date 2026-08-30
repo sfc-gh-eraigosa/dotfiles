@@ -115,6 +115,9 @@ type WorkerMatch struct {
 	// PRNumber is the trailing integer parsed from the worker's pr_url.
 	// Zero when HasPR is false.
 	PRNumber int
+	// PRURL is the worker's raw pr_url, carried through so the render layer can
+	// emit an OSC 8 hyperlink without re-deriving the URL from the number.
+	PRURL string
 	// PRState is copied verbatim from the worker's "pr_state" field.
 	// Empty string when HasPR is false.
 	PRState string
@@ -158,6 +161,7 @@ func buildMatch(featureName string, w Worker) *WorkerMatch {
 	if w.PRUrl != "" {
 		if n := parsePRNumber(w.PRUrl); n > 0 {
 			m.PRNumber = n
+			m.PRURL = w.PRUrl
 			m.PRState = w.PRState
 			m.HasPR = true
 		}

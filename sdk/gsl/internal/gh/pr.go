@@ -16,12 +16,17 @@ import (
 type PRInfo struct {
 	Number int
 	State  string
+	// URL is the PR's web URL, used by the render layer to emit an OSC 8
+	// hyperlink. Empty when gh did not report one (older gh, or a cache entry
+	// written before this field existed).
+	URL string
 }
 
 // prCache is the on-disk JSON structure for the cache file.
 type prCache struct {
 	Number int       `json:"number"`
 	State  string    `json:"state"`
+	URL    string    `json:"url,omitempty"`
 	TS     time.Time `json:"ts"`
 	// TTLSeconds is this entry's OWN lifetime. It exists so a timeout-class
 	// failure can expire faster than a conclusive answer (E19 edge). Zero means
@@ -156,6 +161,7 @@ func writeCache(path string, info *PRInfo, ttl time.Duration) {
 	c := prCache{
 		Number:     info.Number,
 		State:      info.State,
+		URL:        info.URL,
 		TS:         time.Now(),
 		TTLSeconds: int(ttl.Seconds()),
 	}
@@ -221,7 +227,7 @@ func PR(ctx context.Context, runner Runner, branch string) (*PRInfo, error) {
 		if c.Number == 0 {
 			return nil, nil
 		}
-		return &PRInfo{Number: c.Number, State: c.State}, nil
+		return &PRInfo{Number: c.Number, State: c.State, URL: c.URL}, nil
 	}
 
 	// No runner (Deps{GH: nil}): nothing to ask, nothing learned. Do NOT cache
@@ -236,7 +242,7 @@ func PR(ctx context.Context, runner Runner, branch string) (*PRInfo, error) {
 
 	// Forward the branch as a positional arg so gh resolves the PR for the
 	// requested branch (matching the cache key) rather than the cwd branch.
-	out, err := runner.Run(tctx, "pr", "view", branch, "--json", "number,state")
+	out, err := runner.Run(tctx, "pr", "view", branch, "--json", "number,state,url")
 	if err != nil {
 		// gh exited non-zero (the NORMAL "no PR for this branch" signal), gh is
 		// absent, or the deadline fired. All map to "omit" — but they are now
@@ -258,6 +264,7 @@ func PR(ctx context.Context, runner Runner, branch string) (*PRInfo, error) {
 	var payload struct {
 		Number int    `json:"number"`
 		State  string `json:"state"`
+		URL    string `json:"url"`
 	}
 	if err := json.Unmarshal(out, &payload); err != nil {
 		// gh answered in a shape we don't understand. Don't re-dial it every
@@ -273,7 +280,7 @@ func PR(ctx context.Context, runner Runner, branch string) (*PRInfo, error) {
 		return nil, nil
 	}
 
-	info := &PRInfo{Number: payload.Number, State: payload.State}
+	info := &PRInfo{Number: payload.Number, State: payload.State, URL: payload.URL}
 	writeCache(path, info, cacheMaxAge)
 	return info, nil
 }
