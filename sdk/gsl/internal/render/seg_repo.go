@@ -39,9 +39,14 @@ type RepoSegment struct {
 	RegistryPath string
 
 	// Options (from config Segment.Options), already coerced.
-	ShowPR    bool   // default true
-	ShowCount bool   // default true
-	NameMode  string // "feature" | "worker" | "branch" | "off"; default "feature"
+	ShowPR    bool // default true
+	ShowCount bool // default true
+	// LinkPR emits an OSC 8 hyperlink to the PR over the repo segment
+	// (default true). Terminals without OSC 8 ignore the sequence, so this
+	// exists for the rarer terminal that PRINTS unknown escapes instead of
+	// swallowing them.
+	LinkPR   bool
+	NameMode string // "feature" | "worker" | "branch" | "off"; default "feature"
 
 	// Priority is the DROP priority used by the fit loop (config.Segment.Priority,
 	// or the built-in default for this type when unset). It is independent of the
@@ -58,6 +63,7 @@ func NewRepoSegment(gitRunner git.Runner, ghRunner gh.Runner, branch, registryPa
 		RegistryPath: registryPath,
 		ShowPR:       optBool(opts, "show_pr", true),
 		ShowCount:    optBool(opts, "show_count", true),
+		LinkPR:       optBool(opts, "link_pr", true),
 		NameMode:     optString(opts, "name", nameModeFeature),
 	}
 	return s
@@ -69,14 +75,21 @@ func NewRepoSegment(gitRunner git.Runner, ghRunner gh.Runner, branch, registryPa
 // main worktree, "repo_worktree" for a linked worktree. compactLevel is
 // accepted but only level 0 (full detail) is implemented; PHASE 2 will pass
 // the level through for future compaction.
-func (s *RepoSegment) Render(ctx context.Context, st style.Style, _ int) (text, colorKey string, ok bool) {
+func (s *RepoSegment) Render(ctx context.Context, st style.Style, level int) (text, colorKey string, ok bool) {
+	text, colorKey, _, ok = s.RenderLinked(ctx, st, level)
+	return text, colorKey, ok
+}
+
+// RenderLinked implements LinkedSegment. It is the real implementation — Render
+// delegates to it and discards the link — so the two can never drift apart.
+func (s *RepoSegment) RenderLinked(ctx context.Context, st style.Style, _ int) (text, colorKey, link string, ok bool) {
 	if s.Git == nil {
-		return "", "", false
+		return "", "", "", false
 	}
 	loc, err := repo.Locate(ctx, s.Git, "")
 	if err != nil {
 		// Not a git repo (or git unavailable) → omit the whole segment.
-		return "", "", false
+		return "", "", "", false
 	}
 
 	// PR / feature lookup (best-effort; nil or error ⇒ omit those parts).
@@ -127,9 +140,15 @@ func (s *RepoSegment) Render(ctx context.Context, st style.Style, _ int) (text, 
 	}
 
 	if b.Len() == 0 {
-		return "", "", false
+		return "", "", "", false
 	}
-	return b.String(), themeKey, true
+
+	// Gated on the badge actually being on the line: a hyperlink over a segment
+	// showing no PR would be an invisible click target.
+	if s.LinkPR && s.ShowPR && info != nil && info.PRNumber > 0 {
+		link = info.PRURL
+	}
+	return b.String(), themeKey, link, true
 }
 
 // nameLabel resolves the segment's name label per NameMode.

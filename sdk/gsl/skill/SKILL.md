@@ -24,7 +24,7 @@ the shim writes to stdout.
 | Segment  | What it shows |
 |----------|---------------|
 | `dirgit` | Current directory name (basename, `~` for `$HOME`) + branch + staged/unstaged/untracked/stash/ahead/behind badges |
-| `repo`   | Root-or-worktree indicator glyph + optional feature/worker/branch name + optional PR badge (tinted by state) + optional worktree count badge; self-omits outside a git repo |
+| `repo`   | Root-or-worktree indicator glyph + optional feature/worker/branch name + optional PR badge (tinted by state, and a clickable OSC 8 hyperlink to the PR) + optional worktree count badge; self-omits outside a git repo |
 | `ai`     | Model display name + context-window usage + MCP active/configured count + 5h/7d rate-limit percentages. Renders under **both** Claude Code and agy. Self-omits only when there is genuinely no payload on stdin (e.g. bare `gsl status` in a plain shell) |
 | `time`   | Date + time formatted by config Go layouts + timezone abbreviation; always renders |
 
@@ -88,6 +88,28 @@ gsl config style --list             # List all builtin + user-defined styles (* 
 ```
 
 **Segments** valid for enable/disable/toggle: `dirgit`, `repo`, `ai`, `time`
+
+### Repo segment options
+
+Set under `segments[].options` in `~/.config/gsl/config.json`.
+
+| Option | Default | Effect |
+|--------|---------|--------|
+| `show_pr` | `true` | Show the PR badge |
+| `show_count` | `true` | Show the worktree-count badge |
+| `name` | `"feature"` | Label source: `feature` / `worker` / `branch` / `off` |
+| `link_pr` | `true` | Wrap the segment in an OSC 8 hyperlink to the PR, so the badge is clickable |
+
+**About `link_pr`.** The PR URL comes from the gss registry's `pr_url`, or from
+`gh pr view --json url` on the fallback path; when neither supplies one the
+badge simply renders unlinked. Terminals that do not support OSC 8 ignore the
+sequence, so this is safe to leave on — set it to `false` only for a terminal
+that *prints* unknown escapes instead of swallowing them.
+
+The hyperlink is emitted by the join layer and never enters the segment text,
+because a URL carries zero display width: `term.StripANSI` consumes OSC as well
+as CSI so the width machinery measures the visible badge, not the URL. Without
+that, a ~55-column PR URL would make the fit loop shed segments that fit.
 
 **Keys valid for `config get`:** `enabled`, `style`, `timezone`, `time_format`, `date_format`, `segments`, `styles`
 

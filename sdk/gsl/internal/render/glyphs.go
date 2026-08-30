@@ -241,6 +241,22 @@ func separator(st style.Style) string {
 type segmentBlock struct {
 	text     string
 	colorKey string
+	// link, when non-empty, is a URL the join layer wraps the painted block in
+	// as an OSC 8 hyperlink. It is deliberately NOT part of text: text is what
+	// the width machinery measures and truncates, and a URL is zero display
+	// width. Keeping them apart is what stops a long URL from being mistaken
+	// for content.
+	link string
+}
+
+// osc8Start and osc8End bracket a hyperlink. ST (ESC \\) is used rather than the
+// legacy BEL terminator: it is the form the spec prefers, and term.StripANSI
+// accepts either when measuring.
+func osc8Wrap(link, painted string) string {
+	if link == "" {
+		return painted
+	}
+	return "\x1b]8;;" + link + "\x1b\\" + painted + "\x1b]8;;\x1b\\"
 }
 
 // join assembles the surviving segment blocks into the final status line.
@@ -267,7 +283,7 @@ func join(st style.Style, blocks []segmentBlock) string {
 	// but separator is not "powerline"), join with the style separator.
 	parts := make([]string, 0, len(blocks))
 	for _, b := range blocks {
-		parts = append(parts, paint(st, b.colorKey, b.text))
+		parts = append(parts, osc8Wrap(b.link, paint(st, b.colorKey, b.text)))
 	}
 	return strings.Join(parts, separator(st))
 }
@@ -281,7 +297,7 @@ func joinPowerline(st style.Style, blocks []segmentBlock) string {
 		// No glyph available: fall back to classic path without bridges.
 		parts := make([]string, 0, len(blocks))
 		for _, b := range blocks {
-			parts = append(parts, paint(st, b.colorKey, b.text))
+			parts = append(parts, osc8Wrap(b.link, paint(st, b.colorKey, b.text)))
 		}
 		return strings.Join(parts, separator(st))
 	}
@@ -304,9 +320,11 @@ func joinPowerline(st style.Style, blocks []segmentBlock) string {
 			sb.WriteString(fg)
 		}
 		// Space pad before and after the text (mirrors the existing style).
-		sb.WriteString(" ")
-		sb.WriteString(b.text)
-		sb.WriteString(" ")
+		// The hyperlink covers the padded text but stops short of the bridge
+		// chevron: the chevron is shared decoration between two blocks, so
+		// making it clickable would extend one block's link over its neighbour's
+		// boundary.
+		sb.WriteString(osc8Wrap(b.link, " "+b.text+" "))
 
 		// Emit the bridge chevron.
 		if i < len(blocks)-1 {

@@ -53,3 +53,20 @@ import (
 type Segment interface {
 	Render(ctx context.Context, st style.Style, compactLevel int) (text, colorKey string, ok bool)
 }
+
+// LinkedSegment is the OPTIONAL extension a Segment implements when its content
+// addresses something on the web — today, the repo segment's PR badge. It is
+// the Render-path twin of detect.go's `linkable`; both exist so the two render
+// paths stay equivalent (TestDetectFormat_MatchesRender enforces that).
+//
+// The link travels out as a return value rather than as state stashed on the
+// segment because RenderAt renders every segment concurrently: a segment that
+// recorded its link in a field would be writing state another goroutine could
+// observe mid-flight.
+//
+// link is a BARE URL, never an escape sequence — the join layer owns all escape
+// emission, exactly as it owns ANSI painting. Empty means "not linkable".
+type LinkedSegment interface {
+	Segment
+	RenderLinked(ctx context.Context, st style.Style, compactLevel int) (text, colorKey, link string, ok bool)
+}

@@ -35,6 +35,11 @@ type RepoInfo struct {
 	// PRState is the PR state string (e.g. "OPEN", "MERGED"). Empty when
 	// PRNumber == 0.
 	PRState string
+	// PRURL is the PR's web URL, used by the render layer to emit an OSC 8
+	// hyperlink. May be empty even when PRNumber > 0 — an older gh, a cache
+	// entry written before the field existed, or a registry worker whose
+	// pr_url was absent — so the render layer must treat it as optional.
+	PRURL string
 }
 
 // PR resolves the PR number and state for the given branch, using the
@@ -66,6 +71,7 @@ func PR(ctx context.Context, ghRunner gh.Runner, branch, toplevel, registryPath 
 					FeatureName: m.Feature,
 					PRNumber:    m.PRNumber,
 					PRState:     m.PRState,
+					PRURL:       m.PRURL,
 				}, nil
 			}
 			// Registry matched but no pr_url: fall through to gh,
@@ -106,5 +112,6 @@ func ghFallback(ctx context.Context, ghRunner gh.Runner, branch string) (*RepoIn
 	return &RepoInfo{
 		PRNumber: prInfo.Number,
 		PRState:  prInfo.State,
+		PRURL:    prInfo.URL,
 	}, nil
 }
