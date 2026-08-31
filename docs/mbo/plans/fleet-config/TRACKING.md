@@ -5,10 +5,10 @@ is not evidence; pasted output is.
 
 | Task | State | Commit | Observed evidence |
 | :-- | :-- | :-- | :-- |
-| T1 | todo | — | — |
-| T2 | todo | — | — |
-| T3 | todo | — | — |
-| T4 | todo | — | — |
+| T1 | done | `9ca258c` | 4 tests PASS; add/update/unchanged + marker scope + no-blank-on-omission |
+| T2 | done | `a88a04d` | hostile fixture yields no exec directive; NotImported=[LocalCommand PermitLocalCommand ProxyCommand]; Includes=1 |
+| T3 | done | `ae2501b` | 5 tests PASS; ProxyCommand/comment/marker preserved across a HostName rewrite |
+| T4 | done | `a88a04d` | provenance imported-from=src; second Build Empty; re-apply byte-identical; no reorder |
 | T5 | todo | — | — |
 | T6 | todo | — | — |
 | T7 | todo | — | — |
@@ -26,6 +26,10 @@ is not evidence; pasted output is.
 | G2 malformed push rejected | todo | — |
 | G3 self-retarget refused | todo | — |
 | G4 missing IdentityFile named | todo | — |
+
+## Suite state
+
+`go test -race ./...` green (8 pkgs) · `go vet` clean · `gofmt` clean · cfgplan 90.8% · sshconf 94.5%
 
 ## Notes
 

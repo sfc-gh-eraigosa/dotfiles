@@ -3,10 +3,10 @@
 Resumable cursor: **the first unchecked box is the next action.** Check a box only
 when its step is done and, for a task's final step, a commit SHA exists in TRACKING.md.
 
-- [ ] T1 cfgplan: classify add / update / unchanged
-- [ ] T2 cfgplan: name withheld directives + count Include
-- [ ] T3 sshconf.Update: field-level rewrite
-- [ ] T4 cfgplan.Apply: render adds + non-destructive updates
+- [x] T1 cfgplan: classify add / update / unchanged
+- [x] T2 cfgplan: name withheld directives + count Include
+- [x] T3 sshconf.Update: field-level rewrite
+- [x] T4 cfgplan.Apply: render adds + non-destructive updates
 - [ ] T5 config pull: read over the runner seam
 - [ ] T6 pull write safety: backup, 0600, loopback guard
 - [ ] T7 key readiness: name absent IdentityFile paths
