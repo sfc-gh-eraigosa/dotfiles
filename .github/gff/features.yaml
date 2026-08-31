@@ -5,12 +5,15 @@ namespace: com.github.sfc-gh-eraigosa.dotfiles
 sets:
   - area: install
     features:
-      # --- system (4) ---
+      # --- system (5) ---
       - path: install.system.wsl-interop
         description: Runs the wsl_interop_binfmt.sh block that keeps the WSLInterop binfmt registration alive.
         boolDefault: true
       - path: install.system.jetson
         description: Runs the Jetson hardware-detection block (jtop setup and Chromium default browser).
+        boolDefault: true
+      - path: install.system.gpu
+        description: Runs the NVIDIA DGX / discrete-GPU block (setup_gpu.sh - nvitop, nvtop, gpustat, btop). Non-Jetson GPU hosts only.
         boolDefault: true
       - path: install.system.gitrepos
         description: Runs the ~/.gitrepos clone block near the end of install.sh.

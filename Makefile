@@ -205,7 +205,7 @@ shell-test: ## Run all *_test.sh shell test drivers (uses ai/_test_helpers.sh)
 	@echo "==> shell-test (discovering *_test.sh)"
 	@drivers=$$( \
 		{ \
-			find ai opt/scripts opt/bin opt/profiles -maxdepth 6 -name '*_test.sh' -type f 2>/dev/null; \
+			find ai opt/scripts opt/bin opt/profiles opt/lib -maxdepth 6 -name '*_test.sh' -type f 2>/dev/null; \
 			find . -maxdepth 1 -name '*_test.sh' -type f 2>/dev/null; \
 			find scripts -maxdepth 1 -name '*_test.sh' -type f 2>/dev/null; \
 		} | grep -v '^./opt/google-cloud-sdk' | sort -u \
