@@ -18,13 +18,21 @@ const (
 	Divergent   Class = "ahead/divergent"
 	Unknown     Class = "unknown"
 	Unreachable Class = "unreachable"
+	// AuthFailed is a host that ANSWERED and then refused us — an unknown or
+	// changed host key, or no accepted credential. It is deliberately not
+	// Unreachable: the machine is up and listening, and the fix is local
+	// (known_hosts, a key) rather than on the network.
+	AuthFailed Class = "auth-failed"
 )
 
 // Input is everything known about one host after the SSH probe.
 type Input struct {
 	Reachable, HaveStamp, IsAncestor bool
-	Commit, Baseline                 string
-	BehindCount                      int
+	// AuthFailed qualifies a failed probe: ssh got a session and was turned
+	// away. Meaningless when Reachable is true.
+	AuthFailed       bool
+	Commit, Baseline string
+	BehindCount      int
 }
 
 type Result struct {
@@ -35,8 +43,16 @@ type Result struct {
 // Classify decides a host's state. Order matters: an unreachable host is
 // never reported as up-to-date, and a host with no stamp is Unknown rather
 // than assumed current — silence is not success.
+//
+// AuthFailed is tested before Unreachable because it is strictly more
+// specific: both mean "no answer to work with", but only one tells the
+// operator the machine is alive and the fix is local. It is deliberately
+// checked only when the probe failed, so a stale flag can never mask a host
+// that actually answered.
 func Classify(in Input) Result {
 	switch {
+	case !in.Reachable && in.AuthFailed:
+		return Result{Class: AuthFailed}
 	case !in.Reachable:
 		return Result{Class: Unreachable}
 	case !in.HaveStamp:

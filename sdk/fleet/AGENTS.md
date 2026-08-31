@@ -37,6 +37,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `internal/sshconf` | parse **and edit** `~/.ssh/config` (the only inventory) |
 | `internal/stamp` | parse the install stamp |
 | `internal/drift` | classify drift + format age (`now` injected — never `time.Now()`) |
+| `internal/sshfail` | read ssh's stderr to tell a refused *connection* from a refused *credential* |
 | `internal/keys` | authorized_keys diff (reports removals, never applies them) |
 | `internal/reach` | the wake ladder: rung order, peer ranking, provenance (pure; every impure edge injected via `Deps`) |
 | `cmd/answers_store.go` | the non-secret prompt preferences on disk (`0600`); the on-disk type has no credential field |
@@ -59,6 +60,21 @@ without opening a socket.
 - **A dirty clone is skipped** unless `--force`, which *preserves* work in a rescue worktree
   (`git add -A` onto a branch — **not** `stash@{0}`, which silently drops untracked files).
 - **Failures are named per host** and reflected in the exit code; never swallowed.
+- **`unreachable` means the network, never the keys.** A probe that CONNECTED and was
+  then refused — unknown or changed host key, no accepted credential — classifies as
+  `auth-failed`, not `unreachable`. Every probe runs `BatchMode=yes`, so an unknown host
+  key fails *instantly* and used to look exactly like a dead machine; the cost was a real
+  investigation aimed at the network for a one-line `known_hosts` gap. The evidence is
+  ssh's stderr, which `(*exec.Cmd).Output()` already captures. A failure with no stderr
+  to read stays `unreachable` — `internal/sshfail` never invents a diagnosis. Pinned by
+  `TestAuthFailureReportsAuthFailedNotUnreachable` and
+  `TestFailureWithNoEvidenceStaysUnreachable`.
+- **An answering host is never woken, and never relays.** The ladder rouses machines
+  asleep at layer 2; a host that refused us is awake, so waking it spends a full budget
+  (~12s) per host per run to fix nothing. It is equally never ranked as a live relay
+  peer — we cannot run a command through a hop that refuses us. Pinned by
+  `TestWakeLadderNeverFiresForAnAuthFailure` and
+  `TestAuthFailedHostIsNeverOfferedAsALiveRelayPeer`.
 - **TUI in-flight ownership**: a host is in exactly one of `pending` / `updating` /
   `waking` / resolved. Refresh skips hosts an async path owns; every completion
   re-polls its host. Two async paths must never own one row.
@@ -135,6 +151,12 @@ without opening a socket.
   feature branch to prove the stamp before it merges.
 - A stamp that exists but won't parse reports `unknown (corrupt stamp)` — deliberately
   distinct from never-installed.
+- `auth-failed (host key unverified)` almost always means the alias was never accepted
+  into `~/.ssh/known_hosts` — common right after `ssh-find` rewrites a `Hostname`, since
+  the *new* address is an unknown host to ssh. Fix on the workstation:
+  `ssh-keyscan -H <alias> >> ~/.ssh/known_hosts` after checking the fingerprint.
+  `auth-failed (host key CHANGED)` is NOT routine — it is the MITM warning, and the row
+  is orange rather than red precisely so it is not mistaken for a dead host.
 - **A host that needs waking every run is not healthy — it is power-saving.** The `woke via
   <peer>` note exists to keep that visible instead of smoothing it away. The permanent cure
   is on the host, not in fleet: a Wi-Fi NIC with `power_save on` sleeps through the
