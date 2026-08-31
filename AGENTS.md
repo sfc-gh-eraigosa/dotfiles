@@ -6,6 +6,7 @@ Welcome to the dotfiles repository. This file serves as the entry point for agen
 
 - `opt/bin/`: A collection of utility scripts and binaries. [See opt/bin/AGENTS.md](./opt/bin/AGENTS.md) for a categorized registry of these tools.
 - `opt/profiles/`: Shell configuration files (.zshrc, .bashrc, .tmux.conf, etc.). [See opt/profiles/AGENTS.md](./opt/profiles/AGENTS.md) for details.
+- `opt/etc/`: Tracked system config files that scripts **copy** into place (e.g. `keyd/` for the macOS-style keyboard layout). Edit here and re-run the installer — deployed copies are overwritten. [See opt/etc/AGENTS.md](./opt/etc/AGENTS.md).
 - `opt/docs/`: Legacy and reference documentation for various tools and setups. [See opt/docs/AGENTS.md](./opt/docs/AGENTS.md).
 - `src/`: Non-Go custom tools and agent skills (shell/skill tooling). **Go code no longer lives here** — all Go modules live under `sdk/`. [See src/AGENTS.md](./src/AGENTS.md).
 - `sdk/`: Go modules (`gss`, `tmux-mgr`, `gsl`, `fleet`, `gff`, `wol`, and the shared `libs`), each independently `go install`-able as `github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>`. **All Go code lives here, not under `src/`.** [sdk/README.md](./sdk/README.md) is the user-facing tour (what each tool solves, with demos); [sdk/AGENTS.md](./sdk/AGENTS.md) is the build/maintenance contract — **read its "Adding a module" checklist before adding a tool.** (Cutover in progress — see [docs/mbo/plans/2026-06-04-sdk-migration-plan.md](./docs/mbo/plans/2026-06-04-sdk-migration-plan.md).)

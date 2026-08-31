@@ -197,7 +197,14 @@ deploy_windows_files() {
 # -----------------------------------------------------------------------------
 export_gff_wslenv() {
   _gff_wslenv="${WSLENV:-}"
-  for _v in $(env | sed -n 's/^\(GFF_INSTALL_WINDOWS_[A-Z_]*\)=.*/\1/p'); do
+  # GFF_KEYBOARD_* rides along with GFF_INSTALL_WINDOWS_*: keyboard.macos.enabled
+  # is the cross-OS master switch for the macOS key layout, so the Windows side
+  # has to see it or the AutoHotkey half would ignore a global opt-out.
+  # Two -e expressions rather than a \| alternation: alternation in a BRE is a
+  # GNU extension and BSD sed (macOS) does not accept it.
+  for _v in $(env | sed -n \
+    -e 's/^\(GFF_INSTALL_WINDOWS_[A-Z_]*\)=.*/\1/p' \
+    -e 's/^\(GFF_KEYBOARD_[A-Z_]*\)=.*/\1/p'); do
     case ":${_gff_wslenv}:" in *":${_v}/w:"*) : ;; *) _gff_wslenv="${_gff_wslenv:+${_gff_wslenv}:}${_v}/w" ;; esac
   done
   export WSLENV="${_gff_wslenv}"

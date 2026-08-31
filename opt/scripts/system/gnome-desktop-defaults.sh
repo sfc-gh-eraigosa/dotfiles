@@ -9,6 +9,14 @@
 # unconditionally and has no copy-if-selection-else-pass-through mode (Ptyxis
 # and kitty have one; VTE 0.76 / gnome-terminal 3.52 do not).
 #
+# THE OTHER HALF: macos-keys-linux.sh applies the evdev half of this feature via
+# keyd, which is what makes Cmd+C work inside Firefox/VS Code/Nautilus rather than
+# only in gnome-terminal. The split is deliberate:
+#   - keyd    -> in-application editing keys (Cmd+C/V/X/A/Z/S/F...)
+#   - gsettings (here) -> desktop-level ACTIONS that keyd deliberately hands back
+#                         to GNOME as a real <Super> chord (Cmd+Tab/Space/M/H)
+# Both halves are gated by the cross-OS gff flag `keyboard.macos.enabled`.
+#
 # Idempotent and safe to re-run by hand:
 #   ~/opt/scripts/system/gnome-desktop-defaults.sh
 # No-ops on anything that is not a live GNOME session (CI, docker, WSL, plain
@@ -54,23 +62,59 @@ apply_terminal_copy_paste() {
 	gset "$GT_KEYS" paste "'<Super>v'"
 }
 
-free_super_v() {
-	# GNOME binds <Super>v to the message tray, which would swallow the paste
-	# before gnome-terminal ever sees it. <Super>m stays as the tray toggle, so
-	# nothing is lost. Only rewrite when <Super>v is actually still bound, to
-	# avoid stomping a deliberate user customization on a re-run.
+free_message_tray() {
+	# GNOME binds the message tray to <Super>v (swallowing Cmd+V) and, once this
+	# script has run once, to <Super>m -- which now has to go too, because Cmd+M
+	# is Minimize. <Super>n keeps the tray reachable and collides with nothing.
+	# Only rewrite when one of those keys is actually still bound, so a deliberate
+	# user customization survives a re-run.
 	_tray="$(gsettings get org.gnome.shell.keybindings toggle-message-tray 2> /dev/null)" || return 0
 	case "$_tray" in
-		*"<Super>v"*)
-			gset org.gnome.shell.keybindings toggle-message-tray "['<Super>m']"
+		*"<Super>v"* | *"<Super>m"*)
+			gset org.gnome.shell.keybindings toggle-message-tray "['<Super>n']"
 			;;
 	esac
+}
+
+apply_macos_desktop_keys() {
+	# The chords keyd forwards to GNOME untouched. Each one is a macos.ahk
+	# behaviour that only the desktop can perform, not the focused application.
+
+	# Cmd+Space = Spotlight. GNOME's search lives on panel-main-menu; <Super>space
+	# has to be pried off the input-source switcher first or it wins.
+	_src="$(gsettings get org.gnome.desktop.wm.keybindings switch-input-source 2> /dev/null)"
+	case "$_src" in
+		*"<Super>space"*)
+			gset org.gnome.desktop.wm.keybindings switch-input-source "['XF86Keyboard']"
+			;;
+	esac
+	gset org.gnome.desktop.wm.keybindings panel-main-menu "['<Super>space']"
+
+	# Cmd+M and Cmd+H both minimize, exactly as macos.ahk does on Windows.
+	gset org.gnome.desktop.wm.keybindings minimize "['<Super>m', '<Super>h']"
+
+	# A lone Cmd tap does nothing on macOS. Left alone, GNOME opens the Activities
+	# overview every time the user reaches for Cmd and changes their mind -- which
+	# is jarring enough that macos.ahk spends a dedicated block suppressing the
+	# same behaviour on Windows.
+	gset org.gnome.mutter overlay-key "''"
+
+	# Cmd+Option+arrows tile. keyd emits these as plain Ctrl+Alt chords -- it must
+	# NOT synthesize <Super> from inside the Meta layer, which crashes it (see the
+	# warning in opt/etc/keyd/default.conf) -- so GNOME has to be pointed at
+	# Ctrl+Alt to receive them. Cmd+L (lock) needs nothing here: it is left out of
+	# the keyd layer entirely, so it arrives as GNOME's stock <Super>l.
+	gset org.gnome.mutter.keybindings toggle-tiled-left "['<Control><Alt>Left']"
+	gset org.gnome.mutter.keybindings toggle-tiled-right "['<Control><Alt>Right']"
+	gset org.gnome.desktop.wm.keybindings maximize "['<Control><Alt>Up']"
+	gset org.gnome.desktop.wm.keybindings unmaximize "['<Control><Alt>Down']"
 }
 
 if gnome_session_available; then
 	echo "Applying GNOME desktop defaults (macOS-style Super+C / Super+V)..."
 	apply_terminal_copy_paste
-	free_super_v
+	free_message_tray
+	apply_macos_desktop_keys
 else
 	echo "Not a writable GNOME session; skipping GNOME desktop defaults."
 fi

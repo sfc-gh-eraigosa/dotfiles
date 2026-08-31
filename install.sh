@@ -212,15 +212,31 @@ for file in ".profile" ".zprofile" ".zshenv" ".zshrc" ".bash_logout" ".bashrc"; 
 done
 else gff_skip_msg install.shell.profiles; fi
 
-# GNOME desktop defaults — macOS-style Super+C/Super+V copy/paste for
-# gnome-terminal, the Linux counterpart to the Cmd-key mapping macos.ahk applies
-# on Windows. Self-guarding: a no-op off a writable GNOME session (CI, docker,
-# WSL, plain SSH, macOS), so this is safe to run unconditionally.
-if gff_on install.desktop.gnome-keys; then
-if [ -x "${BASE_DIR}/opt/scripts/system/gnome-desktop-defaults.sh" ]; then
-  "${BASE_DIR}/opt/scripts/system/gnome-desktop-defaults.sh" || echo "WARNING: GNOME desktop defaults reported problems; continuing."
-fi
-else gff_skip_msg install.desktop.gnome-keys; fi
+# macOS-style keyboard layout on Linux — the counterpart to the Cmd-key mapping
+# macos.ahk applies on Windows, so one set of muscle memory works on every
+# machine. Two halves, both self-guarding (a no-op off a real desktop session, so
+# CI, docker, WSL, plain SSH and macOS are unaffected):
+#   1. gnome-desktop-defaults.sh — gsettings: the desktop-level ACTIONS
+#      (Cmd+Space/Tab/M/H, an inert lone-Cmd tap).
+#   2. macos-keys-linux.sh — keyd: the in-application EDITING keys, which is what
+#      makes Cmd+C work in Firefox/VS Code/Nautilus and not just the terminal.
+# Both sit under keyboard.macos.enabled, the one switch that turns macOS-style
+# keyboard customization off on EVERY OS (see the README section of the same name).
+if gff_on keyboard.macos.enabled; then
+
+  if gff_on install.desktop.gnome-keys; then
+  if [ -x "${BASE_DIR}/opt/scripts/system/gnome-desktop-defaults.sh" ]; then
+    "${BASE_DIR}/opt/scripts/system/gnome-desktop-defaults.sh" || echo "WARNING: GNOME desktop defaults reported problems; continuing."
+  fi
+  else gff_skip_msg install.desktop.gnome-keys; fi
+
+  if gff_on install.desktop.macos-keys; then
+  if [ -x "${BASE_DIR}/opt/scripts/system/macos-keys-linux.sh" ]; then
+    "${BASE_DIR}/opt/scripts/system/macos-keys-linux.sh" || echo "WARNING: macOS key mappings reported problems; continuing."
+  fi
+  else gff_skip_msg install.desktop.macos-keys; fi
+
+else gff_skip_msg keyboard.macos.enabled; fi
 
 # Shared skill sync — links every SKILL.md into BOTH ~/.gemini/config/skills
 # (Antigravity) and ~/.claude/skills (Claude). Single source of truth for both
