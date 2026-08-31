@@ -192,6 +192,18 @@ if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
 fi
 else gff_skip_msg install.system.jetson; fi
 
+# NVIDIA DGX / discrete-GPU hosts (DGX Spark, workstation dGPU). Deliberately
+# separate from the Jetson block above: a Jetson runs L4T and gets jtop, while
+# a DGX Spark runs DGX OS on stock Ubuntu where jtop cannot work at all.
+# setup_gpu.sh self-guards (no-ops on Jetson and on GPU-less hosts), so this
+# stays inert everywhere else.
+if gff_on install.system.gpu; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/setup_gpu.sh" ]; then
+    bash "${BASE_DIR}/opt/scripts/system/setup_gpu.sh" ||
+      echo "WARNING: GPU monitoring setup reported problems; continuing."
+  fi
+else gff_skip_msg install.system.gpu; fi
+
 if gff_on install.shell.profiles; then
 while IFS= read -r file; do
     filename=$(basename "$file")
