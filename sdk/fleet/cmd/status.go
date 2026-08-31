@@ -15,6 +15,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp"
 	"github.com/spf13/cobra"
 )
@@ -127,7 +128,16 @@ func probeHost(h sshconf.Host, r runner.Runner, base Baseliner) Row {
 func probeHostWake(h sshconf.Host, peers func() []reach.Peer, r runner.Runner, base Baseliner, w waker) Row {
 	row := Row{Alias: h.Alias}
 	out, err := r.Run(h.Alias, probeCmd)
-	if err != nil && w != nil {
+
+	// A host that answered SSH and then refused us is not asleep, so the
+	// ladder has nothing to fix: running it would spend a full wake budget
+	// per host, every run, on ICMP and relay hops that cannot help.
+	authFailed := sshfail.Classify(err) == sshfail.Auth
+	if authFailed {
+		row.Note = sshfail.Note(err)
+	}
+
+	if err != nil && w != nil && !authFailed {
 		var ps []reach.Peer
 		if peers != nil {
 			ps = peers()
@@ -141,7 +151,7 @@ func probeHostWake(h sshconf.Host, peers func() []reach.Peer, r runner.Runner, b
 	}
 	stampText, liveBranch := splitProbe(out)
 	row.Branch = normalizeBranch(liveBranch)
-	in := drift.Input{Reachable: err == nil, Baseline: base.Head()}
+	in := drift.Input{Reachable: err == nil, AuthFailed: authFailed, Baseline: base.Head()}
 	if err == nil {
 		s, perr := stamp.Parse(stampText)
 		switch {
@@ -187,7 +197,11 @@ func collectWake(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time
 			defer wg.Done()
 			peers := func() []reach.Peer { return track.peersFor(h.Alias, hosts) }
 			rows[i] = probeHostWake(h, peers, r, base, w)
-			if rows[i].Class != string(drift.Unreachable) {
+			// Only a host that actually ANSWERED may serve as a relay. One
+			// that refused us is reachable at the IP layer yet cannot run a
+			// command, so ranking it live would send a straggler's ladder
+			// through a hop guaranteed to fail.
+			if c := rows[i].Class; c != string(drift.Unreachable) && c != string(drift.AuthFailed) {
 				track.markUp(h.Alias)
 			}
 		}(i, h)
@@ -242,10 +256,11 @@ func short(sha string) string {
 
 var severity = map[string]int{
 	string(drift.Unreachable): 0,
-	string(drift.Divergent):   1,
-	string(drift.Unknown):     2,
-	string(drift.Behind):      3,
-	string(drift.UpToDate):    4,
+	string(drift.AuthFailed):  1,
+	string(drift.Divergent):   2,
+	string(drift.Unknown):     3,
+	string(drift.Behind):      4,
+	string(drift.UpToDate):    5,
 }
 
 func statusLabel(r Row) string {

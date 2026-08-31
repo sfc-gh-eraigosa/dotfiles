@@ -70,7 +70,11 @@ func newTheme() theme {
 			string(drift.Divergent):   lipgloss.NewStyle().Foreground(c("5")),
 			string(drift.Unknown):     lipgloss.NewStyle().Faint(true),
 			string(drift.Unreachable): lipgloss.NewStyle().Foreground(c("1")).Bold(true),
-			"polling":                 lipgloss.NewStyle().Faint(true),
+			// Orange, not the unreachable red: the machine is UP. The colour
+			// difference is the whole point — it says "look at your keys, not
+			// at the network".
+			string(drift.AuthFailed): lipgloss.NewStyle().Foreground(c("208")).Bold(true),
+			"polling":                lipgloss.NewStyle().Faint(true),
 		},
 	}
 }

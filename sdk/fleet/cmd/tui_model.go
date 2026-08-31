@@ -596,9 +596,12 @@ func (m tuiModel) peersFor(target string) []reach.Peer {
 			name = r.Alias
 		}
 		out = append(out, reach.Peer{
-			Alias:     r.Alias,
-			HostName:  name,
-			Reachable: !m.pending[r.Alias] && r.Class != string(drift.Unreachable) && r.Class != "polling",
+			Alias:    r.Alias,
+			HostName: name,
+			// A host that refused us cannot run a relayed command, so it is
+			// no more usable as a hop than an unreachable one.
+			Reachable: !m.pending[r.Alias] && r.Class != string(drift.Unreachable) &&
+				r.Class != string(drift.AuthFailed) && r.Class != "polling",
 		})
 	}
 	return out
