@@ -15,9 +15,63 @@ if [ ! -z "${GREP_OPTIONS}" ]; then
   unset GREP_OPTIONS
 fi
 
-if [ -f /etc/environment ] ; then
-  . /etc/environment
+# /etc/environment is a pam_env(8) key=value TABLE, not a shell script.
+# Sourcing it runs its `PATH="..."` line as a shell assignment, which
+# CLOBBERS the PATH that PAM and /etc/profile.d/*.sh already built. On
+# DGX Spark that silently dropped NVIDIA's /etc/profile.d/nv_paths.sh
+# entry, so /usr/local/cuda/bin (nvcc, ncu, cuda-gdb, compute-sanitizer)
+# was missing from every login shell. Parse the table instead, and never
+# let it overwrite PATH.
+#
+# POSIX-only (dash sources this file via `sh -l`): no arrays, no [[ ]].
+#
+# DOTFILES_ENV_FILE exists so the test driver can point this loop at a
+# fixture; it is not a user-facing knob. Production always reads
+# /etc/environment.
+_env_file="${DOTFILES_ENV_FILE:-/etc/environment}"
+if [ -r "${_env_file}" ] ; then
+  _env_path_fallback=""
+  while IFS= read -r _env_line || [ -n "${_env_line}" ]; do
+    # pam_env accepts an optional leading `export `.
+    _env_line="${_env_line#export }"
+    case "${_env_line}" in
+      ''|'#'*) continue ;;
+    esac
+    # Must actually be an assignment. Without this, a bare word line like
+    # `FOO` parses as key=FOO val=FOO and gets exported as FOO=FOO.
+    case "${_env_line}" in
+      *=*) ;;
+      *) continue ;;
+    esac
+    _env_key="${_env_line%%=*}"
+    _env_val="${_env_line#*=}"
+    # Accept only plain NAME=VALUE. Anything else (leading whitespace,
+    # shell syntax, a line with no '=') fails this test and is skipped,
+    # which is the fail-safe direction.
+    case "${_env_key}" in
+      ''|*[!A-Za-z0-9_]*) continue ;;
+    esac
+    # Strip one layer of matching quotes.
+    case "${_env_val}" in
+      \"*\") _env_val="${_env_val#\"}" ; _env_val="${_env_val%\"}" ;;
+      \'*\') _env_val="${_env_val#\'}" ; _env_val="${_env_val%\'}" ;;
+    esac
+    if [ "${_env_key}" = "PATH" ] ; then
+      # Remember it, but only as a last resort (see below).
+      _env_path_fallback="${_env_val}"
+      continue
+    fi
+    export "${_env_key}=${_env_val}"
+  done < "${_env_file}"
+  # Only adopt /etc/environment's PATH when we genuinely have none —
+  # e.g. a non-PAM `su` that skipped /etc/profile entirely.
+  if [ -z "${PATH:-}" ] && [ -n "${_env_path_fallback}" ] ; then
+    PATH="${_env_path_fallback}"
+    export PATH
+  fi
+  unset _env_line _env_key _env_val _env_path_fallback
 fi
+unset _env_file
 
 # set PATH so it includes user's private bin if it exists
 if [ -d "${HOME}/bin" ] ; then
@@ -202,3 +256,35 @@ esac
 
 # Load Nano Platform environment
 [ -f "$HOME/.nano_profile" ] && . "$HOME/.nano_profile"
+
+# ---------------------------------------------------------------------------
+# PATH dedupe — keep the FIRST occurrence of each entry, preserve order.
+#
+# This file, /etc/profile.d drop-ins, and ~/.zprofile can each legitimately
+# prepend the same directory, and re-entrant logins (tmux, `su -`, an SSH
+# session that re-runs the profile) compound it. Before this pass a login
+# PATH here carried 20 duplicated entries. Duplicates aren't fatal, but they
+# slow every command lookup and make PATH ordering bugs hard to read.
+#
+# POSIX-only: no arrays, no `${(u)path}` (zsh-ism), no mapfile (bash 4+).
+# ---------------------------------------------------------------------------
+if [ -n "${PATH:-}" ]; then
+  _pd_out=""
+  _pd_rest="${PATH}"
+  while [ -n "${_pd_rest}" ]; do
+    case "${_pd_rest}" in
+      *:*) _pd_head="${_pd_rest%%:*}" ; _pd_rest="${_pd_rest#*:}" ;;
+      *)   _pd_head="${_pd_rest}"     ; _pd_rest="" ;;
+    esac
+    # Drop empty fields: a leading, trailing, or doubled ':' means "current
+    # directory" to the shell, which is a genuine security footgun.
+    [ -z "${_pd_head}" ] && continue
+    case ":${_pd_out}:" in
+      *":${_pd_head}:"*) continue ;;
+    esac
+    if [ -z "${_pd_out}" ]; then _pd_out="${_pd_head}"; else _pd_out="${_pd_out}:${_pd_head}"; fi
+  done
+  PATH="${_pd_out}"
+  export PATH
+  unset _pd_out _pd_rest _pd_head
+fi
