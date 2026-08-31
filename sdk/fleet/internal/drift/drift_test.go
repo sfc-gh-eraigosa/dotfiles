@@ -72,3 +72,27 @@ func TestFormatAgeZeroTimeIsUnknown(t *testing.T) {
 		t.Fatalf("zero time should render %q, got %q", "-", got)
 	}
 }
+
+// A host that answered SSH and then refused us is NOT unreachable. Reporting
+// it as such is what sends an operator to the network layer to debug a trust
+// problem on a machine that is up and listening.
+func TestClassifyAuthFailureIsNotUnreachable(t *testing.T) {
+	got := Classify(Input{Reachable: false, AuthFailed: true})
+	if got.Class != AuthFailed {
+		t.Fatalf("Classify = %q, want %q", got.Class, AuthFailed)
+	}
+	if got.Class == Unreachable {
+		t.Fatal("an auth failure must never render as unreachable")
+	}
+}
+
+// AuthFailed is strictly more specific than "no reply", so it outranks it —
+// but it must never outrank a host that actually answered, or a successful
+// probe carrying a stale flag would hide a real classification.
+func TestClassifyAuthFailureNeverMasksASuccessfulProbe(t *testing.T) {
+	got := Classify(Input{Reachable: true, AuthFailed: true, HaveStamp: true,
+		Commit: "aaa", Baseline: "aaa", IsAncestor: true})
+	if got.Class != UpToDate {
+		t.Fatalf("a host that answered must classify on its stamp, got %q", got.Class)
+	}
+}
