@@ -34,6 +34,9 @@ KEYD_ETC="${KEYD_ETC:-/etc/keyd}"
 # Where evdev keyboards appear. Overridable for the same reason as KEYD_ETC: a CI
 # container has no /sys/class/input, which would silently no-op every test.
 INPUT_DEVICES_DIR="${INPUT_DEVICES_DIR:-/sys/class/input}"
+# Process table root. Overridable so the test driver can present a synthetic one
+# instead of matching whatever happens to be running on the build machine.
+PROC_DIR="${PROC_DIR:-/proc}"
 APP_CONF="${HOME}/.config/keyd/app.conf"
 KEYD_DROPIN="${KEYD_DROPIN:-/etc/systemd/system/keyd.service.d/10-dotfiles-restart.conf}"
 UNIT="${HOME}/.config/systemd/user/keyd-application-mapper.service"
@@ -189,8 +192,8 @@ ensure_keyd() {
 # repo's own test suite. Matching on the installed BINARY PATH, and skipping our
 # own pid, is precise.
 mapper_pids() {
-	for _d in /proc/[0-9]*; do
-		_p="${_d#/proc/}"
+	for _d in "${PROC_DIR}"/[0-9]*; do
+		_p="${_d##*/}"
 		[ "${_p}" = "$$" ] && continue
 		# A process can exit between the glob and the read, so the redirect itself
 		# must not be what fails -- guard the file rather than the pipeline.

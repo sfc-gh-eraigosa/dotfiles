@@ -20,7 +20,7 @@ CONF_DIR="$REPO_ROOT/opt/etc/keyd"
 
 H="$(mktemp -d)"
 trap 'rm -rf "$H"' EXIT
-mkdir -p "$H/bin" "$H/etc" "$H/home" "$H/sys/class/input"
+mkdir -p "$H/bin" "$H/etc" "$H/home" "$H/sys/class/input" "$H/proc"
 
 # --- stubs -------------------------------------------------------------------
 # sudo just runs the command; every path it touches is redirected into $H.
@@ -54,15 +54,14 @@ STUB
 cat > "$H/bin/keyd-application-mapper" <<'STUB'
 #!/usr/bin/env bash
 echo "mapper started" >> "$STUB_LOG"
+# Simulate the process appearing in the process table start_mapper scans.
+if [ "${FAKE_MAPPER_STARTS:-1}" = "1" ]; then
+  mkdir -p "$PROC_DIR/4242"
+  printf '/usr/local/bin/keyd-application-mapper\0' > "$PROC_DIR/4242/cmdline"
+fi
 [ "${FAKE_MAPPER_SOCKET_OK:-1}" = "1" ] ||
   echo 'ERROR: Failed to connect to "/var/run/keyd.socket"' >> "$HOME/.config/keyd/app.log"
 exit 0
-STUB
-
-cat > "$H/bin/pgrep" <<'STUB'
-#!/usr/bin/env bash
-[ "${FAKE_MAPPER_RUNNING:-1}" = "1" ] && { echo 4242; exit 0; }
-exit 1
 STUB
 
 cat > "$H/bin/getent" <<'STUB'
@@ -105,15 +104,17 @@ chmod +x "$H"/bin/*
 
 run_sut() { # run_sut [VAR=val ...]
   : > "$H/stublog"
-  rm -rf "$H/etc/keyd" "$H/etc/systemd" "$H/home/.config"
+  rm -rf "$H/etc/keyd" "$H/etc/systemd" "$H/home/.config" "$H/proc"
+  mkdir -p "$H/proc"
   if [ "${PRESEED_BROKEN_LOG:-0}" = "1" ]; then
-    mkdir -p "$H/home/.config/keyd"
+    mkdir -p "$H/home/.config/keyd" "$H/proc/4242"
+    printf '/usr/local/bin/keyd-application-mapper\0' > "$H/proc/4242/cmdline"
     echo 'ERROR: Failed to connect to "/var/run/keyd.socket"' > "$H/home/.config/keyd/app.log"
   fi
   env PATH="$H/bin:$PATH" HOME="$H/home" KEYD_ETC="$H/etc/keyd" \
       STUB_LOG="$H/stublog" XDG_SESSION_TYPE=x11 DISPLAY=:99 \
       KEYD_DROPIN="$H/etc/systemd/keyd.service.d/10-dotfiles-restart.conf" \
-      INPUT_DEVICES_DIR="$H/sys/class/input" \
+      INPUT_DEVICES_DIR="$H/sys/class/input" PROC_DIR="$H/proc" \
       "$@" bash "$SUT"
 }
 
@@ -151,11 +152,16 @@ assert_eq "$r" "0" "refusal explains the SIGINT hazard"
 # --- ROLLBACK: mapper starts but cannot reach the keyd socket -------------------
 # A live process is not proof of success; it daemonizes and only then fails to
 # open the socket. Leaving that state configured is the worst outcome.
-out="$(PRESEED_BROKEN_LOG=1 run_sut FAKE_MAPPER_RUNNING=1 2>&1)"
+out="$(PRESEED_BROKEN_LOG=1 run_sut 2>&1)"
 assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "no" \
     "already-running mapper that never reached the socket: config rolled back"
 case "$out" in *"rolling back"*) r=0 ;; *) r=1 ;; esac
 assert_eq "$r" "0" "rollback is announced"
+
+# The mapper failing to start at all is the same hazard as it starting broken.
+out="$(run_sut FAKE_MAPPER_STARTS=0 2>&1)"
+assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "no" \
+    "mapper never starts: config rolled back"
 
 # --- happy path ----------------------------------------------------------------
 out="$(run_sut 2>&1)"
