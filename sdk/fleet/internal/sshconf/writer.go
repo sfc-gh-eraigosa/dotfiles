@@ -152,3 +152,64 @@ func Purge(cfg, alias string) (string, error) {
 	out := append(append([]string{}, lines[:start]...), lines[end:]...)
 	return normalize(strings.Join(out, "\n")), nil
 }
+
+// Update rewrites ONLY the modelled directives of an existing block, in place,
+// preserving every unmodelled line, comment, marker, and their order.
+//
+// Add is unusable for this: it purges the block and re-renders from the struct,
+// which would silently take an operator's ProxyCommand with it. That difference
+// is the whole reason this function exists — a HostName refresh must not be
+// destructive.
+//
+// An empty field means "leave it alone", never "blank it": omission is not an
+// instruction to delete.
+func Update(cfg string, h Host) (string, error) {
+	if strings.TrimSpace(h.Alias) == "" {
+		return "", fmt.Errorf("sshconf: alias is required")
+	}
+	lines := strings.Split(cfg, "\n")
+	start, end, ok := blockRange(lines, h.Alias)
+	if !ok {
+		return "", fmt.Errorf("sshconf: host %q not found", h.Alias)
+	}
+
+	want := []struct{ k, v string }{
+		{"HostName", h.HostName}, {"User", h.User},
+		{"Port", h.Port}, {"IdentityFile", h.Identity},
+	}
+	seen := map[string]bool{}
+
+	out := append([]string{}, lines[:start+1]...)
+	for i := start + 1; i < end; i++ {
+		code, comment := splitComment(strings.TrimSpace(lines[i]))
+		f := strings.Fields(code)
+		replaced := false
+		if len(f) >= 2 {
+			for _, kv := range want {
+				if kv.v == "" || !strings.EqualFold(f[0], kv.k) {
+					continue
+				}
+				line := "    " + kv.k + " " + kv.v
+				if comment != "" {
+					// A trailing marker or note on the directive is the
+					// operator's, not ours to discard.
+					line += "  " + comment
+				}
+				out = append(out, line)
+				seen[kv.k], replaced = true, true
+				break
+			}
+		}
+		if !replaced {
+			out = append(out, lines[i])
+		}
+	}
+	// Append any modelled directive the block did not already carry.
+	for _, kv := range want {
+		if kv.v != "" && !seen[kv.k] {
+			out = append(out, "    "+kv.k+" "+kv.v)
+		}
+	}
+	out = append(out, lines[end:]...)
+	return normalize(strings.Join(out, "\n")), nil
+}
