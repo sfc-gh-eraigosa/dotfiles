@@ -1,12 +1,44 @@
 package cmd
 
 import (
+	"errors"
+	"net"
 	"strings"
 	"testing"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
 )
+
+// Found by live testing, not review: `ssh -G` reports the CONFIGURED hostname,
+// which is usually a NAME. A guard that only parsed it as an IP never fired for
+// the exact case it exists for — an alias pointed at 127.0.0.1 via /etc/hosts.
+func TestLoopbackGuardResolvesANameBeforeDeciding(t *testing.T) {
+	resolve := func(host string) ([]net.IP, error) {
+		switch host {
+		case "self-by-name":
+			return []net.IP{net.ParseIP("127.0.0.1")}, nil
+		case "peer-by-name":
+			return []net.IP{net.ParseIP("192.168.0.61")}, nil
+		}
+		return nil, errors.New("no such host")
+	}
+	for _, tc := range []struct {
+		host string
+		want bool
+	}{
+		{"self-by-name", true},
+		{"peer-by-name", false},
+		{"127.0.0.1", true},         // still works without resolving
+		{"192.168.0.5", false},      //
+		{"does-not-resolve", false}, // a DNS failure must not block a pull
+		{"", false},
+	} {
+		if got := isLoopbackHost(tc.host, resolve); got != tc.want {
+			t.Errorf("isLoopbackHost(%q) = %v, want %v", tc.host, got, tc.want)
+		}
+	}
+}
 
 // A fleet member's own alias commonly resolves to 127.0.0.1 via /etc/hosts, so
 // this guard is load-bearing, not theoretical.

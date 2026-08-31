@@ -20,13 +20,41 @@ var configCmd = &cobra.Command{
 	Short: "Transfer ssh-config host entries between this machine and one fleet host",
 }
 
-// isLoopbackHostName reports whether a resolved HostName points back at this
-// machine. This is not hypothetical: a fleet member's own alias commonly
-// resolves to 127.0.0.1 via /etc/hosts, and transferring with yourself is a
-// confusing no-op worth refusing before a connection is opened.
+// isLoopbackHostName reports whether a literal address points at this machine.
 func isLoopbackHostName(h string) bool {
 	ip := net.ParseIP(strings.TrimSpace(h))
 	return ip != nil && ip.IsLoopback()
+}
+
+// isLoopbackHost reports whether a source points back at this machine, and is
+// the guard the pull path actually uses.
+//
+// Found by live testing rather than review: `ssh -G` reports the CONFIGURED
+// hostname, which is normally a NAME, so a guard that only tried ParseIP never
+// fired for the very case it exists for — an alias resolving to 127.0.0.1 via
+// /etc/hosts. Names must therefore be resolved before deciding.
+//
+// A resolution failure is NOT loopback: a pull must not be blocked because DNS
+// is unavailable. `resolve` is injected so this stays testable without touching
+// the network.
+func isLoopbackHost(h string, resolve func(string) ([]net.IP, error)) bool {
+	h = strings.TrimSpace(h)
+	if h == "" {
+		return false
+	}
+	if ip := net.ParseIP(h); ip != nil {
+		return ip.IsLoopback()
+	}
+	ips, err := resolve(h)
+	if err != nil || len(ips) == 0 {
+		return false
+	}
+	for _, ip := range ips {
+		if !ip.IsLoopback() {
+			return false
+		}
+	}
+	return true
 }
 
 // renderPlan is the operator's only safety, so it names every change and

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"net"
 	"os/exec"
 	"strings"
 
@@ -62,7 +63,7 @@ var configPullCmd = &cobra.Command{
 		source := args[0]
 		out := cmd.OutOrStdout()
 
-		if isLoopbackHostName(sourceHostName(source)) {
+		if isLoopbackHost(sourceHostName(source), net.LookupIP) {
 			return fmt.Errorf("%s resolves to this machine — a pull needs a different host", source)
 		}
 
