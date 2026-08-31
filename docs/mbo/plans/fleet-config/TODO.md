@@ -7,8 +7,8 @@ when its step is done and, for a task's final step, a commit SHA exists in TRACK
 - [x] T2 cfgplan: name withheld directives + count Include
 - [x] T3 sshconf.Update: field-level rewrite
 - [x] T4 cfgplan.Apply: render adds + non-destructive updates
-- [ ] T5 config pull: read over the runner seam
-- [ ] T6 pull write safety: backup, 0600, loopback guard
+- [x] T5 config pull: read over the runner seam
+- [x] T6 pull write safety: backup, 0600, loopback guard
 - [ ] T7 key readiness: name absent IdentityFile paths
 - [ ] T8 keys sync --host + manual-bootstrap reporting
 - [ ] T9 config push: validate-before-install, self-retarget guard
