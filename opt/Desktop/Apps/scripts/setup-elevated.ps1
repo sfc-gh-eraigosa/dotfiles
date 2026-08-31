@@ -50,20 +50,23 @@ else { function Test-GffOn([string]$Key) { return $true } }
 # seed them into $env: so Test-GffOn works unchanged. Strictly validated;
 # malformed pairs are logged and ignored (fail-open).
 foreach ($pair in ($GffEnv -split ';' | Where-Object { $_ })) {
-    if ($pair -match '^(GFF_INSTALL_WINDOWS_[A-Z_]+)=(true|false|[a-z0-9,-]+)$') {
+    if ($pair -match '^(GFF_INSTALL_WINDOWS_[A-Z_]+|GFF_KEYBOARD_[A-Z_]+)=(true|false|[a-z0-9,-]+)$') {
         Set-Item -Path ('env:' + $Matches[1]) -Value $Matches[2]
     } else { Log "  WARNING: ignored malformed -GffEnv pair: $pair" }
 }
 
 # 1) macOS-style hotkeys logon task. setup-autostart.ps1 skips its own self-elevate
 #    because we are already admin, registers the task, and reloads AutoHotkey.
-if (Test-GffOn 'install.windows.ahk-autostart') {
+# keyboard.macos.enabled is the cross-OS master switch (Linux keyd + GNOME,
+# Windows AutoHotkey + Copilot key). Flipping it off must leave every keyboard
+# stock, so it gates this step as well as its own per-component flag.
+if ((Test-GffOn 'keyboard.macos.enabled') -and (Test-GffOn 'install.windows.ahk-autostart')) {
     try {
         Log '== [1/4] macOS hotkeys logon task =='
         & (Join-Path $dir 'setup-autostart.ps1')
         Log "  setup-autostart.ps1 exit=$LASTEXITCODE"
     } catch { Log "  task registration FAILED: $($_.Exception.Message)" }
-} else { Log 'SKIP (gff: install.windows.ahk-autostart=false)' }
+} else { Log 'SKIP (gff: keyboard.macos.enabled or install.windows.ahk-autostart=false)' }
 
 # 2) iTunes Win32 (the Store build was removed non-elevated by setup-apps.ps1).
 try {
@@ -88,13 +91,13 @@ if (Test-GffOn 'install.windows.wispr-flow') {
 } else { Log 'SKIP (gff: install.windows.wispr-flow=false)' }
 
 # 4) PowerToys Copilot-key remap (best-effort; warns if PowerToys absent).
-if (Test-GffOn 'install.windows.copilot-key') {
+if ((Test-GffOn 'keyboard.macos.enabled') -and (Test-GffOn 'install.windows.copilot-key')) {
     try {
         Log '== [4/4] PowerToys Copilot-key remap =='
         $suppressor = Join-Path $dir 'suppress-copilot-key.ps1'
         if (Test-Path $suppressor) { & $suppressor } else { Log '  suppress-copilot-key.ps1 not found -- skipping.' }
     } catch { Log "  suppress-copilot-key FAILED: $($_.Exception.Message)" }
-} else { Log 'SKIP (gff: install.windows.copilot-key=false)' }
+} else { Log 'SKIP (gff: keyboard.macos.enabled or install.windows.copilot-key=false)' }
 
 Log "=== done $(Get-Date -Format o) ==="
 Write-Host ''

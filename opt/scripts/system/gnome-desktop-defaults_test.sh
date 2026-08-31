@@ -16,6 +16,7 @@ trap 'rm -rf "$H"' EXIT
 mkdir -p "$H/bin" "$H/run"
 
 GT="org.gnome.Terminal.Legacy.Keybindings:/org/gnome/terminal/legacy/keybindings/"
+WM="org.gnome.desktop.wm.keybindings"
 
 # Stub gsettings: STATE is a "schema<TAB>key<TAB>value" table, SETLOG records
 # every `set` so we can assert on writes (and on their absence).
@@ -47,6 +48,11 @@ reset_state() { # $1 = tray value, $2 = "with-gt" | "no-gt"
     printf 'org.gnome.shell.keybindings\ttoggle-message-tray\t%s\n' "$1"
     printf '%s\tcopy\t%s\n'  "$GT" "'<Control><Shift>c'"
     printf '%s\tpaste\t%s\n' "$GT" "'<Control><Shift>v'"
+    # GNOME 46 stock values for the desktop-action keys.
+    printf 'org.gnome.mutter\toverlay-key\t%s\n' "'Super_L'"
+    printf '%s\tminimize\t%s\n' "$WM" "['<Super>h']"
+    printf '%s\tpanel-main-menu\t%s\n' "$WM" "['<Alt>F1']"
+    printf '%s\tswitch-input-source\t%s\n' "$WM" "['<Super>space', 'XF86Keyboard']"
   } > "$H/state"
   printf 'org.gnome.shell.keybindings\n' > "$H/schemas"
   if [ "$2" = "with-gt" ]; then
@@ -91,7 +97,17 @@ assert_exit_code 0 "applies cleanly on a GNOME session" run_gnome
 assert_grep "binds copy to Super+C"  "copy '<Super>c'"  "$H/setlog"
 assert_grep "binds paste to Super+V" "paste '<Super>v'" "$H/setlog"
 assert_grep "frees Super+V from the message tray" \
-    "toggle-message-tray \['<Super>m'\]" "$H/setlog"
+    "toggle-message-tray \['<Super>n'\]" "$H/setlog"
+
+# --- the macOS desktop actions keyd hands back to GNOME -------------------------
+assert_grep "Cmd+Space opens the Activities search" \
+    "panel-main-menu \['<Super>space'\]" "$H/setlog"
+assert_grep "frees Super+Space from the input-source switcher" \
+    "switch-input-source \['XF86Keyboard'\]" "$H/setlog"
+assert_grep "Cmd+M and Cmd+H both minimize" \
+    "minimize \['<Super>m', '<Super>h'\]" "$H/setlog"
+assert_grep "a lone Cmd tap does nothing (overlay-key cleared)" \
+    "overlay-key ''" "$H/setlog"
 assert_grep_negative "leaves Ctrl+C alone (SIGINT preserved)" \
     "<Control>c" "$H/setlog"
 
@@ -110,9 +126,18 @@ assert_grep "no gnome-terminal schema: still frees the tray key" \
     "toggle-message-tray" "$H/setlog"
 
 # --- respects a user who already customized the tray ----------------------------
+# <Super>n holds neither of the keys the macOS layout needs (V for paste, M for
+# minimize), so a deliberate customization must survive untouched.
+reset_state "['<Super>n']" with-gt
+run_gnome > /dev/null 2>&1
+assert_grep_negative "tray already free of Super+V and Super+M: not rewritten" \
+    "toggle-message-tray" "$H/setlog"
+
+# A tray still on <Super>m DOES have to move, or Cmd+M would open the tray
+# instead of minimizing the window.
 reset_state "['<Super>m']" with-gt
 run_gnome > /dev/null 2>&1
-assert_grep_negative "tray already free of Super+V: not rewritten" \
-    "toggle-message-tray" "$H/setlog"
+assert_grep "tray on Super+M is moved aside for Cmd+M minimize" \
+    "toggle-message-tray \['<Super>n'\]" "$H/setlog"
 
 _test_report

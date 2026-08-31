@@ -28,9 +28,12 @@ sets:
       - path: install.shell.default-zsh
         description: Runs the chsh block that sets zsh as the default login shell.
         boolDefault: true
-      # --- desktop (1) ---
+      # --- desktop (2) ---
       - path: install.desktop.gnome-keys
-        description: Runs gnome-desktop-defaults.sh, which binds macOS-style Super+C/Super+V copy-paste in gnome-terminal and frees Super+V from the GNOME message tray. No-ops off a GNOME session.
+        description: Runs gnome-desktop-defaults.sh, which applies the gsettings half of the macOS key layout (Cmd+Space/M/H, an inert lone-Cmd tap, Super+C/V copy-paste in gnome-terminal). No-ops off a GNOME session. Also requires keyboard.macos.enabled.
+        boolDefault: true
+      - path: install.desktop.macos-keys
+        description: Runs macos-keys-linux.sh, which installs keyd and the macOS-style key layout so Cmd+C/V/X/A/Z and the macOS navigation chords work in EVERY Linux GUI app, not just the terminal. Compiles keyd from source and runs a root daemon. No-ops without a graphical session. Also requires keyboard.macos.enabled.
         boolDefault: true
       # --- pkg (2) ---
       - path: install.pkg.common-core
@@ -276,4 +279,20 @@ sets:
         boolDefault: true
       - path: research-rubric.require.docker-demo
         description: "Require the demo be docker-sandboxed or explicitly skipped — no unsandboxed demos."
+        boolDefault: true
+
+  # --- macOS-style keyboard layout, across every OS -------------------------
+  # ONE switch to turn the whole family of macOS keyboard customizations off.
+  # Set `keyboard.macos.enabled: false` (or `gff set keyboard.macos.enabled false`) and
+  # every OS-specific component below is skipped:
+  #   Linux   - install.desktop.macos-keys  (keyd evdev layout)
+  #           - install.desktop.gnome-keys  (gsettings desktop actions)
+  #   Windows - install.windows.ahk-autostart (macos.ahk logon task)
+  #           - install.windows.copilot-key   (PowerToys Copilot-key remap)
+  # The per-component flags still work for turning off ONE piece; this is the
+  # blanket opt-out for users who do not want Mac muscle memory at all.
+  - area: keyboard
+    features:
+      - path: keyboard.macos.enabled
+        description: Master switch for macOS-style keyboard customization on every OS (Linux keyd + GNOME gsettings, Windows AutoHotkey + Copilot-key remap). Set false to leave every keyboard stock. On by default — see the "macOS-Style Keyboard" section of README.md.
         boolDefault: true

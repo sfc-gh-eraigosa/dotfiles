@@ -90,6 +90,55 @@ mid-project — they read the same context.
 
 ---
 
+## 🍎 macOS-Style Keyboard (on by default)
+
+**Heads up:** this repo deliberately makes every machine's keyboard behave like a
+Mac. `install.sh` turns this on by default, so a fresh install *will* change your
+shortcuts. The goal is one set of muscle memory everywhere — the same `Cmd+C`
+works on the Windows box, the Linux desktop, and the Mac.
+
+**The Command key is `Super`** (the ⊞/⌘ key next to Alt). `Ctrl` is left alone, so
+`Ctrl+C` is still SIGINT in a terminal.
+
+| Shortcut | Action | | Shortcut | Action |
+| :--- | :--- | :-- | :--- | :--- |
+| `Cmd+C` `V` `X` | Copy / paste / cut | | `Cmd+←` `→` | Start / end of line |
+| `Cmd+A` `Z` `⇧Z` | Select all / undo / redo | | `Cmd+↑` `↓` | Top / bottom of document |
+| `Cmd+S` `F` `G` | Save / find / find next | | `Cmd+⇧+←→↑↓` | …and select while moving |
+| `Cmd+T` `⇧T` `W` | New tab / reopen / close | | `Opt+⌫` | Delete previous word |
+| `Cmd+1…9` | Jump to tab N | | `Cmd+⌫` | Delete to start of line |
+| `Cmd+Q` `M` `H` | Quit / minimize / hide | | `Cmd+[` `]` | Browser back / forward |
+| `Cmd+Tab` | Switch application | | `Cmd+Opt+←→↑↓` | Tile / maximize window |
+| `Cmd+Space` | Spotlight (Activities search) | | `Cmd+L` | Lock screen |
+| *(tap `Cmd` alone)* | Nothing, as on macOS | | | |
+
+In a **terminal** the destructive chords are handled for you: `Cmd+C` copies
+(never SIGINT), and `Cmd+S` / `Cmd+Z` / `Cmd+D` are inert rather than freezing,
+suspending, or logging out of your shell.
+
+### Turning it off
+
+One flag covers **every OS** — Linux (keyd + GNOME) and Windows (AutoHotkey +
+the Copilot-key remap):
+
+```bash
+gff set keyboard.macos.enabled false && ./install.sh   # leave every keyboard stock
+```
+
+To remove it from a Linux machine that already has it:
+
+```bash
+~/opt/scripts/system/macos-keys-linux.sh --uninstall
+```
+
+If a remap ever misbehaves, hold **Backspace + Esc + Enter** together to
+panic-quit the keyd daemon and get a stock keyboard back instantly.
+
+Full key table, platform coverage, and troubleshooting:
+[docs/macos-keys.md](docs/macos-keys.md).
+
+---
+
 ## 🖥️ Machine-Local Customization
 
 Host-specific settings that would break other machines go in `~/.zshrc.local` —
