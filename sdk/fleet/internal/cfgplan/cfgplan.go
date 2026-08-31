@@ -11,6 +11,7 @@ package cfgplan
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
 )
@@ -151,5 +152,81 @@ func Build(localText, remoteText string, o Opts) (Plan, error) {
 		})
 	}
 	sort.Slice(p.Changes, func(i, j int) bool { return p.Changes[i].Alias < p.Changes[j].Alias })
+	p.NotImported, p.Includes = scanWithheld(remoteText)
 	return p, nil
+}
+
+// modelled is the set of directives sshconf.Host can carry. Anything else is
+// REPORTED as withheld rather than filtered: it can never be written, because
+// there is no field to hold it.
+var modelled = map[string]bool{
+	"host": true, "hostname": true, "user": true, "port": true, "identityfile": true,
+}
+
+// scanWithheld walks the raw source text and reports the distinct directive
+// names that appear inside CONCRETE Host blocks but have no home in the model,
+// plus the number of Include directives.
+//
+// It exists because exec-safety here is structural: unmodelled directives are
+// unrepresentable, which is a strong guarantee but an invisible one. Naming
+// what was withheld is what keeps a silently-dropped ProxyCommand from looking
+// like a host that mysteriously stopped working.
+//
+// Include is counted, never followed: `cat` does not expand it, and silently
+// missing the hosts those files define would be worse than saying so.
+func scanWithheld(text string) (names []string, includes int) {
+	seen := map[string]bool{}
+	inConcrete := false
+	for _, line := range strings.Split(text, "\n") {
+		t := strings.TrimSpace(line)
+		if t == "" || strings.HasPrefix(t, "#") {
+			continue
+		}
+		fields := strings.Fields(t)
+		switch key := strings.ToLower(fields[0]); {
+		case key == "include":
+			includes++
+		case key == "host":
+			// A pattern block configures defaults, not a machine. Parse skips
+			// them, so their directives are withheld from nothing.
+			inConcrete = len(fields) >= 2 &&
+				!strings.ContainsAny(strings.Join(fields[1:], " "), "*?")
+		case inConcrete && !modelled[key] && !seen[key]:
+			seen[key] = true
+			names = append(names, fields[0])
+		}
+	}
+	sort.Strings(names)
+	return names, includes
+}
+
+// Apply renders the destination text for a plan the caller has confirmed.
+//
+// Add is used ONLY for aliases that do not exist yet, because it purges and
+// re-renders the block; every update goes through Update, which preserves
+// unmodelled lines. Provenance rides in the marker string — render emits
+// "Host <alias>  <marker>" and hasMarker is token-based — so no sshconf API
+// change is needed, and it carries NO timestamp so a repeat transfer is a
+// genuine no-op rather than perpetual churn.
+func (p Plan) Apply(cfg string) (string, error) {
+	marker := "#fleet"
+	if p.Source != "" {
+		marker += " imported-from=" + p.Source
+	}
+	out := cfg
+	var err error
+	for _, c := range p.Changes {
+		switch c.Kind {
+		case Add:
+			out, err = sshconf.Add(out, c.Host, marker)
+		case Update:
+			out, err = sshconf.Update(out, c.Host)
+		default:
+			continue
+		}
+		if err != nil {
+			return "", fmt.Errorf("cfgplan: %s %s: %w", c.Kind, c.Alias, err)
+		}
+	}
+	return out, nil
 }
