@@ -20,7 +20,7 @@ CONF_DIR="$REPO_ROOT/opt/etc/keyd"
 
 H="$(mktemp -d)"
 trap 'rm -rf "$H"' EXIT
-mkdir -p "$H/bin" "$H/etc" "$H/home"
+mkdir -p "$H/bin" "$H/etc" "$H/home" "$H/sys/class/input"
 
 # --- stubs -------------------------------------------------------------------
 # sudo just runs the command; every path it touches is redirected into $H.
@@ -113,6 +113,7 @@ run_sut() { # run_sut [VAR=val ...]
   env PATH="$H/bin:$PATH" HOME="$H/home" KEYD_ETC="$H/etc/keyd" \
       STUB_LOG="$H/stublog" XDG_SESSION_TYPE=x11 DISPLAY=:99 \
       KEYD_DROPIN="$H/etc/systemd/keyd.service.d/10-dotfiles-restart.conf" \
+      INPUT_DEVICES_DIR="$H/sys/class/input" \
       "$@" bash "$SUT"
 }
 
@@ -123,6 +124,14 @@ case "$out" in *"No graphical session"*) r=0 ;; *) r=1 ;; esac
 assert_eq "$r" "0" "no graphical session: reports the skip"
 assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "no" \
     "no graphical session: installs no keyd config"
+
+# A host with no evdev input layer at all (a container) must no-op, not half-run.
+out="$(run_sut INPUT_DEVICES_DIR="$H/sys/class/nope" 2>&1)"
+assert_eq "$?" "0" "no evdev input layer: exits clean"
+case "$out" in *"Not a Linux desktop host"*) r=0 ;; *) r=1 ;; esac
+assert_eq "$r" "0" "no evdev input layer: reports the skip"
+assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "no" \
+    "no evdev input layer: installs nothing"
 
 # --- FAIL-CLOSED: no window detection => refuse to remap ------------------------
 # Without python3-xlib the mapper cannot tell a terminal from a browser, so the

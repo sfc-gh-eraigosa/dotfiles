@@ -31,6 +31,9 @@ CONF_SRC_DIR="${REPO_ROOT}/opt/etc/keyd"
 # Overridable so the test driver can point the whole install at a temp dir
 # instead of the real /etc. Never set in normal use.
 KEYD_ETC="${KEYD_ETC:-/etc/keyd}"
+# Where evdev keyboards appear. Overridable for the same reason as KEYD_ETC: a CI
+# container has no /sys/class/input, which would silently no-op every test.
+INPUT_DEVICES_DIR="${INPUT_DEVICES_DIR:-/sys/class/input}"
 APP_CONF="${HOME}/.config/keyd/app.conf"
 KEYD_DROPIN="${KEYD_DROPIN:-/etc/systemd/system/keyd.service.d/10-dotfiles-restart.conf}"
 UNIT="${HOME}/.config/systemd/user/keyd-application-mapper.service"
@@ -54,7 +57,7 @@ host_supported() {
 		*-[Mm]icrosoft* | *microsoft*) return 1 ;;
 	esac
 	command -v systemctl > /dev/null 2>&1 || return 1
-	[ -d /sys/class/input ] || return 1
+	[ -d "${INPUT_DEVICES_DIR}" ] || return 1
 	return 0
 }
 
