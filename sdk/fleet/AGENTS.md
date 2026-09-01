@@ -89,6 +89,61 @@ without opening a socket.
   before `.61`, which makes a scan of the same network read as noise. Pinned by
   `TestClassifyScanOrdersAddressesNumerically` — a bug found by running a live sweep, not
   by review.
+- **One authentication per host, then connection reuse.** Every ssh invocation carries
+  `ControlMaster=auto` / `ControlPersist=10m`, so the first connection authenticates —
+  interactively, on a real terminal, with fleet never seeing the secret — and every later
+  command rides that socket and skips authentication entirely, BatchMode included. This is
+  deliberately NOT a stored credential: `sudo -S` reads stdin by design, but `ssh` opens
+  `/dev/tty` precisely so a password cannot be piped, so the sudo pattern cannot be copied
+  here. Multiplexing is better than copying it would have been — nothing is stored, it
+  serves key and password auth alike, and it removes a full handshake per command
+  (measured: 3 connections in 0.98s cold vs 0.016s warm).
+  **A password-auth host can only be primed interactively.** No BatchMode probe can
+  answer a password prompt, so such a host stays `auth-failed` on the CLI until someone
+  opens `fleet tui` and presses `s` once; that session establishes the master every later
+  command reuses. `bootstrapHint` says so on `fleet status`, because a CLI-only operator
+  has no other way to discover it.
+  **The relay lane is deliberately NOT multiplexed** (`ControlPath=none` in `viaArgs`): it
+  exists because the direct lane failed, and on a client older than OpenSSH 8.4 `%C`
+  hashes only `%l%h%p%r` — no `%j` — so the relayed and direct sockets are the same file
+  and a live direct master would silently win, skipping the peer entirely. Even where
+  `%j` is included, `ConnectTimeout` does not apply to an established master, and the wake
+  ladder's budget assumes probing a dead host costs one connect timeout. Pinned by
+  `TestRelayNeverReusesAMultiplexedConnection`.
+  `ControlPath` uses `%C`, a fixed-length hash: a literal `%r@%h:%p` grows with the user
+  and host name and can exceed the ~104-byte unix socket limit, at which point
+  multiplexing fails SILENTLY and prompting returns. The TUI's interactive `s` session
+  passes the SAME options via `runner.MuxArgs`, or it would open its own socket and the
+  next probe would prompt again. **Caveat:** a live master pins the connection settings it
+  was opened with, so an `IdentityFile`/`User` change does not take effect until it expires
+  or is closed (`ssh -O exit -o ControlPath=~/.ssh/fleet-mux-* <host>`). `FLEET_NO_MUX=1`
+  disables the whole mechanism. Pinned by `TestEveryRemotePathCarriesTheMuxOptions`,
+  `TestControlPathIsShortEnoughToBeAUnixSocket`, `TestMultiplexingCanBeDisabled`.
+- **A missing `~/.ssh/config` is an EMPTY fleet, not a failure.** Every command reads the
+  inventory through `readConfig`; four of them once used `os.ReadFile` directly and treated
+  "missing" as fatal, which made `fleet` refuse to start on precisely the fresh machine that
+  needed setting up — and once bare `fleet` opened the dashboard, that was the first thing a
+  new user hit. Pinned by `TestMissingConfigIsAnEmptyFleetNotAnError`.
+- **First run offers, it never assumes.** An empty fleet triggers an offer to create the
+  config and then to scan; nothing is written without an explicit yes, and no self entry is
+  added (a `HostName` equal to the machine's own name resolves to loopback, which the
+  transfer verbs correctly refuse as a peer — a confusing thing to create for someone
+  automatically). An existing key is ALWAYS looked for before generating is offered:
+  a second key where a good one exists is how a machine ends up with credentials nobody
+  can account for. Pinned by `TestPickIdentityPrefersAnExistingKeyOverGenerating`.
+- **Interactivity is decided by asking the descriptor, not the file mode.** `/dev/null` is
+  itself a character device, so the usual `Mode()&os.ModeCharDevice` idiom classified a
+  script run with `</dev/null` as interactive — it printed a question nobody could see and
+  read the EOF as "no". `isTerminal` uses `term.IsTerminal` (already in the module graph via
+  bubbletea, so no new dependency). Pinned by `TestDevNullIsNotATerminal`.
+- **Bare `fleet` opens the dashboard.** Help is `fleet help` (and `--help`). `Args` is
+  constrained so a mistyped subcommand still errors rather than falling through to the TUI
+  and hiding the typo behind a working-looking UI.
+- **The TUI list orders by host name, never by severity.** Severity ordering is unstable
+  while rows stream in: a class changes, its severity changes, and the row jumps under the
+  operator's eyes. `fleet status` keeps worst-first — a one-shot report has no re-sorting
+  problem and leading with the broken hosts is the point there. Pinned by
+  `TestTUIOrderDoesNotMoveWhenAClassChanges`.
 - **Config transfer is one-way, always.** `config pull` and `config push` each move
   configuration in exactly one direction, named at the call site. There is deliberately no
   `sync` verb: a combined operation would resolve conflicts by policy instead of by an

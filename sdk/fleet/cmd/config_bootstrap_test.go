@@ -48,3 +48,41 @@ func TestHostsThatRefuseUsAreReportedAsManualBootstrap(t *testing.T) {
 		t.Fatalf("got %v, want stable order", got)
 	}
 }
+
+// bootstrapNeeded existed with a test but was never CALLED — spec F10 was
+// written and never delivered. The hint is where it earns its place: a row
+// reading auth-failed tells you the key is wrong, but not that fleet cannot
+// fix it for you, because authorizing a key needs the access being established.
+func TestStatusHintNamesHostsThatNeedManualBootstrap(t *testing.T) {
+	rows := []Row{
+		{Alias: "ok", Class: string(drift.UpToDate)},
+		{Alias: "blocked", Class: string(drift.AuthFailed)},
+		{Alias: "dead", Class: string(drift.Unreachable)},
+	}
+	got := bootstrapHint(rows)
+	for _, want := range []string{"blocked", "dead", "ssh-copy-id"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("hint %q missing %q", got, want)
+		}
+	}
+}
+
+// A healthy fleet must not be nagged.
+func TestStatusHintIsSilentWhenEveryHostAnswers(t *testing.T) {
+	if got := bootstrapHint([]Row{{Alias: "ok", Class: string(drift.UpToDate)}}); got != "" {
+		t.Fatalf("hint = %q, want empty", got)
+	}
+}
+
+// The hint covered only the KEY bootstrap. A password-auth host cannot be
+// primed by any BatchMode probe — it needs one interactive session — so a
+// CLI-only operator would see a permanent auth-failed with nothing telling
+// them the way out.
+func TestStatusHintExplainsHowToPrimeAPasswordAuthHost(t *testing.T) {
+	got := bootstrapHint([]Row{{Alias: "blocked", Class: string(drift.AuthFailed)}})
+	for _, want := range []string{"password", "fleet tui", "s"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("hint missing %q:\n%s", want, got)
+		}
+	}
+}

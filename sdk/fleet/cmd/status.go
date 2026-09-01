@@ -279,6 +279,18 @@ func sortWorstFirst(rows []Row) {
 	})
 }
 
+// sortByAlias orders rows by host name and nothing else.
+//
+// The TUI uses this rather than sortWorstFirst because severity ordering is
+// UNSTABLE while rows stream in: a host's class changes from polling to its
+// real verdict, its severity changes with it, and the row jumps position under
+// the operator's eyes. The alias-keyed cursor survives that, but a list that
+// reshuffles as you read it is unusable. A one-shot report has no such problem,
+// so `fleet status` keeps worst-first.
+func sortByAlias(rows []Row) {
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Alias < rows[j].Alias })
+}
+
 func renderTable(rows []Row, now time.Time) string {
 	sortWorstFirst(rows)
 	var b strings.Builder
@@ -390,10 +402,15 @@ var statusCmd = &cobra.Command{
 	SilenceErrors: true,
 	SilenceUsage:  true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		raw, err := os.ReadFile(flagConfig)
+		// A MISSING config is an empty fleet, not a failure: on a fresh
+		// machine there is nothing to read yet, and refusing to start is
+		// how `fleet` became unusable on exactly the host that needed
+		// setting up.
+		rawStr, err := readConfig(flagConfig)
 		if err != nil {
 			return fmt.Errorf("reading %s: %w", flagConfig, err)
 		}
+		raw := []byte(rawStr)
 		all, err := sshconf.Parse(string(raw), flagMarker)
 		if err != nil {
 			return err
@@ -420,6 +437,7 @@ var statusCmd = &cobra.Command{
 		} else {
 			fmt.Fprintf(cmd.OutOrStdout(), "baseline: %s %s\n\n", flagRef, short(base.Head()))
 			fmt.Fprint(cmd.OutOrStdout(), renderTable(rows, time.Now()))
+			fmt.Fprint(cmd.OutOrStdout(), bootstrapHint(rows))
 		}
 		return exitErrorFor(rows)
 	},

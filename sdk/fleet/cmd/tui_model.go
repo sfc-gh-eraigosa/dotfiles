@@ -161,7 +161,7 @@ func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time
 		m.pending[h.Alias] = true
 		m.rows = append(m.rows, Row{Alias: h.Alias, Class: "polling"})
 	}
-	sortWorstFirst(m.rows)
+	sortByAlias(m.rows)
 	if len(m.rows) > 0 {
 		m.cursor = m.rows[0].Alias
 	}
@@ -199,7 +199,7 @@ func (m *tuiModel) setRow(row Row) {
 
 // resort keeps the cursor on its alias — the whole reason cursor is alias-keyed.
 func (m *tuiModel) resort() {
-	sortWorstFirst(m.rows)
+	sortByAlias(m.rows)
 	if m.indexOf(m.cursor) < 0 && len(m.rows) > 0 {
 		m.cursor = m.rows[0].Alias
 	}

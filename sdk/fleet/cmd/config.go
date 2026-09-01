@@ -20,12 +20,6 @@ var configCmd = &cobra.Command{
 	Short: "Transfer ssh-config host entries between this machine and one fleet host",
 }
 
-// isLoopbackHostName reports whether a literal address points at this machine.
-func isLoopbackHostName(h string) bool {
-	ip := net.ParseIP(strings.TrimSpace(h))
-	return ip != nil && ip.IsLoopback()
-}
-
 // isLoopbackHost reports whether a source points back at this machine, and is
 // the guard the pull path actually uses.
 //

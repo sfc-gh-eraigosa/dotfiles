@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -217,10 +216,15 @@ disable Wi-Fi power save on that host.`,
 		// --no-wake is not allowed to quietly turn it into a no-op.
 		p.Enabled = true
 
-		raw, err := os.ReadFile(flagConfig)
+		// A MISSING config is an empty fleet, not a failure: on a fresh
+		// machine there is nothing to read yet, and refusing to start is
+		// how `fleet` became unusable on exactly the host that needed
+		// setting up.
+		rawStr, err := readConfig(flagConfig)
 		if err != nil {
 			return fmt.Errorf("reading %s: %w", flagConfig, err)
 		}
+		raw := []byte(rawStr)
 		all, err := sshconf.Parse(string(raw), flagMarker)
 		if err != nil {
 			return err
