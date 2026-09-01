@@ -98,6 +98,15 @@ var keysListCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		// Restricting to named hosts lets a `config pull` authorize only what
+		// it just added, instead of re-pushing keys to the whole fleet.
+		if hosts, err = checkHosts(hosts, keysSyncHosts); err != nil {
+			return err
+		}
+		if len(hosts) == 0 {
+			fmt.Fprintln(cmd.OutOrStdout(), "no matching fleet hosts — nothing to authorize")
+			return nil
+		}
 		r := runner.Exec{}
 		remote := map[string][]string{}
 		for _, h := range hosts {
@@ -156,6 +165,15 @@ var keysSyncCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		// Restricting to named hosts lets a `config pull` authorize only what
+		// it just added, instead of re-pushing keys to the whole fleet.
+		if hosts, err = checkHosts(hosts, keysSyncHosts); err != nil {
+			return err
+		}
+		if len(hosts) == 0 {
+			fmt.Fprintln(cmd.OutOrStdout(), "no matching fleet hosts — nothing to authorize")
+			return nil
+		}
 		r := runner.Exec{}
 		var failures int
 		names := make([]string, 0, len(mine))
@@ -181,7 +199,12 @@ var keysSyncCmd = &cobra.Command{
 	},
 }
 
+// keysSyncHosts restricts `keys sync` to named aliases.
+var keysSyncHosts []string
+
 func init() {
+	keysSyncCmd.Flags().StringSliceVar(&keysSyncHosts, "host", nil,
+		"authorize only these fleet hosts (repeatable); default is every fleet host")
 	keysCmd.AddCommand(keysListCmd, keysSyncCmd)
 	rootCmd.AddCommand(keysCmd)
 }
@@ -268,6 +291,15 @@ var keysPruneCmd = &cobra.Command{
 		hosts, err := fleetHosts()
 		if err != nil {
 			return err
+		}
+		// Restricting to named hosts lets a `config pull` authorize only what
+		// it just added, instead of re-pushing keys to the whole fleet.
+		if hosts, err = checkHosts(hosts, keysSyncHosts); err != nil {
+			return err
+		}
+		if len(hosts) == 0 {
+			fmt.Fprintln(cmd.OutOrStdout(), "no matching fleet hosts — nothing to authorize")
+			return nil
 		}
 		r := runner.Exec{}
 		out := cmd.OutOrStdout()

@@ -22,17 +22,29 @@ var (
 	pullYes    bool
 )
 
+// readRemoteConfig fetches a host's ssh config with a plain read. It is the one
+// place the remote read is spelled out, so pull, push, and diff cannot drift
+// into issuing different commands.
+//
+// A trust failure is reported as such rather than as a network error: saying
+// which layer failed is what sends an operator to the right machine.
+func readRemoteConfig(r runner.Runner, host string) (string, error) {
+	out, err := r.Run(host, remoteConfigCmd)
+	if err != nil {
+		if n := sshfail.Note(err); n != "" {
+			return "", fmt.Errorf("%s: %s", host, n)
+		}
+		return "", fmt.Errorf("%s: %w", host, err)
+	}
+	return out, nil
+}
+
 // pullPlan fetches the source's config and computes what importing it would do.
 // It writes nothing, anywhere.
 func pullPlan(r runner.Runner, source, localText string, o cfgplan.Opts) (cfgplan.Plan, error) {
-	out, err := r.Run(source, remoteConfigCmd)
+	out, err := readRemoteConfig(r, source)
 	if err != nil {
-		// A trust failure is not a network failure; saying so sends the
-		// operator to the right machine.
-		if n := sshfail.Note(err); n != "" {
-			return cfgplan.Plan{}, fmt.Errorf("%s: %s", source, n)
-		}
-		return cfgplan.Plan{}, fmt.Errorf("%s: %w", source, err)
+		return cfgplan.Plan{}, err
 	}
 	if strings.TrimSpace(out) == "" {
 		return cfgplan.Plan{}, fmt.Errorf("%s: no readable ~/.ssh/config", source)
