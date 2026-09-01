@@ -107,6 +107,23 @@ without opening a socket.
   or is closed (`ssh -O exit -o ControlPath=~/.ssh/fleet-mux-* <host>`). `FLEET_NO_MUX=1`
   disables the whole mechanism. Pinned by `TestEveryRemotePathCarriesTheMuxOptions`,
   `TestControlPathIsShortEnoughToBeAUnixSocket`, `TestMultiplexingCanBeDisabled`.
+- **A missing `~/.ssh/config` is an EMPTY fleet, not a failure.** Every command reads the
+  inventory through `readConfig`; four of them once used `os.ReadFile` directly and treated
+  "missing" as fatal, which made `fleet` refuse to start on precisely the fresh machine that
+  needed setting up — and once bare `fleet` opened the dashboard, that was the first thing a
+  new user hit. Pinned by `TestMissingConfigIsAnEmptyFleetNotAnError`.
+- **First run offers, it never assumes.** An empty fleet triggers an offer to create the
+  config and then to scan; nothing is written without an explicit yes, and no self entry is
+  added (a `HostName` equal to the machine's own name resolves to loopback, which the
+  transfer verbs correctly refuse as a peer — a confusing thing to create for someone
+  automatically). An existing key is ALWAYS looked for before generating is offered:
+  a second key where a good one exists is how a machine ends up with credentials nobody
+  can account for. Pinned by `TestPickIdentityPrefersAnExistingKeyOverGenerating`.
+- **Interactivity is decided by asking the descriptor, not the file mode.** `/dev/null` is
+  itself a character device, so the usual `Mode()&os.ModeCharDevice` idiom classified a
+  script run with `</dev/null` as interactive — it printed a question nobody could see and
+  read the EOF as "no". `isTerminal` uses `term.IsTerminal` (already in the module graph via
+  bubbletea, so no new dependency). Pinned by `TestDevNullIsNotATerminal`.
 - **Bare `fleet` opens the dashboard.** Help is `fleet help` (and `--help`). `Args` is
   constrained so a mistyped subcommand still errors rather than falling through to the TUI
   and hiding the typo behind a working-looking UI.

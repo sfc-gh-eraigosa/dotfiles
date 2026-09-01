@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -28,13 +27,39 @@ var tuiCmd = &cobra.Command{
 		if tuiJobs < 1 {
 			return fmt.Errorf("invalid --jobs %d: must be at least 1", tuiJobs)
 		}
-		raw, err := os.ReadFile(flagConfig)
+		// A MISSING config is an empty fleet, not a failure: on a fresh
+		// machine there is nothing to read yet, and refusing to start is
+		// how `fleet` became unusable on exactly the host that needed
+		// setting up.
+		rawStr, err := readConfig(flagConfig)
 		if err != nil {
 			return fmt.Errorf("reading %s: %w", flagConfig, err)
 		}
+		raw := []byte(rawStr)
 		all, err := sshconf.Parse(string(raw), flagMarker)
 		if err != nil {
 			return err
+		}
+		// An empty fleet is where a first run begins, not an error. Offer to
+		// set one up before opening a dashboard with nothing in it.
+		if len(all) == 0 {
+			changed, err := ensureFleet(cmd, len(all))
+			if err != nil {
+				return err
+			}
+			if changed {
+				rawStr, err := readConfig(flagConfig)
+				if err != nil {
+					return err
+				}
+				if all, err = sshconf.Parse(rawStr, flagMarker); err != nil {
+					return err
+				}
+			}
+			if len(all) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "no hosts to show yet — nothing to display.")
+				return nil
+			}
 		}
 		base, err := newGitBaseline(flagRepo, flagRef)
 		if err != nil {
