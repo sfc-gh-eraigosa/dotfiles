@@ -36,6 +36,48 @@ type Runner interface {
 	RunStream(host, stdin string, argv ...string) (lines <-chan string, done <-chan error)
 }
 
+// controlPersist is how long a master connection outlives the command that
+// opened it. Long enough that a poll, then an update, then a config transfer
+// all ride one authentication; short enough that a forgotten session does not
+// linger for the rest of the day.
+const controlPersist = "10m"
+
+// controlPath uses %C — a fixed-length hash of (local host, remote host, port,
+// user) — rather than the conventional %r@%h:%p. A literal path grows with the
+// user and host name and can exceed the ~104-byte limit on a unix socket path,
+// at which point multiplexing fails SILENTLY and every command starts
+// prompting again: the exact symptom this exists to remove.
+const controlPath = "~/.ssh/fleet-mux-%C"
+
+// muxArgs enables SSH connection multiplexing.
+//
+// This is the answer to "stop asking me for credentials on every command". The
+// first connection to a host authenticates normally — interactively, on a real
+// terminal, with fleet never seeing the secret — and every later command rides
+// that same socket and skips authentication ENTIRELY, including under
+// BatchMode. It is strictly better than holding a password in memory: nothing
+// is stored, it works for key and password auth alike, and it removes a full
+// handshake per command.
+//
+// FLEET_NO_MUX is the escape hatch. Multiplexing interacts badly with some
+// jump-host setups and with stale sockets, and an operator who hits that needs
+// a way out that is not "edit the binary".
+// MuxArgs exposes the multiplexing options to callers that shell out to ssh
+// themselves — notably the TUI's interactive session, which must open the very
+// socket the unattended commands will reuse.
+func MuxArgs() []string { return muxArgs() }
+
+func muxArgs() []string {
+	if os.Getenv("FLEET_NO_MUX") != "" {
+		return nil
+	}
+	return []string{
+		"-o", "ControlMaster=auto",
+		"-o", "ControlPath=" + controlPath,
+		"-o", "ControlPersist=" + controlPersist,
+	}
+}
+
 // Exec is the real SSH-backed runner.
 type Exec struct{ ConnectTimeout string }
 
@@ -46,14 +88,30 @@ func (e Exec) timeout() string {
 	return e.ConnectTimeout
 }
 
+// baseArgs is the one place the unattended ssh options are spelled out, so no
+// remote path can drift into a different set — a path missing the mux options
+// would authenticate separately and prompt again.
+func (e Exec) baseArgs(host string) []string {
+	args := []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=" + e.timeout()}
+	args = append(args, muxArgs()...)
+	return append(args, host)
+}
+
+// interactiveArgs is baseArgs for a session that OWNS the terminal: no
+// BatchMode, because the whole point is to let ssh prompt. This is the
+// connection that establishes the master socket every later command reuses.
+func (e Exec) interactiveArgs(host string) []string {
+	args := append([]string{"-t"}, muxArgs()...)
+	return append(args, host)
+}
+
 func (e Exec) Run(host string, argv ...string) (string, error) {
-	base := []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=" + e.timeout(), host}
-	out, err := exec.Command("ssh", append(base, argv...)...).Output()
+	out, err := exec.Command("ssh", append(e.baseArgs(host), argv...)...).Output()
 	return strings.TrimSpace(string(out)), err
 }
 
 func (e Exec) RunInteractive(host string, argv ...string) error {
-	c := exec.Command("ssh", append([]string{"-t", host}, argv...)...)
+	c := exec.Command("ssh", append(e.interactiveArgs(host), argv...)...)
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return c.Run()
 }
@@ -65,9 +123,9 @@ func viaArgs(peer, host, timeout string, argv []string) []string {
 	base := []string{
 		"-o", "BatchMode=yes",
 		"-o", "ConnectTimeout=" + timeout,
-		"-J", peer,
-		host,
 	}
+	base = append(base, muxArgs()...)
+	base = append(base, "-J", peer, host)
 	return append(base, argv...)
 }
 
@@ -77,7 +135,7 @@ func (e Exec) RunVia(peer, host string, argv ...string) (string, error) {
 }
 
 func (e Exec) RunStdin(host, stdin string, argv ...string) (string, error) {
-	base := []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=" + e.timeout(), host}
+	base := e.baseArgs(host)
 	c := exec.Command("ssh", append(base, argv...)...)
 	c.Stdin = strings.NewReader(stdin)
 	// CombinedOutput: sudo writes its failure text to stderr, and that text is
@@ -93,7 +151,7 @@ func (e Exec) RunStream(host, stdin string, argv ...string) (<-chan string, <-ch
 	lines := make(chan string, 256)
 	done := make(chan error, 1)
 
-	base := []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=" + e.timeout(), host}
+	base := e.baseArgs(host)
 	c := exec.Command("ssh", append(base, argv...)...)
 	c.Stdin = strings.NewReader(stdin)
 	pr, pw := io.Pipe()

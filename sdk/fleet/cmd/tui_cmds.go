@@ -352,7 +352,12 @@ func interactiveHandoff(alias, ref string, a answers, pos, total int) tea.Cmd {
 
 // sshShell drops the operator onto the host and restores the TUI on exit.
 func sshShell(alias string) tea.Cmd {
-	c := exec.Command("ssh", alias)
+	// The SAME multiplexing options the runner uses, so the connection the
+	// operator authenticates here becomes the master every later batch command
+	// rides. Without this the interactive session would open its own socket
+	// and the next probe would prompt all over again — the whole point of
+	// pressing `s` first.
+	c := exec.Command("ssh", append(runner.MuxArgs(), alias)...)
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return execDoneMsg{alias: alias, err: err, ssh: true}
 	})

@@ -1,7 +1,7 @@
 package runner
 
 import (
-	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -11,15 +11,23 @@ import (
 // silently run the command on the wrong machine.
 func TestViaArgsRelaysThroughPeerWithProxyJump(t *testing.T) {
 	got := viaArgs("peer-a", "target-b", "6", []string{"echo hi"})
-	want := []string{
-		"-o", "BatchMode=yes",
-		"-o", "ConnectTimeout=6",
-		"-J", "peer-a",
-		"target-b",
-		"echo hi",
+
+	// Asserted positionally rather than as an exact list: the option set grows
+	// (BatchMode, timeout, multiplexing), but the RELATIONSHIP is the
+	// invariant — peer is the -J value, target is the ssh host, and the
+	// command is last. An exact-match assertion would break on every new
+	// option while proving nothing extra.
+	if !hasPair(got, "-J", "peer-a") {
+		t.Fatalf("viaArgs = %q, want the PEER as the -J value", got)
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("viaArgs =\n  %q\nwant\n  %q", got, want)
+	if got[len(got)-1] != "echo hi" {
+		t.Fatalf("viaArgs = %q, want the command last", got)
+	}
+	if got[len(got)-2] != "target-b" {
+		t.Fatalf("viaArgs = %q, want the TARGET as the ssh host, not the peer", got)
+	}
+	if !hasPair(got, "-o", "ConnectTimeout=6") {
+		t.Fatalf("viaArgs = %q, want the caller's timeout", got)
 	}
 }
 
@@ -67,4 +75,66 @@ func hasPair(argv []string, a, b string) bool {
 		}
 	}
 	return false
+}
+
+// Multiplexing is the whole answer to "stop prompting me on every command":
+// the first connection authenticates, later ones ride the same socket and skip
+// authentication entirely — including under BatchMode, which is why fleet's
+// unattended probes stop failing once a session exists.
+func TestMuxArgsEnableConnectionReuse(t *testing.T) {
+	got := muxArgs()
+	if !hasPair(got, "-o", "ControlMaster=auto") {
+		t.Fatalf("muxArgs = %q, want ControlMaster=auto", got)
+	}
+	if !hasPair(got, "-o", "ControlPersist="+controlPersist) {
+		t.Fatalf("muxArgs = %q, want ControlPersist=%s", got, controlPersist)
+	}
+}
+
+// %C is a fixed-length hash of the connection parameters. A literal
+// %r@%h:%p path grows with the user and host name and can exceed the ~104-byte
+// unix socket limit, at which point multiplexing fails silently and every
+// command starts prompting again — the exact symptom this feature removes.
+func TestControlPathIsShortEnoughToBeAUnixSocket(t *testing.T) {
+	var path string
+	got := muxArgs()
+	for i := 0; i+1 < len(got); i++ {
+		if v, ok := strings.CutPrefix(got[i+1], "ControlPath="); ok && got[i] == "-o" {
+			path = v
+		}
+	}
+	if path == "" {
+		t.Fatal("muxArgs sets no ControlPath")
+	}
+	if !strings.Contains(path, "%C") {
+		t.Fatalf("ControlPath = %q, want the fixed-length %%C token", path)
+	}
+	if len(path) > 80 {
+		t.Fatalf("ControlPath %q is %d bytes; too close to the unix socket limit", path, len(path))
+	}
+}
+
+// An escape hatch matters: multiplexing interacts badly with some jump hosts
+// and stale sockets, and an operator who hits that needs a way out that does
+// not involve editing the binary.
+func TestMultiplexingCanBeDisabled(t *testing.T) {
+	t.Setenv("FLEET_NO_MUX", "1")
+	if got := muxArgs(); len(got) != 0 {
+		t.Fatalf("muxArgs = %q, want none when FLEET_NO_MUX is set", got)
+	}
+}
+
+// Every path that reaches a host must reuse the same socket, or the first
+// interactive session authenticates and the later batch probe still prompts.
+func TestEveryRemotePathCarriesTheMuxOptions(t *testing.T) {
+	e := Exec{}
+	for name, got := range map[string][]string{
+		"Run":            e.baseArgs("h"),
+		"RunVia":         viaArgs("peer", "h", "6", []string{"cmd"}),
+		"RunInteractive": e.interactiveArgs("h"),
+	} {
+		if !hasPair(got, "-o", "ControlMaster=auto") {
+			t.Errorf("%s args = %q, want ControlMaster=auto", name, got)
+		}
+	}
 }

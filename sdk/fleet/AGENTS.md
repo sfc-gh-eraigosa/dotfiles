@@ -89,6 +89,32 @@ without opening a socket.
   before `.61`, which makes a scan of the same network read as noise. Pinned by
   `TestClassifyScanOrdersAddressesNumerically` — a bug found by running a live sweep, not
   by review.
+- **One authentication per host, then connection reuse.** Every ssh invocation carries
+  `ControlMaster=auto` / `ControlPersist=10m`, so the first connection authenticates —
+  interactively, on a real terminal, with fleet never seeing the secret — and every later
+  command rides that socket and skips authentication entirely, BatchMode included. This is
+  deliberately NOT a stored credential: `sudo -S` reads stdin by design, but `ssh` opens
+  `/dev/tty` precisely so a password cannot be piped, so the sudo pattern cannot be copied
+  here. Multiplexing is better than copying it would have been — nothing is stored, it
+  serves key and password auth alike, and it removes a full handshake per command
+  (measured: 3 connections in 0.98s cold vs 0.016s warm).
+  `ControlPath` uses `%C`, a fixed-length hash: a literal `%r@%h:%p` grows with the user
+  and host name and can exceed the ~104-byte unix socket limit, at which point
+  multiplexing fails SILENTLY and prompting returns. The TUI's interactive `s` session
+  passes the SAME options via `runner.MuxArgs`, or it would open its own socket and the
+  next probe would prompt again. **Caveat:** a live master pins the connection settings it
+  was opened with, so an `IdentityFile`/`User` change does not take effect until it expires
+  or is closed (`ssh -O exit -o ControlPath=~/.ssh/fleet-mux-* <host>`). `FLEET_NO_MUX=1`
+  disables the whole mechanism. Pinned by `TestEveryRemotePathCarriesTheMuxOptions`,
+  `TestControlPathIsShortEnoughToBeAUnixSocket`, `TestMultiplexingCanBeDisabled`.
+- **Bare `fleet` opens the dashboard.** Help is `fleet help` (and `--help`). `Args` is
+  constrained so a mistyped subcommand still errors rather than falling through to the TUI
+  and hiding the typo behind a working-looking UI.
+- **The TUI list orders by host name, never by severity.** Severity ordering is unstable
+  while rows stream in: a class changes, its severity changes, and the row jumps under the
+  operator's eyes. `fleet status` keeps worst-first — a one-shot report has no re-sorting
+  problem and leading with the broken hosts is the point there. Pinned by
+  `TestTUIOrderDoesNotMoveWhenAClassChanges`.
 - **Config transfer is one-way, always.** `config pull` and `config push` each move
   configuration in exactly one direction, named at the call site. There is deliberately no
   `sync` verb: a combined operation would resolve conflicts by policy instead of by an
