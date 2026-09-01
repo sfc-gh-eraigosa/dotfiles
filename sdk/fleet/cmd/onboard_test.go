@@ -96,7 +96,7 @@ func TestDevNullIsNotATerminal(t *testing.T) {
 	if err != nil {
 		t.Skip("no /dev/null")
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if isTerminal(f) {
 		t.Fatal("/dev/null reported as a terminal — a script would be prompted at")
 	}
@@ -107,8 +107,8 @@ func TestAPipeIsNotATerminal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer r.Close()
-	defer w.Close()
+	defer func() { _ = r.Close() }()
+	defer func() { _ = w.Close() }()
 	if isTerminal(r) {
 		t.Fatal("a pipe reported as a terminal")
 	}

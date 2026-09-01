@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
@@ -57,4 +58,24 @@ func bootstrapNeeded(rows []Row) []string {
 		}
 	}
 	return out
+}
+
+// bootstrapHint turns bootstrapNeeded into the sentence an operator needs.
+//
+// A row reading auth-failed says the credential was refused; it does not say
+// that fleet cannot repair that for you. Authorizing a key means appending to
+// the host's authorized_keys, which requires the very access being
+// established, so the fix is necessarily manual. Saying so is the honest
+// answer, and saying nothing is how someone waits for a sync that can never
+// come.
+func bootstrapHint(rows []Row) string {
+	need := bootstrapNeeded(rows)
+	if len(need) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("\n%d host(s) cannot be reached with your key: %s\n"+
+		"  authorize it with `ssh-copy-id <alias>` (or press A in `fleet tui`) —\n"+
+		"  `fleet keys sync` cannot help: appending to a remote authorized_keys\n"+
+		"  needs the access it is trying to establish.\n",
+		len(need), strings.Join(need, ", "))
 }

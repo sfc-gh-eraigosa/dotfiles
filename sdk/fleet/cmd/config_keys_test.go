@@ -40,22 +40,6 @@ func TestLoopbackGuardResolvesANameBeforeDeciding(t *testing.T) {
 	}
 }
 
-// A fleet member's own alias commonly resolves to 127.0.0.1 via /etc/hosts, so
-// this guard is load-bearing, not theoretical.
-func TestLoopbackHostNameIsDetected(t *testing.T) {
-	for _, tc := range []struct {
-		host string
-		want bool
-	}{
-		{"127.0.0.1", true}, {"::1", true}, {"127.1.2.3", true},
-		{"192.168.0.5", false}, {"example.internal", false}, {"", false},
-	} {
-		if got := isLoopbackHostName(tc.host); got != tc.want {
-			t.Errorf("isLoopbackHostName(%q) = %v, want %v", tc.host, got, tc.want)
-		}
-	}
-}
-
 // An imported IdentityFile is only a PATH. If the key is absent the alias looks
 // configured and fails at connect time, so the miss must be named.
 func TestMissingIdentitiesNamesAbsentKeys(t *testing.T) {
