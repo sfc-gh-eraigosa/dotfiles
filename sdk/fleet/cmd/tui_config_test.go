@@ -68,3 +68,56 @@ func TestConfigActionDelegatesToTheOneWayCliVerb(t *testing.T) {
 		}
 	}
 }
+
+// Authorizing a key is offered ONLY where it can help: a host that answered and
+// refused us. Offering it for an unreachable host would be misleading — there
+// is nothing there to authorize — and pointless for one that already works.
+func TestAuthorizeIsOfferedOnlyForAnAuthFailedHost(t *testing.T) {
+	m := newTUIModel(nil, nil, nil, time.Time{}, "", 1)
+	for _, tc := range []struct {
+		class string
+		want  bool
+	}{
+		{"auth-failed", true},
+		{"unreachable", false},
+		{"up-to-date", false},
+		{"polling", false},
+	} {
+		m.setRow(Row{Alias: "h", Class: tc.class})
+		m.cursor = "h"
+		if got := m.canAuthorize(); got != tc.want {
+			t.Errorf("class %q: canAuthorize = %v, want %v", tc.class, got, tc.want)
+		}
+	}
+}
+
+// The password must reach ssh's own prompt on the real terminal, never fleet:
+// ssh reads from /dev/tty by design precisely so it cannot be piped, and the
+// module bans a secret in argv or the environment.
+func TestAuthorizeHandsTheTerminalToSshCopyIdAndCarriesNoSecret(t *testing.T) {
+	argv := authorizeArgs("host-a")
+	joined := strings.Join(argv, " ")
+	if !strings.HasPrefix(joined, "ssh-copy-id ") {
+		t.Fatalf("argv = %q, want ssh-copy-id", joined)
+	}
+	if !strings.Contains(joined, ".pub") {
+		t.Fatalf("argv = %q, must offer a PUBLIC key", joined)
+	}
+	for _, banned := range []string{"password", "sshpass", "SSH_ASKPASS", "-o PreferredAuthentications"} {
+		if strings.Contains(joined, banned) {
+			t.Fatalf("argv carries a credential mechanism it must not: %q", joined)
+		}
+	}
+	if !strings.HasSuffix(joined, " host-a") {
+		t.Fatalf("argv = %q, want the alias last", joined)
+	}
+}
+
+func TestAuthorizeKeyIsDeclaredInKeyHelp(t *testing.T) {
+	for _, k := range keyHelp {
+		if k.keys == "A" {
+			return
+		}
+	}
+	t.Fatal("A must be declared in keyHelp or it ships undiscoverable")
+}

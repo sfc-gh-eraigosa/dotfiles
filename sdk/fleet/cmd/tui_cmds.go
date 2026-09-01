@@ -365,6 +365,24 @@ func configVerbArgs(direction, alias string) []string {
 	return []string{"config", direction, alias}
 }
 
+// authorizeArgs builds the ssh-copy-id invocation. It offers a PUBLIC key and
+// carries no credential mechanism of its own: no sshpass, no SSH_ASKPASS, no
+// password in argv. The operator authenticates to ssh directly.
+func authorizeArgs(alias string) []string {
+	return []string{"ssh-copy-id", "-i", os.ExpandEnv("$HOME/.ssh/id_ed25519.pub"), alias}
+}
+
+// authorizeShell suspends the TUI so ssh-copy-id owns the terminal and can
+// prompt for a password itself. On return the host is re-probed, so the row
+// reflects what changed rather than the stale auth-failed verdict.
+func authorizeShell(alias string) tea.Cmd {
+	argv := authorizeArgs(alias)
+	c := exec.Command(argv[0], argv[1:]...)
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		return execDoneMsg{alias: alias, err: err, ssh: true}
+	})
+}
+
 // configShell suspends the TUI and runs the config verb, mirroring how `s`
 // hands over for an ssh session. The transfer prints a diff and asks for
 // confirmation, neither of which survives the background lane.

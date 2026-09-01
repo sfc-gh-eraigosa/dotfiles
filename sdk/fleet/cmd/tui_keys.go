@@ -40,6 +40,7 @@ var keyHelp = []struct {
 	{"⏰", "w", "wake selection (or cursor host)", false},
 	{"📥", "p", "pull ssh config FROM cursor host", false},
 	{"📤", "P", "push ssh config TO cursor host", false},
+	{"🔑", "A", "authorize your key on an auth-failed host (ssh-copy-id)", false},
 	{"🗑️", "F", "forget answers (incl. saved preferences)", false},
 	{"⇥", "tab / enter", "(answer form) next field · esc backs out, keeping answers", false},
 	{"✏️", "e", "(confirm) edit the remembered answers · enter runs the update", false},
@@ -399,6 +400,19 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 				dir = "push"
 			}
 			return m, configShell(dir, m.cursor)
+		}
+	case "A":
+		// The ONE case fleet cannot solve on its own: a host that answers and
+		// refuses us needs our public key in its authorized_keys, and putting
+		// it there requires the access we are trying to establish.
+		//
+		// So hand the real terminal to ssh-copy-id and let the operator type
+		// the password into ssh's OWN prompt. ssh reads from /dev/tty by
+		// design, precisely so a password cannot be piped — and that is a
+		// feature here: no credential ever passes through fleet, so there is
+		// no secret-handling code to get wrong.
+		if m.canAuthorize() {
+			return m, authorizeShell(m.cursor)
 		}
 	case "r":
 		return m, m.refresh()
