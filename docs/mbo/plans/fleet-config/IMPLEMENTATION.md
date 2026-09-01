@@ -3,8 +3,11 @@
 ## Where
 
 Worktree `~/git/worktrees/fleet-config`, branch `feature/fleet-config`, module
-`sdk/fleet`. Local commits only; the push is a single jumbo push at the end, on the
-operator's explicit green light.
+`sdk/fleet`. Built with local commits only; published as a single push on the
+operator's explicit green light, as [#254](https://github.com/sfc-gh-eraigosa/dotfiles/pull/254).
+
+**Status: complete.** All 12 tasks and 4 gates are done; this file is kept as the
+record of how the build ran, not as pending instructions.
 
 ## Procedure per task
 
