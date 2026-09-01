@@ -19,6 +19,6 @@ when its step is done and, for a task's final step, a commit SHA exists in TRACK
 ## Human-evidenced gates (cannot be closed by unit tests)
 
 - [x] G1 real pull over SSH, before/after captured (self-pull via LAN IP — see TRACKING note)
-- [ ] G2 push validation REJECTS a deliberately malformed config
-- [ ] G3 self-retarget refused without the flag
-- [ ] G4 key-readiness output on a genuinely absent IdentityFile (unit-verified only)
+- [x] G2 push validation REJECTS a deliberately malformed config
+- [x] G3 self-retarget refused without the flag
+- [x] G4 key-readiness output on a genuinely absent IdentityFile
