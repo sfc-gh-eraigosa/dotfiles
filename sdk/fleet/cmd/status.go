@@ -279,6 +279,18 @@ func sortWorstFirst(rows []Row) {
 	})
 }
 
+// sortByAlias orders rows by host name and nothing else.
+//
+// The TUI uses this rather than sortWorstFirst because severity ordering is
+// UNSTABLE while rows stream in: a host's class changes from polling to its
+// real verdict, its severity changes with it, and the row jumps position under
+// the operator's eyes. The alias-keyed cursor survives that, but a list that
+// reshuffles as you read it is unusable. A one-shot report has no such problem,
+// so `fleet status` keeps worst-first.
+func sortByAlias(rows []Row) {
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Alias < rows[j].Alias })
+}
+
 func renderTable(rows []Row, now time.Time) string {
 	sortWorstFirst(rows)
 	var b strings.Builder

@@ -19,6 +19,17 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "fleet",
 	Short: "Report and manage dotfiles install status across your hosts",
+	// Bare `fleet` opens the dashboard. Printing help by default made the
+	// common case — "show me my hosts" — the one thing the tool would not do
+	// without being told twice. Help stays reachable as `fleet help`, and
+	// `--help` is untouched.
+	//
+	// Args is constrained on purpose: without it a mistyped subcommand would
+	// fall through to the TUI and hide the typo behind a working-looking UI.
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return tuiCmd.RunE(cmd, args)
+	},
 }
 
 // Execute runs the root command. An exitError carries a deliberate exit code
