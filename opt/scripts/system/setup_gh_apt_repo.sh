@@ -80,7 +80,15 @@ fi
 # it postdates the original script, so an existing install can have the repo
 # without it (and is therefore still stuck on the ESM version).
 if [ -f "$KEYRING" ] && [ -f "$SOURCES" ] && [ "${GH_REPO_FORCE:-0}" != "1" ]; then
-  write_prefs || echo "setup_gh_apt_repo: WARNING: could not write $PREFS." >&2
+  # Hard-fail, deliberately: this is the path that HEALS a host provisioned
+  # before the pin existed, so it is exactly the one that must not swallow a
+  # failure. Warning and exiting 0 here made pkg-install-apt report success
+  # while apt still resolved gh to the stale ESM build — the bug persisting on
+  # a host that reads as fixed. Matches the || exit 1 on the writes below.
+  write_prefs || {
+    echo "setup_gh_apt_repo: could not write $PREFS; gh would stay pinned to ESM." >&2
+    exit 1
+  }
   echo "setup_gh_apt_repo: GitHub CLI apt repo already configured; skipping (GH_REPO_FORCE=1 to refresh)."
   exit 0
 fi
@@ -116,6 +124,12 @@ arch="$(dpkg --print-architecture)"
 echo "deb [arch=${arch} signed-by=${KEYRING}] https://cli.github.com/packages stable main" \
   | sudo tee "$SOURCES" >/dev/null || exit 1
 
-write_prefs || echo "setup_gh_apt_repo: WARNING: could not write $PREFS." >&2
+# Consistent with the keyring and sources writes above: a repo configured
+# without its pin leaves the host stuck on ESM, so exiting 0 here would hand
+# the caller a false success right before it installs the stale package.
+write_prefs || {
+  echo "setup_gh_apt_repo: could not write $PREFS; gh would stay pinned to ESM." >&2
+  exit 1
+}
 
 echo "setup_gh_apt_repo: done (key: ${KEYRING}, sources: ${SOURCES}, prefs: ${PREFS})."

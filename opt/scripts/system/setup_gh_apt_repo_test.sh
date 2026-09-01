@@ -42,8 +42,10 @@ assert_grep "pin priority is 600 (> ESM's 510)" \
 
 # Scoped to gh ONLY. `Package: *` here would let the GitHub repo outrank ESM
 # for anything it happens to ship — a much wider blast radius than intended.
+# Anchored: the bare substring would also match a hypothetical `Package: ghci`,
+# so the assertion looked stronger than it was. assert_grep is grep -E.
 assert_grep "pin is scoped to gh, not Package: *" \
-    'Package: gh' "${SCRIPT}"
+    'Package: gh[[:space:]]*$' "${SCRIPT}"
 assert_grep_negative "pin does NOT use a wildcard package" \
     'Package: \*' "${SCRIPT}"
 
@@ -64,10 +66,23 @@ assert_grep "prefs path is reported in the completion message" \
     'prefs: \$\{PREFS\}' "${SCRIPT}"
 
 # --- documentation ties the fix to its cause ------------------------------
-assert_grep "header explains the ESM priority conflict" \
-    'UbuntuESMApps' "${SCRIPT}"
-assert_grep "header records the downstream breakage" \
-    'projectCards' "${SCRIPT}"
+# One assertion, keyed on the NUMBER rather than the prose. The previous pair
+# matched 'UbuntuESMApps' and 'projectCards' in the header comment, which made
+# a reword fail the suite while the fix was intact — a test spending its
+# failure budget on wording. 510 is the ESM priority the pin must beat: a fact
+# that cannot be edited away without the explanation becoming wrong.
+assert_grep "header documents the ESM priority (510) this pin must beat" \
+    '510' "${SCRIPT}"
+
+# A pin-write failure must never exit 0. Both call sites once warned and
+# continued, so pkg-install-apt saw success and installed the stale ESM build
+# on a host that then read as healed. Guard the fix, not just its presence.
+assert_grep_negative "no write_prefs call soft-fails to a bare warning" \
+    'write_prefs \|\| echo' "${SCRIPT}"
+# BOTH call sites — the heal path and the fresh-install path — must fail hard,
+# so count the failure message rather than trusting one of them.
+assert_eq "$(grep -c 'gh would stay pinned to ESM' "${SCRIPT}")" "2" \
+    "both write_prefs call sites exit non-zero on a failed pin write"
 
 # --- safety ---------------------------------------------------------------
 # Still a no-op off apt systems (macOS gets gh from Homebrew).
