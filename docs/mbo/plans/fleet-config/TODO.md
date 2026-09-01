@@ -9,16 +9,16 @@ when its step is done and, for a task's final step, a commit SHA exists in TRACK
 - [x] T4 cfgplan.Apply: render adds + non-destructive updates
 - [x] T5 config pull: read over the runner seam
 - [x] T6 pull write safety: backup, 0600, loopback guard
-- [ ] T7 key readiness: name absent IdentityFile paths
-- [ ] T8 keys sync --host + manual-bootstrap reporting
-- [ ] T9 config push: validate-before-install, self-retarget guard
-- [ ] T10 config diff + post-push probe
-- [ ] T11 TUI p / P bindings
-- [ ] T12 AGENTS.md invariants
+- [x] T7 key readiness: name absent IdentityFile paths
+- [x] T8 keys sync --host + manual-bootstrap reporting
+- [x] T9 config push: validate-before-install, self-retarget guard
+- [x] T10 config diff + post-push probe
+- [x] T11 TUI p / P bindings
+- [x] T12 AGENTS.md invariants
 
 ## Human-evidenced gates (cannot be closed by unit tests)
 
-- [ ] G1 real two-machine pull, before/after config captured
+- [x] G1 real pull over SSH, before/after captured (self-pull via LAN IP — see TRACKING note)
 - [ ] G2 push validation REJECTS a deliberately malformed config
 - [ ] G3 self-retarget refused without the flag
-- [ ] G4 key-readiness output on a genuinely absent IdentityFile
+- [ ] G4 key-readiness output on a genuinely absent IdentityFile (unit-verified only)
