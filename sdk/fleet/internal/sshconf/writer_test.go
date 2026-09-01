@@ -240,3 +240,55 @@ func TestMarkPreservesExistingComment(t *testing.T) {
 		t.Fatalf("Mark did not adopt the host:\n%s", out)
 	}
 }
+
+// The whole reason Update exists: Add purges the block and re-renders it from
+// the struct, which would take the operator's ProxyCommand with it.
+func TestUpdateRewritesOnlyModelledDirectives(t *testing.T) {
+	cfg := "Host a  #fleet\n    HostName 10.0.0.1\n    ProxyCommand nc %h %p\n    # a human note\n"
+	got, err := Update(cfg, Host{Alias: "a", HostName: "10.0.0.9"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "HostName 10.0.0.9") {
+		t.Fatalf("HostName not updated:\n%s", got)
+	}
+	for _, keep := range []string{"ProxyCommand nc %h %p", "# a human note", "#fleet"} {
+		if !strings.Contains(got, keep) {
+			t.Fatalf("Update dropped %q:\n%s", keep, got)
+		}
+	}
+}
+
+// A modelled directive absent from the block must be inserted, or an imported
+// User would never land.
+func TestUpdateInsertsAMissingModelledDirective(t *testing.T) {
+	got, err := Update("Host a  #fleet\n    HostName 10.0.0.1\n", Host{Alias: "a", User: "pilot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "User pilot") {
+		t.Fatalf("missing directive not inserted:\n%s", got)
+	}
+}
+
+func TestUpdateNeverBlanksAFieldTheCallerOmitted(t *testing.T) {
+	got, _ := Update("Host a  #fleet\n    HostName 10.0.0.1\n    User me\n", Host{Alias: "a", HostName: "10.0.0.9"})
+	if !strings.Contains(got, "User me") {
+		t.Fatalf("omitted field was blanked:\n%s", got)
+	}
+}
+
+// Update must not touch a neighbouring block.
+func TestUpdateLeavesOtherBlocksAlone(t *testing.T) {
+	cfg := "Host a  #fleet\n    HostName 10.0.0.1\n\nHost b  #fleet\n    HostName 10.0.0.2\n"
+	got, _ := Update(cfg, Host{Alias: "a", HostName: "10.0.0.9"})
+	if !strings.Contains(got, "HostName 10.0.0.2") {
+		t.Fatalf("neighbouring block damaged:\n%s", got)
+	}
+}
+
+func TestUpdateRejectsAnUnknownAlias(t *testing.T) {
+	if _, err := Update("Host a\n", Host{Alias: "nope", HostName: "x"}); err == nil {
+		t.Fatal("want an error for an unknown alias")
+	}
+}

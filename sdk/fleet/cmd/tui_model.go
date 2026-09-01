@@ -554,6 +554,25 @@ func (m tuiModel) busy() bool {
 // inFlight is true while an async path owns this host; refresh must skip it,
 // and neither `u` nor `s` may claim it. Wake counts: a ladder that gets its
 // row re-polled underneath it produces a verdict for a probe nobody asked for.
+// canAuthorize reports whether offering ssh-copy-id on the cursor host would
+// help. Only an auth-failed host qualifies: it answered SSH and refused our
+// credential, which is exactly what authorizing a key fixes. An unreachable
+// host has nothing to authorize against, and a working one needs nothing.
+func (m tuiModel) canAuthorize() bool {
+	if !m.canStartConfigAction() {
+		return false
+	}
+	i := m.indexOf(m.cursor)
+	return i >= 0 && m.rows[i].Class == string(drift.AuthFailed)
+}
+
+// canStartConfigAction reports whether the cursor host is free to act on. A
+// host is in exactly one of pending / updating / waking / resolved, and two
+// async paths must never own one row.
+func (m tuiModel) canStartConfigAction() bool {
+	return m.cursor != "" && !m.inFlight(m.cursor) && !m.pending[m.cursor]
+}
+
 func (m tuiModel) inFlight(alias string) bool {
 	if m.waking[alias] {
 		return true
