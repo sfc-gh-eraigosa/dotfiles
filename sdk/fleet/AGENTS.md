@@ -17,7 +17,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | Command | Does |
 | :-- | :-- |
 | `fleet status [host...]` | table of host · commit · **branch** · last run · status; `--json`; exits non-zero if any host is stale |
-| `fleet discover` | list every concrete ssh-config host as `in-fleet` / `available`; `--json`; `--add-all` bulk-adopts (one pass, one backup; `--dry-run` / `--yes`) |
+| `fleet discover [--scan]` | list every concrete ssh-config host as `in-fleet` / `available`; `--scan` sweeps the subnet to refresh a moved `HostName` and offer unknown responders; `--json`; `--add-all` bulk-adopts (one pass, one backup; `--dry-run` / `--yes`) |
 | `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v`/`a` selection, concurrent background updates (`--jobs`), `w` wake, `s` ssh, `F` forget answers, `?` help |
 | `fleet update <host>...` | fetch → checkout `--ref` (default `main`) → `pull --ff-only` → `install.sh` over `ssh -t`, one host at a time |
 | `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
@@ -40,6 +40,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `internal/drift` | classify drift + format age (`now` injected — never `time.Now()`) |
 | `internal/sshfail` | read ssh's stderr to tell a refused *connection* from a refused *credential* |
 | `internal/cfgplan` | plan a ONE-WAY ssh-config transfer (pure): `Build` + `Apply` |
+| `internal/lanscan` | sweep a subnet for a listening port (injected dialer — no nmap, no socket in tests) |
 | `internal/keys` | authorized_keys diff (reports removals, never applies them) |
 | `internal/reach` | the wake ladder: rung order, peer ranking, provenance (pure; every impure edge injected via `Deps`) |
 | `cmd/answers_store.go` | the non-secret prompt preferences on disk (`0600`); the on-disk type has no credential field |
@@ -71,6 +72,23 @@ without opening a socket.
   to read stays `unreachable` — `internal/sshfail` never invents a diagnosis. Pinned by
   `TestAuthFailureReportsAuthFailedNotUnreachable` and
   `TestFailureWithNoEvidenceStaysUnreachable`.
+- **`discover` is a local read; `--scan` is the ONE exception.** Without the flag it never
+  opens a socket. The sweep needs no nmap — the shell `ssh-find` it replaces shells out to
+  it, and on a machine without nmap that script exits before scanning anything, which is a
+  discovery tool that silently cannot discover. `internal/lanscan` takes an injected
+  dialer, so the sweep is unit-tested without a socket.
+- **A scan matches on the host's OWN reported name, never on the address.** That is what
+  turns a DHCP move into a one-line `HostName` refresh instead of a duplicate `Host` block
+  under a second alias, and the refresh goes through `sshconf.Update` so a `ProxyCommand`
+  survives it. Pinned by `TestScanPlanRefreshesAMovedHostRatherThanAddingIt`.
+- **A responder that will not authenticate is never written.** We do not know what it is or
+  which user it wants, and guessing would put a broken block in the file every command
+  depends on. It is reported and left alone. Pinned by
+  `TestApplyScanNeverWritesAnUnidentifiedResponder`.
+- **Addresses render in numeric order.** Lexical order puts `.128` before `.16` and `.201`
+  before `.61`, which makes a scan of the same network read as noise. Pinned by
+  `TestClassifyScanOrdersAddressesNumerically` — a bug found by running a live sweep, not
+  by review.
 - **Config transfer is one-way, always.** `config pull` and `config push` each move
   configuration in exactly one direction, named at the call site. There is deliberately no
   `sync` verb: a combined operation would resolve conflicts by policy instead of by an

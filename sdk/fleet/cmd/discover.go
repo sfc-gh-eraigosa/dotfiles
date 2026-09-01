@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
 	"github.com/spf13/cobra"
@@ -82,6 +83,7 @@ func adoptAll(cfg, marker string) (string, []string, error) {
 }
 
 var (
+	discoverScan   bool
 	discoverAddAll bool
 	discoverYes    bool
 	discoverDryRun bool
@@ -92,6 +94,11 @@ var discoverCmd = &cobra.Command{
 	Short: "List ssh-config hosts and which are in the fleet (`--add-all` adopts every available one)",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// --scan is the only path here that opens a socket; without it,
+		// discover stays a pure local read of ~/.ssh/config.
+		if discoverScan {
+			return runScan(cmd)
+		}
 		cfg, err := readConfig(flagConfig)
 		if err != nil {
 			return err
@@ -149,5 +156,10 @@ func init() {
 	discoverCmd.Flags().BoolVar(&discoverAddAll, "add-all", false, "adopt every available ssh-config host into the fleet")
 	discoverCmd.Flags().BoolVar(&discoverYes, "yes", false, "skip the confirmation prompt (non-interactive)")
 	discoverCmd.Flags().BoolVar(&discoverDryRun, "dry-run", false, "print the resulting config without writing")
+	discoverCmd.Flags().BoolVar(&discoverScan, "scan", false,
+		"sweep the local subnet for SSH hosts: refresh a moved HostName and offer unknown responders")
+	discoverCmd.Flags().StringVar(&scanSubnet, "subnet", "", "CIDR to sweep (default: the subnet of the default route)")
+	discoverCmd.Flags().IntVar(&scanWorkers, "jobs", 64, "concurrent probes during a scan")
+	discoverCmd.Flags().DurationVar(&scanTimeout, "probe-timeout", 400*time.Millisecond, "per-address TCP timeout during a scan")
 	rootCmd.AddCommand(discoverCmd)
 }
