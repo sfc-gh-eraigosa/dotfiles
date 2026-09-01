@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -352,6 +353,27 @@ func interactiveHandoff(alias, ref string, a answers, pos, total int) tea.Cmd {
 // sshShell drops the operator onto the host and restores the TUI on exit.
 func sshShell(alias string) tea.Cmd {
 	c := exec.Command("ssh", alias)
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		return execDoneMsg{alias: alias, err: err, ssh: true}
+	})
+}
+
+// configVerbArgs builds the argv for a one-way config transfer. It exists as a
+// named function so a test can assert the TUI delegates to the CLI verb rather
+// than reimplementing the transfer.
+func configVerbArgs(direction, alias string) []string {
+	return []string{"config", direction, alias}
+}
+
+// configShell suspends the TUI and runs the config verb, mirroring how `s`
+// hands over for an ssh session. The transfer prints a diff and asks for
+// confirmation, neither of which survives the background lane.
+func configShell(direction, alias string) tea.Cmd {
+	self, err := os.Executable()
+	if err != nil {
+		self = "fleet"
+	}
+	c := exec.Command(self, configVerbArgs(direction, alias)...)
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return execDoneMsg{alias: alias, err: err, ssh: true}
 	})

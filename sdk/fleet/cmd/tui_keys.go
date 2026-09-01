@@ -38,6 +38,8 @@ var keyHelp = []struct {
 	{"◍", "v", "visual range select", false},
 	{"⎋", "esc", "clear search / selection", false},
 	{"⏰", "w", "wake selection (or cursor host)", false},
+	{"📥", "p", "pull ssh config FROM cursor host", false},
+	{"📤", "P", "push ssh config TO cursor host", false},
 	{"🗑️", "F", "forget answers (incl. saved preferences)", false},
 	{"⇥", "tab / enter", "(answer form) next field · esc backs out, keeping answers", false},
 	{"✏️", "e", "(confirm) edit the remembered answers · enter runs the update", false},
@@ -382,6 +384,21 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// An ssh visit while the engine owns the host would race its update.
 		if m.cursor != "" && !m.inFlight(m.cursor) {
 			return m, sshShell(m.cursor)
+		}
+	case "p", "P":
+		// Config transfer is ONE-WAY and the direction is the keystroke: `p`
+		// pulls FROM the cursor host, `P` pushes TO it. Both suspend the TUI
+		// and run the CLI verb, so the diff is visible and every guard
+		// (loopback, self-retarget, validation, confirmation) applies
+		// identically from either entry point — the alternative, a second
+		// confirm flow inside the TUI, would be a second place for those
+		// guards to drift out of agreement.
+		if m.canStartConfigAction() {
+			dir := "pull"
+			if k.String() == "P" {
+				dir = "push"
+			}
+			return m, configShell(dir, m.cursor)
 		}
 	case "r":
 		return m, m.refresh()

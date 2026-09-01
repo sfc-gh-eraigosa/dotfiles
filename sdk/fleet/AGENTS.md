@@ -23,6 +23,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
 | `fleet remove <alias> [--purge]` | unmark (keeps SSH access); `--purge` deletes the block |
 | `fleet keys list\|sync\|prune` | audit / authorize / remove authorized keys |
+| `fleet config pull\|push\|diff` | one-way ssh-config transfer: import FROM one host, publish TO hosts, or compare without changing anything |
 | `fleet wake [host...]` | rouse hosts asleep at layer 2: ladder `retry → local-prime → peer-relay`, printed rung by rung; `--json`; exits non-zero if any target stayed down |
 
 ## Layout
@@ -38,6 +39,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `internal/stamp` | parse the install stamp |
 | `internal/drift` | classify drift + format age (`now` injected — never `time.Now()`) |
 | `internal/sshfail` | read ssh's stderr to tell a refused *connection* from a refused *credential* |
+| `internal/cfgplan` | plan a ONE-WAY ssh-config transfer (pure): `Build` + `Apply` |
 | `internal/keys` | authorized_keys diff (reports removals, never applies them) |
 | `internal/reach` | the wake ladder: rung order, peer ranking, provenance (pure; every impure edge injected via `Deps`) |
 | `cmd/answers_store.go` | the non-secret prompt preferences on disk (`0600`); the on-disk type has no credential field |
@@ -69,6 +71,47 @@ without opening a socket.
   to read stays `unreachable` — `internal/sshfail` never invents a diagnosis. Pinned by
   `TestAuthFailureReportsAuthFailedNotUnreachable` and
   `TestFailureWithNoEvidenceStaysUnreachable`.
+- **Config transfer is one-way, always.** `config pull` and `config push` each move
+  configuration in exactly one direction, named at the call site. There is deliberately no
+  `sync` verb: a combined operation would resolve conflicts by policy instead of by an
+  operator reading a diff, and would make one mistake's blast radius the union of both
+  directions. `config diff` shows both directions and writes nothing — that is how you
+  choose a verb, not a third direction.
+- **A transfer cannot carry an exec directive.** `sshconf.Host` models only inert fields,
+  so `ProxyCommand` / `LocalCommand` / `Match exec` have nowhere to land. This is
+  STRUCTURAL, not a filter — there is no allowlist to forget to update. Because that also
+  makes the exclusion invisible, `cfgplan` scans the raw text and NAMES what it withheld,
+  along with any `Include` it could not follow. Pinned by
+  `TestBuildNeverCarriesAnExecDirective` and `TestBuildNamesWhatItWithheld`.
+- **`Add` purges; `Update` preserves.** `sshconf.Add` re-renders a block from the struct
+  and would silently take an operator's `ProxyCommand` with it, so it is used ONLY for
+  aliases that do not exist yet. Every update goes through `sshconf.Update`, which
+  rewrites the four modelled directives in place. Pinned by
+  `TestUpdateRewritesOnlyModelledDirectives`.
+- **A transfer MERGES into the destination, never replaces it.** Applying a plan to an
+  empty string would delete every host and directive the destination had that we do not
+  model. Push applies onto the target's own text. Pinned by
+  `TestPushMergesIntoTheTargetConfigRatherThanReplacingIt` — a bug caught by that test
+  before it ever ran against a machine.
+- **A push validates before it commits.** The staged config is parsed by ssh ON THE TARGET
+  before it can replace the live one, the original is backed up first, and the target is
+  re-probed after. Fleet cannot repair a host it can no longer reach — the transport it
+  would need is the thing that broke — so these guards exist to make that outcome unlikely
+  and human-recoverable when it happens. Pinned by `TestRemoteInstallValidatesBeforeMoving`.
+- **A push never silently retargets its own route.** A plan that changes `HostName`/`Port`/
+  `User`/`IdentityFile` for the alias being written to is refused without
+  `--allow-self-retarget`. Pinned by `TestSelfRetargetIsDetected`.
+- **Omission is never deletion.** An empty field on either side leaves the destination
+  value alone; no transfer blanks a directive the other side simply did not set.
+- **Key readiness is a `stat`, never a read.** An imported `IdentityFile` is only a path,
+  so a missing key is NAMED rather than left to fail at connect time — but no private key
+  is ever read, transmitted, or written. `keys sync --host` authorizes only named hosts,
+  and hosts that refuse us are reported as needing MANUAL bootstrap, because appending to
+  a remote `authorized_keys` requires the access we are trying to establish.
+- **The TUI delegates config transfer to the CLI verb.** `p` / `P` suspend the TUI and run
+  `fleet config pull|push`, so the diff is visible and every guard applies identically from
+  either entry point. A second confirm flow inside the TUI would be a second place for
+  those guards to drift.
 - **An answering host is never woken, and never relays.** The ladder rouses machines
   asleep at layer 2; a host that refused us is awake, so waking it spends a full budget
   (~12s) per host per run to fix nothing. It is equally never ranked as a live relay
