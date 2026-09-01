@@ -124,7 +124,21 @@ func viaArgs(peer, host, timeout string, argv []string) []string {
 		"-o", "BatchMode=yes",
 		"-o", "ConnectTimeout=" + timeout,
 	}
-	base = append(base, muxArgs()...)
+	// Deliberately NOT multiplexed. The relay lane exists because the direct
+	// lane failed, so reusing a direct master here is backwards — and on a
+	// client older than OpenSSH 8.4 the ControlPath token %C hashes only
+	// %l%h%p%r (no %j), which makes the relayed and direct sockets the SAME
+	// file: a live direct master would silently win and the peer would never
+	// be used at all.
+	//
+	// The sharper reason survives even where %j is included: ConnectTimeout
+	// does not apply to an already-established master, and the wake ladder's
+	// budget is sized on the assumption that probing a dead host costs one
+	// connect timeout. A hung master would blow it.
+	//
+	// ControlPath=none rather than merely omitting the options, so an
+	// operator's own ssh_config cannot multiplex this lane behind our back.
+	base = append(base, "-o", "ControlPath=none")
 	base = append(base, "-J", peer, host)
 	return append(base, argv...)
 }

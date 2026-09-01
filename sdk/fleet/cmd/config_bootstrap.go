@@ -76,6 +76,9 @@ func bootstrapHint(rows []Row) string {
 	return fmt.Sprintf("\n%d host(s) cannot be reached with your key: %s\n"+
 		"  authorize it with `ssh-copy-id <alias>` (or press A in `fleet tui`) —\n"+
 		"  `fleet keys sync` cannot help: appending to a remote authorized_keys\n"+
-		"  needs the access it is trying to establish.\n",
+		"  needs the access it is trying to establish.\n"+
+		"  if the host wants a password rather than a key, open `fleet tui` and\n"+
+		"  press `s` once: no BatchMode probe can ever answer a password prompt,\n"+
+		"  so that session is the only thing that can prime the shared connection.\n",
 		len(need), strings.Join(need, ", "))
 }

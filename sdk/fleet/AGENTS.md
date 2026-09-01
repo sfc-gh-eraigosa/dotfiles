@@ -98,6 +98,18 @@ without opening a socket.
   here. Multiplexing is better than copying it would have been — nothing is stored, it
   serves key and password auth alike, and it removes a full handshake per command
   (measured: 3 connections in 0.98s cold vs 0.016s warm).
+  **A password-auth host can only be primed interactively.** No BatchMode probe can
+  answer a password prompt, so such a host stays `auth-failed` on the CLI until someone
+  opens `fleet tui` and presses `s` once; that session establishes the master every later
+  command reuses. `bootstrapHint` says so on `fleet status`, because a CLI-only operator
+  has no other way to discover it.
+  **The relay lane is deliberately NOT multiplexed** (`ControlPath=none` in `viaArgs`): it
+  exists because the direct lane failed, and on a client older than OpenSSH 8.4 `%C`
+  hashes only `%l%h%p%r` — no `%j` — so the relayed and direct sockets are the same file
+  and a live direct master would silently win, skipping the peer entirely. Even where
+  `%j` is included, `ConnectTimeout` does not apply to an established master, and the wake
+  ladder's budget assumes probing a dead host costs one connect timeout. Pinned by
+  `TestRelayNeverReusesAMultiplexedConnection`.
   `ControlPath` uses `%C`, a fixed-length hash: a literal `%r@%h:%p` grows with the user
   and host name and can exceed the ~104-byte unix socket limit, at which point
   multiplexing fails SILENTLY and prompting returns. The TUI's interactive `s` session

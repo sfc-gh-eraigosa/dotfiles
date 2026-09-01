@@ -73,3 +73,16 @@ func TestStatusHintIsSilentWhenEveryHostAnswers(t *testing.T) {
 		t.Fatalf("hint = %q, want empty", got)
 	}
 }
+
+// The hint covered only the KEY bootstrap. A password-auth host cannot be
+// primed by any BatchMode probe — it needs one interactive session — so a
+// CLI-only operator would see a permanent auth-failed with nothing telling
+// them the way out.
+func TestStatusHintExplainsHowToPrimeAPasswordAuthHost(t *testing.T) {
+	got := bootstrapHint([]Row{{Alias: "blocked", Class: string(drift.AuthFailed)}})
+	for _, want := range []string{"password", "fleet tui", "s"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("hint missing %q:\n%s", want, got)
+		}
+	}
+}

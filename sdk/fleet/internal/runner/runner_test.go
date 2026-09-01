@@ -124,13 +124,30 @@ func TestMultiplexingCanBeDisabled(t *testing.T) {
 	}
 }
 
-// Every path that reaches a host must reuse the same socket, or the first
-// interactive session authenticates and the later batch probe still prompts.
-func TestEveryRemotePathCarriesTheMuxOptions(t *testing.T) {
+// The relay lane must NOT multiplex. It exists because the direct lane failed,
+// so reusing a direct master there is precisely backwards — and on a client
+// older than OpenSSH 8.4, %C hashes only %l%h%p%r (no %j), so the relayed and
+// direct sockets are the SAME file and a live direct master silently wins.
+//
+// The sharper problem survives even where %j is included: ConnectTimeout does
+// not apply to an already-established master, so a hung one blows the wake
+// ladder's budget, which is sized on the assumption that a probe to a dead
+// host costs one connect timeout.
+func TestRelayNeverReusesAMultiplexedConnection(t *testing.T) {
+	got := viaArgs("peer-a", "target-b", "6", []string{"cmd"})
+	if hasPair(got, "-o", "ControlMaster=auto") {
+		t.Fatalf("viaArgs = %q, must not open or reuse a master", got)
+	}
+	if !hasPair(got, "-o", "ControlPath=none") {
+		t.Fatalf("viaArgs = %q, want ControlPath=none so a user's own ssh_config cannot multiplex it either", got)
+	}
+}
+
+// The direct lanes still multiplex — that is the whole point of the feature.
+func TestDirectLanesStillMultiplex(t *testing.T) {
 	e := Exec{}
 	for name, got := range map[string][]string{
 		"Run":            e.baseArgs("h"),
-		"RunVia":         viaArgs("peer", "h", "6", []string{"cmd"}),
 		"RunInteractive": e.interactiveArgs("h"),
 	} {
 		if !hasPair(got, "-o", "ControlMaster=auto") {
