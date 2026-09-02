@@ -165,6 +165,20 @@ accelerator matches. Check with `dconf dump /org/gnome/terminal/legacy/keybindin
 and re-run `~/opt/scripts/system/gnome-desktop-defaults.sh`, which resets the
 stale binds.
 
+**herdr says "copied to clipboard" but `Cmd+V` pastes something older.** Not a
+keyd problem: the chord arrives as `Ctrl+Shift+V` and gnome-terminal dutifully
+pastes the X clipboard — herdr just never wrote to it. herdr's Linux clipboard
+path is `wl-copy` → `xclip` → `xsel`, and only when none of those exists does
+it fall back to the OSC 52 escape, which gnome-terminal/VTE silently drops
+([VTE #2495](https://gitlab.gnome.org/GNOME/vte/-/issues/2495),
+[herdr #2399](https://github.com/herdrdev/herdr/issues/2399)). `packages.tsv`
+installs `xclip` and `xsel` on every apt host for exactly this reason; on a
+machine provisioned before that, `sudo apt-get install xclip xsel` fixes the
+running herdr immediately (no restart — it resolves the tool per copy). On a
+Wayland session install `wl-clipboard` instead. Holding `Shift` while
+drag-selecting bypasses herdr's mouse capture and copies through gnome-terminal
+itself, if you need a one-off without installing anything.
+
 **Nothing is remapped at all.** `systemctl is-active keyd`, then
 `sudo keyd check` to validate the config. Note that keyd **rejects a trailing
 comment on a binding line** (`c = C-c  # copy`) with `invalid key or action` and

@@ -152,4 +152,21 @@ case "$OUT" in
         ;;
 esac
 
+# === 7. manifest: Linux ships an X11 clipboard tool ===
+# herdr's Linux clipboard path is wl-copy -> xclip -> xsel, and only THEN the
+# OSC 52 escape -- which gnome-terminal/VTE silently drops (VTE #2495). Without
+# one of these installed every herdr mouse-copy shows a "copied" toast while the
+# clipboard keeps its old contents (herdr #2399). .tmux.conf's copy-pipe binds
+# also assume xsel. Both must stay in the APT column; macOS has pbcopy.
+MANIFEST="${REPO_ROOT}/opt/profiles/packages.tsv"
+for tool in xclip xsel; do
+    if awk '!/^[[:space:]]*(#|$)/ {print $2}' "$MANIFEST" | grep -qx "$tool"; then
+        echo "PASS: packages.tsv installs $tool on apt hosts"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL: packages.tsv APT column is missing $tool (herdr/tmux clipboard)"
+        FAIL=$((FAIL + 1))
+    fi
+done
+
 _test_report

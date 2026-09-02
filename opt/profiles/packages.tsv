@@ -79,6 +79,18 @@ watch                -
 # Apple Symbols with the same coverage, hence '-' in the BREW column.
 -                    fonts-symbola
 
+# X11 clipboard bridge for terminal programs. herdr's Linux clipboard path is
+# wl-copy -> xclip -> xsel and only THEN the OSC 52 escape, which gnome-terminal
+# (VTE) silently drops -- so with neither tool present every herdr mouse-copy
+# shows a "copied" toast while Cmd+V pastes the OLD clipboard (herdr #2399,
+# VTE #2495). .tmux.conf's copy-pipe binds already assume xsel. Both are tiny;
+# xclip is first in herdr's order, xsel is what tmux calls. Wayland sessions
+# want wl-clipboard instead (tracked in the dotfiles herdr clipboard issue).
+# macOS ships pbcopy/pbpaste, hence '-' in the BREW column. Guarded by
+# opt/bin/pkg-install_test.sh.
+-                    xclip
+-                    xsel
+
 # Kubernetes toolchain. apt has no kind package at all, and kubectl/helm need
 # third-party apt repos that lag upstream — so Linux/WSL gets the official
 # release binaries via opt/scripts/system/install_k8s_tools.sh (wired into
