@@ -156,6 +156,15 @@ cannot reach keyd. Run `--doctor`; if "mapper running" is `no`, or the log at
 the `keyd` group — the installer adds you, but an already-open session does not
 pick up a new group until you log out and back in.
 
+**`Cmd+V` prints `^V` in gnome-terminal (and `Cmd+C` may interrupt).** The mapper
+is fine; gnome-terminal's *own* copy/paste accelerators are no longer the stock
+`Ctrl+Shift+C/V` that `app.conf` emits. A pre-keyd version of
+`gnome-desktop-defaults.sh` bound them to `<Super>c/v`, which keyd now consumes
+before the terminal sees it, and VTE writes the raw control code when no
+accelerator matches. Check with `dconf dump /org/gnome/terminal/legacy/keybindings/`
+and re-run `~/opt/scripts/system/gnome-desktop-defaults.sh`, which resets the
+stale binds.
+
 **Nothing is remapped at all.** `systemctl is-active keyd`, then
 `sudo keyd check` to validate the config. Note that keyd **rejects a trailing
 comment on a binding line** (`c = C-c  # copy`) with `invalid key or action` and

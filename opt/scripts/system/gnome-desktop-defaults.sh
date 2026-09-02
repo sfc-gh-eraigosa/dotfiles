@@ -2,13 +2,6 @@
 # GNOME desktop defaults — the Linux counterpart to the macOS-style hotkeys that
 # opt/Desktop/Apps/scripts/macos.ahk provides on Windows.
 #
-# WHY <Super> AND NOT <Control>: on macOS, Terminal.app copies with Cmd+C, and
-# Super is the Linux analogue of Cmd — so <Super>c/<Super>v deliver the same
-# muscle memory while leaving Ctrl+C as SIGINT. Binding Ctrl+C to copy would
-# break interrupts outright: gnome-terminal consumes a matched accelerator
-# unconditionally and has no copy-if-selection-else-pass-through mode (Ptyxis
-# and kitty have one; VTE 0.76 / gnome-terminal 3.52 do not).
-#
 # THE OTHER HALF: macos-keys-linux.sh applies the evdev half of this feature via
 # keyd, which is what makes Cmd+C work inside Firefox/VS Code/Nautilus rather than
 # only in gnome-terminal. The split is deliberate:
@@ -16,6 +9,16 @@
 #   - gsettings (here) -> desktop-level ACTIONS that keyd deliberately hands back
 #                         to GNOME as a real <Super> chord (Cmd+Tab/Space/M/H)
 # Both halves are gated by the cross-OS gff flag `keyboard.macos.enabled`.
+#
+# WHY gnome-terminal MUST STAY ON STOCK Ctrl+Shift+C/V: keyd's app.conf turns
+# Cmd+C/V into Ctrl+Shift+C/V while a terminal is focused (Ctrl+C has to stay
+# SIGINT). Those chords only do anything if the terminal's own copy/paste
+# accelerators are still the stock ones. Before keyd existed (#247) this script
+# bound them to <Super>c/<Super>v instead; with keyd consuming Super at the evdev
+# layer that chord never arrives, and VTE, seeing Ctrl+Shift+V with no accelerator
+# to match, writes the raw control code to the shell -- Cmd+V printed ^V and
+# Cmd+C was one keystroke from an interrupt. apply_terminal_copy_paste now UNDOES
+# that stale bind on machines that received it. Never bind these to Super again.
 #
 # Idempotent and safe to re-run by hand:
 #   ~/opt/scripts/system/gnome-desktop-defaults.sh
@@ -48,6 +51,16 @@ gset() {
 		echo "WARNING: could not set $1 $2"
 }
 
+# greset_if SCHEMA[:PATH] KEY STALE — restore the schema default, but only when
+# the key still holds the exact value an older version of this script wrote, so a
+# deliberate user customization survives. Never fatal.
+greset_if() {
+	_gr_have="$(gsettings get "$1" "$2" 2> /dev/null)" || return 0
+	[ "$_gr_have" = "$3" ] || return 0
+	gsettings reset "$1" "$2" 2> /dev/null ||
+		echo "WARNING: could not reset $1 $2"
+}
+
 apply_terminal_copy_paste() {
 	# gnome-terminal may not be installed (Ptyxis-only or headless GNOME).
 	# NOTE: the Keybindings schema is RELOCATABLE (it is bound to a dconf path),
@@ -55,11 +68,14 @@ apply_terminal_copy_paste() {
 	# be looked up with list-relocatable-schemas or this always reports "absent".
 	if ! gsettings list-relocatable-schemas 2> /dev/null |
 		grep -qx 'org.gnome.Terminal.Legacy.Keybindings'; then
-		echo "gnome-terminal keybinding schema absent; skipping copy/paste binds."
+		echo "gnome-terminal keybinding schema absent; skipping copy/paste check."
 		return 0
 	fi
-	gset "$GT_KEYS" copy "'<Super>c'"
-	gset "$GT_KEYS" paste "'<Super>v'"
+	# Migration: put copy/paste back on stock Ctrl+Shift+C/V where the pre-keyd
+	# script had moved them to Super (see the header). keyd's app.conf owns
+	# Cmd+C/V in the terminal from here on; gsettings must not bind them at all.
+	greset_if "$GT_KEYS" copy "'<Super>c'"
+	greset_if "$GT_KEYS" paste "'<Super>v'"
 }
 
 free_message_tray() {
@@ -111,7 +127,7 @@ apply_macos_desktop_keys() {
 }
 
 if gnome_session_available; then
-	echo "Applying GNOME desktop defaults (macOS-style Super+C / Super+V)..."
+	echo "Applying GNOME desktop defaults (macOS-style Cmd+Space/M/H, stock terminal copy/paste)..."
 	apply_terminal_copy_paste
 	free_message_tray
 	apply_macos_desktop_keys
