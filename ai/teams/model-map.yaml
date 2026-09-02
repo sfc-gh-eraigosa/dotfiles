@@ -22,14 +22,20 @@ tiers:
     description: Day-to-day coding.
     claude:      { model: sonnet,           effort: medium }
     antigravity: { model: gpt-4.1,          effort: medium }
-    ollama:      { model: "qwen2.5-coder:7b", num_ctx: 8192 }
+    # qwen2.5-coder:7b -> qwen3-coder:30b on 2026-09-01: MoE, measured 5/5 with
+    # a real tool call at 80 tok/s on the Spark vs 4/5 (tool call as prose) at
+    # 43 tok/s for the 7B. Same rationale for the think tier below.
+    ollama:      { model: "qwen3-coder:30b", num_ctx: 8192 }
   think:
     description: Complex problems, code review.
     claude:      { model: sonnet,           effort: high }
     antigravity: { model: gpt-4.1,          effort: high }
-    ollama:      { model: "qwen2.5:7b",     num_ctx: 8192 }
+    ollama:      { model: "qwen3-coder:30b", num_ctx: 8192 }
   deep-think:
     description: Architecture, high-stakes design.
     claude:      { model: opus,             effort: high }
     antigravity: { model: o3,               effort: max }
-    ollama:      { model: "gemma3:27b",     num_ctx: 8192 }
+    # gemma3:27b -> qwen3.8:27b on 2026-09-01: same 18 GB footprint, twice the
+    # measured speed (19.6 vs 10.4 tok/s on the Spark), and it adds tool calling
+    # and thinking, which gemma3 lacks. See playground ollama/docs/models.md.
+    ollama:      { model: "qwen3.8:27b",    num_ctx: 8192 }
