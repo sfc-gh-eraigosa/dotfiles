@@ -84,8 +84,8 @@ unset _ip_prev _ip_arg
 #   - CONFIG / SKILL / SYMLINK / any repo-content step -> _IP_CONFIG_FLAGS. Runs
 #     in the per-commit config layer; omitting it BAKES the step into the cached
 #     deps layer, so later edits to it stop taking effect per commit (a bug).
-_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
-_IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_K8S INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM"
+_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
+_IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM"
 apply_install_phase() {
   case "$INSTALL_PHASE" in
     deps)   for _f in $_IP_CONFIG_FLAGS; do export "GFF_${_f}=false"; done ;;
@@ -275,6 +275,19 @@ if gff_on install.ai.claude; then
   fi
 else gff_skip_msg install.ai.claude; fi
 
+# herdr agent integrations (`herdr integration install claude|antigravity-cli`):
+# the hook scripts that report each agent's working/blocked/done state to the
+# herdr sidebar. Must run AFTER install_antigravity_skills.sh above, which
+# re-renders ~/.gemini/config/hooks.json from the repo template and drops
+# herdr's entry on every run. Only integrations whose agent CLI is present are
+# installed; the binary itself is the deps-phase install.tools.herdr block.
+if gff_on install.tools.herdr-integrations; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_herdr.sh" ]; then
+    echo "Installing herdr agent integrations..."
+    "${BASE_DIR}/opt/scripts/system/install_herdr.sh" integrations || echo "WARNING: herdr integrations reported problems; continuing."
+  fi
+else gff_skip_msg install.tools.herdr-integrations; fi
+
 NIX_MANAGED_FILE="${HOME}/.config/nix_managed"
 
 if [ -f "$NIX_MANAGED_FILE" ]; then
@@ -397,6 +410,19 @@ if gff_on install.tools.k8s; then
     "${BASE_DIR}/opt/scripts/system/install_k8s_tools.sh" || echo "WARNING: k8s toolchain install reported problems; continuing."
   fi
 else gff_skip_msg install.tools.k8s; fi
+
+# Install herdr (terminal workspace for coding agents; Apache-2.0). No apt
+# package and no mise/nix surface here, so install_herdr.sh fetches the static
+# release binary into ~/opt/bin and verifies it against the SHA-256 herdr
+# publishes in herdr.dev/latest.json. Tracks the latest release so fleet update
+# keeps every host on the same version; pin with HERDR_VERSION=x.y.z. The agent
+# integrations are a separate config-phase step (install.tools.herdr-integrations).
+if gff_on install.tools.herdr; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_herdr.sh" ]; then
+    echo "Installing herdr..."
+    "${BASE_DIR}/opt/scripts/system/install_herdr.sh" || echo "WARNING: herdr install reported problems; continuing."
+  fi
+else gff_skip_msg install.tools.herdr; fi
 
 # Install the Snowflake CLI (`snow`). Replaces the old .zshrc daily-maintenance
 # pip auto-install, which broke on PEP 668 (externally-managed-environment)

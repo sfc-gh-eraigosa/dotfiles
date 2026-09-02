@@ -42,7 +42,7 @@ sets:
       - path: install.pkg.brewfile
         description: Runs the macOS brew bundle block for the Brewfile extras including vault-setup.
         boolDefault: true
-      # --- tools (6) ---
+      # --- tools (8) ---
       - path: install.tools.sops
         description: Runs the install_sops.sh block that fetches the sops release binary.
         boolDefault: true
@@ -60,6 +60,12 @@ sets:
         boolDefault: true
       - path: install.tools.git-aliases
         description: Migration cleanup for the retired ~/.gitenv generator (removes stale generated artifacts); the surviving git shortcuts live in opt/profiles/.gitools.sh.
+        boolDefault: true
+      - path: install.tools.herdr
+        description: Runs the install_herdr.sh block that fetches the herdr (agent terminal workspace) release binary into ~/opt/bin, SHA-256-verified against herdr.dev/latest.json; tracks latest, pin with HERDR_VERSION.
+        boolDefault: true
+      - path: install.tools.herdr-integrations
+        description: Runs `install_herdr.sh integrations` (config phase) to (re)install herdr's agent-state hooks for the agent CLIs present on the host (claude, antigravity-cli); must follow install_antigravity_skills.sh, which re-renders hooks.json.
         boolDefault: true
       # --- runtime (5) ---
       - path: install.runtime.goenv
