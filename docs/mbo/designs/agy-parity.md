@@ -2,7 +2,7 @@
 
 - **Slug:** agy-parity
 - **Date:** 2026-09-03
-- **Status:** Draft
+- **Status:** Approved (2026-09-03, PR #269)
 - **Relates to:** design issue #268 · design PR #269 · builds on `claude-config` (PR #126), `ai-config-home-provisioning` (PR #113), `memory-provisioning` (#134)
 - **Author(s):** Edward Raigosa + Claude (analysis session 2026-09-02)
 
