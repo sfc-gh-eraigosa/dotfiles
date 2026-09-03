@@ -1,0 +1,489 @@
+# fleet-connect — implementation plan
+
+- **Slug:** fleet-connect
+- **Date:** 2026-09-02
+- **Status:** Draft
+- **Relates to:** spec [`../specs/fleet-connect.md`](../specs/fleet-connect.md) · design
+  [`../designs/fleet-connect.md`](../designs/fleet-connect.md) · issue
+  [#266](https://github.com/sfc-gh-eraigosa/dotfiles/issues/266) · PR recorded in
+  [`../index.md`](../index.md)
+
+## 1. Summary & verdict
+
+Build, in `sdk/fleet`: a public provider contract and a versioned local-RPC plugin protocol; the
+registry, config loader and lifecycle that make onboarding a tool a `providers.yaml` stanza; the
+herdr provider as the protocol's first real consumer; drill-down navigation in the TUI; and the
+`ls` / `connect` / `providers` CLI verbs. 25 tasks, strict TDD, one commit each.
+
+**Verdict:** proceed. The design's decisions survive contact with the code — `internal/runner` is
+already the sole remote seam, `reach.Deps` is the injection precedent, `keyHelp` is the one
+keymap source, and `TestDemoFrames` gives golden frames with a width guard for free.
+
+**One correction found while writing this plan** (and now reflected in the design and spec): the
+`host/exec` callback must **not** take an alias. A plugin that could name a machine could
+enumerate the fleet through exec, and with concurrent calls the bridge could not tell which
+provider call an exec belonged to. It takes `callId` instead — the id of the `provider/*`
+request it is answering — and fleet resolves that to the alias it already chose. The escape is
+unrepresentable rather than filtered, the same technique `sshconf.Host` uses for exec directives.
+
+**Two must-hold constraints inherited from the module** (design §5, spec §6):
+
+- No package but `internal/runner` opens a connection to a host; providers reach a machine only
+  through `Host.Exec` / `host/exec`.
+- No new in-flight TUI state: drill-down reuses `canStartConfigAction()`.
+
+## 2. File inventory
+
+| Path | Purpose | Implements |
+| :-- | :-- | :-- |
+| `sdk/fleet/pkg/provider/provider.go` | `Node`, `Action`, `Handoff`, `HandoffKind`, `Stream`, `Provider`, `Host`, `ErrAbsent`, `ErrNoSuchPath`, `Validate` | F1 |
+| `sdk/fleet/pkg/provider/provider_test.go` | JSON round-trip, cells/columns mismatch, action validation | F1a–c |
+| `sdk/fleet/pkg/provider/wire.go` | JSON-RPC 2.0 envelope, method/param/result types, `codec` (newline framing), id correlation | F5 |
+| `sdk/fleet/pkg/provider/wire_test.go` | framing, malformed lines, concurrent id correlation | F5b, F5c |
+| `sdk/fleet/pkg/provider/serve.go` | `Serve(context, Provider, io.Reader, io.Writer)` — the plugin side; `hostExec` client stub handed to the Provider | F5a, F6, F10 |
+| `sdk/fleet/pkg/provider/client.go` | `Dial`/`Client` — the fleet side; handshake, version check, per-call deadline, `host/exec` dispatch to an injected `ExecFunc` | F4, F5, F7a |
+| `sdk/fleet/pkg/provider/*_test.go` | handshake table (match/mismatch), immediate-exit, deadline, echo-attrs | F4a–b, F5a, F7a |
+| `sdk/fleet/pkg/provider/providertest/fake.go` | `FakeProvider` (arbitrary five-column kind) + `StubPlugin` (a test-compiled binary) | harness for E/F leaves, protocol tests |
+| `sdk/fleet/internal/providers/registry.go` | ordered registry; builtin + plugin entries; failure isolation; `Get`, `All`, `Status` | F7b–c, F8b |
+| `sdk/fleet/internal/providers/config.go` | `providers.yaml` load: order, `enabled`, `provides` shadow, duplicate detection, absent = builtins | F8 |
+| `sdk/fleet/internal/providers/host.go` | the `host/exec` bridge: `callId` → alias → `runner.Runner.Run`; nothing else exposed | F6 |
+| `sdk/fleet/internal/providers/*_test.go` | loader table, shadow, disable, one-plugin-failure isolation, spawn count, exec authorization + leak sweep | F6a–b, F7, F8 |
+| `sdk/fleet/internal/provider/herdr/herdr.go` | `New(Deps) provider.Provider`: `Probe`, `Children`, `Columns`, action construction, degraded-state rules | F11–F14 |
+| `sdk/fleet/internal/provider/herdr/parse.go` | pure `parseStatus`, `parseSessions`, `parseSnapshot`, `splitSections` | F11c, F12b |
+| `sdk/fleet/internal/provider/herdr/script.go` | pure `probeScript()`, `snapshotScript(binary, names)` — POSIX sh, every value quoted | F11a, F12a |
+| `sdk/fleet/internal/provider/herdr/testdata/{status,status-stopped,sessions,snapshot,truncated}.json` | **real captured** herdr 0.8.2 output | F11c |
+| `sdk/fleet/internal/provider/herdr/*_test.go` | round-trip counts, absent, stopped, mismatch, hostile session name | F11–F14 |
+| `sdk/fleet/cmd/tui_nav.go` | `navFrame`, push/pop/reload, `loadLevel`, nav messages, `runProviderAction`, `navGen` | F15–F17, F19 |
+| `sdk/fleet/cmd/tui_nav_view.go` | breadcrumb, generic kind-agnostic table, level status bar | F15 |
+| `sdk/fleet/cmd/tui_nav_test.go` | push/pop, esc precedence, generation drop, ownership refusal, unbound keys, stream isolation | F15–F19 |
+| `sdk/fleet/cmd/ls.go` | `fleet ls <host> [path…] [--json]` | F20 |
+| `sdk/fleet/cmd/connect.go` | `fleet connect <host> <path…> [--action k] [--dry-run]` | F21 |
+| `sdk/fleet/cmd/providers.go` | `fleet providers list|check`; hidden `fleet provider serve <name>` | F9, F10 |
+| `sdk/fleet/cmd/provider_registry.go` | the ONE place built-ins are constructed and the config is applied | F8, F10 |
+| `sdk/fleet/cmd/{ls,connect,providers}_test.go` | JSON golden, dry-run argv, refusal exit code, check transcript, **dual-path equality** | F9, F10a, F20, F21 |
+| `sdk/fleet/cmd/tui_model.go`, `tui_keys.go`, `tui_view.go`, `tui.go` *(edits)* | 5 fields, 5 `Update` cases, level-aware `keyHelp`/`headerHints`, registry injection | F15–F19 |
+| `sdk/fleet/cmd/tui_demo_test.go` *(edit)* | golden frames: capability, sessions, agents, absent, plugin-failed | F15, F11b, F7a |
+| `sdk/fleet/internal/runner/handoff.go` | `HandoffArgv` (pure), `Command`, `Quote`; `interactiveArgs` promoted to a package func | F2 |
+| `sdk/fleet/internal/runner/runner.go` *(edit)* | `RunStreamCtx` on the interface, `Exec` and `Fake` | F3 |
+| `sdk/fleet/internal/runner/handoff_test.go` | mux/`-t` presence, no-shell-for-local, quoting, bad input | F2a–c |
+| `sdk/fleet/go.mod` *(edit)* | `gopkg.in/yaml.v3` | F8 |
+| `sdk/fleet/AGENTS.md` (+ `CLAUDE.md` symlink) | new "Drill-down & providers" invariants section; `ls`/`connect`/`providers` rows in Commands | §6 |
+| `sdk/fleet/README.md`, `sdk/README.md` | the drill-down and plugin-authoring tour; **real** pasted demos | §6 |
+| `docs/mbo/plans/fleet-connect/evidence/**` | per-task captured output | §7 |
+
+Touch-points deliberately **not** changed: `install.sh`, `scripts/test.sh` (the floor of 60
+already covers fleet), `cmd/status.go`'s `Row`, the ten `runner.Exec{}` construction sites, and
+`cmd/wake.go`'s type assertion.
+
+## 3. Interface contracts
+
+### 3.1 The contract (frozen at the end of Task 4 — leaf A's exit)
+
+As written in design §4.2, plus `Validate() error` on `Node` and `Action` (exactly one of
+`Handoff`/`Stream`; a `Key` that is printable) and:
+
+```go
+// Host is the ONLY capability a provider has over a machine.
+type Host interface {
+    Alias() string                                                    // for labels and handoffs
+    Exec(ctx context.Context, argv ...string) (stdout string, err error)
+}
+```
+
+In-process, `Host` wraps `runner.Runner` for the alias the registry chose. Over the wire it is a
+stub that issues `host/exec` and blocks for the reply.
+
+### 3.2 The protocol (frozen at the end of Task 8 — leaf B's exit)
+
+JSON-RPC 2.0, one object per line, over stdio. `protocol: 1`.
+
+```
+fleet → plugin   initialize        {fleetVersion, protocol}
+                                 ← {name, version, protocol, capabilities{levels,streams,actions}}
+fleet → plugin   provider/probe    {callId, alias}
+                                 ← {node} | {absent:{reason, node?}}
+fleet → plugin   provider/children {callId, alias, path[], attrs{}}
+                                 ← {kind, columns[], nodes[]}
+fleet → plugin   provider/columns  {kind}                     ← {columns[]}
+fleet → plugin   shutdown          {}                         ← {}
+plugin → fleet   host/exec         {callId, argv[], stdin?}   ← {stdout, stderr, exitCode}
+plugin → fleet   log               {level, message}           (notification)
+```
+
+**`host/exec` carries no alias.** `callId` is the id of the `provider/*` request being answered;
+fleet maps it to the alias it dispatched, so a plugin cannot reach a machine it was not asked
+about, and concurrent calls cannot be confused. An exec whose `callId` is unknown or already
+completed is refused with `-32001 unknown call`.
+
+`alias` is still sent *to* the plugin on `provider/*` so it can label rows and build handoffs; it
+is a name, never a route — no hostname, port, user, key path or credential ever crosses the wire.
+
+### 3.3 Config (frozen at the end of Task 10)
+
+```yaml
+providers:
+  - name: herdr           # built-in; present only to set order or disable
+    enabled: true
+  - name: k8s
+    command: ~/opt/bin/fleet-provider-k8s
+    args: []
+    timeout: 10s          # default 10s
+  - name: herdr-next
+    provides: herdr       # shadows the built-in of that name
+    command: fleet
+    args: [provider, serve, herdr]
+```
+
+Absent file ⇒ built-ins, enabled, declaration order. Duplicate `name` (or two entries
+`provides:` the same capability) is an error naming both. `~` expands via `$HOME`; `command` is
+resolved on PATH when it has no separator.
+
+### 3.4 `fleet ls --json` (frozen at the end of Task 23; a de-facto public contract)
+
+```json
+{ "host": "<alias>", "path": ["herdr"], "kind": "herdr-session",
+  "columns": ["SESSION","STATE","AGENTS","DIR"],
+  "nodes": [ { "id": "default", "kind": "herdr-session",
+               "cells": ["default","running","2","~/.config/herdr"],
+               "detail": "default session", "leaf": false,
+               "attrs": {"binary":"~/.local/bin/herdr"},
+               "actions": [ {"key":"c","label":"attach herdr session default",
+                             "available": true, "reason": ""} ] } ] }
+```
+
+`nodes` and `columns` are always arrays. `id` is the next path segment verbatim. Adding a key is
+non-breaking; renaming or removing one is not.
+
+## 4. TDD build order
+
+Each task: write the test, **observe it fail**, implement minimally, observe it pass, run the
+gates, capture evidence into `plans/fleet-connect/evidence/taskNN/`, commit by explicit path.
+Global gates for every task: `go test -race ./...`, `gofmt -l .` empty, `go vet ./...` clean.
+
+### Phase 1 — the contract (leaf A)
+
+**T1 · `pkg/provider` types.** Tests: JSON round-trip equality for every type including `nil`
+`Attrs`/`Actions` (F1c); `Validate` rejects an `Action` with both or neither of `Handoff`/`Stream`
+(F1b); a `Node` with fewer cells than columns yields blanks in a rendering helper, and zero cells
+does not panic (F1a). Implement the types and `Validate`. **Done when** the three tests pass and
+the package imports stdlib only (`go list -deps` shows no third-party). *Evidence:* `go test`
+output plus the `go list -deps` proof of a stdlib-only public package.
+
+**T2 · runner handoffs.** Tests: a remote handoff's argv contains `ssh`, `-t` and every
+`MuxArgs()` option and **no** `BatchMode` (F2a, extending `TestEveryRemotePathCarriesTheMuxOptions`
+to cover the new path); a local handoff execs `argv[0]` with a `$(…)`-bearing element surviving
+verbatim and no `sh -c` anywhere (F2b); a value interpolated into a remote command appears
+`Quote`d (F2c); empty host/command and empty argv error. Implement `handoff.go`; promote
+`interactiveArgs` to a package function; move `shQuote` to `runner.Quote`, leaving
+`cmd.shQuote = runner.Quote` so existing tests keep passing. **Done when** those pass and the
+whole module still builds. *Evidence:* the asserted argv for both kinds.
+
+**T3 · cancellable streams.** Test: a followed stream whose context is cancelled kills the
+process, closes both channels, and leaks no goroutine (F3a, cancel before the first line too).
+Implement `RunStreamCtx` on the interface, `Exec` (via `exec.CommandContext`) and `Fake`;
+`RunStream` delegates. **Done when** the test passes with `-race` and the ten `runner.Exec{}`
+call sites plus `cmd/wake.go`'s assertion are untouched (`git diff --stat` proves it).
+*Evidence:* the timed test output and the diffstat.
+
+**T4 · test harness.** `providertest.FakeProvider` (an arbitrary five-column kind, three levels,
+one leaf, one action of each type) and `StubPlugin` (a tiny `main` the protocol tests compile).
+**Done when** a smoke test drills `FakeProvider` end-to-end through the not-yet-written registry
+seam's interface. *Evidence:* the smoke test output. **Leaf A exits here — the contract is frozen.**
+
+### Phase 2 — the protocol (leaf B)
+
+**T5 · wire + framing.** Tests: an object per line round-trips; a malformed line errors with a
+decode reason and does not corrupt the next reply (F5b); two concurrent calls get their own
+replies with interleaved arrival (F5c). Implement `wire.go` (envelope, methods, `codec`, a
+pending-call map). **Done when** all three pass under `-race`. *Evidence:* the transcript from
+the framing test.
+
+**T6 · `Serve` (plugin side).** Test: a `Serve`d `FakeProvider` answers `initialize`,
+`provider/probe`, `provider/children` with `attrs` echoed **verbatim** (F5a), and `provider/columns`.
+Implement `serve.go`, including the `Host` stub that turns `Host.Exec` into a `host/exec` request
+carrying the in-flight `callId`. **Done when** the test drives `Serve` over an in-memory pipe.
+*Evidence:* the full JSON transcript.
+
+**T7 · `Client` (fleet side) + handshake.** Tests: `protocol: 1` enables; `protocol: 2` disables
+with `"plugin protocol 2, fleet speaks 1"` (F4a); a plugin exiting before `initialize` is marked
+failed with its exit status and captured stderr, and is not retried in a loop (F4b); a call that
+outlives its deadline errors and the process is killed (F7a). Implement `client.go` with an
+injected `ExecFunc` for the callback. **Done when** the four cases pass using `StubPlugin`.
+*Evidence:* each failure mode's rendered reason.
+
+**T8 · `host/exec` bridge.** Tests: a plugin's `host/exec` reaches `runner.Runner.Run` for the
+alias fleet dispatched, under BatchMode (F6a); the params contain no hostname, port, user,
+identity path or password (a leak sweep over the marshalled bytes, mirroring
+`TestSudoSecretNeverAppearsInTheRemoteCommand`); an exec with an unknown or completed `callId` is
+refused `-32001` (F6b). Implement `internal/providers/host.go`. **Done when** all pass with
+`runner.Fake` and no socket. *Evidence:* the refusal transcript and the leak-sweep assertion.
+**Leaf B exits here — the protocol is frozen.**
+
+### Phase 3 — registry, config, verbs (leaf C)
+
+**T9 · registry.** Tests: render order is declaration order, never map iteration (F8b); one
+failing provider does not stop the others (F7b); a plugin is spawned once and reused across three
+calls (F7c). Implement `registry.go`. **Done when** those pass. *Evidence:* spawn-count assertion.
+
+**T10 · config loader.** Tests: absent file ⇒ built-ins enabled in declaration order, and nothing
+is written (F8a, mirroring `TestMissingConfigIsAnEmptyFleetNotAnError`); an empty file behaves the
+same; reordering the file reorders rendering; a duplicate name errors naming both (F8b);
+`enabled: false` removes the provider from every level *and* stops it being probed (F8c);
+`provides: herdr` shadows the built-in and both never run (F8d). Add `yaml.v3` to `go.mod`.
+**Done when** the table passes. *Evidence:* `go test` plus the `go.mod` diff.
+
+**T11 · lifecycle.** Tests: a deadline breach kills the process and renders the capability as
+failed without hanging (F7a); a plugin's stderr reaches the log; a plugin that dies mid-session is
+re-dialed once on the next call and, failing again, reported. Implement lazy spawn, kill, and
+status. **Done when** the timed tests pass. *Evidence:* the failed-capability row.
+
+**T12 · `providers` verbs.** Tests: `list` prints name · source · state · protocol · command and
+does **not** spawn a plugin without `--probe` (F9a); `check <name> --host <alias>` prints the
+handshake, one probe and the raw exchange with exit 0, non-zero with a named reason on failure,
+and exit 0 for a legitimate `absent` answer (F9b). Implement `cmd/providers.go` including hidden
+`fleet provider serve <name>`. **Done when** the golden output matches. *Evidence:* both
+transcripts.
+
+### Phase 4 — the herdr provider (leaf D)
+
+**T13 · parsers.** Tests over **real captured** fixtures: `status.json`, `status-stopped.json`
+(no `server` block), `sessions.json`, `snapshot.json`, `truncated.json` → a parse reason, never a
+crash and never a "running" verdict (F11c). Implement `parse.go` with narrow structs.
+**Done when** the table passes. *Evidence:* the fixtures' provenance header (herdr `--version`
+and the capture date) plus test output.
+
+**T14 · probe.** Tests: one round trip for the whole capability row (F11a) via a recording
+runner; a host where only `~/.local/bin/herdr` exists still resolves (the verified non-login PATH
+case); no herdr anywhere ⇒ `ErrAbsent` with a `Node` naming the paths tried, `Leaf`, no actions
+(F11b). Implement `script.go`'s `probeScript()` and `Probe`, carrying the resolved path in
+`Attrs["binary"]`. **Done when** the round-trip count is exactly 1 and the absent row renders.
+*Evidence:* the recorded argv and the absent row.
+
+**T15 · sessions level.** Tests: exactly two round trips for N = 0, 1, 5 sessions (F12a); agent
+counts come from the already-fetched snapshots, with `-` when one fails (F12b); every session name
+is quoted in the generated script. **Done when** the counts hold for all three N. *Evidence:* the
+generated script and the round-trip counts.
+
+**T16 · agents level.** Tests: one round trip; rows are `Leaf` so `enter` does nothing; a session
+with no agents renders an empty level with its header (F13a). **Done when** those pass.
+*Evidence:* rendered rows for a real snapshot.
+
+**T17 · actions and degraded states.** Tests: a session's `c` yields the local handoff
+`[herdr, --remote, <alias>, --session, <name>]`, with a metacharacter-laden name inert (F14a);
+protocol mismatch or `compatible:false` lists every attach with both numbers named and attempts
+nothing (F14b); a stopped server still lists sessions and keeps attach available (F14c); no local
+herdr refuses with that reason (F14d). Implement `Deps{LocalBinary, LocalStatus}` (injected,
+cached once per process). **Done when** the four cases pass. *Evidence:* the four `Unavailable`
+strings and the argv.
+
+**T18 · dual-path equality (the keystone).** Test: the herdr tree rendered in-process and again
+with herdr configured as an external plugin (`command: fleet, args: [provider, serve, herdr]`) is
+**byte-identical** at all three levels, including the absent case (F10a). **Done when** the
+comparison passes with a `runner.Fake` behind both paths. *Evidence:* both renderings and the
+diff (empty).
+
+### Phase 5 — the TUI (leaf E)
+
+**T19 · nav stack and loads.** Tests: `enter` replaces the host list with the capability table and
+a breadcrumb, keeping banner, log pane and status bar (F15a); `esc` pops restoring that frame's
+cursor, and pops to the dashboard at depth 0 (F15b); a load in flight shows a spinner and a second
+`r` is a no-op with a status line (F16a); enter A → `esc` → enter B, then A's reply arrives ⇒
+discarded (F16b). Implement `tui_nav.go` against `FakeProvider`, with `reg` injected in
+`cmd/tui.go`. **Done when** all pass and no existing model test changes. *Evidence:* the
+generation-drop transcript.
+
+**T20 · ownership and keymap.** Tests: `enter` on a pending/updating/waking host is refused with a
+status line and probes nothing, then succeeds once free (F17a); a background update on another
+host continues and still logs while drilled in (F17b); every level-bound key is declared in
+`keyHelp` with its level and a level-only key does not show at level 0 (F18a); each of
+`u w v space a p P A F` does nothing inside a level (F18b). Implement the `routeNav` branch and
+the level-aware `keyHelp`/`headerHints`. **Done when** all pass. *Evidence:* the refusal line and
+the keymap coverage output.
+
+**T21 · view and golden frames.** Tests: `esc` clears an active level filter before it pops
+(F15c); `TestDemoFrames` gains capability, sessions, agents, absent and plugin-failed frames, all
+inside the width guard; an unknown five-column kind renders with no TUI change. Implement
+`tui_nav_view.go`. **Done when** the frames are byte-stable in the ASCII profile. *Evidence:* the
+new frames.
+
+**T22 · provider streams.** Test: a `Stream` action's lines reach the log pane with the host's
+colour and touch neither `running`/`updating` nor trigger a re-poll (F19a), including a stream
+that ends immediately. Implement `beginProviderStream` over `RunStreamCtx` with its own message
+types. **Done when** the isolation assertion passes. *Evidence:* the log pane frame plus the
+engine-state assertion.
+
+### Phase 6 — the CLI (leaf F)
+
+**T23 · `fleet ls`.** Tests: `--json` matches the golden shape with `nodes`/`columns` as arrays,
+including a zero-node level (F20a); `fleet ls <host> herdr default` renders the agents table
+without a TUI, and an unknown path segment errors naming it (F20b). **Done when** the golden JSON
+matches byte-for-byte. *Evidence:* the golden file and the human table.
+
+**T24 · `fleet connect`.** Tests: `--dry-run` prints the exact argv, with no credential and no
+unquoted provider value, for a hostile session name (F21a); an action whose `Unavailable` is set
+is refused with its reason and a non-zero exit, as is an `--action` key that does not exist
+(F21b). **Done when** both pass. *Evidence:* the dry-run argv and the refusal exit code.
+
+### Phase 7 — integration (leaf G)
+
+**T25 · register, document, prove live.** Register herdr as a built-in in
+`cmd/provider_registry.go`. Write the AGENTS.md "Drill-down & providers" invariants (§6 below),
+the README drill-down and plugin-authoring sections, and the `sdk/README.md` row — **with real
+pasted output**. Run the live gates on `<spark>`. **Done when** `./scripts/test.sh` is green and
+every live gate in §7 is captured. *Evidence:* all of §7's live captures.
+
+## 5. Verification mapping
+
+| Spec rule | Test |
+| :-- | :-- |
+| F1a | `TestAShortCellSliceRendersBlanksNotAPanic` |
+| F1b | `TestAnActionMustCarryExactlyOneOfHandoffOrStream` |
+| F1c | `TestEveryContractTypeRoundTripsThroughJSON` |
+| F2a | `TestEveryHandoffCarriesTheMuxOptions` |
+| F2b | `TestLocalHandoffNeverInvokesAShell` |
+| F2c | `TestRemoteHandoffQuotesEveryProviderSuppliedValue` |
+| F3a | `TestAFollowedStreamStopsWhenItsContextIsCancelled` |
+| F4a | `TestAProtocolMismatchDisablesThePluginWithBothNumbers` |
+| F4b | `TestAPluginThatExitsBeforeInitializeIsReportedNotRetriedForever` |
+| F5a | `TestAttrsRoundTripToThePluginVerbatim` |
+| F5b | `TestAMalformedLineDoesNotCorruptTheNextReply` |
+| F5c | `TestConcurrentCallsNeverCrossDeliverReplies` |
+| F6a | `TestHostExecLandsOnTheRunnerSeamUnderBatchMode` · `TestHostExecParamsCarryNoRouteOrCredential` |
+| F6b | `TestHostExecForAnUnknownCallIdIsRefused` |
+| F7a | `TestAPluginThatMissesItsDeadlineIsKilledAndReportedAsARow` |
+| F7b | `TestOneFailingPluginNeverStopsTheOthers` |
+| F7c | `TestAPluginIsSpawnedOnceAndReused` |
+| F8a | `TestMissingProvidersConfigIsTheBuiltinSetNotAnError` |
+| F8b | `TestRenderOrderIsFileOrder` · `TestDuplicateProviderNamesAreRefusedNamingBoth` |
+| F8c | `TestADisabledProviderIsNeverProbed` |
+| F8d | `TestAPluginCanShadowABuiltinByName` |
+| F9a | `TestProvidersListDoesNotSpawnWithoutProbe` |
+| F9b | `TestProvidersCheckPrintsTheExchangeAndExitsNonZeroOnFailure` |
+| F10a | `TestTheHerdrTreeIsIdenticalInProcessAndOverTheWire` |
+| F11a | `TestHerdrProbeCostsOneRoundTrip` · `TestHerdrResolvesABinaryMissingFromTheNonLoginPath` |
+| F11b | `TestAbsentHerdrIsARowNotAnOmission` |
+| F11c | `TestParseStatusFromRealHerdrOutput` · `TestTruncatedStatusNeverReportsARunningServer` |
+| F12a | `TestSessionsLevelCostsTwoRoundTripsRegardlessOfSessionCount` |
+| F12b | `TestAgentCountsComeFromTheFetchedSnapshots` |
+| F13a | `TestAgentsLevelCostsOneRoundTripAndRowsAreLeaves` |
+| F14a | `TestAttachUsesTheLocalBinaryAndTheRemoteAlias` · `TestAHostileSessionNameStaysAnInertArgvElement` |
+| F14b | `TestAttachIsRefusedOnAProtocolMismatchWithBothNumbers` |
+| F14c | `TestServerStoppedStillListsSessionsAndKeepsAttach` |
+| F14d | `TestAttachIsRefusedWithoutALocalHerdr` |
+| F15a | `TestEnterPushesTheCapabilityLevelKeepingTheLogPane` |
+| F15b | `TestEscPopsOneLevelRestoringItsCursor` |
+| F15c | `TestEscClearsAFilterBeforeItPopsALevel` |
+| F16a | `TestASecondRefreshWhileLoadingIsANoOp` |
+| F16b | `TestALateLevelLoadForAPoppedViewIsDiscarded` |
+| F17a | `TestDrillingIntoABusyHostIsRefused` |
+| F17b | `TestABackgroundUpdateContinuesWhileDrilledIn` |
+| F18a | `TestKeyHelpCoversEveryBoundNavKeyAtItsLevel` |
+| F18b | `TestUpdateKeysAreUnboundInsideALevel` |
+| F19a | `TestAProviderStreamNeverTouchesTheUpdateEngine` |
+| F20a | `TestLsJSONShapeIsStable` · `TestLsNodesIsNeverNull` |
+| F20b | `TestLsRendersADeepLevelAndNamesAnUnknownSegment` |
+| F21a | `TestConnectDryRunPrintsTheExactArgv` |
+| F21b | `TestConnectRefusesAnUnavailableActionWithItsReason` |
+
+## 6. Integration & rollout
+
+- **Build/test discovery** is by directory under `sdk/`, so the new packages are picked up by
+  `scripts/test.sh` and the `Makefile` loops with no wiring. The coverage floor for `fleet` stays
+  60; the new pure packages target ≥ 90 and should raise the module figure.
+- **No `install.sh` change.** `fleet` is already built and installed under
+  `gff install.sdk.fleet`; nothing new needs a flag, because a plugin is opt-in by the operator's
+  own config file.
+- **Docs.** `sdk/fleet/AGENTS.md` gains a "Drill-down & providers" invariants section:
+  1. A provider never opens a socket; its only reach is `Host.Exec` / `host/exec`.
+  2. `host/exec` carries a `callId`, never an alias — a plugin cannot name a machine.
+  3. A level costs a **bounded** number of round trips, never one per row.
+  4. The path is the contract: `fleet ls <host> <path…>`, the breadcrumb and `Children(path)` are
+     one `[]string`; the `Node` shape is the TUI row, the JSON element and the wire element.
+  5. No package but `internal/runner` spells `ssh` in argv; handoffs are declared data.
+  6. Every provider value in a remote command is `Quote`d; local handoffs are argv with no shell.
+  7. An absent capability is a row with a reason, and a failed plugin is a row with a reason —
+     never an omission.
+  8. An action that cannot run is listed with why, never hidden.
+  9. Drilling in claims no row and is refused on a host an async path owns.
+  10. A late level load for a popped view is discarded.
+  11. Fleet knows no provider's kinds; columns come from `Columns(kind)`, widths from the data.
+  12. `Row` stays install-drift; provider rows are `provider.Node`.
+  13. Provider streams never touch the update engine.
+  14. `keyHelp` remains the single keymap source, now level-aware.
+  15. A missing `providers.yaml` is the built-in set, not a failure.
+  Also: `README.md` gets the drill-down tour **and** a "write a provider plugin" section (the
+  protocol table, a 30-line stub, and `fleet providers check`), and `sdk/README.md`'s fleet
+  section gains the drill-down demo. Demos must be re-run and pasted, never invented.
+- **Manual acceptance checklist** (the operator, on real hardware):
+  1. `fleet` → `enter` on `<spark>` → capability row shows herdr's version, protocol, server
+     state and session count.
+  2. `enter` → sessions; `enter` → agents with live states; `esc` `esc` back to the dashboard.
+  3. `c` on a session → herdr attaches; quit → the dashboard returns and the row is re-polled.
+  4. `enter` on a host without herdr → a row saying so, naming the paths tried.
+  5. `fleet ls <spark> herdr --json | jq .` → the documented shape.
+  6. `fleet connect <spark> herdr default --dry-run` → the argv, nothing secret in it.
+  7. Configure herdr as an external plugin; repeat 1–3; the trees match.
+  8. Configure a deliberately broken plugin; the row explains it and the others still render.
+
+### 6.1 Build leaves / DAG
+
+**Default: one worker, tasks 1 → 25 in order.** The tasks chain through one contract and one model
+struct; per MBO policy the breakout is offered, not assumed.
+
+If the operator asks for parallel execution, the graph is:
+
+```
+A(contract) ──▶ B(protocol) ──▶ C(registry+config+verbs) ──┐
+     │               │                                      ├──▶ G(integrate+docs+live)
+     ├──────────────▶ D(herdr) ────────────────────────────┤
+     └──▶ E(TUI nav) ─────────────────────────────────────┤
+                     F(CLI ls/connect) ◀── C ─────────────┘
+```
+
+| Leaf | Owns (paths) | Consumes (in-edges) | `done-when` gate | Blocking? |
+| :-- | :-- | :-- | :-- | :-- |
+| **A** contract | `pkg/provider/{provider,provider_test}.go`, `pkg/provider/providertest/**`, `internal/runner/handoff*.go`, `internal/runner/runner.go` | — | T1–T4 green; `pkg/provider` stdlib-only; ≥ 90% cov; the ten `Exec{}` sites and `wake.go`'s assertion untouched | **yes (base)** |
+| **B** protocol | `pkg/provider/{wire,serve,client}*.go` | A (§3.1) | T5–T8 green incl. the leak sweep and `-32001` refusal; ≥ 90% cov | **yes** (C, D-T18 consume it) |
+| **C** registry+config+verbs | `internal/providers/**`, `cmd/providers.go`, `go.mod` | A, B (§3.2) | T9–T12 green; missing-config = built-ins; ≥ 90% cov | no |
+| **D** herdr | `internal/provider/herdr/**` | A, B (for T18) | T13–T18 green; real fixtures with provenance; round-trip counts 1/2/1; dual-path identical; ≥ 90% cov; zero `cmd` imports | no |
+| **E** TUI nav | `cmd/tui_nav*.go`, edits to `cmd/tui_{model,keys,view}.go`, `cmd/tui.go`, `cmd/tui_demo_test.go` | A (tests use `FakeProvider`, not herdr) | T19–T22 green; new frames inside the width guard; **no existing test or frame changed** | no |
+| **F** CLI ls/connect | `cmd/ls.go`, `cmd/connect.go`, their tests | A, C (§3.3) | T23–T24 green; golden JSON committed as the contract | no |
+| **G** integrate+docs+live | `cmd/provider_registry.go` (final), `sdk/fleet/AGENTS.md`, `sdk/fleet/README.md`, `sdk/README.md` | B, C, D, E, F | T25: `./scripts/test.sh` green; all §7 live captures committed; the 8-step manual checklist signed off | no |
+
+`cmd/` is touched by C, E, F and G, but in disjoint files; `cmd/provider_registry.go` is created
+by C with an empty built-in set and filled by G, so no leaf races the registration site. Run
+`gss feature conflicts --json` before fan-out and rebase F onto E if they drift, never the
+reverse (E's edits to `tui_keys.go`/`tui_view.go` are the larger surface).
+
+## 7. Validation & evidence (show the work)
+
+Evidence tree `docs/mbo/plans/fleet-connect/evidence/task01..25/`, append-only, dated headers,
+hostnames sanitised, committed with each task. A feature without captured evidence is not done.
+
+**Coverage bars.** `pkg/provider`, `internal/providers` and `internal/provider/herdr` ≥ 90%;
+module floor 60 in `scripts/test.sh` unchanged and not breached; `go test -race ./...` green.
+
+**Adversarial scenarios covered by tests, not hope:** both-and-neither action payloads (F1b); a
+shell-metacharacter session name through a local handoff (F14a) and a remote command (F2c); a
+plugin claiming protocol 2 (F4a); a plugin exiting instantly (F4b); a plugin sleeping past its
+deadline (F7a); a plugin writing a half line (F5b); a plugin issuing `host/exec` with a foreign or
+stale `callId` (F6b) — the fleet-enumeration escape; interleaved concurrent replies (F5c); a
+truncated `status --json` claiming nothing (F11c); a snapshot failing for one of five sessions
+(F12b); a late reply for a popped level (F16b); drill-down racing an update or wake (F17a); a
+provider stream trying to move the update engine (F19a).
+
+**Live gates** (cannot be unit-tested; captured under `evidence/live/`):
+
+1. `fleet providers check herdr --host <spark>` — the raw handshake + probe + `host/exec`
+   exchange.
+2. The three-level drill-down and a real attach, then the dashboard returning with the row
+   re-polled.
+3. The **same tree via the external-plugin path** (`command: fleet, args: [provider, serve,
+   herdr]`) shown identical — the framework's keystone proof.
+4. A host with no herdr rendering the absent row with the paths it tried.
+5. `fleet ls <spark> herdr default --json` and `fleet connect <spark> herdr default --dry-run`.
+6. A deliberately broken plugin: its row explains itself and the others still render.
+
+> Produced via `superpowers:writing-plans`. Execute with `superpowers:executing-plans`, TDD
+> throughout, using the trio in [`./fleet-connect/`](./fleet-connect/). Update
+> [`../index.md`](../index.md) state as it moves.
