@@ -126,6 +126,40 @@ if [ -f "$BASE_DIR/ai/antigravity/aliases.sh" ]; then
     cp "$BASE_DIR/ai/antigravity/aliases.sh" "$AGY_XDG_DIR/aliases.sh"
 fi
 
+# --- Local "dotfiles" plugin: the repo's Claude slash commands + account
+# memories rendered into agy's native plugin shape (commands/*.toml +
+# rules/AGENTS.md) and enabled in ~/.gemini/config/config.json. The renderer
+# is a standalone, tested script (mirrors apply-forced-settings.sh); the
+# Markdown under ai/claude/ stays the single source. Design: agy-parity 5–6.
+RENDER_PLUGIN="$BASE_DIR/opt/scripts/system/render-agy-plugin.sh"
+AGY_PLUGIN_DIR="$AGY_CONFIG_ROOT/plugins/dotfiles"
+AGY_CONFIG_JSON="$AGY_CONFIG_ROOT/config.json"
+if [ -f "$RENDER_PLUGIN" ]; then
+    echo "  Rendering the dotfiles plugin into ~/.gemini/config/plugins/dotfiles..."
+    if bash "$RENDER_PLUGIN" "$BASE_DIR" "$AGY_PLUGIN_DIR"; then
+        if command -v jq > /dev/null 2>&1; then
+            mkdir -p "$AGY_CONFIG_ROOT"
+            [ -f "$AGY_CONFIG_JSON" ] && jq -e . "$AGY_CONFIG_JSON" > /dev/null 2>&1 || echo '{}' > "$AGY_CONFIG_JSON"
+            cfg_tmp="$(mktemp "${TMPDIR:-/tmp}/agy-config.XXXXXX")"
+            # Only our own entry is touched; other plugins and userSettings survive.
+            if jq '.plugins = (.plugins // {}) | .plugins.dotfiles = {enabled: true}' "$AGY_CONFIG_JSON" > "$cfg_tmp" && [ -s "$cfg_tmp" ]; then
+                cat "$cfg_tmp" > "$AGY_CONFIG_JSON"
+            else
+                echo "    WARNING: could not enable the dotfiles plugin in config.json" >&2
+            fi
+            rm -f "$cfg_tmp"
+        else
+            echo "    WARNING: jq not installed — dotfiles plugin rendered but not enabled in config.json" >&2
+        fi
+    else
+        echo "    WARNING: dotfiles plugin render failed; continuing" >&2
+    fi
+else
+    # Renderer absent (e.g. rolled back): drop a previously rendered plugin so
+    # agy does not keep loading stale commands.
+    rm -rf "$AGY_PLUGIN_DIR"
+fi
+
 # --- statusline-command.sh (shim for gsl status line) ---
 # Point agy's statusLine settings to a decoupled shim in ~/.gemini/config/.
 if [ -f "$BASE_DIR/ai/claude/statusline-command.sh" ]; then

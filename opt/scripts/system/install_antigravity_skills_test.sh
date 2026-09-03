@@ -71,6 +71,12 @@ assert_in_subshell "forced: ask carries command(git push --force)" \
 assert_in_subshell "forced: ask carries command(sudo)" \
     "jq -e '.permissions.ask | index(\"command(sudo)\")' '$S' >/dev/null"
 
+# --- A: agy-parity F6/F7 — local dotfiles plugin rendered and enabled ---
+assert_file_exists "$A/.gemini/config/plugins/dotfiles/plugin.json" "plugin: dotfiles/plugin.json rendered"
+assert_file_exists "$A/.gemini/config/plugins/dotfiles/commands/sync.toml" "plugin: commands/sync.toml rendered"
+assert_file_exists "$A/.gemini/config/plugins/dotfiles/rules/AGENTS.md" "plugin: rules/AGENTS.md rendered"
+assert_eq "$(jq -r '.plugins.dotfiles.enabled' "$A/.gemini/config/config.json")" "true" "plugin: enabled in config.json (created)"
+
 # --- A: idempotency (re-run changes nothing structurally) ---
 run_install "$A"
 assert_in_subshell "re-run keeps hooks.json valid" "jq -e . '$A/.gemini/config/hooks.json' >/dev/null"
@@ -85,6 +91,9 @@ ln -s "$REPO_ROOT/ai/skills/sync-skills" "$B/.agents/skills/sync-skills"        
 echo '{ "ui": { "theme": "myTheme" } }' > "$B/.gemini/settings.json"             # host-owned, must survive
 echo '{ "colorScheme": "light", "permissions": { "allow": ["command(mytool)"], "deny": ["command(host-only)"] } }' \
     > "$B/.gemini/antigravity-cli/settings.json"    # pre-existing keys: colorScheme + host allow preserved, host deny replaced
+mkdir -p "$B/.gemini/config"
+echo '{ "plugins": { "superpowers": { "enabled": true } }, "userSettings": { "remoteControlHostname": "h" } }' \
+    > "$B/.gemini/config/config.json"                # pre-existing plugin map + user settings must survive
 run_install "$B"
 assert_in_subshell "legacy ~/.gemini/hooks removed" "[ ! -e '$B/.gemini/hooks' ]"
 assert_in_subshell "legacy repo-pointing policy link removed" "[ ! -e '$B/.gemini/policies/safety.toml' ]"
@@ -105,6 +114,10 @@ assert_in_subshell "existing host: host deny entry REPLACED (policy is immutable
     "! jq -e '.permissions.deny | index(\"command(host-only)\")' '$SB' >/dev/null 2>&1"
 assert_in_subshell "existing host: forced deny carries command(mkfs)" \
     "jq -e '.permissions.deny | index(\"command(mkfs)\")' '$SB' >/dev/null"
+CJ="$B/.gemini/config/config.json"
+assert_eq "$(jq -r '.plugins.dotfiles.enabled' "$CJ")" "true" "existing host: dotfiles plugin enabled"
+assert_eq "$(jq -r '.plugins.superpowers.enabled' "$CJ")" "true" "existing host: other plugin entry preserved"
+assert_eq "$(jq -r '.userSettings.remoteControlHostname' "$CJ")" "h" "existing host: userSettings preserved"
 
 # --- C: agy-parity F4 — hooks.json is MERGED: a foreign named hook (herdr's
 # state-reporting integration) survives, and a stale repo `guards` entry is

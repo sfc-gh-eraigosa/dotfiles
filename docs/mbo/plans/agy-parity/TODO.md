@@ -85,13 +85,13 @@
 
 ### Task 6 — dotfiles plugin renderer + enable  (plan Task 6)
 
-- [ ] RED: create `opt/scripts/system/render-agy-plugin_test.sh`; add plugin + config.json rows (A, B) to the installer test
-- [ ] RUN-RED: both drivers → **FAIL** > 0
-- [ ] GREEN: create `opt/scripts/system/render-agy-plugin.sh`; installer calls it + enables in `config.json`
-- [ ] RUN-GREEN: both drivers | tee `evidence/u5-u6-plugin/{renderer_test,installer_test}.txt` → **FAIL=0**
-- [ ] VERIFY: shellcheck renderer + installer; `make lint-portability | tail -3`; ALLOWLIST both new files
-- [ ] COMMIT: `feat(agy): render repo slash commands + account memories as a local agy plugin (#268)`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: create `opt/scripts/system/render-agy-plugin_test.sh`; add plugin + config.json rows (A, B) to the installer test
+- [x] RUN-RED: both drivers → **FAIL** > 0
+- [x] GREEN: create `opt/scripts/system/render-agy-plugin.sh`; installer calls it + enables in `config.json`
+- [x] RUN-GREEN: both drivers | tee `evidence/u5-u6-plugin/{renderer_test,installer_test}.txt` → **FAIL=0**
+- [x] VERIFY: shellcheck renderer + installer; `make lint-portability | tail -3`; ALLOWLIST both new files
+- [x] COMMIT: `feat(agy): render repo slash commands + account memories as a local agy plugin (#268)`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** renderer + installer tests FAIL=0; lint clean.
 
