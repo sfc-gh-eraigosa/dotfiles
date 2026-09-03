@@ -87,6 +87,8 @@ STUB
 cat > "$H/bin/kill" <<'STUB'
 #!/usr/bin/env bash
 echo "kill $*" >> "$STUB_LOG"
+# FAKE_KILL_REFUSES=1 simulates a mapper ignoring SIGTERM (the entry stays).
+[ "${FAKE_KILL_REFUSES:-0}" = "1" ] && exit 0
 for p in "$@"; do rm -rf "$PROC_DIR/$p"; done
 exit 0
 STUB
@@ -125,6 +127,11 @@ run_sut() { # run_sut [VAR=val ...]
     mkdir -p "$H/proc/4243"
     printf 'bash\0-c\0pgrep -af bin/keyd-application-mapper | head\0' > "$H/proc/4243/cmdline"
   fi
+  if [ "${PRESEED_BARE_ARGV:-0}" = "1" ]; then
+    # The env/sg launch shape: PATH resolution leaves a BARE argv[0].
+    mkdir -p "$H/proc/4244"
+    printf 'keyd-application-mapper\0-d\0' > "$H/proc/4244/cmdline"
+  fi
   if [ "${PRESEED_AUTOSTART:-0}" = "1" ]; then
     mkdir -p "$H/home/.config/autostart"
     printf '[Desktop Entry]\nExec=keyd-application-mapper -d\n' \
@@ -136,6 +143,26 @@ run_sut() { # run_sut [VAR=val ...]
       INPUT_DEVICES_DIR="$H/sys/class/input" PROC_DIR="$H/proc" \
       KILL_CMD="$H/bin/kill" \
       "$@" bash "$SUT"
+}
+
+# The --uninstall twin: the VAR=val pass-through in run_sut cannot carry a script
+# argument (env would consume it as the command to run), so the SUT is invoked
+# with --uninstall here, preseeded only with what this path needs.
+run_sut_uninstall() {
+    : > "$H/stublog"
+    rm -rf "$H/etc/keyd" "$H/etc/systemd" "$H/home/.config" "$H/proc"
+    mkdir -p "$H/proc"
+    if [ "${PRESEED_AUTOSTART:-0}" = "1" ]; then
+        mkdir -p "$H/home/.config/autostart"
+        printf '[Desktop Entry]\nExec=keyd-application-mapper -d\n' \
+            > "$H/home/.config/autostart/keyd-application-mapper.desktop"
+    fi
+    env PATH="$H/bin:$PATH" HOME="$H/home" KEYD_ETC="$H/etc/keyd" \
+        STUB_LOG="$H/stublog" XDG_SESSION_TYPE=x11 DISPLAY=:99 \
+        KEYD_DROPIN="$H/etc/systemd/keyd.service.d/10-dotfiles-restart.conf" \
+        INPUT_DEVICES_DIR="$H/sys/class/input" PROC_DIR="$H/proc" \
+        KILL_CMD="$H/bin/kill" \
+        bash "$SUT" --uninstall
 }
 
 # --- guards: must no-op where there is no desktop ------------------------------
@@ -202,12 +229,38 @@ assert_grep "replace stops the real mapper" "^kill 4242" "$H/stublog"
 assert_grep_negative "replace leaves a bystander shell that mentions the path alone" \
     "^kill 4243" "$H/stublog"
 
+# The env/sg launch shape (PATH resolution) leaves a BARE argv[0], which the
+# `bin/...` pathname rule alone would miss -- that mapper must still be
+# recognized and replaced, not left holding the single-instance lock.
+out="$(PRESEED_BROKEN_LOG=1 PRESEED_BARE_ARGV=1 run_sut 2>&1)"
+assert_grep "bare-argv mapper is recognized and replaced" "^kill 4244" "$H/stublog"
+assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "yes" \
+    "bare-argv mapper: clean replacement keeps the config installed"
+
+# SIGTERM that simply does not take: the pre-existing mapper was running BEFORE
+# the installer touched anything, and its log is the kind of stale evidence that
+# caused the 2026-09-02 false rollback -- so keep it; do not roll back on it.
+out="$(PRESEED_BROKEN_LOG=1 run_sut FAKE_KILL_REFUSES=1 2>&1)"
+assert_eq "$?" "0" "un-stoppable mapper: exits clean"
+assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "yes" \
+    "un-stoppable mapper: the layout survives"
+case "$out" in *"could not stop"*) r=0 ;; *) r=1 ;; esac
+assert_eq "$r" "0" "un-stoppable mapper: the refusal is announced"
+case "$out" in *"rolling back"*) r=1 ;; *) r=0 ;; esac
+assert_eq "$r" "0" "un-stoppable mapper: no stale-log rollback"
+
 # The old XDG autostart entry (an earlier install shape) launches a mapper at login
 # WITHOUT the keyd group, which then owns the single-instance lock and blocks the
 # supervised unit forever. Install and uninstall must both remove it.
 out="$(PRESEED_AUTOSTART=1 run_sut 2>&1)"
 assert_eq "$([ -f "$H/home/.config/autostart/keyd-application-mapper.desktop" ] && echo yes || echo no)" "no" \
     "stale autostart entry is removed on install"
+
+# ...and on --uninstall: if the entry survived, the very next login would
+# relaunch the group-less mapper that blocks the supervised unit forever.
+out="$(PRESEED_AUTOSTART=1 run_sut_uninstall 2>&1)"
+assert_eq "$([ -f "$H/home/.config/autostart/keyd-application-mapper.desktop" ] && echo yes || echo no)" "no" \
+    "stale autostart entry is removed on uninstall"
 
 # The mapper failing to start at all is the same hazard as it starting broken.
 out="$(run_sut FAKE_MAPPER_STARTS=0 2>&1)"

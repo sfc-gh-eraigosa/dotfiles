@@ -165,7 +165,9 @@ itself performs — so a re-run on a healthy host could read old errors and
 uninstall everything. The installer now stops any running mapper (including a
 legacy `~/.config/autostart/keyd-application-mapper.desktop` instance, which runs
 without the `keyd` group and can never connect) and judges only the fresh
-supervised one. Recovery is simply re-running `macos-keys-linux.sh`.
+supervised one. If the pre-existing mapper refuses to stop, the installer keeps
+it as-is rather than rolling back on its stale log. Recovery is simply re-running
+`macos-keys-linux.sh`.
 
 **`Cmd+V` prints `^V` in gnome-terminal (and `Cmd+C` may interrupt).** The mapper
 is fine; gnome-terminal's *own* copy/paste accelerators are no longer the stock

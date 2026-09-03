@@ -205,12 +205,16 @@ mapper_pids() {
 		# A process can exit between the glob and the read, so the redirect itself
 		# must not be what fails -- guard the file rather than the pipeline.
 		[ -r "${_d}/cmdline" ] || continue
-		# Only argv[0..1] count (`keyd-application-mapper …` or `python3 …/keyd-
-		# application-mapper …`). Matching the WHOLE command line would also hit a
-		# shell whose -c string merely mentions the path -- it did, during the
-		# 2026-09-02 fix, killing the shell that was running this script.
+		# Only argv[0..1] count: a BARE name (the env/sg launch shape -- PATH
+		# resolution leaves a bare argv[0], so `bin/...` alone would miss it), a
+		# full path (`…/bin/keyd-application-mapper`), or an interpreter argument
+		# (`python3 …/keyd-application-mapper …`). Matching the WHOLE command line
+		# would also hit a shell whose -c string merely mentions the path -- it
+		# did, during the 2026-09-02 fix, killing the shell that was running this
+		# script. argv[0] is the executable itself (never a -c string), so its
+		# bare name is bystander-safe to match.
 		tr '\0' '\n' 2> /dev/null < "${_d}/cmdline" | head -n 2 |
-			grep -q 'bin/keyd-application-mapper$' || continue
+			grep -qE '^keyd-application-mapper$|/bin/keyd-application-mapper$' || continue
 		echo "${_p}"
 	done
 }
@@ -414,7 +418,16 @@ start_mapper() {
 	# way: stop it, start a fresh supervised one, and judge only the fresh one.
 	if mapper_running; then
 		log "Replacing the already-running application mapper with a fresh supervised one..."
-		stop_mappers || warn "an old application mapper is still running; the new one may refuse to start"
+		if ! stop_mappers; then
+			# SIGTERM did not take within the wait window. This mapper was running
+			# BEFORE we touched the machine, and its log is exactly the cumulative
+			# kind of stale evidence that caused the 2026-09-02 false rollback --
+			# so neither judge it by that log nor uninstall over a mapper we cannot
+			# displace. Keep the previous state; a human can inspect with --doctor.
+			warn "could not stop the pre-existing application mapper; keeping it as-is"
+			warn "instead of judging it by its stale log. Inspect with 'macos-keys-linux.sh --doctor'."
+			return 0
+		fi
 	fi
 
 	if ! mapper_running; then
