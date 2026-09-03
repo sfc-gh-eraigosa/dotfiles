@@ -59,20 +59,51 @@ if [ -d "$BASE_DIR/ai/hooks" ]; then
     chmod +x "$HOOKS_DEST"/*.sh 2>/dev/null || true
 fi
 
-# --- hooks.json (rendered from the repo template; repo-owned wiring) ---
-# Unlike the retired Gemini CLI (hooks lived inside settings.json and needed
-# a forced-subset merge), agy keeps hook wiring in a dedicated hooks.json —
-# so the whole file is ours to render. __HOME__ is substituted because agy
-# does not expand env vars in hook command strings; the replacement escapes
-# sed's metacharacters (& | \) so an unusual $HOME cannot corrupt the file.
-# Guard scripts are referenced by bare name — the adapter resolves them
-# relative to its own directory.
+# --- hooks.json (repo `guards` entry rendered from the template and MERGED
+# over the host file) ---
+# agy keeps hook wiring in a dedicated hooks.json keyed by hook NAME. The repo
+# owns exactly one name, "guards"; other tools own theirs (herdr's agent
+# state-reporting integration adds a "herdr" entry). So the file is merged,
+# not overwritten: the rendered "guards" object replaces the host's "guards"
+# wholesale (arrays replaced, so a stale matcher list cannot linger) and every
+# other named hook is preserved (design: docs/mbo/designs/agy-parity.md unit 4).
+# An unparseable host file is set aside as hooks.json.invalid and recreated.
+# __HOME__ is substituted because agy does not expand env vars in hook command
+# strings; the replacement escapes sed's metacharacters (& | \) so an unusual
+# $HOME cannot corrupt the file. Guard scripts are referenced by bare name —
+# the adapter resolves them relative to its own directory.
 HOOKS_JSON_SRC="$BASE_DIR/ai/antigravity/hooks.json.template"
 if [ -f "$HOOKS_JSON_SRC" ]; then
-    echo "  Rendering ~/.gemini/config/hooks.json..."
+    echo "  Rendering ~/.gemini/config/hooks.json (guards entry, merged)..."
     mkdir -p "$AGY_CONFIG_ROOT"
+    HOOKS_JSON_DEST="$AGY_CONFIG_ROOT/hooks.json"
     home_escaped="$(printf '%s' "$HOME" | sed -e 's/[&|\\]/\\&/g')"
-    sed "s|__HOME__|${home_escaped}|g" "$HOOKS_JSON_SRC" > "$AGY_CONFIG_ROOT/hooks.json"
+    hooks_rendered="$(mktemp "${TMPDIR:-/tmp}/agy-hooks.XXXXXX")"
+    sed "s|__HOME__|${home_escaped}|g" "$HOOKS_JSON_SRC" > "$hooks_rendered"
+    if command -v jq > /dev/null 2>&1; then
+        if [ -f "$HOOKS_JSON_DEST" ] && ! jq -e . "$HOOKS_JSON_DEST" > /dev/null 2>&1; then
+            echo "    WARNING: existing hooks.json is not valid JSON; set aside as hooks.json.invalid" >&2
+            mv "$HOOKS_JSON_DEST" "$HOOKS_JSON_DEST.invalid"
+        fi
+        if [ -f "$HOOKS_JSON_DEST" ]; then
+            hooks_merged="$(mktemp "${TMPDIR:-/tmp}/agy-hooks-merged.XXXXXX")"
+            # `*` deep-merges objects; the rendered right operand wins for
+            # "guards" (its arrays replace the host's), other names survive.
+            if jq -s '.[0] * .[1]' "$HOOKS_JSON_DEST" "$hooks_rendered" > "$hooks_merged" && [ -s "$hooks_merged" ]; then
+                cat "$hooks_merged" > "$HOOKS_JSON_DEST"
+            else
+                echo "    WARNING: hooks.json merge failed; host file left unchanged" >&2
+            fi
+            rm -f "$hooks_merged"
+        else
+            cat "$hooks_rendered" > "$HOOKS_JSON_DEST"
+        fi
+    else
+        # jq-less fallback: overwrite (foreign hooks cannot be preserved).
+        echo "    WARNING: jq not installed — hooks.json overwritten, foreign hook entries not preserved" >&2
+        cat "$hooks_rendered" > "$HOOKS_JSON_DEST"
+    fi
+    rm -f "$hooks_rendered"
 fi
 
 # --- Shell aliases (~/.config/antigravity/aliases.sh, sourced by .zshrc and

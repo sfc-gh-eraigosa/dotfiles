@@ -21,7 +21,9 @@ fi
 
 A="$(mktemp -d)"
 B="$(mktemp -d)"
-trap 'rm -rf "$A" "$B"' EXIT
+C="$(mktemp -d)"
+D="$(mktemp -d)"
+trap 'rm -rf "$A" "$B" "$C" "$D"' EXIT
 
 run_install() { HOME="$1" XDG_CONFIG_HOME="$1/.config" bash "$INSTALLER" >/dev/null 2>&1; }
 
@@ -103,5 +105,34 @@ assert_in_subshell "existing host: host deny entry REPLACED (policy is immutable
     "! jq -e '.permissions.deny | index(\"command(host-only)\")' '$SB' >/dev/null 2>&1"
 assert_in_subshell "existing host: forced deny carries command(mkfs)" \
     "jq -e '.permissions.deny | index(\"command(mkfs)\")' '$SB' >/dev/null"
+
+# --- C: agy-parity F4 — hooks.json is MERGED: a foreign named hook (herdr's
+# state-reporting integration) survives, and a stale repo `guards` entry is
+# replaced by the freshly rendered one ---
+mkdir -p "$C/.gemini/config"
+cat > "$C/.gemini/config/hooks.json" <<'JSON'
+{
+  "herdr": { "PreToolUse": [ { "matcher": "*", "hooks": [ { "type": "command", "command": "herdr-hook" } ] } ] },
+  "guards": { "PreToolUse": [ { "matcher": "stale", "hooks": [ { "type": "command", "command": "stale" } ] } ] }
+}
+JSON
+run_install "$C"
+HJ="$C/.gemini/config/hooks.json"
+assert_in_subshell "merge: hooks.json still valid JSON" "jq -e . '$HJ' >/dev/null"
+assert_eq "$(jq -r 'keys | join(",")' "$HJ")" "guards,herdr" "merge: foreign herdr hook preserved next to guards"
+assert_eq "$(jq -r '.herdr.PreToolUse[0].hooks[0].command' "$HJ")" "herdr-hook" "merge: herdr command untouched"
+assert_in_subshell "merge: stale guards matcher replaced by the rendered one" \
+    "jq -r '.guards.PreToolUse[0].matcher' '$HJ' | grep -q '^run_command|'"
+assert_in_subshell "merge: rendered guards command uses the real HOME" \
+    "jq -r '.guards.PreToolUse[0].hooks[0].command' '$HJ' | grep -qF '$C/.gemini/config/hooks/antigravity_adapter.sh'"
+assert_grep_negative "merge: no unsubstituted __HOME__" "__HOME__" "$HJ"
+
+# --- D: an unparseable pre-existing hooks.json is set aside, not merged into ---
+mkdir -p "$D/.gemini/config"
+echo 'not json {' > "$D/.gemini/config/hooks.json"
+run_install "$D"
+assert_in_subshell "invalid hooks.json: recreated as valid JSON with guards" \
+    "jq -e '.guards' '$D/.gemini/config/hooks.json' >/dev/null"
+assert_file_exists "$D/.gemini/config/hooks.json.invalid" "invalid hooks.json: original set aside as .invalid"
 
 _test_report

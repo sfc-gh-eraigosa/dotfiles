@@ -61,13 +61,13 @@
 
 ### Task 4 — hooks.json merge  (plan Task 4)
 
-- [ ] RED: hosts C (herdr + stale guards) and D (invalid JSON) in the installer test
-- [ ] RUN-RED → **FAIL** > 0
-- [ ] GREEN: render to temp + `jq -s '.[0] * .[1]'`; `.invalid` rename; jq-less fallback; fix comments in `install.sh` + `install_herdr.sh`
-- [ ] RUN-GREEN | tee `evidence/u4-hooks-merge/installer_test.txt` → **FAIL=0**
-- [ ] VERIFY: `bash ai/claude/scripts/validate_hooks.sh <C>/.gemini/config/hooks.json` exit 0; shellcheck installer
-- [ ] COMMIT: `fix(agy): merge hooks.json so foreign named hooks (herdr) survive an install (#268)`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: hosts C (herdr + stale guards) and D (invalid JSON) in the installer test
+- [x] RUN-RED → **FAIL** > 0
+- [x] GREEN: render to temp + `jq -s '.[0] * .[1]'`; `.invalid` rename; jq-less fallback; fix comments in `install.sh` + `install_herdr.sh`
+- [x] RUN-GREEN | tee `evidence/u4-hooks-merge/installer_test.txt` → **FAIL=0**
+- [x] VERIFY: `bash ai/claude/scripts/validate_hooks.sh <C>/.gemini/config/hooks.json` exit 0; shellcheck installer
+- [x] COMMIT: `fix(agy): merge hooks.json so foreign named hooks (herdr) survive an install (#268)`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** installer test FAIL=0; validator exit 0.
 
