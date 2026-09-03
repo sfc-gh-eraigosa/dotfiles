@@ -81,6 +81,16 @@ cat > "$H/bin/usermod" <<'STUB'
 echo "usermod $*" >> "$STUB_LOG"; exit 0
 STUB
 
+# `kill` is a shell builtin, so PATH stubbing cannot intercept it; the SUT goes
+# through KILL_CMD instead. Without this, rollback/replace tests would send a real
+# SIGTERM to whatever real process happens to own pid 4242 on the build machine.
+cat > "$H/bin/kill" <<'STUB'
+#!/usr/bin/env bash
+echo "kill $*" >> "$STUB_LOG"
+for p in "$@"; do rm -rf "$PROC_DIR/$p"; done
+exit 0
+STUB
+
 # Unstubbed, this finds the BUILD MACHINE's real desktop session and the
 # no-graphical-session guard never fires.
 cat > "$H/bin/loginctl" <<'STUB'
@@ -111,10 +121,20 @@ run_sut() { # run_sut [VAR=val ...]
     printf '/usr/local/bin/keyd-application-mapper\0' > "$H/proc/4242/cmdline"
     echo 'ERROR: Failed to connect to "/var/run/keyd.socket"' > "$H/home/.config/keyd/app.log"
   fi
+  if [ "${PRESEED_BYSTANDER:-0}" = "1" ]; then
+    mkdir -p "$H/proc/4243"
+    printf 'bash\0-c\0pgrep -af bin/keyd-application-mapper | head\0' > "$H/proc/4243/cmdline"
+  fi
+  if [ "${PRESEED_AUTOSTART:-0}" = "1" ]; then
+    mkdir -p "$H/home/.config/autostart"
+    printf '[Desktop Entry]\nExec=keyd-application-mapper -d\n' \
+      > "$H/home/.config/autostart/keyd-application-mapper.desktop"
+  fi
   env PATH="$H/bin:$PATH" HOME="$H/home" KEYD_ETC="$H/etc/keyd" \
       STUB_LOG="$H/stublog" XDG_SESSION_TYPE=x11 DISPLAY=:99 \
       KEYD_DROPIN="$H/etc/systemd/keyd.service.d/10-dotfiles-restart.conf" \
       INPUT_DEVICES_DIR="$H/sys/class/input" PROC_DIR="$H/proc" \
+      KILL_CMD="$H/bin/kill" \
       "$@" bash "$SUT"
 }
 
@@ -152,11 +172,42 @@ assert_eq "$r" "0" "refusal explains the SIGINT hazard"
 # --- ROLLBACK: mapper starts but cannot reach the keyd socket -------------------
 # A live process is not proof of success; it daemonizes and only then fails to
 # open the socket. Leaving that state configured is the worst outcome.
-out="$(PRESEED_BROKEN_LOG=1 run_sut 2>&1)"
+out="$(PRESEED_BROKEN_LOG=1 run_sut FAKE_MAPPER_SOCKET_OK=0 2>&1)"
 assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "no" \
-    "already-running mapper that never reached the socket: config rolled back"
+    "mapper that cannot reach the socket: config rolled back"
 case "$out" in *"rolling back"*) r=0 ;; *) r=1 ;; esac
 assert_eq "$r" "0" "rollback is announced"
+
+# --- REPLACE, don't judge by a stale log (regression: 2026-09-02 self-uninstall) --
+# The mapper's app.log is cumulative for the life of a daemonized instance, and
+# keyd's own IPC error lands in it every time the socket is briefly unavailable --
+# including the `systemctl restart keyd` this very script runs a few lines
+# earlier. A re-run of install.sh found a mapper already running, skipped the log
+# reset, read 69 old errors, and rolled the whole layout back on a healthy host.
+# A pre-existing mapper is therefore REPLACED with a fresh supervised one, and
+# only the fresh instance's log decides.
+out="$(PRESEED_BROKEN_LOG=1 run_sut 2>&1)"
+assert_eq "$?" "0" "stale mapper + stale broken log: exits clean"
+assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "yes" \
+    "stale mapper + stale broken log: healthy fresh mapper keeps the config installed"
+assert_grep "stale mapper + stale broken log: the old mapper is stopped" "^kill 4242" "$H/stublog"
+assert_grep "stale mapper + stale broken log: a fresh mapper is started" "mapper started" "$H/stublog"
+case "$out" in *"rolling back"*) r=1 ;; *) r=0 ;; esac
+assert_eq "$r" "0" "stale mapper + stale broken log: no rollback"
+
+# A shell whose -c string merely MENTIONS the mapper path (a grep, an editor, the
+# shell running this very test) must never be treated as a mapper and killed.
+out="$(PRESEED_BROKEN_LOG=1 PRESEED_BYSTANDER=1 run_sut 2>&1)"
+assert_grep "replace stops the real mapper" "^kill 4242" "$H/stublog"
+assert_grep_negative "replace leaves a bystander shell that mentions the path alone" \
+    "^kill 4243" "$H/stublog"
+
+# The old XDG autostart entry (an earlier install shape) launches a mapper at login
+# WITHOUT the keyd group, which then owns the single-instance lock and blocks the
+# supervised unit forever. Install and uninstall must both remove it.
+out="$(PRESEED_AUTOSTART=1 run_sut 2>&1)"
+assert_eq "$([ -f "$H/home/.config/autostart/keyd-application-mapper.desktop" ] && echo yes || echo no)" "no" \
+    "stale autostart entry is removed on install"
 
 # The mapper failing to start at all is the same hazard as it starting broken.
 out="$(run_sut FAKE_MAPPER_STARTS=0 2>&1)"

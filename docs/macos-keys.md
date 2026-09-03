@@ -156,6 +156,17 @@ cannot reach keyd. Run `--doctor`; if "mapper running" is `no`, or the log at
 the `keyd` group — the installer adds you, but an already-open session does not
 pick up a new group until you log out and back in.
 
+**Every Cmd shortcut stopped working right after `install.sh` / `fleet update`
+re-ran.** Run `--doctor`: if keyd is `inactive` and both configs are `absent`, the
+installer rolled itself back. Before 2026-09-02 it judged an *already-running*
+mapper by that mapper's cumulative `app.log`, which collects keyd's IPC error every
+time the socket blinks — including the `systemctl restart keyd` the installer
+itself performs — so a re-run on a healthy host could read old errors and
+uninstall everything. The installer now stops any running mapper (including a
+legacy `~/.config/autostart/keyd-application-mapper.desktop` instance, which runs
+without the `keyd` group and can never connect) and judges only the fresh
+supervised one. Recovery is simply re-running `macos-keys-linux.sh`.
+
 **`Cmd+V` prints `^V` in gnome-terminal (and `Cmd+C` may interrupt).** The mapper
 is fine; gnome-terminal's *own* copy/paste accelerators are no longer the stock
 `Ctrl+Shift+C/V` that `app.conf` emits. A pre-keyd version of
