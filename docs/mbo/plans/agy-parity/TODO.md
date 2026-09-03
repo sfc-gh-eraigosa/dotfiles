@@ -73,13 +73,13 @@
 
 ### Task 5 — adapter sensitive-root ask  (plan Task 5)
 
-- [ ] RED: create `ai/hooks/antigravity_adapter_test.sh` (plan §4 T5 step 1)
-- [ ] RUN-RED: `bash ai/hooks/antigravity_adapter_test.sh | tail -3` → **FAIL** (ask cases)
-- [ ] GREEN: sensitive-root block in `ai/hooks/antigravity_adapter.sh`
-- [ ] RUN-GREEN | tee `evidence/u4-hooks-merge/adapter_test.txt` → **FAIL=0**
-- [ ] VERIFY: shellcheck adapter; `git status --short -- ai/hooks/antigravity_adapter_test.sh` (ALLOWLIST)
-- [ ] COMMIT: `feat(agy): ask before file tools touch credential paths (dir_added_guard parity) (#268)`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: create `ai/hooks/antigravity_adapter_test.sh` (plan §4 T5 step 1)
+- [x] RUN-RED: `bash ai/hooks/antigravity_adapter_test.sh | tail -3` → **FAIL** (ask cases)
+- [x] GREEN: sensitive-root block in `ai/hooks/antigravity_adapter.sh`
+- [x] RUN-GREEN | tee `evidence/u4-hooks-merge/adapter_test.txt` → **FAIL=0**
+- [x] VERIFY: shellcheck adapter; `git status --short -- ai/hooks/antigravity_adapter_test.sh` (ALLOWLIST)
+- [x] COMMIT: `feat(agy): ask before file tools touch credential paths (dir_added_guard parity) (#268)`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** adapter test FAIL=0.
 
