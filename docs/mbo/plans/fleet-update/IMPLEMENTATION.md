@@ -4,7 +4,7 @@
 - **Date:** 2026-09-02
 - **Status:** Ready to execute
 - **Plan (source of truth):** [`../fleet-update.md`](../fleet-update.md) · spec [`../../specs/fleet-update.md`](../../specs/fleet-update.md) · design [`../../designs/fleet-update.md`](../../designs/fleet-update.md)
-- **Objective anchors:** issue [#265](https://github.com/sfc-gh-eraigosa/dotfiles/issues/265) · PR #TBD · `docs/mbo/index.md` row `fleet-update`
+- **Objective anchors:** issue [#265](https://github.com/sfc-gh-eraigosa/dotfiles/issues/265) · PR [#270](https://github.com/sfc-gh-eraigosa/dotfiles/pull/270) · `docs/mbo/index.md` row `fleet-update`
 
 > This file is the **procedure**. It does not restate the plan — it tells a fresh agent
 > session how to execute the plan, task by task, resumably. Every technical detail lives in

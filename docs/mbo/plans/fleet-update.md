@@ -3,7 +3,7 @@
 - **Slug:** fleet-update
 - **Date:** 2026-09-02
 - **Status:** Draft
-- **Relates to:** spec [`../specs/fleet-update.md`](../specs/fleet-update.md) · design [`../designs/fleet-update.md`](../designs/fleet-update.md) · issue [#265](https://github.com/sfc-gh-eraigosa/dotfiles/issues/265) · PR TBD
+- **Relates to:** spec [`../specs/fleet-update.md`](../specs/fleet-update.md) · design [`../designs/fleet-update.md`](../designs/fleet-update.md) · issue [#265](https://github.com/sfc-gh-eraigosa/dotfiles/issues/265) · PR [#270](https://github.com/sfc-gh-eraigosa/dotfiles/pull/270)
 - **Execution trio:** [`fleet-update/IMPLEMENTATION.md`](./fleet-update/IMPLEMENTATION.md) · [`TRACKING.md`](./fleet-update/TRACKING.md) · [`TODO.md`](./fleet-update/TODO.md)
 
 ## 1. Summary & verdict

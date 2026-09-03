@@ -4,7 +4,7 @@
 - **Started:** 2026-09-02
 - **Playbook:** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) · **Cursor:** [`TODO.md`](./TODO.md)
 - **Plan (source of truth):** [`../fleet-update.md`](../fleet-update.md) · spec [`../../specs/fleet-update.md`](../../specs/fleet-update.md)
-- **Objective anchors:** issue [#265](https://github.com/sfc-gh-eraigosa/dotfiles/issues/265) · PR #TBD · `docs/mbo/index.md` row `fleet-update`
+- **Objective anchors:** issue [#265](https://github.com/sfc-gh-eraigosa/dotfiles/issues/265) · PR [#270](https://github.com/sfc-gh-eraigosa/dotfiles/pull/270) · `docs/mbo/index.md` row `fleet-update`
 
 > **Update after EVERY task.** Status: `todo · in-progress · blocked · done`.
 > **Evidence** = the exact command run plus its real result (e.g.

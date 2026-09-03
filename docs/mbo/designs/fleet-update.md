@@ -3,7 +3,7 @@
 - **Slug:** fleet-update
 - **Date:** 2026-09-02
 - **Status:** Proposed
-- **Relates to:** issue [#265](https://github.com/sfc-gh-eraigosa/dotfiles/issues/265) / PR TBD · parent objective [`fleet`](./fleet.md) (#222) · siblings [`fleet-config`](./fleet-config.md), [`fleet-tui`](./fleet-tui.md)
+- **Relates to:** issue [#265](https://github.com/sfc-gh-eraigosa/dotfiles/issues/265) / PR [#270](https://github.com/sfc-gh-eraigosa/dotfiles/pull/270) · parent objective [`fleet`](./fleet.md) (#222) · siblings [`fleet-config`](./fleet-config.md), [`fleet-tui`](./fleet-tui.md)
 - **Author(s):** repo owner (via Claude)
 
 ## 1. Problem / context
