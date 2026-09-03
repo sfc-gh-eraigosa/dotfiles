@@ -15,23 +15,23 @@
 
 ## Preflight (once)
 
-- [ ] `git status -sb | head -1` shows `worktree/agy_defaults`
-- [ ] `jq --version`, `shellcheck --version | head -2`, `python3 -c 'import tomllib'` (optional)
-- [ ] `gh pr view 269 --json isDraft,state` → draft, OPEN
-- [ ] Baseline: `bash ai/antigravity/aliases_test.sh | tail -1` → `FAIL=0`; `bash opt/scripts/system/install_antigravity_skills_test.sh | tail -1` → `FAIL=0`
-- [ ] Read plan §3 and §4
+- [x] `git status -sb | head -1` shows `worktree/agy_defaults`
+- [x] `jq --version`, `shellcheck --version | head -2`, `python3 -c 'import tomllib'` (optional)
+- [x] `gh pr view 269 --json isDraft,state` → draft, OPEN
+- [x] Baseline: `bash ai/antigravity/aliases_test.sh | tail -1` → `FAIL=0`; `bash opt/scripts/system/install_antigravity_skills_test.sh | tail -1` → `FAIL=0`
+- [x] Read plan §3 and §4
 
 ---
 
 ### Task 1 — aliases.sh in the Claude shape  (plan Task 1)
 
-- [ ] RED: append the F1 cases to `ai/antigravity/aliases_test.sh`; replace the `agy-yolo` assertions with the removal guard
-- [ ] RUN-RED: `bash ai/antigravity/aliases_test.sh | tail -3` → expect **FAIL** > 0
-- [ ] GREEN: rewrite `ai/antigravity/aliases.sh` (contract plan §3)
-- [ ] RUN-GREEN: `bash ai/antigravity/aliases_test.sh | tee -a docs/mbo/plans/agy-parity/evidence/u1-aliases/aliases_test.txt | tail -3` → **FAIL=0**
-- [ ] VERIFY: `bash -n`, `shellcheck ai/antigravity/aliases.sh`, `make lint-portability | tail -3`
-- [ ] COMMIT: `feat(agy): agy-config launch config in the claude wrapper shape (#268)`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: append the F1 cases to `ai/antigravity/aliases_test.sh`; replace the `agy-yolo` assertions with the removal guard
+- [x] RUN-RED: `bash ai/antigravity/aliases_test.sh | tail -3` → expect **FAIL** > 0
+- [x] GREEN: rewrite `ai/antigravity/aliases.sh` (contract plan §3)
+- [x] RUN-GREEN: `bash ai/antigravity/aliases_test.sh | tee -a docs/mbo/plans/agy-parity/evidence/u1-aliases/aliases_test.txt | tail -3` → **FAIL=0**
+- [x] VERIFY: `bash -n`, `shellcheck ai/antigravity/aliases.sh`, `make lint-portability | tail -3`
+- [x] COMMIT: `feat(agy): agy-config launch config in the claude wrapper shape (#268)`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** aliases test FAIL=0, lint clean, evidence committed.
 
