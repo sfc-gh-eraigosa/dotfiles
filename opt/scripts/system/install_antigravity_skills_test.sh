@@ -61,6 +61,14 @@ assert_in_subshell "template: allow list carries command(gss status)" \
 assert_in_subshell "template: no _comment key survives the merge" \
     "! jq -e '._comment' '$S' >/dev/null 2>&1"
 
+# --- A: agy-parity F3 — forced deny/ask policy applied on a fresh host ---
+assert_in_subshell "forced: deny carries command(rm -rf /)" \
+    "jq -e '.permissions.deny | index(\"command(rm -rf /)\")' '$S' >/dev/null"
+assert_in_subshell "forced: ask carries command(git push --force)" \
+    "jq -e '.permissions.ask | index(\"command(git push --force)\")' '$S' >/dev/null"
+assert_in_subshell "forced: ask carries command(sudo)" \
+    "jq -e '.permissions.ask | index(\"command(sudo)\")' '$S' >/dev/null"
+
 # --- A: idempotency (re-run changes nothing structurally) ---
 run_install "$A"
 assert_in_subshell "re-run keeps hooks.json valid" "jq -e . '$A/.gemini/config/hooks.json' >/dev/null"
@@ -73,7 +81,8 @@ ln -s "$REPO_ROOT/ai/hooks/safety_guard.sh" "$B/.gemini/policies/safety.toml"   
 ln -s "$REPO_ROOT/ai/antigravity/aliases.sh" "$B/.config/gemini/aliases.sh"
 ln -s "$REPO_ROOT/ai/skills/sync-skills" "$B/.agents/skills/sync-skills"        # repo-pointing skill link
 echo '{ "ui": { "theme": "myTheme" } }' > "$B/.gemini/settings.json"             # host-owned, must survive
-echo '{ "colorScheme": "light" }' > "$B/.gemini/antigravity-cli/settings.json"    # pre-existing keys to preserve
+echo '{ "colorScheme": "light", "permissions": { "allow": ["command(mytool)"], "deny": ["command(host-only)"] } }' \
+    > "$B/.gemini/antigravity-cli/settings.json"    # pre-existing keys: colorScheme + host allow preserved, host deny replaced
 run_install "$B"
 assert_in_subshell "legacy ~/.gemini/hooks removed" "[ ! -e '$B/.gemini/hooks' ]"
 assert_in_subshell "legacy repo-pointing policy link removed" "[ ! -e '$B/.gemini/policies/safety.toml' ]"
@@ -85,5 +94,14 @@ assert_eq "$(jq -r '.colorScheme' "$B/.gemini/antigravity-cli/settings.json")" "
 assert_eq "$(jq -r '.statusLine.enabled' "$B/.gemini/antigravity-cli/settings.json")" "true" "statusLine configured when settings.json pre-exists"
 assert_in_subshell "existing host: template NOT applied (no toolPermission)" \
     "! jq -e '.toolPermission' '$B/.gemini/antigravity-cli/settings.json' >/dev/null 2>&1"
+SB="$B/.gemini/antigravity-cli/settings.json"
+assert_in_subshell "existing host: own allow entry survives the union" \
+    "jq -e '.permissions.allow | index(\"command(mytool)\")' '$SB' >/dev/null"
+assert_in_subshell "existing host: forced allow entry added by the union" \
+    "jq -e '.permissions.allow | index(\"command(gss push)\")' '$SB' >/dev/null"
+assert_in_subshell "existing host: host deny entry REPLACED (policy is immutable)" \
+    "! jq -e '.permissions.deny | index(\"command(host-only)\")' '$SB' >/dev/null 2>&1"
+assert_in_subshell "existing host: forced deny carries command(mkfs)" \
+    "jq -e '.permissions.deny | index(\"command(mkfs)\")' '$SB' >/dev/null"
 
 _test_report

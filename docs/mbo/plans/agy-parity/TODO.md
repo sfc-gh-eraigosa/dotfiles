@@ -49,13 +49,13 @@
 
 ### Task 3 — forced deny/ask/allow  (plan Task 3)
 
-- [ ] RED: A deny/ask rows; B pre-seed allow+deny, assert union/replace
-- [ ] RUN-RED → **FAIL** > 0
-- [ ] GREEN: extend `ai/antigravity/settings.forced.json`
-- [ ] RUN-GREEN | tee `evidence/u3-forced-policy/installer_test.txt` → **FAIL=0**
-- [ ] VERIFY: `jq -e . ai/antigravity/settings.forced.json`
-- [ ] COMMIT: `feat(agy): enforce the repo deny/ask permission policy in agy settings (#268)`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: A deny/ask rows; B pre-seed allow+deny, assert union/replace
+- [x] RUN-RED → **FAIL** > 0
+- [x] GREEN: extend `ai/antigravity/settings.forced.json`
+- [x] RUN-GREEN | tee `evidence/u3-forced-policy/installer_test.txt` → **FAIL=0**
+- [x] VERIFY: `jq -e . ai/antigravity/settings.forced.json`
+- [x] COMMIT: `feat(agy): enforce the repo deny/ask permission policy in agy settings (#268)`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** installer test FAIL=0.
 
