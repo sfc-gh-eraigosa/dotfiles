@@ -40,6 +40,13 @@ PROC_DIR="${PROC_DIR:-/proc}"
 APP_CONF="${HOME}/.config/keyd/app.conf"
 KEYD_DROPIN="${KEYD_DROPIN:-/etc/systemd/system/keyd.service.d/10-dotfiles-restart.conf}"
 UNIT="${HOME}/.config/systemd/user/keyd-application-mapper.service"
+# An earlier install shape started the mapper from an XDG autostart entry. That
+# instance runs WITHOUT the keyd group, so it can never reach the socket, yet it
+# owns the mapper's single-instance lock and blocks the supervised unit forever.
+AUTOSTART_ENTRY="${HOME}/.config/autostart/keyd-application-mapper.desktop"
+# `kill` is a builtin, so the test driver cannot stub it via PATH; it points this
+# at a stub instead. Never set in normal use.
+KILL_CMD="${KILL_CMD:-kill}"
 BUILD_CACHE="${HOME}/.cache/dotfiles/keyd"
 
 # Populated by detect_graphical_session().
@@ -198,14 +205,43 @@ mapper_pids() {
 		# A process can exit between the glob and the read, so the redirect itself
 		# must not be what fails -- guard the file rather than the pipeline.
 		[ -r "${_d}/cmdline" ] || continue
-		tr '\0' ' ' 2> /dev/null < "${_d}/cmdline" |
-			grep -q 'bin/keyd-application-mapper' || continue
+		# Only argv[0..1] count: a BARE name (the env/sg launch shape -- PATH
+		# resolution leaves a bare argv[0], so `bin/...` alone would miss it), a
+		# full path (`…/bin/keyd-application-mapper`), or an interpreter argument
+		# (`python3 …/keyd-application-mapper …`). Matching the WHOLE command line
+		# would also hit a shell whose -c string merely mentions the path -- it
+		# did, during the 2026-09-02 fix, killing the shell that was running this
+		# script. argv[0] is the executable itself (never a -c string), so its
+		# bare name is bystander-safe to match.
+		tr '\0' '\n' 2> /dev/null < "${_d}/cmdline" | head -n 2 |
+			grep -qE '^keyd-application-mapper$|/bin/keyd-application-mapper$' || continue
 		echo "${_p}"
 	done
 }
 
 mapper_running() {
 	[ -n "$(mapper_pids)" ]
+}
+
+# Stop every running mapper -- the supervised unit and any stray daemonized
+# instance -- and wait for the process table to agree, so the caller can start a
+# fresh one whose log reflects only itself.
+stop_mappers() {
+	systemctl --user stop keyd-application-mapper.service > /dev/null 2>&1
+	for _mp in $(mapper_pids); do ${KILL_CMD} "${_mp}" 2> /dev/null; done
+	_tries=0
+	while mapper_running && [ "${_tries}" -lt 10 ]; do
+		sleep 0.2
+		_tries=$((_tries + 1))
+	done
+	mapper_running && return 1
+	return 0
+}
+
+remove_autostart_entry() {
+	[ -f "${AUTOSTART_ENTRY}" ] || return 0
+	log "Removing the legacy autostart entry ${AUTOSTART_ENTRY} (the mapper is a systemd user unit now)."
+	rm -f "${AUTOSTART_ENTRY}"
 }
 
 # --- The fail-closed gate -----------------------------------------------------
@@ -373,6 +409,27 @@ install_unit() {
 start_mapper() {
 	_log="${HOME}/.config/keyd/app.log"
 
+	# A mapper that is already running is not trusted, it is REPLACED. Its app.log
+	# is cumulative for as long as it lives, and keyd's IPC error lands in it every
+	# time the socket is briefly unavailable -- including the `systemctl restart
+	# keyd` enable_keyd() just ran. Judging that instance by that log rolled the
+	# whole layout back on a healthy host (2026-09-02). It may also be a legacy
+	# autostart instance with no keyd group, which can never work at all. Either
+	# way: stop it, start a fresh supervised one, and judge only the fresh one.
+	if mapper_running; then
+		log "Replacing the already-running application mapper with a fresh supervised one..."
+		if ! stop_mappers; then
+			# SIGTERM did not take within the wait window. This mapper was running
+			# BEFORE we touched the machine, and its log is exactly the cumulative
+			# kind of stale evidence that caused the 2026-09-02 false rollback --
+			# so neither judge it by that log nor uninstall over a mapper we cannot
+			# displace. Keep the previous state; a human can inspect with --doctor.
+			warn "could not stop the pre-existing application mapper; keeping it as-is"
+			warn "instead of judging it by its stale log. Inspect with 'macos-keys-linux.sh --doctor'."
+			return 0
+		fi
+	fi
+
 	if ! mapper_running; then
 		# Clear the log so the health check below only judges this run.
 		rm -f "${_log}"
@@ -399,9 +456,7 @@ start_mapper() {
 	# A live process is NOT proof of success: the mapper daemonizes FIRST and only
 	# then discovers it cannot open /var/run/keyd.socket, so it sits there running
 	# and applying nothing. That is precisely the state that leaves Cmd+C as SIGINT
-	# in a terminal. Check the log unconditionally -- including for a mapper that
-	# was already running when we got here, which may be a stale broken one from a
-	# previous boot.
+	# in a terminal. The log was reset above, so it speaks for this run only.
 	if grep -q 'Failed to connect' "${_log}" 2> /dev/null; then
 		return 1
 	fi
@@ -436,9 +491,9 @@ uninstall() {
 	sudo rm -f "${KEYD_DROPIN}"
 	sudo rmdir "$(dirname "${KEYD_DROPIN}")" 2> /dev/null
 	sudo systemctl daemon-reload > /dev/null 2>&1
-	for _mp in $(mapper_pids); do kill "${_mp}" 2> /dev/null; done
+	for _mp in $(mapper_pids); do ${KILL_CMD} "${_mp}" 2> /dev/null; done
 	systemctl --user disable --now keyd-application-mapper.service > /dev/null 2>&1
-	rm -f "${UNIT}" "${APP_CONF}"
+	rm -f "${UNIT}" "${APP_CONF}" "${AUTOSTART_ENTRY}"
 	systemctl --user daemon-reload > /dev/null 2>&1
 	if [ -f "${KEYD_ETC}/default.conf.pre-dotfiles" ]; then
 		sudo mv "${KEYD_ETC}/default.conf.pre-dotfiles" "${KEYD_ETC}/default.conf"
@@ -503,6 +558,7 @@ main() {
 	}
 	enable_keyd || return 0
 	install_unit || warn "could not install the mapper user unit"
+	remove_autostart_entry
 	if ! start_mapper; then
 		warn "the application mapper did not come up; rolling back so the keyboard"
 		warn "is not left with Cmd+C mapped to SIGINT inside terminals."
