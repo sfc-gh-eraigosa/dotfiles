@@ -37,13 +37,13 @@
 
 ### Task 2 — settings template seed  (plan Task 2)
 
-- [ ] RED: add template assertions (A) + "template NOT applied" (B) to `install_antigravity_skills_test.sh`
-- [ ] RUN-RED: `bash opt/scripts/system/install_antigravity_skills_test.sh | tail -3` → **FAIL** > 0
-- [ ] GREEN: create `ai/antigravity/settings.json.template`; installer seeds from it (`jq 'del(._comment)'`)
-- [ ] RUN-GREEN: installer test | tee `evidence/u2-settings-template/installer_test.txt` → **FAIL=0**
-- [ ] VERIFY: `jq -e . ai/antigravity/settings.json.template`; shellcheck installer; `git status --short -- ai/antigravity/settings.json.template` (ALLOWLIST)
-- [ ] COMMIT: `feat(agy): seed agy settings.json from a tracked template on first run (#268)`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: add template assertions (A) + "template NOT applied" (B) to `install_antigravity_skills_test.sh`
+- [x] RUN-RED: `bash opt/scripts/system/install_antigravity_skills_test.sh | tail -3` → **FAIL** > 0
+- [x] GREEN: create `ai/antigravity/settings.json.template`; installer seeds from it (`jq 'del(._comment)'`)
+- [x] RUN-GREEN: installer test | tee `evidence/u2-settings-template/installer_test.txt` → **FAIL=0**
+- [x] VERIFY: `jq -e . ai/antigravity/settings.json.template`; shellcheck installer; `git status --short -- ai/antigravity/settings.json.template` (ALLOWLIST)
+- [x] COMMIT: `feat(agy): seed agy settings.json from a tracked template on first run (#268)`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** installer test FAIL=0.
 

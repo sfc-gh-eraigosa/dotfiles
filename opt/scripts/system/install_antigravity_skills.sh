@@ -104,8 +104,16 @@ if [ -f "$BASE_DIR/ai/claude/statusline-command.sh" ]; then
     chmod +x "$AGY_CONFIG_ROOT/statusline-command.sh"
 fi
 
-# --- settings.json (host-owned real file; forced subset merged on every run) ---
+# --- settings.json (host-owned real file; seeded from the tracked template on
+# first run, forced subset merged on every run) ---
+# Mirrors install_claude_skills.sh: the host OWNS this file (trustedWorkspaces,
+# colorScheme, …). A NEW host is seeded from settings.json.template (its
+# self-documenting "_comment" key is dropped at seed time); an EXISTING file is
+# never re-seeded. settings.forced.json (statusLine + permissions deny/ask,
+# allow unioned) is deep-merged over it every run by apply-forced-settings.sh.
+# Design: docs/mbo/designs/agy-parity.md (units 2–3).
 AGY_SETTINGS_DEST="${HOME}/.gemini/antigravity-cli/settings.json"
+AGY_SETTINGS_TEMPLATE="$BASE_DIR/ai/antigravity/settings.json.template"
 AGY_SETTINGS_FORCED="$BASE_DIR/ai/antigravity/settings.forced.json"
 APPLY_FORCED="$BASE_DIR/opt/scripts/system/apply-forced-settings.sh"
 
@@ -119,9 +127,15 @@ if [ -f "$AGY_SETTINGS_FORCED" ]; then
         cp "$AGY_SETTINGS_DEST" "$AGY_SETTINGS_DEST.bak"
     fi
     
-    # Seed with an empty JSON object if absent
+    # Seed a NEW host from the template (empty object if the template or jq is
+    # missing, so the forced merge below still has a valid file to work on).
     if [ ! -f "$AGY_SETTINGS_DEST" ]; then
-        echo '{}' > "$AGY_SETTINGS_DEST"
+        if [ -f "$AGY_SETTINGS_TEMPLATE" ] && command -v jq > /dev/null 2>&1; then
+            echo "    Seeding settings.json from template (first run)"
+            jq 'del(._comment)' "$AGY_SETTINGS_TEMPLATE" > "$AGY_SETTINGS_DEST"
+        else
+            echo '{}' > "$AGY_SETTINGS_DEST"
+        fi
     fi
     
     # Deep-merge the forced settings

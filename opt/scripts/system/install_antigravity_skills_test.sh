@@ -49,6 +49,18 @@ assert_eq "$(jq -r '.statusLine.command' "$A/.gemini/antigravity-cli/settings.js
 assert_eq "$(jq -r '.statusLine.enabled' "$A/.gemini/antigravity-cli/settings.json")" \
     "true" "statusLine enabled in settings.json"
 
+# --- A: agy-parity F2 — first run seeds the tracked settings template ---
+S="$A/.gemini/antigravity-cli/settings.json"
+assert_eq "$(jq -r '.toolPermission' "$S")" "request-review" "template: toolPermission seeded"
+assert_eq "$(jq -r '.editorMode' "$S")" "vim" "template: editorMode vim"
+assert_eq "$(jq -r '.allowNonWorkspaceAccess' "$S")" "true" "template: allowNonWorkspaceAccess true"
+assert_eq "$(jq -r '.notifications' "$S")" "true" "template: notifications on"
+assert_eq "$(jq -r '.enableTerminalSandbox' "$S")" "false" "template: sandbox off"
+assert_in_subshell "template: allow list carries command(gss status)" \
+    "jq -e '.permissions.allow | index(\"command(gss status)\")' '$S' >/dev/null"
+assert_in_subshell "template: no _comment key survives the merge" \
+    "! jq -e '._comment' '$S' >/dev/null 2>&1"
+
 # --- A: idempotency (re-run changes nothing structurally) ---
 run_install "$A"
 assert_in_subshell "re-run keeps hooks.json valid" "jq -e . '$A/.gemini/config/hooks.json' >/dev/null"
@@ -71,5 +83,7 @@ assert_eq "$(jq -r '.ui.theme' "$B/.gemini/settings.json")" "myTheme" "host-owne
 assert_file_exists "$B/.gemini/antigravity-cli/settings.json.bak" "original agy settings backed up"
 assert_eq "$(jq -r '.colorScheme' "$B/.gemini/antigravity-cli/settings.json")" "light" "existing settings keys preserved"
 assert_eq "$(jq -r '.statusLine.enabled' "$B/.gemini/antigravity-cli/settings.json")" "true" "statusLine configured when settings.json pre-exists"
+assert_in_subshell "existing host: template NOT applied (no toolPermission)" \
+    "! jq -e '.toolPermission' '$B/.gemini/antigravity-cli/settings.json' >/dev/null 2>&1"
 
 _test_report
