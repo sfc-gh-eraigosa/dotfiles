@@ -14,10 +14,11 @@
 
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| (single worker — default) | — | `worktree/fleet-more-than-ssh` | `~/.herdr/worktrees/dotfiles/worktree-fleet-more-than-ssh` | — | design docs only |
+| design (these artifacts) | `fleet-connect/edward-raigosa/design` | `feature/fleet-connect/edward-raigosa/design` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/fleet-connect/edward-raigosa/design` | [#267](https://github.com/sfc-gh-eraigosa/dotfiles/pull/267) | draft |
+| build (T1–T25) | *not created yet* | | | | added when execution starts |
 
-If the operator elects the plan §6.1 fan-out, paste each `gss feature worker add --json` result
-verbatim into this table (worker_ref, branch, worktree_path, base_branch, PR).
+Captured verbatim from `gss feature worker add --json` (feature `fleet-connect`, base `main`). If the
+operator elects the plan §6.1 fan-out, add one row per leaf the same way.
 
 ## 1. Task ledger
 
@@ -110,4 +111,4 @@ silently patched.
 
 | Date | Session | What advanced |
 | :-- | :-- | :-- |
-| 2026-09-02 | planning | Probed all four fleet hosts read-only (runtimes, sessions, ports) and verified herdr 0.8.2's CLI surface, including the non-login PATH gotcha. Brainstormed shape, scope cut (framework + herdr now, k8s next), and navigation (push views + breadcrumb). Operator then asked for tools as **plugins over a local, MCP-like RPC** — design reworked around a versioned JSON-RPC protocol with a `host/exec` callback. Wrote design, spec (21 features, per-feature criteria), plan (25 tasks, DAG) and this trio. Found and folded in one protocol correction: `host/exec` takes a `callId`, not an alias. No code written. |
+| 2026-09-02 | planning | Probed all four fleet hosts read-only (runtimes, sessions, ports) and verified herdr 0.8.2's CLI surface, including the non-login PATH gotcha. Brainstormed shape, scope cut (framework + herdr now, k8s next), and navigation (push views + breadcrumb). Operator then asked for tools as **plugins over a local, MCP-like RPC** — design reworked around a versioned JSON-RPC protocol with a `host/exec` callback. Wrote design, spec (21 features, per-feature criteria), plan (25 tasks, DAG) and this trio. Found and folded in one protocol correction: `host/exec` takes a `callId`, not an alias. Anchored the objective: design issue #266 (kept open as the build-tracking parent) and draft design PR #267 on the `fleet-connect` gss feature. No code written. |
