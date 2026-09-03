@@ -97,12 +97,12 @@
 
 ### Task 7 — docs, sanity, gates, live evidence  (plan Task 7)
 
-- [ ] GREEN: sanity_check.sh asserts seeded keys + plugin dir
-- [ ] DOCS: `ai/antigravity/AGENTS.md`, `ai/AGENTS.md`, `docs/machine-local-overrides.md`
-- [ ] VERIFY: `make shell-test`, `make lint-shell`, `make lint-portability` | tee `evidence/u7-docs-gates/`
-- [ ] LIVE: `bash opt/scripts/system/install_antigravity_skills.sh`; capture `agy-config status`, settings jq, hooks keys, plugin ls, bounded `agy -p` probe → `evidence/live/`
-- [ ] DOCS: `docs/mbo/index.md` → `in-review`; TRACKING §2/§3 ticked
-- [ ] COMMIT: `docs(agy): agy-parity docs, sanity check, and evidence (#268)`
-- [ ] LEDGER + CHECKPOINT + PR body refresh
+- [x] GREEN: sanity_check.sh asserts seeded keys + plugin dir
+- [x] DOCS: `ai/antigravity/AGENTS.md`, `ai/AGENTS.md`, `docs/machine-local-overrides.md`
+- [x] VERIFY: `make shell-test`, `make lint-shell`, `make lint-portability` | tee `evidence/u7-docs-gates/`
+- [x] LIVE: `bash opt/scripts/system/install_antigravity_skills.sh`; capture `agy-config status`, settings jq, hooks keys, plugin ls, bounded `agy -p` probe → `evidence/live/`
+- [x] DOCS: `docs/mbo/index.md` → `in-review`; TRACKING §2/§3 ticked
+- [x] COMMIT: `docs(agy): agy-parity docs, sanity check, and evidence (#268)`
+- [x] LEDGER + CHECKPOINT + PR body refresh
 
 **Done when:** three make gates clean, live transcript committed, PR body current.

@@ -1,0 +1,87 @@
+# 2026-09-03T15:14:35Z 5e62ef0 make shell-test
+RUN: ai/antigravity/aliases_test.sh
+PASS=30 FAIL=0
+RUN: ai/claude/aliases_test.sh
+PASS=36 FAIL=0
+RUN: ai/claude/scripts/validate_hooks_test.sh
+PASS: dead configured hook path FAILS validation (catches #111) (exit 1)
+PASS: fail-open safety_guard (allows known-bad) FAILS the exercise (exit 1)
+PASS: adapter with NO guard argument FAILS validation (exit 1)
+PASS: Antigravity fail-open guard behind the adapter FAILS the exercise (exit 1)
+PASS=7 FAIL=0
+RUN: ai/hooks/antigravity_adapter_test.sh
+PASS=11 FAIL=0
+RUN: ai/hooks/dir_added_guard_test.sh
+RUN: ai/hooks/privacy_guard_test.sh
+RUN: ai/hooks/safety_guard_test.sh
+PASS: 65  FAIL: 0
+RUN: ./install_test.sh
+PASS=19 FAIL=0
+RUN: opt/bin/claude-rc-boot_test.sh
+PASS=17 FAIL=0
+RUN: opt/bin/pkg-install_test.sh
+PASS=13 FAIL=0
+RUN: opt/bin/sshd-setup_test.sh
+PASS=21 FAIL=0
+RUN: opt/lib/gff_test.sh
+PASS: 20  FAIL: 0
+RUN: opt/lib/hardware_test.sh
+PASS=32 FAIL=0
+RUN: opt/lib/winsetup_test.sh
+RUN: opt/profiles/.bash_aliases_test.sh
+PASS=11 FAIL=0
+RUN: opt/profiles/.gitools_test.sh
+RUN: opt/profiles/profile_test.sh
+PASS=21 FAIL=0
+RUN: opt/profiles/rc_test.sh
+PASS=8 FAIL=0
+RUN: opt/scripts/git/git_identity_doctor_test.sh
+PASS: private email FAILS with push-block explanation
+RUN: opt/scripts/misc/open-url_test.sh
+PASS=9 FAIL=0
+RUN: opt/scripts/system/apply-forced-settings_test.sh
+PASS=19 FAIL=0
+RUN: opt/scripts/system/bump-sdk-version_test.sh
+PASS=20 FAIL=0
+RUN: opt/scripts/system/claude_install_test.sh
+PASS=10 FAIL=0
+RUN: opt/scripts/system/gemini_teardown_test.sh
+PASS=25 FAIL=0
+RUN: opt/scripts/system/gnome-desktop-defaults_test.sh
+PASS=24 FAIL=0
+RUN: opt/scripts/system/google-cli-setup_test.sh
+PASS=5 FAIL=0
+RUN: opt/scripts/system/install_ai_teams_test.sh
+RUN: opt/scripts/system/install_antigravity_skills_test.sh
+PASS=54 FAIL=0
+RUN: opt/scripts/system/install_claude_skills_test.sh
+PASS=18 FAIL=0
+RUN: opt/scripts/system/install_herdr_test.sh
+PASS=31 FAIL=0
+RUN: opt/scripts/system/install-stamp_test.sh
+PASS=12 FAIL=0
+RUN: opt/scripts/system/macos-keys-linux_test.sh
+PASS=40 FAIL=0
+RUN: opt/scripts/system/provision-claude-memory_test.sh
+PASS=9 FAIL=0
+RUN: opt/scripts/system/render-agy-plugin_test.sh
+PASS=24 FAIL=0
+RUN: opt/scripts/system/security-audit-collect_test.sh
+PASS: 41  FAIL: 0
+RUN: opt/scripts/system/setup_gh_apt_repo_test.sh
+PASS=15 FAIL=0
+RUN: opt/scripts/system/skill-eval_test.sh
+PASS=27 FAIL=0
+RUN: opt/scripts/system/strip-agy-rc-appends_test.sh
+PASS=12 FAIL=0
+RUN: opt/scripts/system/sync-plugins_test.sh
+PASS=17 FAIL=0
+RUN: opt/scripts/system/sync-skills_test.sh
+PASS=8 FAIL=0
+shell-test: 39 passed, 1 failed
+shell-test rc=
+rebased onto 2f17b59: HEAD=9297539, 9 commits replayed
+# 2026-09-03T15:21:35Z throwaway worktree = PR branch rebased onto origin/main (2f17b59, carries the #263 teams-test fix); proves the MERGED result
+install_ai_teams_test rc=0
+shell-test: 40 passed, 0 failed
+make shell-test rc=0

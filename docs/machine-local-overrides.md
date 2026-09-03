@@ -58,6 +58,11 @@ claude() {
 > `_claude_yolo_enabled` helper was removed — Claude Code's shell-snapshot
 > strips `_`-prefixed functions; check the `$CLAUDE_YOLO_FILE` sentinel inline
 > instead, as above.)
+>
+> The Antigravity CLI has the same shape: `agy-config yolo on|off` toggles
+> `~/.config/antigravity/yolo.enabled` and the `agy` wrapper injects
+> `--dangerously-skip-permissions` while it is present; `agy-config doctor` checks
+> the binary. There is no remote toggle for agy (no such CLI flag).
 
 ### Add a host-specific PATH entry
 

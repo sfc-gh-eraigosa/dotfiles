@@ -105,11 +105,13 @@ Corrections log: (none yet).
 
 > **Maintenance rule:** exactly ONE prompt here — the one that starts the NEXT session.
 
-Mission: finish the agy-parity build on branch `worktree/agy_defaults` (PR #269) to
-dev-complete with evidence. Read first: `docs/mbo/plans/agy-parity/TODO.md` (first unchecked
-box is your next action), `TRACKING.md` (what is proven), plan `docs/mbo/plans/agy-parity.md`
-§3–§4. Scope in order: T1 aliases → T2 template → T3 forced policy → T4 hooks merge → T5
-adapter ask → T6 plugin renderer → T7 docs + gates + live evidence. Human-in-the-loop stops:
-none inside the loop (checkpoints to #269 are pre-authorized); stop and write a TRACKING §4
-blocker if a gate cannot pass without changing a frozen contract. Done-when: TRACKING §3 all
-ticked, index row `in-review`, PR body current.
+Mission: agy-parity is dev-complete on PR #269 (T1–T7 done, evidence under
+`docs/mbo/plans/agy-parity/evidence/`). Next session = review follow-through. Read first:
+`TRACKING.md` §3 (stop condition, all ticked) and §4 (three recorded items, none in scope).
+Scope in order: (1) address PR #269 review comments, re-running the four drivers
+(`aliases_test`, `install_antigravity_skills_test`, `antigravity_adapter_test`,
+`render-agy-plugin_test`) after each change; (2) if the reviewer wants it, the interactive
+`command(...)` deny probe from §4 row 3; (3) on approval, label `ready-for-merge` (Mergify
+updates the branch in place, which also brings in the #263 teams-test fix). Human-in-the-loop
+stops: the ready-for-merge label. Done-when: PR #269 merged, `docs/mbo/index.md` row `merged`,
+issue #268 closed.
