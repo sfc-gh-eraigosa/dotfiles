@@ -105,13 +105,13 @@
 - [ ] SETUP: record refs verbatim in TRACKING §0 / IMPLEMENTATION §2.1
 
 ### Task 17 — fail-open gff resolution  (plan Task 17, leaf C)
-- [ ] RED: `internal/featflag/featflag_test.go` — `TestResolveDefaultsWhenSourceErrors` (`Static{Err: errors.New("x")}` → `Enabled true`, `ConfigPath ""`, `Note` non-empty), `TestResolveHonoursDisabled`, `TestResolveMapsHomeToEmptyPath`, `TestResolveMapsRepoUnderRepoDir` (`repo` → `<repoDir>/opt/etc/fleet/fleet.yaml`), `TestResolveUnknownKeyIsFailOpen` (error wrapping `gff.ErrUnknownKey` → enabled); every test `t.Setenv("HOME", t.TempDir())`
-- [ ] RUN-RED: `go test ./internal/featflag -run 'TestResolve' -v` → expect **FAIL**
-- [ ] GREEN: `featflag.go` — `Source`, `Settings`, `Resolve`, `Static`, key constants
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/featflag): fail-open gff resolution`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `internal/featflag/featflag_test.go` — `TestResolveDefaultsWhenSourceErrors` (`Static{Err: errors.New("x")}` → `Enabled true`, `ConfigPath ""`, `Note` non-empty), `TestResolveHonoursDisabled`, `TestResolveMapsHomeToEmptyPath`, `TestResolveMapsRepoUnderRepoDir` (`repo` → `<repoDir>/opt/etc/fleet/fleet.yaml`), `TestResolveUnknownKeyIsFailOpen` (error wrapping `gff.ErrUnknownKey` → enabled); every test `t.Setenv("HOME", t.TempDir())`
+- [x] RUN-RED: `go test ./internal/featflag -run 'TestResolve' -v` → expect **FAIL**
+- [x] GREEN: `featflag.go` — `Source`, `Settings`, `Resolve`, `Static`, key constants
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/featflag): fail-open gff resolution`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** no code path can return `Enabled false` on an error.
 

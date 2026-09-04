@@ -62,7 +62,7 @@ Plan §4 task numbers. Commit = the SHA carrying the plan's exact message.
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| 17 Fail-open resolution | todo | | | |
+| 17 Fail-open resolution | done | (this commit) | `go test ./internal/featflag -run 'TestResolve\|TestStatic' -v` → PASS (8/8); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | pure package, no gff import |
 | 18 gff adapter + deps + flags | todo | | | record binary size before/after; `go mod tidy` no diff |
 | **Leaf C gate** | todo | — | `go test -race -cover ./internal/featflag` → ; `go run . lint` → ; `go build ./...` → | |
 
