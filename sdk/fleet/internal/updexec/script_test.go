@@ -286,3 +286,51 @@ func TestRestoreRejectsUnvalidatedOrigOrSHA(t *testing.T) {
 		t.Fatal("a 39-char (non-40) SHA must be rejected")
 	}
 }
+
+// --- task 8 -----------------------------------------------------------------
+
+// TestBuildersRejectUnvalidatedInput proves a caller that bypasses
+// updplan.Parse and hand-builds an invalid Repo/branch/url/hostname can
+// never get a metacharacter onto the wire: every builder must return an
+// error, and never a string.
+func TestBuildersRejectUnvalidatedInput(t *testing.T) {
+	badRepo := updplan.Repo{Name: "dotfiles", Path: "~/x; id", Branches: []string{"main"}, Local: updplan.LocalSkip}
+	if s, err := PrecheckScript(badRepo); err == nil {
+		t.Fatalf("PrecheckScript accepted a bad path: %q", s)
+	}
+	if s, err := SyncScript(badRepo, updplan.LocalSkip, false); err == nil {
+		t.Fatalf("SyncScript accepted a bad path: %q", s)
+	}
+	if s, err := RescueScript(badRepo); err == nil {
+		t.Fatalf("RescueScript accepted a bad path: %q", s)
+	}
+	if s, err := RunScript(updplan.Step{ID: "x", Run: "echo hi"}, &badRepo); err == nil {
+		t.Fatalf("RunScript accepted a bad repo path: %q", s)
+	}
+
+	badBranch := repo("dotfiles", []string{"main;id"})
+	if s, err := SyncScript(badBranch, updplan.LocalSkip, false); err == nil {
+		t.Fatalf("SyncScript accepted a bad branch: %q", s)
+	}
+	badBranch.URL = "https://example.com/dotfiles.git"
+	if s, err := CloneScript(badBranch); err == nil {
+		t.Fatalf("CloneScript accepted a bad branch: %q", s)
+	}
+
+	badURL := repo("dotfiles", []string{"main"})
+	badURL.URL = "'x'"
+	if s, err := CloneScript(badURL); err == nil {
+		t.Fatalf("CloneScript accepted a bad url: %q", s)
+	}
+
+	if s, err := GhAuthCheck("gh;id"); err == nil {
+		t.Fatalf("GhAuthCheck accepted a bad hostname: %q", s)
+	}
+	if s, err := GhAuthLogin("gh;id"); err == nil {
+		t.Fatalf("GhAuthLogin accepted a bad hostname: %q", s)
+	}
+
+	if s, err := RestoreScript(repo("dotfiles", []string{"main"}), "main;id", ""); err == nil {
+		t.Fatalf("RestoreScript accepted a bad orig: %q", s)
+	}
+}
