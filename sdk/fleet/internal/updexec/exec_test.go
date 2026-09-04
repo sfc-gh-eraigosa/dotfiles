@@ -1126,3 +1126,209 @@ func TestGhAuthLoginIsNeverRetriedButCheckIs(t *testing.T) {
 		}
 	})
 }
+
+// --- task 15: retries with backoff under per-attempt timeouts ----------------
+
+// retryPlan builds a one-step (batch, non-interactive run) plan with the
+// given retry policy, so the retry/backoff/timeout machinery can be
+// exercised directly.
+func retryPlan(retry updplan.Retry, timeout time.Duration, expect updplan.Expect) updplan.Plan {
+	st := runStep("x", "", "echo hi")
+	st.Retry = retry
+	st.Timeout = timeout
+	if expect.Exit != nil {
+		st.Expect = expect
+	}
+	return updplan.Plan{Steps: []updplan.Step{st}}
+}
+
+func stdBackoff() updplan.Backoff {
+	return updplan.Backoff{Initial: 5 * time.Second, Max: 2 * time.Minute, Factor: 2, Jitter: true}
+}
+
+func TestTransportFailureIsRetriedWithBackoff(t *testing.T) {
+	io := newFakeIO().
+		on("echo hi", "", ErrTransport).
+		on("echo hi", "", ErrTransport).
+		on("echo hi", "", nil)
+	sleeper := &sleepRecorder{}
+	retry := updplan.Retry{Attempts: 3, On: []updplan.RetryOn{updplan.RetryOnTransport}, Backoff: stdBackoff()}
+	e := Executor{IO: io, Sleep: sleeper.Sleep, Rand: midpointRand}
+	rep := e.RunHost("alpha", retryPlan(retry, 0, stdExpect()))
+	r, _ := resultFor(rep, "x")
+	if r.Status != OK || r.Attempts != 3 {
+		t.Fatalf("r = %+v, want ok after 3 attempts", r)
+	}
+	waits := sleeper.all()
+	if len(waits) != 2 || waits[0] != 5*time.Second || waits[1] != 10*time.Second {
+		t.Fatalf("waits = %v, want [5s 10s]", waits)
+	}
+}
+
+func TestNonMatchingFailureIsNotRetried(t *testing.T) {
+	io := newFakeIO().on("echo hi", "", realExitError(t, 1))
+	retry := updplan.Retry{Attempts: 3, On: []updplan.RetryOn{updplan.RetryOnTransport}, Backoff: stdBackoff()}
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", retryPlan(retry, 0, stdExpect()))
+	r, _ := resultFor(rep, "x")
+	if r.Status != Failed || r.Attempts != 1 {
+		t.Fatalf("a plain exit failure not in retry.on must not be retried: %+v", r)
+	}
+}
+
+func TestRetryOnAnyRetriesEveryUnexpectedExit(t *testing.T) {
+	io := newFakeIO().on("echo hi", "", realExitError(t, 1)).on("echo hi", "", nil)
+	retry := updplan.Retry{Attempts: 2, On: []updplan.RetryOn{updplan.RetryOnAny}, Backoff: updplan.Backoff{Initial: time.Millisecond, Factor: 1}}
+	e := Executor{IO: io, Sleep: func(time.Duration) {}}
+	rep := e.RunHost("alpha", retryPlan(retry, 0, stdExpect()))
+	r, _ := resultFor(rep, "x")
+	if r.Status != OK || r.Attempts != 2 {
+		t.Fatalf("retry.on: any must retry a plain exit failure: %+v", r)
+	}
+}
+
+func TestRetryOnExitCodeMatchesOnlyThatCode(t *testing.T) {
+	io := newFakeIO().on("echo hi", "", realExitError(t, 7)).on("echo hi", "", nil)
+	retry := updplan.Retry{Attempts: 2, On: []updplan.RetryOn{"exit:7"}, Backoff: updplan.Backoff{Initial: time.Millisecond, Factor: 1}}
+	e := Executor{IO: io, Sleep: func(time.Duration) {}}
+	rep := e.RunHost("alpha", retryPlan(retry, 0, stdExpect()))
+	r, _ := resultFor(rep, "x")
+	if r.Status != OK || r.Attempts != 2 {
+		t.Fatalf("retry.on: [exit:7] must retry an exit-7 failure: %+v", r)
+	}
+
+	io2 := newFakeIO().on("echo hi", "", realExitError(t, 9))
+	e2 := Executor{IO: io2, Sleep: func(time.Duration) {}}
+	rep2 := e2.RunHost("alpha", retryPlan(retry, 0, stdExpect()))
+	r2, _ := resultFor(rep2, "x")
+	if r2.Status != Failed || r2.Attempts != 1 {
+		t.Fatalf("retry.on: [exit:7] must NOT retry an exit-9 failure: %+v", r2)
+	}
+}
+
+func TestExpectedExitIsNeverRetried(t *testing.T) {
+	io := newFakeIO().on("echo hi", "", realExitError(t, 3))
+	retry := updplan.Retry{Attempts: 3, On: []updplan.RetryOn{updplan.RetryOnAny}, Backoff: stdBackoff()}
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", retryPlan(retry, 0, updplan.Expect{Exit: []int{3}}))
+	r, _ := resultFor(rep, "x")
+	if r.Status != OK || r.Attempts != 1 {
+		t.Fatalf("an expected exit must never be retried: %+v", r)
+	}
+}
+
+func TestAttemptsAreExhaustedThenOnFailureApplies(t *testing.T) {
+	io := newFakeIO().on("echo hi", "", ErrTransport).on("echo hi", "", ErrTransport)
+	retry := updplan.Retry{Attempts: 2, On: []updplan.RetryOn{updplan.RetryOnTransport}, Backoff: updplan.Backoff{Initial: time.Millisecond, Factor: 1}}
+	st := runStep("x", "", "echo hi")
+	st.Retry = retry
+	after := runStep("after", "", "echo after", "x")
+	p := updplan.Plan{Steps: []updplan.Step{st, after}}
+	io.on("echo after", "", nil)
+	e := Executor{IO: io, Sleep: func(time.Duration) {}}
+	rep := e.RunHost("alpha", p)
+	r, _ := resultFor(rep, "x")
+	if r.Status != Failed || r.Attempts != 2 {
+		t.Fatalf("attempts must be exhausted before failing: %+v", r)
+	}
+	dep, _ := resultFor(rep, "after")
+	if dep.Status != DepFailed {
+		t.Fatalf("on_failure: stop (default) must block the dependent: %+v", dep)
+	}
+}
+
+func TestTimeoutCancelsTheAttempt(t *testing.T) {
+	io := newFakeIO().blockOn("echo hi")
+	retry := updplan.Retry{Attempts: 1, On: []updplan.RetryOn{}, Backoff: stdBackoff()}
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", retryPlan(retry, 1*time.Second, stdExpect()))
+	r, _ := resultFor(rep, "x")
+	if !r.TimedOut {
+		t.Fatalf("r.TimedOut = false, want true: %+v", r)
+	}
+	if r.Reason != "timed out after 1s" {
+		t.Fatalf("Reason = %q, want %q", r.Reason, "timed out after 1s")
+	}
+}
+
+func TestTimeoutIsRetriedOnlyWhenListed(t *testing.T) {
+	t.Run("not listed -> single attempt", func(t *testing.T) {
+		io := newFakeIO().blockOn("echo hi")
+		retry := updplan.Retry{Attempts: 3, On: []updplan.RetryOn{updplan.RetryOnTransport}, Backoff: stdBackoff()}
+		e := Executor{IO: io}
+		rep := e.RunHost("alpha", retryPlan(retry, 10*time.Millisecond, stdExpect()))
+		r, _ := resultFor(rep, "x")
+		if r.Attempts != 1 {
+			t.Fatalf("a timeout not in retry.on must not be retried: %+v", r)
+		}
+	})
+	t.Run("listed -> retried", func(t *testing.T) {
+		io := newFakeIO().blockOn("echo hi")
+		retry := updplan.Retry{Attempts: 2, On: []updplan.RetryOn{updplan.RetryOnTimeout}, Backoff: updplan.Backoff{Initial: time.Millisecond, Factor: 1}}
+		e := Executor{IO: io, Sleep: func(time.Duration) {}}
+		rep := e.RunHost("alpha", retryPlan(retry, 10*time.Millisecond, stdExpect()))
+		r, _ := resultFor(rep, "x")
+		if r.Attempts != 2 {
+			t.Fatalf("a timeout listed in retry.on must be retried: %+v", r)
+		}
+	})
+}
+
+func TestInteractiveStepsAreNeverRetried(t *testing.T) {
+	io := newFakeIO().onInteractive("./install.sh", errDeviceFlowDenied)
+	st := interactiveRunStep("x", "", "./install.sh")
+	st.Retry = updplan.Retry{Attempts: 5, On: []updplan.RetryOn{updplan.RetryOnAny}, Backoff: stdBackoff()}
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", updplan.Plan{Steps: []updplan.Step{st}})
+	r, _ := resultFor(rep, "x")
+	if r.Status != Failed || r.Attempts != 1 {
+		t.Fatalf("an interactive step must never be retried even with retry.on: any: %+v", r)
+	}
+}
+
+func TestInteractiveHasNoDeadlineUnlessSet(t *testing.T) {
+	var sawDeadline bool
+	io := recordingDeadlineIO{onCheck: func(ok bool) { sawDeadline = ok }}
+	st := interactiveRunStep("x", "", "./install.sh")
+	e := Executor{IO: io}
+	e.RunHost("alpha", updplan.Plan{Steps: []updplan.Step{st}})
+	if sawDeadline {
+		t.Fatal("an interactive step with no explicit timeout must get no ctx deadline")
+	}
+}
+
+// recordingDeadlineIO reports whether the ctx it was called with carries a
+// deadline.
+type recordingDeadlineIO struct{ onCheck func(bool) }
+
+func (r recordingDeadlineIO) Batch(ctx context.Context, host string, st updplan.Step, script string) (string, error) {
+	return "", nil
+}
+func (r recordingDeadlineIO) Interactive(ctx context.Context, host string, st updplan.Step, script string) error {
+	_, ok := ctx.Deadline()
+	r.onCheck(ok)
+	return nil
+}
+
+func TestExecutorTimeoutOverridesBatchSteps(t *testing.T) {
+	io := newFakeIO().blockOn("echo hi")
+	st := runStep("x", "", "echo hi")
+	st.Timeout = 10 * time.Minute // the plan's own timeout, should be overridden
+	e := Executor{IO: io, Timeout: 20 * time.Millisecond}
+	rep := e.RunHost("alpha", updplan.Plan{Steps: []updplan.Step{st}})
+	r, _ := resultFor(rep, "x")
+	if !r.TimedOut {
+		t.Fatalf("Executor.Timeout must override the step's own batch timeout: %+v", r)
+	}
+}
+
+func TestNoRetryForcesOneAttempt(t *testing.T) {
+	io := newFakeIO().on("echo hi", "", ErrTransport)
+	retry := updplan.Retry{Attempts: 5, On: []updplan.RetryOn{updplan.RetryOnTransport}, Backoff: stdBackoff()}
+	e := Executor{IO: io, NoRetry: true}
+	rep := e.RunHost("alpha", retryPlan(retry, 0, stdExpect()))
+	r, _ := resultFor(rep, "x")
+	if r.Attempts != 1 {
+		t.Fatalf("--no-retry must force exactly one attempt: %+v", r)
+	}
+}
