@@ -28,9 +28,10 @@ type storedAnswers struct {
 	Gemini  string `json:"gemini,omitempty"`
 }
 
-// answersPath is where the preferences live. It follows os.UserConfigDir, so it
-// respects XDG_CONFIG_HOME on Linux and the platform convention elsewhere.
-func answersPath() string {
+// fleetConfigDir is where fleet's own config files live — answers.json today,
+// fleet.yaml (the update plan) from task 19. It follows os.UserConfigDir, so
+// it respects XDG_CONFIG_HOME on Linux and the platform convention elsewhere.
+func fleetConfigDir() string {
 	dir, err := os.UserConfigDir()
 	if err != nil || dir == "" {
 		home, herr := os.UserHomeDir()
@@ -39,7 +40,26 @@ func answersPath() string {
 		}
 		dir = filepath.Join(home, ".config")
 	}
-	return filepath.Join(dir, "fleet", "answers.json")
+	return filepath.Join(dir, "fleet")
+}
+
+// answersPath is where the preferences live.
+func answersPath() string {
+	dir := fleetConfigDir()
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, "answers.json")
+}
+
+// defaultPlanPath is where the update plan lives when neither --file nor gff's
+// fleet.update.config selects a location.
+func defaultPlanPath() string {
+	dir := fleetConfigDir()
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, "fleet.yaml")
 }
 
 // saveAnswers writes the non-secret preferences, owner-only. The file reveals
