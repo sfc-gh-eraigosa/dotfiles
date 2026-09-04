@@ -85,6 +85,51 @@ and auditable:
 - **Settings changes leave diffs**: ruleset snapshots + the GitHub audit log
   cover the one surface PRs can't.
 
+## Troubleshooting: a green PR that keeps getting dequeued
+
+Symptom: every required check is green, the branch is up to date and
+conflict-free, yet Mergify dequeues with
+
+> Mergify failed to merge the pull request. GitHub can't merge the pull
+> request after 10 minutes of retrying. Repository rule violations found —
+> N of 8 required status checks have not succeeded: M expected.
+
+That is a **queue livelock**, and it is a CI-trigger bug, not a code problem.
+Mergify writes `queued` / `dequeued` labels as it moves a PR through the
+queue. If a workflow that owns required checks is dispatched by
+`labeled` / `unlabeled` pull_request events, Mergify's own bookkeeping
+restarts that workflow at the exact moment it holds the merge lock — the
+required checks flip back to `expected`, GitHub refuses the merge, Mergify
+exhausts its 10-minute retry budget and dequeues, and the `dequeued` label
+write restarts the whole cycle.
+
+How to tell it apart from a real failure: list the check runs for the head
+SHA and look for many runs of the same job on **one unchanged commit**.
+
+```sh
+sha=$(gh pr view <N> --json headRefOid -q .headRefOid)
+gh api "repos/{owner}/{repo}/commits/$sha/check-runs?per_page=100" \
+  -q '.check_runs[] | "\(.started_at)\t\(.name)\t\(.conclusion)"' | sort -k2
+gh api "repos/{owner}/{repo}/issues/<N>/timeline?per_page=100" \
+  -q '.[] | select(.event | test("labeled")) | "\(.created_at)\t\(.event)\t\(.label.name)\t\(.actor.login)"'
+```
+
+If the label timeline and the extra runs line up second-for-second, it is
+this bug. Two rules keep it away, both learned the hard way:
+
+1. **Never let a label event restart a required check on a non-draft PR.**
+   `.github/workflows/docker-image.yml` gates its three root jobs on the
+   label name and draft status (see "MERGIFY QUEUE LIVELOCK" in that file's
+   `on:` block, found via #264). A label event carries no new code, so there
+   is nothing to re-validate.
+2. **Never fold label events into a shared, cancelling concurrency group.**
+   Entering the queue can add and remove labels in the same instant; two runs
+   start together and one cancels the other, and a required check whose newest
+   run is `cancelled` is not `success` (found via #243).
+
+A job skipped by `if:` reports its required check as successful, so gating
+jobs this way does not strand the merge.
+
 ## Break-glass (admin emergencies)
 
 The ruleset grants `Repository admin` unconditional bypass (`bypass_actors`,
