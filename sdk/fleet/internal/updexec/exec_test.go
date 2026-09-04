@@ -2,6 +2,7 @@ package updexec
 
 import (
 	"context"
+	"errors"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
+
+var errDeviceFlowDenied = errors.New("device flow denied")
 
 // realExitError returns an authentic *exec.ExitError with the given exit
 // code, by actually running a tiny local command — exitCode()/classify()
@@ -988,6 +991,138 @@ func TestRestoreStepHasFixedRetryPolicy(t *testing.T) {
 		rr, ok := resultFor(rep, "dotfiles.restore")
 		if !ok || rr.Status != Failed || rr.Attempts != 1 {
 			t.Fatalf("a non-transport restore failure must not be retried: %+v", rr)
+		}
+	})
+}
+
+// --- task 14: gh-auth step ----------------------------------------------------
+
+func ghAuthPlan() updplan.Plan {
+	return updplan.Plan{
+		Steps: []updplan.Step{
+			{ID: "gh.auth", Kind: updplan.KindGhAuth, Hostname: "github.com",
+				Expect: stdExpect(), OnFailure: updplan.OnFailureStop, Retry: stdRetry()},
+		},
+	}
+}
+
+func TestGhAuthSkipsLoginWhenStatusPasses(t *testing.T) {
+	io := newFakeIO().on("gh auth status -h github.com", "", nil)
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", ghAuthPlan())
+	r, ok := resultFor(rep, "gh.auth")
+	if !ok || r.Status != OK {
+		t.Fatalf("an authenticated host must pass without logging in: %+v", r)
+	}
+	if len(io.batchCalls()) != 1 {
+		t.Fatalf("want exactly 1 Batch call, got %d: %+v", len(io.batchCalls()), io.batchCalls())
+	}
+	if len(io.interactiveCalls()) != 0 {
+		t.Fatalf("want 0 Interactive calls, got %d: %+v", len(io.interactiveCalls()), io.interactiveCalls())
+	}
+}
+
+func TestGhAuthLogsInInteractivelyThenReverifies(t *testing.T) {
+	io := newFakeIO().
+		on("gh auth status -h github.com", "", realExitError(t, 1)).
+		on("gh auth status -h github.com", "", nil).
+		onInteractive("gh auth login -h github.com", nil)
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", ghAuthPlan())
+	r, ok := resultFor(rep, "gh.auth")
+	if !ok || r.Status != OK {
+		t.Fatalf("login then re-check must succeed: %+v", r)
+	}
+	if len(io.batchCalls()) != 2 {
+		t.Fatalf("want 2 Batch calls (check, recheck), got %d: %+v", len(io.batchCalls()), io.batchCalls())
+	}
+	if len(io.interactiveCalls()) != 1 {
+		t.Fatalf("want exactly 1 Interactive (login) call, got %d", len(io.interactiveCalls()))
+	}
+}
+
+func TestGhAuthReports127AsNotInstalled(t *testing.T) {
+	io := newFakeIO().on("gh auth status -h github.com", "", realExitError(t, 127))
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", ghAuthPlan())
+	r, ok := resultFor(rep, "gh.auth")
+	if !ok || r.Status != Failed || r.Reason != "gh not installed" {
+		t.Fatalf("exit 127 must be reported as gh not installed: %+v", r)
+	}
+	if len(io.interactiveCalls()) != 0 {
+		t.Fatal("a missing gh must never attempt an interactive login")
+	}
+}
+
+func TestGhAuthWithoutATerminalFailsCleanly(t *testing.T) {
+	inner := newFakeIO().on("gh auth status -h github.com", "", realExitError(t, 1))
+	io := noTerminalIO{inner}
+	p := ghAuthPlan()
+	p.Steps = append(p.Steps, runStep("after", "", "echo hi", "gh.auth"))
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", p)
+	r, ok := resultFor(rep, "gh.auth")
+	if !ok || r.Status != Failed || r.Reason != "needs a terminal" {
+		t.Fatalf("no-terminal login must fail cleanly: %+v", r)
+	}
+	after, ok := resultFor(rep, "after")
+	if !ok || after.Status != DepFailed {
+		t.Fatalf("a dependent must be blocked: %+v", after)
+	}
+}
+
+func TestGhAuthNeverUsesStdin(t *testing.T) {
+	io := newFakeIO().
+		on("gh auth status -h github.com", "", realExitError(t, 1)).
+		on("gh auth status -h github.com", "", nil).
+		onInteractive("gh auth login -h github.com", nil)
+	e := Executor{IO: io}
+	e.RunHost("alpha", ghAuthPlan())
+	for _, c := range io.calls {
+		if strings.Contains(c.script, "GH_TOKEN") || strings.Contains(c.script, "GITHUB_TOKEN") {
+			t.Fatalf("gh-auth must never carry a token: %q", c.script)
+		}
+	}
+}
+
+func TestGhAuthLoginIsNeverRetriedButCheckIs(t *testing.T) {
+	t.Run("check retries through transport failures", func(t *testing.T) {
+		io := newFakeIO().
+			on("gh auth status -h github.com", "", ErrTransport).
+			on("gh auth status -h github.com", "", ErrTransport).
+			on("gh auth status -h github.com", "", nil)
+		sleeper := &sleepRecorder{}
+		p := ghAuthPlan()
+		p.Steps[0].Retry = updplan.Retry{
+			Attempts: 3, On: []updplan.RetryOn{updplan.RetryOnTransport},
+			Backoff: updplan.Backoff{Initial: time.Millisecond, Max: time.Millisecond, Factor: 1},
+		}
+		e := Executor{IO: io, Sleep: sleeper.Sleep, Rand: midpointRand}
+		rep := e.RunHost("alpha", p)
+		r, ok := resultFor(rep, "gh.auth")
+		if !ok || r.Status != OK || r.Attempts != 3 {
+			t.Fatalf("check must retry through transport failures: %+v", r)
+		}
+		if len(io.interactiveCalls()) != 0 {
+			t.Fatalf("the check succeeding on retry must never reach login: %+v", io.interactiveCalls())
+		}
+	})
+
+	t.Run("a failing login is never retried", func(t *testing.T) {
+		io := newFakeIO().
+			on("gh auth status -h github.com", "", realExitError(t, 1)).
+			onInteractive("gh auth login -h github.com", errDeviceFlowDenied)
+		e := Executor{IO: io}
+		rep := e.RunHost("alpha", ghAuthPlan())
+		r, ok := resultFor(rep, "gh.auth")
+		if !ok || r.Status != Failed {
+			t.Fatalf("a failing login must fail the step: %+v", r)
+		}
+		if len(io.interactiveCalls()) != 1 {
+			t.Fatalf("login must be attempted exactly once, never retried: %d calls", len(io.interactiveCalls()))
+		}
+		if len(io.batchCalls()) != 1 {
+			t.Fatalf("a failed login must not trigger a re-check: %d Batch calls", len(io.batchCalls()))
 		}
 	})
 }
