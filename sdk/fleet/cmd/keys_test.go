@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,6 +43,11 @@ func (r recordingRunner) RunVia(peer, h string, a ...string) (string, error) {
 func (r recordingRunner) RunStream(h, stdin string, a ...string) (<-chan string, <-chan error) {
 	*r.log = append(*r.log, strings.Join(a, " "))
 	return r.fake.RunStream(h, stdin, a...)
+}
+
+func (r recordingRunner) RunStreamCtx(ctx context.Context, h, stdin string, a ...string) (<-chan string, <-chan error) {
+	*r.log = append(*r.log, strings.Join(a, " "))
+	return r.fake.RunStreamCtx(ctx, h, stdin, a...)
 }
 
 func (r recordingRunner) RunStdin(h, _ string, a ...string) (string, error) {

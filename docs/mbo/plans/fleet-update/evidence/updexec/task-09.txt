@@ -1,0 +1,22 @@
+# 2026-09-04T15:39:07Z task 9
+$ gofmt -l internal/runner/ cmd/ internal/updexec/
+$ go vet ./...
+$ go test -race ./internal/runner/... ./cmd/... ./internal/updexec/...
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	(cached)
+$ go test -race ./... (note: pre-existing unrelated failures remain in internal/updplan, a concurrent review pass on leaf A; not touched by this task)
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keys	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/lanscan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach	1.165s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan	1.035s
