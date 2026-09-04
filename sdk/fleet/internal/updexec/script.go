@@ -155,3 +155,148 @@ func ResetScript(ref string) string {
 		`{ git -c user.email=fleet@local -c user.name=fleet commit -q -m "fleet pre-reset $ts" || true; } && ` +
 		`git checkout -q "` + ref + `" && git reset --hard FETCH_HEAD`
 }
+
+// defaultGhHost is the gh CLI's own default hostname when a step does not
+// name one.
+const defaultGhHost = "github.com"
+
+// rescueRoot is the fixed remote directory under which rescue worktrees are
+// materialised, keyed by repo name.
+const rescueRoot = "~/.local/state/fleet/rescue"
+
+// PrecheckScript reports a repo's remote state without changing anything:
+// "state=missing" when the clone does not exist, else
+// "state=<clean|dirty|in-progress> branch=<name|detached>". Uses -e rather
+// than -d so a WORKTREE clone — whose .git is a file, not a directory — is
+// still detected.
+func PrecheckScript(r updplan.Repo) (string, error) {
+	if err := validRepo(r); err != nil {
+		return "", err
+	}
+	p := r.Path
+	return `if [ ! -e ` + p + `/.git ]; then echo "state=missing"; else cd ` + p +
+		` && g=$(git rev-parse --git-dir) && if [ -e "$g/MERGE_HEAD" ] || [ -d "$g/rebase-merge" ] || [ -d "$g/rebase-apply" ]; then s=in-progress; elif [ -n "$(git status --porcelain)" ]; then s=dirty; else s=clean; fi; b=$(git symbolic-ref -q --short HEAD || echo detached); echo "state=$s branch=$b"; fi`, nil
+}
+
+// CloneScript clones a missing repo — the one network call for a "missing"
+// precheck. The explicit-branch form passes --branch; the "default" form
+// omits it and reads back the branch git itself checked out.
+func CloneScript(r updplan.Repo) (string, error) {
+	if err := validRepo(r); err != nil {
+		return "", err
+	}
+	if err := validBranches(r); err != nil {
+		return "", err
+	}
+	if !updplan.ValidURL(r.URL) {
+		return "", fmt.Errorf("updexec: repo %q: invalid url %q", r.Name, r.URL)
+	}
+	p := r.Path
+	u := ShQuote(r.URL)
+
+	branches := r.Branches
+	var head string
+	var extras []string
+	if branches[0] == "default" {
+		head = `mkdir -p "$(dirname ` + p + `)" && git clone -q ` + u + ` ` + p +
+			` && cd ` + p + ` && b1=$(git symbolic-ref -q --short HEAD)`
+		extras = branches[1:]
+	} else {
+		head = `mkdir -p "$(dirname ` + p + `)" && git clone -q --branch ` + branches[0] + ` ` + u + ` ` + p +
+			` && cd ` + p + ` && b1=` + branches[0]
+		extras = branches[1:]
+	}
+
+	e := extrasScript(extras)
+	if e == "" {
+		return head, nil
+	}
+	return head + ` && ` + e, nil
+}
+
+// RescueScript is today's rescueWorktree text, generalised to a repo's path
+// and name: it commits everything currently on the clone (tracked AND
+// untracked) onto a fleet-rescue/<ts> branch, returns to the original
+// branch (now clean), and materialises the rescue branch as its own
+// worktree under ~/.local/state/fleet/rescue/<name>/<ts> for the operator to
+// inspect. Nothing is ever discarded.
+func RescueScript(r updplan.Repo) (string, error) {
+	if err := validRepo(r); err != nil {
+		return "", err
+	}
+	p, n := r.Path, r.Name
+	dir := rescueRoot + "/" + n
+	return `cd ` + p + ` && ts=$(date -u +%Y%m%dT%H%M%SZ) && ` +
+		`orig=$(git rev-parse --abbrev-ref HEAD) && ` +
+		`git checkout -q -b "fleet-rescue/$ts" && git add -A && ` +
+		`git -c user.email=fleet@local -c user.name=fleet commit -q -m "fleet rescue $ts" && ` +
+		`git checkout -q "$orig" && ` +
+		`mkdir -p ` + dir + ` && ` +
+		`git worktree add ` + dir + `/$ts "fleet-rescue/$ts"`, nil
+}
+
+// RestoreScript checks out orig and, when sha is non-empty, applies and
+// drops the carried stash — but only after a clean apply. On any failure
+// (checkout or apply/drop) the stash is left in place and the exit is a
+// distinguishable 4, so the caller can report "stash=<sha> branch=<orig>"
+// without ever having lost the operator's carried work.
+func RestoreScript(r updplan.Repo, orig, sha string) (string, error) {
+	if err := validRepo(r); err != nil {
+		return "", err
+	}
+	if !updplan.ValidRef(orig) && !updplan.ValidSHA(orig) {
+		return "", fmt.Errorf("updexec: repo %q: invalid restore orig %q", r.Name, orig)
+	}
+	if sha != "" && !updplan.ValidSHA(sha) {
+		return "", fmt.Errorf("updexec: repo %q: invalid restore sha %q", r.Name, sha)
+	}
+	p := r.Path
+	return `cd ` + p + ` && git checkout -q ` + orig + ` && ` +
+		`{ [ -z "` + sha + `" ] || { git stash apply -q ` + sha + ` && git stash drop -q ` + sha + ` && echo "fleet: restored stash=` + sha + `"; }; } || ` +
+		`{ echo "fleet: restore-failed stash=` + sha + ` branch=` + orig + `" >&2; exit 4; }`, nil
+}
+
+// RunScript is a run step's script: `cd <path> && <run>` when the step
+// targets a repo, or the run text verbatim when it does not. run is never
+// re-quoted — it is trusted, operator-authored shell, run verbatim exactly
+// as the operator wrote it.
+func RunScript(st updplan.Step, r *updplan.Repo) (string, error) {
+	if st.Run == "" {
+		return "", fmt.Errorf("updexec: step %q: run is empty", st.ID)
+	}
+	if strings.ContainsAny(st.Run, "\x00\n") {
+		return "", fmt.Errorf("updexec: step %q: run must not contain NUL or newline", st.ID)
+	}
+	if r == nil {
+		return st.Run, nil
+	}
+	if err := validRepo(*r); err != nil {
+		return "", err
+	}
+	return `cd ` + r.Path + ` && ` + st.Run, nil
+}
+
+// GhAuthCheck reports (via exit 127, or the gh auth status exit) whether gh
+// is installed and already authenticated to host, without ever prompting.
+func GhAuthCheck(host string) (string, error) {
+	if host == "" {
+		host = defaultGhHost
+	}
+	if !updplan.ValidHostname(host) {
+		return "", fmt.Errorf("updexec: invalid gh-auth hostname %q", host)
+	}
+	return `command -v gh >/dev/null 2>&1 || exit 127; gh auth status -h ` + host + ` >/dev/null 2>&1`, nil
+}
+
+// GhAuthLogin drives gh's interactive web login flow — it never carries a
+// token, so the credential lives only in the browser/device-code exchange
+// gh itself performs.
+func GhAuthLogin(host string) (string, error) {
+	if host == "" {
+		host = defaultGhHost
+	}
+	if !updplan.ValidHostname(host) {
+		return "", fmt.Errorf("updexec: invalid gh-auth hostname %q", host)
+	}
+	return `gh auth login -h ` + host + ` --web --git-protocol https && gh auth setup-git -h ` + host, nil
+}
