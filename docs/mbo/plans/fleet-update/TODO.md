@@ -81,20 +81,20 @@
 **Done when:** order is deterministic across runs (run the test with `-count=20`).
 
 ### Task 5 — `--ref` compatibility shim + path resolution  (plan Task 5, leaf A)
-- [ ] RED: `TestWithRefTargetsDotfilesByName`, `TestWithRefTargetsTheSoleRepo`, `TestWithRefIsAmbiguousWithManyRepos` (error lists repo names and the `repo=branch` form), `TestWithRefRepoEqualsBranch`, `TestWithRefRejectsShellInjection` (same vectors as `cmd/update_test.go` `TestValidRefRejectsShellInjection`), `TestWithRefDropsADuplicateExtra` (`[main, staging]` + `--ref staging` → `[staging]`), `TestRepoPathResolvesUnderRoot` (`dotfiles` → `~/git/dotfiles`; `work/scripts` → `~/git/work/scripts`; `/srv/x` and `~/x` unchanged; path defaults to the repo name)
-- [ ] RUN-RED: `go test ./internal/updplan -run 'TestWithRef|TestRepoPathResolves' -v` → expect **FAIL**
-- [ ] GREEN: `WithRef`, `WithRefs`, path resolution
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/updplan): --ref compatibility shim`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestWithRefTargetsDotfilesByName`, `TestWithRefTargetsTheSoleRepo`, `TestWithRefIsAmbiguousWithManyRepos` (error lists repo names and the `repo=branch` form), `TestWithRefRepoEqualsBranch`, `TestWithRefRejectsShellInjection` (same vectors as `cmd/update_test.go` `TestValidRefRejectsShellInjection`), `TestWithRefDropsADuplicateExtra` (`[main, staging]` + `--ref staging` → `[staging]`), `TestRepoPathResolvesUnderRoot` (`dotfiles` → `~/git/dotfiles`; `work/scripts` → `~/git/work/scripts`; `/srv/x` and `~/x` unchanged; path defaults to the repo name)
+- [x] RUN-RED: `go test ./internal/updplan -run 'TestWithRef|TestRepoPathResolves' -v` → expect **FAIL**
+- [x] GREEN: `WithRef`, `WithRefs`, path resolution
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/updplan): --ref compatibility shim`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** all shim tests pass and `Repo.Path` is never relative after `Parse`.
 
 ## Leaf A gate
-- [ ] VERIFY: `go test -race -cover ./internal/updplan | tee -a evidence/updplan/leaf-gate.txt` → coverage **≥ 90 %**
-- [ ] LEDGER: TRACKING §0 leaf A `in-review`; §3 gate line ticked with the observed percentage; `docs/mbo/index.md` state → `building`
-- [ ] CHECKPOINT; refresh IMPLEMENTATION §8 kickoff for leaf B (stacked on A) + leaf C (parallel)
+- [x] VERIFY: `go test -race -cover ./internal/updplan | tee -a evidence/updplan/leaf-gate.txt` → coverage **≥ 90 %**
+- [x] LEDGER: TRACKING §0 leaf A `in-review`; §3 gate line ticked with the observed percentage; `docs/mbo/index.md` state → `building`
+- [x] CHECKPOINT; refresh IMPLEMENTATION §8 kickoff for leaf B (stacked on A) + leaf C (parallel)
 
 ---
 

@@ -19,7 +19,7 @@ Leaf state vocabulary (mirrors `docs/mbo/index.md`): `todo → building → in-r
 
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| A `updplan` (base; blocks B) | | | | | todo |
+| A `updplan` (base; blocks B) | (no worker — built directly on `worktree/fleet_config`, per task instructions) | `worktree/fleet_config` | this worktree | — | in-review |
 | B `updexec` (+ runner ctx; base = A; blocks D, E) | | | | | todo |
 | C `featflag` + deps (base = main; blocks D) | | | | | todo |
 | D `cmd` (base = B, after C merged; blocks E, F) | | | | | todo |
@@ -35,11 +35,11 @@ Plan §4 task numbers. Commit = the SHA carrying the plan's exact message.
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
 | 1 Default plan is today's behaviour | done | e36175b | `go test ./internal/updplan -run 'TestDefaultPlanIsTodaysUpdate\|TestDefaultYAMLRoundTripsToDefault' -v` → PASS (2/2); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean; `go mod tidy` no diff | adds the `gopkg.in/yaml.v3` require (IMPLEMENTATION §2 reconcile note) |
-| 2 Validation table | done | (this commit) | `go test ./internal/updplan -run 'TestParseRejects\|TestParseAggregatesEveryError\|TestLocalDefaults' -v` → PASS (31 subtests + 2); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | validate.go landed with task 1 (Parse needed it to compile the round-trip); this task added the full validation table + tests over it |
-| 3 Defaults merge + backoff schedule | done | (this commit) | `go test ./internal/updplan -run 'Inherits\|InteractiveSteps\|ExplicitTimeout\|Backoff\|Jitter\|RetryOnParses' -v` → PASS (6/6); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | merge + backoff math landed with tasks 1-2; this task added the pinning tests |
-| 4 Topological order and cascade helpers | done | (this commit) | `go test -race ./internal/updplan -run 'TestOrder\|TestDependents\|TestLastStepUsing' -v -count=20` → PASS (3 tests x 20 runs, deterministic); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | stable Kahn scan (lowest declaration index first), transitive `Dependents`, `LastStepUsing` |
-| 5 `--ref` shim + path resolution | todo | | | |
-| **Leaf A gate** | todo | — | `go test -race -cover ./internal/updplan` → | |
+| 2 Validation table | done | 83ee2d3 | `go test ./internal/updplan -run 'TestParseRejects\|TestParseAggregatesEveryError\|TestLocalDefaults' -v` → PASS (31 subtests + 2); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | validate.go landed with task 1 (Parse needed it to compile the round-trip); this task added the full validation table + tests over it |
+| 3 Defaults merge + backoff schedule | done | 02ec25f | `go test ./internal/updplan -run 'Inherits\|InteractiveSteps\|ExplicitTimeout\|Backoff\|Jitter\|RetryOnParses' -v` → PASS (6/6); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | merge + backoff math landed with tasks 1-2; this task added the pinning tests |
+| 4 Topological order and cascade helpers | done | 620a95f | `go test -race ./internal/updplan -run 'TestOrder\|TestDependents\|TestLastStepUsing' -v -count=20` → PASS (3 tests x 20 runs, deterministic); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | stable Kahn scan (lowest declaration index first), transitive `Dependents`, `LastStepUsing` |
+| 5 `--ref` shim + path resolution | done | (this commit) | `go test ./internal/updplan -run 'TestWithRef\|TestRepoPathResolves' -v` → PASS (7/7); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | added coverage-closing tests (`RepoOf`, `WithRefs`, `ValidHostname`, `ValidSHA`, backoff field overrides) to clear the 90% gate; removed dead `allowEmpty` param from `parseDuration` |
+| **Leaf A gate** | in-review | (this commit) | `go test -race -cover ./internal/updplan` → **93.4%** (≥ 90% ✓) | evidence/updplan/leaf-gate.txt |
 
 ### Leaf B — `internal/updexec` + `runner.RunStreamCtx` (tasks 6–16; updexec ≥ 90 %)
 

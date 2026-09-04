@@ -117,11 +117,8 @@ func (c *errCollector) join() error {
 
 // --- defaults ---------------------------------------------------------------
 
-func parseDuration(scope, field, s string, allowEmpty bool) (time.Duration, error) {
+func parseDuration(scope, field, s string) (time.Duration, error) {
 	if s == "" {
-		if allowEmpty {
-			return 0, nil
-		}
 		return 0, fmt.Errorf("%s: %s: duration required", scope, field)
 	}
 	if s == "0" {
@@ -165,12 +162,12 @@ func parseBackoff(scope string, w wireBackoff, fallback Backoff) (Backoff, error
 	b := fallback
 
 	if w.Initial != "" {
-		d, err := parseDuration(scope, "retry.backoff.initial", w.Initial, false)
+		d, err := parseDuration(scope, "retry.backoff.initial", w.Initial)
 		errs.add(err)
 		b.Initial = d
 	}
 	if w.Max != "" {
-		d, err := parseDuration(scope, "retry.backoff.max", w.Max, false)
+		d, err := parseDuration(scope, "retry.backoff.max", w.Max)
 		errs.add(err)
 		b.Max = d
 	}
@@ -218,7 +215,7 @@ func parseDefaults(w wireDefaults) (Defaults, error) {
 	d := builtinDefaults()
 
 	if w.Timeout != "" {
-		t, err := parseDuration("update.defaults", "timeout", w.Timeout, false)
+		t, err := parseDuration("update.defaults", "timeout", w.Timeout)
 		errs.add(err)
 		d.Timeout = t
 	}
@@ -437,7 +434,7 @@ func parseSteps(in []wireStep, defs Defaults, repos map[string]Repo) ([]Step, er
 			timeout = 0
 		}
 		if hasExplicitTimeout {
-			t, err := parseDuration(scope, "timeout", *w.Timeout, false)
+			t, err := parseDuration(scope, "timeout", *w.Timeout)
 			errs.add(err)
 			timeout = t
 		}
