@@ -59,13 +59,13 @@
 **Done when:** every table row fails for the stated reason and a two-fault file reports both.
 
 ### Task 3 — retry/timeout defaults merge + backoff schedule  (plan Task 3, leaf A)
-- [ ] RED: `TestStepInheritsDefaultsFieldByField` (step `retry: {attempts: 3}` keeps default `on`/`backoff`), `TestInteractiveStepsDefaultToNoTimeout`, `TestExplicitTimeoutOnInteractiveStepIsKept`, `TestBackoffScheduleIsExponentialAndCapped` (`Initial 5s Factor 2 Max 2m`, rnd = 0.5 → `5s,10s,20s,40s,80s,2m,2m`), `TestJitterStaysWithinHalfOfTheWait` (rnd 0 → 0.5×, rnd 1 → 1.5×), `TestRetryOnParsesExitCodes` (`[75, transport]` → `exit:75`, `transport`)
-- [ ] RUN-RED: `go test ./internal/updplan -run 'Inherits|InteractiveSteps|ExplicitTimeout|Backoff|Jitter|RetryOnParses' -v` → expect **FAIL**
-- [ ] GREEN: `Defaults`, `Retry`, `Backoff.Wait`, merge in `Parse`
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/updplan): retry/timeout defaults merge and backoff schedule`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestStepInheritsDefaultsFieldByField` (step `retry: {attempts: 3}` keeps default `on`/`backoff`), `TestInteractiveStepsDefaultToNoTimeout`, `TestExplicitTimeoutOnInteractiveStepIsKept`, `TestBackoffScheduleIsExponentialAndCapped` (`Initial 5s Factor 2 Max 2m`, rnd = 0.5 → `5s,10s,20s,40s,80s,2m,2m`), `TestJitterStaysWithinHalfOfTheWait` (rnd 0 → 0.5×, rnd 1 → 1.5×), `TestRetryOnParsesExitCodes` (`[75, transport]` → `exit:75`, `transport`)
+- [x] RUN-RED: `go test ./internal/updplan -run 'Inherits|InteractiveSteps|ExplicitTimeout|Backoff|Jitter|RetryOnParses' -v` → expect **FAIL**
+- [x] GREEN: `Defaults`, `Retry`, `Backoff.Wait`, merge in `Parse`
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/updplan): retry/timeout defaults merge and backoff schedule`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** the schedule test prints the exact sequence and interactive steps carry `Timeout 0` unless set.
 
