@@ -70,13 +70,13 @@
 **Done when:** the schedule test prints the exact sequence and interactive steps carry `Timeout 0` unless set.
 
 ### Task 4 — stable topological order  (plan Task 4, leaf A)
-- [ ] RED: `graph_test.go` — `TestOrderIsTopologicalAndStable` (two independent chains interleave by declaration index; every need precedes its dependent), `TestDependentsIsTransitive` (`a→b→c`, `a→d`: `Dependents("a") == [b c d]` in `Order()` order; `Dependents("c") == []`), `TestLastStepUsingRepo` (`r.sync → r.build → other.sync` → `LastStepUsing("r") == "r.build"`)
-- [ ] RUN-RED: `go test ./internal/updplan -run 'TestOrder|TestDependents|TestLastStepUsing' -v` → expect **FAIL**
-- [ ] GREEN: `graph.go` — stable Kahn, transitive closure, `LastStepUsing`; cycle detection wired into `Parse`
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/updplan): stable topological order`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `graph_test.go` — `TestOrderIsTopologicalAndStable` (two independent chains interleave by declaration index; every need precedes its dependent), `TestDependentsIsTransitive` (`a→b→c`, `a→d`: `Dependents("a") == [b c d]` in `Order()` order; `Dependents("c") == []`), `TestLastStepUsingRepo` (`r.sync → r.build → other.sync` → `LastStepUsing("r") == "r.build"`)
+- [x] RUN-RED: `go test ./internal/updplan -run 'TestOrder|TestDependents|TestLastStepUsing' -v` → expect **FAIL**
+- [x] GREEN: `graph.go` — stable Kahn, transitive closure, `LastStepUsing`; cycle detection wired into `Parse`
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/updplan): stable topological order`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** order is deterministic across runs (run the test with `-count=20`).
 
