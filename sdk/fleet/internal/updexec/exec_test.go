@@ -487,3 +487,195 @@ func TestDependencyFailedAlsoBlocks(t *testing.T) {
 		t.Fatalf("c = %+v, want dependency-failed blocked by b", c)
 	}
 }
+
+// --- task 12: local-state policies -------------------------------------------
+
+// onlySyncPlan builds a one-repo, one-step plan for the sync-decision tests.
+func onlySyncPlan(local updplan.Local, withURL bool) updplan.Plan {
+	r := syncRepo("dotfiles", local)
+	if withURL {
+		r.URL = "https://example.com/dotfiles.git"
+	}
+	return updplan.Plan{
+		Repos: map[string]updplan.Repo{"dotfiles": r},
+		Steps: []updplan.Step{syncStep("dotfiles.sync", "dotfiles")},
+	}
+}
+
+// TestUpdateSkipsDirtyCloneByDefault is migrated from cmd/update_test.go: a
+// dirty clone under local: skip is skipped, and NOTHING beyond the
+// (read-only) precheck is ever sent.
+func TestUpdateSkipsDirtyCloneByDefault(t *testing.T) {
+	io := newFakeIO().on("git rev-parse --git-dir", "state=dirty branch=main", nil)
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
+	r, ok := resultFor(rep, "dotfiles.sync")
+	if !ok || r.Status != Skipped {
+		t.Fatalf("dirty clone under local: skip must be skipped: %+v", r)
+	}
+	if r.Reason == "" {
+		t.Fatal("a skip must state a reason")
+	}
+	for _, c := range io.batchCalls() {
+		if strings.Contains(c.script, "install.sh") || strings.Contains(c.script, "git merge") {
+			t.Fatalf("a skipped host must not be mutated: %q", c.script)
+		}
+	}
+}
+
+func TestUpdateProceedsOnCleanClone(t *testing.T) {
+	io := newFakeIO().
+		on("git rev-parse --git-dir", cleanPrecheck, nil).
+		on("orig=$(git symbolic-ref", "fleet: orig=main", nil)
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
+	r, ok := resultFor(rep, "dotfiles.sync")
+	if !ok || r.Status != OK {
+		t.Fatalf("a clean clone must sync: %+v", r)
+	}
+}
+
+// TestForceRescuesDirtyWorkBeforePulling: --force (local: rescue) preserves
+// dirty work in a rescue worktree, then syncs — never a hard reset.
+func TestForceRescuesDirtyWorkBeforePulling(t *testing.T) {
+	io := newFakeIO().
+		on("git rev-parse --git-dir", "state=dirty branch=main", nil).
+		on("fleet-rescue/$ts", "", nil).
+		on("orig=$(git symbolic-ref", "fleet: orig=main", nil)
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalRescue, false))
+	r, ok := resultFor(rep, "dotfiles.sync")
+	if !ok || r.Status != OK {
+		t.Fatalf("rescue then sync must succeed: %+v", r)
+	}
+	calls := io.batchCalls()
+	if len(calls) != 3 {
+		t.Fatalf("want precheck+rescue+sync = 3 batch calls, got %d: %+v", len(calls), calls)
+	}
+	for _, c := range calls {
+		if strings.Contains(c.script, "reset --hard") || strings.Contains(c.script, "checkout -- ") {
+			t.Fatalf("--force must never discard local work: %q", c.script)
+		}
+	}
+	joined := calls[1].script
+	for _, want := range []string{"git add -A", "worktree add"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("--force must preserve work via %q: %q", want, joined)
+		}
+	}
+	if !strings.Contains(calls[1].script, "fleet-rescue") || !strings.Contains(calls[2].script, "orig=$(git symbolic-ref") {
+		t.Fatalf("rescue must run BEFORE sync: %+v", calls)
+	}
+}
+
+func TestUpdateSurfacesProbeFailure(t *testing.T) {
+	io := newFakeIO().on("git rev-parse --git-dir", "", ErrTransport)
+	e := Executor{IO: io}
+	rep := e.RunHost("dead", onlySyncPlan(updplan.LocalSkip, false))
+	r, ok := resultFor(rep, "dotfiles.sync")
+	if !ok || r.Status != Failed {
+		t.Fatalf("an unreachable host must surface a failure: %+v", r)
+	}
+}
+
+func TestMissingCloneWithURLClones(t *testing.T) {
+	io := newFakeIO().
+		on("git rev-parse --git-dir", "state=missing", nil).
+		on("git clone -q", "", nil)
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, true))
+	r, ok := resultFor(rep, "dotfiles.sync")
+	if !ok || r.Status != OK {
+		t.Fatalf("missing + url must clone and succeed: %+v", r)
+	}
+}
+
+func TestMissingCloneWithoutURLFails(t *testing.T) {
+	io := newFakeIO().on("git rev-parse --git-dir", "state=missing", nil)
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
+	r, ok := resultFor(rep, "dotfiles.sync")
+	if !ok || r.Status != Failed {
+		t.Fatalf("missing without url must fail: %+v", r)
+	}
+	for _, c := range io.batchCalls() {
+		if strings.Contains(c.script, "git clone") {
+			t.Fatal("must never clone without a url")
+		}
+	}
+}
+
+func TestInProgressMergeIsSkippedUnderEveryPolicy(t *testing.T) {
+	for _, local := range []updplan.Local{updplan.LocalSkip, updplan.LocalRescue, updplan.LocalCarry} {
+		t.Run(string(local), func(t *testing.T) {
+			io := newFakeIO().on("git rev-parse --git-dir", "state=in-progress branch=main", nil)
+			e := Executor{IO: io}
+			rep := e.RunHost("alpha", onlySyncPlan(local, false))
+			r, ok := resultFor(rep, "dotfiles.sync")
+			if !ok || r.Status != Skipped {
+				t.Fatalf("in-progress under %s must be skipped: %+v", local, r)
+			}
+		})
+	}
+}
+
+func TestResetModeUsesResetScript(t *testing.T) {
+	io := newFakeIO().
+		on("git rev-parse --git-dir", cleanPrecheck, nil).
+		on("orig=$(git symbolic-ref", "fleet: orig=main", nil)
+	e := Executor{IO: io, Reset: true}
+	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
+	r, ok := resultFor(rep, "dotfiles.sync")
+	if !ok || r.Status != OK {
+		t.Fatalf("reset sync must succeed: %+v", r)
+	}
+	found := false
+	for _, c := range io.batchCalls() {
+		if strings.Contains(c.script, "git reset --hard FETCH_HEAD") {
+			found = true
+		}
+		if strings.Contains(c.script, "orig=$(git symbolic-ref") && !strings.Contains(c.script, "git reset --hard FETCH_HEAD") {
+			t.Fatalf("--reset must replace the merge with ResetScript: %q", c.script)
+		}
+	}
+	if !found {
+		t.Fatal("--reset must use ResetScript's git reset --hard FETCH_HEAD")
+	}
+}
+
+func TestUnexpectedPrecheckOutputFails(t *testing.T) {
+	io := newFakeIO().on("git rev-parse --git-dir", "garbage output", nil)
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
+	r, ok := resultFor(rep, "dotfiles.sync")
+	if !ok || r.Status != Failed {
+		t.Fatalf("unexpected precheck output must fail: %+v", r)
+	}
+}
+
+func TestCLILocalOverridesEveryRepoPolicy(t *testing.T) {
+	// The repo says skip, but Executor.Local=rescue must win.
+	io := newFakeIO().
+		on("git rev-parse --git-dir", "state=dirty branch=main", nil).
+		on("fleet-rescue/$ts", "", nil).
+		on("orig=$(git symbolic-ref", "fleet: orig=main", nil)
+	e := Executor{IO: io, Local: updplan.LocalRescue}
+	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
+	r, ok := resultFor(rep, "dotfiles.sync")
+	if !ok || r.Status != OK {
+		t.Fatalf("Executor.Local must override the repo's own policy: %+v", r)
+	}
+}
+
+func TestResetIsIncompatibleWithCarry(t *testing.T) {
+	io := newFakeIO()
+	e := Executor{IO: io, Reset: true}
+	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalCarry, false))
+	r, ok := resultFor(rep, "dotfiles.sync")
+	if !ok || r.Status != Failed || r.Reason != "--reset is incompatible with local: carry" {
+		t.Fatalf("reset+carry must fail up front with the exact reason: %+v", r)
+	}
+	if len(io.batchCalls()) != 0 {
+		t.Fatal("reset+carry must be rejected before any remote call")
+	}
+}
