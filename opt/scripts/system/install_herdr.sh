@@ -27,12 +27,12 @@
 #   install_herdr.sh integrations   # agent integrations    (install.sh --phase config)
 #
 #   `integrations` runs `herdr integration install <id>` for each id in
-#   HERDR_INTEGRATIONS whose agent CLI is present on this host. It must run
-#   AFTER install_antigravity_skills.sh: that script re-renders
-#   ~/.gemini/config/hooks.json from the repo template on every run, which drops
-#   herdr's `herdr` hook entry, so re-installing the integration afterwards is
-#   what keeps agy's state reporting alive. Claude's SessionStart hook survives
-#   the forced-settings merge (only hooks.PreToolUse/DirectoryAdded are replaced).
+#   HERDR_INTEGRATIONS whose agent CLI is present on this host. Ordering
+#   relative to install_antigravity_skills.sh no longer matters: that script
+#   MERGES its `guards` entry into ~/.gemini/config/hooks.json and preserves
+#   every other named hook (herdr's included). Claude's SessionStart hook
+#   likewise survives the forced-settings merge (only hooks.PreToolUse /
+#   DirectoryAdded are replaced).
 #
 # Safe to re-run. Env overrides:
 #   HERDR_VERSION       release to install (default: latest from the manifest)

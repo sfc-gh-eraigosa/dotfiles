@@ -24,7 +24,8 @@ We enforce identical security boundaries across all assistants:
 - **Shared Hooks**: Controlled via PreToolUse/BeforeTool hooks in `ai/hooks/`.
   - `safety_guard.sh`: Blocks dangerous destructive commands (e.g., `rm -rf /`) and mandates user confirmation for sensitive Git actions (`gss push`).
   - `privacy_guard.sh`: Blocks leaking home paths, usernames, hostnames, and secrets into tracked files, PR/issue bodies, and commit messages. Mandates placeholders (`$HOME`, `~`, `${USER}`, `<user>`, `<REDACTED>`) in shared content.
-- **Antigravity Wiring**: The same guards run under `agy` via `ai/hooks/antigravity_adapter.sh`, wired through `~/.gemini/config/hooks.json` (rendered from `ai/antigravity/hooks.json.template`).
+- **Antigravity Wiring**: The same guards run under `agy` via `ai/hooks/antigravity_adapter.sh`, wired through `~/.gemini/config/hooks.json` (the repo's `guards` entry, rendered from `ai/antigravity/hooks.json.template` and merged so other tools' hooks survive). The deny/ask lists are also enforced in agy's own `settings.json` via `ai/antigravity/settings.forced.json`.
+- **Startup parity**: both assistants get the same launch contract — `claude-config` / `agy-config` sentinel launch flags, a seeded settings template, a forced policy subset, and the repo slash commands + account memories (Claude: `~/.claude/commands` + memory provisioning; agy: the rendered local `dotfiles` plugin). See `docs/mbo/designs/agy-parity.md`.
 
 ## 📂 Directory Structure
 

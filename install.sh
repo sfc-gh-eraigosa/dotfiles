@@ -277,10 +277,11 @@ else gff_skip_msg install.ai.claude; fi
 
 # herdr agent integrations (`herdr integration install claude|antigravity-cli`):
 # the hook scripts that report each agent's working/blocked/done state to the
-# herdr sidebar. Must run AFTER install_antigravity_skills.sh above, which
-# re-renders ~/.gemini/config/hooks.json from the repo template and drops
-# herdr's entry on every run. Only integrations whose agent CLI is present are
-# installed; the binary itself is the deps-phase install.tools.herdr block.
+# herdr sidebar. install_antigravity_skills.sh MERGES its `guards` entry into
+# ~/.gemini/config/hooks.json (agy-parity unit 4), so herdr's entry survives
+# either ordering; running after it just keeps the sequence readable. Only
+# integrations whose agent CLI is present are installed; the binary itself is
+# the deps-phase install.tools.herdr block.
 if gff_on install.tools.herdr-integrations; then
   if [ -f "${BASE_DIR}/opt/scripts/system/install_herdr.sh" ]; then
     echo "Installing herdr agent integrations..."

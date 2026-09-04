@@ -1,5 +1,6 @@
+# 2026-09-03T15:14:11Z live ~/.gemini/antigravity-cli/settings.json (trustedWorkspaces redacted; existing host => no template seed expected)
 {
-  "_comment": "FORCED (immutable) agy settings subset. install_antigravity_skills.sh deep-merges this over the host-owned ~/.gemini/antigravity-cli/settings.json on EVERY run via opt/scripts/system/apply-forced-settings.sh: statusLine and permissions.deny/permissions.ask are REPLACED from the repo, permissions.allow is UNIONED (host additions preserved), every other host key is preserved. Targets use agy's action(target) form; command(...) is prefix-matched (deny > ask > allow). Same policy as ai/claude/settings.forced.json. gss push/pr/sync sit in allow: auto-approved at the harness level but still gated by the safety_guard approval-token hook. Design: docs/mbo/designs/agy-parity.md (unit 3).",
+  "allowNonWorkspaceAccess": true,
   "statusLine": {
     "type": "command",
     "command": "bash ~/.gemini/config/statusline-command.sh",
@@ -7,8 +8,8 @@
   },
   "permissions": {
     "allow": [
-      "command(gss push)",
       "command(gss pr)",
+      "command(gss push)",
       "command(gss sync)"
     ],
     "deny": [
@@ -35,3 +36,4 @@
     ]
   }
 }
+# toolPermission present? absent (expected: existing host, not re-seeded)
