@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	mrand "math/rand/v2"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -112,7 +113,11 @@ func (c Console) runStdin(st updplan.Step) string {
 // Batch streams script over runner.RunStreamCtx, forwarding every line to
 // Line (if set) and collecting them into the returned output. An ssh exit
 // of 255 is mapped to ErrTransport (wrapped so errors.Is still finds it and
-// exitCode can still recover 255).
+// exitCode can still recover 255). exec.ErrWaitDelay on its own (i.e. NOT
+// joined with a real *exec.ExitError) means the child's own command
+// finished successfully and only the output-draining goroutine was still
+// running when WaitDelay elapsed — that is runner plumbing, not a failure
+// of the remote command, so it is treated as success.
 func (c Console) Batch(ctx context.Context, host string, st updplan.Step, script string) (string, error) {
 	lines, done := c.R.RunStreamCtx(ctx, host, c.runStdin(st), c.runScript(st, script))
 	var out []string
@@ -123,32 +128,49 @@ func (c Console) Batch(ctx context.Context, host string, st updplan.Step, script
 		out = append(out, l)
 	}
 	err := <-done
+	if errors.Is(err, exec.ErrWaitDelay) && !isExitError(err) {
+		err = nil
+	}
 	if rawExitCode(err) == 255 {
 		err = fmt.Errorf("%w: %v", ErrTransport, err)
 	}
 	return strings.Join(out, "\n"), err
 }
 
-// Interactive hands the terminal to runner.RunInteractive. ctx is ignored
-// unless it carries a deadline, in which case the call runs in a goroutine
-// so a timeout can still be reported (context.DeadlineExceeded) — the
-// underlying interactive session itself is not force-killed, deliberately
-// kept simple: a real terminal session hitting this path is rare, and this
-// is measured, not assumed, by the interactive-timeout test.
+// interactiveCtxRunner is an OPTIONAL capability of a runner.Runner: one
+// that can run an interactive command under a context deadline and actually
+// kill the remote child when it lapses, rather than merely abandoning it.
+// It is not part of runner.Runner itself — adding a method there would
+// ripple into every other package's Runner test double — so Console type-
+// asserts for it instead.
+type interactiveCtxRunner interface {
+	RunInteractiveCtx(ctx context.Context, host string, argv ...string) error
+}
+
+// Interactive hands the terminal to the runner. When st has no deadline it
+// always runs unbounded via runner.RunInteractive.
+//
+// When st DOES have a deadline, Interactive never races a goroutine calling
+// RunInteractive against a bare time.After: on expiry that used to return
+// context.DeadlineExceeded to the caller while the goroutine — and the
+// `ssh -t` child it owns — kept running, holding the terminal and the
+// clone open for RunHost's restore steps to collide with. Instead: if the
+// runner implements interactiveCtxRunner, the deadline is enforced by
+// actually killing the child (RunInteractiveCtx, built on
+// exec.CommandContext). If it does not, the deadline cannot be honoured
+// safely, so the call runs UNBOUNDED rather than racing — a real terminal
+// session hitting this path with a runner that lacks the capability is
+// rare, and an honest "ran to completion" beats a dishonest "timed out"
+// that leaves the child alive.
 func (c Console) Interactive(ctx context.Context, host string, st updplan.Step, script string) error {
 	script = c.runScript(st, script)
-	dl, ok := ctx.Deadline()
-	if !ok {
+	if _, ok := ctx.Deadline(); !ok {
 		return c.R.RunInteractive(host, script)
 	}
-	errCh := make(chan error, 1)
-	go func() { errCh <- c.R.RunInteractive(host, script) }()
-	select {
-	case err := <-errCh:
-		return err
-	case <-time.After(time.Until(dl)):
-		return context.DeadlineExceeded
+	if icr, ok := c.R.(interactiveCtxRunner); ok {
+		return icr.RunInteractiveCtx(ctx, host, script)
 	}
+	return c.R.RunInteractive(host, script)
 }
 
 // Background is the TUI StepIO lane: Batch is identical to Console's, but
@@ -305,6 +327,7 @@ func (e Executor) firstStopBlocker(st updplan.Step, status map[string]Status, p 
 // back.
 type restoreInfo struct {
 	orig  string
+	now   string // the branch/SHA the sync step actually landed on, if it switched
 	sha   string
 	armed bool
 }
@@ -320,7 +343,15 @@ func (e Executor) armAndMaybeRestoreNow(w LineWriter, host string, p updplan.Pla
 	}
 	switched := false
 	for _, n := range res.Notes {
-		if v, ok := strings.CutPrefix(n, "orig="); ok {
+		// Only the FIRST "orig=" note wins: with runWithRetry now
+		// accumulating notes across every retried attempt (see its
+		// comment), a sync step retried after an early attempt already
+		// stashed/switched will emit a SECOND "orig=" note on the
+		// successful attempt — reporting the branch that attempt started
+		// from, which is already the target branch, not the operator's
+		// original one. Overwriting pi.orig with that later note would
+		// point the eventual restore at the wrong branch.
+		if v, ok := strings.CutPrefix(n, "orig="); ok && pi.orig == "" {
 			pi.orig = v
 		}
 		if strings.HasPrefix(n, "carried stash=") {
@@ -333,8 +364,11 @@ func (e Executor) armAndMaybeRestoreNow(w LineWriter, host string, p updplan.Pla
 				}
 			}
 		}
-		if strings.HasPrefix(n, "switched ") {
+		if v, ok := strings.CutPrefix(n, "switched "); ok {
 			switched = true
+			if _, now, found := strings.Cut(v, " -> "); found {
+				pi.now = now
+			}
 		}
 	}
 	if pi.sha != "" || switched {
@@ -346,16 +380,51 @@ func (e Executor) armAndMaybeRestoreNow(w LineWriter, host string, p updplan.Pla
 	pending[repo.Name] = pi
 
 	if res.Status == Failed {
-		rres := e.runRestore(w, host, repo, pi)
-		rep.Results = append(rep.Results, rres)
+		if e.restoreDisabled(repo) {
+			e.noteRestoreDisabled(rep, st.ID, pi)
+		} else {
+			rres := e.runRestore(w, host, repo, pi)
+			rep.Results = append(rep.Results, rres)
+		}
 		delete(pending, repo.Name)
 	}
 }
 
-// fireDueRestores runs (or skips) the synthesized restore for every pending
-// repo whose LastStepUsing is exactly stepID, regardless of that step's own
-// outcome — a restore must still land even when an unrelated later step
-// failed.
+// restoreDisabled reports whether repo's restore is turned off, either
+// globally (--no-restore) or per-repo (restore: false).
+func (e Executor) restoreDisabled(repo updplan.Repo) bool {
+	return e.NoRestore || !repo.Restore
+}
+
+// noteRestoreDisabled records, on the sync step's OWN Result, that a restore
+// was armed but never sent — rather than synthesizing a separate
+// "<repo>.restore" Result. A synthesized restore Result always carries a
+// non-ok Status, and HostReport.Failed() treats any non-ok Result as a host
+// failure: an operator who deliberately disabled restore would see every
+// otherwise-successful run reported as a failed host.
+func (e Executor) noteRestoreDisabled(rep *HostReport, stepID string, pi *restoreInfo) {
+	note := "restore disabled"
+	if pi.sha != "" {
+		branch := pi.now
+		if branch == "" {
+			branch = pi.orig
+		}
+		note = fmt.Sprintf("restore disabled; stash=%s kept on %s", pi.sha, branch)
+	}
+	for i := range rep.Results {
+		if rep.Results[i].Step == stepID {
+			rep.Results[i].Notes = append(rep.Results[i].Notes, note)
+			return
+		}
+	}
+}
+
+// fireDueRestores runs the synthesized restore for every pending repo whose
+// LastStepUsing is exactly stepID, regardless of that step's own outcome —
+// a restore must still land even when an unrelated later step failed. When
+// restore is disabled, NO "<repo>.restore" Result is synthesized at all (see
+// noteRestoreDisabled) — the fact is recorded as a note on the step that
+// last used the repo instead.
 func (e Executor) fireDueRestores(w LineWriter, host string, p updplan.Plan, pending map[string]*restoreInfo, stepID string, rep *HostReport) {
 	for name, pi := range pending {
 		last, ok := p.LastStepUsing(name)
@@ -363,11 +432,8 @@ func (e Executor) fireDueRestores(w LineWriter, host string, p updplan.Plan, pen
 			continue
 		}
 		repo := p.Repos[name]
-		if e.NoRestore || !repo.Restore {
-			rep.Results = append(rep.Results, Result{
-				Step: name + ".restore", Kind: updplan.KindSync, Status: Skipped,
-				Reason: "restore disabled",
-			})
+		if e.restoreDisabled(repo) {
+			e.noteRestoreDisabled(rep, stepID, pi)
 		} else {
 			rep.Results = append(rep.Results, e.runRestore(w, host, repo, pi))
 		}
@@ -582,6 +648,14 @@ func (e Executor) runWithRetry(
 	var callErr error
 	var timedOut bool
 	attempts := 0
+	// allNotes accumulates every attempt's "fleet: " lines, in order, across
+	// retries — not just the last attempt's. A sync step's carry prologue
+	// (stash push, branch switch) runs on EVERY attempt, so a stash pushed
+	// or a branch switched on an early attempt that then hits a transport
+	// failure must still be visible to armAndMaybeRestoreNow once a later
+	// attempt succeeds; keeping only the final attempt's notes silently
+	// strands that stash with no restore ever armed.
+	var allNotes []string
 
 	for n := 1; n <= maxAttempts; n++ {
 		attempts = n
@@ -601,21 +675,30 @@ func (e Executor) runWithRetry(
 			ctx, cancel = context.WithTimeout(ctx, timeout)
 		}
 		out, callErr = call(ctx)
-		timedOut = timeout > 0 && ctx.Err() != nil && errors.Is(ctx.Err(), context.DeadlineExceeded)
 		if cancel != nil {
 			cancel()
 		}
+		// A successful attempt is never "timed out", regardless of whether
+		// its deadline happened to lapse during Batch's output-drain window
+		// after the remote command had already finished (ssh exit 0): only
+		// a call that actually FAILED, and did so via the context deadline,
+		// counts. Deriving timedOut from ctx.Err() unconditionally used to
+		// report a step that finished successfully as a timeout, which
+		// could trigger a spurious re-execution under retry.on: [timeout|any].
+		timedOut = callErr != nil && timeout > 0 && errors.Is(ctx.Err(), context.DeadlineExceeded)
+
+		allNotes = append(allNotes, parseNotes(out)...)
 
 		var sk errSkip
 		if errors.As(callErr, &sk) {
 			return Result{Step: id, Kind: kind, Status: Skipped, Reason: sk.reason,
-				Duration: e.now().Sub(start), Attempts: attempts, Notes: parseNotes(out)}
+				Duration: e.now().Sub(start), Attempts: attempts, Notes: allNotes}
 		}
 
 		exit := exitCode(callErr)
 		if !timedOut && (callErr == nil || isExitError(callErr) || errors.Is(callErr, ErrTransport)) && containsInt(expect.Exit, exit) {
 			return Result{Step: id, Kind: kind, Status: OK, Exit: exit,
-				Duration: e.now().Sub(start), Attempts: attempts, Notes: parseNotes(out)}
+				Duration: e.now().Sub(start), Attempts: attempts, Notes: allNotes}
 		}
 
 		class := classify(callErr, timedOut)
@@ -627,7 +710,7 @@ func (e Executor) runWithRetry(
 	}
 
 	exit := exitCode(callErr)
-	notes := parseNotes(out)
+	notes := allNotes
 	reason := reasonFor(callErr, timedOut, exit, timeout)
 	// RestoreScript's fallback prints "fleet: restore-failed stash=<sha>
 	// branch=<orig>" on any failure — surface it verbatim rather than the
@@ -646,7 +729,18 @@ func (e Executor) runWithRetry(
 	}
 }
 
-func (e Executor) rand() func() float64 { return e.Rand }
+// rand resolves Executor.Rand: a nil Rand must genuinely default to
+// math/rand — Backoff.Wait's own nil handling (return 0.5, the midpoint) is
+// meant only for tests that want a deterministic schedule, not for
+// production, where a nil Rand used to mean "always the midpoint" (i.e. no
+// jitter movement at all) despite the field's own doc comment promising
+// math/rand.
+func (e Executor) rand() func() float64 {
+	if e.Rand != nil {
+		return e.Rand
+	}
+	return mrand.Float64
+}
 
 // --- output/exit-code plumbing ----------------------------------------------
 

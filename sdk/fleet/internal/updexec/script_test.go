@@ -204,7 +204,7 @@ func TestRescuePreservesUntrackedWork(t *testing.T) {
 }
 
 func TestResetScriptUnchanged(t *testing.T) {
-	s := ResetScript("main")
+	s := ResetScript("main", "FETCH_HEAD")
 	want := `ts=$(date -u +%Y%m%dT%H%M%SZ) && ` +
 		`git checkout -q -b "fleet-reset/$ts" && git add -A && ` +
 		`{ git -c user.email=fleet@local -c user.name=fleet commit -q -m "fleet pre-reset $ts" || true; } && ` +

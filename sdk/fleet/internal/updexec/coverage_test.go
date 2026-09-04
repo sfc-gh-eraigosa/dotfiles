@@ -2,7 +2,6 @@ package updexec
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -42,6 +41,20 @@ func TestDiscardKeepsNothing(t *testing.T) {
 	// Nothing to assert beyond "did not panic" — Discard is a no-op sink.
 }
 
+// TestConsoleInteractiveRespectsDeadline used to assert that a deadline
+// already passed by the time Interactive is called reports
+// context.DeadlineExceeded even against a plain recordingRunner. That was
+// pinning the leaf B code-review bug (finding 8): Interactive raced a
+// goroutine calling RunInteractive against a bare time.After, and on
+// expiry returned DeadlineExceeded to the caller while the goroutine (and
+// the real ssh child it would own) kept running — reporting a timeout
+// while doing nothing to actually stop the call. The fix never races: a
+// runner that does not implement interactiveCtxRunner (recordingRunner
+// does not) now runs UNBOUNDED, so an already-expired deadline must NOT
+// turn a successful RunInteractive into a fabricated DeadlineExceeded.
+// (TestInteractiveDeadlineKillsTheChild in review_test.go covers the case
+// where the runner DOES implement interactiveCtxRunner and the deadline is
+// genuinely enforced.)
 func TestConsoleInteractiveRespectsDeadline(t *testing.T) {
 	r := &recordingRunner{}
 	c := Console{R: r}
@@ -51,14 +64,16 @@ func TestConsoleInteractiveRespectsDeadline(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// A deadline that has ALREADY passed must report DeadlineExceeded, not
-	// hang.
+	// A deadline that has ALREADY passed, against a runner lacking
+	// interactiveCtxRunner, must still run to completion rather than
+	// racing a fabricated DeadlineExceeded past a call that would have
+	// succeeded.
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
 	defer cancel()
 	time.Sleep(2 * time.Millisecond)
 	err := c.Interactive(ctx, "alpha", updplan.Step{Kind: updplan.KindRun}, "s")
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("err = %v, want context.DeadlineExceeded", err)
+	if err != nil {
+		t.Fatalf("err = %v, want nil (unbounded fallback must ignore the expired deadline)", err)
 	}
 }
 

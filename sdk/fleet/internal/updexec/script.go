@@ -19,8 +19,8 @@ import (
 
 // ShQuote makes s safe as a single POSIX shell word: it single-quotes s and
 // escapes any embedded single quote using the standard POSIX close-backslash-
-// quote-reopen idiom. Moved from cmd/tui_cmds.go so updexec (and cmd, via a
-// thin alias) share one definition.
+// quote-reopen idiom. Copied from cmd/tui_cmds.go so updexec (and cmd, via a
+// thin alias) share one definition; cmd's copy retires in leaf D/E.
 func ShQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
 // validRepo re-runs the updplan validation checks a Repo must satisfy before
@@ -56,15 +56,22 @@ func validBranches(r updplan.Repo) error {
 // extrasScript builds the EXTRAS loop that fast-forwards (or creates) every
 // branch after the first, skipping any that has diverged from its remote
 // counterpart rather than clobbering it.
+//
+// The loop tracks a "fail" flag rather than relying on its own exit status:
+// POSIX's `for` reports only its LAST iteration's status, so a failing
+// non-last extra (e.g. `git branch --track` against a missing remote
+// branch) would otherwise be silently swallowed by a later, successful
+// iteration. `skipped(diverged)` is deliberately NOT a failure — it echoes
+// and continues.
 func extrasScript(extras []string) string {
 	if len(extras) == 0 {
 		return ""
 	}
-	return `for b in ` + strings.Join(extras, " ") + `; do [ "$b" = "$b1" ] && continue; ` +
+	return `fail=0; for b in ` + strings.Join(extras, " ") + `; do [ "$b" = "$b1" ] && continue; ` +
 		`if git show-ref -q --verify "refs/heads/$b"; then ` +
-		`if git merge-base --is-ancestor "$b" "origin/$b"; then git branch -q -f "$b" "origin/$b" && echo "fleet: ff $b"; ` +
+		`if git merge-base --is-ancestor "$b" "origin/$b"; then git branch -q -f "$b" "origin/$b" && echo "fleet: ff $b" || fail=1; ` +
 		`else echo "fleet: skipped(diverged) $b"; fi; ` +
-		`else git branch -q --track "$b" "origin/$b" && echo "fleet: created $b"; fi; done`
+		`else git branch -q --track "$b" "origin/$b" && echo "fleet: created $b" || fail=1; fi; done; [ "$fail" = 0 ]`
 }
 
 // syncBody builds the BODY portion of a sync script (no prologue/epilogue),
@@ -75,13 +82,17 @@ func syncBody(r updplan.Repo, reset bool) string {
 		extras := extrasScript(branches[1:])
 		move := `git merge --ff-only "origin/$b1"`
 		if reset {
-			move = ResetScript("$b1")
+			move = ResetScript("$b1", `"origin/$b1"`)
 		}
-		body := `git fetch origin && ` +
+		// The fetch MUST stay in the `&&` chain: a `;` here would let a
+		// failed fetch fall through into resolving b1 (via a symref/
+		// ls-remote fallback) and checking out/merging against stale refs,
+		// exiting 0 despite the transport failure never having succeeded.
+		body := `git fetch origin && { ` +
 			`b1=$(git symbolic-ref -q --short refs/remotes/origin/HEAD); b1=${b1#origin/}; ` +
 			`[ -n "$b1" ] || { b1=$(git ls-remote --symref origin HEAD | sed -n 's|^ref: refs/heads/\(.*\)[[:space:]]HEAD$|\1|p') && [ -n "$b1" ] && git remote set-head origin "$b1"; }; ` +
 			`[ -n "$b1" ] || { echo 'fleet: cannot resolve the default branch' >&2; exit 3; }; ` +
-			`git checkout -q "$b1" && ` + move
+			`} && git checkout -q "$b1" && ` + move
 		if extras != "" {
 			body += ` && ` + extras
 		}
@@ -92,7 +103,7 @@ func syncBody(r updplan.Repo, reset bool) string {
 		b1 := branches[0]
 		move := "git merge --ff-only FETCH_HEAD"
 		if reset {
-			move = ResetScript(b1)
+			move = ResetScript(b1, "FETCH_HEAD")
 		}
 		return `git fetch origin ` + b1 + ` && git checkout ` + b1 + ` && ` + move
 	}
@@ -101,7 +112,7 @@ func syncBody(r updplan.Repo, reset bool) string {
 	extras := extrasScript(branches[1:])
 	move := `git merge --ff-only "origin/$b1"`
 	if reset {
-		move = ResetScript("$b1")
+		move = ResetScript("$b1", `"origin/$b1"`)
 	}
 	body := `git fetch origin ` + strings.Join(branches, " ") + ` && b1=` + b1 +
 		` && git checkout -q "$b1" && ` + move
@@ -142,18 +153,25 @@ func SyncScript(r updplan.Repo, local updplan.Local, reset bool) (string, error)
 }
 
 // ResetScript is today's resetToFetched text, generalised to take the ref to
-// land on: it commits everything currently on the clone (tracked AND
-// untracked, via `git add -A`) onto a fleet-reset/<ts> branch before hard
-// resetting to what was just fetched, so a reset can never be the thing that
-// loses an operator's work.
+// check out (checkoutRef) and the ref to hard-reset onto (resetTo): it
+// commits everything currently on the clone (tracked AND untracked, via
+// `git add -A`) onto a fleet-reset/<ts> branch before hard resetting to
+// resetTo, so a reset can never be the thing that loses an operator's work.
+//
+// resetTo must NOT always be "FETCH_HEAD": that is only correct for the
+// single-branch form, where `git fetch origin <b1>` makes FETCH_HEAD exactly
+// origin/<b1>. The multi-branch and default forms fetch several refs (or
+// none named at all), so FETCH_HEAD there is whatever ref the fetch last
+// advertised — typically the ORIGINAL branch's upstream, not origin/$b1 —
+// and callers for those forms must pass `"origin/$b1"` instead.
 //
 // Built by concatenation, never fmt.Sprintf: the shell's date format
 // (%Y%m%dT%H%M%SZ) collides with printf verbs.
-func ResetScript(ref string) string {
+func ResetScript(checkoutRef, resetTo string) string {
 	return `ts=$(date -u +%Y%m%dT%H%M%SZ) && ` +
 		`git checkout -q -b "fleet-reset/$ts" && git add -A && ` +
 		`{ git -c user.email=fleet@local -c user.name=fleet commit -q -m "fleet pre-reset $ts" || true; } && ` +
-		`git checkout -q "` + ref + `" && git reset --hard FETCH_HEAD`
+		`git checkout -q "` + checkoutRef + `" && git reset --hard ` + resetTo
 }
 
 // defaultGhHost is the gh CLI's own default hostname when a step does not
@@ -220,6 +238,18 @@ func CloneScript(r updplan.Repo) (string, error) {
 // branch (now clean), and materialises the rescue branch as its own
 // worktree under ~/.local/state/fleet/rescue/<name>/<ts> for the operator to
 // inspect. Nothing is ever discarded.
+//
+// orig uses `git symbolic-ref -q --short HEAD`, falling back to the SHA,
+// rather than `git rev-parse --abbrev-ref HEAD`: on a detached checkout the
+// latter prints the literal string "HEAD", which makes the later
+// `git checkout -q "$orig"` a no-op — the clone stays on the freshly
+// created fleet-rescue/<ts> branch, and `git worktree add` for that SAME
+// branch then fails, leaving the clone stranded there.
+//
+// The commit is wrapped `|| true`, mirroring ResetScript: submodule-only
+// dirt is not staged by `git add -A`, so a clone whose only change is a
+// dirty submodule pointer has nothing to commit — without `|| true` that
+// aborts the `&&` chain in the same stranded state.
 func RescueScript(r updplan.Repo) (string, error) {
 	if err := validRepo(r); err != nil {
 		return "", err
@@ -227,9 +257,9 @@ func RescueScript(r updplan.Repo) (string, error) {
 	p, n := r.Path, r.Name
 	dir := rescueRoot + "/" + n
 	return `cd ` + p + ` && ts=$(date -u +%Y%m%dT%H%M%SZ) && ` +
-		`orig=$(git rev-parse --abbrev-ref HEAD) && ` +
+		`orig=$(git symbolic-ref -q --short HEAD || git rev-parse HEAD) && ` +
 		`git checkout -q -b "fleet-rescue/$ts" && git add -A && ` +
-		`git -c user.email=fleet@local -c user.name=fleet commit -q -m "fleet rescue $ts" && ` +
+		`{ git -c user.email=fleet@local -c user.name=fleet commit -q -m "fleet rescue $ts" || true; } && ` +
 		`git checkout -q "$orig" && ` +
 		`mkdir -p ` + dir + ` && ` +
 		`git worktree add ` + dir + `/$ts "fleet-rescue/$ts"`, nil

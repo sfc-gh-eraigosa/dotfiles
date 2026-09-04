@@ -911,6 +911,13 @@ func TestDetachedHeadRestoresToTheSHA(t *testing.T) {
 	}
 }
 
+// TestRestoreFalseLeavesHostOnTarget is corrected per the leaf B code
+// review: a synthesized "<repo>.restore" Result — even Skipped — is still
+// non-ok, and HostReport.Failed() treats ANY non-ok Result as a host
+// failure. That made every successful run that switched branches with
+// restore disabled report a FAILED host, which is the opposite of what
+// "disabled" should mean. The fix emits NO restore Result at all when
+// restore is disabled; the fact lives in a note on the sync step instead.
 func TestRestoreFalseLeavesHostOnTarget(t *testing.T) {
 	base := func() *fakeIO {
 		return newFakeIO().
@@ -926,9 +933,11 @@ func TestRestoreFalseLeavesHostOnTarget(t *testing.T) {
 		r.Restore = false
 		p.Repos["dotfiles"] = r
 		rep := e.RunHost("alpha", p)
-		rr, ok := resultFor(rep, "dotfiles.restore")
-		if !ok || rr.Status != Skipped {
-			t.Fatalf("restore: false must synthesize a skipped restore: %+v", rr)
+		if rep.Failed() {
+			t.Fatalf("a successful sync with restore disabled must not fail the host: %+v", rep.Results)
+		}
+		if _, ok := resultFor(rep, "dotfiles.restore"); ok {
+			t.Fatal("restore: false must never synthesize a <repo>.restore result")
 		}
 		for _, c := range io.batchCalls() {
 			if strings.Contains(c.script, "git checkout -q feature") {
@@ -941,11 +950,40 @@ func TestRestoreFalseLeavesHostOnTarget(t *testing.T) {
 		io := base()
 		e := Executor{IO: io, NoRestore: true}
 		rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
-		rr, ok := resultFor(rep, "dotfiles.restore")
-		if !ok || rr.Status != Skipped {
-			t.Fatalf("--no-restore must synthesize a skipped restore: %+v", rr)
+		if rep.Failed() {
+			t.Fatalf("--no-restore on a successful sync must not fail the host: %+v", rep.Results)
+		}
+		if _, ok := resultFor(rep, "dotfiles.restore"); ok {
+			t.Fatal("--no-restore must never synthesize a <repo>.restore result")
 		}
 	})
+}
+
+// TestDisabledRestoreDoesNotFailTheHost is the direct assertion the finding
+// asked for: a plan whose repo switched branches, with restore disabled,
+// must report a fully successful HostReport.
+func TestDisabledRestoreDoesNotFailTheHost(t *testing.T) {
+	io := newFakeIO().
+		on("git rev-parse --git-dir", "state=clean branch=feature", nil).
+		on("orig=$(git symbolic-ref", "fleet: orig=feature\nfleet: switched feature -> main", nil)
+	e := Executor{IO: io, NoRestore: true}
+	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
+	if rep.Failed() {
+		t.Fatalf("HostReport.Failed() = true, want false: %+v", rep.Results)
+	}
+	sync, ok := resultFor(rep, "dotfiles.sync")
+	if !ok || sync.Status != OK {
+		t.Fatalf("sync = %+v, want ok", sync)
+	}
+	found := false
+	for _, n := range sync.Notes {
+		if strings.Contains(n, "restore disabled") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("sync step must note that restore was disabled: %+v", sync.Notes)
+	}
 }
 
 func TestRestoreCheckoutFailureKeepsEverything(t *testing.T) {

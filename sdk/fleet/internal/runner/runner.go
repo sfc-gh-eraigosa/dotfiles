@@ -129,6 +129,21 @@ func (e Exec) RunInteractive(host string, argv ...string) error {
 	return c.Run()
 }
 
+// RunInteractiveCtx is RunInteractive with a controller-enforced deadline:
+// when ctx is done before the interactive remote command exits, the LOCAL
+// ssh child is killed (not merely abandoned) — the same guarantee
+// RunStreamCtx gives the batch lane, extended to the lane that owns a real
+// terminal. Without it, a caller enforcing a deadline on an interactive step
+// (updexec.Console.Interactive) could only detect the timeout, never
+// actually stop the child holding the terminal (and, transitively, the
+// clone a later restore step needs).
+func (e Exec) RunInteractiveCtx(ctx context.Context, host string, argv ...string) error {
+	c := exec.CommandContext(ctx, "ssh", append(e.interactiveArgs(host), argv...)...)
+	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
+	c.WaitDelay = waitDelay
+	return c.Run()
+}
+
 // viaArgs builds the relay argv. Split out from RunVia so the ordering — which
 // decides WHICH machine the command lands on — is asserted by a unit test
 // instead of by opening a socket.
@@ -255,6 +270,18 @@ func (f Fake) RunInteractive(host string, _ ...string) error {
 		return err
 	}
 	return nil
+}
+
+// RunInteractiveCtx honours ctx like RunStreamCtx: when Block[host] is set
+// it waits on ctx.Done() and returns ctx.Err(), simulating an interactive
+// remote command a controller timeout has to kill; otherwise it behaves
+// exactly like RunInteractive.
+func (f Fake) RunInteractiveCtx(ctx context.Context, host string, argv ...string) error {
+	if f.Block[host] {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	return f.RunInteractive(host, argv...)
 }
 
 func (f Fake) RunVia(peer, host string, _ ...string) (string, error) {
