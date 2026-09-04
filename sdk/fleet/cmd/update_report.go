@@ -10,13 +10,6 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
-// localAnswerPreamble and newRunLogOutput are filled in by task 23 (the
-// headless run log + answers env). Until then a run carries no capture and
-// no preamble.
-func localAnswerPreamble(updplan.Step) string { return "" }
-
-func newRunLogOutput(string) updexec.Output { return nil }
-
 // exitErrorForReports is nil when every host's report is ok, else an error
 // naming how many hosts were not updated. Kept separate from runUpdate so it
 // is testable without a runner or a plan.

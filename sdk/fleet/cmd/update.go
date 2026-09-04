@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag"
@@ -164,8 +165,8 @@ var (
 )
 
 // buildExecutor assembles the Executor a live (non-dry-run) update runs
-// through, from the resolved CLI flags. Out is nil in tasks 20-21; task 23
-// wires in the headless capture.
+// through, from the resolved CLI flags. out is the headless capture (task
+// 23's newRunLogOutput); nil is a valid Discard.
 func buildExecutor(r runner.Runner, out updexec.Output, local updplan.Local) updexec.Executor {
 	return updexec.Executor{
 		IO:        updexec.Console{R: r, Preamble: localAnswerPreamble},
@@ -181,6 +182,13 @@ func buildExecutor(r runner.Runner, out updexec.Output, local updplan.Local) upd
 // runUpdate resolves the plan and flags, then runs every host serially
 // (interactive steps cannot share a terminal) through the plan executor.
 func runUpdate(cmd *cobra.Command, hosts []string) error {
+	return runUpdateWith(cmd.OutOrStdout(), hosts, runner.Exec{})
+}
+
+// runUpdateWith is runUpdate with its output writer and runner injected, so
+// a test can drive the whole CLI path — plan resolution, the executor, the
+// headless capture, the report — without a cobra.Command or a real ssh.
+func runUpdateWith(out io.Writer, hosts []string, r runner.Runner) error {
 	local, err := resolveLocalPolicy(flagUpdateLocal, flagUpdateForce)
 	if err != nil {
 		return err
@@ -199,13 +207,10 @@ func runUpdate(cmd *cobra.Command, hosts []string) error {
 		}
 	}
 
-	out := cmd.OutOrStdout()
-
 	if flagUpdateDryRun {
 		return printDryRun(out, plan, local, flagUpdateReset)
 	}
 
-	r := runner.Exec{}
 	reports := make([]updexec.HostReport, 0, len(hosts))
 	for _, host := range hosts {
 		ex := buildExecutor(r, newRunLogOutput(host), local)
