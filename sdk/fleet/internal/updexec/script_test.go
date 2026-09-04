@@ -334,3 +334,14 @@ func TestBuildersRejectUnvalidatedInput(t *testing.T) {
 		t.Fatalf("RestoreScript accepted a bad orig: %q", s)
 	}
 }
+
+// TestCarryPrologueIsIdempotentAcrossAttempts pins the guard that makes a
+// retried carry-sync attempt safe: the stash push only runs when the tree
+// is STILL dirty, so a second attempt after a successful stash (the tree is
+// now clean) never stashes twice.
+func TestCarryPrologueIsIdempotentAcrossAttempts(t *testing.T) {
+	s := mustSync(t, repo("dotfiles", []string{"main"}), updplan.LocalCarry, false)
+	if !strings.Contains(s, `{ [ -z "$(git status --porcelain)" ] || { git stash push -q -u -m "fleet-carry $ts" && echo "fleet: carried stash=$(git rev-parse stash@{0}) from=$orig"; }; }`) {
+		t.Fatalf("carry prologue must guard the stash push on the tree still being dirty:\n%s", s)
+	}
+}

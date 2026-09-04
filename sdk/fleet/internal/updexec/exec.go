@@ -627,10 +627,22 @@ func (e Executor) runWithRetry(
 	}
 
 	exit := exitCode(callErr)
+	notes := parseNotes(out)
+	reason := reasonFor(callErr, timedOut, exit, timeout)
+	// RestoreScript's fallback prints "fleet: restore-failed stash=<sha>
+	// branch=<orig>" on any failure — surface it verbatim rather than the
+	// generic "exit status N" a bare *exec.ExitError gives, since it is the
+	// only place the SHA and branch a kept stash needs are named.
+	for _, n := range notes {
+		if strings.HasPrefix(n, "restore-failed") {
+			reason = n
+			break
+		}
+	}
 	return Result{
 		Step: id, Kind: kind, Status: Failed, Exit: exit,
-		Reason: reasonFor(callErr, timedOut, exit, timeout), Duration: e.now().Sub(start),
-		Attempts: attempts, TimedOut: timedOut, Notes: parseNotes(out),
+		Reason: reason, Duration: e.now().Sub(start),
+		Attempts: attempts, TimedOut: timedOut, Notes: notes,
 	}
 }
 

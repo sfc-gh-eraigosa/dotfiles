@@ -679,3 +679,315 @@ func TestResetIsIncompatibleWithCarry(t *testing.T) {
 		t.Fatal("reset+carry must be rejected before any remote call")
 	}
 }
+
+// --- task 13: carry and branch restore ---------------------------------------
+
+const restoreFailedMarker = "restore-failed stash="
+
+func TestCarryStashesWithUntrackedAndCapturesTheSHA(t *testing.T) {
+	sha := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	io := newFakeIO().
+		on("git rev-parse --git-dir", "state=dirty branch=main", nil).
+		on("orig=$(git symbolic-ref", "fleet: orig=main\nfleet: carried stash="+sha+" from=main", nil).
+		on(restoreFailedMarker, "", nil) // never actually reached (nothing armed beyond stash+same branch -> IS armed, restore WILL run)
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalCarry, false))
+	r, ok := resultFor(rep, "dotfiles.sync")
+	if !ok || r.Status != OK {
+		t.Fatalf("carry sync must succeed: %+v", r)
+	}
+	found := false
+	for _, n := range r.Notes {
+		if strings.Contains(n, "carried stash="+sha) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("Notes must capture the carried stash SHA: %+v", r.Notes)
+	}
+}
+
+func TestCarryRestoreRunsAfterTheLastStepUsingTheRepo(t *testing.T) {
+	io := newFakeIO().
+		on("cd ~/git/r && g=$(git rev-parse", "state=dirty branch=main", nil).
+		on("cd ~/git/other && g=$(git rev-parse", cleanPrecheck, nil).
+		on("orig=$(git symbolic-ref", "fleet: orig=main\nfleet: carried stash=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa from=main", nil).
+		on("cd ~/git/r/scripts && make", "", nil).
+		on(restoreFailedMarker, "", nil)
+	p := updplan.Plan{
+		Repos: map[string]updplan.Repo{
+			"r":     syncRepo("r", updplan.LocalCarry),
+			"other": syncRepo("other", updplan.LocalSkip),
+		},
+		Steps: []updplan.Step{
+			syncStep("r.sync", "r"),
+			func() updplan.Step {
+				s := runStep("r.build", "r", "make", "r.sync")
+				return s
+			}(),
+			syncStep("other.sync", "other"),
+		},
+	}
+	// r.build's script is "cd ~/git/r && make" per RunScript; register it too.
+	io.on("cd ~/git/r && make", "", nil)
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", p)
+
+	var order []string
+	for _, c := range io.batchCalls() {
+		order = append(order, c.script)
+	}
+	buildIdx, restoreIdx, otherIdx := -1, -1, -1
+	for i, s := range order {
+		if strings.Contains(s, "cd ~/git/r && make") && buildIdx == -1 {
+			buildIdx = i
+		}
+		if strings.Contains(s, restoreFailedMarker) && restoreIdx == -1 {
+			restoreIdx = i
+		}
+		if strings.Contains(s, "cd ~/git/other && g=$(git rev-parse") && otherIdx == -1 {
+			otherIdx = i
+		}
+	}
+	if buildIdx == -1 || restoreIdx == -1 || otherIdx == -1 {
+		t.Fatalf("missing expected calls: build=%d restore=%d other=%d, order=%v", buildIdx, restoreIdx, otherIdx, order)
+	}
+	if !(buildIdx < restoreIdx && restoreIdx < otherIdx) {
+		t.Fatalf("restore must run after r.build and before other.sync: build=%d restore=%d other=%d", buildIdx, restoreIdx, otherIdx)
+	}
+	if rr, ok := resultFor(rep, "r.restore"); !ok || rr.Status != OK {
+		t.Fatalf("r.restore = %+v, want ok", rr)
+	}
+}
+
+func TestRestoreRunsEvenWhenAnIntermediateStepFailed(t *testing.T) {
+	io := newFakeIO().
+		on("git rev-parse --git-dir", "state=dirty branch=main", nil).
+		on("orig=$(git symbolic-ref", "fleet: orig=main\nfleet: carried stash=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa from=main", nil).
+		on(restoreFailedMarker, "", nil).
+		on("echo unrelated", "", realExitError(t, 1))
+	p := updplan.Plan{
+		Repos: map[string]updplan.Repo{"dotfiles": syncRepo("dotfiles", updplan.LocalCarry)},
+		Steps: []updplan.Step{
+			syncStep("dotfiles.sync", "dotfiles"),
+			func() updplan.Step {
+				s := runStep("unrelated", "", "echo unrelated")
+				s.OnFailure = updplan.OnFailureContinue
+				return s
+			}(),
+			runStep("dotfiles.build", "dotfiles", "./build.sh", "dotfiles.sync"),
+		},
+	}
+	io.on("./build.sh", "", nil)
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", p)
+
+	if u, ok := resultFor(rep, "unrelated"); !ok || u.Status != Failed {
+		t.Fatalf("unrelated = %+v, want failed", u)
+	}
+	if rr, ok := resultFor(rep, "dotfiles.restore"); !ok || rr.Status != OK {
+		t.Fatalf("restore must still run despite the unrelated failure: %+v", rr)
+	}
+}
+
+func TestRestoreRunsImmediatelyWhenSyncFailsAfterStash(t *testing.T) {
+	io := newFakeIO().
+		on("git rev-parse --git-dir", "state=dirty branch=main", nil).
+		on("orig=$(git symbolic-ref", "fleet: orig=main\nfleet: carried stash=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa from=main", realExitError(t, 1)).
+		on(restoreFailedMarker, "", nil)
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalCarry, false))
+
+	sync, ok := resultFor(rep, "dotfiles.sync")
+	if !ok || sync.Status != Failed {
+		t.Fatalf("sync = %+v, want failed", sync)
+	}
+	// The restore must be the VERY NEXT result, not deferred.
+	if len(rep.Results) < 2 || rep.Results[1].Step != "dotfiles.restore" {
+		t.Fatalf("restore did not run immediately after the failed sync: %+v", rep.Results)
+	}
+}
+
+func TestRestoreConflictKeepsTheStash(t *testing.T) {
+	sha := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	io := newFakeIO().
+		on("git rev-parse --git-dir", "state=dirty branch=main", nil).
+		on("orig=$(git symbolic-ref", "fleet: orig=main\nfleet: carried stash="+sha+" from=main", nil).
+		on(restoreFailedMarker, "fleet: restore-failed stash="+sha+" branch=main", realExitError(t, 4))
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalCarry, false))
+
+	rr, ok := resultFor(rep, "dotfiles.restore")
+	if !ok || rr.Status != Failed {
+		t.Fatalf("restore = %+v, want failed", rr)
+	}
+	if !strings.Contains(rr.Reason, sha) || !strings.Contains(rr.Reason, "main") {
+		t.Fatalf("reason must name the SHA and branch: %q", rr.Reason)
+	}
+}
+
+func TestCleanOffBranchIsRestoredUnderEveryPolicy(t *testing.T) {
+	for _, local := range []updplan.Local{updplan.LocalSkip, updplan.LocalRescue, updplan.LocalCarry} {
+		t.Run(string(local), func(t *testing.T) {
+			io := newFakeIO().
+				on("git rev-parse --git-dir", "state=clean branch=feature", nil).
+				on("orig=$(git symbolic-ref", "fleet: orig=feature\nfleet: switched feature -> main", nil).
+				on(restoreFailedMarker, "", nil)
+			e := Executor{IO: io}
+			rep := e.RunHost("alpha", onlySyncPlan(local, false))
+			rr, ok := resultFor(rep, "dotfiles.restore")
+			if !ok || rr.Status != OK {
+				t.Fatalf("%s: off-branch clean sync must be restored: %+v", local, rr)
+			}
+		})
+	}
+}
+
+func TestOnTargetNeverSynthesizesARestore(t *testing.T) {
+	io := newFakeIO().
+		on("git rev-parse --git-dir", cleanPrecheck, nil).
+		on("orig=$(git symbolic-ref", "fleet: orig=main", nil)
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
+	if _, ok := resultFor(rep, "dotfiles.restore"); ok {
+		t.Fatal("a sync that never switched or stashed must never synthesize a restore step")
+	}
+}
+
+func TestRescueOffBranchRestoresTheBranchWithoutAStash(t *testing.T) {
+	io := newFakeIO().
+		on("git rev-parse --git-dir", "state=dirty branch=feature", nil).
+		on("fleet-rescue/$ts", "", nil).
+		on("orig=$(git symbolic-ref", "fleet: orig=feature\nfleet: switched feature -> main", nil).
+		on(restoreFailedMarker, "", nil)
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalRescue, false))
+	rr, ok := resultFor(rep, "dotfiles.restore")
+	if !ok || rr.Status != OK {
+		t.Fatalf("rescue off-branch must still be restored: %+v", rr)
+	}
+	// Find the restore call and confirm it carried no stash (empty sha).
+	calls := io.batchCalls()
+	var restoreScript string
+	for _, c := range calls {
+		if strings.Contains(c.script, restoreFailedMarker) {
+			restoreScript = c.script
+		}
+	}
+	if restoreScript == "" {
+		t.Fatal("no restore call recorded")
+	}
+	// The stash-apply clause is always present in the script text (it is a
+	// conditional), but with an empty sha the `[ -z "" ]` guard is true, so
+	// it never actually runs.
+	if !strings.Contains(restoreScript, `[ -z "" ]`) {
+		t.Fatalf("a rescue-only restore (no carried stash) must guard the stash apply on an empty sha: %q", restoreScript)
+	}
+}
+
+func TestDetachedHeadRestoresToTheSHA(t *testing.T) {
+	sha := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	io := newFakeIO().
+		on("git rev-parse --git-dir", "state=clean branch=detached", nil).
+		on("orig=$(git symbolic-ref", "fleet: orig="+sha+"\nfleet: switched "+sha+" -> main", nil).
+		on(restoreFailedMarker, "", nil)
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
+	rr, ok := resultFor(rep, "dotfiles.restore")
+	if !ok || rr.Status != OK {
+		t.Fatalf("detached HEAD must be restored to the SHA: %+v", rr)
+	}
+	var restoreScript string
+	for _, c := range io.batchCalls() {
+		if strings.Contains(c.script, restoreFailedMarker) {
+			restoreScript = c.script
+		}
+	}
+	if !strings.Contains(restoreScript, "git checkout -q "+sha) {
+		t.Fatalf("restore must check out the exact SHA: %q", restoreScript)
+	}
+}
+
+func TestRestoreFalseLeavesHostOnTarget(t *testing.T) {
+	base := func() *fakeIO {
+		return newFakeIO().
+			on("git rev-parse --git-dir", "state=clean branch=feature", nil).
+			on("orig=$(git symbolic-ref", "fleet: orig=feature\nfleet: switched feature -> main", nil)
+	}
+
+	t.Run("repo.Restore=false", func(t *testing.T) {
+		io := base()
+		e := Executor{IO: io}
+		p := onlySyncPlan(updplan.LocalSkip, false)
+		r := p.Repos["dotfiles"]
+		r.Restore = false
+		p.Repos["dotfiles"] = r
+		rep := e.RunHost("alpha", p)
+		rr, ok := resultFor(rep, "dotfiles.restore")
+		if !ok || rr.Status != Skipped {
+			t.Fatalf("restore: false must synthesize a skipped restore: %+v", rr)
+		}
+		for _, c := range io.batchCalls() {
+			if strings.Contains(c.script, "git checkout -q feature") {
+				t.Fatal("restore: false must never send a restore script")
+			}
+		}
+	})
+
+	t.Run("Executor.NoRestore", func(t *testing.T) {
+		io := base()
+		e := Executor{IO: io, NoRestore: true}
+		rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
+		rr, ok := resultFor(rep, "dotfiles.restore")
+		if !ok || rr.Status != Skipped {
+			t.Fatalf("--no-restore must synthesize a skipped restore: %+v", rr)
+		}
+	})
+}
+
+func TestRestoreCheckoutFailureKeepsEverything(t *testing.T) {
+	io := newFakeIO().
+		on("git rev-parse --git-dir", "state=clean branch=feature", nil).
+		on("orig=$(git symbolic-ref", "fleet: orig=feature\nfleet: switched feature -> main", nil).
+		on(restoreFailedMarker, "fleet: restore-failed stash= branch=feature", realExitError(t, 4))
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
+	rr, ok := resultFor(rep, "dotfiles.restore")
+	if !ok || rr.Status != Failed {
+		t.Fatalf("a failed checkout must be reported failed: %+v", rr)
+	}
+	if !strings.Contains(rr.Reason, "feature") {
+		t.Fatalf("reason must name the branch: %q", rr.Reason)
+	}
+}
+
+func TestRestoreStepHasFixedRetryPolicy(t *testing.T) {
+	t.Run("retries transport failures 3x regardless of NoRetry", func(t *testing.T) {
+		io := newFakeIO().
+			on("git rev-parse --git-dir", "state=clean branch=feature", nil).
+			on("orig=$(git symbolic-ref", "fleet: orig=feature\nfleet: switched feature -> main", nil).
+			on(restoreFailedMarker, "", ErrTransport).
+			on(restoreFailedMarker, "", ErrTransport).
+			on(restoreFailedMarker, "", nil)
+		sleeper := &sleepRecorder{}
+		e := Executor{IO: io, NoRetry: true, Sleep: sleeper.Sleep, Rand: midpointRand}
+		rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
+		rr, ok := resultFor(rep, "dotfiles.restore")
+		if !ok || rr.Status != OK || rr.Attempts != 3 {
+			t.Fatalf("restore must retry transport failures up to 3 attempts despite NoRetry: %+v", rr)
+		}
+	})
+
+	t.Run("a conflict is not retried", func(t *testing.T) {
+		io := newFakeIO().
+			on("git rev-parse --git-dir", "state=clean branch=feature", nil).
+			on("orig=$(git symbolic-ref", "fleet: orig=feature\nfleet: switched feature -> main", nil).
+			on(restoreFailedMarker, "fleet: restore-failed stash= branch=feature", realExitError(t, 4))
+		e := Executor{IO: io}
+		rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
+		rr, ok := resultFor(rep, "dotfiles.restore")
+		if !ok || rr.Status != Failed || rr.Attempts != 1 {
+			t.Fatalf("a non-transport restore failure must not be retried: %+v", rr)
+		}
+	})
+}
