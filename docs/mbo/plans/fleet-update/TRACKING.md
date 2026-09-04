@@ -20,7 +20,7 @@ Leaf state vocabulary (mirrors `docs/mbo/index.md`): `todo → building → in-r
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | A `updplan` (base; blocks B) | (no worker — built directly on `worktree/fleet_config`, per task instructions) | `worktree/fleet_config` | this worktree | — | in-review |
-| B `updexec` (+ runner ctx; base = A; blocks D, E) | | | | | todo |
+| B `updexec` (+ runner ctx; base = A; blocks D, E) | (no worker — built directly on `worktree/fleet_config`, per task instructions) | `worktree/fleet_config` | this worktree | — | in-review |
 | C `featflag` + deps (base = main; blocks D) | (no worker — built directly on `worktree/fleet_config`, per task instructions) | `worktree/fleet_config` | this worktree | — | in-review |
 | D `cmd` (base = B, after C merged; blocks E, F) | | | | | todo |
 | E `tui` (base = D) | | | | | todo |
@@ -49,14 +49,14 @@ Plan §4 task numbers. Commit = the SHA carrying the plan's exact message.
 | 7 Remaining builders | done | 6a3b907 | `go test -race ./internal/updexec/... -v` → PASS (15/15); `gofmt -l .`/`go vet ./...` clean | moves `TestRescuePreservesUntrackedWork` |
 | 8 Builders re-validate | done | f84fafc | `go test -race ./internal/updexec/... -run TestBuildersRejectUnvalidatedInput -v` → PASS | |
 | 9 Runner ctx path | done | d42984f | `go test -race ./internal/runner/... -v` → PASS; stub `ssh` on a temp `PATH`, `sleep 30` killed within 1.1s via `exec.CommandContext` + `WaitDelay` (a 30s hang was reproduced and fixed — see task-09 evidence) | every `runner.Runner` test double in `cmd` grew a delegating `RunStreamCtx` |
-| 10 Executor happy path | todo | | | scripted `fakeIO` + stepping clock + recorded sleep |
-| 11 Cascade | todo | | | |
-| 12 Sync decisions | todo | | | migrates 4 `cmd` tests by name |
-| 13 Carry & restore | todo | | | |
-| 14 gh-auth | todo | | | |
-| 15 Retry / backoff / timeout | todo | | | |
-| 16 Lanes + exit codes | todo | | | |
-| **Leaf B gate** | todo | — | `go test -race -cover ./internal/updexec ./internal/runner` → | |
+| 10 Executor happy path | done | 49ebffd | `go test -race ./internal/updexec/... -v` → PASS (3/3 new); `gofmt -l .`/`go vet ./...` clean | exec.go lands whole (one cohesive state machine); scripted `fakeIO` + stepping clock + recorded sleep + recording Output double |
+| 11 Cascade | done | 09a69e6 | `go test -race ./internal/updexec/... -run 'Cascade\|FailedStep\|OnFailure\|ExpectExit\|DependencyFailed' -v` → PASS (4/4) | tests only; cascade logic landed with exec.go in task 10 |
+| 12 Sync decisions | done | af6173e | `go test -race ./internal/updexec/... -run 'TestUpdate\|MissingClone\|InProgress\|ResetMode\|UnexpectedPrecheck\|CLILocal\|ResetIsIncompatible' -v` → PASS (11/11) | migrates 4 `cmd` tests by name; tests only |
+| 13 Carry & restore | done | 82ce716 | `go test -race ./internal/updexec/... -run 'Carry\|Restore\|OffBranch\|OnTarget\|Detached' -v` → PASS (14/14) | tests only, plus a small exec.go fix: failure Reason now prefers a "restore-failed" note over the bare exit-status text |
+| 14 gh-auth | done | 48c3804 | `go test -race ./internal/updexec/... -run TestGhAuth -v` → PASS (8/8) | tests only |
+| 15 Retry / backoff / timeout | done | ec15780 | `go test -race ./internal/updexec/... -run 'Retr\|Timeout\|Attempts\|Interactive\|NoRetry' -v` → PASS (14/14) | tests only |
+| 16 Lanes + exit codes | done | 47a2667 | `go test -race ./internal/updexec/... -run 'Console\|Background\|Preamble\|ExitCode' -v` → PASS (5/5); coverage-closing tests added | `go test -race -cover ./internal/updexec ./internal/runner` → updexec **92.7%** (≥ 90% ✓) |
+| **Leaf B gate** | done | 47a2667 | `go test -race -cover ./internal/updexec ./internal/runner` → updexec 92.7%, runner 57.0%; `go test -race ./...` (whole module) green; `cmd/update_test.go` unchanged (10/10 original tests present, none deleted) | evidence/updexec/leaf-gate.txt |
 
 ### Leaf C — `internal/featflag` + deps (tasks 17–18; ≥ 90 %; `gff lint` clean)
 

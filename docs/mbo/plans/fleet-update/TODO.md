@@ -185,85 +185,85 @@
 **Done when:** a deadline kills the local child promptly and the mux invariant covers the new path.
 
 ### Task 10 — executor walks the plan per host  (plan Task 10, leaf B)
-- [ ] RED: `exec_test.go` — scripted `fakeIO` (substring-keyed, per-step response sequences, records calls, honours `ctx.Done()`, `ErrNoTerminal` toggle) + stepping clock + recorded sleep; `TestRunHostRunsStepsInOrderWithDurations` (default plan: precheck → sync → interactive install; durations from the clock; `Output` path set; capture contains `=== step dotfiles.sync (sync) ===`), `TestNotesAreParsedFromFleetLines`, `TestAttemptHeaderIsWrittenToTheCapture`
-- [ ] RUN-RED: `go test ./internal/updexec -run 'TestRunHost|TestNotes|TestAttemptHeader' -v` → expect **FAIL**
-- [ ] GREEN: `exec.go` — `Executor`, `StepIO`, `Output`/`LineWriter`/`Discard`, `Result`, `HostReport`, single-attempt loop
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/updexec): executor walks the plan per host`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `exec_test.go` — scripted `fakeIO` (substring-keyed, per-step response sequences, records calls, honours `ctx.Done()`, `ErrNoTerminal` toggle) + stepping clock + recorded sleep; `TestRunHostRunsStepsInOrderWithDurations` (default plan: precheck → sync → interactive install; durations from the clock; `Output` path set; capture contains `=== step dotfiles.sync (sync) ===`), `TestNotesAreParsedFromFleetLines`, `TestAttemptHeaderIsWrittenToTheCapture`
+- [x] RUN-RED: `go test ./internal/updexec -run 'TestRunHost|TestNotes|TestAttemptHeader' -v` → expect **FAIL**
+- [x] GREEN: `exec.go` — `Executor`, `StepIO`, `Output`/`LineWriter`/`Discard`, `Result`, `HostReport`, single-attempt loop
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/updexec): executor walks the plan per host`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** the happy path runs in `Order()` and the capture carries the step headers.
 
 ### Task 11 — failure cascade  (plan Task 11, leaf B)
-- [ ] RED: `TestFailedStepSkipsTransitiveDependents` (reason `blocked by scripts.make`; independent `dotfiles.*` scripts still sent), `TestOnFailureContinueLetsDependentsRunButStillFailsTheHost`, `TestExpectExitAcceptsNonZero`, `TestDependencyFailedAlsoBlocks` (`a→b→c`, a failed → c blocked by b)
-- [ ] RUN-RED: `go test ./internal/updexec -run 'Cascade|FailedStep|OnFailure|ExpectExit|DependencyFailed' -v` → expect **FAIL**
-- [ ] GREEN: `firstStopBlocker`, `expect` evaluation
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/updexec): failure cascade`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestFailedStepSkipsTransitiveDependents` (reason `blocked by scripts.make`; independent `dotfiles.*` scripts still sent), `TestOnFailureContinueLetsDependentsRunButStillFailsTheHost`, `TestExpectExitAcceptsNonZero`, `TestDependencyFailedAlsoBlocks` (`a→b→c`, a failed → c blocked by b)
+- [x] RUN-RED: `go test ./internal/updexec -run 'Cascade|FailedStep|OnFailure|ExpectExit|DependencyFailed' -v` → expect **FAIL**
+- [x] GREEN: `firstStopBlocker`, `expect` evaluation
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/updexec): failure cascade`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** dependents are blocked, siblings run, `continue` unblocks but still fails the host.
 
 ### Task 12 — local-state policies  (plan Task 12, leaf B)
-- [ ] RED: **migrate** with names + assertions kept: `TestUpdateSkipsDirtyCloneByDefault` (no sent command contains `install.sh`/`pull`/`fetch`), `TestUpdateProceedsOnCleanClone`, `TestForceRescuesDirtyWorkBeforePulling` (no `reset --hard`/`checkout -- `; `git add -A` + `worktree add` present; rescue sent before fetch), `TestUpdateSurfacesProbeFailure`; add `TestMissingCloneWithURLClones`, `TestMissingCloneWithoutURLFails`, `TestInProgressMergeIsSkippedUnderEveryPolicy`, `TestResetModeUsesResetScript`, `TestUnexpectedPrecheckOutputFails`, `TestCLILocalOverridesEveryRepoPolicy`, `TestResetIsIncompatibleWithCarry`
-- [ ] RUN-RED: `go test ./internal/updexec -run 'TestUpdate|MissingClone|InProgress|ResetMode|UnexpectedPrecheck|CLILocal|ResetIsIncompatible' -v` → expect **FAIL**
-- [ ] GREEN: precheck parsing (`state=… branch=…`), policy switch, `Executor.Local` override
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/updexec): local-state policies` — body lists the four migrated tests
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: **migrate** with names + assertions kept: `TestUpdateSkipsDirtyCloneByDefault` (no sent command contains `install.sh`/`pull`/`fetch`), `TestUpdateProceedsOnCleanClone`, `TestForceRescuesDirtyWorkBeforePulling` (no `reset --hard`/`checkout -- `; `git add -A` + `worktree add` present; rescue sent before fetch), `TestUpdateSurfacesProbeFailure`; add `TestMissingCloneWithURLClones`, `TestMissingCloneWithoutURLFails`, `TestInProgressMergeIsSkippedUnderEveryPolicy`, `TestResetModeUsesResetScript`, `TestUnexpectedPrecheckOutputFails`, `TestCLILocalOverridesEveryRepoPolicy`, `TestResetIsIncompatibleWithCarry`
+- [x] RUN-RED: `go test ./internal/updexec -run 'TestUpdate|MissingClone|InProgress|ResetMode|UnexpectedPrecheck|CLILocal|ResetIsIncompatible' -v` → expect **FAIL**
+- [x] GREEN: precheck parsing (`state=… branch=…`), policy switch, `Executor.Local` override
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/updexec): local-state policies` — body lists the four migrated tests
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** the spec §4 F3 table is exercised row by row.
 
 ### Task 13 — carry and branch restore  (plan Task 13, leaf B)
-- [ ] RED: `TestCarryStashesWithUntrackedAndCapturesTheSHA`, `TestCarryRestoreRunsAfterTheLastStepUsingTheRepo` (`r.sync → r.build → other.sync`: restore issued right after `r.build`, before `other.sync`), `TestRestoreRunsEvenWhenAnIntermediateStepFailed`, `TestRestoreRunsImmediatelyWhenSyncFailsAfterStash`, `TestRestoreConflictKeepsTheStash` (no `stash drop` on non-zero apply; reason names SHA + branch), `TestCleanOffBranchIsRestoredUnderEveryPolicy`, `TestOnTargetNeverSynthesizesARestore`, `TestRescueOffBranchRestoresTheBranchWithoutAStash`, `TestDetachedHeadRestoresToTheSHA`, `TestRestoreFalseLeavesHostOnTarget` (per-repo and `NoRestore`), `TestRestoreCheckoutFailureKeepsEverything`, `TestRestoreStepHasFixedRetryPolicy` (3× transport, 5m; apply conflict not retried), `TestCarryPrologueIsIdempotentAcrossAttempts`
-- [ ] RUN-RED: `go test ./internal/updexec -run 'Carry|Restore|OffBranch|OnTarget|Detached' -v` → expect **FAIL**
-- [ ] GREEN: note parsing (`orig=`, `carried stash=`, `switched`), `pending` map, synthesized `<repo>.restore`
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/updexec): carry and branch restore`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestCarryStashesWithUntrackedAndCapturesTheSHA`, `TestCarryRestoreRunsAfterTheLastStepUsingTheRepo` (`r.sync → r.build → other.sync`: restore issued right after `r.build`, before `other.sync`), `TestRestoreRunsEvenWhenAnIntermediateStepFailed`, `TestRestoreRunsImmediatelyWhenSyncFailsAfterStash`, `TestRestoreConflictKeepsTheStash` (no `stash drop` on non-zero apply; reason names SHA + branch), `TestCleanOffBranchIsRestoredUnderEveryPolicy`, `TestOnTargetNeverSynthesizesARestore`, `TestRescueOffBranchRestoresTheBranchWithoutAStash`, `TestDetachedHeadRestoresToTheSHA`, `TestRestoreFalseLeavesHostOnTarget` (per-repo and `NoRestore`), `TestRestoreCheckoutFailureKeepsEverything`, `TestRestoreStepHasFixedRetryPolicy` (3× transport, 5m; apply conflict not retried), `TestCarryPrologueIsIdempotentAcrossAttempts`
+- [x] RUN-RED: `go test ./internal/updexec -run 'Carry|Restore|OffBranch|OnTarget|Detached' -v` → expect **FAIL**
+- [x] GREEN: note parsing (`orig=`, `carried stash=`, `switched`), `pending` map, synthesized `<repo>.restore`
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/updexec): carry and branch restore`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** every row of the spec F3/F4 restore semantics has a green test and nothing is ever dropped.
 
 ### Task 14 — gh-auth step  (plan Task 14, leaf B)
-- [ ] RED: `TestGhAuthSkipsLoginWhenStatusPasses` (1 Batch, 0 Interactive), `TestGhAuthLogsInInteractivelyThenReverifies`, `TestGhAuthReports127AsNotInstalled`, `TestGhAuthWithoutATerminalFailsCleanly` (reason `needs a terminal`; dependents blocked), `TestGhAuthNeverUsesStdin`, `TestGhAuthLoginIsNeverRetriedButCheckIs`
-- [ ] RUN-RED: `go test ./internal/updexec -run 'TestGhAuth' -v` → expect **FAIL**
-- [ ] GREEN: gh-auth branch of `runStep`
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/updexec): gh-auth step`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestGhAuthSkipsLoginWhenStatusPasses` (1 Batch, 0 Interactive), `TestGhAuthLogsInInteractivelyThenReverifies`, `TestGhAuthReports127AsNotInstalled`, `TestGhAuthWithoutATerminalFailsCleanly` (reason `needs a terminal`; dependents blocked), `TestGhAuthNeverUsesStdin`, `TestGhAuthLoginIsNeverRetriedButCheckIs`
+- [x] RUN-RED: `go test ./internal/updexec -run 'TestGhAuth' -v` → expect **FAIL**
+- [x] GREEN: gh-auth branch of `runStep`
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/updexec): gh-auth step`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** check → (login → check) with zero prompts on an authenticated host.
 
 ### Task 15 — retries with backoff under per-attempt timeouts  (plan Task 15, leaf B)
-- [ ] RED: `TestTransportFailureIsRetriedWithBackoff` (255, 255, ok → `Attempts 3`, sleeps `[5s 10s]`), `TestNonMatchingFailureIsNotRetried`, `TestRetryOnAnyRetriesEveryUnexpectedExit`, `TestRetryOnExitCodeMatchesOnlyThatCode`, `TestExpectedExitIsNeverRetried`, `TestAttemptsAreExhaustedThenOnFailureApplies`, `TestTimeoutCancelsTheAttempt` (fake blocks until `ctx.Done()`; `TimedOut true`, reason `timed out after 1s`), `TestTimeoutIsRetriedOnlyWhenListed`, `TestInteractiveStepsAreNeverRetried`, `TestInteractiveHasNoDeadlineUnlessSet`, `TestExecutorTimeoutOverridesBatchSteps`, `TestNoRetryForcesOneAttempt`
-- [ ] RUN-RED: `go test ./internal/updexec -run 'Retr|Timeout|Attempts|Interactive|NoRetry' -v` → expect **FAIL**
-- [ ] GREEN: attempt loop with `context.WithTimeout`, class matching, `Backoff.Wait` via `Sleep`/`Rand`
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/updexec): retries with backoff under per-attempt timeouts`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestTransportFailureIsRetriedWithBackoff` (255, 255, ok → `Attempts 3`, sleeps `[5s 10s]`), `TestNonMatchingFailureIsNotRetried`, `TestRetryOnAnyRetriesEveryUnexpectedExit`, `TestRetryOnExitCodeMatchesOnlyThatCode`, `TestExpectedExitIsNeverRetried`, `TestAttemptsAreExhaustedThenOnFailureApplies`, `TestTimeoutCancelsTheAttempt` (fake blocks until `ctx.Done()`; `TimedOut true`, reason `timed out after 1s`), `TestTimeoutIsRetriedOnlyWhenListed`, `TestInteractiveStepsAreNeverRetried`, `TestInteractiveHasNoDeadlineUnlessSet`, `TestExecutorTimeoutOverridesBatchSteps`, `TestNoRetryForcesOneAttempt`
+- [x] RUN-RED: `go test ./internal/updexec -run 'Retr|Timeout|Attempts|Interactive|NoRetry' -v` → expect **FAIL**
+- [x] GREEN: attempt loop with `context.WithTimeout`, class matching, `Backoff.Wait` via `Sleep`/`Rand`
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/updexec): retries with backoff under per-attempt timeouts`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** the recorded sleep schedule matches the plan and no interactive step is ever retried.
 
 ### Task 16 — Console and Background lanes  (plan Task 16, leaf B)
-- [ ] RED: `TestConsoleStreamsBatchAndHandsOffInteractive` (Batch → `RunStreamCtx` lines reach `Line`; Interactive → `RunInteractive`), `TestBackgroundRefusesInteractive` (`ErrNoTerminal`), `TestPreambleAndStdinApplyToRunStepsOnly` (sync/gh scripts carry no `sudo -S`; stdin empty for them), `TestExitCodeMapsExitErrorAndSSH255` (255 → `ErrTransport`)
-- [ ] RUN-RED: `go test ./internal/updexec -run 'Console|Background|Preamble|ExitCode' -v` → expect **FAIL**
-- [ ] GREEN: `Console`, `Background`, `exitCode`
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/updexec): Console and Background lanes`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestConsoleStreamsBatchAndHandsOffInteractive` (Batch → `RunStreamCtx` lines reach `Line`; Interactive → `RunInteractive`), `TestBackgroundRefusesInteractive` (`ErrNoTerminal`), `TestPreambleAndStdinApplyToRunStepsOnly` (sync/gh scripts carry no `sudo -S`; stdin empty for them), `TestExitCodeMapsExitErrorAndSSH255` (255 → `ErrTransport`)
+- [x] RUN-RED: `go test ./internal/updexec -run 'Console|Background|Preamble|ExitCode' -v` → expect **FAIL**
+- [x] GREEN: `Console`, `Background`, `exitCode`
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/updexec): Console and Background lanes`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** both lanes exist and the secret/preamble can only reach run steps.
 
 ## Leaf B gate
-- [ ] VERIFY: `go test -race -cover ./internal/updexec ./internal/runner | tee -a evidence/updexec/leaf-gate.txt` → updexec **≥ 90 %**; `go test ./...` green (moved tests accounted for, none deleted: `git diff <base> -- cmd/update_test.go` shows only moves)
-- [ ] LEDGER + CHECKPOINT; refresh IMPLEMENTATION §8 for leaf D
+- [x] VERIFY: `go test -race -cover ./internal/updexec ./internal/runner | tee -a evidence/updexec/leaf-gate.txt` → updexec **≥ 90 %**; `go test ./...` green (moved tests accounted for, none deleted: `git diff <base> -- cmd/update_test.go` shows only moves)
+- [x] LEDGER + CHECKPOINT; refresh IMPLEMENTATION §8 for leaf D
 
 ---
 
