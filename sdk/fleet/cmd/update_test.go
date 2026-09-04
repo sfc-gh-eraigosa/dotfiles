@@ -3,13 +3,19 @@ package cmd
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
+
+// updateHost now runs the default plan through the executor. Its precheck
+// step is PrecheckScript, whose output format is "state=<x> branch=<y>" —
+// not the raw `git status --porcelain` these fixtures used pre-executor.
 
 func TestUpdateSkipsDirtyCloneByDefault(t *testing.T) {
 	var sent []string
-	r := recordingRunner{fake: runner.Fake{Out: map[string]string{"alpha": " M install.sh"}}, log: &sent}
+	r := recordingRunner{fake: runner.Fake{Out: map[string]string{"alpha": "state=dirty branch=main"}}, log: &sent}
 	res, err := updateHost(r, "alpha", "main", false)
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +34,7 @@ func TestUpdateSkipsDirtyCloneByDefault(t *testing.T) {
 }
 
 func TestUpdateProceedsOnCleanClone(t *testing.T) {
-	r := runner.Fake{Out: map[string]string{"alpha": ""}}
+	r := runner.Fake{Out: map[string]string{"alpha": "state=clean branch=main"}}
 	res, err := updateHost(r, "alpha", "main", false)
 	if err != nil {
 		t.Fatal(err)
@@ -41,7 +47,7 @@ func TestUpdateProceedsOnCleanClone(t *testing.T) {
 // --force must PRESERVE the dirty work in a rescue worktree, never discard it.
 func TestForceRescuesDirtyWorkBeforePulling(t *testing.T) {
 	var sent []string
-	r := recordingRunner{fake: runner.Fake{Out: map[string]string{"alpha": " M install.sh"}}, log: &sent}
+	r := recordingRunner{fake: runner.Fake{Out: map[string]string{"alpha": "state=dirty branch=main"}}, log: &sent}
 	if _, err := updateHost(r, "alpha", "main", true); err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +110,7 @@ func TestUpdateScriptTargetsGivenRef(t *testing.T) {
 
 func TestUpdateHostUsesTheRequestedRef(t *testing.T) {
 	var sent []string
-	r := recordingRunner{fake: runner.Fake{Out: map[string]string{"alpha": ""}}, log: &sent}
+	r := recordingRunner{fake: runner.Fake{Out: map[string]string{"alpha": "state=clean branch=main"}}, log: &sent}
 	if _, err := updateHost(r, "alpha", "feature/x", false); err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +120,8 @@ func TestUpdateHostUsesTheRequestedRef(t *testing.T) {
 }
 
 // The ref is interpolated into a remote shell command, so it must be a real
-// git ref charset — anything else is rejected, not run.
+// git ref charset — anything else is rejected, not run. validRef is now an
+// alias for updplan.ValidRef.
 func TestValidRefRejectsShellInjection(t *testing.T) {
 	for _, good := range []string{"main", "feature/fleet/build", "v0.1.0", "release-1.2"} {
 		if !validRef(good) {
@@ -150,5 +157,94 @@ func TestUpdateMakesExactlyOneNetworkCall(t *testing.T) {
 	// a host, which would leave it permanently divergent.
 	if !strings.Contains(s, "--ff-only") {
 		t.Fatalf("must stay fast-forward-only:\n%s", s)
+	}
+}
+
+// The whole run — precheck + sync, for the default one-repo plan — must make
+// exactly one `git fetch`, and never a `git pull` (which re-fetches).
+func TestUpdateDefaultPlanSendsExactlyOneFetchPerSyncStep(t *testing.T) {
+	var sent []string
+	r := recordingRunner{fake: runner.Fake{Out: map[string]string{"alpha": "state=clean branch=main"}}, log: &sent}
+	if _, err := updateHost(r, "alpha", "main", false); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(sent, " ")
+	if n := strings.Count(joined, "git fetch"); n != 1 {
+		t.Fatalf("expected exactly one git fetch across the whole run, got %d:\n%v", n, sent)
+	}
+	if strings.Contains(joined, "git pull") {
+		t.Fatalf("git pull re-contacts the remote: %v", sent)
+	}
+}
+
+// --force is exactly an alias for --local rescue: giving both consistently
+// is fine, giving them inconsistently is an error, and --local alone still
+// works without --force.
+func TestForceIsAnAliasForLocalRescue(t *testing.T) {
+	local, err := resolveLocalPolicy("", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if local != updplan.LocalRescue {
+		t.Fatalf("--force must resolve to local:rescue, got %q", local)
+	}
+
+	local, err = resolveLocalPolicy("rescue", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if local != updplan.LocalRescue {
+		t.Fatalf("--force + --local rescue must agree, got %q", local)
+	}
+
+	if _, err := resolveLocalPolicy("carry", true); err == nil {
+		t.Fatal("--force + --local carry disagree and must be an error")
+	}
+
+	local, err = resolveLocalPolicy("carry", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if local != updplan.LocalCarry {
+		t.Fatalf("--local carry alone must resolve to carry, got %q", local)
+	}
+
+	if _, err := resolveLocalPolicy("bogus", false); err == nil {
+		t.Fatal("an unrecognised --local value must be rejected")
+	}
+}
+
+// --timeout and --no-retry must reach the Executor unchanged.
+func TestTimeoutAndNoRetryFlagsReachTheExecutor(t *testing.T) {
+	old := flagUpdateTimeout
+	oldRetry := flagUpdateNoRetry
+	oldReset := flagUpdateReset
+	oldRestore := flagUpdateNoRestore
+	defer func() {
+		flagUpdateTimeout = old
+		flagUpdateNoRetry = oldRetry
+		flagUpdateReset = oldReset
+		flagUpdateNoRestore = oldRestore
+	}()
+	flagUpdateTimeout = 90 * time.Second
+	flagUpdateNoRetry = true
+	flagUpdateReset = true
+	flagUpdateNoRestore = true
+
+	ex := buildExecutor(runner.Fake{}, nil, updplan.LocalSkip)
+	if ex.Timeout != 90*time.Second {
+		t.Fatalf("Timeout = %v, want 90s", ex.Timeout)
+	}
+	if !ex.NoRetry {
+		t.Fatal("NoRetry must reach the executor")
+	}
+	if !ex.Reset {
+		t.Fatal("Reset must reach the executor")
+	}
+	if !ex.NoRestore {
+		t.Fatal("NoRestore must reach the executor")
+	}
+	if ex.Local != updplan.LocalSkip {
+		t.Fatalf("Local = %q, want skip", ex.Local)
 	}
 }
