@@ -6,13 +6,13 @@ package featflag
 import (
 	"fmt"
 	"path/filepath"
+	"reflect"
 )
 
-// Flag keys and the gff registration namespace (.github/gff/features.yaml).
+// Flag keys (declared in .github/gff/features.yaml, area `fleet`).
 const (
 	KeyEnabled = "fleet.update.enabled"
 	KeyConfig  = "fleet.update.config"
-	Namespace  = "com.github.sfc-gh-eraigosa.dotfiles"
 )
 
 // Source is the minimal gff surface featflag needs. gff.GFF implements it in
@@ -69,7 +69,7 @@ func (s Static) Strings(key string) ([]string, error) {
 // Settings: no code path here can return Enabled=false except an explicit,
 // successfully-resolved `false` for fleet.update.enabled.
 func Resolve(src Source, home, repoDir string) Settings {
-	if src == nil {
+	if src == nil || isTypedNil(src) {
 		return Settings{Enabled: true, Note: "featflag: no source configured, using built-in defaults"}
 	}
 
@@ -91,11 +91,23 @@ func Resolve(src Source, home, repoDir string) Settings {
 		settings.Note = appendNote(settings.Note, "fleet.update.config: no selection (defaulting to caller's config path)")
 		return settings
 	}
+	if len(locs) > 1 {
+		// A SINGLE-mode choice with two selections is a misconfigured flag
+		// file; taking the first silently would make YAML option order decide.
+		settings.Note = appendNote(settings.Note, fmt.Sprintf("fleet.update.config: %d selections %v where one is expected (defaulting to caller's config path)", len(locs), locs))
+		return settings
+	}
 
 	switch loc := locs[0]; loc {
 	case "home":
 		// ConfigPath stays "" - the caller resolves its own $XDG_CONFIG_HOME default.
 	case "repo":
+		if !filepath.IsAbs(repoDir) {
+			// A cwd-relative plan path would read whatever checkout the
+			// operator happens to be standing in.
+			settings.Note = appendNote(settings.Note, fmt.Sprintf("fleet.update.config: repo location needs an absolute repo dir, got %q (defaulting to caller's config path)", repoDir))
+			return settings
+		}
 		settings.ConfigPath = filepath.Join(repoDir, "opt/etc/fleet/fleet.yaml")
 	default:
 		settings.Note = appendNote(settings.Note, fmt.Sprintf("fleet.update.config: unrecognized selection %q (defaulting to caller's config path)", loc))
@@ -109,4 +121,11 @@ func appendNote(existing, add string) string {
 		return add
 	}
 	return existing + "; " + add
+}
+
+// isTypedNil reports whether src is a nil pointer wrapped in the interface —
+// `var g *GFF; Resolve(g, …)` — which `src == nil` cannot see.
+func isTypedNil(src Source) bool {
+	v := reflect.ValueOf(src)
+	return v.Kind() == reflect.Ptr && v.IsNil()
 }

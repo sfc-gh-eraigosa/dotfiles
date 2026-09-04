@@ -26,9 +26,10 @@ Verified while planning (shape the plan):
 2. `runner.Fake` returns one canned `Out` per host regardless of argv; a multi-step run needs a
    scripted double (substring-keyed, per-step sequences) defined in `updexec` tests — `runner`
    is not changed for that. `runner` *is* extended with `RunStreamCtx` for timeouts.
-3. The gff live layer is discovered from `os.Getwd()`, so the adapter calls
-   `gff.WithSource("com.github.sfc-gh-eraigosa.dotfiles")` first and falls back to unscoped on
-   `ErrUnknownSource`; every other error is fail-open.
+3. The gff live layer is discovered from `os.Getwd()`, so the adapter scopes every lookup to
+   `gff.WithSource(<--repo path>)` (the checkout's live feature file, cwd-independent) and falls
+   back to unscoped only on `ErrUnknownSource`; every other error is fail-open. (Planned as a
+   namespace scope; changed after the leaf C review showed that read a stale snapshot.)
 4. gff choice flags are closed option sets, so the "config path" flag is a two-option location
    selector; arbitrary paths use `--file`.
 
@@ -238,10 +239,10 @@ validated (`ValidRef`|`ValidSHA` / `ValidSHA`). Nothing else from a host is ever
 ```go
 type Source interface { Bool(key string) (bool, error); Strings(key string) ([]string, error) }
 type Settings struct { Enabled bool; ConfigPath string; Note string }   // Enabled=true on ANY error; ConfigPath "" → caller's default
-const ( KeyEnabled = "fleet.update.enabled"; KeyConfig = "fleet.update.config"; Namespace = "com.github.sfc-gh-eraigosa.dotfiles" )
-func Resolve(src Source, home, repoDir string) Settings   // "home"→"", "repo"→repoDir+"/opt/etc/fleet/fleet.yaml"
+const ( KeyEnabled = "fleet.update.enabled"; KeyConfig = "fleet.update.config" )
+func Resolve(src Source, home, repoDir string) Settings   // "home"→"", "repo"→repoDir+"/opt/etc/fleet/fleet.yaml" (repoDir must be absolute, else Note + ""); >1 selection → Note + ""; typed-nil src is fail-open
 type Static struct { Bools map[string]bool; Strs map[string][]string; Err error }
-type GFF struct{ Opts []gff.Option }                       // gff.go only
+type GFF struct{ Repo string; Opts []gff.Option }          // gff.go only; nil-receiver safe. Scoped to gff.WithSource(Repo) — the --repo checkout's LIVE feature file — retrying unscoped only on ErrUnknownSource; Strings = gff.Selected (option IDs). (Review finding: namespace scoping read a stale snapshot / bound the live layer to cwd.)
 ```
 
 `.github/gff/features.yaml` addition:

@@ -89,8 +89,8 @@ featflag.Resolve(gff|Static) ──► which file / enabled │
 - `internal/runner` — gains `RunStreamCtx(ctx, …)`; `Exec` uses `exec.CommandContext`, `Fake`
   honours `ctx.Done()`; `RunStream` delegates with `context.Background()`.
 - `internal/featflag` — `Source` interface, fail-open `Resolve`, `Static` test double, and the
-  one file that imports `sdk/gff/pkg/gff` (`WithSource(namespace)` first, unscoped on
-  `ErrUnknownSource`).
+  one file that imports `sdk/gff/pkg/gff` (`WithSource(<--repo path>)` — the checkout's live
+  feature file, independent of cwd — with an unscoped retry only on `ErrUnknownSource`).
 - `cmd` — `loadPlan` (flag → gff → default), `runUpdate`, `fleet update init`, per-host capture
   via `applog.NewCapture`, report/JSON/dry-run. Later the TUI lanes.
 

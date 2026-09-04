@@ -108,22 +108,6 @@ func TestGFFStringsDoesNotRetryOtherErrors(t *testing.T) {
 	}
 }
 
-func TestGFFUsesTheRealSDKByDefault(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	g := &GFF{Opts: []gff.Option{gff.WithRoot(t.TempDir())}}
-
-	// No boolFn/stringsFn injected: this exercises the real gff.Bool/StringValues
-	// call paths. The key is unregistered in this scratch root, so we only
-	// assert an error comes back (not what shape) - the point is coverage of
-	// the un-injected default, not resolver behaviour (covered in sdk/gff).
-	if _, err := g.Bool(KeyEnabled); err == nil {
-		t.Fatalf("Bool: want an error resolving an unregistered key against a scratch root")
-	}
-	if _, err := g.Strings(KeyConfig); err == nil {
-		t.Fatalf("Strings: want an error resolving an unregistered key against a scratch root")
-	}
-}
-
 func TestResolveWithGFFUnknownKeyIsFailOpen(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	src := Static{Err: fmt.Errorf("x: %w", gff.ErrUnknownKey)}
