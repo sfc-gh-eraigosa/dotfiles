@@ -207,14 +207,9 @@ func runUpdate(cmd *cobra.Command, hosts []string) error {
 
 	r := runner.Exec{}
 	reports := make([]updexec.HostReport, 0, len(hosts))
-	var failures int
 	for _, host := range hosts {
 		ex := buildExecutor(r, newRunLogOutput(host), local)
-		rep := ex.RunHost(host, plan)
-		reports = append(reports, rep)
-		if rep.Failed() {
-			failures++
-		}
+		reports = append(reports, ex.RunHost(host, plan))
 	}
 
 	if flagJSON {
@@ -225,10 +220,7 @@ func runUpdate(cmd *cobra.Command, hosts []string) error {
 	for _, rep := range reports {
 		printHostReport(out, plan, rep)
 	}
-	if failures > 0 {
-		return fmt.Errorf("%d host(s) not updated", failures)
-	}
-	return nil
+	return exitErrorForReports(reports)
 }
 
 var updateCmd = &cobra.Command{
