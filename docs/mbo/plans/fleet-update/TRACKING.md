@@ -45,10 +45,10 @@ Plan §4 task numbers. Commit = the SHA carrying the plan's exact message.
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| 6 Byte-compat + one network call | todo | | | moves `TestUpdateMakesExactlyOneNetworkCall` (cmd copy retired in task 20) |
-| 7 Remaining builders | todo | | | moves `TestRescuePreservesUntrackedWork` |
-| 8 Builders re-validate | todo | | | |
-| 9 Runner ctx path | todo | | | stub `ssh` on a temp `PATH` |
+| 6 Byte-compat + one network call | done | 28eb946 | `go test -race ./internal/updexec/... -v` → PASS (3/3); `gofmt -l .`/`go vet ./...` clean | moves `TestUpdateMakesExactlyOneNetworkCall` (cmd copy retired in task 20) |
+| 7 Remaining builders | done | 6a3b907 | `go test -race ./internal/updexec/... -v` → PASS (15/15); `gofmt -l .`/`go vet ./...` clean | moves `TestRescuePreservesUntrackedWork` |
+| 8 Builders re-validate | done | f84fafc | `go test -race ./internal/updexec/... -run TestBuildersRejectUnvalidatedInput -v` → PASS | |
+| 9 Runner ctx path | done | d42984f | `go test -race ./internal/runner/... -v` → PASS; stub `ssh` on a temp `PATH`, `sleep 30` killed within 1.1s via `exec.CommandContext` + `WaitDelay` (a 30s hang was reproduced and fixed — see task-09 evidence) | every `runner.Runner` test double in `cmd` grew a delegating `RunStreamCtx` |
 | 10 Executor happy path | todo | | | scripted `fakeIO` + stepping clock + recorded sleep |
 | 11 Cascade | todo | | | |
 | 12 Sync decisions | todo | | | migrates 4 `cmd` tests by name |

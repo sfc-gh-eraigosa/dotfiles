@@ -141,46 +141,46 @@
 - [ ] SETUP: record refs verbatim; confirm `<WT>` contains `internal/updplan`
 
 ### Task 6 — sync script builders: byte-compatible, one fetch  (plan Task 6, leaf B)
-- [ ] RED: `internal/updexec/script_test.go` — `TestSyncScriptSingleBranchMatchesTodaysForm` (BODY for `[main]`, `local: skip`, `reset: false` contains exactly `cd ~/git/dotfiles && git fetch origin main && git checkout main && git merge --ff-only FETCH_HEAD`); **move** `TestUpdateMakesExactlyOneNetworkCall` from `cmd/update_test.go` with its four assertions verbatim (`strings.Count(s, "git fetch") == 1`, no `git pull`, `merge --ff-only FETCH_HEAD`, `--ff-only`); `TestEverySyncFormMakesAtMostOneUnconditionalNetworkCall` (single / multi / default / clone: `fetch`+`clone` == 1, no `pull`, `ls-remote` ≤ 1 and only after the `||` following `symbolic-ref`)
-- [ ] RUN-RED: `go test ./internal/updexec -run 'TestSyncScript|TestUpdateMakesExactlyOneNetworkCall|TestEverySyncForm' -v` → expect **FAIL**
-- [ ] GREEN: `script.go` — `SyncScript` (PROLOGUE + BODY single/multi/default + EPILOGUE per plan §3.4), `ShQuote` (moved from `tui_cmds.go`)
-- [ ] RUN-GREEN: same → expect **PASS**; `go test ./cmd/` still green (the moved test now lives here; `cmd` keeps a wrapper test if needed)
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/updexec): sync script builders (byte-compatible, one fetch)` — body lists the moved test
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `internal/updexec/script_test.go` — `TestSyncScriptSingleBranchMatchesTodaysForm` (BODY for `[main]`, `local: skip`, `reset: false` contains exactly `cd ~/git/dotfiles && git fetch origin main && git checkout main && git merge --ff-only FETCH_HEAD`); **move** `TestUpdateMakesExactlyOneNetworkCall` from `cmd/update_test.go` with its four assertions verbatim (`strings.Count(s, "git fetch") == 1`, no `git pull`, `merge --ff-only FETCH_HEAD`, `--ff-only`); `TestEverySyncFormMakesAtMostOneUnconditionalNetworkCall` (single / multi / default / clone: `fetch`+`clone` == 1, no `pull`, `ls-remote` ≤ 1 and only after the `||` following `symbolic-ref`)
+- [x] RUN-RED: `go test ./internal/updexec -run 'TestSyncScript|TestUpdateMakesExactlyOneNetworkCall|TestEverySyncForm' -v` → expect **FAIL**
+- [x] GREEN: `script.go` — `SyncScript` (PROLOGUE + BODY single/multi/default + EPILOGUE per plan §3.4), `ShQuote` (moved from `tui_cmds.go`)
+- [x] RUN-GREEN: same → expect **PASS**; `go test ./cmd/` still green (the moved test now lives here; `cmd` keeps a wrapper test if needed)
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/updexec): sync script builders (byte-compatible, one fetch)` — body lists the moved test
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** the exact-string test passes and every form counts one unconditional network call.
 
 ### Task 7 — precheck, clone, rescue, reset, restore, run, gh-auth builders  (plan Task 7, leaf B)
-- [ ] RED: `TestMultiBranchFetchesAllInOneCall` (`git fetch origin main staging`), `TestExtrasOnlyForceMoveAnAncestor` (`branch -q -f` only after `merge-base --is-ancestor`; `skipped(diverged)` marker; `continue` guard on `$b1`), `TestDefaultBranchPrefersLocalSymbolicRef`, `TestCloneNeverFetches`, `TestPrecheckUsesDashEForWorktrees`, `TestPrecheckReportsStateAndBranchReadOnly` (no write verbs in the script: `checkout|reset|stash|branch -f|merge|fetch|clone|add|commit|rm`), **move** `TestRescuePreservesUntrackedWork` (parameterised path; rescue dir contains the repo name), `TestResetScriptUnchanged` (today's text), `TestRunScriptIsVerbatimAfterCd` (`cd ~/git/work/scripts && make install`; no-repo form has no `cd`), `TestGhAuthNeverCarriesAToken` (no `GH_TOKEN`, `GITHUB_TOKEN`, `--with-token`, `token`), `TestGhAuthCheckReserves127`, `TestRestoreUsesApplyBySHANeverPop` (no `stash pop`, no `stash@{`), `TestRestoreRejectsUnvalidatedOrigOrSHA` (`main; id`, 39-char SHA → error, no string)
-- [ ] RUN-RED: `go test ./internal/updexec -run 'MultiBranch|Extras|DefaultBranch|Clone|Precheck|Rescue|Reset|RunScript|GhAuth|Restore' -v` → expect **FAIL**
-- [ ] GREEN: `PrecheckScript`, `CloneScript`, `RescueScript`, `ResetScript`, `RestoreScript`, `RunScript`, `GhAuthCheck`, `GhAuthLogin` per plan §3.4
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/updexec): precheck, clone, rescue, restore, run, gh-auth builders`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestMultiBranchFetchesAllInOneCall` (`git fetch origin main staging`), `TestExtrasOnlyForceMoveAnAncestor` (`branch -q -f` only after `merge-base --is-ancestor`; `skipped(diverged)` marker; `continue` guard on `$b1`), `TestDefaultBranchPrefersLocalSymbolicRef`, `TestCloneNeverFetches`, `TestPrecheckUsesDashEForWorktrees`, `TestPrecheckReportsStateAndBranchReadOnly` (no write verbs in the script: `checkout|reset|stash|branch -f|merge|fetch|clone|add|commit|rm`), **move** `TestRescuePreservesUntrackedWork` (parameterised path; rescue dir contains the repo name), `TestResetScriptUnchanged` (today's text), `TestRunScriptIsVerbatimAfterCd` (`cd ~/git/work/scripts && make install`; no-repo form has no `cd`), `TestGhAuthNeverCarriesAToken` (no `GH_TOKEN`, `GITHUB_TOKEN`, `--with-token`, `token`), `TestGhAuthCheckReserves127`, `TestRestoreUsesApplyBySHANeverPop` (no `stash pop`, no `stash@{`), `TestRestoreRejectsUnvalidatedOrigOrSHA` (`main; id`, 39-char SHA → error, no string)
+- [x] RUN-RED: `go test ./internal/updexec -run 'MultiBranch|Extras|DefaultBranch|Clone|Precheck|Rescue|Reset|RunScript|GhAuth|Restore' -v` → expect **FAIL**
+- [x] GREEN: `PrecheckScript`, `CloneScript`, `RescueScript`, `ResetScript`, `RestoreScript`, `RunScript`, `GhAuthCheck`, `GhAuthLogin` per plan §3.4
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/updexec): precheck, clone, rescue, restore, run, gh-auth builders`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** every builder's string matches plan §3.4 and the moved rescue test is green here.
 
 ### Task 8 — builders refuse unvalidated input  (plan Task 8, leaf B)
-- [ ] RED: `TestBuildersRejectUnvalidatedInput` — hand-built `updplan.Repo{Path: "~/x; id"}`, branch `main;id`, url `'x'`, hostname `gh;id` → every builder returns an error and never a string containing `;`
-- [ ] RUN-RED: `go test ./internal/updexec -run 'TestBuildersReject' -v` → expect **FAIL**
-- [ ] GREEN: re-validation at the top of every builder
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `test(fleet/updexec): builders refuse unvalidated input`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestBuildersRejectUnvalidatedInput` — hand-built `updplan.Repo{Path: "~/x; id"}`, branch `main;id`, url `'x'`, hostname `gh;id` → every builder returns an error and never a string containing `;`
+- [x] RUN-RED: `go test ./internal/updexec -run 'TestBuildersReject' -v` → expect **FAIL**
+- [x] GREEN: re-validation at the top of every builder
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `test(fleet/updexec): builders refuse unvalidated input`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** a caller bypassing `Parse` cannot produce a metacharacter on the wire.
 
 ### Task 9 — `runner.RunStreamCtx`  (plan Task 9, leaf B)
-- [ ] RED: `internal/runner/runner_test.go` — `TestRunStreamCtxKillsTheChildOnDeadline` (stub `ssh` on `PATH` in `t.TempDir()` running `sleep 30`; 100 ms deadline → `done` yields a context error within 1 s), `TestRunStreamDelegatesToCtx`, `TestFakeHonoursContextCancellation` (`Fake` with a blocking script; cancel → `done` closes), extend `TestEveryRemotePathCarriesTheMuxOptions` to `RunStreamCtx`
-- [ ] RUN-RED: `go test ./internal/runner -run 'RunStreamCtx|RunStreamDelegates|FakeHonours|EveryRemotePath' -v` → expect **FAIL**
-- [ ] GREEN: `RunStreamCtx` on `Runner`, `Exec` (`exec.CommandContext`), `Fake`; `RunStream` delegates; update every `recordingRunner`-style wrapper in `cmd` tests to compile
-- [ ] RUN-GREEN: same → expect **PASS**; `go test ./...` green
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/runner): RunStreamCtx for controller-enforced timeouts`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `internal/runner/runner_test.go` — `TestRunStreamCtxKillsTheChildOnDeadline` (stub `ssh` on `PATH` in `t.TempDir()` running `sleep 30`; 100 ms deadline → `done` yields a context error within 1 s), `TestRunStreamDelegatesToCtx`, `TestFakeHonoursContextCancellation` (`Fake` with a blocking script; cancel → `done` closes), extend `TestEveryRemotePathCarriesTheMuxOptions` to `RunStreamCtx`
+- [x] RUN-RED: `go test ./internal/runner -run 'RunStreamCtx|RunStreamDelegates|FakeHonours|EveryRemotePath' -v` → expect **FAIL**
+- [x] GREEN: `RunStreamCtx` on `Runner`, `Exec` (`exec.CommandContext`), `Fake`; `RunStream` delegates; update every `recordingRunner`-style wrapper in `cmd` tests to compile
+- [x] RUN-GREEN: same → expect **PASS**; `go test ./...` green
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/runner): RunStreamCtx for controller-enforced timeouts`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** a deadline kills the local child promptly and the mux invariant covers the new path.
 
