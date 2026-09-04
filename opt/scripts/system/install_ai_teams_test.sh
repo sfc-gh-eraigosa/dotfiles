@@ -53,8 +53,18 @@ assert_eq "deep-think -> claude opus"      "$(fmget "$CSY" '.model')"  "opus"
 assert_eq "deep-think -> claude effort hi" "$(fmget "$CSY" '.effort')" "high"
 assert_eq "fast -> claude haiku"           "$(fmget "$CWQ" '.model')"  "haiku"
 assert_eq "deep-think -> antigravity o3"   "$(yq '.model' "$ASY")"  "o3"
-assert_contains "ollama standard FROM"  "$(cat "$OGD")" "FROM qwen2.5-coder:7b"
-assert_contains "ollama num_ctx"        "$(cat "$OGD")" "PARAMETER num_ctx 8192"
+# The ollama expectations are READ FROM model-map.yaml rather than hardcoded: the
+# tiers get re-pointed as the Spark scorecard moves (13a1b90 took standard from
+# qwen2.5-coder:7b to qwen3-coder:30b and this test, still hardcoded, turned the
+# required teams-eval check red on every PR). What is under test is that the
+# emitter honours the map's standard tier, not which tag the map happens to name.
+MODEL_MAP="${HERE}/../../../ai/teams/model-map.yaml"
+MM_STD_MODEL="$(yq -r '.tiers.standard.ollama.model'   "$MODEL_MAP")"
+MM_STD_CTX="$(yq -r '.tiers.standard.ollama.num_ctx'   "$MODEL_MAP")"
+assert_contains "ollama standard FROM follows model-map (${MM_STD_MODEL})" \
+  "$(cat "$OGD")" "FROM ${MM_STD_MODEL}"
+assert_contains "ollama num_ctx follows model-map (${MM_STD_CTX})" \
+  "$(cat "$OGD")" "PARAMETER num_ctx ${MM_STD_CTX}"
 
 # --- emitter validity ------------------------------------------------------------------
 fmget "$CFE" '.name' >/dev/null 2>&1 && [ "$(fmget "$CFE" '.name')" = "web-fe" ] \

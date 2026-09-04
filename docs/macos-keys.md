@@ -156,6 +156,19 @@ cannot reach keyd. Run `--doctor`; if "mapper running" is `no`, or the log at
 the `keyd` group — the installer adds you, but an already-open session does not
 pick up a new group until you log out and back in.
 
+**Every Cmd shortcut stopped working right after `install.sh` / `fleet update`
+re-ran.** Run `--doctor`: if keyd is `inactive` and both configs are `absent`, the
+installer rolled itself back. Before 2026-09-02 it judged an *already-running*
+mapper by that mapper's cumulative `app.log`, which collects keyd's IPC error every
+time the socket blinks — including the `systemctl restart keyd` the installer
+itself performs — so a re-run on a healthy host could read old errors and
+uninstall everything. The installer now stops any running mapper (including a
+legacy `~/.config/autostart/keyd-application-mapper.desktop` instance, which runs
+without the `keyd` group and can never connect) and judges only the fresh
+supervised one. If the pre-existing mapper refuses to stop, the installer keeps
+it as-is rather than rolling back on its stale log. Recovery is simply re-running
+`macos-keys-linux.sh`.
+
 **`Cmd+V` prints `^V` in gnome-terminal (and `Cmd+C` may interrupt).** The mapper
 is fine; gnome-terminal's *own* copy/paste accelerators are no longer the stock
 `Ctrl+Shift+C/V` that `app.conf` emits. A pre-keyd version of
@@ -164,6 +177,20 @@ before the terminal sees it, and VTE writes the raw control code when no
 accelerator matches. Check with `dconf dump /org/gnome/terminal/legacy/keybindings/`
 and re-run `~/opt/scripts/system/gnome-desktop-defaults.sh`, which resets the
 stale binds.
+
+**herdr says "copied to clipboard" but `Cmd+V` pastes something older.** Not a
+keyd problem: the chord arrives as `Ctrl+Shift+V` and gnome-terminal dutifully
+pastes the X clipboard — herdr just never wrote to it. herdr's Linux clipboard
+path is `wl-copy` → `xclip` → `xsel`, and only when none of those exists does
+it fall back to the OSC 52 escape, which gnome-terminal/VTE silently drops
+([VTE #2495](https://gitlab.gnome.org/GNOME/vte/-/issues/2495),
+[herdr #2399](https://github.com/herdrdev/herdr/issues/2399)). `packages.tsv`
+installs `xclip` and `xsel` on every apt host for exactly this reason; on a
+machine provisioned before that, `sudo apt-get install xclip xsel` fixes the
+running herdr immediately (no restart — it resolves the tool per copy). On a
+Wayland session install `wl-clipboard` instead. Holding `Shift` while
+drag-selecting bypasses herdr's mouse capture and copies through gnome-terminal
+itself, if you need a one-off without installing anything.
 
 **Nothing is remapped at all.** `systemctl is-active keyd`, then
 `sudo keyd check` to validate the config. Note that keyd **rejects a trailing
