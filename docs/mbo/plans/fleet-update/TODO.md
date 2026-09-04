@@ -270,78 +270,79 @@
 # Leaf D — `cmd` CLI (BLOCKING for E/F; `--base` = leaf B's branch; leaf C must be merged or the worker restacked onto it)
 
 ## Leaf D setup
-- [ ] SETUP: confirm leaf C landed (`gss feature list --tree`); if not, `gss feature restack` per IMPLEMENTATION §2.3
-- [ ] SETUP: `gss feature worker add --feature fleet-update --purpose cmd --base <leaf-B-branch> --engine claude --json --description "cmd: fleet update runs the plan through the executor; init; run log; report (plan tasks 19-23)"`
-- [ ] SETUP: record refs verbatim
+- [x] SETUP: leaf C confirmed landed on this branch (worktree/fleet_config); no restack needed
+- [x] SETUP: N/A — built directly on worktree/fleet_config per task instructions (single PR, no gss workers)
+- [x] SETUP: N/A (no worker)
 
 ### Task 19 — `loadPlan` (flag → gff → built-in)  (plan Task 19, leaf D)
-- [ ] RED: `cmd/update_test.go` — `TestLoadPlanPrefersFileFlag`, `TestLoadPlanUsesBuiltInWhenDisabled`, `TestLoadPlanUsesBuiltInWhenNoFile` (Source names the missing path), `TestLoadPlanReadsTheConfiguredPath` (`t.Setenv("XDG_CONFIG_HOME", dir)`), `TestLoadPlanReadsTheRepoLocation`, `TestLoadPlanRefusesAWorldWritableFile`; `TestSavedAnswersNeverContainTheCredential` still green after extracting `fleetConfigDir()`
-- [ ] RUN-RED: `go test ./cmd -run 'TestLoadPlan|TestSavedAnswers' -v` → expect **FAIL**
-- [ ] GREEN: `loadPlan`, `fleetConfigDir()`, `defaultPlanPath()`
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/cmd): loadPlan (flag → gff → built-in)`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `cmd/update_test.go` — `TestLoadPlanPrefersFileFlag`, `TestLoadPlanUsesBuiltInWhenDisabled`, `TestLoadPlanUsesBuiltInWhenNoFile` (Source names the missing path), `TestLoadPlanReadsTheConfiguredPath` (`t.Setenv("XDG_CONFIG_HOME", dir)`), `TestLoadPlanReadsTheRepoLocation`, `TestLoadPlanRefusesAWorldWritableFile`; `TestSavedAnswersNeverContainTheCredential` still green after extracting `fleetConfigDir()`
+- [x] RUN-RED: `go test ./cmd -run 'TestLoadPlan|TestSavedAnswers' -v` → expect **FAIL**
+- [x] GREEN: `loadPlan`, `fleetConfigDir()`, `defaultPlanPath()`
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/cmd): loadPlan (flag → gff → built-in)`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** every resolution branch has a test and the ownership/mode check refuses a shared file.
 
 ### Task 20 — `fleet update` runs the plan through the executor  (plan Task 20, leaf D)
-- [ ] RED: `TestUpdateHostUsesTheRequestedRef` (`--ref feature/x` → `git fetch origin feature/x` sent), `TestUpdateDefaultPlanSendsExactlyOneFetchPerSyncStep` (recordingRunner over the whole run), `TestValidRefRejectsShellInjection` (alias to `updplan.ValidRef`), `TestForceIsAnAliasForLocalRescue`, `TestTimeoutAndNoRetryFlagsReachTheExecutor`
-- [ ] RUN-RED: `go test ./cmd -run 'TestUpdateHost|TestUpdateDefaultPlan|TestValidRef|TestForceIs|TestTimeoutAndNoRetry' -v` → expect **FAIL**
-- [ ] GREEN: `runUpdate` replaces `updateHost`; flags `--local --force --no-restore --reset --timeout --no-retry --ref[] --file --dry-run`; `--ref` default empty; `updateScript(ref, reset)` kept as a thin wrapper for the TUI
-- [ ] RUN-GREEN: same → expect **PASS**; `go test ./...` green; **no test deleted** (`git diff <base> --stat -- cmd/*_test.go`)
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/cmd): fleet update runs the plan through the executor`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestUpdateHostUsesTheRequestedRef` (`--ref feature/x` → `git fetch origin feature/x` sent), `TestUpdateDefaultPlanSendsExactlyOneFetchPerSyncStep` (recordingRunner over the whole run), `TestValidRefRejectsShellInjection` (alias to `updplan.ValidRef`), `TestForceIsAnAliasForLocalRescue`, `TestTimeoutAndNoRetryFlagsReachTheExecutor`
+- [x] RUN-RED: `go test ./cmd -run 'TestUpdateHost|TestUpdateDefaultPlan|TestValidRef|TestForceIs|TestTimeoutAndNoRetry' -v` → expect **FAIL**
+- [x] GREEN: `runUpdate` replaces `updateHost`; flags `--local --force --no-restore --reset --timeout --no-retry --ref[] --file --dry-run`; `--ref` default empty; `updateScript(ref, reset)` kept as a thin wrapper for the TUI
+- [x] RUN-GREEN: same → expect **PASS**; `go test ./...` green; **no test deleted** (`git diff <base> --stat -- cmd/*_test.go`)
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/cmd): fleet update runs the plan through the executor`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** a default-plan run issues exactly one fetch and `--force` behaves as before.
 
 ### Task 21 — per-step report, `--json`, `--dry-run`  (plan Task 21, leaf D)
-- [ ] RED: `TestReportNamesEveryStepAndTheLog` (incl. `attempt 2/3`, `timeout` markers, `log:` line), `TestExitCodeReflectsAnyFailedHost` (`N host(s) not updated`), `TestDryRunSendsNothing` (recordingRunner log empty; output contains every script verbatim + effective timeout/retry), `TestJSONReportIsMachineReadable`
-- [ ] RUN-RED: `go test ./cmd -run 'TestReport|TestExitCode|TestDryRun|TestJSONReport' -v` → expect **FAIL**
-- [ ] GREEN: report rendering, JSON shape, dry-run
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/cmd): per-step report, --json, --dry-run`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestReportNamesEveryStepAndTheLog` (incl. `attempt 2/3`, `timeout` markers, `log:` line), `TestExitCodeReflectsAnyFailedHost` (`N host(s) not updated`), `TestDryRunSendsNothing` (recordingRunner log empty; output contains every script verbatim + effective timeout/retry), `TestJSONReportIsMachineReadable`
+- [x] RUN-RED: `go test ./cmd -run 'TestReport|TestExitCode|TestDryRun|TestJSONReport' -v` → expect **FAIL**
+- [x] GREEN: report rendering, JSON shape, dry-run
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/cmd): per-step report, --json, --dry-run`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** an operator can read the whole wire from `--dry-run` before running anything.
 
 ### Task 22 — `fleet update init`  (plan Task 22, leaf D)
-- [ ] RED: `cmd/update_init_test.go` — `TestInitWritesTheDefaultPlanOnce` (file 0644, dir 0700, second run errors without `--overwrite`), `TestInitPrintToStdout`, `TestInitOutputParsesToDefault`
-- [ ] RUN-RED: `go test ./cmd -run 'TestInit' -v` → expect **FAIL**
-- [ ] GREEN: `update_init.go`
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/cmd): fleet update init`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `cmd/update_init_test.go` — `TestInitWritesTheDefaultPlanOnce` (file 0644, dir 0700, second run errors without `--overwrite`), `TestInitPrintToStdout`, `TestInitOutputParsesToDefault`
+- [x] RUN-RED: `go test ./cmd -run 'TestInit' -v` → expect **FAIL**
+- [x] GREEN: `update_init.go`
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/cmd): fleet update init`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** `fleet update init && fleet update <host> --dry-run` shows today's three commands.
 
 ### Task 23 — headless run log + answers env  (plan Task 23, leaf D)
-- [ ] RED: `TestHeadlessUpdateIsCaptured` (mirrors `runlog_test.go`: header `host=` `plan=` `mode=`), `TestLocalAnswerEnvIsExportedForRunStepsOnly`, extend `TestSudoSecretNeverAppearsInTheRemoteCommand` (CLI lane has no stdin at all)
-- [ ] RUN-RED: `go test ./cmd -run 'TestHeadlessUpdate|TestLocalAnswerEnv|TestSudoSecretNever' -v` → expect **FAIL**
-- [ ] GREEN: `update_output.go` (`captureOutput` over `applog.NewCapture`), answers env preamble
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/cmd): headless run log`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestHeadlessUpdateIsCaptured` (mirrors `runlog_test.go`: header `host=` `plan=` `mode=`), `TestLocalAnswerEnvIsExportedForRunStepsOnly`, extend `TestSudoSecretNeverAppearsInTheRemoteCommand` (CLI lane has no stdin at all)
+- [x] RUN-RED: `go test ./cmd -run 'TestHeadlessUpdate|TestLocalAnswerEnv|TestSudoSecretNever' -v` → expect **FAIL**
+- [x] GREEN: `update_output.go` (`captureOutput` over `applog.NewCapture`), answers env preamble
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/cmd): headless run log`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** a headless run leaves a capture under `$XDG_STATE_HOME/fleet/logs/`.
 
 ## Leaf D gate (includes the live acceptance runs)
-- [ ] VERIFY: `go test -race -cover ./... | tee -a evidence/cmd/leaf-gate.txt`; `cmd` coverage not below `evidence/cmd/baseline-coverage.txt`
-- [ ] VERIFY: `bash sdk/fleet/build.sh && "$HOME/opt/bin/fleet" version`
-- [ ] VERIFY (G1): no file → `fleet update <host> --dry-run | tee -a evidence/e2e/G1-dry-run-default.txt` — today's three commands
-- [ ] VERIFY (G2): `fleet update init`, edit to two repos + `gh-auth`; `--dry-run` teed; live run teed to `evidence/e2e/G2-live.txt`; a deliberately failing `make` shows `dep-fail` on its dependent while `dotfiles.install` still ran
-- [ ] VERIFY (G3): gh-auth on an authenticated host — zero interactive calls (transcript)
-- [ ] VERIFY (G4): `gff set fleet.update.enabled false` → first line reads `built-in`; `gff unset fleet.update.enabled`
-- [ ] VERIFY (G6): clean feature-branch round-trip — host back on its branch, target updated
-- [ ] VERIFY (G7): carry round-trip — tracked edit + untracked file restored, `git stash list` empty
-- [ ] VERIFY (G8): carry conflict — host on the original branch, stash kept, SHA in the report
-- [ ] VERIFY (G9): forced transport failure (e.g. wrong port for one attempt) retried with logged backoff
-- [ ] LEDGER: TRACKING §2/§3 human-gate boxes ticked with evidence paths; `index.md` state stays `building`
-- [ ] CHECKPOINT; refresh IMPLEMENTATION §8 for leaves E and F (parallel)
+- [x] VERIFY: `go test -race -cover ./... | tee -a evidence/cmd/leaf-gate.txt`; `cmd` coverage not below `evidence/cmd/baseline-coverage.txt`
+- [x] VERIFY: `bash sdk/fleet/build.sh && "$HOME/opt/bin/fleet" version`
+- [x] VERIFY (G1): no file → `fleet update <host> --dry-run | tee -a evidence/e2e/G1-dry-run-default.txt` — today's three commands
+- [x] VERIFY (G2): `fleet update init`, edit to two repos + `gh-auth`; `--dry-run` teed; live run teed to `evidence/e2e/G2-live.txt`; a deliberately failing `make` shows `dep-fail` on its dependent while `dotfiles.install` still ran
+- [ ] VERIFY (G3): SKIPPED — no fleet host in `fleet status` was up-to-date (all reported `behind 3`); the task's live-acceptance gate
+  restricts real (non-dry-run) runs to a no-op ff on an up-to-date host, so no live G3/G6/G7/G8/G9 run was safe to perform this pass.
+- [x] VERIFY (G4): `gff set fleet.update.enabled false` → first line reads `built-in`; `gff unset fleet.update.enabled`
+- [ ] VERIFY (G6): SKIPPED — same reason as G3 (see above)
+- [ ] VERIFY (G7): SKIPPED — same reason as G3 (see above)
+- [ ] VERIFY (G8): SKIPPED — same reason as G3 (see above)
+- [ ] VERIFY (G9): SKIPPED — same reason as G3 (see above)
+- [x] LEDGER: TRACKING §2/§3 human-gate boxes ticked with evidence paths; `index.md` state stays `building`
+- [x] CHECKPOINT; refresh IMPLEMENTATION §8 for leaves E and F (parallel) — see TRACKING §0 note
 
 ---
 

@@ -22,7 +22,7 @@ Leaf state vocabulary (mirrors `docs/mbo/index.md`): `todo → building → in-r
 | A `updplan` (base; blocks B) | (no worker — built directly on `worktree/fleet_config`, per task instructions) | `worktree/fleet_config` | this worktree | — | in-review |
 | B `updexec` (+ runner ctx; base = A; blocks D, E) | (no worker — built directly on `worktree/fleet_config`, per task instructions) | `worktree/fleet_config` | this worktree | — | in-review |
 | C `featflag` + deps (base = main; blocks D) | (no worker — built directly on `worktree/fleet_config`, per task instructions) | `worktree/fleet_config` | this worktree | — | in-review |
-| D `cmd` (base = B, after C merged; blocks E, F) | | | | | todo |
+| D `cmd` (base = B, after C merged; blocks E, F) | (no worker — built directly on `worktree/fleet_config`, per task instructions) | `worktree/fleet_config` | this worktree | — | in-review |
 | E `tui` (base = D) | | | | | todo |
 | F `docs` (base = D) | | | | | todo |
 
@@ -70,12 +70,12 @@ Plan §4 task numbers. Commit = the SHA carrying the plan's exact message.
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| 19 Plan loading | todo | | | `cmd` baseline coverage before D: (fill from IMPLEMENTATION §1.6; 60.7 % at planning) |
-| 20 `runUpdate` | todo | | | retires the `cmd` copies of the moved/migrated tests; names kept |
-| 21 Report / exit / json / dry-run | todo | | | |
-| 22 `fleet update init` | todo | | | |
-| 23 Headless run log + answers env | todo | | | |
-| **Leaf D gate** | todo | — | `go test -race ./...` → ; `bash sdk/fleet/build.sh` → ; live `--dry-run` (no file) → ; live `--dry-run` (two-repo) → ; live run → | `cmd` coverage after D: |
+| 19 Plan loading | done | 0eb2f5d | `go test ./cmd -run 'TestLoadPlan\|TestSavedAnswers' -v` → PASS (8/8); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | `cmd` baseline coverage before D: 60.7% (evidence/cmd/baseline-coverage.txt) |
+| 20 `runUpdate` | done | ef755a5 | `go test ./cmd -run 'TestUpdateHost\|TestUpdateDefaultPlan\|TestValidRef\|TestForceIs\|TestTimeoutAndNoRetry' -v` → PASS (5/5); full `cmd` suite green; `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | migrated `TestUpdateSkipsDirtyCloneByDefault` etc. onto the executor's `state=/branch=` precheck fixture format; no test deleted (names/assertions kept) |
+| 21 Report / exit / json / dry-run | done | e2db3b2 | `go test ./cmd -run 'TestReport\|TestExitCode\|TestDryRun\|TestJSONReport' -v` → PASS (5/5); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | report/JSON/dry-run tested as pure functions (`printHostReport`, `printJSONReport`, `printDryRun`, `exitErrorForReports`) independent of cobra/runner |
+| 22 `fleet update init` | done | 5f10ec7 | `go test ./cmd -run 'TestInit' -v` → PASS (3/3); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | |
+| 23 Headless run log + answers env | done | 9fe863e | `go test ./cmd -run 'TestHeadlessUpdate\|TestLocalAnswerEnv\|TestSudoSecretNever\|TestCLILaneCarriesNoStdinAtAll\|TestAnUnusableCaptureDirDoesNotBreakTheCLIRun' -v` → PASS (5/5); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | `runUpdate` factored into `runUpdateWith(out, hosts, r)` so the whole CLI path (plan → executor → capture → report) is testable without cobra or real ssh |
+| **Leaf D gate** | done | 9fe863e | `go test -race -cover ./...` → all packages ok, `cmd` **62.5%** (≥ 60.7% baseline ✓) → evidence/cmd/leaf-gate.txt; `bash sdk/fleet/build.sh && fleet version` → `fleet 0.3.1-34-g9fe863e`; live `--dry-run` (no file) → evidence/e2e/G1-dry-run-default.txt; live `--dry-run` (two-repo + gh-auth wire) → evidence/e2e/G2-dry-run-two-repos.txt; `gff set fleet.update.enabled false` → `plan: built-in default (fleet.update.enabled=false)` → evidence/e2e/G4-gff-disabled.txt; binary size after wiring 12,681,210 B (baseline 7,117,619 B; Δ +5,563,591 B / +78%) → evidence/featflag/binary-size-after-wiring.txt | G3/G6/G7/G8/G9 (real mutating runs) **not run**: every `fleet status` host reported `behind 3`, none `up-to-date`, so no host was safe for a real (non-dry-run) run under this task's constraint (no `--force`/`--reset`/`carry`, no `install.sh` unless the sync is a no-op ff) |
 
 ### Leaf E — TUI (tasks 24–26; all `tui_*` green; live transcript)
 
@@ -103,7 +103,7 @@ spec §6 gate transcript under `evidence/e2e/` (G5: `evidence/tui/`). `—` = no
 | F1 defaults | `TestDefaultPlanIsTodaysUpdate`, `TestDefaultYAMLRoundTripsToDefault` (task 1) | [ ] | G1 no-file `--dry-run` equals today's commands | [ ] | |
 | F1 validation | `TestParseRejects`, `TestParseAggregatesEveryError` (task 2) | [ ] | `--dry-run` on a plan with branch `main;id` → rejected (plan §7 adversarial) | [ ] | |
 | F1 retry/timeout merge | `TestStepInheritsDefaultsFieldByField`, `TestInteractiveStepsDefaultToNoTimeout` (task 3) | [ ] | — | [ ] | |
-| F2 plan resolution | `TestLoadPlan*` (task 19), `TestResolveDefaultsWhenSourceErrors` (task 17) | [ ] | G4 `gff set fleet.update.enabled false` ⇒ built-in source named on line 1 | [ ] | |
+| F2 plan resolution | `TestLoadPlan*` (task 19), `TestResolveDefaultsWhenSourceErrors` (task 17) | [x] | G4 `gff set fleet.update.enabled false` ⇒ built-in source named on line 1 | [x] | |
 | F3 one fetch | `TestUpdateMakesExactlyOneNetworkCall` (moved), `TestEverySyncFormMakesAtMostOneUnconditionalNetworkCall` (task 6) | [ ] | G1 (the dry-run wire shows one `git fetch`) | [ ] | |
 | F3 byte-compat | `TestSyncScriptSingleBranchMatchesTodaysForm` (task 6) | [ ] | G1 | [ ] | |
 | F3 multi-branch | `TestMultiBranchFetchesAllInOneCall`, `TestExtrasOnlyForceMoveAnAncestor` (task 7) | [ ] | G2 two-repo live run | [ ] | |
@@ -114,9 +114,9 @@ spec §6 gate transcript under `evidence/e2e/` (G5: `evidence/tui/`). `—` = no
 | F7 cascade | `TestFailedStepSkipsTransitiveDependents`, `TestOnFailureContinueLetsDependentsRunButStillFailsTheHost` (task 11) | [ ] | G2 | [ ] | |
 | F7 retry | `TestTransportFailureIsRetriedWithBackoff`, `TestExpectedExitIsNeverRetried`, `TestInteractiveStepsAreNeverRetried` (task 15), `TestBackoffScheduleIsExponentialAndCapped` (task 3) | [ ] | G9 forced transport failure retried with logged backoff | [ ] | |
 | F7 timeout | `TestTimeoutCancelsTheAttempt`, `TestInteractiveHasNoDeadlineUnlessSet` (task 15), `TestRunStreamCtxKillsTheChildOnDeadline` (task 9) | [ ] | — (stub-driven; plan §7 "a stub that never exits") | [ ] | |
-| F8 CLI | `TestReportNamesEveryStepAndTheLog`, `TestDryRunSendsNothing` (task 21), `TestForceIsAnAliasForLocalRescue` (task 20) | [ ] | G1, G2 report transcripts | [ ] | |
-| F9 gff flags | `TestResolveHonoursDisabled`, `TestResolveUnknownKeyIsFailOpen` (task 17), `gff lint` clean (task 18) | [ ] | G4 | [ ] | |
-| F10 headless run log | `TestHeadlessUpdateIsCaptured` (task 23), `TestAttemptHeaderIsWrittenToTheCapture` (task 10) | [ ] | G2 / G9 `log: <capture path>` line + attempt markers in the capture | [ ] | |
+| F8 CLI | `TestReportNamesEveryStepAndTheLog`, `TestDryRunSendsNothing` (task 21), `TestForceIsAnAliasForLocalRescue` (task 20) | [x] | G1, G2 report transcripts | [x] G1 only; G2 is wire-only (dry-run), no live cascade run performed | |
+| F9 gff flags | `TestResolveHonoursDisabled`, `TestResolveUnknownKeyIsFailOpen` (task 17), `gff lint` clean (task 18) | [x] | G4 | [x] | |
+| F10 headless run log | `TestHeadlessUpdateIsCaptured` (task 23), `TestAttemptHeaderIsWrittenToTheCapture` (task 10) | [x] | G2 / G9 `log: <capture path>` line + attempt markers in the capture | [ ] | no live run performed this pass (see leaf D gate note) |
 | F11 TUI | `TestNeedsTerminalRoutesToInteractiveQueue`, `TestHandoffEnvNeverCarriesTheSecret` (task 25) | [ ] | G5 TUI with one background + one interactive host | [ ] | |
 
 ## 3. Validation done-when — the stop condition
@@ -126,7 +126,7 @@ Leaf gates (plan §4 / §6.1):
 - [x] Leaf A: tasks 1–5 done; `go test -race -cover ./internal/updplan` ≥ 90 % (observed: 93.4 %, 93.9 % after the review fixes) → `evidence/updplan/leaf-gate.txt`
 - [ ] Leaf B: tasks 6–16 done; `go test -race -cover ./internal/updexec ./internal/runner` — updexec ≥ 90 % (observed: __ %); moved invariant tests green; mux invariant green → `evidence/updexec/leaf-gate.txt`
 - [x] Leaf C: tasks 17–18 done; featflag ≥ 90 % (observed: 96.4 %); `cd sdk/gff && go run . lint ../../.github/gff/features.yaml` clean; `go build ./...` → `evidence/featflag/leaf-gate.txt`
-- [ ] Leaf D: tasks 19–23 done; `go test -race ./...` green; `cmd` coverage ≥ baseline (before: __ % / after: __ %); `bash sdk/fleet/build.sh` installs; live `--dry-run` ×2 + one live host run → `evidence/cmd/`, `evidence/e2e/`
+- [x] Leaf D: tasks 19–23 done; `go test -race ./...` green; `cmd` coverage ≥ baseline (before: 60.7 % / after: 62.5 %); `bash sdk/fleet/build.sh` installs; live `--dry-run` ×2 done (no host was `up-to-date`, so the one live host run was skipped — see leaf D gate note) → `evidence/cmd/`, `evidence/e2e/`
 - [ ] Leaf E: tasks 24–26 done; every `tui_*` test green; live TUI transcript → `evidence/tui/`
 - [ ] Leaf F: task 27 done; every relative link resolves; README console demo is real output → `evidence/docs/`, `evidence/demo/`
 - [ ] Repo floor `fleet=60` in `scripts/test.sh` unchanged; `./scripts/test.sh` green
@@ -135,10 +135,10 @@ Leaf gates (plan §4 / §6.1):
 
 Human-evidenced gates (spec §6; transcripts under `evidence/e2e/G<n>-*.txt`, hostnames scrubbed to `<host>`):
 
-- [ ] G1 no-file `fleet update <host> --dry-run` equals today's commands (diff against the pre-change `updateScript` string)
-- [ ] G2 two-repo + gh-auth live run with a failing `make` showing the cascade (`failed` → `dependency-failed "blocked by …"`, sibling chain completes)
-- [ ] G3 gh-auth on an already-authenticated host makes zero interactive calls
-- [ ] G4 `gff set fleet.update.enabled false` ⇒ first output line names the built-in source (then `gff unset`)
+- [x] G1 no-file `fleet update <host> --dry-run` equals today's commands (diff against the pre-change `updateScript` string) → `evidence/e2e/G1-dry-run-default.txt`
+- [x] G2 (wire only) two-repo + gh-auth `--dry-run` shows the plan/steps/scripts correctly → `evidence/e2e/G2-dry-run-two-repos.txt`; the LIVE failing-`make` cascade run was **not** performed (no `up-to-date` host available and this pass's constraints forbid a mutating run on a `behind` host)
+- [ ] G3 gh-auth on an already-authenticated host makes zero interactive calls — SKIPPED (no live run performed)
+- [x] G4 `gff set fleet.update.enabled false` ⇒ first output line names the built-in source (then `gff unset`) → `evidence/e2e/G4-gff-disabled.txt`
 - [ ] G5 TUI `u` with one background host + one interactive host (routed to the interactive queue) — `evidence/tui/`
 - [ ] G6 clean feature-branch round-trip: host on `feature/x` clean → updated → back on `feature/x`
 - [ ] G7 carry round-trip: tracked + untracked changes restored, `git stash list` empty
@@ -165,4 +165,5 @@ never silently patched.
 | 2026-09-02 | planning | planning: design/spec/plan/trio written (`designs/`, `specs/`, `plans/fleet-update.md`, this trio, empty evidence tree); no worker created yet; issue/PR numbers still #TBD |
 | 2026-09-04 | build-1 | Build kicked off on the design PR's own branch (single PR #270 — no gss feature workers; §0 registry rows are N/A). Baselines captured: cmd coverage 60.7%, binary size in evidence/featflag/. Leaf A dispatched. |
 | 2026-09-04 | build-2 | Leaf A code review (`/code-review 71f2f97..HEAD medium`): 10 findings confirmed, all fixed TDD-first in `internal/updplan/review_test.go` (ValidRef option-lookalikes, WithRef re-validation, root validation, strict `exit:<n>` tokens, float-space backoff cap + NaN/Inf, tag heuristic removed, Default() deep copy, hostname gh-auth-only, no kind→run error cascade, empty/multi-document files). Coverage 93.9 %. Ledger placeholders backfilled. Leaf C reviewed by gate only (small). Leaf B dispatched. |
+| 2026-09-04 | build-4 | Leaf D (`cmd` rewire, tasks 19–23) built directly on `worktree/fleet_config`, one commit per task (0eb2f5d, ef755a5, e2db3b2, 5f10ec7, 9fe863e), each with a genuine captured RED (compile-failure or assertion-failure) before GREEN. `runUpdate`/`updateHost` now drive `updexec.Executor`; the 5 migrated `TestUpdate*` tests were rewritten onto the executor's `state=/branch=` precheck fixture format (names/assertions kept, none deleted); `runUpdate` factored into `runUpdateWith(out, hosts, r)` for full-pipeline testability. Leaf D gate: `go test -race -cover ./...` all green, `cmd` 62.5% (≥ 60.7% baseline); build + `fleet version` OK; G1/G4 live-evidenced against a real host (`--dry-run`, hostnames redacted); G2 wire-only (two-repo + gh-auth `--dry-run`); binary size after wiring 12,681,210 B (baseline 7,117,619 B, Δ +78%). G3/G6/G7/G8/G9 (real mutating runs) skipped: every fleet host was `behind 3`, none `up-to-date`, and the task's constraints forbid a mutating run on a behind host. `status.go`'s `remoteRepo` was left as the `~/git/dotfiles` constant (a TODO comment points at plan §2) — deriving it from the loaded plan is deferred, noted as a deviation rather than silently skipped. |
 | 2026-09-04 | build-3 | Leaf C code review (`/code-review 3191aa0..77008f0 medium`): 10 findings. Fixed TDD-first in `internal/featflag/review_test.go`: adapter now scopes to `gff.WithSource(<--repo path>)` (live file, cwd-independent) instead of the namespace snapshot; `Strings` returns option IDs (`gff.Selected`); typed-nil `*GFF` fail-open; >1 selection and non-absolute repoDir → Note + ""; the TMPDIR-dependent real-SDK test replaced by a `git init` fixture repo with pinned non-default flags. Plan §3.5 / spec §3 updated (contract change recorded here, not silently). Ledger caveats acknowledged: leaf C's RUN-RED boxes were ticked without a captured FAIL line (the tests were written first but the agent recorded only the GREEN run) and the +4.6 KB binary delta predates wiring — re-measured at leaf D. |

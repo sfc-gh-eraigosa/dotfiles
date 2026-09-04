@@ -1,0 +1,2 @@
+# 2026-09-04T16:18:34Z binary size after leaf D wiring
+12681210 bytes
