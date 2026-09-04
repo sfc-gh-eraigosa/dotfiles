@@ -2,6 +2,8 @@ package updexec
 
 import (
 	"context"
+	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -9,6 +11,19 @@ import (
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
+
+// realExitError returns an authentic *exec.ExitError with the given exit
+// code, by actually running a tiny local command — exitCode()/classify()
+// are defined in terms of *exec.ExitError, so a test needs the real type,
+// not a hand-rolled stand-in.
+func realExitError(t *testing.T, code int) error {
+	t.Helper()
+	err := exec.Command("sh", "-c", "exit "+strconv.Itoa(code)).Run()
+	if err == nil {
+		t.Fatalf("exit %d unexpectedly succeeded", code)
+	}
+	return err
+}
 
 // --- test doubles ------------------------------------------------------------
 
@@ -367,5 +382,108 @@ func TestAttemptHeaderIsWrittenToTheCapture(t *testing.T) {
 	text := out.text("alpha")
 	if !strings.Contains(text, "=== step dotfiles.sync (sync) ===") {
 		t.Fatalf("capture missing step header:\n%s", text)
+	}
+}
+
+// --- task 11: failure cascade ------------------------------------------------
+
+func resultFor(rep HostReport, id string) (Result, bool) {
+	for _, r := range rep.Results {
+		if r.Step == id {
+			return r, true
+		}
+	}
+	return Result{}, false
+}
+
+// a: sync fails -> b (needs a, on_failure stop) is blocked -> independent
+// dotfiles.* steps still run.
+func TestFailedStepSkipsTransitiveDependents(t *testing.T) {
+	io := newFakeIO().
+		on("cd ~/git/dotfiles && g=$(git rev-parse", "state=missing", nil). // dotfiles.sync: missing, no url -> failed
+		on("cd ~/git/scripts && g=$(git rev-parse", cleanPrecheck, nil).    // scripts.sync: clean -> ok
+		on("orig=$(git symbolic-ref", "fleet: orig=main", nil).             // scripts.sync's own sync body
+		on("make", "", nil)
+
+	p := updplan.Plan{
+		Repos: map[string]updplan.Repo{
+			"dotfiles": syncRepo("dotfiles", updplan.LocalSkip),
+			"scripts":  syncRepo("scripts", updplan.LocalSkip),
+		},
+		Steps: []updplan.Step{
+			syncStep("dotfiles.sync", "dotfiles"),
+			runStep("scripts.make", "scripts", "make", "dotfiles.sync"),
+			syncStep("scripts.sync", "scripts"),
+		},
+	}
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", p)
+
+	blocked, ok := resultFor(rep, "scripts.make")
+	if !ok || blocked.Status != DepFailed || blocked.Reason != "blocked by dotfiles.sync" {
+		t.Fatalf("scripts.make = %+v, want dependency-failed blocked by dotfiles.sync", blocked)
+	}
+	indep, ok := resultFor(rep, "scripts.sync")
+	if !ok || indep.Status != OK {
+		t.Fatalf("scripts.sync (independent) = %+v, want ok", indep)
+	}
+}
+
+func TestOnFailureContinueLetsDependentsRunButStillFailsTheHost(t *testing.T) {
+	io := newFakeIO().
+		on("git rev-parse --git-dir", "state=missing", nil).
+		on("make", "", nil)
+	p := updplan.Plan{
+		Repos: map[string]updplan.Repo{"dotfiles": syncRepo("dotfiles", updplan.LocalSkip)},
+		Steps: []updplan.Step{
+			func() updplan.Step {
+				s := syncStep("dotfiles.sync", "dotfiles")
+				s.OnFailure = updplan.OnFailureContinue
+				return s
+			}(),
+			runStep("scripts.make", "", "make", "dotfiles.sync"),
+		},
+	}
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", p)
+
+	dep, ok := resultFor(rep, "scripts.make")
+	if !ok || dep.Status != OK {
+		t.Fatalf("dependent under on_failure: continue should still run: %+v", dep)
+	}
+	if !rep.Failed() {
+		t.Fatal("host must still be reported failed overall")
+	}
+}
+
+func TestExpectExitAcceptsNonZero(t *testing.T) {
+	fio := newFakeIO()
+	st := runStep("x", "", "echo hi")
+	st.Expect = updplan.Expect{Exit: []int{3}}
+	p := updplan.Plan{Steps: []updplan.Step{st}}
+	fio.on("echo hi", "", realExitError(t, 3))
+	e := Executor{IO: fio}
+	rep := e.RunHost("alpha", p)
+	r, ok := resultFor(rep, "x")
+	if !ok || r.Status != OK || r.Exit != 3 {
+		t.Fatalf("expect.exit=[3] with exit 3 should be ok: %+v", r)
+	}
+}
+
+func TestDependencyFailedAlsoBlocks(t *testing.T) {
+	io := newFakeIO().on("git rev-parse --git-dir", "state=missing", nil).on("echo b", "", nil).on("echo c", "", nil)
+	p := updplan.Plan{
+		Repos: map[string]updplan.Repo{"dotfiles": syncRepo("dotfiles", updplan.LocalSkip)},
+		Steps: []updplan.Step{
+			syncStep("a", "dotfiles"),
+			runStep("b", "", "echo b", "a"),
+			runStep("c", "", "echo c", "b"),
+		},
+	}
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", p)
+	c, ok := resultFor(rep, "c")
+	if !ok || c.Status != DepFailed || c.Reason != "blocked by b" {
+		t.Fatalf("c = %+v, want dependency-failed blocked by b", c)
 	}
 }
