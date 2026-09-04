@@ -34,7 +34,7 @@ Plan §4 task numbers. Commit = the SHA carrying the plan's exact message.
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| 1 Default plan is today's behaviour | todo | | | adds the `gopkg.in/yaml.v3` require (IMPLEMENTATION §2 reconcile note) |
+| 1 Default plan is today's behaviour | done | (recorded in task 2 row's commit note) | `go test ./internal/updplan -run 'TestDefaultPlanIsTodaysUpdate\|TestDefaultYAMLRoundTripsToDefault' -v` → PASS (2/2); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean; `go mod tidy` no diff | adds the `gopkg.in/yaml.v3` require (IMPLEMENTATION §2 reconcile note) |
 | 2 Validation table | todo | | | |
 | 3 Defaults merge + backoff schedule | todo | | | |
 | 4 Topological order and cascade helpers | todo | | | |
@@ -163,3 +163,4 @@ never silently patched.
 | Date | Session | What advanced |
 | :-- | :-- | :-- |
 | 2026-09-02 | planning | planning: design/spec/plan/trio written (`designs/`, `specs/`, `plans/fleet-update.md`, this trio, empty evidence tree); no worker created yet; issue/PR numbers still #TBD |
+| 2026-09-04 | build-1 | Build kicked off on the design PR's own branch (single PR #270 — no gss feature workers; §0 registry rows are N/A). Baselines captured: cmd coverage 60.7%, binary size in evidence/featflag/. Leaf A dispatched. |

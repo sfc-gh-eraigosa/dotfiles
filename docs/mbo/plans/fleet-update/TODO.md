@@ -20,12 +20,12 @@
 
 ## Preflight (once)
 
-- [ ] Design PR merged: `git -C "$HOME/git/dotfiles" fetch origin && git -C "$HOME/git/dotfiles" show origin/main:docs/mbo/plans/fleet-update.md | head -3`
-- [ ] Toolchain: `go version` matches `.go-version`; `git --version`; `gh auth status`; `gss feature list`
-- [ ] Feature registered: `gss feature list | grep -A3 'fleet-update'` — else `gss feature start fleet-update --goal "config-driven multi-repo update DAG for fleet update (#265)"`
-- [ ] Read plan §3 (frozen contracts) and §6.1 (DAG) in full; read spec §4 F1–F11
-- [ ] Baseline coverage recorded: `go test -cover ./cmd/ | tee evidence/cmd/baseline-coverage.txt`
-- [ ] Baseline binary size recorded: `bash sdk/fleet/build.sh && ls -l "$HOME/opt/bin/fleet" | tee evidence/featflag/binary-size-before.txt`
+- [x] (N/A — building on the design PR's own branch, #270) Design PR merged: `git -C "$HOME/git/dotfiles" fetch origin && git -C "$HOME/git/dotfiles" show origin/main:docs/mbo/plans/fleet-update.md | head -3`
+- [x] Toolchain (go1.26.3, gh, gss present): `go version` matches `.go-version`; `git --version`; `gh auth status`; `gss feature list`
+- [x] (N/A — single PR #270, no gss feature workers; leaf SETUP boxes below are skipped) Feature registered: `gss feature list | grep -A3 'fleet-update'` — else `gss feature start fleet-update --goal "config-driven multi-repo update DAG for fleet update (#265)"`
+- [x] Read plan §3 (frozen contracts) and §6.1 (DAG) in full; read spec §4 F1–F11
+- [x] Baseline coverage recorded (cmd 60.7%): `go test -cover ./cmd/ | tee evidence/cmd/baseline-coverage.txt`
+- [x] Baseline binary size recorded: `bash sdk/fleet/build.sh && ls -l "$HOME/opt/bin/fleet" | tee evidence/featflag/binary-size-before.txt`
 
 ---
 
@@ -37,13 +37,13 @@
 - [ ] SETUP: `cd <WT>/sdk/fleet && go build ./... && go test ./...` green before any change
 
 ### Task 1 — built-in default plan equals today's update  (plan Task 1, leaf A)
-- [ ] RED: `internal/updplan/plan_test.go` — `TestDefaultPlanIsTodaysUpdate` (root `~/git`; repo `dotfiles` path `~/git/dotfiles` branches `[main]` local `skip` restore `true`; steps exactly `dotfiles.sync` → `dotfiles.install` run `./install.sh` interactive needs `[dotfiles.sync]`), `TestDefaultYAMLRoundTripsToDefault` (`Parse(DefaultYAML)` deep-equals `Default()` modulo `Source`)
-- [ ] RUN-RED: `go test ./internal/updplan -run 'TestDefaultPlanIsTodaysUpdate|TestDefaultYAMLRoundTripsToDefault' -v` → expect **FAIL** (package does not compile / tests fail)
-- [ ] GREEN: `plan.go` — types (§3.2), `Default()`, `DefaultYAML`, minimal `Parse` (yaml.v3 `KnownFields(true)`) enough for the round trip; add `gopkg.in/yaml.v3` to `go.mod` (`go get gopkg.in/yaml.v3@v3.0.1 && go mod tidy`)
-- [ ] RUN-GREEN: same command → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race; `go mod tidy` leaves no diff
-- [ ] COMMIT: `feat(fleet/updplan): built-in default plan equals today's update`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `internal/updplan/plan_test.go` — `TestDefaultPlanIsTodaysUpdate` (root `~/git`; repo `dotfiles` path `~/git/dotfiles` branches `[main]` local `skip` restore `true`; steps exactly `dotfiles.sync` → `dotfiles.install` run `./install.sh` interactive needs `[dotfiles.sync]`), `TestDefaultYAMLRoundTripsToDefault` (`Parse(DefaultYAML)` deep-equals `Default()` modulo `Source`)
+- [x] RUN-RED: `go test ./internal/updplan -run 'TestDefaultPlanIsTodaysUpdate|TestDefaultYAMLRoundTripsToDefault' -v` → expect **FAIL** (package does not compile / tests fail)
+- [x] GREEN: `plan.go` — types (§3.2), `Default()`, `DefaultYAML`, minimal `Parse` (yaml.v3 `KnownFields(true)`) enough for the round trip; add `gopkg.in/yaml.v3` to `go.mod` (`go get gopkg.in/yaml.v3@v3.0.1 && go mod tidy`)
+- [x] RUN-GREEN: same command → expect **PASS**
+- [x] VERIFY: gofmt/vet/race; `go mod tidy` leaves no diff
+- [x] COMMIT: `feat(fleet/updplan): built-in default plan equals today's update`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** both tests pass; `Default()` describes exactly today's `~/git/dotfiles` → `main` → `./install.sh` flow.
 
