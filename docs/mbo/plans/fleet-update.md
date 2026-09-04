@@ -109,7 +109,7 @@ func (p Plan) LastStepUsing(repo string) (string, bool)   // for the synthesized
 func (p Plan) WithRef(spec string) (Plan, error)      // "b" → repo "dotfiles" else sole repo else error; "repo=b"; ValidRef(b); replaces Branches[0], drops a duplicate extra
 func (p Plan) WithRefs(specs []string) (Plan, error)
 
-func ValidRef(s string) bool        // letters digits . _ / -  (today's validRef, unchanged)
+func ValidRef(s string) bool        // letters digits . _ / - (today's validRef) PLUS git check-ref-format rules: no leading '-', no '..', no '@{', no '.lock' suffix (review finding: a leading '-' is a git option once interpolated bare)
 func ValidRepoName(s string) bool   // ^[a-z0-9][a-z0-9._-]*$
 func ValidID(s string) bool         // same charset
 func ValidPath(s string) bool       // [A-Za-z0-9._/-]+, optional leading "~/", no ".." segment, no leading "-"
@@ -122,8 +122,10 @@ const DefaultYAML string            // the commented starter `fleet update init`
 Validation rules (aggregated with `errors.Join`, each error names step/repo + field): unknown
 keys; `version` ≠ 1; duplicate ids; unknown kind; `sync` without repo / unknown repo; `gh-auth`
 with repo; `run` without `run:`; `run:` containing NUL or newline; `interactive` on non-run;
-`retry` on interactive; `needs` unknown / self / cycle; `default` not first; a tag with extras;
-duplicate branches; `expect.exit` outside 0..255; bad `on_failure` / `local`; `attempts < 1`;
+`retry` on interactive; `needs` unknown / self / cycle; `default` not first; duplicate branches (a tag cannot be
+told from a branch syntactically, so "tag only as the sole entry" is documented, not validated —
+review finding, PR #270); `hostname` on a non-gh-auth step; `update.root` not absolute/`~`-relative
+or outside the path charset; `expect.exit` outside 0..255; bad `on_failure` / `local`; `attempts < 1`;
 unknown `retry.on` token; `factor < 1`; unparsable duration; negative timeout.
 
 ### 3.3 `internal/updexec`

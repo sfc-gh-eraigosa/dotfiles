@@ -109,7 +109,7 @@ update:
     <name>:                    # ^[a-z0-9][a-z0-9._-]*$
       path: <rel|abs|~/…>      # default = name; relative → <root>/<path>; charset [A-Za-z0-9._/-], optional leading ~/, no "..", no leading "-"
       url: <https://|ssh://|git@…>   # optional; enables clone when path is missing
-      branches: [default]      # "default" (remote HEAD) only first; rest ValidRef, unique; a tag only as the sole entry
+      branches: [default]      # "default" (remote HEAD) only first; rest ValidRef, unique; multi-entry lists are BRANCHES (a tag works only as the sole entry — not syntactically checkable, so documented rather than validated)
       local: skip|rescue|carry # default skip
       restore: true|false      # default true
   steps:

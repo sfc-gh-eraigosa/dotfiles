@@ -42,6 +42,11 @@ func (p Plan) WithRef(spec string) (Plan, error) {
 		}
 		newBranches = append(newBranches, b)
 	}
+	// Re-run the branch-list rules: --ref must not mint a plan Parse itself
+	// would reject (duplicates, an option-lookalike, "default" out of place).
+	if err := validateBranches(fmt.Sprintf("repo %q", repoName), newBranches); err != nil {
+		return Plan{}, fmt.Errorf("updplan: --ref: %w", err)
+	}
 	target.Branches = newBranches
 
 	newRepos := make(map[string]Repo, len(p.Repos))

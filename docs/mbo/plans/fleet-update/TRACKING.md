@@ -38,8 +38,8 @@ Plan §4 task numbers. Commit = the SHA carrying the plan's exact message.
 | 2 Validation table | done | 83ee2d3 | `go test ./internal/updplan -run 'TestParseRejects\|TestParseAggregatesEveryError\|TestLocalDefaults' -v` → PASS (31 subtests + 2); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | validate.go landed with task 1 (Parse needed it to compile the round-trip); this task added the full validation table + tests over it |
 | 3 Defaults merge + backoff schedule | done | 02ec25f | `go test ./internal/updplan -run 'Inherits\|InteractiveSteps\|ExplicitTimeout\|Backoff\|Jitter\|RetryOnParses' -v` → PASS (6/6); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | merge + backoff math landed with tasks 1-2; this task added the pinning tests |
 | 4 Topological order and cascade helpers | done | 620a95f | `go test -race ./internal/updplan -run 'TestOrder\|TestDependents\|TestLastStepUsing' -v -count=20` → PASS (3 tests x 20 runs, deterministic); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | stable Kahn scan (lowest declaration index first), transitive `Dependents`, `LastStepUsing` |
-| 5 `--ref` shim + path resolution | done | (this commit) | `go test ./internal/updplan -run 'TestWithRef\|TestRepoPathResolves' -v` → PASS (7/7); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | added coverage-closing tests (`RepoOf`, `WithRefs`, `ValidHostname`, `ValidSHA`, backoff field overrides) to clear the 90% gate; removed dead `allowEmpty` param from `parseDuration` |
-| **Leaf A gate** | in-review | (this commit) | `go test -race -cover ./internal/updplan` → **93.4%** (≥ 90% ✓) | evidence/updplan/leaf-gate.txt |
+| 5 `--ref` shim + path resolution | done | 98b60fd | `go test ./internal/updplan -run 'TestWithRef\|TestRepoPathResolves' -v` → PASS (7/7); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | added coverage-closing tests (`RepoOf`, `WithRefs`, `ValidHostname`, `ValidSHA`, backoff field overrides) to clear the 90% gate; removed dead `allowEmpty` param from `parseDuration` |
+| **Leaf A gate** | done | a8a55d6 | `go test -race -cover ./internal/updplan` → **93.4%** (≥ 90% ✓) | evidence/updplan/leaf-gate.txt |
 
 ### Leaf B — `internal/updexec` + `runner.RunStreamCtx` (tasks 6–16; updexec ≥ 90 %)
 
@@ -62,9 +62,9 @@ Plan §4 task numbers. Commit = the SHA carrying the plan's exact message.
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| 17 Fail-open resolution | done | (this commit) | `go test ./internal/featflag -run 'TestResolve\|TestStatic' -v` → PASS (8/8); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | pure package, no gff import |
-| 18 gff adapter + deps + flags | done | (this commit) | `go test ./internal/featflag -run 'TestGFF' -v` → PASS (7/7); `gofmt -l .`/`go vet ./...`/`go build ./...`/`go test -race ./...` clean; `go mod tidy` stable (snapshot→tidy→diff empty); `cd sdk/gff && go run . lint ../../.github/gff/features.yaml` → exit 0; `go run . get fleet.update.config` → `home` | binary size before 7117619 B → after 7122210 B (Δ +4591 B, +0.06%) |
-| **Leaf C gate** | done | (this commit) | `go test -race -cover ./internal/featflag` → **96.4%** (≥ 90% ✓); `gff lint` clean; `go build ./...` clean | evidence/featflag/leaf-gate.txt |
+| 17 Fail-open resolution | done | 9dee309 | `go test ./internal/featflag -run 'TestResolve\|TestStatic' -v` → PASS (8/8); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | pure package, no gff import |
+| 18 gff adapter + deps + flags | done | 77008f0 | `go test ./internal/featflag -run 'TestGFF' -v` → PASS (7/7); `gofmt -l .`/`go vet ./...`/`go build ./...`/`go test -race ./...` clean; `go mod tidy` stable (snapshot→tidy→diff empty); `cd sdk/gff && go run . lint ../../.github/gff/features.yaml` → exit 0; `go run . get fleet.update.config` → `home` | binary size before 7117619 B → after 7122210 B (Δ +4591 B, +0.06%) |
+| **Leaf C gate** | done | 77008f0 | `go test -race -cover ./internal/featflag` → **96.4%** (≥ 90% ✓); `gff lint` clean; `go build ./...` clean | evidence/featflag/leaf-gate.txt |
 
 ### Leaf D — `cmd` rewire (tasks 19–23; `go test -race ./...`; live `--dry-run` + one live run)
 
@@ -123,9 +123,9 @@ spec §6 gate transcript under `evidence/e2e/` (G5: `evidence/tui/`). `—` = no
 
 Leaf gates (plan §4 / §6.1):
 
-- [ ] Leaf A: tasks 1–5 done; `go test -race -cover ./internal/updplan` ≥ 90 % (observed: __ %) → `evidence/updplan/leaf-gate.txt`
+- [x] Leaf A: tasks 1–5 done; `go test -race -cover ./internal/updplan` ≥ 90 % (observed: 93.4 %, 93.9 % after the review fixes) → `evidence/updplan/leaf-gate.txt`
 - [ ] Leaf B: tasks 6–16 done; `go test -race -cover ./internal/updexec ./internal/runner` — updexec ≥ 90 % (observed: __ %); moved invariant tests green; mux invariant green → `evidence/updexec/leaf-gate.txt`
-- [ ] Leaf C: tasks 17–18 done; featflag ≥ 90 % (observed: __ %); `cd sdk/gff && go run . lint ../../.github/gff/features.yaml` clean; `go build ./...` → `evidence/featflag/leaf-gate.txt`
+- [x] Leaf C: tasks 17–18 done; featflag ≥ 90 % (observed: 96.4 %); `cd sdk/gff && go run . lint ../../.github/gff/features.yaml` clean; `go build ./...` → `evidence/featflag/leaf-gate.txt`
 - [ ] Leaf D: tasks 19–23 done; `go test -race ./...` green; `cmd` coverage ≥ baseline (before: __ % / after: __ %); `bash sdk/fleet/build.sh` installs; live `--dry-run` ×2 + one live host run → `evidence/cmd/`, `evidence/e2e/`
 - [ ] Leaf E: tasks 24–26 done; every `tui_*` test green; live TUI transcript → `evidence/tui/`
 - [ ] Leaf F: task 27 done; every relative link resolves; README console demo is real output → `evidence/docs/`, `evidence/demo/`
@@ -164,3 +164,4 @@ never silently patched.
 | :-- | :-- | :-- |
 | 2026-09-02 | planning | planning: design/spec/plan/trio written (`designs/`, `specs/`, `plans/fleet-update.md`, this trio, empty evidence tree); no worker created yet; issue/PR numbers still #TBD |
 | 2026-09-04 | build-1 | Build kicked off on the design PR's own branch (single PR #270 — no gss feature workers; §0 registry rows are N/A). Baselines captured: cmd coverage 60.7%, binary size in evidence/featflag/. Leaf A dispatched. |
+| 2026-09-04 | build-2 | Leaf A code review (`/code-review 71f2f97..HEAD medium`): 10 findings confirmed, all fixed TDD-first in `internal/updplan/review_test.go` (ValidRef option-lookalikes, WithRef re-validation, root validation, strict `exit:<n>` tokens, float-space backoff cap + NaN/Inf, tag heuristic removed, Default() deep copy, hostname gh-auth-only, no kind→run error cascade, empty/multi-document files). Coverage 93.9 %. Ledger placeholders backfilled. Leaf C reviewed by gate only (small). Leaf B dispatched. |

@@ -3,7 +3,9 @@ package updplan
 import (
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -15,6 +17,14 @@ import (
 // substitution — is rejected before it can run.
 func ValidRef(ref string) bool {
 	if ref == "" {
+		return false
+	}
+	// A leading '-' turns the ref into a git OPTION once interpolated bare
+	// (`git fetch origin -q` fetches nothing and exits 0; `--upload-pack`
+	// executes a program). "..", "@{" and a ".lock" suffix are refused by
+	// `git check-ref-format --branch` too, so no legitimate name is lost.
+	if strings.HasPrefix(ref, "-") || strings.Contains(ref, "..") ||
+		strings.Contains(ref, "@{") || strings.HasSuffix(ref, ".lock") {
 		return false
 	}
 	for _, r := range ref {
@@ -80,21 +90,6 @@ func ValidHostname(s string) bool { return hostnameRe.MatchString(s) }
 // ValidSHA reports whether s is exactly 40 hex characters.
 func ValidSHA(s string) bool { return shaRe.MatchString(s) }
 
-// isTagLike is the heuristic for "a tag only as the sole branches entry": we
-// cannot tell a tag from a branch syntactically, so an entry is treated as
-// tag-like (and therefore forbidden alongside other entries) only when it
-// looks unmistakably like one — "v" followed by a digit, or a full
-// refs/tags/ path.
-func isTagLike(s string) bool {
-	if strings.Contains(s, "refs/tags/") {
-		return true
-	}
-	if len(s) >= 2 && (s[0] == 'v' || s[0] == 'V') && s[1] >= '0' && s[1] <= '9' {
-		return true
-	}
-	return false
-}
-
 // --- error aggregation -----------------------------------------------------
 
 type errCollector struct {
@@ -143,12 +138,16 @@ func parseRetryOn(scope string, in []wireRetryOn) ([]RetryOn, error) {
 			out = append(out, RetryOn(w.raw))
 		default:
 			if strings.HasPrefix(w.raw, "exit:") {
-				var n int
-				if _, err := fmt.Sscanf(w.raw, "exit:%d", &n); err != nil || n < 0 || n > 255 {
+				// Strict: digits only, no sign/space/leading zero, 0..255 —
+				// and always normalised to exit:<n> so an integer token
+				// (`on: [7]`) and a string one (`on: ["exit:7"]`) compare equal.
+				digits := strings.TrimPrefix(w.raw, "exit:")
+				n, err := strconv.Atoi(digits)
+				if err != nil || strconv.Itoa(n) != digits || n < 0 || n > 255 {
 					errs.addf(scope, "retry.on: invalid exit code token %q", w.raw)
 					continue
 				}
-				out = append(out, RetryOn(w.raw))
+				out = append(out, RetryOn(fmt.Sprintf("exit:%d", n)))
 				continue
 			}
 			errs.addf(scope, "retry.on: unknown token %q", w.raw)
@@ -172,8 +171,8 @@ func parseBackoff(scope string, w wireBackoff, fallback Backoff) (Backoff, error
 		b.Max = d
 	}
 	if w.Factor != nil {
-		if *w.Factor < 1 {
-			errs.addf(scope, "retry.backoff.factor: must be >= 1, got %v", *w.Factor)
+		if math.IsNaN(*w.Factor) || math.IsInf(*w.Factor, 0) || *w.Factor < 1 {
+			errs.addf(scope, "retry.backoff.factor: must be a finite number >= 1, got %v", *w.Factor)
 		} else {
 			b.Factor = *w.Factor
 		}
@@ -323,14 +322,6 @@ func validateBranches(scope string, branches []string) error {
 		seen[b] = true
 	}
 
-	if len(branches) > 1 {
-		for i, b := range branches {
-			if isTagLike(b) {
-				errs.addf(scope, "branches[%d]: tag %q must be the sole entry", i, b)
-			}
-		}
-	}
-
 	return errs.join()
 }
 
@@ -381,8 +372,15 @@ func parseSteps(in []wireStep, defs Defaults, repos map[string]Repo) ([]Step, er
 				}
 			}
 		}
-		st.Hostname = w.Hostname
+		if st.Kind == KindGhAuth {
+			st.Hostname = w.Hostname
+		} else if w.Hostname != "" && st.Kind != "" {
+			errs.addf(scope, "hostname: only gh-auth steps may set hostname")
+		}
 
+		// An unknown kind has already been reported; the kind-scoped field
+		// checks below are skipped so the operator is not also told that
+		// run:/interactive: are misplaced when the sole defect is the kind.
 		if st.Kind == KindRun {
 			if w.Run == "" {
 				errs.addf(scope, "run: run step requires run")
@@ -390,14 +388,14 @@ func parseSteps(in []wireStep, defs Defaults, repos map[string]Repo) ([]Step, er
 				errs.addf(scope, "run: must not contain NUL or newline")
 			}
 			st.Run = w.Run
-		} else if w.Run != "" {
+		} else if w.Run != "" && st.Kind != "" {
 			errs.addf(scope, "run: only run steps may set run")
 		}
 
 		interactive := false
 		if w.Interactive != nil {
 			interactive = *w.Interactive
-			if st.Kind != KindRun && interactive {
+			if st.Kind != KindRun && st.Kind != "" && interactive {
 				errs.addf(scope, "interactive: only run steps may be interactive")
 			}
 		}

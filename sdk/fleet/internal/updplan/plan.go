@@ -7,7 +7,10 @@ package updplan
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io"
+	"math"
 	"strings"
 	"time"
 
@@ -65,22 +68,37 @@ func (b Backoff) Wait(n int, rnd func() float64) time.Duration {
 	if n < 1 {
 		n = 1
 	}
-	f := 1.0
-	for i := 0; i < n-1; i++ {
+	// Everything happens in float64 and the cap is applied BEFORE the
+	// conversion to Duration: Initial×Factor^(n-1) overflows int64 at
+	// n≈32 for the built-in 5s/2 schedule, and a float→int64 conversion of
+	// an out-of-range value is implementation-defined (negative on amd64).
+	f := float64(b.Initial)
+	limit := float64(b.Max)
+	for i := 1; i < n; i++ {
 		f *= b.Factor
+		if b.Max > 0 && f >= limit {
+			f = limit
+			break
+		}
 	}
-	d := time.Duration(float64(b.Initial) * f)
-	if b.Max > 0 && d > b.Max {
-		d = b.Max
+	if b.Max > 0 && f > limit {
+		f = limit
 	}
 	if b.Jitter {
 		r := 0.5
 		if rnd != nil {
 			r = rnd()
 		}
-		d = time.Duration(float64(d) * (0.5 + r))
+		f *= 0.5 + r
 	}
-	return d
+	const maxDur = float64(1 << 62) // comfortably inside int64
+	if math.IsNaN(f) || f < 0 {
+		return 0
+	}
+	if math.IsInf(f, 1) || f > maxDur {
+		return time.Duration(1 << 62)
+	}
+	return time.Duration(f)
 }
 
 // Retry is a step or default retry policy.
@@ -179,8 +197,6 @@ const DefaultYAML = "# fleet.yaml — the fleet-update plan.\n" +
 	"      interactive: true\n" +
 	"      needs: [dotfiles.sync]\n"
 
-var defaultPlan = mustParse(DefaultYAML)
-
 func mustParse(data string) Plan {
 	p, err := Parse([]byte(data))
 	if err != nil {
@@ -190,9 +206,11 @@ func mustParse(data string) Plan {
 }
 
 // Default returns the built-in plan: today's `fleet update` behaviour,
-// exactly as Parse(DefaultYAML) produces it.
+// exactly as Parse(DefaultYAML) produces it. It re-parses on every call
+// (~35µs) so each caller owns its maps and slices — a process-global value
+// would let one caller's --local/--timeout override leak into the next.
 func Default() Plan {
-	return defaultPlan
+	return mustParse(DefaultYAML)
 }
 
 // Step looks up a step by id.
@@ -305,7 +323,18 @@ func Parse(data []byte) (Plan, error) {
 
 	var wf wireFile
 	if err := dec.Decode(&wf); err != nil {
+		if errors.Is(err, io.EOF) {
+			// An empty or comment-only file is a schema problem, not an
+			// I/O one; do not let it satisfy errors.Is(err, io.EOF).
+			return Plan{}, errors.New("updplan: parse: empty plan file (no YAML document; run `fleet update init`)")
+		}
 		return Plan{}, fmt.Errorf("updplan: parse: %w", err)
+	}
+	var extra any
+	if err := dec.Decode(&extra); err == nil {
+		return Plan{}, errors.New("updplan: parse: multiple YAML documents; a plan file holds exactly one")
+	} else if !errors.Is(err, io.EOF) {
+		return Plan{}, fmt.Errorf("updplan: parse: second document: %w", err)
 	}
 
 	errs := &errCollector{}
@@ -316,6 +345,12 @@ func Parse(data []byte) (Plan, error) {
 	root := strings.TrimSpace(wf.Update.Root)
 	if root == "" {
 		root = "~/git"
+	}
+	// root is prefixed onto every relative repo path, so it obeys the same
+	// charset rule as path: AND must itself be absolute or ~-relative —
+	// otherwise Repo.Path would resolve against the ssh login cwd.
+	if !(root == "~" || ((strings.HasPrefix(root, "/") || strings.HasPrefix(root, "~/")) && ValidPath(root))) {
+		errs.addf("update", "root: must be an absolute or ~/ path using [A-Za-z0-9._/-], got %q", root)
 	}
 
 	defs, err := parseDefaults(wf.Update.Defaults)

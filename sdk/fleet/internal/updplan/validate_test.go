@@ -212,16 +212,6 @@ update:
 			wantErr: "default",
 		},
 		{
-			name: "tag with extras",
-			yaml: `version: 1
-update:
-  repos:
-    dotfiles: {path: dotfiles, branches: ["v1.2.3", main]}
-  steps: []
-`,
-			wantErr: "sole entry",
-		},
-		{
 			name: "duplicate branches",
 			yaml: `version: 1
 update:
