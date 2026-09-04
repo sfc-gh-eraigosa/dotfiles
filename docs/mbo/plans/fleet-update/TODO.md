@@ -48,13 +48,13 @@
 **Done when:** both tests pass; `Default()` describes exactly today's `~/git/dotfiles` → `main` → `./install.sh` flow.
 
 ### Task 2 — parse + aggregated validation  (plan Task 2, leaf A)
-- [ ] RED: `validate_test.go` — `TestParseRejects` table (every rule listed in plan §3.2 "Validation rules": unknown key, `version: 2`, duplicate id, unknown kind, sync w/o repo, unknown repo, gh-auth with repo, run w/o `run:`, NUL/newline in run, `interactive` on sync, `retry` on interactive, unknown/self need, cycle `a→b→a`, `default` not first, tag + extras, duplicate branch, `expect.exit: [256]`, bad `on_failure`, bad `local`, `attempts: 0`, unknown `retry.on` token, `factor: 0.5`, `timeout: soon`, negative timeout; injection vectors `main; rm -rf ~`, `$(id)`, path `../x`, `~/git; id`, `-rf`, url with `'`) — each asserts the error names the step/repo + field; `TestParseAggregatesEveryError` (two independent faults → both named); `TestLocalDefaultsToSkipAndRestoreToTrue`
-- [ ] RUN-RED: `go test ./internal/updplan -run 'TestParseRejects|TestParseAggregatesEveryError|TestLocalDefaults' -v` → expect **FAIL**
-- [ ] GREEN: `validate.go` — `ValidRef` (moved verbatim from `cmd/update.go`), `ValidPath`, `ValidRepoName`, `ValidID`, `ValidURL`, `ValidHostname`, `ValidSHA`; full `Parse` pipeline decode → defaults → validate (collect with `errors.Join`) → resolve paths
-- [ ] RUN-GREEN: same command → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/updplan): parse + aggregated validation`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `validate_test.go` — `TestParseRejects` table (every rule listed in plan §3.2 "Validation rules": unknown key, `version: 2`, duplicate id, unknown kind, sync w/o repo, unknown repo, gh-auth with repo, run w/o `run:`, NUL/newline in run, `interactive` on sync, `retry` on interactive, unknown/self need, cycle `a→b→a`, `default` not first, tag + extras, duplicate branch, `expect.exit: [256]`, bad `on_failure`, bad `local`, `attempts: 0`, unknown `retry.on` token, `factor: 0.5`, `timeout: soon`, negative timeout; injection vectors `main; rm -rf ~`, `$(id)`, path `../x`, `~/git; id`, `-rf`, url with `'`) — each asserts the error names the step/repo + field; `TestParseAggregatesEveryError` (two independent faults → both named); `TestLocalDefaultsToSkipAndRestoreToTrue`
+- [x] RUN-RED: `go test ./internal/updplan -run 'TestParseRejects|TestParseAggregatesEveryError|TestLocalDefaults' -v` → expect **FAIL**
+- [x] GREEN: `validate.go` — `ValidRef` (moved verbatim from `cmd/update.go`), `ValidPath`, `ValidRepoName`, `ValidID`, `ValidURL`, `ValidHostname`, `ValidSHA`; full `Parse` pipeline decode → defaults → validate (collect with `errors.Join`) → resolve paths
+- [x] RUN-GREEN: same command → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/updplan): parse + aggregated validation`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** every table row fails for the stated reason and a two-fault file reports both.
 

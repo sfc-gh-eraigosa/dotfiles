@@ -34,8 +34,8 @@ Plan §4 task numbers. Commit = the SHA carrying the plan's exact message.
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| 1 Default plan is today's behaviour | done | (recorded in task 2 row's commit note) | `go test ./internal/updplan -run 'TestDefaultPlanIsTodaysUpdate\|TestDefaultYAMLRoundTripsToDefault' -v` → PASS (2/2); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean; `go mod tidy` no diff | adds the `gopkg.in/yaml.v3` require (IMPLEMENTATION §2 reconcile note) |
-| 2 Validation table | todo | | | |
+| 1 Default plan is today's behaviour | done | e36175b | `go test ./internal/updplan -run 'TestDefaultPlanIsTodaysUpdate\|TestDefaultYAMLRoundTripsToDefault' -v` → PASS (2/2); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean; `go mod tidy` no diff | adds the `gopkg.in/yaml.v3` require (IMPLEMENTATION §2 reconcile note) |
+| 2 Validation table | done | (this commit) | `go test ./internal/updplan -run 'TestParseRejects\|TestParseAggregatesEveryError\|TestLocalDefaults' -v` → PASS (31 subtests + 2); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | validate.go landed with task 1 (Parse needed it to compile the round-trip); this task added the full validation table + tests over it |
 | 3 Defaults merge + backoff schedule | todo | | | |
 | 4 Topological order and cascade helpers | todo | | | |
 | 5 `--ref` shim + path resolution | todo | | | |

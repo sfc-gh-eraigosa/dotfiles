@@ -194,11 +194,11 @@ func parseRetry(scope string, w wireRetry, hasRetry bool, fallback Retry) (Retry
 	errs := &errCollector{}
 	r := fallback
 
-	if w.Attempts != 0 {
-		if w.Attempts < 1 {
-			errs.addf(scope, "retry.attempts: must be >= 1, got %d", w.Attempts)
+	if w.Attempts != nil {
+		if *w.Attempts < 1 {
+			errs.addf(scope, "retry.attempts: must be >= 1, got %d", *w.Attempts)
 		} else {
-			r.Attempts = w.Attempts
+			r.Attempts = *w.Attempts
 		}
 	}
 	if len(w.On) > 0 {
@@ -230,7 +230,7 @@ func parseDefaults(w wireDefaults) (Defaults, error) {
 }
 
 func hasWireRetry(w wireRetry) bool {
-	return w.Attempts != 0 || len(w.On) > 0 || w.Backoff.Initial != "" ||
+	return w.Attempts != nil || len(w.On) > 0 || w.Backoff.Initial != "" ||
 		w.Backoff.Max != "" || w.Backoff.Factor != nil || w.Backoff.Jitter != nil
 }
 
@@ -523,13 +523,5 @@ func detectCycle(steps []Step) error {
 			}
 		}
 	}
-	return nil
-}
-
-// validate does the unknown-keys check (already enforced by the decoder's
-// KnownFields) plus any whole-plan checks that need the fully resolved Plan.
-// Field-level validation happens in parseDefaults/parseRepos/parseSteps
-// above, aggregated with errors.Join by Parse.
-func validate(wf wireFile, p Plan) error {
 	return nil
 }

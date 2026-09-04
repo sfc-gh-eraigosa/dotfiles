@@ -234,7 +234,7 @@ type wireDefaults struct {
 }
 
 type wireRetry struct {
-	Attempts int           `yaml:"attempts"`
+	Attempts *int          `yaml:"attempts"`
 	On       []wireRetryOn `yaml:"on"`
 	Backoff  wireBackoff   `yaml:"backoff"`
 }
@@ -308,37 +308,34 @@ func Parse(data []byte) (Plan, error) {
 		return Plan{}, fmt.Errorf("updplan: parse: %w", err)
 	}
 
+	errs := &errCollector{}
+	if wf.Version != 1 {
+		errs.addf("version", "must be 1, got %d", wf.Version)
+	}
+
 	root := strings.TrimSpace(wf.Update.Root)
 	if root == "" {
 		root = "~/git"
 	}
 
 	defs, err := parseDefaults(wf.Update.Defaults)
-	if err != nil {
-		return Plan{}, err
-	}
+	errs.add(err)
 
 	repos, err := parseRepos(wf.Update.Repos, root)
-	if err != nil {
-		return Plan{}, err
-	}
+	errs.add(err)
 
 	steps, err := parseSteps(wf.Update.Steps, defs, repos)
-	if err != nil {
+	errs.add(err)
+
+	if err := errs.join(); err != nil {
 		return Plan{}, err
 	}
 
-	p := Plan{
+	return Plan{
 		Root:     root,
 		Defaults: defs,
 		Repos:    repos,
 		Steps:    steps,
 		Source:   "",
-	}
-
-	if err := validate(wf, p); err != nil {
-		return Plan{}, err
-	}
-
-	return p, nil
+	}, nil
 }
