@@ -88,6 +88,20 @@ func TestResolveUnknownLocationIsFailOpen(t *testing.T) {
 	}
 }
 
+func TestResolveEmptyConfigSelectionIsFailOpen(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	src := Static{Strs: map[string][]string{KeyConfig: {}}}
+
+	got := Resolve(src, t.TempDir(), t.TempDir())
+
+	if got.ConfigPath != "" {
+		t.Fatalf("ConfigPath = %q, want empty for an empty selection", got.ConfigPath)
+	}
+	if got.Note == "" {
+		t.Fatalf("Note is empty, want an explanation for the empty selection")
+	}
+}
+
 func TestResolveNilSourceUsesDefaults(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 

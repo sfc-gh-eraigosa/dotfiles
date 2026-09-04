@@ -21,7 +21,7 @@ Leaf state vocabulary (mirrors `docs/mbo/index.md`): `todo → building → in-r
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | A `updplan` (base; blocks B) | (no worker — built directly on `worktree/fleet_config`, per task instructions) | `worktree/fleet_config` | this worktree | — | in-review |
 | B `updexec` (+ runner ctx; base = A; blocks D, E) | | | | | todo |
-| C `featflag` + deps (base = main; blocks D) | | | | | todo |
+| C `featflag` + deps (base = main; blocks D) | (no worker — built directly on `worktree/fleet_config`, per task instructions) | `worktree/fleet_config` | this worktree | — | in-review |
 | D `cmd` (base = B, after C merged; blocks E, F) | | | | | todo |
 | E `tui` (base = D) | | | | | todo |
 | F `docs` (base = D) | | | | | todo |
@@ -63,8 +63,8 @@ Plan §4 task numbers. Commit = the SHA carrying the plan's exact message.
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
 | 17 Fail-open resolution | done | (this commit) | `go test ./internal/featflag -run 'TestResolve\|TestStatic' -v` → PASS (8/8); `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | pure package, no gff import |
-| 18 gff adapter + deps + flags | todo | | | record binary size before/after; `go mod tidy` no diff |
-| **Leaf C gate** | todo | — | `go test -race -cover ./internal/featflag` → ; `go run . lint` → ; `go build ./...` → | |
+| 18 gff adapter + deps + flags | done | (this commit) | `go test ./internal/featflag -run 'TestGFF' -v` → PASS (7/7); `gofmt -l .`/`go vet ./...`/`go build ./...`/`go test -race ./...` clean; `go mod tidy` stable (snapshot→tidy→diff empty); `cd sdk/gff && go run . lint ../../.github/gff/features.yaml` → exit 0; `go run . get fleet.update.config` → `home` | binary size before 7117619 B → after 7122210 B (Δ +4591 B, +0.06%) |
+| **Leaf C gate** | done | (this commit) | `go test -race -cover ./internal/featflag` → **96.4%** (≥ 90% ✓); `gff lint` clean; `go build ./...` clean | evidence/featflag/leaf-gate.txt |
 
 ### Leaf D — `cmd` rewire (tasks 19–23; `go test -race ./...`; live `--dry-run` + one live run)
 

@@ -116,21 +116,21 @@
 **Done when:** no code path can return `Enabled false` on an error.
 
 ### Task 18 — gff SDK adapter + deps + flags  (plan Task 18, leaf C)
-- [ ] RED: `gff_test.go` — `TestGFFFallsBackToUnscopedOnUnknownSource` (inject the two inner resolve funcs; first returns `gff.ErrUnknownSource`, second is called)
-- [ ] RUN-RED: `go test ./internal/featflag -run 'TestGFF' -v` → expect **FAIL**
-- [ ] GREEN: `gff.go` (the only import of `github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/pkg/gff`); `go.mod`: require `github.com/sfc-gh-eraigosa/dotfiles/sdk/gff v0.0.0` + `replace … => ../gff`; `go mod tidy`
-- [ ] GREEN: `.github/gff/features.yaml` — append `area: fleet` with `fleet.update.enabled` (bool true) and `fleet.update.config` (SINGLE choice: `home` selected, `repo`) exactly as plan §3.5
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: `cd <WT>/sdk/gff && go run . lint ../../.github/gff/features.yaml` → no findings; `go run . get fleet.update.config` → `home`; `cd <WT>/sdk/fleet && go build ./... && go mod tidy && git diff --exit-code go.mod go.sum`
-- [ ] VERIFY: `bash sdk/fleet/build.sh && ls -l "$HOME/opt/bin/fleet" | tee -a evidence/featflag/binary-size-after.txt`
-- [ ] COMMIT: `feat(fleet): gff flags fleet.update.{enabled,config} + SDK adapter`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `gff_test.go` — `TestGFFFallsBackToUnscopedOnUnknownSource` (inject the two inner resolve funcs; first returns `gff.ErrUnknownSource`, second is called)
+- [x] RUN-RED: `go test ./internal/featflag -run 'TestGFF' -v` → expect **FAIL**
+- [x] GREEN: `gff.go` (the only import of `github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/pkg/gff`); `go.mod`: require `github.com/sfc-gh-eraigosa/dotfiles/sdk/gff v0.0.0` + `replace … => ../gff`; `go mod tidy`
+- [x] GREEN: `.github/gff/features.yaml` — append `area: fleet` with `fleet.update.enabled` (bool true) and `fleet.update.config` (SINGLE choice: `home` selected, `repo`) exactly as plan §3.5
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: `cd <WT>/sdk/gff && go run . lint ../../.github/gff/features.yaml` → no findings; `go run . get fleet.update.config` → `home`; `cd <WT>/sdk/fleet && go build ./... && go mod tidy && git diff --exit-code go.mod go.sum`
+- [x] VERIFY: `bash sdk/fleet/build.sh && ls -l "$HOME/opt/bin/fleet" | tee -a evidence/featflag/binary-size-after.txt`
+- [x] COMMIT: `feat(fleet): gff flags fleet.update.{enabled,config} + SDK adapter`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** `gff lint` clean, `go build ./...` green, size delta recorded.
 
 ## Leaf C gate
-- [ ] VERIFY: `go test -race -cover ./internal/featflag | tee -a evidence/featflag/leaf-gate.txt` → **≥ 90 %**
-- [ ] LEDGER + CHECKPOINT
+- [x] VERIFY: `go test -race -cover ./internal/featflag | tee -a evidence/featflag/leaf-gate.txt` → **≥ 90 %** (96.4%)
+- [x] LEDGER + CHECKPOINT
 
 ---
 
