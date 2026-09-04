@@ -1,2 +1,4 @@
 # 2026-09-04T15:16:02Z Leaf A gate
 ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan	(cached)	coverage: 93.4% of statements
+# 2026-09-04T15:16:20Z Leaf A gate (final re-run)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan	(cached)	coverage: 93.4% of statements
