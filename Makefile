@@ -89,7 +89,7 @@ secret-scanning: ## Turn on GitHub secret scanning + push protection + non-provi
 	./opt/scripts/git/github_secret_scanning.sh
 
 .PHONY: secret-scanning-check
-secret-scanning-check: ## Verify the GitHub secret-scanning settings are on (exit 1 if anything is disabled)
+secret-scanning-check: ## Verify GitHub secret scanning + push protection are on (exit 1 if not; non-provider patterns WARN only)
 	./opt/scripts/git/github_secret_scanning.sh --check
 
 .PHONY: skill-evals

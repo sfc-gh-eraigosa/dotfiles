@@ -18,6 +18,7 @@ export STUB_LOG="$TMP/gh.log"      # every gh invocation, one per line
 export STUB_AUTH_RC=0              # gh auth status exit code
 export STUB_PATCH_RC=0             # PATCH exit code (1 => "HTTP 422")
 export STUB_PRIVATE=false
+export STUB_NONPROVIDER_STICKS=1  # 0 => GitHub accepts the PATCH but the setting stays disabled
 
 cat > "$TMP/bin/gh" <<'SHIM'
 #!/usr/bin/env bash
@@ -34,7 +35,8 @@ if [ "$1" = "-X" ] && [ "$2" = PATCH ]; then
     echo 'gh: Advanced Security must be enabled for this repository to use secret scanning. (HTTP 422)' >&2
     exit 1
   fi
-  printf 'enabled\nenabled\nenabled\n' > "$STUB_STATE"
+  if [ "${STUB_NONPROVIDER_STICKS:-1}" = 1 ]; then printf 'enabled\nenabled\nenabled\n' > "$STUB_STATE"
+  else printf 'enabled\nenabled\ndisabled\n' > "$STUB_STATE"; fi
   exit 0
 fi
 # GET repos/<owner>/<name>
@@ -97,6 +99,16 @@ check_eq "check: never PATCHes" 0 "$(patches)"
 
 set_state enabled enabled enabled
 expect 0 "check: exit 0 when all enabled" -- --check --repo acme/dots
+
+# Non-provider patterns are best-effort: GitHub accepts the PATCH (HTTP 200) yet
+# leaves the setting disabled on repos without GitHub Secret Protection. That
+# must be a WARN, not a permanently red check — the two core settings are the gate.
+set_state disabled disabled disabled
+STUB_NONPROVIDER_STICKS=0 expect 0 "ensure: non-provider patterns not honoured => WARN, exit 0" -- --repo acme/dots
+check_out "ensure: warns that non-provider patterns did not stick" 'WARN.*non_provider_patterns'
+set_state enabled enabled disabled
+expect 0 "check: core settings on, non-provider off => exit 0 with WARN" -- --check --repo acme/dots
+check_out "check: WARN names non-provider patterns" 'WARN.*non_provider_patterns'
 
 # ---- degraded environments -----------------------------------------------------------
 set_state disabled disabled disabled

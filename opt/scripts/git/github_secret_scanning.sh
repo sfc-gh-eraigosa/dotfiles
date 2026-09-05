@@ -10,13 +10,18 @@
 #
 # Usage: github_secret_scanning.sh [--check|--status] [--repo owner/name]
 #   (default)  ensure — enable whatever is disabled (idempotent, one PATCH)
-#   --check    report; exit 1 if anything is disabled, 2 if it cannot be read
+#   --check    report; exit 1 if a core setting (scanning, push protection) is
+#              disabled, 2 if it cannot be read. Non-provider patterns are
+#              best-effort: WARN only (see below)
 #   --status   report only, exit 0
 #   --repo     target (default: the repo of the current checkout via gh)
 #
 # Cost: free on public repos. A PRIVATE repo needs GitHub Secret Protection
 # (paid, per active committer); the PATCH is refused with HTTP 422 there and
-# this script says so instead of guessing.
+# this script says so instead of guessing. Non-provider patterns (generic
+# secrets) turned out to need Secret Protection even on a public user-owned
+# repo: GitHub answers 200 and leaves it disabled — observed 2026-09-05 — so it
+# is requested, re-read, and warned about rather than failing the check.
 #
 # Exit codes — ensure: 0 enabled/already/SKIP (no gh or not authenticated:
 # install.sh must not break offline) · 1 could not enable
@@ -60,40 +65,56 @@ if [ "$(printf '%s' "$INFO" | jq -r '.security_and_analysis // empty | type')" !
     skip "security_and_analysis not visible for $REPO (admin permission required)"
 fi
 
-DISABLED=""
-for s in $SETTINGS; do
-    st="$(printf '%s' "$INFO" | jq -r ".security_and_analysis.${s}.status // \"disabled\"")"
-    echo "$REPO: $s = $st"
-    [ "$st" = enabled ] || DISABLED="$DISABLED $s"
-done
+# Non-provider patterns (generic secrets: private keys, connection strings) are
+# BEST-EFFORT: GitHub answers the PATCH with 200 yet leaves the setting disabled
+# on repositories without GitHub Secret Protection. So it is asked for, reported,
+# and warned about — but only the two core settings gate --check.
+CORE="secret_scanning secret_scanning_push_protection"   # everything else in SETTINGS is best-effort
+read_states() { # fills DISABLED (core) and SOFT (best-effort) from a repo JSON in $1
+    DISABLED=""; SOFT=""
+    local s st
+    for s in $SETTINGS; do
+        st="$(printf '%s' "$1" | jq -r ".security_and_analysis.${s}.status // \"disabled\"")"
+        echo "$REPO: $s = $st"
+        [ "$st" = enabled ] && continue
+        case " $CORE " in *" $s "*) DISABLED="$DISABLED $s" ;; *) SOFT="$SOFT $s" ;; esac
+    done
+}
+soft_warn() {
+    [ -n "$SOFT" ] || return 0
+    echo "WARN: not honoured on $REPO:$SOFT — GitHub accepts the request but keeps it disabled without GitHub Secret Protection (best-effort; the local privacy hooks cover generic secret shapes via gitleaks)." >&2
+}
+read_states "$INFO"
 
 case "$MODE" in
-    status) exit 0 ;;
+    status) soft_warn; exit 0 ;;
     check)
         if [ -n "$DISABLED" ]; then
             echo "FAIL: disabled on $REPO:$DISABLED (run: make secret-scanning)" >&2
             exit 1
         fi
-        echo "OK: secret scanning, push protection and non-provider patterns are enabled on $REPO"
+        soft_warn
+        echo "OK: secret scanning and push protection are enabled on $REPO"
         exit 0 ;;
 esac
 
-# ensure
-if [ -z "$DISABLED" ]; then
+# ensure — ask for everything that is off, core and best-effort alike
+WANT="$DISABLED$SOFT"
+if [ -z "$WANT" ]; then
     echo "OK: already enabled on $REPO — nothing to do"
     exit 0
 fi
 
 BODY='{"security_and_analysis":{'
 first=1
-for s in $DISABLED; do
+for s in $WANT; do
     [ "$first" = 1 ] || BODY="$BODY,"
     BODY="$BODY\"$s\":{\"status\":\"enabled\"}"
     first=0
 done
 BODY="$BODY}}"
 
-echo "Enabling on $REPO:$DISABLED"
+echo "Enabling on $REPO:$WANT"
 if ! ERR="$(printf '%s' "$BODY" | gh api -X PATCH "repos/$REPO" --input - 2>&1 >/dev/null)"; then
     echo "FAIL: GitHub refused the change for $REPO: $ERR" >&2
     if [ "$PRIVATE" = true ]; then
@@ -103,4 +124,12 @@ if ! ERR="$(printf '%s' "$BODY" | gh api -X PATCH "repos/$REPO" --input - 2>&1 >
     fi
     exit 1
 fi
-echo "OK: enabled on $REPO:$DISABLED"
+# Re-read: what actually stuck? Core settings must; best-effort ones may not.
+AFTER="$(gh api "repos/$REPO" 2>/dev/null)" || { echo "OK: change accepted for $REPO:$WANT (could not re-read to confirm)"; exit 0; }
+read_states "$AFTER" >/dev/null
+if [ -n "$DISABLED" ]; then
+    echo "FAIL: GitHub accepted the change but these are still disabled on $REPO:$DISABLED" >&2
+    exit 1
+fi
+soft_warn
+echo "OK: enabled on $REPO:$WANT"
