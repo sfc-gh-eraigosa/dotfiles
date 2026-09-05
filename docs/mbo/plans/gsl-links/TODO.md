@@ -78,13 +78,13 @@
 - [x] RUN-GREEN: `cd sdk/gsl && go test ./... -race` → **PASS** (review any regenerated golden diff: only `]8;;`/`[4m`)
 - [x] VERIFY: `gff lint`; `make lint-shell`; `make lint-portability`; `bash sdk/gsl/build.sh`; live `gsl status | cat -v | grep -c ']8;;'` ≥ 6 in a PR worktree; `gff set gsl.links.time false` → no `time.is`; `gff unset gsl.links.time`
 - [x] COMMIT: `feat(gsl): links config key, gff-gated link policy, preview fixture, flag schema, install-time namespace registration`
-- [ ] LEDGER + CHECKPOINT
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** all gates clean and the live toggle observed.
 
 ### Task 6 — docs + human click check  (plan Task 6)
 
-- [ ] DOCS: `sdk/gsl/README.md`, `sdk/gsl/skill/SKILL.md`, `sdk/gsl/docs/design.md`
+- [x] DOCS: `sdk/gsl/README.md`, `sdk/gsl/skill/SKILL.md`, `sdk/gsl/docs/design.md`
 - [ ] VERIFY (human): Ctrl+click each family in a herdr pane; record URLs in `TRACKING.md` §2 + `evidence/T6/click-check.md`; agy: no usage link
 - [ ] COMMIT: `docs(gsl): document link spans, link options, and the gsl.links.* gff flags`
 - [ ] LEDGER: TRACKING §3 all ticked; `docs/mbo/index.md` → `in-review`; flip PR from draft
