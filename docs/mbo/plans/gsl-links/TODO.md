@@ -85,9 +85,9 @@
 ### Task 6 — docs + human click check  (plan Task 6)
 
 - [x] DOCS: `sdk/gsl/README.md`, `sdk/gsl/skill/SKILL.md`, `sdk/gsl/docs/design.md`
-- [ ] VERIFY (human): Ctrl+click each family in a herdr pane; record URLs in `TRACKING.md` §2 + `evidence/T6/click-check.md`; agy: no usage link
-- [ ] COMMIT: `docs(gsl): document link spans, link options, and the gsl.links.* gff flags`
-- [ ] LEDGER: TRACKING §3 all ticked; `docs/mbo/index.md` → `in-review`; flip PR from draft
-- [ ] CHECKPOINT
+- [x] VERIFY (human): Ctrl+click each family in a herdr pane; record URLs in `TRACKING.md` §2 + `evidence/T6/click-check.md`; agy: no usage link
+- [x] COMMIT: `docs(gsl): document link spans, link options, and the gsl.links.* gff flags`
+- [x] LEDGER: TRACKING §3 all ticked; `docs/mbo/index.md` → `in-review`; flip PR from draft
+- [x] CHECKPOINT
 
 **Done when:** stop condition in TRACKING §3 fully ticked.

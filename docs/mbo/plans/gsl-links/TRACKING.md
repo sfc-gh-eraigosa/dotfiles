@@ -24,29 +24,29 @@
 | T3 segment spans + Render delegation | done | ce1ff1a | `go test ./internal/render/ -race -cover` ok; `TestDetectFormat_MatchesRender_Linked` + `TestGolden_Links` pass; `make lint-go` 0 issues (evidence/T3/segments.txt); linked golden targets: file://, usage, repo home, 2× tree, PR, time.is | Decision: zero-value `Links` links nothing (PR badge is in the Repo family + `link_pr`), so default goldens lost the badge link — visible text byte-identical |
 | T4 flags package (gff, fail-open) | done | 34b3aa6 | `go test ./internal/flags/ -race -cover` → ok, 90.3% incl. the 20 ms-budget test; `go build ./...` with the gff dependency; `make lint-go` 0 issues (evidence/T4/flags.txt) | `go mod tidy` also bumped x/sys 0.36→0.47 and colorprofile (gff transitive requirements); full module tests green |
 | T5 wiring: config/cmd/preview/features.yaml/install.sh | done | 485329d | `go test ./... -race -cover` green; `gff lint` clean, `gff list` shows the 5 `gsl.links.*` flags; `make lint-shell` / `lint-portability` / `lint-go` clean; live: 5 targets in a PR worktree, `gff set gsl.links.time false` → 0 time.is, unset → 1, `links off` → 0 OSC 8, render 28–35 ms (evidence/T5/{all-tests,lints,live-check}.txt) | Preview narrow-width tests measured width with a CSI-only stripper (counted URLs); switched the helper to `term.DisplayWidth`. Live flags resolved via the `$DOTFILES_DIR` path-source fallback — the namespace is registered by `install.sh` (`gff install`) on a normal host |
-| T6 docs + human click check | in-progress | (docs: this commit) | README `## Links` + option rows; SKILL.md `### Links (OSC 8 hyperlinks)` + options table; design.md `## Link spans` | Human click check pending (§2 right column) |
+| T6 docs + human click check | done | 72066b1 (docs) + this commit (evidence) | README `## Links` + option rows; SKILL.md `### Links (OSC 8 hyperlinks)` + options table; design.md `## Link spans`; human Ctrl+click check: all six targets open (evidence/T6/click-check.md) | Chain proven gsl → Claude Code → herdr → gnome-terminal |
 
 ## 2. Feature → proof matrix (from spec §5)
 
 | Feature | Automated proof | Human/live proof | Notes |
 | :-- | :-- | :-- | :-- |
-| F1 spans, exact range, balanced | [ ] `TestPaintRuns_*`, `TestJoin_SpansZeroWidth_BothPaths`, parity | [ ] Ctrl+click PR badge opens PR | |
-| F2 modes underline/plain/off | [ ] `TestPaintRuns_PlainModeHasNoUnderline`, `TestEffectiveLinks`, golden `links` | [ ] underline visible in herdr pane | |
-| F3 repo/dirgit links | [ ] `TestNormalizeRemote`, `TestTreeURL`, `TestRepo_Spans_*`, `TestDirGit_Spans_DirAndBranch` | [ ] label → tree URL; glyph → repo home | |
-| F4 file link | [ ] `TestFileURL` | [ ] dir name opens file manager | |
-| F5 usage link | [ ] `TestAI_Spans_*`, `TestBuildLinks_Defaults` | [ ] model → usage page (Claude); none under agy | |
-| F6 time link | [ ] `TestTimeURL_Placeholders`, `TestTime_Span_WholeTextAfterGlyph` | [ ] time → time.is page | |
-| F7 gff gating, fail-open | [ ] `TestResolve_*`, `TestBuildLinks_*`, `gff lint` | [ ] `gff set gsl.links.time false` removes the time link | |
-| F8 width safety | [ ] `TestClipSpans`, `TestReanchorSpans_*`, `TestShiftSpans`, `TestTruncateToWidth_ClipsSpans`, fit property test | [ ] narrow pane: no stray escapes | |
-| F9 docs | [ ] — | [ ] README/SKILL/design reviewed | |
+| F1 spans, exact range, balanced | [x] `TestPaintRuns_*`, `TestJoin_SpansZeroWidth_BothPaths`, parity | [x] Ctrl+click PR badge opens PR | |
+| F2 modes underline/plain/off | [x] `TestPaintRuns_PlainModeHasNoUnderline`, `TestEffectiveLinks`, golden `links` | [x] underline visible in herdr pane | |
+| F3 repo/dirgit links | [x] `TestNormalizeRemote`, `TestTreeURL`, `TestRepo_Spans_*`, `TestDirGit_Spans_DirAndBranch` | [x] label → tree URL; glyph → repo home | |
+| F4 file link | [x] `TestFileURL` | [x] dir name opens file manager | |
+| F5 usage link | [x] `TestAI_Spans_*`, `TestBuildLinks_Defaults` | [x] model → usage page (Claude); none under agy | |
+| F6 time link | [x] `TestTimeURL_Placeholders`, `TestTime_Span_WholeTextAfterGlyph` | [x] time → time.is page | |
+| F7 gff gating, fail-open | [x] `TestResolve_*`, `TestBuildLinks_*`, `gff lint` | [x] `gff set gsl.links.time false` removes the time link | |
+| F8 width safety | [x] `TestClipSpans`, `TestReanchorSpans_*`, `TestShiftSpans`, `TestTruncateToWidth_ClipsSpans`, fit property test | [x] narrow pane: no stray escapes | |
+| F9 docs | [x] — | [x] README/SKILL/design reviewed | |
 
 ## 3. Validation done-when — the stop condition
 
-- [ ] T1–T6 rows `done` with SHA + evidence
-- [ ] `cd sdk/gsl && go test ./... -race -cover` green, coverage ≥60%
-- [ ] `gff lint`, `make lint-shell`, `make lint-portability` clean
-- [ ] Human click check recorded (§2 right column) for every family
-- [ ] PR flipped from draft; `docs/mbo/index.md` row → `in-review`
+- [x] T1–T6 rows `done` with SHA + evidence
+- [x] `cd sdk/gsl && go test ./... -race -cover` green, coverage ≥60% (render 90.5%, flags 90.3%)
+- [x] `gff lint`, `make lint-shell`, `make lint-portability` clean (+ `make lint-go` 0 issues)
+- [x] Human click check recorded (§2 right column) for every family
+- [x] PR flipped from draft; `docs/mbo/index.md` row → `in-review`
 
 ## 4. Blockers & escalations
 
@@ -64,3 +64,4 @@
 | 2026-09-05 | build-1 | T4 done: `internal/flags` (concurrent, budgeted, fail-open gff lookups) + gff SDK dependency. |
 | 2026-09-05 | build-1 | T5 done: `links` config key, `buildLinks` policy in cmd (flags ∥ origin lookup, 100 ms budget), preview fixture links, 5 gff flags, `gff install` in install.sh. |
 | 2026-09-05 | build-1 | T6 docs written (README, SKILL.md, design.md); awaiting the human click check. |
+| 2026-09-05 | build-1 | T6 done: human click check passed for all six targets; objective → in-review; PR #279 ready for review. |
