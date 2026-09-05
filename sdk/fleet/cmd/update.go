@@ -109,13 +109,19 @@ func runUpdateWith(out io.Writer, hosts []string, r runner.Runner) error {
 	}
 
 	if flagJSON {
-		return printJSONReport(out, plan, reports)
+		if err := printJSONReport(out, plan, reports); err != nil {
+			return err
+		}
+	} else {
+		fmt.Fprintf(out, "plan: %s\n", plan.Source)
+		for _, rep := range reports {
+			printHostReport(out, plan, rep)
+		}
 	}
-
-	fmt.Fprintf(out, "plan: %s\n", plan.Source)
-	for _, rep := range reports {
-		printHostReport(out, plan, rep)
-	}
+	// The exit code must always reflect the reports, JSON or not — printing
+	// nil from printJSONReport (which reports only a MARSHAL/WRITE failure,
+	// never a host failure) used to be returned as-is, so `fleet update
+	// --json` exited 0 even when every host failed.
 	return exitErrorForReports(reports)
 }
 

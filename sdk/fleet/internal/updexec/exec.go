@@ -40,6 +40,14 @@ type Result struct {
 	// "attempt 2/3" without cmd guessing the budget from an id suffix.
 	MaxAttempts int
 	TimedOut    bool
+	// NeedsTerminal is set true whenever this step's failure was caused by
+	// ErrNoTerminal — a typed marker HostReport.NeedsTerminal() consults,
+	// rather than string-matching Reason. runGhAuth rewrites Reason to the
+	// human-readable "needs a terminal" for a login that could not run,
+	// which used to also be the ONLY signal NeedsTerminal() had: the string
+	// mismatch meant a gh-auth login needing a tty under the Background lane
+	// was never routed to the interactive queue.
+	NeedsTerminal bool
 }
 
 // HostReport is one host's run of the whole plan.
@@ -77,7 +85,7 @@ func (h HostReport) Err() error {
 // of marking the row failed.
 func (h HostReport) NeedsTerminal() bool {
 	for _, r := range h.Results {
-		if r.Status == Failed && r.Reason == ErrNoTerminal.Error() {
+		if r.Status == Failed && r.NeedsTerminal {
 			return true
 		}
 	}
@@ -111,14 +119,19 @@ type Console struct {
 	Preamble func(st updplan.Step) string
 }
 
+// runScript prepends Preamble's text to script VERBATIM — no separator is
+// added here. Preamble is a complete statement list: every producer
+// (bgPreamble, localAnswerPreamble) is responsible for ending its own text
+// with "; " or "&& " so the concatenation is valid shell. This used to join
+// with " && " unconditionally, which broke every producer that already
+// terminated its own text with "; " (bgPreamble's sudoGate guard, its
+// exported-answers prefix) — the result was "... || exit 92;  && cd ...", a
+// syntax error on EVERY TUI background run step.
 func (c Console) runScript(st updplan.Step, script string) string {
 	if st.Kind != updplan.KindRun || c.Preamble == nil {
 		return script
 	}
-	if p := c.Preamble(st); p != "" {
-		return p + " && " + script
-	}
-	return script
+	return c.Preamble(st) + script
 }
 
 func (c Console) runStdin(st updplan.Step) string {
@@ -199,14 +212,62 @@ func (c Console) Interactive(ctx context.Context, host string, st updplan.Step, 
 	return c.R.RunInteractive(host, script)
 }
 
-// Background is the TUI StepIO lane: Batch is identical to Console's, but
-// Interactive always fails with ErrNoTerminal — a background update has no
-// terminal to hand a step, so the executor routes such a step back to the
-// interactive queue instead.
+// Background is the TUI StepIO lane: Batch is identical to Console's.
+// Interactive is where it differs — but NOT unconditionally. A run step
+// marked interactive: true (the shipped default plan's install.sh) is the
+// TUI's unattended-install case: the sudo preamble + stdin credential
+// already primed the session, so it is run as Batch, its output still
+// flowing to Line/the capture exactly like any other run step. Only a step
+// that genuinely needs a human at a keyboard — a gh-auth login, which drives
+// a browser device-code flow no preamble can answer — fails with
+// ErrNoTerminal, so the executor routes it to the interactive queue instead.
+//
+// "interactive: true" therefore means "needs a tty ONLY when no unattended
+// credential is available", not "always needs a tty" — Console honours the
+// plan author's flag literally (there is always a real terminal on that
+// lane), and Background narrows it to the one kind of step a background
+// session truly cannot service.
 type Background struct{ Console }
 
-func (Background) Interactive(context.Context, string, updplan.Step, string) error {
+func (b Background) Interactive(ctx context.Context, host string, st updplan.Step, script string) error {
+	if st.Kind == updplan.KindRun {
+		_, err := b.Console.Batch(ctx, host, st, script)
+		return err
+	}
 	return ErrNoTerminal
+}
+
+// teeable is an optional capability of a StepIO lane: one that can return a
+// copy of itself whose Batch/Interactive output ALSO reaches an extra
+// callback, without disturbing whatever Line callback it already had.
+// Executor.RunHost uses it to tee every lane's remote output into the
+// host's capture (Output/LineWriter) automatically — a caller (cmd, the
+// TUI) no longer has to remember to wire that itself, which is how a
+// headless `fleet update` run's capture used to contain only the step
+// banners and never the remote command's own output (e.g. git's `fatal:`
+// text reached neither the terminal nor the log).
+type teeable interface {
+	withLine(func(host, line string)) StepIO
+}
+
+// withLine returns a copy of c whose Line callback ALSO invokes fn, after
+// any Line callback c already had.
+func (c Console) withLine(fn func(host, line string)) StepIO {
+	orig := c.Line
+	c.Line = func(host, line string) {
+		if orig != nil {
+			orig(host, line)
+		}
+		fn(host, line)
+	}
+	return c
+}
+
+// withLine on Background rewires its embedded Console the same way, while
+// keeping Background's own Interactive override.
+func (b Background) withLine(fn func(host, line string)) StepIO {
+	b.Console = b.Console.withLine(fn).(Console)
+	return b
 }
 
 // Output opens a per-host log; LineWriter receives every captured line.
@@ -299,6 +360,13 @@ func (e Executor) RunHost(host string, p updplan.Plan) HostReport {
 	header := fmt.Sprintf("fleet update — host=%s plan=%s mode=%s started=%s",
 		host, p.Source, e.modeLabel(), started.Format(time.RFC3339))
 	w, path := e.out().Open(host, header)
+	// Tee every batch line the lane produces into w, in addition to whatever
+	// Line callback the caller already set (cmd echoes to stdout; the TUI
+	// feeds its log pane). Without this, a caller that never wires its own
+	// Line into the capture gets a log containing only the step banners.
+	if t, ok := e.IO.(teeable); ok {
+		e.IO = t.withLine(func(_, line string) { w.Line(line) })
+	}
 
 	rep := HostReport{Host: host, Plan: p.Source, Started: started, Output: path}
 	status := map[string]Status{}
@@ -728,11 +796,13 @@ func (e Executor) runGhAuth(w LineWriter, host string, st updplan.Step) Result {
 	}
 	if err := e.IO.Interactive(context.Background(), host, st, loginScript); err != nil {
 		reason := err.Error()
-		if errors.Is(err, ErrNoTerminal) {
+		needsTerminal := errors.Is(err, ErrNoTerminal)
+		if needsTerminal {
 			reason = "needs a terminal"
 		}
 		return Result{Step: st.ID, Kind: st.Kind, Status: Failed, Reason: reason,
-			Duration: e.now().Sub(start), Attempts: res.Attempts, MaxAttempts: res.MaxAttempts}
+			Duration: e.now().Sub(start), Attempts: res.Attempts, MaxAttempts: res.MaxAttempts,
+			NeedsTerminal: needsTerminal}
 	}
 
 	out, err2 := checkOnce(context.Background())
@@ -847,6 +917,7 @@ func (e Executor) runWithRetry(
 		Step: id, Kind: kind, Status: Failed, Exit: exit,
 		Reason: reason, Duration: e.now().Sub(start),
 		Attempts: attempts, MaxAttempts: maxAttempts, TimedOut: timedOut, Notes: notes,
+		NeedsTerminal: errors.Is(callErr, ErrNoTerminal),
 	}
 }
 

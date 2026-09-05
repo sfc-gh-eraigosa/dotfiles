@@ -101,6 +101,16 @@ func precheckSudo(alias string, r runner.Runner) tea.Cmd {
 	}
 }
 
+// envWinsetupAnswer / envGeminiTeardownAnswer are the ONE definition of the
+// two install.sh prompt-answer environment variable names — envPrefix,
+// handoffEnv, and localAnswerPreamble (update_output.go) each used to spell
+// these out as separate string literals, three copies that could silently
+// drift from one another.
+const (
+	envWinsetupAnswer       = "WINSETUP_ANSWER"
+	envGeminiTeardownAnswer = "GEMINI_TEARDOWN_ANSWER"
+)
+
 // answers are the operator's pre-supplied responses to install.sh's prompts,
 // collected once per wave so an unattended run never reaches a prompt nobody
 // is watching. Password is memory-only: never persisted, never logged, never
@@ -158,10 +168,10 @@ func orUnset(s string) string {
 func (a answers) envPrefix() string {
 	var b []string
 	if a.windows != "" {
-		b = append(b, "WINSETUP_ANSWER="+a.windows)
+		b = append(b, envWinsetupAnswer+"="+a.windows)
 	}
 	if a.gemini != "" {
-		b = append(b, "GEMINI_TEARDOWN_ANSWER="+a.gemini)
+		b = append(b, envGeminiTeardownAnswer+"="+a.gemini)
 	}
 	if len(b) == 0 {
 		return ""
@@ -253,21 +263,68 @@ func bgPreamble(a answers) func(updplan.Step) string {
 	}
 }
 
-// teeOutput wraps another updexec.Output and hands the LineWriter it opens
-// to onOpen, so a caller who does not otherwise see inside RunHost (which
-// owns Output.Open) can still write real remote output into the same
-// capture the executor's own step banners land in.
-type teeOutput struct {
-	inner  updexec.Output
-	onOpen func(updexec.LineWriter)
+// lineQueue is an unbounded, mutex-guarded FIFO decoupling a producer that
+// must NEVER block (the executor's Line callback) from a consumer that may
+// stall for an arbitrarily long time (readLine's Cmd, which is only
+// re-issued from Update() — and Update() itself stops running entirely
+// while tea.ExecProcess suspends the event loop for another host's
+// interactive handoff). Before this, Line pushed onto a capacity-64
+// channel: once a fast background install filled it with nobody reading,
+// the executor's own goroutine — and with it, the whole update — stalled
+// until the UI got back around to draining. With a 30-minute per-attempt
+// deadline on batch steps, a long enough stall could kill the install
+// mid-flight for a reason that had nothing to do with the remote host.
+type lineQueue struct {
+	mu     sync.Mutex
+	cond   *sync.Cond
+	buf    []string
+	closed bool
 }
 
-func (t teeOutput) Open(host, header string) (updexec.LineWriter, string) {
-	w, path := t.inner.Open(host, header)
-	if t.onOpen != nil {
-		t.onOpen(w)
+func newLineQueue() *lineQueue {
+	q := &lineQueue{}
+	q.cond = sync.NewCond(&q.mu)
+	return q
+}
+
+// push never blocks: it only grows a slice and signals, so the executor's
+// Line callback returns immediately regardless of whether anything is
+// reading.
+func (q *lineQueue) push(l string) {
+	q.mu.Lock()
+	q.buf = append(q.buf, l)
+	q.mu.Unlock()
+	q.cond.Signal()
+}
+
+// closeQ marks the queue closed: once drained, forward will stop.
+func (q *lineQueue) closeQ() {
+	q.mu.Lock()
+	q.closed = true
+	q.mu.Unlock()
+	q.cond.Signal()
+}
+
+// forward drains q into ch, in order, blocking on the channel send when
+// nobody is reading — safe here because forward runs in its own goroutine,
+// never on the executor's call path. It closes ch once q is closed and
+// fully drained, exactly like closing a plain channel would.
+func (q *lineQueue) forward(ch chan<- string) {
+	for {
+		q.mu.Lock()
+		for len(q.buf) == 0 && !q.closed {
+			q.cond.Wait()
+		}
+		if len(q.buf) == 0 {
+			q.mu.Unlock()
+			close(ch)
+			return
+		}
+		l := q.buf[0]
+		q.buf = q.buf[1:]
+		q.mu.Unlock()
+		ch <- l
 	}
-	return w, path
 }
 
 // beginStream launches the update from inside a Cmd and hands the channels
@@ -279,39 +336,26 @@ func (t teeOutput) Open(host, header string) (updexec.LineWriter, string) {
 // It runs plan's steps through the SAME plan executor the headless `fleet
 // update` uses (updexec.Executor), over the Background StepIO lane: batch
 // steps stream exactly as before, and an interactive step this lane cannot
-// service fails with updexec.ErrNoTerminal rather than hanging.
+// service (gh-auth) fails with updexec.ErrNoTerminal rather than hanging.
+//
+// The executor tees every line it sends into the capture (Output/LineWriter)
+// itself now (updexec.Executor.RunHost), so beginStream no longer has to —
+// its own Line callback only has to feed the UI's log pane via lineQueue.
 func beginStream(alias string, plan updplan.Plan, a answers, r runner.Runner, dir string) tea.Cmd {
 	secret := a.sudoSecret + "\n"
 	preamble := bgPreamble(a)
 	reset := a.forceReset()
 	return func() tea.Msg {
-		lines := make(chan string, 64)
+		lines := make(chan string)
 		done := make(chan error, 1)
 
-		var mu sync.Mutex
-		var lw updexec.LineWriter
-
-		out := teeOutput{
-			inner: captureOutput{dir: dir},
-			onOpen: func(w updexec.LineWriter) {
-				mu.Lock()
-				lw = w
-				mu.Unlock()
-			},
-		}
+		q := newLineQueue()
+		go q.forward(lines)
 
 		ex := updexec.Executor{
 			IO: updexec.Background{Console: updexec.Console{
-				R: r,
-				Line: func(_, l string) {
-					lines <- l
-					mu.Lock()
-					w := lw
-					mu.Unlock()
-					if w != nil {
-						w.Line(l)
-					}
-				},
+				R:    r,
+				Line: func(_, l string) { q.push(l) },
 				Stdin: func(st updplan.Step) string {
 					if st.Kind != updplan.KindRun {
 						return ""
@@ -320,13 +364,13 @@ func beginStream(alias string, plan updplan.Plan, a answers, r runner.Runner, di
 				},
 				Preamble: preamble,
 			}},
-			Out:   out,
+			Out:   captureOutput{dir: dir},
 			Reset: reset,
 		}
 
 		go func() {
 			rep := ex.RunHost(alias, plan)
-			close(lines)
+			q.closeQ()
 			if rep.NeedsTerminal() {
 				done <- errNeedsTerminal
 				return
@@ -360,8 +404,10 @@ func awaitDone(alias string, st stream) tea.Cmd {
 	}
 }
 
-// shQuote makes a string safe as a single-quoted POSIX shell word.
-func shQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+// shQuote makes a string safe as a single-quoted POSIX shell word. Aliased
+// to updexec.ShQuote — the one definition both packages share, rather than
+// cmd carrying its own byte-identical copy.
+var shQuote = updexec.ShQuote
 
 // handoffWrapper wraps cmd — a full local shell command line — in a banner
 // naming the host and its position in the queue, plus a footer carrying the
@@ -379,12 +425,21 @@ func handoffWrapper(alias, ref, cmd string, pos, total int) string {
 }
 
 // handoffArgv builds the self-exec argv for the interactive handoff:
-// `<self> update <alias> [--file F] [--ref R] [--reset]`. There is now
-// exactly ONE definition of "update a host" — the plan executor behind
-// `fleet update` — so the interactive lane delegates to that CLI verb
-// rather than re-implementing a remote script. Extracted so a test can
+// `<self> update <alias> [--file F] [--ref R] --repo REPO [--reset]`. There
+// is now exactly ONE definition of "update a host" — the plan executor
+// behind `fleet update` — so the interactive lane delegates to that CLI
+// verb rather than re-implementing a remote script. Extracted so a test can
 // assert on it without running a subprocess.
-func handoffArgv(self, alias, file, ref string, reset bool) []string {
+//
+// --repo is forwarded ALWAYS (unlike --file/--ref, which are only appended
+// when set): the persistent --repo flag always carries a value (it defaults
+// to ~/git/dotfiles), and the TUI loaded its plan and gff resolution
+// against THAT checkout. Without forwarding it, a routed host used to
+// resolve gff/the repo-local plan against the child's own --repo default
+// instead — possibly a different checkout than the one the TUI itself
+// loaded from. --config/--marker are irrelevant to `update` and are
+// deliberately left unforwarded.
+func handoffArgv(self, alias, file, ref, repo string, reset bool) []string {
 	argv := []string{self, "update", alias}
 	if file != "" {
 		argv = append(argv, "--file", file)
@@ -392,6 +447,7 @@ func handoffArgv(self, alias, file, ref string, reset bool) []string {
 	if ref != "" {
 		argv = append(argv, "--ref", ref)
 	}
+	argv = append(argv, "--repo", repo)
 	if reset {
 		argv = append(argv, "--reset")
 	}
@@ -407,10 +463,10 @@ func handoffArgv(self, alias, file, ref string, reset bool) []string {
 func handoffEnv(a answers) []string {
 	env := os.Environ()
 	if a.windows != "" {
-		env = append(env, "WINSETUP_ANSWER="+a.windows)
+		env = append(env, envWinsetupAnswer+"="+a.windows)
 	}
 	if a.gemini != "" {
-		env = append(env, "GEMINI_TEARDOWN_ANSWER="+a.gemini)
+		env = append(env, envGeminiTeardownAnswer+"="+a.gemini)
 	}
 	return env
 }
@@ -420,12 +476,12 @@ func handoffEnv(a answers) []string {
 // plan executor the background lane and the headless CLI use. selfFn
 // resolves the executable path (os.Executable in production; injected in
 // tests), matching configShell's self-exec pattern.
-func interactiveHandoff(selfFn func() (string, error), alias, file, ref string, a answers, pos, total int) tea.Cmd {
+func interactiveHandoff(selfFn func() (string, error), alias, file, ref, repo string, a answers, pos, total int) tea.Cmd {
 	self, err := selfFn()
 	if err != nil || self == "" {
 		self = "fleet"
 	}
-	argv := handoffArgv(self, alias, file, ref, a.forceReset())
+	argv := handoffArgv(self, alias, file, ref, repo, a.forceReset())
 	quoted := make([]string, len(argv))
 	for i, s := range argv {
 		quoted[i] = shQuote(s)

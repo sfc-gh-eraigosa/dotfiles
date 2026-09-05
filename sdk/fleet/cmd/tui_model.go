@@ -119,6 +119,7 @@ type tuiModel struct {
 	updateRef string
 	plan      updplan.Plan           // loaded ONCE at startup; the model never calls loadPlan itself
 	file      string                 // the --file value the plan was loaded from, if any; re-passed to the interactive handoff's self-exec
+	repo      string                 // the --repo value the plan/gff resolution used; re-passed to the interactive handoff's self-exec so a routed host resolves against the SAME checkout
 	self      func() (string, error) // resolves the executable path for the interactive handoff's self-exec; os.Executable in production, injected in tests
 	ans       answers                // pre-supplied answers for this wave (memory-only credential)
 	ansField  answerField            // cursor in the answer form
@@ -501,18 +502,32 @@ func (m *tuiModel) startUpdate(targets []string) tea.Cmd {
 }
 
 // planLabel is the plan's Source for the status line: "built-in default"
-// when the built-in plan carries no path, else the Source itself, truncated
-// from the front so a long absolute path can never push the status line
-// past the terminal width (the demo width guard, TestDemoFrames).
+// when the built-in plan carries no path, else the Source itself, elided in
+// the MIDDLE so a long value can never push the status line past the
+// terminal width (the demo width guard, TestDemoFrames) while still keeping
+// both ends readable.
+//
+// This used to truncate from the FRONT (keep only the tail), which for a
+// value like "built-in default (no /very/long/home/path/.config/fleet/
+// fleet.yaml)" dropped the "built-in default (no " marker entirely once the
+// path was long enough — the status line then named a file that was NOT
+// actually loaded. Eliding the middle instead keeps the leading marker (or
+// the start of an explicit --file path) AND the trailing filename, and is
+// rune-safe: slicing by len(string) (bytes) could split a multi-byte rune.
 func planLabel(source string) string {
 	if source == "" {
 		return "built-in default"
 	}
 	const max = 40
-	if len(source) <= max {
+	r := []rune(source)
+	if len(r) <= max {
 		return source
 	}
-	return "…" + source[len(source)-max+1:]
+	const ellipsis = "…"
+	// -1 rune reserved for the ellipsis itself.
+	headLen := (max - 1) / 2
+	tailLen := (max - 1) - headLen
+	return string(r[:headLen]) + ellipsis + string(r[len(r)-tailLen:])
 }
 
 // pump fills free job slots from the background queue. When the wave is fully
@@ -538,7 +553,7 @@ func (m *tuiModel) pump() tea.Cmd {
 			total = len(m.iaQueue) + 1
 		}
 		pos := total - len(m.iaQueue)
-		return tea.Batch(append(cmds, interactiveHandoff(m.self, a, m.file, m.updateRef, m.ans, pos, total))...)
+		return tea.Batch(append(cmds, interactiveHandoff(m.self, a, m.file, m.updateRef, m.repo, m.ans, pos, total))...)
 	}
 	return tea.Batch(cmds...)
 }

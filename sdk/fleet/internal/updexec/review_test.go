@@ -2,6 +2,7 @@ package updexec
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -255,10 +256,19 @@ func TestNoRestoreIsHonouredWhenTheSyncFails(t *testing.T) {
 // TestExtrasLoopTracksFailureAcrossIterations is a pure-string assertion
 // that the loop tracks a fail flag rather than trusting its own (POSIX
 // `for`, last-iteration-only) exit status.
+//
+// Updated for the D+E finding: the whole thing is now wrapped in `{ …; }`
+// so a caller can join it onto a preceding fetch/checkout/merge with a
+// single `&&` and have the ENTIRE loop gated by that chain — previously
+// only the leading `fail=0` assignment was gated (it followed the `&&`) and
+// the `for` loop itself followed a bare `;`, so it ran even when the move
+// before it had failed, and `[ "$fail" = 0 ]` then replaced that failure's
+// real exit code with a generic 1. This test used to pin the un-braced
+// (buggy) text; it is now fixed to assert the braced form.
 func TestExtrasLoopTracksFailureAcrossIterations(t *testing.T) {
 	s := extrasScript([]string{"staging", "release"})
-	if !strings.HasPrefix(s, "fail=0; for b in staging release; do") {
-		t.Fatalf("extras must initialise a fail flag before the loop:\n%s", s)
+	if !strings.HasPrefix(s, "{ fail=0; for b in staging release; do") {
+		t.Fatalf("extras must be wrapped in { … } with a fail flag initialised before the loop:\n%s", s)
 	}
 	if !strings.Contains(s, `echo "fleet: ff $b" || fail=1`) {
 		t.Fatalf("a failing force-move must set the fail flag:\n%s", s)
@@ -266,8 +276,54 @@ func TestExtrasLoopTracksFailureAcrossIterations(t *testing.T) {
 	if !strings.Contains(s, `echo "fleet: created $b" || fail=1`) {
 		t.Fatalf("a failing track-create must set the fail flag:\n%s", s)
 	}
-	if !strings.HasSuffix(s, `done; [ "$fail" = 0 ]`) {
-		t.Fatalf("the loop must end by checking the fail flag:\n%s", s)
+	if !strings.HasSuffix(s, `done; [ "$fail" = 0 ]; }`) {
+		t.Fatalf("the loop must end by checking the fail flag and closing the brace group:\n%s", s)
+	}
+}
+
+// TestExtrasScriptJoinsOntoTheAndChainAsOneUnit pins the fix directly:
+// syncBody/CloneScript join extrasScript onto the preceding move with
+// " && ", and extrasScript's own braces are what make that join gate the
+// WHOLE loop rather than just its first statement.
+func TestExtrasScriptJoinsOntoTheAndChainAsOneUnit(t *testing.T) {
+	s := mustSync(t, repo("dotfiles", []string{"main", "staging"}), updplan.LocalSkip, false)
+	if !strings.Contains(s, `&& { fail=0;`) {
+		t.Fatalf("extras must be joined onto the preceding move with && { fail=0; …:\n%s", s)
+	}
+}
+
+// TestExtrasLoopNeverRunsAfterAFailedMergeUpstream reproduces the finding
+// with a stub git whose merge fails (128): the extras loop's own `git
+// branch` must NEVER run, and the script's exit code must remain 128 (the
+// merge's own code), not the loop's masking 1.
+func TestExtrasLoopNeverRunsAfterAFailedMergeUpstream(t *testing.T) {
+	work := t.TempDir()
+	logFile := filepath.Join(work, "branch.log")
+	stubBin(t, "git", `
+case "$1" in
+  fetch) exit 0 ;;
+  checkout) exit 0 ;;
+  merge) exit 128 ;;
+  symbolic-ref) echo main; exit 0 ;;
+  rev-parse) echo deadbeefdeadbeefdeadbeefdeadbeefdeadbeef; exit 0 ;;
+  branch) echo "$@" >> `+ShQuote(logFile)+`; exit 0 ;;
+esac
+exit 0`)
+
+	r := repo("dotfiles", []string{"main", "staging"})
+	r.Path = work
+	s := mustSync(t, r, updplan.LocalSkip, false)
+
+	err := exec.Command("sh", "-c", s).Run()
+	if err == nil {
+		t.Fatal("a failed merge must fail the whole sync script")
+	}
+	var ee *exec.ExitError
+	if !errors.As(err, &ee) || ee.ExitCode() != 128 {
+		t.Fatalf("exit code = %v, want 128 (the merge's own code, not the loop's masking 1)", err)
+	}
+	if _, statErr := os.Stat(logFile); statErr == nil {
+		t.Fatal("the extras loop's git branch must never run after a failed merge")
 	}
 }
 
@@ -412,5 +468,103 @@ func TestBatchTreatsBareErrWaitDelayAsSuccess(t *testing.T) {
 	_, err := c.Batch(context.Background(), "alpha", updplan.Step{ID: "x", Kind: updplan.KindSync}, "script")
 	if err != nil {
 		t.Fatalf("a bare exec.ErrWaitDelay (child exited 0) must be treated as success: %v", err)
+	}
+}
+
+// --- leaf D+E findings ------------------------------------------------------
+//
+// The tests below pin the final round of code-review findings on the
+// fleet-update build's D+E leaves (docs/mbo/plans/fleet-update.md).
+
+// --- finding 1: Preamble is prepended verbatim, no separator added ----------
+
+// TestBackgroundRunStepScriptIsValidShell proves the assembled preamble +
+// script is syntactically valid POSIX shell (via `sh -n`, a stub-free
+// syntax check) for a preamble containing the sudo prime + sudoGate +
+// exported answers — the exact shape bgPreamble produces. Before the fix,
+// Console.runScript joined Preamble's text with " && ", producing
+// "... || exit 92;  && cd ..." — a syntax error on EVERY TUI background run
+// step, since bgPreamble already terminates its own text with "; ".
+func TestBackgroundRunStepScriptIsValidShell(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sh -n requires a POSIX shell")
+	}
+	preamble := `sudo -S -p '' -v 2>/dev/null || exit 91; ` +
+		`{ [ "$(id -u)" = 0 ] || ! command -v sudo >/dev/null 2>&1 || sudo -n true 2>/dev/null; } || exit 92; ` +
+		`export WINSETUP_ANSWER=s GEMINI_TEARDOWN_ANSWER=keep; `
+	c := Console{Preamble: func(updplan.Step) string { return preamble }}
+	st := updplan.Step{ID: "install", Kind: updplan.KindRun}
+	script := c.runScript(st, "cd /tmp && true")
+
+	if err := exec.Command("sh", "-n", "-c", script).Run(); err != nil {
+		t.Fatalf("assembled script is not valid shell: %v\nscript:\n%s", err, script)
+	}
+}
+
+// --- finding 5: HostReport.NeedsTerminal must use a typed marker, not a string match
+
+// TestGhAuthNeedingATerminalIsFlaggedForTheInteractiveLane pins the fix: a
+// gh-auth login that fails with ErrNoTerminal (the Background lane's shape)
+// must set Result.NeedsTerminal so HostReport.NeedsTerminal() finds it —
+// before the fix, runGhAuth rewrote Reason to the human-readable "needs a
+// terminal", which no longer matched ErrNoTerminal.Error(), so the TUI never
+// routed such a host to its interactive queue.
+func TestGhAuthNeedingATerminalIsFlaggedForTheInteractiveLane(t *testing.T) {
+	inner := newFakeIO().on("gh auth status -h github.com", "", realExitError(t, 1))
+	io := noTerminalIO{inner}
+	e := Executor{IO: io}
+	rep := e.RunHost("alpha", ghAuthPlan())
+
+	r, ok := resultFor(rep, "gh.auth")
+	if !ok || r.Status != Failed || r.Reason != "needs a terminal" {
+		t.Fatalf("no-terminal login must still fail cleanly with the human reason: %+v", r)
+	}
+	if !r.NeedsTerminal {
+		t.Fatalf("Result.NeedsTerminal must be set: %+v", r)
+	}
+	if !rep.NeedsTerminal() {
+		t.Fatal("HostReport.NeedsTerminal() must report true for a gh-auth login needing a terminal")
+	}
+}
+
+// --- finding 7: the executor tees every lane's remote output into the capture
+
+// TestExecutorTeesBatchOutputIntoTheCapture proves RunHost forwards every
+// line a StepIO lane produces into the host's own capture (Output/
+// LineWriter), even when the caller never set Console.Line itself — a
+// headless `fleet update` run used to capture only the executor's own step
+// banners, never the remote command's own output (e.g. git's `fatal:` text).
+func TestExecutorTeesBatchOutputIntoTheCapture(t *testing.T) {
+	out := newRecordingOutput()
+	r := &recordingRunner{streamOut: "line one\nline two"}
+	e := Executor{IO: Console{R: r}, Out: out}
+	e.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
+
+	text := out.text("alpha")
+	for _, want := range []string{"line one", "line two"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("capture must contain the lane's own remote output %q, got:\n%s", want, text)
+		}
+	}
+}
+
+// TestExecutorTeeingPreservesAnExistingLineCallback proves the tee ADDS to
+// whatever Line callback the caller already set (the TUI's log-pane feed)
+// rather than replacing it.
+func TestExecutorTeeingPreservesAnExistingLineCallback(t *testing.T) {
+	out := newRecordingOutput()
+	r := &recordingRunner{streamOut: "line one"}
+	var seen []string
+	e := Executor{
+		IO:  Console{R: r, Line: func(_, l string) { seen = append(seen, l) }},
+		Out: out,
+	}
+	e.RunHost("alpha", onlySyncPlan(updplan.LocalSkip, false))
+
+	if len(seen) == 0 || seen[0] != "line one" {
+		t.Fatalf("the caller's own Line callback must still fire: %v", seen)
+	}
+	if !strings.Contains(out.text("alpha"), "line one") {
+		t.Fatalf("the capture must ALSO receive the line:\n%s", out.text("alpha"))
 	}
 }

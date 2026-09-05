@@ -1,0 +1,266 @@
+2026-09-05 — final D+E code-review findings (10 confirmed) — RED/GREEN evidence
+================================================================================
+
+Method: for each finding, a failing test was added/fixed first (RUN-RED
+confirmed either by writing the test against the still-buggy code, or by
+reverting just the fix locally, running the new test, and restoring), then the
+minimal fix landed (RUN-GREEN). Full transcripts below are the RED capture for
+each finding (fix then reverted with `cp`/restored — no git history touched)
+followed by the final whole-module GREEN gate.
+
+--------------------------------------------------------------------------------
+Finding 1 — Console.runScript joined Preamble with " && " unconditionally,
+breaking bgPreamble's already-terminated "; " text on every TUI background
+run step.
+Fix: runScript prepends Preamble's text VERBATIM; bgPreamble/localAnswerPreamble
+terminate their own text.
+RED (internal/updexec, join re-added):
+
+=== RUN   TestBackgroundRunStepScriptIsValidShell
+    review_test.go:500: assembled script is not valid shell: exit status 2
+        script:
+        sudo -S -p '' -v 2>/dev/null || exit 91; { [ "$(id -u)" = 0 ] || ! command -v sudo >/dev/null 2>&1 || sudo -n true 2>/dev/null; } || exit 92; export WINSETUP_ANSWER=s GEMINI_TEARDOWN_ANSWER=keep;  && cd /tmp && true
+--- FAIL: TestBackgroundRunStepScriptIsValidShell (0.00s)
+FAIL
+
+GREEN: TestBackgroundRunStepScriptIsValidShell, TestRealTUIPreambleProducesValidShell — PASS.
+
+--------------------------------------------------------------------------------
+Finding 2 — Background.Interactive unconditionally returned ErrNoTerminal, so
+the shipped default plan's interactive:true dotfiles.install step could never
+run in the background lane; every host was requeued to the interactive
+handoff and the collected sudo password was never used.
+Fix: Background.Interactive routes a KindRun step through Console.Batch
+(the sudo preamble + stdin already primed the session for exactly this);
+only a genuinely-interactive kind (gh-auth) still returns ErrNoTerminal.
+RED (internal/updexec, Background.Interactive reverted to unconditional ErrNoTerminal):
+
+=== RUN   TestBackgroundRunsInteractiveRunStepsAsBatch
+    console_test.go:162: an interactive KindRun step must run as Batch under Background: updexec: step needs a terminal this lane cannot provide
+--- FAIL: TestBackgroundRunsInteractiveRunStepsAsBatch (0.00s)
+FAIL
+
+GREEN: TestBackgroundRunsInteractiveRunStepsAsBatch, TestBackgroundStillRefusesGhAuthLogin,
+TestBackgroundRefusesInteractive (now gh-auth) — PASS.
+
+--------------------------------------------------------------------------------
+Finding 3 — extrasScript began with a bare "fail=0; for …", so only the
+leading assignment was gated by the preceding "&&" — the for loop itself ran
+even after a failed fetch/checkout/merge, and "[ \"$fail\" = 0 ]" masked the
+real exit code (128 -> 1).
+Fix: wrap the whole loop in "{ …; }" so it is one compound command a caller
+joins onto the preceding move with a single "&&".
+RED (existing TestExtrasLoopTracksFailureAcrossIterations, which pinned the
+un-braced text, run against the newly-braced extrasScript):
+
+--- FAIL: TestExtrasLoopTracksFailureAcrossIterations (0.00s)
+    review_test.go:261: extras must initialise a fail flag before the loop:
+        { fail=0; for b in staging release; do [ "$b" = "$b1" ] && continue; if git show-ref -q --verify "refs/heads/$b"; then if git merge-base --is-ancestor "$b" "origin/$b"; then git branch -q -f "$b" "origin/$b" && echo "fleet: ff $b" || fail=1; else echo "fleet: skipped(diverged) $b"; fi; else git branch -q --track "$b" "origin/$b" && echo "fleet: created $b" || fail=1; fi; done; [ "$fail" = 0 ]; }
+FAIL
+
+(Test fixed to assert the braced form — the finding explicitly names this
+test as pinning the bug.)
+GREEN: TestExtrasLoopTracksFailureAcrossIterations, TestExtrasScriptJoinsOntoTheAndChainAsOneUnit,
+TestExtrasLoopNeverRunsAfterAFailedMergeUpstream (stub git, merge exits 128,
+whole sync script exits 128, git branch never invoked) — PASS.
+
+--------------------------------------------------------------------------------
+Finding 4 — runUpdateWith returned printJSONReport's error directly under
+--json, which only ever reports a marshal/write failure — never a host
+failure — so `fleet update --json` exited 0 even when every host failed.
+Fix: always compute exitErrorForReports after printing, JSON or text.
+RED (cmd/update.go, restored to the old `if flagJSON { return printJSONReport(...) }` early return):
+
+--- FAIL: TestJSONOutputStillExitsNonZeroOnFailure (0.00s)
+FAIL
+
+GREEN: TestJSONOutputStillExitsNonZeroOnFailure — PASS.
+
+--------------------------------------------------------------------------------
+Finding 5 — runGhAuth rewrote a login failure's Reason to the human-readable
+"needs a terminal", but HostReport.NeedsTerminal() matched on
+Reason == ErrNoTerminal.Error() — the two no longer matched, so a gh-auth
+login needing a tty under the Background lane was never routed to the
+interactive queue.
+Fix: typed Result.NeedsTerminal bool, set at every point ErrNoTerminal is the
+cause (runGhAuth's login branch, runWithRetry's final Failed return);
+HostReport.NeedsTerminal() now checks the typed field.
+RED (internal/updexec, HostReport.NeedsTerminal reverted to the string match):
+
+=== RUN   TestGhAuthNeedingATerminalIsFlaggedForTheInteractiveLane
+    review_test.go:526: HostReport.NeedsTerminal() must report true for a gh-auth login needing a terminal
+--- FAIL: TestGhAuthNeedingATerminalIsFlaggedForTheInteractiveLane (0.00s)
+FAIL
+
+GREEN: TestGhAuthNeedingATerminalIsFlaggedForTheInteractiveLane — PASS
+(existing TestGhAuthWithoutATerminalFailsCleanly, exec_test.go:~1114, needed
+no change — it only asserted the human-readable Reason string, which is
+unchanged).
+
+--------------------------------------------------------------------------------
+Finding 6 — resolveTUIPlan applied plan.WithRef(tuiUpdateRef) unconditionally
+with a default of "main", silently overriding a plan's own dotfiles branch
+(e.g. [release]) on bare `fleet`/`fleet tui`, and refusing to start at all
+against a multi-repo plan with no "dotfiles" repo (WithRef's ambiguous-repo
+error).
+Fix: --update-ref defaults to "" (not "main"); resolveTUIPlan applies WithRef
+only when ref != ""; the RunE validation is likewise skipped for an empty ref.
+RED (cmd/tui.go, unconditional WithRef + "main" default restored):
+
+=== RUN   TestTUIDoesNotOverrideThePlanBranchByDefault
+=== RUN   TestTUIDoesNotOverrideThePlanBranchByDefault/multi-repo_plan_with_no_dotfiles_repo_starts_fine
+    review_test.go:95: an empty --update-ref must never be applied via WithRef (which would refuse an ambiguous multi-repo target): invalid --update-ref "": updplan: --ref "" is ambiguous: plan has repos other, work; use repo=branch
+=== RUN   TestTUIDoesNotOverrideThePlanBranchByDefault/dotfiles_plan_on_a_non-main_branch_stays_there
+    review_test.go:118: invalid --update-ref "": updplan: --ref "": invalid ref
+--- FAIL: TestTUIDoesNotOverrideThePlanBranchByDefault (0.00s)
+FAIL
+
+GREEN: TestTUIDoesNotOverrideThePlanBranchByDefault (both subtests),
+TestTUIUpdateRefIsAppliedWhenGiven, existing TestResolveTUIPlanAppliesUpdateRef — PASS.
+
+--------------------------------------------------------------------------------
+Finding 7 — buildExecutor built a Console with no Line callback, and the
+executor never wrote remote output to the LineWriter, so a headless `fleet
+update` run's capture contained only the executor's own step banners —
+never the remote command's own output (e.g. git's `fatal:` text).
+Fix: Executor.RunHost now tees every StepIO lane's Batch output into the
+capture itself (a new `teeable` capability Console/Background implement),
+in addition to whatever Line callback the caller already set.
+RED (internal/updexec, the tee-wiring block removed from RunHost):
+
+=== RUN   TestExecutorTeesBatchOutputIntoTheCapture
+    review_test.go:546: capture must contain the lane's own remote output "line one", got:
+        fleet update — host=alpha plan= mode=fast-forward started=<ts>
+        === step dotfiles.sync (sync) ===
+        finished
+--- FAIL: TestExecutorTeesBatchOutputIntoTheCapture (0.00s)
+FAIL
+
+RED (cmd, same underlying cause, driven end-to-end through runUpdateWith):
+
+=== RUN   TestHeadlessCaptureContainsRemoteOutput
+    review_test.go:173: capture must contain the remote's own output, got:
+        # fleet update — host=alpha plan=<tmp>/fleet.yaml mode=fast-forward started=<ts>
+        <ts> === step dotfiles.sync (sync) ===
+        <ts> === step dotfiles.install (run) ===
+        # <ts> finished
+--- FAIL: TestHeadlessCaptureContainsRemoteOutput (0.00s)
+FAIL
+
+GREEN: TestExecutorTeesBatchOutputIntoTheCapture, TestExecutorTeeingPreservesAnExistingLineCallback,
+TestHeadlessCaptureContainsRemoteOutput — PASS. (beginStream's manual
+teeOutput/onOpen dance in cmd/tui_cmds.go was removed as redundant — the
+executor now does this for both the CLI and the TUI automatically.)
+
+--------------------------------------------------------------------------------
+Finding 8 — the TUI's Line callback pushed onto a capacity-64 channel; once
+full with nobody reading (tea.ExecProcess suspending the event loop for
+another host's interactive handoff), the executor's own goroutine — and the
+whole background update — stalled, and a 30m per-attempt deadline could then
+kill the install mid-flight for a reason unrelated to the remote host.
+Fix: a new unbounded, mutex/cond-guarded lineQueue decouples the executor's
+Line callback (push, never blocks) from readLine's consumer (a forwarder
+goroutine drains the queue into the existing channel API, so stream.lines
+keeps its <-chan string type and every existing test needed no change).
+RED (verified against the queue directly, no revert needed — this is new
+machinery, not a behavior change to revert):
+
+=== RUN   TestBackgroundFeedNeverBlocksTheExecutor
+--- PASS: TestBackgroundFeedNeverBlocksTheExecutor (0.01s)
+(10,000 pushes with no reader completed in <2s; a later reader drained all
+10,000 lines in order.)
+
+--------------------------------------------------------------------------------
+Finding 9 — handoffArgv never forwarded the persistent --repo flag, so a
+routed host resolved gff/the repo-local plan against the child's own --repo
+default (~/git/dotfiles) rather than the checkout the TUI itself loaded from.
+Fix: handoffArgv always appends "--repo <repo>" (unlike --file/--ref, which
+are conditional); tuiModel gained a `repo` field set from flagRepo in tui.go,
+threaded through interactiveHandoff.
+RED (cmd/tui_cmds.go, --repo append removed):
+
+=== RUN   TestHandoffForwardsTheRepoFlag
+    tui_cmds_test.go:129: --repo must always be forwarded, got [fleet update host-a]
+--- FAIL: TestHandoffForwardsTheRepoFlag (0.00s)
+FAIL
+
+GREEN: TestHandoffForwardsTheRepoFlag, TestHandoffDelegatesToFleetUpdate (updated
+argv pin) — PASS.
+
+--------------------------------------------------------------------------------
+Finding 10 — planLabel truncated a long plan Source from the FRONT (keeping
+only the tail), which for a long built-in Source like "built-in default (no
+<long-home-path>/fleet.yaml)" dropped the "built-in default (no " marker
+entirely — the status line then named a file that was NOT actually loaded —
+and could split a multi-byte rune (byte-slicing, not rune-slicing).
+Fix: elide the MIDDLE, rune-safe (operate on []rune, not string bytes),
+keeping both the leading marker/path start and the trailing filename.
+RED (cmd/tui_model.go, planLabel reverted to front-truncation):
+
+=== RUN   TestPlanLabelKeepsTheBuiltInMarker
+    review_test.go:233: planLabel("built-in default (no xxx.../fleet.yaml)") = "…xxx.../fleet.yaml)", must keep the built-in marker
+--- FAIL: TestPlanLabelKeepsTheBuiltInMarker (0.00s)
+=== RUN   TestPlanLabelIsValidUTF8
+    review_test.go:243: planLabel(...) is not valid UTF-8 (split a multi-byte rune)
+--- FAIL: TestPlanLabelIsValidUTF8 (0.00s)
+FAIL
+
+GREEN: TestPlanLabelKeepsTheBuiltInMarker, TestPlanLabelIsValidUTF8 — PASS.
+
+--------------------------------------------------------------------------------
+Cheap/trivial cleanups (done, no dedicated finding tests):
+- cmd's shQuote is now `var shQuote = updexec.ShQuote` (was a byte-identical copy).
+- WINSETUP_ANSWER / GEMINI_TEARDOWN_ANSWER: one exported const pair
+  (envWinsetupAnswer, envGeminiTeardownAnswer) in cmd/tui_cmds.go, used by
+  envPrefix, handoffEnv, and localAnswerPreamble (previously three separate
+  string-literal copies).
+
+================================================================================
+Final gate — whole module, after all ten fixes are in place together
+================================================================================
+
+$ cd sdk/fleet && gofmt -l .
+(no output — clean)
+
+$ go vet ./...
+(no output — clean)
+
+$ go test -race -cover ./...
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	1.477s	coverage: 63.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan	(cached)	coverage: 90.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift	(cached)	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag	(cached)	coverage: 96.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keys	(cached)	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/lanscan	(cached)	coverage: 80.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach	(cached)	coverage: 82.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	(cached)	coverage: 59.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf	(cached)	coverage: 94.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail	(cached)	coverage: 93.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp	(cached)	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	2.282s	coverage: 92.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan	(cached)	coverage: 93.9% of statements
+
+cmd: 63.3 % (floor 63.0 %) — updexec: 92.5 % (floor 90.0 %). Both floors met.
+
+================================================================================
+Rebuild + live dry-run transcript (post-fix binary)
+================================================================================
+
+$ bash sdk/fleet/build.sh
+Building fleet v0.3.1-45-g4d71e06 with go version go1.26.1 linux/arm64...
+fleet built and installed to ${HOME}/opt/bin/fleet
+
+$ "${HOME}/opt/bin/fleet" update <host> --dry-run
+plan: built-in default (no ${HOME}/.config/fleet/fleet.yaml)
+=== dotfiles.sync (sync) ===
+  precheck: if [ ! -e ~/git/dotfiles/.git ]; then echo "state=missing"; else cd ~/git/dotfiles && g=$(git rev-parse --git-dir) && if [ -e "$g/MERGE_HEAD" ] || [ -d "$g/rebase-merge" ] || [ -d "$g/rebase-apply" ]; then s=in-progress; elif [ -n "$(git status --porcelain)" ]; then s=dirty; else s=clean; fi; b=$(git symbolic-ref -q --short HEAD || echo detached); echo "state=$s branch=$b"; fi
+  sync (local=skip): cd ~/git/dotfiles && orig=$(git symbolic-ref -q --short HEAD || git rev-parse HEAD) && echo "fleet: orig=$orig" && git fetch origin main && git checkout main && git merge --ff-only FETCH_HEAD; rc=$?; now=$(git symbolic-ref -q --short HEAD || git rev-parse HEAD); [ "$orig" = "$now" ] || echo "fleet: switched $orig -> $now"; exit $rc
+  timeout=30m0s retry=1 on=[transport]
+=== dotfiles.install (run) ===
+  run (interactive): cd ~/git/dotfiles && ./install.sh
+  timeout=0s retry=1 on=[transport]
+
+(<host> is a #fleet alias from ~/.ssh/config, hostname/alias redacted above;
+--dry-run sends nothing over the network — this proves the rebuilt binary
+still resolves and prints the built-in plan correctly after all ten fixes.)

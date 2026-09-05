@@ -63,15 +63,23 @@ func validBranches(r updplan.Repo) error {
 // branch) would otherwise be silently swallowed by a later, successful
 // iteration. `skipped(diverged)` is deliberately NOT a failure — it echoes
 // and continues.
+//
+// The whole thing is wrapped in `{ …; }` so it is ONE compound command a
+// caller can join onto the preceding fetch/checkout/merge (or `git clone &&
+// cd`) with a single `&&`. Without the braces, only the leading `fail=0`
+// assignment was gated by that `&&` — the `for` loop itself followed a bare
+// `;` and ran unconditionally, even when the move before it had failed, and
+// the trailing `[ "$fail" = 0 ]` then replaced whatever real exit code that
+// failure carried (e.g. a merge conflict's 128) with a generic 1.
 func extrasScript(extras []string) string {
 	if len(extras) == 0 {
 		return ""
 	}
-	return `fail=0; for b in ` + strings.Join(extras, " ") + `; do [ "$b" = "$b1" ] && continue; ` +
+	return `{ fail=0; for b in ` + strings.Join(extras, " ") + `; do [ "$b" = "$b1" ] && continue; ` +
 		`if git show-ref -q --verify "refs/heads/$b"; then ` +
 		`if git merge-base --is-ancestor "$b" "origin/$b"; then git branch -q -f "$b" "origin/$b" && echo "fleet: ff $b" || fail=1; ` +
 		`else echo "fleet: skipped(diverged) $b"; fi; ` +
-		`else git branch -q --track "$b" "origin/$b" && echo "fleet: created $b" || fail=1; fi; done; [ "$fail" = 0 ]`
+		`else git branch -q --track "$b" "origin/$b" && echo "fleet: created $b" || fail=1; fi; done; [ "$fail" = 0 ]; }`
 }
 
 // syncBody builds the BODY portion of a sync script (no prologue/epilogue),

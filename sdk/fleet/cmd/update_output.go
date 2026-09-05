@@ -53,17 +53,22 @@ func newRunLogOutput() updexec.Output {
 // else for this preamble to carry.
 func localAnswerPreamble(updplan.Step) string {
 	var assigns []string
-	if v := os.Getenv("WINSETUP_ANSWER"); v != "" {
-		assigns = append(assigns, "WINSETUP_ANSWER="+v)
+	if v := os.Getenv(envWinsetupAnswer); v != "" {
+		assigns = append(assigns, envWinsetupAnswer+"="+v)
 	}
-	if v := os.Getenv("GEMINI_TEARDOWN_ANSWER"); v != "" {
-		assigns = append(assigns, "GEMINI_TEARDOWN_ANSWER="+v)
+	if v := os.Getenv(envGeminiTeardownAnswer); v != "" {
+		assigns = append(assigns, envGeminiTeardownAnswer+"="+v)
 	}
 	if len(assigns) == 0 {
 		return ""
 	}
-	// No trailing punctuation: Console.runScript joins this with " && " onto
-	// the step's script, and "export A=1; && cmd" is a shell syntax error —
-	// `&&` cannot directly follow a bare `;`.
-	return "export " + strings.Join(assigns, " ")
+	// MUST end with "; " (or "&& "): Console.runScript now prepends
+	// Preamble's text VERBATIM, with no separator added — every producer is
+	// responsible for terminating its own text into valid shell. This used
+	// to return NO trailing punctuation, relying on runScript joining with
+	// " && "; once that join was removed (the leaf D+E fix — the join
+	// itself broke bgPreamble's "; "-terminated text), an unterminated
+	// "export A=1" here would run straight into the step's script with
+	// nothing separating them.
+	return "export " + strings.Join(assigns, " ") + "; "
 }

@@ -23,8 +23,10 @@ var tuiCmd = &cobra.Command{
 	Short: "Interactive host list: vim navigation, search, selection, concurrent updates",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		// Both flags reach a remote shell / bound concurrency, so they are
-		// validated before a single host is contacted.
-		if !validRef(tuiUpdateRef) {
+		// validated before a single host is contacted. An UNSET --update-ref
+		// (the default) means "don't touch the plan's own branch" — it is
+		// validated only when the operator actually gave one.
+		if tuiUpdateRef != "" && !validRef(tuiUpdateRef) {
 			return fmt.Errorf("invalid --update-ref %q: must be a git ref (letters, digits, . _ / -)", tuiUpdateRef)
 		}
 		if tuiJobs < 1 {
@@ -94,19 +96,32 @@ var tuiCmd = &cobra.Command{
 		// plan the TUI itself loaded, not gff's own (possibly different)
 		// resolution.
 		m.file = tuiFile
+		// Re-passed to the interactive handoff's self-exec so a routed host
+		// resolves gff/the plan against the SAME checkout the TUI loaded
+		// from, not the child's own --repo default.
+		m.repo = flagRepo
 		_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()
 		return err
 	},
 }
 
 // resolveTUIPlan loads the tui command's update plan (via loadPlan, exactly
-// like `fleet update`) and applies --update-ref through plan.WithRef,
-// validated before a single host is contacted. Extracted so a test can
-// drive it without cobra or a real ssh config.
+// like `fleet update`) and, ONLY when ref is non-empty, applies --update-ref
+// through plan.WithRef, validated before a single host is contacted. An
+// empty ref (the flag's default) leaves the plan's own branch untouched —
+// this used to apply plan.WithRef(tuiUpdateRef) unconditionally with a
+// default of "main", which silently overrode the plan's own dotfiles branch
+// (e.g. a [release] plan) on bare `fleet`/`fleet tui`, and refused to start
+// at all against a multi-repo plan with no "dotfiles" repo (WithRef's
+// ambiguous-repo error). Extracted so a test can drive it without cobra or
+// a real ssh config.
 func resolveTUIPlan(file, ref, repoDir string) (updplan.Plan, error) {
 	plan, err := loadPlan(file, &featflag.GFF{Repo: repoDir}, repoDir)
 	if err != nil {
 		return updplan.Plan{}, err
+	}
+	if ref == "" {
+		return plan, nil
 	}
 	plan, err = plan.WithRef(ref)
 	if err != nil {
@@ -117,7 +132,7 @@ func resolveTUIPlan(file, ref, repoDir string) (updplan.Plan, error) {
 
 func init() {
 	tuiCmd.Flags().StringVar(&flagRef, "ref", "origin/main", "baseline git ref (what hosts are compared against)")
-	tuiCmd.Flags().StringVar(&tuiUpdateRef, "update-ref", "main", "git ref to update hosts TO")
+	tuiCmd.Flags().StringVar(&tuiUpdateRef, "update-ref", "", "git ref to update hosts TO (default: the plan's own branch)")
 	tuiCmd.Flags().IntVar(&tuiJobs, "jobs", 4, "max concurrent background updates")
 	tuiCmd.Flags().StringVar(&tuiFile, "file", "", "explicit fleet.yaml plan path (skips gff resolution)")
 	rootCmd.AddCommand(tuiCmd)

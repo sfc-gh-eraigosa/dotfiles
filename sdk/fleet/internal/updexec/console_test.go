@@ -124,10 +124,16 @@ func TestConsoleStreamsBatchAndHandsOffInteractive(t *testing.T) {
 	}
 }
 
+// TestBackgroundRefusesInteractive now covers a gh-auth login — the ONE kind
+// of interactive step Background genuinely cannot service (it drives a
+// browser device-code flow no preamble can answer). A KindRun step is
+// covered separately by TestBackgroundRunsInteractiveRunStepsAsBatch: the
+// shipped default plan marks dotfiles.install interactive: true, and that
+// step MUST be runnable in the background lane once sudo was primed.
 func TestBackgroundRefusesInteractive(t *testing.T) {
 	r := &recordingRunner{}
 	b := Background{Console{R: r}}
-	err := b.Interactive(context.Background(), "alpha", updplan.Step{ID: "x", Kind: updplan.KindRun}, "script")
+	err := b.Interactive(context.Background(), "alpha", updplan.Step{ID: "x", Kind: updplan.KindGhAuth}, "script")
 	if !errors.Is(err, ErrNoTerminal) {
 		t.Fatalf("err = %v, want ErrNoTerminal", err)
 	}
@@ -136,11 +142,64 @@ func TestBackgroundRefusesInteractive(t *testing.T) {
 	}
 }
 
+// TestBackgroundRunsInteractiveRunStepsAsBatch pins the fix for the finding
+// that Background.Interactive unconditionally returned ErrNoTerminal: the
+// shipped default plan marks dotfiles.install interactive: true, so every
+// host used to be requeued to the serial interactive handoff and the
+// collected sudo password was never used. A KindRun step must run as Batch
+// instead — the preamble/stdin already primed the session for exactly this.
+func TestBackgroundRunsInteractiveRunStepsAsBatch(t *testing.T) {
+	r := &recordingRunner{streamOut: "installed ok"}
+	var lines []string
+	b := Background{Console{
+		R:        r,
+		Line:     func(_, l string) { lines = append(lines, l) },
+		Stdin:    func(st updplan.Step) string { return "the-secret\n" },
+		Preamble: func(st updplan.Step) string { return `sudo -S -p '' -v && ` },
+	}}
+	st := updplan.Step{ID: "install", Kind: updplan.KindRun, Interactive: true}
+	if err := b.Interactive(context.Background(), "alpha", st, "./install.sh"); err != nil {
+		t.Fatalf("an interactive KindRun step must run as Batch under Background: %v", err)
+	}
+	if r.count("RunInteractive") != 0 {
+		t.Fatal("Background must never hand the terminal to a run step")
+	}
+	if r.count("RunStreamCtx") != 1 {
+		t.Fatalf("want exactly 1 Batch call, got %d", r.count("RunStreamCtx"))
+	}
+	_, stdin, argv := r.last("RunStreamCtx")
+	if stdin != "the-secret\n" {
+		t.Fatalf("the batch call must carry the sudo stdin, got %q", stdin)
+	}
+	if !strings.Contains(strings.Join(argv, " "), "sudo -S -p '' -v && ./install.sh") {
+		t.Fatalf("the batch call must carry the preamble: %v", argv)
+	}
+	if len(lines) != 1 || lines[0] != "installed ok" {
+		t.Fatalf("output must still reach Line: %v", lines)
+	}
+}
+
+// TestBackgroundStillRefusesGhAuthLogin is TestBackgroundRefusesInteractive
+// under an explicit name matching the finding, guarding against a future
+// change accidentally routing gh-auth through Batch too — a browser
+// device-code flow has nowhere to go in a background session.
+func TestBackgroundStillRefusesGhAuthLogin(t *testing.T) {
+	r := &recordingRunner{}
+	b := Background{Console{R: r}}
+	err := b.Interactive(context.Background(), "alpha", updplan.Step{ID: "gh", Kind: updplan.KindGhAuth}, "gh auth login")
+	if !errors.Is(err, ErrNoTerminal) {
+		t.Fatalf("err = %v, want ErrNoTerminal", err)
+	}
+}
+
 func TestPreambleAndStdinApplyToRunStepsOnly(t *testing.T) {
 	r := &recordingRunner{}
+	// The preamble is prepended VERBATIM (no separator added by
+	// Console.runScript) — every producer terminates its own text with
+	// "; " or "&& ", exactly like bgPreamble/localAnswerPreamble do.
 	c := Console{
 		R:        r,
-		Preamble: func(st updplan.Step) string { return `sudo -S -p '' -v` },
+		Preamble: func(st updplan.Step) string { return `sudo -S -p '' -v && ` },
 		Stdin:    func(st updplan.Step) string { return "the-secret" },
 	}
 
@@ -171,7 +230,7 @@ func TestPreambleAndStdinApplyToRunStepsOnly(t *testing.T) {
 		t.Fatalf("a run step must receive Stdin's answer, got %q", runStdin)
 	}
 	if !strings.Contains(strings.Join(runArgv, " "), "sudo -S -p '' -v && run-script") {
-		t.Fatalf("a run step's script must carry the preamble: %v", runArgv)
+		t.Fatalf("a run step's script must carry the preamble, prepended verbatim (no separator added by runScript): %v", runArgv)
 	}
 }
 

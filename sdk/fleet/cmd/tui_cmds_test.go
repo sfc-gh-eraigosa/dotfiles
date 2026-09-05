@@ -85,22 +85,48 @@ func TestSudoPreambleIsPerRunStepSession(t *testing.T) {
 
 // TestHandoffDelegatesToFleetUpdate pins that the interactive handoff's
 // self-exec argv is exactly `<self> update <alias> [--file F] [--ref R]
-// [--reset]` — there is now exactly ONE definition of "update a host", and
-// the interactive lane delegates to it rather than re-implementing a
-// remote script.
+// --repo REPO [--reset]` — there is now exactly ONE definition of "update a
+// host", and the interactive lane delegates to it rather than
+// re-implementing a remote script.
 func TestHandoffDelegatesToFleetUpdate(t *testing.T) {
-	got := handoffArgv("/opt/bin/fleet", "host-b", "/etc/fleet/fleet.yaml", "feature/x", true)
-	want := []string{"/opt/bin/fleet", "update", "host-b", "--file", "/etc/fleet/fleet.yaml", "--ref", "feature/x", "--reset"}
+	got := handoffArgv("/opt/bin/fleet", "host-b", "/etc/fleet/fleet.yaml", "feature/x", "/home/op/dotfiles", true)
+	want := []string{
+		"/opt/bin/fleet", "update", "host-b",
+		"--file", "/etc/fleet/fleet.yaml",
+		"--ref", "feature/x",
+		"--repo", "/home/op/dotfiles",
+		"--reset",
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("argv = %v, want %v", got, want)
 	}
 
 	// No --file/--ref/--reset when unset — nothing is appended just to be
-	// appended.
-	got2 := handoffArgv("fleet", "host-a", "", "", false)
-	want2 := []string{"fleet", "update", "host-a"}
+	// appended. --repo is the one exception: it is ALWAYS forwarded (see
+	// TestHandoffForwardsTheRepoFlag).
+	got2 := handoffArgv("fleet", "host-a", "", "", "/home/op/dotfiles", false)
+	want2 := []string{"fleet", "update", "host-a", "--repo", "/home/op/dotfiles"}
 	if !reflect.DeepEqual(got2, want2) {
 		t.Fatalf("argv = %v, want %v", got2, want2)
+	}
+}
+
+// TestHandoffForwardsTheRepoFlag pins the finding directly: handoffArgv used
+// to never forward the persistent --repo flag, so a routed host resolved
+// gff/the repo-local plan against the child's own --repo default
+// (~/git/dotfiles) rather than the checkout the TUI itself loaded its plan
+// from. --repo must reach the child even when every other optional flag is
+// unset.
+func TestHandoffForwardsTheRepoFlag(t *testing.T) {
+	got := handoffArgv("fleet", "host-a", "", "", "/opt/checkouts/dotfiles", false)
+	found := false
+	for i, a := range got {
+		if a == "--repo" && i+1 < len(got) && got[i+1] == "/opt/checkouts/dotfiles" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("--repo must always be forwarded, got %v", got)
 	}
 }
 
