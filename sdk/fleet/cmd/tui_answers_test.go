@@ -5,18 +5,28 @@ import (
 	"testing"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
 // probeMarker stands in for a real credential. The tests below assert it never
 // escapes into argv or the environment, so it has to be distinctive/greppable.
 var probeMarker = strings.Repeat("Zq7", 3)
 
+// runStepScript builds what a KindRun step's script looks like once the
+// background lane's preamble (bgPreamble) is applied — the same shape
+// beginStream/Console.runScript produce for a run step — so these tests can
+// assert on the preamble without driving the whole executor.
+func runStepScript(a answers) string {
+	return bgPreamble(a)(updplan.Step{Kind: updplan.KindRun}) + "cd ~/git/dotfiles && ./install.sh"
+}
+
 // The credential must never be reachable through argv or the environment:
 // /proc/<pid>/cmdline and /proc/<pid>/environ are world-readable, so anything
 // placed in either leaks to every user on the host.
 func TestSudoSecretNeverAppearsInTheRemoteCommand(t *testing.T) {
-	a := answers{sudoSecret: probeMarker, windows: "s", gemini: "keep"}
-	script := unattendedUpdate("main", a)
+	a := answers{windows: "s", gemini: "keep"}
+	a.appendSecret(probeMarker)
+	script := runStepScript(a)
 	if strings.Contains(script, probeMarker) {
 		t.Fatalf("the credential leaked into the remote command:\n%s", script)
 	}
@@ -47,7 +57,7 @@ func TestSudoSecretIsSentOnStdinOnly(t *testing.T) {
 // With nothing supplied we must not emit a sudo preamble at all — an empty
 // `sudo -S` would consume nothing and fail confusingly.
 func TestNoSecretMeansNoSudoPreamble(t *testing.T) {
-	script := unattendedUpdate("main", answers{windows: "n"})
+	script := runStepScript(answers{windows: "n"})
 	if strings.Contains(script, "sudo -S") {
 		t.Fatalf("nothing supplied, so no sudo preamble belongs here:\n%s", script)
 	}
@@ -59,7 +69,9 @@ func TestNoSecretMeansNoSudoPreamble(t *testing.T) {
 // Priming and installing must share ONE ssh session: sudo's timestamp is
 // tty/session-scoped, so a prime in a separate connection may not be visible.
 func TestPrimeAndInstallShareOneSession(t *testing.T) {
-	script := unattendedUpdate("main", answers{sudoSecret: probeMarker})
+	a := answers{}
+	a.appendSecret(probeMarker)
+	script := runStepScript(a)
 	primeAt := strings.Index(script, "sudo -S")
 	installAt := strings.Index(script, "install.sh")
 	if primeAt < 0 || installAt < 0 || primeAt > installAt {
@@ -236,7 +248,7 @@ func TestAnswersReachTheRemoteCommand(t *testing.T) {
 	if m7.ans.windows != "s" || m7.ans.gemini != "yes" || m7.ans.secretLen() != 2 {
 		t.Fatalf("answers lost on the way to the wave: %+v", m7.ans)
 	}
-	script := unattendedUpdate(m7.updateRef, m7.ans)
+	script := runStepScript(m7.ans)
 	if !strings.Contains(script, "WINSETUP_ANSWER=s") || !strings.Contains(script, "GEMINI_TEARDOWN_ANSWER=yes") {
 		t.Fatalf("answers did not reach the remote command:\n%s", script)
 	}

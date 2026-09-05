@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -115,9 +117,11 @@ type tuiModel struct {
 	jobs      int               // max concurrent background updates
 	running   int               // slots in use
 	updateRef string
-	plan      updplan.Plan // loaded ONCE at startup; the model never calls loadPlan itself
-	ans       answers      // pre-supplied answers for this wave (memory-only credential)
-	ansField  answerField  // cursor in the answer form
+	plan      updplan.Plan           // loaded ONCE at startup; the model never calls loadPlan itself
+	file      string                 // the --file value the plan was loaded from, if any; re-passed to the interactive handoff's self-exec
+	self      func() (string, error) // resolves the executable path for the interactive handoff's self-exec; os.Executable in production, injected in tests
+	ans       answers                // pre-supplied answers for this wave (memory-only credential)
+	ansField  answerField            // cursor in the answer form
 
 	// reachability ladder — its own ownership set, same invariant as updating
 	waking map[string]bool
@@ -153,6 +157,7 @@ func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time
 		jobs:      jobs,
 		updateRef: ref,
 		plan:      plan,
+		self:      os.Executable,
 		run:       r,
 		base:      base,
 		now:       now,
@@ -518,7 +523,7 @@ func (m *tuiModel) pump() tea.Cmd {
 			total = len(m.iaQueue) + 1
 		}
 		pos := total - len(m.iaQueue)
-		return tea.Batch(append(cmds, interactiveHandoff(a, m.updateRef, m.ans, pos, total))...)
+		return tea.Batch(append(cmds, interactiveHandoff(m.self, a, m.file, m.updateRef, m.ans, pos, total))...)
 	}
 	return tea.Batch(cmds...)
 }
@@ -851,6 +856,18 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case bgUpdateDoneMsg:
+		// A step the Background lane cannot service (ErrNoTerminal) is not a
+		// failure — it just needs a real terminal, so the host moves to the
+		// interactive queue instead of landing on the row as FAIL.
+		if errors.Is(msg.err, errNeedsTerminal) {
+			if m.running > 0 {
+				m.running--
+			}
+			m.updating[msg.alias] = updState{phase: updQueued}
+			m.iaQueue = append(m.iaQueue, msg.alias)
+			m.iaTotal++
+			return m, m.pump()
+		}
 		// The tail of the streamed output is the row's failure explanation —
 		// the same text the non-streaming path used to capture at the end.
 		log := msg.log

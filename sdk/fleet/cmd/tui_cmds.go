@@ -182,18 +182,8 @@ const (
 	rcSudoNoCache = 92 // authentication worked but the credential did not persist
 )
 
-// unattendedUpdate builds the remote script for a background update.
-//
-// Everything runs in ONE ssh session on purpose. sudo's timestamp is scoped
-// (tty_tickets), so priming in a separate connection is not guaranteed to be
-// visible to a later one — the credential is primed and consumed in the same
-// session as install.sh.
-//
-// The prime is then VERIFIED with `sudo -n true` rather than assumed: if the
-// credential did not persist we fail immediately with a distinct code instead
-// of running a long install whose privileged steps all silently skip.
-// sudoGate refuses to start install.sh unless sudo will actually work in THIS
-// session.
+// sudoGate refuses to start a run step's script unless sudo will actually
+// work in THIS session.
 //
 // install.sh treats its own failed `sudo -v` as non-fatal and carries on, so
 // without this gate a credential-less run produced a long cascade —
@@ -215,19 +205,6 @@ const (
 // Hosts that need no sudo are exempt rather than blocked: root, and machines
 // with no sudo at all (minimal containers).
 const sudoGate = `{ [ "$(id -u)" = 0 ] || ! command -v sudo >/dev/null 2>&1 || sudo -n true 2>/dev/null; }`
-
-func unattendedUpdate(ref string, a answers) string {
-	var b strings.Builder
-	if a.needsSudo() {
-		// -S reads the password from stdin (never argv); -p '' suppresses the
-		// prompt text that would otherwise pollute the captured log.
-		fmt.Fprintf(&b, "sudo -S -p '' -v 2>/dev/null || exit %d; ", rcSudoAuth)
-	}
-	fmt.Fprintf(&b, "%s || exit %d; ", sudoGate, rcSudoNoCache)
-	b.WriteString(a.envPrefix())
-	b.WriteString(updateScript(ref, a.forceReset()))
-	return b.String()
-}
 
 // explainExit turns the preamble's exit codes into something an operator can
 // act on. A bare "exit status 91" on a row would be useless.
@@ -386,28 +363,75 @@ func awaitDone(alias string, st stream) tea.Cmd {
 // shQuote makes a string safe as a single-quoted POSIX shell word.
 func shQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
-// handoffWrapper wraps the ssh handoff in a banner naming the host and its
-// position in the queue, plus a footer carrying the exit code.
+// handoffWrapper wraps cmd — a full local shell command line — in a banner
+// naming the host and its position in the queue, plus a footer carrying the
+// exit code.
 //
 // tea.ExecProcess SUSPENDS the whole TUI, so while a handoff runs the screen
-// is bare install.sh output with nothing on it identifying which machine you
-// are looking at — or that more hosts are queued behind it.
-// Extracted so the contract is testable without running ssh.
-func handoffWrapper(alias, ref, remote string, pos, total int) string {
+// is bare command output with nothing on it identifying which machine you
+// are looking at — or that more hosts are queued behind it. Extracted so
+// the contract is testable without running a subprocess.
+func handoffWrapper(alias, ref, cmd string, pos, total int) string {
 	banner := fmt.Sprintf("\\n=== fleet: updating %s -> %s   (host %d of %d) ===\\n\\n", alias, ref, pos, total)
 	footer := fmt.Sprintf("\\n=== fleet: %s finished (exit %%s) — returning to the dashboard ===\\n", alias)
-	return fmt.Sprintf("printf %s; ssh -t %s %s; rc=$?; printf %s \"$rc\"; exit $rc",
-		shQuote(banner), shQuote(alias), shQuote(remote), shQuote(footer))
+	return fmt.Sprintf("printf %s; %s; rc=$?; printf %s \"$rc\"; exit $rc",
+		shQuote(banner), cmd, shQuote(footer))
+}
+
+// handoffArgv builds the self-exec argv for the interactive handoff:
+// `<self> update <alias> [--file F] [--ref R] [--reset]`. There is now
+// exactly ONE definition of "update a host" — the plan executor behind
+// `fleet update` — so the interactive lane delegates to that CLI verb
+// rather than re-implementing a remote script. Extracted so a test can
+// assert on it without running a subprocess.
+func handoffArgv(self, alias, file, ref string, reset bool) []string {
+	argv := []string{self, "update", alias}
+	if file != "" {
+		argv = append(argv, "--file", file)
+	}
+	if ref != "" {
+		argv = append(argv, "--ref", ref)
+	}
+	if reset {
+		argv = append(argv, "--reset")
+	}
+	return argv
+}
+
+// handoffEnv is the child's environment: the operator's non-secret prompt
+// answers only (WINSETUP_ANSWER/GEMINI_TEARDOWN_ANSWER) layered onto the
+// parent's own environment — NEVER the sudo secret. The child prompts for
+// its own credential on its own tty (it owns the terminal), so it has no
+// need to receive one from the parent, and /proc/<pid>/environ is
+// world-readable on both ends.
+func handoffEnv(a answers) []string {
+	env := os.Environ()
+	if a.windows != "" {
+		env = append(env, "WINSETUP_ANSWER="+a.windows)
+	}
+	if a.gemini != "" {
+		env = append(env, "GEMINI_TEARDOWN_ANSWER="+a.gemini)
+	}
+	return env
 }
 
 // interactiveHandoff gives the terminal away so install.sh's sudo prompt
-// reaches the operator.
-//
-// It carries the pre-answers too. It previously ran the BARE update script, so
-// a host routed here re-asked every question the operator had already answered.
-func interactiveHandoff(alias, ref string, a answers, pos, total int) tea.Cmd {
-	remote := a.envPrefix() + updateScript(ref, a.forceReset())
-	c := exec.Command("sh", "-c", handoffWrapper(alias, ref, remote, pos, total))
+// reaches the operator, by self-execing `fleet update <alias>` — the same
+// plan executor the background lane and the headless CLI use. selfFn
+// resolves the executable path (os.Executable in production; injected in
+// tests), matching configShell's self-exec pattern.
+func interactiveHandoff(selfFn func() (string, error), alias, file, ref string, a answers, pos, total int) tea.Cmd {
+	self, err := selfFn()
+	if err != nil || self == "" {
+		self = "fleet"
+	}
+	argv := handoffArgv(self, alias, file, ref, a.forceReset())
+	quoted := make([]string, len(argv))
+	for i, s := range argv {
+		quoted[i] = shQuote(s)
+	}
+	c := exec.Command("sh", "-c", handoffWrapper(alias, ref, strings.Join(quoted, " "), pos, total))
+	c.Env = handoffEnv(a)
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return execDoneMsg{alias: alias, err: err}
 	})

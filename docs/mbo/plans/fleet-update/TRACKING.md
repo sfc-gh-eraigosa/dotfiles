@@ -82,7 +82,7 @@ Plan §4 task numbers. Commit = the SHA carrying the plan's exact message.
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
 | 24 Background lane | done | (this commit) | `go test ./cmd -run 'TestSudoPreambleIsPerRunStepSession' -v` → PASS (1/1); full `cmd` suite green; `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | evidence/tui/task-24.txt; `beginStream` now builds `updexec.Executor{IO: updexec.Background{...}}` from the model's injected `plan`; `--file` flag added, `--update-ref` validated via `plan.WithRef` |
-| 25 Handoff delegates to the CLI verb | todo | | | deletes the `updateScript` wrapper |
+| 25 Handoff delegates to the CLI verb | done | (this commit) | `go test ./cmd -run 'TestHandoff|TestNeedsTerminal' -v` → PASS (4/4); full `cmd` suite green; `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean; `grep -n "updateScript\|unattendedUpdate\|rescueWorktree\|updateHost(" cmd/*.go` → only a comment naming the deleted symbols | evidence/tui/task-25.txt; deleted `updateScript`/`remoteUpdateScript`/`resetToFetched`/`rescueWorktree`/`unattendedUpdate`/`updateHost`/`UpdateResult`; `interactiveHandoff` self-execs `<self> update <alias> [--file][--ref][--reset]` |
 | 26 Flags + status text | todo | | | |
 | **Leaf E gate** | todo | — | `go test -race ./cmd` → ; live TUI transcript → | |
 

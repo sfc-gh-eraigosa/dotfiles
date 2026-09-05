@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -78,5 +79,66 @@ func TestSudoPreambleIsPerRunStepSession(t *testing.T) {
 	}
 	if !strings.HasPrefix(runScript, primeCmd) {
 		t.Fatalf("a run step's script must start with the sudo prime when a credential is set:\n%s", runScript)
+	}
+}
+
+// TestHandoffDelegatesToFleetUpdate pins that the interactive handoff's
+// self-exec argv is exactly `<self> update <alias> [--file F] [--ref R]
+// [--reset]` — there is now exactly ONE definition of "update a host", and
+// the interactive lane delegates to it rather than re-implementing a
+// remote script.
+func TestHandoffDelegatesToFleetUpdate(t *testing.T) {
+	got := handoffArgv("/opt/bin/fleet", "host-b", "/etc/fleet/fleet.yaml", "feature/x", true)
+	want := []string{"/opt/bin/fleet", "update", "host-b", "--file", "/etc/fleet/fleet.yaml", "--ref", "feature/x", "--reset"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("argv = %v, want %v", got, want)
+	}
+
+	// No --file/--ref/--reset when unset — nothing is appended just to be
+	// appended.
+	got2 := handoffArgv("fleet", "host-a", "", "", false)
+	want2 := []string{"fleet", "update", "host-a"}
+	if !reflect.DeepEqual(got2, want2) {
+		t.Fatalf("argv = %v, want %v", got2, want2)
+	}
+}
+
+// TestHandoffEnvNeverCarriesTheSecret pins that the child's environment
+// carries only the non-secret prompt answers — never the sudo credential.
+// The child prompts for its own credential on its own tty.
+func TestHandoffEnvNeverCarriesTheSecret(t *testing.T) {
+	a := answers{windows: "s", gemini: "keep"}
+	a.appendSecret(probeMarker)
+	for _, e := range handoffEnv(a) {
+		if strings.Contains(e, probeMarker) {
+			t.Fatalf("the credential leaked into the child's environment: %q", e)
+		}
+	}
+}
+
+// TestNeedsTerminalRoutesToInteractiveQueue pins that a Background run that
+// stopped on a step needing a terminal (errNeedsTerminal, wrapping
+// updexec.ErrNoTerminal) is routed to the interactive queue instead of
+// being marked a failed row.
+func TestNeedsTerminalRoutesToInteractiveQueue(t *testing.T) {
+	// Keep a second host running so pump() cannot immediately dequeue "a"
+	// into the interactive handoff — this asserts on the QUEUEING decision
+	// itself, not on how soon pump happens to service it.
+	m := testModel("a", "b")
+	m.updating["a"] = updState{phase: updRunning}
+	m.updating["b"] = updState{phase: updRunning}
+	m.running = 2
+
+	mm, _ := m.Update(bgUpdateDoneMsg{alias: "a", err: errNeedsTerminal})
+	m2 := mm.(tuiModel)
+
+	if len(m2.iaQueue) != 1 || m2.iaQueue[0] != "a" {
+		t.Fatalf("expected %q queued for the interactive handoff, got %v", "a", m2.iaQueue)
+	}
+	if m2.updating["a"].phase == updFail {
+		t.Fatal("a host needing a terminal must not be marked failed")
+	}
+	if m2.iaTotal != 1 {
+		t.Fatalf("iaTotal must count the newly-queued host, got %d", m2.iaTotal)
 	}
 }

@@ -92,6 +92,11 @@ var tuiCmd = &cobra.Command{
 		// pure value and tests never touch a real config directory.
 		m.ansPath = answersPath()
 		m.ans = loadAnswers(m.ansPath)
+		// Re-passed to the interactive handoff's self-exec (`fleet update
+		// <alias> --file <tuiFile> ...`) so a routed host resolves the SAME
+		// plan the TUI itself loaded, not gff's own (possibly different)
+		// resolution.
+		m.file = tuiFile
 		_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()
 		return err
 	},

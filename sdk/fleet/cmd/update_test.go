@@ -6,24 +6,30 @@ import (
 	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
-// updateHost now runs the default plan through the executor. Its precheck
-// step is PrecheckScript, whose output format is "state=<x> branch=<y>" —
-// not the raw `git status --porcelain` these fixtures used pre-executor.
+// These tests drive the built-in default plan straight through
+// buildExecutor/Executor.RunHost — the plan executor is now the ONLY
+// definition of "update a host" (leaf D review finding: updateHost,
+// updateScript, remoteUpdateScript, resetToFetched, rescueWorktree and
+// UpdateResult were a divergent second implementation with no production
+// caller, and are deleted). The precheck step's output format is
+// "state=<x> branch=<y>" (updexec.PrecheckScript), not the raw
+// `git status --porcelain` these fixtures used pre-executor.
 
 func TestUpdateSkipsDirtyCloneByDefault(t *testing.T) {
 	var sent []string
 	r := recordingRunner{fake: runner.Fake{Out: map[string]string{"alpha": "state=dirty branch=main"}}, log: &sent}
-	res, err := updateHost(r, "alpha", "main", false)
-	if err != nil {
-		t.Fatal(err)
+	ex := buildExecutor(r, nil, "")
+	rep := ex.RunHost("alpha", updplan.Default())
+
+	sync := rep.Results[0]
+	if sync.Status != updexec.Skipped {
+		t.Fatalf("a dirty clone must be skipped without --force, got %+v", sync)
 	}
-	if !res.Skipped {
-		t.Fatal("a dirty clone must be skipped without --force")
-	}
-	if res.Reason == "" {
+	if sync.Reason == "" {
 		t.Fatal("a skip must state a reason")
 	}
 	for _, c := range sent {
@@ -35,29 +41,28 @@ func TestUpdateSkipsDirtyCloneByDefault(t *testing.T) {
 
 func TestUpdateProceedsOnCleanClone(t *testing.T) {
 	r := runner.Fake{Out: map[string]string{"alpha": "state=clean branch=main"}}
-	res, err := updateHost(r, "alpha", "main", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.Skipped {
-		t.Fatalf("a clean clone must not be skipped: %s", res.Reason)
+	ex := buildExecutor(r, nil, "")
+	rep := ex.RunHost("alpha", updplan.Default())
+	if sync := rep.Results[0]; sync.Status == updexec.Skipped {
+		t.Fatalf("a clean clone must not be skipped: %+v", sync)
 	}
 }
 
-// --force must PRESERVE the dirty work in a rescue worktree, never discard it.
+// --force (local: rescue) must PRESERVE the dirty work in a rescue worktree,
+// never discard it.
 func TestForceRescuesDirtyWorkBeforePulling(t *testing.T) {
 	var sent []string
 	r := recordingRunner{fake: runner.Fake{Out: map[string]string{"alpha": "state=dirty branch=main"}}, log: &sent}
-	if _, err := updateHost(r, "alpha", "main", true); err != nil {
-		t.Fatal(err)
-	}
+	ex := buildExecutor(r, nil, updplan.LocalRescue)
+	ex.RunHost("alpha", updplan.Default())
+
 	joined := strings.Join(sent, " ")
 	if strings.Contains(joined, "reset --hard") || strings.Contains(joined, "checkout -- ") {
-		t.Fatalf("--force must never discard local work: %v", sent)
+		t.Fatalf("local:rescue must never discard local work: %v", sent)
 	}
 	for _, want := range []string{"git add -A", "worktree add"} {
 		if !strings.Contains(joined, want) {
-			t.Fatalf("--force must preserve work via %q: %v", want, sent)
+			t.Fatalf("local:rescue must preserve work via %q: %v", want, sent)
 		}
 	}
 }
@@ -66,56 +71,88 @@ func TestForceRescuesDirtyWorkBeforePulling(t *testing.T) {
 // (a stash commit's tree excludes them). The rescue must use `git add -A` so
 // an operator inspecting the rescue worktree finds everything.
 func TestRescuePreservesUntrackedWork(t *testing.T) {
-	if !strings.Contains(rescueWorktree, "git add -A") {
+	repo := updplan.Default().Repos["dotfiles"]
+	script, err := updexec.RescueScript(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(script, "git add -A") {
 		t.Fatal("rescue must stage untracked files (git add -A), or they are lost")
 	}
-	if strings.Contains(rescueWorktree, "stash@{0}") {
+	if strings.Contains(script, "stash@{0}") {
 		t.Fatal("branching from stash@{0} silently drops untracked files")
 	}
-	if !strings.Contains(rescueWorktree, "worktree add") {
+	if !strings.Contains(script, "worktree add") {
 		t.Fatal("rescued work must be materialised as an inspectable worktree")
 	}
 }
 
 func TestUpdateSurfacesProbeFailure(t *testing.T) {
 	r := runner.Fake{Err: map[string]error{"dead": runner.ErrFake}}
-	if _, err := updateHost(r, "dead", "main", false); err == nil {
+	ex := buildExecutor(r, nil, "")
+	rep := ex.RunHost("dead", updplan.Default())
+	if !rep.Failed() {
 		t.Fatal("an unreachable host must surface an error")
 	}
 }
 
 // The default target is `main`, matching the original hardcoded behaviour:
-// fetch, switch to main, fast-forward it, re-run install.sh.
+// fetch, checkout main, fast-forward it, re-run install.sh.
 func TestUpdateScriptDefaultsToMain(t *testing.T) {
-	s := remoteUpdateScript("main")
-	for _, want := range []string{"git fetch origin main", "git checkout main", "merge --ff-only FETCH_HEAD", "./install.sh"} {
+	repo := updplan.Default().Repos["dotfiles"]
+	s, err := updexec.SyncScript(repo, updplan.LocalSkip, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"git fetch origin main", "git checkout main", "merge --ff-only FETCH_HEAD"} {
 		if !strings.Contains(s, want) {
-			t.Fatalf("default update script missing %q:\n%s", want, s)
+			t.Fatalf("default sync script missing %q:\n%s", want, s)
 		}
+	}
+	install, ok := updplan.Default().Step("dotfiles.install")
+	if !ok {
+		t.Fatal("default plan missing dotfiles.install")
+	}
+	rs, err := updexec.RunScript(install, &repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(rs, "./install.sh") {
+		t.Fatalf("install step must run install.sh:\n%s", rs)
 	}
 }
 
-// A non-default ref lets an operator point a host at a branch or tag — e.g. to
-// validate a change (like the install-stamp) before it lands on main.
+// A non-default ref lets an operator point a host at a branch or tag — e.g.
+// to validate a change (like the install-stamp) before it lands on main.
 func TestUpdateScriptTargetsGivenRef(t *testing.T) {
-	s := remoteUpdateScript("feature/fleet/build")
+	p, err := updplan.Default().WithRef("feature/fleet/build")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := updexec.SyncScript(p.Repos["dotfiles"], updplan.LocalSkip, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(s, "git checkout feature/fleet/build") ||
 		!strings.Contains(s, "git fetch origin feature/fleet/build") {
-		t.Fatalf("update script did not target the ref:\n%s", s)
+		t.Fatalf("sync script did not target the ref:\n%s", s)
 	}
 	if strings.Contains(s, " main ") {
-		t.Fatalf("update script leaked the main default:\n%s", s)
+		t.Fatalf("sync script leaked the main default:\n%s", s)
 	}
 }
 
 func TestUpdateHostUsesTheRequestedRef(t *testing.T) {
 	var sent []string
 	r := recordingRunner{fake: runner.Fake{Out: map[string]string{"alpha": "state=clean branch=main"}}, log: &sent}
-	if _, err := updateHost(r, "alpha", "feature/x", false); err != nil {
+	ex := buildExecutor(r, nil, "")
+	p, err := updplan.Default().WithRef("feature/x")
+	if err != nil {
 		t.Fatal(err)
 	}
+	ex.RunHost("alpha", p)
 	if !strings.Contains(strings.Join(sent, " "), "feature/x") {
-		t.Fatalf("updateHost ignored the ref: %v", sent)
+		t.Fatalf("RunHost ignored the ref: %v", sent)
 	}
 }
 
@@ -141,7 +178,11 @@ func TestValidRefRejectsShellInjection(t *testing.T) {
 // Observed on a real host: DNS answered for the fetch and failed for the pull
 // seconds later, failing an update that had everything it needed locally.
 func TestUpdateMakesExactlyOneNetworkCall(t *testing.T) {
-	s := remoteUpdateScript("main")
+	repo := updplan.Default().Repos["dotfiles"]
+	s, err := updexec.SyncScript(repo, updplan.LocalSkip, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if n := strings.Count(s, "git fetch"); n != 1 {
 		t.Fatalf("expected exactly one fetch, got %d:\n%s", n, s)
 	}
@@ -165,9 +206,9 @@ func TestUpdateMakesExactlyOneNetworkCall(t *testing.T) {
 func TestUpdateDefaultPlanSendsExactlyOneFetchPerSyncStep(t *testing.T) {
 	var sent []string
 	r := recordingRunner{fake: runner.Fake{Out: map[string]string{"alpha": "state=clean branch=main"}}, log: &sent}
-	if _, err := updateHost(r, "alpha", "main", false); err != nil {
-		t.Fatal(err)
-	}
+	ex := buildExecutor(r, nil, "")
+	ex.RunHost("alpha", updplan.Default())
+
 	joined := strings.Join(sent, " ")
 	if n := strings.Count(joined, "git fetch"); n != 1 {
 		t.Fatalf("expected exactly one git fetch across the whole run, got %d:\n%v", n, sent)

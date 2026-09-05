@@ -364,13 +364,13 @@
 **Done when:** `u` on a passwordless-sudo host streams the plan's steps into the log pane.
 
 ### Task 25 — interactive handoff is `fleet update`  (plan Task 25, leaf E)
-- [ ] RED: `TestHandoffDelegatesToFleetUpdate` (argv: `<self> update <alias> --file … --ref … [--force]`), `TestHandoffEnvNeverCarriesTheSecret`, `TestNeedsTerminalRoutesToInteractiveQueue` (`ErrNoTerminal` → host moves to `iaQueue`, row not failed)
-- [ ] RUN-RED: `go test ./cmd -run 'TestHandoff|TestNeedsTerminal' -v` → expect **FAIL**
-- [ ] GREEN: `interactiveHandoff` self-execs via `os.Executable()` wrapped by `handoffWrapper`; delete the `updateScript` wrapper and `unattendedUpdate`
-- [ ] RUN-GREEN: same → expect **PASS**; `go test ./...` green
-- [ ] VERIFY: gofmt/vet/race; `grep -n "updateScript\|unattendedUpdate" cmd/*.go` → no hits
-- [ ] COMMIT: `feat(fleet/tui): interactive handoff is fleet update`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestHandoffDelegatesToFleetUpdate` (argv: `<self> update <alias> --file … --ref … [--force]`), `TestHandoffEnvNeverCarriesTheSecret`, `TestNeedsTerminalRoutesToInteractiveQueue` (`ErrNoTerminal` → host moves to `iaQueue`, row not failed)
+- [x] RUN-RED: `go test ./cmd -run 'TestHandoff|TestNeedsTerminal' -v` → expect **FAIL**
+- [x] GREEN: `interactiveHandoff` self-execs via `os.Executable()` wrapped by `handoffWrapper`; delete the `updateScript` wrapper and `unattendedUpdate`
+- [x] RUN-GREEN: same → expect **PASS**; `go test ./...` green
+- [x] VERIFY: gofmt/vet/race; `grep -n "updateScript\|unattendedUpdate" cmd/*.go` → no hits
+- [x] COMMIT: `feat(fleet/tui): interactive handoff is fleet update`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** exactly one definition of "update a host" remains (the executor).
 
