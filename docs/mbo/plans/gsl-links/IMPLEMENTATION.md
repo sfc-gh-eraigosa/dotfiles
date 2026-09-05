@@ -4,7 +4,7 @@
 - **Date:** 2026-09-05
 - **Status:** Ready to execute
 - **Plan (source of truth):** [`../gsl-links.md`](../gsl-links.md) · spec [`../../specs/gsl-links.md`](../../specs/gsl-links.md)
-- **Objective anchors:** issue #(pending) · PR #(pending) · `docs/mbo/index.md` row `gsl-links`
+- **Objective anchors:** issue #278 · PR #279 · `docs/mbo/index.md` row `gsl-links`
 
 > This file is the **procedure**. It does not restate the plan — it tells a fresh agent
 > session how to execute the plan, task by task, resumably. The plan wins any conflict.
@@ -31,7 +31,7 @@ the ledger is a claim, the command is the proof.
 | Working tree clean before each task | `git status --short` → empty (evidence files from a prior task are committed) |
 
 ## 2. Worker map
-Single classic-lane worker: branch `worktree/gsl`, worktree `~/.herdr/worktrees/dotfiles/worktree-gsl`, draft PR #(pending) (opened by `gss pr` on the first commit). No `gss feature` stack; no breakout. Task order is strict: T1 → T2 → T3 → T4 → T5 → T6.
+Single classic-lane worker: branch `worktree/gsl`, worktree `~/.herdr/worktrees/dotfiles/worktree-gsl`, draft PR #279 (opened by `gss pr` on the first commit). No `gss feature` stack; no breakout. Task order is strict: T1 → T2 → T3 → T4 → T5 → T6.
 
 ## 3. The execution loop (every task)
 1. Locate: first unchecked `TODO.md` box → its plan task; read the plan task fully.

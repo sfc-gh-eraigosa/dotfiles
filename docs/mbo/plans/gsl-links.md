@@ -5,7 +5,7 @@
 - **Slug:** gsl-links
 - **Date:** 2026-09-05
 - **Status:** Approved
-- **Relates to:** spec [`../specs/gsl-links.md`](../specs/gsl-links.md) · issue #(pending) · PR #(pending)
+- **Relates to:** spec [`../specs/gsl-links.md`](../specs/gsl-links.md) · issue #278 · PR #279
 
 **Goal:** Make every web-addressable fact on the gsl status line a visibly underlined OSC 8 click target (PR, branch/repo, directory, model/context/rate, time), gated by gff flags and one config key.
 

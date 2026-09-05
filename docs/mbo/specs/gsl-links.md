@@ -3,7 +3,7 @@
 - **Slug:** gsl-links
 - **Date:** 2026-09-05
 - **Status:** Approved (design approved in chat 2026-09-05; bounded change, no separate design doc — the shape is §3)
-- **Relates to:** issue #(pending) / PR #(pending) / prior art PR #249 (`link_pr`, one OSC 8 link over the whole repo block)
+- **Relates to:** issue #278 / PR #279 / prior art PR #249 (`link_pr`, one OSC 8 link over the whole repo block)
 
 ## 1. Goal
 Every fact on the gsl status line that has a canonical web home becomes a click target, and the

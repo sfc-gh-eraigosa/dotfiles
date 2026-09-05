@@ -13,7 +13,7 @@
 
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| gsl-links (single) | classic lane (no gss feature) | `worktree/gsl` | `~/.herdr/worktrees/dotfiles/worktree-gsl` | #(pending) | planning |
+| gsl-links (single) | classic lane (no gss feature) | `worktree/gsl` | `~/.herdr/worktrees/dotfiles/worktree-gsl` | #279 | planning |
 
 ## 1. Task ledger
 
