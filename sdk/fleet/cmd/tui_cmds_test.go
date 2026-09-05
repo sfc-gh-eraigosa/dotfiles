@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -140,5 +141,47 @@ func TestNeedsTerminalRoutesToInteractiveQueue(t *testing.T) {
 	}
 	if m2.iaTotal != 1 {
 		t.Fatalf("iaTotal must count the newly-queued host, got %d", m2.iaTotal)
+	}
+}
+
+// TestResolveTUIPlanAppliesUpdateRef pins that `tui --update-ref` reaches
+// the loaded plan via plan.WithRef — the same validation --ref gets for
+// `fleet update` — and that an invalid ref is rejected before any host is
+// contacted.
+func TestResolveTUIPlanAppliesUpdateRef(t *testing.T) {
+	dir := t.TempDir()
+	file := dir + "/fleet.yaml"
+	if err := os.WriteFile(file, []byte(updplan.DefaultYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	p, err := resolveTUIPlan(file, "feature/x", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := p.Repos["dotfiles"].Branches[0]; got != "feature/x" {
+		t.Fatalf("--update-ref did not reach the plan, branch = %q", got)
+	}
+
+	if _, err := resolveTUIPlan(file, "bad ref", dir); err == nil {
+		t.Fatal("an invalid --update-ref must be rejected before any host is contacted")
+	}
+}
+
+// TestUpdatingStatusNamesThePlan pins the plan-aware status line: it must
+// name the plan (or "built-in default" when the plan carries no Source)
+// wherever the "updating…" text is rendered.
+func TestUpdatingStatusNamesThePlan(t *testing.T) {
+	m := testModel("a")
+	m.startUpdate([]string{"a"})
+	if !strings.Contains(m.status, "plan: built-in default") {
+		t.Fatalf("status must name the plan, got %q", m.status)
+	}
+
+	m2 := testModel("b")
+	m2.plan.Source = "/etc/fleet/fleet.yaml"
+	m2.startUpdate([]string{"b"})
+	if !strings.Contains(m2.status, "plan: /etc/fleet/fleet.yaml") {
+		t.Fatalf("status must name a custom plan's source, got %q", m2.status)
 	}
 }

@@ -375,13 +375,13 @@
 **Done when:** exactly one definition of "update a host" remains (the executor).
 
 ### Task 26 — `--file` and plan-aware status line  (plan Task 26, leaf E)
-- [ ] RED: `--update-ref` → `WithRef` test; `--file` accepted; status line `updating N host(s) (plan: <Source>)`; `TestTUIDemoWidthGuard` still passes
-- [ ] RUN-RED: `go test ./cmd -run 'TestTUI' -v` → expect **FAIL**
-- [ ] GREEN: flags + status text
-- [ ] RUN-GREEN: same → expect **PASS**
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/tui): --file and plan-aware status line`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `--update-ref` → `WithRef` test; `--file` accepted; status line `updating N host(s) (plan: <Source>)`; `TestTUIDemoWidthGuard` still passes
+- [x] RUN-RED: `go test ./cmd -run 'TestTUI' -v` → expect **FAIL**
+- [x] GREEN: flags + status text
+- [x] RUN-GREEN: same → expect **PASS**
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/tui): --file and plan-aware status line`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** the demo width guard passes with the new status text.
 

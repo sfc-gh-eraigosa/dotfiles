@@ -8,6 +8,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 	"github.com/spf13/cobra"
 )
 
@@ -33,13 +34,9 @@ var tuiCmd = &cobra.Command{
 		// headless `fleet update` uses — the TUI grows no second plan loader.
 		// --update-ref is validated against the resolved plan before a single
 		// host is contacted, the same way --ref is validated for `update`.
-		plan, err := loadPlan(tuiFile, &featflag.GFF{Repo: flagRepo}, flagRepo)
+		plan, err := resolveTUIPlan(tuiFile, tuiUpdateRef, flagRepo)
 		if err != nil {
 			return err
-		}
-		plan, err = plan.WithRef(tuiUpdateRef)
-		if err != nil {
-			return fmt.Errorf("invalid --update-ref %q: %w", tuiUpdateRef, err)
 		}
 		// A MISSING config is an empty fleet, not a failure: on a fresh
 		// machine there is nothing to read yet, and refusing to start is
@@ -100,6 +97,22 @@ var tuiCmd = &cobra.Command{
 		_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()
 		return err
 	},
+}
+
+// resolveTUIPlan loads the tui command's update plan (via loadPlan, exactly
+// like `fleet update`) and applies --update-ref through plan.WithRef,
+// validated before a single host is contacted. Extracted so a test can
+// drive it without cobra or a real ssh config.
+func resolveTUIPlan(file, ref, repoDir string) (updplan.Plan, error) {
+	plan, err := loadPlan(file, &featflag.GFF{Repo: repoDir}, repoDir)
+	if err != nil {
+		return updplan.Plan{}, err
+	}
+	plan, err = plan.WithRef(ref)
+	if err != nil {
+		return updplan.Plan{}, fmt.Errorf("invalid --update-ref %q: %w", ref, err)
+	}
+	return plan, nil
 }
 
 func init() {

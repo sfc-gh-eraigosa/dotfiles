@@ -492,12 +492,27 @@ func (m *tuiModel) startUpdate(targets []string) tea.Cmd {
 	case len(cmds) == 0 && len(busy) > 0:
 		m.status = fmt.Sprintf("already updating %s — left it running", strings.Join(busy, ", "))
 	case len(busy) > 0:
-		m.status = fmt.Sprintf("updating %d host(s) → %s (skipped %s: already running)",
-			len(cmds), m.updateRef, strings.Join(busy, ", "))
+		m.status = fmt.Sprintf("updating %d host(s) (plan: %s) (skipped %s: already running)",
+			len(cmds), planLabel(m.plan.Source), strings.Join(busy, ", "))
 	default:
-		m.status = fmt.Sprintf("updating %d host(s) → %s", len(cmds), m.updateRef)
+		m.status = fmt.Sprintf("updating %d host(s) (plan: %s)", len(cmds), planLabel(m.plan.Source))
 	}
 	return tea.Batch(cmds...)
+}
+
+// planLabel is the plan's Source for the status line: "built-in default"
+// when the built-in plan carries no path, else the Source itself, truncated
+// from the front so a long absolute path can never push the status line
+// past the terminal width (the demo width guard, TestDemoFrames).
+func planLabel(source string) string {
+	if source == "" {
+		return "built-in default"
+	}
+	const max = 40
+	if len(source) <= max {
+		return source
+	}
+	return "…" + source[len(source)-max+1:]
 }
 
 // pump fills free job slots from the background queue. When the wave is fully
