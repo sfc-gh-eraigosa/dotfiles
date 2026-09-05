@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 	"os/exec"
 	"strings"
 	"testing"
@@ -16,7 +17,8 @@ import (
 // Verified in a shell: `sh -c 'FOO=bar cd /tmp && env | grep FOO'` prints
 // nothing.
 func TestAnswersAreExportedSoInstallShInheritsThem(t *testing.T) {
-	script := unattendedUpdate("main", answers{windows: "s", gemini: "keep"})
+	a := answers{windows: "s", gemini: "keep"}
+	script := bgPreamble(a)(updplan.Step{Kind: updplan.KindRun}) + "cd ~/git/dotfiles && ./install.sh"
 	if !strings.Contains(script, "export WINSETUP_ANSWER=s") {
 		t.Fatalf("answers must be exported, not prefixed:\n%s", script)
 	}
@@ -34,7 +36,7 @@ func TestAnswersAreExportedSoInstallShInheritsThem(t *testing.T) {
 // password they had just typed. `sudo -n` failing means "needs a password",
 // not "must be interactive": with one in hand the background lane primes it.
 func TestSuppliedCredentialKeepsAPasswordHostInTheBackgroundLane(t *testing.T) {
-	m := newTUIModel(hosts("needs-pw"), nil, fakeBaseline{head: "abc"}, testNow, "main", 2)
+	m := newTUIModel(hosts("needs-pw"), nil, fakeBaseline{head: "abc"}, testNow, "main", 2, updplan.Default())
 	m.ans = answers{sudoSecret: strings.Repeat("Zq7", 3)}
 	mm, _ := m.Update(precheckMsg{alias: "needs-pw", interactive: true})
 	got := mm.(tuiModel)
@@ -47,22 +49,23 @@ func TestSuppliedCredentialKeepsAPasswordHostInTheBackgroundLane(t *testing.T) {
 
 	// Without one it must still fall back, or a password-needing host would
 	// fail in the background with nobody able to answer.
-	m2 := newTUIModel(hosts("needs-pw"), nil, fakeBaseline{head: "abc"}, testNow, "main", 2)
+	m2 := newTUIModel(hosts("needs-pw"), nil, fakeBaseline{head: "abc"}, testNow, "main", 2, updplan.Default())
 	mm2, _ := m2.Update(precheckMsg{alias: "needs-pw", interactive: true})
 	if mm2.(tuiModel).iaTotal != 1 {
 		t.Fatal("with no credential the host must fall back to the interactive lane")
 	}
 }
 
-// DEFECT 3: the interactive lane ran the BARE update script, so a host routed
-// there re-asked every question already answered in the form.
+// DEFECT 3: the interactive lane used to run a bare remote script embedding
+// the answers as an "export" prefix on the remote command; now the child is
+// a self-exec of `fleet update`, and the answers travel as its OWN
+// environment (never the remote shell's) — see handoffEnv.
 func TestInteractiveLaneCarriesTheAnswers(t *testing.T) {
 	a := answers{windows: "s", gemini: "keep"}
-	remote := a.envPrefix() + remoteUpdateScript("main")
-	w := handoffWrapper("host-b", "main", remote, 1, 2)
-	for _, want := range []string{"export WINSETUP_ANSWER=s", "GEMINI_TEARDOWN_ANSWER=keep"} {
-		if !strings.Contains(w, want) {
-			t.Fatalf("interactive handoff dropped %q:\n%s", want, w)
+	joined := strings.Join(handoffEnv(a), "\n")
+	for _, want := range []string{"WINSETUP_ANSWER=s", "GEMINI_TEARDOWN_ANSWER=keep"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("interactive handoff dropped %q from its environment", want)
 		}
 	}
 }
@@ -71,7 +74,7 @@ func TestInteractiveLaneCarriesTheAnswers(t *testing.T) {
 // output. Without a banner there is nothing saying which machine it belongs to.
 func TestHandoffAnnouncesHostAndProgress(t *testing.T) {
 	w := handoffWrapper("host-b", "main", "echo remote", 2, 3)
-	for _, want := range []string{"host-b", "host 2 of 3", "finished", "ssh -t"} {
+	for _, want := range []string{"host-b", "host 2 of 3", "finished"} {
 		if !strings.Contains(w, want) {
 			t.Fatalf("handoff wrapper missing %q:\n%s", want, w)
 		}
@@ -100,7 +103,7 @@ func TestGitAdviceIsStrippedSoTheRealErrorSurvives(t *testing.T) {
 
 // The form is a dialog, not loose text floating under the table.
 func TestAnswerFormIsFramedAsADialog(t *testing.T) {
-	m := newTUIModel(hosts("a"), nil, fakeBaseline{head: "abc"}, testNow, "main", 2)
+	m := newTUIModel(hosts("a"), nil, fakeBaseline{head: "abc"}, testNow, "main", 2, updplan.Default())
 	m.mode = modeAnswers
 	view := m.View()
 	if !strings.Contains(view, "╭") || !strings.Contains(view, "╰") {
@@ -117,7 +120,8 @@ func TestAnswerFormIsFramedAsADialog(t *testing.T) {
 // privileged step had silently skipped. The gate must therefore be
 // UNCONDITIONAL, not merely present when a credential was supplied.
 func TestSudoIsGatedEvenWithNoCredential(t *testing.T) {
-	noCred := unattendedUpdate("main", answers{})
+	installStep := updplan.Step{Kind: updplan.KindRun}
+	noCred := bgPreamble(answers{})(installStep) + "cd ~/git/dotfiles && ./install.sh"
 	if !strings.Contains(noCred, "sudo -n true") {
 		t.Fatalf("a credential-less run must still verify sudo before installing:\n%s", noCred)
 	}
@@ -125,7 +129,9 @@ func TestSudoIsGatedEvenWithNoCredential(t *testing.T) {
 		t.Fatalf("the gate must precede install.sh:\n%s", noCred)
 	}
 	// And it still primes when there IS one.
-	withCred := unattendedUpdate("main", answers{sudoSecret: probeMarker})
+	withSecret := answers{}
+	withSecret.appendSecret(probeMarker)
+	withCred := bgPreamble(withSecret)(installStep) + "cd ~/git/dotfiles && ./install.sh"
 	if !strings.Contains(withCred, "sudo -S -p '' -v") {
 		t.Fatalf("a supplied credential must still be primed:\n%s", withCred)
 	}

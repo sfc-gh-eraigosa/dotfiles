@@ -1,0 +1,27 @@
+# 2026-09-04T15:33:15Z task 7
+$ gofmt -l .
+internal/updplan/validate.go
+$ go vet ./...
+$ go test -race ./internal/updexec/... ./internal/runner/...
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	1.015s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	(cached)
+$ go test -race ./... (note: pre-existing unrelated failures in internal/updplan/review_test.go, an untracked file added by a concurrent review pass on leaf A; not touched by this task)
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keys	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/lanscan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	(cached)
+--- FAIL: TestParseRejects (0.01s)
+    --- FAIL: TestParseRejects/tag_with_extras (0.00s)
+        validate_test.go:401: Parse(tag with extras) = nil error, want one containing "sole entry"
+FAIL
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan	0.042s
+FAIL

@@ -49,6 +49,16 @@ type Baseliner interface {
 const stampPath = "~/.local/state/dotfiles/install-stamp"
 
 // remoteRepo is where install.sh puts the clone on every fleet host.
+//
+// TODO(fleet-update plan §2, leaf D): once every host is expected to be on a
+// fleet.yaml plan, derive this from the loaded plan's "dotfiles" repo path
+// (updplan.Plan.Repos["dotfiles"].Path) instead of hardcoding it — status
+// and update would then agree by construction even when a plan overrides the
+// path. Deferred rather than done here: status has no plan-loading of its
+// own today, and wiring one in just to read one path was judged more
+// invasive than the consistency win, for a value that is still ~always
+// "dotfiles" in practice. Left as a hardcoded constant plus this note per
+// the leaf D task instructions, not silently skipped.
 const remoteRepo = "~/git/dotfiles"
 
 // probeDelim separates the two payloads the probe brings back. It must be

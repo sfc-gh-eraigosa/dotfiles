@@ -59,20 +59,51 @@ if [ -d "$BASE_DIR/ai/hooks" ]; then
     chmod +x "$HOOKS_DEST"/*.sh 2>/dev/null || true
 fi
 
-# --- hooks.json (rendered from the repo template; repo-owned wiring) ---
-# Unlike the retired Gemini CLI (hooks lived inside settings.json and needed
-# a forced-subset merge), agy keeps hook wiring in a dedicated hooks.json —
-# so the whole file is ours to render. __HOME__ is substituted because agy
-# does not expand env vars in hook command strings; the replacement escapes
-# sed's metacharacters (& | \) so an unusual $HOME cannot corrupt the file.
-# Guard scripts are referenced by bare name — the adapter resolves them
-# relative to its own directory.
+# --- hooks.json (repo `guards` entry rendered from the template and MERGED
+# over the host file) ---
+# agy keeps hook wiring in a dedicated hooks.json keyed by hook NAME. The repo
+# owns exactly one name, "guards"; other tools own theirs (herdr's agent
+# state-reporting integration adds a "herdr" entry). So the file is merged,
+# not overwritten: the rendered "guards" object replaces the host's "guards"
+# wholesale (arrays replaced, so a stale matcher list cannot linger) and every
+# other named hook is preserved (design: docs/mbo/designs/agy-parity.md unit 4).
+# An unparseable host file is set aside as hooks.json.invalid and recreated.
+# __HOME__ is substituted because agy does not expand env vars in hook command
+# strings; the replacement escapes sed's metacharacters (& | \) so an unusual
+# $HOME cannot corrupt the file. Guard scripts are referenced by bare name —
+# the adapter resolves them relative to its own directory.
 HOOKS_JSON_SRC="$BASE_DIR/ai/antigravity/hooks.json.template"
 if [ -f "$HOOKS_JSON_SRC" ]; then
-    echo "  Rendering ~/.gemini/config/hooks.json..."
+    echo "  Rendering ~/.gemini/config/hooks.json (guards entry, merged)..."
     mkdir -p "$AGY_CONFIG_ROOT"
+    HOOKS_JSON_DEST="$AGY_CONFIG_ROOT/hooks.json"
     home_escaped="$(printf '%s' "$HOME" | sed -e 's/[&|\\]/\\&/g')"
-    sed "s|__HOME__|${home_escaped}|g" "$HOOKS_JSON_SRC" > "$AGY_CONFIG_ROOT/hooks.json"
+    hooks_rendered="$(mktemp "${TMPDIR:-/tmp}/agy-hooks.XXXXXX")"
+    sed "s|__HOME__|${home_escaped}|g" "$HOOKS_JSON_SRC" > "$hooks_rendered"
+    if command -v jq > /dev/null 2>&1; then
+        if [ -f "$HOOKS_JSON_DEST" ] && ! jq -e . "$HOOKS_JSON_DEST" > /dev/null 2>&1; then
+            echo "    WARNING: existing hooks.json is not valid JSON; set aside as hooks.json.invalid" >&2
+            mv "$HOOKS_JSON_DEST" "$HOOKS_JSON_DEST.invalid"
+        fi
+        if [ -f "$HOOKS_JSON_DEST" ]; then
+            hooks_merged="$(mktemp "${TMPDIR:-/tmp}/agy-hooks-merged.XXXXXX")"
+            # `*` deep-merges objects; the rendered right operand wins for
+            # "guards" (its arrays replace the host's), other names survive.
+            if jq -s '.[0] * .[1]' "$HOOKS_JSON_DEST" "$hooks_rendered" > "$hooks_merged" && [ -s "$hooks_merged" ]; then
+                cat "$hooks_merged" > "$HOOKS_JSON_DEST"
+            else
+                echo "    WARNING: hooks.json merge failed; host file left unchanged" >&2
+            fi
+            rm -f "$hooks_merged"
+        else
+            cat "$hooks_rendered" > "$HOOKS_JSON_DEST"
+        fi
+    else
+        # jq-less fallback: overwrite (foreign hooks cannot be preserved).
+        echo "    WARNING: jq not installed — hooks.json overwritten, foreign hook entries not preserved" >&2
+        cat "$hooks_rendered" > "$HOOKS_JSON_DEST"
+    fi
+    rm -f "$hooks_rendered"
 fi
 
 # --- Shell aliases (~/.config/antigravity/aliases.sh, sourced by .zshrc and
@@ -95,6 +126,40 @@ if [ -f "$BASE_DIR/ai/antigravity/aliases.sh" ]; then
     cp "$BASE_DIR/ai/antigravity/aliases.sh" "$AGY_XDG_DIR/aliases.sh"
 fi
 
+# --- Local "dotfiles" plugin: the repo's Claude slash commands + account
+# memories rendered into agy's native plugin shape (commands/*.toml +
+# rules/AGENTS.md) and enabled in ~/.gemini/config/config.json. The renderer
+# is a standalone, tested script (mirrors apply-forced-settings.sh); the
+# Markdown under ai/claude/ stays the single source. Design: agy-parity 5–6.
+RENDER_PLUGIN="$BASE_DIR/opt/scripts/system/render-agy-plugin.sh"
+AGY_PLUGIN_DIR="$AGY_CONFIG_ROOT/plugins/dotfiles"
+AGY_CONFIG_JSON="$AGY_CONFIG_ROOT/config.json"
+if [ -f "$RENDER_PLUGIN" ]; then
+    echo "  Rendering the dotfiles plugin into ~/.gemini/config/plugins/dotfiles..."
+    if bash "$RENDER_PLUGIN" "$BASE_DIR" "$AGY_PLUGIN_DIR"; then
+        if command -v jq > /dev/null 2>&1; then
+            mkdir -p "$AGY_CONFIG_ROOT"
+            [ -f "$AGY_CONFIG_JSON" ] && jq -e . "$AGY_CONFIG_JSON" > /dev/null 2>&1 || echo '{}' > "$AGY_CONFIG_JSON"
+            cfg_tmp="$(mktemp "${TMPDIR:-/tmp}/agy-config.XXXXXX")"
+            # Only our own entry is touched; other plugins and userSettings survive.
+            if jq '.plugins = (.plugins // {}) | .plugins.dotfiles = {enabled: true}' "$AGY_CONFIG_JSON" > "$cfg_tmp" && [ -s "$cfg_tmp" ]; then
+                cat "$cfg_tmp" > "$AGY_CONFIG_JSON"
+            else
+                echo "    WARNING: could not enable the dotfiles plugin in config.json" >&2
+            fi
+            rm -f "$cfg_tmp"
+        else
+            echo "    WARNING: jq not installed — dotfiles plugin rendered but not enabled in config.json" >&2
+        fi
+    else
+        echo "    WARNING: dotfiles plugin render failed; continuing" >&2
+    fi
+else
+    # Renderer absent (e.g. rolled back): drop a previously rendered plugin so
+    # agy does not keep loading stale commands.
+    rm -rf "$AGY_PLUGIN_DIR"
+fi
+
 # --- statusline-command.sh (shim for gsl status line) ---
 # Point agy's statusLine settings to a decoupled shim in ~/.gemini/config/.
 if [ -f "$BASE_DIR/ai/claude/statusline-command.sh" ]; then
@@ -104,8 +169,16 @@ if [ -f "$BASE_DIR/ai/claude/statusline-command.sh" ]; then
     chmod +x "$AGY_CONFIG_ROOT/statusline-command.sh"
 fi
 
-# --- settings.json (host-owned real file; forced subset merged on every run) ---
+# --- settings.json (host-owned real file; seeded from the tracked template on
+# first run, forced subset merged on every run) ---
+# Mirrors install_claude_skills.sh: the host OWNS this file (trustedWorkspaces,
+# colorScheme, …). A NEW host is seeded from settings.json.template (its
+# self-documenting "_comment" key is dropped at seed time); an EXISTING file is
+# never re-seeded. settings.forced.json (statusLine + permissions deny/ask,
+# allow unioned) is deep-merged over it every run by apply-forced-settings.sh.
+# Design: docs/mbo/designs/agy-parity.md (units 2–3).
 AGY_SETTINGS_DEST="${HOME}/.gemini/antigravity-cli/settings.json"
+AGY_SETTINGS_TEMPLATE="$BASE_DIR/ai/antigravity/settings.json.template"
 AGY_SETTINGS_FORCED="$BASE_DIR/ai/antigravity/settings.forced.json"
 APPLY_FORCED="$BASE_DIR/opt/scripts/system/apply-forced-settings.sh"
 
@@ -119,9 +192,15 @@ if [ -f "$AGY_SETTINGS_FORCED" ]; then
         cp "$AGY_SETTINGS_DEST" "$AGY_SETTINGS_DEST.bak"
     fi
     
-    # Seed with an empty JSON object if absent
+    # Seed a NEW host from the template (empty object if the template or jq is
+    # missing, so the forced merge below still has a valid file to work on).
     if [ ! -f "$AGY_SETTINGS_DEST" ]; then
-        echo '{}' > "$AGY_SETTINGS_DEST"
+        if [ -f "$AGY_SETTINGS_TEMPLATE" ] && command -v jq > /dev/null 2>&1; then
+            echo "    Seeding settings.json from template (first run)"
+            jq 'del(._comment)' "$AGY_SETTINGS_TEMPLATE" > "$AGY_SETTINGS_DEST"
+        else
+            echo '{}' > "$AGY_SETTINGS_DEST"
+        fi
     fi
     
     # Deep-merge the forced settings

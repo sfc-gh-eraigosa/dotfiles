@@ -85,7 +85,7 @@ unset _ip_prev _ip_arg
 #     in the per-commit config layer; omitting it BAKES the step into the cached
 #     deps layer, so later edits to it stop taking effect per commit (a bug).
 _IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
-_IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM"
+_IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM INSTALL_SHELL_OH_MY_ZSH_UPDATE"
 apply_install_phase() {
   case "$INSTALL_PHASE" in
     deps)   for _f in $_IP_CONFIG_FLAGS; do export "GFF_${_f}=false"; done ;;
@@ -275,12 +275,37 @@ if gff_on install.ai.claude; then
   fi
 else gff_skip_msg install.ai.claude; fi
 
+# Git privacy hooks (global core.hooksPath): judge staged content, commit
+# messages and outgoing commits WHATEVER wrote them — the layer behind the
+# agent-side privacy_guard, which only sees tool calls. Same rule library
+# (ai/hooks/privacy_rules.sh); chains to any repo-local hook.
+if gff_on install.git.hooks; then
+  if [ -f "${BASE_DIR}/opt/scripts/git/install_git_hooks.sh" ]; then
+    "${BASE_DIR}/opt/scripts/git/install_git_hooks.sh"
+  fi
+else gff_skip_msg install.git.hooks; fi
+
+# gitleaks: the broad, upstream-maintained secret ruleset the privacy guard
+# (agent hook + git hooks) judges with when the binary is present; our built-in
+# shapes stay as the floor. Flag off => install nothing AND tell the hooks to
+# skip it (marker file), so a binary from elsewhere does not re-enable it.
+# Every judged call is timed; `make hook-timing` reports and goes red over budget.
+if gff_on install.git.gitleaks; then
+  if [ -f "${BASE_DIR}/opt/scripts/git/install_gitleaks.sh" ]; then
+    "${BASE_DIR}/opt/scripts/git/install_gitleaks.sh" || echo "WARN: gitleaks install failed; the privacy guard keeps its built-in secret shapes"
+  fi
+else
+  gff_skip_msg install.git.gitleaks
+  [ -f "${BASE_DIR}/opt/scripts/git/install_gitleaks.sh" ] && "${BASE_DIR}/opt/scripts/git/install_gitleaks.sh" --off
+fi
+
 # herdr agent integrations (`herdr integration install claude|antigravity-cli`):
 # the hook scripts that report each agent's working/blocked/done state to the
-# herdr sidebar. Must run AFTER install_antigravity_skills.sh above, which
-# re-renders ~/.gemini/config/hooks.json from the repo template and drops
-# herdr's entry on every run. Only integrations whose agent CLI is present are
-# installed; the binary itself is the deps-phase install.tools.herdr block.
+# herdr sidebar. install_antigravity_skills.sh MERGES its `guards` entry into
+# ~/.gemini/config/hooks.json (agy-parity unit 4), so herdr's entry survives
+# either ordering; running after it just keeps the sequence readable. Only
+# integrations whose agent CLI is present are installed; the binary itself is
+# the deps-phase install.tools.herdr block.
 if gff_on install.tools.herdr-integrations; then
   if [ -f "${BASE_DIR}/opt/scripts/system/install_herdr.sh" ]; then
     echo "Installing herdr agent integrations..."
@@ -889,6 +914,15 @@ if gff_on install.system.gitrepos; then
     "${HOME}/.gitrepos"
   fi
 else gff_skip_msg install.system.gitrepos; fi
+
+# Keep the oh-my-zsh clone current. .gitrepos above clones it but is told
+# never to pull (";false" in .repos.env), so upstream plugin fixes never
+# landed. Must run AFTER the gitrepos block so a fresh clone exists.
+# Fast-forward only; warns and continues on a diverged/offline clone.
+if gff_on install.shell.oh-my-zsh-update; then
+  bash "${BASE_DIR}/opt/scripts/system/oh-my-zsh_update.sh" ||
+    echo "WARNING: oh-my-zsh update reported problems; continuing."
+else gff_skip_msg install.shell.oh-my-zsh-update; fi
 
 # Load Nano Platform environment
 if gff_on install.system.nano-profile; then

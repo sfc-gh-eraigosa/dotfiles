@@ -138,8 +138,8 @@ func TestResolveUser_Precedence(t *testing.T) {
 	// gh login present and valid → wins over email/$USER.
 	got, err := identity.ResolveUser(identity.UserSources{
 		GHLogin:  func() (string, error) { return "Erai-Bot", nil },
-		GitEmail: func() (string, error) { return "edward.raigosa@gmail.com", nil },
-		Getenv:   func(string) string { return "wenlock" },
+		GitEmail: func() (string, error) { return "jane.doe@example.com", nil },
+		Getenv:   func(string) string { return "someuser" },
 	})
 	if err != nil || got != "erai-bot" {
 		t.Errorf("precedence(gh) = %q, %v; want erai-bot, nil", got, err)
@@ -149,11 +149,11 @@ func TestResolveUser_Precedence(t *testing.T) {
 func TestResolveUser_FallsThroughToEmail(t *testing.T) {
 	got, err := identity.ResolveUser(identity.UserSources{
 		GHLogin:  func() (string, error) { return "", stderrors.New("not authed") },
-		GitEmail: func() (string, error) { return "edward.raigosa@gmail.com", nil },
-		Getenv:   func(string) string { return "wenlock" },
+		GitEmail: func() (string, error) { return "jane.doe@example.com", nil },
+		Getenv:   func(string) string { return "someuser" },
 	})
-	if err != nil || got != "edward-raigosa" {
-		t.Errorf("fallthrough(email) = %q, %v; want edward-raigosa, nil", got, err)
+	if err != nil || got != "jane-doe" {
+		t.Errorf("fallthrough(email) = %q, %v; want jane-doe, nil", got, err)
 	}
 }
 
@@ -161,10 +161,10 @@ func TestResolveUser_FallsThroughToEnv(t *testing.T) {
 	got, err := identity.ResolveUser(identity.UserSources{
 		GHLogin:  func() (string, error) { return "x", nil }, // slugs to "x" → invalid (too short)
 		GitEmail: func() (string, error) { return "", stderrors.New("no email") },
-		Getenv:   func(k string) string { return map[string]string{"USER": "wenlock"}[k] },
+		Getenv:   func(k string) string { return map[string]string{"USER": "someuser"}[k] },
 	})
-	if err != nil || got != "wenlock" {
-		t.Errorf("fallthrough($USER) = %q, %v; want wenlock, nil", got, err)
+	if err != nil || got != "someuser" {
+		t.Errorf("fallthrough($USER) = %q, %v; want someuser, nil", got, err)
 	}
 }
 

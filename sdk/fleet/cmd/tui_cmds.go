@@ -1,17 +1,20 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
-	applog "github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/log"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
 // Messages carrying async results back into Update().
@@ -98,6 +101,16 @@ func precheckSudo(alias string, r runner.Runner) tea.Cmd {
 	}
 }
 
+// envWinsetupAnswer / envGeminiTeardownAnswer are the ONE definition of the
+// two install.sh prompt-answer environment variable names — envPrefix,
+// handoffEnv, and localAnswerPreamble (update_output.go) each used to spell
+// these out as separate string literals, three copies that could silently
+// drift from one another.
+const (
+	envWinsetupAnswer       = "WINSETUP_ANSWER"
+	envGeminiTeardownAnswer = "GEMINI_TEARDOWN_ANSWER"
+)
+
 // answers are the operator's pre-supplied responses to install.sh's prompts,
 // collected once per wave so an unattended run never reaches a prompt nobody
 // is watching. Password is memory-only: never persisted, never logged, never
@@ -155,10 +168,10 @@ func orUnset(s string) string {
 func (a answers) envPrefix() string {
 	var b []string
 	if a.windows != "" {
-		b = append(b, "WINSETUP_ANSWER="+a.windows)
+		b = append(b, envWinsetupAnswer+"="+a.windows)
 	}
 	if a.gemini != "" {
-		b = append(b, "GEMINI_TEARDOWN_ANSWER="+a.gemini)
+		b = append(b, envGeminiTeardownAnswer+"="+a.gemini)
 	}
 	if len(b) == 0 {
 		return ""
@@ -179,18 +192,8 @@ const (
 	rcSudoNoCache = 92 // authentication worked but the credential did not persist
 )
 
-// unattendedUpdate builds the remote script for a background update.
-//
-// Everything runs in ONE ssh session on purpose. sudo's timestamp is scoped
-// (tty_tickets), so priming in a separate connection is not guaranteed to be
-// visible to a later one — the credential is primed and consumed in the same
-// session as install.sh.
-//
-// The prime is then VERIFIED with `sudo -n true` rather than assumed: if the
-// credential did not persist we fail immediately with a distinct code instead
-// of running a long install whose privileged steps all silently skip.
-// sudoGate refuses to start install.sh unless sudo will actually work in THIS
-// session.
+// sudoGate refuses to start a run step's script unless sudo will actually
+// work in THIS session.
 //
 // install.sh treats its own failed `sudo -v` as non-fatal and carries on, so
 // without this gate a credential-less run produced a long cascade —
@@ -212,19 +215,6 @@ const (
 // Hosts that need no sudo are exempt rather than blocked: root, and machines
 // with no sudo at all (minimal containers).
 const sudoGate = `{ [ "$(id -u)" = 0 ] || ! command -v sudo >/dev/null 2>&1 || sudo -n true 2>/dev/null; }`
-
-func unattendedUpdate(ref string, a answers) string {
-	var b strings.Builder
-	if a.needsSudo() {
-		// -S reads the password from stdin (never argv); -p '' suppresses the
-		// prompt text that would otherwise pollute the captured log.
-		fmt.Fprintf(&b, "sudo -S -p '' -v 2>/dev/null || exit %d; ", rcSudoAuth)
-	}
-	fmt.Fprintf(&b, "%s || exit %d; ", sudoGate, rcSudoNoCache)
-	b.WriteString(a.envPrefix())
-	b.WriteString(updateScript(ref, a.forceReset()))
-	return b.String()
-}
 
 // explainExit turns the preamble's exit codes into something an operator can
 // act on. A bare "exit status 91" on a row would be useless.
@@ -249,53 +239,147 @@ func explainExit(err error) string {
 // The password reaches the remote `sudo -S` over ssh's encrypted channel via
 // stdin. It is never an argument and never an environment variable, both of
 // which are world-readable through /proc.
+// errNeedsTerminal marks a background run that stopped on a step the
+// Background lane cannot service (updexec.ErrNoTerminal) — the model routes
+// such a host to the interactive queue instead of marking its row failed
+// (see tuiModel.Update's bgUpdateDoneMsg case).
+var errNeedsTerminal = errors.New("fleet: this host's plan needs a terminal")
+
+// bgPreamble builds the Background lane's per-run-step preamble: prime and
+// verify sudo (only when a credential was supplied — an empty `sudo -S`
+// would consume nothing and fail confusingly), then the sudoGate every run
+// must pass regardless, then the operator's non-secret answers. Console and
+// Background apply this ONLY to updplan.KindRun steps, so a sync or gh-auth
+// script never sees a sudo preamble.
+func bgPreamble(a answers) func(updplan.Step) string {
+	return func(updplan.Step) string {
+		var b strings.Builder
+		if a.needsSudo() {
+			fmt.Fprintf(&b, "sudo -S -p '' -v 2>/dev/null || exit %d; ", rcSudoAuth)
+		}
+		fmt.Fprintf(&b, "%s || exit %d; ", sudoGate, rcSudoNoCache)
+		b.WriteString(a.envPrefix())
+		return b.String()
+	}
+}
+
+// lineQueue is an unbounded, mutex-guarded FIFO decoupling a producer that
+// must NEVER block (the executor's Line callback) from a consumer that may
+// stall for an arbitrarily long time (readLine's Cmd, which is only
+// re-issued from Update() — and Update() itself stops running entirely
+// while tea.ExecProcess suspends the event loop for another host's
+// interactive handoff). Before this, Line pushed onto a capacity-64
+// channel: once a fast background install filled it with nobody reading,
+// the executor's own goroutine — and with it, the whole update — stalled
+// until the UI got back around to draining. With a 30-minute per-attempt
+// deadline on batch steps, a long enough stall could kill the install
+// mid-flight for a reason that had nothing to do with the remote host.
+type lineQueue struct {
+	mu     sync.Mutex
+	cond   *sync.Cond
+	buf    []string
+	closed bool
+}
+
+func newLineQueue() *lineQueue {
+	q := &lineQueue{}
+	q.cond = sync.NewCond(&q.mu)
+	return q
+}
+
+// push never blocks: it only grows a slice and signals, so the executor's
+// Line callback returns immediately regardless of whether anything is
+// reading.
+func (q *lineQueue) push(l string) {
+	q.mu.Lock()
+	q.buf = append(q.buf, l)
+	q.mu.Unlock()
+	q.cond.Signal()
+}
+
+// closeQ marks the queue closed: once drained, forward will stop.
+func (q *lineQueue) closeQ() {
+	q.mu.Lock()
+	q.closed = true
+	q.mu.Unlock()
+	q.cond.Signal()
+}
+
+// forward drains q into ch, in order, blocking on the channel send when
+// nobody is reading — safe here because forward runs in its own goroutine,
+// never on the executor's call path. It closes ch once q is closed and
+// fully drained, exactly like closing a plain channel would.
+func (q *lineQueue) forward(ch chan<- string) {
+	for {
+		q.mu.Lock()
+		for len(q.buf) == 0 && !q.closed {
+			q.cond.Wait()
+		}
+		if len(q.buf) == 0 {
+			q.mu.Unlock()
+			close(ch)
+			return
+		}
+		l := q.buf[0]
+		q.buf = q.buf[1:]
+		q.mu.Unlock()
+		ch <- l
+	}
+}
+
 // beginStream launches the update from inside a Cmd and hands the channels
 // back as a message. Starting it in Update() instead would put I/O on the
 // update path — where a model built without a runner (tests, the demo) panics,
 // and where a blocking dial would freeze the UI. Update stays pure; only Cmds
 // touch the network.
-func beginStream(alias, ref string, a answers, r runner.Runner, dir string) tea.Cmd {
-	script := unattendedUpdate(ref, a)
+//
+// It runs plan's steps through the SAME plan executor the headless `fleet
+// update` uses (updexec.Executor), over the Background StepIO lane: batch
+// steps stream exactly as before, and an interactive step this lane cannot
+// service (gh-auth) fails with updexec.ErrNoTerminal rather than hanging.
+//
+// The executor tees every line it sends into the capture (Output/LineWriter)
+// itself now (updexec.Executor.RunHost), so beginStream no longer has to —
+// its own Line callback only has to feed the UI's log pane via lineQueue.
+func beginStream(alias string, plan updplan.Plan, a answers, r runner.Runner, dir string) tea.Cmd {
 	secret := a.sudoSecret + "\n"
+	preamble := bgPreamble(a)
 	reset := a.forceReset()
 	return func() tea.Msg {
-		lines, done := r.RunStream(alias, secret, script)
-		// Tee to disk from HERE — inside the Cmd, off the UI thread. The pane
-		// is an in-memory ring that dies with the process; the capture is what
-		// survives to be read the morning after.
-		lines = teeToRunLog(dir, alias, ref, reset, lines)
+		lines := make(chan string)
+		done := make(chan error, 1)
+
+		q := newLineQueue()
+		go q.forward(lines)
+
+		ex := updexec.Executor{
+			IO: updexec.Background{Console: updexec.Console{
+				R:    r,
+				Line: func(_, l string) { q.push(l) },
+				Stdin: func(st updplan.Step) string {
+					if st.Kind != updplan.KindRun {
+						return ""
+					}
+					return secret
+				},
+				Preamble: preamble,
+			}},
+			Out:   captureOutput{dir: dir},
+			Reset: reset,
+		}
+
+		go func() {
+			rep := ex.RunHost(alias, plan)
+			q.closeQ()
+			if rep.NeedsTerminal() {
+				done <- errNeedsTerminal
+				return
+			}
+			done <- rep.Err()
+		}()
+
 		return streamStartedMsg{alias: alias, st: stream{lines: lines, done: done}}
 	}
-}
-
-// teeToRunLog forwards every line unchanged while writing it to this run's
-// capture. The file's whole lifecycle — location, 0600, header, per-line
-// timestamps, retention — belongs to libs/log; fleet only says what the run
-// is about.
-//
-// A capture that cannot be opened is nil, and a nil capture's Tee returns the
-// stream untouched: losing the log must never cost the update.
-func teeToRunLog(dir, alias, ref string, reset bool, in <-chan string) <-chan string {
-	mode := "fast-forward"
-	if reset {
-		mode = "FORCE RESET"
-	}
-	c := applog.NewCapture(applog.CaptureOptions{
-		Tool:    logTool,
-		Dir:     dir,
-		Subject: alias,
-		Header: fmt.Sprintf("fleet update — host=%s ref=%s mode=%s started=%s",
-			alias, ref, mode, nowFn().UTC().Format(time.RFC3339)),
-		Now: nowFn,
-	})
-	if c != nil {
-		// fleet's own diagnostics now go somewhere too, not just the remote's
-		// output — including where to find that output.
-		applog.Default().WithFields(map[string]any{
-			"host": alias, "ref": ref, "mode": mode, "capture": c.Path(),
-		}).Info("update started")
-	}
-	return c.Tee(in, "finished")
 }
 
 // readLine blocks until the next line (or EOF) and turns it into a Msg. It is
@@ -320,31 +404,90 @@ func awaitDone(alias string, st stream) tea.Cmd {
 	}
 }
 
-// shQuote makes a string safe as a single-quoted POSIX shell word.
-func shQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+// shQuote makes a string safe as a single-quoted POSIX shell word. Aliased
+// to updexec.ShQuote — the one definition both packages share, rather than
+// cmd carrying its own byte-identical copy.
+var shQuote = updexec.ShQuote
 
-// handoffWrapper wraps the ssh handoff in a banner naming the host and its
-// position in the queue, plus a footer carrying the exit code.
+// handoffWrapper wraps cmd — a full local shell command line — in a banner
+// naming the host and its position in the queue, plus a footer carrying the
+// exit code.
 //
 // tea.ExecProcess SUSPENDS the whole TUI, so while a handoff runs the screen
-// is bare install.sh output with nothing on it identifying which machine you
-// are looking at — or that more hosts are queued behind it.
-// Extracted so the contract is testable without running ssh.
-func handoffWrapper(alias, ref, remote string, pos, total int) string {
+// is bare command output with nothing on it identifying which machine you
+// are looking at — or that more hosts are queued behind it. Extracted so
+// the contract is testable without running a subprocess.
+func handoffWrapper(alias, ref, cmd string, pos, total int) string {
 	banner := fmt.Sprintf("\\n=== fleet: updating %s -> %s   (host %d of %d) ===\\n\\n", alias, ref, pos, total)
 	footer := fmt.Sprintf("\\n=== fleet: %s finished (exit %%s) — returning to the dashboard ===\\n", alias)
-	return fmt.Sprintf("printf %s; ssh -t %s %s; rc=$?; printf %s \"$rc\"; exit $rc",
-		shQuote(banner), shQuote(alias), shQuote(remote), shQuote(footer))
+	return fmt.Sprintf("printf %s; %s; rc=$?; printf %s \"$rc\"; exit $rc",
+		shQuote(banner), cmd, shQuote(footer))
+}
+
+// handoffArgv builds the self-exec argv for the interactive handoff:
+// `<self> update <alias> [--file F] [--ref R] --repo REPO [--reset]`. There
+// is now exactly ONE definition of "update a host" — the plan executor
+// behind `fleet update` — so the interactive lane delegates to that CLI
+// verb rather than re-implementing a remote script. Extracted so a test can
+// assert on it without running a subprocess.
+//
+// --repo is forwarded ALWAYS (unlike --file/--ref, which are only appended
+// when set): the persistent --repo flag always carries a value (it defaults
+// to ~/git/dotfiles), and the TUI loaded its plan and gff resolution
+// against THAT checkout. Without forwarding it, a routed host used to
+// resolve gff/the repo-local plan against the child's own --repo default
+// instead — possibly a different checkout than the one the TUI itself
+// loaded from. --config/--marker are irrelevant to `update` and are
+// deliberately left unforwarded.
+func handoffArgv(self, alias, file, ref, repo string, reset bool) []string {
+	argv := []string{self, "update", alias}
+	if file != "" {
+		argv = append(argv, "--file", file)
+	}
+	if ref != "" {
+		argv = append(argv, "--ref", ref)
+	}
+	argv = append(argv, "--repo", repo)
+	if reset {
+		argv = append(argv, "--reset")
+	}
+	return argv
+}
+
+// handoffEnv is the child's environment: the operator's non-secret prompt
+// answers only (WINSETUP_ANSWER/GEMINI_TEARDOWN_ANSWER) layered onto the
+// parent's own environment — NEVER the sudo secret. The child prompts for
+// its own credential on its own tty (it owns the terminal), so it has no
+// need to receive one from the parent, and /proc/<pid>/environ is
+// world-readable on both ends.
+func handoffEnv(a answers) []string {
+	env := os.Environ()
+	if a.windows != "" {
+		env = append(env, envWinsetupAnswer+"="+a.windows)
+	}
+	if a.gemini != "" {
+		env = append(env, envGeminiTeardownAnswer+"="+a.gemini)
+	}
+	return env
 }
 
 // interactiveHandoff gives the terminal away so install.sh's sudo prompt
-// reaches the operator.
-//
-// It carries the pre-answers too. It previously ran the BARE update script, so
-// a host routed here re-asked every question the operator had already answered.
-func interactiveHandoff(alias, ref string, a answers, pos, total int) tea.Cmd {
-	remote := a.envPrefix() + updateScript(ref, a.forceReset())
-	c := exec.Command("sh", "-c", handoffWrapper(alias, ref, remote, pos, total))
+// reaches the operator, by self-execing `fleet update <alias>` — the same
+// plan executor the background lane and the headless CLI use. selfFn
+// resolves the executable path (os.Executable in production; injected in
+// tests), matching configShell's self-exec pattern.
+func interactiveHandoff(selfFn func() (string, error), alias, file, ref, repo string, a answers, pos, total int) tea.Cmd {
+	self, err := selfFn()
+	if err != nil || self == "" {
+		self = "fleet"
+	}
+	argv := handoffArgv(self, alias, file, ref, repo, a.forceReset())
+	quoted := make([]string, len(argv))
+	for i, s := range argv {
+		quoted[i] = shQuote(s)
+	}
+	c := exec.Command("sh", "-c", handoffWrapper(alias, ref, strings.Join(quoted, " "), pos, total))
+	c.Env = handoffEnv(a)
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return execDoneMsg{alias: alias, err: err}
 	})

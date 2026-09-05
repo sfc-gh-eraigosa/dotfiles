@@ -20,7 +20,7 @@ func TestClassifyScanIdentifiesMovedNewCurrentAndUnidentified(t *testing.T) {
 	}
 	got := map[string]scanKind{}
 	alias := map[string]string{}
-	for _, r := range classifyScan(hosts, found) {
+	for _, r := range classifyScan(hosts, found, nil) {
 		got[r.IP] = r.Kind
 		alias[r.IP] = r.Alias
 	}
@@ -43,7 +43,7 @@ func TestClassifyScanIdentifiesMovedNewCurrentAndUnidentified(t *testing.T) {
 func TestScanPlanRefreshesAMovedHostRatherThanAddingIt(t *testing.T) {
 	cfg := "Host wanderer  #fleet\n    HostName 10.0.0.9\n    ProxyCommand nc %h %p\n"
 	hosts, _ := sshconf.Parse(cfg, "#fleet")
-	rows := classifyScan(hosts, []responder{{IP: "10.0.0.7", Hostname: "wanderer", Identified: true}})
+	rows := classifyScan(hosts, []responder{{IP: "10.0.0.7", Hostname: "wanderer", Identified: true}}, nil)
 	next, changed, err := applyScan(cfg, rows, "#fleet")
 	if err != nil {
 		t.Fatal(err)
@@ -77,7 +77,7 @@ func TestApplyScanNeverWritesAnUnidentifiedResponder(t *testing.T) {
 
 // A new host is adopted under its own reported hostname as the alias.
 func TestApplyScanAdoptsANewHostUnderItsReportedName(t *testing.T) {
-	rows := classifyScan(nil, []responder{{IP: "10.0.0.8", Hostname: "newbox", Identified: true}})
+	rows := classifyScan(nil, []responder{{IP: "10.0.0.8", Hostname: "newbox", Identified: true}}, nil)
 	next, changed, err := applyScan("", rows, "#fleet")
 	if err != nil {
 		t.Fatal(err)
@@ -91,7 +91,7 @@ func TestApplyScanAdoptsANewHostUnderItsReportedName(t *testing.T) {
 func TestScanIsANoOpWhenNothingMoved(t *testing.T) {
 	cfg := "Host steady  #fleet\n    HostName 10.0.0.5\n"
 	hosts, _ := sshconf.Parse(cfg, "#fleet")
-	rows := classifyScan(hosts, []responder{{IP: "10.0.0.5", Hostname: "steady", Identified: true}})
+	rows := classifyScan(hosts, []responder{{IP: "10.0.0.5", Hostname: "steady", Identified: true}}, nil)
 	next, changed, err := applyScan(cfg, rows, "#fleet")
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +110,7 @@ func TestClassifyScanOrdersAddressesNumerically(t *testing.T) {
 		{IP: "192.168.0.61"}, {IP: "192.168.0.128"}, {IP: "192.168.0.16"},
 		{IP: "192.168.0.201"}, {IP: "192.168.0.9"},
 	}
-	rows := classifyScan(nil, found)
+	rows := classifyScan(nil, found, nil)
 	var got []string
 	for _, r := range rows {
 		got = append(got, r.IP)

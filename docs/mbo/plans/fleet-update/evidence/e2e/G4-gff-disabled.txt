@@ -1,0 +1,14 @@
+# 2026-09-04T16:18:28Z G4: gff set fleet.update.enabled false
+(gff set/unset run from this worktree's sdk/gff, --repo pointed at the same worktree checkout
+ so the CLI's live gff scope matches where the flag was set)
+
+$ cd sdk/gff && go run . set fleet.update.enabled false
+$ fleet update <host> --repo <this-checkout> --dry-run
+plan: built-in default (fleet.update.enabled=false)
+=== dotfiles.sync (sync) ===
+  precheck: if [ ! -e ~/git/dotfiles/.git ]; then echo "state=missing"; else cd ~/git/dotfiles && g=$(git rev-parse --git-dir) && if [ -e "$g/MERGE_HEAD" ] || [ -d "$g/rebase-merge" ] || [ -d "$g/rebase-apply" ]; then s=in-progress; elif [ -n "$(git status --porcelain)" ]; then s=dirty; else s=clean; fi; b=$(git symbolic-ref -q --short HEAD || echo detached); echo "state=$s branch=$b"; fi
+  sync (local=skip): cd ~/git/dotfiles && orig=$(git symbolic-ref -q --short HEAD || git rev-parse HEAD) && echo "fleet: orig=$orig" && git fetch origin main && git checkout main && git merge --ff-only FETCH_HEAD; rc=$?; now=$(git symbolic-ref -q --short HEAD || git rev-parse HEAD); [ "$orig" = "$now" ] || echo "fleet: switched $orig -> $now"; exit $rc
+  timeout=30m0s retry=1 on=[transport]
+=== dotfiles.install (run) ===
+  run (interactive): cd ~/git/dotfiles && ./install.sh
+  timeout=0s retry=1 on=[transport]

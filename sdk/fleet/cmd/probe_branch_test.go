@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"testing"
@@ -40,6 +41,14 @@ func (c *countingRunner) RunVia(_, h string, a ...string) (string, error) { retu
 // The streaming path is exercised by runner.Fake in the TUI tests; this fake
 // only counts probe calls, so it returns an already-closed stream.
 func (c *countingRunner) RunStream(string, string, ...string) (<-chan string, <-chan error) {
+	lines := make(chan string)
+	done := make(chan error, 1)
+	close(lines)
+	done <- nil
+	return lines, done
+}
+
+func (c *countingRunner) RunStreamCtx(context.Context, string, string, ...string) (<-chan string, <-chan error) {
 	lines := make(chan string)
 	done := make(chan error, 1)
 	close(lines)

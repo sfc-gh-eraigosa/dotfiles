@@ -7,6 +7,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
 func wakeTestModel(aliases ...string) tuiModel {
@@ -14,7 +15,7 @@ func wakeTestModel(aliases ...string) tuiModel {
 	for _, a := range aliases {
 		hosts = append(hosts, sshconf.Host{Alias: a})
 	}
-	m := newTUIModel(hosts, runner.Fake{}, fakeBaseline{}, testNow, "main", 4)
+	m := newTUIModel(hosts, runner.Fake{}, fakeBaseline{}, testNow, "main", 4, updplan.Default())
 	for _, a := range aliases {
 		delete(m.pending, a)
 		m.setRow(Row{Alias: a, Class: "unreachable"})

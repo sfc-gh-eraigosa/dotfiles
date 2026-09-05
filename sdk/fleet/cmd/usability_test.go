@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 	"strings"
 	"testing"
 	"time"
@@ -48,7 +49,7 @@ func TestTUIOrderIsStableByAlias(t *testing.T) {
 // The ordering must not depend on class at all, or it will still shuffle as
 // rows resolve.
 func TestTUIOrderDoesNotMoveWhenAClassChanges(t *testing.T) {
-	m := newTUIModel(nil, nil, nil, time.Time{}, "", 1)
+	m := newTUIModel(nil, nil, nil, time.Time{}, "", 1, updplan.Default())
 	for _, a := range []string{"alpha", "bravo", "charlie"} {
 		m.setRow(Row{Alias: a, Class: "polling"})
 	}

@@ -32,6 +32,8 @@
 !.shellcheckrc
 !.markdownlint.jsonc
 !.ci-baseline-issues.md
+# gitleaks config read by the privacy guard (ai/hooks/privacy_rules.sh passes -c)
+!.gitleaks.toml
 
 # Repository Structure Exceptions
 !.github/
@@ -107,6 +109,9 @@ ai/claude/settings.json
 # credential and must never be committed.
 ai/gws/config.json
 ai/gws/client_secret.json
+# The ^e email hotkey in opt/Desktop/defaults.ahk reads its address from this
+# local file (seed it from defaults.local.ini.example); it must never be committed.
+opt/Desktop/defaults.local.ini
 .custom_alias
 *.swp
 

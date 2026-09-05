@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# pre-push — judge every commit that is about to leave the machine.
+#
+# This is the boundary that matters. `gss push`, `gss feature checkpoint`,
+# `gh pr create` and plain `git push` all end in a git push, and a commit made
+# with --no-verify (or on a machine without the other hooks) still has to pass
+# here. Only the commits origin lacks are judged — a leak already on the
+# remote is not this push's doing.
+#
+# stdin: one line per ref: <local ref> <local sha> <remote ref> <remote sha>
+# argv: <remote name> <remote url>
+set -u
+# shellcheck source=_privacy_common.sh
+. "$(cd "$(dirname "$0")" && pwd)/_privacy_common.sh"
+privacy_hooks_load_rules "$0" || exit 1
+
+remote="${1:-origin}"
+zero='0000000000000000000000000000000000000000'
+outgoing=""
+while read -r _lref lsha _rref rsha; do
+    [ -n "${lsha:-}" ] || continue
+    [ "$lsha" = "$zero" ] && continue                   # a delete publishes nothing
+    if [ "${rsha:-$zero}" = "$zero" ]; then
+        # New branch: judge what the remote does not have at all.
+        range="$lsha --not --remotes=$remote"
+    else
+        range="$rsha..$lsha"
+    fi
+    # shellcheck disable=SC2086  # range is deliberately word-split
+    outgoing="$outgoing
+$(git log -p -U0 --no-color --format='%n%B' $range 2>/dev/null | privacy_hooks_added_lines)
+$(git log --no-color --format='%B' $range 2>/dev/null)"
+done
+
+privacy_hooks_judge pre-push "$outgoing"
+privacy_hooks_chain pre-push "$@" < /dev/null

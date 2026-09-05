@@ -2,173 +2,148 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
+	"io"
+	"time"
 
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 	"github.com/spf13/cobra"
 )
 
-// UpdateResult reports what happened to one host.
-type UpdateResult struct {
-	Skipped bool
-	Reason  string
-}
+// validRef is kept as a thin alias to updplan.ValidRef, which is the same
+// charset rule PLUS the git check-ref-format hardening (no leading '-', no
+// "..", no "@{", no ".lock" suffix — a leading '-' is a git option once
+// interpolated bare).
+func validRef(ref string) bool { return updplan.ValidRef(ref) }
 
-// validRef guards the operator-supplied update target. The ref is interpolated
-// into a command that runs over ssh, so it is constrained to the git ref
-// charset (letters, digits, and . _ / -). Anything else — shell metacharacters,
-// spaces, command substitution — is rejected before it can run.
-func validRef(ref string) bool {
-	if ref == "" {
-		return false
-	}
-	for _, r := range ref {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
-		case r == '.', r == '_', r == '/', r == '-':
+// resolveLocalPolicy folds --local and --force into one updplan.Local
+// override: "" means "use each repo's own policy". --force is an alias for
+// --local rescue; giving both with conflicting values is an error rather
+// than one silently winning.
+func resolveLocalPolicy(local string, force bool) (updplan.Local, error) {
+	if local != "" {
+		switch updplan.Local(local) {
+		case updplan.LocalSkip, updplan.LocalRescue, updplan.LocalCarry:
 		default:
-			return false
+			return "", fmt.Errorf("invalid --local %q: must be skip, rescue, or carry", local)
 		}
 	}
-	return true
-}
-
-// remoteUpdateScript is the update command for one host, parameterised by the
-// git ref to move to (default `main`). Shared by the headless path and the TUI
-// so there is exactly one definition of "update a host". Callers pass only
-// refs that have passed validRef.
-//
-// It makes exactly ONE network call. The previous form ran `git fetch origin`
-// AND `git pull --ff-only origin <ref>`, and a pull performs its own fetch —
-// so every update contacted the remote twice for data the first call had
-// already brought down. That is not merely wasteful: it doubles the exposure
-// to a transient network fault, and one bit us on the Jetson —
-//
-//	From github.com:...  299953c..c6fccf8   <- fetch reached GitHub
-//	Already on 'main'                       <- checkout fine
-//	ssh: Could not resolve hostname github.com: Temporary failure in name
-//	fatal: Could not read from remote repository.
-//
-// — where DNS answered for the fetch and failed for the redundant pull
-// seconds later, failing an update that already had everything it needed
-// locally.
-//
-// Merging FETCH_HEAD rather than origin/<ref> keeps tag and branch refs both
-// working, exactly as the pull form did.
-func remoteUpdateScript(ref string) string { return updateScript(ref, false) }
-
-// resetToFetched forces the clone onto the fetched commit, for a host whose
-// branch has diverged and can no longer fast-forward.
-//
-// It is destructive, so it preserves first — the same guarantee `--force`
-// makes. EVERYTHING currently on the host (local commits AND uncommitted
-// files) is committed to a `fleet-reset/<ts>` branch before the reset, so a
-// `git reset --hard` can never be the thing that loses an operator's work.
-// `git add -A` rather than a stash: a stash commit's tree excludes untracked
-// files, which is how the original rescue silently dropped them.
-// NOTE: built by concatenation, never fmt.Sprintf — the shell's date format
-// (%Y%m%dT%H%M%SZ) collides with printf verbs, and `go vet` rightly refuses it.
-func resetToFetched(ref string) string {
-	return `ts=$(date -u +%Y%m%dT%H%M%SZ) && ` +
-		`git checkout -q -b "fleet-reset/$ts" && git add -A && ` +
-		`{ git -c user.email=fleet@local -c user.name=fleet commit -q -m "fleet pre-reset $ts" || true; } && ` +
-		`git checkout -q "` + ref + `" && git reset --hard FETCH_HEAD`
-}
-
-// updateScript is the remote update, optionally forcing the clone onto the
-// fetched commit instead of fast-forwarding.
-func updateScript(ref string, reset bool) string {
-	move := "git merge --ff-only FETCH_HEAD"
-	if reset {
-		move = resetToFetched(ref)
-	}
-	return fmt.Sprintf(
-		"cd ~/git/dotfiles && git fetch origin %[1]s && git checkout %[1]s && "+
-			"%[2]s && ./install.sh", ref, move)
-}
-
-// rescueWorktree preserves uncommitted work before a --force update.
-//
-// It commits the dirty state (tracked AND untracked, via `git add -A`) onto a
-// rescue branch, returns the clone to its original branch — now clean, so
-// pull --ff-only can proceed — and materialises the rescue branch as its own
-// worktree for the operator to inspect. Nothing is ever discarded.
-//
-// The plan originally specified `git stash push -u` + `git branch <n> stash@{0}`.
-// Verified against git 2.47.3 (evidence/task12/rescue-verification.txt): that
-// approach recovers tracked modifications but SILENTLY LOSES untracked files,
-// because a stash commit's tree excludes them (they live in stash^3). An
-// operator inspecting the rescue worktree would conclude their untracked work
-// was gone. The temp-commit form below recovers both.
-const rescueWorktree = `cd ~/git/dotfiles && ts=$(date -u +%Y%m%dT%H%M%SZ) && ` +
-	`orig=$(git rev-parse --abbrev-ref HEAD) && ` +
-	`git checkout -q -b "fleet-rescue/$ts" && git add -A && ` +
-	`git -c user.email=fleet@local -c user.name=fleet commit -q -m "fleet rescue $ts" && ` +
-	`git checkout -q "$orig" && ` +
-	`mkdir -p ~/.local/state/dotfiles/rescue && ` +
-	`git worktree add ~/.local/state/dotfiles/rescue/$ts "fleet-rescue/$ts"`
-
-// updateHost fetches, fast-forwards and re-runs install.sh on one host.
-// A dirty clone is SKIPPED by default — never mutate a machine carrying local
-// work — and with --force the work is rescued first, not thrown away.
-func updateHost(r runner.Runner, host, ref string, force bool) (UpdateResult, error) {
-	dirty, err := r.Run(host, "git -C ~/git/dotfiles status --porcelain")
-	if err != nil {
-		return UpdateResult{}, fmt.Errorf("%s: checking clone state: %w", host, err)
-	}
-	if strings.TrimSpace(dirty) != "" {
-		if !force {
-			return UpdateResult{
-				Skipped: true,
-				Reason:  "clone is dirty; re-run with --force to preserve local work in a rescue worktree",
-			}, nil
+	if force {
+		if local != "" && local != string(updplan.LocalRescue) {
+			return "", fmt.Errorf("--force conflicts with --local %s (--force implies --local rescue)", local)
 		}
-		if _, err := r.Run(host, rescueWorktree); err != nil {
-			return UpdateResult{}, fmt.Errorf("%s: rescuing local work (refusing to continue): %w", host, err)
-		}
+		return updplan.LocalRescue, nil
 	}
-	return UpdateResult{}, r.RunInteractive(host, remoteUpdateScript(ref))
+	return updplan.Local(local), nil
 }
 
 var (
-	updateForce bool
-	updateRef   string
+	flagUpdateLocal     string
+	flagUpdateForce     bool
+	flagUpdateNoRestore bool
+	flagUpdateReset     bool
+	flagUpdateTimeout   time.Duration
+	flagUpdateNoRetry   bool
+	flagUpdateRefs      []string
+	flagUpdateFile      string
+	flagUpdateDryRun    bool
 )
 
+// buildExecutor assembles the Executor a live (non-dry-run) update runs
+// through, from the resolved CLI flags. out is the headless capture (task
+// 23's newRunLogOutput); nil is a valid Discard.
+func buildExecutor(r runner.Runner, out updexec.Output, local updplan.Local) updexec.Executor {
+	return updexec.Executor{
+		IO:        updexec.Console{R: r, Preamble: localAnswerPreamble},
+		Out:       out,
+		Local:     local,
+		NoRestore: flagUpdateNoRestore,
+		Reset:     flagUpdateReset,
+		NoRetry:   flagUpdateNoRetry,
+		Timeout:   flagUpdateTimeout,
+	}
+}
+
+// runUpdate resolves the plan and flags, then runs every host serially
+// (interactive steps cannot share a terminal) through the plan executor.
+func runUpdate(cmd *cobra.Command, hosts []string) error {
+	return runUpdateWith(cmd.OutOrStdout(), hosts, runner.Exec{})
+}
+
+// runUpdateWith is runUpdate with its output writer and runner injected, so
+// a test can drive the whole CLI path — plan resolution, the executor, the
+// headless capture, the report — without a cobra.Command or a real ssh.
+func runUpdateWith(out io.Writer, hosts []string, r runner.Runner) error {
+	local, err := resolveLocalPolicy(flagUpdateLocal, flagUpdateForce)
+	if err != nil {
+		return err
+	}
+	if flagUpdateReset && local == updplan.LocalCarry {
+		return fmt.Errorf("--reset is incompatible with --local carry")
+	}
+
+	plan, err := loadPlan(flagUpdateFile, &featflag.GFF{Repo: flagRepo}, flagRepo)
+	if err != nil {
+		return err
+	}
+	if len(flagUpdateRefs) > 0 {
+		if plan, err = plan.WithRefs(flagUpdateRefs); err != nil {
+			return err
+		}
+	}
+
+	if flagUpdateDryRun {
+		return printDryRun(out, plan, local, flagUpdateReset)
+	}
+
+	// One capture value, reused across every host: it carries no per-host
+	// state (Open is keyed by the host/header arguments it is called with
+	// each time), so reconstructing it per host was pure churn.
+	capture := newRunLogOutput()
+	reports := make([]updexec.HostReport, 0, len(hosts))
+	for _, host := range hosts {
+		ex := buildExecutor(r, capture, local)
+		reports = append(reports, ex.RunHost(host, plan))
+	}
+
+	if flagJSON {
+		if err := printJSONReport(out, plan, reports); err != nil {
+			return err
+		}
+	} else {
+		fmt.Fprintf(out, "plan: %s\n", plan.Source)
+		for _, rep := range reports {
+			printHostReport(out, plan, rep)
+		}
+	}
+	// The exit code must always reflect the reports, JSON or not — printing
+	// nil from printJSONReport (which reports only a MARSHAL/WRITE failure,
+	// never a host failure) used to be returned as-is, so `fleet update
+	// --json` exited 0 even when every host failed.
+	return exitErrorForReports(reports)
+}
+
 var updateCmd = &cobra.Command{
-	Use:   "update <host>...",
-	Short: "Pull and re-run install.sh on a host, interactively",
-	Args:  cobra.MinimumNArgs(1),
+	Use: "update <host>...",
+	Short: "Update hosts from a fleet.yaml plan (today's dotfiles fetch+ff+" +
+		"install.sh when none is configured)",
+	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if !validRef(updateRef) {
-			return fmt.Errorf("invalid --ref %q: must be a git ref (letters, digits, . _ / -)", updateRef)
-		}
-		r := runner.Exec{}
-		var failures int
-		// One host at a time: interactive sessions cannot share a terminal.
-		for _, host := range args {
-			fmt.Fprintf(cmd.OutOrStdout(), "\n=== %s ===\n", host)
-			res, err := updateHost(r, host, updateRef, updateForce)
-			switch {
-			case err != nil:
-				fmt.Fprintf(cmd.ErrOrStderr(), "FAIL %s: %v\n", host, err)
-				failures++
-			case res.Skipped:
-				fmt.Fprintf(cmd.OutOrStdout(), "SKIP %s: %s\n", host, res.Reason)
-				failures++
-			default:
-				fmt.Fprintf(cmd.OutOrStdout(), "ok   %s\n", host)
-			}
-		}
-		if failures > 0 {
-			return fmt.Errorf("%d host(s) not updated", failures)
-		}
-		return nil
+		return runUpdate(cmd, args)
 	},
 }
 
 func init() {
-	updateCmd.Flags().BoolVar(&updateForce, "force", false, "rescue uncommitted work into a worktree, then update")
-	updateCmd.Flags().StringVar(&updateRef, "ref", "main", "git ref (branch or tag) to update the host to")
+	updateCmd.Flags().StringVar(&flagUpdateLocal, "local", "", "local-changes policy override: skip|rescue|carry")
+	updateCmd.Flags().BoolVar(&flagUpdateForce, "force", false, "alias for --local rescue")
+	updateCmd.Flags().BoolVar(&flagUpdateNoRestore, "no-restore", false, "never restore a repo's original branch/stash")
+	updateCmd.Flags().BoolVar(&flagUpdateReset, "reset", false, "force the clone onto the fetched commit instead of fast-forwarding (incompatible with --local carry)")
+	updateCmd.Flags().DurationVar(&flagUpdateTimeout, "timeout", 0, "override every batch step's per-attempt timeout")
+	updateCmd.Flags().BoolVar(&flagUpdateNoRetry, "no-retry", false, "run every step at most once")
+	updateCmd.Flags().StringArrayVar(&flagUpdateRefs, "ref", nil, "git ref (branch or tag) to target: B or repo=B; repeatable; default = the plan's own branches")
+	updateCmd.Flags().StringVar(&flagUpdateFile, "file", "", "explicit fleet.yaml plan path (skips gff resolution)")
+	updateCmd.Flags().BoolVar(&flagUpdateDryRun, "dry-run", false, "print every effective script and send nothing")
 	rootCmd.AddCommand(updateCmd)
 }

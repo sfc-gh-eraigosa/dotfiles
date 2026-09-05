@@ -1,0 +1,8 @@
+# 2026-09-03T15:03:41Z 1f4a236 make lint-shell; make lint-portability
+# workflow now runs this WITHOUT continue-on-error: a new shellcheck warning
+# is a hard CI failure. Genuinely-intentional patterns carry an inline
+# `# shellcheck disable=SCxxxx # <reason>`. (docker-image.yml's broader
+# `make lint` may still be warn-only for its own non-shell backlog.)
+lint-shell rc=
+lint-portability rc=0
+lint-shell rc=0

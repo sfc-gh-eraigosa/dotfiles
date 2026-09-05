@@ -1,0 +1,49 @@
+# 2026-09-04T16:16:28Z task-23 RED (stub localAnswerPreamble/newRunLogOutput)
+=== RUN   TestSudoSecretNeverAppearsInTheRemoteCommand
+--- PASS: TestSudoSecretNeverAppearsInTheRemoteCommand (0.00s)
+=== RUN   TestHeadlessUpdateIsCaptured
+    update_output_test.go:46: expected a capture under /tmp/TestHeadlessUpdateIsCaptured3238864244/001/fleet/logs, got err=open /tmp/TestHeadlessUpdateIsCaptured3238864244/001/fleet/logs: no such file or directory entries=[]
+--- FAIL: TestHeadlessUpdateIsCaptured (0.00s)
+=== RUN   TestAnUnusableCaptureDirDoesNotBreakTheCLIRun
+--- PASS: TestAnUnusableCaptureDirDoesNotBreakTheCLIRun (0.00s)
+=== RUN   TestLocalAnswerEnvIsExportedForRunStepsOnly
+    update_output_test.go:105: expected exactly 1 script (the run step) carrying the answer env, got 0:
+        [if [ ! -e ~/git/r/.git ]; then echo "state=missing"; else cd ~/git/r && g=$(git rev-parse --git-dir) && if [ -e "$g/MERGE_HEAD" ] || [ -d "$g/rebase-merge" ] || [ -d "$g/rebase-apply" ]; then s=in-progress; elif [ -n "$(git status --porcelain)" ]; then s=dirty; else s=clean; fi; b=$(git symbolic-ref -q --short HEAD || echo detached); echo "state=$s branch=$b"; fi cd ~/git/r && orig=$(git symbolic-ref -q --short HEAD || git rev-parse HEAD) && echo "fleet: orig=$orig" && git fetch origin main && git checkout main && git merge --ff-only FETCH_HEAD; rc=$?; now=$(git symbolic-ref -q --short HEAD || git rev-parse HEAD); [ "$orig" = "$now" ] || echo "fleet: switched $orig -> $now"; exit $rc echo hi]
+--- FAIL: TestLocalAnswerEnvIsExportedForRunStepsOnly (0.00s)
+=== RUN   TestCLILaneCarriesNoStdinAtAll
+--- PASS: TestCLILaneCarriesNoStdinAtAll (0.00s)
+FAIL
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.013s
+FAIL
+
+# 2026-09-04T16:16:43Z task-23 GREEN
+=== RUN   TestSudoSecretNeverAppearsInTheRemoteCommand
+--- PASS: TestSudoSecretNeverAppearsInTheRemoteCommand (0.00s)
+=== RUN   TestHeadlessUpdateIsCaptured
+--- PASS: TestHeadlessUpdateIsCaptured (0.00s)
+=== RUN   TestAnUnusableCaptureDirDoesNotBreakTheCLIRun
+--- PASS: TestAnUnusableCaptureDirDoesNotBreakTheCLIRun (0.00s)
+=== RUN   TestLocalAnswerEnvIsExportedForRunStepsOnly
+--- PASS: TestLocalAnswerEnvIsExportedForRunStepsOnly (0.00s)
+=== RUN   TestCLILaneCarriesNoStdinAtAll
+--- PASS: TestCLILaneCarriesNoStdinAtAll (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	(cached)
+
+# VERIFY
+gofmt: (empty=clean)
+go vet: clean
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keys	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/lanscan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan	(cached)
