@@ -81,6 +81,37 @@ without opening a socket.
   turns a DHCP move into a one-line `HostName` refresh instead of a duplicate `Host` block
   under a second alias, and the refresh goes through `sshconf.Update` so a `ProxyCommand`
   survives it. Pinned by `TestScanPlanRefreshesAMovedHostRatherThanAddingIt`.
+- **`moved` is decided against the RESOLVED `HostName`, not its text.** A block may say
+  `HostName named-box`, and that string never equals `10.0.0.5`, so a literal
+  comparison reported every name-based host as `moved` on every run and each apply rewrote
+  a working DNS name into a DHCP address that expires — actively downgrading a config that
+  was correct. `classifyScan` takes a resolver; an unresolvable name is still `moved`,
+  because the address we found is then the only thing that works. Pinned by
+  `TestClassifyScanTreatsAResolvedDNSNameAsCurrent`,
+  `TestClassifyScanStillReportsAGenuineMoveWhenTheNameResolvesElsewhere`.
+- **A scan probe carries the fleet credentials EXPLICITLY.** The sweep dials an address,
+  and no `Host` block matches an address — it matches an alias — so ssh offered neither the
+  fleet user nor the fleet key and every responder came back "would not authenticate",
+  including hosts already in the fleet. `scanIdentities` collects the distinct
+  `User`/`IdentityFile` pairs of the fleet-marked blocks and `identify` tries each, bare
+  `ssh` last (right when a wildcard block or the agent already supplies the key). Nothing
+  outside the config is ever guessed at. **Beware the mux caveat above when testing this:**
+  a live master pins the credentials it was opened with, so a stale socket makes an
+  unfixed binary look fixed — compare with `FLEET_NO_MUX=1`. Pinned by
+  `TestScanIdentitiesCollectsDistinctFleetCredentials`,
+  `TestIdentifyTriesEachFleetIdentityUntilOneAuthenticates`.
+- **Under WSL the subnet comes from the WINDOWS host, not from this kernel.** The default
+  route here leaves on the Hyper-V NAT interface (`172.x/20`), a private segment the fleet
+  is not on; WSL holds no interface on the real LAN, so it can route there but cannot
+  enumerate it and no amount of inspecting local interfaces finds it. That `/20` also
+  exceeds `lanscan`'s 1024-address ceiling, so the old behaviour did not merely scan the
+  wrong network — it refused to scan at all. `detectCIDR` asks Windows for the address and
+  prefix of its lowest-metric default route, and falls back to the local interfaces when
+  interop is unavailable or mirrored networking already puts the LAN on `eth0`. Every
+  impure edge is injected via `subnetDeps`. Pinned by
+  `TestDetectCIDRPrefersTheWindowsHostLANUnderWSL`,
+  `TestDetectCIDRFallsBackToLocalInterfacesWhenHostLANUnavailable`,
+  `TestDetectCIDRUsesLocalInterfacesWhenNotUnderWSL`.
 - **A responder that will not authenticate is never written.** We do not know what it is or
   which user it wants, and guessing would put a broken block in the file every command
   depends on. It is reported and left alone. Pinned by
