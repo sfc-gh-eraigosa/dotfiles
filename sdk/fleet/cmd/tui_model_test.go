@@ -10,6 +10,7 @@ import (
 	"github.com/muesli/termenv"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
 // Frames must be byte-stable without a TTY, so colour is pinned off for the
@@ -25,7 +26,7 @@ func hosts(aliases ...string) []sshconf.Host {
 }
 
 func testModel(aliases ...string) tuiModel {
-	return newTUIModel(hosts(aliases...), runner.Fake{}, fakeBaseline{head: "abc"}, testNow, "main", 2)
+	return newTUIModel(hosts(aliases...), runner.Fake{}, fakeBaseline{head: "abc"}, testNow, "main", 2, updplan.Default())
 }
 
 func key(s string) tea.KeyMsg {

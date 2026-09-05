@@ -5,6 +5,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
 	"github.com/spf13/cobra"
@@ -13,6 +14,7 @@ import (
 var (
 	tuiUpdateRef string
 	tuiJobs      int
+	tuiFile      string
 )
 
 var tuiCmd = &cobra.Command{
@@ -26,6 +28,18 @@ var tuiCmd = &cobra.Command{
 		}
 		if tuiJobs < 1 {
 			return fmt.Errorf("invalid --jobs %d: must be at least 1", tuiJobs)
+		}
+		// The plan is loaded ONCE, here, through the same leaf-D loader the
+		// headless `fleet update` uses — the TUI grows no second plan loader.
+		// --update-ref is validated against the resolved plan before a single
+		// host is contacted, the same way --ref is validated for `update`.
+		plan, err := loadPlan(tuiFile, &featflag.GFF{Repo: flagRepo}, flagRepo)
+		if err != nil {
+			return err
+		}
+		plan, err = plan.WithRef(tuiUpdateRef)
+		if err != nil {
+			return fmt.Errorf("invalid --update-ref %q: %w", tuiUpdateRef, err)
 		}
 		// A MISSING config is an empty fleet, not a failure: on a fresh
 		// machine there is nothing to read yet, and refusing to start is
@@ -72,7 +86,7 @@ var tuiCmd = &cobra.Command{
 		// No synchronous probing here: the model opens instantly and streams
 		// rows in as each host answers (spec F1).
 		r := runner.Exec{}
-		m := newTUIModel(selectHosts(all, nil), r, base, time.Now(), tuiUpdateRef, tuiJobs)
+		m := newTUIModel(selectHosts(all, nil), r, base, time.Now(), tuiUpdateRef, tuiJobs, plan)
 		m.wake = newWaker(r, p)
 		// Persistence is wired HERE, not in newTUIModel, so the model stays a
 		// pure value and tests never touch a real config directory.
@@ -87,5 +101,6 @@ func init() {
 	tuiCmd.Flags().StringVar(&flagRef, "ref", "origin/main", "baseline git ref (what hosts are compared against)")
 	tuiCmd.Flags().StringVar(&tuiUpdateRef, "update-ref", "main", "git ref to update hosts TO")
 	tuiCmd.Flags().IntVar(&tuiJobs, "jobs", 4, "max concurrent background updates")
+	tuiCmd.Flags().StringVar(&tuiFile, "file", "", "explicit fleet.yaml plan path (skips gff resolution)")
 	rootCmd.AddCommand(tuiCmd)
 }

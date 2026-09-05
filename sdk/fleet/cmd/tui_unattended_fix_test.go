@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 	"os/exec"
 	"strings"
 	"testing"
@@ -34,7 +35,7 @@ func TestAnswersAreExportedSoInstallShInheritsThem(t *testing.T) {
 // password they had just typed. `sudo -n` failing means "needs a password",
 // not "must be interactive": with one in hand the background lane primes it.
 func TestSuppliedCredentialKeepsAPasswordHostInTheBackgroundLane(t *testing.T) {
-	m := newTUIModel(hosts("needs-pw"), nil, fakeBaseline{head: "abc"}, testNow, "main", 2)
+	m := newTUIModel(hosts("needs-pw"), nil, fakeBaseline{head: "abc"}, testNow, "main", 2, updplan.Default())
 	m.ans = answers{sudoSecret: strings.Repeat("Zq7", 3)}
 	mm, _ := m.Update(precheckMsg{alias: "needs-pw", interactive: true})
 	got := mm.(tuiModel)
@@ -47,7 +48,7 @@ func TestSuppliedCredentialKeepsAPasswordHostInTheBackgroundLane(t *testing.T) {
 
 	// Without one it must still fall back, or a password-needing host would
 	// fail in the background with nobody able to answer.
-	m2 := newTUIModel(hosts("needs-pw"), nil, fakeBaseline{head: "abc"}, testNow, "main", 2)
+	m2 := newTUIModel(hosts("needs-pw"), nil, fakeBaseline{head: "abc"}, testNow, "main", 2, updplan.Default())
 	mm2, _ := m2.Update(precheckMsg{alias: "needs-pw", interactive: true})
 	if mm2.(tuiModel).iaTotal != 1 {
 		t.Fatal("with no credential the host must fall back to the interactive lane")
@@ -100,7 +101,7 @@ func TestGitAdviceIsStrippedSoTheRealErrorSurvives(t *testing.T) {
 
 // The form is a dialog, not loose text floating under the table.
 func TestAnswerFormIsFramedAsADialog(t *testing.T) {
-	m := newTUIModel(hosts("a"), nil, fakeBaseline{head: "abc"}, testNow, "main", 2)
+	m := newTUIModel(hosts("a"), nil, fakeBaseline{head: "abc"}, testNow, "main", 2, updplan.Default())
 	m.mode = modeAnswers
 	view := m.View()
 	if !strings.Contains(view, "╭") || !strings.Contains(view, "╰") {

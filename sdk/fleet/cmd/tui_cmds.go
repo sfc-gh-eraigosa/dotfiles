@@ -1,17 +1,20 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
-	applog "github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/log"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
 // Messages carrying async results back into Update().
@@ -249,53 +252,113 @@ func explainExit(err error) string {
 // The password reaches the remote `sudo -S` over ssh's encrypted channel via
 // stdin. It is never an argument and never an environment variable, both of
 // which are world-readable through /proc.
+// errNeedsTerminal marks a background run that stopped on a step the
+// Background lane cannot service (updexec.ErrNoTerminal) — the model routes
+// such a host to the interactive queue instead of marking its row failed
+// (see tuiModel.Update's bgUpdateDoneMsg case).
+var errNeedsTerminal = errors.New("fleet: this host's plan needs a terminal")
+
+// bgPreamble builds the Background lane's per-run-step preamble: prime and
+// verify sudo (only when a credential was supplied — an empty `sudo -S`
+// would consume nothing and fail confusingly), then the sudoGate every run
+// must pass regardless, then the operator's non-secret answers. Console and
+// Background apply this ONLY to updplan.KindRun steps, so a sync or gh-auth
+// script never sees a sudo preamble.
+func bgPreamble(a answers) func(updplan.Step) string {
+	return func(updplan.Step) string {
+		var b strings.Builder
+		if a.needsSudo() {
+			fmt.Fprintf(&b, "sudo -S -p '' -v 2>/dev/null || exit %d; ", rcSudoAuth)
+		}
+		fmt.Fprintf(&b, "%s || exit %d; ", sudoGate, rcSudoNoCache)
+		b.WriteString(a.envPrefix())
+		return b.String()
+	}
+}
+
+// teeOutput wraps another updexec.Output and hands the LineWriter it opens
+// to onOpen, so a caller who does not otherwise see inside RunHost (which
+// owns Output.Open) can still write real remote output into the same
+// capture the executor's own step banners land in.
+type teeOutput struct {
+	inner  updexec.Output
+	onOpen func(updexec.LineWriter)
+}
+
+func (t teeOutput) Open(host, header string) (updexec.LineWriter, string) {
+	w, path := t.inner.Open(host, header)
+	if t.onOpen != nil {
+		t.onOpen(w)
+	}
+	return w, path
+}
+
 // beginStream launches the update from inside a Cmd and hands the channels
 // back as a message. Starting it in Update() instead would put I/O on the
 // update path — where a model built without a runner (tests, the demo) panics,
 // and where a blocking dial would freeze the UI. Update stays pure; only Cmds
 // touch the network.
-func beginStream(alias, ref string, a answers, r runner.Runner, dir string) tea.Cmd {
-	script := unattendedUpdate(ref, a)
+//
+// It runs plan's steps through the SAME plan executor the headless `fleet
+// update` uses (updexec.Executor), over the Background StepIO lane: batch
+// steps stream exactly as before, and an interactive step this lane cannot
+// service fails with updexec.ErrNoTerminal rather than hanging.
+func beginStream(alias string, plan updplan.Plan, a answers, r runner.Runner, dir string) tea.Cmd {
 	secret := a.sudoSecret + "\n"
+	preamble := bgPreamble(a)
 	reset := a.forceReset()
 	return func() tea.Msg {
-		lines, done := r.RunStream(alias, secret, script)
-		// Tee to disk from HERE — inside the Cmd, off the UI thread. The pane
-		// is an in-memory ring that dies with the process; the capture is what
-		// survives to be read the morning after.
-		lines = teeToRunLog(dir, alias, ref, reset, lines)
+		lines := make(chan string, 64)
+		done := make(chan error, 1)
+
+		var mu sync.Mutex
+		var lw updexec.LineWriter
+
+		out := teeOutput{
+			inner: captureOutput{dir: dir},
+			onOpen: func(w updexec.LineWriter) {
+				mu.Lock()
+				lw = w
+				mu.Unlock()
+			},
+		}
+
+		ex := updexec.Executor{
+			IO: updexec.Background{Console: updexec.Console{
+				R: r,
+				Line: func(_, l string) {
+					lines <- l
+					mu.Lock()
+					w := lw
+					mu.Unlock()
+					if w != nil {
+						w.Line(l)
+					}
+				},
+				Stdin: func(st updplan.Step) string {
+					if st.Kind != updplan.KindRun {
+						return ""
+					}
+					return secret
+				},
+				Preamble: preamble,
+			}},
+			Out:   out,
+			Reset: reset,
+		}
+
+		go func() {
+			rep := ex.RunHost(alias, plan)
+			close(lines)
+			if rep.NeedsTerminal() {
+				done <- errNeedsTerminal
+				return
+			}
+			done <- rep.Err()
+		}()
+
 		return streamStartedMsg{alias: alias, st: stream{lines: lines, done: done}}
 	}
-}
-
-// teeToRunLog forwards every line unchanged while writing it to this run's
-// capture. The file's whole lifecycle — location, 0600, header, per-line
-// timestamps, retention — belongs to libs/log; fleet only says what the run
-// is about.
-//
-// A capture that cannot be opened is nil, and a nil capture's Tee returns the
-// stream untouched: losing the log must never cost the update.
-func teeToRunLog(dir, alias, ref string, reset bool, in <-chan string) <-chan string {
-	mode := "fast-forward"
-	if reset {
-		mode = "FORCE RESET"
-	}
-	c := applog.NewCapture(applog.CaptureOptions{
-		Tool:    logTool,
-		Dir:     dir,
-		Subject: alias,
-		Header: fmt.Sprintf("fleet update — host=%s ref=%s mode=%s started=%s",
-			alias, ref, mode, nowFn().UTC().Format(time.RFC3339)),
-		Now: nowFn,
-	})
-	if c != nil {
-		// fleet's own diagnostics now go somewhere too, not just the remote's
-		// output — including where to find that output.
-		applog.Default().WithFields(map[string]any{
-			"host": alias, "ref": ref, "mode": mode, "capture": c.Path(),
-		}).Info("update started")
-	}
-	return c.Tee(in, "finished")
 }
 
 // readLine blocks until the next line (or EOF) and turns it into a Msg. It is

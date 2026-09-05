@@ -7,17 +7,35 @@ import (
 	"testing"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
 // fleet no longer owns the file mechanics — location, mode, header format,
 // timestamps and retention are libs/log's, and tested there. What fleet still
 // owns is WHAT a run is about, so that is what these assert.
 
+// singleRunStepPlan is a minimal, non-interactive plan: one KindRun step,
+// no repo. It exercises beginStream/the executor's Batch lane directly
+// (no sync precheck-output format to satisfy) so these tests can assert on
+// exactly the bytes the fake runner returns.
+func singleRunStepPlan(source string) updplan.Plan {
+	return updplan.Plan{
+		Source: source,
+		Steps: []updplan.Step{{
+			ID:     "run",
+			Kind:   updplan.KindRun,
+			Run:    "true",
+			Expect: updplan.Expect{Exit: []int{0}},
+			Retry:  updplan.Retry{Attempts: 1},
+		}},
+	}
+}
+
 func TestUpdateIsCapturedWithItsSubject(t *testing.T) {
 	dir := t.TempDir()
 	r := runner.Fake{Out: map[string]string{"host-a": "Installing sops...\ndone"}}
 
-	st := beginStream("host-a", "main", answers{}, r, dir)().(streamStartedMsg).st
+	st := beginStream("host-a", singleRunStepPlan("test-plan"), answers{}, r, dir)().(streamStartedMsg).st
 	var streamed []string
 	for l := range st.lines {
 		streamed = append(streamed, l)
@@ -30,7 +48,7 @@ func TestUpdateIsCapturedWithItsSubject(t *testing.T) {
 	}
 	b, _ := os.ReadFile(filepath.Join(dir, files[0].Name()))
 	s := string(b)
-	for _, want := range []string{"host=host-a", "ref=main", "mode=fast-forward", "Installing sops", "done"} {
+	for _, want := range []string{"host=host-a", "plan=test-plan", "mode=fast-forward", "Installing sops", "done"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("capture missing %q:\n%s", want, s)
 		}
@@ -46,7 +64,7 @@ func TestUpdateIsCapturedWithItsSubject(t *testing.T) {
 func TestForcedResetIsLabelledInTheCapture(t *testing.T) {
 	dir := t.TempDir()
 	r := runner.Fake{Out: map[string]string{"h": "x"}}
-	st := beginStream("h", "main", answers{reset: "y"}, r, dir)().(streamStartedMsg).st
+	st := beginStream("h", singleRunStepPlan("test-plan"), answers{reset: "y"}, r, dir)().(streamStartedMsg).st
 	for range st.lines {
 	}
 	<-st.done
@@ -62,7 +80,7 @@ func TestForcedResetIsLabelledInTheCapture(t *testing.T) {
 func TestAnUnusableCaptureDirDoesNotBreakTheStream(t *testing.T) {
 	r := runner.Fake{Out: map[string]string{"h": "still streams"}}
 	for _, dir := range []string{"", "/proc/cannot/mkdir/here"} {
-		st := beginStream("h", "main", answers{}, r, dir)().(streamStartedMsg).st
+		st := beginStream("h", singleRunStepPlan("test-plan"), answers{}, r, dir)().(streamStartedMsg).st
 		var got []string
 		for l := range st.lines {
 			got = append(got, l)

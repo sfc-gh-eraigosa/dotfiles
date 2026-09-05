@@ -353,13 +353,13 @@
 - [ ] SETUP: record refs verbatim
 
 ### Task 24 — background updates run the plan executor  (plan Task 24, leaf E)
-- [ ] RED: `TestSudoPreambleIsPerRunStepSession` (each run step's script starts with `sudo -S -p '' -v` when a secret is set; sync/gh never); existing `TestUpdateIsCapturedWithItsSubject` / `TestForcedResetIsLabelledInTheCapture` updated for the `plan=` header
-- [ ] RUN-RED: `go test ./cmd -run 'TestSudoPreamble|TestUpdateIsCaptured|TestForcedReset' -v` → expect **FAIL**
-- [ ] GREEN: `beginStream(alias, plan, answers, r, dir)` over `Executor{IO: Background{…}}` in a goroutine; `done` carries `rep.Err()`
-- [ ] RUN-GREEN: same → expect **PASS**; every `tui_*_test.go` green
-- [ ] VERIFY: gofmt/vet/race
-- [ ] COMMIT: `feat(fleet/tui): background updates run the plan executor`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `TestSudoPreambleIsPerRunStepSession` (each run step's script starts with `sudo -S -p '' -v` when a secret is set; sync/gh never); existing `TestUpdateIsCapturedWithItsSubject` / `TestForcedResetIsLabelledInTheCapture` updated for the `plan=` header
+- [x] RUN-RED: `go test ./cmd -run 'TestSudoPreamble|TestUpdateIsCaptured|TestForcedReset' -v` → expect **FAIL**
+- [x] GREEN: `beginStream(alias, plan, answers, r, dir)` over `Executor{IO: Background{…}}` in a goroutine; `done` carries `rep.Err()`
+- [x] RUN-GREEN: same → expect **PASS**; every `tui_*_test.go` green
+- [x] VERIFY: gofmt/vet/race
+- [x] COMMIT: `feat(fleet/tui): background updates run the plan executor`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** `u` on a passwordless-sudo host streams the plan's steps into the log pane.
 

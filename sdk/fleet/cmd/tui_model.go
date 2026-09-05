@@ -11,6 +11,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
 // tuiMode is the explicit interaction mode. Every key event is routed by mode
@@ -114,8 +115,9 @@ type tuiModel struct {
 	jobs      int               // max concurrent background updates
 	running   int               // slots in use
 	updateRef string
-	ans       answers     // pre-supplied answers for this wave (password: memory only)
-	ansField  answerField // cursor in the answer form
+	plan      updplan.Plan // loaded ONCE at startup; the model never calls loadPlan itself
+	ans       answers      // pre-supplied answers for this wave (memory-only credential)
+	ansField  answerField  // cursor in the answer form
 
 	// reachability ladder — its own ownership set, same invariant as updating
 	waking map[string]bool
@@ -137,7 +139,7 @@ type tuiModel struct {
 	quitReq bool
 }
 
-func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time.Time, ref string, jobs int) tuiModel {
+func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time.Time, ref string, jobs int, plan updplan.Plan) tuiModel {
 	m := tuiModel{
 		pending:   map[string]bool{},
 		selected:  map[string]bool{},
@@ -150,6 +152,7 @@ func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time
 		hosts:     map[string]sshconf.Host{},
 		jobs:      jobs,
 		updateRef: ref,
+		plan:      plan,
 		run:       r,
 		base:      base,
 		now:       now,
@@ -501,7 +504,7 @@ func (m *tuiModel) pump() tea.Cmd {
 		m.bgQueue = m.bgQueue[1:]
 		m.updating[a] = updState{phase: updRunning}
 		m.running++
-		cmds = append(cmds, beginStream(a, m.updateRef, m.ans, m.run, m.logDir))
+		cmds = append(cmds, beginStream(a, m.plan, m.ans, m.run, m.logDir))
 	}
 	// Interactive handoffs need the terminal to themselves, so they only run
 	// once no background update can print over them.

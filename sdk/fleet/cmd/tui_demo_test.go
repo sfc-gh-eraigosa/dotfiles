@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
 // TestDemoFrames renders the dashboard's real states through the real model
@@ -30,7 +31,7 @@ func TestDemoFrames(t *testing.T) {
 	base := fakeBaseline{head: "72392c9"}
 	build := func() tuiModel {
 		m := newTUIModel(hosts("host-desktop", "host-nano", "host-pi", "host-edge", "host-lab"),
-			nil, base, testNow, "main", 2)
+			nil, base, testNow, "main", 2, updplan.Default())
 		m.vp = viewport{height: 16, width: 100}
 		return m
 	}
@@ -170,7 +171,7 @@ func stripANSI(s string) string { return ansiRE.ReplaceAllString(s, "") }
 var ansiRE = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
 func build2Empty() tuiModel {
-	m := newTUIModel(nil, nil, fakeBaseline{head: "72392c9"}, testNow, "main", 2)
+	m := newTUIModel(nil, nil, fakeBaseline{head: "72392c9"}, testNow, "main", 2, updplan.Default())
 	m.vp = viewport{height: 16, width: 100}
 	return m
 }

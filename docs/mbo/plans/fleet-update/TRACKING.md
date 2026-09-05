@@ -81,7 +81,7 @@ Plan §4 task numbers. Commit = the SHA carrying the plan's exact message.
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| 24 Background lane | todo | | | |
+| 24 Background lane | done | (this commit) | `go test ./cmd -run 'TestSudoPreambleIsPerRunStepSession' -v` → PASS (1/1); full `cmd` suite green; `gofmt -l .`/`go vet ./...`/`go test -race ./...` clean | evidence/tui/task-24.txt; `beginStream` now builds `updexec.Executor{IO: updexec.Background{...}}` from the model's injected `plan`; `--file` flag added, `--update-ref` validated via `plan.WithRef` |
 | 25 Handoff delegates to the CLI verb | todo | | | deletes the `updateScript` wrapper |
 | 26 Flags + status text | todo | | | |
 | **Leaf E gate** | todo | — | `go test -race ./cmd` → ; live TUI transcript → | |

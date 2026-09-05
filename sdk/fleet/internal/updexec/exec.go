@@ -66,6 +66,19 @@ func (h HostReport) Err() error {
 	return nil
 }
 
+// NeedsTerminal reports whether this run stopped on a step that needed a
+// terminal the lane it ran under could not provide (ErrNoTerminal) — the
+// TUI's Background lane routes such a host to its interactive queue instead
+// of marking the row failed.
+func (h HostReport) NeedsTerminal() bool {
+	for _, r := range h.Results {
+		if r.Status == Failed && r.Reason == ErrNoTerminal.Error() {
+			return true
+		}
+	}
+	return false
+}
+
 // ErrNoTerminal is returned by a StepIO lane (Background) that cannot hand
 // the terminal to an interactive step.
 var ErrNoTerminal = errors.New("updexec: step needs a terminal this lane cannot provide")

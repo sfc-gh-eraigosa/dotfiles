@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 	"strings"
 	"testing"
 	"time"
@@ -38,7 +39,7 @@ func TestKeyHelpHasNoDuplicateBindings(t *testing.T) {
 // A host another async path owns must never be claimed: two paths owning one
 // row is the bug class the ownership set exists to prevent.
 func TestConfigActionSkipsAHostAnotherPathOwns(t *testing.T) {
-	m := newTUIModel(nil, nil, nil, time.Time{}, "", 1)
+	m := newTUIModel(nil, nil, nil, time.Time{}, "", 1, updplan.Default())
 	m.cursor = "busy"
 	m.waking = map[string]bool{"busy": true}
 	if m.canStartConfigAction() {
@@ -73,7 +74,7 @@ func TestConfigActionDelegatesToTheOneWayCliVerb(t *testing.T) {
 // refused us. Offering it for an unreachable host would be misleading — there
 // is nothing there to authorize — and pointless for one that already works.
 func TestAuthorizeIsOfferedOnlyForAnAuthFailedHost(t *testing.T) {
-	m := newTUIModel(nil, nil, nil, time.Time{}, "", 1)
+	m := newTUIModel(nil, nil, nil, time.Time{}, "", 1, updplan.Default())
 	for _, tc := range []struct {
 		class string
 		want  bool
