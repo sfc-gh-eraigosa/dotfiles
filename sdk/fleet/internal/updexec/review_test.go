@@ -297,7 +297,7 @@ exit 0`)
 // implements interactiveCtxRunner (runner.Exec does), a deadline actually
 // kills the remote child rather than merely abandoning it in a goroutine.
 func TestInteractiveDeadlineKillsTheChild(t *testing.T) {
-	stubBin(t, "ssh", "sleep 30")
+	stubBin(t, "ssh", "exec sleep 30") // exec: the killed PID is the sleeper itself, so no orphan inherits our stdout and holds the test binary open for 30s
 
 	c := Console{R: runner.Exec{}}
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
