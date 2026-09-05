@@ -25,6 +25,15 @@
 # Modes:
 #   install_herdr.sh                # the binary            (install.sh --phase deps)
 #   install_herdr.sh integrations   # agent integrations    (install.sh --phase config)
+#   install_herdr.sh config         # managed config.toml   (install.sh --phase config)
+#
+#   `config` renders ai/herdr/config.toml into ~/.config/herdr/config.toml so
+#   herdr follows the host terminal's light/dark appearance with the fleet
+#   Solarized palette (a dark catppuccin sidebar on a Solarized Light terminal
+#   is unreadable). The host OWNS the file: it is written when missing or when
+#   it still carries the "managed by dotfiles" marker; a hand-edited file
+#   without the marker is left alone (HERDR_CONFIG_FORCE=1 reclaims it, keeping
+#   a .bak). A running server is reloaded best-effort so the change is live.
 #
 #   `integrations` runs `herdr integration install <id>` for each id in
 #   HERDR_INTEGRATIONS whose agent CLI is present on this host. Ordering
@@ -39,6 +48,11 @@
 #   HERDR_INSTALL_DIR   target dir (default: ~/opt/bin)
 #   HERDR_FORCE=1       reinstall even when the wanted version is already present
 #   HERDR_INTEGRATIONS  space-separated integration ids (default: claude antigravity-cli)
+#   HERDR_CONFIG_DIR    herdr config dir (default: ${XDG_CONFIG_HOME:-~/.config}/herdr)
+#   HERDR_CONFIG_TEMPLATE  template to render (default: ai/herdr/config.toml in this repo)
+#   HERDR_THEME_DARK    dark theme / no-report fallback (default: solarized)
+#   HERDR_THEME_LIGHT   light theme (default: solarized-light)
+#   HERDR_CONFIG_FORCE=1  overwrite a hand-edited (unmanaged) config.toml, keeping a .bak
 #   HERDR_MANIFEST_URL  manifest location (default: https://herdr.dev/latest.json)
 #   HERDR_MANIFEST_FILE use a local manifest file instead of fetching (tests)
 set -e
@@ -47,6 +61,13 @@ MODE="${1:-install}"
 HERDR_VERSION="${HERDR_VERSION:-latest}"
 INSTALL_DIR="${HERDR_INSTALL_DIR:-${HOME}/opt/bin}"
 HERDR_INTEGRATIONS="${HERDR_INTEGRATIONS:-claude antigravity-cli}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+CONFIG_DIR="${HERDR_CONFIG_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/herdr}"
+CONFIG_TEMPLATE="${HERDR_CONFIG_TEMPLATE:-${REPO_ROOT}/ai/herdr/config.toml}"
+HERDR_THEME_DARK="${HERDR_THEME_DARK:-solarized}"
+HERDR_THEME_LIGHT="${HERDR_THEME_LIGHT:-solarized-light}"
+MANAGED_MARKER="managed by dotfiles"
 MANIFEST_URL="${HERDR_MANIFEST_URL:-https://herdr.dev/latest.json}"
 RELEASE_BASE="https://github.com/herdrdev/herdr/releases/download"
 
@@ -267,8 +288,67 @@ install_integrations() {
     return "${status}"
 }
 
+# ------------------------------------------------------------------------------
+# Mode: managed config.toml
+# ------------------------------------------------------------------------------
+render_config() {
+    sed -e "s|@HERDR_THEME_DARK@|${HERDR_THEME_DARK}|g" \
+        -e "s|@HERDR_THEME_LIGHT@|${HERDR_THEME_LIGHT}|g" "${CONFIG_TEMPLATE}"
+}
+
+# Best-effort: only when a server is up (its API socket exists). Never fails
+# the install; the next `herdr` launch reads the file anyway.
+reload_running_server() {
+    HERDR_BIN="${INSTALL_DIR}/herdr"
+    [ -x "${HERDR_BIN}" ] || HERDR_BIN="$(command -v herdr 2>/dev/null || true)"
+    [ -n "${HERDR_BIN}" ] || return 0
+    [ -e "${CONFIG_DIR}/herdr.sock" ] || return 0
+    if "${HERDR_BIN}" server reload-config 2>&1 | sed 's/^/  /'; then
+        ok "  herdr: running server reloaded config"
+    else
+        warn "running server did not reload config (it will apply on next launch)"
+    fi
+}
+
+install_config() {
+    [ -r "${CONFIG_TEMPLATE}" ] || die "config template not readable: ${CONFIG_TEMPLATE}"
+    for t in "${HERDR_THEME_DARK}" "${HERDR_THEME_LIGHT}"; do
+        case "${t}" in
+            *[!a-z0-9-]*|"") die "theme names must match [a-z0-9-]+ (got '${t}')" ;;
+        esac
+    done
+    TARGET="${CONFIG_DIR}/config.toml"
+    WANT_CONTENT="$(render_config)"
+
+    if [ -e "${TARGET}" ]; then
+        if ! grep -q "${MANAGED_MARKER}" "${TARGET}"; then
+            if [ "${HERDR_CONFIG_FORCE:-0}" != "1" ]; then
+                warn "${TARGET} is hand-edited (no '${MANAGED_MARKER}' marker); leaving it alone. Set HERDR_CONFIG_FORCE=1 to replace it (a .bak is kept)."
+                return 0
+            fi
+            cp -p "${TARGET}" "${TARGET}.bak"
+            info "Replacing hand-edited ${TARGET} (backup: ${TARGET}.bak)..."
+        elif [ "$(cat "${TARGET}")" = "${WANT_CONTENT}" ]; then
+            ok "herdr config up to date: ${TARGET}"
+            return 0
+        else
+            info "Updating managed ${TARGET}..."
+        fi
+    else
+        info "Seeding ${TARGET} (theme: ${HERDR_THEME_DARK} / ${HERDR_THEME_LIGHT}, follows host appearance)..."
+    fi
+
+    mkdir -p "${CONFIG_DIR}"
+    # Write-then-rename so a reload never sees a half-written file.
+    printf '%s\n' "${WANT_CONTENT}" > "${TARGET}.tmp"
+    mv "${TARGET}.tmp" "${TARGET}"
+    ok "  herdr config written: ${TARGET}"
+    reload_running_server
+}
+
 case "${MODE}" in
     install)      install_binary ;;
     integrations) install_integrations ;;
-    *) die "unknown mode '${MODE}' (expected: install | integrations)" ;;
+    config)       install_config ;;
+    *) die "unknown mode '${MODE}' (expected: install | integrations | config)" ;;
 esac

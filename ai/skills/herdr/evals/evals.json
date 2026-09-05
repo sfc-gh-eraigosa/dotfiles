@@ -1,0 +1,41 @@
+{
+  "skill_name": "herdr",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Save my current herdr tab layout as 'review' so I can bring it back later on this machine, and show me how to restore it.",
+      "expected_output": "Checks HERDR_ENV=1, runs `herdr-layout save review` (from the skill's scripts dir) which writes ~/.config/herdr/layouts/review.json via layout.export, then shows `herdr-layout restore review [--workspace ID] [--label TEXT] [--focus]`, warning that restore creates fresh panes and does not carry running processes; nothing is written into the dotfiles repo.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Switch my herdr sidebar theme to nord on this host only. I don't want install.sh to keep resetting it.",
+      "expected_output": "Runs `herdr-prefs set theme.name nord` (plus dark_name/light_name if auto_switch is on), explains that this removes the 'managed by dotfiles' marker so install.sh leaves the file alone, that the running server was reloaded, and that `herdr-prefs reset` returns to the fleet Solarized baseline. Does not edit ai/herdr/config.toml or anything in the dotfiles repo.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I'm in herdr. Start a second Claude in a pane next to this one to review the current diff, wait for it, and read me its answer.",
+      "expected_output": "Verifies HERDR_ENV=1, inspects the caller pane layout, splits a sibling pane with --cwd \"$PWD\" --no-focus, starts the agent with `herdr agent start <name> --kind claude --pane <id>`, sends the task with `herdr agent prompt <name> \"...\" --wait`, then reads with `herdr agent read <name>`. Uses the returned pane id, not a guessed one, and never answers a blocked approval dialog on the user's behalf.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "The herdr sidebar shows dark grey text on a grey background again on this laptop. What's going on and how do I fix it here?",
+      "expected_output": "Runs `herdr-prefs status` to see ownership and theme keys; explains herdr paints its own colors and follows the host light/dark report when auto_switch is on; checks whether the file is host-owned with a dark theme forced, or the host terminal is not reporting its appearance; offers `herdr-prefs set theme.name solarized-light` (host-local) or `herdr-prefs reset` to return to the managed auto-switching config. Does not propose editing the dotfiles repo.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Is my Claude in the other workspace still working or is it waiting on me?",
+      "expected_output": "Runs `herdr agent list` (or `herdr workspace list`) and reports each agent's state using herdr's vocabulary: working, blocked (needs input/approval), done (finished, unseen), idle, unknown. Offers `herdr agent focus <name>` or `herdr agent read <name>` rather than sending keys into the pane.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "Can you set up herdr so my panes come back the same way after a reboot?",
+      "expected_output": "Explains herdr already restores the session shape from session.json on server restart and that agent panes can resume via integrations (session.resume_agents_on_restore), so nothing extra is needed for the last layout; for named alternative layouts points to `herdr-layout save <name>` / `restore <name>`, kept host-local under ~/.config/herdr/layouts.",
+      "files": []
+    }
+  ]
+}
