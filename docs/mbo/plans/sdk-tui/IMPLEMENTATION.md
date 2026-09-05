@@ -4,7 +4,7 @@
 - **Date:** 2026-09-05
 - **Status:** Ready to execute
 - **Plan (source of truth):** [`../sdk-tui.md`](../sdk-tui.md) · spec [`../../specs/sdk-tui.md`](../../specs/sdk-tui.md) · design [`../../designs/sdk-tui.md`](../../designs/sdk-tui.md) · guide `sdk/libs/tui/GUIDE.md`
-- **Objective anchors:** issue #283 · design PR: see `docs/mbo/index.md` row `sdk-tui` · feature `gss feature sdk-tui` · consumer `gff-tui-vim` (#281)
+- **Objective anchors:** issue #283 · design PR #286 · feature `gss feature sdk-tui` · consumer `gff-tui-vim` (#281)
 
 > This file is the **procedure**. It does not restate the plan — it tells a fresh agent
 > session how to execute the plan, task by task, resumably. The plan wins any conflict.

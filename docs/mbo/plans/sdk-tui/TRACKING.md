@@ -13,7 +13,7 @@
 
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| design (docs + GUIDE) | `sdk-tui/edward-raigosa/design` | `feature/sdk-tui/edward-raigosa/design` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/sdk-tui/edward-raigosa/design` | (pending checkpoint) | docs written |
+| design (docs + GUIDE) | `sdk-tui/edward-raigosa/design` | `feature/sdk-tui/edward-raigosa/design` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/sdk-tui/edward-raigosa/design` | [#286](https://github.com/sfc-gh-eraigosa/dotfiles/pull/286) (draft) | docs written; issue #283 |
 | lib | (create per IMPLEMENTATION §2) | | | | not started |
 
 ## 1. Task ledger
