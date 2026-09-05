@@ -31,6 +31,17 @@
 # carrying the CONFIGURED git user.email of the repo being judged — that address
 # is already on every commit's author line. Trailers naming anyone else are not.
 #
+# Secrets: when `gitleaks` is on PATH its ruleset (~160 shapes, entropy-scored,
+# maintained upstream) judges the text FIRST; our built-in shapes stay as the
+# floor so a machine without the binary regresses to today, never to nothing.
+#   gitleaks   "off" in this file, or PRIVACY_GUARD_GITLEAKS=0, disables it.
+#              A <repo>/.gitleaks.toml is passed through when present.
+#
+# Time: every judged call is timed. PRIVACY_GUARD_BUDGET_MS (default 1500) —
+# over it prints a SLOW warning (never a block) and every run is appended to
+# PRIVACY_GUARD_TIMING_LOG (default ~/.local/state/privacy_guard/timing.log),
+# summarised by `make hook-timing`. Security must not cost time silently.
+#
 # Portability: bash 3.2+ (no associative arrays, no mapfile, no ${v,,}), and
 # only POSIX grep -E. Every helper is prefixed privacy_ so sourcing it into a
 # hook cannot shadow anything.
@@ -102,6 +113,81 @@ privacy_escape() { printf '%s' "$1" | sed 's/[][\.|$(){}?+*^]/\\&/g'; }
 
 # privacy_found <category> <snippet>: emit a finding. Callers `return 2`.
 privacy_found() { printf '%s\t%s\n' "$1" "$2"; }
+
+# --- gitleaks ------------------------------------------------------------------
+privacy_gitleaks_enabled() {
+    [ "${PRIVACY_GUARD_GITLEAKS:-1}" != "0" ] || return 1
+    local f; f="$(privacy_config_dir)/gitleaks"
+    if [ -f "$f" ] && grep -Eiq '^[[:space:]]*(off|false|0)[[:space:]]*$' "$f"; then return 1; fi
+    command -v gitleaks >/dev/null 2>&1
+}
+
+# privacy_gitleaks_scan <text> <ctx>: prints "RuleID" and returns 2 on a finding,
+# 0 when clean. Errors (binary broken, unknown flags) return 1 and are reported
+# on stderr; the caller falls through to the built-in shapes — never to nothing.
+privacy_gitleaks_scan() {
+    local text="$1" ctx="$2" root cfg="" rep err rc rule
+    root="$(git -C "$ctx" rev-parse --show-toplevel 2>/dev/null || true)"
+    [ -n "$root" ] && [ -f "$root/.gitleaks.toml" ] && cfg="$root/.gitleaks.toml"
+    rep="$(mktemp "${TMPDIR:-/tmp}/privacy_gl.XXXXXX")"; err="$rep.err"
+    # 8.19+ has `gitleaks stdin`; older releases spell it `detect --pipe`.
+    # shellcheck disable=SC2086 # $cfg is either empty or a single path
+    printf '%s\n' "$text" | gitleaks stdin --no-banner --redact --exit-code 2 \
+        --report-format json --report-path "$rep" ${cfg:+-c "$cfg"} >/dev/null 2>"$err"
+    rc=$?
+    if [ "$rc" -eq 1 ] && grep -qi 'unknown command' "$err"; then
+        # shellcheck disable=SC2086
+        printf '%s\n' "$text" | gitleaks detect --pipe --no-banner --redact --exit-code 2 \
+            --report-format json --report-path "$rep" ${cfg:+-c "$cfg"} >/dev/null 2>"$err"
+        rc=$?
+    fi
+    case "$rc" in
+        0) rm -f "$rep" "$err"; return 0 ;;
+        2) rule="$(grep -o '"RuleID":[[:space:]]*"[^"]*"' "$rep" 2>/dev/null | head -n1 | sed 's/.*"\([^"]*\)"$/\1/')"
+           rm -f "$rep" "$err"; printf '%s' "${rule:-unknown-rule}"; return 2 ;;
+        *) printf 'privacy_guard: gitleaks failed (exit %s): %s — using built-in secret shapes only\n' \
+               "$rc" "$(head -n1 "$err" 2>/dev/null)" >&2
+           rm -f "$rep" "$err"; return 1 ;;
+    esac
+}
+
+# --- timing --------------------------------------------------------------------
+# privacy_now_ms: bash 5 has EPOCHREALTIME; GNU date has %N; BSD date has neither
+# (it prints a literal N) and falls back to whole seconds.
+privacy_now_ms() {
+    local n
+    if [ -n "${EPOCHREALTIME:-}" ]; then n="${EPOCHREALTIME/./}"; printf '%s' "${n%???}"; return; fi
+    n="$(date +%s%N 2>/dev/null)" # portability-ok: guarded — a literal N (BSD date) drops to whole seconds below
+    case "$n" in
+        *N*|"") printf '%s000' "$(date +%s)" ;;
+        *)      printf '%s' "$((n / 1000000))" ;;
+    esac
+}
+
+privacy_timing_log() { printf '%s' "${PRIVACY_GUARD_TIMING_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/privacy_guard/timing.log}"; }
+
+# privacy_timing <name> <start_ms> <bytes>: append a line to the timing log;
+# returns 1 (after a SLOW warning on stderr) when over PRIVACY_GUARD_BUDGET_MS.
+privacy_timing() {
+    local name="$1" start="$2" bytes="$3" now ms budget log gl=off
+    now="$(privacy_now_ms)"; ms=$((now - start)); [ "$ms" -ge 0 ] || ms=0
+    budget="${PRIVACY_GUARD_BUDGET_MS:-1500}"
+    privacy_gitleaks_enabled && gl=on
+    log="$(privacy_timing_log)"
+    if mkdir -p "$(dirname "$log")" 2>/dev/null; then
+        printf '%s\t%s\t%s\t%s\tgitleaks=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$name" "$ms" "$bytes" "$gl" >> "$log" 2>/dev/null
+        # keep the log bounded: past 4000 lines, keep the newest 2000
+        if [ "$(wc -l < "$log" 2>/dev/null || echo 0)" -gt 4000 ]; then
+            tail -n 2000 "$log" > "$log.tmp" 2>/dev/null && mv "$log.tmp" "$log"
+        fi
+    fi
+    if [ "$ms" -gt "$budget" ]; then
+        printf 'privacy_guard: SLOW — %s took %sms (budget %sms; %s bytes judged; gitleaks %s). Investigate: make hook-timing  (log: %s)\n' \
+            "$name" "$ms" "$budget" "$bytes" "$gl" "$log" >&2
+        return 1
+    fi
+    return 0
+}
 
 # --- the rules -----------------------------------------------------------------
 
@@ -196,7 +282,16 @@ EOF
         esac
     fi
 
-    # Rule D — secrets. High-confidence shapes first.
+    # Rule D — secrets. gitleaks first when available (the broad, maintained
+    # ruleset), then our built-in high-confidence shapes as the floor.
+    local rule
+    if privacy_gitleaks_enabled; then
+        rule="$(privacy_gitleaks_scan "$text" "$ctx")"
+        if [ $? -eq 2 ]; then
+            privacy_found "gitleaks rule \"$rule\" matched — looks like a secret/credential (store it in a secret manager, reference a variable)" "$rule"
+            return 2
+        fi
+    fi
     local rx
     for rx in \
         '-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----' \

@@ -34,8 +34,12 @@ printf '[user]\n\tname = Alice\n\temail = %s\n[init]\n\tdefaultBranch = main\n' 
 
 # g: run git with the controlled identity and the hooks under test.
 g() {
+    # shellcheck disable=SC2086 # the ${X:+X=$X} forms expand to zero or one word each
     env -i PATH="$PATH" HOME="$HOME_T" USER="$ID_USER" HOSTNAME="$ID_HOST" \
         GIT_CONFIG_GLOBAL="$HOME_T/.gitconfig" \
+        ${PRIVACY_GUARD_TIMING_LOG:+PRIVACY_GUARD_TIMING_LOG=$PRIVACY_GUARD_TIMING_LOG} \
+        ${PRIVACY_GUARD_BUDGET_MS:+PRIVACY_GUARD_BUDGET_MS=$PRIVACY_GUARD_BUDGET_MS} \
+        ${STUB_GL_LOG:+STUB_GL_LOG=$STUB_GL_LOG} \
         git -c core.hooksPath="$HERE" "$@"
 }
 
@@ -136,6 +140,34 @@ stage newbranch.md "host is $ID_HOST"
 g -C "$REPO" commit -q -m "branch" --no-verify
 expect blocked "pre-push: a NEW branch (no remote counterpart) is judged against what origin lacks" -- -C "$REPO" push -q -u origin feature
 g -C "$REPO" reset -q --hard HEAD~1
+
+# ============================ gitleaks + time budget =============================
+# With gitleaks on PATH the git hooks get its ruleset too (stub: flags LEAKME).
+STUBS="$WORK/stubs"; mkdir -p "$STUBS"
+cat > "$STUBS/gitleaks" <<'SHIM'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${STUB_GL_LOG:-/dev/null}"
+report=""; prev=""
+for a in "$@"; do [ "$prev" = "--report-path" ] && report="$a"; prev="$a"; done
+if grep -q LEAKME; then
+  [ -n "$report" ] && printf '[{"RuleID":"stub-rule","Description":"Stub Secret"}]\n' > "$report"; exit 2
+fi
+[ -n "$report" ] && printf '[]\n' > "$report"; exit 0
+SHIM
+chmod +x "$STUBS/gitleaks"
+g -C "$REPO" checkout -q main
+stage gl.md "api token LEAKME"
+PATH="$STUBS:$PATH" expect blocked "pre-commit: a gitleaks finding is refused (stub rule)" -- -C "$REPO" commit -q -m "docs: gl"
+g -C "$REPO" reset -q gl.md; rm -f "$REPO/gl.md"
+stage gl.md "no secrets"
+TLOG="$WORK/timing.log"
+PATH="$STUBS:$PATH" PRIVACY_GUARD_TIMING_LOG="$TLOG" expect ok "pre-commit: clean content with gitleaks present passes" -- -C "$REPO" commit -q -m "docs: gl clean"
+if [ -s "$TLOG" ] && grep -q $'\tpre-commit\t' "$TLOG" && grep -q $'\tcommit-msg\t' "$TLOG"; then echo "PASS: git hooks log their timing (pre-commit + commit-msg)"; PASS=$((PASS+1))
+else echo "FAIL: timing log missing hook entries :: $(cat "$TLOG" 2>/dev/null)"; FAIL=$((FAIL+1)); fi
+stage gl2.md "still clean"
+out=$(PATH="$STUBS:$PATH" PRIVACY_GUARD_TIMING_LOG="$TLOG" PRIVACY_GUARD_BUDGET_MS=0 g -C "$REPO" commit -q -m "docs: slow" 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q SLOW; then echo "PASS: over budget => SLOW warning on stderr, commit still succeeds"; PASS=$((PASS+1))
+else echo "FAIL: budget 0 should warn SLOW and not block (rc $rc) :: $out"; FAIL=$((FAIL+1)); fi
 
 # ============================ escape hatch ======================================
 stage skip.md "/home/$ID_USER on purpose"

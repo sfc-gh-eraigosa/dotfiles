@@ -235,6 +235,78 @@ if [ "$rc" = 2 ]; then echo "PASS: fails CLOSED when jq is unavailable (exit 2)"
 else echo "FAIL: without jq the hook must fail closed (got $rc) :: $out"; FAIL=$((FAIL+1)); fi
 rm -rf "$SCAN_REPO" "$CFG"
 
+# --- Class 7: gitleaks delegation + the time budget ----------------------------
+# Secret SHAPES come from gitleaks when it is on PATH (its ruleset is ~10x ours
+# and maintained upstream); our 16 shapes stay as the floor. A stub gitleaks
+# proves the contract without depending on the real binary being installed:
+# it flags any text containing LEAKME and honours the CLI we call.
+GL_REPO="$(mktemp -d)"; git -C "$GL_REPO" init -q
+GL_DOC="$GL_REPO/doc.md"
+STUBS="$(mktemp -d)"
+export STUB_GL_LOG="$STUBS/gitleaks.log"
+cat > "$STUBS/gitleaks" <<'SHIM'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${STUB_GL_LOG:-/dev/null}"
+if [ "${STUB_GL_LEGACY:-0}" = 1 ] && [ "$1" = stdin ]; then
+  echo 'Error: unknown command "stdin" for "gitleaks"' >&2; exit 1
+fi
+report=""; prev=""
+for a in "$@"; do [ "$prev" = "--report-path" ] && report="$a"; prev="$a"; done
+text="$(cat)"
+if printf '%s' "$text" | grep -q LEAKME; then
+  [ -n "$report" ] && printf '[{"RuleID":"stub-rule","Description":"Stub Secret","Secret":"LEAKME","File":"","StartLine":1}]\n' > "$report"
+  exit 2
+fi
+[ -n "$report" ] && printf '[]\n' > "$report"
+exit 0
+SHIM
+chmod +x "$STUBS/gitleaks"
+GLPATH="$STUBS:$PATH"
+
+assert_env 2 "$(pl_write "$GL_DOC" "token LEAKME here")"           "gitleaks finding denies the write"                  PATH="$GLPATH" STUB_GL_LOG="$STUB_GL_LOG"
+out=$(printf '%s' "$(pl_write "$GL_DOC" "token LEAKME here")" | env -i PATH="$GLPATH" USER="$ID_USER" HOME="$ID_HOME" HOSTNAME="$ID_HOST" STUB_GL_LOG="$STUB_GL_LOG" bash "$HOOK" 2>&1) || true
+if printf '%s' "$out" | grep -q "stub-rule"; then echo "PASS: the deny names the gitleaks rule"; PASS=$((PASS+1))
+else echo "FAIL: deny should name the gitleaks rule :: $out"; FAIL=$((FAIL+1)); fi
+if grep -q -- '--exit-code 2' "$STUB_GL_LOG" && grep -q -- '--no-banner' "$STUB_GL_LOG"; then echo "PASS: gitleaks is called with --no-banner --exit-code 2"; PASS=$((PASS+1))
+else echo "FAIL: unexpected gitleaks CLI :: $(cat "$STUB_GL_LOG")"; FAIL=$((FAIL+1)); fi
+assert_env 0 "$(pl_write "$GL_DOC" "nothing secret here")"         "gitleaks clean => allowed"                          PATH="$GLPATH"
+assert_env 2 "$(pl_write "$GL_DOC" "key AKIAIOSFODNN7EXAMPLE1")"   "builtin shapes remain the floor when gitleaks is clean" PATH="$GLPATH"
+assert_env 0 "$(pl_write "$GL_DOC" "token LEAKME here")"           "PRIVACY_GUARD_GITLEAKS=0 disables the delegation"   PATH="$GLPATH" PRIVACY_GUARD_GITLEAKS=0
+GLCFG="$(mktemp -d)"; printf 'off\n' > "$GLCFG/gitleaks"
+assert_env 0 "$(pl_write "$GL_DOC" "token LEAKME here")"           "config file gitleaks=off disables the delegation"    PATH="$GLPATH" PRIVACY_GUARD_CONFIG_DIR="$GLCFG"
+assert_env 2 "$(pl_write "$GL_DOC" "token LEAKME here")"           "legacy gitleaks (no stdin subcommand) falls back to detect --pipe" PATH="$GLPATH" STUB_GL_LEGACY=1 STUB_GL_LOG="$STUB_GL_LOG"
+if grep -q -- 'detect --pipe' "$STUB_GL_LOG"; then echo "PASS: legacy fallback used detect --pipe"; PASS=$((PASS+1))
+else echo "FAIL: legacy fallback did not call detect --pipe :: $(cat "$STUB_GL_LOG")"; FAIL=$((FAIL+1)); fi
+: > "$STUB_GL_LOG"
+printf '[extend]\nuseDefault = true\n' > "$GL_REPO/.gitleaks.toml"
+assert_env 0 "$(pl_write "$GL_DOC" "nothing secret here")"         "a repo .gitleaks.toml is passed to gitleaks"        PATH="$GLPATH" STUB_GL_LOG="$STUB_GL_LOG"
+if grep -q -- "-c $GL_REPO/.gitleaks.toml" "$STUB_GL_LOG"; then echo "PASS: gitleaks received -c <repo>/.gitleaks.toml"; PASS=$((PASS+1))
+else echo "FAIL: gitleaks did not receive the repo config :: $(cat "$STUB_GL_LOG")"; FAIL=$((FAIL+1)); fi
+assert_env 0 "$(pl_write "$LOCAL" "token LEAKME here")"            "gitleaks is NOT run for a gitignored file (no cost where nothing is judged)" PATH="$GLPATH" STUB_GL_LOG="$STUBS/none.log"
+[ ! -s "$STUBS/none.log" ] && { echo "PASS: gitleaks was not invoked for the ignored file"; PASS=$((PASS+1)); } || { echo "FAIL: gitleaks ran for an ignored file"; FAIL=$((FAIL+1)); }
+
+# Security must not cost time silently. Every judged call is timed and logged;
+# over budget => a visible SLOW warning (never a block).
+TLOG="$STUBS/timing.log"
+assert_env 0 "$(pl_write "$GL_DOC" "nothing secret here")"         "a timed run is logged"                              PATH="$GLPATH" PRIVACY_GUARD_TIMING_LOG="$TLOG"
+if [ -s "$TLOG" ] && grep -Eq $'\tagent:Write\t[0-9]+\t' "$TLOG"; then echo "PASS: timing log has tool, ms and bytes"; PASS=$((PASS+1))
+else echo "FAIL: timing log missing or malformed :: $(cat "$TLOG" 2>/dev/null)"; FAIL=$((FAIL+1)); fi
+rc=0; out=$(printf '%s' "$(pl_write "$GL_DOC" "nothing secret here")" | env -i PATH="$GLPATH" USER="$ID_USER" HOME="$ID_HOME" HOSTNAME="$ID_HOST" PRIVACY_GUARD_TIMING_LOG="$TLOG" PRIVACY_GUARD_BUDGET_MS=0 bash "$HOOK" 2>&1) || rc=$?
+if [ "$rc" = 0 ] && printf '%s' "$out" | grep -q "SLOW"; then echo "PASS: over budget => SLOW warning, still allowed"; PASS=$((PASS+1))
+else echo "FAIL: over budget should warn SLOW and allow (rc $rc) :: $out"; FAIL=$((FAIL+1)); fi
+out=$(printf '%s' "$(pl_write "$GL_DOC" "nothing secret here")" | env -i PATH="$GLPATH" USER="$ID_USER" HOME="$ID_HOME" HOSTNAME="$ID_HOST" PRIVACY_GUARD_TIMING_LOG="$TLOG" bash "$HOOK" 2>&1) || true
+if ! printf '%s' "$out" | grep -q "SLOW"; then echo "PASS: within the default budget => no warning"; PASS=$((PASS+1))
+else echo "FAIL: default budget should not warn :: $out"; FAIL=$((FAIL+1)); fi
+# The real binary, when present: a shape our 16 built-ins do NOT know.
+if command -v gitleaks >/dev/null 2>&1; then
+    TW="SK$(head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-32)"
+    assert 2 "$(pl_write "$GL_DOC" "twilio key $TW")" "REAL gitleaks: a Twilio API key (absent from the built-in shapes) is refused"
+    assert 0 "$(pl_write "$GL_DOC" "plain prose about keys and tokens, none present")" "REAL gitleaks: ordinary prose passes"
+else
+    echo "SKIP: real gitleaks not on PATH (CI installs it; locally: make install or install_gitleaks.sh)"
+fi
+rm -rf "$GL_REPO" "$STUBS" "$GLCFG"
+
 echo "----"
 echo "privacy_guard_test: $PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ] && exit 0 || exit 1

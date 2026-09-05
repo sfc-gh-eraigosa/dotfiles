@@ -33,9 +33,11 @@ privacy_hooks_judge() {
     local name="$1" text="$2" finding
     [ -n "${PRIVACY_GUARD_SKIP:-}" ] && return 0
     [ -n "$text" ] || return 0
-    if finding="$(privacy_scan "$text" "$PWD")"; then
-        return 0
-    fi
+    local t0 rc
+    t0="$(privacy_now_ms)"
+    finding="$(privacy_scan "$text" "$PWD")"; rc=$?
+    privacy_timing "$name" "$t0" "${#text}" || true
+    [ "$rc" -ne 0 ] || return 0
     printf 'BLOCKED by privacy_guard (%s): %s. Offending text: %s\n' \
         "$name" "${finding%%	*}" "${finding#*	}" >&2
     printf 'Do not record local identity or secrets. Use $HOME / ~ / ${USER} / <user> / <host> / <email> / <REDACTED>.\n' >&2
