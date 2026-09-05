@@ -1,0 +1,6 @@
+# 2026-09-04T15:34:19Z leaf A code-review fixes — RED then GREEN
+## RED (before fixes): 10 review tests failing
+TestValidRefRejectsOptionLookalikesAndBadRefFormat, TestWithRefRevalidatesTheBranchList, TestRootIsValidatedAndMustBeAbsoluteOrHome, TestRetryOnExitTokensAreStrictAndNormalised, TestBackoffWaitNeverOverflowsAndRejectsNaN, TestBranchListsAreNotJudgedByNameHeuristics, TestDefaultIsNotSharedBetweenCallers, TestHostnameIsRejectedOnNonGhAuthSteps, TestUnknownKindDoesNotCascadeIntoRunErrors, TestEmptyAndMultiDocumentFilesAreExplicitErrors — all FAIL (observed)
+## GREEN:
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan	(cached)	coverage: 93.9% of statements
+13

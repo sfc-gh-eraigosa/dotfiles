@@ -1,0 +1,3 @@
+# 2026-09-04T15:22:08Z task 18 binary size after gff import
+7122210 bytes
+# NOTE (leaf C review): at this point nothing in cmd/ imports internal/featflag, so the linker dropped gff/protobuf and this delta is NOT the linking cost. A scratch build with featflag referenced from cmd measured 12,071,116 B (+4.95 MB, +69%). The size gate is re-measured at the leaf D gate, after wiring.

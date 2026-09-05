@@ -1,0 +1,67 @@
+Task 24 — background updates run the plan executor
+Date: 2026-09-05
+
+RED
+---
+Command: go vet ./... (after changing newTUIModel/beginStream signatures in
+production code but before updating the callers)
+Representative failure line:
+  cmd/runlog_test.go:20:30: cannot use "main" (untyped string constant) as
+  updplan.Plan value in argument to beginStream
+
+Once TestSudoPreambleIsPerRunStepSession was added (before beginStream wired
+the executor through), running it against the OLD beginStream(alias, ref
+string, ...) signature was not directly expressible — the signature change
+itself is the behavioural change here, so RED is the compile failure above:
+callers passing a bare ref string could not satisfy the new
+updplan.Plan-typed parameter, proving no code path yet built an Executor
+from a plan.
+
+GREEN
+-----
+go test ./cmd/... -run 'TestSudoPreambleIsPerRunStepSession' -v
+  === RUN   TestSudoPreambleIsPerRunStepSession
+  --- PASS: TestSudoPreambleIsPerRunStepSession (0.00s)
+  PASS
+  ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.007s
+
+Changes:
+- cmd/tui_model.go: tuiModel gains a `plan updplan.Plan` field, injected via
+  newTUIModel (never loaded by the model itself); pump() passes it to
+  beginStream.
+- cmd/tui.go: new `--file` flag; the plan is loaded ONCE via loadPlan and
+  --update-ref is applied through plan.WithRef, validated before any host is
+  contacted (same pattern as --ref today).
+- cmd/tui_cmds.go: beginStream(alias, plan, answers, r, dir) now builds
+  updexec.Executor{IO: updexec.Background{Console:{R, Line, Stdin, Preamble}},
+  Out: <captureOutput wrapped so real remote output — not just the
+  executor's own step banners — lands in the capture>, Reset}; RunHost runs
+  in a goroutine, done<-rep.Err() (or the errNeedsTerminal sentinel, wired
+  fully in task 25). unattendedUpdate/updateScript are kept (still used by
+  interactiveHandoff) — task 25 deletes them.
+- internal/updexec/exec.go: additive HostReport.NeedsTerminal() bool.
+
+VERIFY
+------
+gofmt -l .            -> clean
+go vet ./...          -> clean
+go test -race ./...   -> all packages ok (internal/updexec 31.1s, cmd 1.4s)
+
+DEVIATION
+---------
+- TestSudoSecretIsSentOnStdinOnly, TestUpdateIsCapturedWithItsSubject,
+  TestForcedResetIsLabelledInTheCapture and
+  TestAnUnusableCaptureDirDoesNotBreakTheStream were NOT named in the task's
+  RED list but had to be updated for beginStream's new signature (ref string
+  -> updplan.Plan) and, for the capture tests, the header changing from
+  "ref=<ref>" to "plan=<Source>". They now build a minimal
+  singleRunStepPlan()/twoStepPlan() test plan rather than the built-in
+  default plan, because updplan.Default()'s install step is
+  `interactive: true` and the Background lane's Interactive always returns
+  ErrNoTerminal — routing a default-plan host to the interactive queue
+  before it ever reaches Batch, which would make these tests about routing
+  instead of about the capture/stdin content they exist to pin.
+- The "needs a terminal -> route to iaQueue instead of failing" wiring in
+  tuiModel.Update's bgUpdateDoneMsg case is deliberately left for task 25
+  (that is where the plan places it); beginStream already emits the
+  errNeedsTerminal sentinel this task's tests do not exercise.

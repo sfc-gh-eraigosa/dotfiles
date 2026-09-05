@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
 // tuiMode is the explicit interaction mode. Every key event is routed by mode
@@ -114,8 +117,12 @@ type tuiModel struct {
 	jobs      int               // max concurrent background updates
 	running   int               // slots in use
 	updateRef string
-	ans       answers     // pre-supplied answers for this wave (password: memory only)
-	ansField  answerField // cursor in the answer form
+	plan      updplan.Plan           // loaded ONCE at startup; the model never calls loadPlan itself
+	file      string                 // the --file value the plan was loaded from, if any; re-passed to the interactive handoff's self-exec
+	repo      string                 // the --repo value the plan/gff resolution used; re-passed to the interactive handoff's self-exec so a routed host resolves against the SAME checkout
+	self      func() (string, error) // resolves the executable path for the interactive handoff's self-exec; os.Executable in production, injected in tests
+	ans       answers                // pre-supplied answers for this wave (memory-only credential)
+	ansField  answerField            // cursor in the answer form
 
 	// reachability ladder — its own ownership set, same invariant as updating
 	waking map[string]bool
@@ -137,7 +144,7 @@ type tuiModel struct {
 	quitReq bool
 }
 
-func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time.Time, ref string, jobs int) tuiModel {
+func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time.Time, ref string, jobs int, plan updplan.Plan) tuiModel {
 	m := tuiModel{
 		pending:   map[string]bool{},
 		selected:  map[string]bool{},
@@ -150,6 +157,8 @@ func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time
 		hosts:     map[string]sshconf.Host{},
 		jobs:      jobs,
 		updateRef: ref,
+		plan:      plan,
+		self:      os.Executable,
 		run:       r,
 		base:      base,
 		now:       now,
@@ -484,12 +493,41 @@ func (m *tuiModel) startUpdate(targets []string) tea.Cmd {
 	case len(cmds) == 0 && len(busy) > 0:
 		m.status = fmt.Sprintf("already updating %s — left it running", strings.Join(busy, ", "))
 	case len(busy) > 0:
-		m.status = fmt.Sprintf("updating %d host(s) → %s (skipped %s: already running)",
-			len(cmds), m.updateRef, strings.Join(busy, ", "))
+		m.status = fmt.Sprintf("updating %d host(s) (plan: %s) (skipped %s: already running)",
+			len(cmds), planLabel(m.plan.Source), strings.Join(busy, ", "))
 	default:
-		m.status = fmt.Sprintf("updating %d host(s) → %s", len(cmds), m.updateRef)
+		m.status = fmt.Sprintf("updating %d host(s) (plan: %s)", len(cmds), planLabel(m.plan.Source))
 	}
 	return tea.Batch(cmds...)
+}
+
+// planLabel is the plan's Source for the status line: "built-in default"
+// when the built-in plan carries no path, else the Source itself, elided in
+// the MIDDLE so a long value can never push the status line past the
+// terminal width (the demo width guard, TestDemoFrames) while still keeping
+// both ends readable.
+//
+// This used to truncate from the FRONT (keep only the tail), which for a
+// value like "built-in default (no /very/long/home/path/.config/fleet/
+// fleet.yaml)" dropped the "built-in default (no " marker entirely once the
+// path was long enough — the status line then named a file that was NOT
+// actually loaded. Eliding the middle instead keeps the leading marker (or
+// the start of an explicit --file path) AND the trailing filename, and is
+// rune-safe: slicing by len(string) (bytes) could split a multi-byte rune.
+func planLabel(source string) string {
+	if source == "" {
+		return "built-in default"
+	}
+	const max = 40
+	r := []rune(source)
+	if len(r) <= max {
+		return source
+	}
+	const ellipsis = "…"
+	// -1 rune reserved for the ellipsis itself.
+	headLen := (max - 1) / 2
+	tailLen := (max - 1) - headLen
+	return string(r[:headLen]) + ellipsis + string(r[len(r)-tailLen:])
 }
 
 // pump fills free job slots from the background queue. When the wave is fully
@@ -501,7 +539,7 @@ func (m *tuiModel) pump() tea.Cmd {
 		m.bgQueue = m.bgQueue[1:]
 		m.updating[a] = updState{phase: updRunning}
 		m.running++
-		cmds = append(cmds, beginStream(a, m.updateRef, m.ans, m.run, m.logDir))
+		cmds = append(cmds, beginStream(a, m.plan, m.ans, m.run, m.logDir))
 	}
 	// Interactive handoffs need the terminal to themselves, so they only run
 	// once no background update can print over them.
@@ -515,7 +553,7 @@ func (m *tuiModel) pump() tea.Cmd {
 			total = len(m.iaQueue) + 1
 		}
 		pos := total - len(m.iaQueue)
-		return tea.Batch(append(cmds, interactiveHandoff(a, m.updateRef, m.ans, pos, total))...)
+		return tea.Batch(append(cmds, interactiveHandoff(m.self, a, m.file, m.updateRef, m.repo, m.ans, pos, total))...)
 	}
 	return tea.Batch(cmds...)
 }
@@ -848,6 +886,18 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case bgUpdateDoneMsg:
+		// A step the Background lane cannot service (ErrNoTerminal) is not a
+		// failure — it just needs a real terminal, so the host moves to the
+		// interactive queue instead of landing on the row as FAIL.
+		if errors.Is(msg.err, errNeedsTerminal) {
+			if m.running > 0 {
+				m.running--
+			}
+			m.updating[msg.alias] = updState{phase: updQueued}
+			m.iaQueue = append(m.iaQueue, msg.alias)
+			m.iaTotal++
+			return m, m.pump()
+		}
 		// The tail of the streamed output is the row's failure explanation —
 		// the same text the non-streaming path used to capture at the end.
 		log := msg.log

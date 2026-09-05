@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 )
@@ -28,9 +29,10 @@ type storedAnswers struct {
 	Gemini  string `json:"gemini,omitempty"`
 }
 
-// answersPath is where the preferences live. It follows os.UserConfigDir, so it
-// respects XDG_CONFIG_HOME on Linux and the platform convention elsewhere.
-func answersPath() string {
+// fleetConfigDir is where fleet's own config files live — answers.json today,
+// fleet.yaml (the update plan) from task 19. It follows os.UserConfigDir, so
+// it respects XDG_CONFIG_HOME on Linux and the platform convention elsewhere.
+func fleetConfigDir() string {
 	dir, err := os.UserConfigDir()
 	if err != nil || dir == "" {
 		home, herr := os.UserHomeDir()
@@ -39,7 +41,38 @@ func answersPath() string {
 		}
 		dir = filepath.Join(home, ".config")
 	}
-	return filepath.Join(dir, "fleet", "answers.json")
+	return filepath.Join(dir, "fleet")
+}
+
+// fleetConfigFile resolves the path for one file under fleet's own config
+// directory (fleetConfigDir), naming why it could not when the config
+// directory itself cannot be resolved — the "no config dir" guard that used
+// to be copy-pasted at every one of this function's callers.
+func fleetConfigFile(name string) (string, error) {
+	dir := fleetConfigDir()
+	if dir == "" {
+		return "", errors.New("could not resolve a config directory")
+	}
+	return filepath.Join(dir, name), nil
+}
+
+// answersPath is where the preferences live.
+func answersPath() string {
+	p, err := fleetConfigFile("answers.json")
+	if err != nil {
+		return ""
+	}
+	return p
+}
+
+// defaultPlanPath is where the update plan lives when neither --file nor gff's
+// fleet.update.config selects a location.
+func defaultPlanPath() string {
+	p, err := fleetConfigFile("fleet.yaml")
+	if err != nil {
+		return ""
+	}
+	return p
 }
 
 // saveAnswers writes the non-secret preferences, owner-only. The file reveals

@@ -1,0 +1,50 @@
+# 2026-09-04T15:55:05Z task 15
+$ gofmt -l internal/updexec/
+$ go vet ./...
+$ go test -race ./internal/updexec/... -run Retr|Timeout|Attempts|Interactive|NoRetry -v
+=== RUN   TestRestoreStepHasFixedRetryPolicy
+=== RUN   TestRestoreStepHasFixedRetryPolicy/retries_transport_failures_3x_regardless_of_NoRetry
+=== RUN   TestRestoreStepHasFixedRetryPolicy/a_conflict_is_not_retried
+--- PASS: TestRestoreStepHasFixedRetryPolicy (0.00s)
+    --- PASS: TestRestoreStepHasFixedRetryPolicy/retries_transport_failures_3x_regardless_of_NoRetry (0.00s)
+    --- PASS: TestRestoreStepHasFixedRetryPolicy/a_conflict_is_not_retried (0.00s)
+=== RUN   TestGhAuthLogsInInteractivelyThenReverifies
+--- PASS: TestGhAuthLogsInInteractivelyThenReverifies (0.00s)
+=== RUN   TestGhAuthLoginIsNeverRetriedButCheckIs
+=== RUN   TestGhAuthLoginIsNeverRetriedButCheckIs/check_retries_through_transport_failures
+=== RUN   TestGhAuthLoginIsNeverRetriedButCheckIs/a_failing_login_is_never_retried
+--- PASS: TestGhAuthLoginIsNeverRetriedButCheckIs (0.00s)
+    --- PASS: TestGhAuthLoginIsNeverRetriedButCheckIs/check_retries_through_transport_failures (0.00s)
+    --- PASS: TestGhAuthLoginIsNeverRetriedButCheckIs/a_failing_login_is_never_retried (0.00s)
+=== RUN   TestTransportFailureIsRetriedWithBackoff
+--- PASS: TestTransportFailureIsRetriedWithBackoff (0.00s)
+=== RUN   TestNonMatchingFailureIsNotRetried
+--- PASS: TestNonMatchingFailureIsNotRetried (0.00s)
+=== RUN   TestRetryOnAnyRetriesEveryUnexpectedExit
+--- PASS: TestRetryOnAnyRetriesEveryUnexpectedExit (0.00s)
+=== RUN   TestRetryOnExitCodeMatchesOnlyThatCode
+--- PASS: TestRetryOnExitCodeMatchesOnlyThatCode (0.00s)
+=== RUN   TestExpectedExitIsNeverRetried
+--- PASS: TestExpectedExitIsNeverRetried (0.00s)
+=== RUN   TestAttemptsAreExhaustedThenOnFailureApplies
+--- PASS: TestAttemptsAreExhaustedThenOnFailureApplies (0.00s)
+=== RUN   TestTimeoutCancelsTheAttempt
+--- PASS: TestTimeoutCancelsTheAttempt (1.00s)
+=== RUN   TestTimeoutIsRetriedOnlyWhenListed
+=== RUN   TestTimeoutIsRetriedOnlyWhenListed/not_listed_->_single_attempt
+=== RUN   TestTimeoutIsRetriedOnlyWhenListed/listed_->_retried
+--- PASS: TestTimeoutIsRetriedOnlyWhenListed (0.03s)
+    --- PASS: TestTimeoutIsRetriedOnlyWhenListed/not_listed_->_single_attempt (0.01s)
+    --- PASS: TestTimeoutIsRetriedOnlyWhenListed/listed_->_retried (0.02s)
+=== RUN   TestInteractiveStepsAreNeverRetried
+--- PASS: TestInteractiveStepsAreNeverRetried (0.00s)
+=== RUN   TestInteractiveHasNoDeadlineUnlessSet
+--- PASS: TestInteractiveHasNoDeadlineUnlessSet (0.00s)
+=== RUN   TestExecutorTimeoutOverridesBatchSteps
+--- PASS: TestExecutorTimeoutOverridesBatchSteps (0.02s)
+=== RUN   TestNoRetryForcesOneAttempt
+--- PASS: TestNoRetryForcesOneAttempt (0.00s)
+=== RUN   TestCarryPrologueIsIdempotentAcrossAttempts
+--- PASS: TestCarryPrologueIsIdempotentAcrossAttempts (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	2.088s

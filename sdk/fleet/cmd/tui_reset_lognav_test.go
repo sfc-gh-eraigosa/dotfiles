@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
 // --- force reset to origin ------------------------------------------------
@@ -13,7 +16,11 @@ import (
 // state is committed to a rescue branch before the reset, the same guarantee
 // `--force` makes for a dirty clone.
 func TestForceResetPreservesTheHostsStateFirst(t *testing.T) {
-	s := updateScript("main", true)
+	repo := updplan.Default().Repos["dotfiles"]
+	s, err := updexec.SyncScript(repo, updplan.LocalSkip, true)
+	if err != nil {
+		t.Fatal(err)
+	}
 	reset := strings.Index(s, "git reset --hard")
 	rescue := strings.Index(s, "fleet-reset/")
 	if reset < 0 {
@@ -33,7 +40,11 @@ func TestForceResetPreservesTheHostsStateFirst(t *testing.T) {
 
 // Unset or "n" leaves the safe fast-forward path exactly as it was.
 func TestWithoutResetTheUpdateStaysFastForwardOnly(t *testing.T) {
-	s := updateScript("main", false)
+	repo := updplan.Default().Repos["dotfiles"]
+	s, err := updexec.SyncScript(repo, updplan.LocalSkip, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if strings.Contains(s, "reset --hard") {
 		t.Fatalf("an un-requested reset must never appear:\n%s", s)
 	}
@@ -61,8 +72,13 @@ func TestResetAnswerReachesTheHostAndIsWarnedAbout(t *testing.T) {
 	if !strings.Contains(view, "fleet-reset/") {
 		t.Fatalf("it must say where the host's state is saved:\n%s", view)
 	}
-	if !strings.Contains(unattendedUpdate(m2.updateRef, m2.ans), "reset --hard") {
-		t.Fatal("the reset answer did not reach the remote command")
+	repo := updplan.Default().Repos["dotfiles"]
+	s, err := updexec.SyncScript(repo, updplan.LocalSkip, m2.ans.forceReset())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(s, "reset --hard") {
+		t.Fatal("the reset answer did not reach the sync step's script")
 	}
 }
 

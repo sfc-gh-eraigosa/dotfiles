@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"testing"
@@ -56,6 +57,14 @@ func stampFor(sha string) string {
 
 // Wake tests never stream; an already-closed stream satisfies the seam.
 func (s *sleeperRunner) RunStream(string, string, ...string) (<-chan string, <-chan error) {
+	lines := make(chan string)
+	done := make(chan error, 1)
+	close(lines)
+	done <- nil
+	return lines, done
+}
+
+func (s *sleeperRunner) RunStreamCtx(context.Context, string, string, ...string) (<-chan string, <-chan error) {
 	lines := make(chan string)
 	done := make(chan error, 1)
 	close(lines)

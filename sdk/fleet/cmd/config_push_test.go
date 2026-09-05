@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -53,6 +54,12 @@ func (r failAtRunner) RunStdin(_, _ string, a ...string) (string, error) { retur
 func (r failAtRunner) RunVia(_, _ string, a ...string) (string, error)   { return r.run(a...) }
 func (r failAtRunner) RunInteractive(_ string, a ...string) error        { _, err := r.run(a...); return err }
 func (r failAtRunner) RunStream(string, string, ...string) (<-chan string, <-chan error) {
+	l, d := make(chan string), make(chan error, 1)
+	close(l)
+	d <- nil
+	return l, d
+}
+func (r failAtRunner) RunStreamCtx(context.Context, string, string, ...string) (<-chan string, <-chan error) {
 	l, d := make(chan string), make(chan error, 1)
 	close(l)
 	d <- nil

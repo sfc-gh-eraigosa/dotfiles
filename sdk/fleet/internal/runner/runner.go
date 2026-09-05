@@ -4,12 +4,19 @@ package runner
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
+
+// waitDelay bounds Exec.RunStreamCtx's Wait() after a kill (see its
+// comment). One second is generous for real ssh/install output to flush,
+// while still keeping a controller-enforced timeout tight.
+const waitDelay = 1 * time.Second
 
 // Runner executes a command on a remote host.
 type Runner interface {
@@ -34,6 +41,12 @@ type Runner interface {
 	// error on `done`. It exists because output captured only at completion
 	// tells the operator nothing while a ten-minute install is in flight.
 	RunStream(host, stdin string, argv ...string) (lines <-chan string, done <-chan error)
+	// RunStreamCtx is RunStream with a controller-enforced deadline: when ctx
+	// is done before the remote command finishes, the LOCAL ssh child is
+	// killed (not merely abandoned), so a per-attempt timeout in the
+	// executor actually bounds wall-clock time instead of leaking a process
+	// that outlives the caller's patience for it.
+	RunStreamCtx(ctx context.Context, host, stdin string, argv ...string) (lines <-chan string, done <-chan error)
 }
 
 // controlPersist is how long a master connection outlives the command that
@@ -143,6 +156,21 @@ func (e Exec) RunInteractive(host string, argv ...string) error {
 	return c.Run()
 }
 
+// RunInteractiveCtx is RunInteractive with a controller-enforced deadline:
+// when ctx is done before the interactive remote command exits, the LOCAL
+// ssh child is killed (not merely abandoned) — the same guarantee
+// RunStreamCtx gives the batch lane, extended to the lane that owns a real
+// terminal. Without it, a caller enforcing a deadline on an interactive step
+// (updexec.Console.Interactive) could only detect the timeout, never
+// actually stop the child holding the terminal (and, transitively, the
+// clone a later restore step needs).
+func (e Exec) RunInteractiveCtx(ctx context.Context, host string, argv ...string) error {
+	c := exec.CommandContext(ctx, "ssh", append(e.interactiveArgs(host), argv...)...)
+	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
+	c.WaitDelay = waitDelay
+	return c.Run()
+}
+
 // viaArgs builds the relay argv. Split out from RunVia so the ordering — which
 // decides WHICH machine the command lands on — is asserted by a unit test
 // instead of by opening a socket.
@@ -187,16 +215,33 @@ func (e Exec) RunStdin(host, stdin string, argv ...string) (string, error) {
 
 // RunStream pipes the remote command's combined output back line by line.
 // stdout and stderr share one pipe so the log reads in the order the remote
-// produced it — install.sh writes progress to both.
+// produced it — install.sh writes progress to both. It is RunStreamCtx with
+// a background (never-cancelled) context — no per-attempt deadline.
 func (e Exec) RunStream(host, stdin string, argv ...string) (<-chan string, <-chan error) {
+	return e.RunStreamCtx(context.Background(), host, stdin, argv...)
+}
+
+// RunStreamCtx is RunStream with ctx wired through exec.CommandContext: when
+// ctx's deadline (or cancellation) fires before the remote command exits,
+// the local ssh child is killed, not merely abandoned. This is what lets the
+// executor enforce a per-attempt timeout that actually bounds wall-clock
+// time.
+func (e Exec) RunStreamCtx(ctx context.Context, host, stdin string, argv ...string) (<-chan string, <-chan error) {
 	lines := make(chan string, 256)
 	done := make(chan error, 1)
 
 	base := e.baseArgs(host)
-	c := exec.Command("ssh", append(base, argv...)...)
+	c := exec.CommandContext(ctx, "ssh", append(base, argv...)...)
 	c.Stdin = strings.NewReader(stdin)
 	pr, pw := io.Pipe()
 	c.Stdout, c.Stderr = pw, pw
+	// WaitDelay bounds how long Wait() waits for output plumbing to drain
+	// after a kill: without it, a killed ssh whose remote (or, in tests, a
+	// stub) leaves a GRANDCHILD holding the stdout pipe open can make Wait
+	// block for as long as that orphan lives, silently defeating the whole
+	// point of a controller-enforced deadline. After the delay, Wait force-
+	// closes the pipes and returns instead.
+	c.WaitDelay = waitDelay
 
 	if err := c.Start(); err != nil {
 		close(lines)
@@ -233,6 +278,11 @@ type Fake struct {
 	Err   map[string]error
 	Stdin map[string]string
 	Via   map[string]string // host -> peer that relayed
+	// Block, when true for a host, makes RunStreamCtx simulate a remote
+	// command that never finishes on its own: it waits on ctx.Done() and
+	// sends ctx.Err() on done, so a test can drive the controller-timeout
+	// path deterministically without a real blocking process.
+	Block map[string]bool
 }
 
 func (f Fake) Run(host string, _ ...string) (string, error) {
@@ -249,6 +299,18 @@ func (f Fake) RunInteractive(host string, _ ...string) error {
 	return nil
 }
 
+// RunInteractiveCtx honours ctx like RunStreamCtx: when Block[host] is set
+// it waits on ctx.Done() and returns ctx.Err(), simulating an interactive
+// remote command a controller timeout has to kill; otherwise it behaves
+// exactly like RunInteractive.
+func (f Fake) RunInteractiveCtx(ctx context.Context, host string, argv ...string) error {
+	if f.Block[host] {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	return f.RunInteractive(host, argv...)
+}
+
 func (f Fake) RunVia(peer, host string, _ ...string) (string, error) {
 	if f.Via != nil {
 		f.Via[host] = peer
@@ -262,12 +324,29 @@ func (f Fake) RunVia(peer, host string, _ ...string) (string, error) {
 }
 
 // RunStream replays Out[host] as lines, so a test can drive the streaming
-// path deterministically with no process involved.
-func (f Fake) RunStream(host, stdin string, _ ...string) (<-chan string, <-chan error) {
+// path deterministically with no process involved. It delegates to
+// RunStreamCtx with a background context, matching Exec's RunStream/
+// RunStreamCtx relationship.
+func (f Fake) RunStream(host, stdin string, argv ...string) (<-chan string, <-chan error) {
+	return f.RunStreamCtx(context.Background(), host, stdin, argv...)
+}
+
+// RunStreamCtx replays Out[host] as lines, unless Block[host] is set — in
+// which case it waits on ctx.Done() and reports ctx.Err(), simulating a
+// remote command a controller timeout has to kill.
+func (f Fake) RunStreamCtx(ctx context.Context, host, stdin string, _ ...string) (<-chan string, <-chan error) {
 	lines := make(chan string, 64)
 	done := make(chan error, 1)
 	if f.Stdin != nil {
 		f.Stdin[host] = stdin
+	}
+	if f.Block[host] {
+		go func() {
+			defer close(lines)
+			<-ctx.Done()
+			done <- ctx.Err()
+		}()
+		return lines, done
 	}
 	go func() {
 		defer close(lines)

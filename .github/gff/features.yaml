@@ -312,3 +312,16 @@ sets:
       - path: keyboard.macos.enabled
         description: Master switch for macOS-style keyboard customization on every OS (Linux keyd + GNOME gsettings, Windows AutoHotkey + Copilot-key remap). Set false to leave every keyboard stock. On by default — see the "macOS-Style Keyboard" section of README.md.
         boolDefault: true
+
+  - area: fleet
+    features:
+      - path: fleet.update.enabled
+        description: Lets `fleet update` read its step plan from fleet.yaml. Set false to pin the built-in dotfiles-only plan (fetch → ff → install.sh) regardless of any file. Fail-open - if gff is unavailable fleet behaves as enabled.
+        boolDefault: true
+      - path: fleet.update.config
+        description: Which fleet.yaml `fleet update` reads when --file is not given. `home` = $XDG_CONFIG_HOME/fleet/fleet.yaml; `repo` = opt/etc/fleet/fleet.yaml inside the local dotfiles clone (a tracked team plan).
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: home, description: "~/.config/fleet/fleet.yaml (XDG config dir)", stringValue: home, selected: true}
+            - {id: repo, description: "<dotfiles clone>/opt/etc/fleet/fleet.yaml", stringValue: repo}

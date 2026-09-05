@@ -1,0 +1,37 @@
+# opt/etc/fleet/fleet.yaml — the TRACKED team update plan for `fleet update`.
+#
+# fleet reads this file when the gff flag selects the repo location:
+#     gff set fleet.update.config repo
+# (the default, `home`, reads ~/.config/fleet/fleet.yaml instead; `--file PATH`
+# overrides both; `gff set fleet.update.enabled false` pins the built-in plan).
+# It is resolved as <--repo>/opt/etc/fleet/fleet.yaml — the local dotfiles clone,
+# never the cwd — and must be owned by you and not group/world-writable.
+# git does not store the group-write bit, so a clone made under umask 002 gets
+# 664 and fleet refuses it: `chmod g-w opt/etc/fleet/fleet.yaml` once, in your clone.
+#
+# The content below is exactly `fleet update init --print` (updplan.DefaultYAML):
+# today's fetch → ff-only → ./install.sh. Edit it into a real multi-repo plan;
+# schema and semantics: sdk/fleet/README.md, "fleet update".
+
+# fleet.yaml — the fleet-update plan.
+# With no repos/steps overridden this is byte-for-byte today's `fleet update`:
+# fetch+ff-only dotfiles under ~/git, then re-run ./install.sh interactively.
+version: 1
+update:
+  # root: where relative repo paths resolve (repos.<name>.path defaults to <name>).
+  root: ~/git
+  repos:
+    dotfiles:
+      path: dotfiles
+      branches: [main]
+      # local: skip|rescue|carry (default skip); restore: true|false (default true)
+  steps:
+    - id: dotfiles.sync
+      kind: sync
+      repo: dotfiles
+    - id: dotfiles.install
+      kind: run
+      repo: dotfiles
+      run: ./install.sh
+      interactive: true
+      needs: [dotfiles.sync]

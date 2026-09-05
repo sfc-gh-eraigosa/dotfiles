@@ -1,0 +1,34 @@
+# 2026-09-04T15:50:11Z task 12
+$ gofmt -l internal/updexec/
+$ go vet ./...
+$ go test -race ./internal/updexec/... -run TestUpdate|MissingClone|InProgress|ResetMode|UnexpectedPrecheck|CLILocal|ResetIsIncompatible -v
+=== RUN   TestUpdateSkipsDirtyCloneByDefault
+--- PASS: TestUpdateSkipsDirtyCloneByDefault (0.00s)
+=== RUN   TestUpdateProceedsOnCleanClone
+--- PASS: TestUpdateProceedsOnCleanClone (0.00s)
+=== RUN   TestUpdateSurfacesProbeFailure
+--- PASS: TestUpdateSurfacesProbeFailure (0.00s)
+=== RUN   TestMissingCloneWithURLClones
+--- PASS: TestMissingCloneWithURLClones (0.00s)
+=== RUN   TestMissingCloneWithoutURLFails
+--- PASS: TestMissingCloneWithoutURLFails (0.00s)
+=== RUN   TestInProgressMergeIsSkippedUnderEveryPolicy
+=== RUN   TestInProgressMergeIsSkippedUnderEveryPolicy/skip
+=== RUN   TestInProgressMergeIsSkippedUnderEveryPolicy/rescue
+=== RUN   TestInProgressMergeIsSkippedUnderEveryPolicy/carry
+--- PASS: TestInProgressMergeIsSkippedUnderEveryPolicy (0.00s)
+    --- PASS: TestInProgressMergeIsSkippedUnderEveryPolicy/skip (0.00s)
+    --- PASS: TestInProgressMergeIsSkippedUnderEveryPolicy/rescue (0.00s)
+    --- PASS: TestInProgressMergeIsSkippedUnderEveryPolicy/carry (0.00s)
+=== RUN   TestResetModeUsesResetScript
+--- PASS: TestResetModeUsesResetScript (0.00s)
+=== RUN   TestUnexpectedPrecheckOutputFails
+--- PASS: TestUnexpectedPrecheckOutputFails (0.00s)
+=== RUN   TestCLILocalOverridesEveryRepoPolicy
+--- PASS: TestCLILocalOverridesEveryRepoPolicy (0.00s)
+=== RUN   TestResetIsIncompatibleWithCarry
+--- PASS: TestResetIsIncompatibleWithCarry (0.00s)
+=== RUN   TestUpdateMakesExactlyOneNetworkCall
+--- PASS: TestUpdateMakesExactlyOneNetworkCall (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	1.021s
