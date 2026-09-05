@@ -5,7 +5,7 @@
 - **Slug:** `sdk-tui`
 - **Date:** 2026-09-05
 - **Status:** Approved
-- **Relates to:** spec [`../specs/sdk-tui.md`](../specs/sdk-tui.md) · design [`../designs/sdk-tui.md`](../designs/sdk-tui.md) · guide `sdk/libs/tui/GUIDE.md` · consumer plan [`./gff-tui-vim.md`](./gff-tui-vim.md) · feature `gss feature sdk-tui`
+- **Relates to:** spec [`../specs/sdk-tui.md`](../specs/sdk-tui.md) · design [`../designs/sdk-tui.md`](../designs/sdk-tui.md) · guide `sdk/libs/tui/GUIDE.md` · consumer plan [`./gff-tui-vim.md`](./gff-tui-vim.md) · issue #283 · feature `gss feature sdk-tui`
 
 **Goal:** Ship `sdk/libs/tui` — `keymap`, `nav`, `prompt`, `search`, `cmdline`, `overlay` — as tested, pure, bubbletea-only packages, plus a composition example, so `gff-tui-vim` can build on a frozen API.
 

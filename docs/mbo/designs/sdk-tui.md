@@ -3,7 +3,7 @@
 - **Slug:** `sdk-tui`
 - **Date:** 2026-09-05
 - **Status:** Approved (in-chat 2026-09-05)
-- **Relates to:** consumer objective `gff-tui-vim` (#281, PR #280) · fleet TUI (spec `../specs/fleet-tui.md`, code in `sdk/fleet/cmd/tui_*.go`) · gsl-ultra config studio (`../specs/gsl-ultra.md` F16) · `sdk/libs` contract `sdk/libs/AGENTS.md`
+- **Relates to:** issue #283 · consumer objective `gff-tui-vim` (#281, PR #280) · fleet TUI (spec `../specs/fleet-tui.md`, code in `sdk/fleet/cmd/tui_*.go`) · gsl-ultra config studio (`../specs/gsl-ultra.md` F16) · `sdk/libs` contract `sdk/libs/AGENTS.md`
 - **Author(s):** Edward Raigosa (owner) with Claude
 
 ## 1. Problem / context

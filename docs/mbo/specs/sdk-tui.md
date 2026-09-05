@@ -3,7 +3,7 @@
 - **Slug:** `sdk-tui`
 - **Date:** 2026-09-05
 - **Status:** Approved
-- **Relates to:** design `../designs/sdk-tui.md` · guide `sdk/libs/tui/GUIDE.md` · consumer `gff-tui-vim` (#281 / #280) · fleet TUI code (`sdk/fleet/cmd/tui_*.go`)
+- **Relates to:** issue #283 · design `../designs/sdk-tui.md` · guide `sdk/libs/tui/GUIDE.md` · consumer `gff-tui-vim` (#281 / #280) · fleet TUI code (`sdk/fleet/cmd/tui_*.go`)
 
 ## 1. Goal
 
