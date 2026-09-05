@@ -37,10 +37,11 @@ func (w captureLineWriter) Line(s string)       { w.c.WriteLine(s) }
 func (w captureLineWriter) Close(footer string) { _ = w.c.Close(footer) }
 
 // newRunLogOutput is the Output every live (non-dry-run) host runs through.
-// host is unused today (the capture is keyed by Subject inside Open, not at
-// construction) but kept as a parameter so a future per-host directory
-// override has somewhere to land.
-func newRunLogOutput(string) updexec.Output {
+// It carries no per-host state — Open is keyed by the host/header it is
+// called with each time — so one value is built ONCE and reused across
+// every host in the run, rather than reconstructed (with an unused host
+// parameter) per host.
+func newRunLogOutput() updexec.Output {
 	return captureOutput{dir: fleetLogDir()}
 }
 

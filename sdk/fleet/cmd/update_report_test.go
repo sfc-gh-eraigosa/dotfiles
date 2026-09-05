@@ -25,7 +25,7 @@ func TestReportNamesEveryStepAndTheLog(t *testing.T) {
 	rep := updexec.HostReport{
 		Host: "alpha", Plan: plan.Source, Output: "/tmp/alpha.log",
 		Results: []updexec.Result{
-			{Step: "dotfiles.sync", Kind: updplan.KindSync, Status: updexec.OK, Exit: 0, Attempts: 2, Duration: 3 * time.Second},
+			{Step: "dotfiles.sync", Kind: updplan.KindSync, Status: updexec.OK, Exit: 0, Attempts: 2, MaxAttempts: 3, Duration: 3 * time.Second},
 			{Step: "dotfiles.install", Kind: updplan.KindRun, Status: updexec.Failed, Exit: 1, Reason: "boom", TimedOut: true, Duration: time.Second},
 		},
 	}
@@ -124,5 +124,44 @@ func TestJSONReportIsMachineReadable(t *testing.T) {
 	}
 	if out.Plan != "src" || len(out.Reports) != 1 || out.Reports[0].Host != "a" {
 		t.Fatalf("got %+v", out)
+	}
+}
+
+// TestReportNeverShowsAttemptOneOfOneForSingleAttemptSteps pins that
+// Result.MaxAttempts (set by the executor at every runWithRetry return
+// point, replacing the old totalAttemptsFor id-suffix guess) suppresses the
+// "[attempt N/M]" marker entirely for a step that only ever gets one
+// attempt — a "1/1" marker is noise, not information.
+func TestReportNeverShowsAttemptOneOfOneForSingleAttemptSteps(t *testing.T) {
+	plan := updplan.Plan{Steps: []updplan.Step{{ID: "s", Kind: updplan.KindRun}}}
+	rep := updexec.HostReport{
+		Host: "alpha",
+		Results: []updexec.Result{
+			{Step: "s", Kind: updplan.KindRun, Status: updexec.OK, Exit: 0, Attempts: 1, MaxAttempts: 1},
+		},
+	}
+	var buf strings.Builder
+	printHostReport(&buf, plan, rep)
+	if strings.Contains(buf.String(), "attempt") {
+		t.Fatalf("a single-attempt step must never show an attempt marker:\n%s", buf.String())
+	}
+}
+
+// TestReportShowsAttemptForARestoreStep pins that a synthesized
+// "<repo>.restore" step's report line reads "attempt N/3" straight from
+// Result.MaxAttempts, without cmd guessing the budget from the ".restore"
+// id suffix (the deleted totalAttemptsFor).
+func TestReportShowsAttemptForARestoreStep(t *testing.T) {
+	plan := updplan.Plan{} // the restore step is synthesized, not in the plan
+	rep := updexec.HostReport{
+		Host: "alpha",
+		Results: []updexec.Result{
+			{Step: "dotfiles.restore", Kind: updplan.KindSync, Status: updexec.OK, Exit: 0, Attempts: 2, MaxAttempts: 3},
+		},
+	}
+	var buf strings.Builder
+	printHostReport(&buf, plan, rep)
+	if !strings.Contains(buf.String(), "attempt 2/3") {
+		t.Fatalf("restore step report missing %q:\n%s", "attempt 2/3", buf.String())
 	}
 }

@@ -121,3 +121,23 @@ func TestCLILaneCarriesNoStdinAtAll(t *testing.T) {
 		t.Fatal("the CLI lane must never supply Stdin — it has no credential to send")
 	}
 }
+
+// TestNewRunLogOutputIsReusableAcrossHosts pins that a single newRunLogOutput()
+// value carries no per-host state and can be shared across every host's
+// RunHost call in one run: two Open calls against the SAME Output value,
+// for two different hosts, must produce two independent captures rather
+// than colliding or requiring a fresh Output per host.
+func TestNewRunLogOutputIsReusableAcrossHosts(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", dir)
+
+	out := newRunLogOutput()
+	w1, path1 := out.Open("alpha", "header for alpha")
+	w1.Close("finished")
+	w2, path2 := out.Open("beta", "header for beta")
+	w2.Close("finished")
+
+	if path1 == "" || path2 == "" || path1 == path2 {
+		t.Fatalf("expected two distinct capture paths, got %q and %q", path1, path2)
+	}
+}

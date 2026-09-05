@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"syscall"
 
@@ -31,6 +33,12 @@ var checkOwner = func(fi os.FileInfo) (uid int, ok bool) {
 //
 // repoDir is the --repo checkout, passed to featflag.Resolve for the "repo"
 // config location and used nowhere else.
+//
+// The resolved path is stat'd exactly ONCE, inside readPlanFile: this used
+// to stat here first to decide the missing-file fallback, then readPlanFile
+// stat'd again to check ownership/mode — the SAME file, twice, on every
+// call. errors.Is(err, fs.ErrNotExist) recovers the same "file is missing"
+// fact from readPlanFile's own (wrapped) stat error instead.
 func loadPlan(file string, src featflag.Source, repoDir string) (updplan.Plan, error) {
 	if file != "" {
 		return readPlanFile(file, "")
@@ -45,18 +53,23 @@ func loadPlan(file string, src featflag.Source, repoDir string) (updplan.Plan, e
 
 	path := settings.ConfigPath
 	if path == "" {
-		path = defaultPlanPath()
-	}
-	if path == "" {
-		return updplan.Plan{}, fmt.Errorf("loadPlan: could not resolve a config directory for the update plan")
+		var err error
+		path, err = fleetConfigFile("fleet.yaml")
+		if err != nil {
+			return updplan.Plan{}, fmt.Errorf("loadPlan: %w", err)
+		}
 	}
 
-	if _, err := os.Stat(path); err != nil {
-		p := updplan.Default()
-		p.Source = fmt.Sprintf("built-in default (no %s)", path)
-		return p, nil
+	p, err := readPlanFile(path, settings.Note)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			p := updplan.Default()
+			p.Source = fmt.Sprintf("built-in default (no %s)", path)
+			return p, nil
+		}
+		return updplan.Plan{}, err
 	}
-	return readPlanFile(path, settings.Note)
+	return p, nil
 }
 
 // readPlanFile stats, validates ownership/mode, reads, and parses one plan

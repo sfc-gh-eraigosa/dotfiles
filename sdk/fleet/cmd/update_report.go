@@ -42,25 +42,14 @@ func stepStatusLabel(s updexec.Status) string {
 	}
 }
 
-// totalAttemptsFor is the retry budget a step's report line compares its
-// Attempts against. The synthesized "<repo>.restore" step is not itself in
-// the plan, so its fixed policy (3 attempts) is hardcoded here to match
-// exec.go's runRestore.
-func totalAttemptsFor(p updplan.Plan, stepID string) int {
-	if strings.HasSuffix(stepID, ".restore") {
-		return 3
-	}
-	if st, ok := p.Step(stepID); ok {
-		if st.Retry.Attempts >= 1 {
-			return st.Retry.Attempts
-		}
-	}
-	return 1
-}
-
 // printHostReport renders one host's report per spec F8: "=== host ===" then
-// one line per step, then "log: <path>" when the run left a capture.
+// one line per step, then "log: <path>" when the run left a capture. p is
+// no longer consulted for the retry budget — Result.MaxAttempts carries it
+// directly, set by the executor at every return point of runWithRetry (and
+// runRestore's fixed policy), so this no longer guesses it from a
+// ".restore" id suffix plus a hardcoded 3.
 func printHostReport(w io.Writer, p updplan.Plan, rep updexec.HostReport) {
+	_ = p // kept for call-site/API stability; no longer used for the retry budget
 	fmt.Fprintf(w, "=== %s ===\n", rep.Host)
 	for _, res := range rep.Results {
 		var parts []string
@@ -68,7 +57,7 @@ func printHostReport(w io.Writer, p updplan.Plan, rep updexec.HostReport) {
 		if res.Status == updexec.OK || res.Status == updexec.Failed {
 			parts = append(parts, fmt.Sprintf("[exit %d]", res.Exit))
 		}
-		if total := totalAttemptsFor(p, res.Step); total > 1 || res.Attempts > 1 {
+		if total := res.MaxAttempts; total > 1 || res.Attempts > 1 {
 			if total < res.Attempts {
 				total = res.Attempts
 			}
@@ -98,67 +87,20 @@ func printHostReport(w io.Writer, p updplan.Plan, rep updexec.HostReport) {
 // anything.
 func printDryRun(w io.Writer, p updplan.Plan, local updplan.Local, reset bool) error {
 	fmt.Fprintf(w, "plan: %s\n", p.Source)
+	// cmd carries no script-selection logic of its own: Executor.Scripts is
+	// the SAME builder that runSync/runRun/runGhAuth call, so dry-run can
+	// no longer drift from what a live run would actually send (the leaf D
+	// review finding: this used to re-implement the per-kind selection and
+	// disagreed with it).
+	ex := updexec.Executor{Local: local, Reset: reset}
 	for _, st := range p.Order() {
 		fmt.Fprintf(w, "=== %s (%s) ===\n", st.ID, st.Kind)
-		switch st.Kind {
-		case updplan.KindSync:
-			repo, ok := p.RepoOf(st)
-			if !ok {
-				return fmt.Errorf("dry-run: step %q: unknown repo %q", st.ID, st.Repo)
-			}
-			eff := local
-			if eff == "" {
-				eff = repo.Local
-			}
-			pc, err := updexec.PrecheckScript(repo)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintf(w, "  precheck: %s\n", pc)
-			if repo.URL != "" {
-				cs, err := updexec.CloneScript(repo)
-				if err != nil {
-					return err
-				}
-				fmt.Fprintf(w, "  clone (if missing): %s\n", cs)
-			}
-			if eff == updplan.LocalRescue {
-				rs, err := updexec.RescueScript(repo)
-				if err != nil {
-					return err
-				}
-				fmt.Fprintf(w, "  rescue (if dirty): %s\n", rs)
-			}
-			ss, err := updexec.SyncScript(repo, eff, reset)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintf(w, "  sync (local=%s): %s\n", eff, ss)
-		case updplan.KindRun:
-			var repoPtr *updplan.Repo
-			if repo, ok := p.RepoOf(st); ok {
-				repoPtr = &repo
-			}
-			rs, err := updexec.RunScript(st, repoPtr)
-			if err != nil {
-				return err
-			}
-			label := "run"
-			if st.Interactive {
-				label = "run (interactive)"
-			}
-			fmt.Fprintf(w, "  %s: %s\n", label, rs)
-		case updplan.KindGhAuth:
-			cs, err := updexec.GhAuthCheck(st.Hostname)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintf(w, "  check: %s\n", cs)
-			ls, err := updexec.GhAuthLogin(st.Hostname)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintf(w, "  login (if check fails, interactive): %s\n", ls)
+		scripts, err := ex.Scripts(p, st)
+		if err != nil {
+			return err
+		}
+		for _, ls := range scripts {
+			fmt.Fprintf(w, "  %s: %s\n", ls.Label, ls.Script)
 		}
 		fmt.Fprintf(w, "  timeout=%s retry=%d on=%v\n", st.Timeout, st.Retry.Attempts, st.Retry.On)
 	}

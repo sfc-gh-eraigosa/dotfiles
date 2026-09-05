@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 )
@@ -43,23 +44,35 @@ func fleetConfigDir() string {
 	return filepath.Join(dir, "fleet")
 }
 
-// answersPath is where the preferences live.
-func answersPath() string {
+// fleetConfigFile resolves the path for one file under fleet's own config
+// directory (fleetConfigDir), naming why it could not when the config
+// directory itself cannot be resolved — the "no config dir" guard that used
+// to be copy-pasted at every one of this function's callers.
+func fleetConfigFile(name string) (string, error) {
 	dir := fleetConfigDir()
 	if dir == "" {
+		return "", errors.New("could not resolve a config directory")
+	}
+	return filepath.Join(dir, name), nil
+}
+
+// answersPath is where the preferences live.
+func answersPath() string {
+	p, err := fleetConfigFile("answers.json")
+	if err != nil {
 		return ""
 	}
-	return filepath.Join(dir, "answers.json")
+	return p
 }
 
 // defaultPlanPath is where the update plan lives when neither --file nor gff's
 // fleet.update.config selects a location.
 func defaultPlanPath() string {
-	dir := fleetConfigDir()
-	if dir == "" {
+	p, err := fleetConfigFile("fleet.yaml")
+	if err != nil {
 		return ""
 	}
-	return filepath.Join(dir, "fleet.yaml")
+	return p
 }
 
 // saveAnswers writes the non-secret preferences, owner-only. The file reveals

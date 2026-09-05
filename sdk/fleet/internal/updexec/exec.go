@@ -34,7 +34,12 @@ type Result struct {
 	Reason   string
 	Notes    []string // remote lines prefixed "fleet: ", prefix stripped
 	Attempts int
-	TimedOut bool
+	// MaxAttempts is the retry budget Attempts is measured against — set at
+	// every return point of runWithRetry (and the synthesized restore's
+	// fixed 3-attempt policy in runRestore), so a report line can show
+	// "attempt 2/3" without cmd guessing the budget from an id suffix.
+	MaxAttempts int
+	TimedOut    bool
 }
 
 // HostReport is one host's run of the whole plan.
@@ -160,21 +165,29 @@ type interactiveCtxRunner interface {
 	RunInteractiveCtx(ctx context.Context, host string, argv ...string) error
 }
 
-// Interactive hands the terminal to the runner. When st has no deadline it
-// always runs unbounded via runner.RunInteractive.
+// Interactive hands the terminal to the runner, preferring
+// interactiveCtxRunner whenever the runner implements it — it enforces
+// ctx's deadline (if any) by actually killing the child (RunInteractiveCtx,
+// built on exec.CommandContext), rather than merely abandoning it. A
+// context with no deadline behaves identically either way: an
+// exec.CommandContext built from an undeadlined ctx never cancels, so
+// preferring the capability costs nothing when there is no deadline to
+// enforce.
 //
-// When st DOES have a deadline, Interactive never races a goroutine calling
-// RunInteractive against a bare time.After: on expiry that used to return
-// context.DeadlineExceeded to the caller while the goroutine — and the
-// `ssh -t` child it owns — kept running, holding the terminal and the
-// clone open for RunHost's restore steps to collide with. Instead: if the
-// runner implements interactiveCtxRunner, the deadline is enforced by
-// actually killing the child (RunInteractiveCtx, built on
-// exec.CommandContext). If it does not, the deadline cannot be honoured
-// safely, so the call runs UNBOUNDED rather than racing — a real terminal
-// session hitting this path with a runner that lacks the capability is
-// rare, and an honest "ran to completion" beats a dishonest "timed out"
-// that leaves the child alive.
+// If the runner does NOT implement interactiveCtxRunner, Interactive runs
+// UNBOUNDED — it never races a goroutine calling RunInteractive against a
+// bare time.After: on expiry that used to return context.DeadlineExceeded
+// to the caller while the goroutine — and the `ssh -t` child it owns —
+// kept running, holding the terminal and the clone open for RunHost's
+// restore steps to collide with. A real terminal session hitting this path
+// with a runner that lacks the capability is rare, and an honest "ran to
+// completion" beats a dishonest "timed out" that leaves the child alive.
+//
+// This used to ALSO gate on ctx.Deadline() before even checking the
+// capability — redundant: a runner asserting interactiveCtxRunner already
+// handles the no-deadline case correctly (see above), so the extra branch
+// only ever chose the SAME method the assertion would have, at the cost of
+// a second, easy-to-drift place this decision lived.
 func (c Console) Interactive(ctx context.Context, host string, st updplan.Step, script string) error {
 	script = c.runScript(st, script)
 	if _, ok := ctx.Deadline(); !ok {
@@ -476,6 +489,101 @@ func (e Executor) runRestore(w LineWriter, host string, repo updplan.Repo, pi *r
 		updplan.Expect{Exit: []int{0}}, call)
 }
 
+// LabeledScript is one script Executor.RunHost might send for a step,
+// labelled for a human reader (printDryRun's output). A script whose
+// sending depends on live remote state Scripts cannot observe (e.g. a
+// clone, sent only when the precheck reports the repo missing) has
+// Optional set.
+type LabeledScript struct {
+	Label    string
+	Script   string
+	Optional bool
+}
+
+// Scripts returns every script Executor.RunHost might send for st, in the
+// same order and built with the SAME builder calls runSync/runRun/
+// runGhAuth use — a caller (printDryRun) that only wants to know what WOULD
+// be sent no longer re-implements the per-kind script selection logic
+// separately from the live path, which is how printDryRun and runSync
+// previously drifted (printDryRun showed a clone unconditionally whenever a
+// repo had a url, independent of e.Local/e.Reset). It is pure: it shares
+// e's Local/Reset overrides, but never touches a network, so a caller
+// cannot learn from it whether a sync step's precheck would actually
+// report the repo missing or dirty — that is exactly why the
+// state-dependent entries are marked Optional rather than omitted or
+// asserted unconditionally.
+func (e Executor) Scripts(p updplan.Plan, st updplan.Step) ([]LabeledScript, error) {
+	switch st.Kind {
+	case updplan.KindSync:
+		repo, ok := p.RepoOf(st)
+		if !ok {
+			return nil, fmt.Errorf("updexec: step %q: unknown repo %q", st.ID, st.Repo)
+		}
+		local := repo.Local
+		if e.Local != "" {
+			local = e.Local
+		}
+		var out []LabeledScript
+		pc, err := PrecheckScript(repo)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, LabeledScript{Label: "precheck", Script: pc})
+		if repo.URL != "" {
+			cs, err := CloneScript(repo)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, LabeledScript{Label: "clone (if missing)", Script: cs, Optional: true})
+		}
+		if local == updplan.LocalRescue {
+			rs, err := RescueScript(repo)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, LabeledScript{Label: "rescue (if dirty)", Script: rs, Optional: true})
+		}
+		ss, err := SyncScript(repo, local, e.Reset)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, LabeledScript{Label: fmt.Sprintf("sync (local=%s)", local), Script: ss})
+		return out, nil
+
+	case updplan.KindRun:
+		var repoPtr *updplan.Repo
+		if repo, ok := p.RepoOf(st); ok {
+			repoPtr = &repo
+		}
+		rs, err := RunScript(st, repoPtr)
+		if err != nil {
+			return nil, err
+		}
+		label := "run"
+		if st.Interactive {
+			label = "run (interactive)"
+		}
+		return []LabeledScript{{Label: label, Script: rs}}, nil
+
+	case updplan.KindGhAuth:
+		cs, err := GhAuthCheck(st.Hostname)
+		if err != nil {
+			return nil, err
+		}
+		ls, err := GhAuthLogin(st.Hostname)
+		if err != nil {
+			return nil, err
+		}
+		return []LabeledScript{
+			{Label: "check", Script: cs},
+			{Label: "login (if check fails, interactive)", Script: ls, Optional: true},
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("updexec: step %q: unknown kind %q", st.ID, st.Kind)
+	}
+}
+
 // runStepWithRetry dispatches a plan step to its kind-specific handler.
 func (e Executor) runStepWithRetry(w LineWriter, host string, st updplan.Step, p updplan.Plan) Result {
 	switch st.Kind {
@@ -616,7 +724,7 @@ func (e Executor) runGhAuth(w LineWriter, host string, st updplan.Step) Result {
 	loginScript, err := GhAuthLogin(st.Hostname)
 	if err != nil {
 		return Result{Step: st.ID, Kind: st.Kind, Status: Failed, Reason: err.Error(),
-			Duration: e.now().Sub(start), Attempts: res.Attempts}
+			Duration: e.now().Sub(start), Attempts: res.Attempts, MaxAttempts: res.MaxAttempts}
 	}
 	if err := e.IO.Interactive(context.Background(), host, st, loginScript); err != nil {
 		reason := err.Error()
@@ -624,7 +732,7 @@ func (e Executor) runGhAuth(w LineWriter, host string, st updplan.Step) Result {
 			reason = "needs a terminal"
 		}
 		return Result{Step: st.ID, Kind: st.Kind, Status: Failed, Reason: reason,
-			Duration: e.now().Sub(start), Attempts: res.Attempts}
+			Duration: e.now().Sub(start), Attempts: res.Attempts, MaxAttempts: res.MaxAttempts}
 	}
 
 	out, err2 := checkOnce(context.Background())
@@ -632,11 +740,11 @@ func (e Executor) runGhAuth(w LineWriter, host string, st updplan.Step) Result {
 	notes := parseNotes(out)
 	if err2 == nil && containsInt(st.Expect.Exit, exit) {
 		return Result{Step: st.ID, Kind: st.Kind, Status: OK, Exit: exit,
-			Duration: e.now().Sub(start), Attempts: res.Attempts + 1, Notes: notes}
+			Duration: e.now().Sub(start), Attempts: res.Attempts + 1, MaxAttempts: res.MaxAttempts, Notes: notes}
 	}
 	return Result{Step: st.ID, Kind: st.Kind, Status: Failed, Exit: exit,
 		Reason: reasonFor(err2, false, exit, 0), Duration: e.now().Sub(start),
-		Attempts: res.Attempts + 1, Notes: notes}
+		Attempts: res.Attempts + 1, MaxAttempts: res.MaxAttempts, Notes: notes}
 }
 
 // runWithRetry runs call under Executor's clock/sleep/rand, retrying per
@@ -705,13 +813,13 @@ func (e Executor) runWithRetry(
 		var sk errSkip
 		if errors.As(callErr, &sk) {
 			return Result{Step: id, Kind: kind, Status: Skipped, Reason: sk.reason,
-				Duration: e.now().Sub(start), Attempts: attempts, Notes: allNotes}
+				Duration: e.now().Sub(start), Attempts: attempts, MaxAttempts: maxAttempts, Notes: allNotes}
 		}
 
 		exit := exitCode(callErr)
 		if !timedOut && (callErr == nil || isExitError(callErr) || errors.Is(callErr, ErrTransport)) && containsInt(expect.Exit, exit) {
 			return Result{Step: id, Kind: kind, Status: OK, Exit: exit,
-				Duration: e.now().Sub(start), Attempts: attempts, Notes: allNotes}
+				Duration: e.now().Sub(start), Attempts: attempts, MaxAttempts: maxAttempts, Notes: allNotes}
 		}
 
 		class := classify(callErr, timedOut)
@@ -738,7 +846,7 @@ func (e Executor) runWithRetry(
 	return Result{
 		Step: id, Kind: kind, Status: Failed, Exit: exit,
 		Reason: reason, Duration: e.now().Sub(start),
-		Attempts: attempts, TimedOut: timedOut, Notes: notes,
+		Attempts: attempts, MaxAttempts: maxAttempts, TimedOut: timedOut, Notes: notes,
 	}
 }
 

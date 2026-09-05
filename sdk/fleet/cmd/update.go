@@ -98,9 +98,13 @@ func runUpdateWith(out io.Writer, hosts []string, r runner.Runner) error {
 		return printDryRun(out, plan, local, flagUpdateReset)
 	}
 
+	// One capture value, reused across every host: it carries no per-host
+	// state (Open is keyed by the host/header arguments it is called with
+	// each time), so reconstructing it per host was pure churn.
+	capture := newRunLogOutput()
 	reports := make([]updexec.HostReport, 0, len(hosts))
 	for _, host := range hosts {
-		ex := buildExecutor(r, newRunLogOutput(host), local)
+		ex := buildExecutor(r, capture, local)
 		reports = append(reports, ex.RunHost(host, plan))
 	}
 
