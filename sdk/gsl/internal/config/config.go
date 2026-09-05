@@ -94,6 +94,11 @@ type Config struct {
 	DateFormat string `json:"date_format"`
 	// Style selects the powerline/separator style ("powerline", "plain").
 	Style string `json:"style"`
+	// Links selects the hyperlink affordance: "underline" (default; OSC 8 +
+	// SGR underline on exactly the linked text), "plain" (OSC 8 only), or
+	// "off" (no links at all). Which fields are linked is governed by the
+	// gsl.links.* gff flags, not by this key. See EffectiveLinks.
+	Links string `json:"links,omitempty"`
 	// Styles holds user-defined style overrides keyed by segment type or
 	// element name. Kept as map[string]any for CP1; CP2 will type it further.
 	Styles map[string]any `json:"styles,omitempty"`
@@ -111,6 +116,22 @@ type Config struct {
 
 // DefaultFallbackColumns is the assumed terminal width when nothing knows it.
 const DefaultFallbackColumns = 120
+
+// Link affordance modes for Config.Links.
+const (
+	LinksUnderline = "underline"
+	LinksPlain     = "plain"
+	LinksOff       = "off"
+)
+
+// EffectiveLinks normalizes Links: "" or an unknown value means "underline".
+func (c Config) EffectiveLinks() string {
+	switch c.Links {
+	case LinksPlain, LinksOff:
+		return c.Links
+	}
+	return LinksUnderline
+}
 
 // Default returns a fully usable Config with all 4 segments enabled in the
 // canonical order: dirgit, repo, ai, time.

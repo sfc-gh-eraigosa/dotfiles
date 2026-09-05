@@ -50,6 +50,8 @@ func printConfigKey(cfg config.Config, key string) error {
 		fmt.Println(cfg.TimeFormat)
 	case "date_format":
 		fmt.Println(cfg.DateFormat)
+	case "links":
+		fmt.Println(cfg.EffectiveLinks())
 	case "segments":
 		data, _ := json.MarshalIndent(cfg.Segments, "", "  ")
 		fmt.Println(string(data))
@@ -81,6 +83,13 @@ var configSetCmd = &cobra.Command{
 			cfg.TimeFormat = value
 		case "date_format":
 			cfg.DateFormat = value
+		case "links":
+			switch value {
+			case config.LinksUnderline, config.LinksPlain, config.LinksOff:
+				cfg.Links = value
+			default:
+				return fmt.Errorf("gsl config set links: want underline|plain|off, got %q", value)
+			}
 		default:
 			return fmt.Errorf("gsl config set: unknown key %q", key)
 		}

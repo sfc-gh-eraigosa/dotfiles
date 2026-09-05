@@ -198,6 +198,7 @@ func (discardWriter) Write(p []byte) (int, error) { return len(p), nil }
 func (m Model) renderLine() string {
 	cfg := m.buildConfig()
 	st := style.Resolve(discardWriter{}, m.currentStyleName(), nil, false)
+	st.Links = cfg.EffectiveLinks()
 	deps := m.buildDeps()
 	segs := render.BuildSegments(cfg, deps)
 
@@ -253,6 +254,7 @@ func (m Model) buildDeps() render.Deps {
 			MCP:          &mcpfake.Runner{Default: mcpfake.Response{Stdout: []byte("")}},
 			MCPOpts:      mcp.ActiveCountOptions{},
 			Clock:        func() time.Time { return now },
+			Links:        previewLinks,
 		}
 	default: // FixtureClean
 		gitResponses = CleanGitResponses()
@@ -266,8 +268,19 @@ func (m Model) buildDeps() render.Deps {
 			MCP:          &mcpfake.Runner{Default: mcpfake.Response{Stdout: []byte("")}},
 			MCPOpts:      mcp.ActiveCountOptions{},
 			Clock:        func() time.Time { return now },
+			Links:        previewLinks,
 		}
 	}
+}
+
+// previewLinks is the link policy the fixtures render with: every family on,
+// against an example repository, so the preview shows what a fully linked line
+// looks like (the underline affordance is visible; the targets are fixtures).
+var previewLinks = render.Links{
+	Repo: true, DirGit: true, AI: true, Time: true,
+	RepoURL:  "https://github.com/example/myproject",
+	UsageURL: render.DefaultClaudeUsageURL,
+	TimeURL:  render.DefaultTimeURL,
 }
 
 // RenderOnce renders a single status-line frame against the clean fixture,

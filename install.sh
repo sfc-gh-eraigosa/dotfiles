@@ -583,6 +583,10 @@ if [ "$gff_bootstrap_ok" = "true" ] && [ -x "${HOME}/opt/bin/gff" ]; then
   set -a
   eval "$(cd "${BASE_DIR}" && "${HOME}/opt/bin/gff" export --shell 2>/dev/null || true)"
   set +a
+  # Register this checkout's namespace so cross-repo consumers (gsl render, from
+  # ANY cwd) can resolve the flags. Fail-open: a failure only warns.
+  (cd "${BASE_DIR}" && "${HOME}/opt/bin/gff" install >/dev/null 2>&1) \
+    || echo "WARNING: gff install (namespace registration) failed; gsl link flags fail open (links stay on)."
 fi
 # Re-assert build-phase overrides: the gff export above can have overwritten the
 # GFF_* the later runtime gates (pyenv/rbenv/nvm) read.

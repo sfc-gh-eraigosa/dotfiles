@@ -302,3 +302,26 @@ sets:
       - path: keyboard.macos.enabled
         description: Master switch for macOS-style keyboard customization on every OS (Linux keyd + GNOME gsettings, Windows AutoHotkey + Copilot-key remap). Set false to leave every keyboard stock. On by default — see the "macOS-Style Keyboard" section of README.md.
         boolDefault: true
+
+  # gsl (Go Status Line) runtime flags — read by `gsl render` on every turn via
+  # the gff Go SDK (sdk/gsl/internal/flags). Fail-open: any resolution error
+  # (unregistered namespace, missing gff, slow answer) leaves the links ON, so a
+  # flag can only ever turn a link family OFF. The affordance (underline vs
+  # plain) is the `links` key in ~/.config/gsl/config.json, not a flag.
+  - area: gsl
+    features:
+      - path: gsl.links.enabled
+        description: Master switch for clickable (OSC 8) links on the gsl status line. false removes every link family below; `links` in ~/.config/gsl/config.json still chooses underline vs plain.
+        boolDefault: true
+      - path: gsl.links.repo
+        description: Repo links — the PR badge to its pull request, the feature/worker/branch label and the dirgit branch to the branch on GitHub, and the root/worktree glyph to the repository home.
+        boolDefault: true
+      - path: gsl.links.dirgit
+        description: Directory link — the dirgit directory name opens the working directory as a file:// URL (the file manager in VTE terminals).
+        boolDefault: true
+      - path: gsl.links.ai
+        description: Usage links — the model name, context %, and the 5h/7d rate fields open the host's usage page (Claude Code default claude.ai/settings/usage; the ai segment's `usage_url` option overrides, and is the only way to give Antigravity a target).
+        boolDefault: true
+      - path: gsl.links.time
+        description: Time link — the date/time opens a timezone page built from the time segment's `link_url` template (default https://time.is/{tz_city}; placeholders {tz} {tz_city} {iso_utc} {unix}).
+        boolDefault: true

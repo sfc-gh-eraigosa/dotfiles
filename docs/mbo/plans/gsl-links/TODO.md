@@ -66,18 +66,18 @@
 - [x] RUN-GREEN: `cd sdk/gsl && go test ./internal/flags/ -race && go build ./...` → **PASS**
 - [x] ALLOWLIST: `git status --short -- sdk/gsl/internal/flags`
 - [x] COMMIT: `feat(gsl): fail-open gff lookups for the link families`
-- [ ] LEDGER + CHECKPOINT
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** budget test (<100 ms with a 200 ms lookup) passes; build green.
 
 ### Task 5 — wiring  (plan Task 5)
 
-- [ ] RED: `TestEffectiveLinks`; `TestBuildLinks_*`; config get/set `links` round-trip + invalid value
-- [ ] RUN-RED: `cd sdk/gsl && go test ./internal/config/ ./cmd/ -run 'EffectiveLinks|BuildLinks|Links'` → **FAIL**
-- [ ] GREEN: `config.go`, `cmd/config.go`, `cmd/statusline.go` (`buildLinks`, flags goroutine, remote URL, `st.Links`), `preview/model.go` fixture, `features.yaml` `gsl` area, `install.sh` `gff install` line
-- [ ] RUN-GREEN: `cd sdk/gsl && go test ./... -race` → **PASS** (review any regenerated golden diff: only `]8;;`/`[4m`)
-- [ ] VERIFY: `gff lint`; `make lint-shell`; `make lint-portability`; `bash sdk/gsl/build.sh`; live `gsl status | cat -v | grep -c ']8;;'` ≥ 6 in a PR worktree; `gff set gsl.links.time false` → no `time.is`; `gff unset gsl.links.time`
-- [ ] COMMIT: `feat(gsl): links config key, gff-gated link policy, preview fixture, flag schema, install-time namespace registration`
+- [x] RED: `TestEffectiveLinks`; `TestBuildLinks_*`; config get/set `links` round-trip + invalid value
+- [x] RUN-RED: `cd sdk/gsl && go test ./internal/config/ ./cmd/ -run 'EffectiveLinks|BuildLinks|Links'` → **FAIL**
+- [x] GREEN: `config.go`, `cmd/config.go`, `cmd/statusline.go` (`buildLinks`, flags goroutine, remote URL, `st.Links`), `preview/model.go` fixture, `features.yaml` `gsl` area, `install.sh` `gff install` line
+- [x] RUN-GREEN: `cd sdk/gsl && go test ./... -race` → **PASS** (review any regenerated golden diff: only `]8;;`/`[4m`)
+- [x] VERIFY: `gff lint`; `make lint-shell`; `make lint-portability`; `bash sdk/gsl/build.sh`; live `gsl status | cat -v | grep -c ']8;;'` ≥ 6 in a PR worktree; `gff set gsl.links.time false` → no `time.is`; `gff unset gsl.links.time`
+- [x] COMMIT: `feat(gsl): links config key, gff-gated link policy, preview fixture, flag schema, install-time namespace registration`
 - [ ] LEDGER + CHECKPOINT
 
 **Done when:** all gates clean and the live toggle observed.
