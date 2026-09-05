@@ -15,3 +15,12 @@ Gesture: Ctrl+click on the underlined field in the status bar.
 
 User's answer to the check prompt: "All targets open correctly".
 Chain proven end to end: gsl → Claude Code status line → herdr (ghostty-vt) → gnome-terminal.
+
+## Follow-up check — 2026-09-05 (T7/T8, gsl v0.4.0-31)
+
+| Field | Expected target | Result |
+| :-- | :-- | :-- |
+| `dirgit` directory name (worktree with PR #279) | `https://vscode.dev/github/sfc-gh-eraigosa/dotfiles/pull/279/changes` | opened correctly |
+| `ai` model name (claude-fable-5-1) | `https://www.anthropic.com/claude/fable` | opened correctly |
+
+User's answer: "Both open the expected pages".
