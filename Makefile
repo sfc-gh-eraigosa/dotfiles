@@ -39,7 +39,7 @@ build-base: ## Build the base image locally (fallback when the GHCR pull is unav
 	docker build -f docker/Dockerfile.base -t $(BASE_IMAGE) .
 
 .PHONY: test
-test: shell-test ## Run all tests (shell-test + scripts/test.sh all)
+test: shell-test hook-test ## Run all tests (shell-test + hook-test + scripts/test.sh all)
 	./scripts/test.sh all
 
 .PHONY: unit-test
@@ -61,8 +61,20 @@ claude-test: ## Run Claude Code sanity check (CLI, links, hooks, 27-case hook te
 	./ai/claude/scripts/sanity_check.sh
 
 .PHONY: claude-hook-test
-claude-hook-test: ## Run safety_guard hook test suite only
+claude-hook-test: hook-test ## (alias) Run every guard test suite — see hook-test
+
+.PHONY: hook-test
+hook-test: ## Run the guard suites: safety_guard, privacy_guard, git privacy hooks, git-hook installer, gitleaks installer, timing report (CI-gated, strict)
 	./ai/hooks/safety_guard_test.sh
+	./ai/hooks/privacy_guard_test.sh
+	./ai/githooks/githooks_test.sh
+	./opt/scripts/git/install_git_hooks_test.sh
+	./opt/scripts/git/install_gitleaks_test.sh
+	./opt/scripts/git/privacy_guard_timing_test.sh
+
+.PHONY: hook-timing
+hook-timing: ## How much time is the privacy guard costing? Per-hook stats from its timing log; red if any run is over budget (PRIVACY_GUARD_BUDGET_MS, default 1500)
+	./opt/scripts/git/privacy_guard_timing.sh
 
 .PHONY: ruleset-snapshot
 ruleset-snapshot: ## Refresh .github/rulesets/*.json from the live GitHub rulesets (reviewable audit trail; run after any ruleset change)

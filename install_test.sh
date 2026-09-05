@@ -136,4 +136,25 @@ assert_eq "$([ -n "$PATH_BLOCK_LINE" ] && [ -n "$GFF_PROBE_LINE" ] && \
     [ "$PATH_BLOCK_LINE" -lt "$GFF_PROBE_LINE" ] && echo before || echo after)" \
     "before" "PATH block runs before the gff early-export probe"
 
+# === 8. Directly-executed helper scripts must carry the exec bit ===
+# install.sh invokes some helpers in command position ("${BASE_DIR}/foo.sh")
+# rather than via `bash foo.sh`. A 100644 mode on any of those turns into a
+# runtime "Permission denied" that the `|| echo WARNING` guards swallow, so the
+# component silently never installs (this bit herdr: install_herdr.sh shipped
+# non-executable and every install printed "Permission denied ... continuing").
+# Sourced (`. path`) and `bash path` call sites are exempt by construction:
+# the pattern only matches a quoted path at the start of a command.
+DIRECT_SCRIPTS="$(grep -oE '^[[:space:]]*"\$\{BASE_DIR\}/[^"]+\.sh"' "$INSTALL" \
+    | sed -e 's#^[[:space:]]*"\${BASE_DIR}/##' -e 's#"$##' | sort -u)"
+assert_eq "$([ -n "$DIRECT_SCRIPTS" ] && echo found || echo none)" "found" \
+    "install.sh has directly-invoked helper scripts to check"
+
+NON_EXEC=""
+for rel in $DIRECT_SCRIPTS; do
+    [ -f "${SELF_DIR}/${rel}" ] || continue
+    [ -x "${SELF_DIR}/${rel}" ] || NON_EXEC="${NON_EXEC}${rel} "
+done
+assert_eq "${NON_EXEC% }" "" \
+    "every directly-invoked helper in install.sh is executable"
+
 _test_report

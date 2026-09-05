@@ -92,7 +92,33 @@ func muxArgs() []string {
 }
 
 // Exec is the real SSH-backed runner.
-type Exec struct{ ConnectTimeout string }
+//
+// User and Identities exist for probes addressed by RAW IP. No per-alias Host
+// block in ~/.ssh/config can match an address, so ssh offers neither the fleet
+// user nor the fleet key and the probe fails on credentials rather than on
+// reachability. Both are empty for every alias-addressed call, which keeps
+// ssh_config the single source of truth there. ssh expands a leading ~ in -i
+// itself, so paths are passed through as written in the config.
+type Exec struct {
+	ConnectTimeout string
+	User           string
+	Identities     []string
+}
+
+// identityArgs presents the credentials explicitly. It yields nothing when
+// neither field is set, so the alias-addressed paths keep their exact argv.
+func (e Exec) identityArgs() []string {
+	var args []string
+	if e.User != "" {
+		args = append(args, "-l", e.User)
+	}
+	for _, id := range e.Identities {
+		if id != "" {
+			args = append(args, "-i", id)
+		}
+	}
+	return args
+}
 
 func (e Exec) timeout() string {
 	if e.ConnectTimeout == "" {
@@ -106,6 +132,7 @@ func (e Exec) timeout() string {
 // would authenticate separately and prompt again.
 func (e Exec) baseArgs(host string) []string {
 	args := []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=" + e.timeout()}
+	args = append(args, e.identityArgs()...)
 	args = append(args, muxArgs()...)
 	return append(args, host)
 }

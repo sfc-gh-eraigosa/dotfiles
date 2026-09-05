@@ -33,9 +33,40 @@ on:
     #   - ready_for_review: fires when a draft is marked "Ready for review";
     #     this is what lets build-and-validate start the moment a PR leaves draft.
     #   - labeled / unlabeled: fire when `ready-for-merge` is added or removed,
-    #     so the gate re-runs (or correctly re-skips) on label churn even while
-    #     the PR is still a draft.
+    #     so the gate re-runs (or correctly re-skips) on label churn while the
+    #     PR is still a draft. NOTE: these two are the narrowest trigger here —
+    #     the jobs below gate themselves to the draft case only, because
+    #     restarting a required check on a QUEUED PR livelocks the merge queue.
+    #     See "MERGIFY QUEUE LIVELOCK" below before widening them.
     types: [ opened, synchronize, reopened, ready_for_review, labeled, unlabeled ]
+    #
+    # MERGIFY QUEUE LIVELOCK (PR #264) — why the label events above are GATED
+    # at the job level (`lint`, `shell-lint`, `go-lint` each carry the matching
+    # `if:`; the other three jobs `needs:` them and skip with them).
+    #
+    # A `labeled`/`unlabeled` event carries no new code, but dispatching a run
+    # re-creates this workflow's FIVE required check runs as `expected` /
+    # `in_progress`. Mergify writes `queued` / `dequeued` labels as it moves a
+    # PR through the queue — so its own bookkeeping restarted the ~7-min heavy
+    # build at the exact moment it held the merge lock. GitHub then refused the
+    # merge with "5 of 8 required status checks have not succeeded: 3 expected",
+    # Mergify retried for its 10-minute budget, gave up, and dequeued — which
+    # writes the `dequeued` label, another label event, restarting the cycle.
+    # Observed on #264: eight runs on ONE unchanged SHA, and a dequeue at
+    # 03:38:03 that landed 16 seconds AFTER the checks went green at 03:37:47.
+    #
+    # This is the sibling of PR #243's bug, not the same one: the unique
+    # concurrency group below stopped these label-triggered runs CANCELLING
+    # each other, but did nothing about them RESTARTING the required checks.
+    #
+    # The gate keeps the phase-7 draft fast path and drops nothing else:
+    #   - `ready-for-merge` on a DRAFT still dispatches a run. That is the only
+    #     case the label trigger exists for (see the `build-and-validate` gate).
+    #   - On a NON-DRAFT PR the label is redundant — `draft == false` already
+    #     lets the heavy job run — and Mergify only queues non-drafts, so after
+    #     this gate no label event can restart a queued PR's checks.
+    #   - A job skipped by `if:` reports its required check as SUCCESSFUL, so
+    #     the green checks from the code-driven run stay green.
   # Phase 6 of CI hygiene (issue #46). `merge_group:` is the synthetic-commit
   # event GitHub's merge queue dispatches BEFORE landing a PR on main. Every
   # job below is wired in as a required check via branch protection, so they
@@ -86,6 +117,11 @@ concurrency:
 jobs:
   lint:
     name: Lint (go + shell + markdown + actions)
+    # Label-event guard — see "MERGIFY QUEUE LIVELOCK" in the `on:` block above.
+    if: >-
+      github.event_name != 'pull_request'
+      || (github.event.action != 'labeled' && github.event.action != 'unlabeled')
+      || (github.event.label.name == 'ready-for-merge' && github.event.pull_request.draft)
     runs-on: ubuntu-latest
     # A hang must die in minutes, not burn the 6-hour default (PR #182 lesson).
     timeout-minutes: 15
@@ -151,6 +187,11 @@ jobs:
 
   shell-lint:
     name: Shell Lint (shellcheck)
+    # Label-event guard — see "MERGIFY QUEUE LIVELOCK" in the `on:` block above.
+    if: >-
+      github.event_name != 'pull_request'
+      || (github.event.action != 'labeled' && github.event.action != 'unlabeled')
+      || (github.event.label.name == 'ready-for-merge' && github.event.pull_request.draft)
     runs-on: ubuntu-latest
     # A hang must die in minutes, not burn the 6-hour default (PR #182 lesson).
     timeout-minutes: 15
@@ -172,8 +213,36 @@ jobs:
         continue-on-error: true
         run: make lint-shell
 
+  hook-test:
+    name: Guard Hook Tests (privacy + safety)
+    # Label-event guard — see "MERGIFY QUEUE LIVELOCK" in the `on:` block above.
+    if: >-
+      github.event_name != 'pull_request'
+      || (github.event.action != 'labeled' && github.event.action != 'unlabeled')
+      || (github.event.label.name == 'ready-for-merge' && github.event.pull_request.draft)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # STRICT on purpose — no continue-on-error. These suites pin the privacy
+    # and safety guards that stand between a session and a public push; a red
+    # here must block the merge. They are hermetic (throwaway repos, controlled
+    # identity) and need only bash, git and jq, all present on ubuntu-latest,
+    # plus gitleaks (installed below) for the real-binary cases.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install gitleaks (real-binary cases of the privacy suites; exercises our installer's verified release path)
+        run: |
+          GITLEAKS_INSTALL_METHOD=release ./opt/scripts/git/install_gitleaks.sh
+          echo "$HOME/opt/bin" >> "$GITHUB_PATH"
+      - name: Run make hook-test
+        run: make hook-test
+
   go-lint:
     name: Go Lint (golangci-lint)
+    # Label-event guard — see "MERGIFY QUEUE LIVELOCK" in the `on:` block above.
+    if: >-
+      github.event_name != 'pull_request'
+      || (github.event.action != 'labeled' && github.event.action != 'unlabeled')
+      || (github.event.label.name == 'ready-for-merge' && github.event.pull_request.draft)
     runs-on: ubuntu-latest
     # A hang must die in minutes, not burn the 6-hour default (PR #182 lesson).
     timeout-minutes: 15

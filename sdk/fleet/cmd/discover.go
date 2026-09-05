@@ -92,7 +92,21 @@ var (
 var discoverCmd = &cobra.Command{
 	Use:   "discover",
 	Short: "List ssh-config hosts and which are in the fleet (`--add-all` adopts every available one)",
-	Args:  cobra.NoArgs,
+	Example: `  # List what is in the fleet and what is merely in ssh_config.
+  fleet discover
+
+  # Sweep the LAN for SSH hosts, refreshing moved addresses and offering
+  # unknown responders. The subnet is detected automatically.
+  fleet discover --scan
+
+  # Sweep a subnet explicitly. Needed when the machine holds no interface on
+  # the LAN you mean — a VM on a NAT segment, a second LAN reachable by route,
+  # or WSL with interop unavailable.
+  fleet discover --scan --subnet 192.168.0.0/24
+
+  # See what a sweep WOULD write before it writes anything.
+  fleet discover --scan --subnet 192.168.0.0/24 --dry-run`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// --scan is the only path here that opens a socket; without it,
 		// discover stays a pure local read of ~/.ssh/config.
@@ -158,7 +172,8 @@ func init() {
 	discoverCmd.Flags().BoolVar(&discoverDryRun, "dry-run", false, "print the resulting config without writing")
 	discoverCmd.Flags().BoolVar(&discoverScan, "scan", false,
 		"sweep the local subnet for SSH hosts: refresh a moved HostName and offer unknown responders")
-	discoverCmd.Flags().StringVar(&scanSubnet, "subnet", "", "CIDR to sweep (default: the subnet of the default route)")
+	discoverCmd.Flags().StringVar(&scanSubnet, "subnet", "",
+		"CIDR to sweep, e.g. 192.168.0.0/24 (default: the LAN subnet, asking the Windows host when under WSL)")
 	discoverCmd.Flags().IntVar(&scanWorkers, "jobs", 64, "concurrent probes during a scan")
 	discoverCmd.Flags().DurationVar(&scanTimeout, "probe-timeout", 400*time.Millisecond, "per-address TCP timeout during a scan")
 	rootCmd.AddCommand(discoverCmd)

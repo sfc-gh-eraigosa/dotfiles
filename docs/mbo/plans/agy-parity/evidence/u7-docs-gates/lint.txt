@@ -1,0 +1,7 @@
+# 2026-09-03T15:15:34Z make lint-shell
+lint-shell rc=0
+# make lint-portability
+TIER 3 — informational (all non-POSIX-clean files): 41 (run with --md for the full list)
+
+lint-portability rc=
+rc=0
