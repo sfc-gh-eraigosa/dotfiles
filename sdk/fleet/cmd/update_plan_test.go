@@ -113,10 +113,18 @@ func TestLoadPlanRefusesAWorldWritableFile(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "fleet.yaml")
 	must(t, os.WriteFile(file, []byte(updplan.DefaultYAML), 0o666))
+	// WriteFile's mode is filtered by the process umask (CI runners use 022,
+	// which yields 0644 and is rightly accepted); Chmod is not.
+	must(t, os.Chmod(file, 0o666))
 
 	src := featflag.Static{Bools: map[string]bool{featflag.KeyEnabled: true}}
 	if _, err := loadPlan(file, src, "/repo"); err == nil {
 		t.Fatal("a world-writable plan file must be refused")
+	}
+	// The same file at 0644 is the normal case and must load.
+	must(t, os.Chmod(file, 0o644))
+	if _, err := loadPlan(file, src, "/repo"); err != nil {
+		t.Fatalf("a user-owned 0644 plan file must load: %v", err)
 	}
 }
 
