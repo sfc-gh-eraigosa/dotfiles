@@ -201,6 +201,10 @@ hooks should go too. `~/.config/herdr` and `~/.herdr/worktrees` are user data an
 
 - A gff **choice** flag for the version policy (`latest` vs a pinned string) once a pin is actually needed.
 - `tmux-mgr`/`gsl`: the cross-session agent-state roll-up from (h).
+- ~~A herdr counterpart of the `tmux` skill.~~ Done (worker `theme`): `ai/skills/herdr` maps the tmux-mgr
+  verbs onto herdr's CLI and bundles `herdr-layout` (named tab layouts via socket `layout.export` /
+  `layout.apply`, host-local under `~/.config/herdr/layouts`) and `herdr-prefs` (host-local
+  `config.toml` edits that drop the managed marker; `reset` returns to the baseline).
 - ~~Track `~/.config/herdr/config.toml` under `opt/etc/` via the copy pattern.~~ Done (worker `theme`):
   `ai/herdr/config.toml` is rendered by `install_herdr.sh config` (gff `install.tools.herdr-config`). It
   turns on herdr's host light/dark following (DEC 2031, verified against Windows Terminal) with the
