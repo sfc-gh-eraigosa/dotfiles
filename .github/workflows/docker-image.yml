@@ -213,6 +213,24 @@ jobs:
         continue-on-error: true
         run: make lint-shell
 
+  hook-test:
+    name: Guard Hook Tests (privacy + safety)
+    # Label-event guard — see "MERGIFY QUEUE LIVELOCK" in the `on:` block above.
+    if: >-
+      github.event_name != 'pull_request'
+      || (github.event.action != 'labeled' && github.event.action != 'unlabeled')
+      || (github.event.label.name == 'ready-for-merge' && github.event.pull_request.draft)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # STRICT on purpose — no continue-on-error. These suites pin the privacy
+    # and safety guards that stand between a session and a public push; a red
+    # here must block the merge. They are hermetic (throwaway repos, controlled
+    # identity) and need only bash, git and jq, all present on ubuntu-latest.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run make hook-test
+        run: make hook-test
+
   go-lint:
     name: Go Lint (golangci-lint)
     # Label-event guard — see "MERGIFY QUEUE LIVELOCK" in the `on:` block above.

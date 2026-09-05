@@ -53,8 +53,8 @@ pl_write_file() { jq -n --arg fp "$1" --arg c "$2" '{tool_name:"write_file", too
 pl_replace()    { jq -n --arg fp "$1" --arg s "$2" '{tool_name:"replace",    tool_input:{file_path:$fp, old_string:"x", new_string:$s}}'; }
 pl_shell()      { jq -n --arg c "$1"               '{tool_name:"run_shell_command", tool_input:{command:$c}}'; }
 
-WIN='C:\Users\edwar\project'
-WSL='/mnt/c/Users/edwar/project'
+WIN="C:\\Users\\${ID_USER}\\project"
+WSL="/mnt/c/Users/${ID_USER}/project"
 UNIXHOME="$ID_HOME/secret/path"            # /home/alice/...
 USERLEAK="deployed by $ID_USER on host"
 HOSTLEAK="runs on $ID_HOST in the lab"
@@ -128,6 +128,102 @@ if [ "$rc_direct" = 0 ]; then
 else
     echo "FAIL: direct exec of hook did not allow a clean commit (got $rc_direct) -- shebang/interpreter regression"; FAIL=$((FAIL+1))
 fi
+
+# ============================ GAPS (probe 2026-09-04) ===========================
+# Every case below got through the original hook. Each is one shape a leak can
+# take that the original never looked at. Grouped by WHY it got through.
+
+# assert_env: assert with extra environment for the hook subprocess.
+# usage: assert_env <expected_code> <payload-json> <label> [VAR=value ...]
+assert_env() {
+    local expected="$1" payload="$2" label="$3" out rc; shift 3
+    set +e
+    out=$(printf '%s' "$payload" | env -i PATH="$PATH" USER="$ID_USER" HOME="$ID_HOME" HOSTNAME="$ID_HOST" "$@" bash "$HOOK" 2>&1)
+    rc=$?
+    set -e
+    if [ "$rc" = "$expected" ]; then
+        echo "PASS: $label (exit $rc)"; PASS=$((PASS+1))
+    else
+        echo "FAIL: $label (expected $expected, got $rc) :: $out"; FAIL=$((FAIL+1))
+    fi
+}
+# Bash payload that also carries the working directory, as Claude's does.
+pl_bash_cwd() { jq -n --arg c "$1" --arg d "$2" '{tool_name:"Bash", tool_input:{command:$c}, cwd:$d}'; }
+
+# --- Class 1: file writes that never pass through the Write/Edit tools ---------
+# The original gate only fired for Write/Edit. A heredoc, sed -i, tee, or an
+# interpreter one-liner puts the same bytes in the same tracked file.
+assert 2 "$(pl_bash "cat > $TRACKED <<'EOF'
+home is $ID_HOME
+EOF")"                                                              "Bash heredoc into a TRACKED file"
+assert 2 "$(pl_bash "sed -i 's|X|$ID_HOME|' $TRACKED")"           "sed -i into a TRACKED file" # portability-ok: a string fixture the hook judges, never executed
+assert 2 "$(pl_bash "echo '$ID_HOME' | tee -a $TRACKED")"          "tee into a TRACKED file"
+assert 2 "$(pl_bash "python3 -c \"open('$TRACKED','w').write('$ID_HOME')\"")" "interpreter write into a TRACKED file"
+assert 0 "$(pl_bash "cat > $LOCAL <<'EOF'
+home is $ID_HOME
+EOF")"                                                              "Bash heredoc into a GITIGNORED file stays allowed"
+assert 0 "$(pl_bash "printf '%s' '$ID_HOME' > /dev/null")"         "redirect to /dev/null is not a file write"
+
+# --- Class 2: the commit is judged by its CONTENT, not just its message --------
+SCAN_REPO="$(mktemp -d)"
+git -C "$SCAN_REPO" init -q
+git -C "$SCAN_REPO" -c user.name=A -c user.email=a@example.com commit -q --allow-empty -m seed --no-verify
+printf 'deployed from %s\n' "$ID_HOME" > "$SCAN_REPO/leak.md"
+git -C "$SCAN_REPO" add leak.md
+assert 2 "$(pl_bash_cwd 'git commit -m "docs: tidy"' "$SCAN_REPO")"  "git commit with a clean MESSAGE but a leak STAGED"
+printf 'fix on %s\n' "$ID_HOST" > "$SCAN_REPO/msg.txt"
+git -C "$SCAN_REPO" reset -q leak.md
+assert 2 "$(pl_bash_cwd "git commit -F $SCAN_REPO/msg.txt" "$SCAN_REPO")" "git commit -F reads the message FILE"
+git -C "$SCAN_REPO" add leak.md
+git -C "$SCAN_REPO" -c user.name=A -c user.email=a@example.com commit -q -m "sneaky" --no-verify
+
+# --- Class 3: publishing verbs the original regex did not know -----------------
+# The leak above is now an unpushed commit; every verb that would publish it
+# must be judged on what it publishes.
+assert 2 "$(pl_bash_cwd 'git push origin HEAD' "$SCAN_REPO")"          "git push judges the outgoing commits"
+assert 2 "$(pl_bash_cwd 'gss push' "$SCAN_REPO")"                      "gss push (the repo's own canonical publisher)"
+assert 2 "$(pl_bash_cwd 'gss feature checkpoint' "$SCAN_REPO")"        "gss feature checkpoint (push + PR)"
+printf 'see %s\n' "$ID_HOME" > "$SCAN_REPO/body.md"
+assert 2 "$(pl_bash "gh pr create --title x --body-file $SCAN_REPO/body.md")" "gh pr create --body-file reads the body FILE"
+assert 2 "$(pl_bash "gh release create v1 --notes 'built at $ID_HOME'")"  "gh release create notes"
+assert 2 "$(pl_bash "gh gist create $SCAN_REPO/body.md")"                "gh gist create publishes a file verbatim"
+
+# --- Class 4: identity shapes the word-boundary rule missed --------------------
+assert 2 "$(pl_write "$TRACKED" "host ${ID_USER}gigabyte is up")"     "username as a PREFIX of a longer token"
+assert 2 "$(pl_write "$TRACKED" "host ${ID_HOST}pi answered")"        "hostname as a PREFIX of a longer token"
+git -C "$SCAN_REPO" config user.email "$ID_USER@example.com"
+assert 2 "$(pl_write "$SCAN_REPO/doc.md" "contact $ID_USER@example.com")" "the repo's git user.email"
+assert 2 "$(pl_write "$SCAN_REPO/doc.md" "contact someone.else@example.com")" "ANY email address in tracked content"
+assert 0 "$(pl_write "$SCAN_REPO/doc.md" "contact <user>@example.com or user@example.com")" "placeholder / example.com addresses stay allowed"
+
+# --- Class 5: secret shapes the list did not cover ------------------------------
+# Fixtures are BUILT at runtime so the literal never appears in this file.
+SK_ANT="sk-ant-api03-$(printf 'A%.0s' $(seq 1 48))"
+SK_PROJ="sk-proj-$(printf 'B%.0s' $(seq 1 40))"
+JWT='eyJ''hbGciOiJIUzI1NiJ9.eyJ''zdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJlLXNpZ25hdHVyZQ'
+assert 2 "$(pl_write "$TRACKED" "key $SK_ANT")"                        "Anthropic API key"
+assert 2 "$(pl_write "$TRACKED" "key $SK_PROJ")"                       "OpenAI project key"
+assert 2 "$(pl_write "$TRACKED" "auth: Bearer $JWT")"                  "JWT"
+assert 2 "$(pl_write "$TRACKED" "hook https://hooks.slack.com/services/T0000/B0000/$(printf 'X%.0s' $(seq 1 24))")" "Slack incoming webhook"
+assert 2 "$(pl_write "$TRACKED" "db postgres://admin:s3cretpw@db.example.com/prod")" "credential inside a URL"
+
+# --- Class 6: the hook's own posture ---------------------------------------------
+CFG="$(mktemp -d)"
+printf 'projectcodename\n' > "$CFG/identity"
+assert_env 2 "$(pl_write "$TRACKED" "internal name projectcodename")" "extra identity tokens from the identity file" PRIVACY_GUARD_CONFIG_DIR="$CFG"
+printf '%s\n' "$ID_USER" > "$CFG/allow"
+assert_env 0 "$(pl_write "$TRACKED" "$USERLEAK")"                     "an allowlisted token is not a leak" PRIVACY_GUARD_CONFIG_DIR="$CFG"
+LOGF="$CFG/blocks.log"
+assert_env 2 "$(pl_write "$TRACKED" "$USERLEAK")"                     "a deny is logged" PRIVACY_GUARD_LOG="$LOGF"
+if [ -s "$LOGF" ] && grep -q "Login username" "$LOGF"; then echo "PASS: block log records the category"; PASS=$((PASS+1))
+else echo "FAIL: block log missing or empty ($LOGF)"; FAIL=$((FAIL+1)); fi
+# No jq -> no way to know what is being written -> refuse, do not wave through.
+set +e
+out=$(printf '%s' "$(pl_write "$TRACKED" "$USERLEAK")" | env -i PATH=/nonexistent USER="$ID_USER" HOME="$ID_HOME" HOSTNAME="$ID_HOST" /bin/bash "$HOOK" 2>&1); rc=$?
+set -e
+if [ "$rc" = 2 ]; then echo "PASS: fails CLOSED when jq is unavailable (exit 2)"; PASS=$((PASS+1))
+else echo "FAIL: without jq the hook must fail closed (got $rc) :: $out"; FAIL=$((FAIL+1)); fi
+rm -rf "$SCAN_REPO" "$CFG"
 
 echo "----"
 echo "privacy_guard_test: $PASS passed, $FAIL failed"
