@@ -85,7 +85,7 @@ unset _ip_prev _ip_arg
 #     in the per-commit config layer; omitting it BAKES the step into the cached
 #     deps layer, so later edits to it stop taking effect per commit (a bug).
 _IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
-_IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM"
+_IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM INSTALL_SHELL_OH_MY_ZSH_UPDATE"
 apply_install_phase() {
   case "$INSTALL_PHASE" in
     deps)   for _f in $_IP_CONFIG_FLAGS; do export "GFF_${_f}=false"; done ;;
@@ -910,6 +910,15 @@ if gff_on install.system.gitrepos; then
     "${HOME}/.gitrepos"
   fi
 else gff_skip_msg install.system.gitrepos; fi
+
+# Keep the oh-my-zsh clone current. .gitrepos above clones it but is told
+# never to pull (";false" in .repos.env), so upstream plugin fixes never
+# landed. Must run AFTER the gitrepos block so a fresh clone exists.
+# Fast-forward only; warns and continues on a diverged/offline clone.
+if gff_on install.shell.oh-my-zsh-update; then
+  bash "${BASE_DIR}/opt/scripts/system/oh-my-zsh_update.sh" ||
+    echo "WARNING: oh-my-zsh update reported problems; continuing."
+else gff_skip_msg install.shell.oh-my-zsh-update; fi
 
 # Load Nano Platform environment
 if gff_on install.system.nano-profile; then
