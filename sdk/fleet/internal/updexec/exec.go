@@ -231,7 +231,7 @@ type Background struct{ Console }
 
 func (b Background) Interactive(ctx context.Context, host string, st updplan.Step, script string) error {
 	if st.Kind == updplan.KindRun {
-		_, err := b.Console.Batch(ctx, host, st, script)
+		_, err := b.Batch(ctx, host, st, script)
 		return err
 	}
 	return ErrNoTerminal

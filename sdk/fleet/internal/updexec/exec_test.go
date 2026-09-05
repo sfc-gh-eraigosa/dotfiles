@@ -774,7 +774,7 @@ func TestCarryRestoreRunsAfterTheLastStepUsingTheRepo(t *testing.T) {
 	if buildIdx == -1 || restoreIdx == -1 || otherIdx == -1 {
 		t.Fatalf("missing expected calls: build=%d restore=%d other=%d, order=%v", buildIdx, restoreIdx, otherIdx, order)
 	}
-	if !(buildIdx < restoreIdx && restoreIdx < otherIdx) {
+	if buildIdx >= restoreIdx || restoreIdx >= otherIdx {
 		t.Fatalf("restore must run after r.build and before other.sync: build=%d restore=%d other=%d", buildIdx, restoreIdx, otherIdx)
 	}
 	if rr, ok := resultFor(rep, "r.restore"); !ok || rr.Status != OK {

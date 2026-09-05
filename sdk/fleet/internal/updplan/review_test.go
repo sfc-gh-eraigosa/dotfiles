@@ -66,7 +66,7 @@ func TestRootIsValidatedAndMustBeAbsoluteOrHome(t *testing.T) {
 			t.Errorf("root %q rejected: %v", root, err)
 			continue
 		}
-		if got := p.Repos["x"].Path; strings.HasPrefix(got, ".") || !(strings.HasPrefix(got, "/") || strings.HasPrefix(got, "~")) {
+		if got := p.Repos["x"].Path; strings.HasPrefix(got, ".") || (!strings.HasPrefix(got, "/") && !strings.HasPrefix(got, "~")) {
 			t.Errorf("root %q: resolved path %q is not absolute or ~-relative", root, got)
 		}
 	}

@@ -349,7 +349,8 @@ func Parse(data []byte) (Plan, error) {
 	// root is prefixed onto every relative repo path, so it obeys the same
 	// charset rule as path: AND must itself be absolute or ~-relative —
 	// otherwise Repo.Path would resolve against the ssh login cwd.
-	if !(root == "~" || ((strings.HasPrefix(root, "/") || strings.HasPrefix(root, "~/")) && ValidPath(root))) {
+	rootOK := root == "~" || ((strings.HasPrefix(root, "/") || strings.HasPrefix(root, "~/")) && ValidPath(root))
+	if !rootOK {
 		errs.addf("update", "root: must be an absolute or ~/ path using [A-Za-z0-9._/-], got %q", root)
 	}
 
