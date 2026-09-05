@@ -84,7 +84,7 @@ unset _ip_prev _ip_arg
 #   - CONFIG / SKILL / SYMLINK / any repo-content step -> _IP_CONFIG_FLAGS. Runs
 #     in the per-commit config layer; omitting it BAKES the step into the cached
 #     deps layer, so later edits to it stop taking effect per commit (a bug).
-_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
+_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_TOOLS_HERDR_CONFIG INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
 _IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM INSTALL_SHELL_OH_MY_ZSH_UPDATE"
 apply_install_phase() {
   case "$INSTALL_PHASE" in
@@ -312,6 +312,19 @@ if gff_on install.tools.herdr-integrations; then
     "${BASE_DIR}/opt/scripts/system/install_herdr.sh" integrations || echo "WARNING: herdr integrations reported problems; continuing."
   fi
 else gff_skip_msg install.tools.herdr-integrations; fi
+
+# herdr managed config (~/.config/herdr/config.toml): herdr paints its own
+# sidebar/panel colors, and its default dark catppuccin theme is unreadable on
+# a Solarized Light terminal profile. The rendered template turns on herdr's
+# host light/dark following with the fleet Solarized pair, so the right palette
+# is picked per terminal profile at runtime. The host owns the file: it is only
+# rewritten while it carries the "managed by dotfiles" marker.
+if gff_on install.tools.herdr-config; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_herdr.sh" ]; then
+    echo "Installing herdr config..."
+    "${BASE_DIR}/opt/scripts/system/install_herdr.sh" config || echo "WARNING: herdr config reported problems; continuing."
+  fi
+else gff_skip_msg install.tools.herdr-config; fi
 
 NIX_MANAGED_FILE="${HOME}/.config/nix_managed"
 

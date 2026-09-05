@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+# herdr-layout — save/restore named herdr tab layouts, host-local.
+#
+# herdr already restores the last session shape on server restart (session.json)
+# but has no *named* layouts. This wraps the socket API's layout.export /
+# layout.apply into files under ~/.config/herdr/layouts/<name>.json — the same
+# role `tmux-mgr save|restore` plays for tmux. Layouts are per-host state and
+# are never tracked in the dotfiles repo.
+#
+# Usage:
+#   herdr-layout save <name> [--tab ID | --pane ID | --current]
+#   herdr-layout restore <name> [--workspace ID] [--label TEXT] [--replace-tab ID] [--focus]
+#   herdr-layout list | show <name> | delete <name>
+#
+# Env:
+#   HERDR_SOCKET_PATH  server API socket (herdr injects it into managed panes;
+#                      default: ${XDG_CONFIG_HOME:-~/.config}/herdr/herdr.sock)
+#   HERDR_LAYOUT_DIR   where layouts live (default: <config dir>/layouts)
+#
+# restore creates a NEW tab from the saved tree (structure, labels, cwd, env,
+# argv commands). It does not preserve live PTYs, scrollback, or running
+# processes — herdr's layout.apply contract. --replace-tab closes the given
+# tab after the new one exists.
+set -eu
+
+CONFIG_DIR="${HERDR_CONFIG_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/herdr}"
+SOCK="${HERDR_SOCKET_PATH:-${CONFIG_DIR}/herdr.sock}"
+LAYOUT_DIR="${HERDR_LAYOUT_DIR:-${CONFIG_DIR}/layouts}"
+
+die()   { echo "herdr-layout: $*" >&2; exit 1; }
+usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+
+need_socket() {
+    [ -S "${SOCK}" ] || die "no herdr server socket at ${SOCK} (run inside a herdr pane, or set HERDR_SOCKET_PATH)"
+}
+
+check_name() {
+    case "$1" in
+        ""|*/*|.*|*[!A-Za-z0-9._-]*) die "invalid layout name '$1' (use [A-Za-z0-9._-], no leading dot)" ;;
+    esac
+}
+
+# rpc <method> <params-json>  -> prints the result JSON, or dies with the error code.
+rpc() {
+    python3 - "${SOCK}" "$1" "$2" <<'PY'
+import json, socket, sys
+sock, method, params = sys.argv[1], sys.argv[2], json.loads(sys.argv[3])
+req = {"id": "herdr-layout:" + method, "method": method, "params": params}
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(10)
+s.connect(sock)
+s.sendall((json.dumps(req) + "\n").encode())
+buf = b""
+while not buf.endswith(b"\n"):
+    chunk = s.recv(65536)
+    if not chunk:
+        break
+    buf += chunk
+s.close()
+resp = json.loads(buf.decode() or "{}")
+if "error" in resp:
+    err = resp["error"]
+    sys.stderr.write("herdr-layout: server error %s: %s\n" % (err.get("code"), err.get("message")))
+    sys.exit(1)
+print(json.dumps(resp.get("result", {})))
+PY
+}
+
+cmd_save() {
+    [ $# -ge 1 ] || usage 1
+    name="$1"; shift
+    check_name "${name}"
+    params='{}'
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --tab)     params="$(printf '{"tab_id":"%s"}' "$2")"; shift 2 ;;
+            --pane)    params="$(printf '{"pane_id":"%s"}' "$2")"; shift 2 ;;
+            --current) [ -n "${HERDR_PANE_ID:-}" ] || die "--current needs HERDR_PANE_ID (not inside a herdr pane?)"
+                       params="$(printf '{"pane_id":"%s"}' "${HERDR_PANE_ID}")"; shift ;;
+            *) die "unknown option '$1'" ;;
+        esac
+    done
+    need_socket
+    result="$(rpc layout.export "${params}")"
+    mkdir -p "${LAYOUT_DIR}"
+    out="${LAYOUT_DIR}/${name}.json"
+    printf '%s' "${result}" | python3 -c '
+import json, sys, datetime
+name, out = sys.argv[1], sys.argv[2]
+layout = json.load(sys.stdin)["layout"]
+def strip(node):
+    node.pop("pane_id", None)
+    for k in ("first", "second"):
+        if k in node:
+            strip(node[k])
+    return node
+doc = {
+    "name": name,
+    "saved_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+    "source": {"workspace_id": layout.get("workspace_id"), "tab_id": layout.get("tab_id")},
+    "zoomed": bool(layout.get("zoomed", False)),
+    "root": strip(layout["root"]),
+}
+with open(out + ".tmp", "w") as fh:
+    json.dump(doc, fh, indent=2); fh.write("\n")
+' "${name}" "${out}"
+    mv "${out}.tmp" "${out}"
+    echo "saved layout '${name}' -> ${out}"
+}
+
+cmd_restore() {
+    [ $# -ge 1 ] || usage 1
+    name="$1"; shift
+    check_name "${name}"
+    file="${LAYOUT_DIR}/${name}.json"
+    [ -r "${file}" ] || die "no saved layout '${name}' (looked for ${file}; see: herdr-layout list)"
+    workspace=""; label="${name}"; replace=""; focus=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --workspace)   workspace="$2"; shift 2 ;;
+            --label)       label="$2"; shift 2 ;;
+            --replace-tab) replace="$2"; shift 2 ;;
+            --focus)       focus=true; shift ;;
+            *) die "unknown option '$1'" ;;
+        esac
+    done
+    need_socket
+    params="$(python3 -c '
+import json, sys
+file, workspace, label, replace, focus = sys.argv[1:6]
+doc = json.load(open(file))
+p = {"root": doc["root"], "tab_label": label, "focus": focus == "true"}
+if workspace: p["workspace_id"] = workspace
+if replace:   p["tab_id"] = replace
+print(json.dumps(p))
+' "${file}" "${workspace}" "${label}" "${replace}" "${focus}")"
+    result="$(rpc layout.apply "${params}")"
+    tab="$(printf '%s' "${result}" | python3 -c 'import json,sys; r=json.load(sys.stdin); print((r.get("layout") or {}).get("tab_id",""))')"
+    echo "restored layout '${name}' into tab ${tab:-?} (new panes; running processes are not carried over)"
+}
+
+cmd_list()   { [ -d "${LAYOUT_DIR}" ] || exit 0; for f in "${LAYOUT_DIR}"/*.json; do [ -e "$f" ] || continue; b="$(basename "$f")"; echo "${b%.json}"; done; }
+cmd_show()   { [ $# -eq 1 ] || usage 1; check_name "$1"; f="${LAYOUT_DIR}/$1.json"; [ -r "$f" ] || die "no saved layout '$1'"; cat "$f"; }
+cmd_delete() { [ $# -eq 1 ] || usage 1; check_name "$1"; f="${LAYOUT_DIR}/$1.json"; [ -e "$f" ] || die "no saved layout '$1'"; rm -f "$f"; echo "deleted layout '$1'"; }
+
+[ $# -ge 1 ] || usage 1
+cmd="$1"; shift
+case "${cmd}" in
+    save)    cmd_save "$@" ;;
+    restore) cmd_restore "$@" ;;
+    list)    cmd_list "$@" ;;
+    show)    cmd_show "$@" ;;
+    delete)  cmd_delete "$@" ;;
+    -h|--help|help) usage 0 ;;
+    *) die "unknown command '${cmd}' (save|restore|list|show|delete)" ;;
+esac
