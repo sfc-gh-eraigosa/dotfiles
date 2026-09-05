@@ -52,6 +52,7 @@ type recordedCall struct {
 type fakeIO struct {
 	mu          sync.Mutex
 	batch       map[string][]resp
+	order       []string // batch keys in registration order (tie-break for pick)
 	interactive map[string][]error
 	block       map[string]bool
 	calls       []recordedCall
@@ -68,6 +69,9 @@ func newFakeIO() *fakeIO {
 func (f *fakeIO) on(substr, out string, err error) *fakeIO {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if _, seen := f.batch[substr]; !seen {
+		f.order = append(f.order, substr)
+	}
 	f.batch[substr] = append(f.batch[substr], resp{out, err})
 	return f
 }
@@ -98,12 +102,15 @@ func (f *fakeIO) Batch(ctx context.Context, host string, st updplan.Step, script
 		}
 	}
 	if !blocked {
-		for key, q := range f.batch {
-			if strings.Contains(script, key) && len(q) > 0 {
-				r = q[0]
-				f.batch[key] = q[1:]
-				break
-			}
+		// Deterministic match: the LONGEST matching key wins, registration
+		// order breaks ties. Iterating the map directly made the choice
+		// random whenever two keys matched one script (the rescue script
+		// carries the sync prologue's `orig=$(git symbolic-ref` text), which
+		// flaked TestRescueOffBranchRestoresTheBranchWithoutAStash ~15 %.
+		if key, ok := f.pick(script); ok {
+			q := f.batch[key]
+			r = q[0]
+			f.batch[key] = q[1:]
 		}
 	}
 	f.mu.Unlock()
@@ -112,6 +119,18 @@ func (f *fakeIO) Batch(ctx context.Context, host string, st updplan.Step, script
 		return "", ctx.Err()
 	}
 	return r.out, r.err
+}
+
+// pick returns the most specific registered batch key that matches script and
+// still has a queued response. Callers hold f.mu.
+func (f *fakeIO) pick(script string) (string, bool) {
+	best, found := "", false
+	for _, key := range f.order {
+		if q := f.batch[key]; len(q) > 0 && strings.Contains(script, key) && (!found || len(key) > len(best)) {
+			best, found = key, true
+		}
+	}
+	return best, found
 }
 
 func (f *fakeIO) Interactive(ctx context.Context, host string, st updplan.Step, script string) error {
@@ -861,7 +880,9 @@ func TestRescueOffBranchRestoresTheBranchWithoutAStash(t *testing.T) {
 	io := newFakeIO().
 		on("git rev-parse --git-dir", "state=dirty branch=feature", nil).
 		on("fleet-rescue/$ts", "", nil).
-		on("orig=$(git symbolic-ref", "fleet: orig=feature\nfleet: switched feature -> main", nil).
+		// Keyed on the fetch, not the prologue: the rescue script carries the
+		// same `orig=$(git symbolic-ref` text, so that key would be ambiguous.
+		on("git fetch origin", "fleet: orig=feature\nfleet: switched feature -> main", nil).
 		on(restoreFailedMarker, "", nil)
 	e := Executor{IO: io}
 	rep := e.RunHost("alpha", onlySyncPlan(updplan.LocalRescue, false))

@@ -91,7 +91,7 @@ Plan §4 task numbers. Commit = the SHA carrying the plan's exact message.
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| 27 AGENTS.md / README / sample plan / index | todo | | | `!opt/etc/fleet/**` allowlist rule if the sample ships |
+| 27 AGENTS.md / README / sample plan / index | done | 91ce688 | AGENTS.md invariants (34 cited tests verified by grep) · README `fleet update` rewrite + real redacted `--dry-run` demo · `opt/etc/fleet/fleet.yaml` tracked (`git ls-files`, already under `!opt/**`) · index → in-review | umask-002 gotcha: a fresh clone makes the repo plan 664 and `fleet` refuses it until `chmod g-w` (documented in README/AGENTS) |
 | **Leaf F gate** | todo | — | link check → ; README demo is real output → | |
 
 ## 2. Feature → proof matrix (from spec §5)
