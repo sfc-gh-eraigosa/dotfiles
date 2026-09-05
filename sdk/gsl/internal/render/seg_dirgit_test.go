@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	gitfake "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git/fake"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo"
 )
 
 func TestDirGit_WithGit_ASCII(t *testing.T) {
@@ -83,7 +84,47 @@ func TestDirGit_Spans_DirAndBranch(t *testing.T) {
 	seg := NewDirGitSegment("/home/u/proj", &gitfake.Runner{Script: gitStatusResponses("main")})
 	seg.Links = Links{DirGit: true, Repo: true, RepoURL: "https://github.com/o/r"}
 	_, _, spans, ok := seg.RenderLinked(context.Background(), asciiStyle(), 0)
-	if !ok || len(spans) != 2 || spans[0].URL != "file:///home/u/proj" || spans[1].URL != "https://github.com/o/r/tree/main" {
+	// Directory → the vscode.dev branch view (GitHub remote, no PR known);
+	// branch → the branch on GitHub.
+	if !ok || len(spans) != 2 || spans[0].URL != "https://vscode.dev/github/o/r/tree/main" || spans[1].URL != "https://github.com/o/r/tree/main" {
 		t.Fatalf("spans = %+v", spans)
+	}
+}
+
+func TestDirGit_DirSpan_PRChangesView(t *testing.T) {
+	seg := NewDirGitSegment("/home/u/proj", &gitfake.Runner{Script: gitStatusResponses("main")})
+	seg.Links = Links{DirGit: true, Repo: true, RepoURL: "https://github.com/o/r"}
+	seg.PR = &repo.RepoInfo{PRNumber: 279, PRURL: "https://github.com/o/r/pull/279"}
+	_, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	if len(spans) != 2 || spans[0].URL != "https://vscode.dev/github/o/r/pull/279/changes" {
+		t.Fatalf("dir span with a PR: %+v", spans)
+	}
+}
+
+func TestDirGit_DirSpan_BranchView(t *testing.T) {
+	seg := NewDirGitSegment("/home/u/proj", &gitfake.Runner{Script: gitStatusResponses("main")})
+	seg.Links = Links{DirGit: true, Repo: true, RepoURL: "https://github.com/o/r"}
+	_, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	if len(spans) != 2 || spans[0].URL != "https://vscode.dev/github/o/r/tree/main" {
+		t.Fatalf("dir span without a PR: %+v", spans)
+	}
+}
+
+func TestDirGit_DirSpan_FileFallbackWithoutGitHub(t *testing.T) {
+	seg := NewDirGitSegment("/home/u/proj", &gitfake.Runner{Script: gitStatusResponses("main")})
+	seg.Links = Links{DirGit: true}
+	_, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	if len(spans) != 1 || spans[0].URL != "file:///home/u/proj" {
+		t.Fatalf("dir span without a GitHub remote: %+v", spans)
+	}
+}
+
+func TestDirGit_DirSpan_FileModeOption(t *testing.T) {
+	seg := NewDirGitSegment("/home/u/proj", &gitfake.Runner{Script: gitStatusResponses("main")})
+	seg.Links = Links{DirGit: true, Repo: true, RepoURL: "https://github.com/o/r"}
+	seg.DirLink = "file"
+	_, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	if len(spans) != 2 || spans[0].URL != "file:///home/u/proj" {
+		t.Fatalf("dir_link=file: %+v", spans)
 	}
 }

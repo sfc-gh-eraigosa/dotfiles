@@ -76,7 +76,9 @@ func (s *RepoSegment) detect(ctx context.Context) (segmentData, bool) {
 	}
 
 	var info *repo.RepoInfo
-	if s.NameMode == nameModeFeature || s.ShowPR {
+	if s.PR != nil {
+		info = s.PR
+	} else if s.NameMode == nameModeFeature || s.ShowPR {
 		if pr, perr := repo.PR(ctx, s.GH, s.Branch, loc.Toplevel, s.RegistryPath); perr == nil {
 			info = pr
 		}

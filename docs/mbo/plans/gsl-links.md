@@ -1018,6 +1018,20 @@ git commit -m "docs(gsl): document link spans, link options, and the gsl.links.*
 ```
 Then push via `gss push` (confirm first) and flip the PR from draft when the TRACKING stop condition is fully ticked.
 
+### Task 7: Model name → model page (review follow-up)
+**Files:** Modify `internal/payload/payload.go` (`Model.ID`), `internal/render/links.go` (`modelFamily`, `ModelURL`, `Links.ModelURL`, defaults), `seg_ai_data.go` (model span → model page), `render.go` (`model_url` option); tests in `payload_test.go`, `links_test.go`, `seg_ai_test.go`; linked goldens; README / SKILL.md / features.yaml.
+**Design:** the family token (`fable` `mythos` `opus` `sonnet` `haiku` `gemini`) is the finest key with a stable public page; taken from `model.id`, else the display name. Built-in map: Claude → `https://www.anthropic.com/claude/{family}`, gemini → Google's Gemini models page; `model_url` template overrides; unknown family → no model link. Context / 5h / 7d keep the usage page.
+- [x] RED `TestParse_ModelID`, `TestModelFamily`, `TestModelURL`, `TestAI_Spans_ModelURL_*`, `TestBuildSegments_AIModelURLOption` → FAIL (undefined)
+- [x] GREEN + linked goldens regenerated; `TestAI_Spans_NoUsageURL` re-targeted (model span survives without a usage URL)
+- [x] COMMIT: `feat(gsl): model name links to its model page; directory links to the vscode.dev PR/branch view`
+
+### Task 8: Directory → vscode.dev GitHub view (review follow-up)
+**Files:** Modify `links.go` (`VSCodeDevPRURL`, `VSCodeDevTreeURL`), `seg_dirgit.go` / `seg_dirgit_data.go` (`PR`, `DirLink`, `dirURL`), `seg_repo.go` / `seg_repo_data.go` (`PR` precomputed), `render.go` (`Deps.PR`, `dir_link` option), `cmd/statusline.go` (PR pre-lookup concurrent with flags + origin); tests in `links_test.go`, `seg_dirgit_test.go`, `seg_repo_test.go`.
+**Design:** the directory opens `https://vscode.dev/github/<o>/<r>/pull/<n>/changes` when the branch has a PR, else `…/tree/<branch>`, else `file://` (off GitHub, or `dir_link: file`). The PR lookup moves to cmd (`git.Toplevel` + `repo.PR`, one lookup shared by both segments via `Deps.PR`); a nil `Deps.PR` keeps the repo segment's own lookup, so existing callers are unchanged.
+- [x] RED `TestVSCodeDevURLs`, `TestDirGit_DirSpan_*`, `TestRepo_UsesPrecomputedPR` → FAIL (undefined)
+- [x] GREEN; `TestDirGit_Spans_DirAndBranch` re-targeted to the branch view
+- [x] COMMIT (same commit as T7)
+
 ## 5. Verification mapping
 | Spec rule | Test(s) |
 | :-- | :-- |

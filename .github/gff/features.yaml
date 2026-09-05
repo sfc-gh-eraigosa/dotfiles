@@ -340,10 +340,10 @@ sets:
         description: Repo links — the PR badge to its pull request, the feature/worker/branch label and the dirgit branch to the branch on GitHub, and the root/worktree glyph to the repository home.
         boolDefault: true
       - path: gsl.links.dirgit
-        description: Directory link — the dirgit directory name opens the working directory as a file:// URL (the file manager in VTE terminals).
+        description: Directory link — the dirgit directory name opens the vscode.dev GitHub view (the PR's changes when the branch has one, else the branch; file:// off GitHub, or always when the dirgit option dir_link is set to file).
         boolDefault: true
       - path: gsl.links.ai
-        description: Usage links — the model name, context %, and the 5h/7d rate fields open the host's usage page (Claude Code default claude.ai/settings/usage; the ai segment's `usage_url` option overrides, and is the only way to give Antigravity a target).
+        description: AI links — the model name opens its model page (family from model.id, e.g. anthropic.com/claude/fable; `model_url` overrides); context % and the 5h/7d rate fields open the host's usage page (Claude Code default claude.ai/settings/usage; `usage_url` overrides, and is the only way to give Antigravity a usage target).
         boolDefault: true
       - path: gsl.links.time
         description: Time link — the date/time opens a timezone page built from the time segment's `link_url` template (default https://time.is/{tz_city}; placeholders {tz} {tz_city} {iso_utc} {unix}).

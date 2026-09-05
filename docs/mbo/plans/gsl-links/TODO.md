@@ -91,3 +91,16 @@
 - [x] CHECKPOINT
 
 **Done when:** stop condition in TRACKING §3 fully ticked.
+
+---
+
+### Task 7 — model name → model page  (plan Task 7, review follow-up)
+
+- [x] RED / RUN-RED / GREEN / RUN-GREEN (see plan T7)
+- [x] COMMIT (with T8)
+
+### Task 8 — directory → vscode.dev PR/branch view  (plan Task 8, review follow-up)
+
+- [x] RED / RUN-RED / GREEN / RUN-GREEN (see plan T8)
+- [ ] VERIFY (human): Ctrl+click the directory in a PR worktree → vscode.dev changes view; model name → anthropic.com/claude/<family>
+- [x] COMMIT + CHECKPOINT

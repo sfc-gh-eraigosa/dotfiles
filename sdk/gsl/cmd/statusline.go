@@ -153,6 +153,26 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 		defer fcancel()
 		flagCh <- flags.Resolve(fctx, flags.GFFLookup(os.Getenv))
 	}()
+	// The PR lookup (gss registry, then gh) is pre-computed here too, so both
+	// the repo badge and the directory → vscode.dev changes link share it.
+	prCh := make(chan *repo.RepoInfo, 1)
+	go func() {
+		if cwd == "" || branch == "" {
+			prCh <- nil
+			return
+		}
+		top, terr := git.Toplevel(ctx, gitRunner, cwd)
+		if terr != nil {
+			prCh <- nil
+			return
+		}
+		info, perr := repo.PR(ctx, ghRunner, branch, top, repo.DefaultRegistryPath())
+		if perr != nil {
+			prCh <- nil
+			return
+		}
+		prCh <- info
+	}()
 	remoteURL := ""
 	if cwd != "" {
 		if u, rerr := git.RemoteWebURL(ctx, gitRunner, cwd); rerr == nil {
@@ -162,6 +182,7 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 		}
 	}
 	linkFlags := <-flagCh
+	prInfo := <-prCh
 
 	// Derive the host-tool context and resolve the auto-theme palette.
 	home, _ := os.UserHomeDir()
@@ -184,6 +205,7 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 		MCPOpts:      mcp.ActiveCountOptions{},
 		Clock:        time.Now,
 		Links:        buildLinks(cfg.EffectiveLinks(), linkFlags, remoteURL, p.IsAntigravity()),
+		PR:           prInfo,
 	}
 
 	segs := render.BuildSegments(cfg, deps)

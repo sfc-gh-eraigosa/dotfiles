@@ -16,6 +16,7 @@ import (
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
 )
 
@@ -33,6 +34,9 @@ type dirGitData struct {
 	prio int
 	// links is the policy the spans are gated on.
 	links Links
+	// pr / dirLink feed the directory link (see DirGitSegment).
+	pr      *repo.RepoInfo
+	dirLink string
 }
 
 // priority implements prioritized.
@@ -62,7 +66,7 @@ func (s *DirGitSegment) detect(ctx context.Context) (segmentData, bool) {
 		}
 	}
 
-	d := &dirGitData{cwd: cwd, home: home, prio: s.Priority, links: s.Links}
+	d := &dirGitData{cwd: cwd, home: home, prio: s.Priority, links: s.Links, pr: s.PR, dirLink: s.DirLink}
 
 	// Reuse the pre-threaded status when the caller already computed it
 	// (Deps.GitInfo); shell out only when it is nil. This is the OTHER half of
@@ -82,8 +86,10 @@ func (d *dirGitData) format(st style.Style, level int) (text, colorKey string) {
 	return text, colorKey
 }
 
-// formatLinked implements linkedFormatter. Links: the directory name → its
-// file:// URL (DirGit family), the branch → the branch on GitHub (Repo family).
+// formatLinked implements linkedFormatter. Links: the directory name → the
+// vscode.dev view of the PR changes, else of the branch, else file:// (DirGit
+// family; dir_link=file forces file://); the branch → the branch on GitHub
+// (Repo family).
 func (d *dirGitData) formatLinked(st style.Style, level int) (string, string, []LinkSpan) {
 	var sb spanBuilder
 
@@ -93,11 +99,7 @@ func (d *dirGitData) formatLinked(st style.Style, level int) (string, string, []
 	}
 
 	// Directory display: depends on compaction level.
-	fileURL := ""
-	if d.links.DirGit {
-		fileURL = FileURL(d.cwd)
-	}
-	sb.linked(d.formatDir(level), fileURL)
+	sb.linked(d.formatDir(level), d.dirURL())
 
 	// Git detail: omit entirely at level 3.
 	if level < 3 && d.hasGit && d.gitInfo != nil {
@@ -105,6 +107,28 @@ func (d *dirGitData) formatLinked(st style.Style, level int) (string, string, []
 	}
 
 	return sb.String(), "dirgit", sb.spans
+}
+
+// dirURL is the directory link: with the DirGit family on and dir_link not
+// "file", the vscode.dev changes view of the PR when one is known, else the
+// vscode.dev view of the branch (GitHub remotes only); otherwise file://.
+func (d *dirGitData) dirURL() string {
+	if !d.links.DirGit {
+		return ""
+	}
+	if d.dirLink != "file" && d.links.RepoURL != "" {
+		if d.pr != nil && d.pr.PRNumber > 0 {
+			if u := VSCodeDevPRURL(d.links.RepoURL, d.pr.PRNumber); u != "" {
+				return u
+			}
+		}
+		if d.hasGit && d.gitInfo != nil && !d.gitInfo.Detached {
+			if u := VSCodeDevTreeURL(d.links.RepoURL, d.gitInfo.Branch); u != "" {
+				return u
+			}
+		}
+	}
+	return FileURL(d.cwd)
 }
 
 // formatDir returns the directory label for the given compaction level.

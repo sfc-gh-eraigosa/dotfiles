@@ -123,3 +123,51 @@ func TestTimeURL_Placeholders(t *testing.T) {
 		t.Error("empty template ⇒ no URL; UTC city = UTC")
 	}
 }
+
+func TestModelFamily(t *testing.T) {
+	cases := map[[2]string]string{
+		{"claude-fable-5-1", "Fable"}:                              "fable",
+		{"claude-opus-4-8", "Claude Opus 4.8 (1M context)"}:        "opus",
+		{"", "Sonnet 5"}:                                           "sonnet",
+		{"", "claude-haiku-4-5"}:                                   "haiku",
+		{"claude-mythos-5-1", ""}:                                  "mythos",
+		{"Gemini 3.5 Flash (Medium)", "Gemini 3.5 Flash (Medium)"}: "gemini",
+		{"", "Mystery Model"}:                                      "",
+		{"", ""}:                                                   "",
+	}
+	for in, want := range cases {
+		if got := modelFamily(in[0], in[1]); got != want {
+			t.Errorf("modelFamily(%q, %q) = %q want %q", in[0], in[1], got, want)
+		}
+	}
+}
+
+func TestModelURL(t *testing.T) {
+	if got := ModelURL("", "claude-fable-5-1", "Fable"); got != "https://www.anthropic.com/claude/fable" {
+		t.Errorf("built-in map: %q", got)
+	}
+	if got := ModelURL("", "Gemini 3.5 Flash (Medium)", "Gemini 3.5 Flash (Medium)"); got != DefaultGeminiModelURL {
+		t.Errorf("gemini built-in: %q", got)
+	}
+	if got := ModelURL("", "", "Mystery"); got != "" {
+		t.Errorf("unknown family must yield no URL, got %q", got)
+	}
+	if got := ModelURL("https://x/{family}/{model_id}/{display_name}", "claude-opus-5", "Opus 5"); got != "https://x/opus/claude-opus-5/Opus%205" {
+		t.Errorf("template: %q", got)
+	}
+	if got := ModelURL("https://x/{family}", "", "Mystery"); got != "" {
+		t.Errorf("template with unknown family must yield no URL, got %q", got)
+	}
+}
+
+func TestVSCodeDevURLs(t *testing.T) {
+	if got := VSCodeDevPRURL("https://github.com/o/r", 279); got != "https://vscode.dev/github/o/r/pull/279/changes" {
+		t.Errorf("PR: %q", got)
+	}
+	if got := VSCodeDevTreeURL("https://github.com/o/r", "feature/a b"); got != "https://vscode.dev/github/o/r/tree/feature/a%20b" {
+		t.Errorf("tree: %q", got)
+	}
+	if VSCodeDevPRURL("https://gitlab.com/o/r", 1) != "" || VSCodeDevTreeURL("https://github.com/o/r", "") != "" || VSCodeDevPRURL("https://github.com/o/r", 0) != "" {
+		t.Error("non-GitHub, empty branch, or PR 0 must yield no URL")
+	}
+}

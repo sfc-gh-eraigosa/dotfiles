@@ -99,18 +99,23 @@ Set under `segments[].options` in `~/.config/gsl/config.json`.
 | `repo` | `show_count` | `true` | Show the worktree-count badge |
 | `repo` | `name` | `"feature"` | Label source: `feature` / `worker` / `branch` / `off` |
 | `repo` | `link_pr` | `true` | Make the PR badge a hyperlink to the PR (URL from the gss registry `pr_url`, or `gh pr view --json url`; unlinked when neither supplies one) |
-| `ai` | `usage_url` | Claude: `https://claude.ai/settings/usage`; agy: none | Target of the model / context / 5h / 7d links. The only way to give Antigravity a target. |
+| `dirgit` | `dir_link` | `"vscode"` | Directory link: `vscode` = vscode.dev GitHub view (PR changes if the branch has a PR, else the branch; `file://` off GitHub), `file` = always `file://` |
+| `ai` | `usage_url` | Claude: `https://claude.ai/settings/usage`; agy: none | Target of the context / 5h / 7d links. The only way to give Antigravity a usage target. |
+| `ai` | `model_url` | built-in family map | Model-name link. Empty = Claude families → `https://www.anthropic.com/claude/{family}`, gemini → Google's Gemini models page; template placeholders `{family}` `{model_id}` `{display_name}`; unknown family → no link |
 | `time` | `link_url` | `https://time.is/{tz_city}` | Template for the date/time link. Placeholders `{tz}` `{tz_city}` `{iso_utc}` `{unix}`; empty disables it |
 
 ### Links (OSC 8 hyperlinks)
 
 Every field with a web home is an OSC 8 hyperlink, underlined by default. Open
 with the terminal's link gesture — **Ctrl+click** in gnome-terminal / VTE
-(URL on hover), Cmd+click in iTerm2. Targets: directory → `file://<cwd>`;
-dirgit branch and repo label → `https://github.com/<owner>/<repo>/tree/<branch>`
-(GitHub remotes only, from `git remote get-url origin`); repo glyph → repo home;
-PR badge → the PR; ai model/context/5h/7d → the usage page; time → the
-`link_url` template.
+(URL on hover), Cmd+click in iTerm2. Targets: directory → the vscode.dev GitHub
+view (`/pull/<n>/changes` when the branch has a PR, else `/tree/<branch>`;
+`file://<cwd>` off GitHub); dirgit branch and repo label →
+`https://github.com/<owner>/<repo>/tree/<branch>` (GitHub remotes only, from
+`git remote get-url origin`); repo glyph → repo home; PR badge → the PR; ai model
+name → its model page (family from `model.id`, e.g. anthropic.com/claude/fable);
+ai context/5h/7d → the usage page; time → the `link_url` template. The PR is
+looked up once in cmd (gss registry, then gh) and shared by both segments.
 
 Links are **spans**: each segment records the byte ranges of its raw text that
 address something, and the join layer wraps exactly those ranges (OSC 8 +

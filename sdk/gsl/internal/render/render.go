@@ -13,6 +13,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/observe"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
 	"github.com/sirupsen/logrus"
 )
@@ -87,6 +88,13 @@ type Deps struct {
 	// config mode and the gff master flag by cmd). The zero value links
 	// nothing, so callers that never heard of links render exactly as before.
 	Links Links
+
+	// PR is a PRE-COMPUTED repo.PR result, threaded like GitInfo: cmd runs the
+	// lookup once (concurrently with the flag and origin lookups) so both the
+	// repo segment (badge) and the dirgit segment (directory → vscode.dev PR
+	// changes view) can use it without a second lookup. Nil ⇒ the repo
+	// segment looks it up itself, exactly as before.
+	PR *repo.RepoInfo
 }
 
 // BuildSegments constructs the ordered list of ENABLED segments from
@@ -113,11 +121,14 @@ func BuildSegments(cfg config.Config, deps Deps) []Segment {
 			// git.Status inside Detect (WS3/F12). Nil ⇒ detect it ourselves.
 			dg.Info = deps.GitInfo
 			dg.Links = deps.Links
+			dg.PR = deps.PR
+			dg.DirLink = optString(sc.Options, "dir_link", "vscode")
 			segs = append(segs, dg)
 		case "repo":
 			s := NewRepoSegment(deps.Git, deps.GH, deps.Branch, deps.RegistryPath, sc.Options)
 			s.Priority = prio
 			s.Links = deps.Links
+			s.PR = deps.PR
 			segs = append(segs, s)
 		case "ai":
 			s := NewAISegment(deps.Payload, deps.Cwd, deps.MCP, deps.MCPOpts)
@@ -126,6 +137,8 @@ func BuildSegments(cfg config.Config, deps Deps) []Segment {
 			// The usage_url option overrides the host default (also the way to
 			// give Antigravity a target, which has no known default).
 			s.Links.UsageURL = optString(sc.Options, "usage_url", deps.Links.UsageURL)
+			// model_url overrides the built-in family map for the model-name link.
+			s.Links.ModelURL = optString(sc.Options, "model_url", deps.Links.ModelURL)
 			segs = append(segs, s)
 		case "time":
 			s := NewTimeSegment(deps.Clock, cfg.Timezone, cfg.TimeFormat, cfg.DateFormat)

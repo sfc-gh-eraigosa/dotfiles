@@ -110,7 +110,13 @@ Always renders (directory is always available). Shows:
 
 When the working directory is not inside a git repo, only the directory name is shown — the segment does not self-omit.
 
-Links (see [Links](#links)): the directory name opens the working directory as a `file://` URL; the branch opens the branch on GitHub.
+Segment options (`options` map of the `dirgit` segment):
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `dir_link` | string | `"vscode"` | Directory link target: `vscode` opens the vscode.dev GitHub view (the PR's changes when the branch has one, else the branch); `file` always opens the working directory as `file://`. Off GitHub, `vscode` falls back to `file://`. |
+
+Links (see [Links](#links)): the directory name opens the vscode.dev view of the PR changes or of the branch (`file://` off GitHub); the branch opens the branch on GitHub.
 
 ### `repo`
 
@@ -145,7 +151,8 @@ Segment options (`options` map of the `ai` segment):
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `usage_url` | string | Claude Code: `https://claude.ai/settings/usage`; Antigravity: none | Target of the model / context / 5h / 7d links (see [Links](#links)). Set it to give Antigravity a target. |
+| `usage_url` | string | Claude Code: `https://claude.ai/settings/usage`; Antigravity: none | Target of the context / 5h / 7d links (see [Links](#links)). Set it to give Antigravity a target. |
+| `model_url` | string | built-in family map | Target of the model-name link. Empty = the built-in map: Claude families (`fable`, `mythos`, `opus`, `sonnet`, `haiku`) → `https://www.anthropic.com/claude/{family}`, `gemini` → `https://ai.google.dev/gemini-api/docs/models`. A template may use `{family}`, `{model_id}`, `{display_name}`. Unknown family → no model link. |
 
 ### `time`
 
@@ -211,11 +218,12 @@ Every field with a web home is an [OSC 8](https://gist.github.com/egmontkob/eb11
 
 | Field | Opens |
 |-------|-------|
-| `dirgit` directory name | `file://<cwd>` (the file manager in VTE terminals) |
+| `dirgit` directory name | vscode.dev: `https://vscode.dev/github/<owner>/<repo>/pull/<n>/changes` when the branch has a PR, else `…/tree/<branch>`; `file://<cwd>` off GitHub or with `dir_link: file` |
 | `dirgit` branch, `repo` name label | `https://github.com/<owner>/<repo>/tree/<branch>` (GitHub remotes only; derived from `git remote get-url origin`) |
 | `repo` root/worktree glyph | the repository home |
 | `repo` PR badge | the pull request (`link_pr`) |
-| `ai` model, context %, 5h %, 7d % | the usage page (`usage_url`; Claude Code default `https://claude.ai/settings/usage`) |
+| `ai` model name | the model's page, by family from `model.id` (e.g. `https://www.anthropic.com/claude/fable`; `model_url` overrides) |
+| `ai` context %, 5h %, 7d % | the usage page (`usage_url`; Claude Code default `https://claude.ai/settings/usage`) |
 | `time` date/time | the `link_url` template (default `https://time.is/{tz_city}`) |
 
 Links add zero display width: the fit loop measures, truncates, and sheds exactly as it does without them, and a truncated field keeps its link on the part that survives.
@@ -228,8 +236,8 @@ Links add zero display width: the fit loop measures, truncates, and sheds exactl
   ```bash
   gff set gsl.links.enabled false   # master: no links at all
   gff set gsl.links.repo false      # PR badge, name label, glyph, dirgit branch
-  gff set gsl.links.dirgit false    # directory file:// link
-  gff set gsl.links.ai false        # model / context / rate → usage page
+  gff set gsl.links.dirgit false    # directory → vscode.dev / file:// link
+  gff set gsl.links.ai false        # model → model page; context / rate → usage page
   gff set gsl.links.time false      # date/time → timezone page
   ```
 

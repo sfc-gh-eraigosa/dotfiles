@@ -23,6 +23,7 @@ import (
 // aiData is the detect-once intermediate for the AI segment.
 type aiData struct {
 	modelName     string
+	modelID       string
 	ctxPct        *float64
 	tokenUsed     *float64
 	tokenTotal    *float64
@@ -56,6 +57,9 @@ func (s *AISegment) detect(ctx context.Context) (segmentData, bool) {
 
 	if p.Model != nil && p.Model.DisplayName != nil {
 		d.modelName = *p.Model.DisplayName
+	}
+	if p.Model != nil && p.Model.ID != nil {
+		d.modelID = *p.Model.ID
 	}
 	if cw := p.ContextWindow; cw != nil {
 		d.ctxPct = cw.UsedPercentage
@@ -92,17 +96,19 @@ func (d *aiData) format(st style.Style, level int) (text, colorKey string) {
 	return text, colorKey
 }
 
-// formatLinked implements linkedFormatter. Links (AI family, UsageURL): the
-// model name, the context usage, and each rate-limit field — every fact whose
-// detail lives on the usage page. The MCP count has no web home and stays plain.
+// formatLinked implements linkedFormatter. Links (AI family): the model name →
+// its model page (ModelURL: family from the id, else the display name); the
+// context usage and each rate-limit field → the usage page. The MCP count has
+// no web home and stays plain.
 func (d *aiData) formatLinked(st style.Style, level int) (string, string, []LinkSpan) {
 	if !d.hasPayload {
 		return "", "", nil
 	}
 
-	usage := ""
+	usage, modelPage := "", ""
 	if d.links.AI {
 		usage = d.links.UsageURL
+		modelPage = ModelURL(d.links.ModelURL, d.modelID, d.modelName)
 	}
 	var sb spanBuilder
 	sep := func() {
@@ -125,7 +131,7 @@ func (d *aiData) formatLinked(st style.Style, level int) (string, string, []Link
 		if level >= 3 {
 			name = shortenModelName(d.modelName)
 		}
-		sb.linked(name, usage)
+		sb.linked(name, modelPage)
 	} else if g := glyph(st, "ai"); g != "" {
 		sb.write(g)
 	}

@@ -11,6 +11,7 @@ import (
 
 	ghfake "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh/fake"
 	gitfake "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git/fake"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
 )
 
@@ -198,5 +199,22 @@ func TestRepo_Spans_FamilyOff(t *testing.T) {
 	_, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
 	if len(spans) != 0 {
 		t.Errorf("repo family off must yield no spans (PR included): %+v", spans)
+	}
+}
+
+// TestRepo_UsesPrecomputedPR: when cmd threads the PR lookup in (Deps.PR) the
+// segment must not look it up again — the gh fallback runner stays untouched.
+func TestRepo_UsesPrecomputedPR(t *testing.T) {
+	r := &gitfake.Runner{Script: locateResponses(true, "/nowhere", 1)}
+	gh := &ghfake.Runner{}
+	seg := NewRepoSegment(r, gh, "some/unregistered-branch", "/nonexistent-registry.json", nil)
+	seg.Links = Links{Repo: true}
+	seg.PR = &repo.RepoInfo{PRNumber: 42, PRState: "OPEN", PRURL: "https://github.com/o/r/pull/42"}
+	text, _, spans, ok := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	if !ok || !strings.Contains(text, "PR#42") || len(spans) != 1 || spans[0].URL != "https://github.com/o/r/pull/42" {
+		t.Fatalf("precomputed PR not used: text=%q spans=%+v", text, spans)
+	}
+	if gh.CallCount() != 0 {
+		t.Errorf("gh must not be called when the PR is precomputed; got %d calls", gh.CallCount())
 	}
 }

@@ -16,6 +16,9 @@ import (
 type Links struct {
 	Repo, DirGit, AI, Time     bool
 	RepoURL, UsageURL, TimeURL string
+	// ModelURL is the model-name link template ("" ⇒ the built-in family map,
+	// see ModelURL). Placeholders: {family}, {model_id}, {display_name}.
+	ModelURL string
 }
 
 const (
@@ -24,8 +27,12 @@ const (
 	DefaultClaudeUsageURL = "https://claude.ai/settings/usage"
 	// DefaultTimeURL is the time segment's link template.
 	DefaultTimeURL = "https://time.is/{tz_city}"
-	sgrUnderline   = "\x1b[4m"
-	sgrNoUnderline = "\x1b[24m"
+	// DefaultModelURL is the built-in model-page template for Claude families.
+	DefaultModelURL = "https://www.anthropic.com/claude/{family}"
+	// DefaultGeminiModelURL is the built-in target for Gemini models (Antigravity).
+	DefaultGeminiModelURL = "https://ai.google.dev/gemini-api/docs/models"
+	sgrUnderline          = "\x1b[4m"
+	sgrNoUnderline        = "\x1b[24m"
 )
 
 // spanBuilder records link spans while a segment builds its raw text, so the
@@ -141,6 +148,39 @@ func TreeURL(base, branch string) string {
 	return base + "/tree/" + strings.Join(parts, "/")
 }
 
+// vscodeDevBase maps a normalized GitHub web URL onto vscode.dev's GitHub
+// view ("https://github.com/o/r" → "https://vscode.dev/github/o/r"); "" for
+// any other host.
+func vscodeDevBase(base string) string {
+	const gh = "https://github.com/"
+	if !strings.HasPrefix(base, gh) || len(base) == len(gh) {
+		return ""
+	}
+	return "https://vscode.dev/github/" + strings.TrimPrefix(base, gh)
+}
+
+// VSCodeDevPRURL is the vscode.dev "changes" view of pull request n.
+func VSCodeDevPRURL(base string, n int) string {
+	b := vscodeDevBase(base)
+	if b == "" || n <= 0 {
+		return ""
+	}
+	return b + "/pull/" + strconv.Itoa(n) + "/changes"
+}
+
+// VSCodeDevTreeURL is the vscode.dev view of a branch.
+func VSCodeDevTreeURL(base, branch string) string {
+	b := vscodeDevBase(base)
+	if b == "" || branch == "" {
+		return ""
+	}
+	parts := strings.Split(branch, "/")
+	for i, p := range parts {
+		parts[i] = url.PathEscape(p)
+	}
+	return b + "/tree/" + strings.Join(parts, "/")
+}
+
 // FileURL is the file:// URL of an absolute working directory.
 func FileURL(cwd string) string {
 	if cwd == "" || !strings.HasPrefix(cwd, "/") {
@@ -148,6 +188,51 @@ func FileURL(cwd string) string {
 	}
 	u := url.URL{Scheme: "file", Path: cwd}
 	return u.String()
+}
+
+// linkFamilies are the recognised family tokens, in match order. A family is
+// the finest key with a stable public page: versions have no predictable URL.
+var linkFamilies = []string{"fable", "mythos", "opus", "sonnet", "haiku", "gemini"}
+
+// modelFamily returns the family token found in the model id, else in the
+// display name, else "". Matching is case-insensitive on whole tokens split at
+// "-", " ", "_", and parentheses.
+func modelFamily(id, name string) string {
+	for _, src := range []string{id, name} {
+		for _, tok := range strings.FieldsFunc(strings.ToLower(src), func(r rune) bool {
+			return r == '-' || r == ' ' || r == '_' || r == '(' || r == ')'
+		}) {
+			for _, fam := range linkFamilies {
+				if tok == fam {
+					return fam
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// ModelURL is the model-name link. With an empty template the built-in map
+// applies: Claude families → DefaultModelURL, gemini → DefaultGeminiModelURL.
+// A template is expanded with {family}, {model_id}, {display_name} (the last
+// two path-escaped). An unrecognised family yields no link either way.
+func ModelURL(tpl, id, name string) string {
+	fam := modelFamily(id, name)
+	if fam == "" {
+		return ""
+	}
+	if tpl == "" {
+		if fam == "gemini" {
+			return DefaultGeminiModelURL
+		}
+		tpl = DefaultModelURL
+	}
+	r := strings.NewReplacer(
+		"{family}", fam,
+		"{model_id}", url.PathEscape(id),
+		"{display_name}", url.PathEscape(name),
+	)
+	return r.Replace(tpl)
 }
 
 // TimeURL expands the time segment's link template. Placeholders: {tz} (IANA

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
 )
 
@@ -34,9 +35,16 @@ type DirGitSegment struct {
 	// home overrides $HOME for ~-abbreviation (tests). Empty → os.UserHomeDir.
 	home string
 
-	// Links is the link policy (Deps.Links): DirGit gates the directory →
-	// file:// link, Repo the branch → GitHub tree link. Zero value ⇒ no links.
+	// Links is the link policy (Deps.Links): DirGit gates the directory link,
+	// Repo the branch → GitHub tree link. Zero value ⇒ no links.
 	Links Links
+	// PR is the PRE-COMPUTED pull-request lookup (Deps.PR), used for the
+	// directory → vscode.dev "changes" link. Nil ⇒ no PR known.
+	PR *repo.RepoInfo
+	// DirLink selects the directory link target: "vscode" (default — the
+	// vscode.dev view of the PR changes, else of the branch, falling back to
+	// file:// off GitHub) or "file" (always file://).
+	DirLink string
 }
 
 // NewDirGitSegment builds a DirGitSegment. cwd may be "" to fall back to

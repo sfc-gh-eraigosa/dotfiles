@@ -57,6 +57,11 @@ type RepoSegment struct {
 	// label → branch tree, and PR badge → PR links; LinkPR additionally gates
 	// the badge. Zero value ⇒ no links.
 	Links Links
+	// PR is the PRE-COMPUTED pull-request lookup (Deps.PR). When non-nil the
+	// segment uses it instead of running repo.PR itself — cmd already paid for
+	// that lookup (concurrently with the flag and origin lookups) so the
+	// dirgit segment can link the directory to the PR too. Nil ⇒ look it up.
+	PR *repo.RepoInfo
 }
 
 // NewRepoSegment builds a RepoSegment, applying option defaults from opts.
