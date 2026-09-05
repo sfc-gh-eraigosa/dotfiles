@@ -4,7 +4,7 @@
 - **Date:** 2026-09-05
 - **Status:** Ready to execute (after design PR approval)
 - **Plan (source of truth):** [`../gcfg.md`](../gcfg.md) · spec [`../../specs/gcfg.md`](../../specs/gcfg.md) · design [`../../designs/gcfg.md`](../../designs/gcfg.md)
-- **Objective anchors:** issue #284 · design PR (see `docs/mbo/index.md` row `gcfg`) · `gss feature gcfg`
+- **Objective anchors:** issue #284 · design PR #285 · `gss feature gcfg`
 
 > This file is the **procedure**. It does not restate the plan — it tells a fresh agent
 > session how to execute the plan, task by task, resumably. The plan wins any conflict.
