@@ -212,7 +212,13 @@ if [ -n "$TARGET" ]; then
 fi
 
 # --- Judge ----------------------------------------------------------------------
-if finding="$(privacy_scan "$TEXT" "$CTX")"; then
+T0="$(privacy_now_ms)"
+finding="$(privacy_scan "$TEXT" "$CTX")"; SCAN_RC=$?
+if ! privacy_timing "agent:$TOOL_NAME" "$T0" "${#TEXT}"; then
+    # Claude shows a hook's systemMessage to the user; the JSON dialect gets stderr only.
+    [[ "$TOOL_NAME" =~ ^[a-z_]+$ ]] || printf '{"systemMessage":"privacy_guard: SLOW — %s (see stderr / make hook-timing)"}\n' "agent:$TOOL_NAME"
+fi
+if [ "$SCAN_RC" -eq 0 ]; then
     allow
 fi
 deny "${finding%%	*}" "${finding#*	}"

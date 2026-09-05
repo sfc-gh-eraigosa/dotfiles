@@ -285,6 +285,20 @@ if gff_on install.git.hooks; then
   fi
 else gff_skip_msg install.git.hooks; fi
 
+# gitleaks: the broad, upstream-maintained secret ruleset the privacy guard
+# (agent hook + git hooks) judges with when the binary is present; our built-in
+# shapes stay as the floor. Flag off => install nothing AND tell the hooks to
+# skip it (marker file), so a binary from elsewhere does not re-enable it.
+# Every judged call is timed; `make hook-timing` reports and goes red over budget.
+if gff_on install.git.gitleaks; then
+  if [ -f "${BASE_DIR}/opt/scripts/git/install_gitleaks.sh" ]; then
+    "${BASE_DIR}/opt/scripts/git/install_gitleaks.sh" || echo "WARN: gitleaks install failed; the privacy guard keeps its built-in secret shapes"
+  fi
+else
+  gff_skip_msg install.git.gitleaks
+  [ -f "${BASE_DIR}/opt/scripts/git/install_gitleaks.sh" ] && "${BASE_DIR}/opt/scripts/git/install_gitleaks.sh" --off
+fi
+
 # herdr agent integrations (`herdr integration install claude|antigravity-cli`):
 # the hook scripts that report each agent's working/blocked/done state to the
 # herdr sidebar. install_antigravity_skills.sh MERGES its `guards` entry into

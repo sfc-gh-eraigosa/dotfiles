@@ -64,11 +64,17 @@ claude-test: ## Run Claude Code sanity check (CLI, links, hooks, 27-case hook te
 claude-hook-test: hook-test ## (alias) Run every guard test suite — see hook-test
 
 .PHONY: hook-test
-hook-test: ## Run the guard suites: safety_guard, privacy_guard, git privacy hooks, git-hook installer (CI-gated, strict)
+hook-test: ## Run the guard suites: safety_guard, privacy_guard, git privacy hooks, git-hook installer, gitleaks installer, timing report (CI-gated, strict)
 	./ai/hooks/safety_guard_test.sh
 	./ai/hooks/privacy_guard_test.sh
 	./ai/githooks/githooks_test.sh
 	./opt/scripts/git/install_git_hooks_test.sh
+	./opt/scripts/git/install_gitleaks_test.sh
+	./opt/scripts/git/privacy_guard_timing_test.sh
+
+.PHONY: hook-timing
+hook-timing: ## How much time is the privacy guard costing? Per-hook stats from its timing log; red if any run is over budget (PRIVACY_GUARD_BUDGET_MS, default 1500)
+	./opt/scripts/git/privacy_guard_timing.sh
 
 .PHONY: ruleset-snapshot
 ruleset-snapshot: ## Refresh .github/rulesets/*.json from the live GitHub rulesets (reviewable audit trail; run after any ruleset change)

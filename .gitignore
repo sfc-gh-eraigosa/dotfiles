@@ -32,6 +32,8 @@
 !.shellcheckrc
 !.markdownlint.jsonc
 !.ci-baseline-issues.md
+# gitleaks config read by the privacy guard (ai/hooks/privacy_rules.sh passes -c)
+!.gitleaks.toml
 
 # Repository Structure Exceptions
 !.github/

@@ -105,9 +105,12 @@ sets:
       - path: install.ai.teams
         description: Runs the install_ai_teams.sh block.
         boolDefault: true
-      # --- git (1) ---
+      # --- git (2) ---
       - path: install.git.hooks
         description: Runs install_git_hooks.sh (global privacy git hooks — pre-commit, commit-msg, pre-push — via core.hooksPath).
+        boolDefault: true
+      - path: install.git.gitleaks
+        description: Runs install_gitleaks.sh (gitleaks binary — the upstream secret ruleset the privacy guard's agent hook and git hooks delegate to). false also writes ~/.config/privacy_guard/gitleaks=off so the hooks skip a binary that is present anyway.
         boolDefault: true
       # --- sdk (6) ---
       - path: install.sdk.gss

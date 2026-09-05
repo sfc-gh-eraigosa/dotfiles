@@ -225,9 +225,14 @@ jobs:
     # STRICT on purpose — no continue-on-error. These suites pin the privacy
     # and safety guards that stand between a session and a public push; a red
     # here must block the merge. They are hermetic (throwaway repos, controlled
-    # identity) and need only bash, git and jq, all present on ubuntu-latest.
+    # identity) and need only bash, git and jq, all present on ubuntu-latest,
+    # plus gitleaks (installed below) for the real-binary cases.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install gitleaks (real-binary cases of the privacy suites; exercises our installer's verified release path)
+        run: |
+          GITLEAKS_INSTALL_METHOD=release ./opt/scripts/git/install_gitleaks.sh
+          echo "$HOME/opt/bin" >> "$GITHUB_PATH"
       - name: Run make hook-test
         run: make hook-test
 
