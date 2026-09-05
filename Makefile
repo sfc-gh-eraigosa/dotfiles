@@ -84,6 +84,14 @@ ruleset-snapshot: ## Refresh .github/rulesets/*.json from the live GitHub rulese
 git-doctor: ## Check git identity (user.email/name) against the authenticated GitHub account (pass extra repos as args to the script directly)
 	./opt/scripts/git/git_identity_doctor.sh .
 
+.PHONY: secret-scanning
+secret-scanning: ## Turn on GitHub secret scanning + push protection + non-provider patterns for this repo (server-side backstop; idempotent; free on public repos)
+	./opt/scripts/git/github_secret_scanning.sh
+
+.PHONY: secret-scanning-check
+secret-scanning-check: ## Verify GitHub secret scanning + push protection are on (exit 1 if not; non-provider patterns WARN only)
+	./opt/scripts/git/github_secret_scanning.sh --check
+
 .PHONY: skill-evals
 skill-evals: ## Validate agent-skill eval corpora (ai/skills/*/evals/evals.json) deterministically
 	./opt/scripts/system/skill-eval.sh --check
