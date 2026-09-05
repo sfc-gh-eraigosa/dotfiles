@@ -20,27 +20,27 @@ const osc8Close = "\x1b]8;;\x1b\\"
 // layer, not the segment, owns escape emission.
 func TestRepo_RenderLinked_ReportsPRURL(t *testing.T) {
 	seg, _ := newRepoSeg(false, 1, nil)
-	_, _, link, ok := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	_, _, spans, ok := seg.RenderLinked(context.Background(), asciiStyle(), 0)
 	if !ok {
 		t.Fatal("want ok=true")
 	}
-	if link != wantPRURL {
-		t.Errorf("link = %q, want %q", link, wantPRURL)
+	if len(spans) == 0 || spans[len(spans)-1].URL != wantPRURL {
+		t.Fatalf("spans = %+v, want last span URL %q", spans, wantPRURL)
 	}
-	if strings.Contains(link, "\x1b") {
-		t.Errorf("link must be a bare URL, got an escape sequence: %q", link)
+	if strings.Contains(spans[len(spans)-1].URL, "\x1b") {
+		t.Errorf("link must be a bare URL, got an escape sequence: %q", spans[len(spans)-1].URL)
 	}
 }
 
 // TestRepo_LinkPRDisabled: opting out yields no link but keeps the badge.
 func TestRepo_LinkPRDisabled(t *testing.T) {
 	seg, _ := newRepoSeg(false, 1, map[string]any{"link_pr": false})
-	text, _, link, ok := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	text, _, spans, ok := seg.RenderLinked(context.Background(), asciiStyle(), 0)
 	if !ok {
 		t.Fatal("want ok=true")
 	}
-	if link != "" {
-		t.Errorf("link_pr=false: want no link, got %q", link)
+	if len(spans) != 0 {
+		t.Errorf("link_pr=false: want no link, got %+v", spans)
 	}
 	if !strings.Contains(text, "PR#21") {
 		t.Errorf("link_pr=false must not hide the badge; got %q", text)
@@ -51,12 +51,12 @@ func TestRepo_LinkPRDisabled(t *testing.T) {
 // invisible click target, so show_pr=false must also suppress the link.
 func TestRepo_NoLinkWhenPRHidden(t *testing.T) {
 	seg, _ := newRepoSeg(false, 1, map[string]any{"show_pr": false})
-	_, _, link, ok := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	_, _, spans, ok := seg.RenderLinked(context.Background(), asciiStyle(), 0)
 	if !ok {
 		t.Fatal("want ok=true")
 	}
-	if link != "" {
-		t.Errorf("show_pr=false: want no link, got %q", link)
+	if len(spans) != 0 {
+		t.Errorf("show_pr=false: want no link, got %+v", spans)
 	}
 }
 
@@ -65,7 +65,7 @@ func TestRepo_NoLinkWhenPRHidden(t *testing.T) {
 func TestJoin_EmitsOSC8(t *testing.T) {
 	blocks := []segmentBlock{
 		{text: "left", colorKey: "repo_root"},
-		{text: "PR#21", colorKey: "repo_root", link: wantPRURL},
+		{text: "PR#21", colorKey: "repo_root", links: []LinkSpan{{0, 5, wantPRURL}}},
 	}
 	for _, st := range []struct {
 		name  string
@@ -97,7 +97,7 @@ func TestJoin_EmitsOSC8(t *testing.T) {
 func TestJoin_OSC8_DoesNotChangeWidth(t *testing.T) {
 	plain := []segmentBlock{{text: "PR#21", colorKey: "repo_root"}}
 	linked := []segmentBlock{{text: "PR#21", colorKey: "repo_root",
-		link: "https://github.com/some-org/a-very-long-repository-name/pull/21"}}
+		links: []LinkSpan{{0, 5, "https://github.com/some-org/a-very-long-repository-name/pull/21"}}}}
 	for _, st := range []struct {
 		name  string
 		style style.Style
@@ -120,13 +120,16 @@ func TestJoin_OSC8_DoesNotChangeWidth(t *testing.T) {
 func TestTruncate_PreservesLink(t *testing.T) {
 	st := asciiStyle()
 	blocks := []segmentBlock{
-		{text: "a-long-repo-label PR#21", colorKey: "repo_root", link: wantPRURL},
+		{text: "a-long-repo-label PR#21", colorKey: "repo_root", links: []LinkSpan{{0, 17, wantPRURL}}},
 	}
 	out := truncateToWidth(blocks, st, 12)
 	if len(out) == 0 {
 		t.Fatal("want at least one surviving block")
 	}
-	if out[0].link != wantPRURL {
-		t.Errorf("truncation dropped the link: got %q, want %q", out[0].link, wantPRURL)
+	if len(out[0].links) != 1 || out[0].links[0].URL != wantPRURL {
+		t.Fatalf("truncation dropped the link: got %+v, want %q", out[0].links, wantPRURL)
+	}
+	if end := out[0].links[0].End; end > len(out[0].text)-len(ellipsis) {
+		t.Errorf("link span (end %d) must stop before the ellipsis in %q", end, out[0].text)
 	}
 }

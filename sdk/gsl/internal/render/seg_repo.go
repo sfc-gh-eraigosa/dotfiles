@@ -82,14 +82,14 @@ func (s *RepoSegment) Render(ctx context.Context, st style.Style, level int) (te
 
 // RenderLinked implements LinkedSegment. It is the real implementation — Render
 // delegates to it and discards the link — so the two can never drift apart.
-func (s *RepoSegment) RenderLinked(ctx context.Context, st style.Style, _ int) (text, colorKey, link string, ok bool) {
+func (s *RepoSegment) RenderLinked(ctx context.Context, st style.Style, _ int) (text, colorKey string, spans []LinkSpan, ok bool) {
 	if s.Git == nil {
-		return "", "", "", false
+		return "", "", nil, false
 	}
 	loc, err := repo.Locate(ctx, s.Git, "")
 	if err != nil {
 		// Not a git repo (or git unavailable) → omit the whole segment.
-		return "", "", "", false
+		return "", "", nil, false
 	}
 
 	// PR / feature lookup (best-effort; nil or error ⇒ omit those parts).
@@ -129,7 +129,13 @@ func (s *RepoSegment) RenderLinked(ctx context.Context, st style.Style, _ int) (
 		// they restore the segment's own fg color before returning. This is a
 		// known exception: prBadge's tinting is scoped to the number only and
 		// does not embed a full reset that would interfere with the join layer.
+		badgeStart := b.Len()
 		b.WriteString(prBadge(st, info.PRNumber, info.PRState))
+		// Gated on the badge actually being on the line: a hyperlink over a
+		// segment showing no PR would be an invisible click target.
+		if s.LinkPR && info.PRURL != "" {
+			spans = append(spans, LinkSpan{Start: badgeStart, End: b.Len(), URL: info.PRURL})
+		}
 	}
 
 	if s.ShowCount && loc.WorktreeCount >= 2 {
@@ -140,15 +146,9 @@ func (s *RepoSegment) RenderLinked(ctx context.Context, st style.Style, _ int) (
 	}
 
 	if b.Len() == 0 {
-		return "", "", "", false
+		return "", "", nil, false
 	}
-
-	// Gated on the badge actually being on the line: a hyperlink over a segment
-	// showing no PR would be an invisible click target.
-	if s.LinkPR && s.ShowPR && info != nil && info.PRNumber > 0 {
-		link = info.PRURL
-	}
-	return b.String(), themeKey, link, true
+	return b.String(), themeKey, spans, true
 }
 
 // nameLabel resolves the segment's name label per NameMode.

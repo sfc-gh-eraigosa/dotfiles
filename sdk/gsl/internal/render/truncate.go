@@ -125,7 +125,8 @@ func truncateToWidth(blocks []segmentBlock, st style.Style, cols int) []segmentB
 	// lost by dropping the sub-field tint in this last-resort path.
 	work := make([]segmentBlock, len(blocks))
 	for i, b := range blocks {
-		work[i] = segmentBlock{text: term.StripANSI(b.text), colorKey: b.colorKey, link: b.link}
+		stripped := term.StripANSI(b.text)
+		work[i] = segmentBlock{text: stripped, colorKey: b.colorKey, links: reanchorSpans(b.text, stripped, b.links)}
 	}
 
 	// Shed trailing blocks until the decoration leaves at least one column for
@@ -154,10 +155,15 @@ func truncateToWidth(blocks []segmentBlock, st style.Style, cols int) []segmentB
 			continue
 		}
 		if remaining >= 1 {
+			cut := truncateText(b.text, remaining)
+			kept := len(cut)
+			if cut != b.text {
+				kept -= len(ellipsis) // the ellipsis is never inside a link
+			}
 			out = append(out, segmentBlock{
-				text:     truncateText(b.text, remaining),
+				text:     cut,
 				colorKey: b.colorKey,
-				link:     b.link,
+				links:    clipSpans(b.links, kept),
 			})
 		}
 		break

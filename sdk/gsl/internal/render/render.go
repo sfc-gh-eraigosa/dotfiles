@@ -162,7 +162,7 @@ func RenderAt(ctx context.Context, cfg config.Config, st style.Style, segs []Seg
 	type result struct {
 		text     string
 		colorKey string
-		link     string
+		spans    []LinkSpan
 		ok       bool
 	}
 	results := make([]result, len(segs))
@@ -187,12 +187,13 @@ func RenderAt(ctx context.Context, cfg config.Config, st style.Style, segs []Seg
 			sctx, cancel := context.WithTimeout(ctx, segmentDeadline)
 			defer cancel()
 
-			// A segment implementing LinkedSegment also reports a URL its
+			// A segment implementing LinkedSegment also reports the spans its
 			// content addresses; everything else renders exactly as before.
-			var text, colorKey, link string
+			var text, colorKey string
+			var spans []LinkSpan
 			var ok bool
 			if ls, isLinked := s.(LinkedSegment); isLinked {
-				text, colorKey, link, ok = ls.RenderLinked(sctx, st, compactLevel)
+				text, colorKey, spans, ok = ls.RenderLinked(sctx, st, compactLevel)
 			} else {
 				text, colorKey, ok = s.Render(sctx, st, compactLevel)
 			}
@@ -205,7 +206,7 @@ func RenderAt(ctx context.Context, cfg config.Config, st style.Style, segs []Seg
 				results[idx] = result{ok: false}
 				return
 			}
-			results[idx] = result{text: text, colorKey: colorKey, link: link, ok: ok}
+			results[idx] = result{text: text, colorKey: colorKey, spans: spans, ok: ok}
 		}(i, seg)
 	}
 	wg.Wait()
@@ -213,7 +214,7 @@ func RenderAt(ctx context.Context, cfg config.Config, st style.Style, segs []Seg
 	blocks := make([]segmentBlock, 0, len(segs))
 	for _, r := range results {
 		if r.ok && r.text != "" {
-			blocks = append(blocks, segmentBlock{text: r.text, colorKey: r.colorKey, link: r.link})
+			blocks = append(blocks, segmentBlock{text: r.text, colorKey: r.colorKey, links: r.spans})
 		}
 	}
 	if len(blocks) == 0 {

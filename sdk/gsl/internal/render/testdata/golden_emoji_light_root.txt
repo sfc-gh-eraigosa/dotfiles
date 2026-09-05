@@ -1,1 +1,1 @@
-[38;5;34m📁 project 🌿 feature ✚1 ✎1 ✦1 📦1 ⬆2[0m · ]8;;https://github.com/sfc-gh-eraigosa/dotfiles/pull/21\[38;5;26m🏠 gsl [38;5;2mPR#21[0m[0m]8;;\ · [38;5;37m🤖 Opus 4.7 🧠 42% 84k/200k 🔌 1/2 5h 80% 7d 15%[0m · [38;5;136m⏰ Mon 05-25 14:30 UTC[0m
+[38;5;34m📁 project 🌿 feature ✚1 ✎1 ✦1 📦1 ⬆2[0m · [38;5;26m🏠 gsl ]8;;https://github.com/sfc-gh-eraigosa/dotfiles/pull/21\[4m[38;5;2mPR#21[0m[24m]8;;\[0m · [38;5;37m🤖 Opus 4.7 🧠 42% 84k/200k 🔌 1/2 5h 80% 7d 15%[0m · [38;5;136m⏰ Mon 05-25 14:30 UTC[0m

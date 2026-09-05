@@ -15,21 +15,21 @@
 
 ## Preflight (once)
 
-- [ ] `git rev-parse --abbrev-ref HEAD` → `worktree/gsl`, toplevel ends in `worktree-gsl`
-- [ ] `cd sdk/gsl && go test ./... 2>&1 | tail -3` → baseline green
-- [ ] `gff version && gff lint` → clean
-- [ ] Draft PR exists (`gh pr view --json number`) — else `gss pr` after the docs commit
+- [x] `git rev-parse --abbrev-ref HEAD` → `worktree/gsl`, toplevel ends in `worktree-gsl`
+- [x] `cd sdk/gsl && go test ./... 2>&1 | tail -3` → baseline green
+- [x] `gff version && gff lint` → clean (gff vdev)
+- [x] Draft PR exists: #279
 
 ---
 
 ### Task 1 — spans through join, fit, truncation  (plan Task 1)
 
-- [ ] RED: `internal/render/links_test.go` (plan T1 step 1) + `link_test.go` updates
-- [ ] RUN-RED: `cd sdk/gsl && go test ./internal/render/ -run 'PaintRuns|ValidateSpans|ClipSpans|Reanchor|ShiftSpans|Join_Spans|TruncateToWidth_Clips'` → expect **FAIL** (compile)
-- [ ] GREEN: `links.go`, `segment.go` (`LinkSpan`, `RenderLinked` sig), `glyphs.go` (`paintRuns`, `segmentBlock.links`), `style.go` (`Links`), `detect.go` (`linkedFormatter`, `formatLinkedOf`, `Format`, `finalTierBlocks`), `truncate.go`, `render.go`, `seg_repo.go`/`seg_repo_data.go` one-span shim
-- [ ] RUN-GREEN: `cd sdk/gsl && go test ./internal/render/ -race` → expect **PASS**
-- [ ] VERIFY: `go vet ./...`; evidence `tee` → `evidence/T1/render-tests.txt`
-- [ ] COMMIT: `feat(gsl): link spans — per-field OSC 8 hyperlinks with underline through join, fit, and truncation`
+- [x] RED: `internal/render/links_test.go` (plan T1 step 1) + `link_test.go` updates
+- [x] RUN-RED: `cd sdk/gsl && go test ./internal/render/ -run 'PaintRuns|ValidateSpans|ClipSpans|Reanchor|ShiftSpans|Join_Spans|TruncateToWidth_Clips'` → expect **FAIL** (compile)
+- [x] GREEN: `links.go`, `segment.go` (`LinkSpan`, `RenderLinked` sig), `glyphs.go` (`paintRuns`, `segmentBlock.links`), `style.go` (`Links`), `detect.go` (`linkedFormatter`, `formatLinkedOf`, `Format`, `finalTierBlocks`), `truncate.go`, `render.go`, `seg_repo.go`/`seg_repo_data.go` one-span shim
+- [x] RUN-GREEN: `cd sdk/gsl && go test ./internal/render/ -race` → expect **PASS**
+- [x] VERIFY: `go vet ./...`; evidence `tee` → `evidence/T1/render-tests.txt`
+- [x] COMMIT: `feat(gsl): link spans — per-field OSC 8 hyperlinks with underline through join, fit, and truncation`
 - [ ] LEDGER + CHECKPOINT
 
 **Done when:** render tests green incl. zero-width and clip tests.

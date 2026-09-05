@@ -80,4 +80,10 @@ type Style struct {
 	// Theme maps logical color-role keys to color values (ANSI index, named
 	// color, or escape fragment). See package doc for the conventional key set.
 	Theme map[string]string `json:"theme,omitempty"`
+
+	// Links selects the hyperlink affordance: "plain" emits OSC 8 only; any
+	// other value (including "") also underlines the linked text. cmd sets it
+	// from the config `links` key ("off" never reaches here — it removes the
+	// spans before rendering).
+	Links string `json:"links,omitempty"`
 }

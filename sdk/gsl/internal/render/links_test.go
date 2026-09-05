@@ -1,0 +1,92 @@
+package render
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/term"
+)
+
+const ulOn, ulOff = "\x1b[4m", "\x1b[24m"
+
+func TestPaintRuns_WrapsExactlyTheSpan(t *testing.T) {
+	st := asciiStyle() // Links == "" ⇒ underline
+	got := paintRuns(st, "root main PR#21", []LinkSpan{{Start: 10, End: 15, URL: wantPRURL}})
+	want := "root main " + osc8Open(wantPRURL) + ulOn + "PR#21" + ulOff + osc8Close
+	if got != want {
+		t.Errorf("paintRuns = %q, want %q", got, want)
+	}
+}
+
+func TestPaintRuns_PlainModeHasNoUnderline(t *testing.T) {
+	st := asciiStyle()
+	st.Links = "plain"
+	got := paintRuns(st, "PR#21", []LinkSpan{{0, 5, wantPRURL}})
+	if strings.Contains(got, ulOn) || !strings.Contains(got, osc8Open(wantPRURL)) {
+		t.Errorf("plain mode: got %q", got)
+	}
+}
+
+func TestPaintRuns_NoSpansIsIdentity(t *testing.T) {
+	if got := paintRuns(asciiStyle(), "abc", nil); got != "abc" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestValidateSpans_DropsBadOnes(t *testing.T) {
+	spans := validateSpans(5, []LinkSpan{
+		{3, 5, "u3"}, {0, 2, "u1"}, {1, 3, "overlap"}, {4, 9, "range"}, {0, 1, ""}, {2, 2, "empty"},
+	})
+	if len(spans) != 2 || spans[0].URL != "u1" || spans[1].URL != "u3" {
+		t.Errorf("validateSpans = %+v", spans)
+	}
+}
+
+func TestClipSpans(t *testing.T) {
+	got := clipSpans([]LinkSpan{{0, 4, "a"}, {5, 9, "b"}, {10, 12, "c"}}, 7)
+	if len(got) != 2 || got[1].End != 7 {
+		t.Errorf("clipSpans = %+v", got)
+	}
+}
+
+func TestReanchorSpans_SurvivesANSIStrip(t *testing.T) {
+	orig := "x \x1b[38;5;5mPR#21\x1b[38;5;7m y"
+	spans := []LinkSpan{{2, 2 + len("\x1b[38;5;5mPR#21\x1b[38;5;7m"), wantPRURL}}
+	stripped := term.StripANSI(orig)
+	got := reanchorSpans(orig, stripped, spans)
+	if len(got) != 1 || stripped[got[0].Start:got[0].End] != "PR#21" {
+		t.Errorf("reanchor = %+v over %q", got, stripped)
+	}
+}
+
+func TestShiftSpans(t *testing.T) {
+	got := shiftSpans([]LinkSpan{{0, 2, "glyph"}, {3, 7, "label"}}, 3)
+	if len(got) != 1 || got[0].Start != 0 || got[0].End != 4 {
+		t.Errorf("shiftSpans = %+v", got)
+	}
+}
+
+func TestJoin_SpansZeroWidth_BothPaths(t *testing.T) {
+	plain := []segmentBlock{{text: "main PR#21", colorKey: "repo_root"}}
+	linked := []segmentBlock{{text: "main PR#21", colorKey: "repo_root",
+		links: []LinkSpan{{0, 4, "https://github.com/o/r/tree/main"}, {5, 10, wantPRURL}}}}
+	for _, st := range []style.Style{asciiStyle(), powerlineStyleFixture()} {
+		if term.DisplayWidth(join(st, linked)) != term.DisplayWidth(join(st, plain)) {
+			t.Errorf("spans changed width for %s", st.Separator)
+		}
+		out := join(st, linked)
+		if strings.Count(out, "\x1b]8;;") != 4 { // 2 opens + 2 closes
+			t.Errorf("unbalanced OSC 8 in %q", out)
+		}
+	}
+}
+
+func TestTruncateToWidth_ClipsSpans(t *testing.T) {
+	blocks := []segmentBlock{{text: "a-long-repo-label PR#21", colorKey: "repo_root",
+		links: []LinkSpan{{0, 17, "https://github.com/o/r/tree/x"}, {18, 23, wantPRURL}}}}
+	out := truncateToWidth(blocks, asciiStyle(), 12)
+	if len(out) != 1 || len(out[0].links) != 1 || out[0].links[0].End > len(out[0].text)-len(ellipsis) {
+		t.Errorf("truncate: %+v", out)
+	}
+}

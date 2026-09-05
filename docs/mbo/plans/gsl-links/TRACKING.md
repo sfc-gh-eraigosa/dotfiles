@@ -19,7 +19,7 @@
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| T1 spans through join/fit/truncation | todo | | | |
+| T1 spans through join/fit/truncation | done | (T1 commit — see `git log --oneline -- sdk/gsl/internal/render/links.go`) | `go test ./internal/render/ -race -cover` → `ok … coverage` (evidence/T1/render-tests.txt); 6 goldens regenerated, visible text byte-identical (escape placement only) | RED: compile failure on `LinkSpan`; old `TestTruncate_PreservesLink` re-targeted to the surviving label |
 | T2 remote URL + URL builders | todo | | | |
 | T3 segment spans + Render delegation | todo | | | |
 | T4 flags package (gff, fail-open) | todo | | | |
@@ -58,3 +58,4 @@
 | Date | Session | What advanced |
 | :-- | :-- | :-- |
 | 2026-09-05 | planning | Diagnosed: #249 link already emitted, no affordance, one link per block. Design approved in chat; spec + plan + trio written. |
+| 2026-09-05 | build-1 | T1 done: link spans through join/fit/truncation; goldens refreshed. |

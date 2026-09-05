@@ -167,14 +167,24 @@ func (d *repoData) format(st style.Style, level int) (text, colorKey string) {
 	return b.String(), d.themeKey
 }
 
-// link implements linkable: the repo segment addresses its PR.
+// formatLinked implements linkedFormatter: the PR badge addresses its PR.
 //
 // It is gated on the PR badge actually being shown. A hyperlink over a segment
 // that displays no PR would be an invisible click target — the whole repo block
 // would silently become clickable with nothing on screen explaining why.
-func (d *repoData) link() string {
-	if !d.showPR || d.prNumber <= 0 {
-		return ""
+func (d *repoData) formatLinked(st style.Style, level int) (string, string, []LinkSpan) {
+	text, colorKey := d.format(st, level)
+	if text == "" || !d.showPR || d.prNumber <= 0 || d.prURL == "" {
+		return text, colorKey, nil
 	}
-	return d.prURL
+	prefix := "PR#"
+	if level >= 2 {
+		prefix = "#"
+	}
+	badge := prBadgeWithPrefix(st, prefix, d.prNumber, d.prState)
+	start := strings.LastIndex(text, badge)
+	if start < 0 {
+		return text, colorKey, nil
+	}
+	return text, colorKey, []LinkSpan{{Start: start, End: start + len(badge), URL: d.prURL}}
 }
