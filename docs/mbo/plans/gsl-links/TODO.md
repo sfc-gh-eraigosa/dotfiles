@@ -30,18 +30,18 @@
 - [x] RUN-GREEN: `cd sdk/gsl && go test ./internal/render/ -race` → expect **PASS**
 - [x] VERIFY: `go vet ./...`; evidence `tee` → `evidence/T1/render-tests.txt`
 - [x] COMMIT: `feat(gsl): link spans — per-field OSC 8 hyperlinks with underline through join, fit, and truncation`
-- [ ] LEDGER + CHECKPOINT
+- [x] LEDGER + CHECKPOINT (pushed together with T2)
 
 **Done when:** render tests green incl. zero-width and clip tests.
 
 ### Task 2 — origin URL + URL builders  (plan Task 2)
 
-- [ ] RED: `internal/git/remote_test.go`; `TestTreeURL`/`TestFileURL`/`TestTimeURL_Placeholders` in `links_test.go`
-- [ ] RUN-RED: `cd sdk/gsl && go test ./internal/git/ ./internal/render/ -run 'Remote|TreeURL|FileURL|TimeURL'` → **FAIL**
-- [ ] GREEN: `internal/git/remote.go`
-- [ ] RUN-GREEN: same command → **PASS**
-- [ ] ALLOWLIST: `git status --short -- sdk/gsl/internal/git/remote.go` lists it
-- [ ] COMMIT: `feat(gsl): origin web-URL normalization and tree/file/time URL builders`
+- [x] RED: `internal/git/remote_test.go`; `TestTreeURL`/`TestFileURL`/`TestTimeURL_Placeholders` in `links_test.go`
+- [x] RUN-RED: `cd sdk/gsl && go test ./internal/git/ ./internal/render/ -run 'Remote|TreeURL|FileURL|TimeURL'` → **FAIL**
+- [x] GREEN: `internal/git/remote.go`
+- [x] RUN-GREEN: same command → **PASS**
+- [x] ALLOWLIST: `git status --short -- sdk/gsl/internal/git/remote.go` lists it
+- [x] COMMIT: `feat(gsl): origin web-URL normalization and tree/file/time URL builders`
 - [ ] LEDGER + CHECKPOINT
 
 **Done when:** 8 remote forms + 3 builder tests pass.

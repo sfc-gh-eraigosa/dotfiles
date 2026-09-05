@@ -19,8 +19,8 @@
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| T1 spans through join/fit/truncation | done | (T1 commit — see `git log --oneline -- sdk/gsl/internal/render/links.go`) | `go test ./internal/render/ -race -cover` → `ok … coverage` (evidence/T1/render-tests.txt); 6 goldens regenerated, visible text byte-identical (escape placement only) | RED: compile failure on `LinkSpan`; old `TestTruncate_PreservesLink` re-targeted to the surviving label |
-| T2 remote URL + URL builders | todo | | | |
+| T1 spans through join/fit/truncation | done | f4162ea | `go test ./internal/render/ -race -cover` → `ok … coverage` (evidence/T1/render-tests.txt); 6 goldens regenerated, visible text byte-identical (escape placement only) | RED: compile failure on `LinkSpan`; old `TestTruncate_PreservesLink` re-targeted to the surviving label |
+| T2 remote URL + URL builders | done | (this commit) | `go test ./internal/git/ ./internal/render/ -race -cover` → ok, render 90.5% (evidence/T2/url-tests.txt); mutation checks TreeURL/FileURL/TimeURL each FAIL when broken | builders were written in T1 (`links.go`), so their tests were proven by mutation rather than by a RED run |
 | T3 segment spans + Render delegation | todo | | | |
 | T4 flags package (gff, fail-open) | todo | | | |
 | T5 wiring: config/cmd/preview/features.yaml/install.sh | todo | | | |
@@ -59,3 +59,4 @@
 | :-- | :-- | :-- |
 | 2026-09-05 | planning | Diagnosed: #249 link already emitted, no affordance, one link per block. Design approved in chat; spec + plan + trio written. |
 | 2026-09-05 | build-1 | T1 done: link spans through join/fit/truncation; goldens refreshed. |
+| 2026-09-05 | build-1 | T2 done: `git.RemoteWebURL`/`NormalizeRemote`; URL builder tests + mutation proof. First `gss push` refused on unstaged T2 files — pushing T1+T2 together. |

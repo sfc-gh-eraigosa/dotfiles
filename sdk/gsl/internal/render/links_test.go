@@ -1,8 +1,10 @@
 package render
 
 import (
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/term"
@@ -88,5 +90,36 @@ func TestTruncateToWidth_ClipsSpans(t *testing.T) {
 	out := truncateToWidth(blocks, asciiStyle(), 12)
 	if len(out) != 1 || len(out[0].links) != 1 || out[0].links[0].End > len(out[0].text)-len(ellipsis) {
 		t.Errorf("truncate: %+v", out)
+	}
+}
+
+func TestTreeURL(t *testing.T) {
+	if got := TreeURL("https://github.com/o/r", "feature/a b#1"); got != "https://github.com/o/r/tree/feature/a%20b%231" {
+		t.Errorf("TreeURL = %q", got)
+	}
+	if TreeURL("https://gitlab.com/o/r", "main") != "" || TreeURL("https://github.com/o/r", "") != "" {
+		t.Error("tree URL must be GitHub-only and need a branch")
+	}
+}
+
+func TestFileURL(t *testing.T) {
+	if got := FileURL("/home/u/my dir"); got != "file:///home/u/my%20dir" {
+		t.Errorf("FileURL = %q", got)
+	}
+	if FileURL("") != "" || FileURL("rel") != "" {
+		t.Error("relative or empty cwd must yield no URL")
+	}
+}
+
+func TestTimeURL_Placeholders(t *testing.T) {
+	loc, _ := time.LoadLocation("America/Los_Angeles")
+	ts := time.Date(2026, 9, 5, 8, 0, 0, 0, loc)
+	got := TimeURL("x?tz={tz}&c={tz_city}&i={iso_utc}&u={unix}&k={keep}", ts, loc)
+	want := "x?tz=America/Los_Angeles&c=Los_Angeles&i=20260905T150000Z&u=" + strconv.FormatInt(ts.Unix(), 10) + "&k={keep}"
+	if got != want {
+		t.Errorf("TimeURL = %q want %q", got, want)
+	}
+	if TimeURL("", ts, loc) != "" || TimeURL(DefaultTimeURL, ts, time.UTC) != "https://time.is/UTC" {
+		t.Error("empty template ⇒ no URL; UTC city = UTC")
 	}
 }
