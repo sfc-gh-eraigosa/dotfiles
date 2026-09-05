@@ -3,8 +3,17 @@
 ; #Warn  ; Enable warnings to assist with detecting common errors.
 SendMode Input  ; Recommended for new scripts due to its superior speed and reliability.
 SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
+; ^e types your email address. The address lives in defaults.local.ini beside
+; this script (gitignored; seed it from defaults.local.ini.example) so it never
+; lands in the repo:
+;   [identity]
+;   email=you@example.com
 ^e::
-  Send, edward.raigosa@gmail.com
+  IniRead, LocalEmail, %A_ScriptDir%\defaults.local.ini, identity, email, %A_Space%
+  if (LocalEmail = "")
+    MsgBox, defaults.local.ini beside defaults.ahk needs an [identity] email= entry (see defaults.local.ini.example)
+  else
+    Send, %LocalEmail%
 return
 
 #SingleInstance,force

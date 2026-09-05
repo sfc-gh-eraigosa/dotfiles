@@ -102,6 +102,10 @@ sets:
       - path: install.ai.teams
         description: Runs the install_ai_teams.sh block.
         boolDefault: true
+      # --- git (1) ---
+      - path: install.git.hooks
+        description: Runs install_git_hooks.sh (global privacy git hooks — pre-commit, commit-msg, pre-push — via core.hooksPath).
+        boolDefault: true
       # --- sdk (6) ---
       - path: install.sdk.gss
         description: Runs the gss build-and-install block.

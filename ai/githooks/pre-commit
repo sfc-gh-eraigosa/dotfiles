@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# pre-commit — judge the INDEX, however it was filled.
+#
+# The agent hook only sees a Write/Edit tool call. A heredoc, `sed -i`, `tee`,
+# or an interpreter one-liner reaches the same tracked file without one, and
+# git is the first place all of those converge. Judging the staged additions
+# here is what makes the guard independent of how the bytes arrived.
+set -u
+# shellcheck source=_privacy_common.sh
+. "$(cd "$(dirname "$0")" && pwd)/_privacy_common.sh"
+privacy_hooks_load_rules "$0" || exit 1
+
+staged="$(git diff --cached -U0 --no-color --diff-filter=ACMR 2>/dev/null | privacy_hooks_added_lines)"
+privacy_hooks_judge pre-commit "$staged"
+privacy_hooks_chain pre-commit "$@"

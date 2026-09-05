@@ -275,6 +275,16 @@ if gff_on install.ai.claude; then
   fi
 else gff_skip_msg install.ai.claude; fi
 
+# Git privacy hooks (global core.hooksPath): judge staged content, commit
+# messages and outgoing commits WHATEVER wrote them — the layer behind the
+# agent-side privacy_guard, which only sees tool calls. Same rule library
+# (ai/hooks/privacy_rules.sh); chains to any repo-local hook.
+if gff_on install.git.hooks; then
+  if [ -f "${BASE_DIR}/opt/scripts/git/install_git_hooks.sh" ]; then
+    "${BASE_DIR}/opt/scripts/git/install_git_hooks.sh"
+  fi
+else gff_skip_msg install.git.hooks; fi
+
 # herdr agent integrations (`herdr integration install claude|antigravity-cli`):
 # the hook scripts that report each agent's working/blocked/done state to the
 # herdr sidebar. install_antigravity_skills.sh MERGES its `guards` entry into
