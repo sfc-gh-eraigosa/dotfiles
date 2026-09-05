@@ -2,10 +2,17 @@
 
 Configuration that a script **copies into a system or user location**, kept in the
 repo as the single source of truth. Nothing here is read from this path at
-runtime; nothing here is symlinked into place.
+runtime (except `fleet/`, below); nothing here is symlinked into place.
 
 **Edit the file here, then re-run its installer.** The deployed copies are
 overwritten on every install, so a hand-edit to `/etc/...` is always lost.
+
+## `fleet/` — the tracked team plan for `fleet update`
+
+`fleet.yaml` is read **in place** from the local dotfiles clone (`<--repo>/opt/etc/fleet/fleet.yaml`)
+when `gff set fleet.update.config repo` is set — the one exception to "nothing here is read
+at runtime", because a plan is executable config and copying it would hide which commit it
+came from. Schema and semantics: [sdk/fleet/README.md](../../sdk/fleet/README.md#fleet-update-host).
 
 ## `keyd/` — macOS-style keyboard layout
 

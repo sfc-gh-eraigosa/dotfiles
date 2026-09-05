@@ -4,7 +4,8 @@
 > (design · spec · plan · execution trio).
 
 Answers *"which of my hosts are out of sync with the latest dotfiles install?"* —
-on demand, never as a daemon — and manages fleet membership and access keys.
+on demand, never as a daemon — updates them from a `fleet.yaml` step plan, and manages
+fleet membership and access keys.
 
 ## Why it exists
 
@@ -19,7 +20,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `fleet status [host...]` | table of host · commit · **branch** · last run · status; `--json`; exits non-zero if any host is stale |
 | `fleet discover [--scan]` | list every concrete ssh-config host as `in-fleet` / `available`; `--scan` sweeps the subnet to refresh a moved `HostName` and offer unknown responders; `--json`; `--add-all` bulk-adopts (one pass, one backup; `--dry-run` / `--yes`) |
 | `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v`/`a` selection, concurrent background updates (`--jobs`), `w` wake, `s` ssh, `F` forget answers, `?` help |
-| `fleet update <host>...` | fetch → checkout `--ref` (default `main`) → `pull --ff-only` → `install.sh` over `ssh -t`, one host at a time |
+| `fleet update <host>...` | walks a `fleet.yaml` step plan per host, serially: a DAG of `sync` (fetch → ff-only, one network call) / `run` (verbatim shell, batch or `ssh -t`) / `gh-auth` steps; with no plan file it is today's fetch → ff → `install.sh`. Flags: `--local skip\|rescue\|carry`, `--force` (= `--local rescue`), `--no-restore`, `--reset`, `--timeout D`, `--no-retry`, `--ref B\|repo=B` (repeatable), `--file PATH`, `--dry-run` (prints every effective script, sends nothing); `--json` from root. `fleet update init [--file] [--overwrite] [--print]` writes the starter plan |
 | `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
 | `fleet remove <alias> [--purge]` | unmark (keeps SSH access); `--purge` deletes the block |
 | `fleet keys list\|sync\|prune` | audit / authorize / remove authorized keys |
@@ -44,10 +45,14 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `internal/keys` | authorized_keys diff (reports removals, never applies them) |
 | `internal/reach` | the wake ladder: rung order, peer ranking, provenance (pure; every impure edge injected via `Deps`) |
 | `cmd/answers_store.go` | the non-secret prompt preferences on disk (`0600`); the on-disk type has no credential field |
-| `internal/runner` | the **only** seam that touches a remote host (`Exec` real, `Fake` for tests) |
+| `internal/runner` | the **only** seam that touches a remote host (`Exec` real, `Fake` for tests); `RunStreamCtx` is the deadline-aware path |
+| `internal/updplan` | the `fleet.yaml` schema, pure: `Parse` (`KnownFields`, defaults merge field by field, aggregated validation, path resolution), `Default`/`DefaultYAML`, `WithRef`/`WithRefs`, `Order`/`Dependents`/`LastStepUsing`, `Backoff.Wait` |
+| `internal/updexec` | the remote script builders (`Precheck`/`Sync`/`Clone`/`Rescue`/`Reset`/`Restore`/`Run`/`GhAuth*` — every builder re-validates its inputs) and the `Executor` (attempt loop, cascade, synthesized restore) over the `StepIO` lanes `Console` (CLI) and `Background` (TUI) |
+| `internal/featflag` | fail-open `Resolve` of `fleet.update.{enabled,config}`; `gff.go` is the **only** import of `sdk/gff/pkg/gff`, behind the `Source` interface; `Static` for tests |
+| `cmd/update*.go` | `loadPlan` (`--file` → gff → `~/.config/fleet/fleet.yaml` → built-in, with the ownership/mode check), `runUpdate`, the report / `--json` / `--dry-run`, `update init`, the headless capture |
 
-Everything but `runner` is pure text-in/struct-out, so the decision surface is unit-tested
-without opening a socket.
+Everything but `runner` is pure text-in/struct-out (the executor's clock, sleep, jitter and
+I/O are all injected), so the decision surface is unit-tested without opening a socket.
 
 ## Invariants (each pinned by a test — don't regress these)
 
@@ -60,9 +65,163 @@ without opening a socket.
   by `remove`.
 - **`remove` unmarks; only `--purge` deletes.** Leaving the fleet never costs SSH access.
 - **Every ssh-config write takes a timestamped backup first** and keeps `0600`.
-- **A dirty clone is skipped** unless `--force`, which *preserves* work in a rescue worktree
-  (`git add -A` onto a branch — **not** `stash@{0}`, which silently drops untracked files).
+- **A dirty clone is skipped by default; `rescue` (= `--force`) commits work aside; `carry`
+  stashes and re-applies; nothing is ever dropped.** `rescue` is `git add -A` onto a
+  `fleet-rescue/<ts>` branch, materialised as a worktree under
+  `~/.local/state/fleet/rescue/<repo>/<ts>` — **not** `git branch <n> stash@{0}`, which the
+  original plan proposed and which silently loses untracked files: a stash *commit*'s tree
+  excludes them (they live in the third parent, `stash^3`), so a branch cut from `stash@{0}`
+  never contains them. `carry` uses a stash on purpose and is safe where that was not, for two
+  reasons that both have to hold: the push is `git stash push -u`, so the untracked files ARE
+  in the entry; and the restore is `git stash apply <sha>` — the entry itself, addressed by the
+  40-hex SHA the push echoed (`fleet: carried stash=<sha> from=<orig>`), which re-applies the
+  whole entry, untracked tree included. It is never `stash pop`, never `stash@{0}` (another
+  push on the host would re-index it), and `stash drop <sha>` runs only after a clean apply;
+  on any conflict the stash is kept and the report names `stash=<sha> branch=<orig>`. A merge
+  or rebase in progress is skipped under every policy. Pinned by
+  `TestUpdateSkipsDirtyCloneByDefault`, `TestForceRescuesDirtyWorkBeforePulling`,
+  `TestRescuePreservesUntrackedWork`, `TestCarryStashesWithUntrackedAndCapturesTheSHA`,
+  `TestRestoreUsesApplyBySHANeverPop`, `TestRestoreConflictKeepsTheStash`,
+  `TestInProgressMergeIsSkippedUnderEveryPolicy`, `TestForceIsAnAliasForLocalRescue`.
+  **The live G7 carry round-trip has not run yet** (tracked + untracked restored, `git stash
+  list` empty, on a real host): the reasoning above is pinned against scripted output, not a
+  machine. G7's transcript under `docs/mbo/plans/fleet-update/evidence/e2e/` is what finally
+  licenses this paragraph — until it exists, treat `carry` as reviewed, not proven.
 - **Failures are named per host** and reflected in the exit code; never swallowed.
+- **Every sync step makes exactly ONE unconditional network call.** Single branch is
+  `fetch origin <b>` + `merge --ff-only FETCH_HEAD` (today's string, byte for byte — a `pull`
+  would fetch a second time, and a DNS blip between the two once failed an update that
+  already had everything it needed); multi-branch is one `fetch origin b1 b2 …` and extras are
+  moved with `branch -f` only when the local branch is an ancestor of its remote; `default`
+  resolves the remote HEAD from the local symref, falling back to `ls-remote --symref` at most
+  once; a missing clone with a `url` clones and never also fetches. The fetch stays inside the
+  `&&` chain — a bare `;` let a failed fetch fall through to checking out stale refs and exit
+  0. Pinned by `TestEverySyncFormMakesAtMostOneUnconditionalNetworkCall`,
+  `TestUpdateMakesExactlyOneNetworkCall`, `TestSyncScriptSingleBranchMatchesTodaysForm`,
+  `TestMultiBranchFetchesAllInOneCall`, `TestExtrasOnlyForceMoveAnAncestor`,
+  `TestCloneNeverFetches`, `TestDefaultSyncFailsWhenFetchFails`.
+- **A failed step blocks its dependents, never its siblings.** Order is a stable Kahn sort;
+  a step whose need is not `ok` under `on_failure: stop` (or is itself `dependency-failed`) is
+  `dep-fail blocked by <id>` and the other chains keep running. `on_failure: continue` lets
+  dependents run but the host is still reported as not updated. Pinned by
+  `TestFailedStepSkipsTransitiveDependents`, `TestDependencyFailedAlsoBlocks`,
+  `TestOnFailureContinueLetsDependentsRunButStillFailsTheHost`, `TestOrderIsTopologicalAndStable`.
+- **gh-auth checks before it prompts, and never forwards a token.** `gh auth status` runs in
+  batch first; an authenticated host makes zero interactive calls. Only a failed check runs
+  `gh auth login --web` over `ssh -t`, once, never retried, then one re-check. No remote
+  string ever contains a token, `GH_TOKEN`, `GITHUB_TOKEN`, or `--with-token`; exit 127 is
+  reported as `gh not installed`, not as an auth failure. Pinned by
+  `TestGhAuthSkipsLoginWhenStatusPasses`, `TestGhAuthNeverCarriesAToken`,
+  `TestGhAuthNeverUsesStdin`, `TestGhAuthReports127AsNotInstalled`,
+  `TestGhAuthLoginIsNeverRetriedButCheckIs`, `TestGhAuthWithoutATerminalFailsCleanly`.
+- **`run:` is verbatim — the plan file is executable config.** A run step is `cd <path> &&
+  <run>` with the operator's text unquoted and unfiltered; the guards are elsewhere: the file
+  must be owned by the current uid and not group/world-writable or `loadPlan` refuses it, and
+  `--dry-run` prints every effective script (the exact wire) while touching no runner at all.
+  Everything ELSE interpolated into a remote string is allowlisted (`ValidRef`, `ValidPath`,
+  `ValidRepoName`, `ValidURL`, `ValidHostname`, `ValidSHA`) and every builder re-validates,
+  so a hand-built `Repo`/`Step` that bypassed `Parse` still cannot smuggle a metacharacter.
+  The CLI's `WINSETUP_ANSWER`/`GEMINI_TEARDOWN_ANSWER` preamble and the TUI's sudo stdin apply
+  to run steps only — never to a sync or gh-auth script. Pinned by
+  `TestRunScriptIsVerbatimAfterCd`, `TestLoadPlanRefusesAWorldWritableFile`,
+  `TestDryRunSendsNothing`, `TestBuildersRejectUnvalidatedInput`,
+  `TestWithRefRejectsShellInjection`, `TestPreambleAndStdinApplyToRunStepsOnly`,
+  `TestLocalAnswerEnvIsExportedForRunStepsOnly`.
+- **The built-in plan is today's update, byte for byte.** With no `fleet.yaml`,
+  `Default() == Parse(DefaultYAML)` is one repo (`~/git/dotfiles`, `main`, `local: skip`) and
+  two steps (`dotfiles.sync` → `dotfiles.install`, interactive `./install.sh`); the sync
+  string is the pre-plan `remoteUpdateScript` minus `&& ./install.sh`, and `fleet update
+  init --print` emits exactly that YAML. There is ONE definition of "update a host" — the
+  executor in `internal/updexec`; the CLI verb and the TUI both drive it, and no other
+  update script string exists in `cmd`. Pinned by
+  `TestDefaultPlanIsTodaysUpdate`, `TestDefaultYAMLRoundTripsToDefault`,
+  `TestSyncScriptSingleBranchMatchesTodaysForm`, `TestInitOutputParsesToDefault`,
+  `TestUpdateDefaultPlanSendsExactlyOneFetchPerSyncStep`.
+- **A rejected plan names every fault at once, and an unknown key is a fault.** `Parse` runs
+  with `KnownFields(true)` (a typo like `retires:` is an error, not a silently ignored key)
+  and aggregates with `errors.Join`, so two mistakes cost one round-trip. Pinned by
+  `TestParseRejects`, `TestParseAggregatesEveryError`, `TestStepInheritsDefaultsFieldByField`.
+- **gff is fail-open here.** `featflag.Resolve` returns `Enabled: false` only for an explicit,
+  successfully-read `fleet.update.enabled=false`; a missing gff, an unknown key, a nil or
+  typed-nil source, two selections on a single-choice flag, or a relative `--repo` all resolve
+  to enabled + the home path and say so in a `Note` (surfaced on the `plan:` line). Lookups
+  are scoped to the `--repo` checkout's LIVE feature file, not the cwd. Pinned by
+  `TestResolveDefaultsWhenSourceErrors`, `TestResolveUnknownKeyIsFailOpen`,
+  `TestResolveNilSourceUsesDefaults`, `TestResolveTypedNilGFFIsFailOpen`,
+  `TestResolveMultipleSelectionsIsFailOpenWithANote`, `TestResolveHonoursDisabled`,
+  `TestLoadPlanUsesBuiltInWhenDisabled`, `TestGFFScopesToTheRepoPathNotTheCwd`.
+- **The TUI's interactive lane is the CLI verb.** `Background` is `Console` with
+  `Interactive` replaced by `ErrNoTerminal`, so a background update that meets an interactive
+  step (an `interactive: true` run, a `gh auth login`) fails cleanly and is routed to the
+  serial interactive queue rather than hanging on a prompt nobody can see; that queue
+  self-execs `fleet update <alias>`, so every guard applies identically from either entry
+  point. Pinned today by `TestBackgroundRefusesInteractive`,
+  `TestGhAuthWithoutATerminalFailsCleanly`,
+  `TestPrecheckRoutesInteractiveHostsToTheFallbackQueue` and
+  `TestInteractiveLaneCarriesTheAnswers`; the TUI-side routing tests are leaf E's (spec F11)
+  and land with it.
+- **A host on another branch is put back by default, under every policy.** The sync
+  prologue records `orig` (`symbolic-ref --short HEAD`, falling back to the SHA — `rev-parse
+  --abbrev-ref` prints the literal `HEAD` when detached, which once stranded a rescue) and
+  the epilogue echoes `switched a -> b`; a synthesized `<repo>.restore` checks `orig` out
+  again after the last step that uses the repo. A host already on the target never gets a
+  restore; `restore: false` / `--no-restore` leave it on the target and note it on the sync
+  step instead of failing the host. `orig` and the stash SHA are the only remote-originated
+  values ever interpolated, and both are validated first. Pinned by
+  `TestCleanOffBranchIsRestoredUnderEveryPolicy`, `TestRescueOffBranchRestoresTheBranchWithoutAStash`,
+  `TestDetachedHeadRestoresToTheSHA`, `TestOnTargetNeverSynthesizesARestore`,
+  `TestRestoreFalseLeavesHostOnTarget`, `TestDisabledRestoreDoesNotFailTheHost`,
+  `TestRescueRecordsOrigViaSymbolicRefNotAbbrevRef`, `TestRestoreRejectsUnvalidatedOrigOrSHA`.
+- **Restore is cleanup, not a dependent.** It runs after the last step in `Order()` that
+  references the repo even when that step failed, and immediately when the sync itself failed
+  after switching or stashing; it has its own fixed policy (3 attempts, transport only, 5m)
+  that `--no-retry`/`--timeout` do not touch; a retried sync keeps the FIRST `orig=` note
+  (the successful attempt starts from the target branch, not the operator's). Pinned by
+  `TestRestoreRunsEvenWhenAnIntermediateStepFailed`,
+  `TestRestoreRunsImmediatelyWhenSyncFailsAfterStash`,
+  `TestCarryRestoreRunsAfterTheLastStepUsingTheRepo`, `TestRestoreStepHasFixedRetryPolicy`,
+  `TestNoRestoreIsHonouredWhenTheSyncFails`, `TestCarryNotesSurviveARetry`,
+  `TestCarryPrologueIsIdempotentAcrossAttempts`, `TestLastStepUsingRepo`.
+- **Interactive steps never auto-retry, and get no deadline unless the plan sets one.** A
+  retried `install.sh` would re-ask every question; a retried `gh auth login` would open a
+  second browser flow. `--timeout` overrides batch steps only. Pinned by
+  `TestInteractiveStepsAreNeverRetried`, `TestInteractiveHasNoDeadlineUnlessSet`,
+  `TestExplicitTimeoutOnInteractiveStepIsKept`, `TestExecutorTimeoutOverridesBatchSteps`,
+  `TestGhAuthLoginIsNeverRetriedButCheckIs`.
+- **Retry re-runs the whole script, only for the class the plan names.** `transport` (ssh
+  255 / dial failure), `timeout`, `any`, or a bare exit code; an EXPECTED exit is never
+  retried; the wait is `min(max, initial×factor^(n-1))` ± 50 % jitter with the cap applied
+  before the `Duration` conversion (the built-in 5s/2× schedule overflows `int64` at n≈32).
+  Every attempt writes `=== step <id> attempt a/n (after <wait>) ===` to the capture. Pinned
+  by `TestTransportFailureIsRetriedWithBackoff`, `TestExpectedExitIsNeverRetried`,
+  `TestRetryOnExitCodeMatchesOnlyThatCode`, `TestAttemptsAreExhaustedThenOnFailureApplies`,
+  `TestBackoffScheduleIsExponentialAndCapped`, `TestBackoffWaitNeverOverflowsAndRejectsNaN`,
+  `TestAttemptHeaderIsWrittenToTheCapture`, `TestNoRetryForcesOneAttempt`.
+- **A timeout kills the local `ssh`, not the remote job.** Each attempt runs under
+  `context.WithTimeout` and `runner.RunStreamCtx` uses `exec.CommandContext`, so the deadline
+  ends the local process; whatever it started on the host (an `install.sh` mid-apt) keeps
+  running there. A `timed out` step is therefore "we stopped waiting", and it is retried only
+  if `timeout` is in `retry.on`. An interactive step with a deadline is killed the same way via
+  the runner's optional `RunInteractiveCtx` — never by racing a goroutine that would leave the
+  `ssh -t` child holding the terminal. A successful attempt is never reported as timed out.
+  Pinned by `TestRunStreamCtxKillsTheChildOnDeadline`, `TestTimeoutCancelsTheAttempt`,
+  `TestTimeoutIsRetriedOnlyWhenListed`, `TestInteractiveDeadlineKillsTheChild`,
+  `TestASuccessfulAttemptIsNeverReportedAsTimedOut`.
+- **`--reset` preserves before it destroys, and targets the right ref.** The clone's whole
+  state is committed to `fleet-reset/<ts>` first; the hard reset lands on `FETCH_HEAD` only in
+  the single-branch form (where the fetch named one ref) and on `origin/$b1` in the multi and
+  `default` forms (there `FETCH_HEAD` is whichever ref was advertised last). `--reset` is
+  incompatible with `carry`. Pinned by `TestResetScriptUnchanged`,
+  `TestResetInMultiAndDefaultFormsTargetsOriginB1NotFetchHead`,
+  `TestResetInSingleBranchFormKeepsFetchHead`, `TestResetIsIncompatibleWithCarry`.
+- **Plan resolution is `--file` → gff → home → built-in, and the source is always named.**
+  The first output line is `plan: <path | built-in default (no <path>) | built-in default
+  (fleet.update.enabled=false)>`; a `--file` that does not exist is a hard error, a missing
+  configured file is the built-in plan. A capture that cannot be opened never costs the
+  update. Pinned by `TestLoadPlanPrefersFileFlag`, `TestLoadPlanUsesBuiltInWhenNoFile`,
+  `TestLoadPlanReadsTheConfiguredPath`, `TestLoadPlanReadsTheRepoLocation`,
+  `TestReportNamesEveryStepAndTheLog`, `TestJSONReportIsMachineReadable`,
+  `TestHeadlessUpdateIsCaptured`, `TestAnUnusableCaptureDirDoesNotBreakTheCLIRun`.
 - **`unreachable` means the network, never the keys.** A probe that CONNECTED and was
   then refused — unknown or changed host key, no accepted credential — classifies as
   `auth-failed`, not `unreachable`. Every probe runs `BatchMode=yes`, so an unknown host
@@ -260,6 +419,39 @@ without opening a socket.
 
 ## Gotchas
 
+- **`fleet update init` shadows a host named `init`.** `init` is a subcommand of `update`, so
+  `fleet update init` always writes the starter plan and never updates a host called `init`.
+  Deliberate: a plan-authoring verb needs a stable name more than that hostname needs
+  protecting. Rename the host, or drive it from `fleet tui`.
+- **A `timed out` step is "we stopped waiting", not "it stopped".** The deadline kills the
+  local `ssh`; the remote command keeps running (an `install.sh` in the middle of `apt` will
+  finish on its own). Check the host before re-running, and list `timeout` in `retry.on` only
+  for steps that are safe to start twice.
+- **Manual recovery after a failed carry/restore**: the report line names everything you
+  need — `restore-failed stash=<sha> branch=<orig>`. On the host:
+  `git checkout <orig> && git stash apply <sha>` (then `git stash drop <sha>` once it applied
+  cleanly). The stash is never dropped by fleet unless its apply succeeded, so nothing is
+  lost while you look. A `rescue` lives at `~/.local/state/fleet/rescue/<repo>/<ts>` as a
+  worktree on `fleet-rescue/<ts>`.
+- **The gff SDK link costs +5.56 MB.** Wiring `internal/featflag/gff.go` took the binary from
+  7.1 MB to 12.7 MB (+78 %); it is the only import of `sdk/gff/pkg/gff`, behind the
+  `featflag.Source` interface, precisely so the follow-up — a `gff get` shell-out adapter
+  implementing the same interface — can swap it out without touching a caller. Tracked in
+  `docs/mbo/plans/fleet-update/TRACKING.md`.
+- **Every fleet host is currently `behind`, so the mutating live gates are pending on the
+  operator.** G1 (no-file `--dry-run`), G2's wire (`--dry-run` of a two-repo + gh-auth plan)
+  and G4 (`gff set fleet.update.enabled false` ⇒ built-in) are evidenced under
+  `docs/mbo/plans/fleet-update/evidence/e2e/`; G2-live (failing `make` cascade), G3 (gh-auth
+  zero prompts), G5 (TUI lanes), G6 (clean feature-branch round-trip), G7 (carry
+  round-trip), G8 (carry conflict keeps the stash) and G9 (forced 255 retried with backoff)
+  need a host it is safe to mutate. Do not describe those as run.
+- **The tracked `repo` plan can be refused as group-writable on a fresh clone.** git stores
+  only the exec bit, so `opt/etc/fleet/fleet.yaml` comes out `664` under umask `002`
+  (Ubuntu's default) and `loadPlan` refuses it — by design, the mode check IS the trust
+  boundary for verbatim `run:`. `chmod g-w` it once; do not weaken the check.
+- **The interactive step's `retry=` in `--dry-run` is the merged plan value, not what will
+  happen**: the executor forces one attempt for any interactive step regardless (see the
+  invariant above).
 - The stamp is **not retroactive**: a host reports `unknown` until it runs an
   `install.sh` that *contains* the stamp step. Pre-merge, `fleet update <host>`
   (default target `main`) pulls a `main` whose `install.sh` has no stamp step yet,

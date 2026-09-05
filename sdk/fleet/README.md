@@ -257,25 +257,296 @@ corrupts a selection.
 
 ### `fleet update <host>...`
 
-Brings a host current, one at a time: `fetch` → checkout the target ref →
-`pull --ff-only` → run `install.sh` over `ssh -t` so you can answer credential
-and sudo prompts live.
+Brings hosts current from a **plan** — a small YAML file, `fleet.yaml`, naming the
+repos on every host and a dependency graph of steps to run in them. Hosts run one
+at a time (an interactive step cannot share a terminal); within a host the steps
+run in dependency order, a failed step blocks only its dependents, transient
+failures retry with backoff under per-attempt timeouts, and one line per step is
+reported at the end.
+
+**With no plan file, nothing changes**: the built-in plan is exactly the old
+`fleet update` — `fetch` → checkout `main` → `merge --ff-only` → `./install.sh`
+over `ssh -t` — byte for byte on the wire.
 
 ```sh
-fleet update web-01                      # update to main (the default)
-fleet update web-01 --ref v1.2.0         # or to a tag / branch
+fleet update web-01                          # built-in plan, or your fleet.yaml if present
+fleet update web-01 --ref v1.2.0             # point the (sole / dotfiles) repo at a tag or branch
+fleet update web-01 --ref scripts=release    # per-repo form when the plan has several
+fleet update web-01 db-01 --dry-run          # print every script that WOULD run; send nothing
+fleet update web-01 --file ./fleet.yaml      # an explicit plan (skips gff resolution)
+fleet update init                            # write the starter plan to ~/.config/fleet/fleet.yaml
+fleet update init --print                    # ...or just show it
 ```
 
-The target defaults to `main`. `--ref` points a host at a branch or tag instead
-— useful to validate a change **before** it lands on main (e.g. confirming the
-install-stamp writes, so `fleet status` starts reporting real data for that
-host). The ref is constrained to the git ref charset before it's used in the
-remote command.
+| Flag | Does |
+|------|------|
+| `--local skip\|rescue\|carry` | override every repo's local-changes policy (table below) |
+| `--force` | alias for `--local rescue` — the pre-plan meaning, unchanged |
+| `--no-restore` | leave each host on the target branch; never re-apply a carried stash |
+| `--reset` | hard-reset onto the fetched commit instead of fast-forwarding — for a diverged host. **Destructive**, so the clone's whole state is committed to `fleet-reset/<ts>` first. Incompatible with `carry` |
+| `--timeout D` | override every **batch** step's per-attempt timeout (interactive steps keep the plan's) |
+| `--no-retry` | run every step at most once |
+| `--ref B` / `--ref repo=B` | target a ref; repeatable. Bare `B` picks the repo named `dotfiles`, or the plan's only repo |
+| `--file PATH` | read this plan; must exist |
+| `--dry-run` | print the plan source, every effective script and each step's timeout/retry; touch no runner |
+| `--json` (global) | the report as one JSON document, nothing else |
 
-A **dirty** remote clone is skipped by default rather than clobbered. `--force`
-proceeds, but first preserves the host's uncommitted work in a rescue worktree
-(`git add -A` onto a `fleet-rescue/<ts>` branch — not `git stash`, which silently
-drops untracked files). Nothing is ever discarded.
+#### `fleet.yaml` — the plan
+
+`fleet update init` writes this starter (it is the built-in plan, and it is what
+`opt/etc/fleet/fleet.yaml` in this repo contains):
+
+```yaml
+# fleet.yaml — the fleet-update plan.
+# With no repos/steps overridden this is byte-for-byte today's `fleet update`:
+# fetch+ff-only dotfiles under ~/git, then re-run ./install.sh interactively.
+version: 1
+update:
+  # root: where relative repo paths resolve (repos.<name>.path defaults to <name>).
+  root: ~/git
+  repos:
+    dotfiles:
+      path: dotfiles
+      branches: [main]
+      # local: skip|rescue|carry (default skip); restore: true|false (default true)
+  steps:
+    - id: dotfiles.sync
+      kind: sync
+      repo: dotfiles
+    - id: dotfiles.install
+      kind: run
+      repo: dotfiles
+      run: ./install.sh
+      interactive: true
+      needs: [dotfiles.sync]
+```
+
+The full schema, with every default:
+
+```yaml
+version: 1                              # must be 1
+update:
+  root: ~/git                           # absolute or ~/ path; relative repo paths resolve under it
+  defaults:                             # merged into every step, field by field
+    timeout: 30m                        # per ATTEMPT; 0 = none; interactive steps default to 0
+    retry:
+      attempts: 1                       # >= 1; 1 = no retry
+      on: [transport]                   # transport | timeout | any | <exit code> ...
+      backoff: { initial: 5s, factor: 2, max: 2m, jitter: true }
+  repos:
+    <name>:                             # ^[a-z0-9][a-z0-9._-]*$
+      path: <rel | /abs | ~/...>        # default = <name>; [A-Za-z0-9._/-], no "..", no leading "-"
+      url: <https:// | ssh:// | git@…>  # optional; lets a MISSING clone be cloned (that clone is the one network call)
+      branches: [default]               # "default" = the remote HEAD, only allowed first; the rest are branch names
+                                        # (a tag works only as the sole entry — multi-entry lists are branches)
+      local: skip                       # skip | rescue | carry — what to do with a DIRTY clone (table below)
+      restore: true                     # put the host back on the branch it was on (and re-apply a carried stash)
+  steps:
+    - id: <id>                          # ^[a-z0-9][a-z0-9._-]*$, unique
+      kind: sync | run | gh-auth
+      repo: <name>                      # sync: required; run: optional (adds `cd <path> &&`); gh-auth: forbidden
+      run: <shell>                      # run only, required; VERBATIM — no quoting, no filtering (see trust boundary)
+      interactive: false                # run only; true = `ssh -t`, terminal handed over, never retried
+      hostname: github.com              # gh-auth only
+      needs: [<id>, ...]                # existing ids, not self, acyclic
+      expect: { exit: [0] }             # exit codes that count as ok, each 0..255
+      on_failure: stop                  # stop = dependents are dep-fail; continue = they run, host still fails
+      timeout: <duration>               # overrides defaults.timeout for this step
+      retry: { attempts: 3, on: [transport, timeout], backoff: {...} }   # merges over defaults; forbidden on interactive steps
+```
+
+Unknown keys are errors (`KnownFields`), and every fault in the file is reported
+at once — a plan with two mistakes costs one round-trip, not two.
+
+Step kinds:
+
+- **`sync`** — a read-only precheck (`state=missing|clean|dirty|in-progress branch=…`),
+  then exactly **one** network call: `git fetch origin <b>` + `merge --ff-only` for a
+  single branch (the old string), one `fetch origin b1 b2 …` for several (extras are
+  fast-forwarded only when the local branch is an ancestor of its remote, otherwise
+  `skipped(diverged)`), the remote HEAD for `default`, or a `git clone` when the path
+  is missing and a `url` is set. A merge or rebase in progress is skipped under every
+  policy.
+- **`run`** — `cd <path> && <run>` (or just `<run>` with no `repo`), batch or, with
+  `interactive: true`, over `ssh -t`. `WINSETUP_ANSWER` / `GEMINI_TEARDOWN_ANSWER`
+  from your local environment are exported into run steps only.
+- **`gh-auth`** — `gh auth status` in batch; only if that fails, `gh auth login --web`
+  + `gh auth setup-git` interactively, then one re-check. An authenticated host makes
+  zero interactive calls; `gh` missing reads `gh not installed`, not an auth failure;
+  no token, `GH_TOKEN`, `GITHUB_TOKEN` or `--with-token` ever appears in a remote string.
+
+#### Which plan runs — resolution order
+
+1. `--file PATH` — must exist; skips everything below.
+2. gff `fleet.update.enabled` — `false` pins the built-in plan regardless of any file.
+3. gff `fleet.update.config` — `home` (the default) is `~/.config/fleet/fleet.yaml`
+   (`$XDG_CONFIG_HOME/fleet/fleet.yaml`); `repo` is `<--repo>/opt/etc/fleet/fleet.yaml`,
+   the **tracked team plan** in the local dotfiles clone. Switch with
+   `gff set fleet.update.config repo`.
+   Mind the mode check below: git does not record the group-write bit, so a clone made
+   under umask `002` (Ubuntu's default) has that file as `664` and `fleet` refuses it —
+   `chmod g-w opt/etc/fleet/fleet.yaml` once in your clone.
+4. That file missing ⇒ the built-in plan, and the report says so:
+   `plan: built-in default (no ~/.config/fleet/fleet.yaml)`.
+
+gff is **fail-open** here: gff missing, a key unknown, a bad selection — all behave as
+enabled + `home`, with the reason appended to the `plan:` line. Lookups are scoped to
+the `--repo` checkout's live feature file, never the current directory.
+
+A plan file that is present must be **owned by you and not group- or world-writable**,
+or `fleet update` refuses it. That is the whole trust boundary: `run:` is executed
+verbatim, exactly as written — it is not quoted, filtered or inspected, because a
+plan file is executable config in the same sense a Makefile is. What protects you is
+who can write the file, and `--dry-run`, which prints the exact bytes that would go
+over the wire so you can read them before anything runs.
+
+#### Local changes on the host — `local:` policy
+
+`sync` never clobbers work. What it does with a **dirty** clone is the repo's policy
+(overridable fleet-wide with `--local`, and `--force` still means `rescue`):
+
+| State on the host | `skip` (default) | `rescue` (`--force`) | `carry` |
+|---|---|---|---|
+| clean, on the target branch | sync | sync | sync |
+| clean, on another branch (or detached) | switch, sync, steps, **switch back** | same | same |
+| dirty (tracked edits and/or untracked files) | **skip** — dependents blocked | `git add -A` onto `fleet-rescue/<ts>`, materialised as a worktree under `~/.local/state/fleet/rescue/<repo>/<ts>`; then sync, steps, switch back | `git stash push -u` (SHA captured), switch, sync, steps, then `checkout <orig>` + `stash apply <sha>` + `stash drop <sha>` |
+| merge / rebase in progress | skip | skip | skip |
+| missing, `url:` set | clone | clone | clone |
+| missing, no `url:` | fail | fail | fail |
+
+Restore rules, under every policy:
+
+- The host is put back on the branch it was on **by default**; `restore: false` on
+  the repo or `--no-restore` leaves it on the target (noted on the step, not a failure).
+- Restore is **cleanup, not a dependent**: it runs after the last step that uses the
+  repo even if that step failed, and immediately if the sync itself failed after
+  switching or stashing. It has its own fixed policy (3 attempts, transport only, 5m).
+- A carried stash is dropped **only after a clean apply**. On a conflict it is kept and
+  the report names it: `restore-failed stash=<sha> branch=<orig>`. Manual recovery on
+  the host is then `git checkout <orig> && git stash apply <sha>`.
+- Why `carry` may use a stash when the old rescue could not: the old proposal was
+  `stash push` + `git branch <n> stash@{0}`, and a branch cut from a stash commit does
+  **not** contain the untracked files (they live in `stash^3`). `carry` pushes with `-u`
+  and restores with `stash apply <sha>` — the entry itself, by SHA, never `stash@{0}` or
+  `pop` — which re-applies the whole entry, untracked files included.
+
+#### Retries and timeouts
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `timeout` | `30m` batch, `0` (none) interactive | per **attempt**; on expiry the local `ssh` is killed (the remote job is not — it keeps running), the step reads `timed out after 30m` |
+| `retry.attempts` | `1` | total attempts; the whole script re-runs |
+| `retry.on` | `[transport]` | which failures retry: `transport` (ssh exit 255 / dial failure), `timeout`, `any`, or an exit code such as `75`. An **expected** exit is never retried |
+| `retry.backoff` | `5s × 2, max 2m, jitter` | wait before attempt *n* is `min(max, initial × factor^(n-1))` ± 50 % |
+| interactive steps | — | never auto-retry (a retried `install.sh` would re-ask everything), never get a deadline unless the plan sets one; `--timeout` does not touch them |
+| `<repo>.restore` | fixed | 3 attempts, transport only, 5m — `--no-retry` / `--timeout` do not apply |
+
+`--no-retry` forces one attempt everywhere; `--timeout D` overrides every batch step.
+Each attempt writes `=== step <id> attempt a/n (after <wait>) ===` into the run log.
+
+#### The report
+
+The first line names the plan source. Then, per host, `=== host ===` and one line per
+step — `ok|FAIL|skip|dep-fail <id> [exit N] [attempt a/n] [timeout] <duration> <notes|reason>`
+— then `log: <path>` pointing at the full capture under `~/.local/state/fleet/logs/`
+(every CLI run is teed there, header `fleet update — host=H plan=<source> mode=<fast-forward|FORCE RESET> started=<RFC3339>`;
+a capture that cannot be opened never costs the update). Exit status is non-zero with
+`N host(s) not updated` if any step on any host is not `ok`. `--json` emits
+`{ "plan": …, "reports": [ … ] }` with every field of every step, verbatim.
+
+#### Console demo (real output, `--dry-run`; host alias and home redacted)
+
+A two-repo plan with a `gh-auth` gate, `local: carry` on dotfiles, and a `make` step
+that tolerates exit 2 and does not block anything:
+
+```yaml
+version: 1
+update:
+  root: ~/git
+  defaults:
+    timeout: 30m
+    retry: { attempts: 3, on: [transport], backoff: { initial: 5s, factor: 2, max: 2m, jitter: true } }
+  repos:
+    dotfiles:
+      branches: [main]
+      local: carry
+    scripts:
+      path: work/scripts
+      url: git@github.com:example/scripts.git
+      branches: [default]
+  steps:
+    - id: gh
+      kind: gh-auth
+    - id: dotfiles.sync
+      kind: sync
+      repo: dotfiles
+      needs: [gh]
+    - id: dotfiles.install
+      kind: run
+      repo: dotfiles
+      run: ./install.sh
+      interactive: true
+      needs: [dotfiles.sync]
+    - id: scripts.sync
+      kind: sync
+      repo: scripts
+      needs: [gh]
+    - id: scripts.make
+      kind: run
+      repo: scripts
+      run: make install
+      needs: [scripts.sync]
+      expect: { exit: [0, 2] }
+      on_failure: continue
+      timeout: 10m
+```
+
+```console
+$ fleet update <host> --dry-run --file $TMPDIR/fleet.yaml
+plan: $TMPDIR/fleet.yaml
+=== gh (gh-auth) ===
+  check: command -v gh >/dev/null 2>&1 || exit 127; gh auth status -h github.com >/dev/null 2>&1
+  login (if check fails, interactive): gh auth login -h github.com --web --git-protocol https && gh auth setup-git -h github.com
+  timeout=30m0s retry=3 on=[transport]
+=== dotfiles.sync (sync) ===
+  precheck: if [ ! -e ~/git/dotfiles/.git ]; then echo "state=missing"; else cd ~/git/dotfiles && g=$(git rev-parse --git-dir) && if [ -e "$g/MERGE_HEAD" ] || [ -d "$g/rebase-merge" ] || [ -d "$g/rebase-apply" ]; then s=in-progress; elif [ -n "$(git status --porcelain)" ]; then s=dirty; else s=clean; fi; b=$(git symbolic-ref -q --short HEAD || echo detached); echo "state=$s branch=$b"; fi
+  sync (local=carry): cd ~/git/dotfiles && orig=$(git symbolic-ref -q --short HEAD || git rev-parse HEAD) && echo "fleet: orig=$orig" && ts=$(date -u +%Y%m%dT%H%M%SZ) && { [ -z "$(git status --porcelain)" ] || { git stash push -q -u -m "fleet-carry $ts" && echo "fleet: carried stash=$(git rev-parse stash@{0}) from=$orig"; }; } && git fetch origin main && git checkout main && git merge --ff-only FETCH_HEAD; rc=$?; now=$(git symbolic-ref -q --short HEAD || git rev-parse HEAD); [ "$orig" = "$now" ] || echo "fleet: switched $orig -> $now"; exit $rc
+  timeout=30m0s retry=3 on=[transport]
+=== dotfiles.install (run) ===
+  run (interactive): cd ~/git/dotfiles && ./install.sh
+  timeout=0s retry=3 on=[transport]
+=== scripts.sync (sync) ===
+  precheck: if [ ! -e ~/git/work/scripts/.git ]; then echo "state=missing"; else cd ~/git/work/scripts && g=$(git rev-parse --git-dir) && if [ -e "$g/MERGE_HEAD" ] || [ -d "$g/rebase-merge" ] || [ -d "$g/rebase-apply" ]; then s=in-progress; elif [ -n "$(git status --porcelain)" ]; then s=dirty; else s=clean; fi; b=$(git symbolic-ref -q --short HEAD || echo detached); echo "state=$s branch=$b"; fi
+  clone (if missing): mkdir -p "$(dirname ~/git/work/scripts)" && git clone -q 'git@github.com:example/scripts.git' ~/git/work/scripts && cd ~/git/work/scripts && b1=$(git symbolic-ref -q --short HEAD)
+  sync (local=skip): cd ~/git/work/scripts && orig=$(git symbolic-ref -q --short HEAD || git rev-parse HEAD) && echo "fleet: orig=$orig" && git fetch origin && { b1=$(git symbolic-ref -q --short refs/remotes/origin/HEAD); b1=${b1#origin/}; [ -n "$b1" ] || { b1=$(git ls-remote --symref origin HEAD | sed -n 's|^ref: refs/heads/\(.*\)[[:space:]]HEAD$|\1|p') && [ -n "$b1" ] && git remote set-head origin "$b1"; }; [ -n "$b1" ] || { echo 'fleet: cannot resolve the default branch' >&2; exit 3; }; } && git checkout -q "$b1" && git merge --ff-only "origin/$b1"; rc=$?; now=$(git symbolic-ref -q --short HEAD || git rev-parse HEAD); [ "$orig" = "$now" ] || echo "fleet: switched $orig -> $now"; exit $rc
+  timeout=30m0s retry=3 on=[transport]
+=== scripts.make (run) ===
+  run: cd ~/git/work/scripts && make install
+  timeout=10m0s retry=3 on=[transport]
+```
+
+(`dotfiles.install` shows the merged `retry=3`, but interactive steps are forced to one
+attempt at run time.) The same command with no plan file names its source and is the
+old update exactly:
+
+```console
+$ fleet update <host> --dry-run
+plan: built-in default (no $HOME/.config/fleet/fleet.yaml)
+=== dotfiles.sync (sync) ===
+  precheck: if [ ! -e ~/git/dotfiles/.git ]; then echo "state=missing"; else cd ~/git/dotfiles && g=$(git rev-parse --git-dir) && if [ -e "$g/MERGE_HEAD" ] || [ -d "$g/rebase-merge" ] || [ -d "$g/rebase-apply" ]; then s=in-progress; elif [ -n "$(git status --porcelain)" ]; then s=dirty; else s=clean; fi; b=$(git symbolic-ref -q --short HEAD || echo detached); echo "state=$s branch=$b"; fi
+  sync (local=skip): cd ~/git/dotfiles && orig=$(git symbolic-ref -q --short HEAD || git rev-parse HEAD) && echo "fleet: orig=$orig" && git fetch origin main && git checkout main && git merge --ff-only FETCH_HEAD; rc=$?; now=$(git symbolic-ref -q --short HEAD || git rev-parse HEAD); [ "$orig" = "$now" ] || echo "fleet: switched $orig -> $now"; exit $rc
+  timeout=30m0s retry=1 on=[transport]
+=== dotfiles.install (run) ===
+  run (interactive): cd ~/git/dotfiles && ./install.sh
+  timeout=0s retry=1 on=[transport]
+```
+
+#### `fleet update init`
+
+Writes the starter plan to the resolved location (`~/.config/fleet/fleet.yaml`, dir
+`0700`, file `0644`) and refuses to overwrite without `--overwrite`; `--file PATH`
+writes elsewhere; `--print` writes to stdout instead. It **shadows a host named
+`init`** — `fleet update init` is always this verb.
 
 > **Note:** the install-stamp that `status` reads is written by `install.sh`, so
 > a host only starts reporting a real commit/age once it has run an `install.sh`
@@ -374,8 +645,13 @@ against real machines:
 - `prune` applies nothing without confirmation and deletes only exact lines.
 - `remove` unmarks; only `--purge` deletes. Leaving the fleet keeps SSH access.
 - Every ssh-config write takes a backup first and keeps `0600`.
-- A dirty clone is skipped unless `--force`, which *preserves* work in a rescue
-  worktree.
+- A dirty clone is skipped unless `--force` / `local: rescue`, which *preserves* work in
+  a rescue worktree; `local: carry` stashes with `-u` and re-applies by SHA; a stash is
+  dropped only after a clean apply. Nothing is ever discarded.
+- Every `sync` step makes exactly one network call; `run:` is verbatim and the plan file
+  must be yours and not group/world-writable; `--dry-run` sends nothing.
+- A failed step blocks its dependents, never its siblings; a host is put back on its
+  original branch by default; interactive steps never auto-retry.
 - Failures are named per host and reflected in the exit code.
 - Wake never mutates a target: ICMP, `$SSH_CONNECTION`, and the probe, nothing else.
 - Only a direct re-probe can report a host woken — a working relay is not enough.
@@ -393,6 +669,9 @@ opening a socket. Only one package touches a remote host:
 | `internal/drift` | classify drift + format age (clock injected, never `time.Now()`) |
 | `internal/keys` | `authorized_keys` diff (reports removals, never applies them) |
 | `internal/runner` | the only seam that runs a remote command (`Exec` real, `Fake` for tests) |
+| `internal/updplan` | the `fleet.yaml` schema: parse, defaults merge, validation, step order (pure) |
+| `internal/updexec` | the remote script builders + the per-host executor (retries, cascade, restore); clock, sleep and I/O injected |
+| `internal/featflag` | fail-open resolution of the `fleet.update.*` gff flags; the only import of the gff SDK |
 
 ## Development
 
