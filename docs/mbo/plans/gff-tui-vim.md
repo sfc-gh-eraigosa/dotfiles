@@ -3,319 +3,114 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. The execution trio lives in [`./gff-tui-vim/`](./gff-tui-vim/).
 
 - **Slug:** `gff-tui-vim`
-- **Date:** 2026-09-05
-- **Status:** Approved
-- **Relates to:** spec [`../specs/gff-tui-vim.md`](../specs/gff-tui-vim.md) · parent `gff` plan [`./gff.md`](./gff.md) P3-T1 · feature `gss feature gff-tui-vim` · issue #281 · design PR #280
+- **Date:** 2026-09-05 (revised the same day to consume `sdk/libs/tui`)
+- **Status:** Approved — **blocked on `sdk-tui`** (plan [`./sdk-tui.md`](./sdk-tui.md); this build worker stacks on its `lib` branch)
+- **Relates to:** spec [`../specs/gff-tui-vim.md`](../specs/gff-tui-vim.md) · lib plan [`./sdk-tui.md`](./sdk-tui.md) §3 (frozen contracts) · guide `sdk/libs/tui/GUIDE.md` · parent `gff` plan [`./gff.md`](./gff.md) P3-T1 · feature `gss feature gff-tui-vim` · issue #281 · design PR #280
 
-**Goal:** Make `gff tui` navigable with vim keys, searchable with `/` (incremental regex, `n`/`N`), and scriptable with a `:` command line (`:set`, `:unset`, `:q`, `:help`, `:/re`, Tab completion), so any flag can be found and toggled in a few keystrokes.
+**Goal:** Make `gff tui` navigable with vim keys, searchable with `/` (incremental regex, `n`/`N`), and scriptable with a `:` command line (`:set`, `:unset`, `:q`, `:help`, `:/re`, Tab completion) — as the **first consumer** of `sdk/libs/tui`.
 
-**Architecture:** Four small new files inside `sdk/gff/internal/tui` (`input.go` line editor, `search.go` search state + pure matchers, `command.go` parser/executor/completion, `keys.go` vim motions) plug into the existing bubbletea `Model` through two new screen modes (`modeSearch`, `modeCommand`). Writes keep flowing through `overrides.Write` / `overrides.Unset` and rows refresh through the existing `Explain` hook. No new dependencies.
+**Architecture:** gff's bubbletea `Model` composes `keymap`, `nav`, `search`, `cmdline`, and `overlay` from `sdk/libs/tui` and keeps only what is gff's: the collapsible area tree (auto-expand on match, `inScope`, `rowKey` anchors), row rendering, `:set`/`:unset` validation against flag types, and the override writers. No new dependency beyond `libs`.
 
-**Tech Stack:** Go 1.26 (module `sdk/gff`), bubbletea v1.3.10, lipgloss v1.1.0, testify; tests drive `Model.Update` with real terminal key shapes (the `keyspace_test.go` pattern).
+**Tech Stack:** Go 1.26, bubbletea v1.3.10, lipgloss v1.1.0, testify, `sdk/libs/tui` via the standard `replace ../libs`.
 
 **Spec:** [`../specs/gff-tui-vim.md`](../specs/gff-tui-vim.md)
 
 ## Global constraints
 
-- Coverage: `sdk/gff` module ≥ 90% overall (gate in `.github/workflows/gff-ci.yml`); `internal/tui` must not drop below its current 91.3%.
-- Frozen contracts in [`./gff.md`](./gff.md) §3 (proto, file formats, CLI verbs, shell helper) are **not** touched. gff writes only the user override file; every test writes only under `t.TempDir()`.
-- No new Go module dependency (`go.mod` unchanged).
-- Real key shapes in tests: letters are `tea.KeyRunes`, the spacebar is `tea.KeySpace`, control keys are `tea.KeyCtrlD` etc., Esc is `tea.KeyEscape`.
-- `h`/`H` must not open help anywhere after Task 2. `?` and `F1` do.
-- Stage files by explicit name; one commit per task; commit messages exactly as written in each task; every commit ends with the session trailers required by the harness.
-- Evidence: each task's gate output is `tee`'d into `docs/mbo/plans/gff-tui-vim/evidence/<task>/` and committed with the task.
+- Coverage: `sdk/gff` module ≥ 90% (gate in `.github/workflows/gff-ci.yml`); `internal/tui` ≥ 91.3% (its current value); `internal/resolve` ≥ 95%.
+- Frozen contracts in [`./gff.md`](./gff.md) §3 untouched. Writes only to the user override file; tests only under `t.TempDir()`.
+- `sdk/gff/go.mod` gains `require github.com/sfc-gh-eraigosa/dotfiles/sdk/libs v0.0.0` + `replace … => ../libs`, nothing else.
+- The lib API is [`./sdk-tui.md`](./sdk-tui.md) §3 — **consume, never fork**. A missing capability is a TRACKING blocker escalated to `sdk-tui`, not a local copy.
+- Real key shapes in tests. `h`/`H` never open help after Task 1; `?`/F1 do.
+- Stage by explicit name; one commit per task; plan messages verbatim + session trailers; evidence `tee`'d to `docs/mbo/plans/gff-tui-vim/evidence/<task>/`.
 
 ---
 
 ## 1. Summary & verdict
 
-Additive change to one package plus docs. Design approved in chat on 2026-09-05 with three decisions: `:` is an ex-style command line; vim `h`/`l` win over the old `h`=help binding; `/` auto-expands collapsed areas holding a match. Risk is low (no on-disk format changes); the only behavior a user might notice as a regression is `h` no longer opening help, which the footer, help overlay, README, and `--help` all announce.
+Same behavior as the original plan (design approved in chat 2026-09-05), re-cut after the owner's review to ride `sdk/libs/tui` instead of re-implementing it. Seven tasks became four: the editor, motion engine, search state machine, command parser, and help renderer now come from the lib with their own tests; gff keeps the glue. Risk: low; the one moving part is the lib API, frozen at `sdk-tui` Task 2.
 
 ## 2. File inventory
 
 | Path | Purpose | Implements |
 | :-- | :-- | :-- |
-| `sdk/gff/internal/tui/input.go` | `lineInput` single-line editor (insert/backspace/delete/←→/home/end/ctrl+u/ctrl+w; `Render()` with a cursor block) | spec §3 unit 1, F3, F6 |
-| `sdk/gff/internal/tui/input_test.go` (package `tui`) | table tests for every editor key | F3a, F6 |
-| `sdk/gff/internal/tui/keys.go` | `motionState`, `(m *Model) handleMotion`, `moveCursor`, `turnPage`, `fullPage`, `halfPage` | F1 |
-| `sdk/gff/internal/tui/search.go` | `searchState`, `compilePattern` (smartcase), `matchItem`, `rowKey`, `(m *Model) startSearch/applySearch/commitSearch/cancelSearch/collectMatches/nextMatch/clearHighlights` | F3, F4, F5 |
-| `sdk/gff/internal/tui/search_internal_test.go` (package `tui`) | pure tests for `compilePattern`, `matchItem`, `rowKey` | F3e, F4b |
-| `sdk/gff/internal/tui/command.go` | `command`, `parseCommand`, `parseValue`, `(m *Model) findKey/execCommand/cmdSet/cmdUnset/completeKey/completeCommand` | F6, F7 |
-| `sdk/gff/internal/tui/command_internal_test.go` (package `tui`) | table tests for `parseCommand`, `parseValue` | F6g, F6a–c validation |
-| `sdk/gff/internal/tui/model.go` | new modes + dispatch; `inScope`; motions wired into `updateList`/`updatePicker`; `?`/F1 help; `/`, `:`, `n`, `N`, Esc(`:noh`) | F1, F2, F3, F5, F6 |
-| `sdk/gff/internal/tui/view.go` | prompt line replaces the footer hint; `[i/N]` badge; match gutter `*` + style; new footer hint; help overlay key table | F2, F5, F8, F9 |
-| `sdk/gff/internal/tui/vim_test.go` (package `tui_test`) | model-driven tests: motions, help rebind, picker `j/k` | F1, F2 |
-| `sdk/gff/internal/tui/search_test.go` (package `tui_test`) | model-driven tests: `/` flow, auto-expand, `n/N`, Esc, errors, NO_COLOR gutter, frame height | F3, F4, F5, F8 |
-| `sdk/gff/internal/tui/command_test.go` (package `tui_test`) | model-driven tests: `:set`/`:unset`/`:q`/`:help`/`:/re`, Tab/Shift-Tab, file assertions | F6, F7 |
-| `sdk/gff/internal/tui/round2_test.go` | rewire `TestHelpOverlayFromDetail` from `h` to `?` | F2b |
-| `sdk/gff/cmd/tui.go` | `Long` text lists the key table | F9 |
-| `sdk/gff/cmd/tui_keys_test.go` (package `cmd`) | asserts `tuiCmd.Long` names every key group | F9 |
-| `sdk/gff/README.md` | new **TUI keys** section | F9 |
-| `sdk/gff/AGENTS.md` | keymap line under `internal/tui` | F9 |
-| `docs/mbo/plans/gff-tui-vim/evidence/**` | gate outputs + the real-terminal demo transcript | spec §6 |
-| `docs/mbo/index.md` | state transitions | — |
+| `sdk/gff/go.mod`, `go.sum` | `libs` require + replace | — |
+| `sdk/gff/internal/tui/keys.go` | `gffKeys` (= `keymap.Vim.Merge(select/confirm/unset)`), `palette` adapter over `internal/style`, `listHint` | F1, F2, F8, F9 |
+| `sdk/gff/internal/tui/model.go` | `cur nav.Cursor` replaces `cursor/scrollTop/lastInner`; modes `modeSearch`/`modeCommand`; dispatch; `?`/F1 | F1–F6 |
+| `sdk/gff/internal/tui/search.go` | gff glue over `search.State`: `rowKey`, `inScope`, `hit`, `startSearch/applySearch/commitSearch/cancelSearch/jump/noh` (auto-expand) | F3–F5 |
+| `sdk/gff/internal/tui/command.go` | `parseValue`, `findKey`, `completeKey`, the `set`/`unset` specs, `registerCommands`, `updateCommand` | F6, F7 |
+| `sdk/gff/internal/tui/view.go` | viewport via `cur.Visible()`; prompt/error footer; badge; `*` gutter; help via `overlay.Help` + SOURCES section | F2, F5, F8, F9 |
+| `sdk/gff/internal/tui/vim_test.go` | motions, help rebind, picker `j/k`, footer-from-keymap (package `tui_test`) | F1, F2, F9 |
+| `sdk/gff/internal/tui/search_test.go` | `/` flow, auto-expand, `n/N`, Esc, errors, gutter, frame height | F3–F5, F8 |
+| `sdk/gff/internal/tui/command_test.go` | `:set`/`:unset`/`:q`/`:help`/`:/re`, Tab, file assertions | F6, F7 |
+| `sdk/gff/internal/tui/command_internal_test.go` | `parseValue`, `findKey` tables (package `tui`) | F6 validation |
+| `sdk/gff/internal/tui/round2_test.go` | `TestHelpOverlayFromDetail` `'h'` → `'?'` | F2b |
+| `sdk/gff/internal/resolve/resolve.go`, `resolve_test.go` | `Resolved.WithNamespace` test helper | — |
+| `sdk/gff/cmd/tui.go`, `cmd/tui_keys_test.go` | `Long` from the same key table; pin test | F9 |
+| `sdk/gff/README.md`, `sdk/gff/AGENTS.md` | key table; pointer to `libs/tui/GUIDE.md` | F9 |
+| `docs/mbo/plans/gff-tui-vim/evidence/**` | gates + demo | spec §6 |
 
 ## 3. Interface contracts
 
-These are what neighboring tasks import from each other. Names are final.
+Consumed (frozen in [`./sdk-tui.md`](./sdk-tui.md) §3): `keymap.{Vim,Map,Binding,Dispatch,Handlers,KeyName}`, `nav.Cursor`, `search.State`/`Compile`, `cmdline.{State,Registry,Spec,Standard}`, `overlay.{Help,Section,Palette,Plain}`.
+
+gff-side names (final):
 
 ```go
-// input.go
-type lineInput struct{ runes []rune; pos int }
-func (l *lineInput) String() string
-func (l *lineInput) Reset()
-func (l *lineInput) SetText(s string)          // cursor to end
-func (l *lineInput) Handle(msg tea.KeyMsg) bool // true = consumed (an editing key)
-func (l *lineInput) Render() string             // text with "▌" at the cursor
-
 // keys.go
-type motionState struct{ pendingG bool }
-func (m *Model) handleMotion(msg tea.KeyMsg) bool // true = consumed
-func (m *Model) moveCursor(delta int)             // clamps, then rescope()
-func (m *Model) turnPage(dir int)                 // wraps; resets cursor/scroll; buildRows()
-func (m *Model) fullPage() int                    // lastInner, fallback 10
-func (m *Model) halfPage() int                    // max(1, fullPage()/2)
-
-// search.go
-type searchState struct {
-    input     lineInput
-    pattern   string          // committed pattern for n/N
-    re        *regexp.Regexp  // live (search mode) or committed
-    err       string          // live compile error
-    matches   []int           // row indices, ascending
-    visible   bool            // highlights + badge shown
-    anchorKey string          // rowKey of the cursor row when / was pressed
-    anchorTop int             // scrollTop to restore on Esc
-}
-func compilePattern(p string) (*regexp.Regexp, error) // "" → nil,nil; smartcase
-func matchItem(item resolve.Resolved, re *regexp.Regexp) bool // path OR description
-func rowKey(r row) string
-func (m *Model) inScope(item resolve.Resolved) bool // the buildRows visibility rule
-func (m *Model) rowIndexOf(key string) int          // 0 when absent
-func (m *Model) startSearch()                        // anchors + modeSearch
-func (m *Model) applySearch()                        // compile live text; expand; collect; move cursor
-func (m *Model) collectMatches()                     // rows → matches (no cursor move); called by buildRows
-func (m *Model) commitSearch()                       // Enter
-func (m *Model) cancelSearch()                       // Esc in search mode
-func (m *Model) nextMatch(dir int)                   // n = +1, N = -1
-func (m *Model) clearHighlights()                    // Esc in list (:noh)
-func (m *Model) matchBadge() string                  // "/pat [i/N]" or ""
-
-// command.go
-type command struct{ name string; args []string }
-type completion struct{ head string; candidates []string; idx int }
-func parseCommand(line string) (command, error)
-func parseValue(item resolve.Resolved, raw string) (*gffv1.Value, error)
-func (m *Model) findKey(key string) (int, error)     // "ns:path" or "path"; scope-preferred
-func (m *Model) execCommand(c command) tea.Cmd       // errors → m.errMsg
-func (m *Model) completeKey(prefix string) []string  // in-scope paths, item order
-func (m *Model) completeCommand(dir int)             // Tab=+1, Shift-Tab=-1
+const actUnset keymap.Action = "unset"              // u
+var gffKeys = keymap.Vim.Merge(
+    keymap.Binding{Action: keymap.Select,  Keys: []string{"space"}, Help: "toggle a bool / pick choice options (same writer as `gff set`)", Short: "toggle", Header: true},
+    keymap.Binding{Action: keymap.Confirm, Keys: []string{"enter"}, Help: "expand an area / open feature details (attributes + layers)", Short: "open", Header: true},
+    keymap.Binding{Action: actUnset,       Keys: []string{"u"},     Help: "clear the user override for the row (same as `gff unset`)", Short: "clear", Header: true},
+)
+type palette struct{ pal style.Colors }              // overlay.Palette over lipgloss; NO_COLOR → overlay.Plain
+func newPalette() overlay.Palette
+func listHint() string                              // gffKeys.HeaderHint("  ")
 
 // model.go additions
-const ( modeSearch screenMode = iota + 4 /* after modeHelp */; modeCommand )
-type Model struct { …existing…; motion motionState; search searchState; cmd lineInput; comp completion }
+const ( modeSearch screenMode = iota + 4; modeCommand )
+type Model struct { …; cur nav.Cursor; search search.State; searchAnchor string; cmd cmdline.State; reg cmdline.Registry; … }
+// `cursor` → `cur.Pos`, `scrollTop` → `cur.Top`, `lastInner` → `cur.Height` everywhere.
+func (m *Model) turnPage(dir int)
+
+// search.go (gff glue)
+func rowKey(r row) string
+func (m *Model) inScope(item resolve.Resolved) bool
+func (m *Model) rowIndexOf(key string) int
+func (m *Model) hit(i int) bool                     // rows[i] is a feature row matching search.Re
+func (m *Model) collect()                           // search.Collect over the rows (buildRows calls it)
+func (m *Model) startSearch()
+func (m *Model) applySearch()                       // reveal (expand) + buildRows + First
+func (m *Model) commitSearch()
+func (m *Model) cancelSearch()
+func (m *Model) jump(dir int)                       // n/N incl. re-arm
+func (m *Model) noh()
 func (m *Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd)
+
+// command.go (gff glue)
+func parseValue(item resolve.Resolved, raw string) (*gffv1.Value, error)
+func (m *Model) findKey(key string) (int, error)
+func (m *Model) completeKey(prefix string) []string
+func (m *Model) registerCommands()                  // Standard + set + unset
 func (m *Model) updateCommand(msg tea.KeyMsg) (tea.Model, tea.Cmd)
 ```
 
-Footer hint (list, no prompt open), the single source for F9 — copy verbatim wherever it is shown:
-
-```
-j/k ↑/↓ move  h/l ←/→ page  gg/G top/end  ^d/^u half  / search  n/N next  : command  Enter open  Space toggle  u clear  ? help  q quit
-```
+Footer hint is **rendered from `gffKeys`**: `j/k move  h/l page  / search  n/N match  : command  ? help  q quit  space toggle  enter open  u clear`. The pin test asserts README and `Long` list the same keys.
 
 ## 4. TDD build order
 
-Run every command from `sdk/gff/` (the module root). `EV=../../docs/mbo/plans/gff-tui-vim/evidence` is the evidence root; create the task folder before the `tee`.
+Run from `sdk/gff/`. `EV=../../docs/mbo/plans/gff-tui-vim/evidence`. Work in the `build` worker (created `--base feature/sdk-tui/<user>/lib`).
 
-### Task 1: `lineInput` line editor
-
-**Files:**
-- Create: `sdk/gff/internal/tui/input.go`
-- Test: `sdk/gff/internal/tui/input_test.go` (package `tui`)
-
-**Interfaces:**
-- Consumes: bubbletea key types only.
-- Produces: `lineInput` per §3 — used by Task 4 (search prompt) and Task 6 (command prompt).
-
-- [ ] **Step 1: Write the failing test**
-
-```go
-package tui
-
-import (
-	"testing"
-
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/stretchr/testify/assert"
-)
-
-func runes(s string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)} }
-func key(t tea.KeyType) tea.KeyMsg { return tea.KeyMsg{Type: t} }
-
-func TestLineInputEditing(t *testing.T) {
-	cases := []struct {
-		name string
-		keys []tea.KeyMsg
-		want string
-		pos  int
-	}{
-		{"insert", []tea.KeyMsg{runes("ab"), runes("c")}, "abc", 3},
-		{"space is a rune", []tea.KeyMsg{runes("a"), key(tea.KeySpace), runes("b")}, "a b", 3},
-		{"backspace", []tea.KeyMsg{runes("abc"), key(tea.KeyBackspace)}, "ab", 2},
-		{"backspace at start is a no-op", []tea.KeyMsg{key(tea.KeyBackspace)}, "", 0},
-		{"left then insert", []tea.KeyMsg{runes("ac"), key(tea.KeyLeft), runes("b")}, "abc", 2},
-		{"delete under cursor", []tea.KeyMsg{runes("abc"), key(tea.KeyHome), key(tea.KeyDelete)}, "bc", 0},
-		{"home/end", []tea.KeyMsg{runes("abc"), key(tea.KeyHome), runes("x"), key(tea.KeyEnd), runes("y")}, "xabcy", 5},
-		{"ctrl+a / ctrl+e", []tea.KeyMsg{runes("abc"), key(tea.KeyCtrlA), runes("x"), key(tea.KeyCtrlE), runes("y")}, "xabcy", 5},
-		{"ctrl+u kills to start", []tea.KeyMsg{runes("abc def"), key(tea.KeyLeft), key(tea.KeyCtrlU)}, "f", 0},
-		{"ctrl+w kills a word", []tea.KeyMsg{runes("set install.ai "), key(tea.KeyCtrlW)}, "set ", 4},
-		{"right clamps", []tea.KeyMsg{runes("a"), key(tea.KeyRight), key(tea.KeyRight), runes("b")}, "ab", 2},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			var l lineInput
-			for _, k := range tc.keys {
-				assert.True(t, l.Handle(k), "editing keys are consumed")
-			}
-			assert.Equal(t, tc.want, l.String())
-			assert.Equal(t, tc.pos, l.pos)
-		})
-	}
-}
-
-func TestLineInputDoesNotConsumeModeKeys(t *testing.T) {
-	var l lineInput
-	for _, k := range []tea.KeyType{tea.KeyEscape, tea.KeyEnter, tea.KeyTab, tea.KeyShiftTab, tea.KeyUp, tea.KeyDown} {
-		assert.False(t, l.Handle(key(k)), "%v belongs to the owning mode", k)
-	}
-}
-
-func TestLineInputRenderAndReset(t *testing.T) {
-	var l lineInput
-	l.SetText("abc")
-	l.Handle(key(tea.KeyLeft))
-	assert.Equal(t, "ab▌c", l.Render())
-	l.Reset()
-	assert.Equal(t, "", l.String())
-	assert.Equal(t, "▌", l.Render())
-}
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `go test ./internal/tui/ -run 'TestLineInput' 2>&1 | head -5`
-Expected: FAIL — `undefined: lineInput`
-
-- [ ] **Step 3: Write minimal implementation**
-
-```go
-package tui
-
-import tea "github.com/charmbracelet/bubbletea"
-
-// lineInput is the minimal single-line editor behind the / and : prompts.
-// It owns only editing keys; Esc/Enter/Tab are the owning mode's business.
-type lineInput struct {
-	runes []rune
-	pos   int
-}
-
-func (l *lineInput) String() string { return string(l.runes) }
-
-func (l *lineInput) Reset() { l.runes, l.pos = l.runes[:0], 0 }
-
-// SetText replaces the buffer and parks the cursor at the end.
-func (l *lineInput) SetText(s string) { l.runes = []rune(s); l.pos = len(l.runes) }
-
-// Render is the prompt text with a block cursor at the insertion point.
-func (l *lineInput) Render() string {
-	return string(l.runes[:l.pos]) + "▌" + string(l.runes[l.pos:])
-}
-
-// Handle applies one editing key and reports whether it consumed it.
-func (l *lineInput) Handle(msg tea.KeyMsg) bool {
-	switch msg.Type {
-	case tea.KeyRunes:
-		l.insert(msg.Runes)
-	case tea.KeySpace:
-		l.insert([]rune{' '})
-	case tea.KeyBackspace:
-		if l.pos > 0 {
-			l.runes = append(l.runes[:l.pos-1], l.runes[l.pos:]...)
-			l.pos--
-		}
-	case tea.KeyDelete:
-		if l.pos < len(l.runes) {
-			l.runes = append(l.runes[:l.pos], l.runes[l.pos+1:]...)
-		}
-	case tea.KeyLeft:
-		if l.pos > 0 {
-			l.pos--
-		}
-	case tea.KeyRight:
-		if l.pos < len(l.runes) {
-			l.pos++
-		}
-	case tea.KeyHome, tea.KeyCtrlA:
-		l.pos = 0
-	case tea.KeyEnd, tea.KeyCtrlE:
-		l.pos = len(l.runes)
-	case tea.KeyCtrlU:
-		l.runes = append([]rune{}, l.runes[l.pos:]...)
-		l.pos = 0
-	case tea.KeyCtrlW:
-		start := l.pos
-		for start > 0 && l.runes[start-1] == ' ' {
-			start--
-		}
-		for start > 0 && l.runes[start-1] != ' ' {
-			start--
-		}
-		l.runes = append(l.runes[:start], l.runes[l.pos:]...)
-		l.pos = start
-	default:
-		return false
-	}
-	return true
-}
-
-func (l *lineInput) insert(rs []rune) {
-	out := make([]rune, 0, len(l.runes)+len(rs))
-	out = append(out, l.runes[:l.pos]...)
-	out = append(out, rs...)
-	out = append(out, l.runes[l.pos:]...)
-	l.runes = out
-	l.pos += len(rs)
-}
-```
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `mkdir -p $EV/task1 && go test ./internal/tui/ -run 'TestLineInput' -v 2>&1 | tee $EV/task1/go-test.txt | tail -5`
-Expected: PASS for all three tests.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add internal/tui/input.go internal/tui/input_test.go ../../docs/mbo/plans/gff-tui-vim/evidence/task1
-git commit -m "feat(gff/tui): lineInput single-line editor for the / and : prompts"
-```
-
----
-
-### Task 2: vim motions + help rebind
+### Task 1: adopt `libs/tui` — keymap, `nav.Cursor`, help on `?`/F1
 
 **Files:**
+- Modify: `sdk/gff/go.mod`, `go.sum`
 - Create: `sdk/gff/internal/tui/keys.go`
-- Modify: `sdk/gff/internal/tui/model.go` (`Model` struct; `updateList` arrows/PgUp/PgDn/`?`/`h`; `updatePicker` `j/k`/`h`; `updateDetail` `h`)
-- Modify: `sdk/gff/internal/tui/view.go` (footer hint; help overlay key lines)
-- Modify: `sdk/gff/internal/tui/round2_test.go:68` (`'h'` → `'?'`)
-- Test: `sdk/gff/internal/tui/vim_test.go` (package `tui_test`)
+- Modify: `sdk/gff/internal/tui/model.go`, `view.go`, `round2_test.go:68`
+- Test: `sdk/gff/internal/tui/vim_test.go`
 
-**Interfaces:**
-- Consumes: existing `Model.cursor/rows/pages/pageIdx/scrollTop/lastInner`, `rescope()`, `buildRows()`.
-- Produces: `motionState`, `handleMotion`, `moveCursor`, `turnPage`, `fullPage`, `halfPage` per §3 (Task 4 reuses `moveCursor`; Task 7 documents the keys).
+**Interfaces:** Consumes `keymap`, `nav`, `overlay`. Produces `gffKeys`, `newPalette`, `listHint`, `cur`, `turnPage` (used by Tasks 2–4).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -378,8 +173,7 @@ func TestVimGGAndG(t *testing.T) {
 	m = press(m, rn("g"))
 	assert.Contains(t, cursorLine(m.View()), "install.shell.profiles", "a lone g moves nothing")
 	m = press(m, rn("g"))
-	assert.Contains(t, cursorLine(m.View()), "install", "gg = first row")
-	assert.NotContains(t, cursorLine(m.View()), "install.", "first row is the area header")
+	assert.NotContains(t, cursorLine(m.View()), "install.", "gg = first row (the area header)")
 }
 
 func TestVimPendingGIsCancelledByAnotherKey(t *testing.T) {
@@ -389,18 +183,15 @@ func TestVimPendingGIsCancelledByAnotherKey(t *testing.T) {
 	m = press(m, rn("g"))
 	m = press(m, rn("k")) // cancels the pending g AND moves up once
 	assert.Contains(t, cursorLine(m.View()), "install.pkg.manager")
-	m = press(m, rn("g")) // a fresh single g: still pending, nothing moves
-	assert.Contains(t, cursorLine(m.View()), "install.pkg.manager")
 }
 
 func TestVimCtrlDUHalfPage(t *testing.T) {
 	m := newPagerModel(t)
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 8})
 	m = press(m, tea.KeyMsg{Type: tea.KeyEnter})
-	_ = m.View() // establishes lastInner
+	_ = m.View() // establishes the body height
 	m = press(m, tea.KeyMsg{Type: tea.KeyCtrlD})
-	after := cursorLine(m.View())
-	assert.NotContains(t, after, "▼ install", "ctrl+d moved off the header")
+	assert.NotContains(t, cursorLine(m.View()), "▼ install", "ctrl+d moved off the header")
 	m = press(m, tea.KeyMsg{Type: tea.KeyCtrlU})
 	assert.Contains(t, cursorLine(m.View()), "install", "ctrl+u returns to the top")
 }
@@ -422,8 +213,12 @@ func TestHelpOpensOnQuestionAndF1NotH(t *testing.T) {
 	assert.Contains(t, m.View(), "KEYS", "F1 opens help")
 	m = press(m, tea.KeyMsg{Type: tea.KeyEscape})
 	m = press(m, rn("?"))
-	assert.Contains(t, m.View(), "KEYS", "? opens help")
-	assert.Contains(t, m.View(), "j/k", "help lists the vim keys")
+	v := m.View()
+	assert.Contains(t, v, "KEYS", "? opens help")
+	for _, want := range []string{"j/down", "gg", "ctrl+d", "/", ":", "q/ctrl+c", "space", "u "} {
+		assert.Contains(t, v, want, "help lists %q from the keymap", want)
+	}
+	assert.Contains(t, v, "SOURCES", "gff's own section still renders")
 }
 
 func TestHDoesNotOpenHelpInPickerOrDetail(t *testing.T) {
@@ -449,14 +244,22 @@ func TestPickerJKMoveCursor(t *testing.T) {
 	m = press(m, rn("k"))
 	assert.Contains(t, cursorLine(m.View()), "auto", "k moves it back")
 }
+
+func TestFooterHintRendersFromTheKeymap(t *testing.T) {
+	m := newPagerModel(t)
+	v := m.View()
+	for _, want := range []string{"j/k move", "h/l page", "/ search", "n/N match", ": command", "? help", "q quit", "space toggle", "enter open", "u clear"} {
+		assert.Contains(t, v, want)
+	}
+}
 ```
 
-Also edit `round2_test.go` line 68: replace `Runes: []rune{'h'}` with `Runes: []rune{'?'}` in `TestHelpOverlayFromDetail`.
+Edit `round2_test.go` line 68: `Runes: []rune{'h'}` → `Runes: []rune{'?'}`.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `go test ./internal/tui/ -run 'TestVim|TestHelpOpensOn|TestHDoesNot|TestPickerJK' 2>&1 | grep -E '^(--- FAIL|FAIL|ok)' | head`
-Expected: FAIL for every new test (`j` is ignored, `h` opens help, `G` does nothing).
+Run: `go mod edit -require=github.com/sfc-gh-eraigosa/dotfiles/sdk/libs@v0.0.0 -replace=github.com/sfc-gh-eraigosa/dotfiles/sdk/libs=../libs && go mod tidy && go test ./internal/tui/ -run 'TestVim|TestHelpOpensOn|TestHDoesNot|TestPickerJK|TestFooterHint' 2>&1 | grep -E '^(--- FAIL|ok|FAIL)' | head`
+Expected: every new test FAILs (`j` ignored, `h` opens help).
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -465,73 +268,75 @@ Expected: FAIL for every new test (`j` is ignored, `h` opens help, `G` does noth
 ```go
 package tui
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	"github.com/charmbracelet/lipgloss"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/style"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/keymap"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/overlay"
+)
 
-// motionState carries the multi-key vim motion in flight (only "gg" today).
-type motionState struct {
-	pendingG bool
+// actUnset is gff's own action layered on the sdk vim map (libs/tui/GUIDE.md §3).
+const actUnset keymap.Action = "unset"
+
+// gffKeys is the single key table: footer, help overlay, `gff tui --help`,
+// and the README table all render from (or are pinned to) it.
+var gffKeys = keymap.Vim.Merge(
+	keymap.Binding{Action: keymap.Select, Keys: []string{"space"}, Help: "toggle a bool / pick choice options (same writer as `gff set`)", Short: "toggle", Header: true},
+	keymap.Binding{Action: keymap.Confirm, Keys: []string{"enter"}, Help: "expand an area / open feature details (attributes + layers)", Short: "open", Header: true},
+	keymap.Binding{Action: actUnset, Keys: []string{"u"}, Help: "clear the user override for the row (same as `gff unset`)", Short: "clear", Header: true},
+)
+
+// listHint is the normal-mode footer.
+func listHint() string { return gffKeys.HeaderHint("  ") }
+
+// palette adapts internal/style to overlay.Palette; NO_COLOR → plain text.
+type palette struct{ pal style.Colors }
+
+func newPalette() overlay.Palette {
+	if noColor() {
+		return overlay.Plain{}
+	}
+	return palette{pal: style.Active()}
 }
 
-// handleMotion applies a vim motion in list mode and reports whether it
-// consumed the key. A pending 'g' is completed only by a second 'g'; any
-// other key cancels it and is then handled normally.
-func (m *Model) handleMotion(msg tea.KeyMsg) bool {
-	if m.motion.pendingG {
-		m.motion.pendingG = false
-		if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == 'g' {
-			m.cursor, m.scrollTop = 0, 0
-			m.rescope()
-			return true
-		}
+func (p palette) Dim(s string) string    { return lipgloss.NewStyle().Foreground(p.pal.Grey).Render(s) }
+func (p palette) Bold(s string) string   { return lipgloss.NewStyle().Bold(true).Foreground(p.pal.Purple).Render(s) }
+func (p palette) Accent(s string) string { return lipgloss.NewStyle().Bold(true).Foreground(p.pal.Text).Render(s) }
+func (p palette) Err(s string) string    { return lipgloss.NewStyle().Foreground(p.pal.Red).Render(s) }
+```
+
+`model.go` edits:
+
+1. Fields: replace `cursor int`, `scrollTop int`, `lastInner int` with `cur nav.Cursor`. Every `m.cursor` → `m.cur.Pos`, `m.scrollTop` → `m.cur.Top`. `buildRows` ends (both paths) with `m.cur.SetLen(len(m.rows))`. `rescope()` reads `m.cur.Pos`.
+2. `updateList`, first statements of the function:
+
+```go
+	if m.cur.Key(msg, gffKeys) { // j/k/gg/G/^d/^u/^f/^b and the arrows/PgUp/PgDn
+		m.rescope()
+		return m, nil
 	}
-	switch msg.Type {
-	case tea.KeyCtrlD:
-		m.moveCursor(m.halfPage())
-	case tea.KeyCtrlU:
-		m.moveCursor(-m.halfPage())
-	case tea.KeyCtrlF:
-		m.moveCursor(m.fullPage())
-	case tea.KeyCtrlB:
-		m.moveCursor(-m.fullPage())
-	case tea.KeyRunes:
-		if len(msg.Runes) != 1 {
-			return false
-		}
-		switch msg.Runes[0] {
-		case 'j':
-			m.moveCursor(1)
-		case 'k':
-			m.moveCursor(-1)
-		case 'h':
+	if a, ok := gffKeys.Lookup(msg); ok {
+		switch a {
+		case keymap.PageLeft:
 			m.turnPage(-1)
-		case 'l':
+			return m, nil
+		case keymap.PageRight:
 			m.turnPage(1)
-		case 'g':
-			m.motion.pendingG = true
-		case 'G':
-			m.moveCursor(len(m.rows))
-		default:
-			return false
+			return m, nil
+		case keymap.Help:
+			m.helpReturn = modeList
+			m.mode = modeHelp
+			return m, nil
+		case keymap.Quit:
+			return m, tea.Quit
 		}
-	default:
-		return false
 	}
-	return true
-}
+```
 
-// moveCursor moves by delta, clamps to the row list, and re-derives the
-// breadcrumb scope exactly as the arrow keys do.
-func (m *Model) moveCursor(delta int) {
-	m.cursor += delta
-	if m.cursor > len(m.rows)-1 {
-		m.cursor = len(m.rows) - 1
-	}
-	if m.cursor < 0 {
-		m.cursor = 0
-	}
-	m.rescope()
-}
+   Delete the old `KeyUp/KeyDown/KeyLeft/KeyRight/KeyPgUp/KeyPgDown` cases and the `'q'`, `'Q'`, `'?'`, `'h'`, `'H'` rune cases. Keep `KeyEnter`, `KeySpace`/`' '`, and `'u'` as they are (they act on `m.cur.Pos`).
+3. Add:
 
+```go
 // turnPage moves dir pages through the breadcrumb with wraparound.
 func (m *Model) turnPage(dir int) {
 	n := len(m.pages)
@@ -539,268 +344,71 @@ func (m *Model) turnPage(dir int) {
 		return
 	}
 	m.pageIdx = ((m.pageIdx+dir)%n + n) % n
-	m.cursor, m.scrollTop = 0, 0
 	m.buildRows()
-}
-
-// fullPage is the PgUp/PgDn stride: the body rows shown in the last render.
-func (m *Model) fullPage() int {
-	if m.lastInner < 1 {
-		return 10
-	}
-	return m.lastInner
-}
-
-// halfPage is the ctrl+d / ctrl+u stride.
-func (m *Model) halfPage() int {
-	if n := m.fullPage() / 2; n > 0 {
-		return n
-	}
-	return 1
+	m.cur.To(0)
+	m.cur.Top = 0
 }
 ```
 
-`model.go` edits:
-
-1. Add `motion motionState` to `Model`.
-2. In `updateList`, first line of the function body: `if m.handleMotion(msg) { return m, nil }`.
-3. Replace the `KeyUp`/`KeyDown` cases with `m.moveCursor(-1)` / `m.moveCursor(1)`; replace the `KeyLeft, KeyRight` body with `m.turnPage(-1)` / `m.turnPage(1)`; replace the `KeyPgUp, KeyPgDown` body with `m.moveCursor(-m.fullPage())` / `m.moveCursor(m.fullPage())`.
-4. Add `case tea.KeyF1:` (next to the `'?'` rune case) in `updateList`, `updatePicker`, `updateDetail` doing what `'?'` does there.
-5. In the rune switches of `updateList`, `updateDetail`, `updatePicker`: change `case '?', 'h', 'H':` to `case '?':`.
-6. In `updatePicker`'s rune switch add:
-
-```go
-		case 'j':
-			if m.pickerCursor < len(m.pickerEntries)-1 {
-				m.pickerCursor++
-			}
-		case 'k':
-			if m.pickerCursor > 0 {
-				m.pickerCursor--
-			}
-```
+4. `updatePicker`: add `'j'`/`'k'` next to `KeyDown`/`KeyUp`; change `case '?', 'h', 'H':` to `case '?':` and add `case tea.KeyF1:` in the type switch doing the same. Same two edits in `updateDetail`.
 
 `view.go` edits:
 
-1. The list footer hint becomes exactly the §3 string.
-2. Help overlay, `default:` (flag list) branch, replace the three key lines with:
+1. Viewport block in `viewList` — replace the manual `scrollTop`/`inner`/`lastInner` arithmetic with:
 
 ```go
-		sb.WriteString(dim.Render("  j/k ↑/↓ move · h/l ←/→ category pages · gg/G first/last · ^d/^u half page · ^f/^b (PgUp/PgDn) page"))
-		sb.WriteString("\n")
-		sb.WriteString(dim.Render("  /  regex search (smartcase; Enter commit, Esc cancel) · n/N next/prev match · Esc clear highlights"))
-		sb.WriteString("\n")
-		sb.WriteString(dim.Render("  :  command line — :set <key> <value> · :unset <key> · :/re · :help · :q  (Tab completes keys)"))
-		sb.WriteString("\n")
-		sb.WriteString(dim.Render("  Enter  expand an area / open feature details (attributes + layers)"))
-		sb.WriteString("\n")
-		sb.WriteString(dim.Render("  Space  toggle a bool / pick choice options · u clear the user override · q quit"))
-		sb.WriteString("\n")
+	rowsStart, rowsEnd := 0, len(m.rows)
+	moreAbove, moreBelow := 0, 0
+	if m.height > 0 {
+		overhead := 4
+		if m.errMsg != "" {
+			overhead++
+		}
+		budget := m.height - overhead
+		if budget < 1 {
+			budget = 1
+		}
+		if len(m.rows) > budget {
+			inner := budget - 2
+			if inner < 1 {
+				inner = 1
+			}
+			m.cur.SetHeight(inner)
+			rowsStart, rowsEnd = m.cur.Visible()
+			moreAbove, moreBelow = rowsStart, len(m.rows)-rowsEnd
+		} else {
+			m.cur.SetHeight(budget)
+			m.cur.Top = 0
+		}
+	}
 ```
 
-3. Picker help line: `"  j/k ↑/↓ move · Space toggle an option (multi) · Enter select/confirm · Esc cancel"`.
-4. Every `?/h` mention in help/detail footers becomes `?`; the final help line becomes `"Esc/?/q close"` (unchanged) and the detail footer `"Space toggle/pick  u clear user override  Esc/Enter back  ? help"` (unchanged).
+2. Cursor marker: `if i == m.cur.Pos { cursor = "> " }`.
+3. Footer: `sb.WriteString(dimStyle.Render(listHint()))`.
+4. `viewHelp`: for the list view replace the hand-written KEYS block with `overlay.Help(newPalette(), "KEYS — gff v"+version.Version+" ("+version.Commit+")", gffKeys, "Esc/?/q close", overlay.Section{Title: "SOURCES", Lines: sourceLines})` where `sourceLines []string` is the existing sources rendering collected into a slice (keep the "▶ current scope" / "● registered" / "○ discovered" logic and the key line). Keep the picker/detail help branches as they are but with `?` (not `?/h`) in their text and `j/k` added to the picker line.
 
 - [ ] **Step 4: Run the whole package**
 
-Run: `mkdir -p $EV/task2 && go test ./internal/tui/ -cover 2>&1 | tee $EV/task2/go-test.txt | tail -3`
-Expected: `ok … coverage: ≥ 91.3%`. If `TestHelpOverlayFromDetail` still fails, the `'h'`→`'?'` rewire was missed.
+Run: `mkdir -p $EV/task1 && go test ./internal/tui/ -cover 2>&1 | tee $EV/task1/go-test.txt | tail -3 && go vet ./...`
+Expected: `ok`, coverage ≥ 91.3%.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add internal/tui/keys.go internal/tui/model.go internal/tui/view.go internal/tui/vim_test.go internal/tui/round2_test.go ../../docs/mbo/plans/gff-tui-vim/evidence/task2
-git commit -m "feat(gff/tui): vim motions (j/k/h/l, gg/G, ^d/^u/^f/^b); help moves to ? and F1"
+git add go.mod go.sum internal/tui/keys.go internal/tui/model.go internal/tui/view.go internal/tui/vim_test.go internal/tui/round2_test.go ../../docs/mbo/plans/gff-tui-vim/evidence/task1
+git commit -m "feat(gff/tui): adopt libs/tui — keymap + nav.Cursor vim motions; help moves to ? and F1"
 ```
 
 ---
 
-### Task 3: search engine (pure helpers)
+### Task 2: `/` search over `search.State` with auto-expand, `n`/`N`, `:noh`
 
 **Files:**
-- Create: `sdk/gff/internal/tui/search.go` (this task: `searchState`, `compilePattern`, `matchItem`, `rowKey`, `inScope`, `rowIndexOf`)
-- Modify: `sdk/gff/internal/tui/model.go` (`buildRows` uses `inScope`)
-- Test: `sdk/gff/internal/tui/search_internal_test.go` (package `tui`)
+- Create: `sdk/gff/internal/tui/search.go`
+- Modify: `sdk/gff/internal/tui/model.go`, `view.go`
+- Test: `sdk/gff/internal/tui/search_test.go`
 
-**Interfaces:**
-- Consumes: `resolve.Resolved`, `row`, `Model.pageIdx/pages/scopeNS`.
-- Produces: the pure half of §3 `search.go`; Task 4 adds the mode methods.
-
-- [ ] **Step 1: Write the failing tests**
-
-```go
-package tui
-
-import (
-	"testing"
-
-	gffv1 "github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/gen/gff/v1"
-	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-)
-
-func TestCompilePatternSmartcase(t *testing.T) {
-	re, err := compilePattern("claude")
-	require.NoError(t, err)
-	assert.True(t, re.MatchString("Claude CLI"), "all-lowercase pattern is case-insensitive")
-
-	re, err = compilePattern("Claude")
-	require.NoError(t, err)
-	assert.False(t, re.MatchString("claude"), "an uppercase letter makes it case-sensitive")
-
-	re, err = compilePattern("ai\\.(claude|teams)")
-	require.NoError(t, err)
-	assert.True(t, re.MatchString("install.ai.teams"))
-
-	re, err = compilePattern("")
-	require.NoError(t, err)
-	assert.Nil(t, re, "empty pattern compiles to nil (no matches, no error)")
-
-	_, err = compilePattern("[ai")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "missing closing ]")
-}
-
-func item(path, desc string) resolve.Resolved {
-	return resolve.Resolved{Feature: &gffv1.Feature{Path: path, Description: desc}}
-}
-
-func TestMatchItemPathOrDescription(t *testing.T) {
-	re, _ := compilePattern("teams")
-	assert.True(t, matchItem(item("install.ai.teams", ""), re), "path matches")
-	assert.True(t, matchItem(item("install.ai.x", "AI teams"), re), "description matches")
-	assert.False(t, matchItem(item("install.ai.claude", "Claude CLI"), re))
-	assert.False(t, matchItem(item("install.ai.claude", "Claude CLI"), nil), "nil regex never matches")
-}
-
-func TestRowKeyDistinguishesAreasAndItems(t *testing.T) {
-	assert.Equal(t, "area:ns\x00install", rowKey(row{isArea: true, ns: "ns", area: "install"}))
-	assert.Equal(t, "item:3", rowKey(row{itemIdx: 3}))
-	assert.NotEqual(t, rowKey(row{itemIdx: 0}), rowKey(row{isArea: true}))
-}
-```
-
-- [ ] **Step 2: Run tests to verify they fail**
-
-Run: `go test ./internal/tui/ -run 'TestCompilePattern|TestMatchItem|TestRowKey' 2>&1 | head -5`
-Expected: FAIL — `undefined: compilePattern`.
-
-- [ ] **Step 3: Write minimal implementation**
-
-`search.go`:
-
-```go
-package tui
-
-import (
-	"regexp"
-	"strconv"
-	"strings"
-	"unicode"
-
-	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve"
-)
-
-// searchState is the / prompt plus the committed pattern that n/N replay.
-type searchState struct {
-	input     lineInput
-	pattern   string         // committed pattern (n/N)
-	re        *regexp.Regexp // live (search mode) or committed pattern
-	err       string         // live compile error shown under the prompt
-	matches   []int          // matching row indices, ascending
-	visible   bool           // highlights + badge shown (Esc in the list = :noh)
-	anchorKey string         // rowKey of the cursor row when / was pressed
-	anchorTop int            // scrollTop when / was pressed
-}
-
-// compilePattern compiles a vim-style search: an empty pattern is nil (no
-// matches, no error); a pattern with no uppercase letter is case-insensitive
-// (smartcase).
-func compilePattern(p string) (*regexp.Regexp, error) {
-	if p == "" {
-		return nil, nil
-	}
-	if !strings.ContainsFunc(p, unicode.IsUpper) {
-		p = "(?i)" + p
-	}
-	return regexp.Compile(p)
-}
-
-// matchItem reports whether the pattern hits the key path or the description.
-func matchItem(item resolve.Resolved, re *regexp.Regexp) bool {
-	if re == nil {
-		return false
-	}
-	return re.MatchString(item.Feature.GetPath()) || re.MatchString(item.Feature.GetDescription())
-}
-
-// rowKey identifies a row across buildRows rebuilds (row indices shift when
-// an area expands; keys do not).
-func rowKey(r row) string {
-	if r.isArea {
-		return "area:" + r.ns + "\x00" + r.area
-	}
-	return "item:" + strconv.Itoa(r.itemIdx)
-}
-
-// inScope is the single visibility rule shared by buildRows and search: the
-// All page shows every namespace; a category page shows its component within
-// the breadcrumb's namespace.
-func (m *Model) inScope(item resolve.Resolved) bool {
-	if m.pageIdx <= 0 || m.pageIdx >= len(m.pages) {
-		return true
-	}
-	if componentOf(item.Feature.GetPath()) != m.pages[m.pageIdx].component {
-		return false
-	}
-	return m.scopeNS == "" || item.Namespace() == m.scopeNS
-}
-
-// rowIndexOf finds a row by key; 0 when it is no longer rendered.
-func (m *Model) rowIndexOf(key string) int {
-	for i, r := range m.rows {
-		if rowKey(r) == key {
-			return i
-		}
-	}
-	return 0
-}
-```
-
-`model.go`, `buildRows` category branch: replace the two `continue` checks with
-
-```go
-			if !m.inScope(item) {
-				continue
-			}
-```
-
-- [ ] **Step 4: Run tests to verify they pass**
-
-Run: `mkdir -p $EV/task3 && go test ./internal/tui/ -cover 2>&1 | tee $EV/task3/go-test.txt | tail -3`
-Expected: `ok`, coverage ≥ 91.3% (the whole package still passes after the `inScope` refactor).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add internal/tui/search.go internal/tui/search_internal_test.go internal/tui/model.go ../../docs/mbo/plans/gff-tui-vim/evidence/task3
-git commit -m "feat(gff/tui): search primitives — smartcase compile, path/description match, row keys, shared inScope"
-```
-
----
-
-### Task 4: `/` search mode, `n`/`N`, `:noh`, highlight rendering
-
-**Files:**
-- Modify: `sdk/gff/internal/tui/search.go` (mode methods)
-- Modify: `sdk/gff/internal/tui/model.go` (`modeSearch`; `search searchState`; dispatch; `/`, `n`, `N`, Esc in `updateList`; `buildRows` → `collectMatches`)
-- Modify: `sdk/gff/internal/tui/view.go` (`View` routes `modeSearch` to `viewList`; prompt/error lines; badge; `*` gutter + style; height budget)
-- Test: `sdk/gff/internal/tui/search_test.go` (package `tui_test`)
-
-**Interfaces:**
-- Consumes: Task 1 `lineInput`, Task 2 `moveCursor`, Task 3 helpers.
-- Produces: `startSearch/applySearch/commitSearch/cancelSearch/collectMatches/nextMatch/clearHighlights/matchBadge` per §3; Task 6 reuses `startSearch`+`applySearch`+`commitSearch` for `:/re`.
+**Interfaces:** Consumes `search.State`, Task 1 `cur`/`gffKeys`. Produces the gff search glue named in §3.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -808,10 +416,12 @@ git commit -m "feat(gff/tui): search primitives — smartcase compile, path/desc
 package tui_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -824,12 +434,12 @@ func typeKeys(m tea.Model, s string) tea.Model {
 }
 
 // gutterLines returns the rendered lines carrying the "* " match marker.
-// The cursor row keeps its "> " marker (cursor wins), so a search with N
-// matches and the cursor parked on one of them shows N-1 gutter stars.
+// The cursor row keeps its "> " marker (cursor wins), so N matches with the
+// cursor on one of them show N-1 stars. Tests run with NO_COLOR=1.
 func gutterLines(v string) []string {
 	var out []string
 	for _, l := range strings.Split(v, "\n") {
-		if strings.Contains(l, "* ") || strings.HasPrefix(l, "*") {
+		if strings.HasPrefix(l, "* ") {
 			out = append(out, l)
 		}
 	}
@@ -843,8 +453,8 @@ func TestSlashSearchExpandsAreaAndJumpsToFirstMatch(t *testing.T) {
 	v := m.View()
 	assert.Contains(t, v, "/ai▌", "prompt shows the live pattern")
 	assert.Contains(t, v, "▼ install", "the area holding the matches auto-expanded")
-	assert.Contains(t, cursorLine(v), "install.ai.claude", "cursor landed on the first match after the anchor")
-	assert.Len(t, gutterLines(v), 1, "the other match (teams) carries the * marker; the cursor row keeps >")
+	assert.Contains(t, cursorLine(v), "install.ai.claude", "cursor on the first match after the anchor")
+	require.Len(t, gutterLines(v), 1)
 	assert.Contains(t, gutterLines(v)[0], "install.ai.teams")
 }
 
@@ -867,12 +477,12 @@ func TestSlashSearchInvalidRegexKeepsPreviousMatches(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	m := newPagerModel(t)
 	m = typeKeys(m, "/ai")
-	assert.Len(t, gutterLines(m.View()), 1) // teams; the cursor sits on claude
+	assert.Len(t, gutterLines(m.View()), 1)
 	m = typeKeys(m, "[")
 	v := m.View()
 	assert.Contains(t, v, "missing closing ]", "inline error under the prompt")
 	assert.Len(t, gutterLines(v), 1, "previous matches kept")
-	assert.Contains(t, cursorLine(v), "install.ai.claude", "cursor did not move")
+	assert.Contains(t, cursorLine(v), "install.ai.claude")
 	m = press(m, tea.KeyMsg{Type: tea.KeyBackspace})
 	assert.NotContains(t, m.View(), "missing closing", "fixing the pattern clears the error")
 }
@@ -883,7 +493,7 @@ func TestSlashSearchEscRestoresCursorAndClears(t *testing.T) {
 	m = typeKeys(m, "/shell")
 	m = press(m, tea.KeyMsg{Type: tea.KeyEscape})
 	v := m.View()
-	assert.Contains(t, cursorLine(v), "▼ install", "cursor back on the area header where / was pressed")
+	assert.Contains(t, cursorLine(v), "▼ install", "cursor back on the header where / was pressed")
 	assert.Empty(t, gutterLines(v), "matches cleared")
 	assert.Contains(t, v, "▼ install", "the expanded area stays expanded")
 	assert.NotContains(t, v, "▌", "prompt closed")
@@ -895,7 +505,7 @@ func TestSlashSearchEnterCommitsAndNNHop(t *testing.T) {
 	m = typeKeys(m, "/ai")
 	m = press(m, tea.KeyMsg{Type: tea.KeyEnter})
 	v := m.View()
-	assert.Contains(t, v, "/ai [1/2]", "badge shows position and count")
+	assert.Contains(t, v, "/ai [1/2]")
 	assert.Contains(t, cursorLine(v), "install.ai.claude")
 	m = typeKeys(m, "n")
 	assert.Contains(t, cursorLine(m.View()), "install.ai.teams")
@@ -940,7 +550,7 @@ func TestSearchScopeIsTheCurrentPage(t *testing.T) {
 	m := newPagerModel(t)
 	m = press(m, tea.KeyMsg{Type: tea.KeyRight}) // ai page: claude, teams
 	m = typeKeys(m, "/install")
-	assert.Len(t, gutterLines(m.View()), 1, "only the page's two rows match (cursor on one, star on the other)")
+	assert.Len(t, gutterLines(m.View()), 1, "only the page's two rows match (cursor on one)")
 	m = press(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = typeKeys(m, "l") // pkg page: the badge recomputes for the new page
 	assert.Contains(t, m.View(), "[1/1]")
@@ -956,279 +566,234 @@ func TestSearchPromptKeepsFrameWithinHeight(t *testing.T) {
 }
 ```
 
-Add `"os"` and the `tui` import to the file's import block.
-
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `go test ./internal/tui/ -run 'TestSlash|TestEscInList|TestNWithout|TestSearch' 2>&1 | grep -E '^(--- FAIL|ok|FAIL)' | head`
-Expected: every new test FAILs (`/` is ignored today).
+Expected: every new test FAILs.
 
 - [ ] **Step 3: Write minimal implementation**
 
-`search.go` additions:
+`search.go`:
 
 ```go
-// startSearch anchors the cursor and opens the / prompt.
+package tui
+
+import (
+	"strconv"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/search"
+)
+
+// rowKey identifies a row across buildRows rebuilds (indices shift when an
+// area expands; keys do not). Used to anchor Esc-restore and first-match.
+func rowKey(r row) string {
+	if r.isArea {
+		return "area:" + r.ns + "\x00" + r.area
+	}
+	return "item:" + strconv.Itoa(r.itemIdx)
+}
+
+// inScope is the single visibility rule shared by buildRows and search: the
+// All page shows every namespace; a category page shows its component within
+// the breadcrumb's namespace.
+func (m *Model) inScope(item resolve.Resolved) bool {
+	if m.pageIdx <= 0 || m.pageIdx >= len(m.pages) {
+		return true
+	}
+	if componentOf(item.Feature.GetPath()) != m.pages[m.pageIdx].component {
+		return false
+	}
+	return m.scopeNS == "" || item.Namespace() == m.scopeNS
+}
+
+func (m *Model) rowIndexOf(key string) int {
+	for i, r := range m.rows {
+		if rowKey(r) == key {
+			return i
+		}
+	}
+	return 0
+}
+
+func matchesItem(re interface{ MatchString(string) bool }, it resolve.Resolved) bool {
+	return re.MatchString(it.Feature.GetPath()) || re.MatchString(it.Feature.GetDescription())
+}
+
+// hit is the search haystack: a feature row whose path OR description matches.
+func (m *Model) hit(i int) bool {
+	r := m.rows[i]
+	return !r.isArea && m.search.Re != nil && matchesItem(m.search.Re, r.item)
+}
+
+// collect refreshes the match set for the current rows (buildRows calls it).
+func (m *Model) collect() { m.search.Collect(len(m.rows), m.hit) }
+
 func (m *Model) startSearch() {
-	s := &m.search
-	s.input.Reset()
-	s.err = ""
-	s.re = nil
-	s.matches = s.matches[:0]
-	s.visible = true
-	s.anchorTop = m.scrollTop
-	s.anchorKey = ""
-	if m.cursor >= 0 && m.cursor < len(m.rows) {
-		s.anchorKey = rowKey(m.rows[m.cursor])
+	m.search.Start(m.cur.Pos, m.cur.Top)
+	m.searchAnchor = ""
+	if m.cur.Pos < len(m.rows) {
+		m.searchAnchor = rowKey(m.rows[m.cur.Pos])
 	}
 	m.mode = modeSearch
 }
 
-// applySearch recompiles the live text, reveals matches, and parks the
-// cursor on the first hit at or after the anchor (wrapping to the top).
+// applySearch reveals matches (expanding areas on the All page), rebuilds the
+// rows, and parks the cursor on the first hit at or after the anchor.
 func (m *Model) applySearch() {
-	s := &m.search
-	re, err := compilePattern(s.input.String())
-	if err != nil {
-		s.err = err.Error() // keep the previous matches on screen
-		return
-	}
-	s.err = ""
-	s.re = re
-	if m.pageIdx == 0 { // category pages are flat: nothing to expand
+	if m.search.Re != nil && m.pageIdx == 0 {
 		for _, it := range m.items {
-			if matchItem(it, re) {
+			if matchesItem(m.search.Re, it) {
 				m.expanded[it.Namespace()+"\x00"+areaOf(it.Feature.GetPath())] = true
 			}
 		}
 	}
-	m.buildRows() // → collectMatches
-	if len(s.matches) == 0 {
-		m.cursor = m.rowIndexOf(s.anchorKey)
-		return
-	}
-	anchor := m.rowIndexOf(s.anchorKey)
-	target := s.matches[0]
-	for _, ri := range s.matches {
-		if ri >= anchor {
-			target = ri
-			break
-		}
-	}
-	m.cursor = target
-	m.rescope()
-}
-
-// collectMatches maps the current pattern onto the rendered rows. buildRows
-// calls it so page turns and expands keep the match set honest.
-func (m *Model) collectMatches() {
-	s := &m.search
-	s.matches = s.matches[:0]
-	if s.re == nil || !s.visible {
-		return
-	}
-	for i, r := range m.rows {
-		if !r.isArea && matchItem(r.item, s.re) {
-			s.matches = append(s.matches, i)
-		}
-	}
-}
-
-// commitSearch is Enter in the prompt: freeze the pattern for n/N.
-func (m *Model) commitSearch() {
-	s := &m.search
-	m.mode = modeList
-	if s.err != "" {
-		m.errMsg = "invalid pattern: " + s.err
-		s.err = ""
-		return
-	}
-	s.pattern = s.input.String()
-	s.input.Reset()
-	if s.pattern == "" {
-		s.visible = false
-		s.re = nil
-		s.matches = s.matches[:0]
-		return
-	}
-	if len(s.matches) == 0 {
-		m.errMsg = "pattern not found: " + s.pattern
-	}
-}
-
-// cancelSearch is Esc in the prompt: back to where / was pressed.
-func (m *Model) cancelSearch() {
-	s := &m.search
-	m.mode = modeList
-	s.input.Reset()
-	s.err = ""
-	s.re = nil
-	s.visible = false
-	s.matches = s.matches[:0]
-	m.cursor = m.rowIndexOf(s.anchorKey)
-	m.scrollTop = s.anchorTop
-	m.rescope()
-}
-
-// nextMatch is n (+1) / N (-1): hop with wraparound; re-arm after :noh.
-func (m *Model) nextMatch(dir int) {
-	s := &m.search
-	if s.pattern == "" {
-		return
-	}
-	if !s.visible {
-		re, err := compilePattern(s.pattern)
-		if err != nil {
-			return
-		}
-		s.re, s.visible = re, true
-		m.buildRows()
-	}
-	if len(s.matches) == 0 {
-		m.errMsg = "pattern not found: " + s.pattern
-		return
-	}
-	target := -1
-	if dir > 0 {
-		for _, ri := range s.matches {
-			if ri > m.cursor {
-				target = ri
-				break
-			}
-		}
-		if target < 0 {
-			target = s.matches[0]
-		}
+	m.buildRows() // → SetLen + collect()
+	anchor := m.rowIndexOf(m.searchAnchor)
+	if i, ok := m.search.First(anchor); ok {
+		m.cur.To(i)
 	} else {
-		for i := len(s.matches) - 1; i >= 0; i-- {
-			if s.matches[i] < m.cursor {
-				target = s.matches[i]
-				break
-			}
-		}
-		if target < 0 {
-			target = s.matches[len(s.matches)-1]
-		}
+		m.cur.To(anchor)
 	}
-	m.cursor = target
+	m.rescope()
+}
+
+func (m *Model) commitSearch() {
+	m.mode = modeList
+	committed, notFound := m.search.Commit()
+	switch {
+	case !committed:
+		m.errMsg = "invalid pattern: " + m.search.Err
+		m.search.Err = ""
+	case notFound:
+		m.errMsg = "pattern not found: " + m.search.Pattern
+	}
+}
+
+func (m *Model) cancelSearch() {
+	m.mode = modeList
+	_, top := m.search.Cancel()
+	m.buildRows()
+	m.cur.To(m.rowIndexOf(m.searchAnchor))
+	m.cur.Top = top
+	m.rescope()
+}
+
+// jump is n (+1) / N (-1), re-arming after :noh.
+func (m *Model) jump(dir int) {
+	if m.search.Pattern == "" {
+		return
+	}
+	if !m.search.Visible && !m.search.Rearm() {
+		return
+	}
+	m.collect()
+	i, ok := m.search.Next(m.cur.Pos, dir)
+	if !ok {
+		m.errMsg = "pattern not found: " + m.search.Pattern
+		return
+	}
+	m.cur.To(i)
 	m.errMsg = ""
 	m.rescope()
 }
 
-// clearHighlights is Esc in the list (vim :noh): hide, keep the pattern.
-func (m *Model) clearHighlights() {
-	s := &m.search
-	s.visible = false
-	s.matches = s.matches[:0]
+// noh is Esc in the list: hide highlights, keep the pattern.
+func (m *Model) noh() {
+	m.search.Hide()
 	m.errMsg = ""
-}
-
-// matchBadge is the footer's "/pattern [i/N]" (i = "-" off a match).
-func (m *Model) matchBadge() string {
-	s := &m.search
-	if !s.visible || s.pattern == "" {
-		return ""
-	}
-	pos := "-"
-	for i, ri := range s.matches {
-		if ri == m.cursor {
-			pos = strconv.Itoa(i + 1)
-			break
-		}
-	}
-	return "/" + s.pattern + " [" + pos + "/" + strconv.Itoa(len(s.matches)) + "]"
 }
 
 // updateSearch handles keys while the / prompt is open.
 func (m *Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.KeyEscape:
+	switch m.search.Key(msg) {
+	case search.Cancelled:
 		m.cancelSearch()
-	case tea.KeyEnter:
+	case search.Submitted:
 		m.commitSearch()
-	default:
-		if m.search.input.Handle(msg) {
-			m.applySearch()
-		}
+	case search.Typed:
+		m.applySearch()
 	}
 	return m, nil
 }
 ```
 
-Add `tea "github.com/charmbracelet/bubbletea"` to `search.go`'s imports.
-
 `model.go` edits:
 
-1. Constants: append `modeSearch` and `modeCommand` after `modeHelp` (`modeCommand` is wired in Task 6 but declared now).
-2. `Model` struct: add `search searchState` and `cmd lineInput` (the `:` buffer; Task 6 wires it).
-3. `Update` key dispatch: add `case modeSearch: return m.updateSearch(msg)`.
-4. `buildRows`: call `m.collectMatches()` immediately before the category branch's early `return` **and** as the last statement of the function.
-5. `updateList` rune switch, add:
+1. Constants `modeSearch`, `modeCommand` after `modeHelp`; fields `search search.State`, `searchAnchor string`, and (declared now, wired in Task 3) `cmd cmdline.State`, `reg cmdline.Registry`.
+2. `Update`: `case modeSearch: return m.updateSearch(msg)`.
+3. `buildRows`: end **both** paths with `m.cur.SetLen(len(m.rows)); m.collect()`.
+4. `updateList` — extend the `gffKeys.Lookup` switch from Task 1:
 
 ```go
-		case '/':
+		case keymap.Search:
 			m.startSearch()
-		case 'n':
-			m.nextMatch(1)
-		case 'N':
-			m.nextMatch(-1)
+			return m, nil
+		case keymap.NextMatch:
+			m.jump(1)
+			return m, nil
+		case keymap.PrevMatch:
+			m.jump(-1)
+			return m, nil
+		case keymap.ClearHighlight:
+			m.noh()
+			return m, nil
 ```
-
-   and a new key case `case tea.KeyEscape: m.clearHighlights()` in `updateList`'s type switch.
 
 `view.go` edits:
 
 1. `View()`: `case modeSearch, modeCommand: return m.viewList()`.
-2. `viewList` overhead: after `overhead := 4`, add `if m.mode == modeSearch && m.search.err != "" { overhead++ }`.
-3. Match set + gutter: before the row loop build `matchSet := map[int]bool{}` from `m.search.matches` when `m.search.visible`. In the loop, `cursor := "  "`; `if matchSet[i] { cursor = "* " }`; `if i == m.cursor { cursor = "> " }`. For a matching, non-cursor feature row render the `path` cell with `matchStyle` (`lipgloss.NewStyle().Bold(true).Foreground(pal.Orange)`, plain under `noColor()`) instead of `dimStyle`.
-4. Footer: replace the single hint `WriteString` with (the `modeCommand` branch compiles now and goes live in Task 6)
+2. Overhead: `if m.mode == modeSearch && m.search.Err != "" { overhead++ }`.
+3. Gutter: `cursor := "  "`; `if m.search.IsMatch(i) { cursor = "* " }`; `if i == m.cur.Pos { cursor = "> " }`. A matching non-cursor feature row renders its `path` cell with `matchStyle` (bold + `pal.Orange`; plain under `noColor()`).
+4. Footer:
 
 ```go
 	switch m.mode {
 	case modeSearch:
-		sb.WriteString("/" + m.search.input.Render())
-		if m.search.err != "" {
-			sb.WriteString("\n")
-			sb.WriteString(errStyleFor(pal).Render(m.search.err))
+		sb.WriteString("/" + m.search.Input.Render("▌"))
+		if m.search.Err != "" {
+			sb.WriteString("\n" + errStyleFor(pal).Render(m.search.Err))
 		}
 	case modeCommand:
-		sb.WriteString(":" + m.cmd.Render())
+		sb.WriteString(":" + m.cmd.Input.Render("▌"))
 	default:
-		hint := listHint
-		if b := m.matchBadge(); b != "" {
+		hint := listHint()
+		if b := m.search.Badge(m.cur.Pos); b != "" {
 			hint = b + "  " + hint
 		}
 		sb.WriteString(dimStyle.Render(hint))
 	}
 ```
 
-   with `const listHint = "j/k ↑/↓ move  h/l ←/→ page  gg/G top/end  ^d/^u half  / search  n/N next  : command  Enter open  Space toggle  u clear  ? help  q quit"` and a small helper `func errStyleFor(pal style.Colors) lipgloss.Style` extracted from the existing errMsg rendering (red unless `noColor()`).
+   `errStyleFor(pal)` is the existing errMsg style extracted into a helper (red, plain under `noColor()`).
 
 - [ ] **Step 4: Run the package**
 
-Run: `mkdir -p $EV/task4 && go test ./internal/tui/ -cover 2>&1 | tee $EV/task4/go-test.txt | tail -3`
-Expected: `ok`, coverage ≥ 91.3%. Also `go vet ./...` clean.
+Run: `mkdir -p $EV/task2 && go test ./internal/tui/ -cover 2>&1 | tee $EV/task2/go-test.txt | tail -3 && go vet ./...`
+Expected: `ok`, ≥ 91.3%.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add internal/tui/search.go internal/tui/model.go internal/tui/view.go internal/tui/search_test.go ../../docs/mbo/plans/gff-tui-vim/evidence/task4
-git commit -m "feat(gff/tui): / incremental regex search with auto-expand, n/N, :noh, match gutter"
+git add internal/tui/search.go internal/tui/model.go internal/tui/view.go internal/tui/search_test.go ../../docs/mbo/plans/gff-tui-vim/evidence/task2
+git commit -m "feat(gff/tui): / search via libs/tui/search — auto-expand, n/N, :noh, match gutter"
 ```
 
 ---
 
-### Task 5: command parser + value validation (pure)
+### Task 3: `:` command line over `cmdline` — set/unset with typed validation, Tab completion
 
 **Files:**
-- Create: `sdk/gff/internal/tui/command.go` (this task: `command`, `parseCommand`, `parseValue`, `findKey`)
-- Test: `sdk/gff/internal/tui/command_internal_test.go` (package `tui`)
+- Create: `sdk/gff/internal/tui/command.go`
+- Modify: `sdk/gff/internal/tui/model.go`, `sdk/gff/internal/resolve/resolve.go`, `resolve_test.go`
+- Test: `sdk/gff/internal/tui/command_internal_test.go` (package `tui`), `sdk/gff/internal/tui/command_test.go` (package `tui_test`)
 
-**Interfaces:**
-- Consumes: `resolve.Resolved`, `gffv1` value types, `Model.items/scopeNS`.
-- Produces: `parseCommand`, `parseValue`, `findKey` per §3 for Task 6.
+**Interfaces:** Consumes `cmdline`, Task 2 search glue. Produces `parseValue`, `findKey`, `completeKey`, `registerCommands`, `updateCommand`.
 
 - [ ] **Step 1: Write the failing tests**
+
+`command_internal_test.go`:
 
 ```go
 package tui
@@ -1241,34 +806,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestParseCommand(t *testing.T) {
-	cases := []struct {
-		line string
-		want command
-		err  string
-	}{
-		{"set a.b.c true", command{name: "set", args: []string{"a.b.c", "true"}}, ""},
-		{"  unset   a.b.c  ", command{name: "unset", args: []string{"a.b.c"}}, ""},
-		{"q", command{name: "q"}, ""},
-		{"/ai\\.(x|y) z", command{name: "search", args: []string{"ai\\.(x|y) z"}}, ""},
-		{"/", command{name: "search", args: []string{""}}, ""},
-		{"", command{}, "empty command"},
-		{"   ", command{}, "empty command"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.line, func(t *testing.T) {
-			got, err := parseCommand(tc.line)
-			if tc.err != "" {
-				require.EqualError(t, err, tc.err)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, tc.want.name, got.name)
-			assert.Equal(t, tc.want.args, got.args)
-		})
-	}
-}
 
 func boolItem(path string) resolve.Resolved {
 	return resolve.Resolved{Feature: &gffv1.Feature{Path: path, Default: &gffv1.Feature_BoolDefault{BoolDefault: true}}}
@@ -1293,15 +830,12 @@ func TestParseValueBool(t *testing.T) {
 func TestParseValueChoice(t *testing.T) {
 	single := choiceItem("p.m", gffv1.ChoiceMode_CHOICE_MODE_SINGLE, "auto", "apt")
 	multi := choiceItem("p.n", gffv1.ChoiceMode_CHOICE_MODE_MULTI, "a", "b", "c")
-
 	v, err := parseValue(single, "apt")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"apt"}, v.GetChoiceValue().GetSelected())
-
 	v, err = parseValue(multi, "a,c")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"a", "c"}, v.GetChoiceValue().GetSelected())
-
 	_, err = parseValue(single, "auto,apt")
 	require.EqualError(t, err, "p.m is a single-choice flag: give exactly one id")
 	_, err = parseValue(single, "brew")
@@ -1333,22 +867,165 @@ func TestFindKeyScopedAndQualified(t *testing.T) {
 }
 ```
 
-`WithNamespace` does not exist on `resolve.Resolved` today (the namespace is unexported). Check `internal/resolve/resolve.go` for a test-visible constructor; if none exists, add to `resolve.go`:
+`resolve.go` gains (with a one-line test in `resolve_test.go`: `assert.Equal(t, "ns", Resolved{}.WithNamespace("ns").Namespace())`):
 
 ```go
-// WithNamespace returns a copy bound to ns. Used by tests that build items
+// WithNamespace returns a copy bound to ns. For tests that build items
 // without a resolver.
 func (r Resolved) WithNamespace(ns string) Resolved { r.namespace = ns; return r }
 ```
 
-and cover it in `internal/resolve/resolve_test.go` with a one-line assertion (`assert.Equal(t, "ns", Resolved{}.WithNamespace("ns").Namespace())`) so `internal/resolve` stays ≥ 95%.
+`command_test.go`:
+
+```go
+package tui_test
+
+import (
+	"os"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func newCmdModel(t *testing.T) (tea.Model, string) {
+	t.Helper()
+	r, p := newResolver(t, tuiWorld{repo: pagerYAML})
+	items, err := r.All()
+	require.NoError(t, err)
+	m := tui.NewModel(items, p)
+	m.Explain = r.Explain
+	return m, p.UserOverride
+}
+
+func enter(m tea.Model) (tea.Model, tea.Cmd) { return m.Update(tea.KeyMsg{Type: tea.KeyEnter}) }
+
+func TestColonSetBoolWritesOverrideAndRefreshesRow(t *testing.T) {
+	m, ovr := newCmdModel(t)
+	m = typeKeys(m, ":set install.ai.claude false")
+	assert.Contains(t, m.View(), ":set install.ai.claude false▌")
+	m, _ = enter(m)
+	data, err := os.ReadFile(ovr)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "install.ai.claude: false")
+	m = press(m, tea.KeyMsg{Type: tea.KeyEnter}) // expand install
+	assert.Contains(t, m.View(), "user-override")
+	assert.NotContains(t, m.View(), "▌")
+}
+
+func TestColonSetRejectsBadValueWithoutWriting(t *testing.T) {
+	m, ovr := newCmdModel(t)
+	m = typeKeys(m, ":set install.ai.claude maybe")
+	m, _ = enter(m)
+	assert.Contains(t, m.View(), `value for install.ai.claude must be true or false, got "maybe"`)
+	_, err := os.Stat(ovr)
+	assert.True(t, os.IsNotExist(err), "nothing written")
+	m = typeKeys(m, ":set install.ai.claude")
+	m, _ = enter(m)
+	assert.Contains(t, m.View(), "missing value for install.ai.claude")
+	m = typeKeys(m, ":set nope true")
+	m, _ = enter(m)
+	assert.Contains(t, m.View(), "unknown key: nope")
+}
+
+func TestColonSetChoiceSingleAndInvalid(t *testing.T) {
+	m, ovr := newCmdModel(t)
+	m = typeKeys(m, ":set install.pkg.manager apt")
+	m, _ = enter(m)
+	data, err := os.ReadFile(ovr)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "apt")
+	m = typeKeys(m, ":set install.pkg.manager auto,apt")
+	m, _ = enter(m)
+	assert.Contains(t, m.View(), "single-choice flag")
+}
+
+func TestColonUnsetClearsOverride(t *testing.T) {
+	m, ovr := newCmdModel(t)
+	m = typeKeys(m, ":set install.ai.claude false")
+	m, _ = enter(m)
+	m = typeKeys(m, ":unset install.ai.claude")
+	m, _ = enter(m)
+	data, _ := os.ReadFile(ovr)
+	assert.NotContains(t, string(data), "install.ai.claude")
+	m = typeKeys(m, ":unset nope")
+	m, _ = enter(m)
+	assert.Contains(t, m.View(), "unknown key: nope")
+}
+
+func TestColonQuitHelpAndUnknown(t *testing.T) {
+	m, _ := newCmdModel(t)
+	m = typeKeys(m, ":q")
+	_, cmd := enter(m)
+	require.NotNil(t, cmd, ":q quits")
+	m, _ = newCmdModel(t)
+	m = typeKeys(m, ":help")
+	m, _ = enter(m)
+	assert.Contains(t, m.View(), "KEYS")
+	m = press(m, tea.KeyMsg{Type: tea.KeyEscape})
+	m = typeKeys(m, ":frobnicate")
+	m, _ = enter(m)
+	assert.Contains(t, m.View(), "unknown command: frobnicate")
+}
+
+func TestColonSlashIsSearchAlias(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	a, _ := newCmdModel(t)
+	a = typeKeys(a, "/ai")
+	a, _ = enter(a)
+	b, _ := newCmdModel(t)
+	b = typeKeys(b, ":/ai")
+	b, _ = enter(b)
+	assert.Equal(t, a.View(), b.View(), ":/re and /re end in the same state")
+}
+
+func TestColonEscCancelsAndTypedLettersAreText(t *testing.T) {
+	m, ovr := newCmdModel(t)
+	m = typeKeys(m, ":set install.ai.claude false")
+	m = press(m, tea.KeyMsg{Type: tea.KeyEscape})
+	assert.NotContains(t, m.View(), "▌")
+	m = press(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{':'}})
+	var cmd tea.Cmd
+	for _, c := range "qujk" {
+		m, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{c}})
+		assert.Nil(t, cmd)
+	}
+	_, err := os.Stat(ovr)
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestColonTabCompletesKeysInScope(t *testing.T) {
+	m, _ := newCmdModel(t)
+	m = typeKeys(m, ":set install.ai.")
+	m = press(m, tea.KeyMsg{Type: tea.KeyTab})
+	assert.Contains(t, m.View(), ":set install.ai.claude▌")
+	m = press(m, tea.KeyMsg{Type: tea.KeyTab})
+	assert.Contains(t, m.View(), ":set install.ai.teams▌")
+	m = press(m, tea.KeyMsg{Type: tea.KeyShiftTab})
+	assert.Contains(t, m.View(), ":set install.ai.claude▌")
+
+	m, _ = newCmdModel(t)
+	m = press(m, tea.KeyMsg{Type: tea.KeyRight})
+	m = press(m, tea.KeyMsg{Type: tea.KeyRight}) // pkg page
+	m = typeKeys(m, ":unset ")
+	m = press(m, tea.KeyMsg{Type: tea.KeyTab})
+	assert.Contains(t, m.View(), ":unset install.pkg.manager▌", "only the page's keys complete")
+	m = typeKeys(m, " ")
+	m = press(m, tea.KeyMsg{Type: tea.KeyTab})
+	assert.Contains(t, m.View(), ":unset install.pkg.manager ▌", "the value position does not complete")
+}
+```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `go test ./internal/tui/ -run 'TestParseCommand|TestParseValue|TestFindKey' 2>&1 | head -5`
-Expected: FAIL — `undefined: parseCommand`.
+Run: `go test ./internal/tui/ -run 'TestParseValue|TestFindKey|TestColon' 2>&1 | grep -E '^(--- FAIL|ok|FAIL)' | head`
+Expected: FAIL.
 
 - [ ] **Step 3: Write minimal implementation**
+
+`command.go`:
 
 ```go
 package tui
@@ -1358,29 +1035,13 @@ import (
 	"fmt"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	gffv1 "github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/gen/gff/v1"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/overrides"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/cmdline"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/search"
 )
-
-// command is one parsed :-line.
-type command struct {
-	name string
-	args []string
-}
-
-// parseCommand tokenizes a :-line. ":/re" is the search alias and keeps the
-// whole remainder (spaces included) as its single argument.
-func parseCommand(line string) (command, error) {
-	line = strings.TrimSpace(line)
-	if line == "" {
-		return command{}, errors.New("empty command")
-	}
-	if strings.HasPrefix(line, "/") {
-		return command{name: "search", args: []string{line[1:]}}, nil
-	}
-	f := strings.Fields(line)
-	return command{name: f[0], args: f[1:]}, nil
-}
 
 // parseValue turns the :set value token into a typed Value for item,
 // rejecting anything the picker would not let you choose.
@@ -1421,8 +1082,8 @@ func parseValue(item resolve.Resolved, raw string) (*gffv1.Value, error) {
 }
 
 // findKey resolves "<ns>:<path>" or a bare "<path>" to an item index. A bare
-// path that exists in several namespaces resolves to the breadcrumb's
-// namespace when it is one of them, otherwise it is an error.
+// path in several namespaces resolves to the breadcrumb's namespace when it
+// is one of them, otherwise it is an error.
 func (m *Model) findKey(key string) (int, error) {
 	ns, path := "", key
 	if i := strings.IndexByte(key, ':'); i >= 0 {
@@ -1430,10 +1091,9 @@ func (m *Model) findKey(key string) (int, error) {
 	}
 	var hits []int
 	for i, it := range m.items {
-		if it.Feature.GetPath() != path || (ns != "" && it.Namespace() != ns) {
-			continue
+		if it.Feature.GetPath() == path && (ns == "" || it.Namespace() == ns) {
+			hits = append(hits, i)
 		}
-		hits = append(hits, i)
 	}
 	switch len(hits) {
 	case 0:
@@ -1448,287 +1108,6 @@ func (m *Model) findKey(key string) (int, error) {
 	}
 	return -1, fmt.Errorf("ambiguous key %q: qualify it as <namespace>:%s", key, path)
 }
-```
-
-- [ ] **Step 4: Run tests to verify they pass**
-
-Run: `mkdir -p $EV/task5 && go test ./internal/tui/ ./internal/resolve/ -cover 2>&1 | tee $EV/task5/go-test.txt | tail -3`
-Expected: both `ok`; `internal/resolve` ≥ 95%.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add internal/tui/command.go internal/tui/command_internal_test.go internal/resolve/resolve.go internal/resolve/resolve_test.go ../../docs/mbo/plans/gff-tui-vim/evidence/task5
-git commit -m "feat(gff/tui): :-line parser, typed value validation, scoped key lookup"
-```
-
----
-
-### Task 6: `:` command mode, execution, Tab completion
-
-**Files:**
-- Modify: `sdk/gff/internal/tui/command.go` (`execCommand`, `cmdSet`, `cmdUnset`, `completion`, `completeKey`, `completeCommand`, `updateCommand`)
-- Modify: `sdk/gff/internal/tui/model.go` (`cmd lineInput`, `comp completion`; `:` in `updateList`; dispatch `modeCommand`)
-- Modify: `sdk/gff/internal/tui/view.go` (the `modeCommand` footer branch from Task 4 now renders `m.cmd`)
-- Test: `sdk/gff/internal/tui/command_test.go` (package `tui_test`)
-
-**Interfaces:**
-- Consumes: Task 1 `lineInput`, Task 4 `startSearch/applySearch/commitSearch`, Task 5 parser/validation, existing `overrides.Write/Unset`, `refreshItem`.
-- Produces: `execCommand`, `completeKey`, `completeCommand`, `updateCommand` per §3.
-
-- [ ] **Step 1: Write the failing tests**
-
-```go
-package tui_test
-
-import (
-	"os"
-	"testing"
-
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui"
-)
-
-func newCmdModel(t *testing.T) (tea.Model, string) {
-	t.Helper()
-	r, p := newResolver(t, tuiWorld{repo: pagerYAML})
-	items, err := r.All()
-	require.NoError(t, err)
-	m := tui.NewModel(items, p)
-	m.Explain = r.Explain
-	return m, p.UserOverride
-}
-
-func enter(m tea.Model) (tea.Model, tea.Cmd) { return m.Update(tea.KeyMsg{Type: tea.KeyEnter}) }
-
-func TestColonSetBoolWritesOverrideAndRefreshesRow(t *testing.T) {
-	m, ovr := newCmdModel(t)
-	m = typeKeys(m, ":set install.ai.claude false")
-	assert.Contains(t, m.View(), ":set install.ai.claude false▌", "command prompt shows the line")
-	m, _ = enter(m)
-	data, err := os.ReadFile(ovr)
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "install.ai.claude: false")
-	m = press(m, tea.KeyMsg{Type: tea.KeyEnter}) // expand install
-	assert.Contains(t, m.View(), "user-override", "row shows the new provenance")
-	assert.NotContains(t, m.View(), "▌", "prompt closed")
-}
-
-func TestColonSetRejectsBadValueWithoutWriting(t *testing.T) {
-	m, ovr := newCmdModel(t)
-	m = typeKeys(m, ":set install.ai.claude maybe")
-	m, _ = enter(m)
-	assert.Contains(t, m.View(), `value for install.ai.claude must be true or false, got "maybe"`)
-	_, err := os.Stat(ovr)
-	assert.True(t, os.IsNotExist(err), "nothing written")
-
-	m = typeKeys(m, ":set install.ai.claude")
-	m, _ = enter(m)
-	assert.Contains(t, m.View(), "missing value for install.ai.claude")
-
-	m = typeKeys(m, ":set nope true")
-	m, _ = enter(m)
-	assert.Contains(t, m.View(), "unknown key: nope")
-}
-
-func TestColonSetChoiceSingleAndInvalid(t *testing.T) {
-	m, ovr := newCmdModel(t)
-	m = typeKeys(m, ":set install.pkg.manager apt")
-	m, _ = enter(m)
-	data, err := os.ReadFile(ovr)
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "apt")
-	m = typeKeys(m, ":set install.pkg.manager auto,apt")
-	m, _ = enter(m)
-	assert.Contains(t, m.View(), "single-choice flag")
-}
-
-func TestColonUnsetClearsOverride(t *testing.T) {
-	m, ovr := newCmdModel(t)
-	m = typeKeys(m, ":set install.ai.claude false")
-	m, _ = enter(m)
-	m = typeKeys(m, ":unset install.ai.claude")
-	m, _ = enter(m)
-	data, _ := os.ReadFile(ovr)
-	assert.NotContains(t, string(data), "install.ai.claude")
-	m = typeKeys(m, ":unset nope")
-	m, _ = enter(m)
-	assert.Contains(t, m.View(), "unknown key: nope")
-}
-
-func TestColonQuitHelpAndUnknown(t *testing.T) {
-	m, _ := newCmdModel(t)
-	m = typeKeys(m, ":q")
-	_, cmd := enter(m)
-	require.NotNil(t, cmd, ":q quits")
-
-	m, _ = newCmdModel(t)
-	m = typeKeys(m, ":help")
-	m, _ = enter(m)
-	assert.Contains(t, m.View(), "KEYS", ":help opens the overlay")
-	m = press(m, tea.KeyMsg{Type: tea.KeyEscape})
-
-	m = typeKeys(m, ":frobnicate")
-	m, _ = enter(m)
-	assert.Contains(t, m.View(), "unknown command: frobnicate")
-}
-
-func TestColonSlashIsSearchAlias(t *testing.T) {
-	t.Setenv("NO_COLOR", "1")
-	a, _ := newCmdModel(t)
-	a = typeKeys(a, "/ai")
-	a, _ = enter(a)
-	b, _ := newCmdModel(t)
-	b = typeKeys(b, ":/ai")
-	b, _ = enter(b)
-	assert.Equal(t, a.View(), b.View(), ":/re and /re end in the same state")
-}
-
-func TestColonEscCancels(t *testing.T) {
-	m, ovr := newCmdModel(t)
-	m = typeKeys(m, ":set install.ai.claude false")
-	m = press(m, tea.KeyMsg{Type: tea.KeyEscape})
-	assert.NotContains(t, m.View(), "▌")
-	_, err := os.Stat(ovr)
-	assert.True(t, os.IsNotExist(err))
-}
-
-func TestColonTypedLettersNeverFireNormalKeys(t *testing.T) {
-	m, ovr := newCmdModel(t)
-	m = press(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{':'}})
-	var cmd tea.Cmd
-	for _, c := range "qujk" {
-		m, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{c}})
-		assert.Nil(t, cmd)
-	}
-	_, err := os.Stat(ovr)
-	assert.True(t, os.IsNotExist(err))
-}
-
-func TestColonTabCompletesKeysInScope(t *testing.T) {
-	m, _ := newCmdModel(t)
-	m = typeKeys(m, ":set install.ai.")
-	m = press(m, tea.KeyMsg{Type: tea.KeyTab})
-	assert.Contains(t, m.View(), ":set install.ai.claude▌")
-	m = press(m, tea.KeyMsg{Type: tea.KeyTab})
-	assert.Contains(t, m.View(), ":set install.ai.teams▌")
-	m = press(m, tea.KeyMsg{Type: tea.KeyTab})
-	assert.Contains(t, m.View(), ":set install.ai.claude▌", "Tab wraps")
-	m = press(m, tea.KeyMsg{Type: tea.KeyShiftTab})
-	assert.Contains(t, m.View(), ":set install.ai.teams▌", "Shift-Tab goes back")
-	m = typeKeys(m, "x") // typing resets the cycle
-	m = press(m, tea.KeyMsg{Type: tea.KeyTab})
-	assert.Contains(t, m.View(), ":set install.ai.teamsx▌", "no candidate → unchanged")
-}
-
-func TestColonTabIsScopedToThePage(t *testing.T) {
-	m, _ := newCmdModel(t)
-	m = press(m, tea.KeyMsg{Type: tea.KeyRight})
-	m = press(m, tea.KeyMsg{Type: tea.KeyRight}) // pkg page
-	m = typeKeys(m, ":unset ")
-	m = press(m, tea.KeyMsg{Type: tea.KeyTab})
-	assert.Contains(t, m.View(), ":unset install.pkg.manager▌", "only the page's keys complete")
-	m = press(m, tea.KeyMsg{Type: tea.KeyTab})
-	assert.Contains(t, m.View(), ":unset install.pkg.manager▌", "single candidate cycles onto itself")
-}
-
-func TestColonTabDoesNotCompleteTheValue(t *testing.T) {
-	m, _ := newCmdModel(t)
-	m = typeKeys(m, ":set install.ai.claude ")
-	m = press(m, tea.KeyMsg{Type: tea.KeyTab})
-	assert.Contains(t, m.View(), ":set install.ai.claude ▌")
-}
-```
-
-- [ ] **Step 2: Run tests to verify they fail**
-
-Run: `go test ./internal/tui/ -run 'TestColon' 2>&1 | grep -E '^(--- FAIL|ok|FAIL)' | head`
-Expected: every `TestColon*` FAILs.
-
-- [ ] **Step 3: Write minimal implementation**
-
-`command.go` additions:
-
-```go
-// completion is the Tab cycle over key paths for the current :-line.
-type completion struct {
-	head       string   // "set " / "unset " — everything before the key token
-	candidates []string // in-scope paths matching the typed prefix, item order
-	idx        int
-}
-
-// execCommand runs one parsed :-line. Errors land in m.errMsg; the mode is
-// already back to the list.
-func (m *Model) execCommand(c command) tea.Cmd {
-	var err error
-	switch c.name {
-	case "q", "quit":
-		return tea.Quit
-	case "h", "help":
-		m.helpReturn = modeList
-		m.mode = modeHelp
-	case "search":
-		if c.args[0] != "" {
-			m.startSearch()
-			m.search.input.SetText(c.args[0])
-			m.applySearch()
-			m.commitSearch()
-		}
-	case "set":
-		err = m.cmdSet(c.args)
-	case "unset":
-		err = m.cmdUnset(c.args)
-	default:
-		err = fmt.Errorf("unknown command: %s", c.name)
-	}
-	if err != nil {
-		m.errMsg = err.Error()
-	}
-	return nil
-}
-
-func (m *Model) cmdSet(args []string) error {
-	if len(args) == 0 {
-		return errors.New("usage: :set <key> <value>")
-	}
-	if len(args) < 2 {
-		return fmt.Errorf("missing value for %s", args[0])
-	}
-	idx, err := m.findKey(args[0])
-	if err != nil {
-		return err
-	}
-	item := m.items[idx]
-	val, err := parseValue(item, args[1])
-	if err != nil {
-		return err
-	}
-	if err := overrides.Write(m.p, item.Feature.GetPath(), val); err != nil {
-		return fmt.Errorf("write failed: %w", err)
-	}
-	m.items[idx] = item.WithValue(val, resolve.LayerUserOverride)
-	m.refreshItem(idx) // re-resolves when Explain is wired
-	m.buildRows()
-	return nil
-}
-
-func (m *Model) cmdUnset(args []string) error {
-	if len(args) == 0 {
-		return errors.New("usage: :unset <key>")
-	}
-	idx, err := m.findKey(args[0])
-	if err != nil {
-		return err
-	}
-	if err := overrides.Unset(m.p, m.items[idx].Feature.GetPath()); err != nil {
-		return fmt.Errorf("unset failed: %w", err)
-	}
-	m.refreshItem(idx)
-	m.buildRows()
-	return nil
-}
 
 // completeKey lists in-scope key paths with the prefix, in item order.
 func (m *Model) completeKey(prefix string) []string {
@@ -1741,107 +1120,115 @@ func (m *Model) completeKey(prefix string) []string {
 	return out
 }
 
-// completeCommand is Tab (+1) / Shift-Tab (-1) on the :-line. Only the key
-// token of set/unset completes; the value position is left alone.
-func (m *Model) completeCommand(dir int) {
-	c := &m.comp
-	if c.candidates == nil {
-		text := m.cmd.String()
-		f := strings.Fields(text)
-		if len(f) == 0 || (f[0] != "set" && f[0] != "unset") || len(f) > 2 {
-			return
+// registerCommands wires the : verbs: the sdk standard set plus gff's own
+// set/unset, which go through the SAME writers as `gff set` / `gff unset`.
+func (m *Model) registerCommands() {
+	keyCompleter := func(argIdx int, prefix string) []string {
+		if argIdx != 0 {
+			return nil
 		}
-		if len(f) == 2 && strings.HasSuffix(text, " ") {
-			return // cursor is at the value position
-		}
-		prefix := ""
-		if len(f) == 2 {
-			prefix = f[1]
-		}
-		cands := m.completeKey(prefix)
-		if len(cands) == 0 {
-			return
-		}
-		c.head, c.candidates = f[0]+" ", cands
-		if dir > 0 {
-			c.idx = -1
-		} else {
-			c.idx = 0
-		}
+		return m.completeKey(prefix)
 	}
-	n := len(c.candidates)
-	c.idx = ((c.idx+dir)%n + n) % n
-	m.cmd.SetText(c.head + c.candidates[c.idx])
+	m.reg.Register(cmdline.Standard(
+		func() { m.helpReturn = modeList; m.mode = modeHelp },
+		func(p string) { // :/re — identical end state to "/re" Enter
+			m.startSearch()
+			m.search.Input.SetText(p)
+			re, err := search.Compile(p)
+			if err != nil {
+				m.search.Err = err.Error()
+			} else {
+				m.search.Re = re
+			}
+			m.applySearch()
+			m.commitSearch()
+		},
+	)...)
+	m.reg.Register(
+		cmdline.Spec{Name: "set", Help: "set <key> <value>  (bool: true/false; choice: id[,id])", Complete: keyCompleter,
+			Run: func(args []string) (tea.Cmd, error) {
+				if len(args) == 0 {
+					return nil, errors.New("usage: :set <key> <value>")
+				}
+				if len(args) < 2 {
+					return nil, fmt.Errorf("missing value for %s", args[0])
+				}
+				idx, err := m.findKey(args[0])
+				if err != nil {
+					return nil, err
+				}
+				item := m.items[idx]
+				val, err := parseValue(item, args[1])
+				if err != nil {
+					return nil, err
+				}
+				if err := overrides.Write(m.p, item.Feature.GetPath(), val); err != nil {
+					return nil, fmt.Errorf("write failed: %w", err)
+				}
+				m.items[idx] = item.WithValue(val, resolve.LayerUserOverride)
+				m.refreshItem(idx)
+				m.buildRows()
+				return nil, nil
+			}},
+		cmdline.Spec{Name: "unset", Help: "unset <key>  (clear the user override)", Complete: keyCompleter,
+			Run: func(args []string) (tea.Cmd, error) {
+				if len(args) == 0 {
+					return nil, errors.New("usage: :unset <key>")
+				}
+				idx, err := m.findKey(args[0])
+				if err != nil {
+					return nil, err
+				}
+				if err := overrides.Unset(m.p, m.items[idx].Feature.GetPath()); err != nil {
+					return nil, fmt.Errorf("unset failed: %w", err)
+				}
+				m.refreshItem(idx)
+				m.buildRows()
+				return nil, nil
+			}},
+	)
 }
 
 // updateCommand handles keys while the : prompt is open.
 func (m *Model) updateCommand(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.KeyEscape:
+	ev := m.cmd.Key(msg, &m.reg)
+	switch ev.Kind {
+	case cmdline.Cancelled:
 		m.mode = modeList
-		m.cmd.Reset()
-		m.comp = completion{}
-	case tea.KeyEnter:
-		line := m.cmd.String()
-		m.cmd.Reset()
-		m.comp = completion{}
+	case cmdline.Submitted:
 		m.mode = modeList
-		c, err := parseCommand(line)
-		if err != nil {
-			return m, nil // empty :-line — nothing to do
-		}
 		m.errMsg = ""
-		return m, m.execCommand(c)
-	case tea.KeyTab:
-		m.completeCommand(1)
-	case tea.KeyShiftTab:
-		m.completeCommand(-1)
-	default:
-		if m.cmd.Handle(msg) {
-			m.comp = completion{} // typing resets the cycle
+		cmd, err := m.reg.Run(ev.Command)
+		if err != nil {
+			m.errMsg = err.Error()
 		}
+		return m, cmd
 	}
 	return m, nil
 }
 ```
 
-Add `tea`, `overrides` imports to `command.go`.
-
-`model.go` edits: add `comp completion` to `Model` (`cmd lineInput` exists since Task 4); `case modeCommand: return m.updateCommand(msg)` in `Update`; in `updateList`'s rune switch:
-
-```go
-		case ':':
-			m.cmd.Reset()
-			m.comp = completion{}
-			m.mode = modeCommand
-```
-
-`view.go`: the `modeCommand` footer branch renders `":" + m.cmd.Render()` (finish the Task 4 stub).
+`model.go` edits: `NewModel` calls `m.registerCommands()` before returning; `Update`: `case modeCommand: return m.updateCommand(msg)`; `updateList` Lookup switch: `case keymap.Command: m.cmd.Input.Reset(); m.mode = modeCommand; return m, nil`.
 
 - [ ] **Step 4: Run the package**
 
-Run: `mkdir -p $EV/task6 && go test ./internal/tui/ -cover 2>&1 | tee $EV/task6/go-test.txt | tail -3 && go vet ./...`
-Expected: `ok`, coverage ≥ 91.3%, vet clean.
+Run: `mkdir -p $EV/task3 && go test ./internal/tui/ ./internal/resolve/ -cover 2>&1 | tee $EV/task3/go-test.txt | tail -3 && go vet ./...`
+Expected: both `ok`; tui ≥ 91.3%, resolve ≥ 95%.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add internal/tui/command.go internal/tui/model.go internal/tui/view.go internal/tui/command_test.go ../../docs/mbo/plans/gff-tui-vim/evidence/task6
-git commit -m "feat(gff/tui): : command line — set/unset/q/help/:/re with Tab key completion"
+git add internal/tui/command.go internal/tui/model.go internal/tui/command_internal_test.go internal/tui/command_test.go internal/resolve/resolve.go internal/resolve/resolve_test.go ../../docs/mbo/plans/gff-tui-vim/evidence/task3
+git commit -m "feat(gff/tui): : command line via libs/tui/cmdline — set/unset with typed validation, Tab completion"
 ```
 
 ---
 
-### Task 7: docs, key-table consistency test, coverage gate, real-terminal demo
+### Task 4: docs, key-table pin test, coverage gate, real-terminal demo
 
 **Files:**
-- Modify: `sdk/gff/cmd/tui.go` (`Long`)
-- Create: `sdk/gff/cmd/tui_keys_test.go` (package `cmd`)
-- Modify: `sdk/gff/README.md` (new section **TUI keys** after the existing `gff tui` mention, or at the end of the CLI tour if there is none)
-- Modify: `sdk/gff/AGENTS.md` (`internal/tui` bullet)
-- Create: `docs/mbo/plans/gff-tui-vim/evidence/demo/README.md` + transcript
-
-**Interfaces:** none new.
+- Modify: `sdk/gff/cmd/tui.go`, `sdk/gff/README.md`, `sdk/gff/AGENTS.md`
+- Create: `sdk/gff/cmd/tui_keys_test.go`, `docs/mbo/plans/gff-tui-vim/evidence/demo/*`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1854,10 +1241,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// The four places that list TUI keys (help overlay, footer hint, README,
-// --help) must agree; this pins the --help side.
+// The footer, the help overlay, README, and --help all derive from gffKeys;
+// this pins the --help side so a new binding cannot ship undocumented.
 func TestTUIHelpListsVimSearchAndCommandKeys(t *testing.T) {
-	for _, want := range []string{"j/k", "h/l", "gg/G", "ctrl+d", "/ ", "n/N", ":set", ":unset", ":q", "? help"} {
+	for _, want := range []string{"j/k", "h/l", "gg/G", "ctrl+d", "/ ", "n/N", ":set", ":unset", ":q", "? help", "libs/tui/GUIDE.md"} {
 		assert.Contains(t, tuiCmd.Long, want, "gff tui --help must mention %q", want)
 	}
 	assert.NotContains(t, tuiCmd.Long, "h help", "h no longer opens help")
@@ -1877,7 +1264,7 @@ Expected: FAIL on `j/k`.
 	Long: `Launch an interactive bubbletea TUI that shows all resolved feature flags
 in a collapsible area tree with layer provenance.
 
-Keys (vim style):
+Keys (the sdk vim grammar — see sdk/libs/tui/GUIDE.md):
   j/k ↑/↓ move   h/l ←/→ category page   gg/G first/last   ctrl+d/ctrl+u half page   ctrl+f/ctrl+b page
   / regex search (smartcase; Enter commit, Esc cancel)   n/N next/prev match   Esc clear highlights
   : command line — :set <key> <value>  :unset <key>  :/re  :help  :q   (Tab completes key paths)
@@ -1887,14 +1274,15 @@ Writes go only to the user override file (~/.config/gff/config.yaml, mode 0600).
 Quit without any change leaves the file untouched.`,
 ```
 
-`README.md` — add:
+`README.md` — add a **TUI keys** section:
 
 ```markdown
 ## TUI keys
 
-`gff tui` is vim-flavored. Search finds a flag anywhere on the current page (collapsed
-areas holding a hit expand themselves); the `:` line is the CLI's `set`/`unset` from
-inside the TUI.
+`gff tui` follows the sdk vim grammar from `sdk/libs/tui/GUIDE.md`. The keys below are gff's
+table (`internal/tui/keys.go`); the footer, the `?` overlay, and `gff tui --help` all render
+from it. Search finds a flag anywhere on the current page (collapsed areas holding a hit expand
+themselves); the `:` line is the CLI's `set`/`unset` from inside the TUI.
 
 | Keys | Action |
 | :-- | :-- |
@@ -1913,12 +1301,12 @@ inside the TUI.
 | `q` | quit |
 ```
 
-`AGENTS.md` — extend the `internal/tui` bullet with: "vim keymap (`keys.go`), `/` regex search (`search.go`), `:` command line (`command.go`), prompt editor (`input.go`); the footer hint string in `view.go` is the key table's single source — README §TUI keys and `cmd/tui.go` Long mirror it (pinned by `cmd/tui_keys_test.go`)."
+`AGENTS.md` `internal/tui` bullet: "composes `sdk/libs/tui` (keymap/nav/search/cmdline/overlay); gff-only glue lives in `keys.go` (key table + palette), `search.go` (auto-expand, scope, anchors), `command.go` (`:set`/`:unset` validation → the override writers). The key table is the single source (pinned by `cmd/tui_keys_test.go`). Read `sdk/libs/tui/GUIDE.md` before changing keys."
 
 - [ ] **Step 4: Run the gates**
 
-Run: `mkdir -p $EV/task7 && go test ./... -cover 2>&1 | tee $EV/task7/go-test-all.txt | grep -E 'coverage|FAIL' && go vet ./... && (cd ../.. && make gff-proto-check 2>&1 | tail -2)`
-Expected: every package `ok`; `internal/tui` ≥ 91.3%; module gate (`gff-ci.yml` recipe) ≥ 90% — run its exact `go test -coverpkg` line from the workflow and `tee` it to `$EV/task7/coverage-gate.txt`.
+Run: `mkdir -p $EV/task4 && go test ./... -cover 2>&1 | tee $EV/task4/go-test-all.txt | grep -E 'coverage|FAIL' && go vet ./... && (cd ../.. && make gff-proto-check 2>&1 | tail -2)`, then the exact `gff-ci.yml` coverage recipe `tee`'d to `$EV/task4/coverage-gate.txt`.
+Expected: every package `ok`; module ≥ 90%.
 
 - [ ] **Step 5: Real-terminal demo (human-evidenced gate, spec §6)**
 
@@ -1926,84 +1314,75 @@ In a real terminal (never backgrounded/piped), from `~/git/dotfiles` on this bra
 
 ```bash
 ./sdk/gff/build.sh && tmux new-session -d -s gffdemo -x 140 -y 40 'gff tui'
-# drive: /wispr  Enter  Space  n  gg  :set install.ai.teams false  Enter  :unset install.ai.teams  Enter  q
-tmux send-keys -t gffdemo '/wispr' ; sleep 1; tmux capture-pane -pt gffdemo | tee -a $EV/demo/transcript.txt
-# … one capture per step above, then:
+# one capture per step: /wispr · Enter · Space · n · gg · :set install.ai.teams false Enter · :unset install.ai.teams Enter · q
+tmux send-keys -t gffdemo '/wispr'; sleep 1; tmux capture-pane -pt gffdemo | tee -a $EV/demo/transcript.txt
 tmux send-keys -t gffdemo Enter; sleep 1; tmux send-keys -t gffdemo Space; sleep 1; tmux capture-pane -pt gffdemo | tee -a $EV/demo/transcript.txt
+tmux send-keys -t gffdemo ':set install.ai.teams false' Enter; sleep 1; tmux capture-pane -pt gffdemo | tee -a $EV/demo/transcript.txt
+tmux send-keys -t gffdemo ':unset install.ai.teams' Enter; sleep 1; tmux capture-pane -pt gffdemo | tee -a $EV/demo/transcript.txt
 tmux send-keys -t gffdemo q
 gff get install.windows.wispr-flow   # shows the toggled value; then restore:
 gff unset install.windows.wispr-flow
 ```
 
-`$EV/demo/README.md` names the date, binary version (`gff version`), and each step with the line of the transcript proving it. Restore any flag you flipped.
+`$EV/demo/README.md` names the date, `gff version`, and each step with the transcript line proving it. Restore any flag you flipped.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add cmd/tui.go cmd/tui_keys_test.go README.md AGENTS.md ../../docs/mbo/plans/gff-tui-vim/evidence/task7 ../../docs/mbo/plans/gff-tui-vim/evidence/demo
-git commit -m "docs(gff/tui): key table in --help, README, AGENTS; pin with a test; demo evidence"
+git add cmd/tui.go cmd/tui_keys_test.go README.md AGENTS.md ../../docs/mbo/plans/gff-tui-vim/evidence/task4 ../../docs/mbo/plans/gff-tui-vim/evidence/demo
+git commit -m "docs(gff/tui): key table in --help, README, AGENTS from the shared keymap; pin test; demo evidence"
 ```
 
-Then update `docs/mbo/index.md` (state `building → in-review`) and `docs/mbo/plans/gff-tui-vim/TRACKING.md`, commit as `docs(mbo): gff-tui-vim → in-review`, and `gss feature checkpoint` (confirm first).
+Then update `docs/mbo/index.md` (`building → in-review`), `TRACKING.md`, commit `docs(mbo): gff-tui-vim → in-review`, `gss feature checkpoint` (confirm first).
 
 ## 5. Verification mapping
 
 | Spec rule | Test |
 | :-- | :-- |
-| F1a | `TestVimJKMoveLikeArrows`, `TestVimKClampsAtTop` |
-| F1b | `TestVimHLTurnPages` |
-| F1c | `TestVimGGAndG`, `TestVimPendingGIsCancelledByAnotherKey` |
-| F1d | `TestVimCtrlDUHalfPage`, `TestVimCtrlFBFullPage` |
+| F1a–F1d | `TestVimJKMoveLikeArrows`, `TestVimKClampsAtTop`, `TestVimHLTurnPages`, `TestVimGGAndG`, `TestVimPendingGIsCancelledByAnotherKey`, `TestVimCtrlDUHalfPage`, `TestVimCtrlFBFullPage` |
 | F1e | `TestPickerJKMoveCursor` |
-| F2a | `TestHelpOpensOnQuestionAndF1NotH`, `TestHelpOverlayFromDetail` (rewired) |
-| F2b | `TestHelpOpensOnQuestionAndF1NotH`, `TestHDoesNotOpenHelpInPickerOrDetail` |
+| F2a, F2b | `TestHelpOpensOnQuestionAndF1NotH`, `TestHDoesNotOpenHelpInPickerOrDetail`, `TestHelpOverlayFromDetail` (rewired) |
 | F3a | `TestSlashSearchExpandsAreaAndJumpsToFirstMatch`, `TestSlashSearchTypedLettersNeverFireNormalKeys` |
 | F3b | `TestSlashSearchInvalidRegexKeepsPreviousMatches` |
 | F3c | `TestSlashSearchEscRestoresCursorAndClears` |
 | F3d | `TestSlashSearchEnterCommitsAndNNHop`, `TestSlashSearchNoMatchReportsNotFound` |
-| F3e | `TestCompilePatternSmartcase` |
-| F4a | `TestSlashSearchExpandsAreaAndJumpsToFirstMatch` |
-| F4b | `TestMatchItemPathOrDescription` |
+| F3e | lib: `search.TestCompileSmartcaseAndErrors` |
+| F4a, F4d | `TestSlashSearchExpandsAreaAndJumpsToFirstMatch` |
+| F4b | `hit` exercised by every search test; lib `search.TestTypingRecomputesAndInvalidKeepsPreviousRe` |
 | F4c | `TestSearchScopeIsTheCurrentPage` |
-| F4d | `TestSlashSearchExpandsAreaAndJumpsToFirstMatch` (anchor = header row 0 → first match after it) |
 | F5a | `TestSlashSearchEnterCommitsAndNNHop`, `TestNWithoutPatternIsNoop` |
 | F5b | `TestEscInListClearsHighlightsButKeepsPatternForN` |
-| F6a | `TestColonSetBoolWritesOverrideAndRefreshesRow`, `TestColonSetRejectsBadValueWithoutWriting` |
-| F6b | `TestColonSetChoiceSingleAndInvalid`, `TestParseValueChoice` |
-| F6c | `TestColonUnsetClearsOverride` |
-| F6d, F6e, F6g | `TestColonQuitHelpAndUnknown`, `TestParseCommand` |
+| F6a–F6c | `TestColonSetBoolWritesOverrideAndRefreshesRow`, `TestColonSetRejectsBadValueWithoutWriting`, `TestColonSetChoiceSingleAndInvalid`, `TestColonUnsetClearsOverride`, `TestParseValueBool`, `TestParseValueChoice`, `TestFindKeyScopedAndQualified` |
+| F6d, F6e, F6g | `TestColonQuitHelpAndUnknown`; lib `cmdline.TestParse` |
 | F6f | `TestColonSlashIsSearchAlias` |
-| F6 (routing/Esc) | `TestColonEscCancels`, `TestColonTypedLettersNeverFireNormalKeys` |
-| F7a, F7b | `TestColonTabCompletesKeysInScope` |
-| F7c | `TestColonTabIsScopedToThePage`, `TestColonTabDoesNotCompleteTheValue` |
+| F6 routing | `TestColonEscCancelsAndTypedLettersAreText` |
+| F7a–F7c | `TestColonTabCompletesKeysInScope`; lib `cmdline.TestTabCompletesArgumentCyclesAndResets`, `TestTabCompletesCommandNamesAndNextArg` |
 | F8a | `TestSearchPromptKeepsFrameWithinHeight` |
-| F8b | `gutterLines` assertions in every `NO_COLOR` search test |
-| F9 | `TestTUIHelpListsVimSearchAndCommandKeys`, `TestHelpOpensOnQuestionAndF1NotH` (overlay lists `j/k`) |
-| Editor | `TestLineInputEditing`, `TestLineInputDoesNotConsumeModeKeys`, `TestLineInputRenderAndReset` |
-| Key lookup | `TestFindKeyScopedAndQualified` |
+| F8b | `gutterLines` assertions |
+| F9 | `TestTUIHelpListsVimSearchAndCommandKeys`, `TestFooterHintRendersFromTheKeymap`, `TestHelpOpensOnQuestionAndF1NotH` |
 
 ## 6. Integration & rollout
 
-- No build/CI wiring changes: `gff-ci.yml` already runs `go test ./...` with the coverage gate for the module, and the sdk `scripts/test.sh` discovers the package by directory.
-- Docs touched: `sdk/gff/README.md`, `sdk/gff/AGENTS.md`, `cmd/tui.go` Long. `docs/mbo/index.md` row `gff-tui-vim` moves `planning → building → in-review → merged`.
-- Rollout is the PR merge; users get the keys on the next `sdk/gff/build.sh` (install.sh runs it).
-- Manual acceptance: the Task 7 Step 5 demo transcript.
+- `gff-ci.yml` unchanged (its `go test ./...` + coverage gate cover the module; the `replace ../libs` is the same mechanism gsl/fleet/wlink use).
+- Docs: README, AGENTS, `cmd/tui.go`; `docs/mbo/index.md` state moves.
 
 ### 6.1 Build leaves / DAG
 
-Single leaf — not broken out. Tasks 1→7 are strictly sequential inside one `gss feature` worker (`gff-tui-vim/<user>/build`, `--base` = the design worker's branch so the docs and the build stack).
-
 | Leaf | Owns (paths) | Consumes | `done-when` gate | Blocking? |
 | :-- | :-- | :-- | :-- | :-- |
-| build | `sdk/gff/internal/tui/**`, `sdk/gff/cmd/tui.go`, `sdk/gff/cmd/tui_keys_test.go`, `sdk/gff/README.md`, `sdk/gff/AGENTS.md`, `docs/mbo/plans/gff-tui-vim/evidence/**` | design worker (this plan) | `go test ./... -cover` ≥ 90% module / ≥ 91.3% tui · `go vet` · demo transcript committed | — |
+| build | `sdk/gff/internal/tui/**`, `sdk/gff/internal/resolve/resolve{,_test}.go` (one helper), `sdk/gff/cmd/tui.go`, `cmd/tui_keys_test.go`, `sdk/gff/README.md`, `sdk/gff/AGENTS.md`, `sdk/gff/go.{mod,sum}`, `docs/mbo/plans/gff-tui-vim/evidence/**` | **`sdk-tui/lib`** (plan `./sdk-tui.md` §3) | module ≥ 90% / tui ≥ 91.3% / resolve ≥ 95% · vet · demo transcript | no (consumer) |
+
+```mermaid
+graph LR
+  lib["sdk-tui: lib"] --> build["gff-tui-vim: build"]
+```
+
+Worker: `gss feature worker add --feature gff-tui-vim --purpose build --base feature/sdk-tui/<user>/lib …`; after the lib merges, `gss feature restack … --onto main`.
 
 ## 7. Validation & evidence (show the work)
 
-- **Coverage bars:** module ≥ 90% (CI gate); `internal/tui` ≥ 91.3% (no regression — checked in every task's Step 4); `internal/resolve` ≥ 95% after the `WithNamespace` addition.
-- **Adversarial cases baked into tests:** invalid regex mid-typing; normal-mode letters typed into both prompts; `:set` with a missing value, unknown key, wrong bool, unknown/duplicate/over-count choice ids; ambiguous keys across namespaces; Tab at the value position; pending `g` cancelled by another key; motions on a list shorter than a page.
-- **Evidence protocol:** `docs/mbo/plans/gff-tui-vim/evidence/task{1..7}/go-test.txt` (each task's Step 4 output, dated header, append-only), `evidence/task7/coverage-gate.txt`, `evidence/demo/{README.md,transcript.txt}`. A task without its evidence file is not done; the `TRACKING.md` row stays `in-progress`.
-- **Demo plan:** the Task 7 Step 5 tmux script against the live dotfiles inventory (`.github/gff/features.yaml`) — `/wispr` finds `install.windows.wispr-flow` inside the collapsed `install` area; `:set`/`:unset` round-trip a bool; the flipped flag is restored before the transcript is committed.
+- Coverage bars per task Step 4 (`evidence/task{1..4}/`), module gate `evidence/task4/coverage-gate.txt`.
+- Adversarial cases: invalid regex mid-typing, normal-mode letters inside both prompts, `:set` bad/missing values, unknown/ambiguous keys, Tab at the value position, pending `g` cancellation, motions on a short list.
+- Demo: `evidence/demo/{README.md,transcript.txt}` from a real terminal against the live dotfiles inventory; flipped flag restored.
 
-> Produced via `superpowers:writing-plans`. Execute with `superpowers:executing-plans` /
-> `subagent-driven-development`, TDD throughout, using the trio in [`./gff-tui-vim/`](./gff-tui-vim/).
-> Update `../index.md` state as it moves.
+> Produced via `superpowers:writing-plans`; revised 2026-09-05 to consume `sdk/libs/tui`. Execute with the trio in [`./gff-tui-vim/`](./gff-tui-vim/), TDD throughout. Update `../index.md` state as it moves.

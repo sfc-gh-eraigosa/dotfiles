@@ -2,9 +2,9 @@
 
 - **Slug:** `gff-tui-vim`
 - **Date:** 2026-09-05
-- **Status:** Approved (design approved in-chat 2026-09-05; spec self-reviewed)
+- **Status:** Approved — revised 2026-09-05 to consume `sdk/libs/tui`; **blocked on `sdk-tui`** (spec `./sdk-tui.md`)
 - **Relates to:** parent objective `gff` (spec `./gff.md` F10, plan `../plans/gff.md` P3-T1) ·
-  sibling keymap `./fleet-tui.md` F4–F7 (the vim/search contract this mirrors) ·
+  shared behaviors `./sdk-tui.md` + guide `sdk/libs/tui/GUIDE.md` (the vim/search/command contract this consumes) ·
   issue #281 · design PR #280 (`gss feature gff-tui-vim`, worker `design`)
 
 ## 1. Goal
@@ -55,31 +55,30 @@ acceptance: `h`/`H` never open help in any view; `?` and F1 do.
 
 ## 3. Architecture
 
-All new code lives in `sdk/gff/internal/tui`. No new module dependency: the prompt is a
-~60-line line editor, not `bubbles/textinput` (see §8).
+The behaviors come from `sdk/libs/tui` (`keymap`, `nav`, `prompt`, `search`, `cmdline`,
+`overlay` — spec `./sdk-tui.md` §3, frozen at that objective's Task 2). gff owns only the glue
+below, in `sdk/gff/internal/tui`. New dependency: `sdk/libs` via the standard `replace ../libs`.
 
 | Unit | Does | Used by | Depends on |
 | :-- | :-- | :-- | :-- |
-| `input.go` — `lineInput` | An editable rune buffer with a cursor: insert, backspace, delete, ←/→, home/end, `ctrl+u` (kill to start), `ctrl+w` (kill word). `Handle(tea.KeyMsg) bool` reports whether it consumed the key. | search mode, command mode | bubbletea key types only |
-| `search.go` — `searchState` + pure helpers | `compilePattern` (smartcase: an all-lowercase pattern compiles with `(?i)`), `matchItem` (does `path` or `description` match), `rowKey` (row identity across rebuilds), `inScope` (the one visibility rule `buildRows` and search share), plus the mode methods `startSearch/applySearch/commitSearch/cancelSearch/collectMatches/nextMatch/clearHighlights`. | `Model` search mode, `n`/`N` | `regexp`, `resolve.Resolved` |
-| `command.go` — `parseCommand`, `completeKey`, `(m *Model) execCommand` | Tokenizes `:`-lines, validates against the resolved items, executes through `overrides.Write` / `overrides.Unset`, refreshes rows via the `Explain` hook (or `WithValue` when `Explain` is nil — the same fallback `activateFeature` uses). | `Model` command mode | `overrides`, `resolve`, `gffv1` |
-| `keys.go` — `motionState` + `(m *Model) handleMotion` | The vim motion table for the list (and `j/k` for the picker): `j k h l gg G ctrl+d ctrl+u ctrl+f ctrl+b`, with the pending-`g` state. Returns `handled` so `updateList` falls through to its existing switch otherwise. | `updateList`, `updatePicker` | `Model` cursor/pages/viewport fields |
-| `model.go` | Two new modes, `modeSearch` and `modeCommand`, dispatched from `Update`; `applySearch` (expand → rebuild rows → row-index matches → cursor); `nextMatch`; the `:noh` Esc. | — | all of the above |
-| `view.go` | The prompt line (`/…` or `:…` plus inline error) replaces the footer hint while a prompt is open; committed searches show `/pattern [i/N]` in the footer; matching rows carry a `*` gutter marker (and a highlight style when color is on). Help overlay lists the vim keys. | — | `style` |
+| `keys.go` — `gffKeys`, `palette`, `listHint` | gff's key table = `keymap.Vim` merged with `space` toggle, `enter` open, `u` unset; the `overlay.Palette` adapter over `internal/style`; the footer rendered from the table. | every view | `libs/tui/keymap`, `overlay`, `style` |
+| `search.go` — gff search glue | `rowKey` (row identity across rebuilds), `inScope` (the one visibility rule `buildRows` and search share), `hit` (path OR description), reveal-on-match (expand the `(ns, area)` holding a hit), anchors for Esc-restore; drives `search.State` (`Start/Key/Collect/First/Next/Commit/Cancel/Hide/Rearm/Badge`). | `Model` search mode, `n`/`N` | `libs/tui/search`, `resolve` |
+| `command.go` — gff command glue | `parseValue` (typed validation), `findKey` (`ns:path` or bare, scope-preferred), `completeKey`; registers `set`/`unset` + `cmdline.Standard` on a `cmdline.Registry`; executes through `overrides.Write` / `overrides.Unset`, refreshes via `Explain`. | `Model` command mode | `libs/tui/cmdline`, `overrides`, `resolve`, `gffv1` |
+| `model.go` | `cur nav.Cursor` replaces the hand-rolled cursor/scroll fields; two new modes `modeSearch`/`modeCommand`; motions via `cur.Key(msg, gffKeys)`; the rest via `gffKeys.Lookup`. | — | `libs/tui/nav`, all of the above |
+| `view.go` | Viewport from `cur.Visible()`; the prompt line (`/…` or `:…` plus inline error) replaces the footer while a prompt is open; `search.Badge` in the footer; `*` gutter for matches; help = `overlay.Help(gffKeys, …)` + gff's SOURCES section. | — | `style`, `libs/tui/overlay` |
 
-**Data flow, `/`:** keystroke → `lineInput` → `compilePattern` → `matchItem` over `m.items`
-in scope sets `m.expanded[...]` for each hit's area → `buildRows` → `collectMatches` maps hits to **row** indices
-→ cursor := first match ≥ anchor (wrap) → `View` highlights. Enter freezes `pattern`,
-`matches`; Esc restores `cursor`, `scrollTop` to the anchor and clears `matches` (expanded
-areas stay expanded — the user can see where hits were).
+**Data flow, `/`:** keystroke → `search.State.Key` (compiles, smartcase) → gff expands every
+`(ns, area)` holding a hit → `buildRows` → `search.Collect(len(rows), hit)` → cursor :=
+`search.First(anchor)` (wrap) → `View` marks `IsMatch` rows. Enter → `search.Commit`; Esc →
+`search.Cancel` and gff restores the anchored row + viewport (expanded areas stay expanded).
 
-**Data flow, `:`:** Enter → `parseCommand` → validate against `m.items` → writer → refresh →
-mode back to list; any error → `m.errMsg` (the existing red footer line), mode back to list
-with the file untouched.
+**Data flow, `:`:** Enter → `cmdline.State.Key` → `Submitted{Command}` → `Registry.Run` → gff's
+`set`/`unset` spec validates against `m.items` (`findKey`, `parseValue`) → writer → refresh →
+mode back to list; any error → `m.errMsg` (the existing red footer line) with the file untouched.
 
-**Mode routing invariant:** while `modeSearch` or `modeCommand` is active, *every*
-`tea.KeyRunes` goes to the `lineInput`; normal-mode letters (`q`, `u`, `j`, `k`, …) must not
-fire. Only Esc, Enter, Tab (command mode), and the editor keys are interpreted.
+**Mode routing invariant (GUIDE §4):** while `modeSearch` or `modeCommand` is active, *every*
+key goes to the lib's prompt state; normal-mode letters (`q`, `u`, `j`, `k`, …) must not fire.
+Only Esc, Enter, Tab / Shift-Tab (command mode), and the editor keys are interpreted.
 
 ## 4. Behavior / features
 
@@ -152,13 +151,14 @@ Each rule is a test; the pass column names the proof class.
 ## 7. Prerequisites / dependencies
 
 - `gff` objective merged (it is — `docs/mbo/index.md` row `gff` = done).
-- bubbletea v1.3.10 / lipgloss v1.1.0 already in `sdk/gff/go.mod`; no additions.
+- **`sdk-tui` merged or stacked below** (spec `./sdk-tui.md`, plan `../plans/sdk-tui.md`): the
+  build worker is created `--base` the lib worker's branch. bubbletea / lipgloss already in
+  `sdk/gff/go.mod`; the only addition is `sdk/libs` via `replace ../libs`.
 - The frozen contracts in `../plans/gff.md` §3 are untouched: no proto, file-format, CLI, or
   shell contract changes. Writes still go only to the user override file.
 
 ## 8. Out of scope (and why)
 
-- **`bubbles/textinput`** — a dependency for ~60 lines; the hand-rolled editor is fully tested.
 - **Visual selection / batch toggle (`v`, `space` on many rows)** — fleet-tui F7 territory;
   gff toggles are per-key writes and a batch needs a confirm strip. Backlog.
 - **Search across pages / namespaces** — chosen against in design (rescoping the breadcrumb

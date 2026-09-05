@@ -14,19 +14,16 @@
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | design (docs) | `gff-tui-vim/edward-raigosa/design` | `feature/gff-tui-vim/edward-raigosa/design` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff-tui-vim/edward-raigosa/design` | [#280](https://github.com/sfc-gh-eraigosa/dotfiles/pull/280) (draft) | docs written; issue #281 |
-| build | (create per IMPLEMENTATION §2) | | | | not started |
+| build | (create per IMPLEMENTATION §2, `--base` the `sdk-tui` lib branch) | | | | blocked on `sdk-tui` |
 
 ## 1. Task ledger
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| 1 `lineInput` editor | todo | | | |
-| 2 vim motions + help rebind | todo | | | rewires `TestHelpOverlayFromDetail` `h`→`?` |
-| 3 search primitives + `inScope` | todo | | | |
-| 4 `/` search mode, n/N, :noh, gutter | todo | | | |
-| 5 `:` parser + value validation + `findKey` | todo | | | adds `resolve.Resolved.WithNamespace` (keep resolve ≥ 95%) |
-| 6 `:` mode, exec, Tab completion | todo | | | |
-| 7 docs + key-table test + gates + demo | todo | | | Step 5 is human-evidenced (real terminal) |
+| 1 adopt libs/tui: keymap + nav.Cursor + help rebind | todo | | | rewires `TestHelpOverlayFromDetail` `h`→`?`; replaces cursor/scrollTop/lastInner |
+| 2 `/` search over `search.State` (auto-expand, n/N, :noh, gutter) | todo | | | |
+| 3 `:` over `cmdline` (set/unset validation, Tab) | todo | | | adds `resolve.Resolved.WithNamespace` (keep resolve ≥ 95%) |
+| 4 docs + key-table pin test + gates + demo | todo | | | Step 5 is human-evidenced (real terminal) |
 
 ## 2. Feature → proof matrix (from spec §5)
 
@@ -40,11 +37,12 @@
 | F6 `:` commands | [ ] `TestColon*`, `TestParseCommand`, `TestParseValue*`, `TestFindKeyScopedAndQualified` | [ ] demo `:set`/`:unset` | |
 | F7 Tab completion | [ ] `TestColonTab*` | [ ] demo Tab | |
 | F8 prompt/gutter rendering | [ ] `TestSearchPromptKeepsFrameWithinHeight` + `gutterLines` asserts | [ ] | |
-| F9 docs agree | [ ] `TestTUIHelpListsVimSearchAndCommandKeys` | [ ] README reviewed | |
+| F9 docs agree | [ ] `TestTUIHelpListsVimSearchAndCommandKeys`, `TestFooterHintRendersFromTheKeymap` | [ ] README reviewed | |
 
 ## 3. Validation done-when — the stop condition
 
-- [ ] Tasks 1–7 `done` with commit SHAs and evidence files under `evidence/task<N>/`
+- [ ] `sdk-tui` TRACKING §3 fully ticked (the lib this build consumes)
+- [ ] Tasks 1–4 `done` with commit SHAs and evidence files under `evidence/task<N>/`
 - [ ] `go test ./... -cover`: module ≥ 90%, `internal/tui` ≥ 91.3%, `internal/resolve` ≥ 95% (`evidence/task7/coverage-gate.txt`)
 - [ ] `go vet ./...` clean
 - [ ] `evidence/demo/transcript.txt` + `README.md` committed; flipped flag restored
@@ -61,3 +59,4 @@
 | Date | Session | What advanced |
 | :-- | :-- | :-- |
 | 2026-09-05 | planning | Design approved in chat (`:` = ex command line; vim `h/l` win over `h`=help; `/` auto-expands). Spec, plan, trio written on the `design` worker. |
+| 2026-09-05 | re-plan | Owner review: shared TUI behaviors → new blocking objective `sdk-tui` (`sdk/libs/tui`). Plan re-cut 7→4 tasks to consume the lib; build worker will stack on `feature/sdk-tui/<user>/lib`. |
