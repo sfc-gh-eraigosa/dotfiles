@@ -27,6 +27,10 @@
 #   allow      tokens to NEVER refuse, one per line. The escape for a login
 #              name that is also an ordinary word.
 #
+# Always exempt: a git trailer (Signed-off-by:, Co-authored-by:, any *-by:)
+# carrying the CONFIGURED git user.email of the repo being judged — that address
+# is already on every commit's author line. Trailers naming anyone else are not.
+#
 # Portability: bash 3.2+ (no associative arrays, no mapfile, no ${v,,}), and
 # only POSIX grep -E. Every helper is prefixed privacy_ so sourcing it into a
 # hook cannot shadow anything.
@@ -106,6 +110,21 @@ privacy_scan() {
     local text="$1" ctx="${2:-$PWD}"
     [ -n "$text" ] || return 0
 
+    # Trailers ("Signed-off-by: Name <addr>", "Co-authored-by: …") are where git
+    # identity is SUPPOSED to appear, and the author field already publishes the
+    # configured address on every commit. A *-by: trailer carrying the
+    # configured user.email is therefore no leak: it is cut out before judging,
+    # wherever it sits (a message line, or inside -m "…" on a command line).
+    # Only the trailer itself goes — the name part may not carry a path, URL or
+    # address — so anything else on the line is still judged, and a trailer
+    # naming anyone ELSE is judged like any other text.
+    local gitmail
+    gitmail="$(git -C "$ctx" config user.email 2>/dev/null || true)"
+    if [ -n "$gitmail" ]; then
+        text="$(printf '%s\n' "$text" | sed -E "s|[A-Za-z][A-Za-z-]*-[Bb][Yy]:[[:space:]]*[^<>/:@]*<$(privacy_escape "$gitmail")>||g")"
+        [ -n "$(printf '%s' "$text" | tr -d '[:space:]')" ] || return 0
+    fi
+
     # Rule A — Windows / WSL user-home paths: C:\Users\<name>, /mnt/c/Users/<name>.
     # Placeholders (Users\<user>, Users\%USERNAME%, Users\${USER}) do not match:
     # the trailing class excludes '<', '%' and '$'.
@@ -160,7 +179,8 @@ EOF
 
     # Rule E — ANY email address is somebody's identity, not just yours.
     # Exempt: placeholder local parts (<user>, user, you, me, name, test,
-    # noreply) and variable/placeholder syntax.
+    # noreply) and a variable in the local-part slot ($USER@…, %USERNAME%@…).
+    # Angle brackets are NOT a placeholder: "<bob@corp.example>" is an address.
     local mail='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
     local addr local_part
     addr="$(privacy_first "$text" "$mail")"
@@ -169,7 +189,7 @@ EOF
         case "$local_part" in
             user|you|me|name|test|example|noreply|no-reply|someone|admin|root|git|bot) ;;
             *)
-                if ! privacy_allowed "$addr" && ! privacy_hit "$text" "[<\$%{][^ ]*@"; then
+                if ! privacy_allowed "$addr" && ! privacy_hit "$text" "[\$%{]$(privacy_escape "$addr")"; then
                     privacy_found "An email address appears verbatim (use <email> or a role address)" "$addr"
                     return 2
                 fi ;;

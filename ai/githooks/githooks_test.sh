@@ -103,6 +103,15 @@ expect blocked "commit-msg: home path in the message is refused" -- -C "$REPO" c
 expect blocked "commit-msg: message from a FILE is judged too" -- -C "$REPO" commit -q --allow-empty -F "$(printf 'fix on %s\n' "$ID_HOST" > "$WORK/msg" && echo "$WORK/msg")"
 expect ok "commit-msg: clean message passes" -- -C "$REPO" commit -q --allow-empty -m "docs: tidy"
 
+# Trailers are where git identity is SUPPOSED to appear, and the author field
+# already publishes the configured address on every commit. A *-by: trailer
+# carrying the configured user.email is therefore not a leak; one carrying
+# somebody ELSE's address still is.
+expect ok "commit-msg: --signoff trailer with the configured git email is allowed" -- -C "$REPO" commit -q --allow-empty --signoff -m "docs: signed"
+expect ok "commit-msg: Co-authored-by trailer with the configured git email is allowed" -- -C "$REPO" commit -q --allow-empty -m "docs: paired" -m "Co-authored-by: Alice <$ID_EMAIL>"
+expect blocked "commit-msg: a trailer naming SOMEONE ELSE's address is still refused" -- -C "$REPO" commit -q --allow-empty -m "docs: paired" -m "Co-authored-by: Bob <bob@corp.example>"
+expect blocked "commit-msg: the configured email OUTSIDE a trailer is still refused" -- -C "$REPO" commit -q --allow-empty -m "docs: mail $ID_EMAIL if this breaks"
+
 # ============================ pre-push ==========================================
 # Everything committed with --no-verify above must still be caught at the
 # boundary that actually publishes it. This is the layer gss push / checkpoint
@@ -119,8 +128,8 @@ expect blocked "pre-push: a leaked commit (made with --no-verify) is refused at 
 g -C "$REPO" reset -q --hard HEAD~1
 
 stage after.md "all clean here"
-g -C "$REPO" commit -q -m "docs: clean follow-up"
-expect ok "pre-push: clean commits pass even when older history (already on origin) has a leak" -- -C "$REPO" push -q origin HEAD
+g -C "$REPO" commit -q --signoff -m "docs: clean follow-up"
+expect ok "pre-push: clean commits (incl. a --signoff trailer) pass even when older history (already on origin) has a leak" -- -C "$REPO" push -q origin HEAD
 
 g -C "$REPO" checkout -q -b feature
 stage newbranch.md "host is $ID_HOST"

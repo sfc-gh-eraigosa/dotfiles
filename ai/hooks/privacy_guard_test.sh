@@ -177,6 +177,16 @@ assert 2 "$(pl_bash_cwd "git commit -F $SCAN_REPO/msg.txt" "$SCAN_REPO")" "git c
 git -C "$SCAN_REPO" add leak.md
 git -C "$SCAN_REPO" -c user.name=A -c user.email=a@example.com commit -q -m "sneaky" --no-verify
 
+# A git trailer carrying the repo's CONFIGURED user.email is not a leak: that
+# address is on every author line already. Anyone else's address still is.
+TRAILER_REPO="$(mktemp -d)"
+git -C "$TRAILER_REPO" init -q
+git -C "$TRAILER_REPO" config user.name "Alice"
+git -C "$TRAILER_REPO" config user.email "alice@example.com"
+assert 0 "$(pl_bash_cwd 'git commit --allow-empty -m "docs: tidy" -m "Signed-off-by: Alice <alice@example.com>"' "$TRAILER_REPO")" "git commit: Signed-off-by trailer with the configured git email is allowed"
+assert 2 "$(pl_bash_cwd 'git commit --allow-empty -m "docs: tidy" -m "Co-authored-by: Bob <bob@corp.example>"' "$TRAILER_REPO")" "git commit: a trailer naming SOMEONE ELSE is refused (angle brackets are not a placeholder)"
+assert 2 "$(pl_bash_cwd 'git commit --allow-empty -m "docs: mail alice@example.com if it breaks"' "$TRAILER_REPO")" "git commit: the configured email OUTSIDE a trailer is refused"
+
 # --- Class 3: publishing verbs the original regex did not know -----------------
 # The leak above is now an unpushed commit; every verb that would publish it
 # must be judged on what it publishes.
