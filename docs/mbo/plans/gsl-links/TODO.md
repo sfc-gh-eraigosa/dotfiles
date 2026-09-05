@@ -54,18 +54,18 @@
 - [x] RUN-GREEN: `cd sdk/gsl && go test ./internal/render/ -race` → **PASS**; `-run Golden -update` adds ONLY `golden_links_*.txt` (check `git diff --stat`)
 - [x] VERIFY: `go vet ./...`; evidence → `evidence/T3/segments.txt`
 - [x] COMMIT: `feat(gsl): repo, dirgit, ai, and time segments record link spans; legacy Render delegates to detect+format`
-- [ ] LEDGER + CHECKPOINT
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** all four segments implement `LinkedSegment`; parity test green with links on.
 
 ### Task 4 — flags package  (plan Task 4)
 
-- [ ] RED: `internal/flags/flags_test.go`
-- [ ] RUN-RED: `cd sdk/gsl && go test ./internal/flags/` → **FAIL** (no package)
-- [ ] GREEN: `internal/flags/flags.go`; `go.mod` require + replace for `sdk/gff`; `go mod tidy`
-- [ ] RUN-GREEN: `cd sdk/gsl && go test ./internal/flags/ -race && go build ./...` → **PASS**
-- [ ] ALLOWLIST: `git status --short -- sdk/gsl/internal/flags`
-- [ ] COMMIT: `feat(gsl): fail-open gff lookups for the link families`
+- [x] RED: `internal/flags/flags_test.go`
+- [x] RUN-RED: `cd sdk/gsl && go test ./internal/flags/` → **FAIL** (no package)
+- [x] GREEN: `internal/flags/flags.go`; `go.mod` require + replace for `sdk/gff`; `go mod tidy`
+- [x] RUN-GREEN: `cd sdk/gsl && go test ./internal/flags/ -race && go build ./...` → **PASS**
+- [x] ALLOWLIST: `git status --short -- sdk/gsl/internal/flags`
+- [x] COMMIT: `feat(gsl): fail-open gff lookups for the link families`
 - [ ] LEDGER + CHECKPOINT
 
 **Done when:** budget test (<100 ms with a 200 ms lookup) passes; build green.

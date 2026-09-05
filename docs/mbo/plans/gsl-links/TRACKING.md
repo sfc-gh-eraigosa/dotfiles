@@ -21,8 +21,8 @@
 | :-- | :-- | :-- | :-- | :-- |
 | T1 spans through join/fit/truncation | done | f4162ea | `go test ./internal/render/ -race -cover` → `ok … coverage` (evidence/T1/render-tests.txt); 6 goldens regenerated, visible text byte-identical (escape placement only) | RED: compile failure on `LinkSpan`; old `TestTruncate_PreservesLink` re-targeted to the surviving label |
 | T2 remote URL + URL builders | done | ae0765f | `go test ./internal/git/ ./internal/render/ -race -cover` → ok, render 90.5% (evidence/T2/url-tests.txt); mutation checks TreeURL/FileURL/TimeURL each FAIL when broken | builders were written in T1 (`links.go`), so their tests were proven by mutation rather than by a RED run |
-| T3 segment spans + Render delegation | done | (this commit) | `go test ./internal/render/ -race -cover` ok; `TestDetectFormat_MatchesRender_Linked` + `TestGolden_Links` pass; `make lint-go` 0 issues (evidence/T3/segments.txt); linked golden targets: file://, usage, repo home, 2× tree, PR, time.is | Decision: zero-value `Links` links nothing (PR badge is in the Repo family + `link_pr`), so default goldens lost the badge link — visible text byte-identical |
-| T4 flags package (gff, fail-open) | todo | | | |
+| T3 segment spans + Render delegation | done | ce1ff1a | `go test ./internal/render/ -race -cover` ok; `TestDetectFormat_MatchesRender_Linked` + `TestGolden_Links` pass; `make lint-go` 0 issues (evidence/T3/segments.txt); linked golden targets: file://, usage, repo home, 2× tree, PR, time.is | Decision: zero-value `Links` links nothing (PR badge is in the Repo family + `link_pr`), so default goldens lost the badge link — visible text byte-identical |
+| T4 flags package (gff, fail-open) | done | (this commit) | `go test ./internal/flags/ -race -cover` → ok, 90.3% incl. the 20 ms-budget test; `go build ./...` with the gff dependency; `make lint-go` 0 issues (evidence/T4/flags.txt) | `go mod tidy` also bumped x/sys 0.36→0.47 and colorprofile (gff transitive requirements); full module tests green |
 | T5 wiring: config/cmd/preview/features.yaml/install.sh | todo | | | |
 | T6 docs + human click check | todo | | | |
 
@@ -61,3 +61,4 @@
 | 2026-09-05 | build-1 | T1 done: link spans through join/fit/truncation; goldens refreshed. |
 | 2026-09-05 | build-1 | T2 done: `git.RemoteWebURL`/`NormalizeRemote`; URL builder tests + mutation proof. First `gss push` refused on unstaged T2 files — pushing T1+T2 together. |
 | 2026-09-05 | build-1 | T3 done: all four segments emit spans via `formatLinked`; legacy `Render` delegates to detect+format; linked goldens + parity test. |
+| 2026-09-05 | build-1 | T4 done: `internal/flags` (concurrent, budgeted, fail-open gff lookups) + gff SDK dependency. |
