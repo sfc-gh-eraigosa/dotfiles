@@ -42,18 +42,18 @@
 - [x] RUN-GREEN: same command → **PASS**
 - [x] ALLOWLIST: `git status --short -- sdk/gsl/internal/git/remote.go` lists it
 - [x] COMMIT: `feat(gsl): origin web-URL normalization and tree/file/time URL builders`
-- [ ] LEDGER + CHECKPOINT
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** 8 remote forms + 3 builder tests pass.
 
 ### Task 3 — segments record spans; Render delegates  (plan Task 3)
 
-- [ ] RED: `TestRepo_Spans_*`, `TestDirGit_Spans_DirAndBranch`, `TestAI_Spans_*`, `TestTime_Span_WholeTextAfterGlyph`, parity with links, golden `links` case
-- [ ] RUN-RED: `cd sdk/gsl && go test ./internal/render/ -run 'Spans|Span_|DetectFormat_MatchesRender|Golden'` → **FAIL**
-- [ ] GREEN: `Deps.Links`/`RemoteURL` + `BuildSegments`; `formatLinked` in the four `*_data.go`; delegation in the four `seg_*.go`
-- [ ] RUN-GREEN: `cd sdk/gsl && go test ./internal/render/ -race` → **PASS**; `-run Golden -update` adds ONLY `golden_links_*.txt` (check `git diff --stat`)
-- [ ] VERIFY: `go vet ./...`; evidence → `evidence/T3/segments.txt`
-- [ ] COMMIT: `feat(gsl): repo, dirgit, ai, and time segments record link spans; legacy Render delegates to detect+format`
+- [x] RED: `TestRepo_Spans_*`, `TestDirGit_Spans_DirAndBranch`, `TestAI_Spans_*`, `TestTime_Span_WholeTextAfterGlyph`, parity with links, golden `links` case
+- [x] RUN-RED: `cd sdk/gsl && go test ./internal/render/ -run 'Spans|Span_|DetectFormat_MatchesRender|Golden'` → **FAIL**
+- [x] GREEN: `Deps.Links`/`RemoteURL` + `BuildSegments`; `formatLinked` in the four `*_data.go`; delegation in the four `seg_*.go`
+- [x] RUN-GREEN: `cd sdk/gsl && go test ./internal/render/ -race` → **PASS**; `-run Golden -update` adds ONLY `golden_links_*.txt` (check `git diff --stat`)
+- [x] VERIFY: `go vet ./...`; evidence → `evidence/T3/segments.txt`
+- [x] COMMIT: `feat(gsl): repo, dirgit, ai, and time segments record link spans; legacy Render delegates to detect+format`
 - [ ] LEDGER + CHECKPOINT
 
 **Done when:** all four segments implement `LinkedSegment`; parity test green with links on.

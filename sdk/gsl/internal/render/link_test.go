@@ -20,6 +20,7 @@ const osc8Close = "\x1b]8;;\x1b\\"
 // layer, not the segment, owns escape emission.
 func TestRepo_RenderLinked_ReportsPRURL(t *testing.T) {
 	seg, _ := newRepoSeg(false, 1, nil)
+	seg.Links = Links{Repo: true}
 	_, _, spans, ok := seg.RenderLinked(context.Background(), asciiStyle(), 0)
 	if !ok {
 		t.Fatal("want ok=true")
@@ -35,6 +36,7 @@ func TestRepo_RenderLinked_ReportsPRURL(t *testing.T) {
 // TestRepo_LinkPRDisabled: opting out yields no link but keeps the badge.
 func TestRepo_LinkPRDisabled(t *testing.T) {
 	seg, _ := newRepoSeg(false, 1, map[string]any{"link_pr": false})
+	seg.Links = Links{Repo: true}
 	text, _, spans, ok := seg.RenderLinked(context.Background(), asciiStyle(), 0)
 	if !ok {
 		t.Fatal("want ok=true")
@@ -51,6 +53,7 @@ func TestRepo_LinkPRDisabled(t *testing.T) {
 // invisible click target, so show_pr=false must also suppress the link.
 func TestRepo_NoLinkWhenPRHidden(t *testing.T) {
 	seg, _ := newRepoSeg(false, 1, map[string]any{"show_pr": false})
+	seg.Links = Links{Repo: true}
 	_, _, spans, ok := seg.RenderLinked(context.Background(), asciiStyle(), 0)
 	if !ok {
 		t.Fatal("want ok=true")

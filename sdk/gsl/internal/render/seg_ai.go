@@ -3,7 +3,6 @@ package render
 import (
 	"context"
 	"strconv"
-	"strings"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload"
@@ -33,6 +32,10 @@ type AISegment struct {
 	// or the built-in default for this type when unset). It is independent of the
 	// segment's position in the line.
 	Priority int
+
+	// Links is the link policy (Deps.Links): AI gates the model / context /
+	// rate fields → Links.UsageURL. Zero value or empty UsageURL ⇒ no links.
+	Links Links
 }
 
 // NewAISegment builds an AISegment.
@@ -40,138 +43,21 @@ func NewAISegment(p payload.Payload, cwd string, mcpRunner mcp.Runner, mcpOpts m
 	return &AISegment{Payload: p, Cwd: cwd, MCP: mcpRunner, MCPOpts: mcpOpts}
 }
 
-// Render implements Segment.
-//
-// Returns raw (unpainted) text plus the colorKey "ai". compactLevel is
-// accepted but only level 0 (full detail) is implemented; PHASE 2 will add
-// compaction logic for levels 1–3.
-func (s *AISegment) Render(ctx context.Context, st style.Style, _ int) (text, colorKey string, ok bool) {
-	p := s.Payload
-	// No payload at all (Antigravity/CLI mode): every payload pointer is nil.
-	if p.Model == nil && p.ContextWindow == nil && p.RateLimits == nil {
-		return "", "", false
-	}
-
-	parts := make([]string, 0, 5)
-
-	// ── Model display name ───────────────────────────────────────────────────
-	if p.Model != nil && p.Model.DisplayName != nil && *p.Model.DisplayName != "" {
-		var b strings.Builder
-		if g := glyph(st, "ai"); g != "" {
-			b.WriteString(g)
-			b.WriteString(" ")
-		}
-		b.WriteString(*p.Model.DisplayName)
-		parts = append(parts, b.String())
-	} else if g := glyph(st, "ai"); g != "" {
-		// Payload present but no model name: still show the AI glyph as an
-		// anchor so the segment is not empty when only ctx/limits exist.
-		parts = append(parts, g)
-	}
-
-	// ── Context window ───────────────────────────────────────────────────────
-	if cw := p.ContextWindow; cw != nil {
-		if part := s.contextPart(st, cw); part != "" {
-			parts = append(parts, part)
-		}
-	}
-
-	// ── MCP active/configured ────────────────────────────────────────────────
-	if part := s.mcpPart(ctx, st); part != "" {
-		parts = append(parts, part)
-	}
-
-	// ── Rate limits ──────────────────────────────────────────────────────────
-	if rl := p.RateLimits; rl != nil {
-		if part := ratePart(st, "5h", rl.FiveHour); part != "" {
-			parts = append(parts, part)
-		}
-		if part := ratePart(st, "7d", rl.SevenDay); part != "" {
-			parts = append(parts, part)
-		}
-	}
-
-	if len(parts) == 0 {
-		return "", "", false
-	}
-	return strings.Join(parts, " "), "ai", true
+// Render implements Segment. It delegates to RenderLinked and discards the
+// spans, so the legacy path can never drift from the detect/format path.
+func (s *AISegment) Render(ctx context.Context, st style.Style, level int) (text, colorKey string, ok bool) {
+	text, colorKey, _, ok = s.RenderLinked(ctx, st, level)
+	return text, colorKey, ok
 }
 
-// contextPart renders the context-window usage, e.g. "<ctx-glyph> 42% 50k/200k".
-// Percentage is shown when present; the token ratio is appended when both
-// totals are present.
-func (s *AISegment) contextPart(st style.Style, cw *payload.ContextWindow) string {
-	var b strings.Builder
-	if g := glyph(st, "context"); g != "" {
-		b.WriteString(g)
-		b.WriteString(" ")
+// RenderLinked implements LinkedSegment: detect once, then format with spans.
+func (s *AISegment) RenderLinked(ctx context.Context, st style.Style, level int) (text, colorKey string, spans []LinkSpan, ok bool) {
+	d, ok := s.detect(ctx)
+	if !ok {
+		return "", "", nil, false
 	}
-	wrote := false
-	if cw.UsedPercentage != nil {
-		b.WriteString(pct(*cw.UsedPercentage))
-		wrote = true
-	}
-	if cw.TotalInputTokens != nil && cw.ContextWindowSize != nil {
-		if wrote {
-			b.WriteString(" ")
-		}
-		b.WriteString(tokenAbbrev(*cw.TotalInputTokens))
-		b.WriteString("/")
-		b.WriteString(tokenAbbrev(*cw.ContextWindowSize))
-		wrote = true
-	}
-	if !wrote {
-		return ""
-	}
-	return b.String()
-}
-
-// mcpPart renders the MCP active/configured count, e.g. "<mcp-glyph> 3/5".
-// Returns "" when neither count is available. ConfiguredCount is read from
-// config files (no subprocess); ActiveCount uses the injected runner with its
-// own short timeout + cache.
-func (s *AISegment) mcpPart(ctx context.Context, st style.Style) string {
-	if s.Cwd == "" {
-		return ""
-	}
-	configured, cErr := mcp.ConfiguredCount(s.Cwd)
-	if cErr != nil {
-		return ""
-	}
-
-	active := -1
-	if s.MCP != nil {
-		if n, aErr := mcp.ActiveCount(ctx, s.MCP, s.MCPOpts); aErr == nil {
-			active = n
-		}
-	}
-
-	if configured == 0 && active <= 0 {
-		return ""
-	}
-
-	var b strings.Builder
-	if g := glyph(st, "mcp"); g != "" {
-		b.WriteString(g)
-		b.WriteString(" ")
-	}
-	if active >= 0 {
-		b.WriteString(strconv.Itoa(active))
-		b.WriteString("/")
-		b.WriteString(strconv.Itoa(configured))
-	} else {
-		b.WriteString(strconv.Itoa(configured))
-	}
-	return b.String()
-}
-
-// ratePart renders a single rate-limit window, e.g. "5h 80%". Returns "" when
-// the window or its percentage is nil.
-func ratePart(st style.Style, label string, w *payload.RateWindow) string {
-	if w == nil || w.UsedPercentage == nil {
-		return ""
-	}
-	return label + " " + pct(*w.UsedPercentage)
+	text, colorKey, spans = formatLinkedOf(d, st, level)
+	return text, colorKey, spans, text != ""
 }
 
 // pct formats a 0–100 percentage as an integer with a trailing "%". Values are

@@ -52,6 +52,11 @@ type RepoSegment struct {
 	// or the built-in default for this type when unset). It is independent of the
 	// segment's position in the line.
 	Priority int
+
+	// Links is the link policy (Deps.Links). Repo gates the glyph → repo home,
+	// label → branch tree, and PR badge → PR links; LinkPR additionally gates
+	// the badge. Zero value ⇒ no links.
+	Links Links
 }
 
 // NewRepoSegment builds a RepoSegment, applying option defaults from opts.
@@ -69,86 +74,21 @@ func NewRepoSegment(gitRunner git.Runner, ghRunner gh.Runner, branch, registryPa
 	return s
 }
 
-// Render implements Segment.
-//
-// Returns raw (unpainted) text plus a dynamic colorKey: "repo_root" for the
-// main worktree, "repo_worktree" for a linked worktree. compactLevel is
-// accepted but only level 0 (full detail) is implemented; PHASE 2 will pass
-// the level through for future compaction.
+// Render implements Segment. It delegates to RenderLinked and discards the
+// spans, so the legacy path can never drift from the detect/format path.
 func (s *RepoSegment) Render(ctx context.Context, st style.Style, level int) (text, colorKey string, ok bool) {
 	text, colorKey, _, ok = s.RenderLinked(ctx, st, level)
 	return text, colorKey, ok
 }
 
-// RenderLinked implements LinkedSegment. It is the real implementation — Render
-// delegates to it and discards the link — so the two can never drift apart.
-func (s *RepoSegment) RenderLinked(ctx context.Context, st style.Style, _ int) (text, colorKey string, spans []LinkSpan, ok bool) {
-	if s.Git == nil {
+// RenderLinked implements LinkedSegment: detect once, then format with spans.
+func (s *RepoSegment) RenderLinked(ctx context.Context, st style.Style, level int) (text, colorKey string, spans []LinkSpan, ok bool) {
+	d, ok := s.detect(ctx)
+	if !ok {
 		return "", "", nil, false
 	}
-	loc, err := repo.Locate(ctx, s.Git, "")
-	if err != nil {
-		// Not a git repo (or git unavailable) → omit the whole segment.
-		return "", "", nil, false
-	}
-
-	// PR / feature lookup (best-effort; nil or error ⇒ omit those parts).
-	var info *repo.RepoInfo
-	if s.NameMode == nameModeFeature || s.ShowPR {
-		if pr, perr := repo.PR(ctx, s.GH, s.Branch, loc.Toplevel, s.RegistryPath); perr == nil {
-			info = pr
-		}
-	}
-
-	themeKey := "repo_root"
-	indicatorKey := "repo_root"
-	if loc.IsWorktree {
-		themeKey = "repo_worktree"
-		indicatorKey = "repo_worktree"
-	}
-
-	var b strings.Builder
-	if g := glyph(st, indicatorKey); g != "" {
-		b.WriteString(g)
-	}
-
-	if label := s.nameLabel(info); label != "" {
-		if b.Len() > 0 {
-			b.WriteString(" ")
-		}
-		b.WriteString(label)
-	}
-
-	if s.ShowPR && info != nil && info.PRNumber > 0 {
-		if b.Len() > 0 {
-			b.WriteString(" ")
-		}
-		// prBadge inlines ANSI tints for the PR state color, but these are
-		// sub-field tints within the segment text — they are NOT the segment's
-		// primary colorKey and are acceptable as embedded sequences here because
-		// they restore the segment's own fg color before returning. This is a
-		// known exception: prBadge's tinting is scoped to the number only and
-		// does not embed a full reset that would interfere with the join layer.
-		badgeStart := b.Len()
-		b.WriteString(prBadge(st, info.PRNumber, info.PRState))
-		// Gated on the badge actually being on the line: a hyperlink over a
-		// segment showing no PR would be an invisible click target.
-		if s.LinkPR && info.PRURL != "" {
-			spans = append(spans, LinkSpan{Start: badgeStart, End: b.Len(), URL: info.PRURL})
-		}
-	}
-
-	if s.ShowCount && loc.WorktreeCount >= 2 {
-		if b.Len() > 0 {
-			b.WriteString(" ")
-		}
-		b.WriteString(countBadge(st, "worktree_count", loc.WorktreeCount))
-	}
-
-	if b.Len() == 0 {
-		return "", "", nil, false
-	}
-	return b.String(), themeKey, spans, true
+	text, colorKey, spans = formatLinkedOf(d, st, level)
+	return text, colorKey, spans, text != ""
 }
 
 // nameLabel resolves the segment's name label per NameMode.

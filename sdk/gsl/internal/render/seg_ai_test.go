@@ -109,3 +109,25 @@ func writeMcpJSON(t *testing.T, dir string, n int) {
 		t.Fatalf("write .mcp.json: %v", err)
 	}
 }
+
+func TestAI_Spans_UsageFourFields(t *testing.T) {
+	seg := NewAISegment(samplePayload(), "", nil, mcp.ActiveCountOptions{})
+	seg.Links = Links{AI: true, UsageURL: DefaultClaudeUsageURL}
+	text, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	if len(spans) != 4 {
+		t.Fatalf("want model/ctx/5h/7d spans, got %+v in %q", spans, text)
+	}
+	for _, sp := range spans {
+		if sp.URL != DefaultClaudeUsageURL || strings.Contains(text[sp.Start:sp.End], "MCP") {
+			t.Errorf("bad span %+v", sp)
+		}
+	}
+}
+
+func TestAI_Spans_NoUsageURL(t *testing.T) {
+	seg := NewAISegment(samplePayload(), "", nil, mcp.ActiveCountOptions{})
+	seg.Links = Links{AI: true}
+	if _, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0); len(spans) != 0 {
+		t.Errorf("no usage URL ⇒ no spans: %+v", spans)
+	}
+}

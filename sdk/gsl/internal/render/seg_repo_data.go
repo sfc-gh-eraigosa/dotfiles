@@ -18,7 +18,6 @@ package render
 
 import (
 	"context"
-	"strings"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo"
@@ -51,6 +50,9 @@ type repoData struct {
 	showCount bool
 	// prio is the drop priority (config.Segment.EffectivePriority).
 	prio int
+	// links is the policy; branch is the full branch name the label links to.
+	links  Links
+	branch string
 }
 
 // priority implements prioritized. The repo/PR you are working in is the last
@@ -94,6 +96,8 @@ func (s *RepoSegment) detect(ctx context.Context) (segmentData, bool) {
 		showPR:       s.ShowPR,
 		showCount:    s.ShowCount,
 		prio:         s.Priority,
+		links:        s.Links,
+		branch:       s.Branch,
 		worktreeCount: func() int {
 			if s.ShowCount && loc.WorktreeCount >= 2 {
 				return loc.WorktreeCount
@@ -114,14 +118,30 @@ func (s *RepoSegment) detect(ctx context.Context) (segmentData, bool) {
 }
 
 // format implements segmentData.format for repoData. Pure; no I/O.
+func (d *repoData) format(st style.Style, level int) (text, colorKey string) {
+	text, colorKey, _ = d.formatLinked(st, level)
+	return text, colorKey
+}
+
+// formatLinked implements linkedFormatter: the text at this level plus the
+// spans recorded while building it. Pure; no I/O.
 //
 // Width is monotonically non-increasing in level (spec E5): each level removes
 // or shortens exactly one element and never adds one back.
-func (d *repoData) format(st style.Style, level int) (text, colorKey string) {
-	var b strings.Builder
+//
+// Links: glyph → repo home, label → the branch on GitHub, PR badge → the PR —
+// all gated on the repo family; the badge additionally on link_pr (prURL is
+// left empty otherwise). A hyperlink over a segment that displays no PR would
+// be an invisible click target, so the badge span exists only with the badge.
+func (d *repoData) formatLinked(st style.Style, level int) (string, string, []LinkSpan) {
+	var sb spanBuilder
+	repoURL := ""
+	if d.links.Repo {
+		repoURL = d.links.RepoURL
+	}
 
 	if g := glyph(st, d.indicatorKey); g != "" {
-		b.WriteString(g)
+		sb.linked(g, repoURL)
 	}
 
 	// Label. Level 3+ ellipsizes it — grapheme-safely, so a CJK or emoji repo
@@ -132,10 +152,10 @@ func (d *repoData) format(st style.Style, level int) (text, colorKey string) {
 			label = truncateText(label, repoLabelBudget)
 		}
 		if label != "" {
-			if b.Len() > 0 {
-				b.WriteString(" ")
+			if sb.len() > 0 {
+				sb.write(" ")
 			}
-			b.WriteString(label)
+			sb.linked(label, TreeURL(repoURL, d.branch))
 		}
 	}
 
@@ -146,45 +166,27 @@ func (d *repoData) format(st style.Style, level int) (text, colorKey string) {
 		if level >= 2 {
 			prefix = "#"
 		}
-		if b.Len() > 0 {
-			b.WriteString(" ")
+		if sb.len() > 0 {
+			sb.write(" ")
 		}
-		b.WriteString(prBadgeWithPrefix(st, prefix, d.prNumber, d.prState))
+		prURL := ""
+		if d.links.Repo {
+			prURL = d.prURL
+		}
+		sb.linked(prBadgeWithPrefix(st, prefix, d.prNumber, d.prState), prURL)
 	}
 
 	// Worktree-count badge: the first thing to go. It is a nice-to-have, and the
 	// worktree GLYPH already tells you that you are in a linked worktree.
 	if level < 1 && d.showCount && d.worktreeCount >= 2 {
-		if b.Len() > 0 {
-			b.WriteString(" ")
+		if sb.len() > 0 {
+			sb.write(" ")
 		}
-		b.WriteString(countBadge(st, "worktree_count", d.worktreeCount))
+		sb.write(countBadge(st, "worktree_count", d.worktreeCount))
 	}
 
-	if b.Len() == 0 {
-		return "", ""
+	if sb.len() == 0 {
+		return "", "", nil
 	}
-	return b.String(), d.themeKey
-}
-
-// formatLinked implements linkedFormatter: the PR badge addresses its PR.
-//
-// It is gated on the PR badge actually being shown. A hyperlink over a segment
-// that displays no PR would be an invisible click target — the whole repo block
-// would silently become clickable with nothing on screen explaining why.
-func (d *repoData) formatLinked(st style.Style, level int) (string, string, []LinkSpan) {
-	text, colorKey := d.format(st, level)
-	if text == "" || !d.showPR || d.prNumber <= 0 || d.prURL == "" {
-		return text, colorKey, nil
-	}
-	prefix := "PR#"
-	if level >= 2 {
-		prefix = "#"
-	}
-	badge := prBadgeWithPrefix(st, prefix, d.prNumber, d.prState)
-	start := strings.LastIndex(text, badge)
-	if start < 0 {
-		return text, colorKey, nil
-	}
-	return text, colorKey, []LinkSpan{{Start: start, End: start + len(badge), URL: d.prURL}}
+	return sb.String(), d.themeKey, sb.spans
 }

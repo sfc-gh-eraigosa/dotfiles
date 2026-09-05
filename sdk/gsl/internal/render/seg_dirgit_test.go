@@ -78,3 +78,12 @@ func TestDirGit_CancelledContext_OmitsGitDetail(t *testing.T) {
 		t.Errorf("dirgit: cancelled ctx should omit git detail, got %q", got)
 	}
 }
+
+func TestDirGit_Spans_DirAndBranch(t *testing.T) {
+	seg := NewDirGitSegment("/home/u/proj", &gitfake.Runner{Script: gitStatusResponses("main")})
+	seg.Links = Links{DirGit: true, Repo: true, RepoURL: "https://github.com/o/r"}
+	_, _, spans, ok := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	if !ok || len(spans) != 2 || spans[0].URL != "file:///home/u/proj" || spans[1].URL != "https://github.com/o/r/tree/main" {
+		t.Fatalf("spans = %+v", spans)
+	}
+}

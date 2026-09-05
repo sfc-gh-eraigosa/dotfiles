@@ -82,6 +82,11 @@ type Deps struct {
 
 	// Clock returns the current time for the time segment. nil ⇒ time.Now.
 	Clock func() time.Time
+
+	// Links is the per-render link policy (families already AND-ed with the
+	// config mode and the gff master flag by cmd). The zero value links
+	// nothing, so callers that never heard of links render exactly as before.
+	Links Links
 }
 
 // BuildSegments constructs the ordered list of ENABLED segments from
@@ -107,18 +112,26 @@ func BuildSegments(cfg config.Config, deps Deps) []Segment {
 			// Reuse the caller's pre-computed status instead of re-running
 			// git.Status inside Detect (WS3/F12). Nil ⇒ detect it ourselves.
 			dg.Info = deps.GitInfo
+			dg.Links = deps.Links
 			segs = append(segs, dg)
 		case "repo":
 			s := NewRepoSegment(deps.Git, deps.GH, deps.Branch, deps.RegistryPath, sc.Options)
 			s.Priority = prio
+			s.Links = deps.Links
 			segs = append(segs, s)
 		case "ai":
 			s := NewAISegment(deps.Payload, deps.Cwd, deps.MCP, deps.MCPOpts)
 			s.Priority = prio
+			s.Links = deps.Links
+			// The usage_url option overrides the host default (also the way to
+			// give Antigravity a target, which has no known default).
+			s.Links.UsageURL = optString(sc.Options, "usage_url", deps.Links.UsageURL)
 			segs = append(segs, s)
 		case "time":
 			s := NewTimeSegment(deps.Clock, cfg.Timezone, cfg.TimeFormat, cfg.DateFormat)
 			s.Priority = prio
+			s.Links = deps.Links
+			s.Links.TimeURL = optString(sc.Options, "link_url", deps.Links.TimeURL)
 			segs = append(segs, s)
 		default:
 			// Unknown segment type: skip silently.

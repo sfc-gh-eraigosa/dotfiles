@@ -31,6 +31,8 @@ type dirGitData struct {
 	hasGit bool
 	// prio is the drop priority (config.Segment.EffectivePriority).
 	prio int
+	// links is the policy the spans are gated on.
+	links Links
 }
 
 // priority implements prioritized.
@@ -60,7 +62,7 @@ func (s *DirGitSegment) detect(ctx context.Context) (segmentData, bool) {
 		}
 	}
 
-	d := &dirGitData{cwd: cwd, home: home, prio: s.Priority}
+	d := &dirGitData{cwd: cwd, home: home, prio: s.Priority, links: s.Links}
 
 	// Reuse the pre-threaded status when the caller already computed it
 	// (Deps.GitInfo); shell out only when it is nil. This is the OTHER half of
@@ -76,22 +78,33 @@ func (s *DirGitSegment) detect(ctx context.Context) (segmentData, bool) {
 
 // format implements segmentData.format for dirGitData. Pure; no I/O.
 func (d *dirGitData) format(st style.Style, level int) (text, colorKey string) {
-	var b strings.Builder
+	text, colorKey, _ = d.formatLinked(st, level)
+	return text, colorKey
+}
+
+// formatLinked implements linkedFormatter. Links: the directory name → its
+// file:// URL (DirGit family), the branch → the branch on GitHub (Repo family).
+func (d *dirGitData) formatLinked(st style.Style, level int) (string, string, []LinkSpan) {
+	var sb spanBuilder
 
 	if g := glyph(st, "dirgit"); g != "" {
-		b.WriteString(g)
-		b.WriteString(" ")
+		sb.write(g)
+		sb.write(" ")
 	}
 
 	// Directory display: depends on compaction level.
-	b.WriteString(d.formatDir(level))
+	fileURL := ""
+	if d.links.DirGit {
+		fileURL = FileURL(d.cwd)
+	}
+	sb.linked(d.formatDir(level), fileURL)
 
 	// Git detail: omit entirely at level 3.
 	if level < 3 && d.hasGit && d.gitInfo != nil {
-		d.appendGitFormatted(&b, st, level)
+		d.appendGitFormatted(&sb, st, level)
 	}
 
-	return b.String(), "dirgit"
+	return sb.String(), "dirgit", sb.spans
 }
 
 // formatDir returns the directory label for the given compaction level.
@@ -126,16 +139,22 @@ func abbrevDir(dir, home string) string {
 //	level 1: last branch component (feature/gsl/impl → impl) + badges
 //	level 2: first letter of last component (impl → i) + badges
 //	level 3: no branch at all (caller already skips calling this at level 3)
-func (d *dirGitData) appendGitFormatted(b *strings.Builder, st style.Style, level int) {
+func (d *dirGitData) appendGitFormatted(b *spanBuilder, st style.Style, level int) {
 	info := *d.gitInfo
 	if info.Branch == "" {
 		return
 	}
 
-	b.WriteString(" ")
+	b.write(" ")
 	if g := glyph(st, "branch"); g != "" {
-		b.WriteString(g)
-		b.WriteString(" ")
+		b.write(g)
+		b.write(" ")
+	}
+	// The link targets the FULL branch even when the text is abbreviated below;
+	// a detached HEAD has no branch page.
+	treeURL := ""
+	if d.links.Repo && !info.Detached {
+		treeURL = TreeURL(d.links.RepoURL, info.Branch)
 	}
 	branch := info.Branch
 	switch level {
@@ -153,13 +172,13 @@ func (d *dirGitData) appendGitFormatted(b *strings.Builder, st style.Style, leve
 			branch = string(runes[:1])
 		}
 	}
-	b.WriteString(branch)
+	b.linked(branch, treeURL)
 
 	// Status badges: shown at all levels (even compacted ones).
 	writeBadge := func(iconKey string, n int) {
 		if n > 0 {
-			b.WriteString(" ")
-			b.WriteString(countBadge(st, iconKey, n))
+			b.write(" ")
+			b.write(countBadge(st, iconKey, n))
 		}
 	}
 
@@ -168,8 +187,8 @@ func (d *dirGitData) appendGitFormatted(b *strings.Builder, st style.Style, leve
 	writeBadge("untracked", info.Untracked)
 
 	if info.Stashes > 0 {
-		b.WriteString(" ")
-		b.WriteString(countBadge(st, "stash", info.Stashes))
+		b.write(" ")
+		b.write(countBadge(st, "stash", info.Stashes))
 	}
 
 	writeBadge("ahead", info.Ahead)
