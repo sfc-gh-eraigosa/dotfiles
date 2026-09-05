@@ -5,7 +5,7 @@
 - **Status:** Approved (design approved in-chat 2026-09-05; spec self-reviewed)
 - **Relates to:** parent objective `gff` (spec `./gff.md` F10, plan `../plans/gff.md` P3-T1) ·
   sibling keymap `./fleet-tui.md` F4–F7 (the vim/search contract this mirrors) ·
-  issue #TBD-on-anchor · design PR via `gss feature gff-tui-vim`
+  issue #281 · design PR #280 (`gss feature gff-tui-vim`, worker `design`)
 
 ## 1. Goal
 

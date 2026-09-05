@@ -4,7 +4,7 @@
 - **Date:** 2026-09-05
 - **Status:** Ready to execute
 - **Plan (source of truth):** [`../gff-tui-vim.md`](../gff-tui-vim.md) · spec [`../../specs/gff-tui-vim.md`](../../specs/gff-tui-vim.md)
-- **Objective anchors:** issue — see `docs/mbo/index.md` row `gff-tui-vim` · design PR via `gss feature gff-tui-vim` (worker `gff-tui-vim/<user>/design`) · build worker `gff-tui-vim/<user>/build`
+- **Objective anchors:** issue #281 · design PR #280 (worker `gff-tui-vim/edward-raigosa/design`) · build worker `gff-tui-vim/<user>/build`
 
 > This file is the **procedure**. It does not restate the plan — it tells a fresh agent
 > session how to execute the plan, task by task, resumably. The plan wins any conflict.

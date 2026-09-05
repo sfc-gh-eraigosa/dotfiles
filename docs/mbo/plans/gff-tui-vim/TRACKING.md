@@ -13,7 +13,7 @@
 
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| design (docs) | `gff-tui-vim/edward-raigosa/design` | `feature/gff-tui-vim/edward-raigosa/design` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff-tui-vim/edward-raigosa/design` | (pending checkpoint) | docs written |
+| design (docs) | `gff-tui-vim/edward-raigosa/design` | `feature/gff-tui-vim/edward-raigosa/design` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff-tui-vim/edward-raigosa/design` | [#280](https://github.com/sfc-gh-eraigosa/dotfiles/pull/280) (draft) | docs written; issue #281 |
 | build | (create per IMPLEMENTATION §2) | | | | not started |
 
 ## 1. Task ledger

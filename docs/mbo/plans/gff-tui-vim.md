@@ -5,7 +5,7 @@
 - **Slug:** `gff-tui-vim`
 - **Date:** 2026-09-05
 - **Status:** Approved
-- **Relates to:** spec [`../specs/gff-tui-vim.md`](../specs/gff-tui-vim.md) · parent `gff` plan [`./gff.md`](./gff.md) P3-T1 · feature `gss feature gff-tui-vim` · issue/PR: see `../index.md`
+- **Relates to:** spec [`../specs/gff-tui-vim.md`](../specs/gff-tui-vim.md) · parent `gff` plan [`./gff.md`](./gff.md) P3-T1 · feature `gss feature gff-tui-vim` · issue #281 · design PR #280
 
 **Goal:** Make `gff tui` navigable with vim keys, searchable with `/` (incremental regex, `n`/`N`), and scriptable with a `:` command line (`:set`, `:unset`, `:q`, `:help`, `:/re`, Tab completion), so any flag can be found and toggled in a few keystrokes.
 
