@@ -13,6 +13,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/observe"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
 	"github.com/sirupsen/logrus"
 )
@@ -82,6 +83,18 @@ type Deps struct {
 
 	// Clock returns the current time for the time segment. nil ⇒ time.Now.
 	Clock func() time.Time
+
+	// Links is the per-render link policy (families already AND-ed with the
+	// config mode and the gff master flag by cmd). The zero value links
+	// nothing, so callers that never heard of links render exactly as before.
+	Links Links
+
+	// PR is a PRE-COMPUTED repo.PR result, threaded like GitInfo: cmd runs the
+	// lookup once (concurrently with the flag and origin lookups) so both the
+	// repo segment (badge) and the dirgit segment (directory → vscode.dev PR
+	// changes view) can use it without a second lookup. Nil ⇒ the repo
+	// segment looks it up itself, exactly as before.
+	PR *repo.RepoInfo
 }
 
 // BuildSegments constructs the ordered list of ENABLED segments from
@@ -107,18 +120,31 @@ func BuildSegments(cfg config.Config, deps Deps) []Segment {
 			// Reuse the caller's pre-computed status instead of re-running
 			// git.Status inside Detect (WS3/F12). Nil ⇒ detect it ourselves.
 			dg.Info = deps.GitInfo
+			dg.Links = deps.Links
+			dg.PR = deps.PR
+			dg.DirLink = optString(sc.Options, "dir_link", "vscode")
 			segs = append(segs, dg)
 		case "repo":
 			s := NewRepoSegment(deps.Git, deps.GH, deps.Branch, deps.RegistryPath, sc.Options)
 			s.Priority = prio
+			s.Links = deps.Links
+			s.PR = deps.PR
 			segs = append(segs, s)
 		case "ai":
 			s := NewAISegment(deps.Payload, deps.Cwd, deps.MCP, deps.MCPOpts)
 			s.Priority = prio
+			s.Links = deps.Links
+			// The usage_url option overrides the host default (also the way to
+			// give Antigravity a target, which has no known default).
+			s.Links.UsageURL = optString(sc.Options, "usage_url", deps.Links.UsageURL)
+			// model_url overrides the built-in family map for the model-name link.
+			s.Links.ModelURL = optString(sc.Options, "model_url", deps.Links.ModelURL)
 			segs = append(segs, s)
 		case "time":
 			s := NewTimeSegment(deps.Clock, cfg.Timezone, cfg.TimeFormat, cfg.DateFormat)
 			s.Priority = prio
+			s.Links = deps.Links
+			s.Links.TimeURL = optString(sc.Options, "link_url", deps.Links.TimeURL)
 			segs = append(segs, s)
 		default:
 			// Unknown segment type: skip silently.
@@ -162,7 +188,7 @@ func RenderAt(ctx context.Context, cfg config.Config, st style.Style, segs []Seg
 	type result struct {
 		text     string
 		colorKey string
-		link     string
+		spans    []LinkSpan
 		ok       bool
 	}
 	results := make([]result, len(segs))
@@ -187,12 +213,13 @@ func RenderAt(ctx context.Context, cfg config.Config, st style.Style, segs []Seg
 			sctx, cancel := context.WithTimeout(ctx, segmentDeadline)
 			defer cancel()
 
-			// A segment implementing LinkedSegment also reports a URL its
+			// A segment implementing LinkedSegment also reports the spans its
 			// content addresses; everything else renders exactly as before.
-			var text, colorKey, link string
+			var text, colorKey string
+			var spans []LinkSpan
 			var ok bool
 			if ls, isLinked := s.(LinkedSegment); isLinked {
-				text, colorKey, link, ok = ls.RenderLinked(sctx, st, compactLevel)
+				text, colorKey, spans, ok = ls.RenderLinked(sctx, st, compactLevel)
 			} else {
 				text, colorKey, ok = s.Render(sctx, st, compactLevel)
 			}
@@ -205,7 +232,7 @@ func RenderAt(ctx context.Context, cfg config.Config, st style.Style, segs []Seg
 				results[idx] = result{ok: false}
 				return
 			}
-			results[idx] = result{text: text, colorKey: colorKey, link: link, ok: ok}
+			results[idx] = result{text: text, colorKey: colorKey, spans: spans, ok: ok}
 		}(i, seg)
 	}
 	wg.Wait()
@@ -213,7 +240,7 @@ func RenderAt(ctx context.Context, cfg config.Config, st style.Style, segs []Seg
 	blocks := make([]segmentBlock, 0, len(segs))
 	for _, r := range results {
 		if r.ok && r.text != "" {
-			blocks = append(blocks, segmentBlock{text: r.text, colorKey: r.colorKey, link: r.link})
+			blocks = append(blocks, segmentBlock{text: r.text, colorKey: r.colorKey, links: r.spans})
 		}
 	}
 	if len(blocks) == 0 {

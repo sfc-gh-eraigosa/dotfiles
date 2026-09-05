@@ -6,17 +6,22 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/x/term v0.2.1
 	github.com/rivo/uniseg v0.4.7
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff v0.0.0
 	github.com/sirupsen/logrus v1.10.1
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/image v0.41.0
-	golang.org/x/sys v0.36.0
+	golang.org/x/sys v0.47.0
 )
 
-require gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
+require (
+	google.golang.org/protobuf v1.36.11 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+)
 
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
-	github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc // indirect
+	github.com/charmbracelet/colorprofile v0.3.2 // indirect
 	github.com/charmbracelet/lipgloss v1.1.0 // indirect
 	github.com/charmbracelet/x/ansi v0.10.1 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13-0.20250311204145-2c3ea96c31dd // indirect
@@ -36,3 +41,5 @@ require (
 )
 
 replace github.com/sfc-gh-eraigosa/dotfiles/sdk/libs => ../libs
+
+replace github.com/sfc-gh-eraigosa/dotfiles/sdk/gff => ../gff

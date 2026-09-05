@@ -2,7 +2,6 @@ package render
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
@@ -30,6 +29,10 @@ type TimeSegment struct {
 	// or the built-in default for this type when unset). It is independent of the
 	// segment's position in the line.
 	Priority int
+
+	// Links is the link policy (Deps.Links): Time gates the date/time text →
+	// the Links.TimeURL template. Zero value or empty template ⇒ no link.
+	Links Links
 }
 
 // NewTimeSegment builds a TimeSegment from config values. now may be nil to use
@@ -48,52 +51,20 @@ const (
 	defaultDateLayout = "Mon 01-02"
 )
 
-// Render implements Segment. It never returns ok=false (time is always
-// available) and never panics on a bad tz.
-//
-// Returns raw (unpainted) text plus the colorKey "time". compactLevel is
-// accepted but only level 0 (full detail) is implemented; PHASE 2 will add
-// compaction logic for levels 1–3.
-func (s *TimeSegment) Render(_ context.Context, st style.Style, _ int) (text, colorKey string, ok bool) {
-	now := time.Now
-	if s.Now != nil {
-		now = s.Now
-	}
+// Render implements Segment. It delegates to RenderLinked and discards the
+// spans, so the legacy path can never drift from the detect/format path. It
+// never returns ok=false (time is always available) and never panics on a bad tz.
+func (s *TimeSegment) Render(ctx context.Context, st style.Style, level int) (text, colorKey string, ok bool) {
+	text, colorKey, _, ok = s.RenderLinked(ctx, st, level)
+	return text, colorKey, ok
+}
 
-	loc := time.UTC
-	if s.Timezone != "" {
-		if l, err := time.LoadLocation(s.Timezone); err == nil {
-			loc = l
-		}
-		// On error: keep UTC fallback. Never crash on an unknown tz.
+// RenderLinked implements LinkedSegment: detect once, then format with spans.
+func (s *TimeSegment) RenderLinked(ctx context.Context, st style.Style, level int) (text, colorKey string, spans []LinkSpan, ok bool) {
+	d, ok := s.detect(ctx)
+	if !ok {
+		return "", "", nil, false
 	}
-
-	t := now().In(loc)
-
-	dateLayout := s.DateFormat
-	if dateLayout == "" {
-		dateLayout = defaultDateLayout
-	}
-	timeLayout := s.TimeFormat
-	if timeLayout == "" {
-		timeLayout = defaultTimeLayout
-	}
-
-	var b strings.Builder
-	if g := glyph(st, "time"); g != "" {
-		b.WriteString(g)
-		b.WriteString(" ")
-	}
-	b.WriteString(t.Format(dateLayout))
-	b.WriteString(" ")
-	b.WriteString(t.Format(timeLayout))
-
-	// Timezone abbreviation (e.g. "PST", "UTC"). Format("MST") yields the
-	// abbreviation; LoadLocation failures already collapsed to UTC.
-	if abbr := t.Format("MST"); abbr != "" {
-		b.WriteString(" ")
-		b.WriteString(abbr)
-	}
-
-	return b.String(), "time", true
+	text, colorKey, spans = formatLinkedOf(d, st, level)
+	return text, colorKey, spans, text != ""
 }

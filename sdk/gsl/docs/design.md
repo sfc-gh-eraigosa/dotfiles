@@ -140,6 +140,32 @@ The Detect/Format/Fit split (`internal/render/detect.go`) keeps I/O to exactly o
 
 The join layer (not individual segments) owns all ANSI painting. Segments return raw text plus a `colorKey`; the layer emits the background fill, bridges between adjacent segments (chevron with `fg = prev color`, `bg = next color`), and a trailing fade to the terminal background. The `emoji`/`thin` path is unchanged (no fill block, no bridge needed).
 
+## Link spans (OSC 8 hyperlinks)
+
+A segment's `formatLinked` builds its text through a `spanBuilder` and records
+`LinkSpan{Start, End, URL}` — byte ranges of the RAW text that address something
+on the web — while it writes, so offsets are exact by construction. The legacy
+`Render` path delegates to `RenderLinked → detect → formatLinked`, so the two
+paths cannot drift (the parity test compares spans as well as text).
+
+The join layer owns escape emission: `paintRuns` wraps exactly each span in
+`OSC 8 ; ; url ST … OSC 8 ; ; ST`, plus `SGR 4/24` unless `style.Links ==
+"plain"`. Padding and bridge chevrons stay outside every link. Spans are
+`validateSpans`-ed (in range, non-empty, non-overlapping) so a bad span is
+dropped, never a panic.
+
+Width safety: a URL is zero columns (`term.StripANSI` consumes OSC), so the fit
+loop measures unchanged. When it strips ANSI before truncating, `reanchorSpans`
+re-locates each span's visible fragment in the stripped text; `clipSpans` keeps
+the surviving prefix (never inside the ellipsis); `shiftSpans` slides spans when
+the final tier drops the leading glyph.
+
+Policy lives in `cmd`, not `render`: `buildLinks` folds the config `links` mode
+and the gff flags (`internal/flags`, concurrent, 100 ms budget, fail-open) with
+the one-exec origin URL into `render.Links`, injected through `Deps`. `render`
+therefore still never imports `os/exec`, and the zero-value policy links
+nothing, so every existing caller renders exactly as before.
+
 ## Full design rationale
 
 Full design rationale and the multi-agent review that shaped this implementation live in `docs/mbo/plans/gsl-status-line.md` and `docs/mbo/plans/gsl-status-line-execution.md` (PR #21) — both in the repo's top-level `docs/mbo/plans/` directory (present on `main` / after this feature merges).

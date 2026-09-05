@@ -23,6 +23,7 @@ import (
 // aiData is the detect-once intermediate for the AI segment.
 type aiData struct {
 	modelName     string
+	modelID       string
 	ctxPct        *float64
 	tokenUsed     *float64
 	tokenTotal    *float64
@@ -33,6 +34,8 @@ type aiData struct {
 	hasPayload    bool
 	// prio is the drop priority (config.Segment.EffectivePriority).
 	prio int
+	// links is the policy the spans are gated on.
+	links Links
 }
 
 // priority implements prioritized.
@@ -50,10 +53,13 @@ func (s *AISegment) detect(ctx context.Context) (segmentData, bool) {
 		return nil, false
 	}
 
-	d := &aiData{hasPayload: true, mcpActive: -1, prio: s.Priority}
+	d := &aiData{hasPayload: true, mcpActive: -1, prio: s.Priority, links: s.Links}
 
 	if p.Model != nil && p.Model.DisplayName != nil {
 		d.modelName = *p.Model.DisplayName
+	}
+	if p.Model != nil && p.Model.ID != nil {
+		d.modelID = *p.Model.ID
 	}
 	if cw := p.ContextWindow; cw != nil {
 		d.ctxPct = cw.UsedPercentage
@@ -86,18 +92,36 @@ func (s *AISegment) detect(ctx context.Context) (segmentData, bool) {
 
 // format implements segmentData.format for aiData. Pure; no I/O.
 func (d *aiData) format(st style.Style, level int) (text, colorKey string) {
+	text, colorKey, _ = d.formatLinked(st, level)
+	return text, colorKey
+}
+
+// formatLinked implements linkedFormatter. Links (AI family): the model name →
+// its model page (ModelURL: family from the id, else the display name); the
+// context usage and each rate-limit field → the usage page. The MCP count has
+// no web home and stays plain.
+func (d *aiData) formatLinked(st style.Style, level int) (string, string, []LinkSpan) {
 	if !d.hasPayload {
-		return "", ""
+		return "", "", nil
 	}
 
-	parts := make([]string, 0, 6)
+	usage, modelPage := "", ""
+	if d.links.AI {
+		usage = d.links.UsageURL
+		modelPage = ModelURL(d.links.ModelURL, d.modelID, d.modelName)
+	}
+	var sb spanBuilder
+	sep := func() {
+		if sb.len() > 0 {
+			sb.write(" ")
+		}
+	}
 
 	// ── Model display name ──────────────────────────────────────────────────
 	if d.modelName != "" {
-		var b strings.Builder
 		if g := glyph(st, "ai"); g != "" {
-			b.WriteString(g)
-			b.WriteString(" ")
+			sb.write(g)
+			sb.write(" ")
 		}
 		// The CANONICAL name at every level (spec UC-4: "Claude Opus 4.8 (1M
 		// context)" RENDERS AS "Opus 4.8" — the vendor prefix and the context
@@ -107,60 +131,57 @@ func (d *aiData) format(st style.Style, level int) (text, colorKey string) {
 		if level >= 3 {
 			name = shortenModelName(d.modelName)
 		}
-		b.WriteString(name)
-		parts = append(parts, b.String())
+		sb.linked(name, modelPage)
 	} else if g := glyph(st, "ai"); g != "" {
-		parts = append(parts, g)
+		sb.write(g)
 	}
 
 	// ── Context window ──────────────────────────────────────────────────────
 	if d.ctxPct != nil {
-		var b strings.Builder
+		sep()
 		if g := glyph(st, "context"); g != "" {
-			b.WriteString(g)
-			b.WriteString(" ")
+			sb.write(g)
+			sb.write(" ")
 		}
-		b.WriteString(pct(*d.ctxPct))
+		ctx := pct(*d.ctxPct)
 		// Token ratio: levels 0–1 only.
 		if level <= 1 && d.tokenUsed != nil && d.tokenTotal != nil {
-			b.WriteString(" ")
-			b.WriteString(tokenAbbrev(*d.tokenUsed))
-			b.WriteString("/")
-			b.WriteString(tokenAbbrev(*d.tokenTotal))
+			ctx += " " + tokenAbbrev(*d.tokenUsed) + "/" + tokenAbbrev(*d.tokenTotal)
 		}
-		parts = append(parts, b.String())
+		sb.linked(ctx, usage)
 	}
 
 	// ── MCP count (dropped at level 3) ─────────────────────────────────────
 	if level < 3 && (d.mcpConfigured > 0 || d.mcpActive > 0) {
-		var b strings.Builder
+		sep()
 		if g := glyph(st, "mcp"); g != "" {
-			b.WriteString(g)
-			b.WriteString(" ")
+			sb.write(g)
+			sb.write(" ")
 		}
 		if d.mcpActive >= 0 {
-			b.WriteString(strconv.Itoa(d.mcpActive))
-			b.WriteString("/")
-			b.WriteString(strconv.Itoa(d.mcpConfigured))
+			sb.write(strconv.Itoa(d.mcpActive))
+			sb.write("/")
+			sb.write(strconv.Itoa(d.mcpConfigured))
 		} else {
-			b.WriteString(strconv.Itoa(d.mcpConfigured))
+			sb.write(strconv.Itoa(d.mcpConfigured))
 		}
-		parts = append(parts, b.String())
 	}
 
 	// ── Rate limits ──────────────────────────────────────────────────────────
 	// Level 0: 5h + 7d (matching the original seg_ai.go order); level 1: 5h only; level 2+: none.
 	if level <= 1 && d.rate5h != nil {
-		parts = append(parts, "5h "+pct(*d.rate5h))
+		sep()
+		sb.linked("5h "+pct(*d.rate5h), usage)
 	}
 	if level == 0 && d.rate7d != nil {
-		parts = append(parts, "7d "+pct(*d.rate7d))
+		sep()
+		sb.linked("7d "+pct(*d.rate7d), usage)
 	}
 
-	if len(parts) == 0 {
-		return "", ""
+	if sb.len() == 0 {
+		return "", "", nil
 	}
-	return strings.Join(parts, " "), "ai"
+	return sb.String(), "ai", sb.spans
 }
 
 // modelBudget is the display-width cap for a shortened model name.

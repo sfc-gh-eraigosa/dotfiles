@@ -271,3 +271,15 @@ func TestParseQuotaSynthesis(t *testing.T) {
 		t.Errorf("SevenDay.UsedPercentage: got %f, want %f", got, want)
 	}
 }
+
+// TestParse_ModelID: Claude Code sends model.id alongside display_name; the
+// model-page link is derived from it (the display name is the fallback).
+func TestParse_ModelID(t *testing.T) {
+	p, err := payload.Parse([]byte(`{"model":{"id":"claude-fable-5-1","display_name":"Fable"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Model == nil || p.Model.ID == nil || *p.Model.ID != "claude-fable-5-1" {
+		t.Fatalf("Model = %+v, want ID claude-fable-5-1", p.Model)
+	}
+}
