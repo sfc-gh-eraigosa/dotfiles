@@ -45,7 +45,7 @@ sets:
       - path: install.pkg.brewfile
         description: Runs the macOS brew bundle block for the Brewfile extras including vault-setup.
         boolDefault: true
-      # --- tools (8) ---
+      # --- tools (9) ---
       - path: install.tools.sops
         description: Runs the install_sops.sh block that fetches the sops release binary.
         boolDefault: true
@@ -69,6 +69,9 @@ sets:
         boolDefault: true
       - path: install.tools.herdr-integrations
         description: Runs `install_herdr.sh integrations` (config phase) to (re)install herdr's agent-state hooks for the agent CLIs present on the host (claude, antigravity-cli); must follow install_antigravity_skills.sh, which re-renders hooks.json.
+        boolDefault: true
+      - path: install.tools.herdr-config
+        description: Runs `install_herdr.sh config` (config phase) to render ai/herdr/config.toml into ~/.config/herdr/config.toml so herdr follows the host terminal's light/dark appearance with the Solarized palette; converges a dotfiles-managed file, never clobbers a hand-edited one (HERDR_CONFIG_FORCE=1 to reclaim).
         boolDefault: true
       # --- runtime (5) ---
       - path: install.runtime.goenv

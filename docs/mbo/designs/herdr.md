@@ -60,7 +60,8 @@ configured too, and how do we keep up with releases across the fleet (including 
   channel is a per-host setting. Without a fleet-wide convergence step, hosts drift.
 - **Key collision with tmux.** herdr's default prefix is `ctrl+b`, the same as our untouched tmux default;
   `.tmux.conf` also binds `C-h/j/k/l` in the root table and claims the mouse. herdr **inside** tmux loses
-  its prefix and its mouse. Run it as the outer layer or rebind `[keys]`.
+  its prefix and its mouse. Run it as the outer layer or rebind `[keys]`. *Resolved (worker `theme`):* the
+  managed `ai/herdr/config.toml` sets `prefix = "ctrl+a"`.
 - **Integration clobbering.** `install_antigravity_skills.sh` re-renders `~/.gemini/config/hooks.json`
   from the repo template on every run, deleting herdr's `herdr` hook entry. The Claude `SessionStart` hook
   survives the forced-settings merge only because that merge replaces `hooks.PreToolUse` /
@@ -200,6 +201,9 @@ hooks should go too. `~/.config/herdr` and `~/.herdr/worktrees` are user data an
 
 - A gff **choice** flag for the version policy (`latest` vs a pinned string) once a pin is actually needed.
 - `tmux-mgr`/`gsl`: the cross-session agent-state roll-up from (h).
-- Track `~/.config/herdr/config.toml` under `opt/etc/` via the copy pattern if the config grows beyond the
-  current two `[ui]` keys.
+- ~~Track `~/.config/herdr/config.toml` under `opt/etc/` via the copy pattern.~~ Done (worker `theme`):
+  `ai/herdr/config.toml` is rendered by `install_herdr.sh config` (gff `install.tools.herdr-config`). It
+  turns on herdr's host light/dark following (DEC 2031, verified against Windows Terminal) with the
+  Solarized pair, so the default dark catppuccin sidebar no longer lands on a Solarized Light profile, and
+  moves the prefix to `ctrl+a`. Host-owned: rewritten only while the `managed by dotfiles` marker is present.
 - Re-evaluate at herdr 1.0 or when signed/attested release assets appear.
