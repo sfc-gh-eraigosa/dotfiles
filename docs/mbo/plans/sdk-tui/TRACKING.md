@@ -38,8 +38,8 @@ the registry row.
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| 1 module wiring + `prompt.Line` | done | (SHA recorded at the next commit) | RUN-RED `go test ./tui/prompt/` → `undefined: Line` (`evidence/task1/run-red.txt`); RUN-GREEN `go test ./tui/... -cover -v` → `ok … tui/prompt … coverage: 97.3%` (`evidence/task1/go-test.txt`); `go vet ./...` clean | go.mod direct delta = bubbletea v1.3.10 + testify v1.12.1 exactly; `go mod tidy` (go1.26) canonicalizes the directive to `go 1.24.0` and pulls lipgloss only as `// indirect` via bubbletea — nothing in `tui/` imports it |
-| 2 `keymap` | todo | | | **freezes plan §3** |
+| 1 module wiring + `prompt.Line` | done | `e13455a` | RUN-RED `go test ./tui/prompt/` → `undefined: Line` (`evidence/task1/run-red.txt`); RUN-GREEN `go test ./tui/... -cover -v` → `ok … tui/prompt … coverage: 97.3%` (`evidence/task1/go-test.txt`); `go vet ./...` clean | go.mod direct delta = bubbletea v1.3.10 + testify v1.12.1 exactly; `go mod tidy` (go1.26) canonicalizes the directive to `go 1.24.0` and pulls lipgloss only as `// indirect` via bubbletea — nothing in `tui/` imports it |
+| 2 `keymap` | done | (SHA recorded at the next commit) | RUN-RED `go test ./tui/keymap/` → `undefined: Action/Down/Up/PageLeft…` (`evidence/task2/run-red.txt`); RUN-GREEN `go test ./tui/keymap/ -cover -v` → 6/6 PASS, `coverage: 98.5%` (`evidence/task2/go-test.txt`); `go vet` clean; `Vim.HeaderHint("  ")` pinned to the GUIDE §7 footer by `TestHeaderHintGroupsAndOrders` | **freezes plan §3** (see §5 log). `line_test.go` gofmt-aligned in this commit (lint gate) |
 | 3 `nav.Cursor` | todo | | | extracted from fleet clampViewport/move |
 | 4 `search` | todo | | | extracted from fleet compileInto/jumpMatch |
 | 5 `cmdline` | todo | | | |
@@ -50,7 +50,7 @@ the registry row.
 
 | Feature | Automated proof | Human/live proof | Notes |
 | :-- | :-- | :-- | :-- |
-| F1 keymap | [ ] `TestLookupUsesRealKeyNames` … `TestDispatchCallsTheBoundHandlerOnce` | [ ] demo `?` overlay | |
+| F1 keymap | [x] `TestLookupUsesRealKeyNames` … `TestDispatchCallsTheBoundHandlerOnce` (task2/go-test.txt) | [ ] demo `?` overlay | |
 | F2 nav | [ ] `TestMoveClampsBothEnds` … `TestKeyWithoutChordInMap` | [ ] demo `jj`, `ctrl+d` | |
 | F3 prompt | [x] `TestLineEditing`, `TestLineDoesNotConsumeModeKeys`, `TestLineRenderResetAtEnd` (task1/go-test.txt) | [ ] | |
 | F4 compile | [ ] `TestCompileSmartcaseAndErrors` | [ ] | |
@@ -85,3 +85,4 @@ the registry row.
 | 2026-09-05 | planning | Owner asked for a shared TUI lib after reviewing the gff plan. Verified fleet already ships the behaviors; extract-and-adopt approved; `:` cmdline in scope; own feature `sdk-tui`. GUIDE, design, spec, plan, trio written on the `design` worker. |
 | 2026-09-05 | build (session 1) | Preflight: go1.26.1, golangci-lint v2.0.2; baseline gss size 7675540 B (`evidence/deps/gss-size-before.txt`); feature row re-created, `lib` worker created (§0); libs green on the base (`ok libs/log`). |
 | 2026-09-05 | build (session 1) | Task 1 done (prompt.Line 97.3%). Ledger convention: each task commit carries its own TODO/TRACKING update; the task's SHA is written into its row by the following commit. |
+| 2026-09-05 | build (session 1) | Task 2 done (keymap 98.5%). **Plan §3 interfaces are now frozen** — `prompt.Line` and `keymap` land exactly as written in the plan; every later change to a §3 signature is a §4 blocker + coordinated `plans/gff-tui-vim.md` edit. Task 1 checkpoint not yet pushed: the session's playground `demo-guard` hook blocks `gss feature checkpoint` for the dotfiles worker and the auto-mode classifier refused the hook's `DEMO_GUARD=skip` escape; owner runs the checkpoint. |

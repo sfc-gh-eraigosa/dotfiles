@@ -30,18 +30,18 @@
 - [x] GREEN: `tui/doc.go`, `tui/prompt/line.go`
 - [x] RUN-GREEN: `mkdir -p $EV/task1 && go test ./tui/... -cover -v 2>&1 | tee $EV/task1/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
 - [x] VERIFY: `go vet ./...`; `git diff go.mod` shows only bubbletea + testify
-- [ ] COMMIT: `feat(libs/tui): module wiring + prompt.Line single-line editor`
+- [x] COMMIT: `feat(libs/tui): module wiring + prompt.Line single-line editor`
 - [ ] LEDGER + CHECKPOINT
 
 **Done when:** prompt ≥ 90%; go.mod delta is exactly two requirements.
 
 ### Task 2 — `keymap`  (plan Task 2)
 
-- [ ] RED: `tui/keymap/keymap_test.go` (6 tests)
-- [ ] RUN-RED: `go test ./tui/keymap/` → expect **FAIL** `undefined: Vim`
-- [ ] GREEN: `tui/keymap/keymap.go`, `tui/keymap/vim.go`
-- [ ] RUN-GREEN: `mkdir -p $EV/task2 && go test ./tui/keymap/ -cover -v 2>&1 | tee $EV/task2/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
-- [ ] VERIFY: `Vim.HeaderHint("  ")` equals the GUIDE §7 example (the test pins it)
+- [x] RED: `tui/keymap/keymap_test.go` (6 tests)
+- [x] RUN-RED: `go test ./tui/keymap/` → expect **FAIL** `undefined: Vim`
+- [x] GREEN: `tui/keymap/keymap.go`, `tui/keymap/vim.go`
+- [x] RUN-GREEN: `mkdir -p $EV/task2 && go test ./tui/keymap/ -cover -v 2>&1 | tee $EV/task2/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
+- [x] VERIFY: `Vim.HeaderHint("  ")` equals the GUIDE §7 example (the test pins it)
 - [ ] COMMIT: `feat(libs/tui): keymap — data-driven bindings, Vim default map, footer/help rows, dispatch`
 - [ ] LEDGER + CHECKPOINT — **plan §3 is now frozen**
 
