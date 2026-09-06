@@ -14,14 +14,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
-// ShQuote makes s safe as a single POSIX shell word: it single-quotes s and
-// escapes any embedded single quote using the standard POSIX close-backslash-
-// quote-reopen idiom. Copied from cmd/tui_cmds.go so updexec (and cmd, via a
-// thin alias) share one definition; cmd's copy retires in leaf D/E.
-func ShQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+// ShQuote makes s safe as a single POSIX shell word. It IS runner.Quote —
+// the one quoting implementation for every provider and every update script
+// (fleet-connect leaf A); this alias keeps updexec's call sites unchanged.
+var ShQuote = runner.Quote
 
 // validRepo re-runs the updplan validation checks a Repo must satisfy before
 // any of its fields are interpolated into a remote command.

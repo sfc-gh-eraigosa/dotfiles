@@ -1,0 +1,16 @@
+# task01 RED — 2026-09-06T05:55:27Z — go test ./pkg/provider/ (package has only tests)
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider [github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider.test]
+pkg/provider/provider_test.go:13:17: undefined: Node
+pkg/provider/provider_test.go:14:9: undefined: Node
+pkg/provider/provider_test.go:21:14: undefined: Action
+pkg/provider/provider_test.go:22:42: undefined: Handoff
+pkg/provider/provider_test.go:22:56: undefined: HandoffLocal
+pkg/provider/provider_test.go:23:96: undefined: Handoff
+pkg/provider/provider_test.go:23:110: undefined: HandoffRemote
+pkg/provider/provider_test.go:24:39: undefined: Stream
+pkg/provider/provider_test.go:25:41: undefined: Tunnel
+pkg/provider/provider_test.go:34:35: undefined: Node
+pkg/provider/provider_test.go:34:35: too many errors
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider [build failed]
+FAIL
+exit=1

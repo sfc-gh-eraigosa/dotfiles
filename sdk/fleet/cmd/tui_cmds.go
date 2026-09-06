@@ -407,7 +407,7 @@ func awaitDone(alias string, st stream) tea.Cmd {
 // shQuote makes a string safe as a single-quoted POSIX shell word. Aliased
 // to updexec.ShQuote — the one definition both packages share, rather than
 // cmd carrying its own byte-identical copy.
-var shQuote = updexec.ShQuote
+var shQuote = runner.Quote
 
 // handoffWrapper wraps cmd — a full local shell command line — in a banner
 // naming the host and its position in the queue, plus a footer carrying the
