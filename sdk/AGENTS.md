@@ -62,6 +62,9 @@ only for the reader who trusts it.
   directly — it never commits to `main`.
 - **Test/lint discovery** is by directory under `sdk/` (`scripts/test.sh` + the
   `Makefile` Go loops); `src/` stays scanned until the cutover completes.
+- **TUIs compose `libs/tui`** and follow [`libs/tui/GUIDE.md`](./libs/tui/GUIDE.md)
+  (keymap-as-data, vim grammar, prompt routing, help/confirm). fleet predates the
+  lib and is ported under the `sdk-tui` phase-3 objective.
 
 ## Logging
 

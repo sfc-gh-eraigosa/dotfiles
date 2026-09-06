@@ -1,0 +1,6 @@
+# 2026-09-05 20:35 PDT — RUN-RED: go test ./tui/nav/ 2>&1 | head -5
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/nav [github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/nav.test]
+tui/nav/cursor_test.go:15:7: undefined: Cursor
+tui/nav/cursor_test.go:25:8: undefined: Cursor
+tui/nav/cursor_test.go:39:7: undefined: Cursor
+tui/nav/cursor_test.go:55:8: undefined: Cursor
