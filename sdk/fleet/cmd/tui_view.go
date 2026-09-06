@@ -23,6 +23,7 @@ type theme struct {
 	ok, fail, running             lipgloss.Style
 	dialog, panel                 lipgloss.Style
 	markSel, markOK, markFail     lipgloss.Style
+	local                         lipgloss.Style
 	logHosts                      []lipgloss.Style
 }
 
@@ -62,6 +63,11 @@ func newTheme() theme {
 			lipgloss.NewStyle().Foreground(lipgloss.Color("45")),  // cyan
 			lipgloss.NewStyle().Foreground(lipgloss.Color("113")), // light green
 		},
+		// "You are here" — the header badge and the matching row's alias share
+		// this one style, which is what ties the two together at a glance.
+		// Bold as well as coloured, so the row is still findable on a terminal
+		// that drops the palette.
+		local:    lipgloss.NewStyle().Foreground(lipgloss.Color(localColor)).Bold(true),
 		markSel:  lipgloss.NewStyle().Foreground(lipgloss.Color("25")),
 		markOK:   lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
 		markFail: lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true),
@@ -86,7 +92,11 @@ var th = newTheme()
 // framed in the same panel border as the rest of the dashboard.
 func (m tuiModel) banner() string {
 	var b strings.Builder
-	b.WriteString(th.title.Render("🛰️  "+versionString()) + "\n")
+	title := th.title.Render("🛰️  " + bannerVersion())
+	if badge := m.localBadge(); badge != "" {
+		title += "   " + badge
+	}
+	b.WriteString(title + "\n")
 	b.WriteString(th.dim.Render(headerHints(0)) + "\n")
 	b.WriteString(th.dim.Render(headerHints(1)))
 	return m.renderPanel(th.panel, b.String())
@@ -103,6 +113,46 @@ func (m tuiModel) fitFrame(out string) string {
 		return out
 	}
 	return strings.Join(strings.Split(out, "\n")[:m.vp.height], "\n")
+}
+
+// localBadge names the machine the dashboard is RUNNING on — the question the
+// host list alone cannot answer, because every row looks like a remote.
+//
+// It says which ROW that is too, in the two cases where the row is not
+// obvious: when the fleet knows this machine under a different alias, and when
+// this machine is not in the fleet at all. Without the second, a bare hostname
+// in the header reads as "…and it is the highlighted row" when nothing is
+// highlighted.
+//
+// The width is bounded by truncation, not by trust: the badge shares the
+// banner's panel, and a long FQDN would otherwise push the border past the
+// terminal edge.
+func (m tuiModel) localBadge() string {
+	if m.local.Name == "" {
+		return ""
+	}
+	label := m.local.Name
+	if m.localAlias != "" && !sameMachineName(m.localAlias, m.local.Name) {
+		label += " (" + m.localAlias + ")"
+	}
+	badge := th.local.Render(trunc(localGlyph+" "+label, m.localBadgeWidth()))
+	if m.localAlias == "" {
+		badge += th.dim.Render(" (not in fleet)")
+	}
+	return badge
+}
+
+// localBadgeWidth is what the badge may take from the banner's title line:
+// whatever is left after the version string and the gap, never less than a
+// usable stub. It budgets against panelInner, the width the CONTENT actually
+// gets — renderPanel clamps to that, and a badge measured against panelWidth
+// would be trimmed there instead of here, silently.
+func (m tuiModel) localBadgeWidth() int {
+	w := m.panelInner() - lipgloss.Width(versionString()) - len("🛰️  ") - 3
+	if w < 12 {
+		w = 12
+	}
+	return w
 }
 
 func (m tuiModel) View() string {
@@ -420,12 +470,21 @@ func (m tuiModel) rowView(i int) string {
 	// Truncate BEFORE padding: %-16s pads a short alias but does nothing to a
 	// long one, so a 30-character hostname silently pushed the row past the
 	// terminal edge regardless of width.
+	// Pad OUTSIDE the style, never inside it: %-*s counts the escape bytes as
+	// characters, so styling a padded alias silently eats the columns after it.
+	//
+	// A search hit outranks the local highlight: the search is transient and
+	// answers "what did I just type", while "this is the machine you are on"
+	// is always true and is re-readable from the header badge.
 	name := truncate(r.Alias, aliasColWidth)
+	pad := strings.Repeat(" ", max0(aliasColWidth-lipgloss.Width(name)))
 	var alias string
-	if m.matches(r) {
-		alias = th.match.Render(name)
-		alias += strings.Repeat(" ", max0(aliasColWidth-lipgloss.Width(name)))
-	} else {
+	switch {
+	case m.matches(r):
+		alias = th.match.Render(name) + pad
+	case r.Alias == m.localAlias:
+		alias = th.local.Render(name) + pad
+	default:
 		alias = fmt.Sprintf("%-*s", aliasColWidth, name)
 	}
 

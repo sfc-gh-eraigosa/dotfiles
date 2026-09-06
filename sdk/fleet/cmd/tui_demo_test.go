@@ -37,6 +37,9 @@ func TestDemoFrames(t *testing.T) {
 		// so five hosts need 18. The old 16 only ever "fit" because the frame
 		// overflowed the terminal and bubbletea scrolled the banner away.
 		m.vp = viewport{height: 20, width: 100}
+		// The dashboard always runs ON one of these machines; every frame is
+		// more honest — and the badge + highlight visible — with that set.
+		m.setLocal(localHost{Name: "host-desktop"})
 		return m
 	}
 
@@ -147,6 +150,12 @@ func TestDemoFrames(t *testing.T) {
 			return m
 		}},
 		{"12. empty fleet — points at discover/add", "fleet discover", build2Empty},
+		{"13. this host — header badge names it, its row is highlighted", "⌂ host-desktop", settled},
+		{"14. this host is NOT in the fleet — badge says so, no row lights up", "not in fleet", func() tuiModel {
+			m := settled()
+			m.setLocal(localHost{Name: "some-laptop"})
+			return m
+		}},
 	}
 
 	for _, f := range frames {
