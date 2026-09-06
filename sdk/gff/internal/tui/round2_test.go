@@ -65,7 +65,7 @@ func TestHelpOverlayFromDetail(t *testing.T) {
 	m := newPagerModel(t)
 	m = press(m, tea.KeyMsg{Type: tea.KeyRight})
 	m = press(m, tea.KeyMsg{Type: tea.KeyEnter}) // detail
-	m = press(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	m = press(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
 	v := m.View()
 	assert.Contains(t, v, "clear", "detail help explains the u/clear action")
 	m = press(m, tea.KeyMsg{Type: tea.KeyEscape})

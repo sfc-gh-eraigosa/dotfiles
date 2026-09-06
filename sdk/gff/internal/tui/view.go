@@ -11,6 +11,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/style"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/version"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/overlay"
 )
 
 // noColor returns true when the NO_COLOR env variable is set or stdout is not
@@ -102,7 +103,7 @@ func (m *Model) viewList() string {
 	sb.WriteString(m.renderBreadcrumb(pal))
 	sb.WriteString("\n\n")
 
-	// Viewport windowing.
+	// Viewport windowing: nav.Cursor keeps the cursor row visible.
 	rowsStart, rowsEnd := 0, len(m.rows)
 	moreAbove, moreBelow := 0, 0
 	if m.height > 0 {
@@ -119,26 +120,12 @@ func (m *Model) viewList() string {
 			if inner < 1 {
 				inner = 1
 			}
-			if m.cursor < m.scrollTop {
-				m.scrollTop = m.cursor
-			}
-			if m.cursor > m.scrollTop+inner-1 {
-				m.scrollTop = m.cursor - inner + 1
-			}
-			if m.scrollTop > len(m.rows)-inner {
-				m.scrollTop = len(m.rows) - inner
-			}
-			if m.scrollTop < 0 {
-				m.scrollTop = 0
-			}
-			rowsStart, rowsEnd = m.scrollTop, m.scrollTop+inner
-			if rowsEnd > len(m.rows) {
-				rowsEnd = len(m.rows)
-			}
+			m.cur.SetHeight(inner)
+			rowsStart, rowsEnd = m.cur.Visible()
 			moreAbove, moreBelow = rowsStart, len(m.rows)-rowsEnd
-			m.lastInner = inner
 		} else {
-			m.scrollTop, m.lastInner = 0, budget
+			m.cur.SetHeight(budget)
+			m.cur.Top = 0
 		}
 	}
 
@@ -149,7 +136,7 @@ func (m *Model) viewList() string {
 	for i := rowsStart; i < rowsEnd; i++ {
 		r := m.rows[i]
 		cursor := "  "
-		if i == m.cursor {
+		if i == m.cur.Pos {
 			cursor = "> "
 		}
 
@@ -159,7 +146,7 @@ func (m *Model) viewList() string {
 				indicator = "▼"
 			}
 			line := fmt.Sprintf("%s%s %s", cursor, indicator, r.area)
-			if i == m.cursor {
+			if i == m.cur.Pos {
 				sb.WriteString(cursorStyle.Render(line))
 			} else {
 				sb.WriteString(headerStyle.Render(line))
@@ -179,7 +166,7 @@ func (m *Model) viewList() string {
 			path := item.Feature.GetPath()
 
 			layerRendered := layerColor(pal, layer).Render(layer)
-			if i == m.cursor {
+			if i == m.cur.Pos {
 				sb.WriteString(cursorStyle.Render(fmt.Sprintf("%s  %-40s  %-6s  %-9s  %s  %s",
 					cursor, path, val, marker, layer, desc)))
 			} else {
@@ -210,7 +197,7 @@ func (m *Model) viewList() string {
 		sb.WriteString(errStyle.Render(m.errMsg))
 		sb.WriteString("\n")
 	}
-	sb.WriteString(dimStyle.Render("↑/↓ move  ←/→ category  PgUp/PgDn page  Enter expand/details  Space toggle  u clear  ? help  q quit"))
+	sb.WriteString(dimStyle.Render(listHint()))
 	return sb.String()
 }
 
@@ -249,8 +236,10 @@ func (m *Model) multiNS() bool {
 	return false
 }
 
-// viewHelp is the ?/h overlay: about + version, the key legend for the view
+// viewHelp is the ?/F1 overlay: about + version, the key legend for the view
 // it was opened from, and the full sources story (registry + discovered).
+// The list view's legend renders straight from gffKeys via overlay.Help, so
+// footer, overlay, and --help can never disagree.
 func (m *Model) viewHelp() string {
 	pal := style.Active()
 	dim := lipgloss.NewStyle().Foreground(pal.Grey)
@@ -264,39 +253,56 @@ func (m *Model) viewHelp() string {
 	sb.WriteString(dim.Render(fmt.Sprintf("gff v%s (commit %s)", version.Version, version.Commit)))
 	sb.WriteString("\n\n")
 
-	sb.WriteString(bold.Render("KEYS"))
+	sources := m.sourceLines()
 	switch m.helpReturn {
 	case modeDetail:
+		sb.WriteString(bold.Render("KEYS"))
 		sb.WriteString(dim.Render(" — detail view"))
 		sb.WriteString("\n")
 		sb.WriteString(dim.Render("  Space  toggle the bool / pick choice options (same writer as `gff set`)"))
 		sb.WriteString("\n")
 		sb.WriteString(dim.Render("  u      clear the user override for this key (same as `gff unset`)"))
 		sb.WriteString("\n")
-		sb.WriteString(dim.Render("  Esc/Enter  back to the list · q back · ?/h this help"))
+		sb.WriteString(dim.Render("  Esc/Enter  back to the list · q back · ?/F1 this help"))
 		sb.WriteString("\n")
 	case modePicker:
+		sb.WriteString(bold.Render("KEYS"))
 		sb.WriteString(dim.Render(" — option picker"))
 		sb.WriteString("\n")
-		sb.WriteString(dim.Render("  ↑/↓ move · Space toggle an option (multi) · Enter select/confirm · Esc cancel"))
+		sb.WriteString(dim.Render("  j/k ↑/↓ move · Space toggle an option (multi) · Enter select/confirm · Esc cancel · ?/F1 this help"))
 		sb.WriteString("\n")
 	default:
-		sb.WriteString(dim.Render(" — flag list"))
-		sb.WriteString("\n")
-		sb.WriteString(dim.Render("  ↑/↓ move · ←/→ category pages · PgUp/PgDn page"))
-		sb.WriteString("\n")
-		sb.WriteString(dim.Render("  Enter  expand an area / open feature details (attributes + layers)"))
-		sb.WriteString("\n")
-		sb.WriteString(dim.Render("  Space  toggle a bool / pick choice options · u clear the user override · q quit"))
-		sb.WriteString("\n")
+		sb.WriteString(overlay.Help(newPalette(), "KEYS — flag list", gffKeys, "Esc/?/q close",
+			overlay.Section{Title: "SOURCES", Lines: sources}))
+		return sb.String()
 	}
 	sb.WriteString("\n")
 
 	sb.WriteString(bold.Render("SOURCES"))
-	sb.WriteString(dim.Render(" — where flags come from. Namespaces are disjoint worlds: uniqueness is"))
 	sb.WriteString("\n")
-	sb.WriteString(dim.Render("(namespace, key); an area name like 'install' is grouping only, never claimed."))
+	cur := lipgloss.NewStyle().Bold(true).Foreground(pal.Text)
+	for _, l := range sources {
+		if strings.HasPrefix(l, "▶ ") {
+			sb.WriteString(cur.Render("  " + l))
+		} else {
+			sb.WriteString(dim.Render("  " + l))
+		}
+		sb.WriteString("\n")
+	}
+
 	sb.WriteString("\n")
+	sb.WriteString(dim.Render("Esc/?/q close"))
+	return sb.String()
+}
+
+// sourceLines is the SOURCES block of the help overlay as plain lines: where
+// flags come from, the current-scope source first carrying the ▶ pointer, the
+// rest indented, then the legend. Callers style them.
+func (m *Model) sourceLines() []string {
+	out := []string{
+		"— where flags come from. Namespaces are disjoint worlds: uniqueness is",
+		"(namespace, key); an area name like 'install' is grouping only, never claimed.",
+	}
 	// The source the user is currently scoped to: the breadcrumb namespace,
 	// or the detail item's own namespace when help was opened from the detail.
 	curNS := m.scopeNS
@@ -332,33 +338,27 @@ func (m *Model) viewHelp() string {
 		lines = append(lines, srcLine{ns: ns, text: "○ " + ns + "  · discovered in the current repo — not registered"})
 	}
 	if len(lines) == 0 {
-		sb.WriteString(dim.Render("  (no sources registered — run `gff install` in a repo with a flag file)"))
-		sb.WriteString("\n")
+		out = append(out, "(no sources registered — run `gff install` in a repo with a flag file)")
 	}
 	// Current-scope source first, carrying the pointer; the rest stay dim.
 	sort.SliceStable(lines, func(i, j int) bool {
 		return lines[i].ns == curNS && lines[j].ns != curNS
 	})
-	cur := lipgloss.NewStyle().Bold(true).Foreground(pal.Text)
 	for _, l := range lines {
 		if l.ns == curNS && curNS != "" {
-			sb.WriteString(cur.Render("  ▶ " + l.text))
+			out = append(out, "▶ "+l.text)
 		} else {
-			sb.WriteString(dim.Render("    " + l.text))
+			out = append(out, "  "+l.text)
 		}
-		sb.WriteString("\n")
 	}
 	// The section's key, separated below the entries: the LEFT pointer follows
 	// the scope; the dot is registration status — two orthogonal signals.
-	sb.WriteString("\n")
-	sb.WriteString(dim.Render("  key: ▶ current scope · ● registered · ○ discovered (not registered)"))
-	sb.WriteString("\n")
-	sb.WriteString(dim.Render("  (CLI twin: `gff sources` — same list, plus --json)"))
-	sb.WriteString("\n")
-
-	sb.WriteString("\n")
-	sb.WriteString(dim.Render("Esc/?/q close"))
-	return sb.String()
+	out = append(out,
+		"",
+		"key: ▶ current scope · ● registered · ○ discovered (not registered)",
+		"(CLI twin: `gff sources` — same list, plus --json)",
+	)
+	return out
 }
 
 // plainValue formats a gffv1.Value for the detail view.

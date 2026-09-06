@@ -11,6 +11,8 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/overrides"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/paths"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/keymap"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/nav"
 )
 
 // screenMode controls what the main loop renders.
@@ -20,7 +22,7 @@ const (
 	modeList   screenMode = iota // normal collapsible tree view
 	modePicker                   // option picker overlay (choice flags)
 	modeDetail                   // per-feature detail: attributes + layer provenance
-	modeHelp                     // help overlay (?/h from any view)
+	modeHelp                     // help overlay (?/F1 from any view)
 )
 
 // SourceInfo is one registry entry for the launch panel.
@@ -63,7 +65,7 @@ type Model struct {
 	p        paths.Paths
 	width    int
 	height   int
-	cursor   int             // index into m.rows (the rendered row list)
+	cur      nav.Cursor      // cursor + viewport over m.rows (libs/tui/nav)
 	expanded map[string]bool // area name → expanded
 	rows     []row           // flattened render list rebuilt on each expand/collapse
 	mode     screenMode
@@ -86,11 +88,9 @@ type Model struct {
 	// clear where each area's flags come from. Wired by cmd.
 	Sources []SourceInfo
 
-	// breadcrumb pager + viewport state
-	pages     []page
-	pageIdx   int
-	scrollTop int // first visible row index (viewport windowing)
-	lastInner int // body rows shown in the last render (PgUp/PgDn stride)
+	// breadcrumb pager
+	pages   []page
+	pageIdx int
 
 	// detail state
 	detailItem   resolve.Resolved
@@ -200,10 +200,10 @@ func qualifiedKey(item resolve.Resolved) string {
 // owned by a different namespace (All page only — category pages are already
 // single-namespace).
 func (m *Model) rescope() {
-	if m.pageIdx != 0 || m.cursor < 0 || m.cursor >= len(m.rows) {
+	if m.pageIdx != 0 || m.cur.Pos < 0 || m.cur.Pos >= len(m.rows) {
 		return
 	}
-	if ns := m.rows[m.cursor].ns; ns != "" && ns != m.scopeNS {
+	if ns := m.rows[m.cur.Pos].ns; ns != "" && ns != m.scopeNS {
 		m.scopeNS = ns
 		m.buildPages()
 	}
@@ -235,6 +235,10 @@ func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyEscape, tea.KeyEnter:
 		m.mode = modeList
 
+	case tea.KeyF1:
+		m.helpReturn = modeDetail
+		m.mode = modeHelp
+
 	case tea.KeySpace:
 		m.detailAct()
 
@@ -243,7 +247,7 @@ func (m *Model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			switch msg.Runes[0] {
 			case 'q', 'Q':
 				m.mode = modeList
-			case '?', 'h', 'H':
+			case '?':
 				m.helpReturn = modeDetail
 				m.mode = modeHelp
 			case ' ':
@@ -314,7 +318,7 @@ func (m *Model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyRunes:
 		if len(msg.Runes) > 0 {
 			switch msg.Runes[0] {
-			case 'q', 'Q', '?', 'h', 'H':
+			case 'q', 'Q', '?':
 				m.mode = m.helpReturn
 			}
 		}
@@ -322,75 +326,50 @@ func (m *Model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// updateList handles key events in list mode.
+// updateList handles key events in list mode. Motions and the vim grammar
+// come from libs/tui (gffKeys = keymap.Vim + gff's own actions); only the
+// gff-specific actions are handled here.
 func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.cur.Key(msg, gffKeys) { // j/k/gg/G/^d/^u/^f/^b and the arrows/PgUp/PgDn
+		m.rescope()
+		return m, nil
+	}
+	if a, ok := gffKeys.Lookup(msg); ok {
+		switch a {
+		case keymap.PageLeft:
+			m.turnPage(-1)
+			return m, nil
+		case keymap.PageRight:
+			m.turnPage(1)
+			return m, nil
+		case keymap.Help:
+			m.helpReturn = modeList
+			m.mode = modeHelp
+			return m, nil
+		case keymap.Quit:
+			return m, tea.Quit
+		}
+	}
 	switch msg.Type {
-	case tea.KeyUp:
-		if m.cursor > 0 {
-			m.cursor--
-		}
-		m.rescope()
-
-	case tea.KeyDown:
-		if m.cursor < len(m.rows)-1 {
-			m.cursor++
-		}
-		m.rescope()
-
 	case tea.KeyEnter:
-		if m.cursor >= 0 && m.cursor < len(m.rows) {
-			r := m.rows[m.cursor]
+		if m.cur.Pos >= 0 && m.cur.Pos < len(m.rows) {
+			r := m.rows[m.cur.Pos]
 			if r.isArea {
 				// Toggle expand/collapse (namespace-qualified group key).
 				k := r.ns + "\x00" + r.area
 				m.expanded[k] = !m.expanded[k]
-				m.buildRows()
-				// Keep cursor in-bounds after rebuild.
-				if m.cursor >= len(m.rows) {
-					m.cursor = len(m.rows) - 1
-				}
-				if m.cursor < 0 {
-					m.cursor = 0
-				}
+				m.buildRows() // SetLen keeps the cursor in-bounds after the rebuild
 			} else {
 				// Feature row: open the detail view (attributes + layers).
 				m.openDetail(r)
 			}
 		}
 
-	case tea.KeyLeft, tea.KeyRight:
-		if n := len(m.pages); n > 1 {
-			if msg.Type == tea.KeyRight {
-				m.pageIdx = (m.pageIdx + 1) % n
-			} else {
-				m.pageIdx = (m.pageIdx - 1 + n) % n
-			}
-			m.cursor, m.scrollTop = 0, 0
-			m.buildRows()
-		}
-
-	case tea.KeyPgUp, tea.KeyPgDown:
-		stride := m.lastInner
-		if stride < 1 {
-			stride = 10
-		}
-		if msg.Type == tea.KeyPgDown {
-			m.cursor += stride
-		} else {
-			m.cursor -= stride
-		}
-		if m.cursor > len(m.rows)-1 {
-			m.cursor = len(m.rows) - 1
-		}
-		if m.cursor < 0 {
-			m.cursor = 0
-		}
-
 	// Real terminals deliver the spacebar as KeySpace (bubbletea key.go maps
 	// the ' ' rune to it); KeyRunes{' '} only occurs from synthetic input.
 	case tea.KeySpace:
-		if m.cursor >= 0 && m.cursor < len(m.rows) {
-			r := m.rows[m.cursor]
+		if m.cur.Pos >= 0 && m.cur.Pos < len(m.rows) {
+			r := m.rows[m.cur.Pos]
 			if !r.isArea {
 				return m.activateFeature(r)
 			}
@@ -401,18 +380,11 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			break
 		}
 		switch msg.Runes[0] {
-		case 'q', 'Q':
-			return m, tea.Quit
-
-		case '?', 'h', 'H':
-			m.helpReturn = modeList
-			m.mode = modeHelp
-
 		case 'u', 'U':
 			// Clear the user override for the cursor row — same
 			// overrides.Unset path as `gff unset` and the detail view.
-			if m.cursor >= 0 && m.cursor < len(m.rows) {
-				r := m.rows[m.cursor]
+			if m.cur.Pos >= 0 && m.cur.Pos < len(m.rows) {
+				r := m.rows[m.cur.Pos]
 				if !r.isArea {
 					if err := overrides.Unset(m.p, r.item.Feature.GetPath()); err != nil {
 						m.errMsg = "unset failed: " + err.Error()
@@ -424,8 +396,8 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 
 		case ' ':
-			if m.cursor >= 0 && m.cursor < len(m.rows) {
-				r := m.rows[m.cursor]
+			if m.cur.Pos >= 0 && m.cur.Pos < len(m.rows) {
+				r := m.rows[m.cur.Pos]
 				if !r.isArea {
 					return m.activateFeature(r)
 				}
@@ -433,6 +405,18 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// turnPage moves dir pages through the breadcrumb with wraparound.
+func (m *Model) turnPage(dir int) {
+	n := len(m.pages)
+	if n <= 1 {
+		return
+	}
+	m.pageIdx = ((m.pageIdx+dir)%n + n) % n
+	m.buildRows()
+	m.cur.To(0)
+	m.cur.Top = 0
 }
 
 // activateFeature handles Space on a feature row.
@@ -494,14 +478,14 @@ func selectedSet(v *gffv1.Value) map[string]bool {
 func (m *Model) updatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyUp:
-		if m.pickerCursor > 0 {
-			m.pickerCursor--
-		}
+		m.pickerMove(-1)
 
 	case tea.KeyDown:
-		if m.pickerCursor < len(m.pickerEntries)-1 {
-			m.pickerCursor++
-		}
+		m.pickerMove(1)
+
+	case tea.KeyF1:
+		m.helpReturn = modePicker
+		m.mode = modeHelp
 
 	case tea.KeyEscape:
 		m.mode = m.pickerExitMode()
@@ -532,12 +516,27 @@ func (m *Model) updatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.togglePickerEntry()
 		case 'q', 'Q':
 			m.mode = m.pickerExitMode()
-		case '?', 'h', 'H':
+		case '?':
 			m.helpReturn = modePicker
 			m.mode = modeHelp
+		case 'j':
+			m.pickerMove(1)
+		case 'k':
+			m.pickerMove(-1)
 		}
 	}
 	return m, nil
+}
+
+// pickerMove moves the picker cursor by delta, clamped.
+func (m *Model) pickerMove(delta int) {
+	m.pickerCursor += delta
+	if m.pickerCursor > len(m.pickerEntries)-1 {
+		m.pickerCursor = len(m.pickerEntries) - 1
+	}
+	if m.pickerCursor < 0 {
+		m.pickerCursor = 0
+	}
 }
 
 // pickerExitMode returns the view the picker should fall back to.
@@ -603,6 +602,7 @@ func (m *Model) buildRows() {
 			}
 			m.rows = append(m.rows, row{item: item, ns: item.Namespace(), itemIdx: i})
 		}
+		m.cur.SetLen(len(m.rows))
 		return
 	}
 	// One area row per (namespace, area) pair, first-appearance order, so two
@@ -629,6 +629,7 @@ func (m *Model) buildRows() {
 			}
 		}
 	}
+	m.cur.SetLen(len(m.rows))
 }
 
 // areaOf returns the first dotted segment of a feature path (e.g. "install").

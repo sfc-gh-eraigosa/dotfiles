@@ -16,21 +16,21 @@
 
 ## Preflight (once)
 
-- [ ] SETUP: `sdk-tui` TRACKING §3 fully ticked; `cd sdk/libs && go test ./tui/... -cover` → all ok ≥ 90%
-- [ ] SETUP: `cd sdk/gff && go version` → go1.26; `go test ./... 2>&1 | tail -3` → all ok on the base
-- [ ] SETUP: `go test -cover ./internal/tui/` → record the baseline (≥ 91.3%) in TRACKING §5
-- [ ] SETUP: create the build worker `--base feature/sdk-tui/<user>/lib` (IMPLEMENTATION §2), paste its `--json` into TRACKING §0, `cd` into it
-- [ ] ALLOWLIST: `git status --short -- docs/mbo/plans/gff-tui-vim/evidence/` after the first evidence file
+- [x] SETUP: `sdk-tui` TRACKING §3 fully ticked; `cd sdk/libs && go test ./tui/... -cover` → all ok ≥ 90%
+- [x] SETUP: `cd sdk/gff && go version` → go1.26; `go test ./... 2>&1 | tail -3` → all ok on the base
+- [x] SETUP: `go test -cover ./internal/tui/` → record the baseline (≥ 91.3%) in TRACKING §5
+- [x] SETUP: create the build worker `--base feature/sdk-tui/<user>/lib` (IMPLEMENTATION §2), paste its `--json` into TRACKING §0, `cd` into it
+- [x] ALLOWLIST: `git status --short -- docs/mbo/plans/gff-tui-vim/evidence/` after the first evidence file
 
 ---
 
 ### Task 1 — adopt libs/tui: keymap + nav.Cursor + help rebind  (plan Task 1)
 
-- [ ] RED: `internal/tui/vim_test.go` (11 tests, plan Task 1 Step 1); `round2_test.go:68` `'h'` → `'?'`
-- [ ] RUN-RED: `go mod edit … && go mod tidy && go test ./internal/tui/ -run 'TestVim|TestHelpOpensOn|TestHDoesNot|TestPickerJK|TestFooterHint'` → expect **FAIL**
-- [ ] GREEN: `internal/tui/keys.go`; `model.go` edits 1–4 (`cur nav.Cursor`, Lookup switch, `turnPage`, picker/detail `j/k` + `?`/F1); `view.go` edits 1–4 (viewport via `cur.Visible`, footer `listHint()`, `overlay.Help` + SOURCES)
-- [ ] RUN-GREEN: `mkdir -p $EV/task1 && go test ./internal/tui/ -cover 2>&1 | tee $EV/task1/go-test.txt | tail -3 && go vet ./...` → **ok**, ≥ 91.3%
-- [ ] VERIFY: `grep -rn "'h', 'H'\|scrollTop\|lastInner" internal/tui/*.go` → no hits
+- [x] RED: `internal/tui/vim_test.go` (11 tests, plan Task 1 Step 1); `round2_test.go:68` `'h'` → `'?'`
+- [x] RUN-RED: `go mod edit … && go mod tidy && go test ./internal/tui/ -run 'TestVim|TestHelpOpensOn|TestHDoesNot|TestPickerJK|TestFooterHint'` → expect **FAIL**
+- [x] GREEN: `internal/tui/keys.go`; `model.go` edits 1–4 (`cur nav.Cursor`, Lookup switch, `turnPage`, picker/detail `j/k` + `?`/F1); `view.go` edits 1–4 (viewport via `cur.Visible`, footer `listHint()`, `overlay.Help` + SOURCES)
+- [x] RUN-GREEN: `mkdir -p $EV/task1 && go test ./internal/tui/ -cover 2>&1 | tee $EV/task1/go-test.txt | tail -3 && go vet ./...` → **ok**, ≥ 91.3%
+- [x] VERIFY: `grep -rn "'h', 'H'\|scrollTop\|lastInner" internal/tui/*.go` → no hits
 - [ ] COMMIT: `feat(gff/tui): adopt libs/tui — keymap + nav.Cursor vim motions; help moves to ? and F1`
 - [ ] LEDGER + CHECKPOINT
 
