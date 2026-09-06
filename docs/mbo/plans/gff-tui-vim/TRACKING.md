@@ -1,7 +1,7 @@
 # gff-tui-vim — live state ledger
 
 - **Slug:** `gff-tui-vim`
-- **Started:** 2026-09-05 (planning); build not started
+- **Started:** 2026-09-05 (planning) · build 2026-09-05 (session 1) · **in-review** 2026-09-05
 - **Playbook:** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) · **Cursor:** [`TODO.md`](./TODO.md)
 - **Plan (source of truth):** [`../gff-tui-vim.md`](../gff-tui-vim.md) · spec [`../../specs/gff-tui-vim.md`](../../specs/gff-tui-vim.md)
 
@@ -34,7 +34,7 @@
 | 1 adopt libs/tui: keymap + nav.Cursor + help rebind | done | `01ea253` | RUN-RED `go test ./internal/tui/ -run "TestVim|TestHelpOpensOn|TestHDoesNot|TestPickerJK|TestFooterHint"` → 10 FAIL (`evidence/task1/run-red.txt`); RUN-GREEN `go test ./internal/tui/ -cover` → `ok … coverage: 91.4%` (baseline 91.3%); `grep -rn "'h', 'H'|scrollTop|lastInner" internal/tui/*.go` → no hits; `go vet ./...` clean; `go test ./...` → 12/12 ok (`evidence/task1/go-test.txt`) | rewired `TestHelpOverlayFromDetail` `h`→`?`; `cursor/scrollTop/lastInner` → `nav.Cursor`; three implementation notes in §4 |
 | 2 `/` search over `search.State` (auto-expand, n/N, :noh, gutter) | done | `c3c6a37` | RUN-RED `go test ./internal/tui/ -run "TestSlash|TestEscInList|TestNWithout|TestSearch"` → 8 FAIL (`evidence/task2/run-red.txt`); RUN-GREEN `go test ./internal/tui/ -cover` → `ok … coverage: 91.7%`; `go vet ./...` clean; `go test ./...` → 13/13 ok (`evidence/task2/go-test.txt`) | two extra spec-derived tests added for the gate (see §4) |
 | 3 `:` over `cmdline` (set/unset validation, Tab) | done | `565abfb` | RUN-RED `go test ./internal/tui/ -run "TestParseValue|TestFindKey|TestColon"` → build failed, `undefined: parseValue`, `m.findKey undefined` (`evidence/task3/run-red.txt`); RUN-GREEN `go test ./internal/tui/ ./internal/resolve/ -cover` → tui `92.6%`, resolve `95.5%`; `go vet ./...` clean; `go test ./...` → 13/13 ok (`evidence/task3/go-test.txt`) | added `resolve.Resolved.WithNamespace` + its one-line test (resolve stays ≥ 95%) |
-| 4 docs + key-table pin test + gates + demo | done | (SHA at the next commit) | RUN-RED `go test ./cmd/ -run TestTUIHelpListsVimSearchAndCommandKeys` → FAIL `does not contain "j/k"` (`evidence/task4/run-red.txt`); RUN-GREEN `go test ./... -cover` → 13/13 ok, every package at or above its floor (`evidence/task4/go-test-all.txt`); the exact `gff-ci.yml` recipe → total **91.0%** ≥ 90, resolve **95.5%** ≥ 95, schema **95.7%** ≥ 90, tui **92.6%** ≥ 91.3 — 4× PASS (`evidence/task4/coverage-gate.txt`); `go vet ./...` clean; `make gff-proto-check` clean; real-terminal demo `evidence/demo/{run.sh,transcript.txt,README.md}` — 13 captures | Step 5 human-evidenced against the LIVE inventory; override file `{}` before and after |
+| 4 docs + key-table pin test + gates + demo | done | `58a10a6` | RUN-RED `go test ./cmd/ -run TestTUIHelpListsVimSearchAndCommandKeys` → FAIL `does not contain "j/k"` (`evidence/task4/run-red.txt`); RUN-GREEN `go test ./... -cover` → 13/13 ok, every package at or above its floor (`evidence/task4/go-test-all.txt`); the exact `gff-ci.yml` recipe → total **91.0%** ≥ 90, resolve **95.5%** ≥ 95, schema **95.7%** ≥ 90, tui **92.6%** ≥ 91.3 — 4× PASS (`evidence/task4/coverage-gate.txt`); `go vet ./...` clean; `make gff-proto-check` clean; real-terminal demo `evidence/demo/{run.sh,transcript.txt,README.md}` — 13 captures | Step 5 human-evidenced against the LIVE inventory; override file `{}` before and after |
 
 ## 2. Feature → proof matrix (from spec §5)
 
@@ -57,8 +57,8 @@
 - [x] `go test ./... -cover`: module **91.0%** ≥ 90, `internal/tui` **92.6%** ≥ 91.3, `internal/resolve` **95.5%** ≥ 95 (`evidence/task4/coverage-gate.txt` — the trio said `task7`, this plan has four tasks)
 - [x] `go vet ./...` clean; `make gff-proto-check` clean
 - [x] `evidence/demo/{run.sh,transcript.txt,README.md}` committed; override file `{}` before and after (nothing left flipped)
-- [ ] `docs/mbo/index.md` row `gff-tui-vim` → `in-review` with the build PR number
-- [ ] build draft PR promoted to ready
+- [x] `docs/mbo/index.md` row `gff-tui-vim` → `in-review` with build PR #304
+- [ ] build draft PR promoted to ready — owner runs it (`gss feature pr --ready` is approval-token gated for the agent; `gh pr ready 304` also works)
 
 ## 4. Blockers & escalations
 
@@ -84,3 +84,4 @@
 | 2026-09-05 | build (session 1) | Task 1 pushed → draft PR #304. Task 2 done: `search.go` (rowKey/inScope/hit/collect/start/apply/commit/cancel/jump/noh/updateSearch), `modeSearch` + `modeCommand` modes with the `cmdline` fields declared, view prompt/badge/gutter/`errStyleFor`/`matchStyleFor`. tui 91.7%; module 13/13 ok. |
 | 2026-09-05 | build (session 1) | Task 2 pushed. Task 3 done: `command.go` (parseValue/findKey/completeKey/registerCommands/updateCommand), `registerCommands()` in `NewModel`, `modeCommand` dispatch and the `:` key. `resolve.WithNamespace` added (its test needed the `resolve.` qualifier — the file is package `resolve_test`). tui 92.6%, resolve 95.5%, module 13/13 ok. |
 | 2026-09-05 | build (session 1) | Task 3 pushed. Task 4 done: `--help` key block, README **TUI keys** table, `AGENTS.md internal/tui` bullet, `cmd/tui_keys_test.go` pin test; all gates green (module 91.0%, tui 92.6%, resolve 95.5%, schema 95.7%, vet, proto-check); real-terminal tmux demo captured against the live inventory with the override file restored to `{}`. |
+| 2026-09-05 | build (session 1) | Task 4 pushed (`58a10a6`). `docs/mbo/index.md` row → **in-review** with build PR #304. IMPLEMENTATION §4 objective gate green: 4/4 tasks done with SHAs + evidence, module 91.0% / tui 92.6% / resolve 95.5%, vet + proto-check clean, real-terminal demo committed. Remaining: promote #304 (owner), and after #280 merges `gss feature restack` the build onto `main`. |
