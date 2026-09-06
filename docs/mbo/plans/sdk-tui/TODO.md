@@ -75,17 +75,17 @@
 - [x] RUN-RED: `go test ./tui/cmdline/` → expect **FAIL** `undefined: Parse`
 - [x] GREEN: `tui/cmdline/cmdline.go`
 - [x] RUN-GREEN: `mkdir -p $EV/task5 && go test ./tui/cmdline/ -cover -v 2>&1 | tee $EV/task5/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
-- [ ] COMMIT: `feat(libs/tui): cmdline — : parser, command registry, standard verbs, Tab completion`
-- [ ] LEDGER + CHECKPOINT
+- [x] COMMIT: `feat(libs/tui): cmdline — : parser, command registry, standard verbs, Tab completion`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** cmdline ≥ 90%; both Tab tests pass (argument + command-name completion).
 
 ### Task 6 — `overlay`  (plan Task 6)
 
-- [ ] RED: `tui/overlay/overlay_test.go` (4 tests)
-- [ ] RUN-RED: `go test ./tui/overlay/` → expect **FAIL** `undefined: Help`
-- [ ] GREEN: `tui/overlay/overlay.go`
-- [ ] RUN-GREEN: `mkdir -p $EV/task6 && go test ./tui/overlay/ -cover -v 2>&1 | tee $EV/task6/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
+- [x] RED: `tui/overlay/overlay_test.go` (4 tests)
+- [x] RUN-RED: `go test ./tui/overlay/` → expect **FAIL** `undefined: Help`
+- [x] GREEN: `tui/overlay/overlay.go`
+- [x] RUN-GREEN: `mkdir -p $EV/task6 && go test ./tui/overlay/ -cover -v 2>&1 | tee $EV/task6/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
 - [ ] COMMIT: `feat(libs/tui): overlay — palette interface, help from the keymap, confirm dialog`
 - [ ] LEDGER + CHECKPOINT
 
