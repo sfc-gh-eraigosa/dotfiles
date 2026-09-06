@@ -1,0 +1,6 @@
+# 2026-09-05 20:25 PDT — RUN-RED: go test ./tui/keymap/ 2>&1 | head -5
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/keymap [github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/keymap.test]
+tui/keymap/keymap_test.go:17:8: undefined: Action
+tui/keymap/keymap_test.go:19:12: undefined: Down
+tui/keymap/keymap_test.go:19:52: undefined: Up
+tui/keymap/keymap_test.go:20:12: undefined: PageLeft

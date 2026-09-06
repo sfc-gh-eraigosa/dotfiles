@@ -1,0 +1,114 @@
+# 2026-09-05 20:48 PDT — GOTOOLCHAIN=auto COVERAGE_ENFORCE=1 ./scripts/test.sh unit (repo root, lib worker). First attempt with the env default GOTOOLCHAIN=local aborted at fleet: "go: go.mod requires go >= 1.26.3 (running go 1.26.1; GOTOOLCHAIN=local)" — main already requires 1.26.3 for fleet/gsl/wlink, so this is the host toolchain, not this change.
+[0;34m[TEST][0m Running Go Unit Tests with Coverage...
+[0;34m[TEST][0m Testing module: fleet
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.225s	coverage: 63.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan	0.015s	coverage: 90.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift	0.013s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag	0.047s	coverage: 96.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keys	0.013s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/lanscan	0.025s	coverage: 80.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach	0.166s	coverage: 82.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	1.137s	coverage: 59.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf	0.014s	coverage: 94.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail	0.023s	coverage: 93.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp	0.014s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	1.261s	coverage: 92.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan	0.017s	coverage: 93.9% of statements
+total:											(statements)		82.3%
+[0;32mOK[0m: coverage for fleet is 82% (minimum: 60%)
+[0;34m[TEST][0m Testing module: gff
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff	0.007s	coverage: 45.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/cmd	0.560s	coverage: 87.0% of statements
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/gen/gff/v1		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/gitx	0.017s	coverage: 72.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/overrides	0.027s	coverage: 87.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/paths	0.017s	coverage: 90.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/registry	0.041s	coverage: 88.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve	0.051s	coverage: 95.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/schema	0.025s	coverage: 95.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/style	0.015s	coverage: 85.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui	1.009s	coverage: 91.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/version	0.014s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/pkg/gff	0.068s	coverage: 89.5% of statements
+total:											(statements)				79.8%
+[0;33mWARN[0m: no coverage threshold configured for module 'gff' (current: 79%) — add it to coverage_min() in scripts/test.sh
+[0;34m[TEST][0m Testing module: gsl
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/cmd	2.718s	coverage: 84.1% of statements
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/cmd/glyphcheck		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config	0.031s	coverage: 85.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/exec	1.736s	coverage: 81.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh	0.294s	coverage: 88.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh/fake	0.028s	coverage: 81.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git	2.049s	coverage: 94.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git/fake	0.031s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp	0.248s	coverage: 68.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp/fake	0.030s	coverage: 81.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/observe	0.034s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload	0.033s	coverage: 93.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/preview	0.036s	coverage: 85.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/render	0.478s	coverage: 90.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo	0.032s	coverage: 95.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style	0.030s	coverage: 84.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/term	0.029s	coverage: 79.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/theme	0.044s	coverage: 86.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/version	0.031s	coverage: 75.0% of statements
+total:											(statements)			87.4%
+[0;32mOK[0m: coverage for gsl is 87% (minimum: 60%)
+[0;34m[TEST][0m Testing module: gss
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss		coverage: 0.0% of statements
+--- FAIL: TestIsDirty (0.23s)
+    status_test.go:54: Failed to commit: exit status 1. Status:
+        On branch master
+        
+        No commits yet
+        
+        Changes to be committed:
+          (use "git rm --cached <file>..." to unstage)
+        	new file:   test.txt
+        
+FAIL
+coverage: 21.2% of statements
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/cmd	0.240s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/approval	0.006s	coverage: 71.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/backup	0.007s	coverage: 91.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/classic	0.006s	coverage: 83.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/config	0.010s	coverage: 89.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/errors	0.007s	coverage: 82.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/feature	0.066s	coverage: 83.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/gh	0.024s	coverage: 76.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/gh/fake	0.026s	coverage: 87.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/git	0.516s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/git/fake	0.025s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/identity	0.026s	coverage: 95.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/mode	0.024s	coverage: 91.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/registry	0.034s	coverage: 83.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/repo	0.028s	coverage: 87.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/scan	0.024s	coverage: 95.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/stack	0.026s	coverage: 98.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/status	0.024s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/sync	0.023s	coverage: 94.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/tmpl	0.024s	coverage: 88.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/version	0.023s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/worktree	0.024s	coverage: 100.0% of statements
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/worktree/backendtest		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/worktree/git	2.114s	coverage: 68.4% of statements
+FAIL
+exit=1
+
+# 2026-09-05 20:52 PDT — is gss/TestIsDirty pre-existing? Same test on the clean main checkout (~/git/dotfiles @ 93e0d02): cd sdk/gss && GOTOOLCHAIN=auto go test ./cmd -run TestIsDirty
+--- FAIL: TestIsDirty (0.23s)
+    status_test.go:54: Failed to commit: exit status 1. Status:
+        On branch master
+        
+        No commits yet
+        
+        Changes to be committed:
+          (use "git rm --cached <file>..." to unstage)
+        	new file:   test.txt
+        
+FAIL
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/cmd	0.232s
+FAIL
+# → identical failure on main: the test commits inside a temp repo and the host's global core.hooksPath pre-commit hook rejects it. Host-side, unrelated to sdk/libs/tui; the libs floor is proven directly in libs-coverage.txt (94.9% vs floor 80%).
