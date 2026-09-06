@@ -26,14 +26,14 @@ operator elects the plan §6.1 fan-out, add one row per leaf the same way.
 | :-- | :-- | :-- | :-- | :-- |
 | T1 `pkg/provider` types | todo | | | leaf A |
 | T2 runner handoffs | todo | | | leaf A |
-| T3 runner bridges (`BridgeArgv`, `RunBridgeCtx`) | todo | | | leaf A — `RunStreamCtx` already exists (#270); F3a is `TestRunStreamCtxKillsTheChildOnDeadline` |
+| T3 runner bridges + `RunCtx` (`BridgeArgv`, `RunBridgeCtx`, `RunCtx`) | todo | | | leaf A — `RunStreamCtx` already exists (#270); F3a is `TestRunStreamCtxKillsTheChildOnDeadline` |
 | T4 test harness (FakeProvider, StubPlugin) | todo | | | leaf A — **contract freezes here** (three action kinds, no host field) |
 | T5 wire + framing | todo | | | leaf B |
 | T6 `Serve` (plugin side) | todo | | | leaf B |
 | T7 `Client` + handshake | todo | | | leaf B |
 | T8 `host/exec` bridge | todo | | | leaf B — **protocol freezes here** |
 | T9 registry | todo | | | leaf C |
-| T10 config loader | todo | | | leaf C — adds `yaml.v3` |
+| T10 config loader | todo | | | leaf C — `yaml.v3` already required; `go mod tidy` must be a no-op |
 | T11 plugin lifecycle | todo | | | leaf C |
 | T12 `providers list\|check` + `provider serve` | todo | | | leaf C |
 | T13 herdr parsers | todo | | | leaf D — real fixtures |
@@ -63,8 +63,8 @@ operator elects the plan §6.1 fan-out, add one row per leaf the same way.
 | F3 cancellable streams | [x] exists (`runner_ctx_test.go`, #270) | — | needed by k8s `logs -f`; nothing to build |
 | F4 protocol handshake | [ ] T7 | [ ] `providers check` transcript | mismatch + immediate exit |
 | F5 protocol methods | [ ] T5, T6 | [ ] `providers check` transcript | framing, id correlation, attrs echo |
-| F6 `host/exec` callback | [ ] T8 | [ ] transcript shows the exec | leak sweep + `-32001` |
-| F7 plugin lifecycle | [ ] T11 | [ ] broken-plugin row | deadline, kill, isolation, reuse |
+| F6 `host/exec` callback | [ ] T8 | [ ] transcript shows the exec | leak sweep + `-32001`; same `ExecResult` both paths (F6c) |
+| F7 plugin lifecycle | [ ] T7, T11 | [ ] broken-plugin row | deadline = plugin time only (F7a), kill, re-dial, isolation, reuse; built-in ctx cancel (F7d) |
 | F8 configuration | [ ] T10 | [ ] external-plugin stanza | missing = builtins; shadow; order |
 | F9 `providers list\|check` | [ ] T12 | [ ] both transcripts | no spawn without `--probe` |
 | F10 dogfooding | [ ] T18 | [ ] identical trees live | the framework's keystone |

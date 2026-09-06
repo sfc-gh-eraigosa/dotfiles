@@ -44,32 +44,32 @@
 
 - [ ] RED: `TestEveryHandoffCarriesTheMuxOptions`, `TestLocalHandoffNeverInvokesAShell`, `TestRemoteHandoffQuotesEveryProviderSuppliedValue`, `TestTheAliasComesFromFleetNotTheProvider` + empty-input error cases
 - [ ] RUN-RED: `go test ./internal/runner/` → expect **FAIL**
-- [ ] GREEN: `internal/runner/handoff.go` — `HandoffArgv(alias, h)` (pure), `Command(alias, h)`, `Quote`; promote `interactiveArgs` to a package func; `cmd.shQuote` becomes an alias of `runner.Quote`
+- [ ] GREEN: `internal/runner/handoff.go` — `HandoffArgv(alias, h)` (pure), `Command(alias, h)`, `Quote` (the body of `updexec.ShQuote` moves here — `updexec` imports `runner`, so this is the only cycle-free direction); `updexec.ShQuote` and `cmd.shQuote` become aliases of `runner.Quote`
 - [ ] RUN-GREEN: `go test ./internal/runner/ ./cmd/` → **PASS** (existing cmd tests still green)
 - [ ] VERIFY: remote argv has `ssh -t` + every `MuxArgs()` option and **no** `BatchMode`; local argv passes a `$(…)` element verbatim with no `sh -c`
 - [ ] EVID + COMMIT + LEDGER
 
 **Done when:** both handoff kinds are asserted by argv and the module still builds.
 
-### Task 3 — runner bridges  (plan T3)
+### Task 3 — runner bridges + `RunCtx`  (plan T3)
 
 - [ ] SETUP: confirm `RunStreamCtx` already exists with `go test ./internal/runner/ -run RunStreamCtx -v` → PASS (F3a needs nothing built)
-- [ ] RED: `TestBridgeArgvTargetsOnlyTheHostsLoopback`, `TestBridgeArgvCarriesTheMuxOptionsAndExitOnForwardFailure`, `TestACancelledBridgeIsKilledWithinWaitDelay` (+ zero forwards → error; cancel before up)
+- [ ] RED: `TestBridgeArgvTargetsOnlyTheHostsLoopback`, `TestBridgeArgvCarriesTheMuxOptionsAndExitOnForwardFailure`, `TestACancelledBridgeIsKilledWithinWaitDelay` (+ zero forwards → error; cancel before up); `TestRunCtxReturnsStderrAndExitCodeWithoutAnError`, `TestRunCtxIsCancelledByItsContext` (+ stdin delivered)
 - [ ] RUN-RED: `go test ./internal/runner/ -run Bridge` → expect **FAIL**
-- [ ] GREEN: `internal/runner/bridge.go` — `Forward`, `BridgeArgv(alias, forwards)` (pure), `RunBridgeCtx` on the interface, `Exec` (`exec.CommandContext`, `WaitDelay`) and `Fake` (`Block`); `bridge_linux.go` sets `Pdeathsig`
+- [ ] GREEN: `internal/runner/bridge.go` — `Forward`, `BridgeArgv(alias, forwards)` (pure), `RunBridgeCtx` on the interface, `Exec` (`exec.CommandContext`, `WaitDelay`) and `Fake` (`Block`); `bridge_linux.go` sets `Pdeathsig`; `RunCtx(ctx, host, stdin, argv…) (ExecResult, error)` on the interface, `Exec` (separate stdout/stderr, `ExitError` → `ExitCode`, nil error) and `Fake`
 - [ ] RUN-GREEN: `go test -race ./internal/runner/` → **PASS**, no goroutine leak
 - [ ] VERIFY: argv has `-N`, `ExitOnForwardFailure=yes`, every base/mux option, `-L 127.0.0.1:l:127.0.0.1:r` per forward, alias last, no `-t`, no remote command
 - [ ] VERIFY: `git diff --stat` shows the eleven `runner.Exec{}` sites and `cmd/wake.go` untouched
 - [ ] EVID + COMMIT + LEDGER
 
-**Done when:** a set of tunnels is one killable `ssh -N` and nothing else moved.
+**Done when:** a set of tunnels is one killable `ssh -N`, the batch lane has a context and an exit code, and nothing else moved.
 
 ### Task 4 — test harness  (plan T4)
 
 - [ ] SETUP: decide `FakeProvider`'s five-column kind, three levels, one leaf, one action of each of the three kinds (handoff, stream, tunnel)
-- [ ] RED: a smoke test drilling `FakeProvider` through the registry seam's interface
-- [ ] RUN-RED: `go test ./pkg/provider/providertest/` → expect **FAIL**
-- [ ] GREEN: `providertest/fake.go` — `FakeProvider` + `StubPlugin` (a tiny `main` the protocol tests compile)
+- [ ] RED: a smoke test driving `FakeProvider` through the `Provider` and `Host` interfaces of plan §3.1 alone (a `Host` backed by `runner.Fake`; no registry) + `BuildStub(t)` yields a binary that answers `initialize`
+- [ ] RUN-RED: `go test ./pkg/provider/providertest/...` → expect **FAIL**
+- [ ] GREEN: `providertest/fake.go` — `FakeProvider` + `BuildStub(t)` (`go build` once per test binary into `t.TempDir()`); `providertest/stubplugin/main.go` — `StubPlugin` as its own `main` package, scripted by flags/env (answer, sleep, exec, exit, protocol 2)
 - [ ] RUN-GREEN: `go test ./pkg/provider/...` → **PASS**
 - [ ] EVID + COMMIT + LEDGER
 - [ ] **FREEZE:** record in `TRACKING.md` §5 that the contract (plan §3.1) is frozen as of this SHA
@@ -104,7 +104,7 @@
 
 ### Task 7 — `Client` + handshake  (plan T7)
 
-- [ ] RED: `TestAProtocolMismatchDisablesThePluginWithBothNumbers`, `TestAPluginThatExitsBeforeInitializeIsReportedNotRetriedForever`, `TestAPluginThatMissesItsDeadlineIsKilledAndReportedAsARow`
+- [ ] RED: `TestAProtocolMismatchDisablesThePluginWithBothNumbers`, `TestAPluginThatExitsBeforeInitializeIsReportedNotRetriedForever`, `TestAPluginThatMissesItsDeadlineIsKilledAndReportedAsARow`, `TestASlowHostExecDoesNotCountAgainstThePluginDeadline` (the clock pauses on an outstanding exec)
 - [ ] RUN-RED: `go test ./pkg/provider/ -run Client` → expect **FAIL**
 - [ ] GREEN: `client.go` — `Dial`/`Client`, handshake, version check, per-call deadline, `host/exec` dispatch to an injected `ExecFunc`
 - [ ] RUN-GREEN: `go test -race ./pkg/provider/` → **PASS** (all three failure modes)
@@ -115,9 +115,9 @@
 
 ### Task 8 — `host/exec` bridge  (plan T8)
 
-- [ ] RED: `TestHostExecLandsOnTheRunnerSeamUnderBatchMode`, `TestHostExecParamsCarryNoRouteOrCredential` (leak sweep over marshalled bytes), `TestHostExecForAnUnknownCallIdIsRefused`
+- [ ] RED: `TestHostExecLandsOnTheRunnerSeamUnderBatchMode`, `TestHostExecParamsCarryNoRouteOrCredential` (leak sweep over marshalled bytes), `TestHostExecForAnUnknownCallIdIsRefused`, `TestHostExecSeesTheSameResultInProcessAndOverTheWire` (non-zero exit + stderr + stdin)
 - [ ] RUN-RED: `go test ./internal/providers/ -run HostExec` → expect **FAIL**
-- [ ] GREEN: `internal/providers/host.go` — `callId` → alias → `runner.Runner.Run`; refuse unknown/completed ids with `-32001`
+- [ ] GREEN: `internal/providers/host.go` — `callId` → alias → `runner.Runner.RunCtx` under the call's ctx, reply = `ExecResult`; refuse unknown/completed ids with `-32001`
 - [ ] RUN-GREEN: `go test -race ./internal/providers/` → **PASS** with `runner.Fake`, no socket
 - [ ] VERIFY: two concurrent calls for different hosts each exec on their own alias
 - [ ] EVID: the refusal transcript + the leak-sweep assertion
@@ -145,17 +145,17 @@
 
 - [ ] RED: `TestMissingProvidersConfigIsTheBuiltinSetNotAnError`, `TestDuplicateProviderNamesAreRefusedNamingBoth`, `TestADisabledProviderIsNeverProbed`, `TestAPluginCanShadowABuiltinByName` (+ empty file, reorder)
 - [ ] RUN-RED: `go test ./internal/providers/ -run Config` → expect **FAIL**
-- [ ] GREEN: `config.go` + `gopkg.in/yaml.v3` in `go.mod`; `~` expansion; PATH resolution for a bare `command`
-- [ ] RUN-GREEN: `go test ./internal/providers/` → **PASS**; `go mod tidy` leaves the graph clean
+- [ ] GREEN: `config.go` (`gopkg.in/yaml.v3` is already required — do not touch `go.mod`); `~` expansion; PATH resolution for a bare `command`
+- [ ] RUN-GREEN: `go test ./internal/providers/` → **PASS**; `go mod tidy` is a no-op
 - [ ] VERIFY: an absent config writes **nothing** to disk
-- [ ] EVID: test output + the `go.mod` diff
+- [ ] EVID: test output + the empty `go mod tidy` diff
 - [ ] COMMIT + LEDGER
 
 **Done when:** onboarding is a file, and a missing file is the built-in set.
 
 ### Task 11 — plugin lifecycle  (plan T11)
 
-- [ ] RED: deadline breach → killed + failed row; stderr reaches the log; a plugin that dies mid-session is re-dialed once, then reported
+- [ ] RED: deadline breach → killed + failed row (`timed out after …`); stderr reaches the log; a plugin that dies or is killed mid-session is re-dialed on the next call (once per call, never a loop), then reported; `TestAHungBuiltinExecIsCancelledByItsContext` (F7d)
 - [ ] RUN-RED: `go test ./internal/providers/ -run Lifecycle` → expect **FAIL**
 - [ ] GREEN: lazy spawn, kill, status, stderr capture through `libs/log`
 - [ ] RUN-GREEN: `go test -race ./internal/providers/` → **PASS**, no hang
@@ -195,7 +195,7 @@
 
 - [ ] RED: `TestHerdrProbeCostsOneRoundTrip`, `TestHerdrResolvesABinaryMissingFromTheNonLoginPath`, `TestAbsentHerdrIsARowNotAnOmission`
 - [ ] RUN-RED: `go test ./internal/provider/herdr/ -run Probe` → expect **FAIL**
-- [ ] GREEN: `script.go`'s `probeScript()` (POSIX sh) + `Probe`; resolved path into `Attrs["binary"]`
+- [ ] GREEN: `script.go`'s `probeScript()` (POSIX sh, expands `$HOME` itself) + `Probe`; resolved **absolute** path into `Attrs["binary"]` (a test asserts no `~`)
 - [ ] RUN-GREEN: `go test ./internal/provider/herdr/` → **PASS**, round-trip count exactly 1
 - [ ] VERIFY: `make lint-portability` green (the embedded `sh` script)
 - [ ] EVID: the recorded argv + the absent row
@@ -306,7 +306,7 @@
 - [ ] RED: `TestLsJSONShapeIsStable` (golden), `TestLsNodesIsNeverNull` (zero-node level), `TestLsRendersADeepLevelAndNamesAnUnknownSegment`
 - [ ] RUN-RED: `go test ./cmd/ -run Ls` → expect **FAIL**
 - [ ] GREEN: `cmd/ls.go`
-- [ ] RUN-GREEN: `go test ./cmd/ -run Ls` → **PASS**, golden matches byte-for-byte
+- [ ] RUN-GREEN: `go test ./cmd/ -run Ls` → **PASS**, golden (generated by marshalling the frozen structs — `"key":"c"`, `unavailable`, `handoff`/`stream`/`tunnel`) matches byte-for-byte
 - [ ] EVID: the golden JSON + the human table
 - [ ] ALLOWLIST (golden fixture) + COMMIT + LEDGER
 

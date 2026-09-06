@@ -65,8 +65,11 @@ a tunnel. That heterogeneity is the argument for a plugin boundary rather than a
   `Exec` real, `Fake` for tests). Every ssh call carries `MuxArgs()` (ControlMaster reuse).
 - The `Runner` interface cannot produce an `*exec.Cmd`, yet `tea.ExecProcess` needs one, so the
   TUI's four interactive actions each spell `ssh` out themselves in `cmd/tui_cmds.go`.
-- `runner.RunStream` cannot be cancelled — fine for an install that ends, wrong for a `logs -f`
-  that does not.
+- `runner.RunStreamCtx` (landed with fleet-update #270, tested in `runner_ctx_test.go`) already
+  gives a cancellable, killable stream lane, so a `logs -f` needs nothing new. What the seam
+  lacks is a context on the **batch** lane: `Run(host, argv…)` returns stdout only and cannot
+  be cancelled, so a provider's exec would have no deadline and no stderr or exit code —
+  `RunCtx` is the one batch-lane addition this objective makes (§4.2).
 - `sshconf.Host` has no kind field; `Row` (`cmd/status.go`) is install-drift-specific; there is
   no registry or plugin mechanism anywhere. The closest existing pattern is the wake ladder: a
   slice of uniform strategies with every impure edge injected through `reach.Deps`.
@@ -74,8 +77,9 @@ a tunnel. That heterogeneity is the argument for a plugin boundary rather than a
   alias-keyed; `keyHelp` is the single source of truth for keys; `TestDemoFrames` renders golden
   frames and doubles as the width guard.
 - `sdk/gff` and `sdk/tmux-mgr` already ship a public `pkg/` alongside `internal/`, so a
-  plugin-author-facing package has precedent. `yaml.v3` is already in the repo's dependency
-  graph (`sdk/gss`, `sdk/gff`), though not yet in fleet's.
+  plugin-author-facing package has precedent. `gopkg.in/yaml.v3` is already a direct
+  requirement of fleet's own `go.mod` (used by `internal/updplan`), so the providers loader
+  adds no dependency. Eleven non-test `runner.Exec{}` construction sites exist today; none move.
 
 ## 2. Goals & non-goals
 
@@ -120,8 +124,10 @@ a tunnel. That heterogeneity is the argument for a plugin boundary rather than a
   follow-on.
 - **Remote** transports. The protocol is designed for them (URL-addressed, no stdio assumptions
   in the method layer); only local stdio ships.
-- Auto-refresh of a level, a parameter form for actions needing operator input, and anything
-  that writes to a target: every probe and listing is read-only on the host.
+- Auto-refresh of a level, a parameter form for actions needing operator input, and any
+  built-in that writes to a target: every in-tree probe and listing is read-only on the host.
+  (A third-party plugin's `host/exec` runs what the plugin sends — §5 says so plainly rather
+  than claiming a read-only guarantee fleet cannot enforce.)
 - Sandboxing plugins. Installing a plugin is trusting an executable, exactly like installing any
   CLI on your PATH; §5 states that boundary plainly rather than pretending to enforce it.
 
@@ -225,7 +231,7 @@ contract serialisable from the start is what keeps behaviour out of it.
 | `pkg/provider` (**public**) | The contract and the wire: `Node`, `Action`, `Handoff`, `Stream`, `Provider`, `ErrAbsent`; the JSON-RPC method/param types; `Serve(Provider)` for plugin authors; `Client` for fleet. Pure data + transport, no ssh, no exec of remote things. | fleet, every plugin author | stdlib only |
 | `internal/providers` | The registry: built-in entries, the `providers.yaml` loader, lazy plugin dial, per-call timeouts, health/status, and the `host/exec` bridge onto `runner.Runner`. | TUI nav, CLI verbs | `pkg/provider`, `internal/runner` |
 | `internal/provider/herdr` | The herdr provider: `New(Deps)`; pure parsers over real captured JSON; pure, quoted remote scripts; the degraded-state rules. | the registry (built-in) and `fleet provider serve herdr` | `pkg/provider`, `internal/runner` (types) |
-| `internal/runner` (extended) | Turns a declared `provider.Handoff` into an `*exec.Cmd` (`ssh -t` + mux options for remote, bare argv with no shell for local) and a set of `provider.Tunnel`s into one `ssh -N` (`BridgeArgv`, pure; `RunBridgeCtx`); `Quote`. The alias is a parameter fleet supplies, never a field the provider fills. | the TUI, `fleet connect`, `fleet bridge`, the `host/exec` bridge | `pkg/provider` (data only) |
+| `internal/runner` (extended) | Turns a declared `provider.Handoff` into an `*exec.Cmd` (`ssh -t` + mux options for remote, bare argv with no shell for local) and a set of `provider.Tunnel`s into one `ssh -N` (`BridgeArgv`, pure; `RunBridgeCtx`); `RunCtx` (a context, stdin, stderr and an exit code on the batch lane, for `Host.Exec`); `Quote` (moved here from `updexec.ShQuote`, which re-points to it, so one quoting implementation exists). The alias is a parameter fleet supplies, never a field the provider fills. | the TUI, `fleet connect`, `fleet bridge`, the `host/exec` bridge | `pkg/provider` (data only) |
 | `internal/bridge` | One `Set` per alias — its forwards, the `ssh -N` context, state (`starting · up · failed · stopped`) and reason — under a `Manager` keyed by alias: `Add`/`Remove` restart the host's set, `Status()` is the table every consumer renders, `Close()` tears every host down. Readiness is a loopback TCP dial, injected so tests open no socket. | the TUI, `fleet bridge`, `fleet connect` | `pkg/provider` (data), `internal/runner` |
 | `internal/provider/ports` | The ports provider: one `ss -ltnp` round trip; a small label table (11434 ollama, 3080 dsh, 5900 VNC, 6443 k8s API, …); every loopback-reachable port a row with a `t` `Tunnel` action; a port bound to a non-loopback address only is listed and refused with the reason. | the registry (built-in) | `pkg/provider` |
 | `cmd/tui_nav.go`, `cmd/tui_nav_view.go`, `cmd/tui_bridge.go` | The view stack, push/pop/reload, async level loads with a generation counter, breadcrumb, the generic table renderer, `runProviderAction`; the bridge keys, the gutter marker, the level bridge line and teardown on quit. | `fleet tui` | `pkg/provider`, `internal/providers`, `internal/bridge` |
@@ -244,7 +250,7 @@ type Node struct {
     Actions []Action          `json:"actions"`
 }
 type Action struct {
-    Key         rune     `json:"key"`
+    Key         string   `json:"key"`         // exactly one printable rune, carried as a string ("c")
     Label       string   `json:"label"`
     Unavailable string   `json:"unavailable"` // non-empty: LISTED but refused, with the reason
     Handoff     *Handoff `json:"handoff"`     // takes the terminal              } exactly
@@ -270,11 +276,19 @@ type Provider interface {
     Columns(kind string) []string                                   // unknown kind → nil → IDs only
 }
 
-// Host is what a provider is allowed to do to a machine: run a read-only command.
-// In-process it wraps runner.Runner; over the wire it is the host/exec callback.
+// Host is what a provider is allowed to do to a machine: run one command on it.
+// In-process it wraps runner.Runner.RunCtx; over the wire it is the host/exec callback.
+// Both paths see the SAME data — stdin in; stdout, stderr and exit code out — so the
+// dual-path test compares like with like. A non-zero exit is a result, not an error;
+// err means the command could not be run at all (or ctx expired).
 type Host interface {
     Alias() string
-    Exec(ctx context.Context, argv ...string) (stdout string, err error)
+    Exec(ctx context.Context, stdin string, argv ...string) (ExecResult, error)
+}
+type ExecResult struct {
+    Stdout   string `json:"stdout"`
+    Stderr   string `json:"stderr"`
+    ExitCode int    `json:"exitCode"`
 }
 ```
 
@@ -312,7 +326,8 @@ fleet (host)                                    plugin (provider)
   ◀── {kind, columns[], nodes[]}
   ── provider/columns {kind} ─────────────────────────▶   (for an empty level's header)
   ◀── {columns[]}
-  ── shutdown ────────────────────────────────────────▶
+  ── shutdown {} ─────────────────────────────────────▶
+  ◀── {}                                                  (so fleet can wait for a clean exit)
 
   ◀── host/exec {callId, argv[], stdin?} ─────────────   (plugin-initiated: the ONLY way out)
   ── {stdout, stderr, exitCode} ──────────────────────▶
@@ -324,9 +339,12 @@ Decisions inside the protocol, each with its reason:
 - **Version negotiation is a handshake, not a hope.** `protocol: 1`; a major mismatch disables
   the plugin and renders its capability row as `plugin protocol 2, fleet speaks 1`. herdr's own
   versioned protocol is the cautionary precedent — fleet should fail the same way, legibly.
-- **`host/exec` is the only outward capability**, and it lands on `runner.Runner`, so BatchMode,
-  `ConnectTimeout` and the ControlMaster socket apply unchanged, and `runner.Fake` drives plugin
-  tests with no socket. It carries **no alias**: `callId` names the `provider/*` request the
+- **`host/exec` is the only outward capability**, and it lands on `runner.Runner.RunCtx` under
+  the provider call's context, so BatchMode, `ConnectTimeout` and the ControlMaster socket apply
+  unchanged, and `runner.Fake` drives plugin tests with no socket. Its reply `{stdout, stderr,
+  exitCode}` is exactly the `ExecResult` an in-process `Host.Exec` returns, stdin included on
+  both paths, so a built-in and its served twin see the same failing command the same way. It
+  carries **no alias**: `callId` names the `provider/*` request the
   plugin is answering, and fleet resolves that to the machine it already chose. A plugin that
   could name a host could enumerate the fleet through exec, and concurrent calls could not be
   told apart — so the escape is unrepresentable rather than filtered. The alias still travels
@@ -341,8 +359,14 @@ Decisions inside the protocol, each with its reason:
 - **`attrs` round-trips.** A probe puts opaque state there (herdr's resolved binary path) and
   fleet hands it back on `children`, so a plugin needs no session state and can be restarted or
   reconnected between calls — the property a remote transport will need.
-- **Every call has a deadline** (per-provider `timeout`, default 10s). A plugin that misses it is
-  killed and marked failed; its row says so. A hung plugin must never hang the dashboard.
+- **Every call has a deadline** (per-provider `timeout`, default 10s), and the clock measures
+  the plugin's *own* time: it pauses while a `host/exec` the plugin issued is outstanding,
+  because host time is already bounded by the runner's `ConnectTimeout` and by the context the
+  bridge hands `RunCtx`. A breach fails that **call** (the row reads `timed out after 10s`) and
+  kills the process; the next call to that provider re-dials it — a slow *host* must never cost
+  the operator a plugin for the rest of the session. Built-ins get the same rule through the
+  context on `Host.Exec`: a hung in-process probe is cancelled, not waited for. A hung plugin
+  must never hang the dashboard.
 - **In-process is the same interface.** Built-ins are `Provider` values; `fleet provider serve
   <name>` wraps one in `Serve()` so the *same* herdr code can be configured as an external
   plugin. That is how the protocol gets a real consumer before any third party writes one.
@@ -433,7 +457,9 @@ host
   scripts too) resolves the binary — `command -v herdr`, then `~/opt/bin/herdr`, then
   `~/.local/bin/herdr` — then emits the resolved path, `status --json` and `session list --json`,
   delimiter-separated exactly like the install-stamp probe. The resolved path travels in
-  `Attrs["binary"]`, so deeper levels invoke herdr by absolute path and never re-resolve PATH.
+  `Attrs["binary"]` as an **absolute** path — the script expands `$HOME` before emitting, so
+  the value is never a `~` that a later quoted command would fail to expand — and deeper levels
+  invoke herdr by it, never re-resolving PATH.
 - **The sessions level costs two round trips regardless of session count** (`session list`, then
   one script looping `"$b" --session '<name>' api snapshot` over quoted names); **the agents
   level costs one**. Bounded up front, per the wake ladder's own lesson about budgets.
@@ -521,12 +547,15 @@ HOST     REMOTE  LOCAL                    STATE     NOTE
   more binary speaking v1.
 - **Remote providers** need a dialer and a config URL, because `attrs` round-trip, every call has
   a deadline, and no method assumes a shared filesystem or a live pipe.
+- **A per-plugin `exec.allow` list** (argv[0] names a plugin may run through `host/exec`) is
+  one field in `providers.yaml` and one check in the bridge, for operators who want the
+  read-only property enforced on third-party plugins too.
 
 ## 5. Risks & blast radius
 
 | Risk | Severity | Mitigation |
 | :-- | :-- | :-- |
-| **A plugin is arbitrary code** | High | Stated, not pretended away: installing a plugin is trusting an executable, exactly like installing any CLI on your PATH. Mitigations that *are* real: fleet never passes credentials, hostnames or key paths to a plugin; a plugin's only remote reach is `host/exec` on the call it is answering, so it cannot even name another machine; it cannot spawn an interactive process or hold the terminal; it runs under a deadline. Third-party plugins are opt-in via a config file the operator writes by hand. |
+| **A plugin is arbitrary code** | High | Stated, not pretended away: installing a plugin is trusting an executable, exactly like installing any CLI on your PATH. Mitigations that *are* real: fleet never passes credentials, hostnames or key paths to a plugin; a plugin's only remote reach is `host/exec` on the call it is answering, so it cannot even name another machine; it cannot spawn an interactive process, hold the terminal or bind a port; it runs under a deadline. Third-party plugins are opt-in via a config file the operator writes by hand. **Not** mitigated, and said so: `host/exec` runs whatever argv the plugin sends, on the host the operator drilled into, as the ssh user — a bad plugin can write there, and reverting this PR does not undo it. The read-only guarantee (§6) is for the built-ins, whose scripts are in-tree and reviewed; a per-plugin argv allowlist is a cheap follow-on (§4.9), not a v1 promise. |
 | **A provider-supplied value reaches a shell unquoted** | High | Structural: local handoffs are argv with no shell; every remote command value passes `runner.Quote`; `connect --dry-run` prints the resolved argv. Pinned by `TestLocalHandoffNeverInvokesAShell` and `TestRemoteHandoffQuotesEveryProviderSuppliedValue`. |
 | **A hung or crashing plugin freezes the dashboard** | Medium | Per-call deadline, process kill, capability row rendered as failed; loads run off the UI thread; the registry never blocks `fleet status`, which consults no provider at all. |
 | **A drill-down probe races an in-flight update or wake** | Medium | `enter` reuses `canStartConfigAction()`; no new ownership state to keep in sync. |
@@ -538,7 +567,7 @@ HOST     REMOTE  LOCAL                    STATE     NOTE
 | **A local port collision** | Low | `ExitOnForwardFailure=yes` makes ssh exit with the reason instead of running a half-working set; `LocalPort: 0` allocates around a busy port and says so. Pinned by `TestABusyLocalPortIsAllocatedAroundAndReported`. |
 | **The restart blip drops a connection on a sibling bridge** | Low | Accepted (§3.4 A); happens only on an operator keystroke; `-O forward` on a keeper process is the upgrade path if it ever matters. |
 | **Protocol overhead on every drill-down** | Low | Built-ins stay in-process; only configured plugins spawn, lazily on first use, reused for the session. `fleet status` and the dashboard consult no provider. |
-| **New dependency (`yaml.v3`) in fleet** | Low | Already in the repo's graph via `sdk/gss` and `sdk/gff`; chosen over JSON so a hand-edited plugin registry can carry comments, as `.github/gff/features.yaml` does. |
+| **The providers config format** | Low | `gopkg.in/yaml.v3` is already a direct requirement of fleet (`internal/updplan`), so nothing is added; chosen over JSON so a hand-edited plugin registry can carry comments, as `.github/gff/features.yaml` does. |
 | **Behaviour regression on the dashboard** | Low | Level 0 untouched; `reg == nil` in every existing test; no existing golden frame changes. |
 
 Blast radius: additive code in `sdk/fleet` plus one optional user config file. No `install.sh`
@@ -547,9 +576,10 @@ process of the fleet that opened it, on the workstation only.
 
 ## 6. Rollback
 
-Every probe and listing is read-only on the host; the only mutations are what the operator does
-inside a handed-off terminal, which is exactly what pressing `s` does today. Rolling back is
-reverting the PR: no host, no config file and no socket carries state from this feature, and a
+Every **built-in** probe and listing is read-only on the host; the only mutations are what the
+operator does inside a handed-off terminal (exactly what pressing `s` does today) — or what a
+third-party plugin the operator installed chose to run through `host/exec`, which no revert
+undoes. Rolling back is reverting the PR: no host, no config file and no socket carries state from this feature, and a
 bridge is in-memory state of one fleet process — quitting it removes every bridge.
 Two graduated kill switches exist below that: deleting or emptying `providers.yaml` returns to
 built-ins only, and `reg == nil` (the injected registry) disables drill-down entirely without a

@@ -99,7 +99,7 @@ Components, each independently testable:
 **Data flow (one level):** a key or a CLI verb names `(alias, path)` → the registry resolves
 `path[0]` to a built-in `Provider` value or a dialed plugin `Client` → `Probe`/`Children` runs
 with a deadline → a provider that needs machine data calls `Host.Exec(argv…)`, which in-process
-is `runner.Runner.Run` and over the wire is the `host/exec` callback landing on the same method
+is `runner.Runner.RunCtx` and over the wire is the `host/exec` callback landing on the same method
 → `[]Node` returns → the TUI renders `Columns(kind)` against `Node.Cells` positionally, or the
 CLI marshals the same structs to JSON.
 
@@ -119,30 +119,40 @@ connection to a host — a bridge included: `internal/bridge` owns state and con
   (key, label, unavailable, exactly one of handoff/stream/tunnel), `Handoff` (remote command or
   local argv — **no host field**), `Stream` (command, follow), `Tunnel` (remotePort 1–65535,
   localPort 0–65535 where 0 means "prefer the remote number, else allocate", scheme — **no
-  address field**), `Provider` (name, probe, children, columns), `Host` (alias, exec). All
-  JSON-serialisable; `ErrAbsent`/`ErrNoSuchPath` sentinels.
+  address field**), `Provider` (name, probe, children, columns), `Host` (alias; exec taking a ctx and stdin,
+  returning `ExecResult{stdout, stderr, exitCode}`). `Key` is one printable rune carried as a
+  string. All JSON-serialisable; `ErrAbsent`/`ErrNoSuchPath` sentinels.
 - **F2 Handoff execution.** A remote handoff runs `ssh -t` with `MuxArgs` and no BatchMode; a
-  local handoff runs a bare argv with no shell. `runner.Quote` is the only quoting path for
-  values interpolated into a remote command string. The alias every handoff, stream and tunnel
+  local handoff runs a bare argv with no shell. `runner.Quote` — `updexec.ShQuote` moved into
+  `runner`, with `updexec` and `cmd.shQuote` re-pointed, so exactly one implementation exists —
+  is the only quoting path for values interpolated into a remote command string. The alias every handoff, stream and tunnel
   runs against is supplied by fleet from the level (or the CLI argument), never read from the
   action.
-- **F3 Cancellable streams.** `RunStreamCtx` joins the `Runner` interface (`Exec` via
-  `exec.CommandContext`, `Fake` mirrored); `RunStream` delegates to it.
+- **F3 Cancellable lanes.** `RunStreamCtx` already exists on the `Runner` interface
+  (fleet-update #270) and needs nothing. `RunCtx(ctx, host, stdin, argv…) (ExecResult, error)`
+  joins it so a provider exec can be cancelled and sees stderr and the exit code (`Exec` via
+  `exec.CommandContext`, `Fake` mirrored, `Block` honoured).
 - **F4 Protocol handshake.** `initialize` exchanges `{fleetVersion, protocol}` for
   `{name, version, protocol, capabilities}`; a major-version mismatch disables the plugin with a
   legible reason.
 - **F5 Protocol methods.** `provider/probe`, `provider/children` (with round-tripped `attrs`),
-  `provider/columns`, `shutdown` — newline-framed JSON-RPC 2.0 over stdio, transport addressed
+  `provider/columns`, `shutdown` (answered `{}` so fleet can wait for a clean exit) —
+  newline-framed JSON-RPC 2.0 over stdio, transport addressed
   by URL so a socket or remote endpoint changes only the dialer.
-- **F6 `host/exec` callback.** The plugin's only outward capability; lands on `runner.Runner`,
-  so BatchMode, `ConnectTimeout` and the ControlMaster socket apply. It carries a `callId` — the
+- **F6 `host/exec` callback.** The plugin's only outward capability; lands on
+  `runner.Runner.RunCtx` under the provider call's context, so BatchMode, `ConnectTimeout` and
+  the ControlMaster socket apply, and its reply `{stdout, stderr, exitCode}` is the same
+  `ExecResult` an in-process `Host.Exec` returns, stdin included on both paths. It carries a `callId` — the
   `provider/*` request being answered — and **no alias**, so a plugin cannot name a machine it
   was not asked about; fleet resolves the call to the alias it dispatched. A plugin receives an
   alias for labelling only, and never a hostname, port, user, key path or credential. It cannot
   spawn an interactive process or hold an open pipe.
-- **F7 Plugin lifecycle.** Lazy spawn on first use, reuse for the process lifetime, per-call
-  deadline (default 10s, per-provider override), kill on breach, stderr captured to the log, and
-  a failed plugin rendered as a row rather than an omission or a crash.
+- **F7 Plugin lifecycle.** Lazy spawn on first use, reuse for the process lifetime, a per-call
+  deadline (default 10s, per-provider override) that measures the plugin's own time — paused
+  while its `host/exec` is outstanding — and on breach fails that call, kills the process and
+  re-dials on the next call (once per call, never a loop); stderr captured to the log; a failed
+  plugin rendered as a row rather than an omission or a crash. Built-ins obey the same deadline
+  through the ctx on `Host.Exec`.
 - **F8 Configuration.** `~/.config/fleet/providers.yaml`: file order is render order; `enabled`
   toggles; a plugin may shadow a built-in by name via `provides:`; an absent file means the
   built-ins, enabled, in declaration order.
@@ -266,17 +276,26 @@ Every rule becomes a named test. Format: **trigger · fires · must-not-fire · 
   half-written line · framing test.
 - **F5c** two concurrent calls to one plugin · replies match their request ids · must never
   cross-deliver · interleaved responses · id-correlation test.
-- **F6a** a plugin calling `host/exec` · the argv reaches `runner.Runner.Run` for the alias fleet
-  dispatched, under BatchMode · the plugin must never receive a hostname, port, user, key path or
+- **F6a** a plugin calling `host/exec` · the argv reaches `runner.Runner.RunCtx` for the alias
+  fleet dispatched, under BatchMode · the plugin must never receive a hostname, port, user, key path or
   password · a `stdin` payload · `runner.Fake` assertion plus a leak sweep over the marshalled
   params.
 - **F6b** a plugin calling `host/exec` with an unknown or already-completed `callId` · refused
   `-32001 unknown call` · must not allow a plugin to reach a machine it was not asked about, or
   to enumerate the fleet through exec · two concurrent calls for different hosts, each exec
   landing on its own · authorization test.
-- **F7a** a plugin exceeding its deadline · the call errors, the process is killed, the
-  capability renders as failed · must not hang the TUI or the CLI · a plugin that sleeps forever ·
-  timed test with a stub plugin.
+- **F6c** a command exiting non-zero with stderr · in-process and over the wire the provider
+  receives the same `ExecResult` (stdout, stderr, exit code) and a nil error · must not collapse
+  a non-zero exit into an error on one path only · a `stdin` payload reaches the command on both
+  paths · dual-path exec test.
+- **F7a** a plugin exceeding its deadline in its own think-time · the call errors with `timed
+  out after …`, the process is killed, the capability renders as failed · must not fire while
+  the plugin is merely waiting on a `host/exec` that fleet's ssh answers slowly (a stub whose
+  exec hits a `Fake` blocked for 3× the deadline stays alive and answers) · a plugin that sleeps
+  forever · timed test with a stub plugin.
+- **F7d** a built-in whose in-process `Host.Exec` hangs · the call's ctx cancels it and the row
+  renders failed · must not block `loadLevel` or the CLI · `Fake.Block` on the batch lane ·
+  timed test.
 - **F7b** one plugin failing · every other provider still renders · a failure must never abort
   the level · two plugins, one broken · registry test.
 - **F7c** a plugin spawned once · reused across levels within a process · must not spawn per call ·
@@ -420,8 +439,8 @@ Every rule becomes a named test. Format: **trigger · fires · must-not-fire · 
 - **Unit (pure).** Table tests for `pkg/provider` (marshalling, validation, cells/columns),
   `internal/provider/herdr`'s parsers and script builders over **real captured** herdr 0.8.2
   fixtures in `testdata/`, and `internal/runner`'s `HandoffArgv`.
-- **Protocol.** An in-tree stub plugin (a tiny binary compiled by the test) exercises the
-  handshake, version mismatch, deadline breach, immediate exit, malformed framing, concurrent id
+- **Protocol.** An in-tree stub plugin (`providertest/stubplugin`, its own `main` package the
+  tests `go build` once per run into a temp dir) exercises the handshake, version mismatch, deadline breach, immediate exit, malformed framing, concurrent id
   correlation and the `host/exec` callback. `runner.Fake` backs the bridge, so no socket opens.
 - **Dual-path equality (F10a).** The herdr tree is rendered in-process and again through
   `fleet provider serve herdr`, and the two are asserted identical — the framework's keystone
@@ -449,12 +468,15 @@ Every rule becomes a named test. Format: **trigger · fires · must-not-fire · 
 
 ## 7. Prerequisites / dependencies
 
-- `internal/runner` gains `Handoff` execution, `Quote` (moved from `cmd.shQuote`, alias kept),
-  `interactiveArgs` promoted to a package function, and `RunStreamCtx` on the `Runner` interface.
-  The ten literal `runner.Exec{}` constructions and the `cmd/wake.go` type assertion stay as they
-  are.
-- One new dependency in fleet: `gopkg.in/yaml.v3`, already in the repo's graph via `sdk/gss` and
-  `sdk/gff`, chosen so a hand-edited plugin registry can carry comments.
+- `internal/runner` gains `Handoff` execution, bridge execution (`BridgeArgv`, `RunBridgeCtx`),
+  `RunCtx` on the `Runner` interface, `Quote` (moved from `updexec.ShQuote`; `updexec` and
+  `cmd.shQuote` re-point to it — `updexec` imports `runner`, so the move can only go this way),
+  and `interactiveArgs` promoted to a package function. `RunStreamCtx` already exists (#270).
+  The eleven literal `runner.Exec{}` constructions and the `cmd/wake.go` type assertion stay as
+  they are.
+- No new dependency: `gopkg.in/yaml.v3` is already a direct requirement of fleet's `go.mod`
+  (`internal/updplan`); it is chosen over JSON so a hand-edited plugin registry can carry
+  comments.
 - `pkg/provider` is public API; `sdk/gff` and `sdk/tmux-mgr` set the `pkg/` precedent.
 - herdr ≥ 0.8.2 on a host for the live gates; the local client for attach. No `install.sh`
   change, no host-side writes, no daemon.
@@ -473,7 +495,7 @@ Every rule becomes a named test. Format: **trigger · fires · must-not-fire · 
 | Sandboxing or signing plugins | Installing a plugin is trusting an executable, like any CLI on PATH. The honest mitigations (no credentials, alias-scoped exec, no terminal, deadlines) are in scope; a sandbox is a different project. |
 | Auto-refresh of a level | `r` reloads on demand. A tick is additive because stale replies are already discarded by generation. |
 | A parameter form for actions needing input (`kubectl scale`) | Would be a new TUI mode. Interactive handoffs cover exec/attach, which is what the fleet needs now. |
-| Provider-driven writes to a host | Every probe and listing is read-only; mutation happens only inside a terminal the operator was handed, exactly as `s` does today. |
+| Provider-driven writes to a host | Every **built-in** probe and listing is read-only; mutation happens inside a terminal the operator was handed, exactly as `s` does today. A third-party plugin's `host/exec` is not policed — installing one is trusting it with the ssh user's rights on the hosts the operator drills into (design §5). A per-plugin argv allowlist is a cheap follow-on (design §4.9), not a v1 promise. |
 | Cluster-first (host-independent) views | The tree is rooted at a host by construction while ssh is the bridge; a cluster reachable from two hosts appears under both. |
 
 ## 9. Rollback

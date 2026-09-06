@@ -116,6 +116,10 @@ eleven-step manual checklist in plan §6 is signed off with captures.
   no daemon, no pidfile, no automatic restart of a failed set.
 - **Bridge tests bind no real port.** `listen`/`dial` are injected; a test that opens a socket
   is a defect.
+- **`Host.Exec` and `host/exec` are one shape.** Ctx and stdin in; stdout, stderr and exit code
+  out; a non-zero exit is a result. The plugin deadline measures plugin time only — it pauses on
+  an outstanding `host/exec` — and a breach fails the call, never the session.
+- **Do not touch `go.mod`.** `yaml.v3` is already required; `go mod tidy` must stay a no-op.
 - **Every remote script is POSIX `sh`** per `docs/mbo/specs/shell-portability.md` — no `[[`, no
   arrays, no `local`. `make lint-portability` is enforcing.
 - **Demos and fixtures must be real output.** Fixtures carry the herdr version and capture date.

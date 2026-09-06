@@ -35,6 +35,17 @@ every `-L` (design §3.4 A), owned by `internal/bridge`, and **never outlives th
 that opened it. Leaf **H** (T25–T28) builds it; the contract pieces land in leaf A before the
 freeze.
 
+**Review corrections folded in (2026-09-05, `/code-review` on #267):** `Host.Exec` takes a
+context *and* stdin and returns `ExecResult{stdout, stderr, exitCode}` on both paths, over a
+new `runner.RunCtx` — the batch lane had no context, so a hung built-in could hang `loadLevel`,
+and the wire and in-process shapes differed; the plugin deadline measures plugin time only and
+fails the call, not the session; `Action.Key` is a one-rune string so the JSON golden reads
+`"key":"c"` without the adapter F1c forbids; `Attrs["binary"]` is absolute; `runner.Quote` is
+`updexec.ShQuote` moved (an alias the other way is an import cycle); `StubPlugin` is its own
+`main` package under `providertest/stubplugin`; T4's gate names the §3.1 interfaces, not leaf
+C's registry; §1.3's stale seam claims are corrected (`RunStreamCtx` exists, `yaml.v3` is
+already required, eleven `Exec{}` sites); the read-only claim is scoped to built-ins.
+
 **Three must-hold constraints inherited from the module** (design §5, spec §6):
 
 - No package but `internal/runner` opens a connection to a host; providers reach a machine only
@@ -47,17 +58,18 @@ freeze.
 
 | Path | Purpose | Implements |
 | :-- | :-- | :-- |
-| `sdk/fleet/pkg/provider/provider.go` | `Node`, `Action`, `Handoff`, `HandoffKind`, `Stream`, `Tunnel`, `Provider`, `Host`, `ErrAbsent`, `ErrNoSuchPath`, `Validate` | F1 |
+| `sdk/fleet/pkg/provider/provider.go` | `Node`, `Action`, `Handoff`, `HandoffKind`, `Stream`, `Tunnel`, `Provider`, `Host`, `ExecResult`, `ErrAbsent`, `ErrNoSuchPath`, `Validate` | F1 |
 | `sdk/fleet/pkg/provider/provider_test.go` | JSON round-trip, cells/columns mismatch, action validation (one of three), tunnel port ranges | F1a–d |
 | `sdk/fleet/pkg/provider/wire.go` | JSON-RPC 2.0 envelope, method/param/result types, `codec` (newline framing), id correlation | F5 |
 | `sdk/fleet/pkg/provider/wire_test.go` | framing, malformed lines, concurrent id correlation | F5b, F5c |
 | `sdk/fleet/pkg/provider/serve.go` | `Serve(context, Provider, io.Reader, io.Writer)` — the plugin side; `hostExec` client stub handed to the Provider | F5a, F6, F10 |
 | `sdk/fleet/pkg/provider/client.go` | `Dial`/`Client` — the fleet side; handshake, version check, per-call deadline, `host/exec` dispatch to an injected `ExecFunc` | F4, F5, F7a |
 | `sdk/fleet/pkg/provider/*_test.go` | handshake table (match/mismatch), immediate-exit, deadline, echo-attrs | F4a–b, F5a, F7a |
-| `sdk/fleet/pkg/provider/providertest/fake.go` | `FakeProvider` (arbitrary five-column kind; one action of each of the three kinds) + `StubPlugin` (a test-compiled binary) | harness for E/F/H leaves, protocol tests |
+| `sdk/fleet/pkg/provider/providertest/fake.go` | `FakeProvider` (arbitrary five-column kind; one action of each of the three kinds); `BuildStub(t)` builds the stub once per test binary into `t.TempDir()` | harness for E/F/H leaves, protocol tests |
+| `sdk/fleet/pkg/provider/providertest/stubplugin/main.go` | `StubPlugin`: its own `main` package (a library package cannot hold `func main`), scripted by flags/env to answer, sleep, exec, exit, or claim protocol 2 | protocol tests |
 | `sdk/fleet/internal/providers/registry.go` | ordered registry; builtin + plugin entries; failure isolation; `Get`, `All`, `Status` | F7b–c, F8b |
 | `sdk/fleet/internal/providers/config.go` | `providers.yaml` load: order, `enabled`, `provides` shadow, duplicate detection, absent = builtins | F8 |
-| `sdk/fleet/internal/providers/host.go` | the `host/exec` bridge: `callId` → alias → `runner.Runner.Run`; nothing else exposed | F6 |
+| `sdk/fleet/internal/providers/host.go` | the `host/exec` bridge: `callId` → alias → `runner.Runner.RunCtx` under the call's ctx, reply = `ExecResult`; a paused deadline while outstanding; nothing else exposed | F6 |
 | `sdk/fleet/internal/providers/*_test.go` | loader table, shadow, disable, one-plugin-failure isolation, spawn count, exec authorization + leak sweep | F6a–b, F7, F8 |
 | `sdk/fleet/internal/provider/herdr/herdr.go` | `New(Deps) provider.Provider`: `Probe`, `Children`, `Columns`, action construction, degraded-state rules | F11–F14 |
 | `sdk/fleet/internal/provider/herdr/parse.go` | pure `parseStatus`, `parseSessions`, `parseSnapshot`, `splitSections` | F11c, F12b |
@@ -85,23 +97,25 @@ freeze.
 | `sdk/fleet/cmd/tui_demo_test.go` *(edit)* | golden frames: capability, sessions, agents, absent, plugin-failed, ports (one bridged), dashboard with `⇄N` | F15, F11b, F7a, F25d |
 | `sdk/fleet/internal/runner/handoff.go` | `HandoffArgv(alias, h)` (pure), `Command(alias, h)`, `Quote`; `interactiveArgs` promoted to a package func | F2 |
 | `sdk/fleet/internal/runner/bridge.go` | `Forward`, `BridgeArgv(alias, forwards)` (pure), `RunBridgeCtx` on the interface (`Exec` with `Pdeathsig` on Linux via a build-tagged file; `Fake` mirrored with `Block`) | F22 |
+| `sdk/fleet/internal/runner/runner.go` *(edit)* | `RunCtx(ctx, host, stdin, argv…) (ExecResult, error)` and `RunBridgeCtx` added to the interface, `Exec` and `Fake` | F3, F22 |
+| `sdk/fleet/internal/updexec/script.go` *(edit)* | `ShQuote` becomes `= runner.Quote` (the implementation moves; `updexec` already imports `runner`) | F2 |
 | `sdk/fleet/internal/runner/handoff_test.go` | mux/`-t` presence, no-shell-for-local, quoting, bad input, alias stamping | F2a–d |
 | `sdk/fleet/internal/runner/bridge_test.go` | `-N`/`ExitOnForwardFailure`/mux/`-L` shape, loopback-only, zero forwards, cancel kills | F22a–b |
-| `sdk/fleet/go.mod` *(edit)* | `gopkg.in/yaml.v3` | F8 |
 | `sdk/fleet/AGENTS.md` (+ `CLAUDE.md` symlink) | new "Drill-down & providers" invariants section; `ls`/`connect`/`providers` rows in Commands | §6 |
 | `sdk/fleet/README.md`, `sdk/README.md` | the drill-down and plugin-authoring tour; **real** pasted demos | §6 |
 | `docs/mbo/plans/fleet-connect/evidence/**` | per-task captured output | §7 |
 
 Touch-points deliberately **not** changed: `install.sh`, `scripts/test.sh` (the floor of 60
-already covers fleet), `cmd/status.go`'s `Row`, the ten `runner.Exec{}` construction sites, and
-`cmd/wake.go`'s type assertion.
+already covers fleet), `cmd/status.go`'s `Row`, the eleven `runner.Exec{}` construction sites,
+`cmd/wake.go`'s type assertion, and `go.mod` (`yaml.v3` is already required).
 
 ## 3. Interface contracts
 
 ### 3.1 The contract (frozen at the end of Task 4 — leaf A's exit)
 
 As written in design §4.2, plus `Validate() error` on `Node` and `Action` (exactly one of
-`Handoff`/`Stream`/`Tunnel`; a `Key` that is printable; a `Tunnel` with `RemotePort` in 1–65535
+`Handoff`/`Stream`/`Tunnel`; a `Key` that is exactly one printable rune, carried as a string; a
+`Tunnel` with `RemotePort` in 1–65535
 and `LocalPort` in 0–65535). None of the three action payloads carries a host or an address:
 `internal/runner` takes the alias as a parameter (`HandoffArgv(alias, h)`, `BridgeArgv(alias,
 fwds)`), and the only caller that supplies it is fleet. Also:
@@ -109,13 +123,15 @@ fwds)`), and the only caller that supplies it is fleet. Also:
 ```go
 // Host is the ONLY capability a provider has over a machine.
 type Host interface {
-    Alias() string                                                    // for labels and handoffs
-    Exec(ctx context.Context, argv ...string) (stdout string, err error)
+    Alias() string                                                    // for labels
+    Exec(ctx context.Context, stdin string, argv ...string) (ExecResult, error)
 }
+type ExecResult struct{ Stdout, Stderr string; ExitCode int }        // non-zero exit is a result, not an error
 ```
 
-In-process, `Host` wraps `runner.Runner` for the alias the registry chose. Over the wire it is a
-stub that issues `host/exec` and blocks for the reply.
+In-process, `Host` wraps `runner.Runner.RunCtx` for the alias the registry chose, under the
+call's context. Over the wire it is a stub that issues `host/exec` and blocks for the reply,
+which carries the same three fields. Both paths deliver `stdin`.
 
 ### 3.2 The protocol (frozen at the end of Task 8 — leaf B's exit)
 
@@ -139,8 +155,14 @@ fleet maps it to the alias it dispatched, so a plugin cannot reach a machine it 
 about, and concurrent calls cannot be confused. An exec whose `callId` is unknown or already
 completed is refused with `-32001 unknown call`.
 
-`alias` is still sent *to* the plugin on `provider/*` so it can label rows and build handoffs; it
-is a name, never a route — no hostname, port, user, key path or credential ever crosses the wire.
+`alias` is still sent *to* the plugin on `provider/*` so it can label rows; it is a name, never a
+route — no hostname, port, user, key path or credential ever crosses the wire — and no action
+payload can carry it back.
+
+**The deadline measures plugin time.** The per-call clock pauses while a `host/exec` from that
+call is outstanding (host time is bounded by the runner's own `ConnectTimeout` and the call's
+context on `RunCtx`); a breach fails the call with `timed out after <d>`, kills the process, and
+the next call re-dials it once.
 
 ### 3.3 Config (frozen at the end of Task 10)
 
@@ -170,13 +192,19 @@ resolved on PATH when it has no separator.
   "nodes": [ { "id": "default", "kind": "herdr-session",
                "cells": ["default","running","2","~/.config/herdr"],
                "detail": "default session", "leaf": false,
-               "attrs": {"binary":"~/.local/bin/herdr"},
+               "attrs": {"binary":"/home/<user>/.local/bin/herdr"},
                "actions": [ {"key":"c","label":"attach herdr session default",
-                             "available": true, "reason": ""} ] } ] }
+                             "unavailable": "",
+                             "handoff": {"kind":"local","command":"",
+                                         "argv":["herdr","--remote","<alias>","--session","default"]},
+                             "stream": null, "tunnel": null} ] } ] }
 ```
 
 `nodes` and `columns` are always arrays. `id` is the next path segment verbatim. Adding a key is
-non-breaking; renaming or removing one is not.
+non-breaking; renaming or removing one is not. The golden is **generated by marshalling the
+frozen §3.1 structs**, never hand-written, so it cannot drift from the contract (F1c forbids an
+adapter): `key` is the one-rune string, `unavailable` is the refusal reason, and the three
+payload keys are always present, two of them `null`.
 
 ### 3.5 `fleet bridge` (frozen at the end of Task 28)
 
@@ -219,27 +247,35 @@ verbatim and no `sh -c` anywhere (F2b); a value interpolated into a remote comma
 `Quote`d (F2c); the host element of the argv is the `alias` parameter and nothing in the
 `Handoff` can change it (F2d); empty alias/command and empty argv error. Implement
 `handoff.go` with `HandoffArgv(alias string, h provider.Handoff)`; promote `interactiveArgs` to
-a package function; move `shQuote` to `runner.Quote`, leaving `cmd.shQuote = runner.Quote` so
-existing tests keep passing. **Done when** those pass and the whole module still builds.
+a package function; move the body of `updexec.ShQuote` to `runner.Quote` — the only direction
+that avoids an import cycle, since `updexec` imports `runner` — leaving `updexec.ShQuote =
+runner.Quote` and `cmd.shQuote = runner.Quote` so existing tests keep passing. **Done when** those pass and the whole module still builds.
 *Evidence:* the asserted argv for both kinds.
 
-**T3 · runner bridges.** `RunStreamCtx` already exists on the interface with tests
+**T3 · runner bridges + `RunCtx`.** `RunStreamCtx` already exists on the interface with tests
 (`runner_ctx_test.go`, landed with fleet-update #270), so F3a is covered by
 `TestRunStreamCtxKillsTheChildOnDeadline` and this task builds the bridge lane on the same
 pattern. Tests: `BridgeArgv(alias, [2 forwards])` yields `ssh -N -o ExitOnForwardFailure=yes`,
 every base/mux option, two `-L 127.0.0.1:l:127.0.0.1:r`, the alias last, no `-t`, no remote
 command and no address but `127.0.0.1` (F22a); zero forwards errors; a running bridge whose
 context is cancelled is killed and `done` closes within `WaitDelay`, also when cancelled before
-it is up (F22b, `Fake.Block`). Implement `bridge.go` (`Forward`, `BridgeArgv`, `RunBridgeCtx` on
-`Exec` and `Fake`) plus a `//go:build linux` file setting `Pdeathsig`. **Done when** the tests
+it is up (F22b, `Fake.Block`); `RunCtx` returns stdout, stderr and the exit code for a non-zero
+command with a nil error, delivers stdin, and is cancelled by its context when the command
+blocks (F6c's runner half, F7d's runner half). Implement `bridge.go` (`Forward`, `BridgeArgv`,
+`RunBridgeCtx` on `Exec` and `Fake`) plus a `//go:build linux` file setting `Pdeathsig`, and
+`RunCtx` on the interface, `Exec` (`exec.CommandContext`, separate stdout/stderr buffers,
+`ExitError` → `ExitCode`) and `Fake` (`Out`/`Err`/`Block` honoured). **Done when** the tests
 pass with `-race` and the eleven `runner.Exec{}` call sites plus `cmd/wake.go`'s assertion are
 untouched (`git diff --stat` proves it). *Evidence:* the asserted argv and the diffstat.
 
 **T4 · test harness.** `providertest.FakeProvider` (an arbitrary five-column kind, three levels,
-one leaf, one action of each of the three kinds) and `StubPlugin` (a tiny `main` the protocol
-tests compile).
-**Done when** a smoke test drills `FakeProvider` end-to-end through the not-yet-written registry
-seam's interface. *Evidence:* the smoke test output. **Leaf A exits here — the contract is frozen.**
+one leaf, one action of each of the three kinds) and `StubPlugin` in
+`providertest/stubplugin/main.go` — its own `main` package, because a library package cannot
+hold `func main`; `providertest.BuildStub(t)` runs `go build` once per test binary into
+`t.TempDir()` and returns the path. **Done when** a smoke test drives `FakeProvider` through
+the `Provider` and `Host` interfaces of §3.1 alone (a `Host` backed by `runner.Fake`, no
+registry — leaf A has no in-edges), and `BuildStub` yields a binary that answers `initialize`.
+*Evidence:* the smoke test output. **Leaf A exits here — the contract is frozen.**
 
 ### Phase 2 — the protocol (leaf B)
 
@@ -257,13 +293,16 @@ carrying the in-flight `callId`. **Done when** the test drives `Serve` over an i
 
 **T7 · `Client` (fleet side) + handshake.** Tests: `protocol: 1` enables; `protocol: 2` disables
 with `"plugin protocol 2, fleet speaks 1"` (F4a); a plugin exiting before `initialize` is marked
-failed with its exit status and captured stderr, and is not retried in a loop (F4b); a call that
-outlives its deadline errors and the process is killed (F7a). Implement `client.go` with an
+failed with its exit status and captured stderr, and is not retried in a loop (F4b); a call
+whose plugin think-time outlives its deadline errors and the process is killed, while a call
+blocked on a `host/exec` that fleet's `Fake` answers slowly does **not** fire — the clock pauses
+on an outstanding exec (F7a). Implement `client.go` with an
 injected `ExecFunc` for the callback. **Done when** the four cases pass using `StubPlugin`.
 *Evidence:* each failure mode's rendered reason.
 
-**T8 · `host/exec` bridge.** Tests: a plugin's `host/exec` reaches `runner.Runner.Run` for the
-alias fleet dispatched, under BatchMode (F6a); the params contain no hostname, port, user,
+**T8 · `host/exec` bridge.** Tests: a plugin's `host/exec` reaches `runner.Runner.RunCtx` for
+the alias fleet dispatched, under BatchMode and the call's context (F6a); a non-zero exit with
+stderr and a stdin payload produce the same `ExecResult` over the wire as in-process (F6c); the params contain no hostname, port, user,
 identity path or password (a leak sweep over the marshalled bytes, mirroring
 `TestSudoSecretNeverAppearsInTheRemoteCommand`); an exec with an unknown or completed `callId` is
 refused `-32001` (F6b). Implement `internal/providers/host.go`. **Done when** all pass with
@@ -280,12 +319,15 @@ calls (F7c). Implement `registry.go`. **Done when** those pass. *Evidence:* spaw
 is written (F8a, mirroring `TestMissingConfigIsAnEmptyFleetNotAnError`); an empty file behaves the
 same; reordering the file reorders rendering; a duplicate name errors naming both (F8b);
 `enabled: false` removes the provider from every level *and* stops it being probed (F8c);
-`provides: herdr` shadows the built-in and both never run (F8d). Add `yaml.v3` to `go.mod`.
-**Done when** the table passes. *Evidence:* `go test` plus the `go.mod` diff.
+`provides: herdr` shadows the built-in and both never run (F8d). `yaml.v3` is already required,
+so `go mod tidy` must be a no-op. **Done when** the table passes. *Evidence:* `go test` plus the
+empty `go mod tidy` diff.
 
 **T11 · lifecycle.** Tests: a deadline breach kills the process and renders the capability as
-failed without hanging (F7a); a plugin's stderr reaches the log; a plugin that dies mid-session is
-re-dialed once on the next call and, failing again, reported. Implement lazy spawn, kill, and
+failed without hanging (F7a); a plugin's stderr reaches the log; a plugin that dies or is killed
+mid-session is re-dialed on the next call — once per call, never a loop — and, failing again,
+reported; a built-in whose `Host.Exec` blocks is cancelled by the call's context and rendered
+failed (F7d). Implement lazy spawn, kill, and
 status. **Done when** the timed tests pass. *Evidence:* the failed-capability row.
 
 **T12 · `providers` verbs.** Tests: `list` prints name · source · state · protocol · command and
@@ -307,7 +349,8 @@ and the capture date) plus test output.
 runner; a host where only `~/.local/bin/herdr` exists still resolves (the verified non-login PATH
 case); no herdr anywhere ⇒ `ErrAbsent` with a `Node` naming the paths tried, `Leaf`, no actions
 (F11b). Implement `script.go`'s `probeScript()` and `Probe`, carrying the resolved path in
-`Attrs["binary"]`. **Done when** the round-trip count is exactly 1 and the absent row renders.
+`Attrs["binary"]` as an absolute path (the script expands `$HOME` itself; a test asserts no
+`~` in the attr). **Done when** the round-trip count is exactly 1 and the absent row renders.
 *Evidence:* the recorded argv and the absent row.
 
 **T15 · sessions level.** Tests: exactly two round trips for N = 0, 1, 5 sessions (F12a); agent
@@ -367,8 +410,9 @@ engine-state assertion.
 
 **T23 · `fleet ls`.** Tests: `--json` matches the golden shape with `nodes`/`columns` as arrays,
 including a zero-node level (F20a); `fleet ls <host> herdr default` renders the agents table
-without a TUI, and an unknown path segment errors naming it (F20b). **Done when** the golden JSON
-matches byte-for-byte. *Evidence:* the golden file and the human table.
+without a TUI, and an unknown path segment errors naming it (F20b). The golden is produced by
+marshalling the frozen structs (§3.4), so a contract change fails this test rather than a
+hand-edit hiding it. **Done when** the golden JSON matches byte-for-byte. *Evidence:* the golden file and the human table.
 
 **T24 · `fleet connect`.** Tests: `--dry-run` prints the exact argv, with no credential and no
 unquoted provider value, for a hostile session name (F21a); an action whose `Unavailable` is set
@@ -447,7 +491,9 @@ captures.
 | F5c | `TestConcurrentCallsNeverCrossDeliverReplies` |
 | F6a | `TestHostExecLandsOnTheRunnerSeamUnderBatchMode` · `TestHostExecParamsCarryNoRouteOrCredential` |
 | F6b | `TestHostExecForAnUnknownCallIdIsRefused` |
-| F7a | `TestAPluginThatMissesItsDeadlineIsKilledAndReportedAsARow` |
+| F6c | `TestHostExecSeesTheSameResultInProcessAndOverTheWire` |
+| F7a | `TestAPluginThatMissesItsDeadlineIsKilledAndReportedAsARow` · `TestASlowHostExecDoesNotCountAgainstThePluginDeadline` |
+| F7d | `TestAHungBuiltinExecIsCancelledByItsContext` |
 | F7b | `TestOneFailingPluginNeverStopsTheOthers` |
 | F7c | `TestAPluginIsSpawnedOnceAndReused` |
 | F8a | `TestMissingProvidersConfigIsTheBuiltinSetNotAnError` |
@@ -572,7 +618,7 @@ A(contract) ──▶ B(protocol) ──▶ C(registry+config+verbs) ──┐
 | :-- | :-- | :-- | :-- | :-- |
 | **A** contract | `pkg/provider/{provider,provider_test}.go`, `pkg/provider/providertest/**`, `internal/runner/{handoff,bridge}*.go`, `internal/runner/runner.go` | — | T1–T4 green; `pkg/provider` stdlib-only; ≥ 90% cov; the eleven `Exec{}` sites and `wake.go`'s assertion untouched | **yes (base)** |
 | **B** protocol | `pkg/provider/{wire,serve,client}*.go` | A (§3.1) | T5–T8 green incl. the leak sweep and `-32001` refusal; ≥ 90% cov | **yes** (C, D-T18 consume it) |
-| **C** registry+config+verbs | `internal/providers/**`, `cmd/providers.go`, `go.mod` | A, B (§3.2) | T9–T12 green; missing-config = built-ins; ≥ 90% cov | no |
+| **C** registry+config+verbs | `internal/providers/**`, `cmd/providers.go` | A, B (§3.2) | T9–T12 green; missing-config = built-ins; ≥ 90% cov | no |
 | **D** herdr | `internal/provider/herdr/**` | A, B (for T18) | T13–T18 green; real fixtures with provenance; round-trip counts 1/2/1; dual-path identical; ≥ 90% cov; zero `cmd` imports | no |
 | **E** TUI nav | `cmd/tui_nav*.go`, edits to `cmd/tui_{model,keys,view}.go`, `cmd/tui.go`, `cmd/tui_demo_test.go` | A (tests use `FakeProvider`, not herdr) | T19–T22 green; new frames inside the width guard; **no existing test or frame changed** | no |
 | **F** CLI ls/connect | `cmd/ls.go`, `cmd/connect.go`, their tests | A, C (§3.3) | T23–T24 green; golden JSON committed as the contract | no |
@@ -624,7 +670,8 @@ on its own (F23e); quitting with live bridges (F25e); one of three bridges faili
 8. `fleet bridge <spark>:3080 <nano>:11434` — the table with pids, Ctrl-C, the stop line, and
    `ss -ltn` clean afterwards.
 
-> Produced via `superpowers:writing-plans`; amended 2026-09-05 (leaf H — bridges; T3 rewritten
-> because `RunStreamCtx` already exists; 29 tasks). Execute with `superpowers:executing-plans`,
+> Produced via `superpowers:writing-plans`; amended 2026-09-05 (leaf H — bridges; the
+> `/code-review` corrections in §1; T3 rewritten because `RunStreamCtx` already exists; 29
+> tasks). Execute with `superpowers:executing-plans`,
 > TDD throughout, using the trio in [`./fleet-connect/`](./fleet-connect/). Update
 > [`../index.md`](../index.md) state as it moves.
