@@ -124,6 +124,22 @@ case "$OUT" in *"--print"*) echo "PASS: no-TTY error points at --print"; PASS=$(
 OUT=$(bash "$T" --print < /dev/null 2>&1); RC=$?
 assert_eq "$RC" 1 "--print without a target refused"
 
+# --- --print must not require tmux or claude (CI has neither) ---
+# Regression guard: a blanket preflight made every --print call die with
+# "'claude' not found on PATH" on any machine that is not the one that will
+# run the session. --print only resolves a repo and prints a command.
+MINBIN="$TMPD/minbin"
+mkdir -p "$MINBIN"
+for b in bash git basename tr sed; do ln -sf "$(command -v "$b")" "$MINBIN/$b"; done
+OUT=$(env -i PATH="$MINBIN" HOME="$TMPD" bash "$T" --print "$TMPD/roots/a/plain" 2>&1); RC=$?
+assert_eq "$RC" 0 "--print works with neither tmux nor claude on PATH"
+case "$OUT" in *"-s claude-plain "*) echo "PASS: --print emits the command without claude present"; PASS=$((PASS+1));;
+  *) echo "FAIL: --print under a minimal PATH (got: $OUT)"; FAIL=$((FAIL+1));; esac
+# ...but the real launch path still refuses (no tmux, and no terminal)
+OUT=$(env -i PATH="$MINBIN" HOME="$TMPD" bash "$T" "$TMPD/roots/a/plain" < /dev/null 2>&1); RC=$?
+assert_eq "$RC" 1 "launch path still refuses under a minimal PATH"
+set +e
+
 # --- the picker (sourced with CLAUDE_PICK_LIB=1, fzf stubbed) ---
 # The picker needs a tty, so exercise cp_pick directly with a fake fzf that
 # records the candidate list and echoes back a chosen line.

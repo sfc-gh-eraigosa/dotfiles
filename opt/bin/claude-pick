@@ -203,14 +203,20 @@ cp_main() {
         die "no terminal — run this yourself in a shell, or use: claude-pick --print <target>"
     fi
 
-    command -v tmux >/dev/null 2>&1 || die "tmux not found on PATH"
-    command -v git  >/dev/null 2>&1 || die "git not found on PATH"
-    if ! command -v claude >/dev/null 2>&1; then
-        export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-        # shellcheck source=/dev/null
-        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1
-        command -v claude >/dev/null 2>&1 \
-            || die "'claude' not found on PATH (is Claude Code installed?)"
+    # Only the LAUNCH path needs tmux and claude. --print resolves a repo and
+    # emits a command for someone else to run, so requiring them there would
+    # make the script unusable exactly where it is most useful: a machine that
+    # is not the one that will run the session (CI, a remote shell, an agent).
+    command -v git >/dev/null 2>&1 || die "git not found on PATH"
+    if [ "$PRINT_ONLY" -eq 0 ]; then
+        command -v tmux >/dev/null 2>&1 || die "tmux not found on PATH"
+        if ! command -v claude >/dev/null 2>&1; then
+            export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+            # shellcheck source=/dev/null
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1
+            command -v claude >/dev/null 2>&1 \
+                || die "'claude' not found on PATH (is Claude Code installed?)"
+        fi
     fi
 
     if [ -n "$TARGET" ]; then
