@@ -1,0 +1,56 @@
+# leaf A gate (final) — 2026-09-06T06:15:58Z
+$ go test -race ./... (fleet module)
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keys	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/lanscan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	4.448s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest	(cached)
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest/stubplugin	[no test files]
+
+$ go test ./... -cover — leaf A packages
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	3.436s	coverage: 79.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	(cached)	coverage: 92.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider	(cached)	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest	(cached)	coverage: 94.2% of statements
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest/stubplugin		coverage: 0.0% of statements
+
+# internal/runner coverage: 59.8% on main -> now (new files mean 93.7%)
+github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner/bridge.go:49:		BridgeArgv		100.0%
+github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner/bridge.go:77:		RunBridgeCtx		100.0%
+github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner/bridge.go:95:		RunCtx			100.0%
+github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner/bridge.go:118:		RunBridgeCtx		92.9%
+github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner/bridge.go:141:		RunCtx			90.0%
+github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner/bridge_linux.go:13:	setDeathSignal		100.0%
+github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner/handoff.go:18:		Quote			100.0%
+github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner/handoff.go:25:		InteractiveArgs		100.0%
+github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner/handoff.go:38:		HandoffArgv		100.0%
+github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner/handoff.go:60:		Command			100.0%
+total:											(statements)		79.7%
+
+$ gofmt -l .
+$ go vet ./...
+vet-ok
+
+$ go list -deps ./pkg/provider (non-stdlib: only itself)
+github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider
+$ grep -c "runner.Exec{" non-test (must be 11)
+11
+
+# after the lint fix — 2026-09-06T06:27:34Z
+$ make lint-go → 0 issues in every module (run locally this time; CI caught what I had not)
+$ go test -race ./pkg/provider/... ./internal/runner/
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider	1.013s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest	1.284s
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest/stubplugin	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	(cached)

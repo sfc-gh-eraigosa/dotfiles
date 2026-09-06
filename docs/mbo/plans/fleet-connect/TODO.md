@@ -16,14 +16,14 @@
 
 ## Preflight (once)
 
-- [ ] `cd sdk/fleet && go version` → ≥ 1.26.3
-- [ ] `cd sdk/fleet && go test -race ./... && gofmt -l . && go vet ./...` → green, empty, clean
+- [x] `cd sdk/fleet && go version` → ≥ 1.26.3 (host go is 1.26.1 with `GOTOOLCHAIN=local` pinned by a shell function; use `export GOTOOLCHAIN=auto` + `command go`)
+- [x] `cd sdk/fleet && go test -race ./... && gofmt -l . && go vet ./...` → green, empty, clean
 - [ ] `./scripts/test.sh` → green (fleet floor 60)
 - [ ] `make lint-shell && make lint-portability` → green
-- [ ] `git rev-parse --show-toplevel && git branch --show-current` → this worktree, not `~/git/dotfiles`
+- [x] `git rev-parse --show-toplevel && git branch --show-current` → this worktree, not `~/git/dotfiles` (`feature/fleet-connect/<user>/contract`)
 - [ ] `fleet status <spark>` and `ssh <spark> '~/.local/bin/herdr status'` → a live herdr host exists
 - [ ] `command -v herdr || ls ~/.local/bin/herdr` → a local client exists (needed for attach)
-- [ ] `mkdir -p docs/mbo/plans/fleet-connect/evidence` then `git status --short -- docs/mbo/plans/fleet-connect/evidence` → tracked (else `git check-ignore -v` and add a narrow `!`-rule)
+- [x] `mkdir -p docs/mbo/plans/fleet-connect/evidence` then `git status --short -- docs/mbo/plans/fleet-connect/evidence` → tracked (`!docs/**` and `!sdk/**` already allow both)
 
 ---
 
@@ -31,49 +31,49 @@
 
 ### Task 1 — `pkg/provider` types  (plan T1)
 
-- [ ] RED: `TestEveryContractTypeRoundTripsThroughJSON`, `TestAnActionMustCarryExactlyOneOfHandoffStreamOrTunnel`, `TestATunnelWithAnOutOfRangePortIsRejected`, `TestNoActionPayloadCarriesAHostOrAddress` (reflection), `TestAReservedKeyIsRejectedAtValidation`, `TestAShortCellSliceRendersBlanksNotAPanic`
-- [ ] RUN-RED: `go test ./pkg/provider/` → expect **FAIL** (package does not exist)
-- [ ] GREEN: `pkg/provider/provider.go` — `Node`, `Action`, `Handoff` (no host), `HandoffKind`, `Stream`, `Tunnel` (no address), `Provider`, `Host`, `ErrAbsent`, `ErrNoSuchPath`, `Validate`
-- [ ] RUN-GREEN: `go test ./pkg/provider/ -cover` → **PASS**, ≥ 90%
-- [ ] VERIFY: `go list -deps ./pkg/provider` → stdlib only, no third party
-- [ ] EVID + ALLOWLIST + COMMIT + LEDGER
+- [x] RED: `TestEveryContractTypeRoundTripsThroughJSON`, `TestAnActionMustCarryExactlyOneOfHandoffStreamOrTunnel`, `TestATunnelWithAnOutOfRangePortIsRejected`, `TestNoActionPayloadCarriesAHostOrAddress` (reflection), `TestAReservedKeyIsRejectedAtValidation`, `TestAShortCellSliceRendersBlanksNotAPanic` (+ `TestATunnelActionUsesFleetsTunnelKey`, `TestActionPayloadsAreValidated`, `TestANodeIsOnePathSegmentWithValidActions`, `TestSentinelsSurviveWrapping`)
+- [x] RUN-RED: `go test ./pkg/provider/` → **FAIL** observed (`undefined: Node …`, evidence/task01/red.txt)
+- [x] GREEN: `pkg/provider/provider.go` — `Node`, `Action`, `Handoff` (no host), `HandoffKind`, `Stream`, `Tunnel` (no address), `TunnelKey`, `ReservedKeys`, `Provider`, `Host`, `ExecResult`, `ErrAbsent`, `ErrNoSuchPath`, `Validate`, `Row`
+- [x] RUN-GREEN: `go test ./pkg/provider/ -cover` → **PASS**, 100.0%
+- [x] VERIFY: `go list -deps ./pkg/provider` → stdlib only (third-party count 0)
+- [x] EVID + ALLOWLIST + COMMIT + LEDGER
 
 **Done when:** the five tests pass and the public package is proven stdlib-only.
 
 ### Task 2 — runner handoffs  (plan T2)
 
-- [ ] RED: `TestEveryHandoffCarriesTheMuxOptions`, `TestLocalHandoffNeverInvokesAShell`, `TestRemoteHandoffQuotesEveryProviderSuppliedValue`, `TestTheAliasComesFromFleetNotTheProvider` + empty-input error cases
-- [ ] RUN-RED: `go test ./internal/runner/` → expect **FAIL**
-- [ ] GREEN: `internal/runner/handoff.go` — `HandoffArgv(alias, h)` (pure), `Command(alias, h)`, `Quote` (the body of `updexec.ShQuote` moves here — `updexec` imports `runner`, so this is the only cycle-free direction); `updexec.ShQuote` and `cmd.shQuote` become aliases of `runner.Quote`
-- [ ] RUN-GREEN: `go test ./internal/runner/ ./cmd/` → **PASS** (existing cmd tests still green)
-- [ ] VERIFY: remote argv has `ssh -t` + every `MuxArgs()` option and **no** `BatchMode`; local argv passes a `$(…)` element verbatim with no `sh -c`
-- [ ] EVID + COMMIT + LEDGER
+- [x] RED: `TestEveryHandoffCarriesTheMuxOptions`, `TestLocalHandoffNeverInvokesAShell`, `TestRemoteHandoffQuotesEveryProviderSuppliedValue`, `TestTheAliasComesFromFleetNotTheProvider` + `TestHandoffArgvRefusesEmptyInputs`, `TestInteractiveArgsIsTheTerminalOwningLane`, `updexec.TestShQuoteIsRunnerQuote`
+- [x] RUN-RED: `go test ./internal/runner/ ./internal/updexec/` → **FAIL** observed (`undefined: HandoffArgv …`, evidence/task02/red.txt)
+- [x] GREEN: `internal/runner/handoff.go` — `HandoffArgv(alias, h)` (pure), `Command(alias, h)`, `Quote`, `InteractiveArgs`; `updexec.ShQuote = runner.Quote`, `cmd.shQuote = runner.Quote`; `Exec.interactiveArgs` delegates
+- [x] RUN-GREEN: `go test -race ./internal/runner/ ./internal/updexec/ ./cmd/` → **PASS**
+- [x] VERIFY: remote argv is `ssh` + `InteractiveArgs(alias)` + command (has `-t` + mux, no `BatchMode`); local argv verbatim with no `sh -c`; eleven `runner.Exec{}` sites untouched
+- [x] EVID + COMMIT + LEDGER
 
 **Done when:** both handoff kinds are asserted by argv and the module still builds.
 
 ### Task 3 — runner bridges + `RunCtx`  (plan T3)
 
-- [ ] SETUP: confirm `RunStreamCtx` already exists with `go test ./internal/runner/ -run RunStreamCtx -v` → PASS (F3a needs nothing built)
-- [ ] RED: `TestBridgeArgvTargetsOnlyTheHostsLoopback`, `TestBridgeArgvCarriesTheMuxOptionsAndExitOnForwardFailure`, `TestACancelledBridgeIsKilledWithinWaitDelay` (+ zero forwards → error; cancel before up); `TestRunCtxReturnsStderrAndExitCodeWithoutAnError`, `TestRunCtxIsCancelledByItsContext` (+ stdin delivered)
-- [ ] RUN-RED: `go test ./internal/runner/ -run Bridge` → expect **FAIL**
-- [ ] GREEN: `internal/runner/bridge.go` — `Forward`, `BridgeArgv(alias, forwards)` (pure), `RunBridgeCtx` on the interface, `Exec` (`exec.CommandContext`, `WaitDelay`) and `Fake` (`Block`); `bridge_linux.go` sets `Pdeathsig`; `RunCtx(ctx, host, stdin, argv…) (ExecResult, error)` on the interface, `Exec` (separate stdout/stderr, `ExitError` → `ExitCode`, nil error) and `Fake`
-- [ ] RUN-GREEN: `go test -race ./internal/runner/` → **PASS**, no goroutine leak
-- [ ] VERIFY: argv has `-N`, `ExitOnForwardFailure=yes`, every base/mux option, `-L 127.0.0.1:l:127.0.0.1:r` per forward, alias last, no `-t`, no remote command
-- [ ] VERIFY: `git diff --stat` shows the eleven `runner.Exec{}` sites and `cmd/wake.go` untouched
-- [ ] EVID + COMMIT + LEDGER
+- [x] SETUP: confirmed `RunStreamCtx` already exists — `TestRunStreamCtxKillsTheChildOnDeadline` PASSes untouched (evidence/task03/setup.txt)
+- [x] RED: `TestBridgeArgvTargetsOnlyTheHostsLoopback`, `TestBridgeArgvCarriesTheMuxOptionsAndExitOnForwardFailure`, `TestACancelledBridgeIsKilledWithinWaitDelay` (+ `TestBridgeArgvRefusesBadInput`, `TestFakeBridgeHonoursBlockAndErr`); `TestRunCtxReturnsStderrAndExitCodeWithoutAnError`, `TestRunCtxIsCancelledByItsContext`, `TestFakeRunCtxHonoursOutErrStdinAndBlock`, `TestExecAndFakeCarryTheCtxAndBridgeCapabilities`
+- [x] RUN-RED: `go test ./internal/runner/ -run 'Bridge|RunCtx|Capabilit'` → **FAIL** observed (`undefined: Forward`, `no field or method BridgeArgv`; evidence/task03/red.txt)
+- [x] GREEN: `internal/runner/bridge.go` — `Forward`, `BridgeArgv` (pure), `RunBridgeCtx`, `RunCtx` on `Exec` and `Fake`, plus the `CtxRunner`/`BridgeRunner` **optional capability** interfaces (the module's `interactiveCtxRunner` precedent — widening `Runner` itself would break every package's test double); `bridge_linux.go` sets `Pdeathsig`, `bridge_other.go` is the named macOS residual; `streamCombined` extracted so the stream and bridge lanes share one drain/kill path; `Fake.Argv` records what ran
+- [x] RUN-GREEN: `go test -race ./internal/runner/` → **PASS**; whole module 14 packages ok
+- [x] VERIFY: argv has `-N`, `ExitOnForwardFailure=yes`, every base/mux option, `-L 127.0.0.1:l:127.0.0.1:r` per forward, alias last, no `-t`, no remote command
+- [x] VERIFY: `git diff --stat` — `cmd/wake.go` empty, `runner.Exec{` non-test count still 11
+- [x] EVID + COMMIT + LEDGER
 
 **Done when:** a set of tunnels is one killable `ssh -N`, the batch lane has a context and an exit code, and nothing else moved.
 
 ### Task 4 — test harness  (plan T4)
 
-- [ ] SETUP: decide `FakeProvider`'s five-column kind, three levels, one leaf, one action of each of the three kinds (handoff, stream, tunnel)
-- [ ] RED: a smoke test driving `FakeProvider` through the `Provider` and `Host` interfaces of plan §3.1 alone (a `Host` backed by `runner.Fake`; no registry) + `BuildStub(t)` yields a binary that answers `initialize`
-- [ ] RUN-RED: `go test ./pkg/provider/providertest/...` → expect **FAIL**
-- [ ] GREEN: `providertest/fake.go` — `FakeProvider` + `BuildStub(t)` (`go build` once per test binary into `t.TempDir()`); `providertest/stubplugin/main.go` — `StubPlugin` as its own `main` package, scripted by flags/env (answer, sleep, exec, exit, protocol 2)
-- [ ] RUN-GREEN: `go test ./pkg/provider/...` → **PASS**
-- [ ] EVID + COMMIT + LEDGER
-- [ ] **FREEZE:** record in `TRACKING.md` §5 that the contract (plan §3.1) is frozen as of this SHA
-- [ ] CHECKPOINT: `gss feature checkpoint` → PR 1 draft → ready; label `ready-for-merge` after review
+- [x] SETUP: `FakeProvider` — three kinds of five columns each (`fake-capability` → `fake-widget` → `fake-gadget`), the gadget a `Leaf` carrying one action of each of the three kinds plus one `Unavailable`
+- [x] RED: the smoke test drives every level through `Provider` + `Host` alone (a `runnerHost` adapter over `runner.Fake` lives in the TEST, so leaf A keeps no in-edge to the registry) + `BuildStub(t)`
+- [x] RUN-RED: `go test ./pkg/provider/providertest/...` → **FAIL** observed (`no non-test Go files`; evidence/task04/red.txt)
+- [x] GREEN: `providertest/fake.go` (`NewFakeProvider` + `Absent`/`ProbeError`/`Hang` options), `providertest/stub.go` (`BuildStub`, `sync.Once`), `providertest/stubplugin/main.go` (its own `main`, flags `-reply -half-line -sleep -exit-at-once -stderr`)
+- [x] RUN-GREEN: `go test ./pkg/provider/...` → **PASS**, providertest 94.2%, `pkg/provider` 100%
+- [x] EVID + COMMIT + LEDGER
+- [x] **FREEZE:** recorded in `TRACKING.md` §5 — the contract (plan §3.1) is frozen as of the T4 commit
+- [x] CHECKPOINT: `gss feature checkpoint` → **PR [#305](https://github.com/sfc-gh-eraigosa/dotfiles/pull/305)**, marked ready; 11/11 CI checks green, `mergeStateStatus: CLEAN`. **`ready-for-merge` is the operator's to apply after review.**
 
 **Done when:** later leaves can be built and tested without herdr. **Leaf A exits — PR 1.**
 

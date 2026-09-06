@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift"
 )
 
@@ -88,23 +89,92 @@ func (m tuiModel) banner() string {
 	b.WriteString(th.title.Render("🛰️  "+versionString()) + "\n")
 	b.WriteString(th.dim.Render(headerHints(0)) + "\n")
 	b.WriteString(th.dim.Render(headerHints(1)))
-	return th.panel.Width(m.panelWidth()).Render(b.String())
+	return m.renderPanel(th.panel, b.String())
+}
+
+// fitFrame is the last resort, and it decides WHICH end of an over-tall frame
+// is lost. bubbletea drops lines from the top — "we can't navigate the cursor
+// into the terminal's scrollback buffer" — which takes the banner and leaves
+// the operator looking at a dashboard whose header has silently walked off.
+// Keeping the first vp.height lines loses the bottom instead, which is at
+// least visible and at least stationary.
+func (m tuiModel) fitFrame(out string) string {
+	if m.vp.height < 1 || lipgloss.Height(out) <= m.vp.height {
+		return out
+	}
+	return strings.Join(strings.Split(out, "\n")[:m.vp.height], "\n")
 }
 
 func (m tuiModel) View() string {
-	var b strings.Builder
-	b.WriteString(m.banner())
-	b.WriteString("\n")
+	head := m.banner() + "\n"
 
 	if m.mode == modeHelp {
-		return b.String() + m.helpView()
+		return m.fitFrame(head + m.helpView())
 	}
 	if len(m.rows) == 0 {
 		empty := "no fleet hosts found\n" + th.dim.Render(
 			"run `fleet discover` to see adoptable ssh-config hosts, then `fleet add <alias>`")
-		return b.String() + th.panel.Width(m.panelWidth()).Render(empty) + "\n"
+		return m.fitFrame(head + m.wrapPanel(th.panel, empty) + "\n")
 	}
 
+	body := head + m.listPanel() + "\n"
+	tail := "\n" + m.statusView()
+
+	if !m.logOpen {
+		return m.fitFrame(body + tail)
+	}
+
+	// A blank line separates the log pane from the status bar, as it does when
+	// the pane is hidden.
+	compose := func(rows int) string { return body + m.logViewN(rows) + "\n" + tail }
+
+	// The log pane is the elastic block, so it gets whatever the fixed blocks
+	// leave rather than a predicted share. Every other height in this file has
+	// drifted at least once — the banner grew a row, the panels grew borders —
+	// and measuring what is already rendered cannot drift.
+	rows := m.logHeight()
+	out := compose(rows)
+
+	// One corrective pass lands on the exact fit; four is slack for a pane that
+	// has fewer lines than the budget and so stops growing.
+	for i, prev := 0, -1; i < 4; i++ {
+		h := lipgloss.Height(out)
+		if h == m.vp.height || h == prev {
+			break
+		}
+		next := max0(rows + m.vp.height - h)
+		if next == rows {
+			break
+		}
+		prev, rows = h, next
+		out = compose(rows)
+	}
+
+	// Belt and braces. bubbletea's renderer drops lines from the TOP of a frame
+	// that is too tall, so overflow is paid for with the banner — the one thing
+	// on screen that must never move. Hand back log rows until it fits: losing
+	// a line of output is always the better trade.
+	for rows > 0 {
+		over := lipgloss.Height(out) - m.vp.height
+		if over <= 0 {
+			break
+		}
+		rows = max0(rows - over)
+		out = compose(rows)
+	}
+	// An open answers form or confirm gate is a whole framed dialog where the
+	// status bar normally sits, and on a short terminal it can outgrow what the
+	// log pane has left to give. The pane is the thing to spend: the dialog is
+	// what the operator is answering, and its idle hint says nothing.
+	if lipgloss.Height(out) > m.vp.height {
+		out = body + tail
+	}
+	return m.fitFrame(out)
+}
+
+// listPanel is the framed host table: column header plus the visible slice of
+// rows, ending without a trailing newline like every other panel.
+func (m tuiModel) listPanel() string {
 	var list strings.Builder
 	// The header carries the SAME prefix width as a row (cursor + dot + space),
 	// or every column label sits four cells left of the data under it.
@@ -118,15 +188,9 @@ func (m tuiModel) View() string {
 		end = len(m.rows)
 	}
 	for i := m.vp.top; i < end; i++ {
-		list.WriteString(trunc(m.rowView(i), m.panelWidth()) + "\n")
+		list.WriteString(trunc(m.rowView(i), m.panelInner()) + "\n")
 	}
-	b.WriteString(th.panel.Width(m.panelWidth()).Render(strings.TrimRight(list.String(), "\n")) + "\n")
-
-	if m.logOpen {
-		b.WriteString(m.logView() + "\n")
-	}
-	b.WriteString("\n" + m.statusView())
-	return b.String()
+	return m.renderPanel(th.panel, strings.TrimRight(list.String(), "\n"))
 }
 
 // logView is the framed streaming pane. It sits BELOW the host list rather
@@ -166,19 +230,35 @@ func shortWhat(s string) string {
 	return s
 }
 
-func (m tuiModel) logView() string {
-	h := m.logHeight()
+// logView renders the pane at its predicted height. View() calls logViewN
+// with a measured budget instead; this shorthand keeps the pane renderable on
+// its own (tests, and any caller that only wants the section).
+func (m tuiModel) logView() string { return m.logViewN(m.logHeight()) }
+
+// logPanelChrome is what the log pane costs before a single line of output:
+// its two border rows plus the title/mode/keys row.
+const logPanelChrome = 3
+
+func (m tuiModel) logViewN(h int) string {
+	if h < 0 {
+		h = 0
+	}
 	var body strings.Builder
 
 	live := m.liveAliases()
-	title := "logs"
+	// The label is styled, the aliases keep their OWN colours, and the two are
+	// concatenated — never nested. lipgloss re-styles a string character by
+	// character, so wrapping already-rendered text strands its escape bytes:
+	// the pane printed a literal "[38;5;33mhost-nano[0m" and the orphaned
+	// codes counted as visible cells, which is what pushed the title onto a
+	// second row once several hosts were streaming at once.
+	title := th.header.Render("logs")
 	if len(live) > 0 {
-		// The legend is coloured to match the lines, so it doubles as a key.
 		coloured := make([]string, 0, len(live))
 		for _, a := range live {
 			coloured = append(coloured, m.hostStyle(a).Render(a))
 		}
-		title = "logs — streaming: " + strings.Join(coloured, ", ")
+		title = th.header.Render("logs — streaming:") + " " + strings.Join(coloured, ", ")
 	}
 	mode := "following"
 	if !m.logFollow {
@@ -193,12 +273,12 @@ func (m tuiModel) logView() string {
 			keys += th.dim.Render("   /" + m.logSearch.input)
 		}
 	}
-	body.WriteString(th.header.Render(title) + th.dim.Render("   "+mode+"   ") + keys + "\n")
+	body.WriteString(title + th.dim.Render("   "+mode+"   ") + keys + "\n")
 
 	if !m.logActive() {
 		// Collapsed to a single framed line: still visibly its own section, but
 		// it must not cost the fleet view a fifth of the screen to say nothing.
-		return th.panel.Width(m.panelWidth()).Render(
+		return m.renderPanel(th.panel,
 			th.dim.Render("📜 logs: idle — output appears here during an update  (l: hide)"))
 	}
 
@@ -221,7 +301,7 @@ func (m tuiModel) logView() string {
 			m.hostStyle(e.alias).Render(fmt.Sprintf("%-14s│", trunc(e.alias, 14))),
 			text)
 	}
-	return th.panel.Width(m.panelWidth()).Render(strings.TrimRight(body.String(), "\n"))
+	return m.renderPanel(th.panel, strings.TrimRight(body.String(), "\n"))
 }
 
 // logStart is the first visible line: pinned to the tail while following, so
@@ -251,16 +331,18 @@ func (m tuiModel) logStart(h int) int {
 	return m.logTop
 }
 
-// logGutter is the timestamp + host columns and their separators.
-const logGutter = 8 + 1 + 14 + 1 + 1 + 1
+// logGutter is everything a log line prints before the text, summed from the
+// same numbers as the Fprintf in logViewN:
+//
+//	8 stamp + 1 space + 14 alias + 1 separator + 1 space
+//
+// Keep it in sync with that format string.
+const logGutter = 8 + 1 + 14 + 1 + 1
 
-func (m tuiModel) logWidth() int {
-	w := m.vp.width - 4
-	if w < 40 {
-		w = 40
-	}
-	return w
-}
+// logWidth is the room a log line has: the panel's real content width, not the
+// terminal's. A line budgeted against anything wider wraps inside the frame
+// and silently costs the pane an extra row.
+func (m tuiModel) logWidth() int { return m.panelInner() }
 
 // liveAliases names the hosts currently streaming, so the pane header says
 // whose output is arriving when several run at once.
@@ -276,21 +358,23 @@ func (m tuiModel) liveAliases() []string {
 // trunc cuts to a DISPLAY width, not a rune count: emoji and CJK occupy two
 // cells, so counting runes overflows the frame (caught by the demo's width
 // assertion when icons were added to the header).
+//
+// It must also CLOSE any style it cuts through. The hand-rolled version copied
+// runes until the width ran out, which dropped the trailing reset of a styled
+// run it happened to cut in half. lipgloss ends the line for padding but then
+// RE-OPENS the still-open style at the start of the next one, so a streaming
+// legend cut inside a host's colour repainted the row below it — the first log
+// row's timestamp came out in that host's colour instead of dim, while every
+// row under it was correct.
+//
+// ansi.Truncate keeps collecting escape sequences past the cut, so the run's
+// own reset survives; it is also a single pass rather than the old quadratic
+// re-measure of the whole accumulated prefix on every rune.
 func trunc(s string, n int) string {
 	if n < 1 {
 		n = 1
 	}
-	if lipgloss.Width(s) <= n {
-		return s
-	}
-	var b strings.Builder
-	for _, r := range s {
-		if lipgloss.Width(b.String()+string(r)) > n-1 {
-			break
-		}
-		b.WriteRune(r)
-	}
-	return b.String() + "…"
+	return ansi.Truncate(s, n, "…")
 }
 
 func maxInt(a, b int) int {
@@ -433,7 +517,7 @@ const rowPrefixWidth = 3 + 1 + aliasColWidth + 1 + 9 + 1 + branchColWidth + 1 + 
 // PANEL's inner width, not the raw terminal: rows are framed now, so the
 // border and padding are not available to the row.
 func (m tuiModel) failWidth() int {
-	return m.panelWidth() - rowPrefixWidth - len(failPrefix)
+	return m.panelInner() - rowPrefixWidth - len(failPrefix)
 }
 
 func truncate(s string, n int) string {
@@ -513,17 +597,58 @@ func (m tuiModel) answersView() string {
 	// "up" would silently select the wrong answer. Arrows are the idiom the
 	// host list already uses.
 	b.WriteString("\n" + th.dim.Render("↑/↓ or tab: field   letters set the answer   enter: next   esc: cancel"))
-	return th.panel.Width(m.panelWidth()).Render(b.String())
+	return m.wrapPanel(th.panel, b.String())
 }
 
-// panelWidth is the inner width every framed section shares, so their borders
-// line up into a single column instead of a ragged stack.
+// panelWidth is the width every framed section declares, so their borders line
+// up into a single column instead of a ragged stack. It is what lipgloss is
+// told, NOT what content gets: see panelInner.
 func (m tuiModel) panelWidth() int {
 	w := m.vp.width - 4
 	if w < 20 {
 		w = 20
 	}
 	return w
+}
+
+// panelPad is the horizontal padding on both framed styles (Padding(0, 1)).
+const panelPad = 2
+
+// panelInner is the width actually available to a panel's CONTENT.
+//
+// lipgloss counts horizontal padding INSIDE Style.Width, so a panel declared
+// Width(n) with Padding(0, 1) leaves n-2 cells for text. Treating panelWidth
+// as the content budget is what let a log line land in those last two cells,
+// wrap onto a second row, and push the whole frame past the terminal height —
+// at which point bubbletea drops lines from the TOP and the banner vanishes.
+func (m tuiModel) panelInner() int { return max0(m.panelWidth() - panelPad) }
+
+// tailHeight is the blank line plus the status block at the foot of the frame.
+// It is MEASURED because the status block is not always one line: the answers
+// form and the confirm gate render there as full framed dialogs.
+func (m tuiModel) tailHeight() int { return 1 + lipgloss.Height(m.statusView()) }
+
+// renderPanel frames content one screen row per content line, hard-clamping
+// each to panelInner first. Clamping here rather than at each call site is the
+// point: a panel whose height is BUDGETED — the banner, the host list, the log
+// pane — can then never grow a row, whatever a future section forgets to
+// truncate.
+func (m tuiModel) renderPanel(style lipgloss.Style, content string) string {
+	w := m.panelInner()
+	lines := strings.Split(content, "\n")
+	for i, l := range lines {
+		lines[i] = trunc(l, w)
+	}
+	return style.Width(m.panelWidth()).Render(strings.Join(lines, "\n"))
+}
+
+// wrapPanel frames prose, letting lipgloss wrap it. The dialogs are the one
+// place where losing the tail of a line is worse than spending a row on it —
+// the force-reset warning names the branch the operator's work is saved to.
+// Their height is measured, not budgeted, so wrapping costs the log pane a row
+// rather than the banner.
+func (m tuiModel) wrapPanel(style lipgloss.Style, content string) string {
+	return style.Width(m.panelWidth()).Render(content)
 }
 
 // confirmView is the gate before anything runs. Each thing the operator needs
@@ -564,17 +689,46 @@ func (m tuiModel) confirmView() string {
 	b.WriteString(th.dim.Render("   ⏎ enter: ") + th.statusBar.Render("update") +
 		th.dim.Render("     ✏️ e: edit answers     ⎋ esc: cancel"))
 
-	return th.panel.Width(m.panelWidth()).Render(b.String())
+	return m.wrapPanel(th.panel, b.String())
 }
 
+// helpView lists every key. It is budgeted like the log pane rather than left
+// to run off the bottom: an overlay taller than the terminal is scrolled from
+// the TOP by bubbletea, which would hide the "❓ keys" heading and the first
+// keys — the half a reader looks at first.
 func (m tuiModel) helpView() string {
+	// title + blank + [keys] + blank + footer, inside two border rows, under
+	// the banner the overlay is drawn below.
+	// A zero height is "we have not been told the terminal size yet" (no
+	// WindowSizeMsg has arrived), not "no room" — clamping there would hide
+	// keys on a terminal that has plenty of space.
+	room := len(keyHelp)
+	if m.vp.height > 0 {
+		room = m.vp.height - bannerHeight - 2 - 4
+		if room < len(keyHelp) {
+			room-- // the "… N more" line costs a row of its own
+		}
+	}
+	shown := keyHelp
+	var more string
+	if room < len(shown) {
+		if room < 1 {
+			room = 1
+		}
+		shown = keyHelp[:room]
+		more = fmt.Sprintf("  … %d more — make the window taller to see them", len(keyHelp)-room)
+	}
+
 	var b strings.Builder
 	b.WriteString(th.header.Render("❓ keys") + "\n\n")
-	for _, k := range keyHelp {
+	for _, k := range shown {
 		fmt.Fprintf(&b, "  %s %-18s %s\n", k.icon, k.keys, th.dim.Render(k.what))
 	}
+	if more != "" {
+		b.WriteString(th.dim.Render(more) + "\n")
+	}
 	b.WriteString("\n" + th.dim.Render("any key to close"))
-	return th.panel.Width(m.panelWidth()).Render(strings.TrimRight(b.String(), "\n"))
+	return m.renderPanel(th.panel, strings.TrimRight(b.String(), "\n"))
 }
 
 func max0(n int) int {

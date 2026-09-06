@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
@@ -731,41 +732,51 @@ func (m tuiModel) tailFor(alias string, n int) string {
 // fifth to display nothing.
 func (m tuiModel) logActive() bool { return m.logOpen && len(m.logs) > 0 }
 
-// logHeight splits the frame: the host list keeps the top fifth (floor of 3
-// rows so it never collapses) and the log takes the rest.
+// bannerHeight is the intro panel: three hint lines inside two border rows.
+// It is a constant because renderPanel clamps each line to one row, so the
+// banner cannot grow no matter how many keys headerHints has to advertise.
+const bannerHeight = 3 + 2
+
+// listPanelChrome is the host table's two border rows plus its column header.
+const listPanelChrome = 2 + 1
+
+// listChrome is everything a host row must be paid for out of. The tail is
+// measured rather than counted: the answers form and the confirm gate render
+// where the one-line status bar normally sits.
+func (m tuiModel) listChrome() int {
+	return bannerHeight + listPanelChrome + m.tailHeight()
+}
+
+// logHeight is the rows the streaming pane gets. It MEASURES the blocks above
+// it instead of predicting them: the arithmetic here has silently drifted
+// before (a banner row, then panel borders), and every line of overflow is
+// paid for by bubbletea dropping the banner off the top of the frame.
 func (m tuiModel) logHeight() int {
-	if !m.logOpen {
-		return 0
+	if !m.logOpen || !m.logActive() {
+		return 0 // hidden, or collapsed to a single framed hint; no rows
 	}
-	if !m.logActive() {
-		return 0 // collapsed to a single unframed hint line; no rows reserved
-	}
-	h := m.vp.height - m.listHeight() - 10 // both panels' borders + chrome
-	if h < 3 {
-		h = 3
-	}
-	return h
+	return max0(m.vp.height - lipgloss.Height(m.banner()) -
+		lipgloss.Height(m.listPanel()) - logPanelChrome - m.tailHeight())
 }
 
 // listHeight is the rows available to the host table.
 func (m tuiModel) listHeight() int {
 	if !m.logActive() {
-		// Closed, or open-but-empty: the list keeps everything except the
-		// couple of lines the collapsed hint occupies.
-		h := m.vp.height - 7 // chrome + the list panel's own border
+		// Closed, or open-but-empty: the list keeps everything the fixed
+		// chrome does not need.
+		h := m.vp.height - m.listChrome()
 		if m.logOpen {
-			h -= 3 // the collapsed hint line and its frame
+			h -= logPanelChrome // the collapsed hint line and its frame
 		}
-		if h < 1 {
-			h = 1
-		}
-		return h
+		return maxInt(1, h)
 	}
 	h := m.vp.height/5 - 2 // top ~20% once logs are flowing, less its border
 	if h < 3 {
 		h = 3
 	}
-	return h
+	// The list's floor must never push the log pane off the bottom: leave it
+	// at least its frame plus one line of output.
+	return maxInt(1, minInt(h, m.vp.height-m.listChrome()-logPanelChrome-1))
 }
 
 // ---- log navigation -------------------------------------------------------
