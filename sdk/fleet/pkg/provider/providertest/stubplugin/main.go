@@ -38,14 +38,14 @@ func main() {
 		return
 	}
 
+	// Unbuffered: a caller blocked on this reply must see it as soon as the
+	// line is answered, and a test that kills the process mid-exchange must
+	// not lose what was already written.
 	in := bufio.NewScanner(os.Stdin)
 	in.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	out := bufio.NewWriter(os.Stdout)
-	defer out.Flush()
 	for in.Scan() {
 		if *reply != "" {
-			fmt.Fprintln(out, *reply)
-			out.Flush()
+			fmt.Fprintln(os.Stdout, *reply)
 		}
 	}
 }

@@ -169,7 +169,7 @@ func (a Action) Validate() error {
 	if a.Tunnel != nil && a.Key != TunnelKey {
 		return fmt.Errorf("provider: tunnel action key %q must be %q, fleet's tunnel key", a.Key, TunnelKey)
 	}
-	if ReservedKeys[r] && !(a.Tunnel != nil && a.Key == TunnelKey) {
+	if ReservedKeys[r] && (a.Tunnel == nil || a.Key != TunnelKey) {
 		return fmt.Errorf("provider: action key %q is reserved by fleet", a.Key)
 	}
 	if a.Label == "" {

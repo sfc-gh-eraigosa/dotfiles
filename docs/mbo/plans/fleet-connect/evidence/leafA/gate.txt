@@ -46,3 +46,11 @@ $ go list -deps ./pkg/provider (non-stdlib: only itself)
 github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider
 $ grep -c "runner.Exec{" non-test (must be 11)
 11
+
+# after the lint fix — 2026-09-06T06:27:34Z
+$ make lint-go → 0 issues in every module (run locally this time; CI caught what I had not)
+$ go test -race ./pkg/provider/... ./internal/runner/
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider	1.013s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest	1.284s
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest/stubplugin	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	(cached)
