@@ -1,0 +1,146 @@
+# P1-T5 engine + renderers — 2026-09-06T07:00:11Z — worker gcfg/edward-raigosa/build
+
+## RUN-RED
+$ go test ./internal/engine/  → undefined: New, Options
+$ go test ./internal/report/  → undefined: TTY, Options, Markdown, JSON
+
+## RUN-GREEN: go vet ./... && go test ./... -count=1 -cover
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg	0.005s	coverage: 91.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/cmd	0.018s	coverage: 93.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/engine	0.008s	coverage: 91.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/family	0.011s	coverage: 97.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/family/general	0.013s	coverage: 93.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/family/security	0.012s	coverage: 80.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/gh	0.018s	coverage: 86.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/report	0.012s	coverage: 91.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/schema	0.015s	coverage: 94.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/version	0.010s	coverage: 100.0% of statements
+
+## per-package bars as gcfg-ci computes them (engine ≥90, schema ≥90)
+internal/engine: coverage: 91.6%
+internal/schema: coverage: 94.8%
+
+## module total (CI formula, ≥80)
+total:											(statements)		92.6%
+
+## tests
+--- PASS: TestVerifyCleanIsNoFindings (0.00s)
+--- PASS: TestVerifyCollectsFindingsFromEveryFamily (0.00s)
+--- PASS: TestVerifyUnreadableFamilyIsAFindingNotAnError (0.00s)
+--- PASS: TestVerifyAllUnreadableIsAnError (0.00s)
+--- PASS: TestVerifySkipsUndeclaredFamilies (0.00s)
+--- PASS: TestVerifyOnlySelectsFamilies (0.00s)
+--- PASS: TestPlanReturnsChangesWithoutWriting (0.00s)
+--- PASS: TestApplyWritesThenReReads (0.00s)
+--- PASS: TestApplyReportsWhatSurvivedTheReRead (0.00s)
+--- PASS: TestApplyDryRunWritesNothing (0.00s)
+--- PASS: TestApplyFailureIsReported (0.00s)
+--- PASS: TestExportBuildsAFileFromLiveState (0.00s)
+--- PASS: TestExportReportsUnreadableFamilies (0.00s)
+--- PASS: TestOrgScopeUsesTheOrgBlock (0.00s)
+--- PASS: TestVerifyWithNothingDeclaredIsCleanAndSaysSo (0.00s)
+--- PASS: TestOwnershipResolution (0.00s)
+    --- PASS: TestOwnershipResolution/unset_defaults_to_declared (0.00s)
+    --- PASS: TestOwnershipResolution/file_level_applies (0.00s)
+    --- PASS: TestOwnershipResolution/family_overrides_the_file (0.00s)
+    --- PASS: TestOwnershipResolution/family_alone (0.00s)
+--- PASS: TestHeadlineReadsAsASentence (0.00s)
+--- PASS: TestBlockNodesToleratesAMissingBlock (0.00s)
+--- PASS: TestPlanErrors (0.00s)
+--- PASS: TestExportEdges (0.00s)
+--- PASS: TestApplyWithNoChangesStillVerifies (0.00s)
+--- PASS: TestApplyFallsBackToPlainDiff (0.00s)
+--- PASS: TestTTYGolden (0.00s)
+--- PASS: TestTTYCleanGolden (0.00s)
+--- PASS: TestMarkdownGolden (0.00s)
+--- PASS: TestMarkdownCleanGolden (0.00s)
+--- PASS: TestJSONGolden (0.00s)
+--- PASS: TestJSONShapeIsStable (0.00s)
+--- PASS: TestRenderersNeverEchoASecret (0.00s)
+--- PASS: TestTTYColour (0.00s)
+--- PASS: TestMarkdownTableEscapesPipes (0.00s)
+
+## rendered report — terminal (--no-color golden)
+sfc-gh-eraigosa/dotfiles: 2 drift, 1 unmanaged, 1 not_honoured, 1 unreadable (5 families checked)
+
+general
+  drift      merge.delete_branch_on_merge
+             want true
+             live false
+  drift      description
+             want dotfiles and lab tooling
+             live old text
+
+labels
+  unmanaged  chore
+             live chore (not declared)
+
+security
+  not_honoured non_provider_patterns
+             want true
+             live false
+             GitHub accepted the write but the setting stayed off — non-provider patterns need GitHub Secret Protection on this plan
+
+actions
+  unreadable *
+             GET /repos/o/r/actions/permissions: HTTP 403 Resource not accessible by personal access token (needs repo:Administration:write)
+
+## rendered report — markdown (GITHUB_STEP_SUMMARY golden)
+### gcfg — sfc-gh-eraigosa/dotfiles: 2 drift, 1 unmanaged, 1 not_honoured, 1 unreadable (5 families checked)
+
+| family | key | want | live | kind |
+| :-- | :-- | :-- | :-- | :-- |
+| general | merge.delete_branch_on_merge | true | false | drift |
+| general | description | dotfiles and lab tooling | old text | drift |
+| labels | chore | — | chore | unmanaged |
+| security | non_provider_patterns | true | false | not_honoured — GitHub accepted the write but the setting stayed off — non-provider patterns need GitHub Secret Protection on this plan |
+| actions | * | — | — | unreadable — GET /repos/o/r/actions/permissions: HTTP 403 Resource not accessible by personal access token (needs repo:Administration:write) |
+
+## rendered report — json golden
+{
+  "target": "sfc-gh-eraigosa/dotfiles",
+  "clean": false,
+  "families": 5,
+  "counts": {
+    "drift": 2,
+    "not_honoured": 1,
+    "unmanaged": 1,
+    "unreadable": 1
+  },
+  "findings": [
+    {
+      "family": "general",
+      "key": "merge.delete_branch_on_merge",
+      "kind": "drift",
+      "want": "true",
+      "live": "false"
+    },
+    {
+      "family": "general",
+      "key": "description",
+      "kind": "drift",
+      "want": "dotfiles and lab tooling",
+      "live": "old text"
+    },
+    {
+      "family": "labels",
+      "key": "chore",
+      "kind": "unmanaged",
+      "live": "chore"
+    },
+    {
+      "family": "security",
+      "key": "non_provider_patterns",
+      "kind": "not_honoured",
+      "want": "true",
+      "live": "false",
+      "reason": "GitHub accepted the write but the setting stayed off — non-provider patterns need GitHub Secret Protection on this plan"
+    },
+    {
+      "family": "actions",
+      "key": "*",
+      "kind": "unreadable",
+      "reason": "GET /repos/o/r/actions/permissions: HTTP 403 Resource not accessible by personal access token (needs repo:Administration:write)"
+    }
+  ]
+}

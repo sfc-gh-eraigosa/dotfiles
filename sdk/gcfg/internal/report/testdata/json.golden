@@ -1,0 +1,47 @@
+{
+  "target": "sfc-gh-eraigosa/dotfiles",
+  "clean": false,
+  "families": 5,
+  "counts": {
+    "drift": 2,
+    "not_honoured": 1,
+    "unmanaged": 1,
+    "unreadable": 1
+  },
+  "findings": [
+    {
+      "family": "general",
+      "key": "merge.delete_branch_on_merge",
+      "kind": "drift",
+      "want": "true",
+      "live": "false"
+    },
+    {
+      "family": "general",
+      "key": "description",
+      "kind": "drift",
+      "want": "dotfiles and lab tooling",
+      "live": "old text"
+    },
+    {
+      "family": "labels",
+      "key": "chore",
+      "kind": "unmanaged",
+      "live": "chore"
+    },
+    {
+      "family": "security",
+      "key": "non_provider_patterns",
+      "kind": "not_honoured",
+      "want": "true",
+      "live": "false",
+      "reason": "GitHub accepted the write but the setting stayed off — non-provider patterns need GitHub Secret Protection on this plan"
+    },
+    {
+      "family": "actions",
+      "key": "*",
+      "kind": "unreadable",
+      "reason": "GET /repos/o/r/actions/permissions: HTTP 403 Resource not accessible by personal access token (needs repo:Administration:write)"
+    }
+  ]
+}
