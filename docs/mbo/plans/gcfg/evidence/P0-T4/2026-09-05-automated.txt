@@ -1,0 +1,107 @@
+# P0-T4 manifest flow + CLI — automated gates — 2026-09-06T06:02:13Z — worker gcfg/edward-raigosa/build
+
+## RUN-RED: go test ./pkg/ghapp/ ; go test ./cmd/
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/pkg/ghapp [github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/pkg/ghapp.test]
+pkg/ghapp/manifest_test.go:113:14: undefined: Create
+pkg/ghapp/manifest_test.go:113:43: undefined: Manifest
+pkg/ghapp/manifest_test.go:116:5: undefined: CreateOpts
+pkg/ghapp/manifest_test.go:169:12: undefined: Create
+pkg/ghapp/manifest_test.go:169:41: undefined: Manifest
+pkg/ghapp/manifest_test.go:170:3: undefined: CreateOpts
+pkg/ghapp/manifest_test.go:189:12: undefined: Create
+pkg/ghapp/manifest_test.go:189:41: undefined: Manifest
+pkg/ghapp/manifest_test.go:190:3: undefined: CreateOpts
+pkg/ghapp/manifest_test.go:222:14: undefined: Create
+pkg/ghapp/manifest_test.go:222:14: too many errors
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/cmd [github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/cmd.test]
+cmd/helpers_test.go:128:9: undefined: openBrowser
+cmd/helpers_test.go:129:2: undefined: openBrowser
+cmd/helpers_test.go:130:21: undefined: openBrowser
+cmd/verbs_test.go:87:9: undefined: openBrowser
+cmd/verbs_test.go:88:2: undefined: openBrowser
+cmd/verbs_test.go:89:21: undefined: openBrowser
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/cmd [build failed]
+FAIL
+
+## RUN-GREEN: go vet ./... && go test ./... -count=1 -cover ; module total (CI formula)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp	0.006s	coverage: 90.9% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/cmd	0.682s	coverage: 88.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/internal/version	0.004s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/pkg/ghapp	1.738s	coverage: 79.4% of statements
+total:										(statements)		86.7%
+
+## race detector x3: go test ./pkg/ghapp/ -count=1 -race → ok ok ok
+
+## tests
+--- PASS: TestParsePrivateKeyPKCS1AndPKCS8 (0.06s)
+--- PASS: TestSignJWTClaimsAndSignature (0.02s)
+--- PASS: TestSignJWTRejectsWrongKey (0.17s)
+--- PASS: TestParsePrivateKeyRejectsNonRSA (0.00s)
+--- PASS: TestCreateManifestFlowPersistsApp (0.03s)
+--- PASS: TestCreateOrgAndHookURL (0.03s)
+--- PASS: TestCreateExpiredCodeIsAClearError (0.07s)
+--- PASS: TestCreateIgnoresWrongState (0.01s)
+--- PASS: TestCreatePortFallback (0.13s)
+--- PASS: TestCreateOpenerErrorAndCancel (0.12s)
+--- PASS: TestCreateRequiresName (0.00s)
+--- PASS: TestInfoReturnsAppMetadata (0.04s)
+--- PASS: TestFileStoreSaveCreatesPrivateDirAndFiles (0.09s)
+--- PASS: TestFileStoreRoundTrip (0.12s)
+--- PASS: TestFileStoreLoadMissingIsEmpty (0.00s)
+--- PASS: TestFileStoreLoadRefusesWorldReadablePEM (0.08s)
+--- PASS: TestFileStoreSaveRejectsBadSlug (0.22s)
+--- PASS: TestFileStoreLoadRejectsCorruptJSON (0.00s)
+--- PASS: TestDefaultStoreDir (0.00s)
+--- PASS: TestFileStoreLoadErrorsWhenPEMMissing (0.00s)
+--- PASS: TestFileStoreSaveFailsWhenDirIsAFile (0.00s)
+--- PASS: TestInstallationsPaginatesAndUsesAppJWT (0.03s)
+--- PASS: TestTokenScopesBodyAndReturnsExpiry (0.17s)
+--- PASS: TestTokenEmptyScopeSendsNoBody (0.05s)
+--- PASS: TestTokenCacheHitUntilTwoMinutesBeforeExpiry (0.05s)
+--- PASS: TestTokenNeverPrintsItself (0.00s)
+--- PASS: TestTokenErrorsCarryStatusNotBody (0.08s)
+--- PASS: TestBadJWTIsAnAuthError (0.06s)
+--- PASS: TestAppLoadsKeyFromPEMPathLazily (0.03s)
+--- PASS: TestDefaultsHitAPIGitHub (0.00s)
+--- PASS: TestCreatePersistsAndPrintsNoSecrets (0.01s)
+--- PASS: TestCreateWithManifestFileAndOrg (0.05s)
+--- PASS: TestCreateRefusesDuplicateSlugWithoutForce (0.06s)
+--- PASS: TestStatusEmptyIsUsage (0.11s)
+--- PASS: TestStatusListsAppsWithoutSecrets (0.05s)
+--- PASS: TestInstallRecordsInstallations (0.26s)
+--- PASS: TestTokenRepoPrintsOnlyTheToken (0.07s)
+--- PASS: TestTokenOrgUsesOrgInstallation (0.08s)
+--- PASS: TestTokenUsageErrors (0.08s)
+--- PASS: TestDoctorHealthy (0.09s)
+--- PASS: TestDoctorFailsOnBadCredentials (0.04s)
+--- PASS: TestDoctorNoAppIsUsage (0.05s)
+--- PASS: TestAppFlagSelectsAmongSeveral (0.06s)
+--- PASS: TestVersionCommand (0.00s)
+--- PASS: TestRootHelpNonTTY (0.00s)
+
+## token-leak grep on the verbose log (CI step)
+clean: fixture token absent from 117 log lines
+
+## go run . --help (verb surface)
+GitHub App credential toolkit — create an App by manifest, mint installation tokens
+
+Usage:
+  ghapp [flags]
+  ghapp [command]
+
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  create      Create a GitHub App via the manifest flow and store its key (0600)
+  doctor      Check the store, key, App JWT, installations, and (with --repo) a real token
+  help        Help about any command
+  install     Open the App's install page, then record where it is installed
+  status      Show stored Apps, key file modes, and recorded installations (no secrets)
+  token       Mint an installation token; prints ONLY the token on stdout
+  version     Show version information
+
+Flags:
+      --app string          App slug when more than one is stored
+      --config-dir string   where apps.json and the PEMs live (0700) (default "~/.config/ghapp")
+  -h, --help                help for ghapp
+
+Use "ghapp [command] --help" for more information about a command.

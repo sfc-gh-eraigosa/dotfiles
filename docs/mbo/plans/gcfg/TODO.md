@@ -15,88 +15,88 @@
 
 ## Preflight (once)
 
-- [ ] `go version` matches `.go-version`
-- [ ] `gh auth status` shows `repo` scope
-- [ ] design PR merged; `gss feature list --feature gcfg --json` shows the feature
-- [ ] worker for the phase created via `gss feature worker add --feature gcfg --purpose <leaf> --description "…" --json`; row copied into IMPLEMENTATION §2 + TRACKING §0
-- [ ] `git status --short` clean in the worker worktree
+- [x] `go version` matches `.go-version`
+- [x] `gh auth status` shows `repo` scope
+- [~] design PR merged (**not merged** — build worker stacked on `feature/gcfg/edward-raigosa/design`, PR #285, by owner decision 2026-09-05); `gss feature list --feature gcfg --json` shows the feature ✓ (row re-created after the 2026-09-05 registry audit dropped it)
+- [x] worker for the phase created via `gss feature worker add --feature gcfg --purpose <leaf> --description "…" --json`; row copied into IMPLEMENTATION §2 + TRACKING §0
+- [x] `git status --short` clean in the worker worktree
 
 ---
 
 ### P0-T1 — ghapp scaffold + version  (plan P0-T1)
-- [ ] SETUP: `sdk/ghapp/{go.mod,main.go,build.sh}` mirroring `sdk/gff` (module path with `sdk/`), `internal/version`
-- [ ] RED: `cmd/version_test.go` expects a non-empty version string from ldflags default `dev`
-- [ ] RUN-RED: `cd sdk/ghapp && go test ./cmd/` → expect **FAIL**
-- [ ] GREEN: cobra root + `version`
-- [ ] RUN-GREEN: `go test ./... -cover` → **PASS**; `go run . version`
-- [ ] VERIFY: `.github/workflows/ghapp-ci.yml` (vet, test, ≥80% gate); `git status --short -- sdk/ghapp` shows files tracked (ALLOWLIST)
-- [ ] DOCS: `sdk/ghapp/{AGENTS.md,CLAUDE.md→AGENTS.md,README.md}` stubs
-- [ ] COMMIT: `feat(ghapp): module scaffold + version`
-- [ ] LEDGER + CHECKPOINT
+- [x] SETUP: `sdk/ghapp/{go.mod,main.go,build.sh}` mirroring `sdk/gff` (module path with `sdk/`), `internal/version`
+- [x] RED: `cmd/version_test.go` expects a non-empty version string from ldflags default `dev`
+- [x] RUN-RED: `cd sdk/ghapp && go test ./cmd/` → expect **FAIL**
+- [x] GREEN: cobra root + `version`
+- [x] RUN-GREEN: `go test ./... -cover` → **PASS**; `go run . version`
+- [x] VERIFY: `.github/workflows/ghapp-ci.yml` (vet, test, ≥80% gate); `git status --short -- sdk/ghapp` shows files tracked (ALLOWLIST)
+- [x] DOCS: `sdk/ghapp/{AGENTS.md,CLAUDE.md→AGENTS.md,README.md}` stubs
+- [x] COMMIT: `feat(ghapp): module scaffold + version`
+- [x] LEDGER + CHECKPOINT
 **Done when:** CI green on the worker PR; version prints.
 
 ### P0-T2 — store + JWT  (plan P0-T2)
-- [ ] RED: `pkg/ghapp/store_test.go` (0700 dir, 0600 PEM, round-trip, refuse 0644 PEM); `jwt_test.go` (RS256, iss/iat/exp, verifies with pubkey)
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `store.go`, `jwt.go` (golang-jwt/v5)
-- [ ] RUN-GREEN: `go test ./pkg/ghapp/ -cover` → **PASS**
-- [ ] COMMIT: `feat(ghapp): app store + RS256 JWT`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `pkg/ghapp/store_test.go` (0700 dir, 0600 PEM, round-trip, refuse 0644 PEM); `jwt_test.go` (RS256, iss/iat/exp, verifies with pubkey)
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `store.go`, `jwt.go` (golang-jwt/v5)
+- [x] RUN-GREEN: `go test ./pkg/ghapp/ -cover` → **PASS**
+- [x] COMMIT: `feat(ghapp): app store + RS256 JWT`
+- [x] LEDGER + CHECKPOINT
 
 ### P0-T3 — installation tokens  (plan P0-T3)
-- [ ] RED: httptest stub for `GET /app/installations`, `POST /app/installations/{id}/access_tokens`; cache hit/miss around expiry-2m; scoping body; token-leak grep on logs
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `token.go`, `installs.go`
-- [ ] RUN-GREEN → **PASS**
-- [ ] COMMIT: `feat(ghapp): installation tokens with cache`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: httptest stub for `GET /app/installations`, `POST /app/installations/{id}/access_tokens`; cache hit/miss around expiry-2m; scoping body; token-leak grep on logs
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `token.go`, `installs.go`
+- [x] RUN-GREEN → **PASS**
+- [x] COMMIT: `feat(ghapp): installation tokens with cache`
+- [x] LEDGER + CHECKPOINT
 
 ### P0-T4 — manifest flow + CLI  (plan P0-T4)
-- [ ] RED: `manifest_test.go` (listener + port fallback; form fields; conversion exchange via stub; expired code error; injected browser opener); cmd tests for `create/install/token/status/doctor`
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `manifest.go`, cmd verbs
-- [ ] RUN-GREEN → **PASS**; coverage ≥80%
+- [x] RED: `manifest_test.go` (listener + port fallback; form fields; conversion exchange via stub; expired code error; injected browser opener); cmd tests for `create/install/token/status/doctor`
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `manifest.go`, cmd verbs
+- [x] RUN-GREEN → **PASS**; coverage ≥80%
 - [ ] VERIFY (human, ask first): one real `ghapp create` + `ghapp token --repo <this repo>` → `evidence/ghapp/` (redacted)
 - [ ] COMMIT: `feat(ghapp): manifest-flow create + CLI`
-- [ ] LEDGER + CHECKPOINT
+- [x] LEDGER + CHECKPOINT
 **Done when:** ghapp-ci green; token mint evidence captured.
 
 ### P1-T1 — gcfg scaffold + CI  (plan P1-T1)
-- [ ] SETUP/RED/GREEN as P0-T1 for `sdk/gcfg`; `gcfg-ci.yml` with 80/90/90 gates + schema-drift placeholder
-- [ ] COMMIT: `feat(gcfg): module scaffold + version + CI`
-- [ ] LEDGER + CHECKPOINT
+- [x] SETUP/RED/GREEN as P0-T1 for `sdk/gcfg`; `gcfg-ci.yml` with 80/90/90 gates + schema-drift placeholder
+- [x] COMMIT: `feat(gcfg): module scaffold + version + CI`
+- [x] LEDGER + CHECKPOINT
 
 ### P1-T2 — schema load + lint + JSON Schema  (plan P1-T2)
-- [ ] RED: `internal/schema/load_test.go` (unknown key path error; all-optional; per-family ownership), `lint_test.go` (org block outside `.github`; dup names; enums; secret-shaped value), `jsonschema_test.go` (golden)
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `types.go`, `load.go`, `lint.go`, `jsonschema.go`; `gcfg lint`, `gcfg schema`
-- [ ] RUN-GREEN: `go test ./internal/schema/ -cover` ≥90% → **PASS**
-- [ ] COMMIT: `feat(gcfg): typed schema, strict load, lint, JSON Schema`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `internal/schema/load_test.go` (unknown key path error; all-optional; per-family ownership), `lint_test.go` (org block outside `.github`; dup names; enums; secret-shaped value), `jsonschema_test.go` (golden)
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `types.go`, `load.go`, `lint.go`, `jsonschema.go`; `gcfg lint`, `gcfg schema`
+- [x] RUN-GREEN: `go test ./internal/schema/ -cover` ≥90% → **PASS**
+- [x] COMMIT: `feat(gcfg): typed schema, strict load, lint, JSON Schema`
+- [x] LEDGER + CHECKPOINT
 
 ### P1-T3 — gh client + credential chain  (plan P1-T3)
-- [ ] RED: `internal/gh/fake_test.go` (records calls, serves fixtures), `auth_test.go` (order GH_TOKEN → GITHUB_TOKEN → gh login → ghapp; none → error), `cmd/auth_status_test.go` (never prints token)
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `client.go`, `real.go` (go-gh REST, retry, Retry-After), `fake.go`, `auth.go`
-- [ ] RUN-GREEN → **PASS**
-- [ ] COMMIT: `feat(gcfg): gh client seam, recording fake, credential chain`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `internal/gh/fake_test.go` (records calls, serves fixtures), `auth_test.go` (order GH_TOKEN → GITHUB_TOKEN → gh login → ghapp; none → error), `cmd/auth_status_test.go` (never prints token)
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `client.go`, `real.go` (go-gh REST, retry, Retry-After), `fake.go`, `auth.go`
+- [x] RUN-GREEN → **PASS**
+- [x] COMMIT: `feat(gcfg): gh client seam, recording fake, credential chain`
+- [x] LEDGER + CHECKPOINT
 
 ### P1-T4 — family model + general + security  (plan P1-T4)
-- [ ] RED: `family_test.go` (registry), `general/general_test.go`, `security/security_test.go`: Read from fixture; Export golden; Diff matrix (declared/full/missing/not-honoured); Apply records PATCH body
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN
-- [ ] RUN-GREEN → **PASS**
-- [ ] COMMIT: `feat(gcfg): family model + general + security`
+- [x] RED: `family_test.go` (registry), `general/general_test.go`, `security/security_test.go`: Read from fixture; Export golden; Diff matrix (declared/full/missing/not-honoured); Apply records PATCH body
+- [x] RUN-RED → **FAIL**
+- [x] GREEN
+- [x] RUN-GREEN → **PASS**
+- [x] COMMIT: `feat(gcfg): family model + general + security`
 - [ ] LEDGER + CHECKPOINT
 
 ### P1-T5 — engine + renderers  (plan P1-T5)
-- [ ] RED: `engine/{export,verify,plan,apply,ownership}_test.go` (clean; drift; unreadable→finding; full extras; apply→re-read→not-honoured survives; call order), `report/*_test.go` goldens (tty/json/markdown)
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN
-- [ ] RUN-GREEN: `go test ./internal/engine/ -cover` ≥90% → **PASS**
-- [ ] COMMIT: `feat(gcfg): engine + renderers`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `engine/{export,verify,plan,apply,ownership}_test.go` (clean; drift; unreadable→finding; full extras; apply→re-read→not-honoured survives; call order), `report/*_test.go` goldens (tty/json/markdown)
+- [x] RUN-RED → **FAIL**
+- [x] GREEN
+- [x] RUN-GREEN: `go test ./internal/engine/ -cover` ≥90% → **PASS**
+- [x] COMMIT: `feat(gcfg): engine + renderers`
+- [x] LEDGER + CHECKPOINT
 
 ### P1-T6 — verbs export/verify/plan/apply/init  (plan P1-T6)
 - [ ] RED: `cmd/{export,verify,plan,apply,init}_test.go` (exit codes; non-TTY apply w/o --yes → 2 and zero writes; --only; init golden; --from via fake; refuse overwrite; token grep)

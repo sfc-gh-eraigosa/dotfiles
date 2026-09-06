@@ -1,0 +1,120 @@
+# P1-T2 schema load + lint + JSON Schema — 2026-09-06T06:36:18Z — worker gcfg/edward-raigosa/build
+
+## RUN-RED: go test ./internal/schema/
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/schema [github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/schema.test]
+internal/schema/lint_test.go:8:47: undefined: LintOpts
+internal/schema/lint_test.go:8:59: undefined: Problem
+internal/schema/lint_test.go:10:15: undefined: Load
+internal/schema/lint_test.go:14:9: undefined: Lint
+internal/schema/lint_test.go:17:26: undefined: Problem
+internal/schema/lint_test.go:27:29: undefined: LintOpts
+internal/schema/lint_test.go:34:26: undefined: LintOpts
+internal/schema/lint_test.go:38:29: undefined: LintOpts
+internal/schema/jsonschema_test.go:12:14: undefined: JSONSchema
+internal/schema/jsonschema_test.go:32:12: undefined: JSONSchema
+internal/schema/lint_test.go:38:29: too many errors
+
+## RUN-GREEN: go vet ./... && go test ./... -count=1 -cover
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg	0.004s	coverage: 91.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/cmd	0.011s	coverage: 96.9% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/schema	0.017s	coverage: 94.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/version	0.005s	coverage: 100.0% of statements
+
+## per-package bar as gcfg-ci computes it (internal/schema ≥90)
+coverage: 94.8%
+
+## module total (CI formula, ≥80)
+total:										(statements)	95.1%
+
+## tests
+--- PASS: TestJSONSchemaGolden (0.00s)
+--- PASS: TestJSONSchemaShape (0.00s)
+--- PASS: TestJSONSchemaCoversEveryKind (0.00s)
+--- PASS: TestLintCleanFile (0.00s)
+--- PASS: TestLintOrgBlockOnlyInDotGithubRepo (0.00s)
+--- PASS: TestLintDuplicateNames (0.00s)
+--- PASS: TestLintEnumValues (0.00s)
+--- PASS: TestLintSecretShapedValues (0.00s)
+--- PASS: TestLintRequiredFieldsInLists (0.00s)
+--- PASS: TestLintLabelColour (0.00s)
+--- PASS: TestProblemStringCarriesPathAndMessage (0.00s)
+--- PASS: TestLoadFullFile (0.00s)
+--- PASS: TestLoadEverythingOptional (0.00s)
+--- PASS: TestLoadUnknownKeyNamesThePath (0.00s)
+--- PASS: TestLoadVersionRules (0.00s)
+--- PASS: TestLoadPerFamilyOwnership (0.00s)
+--- PASS: TestLoadListFamilyAcceptsBothForms (0.00s)
+--- PASS: TestLoadReadErrors (0.00s)
+--- PASS: TestDefaultRoundTrips (0.00s)
+--- PASS: TestErrorsCarryNoProgramPrefix (0.00s)
+--- PASS: TestEveryFamilyResolvesOwnership (0.00s)
+--- PASS: TestListMarshalKeepsTheSimplerForm (0.00s)
+--- PASS: TestParseNamesTheSourceInErrors (0.00s)
+--- PASS: TestLintCleanFileIsExitZero (0.00s)
+--- PASS: TestLintProblemsAreUsageErrors (0.00s)
+--- PASS: TestLintUnknownKeyIsAUsageError (0.00s)
+--- PASS: TestLintMissingFileIsAUsageError (0.00s)
+--- PASS: TestLintWarnsOnAnEmptyFile (0.00s)
+--- PASS: TestLintJSON (0.00s)
+--- PASS: TestLintOrgPlacementUsesTheTarget (0.00s)
+--- PASS: TestSchemaWritesTheJSONSchema (0.00s)
+--- PASS: TestBadTargetIsAUsageError (0.00s)
+--- PASS: TestVersionCommand (0.00s)
+--- PASS: TestBareCommandPrintsHelp (0.00s)
+--- PASS: TestTargetFlagParsing (0.00s)
+
+## compiled binary: lint on a clean file
+ok: $TMP/ok.yaml is valid
+exit=0
+
+## lint on a file with problems → exit 2
+repo.general.visibility: "hidden" must be one of public, private, internal
+repo.labels[0].color: "#d73a4a" must be six hex digits without a leading #
+repo.labels[1].name: duplicate name "BUG"
+org: the org block only works in the organization's `.github` repository, not sfc-gh-eraigosa/dotfiles
+gcfg: usage: 4 problem(s) in $TMP/bad.yaml
+exit=2
+
+## unknown key names the key and the line → exit 2
+gcfg: usage: $TMP/unknown.yaml: yaml: unmarshal errors:
+  line 5: field squash_titel not found in type schema.Merge
+exit=2
+
+## a secret-shaped value is refused without echoing it → exit 2
+repo.general.description: value looks like a secret; gcfg.yaml is committed and manages secrets by name only
+gcfg: usage: 1 problem(s) in $TMP/secret.yaml
+exit=2
+
+## empty file warns, exit 0
+warning: $TMP/empty.yaml declares no settings — verify and apply have nothing to do
+ok: $TMP/empty.yaml is valid
+exit=0
+
+## gcfg schema (first 24 lines; the full document is the golden in internal/schema/testdata/)
+{
+  "$id": "https://raw.githubusercontent.com/sfc-gh-eraigosa/dotfiles/main/.github/gcfg.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "GitHub repository and organization settings as code (gcfg).",
+  "properties": {
+    "org": {
+      "additionalProperties": false,
+      "description": "settings of the owning organization; only in the org's .github repo",
+      "properties": {
+        "actions": {
+          "additionalProperties": false,
+          "properties": {
+            "allowed_actions": {
+              "enum": [
+                "all",
+                "local_only",
+                "selected"
+              ],
+              "type": "string"
+            },
+            "default_workflow_permissions": {
+              "enum": [
+                "read",
+
+## schema is stable: two runs are byte-identical
+identical (32206 bytes)
