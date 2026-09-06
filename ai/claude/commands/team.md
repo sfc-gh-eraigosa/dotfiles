@@ -1,0 +1,43 @@
+---
+description: Route a task to the right AI team + member (two-level team→member selection)
+---
+
+You are routing a development task to the best-fit specialist agent from the AI teams.
+
+Task / argument: $ARGUMENTS
+
+If the argument names a **squad**, recommend that squad's members. If it names a **team**,
+list that team's members. Otherwise infer the team from the task (file types, domain,
+keywords), then pick the single best member — and a squad if the task spans teams.
+Invoke a member with `@agent-<team>-<role>`. Prefer the most specific member; do not
+fan out the whole team. Explain the choice in one line.
+
+### Members (team-role: use when)
+- web-api: Designing or changing backend HTTP/GraphQL APIs, OpenAPI/GraphQL schemas, request validation, route handlers, auth middleware, or database migrations that shape the frontend contract.
+- web-fe: Building or modifying UI components, styling, accessibility (ARIA/axe), client-side routing, Storybook stories, or data-bound views against an API contract
+- web-webarch: Delegate for framework selection/upgrades, rendering-strategy decisions (SSR/SSG/ISR/CSR), monorepo package boundaries, cache-control and CDN topology, design-system governance, or any cross-cutting architectural trade-off requiring an RFC/ADR.
+- web-webqa: End-to-end/cross-browser test authoring or review, Playwright/Cypress suites, Lighthouse performance/accessibility budgets, visual-regression diffing, or filing/triaging bug reports for web features marked ready for QA.
+- web-websec: Auditing web code, configs, or dependencies for vulnerabilities — OWASP Top 10 checks, security header/CSP validation, npm/pnpm dependency audits, secret scanning, auth/session/token review, or CORS policy enforcement before merge or release.
+- go-goarch: Designing or reviewing service boundaries, defining Go interfaces before implementation, governing .proto/RPC contracts, modeling goroutine lifecycles, or planning cross-service refactors and distributed tracing topology.
+- go-godev: Writing or modifying Go source — implementing services, CLIs (cobra), libraries, concurrency, error handling, or module hygiene in cmd/, internal/, or pkg/.
+- go-goqa: Validating a Go implementation marked Ready for QA — running the race detector, writing fuzz/benchmark/integration tests, enforcing coverage gates, or chasing goroutine leaks and flaky tests.
+- go-gosec: A Go change needs a security review: gosec/govulncheck findings, new go.mod dependencies, CVE/SBOM auditing, secret handling, TLS/mTLS config, or container privilege hardening before staging promotion.
+- terraform-aws-cloudarch: Designing AWS account topology, landing zones, VPC/network tiers, multi-region RPO/RTO strategy, ADRs, or evaluating designs against the Well-Architected pillars and cost governance.
+- terraform-aws-cloudsec: Static policy scanning of Terraform (checkov/tfsec), IAM role and policy audits, encryption-at-rest enforcement, CloudTrail/VPC Flow Log verification, S3 public access blocks, or SCP guardrail authoring.
+- terraform-aws-infra: Authoring or refactoring Terraform modules, composing root modules in environments/, writing variable blocks, configuring remote state, reviewing terraform plan output, or applying tagging and lifecycle rules to AWS resources
+- terraform-aws-platform: Setting up or fixing CI/CD pipelines, GitHub Actions workflows, Atlantis configs, ECR lifecycle policies, ECS/EKS rollouts, container build automation, or CI secret handling via OIDC for AWS workloads.
+- ai-ci-aiarch: Designing or reviewing agentic workflows, RAG/retrieval architecture, multi-model chains, model tier policies, eval harnesses, or LLMOps system design and ADRs
+- ai-ci-aidev: Building or modifying LLM-backed features — prompt pipelines, RAG, embeddings, structured-output parsing, model-abstraction wrappers, or eval suites under evals/
+- ai-ci-ci: Authoring or fixing CI pipelines — GitHub Actions YAML, Makefile targets, caching strategy, build matrices, runner provisioning, concurrency controls, or speeding up lint/test jobs.
+- ai-ci-modelops: The session needs to deploy, configure, or scale model-serving stacks (Ollama/LiteLLM/vLLM), manage GPU resource limits and VRAM, maintain the model registry, set inference latency SLOs, or design canary rollouts and air-gap model mirrors.
+- architecture-adversary: Independently verifying or refuting a claim, finding, or another agent's answer before it is trusted — adversarial second-opinion on audit/review output, fact-checking a conclusion against the actual source, calibrating severity, and filtering false positives out of a set of findings.
+- architecture-em: The main session needs cross-team conflict resolution among architects, translation of business goals into engineering objectives, roadmap or risk-register updates, priority arbitration, plain-language stakeholder summaries of architectural decisions, or organizing a new objective (a GitHub issue or a gss draft PR) into the docs/mbo design→spec→plan pipeline via the mbo-plan skill.
+- architecture-principal: A change touches auth, data migrations, public APIs, or core infrastructure and needs a mandatory critical review; engineering standards, linter configs, or the design pattern library must be defined or enforced; tech debt must be cataloged or prioritized for sprint allocation.
+- architecture-secarch: Designing or reviewing security architecture — STRIDE threat models, zero-trust enforcement, identity/OAuth2/OIDC flows, secrets management strategy, compliance mapping (SOC 2, GDPR, HIPAA), or blast-radius analysis of a new service or major feature.
+- architecture-sysarch: Significant design decisions, service-boundary or data-store choices, multi-team/multi-service changes, cross-cutting contracts (observability/auth/error propagation), dependency-graph review, or capacity modeling before production.
+
+### Squads (cross-team)
+- fullstack-feature: web/fe, web/api, go/godev, architecture/sysarch
+- secure-release: go/gosec, web/websec, architecture/secarch
+- infra-rollout: terraform-aws/infra, terraform-aws/platform, terraform-aws/cloudsec
+- adversarial-review: architecture/adversary, architecture/principal

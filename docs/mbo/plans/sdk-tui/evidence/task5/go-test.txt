@@ -1,0 +1,28 @@
+# 2026-09-05 20:59 PDT — go test ./tui/cmdline/ -cover -v (after the Parse nil-Args fix; the first run failed TestParse/q: expected nil Args, got []string{})
+=== RUN   TestParse
+=== RUN   TestParse/set_a.b.c_true
+=== RUN   TestParse/__unset___a.b.c__
+=== RUN   TestParse/q
+=== RUN   TestParse//ai\.(x|y)_z
+=== RUN   TestParse//
+=== RUN   TestParse/#00
+=== RUN   TestParse/___
+--- PASS: TestParse (0.00s)
+    --- PASS: TestParse/set_a.b.c_true (0.00s)
+    --- PASS: TestParse/__unset___a.b.c__ (0.00s)
+    --- PASS: TestParse/q (0.00s)
+    --- PASS: TestParse//ai\.(x|y)_z (0.00s)
+    --- PASS: TestParse// (0.00s)
+    --- PASS: TestParse/#00 (0.00s)
+    --- PASS: TestParse/___ (0.00s)
+=== RUN   TestRegistryRunAliasesAndUnknown
+--- PASS: TestRegistryRunAliasesAndUnknown (0.00s)
+=== RUN   TestStateSubmitCancelEmpty
+--- PASS: TestStateSubmitCancelEmpty (0.00s)
+=== RUN   TestTabCompletesArgumentCyclesAndResets
+--- PASS: TestTabCompletesArgumentCyclesAndResets (0.00s)
+=== RUN   TestTabCompletesCommandNamesAndNextArg
+--- PASS: TestTabCompletesCommandNamesAndNextArg (0.00s)
+PASS
+coverage: 96.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/cmdline	0.006s	coverage: 96.2% of statements

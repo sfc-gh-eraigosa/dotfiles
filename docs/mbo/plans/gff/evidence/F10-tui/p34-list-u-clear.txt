@@ -1,0 +1,26 @@
+# Owner ask: 'u' clears the user override from the LIST view (mirrors the detail view)
+# date UTC: 2026-07-26T16:57:57Z
+# Same overrides.Unset path as gff unset; row refreshes in place via resolve.Explain.
+
+== BEFORE: leftover user-overrides on the runtime page ==
+com.github.sfc-gh-eraigosa.dotfiles ▸ install (All) · ai · fonts · network · pkg · [runtime] · sdk · shell · system · to
+>   install.runtime.fnm                       false   override   user-override  Runs the fnm install block.
+  install.runtime.goenv                     true  override  user-override  Runs the goenv install/update and pinned Go t
+  install.runtime.nvm                       true  override  user-override  Runs the nvm install block.
+  install.runtime.pyenv                     true  default  repo-live  Runs the pyenv install/update block.
+  install.runtime.rbenv                     true  default  repo-live  Runs the rbenv install/update block with the ruby-
+↑/↓ move  ←/→ category  PgUp/PgDn page  Enter expand/details  Space toggle  u clear  ? help  q quit
+
+== AFTER: 'u' on goenv and nvm — overrides cleared in place ==
+com.github.sfc-gh-eraigosa.dotfiles ▸ install (All) · ai · fonts · network · pkg · [runtime] · sdk · shell · system · to
+  install.runtime.fnm                       false  override  user-override  Runs the fnm install block.
+  install.runtime.goenv                     true  default  repo-live  Runs the goenv install/update and pinned Go toolch
+>   install.runtime.nvm                       true    default    repo-live  Runs the nvm install block.
+  install.runtime.pyenv                     true  default  repo-live  Runs the pyenv install/update block.
+  install.runtime.rbenv                     true  default  repo-live  Runs the rbenv install/update block with the ruby-
+↑/↓ move  ←/→ category  PgUp/PgDn page  Enter expand/details  Space toggle  u clear  ? help  q quit
+
+== override file after ==
+demo.pkg.manager: apt
+demo.ui.dashboard: true
+install.runtime.fnm: false

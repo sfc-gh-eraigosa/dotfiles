@@ -1,12 +1,28 @@
 {
-  "env": {
-    "DOTFILES_DIR": "$HOME/git/dotfiles"
+  "_comment": "New-host baseline (host-owned after install; forced subset re-applied separately). NEVER add a `model` key here — the fleet spans Claude Code versions and model aliases differ across them (see docs/claude-code-support.md). Keys unknown to older versions are silently ignored, so additive new-version keys are safe. The sandbox block ships DISABLED: before flipping `enabled`, populate network.allowedDomains and keep ~/.config/gss readable (the gss approval token lives there).",
+  "isolatePeerMachines": true,
+  "sandbox": {
+    "enabled": false,
+    "network": {
+      "allowedDomains": [],
+      "strictAllowlist": true
+    },
+    "credentials": {
+      "files": [
+        { "path": "~/.ssh", "mode": "deny" },
+        { "path": "~/.aws", "mode": "deny" },
+        { "path": "~/.gnupg", "mode": "deny" }
+      ]
+    }
   },
   "permissions": {
     "allow": [
       "Bash(gss status:*)",
       "Bash(gss scan:*)",
       "Bash(gss version:*)",
+      "Bash(gss push:*)",
+      "Bash(gss pr:*)",
+      "Bash(gss sync:*)",
       "Bash(tmux-mgr session:*)",
       "Bash(tmux-mgr window:*)",
       "Bash(tmux-mgr capture:*)",
@@ -18,6 +34,8 @@
       "Bash(wol version)",
       "Bash(sync-skills:*)",
       "Bash(bash $HOME/opt/scripts/system/sync-skills.sh:*)",
+      "Bash(sync-plugins:*)",
+      "Bash(bash $HOME/opt/scripts/system/sync-plugins.sh:*)",
       "Bash($HOME/opt/scripts/*/*:*)",
       "Bash($HOME/opt/bin/*:*)",
       "Bash(git status:*)",
@@ -45,9 +63,6 @@
       "Bash(init 6)"
     ],
     "ask": [
-      "Bash(gss push:*)",
-      "Bash(gss pr:*)",
-      "Bash(gss sync:*)",
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
       "Bash(reboot:*)",
@@ -65,7 +80,16 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/git/dotfiles/ai/claude/hooks/safety_guard.sh"
+            "command": "$HOME/.claude/hooks/safety_guard.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/privacy_guard.sh"
           }
         ]
       }
@@ -77,5 +101,6 @@
   },
   "skipDangerousModePermissionPrompt": true,
   "theme": "auto",
+  "editorMode": "vim",
   "skipAutoPermissionPrompt": true
 }

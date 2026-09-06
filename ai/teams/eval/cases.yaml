@@ -1,0 +1,186 @@
+# cases.yaml — routing eval fixtures for the AI Teams system.
+#
+# Each case is a realistic one-line engineering task plus the team/member the
+# router is expected to select. `route-eval.sh --check` validates every
+# expectation against the live source tree (team folders, the_*.md roles, and
+# teams.yaml squads) with zero model calls. `route-eval.sh --runner <cli>`
+# scores a real model against these expectations.
+#
+# expect.team   : a real ai/teams/<team>/ folder (required for member cases).
+# expect.member : a role that resolves to ai/teams/<team>/the_*.md (role: <member>).
+# expect.squad  : OPTIONAL — a squad name in teams.yaml. When present the case is
+#                 cross-domain/ambiguous and a squad answer is the defensible target.
+#
+# Coverage: >= 2 discriminating cases per member across all 22 members, plus a
+# block of squad/ambiguous cross-domain cases at the end.
+schema_version: 1
+
+cases:
+  # ---------------- web/fe — The Frontend Engineer ----------------
+  - task: "Build a responsive React modal component with focus-trap and ARIA roles."
+    expect: { team: web, member: fe }
+  - task: "Fix the Tailwind layout shift on the product card grid at mobile breakpoints."
+    expect: { team: web, member: fe }
+
+  # ---------------- web/api — The API Designer ----------------
+  - task: "Design the OpenAPI schema and route handlers for a new /v2/orders REST endpoint."
+    expect: { team: web, member: api }
+  - task: "Add request validation middleware and a DB migration for the user-profile API contract."
+    expect: { team: web, member: api }
+
+  # ---------------- web/webqa — The Web QA Engineer ----------------
+  - task: "Author a Playwright end-to-end suite for the checkout flow across Chromium and WebKit."
+    expect: { team: web, member: webqa }
+  - task: "Set a Lighthouse performance budget and add visual-regression diffing to CI for the marketing site."
+    expect: { team: web, member: webqa }
+
+  # ---------------- web/websec — The Web Security Auditor ----------------
+  - task: "Fix the missing Content-Security-Policy header and tighten the CORS allowlist before release."
+    expect: { team: web, member: websec }
+  - task: "Run an npm dependency audit and review the session-cookie/token handling for OWASP Top 10 issues."
+    expect: { team: web, member: websec }
+
+  # ---------------- web/webarch — The Web Architect ----------------
+  - task: "Write an ADR choosing between SSR, SSG, and ISR for the new docs portal rendering strategy."
+    expect: { team: web, member: webarch }
+  - task: "Define the monorepo package boundaries and CDN cache-control topology for the design system."
+    expect: { team: web, member: webarch }
+
+  # ---------------- go/godev — The Go Developer ----------------
+  - task: "Implement a cobra CLI subcommand that streams logs with a bounded worker pool in internal/."
+    expect: { team: go, member: godev }
+  - task: "Refactor the payments package error handling to wrap errors with %w and clean up module hygiene."
+    expect: { team: go, member: godev }
+
+  # ---------------- go/goqa — The Go QA Engineer ----------------
+  - task: "Write table-driven tests and a fuzz target for the Go parser and enforce a 90% coverage gate."
+    expect: { team: go, member: goqa }
+  - task: "Run the race detector and chase a goroutine leak in the Go worker-pool integration test."
+    expect: { team: go, member: goqa }
+
+  # ---------------- go/gosec — The Go Security Engineer ----------------
+  - task: "Triage govulncheck findings on the new go.mod dependencies and harden the TLS config."
+    expect: { team: go, member: gosec }
+  - task: "Review the Go service for gosec secret-handling issues and audit the SBOM before staging promotion."
+    expect: { team: go, member: gosec }
+
+  # ---------------- go/goarch — The Go Architect ----------------
+  - task: "Define the Go interfaces and .proto RPC contract for the new inventory microservice before coding."
+    expect: { team: go, member: goarch }
+  - task: "Model the goroutine lifecycle and distributed-tracing topology for a cross-service Go refactor."
+    expect: { team: go, member: goarch }
+
+  # ---------------- terraform-aws/infra — The Infrastructure Engineer ----------------
+  - task: "Author a reusable Terraform module for an RDS instance with remote state and tagging rules."
+    expect: { team: terraform-aws, member: infra }
+  - task: "Compose the staging root module in environments/ and review the terraform plan output for the VPC."
+    expect: { team: terraform-aws, member: infra }
+
+  # ---------------- terraform-aws/platform — The Platform Engineer ----------------
+  - task: "Set up a GitHub Actions workflow with OIDC to AWS that builds and rolls out the ECS service."
+    expect: { team: terraform-aws, member: platform }
+  - task: "Fix the Atlantis config and add an ECR lifecycle policy to the container build pipeline."
+    expect: { team: terraform-aws, member: platform }
+  # Negative-scope trap: a Dockerfile for a Go service is container/build automation,
+  # owned by the Platform Engineer (not go/godev application code).
+  - task: "Add a multi-stage Dockerfile and container build automation for the Go API service."
+    expect: { team: terraform-aws, member: platform }
+
+  # ---------------- terraform-aws/cloudsec — The Cloud Security Engineer ----------------
+  - task: "Run checkov and tfsec on the Terraform, enforce S3 public-access blocks and encryption-at-rest."
+    expect: { team: terraform-aws, member: cloudsec }
+  - task: "Audit the IAM roles and author SCP guardrails, verifying CloudTrail and VPC Flow Logs are on."
+    expect: { team: terraform-aws, member: cloudsec }
+
+  # ---------------- terraform-aws/cloudarch — The Cloud Architect ----------------
+  - task: "Design the multi-account landing zone and VPC network tiers against the Well-Architected pillars."
+    expect: { team: terraform-aws, member: cloudarch }
+  - task: "Write an ADR for the multi-region RPO/RTO strategy and cost-governance topology."
+    expect: { team: terraform-aws, member: cloudarch }
+
+  # ---------------- ai-ci/aidev — The AI Developer ----------------
+  - task: "Build a RAG prompt pipeline with embeddings and structured-output parsing behind a model wrapper."
+    expect: { team: ai-ci, member: aidev }
+  - task: "Add an eval suite under evals/ for the summarization feature's LLM responses."
+    expect: { team: ai-ci, member: aidev }
+
+  # ---------------- ai-ci/ci — The CI Engineer ----------------
+  - task: "Speed up the lint/test GitHub Actions jobs with a build matrix and dependency caching."
+    expect: { team: ai-ci, member: ci }
+  - task: "Add Makefile targets and concurrency controls to the CI pipeline to cancel stale runs."
+    expect: { team: ai-ci, member: ci }
+
+  # ---------------- ai-ci/modelops — The Model Ops Engineer ----------------
+  - task: "Deploy a vLLM serving stack with GPU VRAM limits and set an inference latency SLO."
+    expect: { team: ai-ci, member: modelops }
+  - task: "Design a canary rollout for the LiteLLM model registry and an air-gapped model mirror."
+    expect: { team: ai-ci, member: modelops }
+
+  # ---------------- ai-ci/aiarch — The AI Architect ----------------
+  - task: "Design the multi-model agentic workflow and retrieval architecture with a model-tier policy."
+    expect: { team: ai-ci, member: aiarch }
+  - task: "Write an ADR for the LLMOps eval-harness system design across the agent chain."
+    expect: { team: ai-ci, member: aiarch }
+
+  # ---------------- architecture/sysarch — The Systems Architect ----------------
+  - task: "Choose the data-store and service boundaries for a new multi-service event-driven platform."
+    expect: { team: architecture, member: sysarch }
+  - task: "Review the dependency graph and capacity model for cross-cutting observability and auth contracts."
+    expect: { team: architecture, member: sysarch }
+
+  # ---------------- architecture/principal — The Principal Engineer ----------------
+  - task: "Do the mandatory critical review of a change that alters auth and runs a public-API data migration."
+    expect: { team: architecture, member: principal }
+  - task: "Define the engineering linter standards and catalog tech debt for sprint allocation."
+    expect: { team: architecture, member: principal }
+
+  # ---------------- architecture/secarch — The Security Architect ----------------
+  - task: "Build a STRIDE threat model and zero-trust OAuth2/OIDC identity flow for the new payments service."
+    expect: { team: architecture, member: secarch }
+  - task: "Map SOC 2 and GDPR compliance and analyze blast radius for the new tenant-isolation feature."
+    expect: { team: architecture, member: secarch }
+
+  # ---------------- architecture/em — The Engineering Manager ----------------
+  - task: "Resolve the conflict between the cloud and security architects and update the risk register."
+    expect: { team: architecture, member: em }
+  - task: "Translate the Q3 business goals into engineering objectives and a plain-language stakeholder summary."
+    expect: { team: architecture, member: em }
+
+  # ---------------- architecture/adversary — The Adversarial Reviewer ----------------
+  - task: "Independently verify whether this reported SQL-injection finding is real before we file it as a bug."
+    expect: { team: architecture, member: adversary }
+  - task: "Stress-test the audit's claim that the worktree code has a race condition — confirm or refute it against the source."
+    expect: { team: architecture, member: adversary }
+
+  # --------- go boundary discriminators: implementation bug (godev) vs interface/contract design (goarch) ---------
+  - task: "Decide whether the worktree Backend interface should take a context.Context parameter and how that reshapes the contract."
+    expect: { team: go, member: goarch }
+  - task: "Fix the goroutine in the log streamer that leaks because the worker never checks ctx.Done()."
+    expect: { team: go, member: godev }
+
+  # ================= Squad / ambiguous / cross-domain cases =================
+  # These span multiple teams; a squad is the defensible routing target.
+
+  # fullstack-feature: UI + API + service + design end to end.
+  - task: "Ship a user-facing dashboard end to end: new UI, the backing REST API, the Go service, and the system design."
+    expect: { squad: fullstack-feature }
+  - task: "Build a complete account-settings feature spanning the React frontend, its API contract, and the Go backend service."
+    expect: { squad: fullstack-feature }
+
+  # secure-release: security gate before shipping (code + web surface + threat model).
+  - task: "Run the full security gate before release: Go code review, web-surface audit, and an updated threat model."
+    expect: { squad: secure-release }
+  - task: "Block the release until the dependency CVEs, CSP/CORS posture, and STRIDE threat model are all signed off."
+    expect: { squad: secure-release }
+
+  # infra-rollout: provision + ship infrastructure changes safely.
+  - task: "Provision new AWS infrastructure and roll it out safely: Terraform modules, the CI/CD pipeline, and a policy scan."
+    expect: { squad: infra-rollout }
+  - task: "Stand up the VPC and ECS workload with its deploy pipeline and a checkov security scan in one coordinated rollout."
+    expect: { squad: infra-rollout }
+
+  # adversarial-review: independently verify/harden another team's findings before trusting them.
+  - task: "Before we trust the security audit, get an independent skeptic plus the principal engineer to confirm or refute the critical findings."
+    expect: { squad: adversarial-review }
+  - task: "Run an adversarial second-opinion pass over the migration review and filter out any false positives before sign-off."
+    expect: { squad: adversarial-review }

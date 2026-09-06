@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # ~/.profile: executed by the command interpreter for login shells.
 # This file is not read by bash(1), if ~/.bash_profile or ~/.bash_login
 # exists.
@@ -9,13 +10,68 @@
 #umask 022
 
 if [ ! -z "${GREP_OPTIONS}" ]; then
+  # shellcheck disable=SC2139  # intentional: bake the current GREP_OPTIONS into the alias, then unset it
   alias grep="grep ${GREP_OPTIONS}"
   unset GREP_OPTIONS
 fi
 
-if [ -f /etc/environment ] ; then
-  . /etc/environment
+# /etc/environment is a pam_env(8) key=value TABLE, not a shell script.
+# Sourcing it runs its `PATH="..."` line as a shell assignment, which
+# CLOBBERS the PATH that PAM and /etc/profile.d/*.sh already built. On
+# DGX Spark that silently dropped NVIDIA's /etc/profile.d/nv_paths.sh
+# entry, so /usr/local/cuda/bin (nvcc, ncu, cuda-gdb, compute-sanitizer)
+# was missing from every login shell. Parse the table instead, and never
+# let it overwrite PATH.
+#
+# POSIX-only (dash sources this file via `sh -l`): no arrays, no [[ ]].
+#
+# DOTFILES_ENV_FILE exists so the test driver can point this loop at a
+# fixture; it is not a user-facing knob. Production always reads
+# /etc/environment.
+_env_file="${DOTFILES_ENV_FILE:-/etc/environment}"
+if [ -r "${_env_file}" ] ; then
+  _env_path_fallback=""
+  while IFS= read -r _env_line || [ -n "${_env_line}" ]; do
+    # pam_env accepts an optional leading `export `.
+    _env_line="${_env_line#export }"
+    case "${_env_line}" in
+      ''|'#'*) continue ;;
+    esac
+    # Must actually be an assignment. Without this, a bare word line like
+    # `FOO` parses as key=FOO val=FOO and gets exported as FOO=FOO.
+    case "${_env_line}" in
+      *=*) ;;
+      *) continue ;;
+    esac
+    _env_key="${_env_line%%=*}"
+    _env_val="${_env_line#*=}"
+    # Accept only plain NAME=VALUE. Anything else (leading whitespace,
+    # shell syntax, a line with no '=') fails this test and is skipped,
+    # which is the fail-safe direction.
+    case "${_env_key}" in
+      ''|*[!A-Za-z0-9_]*) continue ;;
+    esac
+    # Strip one layer of matching quotes.
+    case "${_env_val}" in
+      \"*\") _env_val="${_env_val#\"}" ; _env_val="${_env_val%\"}" ;;
+      \'*\') _env_val="${_env_val#\'}" ; _env_val="${_env_val%\'}" ;;
+    esac
+    if [ "${_env_key}" = "PATH" ] ; then
+      # Remember it, but only as a last resort (see below).
+      _env_path_fallback="${_env_val}"
+      continue
+    fi
+    export "${_env_key}=${_env_val}"
+  done < "${_env_file}"
+  # Only adopt /etc/environment's PATH when we genuinely have none —
+  # e.g. a non-PAM `su` that skipped /etc/profile entirely.
+  if [ -z "${PATH:-}" ] && [ -n "${_env_path_fallback}" ] ; then
+    PATH="${_env_path_fallback}"
+    export PATH
+  fi
+  unset _env_line _env_key _env_val _env_path_fallback
 fi
+unset _env_file
 
 # set PATH so it includes user's private bin if it exists
 if [ -d "${HOME}/bin" ] ; then
@@ -23,6 +79,9 @@ if [ -d "${HOME}/bin" ] ; then
 fi
 if [ -d "${HOME}/opt/bin" ] ; then
     PATH="${HOME}/opt/bin:$PATH"
+fi
+if [ -d "${HOME}/opt/google-cloud-sdk/bin" ] ; then
+    PATH="${HOME}/opt/google-cloud-sdk/bin:$PATH"
 fi
 if [ -d "${HOME}/opt/scripts" ] ; then
     for d in "${HOME}/opt/scripts"/*; do
@@ -37,6 +96,7 @@ if [ -d "${HOME}/.cabal/bin" ] ; then
       PATH="${HOME}/.cabal/bin:$PATH"
 fi
 
+# shellcheck disable=SC2034  # set here for parity with .bashrc/.zshrc; consumed by interactive prompt setup
 force_color_prompt=yes
 # Detect if we're in VSCode/Cursor terminal
 if [ "$TERM_PROGRAM" = "vscode" ] || [ "$TERM_PROGRAM" = "cursor" ] || [ -n "$VSCODE_PID" ] || [ -n "$CURSOR_PID" ]; then
@@ -129,11 +189,9 @@ test -e "/workspace/Human-Connection/.devcontainer/profile_devcontainer_alias.sh
 if [ -d "/home/linuxbrew" ]; then
     eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 fi
-# docker windows
-if [ -d "/mnt/c/Program\ Files/Docker/Docker" ]; then
-    alias docker='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker.exe'
-    alias docker-compose='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker-compose.exe'
-fi
+# docker windows: handled in .bash_aliases (WSL-aware guard). The block that
+# lived here was dead code — the backslash inside the quoted -d path meant the
+# test never matched, so these aliases were never actually defined from here.
 
 # pyenv, rbenv, goenv paths
 [ -d "$HOME/.pyenv/bin" ] && export PATH="$PATH:$HOME/.pyenv/bin"
@@ -146,7 +204,7 @@ if [ "$EDITOR_TERMINAL" = "false" ]; then
     if ! pgrep -u "${USER:-$(id -un)}" ssh-agent > /dev/null 2>&1; then
       eval "$(ssh-agent -s)" > /dev/null
     fi
-    export GPG_TTY=$(tty 2>/dev/null)
+    GPG_TTY=$(tty 2>/dev/null); export GPG_TTY
     # Only launch zsh if we are not already in it and it exists
     case "$-" in
         *i*)
@@ -163,20 +221,70 @@ alias bazel='bazelisk'
 # added by Snowflake SnowSQL installer
 export PATH=${HOME}/opt/bin:$PATH
 
-# ruby docker environment aliases
+# ruby docker environment aliases + git environment shortcuts.
 #
-if [ -f ${HOME}/.ruby.env ] ; then
-    source ${HOME}/.ruby.env
-else
-    case "$-" in
-        *i*) echo ".ruby.env is missing, you can install with : . opt/scripts/docker/setup_ruby-docker.sh" ;;
-    esac
-fi
-# Source git environment shortcuts
-[ -f ${HOME}/.dindcenv ] && . ${HOME}/.dindcenv
+# ~/.ruby.env and ~/.dindcenv define interactive Docker/UCP helper aliases and
+# functions written in bash/zsh-only syntax: the `function name { ... }` form
+# and hyphenated names (e.g. dindc-login). They are NOT POSIX sh, and sourcing
+# them from the wrong shell at login breaks login on two of our platforms:
+#   * Linux / Raspberry Pi / WSL — /bin/sh is dash; a parse error in a
+#     dot-sourced file is FATAL (exit 2) even under `set +e`. On the Pi this
+#     aborts the LightDM Xsession before the desktop starts → blank screen →
+#     bounced back to the greeter (a login loop).
+#   * macOS — /bin/sh is bash in POSIX mode, which rejects the hyphenated
+#     function names ("not a valid identifier") and bails as well.
+# Every one of those failure paths is a NON-INTERACTIVE shell, and these helpers
+# are only useful interactively. So gate on an interactive shell that is real
+# bash or zsh; non-interactive logins (the Xsession, `sh -c`, ssh commands)
+# skip the block entirely and can never choke on it.
+case "$-" in
+    *i*)
+        if [ -n "$BASH_VERSION" ] || [ -n "$ZSH_VERSION" ]; then
+            if [ -f "${HOME}/.ruby.env" ] ; then
+                . "${HOME}/.ruby.env"
+            else
+                echo ".ruby.env is missing, you can install with : . opt/scripts/docker/setup_ruby-docker.sh"
+            fi
+            # Source git environment shortcuts
+            [ -f "${HOME}/.dindcenv" ] && . "${HOME}/.dindcenv"
+        fi
+        ;;
+esac
 
-# Load Gemini CLI environment
-[ -f "$HOME/.gemini.profile" ] && . "$HOME/.gemini.profile"
+# Load Antigravity CLI environment
+[ -f "$HOME/.antigravity.profile" ] && . "$HOME/.antigravity.profile"
 
 # Load Nano Platform environment
 [ -f "$HOME/.nano_profile" ] && . "$HOME/.nano_profile"
+
+# ---------------------------------------------------------------------------
+# PATH dedupe — keep the FIRST occurrence of each entry, preserve order.
+#
+# This file, /etc/profile.d drop-ins, and ~/.zprofile can each legitimately
+# prepend the same directory, and re-entrant logins (tmux, `su -`, an SSH
+# session that re-runs the profile) compound it. Before this pass a login
+# PATH here carried 20 duplicated entries. Duplicates aren't fatal, but they
+# slow every command lookup and make PATH ordering bugs hard to read.
+#
+# POSIX-only: no arrays, no `${(u)path}` (zsh-ism), no mapfile (bash 4+).
+# ---------------------------------------------------------------------------
+if [ -n "${PATH:-}" ]; then
+  _pd_out=""
+  _pd_rest="${PATH}"
+  while [ -n "${_pd_rest}" ]; do
+    case "${_pd_rest}" in
+      *:*) _pd_head="${_pd_rest%%:*}" ; _pd_rest="${_pd_rest#*:}" ;;
+      *)   _pd_head="${_pd_rest}"     ; _pd_rest="" ;;
+    esac
+    # Drop empty fields: a leading, trailing, or doubled ':' means "current
+    # directory" to the shell, which is a genuine security footgun.
+    [ -z "${_pd_head}" ] && continue
+    case ":${_pd_out}:" in
+      *":${_pd_head}:"*) continue ;;
+    esac
+    if [ -z "${_pd_out}" ]; then _pd_out="${_pd_head}"; else _pd_out="${_pd_out}:${_pd_head}"; fi
+  done
+  PATH="${_pd_out}"
+  export PATH
+  unset _pd_out _pd_rest _pd_head
+fi

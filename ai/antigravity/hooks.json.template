@@ -1,0 +1,15 @@
+{
+  "guards": {
+    "PreToolUse": [
+      {
+        "matcher": "run_command|write_to_file|replace_file_content|multi_replace_file_content|edit_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "__HOME__/.gemini/config/hooks/antigravity_adapter.sh safety_guard.sh privacy_guard.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "_comment": "New-host baseline for the Antigravity CLI (agy >= 1.1). Seeded ONCE by install_antigravity_skills.sh when ~/.gemini/antigravity-cli/settings.json is absent (this key is dropped at seed time); host-owned afterwards, with ai/antigravity/settings.forced.json re-applied on every run. Mirrors ai/claude/settings.json.template key-for-key where agy has a key: toolPermission ~ permissions.defaultMode, editorMode, colorScheme ~ theme, notifications, enableTerminalSandbox ~ sandbox.enabled. allowNonWorkspaceAccess is true because gss/herdr worktrees and ~/opt/scripts live outside any workspace root. NEVER add trustedWorkspaces here (host-local). Design: docs/mbo/designs/agy-parity.md.",
+  "toolPermission": "request-review",
+  "editorMode": "vim",
+  "colorScheme": "terminal",
+  "notifications": true,
+  "enableTerminalSandbox": false,
+  "allowNonWorkspaceAccess": true,
+  "permissions": {
+    "allow": [
+      "command(gss status)",
+      "command(gss scan)",
+      "command(gss version)",
+      "command(gss push)",
+      "command(gss pr)",
+      "command(gss sync)",
+      "command(tmux-mgr session)",
+      "command(tmux-mgr window)",
+      "command(tmux-mgr capture)",
+      "command(tmux-mgr agent list)",
+      "command(tmux-mgr desktop)",
+      "command(tmux-mgr save)",
+      "command(tmux-mgr restore)",
+      "command(tmux-mgr version)",
+      "command(wol version)",
+      "command(sync-skills)",
+      "command(sync-plugins)",
+      "command(git status)",
+      "command(git diff)",
+      "command(git log)",
+      "command(git branch)",
+      "command(git rev-parse)",
+      "command(make help)",
+      "command(make unit-test)",
+      "command(make bin)",
+      "command(make integration-test)"
+    ]
+  }
+}

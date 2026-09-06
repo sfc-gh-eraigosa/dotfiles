@@ -1,0 +1,91 @@
+# Mergify merge queue — the queue GitHub reserves for org-owned repos,
+# provided by the Mergify app instead (installed on this personal-account
+# repo; free tier). Docs: https://docs.mergify.com/merge-queue/
+#
+# How to land a PR through the queue:
+#   - add the `ready-for-merge` label (it ALSO force-runs the heavy
+#     build-and-validate job on drafts — same label, one meaning: "land it"),
+#     then mark the PR ready for review; or
+#   - comment `@mergifyio queue` on the PR (works ad hoc, no label).
+#
+# Mergify updates the PR in place against the latest main (update_method:
+# merge — satisfies the ruleset's strict up-to-date requirement without
+# force-pushing the branch), waits for the ruleset's REQUIRED checks on the
+# updated code, then squash-merges. Queue entries are serialized, so two
+# green-but-conflicting PRs can never land stale.
+
+# In-place checks only (no speculative draft-PR trains): required for
+# compatibility with the ruleset's strict "require branches to be up to date"
+# policy — Mergify flags the combination otherwise (see PR #204's warning).
+# Serialized in-place checking is our intended design anyway.
+merge_queue:
+  max_parallel_checks: 1
+
+# Branch-protection-as-code: the merge gate list lives HERE, reviewable in
+# PRs, and reports as the single "Mergify Merge Protections" check. Rollout:
+# (1) merge this, (2) verify the check reports on a PR, (3) add it to the
+# GitHub ruleset's required checks and slim the native list to just it
+# (then `make ruleset-snapshot` + commit). Until step 3 the GitHub ruleset's
+# native check list remains the enforcer and this is a parallel dry run.
+merge_protections:
+  - name: required CI green (managed as code)
+    description: Mirror of the main ruleset's required checks — edit via PR.
+    if:
+      - base = main
+    success_conditions:
+      - check-success = Build and Integration Test
+      - check-success = Lint (go + shell + markdown + actions)
+      - check-success = Go Lint (golangci-lint)
+      - check-success = Validate teams source + routing artifacts
+      - check-success = binary-level e2e tests
+      - check-success = unit tests + coverage gate
+      - check-success = Run Shell Test Drivers
+      - check-success = Shell Lint (shellcheck)
+      - check-success = Run Unit Tests
+
+  # External-contribution gate: any PR not authored by the maintainer (or
+  # dependabot, a GitHub-operated trusted source) requires the maintainer's
+  # approving review. GitHub's native "require 1 approval" can't do this —
+  # authors can't approve their own PRs, so it would deadlock solo work.
+  # See docs/mergify.md for the full policy.
+  - name: external contributions need the maintainer's review
+    if:
+      - author != sfc-gh-eraigosa
+      - author != dependabot[bot]
+    success_conditions:
+      - approved-reviews-by = sfc-gh-eraigosa
+
+queue_rules:
+  - name: default
+    batch_size: 1
+    merge_method: squash
+    update_method: merge
+    # No queue/merge conditions: the branch ruleset's required status checks
+    # are enforced by GitHub and honored by Mergify automatically. Keeping
+    # both unset (identical) is also required for in-place mode.
+
+pull_request_rules:
+  - name: queue PRs labeled ready-for-merge
+    conditions:
+      - label = ready-for-merge
+      - -draft
+      # Author guard (belt to the merge_protections suspenders): external
+      # PRs enter the queue only after the maintainer's approving review.
+      - or:
+          - author = sfc-gh-eraigosa
+          - author = dependabot[bot]
+          - approved-reviews-by = sfc-gh-eraigosa
+    actions:
+      queue:
+        name: default
+
+  # Label hygiene: when Mergify performs the merge, swap the trigger label
+  # for an audit label so merged PRs are scannable at a glance.
+  - name: label swap after a Mergify merge
+    conditions:
+      - merged
+      - merged-by = mergify[bot]
+    actions:
+      label:
+        remove: [ready-for-merge]
+        add: [merged-by-mergify]

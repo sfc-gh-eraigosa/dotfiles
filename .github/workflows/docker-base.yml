@@ -1,0 +1,53 @@
+name: Docker Base Image
+
+# Builds and publishes ghcr.io/sfc-gh-eraigosa/dotfiles-base — the slow,
+# rarely-changing foundation (ubuntu + apt + devcontainer setup + docker-ce/
+# dind) that the CI test image builds FROM. Runs only when the base inputs
+# change, on a weekly schedule (picks up ubuntu/docker security updates), or
+# on demand. docker-image.yml pulls this image and falls back to building it
+# locally if the pull fails (first run, forks).
+#
+# Uses plain docker CLI (login/build/push) instead of third-party actions so
+# no new pin-to-SHA entries are needed (repo convention: every third-party
+# action is pinned to a full 40-char commit SHA).
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'docker/Dockerfile.base'
+      - 'opt/scripts/docker/dockerd-entrypoint.sh'
+      - '.github/workflows/docker-base.yml'
+  schedule:
+    - cron: '17 6 * * 1'   # Mondays 06:17 UTC — weekly security refresh
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  BASE_IMAGE: ghcr.io/${{ github.repository_owner }}/dotfiles-base
+
+jobs:
+  build-and-push:
+    name: Build and push base image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build base image
+        run: |
+          docker build -f docker/Dockerfile.base \
+            -t "$BASE_IMAGE:latest" \
+            -t "$BASE_IMAGE:$(date -u +%Y%m%d)" \
+            .
+
+      - name: Push base image (latest + dated tag)
+        run: |
+          docker push "$BASE_IMAGE:latest"
+          docker push "$BASE_IMAGE:$(date -u +%Y%m%d)"

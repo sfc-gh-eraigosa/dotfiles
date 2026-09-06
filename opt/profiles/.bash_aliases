@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 #
 # alias files
 #
@@ -29,7 +30,9 @@ alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo
 # See /usr/share/doc/bash-doc/examples in the bash-doc package.
 
 alias dockerup='bash ~/opt/bin/docker_up.sh'
+# shellcheck disable=SC2142 # novassh and novassh1 are intentional wrapper aliases around functions
 alias novassh='function nova_ssh { ssh-keygen -f ~/.ssh/known_hosts -R $1;ssh -i ~/.ssh/nova-USWest-AZ3.pem -l ubuntu $1;};nova_ssh'
+# shellcheck disable=SC2142
 alias novassh1='function nova_ssh1 { ssh-keygen -f ~/.ssh/known_hosts -R $1;ssh -i ~/.ssh/nova-USWest-AZ1.pem -l ubuntu $1;};nova_ssh1'
 alias sshhost='cat ~/.ssh/config|grep "Host\s"|sed "s/Host /ssh /g"'
 alias irc=irssi
@@ -105,17 +108,12 @@ alias f12='xdotool key F12'
 alias delkey='xdotool key Delete'
 
 #
-# Source git environment shortcuts
+# Git shortcuts (git-reset, git-reset-all, git-clean, git-help) — the slim
+# replacement for the retired Gerrit-era ~/.gitenv generator. No startup side
+# effects; safe to source unconditionally.
 #
-
-if [ -f ~/.gitenv ] ; then
-    source ~/.gitenv
-    if [ ! -f ~/.gitenv.nologin ]; then
-        echo "running git-login, to disable execute: touch ~/.gitenv.nologin"
-        fgit-login
-    fi
-else
-    echo ".gitenv is missing, you can install with : . opt/scripts/git/setup_git_alias.sh"
+if [ -f "$HOME/.gitools.sh" ] ; then
+    . "$HOME/.gitools.sh"
 fi
 # Some git shortcuts
 alias git-branches-rm='$HOME/opt/scripts/git/git-rm-mybranches.sh'
@@ -155,7 +153,7 @@ alias vpn="osascript -e 'tell application \"Viscosity\" to connectall'"
 alias novpn="osascript -e 'tell application \"Viscosity\" to disconnectall'"
 
 export NAMESPACE="${NAMESPACE:-default}"
-alias k="kubectl --namespace=$NAMESPACE"
+alias k='kubectl --namespace=$NAMESPACE'
 alias kpodjson='k get pod -o=json'
 alias kpod='kpodjson|jq -r ".items[0].metadata.name"'
 
@@ -186,13 +184,22 @@ export DOCKER_STACK_ORCHESTRATOR=swarm
 # 1.8, 11, 12, 1.7
 if [ -d "/usr/libexec/java_home" ] ; then
   export JAVA_VERSION=1.8
-  export JAVA_HOME=$(/usr/libexec/java_home -v ${JAVA_VERSION})
+  JAVA_HOME=$(/usr/libexec/java_home -v "${JAVA_VERSION}"); export JAVA_HOME
 fi
 
+# Windows paths (WSL): prefer the install-time cache written by
+# opt/bin/install_windows.sh (resolved from the real Windows env via
+# wslpath, so a custom automount root or relocated ProgramFiles is honored);
+# fall back to the standard /mnt/c layout so a missing cache never breaks login.
+# shellcheck disable=SC1091
+[ -f "${HOME}/.cache/dotfiles/winenv.sh" ] && . "${HOME}/.cache/dotfiles/winenv.sh"
+WIN_PROGRAM_FILES="${WIN_PROGRAM_FILES:-/mnt/c/Program Files}"
+
+# shellcheck disable=SC2139  # intentional: bake the install-time-resolved path into the alias
 if [ "$(uname -s)" = "Darwin" ]; then
     alias code="open '/Applications/Visual Studio Code.app'"
 else
-    alias code="/mnt/c/Program\ Files/Microsoft\ VS\ Code/Code.exe"
+    alias code="\"${WIN_PROGRAM_FILES}/Microsoft VS Code/Code.exe\""
 fi
 
 # gpg
@@ -210,11 +217,29 @@ alias python=python3
 alias pip=pip3
 alias vault-login=vault-login.sh
 
-# docker windows
-if [ -d /mnt/c/Program\ Files/Docker/Docker/resources/bin/ ]; then
-   alias docker='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker.exe'
-   alias kubectl='/mnt/c/Program\ Files/Docker/Docker/resources/bin/kubectl.exe'
-   alias docker-compose='/mnt/c/Program\ Files/Docker/Docker/resources/bin/docker-compose.exe'
+# docker windows (WSL): Docker Desktop's Windows CLIs are a fallback only.
+# Never shadow a working Linux CLI, and only alias the .exe when Windows-exe
+# interop actually works — the WSLInterop binfmt registration can get wiped
+# (systemd/WSL race), and then every .exe fails with "exec format error".
+# Note: Docker Desktop's /usr/bin/docker shim dangles when Desktop isn't
+# running, so test executability, not just presence.
+# shellcheck disable=SC2139  # intentional: bake the install-time-resolved path into the aliases
+if [ -d "${WIN_PROGRAM_FILES}/Docker/Docker/resources/bin/" ]; then
+   if grep -qs '^enabled' /proc/sys/fs/binfmt_misc/WSLInterop /proc/sys/fs/binfmt_misc/WSLInterop-late; then
+      [ -x "$(command -v docker 2>/dev/null)" ]         || alias docker="\"${WIN_PROGRAM_FILES}/Docker/Docker/resources/bin/docker.exe\""
+      [ -x "$(command -v kubectl 2>/dev/null)" ]        || alias kubectl="\"${WIN_PROGRAM_FILES}/Docker/Docker/resources/bin/kubectl.exe\""
+      [ -x "$(command -v docker-compose 2>/dev/null)" ] || alias docker-compose="\"${WIN_PROGRAM_FILES}/Docker/Docker/resources/bin/docker-compose.exe\""
+   elif ! [ -x "$(command -v docker 2>/dev/null)" ]; then
+      # No working Linux docker AND no Windows-exe interop: fail loud and clear
+      # instead of "exec format error" / "no such file or directory".
+      docker() {
+         echo "docker: Docker Desktop isn't running (its /usr/bin/docker shim is dangling)" >&2
+         echo "        and Windows-exe interop is unavailable (WSLInterop binfmt not registered)." >&2
+         echo "Fix:    start Docker Desktop on Windows, or restore interop with:" >&2
+         echo "        sudo sh -c 'echo \":WSLInterop:M::MZ::/init:PF\" > /proc/sys/fs/binfmt_misc/register'" >&2
+         return 127
+      }
+   fi
 fi
 
 # snowsql for mac
@@ -225,7 +250,6 @@ fi
 if [ -f ~/opt/bin/snowsql ]; then
     alias snowsql=~/opt/bin/snowsql
 fi
-export GOPRIVATE=github.com/snowflake-eng/*
 alias cursor='/Applications/Cursor.app/Contents/MacOS/Cursor'
 
 function sfhelp() {
@@ -236,9 +260,10 @@ function sfhelp() {
     sfssh - ssh to the workspace, alias for "sf ws ssh gco2"
 
     sfcreate - create a new workspace, alias for "sf ws create --os rocky9 --name gco2 --customization off"
-       usage: sfcreate [-nc] [-nr] [<name>]
+       usage: sfcreate [-nc] [-nr] [-s] [<name>]
          -nc - no customization, default is customization on
          -nr - no rocky9, default is rocky9
+         -s  - small workspace (1 unit, for directed tests / non-monorepo work)
          <name> - name of the workspace, default is gco2
 
     sfcode - code editor for the workspace, alias for "sf ws code gco2 --file <project-file> --ide cursor"
@@ -250,7 +275,7 @@ EOF
 
 function sfcode() {
     local NAME="gco2"
-    local PROJECT_FILE="~/$(whoami).code-workspace"
+    local PROJECT_FILE; PROJECT_FILE="$HOME/$(whoami).code-workspace"
     local IDE="cursor"
     
     while [[ $# -gt 0 ]]; do
@@ -287,6 +312,7 @@ function sfcreate() {
     local NAME="gco2"
     local NO_CUSTOMIZATION=
     local ROCKY9="--os rocky9"
+    local INSTANCE_PROFILE=
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -302,6 +328,10 @@ function sfcreate() {
                 NO_CUSTOMIZATION="--customization off"
                 shift
                 ;;
+            -s)
+                INSTANCE_PROFILE="--instance-profile small"
+                shift
+                ;;
             *)
                 NAME="$1"
                 shift
@@ -310,8 +340,8 @@ function sfcreate() {
     done
     echo "using name = ${NAME}"
 
-    echo "sf ws create --name ${NAME} ${NO_CUSTOMIZATION} ${ROCKY9}"
-    eval sf ws create --name ${NAME} ${NO_CUSTOMIZATION} ${ROCKY9}
+    echo "sf ws create --name ${NAME} ${NO_CUSTOMIZATION} ${ROCKY9} ${INSTANCE_PROFILE}"
+    eval sf ws create --name ${NAME} ${NO_CUSTOMIZATION} ${ROCKY9} ${INSTANCE_PROFILE}
     eval sf ws ssh ${NAME}
 }
 
@@ -328,7 +358,7 @@ function tmux4() {
         attach
 }
 alias tdev='tmux attach -t dev'
-gorun() { local f=$(mktemp -t gorun-XXXX).go; cat >"$f"; go run "$f"; rm "$f"; }
+gorun() { local f; f=$(mktemp -t gorun-XXXX).go; cat >"$f"; go run "$f"; rm "$f"; }
 alias avalanche_up='GODEBUG="x509ignoreCN=0" go run ./cmd/avaServer -yes-i-really-want-to-disable-authentication -mig-bypass-sha256 -overridedb 127.0.0.1'
 if command -v sf &> /dev/null; then
     eval "$(sf aliases)"
@@ -337,3 +367,4 @@ fi
 if [ -f ~/opt/bin/locales.sh ]; then
     source ~/opt/bin/locales.sh
 fi
+alias wifi-manage='~/git/dotfiles/opt/scripts/system/wifi-manage.sh'

@@ -1,0 +1,51 @@
+# P2-T5 — human-evidenced real-install acceptance (spec §6, plan §4 P2-T5)
+# Date: 2026-07-26 · Owner-run on real WSL2 (Windows 11 host), interactive terminal
+# Branch: fix/gff-wslenv-w-flag @ 0435b9d (the WSLENV /u→/w fix, PR #191) — required
+# for the flag to cross WSL→Win32; see TRACKING §10 for the three findings this
+# run surfaced (set -a requirement, /u→/w defect, UAC env-strip limitation).
+#
+# Evidence key: install.windows.apps (non-elevated setup-apps.ps1 gate). The
+# originally-scripted install.windows.wispr-flow lives in the UAC-ELEVATED batch,
+# which cannot receive env vars at all (Start-Process -Verb RunAs strips the
+# caller's environment — proven by probe, recorded in TRACKING §10). The apps
+# gate exercises the identical chain: config override → gff export → set -a →
+# install.sh → install_windows.sh WSLENV(/w) → powershell.exe Test-GffOn.
+
+## Preamble (WSL, ${HOME}/git/dotfiles)
+
+    $ gff set install.windows.apps false
+    $ set -a; eval "$(gff export --shell)"; set +a
+    $ env | grep GFF_INSTALL_WINDOWS_APPS
+    GFF_INSTALL_WINDOWS_APPS=false
+
+## Hop probes (same machine, same session)
+
+    $ WSLENV=FOO/u powershell.exe ... 'Write-Host "[$env:FOO]"'   -> []      (/u never crosses)
+    $ WSLENV=FOO/w powershell.exe ... 'Write-Host "[$env:FOO]"'   -> [bar]   (/w crosses)
+    $ WSLENV=...WISPR_FLOW/w powershell.exe ...                   -> [false] (real name crosses)
+    elevated probe: child writes "ran-$env:GFF_TEST"              -> "ran-"  (UAC strips env)
+
+## install.sh transcript slice (interactive run, prompt answered y)
+
+    Windows Desktop Customization detected.
+    ...
+    Choice [y/n/s]: y
+    Starting Windows customization... (this may take a few minutes)
+
+    === [1/6] WSL platform ===
+    WSL already installed -- skipping.
+    ...
+    === [4/6] Nerd Font (MesloLGS NF) ===
+
+    === gsl Nerd Font (MesloLGS Nerd Font, nerd-fonts v3.4.0) ===
+    Activated MesloLGS Nerd Font for this session (restart Terminal to pick it up).
+    SKIP (gff: install.windows.apps=false)
+
+    === [5/6] Windows Terminal themes + profiles ===
+    Wrote 5 schemes and 10 profiles to settings.json
+
+# The entire "[5/6] Desktop apps (winget)" phase — 17 per-app checks plus the
+# APP SUMMARY table in the un-gated baseline run earlier the same day — is
+# replaced by the single SKIP line. The run then completed end-to-end; the
+# override was removed afterwards (gff unset install.windows.apps) and the
+# wispr-flow override from the earlier attempts was likewise unset.

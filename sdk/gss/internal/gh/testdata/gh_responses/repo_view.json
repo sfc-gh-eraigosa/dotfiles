@@ -1,0 +1,6 @@
+{
+  "name": "sample-repo",
+  "owner": { "login": "sfc-gh-eraigosa" },
+  "nameWithOwner": "sfc-gh-eraigosa/sample-repo",
+  "defaultBranchRef": { "name": "main" }
+}

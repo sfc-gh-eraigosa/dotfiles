@@ -1,0 +1,32 @@
+# P14 — live acceptance (PARTIAL)
+# captured 2026-08-27T13:58:27Z
+# Addresses/hostnames substituted 1:1 per the PR's no-real-topology rule.
+
+## PROVEN — real binary, real Windows interop, real DNS
+  status                 exit 0, link OK, 3/3 fleet resolvable
+  status --json          valid JSON, all 7 contract keys present
+  pin --dry-run          selected a resolver; wrote NOTHING (symlink intact, no snapshot)
+  verify                 PASS; budget derived to 21s (the corrected attempts-aware formula)
+  wait --ready           ready in 1 check
+  doctor                 3 passed, 1 finding (this host's ssh keepalive is disabled)
+  bare 'wait'            exit 2 (usage error, not a silent no-op)
+  unknown flag           exit 2
+  unpin on unmanaged     DECLINED and left resolv.conf alone  [review finding 3]
+
+## PROVEN — full write round trip, against a temp root via the testing hooks
+   (the real binary and real probing; only the /etc paths are substituted)
+  pin                    symlink replaced with a real file
+  pin                    'search localdomain' preserved            [finding 12]
+  pin                    snapshot written with a 'complete' marker [finding 1]
+  re-pin                 did NOT re-snapshot (original target kept)
+  status (pinned)        reports 'pinned by wlink'
+  unpin                  symlink target restored exactly
+  unpin                  wsl.conf byte-for-byte IDENTICAL
+  unpin                  snapshot cleared                          [EC-18]
+  throughout             the distro-SHARED target file was never modified [EC-17]
+
+## NOT PROVEN — carried as TODOs in TRACKING.md, not claimed
+  1. writing to /etc specifically (needs sudo; only the paths differ from the above)
+  2. tunnel-UP behaviour (no tunnel interface present on this host)
+  3. 'not-ready' during an actual WireGuard handshake
+  4. the miss-timing improvement (this host resolves via the LAN, so no misses occur)

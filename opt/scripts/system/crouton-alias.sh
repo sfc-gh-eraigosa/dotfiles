@@ -1,3 +1,5 @@
+# shellcheck shell=bash
+
 echo "crouton aliases installed, use crouton-help for more info."
 alias startchroot='sudo enter-chroot -n precise'
 alias startxfce4='sudo startxfce4 -n ${CHROOT_NAME:-xfce}'
@@ -56,11 +58,13 @@ function crouton-start {
        xorg) 
            echo "start using xorg"
            echo $_METHOD> ~/.config/crouton_method.config
+           # shellcheck disable=SC2033 # startunity here is the external crouton binary, not the shell alias
            sudo startunity -X xorg -n $CHROOT_NAME
            ;;
        xiwi) 
            echo "start using xiwi"
            echo $_METHOD> ~/.config/crouton_method.config
+           # shellcheck disable=SC2033 # startunity here is the external crouton binary, not the shell alias
            sudo startunity -X xiwi -n $CHROOT_NAME
            ;;
        *)
@@ -79,13 +83,13 @@ function crouton-run {
 }
 function crouton-update {
    [[ -z "$CHROOT_NAME" ]] && CHROOT_NAME=trusty
-   cd ~/Downloads
+   cd ~/Downloads || return 1
    [ ! -f ./crouton ] && curl -L https://goo.gl/fd3zc > ./crouton
    [ ! -f ./crouton-alias.sh ] && curl -L https://raw.githubusercontent.com/wenlock/myhome/master/opt/scripts/system/crouton-alias.sh > ./crouton-alias.sh
    sudo sh ./crouton -u -n $CHROOT_NAME
 }
 function crouton-clean {
-    cd ~/Downloads
+    cd ~/Downloads || return 1
     [ -f ./crouton ] && rm -f ./crouton
     [ -f ./crouton-alias.sh ] && rm -f ./crouton-alias.sh
     echo "clean done"

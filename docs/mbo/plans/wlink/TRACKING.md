@@ -1,0 +1,138 @@
+# wlink — live state ledger
+
+- **Slug:** `wlink`
+- **Started:** 2026-08-25 — built inside PR #242, in the existing `wsl-dns-lan/edward-raigosa/dns` worker
+- **Playbook:** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) · **Cursor:** [`TODO.md`](./TODO.md)
+- **Plan (source of truth):** [`../wlink.md`](../wlink.md) · spec [`../../specs/wlink.md`](../../specs/wlink.md)
+- **Anchors:** issue [#245](https://github.com/sfc-gh-eraigosa/dotfiles/issues/245)
+
+> **Update after EVERY task.** Status: `todo · in-progress · blocked · done`.
+> **Evidence** = the exact command run plus its real result. A row is `done` only with a commit
+> SHA **and** evidence. **Never write a result you did not observe.**
+
+## 0. Worker registry
+
+Fill verbatim from `gss feature worker add --feature wlink --purpose cli … --json`.
+
+| Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| cli (single worker — plan §6.1 recommends no fan-out) | `wsl-dns-lan/edward-raigosa/dns` | `feature/wsl-dns-lan/edward-raigosa/dns` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/wsl-dns-lan/edward-raigosa/dns` | [#242](https://github.com/sfc-gh-eraigosa/dotfiles/pull/242) (draft) | exists |
+
+## 1. Task ledger
+
+Phases from plan §4. `P1` and `P2` are blocking — they freeze the `winhost.Runner` seam and the
+`linkstate.State` schema that everything else consumes.
+
+| Task | Status | Commit | Evidence (command → result) | Notes |
+| :-- | :-- | :-- | :-- | :-- |
+| P0 — module skeleton + `libs/log` wiring | **done** | *(this commit)* | `go test ./...` → ok; `wlink --version` → `wlink 0.0.0-untagged (18d8436) built … linux/amd64`; hand-rolled-logger grep → none; `evidence/p0/` | `SetDefaultTool("wlink")` once via sync.Once |
+| P1 — `winhost` + `Runner` **(BLOCKING)** | **done** | *(this commit)* | `go test -cover ./internal/winhost/...` → ok, **64.3%**; live run against this machine's real Windows parsed all 6 interfaces; interop-outside-seam grep → none; `evidence/p1-winhost/` | seam frozen: `Runner`, `Interface` |
+| P2 — `linkstate.State` **(BLOCKING)** | **done** | *(this commit)* | `go test -cover ./internal/linkstate/...` → ok, **100.0%**; JSON shape asserted against spec §4.1; `evidence/p2/` | schema frozen + documented in README |
+| P3 — `probe` native DNS | **done** | *(this commit)* | `go test -cover ./internal/probe/...` → ok, **87.1%**; all four outcomes distinguished against an in-process DNS server; dig-parity comparison + `grep '"dig"'` → none; `evidence/p3-probe/` | **no DNS library added** — stdlib preserves the distinctions |
+| P4 — `probe` scoring + recursion guard | **done** | *(this commit)* | `go test -cover ./internal/probe/...` → ok, **94.7%**, 18 cases; EC-1/EC-2/EC-14 each asserted; `evidence/p4/` | ties resolve to first-enumerated (stable across runs) |
+| P5 — `resolvconf` render + derived budget | **done** | *(this commit)* | `go test -cover ./internal/resolvconf/...` → ok, **95.2%**; all five INI shapes byte-exact; budget 7s managed / 11s unmanaged; rendered artifacts captured; `evidence/p5/` | Set→Remove round trip byte-for-byte |
+| P6 — snapshot + drift | **done** | *(this commit)* | `go test -cover ./internal/resolvconf/...` → ok, **80.9%**, 28 cases; snapshot-failure ⇒ no write asserted; round trip byte-for-byte incl. symlink target; `evidence/p6-snapshot/` | all against a temp root — no privileged write in tests |
+| P7 — `fleetsrc` (+ `/etc/hosts` exclusion) | **done** | *(this commit)* | `go test -cover ./internal/fleetsrc/...` → ok, **90.1%**, 10 cases; read-only gate (no WriteFile/Create/OpenFile) → none; `evidence/p7/` | consumes `fleet discover --json`; ssh scan is fallback only |
+| P8 — `cmd/pin` + `cmd/unpin` | **done** | *(this commit)* | `go test -cover ./cmd/...` → ok, **61.9%**; **module-wide 75.2%**; binary built and run on this machine — agrees with the prototype on exclusion, winner, 3/3 and guard verdict; `evidence/p8/` | one deliberate divergence, EC-22 |
+| P9 — `cmd/status` + `--json` | **done** | *(this commit)* | `go test -cover ./cmd/...` → ok, **73.0%**; JSON validated as a document; run live on this machine; `evidence/p9/` | **EC-20 corrected** after a live run |
+| P10 — `cmd/verify` | **done** | *(this commit)* | `go test ./cmd/...` → ok; all four EC-7 outcomes asserted; live run on this machine → PASS, budget derived to 11s; `evidence/p10/` | resolves via the **host** path, not direct-to-server |
+| P11 — `cmd/wait` + readiness | **done** | *(this commit)* | `go test ./cmd/...` → ok; live: ready in 1 check, timeout → exit 1, bare verb → exit 2; **latency bug fixed: 11s → 5s**; `evidence/p11/` | sentinel-first short-circuit |
+| P12 — `sshcfg` + `cmd/doctor` | **done** | *(this commit)* | `sshcfg` **84.6%**; live run flags this machine's disabled keepalive, confirmed independently by `ssh -G`; `evidence/p12/` | `--fix` re-asks ssh instead of assuming |
+| P13 — integration & rollout | **done** | *(this commit)* | all 9 `sdk/AGENTS.md` checklist items verified; flag fail-closed both ways; `lint-portability` T1/T2=0; `lint-shell` exit 0; module-wide **79.1%**; `evidence/p13/` | prototype deletion is P15 |
+| P14 — live acceptance | **partial** | a3e64f0 | read-only surface + full write round trip proven with the real binary against a temp root; 4 items unproven (see §6) | found review finding 12 before writing a byte |
+| P15 — retire the prototype | todo | | | **gated:** EC-1…EC-19 each cite a passing Go test and spec §5.1 is current |
+
+## 2. Feature → proof matrix (spec §5)
+
+A rule is proven only when its named Go test passes **and**, where marked, a live capture exists.
+
+| Rule | Feature | Automated proof | Human/live proof | Notes |
+| :-- | :-- | :-- | :-- | :-- |
+| EC-1 | F1/F2 candidate selection | [x] `probe/TestScore_PrefersTheResolverThatAnswersForTheFleet`| — | the default-gateway trap |
+| EC-2 | F3 recursion guard | [x] `probe/TestGuard_RefusesAResolverThatCannotRecurse`, `TestGuard_OverrideAllowsButStillExplains`| — | NXDOMAIN from ns#1 is final |
+| EC-3 | F4/F5 render | [x] `resolvconf/TestSetGenerateResolvConf_AllFiveShapes`, `TestRenderResolvConf_WinnerFirstThenFallbacks`| — | golden byte-exact |
+| EC-4 | F6 snapshot/restore | [x] `resolvconf/TestApply_SnapshotsBeforeWritingAndRecordsTheSymlinkTarget`, `TestApply_RefusesToWriteWhenTheSnapshotCannotBeTaken`, `TestRestore_RoundTripsByteForByteAndClearsTheSnapshot`, `TestApply_DoesNotOverwriteAGoodSnapshotOnRerun`| [ ] | the safety property |
+| EC-5 | F7 `/etc/hosts` exclusion | [x] `fleetsrc/TestResolve_ExcludesNamesServedByHostsFile`, `TestHostsFileNames`| — | scores `1/1`, not `1/2` |
+| EC-6 | F8/F15 readiness | [x] `probe/TestAllSilent`, `cmd/TestWait_ReturnsZeroOnceTheTunnelAnswers`, `TestWait_TimesOutWithExitOne`, `TestWait_ReachableButIgnorantIsNotReady`| [ ] during a real handshake | the race hit on the first run |
+| EC-7 | F9 verify matrix | [x] `cmd/TestVerify_PassesWhenPublicAndFleetBothResolve`, `TestVerify_PassesOffTunnelWhenMissesAreFast`, `TestVerify_FailsWhenPublicDNSIsBroken`, `TestVerify_FailsWhenAMissExceedsTheBudget`| [ ] tunnel up **and** down | public resolves in both states |
+| EC-8 | F11 native DNS | [x] `probe/TestLookupA_DistinguishesTheFourOutcomes` (resolved · nxdomain · nodata · servfail · silent) | — | drops the `dig` dependency |
+| EC-9 | F12/F13 status/json | [x] `cmd/TestStatus_JSONIsTheDocumentedContract`, `TestStatus_ExitCodeFollowsHealth`| — | exit codes are contract |
+| EC-10 | F14 doctor | [x] `sshcfg/TestApplyKeepalive_IsIdempotent`, `cmd/TestDoctor_FlagsDisabledKeepalive`, `TestDoctor_FixVerifiesRatherThanAssuming`| [x] live run on this machine on a real ssh config | |
+| EC-11 | F17 drift | [x] `resolvconf/TestDetectDrift`, `TestDetectDrift_UnmanagedIsNotDrift`, `TestDetectDrift_DeletedManagedFile`| — | |
+| EC-12 | non-WSL no-op | [x] `cmd/TestPin_NonWSLIsANoOp`, `TestStatus_NonWSLIsANoOp`, `TestVerify_NonWSLIsANoOp`, `TestWait_NonWSLIsANoOp`, `TestDoctor_NonWSLIsANoOp`| — | must never write off-WSL |
+| EC-13 | wildcard Host skipped | [x] `fleetsrc/TestResolve_NeverProbesWildcardHostPatterns`| — | |
+| EC-14 | candidate filtering | [x] `probe/TestFilterCandidates`| — | + de-dup, first-seen order |
+| EC-15 | zero probe hosts | [x] `fleetsrc/TestResolve_NoFleetHostsIsNotAnError`| — | not an error |
+| EC-16 | unpin without a snapshot | [x] `resolvconf/TestRestore_WithoutASnapshotRepairsTheStockLayout`| — | restores WSL's stock symlink |
+| EC-17 | symlink → real file | [x] `resolvconf/TestApply_ReplacesTheSharedSymlinkInsteadOfWritingThroughIt`| — | `/mnt/wsl/resolv.conf` is distro-shared |
+| EC-18 | snapshot removed after unpin | [x] `resolvconf/TestRestore_RoundTripsByteForByteAndClearsTheSnapshot`| — | next pin snapshots fresh state |
+| EC-19 | unknown args exit 2 | [x] `cmd/TestUnknownFlag_IsAUsageError` | — | distinct from a safe decline |
+| EC-22 | fallbacks are not hardcoded | [x] `cmd/TestPin_ExtraFallbacksAreOptIn` | — | **added in P8** — deliberate divergence from the prototype |
+| EC-21 | IP-hostname / alias-vs-Hostname | [x] `fleetsrc/TestResolve_SkipsHostnamesThatAreAlreadyAddresses`, `TestResolve_ProbesTheHostnameNotTheAlias` | — | **added in P7** — spec gap found while wiring the fleet contract |
+| EC-20 | link health / exit code | [x] `linkstate/TestState_Health`, `TestState_NonWSLIsNotDegraded`, `TestState_EmptyFleetIsNotDegraded` | — | **added in P2** — spec gap found while freezing the schema |
+| — | spec §5.1 kept current | [ ] every build-time discovery recorded as an EC rule | — | the prototype is deleted; the spec is the record |
+
+## 3. Validation done-when — the stop condition
+
+- [ ] EC-1…EC-19 each have a passing named Go test (plan §5 table complete)
+- [ ] Spec §5.1 current — every build-time discovery recorded there as an EC rule
+- [ ] `go test ./...` green; module coverage **≥60%**
+- [x] `sdk/AGENTS.md` "Adding a module" checklist — all 9 items, including the `sdk/README.md` section with a **real captured** demo
+- [x] `install.sdk.wlink` registered `boolDefault: false`, gated `gff_opt_in`; `install.sh` builds and pins **only** when it is true
+- [ ] Both flag states verified on a real `install.sh` run (plan §6)
+- [x] **P15**: `grep -rn 'wsl_dns_lan\|install.system.wsl-dns' . | grep -v docs/mbo/` → empty; suite still green
+- [x] `docs/wsl-dns.md` content folded into `sdk/wlink/README.md`; `docs/AGENTS.md` repointed
+- [~] Live acceptance checklist (plan §6) — **NOT PERFORMED**, skipped by decision 2026-08-25
+- [~] Miss timing vs baseline **20–21s → 4s** — **NOT MEASURED** for wlink (the baseline is the prototype's)
+- [ ] `docs/mbo/index.md` state advanced to `merged`
+
+## 4. Blockers & escalations
+
+Failing command + its **real** output. **A behavior the spec does not cover is a spec gap, not a
+free choice** — record it here, add the EC rule to spec §5.1, then implement. Once the prototype
+is deleted the spec is the only record.
+
+| Date | Task | Blocker | Command + observed output | Resolution |
+| :-- | :-- | :-- | :-- | :-- |
+| 2026-08-27 | P14 | **Superseded by the partial run below.** Original entry: live acceptance not performed — skipped by explicit decision. Consequence: every tunnel-**up** behaviour (pin writing for real, `verify` PASS with the tunnel up, `not-ready` during an actual handshake, `unpin` restoring a real `/etc/resolv.conf`, and the miss-timing improvement) is proven **by fixtures only**. Four defects in this build were found *exclusively* by running on real hardware — the health rule (EC-20), `fleet.resolved` semantics, 8s of per-run latency, and the prototype fallback divergence — so this is a real, if accepted, gap in confidence. | n/a | Open. `wlink verify` run with the tunnel up and down would close it at any later date. |
+| 2026-08-25 | P8 | **Deliberate divergence from the prototype, recorded not absorbed.** The shell script appended `nameserver 1.1.1.1` as a last-resort fallback; `wlink` does not. On WSL the NAT proxy (`10.255.255.254`) is the Windows host and effectively always present, so the third entry is unreachable-in-practice while silently routing a user's DNS to a third party. Now opt-in via `WLINK_FALLBACKS`, pinned as **EC-22**. Everything else matched the prototype exactly on a live side-by-side run. |
+
+## 6. Open items — NOT proven, do not claim
+
+Each was attempted and could not be demonstrated on this host. None is claimed
+as working anywhere in the docs.
+
+| # | Item | Why it could not be proven | What would prove it |
+| :-- | :-- | :-- | :-- |
+| T1 | `pin` / `unpin` writing to **`/etc`** | needs interactive sudo, which the agent cannot supply | `sudo wlink pin`, then `sudo wlink unpin`, comparing `/etc/wsl.conf` before/after. Everything except the paths is already proven against a temp root. |
+| T2 | Tunnel-**UP** behaviour | no tunnel interface present on this host | bring WireGuard up, then `wlink status` (expect `tunnel: up`) and `wlink verify` (expect PASS) |
+| T3 | `not-ready` during a real handshake | needs the moment between clicking connect and the handshake completing | `wlink status` within a second or two of connecting; expect `tunnel: not-ready`, not `down` |
+| T4 | The miss-timing improvement | this host resolves the fleet via the LAN, so no misses occur | pin, disconnect the tunnel, `wlink verify`; compare a fleet miss against the 20–21s prototype baseline |
+| T5 | Prototype residue on this host | out of scope for the build | `/etc/wsl.conf` carries `generateResolvConf = false` and `/etc/wsl_dns_lan.backup/` still exists, both left by the prototype's Aug-23 pin whose `--revert` never ran. Pristine `wsl.conf` (in that backup) had no `[network]` section. |
+
+Also observed and worth confirming: `/etc/resolv.conf` is a **stock symlink despite
+`generateResolvConf = false`**, so that setting did not survive a WSL restart as the design
+assumed. If it reproduces, EC-3's rationale needs revisiting.
+
+## 5. Session log (append-only)
+
+| Date | Session | What happened |
+| :-- | :-- | :-- |
+| 2026-08-27 | P14 | Ran partially. The read-only surface and the **full write round trip** (pin → re-pin → status → unpin) are proven with the real binary, real interop and real DNS, against a temp root via the testing hooks — so only the `/etc` paths differ from a production run. It found **review finding 12 before writing a byte**: this host's `resolv.conf` carries `search localdomain`, which the renderer would have silently dropped. Four items remain unproven and are listed in §6 rather than claimed. |
+| 2026-08-25 | P15 | Prototype deleted. The gate did its job: it caught **EC-12 unticked** — the five `NonWSL` tests existed and passed, but the matrix row had never been updated, so the deletion would have proceeded on an incomplete record. Verified the tests, ticked the row, then deleted. Three proofs captured: no reference outside `docs/mbo/`, absent from the PR's net diff vs `main`, and all suites green afterwards. Also corrected a stale `packages.tsv` comment claiming `dnsutils` existed for the prototype — `wlink` resolves natively, which is why it needs nothing installed. |
+| 2026-08-25 | P14 | Skipped by decision. Recorded as an open blocker rather than silently omitted: the automated gate (EC-1…EC-22 each citing a passing Go test) is met, but the human/live column is not, and tunnel-up behaviour is fixture-proven only. Note the P15 gate itself caught EC-12 as unticked — its five `NonWSL` tests existed and passed but the matrix row had never been updated. |
+| 2026-08-25 | P13 | Rollout wired, all 9 checklist items verified rather than assumed. `install.sdk.wlink` is `boolDefault: false` + `gff_opt_in` — the deliberate departure from the other `install.sdk.*` flags, and the features.yaml description says **why** so it is not later "corrected". The `install.sh` block also runs `wlink pin`, which is safe precisely because a decline is exit 0: a tunnel that happens to be down at install time cannot fail the installer. The `sdk/README.md` demo is **real captured output** from this machine (addresses substituted), per the repo's rule that an invented transcript fails exactly the reader who trusts it. |
+| 2026-08-25 | P12 | `doctor` uses **`ssh -G`** rather than parsing the config: ssh's first-match-wins Host resolution is exactly where a hand-rolled checker would quietly disagree with the client it describes, and a wrong "all clear" is worse than no check. That same fact shapes `--fix`: because ssh takes the FIRST value for a keyword, an appended block can be inert if an earlier one already sets it — so `--fix` **re-asks ssh** afterwards and reports what actually took effect. Live run flagged this machine's `ServerAliveInterval 0` / `ConnectTimeout none`, independently confirmed by `ssh -G`. That is the condition behind the observed git hangs (one `ls-remote` hung 45s with TCP established and zero bytes moving; the next three ran in 2–3s). |
+| 2026-08-25 | P11 | **A latency bug that only running the binary could find.** `wait --ready` took **11 seconds** to report a link that was already up. Cause: a dead candidate (a stale Bluetooth adapter here) cost one full 2s timeout *per fleet name* — (3+1) × 2s = 8s of pure waiting on every run, in `status` and `pin` too. Fixed by asking the **sentinel first** and short-circuiting on SILENCE only: a dead server now costs one timeout instead of N+1. **11s → 5s** for `wait`, 4s for `status`. Deliberately narrow: an NXDOMAIN or SERVFAIL proves the server is talking, so its fleet names are still asked about — that is precisely the split-horizon resolver the recursion guard then refuses. Readiness is also defined as "resolves a fleet name", not "answers at all": returning ready on a reachable-but-ignorant resolver would hand back control before the thing being waited for had happened. |
+| 2026-08-25 | P10 | `verify` resolves through the **host resolver path** (nsswitch + resolv.conf ordering), never a direct query to a chosen server — a direct query bypasses the ordering entirely and would prove nothing about what `ssh` experiences, which is the only thing verify exists to establish. All four EC-7 outcomes asserted with a fake system resolver so a 30s stall is testable in milliseconds. Live run passed with the budget derived to **11s** (unmanaged resolv.conf: 1 nameserver × glibc's default 5s × 2 families + 1); it becomes 7s once pinned. |
+| 2026-08-25 | P9 | **EC-20 was wrong, and running on real hardware proved it.** The rule made `link` degraded when the tunnel was not up or nothing was pinned. On this machine — sitting directly on the fleet's LAN — all 3 hosts resolved, public DNS worked, and `status` still said `DEGRADED` with exit 1. Health now asks ONE question: can this box reach its fleet by name? Tunnel state and pin status are reported as context, never health inputs; a machine that needs no tunnel and no pin is not broken. Spec, code, and tests all corrected. Also fixed: `fleet.resolved` was reporting the BEST candidate's score rather than what the resolver **in force** can currently answer — which called a machine healthy because some resolver *could* serve it. |
+| 2026-08-25 | P8 | Commands wired; the binary runs. Cross-validated live against the prototype on this machine: same `/etc/hosts` exclusion, same winner, same 3/3 score, same guard verdict — the port's oracle check, run for real rather than argued. Snapshot is taken **separately** from the write so the two failures stay distinguishable: no undo path is a safe decline (exit 0), a failed write is a real failure (exit 1). |
+| 2026-08-25 | P7 | Host source wired to `fleet discover --json`, killing the duplicate `#fleet` parser; the ssh scan is a **read-only** fallback for machines without fleet, proven by a grep gate (no `WriteFile`/`Create`/`OpenFile` in the package) — fleet stays the only writer of those blocks. **Spec gap found and closed as EC-21:** a fleet entry whose `Hostname` is already an IP must be excluded, not probed — DNS has nothing to resolve for it, so probing would penalise every candidate for a name no resolver was ever asked about, the same false-cap EC-5 prevents. The same rule pinned that the **`Hostname`** is probed, never the alias, since `Hostname` is what ssh actually resolves. |
+| 2026-08-25 | P6 | The safety phase. Every case runs against a temp root, so replacing a symlink and rewriting system files is fully covered with **no privileged write in the suite**. EC-17 is asserted the strong way: the test keeps the distro-shared target file and checks it was **not modified**, which is what proves the pin cannot leak into other WSL distros. Two states the prototype never exercised are now covered because they are the *common* ones on a stock install: **no `/etc/wsl.conf` at all** (pin creates it, so unpin must delete it rather than leave a file the user never had) and an absent `resolv.conf`. Re-running pin is asserted not to re-snapshot — a second snapshot would capture wlink's own managed files and unpin would faithfully restore the pin it exists to remove. |
+| 2026-08-25 | P5 | Render + INI surgery. Three behaviours added beyond the prototype, each with a reason: the winner is **de-duplicated** out of its own fallback list (a repeat wastes a second full timeout on the same dead server); output is capped at **glibc MAXNS=3** (extras are silently ignored, so emitting more is false redundancy); and `Set`→`Remove` is asserted to round-trip **byte-for-byte**, which is the property the whole undo path rests on. Rendering is kept separate from writing so every shape that could clobber a user's `wsl.conf` is covered as a pure string transform, with no privileged write in the tests. |
+| 2026-08-25 | P4 | Scoring + guard. EC-1 asserted with the gateway listed **first** in enumeration order, so a naive implementation that trusts ordering fails the test. Tie-breaking pinned to first-enumerated and looped 20× — map iteration order would otherwise change the pinned resolver run to run on an unchanged machine. `Score` deliberately scores **every** candidate even after a winner emerges, because `status` needs the whole picture: "the ISP resolver answered but knew none of your hosts" is the line that explains why the default route is not the answer. |
+| 2026-08-25 | P3 | Native DNS landed; `dig` dependency gone. **No DNS library needed** — checked first, and `net.Resolver` already preserves every distinction wlink needs (timeout→`IsTimeout`, NXDOMAIN→`IsNotFound`, SERVFAIL→neither), so the module still has 14 total deps and works where `dnsutils` never installs. `PreferGo` is load-bearing: without it cgo's resolver reads `/etc/resolv.conf` and answers from the very configuration wlink is trying to evaluate. A test caught cancellation being classified `Unhelpful` (i.e. "the server answered") when nothing came back — a status-line timeout would have looked like a reachable resolver; now checked before the DNSError switch. |
+| 2026-08-25 | P2 | Schema frozen at 100% coverage. **Spec gap found and closed:** the JSON needed a computed `link` verdict so gsl reads one field instead of re-deriving the degraded rules — added to spec §4.1 and pinned as new rule **EC-20**, which also fixes two traps the rules did not state: off-WSL is `ok` (a no-op, not a failure, or install.sh looks broken on machines the feature never applied to) and an **empty** fleet is `ok` (nothing to resolve is not a shortfall). Also pinned: empty collections marshal as `[]`, absences as `null`. |
+| 2026-08-25 | P1 | Seam frozen. Two design calls worth recording: queries ask PowerShell for **JSON** (`ConvertTo-Json`) rather than the default table rendering, because table output is column-truncated and locale-dependent; and `decodeRows` handles the **bare-object-vs-array** shape, since `ConvertTo-Json` emits an object when exactly one row matches — a parser assuming an array silently returns nothing on a single-interface machine. A test also caught the tunnel-alias regex being too narrow (hex-only, so `wg-lab`/`wg-home` failed without adapter data); broadened, code fixed rather than the test. |
+| 2026-08-25 | P0 | Module skeleton landed. **Deviation from plan §2:** version vars stamped into `cmd` (`cmd.Version`/`Commit`/`BuildDate`/`Dirty`), not `internal/version` — mirroring `sdk/fleet`'s actual `build.sh`, which is the live convention. Plan inventory amended. |
+| 2026-08-24 | planning | Design approved. Issue #245 opened. Design/spec/plan + this trio laid down. Build **not started**. Scope corrected: `wlink` is built **inside** PR #242 and the shell prototype is deleted there too — none of it ever lands on `main` (verified: `git ls-tree origin/main` matches none of it), so there is no cutover, archival, or flag migration. Baseline recorded from live testing: fleet lookups **20–21s unpinned → 4s pinned**; `--verify` PASS with the tunnel up (3/3 fleet hosts, 0s each) and a real `ssh lab-pi` login. |

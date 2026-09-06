@@ -1,0 +1,302 @@
+# sdk-tui demo transcript — 2026-09-05 20:54 PDT — go version go1.26.1 linux/arm64
+
+===== start (30 rows, cursor on row 01) | 2026-09-05 20:54:10 PDT =====
+example list
+
+> row 01
+  row 02
+  row 03
+  row 04
+  row 05
+  row 06
+  row 07
+  row 08
+  row 09
+  row 10
+  row 11
+  row 12
+  row 13
+  row 14
+  row 15
+  row 16
+  row 17
+
+j/k move  / search  n/N match  : command  ? help  q quit
+
+===== jj → cursor on row 03 | 2026-09-05 20:54:11 PDT =====
+example list
+
+  row 01
+  row 02
+> row 03
+  row 04
+  row 05
+  row 06
+  row 07
+  row 08
+  row 09
+  row 10
+  row 11
+  row 12
+  row 13
+  row 14
+  row 15
+  row 16
+  row 17
+
+j/k move  / search  n/N match  : command  ? help  q quit
+
+===== ctrl+d → half page down | 2026-09-05 20:54:11 PDT =====
+example list
+
+  row 01
+  row 02
+  row 03
+  row 04
+  row 05
+  row 06
+  row 07
+  row 08
+  row 09
+  row 10
+> row 11
+  row 12
+  row 13
+  row 14
+  row 15
+  row 16
+  row 17
+
+j/k move  / search  n/N match  : command  ? help  q quit
+
+===== gg → back to row 01 (chord) | 2026-09-05 20:54:12 PDT =====
+example list
+
+> row 01
+  row 02
+  row 03
+  row 04
+  row 05
+  row 06
+  row 07
+  row 08
+  row 09
+  row 10
+  row 11
+  row 12
+  row 13
+  row 14
+  row 15
+  row 16
+  row 17
+
+j/k move  / search  n/N match  : command  ? help  q quit
+
+===== /25 → incremental search, prompt open, cursor parked on the match | 2026-09-05 20:54:13 PDT =====
+example list
+
+  row 09
+  row 10
+  row 11
+  row 12
+  row 13
+  row 14
+  row 15
+  row 16
+  row 17
+  row 18
+  row 19
+  row 20
+  row 21
+  row 22
+  row 23
+  row 24
+> row 25
+
+/25▌
+
+===== Enter → committed; badge /25 [1/1] | 2026-09-05 20:54:14 PDT =====
+example list
+
+  row 09
+  row 10
+  row 11
+  row 12
+  row 13
+  row 14
+  row 15
+  row 16
+  row 17
+  row 18
+  row 19
+  row 20
+  row 21
+  row 22
+  row 23
+  row 24
+> row 25
+
+/25 [1/1]  j/k move  / search  n/N match  : command  ? help  q quit
+
+===== n → wraps onto the only match | 2026-09-05 20:54:14 PDT =====
+example list
+
+  row 09
+  row 10
+  row 11
+  row 12
+  row 13
+  row 14
+  row 15
+  row 16
+  row 17
+  row 18
+  row 19
+  row 20
+  row 21
+  row 22
+  row 23
+  row 24
+> row 25
+
+/25 [1/1]  j/k move  / search  n/N match  : command  ? help  q quit
+
+===== :mark <Tab> → completes the first row name | 2026-09-05 20:54:16 PDT =====
+example list
+
+  row 09
+  row 10
+  row 11
+  row 12
+  row 13
+  row 14
+  row 15
+  row 16
+  row 17
+  row 18
+  row 19
+  row 20
+  row 21
+  row 22
+  row 23
+  row 24
+> row 25
+
+:mark row 01▌
+
+===== Enter → :mark ran (status line) | 2026-09-05 20:54:16 PDT =====
+
+  row 09
+  row 10
+  row 11
+  row 12
+  row 13
+  row 14
+  row 15
+  row 16
+  row 17
+  row 18
+  row 19
+  row 20
+  row 21
+  row 22
+  row 23
+  row 24
+> row 25
+
+/25 [1/1]  j/k move  / search  n/N match  : command  ? help  q quit
+marked row 01
+
+===== ? → help overlay rendered from the keymap | 2026-09-05 20:54:17 PDT =====
+
+    j/down             move down
+    k/up               move up
+    gg                 first row
+    G                  last row
+    ctrl+d             half page down
+    ctrl+u             half page up
+    ctrl+f/pgdown      page down
+    ctrl+b/pgup        page up
+    /                  regex search (smartcase; enter commit, esc cancel)
+    n                  next match
+    N                  previous match
+    esc                clear search highlights (pattern kept for n/N)
+    :                  command line
+    ?/f1               this help
+    q/ctrl+c           quit
+    space              select / toggle the row
+    enter              open / confirm
+    d                  delete the row (asks first)
+
+any key closes
+
+===== Esc → help closed | 2026-09-05 20:54:17 PDT =====
+
+  row 09
+  row 10
+  row 11
+  row 12
+  row 13
+  row 14
+  row 15
+  row 16
+  row 17
+  row 18
+  row 19
+  row 20
+  row 21
+  row 22
+  row 23
+  row 24
+> row 25
+
+/25 [1/1]  j/k move  / search  n/N match  : command  ? help  q quit
+marked row 01
+
+===== d → confirm dialog | 2026-09-05 20:54:18 PDT =====
+delete row 25?
+
+enter/y delete · esc/n cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+===== x → declines (row kept, status cancelled) | 2026-09-05 20:54:19 PDT =====
+
+  row 09
+  row 10
+  row 11
+  row 12
+  row 13
+  row 14
+  row 15
+  row 16
+  row 17
+  row 18
+  row 19
+  row 20
+  row 21
+  row 22
+  row 23
+  row 24
+> row 25
+
+/25 [1/1]  j/k move  / search  n/N match  : command  ? help  q quit
+cancelled
+
+===== :q → program exited, tmux session gone | 20:54:20 =====

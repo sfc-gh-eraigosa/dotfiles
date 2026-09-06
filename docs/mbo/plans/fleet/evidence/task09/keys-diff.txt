@@ -1,0 +1,15 @@
+=== RUN   TestComputeAddsMissingAndFlagsForeignForRemoval
+--- PASS: TestComputeAddsMissingAndFlagsForeignForRemoval (0.00s)
+=== RUN   TestComputeNeverTreatsEmptyRemoteAsWholesaleRemoval
+--- PASS: TestComputeNeverTreatsEmptyRemoteAsWholesaleRemoval (0.00s)
+=== RUN   TestComputeWithNoLocalKeysReportsEveryRemoteAsRemoval
+--- PASS: TestComputeWithNoLocalKeysReportsEveryRemoteAsRemoval (0.00s)
+=== RUN   TestComputeIsNoOpWhenIdentical
+--- PASS: TestComputeIsNoOpWhenIdentical (0.00s)
+=== RUN   TestComputeNormalizesWhitespace
+--- PASS: TestComputeNormalizesWhitespace (0.00s)
+=== RUN   TestComputeIgnoresBlanksAndComments
+--- PASS: TestComputeIgnoresBlanksAndComments (0.00s)
+PASS
+coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keys	0.002s	coverage: 100.0% of statements

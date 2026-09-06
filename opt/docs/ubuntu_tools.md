@@ -164,11 +164,7 @@ git reset --hard origin/master;
 ```
 
 #### git shortcuts ####
-The next script I use to automate and simplify some of the usage of git on my local system at the command prompt.  After installation you'll get a script called ```~/.gitenv``` which will be sourced as a set of funcitons and aliases from the ```~/.profile``` shell environment.  Use ```git-help``` to get started on usage / setup.
-
-```script
-bash ~/opt/bin/setup_git_alias.sh
-```
+Git shortcuts (`git-reset`, `git-reset-all`, `git-clean`, `git-help`) are provided by `opt/profiles/.gitools.sh`, symlinked to `~/.gitools.sh` by `install.sh` and sourced from `.bash_aliases`. Use `git-help` for usage. (The former Gerrit-era `setup_git_alias.sh` / `~/.gitenv` generator was retired 2026-08-08; examples below that reference `git-clone <alias>:<project>` are historical.)
 
 #### setup zsh ####
 Love this shell over bash for productivity.  For automation bash is still the cross platform winner in my mind.

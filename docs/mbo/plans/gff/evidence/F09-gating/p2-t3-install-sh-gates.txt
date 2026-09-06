@@ -1,0 +1,11 @@
+2026-07-26T04:19:58Z (UTC)
+task: P2-T3 — instrument install.sh with gff_on gates (fail-open)
+command: bash -n install.sh; grep -n opt/lib/gff.sh install.sh; GFF_INSTALL_TOOLS_SOPS=false bash -c '. opt/lib/gff.sh; gff_on install.tools.sops || gff_skip_msg install.tools.sops'
+bash -n install.sh: clean (exit 0)
+--- helper sourced before first gate ---
+23:. "${BASE_DIR}/opt/lib/gff.sh"
+67:if gff_on install.windows.desktop-deploy; then
+--- gate count (gff_on call sites incl. 2 comment mentions) ---
+37
+--- manual SKIP check ---
+SKIP (gff: install.tools.sops=false)

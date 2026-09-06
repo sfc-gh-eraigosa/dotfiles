@@ -1,0 +1,141 @@
+# VD-1 demo transcript — sdk/gff/scripts/demo.sh
+# date UTC: 2026-07-26T15:03:09Z
+# host: linux/arm64 (Raspberry Pi); command: bash sdk/gff/scripts/demo.sh
+# re-runnability: three consecutive runs, all exit 0; real ~/.config/gff untouched (mtime-verified)
+
+gff end-to-end demo — 2026-07-26T15:01:26Z
+scratch world: /tmp/gff-demo.vQImO5 (your real HOME is untouched)
+$ go build -o ${GFF_DEMO_HOME}/bin/gff  (from github.com/sfc-gh-eraigosa/dotfiles/sdk/gff)
+
+══ STEP 1 ═════════════════════════════════════════════
+   Scaffold a demo repo; author a flag file: 1 bool + 1 radio + 1 checkbox (typed values)
+
+namespace: com.example.gffdemo
+sets:
+  - area: demo
+    features:
+      - path: demo.ui.dashboard
+        description: Render the dashboard pane
+        boolDefault: true
+      - path: demo.pkg.manager
+  … (radio + checkbox options with typed stringValue payloads)
+
+══ STEP 2 ═════════════════════════════════════════════
+   lint → install → list — note the LAYER (winning-layer provenance) column
+
+$ gff lint
+lint: clean (exit 0)
+$ gff install
+installed com.example.gffdemo (gffdemo)
+$ gff list   (from $HOME — a foreign CWD — via the registered snapshot)
+PATH                TYPE    VALUE         LAYER          DESCRIPTION
+demo.pkg.manager    choice  auto          user-snapshot  Package manager selection (radio)
+demo.shell.plugins  choice  fzf,starship  user-snapshot  Optional shell plugins (checkbox)
+demo.ui.dashboard   bool    true          user-snapshot  Render the dashboard pane
+
+══ STEP 3 ═════════════════════════════════════════════
+   Gate a toy script with gff_on; flip the bool off; rerun shows the SKIP line; flip back
+
+$ eval "$(gff export --shell)" && sh toy.sh    # default: on
+RUN  (dashboard step executed)
+$ gff set demo.ui.dashboard false && re-eval && sh toy.sh    # now: SKIP
+SKIP (gff: demo.ui.dashboard=false)
+$ gff unset demo.ui.dashboard && re-eval && sh toy.sh    # default restored
+RUN  (dashboard step executed)
+
+══ STEP 4 ═════════════════════════════════════════════
+   Export all four formats; eval the shell form in dash; parse the .env
+
+--- gff export --format shell ---
+GFF_DEMO_PKG_MANAGER=auto
+GFF_DEMO_SHELL_PLUGINS=fzf,starship
+GFF_DEMO_UI_DASHBOARD=true
+--- gff export --format dotenv ---
+--- gff export --format json ---
+[{"namespace":"com.example.gffdemo","path":"demo.pkg.manager","description":"Package manager selection (radio)","type":"choice","layer":"repo-live","value":{"choiceValue":{"selected":["auto"]}},"feature":{"path":"demo.pkg.manager","description":"Package manager selection (radio)","choiceDefault":{"mode":"CHOICE_MODE_SINGLE","options":[{"id":"auto","description":"Auto-detect","selected":true,"stringValue":"auto"},{"id":"apt","description":"Debian/Ubuntu apt","stringValue":"apt"},{"id":"brew","description":"Homebrew","stringValue":"brew"}]}}},{"namespace":"com.example.gffdemo","path":"demo.shell.plugins","description":"Optional shell plugins (checkbox)","type":"choice","layer":"repo-live","value":{"choiceValue":{"selected":["fzf","starship"]}},"feature":{"path":"demo.shell.plugins","description":"Optional shell plugins (checkbox)","choiceDefault":{"mode":"CHOICE_MODE_MULTI","options":[{"id":"fzf","description":"Fuzzy finder","selected":true,"stringValue":"fzf"},{"id":"starship","description":"Prompt","selected":true,"stringValue":"starship"},{"id":"zoxide","description":"Smart cd","stringValue":"zoxide"}]}}},{"namespace":"com.example.gffdemo","path":"demo.ui.dashboard","description":"Render the dashboard pane","type":"bool","layer":"repo-live","value":{"boolValue":true},"feature":{"path":"demo.ui.dashboard","description":"Render the dashboard pane","boolDefault":true}}]
+--- gff export --format yaml ---
+- description: Package manager selection (radio)
+  feature:
+    choiceDefault:
+        mode: CHOICE_MODE_SINGLE
+        options:
+            - description: Auto-detect
+              id: auto
+              selected: true
+              stringValue: auto
+            - description: Debian/Ubuntu apt
+              id: apt
+              stringValue: apt
+            - description: Homebrew
+              id: brew
+              stringValue: brew
+    description: Package manager selection (radio)
+    path: demo.pkg.manager
+  layer: repo-live
+  namespace: com.example.gffdemo
+  path: demo.pkg.manager
+  type: choice
+  value:
+    choiceValue:
+        selected:
+            - auto
+- description: Optional shell plugins (checkbox)
+  feature:
+    choiceDefault:
+        mode: CHOICE_MODE_MULTI
+        options:
+            - description: Fuzzy finder
+              id: fzf
+              selected: true
+              stringValue: fzf
+            - description: Prompt
+              id: starship
+              selected: true
+              stringValue: starship
+            - description: Smart cd
+              id: zoxide
+              stringValue: zoxide
+    description: Optional shell plugins (checkbox)
+    path: demo.shell.plugins
+  layer: repo-live
+  namespace: com.example.gffdemo
+  path: demo.shell.plugins
+  type: choice
+  value:
+    choiceValue:
+        selected:
+            - fzf
+            - starship
+- description: Render the dashboard pane
+  feature:
+    boolDefault: true
+    description: Render the dashboard pane
+    path: demo.ui.dashboard
+  layer: repo-live
+  namespace: com.example.gffdemo
+  path: demo.ui.dashboard
+  type: bool
+  value:
+    boolValue: true
+$ sh (dash) -c 'eval "$(gff export --format shell)" …'   # POSIX-eval proof
+dash sees: GFF_DEMO_PKG_MANAGER=auto
+$ gff export --format dotenv -o .env && parse it line by line
+  parsed: GFF_DEMO_PKG_MANAGER -> auto
+  parsed: GFF_DEMO_SHELL_PLUGINS -> fzf,starship
+  parsed: GFF_DEMO_UI_DASHBOARD -> true
+
+══ STEP 5 ═════════════════════════════════════════════
+   The guardrail: a DIFFERENT repo url may not claim an already-registered namespace
+
+$ cd impostor && gff install    # same namespace, different url => rejected
+install: WARNING: declared namespace "com.example.gffdemo" differs from origin-derived "com.example.other.impostor" (fork? keeping declared)
+gff: install: namespace registered by a different url: com.example.gffdemo (existing url: https://example.com/gffdemo.git)
+rejected as expected (registry unchanged; the error names the existing url)
+
+══ STEP 6 ═════════════════════════════════════════════
+   Finale: an empty directory, no gff on PATH — zero-install via go run
+
+$ eval "$(go run . export --format shell --source com.example.gffdemo)"   # module-local stand-in for @<tag>
+zero-install sees: GFF_DEMO_PKG_MANAGER=auto
+
+✔ demo complete — scratch world /tmp/gff-demo.vQImO5 (re-run me any time; each run is fresh)

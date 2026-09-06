@@ -1,0 +1,92 @@
+[
+  {
+    "Name": "Windows Terminal",
+    "Id": "Microsoft.WindowsTerminal",
+    "Match": "Windows Terminal"
+  },
+  {
+    "Name": "Discord",
+    "Id": "Discord.Discord",
+    "Match": "Discord"
+  },
+  {
+    "Name": "Slack",
+    "Id": "SlackTechnologies.Slack",
+    "Match": "Slack"
+  },
+  {
+    "Name": "Obsidian",
+    "Id": "Obsidian.Obsidian",
+    "Match": "Obsidian"
+  },
+  {
+    "Name": "OBS Studio",
+    "Id": "OBSProject.OBSStudio",
+    "Match": "OBS Studio"
+  },
+  {
+    "Name": "Spotify",
+    "Id": "Spotify.Spotify",
+    "Match": "Spotify",
+    "Exe": "Spotify.exe"
+  },
+  {
+    "Name": "Apple iTunes",
+    "Id": "Apple.iTunes",
+    "Match": "iTunes",
+    "Elevated": true
+  },
+  {
+    "Name": "Antigravity",
+    "Id": "Google.Antigravity",
+    "Match": "^Antigravity(?! IDE)"
+  },
+  {
+    "Name": "Antigravity IDE",
+    "Id": "Google.AntigravityIDE",
+    "Match": "Antigravity IDE"
+  },
+  {
+    "Name": "Cursor",
+    "Id": "Anysphere.Cursor",
+    "Match": "Cursor"
+  },
+  {
+    "Name": "Claude",
+    "Id": "Anthropic.Claude",
+    "Match": "^Claude($| )",
+    "Appx": "Claude"
+  },
+  {
+    "Name": "GitHub Desktop",
+    "Id": "GitHub.GitHubDesktop",
+    "Match": "GitHub Desktop"
+  },
+  {
+    "Name": "Docker Desktop",
+    "Id": "Docker.DockerDesktop",
+    "Match": "Docker Desktop"
+  },
+  {
+    "Name": "AutoHotkey v2",
+    "Id": "AutoHotkey.AutoHotkey",
+    "Match": "AutoHotkey"
+  },
+  {
+    "Name": "Microsoft PowerToys",
+    "Id": "Microsoft.PowerToys",
+    "Match": "PowerToys"
+  },
+  {
+    "Name": "Google Chrome",
+    "Id": "Google.Chrome",
+    "Match": "Google Chrome",
+    "Exe": "chrome.exe"
+  },
+  {
+    "Name": "Mozilla Firefox",
+    "Id": "Mozilla.Firefox",
+    "Match": "Mozilla Firefox",
+    "Exe": "firefox.exe"
+  }
+]

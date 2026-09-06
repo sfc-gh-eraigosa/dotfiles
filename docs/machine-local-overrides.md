@@ -42,13 +42,27 @@ locally without changing the repo:
 ```zsh
 # ~/.zshrc.local
 claude() {
-    if _claude_yolo_enabled; then
+    if [ -f "$CLAUDE_YOLO_FILE" ]; then
         sf ai claude -- --dangerously-skip-permissions "$@"
     else
         sf ai claude -- "$@"
     fi
 }
 ```
+
+> The launch config is two opt-in sentinel files under `~/.config/claude/`
+> (`yolo.enabled`, `remote.enabled`), both **OFF by default**. Toggle them with
+> `claude-config yolo on|off` / `claude-config remote on|off`. `remote` adds
+> `--remote-control` to interactive sessions only; turn it on per machine where
+> you want it, and `claude-config remote off` to disable. (The old
+> `_claude_yolo_enabled` helper was removed — Claude Code's shell-snapshot
+> strips `_`-prefixed functions; check the `$CLAUDE_YOLO_FILE` sentinel inline
+> instead, as above.)
+>
+> The Antigravity CLI has the same shape: `agy-config yolo on|off` toggles
+> `~/.config/antigravity/yolo.enabled` and the `agy` wrapper injects
+> `--dangerously-skip-permissions` while it is present; `agy-config doctor` checks
+> the binary. There is no remote toggle for agy (no such CLI flag).
 
 ### Add a host-specific PATH entry
 
@@ -87,7 +101,7 @@ export EDITOR="code --wait"
 ```
 ~/.zshrc  (symlink → dotfiles/opt/profiles/.zshrc)
   └─ sources opt/profiles/.zshrc content
-       └─ sources ~/.config/claude/aliases.sh  (claude, claude-toggle)
+       └─ sources ~/.config/claude/aliases.sh  (claude, claude-config)
        └─ ... other tools ...
        └─ sources ~/.zshrc.local  ← your overrides land here, last
 ```

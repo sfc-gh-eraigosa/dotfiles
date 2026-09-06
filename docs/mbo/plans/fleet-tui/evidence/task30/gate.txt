@@ -1,0 +1,41 @@
+# Task 30 — select-all + docs + gate (2026-08-17T15:57:30Z)
+
+## select-all
+=== RUN   TestSelectAllTogglesEveryRow
+--- PASS: TestSelectAllTogglesEveryRow (0.00s)
+=== RUN   TestSelectAllRespectsTheActiveFilter
+--- PASS: TestSelectAllRespectsTheActiveFilter (0.00s)
+=== RUN   TestSelectAllCompletesAPartialSelection
+--- PASS: TestSelectAllCompletesAPartialSelection (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.004s
+
+## gate
+### go vet + gofmt
+(both clean)
+
+### coverage
+[0;32mOK[0m: coverage for fleet is 82% (minimum: 60%)
+
+### portability
+TIER 1 — MUST FIX (POSIX /bin/sh breakage; login-loop class): 0
+TIER 2 — environment hazards (macOS bash 3.2 / BSD coreutils / non-interactive apt): 0
+
+### markdownlint
+25 issues across the 6 changed docs — identical to the pre-change baseline
+(README 20, designs 2, specs 3); no new findings introduced.
+
+## demo frame — the branch column explaining a divergent row
+```text
+━━━ 2. streamed in — worst-first, status-coloured ━━━
+fleet  ?: help  /: search  space: select  u: update  s: ssh  r: refresh  q: quit
+
+  HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE
+   host-lab         abc1234   feature/gff≠main 3h ago        divergent              
+   host-pi          -         -                -             unreachable            
+   host-edge        -         -                -             unknown (corrupt stamp) 
+   host-nano        9484943   main             2w ago        behind 24              
+>  host-desktop     72392c9   main             2h ago        up-to-date             
+
+5/5
+```

@@ -1,0 +1,6 @@
+# 2026-09-03T15:14:11Z live ~/.gemini/config/hooks.json keys + guards matcher
+guards
+run_command|write_to_file|replace_file_content|multi_replace_file_content|edit_file
+# validate_hooks:
+PASS: configured hooks resolve; safety_guard blocks via the configured command
+validate rc=0

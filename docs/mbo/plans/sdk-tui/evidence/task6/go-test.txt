@@ -1,0 +1,12 @@
+# 2026-09-05 21:07 PDT — go test ./tui/overlay/ -cover -v
+=== RUN   TestHelpRendersEveryBindingSectionsAndHint
+--- PASS: TestHelpRendersEveryBindingSectionsAndHint (0.00s)
+=== RUN   TestHelpUsesThePalette
+--- PASS: TestHelpUsesThePalette (0.00s)
+=== RUN   TestConfirmKeys
+--- PASS: TestConfirmKeys (0.00s)
+=== RUN   TestConfirmRender
+--- PASS: TestConfirmRender (0.00s)
+PASS
+coverage: 95.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/overlay	0.005s	coverage: 95.7% of statements

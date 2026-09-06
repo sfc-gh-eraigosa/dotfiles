@@ -1,0 +1,2 @@
+# 2026-09-05 20:05 PDT — from a clean main checkout (~/git/dotfiles @ 93e0d02): cd sdk/gss && go build -o /tmp/gss-before . && ls -l /tmp/gss-before
+-rwxrwxr-x 1 <user> <user> 7675540 Sep  5 20:05 /tmp/gss-before

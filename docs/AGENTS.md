@@ -1,0 +1,25 @@
+# docs/ — repository documentation
+
+Reference guides and the repo's objective-driven design system.
+
+## Start here for design work
+
+> **Any "let's design / plan / build X" work — an issue, a `gss feature` draft PR, a new
+> feature, skill, CLI, or service — starts in [`mbo/`](./mbo/AGENTS.md)** (Management By
+> Objective). It routes the task to the right skill workflow and lays down consistent
+> design → spec → plan artifacts tracked in [`mbo/index.md`](./mbo/index.md).
+
+- [`mbo/`](./mbo/) — design · spec · plan artifacts + the objective tracker. Read
+  [`mbo/AGENTS.md`](./mbo/AGENTS.md) first.
+
+## Reference guides (not objective artifacts)
+
+- [`ai-plugins.md`](./ai-plugins.md) — the Claude/Antigravity plugin catalog + mapping.
+- [`machine-local-overrides.md`](./machine-local-overrides.md) — the `~/.zshrc.local` pattern.
+- [`macos-keys.md`](./macos-keys.md) — the macOS-style keyboard layout on every OS (Linux keyd + GNOME gsettings, Windows AutoHotkey): full key table, why it takes two components on Linux, why terminals need per-app overrides (`Cmd+C` vs SIGINT), the one `keyboard.macos.enabled` kill switch, and recovery/panic-chord instructions. **On by default.**
+- [`claude-code-support.md`](./claude-code-support.md) — supported Claude Code version range, cross-version compatibility rules, and the upgrade-audit runbook.
+- [`gitignore-allowlist.md`](./gitignore-allowlist.md) — the `*`-default `.gitignore` allowlist: opted-in paths, verification recipe, worked examples.
+- [`install-windows.md`](./install-windows.md) — `install.sh` Windows/WSL interactivity flow, `[y]/[s]` semantics, gff overrides.
+- [`security-audit.md`](./security-audit.md) — opt-in unattended weekly security audit: Windows collector task + Claude analysis task, gff-gated **fail-closed**.
+- [`security-hardening.md`](./security-hardening.md) — opt-in Windows hardening (follow-up to the audit): Event Log Readers, TaskScheduler/Operational channel, 5 Defender ASR rules in **audit mode only**. Self-elevating, idempotent, precisely reversible; gff-gated **fail-closed**.
+- [`mergify.md`](./mergify.md) — the merge model: Mergify queue, solo-maintainer rules and rationale, external-contributor review gate, AI-work traceability, break-glass.

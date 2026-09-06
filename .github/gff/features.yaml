@@ -1,0 +1,353 @@
+# gff feature inventory for the dotfiles repo — every install.sh component is a
+# flag (all on by default; only an explicit `false` skips a step — fail-open).
+# Schema: sdk/gff proto (protojson field names, YAML syntax). See plan §4 P2-T1.
+namespace: com.github.sfc-gh-eraigosa.dotfiles
+sets:
+  - area: install
+    features:
+      # --- system (5) ---
+      - path: install.system.wsl-interop
+        description: Runs the wsl_interop_binfmt.sh block that keeps the WSLInterop binfmt registration alive.
+        boolDefault: true
+      - path: install.system.jetson
+        description: Runs the Jetson hardware-detection block (jtop setup and Chromium default browser).
+        boolDefault: true
+      - path: install.system.gpu
+        description: Runs the NVIDIA DGX / discrete-GPU block (setup_gpu.sh - nvitop, nvtop, gpustat, btop). Non-Jetson GPU hosts only.
+        boolDefault: true
+      - path: install.system.gitrepos
+        description: Runs the ~/.gitrepos clone block near the end of install.sh.
+        boolDefault: true
+      - path: install.system.nano-profile
+        description: Runs the block that wires .nano_profile sourcing into .zshrc and .profile.
+        boolDefault: true
+      # --- shell (3) ---
+      - path: install.shell.profiles
+        description: Runs the block that symlinks opt/profiles dotfiles into the home directory.
+        boolDefault: true
+      - path: install.shell.default-zsh
+        description: Runs the chsh block that sets zsh as the default login shell.
+        boolDefault: true
+      - path: install.shell.oh-my-zsh-update
+        description: Runs oh-my-zsh_update.sh, which fast-forwards the oh-my-zsh clone (~/.oh-my-zsh, else ~/git/oh-my-zsh) to its upstream tip after the .gitrepos block. ~/.gitrepos clones oh-my-zsh but never pulls it (";false" in .repos.env), so without this the clone goes stale and misses upstream plugin fixes. Fast-forward only, never prompts, never fails the install - a diverged clone or offline host prints a WARNING and is left untouched.
+        boolDefault: true
+      # --- desktop (2) ---
+      - path: install.desktop.gnome-keys
+        description: Runs gnome-desktop-defaults.sh, which applies the gsettings half of the macOS key layout (Cmd+Space/M/H, an inert lone-Cmd tap, Super+C/V copy-paste in gnome-terminal). No-ops off a GNOME session. Also requires keyboard.macos.enabled.
+        boolDefault: true
+      - path: install.desktop.macos-keys
+        description: Runs macos-keys-linux.sh, which installs keyd and the macOS-style key layout so Cmd+C/V/X/A/Z and the macOS navigation chords work in EVERY Linux GUI app, not just the terminal. Compiles keyd from source and runs a root daemon. No-ops without a graphical session. Also requires keyboard.macos.enabled.
+        boolDefault: true
+      # --- pkg (2) ---
+      - path: install.pkg.common-core
+        description: Runs the pkg-install block that installs the curated common-core packages plus the legacy yum path.
+        boolDefault: true
+      - path: install.pkg.brewfile
+        description: Runs the macOS brew bundle block for the Brewfile extras including vault-setup.
+        boolDefault: true
+      # --- tools (9) ---
+      - path: install.tools.sops
+        description: Runs the install_sops.sh block that fetches the sops release binary.
+        boolDefault: true
+      - path: install.tools.yq
+        description: Runs the install_yq.sh block that fetches the mikefarah yq binary.
+        boolDefault: true
+      - path: install.tools.k8s
+        description: Runs the install_k8s_tools.sh block (kubectl, helm, kind).
+        boolDefault: true
+      - path: install.tools.snowflake
+        description: Runs the install_snowflake_cli.sh block.
+        boolDefault: true
+      - path: install.tools.docker
+        description: Runs the docker setup block (permissions plus ruby-docker and dindc aliases).
+        boolDefault: true
+      - path: install.tools.git-aliases
+        description: Migration cleanup for the retired ~/.gitenv generator (removes stale generated artifacts); the surviving git shortcuts live in opt/profiles/.gitools.sh.
+        boolDefault: true
+      - path: install.tools.herdr
+        description: Runs the install_herdr.sh block that fetches the herdr (agent terminal workspace) release binary into ~/opt/bin, SHA-256-verified against herdr.dev/latest.json; tracks latest, pin with HERDR_VERSION.
+        boolDefault: true
+      - path: install.tools.herdr-integrations
+        description: Runs `install_herdr.sh integrations` (config phase) to (re)install herdr's agent-state hooks for the agent CLIs present on the host (claude, antigravity-cli); must follow install_antigravity_skills.sh, which re-renders hooks.json.
+        boolDefault: true
+      - path: install.tools.herdr-config
+        description: Runs `install_herdr.sh config` (config phase) to render ai/herdr/config.toml into ~/.config/herdr/config.toml so herdr follows the host terminal's light/dark appearance with the Solarized palette; converges a dotfiles-managed file, never clobbers a hand-edited one (HERDR_CONFIG_FORCE=1 to reclaim).
+        boolDefault: true
+      # --- runtime (5) ---
+      - path: install.runtime.goenv
+        description: Runs the goenv install/update and pinned Go toolchain block.
+        boolDefault: true
+      - path: install.runtime.pyenv
+        description: Runs the pyenv install/update block.
+        boolDefault: true
+      - path: install.runtime.rbenv
+        description: Runs the rbenv install/update block with the ruby-build plugin.
+        boolDefault: true
+      - path: install.runtime.nvm
+        description: Runs the nvm install block.
+        boolDefault: true
+      - path: install.runtime.fnm
+        description: Runs the fnm install block.
+        boolDefault: true
+      # --- ai (6) ---
+      - path: install.ai.skills
+        description: Runs the sync-skills.sh block that links shared skills into both assistants.
+        boolDefault: true
+      - path: install.ai.antigravity
+        description: Runs the Antigravity blocks (install_antigravity_skills.sh, antigravity_install.sh, gemini_teardown.sh).
+        boolDefault: true
+      - path: install.ai.claude
+        description: Runs the Claude Code blocks (install_claude_skills.sh and claude_install.sh).
+        boolDefault: true
+      - path: install.ai.google-cli
+        description: Runs the google-cli-setup.sh block.
+        boolDefault: true
+      - path: install.ai.plugins
+        description: Runs the sync-plugins.sh block that syncs the AI plugin manifest.
+        boolDefault: true
+      - path: install.ai.teams
+        description: Runs the install_ai_teams.sh block.
+        boolDefault: true
+      # --- git (2) ---
+      - path: install.git.hooks
+        description: Runs install_git_hooks.sh (global privacy git hooks — pre-commit, commit-msg, pre-push — via core.hooksPath).
+        boolDefault: true
+      - path: install.git.gitleaks
+        description: Runs install_gitleaks.sh (gitleaks binary — the upstream secret ruleset the privacy guard's agent hook and git hooks delegate to). false also writes ~/.config/privacy_guard/gitleaks=off so the hooks skip a binary that is present anyway.
+        boolDefault: true
+      # --- sdk (6) ---
+      - path: install.sdk.gss
+        description: Runs the gss build-and-install block.
+        boolDefault: true
+      - path: install.sdk.tmux-mgr
+        description: Runs the tmux-mgr build-and-install block.
+        boolDefault: true
+      - path: install.sdk.wol
+        description: Runs the wol build-and-install block.
+        boolDefault: true
+      - path: install.sdk.gsl
+        description: Runs the gsl build-and-install block.
+        boolDefault: true
+      - path: install.sdk.fleet
+        description: Runs the fleet build-and-install block.
+        boolDefault: true
+      - path: install.sdk.gff
+        description: Runs the later duplicate gff build block (the bootstrap build itself is never gated).
+        boolDefault: true
+      - path: install.sdk.wlink
+        description: Opt-in (fail-closed) WSL link tool - builds/installs wlink and pins the resolver that knows your fleet. Unlike the other install.sdk.* flags this defaults FALSE and is gated with gff_opt_in, because wlink is only useful on a machine that reaches its fleet over a VPN/tunnel and it rewrites /etc/resolv.conf. Enable with gff set install.sdk.wlink true.
+        boolDefault: false
+      # --- fonts (1) ---
+      - path: install.fonts.nerd-font
+        description: Runs the Nerd Font configuration block (OS dispatch plus the glyph-coverage check).
+        boolDefault: true
+      # --- network (1) ---
+      - path: install.network.sshd
+        description: Runs the sshd_run.sh block when ~/.sshd.env is present.
+        boolDefault: true
+      # --- windows (11) ---
+      - path: install.windows.desktop-deploy
+        description: Runs the install_windows.sh invocation that deploys opt/Desktop onto the Windows Desktop.
+        boolDefault: true
+      - path: install.windows.wsl-platform
+        description: Runs the WSL platform phase in setup-apps.ps1.
+        boolDefault: true
+      - path: install.windows.nerd-font
+        description: Runs the Nerd Font phase in setup-apps.ps1.
+        boolDefault: true
+      - path: install.windows.terminal-themes
+        description: Runs the Windows Terminal themes and profiles phase in setup-apps.ps1.
+        boolDefault: true
+      - path: install.windows.apps
+        description: Runs the winget desktop apps phase in setup-apps.ps1.
+        boolDefault: true
+      - path: install.windows.wispr-flow
+        description: Runs the Wispr Flow MSI step in setup-elevated.ps1.
+        boolDefault: true
+      - path: install.windows.copilot-key
+        description: Runs the PowerToys Copilot-key remap step in setup-elevated.ps1.
+        boolDefault: true
+      - path: install.windows.ahk-autostart
+        description: Runs the macOS-hotkeys AutoHotkey logon task step in setup-elevated.ps1.
+        boolDefault: true
+      - path: install.windows.claude-rc-autostart
+        description: Gates the standalone install-claude-rc-autostart.ps1 script on the Windows side.
+        boolDefault: true
+      - path: install.windows.sshd
+        description: Gates the standalone setup-sshd.ps1 script on the Windows side.
+        boolDefault: true
+      - path: install.windows.portproxy
+        description: Gates the standalone refresh-wsl-portproxy.ps1 script on the Windows side.
+        boolDefault: true
+      - path: install.windows.security-audit
+        description: Opt-in (fail-closed) unattended weekly security audit - setup-security-audit.ps1 registers the ClaudeSecurityAuditCollector task and seeds the Claude analysis task. Enable with gff set install.windows.security-audit true.
+        boolDefault: false
+      - path: install.windows.security-hardening
+        description: Opt-in (fail-closed) Windows security hardening - setup-security-hardening.ps1 adds the user to Event Log Readers, enables the TaskScheduler/Operational channel, and configures 5 Defender ASR rules in AUDIT MODE only (never enforce). Self-elevating, idempotent, -Uninstall reverts only what it changed. Enable with gff set install.windows.security-hardening true.
+        boolDefault: false
+
+  # research-rubric.* — tunable weights for the research-evaluation skill's rubric.
+  # Smart PUBLIC defaults live here; anyone tunes them on demand via the gff user
+  # layer (`gff set research-rubric.weight.security critical` / `gff tui`) or a repo
+  # override — dissenting weightings never require editing the skill. Weight tiers:
+  # none=0 low=1 medium=2 high=3 critical=4 (the selected option's intValue is the
+  # weight the skill multiplies each dimension score by). See the skill's
+  # references/tuning.md.
+  - area: research-rubric
+    features:
+      - path: research-rubric.weight.value
+        description: "Weight for dimension (a) Value — what the tool is worth to us / problems it solves."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1}
+            - {id: medium,   description: normal factor,         intValue: 2}
+            - {id: high,     description: strong factor,         intValue: 3, selected: true}
+            - {id: critical, description: decisive factor,       intValue: 4}
+      - path: research-rubric.weight.setup-licensing
+        description: "Weight for dimension (b) Setup cost & licensing."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1}
+            - {id: medium,   description: normal factor,         intValue: 2, selected: true}
+            - {id: high,     description: strong factor,         intValue: 3}
+            - {id: critical, description: decisive factor,       intValue: 4}
+      - path: research-rubric.weight.adversarial
+        description: "Weight for dimension (c) Adversarial review — the case against adopting."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1}
+            - {id: medium,   description: normal factor,         intValue: 2}
+            - {id: high,     description: strong factor,         intValue: 3, selected: true}
+            - {id: critical, description: decisive factor,       intValue: 4}
+      - path: research-rubric.weight.security
+        description: "Weight for dimension (d) Security & safety."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1}
+            - {id: medium,   description: normal factor,         intValue: 2}
+            - {id: high,     description: strong factor,         intValue: 3}
+            - {id: critical, description: decisive factor,       intValue: 4, selected: true}
+      - path: research-rubric.weight.stability
+        description: "Weight for dimension (e) Stability — blast radius / destabilization risk."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1}
+            - {id: medium,   description: normal factor,         intValue: 2, selected: true}
+            - {id: high,     description: strong factor,         intValue: 3}
+            - {id: critical, description: decisive factor,       intValue: 4}
+      - path: research-rubric.weight.quality-support
+        description: "Weight for dimension (f) Quality & support — maintenance, bus factor, cadence."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1}
+            - {id: medium,   description: normal factor,         intValue: 2, selected: true}
+            - {id: high,     description: strong factor,         intValue: 3}
+            - {id: critical, description: decisive factor,       intValue: 4}
+      - path: research-rubric.weight.demo
+        description: "Weight for dimension (g) Demo — first-hand docker-sandboxed validation."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1, selected: true}
+            - {id: medium,   description: normal factor,         intValue: 2}
+            - {id: high,     description: strong factor,         intValue: 3}
+            - {id: critical, description: decisive factor,       intValue: 4}
+      - path: research-rubric.weight.borrowable
+        description: "Weight for dimension (h) Borrowable features — build-vs-adopt leverage."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1}
+            - {id: medium,   description: normal factor,         intValue: 2}
+            - {id: high,     description: strong factor,         intValue: 3, selected: true}
+            - {id: critical, description: decisive factor,       intValue: 4}
+      - path: research-rubric.weight.business
+        description: "Weight for dimension (i) Business outcomes — the financial/ROI vector (modest default)."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: none,     description: ignore this dimension, intValue: 0}
+            - {id: low,      description: minor factor,          intValue: 1}
+            - {id: medium,   description: normal factor,         intValue: 2, selected: true}
+            - {id: high,     description: strong factor,         intValue: 3}
+            - {id: critical, description: decisive factor,       intValue: 4}
+      - path: research-rubric.decision.mode
+        description: "Verdict-threshold posture applied to the weighted score."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: strict,   description: high bar; reject unless strongly positive, stringValue: strict}
+            - {id: balanced, description: default posture,                          stringValue: balanced, selected: true}
+            - {id: lenient,  description: adopt-friendly; low bar,                  stringValue: lenient}
+      - path: research-rubric.require.adversarial
+        description: "Require a non-empty adversarial (case-against) section; a verdict without one is invalid."
+        boolDefault: true
+      - path: research-rubric.require.docker-demo
+        description: "Require the demo be docker-sandboxed or explicitly skipped — no unsandboxed demos."
+        boolDefault: true
+
+  # --- macOS-style keyboard layout, across every OS -------------------------
+  # ONE switch to turn the whole family of macOS keyboard customizations off.
+  # Set `keyboard.macos.enabled: false` (or `gff set keyboard.macos.enabled false`) and
+  # every OS-specific component below is skipped:
+  #   Linux   - install.desktop.macos-keys  (keyd evdev layout)
+  #           - install.desktop.gnome-keys  (gsettings desktop actions)
+  #   Windows - install.windows.ahk-autostart (macos.ahk logon task)
+  #           - install.windows.copilot-key   (PowerToys Copilot-key remap)
+  # The per-component flags still work for turning off ONE piece; this is the
+  # blanket opt-out for users who do not want Mac muscle memory at all.
+  - area: keyboard
+    features:
+      - path: keyboard.macos.enabled
+        description: Master switch for macOS-style keyboard customization on every OS (Linux keyd + GNOME gsettings, Windows AutoHotkey + Copilot-key remap). Set false to leave every keyboard stock. On by default — see the "macOS-Style Keyboard" section of README.md.
+        boolDefault: true
+
+  - area: fleet
+    features:
+      - path: fleet.update.enabled
+        description: Lets `fleet update` read its step plan from fleet.yaml. Set false to pin the built-in dotfiles-only plan (fetch → ff → install.sh) regardless of any file. Fail-open - if gff is unavailable fleet behaves as enabled.
+        boolDefault: true
+      - path: fleet.update.config
+        description: Which fleet.yaml `fleet update` reads when --file is not given. `home` = $XDG_CONFIG_HOME/fleet/fleet.yaml; `repo` = opt/etc/fleet/fleet.yaml inside the local dotfiles clone (a tracked team plan).
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: home, description: "~/.config/fleet/fleet.yaml (XDG config dir)", stringValue: home, selected: true}
+            - {id: repo, description: "<dotfiles clone>/opt/etc/fleet/fleet.yaml", stringValue: repo}
+
+  # gsl (Go Status Line) runtime flags — read by `gsl render` on every turn via
+  # the gff Go SDK (sdk/gsl/internal/flags). Fail-open: any resolution error
+  # (unregistered namespace, missing gff, slow answer) leaves the links ON, so a
+  # flag can only ever turn a link family OFF. The affordance (underline vs
+  # plain) is the `links` key in ~/.config/gsl/config.json, not a flag.
+  - area: gsl
+    features:
+      - path: gsl.links.enabled
+        description: Master switch for clickable (OSC 8) links on the gsl status line. false removes every link family below; `links` in ~/.config/gsl/config.json still chooses underline vs plain.
+        boolDefault: true
+      - path: gsl.links.repo
+        description: Repo links — the PR badge to its pull request, the feature/worker/branch label and the dirgit branch to the branch on GitHub, and the root/worktree glyph to the repository home.
+        boolDefault: true
+      - path: gsl.links.dirgit
+        description: Directory link — the dirgit directory name opens the vscode.dev GitHub view (the PR's changes when the branch has one, else the branch; file:// off GitHub, or always when the dirgit option dir_link is set to file).
+        boolDefault: true
+      - path: gsl.links.ai
+        description: AI links — the model name opens its model page (family from model.id, e.g. anthropic.com/claude/fable; `model_url` overrides); context % and the 5h/7d rate fields open the host's usage page (Claude Code default claude.ai/settings/usage; `usage_url` overrides, and is the only way to give Antigravity a usage target).
+        boolDefault: true
+      - path: gsl.links.time
+        description: Time link — the date/time opens a timezone page built from the time segment's `link_url` template (default https://time.is/{tz_city}; placeholders {tz} {tz_city} {iso_utc} {unix}).
+        boolDefault: true

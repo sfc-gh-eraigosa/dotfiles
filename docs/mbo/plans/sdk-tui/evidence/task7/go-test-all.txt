@@ -1,0 +1,9 @@
+# 2026-09-05 21:25 PDT — go test ./... -cover (sdk/libs)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/log	0.007s	coverage: 90.2% of statements
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/cmdline	0.005s	coverage: 96.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/keymap	0.007s	coverage: 98.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/nav	0.006s	coverage: 98.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/overlay	0.006s	coverage: 95.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/prompt	0.004s	coverage: 97.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/search	0.006s	coverage: 94.0% of statements

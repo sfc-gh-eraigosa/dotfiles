@@ -1,0 +1,106 @@
+# gff-install-flow — Task 6 human validation matrix (owner-run, real WSL2 terminal)
+# Date: 2026-07-26 · Branch: feature/gff-install-flow/edward-raigosa/build @ 89bb01d
+# Spec: docs/mbo/specs/gff-install-flow.md §5-6 · Plan Task 6 · PR #194
+# No `set -a` / `eval` appears anywhere in these runs — the early export (F1)
+# and the in-script bootstrap materialize all flags.
+
+## RUN 1 — [y] + install.windows.wispr-flow=false (F1/F2/F4/F5 capstone)
+
+    $ gff set install.windows.wispr-flow false
+    $ gff get install.windows.wispr-flow
+    false
+    $ ./install.sh
+    ...
+    Windows Desktop Customization detected.        <- prompt in the FIRST minute
+    ...
+      [s] Skip and never ask again (recorded as a gff override).
+    Choice [y/n/s]: y
+    Windows customization will run at the END of this install (the UAC prompt appears then).
+    ... (full Linux install: apt, tools, runtimes, AI CLIs, sdk builds) ...
+    Cached Windows paths -> ~/.cache/dotfiles/winenv.sh    <- Windows phase LAST
+    Deploying opt/Desktop -> /mnt/c/Users/<winuser>/OneDrive/Desktop
+    Starting Windows customization... (this may take a few minutes)
+    === [1/6] WSL platform === ... === [5/6] Desktop apps (winget) === ...   <- phases visible (log cat'ed)
+    === Elevated setup (approve ONE UAC prompt) ===
+    Finishing setup (hotkey task, iTunes, Wispr Flow, Copilot-key remap)...
+    Elevated setup finished. Details: C:\Users\<winuser>\setup-elevated.log  <- user-readable path (F5)
+
+    $ cat /mnt/c/Users/<winuser>/setup-elevated.log        <- read WITHOUT elevation (F5)
+    === setup-elevated 2026-07-26T17:56:15... ===
+    == [1/4] macOS hotkeys logon task ==
+    == [2/4] iTunes (Win32) ==
+      ... winget exit=-1978335189 (already installed; benign)
+    SKIP (gff: install.windows.wispr-flow=false)           <- F4: the flag CROSSED the UAC
+    == [4/4] PowerToys Copilot-key remap ==                   boundary via -GffEnv (env alone
+    === done 2026-07-26T17:56:18... ===                       cannot; gff TRACKING §10 row 5)
+
+# The [3/4] Wispr Flow phase was replaced by the SKIP line inside the ELEVATED
+# batch — the line unreachable on pre-#194 main. First attempt of this run also
+# caught (and fixed) a real defect: an em-dash inside a .ps1 string parses as a
+# curly-quote terminator under PS 5.1's ANSI read of BOM-less files
+# (gff-install-flow TRACKING §4).
+
+## RUN 2 — [n] (deploy still runs at the end; no PS customization)
+
+    Choice [y/n/s]: n
+    ... (full Linux install) ...
+    Cached Windows paths -> ~/.cache/dotfiles/winenv.sh    <- per-run deploy preserved
+    Deploying opt/Desktop -> /mnt/c/Users/<winuser>/OneDrive/Desktop
+    (run ends -- NO "Starting Windows customization", no UAC)               PASS
+
+## RUN 3 — [s] (permanent skip becomes a gff override; no sentinel file)
+
+  Attempt 1 (branch @ 89bb01d) surfaced a REAL bug — the fail-open fallback fired:
+
+    Choice [y/n/s]: s
+    ... Deploying opt/Desktop -> ... (deferred phase, CWD is now $HOME) ...
+    gff: resolve: unknown flag key: install.windows.desktop-deploy
+    gff unavailable; wrote legacy sentinel ~/.config/dotfiles/.skip_windows_setup
+
+  Root cause: install.sh does `cd "${HOME}"` at line ~610 (nano-profile block),
+  so the deferred `gff set` ran outside the repo and lost the repo-live layer.
+  Fixed TDD (winsetup_run_gff subshell-cd's to WINSETUP_REPO_DIR = BASE_DIR;
+  test 8b proves gff's CWD). Side proof: the sentinel FALLBACK branch of
+  winsetup_record_skip works in production (fail-open held).
+
+  Attempt 2 (post-fix): the leftover sentinel exercises the MIGRATION path live —
+  see the continuation below.
+
+## RUN 3b — migration run (sentinel from attempt 1 + working gff @ b944eca)
+
+    $ ./install.sh
+    Requesting sudo access up front ...
+    Migrated legacy skip sentinel to gff override: install.windows.desktop-deploy=false
+    ... (NO y/n/s prompt anywhere in the run) ...
+    ... (full Linux install) ...
+    SKIP (gff: install.windows.desktop-deploy=false)   <- tail gate: the mid-script
+                                                          bootstrap re-export picked up
+                                                          the just-written override —
+                                                          deploy skipped in the SAME run
+
+    $ gff list install.windows.desktop-deploy
+    │ install.windows.desktop-deploy │ bool │ false │ user-override │ ... │   PASS
+    $ ls ~/.config/dotfiles/.skip_windows_setup
+    ls: cannot access '...': No such file or directory                        PASS
+
+# F3 proven end-to-end: sentinel honored (attempt-1 fallback), migrated to a gff
+# override (visible in gff list, reversible via unset), file deleted; the direct
+# gff-first [s] recording path is covered by winsetup_test.sh case 7 + the CWD
+# anchor by case 8b.
+
+## RUN 4 — flag-off (no prompt at all; early + tail SKIP)
+
+    $ ./install.sh
+    Requesting sudo access up front ...
+    SKIP (gff: install.windows.desktop-deploy=false)   <- ask gate, seconds in:
+    ... (full Linux install, NO y/n/s prompt anywhere) ...  early export materialized
+    SKIP (gff: install.windows.desktop-deploy=false)   <- deferred gate at the tail
+    $ gff unset install.windows.desktop-deploy         <- default restored     PASS
+
+# MATRIX COMPLETE. Zero `set -a` / `eval` in any run — F1 proven across all four.
+# F2: prompt-first-minute + Windows-last (runs 1-3). F3: fallback + migration +
+# override + unset (runs 3/3b). F4: elevated-log SKIP via -GffEnv (run 1).
+# F5: unelevated log read (run 1). F6: loud-failure code paths (see TRACKING §4 —
+# two REAL failures during the matrix were surfaced loudly, root-caused, fixed
+# TDD, and re-proven live: the .ps1 ANSI/em-dash parse bug and the $HOME-CWD
+# unknown-key bug).

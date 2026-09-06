@@ -1,0 +1,51 @@
+# P15 — retire the prototype
+# captured 2026-08-25T14:08:07Z
+
+## GATE: every spec rule EC-1..EC-22 cites a passing Go test
+  EC-1  ok
+  EC-2  ok
+  EC-3  ok
+  EC-4  ok
+  EC-5  ok
+  EC-6  ok
+  EC-7  ok
+  EC-8  ok
+  EC-9  ok
+  EC-10 ok
+  EC-11 ok
+  EC-12 ok
+  EC-13 ok
+  EC-14 ok
+  EC-15 ok
+  EC-16 ok
+  EC-17 ok
+  EC-18 ok
+  EC-19 ok
+  EC-20 ok
+  EC-21 ok
+  EC-22 ok
+  (the gate caught EC-12 unticked: its five NonWSL tests existed and passed,
+   but the matrix row had never been updated. Verified, then ticked.)
+
+## final run of the prototype, immediately before deletion
+  PASS=54 FAIL=0
+
+## PROOF 1 — no reference outside docs/mbo/
+  clean
+
+## PROOF 2 — absent from the PR's net diff vs main (no rows = not added)
+
+## suites after deletion
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/cmd	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/fleetsrc	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/linkstate	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/probe	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/resolvconf	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/sshcfg	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/winhost	(cached)
+  lint-shell exit=0
+TIER 1 — MUST FIX (POSIX /bin/sh breakage; login-loop class): 0
+TIER 2 — environment hazards (macOS bash 3.2 / BSD coreutils / non-interactive apt): 0
+
+## NOT DONE: P14 live acceptance, skipped by decision 2026-08-25.
+## Tunnel-UP behaviour is fixture-proven only. See TRACKING.md blockers.

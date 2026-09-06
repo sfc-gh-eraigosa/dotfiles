@@ -1,0 +1,21 @@
+{
+  "cwd": "/home/user/project",
+  "model": {
+    "display_name": "Opus 4.7"
+  },
+  "context_window": {
+    "used_percentage": 42,
+    "total_input_tokens": 84000,
+    "context_window_size": 200000
+  },
+  "rate_limits": {
+    "five_hour": {
+      "used_percentage": 28.99,
+      "resets_at": 1779863400
+    },
+    "seven_day": {
+      "used_percentage": 32,
+      "resets_at": 1780052400
+    }
+  }
+}

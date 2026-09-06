@@ -1,0 +1,14 @@
+# 2026-09-05 23:01 PDT — RUN-RED (after dropping the duplicate cursorLine helper the package already defines): go test ./internal/tui/ -run "TestVim|TestHelpOpensOn|TestHDoesNot|TestPickerJK|TestFooterHint"
+--- FAIL: TestVimJKMoveLikeArrows (0.00s)
+--- FAIL: TestVimHLTurnPages (0.00s)
+--- FAIL: TestVimGGAndG (0.00s)
+--- FAIL: TestVimPendingGIsCancelledByAnotherKey (0.00s)
+--- FAIL: TestVimCtrlDUHalfPage (0.00s)
+--- FAIL: TestVimCtrlFBFullPage (0.00s)
+--- FAIL: TestHelpOpensOnQuestionAndF1NotH (0.00s)
+--- FAIL: TestHDoesNotOpenHelpInPickerOrDetail (0.00s)
+--- FAIL: TestPickerJKMoveCursor (0.00s)
+--- FAIL: TestFooterHintRendersFromTheKeymap (0.00s)
+FAIL
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui	0.010s
+FAIL

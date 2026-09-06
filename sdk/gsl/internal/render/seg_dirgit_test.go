@@ -1,0 +1,130 @@
+package render
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+
+	gitfake "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git/fake"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo"
+)
+
+func TestDirGit_WithGit_ASCII(t *testing.T) {
+	st := asciiStyle()
+
+	r := &gitfake.Runner{Script: gitStatusResponses("main")}
+	seg := &DirGitSegment{Cwd: "/home/user/project", Git: r, home: "/home/user"}
+
+	got, colorKey, ok := seg.Render(context.Background(), st, 0)
+	if !ok {
+		t.Fatal("dirgit: want ok=true")
+	}
+	if colorKey != "dirgit" {
+		t.Errorf("dirgit: want colorKey=dirgit, got %q", colorKey)
+	}
+	// ascii glyphs: [dir] dir, br: branch, *1 staged, !1 unstaged, ?1 untracked,
+	// $1 stash, +2 ahead (ascii table: staged=*, unstaged=!, untracked=?,
+	// stash=$, ahead=+).
+	for _, want := range []string{"[dir]", "project", "br:", "main", "*1", "!1", "?1", "$1", "+2"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("dirgit ascii output %q missing %q", got, want)
+		}
+	}
+}
+
+func TestDirGit_NotARepo_ShowsCwdOnly(t *testing.T) {
+	st := asciiStyle()
+
+	r := &gitfake.Runner{Default: gitfake.Response{Err: errors.New("not a git repo")}}
+	seg := &DirGitSegment{Cwd: "/home/user/project", Git: r, home: "/home/user"}
+
+	got, _, ok := seg.Render(context.Background(), st, 0)
+	if !ok {
+		t.Fatal("dirgit: want ok=true even outside a repo")
+	}
+	if !strings.Contains(got, "project") {
+		t.Errorf("dirgit: want cwd basename, got %q", got)
+	}
+	if strings.Contains(got, "br:") {
+		t.Errorf("dirgit: should not show branch outside a repo, got %q", got)
+	}
+}
+
+func TestDirGit_HomeAbbreviation(t *testing.T) {
+	st := asciiStyle()
+	r := &gitfake.Runner{Default: gitfake.Response{Err: errors.New("nope")}}
+
+	seg := &DirGitSegment{Cwd: "/home/user", Git: r, home: "/home/user"}
+	got, _, _ := seg.Render(context.Background(), st, 0)
+	if !strings.Contains(got, "~") {
+		t.Errorf("dirgit: home dir should abbreviate to ~, got %q", got)
+	}
+}
+
+func TestDirGit_CancelledContext_OmitsGitDetail(t *testing.T) {
+	st := asciiStyle()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already cancelled
+
+	r := &gitfake.Runner{Script: gitStatusResponses("main")}
+	seg := &DirGitSegment{Cwd: "/home/user/project", Git: r, home: "/home/user"}
+
+	got, _, ok := seg.Render(ctx, st, 0)
+	if !ok {
+		t.Fatal("dirgit: want ok=true (cwd still renders)")
+	}
+	if strings.Contains(got, "main") {
+		t.Errorf("dirgit: cancelled ctx should omit git detail, got %q", got)
+	}
+}
+
+func TestDirGit_Spans_DirAndBranch(t *testing.T) {
+	seg := NewDirGitSegment("/home/u/proj", &gitfake.Runner{Script: gitStatusResponses("main")})
+	seg.Links = Links{DirGit: true, Repo: true, RepoURL: "https://github.com/o/r"}
+	_, _, spans, ok := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	// Directory → the vscode.dev branch view (GitHub remote, no PR known);
+	// branch → the branch on GitHub.
+	if !ok || len(spans) != 2 || spans[0].URL != "https://vscode.dev/github/o/r/tree/main" || spans[1].URL != "https://github.com/o/r/tree/main" {
+		t.Fatalf("spans = %+v", spans)
+	}
+}
+
+func TestDirGit_DirSpan_PRChangesView(t *testing.T) {
+	seg := NewDirGitSegment("/home/u/proj", &gitfake.Runner{Script: gitStatusResponses("main")})
+	seg.Links = Links{DirGit: true, Repo: true, RepoURL: "https://github.com/o/r"}
+	seg.PR = &repo.RepoInfo{PRNumber: 279, PRURL: "https://github.com/o/r/pull/279"}
+	_, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	if len(spans) != 2 || spans[0].URL != "https://vscode.dev/github/o/r/pull/279/changes" {
+		t.Fatalf("dir span with a PR: %+v", spans)
+	}
+}
+
+func TestDirGit_DirSpan_BranchView(t *testing.T) {
+	seg := NewDirGitSegment("/home/u/proj", &gitfake.Runner{Script: gitStatusResponses("main")})
+	seg.Links = Links{DirGit: true, Repo: true, RepoURL: "https://github.com/o/r"}
+	_, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	if len(spans) != 2 || spans[0].URL != "https://vscode.dev/github/o/r/tree/main" {
+		t.Fatalf("dir span without a PR: %+v", spans)
+	}
+}
+
+func TestDirGit_DirSpan_FileFallbackWithoutGitHub(t *testing.T) {
+	seg := NewDirGitSegment("/home/u/proj", &gitfake.Runner{Script: gitStatusResponses("main")})
+	seg.Links = Links{DirGit: true}
+	_, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	if len(spans) != 1 || spans[0].URL != "file:///home/u/proj" {
+		t.Fatalf("dir span without a GitHub remote: %+v", spans)
+	}
+}
+
+func TestDirGit_DirSpan_FileModeOption(t *testing.T) {
+	seg := NewDirGitSegment("/home/u/proj", &gitfake.Runner{Script: gitStatusResponses("main")})
+	seg.Links = Links{DirGit: true, Repo: true, RepoURL: "https://github.com/o/r"}
+	seg.DirLink = "file"
+	_, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	if len(spans) != 2 || spans[0].URL != "file:///home/u/proj" {
+		t.Fatalf("dir_link=file: %+v", spans)
+	}
+}

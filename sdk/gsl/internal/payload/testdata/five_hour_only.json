@@ -1,0 +1,17 @@
+{
+  "cwd": "/home/user/project",
+  "model": {
+    "display_name": "claude-haiku-3-5"
+  },
+  "context_window": {
+    "used_percentage": 15.0,
+    "total_input_tokens": 3000,
+    "context_window_size": 200000
+  },
+  "rate_limits": {
+    "five_hour": {
+      "used_percentage": 30.0,
+      "resets_at": "2026-05-25T08:00:00Z"
+    }
+  }
+}

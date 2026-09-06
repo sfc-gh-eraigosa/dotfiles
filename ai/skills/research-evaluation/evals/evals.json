@@ -1,0 +1,35 @@
+{
+  "skill_name": "research-evaluation",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I keep hearing about a tool called claude-mem. Look it up and tell me whether we should adopt it — what's the value, what's the catch, and how risky is it?",
+      "expected_output": "Invokes research-evaluation: identifies the canonical repo via web search, runs all seven rubric dimensions including a genuine adversarial section and dated maintenance stats, assesses overlap with the user's existing memory systems, proposes a docker-sandboxed demo (or docker-or-skip), and ends with a grounded adopt/park/reject verdict plus a research design doc and tracking issue if the repo has docs/mbo.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Start research MBOs for these three: foo-router, bar-agent, and some context compressor called baz. Stop on anything you can't find.",
+      "expected_output": "Fans out one parallel web-enabled research agent per target, treats NOT_FOUND as a valid recorded outcome (searches tried + closest candidates) rather than forcing a name-collision match, writes one research design doc per FOUND target from the research template, creates locate-before-create issues, and registers every slug in the MBO index with evaluated/not-found states.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Before we wire this new LLM proxy into the cluster, evaluate it properly — licensing, security posture, and whether it could destabilize anything.",
+      "expected_output": "Runs the rubric on the single target with emphasis on (b) licensing terms, (d) security/supply-chain (what data flows through it, credentials handling), and (e) stability blast radius; proposes a sandboxed docker demo with success criteria and never routes real credentials into the tool under evaluation.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Can you check out that hermes agent harness on github and propose how we'd use it with our k8s project and standalone?",
+      "expected_output": "Identifies the canonical repo, runs the full rubric, and includes a dedicated proposed-usage section covering both an integrated deployment against the user's cluster (least-privilege, sandboxed sidecar posture) and a standalone docker-compose path, ending with a verdict.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "For each tool we've researched, what features are we missing in our own setup, and should we just build them ourselves instead of adopting the tool?",
+      "expected_output": "Runs the (h) borrowable-features / build-vs-adopt dimension across the evaluations: for each valuable capability the tool has that the user's stack lacks, tables gap -> value to us -> build-it-ourselves sketch (grounded in existing hooks/.remember/MEMORY.md/gss/skills/skill-creator evals) -> worth it, and where the in-house build is simpler/safer flips the verdict to reject-but-build-the-feature rather than adopting.",
+      "files": []
+    }
+  ]
+}

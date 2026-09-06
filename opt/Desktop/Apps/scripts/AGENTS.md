@@ -1,0 +1,114 @@
+# Desktop Apps scripts (Windows-side automation)
+
+Scripts deployed to the Windows Desktop under `Apps\scripts\` by `install.sh`
+(via `opt/bin/install_windows.sh`). They configure the Windows host: macOS-style
+keyboard shortcuts, Wispr Flow voice dictation, app/font setup, and PowerToys.
+
+## Inventory
+
+- **`macos.ahk`** — AutoHotkey v2: macOS-style Cmd/Opt shortcuts **and** the Wispr
+  Flow hold-to-talk dictation driver (Copilot key + user-added trigger keys).
+- **`flow-triggers.ahk`** — pure data/policy layer for extra trigger keys (validate,
+  normalize, dedupe, persist). Headlessly testable via `flow-triggers-test.ahk`.
+- **`flow-calib.ahk` / `flow-calib-test.ahk`** — overlay click-offset calibration.
+- **`copilot-key-detect.ahk` / `copilot-key-probe.ahk`** — diagnostics that log the
+  raw vk/sc a key emits / whether the Copilot key auto-repeats.
+- **`suppress-copilot-key.ps1`** — PowerToys KBM remap `Win+Shift+F23 → F24` (so
+  Windows doesn't open the Copilot Settings page) + module setup. `-Status` reports state.
+- **`install-wisprflow.ps1`** — installs the Wispr Flow app (self-elevates).
+- **`setup-autostart.ps1`** — registers the elevated logon task for `macos.ahk` and,
+  re-run standalone, **reloads** AutoHotkey after a re-deploy (self-elevates → UAC).
+- **`setup-apps.ps1`** — winget app install + Windows Terminal profiles/themes.
+- **`setup-security-audit.ps1`** — opt-in (gff `install.windows.security-audit`,
+  **fail-closed**) installer for the unattended security audit: registers the
+  user-level `ClaudeSecurityAuditCollector` task (daily at `-At`, **repeating hourly
+  for `-WindowHours`** — default 17:00→00:00 — so an asleep machine still collects;
+  `StartWhenAvailable`, Priority 7, `IgnoreNew`), installs the collector to
+  `%USERPROFILE%\Claude\SecurityAudit`, and seeds **both** Claude prompts
+  (`weekly-security-audit` = full Saturday summary, `daily-security-triage` =
+  urgent-only) — never overwriting an evolving baseline. **`-Status` is the
+  verification command**: task health with a *decoded* `LastTaskResult`, the
+  schedule, report freshness/history, and **proof of which collector is running**
+  (installed vs deployed `COLLECTOR_VERSION` + SHA-256 → `UP TO DATE` / `STALE`).
+  See `docs/security-audit.md`.
+- **`security-triage-skill.template.md`** — the **daily** urgent-only Claude prompt.
+  Deliberately quiet: one line when clean, escalates only live detections, protection
+  turned off, log clears, new admins/hidden users, high-signal ASEPs, unsigned
+  user-writable processes, and network-pivot changes. Keeps **no baseline** — the
+  weekly task owns that.
+- **`setup-security-hardening.ps1`** — opt-in (gff `install.windows.security-hardening`,
+  **fail-closed**) hardening, the follow-up to the audit: adds the user to `Event Log Readers`
+  (by well-known SID `S-1-5-32-573` — the name is localized), enables the
+  `Microsoft-Windows-TaskScheduler/Operational` channel, and sets 5 Defender ASR rules to
+  **AuditMode only** (never Block — this is a dev machine; promotion is a separate decision).
+  Self-elevates once; `-Status` is read-only and does **not** elevate. Each action is
+  idempotent and **read-back verified**; `Add-MpPreference` (never `Set-`) so existing rules
+  survive. `-Uninstall` reverts only what a state file
+  (`%ProgramData%\dotfiles\security-hardening.state.json`) records it changed, and skips any
+  ASR rule since promoted to Block. Touches nothing under `%USERPROFILE%\Claude\` — the weekly
+  audit detects the posture change itself. See `docs/security-hardening.md`.
+- **`security-audit-collect.ps1`** — the read-only collector that task runs:
+  ~40 anomaly lenses (persistence ASEPs, Defender health, network exposure/C2,
+  process masquerade, accounts/privilege, patch posture, 7d event-log signals)
+  into `latest-audit.txt` (+ a copy into the Claude task folder, dated history,
+  optional Google Drive fallback copy). **Detection only — never changes config.**
+  Every section resolves to items, `(none)`, `!! COLLECTION ERROR`, or
+  `## ADMIN-REQUIRED` — **never** an empty section, which the analysis would read
+  as "clean". Keep that contract when editing a lens: wrap it in `Add-Section`
+  (never hand-append to `$sections`), use `Deny-Marker` for admin-gaps (type name
+  only, byte-stable), version-normalize churny paths via `Norm-Ver`, and split
+  high-churn surfaces into `[STABLE]`/`[VOLATILE]` blocks. Params `-StdOut` (emit
+  to stdout, no writes), `-BaseDir`, `-Days` support ad-hoc + test runs.
+  **Tested by `opt/scripts/system/security-audit-collect_test.sh`** — static
+  contract checks in CI + a live read-only run assertion on WSL/Windows.
+
+User-facing runbook: **`WISPR-FLOW.md`**. Overview: **`README.md`**.
+
+## Developing macos.ahk from WSL (the cross-boundary loop)
+
+AutoHotkey runs on **Windows**; the repo is edited in **WSL**. There is no
+hot-reload — every change is a deploy → restart-AHK → observe loop. The
+**`wispr-flow-debug` skill** (`src/wispr-flow-debug/SKILL.md`) automates this; the
+essentials:
+
+1. **Deploy:** copy `macos.ahk` to the (often OneDrive-redirected) Desktop —
+   resolve it with `powershell.exe [Environment]::GetFolderPath('Desktop')` piped
+   through `wslpath`, never a hardcoded path.
+2. **Reload:** `Stop-Process AutoHotkey*` then `Start-Process AutoHotkey64.exe`.
+   **Non-elevated is enough to test trigger keys**; elevation only matters for
+   dictating into admin windows and for the logon-task that survives reboot. **KBM
+   and AHK must run at the same integrity** or PowerToys' injected F24 never reaches
+   AHK's keyboard hook. **A non-elevated `Stop-Process` cannot kill the elevated
+   logon-task instance** (silent failure — `Get-Process AutoHotkey*` showing an
+   empty `Path` means elevated): reload that one via `setup-autostart.ps1` (UAC).
+   `macos.ahk`'s named-mutex guard makes a second copy started next to it exit
+   instead of creating duplicate keyboard hooks (the old "stuck HUD that ignores
+   Esc" failure).
+3. **Observe:** add temporary `FileAppend(..., A_Temp "\flow-dbg.txt")` lines tagged
+   `; DEBUG (temporary)`, then read the log from WSL at
+   `$(wslpath "$(powershell.exe '$env:TEMP')")/flow-dbg.txt`. **Strip every DEBUG
+   line before committing** (`grep -n "flow-dbg.txt\|; DEBUG" macos.ahk` must be empty).
+
+> The Copilot key and every extra trigger key route through the **same**
+> `_FlowTriggerDown`/`_FlowTriggerUp` (`*F24::` plus the startup bind loop), so they
+> cannot behave differently by code. A reported divergence is upstream: the
+> PowerToys remap, an integrity mismatch, a stale deployed file, or `flow-triggers.ini`.
+
+## AutoHotkey v2 gotchas (bugs this layer has actually hit)
+
+- **Hotkey callbacks must take `(*)`** — AHK v2 passes the hotkey name to the
+  callback; a zero-parameter function throws on every press (binds fine, fires never).
+- **`On`/`Off`/`Toggle` is the Action (2nd) arg of `Hotkey()`, not an Options
+  string** — `Hotkey key, "Off"` disables; `Hotkey key, callback` binds (enabled by
+  default, no `"On"`). In Options they error and a surrounding `try` swallows it.
+- **`GetKeyName` returns long modifier spellings** (`LControl`/`RControl`/`LMenu`/
+  `RMenu`) — match both forms or a Ctrl/Alt key is misclassified into a junk chord.
+- **Timer threads inherit auto-exec defaults, not the caller's** — re-assert
+  `CoordMode` inside a `SetTimer fn, -1` handler; it does not see the hotkey thread's.
+
+## flow-triggers.ini
+
+Per-machine, **not tracked in git** (`%LOCALAPPDATA%\dotfiles\flow-triggers.ini`).
+The loader **gates on `count=`** and leaves higher-index `kN` lines as inert
+orphans — so `count=1` with `k1/k2/k3` present binds only `k1` (this is by design:
+removing a trigger decrements `count` without deleting the orphaned line).

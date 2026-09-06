@@ -1,0 +1,939 @@
+package cmd
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"regexp"
+	"strings"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
+)
+
+// tuiMode is the explicit interaction mode. Every key event is routed by mode
+// (tui_keys.go) — no hidden flag combinations.
+type tuiMode int
+
+const (
+	modeNormal tuiMode = iota
+	modeSearch
+	modeAnswers // pre-wave form: sudo password + install.sh prompt answers
+	modeConfirm
+	modeHelp
+)
+
+// answerField is the cursor within the pre-wave answer form.
+type answerField int
+
+const (
+	fieldSudo answerField = iota
+	fieldWindows
+	fieldGemini
+	fieldReset
+	answerFieldCount
+)
+
+// updPhase is where a host sits in the update engine.
+type updPhase int
+
+const (
+	updQueued   updPhase = iota // waiting for a job slot (or the fallback queue)
+	updPrecheck                 // running `sudo -n true` to pick a lane
+	updRunning                  // update in flight
+	updOK
+	updFail
+)
+
+// updState is a host's update status plus the tail of its captured output.
+// Background updates capture output instead of showing it (there is no
+// terminal to show it on), so a failure must carry its own explanation.
+type updState struct {
+	phase updPhase
+	log   string
+}
+
+type searchState struct {
+	input     string
+	re        *regexp.Regexp
+	err       string
+	committed bool
+}
+
+type viewport struct{ top, height, width int }
+
+// logEntry is one streamed line tagged with the host that produced it, so a
+// concurrent wave stays readable when several installs interleave.
+type logEntry struct {
+	alias, line string
+	at          time.Time
+}
+
+// nowFn is the clock for log timestamps, swapped in tests so frames stay
+// byte-stable (the package's rule: never time.Now() in render paths).
+var nowFn = time.Now
+
+// logCap bounds the buffer: a fleet-wide install emits tens of thousands of
+// lines and the pane only ever shows a screenful.
+const logCap = 2000
+
+// tuiModel is the whole dashboard as one value: pure data in, pure frame out.
+//
+// In-flight ownership invariant: a host is in EXACTLY ONE of pending (being
+// polled), updating (owned by the update engine), waking (owned by the
+// reachability ladder), or resolved. Refresh skips `updating` and `waking`
+// hosts; either completion clears its claim and re-polls. No row is ever
+// owned by two async paths at once.
+type tuiModel struct {
+	rows    []Row
+	pending map[string]bool
+	cursor  string // ALIAS, not index — survives the worst-first re-sort
+	vp      viewport
+	mode    tuiMode
+
+	search   searchState
+	selected map[string]bool
+	vAnchor  *string
+
+	// update engine (background-first)
+	updating  map[string]updState
+	bgQueue   []string
+	iaQueue   []string
+	iaTotal   int               // interactive-queue size this wave, for the handoff banner
+	streams   map[string]stream // in-flight output channels, by alias
+	logs      []logEntry        // interleaved, capped ring of streamed lines
+	logOpen   bool              // `l` toggles the pane; off restores a full-height list
+	logFollow bool              // tail the newest line
+	logTop    int               // scroll offset when not following
+	logColor  map[string]int    // alias -> palette slot, by first appearance
+	logDir    string            // where per-run install captures are written
+	logFocus  bool              // tab moves vim keys from the host list to the log
+	logSearch searchState       // `/` while the log is focused searches log lines
+	jobs      int               // max concurrent background updates
+	running   int               // slots in use
+	updateRef string
+	plan      updplan.Plan           // loaded ONCE at startup; the model never calls loadPlan itself
+	file      string                 // the --file value the plan was loaded from, if any; re-passed to the interactive handoff's self-exec
+	repo      string                 // the --repo value the plan/gff resolution used; re-passed to the interactive handoff's self-exec so a routed host resolves against the SAME checkout
+	self      func() (string, error) // resolves the executable path for the interactive handoff's self-exec; os.Executable in production, injected in tests
+	ans       answers                // pre-supplied answers for this wave (memory-only credential)
+	ansField  answerField            // cursor in the answer form
+
+	// reachability ladder — its own ownership set, same invariant as updating
+	waking map[string]bool
+	wake   waker // nil = --no-wake
+
+	// ansPath is where the non-secret prompt preferences persist. INJECTED,
+	// not resolved here: a model that reached os.UserConfigDir() itself made
+	// every test write to the developer's real config, which is both a
+	// hermeticity bug and a rude thing to do to someone's home directory.
+	// Empty (the test default) disables persistence entirely.
+	ansPath string
+
+	hosts   map[string]sshconf.Host
+	run     runner.Runner
+	base    Baseliner
+	now     time.Time
+	spinner string // frame injected; tests keep it fixed for stable goldens
+	status  string
+	quitReq bool
+}
+
+func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time.Time, ref string, jobs int, plan updplan.Plan) tuiModel {
+	m := tuiModel{
+		pending:   map[string]bool{},
+		selected:  map[string]bool{},
+		updating:  map[string]updState{},
+		streams:   map[string]stream{},
+		logColor:  map[string]int{},
+		logFollow: true,
+		logOpen:   true, // on by default: shipped off, it was undiscoverable
+		waking:    map[string]bool{},
+		hosts:     map[string]sshconf.Host{},
+		jobs:      jobs,
+		updateRef: ref,
+		plan:      plan,
+		self:      os.Executable,
+		run:       r,
+		base:      base,
+		now:       now,
+		vp:        viewport{height: 20, width: 100},
+		spinner:   "⠋",
+	}
+	for _, h := range hosts {
+		m.hosts[h.Alias] = h
+		m.pending[h.Alias] = true
+		m.rows = append(m.rows, Row{Alias: h.Alias, Class: "polling"})
+	}
+	sortByAlias(m.rows)
+	if len(m.rows) > 0 {
+		m.cursor = m.rows[0].Alias
+	}
+	return m
+}
+
+func (m tuiModel) Init() tea.Cmd {
+	cmds := make([]tea.Cmd, 0, len(m.rows))
+	for _, r := range m.rows {
+		cmds = append(cmds, pollHostWake(m.hosts[r.Alias], m.peersFor(r.Alias), m.run, m.base, m.wake))
+	}
+	return tea.Batch(cmds...)
+}
+
+// ---- helpers over the row list -------------------------------------------
+
+func (m tuiModel) indexOf(alias string) int {
+	for i, r := range m.rows {
+		if r.Alias == alias {
+			return i
+		}
+	}
+	return -1
+}
+
+func (m *tuiModel) setRow(row Row) {
+	for i := range m.rows {
+		if m.rows[i].Alias == row.Alias {
+			m.rows[i] = row
+			return
+		}
+	}
+	m.rows = append(m.rows, row)
+}
+
+// resort keeps the cursor on its alias — the whole reason cursor is alias-keyed.
+func (m *tuiModel) resort() {
+	sortByAlias(m.rows)
+	if m.indexOf(m.cursor) < 0 && len(m.rows) > 0 {
+		m.cursor = m.rows[0].Alias
+	}
+	m.clampViewport()
+}
+
+// clampViewport enforces vp.top <= indexOf(cursor) < vp.top+height so the
+// cursor is always on screen and the header never scrolls away.
+func (m *tuiModel) clampViewport() {
+	h := m.visibleRows()
+	if h < 1 {
+		h = 1
+	}
+	i := m.indexOf(m.cursor)
+	if i < 0 {
+		m.vp.top = 0
+		return
+	}
+	if i < m.vp.top {
+		m.vp.top = i
+	}
+	if i >= m.vp.top+h {
+		m.vp.top = i - h + 1
+	}
+	max := len(m.rows) - h
+	if max < 0 {
+		max = 0
+	}
+	if m.vp.top > max {
+		m.vp.top = max
+	}
+	if m.vp.top < 0 {
+		m.vp.top = 0
+	}
+}
+
+// visibleRows is the terminal height minus the chrome (title, header, status).
+// visibleRows is how many host rows fit — which shrinks when the log pane is
+// open, so every motion/paging calculation follows the split automatically.
+func (m tuiModel) visibleRows() int { return m.listHeight() }
+
+func (m *tuiModel) moveTo(i int) {
+	if len(m.rows) == 0 {
+		return
+	}
+	if i < 0 {
+		i = 0
+	}
+	if i > len(m.rows)-1 {
+		i = len(m.rows) - 1
+	}
+	m.cursor = m.rows[i].Alias
+	m.clampViewport()
+}
+
+func (m *tuiModel) move(d int) {
+	i := m.indexOf(m.cursor)
+	if i < 0 {
+		i = 0
+	}
+	m.moveTo(i + d)
+}
+
+// ---- search ---------------------------------------------------------------
+
+// rowText is what a search pattern matches against: the rendered line, so
+// `/behind` and `/unreachable` work as naturally as `/hostname`.
+func (m tuiModel) rowText(r Row) string {
+	// Branch is in the haystack on purpose: `/feature` + select-all + `u` is
+	// the targeting workflow the branch column exists to enable.
+	return strings.Join([]string{r.Alias, r.Commit, branchCell(r), statusLabel(r), r.Note}, " ")
+}
+
+// compileSearch applies vim smartcase: case-insensitive unless the pattern
+// contains an uppercase letter. An invalid pattern keeps the previous compiled
+// regexp so the highlight does not flicker while typing `[a-`.
+// compileInto applies vim smartcase to any search state, so the host filter
+// and the log search cannot drift apart.
+func compileInto(st *searchState) {
+	s := st.input
+	if s == "" {
+		st.re, st.err = nil, ""
+		return
+	}
+	pat := s
+	if s == strings.ToLower(s) {
+		pat = "(?i)" + s
+	}
+	re, err := regexp.Compile(pat)
+	if err != nil {
+		st.err = "bad pattern: " + cleanReErr(err)
+		return
+	}
+	st.re, st.err = re, ""
+}
+
+func (m *tuiModel) compileSearch() {
+	s := m.search.input
+	if s == "" {
+		m.search.re, m.search.err = nil, ""
+		return
+	}
+	pat := s
+	if s == strings.ToLower(s) {
+		pat = "(?i)" + s
+	}
+	re, err := regexp.Compile(pat)
+	if err != nil {
+		m.search.err = "bad pattern: " + cleanReErr(err)
+		return
+	}
+	m.search.re, m.search.err = re, ""
+}
+
+func cleanReErr(err error) string {
+	s := err.Error()
+	if i := strings.LastIndex(s, ": "); i >= 0 {
+		s = s[i+2:]
+	}
+	return s
+}
+
+func (m tuiModel) matches(r Row) bool {
+	return m.search.re != nil && m.search.re.MatchString(m.rowText(r))
+}
+
+func (m tuiModel) matchIndexes() []int {
+	var out []int
+	for i, r := range m.rows {
+		if m.matches(r) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// jumpMatch moves to the next (d=1) or previous (d=-1) match, wrapping.
+func (m *tuiModel) jumpMatch(d int) {
+	idx := m.matchIndexes()
+	if len(idx) == 0 {
+		m.status = "no matches"
+		return
+	}
+	cur := m.indexOf(m.cursor)
+	if d > 0 {
+		for _, i := range idx {
+			if i > cur {
+				m.moveTo(i)
+				return
+			}
+		}
+		m.moveTo(idx[0]) // wrap
+		return
+	}
+	for k := len(idx) - 1; k >= 0; k-- {
+		if idx[k] < cur {
+			m.moveTo(idx[k])
+			return
+		}
+	}
+	m.moveTo(idx[len(idx)-1]) // wrap
+}
+
+// ---- selection ------------------------------------------------------------
+
+// visualRange is the anchor..cursor span while in visual mode.
+func (m tuiModel) visualRange() (int, int, bool) {
+	if m.vAnchor == nil {
+		return 0, 0, false
+	}
+	a, b := m.indexOf(*m.vAnchor), m.indexOf(m.cursor)
+	if a < 0 || b < 0 {
+		return 0, 0, false
+	}
+	if a > b {
+		a, b = b, a
+	}
+	return a, b, true
+}
+
+func (m tuiModel) isSelected(i int) bool {
+	if a, b, ok := m.visualRange(); ok && i >= a && i <= b {
+		return true
+	}
+	return m.selected[m.rows[i].Alias]
+}
+
+// selectedAliases returns the selection in table order — the order the batch
+// confirm strip lists and the queue runs.
+func (m tuiModel) selectedAliases() []string {
+	var out []string
+	for i, r := range m.rows {
+		if m.isSelected(i) {
+			out = append(out, r.Alias)
+		}
+	}
+	return out
+}
+
+// filteredRows is what the operator can currently see through the search: the
+// rows an action should apply to. With no active pattern it is every row.
+func (m tuiModel) filteredRows() []Row {
+	if m.search.re == nil {
+		return m.rows
+	}
+	var out []Row
+	for _, r := range m.rows {
+		if m.matches(r) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// selectAllFiltered selects every visible row, or clears them when they are
+// already all selected. A PARTIAL selection is completed rather than toggled
+// off, so the key never destroys a selection the operator built by hand.
+func (m *tuiModel) selectAllFiltered() {
+	rows := m.filteredRows()
+	if len(rows) == 0 {
+		return
+	}
+	all := true
+	for _, r := range rows {
+		if !m.selected[r.Alias] {
+			all = false
+			break
+		}
+	}
+	for _, r := range rows {
+		if all {
+			delete(m.selected, r.Alias)
+		} else {
+			m.selected[r.Alias] = true
+		}
+	}
+	if all {
+		m.status = "selection cleared"
+	} else {
+		m.status = fmt.Sprintf("%d host(s) selected", len(m.selected))
+	}
+}
+
+// updateTargets is the selection, or the cursor row when nothing is selected.
+func (m tuiModel) updateTargets() []string {
+	if s := m.selectedAliases(); len(s) > 0 {
+		return s
+	}
+	if m.cursor != "" {
+		return []string{m.cursor}
+	}
+	return nil
+}
+
+// ---- update engine --------------------------------------------------------
+
+// startUpdate seeds the engine: every target goes to precheck, which routes it
+// to the background wave or the interactive fallback.
+func (m *tuiModel) startUpdate(targets []string) tea.Cmd {
+	var cmds []tea.Cmd
+	var busy []string
+	for _, a := range targets {
+		// Guard on the PHASE, not on presence in the map. A finished host
+		// keeps its ok/FAIL entry so the row can still show the outcome, so a
+		// presence test meant a host could be updated exactly ONCE per session
+		// and every later attempt was skipped in silence.
+		if m.inFlight(a) {
+			busy = append(busy, a)
+			continue
+		}
+		// Re-running clears the previous outcome, or the row would show a
+		// stale "ok" while the new attempt is still deciding.
+		m.updating[a] = updState{phase: updPrecheck}
+		delete(m.pending, a) // ownership moves to the engine
+		cmds = append(cmds, precheckSudo(a, m.run))
+	}
+	m.iaTotal = 0
+
+	// Say what happened. A double-press used to report "updating 0 host(s)",
+	// which reads the same as a successful start and hides the reason.
+	switch {
+	case len(cmds) == 0 && len(busy) > 0:
+		m.status = fmt.Sprintf("already updating %s — left it running", strings.Join(busy, ", "))
+	case len(busy) > 0:
+		m.status = fmt.Sprintf("updating %d host(s) (plan: %s) (skipped %s: already running)",
+			len(cmds), planLabel(m.plan.Source), strings.Join(busy, ", "))
+	default:
+		m.status = fmt.Sprintf("updating %d host(s) (plan: %s)", len(cmds), planLabel(m.plan.Source))
+	}
+	return tea.Batch(cmds...)
+}
+
+// planLabel is the plan's Source for the status line: "built-in default"
+// when the built-in plan carries no path, else the Source itself, elided in
+// the MIDDLE so a long value can never push the status line past the
+// terminal width (the demo width guard, TestDemoFrames) while still keeping
+// both ends readable.
+//
+// This used to truncate from the FRONT (keep only the tail), which for a
+// value like "built-in default (no /very/long/home/path/.config/fleet/
+// fleet.yaml)" dropped the "built-in default (no " marker entirely once the
+// path was long enough — the status line then named a file that was NOT
+// actually loaded. Eliding the middle instead keeps the leading marker (or
+// the start of an explicit --file path) AND the trailing filename, and is
+// rune-safe: slicing by len(string) (bytes) could split a multi-byte rune.
+func planLabel(source string) string {
+	if source == "" {
+		return "built-in default"
+	}
+	const max = 40
+	r := []rune(source)
+	if len(r) <= max {
+		return source
+	}
+	const ellipsis = "…"
+	// -1 rune reserved for the ellipsis itself.
+	headLen := (max - 1) / 2
+	tailLen := (max - 1) - headLen
+	return string(r[:headLen]) + ellipsis + string(r[len(r)-tailLen:])
+}
+
+// pump fills free job slots from the background queue. When the wave is fully
+// drained it releases the interactive fallback queue, one host at a time.
+func (m *tuiModel) pump() tea.Cmd {
+	var cmds []tea.Cmd
+	for m.running < m.jobs && len(m.bgQueue) > 0 {
+		a := m.bgQueue[0]
+		m.bgQueue = m.bgQueue[1:]
+		m.updating[a] = updState{phase: updRunning}
+		m.running++
+		cmds = append(cmds, beginStream(a, m.plan, m.ans, m.run, m.logDir))
+	}
+	// Interactive handoffs need the terminal to themselves, so they only run
+	// once no background update can print over them.
+	if m.running == 0 && len(m.bgQueue) == 0 && len(m.iaQueue) > 0 {
+		a := m.iaQueue[0]
+		m.iaQueue = m.iaQueue[1:]
+		m.updating[a] = updState{phase: updRunning}
+		m.running++
+		total := m.iaTotal
+		if total == 0 {
+			total = len(m.iaQueue) + 1
+		}
+		pos := total - len(m.iaQueue)
+		return tea.Batch(append(cmds, interactiveHandoff(m.self, a, m.file, m.updateRef, m.repo, m.ans, pos, total))...)
+	}
+	return tea.Batch(cmds...)
+}
+
+// finishUpdate records the outcome, releases the slot, and re-polls the host —
+// the invariant is "an update completion always refreshes its row".
+func (m *tuiModel) finishUpdate(alias, log string, err error) tea.Cmd {
+	if m.running > 0 {
+		m.running--
+	}
+	st := updState{phase: updOK, log: log}
+	if err != nil {
+		st = updState{phase: updFail, log: strings.TrimSpace(log + " " + err.Error())}
+	}
+	m.updating[alias] = st
+	cmds := []tea.Cmd{pollHost(m.hosts[alias], m.run, m.base)}
+	if c := m.pump(); c != nil {
+		cmds = append(cmds, c)
+	}
+	return tea.Batch(cmds...)
+}
+
+// busy reports whether the engine still owns work — used by the quit guard.
+func (m tuiModel) busy() bool {
+	if m.running > 0 || len(m.bgQueue) > 0 || len(m.iaQueue) > 0 || len(m.waking) > 0 {
+		return true
+	}
+	for _, s := range m.updating {
+		if s.phase == updPrecheck || s.phase == updRunning || s.phase == updQueued {
+			return true
+		}
+	}
+	return false
+}
+
+// inFlight is true while an async path owns this host; refresh must skip it,
+// and neither `u` nor `s` may claim it. Wake counts: a ladder that gets its
+// row re-polled underneath it produces a verdict for a probe nobody asked for.
+// canAuthorize reports whether offering ssh-copy-id on the cursor host would
+// help. Only an auth-failed host qualifies: it answered SSH and refused our
+// credential, which is exactly what authorizing a key fixes. An unreachable
+// host has nothing to authorize against, and a working one needs nothing.
+func (m tuiModel) canAuthorize() bool {
+	if !m.canStartConfigAction() {
+		return false
+	}
+	i := m.indexOf(m.cursor)
+	return i >= 0 && m.rows[i].Class == string(drift.AuthFailed)
+}
+
+// canStartConfigAction reports whether the cursor host is free to act on. A
+// host is in exactly one of pending / updating / waking / resolved, and two
+// async paths must never own one row.
+func (m tuiModel) canStartConfigAction() bool {
+	return m.cursor != "" && !m.inFlight(m.cursor) && !m.pending[m.cursor]
+}
+
+func (m tuiModel) inFlight(alias string) bool {
+	if m.waking[alias] {
+		return true
+	}
+	s, ok := m.updating[alias]
+	return ok && (s.phase == updQueued || s.phase == updPrecheck || s.phase == updRunning)
+}
+
+// startWake claims each target and runs its ladder in the BACKGROUND lane.
+// tea.ExecProcess would suspend the entire dashboard, which is the freeze this
+// whole feature exists to remove.
+func (m *tuiModel) startWake(targets []string) tea.Cmd {
+	var cmds []tea.Cmd
+	for _, a := range targets {
+		if m.inFlight(a) {
+			continue
+		}
+		m.waking[a] = true
+		cmds = append(cmds, wakeHost(m.hosts[a], m.peersFor(a), m.run, m.wakePolicy()))
+	}
+	if len(cmds) == 0 {
+		return nil
+	}
+	m.status = fmt.Sprintf("waking %d host(s)", len(cmds))
+	return tea.Batch(cmds...)
+}
+
+// peersFor offers every other fleet host as a relay candidate, marking the
+// ones whose rows have already resolved to something other than unreachable —
+// relaying through a second sleeping host helps nobody.
+func (m tuiModel) peersFor(target string) []reach.Peer {
+	out := make([]reach.Peer, 0, len(m.rows))
+	for _, r := range m.rows {
+		if r.Alias == target {
+			continue
+		}
+		h := m.hosts[r.Alias]
+		name := h.HostName
+		if name == "" {
+			name = r.Alias
+		}
+		out = append(out, reach.Peer{
+			Alias:    r.Alias,
+			HostName: name,
+			// A host that refused us cannot run a relayed command, so it is
+			// no more usable as a hop than an unreachable one.
+			Reachable: !m.pending[r.Alias] && r.Class != string(drift.Unreachable) &&
+				r.Class != string(drift.AuthFailed) && r.Class != "polling",
+		})
+	}
+	return out
+}
+
+// wakePolicy is the model's ladder budget. The TUI always allows the ladder
+// when the operator asks for it explicitly with `w`.
+func (m tuiModel) wakePolicy() reach.Policy {
+	return reach.Policy{Enabled: true, Budget: flagWakeTimeout, Retries: 2}
+}
+
+// refresh re-polls every host the update engine does not currently own (F2b).
+func (m *tuiModel) refresh() tea.Cmd {
+	var cmds []tea.Cmd
+	for _, r := range m.rows {
+		if m.inFlight(r.Alias) {
+			continue
+		}
+		m.pending[r.Alias] = true
+		cmds = append(cmds, pollHostWake(m.hosts[r.Alias], m.peersFor(r.Alias), m.run, m.base, m.wake))
+	}
+	m.status = fmt.Sprintf("refreshing %d host(s)", len(cmds))
+	return tea.Batch(cmds...)
+}
+
+// ---- log buffer -----------------------------------------------------------
+
+// appendLog adds a line and enforces the cap. Dropping from the front keeps
+// the newest output, which is what an operator watching an install wants.
+func (m *tuiModel) appendLog(alias, line string) {
+	// Claim a colour slot the first time a host says anything, so the mapping
+	// is stable for the session and independent of how the lines interleave.
+	if m.logColor == nil {
+		m.logColor = map[string]int{}
+	}
+	if _, ok := m.logColor[alias]; !ok {
+		m.logColor[alias] = len(m.logColor)
+	}
+	m.logs = append(m.logs, logEntry{alias: alias, line: line, at: nowFn()})
+	if len(m.logs) > logCap {
+		m.logs = m.logs[len(m.logs)-logCap:]
+		if m.logTop > 0 {
+			m.logTop -= 1
+		}
+	}
+}
+
+// tailFor returns the last n lines a host produced, used as its FAIL text.
+func (m tuiModel) tailFor(alias string, n int) string {
+	var keep []string
+	for _, e := range m.logs {
+		if e.alias != alias {
+			continue
+		}
+		low := strings.ToLower(e.line)
+		if strings.HasPrefix(low, "hint:") || strings.HasPrefix(low, "advice:") {
+			continue
+		}
+		keep = append(keep, e.line)
+	}
+	if len(keep) > n {
+		keep = keep[len(keep)-n:]
+	}
+	return joinTrim(keep)
+}
+
+// logActive is "the pane is open AND has something to show". The split only
+// costs the host list its rows once output exists: the pane is ON by default
+// so it is discoverable, but an empty box must not shrink the fleet view to a
+// fifth to display nothing.
+func (m tuiModel) logActive() bool { return m.logOpen && len(m.logs) > 0 }
+
+// bannerHeight is the intro panel: three hint lines inside two border rows.
+// It is a constant because renderPanel clamps each line to one row, so the
+// banner cannot grow no matter how many keys headerHints has to advertise.
+const bannerHeight = 3 + 2
+
+// listPanelChrome is the host table's two border rows plus its column header.
+const listPanelChrome = 2 + 1
+
+// listChrome is everything a host row must be paid for out of. The tail is
+// measured rather than counted: the answers form and the confirm gate render
+// where the one-line status bar normally sits.
+func (m tuiModel) listChrome() int {
+	return bannerHeight + listPanelChrome + m.tailHeight()
+}
+
+// logHeight is the rows the streaming pane gets. It MEASURES the blocks above
+// it instead of predicting them: the arithmetic here has silently drifted
+// before (a banner row, then panel borders), and every line of overflow is
+// paid for by bubbletea dropping the banner off the top of the frame.
+func (m tuiModel) logHeight() int {
+	if !m.logOpen || !m.logActive() {
+		return 0 // hidden, or collapsed to a single framed hint; no rows
+	}
+	return max0(m.vp.height - lipgloss.Height(m.banner()) -
+		lipgloss.Height(m.listPanel()) - logPanelChrome - m.tailHeight())
+}
+
+// listHeight is the rows available to the host table.
+func (m tuiModel) listHeight() int {
+	if !m.logActive() {
+		// Closed, or open-but-empty: the list keeps everything the fixed
+		// chrome does not need.
+		h := m.vp.height - m.listChrome()
+		if m.logOpen {
+			h -= logPanelChrome // the collapsed hint line and its frame
+		}
+		return maxInt(1, h)
+	}
+	h := m.vp.height/5 - 2 // top ~20% once logs are flowing, less its border
+	if h < 3 {
+		h = 3
+	}
+	// The list's floor must never push the log pane off the bottom: leave it
+	// at least its frame plus one line of output.
+	return maxInt(1, minInt(h, m.vp.height-m.listChrome()-logPanelChrome-1))
+}
+
+// ---- log navigation -------------------------------------------------------
+
+// logMatches are the buffer indexes matching the log's own search pattern.
+func (m tuiModel) logMatches() []int {
+	if m.logSearch.re == nil {
+		return nil
+	}
+	var out []int
+	for i, e := range m.logs {
+		if m.logSearch.re.MatchString(e.alias + " " + e.line) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// logJump moves the log viewport to the next/previous match, wrapping. It
+// stops following, or the tail would immediately yank the match off screen.
+func (m *tuiModel) logJump(d int) {
+	idx := m.logMatches()
+	if len(idx) == 0 {
+		m.status = "no matches in the log"
+		return
+	}
+	m.logFollow = false
+	cur := m.logTop
+	if d > 0 {
+		for _, i := range idx {
+			if i > cur {
+				m.logTop = i
+				return
+			}
+		}
+		m.logTop = idx[0]
+		return
+	}
+	for k := len(idx) - 1; k >= 0; k-- {
+		if idx[k] < cur {
+			m.logTop = idx[k]
+			return
+		}
+	}
+	m.logTop = idx[len(idx)-1]
+}
+
+// logTo moves the log viewport, clamped. Any explicit move stops following.
+func (m *tuiModel) logTo(i int) {
+	m.logFollow = false
+	if i < 0 {
+		i = 0
+	}
+	if max := len(m.logs) - 1; i > max {
+		i = maxInt(0, max)
+	}
+	m.logTop = i
+}
+
+// ---- the bubbletea Update -------------------------------------------------
+
+func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.vp.height, m.vp.width = msg.Height, msg.Width
+		m.clampViewport()
+		return m, nil
+
+	case hostRowMsg:
+		delete(m.pending, msg.row.Alias)
+		m.setRow(msg.row)
+		m.resort()
+		return m, nil
+
+	case wakeDoneMsg:
+		// Release the claim FIRST and unconditionally: a host left owned by a
+		// failed ladder would be skipped by every later refresh, silently
+		// freezing its row for the rest of the session.
+		delete(m.waking, msg.alias)
+		if msg.woke {
+			m.status = fmt.Sprintf("%s woke via %s", msg.alias, msg.via)
+		} else {
+			m.status = fmt.Sprintf("%s stayed unreachable", msg.alias)
+		}
+		// Re-poll so the row shows its real drift class, not the stale
+		// unreachable verdict that triggered the wake.
+		m.pending[msg.alias] = true
+		return m, pollHostWake(m.hosts[msg.alias], m.peersFor(msg.alias), m.run, m.base, m.wake)
+
+	case precheckMsg:
+		// Route the host. The precheck answers "can sudo run without being
+		// asked?" — but a credential the operator supplied answers the same
+		// question, because the background lane primes with it. Sending a
+		// password-needing host to the interactive lane when we HAVE its
+		// password defeats the whole point of collecting one: the operator
+		// typed a password and was prompted for it anyway (live defect).
+		m.updating[msg.alias] = updState{phase: updQueued}
+		if msg.interactive && !m.ans.needsSudo() {
+			m.iaQueue = append(m.iaQueue, msg.alias)
+			m.iaTotal++
+		} else {
+			m.bgQueue = append(m.bgQueue, msg.alias)
+		}
+		return m, m.pump()
+
+	case streamStartedMsg:
+		m.streams[msg.alias] = msg.st
+		return m, tea.Batch(readLine(msg.alias, msg.st), awaitDone(msg.alias, msg.st))
+
+	case logLineMsg:
+		m.appendLog(msg.alias, msg.line)
+		// Re-issue the reader: one Cmd per line is what turns the channel into
+		// a stream of messages without a goroutine touching the model.
+		return m, readLine(msg.alias, m.streams[msg.alias])
+
+	case logEOFMsg:
+		delete(m.streams, msg.alias)
+		return m, nil
+
+	case bgUpdateDoneMsg:
+		// A step the Background lane cannot service (ErrNoTerminal) is not a
+		// failure — it just needs a real terminal, so the host moves to the
+		// interactive queue instead of landing on the row as FAIL.
+		if errors.Is(msg.err, errNeedsTerminal) {
+			if m.running > 0 {
+				m.running--
+			}
+			m.updating[msg.alias] = updState{phase: updQueued}
+			m.iaQueue = append(m.iaQueue, msg.alias)
+			m.iaTotal++
+			return m, m.pump()
+		}
+		// The tail of the streamed output is the row's failure explanation —
+		// the same text the non-streaming path used to capture at the end.
+		log := msg.log
+		if log == "" {
+			log = m.tailFor(msg.alias, 3)
+		}
+		if e := explainExit(msg.err); e != "" && msg.err != nil {
+			log = strings.TrimSpace(e + " " + log)
+		}
+		return m, m.finishUpdate(msg.alias, log, msg.err)
+
+	case execDoneMsg:
+		if msg.ssh {
+			// An ssh visit returns with the terminal restored; re-poll so the
+			// row reflects anything the operator changed by hand.
+			return m, pollHost(m.hosts[msg.alias], m.run, m.base)
+		}
+		return m, m.finishUpdate(msg.alias, "", msg.err)
+
+	case spinnerTickMsg:
+		m.spinner = spinFrames[int(msg)%len(spinFrames)]
+		return m, spinnerTick(int(msg) + 1)
+
+	case tea.KeyMsg:
+		return route(m, msg)
+	}
+	return m, nil
+}

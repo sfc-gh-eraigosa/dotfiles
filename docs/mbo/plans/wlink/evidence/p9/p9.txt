@@ -1,0 +1,58 @@
+# P9 — status + --json (EC-9, EC-20 corrected)
+# captured 2026-08-25T06:15:32Z
+
+$ go test -cover ./cmd/...
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/cmd	0.007s	coverage: 73.0% of statements
+module-wide: total:											(statements)			79.8%
+
+## BEFORE the EC-20 correction — the same machine, reported wrongly:
+  link:      DEGRADED
+  tunnel:    down
+  fleet:     3/3 resolvable   <- everything works
+  exit=1
+
+## AFTER — health asks one question: can this box reach its fleet?
+$ wlink status
+link:      OK
+tunnel:    down
+resolver:  10.255.255.254   (present, but NOT written by wlink)
+fleet:     3/3 resolvable
+excluded:  ashyumi   (served by /etc/hosts — files precedes dns)
+exit=0
+
+$ wlink status --json
+{
+  "wsl": true,
+  "link": "ok",
+  "tunnel": {
+    "state": "down",
+    "interface": "",
+    "handshake_age_seconds": null
+  },
+  "pinned": {
+    "resolver": "10.255.255.254",
+    "managed": false
+  },
+  "candidates": [
+    {
+      "server": "192.168.0.1",
+      "reachable": true,
+      "fleet_resolved": 3,
+      "recursive": true
+    },
+    {
+      "server": "172.20.10.1",
+      "reachable": false,
+      "fleet_resolved": 0,
+      "recursive": false
+    }
+  ],
+  "fleet": {
+    "total": 3,
+    "resolved": 3,
+    "excluded_by_hosts_file": [
+      "ashyumi"
+    ]
+  },
+  "drift": null
+}

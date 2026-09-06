@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# docker — real-executable shim so NON-INTERACTIVE shells (make, scripts,
+# CI-ish tooling) resolve a working docker. The interactive fallback in
+# opt/profiles/.bash_aliases is an *alias*, which only exists in
+# interactive shells — `make docker` in a fresh shell dies with
+# "make: docker: No such file or directory" even while Docker Desktop is
+# up. This shim lives in ~/opt/bin (on PATH for any properly-loaded
+# shell) and picks the best available CLI, in order:
+#
+#   1. Docker Desktop's Linux CLI (the WSL-integration mount) — native,
+#      fastest, present only while integration for this distro is active.
+#      Self-gating: the mount path only exists on WSL.
+#   2. Any other real docker later in PATH (skipping this shim and the
+#      dangling /usr/bin/docker symlink Desktop leaves when not running).
+#      This is the whole story on macOS and plain Linux (Raspberry Pi).
+#   3. Docker Desktop's Windows docker.exe over interop (requires the
+#      WSLInterop binfmt registration; talks to the same engine).
+#      Self-gating: the binfmt files only exist on WSL.
+#
+# Mirrors the decision logic (and the fail-loud message) of the
+# .bash_aliases block — keep the two in sync.
+set -eu
+
+DD_LINUX="/mnt/wsl/docker-desktop/cli-tools/usr/bin/docker"
+if [ -x "${DD_LINUX}" ]; then
+    exec "${DD_LINUX}" "$@"
+fi
+
+# Next real docker on PATH: `type -aP` lists all executable candidates in
+# PATH order, one per line (bash builtin, present since 3.2 — NOT
+# `command -v -a`, which is invalid in bash and made this loop silently
+# never run). Skip ourselves (any copy/symlink of this shim resolves to
+# the same physical file) and anything not actually executable (a
+# dangling /usr/bin/docker symlink fails -x).
+#
+# The candidates MUST be collected before exec'ing (mapfile, not
+# `while read ... done < <(...)`): a redirect-fed loop makes the pipe the
+# loop body's stdin, so the exec'd docker inherits the *unread rest of the
+# candidate list* as its stdin instead of ours. Anything piping data
+# through this shim gets that list as payload — kind ships kubeadm.conf
+# via `docker exec -i ... cp /dev/stdin` and got the leftover line
+# "/bin/docker" as its cluster config.
+self="$(cd -- "$(dirname "$0")" && pwd -P)/$(basename "$0")"
+# Read candidates on fd 3 (not stdin) for the same reason — and via a plain
+# while-read because mapfile is bash-4-only and breaks macOS system bash 3.2.
+while IFS= read -r cand <&3; do
+    [ -n "${cand}" ] || continue
+    [ "${cand}" = "${self}" ] && continue
+    [ "$(cd -- "$(dirname "${cand}")" 2>/dev/null && pwd -P)/$(basename "${cand}")" = "${self}" ] && continue
+    if [ -x "${cand}" ]; then
+        exec "${cand}" "$@"
+    fi
+done 3< <(type -aP docker 2>/dev/null)
+
+# Windows docker.exe over interop. WIN_PROGRAM_FILES comes from the
+# install_windows.sh env cache when available; default to the standard
+# mount point.
+# shellcheck disable=SC1091
+[ -f "${HOME}/.cache/dotfiles/winenv.sh" ] && . "${HOME}/.cache/dotfiles/winenv.sh"
+DD_EXE="${WIN_PROGRAM_FILES:-/mnt/c/Program Files}/Docker/Docker/resources/bin/docker.exe"
+if [ -x "${DD_EXE}" ] && grep -qs '^enabled' /proc/sys/fs/binfmt_misc/WSLInterop /proc/sys/fs/binfmt_misc/WSLInterop-late; then
+    # docker.exe shells out to its credential helper
+    # (docker-credential-desktop.exe) by bare name — it must be on the PATH
+    # the Windows process inherits, or builds/pulls die with "error getting
+    # credentials". Its home is docker.exe's own directory.
+    PATH="${PATH}:$(dirname "${DD_EXE}")"
+    export PATH
+    exec "${DD_EXE}" "$@"
+fi
+
+# Fail loud, with advice matching the platform: the Desktop/interop
+# story only applies on WSL; everywhere else the answer is "install
+# docker". (-s on grep: /proc/version doesn't exist on macOS.)
+if [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qsi microsoft /proc/version; then
+    echo "docker: Docker Desktop isn't running (its /usr/bin/docker shim is dangling)" >&2
+    echo "        and Windows-exe interop is unavailable (WSLInterop binfmt not registered)." >&2
+    echo "Fix:    start Docker Desktop on Windows, or restore interop with:" >&2
+    echo "        sudo systemctl restart wsl-interop-binfmt" >&2
+else
+    echo "docker: no docker CLI found on PATH." >&2
+    echo "Fix:    install Docker Engine (https://docs.docker.com/engine/install/)" >&2
+    echo "        or Docker Desktop for this platform." >&2
+fi
+exit 127

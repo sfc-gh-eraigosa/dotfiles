@@ -1,0 +1,18 @@
+# 2026-09-05 20:37 PDT — go test ./tui/nav/ -cover -v
+=== RUN   TestMoveClampsBothEnds
+--- PASS: TestMoveClampsBothEnds (0.00s)
+=== RUN   TestEmptyListNeverPanics
+--- PASS: TestEmptyListNeverPanics (0.00s)
+=== RUN   TestClampKeepsCursorOnScreen
+--- PASS: TestClampKeepsCursorOnScreen (0.00s)
+=== RUN   TestStridesFallBackWhenHeightUnknown
+--- PASS: TestStridesFallBackWhenHeightUnknown (0.00s)
+=== RUN   TestApplyActions
+--- PASS: TestApplyActions (0.00s)
+=== RUN   TestGGChordAndCancellation
+--- PASS: TestGGChordAndCancellation (0.00s)
+=== RUN   TestKeyWithoutChordInMap
+--- PASS: TestKeyWithoutChordInMap (0.00s)
+PASS
+coverage: 98.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/nav	0.005s	coverage: 98.4% of statements

@@ -1,43 +1,450 @@
 name: Docker Image CI
 
+# Pin-to-SHA convention (issue #46 phase 5):
+# Every third-party GitHub Action used below is pinned to a full 40-char
+# commit SHA, with a trailing `# vX.Y.Z` comment naming the human-readable
+# release tag. This protects us from a compromised tag being silently
+# repointed at malicious code (a published `vX.Y.Z` tag can be moved by
+# anyone who controls the upstream repo; a 40-char SHA cannot). Dependabot
+# (.github/dependabot.yml) raises PRs that bump both the SHA and the
+# trailing comment together when a new release ships.
+#
+# When bumping a pin by hand:
+#   tag=$(gh api repos/<owner>/<repo>/releases/latest --jq .tag_name)
+#   sha=$(gh api repos/<owner>/<repo>/git/ref/tags/$tag --jq .object.sha)
+#   # then write: uses: <owner>/<repo>@$sha # $tag
+
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+    # Phase 7 of CI hygiene (issue #46 / PR #48): draft-PR fast path. GitHub's
+    # DEFAULT pull_request activity types are opened/synchronize/reopened. None
+    # of those fire when a PR flips draft->ready or when a label is added or
+    # removed — so without the extra types below, the `build-and-validate` gate
+    # (which keys off draft-status and the `ready-for-merge` label) would never
+    # re-evaluate after promotion or labeling, and the heavy job would stay
+    # skipped until the next code push. We therefore opt in explicitly:
+    #   - opened/synchronize/reopened: the defaults, RE-STATED — once you
+    #     specify `types:` the implicit default list is REPLACED, not extended,
+    #     so omitting these would silently drop normal push-to-PR CI for every
+    #     job in this file (the fast jobs share this trigger block too).
+    #   - ready_for_review: fires when a draft is marked "Ready for review";
+    #     this is what lets build-and-validate start the moment a PR leaves draft.
+    #   - labeled / unlabeled: fire when `ready-for-merge` is added or removed,
+    #     so the gate re-runs (or correctly re-skips) on label churn while the
+    #     PR is still a draft. NOTE: these two are the narrowest trigger here —
+    #     the jobs below gate themselves to the draft case only, because
+    #     restarting a required check on a QUEUED PR livelocks the merge queue.
+    #     See "MERGIFY QUEUE LIVELOCK" below before widening them.
+    types: [ opened, synchronize, reopened, ready_for_review, labeled, unlabeled ]
+    #
+    # MERGIFY QUEUE LIVELOCK (PR #264) — why the label events above are GATED
+    # at the job level (`lint`, `shell-lint`, `go-lint` each carry the matching
+    # `if:`; the other three jobs `needs:` them and skip with them).
+    #
+    # A `labeled`/`unlabeled` event carries no new code, but dispatching a run
+    # re-creates this workflow's FIVE required check runs as `expected` /
+    # `in_progress`. Mergify writes `queued` / `dequeued` labels as it moves a
+    # PR through the queue — so its own bookkeeping restarted the ~7-min heavy
+    # build at the exact moment it held the merge lock. GitHub then refused the
+    # merge with "5 of 8 required status checks have not succeeded: 3 expected",
+    # Mergify retried for its 10-minute budget, gave up, and dequeued — which
+    # writes the `dequeued` label, another label event, restarting the cycle.
+    # Observed on #264: eight runs on ONE unchanged SHA, and a dequeue at
+    # 03:38:03 that landed 16 seconds AFTER the checks went green at 03:37:47.
+    #
+    # This is the sibling of PR #243's bug, not the same one: the unique
+    # concurrency group below stopped these label-triggered runs CANCELLING
+    # each other, but did nothing about them RESTARTING the required checks.
+    #
+    # The gate keeps the phase-7 draft fast path and drops nothing else:
+    #   - `ready-for-merge` on a DRAFT still dispatches a run. That is the only
+    #     case the label trigger exists for (see the `build-and-validate` gate).
+    #   - On a NON-DRAFT PR the label is redundant — `draft == false` already
+    #     lets the heavy job run — and Mergify only queues non-drafts, so after
+    #     this gate no label event can restart a queued PR's checks.
+    #   - A job skipped by `if:` reports its required check as SUCCESSFUL, so
+    #     the green checks from the code-driven run stay green.
+  # Phase 6 of CI hygiene (issue #46). `merge_group:` is the synthetic-commit
+  # event GitHub's merge queue dispatches BEFORE landing a PR on main. Every
+  # job below is wired in as a required check via branch protection, so they
+  # must execute on this trigger or the queue will block indefinitely waiting
+  # for status. No `branches:` filter — `merge_group` always targets the
+  # queue's configured base branch (main in our case).
+  # Admin setup runbook: .github/MERGE_QUEUE_SETUP.md
+  merge_group:
+
+# Cancel superseded runs on the same ref: without this, a hung build (e.g. the
+# PR #182 tzdata-prompt hang) piles up one 6-hour run per push. PR runs cancel;
+# push (main) and merge_group runs must NOT — their runs validate distinct
+# commits and must all reach a conclusion (a cancelled run reddens the badge).
+#
+# The group therefore carries a per-run discriminator for non-PR events:
+#   - pull_request CODE events (opened/synchronize/reopened/ready_for_review)
+#     -> "pr", so the group is stable per PR ref and a new commit cancels the
+#     older in-flight run (the intended cost saving).
+#   - push / merge_group -> github.run_id, a UNIQUE value per run, so each run
+#     is alone in its group and can never be cancelled by a sibling.
+# This replaces `cancel-in-progress: ${{ github.event_name == 'pull_request' }}`,
+# which did NOT protect push runs: once the merge queue went live, rapid
+# back-to-back main landings put two main runs in the same ref-keyed group and
+# the in-flight (slow Docker build) run was cancelled, failing the badge.
+#
+#   - pull_request LABEL events (labeled/unlabeled) -> github.run_id too.
+#     These fire on Mergify's own queue-state labels, so folding them into the
+#     shared "pr" group livelocked the merge queue (found in PR #243):
+#       1. Entering the queue adds `queued` AND removes `dequeued` in the same
+#          instant — two label events, so two runs start together.
+#       2. The second cancels the first through this group.
+#       3. A required check whose newest run is `cancelled` is not `success`,
+#          so GitHub refuses the merge with "N of 8 required status checks
+#          have not succeeded".
+#       4. Mergify retries for 10 minutes, dequeues, and removes `queued` —
+#          itself another label event, which restarts the cycle.
+#     Observed as: `Build and Integration Test` green at 19:11:07, a fresh run
+#     cancelled at 19:12:30 one second after starting, dequeued at 19:12. It
+#     bites hardest on PRs whose heavy build (~7 min) is near Mergify's 10-min
+#     retry budget; PRs that skip it merge before the cycle can bite.
+#     A label event carries no new code, so there is nothing to supersede and
+#     nothing saved by cancelling. A unique group breaks the cycle and leaves
+#     the commit-driven cost saving above untouched.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ (github.event_name == 'pull_request' && github.event.action != 'labeled' && github.event.action != 'unlabeled') && 'pr' || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
-  unit-tests:
-    name: Run Unit Tests
+  lint:
+    name: Lint (go + shell + markdown + actions)
+    # Label-event guard — see "MERGIFY QUEUE LIVELOCK" in the `on:` block above.
+    if: >-
+      github.event_name != 'pull_request'
+      || (github.event.action != 'labeled' && github.event.action != 'unlabeled')
+      || (github.event.label.name == 'ready-for-merge' && github.event.pull_request.draft)
     runs-on: ubuntu-latest
+    # A hang must die in minutes, not burn the 6-hour default (PR #182 lesson).
+    timeout-minutes: 15
+    # Phase 1 of CI hygiene (issue #46). This job runs first and unit-tests
+    # / shell-tests depend on it (`needs: lint`), so once the backlog is
+    # cleared and the warn-only flags below are dropped, a lint regression
+    # will short-circuit the rest of CI. Until then the lint steps are
+    # warn-only (see the per-step notes) so the merge queue isn't blocked by
+    # the pre-existing baseline. Tool versions are pinned in
+    # .ci-baseline-issues.md. Phase 5 added actionlint (MIT,
+    # https://github.com/rhysd/actionlint/blob/main/LICENSE.txt) to lint
+    # the workflow YAML itself.
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.26'
-          cache-dependency-path: "src/**/*.sum"
+          # setup-go@v5 enables module caching by default (cache: true);
+          # cache-dependency-path scopes the cache key to our four Go modules.
+          cache-dependency-path: |
+            sdk/**/*.sum
+
+      - name: Install golangci-lint
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.0.2
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Install markdownlint-cli2
+        run: npm install -g markdownlint-cli2@0.22.1
+
+      - name: Install actionlint
+        # Pinned to the same Go release line we use for the rest of the
+        # workflow; bumps land via the same PR that bumps actionlint usage.
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Run make lint
+        # WARN-ONLY: the phase-1 baseline ships a known backlog (121 Go +
+        # ~90 shell + ~979 markdown findings, see .ci-baseline-issues.md).
+        # `continue-on-error: true` keeps every linter RUNNING and surfacing
+        # findings in the step log, but does not fail the job — so the lint
+        # job stays green and the merge queue (phase 6) isn't deadlocked by
+        # the pre-existing backlog. Follow-up phases that burn the backlog
+        # down should drop this flag (per linter as each category reaches
+        # zero) to make the gate strict.
+        continue-on-error: true
+        run: make lint
+
+      - name: Run actionlint
+        # Lints the workflow YAML itself. Run AFTER make lint so a missing
+        # shellcheck/golangci-lint shows up first (clearer failure mode).
+        # Warn-only for the same reason as `make lint` above.
+        continue-on-error: true
+        run: actionlint .github/workflows/*.yml
+
+  shell-lint:
+    name: Shell Lint (shellcheck)
+    # Label-event guard — see "MERGIFY QUEUE LIVELOCK" in the `on:` block above.
+    if: >-
+      github.event_name != 'pull_request'
+      || (github.event.action != 'labeled' && github.event.action != 'unlabeled')
+      || (github.event.label.name == 'ready-for-merge' && github.event.pull_request.draft)
+    runs-on: ubuntu-latest
+    # A hang must die in minutes, not burn the 6-hour default (PR #182 lesson).
+    timeout-minutes: 15
+    # Dedicated shellcheck check, wired in as a required status context via
+    # branch protection. shellcheck also runs inside the `lint` job's
+    # `make lint` step, but that job is warn-only across all linters; this
+    # job isolates the shell signal under its own required context so a
+    # future strict flip can gate on shell alone. WARN-ONLY for now to match
+    # the phase-1 baseline backlog (~90 shell findings, .ci-baseline-issues.md)
+    # so the merge queue isn't deadlocked; drop continue-on-error once the
+    # shell backlog reaches zero.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+      - name: Run make lint-shell
+        continue-on-error: true
+        run: make lint-shell
+
+  hook-test:
+    name: Guard Hook Tests (privacy + safety)
+    # Label-event guard — see "MERGIFY QUEUE LIVELOCK" in the `on:` block above.
+    if: >-
+      github.event_name != 'pull_request'
+      || (github.event.action != 'labeled' && github.event.action != 'unlabeled')
+      || (github.event.label.name == 'ready-for-merge' && github.event.pull_request.draft)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # STRICT on purpose — no continue-on-error. These suites pin the privacy
+    # and safety guards that stand between a session and a public push; a red
+    # here must block the merge. They are hermetic (throwaway repos, controlled
+    # identity) and need only bash, git and jq, all present on ubuntu-latest,
+    # plus gitleaks (installed below) for the real-binary cases.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install gitleaks (real-binary cases of the privacy suites; exercises our installer's verified release path)
+        run: |
+          GITLEAKS_INSTALL_METHOD=release ./opt/scripts/git/install_gitleaks.sh
+          echo "$HOME/opt/bin" >> "$GITHUB_PATH"
+      - name: Run make hook-test
+        run: make hook-test
+
+  go-lint:
+    name: Go Lint (golangci-lint)
+    # Label-event guard — see "MERGIFY QUEUE LIVELOCK" in the `on:` block above.
+    if: >-
+      github.event_name != 'pull_request'
+      || (github.event.action != 'labeled' && github.event.action != 'unlabeled')
+      || (github.event.label.name == 'ready-for-merge' && github.event.pull_request.draft)
+    runs-on: ubuntu-latest
+    # A hang must die in minutes, not burn the 6-hour default (PR #182 lesson).
+    timeout-minutes: 15
+    # Dedicated Go check, STRICT — no continue-on-error. golangci-lint also
+    # runs inside the `lint` job's `make lint` step, but that job is warn-only
+    # across every linter, which is why a 212-finding Go backlog sat on main
+    # under a green "Lint" check for months. This job isolates the Go signal
+    # under its own required context so a regression is a hard failure.
+    #
+    # It is strict because the Go backlog is at ZERO (all six sdk/ modules),
+    # which is the condition the `lint` job's comment names for dropping the
+    # warn-only flag "per linter as each category reaches zero". Shell and
+    # markdown are not there yet, so `make lint` itself stays warn-only.
+    #
+    # Do NOT add a paths filter: a required check that is skipped never
+    # reports, and the merge queue then waits on it forever (docs/mergify.md).
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26'
+          cache-dependency-path: |
+            sdk/**/*.sum
+      - name: Install golangci-lint
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.0.2
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Run make lint-go
+        run: make lint-go
+
+  unit-tests:
+    name: Run Unit Tests
+    needs: lint
+    runs-on: ubuntu-latest
+    # A hang must die in minutes, not burn the 6-hour default (PR #182 lesson).
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26'
+          cache-dependency-path: |
+            sdk/**/*.sum
       - name: Run Go Unit Tests
         run: make unit-test
+      - name: Upload coverage report
+        # Phase 3 of CI hygiene (issue #46). scripts/test.sh emits per-module
+        # `<mod>.out` profiles + `<mod>.html` HTML reports into coverage/.
+        # `if: always()` so the artifact is still uploaded when the coverage
+        # gate (the previous step) FAILS — that's exactly when reviewers want
+        # to inspect which package is dragging the module under its floor.
+        # Phase 5 bumped this to upload-artifact@v4 (v3 is sunset).
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
       - name: gss dependency + license gate
         run: |
           go install github.com/google/go-licenses@latest
-          export PATH="$(go env GOPATH)/bin:$PATH"
-          GSS_STRICT_CHECK=1 bash src/gss/scripts/check-deps.sh
+          PATH="$(go env GOPATH)/bin:$PATH"
+          export PATH
+          GSS_STRICT_CHECK=1 bash sdk/gss/scripts/check-deps.sh
+
+  shell-tests:
+    name: Run Shell Test Drivers
+    needs: lint
+    runs-on: ubuntu-latest
+    # A hang must die in minutes, not burn the 6-hour default (PR #182 lesson).
+    timeout-minutes: 15
+    # Phase 2 of CI hygiene (issue #46). Runs every `*_test.sh` driver
+    # discovered by `make shell-test` — install_test.sh, the migrated
+    # aliases_test.sh, the safety_guard hook test suite, plus the new
+    # drivers for sync-skills, google-cli-setup, open-url, pkg-install.
+    # Parallel to unit-tests (Go) so a shell-driver regression doesn't
+    # gate the Go suite and vice-versa.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install jq + zsh
+        # safety_guard_test.sh builds its tool_input payloads with jq; zsh is
+        # needed so aliases_test.sh's cross-shell doctor regression case runs
+        # for real here (it skips gracefully where zsh is absent).
+        run: sudo apt-get update && sudo apt-get install -y jq zsh
+      - name: Run make shell-test
+        run: make shell-test
 
   build-and-validate:
     name: Build and Integration Test
+    # Phase 7 of CI hygiene (issue #46 / PR #48). This is the SLOW job (docker
+    # build + integration suite + docker-in-docker), so we keep it OFF the
+    # draft-PR critical path while leaving the fast jobs (lint/unit/shell)
+    # running on every push. The gate runs build-and-validate when:
+    #   - the event is NOT a pull_request  -> covers `merge_group` (the merge
+    #     queue's required check; it MUST run or the queue hangs — see the
+    #     phase-6 note above) and `push` to main (post-merge validation). This
+    #     clause is the escape hatch: merge_group/push payloads carry no
+    #     `github.event.pull_request` object, so the two PR-specific clauses
+    #     below evaluate to null/false there rather than erroring.
+    #   - OR the PR is not a draft (`draft == false`, i.e. ready-for-review).
+    #   - OR the PR carries the `ready-for-merge` label, which forces the heavy
+    #     job to run even while the PR is still a draft (explicit opt-in).
+    # The pull_request `types:` list above (ready_for_review, labeled) is what
+    # makes GitHub re-dispatch the workflow when draft/label state changes so
+    # this gate is actually re-evaluated.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ready-for-merge')
     needs: unit-tests
     runs-on: ubuntu-latest
+    # A hang must die in minutes, not burn the 6-hour default (PR #182 lesson).
+    # Heavy job baseline is ~6 min; 30 gives headroom without hiding a hang for hours.
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
     env:
-      IMAGE_NAME: dotfiles:latest
+      # dotfiles-test matches scripts/test.sh's IMAGE_NAME so the integration
+      # suite reuses this build instead of building a second image.
+      IMAGE_NAME: dotfiles-test
+      BASE_IMAGE: ghcr.io/${{ github.repository_owner }}/dotfiles-base:latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Provide base image (rebuild locally when this PR changes the base)
+        # The slow foundation layers live in ghcr.io/…/dotfiles-base, published
+        # from MAIN ONLY by docker-base.yml. So if THIS PR edits Dockerfile.base
+        # or the dind entrypoint, the published base is stale for it — build the
+        # base locally so the PR's change is actually validated (see AGENTS.md
+        # "Docker build layering"). Otherwise pull, falling back to a local build
+        # on any pull miss (first run, forks, GHCR outage).
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          base_changed=""
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base_changed=$(gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" \
+              --jq '.[].filename' \
+              | grep -E '^(docker/Dockerfile\.base|opt/scripts/docker/dockerd-entrypoint\.sh)$' || true)
+          fi
+          if [ -n "$base_changed" ]; then
+            echo "PR changes the base image ($base_changed) — building base locally to validate."
+            make build-base
+          else
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin || true
+            docker pull "$BASE_IMAGE" || make build-base
+          fi
+
+      - name: Set up Docker Buildx
+        # docker-container driver is required for the type=gha layer cache below.
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Expose GitHub Actions runtime credentials (for the type=gha build cache)
+        # The `type=gha` cache backend authenticates with the per-job runtime
+        # credentials. GitHub mints those automatically, but only injects them
+        # into `docker/build-push-action` — NOT into a plain
+        # `run: docker buildx build` like our `make build`. Without this step the
+        # cache silently no-ops: buildx neither imports nor exports, prints no
+        # error, and the build still succeeds — which is exactly how #217 shipped
+        # a dead cache while CI stayed green. This action re-exports the runtime
+        # env into $GITHUB_ENV so the following steps can see it.
+        #
+        # NOTE: these credentials are EPHEMERAL — minted per job, expiring with
+        # the job. There is no secret to create, store, or rotate. Runbook + the
+        # rejected PAT-backed alternative: docs/ci-build-cache.md
+        uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+
+      - name: Assert the build cache backend is live (fail hard)
+        # A silently-disabled cache is a slow, invisible regression, so make its
+        # absence LOUD and FATAL here rather than letting the build "succeed"
+        # uncached. If this fails, the runtime step above did not run or GitHub
+        # renamed the variables — see docs/ci-build-cache.md.
+        run: |
+          missing=""
+          [ -n "${ACTIONS_RUNTIME_TOKEN:-}" ] || missing="$missing ACTIONS_RUNTIME_TOKEN"
+          [ -n "${ACTIONS_RESULTS_URL:-}" ] || missing="$missing ACTIONS_RESULTS_URL"
+          if [ -n "$missing" ]; then
+            echo "::error::BUILD CACHE BROKEN: missing runtime env:$missing — see docs/ci-build-cache.md"
+            exit 1
+          fi
+          echo "Build cache backend reachable (runtime credentials present)."
+
       - name: Build the Docker image
-        run: make build
-      
+        # type=gha persists the two-phase Dockerfile's layers across runs: a PR
+        # that doesn't touch opt/ or sdk/ or install.sh reuses the cached deps
+        # layer and skips the expensive toolchain install.
+        #
+        # No `ignore-error=true` here on purpose: buildx defaults it to false, so
+        # once the credentials ARE present (guaranteed by the preflight above) a
+        # cache export failure is fatal via the exit code. Credentials-absent is
+        # the only mode that degrades silently, and the preflight covers it — so
+        # those two checks together are sufficient. Deliberately NOT grepping the
+        # progress output for "exporting cache": that text varies with
+        # --progress mode, TTY, and BuildKit version. See docs/ci-build-cache.md.
+        run: make build BUILD_CACHE="--cache-from=type=gha --cache-to=type=gha,mode=max"
+
       - name: Run Integration Tests
         run: make integration-test
 
       - name: Build Docker in Docker (Legacy Check)
-        run: docker run --privileged -v $(pwd):/dotfiles -w /dotfiles dotfiles:latest docker build --tag test opt/docker/helloworld
+        run: docker run --privileged -v "$(pwd):/dotfiles" -w /dotfiles "$IMAGE_NAME" docker build --tag test docker/helloworld

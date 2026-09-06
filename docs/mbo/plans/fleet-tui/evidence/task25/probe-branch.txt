@@ -1,0 +1,27 @@
+# Task 25 — probe carries the live branch (2026-08-17T15:57:11Z)
+=== RUN   TestBranchCostsNoExtraRoundTrip
+--- PASS: TestBranchCostsNoExtraRoundTrip (0.00s)
+=== RUN   TestProbeSplitLeavesStampParsingIntact
+=== RUN   TestProbeSplitLeavesStampParsingIntact/good_stamp_and_branch
+=== RUN   TestProbeSplitLeavesStampParsingIntact/corrupt_stamp_still_diagnosed
+=== RUN   TestProbeSplitLeavesStampParsingIntact/mangled_branch_half_must_not_affect_the_drift_class
+=== RUN   TestProbeSplitLeavesStampParsingIntact/no_delimiter_at_all_(older_host)_still_classifies
+--- PASS: TestProbeSplitLeavesStampParsingIntact (0.00s)
+    --- PASS: TestProbeSplitLeavesStampParsingIntact/good_stamp_and_branch (0.00s)
+    --- PASS: TestProbeSplitLeavesStampParsingIntact/corrupt_stamp_still_diagnosed (0.00s)
+    --- PASS: TestProbeSplitLeavesStampParsingIntact/mangled_branch_half_must_not_affect_the_drift_class (0.00s)
+    --- PASS: TestProbeSplitLeavesStampParsingIntact/no_delimiter_at_all_(older_host)_still_classifies (0.00s)
+=== RUN   TestProbeKeepsTheInstalledBranchFromTheStamp
+--- PASS: TestProbeKeepsTheInstalledBranchFromTheStamp (0.00s)
+=== RUN   TestBranchEdgeCases
+=== RUN   TestBranchEdgeCases/detached_HEAD_is_named,_not_echoed
+=== RUN   TestBranchEdgeCases/whitespace_is_trimmed
+=== RUN   TestBranchEdgeCases/plain_branch_passes_through
+=== RUN   TestBranchEdgeCases/missing_clone_renders_a_dash
+--- PASS: TestBranchEdgeCases (0.00s)
+    --- PASS: TestBranchEdgeCases/detached_HEAD_is_named,_not_echoed (0.00s)
+    --- PASS: TestBranchEdgeCases/whitespace_is_trimmed (0.00s)
+    --- PASS: TestBranchEdgeCases/plain_branch_passes_through (0.00s)
+    --- PASS: TestBranchEdgeCases/missing_clone_renders_a_dash (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.007s

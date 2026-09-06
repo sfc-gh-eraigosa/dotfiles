@@ -1,0 +1,39 @@
+# 2026-09-03T15:14:11Z live ~/.gemini/antigravity-cli/settings.json (trustedWorkspaces redacted; existing host => no template seed expected)
+{
+  "allowNonWorkspaceAccess": true,
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.gemini/config/statusline-command.sh",
+    "enabled": true
+  },
+  "permissions": {
+    "allow": [
+      "command(gss pr)",
+      "command(gss push)",
+      "command(gss sync)"
+    ],
+    "deny": [
+      "command(rm -rf /)",
+      "command(rm -rf ~)",
+      "command(rm -rf $HOME)",
+      "command(dd if=)",
+      "command(mkfs)",
+      "command(fdisk)",
+      "command(parted)",
+      "command(sfdisk)",
+      "command(mkswap)",
+      "command(init 0)",
+      "command(init 6)"
+    ],
+    "ask": [
+      "command(git push --force)",
+      "command(git push -f)",
+      "command(reboot)",
+      "command(shutdown)",
+      "command(poweroff)",
+      "command(halt)",
+      "command(sudo)"
+    ]
+  }
+}
+# toolPermission present? absent (expected: existing host, not re-seeded)

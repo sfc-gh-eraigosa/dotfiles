@@ -1,0 +1,6 @@
+# 2026-09-03T15:07:53Z validate_hooks.sh on merged hooks.json (host with a herdr entry)
+validate rc=1
+# 2026-09-03T15:08:18Z re-run: previous FAIL was the fixture's bare 'true' command (validator wants a file path); herdr entry now /bin/true
+# keys: guards,herdr
+PASS: configured hooks resolve; safety_guard blocks via the configured command
+validate rc=0

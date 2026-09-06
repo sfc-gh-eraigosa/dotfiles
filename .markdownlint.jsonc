@@ -1,0 +1,39 @@
+// markdownlint-cli2 configuration for the dotfiles repo.
+// Phase 1 of GitHub issue #46 (CI hygiene baseline). JSONC chosen over JSON
+// so each rule decision is documented inline; markdownlint-cli2 reads .jsonc
+// natively. Keep this conservative — ratchet stricter rules in later phases.
+{
+  // Inherit the recommended defaults; we override individual rules below.
+  "default": true,
+
+  // MD003 — heading style. Force ATX (`# Heading`) over setext (`===`). ATX
+  // is uniform across heading levels and is what every file in this repo
+  // already uses.
+  "MD003": { "style": "atx" },
+
+  // MD007 — unordered list indent. Two spaces matches markdown norms and
+  // CommonMark.
+  "MD007": { "indent": 2 },
+
+  // MD009 — trailing whitespace. Allow the two-space line-break form
+  // (br_spaces: 2) so authors can still force `<br>` in prose. Disallow
+  // strict-mode and list-item trailing whitespace which is always noise.
+  "MD009": { "br_spaces": 2, "strict": false, "list_item_empty_lines": false },
+
+  // MD013 — line-length. Disabled. Our doc tree (CLAUDE.md especially) is
+  // long-form prose where forced wrapping hurts readability and makes diffs
+  // noisier. Rely on editorconfig + author judgment for line length.
+  "MD013": false,
+
+  // MD024 — duplicate-headings. Allow duplicate headings only when nested
+  // under different parents (siblings_only). Useful for changelog-style docs.
+  "MD024": { "siblings_only": true },
+
+  // MD033 — inline HTML. Allow common embeds we already use in README.md
+  // and skill docs (details/summary, br, img with alt).
+  "MD033": { "allowed_elements": ["br", "details", "summary", "img", "kbd", "sub", "sup"] },
+
+  // MD041 — first-line-h1. Disabled. Subdirectory AGENTS.md / CLAUDE.md
+  // files sometimes lead with a YAML front-matter block or a callout.
+  "MD041": false
+}

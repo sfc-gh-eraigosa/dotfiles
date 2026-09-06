@@ -1,0 +1,25 @@
+# Task 23 — gate (2026-08-17T06:07:06Z)
+
+## fleet module
+### go vet
+(clean)
+
+### gofmt -l
+(clean)
+
+### go test -cover
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.575s	coverage: 63.9% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift	(cached)	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keys	(cached)	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach	(cached)	coverage: 82.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	(cached)	coverage: 20.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf	(cached)	coverage: 94.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp	(cached)	coverage: 100.0% of statements
+
+### repo coverage gate
+[0;32mOK[0m: coverage for fleet is 81% (minimum: 60%)
+
+### make lint-portability
+TIER 1 — MUST FIX (POSIX /bin/sh breakage; login-loop class): 0
+TIER 2 — environment hazards (macOS bash 3.2 / BSD coreutils / non-interactive apt): 0

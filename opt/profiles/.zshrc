@@ -22,8 +22,8 @@ should_run_daily_maintenance() {
   local mtime
   now=$(date +%s)
   if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS
-    mtime=$(stat -f %m "${DAILY_STAMP_FILE}" 2>/dev/null || echo 0)
+    # macOS: stat -f %m broke in Darwin 25+ (macOS 16), use date -r instead
+    mtime=$(date -r "${DAILY_STAMP_FILE}" +%s 2>/dev/null || echo 0)
   else
     # Linux / Raspberry Pi
     mtime=$(stat -c %Y "${DAILY_STAMP_FILE}" 2>/dev/null || echo 0)
@@ -50,10 +50,6 @@ run_daily_maintenance() {
   # Setup any missing brew packages from the $HOME/Brewfile
   if [ "$(uname -s)" = "Darwin" ] && command -v brew >/dev/null 2>&1 ; then
     brew bundle check || brew bundle
-  fi
-  # Ensure Snowflake CLI is available (install if missing)
-  if command -v python >/dev/null 2>&1 && command -v pip3 >/dev/null 2>&1 ; then
-    snow --version >/dev/null 2>&1 || ( pip3 install --upgrade pip && python -m pip install snowflake-cli-labs )
   fi
 }
 
@@ -141,9 +137,22 @@ ZSH_THEME="agnoster"
 # plugins=(git)
 plugins=(git docker golang zsh-completions kubectl)
 
-# Only clone zsh-completions if not in editor terminal (expensive git operation)
+# Drop plugins whose CLI is missing or a dangling shim. Docker Desktop's WSL
+# integration leaves /usr/bin/docker as a dangling symlink when Desktop isn't
+# running, which passes the omz plugin's existence check but then fails its
+# `command docker --version` probe with "command not found" at every login.
+for _p in docker kubectl; do
+  [[ -x "$(whence -p $_p 2>/dev/null)" ]] || plugins=(${plugins:#$_p})
+done
+unset _p
+
+# Only clone zsh-completions if not in editor terminal (expensive git operation).
+# Non-fatal + shallow + time-bounded: a network stall or failure here must never
+# hang or abort shell startup — nor a script that sources this file under `set -e`
+# (a CI image build sanity-checks the shell exactly that way).
 if [[ "$EDITOR_TERMINAL" == "false" ]] && [ ! -d "${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions" ] ; then
-  git clone https://github.com/zsh-users/zsh-completions ${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions
+  timeout 30 git clone --depth 1 https://github.com/zsh-users/zsh-completions "${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions" 2>/dev/null \
+    || print -u2 "zsh-completions: clone skipped (offline/slow) — will retry next shell"
 fi
 
 # User configuration
@@ -152,6 +161,9 @@ fi
 export PATH="$PATH:$HOME/bin"
 if [ -d "${HOME}/opt/bin" ] ; then
     PATH="${HOME}/opt/bin:$PATH"
+fi
+if [ -d "${HOME}/opt/google-cloud-sdk/bin" ] ; then
+    PATH="${HOME}/opt/google-cloud-sdk/bin:$PATH"
 fi
 if [ -d "${HOME}/opt/scripts" ] ; then
     for d in "${HOME}/opt/scripts"/*; do
@@ -163,14 +175,33 @@ fi
 # export MANPATH="/usr/local/man:$MANPATH"
 fpath+=${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions/src
 
+# Shadow dangling completion symlinks before oh-my-zsh runs compinit. Vendor
+# packages such as Docker Desktop on WSL leave _* symlinks in root-owned $fpath
+# dirs that dangle when their backing mount is gone; compinit then errors
+# ("no such file or directory") reading the broken link. An empty stub earlier
+# in $fpath makes compinit skip it. Rebuilt each startup, so the real
+# completion is used again once its target returns.
+# NOTE: this only protects OUR compinit (oh-my-zsh + the cached one below). The
+# distro's GLOBAL compinit in /etc/zsh/zshrc runs before this file, so that one
+# is disabled separately via `skip_global_compinit=1` in ~/.zshenv.
+_comp_shadow="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/compshadow"
+rm -rf "$_comp_shadow" 2>/dev/null
+for _comp_f in ${^fpath}/_*(N@); do
+  [[ -e $_comp_f ]] && continue                 # symlink target resolves: leave it
+  [[ -d $_comp_shadow ]] || mkdir -p "$_comp_shadow"
+  : > "$_comp_shadow/${_comp_f:t}"
+done
+[[ -d $_comp_shadow ]] && fpath=("$_comp_shadow" $fpath)
+unset _comp_f _comp_shadow
+
 source $ZSH/oh-my-zsh.sh
 
 # oh-my-zsh's git plugin defines `alias gss='git status -s'` which shadows
 # our gss binary at ~/opt/bin/gss. Drop the alias so the binary wins —
-# critical for any AI assistant (Claude, Gemini) that calls `gss push`.
+# critical for any AI assistant (Claude, Antigravity) that calls `gss push`.
 unalias gss 2>/dev/null
 
-# Claude Code CLI helpers: claude (wrapper) and claude-toggle (YOLO on/off)
+# Claude Code CLI helpers: claude (wrapper) and claude-config (yolo/remote on/off)
 [ -f "${HOME}/.config/claude/aliases.sh" ] && . "${HOME}/.config/claude/aliases.sh"
 
 # You may need to manually set your language environment
@@ -242,18 +273,6 @@ test -f ${HOME}/.rbenv/shims/gh && rm -f ${HOME}/.rbenv/shims/gh
 #
 # node in path
 export PATH="$PATH:$HOME/.nodenv/shims"
-
-#
-# GITHUB_TOKEN setup from stored credential (skip expensive git credential call in editor terminals)
-if [[ ! -f .no_github_token ]] ; then
-  if [[ "$EDITOR_TERMINAL" == "true" ]] && [[ -n "$GITHUB_TOKEN" ]]; then
-    # Use existing GITHUB_TOKEN if available
-    export GITHUB_TOKEN
-  elif [[ "$EDITOR_TERMINAL" == "false" ]]; then
-    # Only fetch credentials in regular terminals
-    export GITHUB_TOKEN=${GITHUB_TOKEN:-$( printf "protocol=https\\nhost=github.com\\npath=github\\n" | GIT_TERMINAL_PROMPT=0 git credential fill 2>/dev/null | awk -F'=' '/password=/{print $2}')}
-  fi
-fi
 
 test -n "$(alias ruby)" && unalias ruby
 
@@ -366,19 +385,23 @@ fi
 
 # OpenClaw Completion
 
-# --- Performance Optimizations by Gemini ---
+# --- Performance Optimizations (AI-suggested) ---
 
 # Optimize compinit to run once per day
 autoload -Uz compinit
 _comp_dumpfile="${ZSH_COMPDUMP:-$HOME/.zcompdump}"
 if [[ "$OSTYPE" == "darwin"* ]]; then
-  _comp_mtime=$(stat -f %m "$_comp_dumpfile" 2>/dev/null || echo 0)
+  _comp_mtime=$(date -r "$_comp_dumpfile" +%s 2>/dev/null || echo 0)
 else
   _comp_mtime=$(stat -c %Y "$_comp_dumpfile" 2>/dev/null || echo 0)
 fi
 
+# -i: ignore (don't prompt about) insecure $fpath dirs. Without it, an
+# insecure completion dir makes compinit try to prompt, which on a
+# non-interactive/headless shell aborts with "not interactive and can't open
+# terminal" — breaking startup and the rc_test.sh clean-source check.
 if (( $(date +%s) - _comp_mtime > 86400 )); then
-  compinit
+  compinit -i
 else
   compinit -C
 fi
@@ -410,10 +433,10 @@ openclaw() {
 # Added by tmux-mgr
 [ -f ${HOME}/.config/tmux-mgr/aliases.sh ] && source ${HOME}/.config/tmux-mgr/aliases.sh
 
-# Load Gemini CLI environment
-[[ -f "$HOME/.gemini.profile" ]] && source "$HOME/.gemini.profile"
-# Gemini CLI helpers: gemini() wrapper with tmux auto-anchor
-[ -f "${HOME}/.config/gemini/aliases.sh" ] && . "${HOME}/.config/gemini/aliases.sh"
+# Load Antigravity CLI environment
+[[ -f "$HOME/.antigravity.profile" ]] && source "$HOME/.antigravity.profile"
+# Antigravity CLI helpers: agy() wrapper with tmux auto-anchor
+[ -f "${HOME}/.config/antigravity/aliases.sh" ] && . "${HOME}/.config/antigravity/aliases.sh"
 
 # Load Nano Platform environment
 [ -f "$HOME/.nano_profile" ] && . "$HOME/.nano_profile"

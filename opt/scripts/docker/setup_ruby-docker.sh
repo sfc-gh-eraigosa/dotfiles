@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 #    Licensed under the Apache License, Version 2.0 (the "License");
 #    you may not use this file except in compliance with the License.
 #    You may obtain a copy of the License at
@@ -14,7 +15,7 @@ SCRIPT_NAME=.ruby.env
 ALIAS_ENV_SCRIPT="$HOME/$SCRIPT_NAME"
 
 # VERIFY THAT docker is installed
-docker --version 2>&1 >/dev/null
+docker --version >/dev/null 2>&1
 DOCKER_IS_AVAILABLE=$?
 if [ $DOCKER_IS_AVAILABLE -eq 0 ]; then
    docker --version
@@ -91,7 +92,7 @@ function f-ruby-install-rails {
                      -e HTTPS_PROXY \
                      -e NO_PROXY \
     ruby bash -c "apt-get update && \
-    apt-get install -y --no-install-recommends \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         nodejs \
         mysql-client \
         postgresql-client \

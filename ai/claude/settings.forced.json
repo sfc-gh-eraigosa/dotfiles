@@ -1,0 +1,69 @@
+{
+  "_comment": "FORCED (immutable) Claude settings subset. install_claude_skills.sh deep-merges this over the host-owned ~/.claude/settings.json on every run (see opt/scripts/system/apply-forced-settings.sh and docs/mbo/designs/2026-06-02-ai-config-home-provisioning.md). hooks/statusLine/permissions.deny/permissions.ask are REPLACED from the repo; permissions.allow is UNIONED (host additions preserved); every other host field is preserved. Hooks reference well-known $HOME paths populated by copy. gss push/pr/sync live in allow (not ask): they are auto-approved at the harness level but still gated by the safety_guard approval-token hook (which runs before permission checks) plus the gss skill's mandatory confirmation — so they no longer double-prompt.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/safety_guard.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/privacy_guard.sh"
+          }
+        ]
+      }
+    ],
+    "DirectoryAdded": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/dir_added_guard.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/statusline-command.sh"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(gss push:*)",
+      "Bash(gss pr:*)",
+      "Bash(gss sync:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf /:*)",
+      "Bash(rm -rf ~:*)",
+      "Bash(rm -rf $HOME:*)",
+      "Bash(dd if=:*)",
+      "Bash(mkfs:*)",
+      "Bash(mkfs.:*)",
+      "Bash(fdisk:*)",
+      "Bash(parted:*)",
+      "Bash(sfdisk:*)",
+      "Bash(mkswap:*)",
+      "Bash(init 0)",
+      "Bash(init 6)"
+    ],
+    "ask": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(reboot:*)",
+      "Bash(shutdown:*)",
+      "Bash(poweroff:*)",
+      "Bash(halt:*)",
+      "Bash(sudo:*)"
+    ]
+  }
+}

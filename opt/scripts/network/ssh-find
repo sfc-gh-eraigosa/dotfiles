@@ -21,10 +21,21 @@ SSH_USER=$(echo "$CONFIG" | awk '/^user / {print $2}')
 IDENTITY_FILE=$(echo "$CONFIG" | awk '/^identityfile / {print $2}' | head -n 1 | sed "s|^~|$HOME|")
 
 echo "Scanning network for SSH hosts..."
-# Identify local subnet
-interface=$(route get default | awk '/interface:/ {print $2}')
-if [[ -z "$interface" ]]; then interface="en0"; fi
-subnet=$(ifconfig "$interface" | awk '/inet / {print $2}' | cut -d. -f1-3)".0/24"
+# Identify local subnet — prefer 'ip' (modern Linux); fall back to
+# 'route'/'ifconfig' (macOS / older Linux with net-tools).
+if command -v ip &>/dev/null; then
+    interface=$(ip route 2>/dev/null | awk '/default/ {print $5; exit}')
+    [[ -z "$interface" ]] && interface="eth0"
+    local_ip=$(ip -4 addr show "$interface" 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 | head -1)
+    subnet=$(echo "$local_ip" | cut -d. -f1-3)".0/24"
+elif command -v route &>/dev/null && command -v ifconfig &>/dev/null; then
+    interface=$(route get default 2>/dev/null | awk '/interface:/ {print $2}')
+    [[ -z "$interface" ]] && interface="en0"
+    subnet=$(ifconfig "$interface" | awk '/inet / {print $2}' | cut -d. -f1-3)".0/24"
+else
+    echo "Error: neither 'ip' nor 'route'/'ifconfig' found; cannot detect subnet." >&2
+    exit 1
+fi
 
 echo "Scanning subnet $subnet..."
 ips=$(nmap -p 22 --open "$subnet" -oG - | awk '/Up$/{print $2} /open/{print $2}' | sort -u)

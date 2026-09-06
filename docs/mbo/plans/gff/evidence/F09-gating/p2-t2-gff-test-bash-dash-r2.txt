@@ -1,0 +1,33 @@
+2026-07-26T04:14:33Z (UTC)
+task: P2-T2 — re-run after adding shellcheck disable directives (comments only)
+command: bash opt/lib/gff_test.sh && sh opt/lib/gff_test.sh   (/bin/sh -> dash)
+=== bash opt/lib/gff_test.sh ===
+PASS: var unset => run (fail-open) (exit 0)
+PASS: =true => run (exit 0)
+PASS: =false => skip (the only disabling value) (exit 1)
+PASS: =FALSE => run (uppercase is not false) (exit 0)
+PASS: =0 => run (0 is not false) (exit 0)
+PASS: garbage value => run (fail-open) (exit 0)
+PASS: key mangling: install.windows.wispr-flow reads GFF_INSTALL_WINDOWS_WISPR_FLOW (exit 1)
+PASS: mangled var unset again => run (exit 0)
+PASS: gff_skip_msg echoes exactly 'SKIP (gff: <key>=false)'
+PASS: gff binary absent from PATH => run (exit 0)
+---
+PASS: 10  FAIL: 0
+bash exit: 0
+=== sh (dash) opt/lib/gff_test.sh ===
+PASS: var unset => run (fail-open) (exit 0)
+PASS: =true => run (exit 0)
+PASS: =false => skip (the only disabling value) (exit 1)
+PASS: =FALSE => run (uppercase is not false) (exit 0)
+PASS: =0 => run (0 is not false) (exit 0)
+PASS: garbage value => run (fail-open) (exit 0)
+PASS: key mangling: install.windows.wispr-flow reads GFF_INSTALL_WINDOWS_WISPR_FLOW (exit 1)
+PASS: mangled var unset again => run (exit 0)
+PASS: gff_skip_msg echoes exactly 'SKIP (gff: <key>=false)'
+PASS: gff binary absent from PATH => run (exit 0)
+---
+PASS: 10  FAIL: 0
+sh exit: 0
+=== shellcheck opt/lib/gff.sh opt/lib/gff_test.sh ===
+shellcheck clean

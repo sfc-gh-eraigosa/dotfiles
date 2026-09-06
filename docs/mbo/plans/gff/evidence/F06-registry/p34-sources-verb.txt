@@ -1,0 +1,25 @@
+# gff sources — owner-approved §3.4 extension (PR #187 review)
+# date UTC: 2026-07-26T17:53:44Z
+
+$ gff sources   (plain, piped)
+NAMESPACE                            URL  COMMIT  STATUS
+com.github.sfc-gh-eraigosa.dotfiles  -    -       discovered — not registered · current repo
+com.example.quickstart               -    -       registered
+
+$ gff sources --json
+[
+  {
+    "namespace": "com.github.sfc-gh-eraigosa.dotfiles",
+    "url": "",
+    "commit": "",
+    "registered": false,
+    "currentRepo": true
+  },
+  {
+    "namespace": "com.example.quickstart",
+    "url": "",
+    "commit": "",
+    "registered": true,
+    "currentRepo": false
+  }
+]

@@ -1,0 +1,3 @@
+--- PASS: TestPruneRequiresConfirmationAndChangesNothingWhenDeclined (0.00s)
+--- PASS: TestPruneAppliesOnlyWhenConfirmed (0.00s)
+--- PASS: TestPruneIsANoOpWhenNothingForeign (0.00s)

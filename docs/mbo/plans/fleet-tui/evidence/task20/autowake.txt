@@ -1,0 +1,43 @@
+# Task 20 — auto-wake in the probe path
+=== RUN   TestWakeFiresOnlyForUnreachableHosts
+--- PASS: TestWakeFiresOnlyForUnreachableHosts (0.00s)
+=== RUN   TestWokenHostReportsItsRealClassAndHowItWoke
+--- PASS: TestWokenHostReportsItsRealClassAndHowItWoke (0.00s)
+=== RUN   TestFailedWakeStillReportsUnreachable
+--- PASS: TestFailedWakeStillReportsUnreachable (0.00s)
+=== RUN   TestSleepingHostsWakeConcurrentlyNotSerially
+--- PASS: TestSleepingHostsWakeConcurrentlyNotSerially (0.15s)
+=== RUN   TestNoWakeSuppressesTheLadderEntirely
+--- PASS: TestNoWakeSuppressesTheLadderEntirely (0.00s)
+=== RUN   TestWakeReceivesTheOtherFleetHostsAsPeers
+--- PASS: TestWakeReceivesTheOtherFleetHostsAsPeers (0.00s)
+=== RUN   TestWakeTimeoutMustBePositive
+--- PASS: TestWakeTimeoutMustBePositive (0.00s)
+=== RUN   TestWakeKeyClaimsTheCursorHostInTheBackgroundLane
+--- PASS: TestWakeKeyClaimsTheCursorHostInTheBackgroundLane (0.00s)
+=== RUN   TestWakeKeyActsOnTheWholeSelection
+--- PASS: TestWakeKeyActsOnTheWholeSelection (0.00s)
+=== RUN   TestRefreshSkipsHostsBeingWoken
+--- PASS: TestRefreshSkipsHostsBeingWoken (0.00s)
+=== RUN   TestWakeIgnoresHostsAlreadyInFlight
+--- PASS: TestWakeIgnoresHostsAlreadyInFlight (0.00s)
+=== RUN   TestWakeCompletionReleasesOwnershipAndRepolls
+--- PASS: TestWakeCompletionReleasesOwnershipAndRepolls (0.00s)
+=== RUN   TestFailedWakeStillReleasesOwnership
+--- PASS: TestFailedWakeStillReleasesOwnership (0.00s)
+=== RUN   TestHelpListsTheWakeKey
+--- PASS: TestHelpListsTheWakeKey (0.00s)
+=== RUN   TestPollHostCarriesTheWakerIntoTheTUI
+--- PASS: TestPollHostCarriesTheWakerIntoTheTUI (0.00s)
+=== RUN   TestRenderWakeShowsEveryRungAndTheVerdict
+--- PASS: TestRenderWakeShowsEveryRungAndTheVerdict (0.00s)
+=== RUN   TestRenderWakeReportsAnExhaustedLadder
+--- PASS: TestRenderWakeReportsAnExhaustedLadder (0.00s)
+=== RUN   TestWakeJSONCarriesTheWholeLadder
+--- PASS: TestWakeJSONCarriesTheWholeLadder (0.00s)
+=== RUN   TestWakeNeverSendsAnythingThatWritesToATarget
+--- PASS: TestWakeNeverSendsAnythingThatWritesToATarget (0.00s)
+=== RUN   TestDisabledPolicyProducesNoWaker
+--- PASS: TestDisabledPolicyProducesNoWaker (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.157s

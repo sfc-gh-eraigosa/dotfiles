@@ -1,0 +1,87 @@
+
+=== R1 launch — clean frame, ns-separated area rows, '? help' hint (no always-on panel) ===
+com.example.quickstart ▸ [demo (All)] · pkg · shell · ui
+> ▶ demo  · com.example.quickstart
+  ▶ install  · com.github.sfc-gh-eraigosa.dotfiles
+↑/↓ move  ←/→ category  PgUp/PgDn page  Enter expand/details  Space toggle  ? help  q quit
+
+=== R2 '?' — help overlay: about + version + view keys + SOURCES (registered ● vs discovered ○) ===
+gff — git fast features  · layered feature flags persisted in git
+gff vdev (commit none)
+KEYS — flag list
+  ↑/↓ move · ←/→ category pages · PgUp/PgDn page
+  Enter  expand an area / open feature details (attributes + layers)
+  Space  toggle a bool / pick choice options · q quit
+SOURCES — where flags come from. Namespaces are disjoint worlds: uniqueness is
+(namespace, key); an area name like 'install' is grouping only, never claimed.
+  ● com.example.quickstart
+  ○ com.github.sfc-gh-eraigosa.dotfiles  · discovered in the current repo — not registered
+Esc/?/q close
+
+=== R3 cursor on the second namespace row — breadcrumb rescopes to its categories ===
+com.github.sfc-gh-eraigosa.dotfiles ▸ [install (All)] · ai · fonts · network · pkg · runtime · sdk · shell · system · to
+  ▶ demo  · com.example.quickstart
+> ▶ install  · com.github.sfc-gh-eraigosa.dotfiles
+↑/↓ move  ←/→ category  PgUp/PgDn page  Enter expand/details  Space toggle  ? help  q quit
+
+=== R4 Right — first category page of the rescoped namespace ===
+com.github.sfc-gh-eraigosa.dotfiles ▸ install (All) · [ai] · fonts · network · pkg · runtime · sdk · shell · system · to
+>   install.ai.antigravity                    true    default    repo-live  Runs the Antigravity blocks (install_antigra
+  install.ai.claude                         true  default  repo-live  Runs the Claude Code blocks (install_claude_skills
+  install.ai.google-cli                     true  default  repo-live  Runs the google-cli-setup.sh block.
+  install.ai.plugins                        true  default  repo-live  Runs the sync-plugins.sh block that syncs the AI p
+  install.ai.skills                         true  default  repo-live  Runs the sync-skills.sh block that links shared sk
+  install.ai.teams                          true  default  repo-live  Runs the install_ai_teams.sh block.
+↑/↓ move  ←/→ category  PgUp/PgDn page  Enter expand/details  Space toggle  ? help  q quit
+
+=== R5 Enter — detail view with action footer ===
+install.ai.antigravity  (bool)
+Runs the Antigravity blocks (install_antigravity_skills.sh, antigravity_install.sh, gemini_teardown.sh).
+namespace: com.github.sfc-gh-eraigosa.dotfiles
+Effective: true  (repo-live)
+LAYERS — every level this key passes through, lowest to highest
+  system-snapshot   —
+  user-snapshot     —
+  repo-live         default: true  ◀ winning
+  system-override   —
+  user-override     —
+Space toggle/pick  u clear user override  Esc/Enter back  ? help
+
+=== R6 Space in detail — toggled via the existing writer; user-override row appears, marked winning ===
+install.ai.antigravity  (bool)
+Runs the Antigravity blocks (install_antigravity_skills.sh, antigravity_install.sh, gemini_teardown.sh).
+namespace: com.github.sfc-gh-eraigosa.dotfiles
+Effective: false  (user-override)
+LAYERS — every level this key passes through, lowest to highest
+  system-snapshot   —
+  user-snapshot     —
+  repo-live         default: true
+  system-override   —
+  user-override     override: false  ◀ winning
+Space toggle/pick  u clear user override  Esc/Enter back  ? help
+
+=== R7 'u' — user override cleared via overrides.Unset; default layer wins again ===
+install.ai.antigravity  (bool)
+Runs the Antigravity blocks (install_antigravity_skills.sh, antigravity_install.sh, gemini_teardown.sh).
+namespace: com.github.sfc-gh-eraigosa.dotfiles
+Effective: true  (repo-live)
+LAYERS — every level this key passes through, lowest to highest
+  system-snapshot   —
+  user-snapshot     —
+  repo-live         default: true  ◀ winning
+  system-override   —
+  user-override     —
+Space toggle/pick  u clear user override  Esc/Enter back  ? help
+
+=== R8 'h' in detail — context help (Space/u actions explained) ===
+gff — git fast features  · layered feature flags persisted in git
+gff vdev (commit none)
+KEYS — detail view
+  Space  toggle the bool / pick choice options (same writer as `gff set`)
+  u      clear the user override for this key (same as `gff unset`)
+  Esc/Enter  back to the list · q back · ?/h this help
+SOURCES — where flags come from. Namespaces are disjoint worlds: uniqueness is
+(namespace, key); an area name like 'install' is grouping only, never claimed.
+  ● com.example.quickstart
+  ○ com.github.sfc-gh-eraigosa.dotfiles  · discovered in the current repo — not registered
+Esc/?/q close
