@@ -31,17 +31,17 @@
 - [x] GREEN: `internal/tui/keys.go`; `model.go` edits 1–4 (`cur nav.Cursor`, Lookup switch, `turnPage`, picker/detail `j/k` + `?`/F1); `view.go` edits 1–4 (viewport via `cur.Visible`, footer `listHint()`, `overlay.Help` + SOURCES)
 - [x] RUN-GREEN: `mkdir -p $EV/task1 && go test ./internal/tui/ -cover 2>&1 | tee $EV/task1/go-test.txt | tail -3 && go vet ./...` → **ok**, ≥ 91.3%
 - [x] VERIFY: `grep -rn "'h', 'H'\|scrollTop\|lastInner" internal/tui/*.go` → no hits
-- [ ] COMMIT: `feat(gff/tui): adopt libs/tui — keymap + nav.Cursor vim motions; help moves to ? and F1`
-- [ ] LEDGER + CHECKPOINT
+- [x] COMMIT: `feat(gff/tui): adopt libs/tui — keymap + nav.Cursor vim motions; help moves to ? and F1`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** package green incl. the rewired help test; grep clean; go.mod delta is only `sdk/libs`.
 
 ### Task 2 — `/` search over `search.State`  (plan Task 2)
 
-- [ ] RED: `internal/tui/search_test.go` (10 tests; `typeKeys`, `gutterLines` helpers)
-- [ ] RUN-RED: `go test ./internal/tui/ -run 'TestSlash|TestEscInList|TestNWithout|TestSearch'` → expect **FAIL**
-- [ ] GREEN: `internal/tui/search.go`; `model.go` edits 1–4; `view.go` edits 1–4
-- [ ] RUN-GREEN: `mkdir -p $EV/task2 && go test ./internal/tui/ -cover 2>&1 | tee $EV/task2/go-test.txt | tail -3 && go vet ./...` → **ok**, ≥ 91.3%
+- [x] RED: `internal/tui/search_test.go` (10 tests; `typeKeys`, `gutterLines` helpers)
+- [x] RUN-RED: `go test ./internal/tui/ -run 'TestSlash|TestEscInList|TestNWithout|TestSearch'` → expect **FAIL**
+- [x] GREEN: `internal/tui/search.go`; `model.go` edits 1–4; `view.go` edits 1–4
+- [x] RUN-GREEN: `mkdir -p $EV/task2 && go test ./internal/tui/ -cover 2>&1 | tee $EV/task2/go-test.txt | tail -3 && go vet ./...` → **ok**, ≥ 91.3%
 - [ ] COMMIT: `feat(gff/tui): / search via libs/tui/search — auto-expand, n/N, :noh, match gutter`
 - [ ] LEDGER + CHECKPOINT
 

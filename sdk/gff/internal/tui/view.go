@@ -85,6 +85,8 @@ func (m *Model) View() string {
 		return m.viewDetail()
 	case modeHelp:
 		return m.viewHelp()
+	case modeSearch, modeCommand:
+		return m.viewList()
 	}
 	return m.viewList()
 }
@@ -107,9 +109,12 @@ func (m *Model) viewList() string {
 	rowsStart, rowsEnd := 0, len(m.rows)
 	moreAbove, moreBelow := 0, 0
 	if m.height > 0 {
-		overhead := 4 // breadcrumb + blank + blank + help line
+		overhead := 4 // breadcrumb + blank + blank + help/prompt line
 		if m.errMsg != "" {
 			overhead++
+		}
+		if m.mode == modeSearch && m.search.Err != "" {
+			overhead++ // the inline pattern error renders under the prompt
 		}
 		budget := m.height - overhead
 		if budget < 1 {
@@ -136,6 +141,9 @@ func (m *Model) viewList() string {
 	for i := rowsStart; i < rowsEnd; i++ {
 		r := m.rows[i]
 		cursor := "  "
+		if m.search.IsMatch(i) {
+			cursor = "* " // a match; the cursor wins on its own row
+		}
 		if i == m.cur.Pos {
 			cursor = "> "
 		}
@@ -166,11 +174,18 @@ func (m *Model) viewList() string {
 			path := item.Feature.GetPath()
 
 			layerRendered := layerColor(pal, layer).Render(layer)
+			// A matching row wears the gutter marker AND highlights its path
+			// so the hit is visible without color (NO_COLOR renders the same
+			// markers).
+			pathStyle := dimStyle
+			if m.search.IsMatch(i) {
+				pathStyle = matchStyleFor(pal)
+			}
 			if i == m.cur.Pos {
 				sb.WriteString(cursorStyle.Render(fmt.Sprintf("%s  %-40s  %-6s  %-9s  %s  %s",
 					cursor, path, val, marker, layer, desc)))
 			} else {
-				sb.WriteString(dimStyle.Render(fmt.Sprintf("  %-40s", path)))
+				sb.WriteString(pathStyle.Render(fmt.Sprintf("%s%-40s", cursor, path)))
 				sb.WriteString("  ")
 				sb.WriteString(val)
 				sb.WriteString("  ")
@@ -190,15 +205,41 @@ func (m *Model) viewList() string {
 
 	sb.WriteString("\n")
 	if m.errMsg != "" {
-		errStyle := lipgloss.NewStyle().Foreground(pal.Red)
-		if noColor() {
-			errStyle = lipgloss.NewStyle()
-		}
-		sb.WriteString(errStyle.Render(m.errMsg))
+		sb.WriteString(errStyleFor(pal).Render(m.errMsg))
 		sb.WriteString("\n")
 	}
-	sb.WriteString(dimStyle.Render(listHint()))
+	switch m.mode {
+	case modeSearch:
+		sb.WriteString("/" + m.search.Input.Render("▌"))
+		if m.search.Err != "" {
+			sb.WriteString("\n" + errStyleFor(pal).Render(m.search.Err))
+		}
+	case modeCommand:
+		sb.WriteString(":" + m.cmd.Input.Render("▌"))
+	default:
+		hint := listHint()
+		if b := m.search.Badge(m.cur.Pos); b != "" {
+			hint = b + "  " + hint
+		}
+		sb.WriteString(dimStyle.Render(hint))
+	}
 	return sb.String()
+}
+
+// matchStyleFor highlights a search hit's path, plain under NO_COLOR.
+func matchStyleFor(pal style.Colors) lipgloss.Style {
+	if noColor() {
+		return lipgloss.NewStyle()
+	}
+	return lipgloss.NewStyle().Bold(true).Foreground(pal.Orange)
+}
+
+// errStyleFor is the footer/error red, plain under NO_COLOR.
+func errStyleFor(pal style.Colors) lipgloss.Style {
+	if noColor() {
+		return lipgloss.NewStyle()
+	}
+	return lipgloss.NewStyle().Foreground(pal.Red)
 }
 
 // renderBreadcrumb renders the category pager header; the active page is

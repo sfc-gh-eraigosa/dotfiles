@@ -11,18 +11,22 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/overrides"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/paths"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/cmdline"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/keymap"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/nav"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/search"
 )
 
 // screenMode controls what the main loop renders.
 type screenMode int
 
 const (
-	modeList   screenMode = iota // normal collapsible tree view
-	modePicker                   // option picker overlay (choice flags)
-	modeDetail                   // per-feature detail: attributes + layer provenance
-	modeHelp                     // help overlay (?/F1 from any view)
+	modeList    screenMode = iota // normal collapsible tree view
+	modePicker                    // option picker overlay (choice flags)
+	modeDetail                    // per-feature detail: attributes + layer provenance
+	modeHelp                      // help overlay (?/F1 from any view)
+	modeSearch                    // the / prompt is open (every key is text)
+	modeCommand                   // the : prompt is open (every key is text)
 )
 
 // SourceInfo is one registry entry for the launch panel.
@@ -96,6 +100,16 @@ type Model struct {
 	detailItem   resolve.Resolved
 	detailLayers []resolve.LayerInfo
 	detailIdx    int // index into m.items backing the detail view
+
+	// search state: the sdk state machine plus gff's row anchor (indices
+	// shift when an area expands; the key survives a rebuild).
+	search       search.State
+	searchAnchor string
+
+	// command line: declared here so the view can render the : prompt;
+	// the verbs are registered in command.go.
+	cmd cmdline.State
+	reg cmdline.Registry
 
 	scopeNS      string     // namespace the breadcrumb pages derive from
 	helpReturn   screenMode // view to return to when help closes
@@ -179,6 +193,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateDetail(msg)
 		case modeHelp:
 			return m.updateHelp(msg)
+		case modeSearch:
+			return m.updateSearch(msg)
 		}
 		return m.updateList(msg)
 	}
@@ -348,6 +364,18 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case keymap.Quit:
 			return m, tea.Quit
+		case keymap.Search:
+			m.startSearch()
+			return m, nil
+		case keymap.NextMatch:
+			m.jump(1)
+			return m, nil
+		case keymap.PrevMatch:
+			m.jump(-1)
+			return m, nil
+		case keymap.ClearHighlight:
+			m.noh()
+			return m, nil
 		}
 	}
 	switch msg.Type {
@@ -603,6 +631,7 @@ func (m *Model) buildRows() {
 			m.rows = append(m.rows, row{item: item, ns: item.Namespace(), itemIdx: i})
 		}
 		m.cur.SetLen(len(m.rows))
+		m.collect()
 		return
 	}
 	// One area row per (namespace, area) pair, first-appearance order, so two
@@ -630,6 +659,7 @@ func (m *Model) buildRows() {
 		}
 	}
 	m.cur.SetLen(len(m.rows))
+	m.collect()
 }
 
 // areaOf returns the first dotted segment of a feature path (e.g. "install").

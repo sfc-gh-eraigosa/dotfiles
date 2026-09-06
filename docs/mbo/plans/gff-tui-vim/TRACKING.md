@@ -14,7 +14,7 @@
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | design (docs) | `gff-tui-vim/edward-raigosa/design` | `feature/gff-tui-vim/edward-raigosa/design` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff-tui-vim/edward-raigosa/design` | [#280](https://github.com/sfc-gh-eraigosa/dotfiles/pull/280) (draft) | docs written; issue #281 |
-| build | `gff-tui-vim/edward-raigosa/build` | `feature/gff-tui-vim/edward-raigosa/build` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff-tui-vim/edward-raigosa/build` | (pending checkpoint) | created 2026-09-05 22:58 PDT; base `feature/gff-tui-vim/edward-raigosa/design` @ `63d0397` (= `main` @ `70629d1` + the trio; the lib is already on `main`, so the design branch replaces the planned lib-branch base) |
+| build | `gff-tui-vim/edward-raigosa/build` | `feature/gff-tui-vim/edward-raigosa/build` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gff-tui-vim/edward-raigosa/build` | [#304](https://github.com/sfc-gh-eraigosa/dotfiles/pull/304) (draft, base = design branch) | created 2026-09-05 22:58 PDT; base `feature/gff-tui-vim/edward-raigosa/design` @ `63d0397` (= `main` @ `70629d1` + the trio; the lib is already on `main`, so the design branch replaces the planned lib-branch base) |
 
 `gss feature worker add --feature gff-tui-vim --purpose build --base feature/gff-tui-vim/edward-raigosa/design --engine claude --json` (2026-09-05):
 
@@ -31,8 +31,8 @@
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| 1 adopt libs/tui: keymap + nav.Cursor + help rebind | done | (SHA at the next commit) | RUN-RED `go test ./internal/tui/ -run "TestVim|TestHelpOpensOn|TestHDoesNot|TestPickerJK|TestFooterHint"` → 10 FAIL (`evidence/task1/run-red.txt`); RUN-GREEN `go test ./internal/tui/ -cover` → `ok … coverage: 91.4%` (baseline 91.3%); `grep -rn "'h', 'H'|scrollTop|lastInner" internal/tui/*.go` → no hits; `go vet ./...` clean; `go test ./...` → 12/12 ok (`evidence/task1/go-test.txt`) | rewired `TestHelpOverlayFromDetail` `h`→`?`; `cursor/scrollTop/lastInner` → `nav.Cursor`; three implementation notes in §4 |
-| 2 `/` search over `search.State` (auto-expand, n/N, :noh, gutter) | todo | | | |
+| 1 adopt libs/tui: keymap + nav.Cursor + help rebind | done | `01ea253` | RUN-RED `go test ./internal/tui/ -run "TestVim|TestHelpOpensOn|TestHDoesNot|TestPickerJK|TestFooterHint"` → 10 FAIL (`evidence/task1/run-red.txt`); RUN-GREEN `go test ./internal/tui/ -cover` → `ok … coverage: 91.4%` (baseline 91.3%); `grep -rn "'h', 'H'|scrollTop|lastInner" internal/tui/*.go` → no hits; `go vet ./...` clean; `go test ./...` → 12/12 ok (`evidence/task1/go-test.txt`) | rewired `TestHelpOverlayFromDetail` `h`→`?`; `cursor/scrollTop/lastInner` → `nav.Cursor`; three implementation notes in §4 |
+| 2 `/` search over `search.State` (auto-expand, n/N, :noh, gutter) | done | (SHA at the next commit) | RUN-RED `go test ./internal/tui/ -run "TestSlash|TestEscInList|TestNWithout|TestSearch"` → 8 FAIL (`evidence/task2/run-red.txt`); RUN-GREEN `go test ./internal/tui/ -cover` → `ok … coverage: 91.7%`; `go vet ./...` clean; `go test ./...` → 13/13 ok (`evidence/task2/go-test.txt`) | two extra spec-derived tests added for the gate (see §4) |
 | 3 `:` over `cmdline` (set/unset validation, Tab) | todo | | | adds `resolve.Resolved.WithNamespace` (keep resolve ≥ 95%) |
 | 4 docs + key-table pin test + gates + demo | todo | | | Step 5 is human-evidenced (real terminal) |
 
@@ -42,12 +42,12 @@
 | :-- | :-- | :-- | :-- |
 | F1 vim motions | [x] `TestVim*`, `TestPickerJKMoveCursor` (task1/go-test.txt) | [ ] demo `gg`/`G` | |
 | F2 help rebind | [x] `TestHelpOpensOnQuestionAndF1NotH`, `TestHDoesNotOpenHelpInPickerOrDetail` (task1/go-test.txt) | [ ] | |
-| F3 `/` prompt | [ ] `TestSlashSearch*` | [ ] demo `/wispr` | |
-| F4 haystack + auto-expand | [ ] `TestSlashSearchExpandsAreaAndJumpsToFirstMatch`, `TestSearchScopeIsTheCurrentPage`, `TestMatchItemPathOrDescription` | [ ] demo (collapsed `install` expands) | |
-| F5 n/N + :noh | [ ] `TestSlashSearchEnterCommitsAndNNHop`, `TestEscInListClearsHighlightsButKeepsPatternForN`, `TestNWithoutPatternIsNoop` | [ ] demo `n` | |
+| F3 `/` prompt | [x] `TestSlashSearch*` (task2/go-test.txt) | [ ] demo `/wispr` | |
+| F4 haystack + auto-expand | [x] `TestSlashSearchExpandsAreaAndJumpsToFirstMatch`, `TestSearchScopeIsTheCurrentPage` (task2/go-test.txt); `matchesItem` exercised by every search test (the plan's `TestMatchItemPathOrDescription` has no body in §4 and is covered by these) | [ ] demo (collapsed `install` expands) | |
+| F5 n/N + :noh | [x] `TestSlashSearchEnterCommitsAndNNHop`, `TestEscInListClearsHighlightsButKeepsPatternForN`, `TestNWithoutPatternIsNoop`, `TestNOnAPageWithoutMatchesReportsNotFound` (task2/go-test.txt) | [ ] demo `n` | |
 | F6 `:` commands | [ ] `TestColon*`, `TestParseCommand`, `TestParseValue*`, `TestFindKeyScopedAndQualified` | [ ] demo `:set`/`:unset` | |
 | F7 Tab completion | [ ] `TestColonTab*` | [ ] demo Tab | |
-| F8 prompt/gutter rendering | [ ] `TestSearchPromptKeepsFrameWithinHeight` + `gutterLines` asserts | [ ] | |
+| F8 prompt/gutter rendering | [x] `TestSearchPromptKeepsFrameWithinHeight` + `gutterLines` asserts (task2/go-test.txt) | [ ] | |
 | F9 docs agree | [ ] `TestTUIHelpListsVimSearchAndCommandKeys`, `TestFooterHintRendersFromTheKeymap` | [ ] README reviewed | |
 
 ## 3. Validation done-when — the stop condition
@@ -67,6 +67,8 @@
 | 2026-09-05 | 1 | (note, not blocking) the plan's `vim_test.go` redeclares an existing helper | `go vet ./internal/tui/` → `vet: internal/tui/vim_test.go:14:6: cursorLine redeclared in this block` — `round2_test.go:293` already defines `cursorLine` for package `tui_test`. | Dropped the duplicate from the new file and used the existing helper (it matches on the `"> "` prefix, which is what the new assertions want). No test intent changed. |
 | 2026-09-05 | 1 | (note, not blocking) plan §3 `gffKeys` loses gff's "category" wording | `go test ./internal/tui/` → `--- FAIL: TestHelpOverlayShowsAboutVersionAndSources … does not contain "category"` (round2_test.go:58, a pre-existing test asserting the overlay names gff's lateral axis). The plan's `gffKeys` merges only Select/Confirm/unset, so the overlay inherited the sdk's generic "previous page / pane". | Merged `PageLeft`/`PageRight` with gff Help text ("previous/next category page"), keeping `Short: "page"` so the footer still reads `h/l page`. This is exactly what GUIDE §3 prescribes for a tool whose lateral axis is real. Existing test kept as written; no lib change. |
 | 2026-09-05 | 1 | (note, not blocking) `h`/`H` still closed the help overlay | `grep -rn "'h', 'H'|scrollTop|lastInner" internal/tui/*.go` → 1 hit, `model.go:321` in `updateHelp` (the overlay's close keys). The plan's Task 1 edits cover the list/picker/detail handlers, not the overlay's own close set. | Dropped `h`/`H` from the close keys (`Esc/?/q` remain — exactly what the overlay's own hint advertises), satisfying the TODO's grep gate and IMPLEMENTATION §5 "h/H never open help after Task 1". |
+| 2026-09-05 | 2 | (note, not blocking) the plan's Task 2 test list leaves new branches uncovered | After the plan's 10 tests: `go test ./internal/tui/ -cover` → `coverage: 91.1%`, **below the 91.3% floor**. `go tool cover -func` named the gaps: `commitSearch` 66.7% (the `!committed` path — Enter on an outstanding compile error) and `jump` 75% (the `!ok` path — `n` where the committed pattern matches nothing on this page); both are behaviors the plan's own implementation and spec F3b/F5a define. | Added two tests to `search_test.go` — `TestSlashSearchEnterOnInvalidPatternDoesNotCommit` and `TestNOnAPageWithoutMatchesReportsNotFound`. Nothing in the implementation changed. Coverage 91.1% → **91.7%**. |
+| 2026-09-05 | 2 | (note, not blocking) the `*` gutter never rendered on non-cursor rows | `go test ./internal/tui/` → 4 FAIL, all `gutterLines`: `"[]" should have 1 item(s), but has 0`. The pre-existing `viewList` writes a hardcoded two-space indent in the non-cursor feature-row branch and ignores the computed `cursor` marker, so the plan's view edit 3 (setting `cursor = "* "`) had no effect there. | Non-cursor rows now render `cursor` + the path (`%s%-40s`), and a matching row's path takes `matchStyleFor(pal)` (bold orange, plain under NO_COLOR) as plan view edit 3 specifies. |
 
 ## 5. Session log (append-only — never rewrite history)
 
@@ -76,3 +78,4 @@
 | 2026-09-05 | re-plan | Owner review: shared TUI behaviors → new blocking objective `sdk-tui` (`sdk/libs/tui`). Plan re-cut 7→4 tasks to consume the lib; build worker will stack on `feature/sdk-tui/<user>/lib`. |
 | 2026-09-05 | build (session 1) | Preflight: sdk-tui done on `main` (`70629d1`), libs `tui/*` 6/6 ok; gff module all ok on the base; **baseline `internal/tui` coverage 91.3%** (`go test -cover ./internal/tui/`); go1.26.1. Build worker created (§0) on the design branch. |
 | 2026-09-05 | build (session 1) | Task 1 done: `keys.go` (gffKeys + palette + listHint), `model.go` on `nav.Cursor` with `gffKeys.Lookup` dispatch + `turnPage`, `view.go` viewport/footer/help via `overlay.Help` + a `sourceLines()` extraction. tui 91.3% → 91.4%; module 12/12 ok. Three implementation notes recorded in §4 (none touch the lib or the plan). |
+| 2026-09-05 | build (session 1) | Task 1 pushed → draft PR #304. Task 2 done: `search.go` (rowKey/inScope/hit/collect/start/apply/commit/cancel/jump/noh/updateSearch), `modeSearch` + `modeCommand` modes with the `cmdline` fields declared, view prompt/badge/gutter/`errStyleFor`/`matchStyleFor`. tui 91.7%; module 13/13 ok. |
