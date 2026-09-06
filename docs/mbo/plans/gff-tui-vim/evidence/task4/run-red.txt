@@ -1,0 +1,9 @@
+# 2026-09-05 23:19 PDT — RUN-RED: go test ./cmd/ -run TestTUIHelpListsVimSearchAndCommandKeys
+--- FAIL: TestTUIHelpListsVimSearchAndCommandKeys (0.00s)
+        	Error:      	"Launch an interactive bubbletea TUI that shows all resolved feature flags\nin a collapsible area tree with layer provenance.\n\nNavigation: ↑/↓ move  Enter expand/collapse  Space toggle (bool) or pick (choice)  q quit.\n\nWrites go only to the user override file (~/.config/gff/config.yaml, mode 0600).\nQuit without any change leaves the file untouched." does not contain "j/k"
+        	Messages:   	gff tui --help must mention "j/k"
+        	Error:      	"Launch an interactive bubbletea TUI that shows all resolved feature flags\nin a collapsible area tree with layer provenance.\n\nNavigation: ↑/↓ move  Enter expand/collapse  Space toggle (bool) or pick (choice)  q quit.\n\nWrites go only to the user override file (~/.config/gff/config.yaml, mode 0600).\nQuit without any change leaves the file untouched." does not contain "h/l"
+        	Messages:   	gff tui --help must mention "h/l"
+        	Error:      	"Launch an interactive bubbletea TUI that shows all resolved feature flags\nin a collapsible area tree with layer provenance.\n\nNavigation: ↑/↓ move  Enter expand/collapse  Space toggle (bool) or pick (choice)  q quit.\n\nWrites go only to the user override file (~/.config/gff/config.yaml, mode 0600).\nQuit without any change leaves the file untouched." does not contain "gg/G"
+        	Messages:   	gff tui --help must mention "gg/G"
+        	Error:      	"Launch an interactive bubbletea TUI that shows all resolved feature flags\nin a collapsible area tree with layer provenance.\n\nNavigation: ↑/↓ move  Enter expand/collapse  Space toggle (bool) or pick (choice)  q quit.\n\nWrites go only to the user override file (~/.config/gff/config.yaml, mode 0600).\nQuit without any change leaves the file untouched." does not contain "ctrl+d"

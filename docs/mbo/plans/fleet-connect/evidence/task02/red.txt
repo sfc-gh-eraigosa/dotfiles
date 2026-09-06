@@ -1,0 +1,19 @@
+# task02 RED — 2026-09-06T05:58:31Z — go test ./internal/runner/ ./internal/updexec/
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec [github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec.test]
+internal/updexec/quote_test.go:13:66: undefined: runner.Quote
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner [github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner.test]
+internal/runner/handoff_test.go:24:14: undefined: HandoffArgv
+internal/runner/handoff_test.go:48:41: undefined: InteractiveArgs
+internal/runner/handoff_test.go:59:14: undefined: HandoffArgv
+internal/runner/handoff_test.go:72:12: undefined: Command
+internal/runner/handoff_test.go:96:13: undefined: Quote
+internal/runner/handoff_test.go:102:30: undefined: Quote
+internal/runner/handoff_test.go:103:14: undefined: HandoffArgv
+internal/runner/handoff_test.go:117:12: undefined: HandoffArgv
+internal/runner/handoff_test.go:121:12: undefined: HandoffArgv
+internal/runner/handoff_test.go:141:17: undefined: HandoffArgv
+internal/runner/handoff_test.go:141:17: too many errors
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner [build failed]
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec [build failed]
+FAIL
+exit=1
