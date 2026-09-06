@@ -1,0 +1,37 @@
+# P0-T2 store + JWT — 2026-09-06T03:33:00Z — worker gcfg/edward-raigosa/build
+
+## RUN-RED: cd sdk/ghapp && go test ./pkg/ghapp/
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/pkg/ghapp [github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/pkg/ghapp.test]
+pkg/ghapp/jwt_test.go:26:15: undefined: ParsePrivateKey
+pkg/ghapp/jwt_test.go:34:15: undefined: ParsePrivateKey
+pkg/ghapp/jwt_test.go:45:14: undefined: SignJWT
+pkg/ghapp/jwt_test.go:76:14: undefined: SignJWT
+pkg/ghapp/store_test.go:25:7: undefined: FileStore
+pkg/ghapp/store_test.go:31:10: undefined: Apps
+pkg/ghapp/store_test.go:31:25: missing type in composite literal
+pkg/ghapp/store_test.go:58:7: undefined: FileStore
+pkg/ghapp/store_test.go:63:10: undefined: Apps
+pkg/ghapp/store_test.go:63:20: missing type in composite literal
+pkg/ghapp/store_test.go:63:20: too many errors
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/pkg/ghapp [build failed]
+FAIL
+
+## RUN-GREEN: go vet ./... && go test ./pkg/ghapp/ -count=1 -cover (twice: after impl, after error-path tests) + CI-formula module total
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/pkg/ghapp	0.748s	coverage: 78.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/pkg/ghapp	0.583s	coverage: 87.5% of statements
+total:										(statements)	87.7%
+
+## go test -v names
+--- PASS: TestParsePrivateKeyPKCS1AndPKCS8 (0.05s)
+--- PASS: TestSignJWTClaimsAndSignature (0.02s)
+--- PASS: TestSignJWTRejectsWrongKey (0.08s)
+--- PASS: TestParsePrivateKeyRejectsNonRSA (0.00s)
+--- PASS: TestFileStoreSaveCreatesPrivateDirAndFiles (0.03s)
+--- PASS: TestFileStoreRoundTrip (0.02s)
+--- PASS: TestFileStoreLoadMissingIsEmpty (0.00s)
+--- PASS: TestFileStoreLoadRefusesWorldReadablePEM (0.02s)
+--- PASS: TestFileStoreSaveRejectsBadSlug (0.17s)
+--- PASS: TestFileStoreLoadRejectsCorruptJSON (0.00s)
+--- PASS: TestDefaultStoreDir (0.00s)
+--- PASS: TestFileStoreLoadErrorsWhenPEMMissing (0.00s)
+--- PASS: TestFileStoreSaveFailsWhenDirIsAFile (0.00s)

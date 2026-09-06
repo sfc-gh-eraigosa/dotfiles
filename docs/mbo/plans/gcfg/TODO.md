@@ -32,15 +32,15 @@
 - [x] VERIFY: `.github/workflows/ghapp-ci.yml` (vet, test, ≥80% gate); `git status --short -- sdk/ghapp` shows files tracked (ALLOWLIST)
 - [x] DOCS: `sdk/ghapp/{AGENTS.md,CLAUDE.md→AGENTS.md,README.md}` stubs
 - [x] COMMIT: `feat(ghapp): module scaffold + version`
-- [ ] LEDGER + CHECKPOINT
+- [x] LEDGER + CHECKPOINT
 **Done when:** CI green on the worker PR; version prints.
 
 ### P0-T2 — store + JWT  (plan P0-T2)
-- [ ] RED: `pkg/ghapp/store_test.go` (0700 dir, 0600 PEM, round-trip, refuse 0644 PEM); `jwt_test.go` (RS256, iss/iat/exp, verifies with pubkey)
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `store.go`, `jwt.go` (golang-jwt/v5)
-- [ ] RUN-GREEN: `go test ./pkg/ghapp/ -cover` → **PASS**
-- [ ] COMMIT: `feat(ghapp): app store + RS256 JWT`
+- [x] RED: `pkg/ghapp/store_test.go` (0700 dir, 0600 PEM, round-trip, refuse 0644 PEM); `jwt_test.go` (RS256, iss/iat/exp, verifies with pubkey)
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `store.go`, `jwt.go` (golang-jwt/v5)
+- [x] RUN-GREEN: `go test ./pkg/ghapp/ -cover` → **PASS**
+- [x] COMMIT: `feat(ghapp): app store + RS256 JWT`
 - [ ] LEDGER + CHECKPOINT
 
 ### P0-T3 — installation tokens  (plan P0-T3)
