@@ -14,14 +14,14 @@
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | design | `gcfg/edward-raigosa/design` | `feature/gcfg/edward-raigosa/design` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gcfg/edward-raigosa/design` | #285 | designing |
-| build (P0+P1 sequential) | `gcfg/edward-raigosa/build` | `feature/gcfg/edward-raigosa/build` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gcfg/edward-raigosa/build` | (checkpoint pending) | building |
+| build (P0+P1 sequential) | `gcfg/edward-raigosa/build` | `feature/gcfg/edward-raigosa/build` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gcfg/edward-raigosa/build` | [#287](https://github.com/sfc-gh-eraigosa/dotfiles/pull/287) (draft, base = design) | building |
 
 ## 1. Task ledger
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| P0-T1 ghapp scaffold + version | done | (this commit; SHA in checkpoint log) | `go test ./... -count=1 -cover` → 3 pkgs ok (main 90.9%, cmd 83.3%, version 100%); CI formula total 88.2% ≥80; `go run . version` → `ghapp vdev …`; actionlint clean → [evidence/P0-T1/2026-09-05.txt](./evidence/P0-T1/2026-09-05.txt) | ghapp-ci.yml added (no PR path filter, like gff-ci) |
-| P0-T2 store + JWT | todo | | | |
+| P0-T1 ghapp scaffold + version | done | `e2b78f2` | `go test ./... -count=1 -cover` → 3 pkgs ok (main 90.9%, cmd 83.3%, version 100%); CI formula total 88.2% ≥80; `go run . version` → `ghapp vdev …`; actionlint clean → [evidence/P0-T1/2026-09-05.txt](./evidence/P0-T1/2026-09-05.txt) | ghapp-ci.yml added (no PR path filter, like gff-ci) |
+| P0-T2 store + JWT | done | (this commit) | `go test ./pkg/ghapp/ -count=1 -cover` → ok 87.5% (12 tests: 0700 dir, 0600 PEM+apps.json, round-trip, 0644 PEM refused naming file+mode, missing PEM, bad slug, corrupt JSON, XDG dir; RS256 iss/iat-60s/exp+9m verified with pubkey, wrong key rejected, PKCS1+PKCS8, non-RSA rejected); module total 87.7% → [evidence/P0-T2/2026-09-05.txt](./evidence/P0-T2/2026-09-05.txt) | golang-jwt/jwt/v5 v5.3.1 |
 | P0-T3 installation tokens | todo | | | |
 | P0-T4 manifest flow + CLI | todo | | | human: one real create (redacted) |
 | P1-T1 gcfg scaffold + CI | todo | | | |
