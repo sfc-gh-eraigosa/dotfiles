@@ -86,20 +86,20 @@
 - [x] RUN-RED: `go test ./tui/overlay/` → expect **FAIL** `undefined: Help`
 - [x] GREEN: `tui/overlay/overlay.go`
 - [x] RUN-GREEN: `mkdir -p $EV/task6 && go test ./tui/overlay/ -cover -v 2>&1 | tee $EV/task6/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
-- [ ] COMMIT: `feat(libs/tui): overlay — palette interface, help from the keymap, confirm dialog`
-- [ ] LEDGER + CHECKPOINT
+- [x] COMMIT: `feat(libs/tui): overlay — palette interface, help from the keymap, confirm dialog`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** overlay ≥ 90%; `grep -rn lipgloss tui/` → no hits.
 
 ### Task 7 — example, docs, gates, demo  (plan Task 7)
 
-- [ ] RED: `tui/example/model_test.go` (build tag `example`)
-- [ ] RUN-RED: `go test -tags example ./tui/example/` → expect **FAIL** `undefined: newModel`
-- [ ] GREEN: `tui/example/model.go`, `tui/example/main.go`
-- [ ] RUN-GREEN: `go test -tags example ./tui/example/ -v | tee $EV/task7/example-test.txt` → **PASS**
-- [ ] DOCS: `sdk/libs/AGENTS.md` table row; `sdk/AGENTS.md` Conventions bullet
-- [ ] VERIFY: plan Task 7 Step 5 gates → `go-test-all.txt`, `coverage-gate.txt` (COVERAGE_ENFORCE=1), `lint-go.txt`, `deps/gss-size.txt` vs `gss-size-before.txt`
-- [ ] VERIFY (human, real terminal): plan Task 7 Step 6 tmux demo → `evidence/demo/{transcript.txt,README.md}`
+- [x] RED: `tui/example/model_test.go` (build tag `example`)
+- [x] RUN-RED: `go test -tags example ./tui/example/` → expect **FAIL** `undefined: newModel`
+- [x] GREEN: `tui/example/model.go`, `tui/example/main.go`
+- [x] RUN-GREEN: `go test -tags example ./tui/example/ -v | tee $EV/task7/example-test.txt` → **PASS**
+- [x] DOCS: `sdk/libs/AGENTS.md` table row; `sdk/AGENTS.md` Conventions bullet
+- [x] VERIFY: plan Task 7 Step 5 gates → `go-test-all.txt`, `coverage-gate.txt` (COVERAGE_ENFORCE=1), `lint-go.txt`, `deps/gss-size.txt` vs `gss-size-before.txt`
+- [x] VERIFY (human, real terminal): plan Task 7 Step 6 tmux demo → `evidence/demo/{transcript.txt,README.md}`
 - [ ] COMMIT: `feat(libs/tui): composition example, AGENTS docs, module gates + demo evidence`
 - [ ] LEDGER: TRACKING §1 all `done`, §2 matrix ticked, §3 stop condition
 - [ ] DOCS: `docs/mbo/index.md` row `sdk-tui` → `in-review` (+ lib PR #); COMMIT `docs(mbo): sdk-tui → in-review`
