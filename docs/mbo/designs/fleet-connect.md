@@ -8,6 +8,8 @@
   [#266](https://github.com/sfc-gh-eraigosa/dotfiles/issues/266); design PR recorded in
   `../index.md` row `fleet-connect`.
 - **Author(s):** operator + assistant
+- **Amended:** 2026-09-05 — port bridges (goal 7, §3.4, §4.7–§4.8): a third declared action
+  kind, `Tunnel`, and the `ports` provider, decided with the operator before the contract freezes.
 
 ## 1. Problem / context
 
@@ -96,14 +98,25 @@ a tunnel. That heterogeneity is the argument for a plugin boundary rather than a
 6. **CLI parity:** `fleet ls <host> [path…] [--json]` and `fleet connect <host> <path…>` run the
    same providers, and their JSON node shape **is** the plugin wire shape — one schema, four
    consumers (TUI, CLI, plugin protocol, scripts).
+7. **Port bridges:** from a host's `ports` level, bridge any number of that host's listening
+   ports to `127.0.0.1` on the workstation over the ssh connection fleet already multiplexed,
+   so a dsh or web UI that only listens on the remote becomes a local URL. Bridges on several
+   hosts are started, stopped and shown from one dashboard or one `fleet bridge` command, and
+   **a bridge lives exactly as long as the fleet process that opened it.**
 
 **Non-goals (YAGNI — each is a later objective or a rejected idea)**
 
-- Kubernetes, docker, tmux/Claude sessions, system stats with htop/nvtop/jtop handoffs, and port
-  tunnels: catalogued in §3.1 as the plugin roadmap, not built here. "Basic stats" in this
-  objective means herdr's own (server state, agent states).
+- Kubernetes, docker, tmux/Claude sessions, and system stats with htop/nvtop/jtop handoffs:
+  catalogued in §3.1 as the plugin roadmap, not built here. "Basic stats" in this objective
+  means herdr's own (server state, agent states).
+- **Bridges that outlive fleet.** A detached forwarder — a daemon, `ssh -f`, or the pidfile
+  model of the playground `expose` supervisor — was weighed in §3.4 and rejected by the
+  operator: when fleet dies, every bridge dies with it, so there is never a forward on the
+  workstation that no visible process owns.
+- **LAN exposure of a bridge** (`-L 0.0.0.0:…`). A bridge binds loopback only; re-exposing a
+  local port to the LAN is `expose`'s job, not fleet's.
 - A **declarative (YAML-manifest) plugin** that would make simple tools truly zero-code. It is
-  itself just a plugin, so the protocol makes it purely additive; §4.7 sizes it as the natural
+  itself just a plugin, so the protocol makes it purely additive; §4.9 sizes it as the natural
   follow-on.
 - **Remote** transports. The protocol is designed for them (URL-addressed, no stdio assumptions
   in the method layer); only local stdio ships.
@@ -126,7 +139,7 @@ the same `runner` seam and ControlMaster socket, so no new credential path exist
 | **containers** (docker, podman) | `docker ps --format json` | containers (+ compose projects) | `docker logs -f` (stream), `docker exec -it` (handoff), `docker stats --no-stream` | later |
 | **sessions** (tmux, Claude remote-control) | `tmux ls -F`; `capture-pane` for the `Remote Control active` marker | sessions → windows | `ssh -t <alias> tmux attach -t <s>` — absorbs the attach step of the `remote-claude-session` skill and the unbuilt `tmux-mgr remote` design (#63) | later |
 | **system** | `uptime`, `free`, `nvidia-smi --query-gpu`, `tegrastats` one-shot, `command -v` for htop/btop/nvtop/nvitop/jtop | stats row · tool list · systemd units | handoff `ssh -t <alias> htop`; `journalctl -fu <unit>` stream | later |
-| **ports** | `ss -ltnp` | listening ports, labelled (ollama, VNC, web UIs) | `ssh -L <local>:127.0.0.1:<port> <alias> -N`, print the local URL | later |
+| **ports** | `ss -ltnp` | listening ports, labelled (ollama, dsh, VNC, web UIs) | `t`: bridge the port to `127.0.0.1` over the mux — N ports per host ride one `ssh -N`; the local URL is printed | **this objective** (§3.4, §4.7–§4.8) |
 | not planned | WoL (rejected in `fleet-tui`), mosh, serial console, RDP/VNC launch, sftp/sshfs | | | — |
 
 ### 3.2 How a tool becomes a provider
@@ -165,6 +178,39 @@ columns; `esc` pops. A tree expanded in place would force every kind into one sh
 detail right) would rework the derived-width rows and the bottom log pane. Push views reuse the
 existing panel, log pane and status bar unchanged.
 
+### 3.4 How N ports become N local bridges (decided 2026-09-05)
+
+The action contract had exactly two kinds — a `Handoff` takes the terminal, a `Stream` emits
+lines — and a port bridge is neither: a long-lived background process that produces no output
+and has to be started, listed and stopped. The bridge is a third **declared** kind, `Tunnel`
+(§4.2), and four shapes were weighed for the process behind it:
+
+**A. One `ssh -N` per host carrying every `-L` — chosen.** Fleet keeps one background ssh per
+host that has a bridge, built by `runner` as
+`ssh -N -o ExitOnForwardFailure=yes <BatchMode + mux options> -L 127.0.0.1:<l>:127.0.0.1:<r> … <alias>`,
+and owns its context: cancelling it tears every one of that host's bridges down at once. Adding
+or removing a port restarts that one process — a sub-second blip on the host's other bridges,
+accepted because it happens only on an operator keystroke. Costs one process per bridged host,
+never per port; earns one lifecycle, one pure argv builder, and a `runner.Fake` test path
+(`Block`) that already simulates a process that never ends on its own.
+
+**B. `ssh -O forward` / `-O cancel` against the ControlMaster.** No extra process and no blip,
+but a forward on the master dies when `ControlPersist` (10m) expires after the last client —
+the wrong lifetime for a dsh session the operator is working in, and invisible when it happens.
+Rejected. It remains the natural upgrade *inside* A (a keeper process plus `-O forward`) if the
+restart blip ever matters.
+
+**C. One `ssh -N -L` per port.** Simplest to reason about, but N processes per host and no
+single place that knows "this host's bridges". Rejected.
+
+**D. A detached forwarder that outlives fleet** (a daemon, `ssh -f`, or `expose`'s pidfile
+model). Rejected by the operator: a bridge lives exactly as long as the fleet process that
+opened it. Quitting the TUI, or Ctrl-C on `fleet bridge`, *is* the teardown.
+
+Under A a `Tunnel` follows the same rule as the other two kinds: the provider declares it as
+data — two port numbers and a URL scheme — fleet stamps the alias and turns it into a process.
+There is nothing to quote: the argv is built from integers.
+
 ## 4. Decision
 
 **The bet:** the TUI knows nothing about any provider's shape, and fleet knows nothing about any
@@ -179,9 +225,11 @@ contract serialisable from the start is what keeps behaviour out of it.
 | `pkg/provider` (**public**) | The contract and the wire: `Node`, `Action`, `Handoff`, `Stream`, `Provider`, `ErrAbsent`; the JSON-RPC method/param types; `Serve(Provider)` for plugin authors; `Client` for fleet. Pure data + transport, no ssh, no exec of remote things. | fleet, every plugin author | stdlib only |
 | `internal/providers` | The registry: built-in entries, the `providers.yaml` loader, lazy plugin dial, per-call timeouts, health/status, and the `host/exec` bridge onto `runner.Runner`. | TUI nav, CLI verbs | `pkg/provider`, `internal/runner` |
 | `internal/provider/herdr` | The herdr provider: `New(Deps)`; pure parsers over real captured JSON; pure, quoted remote scripts; the degraded-state rules. | the registry (built-in) and `fleet provider serve herdr` | `pkg/provider`, `internal/runner` (types) |
-| `internal/runner` (extended) | Turns a declared `provider.Handoff` into an `*exec.Cmd` (`ssh -t` + mux options for remote, bare argv with no shell for local); `Quote`; `RunStreamCtx` on the `Runner` interface. | the TUI, `fleet connect`, the `host/exec` bridge | `pkg/provider` (data only) |
-| `cmd/tui_nav.go`, `cmd/tui_nav_view.go` | The view stack, push/pop/reload, async level loads with a generation counter, breadcrumb, the generic table renderer, `runProviderAction`. | `fleet tui` | `pkg/provider`, `internal/providers` |
-| `cmd/ls.go`, `cmd/connect.go`, `cmd/providers.go` | `fleet ls` / `fleet connect`; `fleet providers list|check`; the hidden `fleet provider serve <name>`. | operators, scripts, protocol tests | `internal/providers` |
+| `internal/runner` (extended) | Turns a declared `provider.Handoff` into an `*exec.Cmd` (`ssh -t` + mux options for remote, bare argv with no shell for local) and a set of `provider.Tunnel`s into one `ssh -N` (`BridgeArgv`, pure; `RunBridgeCtx`); `Quote`. The alias is a parameter fleet supplies, never a field the provider fills. | the TUI, `fleet connect`, `fleet bridge`, the `host/exec` bridge | `pkg/provider` (data only) |
+| `internal/bridge` | One `Set` per alias — its forwards, the `ssh -N` context, state (`starting · up · failed · stopped`) and reason — under a `Manager` keyed by alias: `Add`/`Remove` restart the host's set, `Status()` is the table every consumer renders, `Close()` tears every host down. Readiness is a loopback TCP dial, injected so tests open no socket. | the TUI, `fleet bridge`, `fleet connect` | `pkg/provider` (data), `internal/runner` |
+| `internal/provider/ports` | The ports provider: one `ss -ltnp` round trip; a small label table (11434 ollama, 3080 dsh, 5900 VNC, 6443 k8s API, …); every loopback-reachable port a row with a `t` `Tunnel` action; a port bound to a non-loopback address only is listed and refused with the reason. | the registry (built-in) | `pkg/provider` |
+| `cmd/tui_nav.go`, `cmd/tui_nav_view.go`, `cmd/tui_bridge.go` | The view stack, push/pop/reload, async level loads with a generation counter, breadcrumb, the generic table renderer, `runProviderAction`; the bridge keys, the gutter marker, the level bridge line and teardown on quit. | `fleet tui` | `pkg/provider`, `internal/providers`, `internal/bridge` |
+| `cmd/ls.go`, `cmd/connect.go`, `cmd/bridge.go`, `cmd/providers.go` | `fleet ls` / `fleet connect` / `fleet bridge`; `fleet providers list|check`; the hidden `fleet provider serve <name>`. | operators, scripts, protocol tests | `internal/providers`, `internal/bridge` |
 
 ### 4.2 The contract (frozen in the blocking leaf; every field is JSON)
 
@@ -199,16 +247,21 @@ type Action struct {
     Key         rune     `json:"key"`
     Label       string   `json:"label"`
     Unavailable string   `json:"unavailable"` // non-empty: LISTED but refused, with the reason
-    Handoff     *Handoff `json:"handoff"`     // takes the terminal    } exactly
-    Stream      *Stream  `json:"stream"`      // lines into the log pane } one is set
+    Handoff     *Handoff `json:"handoff"`     // takes the terminal              } exactly
+    Stream      *Stream  `json:"stream"`      // lines into the log pane         } one
+    Tunnel      *Tunnel  `json:"tunnel"`      // a port bridged to 127.0.0.1     } is set
 }
 type Handoff struct {                          // DATA. Only internal/runner turns it into a process.
     Kind    HandoffKind `json:"kind"`          // "remote" (ssh -t + mux) | "local" (argv, no shell)
-    Host    string      `json:"host"`
     Command string      `json:"command"`       // remote: a shell command the provider has already quoted
     Argv    []string    `json:"argv"`          // local: argv, so a hostile value is inert
-}
+}                                              // no Host field: fleet stamps the level's alias (below)
 type Stream struct { Command string `json:"command"`; Follow bool `json:"follow"` }
+type Tunnel struct {                           // DATA. Two integers and a scheme; nothing to quote.
+    RemotePort int    `json:"remotePort"`      // 1–65535, always on the HOST's loopback
+    LocalPort  int    `json:"localPort"`       // 0: prefer RemotePort locally, else allocate
+    Scheme     string `json:"scheme"`          // "http" | "https" | "" — printed before 127.0.0.1:<l>
+}
 
 type Provider interface {
     Name() string
@@ -232,6 +285,15 @@ technique as `sshconf.Host` making an exec directive *unrepresentable* rather th
 Why `Host` rather than passing a `runner.Runner`: it is the single narrow capability a provider
 needs, it serialises to one RPC method, and it is the reason a plugin cannot open its own
 connection to a fleet machine.
+
+Why no host field on `Handoff`, `Stream` or `Tunnel`: the machine an action runs against is the
+one the operator drilled into, and fleet already knows it — the level's alias is stamped onto
+the action by `runProviderAction` / `fleet connect` / `fleet bridge` at the moment it becomes a
+process, exactly as `host/exec` resolves its `callId`. A provider that could name a host in a
+handoff could open an interactive ssh to any fleet machine, which is the enumeration escape
+the `callId` rule closes for exec; leaving the field out makes it unrepresentable on every
+path. The same rule is why `Tunnel` has no remote *address*: a forward always targets the
+dispatched host's own `127.0.0.1`, so a plugin cannot turn a fleet machine into a jump host.
 
 ### 4.3 The plugin protocol (v1)
 
@@ -270,10 +332,12 @@ Decisions inside the protocol, each with its reason:
   told apart — so the escape is unrepresentable rather than filtered. The alias still travels
   *to* the plugin so it can label rows and build handoffs; it is a name, never a route, and no
   hostname, port, user, key path or credential ever crosses the wire.
-- **Streams and handoffs are declared, never spawned by the plugin.** A plugin cannot take the
-  operator's terminal or hold an open pipe; it returns a `Stream`/`Handoff` and fleet runs it.
-  That keeps `tea.ExecProcess` — which suspends the entire dashboard — under fleet's control and
-  keeps a plugin's failure modes bounded to "answered badly" or "did not answer".
+- **Streams, handoffs and tunnels are declared, never spawned by the plugin.** A plugin cannot
+  take the operator's terminal, hold an open pipe or bind a port; it returns a
+  `Stream`/`Handoff`/`Tunnel` and fleet runs it on the alias it dispatched. That keeps
+  `tea.ExecProcess` — which suspends the entire dashboard — and every background `ssh -N` under
+  fleet's control, and keeps a plugin's failure modes bounded to "answered badly" or "did not
+  answer".
 - **`attrs` round-trips.** A probe puts opaque state there (herdr's resolved binary path) and
   fleet hands it back on `children`, so a plugin needs no session state and can be restarted or
   reconnected between calls — the property a remote transport will need.
@@ -311,8 +375,9 @@ first thing to run when a plugin misbehaves.
 
 - **State:** `nav []navFrame` (empty = level 0), `navHost`, `navGen`, `reg *providers.Registry`
   (injected in `cmd/tui.go` beside `ansPath`; `nil` disables drill-down, which is what existing
-  tests and demo frames get), `provStreams`. A `navFrame` holds `path`, `kind`, `columns`,
-  `rows`, an ID-keyed `cursor`, `top`, `loading`, `err`, and its own `search` state.
+  tests and demo frames get), `provStreams`, and `bridges *bridge.Manager` (one for the whole
+  process, every host's sets inside it). A `navFrame` holds `path`, `kind`, `columns`, `rows`,
+  an ID-keyed `cursor`, `top`, `loading`, `err`, and its own `search` state.
 - **Loading:** `loadLevel(gen, depth, alias, path, reg, r)` runs off the UI thread. An empty path
   probes every enabled provider in registry order; an absent capability becomes a dimmed row
   carrying its reason; a failed plugin becomes a row saying so. A non-empty path resolves
@@ -327,16 +392,31 @@ first thing to run when a plugin misbehaves.
   `Unavailable` action produces a status line with its reason. A `Stream`'s lines pass through
   `appendLog` (host colour, legend and `logCap` reused) but carry their own message types —
   never `bgUpdateDoneMsg`, whose handler decrements the update engine's slot count and re-polls.
-  A `Handoff` becomes `runner.Command(h)` under `tea.ExecProcess`, completing through the
-  existing `execDoneMsg{ssh:true}` path so the row is re-polled on return. No `handoffWrapper`
-  banner: `herdr --remote` repaints the screen within a frame, and so will `kubectl exec`.
+  A `Handoff` becomes `runner.Command(alias, h)` under `tea.ExecProcess`, completing through
+  the existing `execDoneMsg{ssh:true}` path so the row is re-polled on return — `alias` is
+  `navHost`, never a value from the provider, and the handler re-polls only an alias present
+  in `m.hosts`. No `handoffWrapper` banner: `herdr --remote` repaints the screen within a
+  frame, and so will `kubectl exec`. A `Tunnel` is a **toggle** on the bridge manager keyed by
+  `(navHost, RemotePort)`: absent → `Add` (the host's `ssh -N` restarts with one more `-L`),
+  present → `Remove`. The manager reports through its own message types (`bridgeUpMsg`,
+  `bridgeDoneMsg`) and its transitions are lines in the log pane via `appendLog`, so it shares
+  nothing with the update engine.
 - **Keys:** `keyHelp` gains a level marker and the always-visible header strip filters on it, so
   a drill-down key is never implemented-but-invisible (the defect the log pane shipped with).
   Inside a level: `enter` pushes (no-op on a `Leaf`), `esc` clears the level's filter first and
-  pops otherwise, `r` reloads only this level, `c` runs the cursor row's `c` action, vim motions
-  and `/ n N` are scoped to the level, log-pane keys are unchanged, and `u w v space a p P A F`
-  are **unbound** — a fleet-wide update is a dashboard verb, and a stray keystroke three levels
-  down must not reinstall a fleet.
+  pops otherwise, `r` reloads only this level, `c` runs the cursor row's `c` action, `t` toggles
+  the cursor row's `Tunnel` action (any kind may carry one; the ports provider is merely the
+  first), `T` stops every bridge on the level's host, vim motions and `/ n N` are scoped to the
+  level, log-pane keys are unchanged, and `u w v space a p P A F` are **unbound** — a
+  fleet-wide update is a dashboard verb, and a stray keystroke three levels down must not
+  reinstall a fleet. Bridges survive `esc`: they belong to the process, not the level.
+- **Bridge rendering is kind-agnostic.** Fleet never adds a column to a provider's table.
+  A row whose `Tunnel` is active gets a `⇄` marker in the cursor gutter (keyed on
+  `(alias, RemotePort)`, so it survives a reload), the level status line lists the host's
+  bridges (`⇄ 3080→http://127.0.0.1:3080 up · 11434→127.0.0.1:41234 starting`), and at level 0
+  a host row with bridges carries `⇄N` in its existing NOTE column. `q` runs
+  `bridges.Close()` before `tea.Quit`, so the last frame the operator sees is one with no
+  bridges; the force-quit path does the same.
 - **Breadcrumb:** derived from `navHost` plus the top frame's `path` — the same `[]string` that
   is the `fleet ls` argument list and the RPC `path` parameter. One list, no second source.
 
@@ -371,7 +451,67 @@ host
 | protocol mismatch | local `client.protocol` ≠ remote `server.protocol`, or `compatible:false` | attach is listed with `Unavailable: "local client speaks 20, <host> serves 19 — update one side"` |
 | no local herdr | `Deps.LocalBinary` returns nothing | attach unavailable with the reason; `fleet connect` runs the **local** client |
 
-### 4.7 What this makes cheap next
+### 4.7 The ports provider
+
+```
+host
+└─ ports        PORT · BIND · PROCESS · LABEL                          t: bridge to 127.0.0.1
+```
+
+- **Probe is one round trip:** `ss -H -ltnp` (POSIX-`sh` wrapper; `ss` absent → the row says so
+  and names the fallback the operator can install). Rows are `Leaf`; there is no deeper level.
+- **PROCESS** comes from `ss -p`, which names only the caller's own processes without root;
+  blank is an honest cell, not a failure. **LABEL** is a small in-tree table keyed by port —
+  `11434 ollama`, `3080 dsh`, `5900 VNC`, `6443 kubernetes`, `8888 jupyter`, `9100
+  node-exporter` — falling back to the process name, then blank.
+- **Bind rules.** A port bound to `0.0.0.0`, `::`, `127.0.0.1` or `::1` is reachable via the
+  host's loopback and gets `t: Tunnel{RemotePort: p, LocalPort: 0, Scheme: guess}` where the
+  scheme guess is `http` for the label table's web UIs and `""` otherwise. A port bound only to
+  a non-loopback address (`192.168.0.5:5900`) is **listed with `Unavailable: "bound to
+  192.168.0.5 only — not reachable via the host's loopback"`**, because a tunnel never targets
+  anything but `127.0.0.1` on the host (§4.2).
+- **Bridge state is not the provider's.** `Attrs` carry nothing; the `⇄` marker and the bridge
+  line are fleet's, keyed on `(alias, RemotePort)`, so `r` reloads the port list without
+  touching a bridge.
+
+### 4.8 Bridges: lifecycle, ports and lifetime
+
+- **One `ssh -N` per host.** `bridge.Set{alias, forwards []Forward{Remote, Local, Scheme}}`;
+  `runner.BridgeArgv(alias, forwards)` is pure and asserted by test:
+  `ssh -N -o ExitOnForwardFailure=yes` + `baseArgs` (BatchMode, ConnectTimeout, mux) +
+  one `-L 127.0.0.1:<l>:127.0.0.1:<r>` per forward + `<alias>`. `runner.RunBridgeCtx` starts it
+  under `exec.CommandContext` with the same `WaitDelay` discipline as `RunStreamCtx`, and on
+  Linux sets `Pdeathsig=SIGTERM` so a fleet that is killed outright takes its bridges with it.
+- **Change = restart.** `Add`/`Remove` cancel the host's context, wait for `done`, and start a
+  new process with the new forward list. Other bridges on that host blip for the restart;
+  bridges on other hosts are untouched. `Remove` of the last forward stops the process and
+  deletes the set.
+- **Local port policy.** `LocalPort: 0` prefers the remote port number (`3080 → 127.0.0.1:3080`,
+  the case the operator actually types into a browser); if that local port is busy, fleet
+  allocates a free one by binding `127.0.0.1:0`, releases it, and says so in the bridge line.
+  An explicit `LocalPort` that is busy fails the bridge with `ExitOnForwardFailure`'s reason
+  rather than silently moving. (The allocate-then-release race is accepted and named.)
+- **Readiness.** `ssh -N` prints nothing on success, so the set is `starting` until an injected
+  loopback dial to `<l>` succeeds (polled, bounded by `ConnectTimeout`), then `up`; if the
+  process exits first the set is `failed` with its last stderr line (`bind: Address already in
+  use`, `Permission denied (publickey)`, …) — the same explain-the-exit discipline the update
+  engine uses.
+- **Lifetime.** A set lives while its context lives; `Manager.Close()` cancels every set and
+  waits. The TUI calls it on `q`, `fleet bridge` on Ctrl-C/SIGTERM, and a crash is covered by
+  `Pdeathsig` on Linux. **Residual, named:** on macOS a SIGKILLed fleet can orphan an `ssh -N`;
+  `fleet bridge` prints the pid of each process it starts so the operator can find it.
+- **Multiple targets.** The manager is keyed by alias, so the dashboard shows `⇄N` on every
+  bridged host at once, and `fleet bridge <spark>:3080 <spark>:11434 <nano>:11434` opens two
+  sets in one process and prints one table:
+
+```
+HOST     REMOTE  LOCAL                    STATE     NOTE
+<spark>  3080    http://127.0.0.1:3080    up
+<spark>  11434   127.0.0.1:11434          up
+<nano>   11434   127.0.0.1:41234          up        11434 busy locally → allocated
+```
+
+### 4.9 What this makes cheap next
 
 - **Kubernetes** is a provider with five levels and two action types; it needs no framework
   change, and it may ship in-process or as `fleet-provider-k8s` — the decision is now a
@@ -393,18 +533,24 @@ host
 | **A late level load lands in the wrong frame** | Medium | Generation counter; stale replies dropped. Pinned by `TestALateLevelLoadForAPoppedViewIsDiscarded`. |
 | **A provider stream leaks into the update engine** | Medium | Own message types and own map; only `appendLog` is shared. Pinned by `TestAProviderStreamNeverTouchesTheUpdateEngine`. |
 | **The protocol proves wrong once k8s lands** | Medium | Bought down deliberately: v1 is dogfooded by a real provider over the wire (`fleet provider serve herdr`) before it is published, `RunStreamCtx` lands now so a followed log is cancellable, and the version handshake gives a clean break if v2 is needed. **Two residuals, accepted and named:** (a) an action needing operator *input* (`kubectl scale`, choosing `sh` vs `bash`) is not modelled — an interactive handoff asks for itself, and a real parameter form would be one new mode beside `modeAnswers`, additive; (b) the tree is rooted at a host, so a cluster reachable from two hosts appears twice — correct while ssh is the bridge. |
+| **A bridge outlives fleet** | Medium | By construction a set dies with its context (`q`, Ctrl-C, `Close()`); `Pdeathsig` on Linux covers a SIGKILLed fleet. Residual on macOS, named in §4.8: the pid is printed. Pinned by `TestClosingTheManagerStopsEveryBridge` and `TestQuitTearsDownEveryBridgeBeforeExit`. |
+| **A plugin declares a tunnel to pivot through a host** | Medium | Structural: `Tunnel` has no address field, so a forward can only target the dispatched host's `127.0.0.1`; ports are validated to 1–65535; `BridgeArgv` is built from integers, so nothing is interpolated. Pinned by `TestBridgeArgvTargetsOnlyTheHostsLoopback`. |
+| **A local port collision** | Low | `ExitOnForwardFailure=yes` makes ssh exit with the reason instead of running a half-working set; `LocalPort: 0` allocates around a busy port and says so. Pinned by `TestABusyLocalPortIsAllocatedAroundAndReported`. |
+| **The restart blip drops a connection on a sibling bridge** | Low | Accepted (§3.4 A); happens only on an operator keystroke; `-O forward` on a keeper process is the upgrade path if it ever matters. |
 | **Protocol overhead on every drill-down** | Low | Built-ins stay in-process; only configured plugins spawn, lazily on first use, reused for the session. `fleet status` and the dashboard consult no provider. |
 | **New dependency (`yaml.v3`) in fleet** | Low | Already in the repo's graph via `sdk/gss` and `sdk/gff`; chosen over JSON so a hand-edited plugin registry can carry comments, as `.github/gff/features.yaml` does. |
 | **Behaviour regression on the dashboard** | Low | Level 0 untouched; `reg == nil` in every existing test; no existing golden frame changes. |
 
 Blast radius: additive code in `sdk/fleet` plus one optional user config file. No `install.sh`
-change, no host-side writes, no new credential material, no daemon.
+change, no host-side writes, no new credential material, no daemon — a bridge is a child
+process of the fleet that opened it, on the workstation only.
 
 ## 6. Rollback
 
 Every probe and listing is read-only on the host; the only mutations are what the operator does
 inside a handed-off terminal, which is exactly what pressing `s` does today. Rolling back is
-reverting the PR: no host, no config file and no socket carries state from this feature.
+reverting the PR: no host, no config file and no socket carries state from this feature, and a
+bridge is in-memory state of one fleet process — quitting it removes every bridge.
 Two graduated kill switches exist below that: deleting or emptying `providers.yaml` returns to
 built-ins only, and `reg == nil` (the injected registry) disables drill-down entirely without a
 revert.
@@ -427,12 +573,22 @@ The plan captures into `plans/fleet-connect/evidence/`, not asserts:
 - **Degraded states as rows:** frames for absent, server-stopped and protocol-mismatched hosts,
   each with its reason on screen.
 - **Nav correctness:** golden frames per level, and a transcript of the stale-reply drop.
+- **Bridges:** the argv produced by `BridgeArgv` for two forwards (showing `-N`,
+  `ExitOnForwardFailure`, the mux options and both `-L`s targeting `127.0.0.1`); a manager
+  transcript of add → add → remove showing exactly one process per host and a restart per
+  change; the busy-local-port allocation line; the `fleet bridge` table for two hosts; and a
+  frame of the dashboard after `q` showing no bridge survived.
 - **Live:** `fleet ls <spark> herdr` and `fleet ls <spark> herdr default` real output;
   `fleet connect <spark> herdr default --dry-run` argv; a real attach from the TUI (`enter` →
-  `enter` → `c`, then return to the dashboard with the row re-polled). Hostnames sanitised.
+  `enter` → `c`, then return to the dashboard with the row re-polled); `fleet ls <spark>
+  ports`; two bridges toggled from the ports level and `curl -sI http://127.0.0.1:3080`
+  succeeding, then `q` and `ss -ltn` on the workstation showing both local ports gone;
+  `fleet bridge <spark>:3080 <nano>:11434` with its table. Hostnames sanitised.
 - **Regression:** `go test ./... -cover` and `./scripts/test.sh` showing the floor met with no
   existing test modified.
 
 > Produced via `superpowers:brainstorming` (2026-09-02: shape, scope cut, navigation mockups,
 > framework choice, and the operator's plugin/local-RPC direction) with the go-team architect for
-> the contracts. Registered in `../index.md`. The matching spec is `../specs/fleet-connect.md`.
+> the contracts; amended 2026-09-05 after the design review (port bridges as a third action kind,
+> option A of §3.4, chosen by the operator; bridges never outlive fleet). Registered in
+> `../index.md`. The matching spec is `../specs/fleet-connect.md`.

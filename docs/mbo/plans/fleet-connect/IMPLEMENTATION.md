@@ -6,7 +6,7 @@
 - **Plan (source of truth):** [`../fleet-connect.md`](../fleet-connect.md) · spec
   [`../../specs/fleet-connect.md`](../../specs/fleet-connect.md) · design
   [`../../designs/fleet-connect.md`](../../designs/fleet-connect.md)
-- **Objective anchors:** issue [#266](https://github.com/sfc-gh-eraigosa/dotfiles/issues/266) · design PR *(this PR)* · `docs/mbo/index.md` row `fleet-connect`
+- **Objective anchors:** issue [#266](https://github.com/sfc-gh-eraigosa/dotfiles/issues/266) · design PR [#267](https://github.com/sfc-gh-eraigosa/dotfiles/pull/267) · `docs/mbo/index.md` row `fleet-connect`
 
 > This file is the **procedure**. It does not restate the plan — it tells a fresh agent session
 > how to execute the plan, task by task, resumably. The plan wins any conflict.
@@ -17,7 +17,7 @@
 | :-- | :-- | :-- |
 | `IMPLEMENTATION.md` (this) | Procedure: preconditions, worker map, per-task loop, hard rules, kickoff prompt | Read-only during the run (except §7 corrections) |
 | [`TRACKING.md`](./TRACKING.md) | Live **state ledger**: per-task status/commit/evidence, proof matrix, blockers, append-only session log | Updated after **every** task |
-| [`TODO.md`](./TODO.md) | The **cursor**: the plan's 25 tasks expanded into ordered micro-steps | Checkboxes ticked as you go |
+| [`TODO.md`](./TODO.md) | The **cursor**: the plan's 29 tasks expanded into ordered micro-steps | Checkboxes ticked as you go |
 
 **Resumption rule:** the first unchecked box in `TODO.md` is the next action; `TRACKING.md` says
 what has been proven. Re-run the last verification command before continuing — the ledger is a
@@ -41,19 +41,20 @@ claim, the command is the proof.
 
 ## 2. Worker map
 
-Default: **one worker, tasks 1 → 25 in plan order.** The plan's §6.1 DAG is the fan-out shape if
+Default: **one worker, tasks 1 → 29 in plan order.** The plan's §6.1 DAG is the fan-out shape if
 the operator asks for parallel execution; capture `gss feature worker add --json` output verbatim
 into `TRACKING.md` §0 if that happens.
 
 | Leaf | Tasks | Owns | Blocking? |
 | :-- | :-- | :-- | :-- |
-| A contract | T1–T4 | `pkg/provider/{provider,providertest}`, `internal/runner/handoff*.go`, `runner.go` | **yes (base)** |
+| A contract | T1–T4 | `pkg/provider/{provider,providertest}`, `internal/runner/{handoff,bridge}*.go`, `runner.go` | **yes (base)** |
 | B protocol | T5–T8 | `pkg/provider/{wire,serve,client}*.go` | **yes** |
 | C registry+config+verbs | T9–T12 | `internal/providers/**`, `cmd/providers.go`, `go.mod` | no |
 | D herdr | T13–T18 | `internal/provider/herdr/**` | no |
 | E TUI nav | T19–T22 | `cmd/tui_nav*.go` + edits to `cmd/tui_{model,keys,view}.go`, `tui.go`, `tui_demo_test.go` | no |
 | F CLI | T23–T24 | `cmd/ls.go`, `cmd/connect.go` | no |
-| G integrate | T25 | `cmd/provider_registry.go`, `sdk/fleet/AGENTS.md`, `README.md`s | no |
+| H bridges | T25–T28 | `internal/bridge/**`, `internal/provider/ports/**`, `cmd/tui_bridge*.go`, `cmd/bridge*.go`, the tunnel branch of `connect.go`, `keyHelp` rows for `t`/`T` (after E and F) | no |
+| G integrate | T29 | `cmd/provider_registry.go`, `sdk/fleet/AGENTS.md`, `README.md`s | no |
 
 ## 3. The execution loop (every task)
 
@@ -75,17 +76,19 @@ into `TRACKING.md` §0 if that happens.
 
 ## 4. Done-when gates
 
-**Per leaf** (plan §6.1): A — T1–T4 green, `pkg/provider` stdlib-only, ≥ 90% coverage, the ten
+**Per leaf** (plan §6.1): A — T1–T4 green, `pkg/provider` stdlib-only, ≥ 90% coverage, the eleven
 `runner.Exec{}` sites and `cmd/wake.go`'s type assertion untouched. B — T5–T8 green including the
 credential leak sweep and the `-32001` refusal, ≥ 90%. C — T9–T12 green, missing config = the
 built-in set, ≥ 90%. D — T13–T18 green, fixtures carry provenance, round-trip counts 1/2/1, the
 dual-path rendering identical, ≥ 90%, no `cmd` import. E — T19–T22 green, new frames inside the
 width guard, **no existing test or golden frame changed**. F — T23–T24 green, golden JSON
-committed. G — `./scripts/test.sh` green and every live gate captured.
+committed. H — T25–T28 green, no real port bound by any test, ≥ 90%, one `ssh -N` per host
+proven by process count, `Close()` on every exit path. G — `./scripts/test.sh` green and every
+live gate captured.
 
 **The objective is done when** every box in `TODO.md` is ticked, every row in `TRACKING.md` §1
-carries a SHA and observed evidence, `TRACKING.md` §2 shows a proof for all 21 features, and the
-eight-step manual checklist in plan §6 is signed off with captures.
+carries a SHA and observed evidence, `TRACKING.md` §2 shows a proof for all 26 features, and the
+eleven-step manual checklist in plan §6 is signed off with captures.
 
 ## 5. Hard rules
 
@@ -102,8 +105,17 @@ eight-step manual checklist in plan §6 is signed off with captures.
 - **No credential, hostname, port, user or key path may cross the plugin wire.** The leak sweep in
   T8 asserts it over the marshalled bytes; keep it passing.
 - **No new TUI in-flight state.** Drill-down reuses `canStartConfigAction()`.
-- **Do not touch `Row`, the ten `runner.Exec{}` sites, `cmd/wake.go`'s assertion, `install.sh`, or
-  `scripts/test.sh`'s floor.**
+- **Do not touch `Row`, the eleven `runner.Exec{}` sites, `cmd/wake.go`'s assertion, `install.sh`,
+  or `scripts/test.sh`'s floor.**
+- **No action payload names a host or an address.** `Handoff`, `Stream` and `Tunnel` carry no
+  such field; `runner` takes the alias as a parameter and only fleet supplies it. A tunnel
+  targets the dispatched host's `127.0.0.1` and binds the workstation's `127.0.0.1` — never
+  another address on either side.
+- **One `ssh -N` per bridged host, and a bridge never outlives fleet.** `internal/bridge` owns
+  every bridge context; `q`, Ctrl-C and `Close()` tear every set down before exit. No `ssh -f`,
+  no daemon, no pidfile, no automatic restart of a failed set.
+- **Bridge tests bind no real port.** `listen`/`dial` are injected; a test that opens a socket
+  is a defect.
 - **Every remote script is POSIX `sh`** per `docs/mbo/specs/shell-portability.md` — no `[[`, no
   arrays, no `local`. `make lint-portability` is enforcing.
 - **Demos and fixtures must be real output.** Fixtures carry the herdr version and capture date.
@@ -155,10 +167,10 @@ Observable state wins over the registry.
 > `docs/mbo/plans/fleet-connect/TRACKING.md` with the commit SHA and that observed output before
 > ticking the box. Honour the hard rules in `IMPLEMENTATION.md` §5 — above all: only
 > `internal/runner` opens a connection to a host, `host/exec` carries a `callId` and never an
-> alias, the contract freezes after T4 and the protocol after T8, and local handoffs are argv with
-> no shell. Stage by explicit path and **confirm with the interactive prompt before any `git add`,
+> alias, no action payload names a host, the contract freezes after T4 and the protocol after
+> T8, local handoffs are argv with no shell, and a bridge never outlives fleet. Stage by explicit path and **confirm with the interactive prompt before any `git add`,
 > `commit`, or push**. Stop and ask the operator for: the live gates on real hardware (plan §7),
 > any change to a frozen contract, and the first push. If you are blocked, record it in
 > `TRACKING.md` §4 with the failing command and its real output rather than working around it.
-> Done when every `TODO.md` box is ticked, `TRACKING.md` §2 shows a proof for all 21 features, and
+> Done when every `TODO.md` box is ticked, `TRACKING.md` §2 shows a proof for all 26 features, and
 > `./scripts/test.sh` is green.

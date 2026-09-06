@@ -31,40 +31,42 @@
 
 ### Task 1 — `pkg/provider` types  (plan T1)
 
-- [ ] RED: `TestEveryContractTypeRoundTripsThroughJSON`, `TestAnActionMustCarryExactlyOneOfHandoffOrStream`, `TestAShortCellSliceRendersBlanksNotAPanic`
+- [ ] RED: `TestEveryContractTypeRoundTripsThroughJSON`, `TestAnActionMustCarryExactlyOneOfHandoffStreamOrTunnel`, `TestATunnelWithAnOutOfRangePortIsRejected`, `TestNoActionPayloadCarriesAHostOrAddress` (reflection), `TestAShortCellSliceRendersBlanksNotAPanic`
 - [ ] RUN-RED: `go test ./pkg/provider/` → expect **FAIL** (package does not exist)
-- [ ] GREEN: `pkg/provider/provider.go` — `Node`, `Action`, `Handoff`, `HandoffKind`, `Stream`, `Provider`, `Host`, `ErrAbsent`, `ErrNoSuchPath`, `Validate`
+- [ ] GREEN: `pkg/provider/provider.go` — `Node`, `Action`, `Handoff` (no host), `HandoffKind`, `Stream`, `Tunnel` (no address), `Provider`, `Host`, `ErrAbsent`, `ErrNoSuchPath`, `Validate`
 - [ ] RUN-GREEN: `go test ./pkg/provider/ -cover` → **PASS**, ≥ 90%
 - [ ] VERIFY: `go list -deps ./pkg/provider` → stdlib only, no third party
 - [ ] EVID + ALLOWLIST + COMMIT + LEDGER
 
-**Done when:** the three tests pass and the public package is proven stdlib-only.
+**Done when:** the five tests pass and the public package is proven stdlib-only.
 
 ### Task 2 — runner handoffs  (plan T2)
 
-- [ ] RED: `TestEveryHandoffCarriesTheMuxOptions`, `TestLocalHandoffNeverInvokesAShell`, `TestRemoteHandoffQuotesEveryProviderSuppliedValue` + empty-input error cases
+- [ ] RED: `TestEveryHandoffCarriesTheMuxOptions`, `TestLocalHandoffNeverInvokesAShell`, `TestRemoteHandoffQuotesEveryProviderSuppliedValue`, `TestTheAliasComesFromFleetNotTheProvider` + empty-input error cases
 - [ ] RUN-RED: `go test ./internal/runner/` → expect **FAIL**
-- [ ] GREEN: `internal/runner/handoff.go` — `HandoffArgv` (pure), `Command`, `Quote`; promote `interactiveArgs` to a package func; `cmd.shQuote` becomes an alias of `runner.Quote`
+- [ ] GREEN: `internal/runner/handoff.go` — `HandoffArgv(alias, h)` (pure), `Command(alias, h)`, `Quote`; promote `interactiveArgs` to a package func; `cmd.shQuote` becomes an alias of `runner.Quote`
 - [ ] RUN-GREEN: `go test ./internal/runner/ ./cmd/` → **PASS** (existing cmd tests still green)
 - [ ] VERIFY: remote argv has `ssh -t` + every `MuxArgs()` option and **no** `BatchMode`; local argv passes a `$(…)` element verbatim with no `sh -c`
 - [ ] EVID + COMMIT + LEDGER
 
 **Done when:** both handoff kinds are asserted by argv and the module still builds.
 
-### Task 3 — cancellable streams  (plan T3)
+### Task 3 — runner bridges  (plan T3)
 
-- [ ] RED: `TestAFollowedStreamStopsWhenItsContextIsCancelled` (also cancel-before-first-line)
-- [ ] RUN-RED: `go test ./internal/runner/ -run Cancel` → expect **FAIL**
-- [ ] GREEN: `RunStreamCtx` on the `Runner` interface, `Exec` (via `exec.CommandContext`) and `Fake`; `RunStream` delegates
+- [ ] SETUP: confirm `RunStreamCtx` already exists with `go test ./internal/runner/ -run RunStreamCtx -v` → PASS (F3a needs nothing built)
+- [ ] RED: `TestBridgeArgvTargetsOnlyTheHostsLoopback`, `TestBridgeArgvCarriesTheMuxOptionsAndExitOnForwardFailure`, `TestACancelledBridgeIsKilledWithinWaitDelay` (+ zero forwards → error; cancel before up)
+- [ ] RUN-RED: `go test ./internal/runner/ -run Bridge` → expect **FAIL**
+- [ ] GREEN: `internal/runner/bridge.go` — `Forward`, `BridgeArgv(alias, forwards)` (pure), `RunBridgeCtx` on the interface, `Exec` (`exec.CommandContext`, `WaitDelay`) and `Fake` (`Block`); `bridge_linux.go` sets `Pdeathsig`
 - [ ] RUN-GREEN: `go test -race ./internal/runner/` → **PASS**, no goroutine leak
-- [ ] VERIFY: `git diff --stat` shows the ten `runner.Exec{}` sites and `cmd/wake.go` untouched
+- [ ] VERIFY: argv has `-N`, `ExitOnForwardFailure=yes`, every base/mux option, `-L 127.0.0.1:l:127.0.0.1:r` per forward, alias last, no `-t`, no remote command
+- [ ] VERIFY: `git diff --stat` shows the eleven `runner.Exec{}` sites and `cmd/wake.go` untouched
 - [ ] EVID + COMMIT + LEDGER
 
-**Done when:** a followed stream is killable and nothing else moved.
+**Done when:** a set of tunnels is one killable `ssh -N` and nothing else moved.
 
 ### Task 4 — test harness  (plan T4)
 
-- [ ] SETUP: decide `FakeProvider`'s five-column kind, three levels, one leaf, one action of each type
+- [ ] SETUP: decide `FakeProvider`'s five-column kind, three levels, one leaf, one action of each of the three kinds (handoff, stream, tunnel)
 - [ ] RED: a smoke test drilling `FakeProvider` through the registry seam's interface
 - [ ] RUN-RED: `go test ./pkg/provider/providertest/` → expect **FAIL**
 - [ ] GREEN: `providertest/fake.go` — `FakeProvider` + `StubPlugin` (a tiny `main` the protocol tests compile)
@@ -312,9 +314,9 @@
 
 ### Task 24 — `fleet connect`  (plan T24)
 
-- [ ] RED: `TestConnectDryRunPrintsTheExactArgv` (hostile session name), `TestConnectRefusesAnUnavailableActionWithItsReason` (+ unknown `--action` key)
+- [ ] RED: `TestConnectDryRunPrintsTheExactArgv` (hostile session name), `TestConnectRefusesAnUnavailableActionWithItsReason` (+ unknown `--action` key), `TestConnectStreamsToStdoutWithoutATty`, the F2d case (argv host = the `<host>` argument)
 - [ ] RUN-RED: `go test ./cmd/ -run Connect` → expect **FAIL**
-- [ ] GREEN: `cmd/connect.go`
+- [ ] GREEN: `cmd/connect.go` (handoff + stream branches; the tunnel branch lands in Task 28)
 - [ ] RUN-GREEN: `go test ./cmd/ -run Connect` → **PASS**
 - [ ] VERIFY: no credential and no unquoted provider value in the printed argv
 - [ ] EVID: the dry-run argv + the refusal exit code
@@ -324,22 +326,77 @@
 
 ---
 
-## Phase 7 — integration (leaf G)
+## Phase 7 — bridges (leaf H; after E and F)
 
-### Task 25 — register, document, prove live  (plan T25)
+### Task 25 — bridge manager  (plan T25)
 
-- [ ] GREEN: register herdr as a built-in in `cmd/provider_registry.go`
+- [ ] RED: `TestOneProcessPerHostRestartedPerChange`, `TestBridgesOnTwoHostsAreIndependent`, `TestABusyLocalPortIsAllocatedAroundAndReported`, `TestAnExplicitBusyPortFailsWithSshsReason`, `TestASelfExitedBridgeIsFailedWithItsLastStderrLine`, `TestClosingTheManagerStopsEveryBridge`
+- [ ] RUN-RED: `go test ./internal/bridge/` → expect **FAIL** (package does not exist)
+- [ ] GREEN: `internal/bridge/{manager,set,ports}.go` — `Manager` keyed by alias, `Set`, `Forward`, local-port policy (0 = prefer remote number, else allocate + note), injected `listen`/`dial`, `Status()`, `Close()` (idempotent)
+- [ ] RUN-GREEN: `go test -race ./internal/bridge/ -cover` → **PASS**, ≥ 90%
+- [ ] VERIFY: a recording runner shows one process per alias at any time; no test binds a real port
+- [ ] EVID: the add/add/remove transcript + the allocation note
+- [ ] ALLOWLIST + COMMIT + LEDGER
+
+**Done when:** N ports on M hosts are M processes, and `Close()` leaves none.
+
+### Task 26 — ports provider  (plan T26)
+
+- [ ] SETUP: capture **real** `ss -H -ltnp` from `<spark>` and `<pi>` into `internal/provider/ports/testdata/` with a provenance header (host kind, `ss --version`, date)
+- [ ] RED: `TestPortsLevelSplitsLoopbackReachableFromLanOnlyBinds`, `TestPortsProbeCostsOneRoundTrip`, `TestPortLabelsComeFromTheTableThenTheProcess`, `TestMissingSsIsARowNamingTheTool` (+ empty level keeps its header)
+- [ ] RUN-RED: `go test ./internal/provider/ports/` → expect **FAIL**
+- [ ] GREEN: `ports.go` (POSIX-sh wrapper, `Probe`, `Children` = the rows, `Columns`), `parse.go`, `labels.go`; loopback-reachable → `t` `Tunnel{RemotePort, 0, guess}`; LAN-only → `Unavailable` naming the address
+- [ ] RUN-GREEN: `go test ./internal/provider/ports/ -cover` → **PASS**, ≥ 90%, round-trip count 1
+- [ ] VERIFY: `make lint-portability` green
+- [ ] EVID: fixture provenance + rendered rows for both hosts
+- [ ] ALLOWLIST (`testdata/*.txt`) + COMMIT + LEDGER
+
+**Done when:** every listening port is a row, and only loopback-reachable ones offer a tunnel.
+
+### Task 27 — TUI bridges  (plan T27)
+
+- [ ] RED: `TestTToggleABridgeWithoutTouchingTheUpdateEngine`, `TestReloadKeepsTheBridgeMarkerOnItsPort`, `TestTStopsOnlyThisHostsBridges`, `TestBridgesSurviveEscAndShowOnTheDashboard` (golden), `TestQuitTearsDownEveryBridgeBeforeExit` (+ force-quit path)
+- [ ] RUN-RED: `go test ./cmd/ -run Bridge` → expect **FAIL**
+- [ ] GREEN: `cmd/tui_bridge.go` — `t`/`T`, `bridgeUpMsg`/`bridgeDoneMsg`, `⇄` gutter marker keyed on `(alias, remotePort)`, level bridge line, `⇄N` NOTE at level 0, `bridges.Close()` before `tea.Quit`; `keyHelp` rows for `t`/`T` at level ≥ 1
+- [ ] RUN-GREEN: `go test -race ./cmd/` → **PASS**; `running`/`updating` untouched; no existing test or frame changed
+- [ ] VERIFY: `go test ./cmd/ -run DemoFrames -v` → the ports frame and the `⇄N` dashboard frame inside the width guard
+- [ ] EVID: the toggle transcript + the two new frames
+- [ ] COMMIT + LEDGER
+
+**Done when:** bridges toggle from any level, survive `esc`, and cannot survive `q`.
+
+### Task 28 — `fleet bridge` + `connect` on a tunnel  (plan T28)
+
+- [ ] RED: `TestBridgeVerbRunsOnePerHostAndPrintsTheTable`, `TestBridgeDryRunStartsNothing`, `TestOneFailedBridgeLeavesTheOthersUpAndExitsNonZero`, `TestAMalformedBridgeSpecIsRefusedBeforeStart` (+ `connect <host> ports 3080` = one-entry bridge)
+- [ ] RUN-RED: `go test ./cmd/ -run "BridgeVerb|BridgeSpec|BridgeDryRun|FailedBridge"` → expect **FAIL**
+- [ ] GREEN: `cmd/bridge.go` (spec parsing, the plan §3.5 table with pids, re-print on state change, hold until SIGINT/SIGTERM, `Close()`, exit code); tunnel branch of `cmd/connect.go`
+- [ ] RUN-GREEN: `go test ./cmd/ -run Bridge` → **PASS**
+- [ ] VERIFY: three specs on two aliases → exactly two processes in the recording runner
+- [ ] EVID: the table + both exit codes
+- [ ] COMMIT + LEDGER
+
+**Done when:** a script can open N bridges on M hosts with one command and Ctrl-C leaves none. **Leaf H exits.**
+
+---
+
+## Phase 8 — integration (leaf G)
+
+### Task 29 — register, document, prove live  (plan T29)
+
+- [ ] GREEN: register herdr and ports as built-ins in `cmd/provider_registry.go`
 - [ ] RUN-GREEN: `go test -race ./... && go test ./... -cover` → **PASS**, new packages ≥ 90%
 - [ ] VERIFY: `./scripts/test.sh` green; `make lint-shell && make lint-portability` green
-- [ ] DOCS: `sdk/fleet/AGENTS.md` — the 15 "Drill-down & providers" invariants + `ls`/`connect`/`providers` rows in Commands
-- [ ] DOCS: `sdk/fleet/README.md` — drill-down tour **and** "write a provider plugin" (protocol table, ~30-line stub, `providers check`); `sdk/README.md` fleet section demo — **real pasted output**
+- [ ] DOCS: `sdk/fleet/AGENTS.md` — the 18 "Drill-down & providers" invariants + `ls`/`connect`/`bridge`/`providers` rows in Commands
+- [ ] DOCS: `sdk/fleet/README.md` — drill-down tour, "bridge a port" (`t`, `T`, `fleet bridge`, the lifetime rule) **and** "write a provider plugin" (protocol table, ~30-line stub, `providers check`); `sdk/README.md` fleet section demo — **real pasted output**
 - [ ] LIVE 1: `fleet providers check herdr --host <spark>` → capture the raw handshake + probe + `host/exec` exchange
 - [ ] LIVE 2: three-level drill-down + real attach; on exit the dashboard returns and the row re-polls
 - [ ] LIVE 3: configure herdr as an external plugin (`command: fleet, args: [provider, serve, herdr]`) → the tree is identical
 - [ ] LIVE 4: a host without herdr → the absent row naming the paths tried
 - [ ] LIVE 5: `fleet ls <spark> herdr default --json` + `fleet connect <spark> herdr default --dry-run`
 - [ ] LIVE 6: a deliberately broken plugin → its row explains itself; the others still render
-- [ ] CHECKLIST: the eight manual steps in plan §6 signed off
+- [ ] LIVE 7: `t` on 3080 and 11434 in `<spark>`'s ports level → `curl -sI http://127.0.0.1:3080` answers; `q` → `ss -ltn` shows neither local port
+- [ ] LIVE 8: `fleet bridge <spark>:3080 <nano>:11434` → the table with pids; Ctrl-C → the stop line; `ss -ltn` clean
+- [ ] CHECKLIST: the eleven manual steps in plan §6 signed off
 - [ ] EVID: everything above into `evidence/live/`, hostnames sanitised
 - [ ] COMMIT + LEDGER; advance `docs/mbo/index.md` state to `in-review`
 

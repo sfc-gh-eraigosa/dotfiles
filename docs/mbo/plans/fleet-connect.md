@@ -12,8 +12,10 @@
 
 Build, in `sdk/fleet`: a public provider contract and a versioned local-RPC plugin protocol; the
 registry, config loader and lifecycle that make onboarding a tool a `providers.yaml` stanza; the
-herdr provider as the protocol's first real consumer; drill-down navigation in the TUI; and the
-`ls` / `connect` / `providers` CLI verbs. 25 tasks, strict TDD, one commit each.
+herdr provider as the protocol's first real consumer; drill-down navigation in the TUI; the
+`ls` / `connect` / `providers` CLI verbs; and — added 2026-09-05 — port bridges: a third action
+kind (`Tunnel`), the `ports` provider, a bridge manager that runs one `ssh -N` per host, the
+`t`/`T` keys, and `fleet bridge`. 29 tasks, strict TDD, one commit each.
 
 **Verdict:** proceed. The design's decisions survive contact with the code — `internal/runner` is
 already the sole remote seam, `reach.Deps` is the injection precedent, `keyHelp` is the one
@@ -26,24 +28,33 @@ provider call an exec belonged to. It takes `callId` instead — the id of the `
 request it is answering — and fleet resolves that to the alias it already chose. The escape is
 unrepresentable rather than filtered, the same technique `sshconf.Host` uses for exec directives.
 
-**Two must-hold constraints inherited from the module** (design §5, spec §6):
+**Amendment 2026-09-05 (design review + operator decision):** `Action` carries exactly one of
+three kinds — `Handoff`, `Stream`, `Tunnel` — and none of them names a host: fleet stamps the
+level's alias when the action becomes a process. A bridge is one `ssh -N` per host carrying
+every `-L` (design §3.4 A), owned by `internal/bridge`, and **never outlives the fleet process**
+that opened it. Leaf **H** (T25–T28) builds it; the contract pieces land in leaf A before the
+freeze.
+
+**Three must-hold constraints inherited from the module** (design §5, spec §6):
 
 - No package but `internal/runner` opens a connection to a host; providers reach a machine only
-  through `Host.Exec` / `host/exec`.
+  through `Host.Exec` / `host/exec`; a bridge is a `runner` process under a context
+  `internal/bridge` owns.
 - No new in-flight TUI state: drill-down reuses `canStartConfigAction()`.
+- A bridge binds `127.0.0.1` locally and targets `127.0.0.1` on the host, and dies with fleet.
 
 ## 2. File inventory
 
 | Path | Purpose | Implements |
 | :-- | :-- | :-- |
-| `sdk/fleet/pkg/provider/provider.go` | `Node`, `Action`, `Handoff`, `HandoffKind`, `Stream`, `Provider`, `Host`, `ErrAbsent`, `ErrNoSuchPath`, `Validate` | F1 |
-| `sdk/fleet/pkg/provider/provider_test.go` | JSON round-trip, cells/columns mismatch, action validation | F1a–c |
+| `sdk/fleet/pkg/provider/provider.go` | `Node`, `Action`, `Handoff`, `HandoffKind`, `Stream`, `Tunnel`, `Provider`, `Host`, `ErrAbsent`, `ErrNoSuchPath`, `Validate` | F1 |
+| `sdk/fleet/pkg/provider/provider_test.go` | JSON round-trip, cells/columns mismatch, action validation (one of three), tunnel port ranges | F1a–d |
 | `sdk/fleet/pkg/provider/wire.go` | JSON-RPC 2.0 envelope, method/param/result types, `codec` (newline framing), id correlation | F5 |
 | `sdk/fleet/pkg/provider/wire_test.go` | framing, malformed lines, concurrent id correlation | F5b, F5c |
 | `sdk/fleet/pkg/provider/serve.go` | `Serve(context, Provider, io.Reader, io.Writer)` — the plugin side; `hostExec` client stub handed to the Provider | F5a, F6, F10 |
 | `sdk/fleet/pkg/provider/client.go` | `Dial`/`Client` — the fleet side; handshake, version check, per-call deadline, `host/exec` dispatch to an injected `ExecFunc` | F4, F5, F7a |
 | `sdk/fleet/pkg/provider/*_test.go` | handshake table (match/mismatch), immediate-exit, deadline, echo-attrs | F4a–b, F5a, F7a |
-| `sdk/fleet/pkg/provider/providertest/fake.go` | `FakeProvider` (arbitrary five-column kind) + `StubPlugin` (a test-compiled binary) | harness for E/F leaves, protocol tests |
+| `sdk/fleet/pkg/provider/providertest/fake.go` | `FakeProvider` (arbitrary five-column kind; one action of each of the three kinds) + `StubPlugin` (a test-compiled binary) | harness for E/F/H leaves, protocol tests |
 | `sdk/fleet/internal/providers/registry.go` | ordered registry; builtin + plugin entries; failure isolation; `Get`, `All`, `Status` | F7b–c, F8b |
 | `sdk/fleet/internal/providers/config.go` | `providers.yaml` load: order, `enabled`, `provides` shadow, duplicate detection, absent = builtins | F8 |
 | `sdk/fleet/internal/providers/host.go` | the `host/exec` bridge: `callId` → alias → `runner.Runner.Run`; nothing else exposed | F6 |
@@ -53,19 +64,29 @@ unrepresentable rather than filtered, the same technique `sshconf.Host` uses for
 | `sdk/fleet/internal/provider/herdr/script.go` | pure `probeScript()`, `snapshotScript(binary, names)` — POSIX sh, every value quoted | F11a, F12a |
 | `sdk/fleet/internal/provider/herdr/testdata/{status,status-stopped,sessions,snapshot,truncated}.json` | **real captured** herdr 0.8.2 output | F11c |
 | `sdk/fleet/internal/provider/herdr/*_test.go` | round-trip counts, absent, stopped, mismatch, hostile session name | F11–F14 |
-| `sdk/fleet/cmd/tui_nav.go` | `navFrame`, push/pop/reload, `loadLevel`, nav messages, `runProviderAction`, `navGen` | F15–F17, F19 |
+| `sdk/fleet/cmd/tui_nav.go` | `navFrame`, push/pop/reload, `loadLevel`, nav messages, `runProviderAction` (stamps `navHost`), `navGen` | F2d, F15–F17, F19 |
+| `sdk/fleet/cmd/tui_bridge.go` | `t`/`T` handling, `bridgeUpMsg`/`bridgeDoneMsg`, the `⇄` gutter marker, the level bridge line, the `⇄N` NOTE, `Close()` on quit | F25 |
+| `sdk/fleet/cmd/tui_bridge_test.go` | toggle, reload keeps the marker, host-scoped `T`, `⇄N` at level 0, quit teardown | F25a–e |
 | `sdk/fleet/cmd/tui_nav_view.go` | breadcrumb, generic kind-agnostic table, level status bar | F15 |
 | `sdk/fleet/cmd/tui_nav_test.go` | push/pop, esc precedence, generation drop, ownership refusal, unbound keys, stream isolation | F15–F19 |
 | `sdk/fleet/cmd/ls.go` | `fleet ls <host> [path…] [--json]` | F20 |
-| `sdk/fleet/cmd/connect.go` | `fleet connect <host> <path…> [--action k] [--dry-run]` | F21 |
+| `sdk/fleet/cmd/connect.go` | `fleet connect <host> <path…> [--action k] [--dry-run]` — handoff, stream to stdout, or a one-entry bridge | F21 |
+| `sdk/fleet/cmd/bridge.go` | `fleet bridge <alias>:<remote>[:<local>] … [--dry-run]`: spec parsing, the table, hold until signal, `Close()`, exit code | F26 |
+| `sdk/fleet/cmd/bridge_test.go` | one process per alias, table, dry-run, one-of-three failure exit code, malformed spec refused | F26a–b |
+| `sdk/fleet/internal/bridge/{manager,set,ports}.go` | `Manager`, `Set`, `Forward`, local-port policy, readiness dial, `Status`, `Close` | F23 |
+| `sdk/fleet/internal/bridge/*_test.go` | one process per alias, restart per change, port policy, busy explicit port, self-exit, `Close` | F23a–f |
+| `sdk/fleet/internal/provider/ports/{ports,parse,labels}.go` | the ports provider: `ss` script, parser, label table, bind rules, `t` tunnel actions | F24 |
+| `sdk/fleet/internal/provider/ports/testdata/ss-{spark,pi}.txt` | **real captured** `ss -H -ltnp` output | F24a |
+| `sdk/fleet/internal/provider/ports/*_test.go` | bind rules, labels, absent `ss`, empty level | F24a–c |
 | `sdk/fleet/cmd/providers.go` | `fleet providers list|check`; hidden `fleet provider serve <name>` | F9, F10 |
 | `sdk/fleet/cmd/provider_registry.go` | the ONE place built-ins are constructed and the config is applied | F8, F10 |
 | `sdk/fleet/cmd/{ls,connect,providers}_test.go` | JSON golden, dry-run argv, refusal exit code, check transcript, **dual-path equality** | F9, F10a, F20, F21 |
 | `sdk/fleet/cmd/tui_model.go`, `tui_keys.go`, `tui_view.go`, `tui.go` *(edits)* | 5 fields, 5 `Update` cases, level-aware `keyHelp`/`headerHints`, registry injection | F15–F19 |
-| `sdk/fleet/cmd/tui_demo_test.go` *(edit)* | golden frames: capability, sessions, agents, absent, plugin-failed | F15, F11b, F7a |
-| `sdk/fleet/internal/runner/handoff.go` | `HandoffArgv` (pure), `Command`, `Quote`; `interactiveArgs` promoted to a package func | F2 |
-| `sdk/fleet/internal/runner/runner.go` *(edit)* | `RunStreamCtx` on the interface, `Exec` and `Fake` | F3 |
-| `sdk/fleet/internal/runner/handoff_test.go` | mux/`-t` presence, no-shell-for-local, quoting, bad input | F2a–c |
+| `sdk/fleet/cmd/tui_demo_test.go` *(edit)* | golden frames: capability, sessions, agents, absent, plugin-failed, ports (one bridged), dashboard with `⇄N` | F15, F11b, F7a, F25d |
+| `sdk/fleet/internal/runner/handoff.go` | `HandoffArgv(alias, h)` (pure), `Command(alias, h)`, `Quote`; `interactiveArgs` promoted to a package func | F2 |
+| `sdk/fleet/internal/runner/bridge.go` | `Forward`, `BridgeArgv(alias, forwards)` (pure), `RunBridgeCtx` on the interface (`Exec` with `Pdeathsig` on Linux via a build-tagged file; `Fake` mirrored with `Block`) | F22 |
+| `sdk/fleet/internal/runner/handoff_test.go` | mux/`-t` presence, no-shell-for-local, quoting, bad input, alias stamping | F2a–d |
+| `sdk/fleet/internal/runner/bridge_test.go` | `-N`/`ExitOnForwardFailure`/mux/`-L` shape, loopback-only, zero forwards, cancel kills | F22a–b |
 | `sdk/fleet/go.mod` *(edit)* | `gopkg.in/yaml.v3` | F8 |
 | `sdk/fleet/AGENTS.md` (+ `CLAUDE.md` symlink) | new "Drill-down & providers" invariants section; `ls`/`connect`/`providers` rows in Commands | §6 |
 | `sdk/fleet/README.md`, `sdk/README.md` | the drill-down and plugin-authoring tour; **real** pasted demos | §6 |
@@ -80,7 +101,10 @@ already covers fleet), `cmd/status.go`'s `Row`, the ten `runner.Exec{}` construc
 ### 3.1 The contract (frozen at the end of Task 4 — leaf A's exit)
 
 As written in design §4.2, plus `Validate() error` on `Node` and `Action` (exactly one of
-`Handoff`/`Stream`; a `Key` that is printable) and:
+`Handoff`/`Stream`/`Tunnel`; a `Key` that is printable; a `Tunnel` with `RemotePort` in 1–65535
+and `LocalPort` in 0–65535). None of the three action payloads carries a host or an address:
+`internal/runner` takes the alias as a parameter (`HandoffArgv(alias, h)`, `BridgeArgv(alias,
+fwds)`), and the only caller that supplies it is fleet. Also:
 
 ```go
 // Host is the ONLY capability a provider has over a machine.
@@ -154,6 +178,22 @@ resolved on PATH when it has no separator.
 `nodes` and `columns` are always arrays. `id` is the next path segment verbatim. Adding a key is
 non-breaking; renaming or removing one is not.
 
+### 3.5 `fleet bridge` (frozen at the end of Task 28)
+
+```
+$ fleet bridge <spark>:3080 <spark>:11434 <nano>:11434
+HOST     REMOTE  LOCAL                    STATE     NOTE
+<spark>  3080    http://127.0.0.1:3080    up        pid 41230
+<spark>  11434   127.0.0.1:11434          up        pid 41230
+<nano>   11434   127.0.0.1:41234          up        pid 41231 · 11434 busy locally → allocated
+^C
+stopped 3 bridges on 2 hosts
+```
+
+A spec is `<alias>:<remote>[:<local>]`; a malformed one is refused before anything starts. The
+table is re-printed for a row whose state changes; the exit code is non-zero if any row ever
+read `failed`. `--dry-run` prints one argv per host and starts nothing.
+
 ## 4. TDD build order
 
 Each task: write the test, **observe it fail**, implement minimally, observe it pass, run the
@@ -163,30 +203,41 @@ Global gates for every task: `go test -race ./...`, `gofmt -l .` empty, `go vet 
 ### Phase 1 — the contract (leaf A)
 
 **T1 · `pkg/provider` types.** Tests: JSON round-trip equality for every type including `nil`
-`Attrs`/`Actions` (F1c); `Validate` rejects an `Action` with both or neither of `Handoff`/`Stream`
-(F1b); a `Node` with fewer cells than columns yields blanks in a rendering helper, and zero cells
-does not panic (F1a). Implement the types and `Validate`. **Done when** the three tests pass and
-the package imports stdlib only (`go list -deps` shows no third-party). *Evidence:* `go test`
-output plus the `go list -deps` proof of a stdlib-only public package.
+`Attrs`/`Actions` (F1c); `Validate` rejects an `Action` with two or more, or none, of
+`Handoff`/`Stream`/`Tunnel` (F1b) and a `Tunnel` whose ports are out of range (F1d); a `Node`
+with fewer cells than columns yields blanks in a rendering helper, and zero cells does not panic
+(F1a); a compile-time check that `Handoff`, `Stream` and `Tunnel` have no field named `Host` or
+`Addr` (reflection over the struct, so the escape cannot be reintroduced quietly). Implement the
+types and `Validate`. **Done when** the tests pass and the package imports stdlib only (`go list
+-deps` shows no third-party). *Evidence:* `go test` output plus the `go list -deps` proof of a
+stdlib-only public package.
 
 **T2 · runner handoffs.** Tests: a remote handoff's argv contains `ssh`, `-t` and every
 `MuxArgs()` option and **no** `BatchMode` (F2a, extending `TestEveryRemotePathCarriesTheMuxOptions`
 to cover the new path); a local handoff execs `argv[0]` with a `$(…)`-bearing element surviving
 verbatim and no `sh -c` anywhere (F2b); a value interpolated into a remote command appears
-`Quote`d (F2c); empty host/command and empty argv error. Implement `handoff.go`; promote
-`interactiveArgs` to a package function; move `shQuote` to `runner.Quote`, leaving
-`cmd.shQuote = runner.Quote` so existing tests keep passing. **Done when** those pass and the
-whole module still builds. *Evidence:* the asserted argv for both kinds.
+`Quote`d (F2c); the host element of the argv is the `alias` parameter and nothing in the
+`Handoff` can change it (F2d); empty alias/command and empty argv error. Implement
+`handoff.go` with `HandoffArgv(alias string, h provider.Handoff)`; promote `interactiveArgs` to
+a package function; move `shQuote` to `runner.Quote`, leaving `cmd.shQuote = runner.Quote` so
+existing tests keep passing. **Done when** those pass and the whole module still builds.
+*Evidence:* the asserted argv for both kinds.
 
-**T3 · cancellable streams.** Test: a followed stream whose context is cancelled kills the
-process, closes both channels, and leaks no goroutine (F3a, cancel before the first line too).
-Implement `RunStreamCtx` on the interface, `Exec` (via `exec.CommandContext`) and `Fake`;
-`RunStream` delegates. **Done when** the test passes with `-race` and the ten `runner.Exec{}`
-call sites plus `cmd/wake.go`'s assertion are untouched (`git diff --stat` proves it).
-*Evidence:* the timed test output and the diffstat.
+**T3 · runner bridges.** `RunStreamCtx` already exists on the interface with tests
+(`runner_ctx_test.go`, landed with fleet-update #270), so F3a is covered by
+`TestRunStreamCtxKillsTheChildOnDeadline` and this task builds the bridge lane on the same
+pattern. Tests: `BridgeArgv(alias, [2 forwards])` yields `ssh -N -o ExitOnForwardFailure=yes`,
+every base/mux option, two `-L 127.0.0.1:l:127.0.0.1:r`, the alias last, no `-t`, no remote
+command and no address but `127.0.0.1` (F22a); zero forwards errors; a running bridge whose
+context is cancelled is killed and `done` closes within `WaitDelay`, also when cancelled before
+it is up (F22b, `Fake.Block`). Implement `bridge.go` (`Forward`, `BridgeArgv`, `RunBridgeCtx` on
+`Exec` and `Fake`) plus a `//go:build linux` file setting `Pdeathsig`. **Done when** the tests
+pass with `-race` and the eleven `runner.Exec{}` call sites plus `cmd/wake.go`'s assertion are
+untouched (`git diff --stat` proves it). *Evidence:* the asserted argv and the diffstat.
 
 **T4 · test harness.** `providertest.FakeProvider` (an arbitrary five-column kind, three levels,
-one leaf, one action of each type) and `StubPlugin` (a tiny `main` the protocol tests compile).
+one leaf, one action of each of the three kinds) and `StubPlugin` (a tiny `main` the protocol
+tests compile).
 **Done when** a smoke test drills `FakeProvider` end-to-end through the not-yet-written registry
 seam's interface. *Evidence:* the smoke test output. **Leaf A exits here — the contract is frozen.**
 
@@ -322,27 +373,73 @@ matches byte-for-byte. *Evidence:* the golden file and the human table.
 **T24 · `fleet connect`.** Tests: `--dry-run` prints the exact argv, with no credential and no
 unquoted provider value, for a hostile session name (F21a); an action whose `Unavailable` is set
 is refused with its reason and a non-zero exit, as is an `--action` key that does not exist
-(F21b). **Done when** both pass. *Evidence:* the dry-run argv and the refusal exit code.
+(F21b); a `Stream` action's lines reach stdout with no tty (F21c); the argv runs against the
+`<host>` argument, whatever the provider returned (F2d). **Done when** all pass. *Evidence:* the
+dry-run argv and the refusal exit code.
 
-### Phase 7 — integration (leaf G)
+### Phase 7 — bridges (leaf H)
 
-**T25 · register, document, prove live.** Register herdr as a built-in in
+**T25 · bridge manager.** Tests, all with `runner.Fake`/a recording runner and injected
+`listen`/`dial`: `Add` twice then `Remove` once on one alias runs exactly one process at a time,
+started three times (F23a); two aliases → two processes, each argv naming its own alias, and
+`Remove` on one leaves the other running (F23b); `LocalPort: 0` takes the remote number when
+free and allocates with a note when busy (F23c); an explicit busy port is `failed` with ssh's
+reason, never moved (F23d); a process exiting on its own is `failed` with its last stderr line
+and not restarted (F23e); `Close()` cancels every set and observes every `done`, and is
+idempotent (F23f). Implement `internal/bridge`. **Done when** all pass under `-race` and the
+package binds no real port (`strace`-free proof: the injected `listen` is the only listener).
+*Evidence:* the add/add/remove process transcript and the allocation note.
+
+**T26 · ports provider.** Capture **real** `ss -H -ltnp` output from `<spark>` and `<pi>` into
+`testdata/` with a provenance header (host kind, `ss --version`, date). Tests: the four bind
+classes render the right tunnel/`Unavailable` split in one round trip, and an empty listener
+set is an empty level with its header (F24a); label-table ports get their LABEL and scheme
+guess, unknown ports fall back to process name then blank (F24b); missing `ss` names the tool
+on the capability row and a failing `ss` carries its stderr (F24c). Implement
+`internal/provider/ports` (POSIX-`sh` wrapper; `make lint-portability` applies). **Done when**
+the tests pass and the round-trip count is exactly 1. *Evidence:* the fixtures' provenance and
+the rendered rows for both hosts.
+
+**T27 · TUI bridges.** Tests against `FakeProvider`'s tunnel action: `t` adds `(alias,
+remotePort)` and shows `⇄`, `t` again removes it, and neither touches `running`/`updating` nor
+re-polls (F25a); `r` keeps the marker on the same port and a port that vanished keeps its bridge
+with a marked line (F25b); `T` stops only this host's bridges (F25c); `esc` to level 0 keeps the
+bridges up and shows `⇄N` on both host rows — a golden frame (F25d); `q` and the force-quit path
+call `Close()` before `tea.Quit` and the last frame shows no bridge (F25e). Implement
+`cmd/tui_bridge.go`, the `keyHelp` entries for `t`/`T` at level ≥ 1, the gutter marker, the
+level bridge line and the NOTE marker. **Done when** all pass and no existing test or frame
+changes. *Evidence:* the toggle transcript and the two new golden frames.
+
+**T28 · `fleet bridge` + `connect` on a tunnel.** Tests: three specs across two aliases start
+two processes, print the §3.5 table, and stop everything on the interrupt (F26a); `--dry-run`
+prints two argvs and starts nothing; one failing bridge leaves the others up and makes the exit
+code non-zero, and a malformed spec is refused before anything starts (F26b); `fleet connect
+<host> ports 3080` is a one-entry bridge with the same table. Implement `cmd/bridge.go` and the
+tunnel branch of `cmd/connect.go`. **Done when** all pass. *Evidence:* the table and the exit
+codes. **Leaf H exits here.**
+
+### Phase 8 — integration (leaf G)
+
+**T29 · register, document, prove live.** Register herdr and ports as built-ins in
 `cmd/provider_registry.go`. Write the AGENTS.md "Drill-down & providers" invariants (§6 below),
-the README drill-down and plugin-authoring sections, and the `sdk/README.md` row — **with real
-pasted output**. Run the live gates on `<spark>`. **Done when** `./scripts/test.sh` is green and
-every live gate in §7 is captured. *Evidence:* all of §7's live captures.
+the README drill-down, bridge and plugin-authoring sections, and the `sdk/README.md` row —
+**with real pasted output**. Run the live gates on `<spark>` and `<nano>`. **Done when**
+`./scripts/test.sh` is green and every live gate in §7 is captured. *Evidence:* all of §7's live
+captures.
 
 ## 5. Verification mapping
 
 | Spec rule | Test |
 | :-- | :-- |
 | F1a | `TestAShortCellSliceRendersBlanksNotAPanic` |
-| F1b | `TestAnActionMustCarryExactlyOneOfHandoffOrStream` |
+| F1b | `TestAnActionMustCarryExactlyOneOfHandoffStreamOrTunnel` |
 | F1c | `TestEveryContractTypeRoundTripsThroughJSON` |
+| F1d | `TestATunnelWithAnOutOfRangePortIsRejected` · `TestNoActionPayloadCarriesAHostOrAddress` |
 | F2a | `TestEveryHandoffCarriesTheMuxOptions` |
 | F2b | `TestLocalHandoffNeverInvokesAShell` |
 | F2c | `TestRemoteHandoffQuotesEveryProviderSuppliedValue` |
-| F3a | `TestAFollowedStreamStopsWhenItsContextIsCancelled` |
+| F2d | `TestTheAliasComesFromFleetNotTheProvider` |
+| F3a | `TestRunStreamCtxKillsTheChildOnDeadline` (exists; `runner_ctx_test.go`) |
 | F4a | `TestAProtocolMismatchDisablesThePluginWithBothNumbers` |
 | F4b | `TestAPluginThatExitsBeforeInitializeIsReportedNotRetriedForever` |
 | F5a | `TestAttrsRoundTripToThePluginVerbatim` |
@@ -384,6 +481,25 @@ every live gate in §7 is captured. *Evidence:* all of §7's live captures.
 | F20b | `TestLsRendersADeepLevelAndNamesAnUnknownSegment` |
 | F21a | `TestConnectDryRunPrintsTheExactArgv` |
 | F21b | `TestConnectRefusesAnUnavailableActionWithItsReason` |
+| F21c | `TestConnectStreamsToStdoutWithoutATty` |
+| F22a | `TestBridgeArgvTargetsOnlyTheHostsLoopback` · `TestBridgeArgvCarriesTheMuxOptionsAndExitOnForwardFailure` |
+| F22b | `TestACancelledBridgeIsKilledWithinWaitDelay` |
+| F23a | `TestOneProcessPerHostRestartedPerChange` |
+| F23b | `TestBridgesOnTwoHostsAreIndependent` |
+| F23c | `TestABusyLocalPortIsAllocatedAroundAndReported` |
+| F23d | `TestAnExplicitBusyPortFailsWithSshsReason` |
+| F23e | `TestASelfExitedBridgeIsFailedWithItsLastStderrLine` |
+| F23f | `TestClosingTheManagerStopsEveryBridge` |
+| F24a | `TestPortsLevelSplitsLoopbackReachableFromLanOnlyBinds` · `TestPortsProbeCostsOneRoundTrip` |
+| F24b | `TestPortLabelsComeFromTheTableThenTheProcess` |
+| F24c | `TestMissingSsIsARowNamingTheTool` |
+| F25a | `TestTToggleABridgeWithoutTouchingTheUpdateEngine` |
+| F25b | `TestReloadKeepsTheBridgeMarkerOnItsPort` |
+| F25c | `TestTStopsOnlyThisHostsBridges` |
+| F25d | `TestBridgesSurviveEscAndShowOnTheDashboard` |
+| F25e | `TestQuitTearsDownEveryBridgeBeforeExit` |
+| F26a | `TestBridgeVerbRunsOnePerHostAndPrintsTheTable` · `TestBridgeDryRunStartsNothing` |
+| F26b | `TestOneFailedBridgeLeavesTheOthersUpAndExitsNonZero` · `TestAMalformedBridgeSpecIsRefusedBeforeStart` |
 
 ## 6. Integration & rollout
 
@@ -411,9 +527,14 @@ every live gate in §7 is captured. *Evidence:* all of §7's live captures.
   13. Provider streams never touch the update engine.
   14. `keyHelp` remains the single keymap source, now level-aware.
   15. A missing `providers.yaml` is the built-in set, not a failure.
-  Also: `README.md` gets the drill-down tour **and** a "write a provider plugin" section (the
-  protocol table, a 30-line stub, and `fleet providers check`), and `sdk/README.md`'s fleet
-  section gains the drill-down demo. Demos must be re-run and pasted, never invented.
+  16. No action payload names a host or an address: fleet stamps the level's alias, and a
+      tunnel targets only that host's loopback.
+  17. One `ssh -N` per bridged host, owned by `internal/bridge`; a change restarts it.
+  18. A bridge never outlives fleet: `q`, Ctrl-C and `Close()` tear every set down before exit.
+  Also: `README.md` gets the drill-down tour, a "bridge a port" section (`t`, `T`, `fleet
+  bridge`, the lifetime rule), **and** a "write a provider plugin" section (the protocol table,
+  a 30-line stub, and `fleet providers check`), and `sdk/README.md`'s fleet section gains the
+  drill-down demo. Demos must be re-run and pasted, never invented.
 - **Manual acceptance checklist** (the operator, on real hardware):
   1. `fleet` → `enter` on `<spark>` → capability row shows herdr's version, protocol, server
      state and session count.
@@ -424,10 +545,16 @@ every live gate in §7 is captured. *Evidence:* all of §7's live captures.
   6. `fleet connect <spark> herdr default --dry-run` → the argv, nothing secret in it.
   7. Configure herdr as an external plugin; repeat 1–3; the trees match.
   8. Configure a deliberately broken plugin; the row explains it and the others still render.
+  9. `enter` on `<spark>` → `ports`; `t` on 3080 and 11434 → `⇄` on both, the level line names
+     both local URLs; `curl -sI http://127.0.0.1:3080` answers.
+  10. `esc` `esc` → `⇄2` on `<spark>`; `enter` on `<nano>` → `ports` → `t` on 11434 → the
+      allocation note; `T` → `<nano>`'s bridge gone, `<spark>`'s still up.
+  11. `q` → `ss -ltn` on the workstation shows neither 3080 nor 11434; `fleet bridge
+      <spark>:3080 <nano>:11434` prints the table, Ctrl-C prints the stop line.
 
 ### 6.1 Build leaves / DAG
 
-**Default: one worker, tasks 1 → 25 in order.** The tasks chain through one contract and one model
+**Default: one worker, tasks 1 → 29 in order.** The tasks chain through one contract and one model
 struct; per MBO policy the breakout is offered, not assumed.
 
 If the operator asks for parallel execution, the graph is:
@@ -436,32 +563,37 @@ If the operator asks for parallel execution, the graph is:
 A(contract) ──▶ B(protocol) ──▶ C(registry+config+verbs) ──┐
      │               │                                      ├──▶ G(integrate+docs+live)
      ├──────────────▶ D(herdr) ────────────────────────────┤
-     └──▶ E(TUI nav) ─────────────────────────────────────┤
-                     F(CLI ls/connect) ◀── C ─────────────┘
+     ├──▶ E(TUI nav) ─────────────────────────────────────┤
+     │               F(CLI ls/connect) ◀── C ─────────────┤
+     └──▶ H(bridges: manager, ports, tui, verb) ◀── E, F ─┘
 ```
 
 | Leaf | Owns (paths) | Consumes (in-edges) | `done-when` gate | Blocking? |
 | :-- | :-- | :-- | :-- | :-- |
-| **A** contract | `pkg/provider/{provider,provider_test}.go`, `pkg/provider/providertest/**`, `internal/runner/handoff*.go`, `internal/runner/runner.go` | — | T1–T4 green; `pkg/provider` stdlib-only; ≥ 90% cov; the ten `Exec{}` sites and `wake.go`'s assertion untouched | **yes (base)** |
+| **A** contract | `pkg/provider/{provider,provider_test}.go`, `pkg/provider/providertest/**`, `internal/runner/{handoff,bridge}*.go`, `internal/runner/runner.go` | — | T1–T4 green; `pkg/provider` stdlib-only; ≥ 90% cov; the eleven `Exec{}` sites and `wake.go`'s assertion untouched | **yes (base)** |
 | **B** protocol | `pkg/provider/{wire,serve,client}*.go` | A (§3.1) | T5–T8 green incl. the leak sweep and `-32001` refusal; ≥ 90% cov | **yes** (C, D-T18 consume it) |
 | **C** registry+config+verbs | `internal/providers/**`, `cmd/providers.go`, `go.mod` | A, B (§3.2) | T9–T12 green; missing-config = built-ins; ≥ 90% cov | no |
 | **D** herdr | `internal/provider/herdr/**` | A, B (for T18) | T13–T18 green; real fixtures with provenance; round-trip counts 1/2/1; dual-path identical; ≥ 90% cov; zero `cmd` imports | no |
 | **E** TUI nav | `cmd/tui_nav*.go`, edits to `cmd/tui_{model,keys,view}.go`, `cmd/tui.go`, `cmd/tui_demo_test.go` | A (tests use `FakeProvider`, not herdr) | T19–T22 green; new frames inside the width guard; **no existing test or frame changed** | no |
 | **F** CLI ls/connect | `cmd/ls.go`, `cmd/connect.go`, their tests | A, C (§3.3) | T23–T24 green; golden JSON committed as the contract | no |
-| **G** integrate+docs+live | `cmd/provider_registry.go` (final), `sdk/fleet/AGENTS.md`, `sdk/fleet/README.md`, `sdk/README.md` | B, C, D, E, F | T25: `./scripts/test.sh` green; all §7 live captures committed; the 8-step manual checklist signed off | no |
+| **H** bridges | `internal/bridge/**`, `internal/provider/ports/**`, `cmd/tui_bridge*.go`, `cmd/bridge*.go`, the tunnel branch of `cmd/connect.go`, `keyHelp` rows for `t`/`T` | A (T3's `RunBridgeCtx`), E (the nav model), F (`connect`) | T25–T28 green; no real port bound in tests; ≥ 90% cov; one process per host proven by count; `Close()` before every exit path | no |
+| **G** integrate+docs+live | `cmd/provider_registry.go` (final), `sdk/fleet/AGENTS.md`, `sdk/fleet/README.md`, `sdk/README.md` | B, C, D, E, F, H | T29: `./scripts/test.sh` green; all §7 live captures committed; the 11-step manual checklist signed off | no |
 
-`cmd/` is touched by C, E, F and G, but in disjoint files; `cmd/provider_registry.go` is created
-by C with an empty built-in set and filled by G, so no leaf races the registration site. Run
-`gss feature conflicts --json` before fan-out and rebase F onto E if they drift, never the
-reverse (E's edits to `tui_keys.go`/`tui_view.go` are the larger surface).
+`cmd/` is touched by C, E, F, H and G, but in disjoint files except `cmd/connect.go` (F creates
+it, H adds the tunnel branch) and `keyHelp` (E makes it level-aware, H adds two rows) — so H
+starts after E and F land; `cmd/provider_registry.go` is created by C with an empty built-in
+set and filled by G, so no leaf races the registration site. Run `gss feature conflicts --json`
+before fan-out and rebase F onto E if they drift, never the reverse (E's edits to
+`tui_keys.go`/`tui_view.go` are the larger surface).
 
 ## 7. Validation & evidence (show the work)
 
-Evidence tree `docs/mbo/plans/fleet-connect/evidence/task01..25/`, append-only, dated headers,
+Evidence tree `docs/mbo/plans/fleet-connect/evidence/task01..29/`, append-only, dated headers,
 hostnames sanitised, committed with each task. A feature without captured evidence is not done.
 
-**Coverage bars.** `pkg/provider`, `internal/providers` and `internal/provider/herdr` ≥ 90%;
-module floor 60 in `scripts/test.sh` unchanged and not breached; `go test -race ./...` green.
+**Coverage bars.** `pkg/provider`, `internal/providers`, `internal/provider/herdr`,
+`internal/provider/ports` and `internal/bridge` ≥ 90%; module floor 60 in `scripts/test.sh`
+unchanged and not breached; `go test -race ./...` green.
 
 **Adversarial scenarios covered by tests, not hope:** both-and-neither action payloads (F1b); a
 shell-metacharacter session name through a local handoff (F14a) and a remote command (F2c); a
@@ -470,7 +602,10 @@ deadline (F7a); a plugin writing a half line (F5b); a plugin issuing `host/exec`
 stale `callId` (F6b) — the fleet-enumeration escape; interleaved concurrent replies (F5c); a
 truncated `status --json` claiming nothing (F11c); a snapshot failing for one of five sessions
 (F12b); a late reply for a popped level (F16b); drill-down racing an update or wake (F17a); a
-provider stream trying to move the update engine (F19a).
+provider stream trying to move the update engine (F19a); an action payload trying to name
+another host — unrepresentable by type, asserted by reflection (F1d, F2d); a tunnel with a port
+out of range (F1d); a busy local port, explicit and allocated (F23c, F23d); a bridge that dies
+on its own (F23e); quitting with live bridges (F25e); one of three bridges failing (F26b).
 
 **Live gates** (cannot be unit-tested; captured under `evidence/live/`):
 
@@ -483,7 +618,13 @@ provider stream trying to move the update engine (F19a).
 4. A host with no herdr rendering the absent row with the paths it tried.
 5. `fleet ls <spark> herdr default --json` and `fleet connect <spark> herdr default --dry-run`.
 6. A deliberately broken plugin: its row explains itself and the others still render.
+7. Two bridges toggled from `<spark>`'s ports level, `curl -sI http://127.0.0.1:3080` through
+   one, `⇄2` on the dashboard, then `q` and `ss -ltn` on the workstation showing both local
+   ports gone.
+8. `fleet bridge <spark>:3080 <nano>:11434` — the table with pids, Ctrl-C, the stop line, and
+   `ss -ltn` clean afterwards.
 
-> Produced via `superpowers:writing-plans`. Execute with `superpowers:executing-plans`, TDD
-> throughout, using the trio in [`./fleet-connect/`](./fleet-connect/). Update
+> Produced via `superpowers:writing-plans`; amended 2026-09-05 (leaf H — bridges; T3 rewritten
+> because `RunStreamCtx` already exists; 29 tasks). Execute with `superpowers:executing-plans`,
+> TDD throughout, using the trio in [`./fleet-connect/`](./fleet-connect/). Update
 > [`../index.md`](../index.md) state as it moves.
