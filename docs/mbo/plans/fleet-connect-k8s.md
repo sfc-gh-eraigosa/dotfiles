@@ -5,8 +5,8 @@
 - **Status:** Draft
 - **Relates to:** spec [`../specs/fleet-connect-k8s.md`](../specs/fleet-connect-k8s.md) · design
   [`../designs/fleet-connect-k8s.md`](../designs/fleet-connect-k8s.md) · parent
-  [`fleet-connect`](./fleet-connect.md) (issue #266, PR #267) · design issue *(pending)* · PRs
-  recorded in [`../index.md`](../index.md)
+  [`fleet-connect`](./fleet-connect.md) (issue #266, PR #267) · design issue
+  [#297](https://github.com/sfc-gh-eraigosa/dotfiles/issues/297) · PRs recorded in [`../index.md`](../index.md)
 
 ## 1. Summary & verdict
 
@@ -210,10 +210,10 @@ fleet-connect PR 7 (bridges) merged ──────────────�
 
 | PR | Worker (`fleet-connect-k8s/<user>/<purpose>`) | Tasks | Owns (paths) | Consumes | `done-when` gate | Blocking? |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| **kA** | `core` | T1–T2 | `internal/provider/k8s/{parse,kinds,script,k8s}.go`, `testdata/**` | `fleet-connect` A, B, C merged (`pkg/provider`, `provider serve`) | T1–T2 green; fixtures with provenance; round trip 1; lint-portability; ≥ 90% | **yes (base)** |
-| **kB** | `levels` | T3–T5 | `k8s.go` level branches, `script.go` level builders | kA (§3.2 attrs, §3.3 table) | T3–T5 green; round trips 0/1/1/1; every curated kind fixture-backed | yes (kC attaches to its rows) |
-| **kC** | `actions` | T6–T7 | `actions.go`, the `Actions` column of `kinds.go` | kB; `fleet-connect` H merged for T7's manager test | T6–T7 green; quoting walk; reserved-key check; no real port | no |
-| **kD** | `integrate` | T8 | `cmd/provider_registry.go` (one line), `cmd/providers_k8s_test.go`, docs | kC; `fleet-connect` G merged (E/F for live) | `./scripts/test.sh` green; dual-path identical; 8-step checklist captured | no |
+| **kA** (#298) | `core` | T1–T2 | `internal/provider/k8s/{parse,kinds,script,k8s}.go`, `testdata/**` | `fleet-connect` A, B, C merged (`pkg/provider`, `provider serve`) | T1–T2 green; fixtures with provenance; round trip 1; lint-portability; ≥ 90% | **yes (base)** |
+| **kB** (#299) | `levels` | T3–T5 | `k8s.go` level branches, `script.go` level builders | kA (§3.2 attrs, §3.3 table) | T3–T5 green; round trips 0/1/1/1; every curated kind fixture-backed | yes (kC attaches to its rows) |
+| **kC** (#300) | `actions` | T6–T7 | `actions.go`, the `Actions` column of `kinds.go` | kB; `fleet-connect` H merged for T7's manager test | T6–T7 green; quoting walk; reserved-key check; no real port | no |
+| **kD** (#301) | `integrate` | T8 | `cmd/provider_registry.go` (one line), `cmd/providers_k8s_test.go`, docs | kC; `fleet-connect` G merged (E/F for live) | `./scripts/test.sh` green; dual-path identical; 8-step checklist captured | no |
 
 Every PR and issue of this objective carries the program label **`fleet-connect`** (parent plan
 §6.1): after each `gss feature checkpoint`, `gh pr edit <n> --add-label fleet-connect`.

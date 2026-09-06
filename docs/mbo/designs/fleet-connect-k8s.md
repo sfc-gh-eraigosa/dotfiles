@@ -5,7 +5,7 @@
 - **Status:** Proposed
 - **Relates to:** the second provider under [`fleet-connect`](./fleet-connect.md) (design
   issue [#266](https://github.com/sfc-gh-eraigosa/dotfiles/issues/266), design PR #267); design
-  issue *(pending — see `../index.md`)*; consumes the frozen contract of `fleet-connect` plan
+  issue [#297](https://github.com/sfc-gh-eraigosa/dotfiles/issues/297) (sub-issues #298–#301, one per PR); consumes the frozen contract of `fleet-connect` plan
   §3.1 (three action kinds, `Tunnel.Keeper`, no host field) and its bridge manager (leaf H).
 - **Author(s):** operator + assistant
 

@@ -612,18 +612,19 @@ captures.
 **Decided 2026-09-05: the build is split into eight PRs, one per leaf, blocking-first**, in the
 operator's priority order herdr → ports → k8s (the k8s provider is its own objective,
 `fleet-connect-k8s`, stacked after PR 3). Each PR is a `gss feature` worker whose `--base` is
-its in-edge; each carries `Closes #<sub-issue>` of design issue #266.
+its in-edge; each carries `Closes #<sub-issue>` of design issue #266 (the sub-issue numbers are
+in the PR column).
 
 | PR | Worker (`fleet-connect/<user>/<purpose>`) | Leaf · tasks | Base (in-edge) | Review gate (from the leaf's `done-when`) | Unblocks |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| **1** | `contract` | A · T1–T4 | `main` | contract frozen: three action kinds, `Keeper`, `ReservedKeys`, no host field; `pkg/provider` stdlib-only; ≥ 90% | everything |
-| **2** | `protocol` | B · T5–T8 | PR 1 | protocol frozen; leak sweep; `-32001`; deadline pauses on exec; ≥ 90% | 3, 4 |
-| **3** | `registry` | C · T9–T12 | PR 2 | missing config = built-ins; `provider serve`; ≥ 90% | 4 (T18), 6, k8s kA |
-| **4** | `herdr` | D · T13–T18 | PR 3 | real fixtures; 1/2/1 round trips; **dual-path identical** | 8 |
-| **5** | `tui` | E · T19–T22 | PR 1 | no existing test or frame changed; F18c row-action fallthrough | 7 |
-| **6** | `cli` | F · T23–T24 | PR 3 | golden JSON from the structs; stream to stdout | 7 |
-| **7** | `bridges` | H · T25–T28 | PR 6, after PR 5 merges (restack once) | one `ssh -N` per host; keepers; no real port; `Close()` on every exit | 8, k8s kC/kD |
-| **8** | `integrate` | G · T29 | PR 7, after 4 merges | `./scripts/test.sh`; all live gates; 11-step checklist | `fleet-connect-k8s` kD |
+| **1** (#289) | `contract` | A · T1–T4 | `main` | contract frozen: three action kinds, `Keeper`, `ReservedKeys`, no host field; `pkg/provider` stdlib-only; ≥ 90% | everything |
+| **2** (#290) | `protocol` | B · T5–T8 | PR 1 | protocol frozen; leak sweep; `-32001`; deadline pauses on exec; ≥ 90% | 3, 4 |
+| **3** (#291) | `registry` | C · T9–T12 | PR 2 | missing config = built-ins; `provider serve`; ≥ 90% | 4 (T18), 6, k8s kA |
+| **4** (#292) | `herdr` | D · T13–T18 | PR 3 | real fixtures; 1/2/1 round trips; **dual-path identical** | 8 |
+| **5** (#293) | `tui` | E · T19–T22 | PR 1 | no existing test or frame changed; F18c row-action fallthrough | 7 |
+| **6** (#294) | `cli` | F · T23–T24 | PR 3 | golden JSON from the structs; stream to stdout | 7 |
+| **7** (#295) | `bridges` | H · T25–T28 | PR 6, after PR 5 merges (restack once) | one `ssh -N` per host; keepers; no real port; `Close()` on every exit | 8, k8s kC/kD |
+| **8** (#296) | `integrate` | G · T29 | PR 7, after 4 merges | `./scripts/test.sh`; all live gates; 11-step checklist | `fleet-connect-k8s` kD |
 
 Order of landing: 1 → 2 → 3 → {4 herdr, 5 tui, 6 cli in parallel} → 7 bridges → 8 integrate →
 then `fleet-connect-k8s` kA → kB → kC → kD (its plan §6.1). `gss feature merged` walks the

@@ -5,7 +5,7 @@
 - **Status:** Draft
 - **Relates to:** design [`../designs/fleet-connect-k8s.md`](../designs/fleet-connect-k8s.md) ·
   parent framework [`fleet-connect`](../designs/fleet-connect.md) (issue #266, PR #267) · design
-  issue *(pending)* · PR recorded in `../index.md`
+  issue [#297](https://github.com/sfc-gh-eraigosa/dotfiles/issues/297) · PRs recorded in `../index.md`
 
 ## 1. Goal
 

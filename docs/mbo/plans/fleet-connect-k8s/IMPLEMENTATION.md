@@ -6,7 +6,7 @@
 - **Plan (source of truth):** [`../fleet-connect-k8s.md`](../fleet-connect-k8s.md) · spec
   [`../../specs/fleet-connect-k8s.md`](../../specs/fleet-connect-k8s.md) · design
   [`../../designs/fleet-connect-k8s.md`](../../designs/fleet-connect-k8s.md)
-- **Objective anchors:** design issue *(pending — `gh issue create`, see `docs/mbo/index.md`)* ·
+- **Objective anchors:** design issue [#297](https://github.com/sfc-gh-eraigosa/dotfiles/issues/297) (sub-issues #298 core · #299 levels · #300 actions · #301 integrate) ·
   parent framework issue [#266](https://github.com/sfc-gh-eraigosa/dotfiles/issues/266) ·
   `docs/mbo/index.md` row `fleet-connect-k8s`
 
@@ -47,7 +47,7 @@ says what has been proven. Re-run the last verification command before continuin
 | kD integrate | `fleet-connect-k8s/<user>/integrate` | kC's branch | T8 | no |
 
 ```bash
-gss feature start fleet-connect-k8s --goal "Kubernetes resources as a fleet provider (design issue #<n>)"
+gss feature start fleet-connect-k8s --goal "Kubernetes resources as a fleet provider (design issue #297)"
 gss feature worker add --feature fleet-connect-k8s --purpose core      --description "k8s provider core: fixtures, parsers, probe, degraded rows (T1–T2)" --json
 gss feature worker add --feature fleet-connect-k8s --purpose levels    --description "k8s levels: contexts, namespaces, kinds, objects, containers (T3–T5)" --base <core branch> --json
 gss feature worker add --feature fleet-connect-k8s --purpose actions   --description "k8s actions: logs/describe/events streams, exec handoff, service tunnels (T6–T7)" --base <levels branch> --json
