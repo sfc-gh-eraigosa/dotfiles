@@ -49,3 +49,14 @@ func TestRunUnknownVerbExitOneWithMessage(t *testing.T) {
 		t.Fatalf("want 'ghapp: ' prefixed error on stderr, got %q", stderr.String())
 	}
 }
+
+// main prints one "ghapp: " prefix; a package error that already carries it
+// would read as a bug in the tool.
+func TestRunPrintsASinglePrefix(t *testing.T) {
+	var stderr bytes.Buffer
+	run([]string{"token", "--repo", "notaslug"}, &stderr)
+	got := stderr.String()
+	if strings.Count(got, "ghapp:") != 1 {
+		t.Fatalf("want exactly one program prefix, got %q", got)
+	}
+}

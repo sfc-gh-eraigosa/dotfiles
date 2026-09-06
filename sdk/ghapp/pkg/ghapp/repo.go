@@ -25,7 +25,7 @@ func RepoAccess(ctx context.Context, hc *http.Client, apiURL string, tok Token, 
 	req.Header.Set("Accept", "application/vnd.github+json")
 	res, err := hc.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("ghapp: GET /repos/%s: %w", ownerRepo, err)
+		return nil, fmt.Errorf("GET /repos/%s: %w", ownerRepo, err)
 	}
 	defer res.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
@@ -35,7 +35,7 @@ func RepoAccess(ctx context.Context, hc *http.Client, apiURL string, tok Token, 
 	}
 	_ = json.Unmarshal(raw, &body)
 	if res.StatusCode != 200 {
-		return nil, fmt.Errorf("ghapp: GET /repos/%s: HTTP %d %s", ownerRepo, res.StatusCode, body.Message)
+		return nil, fmt.Errorf("GET /repos/%s: HTTP %d %s", ownerRepo, res.StatusCode, body.Message)
 	}
 	return body.Permissions, nil
 }

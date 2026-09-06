@@ -70,7 +70,7 @@ func (a App) Token(ctx context.Context, inst int64, scope TokenScope) (Token, er
 	if len(scope.Permissions) > 0 || len(scope.Repositories) > 0 {
 		b, err := json.Marshal(scope)
 		if err != nil {
-			return Token{}, fmt.Errorf("ghapp: encoding token scope: %w", err)
+			return Token{}, fmt.Errorf("encoding token scope: %w", err)
 		}
 		body = bytes.NewReader(b)
 	}
@@ -111,11 +111,11 @@ func (a App) ready() (*deps, error) {
 	defer d.mu.Unlock()
 	if d.key == nil {
 		if a.PEMPath == "" {
-			return nil, errors.New("ghapp: app has no private key (PEMPath empty)")
+			return nil, errors.New("app has no private key (PEMPath empty)")
 		}
 		b, err := os.ReadFile(a.PEMPath)
 		if err != nil {
-			return nil, fmt.Errorf("ghapp: reading private key: %w", err)
+			return nil, fmt.Errorf("reading private key: %w", err)
 		}
 		k, err := ParsePrivateKey(b)
 		if err != nil {
@@ -144,7 +144,7 @@ func (a App) appCall(ctx context.Context, method, path string, body io.Reader, o
 	}
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
-		return "", fmt.Errorf("ghapp: %w", err)
+		return "", fmt.Errorf("%w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+jwt)
 	req.Header.Set("Accept", "application/vnd.github+json")
@@ -154,23 +154,23 @@ func (a App) appCall(ctx context.Context, method, path string, body io.Reader, o
 	}
 	res, err := d.http.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("ghapp: %s %s: %w", method, path, err)
+		return "", fmt.Errorf("%s %s: %w", method, path, err)
 	}
 	defer res.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(res.Body, 4<<20))
 	if err != nil {
-		return "", fmt.Errorf("ghapp: reading response: %w", err)
+		return "", fmt.Errorf("reading response: %w", err)
 	}
 	if res.StatusCode < 200 || res.StatusCode > 299 {
 		var gh struct {
 			Message string `json:"message"`
 		}
 		_ = json.Unmarshal(raw, &gh)
-		return "", fmt.Errorf("ghapp: %s %s: HTTP %d %s", method, path, res.StatusCode, gh.Message)
+		return "", fmt.Errorf("%s %s: HTTP %d %s", method, path, res.StatusCode, gh.Message)
 	}
 	if out != nil && len(raw) > 0 {
 		if err := json.Unmarshal(raw, out); err != nil {
-			return "", fmt.Errorf("ghapp: decoding response: %w", err)
+			return "", fmt.Errorf("decoding response: %w", err)
 		}
 	}
 	return res.Header.Get("Link"), nil

@@ -81,7 +81,7 @@ var ErrManifestCode = errors.New("manifest code expired or invalid")
 // Webhook/client secrets returned by GitHub are dropped, never stored.
 func Create(ctx context.Context, m Manifest, o CreateOpts) (App, error) {
 	if strings.TrimSpace(m.Name) == "" {
-		return App{}, errors.New("ghapp: manifest name is required")
+		return App{}, errors.New("manifest name is required")
 	}
 	if o.WebURL == "" {
 		o.WebURL = "https://github.com"
@@ -126,7 +126,7 @@ func Create(ctx context.Context, m Manifest, o CreateOpts) (App, error) {
 	}
 	manifestJSON, err := json.Marshal(wm)
 	if err != nil {
-		return App{}, fmt.Errorf("ghapp: encoding manifest: %w", err)
+		return App{}, fmt.Errorf("encoding manifest: %w", err)
 	}
 
 	type result struct {
@@ -151,7 +151,7 @@ func Create(ctx context.Context, m Manifest, o CreateOpts) (App, error) {
 		code := r.URL.Query().Get("code")
 		app, err := exchange(r.Context(), o, code, existing)
 		if err != nil {
-			http.Error(w, "ghapp: "+err.Error(), http.StatusBadGateway)
+			http.Error(w, ""+err.Error(), http.StatusBadGateway)
 			select {
 			case done <- result{err: err}:
 			default:
@@ -170,13 +170,13 @@ func Create(ctx context.Context, m Manifest, o CreateOpts) (App, error) {
 	defer srv.Close()
 
 	if err := o.OpenBrowser(fmt.Sprintf("http://127.0.0.1:%d/", port)); err != nil {
-		return App{}, fmt.Errorf("ghapp: opening browser: %w", err)
+		return App{}, fmt.Errorf("opening browser: %w", err)
 	}
 	select {
 	case r := <-done:
 		return r.app, r.err
 	case <-ctx.Done():
-		return App{}, fmt.Errorf("ghapp: waiting for the GitHub callback: %w", ctx.Err())
+		return App{}, fmt.Errorf("waiting for the GitHub callback: %w", ctx.Err())
 	}
 }
 
@@ -237,7 +237,7 @@ func listen(port int) (net.Listener, error) {
 		}
 		last = err
 	}
-	return nil, fmt.Errorf("ghapp: no free callback port in %d-%d: %w", port, port+9, last)
+	return nil, fmt.Errorf("no free callback port in %d-%d: %w", port, port+9, last)
 }
 
 func randomState() string {

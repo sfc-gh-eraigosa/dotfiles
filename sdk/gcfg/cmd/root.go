@@ -60,6 +60,9 @@ difference on purpose. Settings it does not know are reported, never touched.`,
 	pf.StringVarP(&g.File, "file", "f", ".github/gcfg.yaml", "path to the settings file")
 	pf.BoolVar(&g.Org, "org", false, "operate on the org block (only in the org's .github repo)")
 	pf.BoolVar(&g.NoColor, "no-color", false, "plain output")
-	root.AddCommand(newVersionCmd(), newLintCmd(g), newSchemaCmd(g), newAuthCmd(g))
+	root.AddCommand(
+		newVersionCmd(), newInitCmd(g), newExportCmd(g), newLintCmd(g), newSchemaCmd(g),
+		newVerifyCmd(g), newPlanCmd(g), newApplyCmd(g), newAuthCmd(g),
+	)
 	return root
 }

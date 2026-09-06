@@ -116,3 +116,44 @@ func TestBothImplementClient(t *testing.T) {
 	var _ Client = NewFake()
 	var _ Client = NewREST(RESTOpts{Bearer: "t"})
 }
+
+// Apply's whole contract is "write, then read back", so the fake must be
+// able to behave like GitHub: a successful write changes what the next read
+// returns.
+func TestFakeWriteCanChangeALaterRead(t *testing.T) {
+	f := NewFake()
+	f.Get("/repos/o/r", 200, `{"has_wiki":false}`)
+	f.AfterWrite("PATCH", "/repos/o/r", "/repos/o/r", `{"has_wiki":true}`)
+
+	var before, after struct {
+		HasWiki bool `json:"has_wiki"`
+	}
+	if _, err := f.Do(t.Context(), "GET", "/repos/o/r", nil, &before); err != nil {
+		t.Fatal(err)
+	}
+	if before.HasWiki {
+		t.Fatal("the first read should see the original state")
+	}
+	if _, err := f.Do(t.Context(), "PATCH", "/repos/o/r", map[string]any{"has_wiki": true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Do(t.Context(), "GET", "/repos/o/r", nil, &after); err != nil {
+		t.Fatal(err)
+	}
+	if !after.HasWiki {
+		t.Fatal("after the write, the read must see the new state")
+	}
+	// A write that never happens changes nothing.
+	f2 := NewFake()
+	f2.Get("/repos/o/r", 200, `{"has_wiki":false}`)
+	f2.AfterWrite("PATCH", "/repos/o/r", "/repos/o/r", `{"has_wiki":true}`)
+	var untouched struct {
+		HasWiki bool `json:"has_wiki"`
+	}
+	if _, err := f2.Do(t.Context(), "GET", "/repos/o/r", nil, &untouched); err != nil {
+		t.Fatal(err)
+	}
+	if untouched.HasWiki {
+		t.Fatal("no write, no change")
+	}
+}

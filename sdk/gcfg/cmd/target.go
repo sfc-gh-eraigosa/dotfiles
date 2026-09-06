@@ -51,12 +51,32 @@ func (g *Globals) resolveTarget() (Target, error) {
 	return Target{Owner: owner, Repo: repo}, nil
 }
 
-// client resolves a credential and returns an authenticated client plus the
-// source it came from.
-func (g *Globals) client(ctx context.Context, t Target) (gh.Client, gh.Source, error) {
-	c, src, err := gh.Resolve(ctx, gh.AuthOpts{Prefer: g.Auth, Owner: t.Owner, Repo: t.Repo})
+// newClient is the seam every verb resolves its client through; tests swap
+// it for the recording fake so no test needs a network or a credential.
+var newClient = func(g *Globals, t Target) (gh.Client, gh.Source, error) {
+	c, src, err := gh.Resolve(context.Background(), gh.AuthOpts{Prefer: g.Auth, Owner: t.Owner, Repo: t.Repo})
 	if err != nil {
 		return nil, src, fmt.Errorf("%w: %v", ErrUsage, err)
 	}
 	return c, src, nil
+}
+
+// client resolves a credential and returns an authenticated client plus the
+// source it came from.
+func (g *Globals) client(ctx context.Context, t Target) (gh.Client, gh.Source, error) {
+	return newClient(g, t)
+}
+
+// resolve is the preamble every settings verb shares: the target and a
+// client, or a usage error.
+func (g *Globals) resolve(ctx context.Context) (Target, gh.Client, error) {
+	t, err := g.resolveTarget()
+	if err != nil {
+		return Target{}, nil, err
+	}
+	c, _, err := g.client(ctx, t)
+	if err != nil {
+		return Target{}, nil, err
+	}
+	return t, c, nil
 }

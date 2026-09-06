@@ -305,3 +305,31 @@ func TestInfoReturnsAppMetadata(t *testing.T) {
 		t.Fatalf("info = %+v", info)
 	}
 }
+
+// The package's errors carry no program prefix: the CLI adds ""
+// once, and a doubled prefix reads like a bug in the tool. (Observed live:
+// "ghapp: waiting for the GitHub callback: context deadline
+// exceeded" when a create window expired.)
+func TestPackageErrorsCarryNoProgramPrefix(t *testing.T) {
+	c := newConvStub(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	_, err := Create(ctx, Manifest{Name: "x"},
+		CreateOpts{Store: FileStore{Dir: filepath.Join(t.TempDir(), "g")}, OpenBrowser: func(string) error { return nil }, APIURL: c.srv.URL})
+	if err == nil {
+		t.Fatal("want a timeout error")
+	}
+	if strings.HasPrefix(err.Error(), "ghapp:") {
+		t.Errorf("error should not prefix the program name: %v", err)
+	}
+	if _, err := Create(context.Background(), Manifest{}, CreateOpts{Store: FileStore{Dir: t.TempDir()}}); err == nil || strings.HasPrefix(err.Error(), "ghapp:") {
+		t.Errorf("name error = %v", err)
+	}
+	st := FileStore{Dir: filepath.Join(t.TempDir(), "g")}
+	if _, err := st.SavePEM("../bad", []byte("x")); err == nil || strings.HasPrefix(err.Error(), "ghapp:") {
+		t.Errorf("store error = %v", err)
+	}
+	if _, err := ParsePrivateKey([]byte("nope")); err == nil || strings.HasPrefix(err.Error(), "ghapp:") {
+		t.Errorf("key error = %v", err)
+	}
+}

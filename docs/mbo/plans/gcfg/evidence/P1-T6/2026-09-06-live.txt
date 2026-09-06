@@ -1,0 +1,78 @@
+# P1-T6 — live UC1–UC3 on sfc-gh-eraigosa/dotfiles — 2026-09-06T21:58:27Z
+# Credential: this host's keyring-backed gh login (never printed). Binary: go build of this worker.
+
+## UC1 — export what is live
+$ gcfg export --out live.yaml -R sfc-gh-eraigosa/dotfiles --force
+wrote /tmp/claude-1000/-home-wenlock-github-sfc-gh-eraigosa-playground/4ae2e046-d679-4497-8570-6f4ac7348d85/scratchpad/live.yaml (sfc-gh-eraigosa/dotfiles)
+exit=0
+
+## UC2a — the exported file verifies clean
+$ gcfg verify -f live.yaml -R sfc-gh-eraigosa/dotfiles --no-color
+sfc-gh-eraigosa/dotfiles: clean (2 families checked)
+exit=0
+
+## UC2b — a changed key is drift, exit 1, named
+$ sed wiki:false→true; gcfg verify -f wiki-on.yaml --no-color
+sfc-gh-eraigosa/dotfiles: 1 drift (2 families checked)
+
+general
+  drift      features.wiki
+             want true
+             live false
+exit=1
+
+## UC2c — the same finding as a GitHub step summary
+### gcfg — sfc-gh-eraigosa/dotfiles: 1 drift (2 families checked)
+
+| family | key | want | live | kind |
+| :-- | :-- | :-- | :-- | :-- |
+| general | features.wiki | true | false | drift |
+exit=1
+
+## UC3a — plan writes nothing
+update general.features.wiki: false → true
+sfc-gh-eraigosa/dotfiles: 1 drift (2 families checked)
+
+general
+  drift      features.wiki
+             want true
+             live false
+exit=1
+
+## UC3b — apply refuses without --yes off a terminal, and writes nothing
+update general.features.wiki: false → true
+gcfg: usage: refusing to apply 1 change(s) without a terminal to confirm at — re-run with --yes
+exit=2
+
+## UC3c — the real apply: turn the wiki tab on, then read it back
+$ gcfg apply --yes -f wiki-on.yaml -R sfc-gh-eraigosa/dotfiles --only general
+update general.features.wiki: false → true
+sfc-gh-eraigosa/dotfiles: clean (1 families checked)
+exit=0
+
+## UC3d — the change is real: verifying the ORIGINAL file now reports drift the other way
+sfc-gh-eraigosa/dotfiles: 1 drift (2 families checked)
+
+general
+  drift      features.wiki
+             want false
+             live true
+exit=1
+
+## UC3e — restore: apply the original exported file
+$ gcfg apply --yes -f live.yaml -R sfc-gh-eraigosa/dotfiles --only general
+update general.features.wiki: true → false
+sfc-gh-eraigosa/dotfiles: clean (1 families checked)
+exit=0
+
+## UC3f — back where we started: the original file verifies clean again
+sfc-gh-eraigosa/dotfiles: clean (2 families checked)
+exit=0
+
+## the wiki tab is off again, straight from the API
+has_wiki=false
+
+## auth status for the run above (source only, never the value)
+target: sfc-gh-eraigosa/dotfiles
+source: gh login
+token:  *** (never printed; gh login supplies it)

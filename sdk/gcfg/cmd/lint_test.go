@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func writeFile(t *testing.T, name, body string) string {
+func writeTmp(t *testing.T, name, body string) string {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), name)
 	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
@@ -19,7 +19,7 @@ func writeFile(t *testing.T, name, body string) string {
 }
 
 func TestLintCleanFileIsExitZero(t *testing.T) {
-	p := writeFile(t, "gcfg.yaml", "version: 1\nrepo:\n  general:\n    visibility: public\n")
+	p := writeTmp(t, "gcfg.yaml", "version: 1\nrepo:\n  general:\n    visibility: public\n")
 	out, _, err := run("lint", "-f", p, "-R", "o/r")
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
@@ -30,7 +30,7 @@ func TestLintCleanFileIsExitZero(t *testing.T) {
 }
 
 func TestLintProblemsAreUsageErrors(t *testing.T) {
-	p := writeFile(t, "gcfg.yaml", "version: 1\nrepo:\n  general:\n    visibility: hidden\n")
+	p := writeTmp(t, "gcfg.yaml", "version: 1\nrepo:\n  general:\n    visibility: hidden\n")
 	out, _, err := run("lint", "-f", p, "-R", "o/r")
 	if !errors.Is(err, ErrUsage) {
 		t.Fatalf("want ErrUsage, got %v", err)
@@ -41,7 +41,7 @@ func TestLintProblemsAreUsageErrors(t *testing.T) {
 }
 
 func TestLintUnknownKeyIsAUsageError(t *testing.T) {
-	p := writeFile(t, "gcfg.yaml", "version: 1\nrepo:\n  genral: {}\n")
+	p := writeTmp(t, "gcfg.yaml", "version: 1\nrepo:\n  genral: {}\n")
 	_, _, err := run("lint", "-f", p)
 	if !errors.Is(err, ErrUsage) || !strings.Contains(err.Error(), "genral") {
 		t.Fatalf("want a usage error naming the key, got %v", err)
@@ -56,7 +56,7 @@ func TestLintMissingFileIsAUsageError(t *testing.T) {
 }
 
 func TestLintWarnsOnAnEmptyFile(t *testing.T) {
-	p := writeFile(t, "gcfg.yaml", "version: 1\n")
+	p := writeTmp(t, "gcfg.yaml", "version: 1\n")
 	out, _, err := run("lint", "-f", p)
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +67,7 @@ func TestLintWarnsOnAnEmptyFile(t *testing.T) {
 }
 
 func TestLintJSON(t *testing.T) {
-	p := writeFile(t, "gcfg.yaml", "version: 1\nrepo:\n  general:\n    visibility: hidden\n")
+	p := writeTmp(t, "gcfg.yaml", "version: 1\nrepo:\n  general:\n    visibility: hidden\n")
 	out, _, err := run("lint", "-f", p, "--json")
 	if !errors.Is(err, ErrUsage) {
 		t.Fatalf("want ErrUsage, got %v", err)
@@ -86,7 +86,7 @@ func TestLintJSON(t *testing.T) {
 
 // The org-placement rule needs the target; -R supplies it.
 func TestLintOrgPlacementUsesTheTarget(t *testing.T) {
-	p := writeFile(t, "gcfg.yaml", "version: 1\norg:\n  profile: {description: x}\n")
+	p := writeTmp(t, "gcfg.yaml", "version: 1\norg:\n  profile: {description: x}\n")
 	if _, _, err := run("lint", "-f", p, "-R", "acme/.github"); err != nil {
 		t.Fatalf("org file in .github should lint clean: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestSchemaWritesTheJSONSchema(t *testing.T) {
 }
 
 func TestBadTargetIsAUsageError(t *testing.T) {
-	p := writeFile(t, "gcfg.yaml", "version: 1\n")
+	p := writeTmp(t, "gcfg.yaml", "version: 1\n")
 	if _, _, err := run("lint", "-f", p, "-R", "notaslug"); !errors.Is(err, ErrUsage) {
 		t.Fatalf("want ErrUsage, got %v", err)
 	}

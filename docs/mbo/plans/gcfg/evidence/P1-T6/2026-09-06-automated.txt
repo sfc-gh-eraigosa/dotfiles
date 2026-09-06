@@ -1,0 +1,57 @@
+# P1-T6 verbs export/verify/plan/apply/init — automated gates — 2026-09-06T21:59:34Z
+
+## RUN-RED
+$ go test ./cmd/ → unknown command "export" for "gcfg" (and verify/plan/apply/init)
+$ go test ./internal/gh/ -run TestFakeWriteCanChangeALaterRead → undefined: AfterWrite
+
+## RUN-GREEN: go vet ./... && go test ./... -count=1 -cover
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg	0.009s	coverage: 91.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/cmd	0.045s	coverage: 85.9% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/engine	0.010s	coverage: 91.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/family	0.007s	coverage: 97.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/family/general	0.013s	coverage: 93.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/family/security	0.010s	coverage: 80.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/gh	0.018s	coverage: 86.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/report	0.010s	coverage: 91.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/schema	0.022s	coverage: 94.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/version	0.007s	coverage: 100.0% of statements
+
+## per-package bars (engine ≥90, schema ≥90) and the module bar (≥80)
+internal/engine: coverage: 91.6%
+internal/schema: coverage: 94.8%
+module total: total:											(statements)		91.1%
+
+## verb tests
+--- PASS: TestAuthStatusNamesTheSourceAndNeverTheToken (0.00s)
+--- PASS: TestAuthStatusWithNoCredentialIsUsage (0.00s)
+--- PASS: TestAuthStatusHonoursTheAuthFlag (0.00s)
+--- PASS: TestTargetFallsBackToTheGitRemote (0.01s)
+--- PASS: TestTargetOutsideARepoIsAUsageError (0.00s)
+--- PASS: TestLintCleanFileIsExitZero (0.00s)
+--- PASS: TestLintProblemsAreUsageErrors (0.00s)
+--- PASS: TestLintUnknownKeyIsAUsageError (0.00s)
+--- PASS: TestLintMissingFileIsAUsageError (0.00s)
+--- PASS: TestLintWarnsOnAnEmptyFile (0.00s)
+--- PASS: TestLintJSON (0.00s)
+--- PASS: TestLintOrgPlacementUsesTheTarget (0.00s)
+--- PASS: TestSchemaWritesTheJSONSchema (0.00s)
+--- PASS: TestBadTargetIsAUsageError (0.00s)
+--- PASS: TestVersionCommand (0.00s)
+--- PASS: TestBareCommandPrintsHelp (0.00s)
+--- PASS: TestTargetFlagParsing (0.00s)
+--- PASS: TestExportThenVerifyIsClean (0.00s)
+--- PASS: TestExportRefusesToOverwriteWithoutForce (0.00s)
+--- PASS: TestExportToStdout (0.00s)
+--- PASS: TestVerifyReportsDriftWithExitOne (0.00s)
+--- PASS: TestVerifyJSONAndMarkdown (0.00s)
+--- PASS: TestVerifyOnlyLimitsFamilies (0.00s)
+--- PASS: TestPlanShowsChangesAndWritesNothing (0.00s)
+--- PASS: TestApplyWritesAndReVerifies (0.00s)
+--- PASS: TestApplyReportsASettingGitHubIgnored (0.00s)
+--- PASS: TestApplyWithoutYesInNonTTYIsExitTwoAndWritesNothing (0.00s)
+--- PASS: TestApplyDryRunWritesNothing (0.00s)
+--- PASS: TestApplyCleanFileIsExitZeroAndNoWrites (0.00s)
+--- PASS: TestInitWritesADefaultFile (0.00s)
+--- PASS: TestInitFromAnotherRepo (0.00s)
+--- PASS: TestVerifyMissingFileIsUsage (0.00s)
+--- PASS: TestVerbsNeverPrintACredential (0.00s)

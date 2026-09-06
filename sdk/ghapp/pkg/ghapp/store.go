@@ -36,7 +36,7 @@ var _ Store = FileStore{}
 
 func (s FileStore) ensureDir() error {
 	if err := os.MkdirAll(s.Dir, dirPerm); err != nil {
-		return fmt.Errorf("ghapp store: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 	// MkdirAll honours the umask; force the mode we promised.
 	return os.Chmod(s.Dir, dirPerm)
@@ -45,7 +45,7 @@ func (s FileStore) ensureDir() error {
 // SavePEM writes the private key for slug and returns its path.
 func (s FileStore) SavePEM(slug string, pemBytes []byte) (string, error) {
 	if !slugRE.MatchString(slug) {
-		return "", fmt.Errorf("ghapp store: invalid app slug %q", slug)
+		return "", fmt.Errorf("invalid app slug %q", slug)
 	}
 	if err := s.ensureDir(); err != nil {
 		return "", err
@@ -64,7 +64,7 @@ func (s FileStore) Save(apps Apps) error {
 	}
 	b, err := json.MarshalIndent(apps, "", "  ")
 	if err != nil {
-		return fmt.Errorf("ghapp store: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 	return writePrivate(filepath.Join(s.Dir, appsFile), append(b, '\n'))
 }
@@ -77,15 +77,15 @@ func (s FileStore) Load() (Apps, error) {
 		return Apps{}, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("ghapp store: %w", err)
+		return nil, fmt.Errorf("%w", err)
 	}
 	apps := Apps{}
 	if err := json.Unmarshal(b, &apps); err != nil {
-		return nil, fmt.Errorf("ghapp store: parsing %s: %w", appsFile, err)
+		return nil, fmt.Errorf("parsing %s: %w", appsFile, err)
 	}
 	for slug, a := range apps {
 		if err := checkPrivate(a.PEMPath); err != nil {
-			return nil, fmt.Errorf("ghapp store: app %q: %w", slug, err)
+			return nil, fmt.Errorf("app %q: %w", slug, err)
 		}
 	}
 	return apps, nil
@@ -94,14 +94,14 @@ func (s FileStore) Load() (Apps, error) {
 func writePrivate(path string, b []byte) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, filePerm)
 	if err != nil {
-		return fmt.Errorf("ghapp store: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 	if _, err := f.Write(b); err != nil {
 		f.Close()
-		return fmt.Errorf("ghapp store: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 	if err := f.Close(); err != nil {
-		return fmt.Errorf("ghapp store: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 	return os.Chmod(path, filePerm)
 }

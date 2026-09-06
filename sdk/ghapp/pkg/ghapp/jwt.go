@@ -17,18 +17,18 @@ import (
 func ParsePrivateKey(pemBytes []byte) (*rsa.PrivateKey, error) {
 	block, _ := pem.Decode(pemBytes)
 	if block == nil {
-		return nil, errors.New("ghapp: no PEM block found in private key")
+		return nil, errors.New("no PEM block found in private key")
 	}
 	if k, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
 		return k, nil
 	}
 	k, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
-		return nil, fmt.Errorf("ghapp: parsing private key: %w", err)
+		return nil, fmt.Errorf("parsing private key: %w", err)
 	}
 	rk, ok := k.(*rsa.PrivateKey)
 	if !ok {
-		return nil, errors.New("ghapp: private key is not RSA")
+		return nil, errors.New("private key is not RSA")
 	}
 	return rk, nil
 }
@@ -43,7 +43,7 @@ func SignJWT(appID int64, key *rsa.PrivateKey, now time.Time) (string, error) {
 	}
 	s, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(key)
 	if err != nil {
-		return "", fmt.Errorf("ghapp: signing app jwt: %w", err)
+		return "", fmt.Errorf("signing app jwt: %w", err)
 	}
 	return s, nil
 }

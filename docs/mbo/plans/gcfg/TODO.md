@@ -99,13 +99,13 @@
 - [x] LEDGER + CHECKPOINT
 
 ### P1-T6 — verbs export/verify/plan/apply/init  (plan P1-T6)
-- [ ] RED: `cmd/{export,verify,plan,apply,init}_test.go` (exit codes; non-TTY apply w/o --yes → 2 and zero writes; --only; init golden; --from via fake; refuse overwrite; token grep)
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN
-- [ ] RUN-GREEN → **PASS**; module coverage ≥80%
-- [ ] VERIFY (live, ask before apply): `go run . export` on this repo → verify 0; flip `delete_branch_on_merge` in UI → verify 1 names key; `apply` → re-read 0 → `evidence/core/`
-- [ ] COMMIT: `feat(gcfg): export/verify/plan/apply/init`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `cmd/{export,verify,plan,apply,init}_test.go` (exit codes; non-TTY apply w/o --yes → 2 and zero writes; --only; init golden; --from via fake; refuse overwrite; token grep)
+- [x] RUN-RED → **FAIL**
+- [x] GREEN
+- [x] RUN-GREEN → **PASS**; module coverage ≥80%
+- [x] VERIFY (live, ask before apply): `go run . export` on this repo → verify 0; flip `delete_branch_on_merge` in UI → verify 1 names key; `apply` → re-read 0 → `evidence/core/`
+- [x] COMMIT: `feat(gcfg): export/verify/plan/apply/init`
+- [x] LEDGER + CHECKPOINT
 **Done when:** gcfg-ci green 80/90/90; UC1–UC3 evidence captured.
 
 ### P2-T1 … P2-T10 — families  (plan P2)

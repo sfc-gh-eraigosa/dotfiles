@@ -26,6 +26,15 @@ type Fake struct {
 	single map[string]stubbed  // method+path → one response
 	pages  map[string][]string // path → JSON array per page
 	calls  []Call
+	// after lets a write change what a later read returns, which is how
+	// GitHub behaves and what apply's re-read depends on.
+	after map[string][]pendingRead
+}
+
+// pendingRead is a GET stub installed once a particular write happens.
+type pendingRead struct {
+	path string
+	body string
 }
 
 type stubbed struct {
@@ -36,7 +45,16 @@ type stubbed struct {
 
 // NewFake returns an empty fake; stub it with Get/GetFile/GetPages/Fail.
 func NewFake() *Fake {
-	return &Fake{single: map[string]stubbed{}, pages: map[string][]string{}}
+	return &Fake{single: map[string]stubbed{}, pages: map[string][]string{}, after: map[string][]pendingRead{}}
+}
+
+// AfterWrite makes a successful writeMethod+writePath replace the stub for
+// GET readPath with body — the fake's way of saying "GitHub took it".
+func (f *Fake) AfterWrite(writeMethod, writePath, readPath, body string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	k := key(writeMethod, writePath)
+	f.after[k] = append(f.after[k], pendingRead{path: readPath, body: body})
 }
 
 func key(method, path string) string { return method + " " + path }
@@ -87,6 +105,7 @@ func (f *Fake) Do(ctx context.Context, method, path string, body, out any) (int,
 		// A write with no stub is allowed and counts as accepted: apply
 		// tests care about the request, not a canned answer.
 		if method != "GET" {
+			f.applyAfter(method, path)
 			return 200, nil
 		}
 		return 0, fmt.Errorf("fake: no stub for %s %s", method, path)
@@ -99,7 +118,19 @@ func (f *Fake) Do(ctx context.Context, method, path string, body, out any) (int,
 			return s.status, fmt.Errorf("fake: decoding stub for %s %s: %w", method, path, err)
 		}
 	}
+	if method != "GET" {
+		f.applyAfter(method, path)
+	}
 	return s.status, nil
+}
+
+// applyAfter installs any read stubs this write was set up to change.
+func (f *Fake) applyAfter(method, path string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, p := range f.after[key(method, path)] {
+		f.single[key("GET", p.path)] = stubbed{status: 200, body: p.body}
+	}
 }
 
 // Paginate implements Client over the stubbed pages, falling back to a
