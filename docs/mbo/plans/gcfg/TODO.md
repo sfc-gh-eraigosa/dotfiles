@@ -91,12 +91,12 @@
 - [ ] LEDGER + CHECKPOINT
 
 ### P1-T5 — engine + renderers  (plan P1-T5)
-- [ ] RED: `engine/{export,verify,plan,apply,ownership}_test.go` (clean; drift; unreadable→finding; full extras; apply→re-read→not-honoured survives; call order), `report/*_test.go` goldens (tty/json/markdown)
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN
-- [ ] RUN-GREEN: `go test ./internal/engine/ -cover` ≥90% → **PASS**
-- [ ] COMMIT: `feat(gcfg): engine + renderers`
-- [ ] LEDGER + CHECKPOINT
+- [x] RED: `engine/{export,verify,plan,apply,ownership}_test.go` (clean; drift; unreadable→finding; full extras; apply→re-read→not-honoured survives; call order), `report/*_test.go` goldens (tty/json/markdown)
+- [x] RUN-RED → **FAIL**
+- [x] GREEN
+- [x] RUN-GREEN: `go test ./internal/engine/ -cover` ≥90% → **PASS**
+- [x] COMMIT: `feat(gcfg): engine + renderers`
+- [x] LEDGER + CHECKPOINT
 
 ### P1-T6 — verbs export/verify/plan/apply/init  (plan P1-T6)
 - [ ] RED: `cmd/{export,verify,plan,apply,init}_test.go` (exit codes; non-TTY apply w/o --yes → 2 and zero writes; --only; init golden; --from via fake; refuse overwrite; token grep)

@@ -79,11 +79,12 @@ func (l *linter) dupes(base, field string, names []string) {
 // toward false positives: this file is committed, so a suspicious string is
 // worth a human look.
 var secretish = []*regexp.Regexp{
-	regexp.MustCompile(`gh[pousr]_[A-Za-z0-9]{16,}`),         // GitHub PATs / tokens
+	regexp.MustCompile(`gh[pousr]_[A-Za-z0-9_]{16,}`),        // GitHub PATs / tokens
 	regexp.MustCompile(`github_pat_[A-Za-z0-9_]{20,}`),       // fine-grained PATs
 	regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY-----`), // PEM
 	regexp.MustCompile(`(?i)\bAKIA[0-9A-Z]{16}\b`),           // AWS access key id
-	regexp.MustCompile(`xox[baprs]-[A-Za-z0-9-]{10,}`),       // Slack
+	regexp.MustCompile(`xox[baprs]-[A-Za-z0-9-]{10,}`),
+	regexp.MustCompile(`(?i)\b(?:secret|password|passwd|api[_-]?key)\s*[:=]\s*\S{8,}`), // Slack
 }
 
 // secret flags a value that looks like a credential, never echoing it.
