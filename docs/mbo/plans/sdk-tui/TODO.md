@@ -31,7 +31,7 @@
 - [x] RUN-GREEN: `mkdir -p $EV/task1 && go test ./tui/... -cover -v 2>&1 | tee $EV/task1/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
 - [x] VERIFY: `go vet ./...`; `git diff go.mod` shows only bubbletea + testify
 - [x] COMMIT: `feat(libs/tui): module wiring + prompt.Line single-line editor`
-- [ ] LEDGER + CHECKPOINT
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** prompt ≥ 90%; go.mod delta is exactly two requirements.
 
@@ -42,17 +42,17 @@
 - [x] GREEN: `tui/keymap/keymap.go`, `tui/keymap/vim.go`
 - [x] RUN-GREEN: `mkdir -p $EV/task2 && go test ./tui/keymap/ -cover -v 2>&1 | tee $EV/task2/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
 - [x] VERIFY: `Vim.HeaderHint("  ")` equals the GUIDE §7 example (the test pins it)
-- [ ] COMMIT: `feat(libs/tui): keymap — data-driven bindings, Vim default map, footer/help rows, dispatch`
-- [ ] LEDGER + CHECKPOINT — **plan §3 is now frozen**
+- [x] COMMIT: `feat(libs/tui): keymap — data-driven bindings, Vim default map, footer/help rows, dispatch`
+- [x] LEDGER + CHECKPOINT — **plan §3 is now frozen**
 
 **Done when:** keymap ≥ 90%; TRACKING §5 notes the freeze.
 
 ### Task 3 — `nav.Cursor`  (plan Task 3)
 
-- [ ] RED: `tui/nav/cursor_test.go` (7 tests)
-- [ ] RUN-RED: `go test ./tui/nav/` → expect **FAIL** `undefined: Cursor`
-- [ ] GREEN: `tui/nav/cursor.go`
-- [ ] RUN-GREEN: `mkdir -p $EV/task3 && go test ./tui/nav/ -cover -v 2>&1 | tee $EV/task3/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
+- [x] RED: `tui/nav/cursor_test.go` (7 tests)
+- [x] RUN-RED: `go test ./tui/nav/` → expect **FAIL** `undefined: Cursor`
+- [x] GREEN: `tui/nav/cursor.go`
+- [x] RUN-GREEN: `mkdir -p $EV/task3 && go test ./tui/nav/ -cover -v 2>&1 | tee $EV/task3/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
 - [ ] COMMIT: `feat(libs/tui): nav.Cursor — clamped motion, following viewport, gg chord as state`
 - [ ] LEDGER + CHECKPOINT
 

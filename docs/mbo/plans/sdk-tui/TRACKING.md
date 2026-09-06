@@ -14,7 +14,7 @@
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | design (docs + GUIDE) | `sdk-tui/edward-raigosa/design` | `feature/sdk-tui/edward-raigosa/design` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/sdk-tui/edward-raigosa/design` | [#286](https://github.com/sfc-gh-eraigosa/dotfiles/pull/286) (draft) | docs written; issue #283 |
-| lib | `sdk-tui/edward-raigosa/lib` | `feature/sdk-tui/edward-raigosa/lib` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/sdk-tui/edward-raigosa/lib` | (pending checkpoint) | created 2026-09-05; base `feature/sdk-tui/edward-raigosa/design` @ `aa2d78a` |
+| lib | `sdk-tui/edward-raigosa/lib` | `feature/sdk-tui/edward-raigosa/lib` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/sdk-tui/edward-raigosa/lib` | [#288](https://github.com/sfc-gh-eraigosa/dotfiles/pull/288) (draft, base = design branch) | created 2026-09-05; base `feature/sdk-tui/edward-raigosa/design` @ `aa2d78a`; first checkpoint after Task 2 |
 
 `gss feature worker add --feature sdk-tui --purpose lib --base feature/sdk-tui/edward-raigosa/design --engine claude --json` (2026-09-05):
 
@@ -39,8 +39,8 @@ the registry row.
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
 | 1 module wiring + `prompt.Line` | done | `e13455a` | RUN-RED `go test ./tui/prompt/` → `undefined: Line` (`evidence/task1/run-red.txt`); RUN-GREEN `go test ./tui/... -cover -v` → `ok … tui/prompt … coverage: 97.3%` (`evidence/task1/go-test.txt`); `go vet ./...` clean | go.mod direct delta = bubbletea v1.3.10 + testify v1.12.1 exactly; `go mod tidy` (go1.26) canonicalizes the directive to `go 1.24.0` and pulls lipgloss only as `// indirect` via bubbletea — nothing in `tui/` imports it |
-| 2 `keymap` | done | (SHA recorded at the next commit) | RUN-RED `go test ./tui/keymap/` → `undefined: Action/Down/Up/PageLeft…` (`evidence/task2/run-red.txt`); RUN-GREEN `go test ./tui/keymap/ -cover -v` → 6/6 PASS, `coverage: 98.5%` (`evidence/task2/go-test.txt`); `go vet` clean; `Vim.HeaderHint("  ")` pinned to the GUIDE §7 footer by `TestHeaderHintGroupsAndOrders` | **freezes plan §3** (see §5 log). `line_test.go` gofmt-aligned in this commit (lint gate) |
-| 3 `nav.Cursor` | todo | | | extracted from fleet clampViewport/move |
+| 2 `keymap` | done | `1238136` | RUN-RED `go test ./tui/keymap/` → `undefined: Action/Down/Up/PageLeft…` (`evidence/task2/run-red.txt`); RUN-GREEN `go test ./tui/keymap/ -cover -v` → 6/6 PASS, `coverage: 98.5%` (`evidence/task2/go-test.txt`); `go vet` clean; `Vim.HeaderHint("  ")` pinned to the GUIDE §7 footer by `TestHeaderHintGroupsAndOrders` | **freezes plan §3** (see §5 log). `line_test.go` gofmt-aligned in this commit (lint gate) |
+| 3 `nav.Cursor` | done | (SHA recorded at the next commit) | RUN-RED `go test ./tui/nav/` → `undefined: Cursor` (`evidence/task3/run-red.txt`); RUN-GREEN `go test ./tui/nav/ -cover -v` → 7/7 PASS, `coverage: 98.4%` (`evidence/task3/go-test.txt`); `go vet` clean; `grep -c "^var " tui/nav/cursor.go` → 0 | extracted from fleet clampViewport/move; `gg` pending state lives on the value |
 | 4 `search` | todo | | | extracted from fleet compileInto/jumpMatch |
 | 5 `cmdline` | todo | | | |
 | 6 `overlay` | todo | | | |
@@ -51,7 +51,7 @@ the registry row.
 | Feature | Automated proof | Human/live proof | Notes |
 | :-- | :-- | :-- | :-- |
 | F1 keymap | [x] `TestLookupUsesRealKeyNames` … `TestDispatchCallsTheBoundHandlerOnce` (task2/go-test.txt) | [ ] demo `?` overlay | |
-| F2 nav | [ ] `TestMoveClampsBothEnds` … `TestKeyWithoutChordInMap` | [ ] demo `jj`, `ctrl+d` | |
+| F2 nav | [x] `TestMoveClampsBothEnds` … `TestKeyWithoutChordInMap` (task3/go-test.txt) | [ ] demo `jj`, `ctrl+d` | |
 | F3 prompt | [x] `TestLineEditing`, `TestLineDoesNotConsumeModeKeys`, `TestLineRenderResetAtEnd` (task1/go-test.txt) | [ ] | |
 | F4 compile | [ ] `TestCompileSmartcaseAndErrors` | [ ] | |
 | F5 search state | [ ] `TestTypingRecomputes…`, `TestFirstAndNextWrap`, `TestCommitCancelHideRearmBadge`, `TestModeKeysAreIgnoredNotTyped` | [ ] demo `/25`, `n` | |
@@ -86,3 +86,4 @@ the registry row.
 | 2026-09-05 | build (session 1) | Preflight: go1.26.1, golangci-lint v2.0.2; baseline gss size 7675540 B (`evidence/deps/gss-size-before.txt`); feature row re-created, `lib` worker created (§0); libs green on the base (`ok libs/log`). |
 | 2026-09-05 | build (session 1) | Task 1 done (prompt.Line 97.3%). Ledger convention: each task commit carries its own TODO/TRACKING update; the task's SHA is written into its row by the following commit. |
 | 2026-09-05 | build (session 1) | Task 2 done (keymap 98.5%). **Plan §3 interfaces are now frozen** — `prompt.Line` and `keymap` land exactly as written in the plan; every later change to a §3 signature is a §4 blocker + coordinated `plans/gff-tui-vim.md` edit. Task 1 checkpoint not yet pushed: the session's playground `demo-guard` hook blocks `gss feature checkpoint` for the dotfiles worker and the auto-mode classifier refused the hook's `DEMO_GUARD=skip` escape; owner runs the checkpoint. |
+| 2026-09-05 | build (session 1) | Checkpoint after Task 2 succeeded (`--auto`, playground hook skipped, owner-approved) → draft PR #288. Task 3 done (nav 98.4%, zero globals). |
