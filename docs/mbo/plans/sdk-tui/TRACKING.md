@@ -14,13 +14,31 @@
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | design (docs + GUIDE) | `sdk-tui/edward-raigosa/design` | `feature/sdk-tui/edward-raigosa/design` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/sdk-tui/edward-raigosa/design` | [#286](https://github.com/sfc-gh-eraigosa/dotfiles/pull/286) (draft) | docs written; issue #283 |
-| lib | (create per IMPLEMENTATION §2) | | | | not started |
+| lib | `sdk-tui/edward-raigosa/lib` | `feature/sdk-tui/edward-raigosa/lib` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/sdk-tui/edward-raigosa/lib` | (pending checkpoint) | created 2026-09-05; base `feature/sdk-tui/edward-raigosa/design` @ `aa2d78a` |
+
+`gss feature worker add --feature sdk-tui --purpose lib --base feature/sdk-tui/edward-raigosa/design --engine claude --json` (2026-09-05):
+
+```json
+{
+  "worker_ref": "sdk-tui/edward-raigosa/lib",
+  "branch": "feature/sdk-tui/edward-raigosa/lib",
+  "worktree_path": "$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/sdk-tui/edward-raigosa/lib",
+  "base_branch": "feature/sdk-tui/edward-raigosa/design"
+}
+```
+
+Notes: the `sdk-tui` feature row (and the design worker's row) had been dropped from the shared
+gss registry by an earlier `gss feature audit --repair` run from another repo, so the feature was
+re-created with `gss feature start sdk-tui --base main` before `worker add`. `worker add` checked the
+new worktree out on the **base** branch instead of the lib branch; fixed with
+`git checkout -b feature/sdk-tui/edward-raigosa/lib` at the same commit (`aa2d78a`), which matches
+the registry row.
 
 ## 1. Task ledger
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| 1 module wiring + `prompt.Line` | todo | | | go.mod: + bubbletea v1.3.10, testify |
+| 1 module wiring + `prompt.Line` | done | (SHA recorded at the next commit) | RUN-RED `go test ./tui/prompt/` → `undefined: Line` (`evidence/task1/run-red.txt`); RUN-GREEN `go test ./tui/... -cover -v` → `ok … tui/prompt … coverage: 97.3%` (`evidence/task1/go-test.txt`); `go vet ./...` clean | go.mod direct delta = bubbletea v1.3.10 + testify v1.12.1 exactly; `go mod tidy` (go1.26) canonicalizes the directive to `go 1.24.0` and pulls lipgloss only as `// indirect` via bubbletea — nothing in `tui/` imports it |
 | 2 `keymap` | todo | | | **freezes plan §3** |
 | 3 `nav.Cursor` | todo | | | extracted from fleet clampViewport/move |
 | 4 `search` | todo | | | extracted from fleet compileInto/jumpMatch |
@@ -34,7 +52,7 @@
 | :-- | :-- | :-- | :-- |
 | F1 keymap | [ ] `TestLookupUsesRealKeyNames` … `TestDispatchCallsTheBoundHandlerOnce` | [ ] demo `?` overlay | |
 | F2 nav | [ ] `TestMoveClampsBothEnds` … `TestKeyWithoutChordInMap` | [ ] demo `jj`, `ctrl+d` | |
-| F3 prompt | [ ] `TestLineEditing`, `TestLineDoesNotConsumeModeKeys`, `TestLineRenderResetAtEnd` | [ ] | |
+| F3 prompt | [x] `TestLineEditing`, `TestLineDoesNotConsumeModeKeys`, `TestLineRenderResetAtEnd` (task1/go-test.txt) | [ ] | |
 | F4 compile | [ ] `TestCompileSmartcaseAndErrors` | [ ] | |
 | F5 search state | [ ] `TestTypingRecomputes…`, `TestFirstAndNextWrap`, `TestCommitCancelHideRearmBadge`, `TestModeKeysAreIgnoredNotTyped` | [ ] demo `/25`, `n` | |
 | F6 parse/registry | [ ] `TestParse`, `TestRegistryRunAliasesAndUnknown` | [ ] demo `:q` | |
@@ -65,3 +83,5 @@
 | Date | Session | What advanced |
 | :-- | :-- | :-- |
 | 2026-09-05 | planning | Owner asked for a shared TUI lib after reviewing the gff plan. Verified fleet already ships the behaviors; extract-and-adopt approved; `:` cmdline in scope; own feature `sdk-tui`. GUIDE, design, spec, plan, trio written on the `design` worker. |
+| 2026-09-05 | build (session 1) | Preflight: go1.26.1, golangci-lint v2.0.2; baseline gss size 7675540 B (`evidence/deps/gss-size-before.txt`); feature row re-created, `lib` worker created (§0); libs green on the base (`ok libs/log`). |
+| 2026-09-05 | build (session 1) | Task 1 done (prompt.Line 97.3%). Ledger convention: each task commit carries its own TODO/TRACKING update; the task's SHA is written into its row by the following commit. |

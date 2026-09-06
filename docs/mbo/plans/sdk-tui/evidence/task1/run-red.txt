@@ -1,0 +1,6 @@
+# 2026-09-05 20:10 PDT — RUN-RED: go test ./tui/prompt/ 2>&1 | head -5
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/prompt [github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/prompt.test]
+tui/prompt/line_test.go:35:10: undefined: Line
+tui/prompt/line_test.go:46:8: undefined: Line
+tui/prompt/line_test.go:53:8: undefined: Line
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/prompt [build failed]

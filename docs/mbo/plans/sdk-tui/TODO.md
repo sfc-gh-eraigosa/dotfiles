@@ -15,21 +15,21 @@
 
 ## Preflight (once)
 
-- [ ] SETUP: `go version` → go1.26; `golangci-lint version`
-- [ ] SETUP: from a clean `main` checkout build gss and save `evidence/deps/gss-size-before.txt` (IMPLEMENTATION §1)
-- [ ] SETUP: create the `lib` worker (IMPLEMENTATION §2), paste its `--json` into TRACKING §0, `cd` into it
-- [ ] SETUP: `cd sdk/libs && go test ./... | tail -2` → ok on the base
-- [ ] ALLOWLIST: after the first file under `sdk/libs/tui/` and `evidence/`: `git status --short -- <path>`; `git check-ignore -v` if absent
+- [x] SETUP: `go version` → go1.26; `golangci-lint version`
+- [x] SETUP: from a clean `main` checkout build gss and save `evidence/deps/gss-size-before.txt` (IMPLEMENTATION §1)
+- [x] SETUP: create the `lib` worker (IMPLEMENTATION §2), paste its `--json` into TRACKING §0, `cd` into it
+- [x] SETUP: `cd sdk/libs && go test ./... | tail -2` → ok on the base
+- [x] ALLOWLIST: after the first file under `sdk/libs/tui/` and `evidence/`: `git status --short -- <path>`; `git check-ignore -v` if absent
 
 ---
 
 ### Task 1 — module wiring + `prompt.Line`  (plan Task 1)
 
-- [ ] RED: `tui/prompt/line_test.go` (3 tests, plan Task 1 Step 1)
-- [ ] RUN-RED: `go get … && go test ./tui/prompt/` → expect **FAIL** `undefined: Line`
-- [ ] GREEN: `tui/doc.go`, `tui/prompt/line.go`
-- [ ] RUN-GREEN: `mkdir -p $EV/task1 && go test ./tui/... -cover -v 2>&1 | tee $EV/task1/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
-- [ ] VERIFY: `go vet ./...`; `git diff go.mod` shows only bubbletea + testify
+- [x] RED: `tui/prompt/line_test.go` (3 tests, plan Task 1 Step 1)
+- [x] RUN-RED: `go get … && go test ./tui/prompt/` → expect **FAIL** `undefined: Line`
+- [x] GREEN: `tui/doc.go`, `tui/prompt/line.go`
+- [x] RUN-GREEN: `mkdir -p $EV/task1 && go test ./tui/... -cover -v 2>&1 | tee $EV/task1/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
+- [x] VERIFY: `go vet ./...`; `git diff go.mod` shows only bubbletea + testify
 - [ ] COMMIT: `feat(libs/tui): module wiring + prompt.Line single-line editor`
 - [ ] LEDGER + CHECKPOINT
 
