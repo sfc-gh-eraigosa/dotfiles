@@ -4,7 +4,7 @@
 - **Date:** 2026-09-06
 - **Status:** Ready to execute
 - **Plan (source of truth):** [`../fleet-error-view.md`](../fleet-error-view.md) · spec [`../../specs/fleet-error-view.md`](../../specs/fleet-error-view.md) · design [`../../designs/fleet-error-view.md`](../../designs/fleet-error-view.md)
-- **Objective anchors:** issue [#308](https://github.com/sfc-gh-eraigosa/dotfiles/issues/308) · PR #TBD · `docs/mbo/index.md` row `fleet-error-view`
+- **Objective anchors:** issue [#308](https://github.com/sfc-gh-eraigosa/dotfiles/issues/308) · PR [#310](https://github.com/sfc-gh-eraigosa/dotfiles/pull/310) · `docs/mbo/index.md` row `fleet-error-view`
 
 > This file is the **procedure**. It does not restate the plan — it tells a fresh agent session
 > how to execute the plan, task by task, resumably. The plan wins any conflict.

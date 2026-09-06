@@ -3,7 +3,7 @@
 - **Slug:** fleet-error-view
 - **Date:** 2026-09-06
 - **Status:** Draft
-- **Relates to:** design [`../designs/fleet-error-view.md`](../designs/fleet-error-view.md) · plan [`../plans/fleet-error-view.md`](../plans/fleet-error-view.md) · issue [#308](https://github.com/sfc-gh-eraigosa/dotfiles/issues/308) · PR #TBD
+- **Relates to:** design [`../designs/fleet-error-view.md`](../designs/fleet-error-view.md) · plan [`../plans/fleet-error-view.md`](../plans/fleet-error-view.md) · issue [#308](https://github.com/sfc-gh-eraigosa/dotfiles/issues/308) · PR [#310](https://github.com/sfc-gh-eraigosa/dotfiles/pull/310)
 
 ## 1. Goal
 

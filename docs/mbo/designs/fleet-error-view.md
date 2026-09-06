@@ -3,7 +3,7 @@
 - **Slug:** fleet-error-view
 - **Date:** 2026-09-06
 - **Status:** Draft
-- **Relates to:** issue [#308](https://github.com/sfc-gh-eraigosa/dotfiles/issues/308) · design PR #TBD · spec [`../specs/fleet-error-view.md`](../specs/fleet-error-view.md) · plan [`../plans/fleet-error-view.md`](../plans/fleet-error-view.md)
+- **Relates to:** issue [#308](https://github.com/sfc-gh-eraigosa/dotfiles/issues/308) · design PR [#310](https://github.com/sfc-gh-eraigosa/dotfiles/pull/310) · spec [`../specs/fleet-error-view.md`](../specs/fleet-error-view.md) · plan [`../plans/fleet-error-view.md`](../plans/fleet-error-view.md)
 - **Author(s):** Edward Raigosa (with Claude)
 
 ## 1. Problem / context

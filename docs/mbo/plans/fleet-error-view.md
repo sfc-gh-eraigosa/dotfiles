@@ -9,7 +9,7 @@
 - **Slug:** fleet-error-view
 - **Date:** 2026-09-06
 - **Status:** Draft
-- **Relates to:** spec [`../specs/fleet-error-view.md`](../specs/fleet-error-view.md) · design [`../designs/fleet-error-view.md`](../designs/fleet-error-view.md) · issue [#308](https://github.com/sfc-gh-eraigosa/dotfiles/issues/308) · PR #TBD
+- **Relates to:** spec [`../specs/fleet-error-view.md`](../specs/fleet-error-view.md) · design [`../designs/fleet-error-view.md`](../designs/fleet-error-view.md) · issue [#308](https://github.com/sfc-gh-eraigosa/dotfiles/issues/308) · PR [#310](https://github.com/sfc-gh-eraigosa/dotfiles/pull/310)
 
 **Goal:** Make `fleet tui` a three-pane dashboard (host / log / error) whose panes toggle with
 `h` / `l` / `e` and share the viewport correctly, and carry remote **stderr** end to end so a

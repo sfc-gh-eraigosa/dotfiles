@@ -13,7 +13,7 @@
 
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| (single) | *(pending `gss feature worker add --json`)* | `worktree/fleet-error-view` | this worktree | — | planning |
+| (single) | classic gss lane (not a `gss feature` worker) | `worktree/fleet-error-view` | this worktree | [#310](https://github.com/sfc-gh-eraigosa/dotfiles/pull/310) (draft) | planning |
 
 ## 1. Task ledger
 
