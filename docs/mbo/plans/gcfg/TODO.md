@@ -41,14 +41,14 @@
 - [x] GREEN: `store.go`, `jwt.go` (golang-jwt/v5)
 - [x] RUN-GREEN: `go test ./pkg/ghapp/ -cover` → **PASS**
 - [x] COMMIT: `feat(ghapp): app store + RS256 JWT`
-- [ ] LEDGER + CHECKPOINT
+- [x] LEDGER + CHECKPOINT
 
 ### P0-T3 — installation tokens  (plan P0-T3)
-- [ ] RED: httptest stub for `GET /app/installations`, `POST /app/installations/{id}/access_tokens`; cache hit/miss around expiry-2m; scoping body; token-leak grep on logs
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `token.go`, `installs.go`
-- [ ] RUN-GREEN → **PASS**
-- [ ] COMMIT: `feat(ghapp): installation tokens with cache`
+- [x] RED: httptest stub for `GET /app/installations`, `POST /app/installations/{id}/access_tokens`; cache hit/miss around expiry-2m; scoping body; token-leak grep on logs
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `token.go`, `installs.go`
+- [x] RUN-GREEN → **PASS**
+- [x] COMMIT: `feat(ghapp): installation tokens with cache`
 - [ ] LEDGER + CHECKPOINT
 
 ### P0-T4 — manifest flow + CLI  (plan P0-T4)

@@ -1,0 +1,51 @@
+# P0-T3 installation tokens — 2026-09-06T03:38:39Z — worker gcfg/edward-raigosa/build
+
+## RUN-RED: go test ./pkg/ghapp/
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/pkg/ghapp [github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/pkg/ghapp.test]
+pkg/ghapp/token_test.go:96:40: App{…}.With undefined (type App has no field or method With)
+pkg/ghapp/token_test.go:96:45: undefined: Options
+pkg/ghapp/token_test.go:103:14: invalid operation: cannot call s.app().Installations (value of type map[string]int64): map[string]int64 is not a function
+pkg/ghapp/token_test.go:121:22: s.app().Token undefined (type App has no field or method Token)
+pkg/ghapp/token_test.go:121:54: undefined: TokenScope
+pkg/ghapp/token_test.go:146:23: s.app().Token undefined (type App has no field or method Token)
+pkg/ghapp/token_test.go:146:55: undefined: TokenScope
+pkg/ghapp/token_test.go:157:11: undefined: TokenScope
+pkg/ghapp/token_test.go:158:19: app.Token undefined (type App has no field or method Token)
+pkg/ghapp/token_test.go:163:19: app.Token undefined (type App has no field or method Token)
+pkg/ghapp/token_test.go:163:19: too many errors
+
+## RUN-GREEN: go vet ./... && go test ./pkg/ghapp/ -count=1 -cover
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/pkg/ghapp	1.251s	coverage: 89.2% of statements
+
+## tests
+--- PASS: TestParsePrivateKeyPKCS1AndPKCS8 (0.13s)
+--- PASS: TestSignJWTClaimsAndSignature (0.04s)
+--- PASS: TestSignJWTRejectsWrongKey (0.14s)
+--- PASS: TestParsePrivateKeyRejectsNonRSA (0.00s)
+--- PASS: TestFileStoreSaveCreatesPrivateDirAndFiles (0.13s)
+--- PASS: TestFileStoreRoundTrip (0.07s)
+--- PASS: TestFileStoreLoadMissingIsEmpty (0.00s)
+--- PASS: TestFileStoreLoadRefusesWorldReadablePEM (0.08s)
+--- PASS: TestFileStoreSaveRejectsBadSlug (0.27s)
+--- PASS: TestFileStoreLoadRejectsCorruptJSON (0.00s)
+--- PASS: TestDefaultStoreDir (0.00s)
+--- PASS: TestFileStoreLoadErrorsWhenPEMMissing (0.00s)
+--- PASS: TestFileStoreSaveFailsWhenDirIsAFile (0.00s)
+--- PASS: TestInstallationsPaginatesAndUsesAppJWT (0.02s)
+--- PASS: TestTokenScopesBodyAndReturnsExpiry (0.05s)
+--- PASS: TestTokenEmptyScopeSendsNoBody (0.05s)
+--- PASS: TestTokenCacheHitUntilTwoMinutesBeforeExpiry (0.05s)
+--- PASS: TestTokenNeverPrintsItself (0.00s)
+--- PASS: TestTokenErrorsCarryStatusNotBody (0.04s)
+--- PASS: TestBadJWTIsAnAuthError (0.09s)
+--- PASS: TestAppLoadsKeyFromPEMPathLazily (0.01s)
+--- PASS: TestDefaultsHitAPIGitHub (0.00s)
+
+## token-leak grep on the verbose log (CI step)
+clean: fixture token absent from 75 log lines
+
+## module total (CI formula)
+total:										(statements)	89.1%
+
+## actionlint .github/workflows/ghapp-ci.yml (pull_request base filter dropped so stacked PRs get CI)
+clean
