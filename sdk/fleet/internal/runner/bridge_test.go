@@ -218,3 +218,22 @@ func TestExecAndFakeCarryTheCtxAndBridgeCapabilities(t *testing.T) {
 	var _ BridgeRunner = Exec{}
 	var _ BridgeRunner = Fake{}
 }
+
+// A bridge whose forwards are unusable never becomes a process: the error
+// arrives on done and lines is closed, so a manager sees a failed set with a
+// reason instead of a child it has to reap.
+func TestABridgeWithBadForwardsFailsWithoutStartingAProcess(t *testing.T) {
+	stubSSH(t, "echo should-not-run; sleep 30")
+	lines, done := (Exec{}).RunBridgeCtx(context.Background(), "spark", nil)
+	for l := range lines {
+		t.Fatalf("no process should have started, got a line: %q", l)
+	}
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "forward") {
+			t.Fatalf("want the BridgeArgv reason on done, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("done must carry the error immediately")
+	}
+}
