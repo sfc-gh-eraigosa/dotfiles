@@ -120,6 +120,13 @@ func TestViewNeverExceedsTerminalHeight(t *testing.T) {
 // drag a window to, in the state that produced the report: several hosts
 // streaming at once, with output long enough to wrap. Every frame must fit.
 func TestViewFitsAcrossEveryTerminalSize(t *testing.T) {
+	// Run under a REAL colour profile, not the Ascii one init() pins. Under
+	// Ascii every style is a no-op, so the frame carries no escape bytes at
+	// all — which is how an ANSI-accounting bug in trunc reached main under a
+	// 1219-size sweep that was measuring styleless output.
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	defer lipgloss.SetColorProfile(termenv.Ascii)
+
 	for h := 8; h <= 60; h++ {
 		for w := 40; w <= 200; w += 7 {
 			m := layoutModel(h, w)
