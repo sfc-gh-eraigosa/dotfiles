@@ -58,7 +58,7 @@
 - [x] `go vet ./...` clean; `make gff-proto-check` clean
 - [x] `evidence/demo/{run.sh,transcript.txt,README.md}` committed; override file `{}` before and after (nothing left flipped)
 - [x] `docs/mbo/index.md` row `gff-tui-vim` → `in-review` with build PR #304
-- [ ] build draft PR promoted to ready — owner runs it (`gss feature pr --ready` is approval-token gated for the agent; `gh pr ready 304` also works)
+- [x] build PR promoted and merged — #304 landed on `main` 2026-09-06 as `1be9576`, after #280 (`6c43686`)
 
 ## 4. Blockers & escalations
 
@@ -91,3 +91,4 @@
 | 2026-09-05 | build (session 1) | Task 3 pushed. Task 4 done: `--help` key block, README **TUI keys** table, `AGENTS.md internal/tui` bullet, `cmd/tui_keys_test.go` pin test; all gates green (module 91.0%, tui 92.6%, resolve 95.5%, schema 95.7%, vet, proto-check); real-terminal tmux demo captured against the live inventory with the override file restored to `{}`. |
 | 2026-09-05 | build (session 1) | Task 4 pushed (`58a10a6`). `docs/mbo/index.md` row → **in-review** with build PR #304. IMPLEMENTATION §4 objective gate green: 4/4 tasks done with SHAs + evidence, module 91.0% / tui 92.6% / resolve 95.5%, vet + proto-check clean, real-terminal demo committed. Remaining: promote #304 (owner), and after #280 merges `gss feature restack` the build onto `main`. |
 | 2026-09-06 | review (#304) | Independent review of the build PR: 12 findings. Two correctness bugs in `commitSearch` fixed with regression tests (`9b66496`), four lower-severity ones fixed here (F1 toggle, `Q` quits, help-overlay height budget, `:set` arity) plus the `inScope` duplication and the demo script now backing up/restoring the operator's real override file. Gates re-run after the fixes: module 91.0%, tui 92.6%, resolve 95.5%, schema 95.7%, `go vet` clean, `golangci-lint` 0 issues. Two findings deliberately not fixed here (lib-side ctrl+c → escalated to `sdk-tui`; the `replace` vs `go install` trade-off → plan-mandated, repo-wide). |
+| 2026-09-06 | close-out | #280 merged (`6c43686`), which re-targeted #304 to `main`; merged `origin/main` into the build branch (index.md + the trio conflicted — the design squash vs the build progress), re-ran the gates, and the **gff CI ran on this code for the first time**: unit+coverage, e2e, Go Lint, teams-validate all green. Labelled `ready-for-merge`; #304 merged as `1be9576`. Objective **done**. Follow-up carried forward: the lib-side ctrl+c gap (§4) belongs to `sdk-tui`. |
