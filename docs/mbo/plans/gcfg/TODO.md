@@ -49,13 +49,13 @@
 - [x] GREEN: `token.go`, `installs.go`
 - [x] RUN-GREEN → **PASS**
 - [x] COMMIT: `feat(ghapp): installation tokens with cache`
-- [ ] LEDGER + CHECKPOINT
+- [x] LEDGER + CHECKPOINT
 
 ### P0-T4 — manifest flow + CLI  (plan P0-T4)
-- [ ] RED: `manifest_test.go` (listener + port fallback; form fields; conversion exchange via stub; expired code error; injected browser opener); cmd tests for `create/install/token/status/doctor`
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `manifest.go`, cmd verbs
-- [ ] RUN-GREEN → **PASS**; coverage ≥80%
+- [x] RED: `manifest_test.go` (listener + port fallback; form fields; conversion exchange via stub; expired code error; injected browser opener); cmd tests for `create/install/token/status/doctor`
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `manifest.go`, cmd verbs
+- [x] RUN-GREEN → **PASS**; coverage ≥80%
 - [ ] VERIFY (human, ask first): one real `ghapp create` + `ghapp token --repo <this repo>` → `evidence/ghapp/` (redacted)
 - [ ] COMMIT: `feat(ghapp): manifest-flow create + CLI`
 - [ ] LEDGER + CHECKPOINT
