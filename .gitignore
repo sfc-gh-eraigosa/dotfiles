@@ -65,6 +65,7 @@ opt/bin/*
 !opt/bin/install_windows.sh
 !opt/bin/sshd-setup
 !opt/bin/claude-rc-boot
+!opt/bin/claude-pick
 # WSL docker shims: real executables (not aliases) so make/scripts resolve
 # docker even in non-interactive shells (see opt/profiles/.bash_aliases).
 !opt/bin/docker
@@ -74,6 +75,7 @@ opt/bin/*
 !opt/bin/pkg-install_test.sh
 !opt/bin/sshd-setup_test.sh
 !opt/bin/claude-rc-boot_test.sh
+!opt/bin/claude-pick_test.sh
 
 # Opt Subdirectory Configuration
 opt/.DS_Store
