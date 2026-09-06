@@ -80,14 +80,14 @@
 - [x] GREEN: `client.go`, `real.go` (go-gh REST, retry, Retry-After), `fake.go`, `auth.go`
 - [x] RUN-GREEN → **PASS**
 - [x] COMMIT: `feat(gcfg): gh client seam, recording fake, credential chain`
-- [ ] LEDGER + CHECKPOINT
+- [x] LEDGER + CHECKPOINT
 
 ### P1-T4 — family model + general + security  (plan P1-T4)
-- [ ] RED: `family_test.go` (registry), `general/general_test.go`, `security/security_test.go`: Read from fixture; Export golden; Diff matrix (declared/full/missing/not-honoured); Apply records PATCH body
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN
-- [ ] RUN-GREEN → **PASS**
-- [ ] COMMIT: `feat(gcfg): family model + general + security`
+- [x] RED: `family_test.go` (registry), `general/general_test.go`, `security/security_test.go`: Read from fixture; Export golden; Diff matrix (declared/full/missing/not-honoured); Apply records PATCH body
+- [x] RUN-RED → **FAIL**
+- [x] GREEN
+- [x] RUN-GREEN → **PASS**
+- [x] COMMIT: `feat(gcfg): family model + general + security`
 - [ ] LEDGER + CHECKPOINT
 
 ### P1-T5 — engine + renderers  (plan P1-T5)
