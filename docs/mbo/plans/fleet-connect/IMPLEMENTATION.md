@@ -164,20 +164,54 @@ Observable state wins over the registry.
 > **Maintenance rule:** exactly ONE prompt here — the one that starts the NEXT session. Replace
 > it at session end; past prompts are in `git log -- <this file>`.
 
-> Continue the `fleet-connect` objective in this worktree. Read
-> `docs/mbo/plans/fleet-connect/TODO.md` and start at the **first unchecked box**; the task detail
-> is in `docs/mbo/plans/fleet-connect.md`, the requirements in
-> `docs/mbo/specs/fleet-connect.md`, and the rationale in `docs/mbo/designs/fleet-connect.md`.
+> Build **PR 2 of the `fleet-connect` stack: leaf B, the plugin protocol (tasks T5–T8)**, in the
+> dotfiles repo. PR 1 (leaf A, the contract) is merged; the contract of plan §3.1 is **frozen** —
+> if you need to change it, that is a blocker for `TRACKING.md` §4 and an explicit plan
+> amendment, never a quiet edit.
+>
+> Create the worker first, from a normal dotfiles checkout:
+> `gss feature worker add --feature fleet-connect --purpose protocol --description "leaf B: JSON-RPC wire, Serve, Client, host/exec bridge (T5–T8)" --base main --json`
+> (base `main` once PR 1 has merged; otherwise `--base feature/fleet-connect/<user>/contract`).
+> Capture that JSON verbatim into `TRACKING.md` §0, then work inside that worktree.
+>
+> Read `docs/mbo/plans/fleet-connect/TODO.md` and start at the **first unchecked box** (Phase 2,
+> Task 5). Task detail is in `docs/mbo/plans/fleet-connect.md` (T5–T8 and §3.2, the protocol you
+> are freezing); requirements in `docs/mbo/specs/fleet-connect.md` (F4–F7); rationale in
+> `docs/mbo/designs/fleet-connect.md` §4.3.
+>
+> What leaf A already gives you, so you do not rebuild it: `pkg/provider` (the frozen contract,
+> `Host.Exec(ctx, stdin, argv…) → ExecResult`, `ReservedKeys`, `TunnelKey`);
+> `runner.CtxRunner`/`BridgeRunner` as **optional capability interfaces** (type-assert, do not
+> widen `runner.Runner`); `runner.Quote`; and `providertest` with `FakeProvider` +
+> `BuildStub(t)`. The stub is deliberately **protocol-agnostic** — it answers with whatever you
+> can it via `-reply`, and carries `-sleep`, `-exit-at-once`, `-half-line`, `-stderr`. Supply the
+> JSON from your tests; do not teach the stub your wire format.
+>
 > Work strictly TDD: write the failing test first, **run it and paste the observed failure**,
-> implement the minimum, run `go test -race ./...` plus the task's own gate, `tee` the gate output
-> into `docs/mbo/plans/fleet-connect/evidence/taskNN/`, then update
-> `docs/mbo/plans/fleet-connect/TRACKING.md` with the commit SHA and that observed output before
-> ticking the box. Honour the hard rules in `IMPLEMENTATION.md` §5 — above all: only
-> `internal/runner` opens a connection to a host, `host/exec` carries a `callId` and never an
-> alias, no action payload names a host, the contract freezes after T4 and the protocol after
-> T8, local handoffs are argv with no shell, and a bridge never outlives fleet. Stage by explicit path and **confirm with the interactive prompt before any `git add`,
-> `commit`, or push**. Stop and ask the operator for: the live gates on real hardware (plan §7),
-> any change to a frozen contract, and the first push. If you are blocked, record it in
-> `TRACKING.md` §4 with the failing command and its real output rather than working around it.
-> Done when every `TODO.md` box is ticked, `TRACKING.md` §2 shows a proof for all 26 features, and
-> `./scripts/test.sh` is green.
+> implement the minimum, then run `go test -race ./...`, `gofmt -l .`, `go vet ./...` **and
+> `make lint-go`** (CI's golangci-lint catches errcheck/staticcheck that `go vet` does not — it
+> failed PR 1 once for exactly this). `tee` each gate's output into
+> `docs/mbo/plans/fleet-connect/evidence/taskNN/`, **sanitising `$HOME` and hostnames** (the
+> privacy guard blocks a commit otherwise), then update `TRACKING.md` with the commit SHA and
+> that observed output before ticking the box.
+>
+> Host gotchas that cost PR 1 real time: `go` is a shell function pinning `GOTOOLCHAIN=local`
+> with a Go older than `go.mod` requires — use `export GOTOOLCHAIN=auto` and `command go`. The
+> `demo-guard` hook belongs to the *playground* repo and fires on dotfiles commits that touch
+> code; dotfiles has no `demos/` convention, so prefix commits with `DEMO_GUARD=skip` and say why
+> in the PR body. `gss feature checkpoint` returns the PR to draft — re-run `gh pr ready <n>`
+> after it, and label the PR `fleet-connect`.
+>
+> Honour `IMPLEMENTATION.md` §5 above all: only `internal/runner` opens a connection to a host;
+> `host/exec` carries a `callId` and never an alias; the per-call deadline measures the plugin's
+> own time and **pauses while a `host/exec` is outstanding**; no credential, hostname, port, user
+> or key path may cross the wire (T8's leak sweep asserts it over the marshalled bytes). Stage by
+> explicit path and **confirm with the interactive prompt before any `git add`, `commit`, or
+> checkpoint** — a checkpoint publishes, so it needs a fresh `~/.config/gss/approval.token`
+> written in a separate call.
+>
+> Stop and ask the operator for: anything that would change the frozen contract, and the first
+> push. If blocked, record it in `TRACKING.md` §4 with the failing command and its real output
+> rather than working around it. **Leaf B is done when** T5–T8 are green, the protocol of plan
+> §3.2 is recorded as frozen in `TRACKING.md` §5, `pkg/provider` is still ≥ 90% covered and
+> stdlib-only, and PR 2 is ready for review with its CI green.
