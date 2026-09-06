@@ -53,17 +53,17 @@
 - [x] RUN-RED: `go test ./tui/nav/` → expect **FAIL** `undefined: Cursor`
 - [x] GREEN: `tui/nav/cursor.go`
 - [x] RUN-GREEN: `mkdir -p $EV/task3 && go test ./tui/nav/ -cover -v 2>&1 | tee $EV/task3/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
-- [ ] COMMIT: `feat(libs/tui): nav.Cursor — clamped motion, following viewport, gg chord as state`
-- [ ] LEDGER + CHECKPOINT
+- [x] COMMIT: `feat(libs/tui): nav.Cursor — clamped motion, following viewport, gg chord as state`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** nav ≥ 90%; `grep -n "^var " tui/nav/cursor.go` → no mutable globals.
 
 ### Task 4 — `search`  (plan Task 4)
 
-- [ ] RED: `tui/search/search_test.go` (5 tests)
-- [ ] RUN-RED: `go test ./tui/search/` → expect **FAIL** `undefined: Compile`
-- [ ] GREEN: `tui/search/search.go`
-- [ ] RUN-GREEN: `mkdir -p $EV/task4 && go test ./tui/search/ -cover -v 2>&1 | tee $EV/task4/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
+- [x] RED: `tui/search/search_test.go` (5 tests)
+- [x] RUN-RED: `go test ./tui/search/` → expect **FAIL** `undefined: Compile`
+- [x] GREEN: `tui/search/search.go`
+- [x] RUN-GREEN: `mkdir -p $EV/task4 && go test ./tui/search/ -cover -v 2>&1 | tee $EV/task4/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
 - [ ] COMMIT: `feat(libs/tui): search — smartcase compile, incremental matches, n/N wrap, :noh/re-arm, badge`
 - [ ] LEDGER + CHECKPOINT
 

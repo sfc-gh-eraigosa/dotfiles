@@ -1,0 +1,14 @@
+# 2026-09-05 20:47 PDT — go test ./tui/search/ -cover -v
+=== RUN   TestCompileSmartcaseAndErrors
+--- PASS: TestCompileSmartcaseAndErrors (0.00s)
+=== RUN   TestTypingRecomputesAndInvalidKeepsPreviousRe
+--- PASS: TestTypingRecomputesAndInvalidKeepsPreviousRe (0.00s)
+=== RUN   TestModeKeysAreIgnoredNotTyped
+--- PASS: TestModeKeysAreIgnoredNotTyped (0.00s)
+=== RUN   TestFirstAndNextWrap
+--- PASS: TestFirstAndNextWrap (0.00s)
+=== RUN   TestCommitCancelHideRearmBadge
+--- PASS: TestCommitCancelHideRearmBadge (0.00s)
+PASS
+coverage: 94.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/search	0.004s	coverage: 94.0% of statements
