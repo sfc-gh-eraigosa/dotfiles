@@ -443,6 +443,26 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   `TestLogTitleNeverNestsStyles`,
   `TestHelpOverlayOnAShortTerminalSaysWhatItHidRatherThanOverflowing`, and the height guard
   in `TestDemoFrames` — the twin of the width guard, whose absence is why this shipped.
+- **Truncation must CLOSE the style it cuts through, and tests must run under a real
+  colour profile.** `trunc` is `ansi.Truncate`, not a hand-rolled rune loop. The hand-rolled
+  version copied runes until the width ran out, which dropped the trailing reset of any
+  styled run it cut in half; lipgloss ends the line for padding but then **re-opens** the
+  still-open style at the start of the NEXT line, so a streaming legend cut inside a host's
+  colour repainted the row below it — the first log row's timestamp rendered in that host's
+  colour instead of dim, while every row beneath it was correct. `ansi.Truncate` keeps
+  collecting escape sequences past the cut, so the run's own reset survives; it is also one
+  pass instead of re-measuring the whole accumulated prefix per rune (a 300-character line
+  went 21.5µs → 1.1µs, 187 allocs → 3, and a full `View()` 731µs → 480µs). The second half
+  of this invariant is why the first half shipped broken: `init()` pins `termenv.Ascii`, and
+  under Ascii every style is a no-op, so a 1219-size sweep was measuring frames with no
+  escape bytes in them at all. **Any test that reasons about layout, width, or styling must
+  set `ANSI256` itself.** Pinned by `TestTruncClosesTheStyleItCutsThrough`,
+  `TestTruncLeavesUnstyledAndShortStringsAlone` and
+  `TestLeakedStyleNeverRepaintsTheFollowingRow` — those three, and only those three, pin the
+  style half. `TestViewNeverExceedsTerminalHeight` and `TestViewFitsAcrossEveryTerminalSize`
+  now run under `ANSI256` as well, which pins the WIDTH half against escape bytes being
+  miscounted; neither of them catches a leaked style, so do not treat the 1219-size sweep as
+  cover for one.
 - **Row width is derived, not guessed.** `rowPrefixWidth` sums the same numbers as
   `rowView`'s format string and `failWidth` budgets from it; the failure cause is dropped
   rather than clamped to a floor when nothing fits. Adding the BRANCH column against a

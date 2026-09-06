@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift"
 )
 
@@ -357,21 +358,23 @@ func (m tuiModel) liveAliases() []string {
 // trunc cuts to a DISPLAY width, not a rune count: emoji and CJK occupy two
 // cells, so counting runes overflows the frame (caught by the demo's width
 // assertion when icons were added to the header).
+//
+// It must also CLOSE any style it cuts through. The hand-rolled version copied
+// runes until the width ran out, which dropped the trailing reset of a styled
+// run it happened to cut in half. lipgloss ends the line for padding but then
+// RE-OPENS the still-open style at the start of the next one, so a streaming
+// legend cut inside a host's colour repainted the row below it — the first log
+// row's timestamp came out in that host's colour instead of dim, while every
+// row under it was correct.
+//
+// ansi.Truncate keeps collecting escape sequences past the cut, so the run's
+// own reset survives; it is also a single pass rather than the old quadratic
+// re-measure of the whole accumulated prefix on every rune.
 func trunc(s string, n int) string {
 	if n < 1 {
 		n = 1
 	}
-	if lipgloss.Width(s) <= n {
-		return s
-	}
-	var b strings.Builder
-	for _, r := range s {
-		if lipgloss.Width(b.String()+string(r)) > n-1 {
-			break
-		}
-		b.WriteRune(r)
-	}
-	return b.String() + "…"
+	return ansi.Truncate(s, n, "…")
 }
 
 func maxInt(a, b int) int {
