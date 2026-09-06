@@ -73,7 +73,7 @@
 - [x] RUN-GREEN: `go test ./pkg/provider/...` → **PASS**, providertest 94.2%, `pkg/provider` 100%
 - [x] EVID + COMMIT + LEDGER
 - [x] **FREEZE:** recorded in `TRACKING.md` §5 — the contract (plan §3.1) is frozen as of the T4 commit
-- [ ] CHECKPOINT: `gss feature checkpoint` → PR 1 draft → ready; label `ready-for-merge` after review
+- [x] CHECKPOINT: `gss feature checkpoint` → **PR [#305](https://github.com/sfc-gh-eraigosa/dotfiles/pull/305)**, marked ready; 11/11 CI checks green, `mergeStateStatus: CLEAN`. **`ready-for-merge` is the operator's to apply after review.**
 
 **Done when:** later leaves can be built and tested without herdr. **Leaf A exits — PR 1.**
 

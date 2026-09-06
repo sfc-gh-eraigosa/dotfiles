@@ -15,7 +15,7 @@
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | design (these artifacts) | `fleet-connect/edward-raigosa/design` | `feature/fleet-connect/edward-raigosa/design` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/fleet-connect/edward-raigosa/design` | [#267](https://github.com/sfc-gh-eraigosa/dotfiles/pull/267) | draft |
-| PR 1 contract (A, T1–T4) | *not created yet* | `feature/fleet-connect/<user>/contract` | | | base `main` — **blocking** |
+| PR 1 contract (A, T1–T4) | `fleet-connect/<user>/contract` | `feature/fleet-connect/<user>/contract` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/fleet-connect/<user>/contract` | [#305](https://github.com/sfc-gh-eraigosa/dotfiles/pull/305) | **ready for review** (11/11 CI green, `CLEAN`) — base `main`, **blocking** |
 | PR 2 protocol (B, T5–T8) | *not created yet* | `…/protocol` | | | base PR 1 — **blocking** |
 | PR 3 registry (C, T9–T12) | *not created yet* | `…/registry` | | | base PR 2 — blocking for 4, 6, k8s |
 | PR 4 herdr (D, T13–T18) | *not created yet* | `…/herdr` | | | base PR 3 |
@@ -65,8 +65,8 @@ Captured verbatim from `gss feature worker add --json` (feature `fleet-connect`;
 
 | Feature | Automated proof | Human/live proof | Notes |
 | :-- | :-- | :-- | :-- |
-| F1 contract | [ ] T1 | — | JSON round-trip, validation (one of three kinds, port ranges, no host field), short cells |
-| F2 handoff execution | [ ] T2, T24 | [ ] live dry-run argv | mux + `-t`; local argv no shell; alias stamped by fleet |
+| F1 contract | [x] T1 (100% cov) | — | JSON round-trip, validation (one of three kinds, port ranges, no host field), short cells; `TunnelKey` |
+| F2 handoff execution | [x] T2 · [ ] T24 | [ ] live dry-run argv | mux + `-t`; local argv no shell; alias stamped by fleet |
 | F3 cancellable streams | [x] exists (`runner_ctx_test.go`, #270) | — | needed by k8s `logs -f`; nothing to build |
 | F4 protocol handshake | [ ] T7 | [ ] `providers check` transcript | mismatch + immediate exit |
 | F5 protocol methods | [ ] T5, T6 | [ ] `providers check` transcript | framing, id correlation, attrs echo |
@@ -86,7 +86,7 @@ Captured verbatim from `gss feature worker add --json` (feature `fleet-connect`;
 | F19 provider streams | [ ] T22 | — | engine isolation |
 | F20 `fleet ls` | [ ] T23 | [ ] live JSON | never `null` |
 | F21 `fleet connect` | [ ] T24, T28 | [ ] live dry-run + refusal | exact argv; stream to stdout; tunnel = one-entry bridge |
-| F22 bridge execution | [ ] T3 | [ ] live `bridge --dry-run` argv | `-N`, `ExitOnForwardFailure`, loopback both sides, `Pdeathsig` on Linux |
+| F22 bridge execution | [x] T3 | [ ] live `bridge --dry-run` argv | `-N`, `ExitOnForwardFailure`, loopback both sides, `Pdeathsig` on Linux |
 | F23 bridge manager | [ ] T25 | [ ] live add/add/remove | one process per host; port policy; `Close()` |
 | F24 ports provider | [ ] T26 | [ ] live `fleet ls <spark> ports` | one round trip; bind rules; labels |
 | F25 TUI bridges | [ ] T27 | [ ] live toggle + `q` teardown | `⇄` marker; `⇄N` NOTE; survives `esc` |
