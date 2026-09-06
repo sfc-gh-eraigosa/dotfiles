@@ -21,9 +21,10 @@ on:
       - '.github/workflows/ghapp-ci.yml'
   # No paths filter on pull_request (same reasoning as gff-ci.yml): a
   # path-skipped REQUIRED check never reports and the Mergify queue waits
-  # forever. The job is sub-minute.
+  # forever. The job is sub-minute. No base-branch filter either: gss
+  # feature workers stack PRs on feature branches, and those PRs need CI
+  # before they ever re-target main.
   pull_request:
-    branches: [ main ]
   workflow_dispatch: {}
 
 concurrency:

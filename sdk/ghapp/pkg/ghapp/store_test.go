@@ -28,7 +28,7 @@ func TestFileStoreSaveCreatesPrivateDirAndFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	apps := Apps{"my-app": {ID: 42, Slug: "my-app", PEMPath: pemPath, Installations: map[string]int64{"o/r": 7}}}
+	apps := Apps{"my-app": {ID: 42, Slug: "my-app", PEMPath: pemPath, Installs: map[string]int64{"o/r": 7}}}
 	if err := s.Save(apps); err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestFileStoreRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Apps{"a": {ID: 1, Slug: "a", PEMPath: pemPath, Installations: map[string]int64{"o": 2, "o/r": 3}}}
+	want := Apps{"a": {ID: 1, Slug: "a", PEMPath: pemPath, Installs: map[string]int64{"o": 2, "o/r": 3}}}
 	if err := s.Save(want); err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestFileStoreRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(got) != 1 || got["a"].ID != 1 || got["a"].Slug != "a" || got["a"].PEMPath != pemPath ||
-		got["a"].Installations["o"] != 2 || got["a"].Installations["o/r"] != 3 {
+		got["a"].Installs["o"] != 2 || got["a"].Installs["o/r"] != 3 {
 		t.Fatalf("round-trip mismatch: %+v", got)
 	}
 }

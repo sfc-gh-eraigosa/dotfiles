@@ -21,8 +21,8 @@
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
 | P0-T1 ghapp scaffold + version | done | `e2b78f2` | `go test ./... -count=1 -cover` → 3 pkgs ok (main 90.9%, cmd 83.3%, version 100%); CI formula total 88.2% ≥80; `go run . version` → `ghapp vdev …`; actionlint clean → [evidence/P0-T1/2026-09-05.txt](./evidence/P0-T1/2026-09-05.txt) | ghapp-ci.yml added (no PR path filter, like gff-ci) |
-| P0-T2 store + JWT | done | (this commit) | `go test ./pkg/ghapp/ -count=1 -cover` → ok 87.5% (12 tests: 0700 dir, 0600 PEM+apps.json, round-trip, 0644 PEM refused naming file+mode, missing PEM, bad slug, corrupt JSON, XDG dir; RS256 iss/iat-60s/exp+9m verified with pubkey, wrong key rejected, PKCS1+PKCS8, non-RSA rejected); module total 87.7% → [evidence/P0-T2/2026-09-05.txt](./evidence/P0-T2/2026-09-05.txt) | golang-jwt/jwt/v5 v5.3.1 |
-| P0-T3 installation tokens | todo | | | |
+| P0-T2 store + JWT | done | `02edb2d` | `go test ./pkg/ghapp/ -count=1 -cover` → ok 87.5% (12 tests: 0700 dir, 0600 PEM+apps.json, round-trip, 0644 PEM refused naming file+mode, missing PEM, bad slug, corrupt JSON, XDG dir; RS256 iss/iat-60s/exp+9m verified with pubkey, wrong key rejected, PKCS1+PKCS8, non-RSA rejected); module total 87.7% → [evidence/P0-T2/2026-09-05.txt](./evidence/P0-T2/2026-09-05.txt) | golang-jwt/jwt/v5 v5.3.1 |
+| P0-T3 installation tokens | done | (this commit) | `go test ./pkg/ghapp/ -count=1 -cover` → ok 89.2% (JWT-bearer stub; 2-page installations; scoped body permissions/repositories, no body when unscoped; cache hit at expiry−3m, miss at expiry−1m30s, per-inst/scope keys; Token redacts under String/%v/%+v/%s/JSON; 401/403 errors carry status+message; lazy PEM load); leak grep clean; module total see evidence → [evidence/P0-T3/2026-09-05.txt](./evidence/P0-T3/2026-09-05.txt) | ghapp-ci: `pull_request` base filter dropped (stacked PR #287 got no run) |
 | P0-T4 manifest flow + CLI | todo | | | human: one real create (redacted) |
 | P1-T1 gcfg scaffold + CI | todo | | | |
 | P1-T2 schema load + lint + JSON Schema | todo | | | |
@@ -83,6 +83,7 @@
 
 | Date | Task | Blocker | Command + observed output | Resolution |
 | :-- | :-- | :-- | :-- | :-- |
+| 2026-09-05 | P0-T3 | Plan §3.2 contract defect: `App` declares field `Installations map[string]int64` **and** method `Installations(ctx)`; Go cannot have both | `go test ./pkg/ghapp/` → `cannot call s.app().Installations (value of type map[string]int64): map[string]int64 is not a function` | Field renamed `Installs` (JSON key `installations` unchanged); method keeps the contract name. Plan text left as-is per §5 (escalate, never edit) — owner to amend §3.2 when the design PR is next touched |
 
 ## 5. Session log (append-only — never rewrite history)
 
