@@ -1,0 +1,23 @@
+# 2026-09-05 23:11 PDT — RUN-GREEN: go test ./internal/tui/ -cover (after dropping h/H from the help-overlay close keys — the last 'h', 'H' hit)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui	1.015s	coverage: 91.4% of statements
+
+# VERIFY: grep -rn "'h', 'H'|scrollTop|lastInner" internal/tui/*.go
+(no hits)
+
+# VERIFY: go vet ./...
+vet clean
+
+# VERIFY: go test ./... (module)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff	0.006s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/cmd	0.266s
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/gen/gff/v1	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/gitx	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/overrides	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/paths	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/registry	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/schema	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/style	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui	0.997s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/version	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/pkg/gff	(cached)

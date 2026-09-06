@@ -986,3 +986,7 @@ sets:
 	require.NoError(t, err, "--source namespace must win, not ambiguity")
 	assert.False(t, res.Value.GetBoolValue(), "beta's default")
 }
+
+func TestWithNamespaceBindsTheCopy(t *testing.T) {
+	assert.Equal(t, "ns", resolve.Resolved{}.WithNamespace("ns").Namespace())
+}

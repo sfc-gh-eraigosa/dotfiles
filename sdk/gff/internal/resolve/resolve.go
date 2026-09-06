@@ -112,6 +112,10 @@ func (r Resolved) WithValue(v *gffv1.Value, l Layer) Resolved {
 	return r
 }
 
+// WithNamespace returns a copy bound to ns. For tests that build items
+// without a resolver.
+func (r Resolved) WithNamespace(ns string) Resolved { r.namespace = ns; return r }
+
 func (r Resolved) JSON() (ResolvedJSON, error) {
 	valBytes, err := protojson.Marshal(r.Value)
 	if err != nil {
