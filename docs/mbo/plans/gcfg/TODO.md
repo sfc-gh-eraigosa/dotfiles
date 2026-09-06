@@ -64,14 +64,14 @@
 ### P1-T1 — gcfg scaffold + CI  (plan P1-T1)
 - [x] SETUP/RED/GREEN as P0-T1 for `sdk/gcfg`; `gcfg-ci.yml` with 80/90/90 gates + schema-drift placeholder
 - [x] COMMIT: `feat(gcfg): module scaffold + version + CI`
-- [ ] LEDGER + CHECKPOINT
+- [x] LEDGER + CHECKPOINT
 
 ### P1-T2 — schema load + lint + JSON Schema  (plan P1-T2)
-- [ ] RED: `internal/schema/load_test.go` (unknown key path error; all-optional; per-family ownership), `lint_test.go` (org block outside `.github`; dup names; enums; secret-shaped value), `jsonschema_test.go` (golden)
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `types.go`, `load.go`, `lint.go`, `jsonschema.go`; `gcfg lint`, `gcfg schema`
-- [ ] RUN-GREEN: `go test ./internal/schema/ -cover` ≥90% → **PASS**
-- [ ] COMMIT: `feat(gcfg): typed schema, strict load, lint, JSON Schema`
+- [x] RED: `internal/schema/load_test.go` (unknown key path error; all-optional; per-family ownership), `lint_test.go` (org block outside `.github`; dup names; enums; secret-shaped value), `jsonschema_test.go` (golden)
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `types.go`, `load.go`, `lint.go`, `jsonschema.go`; `gcfg lint`, `gcfg schema`
+- [x] RUN-GREEN: `go test ./internal/schema/ -cover` ≥90% → **PASS**
+- [x] COMMIT: `feat(gcfg): typed schema, strict load, lint, JSON Schema`
 - [ ] LEDGER + CHECKPOINT
 
 ### P1-T3 — gh client + credential chain  (plan P1-T3)
