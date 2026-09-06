@@ -118,8 +118,9 @@ connection to a host — a bridge included: `internal/bridge` owns state and con
 - **F1 Contract.** `Node` (id, kind, positional cells, detail, leaf, attrs, actions), `Action`
   (key, label, unavailable, exactly one of handoff/stream/tunnel), `Handoff` (remote command or
   local argv — **no host field**), `Stream` (command, follow), `Tunnel` (remotePort 1–65535,
-  localPort 0–65535 where 0 means "prefer the remote number, else allocate", scheme — **no
-  address field**), `Provider` (name, probe, children, columns), `Host` (alias; exec taking a ctx and stdin,
+  localPort 0–65535 where 0 means "prefer the remote number, else allocate", scheme, and an
+  optional `keeper`: a provider-quoted host command that must be running for the port to
+  listen — **no address field**), `Provider` (name, probe, children, columns), `Host` (alias; exec taking a ctx and stdin,
   returning `ExecResult{stdout, stderr, exitCode}`). `Key` is one printable rune carried as a
   string. All JSON-serialisable; `ErrAbsent`/`ErrNoSuchPath` sentinels.
 - **F2 Handoff execution.** A remote handoff runs `ssh -t` with `MuxArgs` and no BatchMode; a
@@ -189,8 +190,10 @@ connection to a host — a bridge included: `internal/bridge` owns state and con
   `canStartConfigAction()`; no new in-flight state; other hosts' background work continues while
   drilled in.
 - **F18 Level-aware keymap.** `keyHelp` stays the single source of truth and gains a level
-  marker; the header strip shows the current level's keys; `u w v space a p P A F` are unbound
-  inside a level.
+  marker; the header strip shows the current level's keys plus the cursor row's declared
+  action keys with their labels; any printable key fleet does not bind runs the cursor row's
+  action with that key; `u w v space a p P A F` are unbound inside a level; a provider cannot
+  declare a reserved key (F1e).
 - **F19 Provider streams.** A `Stream` action's lines reach the existing log pane through
   `appendLog` (host colour, legend, `logCap`) using their own message types, never the update
   engine's.
@@ -218,7 +221,10 @@ connection to a host — a bridge included: `internal/bridge` owns state and con
   `Close()` cancels and waits for every set. Local port policy: `0` prefers the remote number,
   allocates when busy and records that it did; an explicit busy port fails with ssh's reason.
   Readiness is a loopback dial, injected. A set that exits on its own is `failed` with its
-  last stderr line and is not restarted automatically.
+  last stderr line and is not restarted automatically. A forward with a `keeper` runs it on
+  the host through `RunStreamCtx` under its own context before the set (re)starts; the keeper's
+  lines reach the log pane; a keeper that exits fails only its forward with its last line;
+  `Remove` stops the keeper. Keepers are per-forward and survive a sibling's restart.
 - **F24 ports provider.** One round trip (`ss -H -ltnp`); rows `PORT · BIND · PROCESS · LABEL`,
   `Leaf`; an in-tree label table; a loopback-reachable port (`0.0.0.0`, `::`, `127.0.0.1`,
   `::1`) carries `t: Tunnel{RemotePort, 0, scheme-guess}`; a port bound only to a non-loopback
@@ -246,6 +252,9 @@ Every rule becomes a named test. Format: **trigger · fires · must-not-fire · 
   construction/validation · must never be executed ambiguously · none set · validation test.
 - **F1d** a `Tunnel` with `RemotePort` 0 or 65536, or `LocalPort` above 65535 · rejected by
   `Validate` · must never reach `BridgeArgv` · `LocalPort: 0` is valid · validation test.
+- **F1e** an `Action` whose `Key` is in `provider.ReservedKeys` (`r`, `t`, `q`, `j`, space…) ·
+  rejected by `Validate` naming the key · must never be listed in a level · `c` and `l` are
+  fine · validation test.
 - **F1c** every contract type · round-trips through JSON unchanged · must not require a custom
   adapter between wire and TUI · a `nil` `Attrs`/`Actions` · marshal/unmarshal equality test.
 - **F2a** a remote handoff · argv contains `ssh`, `-t` and every `MuxArgs` option · must not
@@ -366,6 +375,10 @@ Every rule becomes a named test. Format: **trigger · fires · must-not-fire · 
   keymap coverage test.
 - **F18b** `u`, `w`, `v`, `space`, `a`, `p`, `P`, `A`, `F` pressed inside a level · no action · a
   fleet-wide update must never start from inside a level · each key individually · unbound test.
+- **F18c** a printable key not bound by fleet, pressed on a row that declares an action with
+  that key · the action runs; the header strip listed it with its label · a key the row does
+  not declare → a status line, nothing runs · two rows with different keys on one level ·
+  provider-key test with `FakeProvider`.
 - **F19a** a `Stream` action · lines reach the log pane with the host's colour · must not touch
   `running`, `updating` or trigger a re-poll · a stream that ends immediately · engine-isolation
   test.
@@ -403,6 +416,11 @@ Every rule becomes a named test. Format: **trigger · fires · must-not-fire · 
 - **F23f** `Close()` with three sets across two hosts · every context cancelled and every
   `done` observed before it returns · must not return with a live process · `Close()` twice is
   a no-op · teardown test.
+- **F23g** a forward with a `keeper` · the keeper starts on the host under the bridge's
+  context before the set restarts, its lines reach the log, and `Remove`/`Close()` stop it ·
+  must not restart a keeper when a sibling forward changes, and must not leave a keeper
+  running after its forward is removed · a keeper that exits at once → that forward `failed`
+  with its last line, siblings up · keeper test with a recording runner.
 - **F24a** a host with ports bound to `0.0.0.0`, `127.0.0.1`, `::` and `192.168.0.5` · one round
   trip; the first three rows carry a `t` tunnel, the last is listed with `Unavailable` naming
   `192.168.0.5` · must not offer a tunnel to a non-loopback-only bind, and must not omit it ·
@@ -485,18 +503,10 @@ Every rule becomes a named test. Format: **trigger · fires · must-not-fire · 
 
 | Item | Why |
 | :-- | :-- |
-| Kubernetes, docker, tmux/Claude sessions, system stats | The plugin roadmap (design §3.1). Each is additive under v1; k8s is the next objective and stresses depth and streaming, which is why the framework ships first. |
-| Bridges that outlive fleet | Rejected by the operator (design §3.4 D): a bridge dies with the fleet process that opened it, so no forward exists on the workstation without a visible owner. A detached forwarder is `expose`'s model, not fleet's. |
-| LAN exposure of a bridge (`-L 0.0.0.0:…`) | A bridge binds loopback only. Re-exposing a local port to the LAN is what `expose` does. |
-| Remote-side addresses other than the host's loopback | A `Tunnel` has no address field by design: a plugin must not be able to use a fleet machine as a jump host. A port bound only to a LAN address is listed and refused with the reason. |
-| Automatic restart of a bridge that died | A failed set stays `failed` with its reason; `t` again retries. A watchdog is `expose`'s job and would hide the reason. |
-| A declarative YAML-manifest plugin | It is itself a plugin, so it costs no framework change later. Putting a template language inside fleet now would buy the hard 20% at the price of the whole engine. |
-| Remote / socket transports | The protocol is URL-addressed and stateless per call so they stay cheap, but only local stdio is built and tested here. |
-| Sandboxing or signing plugins | Installing a plugin is trusting an executable, like any CLI on PATH. The honest mitigations (no credentials, alias-scoped exec, no terminal, deadlines) are in scope; a sandbox is a different project. |
-| Auto-refresh of a level | `r` reloads on demand. A tick is additive because stale replies are already discarded by generation. |
-| A parameter form for actions needing input (`kubectl scale`) | Would be a new TUI mode. Interactive handoffs cover exec/attach, which is what the fleet needs now. |
-| Provider-driven writes to a host | Every **built-in** probe and listing is read-only; mutation happens inside a terminal the operator was handed, exactly as `s` does today. A third-party plugin's `host/exec` is not policed — installing one is trusting it with the ssh user's rights on the hosts the operator drills into (design §5). A per-plugin argv allowlist is a cheap follow-on (design §4.9), not a v1 promise. |
-| Cluster-first (host-independent) views | The tree is rooted at a host by construction while ssh is the bridge; a cluster reachable from two hosts appears under both. |
+| **Sequenced follow-ons, not this PR** — Kubernetes resources (`fleet-connect-k8s`, planned alongside this objective), containers, sessions, system stats, a declarative-manifest plugin, remote transports | Design goal 8: each is a provider speaking v1 with zero framework change, registered in `../index.md`. The framework ships first so the protocol is proven by one real consumer before the second stresses it. |
+| A bridge that outlives fleet, binds a LAN address, or targets anything but the host's loopback | Rejected by the operator (design §3.4 D): a bridge dies with the fleet process that opened it and binds loopback on both ends. A detached or LAN-exposed forwarder is `expose`'s model; a `Tunnel` has no address field so a plugin cannot use a fleet machine as a jump host. |
+| Sandboxing, signing or policing plugins | Installing a plugin is trusting an executable, like any CLI on PATH. The real mitigations (no credentials, alias-scoped exec, no terminal, deadlines) are in scope; a sandbox is a different project, and a per-plugin argv allowlist is a cheap follow-on (design §4.9). |
+| TUI extras — auto-refresh of a level, a parameter form for actions needing input, cluster-first views, auto-restart of a failed bridge | Each is additive and none is needed to reach herdr, ports or k8s; `r` reloads, interactive handoffs ask for their own input, the tree is host-rooted while ssh is the bridge, and `t` retries a failed bridge with its reason visible. |
 
 ## 9. Rollback
 

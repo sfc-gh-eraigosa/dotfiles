@@ -27,11 +27,11 @@
 
 ---
 
-## Phase 1 — the contract (leaf A)
+## Phase 1 — the contract (leaf A · **PR 1 `contract`**, base `main`)
 
 ### Task 1 — `pkg/provider` types  (plan T1)
 
-- [ ] RED: `TestEveryContractTypeRoundTripsThroughJSON`, `TestAnActionMustCarryExactlyOneOfHandoffStreamOrTunnel`, `TestATunnelWithAnOutOfRangePortIsRejected`, `TestNoActionPayloadCarriesAHostOrAddress` (reflection), `TestAShortCellSliceRendersBlanksNotAPanic`
+- [ ] RED: `TestEveryContractTypeRoundTripsThroughJSON`, `TestAnActionMustCarryExactlyOneOfHandoffStreamOrTunnel`, `TestATunnelWithAnOutOfRangePortIsRejected`, `TestNoActionPayloadCarriesAHostOrAddress` (reflection), `TestAReservedKeyIsRejectedAtValidation`, `TestAShortCellSliceRendersBlanksNotAPanic`
 - [ ] RUN-RED: `go test ./pkg/provider/` → expect **FAIL** (package does not exist)
 - [ ] GREEN: `pkg/provider/provider.go` — `Node`, `Action`, `Handoff` (no host), `HandoffKind`, `Stream`, `Tunnel` (no address), `Provider`, `Host`, `ErrAbsent`, `ErrNoSuchPath`, `Validate`
 - [ ] RUN-GREEN: `go test ./pkg/provider/ -cover` → **PASS**, ≥ 90%
@@ -73,12 +73,13 @@
 - [ ] RUN-GREEN: `go test ./pkg/provider/...` → **PASS**
 - [ ] EVID + COMMIT + LEDGER
 - [ ] **FREEZE:** record in `TRACKING.md` §5 that the contract (plan §3.1) is frozen as of this SHA
+- [ ] CHECKPOINT: `gss feature checkpoint` → PR 1 draft → ready; label `ready-for-merge` after review
 
-**Done when:** later leaves can be built and tested without herdr. **Leaf A exits.**
+**Done when:** later leaves can be built and tested without herdr. **Leaf A exits — PR 1.**
 
 ---
 
-## Phase 2 — the protocol (leaf B)
+## Phase 2 — the protocol (leaf B · **PR 2 `protocol`**, base PR 1)
 
 ### Task 5 — wire + framing  (plan T5)
 
@@ -123,12 +124,13 @@
 - [ ] EVID: the refusal transcript + the leak-sweep assertion
 - [ ] COMMIT + LEDGER
 - [ ] **FREEZE:** record in `TRACKING.md` §5 that the protocol (plan §3.2) is frozen as of this SHA
+- [ ] CHECKPOINT: PR 2 draft → ready
 
-**Done when:** a plugin cannot name a machine, and every exec rides the runner seam. **Leaf B exits.**
+**Done when:** a plugin cannot name a machine, and every exec rides the runner seam. **Leaf B exits — PR 2.**
 
 ---
 
-## Phase 3 — registry, config, verbs (leaf C)
+## Phase 3 — registry, config, verbs (leaf C · **PR 3 `registry`**, base PR 2)
 
 ### Task 9 — registry  (plan T9)
 
@@ -173,11 +175,13 @@
 - [ ] EVID: both transcripts
 - [ ] COMMIT + LEDGER
 
-**Done when:** a plugin author has a debugging surface.
+- [ ] CHECKPOINT: PR 3 draft → ready (unblocks herdr, cli, and `fleet-connect-k8s` kA)
+
+**Done when:** a plugin author has a debugging surface. **Leaf C exits — PR 3.**
 
 ---
 
-## Phase 4 — the herdr provider (leaf D)
+## Phase 4 — the herdr provider (leaf D · **PR 4 `herdr`**, base PR 3)
 
 ### Task 13 — parsers  (plan T13)
 
@@ -245,11 +249,13 @@
 - [ ] EVID: both renderings + the (empty) diff
 - [ ] COMMIT + LEDGER
 
-**Done when:** the protocol is proven by a real provider, not a paper design. **Leaf D exits.**
+- [ ] CHECKPOINT: PR 4 draft → ready
+
+**Done when:** the protocol is proven by a real provider, not a paper design. **Leaf D exits — PR 4.**
 
 ---
 
-## Phase 5 — the TUI (leaf E)
+## Phase 5 — the TUI (leaf E · **PR 5 `tui`**, base PR 1)
 
 ### Task 19 — nav stack + loads  (plan T19)
 
@@ -264,7 +270,7 @@
 
 ### Task 20 — ownership + keymap  (plan T20)
 
-- [ ] RED: `TestDrillingIntoABusyHostIsRefused`, `TestABackgroundUpdateContinuesWhileDrilledIn`, `TestKeyHelpCoversEveryBoundNavKeyAtItsLevel`, `TestUpdateKeysAreUnboundInsideALevel`
+- [ ] RED: `TestDrillingIntoABusyHostIsRefused`, `TestABackgroundUpdateContinuesWhileDrilledIn`, `TestKeyHelpCoversEveryBoundNavKeyAtItsLevel`, `TestUpdateKeysAreUnboundInsideALevel`, `TestAProviderKeyRunsTheCursorRowsActionAndShowsInTheHeader`
 - [ ] RUN-RED: `go test ./cmd/ -run "Busy|Unbound|KeyHelp"` → expect **FAIL**
 - [ ] GREEN: the `routeNav` branch; level-aware `keyHelp` + `headerHints`; `enter` gated by `canStartConfigAction()`
 - [ ] RUN-GREEN: `go test ./cmd/` → **PASS**
@@ -295,11 +301,13 @@
 - [ ] EVID: the log-pane frame + the engine-state assertion
 - [ ] COMMIT + LEDGER
 
-**Done when:** a provider stream shares the log pane and nothing else. **Leaf E exits.**
+- [ ] CHECKPOINT: PR 5 draft → ready
+
+**Done when:** a provider stream shares the log pane and nothing else. **Leaf E exits — PR 5.**
 
 ---
 
-## Phase 6 — the CLI (leaf F)
+## Phase 6 — the CLI (leaf F · **PR 6 `cli`**, base PR 3)
 
 ### Task 23 — `fleet ls`  (plan T23)
 
@@ -322,17 +330,19 @@
 - [ ] EVID: the dry-run argv + the refusal exit code
 - [ ] COMMIT + LEDGER
 
-**Done when:** connecting works from the CLI and refuses legibly. **Leaf F exits.**
+- [ ] CHECKPOINT: PR 6 draft → ready
+
+**Done when:** connecting works from the CLI and refuses legibly. **Leaf F exits — PR 6.**
 
 ---
 
-## Phase 7 — bridges (leaf H; after E and F)
+## Phase 7 — bridges (leaf H · **PR 7 `bridges`**, base PR 6, restack after PR 5)
 
 ### Task 25 — bridge manager  (plan T25)
 
-- [ ] RED: `TestOneProcessPerHostRestartedPerChange`, `TestBridgesOnTwoHostsAreIndependent`, `TestABusyLocalPortIsAllocatedAroundAndReported`, `TestAnExplicitBusyPortFailsWithSshsReason`, `TestASelfExitedBridgeIsFailedWithItsLastStderrLine`, `TestClosingTheManagerStopsEveryBridge`
+- [ ] RED: `TestOneProcessPerHostRestartedPerChange`, `TestBridgesOnTwoHostsAreIndependent`, `TestABusyLocalPortIsAllocatedAroundAndReported`, `TestAnExplicitBusyPortFailsWithSshsReason`, `TestASelfExitedBridgeIsFailedWithItsLastStderrLine`, `TestClosingTheManagerStopsEveryBridge`, `TestAKeeperRunsUnderTheBridgeContextAndStopsWithIt`
 - [ ] RUN-RED: `go test ./internal/bridge/` → expect **FAIL** (package does not exist)
-- [ ] GREEN: `internal/bridge/{manager,set,ports}.go` — `Manager` keyed by alias, `Set`, `Forward`, local-port policy (0 = prefer remote number, else allocate + note), injected `listen`/`dial`, `Status()`, `Close()` (idempotent)
+- [ ] GREEN: `internal/bridge/{manager,set,ports,keeper}.go` — `Manager` keyed by alias, `Set`, `Forward` (+ optional keeper process via `RunStreamCtx`), local-port policy (0 = prefer remote number, else allocate + note), injected `listen`/`dial`, `Status()`, `Close()` (idempotent)
 - [ ] RUN-GREEN: `go test -race ./internal/bridge/ -cover` → **PASS**, ≥ 90%
 - [ ] VERIFY: a recording runner shows one process per alias at any time; no test binds a real port
 - [ ] EVID: the add/add/remove transcript + the allocation note
@@ -375,11 +385,13 @@
 - [ ] EVID: the table + both exit codes
 - [ ] COMMIT + LEDGER
 
-**Done when:** a script can open N bridges on M hosts with one command and Ctrl-C leaves none. **Leaf H exits.**
+- [ ] CHECKPOINT: PR 7 draft → ready (after `gss feature restack` onto the merged PR 5 + 6 base)
+
+**Done when:** a script can open N bridges on M hosts with one command and Ctrl-C leaves none. **Leaf H exits — PR 7.**
 
 ---
 
-## Phase 8 — integration (leaf G)
+## Phase 8 — integration (leaf G · **PR 8 `integrate`**, base PR 7, after PR 4)
 
 ### Task 29 — register, document, prove live  (plan T29)
 

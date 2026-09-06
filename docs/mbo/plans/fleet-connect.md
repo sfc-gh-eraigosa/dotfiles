@@ -115,8 +115,9 @@ already covers fleet), `cmd/status.go`'s `Row`, the eleven `runner.Exec{}` const
 
 As written in design §4.2, plus `Validate() error` on `Node` and `Action` (exactly one of
 `Handoff`/`Stream`/`Tunnel`; a `Key` that is exactly one printable rune, carried as a string; a
-`Tunnel` with `RemotePort` in 1–65535
-and `LocalPort` in 0–65535). None of the three action payloads carries a host or an address:
+`Tunnel` with `RemotePort` in 1–65535, an optional provider-quoted `Keeper` command,
+and `LocalPort` in 0–65535; a `Key` not in `ReservedKeys`, F1e). None of the three action
+payloads carries a host or an address:
 `internal/runner` takes the alias as a parameter (`HandoffArgv(alias, h)`, `BridgeArgv(alias,
 fwds)`), and the only caller that supplies it is fleet. Also:
 
@@ -235,7 +236,8 @@ Global gates for every task: `go test -race ./...`, `gofmt -l .` empty, `go vet 
 `Handoff`/`Stream`/`Tunnel` (F1b) and a `Tunnel` whose ports are out of range (F1d); a `Node`
 with fewer cells than columns yields blanks in a rendering helper, and zero cells does not panic
 (F1a); a compile-time check that `Handoff`, `Stream` and `Tunnel` have no field named `Host` or
-`Addr` (reflection over the struct, so the escape cannot be reintroduced quietly). Implement the
+`Addr` (reflection over the struct, so the escape cannot be reintroduced quietly); an `Action`
+keyed on a rune in `ReservedKeys` is rejected naming it (F1e). Implement the
 types and `Validate`. **Done when** the tests pass and the package imports stdlib only (`go list
 -deps` shows no third-party). *Evidence:* `go test` output plus the `go list -deps` proof of a
 stdlib-only public package.
@@ -390,8 +392,10 @@ generation-drop transcript.
 status line and probes nothing, then succeeds once free (F17a); a background update on another
 host continues and still logs while drilled in (F17b); every level-bound key is declared in
 `keyHelp` with its level and a level-only key does not show at level 0 (F18a); each of
-`u w v space a p P A F` does nothing inside a level (F18b). Implement the `routeNav` branch and
-the level-aware `keyHelp`/`headerHints`. **Done when** all pass. *Evidence:* the refusal line and
+`u w v space a p P A F` does nothing inside a level (F18b); an unbound printable key runs the
+cursor row's declared action with that key, the header strip lists the row's keys with labels,
+and an undeclared key is a status line (F18c). Implement the `routeNav` branch and the
+level-aware `keyHelp`/`headerHints`, with the row-action fallthrough. **Done when** all pass. *Evidence:* the refusal line and
 the keymap coverage output.
 
 **T21 · view and golden frames.** Tests: `esc` clears an active level filter before it pops
@@ -430,7 +434,9 @@ started three times (F23a); two aliases → two processes, each argv naming its 
 free and allocates with a note when busy (F23c); an explicit busy port is `failed` with ssh's
 reason, never moved (F23d); a process exiting on its own is `failed` with its last stderr line
 and not restarted (F23e); `Close()` cancels every set and observes every `done`, and is
-idempotent (F23f). Implement `internal/bridge`. **Done when** all pass under `-race` and the
+idempotent (F23f); a forward with a `Keeper` starts it under its own context before the set
+restarts, its lines reach the log, a sibling's change does not restart it, and `Remove`/`Close()`
+stop it (F23g). Implement `internal/bridge`. **Done when** all pass under `-race` and the
 package binds no real port (`strace`-free proof: the injected `listen` is the only listener).
 *Evidence:* the add/add/remove process transcript and the allocation note.
 
@@ -479,6 +485,7 @@ captures.
 | F1b | `TestAnActionMustCarryExactlyOneOfHandoffStreamOrTunnel` |
 | F1c | `TestEveryContractTypeRoundTripsThroughJSON` |
 | F1d | `TestATunnelWithAnOutOfRangePortIsRejected` · `TestNoActionPayloadCarriesAHostOrAddress` |
+| F1e | `TestAReservedKeyIsRejectedAtValidation` |
 | F2a | `TestEveryHandoffCarriesTheMuxOptions` |
 | F2b | `TestLocalHandoffNeverInvokesAShell` |
 | F2c | `TestRemoteHandoffQuotesEveryProviderSuppliedValue` |
@@ -522,6 +529,7 @@ captures.
 | F17b | `TestABackgroundUpdateContinuesWhileDrilledIn` |
 | F18a | `TestKeyHelpCoversEveryBoundNavKeyAtItsLevel` |
 | F18b | `TestUpdateKeysAreUnboundInsideALevel` |
+| F18c | `TestAProviderKeyRunsTheCursorRowsActionAndShowsInTheHeader` |
 | F19a | `TestAProviderStreamNeverTouchesTheUpdateEngine` |
 | F20a | `TestLsJSONShapeIsStable` · `TestLsNodesIsNeverNull` |
 | F20b | `TestLsRendersADeepLevelAndNamesAnUnknownSegment` |
@@ -536,6 +544,7 @@ captures.
 | F23d | `TestAnExplicitBusyPortFailsWithSshsReason` |
 | F23e | `TestASelfExitedBridgeIsFailedWithItsLastStderrLine` |
 | F23f | `TestClosingTheManagerStopsEveryBridge` |
+| F23g | `TestAKeeperRunsUnderTheBridgeContextAndStopsWithIt` |
 | F24a | `TestPortsLevelSplitsLoopbackReachableFromLanOnlyBinds` · `TestPortsProbeCostsOneRoundTrip` |
 | F24b | `TestPortLabelsComeFromTheTableThenTheProcess` |
 | F24c | `TestMissingSsIsARowNamingTheTool` |
@@ -600,10 +609,38 @@ captures.
 
 ### 6.1 Build leaves / DAG
 
-**Default: one worker, tasks 1 → 29 in order.** The tasks chain through one contract and one model
-struct; per MBO policy the breakout is offered, not assumed.
+**Decided 2026-09-05: the build is split into eight PRs, one per leaf, blocking-first**, in the
+operator's priority order herdr → ports → k8s (the k8s provider is its own objective,
+`fleet-connect-k8s`, stacked after PR 3). Each PR is a `gss feature` worker whose `--base` is
+its in-edge; each carries `Closes #<sub-issue>` of design issue #266.
 
-If the operator asks for parallel execution, the graph is:
+| PR | Worker (`fleet-connect/<user>/<purpose>`) | Leaf · tasks | Base (in-edge) | Review gate (from the leaf's `done-when`) | Unblocks |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| **1** | `contract` | A · T1–T4 | `main` | contract frozen: three action kinds, `Keeper`, `ReservedKeys`, no host field; `pkg/provider` stdlib-only; ≥ 90% | everything |
+| **2** | `protocol` | B · T5–T8 | PR 1 | protocol frozen; leak sweep; `-32001`; deadline pauses on exec; ≥ 90% | 3, 4 |
+| **3** | `registry` | C · T9–T12 | PR 2 | missing config = built-ins; `provider serve`; ≥ 90% | 4 (T18), 6, k8s kA |
+| **4** | `herdr` | D · T13–T18 | PR 3 | real fixtures; 1/2/1 round trips; **dual-path identical** | 8 |
+| **5** | `tui` | E · T19–T22 | PR 1 | no existing test or frame changed; F18c row-action fallthrough | 7 |
+| **6** | `cli` | F · T23–T24 | PR 3 | golden JSON from the structs; stream to stdout | 7 |
+| **7** | `bridges` | H · T25–T28 | PR 6, after PR 5 merges (restack once) | one `ssh -N` per host; keepers; no real port; `Close()` on every exit | 8, k8s kC/kD |
+| **8** | `integrate` | G · T29 | PR 7, after 4 merges | `./scripts/test.sh`; all live gates; 11-step checklist | `fleet-connect-k8s` kD |
+
+Order of landing: 1 → 2 → 3 → {4 herdr, 5 tui, 6 cli in parallel} → 7 bridges → 8 integrate →
+then `fleet-connect-k8s` kA → kB → kC → kD (its plan §6.1). `gss feature merged` walks the
+stack; PR 7 is the one manual restack (two in-edges).
+
+```bash
+gss feature worker add --feature fleet-connect --purpose contract  --description "leaf A: pkg/provider contract + runner handoffs/bridges (T1–T4)" --json
+gss feature worker add --feature fleet-connect --purpose protocol  --description "leaf B: JSON-RPC wire, Serve, Client, host/exec bridge (T5–T8)" --base feature/fleet-connect/<user>/contract --json
+gss feature worker add --feature fleet-connect --purpose registry  --description "leaf C: registry, providers.yaml, providers verbs (T9–T12)"  --base feature/fleet-connect/<user>/protocol --json
+gss feature worker add --feature fleet-connect --purpose herdr     --description "leaf D: the herdr provider + dual-path proof (T13–T18)"      --base feature/fleet-connect/<user>/registry --json
+gss feature worker add --feature fleet-connect --purpose tui       --description "leaf E: drill-down nav, keymap, frames, streams (T19–T22)"   --base feature/fleet-connect/<user>/contract --json
+gss feature worker add --feature fleet-connect --purpose cli       --description "leaf F: fleet ls + connect (T23–T24)"                        --base feature/fleet-connect/<user>/registry --json
+gss feature worker add --feature fleet-connect --purpose bridges   --description "leaf H: bridge manager, ports provider, t/T keys, fleet bridge (T25–T28)" --base feature/fleet-connect/<user>/cli --json
+gss feature worker add --feature fleet-connect --purpose integrate --description "leaf G: registration, docs, live gates (T29)"               --base feature/fleet-connect/<user>/bridges --json
+```
+
+The leaf graph those PRs realise:
 
 ```
 A(contract) ──▶ B(protocol) ──▶ C(registry+config+verbs) ──┐

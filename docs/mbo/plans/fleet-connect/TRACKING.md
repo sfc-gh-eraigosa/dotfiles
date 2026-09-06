@@ -15,10 +15,17 @@
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | design (these artifacts) | `fleet-connect/edward-raigosa/design` | `feature/fleet-connect/edward-raigosa/design` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/fleet-connect/edward-raigosa/design` | [#267](https://github.com/sfc-gh-eraigosa/dotfiles/pull/267) | draft |
-| build (T1–T25) | *not created yet* | | | | added when execution starts |
+| PR 1 contract (A, T1–T4) | *not created yet* | `feature/fleet-connect/<user>/contract` | | | base `main` — **blocking** |
+| PR 2 protocol (B, T5–T8) | *not created yet* | `…/protocol` | | | base PR 1 — **blocking** |
+| PR 3 registry (C, T9–T12) | *not created yet* | `…/registry` | | | base PR 2 — blocking for 4, 6, k8s |
+| PR 4 herdr (D, T13–T18) | *not created yet* | `…/herdr` | | | base PR 3 |
+| PR 5 tui (E, T19–T22) | *not created yet* | `…/tui` | | | base PR 1 |
+| PR 6 cli (F, T23–T24) | *not created yet* | `…/cli` | | | base PR 3 |
+| PR 7 bridges (H, T25–T28) | *not created yet* | `…/bridges` | | | base PR 6; restack after PR 5 |
+| PR 8 integrate (G, T29) | *not created yet* | `…/integrate` | | | base PR 7; after PR 4 |
 
-Captured verbatim from `gss feature worker add --json` (feature `fleet-connect`, base `main`). If the
-operator elects the plan §6.1 fan-out, add one row per leaf the same way.
+Captured verbatim from `gss feature worker add --json` (feature `fleet-connect`; commands in plan
+§6.1) when execution starts. One sub-issue per PR under #266.
 
 ## 1. Task ledger
 
@@ -126,3 +133,4 @@ silently patched.
 | :-- | :-- | :-- |
 | 2026-09-02 | planning | Probed all four fleet hosts read-only (runtimes, sessions, ports) and verified herdr 0.8.2's CLI surface, including the non-login PATH gotcha. Brainstormed shape, scope cut (framework + herdr now, k8s next), and navigation (push views + breadcrumb). Operator then asked for tools as **plugins over a local, MCP-like RPC** — design reworked around a versioned JSON-RPC protocol with a `host/exec` callback. Wrote design, spec (21 features, per-feature criteria), plan (25 tasks, DAG) and this trio. Found and folded in one protocol correction: `host/exec` takes a `callId`, not an alias. Anchored the objective: design issue #266 (kept open as the build-tracking parent) and draft design PR #267 on the `fleet-connect` gss feature. No code written. |
 | 2026-09-05 | design review + amendment | `/code-review` on #267 returned ten confirmed findings. The operator added one feature: N-port ssh bridges per host, started/stopped/shown across hosts, **never outliving fleet** (design §3.4, option A chosen: one `ssh -N` per host carrying every `-L`). Folded in: a third action kind `Tunnel`; no host field on any action payload (finding 1 — fleet stamps the alias); `internal/bridge`; the `ports` provider; `t`/`T` keys; `fleet bridge`; leaf H (T25–T28); T3 rewritten around `BridgeArgv`/`RunBridgeCtx` because `RunStreamCtx` already exists (finding 7); 29 tasks, 26 features. Remaining findings addressed in the follow-up commit. No code written. |
+| 2026-09-05 | PR split + k8s | Operator set the priority herdr → ports → k8s resources and asked for one PR per blocking leaf with complete plans. Plan §6.1 now names eight stacked PRs (contract → protocol → registry → {herdr, tui, cli} → bridges → integrate) with worker refs, bases and review gates; TODO phases carry their PR and a CHECKPOINT line; this ledger lists the planned workers. Non-goals cut to two rejected items; the roadmap became design goal 8 with index rows for containers, sessions, system, a declarative plugin and remote transports. Two contract additions before the freeze: `Tunnel.Keeper` (a host-side command the bridge keeps alive — what `kubectl port-forward` needs) and `ReservedKeys` + the F18c rule that any declared key runs the cursor row's action. Probed the three Kubernetes hosts and wrote the `fleet-connect-k8s` design, spec, plan (8 tasks, PRs kA–kD) and trio. Design issue for k8s and the sub-issues not created yet; push pending the operator's approval gate. |

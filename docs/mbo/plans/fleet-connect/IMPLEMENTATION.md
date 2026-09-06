@@ -41,9 +41,11 @@ claim, the command is the proof.
 
 ## 2. Worker map
 
-Default: **one worker, tasks 1 → 29 in plan order.** The plan's §6.1 DAG is the fan-out shape if
-the operator asks for parallel execution; capture `gss feature worker add --json` output verbatim
-into `TRACKING.md` §0 if that happens.
+**Decided 2026-09-05: eight PRs, one per leaf, blocking-first** (plan §6.1 has the table and
+the exact `gss feature worker add` commands). Land 1 contract → 2 protocol → 3 registry →
+{4 herdr, 5 tui, 6 cli} → 7 bridges → 8 integrate; `fleet-connect-k8s` stacks after 3.
+Capture every `worker add --json` output verbatim into `TRACKING.md` §0; put `Closes
+#<sub-issue>` in each draft PR body.
 
 | Leaf | Tasks | Owns | Blocking? |
 | :-- | :-- | :-- | :-- |
