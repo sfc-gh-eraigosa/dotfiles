@@ -1,0 +1,77 @@
+name: ghapp CI
+
+# ghapp CI — go vet, tests, coverage gate (plan docs/mbo/plans/gcfg.md §7).
+#
+# Pin-to-SHA convention: every third-party Action is pinned to a full 40-char
+# commit SHA with a trailing # vX.Y.Z comment (matches gff-ci.yml).
+#
+# Coverage gate: module-wide ≥80% (plan "Global constraints"). Nothing is
+# excluded from measurement — cmd, internal/version, pkg/ghapp and the root
+# main package all count.
+
+on:
+  # Merge-queue coverage: once this check is REQUIRED it must report on the
+  # queue's ephemeral branches — merge_group takes no path filters by design.
+  merge_group:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+    paths:
+      - 'sdk/ghapp/**'
+      - '.github/workflows/ghapp-ci.yml'
+  # No paths filter on pull_request (same reasoning as gff-ci.yml): a
+  # path-skipped REQUIRED check never reports and the Mergify queue waits
+  # forever. The job is sub-minute.
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: unit tests + coverage gate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/ghapp
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache-dependency-path: sdk/ghapp/go.sum
+
+      - name: Zero-install smoke (module must stay go-run-able)
+        run: go run . version
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Tests + coverage profile
+        run: |
+          COVERPKG=$(go list ./... | paste -sd, -)
+          # -count=1 defeats the restored build cache: replayed cached test
+          # results merge stale profile fragments and misreport the total.
+          go test ./... -count=1 -coverpkg="$COVERPKG" -coverprofile=cover.out
+
+      - name: Coverage gate (module ≥80%)
+        run: |
+          total=$(go tool cover -func=cover.out | awk '/^total:/ { gsub(/%/, "", $NF); print $NF }')
+          echo "total coverage: ${total}%"
+          awk -v t="${total}" 'BEGIN { if (t+0 < 80) { print "FAIL: total " t "% < 80%"; exit 1 } }'
+
+      - name: Token-leak grep (no fixture token in any test output)
+        # pkg/ghapp tests use the literal fixture token below; a test that
+        # logs it would leak a real token in the same code path.
+        run: |
+          go test ./... -count=1 -v 2>&1 | tee test.log >/dev/null
+          if grep -q 'ghs_FIXTURE_TOKEN_DO_NOT_PRINT' test.log; then
+            echo "FAIL: fixture token appeared in test output"; exit 1
+          fi

@@ -15,23 +15,23 @@
 
 ## Preflight (once)
 
-- [ ] `go version` matches `.go-version`
-- [ ] `gh auth status` shows `repo` scope
-- [ ] design PR merged; `gss feature list --feature gcfg --json` shows the feature
-- [ ] worker for the phase created via `gss feature worker add --feature gcfg --purpose <leaf> --description "…" --json`; row copied into IMPLEMENTATION §2 + TRACKING §0
-- [ ] `git status --short` clean in the worker worktree
+- [x] `go version` matches `.go-version`
+- [x] `gh auth status` shows `repo` scope
+- [~] design PR merged (**not merged** — build worker stacked on `feature/gcfg/edward-raigosa/design`, PR #285, by owner decision 2026-09-05); `gss feature list --feature gcfg --json` shows the feature ✓ (row re-created after the 2026-09-05 registry audit dropped it)
+- [x] worker for the phase created via `gss feature worker add --feature gcfg --purpose <leaf> --description "…" --json`; row copied into IMPLEMENTATION §2 + TRACKING §0
+- [x] `git status --short` clean in the worker worktree
 
 ---
 
 ### P0-T1 — ghapp scaffold + version  (plan P0-T1)
-- [ ] SETUP: `sdk/ghapp/{go.mod,main.go,build.sh}` mirroring `sdk/gff` (module path with `sdk/`), `internal/version`
-- [ ] RED: `cmd/version_test.go` expects a non-empty version string from ldflags default `dev`
-- [ ] RUN-RED: `cd sdk/ghapp && go test ./cmd/` → expect **FAIL**
-- [ ] GREEN: cobra root + `version`
-- [ ] RUN-GREEN: `go test ./... -cover` → **PASS**; `go run . version`
-- [ ] VERIFY: `.github/workflows/ghapp-ci.yml` (vet, test, ≥80% gate); `git status --short -- sdk/ghapp` shows files tracked (ALLOWLIST)
-- [ ] DOCS: `sdk/ghapp/{AGENTS.md,CLAUDE.md→AGENTS.md,README.md}` stubs
-- [ ] COMMIT: `feat(ghapp): module scaffold + version`
+- [x] SETUP: `sdk/ghapp/{go.mod,main.go,build.sh}` mirroring `sdk/gff` (module path with `sdk/`), `internal/version`
+- [x] RED: `cmd/version_test.go` expects a non-empty version string from ldflags default `dev`
+- [x] RUN-RED: `cd sdk/ghapp && go test ./cmd/` → expect **FAIL**
+- [x] GREEN: cobra root + `version`
+- [x] RUN-GREEN: `go test ./... -cover` → **PASS**; `go run . version`
+- [x] VERIFY: `.github/workflows/ghapp-ci.yml` (vet, test, ≥80% gate); `git status --short -- sdk/ghapp` shows files tracked (ALLOWLIST)
+- [x] DOCS: `sdk/ghapp/{AGENTS.md,CLAUDE.md→AGENTS.md,README.md}` stubs
+- [x] COMMIT: `feat(ghapp): module scaffold + version`
 - [ ] LEDGER + CHECKPOINT
 **Done when:** CI green on the worker PR; version prints.
 
