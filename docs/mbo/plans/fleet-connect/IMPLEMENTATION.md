@@ -45,7 +45,8 @@ claim, the command is the proof.
 the exact `gss feature worker add` commands). Land 1 contract → 2 protocol → 3 registry →
 {4 herdr, 5 tui, 6 cli} → 7 bridges → 8 integrate; `fleet-connect-k8s` stacks after 3.
 Capture every `worker add --json` output verbatim into `TRACKING.md` §0; put `Closes
-#<sub-issue>` in each draft PR body.
+#<sub-issue>` in each draft PR body; label every PR `fleet-connect` (`gh pr edit <n>
+--add-label fleet-connect`) — the program-wide label.
 
 | Leaf | Tasks | Owns | Blocking? |
 | :-- | :-- | :-- | :-- |

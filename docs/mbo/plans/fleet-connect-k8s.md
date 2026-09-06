@@ -215,6 +215,9 @@ fleet-connect PR 7 (bridges) merged ──────────────�
 | **kC** | `actions` | T6–T7 | `actions.go`, the `Actions` column of `kinds.go` | kB; `fleet-connect` H merged for T7's manager test | T6–T7 green; quoting walk; reserved-key check; no real port | no |
 | **kD** | `integrate` | T8 | `cmd/provider_registry.go` (one line), `cmd/providers_k8s_test.go`, docs | kC; `fleet-connect` G merged (E/F for live) | `./scripts/test.sh` green; dual-path identical; 8-step checklist captured | no |
 
+Every PR and issue of this objective carries the program label **`fleet-connect`** (parent plan
+§6.1): after each `gss feature checkpoint`, `gh pr edit <n> --add-label fleet-connect`.
+
 The stack is linear: `gss feature start fleet-connect-k8s`, then `worker add --purpose core`
 (base `main` once `fleet-connect` PR 3 has merged; `--base feature/fleet-connect/<user>/registry`
 to start earlier), `levels --base <core branch>`, `actions --base <levels branch>`, `integrate

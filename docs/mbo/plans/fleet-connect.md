@@ -629,6 +629,12 @@ Order of landing: 1 → 2 → 3 → {4 herdr, 5 tui, 6 cli in parallel} → 7 br
 then `fleet-connect-k8s` kA → kB → kC → kD (its plan §6.1). `gss feature merged` walks the
 stack; PR 7 is the one manual restack (two in-edges).
 
+**One label for the whole program.** Every PR and issue in it — the design PR #267, issue
+#266 and its sub-issues, the eight leaf PRs, and `fleet-connect-k8s`'s issue and four PRs —
+carries the GitHub label **`fleet-connect`**, so `gh pr list --label fleet-connect` and
+`gh issue list --label fleet-connect` are the program view. `gss feature checkpoint` creates
+each draft PR; the next step is always `gh pr edit <n> --add-label fleet-connect`.
+
 ```bash
 gss feature worker add --feature fleet-connect --purpose contract  --description "leaf A: pkg/provider contract + runner handoffs/bridges (T1–T4)" --json
 gss feature worker add --feature fleet-connect --purpose protocol  --description "leaf B: JSON-RPC wire, Serve, Client, host/exec bridge (T5–T8)" --base feature/fleet-connect/<user>/contract --json

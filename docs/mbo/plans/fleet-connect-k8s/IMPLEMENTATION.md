@@ -55,7 +55,8 @@ gss feature worker add --feature fleet-connect-k8s --purpose integrate --descrip
 ```
 
 Capture each `--json` output verbatim into `TRACKING.md` §0. One sub-issue per PR under the
-design issue (`mbo-plan` §7); each draft PR body carries `Closes #<sub-issue>`.
+design issue (`mbo-plan` §7); each draft PR body carries `Closes #<sub-issue>`; every PR and
+issue carries the program label `fleet-connect` (`gh pr edit <n> --add-label fleet-connect`).
 
 ## 3. The execution loop (every task)
 
