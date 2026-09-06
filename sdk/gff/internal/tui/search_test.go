@@ -49,6 +49,7 @@ func TestSlashSearchTypedLettersNeverFireNormalKeys(t *testing.T) {
 	require.NoError(t, err)
 	var m tea.Model = tui.NewModel(items, p)
 	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	assert.Nil(t, cmd, "opening the prompt emits no command")
 	for _, c := range "qujk" {
 		m, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{c}})
 		assert.Nil(t, cmd, "%q inside the prompt must not quit", c)
@@ -180,4 +181,36 @@ func TestNOnAPageWithoutMatchesReportsNotFound(t *testing.T) {
 	m = typeKeys(m, "n")
 	assert.Contains(t, m.View(), "pattern not found: claude")
 	assert.Equal(t, before, cursorLine(m.View()), "cursor did not move")
+}
+
+// A refused pattern (Enter on an invalid regex) must not disarm the pattern
+// that IS committed: the badge keeps its real count and n/N keep hopping.
+func TestSlashSearchInvalidCommitKeepsTheCommittedPatternArmed(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	m := newPagerModel(t)
+	m = typeKeys(m, "/ai")
+	m = press(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = typeKeys(m, "/[")
+	m = press(m, tea.KeyMsg{Type: tea.KeyEnter})
+	v := m.View()
+	assert.Contains(t, v, "invalid pattern: missing closing ]")
+	assert.Contains(t, v, "/ai [1/2]", "the committed pattern keeps its real match count")
+	m = typeKeys(m, "n")
+	v = m.View()
+	assert.NotContains(t, v, "pattern not found", "n still hops the committed pattern")
+	assert.Contains(t, cursorLine(v), "install.ai.teams")
+}
+
+// An error line belongs to the action that produced it: the next successful
+// search clears it instead of leaving it under the list forever.
+func TestSuccessfulSearchClearsThePreviousError(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	m := newPagerModel(t)
+	m = typeKeys(m, "/zzz")
+	m = press(m, tea.KeyMsg{Type: tea.KeyEnter})
+	assert.Contains(t, m.View(), "pattern not found: zzz")
+	m = typeKeys(m, "/ai")
+	assert.NotContains(t, m.View(), "pattern not found", "opening the prompt drops the stale error")
+	m = press(m, tea.KeyMsg{Type: tea.KeyEnter})
+	assert.NotContains(t, m.View(), "pattern not found", "a successful commit leaves no error line")
 }

@@ -54,6 +54,7 @@ func (m *Model) collect() { m.search.Collect(len(m.rows), m.hit) }
 
 func (m *Model) startSearch() {
 	m.search.Start(m.cur.Pos, m.cur.Top)
+	m.errMsg = "" // a previous "not found" / command error is not about this search
 	m.searchAnchor = ""
 	if m.cur.Pos < len(m.rows) {
 		m.searchAnchor = rowKey(m.rows[m.cur.Pos])
@@ -88,8 +89,17 @@ func (m *Model) commitSearch() {
 	case !committed:
 		m.errMsg = "invalid pattern: " + m.search.Err
 		m.search.Err = ""
+		// The refused pattern left the state armed with no regexp — the
+		// badge would read [-/0] and n/N would report "not found" for a
+		// pattern that does match. Re-arm the one that IS committed.
+		m.search.Hide()
+		if m.search.Rearm() {
+			m.collect()
+		}
 	case notFound:
 		m.errMsg = "pattern not found: " + m.search.Pattern
+	default:
+		m.errMsg = ""
 	}
 }
 
