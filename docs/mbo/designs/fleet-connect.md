@@ -260,6 +260,7 @@ type Stream struct { Command string `json:"command"`; Follow bool `json:"follow"
 // rejects an Action keyed on one, so a plugin author learns the collision at construction, not
 // from a key that never fires. enter and esc are not printable and cannot be declared at all.
 var ReservedKeys = map[rune]bool{ /* r t T q / n N j k g G u w v a p P A F ' ' */ }
+const TunnelKey = "t"   // the one reserved key a provider DOES declare: every Tunnel action carries it (found by T1's tests)
 type Tunnel struct {                           // DATA. Two integers, a scheme, and at most one quoted command.
     RemotePort int    `json:"remotePort"`      // 1–65535, always on the HOST's loopback
     LocalPort  int    `json:"localPort"`       // 0: prefer RemotePort locally, else allocate

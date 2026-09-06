@@ -16,14 +16,14 @@
 
 ## Preflight (once)
 
-- [ ] `cd sdk/fleet && go version` → ≥ 1.26.3
-- [ ] `cd sdk/fleet && go test -race ./... && gofmt -l . && go vet ./...` → green, empty, clean
+- [x] `cd sdk/fleet && go version` → ≥ 1.26.3 (host go is 1.26.1 with `GOTOOLCHAIN=local` pinned by a shell function; use `export GOTOOLCHAIN=auto` + `command go`)
+- [x] `cd sdk/fleet && go test -race ./... && gofmt -l . && go vet ./...` → green, empty, clean
 - [ ] `./scripts/test.sh` → green (fleet floor 60)
 - [ ] `make lint-shell && make lint-portability` → green
-- [ ] `git rev-parse --show-toplevel && git branch --show-current` → this worktree, not `~/git/dotfiles`
+- [x] `git rev-parse --show-toplevel && git branch --show-current` → this worktree, not `~/git/dotfiles` (`feature/fleet-connect/<user>/contract`)
 - [ ] `fleet status <spark>` and `ssh <spark> '~/.local/bin/herdr status'` → a live herdr host exists
 - [ ] `command -v herdr || ls ~/.local/bin/herdr` → a local client exists (needed for attach)
-- [ ] `mkdir -p docs/mbo/plans/fleet-connect/evidence` then `git status --short -- docs/mbo/plans/fleet-connect/evidence` → tracked (else `git check-ignore -v` and add a narrow `!`-rule)
+- [x] `mkdir -p docs/mbo/plans/fleet-connect/evidence` then `git status --short -- docs/mbo/plans/fleet-connect/evidence` → tracked (`!docs/**` and `!sdk/**` already allow both)
 
 ---
 
@@ -31,12 +31,12 @@
 
 ### Task 1 — `pkg/provider` types  (plan T1)
 
-- [ ] RED: `TestEveryContractTypeRoundTripsThroughJSON`, `TestAnActionMustCarryExactlyOneOfHandoffStreamOrTunnel`, `TestATunnelWithAnOutOfRangePortIsRejected`, `TestNoActionPayloadCarriesAHostOrAddress` (reflection), `TestAReservedKeyIsRejectedAtValidation`, `TestAShortCellSliceRendersBlanksNotAPanic`
-- [ ] RUN-RED: `go test ./pkg/provider/` → expect **FAIL** (package does not exist)
-- [ ] GREEN: `pkg/provider/provider.go` — `Node`, `Action`, `Handoff` (no host), `HandoffKind`, `Stream`, `Tunnel` (no address), `Provider`, `Host`, `ErrAbsent`, `ErrNoSuchPath`, `Validate`
-- [ ] RUN-GREEN: `go test ./pkg/provider/ -cover` → **PASS**, ≥ 90%
-- [ ] VERIFY: `go list -deps ./pkg/provider` → stdlib only, no third party
-- [ ] EVID + ALLOWLIST + COMMIT + LEDGER
+- [x] RED: `TestEveryContractTypeRoundTripsThroughJSON`, `TestAnActionMustCarryExactlyOneOfHandoffStreamOrTunnel`, `TestATunnelWithAnOutOfRangePortIsRejected`, `TestNoActionPayloadCarriesAHostOrAddress` (reflection), `TestAReservedKeyIsRejectedAtValidation`, `TestAShortCellSliceRendersBlanksNotAPanic` (+ `TestATunnelActionUsesFleetsTunnelKey`, `TestActionPayloadsAreValidated`, `TestANodeIsOnePathSegmentWithValidActions`, `TestSentinelsSurviveWrapping`)
+- [x] RUN-RED: `go test ./pkg/provider/` → **FAIL** observed (`undefined: Node …`, evidence/task01/red.txt)
+- [x] GREEN: `pkg/provider/provider.go` — `Node`, `Action`, `Handoff` (no host), `HandoffKind`, `Stream`, `Tunnel` (no address), `TunnelKey`, `ReservedKeys`, `Provider`, `Host`, `ExecResult`, `ErrAbsent`, `ErrNoSuchPath`, `Validate`, `Row`
+- [x] RUN-GREEN: `go test ./pkg/provider/ -cover` → **PASS**, 100.0%
+- [x] VERIFY: `go list -deps ./pkg/provider` → stdlib only (third-party count 0)
+- [x] EVID + ALLOWLIST + COMMIT + LEDGER
 
 **Done when:** the five tests pass and the public package is proven stdlib-only.
 
