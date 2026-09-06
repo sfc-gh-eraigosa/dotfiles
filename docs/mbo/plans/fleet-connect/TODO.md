@@ -42,12 +42,12 @@
 
 ### Task 2 — runner handoffs  (plan T2)
 
-- [ ] RED: `TestEveryHandoffCarriesTheMuxOptions`, `TestLocalHandoffNeverInvokesAShell`, `TestRemoteHandoffQuotesEveryProviderSuppliedValue`, `TestTheAliasComesFromFleetNotTheProvider` + empty-input error cases
-- [ ] RUN-RED: `go test ./internal/runner/` → expect **FAIL**
-- [ ] GREEN: `internal/runner/handoff.go` — `HandoffArgv(alias, h)` (pure), `Command(alias, h)`, `Quote` (the body of `updexec.ShQuote` moves here — `updexec` imports `runner`, so this is the only cycle-free direction); `updexec.ShQuote` and `cmd.shQuote` become aliases of `runner.Quote`
-- [ ] RUN-GREEN: `go test ./internal/runner/ ./cmd/` → **PASS** (existing cmd tests still green)
-- [ ] VERIFY: remote argv has `ssh -t` + every `MuxArgs()` option and **no** `BatchMode`; local argv passes a `$(…)` element verbatim with no `sh -c`
-- [ ] EVID + COMMIT + LEDGER
+- [x] RED: `TestEveryHandoffCarriesTheMuxOptions`, `TestLocalHandoffNeverInvokesAShell`, `TestRemoteHandoffQuotesEveryProviderSuppliedValue`, `TestTheAliasComesFromFleetNotTheProvider` + `TestHandoffArgvRefusesEmptyInputs`, `TestInteractiveArgsIsTheTerminalOwningLane`, `updexec.TestShQuoteIsRunnerQuote`
+- [x] RUN-RED: `go test ./internal/runner/ ./internal/updexec/` → **FAIL** observed (`undefined: HandoffArgv …`, evidence/task02/red.txt)
+- [x] GREEN: `internal/runner/handoff.go` — `HandoffArgv(alias, h)` (pure), `Command(alias, h)`, `Quote`, `InteractiveArgs`; `updexec.ShQuote = runner.Quote`, `cmd.shQuote = runner.Quote`; `Exec.interactiveArgs` delegates
+- [x] RUN-GREEN: `go test -race ./internal/runner/ ./internal/updexec/ ./cmd/` → **PASS**
+- [x] VERIFY: remote argv is `ssh` + `InteractiveArgs(alias)` + command (has `-t` + mux, no `BatchMode`); local argv verbatim with no `sh -c`; eleven `runner.Exec{}` sites untouched
+- [x] EVID + COMMIT + LEDGER
 
 **Done when:** both handoff kinds are asserted by argv and the module still builds.
 

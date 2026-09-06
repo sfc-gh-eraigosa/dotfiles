@@ -32,7 +32,7 @@ Captured verbatim from `gss feature worker add --json` (feature `fleet-connect`;
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
 | T1 `pkg/provider` types | done | (this commit) | `go test ./pkg/provider/ -cover` → ok, 100.0%; `go list -deps` third-party count 0; gofmt empty; vet ok; `-race` ok (evidence/task01/{red,green}.txt) | leaf A — contract refinement: a `Tunnel` action must use `TunnelKey` (`t`), the one reserved key a provider declares |
-| T2 runner handoffs | todo | | | leaf A |
+| T2 runner handoffs | done | (this commit) | `go test -race ./internal/runner/ ./internal/updexec/ ./cmd/` → ok ×3; gofmt empty; vet ok; `runner.Exec{` non-test count 11; diffstat: `tui_cmds.go` +1/-1, `runner.go` +1/-4, `script.go` +5/-5 (evidence/task02/{red,green}.txt) | leaf A |
 | T3 runner bridges + `RunCtx` (`BridgeArgv`, `RunBridgeCtx`, `RunCtx`) | todo | | | leaf A — `RunStreamCtx` already exists (#270); F3a is `TestRunStreamCtxKillsTheChildOnDeadline` |
 | T4 test harness (FakeProvider, StubPlugin) | todo | | | leaf A — **contract freezes here** (three action kinds, no host field) |
 | T5 wire + framing | todo | | | leaf B |

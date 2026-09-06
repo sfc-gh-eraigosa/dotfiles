@@ -140,10 +140,7 @@ func (e Exec) baseArgs(host string) []string {
 // interactiveArgs is baseArgs for a session that OWNS the terminal: no
 // BatchMode, because the whole point is to let ssh prompt. This is the
 // connection that establishes the master socket every later command reuses.
-func (e Exec) interactiveArgs(host string) []string {
-	args := append([]string{"-t"}, muxArgs()...)
-	return append(args, host)
-}
+func (e Exec) interactiveArgs(host string) []string { return InteractiveArgs(host) }
 
 func (e Exec) Run(host string, argv ...string) (string, error) {
 	out, err := exec.Command("ssh", append(e.baseArgs(host), argv...)...).Output()
