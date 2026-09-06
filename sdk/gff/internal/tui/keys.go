@@ -20,6 +20,10 @@ var gffKeys = keymap.Vim.Merge(
 	keymap.Binding{Action: keymap.Select, Keys: []string{"space"}, Help: "toggle a bool / pick choice options (same writer as `gff set`)", Short: "toggle", Header: true},
 	keymap.Binding{Action: keymap.Confirm, Keys: []string{"enter"}, Help: "expand an area / open feature details (attributes + layers)", Short: "open", Header: true},
 	keymap.Binding{Action: actUnset, Keys: []string{"u"}, Help: "clear the user override for the row (same as `gff unset`)", Short: "clear", Header: true},
+	// gff answered to Q before it adopted the sdk map, and 'u'/'U' both still
+	// clear an override — the uppercase alias stays, declared here rather than
+	// special-cased in the handler.
+	keymap.Binding{Action: keymap.Quit, Keys: []string{"q", "Q", "ctrl+c"}, Help: "quit", Short: "quit", Header: true},
 )
 
 // listHint is the normal-mode footer.

@@ -16,6 +16,20 @@ bin="${TMPDIR:-/tmp}/gff-demo"
 
 (cd "$gffdir" && go build -o "$bin" .)
 
+# The demo drives :set/:unset against the operator's REAL override file so the
+# inventory stays live. Back it up and restore it on any exit — a re-run must
+# not cost someone a genuine override on the demo key.
+cfg="${HOME}/.config/gff/config.yaml"
+backup="$(mktemp -u "${TMPDIR:-/tmp}/gff-config-XXXXXX.yaml")"
+restore() {
+  if [ -f "$backup" ]; then
+    cp -p "$backup" "$cfg" && rm -f "$backup"
+    echo "restored $cfg from the pre-demo backup"
+  fi
+}
+trap restore EXIT
+[ -f "$cfg" ] && cp -p "$cfg" "$backup"
+
 snap() { # $1 = step label
   sleep 0.8
   { printf '\n===== %s | %s =====\n' "$1" "$(date '+%Y-%m-%d %H:%M:%S %Z')"; tmux capture-pane -pt "$sess"; } | tee -a "$out"

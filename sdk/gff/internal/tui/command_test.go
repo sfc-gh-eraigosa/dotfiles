@@ -136,3 +136,14 @@ func TestColonTabCompletesKeysInScope(t *testing.T) {
 	m = press(m, tea.KeyMsg{Type: tea.KeyTab})
 	assert.Contains(t, m.View(), ":unset install.pkg.manager ▌", "the value position does not complete")
 }
+
+// Review #304 finding 11: :set took args[0] and args[1] and silently dropped
+// the rest, so a typo'd list (":set k a, b") wrote a[0] and said nothing.
+func TestColonSetRejectsExtraArguments(t *testing.T) {
+	m, ovr := newCmdModel(t)
+	m = typeKeys(m, ":set install.ai.claude false junk")
+	m, _ = enter(m)
+	assert.Contains(t, m.View(), "takes one value")
+	_, err := os.Stat(ovr)
+	assert.True(t, os.IsNotExist(err), "nothing written")
+}

@@ -329,10 +329,12 @@ func (m *Model) refreshItem(idx int) {
 	}
 }
 
-// updateHelp closes the overlay back to wherever it was opened from.
+// updateHelp closes the overlay back to wherever it was opened from. F1 is
+// here so the key that opens the overlay also toggles it shut, which is what
+// the detail legend advertises.
 func (m *Model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
-	case tea.KeyEscape, tea.KeyEnter:
+	case tea.KeyEscape, tea.KeyEnter, tea.KeyF1:
 		m.mode = m.helpReturn
 	case tea.KeyRunes:
 		if len(msg.Runes) > 0 {
@@ -626,13 +628,9 @@ func (m *Model) confirmPicker() {
 // headers, nothing to expand). Areas are sorted in first-appearance order.
 func (m *Model) buildRows() {
 	if m.pageIdx > 0 && m.pageIdx < len(m.pages) {
-		comp := m.pages[m.pageIdx].component
 		m.rows = nil
 		for i, item := range m.items {
-			if componentOf(item.Feature.GetPath()) != comp {
-				continue
-			}
-			if m.scopeNS != "" && item.Namespace() != m.scopeNS {
+			if !m.inScope(item) { // the one visibility rule — see search.go
 				continue
 			}
 			m.rows = append(m.rows, row{item: item, ns: item.Namespace(), itemIdx: i})

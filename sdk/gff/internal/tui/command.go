@@ -123,6 +123,11 @@ func (m *Model) registerCommands() {
 				if len(args) < 2 {
 					return nil, fmt.Errorf("missing value for %s", args[0])
 				}
+				// Silently dropping args[2:] turned a typo'd list
+				// (":set k a, b") into a wrong write with no complaint.
+				if len(args) > 2 {
+					return nil, fmt.Errorf("%s takes one value (choice ids are comma-separated, no spaces), got %d", args[0], len(args)-1)
+				}
 				idx, err := m.findKey(args[0])
 				if err != nil {
 					return nil, err

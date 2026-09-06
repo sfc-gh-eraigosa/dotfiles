@@ -315,7 +315,7 @@ func (m *Model) viewHelp() string {
 	default:
 		sb.WriteString(overlay.Help(newPalette(), "KEYS — flag list", gffKeys, "Esc/?/q close",
 			overlay.Section{Title: "SOURCES", Lines: sources}))
-		return sb.String()
+		return fitHeight(sb.String(), m.height, dim.Render("… trimmed to fit — Esc/?/q close"))
 	}
 	sb.WriteString("\n")
 
@@ -333,7 +333,26 @@ func (m *Model) viewHelp() string {
 
 	sb.WriteString("\n")
 	sb.WriteString(dim.Render("Esc/?/q close"))
-	return sb.String()
+	return fitHeight(sb.String(), m.height, dim.Render("… trimmed to fit — Esc/?/q close"))
+}
+
+// fitHeight keeps an overlay inside the window: the list view budgets its
+// rows, and the help legend now renders the whole 20-row key table, which
+// overflows an 80x24 terminal. Keeps the first line (title) and the last
+// (the close hint), dropping the middle and saying so.
+func fitHeight(s string, height int, trimmedHint string) string {
+	if height <= 0 {
+		return s
+	}
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if len(lines) <= height {
+		return s
+	}
+	if height < 3 {
+		return strings.Join(lines[:height], "\n")
+	}
+	head := lines[:height-2]
+	return strings.Join(append(head, "", trimmedHint), "\n")
 }
 
 // sourceLines is the SOURCES block of the help overlay as plain lines: where

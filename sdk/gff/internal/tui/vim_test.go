@@ -1,6 +1,7 @@
 package tui_test
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -87,7 +88,7 @@ func TestHelpOpensOnQuestionAndF1NotH(t *testing.T) {
 	m = press(m, rn("?"))
 	v := m.View()
 	assert.Contains(t, v, "KEYS", "? opens help")
-	for _, want := range []string{"j/down", "gg", "ctrl+d", "/", ":", "q/ctrl+c", "space", "u "} {
+	for _, want := range []string{"j/down", "gg", "ctrl+d", "/", ":", "q/Q/ctrl+c", "space", "u "} {
 		assert.Contains(t, v, want, "help lists %q from the keymap", want)
 	}
 	assert.Contains(t, v, "SOURCES", "gff's own section still renders")
@@ -123,4 +124,36 @@ func TestFooterHintRendersFromTheKeymap(t *testing.T) {
 	for _, want := range []string{"j/k move", "h/l page", "/ search", "n/N match", ": command", "? help", "q quit", "space toggle", "enter open", "u clear"} {
 		assert.Contains(t, v, want)
 	}
+}
+
+// Review #304 finding 9: the detail legend this PR wrote advertises "?/F1 this
+// help", so F1 must close the overlay it opens — not only ?/q/Esc.
+func TestF1TogglesTheHelpOverlayShut(t *testing.T) {
+	m := newPagerModel(t)
+	m = press(m, tea.KeyMsg{Type: tea.KeyF1})
+	assert.Contains(t, m.View(), "KEYS", "F1 opens help")
+	m = press(m, tea.KeyMsg{Type: tea.KeyF1})
+	assert.NotContains(t, m.View(), "KEYS", "F1 closes it again")
+}
+
+// Review #304 finding 10: 'Q' quit before this PR and 'u'/'U' both still
+// clear an override, so the uppercase alias must survive the keymap move.
+func TestUppercaseQStillQuits(t *testing.T) {
+	m := newPagerModel(t)
+	_, cmd := m.Update(rn("Q"))
+	assert.NotNil(t, cmd, "Q quits like q")
+}
+
+// Review #304 finding 5: the list legend grew from 4 hand-written lines to the
+// full 20-row key table, so the overlay has to respect the window like the
+// list does.
+func TestHelpOverlayFitsTheWindow(t *testing.T) {
+	m := newPagerModel(t)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = press(m, rn("?"))
+	v := m.View()
+	lines := strings.Split(strings.TrimRight(v, "\n"), "\n")
+	assert.LessOrEqual(t, len(lines), 24, "the overlay fits an 80x24 terminal")
+	assert.Contains(t, v, "gff — git fast features", "the title survives the trim")
+	assert.Contains(t, v, "close", "so does the close hint")
 }

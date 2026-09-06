@@ -17,3 +17,13 @@ vet clean
 # VERIFY: make gff-proto-check (repo root)
 bash sdk/gff/scripts/genproto.sh
 git diff --exit-code -- sdk/gff/gen/
+
+# 2026-09-06 12:31 PDT — post-review re-run of the module gate (review fixes applied)
+total (gen excluded): 91.0%
+internal/resolve: 95.5%
+internal/schema:  95.7%
+internal/tui:     92.6%
+PASS total >= 90%
+
+# go vet ./...
+vet clean
