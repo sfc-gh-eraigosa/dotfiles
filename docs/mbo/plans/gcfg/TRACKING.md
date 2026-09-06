@@ -14,12 +14,13 @@
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | design | `gcfg/edward-raigosa/design` | `feature/gcfg/edward-raigosa/design` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gcfg/edward-raigosa/design` | #285 | designing |
+| build (P0+P1 sequential) | `gcfg/edward-raigosa/build` | `feature/gcfg/edward-raigosa/build` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gcfg/edward-raigosa/build` | (checkpoint pending) | building |
 
 ## 1. Task ledger
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| P0-T1 ghapp scaffold + version | todo | | | |
+| P0-T1 ghapp scaffold + version | done | (this commit; SHA in checkpoint log) | `go test ./... -count=1 -cover` → 3 pkgs ok (main 90.9%, cmd 83.3%, version 100%); CI formula total 88.2% ≥80; `go run . version` → `ghapp vdev …`; actionlint clean → [evidence/P0-T1/2026-09-05.txt](./evidence/P0-T1/2026-09-05.txt) | ghapp-ci.yml added (no PR path filter, like gff-ci) |
 | P0-T2 store + JWT | todo | | | |
 | P0-T3 installation tokens | todo | | | |
 | P0-T4 manifest flow + CLI | todo | | | human: one real create (redacted) |
@@ -88,3 +89,4 @@
 | Date | Session | What advanced |
 | :-- | :-- | :-- |
 | 2026-09-05 | design | POC research (gh token scopes, GITHUB_TOKEN has no administration permission, fine-grained Administration covers all repo endpoints, org endpoints need admin:org / org Administration, non-provider patterns not honoured on this plan, safe-settings/Terraform/Probot prior art); design + spec + plan + trio written; feature `gcfg` + design worker created |
+| 2026-09-05 | build (P0 start) | registry row for `gcfg` re-created (`gss feature start`, dropped by an earlier shared-registry `audit --repair`); worker `gcfg/edward-raigosa/build` added, base = design branch (#285 not merged; owner chose to build on it); P0-T1 RED→GREEN, main refactored to a testable `run()` to clear the 80% bar |
