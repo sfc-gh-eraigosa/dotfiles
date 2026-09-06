@@ -94,14 +94,23 @@ jobs:
       - name: actionlint on rendered workflow templates
         working-directory: .
         run: |
+          # Only the workflows gcfg itself renders are linted here; the repo's
+          # own workflows are shell-lint.yml's job. Both the goldens and the
+          # installed files appear task by task (P3-T3, P5-T3), so the step
+          # lints whatever exists and says so when nothing does.
           shopt -s nullglob
-          files=(sdk/gcfg/internal/actions/testdata/*.golden .github/workflows/gcfg-verify.yml .github/workflows/gcfg-apply.yml)
+          candidates=(sdk/gcfg/internal/actions/testdata/*.golden .github/workflows/gcfg-verify.yml .github/workflows/gcfg-apply.yml)
+          files=()
+          for f in "${candidates[@]}"; do
+            [ -f "$f" ] && files+=("$f")
+          done
           if [ ${#files[@]} -eq 0 ]; then
-            echo "no rendered workflows yet (P3-T3); actionlint skipped"
+            echo "no rendered workflows yet (P3-T3/P5-T3); actionlint skipped"
             exit 0
           fi
-          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/8ec5c1e0cfaf7ec1e3628f5ee0ffcb1de1eaea6c/scripts/download-actionlint.bash)
-          ./actionlint -color "${files[@]}"
+          # Version-pinned through the Go module proxy the build already uses.
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          "$(go env GOPATH)/bin/actionlint" -color "${files[@]}"
 
       - name: Token-leak grep (no fixture token in any test output)
         run: |
