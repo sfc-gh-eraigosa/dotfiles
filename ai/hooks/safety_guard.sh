@@ -157,14 +157,43 @@ if [[ "$CMD_SCRUBBED" =~ \>[[:space:]]*/dev/(sd[a-z]|nvme[0-9]+n[0-9]+|mapper/|h
     deny "Direct redirection to block devices is prohibited."
 fi
 
-# Shared gss context for the rules below: resolve the effective working dir
-# (target of a leading `cd <path> &&`, else the hook's CWD) and whether it is
-# inside a registered feature worker worktree (under the gss worktree root).
+# Shared gss context for the rules below.
+#
+# gss resolves the repo it acts on as `--repo/-r <path>` first, else its cwd.
+# From an assistant the cwd is usually set by a leading `cd <path> &&`, so the
+# hook mirrors that order: --repo, else the leading cd target, else the hook's
+# own CWD. Command text is matched unexpanded, so only `~`, `$HOME` and
+# `${HOME}` are expanded here (by substitution, never eval) and surrounding
+# quotes are dropped; any other variable stays literal and the token gate
+# refuses it instead of silently comparing against the wrong repo (issue #302).
 GSS_WT_ROOT="${GSS_WORKTREE_ROOT:-$HOME/.config/gss/worktrees}"
-GSS_EFFECTIVE_DIR="$PWD"
+# Global flags gss accepts BEFORE the verb (`gss -r <path> push`). The verb
+# regexes below allow them, so a flag-first spelling cannot slip past a gate.
+GSS_GLOBAL_FLAGS='([[:space:]]+(-r|--repo)(=[^[:space:];|&]+|[[:space:]]+[^[:space:];|&]+))*'
+GSS_VERB="(^|[[:space:];|&])gss${GSS_GLOBAL_FLAGS}[[:space:]]+"
+gss_expand_path() {
+    local p="$1"
+    p=${p//[\"\']/}                       # "$HOME/x", '~/x', "$HOME"/x
+    case "$p" in                          # bare ~ or ~/… only, never ~user
+        \~) p="$HOME" ;;
+        \~/*) p="$HOME${p#\~}" ;;
+    esac
+    p="${p//\$\{HOME\}/$HOME}"
+    p="${p//\$HOME\//$HOME/}"             # $HOME/… — not $HOMEX/…
+    [ "$p" = '$HOME' ] && p="$HOME"
+    printf '%s' "$p"
+}
+GSS_EFFECTIVE_RAW="$PWD"
+GSS_EFFECTIVE_SRC="the hook's cwd"
 if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])cd[[:space:]]+([^[:space:];|&]+)[[:space:]]*(&&|;) ]]; then
-    GSS_EFFECTIVE_DIR="${BASH_REMATCH[2]/#\~/$HOME}"
+    GSS_EFFECTIVE_RAW="${BASH_REMATCH[2]}"
+    GSS_EFFECTIVE_SRC="the leading cd"
 fi
+if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])gss[[:space:]]+(${SAFE_CHARS}*[[:space:]])?(-r|--repo)(=|[[:space:]]+)([^[:space:];|&]+) ]]; then
+    GSS_EFFECTIVE_RAW="${BASH_REMATCH[5]}"
+    GSS_EFFECTIVE_SRC="--repo"
+fi
+GSS_EFFECTIVE_DIR="$(gss_expand_path "$GSS_EFFECTIVE_RAW")"
 gss_in_worker() {
     case "$GSS_EFFECTIVE_DIR" in
         "$GSS_WT_ROOT" | "$GSS_WT_ROOT"/*) return 0 ;;
@@ -176,7 +205,7 @@ gss_in_worker() {
 # Classic `gss push/pr --force-autonomous` is valid on a regular checkout but
 # is the WRONG MODE inside a feature worker worktree (the binary errors
 # ErrWrongMode). Fires before the token gate so the user sees the real cause.
-if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])gss[[:space:]]+(push|pr)([[:space:]]|$) ]] \
+if [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}(push|pr)([[:space:]]|$) ]] \
    && [[ "$CMD_SCRUBBED" =~ (^|[[:space:]])--force-autonomous([[:space:]]|$) ]] \
    && gss_in_worker; then
     deny "gss push/pr --force-autonomous is invalid inside a feature worker worktree ($GSS_EFFECTIVE_DIR) — it is the wrong mode (the binary errors ErrWrongMode). Use the gss feature commands, or run classic gss from a regular checkout."
@@ -189,24 +218,26 @@ fi
 # publish. Covers classic push/pr/sync AND the publish-class feature verbs:
 # `feature pr --ready` (promote draft→ready), `feature merged` (re-target +
 # auto-promote children), `feature restack` (force-push + retarget).
-if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])gss[[:space:]]+(push|pr|sync)([[:space:]]|$) ]] \
-   || [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])gss[[:space:]]+feature[[:space:]]+(merged|restack)([[:space:]]|$) ]] \
-   || { [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])gss[[:space:]]+feature[[:space:]]+pr([[:space:]]|$) ]] \
+if [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}(push|pr|sync)([[:space:]]|$) ]] \
+   || [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}feature[[:space:]]+(merged|restack)([[:space:]]|$) ]] \
+   || { [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}feature[[:space:]]+pr([[:space:]]|$) ]] \
         && [[ "$CMD_SCRUBBED" =~ (^|[[:space:]])--ready([[:space:]]|$) ]]; }; then
     TOKEN_FILE="${HOME}/.config/gss/approval.token"
     if [ ! -f "$TOKEN_FILE" ]; then
         deny "This gss command publishes/mutates remote state (push/pr/sync, or feature pr --ready / merged / restack) and requires an approval token, issued as a SEPARATE Bash call BEFORE it. Two-call recipe: (1) \`mkdir -p ~/.config/gss && git rev-parse HEAD > ~/.config/gss/approval.token\` (2) the gss command. Chaining both with && in one Bash call is intentionally blocked so the user sees an explicit approve→publish gate."
     fi
-    # Token must be fresh — current HEAD must match the token contents. When
-    # the command leads with `cd <path>`, HEAD is resolved from that repo
-    # (cross-repo publishes), via the shared GSS_EFFECTIVE_DIR above.
+    # Token must be fresh: HEAD of the TARGET repo (GSS_EFFECTIVE_DIR — from
+    # --repo, else a leading cd, else the hook's cwd) must match the token. A
+    # target we cannot resolve is refused outright; comparing against the
+    # cwd's HEAD instead would report a fresh token as stale (issue #302).
     if command -v git &> /dev/null; then
-        GIT_CHECK_DIR="."
-        [ -d "$GSS_EFFECTIVE_DIR" ] && GIT_CHECK_DIR="$GSS_EFFECTIVE_DIR"
-        CURRENT_HEAD="$(git -C "$GIT_CHECK_DIR" rev-parse HEAD 2>/dev/null || echo)"
+        if [ ! -d "$GSS_EFFECTIVE_DIR" ]; then
+            deny "gss could not resolve the target repo: ${GSS_EFFECTIVE_SRC} names '${GSS_EFFECTIVE_RAW}', which is not a directory after expanding ~ and \$HOME (no other variables are expanded — spell the path literally or \$HOME-relative, or pass \`gss --repo <path>\`). Refusing to check the approval token against the cwd's HEAD instead."
+        fi
+        CURRENT_HEAD="$(git -C "$GSS_EFFECTIVE_DIR" rev-parse HEAD 2>/dev/null || echo)"
         TOKEN_HEAD="$(cat "$TOKEN_FILE" 2>/dev/null || echo)"
         if [ -n "$CURRENT_HEAD" ] && [ "$CURRENT_HEAD" != "$TOKEN_HEAD" ]; then
-            deny "gss approval token is stale (does not match HEAD $CURRENT_HEAD of ${GIT_CHECK_DIR}). Re-confirm with the user and regenerate."
+            deny "gss approval token is stale: token holds ${TOKEN_HEAD:-<empty>} but HEAD of ${GSS_EFFECTIVE_DIR} is ${CURRENT_HEAD} (target repo resolved from ${GSS_EFFECTIVE_SRC}). Re-confirm with the user and regenerate it from THAT repo: \`git -C '${GSS_EFFECTIVE_DIR}' rev-parse HEAD > ~/.config/gss/approval.token\`."
         fi
     fi
 fi
@@ -215,7 +246,7 @@ fi
 # Plain `gss feature checkpoint` resolves the worker from cwd. Without an
 # explicit --worker AND outside the worktree root it is a classic-context
 # misuse (the binary would error). Require --worker when not in a worker.
-if [[ "$CMD_SCRUBBED" =~ (^|[[:space:];|&])gss[[:space:]]+feature[[:space:]]+checkpoint([[:space:]]|$) ]] \
+if [[ "$CMD_SCRUBBED" =~ ${GSS_VERB}feature[[:space:]]+checkpoint([[:space:]]|$) ]] \
    && ! [[ "$CMD_SCRUBBED" =~ (^|[[:space:]])--worker([[:space:]]|=) ]] \
    && ! gss_in_worker; then
     deny "gss feature checkpoint resolves the worker from cwd, but $GSS_EFFECTIVE_DIR is not a feature worker worktree. Run it from inside the worktree, or pass --worker <feature/user/purpose>."

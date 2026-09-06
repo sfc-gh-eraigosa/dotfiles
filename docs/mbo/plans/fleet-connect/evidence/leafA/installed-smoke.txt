@@ -1,0 +1,28 @@
+# leaf A — installed-binary smoke test (operator-requested), 2026-09-06T14:23:58Z
+#
+# PR 1 adds NO user-visible command: the contract, the runner lanes and the harness are
+# plumbing for leaves B-H. So the meaningful gate is a NO-REGRESSION proof - the binary
+# built from this branch must behave exactly like the one built from main.
+#
+# built with sdk/fleet/build.sh (the sanctioned installer), into ~/opt/bin:
+#   before: fleet 0.4.0-3-g93e0d02   (main, 2026-09-05)
+#   after:  fleet 0.4.0-13-g266cf8f  (this PR)
+#   backup: ~/opt/bin/fleet.bak-pre-pr305
+
+$ fleet status   # exercises the batch ssh lane whose plumbing T3 extracted into streamCombined
+baseline: origin/main fe438db
+
+HOST             COMMIT    BRANCH                 LAST RUN      STATUS
+<nano>     93e0d02   main                   17h ago       behind 3
+<spark>    93e0d02   main                   17h ago       behind 3
+<gigabyte>  93e0d02   main                   17h ago       behind 3
+<pi>        93e0d02   main                   17h ago       behind 3
+
+# byte-for-byte, binary built from main vs binary built from this branch:
+  IDENTICAL: fleet discover
+  IDENTICAL: fleet --help
+  IDENTICAL: fleet update <host> --dry-run   <- the Quote move (updexec.ShQuote is now runner.Quote)
+  IDENTICAL: fleet status --json            <- modulo the timing-only installed_at/note fields
+
+# The command list is unchanged, as leaf A requires: no ls, no connect, no bridge and no
+# drill-down yet - those arrive with leaves C/E/F/H.

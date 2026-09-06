@@ -141,10 +141,18 @@ design governs.
 Two hook-layer behaviours that `--help` will not tell you about:
 
 - **Address workers with `--worker <ref>`, not by `cd`-ing in.**
-  `safety_guard.sh` matches command text without expanding variables, so
-  `cd "$HOME/…/worker" && gss feature checkpoint` is refused as "not a worker
-  worktree", while `privacy_guard.sh` blocks the expanded literal path that
-  would satisfy it. `--worker` works from anywhere and is unambiguous.
+  `safety_guard.sh` matches command text without expanding variables. It does
+  expand `~`, `$HOME` and `${HOME}` in a leading `cd <path> &&` and in
+  `--repo/-r <path>` (so `cd "$HOME/…/worker" && gss feature checkpoint` and
+  `gss push --repo "$HOME/…"` resolve the repo you meant), but any other
+  variable stays literal and the token gate refuses it — while
+  `privacy_guard.sh` blocks the expanded literal path. `--worker` works from
+  anywhere and is unambiguous.
+- **The approval token is checked against the repo gss will act on** —
+  `--repo/-r` first, else the leading `cd` target, else the session cwd — so
+  for a cross-repo publish mint the token from *that* repo
+  (`git -C "$HOME/…/other-repo" rev-parse HEAD > ~/.config/gss/approval.token`).
+  A stale deny names the repo it compared against and how it chose it.
 - **`--help` is refused for gated verbs outside a worktree** (the rules match
   the verb, not the flags). Read `sdk/gss/cmd/feature_<verb>.go` for the flag
   set, or pass `--worker` alongside `--help`.

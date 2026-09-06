@@ -53,7 +53,7 @@ until `kubectl port-forward` is running. That is exactly what `Tunnel.Keeper` is
 1. **See the cluster from the host row:** `enter` on `<nano>` shows `k8s · k3s 1.36 · context
    default · server ok · 6 ns`; `enter` drills contexts → namespaces → resource kinds → objects
    → containers, each level with its own columns and a bounded number of ssh round trips.
-2. **Act at the right level:** logs (`l`, followed stream), describe and events (`d`, `e`,
+2. **Act at the right level:** logs (`o`, followed stream), describe and events (`d`, `E`,
    one-shot streams), an interactive shell (`x`, handoff, `bash` with `sh` fallback), and a
    **port-forward as a bridge** (`t` on a service) — the ClusterIP Grafana on the Jetson
    becomes `http://127.0.0.1:80` (or an allocated port) in two keystrokes.
@@ -177,16 +177,25 @@ kind row but the `e` action. A kind whose `get` fails (forbidden, or a CRD not i
 
 | Row | Key | Kind | Command (every `<>` value `Quote`d; `$K` = the resolved kubectl + `--context <ctx>` + `--request-timeout=5s`) |
 | :-- | :-- | :-- | :-- |
-| pod | `l` | Stream, follow | `$K -n <ns> logs <pod> --all-containers --tail=100 -f` |
+| pod | `o` | Stream, follow | `$K -n <ns> logs <pod> --all-containers --tail=100 -f` |
 | pod | `d` | Stream, one-shot | `$K -n <ns> describe pod <pod>` |
-| pod | `e` | Stream, one-shot | `$K -n <ns> get events --field-selector involvedObject.name=<pod> --sort-by=.lastTimestamp` |
+| pod | `E` | Stream, one-shot | `$K -n <ns> get events --field-selector involvedObject.name=<pod> --sort-by=.lastTimestamp` |
 | pod | `x` | Handoff, remote | `$K -n <ns> exec -it <pod> -- sh -c 'command -v bash >/dev/null && exec bash || exec sh'` |
-| container | `l` / `x` | as pod, with `-c <container>` | |
-| deployment / statefulset / daemonset | `l` | Stream, follow | `$K -n <ns> logs <kind>/<name> --all-containers --tail=100 -f` |
+| container | `o` / `x` | as pod, with `-c <container>` | |
+| deployment / statefulset / daemonset | `o` | Stream, follow | `$K -n <ns> logs <kind>/<name> --all-containers --tail=100 -f` |
 | deployment / … | `d` | Stream, one-shot | `$K -n <ns> describe <kind> <name>` |
 | service | `t` | **Tunnel** | `RemotePort: <first port>`, `LocalPort: 0`, `Scheme: "http"` when the port name or number says so (`http`, `80`, `8080`, `3000`, `grafana`), else `""`; `Keeper: $K -n <ns> port-forward --address 127.0.0.1 svc/<name> <port>:<port>` |
-| namespace / context | `e` | Stream, one-shot | `$K -n <ns> get events --sort-by=.lastTimestamp` / `$K get events -A --sort-by=.lastTimestamp` |
+| namespace / context | `E` | Stream, one-shot | `$K -n <ns> get events --sort-by=.lastTimestamp` / `$K get events -A --sort-by=.lastTimestamp` |
 | kind | — | | a kind row has no actions; `enter` lists its objects |
+
+**Why `o` for logs and `E` for events, not the obvious `l` and `e`** (corrected 2026-09-06,
+before any of this was built): fleet already binds `l` to the streaming log pane and `e` to
+editing remembered answers, and `provider.ReservedKeys` now reflects fleet's real keymap rather
+than the design's guess at it. A provider that declared `l` would have been silently shadowed by
+the log-pane toggle — the exact forward collision this objective must not ship. `o` reads as
+"output" and `E` follows the guide's convention of an uppercase variant for a rarer view.
+(`e` is mode-scoped to the confirm dialog today, so it may be freed for providers later once the
+keymap encodes modes; until it does, it stays reserved.)
 
 Key rules from `fleet-connect` apply: `c` is not used by this provider (there is no single
 "connect" for a cluster), keys are one printable rune each and never a key fleet reserves

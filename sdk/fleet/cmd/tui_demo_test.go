@@ -32,7 +32,11 @@ func TestDemoFrames(t *testing.T) {
 	build := func() tuiModel {
 		m := newTUIModel(hosts("host-desktop", "host-nano", "host-pi", "host-edge", "host-lab"),
 			nil, base, testNow, "main", 2, updplan.Default())
-		m.vp = viewport{height: 16, width: 100}
+		// 13 of these rows are chrome with the log pane open-but-empty
+		// (banner 5 + list frame 3 + collapsed-hint frame 3 + blank + status),
+		// so five hosts need 18. The old 16 only ever "fit" because the frame
+		// overflowed the terminal and bubbletea scrolled the banner away.
+		m.vp = viewport{height: 20, width: 100}
 		return m
 	}
 
@@ -159,6 +163,14 @@ func TestDemoFrames(t *testing.T) {
 				t.Errorf("frame %q line too wide (%d): %q", f.name, w, line)
 			}
 		}
+		// The height guard is the twin of the width one, and the reason the
+		// banner used to disappear mid-update: bubbletea drops lines from the
+		// TOP of a frame taller than the terminal, so one row of overflow
+		// costs the operator the header.
+		if h := lipgloss.Height(out); h > m.vp.height {
+			t.Errorf("frame %q too tall (%d lines for a %d-line terminal; %d scrolled off the top):\n%s",
+				f.name, h, m.vp.height, h-m.vp.height, out)
+		}
 		if demo {
 			fmt.Printf("\n\033[1;33m━━━ %s ━━━\033[0m\n%s\n", f.name, out)
 		}
@@ -172,7 +184,7 @@ var ansiRE = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
 func build2Empty() tuiModel {
 	m := newTUIModel(nil, nil, fakeBaseline{head: "72392c9"}, testNow, "main", 2, updplan.Default())
-	m.vp = viewport{height: 16, width: 100}
+	m.vp = viewport{height: 20, width: 100}
 	return m
 }
 
