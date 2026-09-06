@@ -21,7 +21,7 @@ func fullNode() Node {
 		Actions: []Action{
 			{Key: "c", Label: "attach", Handoff: &Handoff{Kind: HandoffLocal, Argv: []string{"herdr", "--remote", "spark"}}},
 			{Key: "x", Label: "shell", Unavailable: "local client speaks 20, host serves 19", Handoff: &Handoff{Kind: HandoffRemote, Command: "herdr attach"}},
-			{Key: "l", Label: "logs", Stream: &Stream{Command: "herdr logs -f", Follow: true}},
+			{Key: "o", Label: "output", Stream: &Stream{Command: "herdr logs -f", Follow: true}},
 			{Key: "t", Label: "bridge", Tunnel: &Tunnel{RemotePort: 3080, LocalPort: 0, Scheme: "http", Keeper: "kubectl port-forward svc/x 3080:3080"}},
 		},
 	}
@@ -85,7 +85,7 @@ func TestAnActionMustCarryExactlyOneOfHandoffStreamOrTunnel(t *testing.T) {
 		ok   bool
 	}{
 		{"handoff only", Action{Key: "c", Label: "l", Handoff: h}, true},
-		{"stream only", Action{Key: "c", Label: "l", Stream: s}, true},
+		{"stream only", Action{Key: "o", Label: "l", Stream: s}, true},
 		{"tunnel only", Action{Key: "t", Label: "l", Tunnel: u}, true},
 		{"none", Action{Key: "c", Label: "l"}, false},
 		{"handoff+stream", Action{Key: "c", Label: "l", Handoff: h, Stream: s}, false},
@@ -174,7 +174,10 @@ func TestNoActionPayloadCarriesAHostOrAddress(t *testing.T) {
 // validation, naming the key, instead of as a key that never fires.
 func TestAReservedKeyIsRejectedAtValidation(t *testing.T) {
 	ok := &Handoff{Kind: HandoffLocal, Argv: []string{"herdr"}}
-	for _, k := range []string{"r", "t", "T", "q", "/", "n", "N", "j", "k", "g", "G", "u", "w", "v", "a", "p", "P", "A", "F", " "} {
+	for _, k := range []string{
+		"j", "k", "h", "l", "g", "G", "/", "n", "N", "?", ":", "q", " ",
+		"r", "s", "u", "w", "v", "a", "p", "P", "A", "F", "e", "J", "K", "T",
+	} {
 		err := Action{Key: k, Label: "l", Handoff: ok}.Validate()
 		if err == nil {
 			t.Fatalf("key %q is reserved but was accepted", k)
@@ -186,7 +189,7 @@ func TestAReservedKeyIsRejectedAtValidation(t *testing.T) {
 			t.Fatalf("ReservedKeys does not list %q", k)
 		}
 	}
-	for _, k := range []string{"c", "l", "d", "e", "x", "b"} {
+	for _, k := range []string{"c", "d", "x", "b", "o", "i", "m", "y", "z", "L", "E"} {
 		if err := (Action{Key: k, Label: "l", Handoff: ok}).Validate(); err != nil {
 			t.Fatalf("key %q should be free: %v", k, err)
 		}

@@ -85,16 +85,38 @@ type Tunnel struct {
 // agree on which action a row's bridge is — the way enter is the drill key.
 const TunnelKey = "t"
 
-// ReservedKeys are the printable runes fleet binds inside a level (r t T q /
-// n N j k g G) plus the dashboard verbs it deliberately leaves unbound there
-// (u w v a p P A F and space). Validate rejects an Action keyed on one — except
-// a Tunnel, which must use TunnelKey — so a plugin author learns the collision
-// at construction rather than from a key that never fires. Enter and esc are
-// not printable and cannot be declared.
+// ReservedKeys are the printable runes the HOST TOOL owns, so a provider that
+// declares one would be silently shadowed. Validate rejects them — except a
+// Tunnel, which must use TunnelKey — so a plugin author learns the collision at
+// construction rather than from a key that never fires. Enter and esc are not
+// printable and cannot be declared.
+//
+// Three groups, and the reason each is here:
+//
+//   - Navigation and search, common to every sdk TUI: j k h l g G / n N ? : q
+//     and space. `h` and `:` are reserved AHEAD of use — `h` is navigation real
+//     estate (the shared keymap's page-left; never help, which is `?`), and `:`
+//     is the command line. Reserving a key is not spending it.
+//   - Fleet's dashboard verbs, every one live today: r s u w v a p P A F e J K l.
+//     `l` toggles the log pane and `s` opens an ssh session — the two a provider
+//     would most plausibly have tried to take.
+//   - This objective's own: t and T, the bridge keys.
+//
+// THIS IS A MIRROR, NOT THE SOURCE. The host tool's keymap is the source of
+// truth; this package is stdlib-only by contract and cannot import it. The
+// agreement is mechanical instead of clerical: fleet's own
+// TestEveryFleetKeyIsReservedAgainstProviders fails if fleet binds a key that is
+// missing here. Keep that test passing rather than editing this list by eye — a
+// hand-maintained version of it missed six keys fleet already bound.
 var ReservedKeys = map[rune]bool{
-	'r': true, 't': true, 'T': true, 'q': true, '/': true, 'n': true, 'N': true,
-	'j': true, 'k': true, 'g': true, 'G': true,
-	'u': true, 'w': true, 'v': true, 'a': true, 'p': true, 'P': true, 'A': true, 'F': true, ' ': true,
+	// navigation, search, help, command line, quit, select
+	'j': true, 'k': true, 'h': true, 'l': true, 'g': true, 'G': true,
+	'/': true, 'n': true, 'N': true, '?': true, ':': true, 'q': true, ' ': true,
+	// fleet's dashboard verbs
+	'r': true, 's': true, 'u': true, 'w': true, 'v': true, 'a': true,
+	'p': true, 'P': true, 'A': true, 'F': true, 'e': true, 'J': true, 'K': true,
+	// this objective: the bridge keys
+	't': true, 'T': true,
 }
 
 // Provider is what fleet asks about a host. Probe answers "is your tool here,

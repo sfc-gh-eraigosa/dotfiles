@@ -171,7 +171,7 @@ func (f *FakeProvider) gadgets(h provider.Host, widget string, attrs map[string]
 				Kind: provider.HandoffLocal,
 				Argv: []string{"fake-client", "--remote", h.Alias(), "--gadget", id},
 			}},
-			{Key: "l", Label: "logs of " + id, Stream: &provider.Stream{
+			{Key: "o", Label: "output of " + id, Stream: &provider.Stream{
 				Command: "fake-provider logs " + id,
 				Follow:  true,
 			}},
