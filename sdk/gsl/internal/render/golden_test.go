@@ -140,3 +140,54 @@ func TestGolden_SanityMarkers(t *testing.T) {
 		})
 	}
 }
+
+// goldenLinks is the link policy the linked golden + parity cases render with.
+var goldenLinks = Links{Repo: true, DirGit: true, AI: true, Time: true,
+	RepoURL: "https://github.com/o/r", UsageURL: DefaultClaudeUsageURL, TimeURL: DefaultTimeURL}
+
+// buildGoldenSegmentsLinked is buildGoldenSegments with goldenLinks injected
+// into every segment, so every family produces spans.
+func buildGoldenSegmentsLinked(t *testing.T, isWorktree bool, mcpDir string) []Segment {
+	t.Helper()
+	segs := buildGoldenSegments(t, isWorktree, mcpDir)
+	segs[0].(*DirGitSegment).Links = goldenLinks
+	segs[1].(*RepoSegment).Links = goldenLinks
+	segs[2].(*AISegment).Links = goldenLinks
+	segs[3].(*TimeSegment).Links = goldenLinks
+	return segs
+}
+
+// TestGolden_Links renders every family linked, in both styles, and pins the
+// bytes. Beyond the golden it asserts the structural invariants: at least one
+// hyperlink per segment, underline SGR present, and balanced OSC 8 pairs.
+func TestGolden_Links(t *testing.T) {
+	for _, styleName := range []string{"powerline", "emoji"} {
+		t.Run(styleName, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("CLAUDE_CONFIG_DIR", dir)
+			t.Setenv("XDG_CACHE_HOME", dir)
+			st := style.Resolve(discardWriter{}, styleName, nil, false)
+			segs := buildGoldenSegmentsLinked(t, true, dir)
+			got := Render(context.Background(), config.Default(), st, segs)
+			if opens := strings.Count(got, "\x1b]8;;"); opens < 2*7 || opens%2 != 0 {
+				t.Errorf("want ≥7 balanced hyperlinks (glyph, label, PR, dir, branch, model…, time), got %d OSC 8 markers in %q", opens, got)
+			}
+			if !strings.Contains(got, "\x1b[4m") {
+				t.Errorf("underline SGR missing in %q", got)
+			}
+			goldenPath := filepath.Join("testdata", "golden_links_"+styleName+".txt")
+			if *update {
+				if err := os.WriteFile(goldenPath, []byte(got), 0o644); err != nil {
+					t.Fatalf("golden: write %s: %v", goldenPath, err)
+				}
+			}
+			wantBytes, err := os.ReadFile(goldenPath)
+			if err != nil {
+				t.Fatalf("golden: read %s: %v (run with -update to create)", goldenPath, err)
+			}
+			if got != string(wantBytes) {
+				t.Errorf("golden links_%s mismatch:\n got: %q\nwant: %q", styleName, got, string(wantBytes))
+			}
+		})
+	}
+}

@@ -1,0 +1,13 @@
+# T4 evidence — 2026-09-05T17:27:03Z
+$ cd sdk/gsl && go test ./internal/flags/ -race -cover -v | grep -E "^(--- |ok)"
+--- PASS: TestResolve_AllTrueByDefault (0.00s)
+--- PASS: TestResolve_FalseFlagWins (0.00s)
+--- PASS: TestResolve_ErrorIsFailOpen (0.00s)
+--- PASS: TestResolve_SlowLookupIsFailOpenAndBounded (0.02s)
+--- PASS: TestResolve_NilLookupIsAllTrue (0.00s)
+--- PASS: TestResolve_AsksEveryKeyOnce (0.00s)
+--- PASS: TestGFFLookup_UnregisteredSourceFallsBackToDotfilesDir (0.00s)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/flags	1.039s	coverage: 90.3% of statements
+
+$ go build ./... && go vet ./... && go run . version
+gsl vdev

@@ -29,6 +29,10 @@ type timeData struct {
 	tz string
 	// prio is the drop priority (config.Segment.EffectivePriority).
 	prio int
+	// loc is the resolved location (for the {tz}/{tz_city} placeholders).
+	loc *time.Location
+	// links is the policy the span is gated on.
+	links Links
 }
 
 // priority implements prioritized. The clock is the first thing to go: every
@@ -71,17 +75,28 @@ func (s *TimeSegment) detect(_ context.Context) (segmentData, bool) {
 		timeLayout: timeLayout,
 		tz:         t.Format("MST"),
 		prio:       s.Priority,
+		loc:        loc,
+		links:      s.Links,
 	}, true
 }
 
 // format implements segmentData.format for timeData. Pure; no I/O.
 func (d *timeData) format(st style.Style, level int) (text, colorKey string) {
-	var b strings.Builder
+	text, colorKey, _ = d.formatLinked(st, level)
+	return text, colorKey
+}
 
+// formatLinked implements linkedFormatter. Link (Time family): the whole
+// date/time/zone text (not the glyph) → the TimeURL template expanded for this
+// instant and zone.
+func (d *timeData) formatLinked(st style.Style, level int) (string, string, []LinkSpan) {
+	var sb spanBuilder
 	if g := glyph(st, "time"); g != "" {
-		b.WriteString(g)
-		b.WriteString(" ")
+		sb.write(g)
+		sb.write(" ")
 	}
+
+	var b strings.Builder
 
 	// Date: shown at level 0 only.
 	if level == 0 {
@@ -103,7 +118,12 @@ func (d *timeData) format(st style.Style, level int) (text, colorKey string) {
 		b.WriteString(d.tz)
 	}
 
-	return b.String(), "time"
+	link := ""
+	if d.links.Time {
+		link = TimeURL(d.links.TimeURL, d.t, d.loc)
+	}
+	sb.linked(b.String(), link)
+	return sb.String(), "time", sb.spans
 }
 
 // stripSecondsFromLayout removes the seconds component (":05" or ":SS")

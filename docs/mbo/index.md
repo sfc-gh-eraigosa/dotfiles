@@ -20,6 +20,7 @@ done` (also `parked`, `superseded`).
 
 | Slug | Design | Spec | Plan | Issue(s) | PR(s) | State |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| `gsl-links` | — (bounded; shape in spec §3) | [spec](./specs/gsl-links.md) | [plan](./plans/gsl-links.md) · [trio](./plans/gsl-links/) | [#278](https://github.com/sfc-gh-eraigosa/dotfiles/issues/278) | [#279](https://github.com/sfc-gh-eraigosa/dotfiles/pull/279) | in-review |
 | `herdr` | [design](./designs/herdr.md) (research dossier: value · setup/licensing · adversarial · security · stability · quality · demo · borrowable · business) | — | — | [#260](https://github.com/sfc-gh-eraigosa/dotfiles/issues/260) | (this PR) | building (verdict **adopt selectively**: pinned-or-latest checksummed installer + gff flags + agent integrations; tmux-mgr stays the orchestration layer) |
 | `spark-gpu-support` | [design](./designs/spark-gpu-support.md) | — | — | — | (this PR) | designing (3 fixes landed + verified on the DGX Spark: PATH clobber, zsh profile.d gap, GPU provisioning; spec/plan pending) |
 | `research-evaluation` | the `ai/skills/research-evaluation/` skill (rubric: value · setup/licensing · adversarial · security · stability · quality · docker-or-skip demo) | — | — | a private repo's issues #235–#240 (first six-target run) | (this PR) | in-review |
