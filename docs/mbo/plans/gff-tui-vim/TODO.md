@@ -66,9 +66,9 @@
 - [x] RUN-GREEN: `mkdir -p $EV/task4 && go test ./... -cover 2>&1 | tee $EV/task4/go-test-all.txt | grep -E 'coverage|FAIL'` → every package **ok**
 - [x] VERIFY: the `gff-ci.yml` coverage recipe → `$EV/task4/coverage-gate.txt` ≥ 90%; `go vet ./...`; `make gff-proto-check`
 - [x] VERIFY (human, real terminal): plan Task 4 Step 5 tmux demo → `$EV/demo/{transcript.txt,README.md}`; restore the flipped flag
-- [ ] COMMIT: `docs(gff/tui): key table in --help, README, AGENTS from the shared keymap; pin test; demo evidence`
-- [ ] LEDGER: TRACKING §1 all `done`, §2 matrix ticked, §3 stop condition
-- [ ] DOCS: `docs/mbo/index.md` row `gff-tui-vim` → `in-review` (+ build PR #); COMMIT `docs(mbo): gff-tui-vim → in-review`
-- [ ] CHECKPOINT: `gss feature checkpoint` (confirm first); after the lib merges, `gss feature restack <build> --onto main`; promote the draft PR
+- [x] COMMIT: `docs(gff/tui): key table in --help, README, AGENTS from the shared keymap; pin test; demo evidence`
+- [x] LEDGER: TRACKING §1 all `done`, §2 matrix ticked, §3 stop condition
+- [x] DOCS: `docs/mbo/index.md` row `gff-tui-vim` → `in-review` (+ build PR #); COMMIT `docs(mbo): gff-tui-vim → in-review`
+- [x] CHECKPOINT: `gss feature checkpoint` (confirm first); after the lib merges, `gss feature restack <build> --onto main`; promote the draft PR — *promotion is approval-token gated for the agent; the owner runs it (`gh pr ready 304`), and the restack waits for design PR #280 to merge*
 
 **Done when:** IMPLEMENTATION §4 objective gate green.
