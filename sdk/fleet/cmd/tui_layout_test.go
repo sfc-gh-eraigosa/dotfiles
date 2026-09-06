@@ -38,6 +38,12 @@ func layoutModel(h, w int) tuiModel {
 // terminal's scrollback buffer"), so one line of overflow silently eats the
 // banner. Every state below must therefore fit in vp.height EXACTLY.
 func TestViewNeverExceedsTerminalHeight(t *testing.T) {
+	// Under the Ascii profile init() pins, every style is a no-op and the
+	// frame carries no escape bytes — so a layout test running there is
+	// measuring something the operator never sees.
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	defer lipgloss.SetColorProfile(termenv.Ascii)
+
 	long := strings.Repeat("x", 300)
 	states := []struct {
 		name string

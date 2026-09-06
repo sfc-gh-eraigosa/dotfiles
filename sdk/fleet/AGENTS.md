@@ -457,9 +457,12 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   under Ascii every style is a no-op, so a 1219-size sweep was measuring frames with no
   escape bytes in them at all. **Any test that reasons about layout, width, or styling must
   set `ANSI256` itself.** Pinned by `TestTruncClosesTheStyleItCutsThrough`,
-  `TestTruncLeavesUnstyledAndShortStringsAlone`,
-  `TestLeakedStyleNeverRepaintsTheFollowingRow`, and `TestViewFitsAcrossEveryTerminalSize`
-  (now swept under `ANSI256`).
+  `TestTruncLeavesUnstyledAndShortStringsAlone` and
+  `TestLeakedStyleNeverRepaintsTheFollowingRow` — those three, and only those three, pin the
+  style half. `TestViewNeverExceedsTerminalHeight` and `TestViewFitsAcrossEveryTerminalSize`
+  now run under `ANSI256` as well, which pins the WIDTH half against escape bytes being
+  miscounted; neither of them catches a leaked style, so do not treat the 1219-size sweep as
+  cover for one.
 - **Row width is derived, not guessed.** `rowPrefixWidth` sums the same numbers as
   `rowView`'s format string and `failWidth` budgets from it; the failure cause is dropped
   rather than clamped to a floor when nothing fits. Adding the BRANCH column against a
