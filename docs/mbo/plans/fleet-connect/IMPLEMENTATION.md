@@ -184,7 +184,7 @@ Observable state wins over the registry.
 > `runner.CtxRunner`/`BridgeRunner` as **optional capability interfaces** (type-assert, do not
 > widen `runner.Runner`); `runner.Quote`; and `providertest` with `FakeProvider` +
 > `BuildStub(t)`. The stub is deliberately **protocol-agnostic** — it answers with whatever you
-> can it via `-reply`, and carries `-sleep`, `-exit-at-once`, `-half-line`, `-stderr`. Supply the
+> hand it via `-reply`, and carries `-sleep`, `-exit-at-once`, `-half-line`, `-stderr`. Supply the
 > JSON from your tests; do not teach the stub your wire format.
 >
 > Work strictly TDD: write the failing test first, **run it and paste the observed failure**,
