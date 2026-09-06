@@ -1,0 +1,95 @@
+# P1-T3 gh client seam + recording fake + credential chain — 2026-09-06T06:47:10Z — worker gcfg/edward-raigosa/build
+
+## RUN-RED (first run of each new test file)
+$ go test ./internal/gh/  → 10 undefined symbols (NewREST, RESTOpts, AuthOpts, Source*, ParseRemote, resolveToken)
+$ go test ./cmd/ -run TestAuth → unknown command "auth" for "gcfg"
+$ go test ./internal/gh/ -run TestGHLoginFallsBack → undefined: askGH
+
+## RUN-GREEN: go vet ./... && go test ./... -count=1 -cover
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg	0.005s	coverage: 91.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/cmd	0.029s	coverage: 93.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/gh	0.014s	coverage: 86.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/schema	0.011s	coverage: 94.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/version	0.005s	coverage: 100.0% of statements
+
+## module total (CI formula, ≥80)
+total:											(statements)		92.6%
+
+## race detector
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/gh	1.048s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/cmd	1.057s
+
+## tests
+--- PASS: TestResolveOrder (0.00s)
+    --- PASS: TestResolveOrder/GH_TOKEN_wins (0.00s)
+    --- PASS: TestResolveOrder/GITHUB_TOKEN_next (0.00s)
+    --- PASS: TestResolveOrder/gh_login_next (0.00s)
+    --- PASS: TestResolveOrder/ghapp_last (0.00s)
+    --- PASS: TestResolveOrder/nothing_at_all (0.00s)
+--- PASS: TestResolveHonoursThePinnedSource (0.00s)
+--- PASS: TestResolveReturnsAUsableClient (0.00s)
+--- PASS: TestSourceStringsAreHumanReadable (0.00s)
+--- PASS: TestAuthErrorsNeverCarryATokenValue (0.00s)
+--- PASS: TestTargetFromGitRemote (0.00s)
+--- PASS: TestGHLoginFallsBackToTheGHBinary (0.00s)
+--- PASS: TestRESTSendsAuthAndAPIHeaders (0.00s)
+--- PASS: TestRESTSendsJSONBodyAndReturnsStatusForKnownFailures (0.00s)
+--- PASS: TestRESTRetriesServerErrorsAndHonoursRetryAfter (0.00s)
+--- PASS: TestRESTGivesUpAfterTheLastAttempt (0.00s)
+--- PASS: TestRESTSecondaryRateLimitIsRetried (0.00s)
+--- PASS: TestRESTPaginatesFollowingLinkHeaders (0.00s)
+--- PASS: TestPaginateStopsOnCallbackErrorAndOnFailure (0.00s)
+--- PASS: TestRESTErrorsNeverCarryTheToken (0.00s)
+--- PASS: TestRESTContextCancellation (0.00s)
+--- PASS: TestFakeServesFixturesAndRecordsCalls (0.00s)
+--- PASS: TestFakeUnexpectedCallIsAnError (0.00s)
+--- PASS: TestFakeCanFailAndServeFromFiles (0.00s)
+--- PASS: TestFakePaginatesMultiplePages (0.00s)
+--- PASS: TestBothImplementClient (0.00s)
+--- PASS: TestGHHostsPathHonoursEachConfigConvention (0.00s)
+--- PASS: TestHostsFileTokenToleratesAnythingUnreadable (0.01s)
+--- PASS: TestPathsSummarisesTheCallRecord (0.00s)
+--- PASS: TestWithPerPageLeavesAnExistingSetting (0.00s)
+--- PASS: TestMessageRendersGitHubErrorBodies (0.00s)
+--- PASS: TestAuthStatusNamesTheSourceAndNeverTheToken (0.00s)
+--- PASS: TestAuthStatusWithNoCredentialIsUsage (0.00s)
+--- PASS: TestAuthStatusHonoursTheAuthFlag (0.00s)
+--- PASS: TestTargetFallsBackToTheGitRemote (0.02s)
+--- PASS: TestTargetOutsideARepoIsAUsageError (0.00s)
+--- PASS: TestLintCleanFileIsExitZero (0.00s)
+--- PASS: TestLintProblemsAreUsageErrors (0.00s)
+--- PASS: TestLintUnknownKeyIsAUsageError (0.00s)
+--- PASS: TestLintMissingFileIsAUsageError (0.00s)
+--- PASS: TestLintWarnsOnAnEmptyFile (0.00s)
+--- PASS: TestLintJSON (0.00s)
+--- PASS: TestLintOrgPlacementUsesTheTarget (0.00s)
+--- PASS: TestSchemaWritesTheJSONSchema (0.00s)
+--- PASS: TestBadTargetIsAUsageError (0.00s)
+--- PASS: TestVersionCommand (0.00s)
+--- PASS: TestBareCommandPrintsHelp (0.00s)
+--- PASS: TestTargetFlagParsing (0.00s)
+
+## token-leak grep over the whole verbose log (CI step)
+clean: fixture token absent from 165 log lines
+no real credential in the log either: 0 match(es)
+
+## auth status names the source, never the token (canary in GH_TOKEN)
+target: sfc-gh-eraigosa/dotfiles
+source: GH_TOKEN
+token:  *** (never printed; GH_TOKEN supplies it)
+exit=0
+
+## the real gh login on this host is keyring-backed, and the chain finds it
+(target read from the checkout, no -R; the value itself is never printed)
+target: sfc-gh-eraigosa/dotfiles
+source: gh login
+token:  *** (never printed; gh login supplies it)
+exit=0
+
+## --auth env with nothing in the environment does NOT silently fall back
+gcfg: usage: no GitHub credential: --auth env, but neither GH_TOKEN nor GITHUB_TOKEN is set
+exit=2
+
+## no credential at all → exit 2, with the fix spelled out
+gcfg: usage: no GitHub credential: set GH_TOKEN, run `gh auth login`, or create a GitHub App with `ghapp create` (see `gcfg auth doctor`)
+exit=2
