@@ -55,6 +55,12 @@ func newStub(t *testing.T) *stub {
 		}
 		return true
 	}
+	mux.HandleFunc("GET /app", func(w http.ResponseWriter, r *http.Request) {
+		if !requireJWT(w, r) {
+			return
+		}
+		fmt.Fprint(w, `{"id":777,"slug":"test-app","name":"Test App","html_url":"https://github.com/apps/test-app"}`)
+	})
 	mux.HandleFunc("GET /app/installations", func(w http.ResponseWriter, r *http.Request) {
 		s.installCalls.Add(1)
 		if !requireJWT(w, r) {
