@@ -1,7 +1,7 @@
 # sdk-tui — live state ledger
 
 - **Slug:** `sdk-tui`
-- **Started:** 2026-09-05 (planning); build not started
+- **Started:** 2026-09-05 (planning) · build 2026-09-05 (session 1) · **in-review** 2026-09-05
 - **Playbook:** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) · **Cursor:** [`TODO.md`](./TODO.md)
 - **Plan (source of truth):** [`../sdk-tui.md`](../sdk-tui.md) · spec [`../../specs/sdk-tui.md`](../../specs/sdk-tui.md)
 
@@ -14,7 +14,7 @@
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | design (docs + GUIDE) | `sdk-tui/edward-raigosa/design` | `feature/sdk-tui/edward-raigosa/design` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/sdk-tui/edward-raigosa/design` | [#286](https://github.com/sfc-gh-eraigosa/dotfiles/pull/286) (draft) | docs written; issue #283 |
-| lib | `sdk-tui/edward-raigosa/lib` | `feature/sdk-tui/edward-raigosa/lib` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/sdk-tui/edward-raigosa/lib` | [#288](https://github.com/sfc-gh-eraigosa/dotfiles/pull/288) (draft, base = design branch) | created 2026-09-05; base `feature/sdk-tui/edward-raigosa/design` @ `aa2d78a`; first checkpoint after Task 2 |
+| lib | `sdk-tui/edward-raigosa/lib` | `feature/sdk-tui/edward-raigosa/lib` | `$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/sdk-tui/edward-raigosa/lib` | [#288](https://github.com/sfc-gh-eraigosa/dotfiles/pull/288) (base = design branch; promoted to ready-for-review) | Tasks 1–7 done 2026-09-05; base `feature/sdk-tui/edward-raigosa/design` @ `aa2d78a` |
 
 `gss feature worker add --feature sdk-tui --purpose lib --base feature/sdk-tui/edward-raigosa/design --engine claude --json` (2026-09-05):
 
@@ -44,7 +44,7 @@ the registry row.
 | 4 `search` | done | `7fb006b` | RUN-RED `go test ./tui/search/` → `undefined: State` / `undefined: Compile` (`evidence/task4/run-red.txt`); RUN-GREEN `go test ./tui/search/ -cover -v` → 5/5 PASS, `coverage: 94.0%` (`evidence/task4/go-test.txt`); `go vet` clean | extracted from fleet compileInto/jumpMatch; `TestTypingRecomputesAndInvalidKeepsPreviousRe` proves `Re` survives an invalid keystroke |
 | 5 `cmdline` | done | `dce3f46` | RUN-RED `go test ./tui/cmdline/` → `undefined: Command` (`evidence/task5/run-red.txt`); first GREEN run FAILED `TestParse/q` (`expected: []string(nil)`, `actual: []string{}`); RUN-GREEN after the fix → 5/5 PASS, `coverage: 96.2%` (`evidence/task5/go-test.txt`); `go vet` clean | **Deviation from the plan's Task 5 Step 3 code (not from §3):** `Parse` returns `Args == nil` when the line has no arguments (`c.Args = f[1:]` only when `len(f) > 1`) — the plan's own `TestParse` expects `Command{Name: "q"}` with nil Args and `assert.Equal` distinguishes nil from empty. Signature unchanged. |
 | 6 `overlay` | done | `74b13fc` | RUN-RED `go test ./tui/overlay/` → `undefined: Help` (`evidence/task6/run-red.txt`); RUN-GREEN `go test ./tui/overlay/ -cover -v` → 4/4 PASS, `coverage: 95.7%` (`evidence/task6/go-test.txt`); `go vet` clean; `grep -rln lipgloss --include=*.go tui/` → 0 files (the only two mentions are GUIDE.md prose) | |
-| 7 example + docs + gates + demo | done | (SHA recorded at the next commit) | RUN-RED `go test -tags example ./tui/example/` → `undefined: newModel` (`task7/run-red.txt`); first GREEN run FAILED (`usage: :mark <row>` — see §4); RUN-GREEN → PASS (`task7/example-test.txt`); `go test ./... -cover` → 7/7 packages ok, every `tui/*` ≥ 94.0% (`task7/go-test-all.txt`); `go vet ./...` + `go vet -tags example ./tui/example/` clean; libs module total **94.9%** vs floor 80% (`task7/libs-coverage.txt`); `make lint-go` → 8/8 modules `0 issues`, exit 0 (`task7/lint-go.txt`); gss size raw +336 B, normalized builds byte-identical (`deps/README.md`); real-terminal demo `demo/{run.sh,transcript.txt,README.md}` — 14 steps observed | Repo-wide `COVERAGE_ENFORCE=1 ./scripts/test.sh unit` cannot complete on this host (§4 B1); consumer go.mod tidy (§4 B2) |
+| 7 example + docs + gates + demo | done | `256388e` | RUN-RED `go test -tags example ./tui/example/` → `undefined: newModel` (`task7/run-red.txt`); first GREEN run FAILED (`usage: :mark <row>` — see §4); RUN-GREEN → PASS (`task7/example-test.txt`); `go test ./... -cover` → 7/7 packages ok, every `tui/*` ≥ 94.0% (`task7/go-test-all.txt`); `go vet ./...` + `go vet -tags example ./tui/example/` clean; libs module total **94.9%** vs floor 80% (`task7/libs-coverage.txt`); `make lint-go` → 8/8 modules `0 issues`, exit 0 (`task7/lint-go.txt`); gss size raw +336 B, normalized builds byte-identical (`deps/README.md`); real-terminal demo `demo/{run.sh,transcript.txt,README.md}` — 14 steps observed | Repo-wide `COVERAGE_ENFORCE=1 ./scripts/test.sh unit` cannot complete on this host (§4 B1); consumer go.mod tidy (§4 B2) |
 
 ## 2. Feature → proof matrix (from spec §5)
 
@@ -64,14 +64,14 @@ the registry row.
 
 ## 3. Validation done-when — the stop condition
 
-- [x] Tasks 1–7 `done` with commit SHAs and evidence files (Task 7 SHA lands with the in-review commit)
+- [x] Tasks 1–7 `done` with commit SHAs and evidence files (`e13455a` `1238136` `65f7cb4` `7fb006b` `dce3f46` `74b13fc` `256388e`)
 - [x] every `sdk/libs/tui/*` package ≥ 90% (`evidence/task{1..6}/go-test.txt`; lowest: search 94.0%)
 - [x] libs floor: **94.9% ≥ 80%** by the script's own method (`evidence/task7/libs-coverage.txt`); the repo-wide script run aborts on this host at `gss/TestIsDirty`, reproduced on clean `main` (`coverage-gate.txt`, §4 B1) — CI runs it with its own hooks
 - [x] `make lint-go` clean (`evidence/task7/lint-go.txt`); `go vet` clean incl. `-tags example`
 - [x] `evidence/demo/{README.md,transcript.txt,run.sh}` from a real terminal (tmux pane, foreground)
 - [x] `evidence/deps/gss-size-before.txt` vs `gss-size.txt`: raw +336 B explained; normalized builds byte-identical (`deps/README.md`)
 - [x] plan §3 unchanged since Task 2 — every signature landed verbatim
-- [ ] `docs/mbo/index.md` row `sdk-tui` → `in-review` with the lib PR; draft PR promoted
+- [x] `docs/mbo/index.md` row `sdk-tui` → `in-review` with lib PR #288; draft PR promoted with `gss feature pr --ready`
 
 ## 4. Blockers & escalations
 
@@ -95,3 +95,4 @@ the registry row.
 | 2026-09-05 | build (session 1) | Task 4 pushed to PR #288. Task 5 done (cmdline 96.2%) with one implementation-level deviation (Parse nil Args) recorded in the task row; plan text untouched. |
 | 2026-09-05 | build (session 1) | Task 5 pushed to PR #288. Task 6 done (overlay 95.7%, no lipgloss in Go). |
 | 2026-09-05 | build (session 1) | Task 6 pushed to PR #288. Task 7: example green after fixing the plan's `:mark` sample for space-containing row names; AGENTS rows added; gates run (libs 94.9%, lint 8/8, gss normalized byte-identical); B1/B2 filed in §4; real-terminal tmux demo captured (14 steps) after switching the driver to one-char-per-event typing. |
+| 2026-09-05 | build (session 1) | Task 7 pushed (`256388e`). `docs/mbo/index.md` → in-review with lib PR #288; PR promoted to ready-for-review. Objective gate (IMPLEMENTATION §4) green except the host-only repo-wide coverage script (§4 B1, left to CI). Next: `gss feature start gff-tui-vim` (the feature is not in the registry — the shared registry lost rows to an earlier `audit --repair`) then `gss feature worker add --feature gff-tui-vim --purpose build --base feature/sdk-tui/edward-raigosa/lib`. |

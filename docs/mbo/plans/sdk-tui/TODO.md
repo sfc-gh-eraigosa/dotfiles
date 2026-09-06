@@ -100,9 +100,9 @@
 - [x] DOCS: `sdk/libs/AGENTS.md` table row; `sdk/AGENTS.md` Conventions bullet
 - [x] VERIFY: plan Task 7 Step 5 gates → `go-test-all.txt`, `coverage-gate.txt` (COVERAGE_ENFORCE=1), `lint-go.txt`, `deps/gss-size.txt` vs `gss-size-before.txt`
 - [x] VERIFY (human, real terminal): plan Task 7 Step 6 tmux demo → `evidence/demo/{transcript.txt,README.md}`
-- [ ] COMMIT: `feat(libs/tui): composition example, AGENTS docs, module gates + demo evidence`
-- [ ] LEDGER: TRACKING §1 all `done`, §2 matrix ticked, §3 stop condition
-- [ ] DOCS: `docs/mbo/index.md` row `sdk-tui` → `in-review` (+ lib PR #); COMMIT `docs(mbo): sdk-tui → in-review`
-- [ ] CHECKPOINT: `gss feature checkpoint` (confirm first); promote the draft PR; then create `gff-tui-vim/build` `--base` this branch
+- [x] COMMIT: `feat(libs/tui): composition example, AGENTS docs, module gates + demo evidence`
+- [x] LEDGER: TRACKING §1 all `done`, §2 matrix ticked, §3 stop condition
+- [x] DOCS: `docs/mbo/index.md` row `sdk-tui` → `in-review` (+ lib PR #); COMMIT `docs(mbo): sdk-tui → in-review`
+- [x] CHECKPOINT: `gss feature checkpoint` (confirm first); promote the draft PR; then create `gff-tui-vim/build` `--base` this branch — *worker creation deferred to the gff-tui-vim kickoff: its feature row must be re-created first (TRACKING §5)*
 
 **Done when:** IMPLEMENTATION §4 objective gate green.
