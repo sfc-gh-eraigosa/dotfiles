@@ -126,11 +126,14 @@ func TestLocalAliasIsDeterministicWhenTwoBlocksMatch(t *testing.T) {
 		m.setLocal(localHost{Name: "box"})
 		return m.localAlias
 	}
-	if got := build(); got != "alpha" {
-		t.Fatalf("localAlias = %q, want alpha (first in row order)", got)
-	}
-	if build() != build() {
-		t.Fatal("the local pick must not vary between runs")
+	// Sampled repeatedly ON PURPOSE. The failure this guards against is Go's
+	// randomised map iteration order, and a single pair of runs would only
+	// catch that by luck — `alpha` has to win EVERY time, not merely twice in
+	// a row.
+	for i := range 50 {
+		if got := build(); got != "alpha" {
+			t.Fatalf("run %d: localAlias = %q, want alpha (first in row order)", i, got)
+		}
 	}
 }
 
