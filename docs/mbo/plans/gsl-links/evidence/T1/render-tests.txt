@@ -1,0 +1,12 @@
+# T1 evidence — 2026-09-05T16:04:00Z
+$ cd sdk/gsl && go test ./internal/render/ -race -cover
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/render	5.258s	coverage: 88.5% of statements
+
+$ git diff --stat -- internal/render/testdata
+ sdk/gsl/internal/render/testdata/golden_emoji_dark-daltonism_root.txt | 2 +-
+ sdk/gsl/internal/render/testdata/golden_emoji_light_root.txt          | 2 +-
+ sdk/gsl/internal/render/testdata/golden_emoji_root.txt                | 2 +-
+ sdk/gsl/internal/render/testdata/golden_emoji_worktree.txt            | 2 +-
+ sdk/gsl/internal/render/testdata/golden_powerline_root.txt            | 2 +-
+ sdk/gsl/internal/render/testdata/golden_powerline_worktree.txt        | 2 +-
+ 6 files changed, 6 insertions(+), 6 deletions(-)

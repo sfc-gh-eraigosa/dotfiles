@@ -1,0 +1,42 @@
+# T3 evidence — 2026-09-05T17:25:00Z
+$ cd sdk/gsl && go test ./internal/render/ -race -cover && go vet ./...
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/render	5.829s	coverage: 92.8% of statements
+vet: ok
+
+$ go test ./internal/render/ -run "Spans|Span_|DetectFormat_MatchesRender|Golden_Links" -v | grep -E "^--- (PASS|FAIL)"
+--- PASS: TestDetectFormat_MatchesRender (0.01s)
+--- PASS: TestDetectFormat_MatchesRender_Linked (0.00s)
+--- PASS: TestGolden_Links (0.00s)
+--- PASS: TestPaintRuns_NoSpansIsIdentity (0.00s)
+--- PASS: TestValidateSpans_DropsBadOnes (0.00s)
+--- PASS: TestClipSpans (0.00s)
+--- PASS: TestReanchorSpans_SurvivesANSIStrip (0.00s)
+--- PASS: TestShiftSpans (0.00s)
+--- PASS: TestJoin_SpansZeroWidth_BothPaths (0.00s)
+--- PASS: TestTruncateToWidth_ClipsSpans (0.00s)
+--- PASS: TestAI_Spans_UsageFourFields (0.00s)
+--- PASS: TestAI_Spans_NoUsageURL (0.00s)
+--- PASS: TestDirGit_Spans_DirAndBranch (0.00s)
+--- PASS: TestRepo_Spans_GlyphLabelBadge (0.00s)
+--- PASS: TestRepo_Spans_FamilyOff (0.00s)
+--- PASS: TestTime_Span_WholeTextAfterGlyph (0.00s)
+
+$ git status --short -- internal/render/testdata   (default goldens: PR badge unlinked without a policy; linked goldens new)
+ M internal/render/testdata/golden_emoji_dark-daltonism_root.txt
+ M internal/render/testdata/golden_emoji_light_root.txt
+ M internal/render/testdata/golden_emoji_root.txt
+ M internal/render/testdata/golden_emoji_worktree.txt
+ M internal/render/testdata/golden_powerline_root.txt
+ M internal/render/testdata/golden_powerline_worktree.txt
+?? internal/render/testdata/golden_links_emoji.txt
+?? internal/render/testdata/golden_links_powerline.txt
+
+$ link targets in golden_links_powerline.txt
+
+file:///home/user/project
+https://claude.ai/settings/usage
+https://github.com/o/r
+https://github.com/o/r/tree/feature
+https://github.com/o/r/tree/feature/gsl/edward-raigosa/impl
+https://github.com/sfc-gh-eraigosa/dotfiles/pull/21
+https://time.is/UTC

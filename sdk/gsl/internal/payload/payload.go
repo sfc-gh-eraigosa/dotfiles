@@ -123,6 +123,10 @@ type ContextWindow struct {
 
 // Model holds the model metadata from the Claude payload.
 type Model struct {
+	// ID is the model identifier (Claude Code: e.g. "claude-fable-5-1";
+	// Antigravity repeats the display name here). The model-page link derives
+	// its family from it, falling back to DisplayName.
+	ID          *string `json:"id"`
 	DisplayName *string `json:"display_name"`
 }
 

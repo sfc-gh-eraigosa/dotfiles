@@ -8,7 +8,12 @@
 #   * "already on the wanted version" is a cheap no-op (fleet update re-runs
 #     install.sh on every host, so this path is the common one);
 #   * the integrations mode only touches agent CLIs that exist on the host;
-#   * the gff wiring is complete: both flags exist in features.yaml, each key is
+#   * the config mode seeds a dotfiles-MANAGED ~/.config/herdr/config.toml that
+#     lets herdr follow the host terminal's light/dark appearance with the
+#     fleet Solarized palette; it converges a managed file, never clobbers a
+#     hand-edited one (no marker) unless HERDR_CONFIG_FORCE=1, and reloads a
+#     running server best-effort;
+#   * the gff wiring is complete: all three flags exist in features.yaml, each key is
 #     in exactly one install-phase list, and the integrations block runs AFTER
 #     install_antigravity_skills.sh (which re-renders hooks.json and drops
 #     herdr's entry).
@@ -76,6 +81,7 @@ cat > "${STUB_DIR}/herdr" <<'SH'
 case "$1" in
   --version) echo "herdr 0.8.2" ;;
   integration) echo "stub: herdr $*"; exit 0 ;;
+  server) echo "stub: herdr $*"; exit 0 ;;
   *) exit 1 ;;
 esac
 SH
@@ -117,6 +123,69 @@ out="$(HERDR_INSTALL_DIR="${EMPTY_DIR}" PATH="${EMPTY_DIR}:/usr/bin:/bin" bash "
 assert_eq "${rc}" "0" "integrations: no herdr -> exit 0"
 assert_eq "$(printf '%s' "${out}" | grep -c 'herdr is not installed; skipping')" "1" "integrations: no herdr is reported"
 
+# --- config mode: managed config.toml ----------------------------------------
+TEMPLATE="${REPO_ROOT}/ai/herdr/config.toml"
+assert_file_exists "${TEMPLATE}" "config template is tracked at ai/herdr/config.toml"
+assert_grep "template turns on host light/dark following" '^auto_switch = true' "${TEMPLATE}"
+assert_grep "template carries the managed marker" 'managed by dotfiles' "${TEMPLATE}"
+assert_grep "template renders the dark theme from a token" '@HERDR_THEME_DARK@' "${TEMPLATE}"
+assert_grep "template renders the light theme from a token" '@HERDR_THEME_LIGHT@' "${TEMPLATE}"
+assert_grep "template ships no hardcoded home path" '^# managed by dotfiles' "${TEMPLATE}"
+assert_grep "template sets the prefix to ctrl+a (tmux muscle memory, no ctrl+b clash)" '^prefix = "ctrl\+a"$' "${TEMPLATE}"
+
+# 6. Fresh host: no config.toml -> seeded with the Solarized pair, dark fallback.
+CFG_DIR="${TMP}/cfg-fresh"
+out="$(HERDR_INSTALL_DIR="${EMPTY_DIR}" HERDR_CONFIG_DIR="${CFG_DIR}" bash "${SCRIPT}" config 2>&1)"; rc=$?
+assert_eq "${rc}" "0" "config: fresh host exits 0"
+assert_file_exists "${CFG_DIR}/config.toml" "config: fresh host gets config.toml"
+assert_grep "config: dark fallback theme is solarized" '^name = "solarized"$' "${CFG_DIR}/config.toml"
+assert_grep "config: auto_switch is on" '^auto_switch = true$' "${CFG_DIR}/config.toml"
+assert_grep "config: light sibling is solarized-light" '^light_name = "solarized-light"$' "${CFG_DIR}/config.toml"
+assert_grep "config: dark sibling is solarized" '^dark_name = "solarized"$' "${CFG_DIR}/config.toml"
+assert_grep "config: written file carries the managed marker" '^# managed by dotfiles' "${CFG_DIR}/config.toml"
+assert_grep_negative "config: no unrendered tokens remain" '@HERDR_THEME_' "${CFG_DIR}/config.toml"
+assert_grep "config: rendered file keeps the ctrl+a prefix" '^prefix = "ctrl\+a"$' "${CFG_DIR}/config.toml"
+assert_grep_negative "config: no herdr -> no reload attempted" 'reload' <(printf '%s\n' "${out}")
+
+# 7. Re-run on a managed file is a converge no-op.
+before="$(cat "${CFG_DIR}/config.toml")"
+out="$(HERDR_INSTALL_DIR="${EMPTY_DIR}" HERDR_CONFIG_DIR="${CFG_DIR}" bash "${SCRIPT}" config 2>&1)"; rc=$?
+assert_eq "${rc}" "0" "config: re-run exits 0"
+assert_eq "$(cat "${CFG_DIR}/config.toml")" "${before}" "config: re-run leaves a managed file byte-identical"
+assert_eq "$(printf '%s' "${out}" | grep -c 'up to date')" "1" "config: re-run reports up to date"
+
+# 8. Theme overrides render into the managed file.
+CFG_DIR2="${TMP}/cfg-override"
+out="$(HERDR_INSTALL_DIR="${EMPTY_DIR}" HERDR_CONFIG_DIR="${CFG_DIR2}" HERDR_THEME_DARK=nord HERDR_THEME_LIGHT=one-light bash "${SCRIPT}" config 2>&1)"; rc=$?
+assert_eq "${rc}" "0" "config: theme override exits 0"
+assert_grep "config: HERDR_THEME_DARK renders name" '^name = "nord"$' "${CFG_DIR2}/config.toml"
+assert_grep "config: HERDR_THEME_DARK renders dark_name" '^dark_name = "nord"$' "${CFG_DIR2}/config.toml"
+assert_grep "config: HERDR_THEME_LIGHT renders light_name" '^light_name = "one-light"$' "${CFG_DIR2}/config.toml"
+
+# 9. A hand-edited config (no managed marker) is left alone, with a warning.
+CFG_DIR3="${TMP}/cfg-hand"
+mkdir -p "${CFG_DIR3}"
+printf '[theme]\nname = "dracula"\n' > "${CFG_DIR3}/config.toml"
+out="$(HERDR_INSTALL_DIR="${EMPTY_DIR}" HERDR_CONFIG_DIR="${CFG_DIR3}" bash "${SCRIPT}" config 2>&1)"; rc=$?
+assert_eq "${rc}" "0" "config: hand-edited file -> exit 0"
+assert_grep "config: hand-edited file is untouched" '^name = "dracula"$' "${CFG_DIR3}/config.toml"
+assert_eq "$(printf '%s' "${out}" | grep -c 'leaving it alone')" "1" "config: hand-edited file is reported, not clobbered"
+assert_eq "$(printf '%s' "${out}" | grep -c 'HERDR_CONFIG_FORCE=1')" "1" "config: warning names the override"
+
+# 10. HERDR_CONFIG_FORCE=1 replaces a hand-edited file but keeps a backup.
+out="$(HERDR_INSTALL_DIR="${EMPTY_DIR}" HERDR_CONFIG_DIR="${CFG_DIR3}" HERDR_CONFIG_FORCE=1 bash "${SCRIPT}" config 2>&1)"; rc=$?
+assert_eq "${rc}" "0" "config: force exits 0"
+assert_grep "config: force writes the managed file" '^# managed by dotfiles' "${CFG_DIR3}/config.toml"
+assert_grep "config: force keeps a backup of the hand-edited file" '^name = "dracula"$' "${CFG_DIR3}/config.toml.bak"
+
+# 11. A running server (socket present) is reloaded best-effort after a write.
+CFG_DIR4="${TMP}/cfg-live"
+mkdir -p "${CFG_DIR4}"; : > "${CFG_DIR4}/herdr.sock"
+out="$(HERDR_INSTALL_DIR="${STUB_DIR}" HERDR_CONFIG_DIR="${CFG_DIR4}" bash "${SCRIPT}" config 2>&1)"; rc=$?
+assert_eq "${rc}" "0" "config: live server path exits 0"
+assert_eq "$(printf '%s' "${out}" | grep -c 'stub: herdr server reload-config')" "1" \
+    "config: running server gets 'herdr server reload-config'"
+
 # --- gff wiring -------------------------------------------------------------
 assert_grep "features.yaml declares install.tools.herdr" 'path: install\.tools\.herdr$' "${FEATURES}"
 assert_grep "features.yaml declares install.tools.herdr-integrations" \
@@ -124,6 +193,11 @@ assert_grep "features.yaml declares install.tools.herdr-integrations" \
 assert_grep "install.sh gates the binary on install.tools.herdr" 'gff_on install\.tools\.herdr;' "${INSTALL_SH}"
 assert_grep "install.sh gates integrations on install.tools.herdr-integrations" \
     'gff_on install\.tools\.herdr-integrations;' "${INSTALL_SH}"
+assert_grep "features.yaml declares install.tools.herdr-config" \
+    'path: install\.tools\.herdr-config$' "${FEATURES}"
+assert_grep "install.sh gates the managed config on install.tools.herdr-config" \
+    'gff_on install\.tools\.herdr-config;' "${INSTALL_SH}"
+assert_grep "install.sh runs install_herdr.sh in config mode" 'install_herdr\.sh" config' "${INSTALL_SH}"
 
 # Phase lists: a downloaded CLI is a deps step; writing into ~/.claude and
 # ~/.gemini is a config step. A key in NEITHER list runs in BOTH phases (the
@@ -138,6 +212,10 @@ assert_eq "$(printf '%s' "${config_line}" | grep -c -w 'INSTALL_TOOLS_HERDR_INTE
     "INSTALL_TOOLS_HERDR_INTEGRATIONS is in _IP_CONFIG_FLAGS"
 assert_eq "$(printf '%s' "${deps_line}" | grep -c -w 'INSTALL_TOOLS_HERDR_INTEGRATIONS')" "0" \
     "INSTALL_TOOLS_HERDR_INTEGRATIONS is NOT in _IP_DEPS_FLAGS"
+assert_eq "$(printf '%s' "${config_line}" | grep -c -w 'INSTALL_TOOLS_HERDR_CONFIG')" "1" \
+    "INSTALL_TOOLS_HERDR_CONFIG is in _IP_CONFIG_FLAGS"
+assert_eq "$(printf '%s' "${deps_line}" | grep -c -w 'INSTALL_TOOLS_HERDR_CONFIG')" "0" \
+    "INSTALL_TOOLS_HERDR_CONFIG is NOT in _IP_DEPS_FLAGS"
 
 # Ordering: the integrations block must come after install_antigravity_skills.sh
 # is invoked, or the hooks.json re-render undoes it on every run.

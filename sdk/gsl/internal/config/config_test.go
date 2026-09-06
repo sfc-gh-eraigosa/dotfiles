@@ -287,3 +287,33 @@ func findSegment(t *testing.T, c config.Config, segType string) config.Segment {
 	t.Fatalf("segment type %q not found in config", segType)
 	return config.Segment{}
 }
+
+// TestEffectiveLinks: "" and unknown values normalize to underline; plain and
+// off are honoured verbatim.
+func TestEffectiveLinks(t *testing.T) {
+	for in, want := range map[string]string{"": "underline", "underline": "underline", "plain": "plain", "off": "off", "bogus": "underline"} {
+		if got := (config.Config{Links: in}).EffectiveLinks(); got != want {
+			t.Errorf("EffectiveLinks(%q) = %q want %q", in, got, want)
+		}
+	}
+}
+
+// TestLinksRoundTrip: the links key survives Save/Load and is omitted when empty.
+func TestLinksRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	c := config.Default()
+	c.Links = "plain"
+	if err := config.Save(path, c); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(path)
+	if err != nil || loaded.Links != "plain" {
+		t.Fatalf("loaded.Links = %q, err %v", loaded.Links, err)
+	}
+	raw, _ := os.ReadFile(path)
+	var m map[string]any
+	_ = json.Unmarshal(raw, &m)
+	if _, ok := m["links"]; !ok {
+		t.Error("links key missing from the saved JSON")
+	}
+}

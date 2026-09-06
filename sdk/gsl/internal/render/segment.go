@@ -64,9 +64,18 @@ type Segment interface {
 // recorded its link in a field would be writing state another goroutine could
 // observe mid-flight.
 //
-// link is a BARE URL, never an escape sequence — the join layer owns all escape
-// emission, exactly as it owns ANSI painting. Empty means "not linkable".
+// Every span's URL is BARE, never an escape sequence — the join layer owns all
+// escape emission, exactly as it owns ANSI painting. No spans means "not
+// linkable".
 type LinkedSegment interface {
 	Segment
-	RenderLinked(ctx context.Context, st style.Style, compactLevel int) (text, colorKey, link string, ok bool)
+	RenderLinked(ctx context.Context, st style.Style, compactLevel int) (text, colorKey string, spans []LinkSpan, ok bool)
+}
+
+// LinkSpan is one clickable range of a segment's RAW text: byte offsets
+// [Start, End) into the text the segment returned, plus the bare URL. Spans
+// carry zero display width; the join layer turns them into OSC 8 hyperlinks.
+type LinkSpan struct {
+	Start, End int
+	URL        string
 }

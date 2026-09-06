@@ -85,3 +85,12 @@ func TestTime_GlyphModes(t *testing.T) {
 		t.Errorf("time ascii: want [time] in %q", got)
 	}
 }
+
+func TestTime_Span_WholeTextAfterGlyph(t *testing.T) {
+	seg := NewTimeSegment(fixedClock(), "America/Los_Angeles", "15:04:05", "2006-01-02")
+	seg.Links = Links{Time: true, TimeURL: DefaultTimeURL}
+	text, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	if len(spans) != 1 || spans[0].URL != "https://time.is/Los_Angeles" || spans[0].End != len(text) {
+		t.Errorf("spans = %+v text=%q", spans, text)
+	}
+}

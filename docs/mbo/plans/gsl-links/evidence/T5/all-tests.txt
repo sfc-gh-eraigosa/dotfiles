@@ -1,0 +1,32 @@
+# T5 evidence — 2026-09-05T17:31:36Z
+$ cd sdk/gsl && go test ./... -race -cover
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/cmd	3.223s	coverage: 85.4% of statements
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/cmd/glyphcheck		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config	1.033s	coverage: 86.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/exec	2.735s	coverage: 81.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/flags	(cached)	coverage: 90.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh	1.280s	coverage: 88.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh/fake	1.022s	coverage: 81.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git	3.050s	coverage: 91.9% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git/fake	1.020s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp	1.237s	coverage: 68.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp/fake	1.026s	coverage: 81.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/observe	1.028s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload	1.047s	coverage: 93.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/preview	1.098s	coverage: 85.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/render	5.793s	coverage: 92.9% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo	1.025s	coverage: 95.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style	1.023s	coverage: 84.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/term	1.021s	coverage: 79.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/theme	1.033s	coverage: 86.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/version	1.017s	coverage: 75.0% of statements
+
+$ go test ./internal/config/ ./cmd/ -run "EffectiveLinks|LinksRoundTrip|BuildLinks|ConfigSet_Links" -v | grep -E "^--- "
+--- PASS: TestEffectiveLinks (0.00s)
+--- PASS: TestLinksRoundTrip (0.00s)
+--- PASS: TestConfigSet_Links (0.01s)
+--- PASS: TestBuildLinks_ConfigOffBeatsFlags (0.00s)
+--- PASS: TestBuildLinks_MasterFlagOff (0.00s)
+--- PASS: TestBuildLinks_FamilyFlagOff (0.00s)
+--- PASS: TestBuildLinks_Defaults (0.00s)

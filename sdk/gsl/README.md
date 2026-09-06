@@ -110,6 +110,14 @@ Always renders (directory is always available). Shows:
 
 When the working directory is not inside a git repo, only the directory name is shown — the segment does not self-omit.
 
+Segment options (`options` map of the `dirgit` segment):
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `dir_link` | string | `"vscode"` | Directory link target: `vscode` opens the vscode.dev GitHub view (the PR's changes when the branch has one, else the branch); `file` always opens the working directory as `file://`. Off GitHub, `vscode` falls back to `file://`. |
+
+Links (see [Links](#links)): the directory name opens the vscode.dev view of the PR changes or of the branch (`file://` off GitHub); the branch opens the branch on GitHub.
+
 ### `repo`
 
 Renders when inside a git repo; self-omits outside one. Shows:
@@ -126,6 +134,9 @@ Segment options (set in the `options` map of the `repo` segment in `config.json`
 | `show_pr` | bool | `true` | Show the PR number badge |
 | `show_count` | bool | `true` | Show the worktree count badge |
 | `name` | string | `"feature"` | Name label mode: `feature` (gss registry name), `worker` (trailing branch segment), `branch` (raw branch), `off` (no label) |
+| `link_pr` | bool | `true` | Make the PR badge a hyperlink to the pull request (the URL comes from the gss registry or `gh pr view`) |
+
+Links (see [Links](#links)): the root/worktree glyph opens the repository home, the name label opens the branch on GitHub, and the PR badge opens the pull request.
 
 ### `ai`
 
@@ -136,6 +147,13 @@ Segment options (set in the `options` map of the `repo` segment in `config.json`
 - MCP server count: `<active>/<configured>` when servers are configured; active count uses a short-lived subprocess query with a cache
 - 5-hour and 7-day rate-limit usage percentages (`5h 42%`, `7d 10%`)
 
+Segment options (`options` map of the `ai` segment):
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `usage_url` | string | Claude Code: `https://claude.ai/settings/usage`; Antigravity: none | Target of the context / 5h / 7d links (see [Links](#links)). Set it to give Antigravity a target. |
+| `model_url` | string | built-in family map | Target of the model-name link. Empty = the built-in map: Claude families (`fable`, `mythos`, `opus`, `sonnet`, `haiku`) → `https://www.anthropic.com/claude/{family}`, `gemini` → `https://ai.google.dev/gemini-api/docs/models`. A template may use `{family}`, `{model_id}`, `{display_name}`. Unknown family → no model link. |
+
 ### `time`
 
 Always renders. Shows:
@@ -145,6 +163,12 @@ Always renders. Shows:
 - Timezone abbreviation (e.g. `PST`, `UTC`)
 
 Falls back to UTC silently on unknown or missing timezone — never panics.
+
+Segment options (`options` map of the `time` segment):
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `link_url` | string | `https://time.is/{tz_city}` | Template for the date/time link (see [Links](#links)). Placeholders: `{tz}` (IANA name, e.g. `America/Los_Angeles`), `{tz_city}` (its last element, `Los_Angeles`), `{iso_utc}` (`20260905T150000Z`), `{unix}`. Empty disables the link. |
 
 ## Configuration
 
@@ -167,6 +191,7 @@ A missing config file is not an error — `Default()` is used automatically. On 
   "time_format": "15:04:05",
   "date_format": "2006-01-02",
   "style":       "powerline",
+  "links":       "underline",
   "styles":      {}
 }
 ```
@@ -184,7 +209,39 @@ Field reference:
 | `time_format` | string | `"15:04:05"` | Go layout string for the clock. |
 | `date_format` | string | `"2006-01-02"` | Go layout string for the date. |
 | `style` | string | `"powerline"` | Active style name. |
+| `links` | string | `"underline"` | Hyperlink affordance: `underline` (OSC 8 + underline on exactly the linked text), `plain` (OSC 8 only, no underline), `off` (no links at all). See [Links](#links). |
 | `styles` | object | `{}` | User-defined style overrides (see Styles section). |
+
+## Links
+
+Every field with a web home is an [OSC 8](https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda) hyperlink, underlined so you can see it. Open one the way your terminal opens links — in gnome-terminal and other VTE terminals that is **Ctrl+click** (the URL shows on hover); iTerm2 is Cmd+click; Windows Terminal Ctrl+click. Terminals without OSC 8 support ignore the escape and show the plain text.
+
+| Field | Opens |
+|-------|-------|
+| `dirgit` directory name | vscode.dev: `https://vscode.dev/github/<owner>/<repo>/pull/<n>/changes` when the branch has a PR, else `…/tree/<branch>`; `file://<cwd>` off GitHub or with `dir_link: file` |
+| `dirgit` branch, `repo` name label | `https://github.com/<owner>/<repo>/tree/<branch>` (GitHub remotes only; derived from `git remote get-url origin`) |
+| `repo` root/worktree glyph | the repository home |
+| `repo` PR badge | the pull request (`link_pr`) |
+| `ai` model name | the model's page, by family from `model.id` (e.g. `https://www.anthropic.com/claude/fable`; `model_url` overrides) |
+| `ai` context %, 5h %, 7d % | the usage page (`usage_url`; Claude Code default `https://claude.ai/settings/usage`) |
+| `time` date/time | the `link_url` template (default `https://time.is/{tz_city}`) |
+
+Links add zero display width: the fit loop measures, truncates, and sheds exactly as it does without them, and a truncated field keeps its link on the part that survives.
+
+**Turning links off.** Two layers, both fail-open (an error only ever leaves links *on*):
+
+- `gsl config set links off` — no links at all; `plain` keeps the links but drops the underline.
+- gff flags, one per family, all `true` by default:
+
+  ```bash
+  gff set gsl.links.enabled false   # master: no links at all
+  gff set gsl.links.repo false      # PR badge, name label, glyph, dirgit branch
+  gff set gsl.links.dirgit false    # directory → vscode.dev / file:// link
+  gff set gsl.links.ai false        # model → model page; context / rate → usage page
+  gff set gsl.links.time false      # date/time → timezone page
+  ```
+
+  `gsl render` reads the flags through the gff SDK from the dotfiles namespace, which `install.sh` registers with `gff install`. Without a registered namespace it falls back to the checkout named by `$DOTFILES_DIR`; if neither resolves, the flags read `true`.
 
 ## Auto theme colors
 

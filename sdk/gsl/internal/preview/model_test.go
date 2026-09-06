@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/preview"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/term"
 )
 
 // TestRenderOnce_NonEmpty verifies that RenderOnce produces a non-empty line.
@@ -243,38 +244,7 @@ func TestModel_WindowWidth_ZeroIgnored(t *testing.T) {
 	}
 }
 
-// termDisplayWidth measures display width by stripping ANSI SGR sequences
-// and counting grapheme clusters. This mirrors term.DisplayWidth without
-// importing the internal/term package directly from the external test package.
-func termDisplayWidth(s string) int {
-	// Strip ESC [ ... m sequences.
-	stripped := strings.Builder{}
-	i := 0
-	for i < len(s) {
-		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
-			j := i + 2
-			for j < len(s) && (s[j] < 0x40 || s[j] > 0x7E) {
-				j++
-			}
-			if j < len(s) {
-				j++
-			}
-			i = j
-			continue
-		}
-		stripped.WriteByte(s[i])
-		i++
-	}
-	// Count rune width using a simple approximation: non-ASCII runes with
-	// East Asian width are 2 cols, everything else 1. For test assertions
-	// at COLUMNS=20 this is conservative and sufficient.
-	count := 0
-	for _, r := range stripped.String() {
-		if r >= 0x1100 { // broad East-Asian / emoji range
-			count += 2
-		} else {
-			count += 1
-		}
-	}
-	return count
-}
+// termDisplayWidth is term.DisplayWidth: it strips CSI and OSC sequences
+// (OSC 8 hyperlinks carry a URL that must count as zero columns) and measures
+// grapheme clusters, exactly as the fit loop does.
+func termDisplayWidth(s string) int { return term.DisplayWidth(s) }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp"
 	mcpfake "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp/fake"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload"
@@ -107,5 +108,86 @@ func writeMcpJSON(t *testing.T, dir string, n int) {
 	sb.WriteString("}}")
 	if err := os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(sb.String()), 0o644); err != nil {
 		t.Fatalf("write .mcp.json: %v", err)
+	}
+}
+
+func TestAI_Spans_UsageFourFields(t *testing.T) {
+	seg := NewAISegment(samplePayload(), "", nil, mcp.ActiveCountOptions{})
+	seg.Links = Links{AI: true, UsageURL: DefaultClaudeUsageURL}
+	text, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	if len(spans) != 4 {
+		t.Fatalf("want model/ctx/5h/7d spans, got %+v in %q", spans, text)
+	}
+	// The model name opens its model page (family from the display name here);
+	// context and rate fields open the usage page.
+	if spans[0].URL != "https://www.anthropic.com/claude/opus" || text[spans[0].Start:spans[0].End] != "Opus 4.7" {
+		t.Errorf("model span = %+v (%q)", spans[0], text[spans[0].Start:spans[0].End])
+	}
+	for _, sp := range spans[1:] {
+		if sp.URL != DefaultClaudeUsageURL || strings.Contains(text[sp.Start:sp.End], "MCP") {
+			t.Errorf("bad span %+v", sp)
+		}
+	}
+}
+
+func TestAI_Spans_ModelURL_Gemini(t *testing.T) {
+	p := samplePayload()
+	p.Model = &payload.Model{ID: strptr("Gemini 3.5 Flash (Medium)"), DisplayName: strptr("Gemini 3.5 Flash (Medium)")}
+	seg := NewAISegment(p, "", nil, mcp.ActiveCountOptions{})
+	seg.Links = Links{AI: true, UsageURL: DefaultClaudeUsageURL}
+	_, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	if len(spans) != 4 || spans[0].URL != DefaultGeminiModelURL {
+		t.Errorf("gemini model span: %+v", spans)
+	}
+}
+
+func TestAI_Spans_ModelURL_UnknownFamilyHasNoModelLink(t *testing.T) {
+	p := samplePayload()
+	p.Model = &payload.Model{DisplayName: strptr("Mystery")}
+	seg := NewAISegment(p, "", nil, mcp.ActiveCountOptions{})
+	seg.Links = Links{AI: true, UsageURL: DefaultClaudeUsageURL}
+	text, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	if len(spans) != 3 || strings.Contains(text[spans[0].Start:spans[0].End], "Mystery") {
+		t.Errorf("unknown family: want ctx/5h/7d spans only, got %+v in %q", spans, text)
+	}
+}
+
+func TestAI_Spans_ModelURL_TemplateOverride(t *testing.T) {
+	p := samplePayload()
+	p.Model = &payload.Model{ID: strptr("claude-fable-5-1"), DisplayName: strptr("Fable")}
+	seg := NewAISegment(p, "", nil, mcp.ActiveCountOptions{})
+	seg.Links = Links{AI: true, ModelURL: "https://x/{family}/{model_id}"}
+	_, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
+	if len(spans) != 1 || spans[0].URL != "https://x/fable/claude-fable-5-1" {
+		t.Errorf("template override (no usage URL ⇒ only the model span): %+v", spans)
+	}
+}
+
+func TestBuildSegments_AIModelURLOption(t *testing.T) {
+	cfg := config.Default()
+	for i := range cfg.Segments {
+		if cfg.Segments[i].Type == "ai" {
+			cfg.Segments[i].Options = map[string]any{"model_url": "https://x/{family}"}
+		}
+	}
+	segs := BuildSegments(cfg, Deps{Payload: samplePayload(), Links: Links{AI: true}})
+	var ai *AISegment
+	for _, s := range segs {
+		if a, ok := s.(*AISegment); ok {
+			ai = a
+		}
+	}
+	if ai == nil || ai.Links.ModelURL != "https://x/{family}" {
+		t.Fatalf("model_url option not threaded: %+v", ai)
+	}
+}
+
+func TestAI_Spans_NoUsageURL(t *testing.T) {
+	seg := NewAISegment(samplePayload(), "", nil, mcp.ActiveCountOptions{})
+	seg.Links = Links{AI: true}
+	// No usage URL ⇒ no context/rate spans; the model name still opens its
+	// model page (built-in family map).
+	if _, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0); len(spans) != 1 || spans[0].URL != "https://www.anthropic.com/claude/opus" {
+		t.Errorf("no usage URL ⇒ only the model-page span: %+v", spans)
 	}
 }
