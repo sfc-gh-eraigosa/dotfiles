@@ -58,12 +58,12 @@
 - [x] RUN-GREEN → **PASS**; coverage ≥80%
 - [ ] VERIFY (human, ask first): one real `ghapp create` + `ghapp token --repo <this repo>` → `evidence/ghapp/` (redacted)
 - [ ] COMMIT: `feat(ghapp): manifest-flow create + CLI`
-- [ ] LEDGER + CHECKPOINT
+- [x] LEDGER + CHECKPOINT
 **Done when:** ghapp-ci green; token mint evidence captured.
 
 ### P1-T1 — gcfg scaffold + CI  (plan P1-T1)
-- [ ] SETUP/RED/GREEN as P0-T1 for `sdk/gcfg`; `gcfg-ci.yml` with 80/90/90 gates + schema-drift placeholder
-- [ ] COMMIT: `feat(gcfg): module scaffold + version + CI`
+- [x] SETUP/RED/GREEN as P0-T1 for `sdk/gcfg`; `gcfg-ci.yml` with 80/90/90 gates + schema-drift placeholder
+- [x] COMMIT: `feat(gcfg): module scaffold + version + CI`
 - [ ] LEDGER + CHECKPOINT
 
 ### P1-T2 — schema load + lint + JSON Schema  (plan P1-T2)
