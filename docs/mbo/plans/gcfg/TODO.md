@@ -72,14 +72,14 @@
 - [x] GREEN: `types.go`, `load.go`, `lint.go`, `jsonschema.go`; `gcfg lint`, `gcfg schema`
 - [x] RUN-GREEN: `go test ./internal/schema/ -cover` ≥90% → **PASS**
 - [x] COMMIT: `feat(gcfg): typed schema, strict load, lint, JSON Schema`
-- [ ] LEDGER + CHECKPOINT
+- [x] LEDGER + CHECKPOINT
 
 ### P1-T3 — gh client + credential chain  (plan P1-T3)
-- [ ] RED: `internal/gh/fake_test.go` (records calls, serves fixtures), `auth_test.go` (order GH_TOKEN → GITHUB_TOKEN → gh login → ghapp; none → error), `cmd/auth_status_test.go` (never prints token)
-- [ ] RUN-RED → **FAIL**
-- [ ] GREEN: `client.go`, `real.go` (go-gh REST, retry, Retry-After), `fake.go`, `auth.go`
-- [ ] RUN-GREEN → **PASS**
-- [ ] COMMIT: `feat(gcfg): gh client seam, recording fake, credential chain`
+- [x] RED: `internal/gh/fake_test.go` (records calls, serves fixtures), `auth_test.go` (order GH_TOKEN → GITHUB_TOKEN → gh login → ghapp; none → error), `cmd/auth_status_test.go` (never prints token)
+- [x] RUN-RED → **FAIL**
+- [x] GREEN: `client.go`, `real.go` (go-gh REST, retry, Retry-After), `fake.go`, `auth.go`
+- [x] RUN-GREEN → **PASS**
+- [x] COMMIT: `feat(gcfg): gh client seam, recording fake, credential chain`
 - [ ] LEDGER + CHECKPOINT
 
 ### P1-T4 — family model + general + security  (plan P1-T4)
