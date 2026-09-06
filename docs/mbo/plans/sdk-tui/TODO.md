@@ -64,17 +64,17 @@
 - [x] RUN-RED: `go test ./tui/search/` → expect **FAIL** `undefined: Compile`
 - [x] GREEN: `tui/search/search.go`
 - [x] RUN-GREEN: `mkdir -p $EV/task4 && go test ./tui/search/ -cover -v 2>&1 | tee $EV/task4/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
-- [ ] COMMIT: `feat(libs/tui): search — smartcase compile, incremental matches, n/N wrap, :noh/re-arm, badge`
-- [ ] LEDGER + CHECKPOINT
+- [x] COMMIT: `feat(libs/tui): search — smartcase compile, incremental matches, n/N wrap, :noh/re-arm, badge`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** search ≥ 90%; the invalid-regex test proves `Re` is kept.
 
 ### Task 5 — `cmdline`  (plan Task 5)
 
-- [ ] RED: `tui/cmdline/cmdline_test.go` (5 tests)
-- [ ] RUN-RED: `go test ./tui/cmdline/` → expect **FAIL** `undefined: Parse`
-- [ ] GREEN: `tui/cmdline/cmdline.go`
-- [ ] RUN-GREEN: `mkdir -p $EV/task5 && go test ./tui/cmdline/ -cover -v 2>&1 | tee $EV/task5/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
+- [x] RED: `tui/cmdline/cmdline_test.go` (5 tests)
+- [x] RUN-RED: `go test ./tui/cmdline/` → expect **FAIL** `undefined: Parse`
+- [x] GREEN: `tui/cmdline/cmdline.go`
+- [x] RUN-GREEN: `mkdir -p $EV/task5 && go test ./tui/cmdline/ -cover -v 2>&1 | tee $EV/task5/go-test.txt | grep -E '^(ok|FAIL|---)'` → **ok**, ≥ 90%
 - [ ] COMMIT: `feat(libs/tui): cmdline — : parser, command registry, standard verbs, Tab completion`
 - [ ] LEDGER + CHECKPOINT
 
