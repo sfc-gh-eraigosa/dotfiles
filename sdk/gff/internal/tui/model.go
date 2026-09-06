@@ -129,6 +129,7 @@ func NewModel(items []resolve.Resolved, p paths.Paths) *Model {
 		m.scopeNS = m.rows[0].ns
 	}
 	m.buildPages()
+	m.registerCommands()
 	return m
 }
 
@@ -195,6 +196,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateHelp(msg)
 		case modeSearch:
 			return m.updateSearch(msg)
+		case modeCommand:
+			return m.updateCommand(msg)
 		}
 		return m.updateList(msg)
 	}
@@ -375,6 +378,10 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case keymap.ClearHighlight:
 			m.noh()
+			return m, nil
+		case keymap.Command:
+			m.cmd.Input.Reset()
+			m.mode = modeCommand
 			return m, nil
 		}
 	}

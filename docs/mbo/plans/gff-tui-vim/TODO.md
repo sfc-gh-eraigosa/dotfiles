@@ -42,17 +42,17 @@
 - [x] RUN-RED: `go test ./internal/tui/ -run 'TestSlash|TestEscInList|TestNWithout|TestSearch'` → expect **FAIL**
 - [x] GREEN: `internal/tui/search.go`; `model.go` edits 1–4; `view.go` edits 1–4
 - [x] RUN-GREEN: `mkdir -p $EV/task2 && go test ./internal/tui/ -cover 2>&1 | tee $EV/task2/go-test.txt | tail -3 && go vet ./...` → **ok**, ≥ 91.3%
-- [ ] COMMIT: `feat(gff/tui): / search via libs/tui/search — auto-expand, n/N, :noh, match gutter`
-- [ ] LEDGER + CHECKPOINT
+- [x] COMMIT: `feat(gff/tui): / search via libs/tui/search — auto-expand, n/N, :noh, match gutter`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** all search tests pass; frame-height test passes at height 8.
 
 ### Task 3 — `:` over `cmdline`  (plan Task 3)
 
-- [ ] RED: `internal/tui/command_internal_test.go` (3 tables) + `internal/tui/command_test.go` (8 tests); `resolve.WithNamespace` + its one-line test
-- [ ] RUN-RED: `go test ./internal/tui/ -run 'TestParseValue|TestFindKey|TestColon'` → expect **FAIL**
-- [ ] GREEN: `internal/tui/command.go`; `model.go` (`registerCommands` in `NewModel`, dispatch, `:` key)
-- [ ] RUN-GREEN: `mkdir -p $EV/task3 && go test ./internal/tui/ ./internal/resolve/ -cover 2>&1 | tee $EV/task3/go-test.txt | tail -3 && go vet ./...` → **ok** ×2; tui ≥ 91.3%, resolve ≥ 95%
+- [x] RED: `internal/tui/command_internal_test.go` (3 tables) + `internal/tui/command_test.go` (8 tests); `resolve.WithNamespace` + its one-line test
+- [x] RUN-RED: `go test ./internal/tui/ -run 'TestParseValue|TestFindKey|TestColon'` → expect **FAIL**
+- [x] GREEN: `internal/tui/command.go`; `model.go` (`registerCommands` in `NewModel`, dispatch, `:` key)
+- [x] RUN-GREEN: `mkdir -p $EV/task3 && go test ./internal/tui/ ./internal/resolve/ -cover 2>&1 | tee $EV/task3/go-test.txt | tail -3 && go vet ./...` → **ok** ×2; tui ≥ 91.3%, resolve ≥ 95%
 - [ ] COMMIT: `feat(gff/tui): : command line via libs/tui/cmdline — set/unset with typed validation, Tab completion`
 - [ ] LEDGER + CHECKPOINT
 

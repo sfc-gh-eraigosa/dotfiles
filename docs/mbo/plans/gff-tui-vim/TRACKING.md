@@ -32,8 +32,8 @@
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
 | 1 adopt libs/tui: keymap + nav.Cursor + help rebind | done | `01ea253` | RUN-RED `go test ./internal/tui/ -run "TestVim|TestHelpOpensOn|TestHDoesNot|TestPickerJK|TestFooterHint"` → 10 FAIL (`evidence/task1/run-red.txt`); RUN-GREEN `go test ./internal/tui/ -cover` → `ok … coverage: 91.4%` (baseline 91.3%); `grep -rn "'h', 'H'|scrollTop|lastInner" internal/tui/*.go` → no hits; `go vet ./...` clean; `go test ./...` → 12/12 ok (`evidence/task1/go-test.txt`) | rewired `TestHelpOverlayFromDetail` `h`→`?`; `cursor/scrollTop/lastInner` → `nav.Cursor`; three implementation notes in §4 |
-| 2 `/` search over `search.State` (auto-expand, n/N, :noh, gutter) | done | (SHA at the next commit) | RUN-RED `go test ./internal/tui/ -run "TestSlash|TestEscInList|TestNWithout|TestSearch"` → 8 FAIL (`evidence/task2/run-red.txt`); RUN-GREEN `go test ./internal/tui/ -cover` → `ok … coverage: 91.7%`; `go vet ./...` clean; `go test ./...` → 13/13 ok (`evidence/task2/go-test.txt`) | two extra spec-derived tests added for the gate (see §4) |
-| 3 `:` over `cmdline` (set/unset validation, Tab) | todo | | | adds `resolve.Resolved.WithNamespace` (keep resolve ≥ 95%) |
+| 2 `/` search over `search.State` (auto-expand, n/N, :noh, gutter) | done | `c3c6a37` | RUN-RED `go test ./internal/tui/ -run "TestSlash|TestEscInList|TestNWithout|TestSearch"` → 8 FAIL (`evidence/task2/run-red.txt`); RUN-GREEN `go test ./internal/tui/ -cover` → `ok … coverage: 91.7%`; `go vet ./...` clean; `go test ./...` → 13/13 ok (`evidence/task2/go-test.txt`) | two extra spec-derived tests added for the gate (see §4) |
+| 3 `:` over `cmdline` (set/unset validation, Tab) | done | (SHA at the next commit) | RUN-RED `go test ./internal/tui/ -run "TestParseValue|TestFindKey|TestColon"` → build failed, `undefined: parseValue`, `m.findKey undefined` (`evidence/task3/run-red.txt`); RUN-GREEN `go test ./internal/tui/ ./internal/resolve/ -cover` → tui `92.6%`, resolve `95.5%`; `go vet ./...` clean; `go test ./...` → 13/13 ok (`evidence/task3/go-test.txt`) | added `resolve.Resolved.WithNamespace` + its one-line test (resolve stays ≥ 95%) |
 | 4 docs + key-table pin test + gates + demo | todo | | | Step 5 is human-evidenced (real terminal) |
 
 ## 2. Feature → proof matrix (from spec §5)
@@ -45,8 +45,8 @@
 | F3 `/` prompt | [x] `TestSlashSearch*` (task2/go-test.txt) | [ ] demo `/wispr` | |
 | F4 haystack + auto-expand | [x] `TestSlashSearchExpandsAreaAndJumpsToFirstMatch`, `TestSearchScopeIsTheCurrentPage` (task2/go-test.txt); `matchesItem` exercised by every search test (the plan's `TestMatchItemPathOrDescription` has no body in §4 and is covered by these) | [ ] demo (collapsed `install` expands) | |
 | F5 n/N + :noh | [x] `TestSlashSearchEnterCommitsAndNNHop`, `TestEscInListClearsHighlightsButKeepsPatternForN`, `TestNWithoutPatternIsNoop`, `TestNOnAPageWithoutMatchesReportsNotFound` (task2/go-test.txt) | [ ] demo `n` | |
-| F6 `:` commands | [ ] `TestColon*`, `TestParseCommand`, `TestParseValue*`, `TestFindKeyScopedAndQualified` | [ ] demo `:set`/`:unset` | |
-| F7 Tab completion | [ ] `TestColonTab*` | [ ] demo Tab | |
+| F6 `:` commands | [x] `TestColon*`, `TestParseValue*`, `TestFindKeyScopedAndQualified` (task3/go-test.txt); `TestParseCommand` is the lib's `cmdline.TestParse` (plan §5 maps F6d/F6g there) | [ ] demo `:set`/`:unset` | |
+| F7 Tab completion | [x] `TestColonTabCompletesKeysInScope` (task3/go-test.txt) | [ ] demo Tab | |
 | F8 prompt/gutter rendering | [x] `TestSearchPromptKeepsFrameWithinHeight` + `gutterLines` asserts (task2/go-test.txt) | [ ] | |
 | F9 docs agree | [ ] `TestTUIHelpListsVimSearchAndCommandKeys`, `TestFooterHintRendersFromTheKeymap` | [ ] README reviewed | |
 
@@ -79,3 +79,4 @@
 | 2026-09-05 | build (session 1) | Preflight: sdk-tui done on `main` (`70629d1`), libs `tui/*` 6/6 ok; gff module all ok on the base; **baseline `internal/tui` coverage 91.3%** (`go test -cover ./internal/tui/`); go1.26.1. Build worker created (§0) on the design branch. |
 | 2026-09-05 | build (session 1) | Task 1 done: `keys.go` (gffKeys + palette + listHint), `model.go` on `nav.Cursor` with `gffKeys.Lookup` dispatch + `turnPage`, `view.go` viewport/footer/help via `overlay.Help` + a `sourceLines()` extraction. tui 91.3% → 91.4%; module 12/12 ok. Three implementation notes recorded in §4 (none touch the lib or the plan). |
 | 2026-09-05 | build (session 1) | Task 1 pushed → draft PR #304. Task 2 done: `search.go` (rowKey/inScope/hit/collect/start/apply/commit/cancel/jump/noh/updateSearch), `modeSearch` + `modeCommand` modes with the `cmdline` fields declared, view prompt/badge/gutter/`errStyleFor`/`matchStyleFor`. tui 91.7%; module 13/13 ok. |
+| 2026-09-05 | build (session 1) | Task 2 pushed. Task 3 done: `command.go` (parseValue/findKey/completeKey/registerCommands/updateCommand), `registerCommands()` in `NewModel`, `modeCommand` dispatch and the `:` key. `resolve.WithNamespace` added (its test needed the `resolve.` qualifier — the file is package `resolve_test`). tui 92.6%, resolve 95.5%, module 13/13 ok. |
