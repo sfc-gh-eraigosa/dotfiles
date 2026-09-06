@@ -66,13 +66,13 @@
 
 ### Task 4 — test harness  (plan T4)
 
-- [ ] SETUP: decide `FakeProvider`'s five-column kind, three levels, one leaf, one action of each of the three kinds (handoff, stream, tunnel)
-- [ ] RED: a smoke test driving `FakeProvider` through the `Provider` and `Host` interfaces of plan §3.1 alone (a `Host` backed by `runner.Fake`; no registry) + `BuildStub(t)` yields a binary that answers `initialize`
-- [ ] RUN-RED: `go test ./pkg/provider/providertest/...` → expect **FAIL**
-- [ ] GREEN: `providertest/fake.go` — `FakeProvider` + `BuildStub(t)` (`go build` once per test binary into `t.TempDir()`); `providertest/stubplugin/main.go` — `StubPlugin` as its own `main` package, scripted by flags/env (answer, sleep, exec, exit, protocol 2)
-- [ ] RUN-GREEN: `go test ./pkg/provider/...` → **PASS**
-- [ ] EVID + COMMIT + LEDGER
-- [ ] **FREEZE:** record in `TRACKING.md` §5 that the contract (plan §3.1) is frozen as of this SHA
+- [x] SETUP: `FakeProvider` — three kinds of five columns each (`fake-capability` → `fake-widget` → `fake-gadget`), the gadget a `Leaf` carrying one action of each of the three kinds plus one `Unavailable`
+- [x] RED: the smoke test drives every level through `Provider` + `Host` alone (a `runnerHost` adapter over `runner.Fake` lives in the TEST, so leaf A keeps no in-edge to the registry) + `BuildStub(t)`
+- [x] RUN-RED: `go test ./pkg/provider/providertest/...` → **FAIL** observed (`no non-test Go files`; evidence/task04/red.txt)
+- [x] GREEN: `providertest/fake.go` (`NewFakeProvider` + `Absent`/`ProbeError`/`Hang` options), `providertest/stub.go` (`BuildStub`, `sync.Once`), `providertest/stubplugin/main.go` (its own `main`, flags `-reply -half-line -sleep -exit-at-once -stderr`)
+- [x] RUN-GREEN: `go test ./pkg/provider/...` → **PASS**, providertest 94.2%, `pkg/provider` 100%
+- [x] EVID + COMMIT + LEDGER
+- [x] **FREEZE:** recorded in `TRACKING.md` §5 — the contract (plan §3.1) is frozen as of the T4 commit
 - [ ] CHECKPOINT: `gss feature checkpoint` → PR 1 draft → ready; label `ready-for-merge` after review
 
 **Done when:** later leaves can be built and tested without herdr. **Leaf A exits — PR 1.**
