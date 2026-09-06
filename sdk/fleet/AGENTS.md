@@ -420,6 +420,29 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
 - **Branch costs no extra round-trip.** The live checked-out branch rides in the *same*
   remote command as the stamp read, split on `probeDelim`. A second dial per host would
   double the poll for one column. Pinned by `TestBranchCostsNoExtraRoundTrip`.
+- **The frame must never be taller than the terminal.** bubbletea's standard renderer
+  drops lines from the TOP of an over-tall frame ("we can't navigate the cursor into the
+  terminal's scrollback buffer"), so a single row of overflow silently walks the banner off
+  the screen — which is what an operator sees as "the window shifted up and ate the header"
+  during a multi-host update. Three things kept it from fitting, and all three are now
+  structural rather than arithmetic: **(a)** lipgloss counts horizontal padding INSIDE
+  `Style.Width`, so a panel declared `Width(n)` with `Padding(0, 1)` gives content only
+  `n-2` cells — `panelInner()` is that number and `renderPanel` clamps every line to it, so
+  a long log line can no longer wrap onto a second row; **(b)** the log pane's height is
+  MEASURED against the already-rendered banner, list and status blocks rather than predicted
+  from a constant (the old `- 10` was three short: the banner had grown a row and the panels
+  had grown borders); **(c)** a style is never applied to already-rendered text — lipgloss
+  re-styles character by character, so nesting stranded the streaming legend's escape bytes,
+  printed them as literal `[38;5;33mhost-nano[0m`, and counted them as visible cells.
+  `View()` then verifies rather than trusts: it hands log rows back until the frame fits,
+  drops the pane entirely for a dialog that outgrows it, and `fitFrame` clips the BOTTOM as
+  a last resort so the header is never what is lost. Prose dialogs (`wrapPanel`) still wrap
+  — losing the tail of the force-reset warning is worse than spending a row — and their
+  height is measured, so they cost the log pane rather than the banner. Pinned by
+  `TestViewNeverExceedsTerminalHeight`, `TestViewFitsAcrossEveryTerminalSize` (1219 sizes),
+  `TestLogTitleNeverNestsStyles`,
+  `TestHelpOverlayOnAShortTerminalSaysWhatItHidRatherThanOverflowing`, and the height guard
+  in `TestDemoFrames` — the twin of the width guard, whose absence is why this shipped.
 - **Row width is derived, not guessed.** `rowPrefixWidth` sums the same numbers as
   `rowView`'s format string and `failWidth` budgets from it; the failure cause is dropped
   rather than clamped to a floor when nothing fits. Adding the BRANCH column against a

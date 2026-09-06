@@ -93,10 +93,12 @@ func TestLogPaneTogglesAndRestoresFullHeight(t *testing.T) {
 }
 
 // Even on a short terminal the split must leave both halves usable rather
-// than collapsing the list to zero rows.
+// than collapsing the list to zero rows. 15 rows is the floor at which that is
+// possible at all: 13 go to chrome (banner 5 + list frame 3 + log frame 3 +
+// blank + status), leaving one row each.
 func TestSplitKeepsBothHalvesUsableOnASmallTerminal(t *testing.T) {
 	m := testModel("a", "b")
-	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 16})
 	open := mm.(tuiModel)
 	open.appendLog("a", "line") // make the pane active
 	if open.visibleRows() < 1 || open.logHeight() < 1 {
