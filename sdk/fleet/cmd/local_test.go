@@ -129,8 +129,12 @@ func TestLocalAliasIsDeterministicWhenTwoBlocksMatch(t *testing.T) {
 	if got := build(); got != "alpha" {
 		t.Fatalf("localAlias = %q, want alpha (first in row order)", got)
 	}
-	if build() != build() {
-		t.Fatal("the local pick must not vary between runs")
+	// Two separate observations, named: `build() != build()` reads to
+	// staticcheck as a tautology (SA4000) because it cannot see that each call
+	// rebuilds the model and re-runs the pick.
+	first, second := build(), build()
+	if first != second {
+		t.Fatalf("the local pick must not vary between runs: got %q then %q", first, second)
 	}
 }
 
