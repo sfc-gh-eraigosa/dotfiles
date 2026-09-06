@@ -33,11 +33,16 @@ DIRTY="false"
 if ! git -C "$SCRIPT_DIR" diff --quiet 2>/dev/null; then
     DIRTY="true"
 fi
+# The origin remote, passed VERBATIM: normalising scp-like vs https spellings is
+# cmd.commitURL's job (unit-tested Go), not sed's. A checkout with no origin
+# keeps the compiled-in default.
+REPO=$(git -C "$SCRIPT_DIR" remote get-url origin 2>/dev/null || echo "")
 
 LDFLAGS="-X github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd.Version=$VERSION \
          -X github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd.Commit=$COMMIT \
          -X github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd.BuildDate=$DATE \
-         -X github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd.Dirty=$DIRTY"
+         -X github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd.Dirty=$DIRTY \
+         ${REPO:+-X github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd.Repo=$REPO}"
 
 mkdir -p "$BIN_DIR"
 echo "Building fleet v$VERSION with $($GO_BIN version)..."

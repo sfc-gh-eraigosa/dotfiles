@@ -136,13 +136,19 @@ type tuiModel struct {
 	// Empty (the test default) disables persistence entirely.
 	ansPath string
 
-	hosts   map[string]sshconf.Host
-	run     runner.Runner
-	base    Baseliner
-	now     time.Time
-	spinner string // frame injected; tests keep it fixed for stable goldens
-	status  string
-	quitReq bool
+	hosts map[string]sshconf.Host
+	// local is who THIS machine is, and localAlias is the fleet row that IS
+	// it ("" when we are running from a machine outside the fleet). Both are
+	// set once via setLocal — injected rather than detected here, so the
+	// model stays a pure value and tests never read the real hostname.
+	local      localHost
+	localAlias string
+	run        runner.Runner
+	base       Baseliner
+	now        time.Time
+	spinner    string // frame injected; tests keep it fixed for stable goldens
+	status     string
+	quitReq    bool
 }
 
 func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time.Time, ref string, jobs int, plan updplan.Plan) tuiModel {
@@ -184,6 +190,23 @@ func (m tuiModel) Init() tea.Cmd {
 		cmds = append(cmds, pollHostWake(m.hosts[r.Alias], m.peersFor(r.Alias), m.run, m.base, m.wake))
 	}
 	return tea.Batch(cmds...)
+}
+
+// setLocal records who this machine is and which fleet row, if any, IS it.
+//
+// The pick walks m.rows, which newTUIModel has already sorted by alias, so a
+// config where two blocks both point here (an alias and a loopback tunnel is
+// the ordinary way that happens) resolves to the SAME row on every run —
+// map iteration order would have moved the highlight between restarts.
+func (m *tuiModel) setLocal(me localHost) {
+	m.local = me
+	m.localAlias = ""
+	for _, r := range m.rows {
+		if isLocalHost(m.hosts[r.Alias], me) {
+			m.localAlias = r.Alias
+			return
+		}
+	}
 }
 
 // ---- helpers over the row list -------------------------------------------

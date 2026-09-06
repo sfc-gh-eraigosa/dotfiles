@@ -19,7 +19,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | :-- | :-- |
 | `fleet status [host...]` | table of host · commit · **branch** · last run · status; `--json`; exits non-zero if any host is stale |
 | `fleet discover [--scan]` | list every concrete ssh-config host as `in-fleet` / `available`; `--scan` sweeps the subnet to refresh a moved `HostName` and offer unknown responders; `--json`; `--add-all` bulk-adopts (one pass, one backup; `--dry-run` / `--yes`) |
-| `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v`/`a` selection, concurrent background updates (`--jobs`), `w` wake, `s` ssh, `F` forget answers, `?` help |
+| `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v`/`a` selection, concurrent background updates (`--jobs`), `w` wake, `s` ssh, `F` forget answers, `?` help. The header names **this** machine (`⌂ <hostname>`) and its row's alias is painted the same colour; the version's commit is an OSC 8 link to its GitHub page |
 | `fleet update <host>...` | walks a `fleet.yaml` step plan per host, serially: a DAG of `sync` (fetch → ff-only, one network call) / `run` (verbatim shell, batch or `ssh -t`) / `gh-auth` steps; with no plan file it is today's fetch → ff → `install.sh`. Flags: `--local skip\|rescue\|carry`, `--force` (= `--local rescue`), `--no-restore`, `--reset`, `--timeout D`, `--no-retry`, `--ref B\|repo=B` (repeatable), `--file PATH`, `--dry-run` (prints every effective script, sends nothing); `--json` from root. `fleet update init [--file] [--overwrite] [--print]` writes the starter plan |
 | `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
 | `fleet remove <alias> [--purge]` | unmark (keeps SSH access); `--purge` deletes the block |
@@ -36,6 +36,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `cmd/tui_view.go` | pure `View()` + the one lipgloss `theme` |
 | `cmd/tui_keys.go` | keymap + mode routing (`keyHelp` is the single source of truth) |
 | `cmd/tui_cmds.go` | tea.Cmd producers: poll, precheck, background update, handoffs |
+| `cmd/local.go` | "which of these rows is the machine I am typing on" — `detectLocal` (the one impure edge) + the pure `isLocalHost` match, and the `⌂` glyph / colour the header badge and the row share |
 | `internal/sshconf` | parse **and edit** `~/.ssh/config` (the only inventory) |
 | `internal/stamp` | parse the install stamp |
 | `internal/drift` | classify drift + format age (`now` injected — never `time.Now()`) |
@@ -381,6 +382,34 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   peer — we cannot run a command through a hop that refuses us. Pinned by
   `TestWakeLadderNeverFiresForAnAuthFailure` and
   `TestAuthFailedHostIsNeverOfferedAsALiveRelayPeer`.
+- **The dashboard says which machine it is RUNNING on, and never guesses.** Every row looks
+  like a remote, so the header carries a `⌂ <hostname>` badge and the matching row's alias is
+  painted the same colour (`localColor`, deliberately none of the drift classes' colours —
+  location is a different question from status). The match is by ADDRESS *and* by NAME and
+  either suffices, because each covers the other's blind spot: a DHCP move makes a configured
+  `HostName` stale while the alias still names the box, and a nickname alias says nothing
+  about the box while its address still resolves to it. Loopback in any spelling (`127.0.0.0/8`,
+  `::1`, `localhost`) is local by definition. There is deliberately **no DNS**: a resolver hang
+  would stall startup for a cosmetic highlight, so a name that needs resolving simply does not
+  match. Not being in the fleet is SAID (`(not in fleet)`) rather than left to look like an
+  unhighlighted row, the pick walks the alias-sorted rows so two matching blocks resolve the
+  same way on every run, and a search hit outranks the highlight (the search is transient; the
+  badge is re-readable). `detectLocal` is called once in `tui.go` and handed to `setLocal` as
+  data — a model that read the hostname itself would render the developer's machine into every
+  test. Pinned by `TestLocalHostMatchesByAlias`, `TestLocalHostMatchesByInterfaceIP`,
+  `TestLocalHostMatchesLoopback`, `TestLocalHostRejectsEveryOtherMachine`,
+  `TestLocalAliasIsDeterministicWhenTwoBlocksMatch`,
+  `TestBannerSaysWhenThisMachineIsNotInTheFleet`, `TestBannerStaysInsideThePanel`,
+  `TestLocalHighlightDoesNotChangeTheRowWidth`, `TestSearchHighlightWinsOverTheLocalHighlight`.
+- **The banner's commit is a link, and a doubtful link is no link.** `commitURL` resolves
+  `Repo` (injected verbatim from `git remote get-url origin`) to a GitHub commit page and
+  returns "" for anything else — a GitLab remote wants `/-/commit/`, so a guessed URL would be
+  a broken link that looks exactly like a working one, strictly worse than the plain text it
+  replaced. A build with no real SHA (`none`, `dev`) links nothing rather than offering a 404.
+  The URL rides in an OSC 8 escape and therefore costs ZERO cells, which is what keeps the
+  panel's width budget intact. Pinned by `TestCommitURLAcceptsEveryRemoteSpelling`,
+  `TestCommitURLNeedsARealSHA`, `TestCommitURLOnlyLinksKnownForges`,
+  `TestBannerVersionLinksTheCommitAtZeroWidth`, `TestBannerVersionIsPlainWithoutASHA`.
 - **TUI in-flight ownership**: a host is in exactly one of `pending` / `updating` /
   `waking` / resolved. Refresh skips hosts an async path owns; every completion
   re-polls its host. Two async paths must never own one row.
@@ -561,8 +590,10 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   `eth0` is a private `172.x` link with no layer-2 presence on the fleet subnet, so the
   rung reports `skipped: workstation is not on the target's subnet`. It earns its place
   when fleet runs *on* a fleet member, which is genuinely on the LAN.
-- `build.sh` injects `cmd.Version`/`Commit`/`Dirty`/`BuildDate` by exact symbol path. Keep
-  them exported, or the ldflags silently no-op and every binary reports `dev`.
+- `build.sh` injects `cmd.Version`/`Commit`/`Dirty`/`BuildDate`/`Repo` by exact symbol path.
+  Keep them exported, or the ldflags silently no-op and every binary reports `dev`. `Repo`
+  gets the origin remote VERBATIM — normalising its spelling is `commitURL`'s job (unit-tested
+  Go), not `sed`'s — and a checkout with no origin keeps the compiled-in default.
 - The coverage floor lives in `scripts/test.sh` `coverage_min()`; a module missing from that
   map is silently exempt.
 
