@@ -19,7 +19,7 @@ exchanges the code for the App id + private key and stores them under
 that repository. No secret is ever printed except by `token`, whose stdout is
 the token and nothing else.
 
-**Reach for it when**
+**Reach for it when:**
 
 - a CLI needs admin-level GitHub access without a long-lived PAT (gcfg);
 - a workflow should use `actions/create-github-app-token` and you need the
@@ -27,30 +27,28 @@ the token and nothing else.
 - you want to see exactly what an App can do on a repo (`doctor --repo`).
 
 ```console
-$ ghapp create --name "gcfg (edward)"
+$ ghapp status
+no GitHub App stored in ~/.config/ghapp — run `ghapp create`
+
+$ ghapp token --repo sfc-gh-eraigosa/dotfiles
+ghapp: usage: no GitHub App in ~/.config/ghapp — run `ghapp create` first
+
+$ ghapp create --name "gcfg (sfc-gh-eraigosa)" --no-browser
 waiting for GitHub to hand back the App (up to 10m0s)…
-created App gcfg-edward (id 1234567)
-  key:  ~/.config/ghapp/gcfg-edward.pem (0600)
-  next: ghapp install --app gcfg-edward   # install it on your account/org, then `ghapp token --repo owner/repo`
-
-$ ghapp install --no-browser
-gcfg-edward is installed on:
-  sfc-gh-eraigosa          id 87654321 User (all repositories)
-
-$ ghapp doctor --repo sfc-gh-eraigosa/dotfiles
-ok    store          ~/.config/ghapp 0700
-ok    pem            ~/.config/ghapp/gcfg-edward.pem 0600 ok
-ok    jwt            App gcfg-edward (id 1234567) https://github.com/apps/gcfg-edward
-ok    installations  1 (sfc-gh-eraigosa=87654321)
-ok    token          minted for installation 87654321, ghs_*** (expires 2026-09-06T06:31:00Z)
-ok    repo           sfc-gh-eraigosa/dotfiles reachable; permissions: admin,maintain,pull,push,triage
-
-$ GH_TOKEN=$(ghapp token --repo sfc-gh-eraigosa/dotfiles --permissions administration=write) gh api repos/sfc-gh-eraigosa/dotfiles -q .full_name
-sfc-gh-eraigosa/dotfiles
+open this URL in a browser: http://127.0.0.1:8479/
 ```
 
-(Transcript shape from the test stub; ids and dates are illustrative until the
-live evidence in `docs/mbo/plans/gcfg/evidence/ghapp/` replaces them.)
+Open that URL and confirm on GitHub; the redirect back stores the App id and
+its private key. From then on `token` prints an installation token and nothing
+else, so it composes directly:
+
+```sh
+GH_TOKEN=$(ghapp token --repo owner/repo) gcfg verify
+```
+
+`ghapp doctor --repo owner/repo` walks the whole chain: store and key
+permissions, whether the id and key are a matching pair, where the App is
+installed, and whether a freshly minted token actually reaches the repository.
 
 ## Verbs
 

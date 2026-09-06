@@ -1,12 +1,13 @@
 # 🧰 The SDK — small Go tools that make an agent-driven workflow safe
 
-Seven Go modules that turn a laptop and a pile of machines into an environment
+Ten Go modules that turn a laptop and a pile of machines into an environment
 where **AI agents can do real work without you holding your breath.**
 
 Each one is a single static binary, independently versioned, `go install`-able,
 and useful on its own. Together they cover the loop: *let an agent work
 (`tmux-mgr`) → let it commit without losing anything (`gss`) → see what's
-happening (`gsl`) → roll it out to every machine you own (`fleet`).*
+happening (`gsl`) → roll it out to every machine you own (`fleet`) → keep the
+repository it pushes to configured the way you meant (`gcfg`).*
 
 ```bash
 # Everything, wired into ~/opt/bin:
@@ -29,6 +30,8 @@ go install github.com/sfc-gh-eraigosa/dotfiles/sdk/gss@latest
 | **[gff](#-gff--flags-that-live-in-git)** | "Skip that step on this machine" | Layered feature flags with full provenance |
 | **[wlink](#-wlink--why-does-ssh-hang-but-the-ip-work)** | `ssh host` hangs from WSL but `ssh <ip>` works | Pins the resolver that actually knows your fleet, reversibly |
 | **[wol](#-wol--turn-it-on-from-anywhere)** | The machine you need is powered off | Wake-on-LAN magic packets |
+| **[gcfg](#-gcfg--repo-settings-that-live-in-git)** | Someone changed a repo setting and nobody knows who | GitHub settings as code: export, verify in CI, apply on purpose |
+| **[ghapp](#-ghapp--an-admin-token-that-expires-by-itself)** | A workflow needs admin rights and `GITHUB_TOKEN` hasn't got them | GitHub App credentials: one browser round-trip, hour-long tokens |
 | **[libs](#-libs--the-shared-foundation)** | You're writing tool #8 | Shared logging: rotation, capture, XDG paths |
 
 ---
@@ -359,6 +362,138 @@ packet left, not that anything woke. Many networks need the *subnet* broadcast
 wants port 7. WoL must also be enabled in the target's BIOS/NIC.
 
 → [Agent context](./wol/AGENTS.md)
+
+---
+
+## 📋 `gcfg` — repo settings that live in git
+
+> Your repository's settings, declared in a file, checked in CI, and changed
+> only on purpose.
+
+**The problem.** Repository settings live in a web UI that records nothing. Six
+months later the wiki is on, `delete_branch_on_merge` is off, secret scanning
+was never enabled on the newest repo, and nobody can say when any of it changed
+or whether it was deliberate. The usual fix is a script per setting — this repo
+had grown two of them — each one a write with no way to ask "is it still like
+that?"
+
+**What it does about it.** One file, `.github/gcfg.yaml`, holds what the
+settings should be. `gcfg export` writes it from whatever is live, so an
+existing repo adopts it without anyone typing YAML. `gcfg verify` fails a PR
+when the live repo disagrees, naming the key. `gcfg apply` makes the change and
+then **reads every setting back**, because GitHub returning 200 is not the same
+as a setting that actually changed — a plan that silently ignores
+`non_provider_patterns` is reported as `not_honoured` rather than as drift that
+never clears. Keys the file does not mention are left alone, so adopting it is
+never all-or-nothing. Secrets are managed by **name only**; nothing gcfg writes
+can carry a credential.
+
+**Reach for it when:**
+
+- A repo setting changed and you want the diff, not an argument
+- A new repo should start with the same settings as the last one
+- You want CI to fail when the live configuration drifts from the file
+- An agent is about to change repository settings and you want a review first
+
+```console
+$ gcfg export --out .github/gcfg.yaml
+wrote .github/gcfg.yaml (sfc-gh-eraigosa/dotfiles)
+
+$ gcfg verify
+sfc-gh-eraigosa/dotfiles: clean (2 families checked)
+
+# someone turns the wiki off in the UI:
+$ gcfg verify
+sfc-gh-eraigosa/dotfiles: 1 drift (2 families checked)
+
+general
+  drift      features.wiki
+             want true
+             live false
+
+$ gcfg plan
+update general.features.wiki: false → true
+
+$ gcfg apply --yes
+update general.features.wiki: false → true
+sfc-gh-eraigosa/dotfiles: clean (2 families checked)
+```
+
+Exit codes are the contract: **0** clean, **1** something needs a human, **2**
+the file or the credential is the problem. That makes `gcfg verify` a CI gate
+with no extra glue.
+
+**Gotchas.** Writes need a credential with repository **Administration**
+permission — Actions' built-in `GITHUB_TOKEN` does **not** have it, so a
+workflow must bring a fine-grained PAT or an App token (see
+[`ghapp`](#-ghapp--an-admin-token-that-expires-by-itself)). Off a terminal,
+`apply` refuses without `--yes` and writes nothing, so no script changes a repo
+by accident. Today it manages the `general` and `security` families; the rest
+are landing family by family, and anything it does not manage it does not touch.
+
+→ [Agent context](./gcfg/AGENTS.md) · [module README](./gcfg/README.md)
+
+---
+
+## 🔑 `ghapp` — an admin token that expires by itself
+
+> A GitHub App's credential instead of yours: created in one browser
+> round-trip, stored `0600`, and only ever an hour old.
+
+**The problem.** Anything that administers a repository needs a token with
+`Administration` rights. A classic PAT is all-or-nothing and ends up in a shell
+history; a fine-grained one is scoped but is still a person's token that expires
+on a date you will forget. Inside Actions, `GITHUB_TOKEN` has no administration
+permission at all, so the workflow that would fix your settings cannot.
+
+**What it does about it.** `ghapp create` registers a private GitHub App through
+GitHub's manifest flow: it serves a one-page form on localhost, your browser
+posts it to GitHub, GitHub redirects back with a code, and `ghapp` exchanges it
+for the App id and private key — stored under `~/.config/ghapp/` with the
+directory `0700` and the key `0600`, refusing to load a key anyone else can
+read. After that `ghapp token --repo owner/repo` mints an installation token
+scoped to that repository, cached until just before it expires. The token value
+is printed by exactly one command, `token`, whose entire stdout is the token so
+it can be captured; every other verb, log line, and error redacts it.
+
+**Reach for it when:**
+
+- A tool needs admin-level GitHub access and you don't want a long-lived PAT
+- A workflow needs `Administration` and `GITHUB_TOKEN` cannot provide it
+- You want to see exactly what a credential can do on a repo before trusting it
+
+```console
+$ ghapp status
+no GitHub App stored in ~/.config/ghapp — run `ghapp create`
+
+$ ghapp token --repo sfc-gh-eraigosa/dotfiles
+ghapp: usage: no GitHub App in ~/.config/ghapp — run `ghapp create` first
+
+$ ghapp create --name "gcfg (sfc-gh-eraigosa)" --no-browser
+waiting for GitHub to hand back the App (up to 10m0s)…
+open this URL in a browser: http://127.0.0.1:8479/
+```
+
+Open that URL, confirm on GitHub, and the redirect back stores the App id and
+key. From then on `ghapp token --repo owner/repo` prints an installation token
+and nothing else, so it composes:
+
+```sh
+GH_TOKEN=$(ghapp token --repo owner/repo) gcfg verify
+```
+
+`ghapp doctor --repo owner/repo` checks the whole chain in one go: store and key
+permissions, that the id and key are a matching pair, where the App is
+installed, and whether a freshly minted token can actually reach the repository.
+
+**Gotchas.** `create` needs a browser that can reach `127.0.0.1` on this host —
+over SSH, forward the port first (`ssh -L 8479:127.0.0.1:8479 host`). The code
+GitHub hands back is valid for one hour; a stale one fails with a clear
+*expired* error rather than a stack trace. In Actions you do not need this
+binary at all: put the App id and key in repository secrets and mint the token
+with `actions/create-github-app-token`.
+
+→ [Agent context](./ghapp/AGENTS.md) · [module README](./ghapp/README.md)
 
 ---
 
