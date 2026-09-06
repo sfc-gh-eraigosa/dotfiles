@@ -53,19 +53,19 @@
 - [x] RUN-RED: `go test ./internal/tui/ -run 'TestParseValue|TestFindKey|TestColon'` → expect **FAIL**
 - [x] GREEN: `internal/tui/command.go`; `model.go` (`registerCommands` in `NewModel`, dispatch, `:` key)
 - [x] RUN-GREEN: `mkdir -p $EV/task3 && go test ./internal/tui/ ./internal/resolve/ -cover 2>&1 | tee $EV/task3/go-test.txt | tail -3 && go vet ./...` → **ok** ×2; tui ≥ 91.3%, resolve ≥ 95%
-- [ ] COMMIT: `feat(gff/tui): : command line via libs/tui/cmdline — set/unset with typed validation, Tab completion`
-- [ ] LEDGER + CHECKPOINT
+- [x] COMMIT: `feat(gff/tui): : command line via libs/tui/cmdline — set/unset with typed validation, Tab completion`
+- [x] LEDGER + CHECKPOINT
 
 **Done when:** all `TestColon*` pass; `:/re` equivalence test passes.
 
 ### Task 4 — docs, pin test, gates, demo  (plan Task 4)
 
-- [ ] RED: `cmd/tui_keys_test.go`
-- [ ] RUN-RED: `go test ./cmd/ -run TestTUIHelpListsVimSearchAndCommandKeys` → expect **FAIL** on `j/k`
-- [ ] DOCS: `cmd/tui.go` Long; `README.md` **TUI keys**; `AGENTS.md` `internal/tui` bullet
-- [ ] RUN-GREEN: `mkdir -p $EV/task4 && go test ./... -cover 2>&1 | tee $EV/task4/go-test-all.txt | grep -E 'coverage|FAIL'` → every package **ok**
-- [ ] VERIFY: the `gff-ci.yml` coverage recipe → `$EV/task4/coverage-gate.txt` ≥ 90%; `go vet ./...`; `make gff-proto-check`
-- [ ] VERIFY (human, real terminal): plan Task 4 Step 5 tmux demo → `$EV/demo/{transcript.txt,README.md}`; restore the flipped flag
+- [x] RED: `cmd/tui_keys_test.go`
+- [x] RUN-RED: `go test ./cmd/ -run TestTUIHelpListsVimSearchAndCommandKeys` → expect **FAIL** on `j/k`
+- [x] DOCS: `cmd/tui.go` Long; `README.md` **TUI keys**; `AGENTS.md` `internal/tui` bullet
+- [x] RUN-GREEN: `mkdir -p $EV/task4 && go test ./... -cover 2>&1 | tee $EV/task4/go-test-all.txt | grep -E 'coverage|FAIL'` → every package **ok**
+- [x] VERIFY: the `gff-ci.yml` coverage recipe → `$EV/task4/coverage-gate.txt` ≥ 90%; `go vet ./...`; `make gff-proto-check`
+- [x] VERIFY (human, real terminal): plan Task 4 Step 5 tmux demo → `$EV/demo/{transcript.txt,README.md}`; restore the flipped flag
 - [ ] COMMIT: `docs(gff/tui): key table in --help, README, AGENTS from the shared keymap; pin test; demo evidence`
 - [ ] LEDGER: TRACKING §1 all `done`, §2 matrix ticked, §3 stop condition
 - [ ] DOCS: `docs/mbo/index.md` row `gff-tui-vim` → `in-review` (+ build PR #); COMMIT `docs(mbo): gff-tui-vim → in-review`

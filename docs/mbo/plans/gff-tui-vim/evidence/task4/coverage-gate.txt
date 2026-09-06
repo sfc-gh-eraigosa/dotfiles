@@ -1,0 +1,19 @@
+# 2026-09-05 23:21 PDT — the exact gff-ci.yml coverage recipe (Tests + coverage profile, Coverage gate)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui	1.020s	coverage: 47.9% of statements in github.com/sfc-gh-eraigosa/dotfiles/sdk/gff, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/cmd, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/gitx, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/overrides, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/paths, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/registry, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/schema, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/style, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/version, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/pkg/gff
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/version	0.016s	coverage: 0.0% of statements in github.com/sfc-gh-eraigosa/dotfiles/sdk/gff, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/cmd, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/gitx, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/overrides, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/paths, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/registry, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/schema, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/style, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/version, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/pkg/gff
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/pkg/gff	0.080s	coverage: 17.2% of statements in github.com/sfc-gh-eraigosa/dotfiles/sdk/gff, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/cmd, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/gitx, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/overrides, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/paths, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/registry, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/schema, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/style, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/version, github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/pkg/gff
+total coverage (gen excluded): 91.0%
+internal/resolve package: 95.5%
+internal/schema  package: 95.7%
+internal/tui     package: 92.6%  (plan floor 91.3%)
+PASS: total >= 90%
+PASS: resolve >= 95%
+PASS: schema >= 90%
+PASS: tui >= 91.3%
+
+# 2026-09-05 23:21 PDT — VERIFY: go vet ./...
+vet clean
+
+# VERIFY: make gff-proto-check (repo root)
+bash sdk/gff/scripts/genproto.sh
+git diff --exit-code -- sdk/gff/gen/

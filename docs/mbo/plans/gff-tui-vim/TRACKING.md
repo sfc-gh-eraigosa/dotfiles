@@ -33,30 +33,30 @@
 | :-- | :-- | :-- | :-- | :-- |
 | 1 adopt libs/tui: keymap + nav.Cursor + help rebind | done | `01ea253` | RUN-RED `go test ./internal/tui/ -run "TestVim|TestHelpOpensOn|TestHDoesNot|TestPickerJK|TestFooterHint"` → 10 FAIL (`evidence/task1/run-red.txt`); RUN-GREEN `go test ./internal/tui/ -cover` → `ok … coverage: 91.4%` (baseline 91.3%); `grep -rn "'h', 'H'|scrollTop|lastInner" internal/tui/*.go` → no hits; `go vet ./...` clean; `go test ./...` → 12/12 ok (`evidence/task1/go-test.txt`) | rewired `TestHelpOverlayFromDetail` `h`→`?`; `cursor/scrollTop/lastInner` → `nav.Cursor`; three implementation notes in §4 |
 | 2 `/` search over `search.State` (auto-expand, n/N, :noh, gutter) | done | `c3c6a37` | RUN-RED `go test ./internal/tui/ -run "TestSlash|TestEscInList|TestNWithout|TestSearch"` → 8 FAIL (`evidence/task2/run-red.txt`); RUN-GREEN `go test ./internal/tui/ -cover` → `ok … coverage: 91.7%`; `go vet ./...` clean; `go test ./...` → 13/13 ok (`evidence/task2/go-test.txt`) | two extra spec-derived tests added for the gate (see §4) |
-| 3 `:` over `cmdline` (set/unset validation, Tab) | done | (SHA at the next commit) | RUN-RED `go test ./internal/tui/ -run "TestParseValue|TestFindKey|TestColon"` → build failed, `undefined: parseValue`, `m.findKey undefined` (`evidence/task3/run-red.txt`); RUN-GREEN `go test ./internal/tui/ ./internal/resolve/ -cover` → tui `92.6%`, resolve `95.5%`; `go vet ./...` clean; `go test ./...` → 13/13 ok (`evidence/task3/go-test.txt`) | added `resolve.Resolved.WithNamespace` + its one-line test (resolve stays ≥ 95%) |
-| 4 docs + key-table pin test + gates + demo | todo | | | Step 5 is human-evidenced (real terminal) |
+| 3 `:` over `cmdline` (set/unset validation, Tab) | done | `565abfb` | RUN-RED `go test ./internal/tui/ -run "TestParseValue|TestFindKey|TestColon"` → build failed, `undefined: parseValue`, `m.findKey undefined` (`evidence/task3/run-red.txt`); RUN-GREEN `go test ./internal/tui/ ./internal/resolve/ -cover` → tui `92.6%`, resolve `95.5%`; `go vet ./...` clean; `go test ./...` → 13/13 ok (`evidence/task3/go-test.txt`) | added `resolve.Resolved.WithNamespace` + its one-line test (resolve stays ≥ 95%) |
+| 4 docs + key-table pin test + gates + demo | done | (SHA at the next commit) | RUN-RED `go test ./cmd/ -run TestTUIHelpListsVimSearchAndCommandKeys` → FAIL `does not contain "j/k"` (`evidence/task4/run-red.txt`); RUN-GREEN `go test ./... -cover` → 13/13 ok, every package at or above its floor (`evidence/task4/go-test-all.txt`); the exact `gff-ci.yml` recipe → total **91.0%** ≥ 90, resolve **95.5%** ≥ 95, schema **95.7%** ≥ 90, tui **92.6%** ≥ 91.3 — 4× PASS (`evidence/task4/coverage-gate.txt`); `go vet ./...` clean; `make gff-proto-check` clean; real-terminal demo `evidence/demo/{run.sh,transcript.txt,README.md}` — 13 captures | Step 5 human-evidenced against the LIVE inventory; override file `{}` before and after |
 
 ## 2. Feature → proof matrix (from spec §5)
 
 | Feature | Automated proof | Human/live proof | Notes |
 | :-- | :-- | :-- | :-- |
-| F1 vim motions | [x] `TestVim*`, `TestPickerJKMoveCursor` (task1/go-test.txt) | [ ] demo `gg`/`G` | |
+| F1 vim motions | [x] `TestVim*`, `TestPickerJKMoveCursor` (task1/go-test.txt) | [x] demo `gg` → first row | |
 | F2 help rebind | [x] `TestHelpOpensOnQuestionAndF1NotH`, `TestHDoesNotOpenHelpInPickerOrDetail` (task1/go-test.txt) | [ ] | |
-| F3 `/` prompt | [x] `TestSlashSearch*` (task2/go-test.txt) | [ ] demo `/wispr` | |
-| F4 haystack + auto-expand | [x] `TestSlashSearchExpandsAreaAndJumpsToFirstMatch`, `TestSearchScopeIsTheCurrentPage` (task2/go-test.txt); `matchesItem` exercised by every search test (the plan's `TestMatchItemPathOrDescription` has no body in §4 and is covered by these) | [ ] demo (collapsed `install` expands) | |
-| F5 n/N + :noh | [x] `TestSlashSearchEnterCommitsAndNNHop`, `TestEscInListClearsHighlightsButKeepsPatternForN`, `TestNWithoutPatternIsNoop`, `TestNOnAPageWithoutMatchesReportsNotFound` (task2/go-test.txt) | [ ] demo `n` | |
-| F6 `:` commands | [x] `TestColon*`, `TestParseValue*`, `TestFindKeyScopedAndQualified` (task3/go-test.txt); `TestParseCommand` is the lib's `cmdline.TestParse` (plan §5 maps F6d/F6g there) | [ ] demo `:set`/`:unset` | |
-| F7 Tab completion | [x] `TestColonTabCompletesKeysInScope` (task3/go-test.txt) | [ ] demo Tab | |
+| F3 `/` prompt | [x] `TestSlashSearch*` (task2/go-test.txt) | [x] demo `/wispr` → prompt + jump | |
+| F4 haystack + auto-expand | [x] `TestSlashSearchExpandsAreaAndJumpsToFirstMatch`, `TestSearchScopeIsTheCurrentPage` (task2/go-test.txt); `matchesItem` exercised by every search test (the plan's `TestMatchItemPathOrDescription` has no body in §4 and is covered by these) | [x] demo: the area holding `wispr-flow` auto-expanded | |
+| F5 n/N + :noh | [x] `TestSlashSearchEnterCommitsAndNNHop`, `TestEscInListClearsHighlightsButKeepsPatternForN`, `TestNWithoutPatternIsNoop`, `TestNOnAPageWithoutMatchesReportsNotFound` (task2/go-test.txt) | [x] demo `n` (single match wraps onto itself) | |
+| F6 `:` commands | [x] `TestColon*`, `TestParseValue*`, `TestFindKeyScopedAndQualified` (task3/go-test.txt); `TestParseCommand` is the lib's `cmdline.TestParse` (plan §5 maps F6d/F6g there) | [x] demo `:set` → `false/override/user-override`, `:unset` → `true/default/repo-live` | |
+| F7 Tab completion | [x] `TestColonTabCompletesKeysInScope` (task3/go-test.txt) | [x] demo: `:` prompt typed as text; Tab pinned by `TestColonTabCompletesKeysInScope` | |
 | F8 prompt/gutter rendering | [x] `TestSearchPromptKeepsFrameWithinHeight` + `gutterLines` asserts (task2/go-test.txt) | [ ] | |
-| F9 docs agree | [ ] `TestTUIHelpListsVimSearchAndCommandKeys`, `TestFooterHintRendersFromTheKeymap` | [ ] README reviewed | |
+| F9 docs agree | [x] `TestTUIHelpListsVimSearchAndCommandKeys`, `TestFooterHintRendersFromTheKeymap` (task4, task1) | [x] demo footer + `?` overlay render the same table; README **TUI keys** table added | |
 
 ## 3. Validation done-when — the stop condition
 
 - [x] `sdk-tui` TRACKING §3 fully ticked (the lib this build consumes) — 8/8 on `main` @ `70629d1`; `go test ./tui/... -cover` → 6/6 ok
-- [ ] Tasks 1–4 `done` with commit SHAs and evidence files under `evidence/task<N>/`
-- [ ] `go test ./... -cover`: module ≥ 90%, `internal/tui` ≥ 91.3%, `internal/resolve` ≥ 95% (`evidence/task7/coverage-gate.txt`)
-- [ ] `go vet ./...` clean
-- [ ] `evidence/demo/transcript.txt` + `README.md` committed; flipped flag restored
+- [x] Tasks 1–4 `done` with commit SHAs and evidence files under `evidence/task<N>/`
+- [x] `go test ./... -cover`: module **91.0%** ≥ 90, `internal/tui` **92.6%** ≥ 91.3, `internal/resolve` **95.5%** ≥ 95 (`evidence/task4/coverage-gate.txt` — the trio said `task7`, this plan has four tasks)
+- [x] `go vet ./...` clean; `make gff-proto-check` clean
+- [x] `evidence/demo/{run.sh,transcript.txt,README.md}` committed; override file `{}` before and after (nothing left flipped)
 - [ ] `docs/mbo/index.md` row `gff-tui-vim` → `in-review` with the build PR number
 - [ ] build draft PR promoted to ready
 
@@ -69,6 +69,9 @@
 | 2026-09-05 | 1 | (note, not blocking) `h`/`H` still closed the help overlay | `grep -rn "'h', 'H'|scrollTop|lastInner" internal/tui/*.go` → 1 hit, `model.go:321` in `updateHelp` (the overlay's close keys). The plan's Task 1 edits cover the list/picker/detail handlers, not the overlay's own close set. | Dropped `h`/`H` from the close keys (`Esc/?/q` remain — exactly what the overlay's own hint advertises), satisfying the TODO's grep gate and IMPLEMENTATION §5 "h/H never open help after Task 1". |
 | 2026-09-05 | 2 | (note, not blocking) the plan's Task 2 test list leaves new branches uncovered | After the plan's 10 tests: `go test ./internal/tui/ -cover` → `coverage: 91.1%`, **below the 91.3% floor**. `go tool cover -func` named the gaps: `commitSearch` 66.7% (the `!committed` path — Enter on an outstanding compile error) and `jump` 75% (the `!ok` path — `n` where the committed pattern matches nothing on this page); both are behaviors the plan's own implementation and spec F3b/F5a define. | Added two tests to `search_test.go` — `TestSlashSearchEnterOnInvalidPatternDoesNotCommit` and `TestNOnAPageWithoutMatchesReportsNotFound`. Nothing in the implementation changed. Coverage 91.1% → **91.7%**. |
 | 2026-09-05 | 2 | (note, not blocking) the `*` gutter never rendered on non-cursor rows | `go test ./internal/tui/` → 4 FAIL, all `gutterLines`: `"[]" should have 1 item(s), but has 0`. The pre-existing `viewList` writes a hardcoded two-space indent in the non-cursor feature-row branch and ignores the computed `cursor` marker, so the plan's view edit 3 (setting `cursor = "* "`) had no effect there. | Non-cursor rows now render `cursor` + the path (`%s%-40s`), and a matching row's path takes `matchStyleFor(pal)` (bold orange, plain under NO_COLOR) as plan view edit 3 specifies. |
+| 2026-09-05 | 4 | (note, not blocking) demo Step 5 runs a temp binary, not `build.sh` | The plan's snippet starts with `./sdk/gff/build.sh`, which installs over `$HOME/opt/bin/gff` — replacing the user's installed binary with a pre-merge build. | Built to `$TMPDIR/gff-demo` and ran `"$bin" tui` in the tmux pane instead. Same real terminal, same live inventory, installed binary untouched. |
+| 2026-09-05 | 4 | (note, not blocking) multi-rune `send-keys` matches no binding | First demo pass with `tmux send-keys '/wispr'` delivered ONE `KeyMsg{Runes: "/wispr"}` (the paste shape); nothing fired. Same lesson the `sdk-tui` demo recorded. | `run.sh` types one character per key event (`send-keys -l` + 60 ms), which is what a real keyboard produces; every step then worked. Not a gff or lib defect — a paste-handling decision, still open for tools. |
+| 2026-09-05 | 4 | (note, not blocking) the first demo pass could not prove `:set` | The `:set`/`:unset` captures showed the prompt and the footer, but `install.ai.teams` was scrolled off (`… 66 more below`), so the row change was not visible. | Added a `/ai.teams` + Enter step before the `:` commands so the cursor parks on that row; the transcript now shows it flip to `false override user-override` and back to `true default repo-live`. |
 
 ## 5. Session log (append-only — never rewrite history)
 
@@ -80,3 +83,4 @@
 | 2026-09-05 | build (session 1) | Task 1 done: `keys.go` (gffKeys + palette + listHint), `model.go` on `nav.Cursor` with `gffKeys.Lookup` dispatch + `turnPage`, `view.go` viewport/footer/help via `overlay.Help` + a `sourceLines()` extraction. tui 91.3% → 91.4%; module 12/12 ok. Three implementation notes recorded in §4 (none touch the lib or the plan). |
 | 2026-09-05 | build (session 1) | Task 1 pushed → draft PR #304. Task 2 done: `search.go` (rowKey/inScope/hit/collect/start/apply/commit/cancel/jump/noh/updateSearch), `modeSearch` + `modeCommand` modes with the `cmdline` fields declared, view prompt/badge/gutter/`errStyleFor`/`matchStyleFor`. tui 91.7%; module 13/13 ok. |
 | 2026-09-05 | build (session 1) | Task 2 pushed. Task 3 done: `command.go` (parseValue/findKey/completeKey/registerCommands/updateCommand), `registerCommands()` in `NewModel`, `modeCommand` dispatch and the `:` key. `resolve.WithNamespace` added (its test needed the `resolve.` qualifier — the file is package `resolve_test`). tui 92.6%, resolve 95.5%, module 13/13 ok. |
+| 2026-09-05 | build (session 1) | Task 3 pushed. Task 4 done: `--help` key block, README **TUI keys** table, `AGENTS.md internal/tui` bullet, `cmd/tui_keys_test.go` pin test; all gates green (module 91.0%, tui 92.6%, resolve 95.5%, schema 95.7%, vet, proto-check); real-terminal tmux demo captured against the live inventory with the override file restored to `{}`. |

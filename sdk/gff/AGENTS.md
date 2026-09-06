@@ -18,6 +18,10 @@ SDK. The dotfiles repo instruments `install.sh` with it (flags in
 - `internal/resolve` — the 5-layer merge with winning-layer attribution (≥95% cover).
 - `internal/registry` — `~/.config/gff/sources.yaml` keyed by reverse-DNS
   namespace + user snapshots.
+- `internal/tui` — the bubbletea TUI. Composes `sdk/libs/tui` (keymap/nav/search/cmdline/overlay);
+  gff-only glue lives in `keys.go` (key table + palette), `search.go` (auto-expand, scope, anchors),
+  `command.go` (`:set`/`:unset` validation → the override writers). The key table is the single
+  source (pinned by `cmd/tui_keys_test.go`). Read `sdk/libs/tui/GUIDE.md` before changing keys.
 - `cmd/` — one file per verb, self-registering via `init()`. Exit-code mapping
   lives ONLY in `main.go` (0 ok, 1 error, 2 unknown key/option/source/wrong-type).
 - `pkg/gff` — the public SDK (`Bool`, `Selected`, `IsSelected`, typed values).
