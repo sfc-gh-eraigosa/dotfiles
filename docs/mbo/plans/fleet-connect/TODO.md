@@ -53,14 +53,14 @@
 
 ### Task 3 — runner bridges + `RunCtx`  (plan T3)
 
-- [ ] SETUP: confirm `RunStreamCtx` already exists with `go test ./internal/runner/ -run RunStreamCtx -v` → PASS (F3a needs nothing built)
-- [ ] RED: `TestBridgeArgvTargetsOnlyTheHostsLoopback`, `TestBridgeArgvCarriesTheMuxOptionsAndExitOnForwardFailure`, `TestACancelledBridgeIsKilledWithinWaitDelay` (+ zero forwards → error; cancel before up); `TestRunCtxReturnsStderrAndExitCodeWithoutAnError`, `TestRunCtxIsCancelledByItsContext` (+ stdin delivered)
-- [ ] RUN-RED: `go test ./internal/runner/ -run Bridge` → expect **FAIL**
-- [ ] GREEN: `internal/runner/bridge.go` — `Forward`, `BridgeArgv(alias, forwards)` (pure), `RunBridgeCtx` on the interface, `Exec` (`exec.CommandContext`, `WaitDelay`) and `Fake` (`Block`); `bridge_linux.go` sets `Pdeathsig`; `RunCtx(ctx, host, stdin, argv…) (ExecResult, error)` on the interface, `Exec` (separate stdout/stderr, `ExitError` → `ExitCode`, nil error) and `Fake`
-- [ ] RUN-GREEN: `go test -race ./internal/runner/` → **PASS**, no goroutine leak
-- [ ] VERIFY: argv has `-N`, `ExitOnForwardFailure=yes`, every base/mux option, `-L 127.0.0.1:l:127.0.0.1:r` per forward, alias last, no `-t`, no remote command
-- [ ] VERIFY: `git diff --stat` shows the eleven `runner.Exec{}` sites and `cmd/wake.go` untouched
-- [ ] EVID + COMMIT + LEDGER
+- [x] SETUP: confirmed `RunStreamCtx` already exists — `TestRunStreamCtxKillsTheChildOnDeadline` PASSes untouched (evidence/task03/setup.txt)
+- [x] RED: `TestBridgeArgvTargetsOnlyTheHostsLoopback`, `TestBridgeArgvCarriesTheMuxOptionsAndExitOnForwardFailure`, `TestACancelledBridgeIsKilledWithinWaitDelay` (+ `TestBridgeArgvRefusesBadInput`, `TestFakeBridgeHonoursBlockAndErr`); `TestRunCtxReturnsStderrAndExitCodeWithoutAnError`, `TestRunCtxIsCancelledByItsContext`, `TestFakeRunCtxHonoursOutErrStdinAndBlock`, `TestExecAndFakeCarryTheCtxAndBridgeCapabilities`
+- [x] RUN-RED: `go test ./internal/runner/ -run 'Bridge|RunCtx|Capabilit'` → **FAIL** observed (`undefined: Forward`, `no field or method BridgeArgv`; evidence/task03/red.txt)
+- [x] GREEN: `internal/runner/bridge.go` — `Forward`, `BridgeArgv` (pure), `RunBridgeCtx`, `RunCtx` on `Exec` and `Fake`, plus the `CtxRunner`/`BridgeRunner` **optional capability** interfaces (the module's `interactiveCtxRunner` precedent — widening `Runner` itself would break every package's test double); `bridge_linux.go` sets `Pdeathsig`, `bridge_other.go` is the named macOS residual; `streamCombined` extracted so the stream and bridge lanes share one drain/kill path; `Fake.Argv` records what ran
+- [x] RUN-GREEN: `go test -race ./internal/runner/` → **PASS**; whole module 14 packages ok
+- [x] VERIFY: argv has `-N`, `ExitOnForwardFailure=yes`, every base/mux option, `-L 127.0.0.1:l:127.0.0.1:r` per forward, alias last, no `-t`, no remote command
+- [x] VERIFY: `git diff --stat` — `cmd/wake.go` empty, `runner.Exec{` non-test count still 11
+- [x] EVID + COMMIT + LEDGER
 
 **Done when:** a set of tunnels is one killable `ssh -N`, the batch lane has a context and an exit code, and nothing else moved.
 
