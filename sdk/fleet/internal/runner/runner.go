@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -47,6 +48,23 @@ type Runner interface {
 	// executor actually bounds wall-clock time instead of leaking a process
 	// that outlives the caller's patience for it.
 	RunStreamCtx(ctx context.Context, host, stdin string, argv ...string) (lines <-chan string, done <-chan error)
+}
+
+// Line is one line of remote output plus which stream produced it.
+type Line struct {
+	Text   string
+	Stderr bool
+}
+
+// SplitStreamer is an OPTIONAL capability of a Runner: RunStreamCtx with the
+// two streams kept APART, so a consumer can tell a warning from progress.
+//
+// It is deliberately NOT part of Runner: adding a method there would ripple
+// into every other package's Runner test double (the same reasoning as
+// updexec's interactiveCtxRunner). A consumer type-asserts for it and falls
+// back to the merged stream, where every line is stdout.
+type SplitStreamer interface {
+	RunSplitStreamCtx(ctx context.Context, host, stdin string, argv ...string) (lines <-chan Line, done <-chan error)
 }
 
 // controlPersist is how long a master connection outlives the command that
@@ -213,34 +231,43 @@ func (e Exec) RunStdin(host, stdin string, argv ...string) (string, error) {
 	return strings.TrimSpace(string(out)), err
 }
 
-// RunStream pipes the remote command's combined output back line by line.
-// stdout and stderr share one pipe so the log reads in the order the remote
-// produced it — install.sh writes progress to both. It is RunStreamCtx with
-// a background (never-cancelled) context — no per-attempt deadline.
+// RunStream pipes the remote command's output back line by line. It is
+// RunStreamCtx with a background (never-cancelled) context — no per-attempt
+// deadline.
 func (e Exec) RunStream(host, stdin string, argv ...string) (<-chan string, <-chan error) {
 	return e.RunStreamCtx(context.Background(), host, stdin, argv...)
 }
 
-// RunStreamCtx is RunStream with ctx wired through exec.CommandContext: when
-// ctx's deadline (or cancellation) fires before the remote command exits,
-// the local ssh child is killed, not merely abandoned. This is what lets the
-// executor enforce a per-attempt timeout that actually bounds wall-clock
-// time.
-func (e Exec) RunStreamCtx(ctx context.Context, host, stdin string, argv ...string) (<-chan string, <-chan error) {
-	lines := make(chan string, 256)
+// RunSplitStreamCtx streams the remote command with stdout and stderr on
+// SEPARATE pipes, tagging each line with the stream that produced it, so a
+// consumer can tell a warning from progress. A host that writes
+// "WARNING: apt-get update failed" and exits 0 is the case this exists for.
+//
+// The cost of the split is that ordering BETWEEN the two streams is arrival
+// order rather than the remote's exact interleaving (ordering WITHIN each
+// stream is exact) — accepted in docs/mbo/designs/fleet-error-view.md §3.1,
+// which is also why the TUI keeps stderr in the merged log pane and stamps
+// every line with its arrival time.
+//
+// Both pipes MUST be drained CONCURRENTLY: one goroutine scanning stdout to
+// completion and then stderr would let the unread pipe's buffer fill and wedge
+// the remote command. Hence one scanner per pipe, a WaitGroup, and a single
+// closer.
+func (e Exec) RunSplitStreamCtx(ctx context.Context, host, stdin string, argv ...string) (<-chan Line, <-chan error) {
+	lines := make(chan Line, 256)
 	done := make(chan error, 1)
 
-	base := e.baseArgs(host)
-	c := exec.CommandContext(ctx, "ssh", append(base, argv...)...)
+	c := exec.CommandContext(ctx, "ssh", append(e.baseArgs(host), argv...)...)
 	c.Stdin = strings.NewReader(stdin)
-	pr, pw := io.Pipe()
-	c.Stdout, c.Stderr = pw, pw
+	outR, outW := io.Pipe()
+	errR, errW := io.Pipe()
+	c.Stdout, c.Stderr = outW, errW
 	// WaitDelay bounds how long Wait() waits for output plumbing to drain
 	// after a kill: without it, a killed ssh whose remote (or, in tests, a
-	// stub) leaves a GRANDCHILD holding the stdout pipe open can make Wait
-	// block for as long as that orphan lives, silently defeating the whole
-	// point of a controller-enforced deadline. After the delay, Wait force-
-	// closes the pipes and returns instead.
+	// stub) leaves a GRANDCHILD holding a pipe open can make Wait block for as
+	// long as that orphan lives, silently defeating the whole point of a
+	// controller-enforced deadline. After the delay, Wait force-closes the
+	// pipes and returns instead.
 	c.WaitDelay = waitDelay
 
 	if err := c.Start(); err != nil {
@@ -248,19 +275,49 @@ func (e Exec) RunStreamCtx(ctx context.Context, host, stdin string, argv ...stri
 		done <- err
 		return lines, done
 	}
+
 	go func() {
-		// Closing the writer ends the scanner below; without it the reader
+		// Closing both writers ends the scanners below; without it a reader
 		// would block forever after the process exits.
 		err := c.Wait()
-		_ = pw.Close()
+		_ = outW.Close()
+		_ = errW.Close()
 		done <- err
 	}()
-	go func() {
-		defer close(lines)
-		sc := bufio.NewScanner(pr)
+
+	var wg sync.WaitGroup
+	scan := func(r io.Reader, isErr bool) {
+		defer wg.Done()
+		sc := bufio.NewScanner(r)
 		sc.Buffer(make([]byte, 0, 64*1024), 1024*1024) // install logs have long lines
 		for sc.Scan() {
-			lines <- sc.Text()
+			lines <- Line{Text: sc.Text(), Stderr: isErr}
+		}
+	}
+	wg.Add(2)
+	go scan(outR, false)
+	go scan(errR, true)
+	go func() {
+		wg.Wait()
+		close(lines)
+	}()
+
+	return lines, done
+}
+
+// RunStreamCtx is RunSplitStreamCtx with the tag dropped, so there is exactly
+// ONE streaming implementation and the merged path can never drift from the
+// split one. ctx is wired through exec.CommandContext: when its deadline (or
+// cancellation) fires before the remote command exits, the local ssh child is
+// killed, not merely abandoned — which is what lets the executor enforce a
+// per-attempt timeout that actually bounds wall-clock time.
+func (e Exec) RunStreamCtx(ctx context.Context, host, stdin string, argv ...string) (<-chan string, <-chan error) {
+	split, done := e.RunSplitStreamCtx(ctx, host, stdin, argv...)
+	lines := make(chan string, 256)
+	go func() {
+		defer close(lines)
+		for l := range split {
+			lines <- l.Text
 		}
 	}()
 	return lines, done
@@ -274,10 +331,13 @@ var ErrFake = errors.New("runner: fake ssh failure")
 // records which peer relayed to each host so a wake test can assert the peer
 // ranking chose the peer it meant to.
 type Fake struct {
-	Out   map[string]string
-	Err   map[string]error
-	Stdin map[string]string
-	Via   map[string]string // host -> peer that relayed
+	Out map[string]string
+	// ErrOut is what the host writes to STDERR, replayed by
+	// RunSplitStreamCtx after Out. A test scripts either or both.
+	ErrOut map[string]string
+	Err    map[string]error
+	Stdin  map[string]string
+	Via    map[string]string // host -> peer that relayed
 	// Block, when true for a host, makes RunStreamCtx simulate a remote
 	// command that never finishes on its own: it waits on ctx.Done() and
 	// sends ctx.Err() on done, so a test can drive the controller-timeout
@@ -331,11 +391,14 @@ func (f Fake) RunStream(host, stdin string, argv ...string) (<-chan string, <-ch
 	return f.RunStreamCtx(context.Background(), host, stdin, argv...)
 }
 
-// RunStreamCtx replays Out[host] as lines, unless Block[host] is set — in
-// which case it waits on ctx.Done() and reports ctx.Err(), simulating a
-// remote command a controller timeout has to kill.
-func (f Fake) RunStreamCtx(ctx context.Context, host, stdin string, _ ...string) (<-chan string, <-chan error) {
-	lines := make(chan string, 64)
+// RunSplitStreamCtx replays Out[host] as stdout and ErrOut[host] as stderr,
+// unless Block[host] is set — in which case it waits on ctx.Done() and reports
+// ctx.Err(), simulating a remote command a controller timeout has to kill.
+//
+// It records stdin exactly as the merged path did: several tests assert the
+// sudo secret travelled over stdin and NOT argv.
+func (f Fake) RunSplitStreamCtx(ctx context.Context, host, stdin string, _ ...string) (<-chan Line, <-chan error) {
+	lines := make(chan Line, 64)
 	done := make(chan error, 1)
 	if f.Stdin != nil {
 		f.Stdin[host] = stdin
@@ -352,10 +415,30 @@ func (f Fake) RunStreamCtx(ctx context.Context, host, stdin string, _ ...string)
 		defer close(lines)
 		for _, l := range strings.Split(f.Out[host], "\n") {
 			if strings.TrimSpace(l) != "" {
-				lines <- l
+				lines <- Line{Text: l}
+			}
+		}
+		for _, l := range strings.Split(f.ErrOut[host], "\n") {
+			if strings.TrimSpace(l) != "" {
+				lines <- Line{Text: l, Stderr: true}
 			}
 		}
 		done <- f.Err[host]
+	}()
+	return lines, done
+}
+
+// RunStreamCtx is the split stream with the tag dropped — the same
+// relationship Exec's two methods have, so the fake cannot drift from the
+// real runner in the one way that would matter.
+func (f Fake) RunStreamCtx(ctx context.Context, host, stdin string, argv ...string) (<-chan string, <-chan error) {
+	split, done := f.RunSplitStreamCtx(ctx, host, stdin, argv...)
+	lines := make(chan string, 64)
+	go func() {
+		defer close(lines)
+		for l := range split {
+			lines <- l.Text
+		}
 	}()
 	return lines, done
 }
