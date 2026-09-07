@@ -1,8 +1,11 @@
 # fleet-connect — live state ledger
 
 - **Slug:** fleet-connect
-- **Started:** 2026-09-02 (planning); build not started
+- **Started:** 2026-09-02 (planning); build started 2026-09-06
 - **Playbook:** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) · **Cursor:** [`TODO.md`](./TODO.md)
+- **Status (2026-09-07 audit):** PR 1/8 merged — #305 `contract` (leaf A, T1–T4; closed #289,
+  2026-09-06). Design PR #267 merged 2026-09-06. PRs 2–8 (#290–#296) still open: leaf B protocol
+  is next in the chain (plan §6.1, blocking-first).
 - **Plan (source of truth):** [`../fleet-connect.md`](../fleet-connect.md) · spec
   [`../../specs/fleet-connect.md`](../../specs/fleet-connect.md)
 

@@ -4,7 +4,11 @@
 - **Started:** 2026-08-25 — built inside PR #242, in the existing `wsl-dns-lan/edward-raigosa/dns` worker
 - **Playbook:** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) · **Cursor:** [`TODO.md`](./TODO.md)
 - **Plan (source of truth):** [`../wlink.md`](../wlink.md) · spec [`../../specs/wlink.md`](../../specs/wlink.md)
-- **Anchors:** issue [#245](https://github.com/sfc-gh-eraigosa/dotfiles/issues/245)
+- **Anchors:** issue [#245](https://github.com/sfc-gh-eraigosa/dotfiles/issues/245) · PR [#242](https://github.com/sfc-gh-eraigosa/dotfiles/pull/242)
+- **Status (2026-09-07 audit):** design + build merged in #242 (2026-08-27, 12 findings fixed,
+  CI green). P14 partial: write round trip proven against a temp root; **4 items unproven in §6
+  below** (both real `install.sh` flag states + the live EC-6/EC-7 handshakes). Issue #245 stays
+  open.
 
 > **Update after EVERY task.** Status: `todo · in-progress · blocked · done`.
 > **Evidence** = the exact command run plus its real result. A row is `done` only with a commit

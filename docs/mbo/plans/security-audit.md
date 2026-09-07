@@ -1,6 +1,7 @@
 # Unattended Weekly Security Audit — plan
 
-**Status:** building · **Slug:** `security-audit` · **Spec:** [../specs/security-audit.md](../specs/security-audit.md)
+**Status:** merged — v2 in PR #225 (2026-08-17); v3 in PR #229 (2026-08-17): evening hourly cadence,
+daily urgent triage, `-Status` provenance. Windows-host ACs pending at flag-flip. · **Slug:** `security-audit` · **Spec:** [../specs/security-audit.md](../specs/security-audit.md)
 
 Small feature: spec → plan, built in a single PR (no execution trio).
 
