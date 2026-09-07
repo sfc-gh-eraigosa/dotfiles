@@ -140,10 +140,7 @@ func (e Exec) baseArgs(host string) []string {
 // interactiveArgs is baseArgs for a session that OWNS the terminal: no
 // BatchMode, because the whole point is to let ssh prompt. This is the
 // connection that establishes the master socket every later command reuses.
-func (e Exec) interactiveArgs(host string) []string {
-	args := append([]string{"-t"}, muxArgs()...)
-	return append(args, host)
-}
+func (e Exec) interactiveArgs(host string) []string { return InteractiveArgs(host) }
 
 func (e Exec) Run(host string, argv ...string) (string, error) {
 	out, err := exec.Command("ssh", append(e.baseArgs(host), argv...)...).Output()
@@ -227,12 +224,19 @@ func (e Exec) RunStream(host, stdin string, argv ...string) (<-chan string, <-ch
 // executor enforce a per-attempt timeout that actually bounds wall-clock
 // time.
 func (e Exec) RunStreamCtx(ctx context.Context, host, stdin string, argv ...string) (<-chan string, <-chan error) {
-	lines := make(chan string, 256)
-	done := make(chan error, 1)
-
 	base := e.baseArgs(host)
 	c := exec.CommandContext(ctx, "ssh", append(base, argv...)...)
 	c.Stdin = strings.NewReader(stdin)
+	return streamCombined(c)
+}
+
+// streamCombined starts c and delivers its combined output line by line —
+// the plumbing RunStreamCtx and RunBridgeCtx share, so the two lanes cannot
+// drift in how they drain, kill, or wait.
+func streamCombined(c *exec.Cmd) (<-chan string, <-chan error) {
+	lines := make(chan string, 256)
+	done := make(chan error, 1)
+
 	pr, pw := io.Pipe()
 	c.Stdout, c.Stderr = pw, pw
 	// WaitDelay bounds how long Wait() waits for output plumbing to drain
@@ -283,6 +287,9 @@ type Fake struct {
 	// sends ctx.Err() on done, so a test can drive the controller-timeout
 	// path deterministically without a real blocking process.
 	Block map[string]bool
+	// Argv, when non-nil, records every RunCtx argv per host so a provider
+	// test can assert what ran where.
+	Argv map[string][][]string
 }
 
 func (f Fake) Run(host string, _ ...string) (string, error) {

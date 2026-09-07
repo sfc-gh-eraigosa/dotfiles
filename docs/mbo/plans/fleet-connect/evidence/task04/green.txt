@@ -1,0 +1,22 @@
+# task04 GREEN (final) — 2026-09-06T06:12:04Z
+$ go test ./pkg/provider/... -cover
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider	(cached)	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest	0.265s	coverage: 94.2% of statements
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest/stubplugin		coverage: 0.0% of statements
+$ go test ./pkg/provider/providertest/ -v
+--- PASS: TestFakeProviderDrivesEveryLevelThroughTheContractAlone (0.00s)
+--- PASS: TestTheFakeProviderReachesTheHostOnlyThroughExec (0.00s)
+--- PASS: TestFakeProviderCanBeScriptedIntoItsFailureModes (0.05s)
+--- PASS: TestBuildStubYieldsAScriptableProcess (0.22s)
+--- PASS: TestALevelEnteredWithoutAProbeStillFetchesItsOwnData (0.00s)
+--- PASS: TestAPathThatNamesNothingIsErrNoSuchPath (0.00s)
+--- PASS: TestEveryFakeKindHasFiveColumns (0.00s)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest	0.277s
+$ go list -deps ./pkg/provider/providertest (non-stdlib — the harness stays importable by a plugin author)
+github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider
+github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest
+$ go test -race ./... (module)
+module: 15 packages ok
+$ gofmt -l .
+$ go vet ./...
+vet-ok

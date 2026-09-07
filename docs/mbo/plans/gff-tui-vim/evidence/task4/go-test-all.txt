@@ -1,0 +1,14 @@
+# 2026-09-05 23:20 PDT — module gate: go test ./... -cover
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff	0.006s	coverage: 45.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/cmd	0.275s	coverage: 87.0% of statements
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/gen/gff/v1		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/gitx	0.016s	coverage: 72.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/overrides	0.031s	coverage: 87.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/paths	0.016s	coverage: 90.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/registry	0.039s	coverage: 88.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve	0.042s	coverage: 95.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/schema	0.023s	coverage: 95.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/style	0.012s	coverage: 85.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui	1.037s	coverage: 92.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/version	0.013s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/pkg/gff	0.073s	coverage: 89.5% of statements

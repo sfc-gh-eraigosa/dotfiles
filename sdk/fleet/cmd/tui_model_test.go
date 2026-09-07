@@ -188,8 +188,10 @@ func TestWindowResizeKeepsCursorVisible(t *testing.T) {
 
 func TestHalfPageMovesAndStaysInBounds(t *testing.T) {
 	m := testModel("a", "b", "c", "d", "e", "f", "g", "h")
-	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 13}) // 6 list rows once framed
-	m2, _ := send(mm.(tuiModel), "l")                           // hide the log pane so the math is the list's alone
+	// 10 rows are chrome once the log pane is hidden (banner 5 + list frame 3
+	// + blank + status), so 16 is what leaves the 6 list rows this asserts on.
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 16})
+	m2, _ := send(mm.(tuiModel), "l") // hide the log pane so the math is the list's alone
 	m3, _ := send(m2, "ctrl+d")
 	if m3.indexOf(m3.cursor) != 3 {
 		t.Fatalf("ctrl+d should move half a page (3), got %d", m3.indexOf(m3.cursor))
@@ -499,7 +501,11 @@ func TestSSHIsBlockedWhileThatHostUpdates(t *testing.T) {
 
 func TestHelpOverlayRendersEveryKeyAndClosesOnAnyKey(t *testing.T) {
 	m := testModel("a")
-	m2, _ := send(m, "?")
+	// Tall enough for all of keyHelp: the overlay is budgeted now (banner 5 +
+	// its own 2 border rows + title, blank, blank, footer), so a short terminal
+	// shows a "… N more" line instead of running off the bottom.
+	tall, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: len(keyHelp) + 11})
+	m2, _ := send(tall.(tuiModel), "?")
 	view := m2.View()
 	for _, k := range keyHelp {
 		if !strings.Contains(view, k.keys) {
@@ -512,6 +518,27 @@ func TestHelpOverlayRendersEveryKeyAndClosesOnAnyKey(t *testing.T) {
 	}
 	if m3.indexOf(m3.cursor) != 0 {
 		t.Fatal("the closing key must not also act as a motion")
+	}
+}
+
+// On a terminal too short for 24 keys the overlay says so rather than growing
+// past the bottom — an overlay taller than the screen is scrolled from the TOP
+// by bubbletea, which hides the heading and the first keys.
+func TestHelpOverlayOnAShortTerminalSaysWhatItHidRatherThanOverflowing(t *testing.T) {
+	m := testModel("a")
+	short, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	m2, _ := send(short.(tuiModel), "?")
+	view := m2.View()
+	if h := lipgloss.Height(view); h > 20 {
+		t.Fatalf("help overlay is %d lines on a 20-line terminal:\n%s", h, view)
+	}
+	if !strings.Contains(stripANSI(view), "more — make the window taller") {
+		t.Fatalf("a clamped overlay must name what it hid:\n%s", view)
+	}
+	// The clamp must fit the whole panel, border included — a frame cut by
+	// fitFrame would leave the box hanging open at the bottom of the screen.
+	if !strings.HasSuffix(strings.TrimRight(stripANSI(view), "\n"), "╯") {
+		t.Fatalf("the clamped overlay lost its bottom border:\n%s", view)
 	}
 }
 

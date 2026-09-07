@@ -87,6 +87,10 @@ var tuiCmd = &cobra.Command{
 		r := runner.Exec{}
 		m := newTUIModel(selectHosts(all, nil), r, base, time.Now(), tuiUpdateRef, tuiJobs, plan)
 		m.wake = newWaker(r, p)
+		// Who are WE? Detected here, at the one impure edge, and handed to the
+		// model as data — the model never reads the hostname itself, or every
+		// test would render whatever machine it happened to run on.
+		m.setLocal(detectLocal())
 		// Persistence is wired HERE, not in newTUIModel, so the model stays a
 		// pure value and tests never touch a real config directory.
 		m.ansPath = answersPath()

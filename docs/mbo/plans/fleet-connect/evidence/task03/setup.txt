@@ -1,0 +1,1 @@
+# task03 SETUP — RunStreamCtx already exists (F3a): 2026-09-06T06:02:36Z (run against the T2 commit, bridge tests parked)

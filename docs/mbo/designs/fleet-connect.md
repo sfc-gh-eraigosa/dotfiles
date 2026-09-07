@@ -255,11 +255,15 @@ type Handoff struct {                          // DATA. Only internal/runner tur
     Argv    []string    `json:"argv"`          // local: argv, so a hostile value is inert
 }                                              // no Host field: fleet stamps the level's alias (below)
 type Stream struct { Command string `json:"command"`; Follow bool `json:"follow"` }
-// ReservedKeys are the printable runes fleet binds inside a level (r t T q / n N j k g G) plus
-// the dashboard verbs it deliberately leaves unbound there (u w v a p P A F and space). Validate
-// rejects an Action keyed on one, so a plugin author learns the collision at construction, not
-// from a key that never fires. enter and esc are not printable and cannot be declared at all.
-var ReservedKeys = map[rune]bool{ /* r t T q / n N j k g G u w v a p P A F ' ' */ }
+// ReservedKeys are the printable runes the HOST TOOL owns, so a provider that declared one would
+// be silently shadowed. Three groups: the navigation/search keys common to every sdk TUI
+// (j k h l g G / n N ? : q space), fleet's own dashboard verbs (r s u w v a p P A F e J K), and
+// this objective's bridge keys (t T). enter and esc are not printable and cannot be declared.
+//
+// It is a MIRROR of fleet's keymap, not the source — pkg/provider is stdlib-only and cannot
+// import it — kept honest by fleet's TestEveryFleetKeyIsReservedAgainstProviders. See §4.10.
+var ReservedKeys = map[rune]bool{ /* j k h l g G / n N ? : q ' ' r s u w v a p P A F e J K t T */ }
+const TunnelKey = "t"   // the one reserved key a provider DOES declare: every Tunnel action carries it (found by T1's tests)
 type Tunnel struct {                           // DATA. Two integers, a scheme, and at most one quoted command.
     RemotePort int    `json:"remotePort"`      // 1–65535, always on the HOST's loopback
     LocalPort  int    `json:"localPort"`       // 0: prefer RemotePort locally, else allocate
@@ -564,6 +568,43 @@ HOST     REMOTE  LOCAL                    STATE     NOTE
 - **A per-plugin `exec.allow` list** (argv[0] names a plugin may run through `host/exec`) is
   one field in `providers.yaml` and one check in the bridge, for operators who want the
   read-only property enforced on third-party plugins too.
+
+### 4.10 The provider key space (amended 2026-09-06, after the cross-cutting review)
+
+A provider declares its actions by key, and the host tool binds keys of its own, so the two
+share one namespace and something has to arbitrate. The first version of `ReservedKeys` was
+written from THIS DOCUMENT rather than from fleet's running keymap, and it drifted: six keys
+fleet already bound were left free for providers to take, `l` (the streaming log pane) and `s`
+(ssh to the cursor host) among them. Both were live header keys. The `fleet-connect-k8s` design
+had already spent `l` on logs, so the collision was one build away from shipping.
+
+The rule, and why it is shaped this way:
+
+- **The host tool's keymap is the source of truth.** `provider.ReservedKeys` is a mirror.
+  `pkg/provider` is stdlib-only by contract (a gate proves it) and therefore cannot import
+  fleet's keymap — or, later, `sdk/libs/tui/keymap` — so the mirror cannot be derived at compile
+  time.
+- **The agreement is mechanical, not clerical.** `TestEveryFleetKeyIsReservedAgainstProviders`
+  in `cmd` reads `keyHelp` and fails if fleet binds a rune the contract leaves free. A second
+  test refuses a reserved rune that nothing binds and no comment justifies, so the list stays
+  reviewable instead of accumulating. Editing the list by eye is what produced the drift; keep
+  the tests passing instead.
+- **Reserving a key is not spending it.** `h` and `:` are held ahead of use — `h` is navigation
+  real estate (never help, which is `?`), `:` is the command line. Holding them now costs a
+  provider nothing it was going to use and keeps the option open.
+- **A provider's key space is what is left**: `b c d f i m o x y z`, the digits, and the
+  uppercase letters fleet does not bind. herdr attaches on `c`; k8s uses `o d E x` and the
+  shared `t`.
+
+**On `sdk/libs/tui` (landed 2026-09-05) — planned for, not adopted here.** Its `keymap.Vim`
+claims `h`/`l` as page-left/page-right, which would break fleet's shipped `l`. Its own guide
+says a tool with no lateral axis removes those two with `Without`, and fleet's drill-down has no
+lateral axis, so that is the likely resolution — but it belongs to the `fleet-tui` adoption, not
+to this objective. Reserving `h` and `l` now is correct under either outcome, and the drift test
+keeps working when fleet swaps `keyHelp` for a `keymap.Map`, because it derives from whatever
+fleet actually uses. **Follow-on:** the mirror currently mixes shared navigation keys with
+fleet's own verbs inside a package third-party plugin authors import. Splitting them belongs
+with the registry (leaf C), which is where a non-fleet host would supply its own set.
 
 ## 5. Risks & blast radius
 

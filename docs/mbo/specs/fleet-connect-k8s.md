@@ -97,8 +97,8 @@ never spawns anything — its actions are data.
   trip with per-kind columns; secrets show key names only.
 - **K5 Containers level.** 1 round trip from the pod's JSON; rows are `Leaf`; READY/RESTARTS/
   STATE from `containerStatuses`.
-- **K6 Streams.** `l` followed logs (pod, container, deployment/statefulset/daemonset), `d`
-  describe, `e` events (pod, namespace, context) — all `Stream` actions, all quoted.
+- **K6 Streams.** `o` followed logs (pod, container, deployment/statefulset/daemonset), `d`
+  describe, `E` events (pod, namespace, context) — all `Stream` actions, all quoted.
 - **K7 Exec handoff.** `x` on a pod or container: a remote `Handoff` running `kubectl exec -it
   … -- sh -c '<fixed literal>'` with bash-then-sh fallback.
 - **K8 Service tunnels.** `t` on a service: a `Tunnel` with `RemotePort` = the first port,
@@ -142,10 +142,10 @@ never spawns anything — its actions are data.
 - **K5a** the containers level · one round trip; rows `Leaf`; STATE from `containerStatuses`
   (`running` / `waiting: CrashLoopBackOff` / `terminated: Completed`) · `enter` on a container
   is a no-op · a pod with an init container (listed, marked) · fixture test.
-- **K6a** `l` on a pod · a followed `Stream` whose command contains `logs`, `--all-containers`,
+- **K6a** `o` on a pod · a followed `Stream` whose command contains `logs`, `--all-containers`,
   `--tail=100`, `-f` and the quoted pod · must not contain an unquoted value · on a container
   it carries `-c <quoted>` · argv assertion.
-- **K6b** `d` and `e` · one-shot `Stream`s (`Follow: false`) · must not carry `-f` · `e` on a
+- **K6b** `d` and `E` · one-shot `Stream`s (`Follow: false`) · must not carry `-f` · `E` on a
   context uses `-A` · assertion.
 - **K7a** `x` on a pod · a remote `Handoff` with `exec -it`, the quoted pod, and the fixed
   `sh -c` fallback literal · must not be a local handoff and must not interpolate into the

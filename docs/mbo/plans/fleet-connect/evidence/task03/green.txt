@@ -1,0 +1,30 @@
+# task03 GREEN — 2026-09-06T06:03:41Z
+$ go test -race ./internal/runner/
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	4.446s
+$ go test ./internal/runner/ -run "Bridge|RunCtx|Capabilit|RunStreamCtx" -v
+--- PASS: TestBridgeArgvTargetsOnlyTheHostsLoopback (0.00s)
+--- PASS: TestBridgeArgvCarriesTheMuxOptionsAndExitOnForwardFailure (0.00s)
+--- PASS: TestBridgeArgvRefusesBadInput (0.00s)
+--- PASS: TestACancelledBridgeIsKilledWithinWaitDelay (1.10s)
+--- PASS: TestFakeBridgeHonoursBlockAndErr (0.05s)
+--- PASS: TestRunCtxReturnsStderrAndExitCodeWithoutAnError (0.00s)
+--- PASS: TestRunCtxIsCancelledByItsContext (1.10s)
+--- PASS: TestFakeRunCtxHonoursOutErrStdinAndBlock (0.05s)
+--- PASS: TestExecAndFakeCarryTheCtxAndBridgeCapabilities (0.00s)
+--- PASS: TestRunStreamCtxKillsTheChildOnDeadline (1.10s)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	3.411s
+$ go test -race ./... (whole module)
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet	[no test files]
+module: 14 packages ok
+$ gofmt -l .
+$ go vet ./...
+vet-ok
+$ runner.Exec{ non-test count
+11
+$ git diff --stat -- cmd/wake.go (must be empty)
+$ git status --short -- .
+ M internal/runner/runner.go
+?? internal/runner/bridge.go
+?? internal/runner/bridge_linux.go
+?? internal/runner/bridge_other.go
+?? internal/runner/bridge_test.go

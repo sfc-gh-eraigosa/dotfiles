@@ -1,0 +1,30 @@
+# T1 amendment — ReservedKeys mirrors fleet's keymap, 2026-09-06T16:33:30Z
+
+$ (cd sdk/fleet && go test -race ./...)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	1.431s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keys	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/lanscan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach	1.170s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	4.451s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	2.287s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider	1.018s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest	1.292s
+
+$ (cd sdk/fleet && go test ./cmd/ -run "EveryFleetKey|EveryReservedKey" -v)
+--- PASS: TestEveryFleetKeyIsReservedAgainstProviders (0.00s)
+--- PASS: TestEveryReservedKeyIsBoundOrDeliberatelyHeld (0.00s)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.006s
+
+# proof the drift test BITES (temporarily removed 's' from ReservedKeys):
+  --- FAIL: TestEveryFleetKeyIsReservedAgainstProviders
+      provider_keys_test.go:45: fleet binds "s" (ssh to cursor host) but a provider may declare it
+
+$ make lint-go
+  8 modules at 0 issues
