@@ -4,9 +4,6 @@
 - **Started:** 2026-08-16
 - **Playbook:** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) · **Cursor:** [`TODO.md`](./TODO.md)
 - **Plan (source of truth):** [`../fleet-tui.md`](../fleet-tui.md) · spec [`../../specs/fleet-tui.md`](../../specs/fleet-tui.md)
-- **Status (2026-09-07 audit):** build merged — PR #227 (2026-08-18). The live-evidence column
-  (F1–F12 human checks below) remains unchecked / owner-gated; issue #226 stays open until those
-  capture.
 
 > **Update after EVERY task.** Status: `todo · in-progress · blocked · done`.
 > A row is `done` only with a commit SHA **and** observed evidence.

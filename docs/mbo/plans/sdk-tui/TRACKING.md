@@ -3,10 +3,6 @@
 - **Slug:** `sdk-tui`
 - **Started:** 2026-09-05 (planning) · build 2026-09-05 (session 1) · **in-review** 2026-09-05
 - **Playbook:** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) · **Cursor:** [`TODO.md`](./TODO.md)
-- **Status (2026-09-07 audit):** DONE — lib merged via #288 (2026-09-06, `main` @ `70629d1`),
-  design via #286; libs coverage 94.9% (≥90 gate), lint clean; first consumer `gff-tui-vim`
-  shipped in #304 (2026-09-06). Issue #283 closed 2026-09-07. Phase 3 (fleet port, gsl config
-  studio) is tracked as separate objectives.
 - **Plan (source of truth):** [`../sdk-tui.md`](../sdk-tui.md) · spec [`../../specs/sdk-tui.md`](../../specs/sdk-tui.md)
 
 > **Update after EVERY task.** Status: `todo · in-progress · blocked · done`.

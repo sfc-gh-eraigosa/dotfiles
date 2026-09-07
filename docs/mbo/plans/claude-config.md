@@ -2,9 +2,7 @@
 
 - **Slug:** claude-config
 - **Date:** 2026-06-07
-- **Status:** Done — build merged in PR #126 (2026-06-13); `claude-config`, the opt-in
-  `--remote-control` flag and the single-binary installer are on `main` (ai/claude/aliases.sh,
-  opt/scripts/system/claude_install.sh).
+- **Status:** In-progress
 - **Relates to:** spec `../specs/claude-config.md` · PR #126 · consumer: a private repo PR
 
 ## 1. Summary & verdict

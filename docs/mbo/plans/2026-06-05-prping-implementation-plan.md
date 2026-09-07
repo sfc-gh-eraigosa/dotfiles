@@ -2,8 +2,7 @@
 
 - **Slug:** prping
 - **Date:** 2026-06-06
-- **Status:** Spec + plan merged via PR #127 (2026-06-08); the build has not started (no build PR
-  exists on the repo).
+- **Status:** Draft
 - **Relates to:** spec [`../specs/2026-06-05-prping-design.md`](../specs/2026-06-05-prping-design.md) · PR #127
 - **Supersedes:** the earlier bash-script plan that lived at this same path (git history), AND the
   first Go-CLI draft of this plan — replaced by this revision, which folds in the three

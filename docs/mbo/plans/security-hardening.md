@@ -1,6 +1,6 @@
 # Opt-in Windows Security Hardening — plan
 
-**Status:** merged — PR #228 (2026-08-17). Windows-host AC1–AC6 pending at flag-flip. · **Slug:** `security-hardening` · **Spec:** [../specs/security-hardening.md](../specs/security-hardening.md)
+**Status:** building · **Slug:** `security-hardening` · **Spec:** [../specs/security-hardening.md](../specs/security-hardening.md)
 
 Small feature: spec → plan, built in a single PR (no execution trio). Follow-up to
 [`security-audit`](./security-audit.md) — reuses its gates and call-site pattern verbatim.

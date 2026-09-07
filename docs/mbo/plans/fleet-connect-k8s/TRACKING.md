@@ -3,8 +3,6 @@
 - **Slug:** fleet-connect-k8s
 - **Started:** 2026-09-05 (planning); build not started — waits for `fleet-connect` PR 3
 - **Playbook:** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) · **Cursor:** [`TODO.md`](./TODO.md)
-- **Status (2026-09-07 audit):** still planning. `fleet-connect` PR 1 (#305) merged 2026-09-06,
-  PR 2 (#290) is the current worker; PR 3 (#291) must land before kA–kD may stack.
 - **Plan (source of truth):** [`../fleet-connect-k8s.md`](../fleet-connect-k8s.md) · spec
   [`../../specs/fleet-connect-k8s.md`](../../specs/fleet-connect-k8s.md)
 

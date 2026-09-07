@@ -5,8 +5,6 @@
 - **Playbook:** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) · **Cursor:** [`TODO.md`](./TODO.md)
 - **Plan (source of truth):** [`../agy-parity.md`](../agy-parity.md) · spec [`../../specs/agy-parity.md`](../../specs/agy-parity.md)
 - **Objective anchors:** issue #268 · PR #269 · `docs/mbo/index.md` row `agy-parity`
-- **Status (2026-09-07 audit):** DONE — #269 (design + spec + plan + build) merged to `main`
-  2026-09-04; all ledger rows evidenced; issue #268 closed 2026-09-07 with the evidence link.
 
 > **Update after EVERY task.** Status: `todo · in-progress · blocked · done`.
 > **Evidence** = the exact command run plus its real result. A row is `done` only with a

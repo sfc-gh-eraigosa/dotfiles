@@ -5,12 +5,6 @@
 - **Playbook:** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) · **Cursor:** [`TODO.md`](./TODO.md)
 - **Plan (source of truth):** [`../fleet-update.md`](../fleet-update.md) · spec [`../../specs/fleet-update.md`](../../specs/fleet-update.md)
 - **Objective anchors:** issue [#265](https://github.com/sfc-gh-eraigosa/dotfiles/issues/265) · PR [#270](https://github.com/sfc-gh-eraigosa/dotfiles/pull/270) · `docs/mbo/index.md` row `fleet-update`
-- **Status (2026-09-07 audit):** build merged — #270 (2026-09-05) **merged, no longer draft**:
-  leaves A `updplan` / B `updexec` / C `featflag` / D `cmd` on `main` (E TUI + F docs landed in the
-  same PR). Live gates G1, G2-wire, G4 evidenced during build; **G2-live / G3 / G5–G9 still pending
-  on the operator** (every fleet host is `behind`; no host safe for a mutating run). Issue #265
-  stays open. Follow-up: the gff SDK link adds +5.56 MB — swap `featflag/gff.go` for a `gff get`
-  shell-out behind the same `Source`.
 
 > **Update after EVERY task.** Status: `todo · in-progress · blocked · done`.
 > **Evidence** = the exact command run plus its real result (e.g.

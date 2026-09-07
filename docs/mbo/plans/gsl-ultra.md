@@ -275,14 +275,14 @@ is not function-disjoint, **merge the leaves** rather than rebasing around it.
 
 **Landing order:** `iface` → (`width` ∥ `latency` ∥ `agy`) → `mcp` → `style` → `tui`.
 
-### 6.2 Execution ledger (updated 2026-09-07 audit; #196 merged 2026-08-09)
+### 6.2 Execution ledger (updated 2026-07-26; consolidated into [#196](https://github.com/sfc-gh-eraigosa/dotfiles/pull/196))
 
 | Leaf | PR | State | Gate evidence |
 | :-- | :-- | :-- | :-- |
-| `iface` | [#196](https://github.com/sfc-gh-eraigosa/dotfiles/pull/196) (was #161) | **merged 2026-08-09** | `go build ./...` + `go vet ./...` green — P0 gate met |
-| `width` | [#196](https://github.com/sfc-gh-eraigosa/dotfiles/pull/196) (was #165) | **merged 2026-08-09** | full `go test ./...` green incl. `fit_property_test.go` (E1–E7) |
-| `latency` | [#196](https://github.com/sfc-gh-eraigosa/dotfiles/pull/196) (was #166) | **merged 2026-08-09** | full suite green incl. procgroup/gh-cache tests (E18, E19, E24) |
-| `agy` | [#196](https://github.com/sfc-gh-eraigosa/dotfiles/pull/196) (was #167) | **merged 2026-08-09** | full suite green; `FuzzParse` 20 s smoke clean (E20, E21); reconciled with main's tmux-palette rule (#190) |
+| `iface` | [#196](https://github.com/sfc-gh-eraigosa/dotfiles/pull/196) (was #161) | in-review (consolidated) | `go build ./...` + `go vet ./...` green — P0 gate met |
+| `width` | [#196](https://github.com/sfc-gh-eraigosa/dotfiles/pull/196) (was #165) | in-review (consolidated) | full `go test ./...` green incl. `fit_property_test.go` (E1–E7) |
+| `latency` | [#196](https://github.com/sfc-gh-eraigosa/dotfiles/pull/196) (was #166) | in-review (consolidated) | full suite green incl. procgroup/gh-cache tests (E18, E19, E24) |
+| `agy` | [#196](https://github.com/sfc-gh-eraigosa/dotfiles/pull/196) (was #167) | in-review (consolidated) | full suite green; `FuzzParse` 20 s smoke clean (E20, E21); reconciled with main's tmux-palette rule (#190) |
 | `mcp` | — | **not started** | blocked on `latency` (exec seam) |
 | `style` | — | **not started** | blocked on `width` (raw-text-aware truncation) |
 | `tui` | — | **not started** | blocked on `width` + `mcp` + `style` |
