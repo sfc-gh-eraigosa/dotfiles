@@ -53,7 +53,7 @@ until `kubectl port-forward` is running. That is exactly what `Tunnel.Keeper` is
 1. **See the cluster from the host row:** `enter` on `<nano>` shows `k8s · k3s 1.36 · context
    default · server ok · 6 ns`; `enter` drills contexts → namespaces → resource kinds → objects
    → containers, each level with its own columns and a bounded number of ssh round trips.
-2. **Act at the right level:** logs (`l`, followed stream), describe and events (`d`, `e`,
+2. **Act at the right level:** logs (`L`, followed stream), describe and events (`d`, `E`,
    one-shot streams), an interactive shell (`x`, handoff, `bash` with `sh` fallback), and a
    **port-forward as a bridge** (`t` on a service) — the ClusterIP Grafana on the Jetson
    becomes `http://127.0.0.1:80` (or an allocated port) in two keystrokes.
@@ -127,7 +127,7 @@ host
    └─ <context>     CONTEXT · CLUSTER · CURRENT · NAMESPACES                   e: cluster events
       └─ <ns>       NAMESPACE · STATUS · PODS · AGE                            e: namespace events
          └─ <kind>  KIND · COUNT                                               (curated list, §4.4)
-            └─ <object>   columns per kind (§4.4)                              l d e x t per kind
+            └─ <object>   columns per kind (§4.4)                              L d E x t per kind
                └─ <container>  CONTAINER · IMAGE · READY · RESTARTS · STATE     l x   (Leaf)
 ```
 
@@ -170,22 +170,28 @@ NAME · READY · AGE; **jobs** NAME · COMPLETIONS · AGE; **cronjobs** NAME · 
 **services** NAME · TYPE · CLUSTER-IP · PORTS · AGE; **ingresses** NAME · HOSTS · AGE;
 **configmaps** / **secrets** NAME · KEYS · AGE (secrets: key *names* only — values never
 leave the host); **persistentvolumeclaims** NAME · STATUS · CAPACITY · AGE; **events** is not a
-kind row but the `e` action. A kind whose `get` fails (forbidden, or a CRD not installed) shows
+kind row but the `E` action. A kind whose `get` fails (forbidden, or a CRD not installed) shows
 `COUNT=?` with the reason in its detail, never an omission.
 
 ### 4.5 Actions (declared data; fleet runs them)
 
+> **Logs are `L` and events are `E`, not `l`/`e`** — those are reserved as the global pane
+> toggles (`fleet-connect` design §4.2, from `fleet-error-view` #308/#310, built 2026-09-06):
+> a level is drawn *inside* the log and stderr panes, so an action bound to `l` or `e` would
+> shadow the key that shows or hides the pane the operator is reading. The mnemonic survives
+> in the uppercase form; `provider.Validate` rejects the lowercase ones at construction.
+
 | Row | Key | Kind | Command (every `<>` value `Quote`d; `$K` = the resolved kubectl + `--context <ctx>` + `--request-timeout=5s`) |
 | :-- | :-- | :-- | :-- |
-| pod | `l` | Stream, follow | `$K -n <ns> logs <pod> --all-containers --tail=100 -f` |
+| pod | `L` | Stream, follow | `$K -n <ns> logs <pod> --all-containers --tail=100 -f` |
 | pod | `d` | Stream, one-shot | `$K -n <ns> describe pod <pod>` |
-| pod | `e` | Stream, one-shot | `$K -n <ns> get events --field-selector involvedObject.name=<pod> --sort-by=.lastTimestamp` |
+| pod | `E` | Stream, one-shot | `$K -n <ns> get events --field-selector involvedObject.name=<pod> --sort-by=.lastTimestamp` |
 | pod | `x` | Handoff, remote | `$K -n <ns> exec -it <pod> -- sh -c 'command -v bash >/dev/null && exec bash || exec sh'` |
-| container | `l` / `x` | as pod, with `-c <container>` | |
-| deployment / statefulset / daemonset | `l` | Stream, follow | `$K -n <ns> logs <kind>/<name> --all-containers --tail=100 -f` |
+| container | `L` / `x` | as pod, with `-c <container>` | |
+| deployment / statefulset / daemonset | `L` | Stream, follow | `$K -n <ns> logs <kind>/<name> --all-containers --tail=100 -f` |
 | deployment / … | `d` | Stream, one-shot | `$K -n <ns> describe <kind> <name>` |
 | service | `t` | **Tunnel** | `RemotePort: <first port>`, `LocalPort: 0`, `Scheme: "http"` when the port name or number says so (`http`, `80`, `8080`, `3000`, `grafana`), else `""`; `Keeper: $K -n <ns> port-forward --address 127.0.0.1 svc/<name> <port>:<port>` |
-| namespace / context | `e` | Stream, one-shot | `$K -n <ns> get events --sort-by=.lastTimestamp` / `$K get events -A --sort-by=.lastTimestamp` |
+| namespace / context | `E` | Stream, one-shot | `$K -n <ns> get events --sort-by=.lastTimestamp` / `$K get events -A --sort-by=.lastTimestamp` |
 | kind | — | | a kind row has no actions; `enter` lists its objects |
 
 Key rules from `fleet-connect` apply: `c` is not used by this provider (there is no single
@@ -241,7 +247,7 @@ a port-forward keeper dies with its bridge, which dies with fleet.
   kubectl` and `/usr/local/bin/kubectl` resolved and carried in `attrs`.
 - **Quoting:** the built argv for a pod named `it's $(bad)` — the inert quoted word.
 - **Dual path:** the five-level tree identical in-process and via `fleet provider serve k8s`.
-- **Live:** the drill-down to a Grafana pod on `<nano>` with `l` streaming its log, `x` landing
+- **Live:** the drill-down to a Grafana pod on `<nano>` with `L` streaming its log, `x` landing
   in a shell and returning, and `t` on `observability-grafana` yielding a local URL that
   `curl -sI` answers; the same on a `bots-dev` service on `<gigabyte>`; the `<pi>` probe
   resolving `~/opt/bin/kubectl`; `fleet ls <nano> k8s default observability pods --json`.

@@ -256,10 +256,11 @@ type Handoff struct {                          // DATA. Only internal/runner tur
 }                                              // no Host field: fleet stamps the level's alias (below)
 type Stream struct { Command string `json:"command"`; Follow bool `json:"follow"` }
 // ReservedKeys are the printable runes fleet binds inside a level (r t T q / n N j k g G) plus
-// the dashboard verbs it deliberately leaves unbound there (u w v a p P A F and space). Validate
-// rejects an Action keyed on one, so a plugin author learns the collision at construction, not
-// from a key that never fires. enter and esc are not printable and cannot be declared at all.
-var ReservedKeys = map[rune]bool{ /* r t T q / n N j k g G u w v a p P A F ' ' */ }
+// the dashboard verbs it deliberately leaves unbound there (u w v a p P A F and space) plus the
+// three PANE TOGGLES, which are global and must never be shadowed (h l e). Validate rejects an
+// Action keyed on one, so a plugin author learns the collision at construction, not from a key
+// that never fires. enter and esc are not printable and cannot be declared at all.
+var ReservedKeys = map[rune]bool{ /* r t T q / n N j k g G u w v a p P A F ' ' h l e */ }
 type Tunnel struct {                           // DATA. Two integers, a scheme, and at most one quoted command.
     RemotePort int    `json:"remotePort"`      // 1–65535, always on the HOST's loopback
     LocalPort  int    `json:"localPort"`       // 0: prefer RemotePort locally, else allocate
@@ -428,14 +429,19 @@ first thing to run when a plugin misbehaves.
   nothing with the update engine.
 - **Keys:** `keyHelp` gains a level marker and the always-visible header strip filters on it, so
   a drill-down key is never implemented-but-invisible (the defect the log pane shipped with).
+  **`h`, `l` and `e` are reserved (2026-09-06, from `fleet-error-view` #308/#310, now built):**
+  they toggle the host / log / stderr panes and are global — a level is drawn INSIDE those panes,
+  so a provider action bound to one would shadow the key that shows or hides the pane the operator
+  is looking at. This retires the `l` and `e` examples the k8s provider sketch used for
+  logs/events; pick unreserved runes there (`d` describe, `x` exec, and e.g. `o` for logs).
   Inside a level: `enter` pushes (no-op on a `Leaf`), `esc` clears the level's filter first and
   pops otherwise, `r` reloads only this level, `t` toggles the cursor row's `Tunnel` action
   (any kind may carry one; the ports provider is merely the first), `T` stops every bridge on
   the level's host, vim motions and `/ n N` are scoped to the level, log-pane keys are
   unchanged, and `u w v space a p P A F` are **unbound** — a fleet-wide update is a dashboard
   verb, and a stray keystroke three levels down must not reinstall a fleet. **Any other
-  printable key runs the cursor row's action with that key** (`c` for herdr's attach, `l d e
-  x` for k8s), and the header strip lists the cursor row's action keys with their labels, so
+  printable key runs the cursor row's action with that key** (`c` for herdr's attach, `d x`
+  for k8s), and the header strip lists the cursor row's action keys with their labels, so
   a provider's keys are visible without a keymap change in fleet; `ReservedKeys` (§4.2) is
   what keeps them from colliding. Bridges survive `esc`: they belong to the process, not the
   level.

@@ -19,7 +19,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | :-- | :-- |
 | `fleet status [host...]` | table of host · commit · **branch** · last run · status; `--json`; exits non-zero if any host is stale |
 | `fleet discover [--scan]` | list every concrete ssh-config host as `in-fleet` / `available`; `--scan` sweeps the subnet to refresh a moved `HostName` and offer unknown responders; `--json`; `--add-all` bulk-adopts (one pass, one backup; `--dry-run` / `--yes`) |
-| `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v`/`a` selection, concurrent background updates (`--jobs`), `w` wake, `s` ssh, `F` forget answers, `?` help |
+| `fleet tui` | three-pane streaming dashboard: `h` host list / `l` log / `e` **stderr**, each toggling, whichever are visible sharing the viewport; vim nav (`gg`/`G`/`ctrl+d`), `/` regex search (per pane), `tab` focus, `space`/`v`/`a` selection, concurrent background updates (`--jobs`), `w` wake, `s` ssh, `F` forget answers, `?` help |
 | `fleet update <host>...` | walks a `fleet.yaml` step plan per host, serially: a DAG of `sync` (fetch → ff-only, one network call) / `run` (verbatim shell, batch or `ssh -t`) / `gh-auth` steps; with no plan file it is today's fetch → ff → `install.sh`. Flags: `--local skip\|rescue\|carry`, `--force` (= `--local rescue`), `--no-restore`, `--reset`, `--timeout D`, `--no-retry`, `--ref B\|repo=B` (repeatable), `--file PATH`, `--dry-run` (prints every effective script, sends nothing); `--json` from root. `fleet update init [--file] [--overwrite] [--print]` writes the starter plan |
 | `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
 | `fleet remove <alias> [--purge]` | unmark (keeps SSH access); `--purge` deletes the block |
@@ -33,7 +33,8 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | :-- | :-- |
 | `cmd/` | cobra commands, rendering, SSH fan-out |
 | `cmd/tui_model.go` | TUI state machine: modes, alias-keyed cursor/selection, update engine |
-| `cmd/tui_view.go` | pure `View()` + the one lipgloss `theme` |
+| `cmd/tui_view.go` | pure `View()` + the one lipgloss `theme`; `hostView` / `logView` / `errView` over the shared `renderStream` |
+| `cmd/tui_layout.go` | the ONLY pane-height arithmetic: `panes` → `heights`, over a measured chrome |
 | `cmd/tui_keys.go` | keymap + mode routing (`keyHelp` is the single source of truth) |
 | `cmd/tui_cmds.go` | tea.Cmd producers: poll, precheck, background update, handoffs |
 | `internal/sshconf` | parse **and edit** `~/.ssh/config` (the only inventory) |
@@ -381,6 +382,37 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   peer — we cannot run a command through a hop that refuses us. Pinned by
   `TestWakeLadderNeverFiresForAnAuthFailure` and
   `TestAuthFailedHostIsNeverOfferedAsALiveRelayPeer`.
+- **stdout and stderr are streamed on SEPARATE pipes, and a host that wrote stderr is
+  flagged even when it exited 0.** `runner.RunSplitStreamCtx` (an OPTIONAL `SplitStreamer`
+  capability — `runner.Runner` is unchanged, so no test double moved) tags each line;
+  `updexec.Console.ErrLine` routes it (nil ⇒ stderr goes to `Line`, i.e. the CLI's output is
+  byte-identical to before); the model keeps ONE tagged buffer with two projections — the log
+  pane shows everything with a `!` gutter, the error pane the stderr subset. A non-benign
+  stderr line (`updexec.Benign` is an anchored whole-line denylist of ssh/git/sudo chatter —
+  a *prefix* test would have whitelisted `remote: fatal: repository not found`) puts `ok ⚠N`
+  on the row, and the capture marks stderr with `!! `. The cost is that ordering BETWEEN the
+  streams is arrival order, not the remote's exact interleaving; ordering within each is
+  exact, every line is timestamped, and stderr stays in the log pane — which is why. Pinned by
+  `TestRunSplitStreamCtxSeparatesTheStreams`, `TestSplitStreamDoesNotDeadlockUnderBackpressure`,
+  `TestNilErrLineRoutesStderrToLine`, `TestBatchFallsBackWhenNotSplitCapable`,
+  `TestCaptureMarksStderr`, `TestBenignStderrTable`, `TestOkWithWarningsBadge`,
+  `TestFailRowIsNeverAWarning`, `TestStderrReachesBothPanesAndTheBadge`.
+- **Every pane height comes from `layout()`, over a MEASURED chrome, and the frame never
+  overflows the terminal.** It used to, by +3 rows at 100x40 with logs and +12 at 60x16, for
+  three independent reasons: the banner's hint strip WRAPS (so its height depends on width),
+  the status area is a framed panel of 8–12 rows in `modeAnswers`/`modeConfirm` rather than one
+  line, and rows were truncated to `panelWidth()` when `th.panel`'s `Padding(0,1)` leaves only
+  `panelWidth()-2` usable columns — so at 80 columns an 8-host panel rendered **20** lines.
+  `TestDemoFrames` never caught it because it asserted width only. Any open panel costs exactly
+  `panelFixedRows` (border + one lead line: the column header, a stream pane's title, or its
+  collapsed hint). When chrome + panel frames already exceed the terminal (a dialog at 60x16),
+  every pane yields rather than adding to a frame that cannot fit. Pinned by
+  `TestFrameFitsTheTerminal`, `TestPanelBodyRowIsExactlyOneLine`,
+  `TestChromeOverBudgetGivesThePanesNothing`, `TestEmptyFleetStillRendersTheOtherPanes`, and
+  the demo's height guard. **Do not reintroduce a hardcoded height anywhere in `View()`.**
+- **Pane visibility is session-only and never persisted** — host+log on, error off, every
+  start. Hiding the LAST visible pane is refused: there is no zero-pane state to get stuck in.
+  Pinned by `TestPaneDefaults`, `TestPaneStateIsNotPersisted`, `TestHidingTheLastPaneIsRefused`.
 - **TUI in-flight ownership**: a host is in exactly one of `pending` / `updating` /
   `waking` / resolved. Refresh skips hosts an async path owns; every completion
   re-polls its host. Two async paths must never own one row.

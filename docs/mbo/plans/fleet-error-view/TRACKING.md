@@ -19,20 +19,20 @@
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| 1 · runner: `SplitStreamer` | todo | | | |
-| 2 · runner: `Fake.ErrOut` | todo | | | |
-| 3 · updexec: `Console.ErrLine` | todo | | | |
-| 4 · updexec: capture marks stderr | todo | | | |
-| 5 · updexec: `Benign()` | todo | | | |
-| 6 · cmd: tag into the model | todo | | | |
-| 7 · cmd: pure `layout()` | todo | | | |
-| 8 · cmd: adopt layout, fix overflow | todo | | | RED output is itself evidence |
-| 9 · cmd: `h`/`e` keys + focus | todo | | | |
-| 10 · cmd: error pane render | todo | | | |
-| 11 · cmd: warning badge + status | todo | | | |
-| 12 · cmd: end-to-end + `-race` | todo | | | |
-| 13 · frames, usability, docs | todo | | | |
-| 14 · live gate (human) | todo | | | cannot be completed by an agent |
+| 1 · runner: `SplitStreamer` | done | see §5 | `go test ./...` + `-race` green | |
+| 2 · runner: `Fake.ErrOut` | done | see §5 | `go test ./...` + `-race` green | |
+| 3 · updexec: `Console.ErrLine` | done | see §5 | `go test ./...` + `-race` green | |
+| 4 · updexec: capture marks stderr | done | see §5 | `go test ./...` + `-race` green | |
+| 5 · updexec: `Benign()` | done | see §5 | `go test ./...` + `-race` green | |
+| 6 · cmd: tag into the model | done | see §5 | `go test ./...` + `-race` green | |
+| 7 · cmd: pure `layout()` | done | see §5 | `go test ./...` + `-race` green | |
+| 8 · cmd: adopt layout, fix overflow | done | see §5 | `go test ./...` + `-race` green | RED output is itself evidence |
+| 9 · cmd: `h`/`e` keys + focus | done | see §5 | `go test ./...` + `-race` green | |
+| 10 · cmd: error pane render | done | see §5 | `go test ./...` + `-race` green | |
+| 11 · cmd: warning badge + status | done | see §5 | `go test ./...` + `-race` green | |
+| 12 · cmd: end-to-end + `-race` | done | see §5 | `go test ./...` + `-race` green | |
+| 13 · frames, usability, docs | done | see §5 | `go test ./...` + `-race` green | |
+| 14 · live gate (human) | **todo** | | | cannot be completed by an agent — the ONE outstanding item |
 
 ## 2. Feature → proof matrix (from spec §5)
 
@@ -75,10 +75,31 @@
 
 ## 4. Blockers & escalations
 
-*(none yet — record the failing command and its real output here; contract defects get
-escalated, never silently patched)*
+- **Resolved during the build — three pre-existing tests encoded the overflow, not one.** The
+  plan predicted a single rewrite (`TestSplitKeepsBothHalvesUsableOnASmallTerminal`). Two more
+  failed for the same root cause: `TestWindowResizeKeepsCursorVisible` (80×10) and
+  `TestHalfPageMovesAndStaysInBounds` (80×13, commented "6 list rows once framed" — it was
+  never 6 without rendering past the bottom of the screen). Their viewport heights were raised
+  so they still test the motion arithmetic they were written for; nothing they assert changed.
+- **Resolved during the build — the demo fixture was too short.** With the corrected arithmetic
+  a 16-row terminal genuinely fits three host rows, so frames 2 and 9 stopped containing the
+  states they demonstrate. The fixture is 24 rows now; the frames were not weakened.
+- **Two defects the golden frames caught that no unit test did:** the error pane's title leaked
+  raw ANSI (a `th.warn.Render` nested inside `th.header.Render` re-escapes the inner reset), and
+  the bottom split collapsed the error pane entirely at 24 rows because `splitBottom` demanded
+  BOTH panes reach `minPaneRows` before splitting at all — on the very terminal size an
+  operator would open it on. The floor is now an aspiration, not a precondition: any region of
+  ≥2 rows splits.
 
 ## 5. Session log (append-only)
+
+- **2026-09-06 (build)** — Tasks 1–13 implemented TDD, RED verified before every GREEN.
+  Commits: `0e92030` (runner split streams), `9accdec` (updexec ErrLine + capture marking +
+  Benign), `c735fd5` (the three panes, layout(), the badge, frames + the height guard).
+  Gates: `go test ./...` and `go test -race ./...` green; `golangci-lint` 0 issues;
+  coverage `cmd` 65.4 %, `runner` 74.0 %, `updexec` 92.4 %, module **83.4 %** (all above their
+  floors, none regressed). Installed to `~/opt/bin/fleet` (`v0.4.0-10-g9accdec`) for the
+  operator to try. Task 14 (the live run) is the only item left.
 
 - **2026-09-06 (review)** — `/code-review high` against the real `sdk/fleet` source returned 12
   findings, all verified and folded in before any code was written. The load-bearing ones:

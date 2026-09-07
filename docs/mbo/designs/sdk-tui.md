@@ -94,6 +94,14 @@ branch, `--base` = the dependency edge). fleet's port and gsl's studio are named
   check with `COVERAGE_ENFORCE=1` locally.
 - **fleet drift.** Until fleet is ported, fleet and the lib can diverge. The guide's canonical
   keymap is copied from fleet's today, and the fleet port is the first phase-3 item.
+  **Known divergence (2026-09-06, `fleet-error-view` #308/#310, built):** fleet binds `h` and
+  `e` to its host- and stderr-pane toggles, alongside the `l` it already used for the log pane.
+  The guide's §3 makes `h`/`l` the lateral `PageLeft`/`PageRight` motions but explicitly allows
+  a tool with no lateral axis to rebind them "and say so in its help" — fleet has no lateral
+  axis, and all three are declared in its `keyHelp`, so this is the sanctioned path rather than
+  drift. **The phase-3 port must carry these three bindings across** and either `Merge`/`Without`
+  the lateral defaults or keep fleet's; it must not silently restore `h` as a motion and take the
+  host pane's toggle with it. `fleet-connect` reserves the same three runes for the same reason.
 - Blast radius of this objective itself: additive (new packages, no consumer changes).
 
 ## 6. Rollback
