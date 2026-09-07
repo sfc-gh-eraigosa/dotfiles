@@ -92,30 +92,17 @@ func TestLogPaneTogglesAndRestoresFullHeight(t *testing.T) {
 	}
 }
 
-// On a terminal that CAN fit both halves, the split leaves both usable.
-func TestSplitKeepsBothHalvesUsableWhenTheyFit(t *testing.T) {
+// Even on a short terminal the split must leave both halves usable rather
+// than collapsing the list to zero rows. 15 rows is the floor at which that is
+// possible at all: 13 go to chrome (banner 5 + list frame 3 + log frame 3 +
+// blank + status), leaving one row each.
+func TestSplitKeepsBothHalvesUsableOnASmallTerminal(t *testing.T) {
 	m := testModel("a", "b")
-	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 16})
 	open := mm.(tuiModel)
 	open.appendLog("a", "line") // make the pane active
 	if open.visibleRows() < 1 || open.logHeight() < 1 {
 		t.Fatalf("split collapsed: list=%d log=%d", open.visibleRows(), open.logHeight())
-	}
-}
-
-// Below that the frame FITS instead. At 80x12 the chrome (7) plus two panel
-// frames (3 each) is 13 rows for a 12-row terminal, so there is nothing left to
-// hand out. This case used to assert the opposite, and "both halves usable"
-// there was only achievable by rendering past the bottom of the screen — the
-// overflow documented in docs/mbo/designs/fleet-error-view.md §1.3.
-func TestSmallTerminalFitsRatherThanKeepingBothHalves(t *testing.T) {
-	m := testModel("a", "b")
-	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
-	open := mm.(tuiModel)
-	open.appendLog("a", "line")
-	budget := minFrameRows(open.chromeRows(), open.paneState())
-	if h := lipgloss.Height(open.View()); h > budget {
-		t.Fatalf("the panes must add nothing when the fixed rows are over budget: %d > %d", h, budget)
 	}
 }
 

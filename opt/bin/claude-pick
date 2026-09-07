@@ -1,0 +1,266 @@
+#!/usr/bin/env bash
+# claude-pick — pick a git repo (or clone one), then start Claude there in a
+# reusable tmux session named after the repo.
+#
+# Deliberately dumb about flags: the pane runs a bare `claude` through an
+# INTERACTIVE shell, so the `claude()` wrapper from ai/claude/aliases.sh owns
+# every launch flag (--remote-control via `claude-config remote on`, YOLO,
+# `tmux-mgr pane anchor`). Passing --remote-control here as well would double
+# the flag and clobber the explicit session name the wrapper sets on purpose.
+# Companion: opt/bin/claude-rc-boot (unattended logon autostart, no picker).
+#
+# Usage:
+#   claude-pick                          # interactive picker
+#   claude-pick ~/github/some-repo       # explicit repo path (worktrees included)
+#   claude-pick owner/repo               # clone into $CLAUDE_PICK_CLONE_DIR, then launch
+#   claude-pick https://github.com/o/r   # clone-and-launch (URL)
+#   claude-pick --list                   # print discovered repos, don't launch
+#   claude-pick --print [target]         # print the tmux command, don't run it
+#   claude-pick --help
+#
+# Env overrides:
+#   CLAUDE_PICK_ROOTS          colon-separated scan roots
+#                              (default: $HOME/github:$HOME/git:$HOME/.herdr/worktrees:$HOME/.config/gss/worktrees)
+#   CLAUDE_PICK_DEPTH          scan depth under each root (default: 6 — deep enough
+#                              for gss's <owner>/<repo>/<feature>/<user>/<worker>)
+#   CLAUDE_PICK_CLONE_DIR      clone destination (default: $HOME/github)
+#   CLAUDE_PICK_SESSION_PREFIX tmux session prefix (default: claude)
+
+set -u
+
+ROOTS="${CLAUDE_PICK_ROOTS:-$HOME/github:$HOME/git:$HOME/.herdr/worktrees:$HOME/.config/gss/worktrees}"
+DEPTH="${CLAUDE_PICK_DEPTH:-6}"
+CLONE_DIR="${CLAUDE_PICK_CLONE_DIR:-$HOME/github}"
+SESSION_PREFIX="${CLAUDE_PICK_SESSION_PREFIX:-claude}"
+CLONE_LABEL="[clone a new repo]"
+
+die() { echo "claude-pick: $*" >&2; exit 1; }
+
+usage() {
+    cat <<'EOF'
+Usage: claude-pick [target]
+       claude-pick --list              print discovered repos, don't launch
+       claude-pick --print [target]    print the tmux command, don't run it
+       claude-pick --help
+
+Picks a git repo and starts Claude there in a tmux session named
+"<prefix>-<repo>", reattaching if that session already exists.
+
+  target   a repo path (git worktrees included), "owner/repo", or a clone URL.
+           Omit it for an interactive picker (fzf, else a numbered menu).
+
+Launch flags (--remote-control, --dangerously-skip-permissions) are NOT set
+here: the pane runs a bare `claude` under an interactive shell so the wrapper
+in ai/claude/aliases.sh applies them. Toggle with `claude-config remote on`.
+
+Env: CLAUDE_PICK_ROOTS, CLAUDE_PICK_DEPTH, CLAUDE_PICK_CLONE_DIR,
+     CLAUDE_PICK_SESSION_PREFIX.
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# Repo identity
+# ---------------------------------------------------------------------------
+
+# Canonical work-tree root for a directory, or non-zero if it isn't one.
+# Uses git itself rather than testing for a `.git` DIRECTORY: inside a git
+# worktree (this repo's whole gss/herdr workflow) `.git` is a FILE, so a
+# `[ -d "$d/.git" ]` test silently rejects every worktree.
+cp_repo_root() {
+    [ -d "${1:-}" ] || return 1
+    git -C "$1" rev-parse --show-toplevel 2>/dev/null
+}
+
+# tmux rewrites '.' and ':' to '_' when it CREATES a session but not when it
+# LOOKS ONE UP, so an unsanitized "claude-foo.github.io" creates
+# "claude-foo_github_io" and then fails every has-session/switch-client against
+# it. Sanitize up front, matching claude-rc-boot's prefix rules.
+cp_session_name() {
+    printf '%s-%s' "$SESSION_PREFIX" \
+        "$(basename "$1" | tr -c 'A-Za-z0-9_-' '-' | sed 's/-\{2,\}/-/g; s/^-//; s/-*$//')"
+}
+
+# ---------------------------------------------------------------------------
+# Discovery
+# ---------------------------------------------------------------------------
+
+# Every repo under the scan roots. Matches `.git` of ANY type (dir for a normal
+# clone, file for a worktree/submodule) and prunes so we never walk into a
+# .git's own contents.
+cp_discover() {
+    local root rest="$ROOTS"
+    while [ -n "$rest" ]; do
+        root="${rest%%:*}"
+        case "$rest" in *:*) rest="${rest#*:}" ;; *) rest="" ;; esac
+        if [ -z "$root" ] || [ ! -d "$root" ]; then continue; fi
+        find "$root" -mindepth 1 -maxdepth "$DEPTH" -name .git -print -prune 2>/dev/null \
+            | while IFS= read -r g; do dirname "$g"; done
+    done | awk 'NF && !seen[$0]++'
+}
+
+# ---------------------------------------------------------------------------
+# Clone target parsing
+# ---------------------------------------------------------------------------
+
+# Turn "owner/repo" or a URL into a clone URL. Filesystem-looking arguments are
+# REJECTED rather than coerced: "~/gihub/typo" contains a slash, so a bare
+# */*-matches-owner/repo rule would happily build
+# "https://github.com/<home>/gihub/typo" and fail deep inside git clone.
+cp_clone_url() {
+    local t="$1"
+    case "$t" in
+        /*|./*|../*|~*)
+            die "no repo at '$t' (and it looks like a path, not owner/repo)" ;;
+        http://*|https://*|git@*|ssh://*)
+            printf '%s' "$t" ;;
+        [A-Za-z0-9._-]*/[A-Za-z0-9._-]*)
+            case "$t" in
+                */*/*) die "not a URL or owner/repo: $t" ;;
+                *) printf 'https://github.com/%s' "$t" ;;
+            esac ;;
+        *)
+            die "not a URL or owner/repo: $t" ;;
+    esac
+}
+
+# Repo directory name from a clone target. Trailing slashes are stripped first:
+# ".../o/r/" is a common paste and would otherwise yield an EMPTY name, cloning
+# straight into the scan root.
+cp_clone_name() {
+    local t="$1"
+    while [ "${t%/}" != "$t" ]; do t="${t%/}"; done
+    t="${t##*/}"
+    t="${t%.git}"
+    [ -n "$t" ] || die "could not derive a repo name from: $1"
+    printf '%s' "$t"
+}
+
+# Clone (or reuse) the target and echo the resulting work tree.
+cp_clone() {
+    local target="$1" url name dest
+    url="$(cp_clone_url "$target")" || exit 1
+    name="$(cp_clone_name "$target")" || exit 1
+    dest="$CLONE_DIR/$name"
+    if cp_repo_root "$dest" >/dev/null; then
+        echo "claude-pick: reusing existing clone at $dest" >&2
+    else
+        mkdir -p "$CLONE_DIR" || die "cannot create $CLONE_DIR"
+        echo "claude-pick: cloning $url -> $dest" >&2
+        git clone "$url" "$dest" >&2 || die "clone failed: $url"
+    fi
+    cp_repo_root "$dest" || die "cloned but not a git repo: $dest"
+}
+
+# ---------------------------------------------------------------------------
+# Picker
+# ---------------------------------------------------------------------------
+
+cp_pick() {
+    local repos choice
+    repos="$(cp_discover)"
+    [ -n "$repos" ] || die "no repos found under $ROOTS (set CLAUDE_PICK_ROOTS)"
+    if command -v fzf >/dev/null 2>&1; then
+        choice="$(printf '%s\n%s\n' "$repos" "$CLONE_LABEL" \
+            | fzf --prompt='claude-pick > ' --height=40% --reverse)" || exit 1
+    else
+        echo "Pick a repo to start Claude in:" >&2
+        local IFS=$'\n' c
+        PS3='> '
+        select c in $repos "$CLONE_LABEL"; do
+            [ -n "${c:-}" ] && choice="$c" && break
+        done
+    fi
+    [ -n "${choice:-}" ] || die "nothing selected"
+    if [ "$choice" = "$CLONE_LABEL" ]; then
+        local target
+        printf 'Repo to clone (owner/repo or URL): ' >&2
+        read -r target
+        [ -n "${target:-}" ] || die "no repo specified"
+        cp_clone "$target"
+    else
+        printf '%s' "$choice"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+cp_main() {
+    local PRINT_ONLY=0 TARGET REPO SESSION INNER
+    case "${1:-}" in
+        --help|-h) usage; exit 0 ;;
+        --list) cp_discover; exit 0 ;;
+        --print) PRINT_ONLY=1; shift ;;
+    esac
+
+    TARGET="${1:-}"
+
+    # The picker, `tmux switch-client` and an attached `tmux new-session` all need a
+    # controlling terminal. Agents calling this from a non-interactive tool call
+    # must ask for the command and hand it to the user instead of running it.
+    if [ "$PRINT_ONLY" -eq 0 ] && [ ! -t 0 ]; then
+        die "no terminal — run this yourself in a shell, or use: claude-pick --print <target>"
+    fi
+
+    # Only the LAUNCH path needs tmux and claude. --print resolves a repo and
+    # emits a command for someone else to run, so requiring them there would
+    # make the script unusable exactly where it is most useful: a machine that
+    # is not the one that will run the session (CI, a remote shell, an agent).
+    command -v git >/dev/null 2>&1 || die "git not found on PATH"
+    if [ "$PRINT_ONLY" -eq 0 ]; then
+        command -v tmux >/dev/null 2>&1 || die "tmux not found on PATH"
+        if ! command -v claude >/dev/null 2>&1; then
+            export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+            # shellcheck source=/dev/null
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1
+            command -v claude >/dev/null 2>&1 \
+                || die "'claude' not found on PATH (is Claude Code installed?)"
+        fi
+    fi
+
+    if [ -n "$TARGET" ]; then
+        REPO="$(cp_repo_root "$TARGET")" || REPO="$(cp_clone "$TARGET")" || exit 1
+    elif [ "$PRINT_ONLY" -eq 1 ]; then
+        die "--print needs a target (the picker requires a terminal)"
+    else
+        REPO="$(cp_pick)" || exit 1
+    fi
+    [ -n "${REPO:-}" ] || die "no repo resolved"
+
+    SESSION="$(cp_session_name "$REPO")"
+    # Bare `claude` under `$SHELL -ic` so the aliases.sh wrapper is in scope; the
+    # trailing interactive shell keeps the pane (and Claude's output) alive after
+    # claude exits.
+    # shellcheck disable=SC2016  # $SHELL must expand in the INNER shell, not here
+    INNER='claude; exec "$SHELL" -i'
+
+    # The printed form keeps `-A`: it is meant to be pasted into a real terminal,
+    # where a client exists and -A's attach-if-exists branch is exactly right.
+    if [ "$PRINT_ONLY" -eq 1 ]; then
+        # shellcheck disable=SC2016  # literal "$SHELL" is part of the command being printed
+        printf 'tmux new-session -A -s %s -c %s "$SHELL" -ic %s\n' \
+            "$SESSION" "$REPO" "'$INNER'"
+        exit 0
+    fi
+
+    # `-A` is avoided on purpose: tmux maps it to attach-session when the target
+    # already exists, which ignores -d and fails without a client. Branch instead.
+    if [ -n "${TMUX:-}" ]; then
+        tmux has-session -t "=$SESSION" 2>/dev/null \
+            || tmux new-session -d -s "$SESSION" -c "$REPO" "$SHELL" -ic "$INNER" \
+            || die "could not create tmux session $SESSION"
+        exec tmux switch-client -t "=$SESSION"
+    fi
+    if tmux has-session -t "=$SESSION" 2>/dev/null; then
+        exec tmux attach -t "=$SESSION"
+    fi
+    exec tmux new-session -s "$SESSION" -c "$REPO" "$SHELL" -ic "$INNER"
+}
+
+# Sourcing with CLAUDE_PICK_LIB=1 loads the cp_* helpers without running
+# anything, so the test driver can exercise the picker (which needs a tty) with
+# fzf stubbed out.
+if [ -z "${CLAUDE_PICK_LIB:-}" ]; then
+    cp_main "$@"
+fi

@@ -85,6 +85,29 @@ enumerates every namespace `--source` accepts and where each one comes from. Exi
 always means a usage/definition error (unknown key/option/source, wrong type) —
 shell callers treat ≥2 as fail-open.
 
+## TUI keys
+
+`gff tui` follows the sdk vim grammar from `sdk/libs/tui/GUIDE.md`. The keys below are gff's
+table (`internal/tui/keys.go`); the footer, the `?` overlay, and `gff tui --help` all render
+from it. Search finds a flag anywhere on the current page (collapsed areas holding a hit expand
+themselves); the `:` line is the CLI's `set`/`unset` from inside the TUI.
+
+| Keys | Action |
+| :-- | :-- |
+| `j`/`k`, `↑`/`↓` | move |
+| `h`/`l`, `←`/`→` | previous / next category page |
+| `gg` / `G` | first / last row |
+| `ctrl+d` / `ctrl+u`, `ctrl+f` / `ctrl+b` (PgUp/PgDn) | half page / full page |
+| `/` then a regex | incremental search, smartcase (`claude` matches `Claude CLI`; `Claude` is exact-case); Enter commits, Esc cancels |
+| `n` / `N` | next / previous match (wraps); Esc in the list clears highlights |
+| `:set <key> <value>` · `:unset <key>` | write / clear a user override — same writer as the CLI. Bool: `true`/`false`; choice: comma-separated ids. Tab completes key paths |
+| `:/re` · `:help` · `:q` | search alias · help · quit |
+| Enter | expand an area / open a flag's detail (layers) |
+| Space | toggle a bool / open the choice picker |
+| `u` | clear the user override on the cursor row |
+| `?` / F1 | help |
+| `q` | quit |
+
 ## Layers & provenance — reading the LAYER column
 
 Every value gff prints was won by exactly one of five layers; `gff list`'s

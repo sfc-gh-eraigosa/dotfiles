@@ -32,7 +32,14 @@ func TestDemoFrames(t *testing.T) {
 	build := func() tuiModel {
 		m := newTUIModel(hosts("host-desktop", "host-nano", "host-pi", "host-edge", "host-lab"),
 			nil, base, testNow, "main", 2, updplan.Default())
-		m.vp = viewport{height: 24, width: 100}
+		// 13 of these rows are chrome with the log pane open-but-empty
+		// (banner 5 + list frame 3 + collapsed-hint frame 3 + blank + status),
+		// so five hosts need 18. The old 16 only ever "fit" because the frame
+		// overflowed the terminal and bubbletea scrolled the banner away.
+		m.vp = viewport{height: 20, width: 100}
+		// The dashboard always runs ON one of these machines; every frame is
+		// more honest — and the badge + highlight visible — with that set.
+		m.setLocal(localHost{Name: "host-desktop"})
 		return m
 	}
 
@@ -140,15 +147,17 @@ func TestDemoFrames(t *testing.T) {
 		}},
 		{"13. HOST PANE HIDDEN — `h` gives the whole viewport to the log", "logs", func() tuiModel {
 			m := settled()
+			m.vp = viewport{height: 26, width: 100}
 			m.hostOpen = false
 			m.focus = paneLog
-			for i := range 8 {
+			for i := 0; i < 8; i++ {
 				m.appendLog("host-nano", fmt.Sprintf("Installing package %d of 28...", i+1))
 			}
 			return m
 		}},
 		{"14. ERROR PANE — stderr below the log, sharing the bottom", "stderr", func() tuiModel {
 			m := settled()
+			m.vp = viewport{height: 26, width: 100}
 			m.errOpen = true
 			m.appendLogLine("host-nano", "Updating apt package lists...", false)
 			m.appendLogLine("host-nano", "WARNING: apt-get update failed; installs may be incomplete.", true)
@@ -157,12 +166,14 @@ func TestDemoFrames(t *testing.T) {
 		}},
 		{"15. WARNING BADGE — exited 0, but wrote to stderr", "ok", func() tuiModel {
 			m := settled()
-			m.appendLogLine("host-nano", "WARNING: apt-get update failed; installs may be incomplete.", true)
-			m.updating["host-nano"] = updState{phase: updOK}
+			m.vp = viewport{height: 26, width: 100}
+			m.appendLogLine("host-desktop", "WARNING: apt-get update failed; installs may be incomplete.", true)
+			m.updating["host-desktop"] = updState{phase: updOK}
 			return m
 		}},
 		{"16. ERROR PANE ONLY — host and log hidden", "stderr", func() tuiModel {
 			m := settled()
+			m.vp = viewport{height: 26, width: 100}
 			m.hostOpen, m.logOpen, m.errOpen = false, false, true
 			m.focus = paneErr
 			m.appendLogLine("host-pi", "fatal: could not read Username for 'https://github.com'", true)
@@ -181,6 +192,12 @@ func TestDemoFrames(t *testing.T) {
 			return m
 		}},
 		{"12. empty fleet — points at discover/add", "fleet discover", build2Empty},
+		{"13. this host — header badge names it, its row is highlighted", "⌂ host-desktop", settled},
+		{"14. this host is NOT in the fleet — badge says so, no row lights up", "not in fleet", func() tuiModel {
+			m := settled()
+			m.setLocal(localHost{Name: "some-laptop"})
+			return m
+		}},
 	}
 
 	for _, f := range frames {
@@ -197,17 +214,13 @@ func TestDemoFrames(t *testing.T) {
 				t.Errorf("frame %q line too wide (%d): %q", f.name, w, line)
 			}
 		}
-		// The width guard's missing twin — the omission that let the frame
-		// overflow the terminal by up to 12 rows unnoticed. Same budget as
-		// TestFrameFitsTheTerminal, so the two guards cannot disagree.
-		if m.mode != modeHelp {
-			budget := m.vp.height
-			if fixed := minFrameRows(m.chromeRows(), m.paneState()); fixed > budget {
-				budget = fixed
-			}
-			if h := lipgloss.Height(out); h > budget {
-				t.Errorf("frame %q too tall (%d > %d):\n%s", f.name, h, budget, out)
-			}
+		// The height guard is the twin of the width one, and the reason the
+		// banner used to disappear mid-update: bubbletea drops lines from the
+		// TOP of a frame taller than the terminal, so one row of overflow
+		// costs the operator the header.
+		if h := lipgloss.Height(out); h > m.vp.height {
+			t.Errorf("frame %q too tall (%d lines for a %d-line terminal; %d scrolled off the top):\n%s",
+				f.name, h, m.vp.height, h-m.vp.height, out)
 		}
 		if demo {
 			fmt.Printf("\n\033[1;33m━━━ %s ━━━\033[0m\n%s\n", f.name, out)
@@ -222,7 +235,7 @@ var ansiRE = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
 func build2Empty() tuiModel {
 	m := newTUIModel(nil, nil, fakeBaseline{head: "72392c9"}, testNow, "main", 2, updplan.Default())
-	m.vp = viewport{height: 16, width: 100}
+	m.vp = viewport{height: 20, width: 100}
 	return m
 }
 

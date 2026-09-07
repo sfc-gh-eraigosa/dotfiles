@@ -1,0 +1,12 @@
+# 2026-09-05 23:14 PDT — RUN-RED: go test ./internal/tui/ -run "TestSlash|TestEscInList|TestNWithout|TestSearch"
+--- FAIL: TestSlashSearchExpandsAreaAndJumpsToFirstMatch (0.00s)
+--- FAIL: TestSlashSearchTypedLettersNeverFireNormalKeys (0.00s)
+--- FAIL: TestSlashSearchInvalidRegexKeepsPreviousMatches (0.00s)
+--- FAIL: TestSlashSearchEscRestoresCursorAndClears (0.00s)
+--- FAIL: TestSlashSearchEnterCommitsAndNNHop (0.00s)
+--- FAIL: TestSlashSearchNoMatchReportsNotFound (0.00s)
+--- FAIL: TestEscInListClearsHighlightsButKeepsPatternForN (0.00s)
+--- FAIL: TestSearchScopeIsTheCurrentPage (0.00s)
+FAIL
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui	0.015s
+FAIL

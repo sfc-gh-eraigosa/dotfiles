@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
@@ -69,8 +70,7 @@ type searchState struct {
 type viewport struct{ top, height, width int }
 
 // logEntry is one streamed line tagged with the host that produced it, so a
-// concurrent wave stays readable when several installs interleave, and with
-// the STREAM it came from, which is what the error pane projects on.
+// concurrent wave stays readable when several installs interleave.
 type logEntry struct {
 	alias, line string
 	at          time.Time
@@ -113,31 +113,30 @@ type tuiModel struct {
 	iaTotal  int               // interactive-queue size this wave, for the handoff banner
 	streams  map[string]stream // in-flight output channels, by alias
 	logs     []logEntry        // interleaved, capped ring of streamed lines
-
-	// Pane visibility. Session-only, never persisted: the defaults ARE the
+	logOpen  bool              // `l` toggles the pane; off restores a full-height list
+	// hostOpen and errOpen complete the pane set: the host table, the log, and
+	// the stderr stream. Session-only, never persisted — the defaults ARE the
 	// contract, and a preference file would be a second source of truth for
 	// what `fleet tui` looks like on startup.
-	hostOpen bool // `h` toggles the host table; on by default
-	logOpen  bool // `l` toggles the log pane; on by default
-	errOpen  bool // `e` toggles the stderr pane; OFF by default
-	focus    pane // tab cycles the vim keys over the VISIBLE panes
-
+	hostOpen  bool           // `h`; on by default
+	errOpen   bool           // `e`; OFF by default
+	focus     pane           // tab cycles the vim keys over the VISIBLE panes
 	logFollow bool           // tail the newest line
 	logTop    int            // scroll offset when not following
 	logColor  map[string]int // alias -> palette slot, by first appearance
 	logDir    string         // where per-run install captures are written
+	logFocus  bool           // tab moves vim keys from the host list to the log
 	logSearch searchState    // `/` while the log is focused searches log lines
-
 	// The error pane's own navigation state, deliberately parallel to the
 	// log's rather than folded into a shared struct: the existing suite reads
-	// m.logFollow / m.logTop directly in a dozen places, and rewriting those
-	// is a refactor this objective did not ask for. The BEHAVIOUR is shared
+	// m.logFollow / m.logTop directly in a dozen places, and rewriting those is
+	// a refactor this objective did not ask for. The BEHAVIOUR is shared
 	// (streamNav below); only the three fields are duplicated.
 	errFollow bool
 	errTop    int
 	errSearch searchState
-	// errCount is len(errEntries()) maintained incrementally. errActive() is
-	// called from every height query — i.e. on every keystroke and spinner
+	// errCount is len(errEntries()) maintained incrementally: errActive() is
+	// consulted from every height query — i.e. on every keystroke and spinner
 	// tick — and rebuilding a filtered copy of a 2000-entry ring that often is
 	// a render-path cost with no reason to exist.
 	errCount int
@@ -165,13 +164,19 @@ type tuiModel struct {
 	// Empty (the test default) disables persistence entirely.
 	ansPath string
 
-	hosts   map[string]sshconf.Host
-	run     runner.Runner
-	base    Baseliner
-	now     time.Time
-	spinner string // frame injected; tests keep it fixed for stable goldens
-	status  string
-	quitReq bool
+	hosts map[string]sshconf.Host
+	// local is who THIS machine is, and localAlias is the fleet row that IS
+	// it ("" when we are running from a machine outside the fleet). Both are
+	// set once via setLocal — injected rather than detected here, so the
+	// model stays a pure value and tests never read the real hostname.
+	local      localHost
+	localAlias string
+	run        runner.Runner
+	base       Baseliner
+	now        time.Time
+	spinner    string // frame injected; tests keep it fixed for stable goldens
+	status     string
+	quitReq    bool
 }
 
 func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time.Time, ref string, jobs int, plan updplan.Plan) tuiModel {
@@ -218,6 +223,23 @@ func (m tuiModel) Init() tea.Cmd {
 		cmds = append(cmds, pollHostWake(m.hosts[r.Alias], m.peersFor(r.Alias), m.run, m.base, m.wake))
 	}
 	return tea.Batch(cmds...)
+}
+
+// setLocal records who this machine is and which fleet row, if any, IS it.
+//
+// The pick walks m.rows, which newTUIModel has already sorted by alias, so a
+// config where two blocks both point here (an alias and a loopback tunnel is
+// the ordinary way that happens) resolves to the SAME row on every run —
+// map iteration order would have moved the highlight between restarts.
+func (m *tuiModel) setLocal(me localHost) {
+	m.local = me
+	m.localAlias = ""
+	for _, r := range m.rows {
+		if isLocalHost(m.hosts[r.Alias], me) {
+			m.localAlias = r.Alias
+			return
+		}
+	}
 }
 
 // ---- helpers over the row list -------------------------------------------
@@ -515,10 +537,9 @@ func (m *tuiModel) startUpdate(targets []string) tea.Cmd {
 			continue
 		}
 		// Re-running clears the previous outcome, or the row would show a
-		// stale "ok" while the new attempt is still deciding. The warning
-		// badge goes with it: it must describe THIS attempt, not the last one.
+		// stale "ok" while the new attempt is still deciding.
 		m.updating[a] = updState{phase: updPrecheck}
-		delete(m.warns, a)
+		delete(m.warns, a)   // the badge must describe THIS attempt
 		delete(m.pending, a) // ownership moves to the engine
 		cmds = append(cmds, precheckSudo(a, m.run))
 	}
@@ -782,8 +803,7 @@ func (m tuiModel) errEntries() []logEntry {
 	return out
 }
 
-// warnTotals is the status bar's summary: lines, and how many hosts they came
-// from.
+// warnTotals is the status bar's summary: lines, and how many hosts wrote them.
 func (m tuiModel) warnTotals() (lines, hosts int) {
 	for _, n := range m.warns {
 		if n > 0 {
@@ -794,7 +814,43 @@ func (m tuiModel) warnTotals() (lines, hosts int) {
 	return lines, hosts
 }
 
-// ---- panes ----------------------------------------------------------------
+// tailFor returns the last n lines a host produced, used as its FAIL text.
+func (m tuiModel) tailFor(alias string, n int) string {
+	var keep []string
+	for _, e := range m.logs {
+		if e.alias != alias {
+			continue
+		}
+		low := strings.ToLower(e.line)
+		if strings.HasPrefix(low, "hint:") || strings.HasPrefix(low, "advice:") {
+			continue
+		}
+		keep = append(keep, e.line)
+	}
+	if len(keep) > n {
+		keep = keep[len(keep)-n:]
+	}
+	return joinTrim(keep)
+}
+
+// logActive is "the pane is open AND has something to show". The split only
+// costs the host list its rows once output exists: the pane is ON by default
+// so it is discoverable, but an empty box must not shrink the fleet view to a
+// fifth to display nothing.
+func (m tuiModel) logActive() bool { return m.logOpen && len(m.logs) > 0 }
+
+// errActive is its stderr twin. It reads the COUNTER, not the projection —
+// this is consulted from every height query.
+func (m tuiModel) errActive() bool { return m.errOpen && m.errCount > 0 }
+
+// pane names the three stacked panels the operator composes.
+type pane int
+
+const (
+	paneHost pane = iota
+	paneLog
+	paneErr
+)
 
 // visiblePanes is the tab cycle order: the host table, then the streams below.
 func (m tuiModel) visiblePanes() []pane {
@@ -841,56 +897,105 @@ func (m *tuiModel) cycleFocus() {
 	m.focus = vis[0]
 }
 
-// logFocused reports whether the vim keys currently drive the log pane. It
-// replaces the old logFocus field, so the focus rule lives in one place now
-// that there are three panes to cycle.
+// logFocused reports whether the vim keys currently drive the log pane; it
+// replaces the old logFocus field now that there are three panes to cycle.
 func (m tuiModel) logFocused() bool { return m.focus == paneLog && m.logOpen }
 
 // errFocused is its error-pane twin.
 func (m tuiModel) errFocused() bool { return m.focus == paneErr && m.errOpen }
 
-// tailFor returns the last n lines a host produced, used as its FAIL text.
-func (m tuiModel) tailFor(alias string, n int) string {
-	var keep []string
-	for _, e := range m.logs {
-		if e.alias != alias {
-			continue
-		}
-		low := strings.ToLower(e.line)
-		if strings.HasPrefix(low, "hint:") || strings.HasPrefix(low, "advice:") {
-			continue
-		}
-		keep = append(keep, e.line)
+// bannerHeight is the intro panel: three hint lines inside two border rows.
+// It is a constant because renderPanel clamps each line to one row, so the
+// banner cannot grow no matter how many keys headerHints has to advertise.
+const bannerHeight = 3 + 2
+
+// listPanelChrome is the host table's two border rows plus its column header.
+const listPanelChrome = 2 + 1
+
+// listChrome is everything a host row must be paid for out of. The tail is
+// measured rather than counted: the answers form and the confirm gate render
+// where the one-line status bar normally sits.
+func (m tuiModel) listChrome() int {
+	return bannerHeight + listPanelChrome + m.tailHeight()
+}
+
+// streamBudget is the rows the stream panes have between them. It MEASURES the
+// blocks above instead of predicting them: the arithmetic here has silently
+// drifted before (a banner row, then panel borders), and every line of
+// overflow is paid for by bubbletea dropping the banner off the top.
+func (m tuiModel) streamBudget() int {
+	used := lipgloss.Height(m.banner()) + m.tailHeight()
+	if m.hostOpen {
+		used += lipgloss.Height(m.listPanel())
 	}
-	if len(keep) > n {
-		keep = keep[len(keep)-n:]
+	// Each OPEN stream pane costs its frame whether or not it has body rows:
+	// a pane with nothing to show still renders its one-line hint.
+	if m.logOpen {
+		used += logPanelChrome
 	}
-	return joinTrim(keep)
+	if m.errOpen {
+		used += logPanelChrome
+	}
+	return max0(m.vp.height - used)
 }
 
-// logActive is "the pane is open AND has something to show". The split only
-// costs the host list its rows once output exists: the pane is ON by default
-// so it is discoverable, but an empty box must not shrink the fleet view to a
-// fifth to display nothing.
-func (m tuiModel) logActive() bool { return m.logOpen && len(m.logs) > 0 }
-
-// errActive is its stderr twin. It reads the COUNTER, not the projection:
-// this is called from every height query, i.e. on every keystroke and every
-// spinner tick.
-func (m tuiModel) errActive() bool { return m.errOpen && m.errCount > 0 }
-
-func (m tuiModel) paneState() panes {
-	return panes{host: m.hostOpen, log: m.logOpen, err: m.errOpen}
+// logHeight and errHeight split that budget. With both flowing it is halved,
+// the odd row going to the log — it is the primary, and the error pane is a
+// filtered view of the same buffer.
+func (m tuiModel) logHeight() int {
+	if !m.logOpen || !m.logActive() {
+		return 0 // hidden, or collapsed to a single framed hint; no rows
+	}
+	b := m.streamBudget()
+	if m.errActive() {
+		return b - b/2
+	}
+	return b
 }
 
-// heights is the one call into layout(); View() takes it ONCE per frame.
-func (m tuiModel) heights() heights {
-	return layout(m.vp.height, m.chromeRows(), m.paneState(), m.logActive(), m.errActive())
+func (m tuiModel) errHeight() int {
+	if !m.errOpen || !m.errActive() {
+		return 0
+	}
+	b := m.streamBudget()
+	if m.logActive() {
+		return b / 2
+	}
+	return b
 }
 
-func (m tuiModel) listHeight() int { return m.heights().host }
-func (m tuiModel) logHeight() int  { return m.heights().log }
-func (m tuiModel) errHeight() int  { return m.heights().err }
+// listHeight is the rows available to the host table.
+func (m tuiModel) listHeight() int {
+	if !m.hostOpen {
+		return 0
+	}
+	if !m.logActive() && !m.errActive() {
+		// Closed, or open-but-empty: the list keeps everything the fixed
+		// chrome does not need.
+		h := m.vp.height - m.listChrome()
+		if m.logOpen {
+			h -= logPanelChrome // the collapsed hint line and its frame
+		}
+		if m.errOpen {
+			h -= logPanelChrome
+		}
+		return maxInt(1, h)
+	}
+	h := m.vp.height/5 - 2 // top ~20% once logs are flowing, less its border
+	if h < 3 {
+		h = 3
+	}
+	// The list's floor must never push the log pane off the bottom: leave it
+	// at least its frame plus one line of output.
+	streams := 0
+	if m.logOpen {
+		streams++
+	}
+	if m.errOpen {
+		streams++
+	}
+	return maxInt(1, minInt(h, m.vp.height-m.listChrome()-streams*logPanelChrome-1))
+}
 
 // ---- log navigation -------------------------------------------------------
 
@@ -939,6 +1044,11 @@ func streamMatches(nav streamNav) []int {
 	return out
 }
 
+// logMatches are the log buffer's indexes matching its own pattern.
+func (m tuiModel) logMatches() []int {
+	return streamMatches(streamNav{entries: m.logs, search: &m.logSearch})
+}
+
 // streamJump moves the pane to the next/previous match, wrapping. It stops
 // following, or the tail would immediately yank the match off screen.
 func (m *tuiModel) streamJump(nav streamNav, d int) {
@@ -979,11 +1089,6 @@ func (m *tuiModel) streamTo(nav streamNav, i int) {
 		i = maxInt(0, max)
 	}
 	*nav.top = i
-}
-
-// logMatches are the log buffer's indexes matching its own pattern.
-func (m tuiModel) logMatches() []int {
-	return streamMatches(streamNav{entries: m.logs, search: &m.logSearch})
 }
 
 // ---- the bubbletea Update -------------------------------------------------

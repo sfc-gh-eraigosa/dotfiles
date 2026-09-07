@@ -1,0 +1,13 @@
+# 2026-09-05 23:18 PDT — RUN-RED: go test ./internal/tui/ -run "TestParseValue|TestFindKey|TestColon"
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui [github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui.test]
+internal/tui/command_internal_test.go:25:12: undefined: parseValue
+internal/tui/command_internal_test.go:28:11: undefined: parseValue
+internal/tui/command_internal_test.go:35:12: undefined: parseValue
+internal/tui/command_internal_test.go:38:11: undefined: parseValue
+internal/tui/command_internal_test.go:41:11: undefined: parseValue
+internal/tui/command_internal_test.go:43:11: undefined: parseValue
+internal/tui/command_internal_test.go:45:11: undefined: parseValue
+internal/tui/command_internal_test.go:55:16: m.findKey undefined (type *Model has no field or method findKey)
+internal/tui/command_internal_test.go:58:15: m.findKey undefined (type *Model has no field or method findKey)
+internal/tui/command_internal_test.go:61:15: m.findKey undefined (type *Model has no field or method findKey)
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui [build failed]

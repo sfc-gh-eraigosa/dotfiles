@@ -1,0 +1,284 @@
+# gff TUI demo transcript — 2026-09-05 23:22 PDT
+# gff vdev
+# go version go1.26.1 linux/arm64
+# user override file before: {}
+
+===== start — live inventory, footer rendered from gffKeys | 2026-09-05 23:22:49 PDT =====
+[(All)] · ai · decision · desktop · fonts · git · links · macos · network · pkg · require · runtime · sdk
+
+> ▶ fleet  · com.github.sfc-gh-eraigosa.dotfiles
+  ▶ gsl  · com.github.sfc-gh-eraigosa.dotfiles
+  ▶ install  · com.github.sfc-gh-eraigosa.dotfiles
+  ▶ keyboard  · com.github.sfc-gh-eraigosa.dotfiles
+  ▶ research-rubric  · com.github.sfc-gh-eraigosa.dotfiles
+
+j/k move  h/l page  / search  n/N match  : command  ? help  q quit  space toggle  enter open  u clear
+
+
+
+
+
+
+
+
+
+
+
+
+
+===== /wispr → incremental search; the area holding the hit auto-expands | 2026-09-05 23:22:50 PDT =====
+[(All)] · ai · decision · desktop · fonts · git · links · macos · network · pkg · require · runtime · sdk
+
+  … 50 more above
+  install.tools.snowflake                   true  default  repo-live  Runs the install_snowflake_cli.sh bl
+  install.tools.sops                        true  default  repo-live  Runs the install_sops.sh block that
+  install.tools.yq                          true  default  repo-live  Runs the install_yq.sh block that fe
+  install.windows.ahk-autostart             true  default  repo-live  Runs the macOS-hotkeys AutoHotkey lo
+  install.windows.apps                      true  default  repo-live  Runs the winget desktop apps phase i
+  install.windows.claude-rc-autostart       true  default  repo-live  Gates the standalone install-claude-
+  install.windows.copilot-key               true  default  repo-live  Runs the PowerToys Copilot-key remap
+  install.windows.desktop-deploy            true  default  repo-live  Runs the install_windows.sh invocati
+  install.windows.nerd-font                 true  default  repo-live  Runs the Nerd Font phase in setup-ap
+  install.windows.portproxy                 true  default  repo-live  Gates the standalone refresh-wsl-por
+  install.windows.security-audit            false  default  repo-live  Opt-in (fail-closed) unattended wee
+  install.windows.security-hardening        false  default  repo-live  Opt-in (fail-closed) Windows securi
+  install.windows.sshd                      true  default  repo-live  Gates the standalone setup-sshd.ps1
+  install.windows.terminal-themes           true  default  repo-live  Runs the Windows Terminal themes and
+>   install.windows.wispr-flow                true    default    repo-live  Runs the Wispr Flow MSI step i
+  … 16 more below
+
+/wispr▌
+
+===== Enter → pattern committed, [i/N] badge in the footer | 2026-09-05 23:22:51 PDT =====
+[(All)] · ai · decision · desktop · fonts · git · links · macos · network · pkg · require · runtime · sdk
+
+  … 50 more above
+  install.tools.snowflake                   true  default  repo-live  Runs the install_snowflake_cli.sh bl
+  install.tools.sops                        true  default  repo-live  Runs the install_sops.sh block that
+  install.tools.yq                          true  default  repo-live  Runs the install_yq.sh block that fe
+  install.windows.ahk-autostart             true  default  repo-live  Runs the macOS-hotkeys AutoHotkey lo
+  install.windows.apps                      true  default  repo-live  Runs the winget desktop apps phase i
+  install.windows.claude-rc-autostart       true  default  repo-live  Gates the standalone install-claude-
+  install.windows.copilot-key               true  default  repo-live  Runs the PowerToys Copilot-key remap
+  install.windows.desktop-deploy            true  default  repo-live  Runs the install_windows.sh invocati
+  install.windows.nerd-font                 true  default  repo-live  Runs the Nerd Font phase in setup-ap
+  install.windows.portproxy                 true  default  repo-live  Gates the standalone refresh-wsl-por
+  install.windows.security-audit            false  default  repo-live  Opt-in (fail-closed) unattended wee
+  install.windows.security-hardening        false  default  repo-live  Opt-in (fail-closed) Windows securi
+  install.windows.sshd                      true  default  repo-live  Gates the standalone setup-sshd.ps1
+  install.windows.terminal-themes           true  default  repo-live  Runs the Windows Terminal themes and
+>   install.windows.wispr-flow                true    default    repo-live  Runs the Wispr Flow MSI step i
+  … 16 more below
+
+/wispr [1/1]  j/k move  h/l page  / search  n/N match  : command  ? help  q quit  space toggle  enter open
+
+===== n → hop to the next match (wraps) | 2026-09-05 23:22:52 PDT =====
+[(All)] · ai · decision · desktop · fonts · git · links · macos · network · pkg · require · runtime · sdk
+
+  … 50 more above
+  install.tools.snowflake                   true  default  repo-live  Runs the install_snowflake_cli.sh bl
+  install.tools.sops                        true  default  repo-live  Runs the install_sops.sh block that
+  install.tools.yq                          true  default  repo-live  Runs the install_yq.sh block that fe
+  install.windows.ahk-autostart             true  default  repo-live  Runs the macOS-hotkeys AutoHotkey lo
+  install.windows.apps                      true  default  repo-live  Runs the winget desktop apps phase i
+  install.windows.claude-rc-autostart       true  default  repo-live  Gates the standalone install-claude-
+  install.windows.copilot-key               true  default  repo-live  Runs the PowerToys Copilot-key remap
+  install.windows.desktop-deploy            true  default  repo-live  Runs the install_windows.sh invocati
+  install.windows.nerd-font                 true  default  repo-live  Runs the Nerd Font phase in setup-ap
+  install.windows.portproxy                 true  default  repo-live  Gates the standalone refresh-wsl-por
+  install.windows.security-audit            false  default  repo-live  Opt-in (fail-closed) unattended wee
+  install.windows.security-hardening        false  default  repo-live  Opt-in (fail-closed) Windows securi
+  install.windows.sshd                      true  default  repo-live  Gates the standalone setup-sshd.ps1
+  install.windows.terminal-themes           true  default  repo-live  Runs the Windows Terminal themes and
+>   install.windows.wispr-flow                true    default    repo-live  Runs the Wispr Flow MSI step i
+  … 16 more below
+
+/wispr [1/1]  j/k move  h/l page  / search  n/N match  : command  ? help  q quit  space toggle  enter open
+
+===== gg → first row (chord) | 2026-09-05 23:22:53 PDT =====
+[(All)] · ai · decision · desktop · fonts · git · links · macos · network · pkg · require · runtime · sdk
+
+> ▼ fleet  · com.github.sfc-gh-eraigosa.dotfiles
+  fleet.update.config                       home  default  repo-live  Which fleet.yaml `fleet update` read
+  fleet.update.enabled                      true  default  repo-live  Lets `fleet update` read its step pl
+  ▼ gsl  · com.github.sfc-gh-eraigosa.dotfiles
+  gsl.links.ai                              true  default  repo-live  AI links — the model name opens its
+  gsl.links.dirgit                          true  default  repo-live  Directory link — the dirgit director
+  gsl.links.enabled                         true  default  repo-live  Master switch for clickable (OSC 8)
+  gsl.links.repo                            true  default  repo-live  Repo links — the PR badge to its pul
+  gsl.links.time                            true  default  repo-live  Time link — the date/time opens a ti
+  ▼ install  · com.github.sfc-gh-eraigosa.dotfiles
+  install.ai.antigravity                    true  default  repo-live  Runs the Antigravity blocks (install
+  install.ai.claude                         true  default  repo-live  Runs the Claude Code blocks (install
+  install.ai.google-cli                     true  default  repo-live  Runs the google-cli-setup.sh block.
+  install.ai.plugins                        true  default  repo-live  Runs the sync-plugins.sh block that
+  install.ai.skills                         true  default  repo-live  Runs the sync-skills.sh block that l
+  … 66 more below
+
+/wispr [-/1]  j/k move  h/l page  / search  n/N match  : command  ? help  q quit  space toggle  enter open
+
+
+===== /ai.teams Enter → cursor parked on the row the : commands will change | 2026-09-05 23:22:54 PDT =====
+[(All)] · ai · decision · desktop · fonts · git · links · macos · network · pkg · require · runtime · sdk
+
+  … 1 more above
+  fleet.update.config                       home  default  repo-live  Which fleet.yaml `fleet update` read
+  fleet.update.enabled                      true  default  repo-live  Lets `fleet update` read its step pl
+  ▼ gsl  · com.github.sfc-gh-eraigosa.dotfiles
+  gsl.links.ai                              true  default  repo-live  AI links — the model name opens its
+  gsl.links.dirgit                          true  default  repo-live  Directory link — the dirgit director
+  gsl.links.enabled                         true  default  repo-live  Master switch for clickable (OSC 8)
+  gsl.links.repo                            true  default  repo-live  Repo links — the PR badge to its pul
+  gsl.links.time                            true  default  repo-live  Time link — the date/time opens a ti
+  ▼ install  · com.github.sfc-gh-eraigosa.dotfiles
+  install.ai.antigravity                    true  default  repo-live  Runs the Antigravity blocks (install
+  install.ai.claude                         true  default  repo-live  Runs the Claude Code blocks (install
+  install.ai.google-cli                     true  default  repo-live  Runs the google-cli-setup.sh block.
+  install.ai.plugins                        true  default  repo-live  Runs the sync-plugins.sh block that
+  install.ai.skills                         true  default  repo-live  Runs the sync-skills.sh block that l
+>   install.ai.teams                          true    default    repo-live  Runs the install_ai_teams.sh b
+  … 65 more below
+
+/ai.teams [1/1]  j/k move  h/l page  / search  n/N match  : command  ? help  q quit  space toggle  enter o
+
+===== :set … typed (letters are text, not normal-mode keys) | 2026-09-05 23:22:57 PDT =====
+[(All)] · ai · decision · desktop · fonts · git · links · macos · network · pkg · require · runtime · sdk
+
+  … 1 more above
+  fleet.update.config                       home  default  repo-live  Which fleet.yaml `fleet update` read
+  fleet.update.enabled                      true  default  repo-live  Lets `fleet update` read its step pl
+  ▼ gsl  · com.github.sfc-gh-eraigosa.dotfiles
+  gsl.links.ai                              true  default  repo-live  AI links — the model name opens its
+  gsl.links.dirgit                          true  default  repo-live  Directory link — the dirgit director
+  gsl.links.enabled                         true  default  repo-live  Master switch for clickable (OSC 8)
+  gsl.links.repo                            true  default  repo-live  Repo links — the PR badge to its pul
+  gsl.links.time                            true  default  repo-live  Time link — the date/time opens a ti
+  ▼ install  · com.github.sfc-gh-eraigosa.dotfiles
+  install.ai.antigravity                    true  default  repo-live  Runs the Antigravity blocks (install
+  install.ai.claude                         true  default  repo-live  Runs the Claude Code blocks (install
+  install.ai.google-cli                     true  default  repo-live  Runs the google-cli-setup.sh block.
+  install.ai.plugins                        true  default  repo-live  Runs the sync-plugins.sh block that
+  install.ai.skills                         true  default  repo-live  Runs the sync-skills.sh block that l
+>   install.ai.teams                          true    default    repo-live  Runs the install_ai_teams.sh b
+  … 65 more below
+
+:set install.ai.teams false▌
+
+===== Enter → override written; the row reads false / user-override | 2026-09-05 23:22:58 PDT =====
+[(All)] · ai · decision · desktop · fonts · git · links · macos · network · pkg · require · runtime · sdk
+
+  … 1 more above
+  fleet.update.config                       home  default  repo-live  Which fleet.yaml `fleet update` read
+  fleet.update.enabled                      true  default  repo-live  Lets `fleet update` read its step pl
+  ▼ gsl  · com.github.sfc-gh-eraigosa.dotfiles
+  gsl.links.ai                              true  default  repo-live  AI links — the model name opens its
+  gsl.links.dirgit                          true  default  repo-live  Directory link — the dirgit director
+  gsl.links.enabled                         true  default  repo-live  Master switch for clickable (OSC 8)
+  gsl.links.repo                            true  default  repo-live  Repo links — the PR badge to its pul
+  gsl.links.time                            true  default  repo-live  Time link — the date/time opens a ti
+  ▼ install  · com.github.sfc-gh-eraigosa.dotfiles
+  install.ai.antigravity                    true  default  repo-live  Runs the Antigravity blocks (install
+  install.ai.claude                         true  default  repo-live  Runs the Claude Code blocks (install
+  install.ai.google-cli                     true  default  repo-live  Runs the google-cli-setup.sh block.
+  install.ai.plugins                        true  default  repo-live  Runs the sync-plugins.sh block that
+  install.ai.skills                         true  default  repo-live  Runs the sync-skills.sh block that l
+>   install.ai.teams                          false   override   user-override  Runs the install_ai_teams.
+  … 65 more below
+
+/ai.teams [1/1]  j/k move  h/l page  / search  n/N match  : command  ? help  q quit  space toggle  enter o
+
+===== :unset … typed | 2026-09-05 23:23:00 PDT =====
+[(All)] · ai · decision · desktop · fonts · git · links · macos · network · pkg · require · runtime · sdk
+
+  … 1 more above
+  fleet.update.config                       home  default  repo-live  Which fleet.yaml `fleet update` read
+  fleet.update.enabled                      true  default  repo-live  Lets `fleet update` read its step pl
+  ▼ gsl  · com.github.sfc-gh-eraigosa.dotfiles
+  gsl.links.ai                              true  default  repo-live  AI links — the model name opens its
+  gsl.links.dirgit                          true  default  repo-live  Directory link — the dirgit director
+  gsl.links.enabled                         true  default  repo-live  Master switch for clickable (OSC 8)
+  gsl.links.repo                            true  default  repo-live  Repo links — the PR badge to its pul
+  gsl.links.time                            true  default  repo-live  Time link — the date/time opens a ti
+  ▼ install  · com.github.sfc-gh-eraigosa.dotfiles
+  install.ai.antigravity                    true  default  repo-live  Runs the Antigravity blocks (install
+  install.ai.claude                         true  default  repo-live  Runs the Claude Code blocks (install
+  install.ai.google-cli                     true  default  repo-live  Runs the google-cli-setup.sh block.
+  install.ai.plugins                        true  default  repo-live  Runs the sync-plugins.sh block that
+  install.ai.skills                         true  default  repo-live  Runs the sync-skills.sh block that l
+>   install.ai.teams                          false   override   user-override  Runs the install_ai_teams.
+  … 65 more below
+
+:unset install.ai.teams▌
+
+===== Enter → override cleared; the row falls back to its resolved layer | 2026-09-05 23:23:01 PDT =====
+[(All)] · ai · decision · desktop · fonts · git · links · macos · network · pkg · require · runtime · sdk
+
+  … 1 more above
+  fleet.update.config                       home  default  repo-live  Which fleet.yaml `fleet update` read
+  fleet.update.enabled                      true  default  repo-live  Lets `fleet update` read its step pl
+  ▼ gsl  · com.github.sfc-gh-eraigosa.dotfiles
+  gsl.links.ai                              true  default  repo-live  AI links — the model name opens its
+  gsl.links.dirgit                          true  default  repo-live  Directory link — the dirgit director
+  gsl.links.enabled                         true  default  repo-live  Master switch for clickable (OSC 8)
+  gsl.links.repo                            true  default  repo-live  Repo links — the PR badge to its pul
+  gsl.links.time                            true  default  repo-live  Time link — the date/time opens a ti
+  ▼ install  · com.github.sfc-gh-eraigosa.dotfiles
+  install.ai.antigravity                    true  default  repo-live  Runs the Antigravity blocks (install
+  install.ai.claude                         true  default  repo-live  Runs the Claude Code blocks (install
+  install.ai.google-cli                     true  default  repo-live  Runs the google-cli-setup.sh block.
+  install.ai.plugins                        true  default  repo-live  Runs the sync-plugins.sh block that
+  install.ai.skills                         true  default  repo-live  Runs the sync-skills.sh block that l
+>   install.ai.teams                          true    default    repo-live  Runs the install_ai_teams.sh b
+  … 65 more below
+
+/ai.teams [1/1]  j/k move  h/l page  / search  n/N match  : command  ? help  q quit  space toggle  enter o
+
+===== ? → help overlay, keys rendered from the same table | 2026-09-05 23:23:02 PDT =====
+    ctrl+b/pgup        page up
+    /                  regex search (smartcase; enter commit, esc cancel)
+    n                  next match
+    N                  previous match
+    esc                clear search highlights (pattern kept for n/N)
+    :                  command line
+    ?/f1               this help
+    q/ctrl+c           quit
+    space              toggle a bool / pick choice options (same writer as `gff set`)
+    enter              expand an area / open feature details (attributes + layers)
+    u                  clear the user override for the row (same as `gff unset`)
+
+SOURCES
+  — where flags come from. Namespaces are disjoint worlds: uniqueness is
+  (namespace, key); an area name like 'install' is grouping only, never claimed.
+  ▶ ● com.github.sfc-gh-eraigosa.dotfiles  git@github.com:sfc-gh-eraigosa/dotfiles.git  @93e0d02
+
+  key: ▶ current scope · ● registered · ○ discovered (not registered)
+  (CLI twin: `gff sources` — same list, plus --json)
+
+Esc/?/q close
+
+===== Esc → back to the list | 2026-09-05 23:23:02 PDT =====
+[(All)] · ai · decision · desktop · fonts · git · links · macos · network · pkg · require · runtime · sdk
+
+  … 1 more above
+  fleet.update.config                       home  default  repo-live  Which fleet.yaml `fleet update` read
+  fleet.update.enabled                      true  default  repo-live  Lets `fleet update` read its step pl
+  ▼ gsl  · com.github.sfc-gh-eraigosa.dotfiles
+  gsl.links.ai                              true  default  repo-live  AI links — the model name opens its
+  gsl.links.dirgit                          true  default  repo-live  Directory link — the dirgit director
+  gsl.links.enabled                         true  default  repo-live  Master switch for clickable (OSC 8)
+  gsl.links.repo                            true  default  repo-live  Repo links — the PR badge to its pul
+  gsl.links.time                            true  default  repo-live  Time link — the date/time opens a ti
+  ▼ install  · com.github.sfc-gh-eraigosa.dotfiles
+  install.ai.antigravity                    true  default  repo-live  Runs the Antigravity blocks (install
+  install.ai.claude                         true  default  repo-live  Runs the Claude Code blocks (install
+  install.ai.google-cli                     true  default  repo-live  Runs the google-cli-setup.sh block.
+  install.ai.plugins                        true  default  repo-live  Runs the sync-plugins.sh block that
+  install.ai.skills                         true  default  repo-live  Runs the sync-skills.sh block that l
+>   install.ai.teams                          true    default    repo-live  Runs the install_ai_teams.sh b
+  … 65 more below
+
+/ai.teams [1/1]  j/k move  h/l page  / search  n/N match  : command  ? help  q quit  space toggle  enter o
+
+===== :q → program exited, tmux session gone | 23:23:03 =====
+# user override file after: {}
+# gff get install.ai.teams → true

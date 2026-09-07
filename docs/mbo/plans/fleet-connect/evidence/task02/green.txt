@@ -1,0 +1,15 @@
+# task02 GREEN (final) — 2026-09-06T06:00:33Z
+$ go test -race ./internal/runner/ ./internal/updexec/ ./cmd/
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	2.138s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	2.294s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	1.428s
+$ gofmt -l .
+$ go vet ./...
+vet-ok
+$ grep -c "runner.Exec{" (non-test) — must still be 11
+11
+$ git diff --stat -- . (T2 touches only the alias sites + interactiveArgs)
+ sdk/fleet/cmd/tui_cmds.go            |  2 +-
+ sdk/fleet/internal/runner/runner.go  |  5 +----
+ sdk/fleet/internal/updexec/script.go | 10 +++++-----
+ 3 files changed, 7 insertions(+), 10 deletions(-)

@@ -93,6 +93,27 @@
 
 ## 5. Session log (append-only)
 
+- **2026-09-06 (reconciliation — READ THIS BEFORE TRUSTING THE PLAN'S §1)** — merging
+  `origin/worktree/fleet-error-view` revealed that `main` had moved under this branch and
+  **two of the plan's premises were already resolved there**:
+  1. **The frame overflow was fixed on main first**, as
+     [#306](https://github.com/sfc-gh-eraigosa/dotfiles/pull/306) (09:19), independently
+     finding the same padding cause ("lipgloss counts horizontal padding INSIDE Style.Width").
+     Its `View()` **measures and corrects** — render, measure, hand rows back until it fits,
+     with `fitFrame` as a last resort — which is strictly better than the predictive
+     `layout()` this plan's Tasks 7–8 specified, because it cannot drift. **`cmd/tui_layout.go`
+     was deleted and the panes were rebuilt on main's loop**, extended from one elastic pane to
+     two (`splitStreamRows`). Plan §1 finding 2 and Tasks 7–8 are superseded; the *findings*
+     were right, the design was second-best.
+  2. **`ReservedKeys` is real Go code now** (`sdk/fleet/pkg/provider/provider.go`, from
+     [#305](https://github.com/sfc-gh-eraigosa/dotfiles/pull/305)) and **already reserves
+     `h`, `l` and `e`** — `h` deliberately "ahead of use". The design-doc edits this objective
+     made were redundant and were dropped in favour of main's. `cmd/provider_keys_test.go`'s
+     `TestEveryFleetKeyIsReservedAgainstProviders` mechanically enforces the agreement and
+     **passes with the new `h`/`e` bindings**, which is a better guarantee than the prose was.
+  Everything the objective actually adds — the split streams, `ErrLine`, the marked capture,
+  `Benign`, the tagged buffer, the error pane, the warning badge — survived unchanged.
+
 - **2026-09-06 (build)** — Tasks 1–13 implemented TDD, RED verified before every GREEN.
   Commits: `0e92030` (runner split streams), `9accdec` (updexec ErrLine + capture marking +
   Benign), `c735fd5` (the three panes, layout(), the badge, frames + the height guard).
