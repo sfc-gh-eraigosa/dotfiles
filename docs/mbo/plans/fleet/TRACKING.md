@@ -4,6 +4,10 @@
 - **Started:** 2026-08-09
 - **Playbook:** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) · **Cursor:** [`TODO.md`](./TODO.md)
 - **Plan (source of truth):** [`../fleet.md`](../fleet.md) · spec [`../../specs/fleet.md`](../../specs/fleet.md)
+- **Status (2026-09-07 audit):** design #223 (2026-08-10) + build #224 (2026-08-17) merged to
+  `main` (13/15 leaves at merge). Live follow-ups = plan tasks 11 / 14 / 15 (declined-prune
+  capture · live update of the stale host · ssh-key-sync retirement) — still open; issue #222
+  stays open until they land.
 
 > **Update after EVERY task.** Status: `todo · in-progress · blocked · done`.
 > **Evidence** = the exact command run plus its real result. A row is `done` only with a
