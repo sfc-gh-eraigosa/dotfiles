@@ -32,7 +32,7 @@ func TestDemoFrames(t *testing.T) {
 	build := func() tuiModel {
 		m := newTUIModel(hosts("host-desktop", "host-nano", "host-pi", "host-edge", "host-lab"),
 			nil, base, testNow, "main", 2, updplan.Default())
-		m.vp = viewport{height: 16, width: 100}
+		m.vp = viewport{height: 24, width: 100}
 		return m
 	}
 
@@ -121,7 +121,7 @@ func TestDemoFrames(t *testing.T) {
 			m := settled()
 			m.vp = viewport{height: 26, width: 100}
 			m.logOpen = true
-			m.logFocus = true
+			m.focus = paneLog
 			m.streams = map[string]stream{"host-nano": {}, "host-pi": {}}
 			m.updating["host-nano"] = updState{phase: updRunning}
 			m.updating["host-pi"] = updState{phase: updRunning}
@@ -136,6 +136,44 @@ func TestDemoFrames(t *testing.T) {
 			} {
 				m.appendLog(l.a, l.t)
 			}
+			return m
+		}},
+		{"13. HOST PANE HIDDEN — `h` gives the whole viewport to the log", "logs", func() tuiModel {
+			m := settled()
+			m.hostOpen = false
+			m.focus = paneLog
+			for i := range 8 {
+				m.appendLog("host-nano", fmt.Sprintf("Installing package %d of 28...", i+1))
+			}
+			return m
+		}},
+		{"14. ERROR PANE — stderr below the log, sharing the bottom", "stderr", func() tuiModel {
+			m := settled()
+			m.errOpen = true
+			m.appendLogLine("host-nano", "Updating apt package lists...", false)
+			m.appendLogLine("host-nano", "WARNING: apt-get update failed; installs may be incomplete.", true)
+			m.appendLogLine("host-pi", "WARNING: grouped install failed; retrying individually...", true)
+			return m
+		}},
+		{"15. WARNING BADGE — exited 0, but wrote to stderr", "ok", func() tuiModel {
+			m := settled()
+			m.appendLogLine("host-nano", "WARNING: apt-get update failed; installs may be incomplete.", true)
+			m.updating["host-nano"] = updState{phase: updOK}
+			return m
+		}},
+		{"16. ERROR PANE ONLY — host and log hidden", "stderr", func() tuiModel {
+			m := settled()
+			m.hostOpen, m.logOpen, m.errOpen = false, false, true
+			m.focus = paneErr
+			m.appendLogLine("host-pi", "fatal: could not read Username for 'https://github.com'", true)
+			return m
+		}},
+		{"17. THREE PANES on a narrow terminal", "logs", func() tuiModel {
+			m := settled()
+			m.vp = viewport{height: 24, width: 80}
+			m.errOpen = true
+			m.appendLogLine("host-nano", "Installing 28 core packages via apt...", false)
+			m.appendLogLine("host-nano", "WARNING: apt-get update failed", true)
 			return m
 		}},
 		{"11. help overlay", "toggle this help", func() tuiModel {
@@ -157,6 +195,18 @@ func TestDemoFrames(t *testing.T) {
 		for _, line := range strings.Split(out, "\n") {
 			if w := lipgloss.Width(line); w > m.vp.width {
 				t.Errorf("frame %q line too wide (%d): %q", f.name, w, line)
+			}
+		}
+		// The width guard's missing twin — the omission that let the frame
+		// overflow the terminal by up to 12 rows unnoticed. Same budget as
+		// TestFrameFitsTheTerminal, so the two guards cannot disagree.
+		if m.mode != modeHelp {
+			budget := m.vp.height
+			if fixed := minFrameRows(m.chromeRows(), m.paneState()); fixed > budget {
+				budget = fixed
+			}
+			if h := lipgloss.Height(out); h > budget {
+				t.Errorf("frame %q too tall (%d > %d):\n%s", f.name, h, budget, out)
 			}
 		}
 		if demo {

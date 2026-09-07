@@ -19,7 +19,7 @@ type theme struct {
 	title, header, statusBar, dim lipgloss.Style
 	cursor, selected, match       lipgloss.Style
 	byClass                       map[string]lipgloss.Style
-	ok, fail, running             lipgloss.Style
+	ok, fail, running, warn       lipgloss.Style
 	dialog, panel                 lipgloss.Style
 	markSel, markOK, markFail     lipgloss.Style
 	logHosts                      []lipgloss.Style
@@ -38,6 +38,10 @@ func newTheme() theme {
 		ok:        lipgloss.NewStyle().Foreground(c("2")),
 		fail:      lipgloss.NewStyle().Foreground(c("1")).Bold(true),
 		running:   lipgloss.NewStyle().Foreground(c("4")),
+		// Yellow: a warning is not a failure. The outcome colours keep their
+		// meanings — green ok, red FAIL — and ⚠ sits alongside rather than
+		// replacing them.
+		warn: lipgloss.NewStyle().Foreground(c("3")),
 		dialog: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("6")).Padding(0, 1),
 		// Every section gets the same frame as the answers dialog, so the
@@ -91,42 +95,79 @@ func (m tuiModel) banner() string {
 	return th.panel.Width(m.panelWidth()).Render(b.String())
 }
 
+// statusSeparatorRows is the blank line View() emits between the last panel
+// and the status area.
+const statusSeparatorRows = 1
+
+// chromeRows is the frame's fixed cost, MEASURED not assumed. BOTH ends of it
+// vary: the banner's key-hint strip wraps at narrow widths (6 rows at 60
+// columns, 5 at 80+), and the status area is a full framed PANEL in
+// modeAnswers and modeConfirm (10-12 rows) rather than one line. Assuming
+// three lines of banner and two of status is how the frame came to overflow
+// the terminal by up to 12 rows.
+func (m tuiModel) chromeRows() int {
+	return lipgloss.Height(m.banner()) + statusSeparatorRows + lipgloss.Height(m.statusView())
+}
+
 func (m tuiModel) View() string {
 	var b strings.Builder
 	b.WriteString(m.banner())
 	b.WriteString("\n")
 
+	// The overlay deliberately replaces the whole frame — no panes, no status.
 	if m.mode == modeHelp {
 		return b.String() + m.helpView()
 	}
+
+	h := m.heights()
+	if m.hostOpen {
+		b.WriteString(m.hostView(h.host) + "\n")
+	}
+	if m.logOpen {
+		b.WriteString(m.logView(h.log) + "\n")
+	}
+	if m.errOpen {
+		b.WriteString(m.errView(h.err) + "\n")
+	}
+	b.WriteString("\n" + m.statusView())
+	return b.String()
+}
+
+// hostView is the fleet table. An empty fleet renders its guidance as this
+// pane's BODY rather than returning early from View(): an early return here
+// swallowed the log pane, the error pane and the status line whenever the
+// fleet was empty.
+func (m tuiModel) hostView(rows int) string {
 	if len(m.rows) == 0 {
-		empty := "no fleet hosts found\n" + th.dim.Render(
-			"run `fleet discover` to see adoptable ssh-config hosts, then `fleet add <alias>`")
-		return b.String() + th.panel.Width(m.panelWidth()).Render(empty) + "\n"
+		// The headline is this panel's lead line (what panelFixedRows budgets);
+		// the guidance is a body row, shown only when one was granted.
+		empty := trunc("no fleet hosts found", m.panelInnerWidth())
+		if rows > 0 {
+			empty += "\n" + trunc(th.dim.Render(
+				"run `fleet discover` to see adoptable ssh-config hosts, then `fleet add <alias>`"),
+				m.panelInnerWidth())
+		}
+		return th.panel.Width(m.panelWidth()).Render(empty)
 	}
 
 	var list strings.Builder
 	// The header carries the SAME prefix width as a row (cursor + dot + space),
-	// or every column label sits four cells left of the data under it.
-	list.WriteString(strings.Repeat(" ", rowMarkPrefix) +
+	// or every column label sits four cells left of the data under it. It is
+	// truncated like any other line: at 80 columns it is ~91 wide, and an
+	// untruncated header wraps, which silently costs the panel a row.
+	list.WriteString(trunc(strings.Repeat(" ", rowMarkPrefix)+
 		th.header.Render(fmt.Sprintf("%-16s %-9s %-*s %-13s %-22s %s",
-			"HOST", "COMMIT", branchColWidth, "BRANCH", "LAST RUN", "STATUS", "UPDATE")) + "\n")
+			"HOST", "COMMIT", branchColWidth, "BRANCH", "LAST RUN", "STATUS", "UPDATE")),
+		m.panelInnerWidth()) + "\n")
 
-	h := m.visibleRows()
-	end := m.vp.top + h
+	end := m.vp.top + rows
 	if end > len(m.rows) {
 		end = len(m.rows)
 	}
 	for i := m.vp.top; i < end; i++ {
-		list.WriteString(trunc(m.rowView(i), m.panelWidth()) + "\n")
+		list.WriteString(trunc(m.rowView(i), m.panelInnerWidth()) + "\n")
 	}
-	b.WriteString(th.panel.Width(m.panelWidth()).Render(strings.TrimRight(list.String(), "\n")) + "\n")
-
-	if m.logOpen {
-		b.WriteString(m.logView() + "\n")
-	}
-	b.WriteString("\n" + m.statusView())
-	return b.String()
+	return th.panel.Width(m.panelWidth()).Render(strings.TrimRight(list.String(), "\n"))
 }
 
 // logView is the framed streaming pane. It sits BELOW the host list rather
@@ -154,7 +195,7 @@ func shortWhat(s string) string {
 	if i := strings.IndexAny(s, "(·"); i > 0 {
 		s = strings.TrimSpace(s[:i])
 	}
-	for _, cut := range []string{"toggle this ", "toggle ", "show / hide the streaming ", "regex "} {
+	for _, cut := range []string{"toggle this ", "toggle ", "show / hide the streaming ", "show / hide the ", "regex "} {
 		s = strings.TrimPrefix(s, cut)
 	}
 	if i := strings.Index(s, " selection"); i > 0 {
@@ -166,10 +207,80 @@ func shortWhat(s string) string {
 	return s
 }
 
-func (m tuiModel) logView() string {
-	h := m.logHeight()
-	var body strings.Builder
+// streamPane renders one scrolling stream pane. The log and the error pane are
+// the same widget over different slices of the SAME buffer, so their scroll,
+// search and truncation behaviour cannot drift apart.
+type streamPane struct {
+	entries []logEntry
+	rows    int // body rows this pane was granted
+	title   string
+	hint    string // shown instead of the body when there is nothing to show
+	active  bool
+	focused bool
+	follow  bool
+	top     int
+	search  searchState
+	hideKey string // the key that closes this pane, named in the header
+	// markStderr draws the dim red `!` gutter. The log pane sets it (it shows
+	// both streams and must say which is which); the error pane does not —
+	// every line in it is stderr, so a marker on every line says nothing.
+	markStderr bool
+}
 
+func (m tuiModel) renderStream(p streamPane) string {
+	if !p.active {
+		// Collapsed to a single framed line: still visibly its own section, but
+		// it must not cost the fleet view a share of the screen to say nothing.
+		return th.panel.Width(m.panelWidth()).Render(
+			trunc(th.dim.Render(p.hint), m.panelInnerWidth()))
+	}
+
+	var body strings.Builder
+	mode := "following"
+	if !p.follow {
+		mode = fmt.Sprintf("scrolled %d/%d", p.top+1, len(p.entries))
+	}
+	keys := "tab: focus  " + p.hideKey + ": hide"
+	if p.focused {
+		// Say the keys are HERE now, or the operator has no way to know why
+		// j/k stopped moving the host cursor.
+		keys = th.markSel.Render("◀ keys here") + th.dim.Render("   gg/G  /  n/N  tab: back")
+		if p.search.committed && p.search.input != "" {
+			keys += th.dim.Render("   /" + p.search.input)
+		}
+	}
+	body.WriteString(trunc(
+		th.header.Render(p.title)+th.dim.Render("   "+mode+"   ")+keys,
+		m.panelInnerWidth()) + "\n")
+
+	start := streamStart(p.follow, p.top, len(p.entries), p.rows)
+	for i := start; i < len(p.entries) && i < start+p.rows; i++ {
+		e := p.entries[i]
+		// hh:mm:ss first, then the host, then the line. Short on purpose: the
+		// date is the session's, and seconds are what matter when reading how
+		// long a step took.
+		stamp := "        "
+		if !e.at.IsZero() {
+			stamp = e.at.Format("15:04:05")
+		}
+		gutter := " "
+		if p.markStderr && e.stderr {
+			gutter = th.warn.Render("!")
+		}
+		text := trunc(e.line, m.logWidth()-logGutter)
+		if p.search.re != nil && p.search.re.MatchString(e.alias+" "+e.line) {
+			text = th.match.Render(text)
+		}
+		fmt.Fprintf(&body, "%s%s %s %s\n",
+			gutter,
+			th.dim.Render(stamp),
+			m.hostStyle(e.alias).Render(fmt.Sprintf("%-14s│", trunc(e.alias, 14))),
+			text)
+	}
+	return th.panel.Width(m.panelWidth()).Render(strings.TrimRight(body.String(), "\n"))
+}
+
+func (m tuiModel) logView(rows int) string {
 	live := m.liveAliases()
 	title := "logs"
 	if len(live) > 0 {
@@ -180,48 +291,48 @@ func (m tuiModel) logView() string {
 		}
 		title = "logs — streaming: " + strings.Join(coloured, ", ")
 	}
-	mode := "following"
-	if !m.logFollow {
-		mode = fmt.Sprintf("scrolled %d/%d", m.logTop+1, len(m.logs))
-	}
-	keys := "tab: focus  l: hide"
-	if m.logFocus {
-		// Say the keys are HERE now, or the operator has no way to know why
-		// j/k stopped moving the host cursor.
-		keys = th.markSel.Render("◀ keys here") + th.dim.Render("   gg/G  /  n/N  tab: back")
-		if m.logSearch.committed && m.logSearch.input != "" {
-			keys += th.dim.Render("   /" + m.logSearch.input)
-		}
-	}
-	body.WriteString(th.header.Render(title) + th.dim.Render("   "+mode+"   ") + keys + "\n")
+	return m.renderStream(streamPane{
+		entries:    m.logs,
+		rows:       rows,
+		title:      title,
+		hint:       "📜 logs: idle — output appears here during an update  (l: hide)",
+		active:     m.logActive(),
+		focused:    m.logFocused(),
+		follow:     m.logFollow,
+		top:        m.logTop,
+		search:     m.logSearch,
+		hideKey:    "l",
+		markStderr: true,
+	})
+}
 
-	if !m.logActive() {
-		// Collapsed to a single framed line: still visibly its own section, but
-		// it must not cost the fleet view a fifth of the screen to say nothing.
-		return th.panel.Width(m.panelWidth()).Render(
-			th.dim.Render("📜 logs: idle — output appears here during an update  (l: hide)"))
+// errView is the stderr pane. It is a projection of the same buffer the log
+// renders, so a line is never in one and missing from the other.
+func (m tuiModel) errView(rows int) string {
+	title := "errors — stderr"
+	if lines, hosts := m.warnTotals(); lines > 0 {
+		title = fmt.Sprintf("errors — ⚠ %s on %s",
+			plural(lines, "warning"), plural(hosts, "host"))
 	}
+	return m.renderStream(streamPane{
+		entries: m.errEntries(),
+		rows:    rows,
+		title:   title,
+		hint:    "⚠️  stderr: none captured — this pane fills when a host writes to stderr  (e: hide)",
+		active:  m.errActive(),
+		focused: m.errFocused(),
+		follow:  m.errFollow,
+		top:     m.errTop,
+		search:  m.errSearch,
+		hideKey: "e",
+	})
+}
 
-	start := m.logStart(h)
-	for i := start; i < len(m.logs) && i < start+h; i++ {
-		e := m.logs[i]
-		// hh:mm:ss first, then the host, then the line. Short on purpose: the
-		// date is the session's, and seconds are what matter when reading how
-		// long a step took.
-		stamp := "        "
-		if !e.at.IsZero() {
-			stamp = e.at.Format("15:04:05")
-		}
-		text := trunc(e.line, m.logWidth()-logGutter)
-		if m.logSearch.re != nil && m.logSearch.re.MatchString(e.alias+" "+e.line) {
-			text = th.match.Render(text)
-		}
-		fmt.Fprintf(&body, "%s %s %s\n",
-			th.dim.Render(stamp),
-			m.hostStyle(e.alias).Render(fmt.Sprintf("%-14s│", trunc(e.alias, 14))),
-			text)
+func plural(n int, noun string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, noun)
 	}
-	return th.panel.Width(m.panelWidth()).Render(strings.TrimRight(body.String(), "\n"))
+	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 // logStart is the first visible line: pinned to the tail while following, so
@@ -238,24 +349,24 @@ func (m tuiModel) hostStyle(alias string) lipgloss.Style {
 	return th.statusBar
 }
 
-func (m tuiModel) logStart(h int) int {
-	if m.logFollow {
-		if s := len(m.logs) - h; s > 0 {
+func streamStart(follow bool, top, n, h int) int {
+	if follow {
+		if s := n - h; s > 0 {
 			return s
 		}
 		return 0
 	}
-	if m.logTop > len(m.logs)-1 {
-		return maxInt(0, len(m.logs)-1)
+	if top > n-1 {
+		return maxInt(0, n-1)
 	}
-	return m.logTop
+	return top
 }
 
 // logGutter is the timestamp + host columns and their separators.
 const logGutter = 8 + 1 + 14 + 1 + 1 + 1
 
 func (m tuiModel) logWidth() int {
-	w := m.vp.width - 4
+	w := m.panelInnerWidth()
 	if w < 40 {
 		w = 40
 	}
@@ -386,6 +497,12 @@ func (m tuiModel) updateCell(alias string) string {
 	case updRunning:
 		return th.running.Render(m.spinner + " updating")
 	case updOK:
+		// A run can exit 0 having written warnings to stderr — a host that
+		// half-installed and reported success is the worst outcome this tool
+		// can produce, so the row says so without anyone opening a pane.
+		if n := m.warns[alias]; n > 0 {
+			return th.ok.Render("ok") + " " + th.warn.Render(fmt.Sprintf("⚠%d", n))
+		}
 		return th.ok.Render("ok")
 	case updFail:
 		msg := "FAIL"
@@ -433,7 +550,7 @@ const rowPrefixWidth = 3 + 1 + aliasColWidth + 1 + 9 + 1 + branchColWidth + 1 + 
 // PANEL's inner width, not the raw terminal: rows are framed now, so the
 // border and padding are not available to the row.
 func (m tuiModel) failWidth() int {
-	return m.panelWidth() - rowPrefixWidth - len(failPrefix)
+	return m.panelInnerWidth() - rowPrefixWidth - len(failPrefix)
 }
 
 func truncate(s string, n int) string {
@@ -477,6 +594,10 @@ func (m tuiModel) statusView() string {
 	if n := len(m.bgQueue) + len(m.iaQueue); n > 0 {
 		bits = append(bits, fmt.Sprintf("%d queued", n))
 	}
+	if lines, hosts := m.warnTotals(); lines > 0 {
+		bits = append(bits, th.warn.Render(fmt.Sprintf("⚠ %s on %s",
+			plural(lines, "warning"), plural(hosts, "host"))))
+	}
 	line := th.statusBar.Render(strings.Join(bits, " · "))
 	if m.status != "" {
 		line += th.dim.Render("   " + m.status)
@@ -514,6 +635,20 @@ func (m tuiModel) answersView() string {
 	// host list already uses.
 	b.WriteString("\n" + th.dim.Render("↑/↓ or tab: field   letters set the answer   enter: next   esc: cancel"))
 	return th.panel.Width(m.panelWidth()).Render(b.String())
+}
+
+// panelInnerWidth is the columns a panel's CONTENT actually gets: panelWidth
+// less th.panel's Padding(0, 1). Truncating to panelWidth() instead — which is
+// what every call site used to do — leaves each line two columns too wide, so
+// lipgloss wraps it and a one-row host becomes two rendered lines. Measured:
+// at panel.Width(76) a 74-column line renders 3 rows, a 75-column line 4. That
+// is why an 8-host panel rendered 20 lines at 80 columns.
+func (m tuiModel) panelInnerWidth() int {
+	w := m.panelWidth() - 2
+	if w < 20 {
+		w = 20
+	}
+	return w
 }
 
 // panelWidth is the inner width every framed section shares, so their borders

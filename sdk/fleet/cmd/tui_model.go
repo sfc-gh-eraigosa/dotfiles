@@ -13,6 +13,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
@@ -68,10 +69,15 @@ type searchState struct {
 type viewport struct{ top, height, width int }
 
 // logEntry is one streamed line tagged with the host that produced it, so a
-// concurrent wave stays readable when several installs interleave.
+// concurrent wave stays readable when several installs interleave, and with
+// the STREAM it came from, which is what the error pane projects on.
 type logEntry struct {
 	alias, line string
 	at          time.Time
+	stderr      bool // the remote wrote this to stderr
+	// warn is stderr AND not routine chatter. Computed ONCE, here, because
+	// View() must stay pure and cheap and this decision is a regexp sweep.
+	warn bool
 }
 
 // nowFn is the clock for log timestamps, swapped in tests so frames stay
@@ -101,21 +107,45 @@ type tuiModel struct {
 	vAnchor  *string
 
 	// update engine (background-first)
-	updating  map[string]updState
-	bgQueue   []string
-	iaQueue   []string
-	iaTotal   int               // interactive-queue size this wave, for the handoff banner
-	streams   map[string]stream // in-flight output channels, by alias
-	logs      []logEntry        // interleaved, capped ring of streamed lines
-	logOpen   bool              // `l` toggles the pane; off restores a full-height list
-	logFollow bool              // tail the newest line
-	logTop    int               // scroll offset when not following
-	logColor  map[string]int    // alias -> palette slot, by first appearance
-	logDir    string            // where per-run install captures are written
-	logFocus  bool              // tab moves vim keys from the host list to the log
-	logSearch searchState       // `/` while the log is focused searches log lines
-	jobs      int               // max concurrent background updates
-	running   int               // slots in use
+	updating map[string]updState
+	bgQueue  []string
+	iaQueue  []string
+	iaTotal  int               // interactive-queue size this wave, for the handoff banner
+	streams  map[string]stream // in-flight output channels, by alias
+	logs     []logEntry        // interleaved, capped ring of streamed lines
+
+	// Pane visibility. Session-only, never persisted: the defaults ARE the
+	// contract, and a preference file would be a second source of truth for
+	// what `fleet tui` looks like on startup.
+	hostOpen bool // `h` toggles the host table; on by default
+	logOpen  bool // `l` toggles the log pane; on by default
+	errOpen  bool // `e` toggles the stderr pane; OFF by default
+	focus    pane // tab cycles the vim keys over the VISIBLE panes
+
+	logFollow bool           // tail the newest line
+	logTop    int            // scroll offset when not following
+	logColor  map[string]int // alias -> palette slot, by first appearance
+	logDir    string         // where per-run install captures are written
+	logSearch searchState    // `/` while the log is focused searches log lines
+
+	// The error pane's own navigation state, deliberately parallel to the
+	// log's rather than folded into a shared struct: the existing suite reads
+	// m.logFollow / m.logTop directly in a dozen places, and rewriting those
+	// is a refactor this objective did not ask for. The BEHAVIOUR is shared
+	// (streamNav below); only the three fields are duplicated.
+	errFollow bool
+	errTop    int
+	errSearch searchState
+	// errCount is len(errEntries()) maintained incrementally. errActive() is
+	// called from every height query — i.e. on every keystroke and spinner
+	// tick — and rebuilding a filtered copy of a 2000-entry ring that often is
+	// a render-path cost with no reason to exist.
+	errCount int
+	// warns counts each host's non-benign stderr lines: the row badge that
+	// says "this exited 0 but wrote warnings".
+	warns     map[string]int
+	jobs      int // max concurrent background updates
+	running   int // slots in use
 	updateRef string
 	plan      updplan.Plan           // loaded ONCE at startup; the model never calls loadPlan itself
 	file      string                 // the --file value the plan was loaded from, if any; re-passed to the interactive handoff's self-exec
@@ -152,7 +182,12 @@ func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time
 		streams:   map[string]stream{},
 		logColor:  map[string]int{},
 		logFollow: true,
+		errFollow: true,
+		warns:     map[string]int{},
+		hostOpen:  true, // the fleet is what the tool is for
 		logOpen:   true, // on by default: shipped off, it was undiscoverable
+		errOpen:   false,
+		focus:     paneHost,
 		waking:    map[string]bool{},
 		hosts:     map[string]sshconf.Host{},
 		jobs:      jobs,
@@ -480,8 +515,10 @@ func (m *tuiModel) startUpdate(targets []string) tea.Cmd {
 			continue
 		}
 		// Re-running clears the previous outcome, or the row would show a
-		// stale "ok" while the new attempt is still deciding.
+		// stale "ok" while the new attempt is still deciding. The warning
+		// badge goes with it: it must describe THIS attempt, not the last one.
 		m.updating[a] = updState{phase: updPrecheck}
+		delete(m.warns, a)
 		delete(m.pending, a) // ownership moves to the engine
 		cmds = append(cmds, precheckSudo(a, m.run))
 	}
@@ -686,9 +723,14 @@ func (m *tuiModel) refresh() tea.Cmd {
 
 // ---- log buffer -----------------------------------------------------------
 
-// appendLog adds a line and enforces the cap. Dropping from the front keeps
-// the newest output, which is what an operator watching an install wants.
-func (m *tuiModel) appendLog(alias, line string) {
+// appendLog is the stdout form, kept so every existing caller and test reads
+// the same as before the streams were split.
+func (m *tuiModel) appendLog(alias, line string) { m.appendLogLine(alias, line, false) }
+
+// appendLogLine adds a line tagged by the stream that produced it, and
+// enforces the cap. ONE buffer feeds both panes: two buffers would evict at
+// different rates and the panes would disagree about what arrived.
+func (m *tuiModel) appendLogLine(alias, line string, isErr bool) {
 	// Claim a colour slot the first time a host says anything, so the mapping
 	// is stable for the session and independent of how the lines interleave.
 	if m.logColor == nil {
@@ -697,14 +739,115 @@ func (m *tuiModel) appendLog(alias, line string) {
 	if _, ok := m.logColor[alias]; !ok {
 		m.logColor[alias] = len(m.logColor)
 	}
-	m.logs = append(m.logs, logEntry{alias: alias, line: line, at: nowFn()})
+	warn := isErr && !updexec.Benign(line)
+	if warn {
+		if m.warns == nil {
+			m.warns = map[string]int{}
+		}
+		m.warns[alias]++
+	}
+	m.logs = append(m.logs, logEntry{
+		alias: alias, line: line, at: nowFn(), stderr: isErr, warn: warn,
+	})
+	if isErr {
+		m.errCount++
+	}
 	if len(m.logs) > logCap {
+		// Dropping from the front keeps the newest output, which is what an
+		// operator watching an install wants. Decrement errCount for whatever
+		// the eviction actually removed, or it drifts from the projection.
+		for _, e := range m.logs[:len(m.logs)-logCap] {
+			if e.stderr {
+				m.errCount--
+			}
+		}
 		m.logs = m.logs[len(m.logs)-logCap:]
 		if m.logTop > 0 {
-			m.logTop -= 1
+			m.logTop--
+		}
+		if m.errTop > 0 {
+			m.errTop--
 		}
 	}
 }
+
+// errEntries is the error pane's projection: the stderr subset, in order.
+func (m tuiModel) errEntries() []logEntry {
+	out := make([]logEntry, 0, m.errCount)
+	for _, e := range m.logs {
+		if e.stderr {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// warnTotals is the status bar's summary: lines, and how many hosts they came
+// from.
+func (m tuiModel) warnTotals() (lines, hosts int) {
+	for _, n := range m.warns {
+		if n > 0 {
+			lines += n
+			hosts++
+		}
+	}
+	return lines, hosts
+}
+
+// ---- panes ----------------------------------------------------------------
+
+// visiblePanes is the tab cycle order: the host table, then the streams below.
+func (m tuiModel) visiblePanes() []pane {
+	var out []pane
+	if m.hostOpen {
+		out = append(out, paneHost)
+	}
+	if m.logOpen {
+		out = append(out, paneLog)
+	}
+	if m.errOpen {
+		out = append(out, paneErr)
+	}
+	return out
+}
+
+// togglePane flips one pane, REFUSING to hide the last visible one: a
+// dashboard with nothing on it leaves no obvious key to bring it back.
+func (m *tuiModel) togglePane(p pane) {
+	open := map[pane]*bool{paneHost: &m.hostOpen, paneLog: &m.logOpen, paneErr: &m.errOpen}[p]
+	if *open && len(m.visiblePanes()) == 1 {
+		m.status = "at least one view must stay open"
+		return
+	}
+	*open = !*open
+	if !*open && m.focus == p {
+		m.cycleFocus()
+	}
+	m.clampViewport()
+}
+
+// cycleFocus moves to the next VISIBLE pane, wrapping.
+func (m *tuiModel) cycleFocus() {
+	vis := m.visiblePanes()
+	if len(vis) == 0 {
+		return
+	}
+	for i, p := range vis {
+		if p == m.focus {
+			m.focus = vis[(i+1)%len(vis)]
+			return
+		}
+	}
+	m.focus = vis[0]
+}
+
+// logFocused reports whether the vim keys currently drive the log pane. It
+// replaces the old logFocus field, so the focus rule lives in one place now
+// that there are three panes to cycle.
+func (m tuiModel) logFocused() bool { return m.focus == paneLog && m.logOpen }
+
+// errFocused is its error-pane twin.
+func (m tuiModel) errFocused() bool { return m.focus == paneErr && m.errOpen }
 
 // tailFor returns the last n lines a host produced, used as its FAIL text.
 func (m tuiModel) tailFor(alias string, n int) string {
@@ -731,98 +874,116 @@ func (m tuiModel) tailFor(alias string, n int) string {
 // fifth to display nothing.
 func (m tuiModel) logActive() bool { return m.logOpen && len(m.logs) > 0 }
 
-// logHeight splits the frame: the host list keeps the top fifth (floor of 3
-// rows so it never collapses) and the log takes the rest.
-func (m tuiModel) logHeight() int {
-	if !m.logOpen {
-		return 0
-	}
-	if !m.logActive() {
-		return 0 // collapsed to a single unframed hint line; no rows reserved
-	}
-	h := m.vp.height - m.listHeight() - 10 // both panels' borders + chrome
-	if h < 3 {
-		h = 3
-	}
-	return h
+// errActive is its stderr twin. It reads the COUNTER, not the projection:
+// this is called from every height query, i.e. on every keystroke and every
+// spinner tick.
+func (m tuiModel) errActive() bool { return m.errOpen && m.errCount > 0 }
+
+func (m tuiModel) paneState() panes {
+	return panes{host: m.hostOpen, log: m.logOpen, err: m.errOpen}
 }
 
-// listHeight is the rows available to the host table.
-func (m tuiModel) listHeight() int {
-	if !m.logActive() {
-		// Closed, or open-but-empty: the list keeps everything except the
-		// couple of lines the collapsed hint occupies.
-		h := m.vp.height - 7 // chrome + the list panel's own border
-		if m.logOpen {
-			h -= 3 // the collapsed hint line and its frame
-		}
-		if h < 1 {
-			h = 1
-		}
-		return h
-	}
-	h := m.vp.height/5 - 2 // top ~20% once logs are flowing, less its border
-	if h < 3 {
-		h = 3
-	}
-	return h
+// heights is the one call into layout(); View() takes it ONCE per frame.
+func (m tuiModel) heights() heights {
+	return layout(m.vp.height, m.chromeRows(), m.paneState(), m.logActive(), m.errActive())
 }
+
+func (m tuiModel) listHeight() int { return m.heights().host }
+func (m tuiModel) logHeight() int  { return m.heights().log }
+func (m tuiModel) errHeight() int  { return m.heights().err }
 
 // ---- log navigation -------------------------------------------------------
 
-// logMatches are the buffer indexes matching the log's own search pattern.
-func (m tuiModel) logMatches() []int {
-	if m.logSearch.re == nil {
+// streamNav is a handle on whichever stream pane currently owns the vim keys:
+// pointers to its scroll state plus the slice it scrolls over. One set of
+// motions then serves both panes, so the log and the error pane cannot drift
+// apart in how they scroll, follow, or search.
+type streamNav struct {
+	entries []logEntry
+	follow  *bool
+	top     *int
+	search  *searchState
+	height  int
+	label   string // named in the "no matches" status
+}
+
+// focusedStream returns the focused pane's navigation handle, or false when
+// the host list has the keys.
+func (m *tuiModel) focusedStream() (streamNav, bool) {
+	switch {
+	case m.logFocused():
+		return streamNav{
+			entries: m.logs, follow: &m.logFollow, top: &m.logTop,
+			search: &m.logSearch, height: m.logHeight(), label: "log",
+		}, true
+	case m.errFocused():
+		return streamNav{
+			entries: m.errEntries(), follow: &m.errFollow, top: &m.errTop,
+			search: &m.errSearch, height: m.errHeight(), label: "error pane",
+		}, true
+	}
+	return streamNav{}, false
+}
+
+// streamMatches are the pane's entry indexes matching its own search pattern.
+func streamMatches(nav streamNav) []int {
+	if nav.search.re == nil {
 		return nil
 	}
 	var out []int
-	for i, e := range m.logs {
-		if m.logSearch.re.MatchString(e.alias + " " + e.line) {
+	for i, e := range nav.entries {
+		if nav.search.re.MatchString(e.alias + " " + e.line) {
 			out = append(out, i)
 		}
 	}
 	return out
 }
 
-// logJump moves the log viewport to the next/previous match, wrapping. It
-// stops following, or the tail would immediately yank the match off screen.
-func (m *tuiModel) logJump(d int) {
-	idx := m.logMatches()
+// streamJump moves the pane to the next/previous match, wrapping. It stops
+// following, or the tail would immediately yank the match off screen.
+func (m *tuiModel) streamJump(nav streamNav, d int) {
+	idx := streamMatches(nav)
 	if len(idx) == 0 {
-		m.status = "no matches in the log"
+		m.status = "no matches in the " + nav.label
 		return
 	}
-	m.logFollow = false
-	cur := m.logTop
+	*nav.follow = false
+	cur := *nav.top
 	if d > 0 {
 		for _, i := range idx {
 			if i > cur {
-				m.logTop = i
+				*nav.top = i
 				return
 			}
 		}
-		m.logTop = idx[0]
+		*nav.top = idx[0]
 		return
 	}
 	for k := len(idx) - 1; k >= 0; k-- {
 		if idx[k] < cur {
-			m.logTop = idx[k]
+			*nav.top = idx[k]
 			return
 		}
 	}
-	m.logTop = idx[len(idx)-1]
+	*nav.top = idx[len(idx)-1]
 }
 
-// logTo moves the log viewport, clamped. Any explicit move stops following.
-func (m *tuiModel) logTo(i int) {
-	m.logFollow = false
+// streamTo moves the pane's viewport, clamped. Any explicit move stops
+// following.
+func (m *tuiModel) streamTo(nav streamNav, i int) {
+	*nav.follow = false
 	if i < 0 {
 		i = 0
 	}
-	if max := len(m.logs) - 1; i > max {
+	if max := len(nav.entries) - 1; i > max {
 		i = maxInt(0, max)
 	}
-	m.logTop = i
+	*nav.top = i
+}
+
+// logMatches are the log buffer's indexes matching its own pattern.
+func (m tuiModel) logMatches() []int {
+	return streamMatches(streamNav{entries: m.logs, search: &m.logSearch})
 }
 
 // ---- the bubbletea Update -------------------------------------------------
@@ -876,7 +1037,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(readLine(msg.alias, msg.st), awaitDone(msg.alias, msg.st))
 
 	case logLineMsg:
-		m.appendLog(msg.alias, msg.line)
+		m.appendLogLine(msg.alias, msg.line, msg.stderr)
 		// Re-issue the reader: one Cmd per line is what turns the channel into
 		// a stream of messages without a goroutine touching the model.
 		return m, readLine(msg.alias, m.streams[msg.alias])

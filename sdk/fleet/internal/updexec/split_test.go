@@ -81,7 +81,7 @@ func TestBatchFallsBackWhenNotSplitCapable(t *testing.T) {
 type memOutput struct{ lines *[]string }
 
 func (m memOutput) Open(string, string) (LineWriter, string) {
-	return memWriter{m.lines}, "mem://capture"
+	return memWriter(m), "mem://capture"
 }
 
 type memWriter struct{ lines *[]string }

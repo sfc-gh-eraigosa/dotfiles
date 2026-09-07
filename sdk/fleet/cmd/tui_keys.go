@@ -25,6 +25,8 @@ var keyHelp = []struct {
 	{"●", "space", "toggle selection", true},
 	{"🚀", "u", "update selection (or cursor host)", true},
 	{"📜", "l", "show / hide the streaming log pane", true},
+	{"🗂️", "h", "show / hide the host list", true},
+	{"⚠️", "e", "show / hide the stderr pane · (confirm) edit the remembered answers", true},
 	{"🖥️", "s", "ssh to cursor host", true},
 	{"🔄", "r", "refresh", true},
 	{"🚪", "q", "quit", true},
@@ -43,7 +45,6 @@ var keyHelp = []struct {
 	{"🔑", "A", "authorize your key on an auth-failed host (ssh-copy-id)", false},
 	{"🗑️", "F", "forget answers (incl. saved preferences)", false},
 	{"⇥", "tab / enter", "(answer form) next field · esc backs out, keeping answers", false},
-	{"✏️", "e", "(confirm) edit the remembered answers · enter runs the update", false},
 }
 
 // route owns every keystroke. Mode comes first: a key typed in search is text,
@@ -149,12 +150,12 @@ func cycle(cur string, ring []string, fwd bool) string {
 }
 
 func routeSearch(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// The focused pane owns the pattern, so searching the log never disturbs a
-	// host filter the operator set earlier (and vice versa).
-	inLog := m.logFocus && m.logOpen
+	// The focused pane owns the pattern, so searching one pane never disturbs
+	// a host filter or another pane's pattern.
+	nav, inStream := m.focusedStream()
 	st := &m.search
-	if inLog {
-		st = &m.logSearch
+	if inStream {
+		st = nav.search
 	}
 	switch k.String() {
 	case "esc":
@@ -164,8 +165,8 @@ func routeSearch(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		st.committed = true
 		m.mode = modeNormal
 		if st.re != nil {
-			if inLog {
-				m.logJump(1)
+			if inStream {
+				m.streamJump(nav, 1)
 			} else {
 				m.jumpMatch(1)
 			}
@@ -214,8 +215,8 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		pendingG = false
 		if key == "g" {
 			// gg goes to the top of whichever pane has the keys.
-			if m.logFocus && m.logOpen {
-				m.logTo(0)
+			if nav, ok := m.focusedStream(); ok {
+				m.streamTo(nav, 0)
 			} else {
 				m.moveTo(0)
 			}
@@ -224,27 +225,29 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// fall through: the pending g is cancelled, this key acts normally
 	}
 
-	// With the log focused, the vim keys drive it instead of the host list, so
-	// a long install log is navigable with the same muscle memory.
-	if m.logFocus && m.logOpen {
+	// With a stream pane focused, the vim keys drive IT instead of the host
+	// list, so a long install log is navigable with the same muscle memory.
+	// One block for both panes: the log and the error pane differ only in
+	// which state they own, so their motions cannot drift apart.
+	if nav, ok := m.focusedStream(); ok {
 		switch key {
 		case "j", "down":
-			m.logTo(m.logTop + 1)
+			m.streamTo(nav, *nav.top+1)
 			return m, nil
 		case "k", "up":
-			m.logTo(m.logTop - 1)
+			m.streamTo(nav, *nav.top-1)
 			return m, nil
 		case "ctrl+d":
-			m.logTo(m.logTop + maxInt(1, m.logHeight()/2))
+			m.streamTo(nav, *nav.top+maxInt(1, nav.height/2))
 			return m, nil
 		case "ctrl+u":
-			m.logTo(m.logTop - maxInt(1, m.logHeight()/2))
+			m.streamTo(nav, *nav.top-maxInt(1, nav.height/2))
 			return m, nil
 		case "ctrl+f", "pgdown":
-			m.logTo(m.logTop + maxInt(1, m.logHeight()))
+			m.streamTo(nav, *nav.top+maxInt(1, nav.height))
 			return m, nil
 		case "ctrl+b", "pgup":
-			m.logTo(m.logTop - maxInt(1, m.logHeight()))
+			m.streamTo(nav, *nav.top-maxInt(1, nav.height))
 			return m, nil
 		case "g":
 			pendingG = true
@@ -253,27 +256,24 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// Jumping to the end means "show me the newest", which is exactly
 			// what following does — so G resumes it rather than pinning a
 			// stale offset that a still-running install would scroll past.
-			m.logFollow = true
+			*nav.follow = true
 			return m, nil
 		case "/":
 			m.mode = modeSearch
-			m.logSearch = searchState{}
+			*nav.search = searchState{}
 			return m, nil
 		case "n":
-			m.logJump(1)
+			m.streamJump(nav, 1)
 			return m, nil
 		case "N":
-			m.logJump(-1)
+			m.streamJump(nav, -1)
 			return m, nil
 		}
 	}
 
 	switch key {
 	case "tab":
-		// Only meaningful when there is a log to focus.
-		if m.logOpen {
-			m.logFocus = !m.logFocus
-		}
+		m.cycleFocus()
 		return m, nil
 	case "q", "ctrl+c":
 		// Quitting mid-update would orphan work the operator can't see.
@@ -348,10 +348,13 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case "l":
-		// Toggling off restores the host list to the full viewport.
-		m.logOpen = !m.logOpen
+		// Toggling off gives the rows back to whatever panes remain.
+		m.togglePane(paneLog)
 		m.logFollow = true
-		m.clampViewport()
+	case "h":
+		m.togglePane(paneHost)
+	case "e":
+		m.togglePane(paneErr)
 	case "J":
 		// Scrolling stops the tail from yanking the view away mid-read.
 		if m.logOpen {

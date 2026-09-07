@@ -191,7 +191,7 @@ func TestBackgroundFeedNeverBlocksTheExecutor(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		for i := 0; i < n; i++ {
-			q.push(fmt.Sprintf("line-%d", i))
+			q.push(outLine{text: fmt.Sprintf("line-%d", i)})
 		}
 		close(done)
 	}()
@@ -201,13 +201,13 @@ func TestBackgroundFeedNeverBlocksTheExecutor(t *testing.T) {
 		t.Fatal("push blocked with no reader draining the queue")
 	}
 
-	ch := make(chan string)
+	ch := make(chan outLine)
 	go q.forward(ch)
 	q.closeQ()
 
 	var got []string
 	for l := range ch {
-		got = append(got, l)
+		got = append(got, l.text)
 	}
 	if len(got) != n {
 		t.Fatalf("got %d lines, want %d", len(got), n)

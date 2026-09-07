@@ -38,7 +38,7 @@ func TestUpdateIsCapturedWithItsSubject(t *testing.T) {
 	st := beginStream("host-a", singleRunStepPlan("test-plan"), answers{}, r, dir)().(streamStartedMsg).st
 	var streamed []string
 	for l := range st.lines {
-		streamed = append(streamed, l)
+		streamed = append(streamed, l.text)
 	}
 	<-st.done
 
@@ -83,7 +83,7 @@ func TestAnUnusableCaptureDirDoesNotBreakTheStream(t *testing.T) {
 		st := beginStream("h", singleRunStepPlan("test-plan"), answers{}, r, dir)().(streamStartedMsg).st
 		var got []string
 		for l := range st.lines {
-			got = append(got, l)
+			got = append(got, l.text)
 		}
 		<-st.done
 		if len(got) != 1 || got[0] != "still streams" {

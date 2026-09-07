@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -39,6 +41,8 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeySpace}
 	case "backspace":
 		return tea.KeyMsg{Type: tea.KeyBackspace}
+	case "tab":
+		return tea.KeyMsg{Type: tea.KeyTab}
 	case "ctrl+d":
 		return tea.KeyMsg{Type: tea.KeyCtrlD}
 	case "ctrl+u":
@@ -177,7 +181,7 @@ func TestLoneGIsCancelledByTheNextKey(t *testing.T) {
 func TestWindowResizeKeepsCursorVisible(t *testing.T) {
 	m := testModel("a", "b", "c", "d", "e", "f", "g", "h")
 	m2, _ := send(m, "G") // cursor at the last row
-	mm, _ := m2.Update(tea.WindowSizeMsg{Width: 80, Height: 10})
+	mm, _ := m2.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
 	got := mm.(tuiModel)
 	i := got.indexOf(got.cursor)
 	if i < got.vp.top || i >= got.vp.top+got.visibleRows() {
@@ -188,8 +192,9 @@ func TestWindowResizeKeepsCursorVisible(t *testing.T) {
 
 func TestHalfPageMovesAndStaysInBounds(t *testing.T) {
 	m := testModel("a", "b", "c", "d", "e", "f", "g", "h")
-	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 13}) // 6 list rows once framed
-	m2, _ := send(mm.(tuiModel), "l")                           // hide the log pane so the math is the list's alone
+	// 6 list rows once framed: chrome 7 + the host panel's own 3 fixed rows.
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 16})
+	m2, _ := send(mm.(tuiModel), "l") // hide the log pane so the math is the list's alone
 	m3, _ := send(m2, "ctrl+d")
 	if m3.indexOf(m3.cursor) != 3 {
 		t.Fatalf("ctrl+d should move half a page (3), got %d", m3.indexOf(m3.cursor))
@@ -529,4 +534,25 @@ func TestQuitIsGuardedWhileUpdatesRun(t *testing.T) {
 	if _, cmd := send(m2, "q"); cmd == nil {
 		t.Fatal("a second q must force the quit")
 	}
+}
+
+// settledTestModel is testModel with n hosts already resolved, for the frame
+// and pane suites: a model full of `polling` rows renders differently from a
+// settled fleet, and the layout must hold for both.
+func settledTestModel(n int) tuiModel {
+	aliases := make([]string, 0, n)
+	for i := 1; i <= n; i++ {
+		aliases = append(aliases, fmt.Sprintf("h%d", i))
+	}
+	m := testModel(aliases...)
+	for i := range m.rows {
+		m.rows[i].Class = "up-to-date"
+		m.rows[i].Commit = "72392c9"
+		m.rows[i].Age = testNow.Add(-time.Hour)
+		m.rows[i].Branch = "main"
+		m.rows[i].InstalledBranch = "main"
+		delete(m.pending, m.rows[i].Alias)
+	}
+	m.resort()
+	return m
 }
