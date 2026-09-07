@@ -4,6 +4,9 @@
 - **Started:** 2026-07-26
 - **Playbook:** [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) · **Cursor:** [`TODO.md`](./TODO.md)
 - **Plan (source of truth):** [`../gff-install-flow.md`](../gff-install-flow.md) · spec [`../../specs/gff-install-flow.md`](../../specs/gff-install-flow.md)
+- **Status (2026-09-07 audit):** build merged — #193 (2026-07-26) + #194 (2026-07-27); all 6 tasks
+  done, 4-run owner matrix green incl. the elevated-log wispr SKIP. Closeout PR #195
+  (ledgers final + next-iteration backlog) still open; F6 live decline probe optional/unproven.
 
 > **Update after EVERY task.** Status: `todo · in-progress · blocked · done`.
 > **Evidence** = the exact command run plus its real result. A row is `done` only with a

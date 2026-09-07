@@ -2,8 +2,8 @@
 
 - **Slug:** agy-gsl-integration
 - **Date:** 2026-07-10
-- **Status:** Approved
-- **Relates to:** spec `../specs/agy-gsl-integration.md`
+- **Status:** Done — build merged in PR #157 (2026-07-11).
+- **Relates to:** spec `../specs/agy-gsl-integration.md` · PR #157
 
 ## 1. Summary & verdict
 Implement dynamic status line configuration in the Antigravity CLI installer, mirroring the Claude Code setup but with path isolation (copying the shim to `~/.gemini/config/`).

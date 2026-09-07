@@ -2,8 +2,11 @@
 
 - **Slug:** `herdr`
 - **Date:** 2026-09-01 (all maintenance numbers observed this date)
-- **Status:** Proposed
-- **Relates to:** issue [#260](https://github.com/sfc-gh-eraigosa/dotfiles/issues/260) · this PR (gss feature `herdr`, worker `install`)
+- **Status:** Done (2026-09-07 audit) — adoption landed on `main`: installer #261, xclip deps
+  #263, exec bit #272, managed config.toml #282 (2026-09-02 → 2026-09-06). Issue #260 closed.
+  Explicit follow-ups (version-policy gff flag, cross-session agent-state roll-up, opt/etc config
+  tracking, re-eval at 1.0/signed releases) remain open as future work.
+- **Relates to:** issue [#260](https://github.com/sfc-gh-eraigosa/dotfiles/issues/260) (closed 2026-09-07) · PRs #261 · #263 · #272 · #282 (gss feature `herdr`, worker `install`)
 - **Target:** <https://github.com/herdrdev/herdr> · <https://herdr.dev> · "the runtime your coding agents live on"
 - **Verdict:** **adopt selectively** — install as a pinned-or-latest, checksummed, gff-gated tool with agent
   integrations; keep tmux + `tmux-mgr` as the orchestration layer.

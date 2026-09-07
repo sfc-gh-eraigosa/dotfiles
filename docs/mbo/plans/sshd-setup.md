@@ -6,7 +6,8 @@
 
 - **Slug:** sshd-setup
 - **Date:** 2026-07-16
-- **Status:** Draft
+- **Status:** Build merged — PR #170 (2026-07-19). §6 manual acceptance (7 steps on the
+  Windows+WSL host) is owner-gated, not yet evidenced. Issue #169 open.
 - **Relates to:** spec `../specs/sshd-setup.md` · issue #169 · PR #170
 
 **Goal:** An on-demand `sshd-setup` bash tool (+ `setup-sshd.ps1` for Windows-native) that
