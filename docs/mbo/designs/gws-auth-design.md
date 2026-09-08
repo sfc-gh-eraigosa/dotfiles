@@ -35,6 +35,16 @@ This mode is intended for non-interactive environments where browser access is n
 - **Secret Management**: `client_secret.json` MUST NEVER be committed to the repository. Use the provided template (`ai/gws/client_secret.json.template`) for local setup only.
 - **Scope Limitation**: For CI/CD, consider creating a dedicated service account or limiting OAuth scopes to only what is strictly necessary for the automated task.
 
+## Gotchas & Troubleshooting
+
+### Template Placeholder Collision (`Error 401: invalid_client`)
+When `google-cli-setup.sh` seeds `~/.config/gws/client_secret.json` from `ai/gws/client_secret.json.template`, the file contains dummy values (`YOUR_CLIENT_ID...`). If a user invokes `gws auth login` directly without running `gws auth setup` or replacing the secret file, `gws` submits the dummy client ID, and Google's OAuth endpoint fails with:
+```
+The OAuth client was not found. Error 401: invalid_client
+```
+**Remediation**: Run `gws auth setup --login` (with `gcloud` authenticated) to provision real client credentials, or replace `~/.config/gws/client_secret.json` with a Desktop app OAuth client JSON downloaded from Google Cloud Console.
+
 ## Future Improvements
 - **Service Account Support**: Investigate native service account integration for server-to-server scenarios without a refresh token.
 - **Automatic Secret Materialization**: Integrate with the existing `install_sops.sh` or a Vault-based setup to automatically fetch credentials.
+

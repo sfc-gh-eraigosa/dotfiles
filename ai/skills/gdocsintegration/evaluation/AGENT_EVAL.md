@@ -14,7 +14,9 @@ Verify that the `google-docs` skill and the `gws` CLI are correctly configured a
 Ensure you are authenticated:
 ```bash
 gws auth status
-# or if not authenticated:
+# if auth_method is none or credentials missing:
+gws auth setup --login
+# or with pre-configured ~/.config/gws/client_secret.json:
 gws auth login
 ```
 
@@ -45,5 +47,6 @@ Verify that other services are accessible under the same authentication:
 - [ ] Permissions cover Gmail, Calendar, and Sheets as expected.
 
 ## Gotchas for Evaluators
+- **`Error 401: invalid_client`**: If `gws auth login` fails with *"The OAuth client was not found"*, `~/.config/gws/client_secret.json` still has the default template placeholder. Run `gws auth setup --login` or provide a valid Desktop client JSON.
 - **Scopes**: If any command fails with "Insufficient Permission", re-authenticate and ensure all Workspace scopes were granted during the OAuth flow.
 - **Quota**: Be mindful of Google API quotas during intensive evaluation.
