@@ -16,8 +16,10 @@ letting an agent actually *do* things survivable.
 
 ## 🧰 The SDK
 
-Seven single-binary Go tools covering the loop: *let an agent work → let it
-commit without losing anything → see what's happening → roll it out everywhere.*
+Nine single-binary Go tools (plus a shared library) covering the loop: *let an
+agent work → let it commit without losing anything → see what's happening →
+roll it out everywhere → keep the repo it pushes to configured the way you
+meant.*
 
 | Tool | Reach for it when… |
 | :--- | :--- |
@@ -26,7 +28,10 @@ commit without losing anything → see what's happening → roll it out everywhe
 | [`gsl`](sdk/README.md#-gsl--know-what-your-agent-is-costing-you) | You can't tell how much context is left |
 | [`fleet`](sdk/README.md#-fleet--is-every-machine-actually-updated) | You have more machines than you can `ssh` into |
 | [`gff`](sdk/README.md#-gff--flags-that-live-in-git) | "Skip that step on this machine" |
+| [`wlink`](sdk/README.md#-wlink--why-does-ssh-hang-but-the-ip-work) | `ssh host` hangs from WSL but `ssh <ip>` works |
 | [`wol`](sdk/README.md#-wol--turn-it-on-from-anywhere) | The machine you need is powered off |
+| [`gcfg`](sdk/README.md#-gcfg--repo-settings-that-live-in-git) | Someone changed a repo setting and nobody knows who |
+| [`ghapp`](sdk/README.md#-ghapp--an-admin-token-that-expires-by-itself) | A workflow needs admin rights `GITHUB_TOKEN` hasn't got |
 | [`libs`](sdk/README.md#-libs--the-shared-foundation) | You're writing tool #8 |
 
 → **[What each tool solves, with demos](sdk/README.md)**
@@ -70,7 +75,7 @@ mid-project — they read the same context.
 
 | Path | Description |
 | :--- | :--- |
-| [`sdk/`](sdk/README.md) | **Go tools** — `gss`, `tmux-mgr`, `gsl`, `fleet`, `gff`, `wol`, `libs`. |
+| [`sdk/`](sdk/README.md) | **Go tools** — `gss`, `tmux-mgr`, `gsl`, `fleet`, `gff`, `wlink`, `wol`, `gcfg`, `ghapp`, `libs`. |
 | `opt/bin/` · `opt/profiles/` | Utility scripts (on `$PATH`) and shell configuration. |
 | `src/` | Non-Go tooling and agent skills. |
 | [`ai/`](ai/) | Assistant config: skills, hooks, teams, plugin manifest. |
@@ -87,6 +92,7 @@ mid-project — they read the same context.
 | `/ssh-find <alias>` · `/ssh-keys` | Discover a host's IP · manage keys across hosts |
 | `gss push` | Safely backup, sync, and push |
 | `fleet status` · `fleet tui` | Which hosts are out of sync · interactive dashboard |
+| `gcfg verify` · `gcfg apply` | Is this repo configured as declared · make it so |
 
 ---
 

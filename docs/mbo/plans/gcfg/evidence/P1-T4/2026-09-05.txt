@@ -1,0 +1,55 @@
+# P1-T4 family model + general + security — 2026-09-06T06:54:43Z — worker gcfg/edward-raigosa/build
+
+## RUN-RED (first run of each new test file)
+$ go test ./internal/family/          → undefined: Scope, Target, Live, Finding, Change, NewRegistry
+$ go test ./internal/family/general/  → undefined: New
+$ go test ./internal/family/security/ → undefined: New
+
+## RUN-GREEN: go vet ./... && go test ./... -count=1 -cover
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg	0.013s	coverage: 91.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/cmd	0.038s	coverage: 93.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/family	0.011s	coverage: 97.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/family/general	0.012s	coverage: 93.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/family/security	0.013s	coverage: 80.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/gh	0.022s	coverage: 86.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/schema	0.023s	coverage: 94.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/version	0.009s	coverage: 100.0% of statements
+
+## module total (CI formula, ≥80)
+total:											(statements)		92.8%
+
+## tests
+--- PASS: TestDifferOnlyReportsDeclaredDisagreements (0.00s)
+--- PASS: TestDifferReportAndAddStampTheFamily (0.00s)
+--- PASS: TestManagedFollowsOwnership (0.00s)
+--- PASS: TestScopeString (0.00s)
+--- PASS: TestFindingStringCoversEveryKind (0.00s)
+--- PASS: TestNodeHelpers (0.00s)
+--- PASS: TestMapSkipsAbsentValuesAndScalarsCarryTags (0.00s)
+--- PASS: TestMapPanicsOnAnOddArgumentList (0.00s)
+--- PASS: TestSameStrings (0.00s)
+--- PASS: TestPackageLevelRegistry (0.00s)
+--- PASS: TestRegistryKeepsScopesApartAndStaysOrdered (0.00s)
+--- PASS: TestRegistryRejectsADuplicate (0.00s)
+--- PASS: TestSelect (0.00s)
+--- PASS: TestTargetString (0.00s)
+--- PASS: TestFindingAndChangeRender (0.00s)
+--- PASS: TestFamiliesSelfRegister (0.00s)
+--- PASS: TestReadAndExportRoundTrip (0.00s)
+--- PASS: TestDiffCleanFileHasNoFindings (0.00s)
+--- PASS: TestDiffReportsDriftPerKeyAndPlansTheChange (0.00s)
+--- PASS: TestDiffUndeclaredKeysAreNeverTouched (0.00s)
+--- PASS: TestApplySendsOnePatchWithOnlyTheChangedKeys (0.00s)
+--- PASS: TestApplySplitsVisibilityAndDefaultBranch (0.00s)
+--- PASS: TestApplyTopicsUseTheirOwnEndpoint (0.00s)
+--- PASS: TestApplyWithNothingToDoMakesNoRequest (0.00s)
+--- PASS: TestReadSurfacesTheFailure (0.00s)
+--- PASS: TestIdentity (0.00s)
+--- PASS: TestReadCombinesTheThreeEndpoints (0.00s)
+--- PASS: TestReadTreatsAlerts404AsDisabled (0.00s)
+--- PASS: TestDiffAndApplyUseTheSecurityAnalysisBlock (0.00s)
+--- PASS: TestApplyDependabotAlertsUseTheirOwnEndpoint (0.00s)
+--- PASS: TestApplyPrivateVulnerabilityReportingUsesItsOwnEndpoint (0.00s)
+--- PASS: TestNotHonouredIsItsOwnFinding (0.00s)
+--- PASS: TestReadSurfacesARepoFailure (0.00s)
+--- PASS: TestIdentity (0.00s)

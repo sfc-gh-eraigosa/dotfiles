@@ -1,0 +1,120 @@
+name: gcfg CI
+
+# gcfg CI — go vet, tests, coverage gates, JSON Schema drift, actionlint on
+# the workflow templates gcfg renders (plan docs/mbo/plans/gcfg.md §7).
+#
+# Pin-to-SHA convention: every third-party Action is pinned to a full 40-char
+# commit SHA with a trailing # vX.Y.Z comment (matches gff-ci.yml).
+#
+# Coverage gates (plan "Global constraints"): module-wide ≥80%,
+# internal/engine ≥90%, internal/schema ≥90%. Nothing is excluded from the
+# module measurement.
+
+on:
+  # Merge-queue coverage: once these checks are REQUIRED they must report on
+  # the queue's ephemeral branches — merge_group takes no path filters.
+  merge_group:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+    paths:
+      - 'sdk/gcfg/**'
+      - '.github/workflows/gcfg-ci.yml'
+      - 'Makefile'
+  # No paths or base filter on pull_request (same reasoning as gff-ci.yml): a
+  # path-skipped REQUIRED check never reports and the Mergify queue waits
+  # forever; gss feature workers stack PRs on feature branches, which need CI
+  # before they re-target main.
+  pull_request:
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: gcfg unit tests + coverage gates
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/gcfg
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache-dependency-path: sdk/gcfg/go.sum
+
+      - name: Zero-install smoke (module must stay go-run-able)
+        run: go run . version
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Tests + coverage profile
+        run: |
+          COVERPKG=$(go list ./... | paste -sd, -)
+          # -count=1 defeats the restored build cache: replayed cached test
+          # results merge stale profile fragments and misreport the total.
+          go test ./... -count=1 -coverpkg="$COVERPKG" -coverprofile=cover.out
+
+      - name: Coverage gates (module ≥80, engine ≥90, schema ≥90)
+        # Per-package bars use the same `go test ./<pkg>/ -cover` measurement
+        # TRACKING records. A package that does not exist yet is skipped —
+        # the bar starts biting the task that creates it.
+        run: |
+          total=$(go tool cover -func=cover.out | awk '/^total:/ { gsub(/%/, "", $NF); print $NF }')
+          echo "total coverage: ${total}%"
+          awk -v t="${total}" 'BEGIN { if (t+0 < 80) { print "FAIL: total " t "% < 80%"; exit 1 } }'
+          for pkg in engine schema; do
+            if [ -d "internal/$pkg" ]; then
+              c=$(go test "./internal/$pkg/" -count=1 -cover 2>&1 | grep -o 'coverage: [0-9.]*' | awk '{print $2}' | tail -1)
+              echo "internal/$pkg package: ${c}%"
+              awk -v c="${c}" -v p="$pkg" 'BEGIN { if (c+0 < 90) { print "FAIL: " p " " c "% < 90%"; exit 1 } }'
+            else
+              echo "internal/$pkg: not present yet, gate skipped"
+            fi
+          done
+
+      - name: JSON Schema drift (.github/gcfg.schema.json regenerates clean)
+        working-directory: .
+        run: |
+          if [ -f .github/gcfg.schema.json ]; then
+            go -C sdk/gcfg run . schema --out ../../.github/gcfg.schema.json
+            git diff --exit-code -- .github/gcfg.schema.json
+          else
+            echo "schema not published yet (P5-T2); drift check skipped"
+          fi
+
+      - name: actionlint on rendered workflow templates
+        working-directory: .
+        run: |
+          # Only the workflows gcfg itself renders are linted here; the repo's
+          # own workflows are shell-lint.yml's job. Both the goldens and the
+          # installed files appear task by task (P3-T3, P5-T3), so the step
+          # lints whatever exists and says so when nothing does.
+          shopt -s nullglob
+          candidates=(sdk/gcfg/internal/actions/testdata/*.golden .github/workflows/gcfg-verify.yml .github/workflows/gcfg-apply.yml)
+          files=()
+          for f in "${candidates[@]}"; do
+            [ -f "$f" ] && files+=("$f")
+          done
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "no rendered workflows yet (P3-T3/P5-T3); actionlint skipped"
+            exit 0
+          fi
+          # Version-pinned through the Go module proxy the build already uses.
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          "$(go env GOPATH)/bin/actionlint" -color "${files[@]}"
+
+      - name: Token-leak grep (no fixture token in any test output)
+        run: |
+          go test ./... -count=1 -v > test.log 2>&1
+          if grep -q 'ghs_FIXTURE_TOKEN_DO_NOT_PRINT' test.log; then
+            echo "FAIL: fixture token appeared in test output"; exit 1
+          fi

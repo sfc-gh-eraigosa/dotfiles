@@ -1,0 +1,57 @@
+# P0-T1 ghapp scaffold + version — 2026-09-06T03:17:44Z — worker gcfg/edward-raigosa/build
+
+## RUN-RED: cd sdk/ghapp && go test ./...
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/internal/version [github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/internal/version.test]
+internal/version/version_test.go:9:9: undefined: String
+internal/version/version_test.go:11:15: undefined: Version
+internal/version/version_test.go:12:14: undefined: Commit
+internal/version/version_test.go:13:13: undefined: Dirty
+internal/version/version_test.go:14:18: undefined: BuildDate
+internal/version/version_test.go:24:5: undefined: Version
+internal/version/version_test.go:24:25: undefined: Commit
+internal/version/version_test.go:24:45: undefined: BuildDate
+internal/version/version_test.go:24:71: undefined: Dirty
+internal/version/version_test.go:25:48: undefined: Version
+internal/version/version_test.go:25:48: too many errors
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp [github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp.test]
+./main_test.go:9:12: undefined: exitCode
+./main_test.go:15:12: undefined: exitCode
+./main_test.go:15:21: undefined: ErrUsage
+./main_test.go:18:12: undefined: exitCode
+./main_test.go:18:52: undefined: ErrUsage
+./main_test.go:24:12: undefined: exitCode
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp [build failed]
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/cmd [github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/cmd.test]
+cmd/version_test.go:13:9: undefined: NewRootCmd
+cmd/version_test.go:32:9: undefined: NewRootCmd
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/cmd [build failed]
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/internal/version [build failed]
+FAIL
+
+## RUN-GREEN: go vet ./... && go test ./... -count=1 -cover
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp	0.004s	coverage: 57.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/cmd	0.004s	coverage: 83.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/internal/version	0.003s	coverage: 100.0% of statements
+
+## go run . version
+ghapp vdev
+  Commit:      none
+  Dirty:       false
+  Build Date:  unknown
+  Description: ghapp — GitHub App credential toolkit: manifest-flow create, installation tokens
+
+## coverage gate as CI computes it
+total:										(statements)	69.2%
+
+## actionlint .github/workflows/ghapp-ci.yml
+actionlint: clean
+
+## ALLOWLIST: git status --short -- sdk/ghapp .github/workflows/ghapp-ci.yml
+?? .github/workflows/ghapp-ci.yml
+?? sdk/ghapp/
+
+## refactor: main() → testable run(); coverage gate re-run (CI formula)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp	0.003s	coverage: 90.9% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/cmd	0.004s	coverage: 83.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/internal/version	0.004s	coverage: 100.0% of statements
+total:										(statements)	88.2%
