@@ -125,7 +125,6 @@ type tuiModel struct {
 	logTop    int            // scroll offset when not following
 	logColor  map[string]int // alias -> palette slot, by first appearance
 	logDir    string         // where per-run install captures are written
-	logFocus  bool           // tab moves vim keys from the host list to the log
 	logSearch searchState    // `/` while the log is focused searches log lines
 	// The error pane's own navigation state, deliberately parallel to the
 	// log's rather than folded into a shared struct: the existing suite reads
@@ -775,19 +774,33 @@ func (m *tuiModel) appendLogLine(alias, line string, isErr bool) {
 	}
 	if len(m.logs) > logCap {
 		// Dropping from the front keeps the newest output, which is what an
-		// operator watching an install wants. Decrement errCount for whatever
-		// the eviction actually removed, or it drifts from the projection.
-		for _, e := range m.logs[:len(m.logs)-logCap] {
+		// operator watching an install wants.
+		//
+		// logTop and errTop index DIFFERENT slices, so a single eviction shifts
+		// them by different amounts: logTop indexes m.logs (every line), while
+		// errTop indexes the filtered stderr view. A dropped STDOUT line moves
+		// logTop but leaves the stderr view — and errTop — where they were; a
+		// dropped STDERR line moves both. Decrementing both by one (the old
+		// way) silently walked the error pane's scroll upward each time a
+		// progress line aged out.
+		drop := len(m.logs) - logCap
+		droppedErr := 0
+		for _, e := range m.logs[:drop] {
 			if e.stderr {
+				droppedErr++
 				m.errCount--
 			}
 		}
-		m.logs = m.logs[len(m.logs)-logCap:]
-		if m.logTop > 0 {
-			m.logTop--
+		m.logs = m.logs[drop:]
+		if m.logTop >= drop {
+			m.logTop -= drop
+		} else {
+			m.logTop = 0
 		}
-		if m.errTop > 0 {
-			m.errTop--
+		if m.errTop >= droppedErr {
+			m.errTop -= droppedErr
+		} else {
+			m.errTop = 0
 		}
 	}
 }
