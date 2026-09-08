@@ -107,7 +107,7 @@ func Create(ctx context.Context, m Manifest, o CreateOpts) (App, error) {
 	if err != nil {
 		return App{}, err
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	port := ln.Addr().(*net.TCPAddr).Port
 	state := randomState()
 	redirect := fmt.Sprintf("http://127.0.0.1:%d/callback", port)
@@ -167,7 +167,7 @@ func Create(ctx context.Context, m Manifest, o CreateOpts) (App, error) {
 	})
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = srv.Serve(ln) }()
-	defer srv.Close()
+	defer func() { _ = srv.Close() }()
 
 	if err := o.OpenBrowser(fmt.Sprintf("http://127.0.0.1:%d/", port)); err != nil {
 		return App{}, fmt.Errorf("opening browser: %w", err)
@@ -194,7 +194,7 @@ func exchange(ctx context.Context, o CreateOpts, code string, existing Apps) (Ap
 	if err != nil {
 		return App{}, fmt.Errorf("conversion request: %w", err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	var conv struct {
 		ID      int64  `json:"id"`
 		Slug    string `json:"slug"`

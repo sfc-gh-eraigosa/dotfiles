@@ -163,7 +163,19 @@ func TestMapPanicsOnAnOddArgumentList(t *testing.T) {
 			t.Fatal("an odd pair list is a programming mistake and must panic")
 		}
 	}()
-	Map("a")
+	// Behind a function call: a literal Map("a"), or even a slice literal,
+	// lets staticcheck prove the argument count is odd and fail the build
+	// instead of letting the test observe the panic.
+	Map(oddArgs(1)...)
+}
+
+// oddArgs returns n placeholder arguments.
+func oddArgs(n int) []any {
+	out := make([]any, n)
+	for i := range out {
+		out[i] = "k"
+	}
+	return out
 }
 
 func TestSameStrings(t *testing.T) {

@@ -16,7 +16,7 @@ func clearEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{"GH_TOKEN", "GITHUB_TOKEN", "GH_CONFIG_DIR", "XDG_CONFIG_HOME"} {
 		t.Setenv(k, "")
-		os.Unsetenv(k)
+		_ = os.Unsetenv(k)
 	}
 	old := askGH
 	askGH = func() (string, error) { return "", errors.New("gh: stubbed out in tests") }

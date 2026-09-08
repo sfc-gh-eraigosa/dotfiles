@@ -17,7 +17,7 @@ func isolateCreds(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{"GH_TOKEN", "GITHUB_TOKEN"} {
 		t.Setenv(k, "")
-		os.Unsetenv(k)
+		_ = os.Unsetenv(k)
 	}
 	t.Setenv("GH_CONFIG_DIR", t.TempDir()) // no gh login
 	// Never let a cmd test reach this machine's gh credential.
@@ -87,7 +87,7 @@ func TestTargetFallsBackToTheGitRemote(t *testing.T) {
 	mustGit(t, dir, "init", "-q")
 	mustGit(t, dir, "remote", "add", "origin", "git@github.com:sfc-gh-eraigosa/dotfiles.git")
 	cwd, _ := os.Getwd()
-	t.Cleanup(func() { os.Chdir(cwd) })
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestTargetOutsideARepoIsAUsageError(t *testing.T) {
 	t.Setenv("GH_TOKEN", canary)
 	dir := t.TempDir() // no git repo here
 	cwd, _ := os.Getwd()
-	t.Cleanup(func() { os.Chdir(cwd) })
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}

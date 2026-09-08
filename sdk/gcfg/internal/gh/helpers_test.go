@@ -13,12 +13,12 @@ func TestGHHostsPathHonoursEachConfigConvention(t *testing.T) {
 	if got := ghHostsPath(); got != filepath.Join("/gh-config", "hosts.yml") {
 		t.Errorf("GH_CONFIG_DIR: %q", got)
 	}
-	os.Unsetenv("GH_CONFIG_DIR")
+	_ = os.Unsetenv("GH_CONFIG_DIR")
 	t.Setenv("XDG_CONFIG_HOME", "/xdg")
 	if got := ghHostsPath(); got != filepath.Join("/xdg", "gh", "hosts.yml") {
 		t.Errorf("XDG_CONFIG_HOME: %q", got)
 	}
-	os.Unsetenv("XDG_CONFIG_HOME")
+	_ = os.Unsetenv("XDG_CONFIG_HOME")
 	t.Setenv("HOME", "/home/someone")
 	if got := ghHostsPath(); got != filepath.Join("/home/someone", ".config", "gh", "hosts.yml") {
 		t.Errorf("HOME: %q", got)

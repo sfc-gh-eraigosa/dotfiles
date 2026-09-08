@@ -36,7 +36,7 @@ func (t Token) String() string {
 }
 
 // Format routes every fmt verb through String so %v/%+v/%s cannot leak.
-func (t Token) Format(f fmt.State, verb rune) { io.WriteString(f, t.String()) }
+func (t Token) Format(f fmt.State, verb rune) { _, _ = io.WriteString(f, t.String()) }
 
 // MarshalJSON emits metadata only.
 func (t Token) MarshalJSON() ([]byte, error) {
@@ -156,7 +156,7 @@ func (a App) appCall(ctx context.Context, method, path string, body io.Reader, o
 	if err != nil {
 		return "", fmt.Errorf("%s %s: %w", method, path, err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(res.Body, 4<<20))
 	if err != nil {
 		return "", fmt.Errorf("reading response: %w", err)

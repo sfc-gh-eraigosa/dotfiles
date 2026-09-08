@@ -67,10 +67,9 @@ func (Family) Read(ctx context.Context, c gh.Client, t family.Target) (family.Li
 // apart: one table naming each setting, how to read it from Live, and how
 // GitHub spells it in a PATCH.
 type field struct {
-	key    string // path in gcfg.yaml, e.g. features.wiki
-	api    string // GitHub's field name in the repo PATCH
-	get    func(*Live) any
-	target string // "" repo PATCH, "topics" its own endpoint
+	key string // path in gcfg.yaml, e.g. features.wiki
+	api string // GitHub's field name in the repo PATCH
+	get func(*Live) any
 }
 
 var fields = []field{

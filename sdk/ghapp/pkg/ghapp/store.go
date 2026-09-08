@@ -97,7 +97,7 @@ func writePrivate(path string, b []byte) error {
 		return fmt.Errorf("%w", err)
 	}
 	if _, err := f.Write(b); err != nil {
-		f.Close()
+		_ = f.Close()
 		return fmt.Errorf("%w", err)
 	}
 	if err := f.Close(); err != nil {

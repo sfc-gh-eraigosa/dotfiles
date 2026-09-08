@@ -139,7 +139,7 @@ func fakeBrowser(t *testing.T, code string) func(string) error {
 				return
 			}
 			b, _ := io.ReadAll(res.Body)
-			res.Body.Close()
+			_ = res.Body.Close()
 			page := string(b)
 			i := strings.Index(page, "redirect_url")
 			if i < 0 {
@@ -154,7 +154,7 @@ func fakeBrowser(t *testing.T, code string) func(string) error {
 			state = state[:strings.IndexAny(state, `"&`)]
 			r2, err := http.Get(redirect + "?code=" + code + "&state=" + state)
 			if err == nil {
-				r2.Body.Close()
+				_ = r2.Body.Close()
 			}
 		}()
 		return nil

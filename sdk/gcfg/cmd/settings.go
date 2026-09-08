@@ -217,7 +217,8 @@ stdout is not a terminal, so nothing is written by a script that did not ask.`,
 			if !yes {
 				fmt.Fprintf(out, "\napply %d change(s) to %s? [y/N] ", len(changes), target)
 				var answer string
-				fmt.Fscanln(cmd.InOrStdin(), &answer)
+				// A read error just means no answer, which is a "no".
+				_, _ = fmt.Fscanln(cmd.InOrStdin(), &answer)
 				if answer != "y" && answer != "Y" {
 					return fmt.Errorf("%w: cancelled", ErrUsage)
 				}

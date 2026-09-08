@@ -27,7 +27,7 @@ func RepoAccess(ctx context.Context, hc *http.Client, apiURL string, tok Token, 
 	if err != nil {
 		return nil, fmt.Errorf("GET /repos/%s: %w", ownerRepo, err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	raw, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	var body struct {
 		Permissions map[string]bool `json:"permissions"`

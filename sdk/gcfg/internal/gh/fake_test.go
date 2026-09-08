@@ -114,7 +114,7 @@ func TestFakePaginatesMultiplePages(t *testing.T) {
 // of the seam.
 func TestBothImplementClient(t *testing.T) {
 	var _ Client = NewFake()
-	var _ Client = NewREST(RESTOpts{Bearer: "t"})
+	_ = NewREST(RESTOpts{Bearer: "t"})
 }
 
 // Apply's whole contract is "write, then read back", so the fake must be

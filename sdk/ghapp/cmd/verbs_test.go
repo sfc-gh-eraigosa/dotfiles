@@ -29,7 +29,7 @@ func TestCreatePersistsAndPrintsNoSecrets(t *testing.T) {
 func TestCreateWithManifestFileAndOrg(t *testing.T) {
 	w := newWorld(t)
 	mf := filepath.Join(t.TempDir(), "m.json")
-	os.WriteFile(mf, []byte(`{"name":"from-file","permissions":{"contents":"read"}}`), 0o600)
+	_ = os.WriteFile(mf, []byte(`{"name":"from-file","permissions":{"contents":"read"}}`), 0o600)
 	out, errs, err := w.create(t, "--manifest", mf, "--org", "acme")
 	if err != nil {
 		t.Fatalf("%v\n%s%s", err, out, errs)
@@ -64,7 +64,7 @@ func TestStatusEmptyIsUsage(t *testing.T) {
 
 func TestStatusListsAppsWithoutSecrets(t *testing.T) {
 	w := newWorld(t)
-	w.create(t)
+	_, _, _ = w.create(t)
 	if _, _, err := w.run("install", "--no-browser"); err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestStatusListsAppsWithoutSecrets(t *testing.T) {
 
 func TestInstallRecordsInstallations(t *testing.T) {
 	w := newWorld(t)
-	w.create(t)
+	_, _, _ = w.create(t)
 	var opened string
 	old := openBrowser
 	openBrowser = func(u string) error { opened = u; return nil }
@@ -106,7 +106,7 @@ func TestInstallRecordsInstallations(t *testing.T) {
 
 func TestTokenRepoPrintsOnlyTheToken(t *testing.T) {
 	w := newWorld(t)
-	w.create(t)
+	_, _, _ = w.create(t)
 	out, errs, err := w.run("token", "--repo", "sfc-gh-eraigosa/dotfiles", "--permissions", "administration=write", "--permissions", "contents=read")
 	if err != nil {
 		t.Fatalf("%v %s", err, errs)
@@ -135,7 +135,7 @@ func TestTokenRepoPrintsOnlyTheToken(t *testing.T) {
 
 func TestTokenOrgUsesOrgInstallation(t *testing.T) {
 	w := newWorld(t)
-	w.create(t)
+	_, _, _ = w.create(t)
 	out, _, err := w.run("token", "--org", "other-org")
 	if err != nil || out != leakCanary+"\n" {
 		t.Fatalf("out=%q err=%v", out, err)
@@ -153,7 +153,7 @@ func TestTokenUsageErrors(t *testing.T) {
 	if _, _, err := w.run("token", "--repo", "a/b"); !errors.Is(err, ErrUsage) {
 		t.Fatalf("no app: want ErrUsage, got %v", err)
 	}
-	w.create(t)
+	_, _, _ = w.create(t)
 	if _, _, err := w.run("token"); !errors.Is(err, ErrUsage) {
 		t.Fatalf("no target: want ErrUsage, got %v", err)
 	}
@@ -170,7 +170,7 @@ func TestTokenUsageErrors(t *testing.T) {
 
 func TestDoctorHealthy(t *testing.T) {
 	w := newWorld(t)
-	w.create(t)
+	_, _, _ = w.create(t)
 	out, errs, err := w.run("doctor", "--repo", "sfc-gh-eraigosa/dotfiles")
 	if err != nil {
 		t.Fatalf("%v\n%s%s", err, out, errs)
@@ -188,7 +188,7 @@ func TestDoctorHealthy(t *testing.T) {
 
 func TestDoctorFailsOnBadCredentials(t *testing.T) {
 	w := newWorld(t)
-	w.create(t)
+	_, _, _ = w.create(t)
 	w.badJWT = true
 	out, _, err := w.run("doctor")
 	if err == nil {
@@ -209,7 +209,7 @@ func TestDoctorNoAppIsUsage(t *testing.T) {
 
 func TestAppFlagSelectsAmongSeveral(t *testing.T) {
 	w := newWorld(t)
-	w.create(t)
+	_, _, _ = w.create(t)
 	if _, _, err := w.run("status", "--app", "missing"); err == nil || !strings.Contains(err.Error(), "missing") {
 		t.Fatalf("want unknown app error, got %v", err)
 	}

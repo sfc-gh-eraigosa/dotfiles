@@ -120,7 +120,7 @@ func (c *rest) attempt(ctx context.Context, method, path string, payload []byte)
 		raw, readErr := io.ReadAll(io.LimitReader(res.Body, 8<<20))
 		link := res.Header.Get("Link")
 		retryAfter := res.Header.Get("Retry-After")
-		res.Body.Close()
+		_ = res.Body.Close()
 		if readErr != nil {
 			return res.StatusCode, nil, link, fmt.Errorf("%s %s: reading response: %w", method, path, readErr)
 		}

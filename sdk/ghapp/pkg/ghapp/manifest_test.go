@@ -72,7 +72,7 @@ func browse(t *testing.T, code string) (opener func(string) error, form *formSee
 				return
 			}
 			b, _ := io.ReadAll(res.Body)
-			res.Body.Close()
+			_ = res.Body.Close()
 			m := formRE.FindStringSubmatch(string(b))
 			if m == nil {
 				form.err = fmt.Errorf("no manifest form in page: %s", b)
@@ -90,7 +90,7 @@ func browse(t *testing.T, code string) (opener func(string) error, form *formSee
 				return
 			}
 			b, _ = io.ReadAll(res.Body)
-			res.Body.Close()
+			_ = res.Body.Close()
 			form.callbackStatus = res.StatusCode
 			form.callbackBody = string(b)
 		}()
@@ -224,7 +224,7 @@ func TestCreateIgnoresWrongState(t *testing.T) {
 		go func() {
 			res, _ := http.Get(u)
 			b, _ := io.ReadAll(res.Body)
-			res.Body.Close()
+			_ = res.Body.Close()
 			m := formRE.FindStringSubmatch(string(b))
 			var man map[string]any
 			_ = json.Unmarshal([]byte(m[2]), &man)
@@ -235,9 +235,9 @@ func TestCreateIgnoresWrongState(t *testing.T) {
 			if bad.StatusCode != 400 {
 				panic(fmt.Sprintf("wrong state accepted: %d", bad.StatusCode))
 			}
-			bad.Body.Close()
+			_ = bad.Body.Close()
 			ok, _ := http.Get(redirect + "?code=good-code&state=" + state)
-			ok.Body.Close()
+			_ = ok.Body.Close()
 		}()
 		return nil
 	}
@@ -256,7 +256,7 @@ func TestCreatePortFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 	busy := l.Addr().(*net.TCPAddr).Port
 	c := newConvStub(t)
 	opener, form := browse(t, "good-code")
