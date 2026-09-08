@@ -1,0 +1,39 @@
+# P1-T1 gcfg scaffold + CI — 2026-09-06T06:26:45Z — worker gcfg/edward-raigosa/build
+
+## RUN-RED: cd sdk/gcfg && go test ./...
+github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/cmd: no non-test Go files in ~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gcfg/edward-raigosa/build/sdk/gcfg/cmd
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg [build failed]
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/version [github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/version.test]
+internal/version/version_test.go:9:9: undefined: String
+internal/version/version_test.go:11:14: undefined: Version
+internal/version/version_test.go:12:14: undefined: Commit
+internal/version/version_test.go:13:13: undefined: Dirty
+internal/version/version_test.go:14:18: undefined: BuildDate
+internal/version/version_test.go:24:5: undefined: Version
+internal/version/version_test.go:24:25: undefined: Commit
+internal/version/version_test.go:24:45: undefined: BuildDate
+internal/version/version_test.go:24:71: undefined: Dirty
+internal/version/version_test.go:25:48: undefined: Version
+internal/version/version_test.go:25:48: too many errors
+
+## RUN-GREEN: go vet ./... && go test ./... -count=1 -cover
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg	0.004s	coverage: 91.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/cmd	0.004s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/version	0.004s	coverage: 100.0% of statements
+
+## module total (CI formula)
+total:										(statements)	96.7%
+
+## go run . version
+gcfg vdev
+  Commit:      none
+  Dirty:       false
+  Build Date:  unknown
+  Description: gcfg — GitHub settings as code: .github/gcfg.yaml exported, verified, applied
+
+## actionlint .github/workflows/gcfg-ci.yml
+clean
+
+## ALLOWLIST: git status --short -- sdk/gcfg .github/workflows/gcfg-ci.yml
+?? .github/workflows/gcfg-ci.yml
+?? sdk/gcfg/

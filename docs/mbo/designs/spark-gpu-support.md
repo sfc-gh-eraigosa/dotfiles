@@ -2,8 +2,9 @@
 
 - **Slug:** `spark-gpu-support`
 - **Date:** 2026-08-31
-- **Status:** Draft
-- **Relates to:** issue TBD / PR TBD (branch `design/fleet-config-pull`)
+- **Status:** Build merged — PR #253 (2026-08-31): PATH-clobber fix, zsh profile.d gap, GPU
+  detection + monitoring. Spec/plan still pending.
+- **Relates to:** PR [#253](https://github.com/sfc-gh-eraigosa/dotfiles/pull/253) (build); spec/plan TBD
 - **Author(s):** Edward Raigosa
 
 ## 1. Problem / context
