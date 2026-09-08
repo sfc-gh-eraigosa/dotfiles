@@ -13,11 +13,17 @@
 > `ALLOWLIST` `.gitignore` check · `DOCS` · `COMMIT` · `LEDGER` update TRACKING.md ·
 > `CHECKPOINT` push/PR refresh.
 
+> **Where this stands (2026-09-07):** P0 and P1 are complete and merged-ready in
+> [#287](https://github.com/sfc-gh-eraigosa/dotfiles/pull/287) — module coverage
+> 91.1%, `internal/engine` 91.6%, `internal/schema` 94.8%, UC1–UC3 evidenced live
+> on this repo. **The first unchecked box below is P2-T1 (rulesets family).** The
+> one P0 leftover is the human `ghapp create`, tracked in its own box.
+
 ## Preflight (once)
 
 - [x] `go version` matches `.go-version`
 - [x] `gh auth status` shows `repo` scope
-- [~] design PR merged (**not merged** — build worker stacked on `feature/gcfg/edward-raigosa/design`, PR #285, by owner decision 2026-09-05); `gss feature list --feature gcfg --json` shows the feature ✓ (row re-created after the 2026-09-05 registry audit dropped it)
+- [x] design approved; **the stack was collapsed 2026-09-07** — the build branch already contained #285's two commits, so it was re-targeted onto `main` and #285 closed as superseded. Everything ships in [#287](https://github.com/sfc-gh-eraigosa/dotfiles/pull/287). (`gss feature list --feature gcfg` row was re-created after the 2026-09-05 registry audit dropped it.)
 - [x] worker for the phase created via `gss feature worker add --feature gcfg --purpose <leaf> --description "…" --json`; row copied into IMPLEMENTATION §2 + TRACKING §0
 - [x] `git status --short` clean in the worker worktree
 
@@ -56,8 +62,8 @@
 - [x] RUN-RED → **FAIL**
 - [x] GREEN: `manifest.go`, cmd verbs
 - [x] RUN-GREEN → **PASS**; coverage ≥80%
-- [ ] VERIFY (human, ask first): one real `ghapp create` + `ghapp token --repo <this repo>` → `evidence/ghapp/` (redacted)
-- [ ] COMMIT: `feat(ghapp): manifest-flow create + CLI`
+- [ ] VERIFY (human, ask first): one real `ghapp create` + `ghapp token --repo <this repo>` → `evidence/ghapp/` (redacted) — **still open**: two callback windows (15 min, then 2 h) expired without the browser step, see TRACKING §1
+- [x] COMMIT: `feat(ghapp): manifest-flow create + CLI` (`ee50362`; automated gates only)
 - [x] LEDGER + CHECKPOINT
 **Done when:** ghapp-ci green; token mint evidence captured.
 
@@ -88,7 +94,7 @@
 - [x] GREEN
 - [x] RUN-GREEN → **PASS**
 - [x] COMMIT: `feat(gcfg): family model + general + security`
-- [ ] LEDGER + CHECKPOINT
+- [x] LEDGER + CHECKPOINT
 
 ### P1-T5 — engine + renderers  (plan P1-T5)
 - [x] RED: `engine/{export,verify,plan,apply,ownership}_test.go` (clean; drift; unreadable→finding; full extras; apply→re-read→not-honoured survives; call order), `report/*_test.go` goldens (tty/json/markdown)

@@ -13,8 +13,8 @@
 
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| design | `gcfg/edward-raigosa/design` | `feature/gcfg/edward-raigosa/design` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gcfg/edward-raigosa/design` | #285 | designing |
-| build (P0+P1 sequential) | `gcfg/edward-raigosa/build` | `feature/gcfg/edward-raigosa/build` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gcfg/edward-raigosa/build` | [#287](https://github.com/sfc-gh-eraigosa/dotfiles/pull/287) (draft, base = design) | building |
+| design | `gcfg/edward-raigosa/design` | `feature/gcfg/edward-raigosa/design` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gcfg/edward-raigosa/design` | #285 (closed 2026-09-07) | **superseded** — both commits ship in the build worker |
+| build (P0+P1 sequential) | `gcfg/edward-raigosa/build` | `feature/gcfg/edward-raigosa/build` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gcfg/edward-raigosa/build` | [#287](https://github.com/sfc-gh-eraigosa/dotfiles/pull/287) (base **main** since 2026-09-07) | P0 + P1 done, ready to merge |
 
 ## 1. Task ledger
 
@@ -77,7 +77,7 @@
 - [ ] `gcfg-verify.yml` + `gcfg-apply.yml` installed; red→green evidence captured
 - [ ] `gcfg auth doctor` evidence for gh token and App token (P3; `auth status` already evidenced live)
 - [ ] `github_secret_scanning.sh` + `ruleset_snapshot.sh` + `.github/rulesets/main.json` removed
-- [ ] every task row `done` with SHA + evidence; `index.md` state advanced
+- [x] every **P0/P1** task row `done` with SHA + evidence; `index.md` state advanced (P2–P5 rows still `todo`)
 
 ## 4. Blockers & escalations
 
@@ -91,6 +91,7 @@
 
 | Date | Session | What advanced |
 | :-- | :-- | :-- |
+| 2026-09-07 | build (merge prep) | Stack collapsed on the owner's call: the build branch already carried #285's two commits, so it was rebased onto `main`, PR #287 re-targeted to `main`, and #285 closed as superseded. `docs/mbo/index.md` conflicted with main's 2026-09-07 index audit (#316), which had restructured the Active table and carried no `gcfg` row — resolved by taking main's table and re-adding the row. TODO cursor, worker map and the §8 kickoff prompt advanced to P2 |
 | 2026-09-06 | build (P0+P1 complete) | P0-T1..T4 and P1-T1..T6 all done and evidenced; `gcfg CI`, `ghapp CI` and `AI Teams Eval` green on PR #287 at `6ccac22`; UC1–UC3 proven live on this repo and the repo restored. Open: the one real `ghapp create` (two windows expired without the browser step) |
 | 2026-09-05 | design | POC research (gh token scopes, GITHUB_TOKEN has no administration permission, fine-grained Administration covers all repo endpoints, org endpoints need admin:org / org Administration, non-provider patterns not honoured on this plan, safe-settings/Terraform/Probot prior art); design + spec + plan + trio written; feature `gcfg` + design worker created |
 | 2026-09-05 | build (P0 start) | registry row for `gcfg` re-created (`gss feature start`, dropped by an earlier shared-registry `audit --repair`); worker `gcfg/edward-raigosa/build` added, base = design branch (#285 not merged; owner chose to build on it); P0-T1 RED→GREEN, main refactored to a testable `run()` to clear the 80% bar |

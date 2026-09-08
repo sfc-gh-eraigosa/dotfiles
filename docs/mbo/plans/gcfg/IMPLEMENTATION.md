@@ -38,16 +38,17 @@ Captured VERBATIM from `gss feature worker add --json` when each leaf worker is 
 (CAP-C). Blocking-first order per plan §6.1: `ghapp` ∥ `core` → `fam-repo-a`,
 `fam-repo-b`, `fam-org`, `auth` (also ← ghapp), `actions`, `tui` → `adoption`.
 
-| Leaf | worker_ref | branch | worktree_path | base |
-| :-- | :-- | :-- | :-- | :-- |
-| design (this) | `gcfg/edward-raigosa/design` | `feature/gcfg/edward-raigosa/design` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gcfg/edward-raigosa/design` | main |
-| ghapp | (create at P0 start) | | | main |
-| core | (create at P1 start) | | | main |
-| fam-repo-a / fam-repo-b / fam-org / auth / actions / tui | (create after core merges) | | | main (auth: after ghapp too) |
-| adoption | (create last) | | | main |
+| Leaf | worker_ref | branch | worktree_path | base | State |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| design | `gcfg/edward-raigosa/design` | `feature/gcfg/edward-raigosa/design` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gcfg/edward-raigosa/design` | main | **superseded** — its two commits ship in the build worker; PR #285 closed 2026-09-07 |
+| ghapp + core | `gcfg/edward-raigosa/build` | `feature/gcfg/edward-raigosa/build` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/gcfg/edward-raigosa/build` | main (re-targeted from the design branch 2026-09-07) | **P0 + P1 done**, [#287](https://github.com/sfc-gh-eraigosa/dotfiles/pull/287) |
+| fam-repo-a / fam-repo-b / fam-org | (create after #287 lands) | | | main | next |
+| auth / actions / tui | (create after #287 lands) | | | main | next |
+| adoption | (create last) | | | main | last |
 
-If the build is done sequentially in one PR instead (the `mbo-plan` default), one worker
-`gcfg/<user>/build` carries every phase in plan order.
+The build was done sequentially in one PR (the `mbo-plan` default), so a single worker
+`gcfg/edward-raigosa/build` carried P0 and P1 in plan order. The remaining leaves are
+independent and can run in parallel off `main` once #287 is in.
 
 ## 3. The execution loop (every task)
 
@@ -106,15 +107,32 @@ gss registry drifts from reality: `gss feature audit --feature gcfg --json`, the
 
 > **Maintenance rule:** exactly ONE prompt here — the one that starts the NEXT session.
 
-Mission: execute `docs/mbo/plans/gcfg.md` starting at phase P0 (ghapp) and P1 (gcfg core),
-TDD, in a `gss feature gcfg` worker worktree.
+Mission: execute `docs/mbo/plans/gcfg.md` phase **P2 (families)**, TDD, in a new
+`gss feature gcfg` worker off `main`. P0 (ghapp) and P1 (gcfg core) landed in
+[#287](https://github.com/sfc-gh-eraigosa/dotfiles/pull/287); the engine, the `Family`
+contract, the recording fake and the two reference families are already there.
 
-Read first: `docs/mbo/plans/gcfg.md` (§3 contracts, §4 P0/P1 tasks), this file §3–§5,
-`docs/mbo/plans/gcfg/TODO.md` (first unchecked box), `sdk/AGENTS.md` (Adding a module),
-`sdk/gff/build.sh` and `sdk/gff/cmd/root.go` (the shape to mirror).
+Read first: `docs/mbo/plans/gcfg.md` (§3.1 for each family's YAML shape, §4 P2), this
+file §3–§5, `docs/mbo/plans/gcfg/TODO.md` (first unchecked box), and — as the shape to
+copy — `sdk/gcfg/internal/family/general/` (a fixed set of scalars, one key table shared
+by Export and Diff) and `.../security/` (three endpoint shapes behind one family, plus
+`DiffAfterApply` for a write GitHub accepts and ignores).
 
-Scope in order: P0-T1 → P0-T4, then P1-T1 → P1-T6, each with RED → GREEN → gate →
-evidence → ledger → confirmed commit → checkpoint. Stop and ask (interactive prompt) before
-every commit, before the one real `ghapp create`, and before any live `apply` on this repo.
-Blocked → TRACKING §4 with the real command output. Done when P0 and P1 gates in plan §6.1
-are met and TRACKING shows evidence for UC1–UC3 on this repo.
+Scope in order: **P2-T1 rulesets** (also imports `.github/rulesets/*.json` on export,
+updates by name, deletes only under `full`) → P2-T2 actions → P2-T3 labels (pagination
+past 100) → P2-T4 autolinks → P2-T5 environments → P2-T6 secrets (names only) +
+webhooks (no secret) → P2-T7 collaborators + pages (report-only) → P2-T8/T9/T10 the org
+families. Each task: RED → GREEN → gate → evidence → ledger → confirmed commit →
+checkpoint. A list family is where `ownership: full` finally bites — extras become drift
+and `apply` deletes them, so every one needs the create/update/delete matrix and a
+pre-image on the delete.
+
+Stop and ask (interactive prompt) before every commit and before any live `apply` on
+this repo. Blocked → TRACKING §4 with the real command output. Done when every P2 family
+has fixtures, an export golden, a diff matrix and a recorded apply body, `gcfg-ci` is
+green at 80/90/90, and `gcfg export` on this repo covers every family that is live.
+
+**Carried over from P0, unfinished:** one real `ghapp create` + `ghapp token --repo
+sfc-gh-eraigosa/dotfiles` + `ghapp doctor` → `evidence/ghapp/` (redacted). Two callback
+windows expired without the browser step; it needs a browser that can reach
+`127.0.0.1:8479` on the host running it.
