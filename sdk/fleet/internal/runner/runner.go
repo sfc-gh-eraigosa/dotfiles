@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -47,6 +48,25 @@ type Runner interface {
 	// executor actually bounds wall-clock time instead of leaking a process
 	// that outlives the caller's patience for it.
 	RunStreamCtx(ctx context.Context, host, stdin string, argv ...string) (lines <-chan string, done <-chan error)
+}
+
+// Line is one line of remote output plus which stream produced it.
+type Line struct {
+	Text   string
+	Stderr bool
+}
+
+// SplitStreamer is an OPTIONAL capability of a Runner: streaming with the two
+// streams kept APART, so a consumer can tell a warning from progress. A host
+// that prints "WARNING: apt-get update failed" and exits 0 is the case it
+// exists for.
+//
+// It is deliberately NOT part of Runner: adding a method there would ripple
+// into every other package's Runner test double (the same reasoning as
+// updexec's interactiveCtxRunner). A consumer type-asserts for it and falls
+// back to the merged stream, where every line is stdout.
+type SplitStreamer interface {
+	RunSplitStreamCtx(ctx context.Context, host, stdin string, argv ...string) (lines <-chan Line, done <-chan error)
 }
 
 // controlPersist is how long a master connection outlives the command that
@@ -230,21 +250,47 @@ func (e Exec) RunStreamCtx(ctx context.Context, host, stdin string, argv ...stri
 	return streamCombined(c)
 }
 
-// streamCombined starts c and delivers its combined output line by line —
-// the plumbing RunStreamCtx and RunBridgeCtx share, so the two lanes cannot
-// drift in how they drain, kill, or wait.
+// streamCombined delivers c's output line by line with the stream tag dropped
+// — the plumbing RunStreamCtx and RunBridgeCtx share, so the two lanes cannot
+// drift in how they drain, kill, or wait. It is streamSplit merged, so there
+// is still exactly one implementation of that plumbing.
 func streamCombined(c *exec.Cmd) (<-chan string, <-chan error) {
+	split, done := streamSplit(c)
 	lines := make(chan string, 256)
+	go func() {
+		defer close(lines)
+		for l := range split {
+			lines <- l.Text
+		}
+	}()
+	return lines, done
+}
+
+// streamSplit starts c with stdout and stderr on SEPARATE pipes, tagging each
+// line with the stream that produced it.
+//
+// The cost of the split is that ordering BETWEEN the two streams is arrival
+// order rather than the remote's exact interleaving (ordering WITHIN each
+// stream is exact) — accepted in docs/mbo/designs/fleet-error-view.md §3.1,
+// which is also why the TUI keeps stderr in the merged log pane and stamps
+// every line with its arrival time.
+//
+// Both pipes MUST be drained CONCURRENTLY: one goroutine scanning stdout to
+// completion and then stderr would let the unread pipe's buffer fill and wedge
+// the remote command. Hence one scanner per pipe, a WaitGroup, and one closer.
+func streamSplit(c *exec.Cmd) (<-chan Line, <-chan error) {
+	lines := make(chan Line, 256)
 	done := make(chan error, 1)
 
-	pr, pw := io.Pipe()
-	c.Stdout, c.Stderr = pw, pw
+	outR, outW := io.Pipe()
+	errR, errW := io.Pipe()
+	c.Stdout, c.Stderr = outW, errW
 	// WaitDelay bounds how long Wait() waits for output plumbing to drain
 	// after a kill: without it, a killed ssh whose remote (or, in tests, a
-	// stub) leaves a GRANDCHILD holding the stdout pipe open can make Wait
-	// block for as long as that orphan lives, silently defeating the whole
-	// point of a controller-enforced deadline. After the delay, Wait force-
-	// closes the pipes and returns instead.
+	// stub) leaves a GRANDCHILD holding a pipe open can make Wait block for as
+	// long as that orphan lives, silently defeating the whole point of a
+	// controller-enforced deadline. After the delay, Wait force-closes the
+	// pipes and returns instead.
 	c.WaitDelay = waitDelay
 
 	if err := c.Start(); err != nil {
@@ -252,22 +298,41 @@ func streamCombined(c *exec.Cmd) (<-chan string, <-chan error) {
 		done <- err
 		return lines, done
 	}
+
 	go func() {
-		// Closing the writer ends the scanner below; without it the reader
+		// Closing both writers ends the scanners below; without it a reader
 		// would block forever after the process exits.
 		err := c.Wait()
-		_ = pw.Close()
+		_ = outW.Close()
+		_ = errW.Close()
 		done <- err
 	}()
-	go func() {
-		defer close(lines)
-		sc := bufio.NewScanner(pr)
+
+	var wg sync.WaitGroup
+	scan := func(r io.Reader, isErr bool) {
+		defer wg.Done()
+		sc := bufio.NewScanner(r)
 		sc.Buffer(make([]byte, 0, 64*1024), 1024*1024) // install logs have long lines
 		for sc.Scan() {
-			lines <- sc.Text()
+			lines <- Line{Text: sc.Text(), Stderr: isErr}
 		}
+	}
+	wg.Add(2)
+	go scan(outR, false)
+	go scan(errR, true)
+	go func() {
+		wg.Wait()
+		close(lines)
 	}()
+
 	return lines, done
+}
+
+// RunSplitStreamCtx is RunStreamCtx with the two streams kept apart.
+func (e Exec) RunSplitStreamCtx(ctx context.Context, host, stdin string, argv ...string) (<-chan Line, <-chan error) {
+	c := exec.CommandContext(ctx, "ssh", append(e.baseArgs(host), argv...)...)
+	c.Stdin = strings.NewReader(stdin)
+	return streamSplit(c)
 }
 
 // ErrFake is the canned failure used by Fake.
@@ -278,10 +343,13 @@ var ErrFake = errors.New("runner: fake ssh failure")
 // records which peer relayed to each host so a wake test can assert the peer
 // ranking chose the peer it meant to.
 type Fake struct {
-	Out   map[string]string
-	Err   map[string]error
-	Stdin map[string]string
-	Via   map[string]string // host -> peer that relayed
+	Out map[string]string
+	// ErrOut is what the host writes to STDERR, replayed by
+	// RunSplitStreamCtx after Out. A test scripts either or both.
+	ErrOut map[string]string
+	Err    map[string]error
+	Stdin  map[string]string
+	Via    map[string]string // host -> peer that relayed
 	// Block, when true for a host, makes RunStreamCtx simulate a remote
 	// command that never finishes on its own: it waits on ctx.Done() and
 	// sends ctx.Err() on done, so a test can drive the controller-timeout
@@ -341,8 +409,26 @@ func (f Fake) RunStream(host, stdin string, argv ...string) (<-chan string, <-ch
 // RunStreamCtx replays Out[host] as lines, unless Block[host] is set — in
 // which case it waits on ctx.Done() and reports ctx.Err(), simulating a
 // remote command a controller timeout has to kill.
-func (f Fake) RunStreamCtx(ctx context.Context, host, stdin string, _ ...string) (<-chan string, <-chan error) {
+func (f Fake) RunStreamCtx(ctx context.Context, host, stdin string, argv ...string) (<-chan string, <-chan error) {
+	split, done := f.RunSplitStreamCtx(ctx, host, stdin, argv...)
 	lines := make(chan string, 64)
+	go func() {
+		defer close(lines)
+		for l := range split {
+			lines <- l.Text
+		}
+	}()
+	return lines, done
+}
+
+// RunSplitStreamCtx replays Out[host] as stdout and ErrOut[host] as stderr.
+// It mirrors RunStreamCtx exactly — including recording stdin (tests assert
+// the sudo secret travelled over stdin and NOT argv) and sending Err[host]
+// from the same goroutine after the lines — because any divergence between
+// the fake's two paths is a bug that only shows up in the tests using the
+// other one.
+func (f Fake) RunSplitStreamCtx(ctx context.Context, host, stdin string, _ ...string) (<-chan Line, <-chan error) {
+	lines := make(chan Line, 64)
 	done := make(chan error, 1)
 	if f.Stdin != nil {
 		f.Stdin[host] = stdin
@@ -359,7 +445,12 @@ func (f Fake) RunStreamCtx(ctx context.Context, host, stdin string, _ ...string)
 		defer close(lines)
 		for _, l := range strings.Split(f.Out[host], "\n") {
 			if strings.TrimSpace(l) != "" {
-				lines <- l
+				lines <- Line{Text: l}
+			}
+		}
+		for _, l := range strings.Split(f.ErrOut[host], "\n") {
+			if strings.TrimSpace(l) != "" {
+				lines <- Line{Text: l, Stderr: true}
 			}
 		}
 		done <- f.Err[host]

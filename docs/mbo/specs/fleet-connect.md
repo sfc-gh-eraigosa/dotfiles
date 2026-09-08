@@ -252,9 +252,9 @@ Every rule becomes a named test. Format: **trigger · fires · must-not-fire · 
   construction/validation · must never be executed ambiguously · none set · validation test.
 - **F1d** a `Tunnel` with `RemotePort` 0 or 65536, or `LocalPort` above 65535 · rejected by
   `Validate` · must never reach `BridgeArgv` · `LocalPort: 0` is valid · validation test.
-- **F1e** an `Action` whose `Key` is in `provider.ReservedKeys` (`r`, `t`, `q`, `j`, space…) ·
-  rejected by `Validate` naming the key · must never be listed in a level · `c` and `l` are
-  fine · validation test.
+- **F1e** an `Action` whose `Key` is in `provider.ReservedKeys` (`r`, `t`, `q`, `j`, space, and
+  the pane toggles `h` `l` `e`) · rejected by `Validate` naming the key · must never be listed
+  in a level · `c`, `L` and `E` are fine · validation test.
 - **F1c** every contract type · round-trips through JSON unchanged · must not require a custom
   adapter between wire and TUI · a `nil` `Attrs`/`Actions` · marshal/unmarshal equality test.
 - **F2a** a remote handoff · argv contains `ssh`, `-t` and every `MuxArgs` option · must not

@@ -128,7 +128,7 @@ func TestStreamedLinesAreTaggedAndRendered(t *testing.T) {
 // A line must re-issue the reader, or the stream stops after one line.
 func TestEachLineReissuesTheReader(t *testing.T) {
 	m := testModel("a")
-	m.streams["a"] = stream{lines: make(chan string), done: make(chan error, 1)}
+	m.streams["a"] = stream{lines: make(chan outLine), done: make(chan error, 1)}
 	_, cmd := m.Update(logLineMsg{alias: "a", line: "x"})
 	if cmd == nil {
 		t.Fatal("receiving a line must re-issue the reader or the stream stalls")

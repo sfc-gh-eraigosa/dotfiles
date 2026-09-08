@@ -20,7 +20,7 @@ type theme struct {
 	title, header, statusBar, dim lipgloss.Style
 	cursor, selected, match       lipgloss.Style
 	byClass                       map[string]lipgloss.Style
-	ok, fail, running             lipgloss.Style
+	ok, fail, running, warn       lipgloss.Style
 	dialog, panel                 lipgloss.Style
 	markSel, markOK, markFail     lipgloss.Style
 	local                         lipgloss.Style
@@ -40,6 +40,9 @@ func newTheme() theme {
 		ok:        lipgloss.NewStyle().Foreground(c("2")),
 		fail:      lipgloss.NewStyle().Foreground(c("1")).Bold(true),
 		running:   lipgloss.NewStyle().Foreground(c("4")),
+		// Yellow: a warning is not a failure. The outcome colours keep their
+		// meanings — green ok, red FAIL — and ⚠ sits alongside, never instead.
+		warn: lipgloss.NewStyle().Foreground(c("3")),
 		dialog: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("6")).Padding(0, 1),
 		// Every section gets the same frame as the answers dialog, so the
@@ -167,22 +170,36 @@ func (m tuiModel) View() string {
 		return m.fitFrame(head + m.wrapPanel(th.panel, empty) + "\n")
 	}
 
-	body := head + m.listPanel() + "\n"
+	body := head
+	if m.hostOpen {
+		body += m.listPanel() + "\n"
+	}
 	tail := "\n" + m.statusView()
 
-	if !m.logOpen {
+	if !m.logOpen && !m.errOpen {
 		return m.fitFrame(body + tail)
 	}
 
-	// A blank line separates the log pane from the status bar, as it does when
-	// the pane is hidden.
-	compose := func(rows int) string { return body + m.logViewN(rows) + "\n" + tail }
+	// A blank line separates the last pane from the status bar, as it does
+	// when both panes are hidden. Each open pane renders whether or not it has
+	// rows — a pane with nothing to show is a one-line hint, not a gap.
+	compose := func(rows int) string {
+		out := body
+		logRows, errRows := m.splitStreamRows(rows)
+		if m.logOpen {
+			out += m.logViewN(logRows) + "\n"
+		}
+		if m.errOpen {
+			out += m.errViewN(errRows) + "\n"
+		}
+		return out + tail
+	}
 
-	// The log pane is the elastic block, so it gets whatever the fixed blocks
-	// leave rather than a predicted share. Every other height in this file has
-	// drifted at least once — the banner grew a row, the panels grew borders —
-	// and measuring what is already rendered cannot drift.
-	rows := m.logHeight()
+	// The stream panes are the elastic block, so they get whatever the fixed
+	// blocks leave rather than a predicted share. Every other height in this
+	// file has drifted at least once — the banner grew a row, the panels grew
+	// borders — and measuring what is already rendered cannot drift.
+	rows := m.streamBudget()
 	out := compose(rows)
 
 	// One corrective pass lands on the exact fit; four is slack for a pane that
@@ -202,8 +219,8 @@ func (m tuiModel) View() string {
 
 	// Belt and braces. bubbletea's renderer drops lines from the TOP of a frame
 	// that is too tall, so overflow is paid for with the banner — the one thing
-	// on screen that must never move. Hand back log rows until it fits: losing
-	// a line of output is always the better trade.
+	// on screen that must never move. Hand back stream rows until it fits:
+	// losing a line of output is always the better trade.
 	for rows > 0 {
 		over := lipgloss.Height(out) - m.vp.height
 		if over <= 0 {
@@ -214,12 +231,28 @@ func (m tuiModel) View() string {
 	}
 	// An open answers form or confirm gate is a whole framed dialog where the
 	// status bar normally sits, and on a short terminal it can outgrow what the
-	// log pane has left to give. The pane is the thing to spend: the dialog is
-	// what the operator is answering, and its idle hint says nothing.
-	if lipgloss.Height(out) > m.vp.height {
+	// panes have left to give. The panes are the thing to spend: the dialog is
+	// what the operator is answering, and an idle hint says nothing.
+	if lipgloss.Height(out) > m.vp.height && m.hostOpen {
 		out = body + tail
 	}
 	return m.fitFrame(out)
+}
+
+// splitStreamRows shares a stream budget between the log and the error pane.
+// With both flowing it is halved, the odd row going to the log — it is the
+// primary, and the error pane is a filtered view of the same buffer. A pane
+// with nothing to show takes none of it: its hint is one line either way.
+func (m tuiModel) splitStreamRows(rows int) (logRows, errRows int) {
+	switch {
+	case m.logActive() && m.errActive():
+		return rows - rows/2, rows / 2
+	case m.logActive():
+		return rows, 0
+	case m.errActive():
+		return 0, rows
+	}
+	return 0, 0
 }
 
 // listPanel is the framed host table: column header plus the visible slice of
@@ -268,7 +301,7 @@ func shortWhat(s string) string {
 	if i := strings.IndexAny(s, "(·"); i > 0 {
 		s = strings.TrimSpace(s[:i])
 	}
-	for _, cut := range []string{"toggle this ", "toggle ", "show / hide the streaming ", "regex "} {
+	for _, cut := range []string{"toggle this ", "toggle ", "show / hide the streaming ", "show / hide the ", "regex "} {
 		s = strings.TrimPrefix(s, cut)
 	}
 	if i := strings.Index(s, " selection"); i > 0 {
@@ -315,7 +348,7 @@ func (m tuiModel) logViewN(h int) string {
 		mode = fmt.Sprintf("scrolled %d/%d", m.logTop+1, len(m.logs))
 	}
 	keys := "tab: focus  l: hide"
-	if m.logFocus {
+	if m.logFocused() {
 		// Say the keys are HERE now, or the operator has no way to know why
 		// j/k stopped moving the host cursor.
 		keys = th.markSel.Render("◀ keys here") + th.dim.Render("   gg/G  /  n/N  tab: back")
@@ -346,7 +379,14 @@ func (m tuiModel) logViewN(h int) string {
 		if m.logSearch.re != nil && m.logSearch.re.MatchString(e.alias+" "+e.line) {
 			text = th.match.Render(text)
 		}
-		fmt.Fprintf(&body, "%s %s %s\n",
+		// The log shows BOTH streams, so it has to say which is which — the
+		// error pane does not (every line in it is stderr).
+		gutter := " "
+		if e.stderr {
+			gutter = th.warn.Render("!")
+		}
+		fmt.Fprintf(&body, "%s%s %s %s\n",
+			gutter,
 			th.dim.Render(stamp),
 			m.hostStyle(e.alias).Render(fmt.Sprintf("%-14s│", trunc(e.alias, 14))),
 			text)
@@ -356,6 +396,71 @@ func (m tuiModel) logViewN(h int) string {
 
 // logStart is the first visible line: pinned to the tail while following, so
 // a running install keeps its newest output on screen without any input.
+// errViewN is the stderr pane: the same widget as the log, over the
+// stderr subset of the SAME buffer, so a line is never in one and missing from
+// the other. It exists because a host can write "WARNING: apt-get update
+// failed", exit 0, and otherwise look like a clean `ok`.
+func (m tuiModel) errViewN(h int) string {
+	if h < 0 {
+		h = 0
+	}
+	var body strings.Builder
+
+	// Styled label + plain count, concatenated rather than nested: lipgloss
+	// re-styles character by character, so wrapping already-rendered text
+	// strands its escape bytes as visible cells (the defect that pushed the
+	// log pane's title onto a second row).
+	title := th.header.Render("errors — stderr")
+	if lines, hosts := m.warnTotals(); lines > 0 {
+		title = th.header.Render("errors") + " " + th.warn.Render(fmt.Sprintf("⚠ %s on %s",
+			plural(lines, "warning"), plural(hosts, "host")))
+	}
+	entries := m.errEntries()
+	mode := "following"
+	if !m.errFollow {
+		mode = fmt.Sprintf("scrolled %d/%d", m.errTop+1, len(entries))
+	}
+	keys := "tab: focus  e: hide"
+	if m.errFocused() {
+		keys = th.markSel.Render("◀ keys here") + th.dim.Render("   gg/G  /  n/N  tab: back")
+		if m.errSearch.committed && m.errSearch.input != "" {
+			keys += th.dim.Render("   /" + m.errSearch.input)
+		}
+	}
+	body.WriteString(title + th.dim.Render("   "+mode+"   ") + keys + "\n")
+
+	if !m.errActive() {
+		return m.renderPanel(th.panel, th.dim.Render(
+			"⚠️  stderr: none captured — this pane fills when a host writes to stderr  (e: hide)"))
+	}
+
+	start := streamStart(m.errFollow, m.errTop, len(entries), h)
+	for i := start; i < len(entries) && i < start+h; i++ {
+		e := entries[i]
+		stamp := "        "
+		if !e.at.IsZero() {
+			stamp = e.at.Format("15:04:05")
+		}
+		text := trunc(e.line, m.logWidth()-logGutter)
+		if m.errSearch.re != nil && m.errSearch.re.MatchString(e.alias+" "+e.line) {
+			text = th.match.Render(text)
+		}
+		fmt.Fprintf(&body, " %s %s %s\n",
+			th.dim.Render(stamp),
+			m.hostStyle(e.alias).Render(fmt.Sprintf("%-14s│", trunc(e.alias, 14))),
+			text)
+	}
+	return m.renderPanel(th.panel, strings.TrimRight(body.String(), "\n"))
+}
+
+// plural keeps "1 warning on 1 host" from reading as a template bug.
+func plural(n int, noun string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, noun)
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
+}
+
 // hostStyle is a host's colour in the log pane. Assignment is by first
 // appearance and held in the model, so a host keeps ONE colour for the whole
 // session: colouring by line position instead would make a host's tag change
@@ -366,6 +471,20 @@ func (m tuiModel) hostStyle(alias string) lipgloss.Style {
 		return th.logHosts[i%len(th.logHosts)]
 	}
 	return th.statusBar
+}
+
+// streamStart is logStart's rule, parameterised so both panes share it.
+func streamStart(follow bool, top, n, h int) int {
+	if follow {
+		if s := n - h; s > 0 {
+			return s
+		}
+		return 0
+	}
+	if top > n-1 {
+		return maxInt(0, n-1)
+	}
+	return top
 }
 
 func (m tuiModel) logStart(h int) int {
@@ -529,6 +648,12 @@ func (m tuiModel) updateCell(alias string) string {
 	case updRunning:
 		return th.running.Render(m.spinner + " updating")
 	case updOK:
+		// A run can exit 0 having written warnings to stderr — a host that
+		// half-installed and reported success is the worst outcome this tool
+		// can produce, so the row says so without anyone opening a pane.
+		if n := m.warns[alias]; n > 0 {
+			return th.ok.Render("ok") + " " + th.warn.Render(fmt.Sprintf("⚠%d", n))
+		}
 		return th.ok.Render("ok")
 	case updFail:
 		msg := "FAIL"
@@ -619,6 +744,10 @@ func (m tuiModel) statusView() string {
 	}
 	if n := len(m.bgQueue) + len(m.iaQueue); n > 0 {
 		bits = append(bits, fmt.Sprintf("%d queued", n))
+	}
+	if lines, hosts := m.warnTotals(); lines > 0 {
+		bits = append(bits, th.warn.Render(fmt.Sprintf("⚠ %s on %s",
+			plural(lines, "warning"), plural(hosts, "host"))))
 	}
 	line := th.statusBar.Render(strings.Join(bits, " · "))
 	if m.status != "" {

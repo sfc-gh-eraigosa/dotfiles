@@ -129,12 +129,34 @@ so ten sleeping hosts cost about one budget of wall clock rather than ten. Use
 
 ### `fleet tui`
 
-```
-╭────────────────────────────────────────────────────────────────────────────────╮
-│ 🛰️  fleet 0.1.0 (40b4953)                                                      │
-│ ❓ ?: help   🔍 /: search   ● space: selection   🚀 u: update                  │
-│ 📜 l: log pane   🖥️ s: ssh   🔄 r: refresh   🚪 q: quit                        │
-╰────────────────────────────────────────────────────────────────────────────────╯
+Real output — `FLEET_DEMO=1 go test ./cmd/ -run TestDemoFrames` frame 14, with all three
+panes open:
+
+```text
+╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ 🛰️  fleet dev (none)                                                                           │
+│ ❓ ?: help  🔍 /: search  ● space: selection  🚀 u: update  📜 l: log pane                     │
+│ 🗂️ h: host list  ⚠️ e: stderr pane  🖥️ s: ssh  🔄 r: refresh  🚪 q: quit                       │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+│     HOST             COMMIT    BRANCH           LAST RUN      STATUS                 UPDATE    │
+│ >   host-desktop     72392c9   main             2h ago        up-to-date                       │
+│     host-edge        -         -                -             unknown (corrupt stamp)          │
+│     host-lab         abc1234   feature/gff≠main 3h ago        divergent                        │
+│     host-nano        9484943   main             2w ago        behind 24                        │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ logs   following   tab: focus  l: hide                                                         │
+│ !19:12:48 host-nano     │ WARNING: apt-get update failed; installs may be incomplete.          │
+│ !19:12:48 host-pi       │ WARNING: grouped install failed; retrying individually...            │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ errors — ⚠ 2 warnings on 2 hosts   following   tab: focus  e: hide                             │
+│  19:12:48 host-nano     │ WARNING: apt-get update failed; installs may be incomplete.          │
+│  19:12:48 host-pi       │ WARNING: grouped install failed; retrying individually...            │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+1/5 · ⚠ 2 warnings on 2 hosts
 ```
 
 The interactive dashboard. Framed panels provide unified visual structure and clear
@@ -162,16 +184,37 @@ fleet tui --update-ref feature/x         # update targets that ref instead of ma
 | `u` | update the selection (or the cursor host) |
 | `w` | wake the selection (or the cursor host) — rows tick `waking ⠋` |
 | `F` | forget the remembered answers (including the saved preferences) |
-| `e` | on the confirm strip: edit the remembered answers |
 | `s` | ssh to the cursor host |
-| `l` | show / hide the streaming log pane |
-| `tab` | move the vim keys between the host list and the log pane |
+| `h` | show / hide the **host list** |
+| `l` | show / hide the streaming **log** pane |
+| `e` | show / hide the **stderr** pane (off by default) · on the confirm strip: edit the remembered answers |
+| `tab` | move the vim keys between the visible panes |
 | `J` / `K` | scroll the log pane |
-| `gg` / `G` | (log focused) first line / resume following the tail |
-| `/` `n` `N` | (log focused) search the log, next / previous match |
+| `gg` / `G` | (a stream pane focused) first line / resume following the tail |
+| `/` `n` `N` | (a stream pane focused) search that pane, next / previous match |
 | `r` | refresh |
 | `?` | help overlay |
 | `q` | quit (guarded while updates run) |
+
+#### Three panes
+
+The dashboard is three stacked panels you compose. The host table is on top; the log stream and
+the stderr stream share the bottom. Hide any of them and the rest take the space — one visible
+pane fills the viewport. Hiding the last one is refused, so there is no blank-screen state.
+
+The **stderr pane** exists because a host can print
+
+```
+WARNING: apt-get update failed; installs may be incomplete.
+```
+
+on stderr, exit **0**, and look like a clean `ok`. stdout and stderr are streamed on separate
+pipes now, so that line lands in the error pane, keeps a `!` gutter in the log (which still
+shows everything, in arrival order), and puts `ok ⚠1` on the host's row without you opening
+anything. Routine ssh/git/sudo chatter — `Warning: Permanently added …`, git's progress, the
+sudo prompt echo — is excluded from the count, or every host would wear a ⚠ after every fetch.
+The per-host capture under `~/.local/state/fleet/logs/` marks the same lines with `!! `, so a
+headless `fleet update` can be read the same way afterwards.
 
 The status dot left of each hostname is **navy** when selected, and flips
 **green** or **red** to report an update's outcome — so a finished wave reads at

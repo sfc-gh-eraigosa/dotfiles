@@ -92,7 +92,7 @@ func TestViewNeverExceedsTerminalHeight(t *testing.T) {
 		}},
 		{"long-lined update, log focused and scrolled", func(m *tuiModel) {
 			m.logOpen = true
-			m.logFocus = true
+			m.focus = paneLog // focus is the pane field now; logFocus no longer exists
 			m.logFollow = false
 			m.logTop = 5
 			for i := 0; i < 60; i++ {
@@ -125,6 +125,12 @@ func TestViewNeverExceedsTerminalHeight(t *testing.T) {
 // TestViewFitsAcrossEveryTerminalSize sweeps the sizes an operator can actually
 // drag a window to, in the state that produced the report: several hosts
 // streaming at once, with output long enough to wrap. Every frame must fit.
+//
+// It sweeps BOTH stream compositions: the log pane alone (it takes the whole
+// stream budget) and the log + error panes together (they split it). The
+// second is the fleet-error-view state and consumes more chrome, so it is the
+// harder fit. Sweeping it keeps a future height change from drifting the three-
+// pane layout at some size the two fixed golden frames happen not to hit.
 func TestViewFitsAcrossEveryTerminalSize(t *testing.T) {
 	// Run under a REAL colour profile, not the Ascii one init() pins. Under
 	// Ascii every style is a no-op, so the frame carries no escape bytes at
@@ -133,23 +139,39 @@ func TestViewFitsAcrossEveryTerminalSize(t *testing.T) {
 	lipgloss.SetColorProfile(termenv.ANSI256)
 	defer lipgloss.SetColorProfile(termenv.Ascii)
 
+	compositions := []struct {
+		name      string
+		configure func(*tuiModel)
+	}{
+		{"log-only", func(m *tuiModel) { m.logOpen = true }},
+		{"log+error", func(m *tuiModel) {
+			m.logOpen = true
+			m.errOpen = true
+		}},
+	}
+
 	for h := 8; h <= 60; h++ {
 		for w := 40; w <= 200; w += 7 {
-			m := layoutModel(h, w)
-			m.logOpen = true
-			m.streams = map[string]stream{"host-nano": {}, "host-pi": {}, "host-edge": {}}
-			for i := 0; i < 40; i++ {
-				m.appendLog("host-nano", strings.Repeat("x", 250))
-				m.appendLog("host-pi", fmt.Sprintf("Installing package %d...", i))
-			}
-			out := m.View()
-			if got := lipgloss.Height(out); got > h {
-				t.Fatalf("%dx%d: frame is %d lines, %d would be scrolled off the top",
-					w, h, got, got-h)
-			}
-			for _, line := range strings.Split(out, "\n") {
-				if wd := lipgloss.Width(line); wd > w {
-					t.Fatalf("%dx%d: line too wide (%d): %q", w, h, wd, stripANSI(line))
+			for _, comp := range compositions {
+				m := layoutModel(h, w)
+				comp.configure(&m)
+				m.streams = map[string]stream{"host-nano": {}, "host-pi": {}, "host-edge": {}}
+				for i := 0; i < 40; i++ {
+					m.appendLog("host-nano", strings.Repeat("x", 250))
+					m.appendLog("host-pi", fmt.Sprintf("Installing package %d...", i))
+				}
+				if m.errOpen {
+					m.appendLogLine("host-pi", "WARNING: apt-get update failed", true)
+				}
+				out := m.View()
+				if got := lipgloss.Height(out); got > h {
+					t.Fatalf("%s %dx%d: frame is %d lines, %d would be scrolled off the top",
+						comp.name, w, h, got, got-h)
+				}
+				for _, line := range strings.Split(out, "\n") {
+					if wd := lipgloss.Width(line); wd > w {
+						t.Fatalf("%s %dx%d: line too wide (%d): %q", comp.name, w, h, wd, stripANSI(line))
+					}
 				}
 			}
 		}

@@ -113,10 +113,25 @@ type StepIO interface {
 // updplan.KindRun steps — a sync or gh-auth script is never prefixed with a
 // sudo preamble, and never receives the operator's answers on stdin.
 type Console struct {
-	R        runner.Runner
-	Line     func(host, line string)
+	R    runner.Runner
+	Line func(host, line string)
+	// ErrLine receives the remote's STDERR when the runner can separate the
+	// streams (runner.SplitStreamer). Nil — the CLI's case — routes stderr to
+	// Line instead, which is byte for byte the behaviour before the split.
+	ErrLine  func(host, line string)
 	Stdin    func(st updplan.Step) string
 	Preamble func(st updplan.Step) string
+}
+
+// emit routes one line to the callback that owns its stream.
+func (c Console) emit(host string, l runner.Line) {
+	if l.Stderr && c.ErrLine != nil {
+		c.ErrLine(host, l.Text)
+		return
+	}
+	if c.Line != nil {
+		c.Line(host, l.Text)
+	}
 }
 
 // runScript prepends Preamble's text to script VERBATIM — no separator is
@@ -150,15 +165,28 @@ func (c Console) runStdin(st updplan.Step) string {
 // running when WaitDelay elapsed — that is runner plumbing, not a failure
 // of the remote command, so it is treated as success.
 func (c Console) Batch(ctx context.Context, host string, st updplan.Step, script string) (string, error) {
-	lines, done := c.R.RunStreamCtx(ctx, host, c.runStdin(st), c.runScript(st, script))
 	var out []string
-	for l := range lines {
-		if c.Line != nil {
-			c.Line(host, l)
+	var err error
+
+	// Prefer the split capability so stderr can be told from progress; a
+	// runner without it (every pre-existing test double) streams merged, and
+	// every line is stdout — exactly the behaviour before the split.
+	if ss, ok := c.R.(runner.SplitStreamer); ok {
+		lines, done := ss.RunSplitStreamCtx(ctx, host, c.runStdin(st), c.runScript(st, script))
+		for l := range lines {
+			c.emit(host, l)
+			out = append(out, l.Text)
 		}
-		out = append(out, l)
+		err = <-done
+	} else {
+		lines, done := c.R.RunStreamCtx(ctx, host, c.runStdin(st), c.runScript(st, script))
+		for l := range lines {
+			c.emit(host, runner.Line{Text: l})
+			out = append(out, l)
+		}
+		err = <-done
 	}
-	err := <-done
+
 	if errors.Is(err, exec.ErrWaitDelay) && !isExitError(err) {
 		err = nil
 	}
@@ -247,26 +275,44 @@ func (b Background) Interactive(ctx context.Context, host string, st updplan.Ste
 // banners and never the remote command's own output (e.g. git's `fatal:`
 // text reached neither the terminal nor the log).
 type teeable interface {
-	withLine(func(host, line string)) StepIO
+	withLines(out, err func(host, line string)) StepIO
 }
 
-// withLine returns a copy of c whose Line callback ALSO invokes fn, after
-// any Line callback c already had.
-func (c Console) withLine(fn func(host, line string)) StepIO {
-	orig := c.Line
+// stderrMark prefixes a stderr line in a host's captured log. Without it a
+// post-mortem of a headless run cannot tell a warning from progress — the
+// distinction exists on the wire now, and throwing it away at the capture is
+// where it would be lost for good.
+const stderrMark = "!! "
+
+// withLines returns a copy of c whose callbacks ALSO invoke out/err, after
+// whatever callbacks c already had.
+func (c Console) withLines(out, err func(host, line string)) StepIO {
+	origOut, origErr := c.Line, c.ErrLine
 	c.Line = func(host, line string) {
-		if orig != nil {
-			orig(host, line)
+		if origOut != nil {
+			origOut(host, line)
 		}
-		fn(host, line)
+		out(host, line)
+	}
+	c.ErrLine = func(host, line string) {
+		// Route to the ORIGINAL ErrLine when the caller had one; otherwise the
+		// caller wanted stderr on Line (the nil rule) and must keep getting it.
+		// Setting ErrLine here would otherwise silently change what a caller
+		// with ErrLine == nil sees.
+		if origErr != nil {
+			origErr(host, line)
+		} else if origOut != nil {
+			origOut(host, line)
+		}
+		err(host, line)
 	}
 	return c
 }
 
-// withLine on Background rewires its embedded Console the same way, while
+// withLines on Background rewires its embedded Console the same way, while
 // keeping Background's own Interactive override.
-func (b Background) withLine(fn func(host, line string)) StepIO {
-	b.Console = b.Console.withLine(fn).(Console)
+func (b Background) withLines(out, err func(host, line string)) StepIO {
+	b.Console = b.Console.withLines(out, err).(Console)
 	return b
 }
 
@@ -365,7 +411,13 @@ func (e Executor) RunHost(host string, p updplan.Plan) HostReport {
 	// feeds its log pane). Without this, a caller that never wires its own
 	// Line into the capture gets a log containing only the step banners.
 	if t, ok := e.IO.(teeable); ok {
-		e.IO = t.withLine(func(_, line string) { w.Line(line) })
+		e.IO = t.withLines(
+			func(_, line string) { w.Line(line) },
+			// The prefix is applied unconditionally: RunHost has a value
+			// receiver, so its rewired e.IO never escapes this call and there
+			// is no path that tees twice.
+			func(_, line string) { w.Line(stderrMark + line) },
+		)
 	}
 
 	rep := HostReport{Host: host, Plan: p.Source, Started: started, Output: path}

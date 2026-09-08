@@ -122,7 +122,7 @@ func TestTabMovesTheVimKeysToTheLog(t *testing.T) {
 	cursorBefore := m.cursor
 
 	focused, _ := send(m, "tab")
-	if !focused.logFocus {
+	if !focused.logFocused() {
 		t.Fatal("tab must move focus to the log")
 	}
 	moved, _ := send(focused, "j")
@@ -142,7 +142,7 @@ func TestTabMovesTheVimKeysToTheLog(t *testing.T) {
 		t.Fatal("G means 'show me the newest', i.e. resume following")
 	}
 	back, _ := send(end, "tab")
-	if back.logFocus {
+	if back.logFocused() {
 		t.Fatal("tab must return the keys to the host list")
 	}
 }

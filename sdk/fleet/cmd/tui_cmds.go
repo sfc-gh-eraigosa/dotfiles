@@ -40,8 +40,12 @@ type (
 	}
 	spinnerTickMsg int
 
-	// logLineMsg carries one streamed output line from an in-flight update.
-	logLineMsg struct{ alias, line string }
+	// logLineMsg carries one streamed output line from an in-flight update,
+	// tagged with the stream that produced it.
+	logLineMsg struct {
+		alias, line string
+		stderr      bool
+	}
 	// logEOFMsg says a host's stream ended; the completion arrives separately
 	// on doneCh, so the two are joined in the model.
 	logEOFMsg struct{ alias string }
@@ -52,10 +56,17 @@ type (
 	}
 )
 
+// outLine is one streamed line plus the stream it came from — the tag has to
+// survive the queue and the channel, or the error pane has nothing to filter on.
+type outLine struct {
+	text   string
+	stderr bool
+}
+
 // stream is one host's in-flight output channels, parked in the model so the
 // reader Cmd can be re-issued after every line.
 type stream struct {
-	lines <-chan string
+	lines <-chan outLine
 	done  <-chan error
 }
 
@@ -277,7 +288,7 @@ func bgPreamble(a answers) func(updplan.Step) string {
 type lineQueue struct {
 	mu     sync.Mutex
 	cond   *sync.Cond
-	buf    []string
+	buf    []outLine
 	closed bool
 }
 
@@ -290,7 +301,7 @@ func newLineQueue() *lineQueue {
 // push never blocks: it only grows a slice and signals, so the executor's
 // Line callback returns immediately regardless of whether anything is
 // reading.
-func (q *lineQueue) push(l string) {
+func (q *lineQueue) push(l outLine) {
 	q.mu.Lock()
 	q.buf = append(q.buf, l)
 	q.mu.Unlock()
@@ -309,7 +320,7 @@ func (q *lineQueue) closeQ() {
 // nobody is reading — safe here because forward runs in its own goroutine,
 // never on the executor's call path. It closes ch once q is closed and
 // fully drained, exactly like closing a plain channel would.
-func (q *lineQueue) forward(ch chan<- string) {
+func (q *lineQueue) forward(ch chan<- outLine) {
 	for {
 		q.mu.Lock()
 		for len(q.buf) == 0 && !q.closed {
@@ -346,7 +357,7 @@ func beginStream(alias string, plan updplan.Plan, a answers, r runner.Runner, di
 	preamble := bgPreamble(a)
 	reset := a.forceReset()
 	return func() tea.Msg {
-		lines := make(chan string)
+		lines := make(chan outLine)
 		done := make(chan error, 1)
 
 		q := newLineQueue()
@@ -354,8 +365,9 @@ func beginStream(alias string, plan updplan.Plan, a answers, r runner.Runner, di
 
 		ex := updexec.Executor{
 			IO: updexec.Background{Console: updexec.Console{
-				R:    r,
-				Line: func(_, l string) { q.push(l) },
+				R:       r,
+				Line:    func(_, l string) { q.push(outLine{text: l}) },
+				ErrLine: func(_, l string) { q.push(outLine{text: l, stderr: true}) },
 				Stdin: func(st updplan.Step) string {
 					if st.Kind != updplan.KindRun {
 						return ""
@@ -391,7 +403,7 @@ func readLine(alias string, st stream) tea.Cmd {
 		if !ok {
 			return logEOFMsg{alias: alias}
 		}
-		return logLineMsg{alias: alias, line: l}
+		return logLineMsg{alias: alias, line: l.text, stderr: l.stderr}
 	}
 }
 

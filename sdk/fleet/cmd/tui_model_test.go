@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -39,6 +41,8 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeySpace}
 	case "backspace":
 		return tea.KeyMsg{Type: tea.KeyBackspace}
+	case "tab":
+		return tea.KeyMsg{Type: tea.KeyTab}
 	case "ctrl+d":
 		return tea.KeyMsg{Type: tea.KeyCtrlD}
 	case "ctrl+u":
@@ -556,4 +560,25 @@ func TestQuitIsGuardedWhileUpdatesRun(t *testing.T) {
 	if _, cmd := send(m2, "q"); cmd == nil {
 		t.Fatal("a second q must force the quit")
 	}
+}
+
+// settledTestModel is testModel with n hosts already resolved, for the pane and
+// stderr suites: a model full of `polling` rows renders differently from a
+// settled fleet, and the panes must hold for both.
+func settledTestModel(n int) tuiModel {
+	aliases := make([]string, 0, n)
+	for i := 1; i <= n; i++ {
+		aliases = append(aliases, fmt.Sprintf("h%d", i))
+	}
+	m := testModel(aliases...)
+	for i := range m.rows {
+		m.rows[i].Class = "up-to-date"
+		m.rows[i].Commit = "72392c9"
+		m.rows[i].Age = testNow.Add(-time.Hour)
+		m.rows[i].Branch = "main"
+		m.rows[i].InstalledBranch = "main"
+		delete(m.pending, m.rows[i].Alias)
+	}
+	m.resort()
+	return m
 }
