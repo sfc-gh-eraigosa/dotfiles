@@ -85,7 +85,7 @@ independent and can run in parallel off `main` once #287 is in.
 
 ## 6. Command cheat-sheet
 
-```
+```text
 cd sdk/gcfg && go test ./... -cover                 # unit + coverage
 cd sdk/gcfg && go vet ./...
 make gcfg-test gcfg-e2e                             # bars + binary e2e (once wired)

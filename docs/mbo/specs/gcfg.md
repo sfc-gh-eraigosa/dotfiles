@@ -67,7 +67,7 @@ it and re-verifies green.
 export --org` in `<org>/.github`. Flow: `org:` block with profile, member privileges,
 security defaults for new repos, Actions permissions, rulesets, and installed apps
 (report-only). Acceptance: the same file in any other repo fails lint with "org block
-only allowed in <org>/.github".
+only allowed in `<org>/.github`".
 
 ## 3. Architecture
 

@@ -52,7 +52,7 @@ on 2026-09-05):
 
 ## 2. Goals & non-goals
 
-**Goals**
+### Goals
 
 - G1 One file, `.github/gcfg.yaml`, declares a repo's GitHub settings (and, in an
   org's `.github` repo only, that org's settings). Each repo carries its own file.
@@ -77,7 +77,7 @@ on 2026-09-05):
   are managed by **name/presence** only. Nothing gcfg writes to the repo can leak a
   credential; the privacy guard and gitleaks judge its output like any other file.
 
-**Non-goals (v1)**
+### Non-goals (v1)
 
 - Multi-repo fan-out from one file (safe-settings' model). One repo, one org, one file.
 - Team/membership management, billing, GitHub Pages content, Discussions categories.
@@ -168,9 +168,9 @@ Units, each independently testable:
   `plan`, `apply`, `tui`, `actions install verify|apply`, `auth status|doctor|pat|app`,
   `version`.
 
-**Data flow**
+### Data flow
 
-```
+```text
 .github/gcfg.yaml ──lint──▶ desired ──┐
                                       ├─ diff ──▶ findings ──▶ {tty, --json, --markdown, TUI}
 GitHub REST (token) ──read──▶ live ───┘                │

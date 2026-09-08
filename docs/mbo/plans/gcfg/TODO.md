@@ -13,11 +13,11 @@
 > `ALLOWLIST` `.gitignore` check · `DOCS` · `COMMIT` · `LEDGER` update TRACKING.md ·
 > `CHECKPOINT` push/PR refresh.
 
-> **Where this stands (2026-09-07):** P0 and P1 are complete and merged-ready in
-> [#287](https://github.com/sfc-gh-eraigosa/dotfiles/pull/287) — module coverage
-> 91.1%, `internal/engine` 91.6%, `internal/schema` 94.8%, UC1–UC3 evidenced live
-> on this repo. **The first unchecked box below is P2-T1 (rulesets family).** The
-> one P0 leftover is the human `ghapp create`, tracked in its own box.
+**Where this stands (2026-09-07):** P0 and P1 are complete and merged-ready in
+[#287](https://github.com/sfc-gh-eraigosa/dotfiles/pull/287) — module coverage
+91.1%, `internal/engine` 91.6%, `internal/schema` 94.8%, UC1–UC3 evidenced live
+on this repo. **The first unchecked box below is P2-T1 (rulesets family).** The
+one P0 leftover is the human `ghapp create`, tracked in its own box.
 
 ## Preflight (once)
 
@@ -30,6 +30,7 @@
 ---
 
 ### P0-T1 — ghapp scaffold + version  (plan P0-T1)
+
 - [x] SETUP: `sdk/ghapp/{go.mod,main.go,build.sh}` mirroring `sdk/gff` (module path with `sdk/`), `internal/version`
 - [x] RED: `cmd/version_test.go` expects a non-empty version string from ldflags default `dev`
 - [x] RUN-RED: `cd sdk/ghapp && go test ./cmd/` → expect **FAIL**
@@ -42,6 +43,7 @@
 **Done when:** CI green on the worker PR; version prints.
 
 ### P0-T2 — store + JWT  (plan P0-T2)
+
 - [x] RED: `pkg/ghapp/store_test.go` (0700 dir, 0600 PEM, round-trip, refuse 0644 PEM); `jwt_test.go` (RS256, iss/iat/exp, verifies with pubkey)
 - [x] RUN-RED → **FAIL**
 - [x] GREEN: `store.go`, `jwt.go` (golang-jwt/v5)
@@ -50,6 +52,7 @@
 - [x] LEDGER + CHECKPOINT
 
 ### P0-T3 — installation tokens  (plan P0-T3)
+
 - [x] RED: httptest stub for `GET /app/installations`, `POST /app/installations/{id}/access_tokens`; cache hit/miss around expiry-2m; scoping body; token-leak grep on logs
 - [x] RUN-RED → **FAIL**
 - [x] GREEN: `token.go`, `installs.go`
@@ -58,6 +61,7 @@
 - [x] LEDGER + CHECKPOINT
 
 ### P0-T4 — manifest flow + CLI  (plan P0-T4)
+
 - [x] RED: `manifest_test.go` (listener + port fallback; form fields; conversion exchange via stub; expired code error; injected browser opener); cmd tests for `create/install/token/status/doctor`
 - [x] RUN-RED → **FAIL**
 - [x] GREEN: `manifest.go`, cmd verbs
@@ -68,11 +72,13 @@
 **Done when:** ghapp-ci green; token mint evidence captured.
 
 ### P1-T1 — gcfg scaffold + CI  (plan P1-T1)
+
 - [x] SETUP/RED/GREEN as P0-T1 for `sdk/gcfg`; `gcfg-ci.yml` with 80/90/90 gates + schema-drift placeholder
 - [x] COMMIT: `feat(gcfg): module scaffold + version + CI`
 - [x] LEDGER + CHECKPOINT
 
 ### P1-T2 — schema load + lint + JSON Schema  (plan P1-T2)
+
 - [x] RED: `internal/schema/load_test.go` (unknown key path error; all-optional; per-family ownership), `lint_test.go` (org block outside `.github`; dup names; enums; secret-shaped value), `jsonschema_test.go` (golden)
 - [x] RUN-RED → **FAIL**
 - [x] GREEN: `types.go`, `load.go`, `lint.go`, `jsonschema.go`; `gcfg lint`, `gcfg schema`
@@ -81,6 +87,7 @@
 - [x] LEDGER + CHECKPOINT
 
 ### P1-T3 — gh client + credential chain  (plan P1-T3)
+
 - [x] RED: `internal/gh/fake_test.go` (records calls, serves fixtures), `auth_test.go` (order GH_TOKEN → GITHUB_TOKEN → gh login → ghapp; none → error), `cmd/auth_status_test.go` (never prints token)
 - [x] RUN-RED → **FAIL**
 - [x] GREEN: `client.go`, `real.go` (go-gh REST, retry, Retry-After), `fake.go`, `auth.go`
@@ -89,6 +96,7 @@
 - [x] LEDGER + CHECKPOINT
 
 ### P1-T4 — family model + general + security  (plan P1-T4)
+
 - [x] RED: `family_test.go` (registry), `general/general_test.go`, `security/security_test.go`: Read from fixture; Export golden; Diff matrix (declared/full/missing/not-honoured); Apply records PATCH body
 - [x] RUN-RED → **FAIL**
 - [x] GREEN
@@ -97,6 +105,7 @@
 - [x] LEDGER + CHECKPOINT
 
 ### P1-T5 — engine + renderers  (plan P1-T5)
+
 - [x] RED: `engine/{export,verify,plan,apply,ownership}_test.go` (clean; drift; unreadable→finding; full extras; apply→re-read→not-honoured survives; call order), `report/*_test.go` goldens (tty/json/markdown)
 - [x] RUN-RED → **FAIL**
 - [x] GREEN
@@ -105,6 +114,7 @@
 - [x] LEDGER + CHECKPOINT
 
 ### P1-T6 — verbs export/verify/plan/apply/init  (plan P1-T6)
+
 - [x] RED: `cmd/{export,verify,plan,apply,init}_test.go` (exit codes; non-TTY apply w/o --yes → 2 and zero writes; --only; init golden; --from via fake; refuse overwrite; token grep)
 - [x] RUN-RED → **FAIL**
 - [x] GREEN
@@ -115,7 +125,9 @@
 **Done when:** gcfg-ci green 80/90/90; UC1–UC3 evidence captured.
 
 ### P2-T1 … P2-T10 — families  (plan P2)
+
 For each family in plan order (rulesets · actions · labels · autolinks · environments · secrets+webhooks · collaborators+pages · org profile+members+security_defaults · org actions+rulesets · org apps):
+
 - [ ] RED: `<family>_test.go` (fixture Read; Export golden; Diff matrix; Apply body; pagination where relevant; rulesets: import of `.github/rulesets/*.json`)
 - [ ] RUN-RED → **FAIL**
 - [ ] GREEN
@@ -124,52 +136,63 @@ For each family in plan order (rulesets · actions · labels · autolinks · env
 - [ ] LEDGER + CHECKPOINT
 
 ### P3-T1 — auth doctor + pat  (plan P3-T1)
+
 - [ ] RED: probe matrix over fake (read/write per family; 403 → permission name; org scope message); `pat --check` from stdin; token grep
 - [ ] RUN-RED → **FAIL** · GREEN · RUN-GREEN → **PASS**
 - [ ] VERIFY (live): `gcfg auth doctor` with gh token → `evidence/auth/`
 - [ ] COMMIT: `feat(gcfg): auth doctor + pat checklist` · LEDGER + CHECKPOINT
 
 ### P3-T2 — auth app wrappers  (plan P3-T2)
+
 - [ ] RED/GREEN thin verbs over `pkg/ghapp`; VERIFY (live): `gcfg auth doctor --auth app` → `evidence/auth/`
 - [ ] COMMIT: `feat(gcfg): auth app verbs` · LEDGER + CHECKPOINT
 
 ### P3-T3 — actions install/uninstall  (plan P3-T3)
+
 - [ ] RED: render goldens ×{verify,apply}×{app,pat}; pinned version+checksum; refuse overwrite; uninstall only ours; actionlint step in gcfg-ci
 - [ ] RUN-RED → **FAIL** · GREEN · RUN-GREEN → **PASS** · VERIFY: `actionlint` on goldens
 - [ ] COMMIT: `feat(gcfg): actions install verify|apply` · LEDGER + CHECKPOINT
 
 ### P3-T4 — e2e harness  (plan P3-T4)
+
 - [ ] RED: `scripts/e2e.sh` scenario list fails (no binary path yet) · GREEN · RUN-GREEN: `make gcfg-e2e` → **PASS**
 - [ ] COMMIT: `test(gcfg): binary-level e2e` · LEDGER + CHECKPOINT
 
 ### P4-T1 — TUI navigation + search  (plan P4-T1)
+
 - [ ] RED teatest goldens (tree, j/k/gg/G, h/l fold, `/` smartcase + n/N, `?`, tiny terminal) · GREEN · RUN-GREEN
 - [ ] COMMIT: `feat(gcfg): tui navigation + search` · LEDGER + CHECKPOINT
 
 ### P4-T2 — TUI editors + write-back  (plan P4-T2)
+
 - [ ] RED (editors, `u`, `w` writes only changed keys with comments kept, quit-unsaved prompt, byte-identical without `w`) · GREEN · RUN-GREEN
 - [ ] COMMIT: `feat(gcfg): tui editors + write-back` · LEDGER + CHECKPOINT
 
 ### P4-T3 — TUI verify/apply  (plan P4-T3)
+
 - [ ] RED (`v` colors; `a` plan+confirm+apply via fake; recolor) · GREEN · RUN-GREEN
 - [ ] COMMIT: `feat(gcfg): tui verify + apply` · LEDGER + CHECKPOINT
 
 ### P5-T1 — wiring  (plan P5-T1)
+
 - [ ] `install.sdk.gcfg` in `.github/gff/features.yaml`; install.sh block (builds gcfg + ghapp); Makefile targets; `sdk/AGENTS.md` + `sdk/README.md` rows/sections; module docs
 - [ ] VERIFY: `bash -n install.sh`; `make lint-shell lint-portability`; `make -n gcfg-test gcfg-verify`
 - [ ] COMMIT: `feat(install): build gcfg + ghapp behind install.sdk.gcfg` · LEDGER + CHECKPOINT
 
 ### P5-T2 — this repo's gcfg.yaml + schema + CI verify  (plan P5-T2)
+
 - [ ] `gcfg export` → `.github/gcfg.yaml` (review; rulesets imported); `gcfg schema` → `.github/gcfg.schema.json`
 - [ ] `make gcfg-verify` job in `gcfg-ci.yml` (skips with notice when the secret is absent)
 - [ ] VERIFY: job green on the PR → `evidence/adoption/`
 - [ ] COMMIT: `feat(github): declare this repo's settings in .github/gcfg.yaml` · LEDGER + CHECKPOINT
 
 ### P5-T3 — workflows installed  (plan P5-T3)
+
 - [ ] `gcfg actions install both`; first verify run green; drift PR red → apply → green; logs → `evidence/actions/`
 - [ ] COMMIT: `feat(github): gcfg verify + apply workflows` · LEDGER + CHECKPOINT
 
 ### P5-T4 — retire the one-offs  (plan P5-T4)
+
 - [ ] VERIFY precondition: P5-T2 job green on main
 - [ ] remove `opt/scripts/git/{github_secret_scanning,ruleset_snapshot}.sh` (+tests), Makefile targets, AGENTS bullets, `.github/rulesets/main.json`
 - [ ] VERIFY: `make shell-test hook-test`; `grep -rn 'secret_scanning.sh\|ruleset_snapshot' .` empty
