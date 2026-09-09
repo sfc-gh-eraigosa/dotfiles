@@ -15,6 +15,27 @@ function install_zsh_centos7() {
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 export BASE_DIR
 
+# --- Self-sufficient PATH -----------------------------------------------------
+# This script INSTALLS into ~/opt/bin (sops, yq, kubectl, helm, kind, and every
+# sdk/ binary) and ~/.local/bin (pipx CLIs, agy, claude) and then immediately
+# CONSUMES those tools — install_ai_teams.sh and sync-plugins.sh both hard-require
+# `yq`, the gff early-export below probes `command -v gff`.
+#
+# Those directories are only added to PATH by ~/.profile, which is sourced by
+# LOGIN shells. `fleet update <host>` runs install.sh over `ssh -t host "...
+# ./install.sh"` — a NON-login shell — so PATH lacked both, and the run failed
+# with a cascade of "installed but not resolvable" errors ("yq not resolvable
+# after install", "sync-plugins: 'yq' not found", "install_ai_teams: yq is
+# required"). Make the script independent of the caller's shell startup files.
+for _ip_dir in "${HOME}/opt/bin" "${HOME}/.local/bin"; do
+  case ":${PATH}:" in
+    *":${_ip_dir}:"*) ;;                    # already present — don't duplicate
+    *) PATH="${_ip_dir}:${PATH}" ;;
+  esac
+done
+unset _ip_dir
+export PATH
+
 # gff_on is env-only and fail-open; it must exist before the FIRST gate. Sourcing
 # it here (not at the bootstrap point) is load-bearing: a gate that calls an
 # undefined gff_on gets exit 127, takes the else branch, and SKIPS the step —
@@ -63,8 +84,8 @@ unset _ip_prev _ip_arg
 #   - CONFIG / SKILL / SYMLINK / any repo-content step -> _IP_CONFIG_FLAGS. Runs
 #     in the per-commit config layer; omitting it BAKES the step into the cached
 #     deps layer, so later edits to it stop taking effect per commit (a bug).
-_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES"
-_IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_K8S INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM"
+_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_TOOLS_HERDR_CONFIG INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
+_IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM INSTALL_SHELL_OH_MY_ZSH_UPDATE"
 apply_install_phase() {
   case "$INSTALL_PHASE" in
     deps)   for _f in $_IP_CONFIG_FLAGS; do export "GFF_${_f}=false"; done ;;
@@ -171,6 +192,18 @@ if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
 fi
 else gff_skip_msg install.system.jetson; fi
 
+# NVIDIA DGX / discrete-GPU hosts (DGX Spark, workstation dGPU). Deliberately
+# separate from the Jetson block above: a Jetson runs L4T and gets jtop, while
+# a DGX Spark runs DGX OS on stock Ubuntu where jtop cannot work at all.
+# setup_gpu.sh self-guards (no-ops on Jetson and on GPU-less hosts), so this
+# stays inert everywhere else.
+if gff_on install.system.gpu; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/setup_gpu.sh" ]; then
+    bash "${BASE_DIR}/opt/scripts/system/setup_gpu.sh" ||
+      echo "WARNING: GPU monitoring setup reported problems; continuing."
+  fi
+else gff_skip_msg install.system.gpu; fi
+
 if gff_on install.shell.profiles; then
 while IFS= read -r file; do
     filename=$(basename "$file")
@@ -190,6 +223,32 @@ for file in ".profile" ".zprofile" ".zshenv" ".zshrc" ".bash_logout" ".bashrc"; 
   ln -sf "${BASE_DIR}/opt/profiles/${file}" "${HOME}/${file}"
 done
 else gff_skip_msg install.shell.profiles; fi
+
+# macOS-style keyboard layout on Linux — the counterpart to the Cmd-key mapping
+# macos.ahk applies on Windows, so one set of muscle memory works on every
+# machine. Two halves, both self-guarding (a no-op off a real desktop session, so
+# CI, docker, WSL, plain SSH and macOS are unaffected):
+#   1. gnome-desktop-defaults.sh — gsettings: the desktop-level ACTIONS
+#      (Cmd+Space/Tab/M/H, an inert lone-Cmd tap).
+#   2. macos-keys-linux.sh — keyd: the in-application EDITING keys, which is what
+#      makes Cmd+C work in Firefox/VS Code/Nautilus and not just the terminal.
+# Both sit under keyboard.macos.enabled, the one switch that turns macOS-style
+# keyboard customization off on EVERY OS (see the README section of the same name).
+if gff_on keyboard.macos.enabled; then
+
+  if gff_on install.desktop.gnome-keys; then
+  if [ -x "${BASE_DIR}/opt/scripts/system/gnome-desktop-defaults.sh" ]; then
+    "${BASE_DIR}/opt/scripts/system/gnome-desktop-defaults.sh" || echo "WARNING: GNOME desktop defaults reported problems; continuing."
+  fi
+  else gff_skip_msg install.desktop.gnome-keys; fi
+
+  if gff_on install.desktop.macos-keys; then
+  if [ -x "${BASE_DIR}/opt/scripts/system/macos-keys-linux.sh" ]; then
+    "${BASE_DIR}/opt/scripts/system/macos-keys-linux.sh" || echo "WARNING: macOS key mappings reported problems; continuing."
+  fi
+  else gff_skip_msg install.desktop.macos-keys; fi
+
+else gff_skip_msg keyboard.macos.enabled; fi
 
 # Shared skill sync — links every SKILL.md into BOTH ~/.gemini/config/skills
 # (Antigravity) and ~/.claude/skills (Claude). Single source of truth for both
@@ -215,6 +274,57 @@ if gff_on install.ai.claude; then
     "${BASE_DIR}/opt/scripts/system/install_claude_skills.sh"
   fi
 else gff_skip_msg install.ai.claude; fi
+
+# Git privacy hooks (global core.hooksPath): judge staged content, commit
+# messages and outgoing commits WHATEVER wrote them — the layer behind the
+# agent-side privacy_guard, which only sees tool calls. Same rule library
+# (ai/hooks/privacy_rules.sh); chains to any repo-local hook.
+if gff_on install.git.hooks; then
+  if [ -f "${BASE_DIR}/opt/scripts/git/install_git_hooks.sh" ]; then
+    "${BASE_DIR}/opt/scripts/git/install_git_hooks.sh"
+  fi
+else gff_skip_msg install.git.hooks; fi
+
+# gitleaks: the broad, upstream-maintained secret ruleset the privacy guard
+# (agent hook + git hooks) judges with when the binary is present; our built-in
+# shapes stay as the floor. Flag off => install nothing AND tell the hooks to
+# skip it (marker file), so a binary from elsewhere does not re-enable it.
+# Every judged call is timed; `make hook-timing` reports and goes red over budget.
+if gff_on install.git.gitleaks; then
+  if [ -f "${BASE_DIR}/opt/scripts/git/install_gitleaks.sh" ]; then
+    "${BASE_DIR}/opt/scripts/git/install_gitleaks.sh" || echo "WARN: gitleaks install failed; the privacy guard keeps its built-in secret shapes"
+  fi
+else
+  gff_skip_msg install.git.gitleaks
+  [ -f "${BASE_DIR}/opt/scripts/git/install_gitleaks.sh" ] && "${BASE_DIR}/opt/scripts/git/install_gitleaks.sh" --off
+fi
+
+# herdr agent integrations (`herdr integration install claude|antigravity-cli`):
+# the hook scripts that report each agent's working/blocked/done state to the
+# herdr sidebar. install_antigravity_skills.sh MERGES its `guards` entry into
+# ~/.gemini/config/hooks.json (agy-parity unit 4), so herdr's entry survives
+# either ordering; running after it just keeps the sequence readable. Only
+# integrations whose agent CLI is present are installed; the binary itself is
+# the deps-phase install.tools.herdr block.
+if gff_on install.tools.herdr-integrations; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_herdr.sh" ]; then
+    echo "Installing herdr agent integrations..."
+    "${BASE_DIR}/opt/scripts/system/install_herdr.sh" integrations || echo "WARNING: herdr integrations reported problems; continuing."
+  fi
+else gff_skip_msg install.tools.herdr-integrations; fi
+
+# herdr managed config (~/.config/herdr/config.toml): herdr paints its own
+# sidebar/panel colors, and its default dark catppuccin theme is unreadable on
+# a Solarized Light terminal profile. The rendered template turns on herdr's
+# host light/dark following with the fleet Solarized pair, so the right palette
+# is picked per terminal profile at runtime. The host owns the file: it is only
+# rewritten while it carries the "managed by dotfiles" marker.
+if gff_on install.tools.herdr-config; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_herdr.sh" ]; then
+    echo "Installing herdr config..."
+    "${BASE_DIR}/opt/scripts/system/install_herdr.sh" config || echo "WARNING: herdr config reported problems; continuing."
+  fi
+else gff_skip_msg install.tools.herdr-config; fi
 
 NIX_MANAGED_FILE="${HOME}/.config/nix_managed"
 
@@ -251,10 +361,36 @@ else
   if gff_on install.shell.default-zsh; then
   ZSH_PATH="$(command -v zsh || true)"
   if [ -n "$ZSH_PATH" ]; then
-    if [ "$SHELL" != "$ZSH_PATH" ]; then
+    # Compare against the PASSWD entry, not $SHELL. $SHELL is frozen at login,
+    # so after a chsh it stays stale for the life of the session — testing it
+    # re-runs `sudo chsh` on every install until the user logs out.
+    # (macOS has no getent; fall back to $SHELL there.)
+    if command -v getent &> /dev/null; then
+      CURRENT_LOGIN_SHELL="$(getent passwd "${USER:-$(id -un)}" | cut -d: -f7)"
+    else
+      CURRENT_LOGIN_SHELL="$SHELL"
+    fi
+    if [ "$CURRENT_LOGIN_SHELL" != "$ZSH_PATH" ]; then
       echo "Changing default shell to zsh ($ZSH_PATH)..."
       # ${USER:-$(id -un)} so chsh still gets a real name in non-login/root shells.
       sudo chsh -s "$ZSH_PATH" "${USER:-$(id -un)}" || echo "WARNING: could not change default shell to zsh."
+    fi
+
+    # chsh only rewrites /etc/passwd. The running session keeps the old $SHELL,
+    # and VTE/gnome-terminal prefers $SHELL OVER the passwd entry — so every new
+    # terminal keeps opening the previous shell until the next logout. Push the
+    # new value into the systemd user manager and the D-Bus activation env so
+    # D-Bus-activated terminals (gnome-terminal-server) pick it up on their next
+    # start. Best-effort: absent on macOS and in containers.
+    if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+      if command -v systemctl &> /dev/null; then
+        systemctl --user set-environment "SHELL=${ZSH_PATH}" 2>/dev/null || true
+      fi
+      # Pass the VALUE explicitly. A bare `--systemd SHELL` re-reads $SHELL from
+      # THIS process — still the OLD shell — and silently clobbers the line above.
+      if command -v dbus-update-activation-environment &> /dev/null; then
+        dbus-update-activation-environment --systemd "SHELL=${ZSH_PATH}" 2>/dev/null || true
+      fi
     fi
   else
     echo "WARNING: zsh is not installed; leaving the default shell unchanged."
@@ -312,6 +448,19 @@ if gff_on install.tools.k8s; then
     "${BASE_DIR}/opt/scripts/system/install_k8s_tools.sh" || echo "WARNING: k8s toolchain install reported problems; continuing."
   fi
 else gff_skip_msg install.tools.k8s; fi
+
+# Install herdr (terminal workspace for coding agents; Apache-2.0). No apt
+# package and no mise/nix surface here, so install_herdr.sh fetches the static
+# release binary into ~/opt/bin and verifies it against the SHA-256 herdr
+# publishes in herdr.dev/latest.json. Tracks the latest release so fleet update
+# keeps every host on the same version; pin with HERDR_VERSION=x.y.z. The agent
+# integrations are a separate config-phase step (install.tools.herdr-integrations).
+if gff_on install.tools.herdr; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_herdr.sh" ]; then
+    echo "Installing herdr..."
+    "${BASE_DIR}/opt/scripts/system/install_herdr.sh" || echo "WARNING: herdr install reported problems; continuing."
+  fi
+else gff_skip_msg install.tools.herdr; fi
 
 # Install the Snowflake CLI (`snow`). Replaces the old .zshrc daily-maintenance
 # pip auto-install, which broke on PEP 668 (externally-managed-environment)
@@ -418,6 +567,49 @@ if command -v goenv &> /dev/null; then
 fi
 else gff_skip_msg install.runtime.goenv; fi
 
+# --- Go PATH activation (phase-independent) --------------------------------
+# goenv INSTALLATION is a deps-phase step (repo-independent → cached layer), but
+# PATH is NOT inherited across Docker RUN layers. So in the `config` layer goenv
+# is present on disk while `go` is absent from PATH, and every later Go build —
+# the gff bootstrap just below and all sdk/*/build.sh — degrades to
+# "WARNING: 'go' not found" and skips. Post-#217 that was invisible: the sdk
+# builds also ran in the deps layer, so the image still shipped binaries, just
+# ones baked into the cached layer and stamped `Commit: none` (that layer's
+# partial COPY carries no .git). This re-activates an ALREADY-INSTALLED goenv;
+# it installs nothing and touches no network. It is a strict no-op whenever `go`
+# is already on PATH (the real-machine / `--phase all` case), so behavior there
+# is unchanged.
+ensure_go_on_path() {
+  if command -v go >/dev/null 2>&1; then
+    return 0
+  fi
+  [ -d "${HOME}/.goenv" ] && export PATH="${HOME}/.goenv/bin:${PATH}"
+  command -v goenv >/dev/null 2>&1 || return 0
+  # Same bash-safe init + PATH-clobber guard as the goenv section above; see
+  # docs/mbo/specs/shell-portability.md for why `- bash` is passed explicitly.
+  __goenv_path_safe="${PATH}"
+  eval "$(goenv init - bash)"
+  case ":${PATH}:" in
+    *":/usr/bin:"*) : ;;                          # system PATH survived
+    *) PATH="${PATH}:${__goenv_path_safe}" ;;     # init clobbered PATH; restore
+  esac
+  export PATH
+  unset __goenv_path_safe
+}
+ensure_go_on_path
+# FAIL HARD in a container build. On a real machine (`--phase all`) a missing Go
+# is tolerable — the sdk build scripts warn and skip, and the user may simply not
+# want Go. Inside the two-phase Docker build it is a BUG: the config layer would
+# silently ship whatever binaries the cached deps layer happened to bake in
+# (stamped `Commit: none`), which is exactly how #217 regressed unnoticed while
+# CI stayed green. Surface it as a build failure instead of a WARNING.
+if [ "$INSTALL_PHASE" != "all" ] && ! command -v go >/dev/null 2>&1; then
+  echo "ERROR: install.sh --phase ${INSTALL_PHASE}: no 'go' on PATH after goenv activation." >&2
+  echo "       The sdk/*/build.sh steps would silently skip and the image would ship" >&2
+  echo "       stale binaries. Check the goenv deps layer and ensure_go_on_path()." >&2
+  exit 1
+fi
+
 # build gff first so every later step can be feature-flag gated (fail-open:
 # if the build fails or gff is absent, all steps run — flags only ever skip).
 if gff_bootstrap_ok=false; command -v go >/dev/null 2>&1 && [ -f "${BASE_DIR}/sdk/gff/build.sh" ]; then
@@ -429,6 +621,10 @@ if [ "$gff_bootstrap_ok" = "true" ] && [ -x "${HOME}/opt/bin/gff" ]; then
   set -a
   eval "$(cd "${BASE_DIR}" && "${HOME}/opt/bin/gff" export --shell 2>/dev/null || true)"
   set +a
+  # Register this checkout's namespace so cross-repo consumers (gsl render, from
+  # ANY cwd) can resolve the flags. Fail-open: a failure only warns.
+  (cd "${BASE_DIR}" && "${HOME}/opt/bin/gff" install >/dev/null 2>&1) \
+    || echo "WARNING: gff install (namespace registration) failed; gsl link flags fail open (links stay on)."
 fi
 # Re-assert build-phase overrides: the gff export above can have overwritten the
 # GFF_* the later runtime gates (pyenv/rbenv/nvm) read.
@@ -547,6 +743,47 @@ if gff_on install.ai.teams; then
   fi
 else gff_skip_msg install.ai.teams; fi
 
+# WSL only, OPT-IN (fail-closed): build wlink and pin
+#
+# Placed with the other sdk builds ON PURPOSE: it needs `go`, which is not on
+# PATH until the goenv install and ensure_go_on_path above. Higher up, build.sh
+# printed "go not found", exited 0, and wlink was silently never installed. the resolver that knows
+# your fleet. From WSL, `ssh <fleet-host>` stalls ~20s and dies with "Temporary
+# failure in name resolution" while `ssh <ip>` works, because WSL2 points
+# resolv.conf at the Windows NAT DNS proxy, which answers from whatever resolver
+# Windows treats as primary -- normally the ISP's, which has never heard of the
+# fleet. wlink probes EVERY per-interface resolver Windows knows (the right one
+# is frequently on a VPN interface, NOT the default route) and pins the one that
+# answers, reversibly.
+#
+# gff_opt_in, NOT gff_on: this rewrites host DNS, so an unset flag, a missing
+# gff binary, or a machine where the export never happened must all mean DO NOT
+# BUILD. That is a deliberate departure from the other install.sdk.* flags.
+#   gff set install.sdk.wlink true
+# Undo on any machine:  wlink unpin
+if gff_opt_in install.sdk.wlink; then
+  if [ -f "${BASE_DIR}/sdk/wlink/build.sh" ]; then
+    echo "Installing wlink (WSL link: tunnel + resolver)..."
+    bash "${BASE_DIR}/sdk/wlink/build.sh" || echo "WARNING: wlink build reported problems; continuing."
+    # Pinning is best-effort by design: it declines safely (exit 0, no write)
+    # when the tunnel is down, so install.sh never fails over a link that
+    # happens to be unavailable right now.
+    # The pin writes under /etc, so it needs root. install.sh cached sudo
+    # credentials up front, so this does not prompt again mid-run.
+    if [ -x "${HOME}/opt/bin/wlink" ]; then
+      if [ "$(id -u)" -eq 0 ]; then
+        "${HOME}/opt/bin/wlink" pin || echo "WARNING: wlink pin reported problems; continuing."
+      elif command -v sudo >/dev/null 2>&1; then
+        sudo -E "${HOME}/opt/bin/wlink" pin || echo "WARNING: wlink pin reported problems; continuing."
+      else
+        echo "WARNING: wlink installed but cannot pin without root; run: sudo wlink pin"
+      fi
+    fi
+  fi
+else
+  echo "SKIP (gff: install.sdk.wlink is opt-in and not enabled)"
+fi
+
 # build and install gss
 if gff_on install.sdk.gss; then
   if [ -f "${BASE_DIR}/sdk/gss/build.sh" ]; then
@@ -587,6 +824,19 @@ if gff_on install.sdk.wol; then
     fi
   fi
 else gff_skip_msg install.sdk.wol; fi
+
+# build and install fleet
+if gff_on install.sdk.fleet; then
+  if [ -f "${BASE_DIR}/sdk/fleet/build.sh" ]; then
+    echo "Installing fleet (dotfiles install-status checker)..."
+    bash "${BASE_DIR}/sdk/fleet/build.sh"
+    if [ -f "${HOME}/opt/bin/fleet" ]; then
+        echo "--------------------------------------------------"
+        "${HOME}/opt/bin/fleet" version
+        echo "--------------------------------------------------"
+    fi
+  fi
+else gff_skip_msg install.sdk.fleet; fi
 
 # build and install gsl
 if gff_on install.sdk.gsl; then
@@ -677,6 +927,15 @@ if gff_on install.system.gitrepos; then
     "${HOME}/.gitrepos"
   fi
 else gff_skip_msg install.system.gitrepos; fi
+
+# Keep the oh-my-zsh clone current. .gitrepos above clones it but is told
+# never to pull (";false" in .repos.env), so upstream plugin fixes never
+# landed. Must run AFTER the gitrepos block so a fresh clone exists.
+# Fast-forward only; warns and continues on a diverged/offline clone.
+if gff_on install.shell.oh-my-zsh-update; then
+  bash "${BASE_DIR}/opt/scripts/system/oh-my-zsh_update.sh" ||
+    echo "WARNING: oh-my-zsh update reported problems; continuing."
+else gff_skip_msg install.shell.oh-my-zsh-update; fi
 
 # Load Nano Platform environment
 if gff_on install.system.nano-profile; then
@@ -771,4 +1030,13 @@ if [ -f "$WIN_SETUP_MARKER" ]; then
 BANNER
   fi
   unset _b _x
+fi
+
+# --- install stamp (fleet) -------------------------------------------------
+# LAST action of a successful run: record the commit that was installed so
+# `fleet status` can tell "pulled" from "actually installed". Phase-gated
+# inside the script (a Docker deps/config layer must never stamp), and it
+# never fails the install.
+if [ -f "${BASE_DIR}/opt/scripts/system/install-stamp.sh" ]; then
+  bash "${BASE_DIR}/opt/scripts/system/install-stamp.sh" "${BASE_DIR}" || true
 fi

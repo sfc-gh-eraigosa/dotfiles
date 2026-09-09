@@ -1,0 +1,54 @@
+# 2026-09-04T16:17:56Z G2: two-repo + gh-auth plan, wire-only (dry-run)
+fleet update init --file /tmp/fleet-e2e.yaml --print, then edited to two repos + gh-auth (see below):
+# fleet.yaml — the fleet-update plan (G2 two-repo + gh-auth e2e wire test).
+version: 1
+update:
+  root: ~/git
+  repos:
+    dotfiles:
+      path: dotfiles
+      branches: [main]
+    scratch:
+      path: scratch2
+      url: https://github.com/sfc-gh-eraigosa/dotfiles.git
+      branches: [main]
+      local: rescue
+      restore: true
+  steps:
+    - id: gh.check
+      kind: gh-auth
+      hostname: github.com
+    - id: dotfiles.sync
+      kind: sync
+      repo: dotfiles
+      needs: [gh.check]
+    - id: dotfiles.install
+      kind: run
+      repo: dotfiles
+      run: ./install.sh
+      interactive: true
+      needs: [dotfiles.sync]
+    - id: scratch.sync
+      kind: sync
+      repo: scratch
+      needs: [gh.check]
+
+--- dry-run ---
+plan: /tmp/fleet-e2e.yaml
+=== gh.check (gh-auth) ===
+  check: command -v gh >/dev/null 2>&1 || exit 127; gh auth status -h github.com >/dev/null 2>&1
+  login (if check fails, interactive): gh auth login -h github.com --web --git-protocol https && gh auth setup-git -h github.com
+  timeout=30m0s retry=1 on=[transport]
+=== dotfiles.sync (sync) ===
+  precheck: if [ ! -e ~/git/dotfiles/.git ]; then echo "state=missing"; else cd ~/git/dotfiles && g=$(git rev-parse --git-dir) && if [ -e "$g/MERGE_HEAD" ] || [ -d "$g/rebase-merge" ] || [ -d "$g/rebase-apply" ]; then s=in-progress; elif [ -n "$(git status --porcelain)" ]; then s=dirty; else s=clean; fi; b=$(git symbolic-ref -q --short HEAD || echo detached); echo "state=$s branch=$b"; fi
+  sync (local=skip): cd ~/git/dotfiles && orig=$(git symbolic-ref -q --short HEAD || git rev-parse HEAD) && echo "fleet: orig=$orig" && git fetch origin main && git checkout main && git merge --ff-only FETCH_HEAD; rc=$?; now=$(git symbolic-ref -q --short HEAD || git rev-parse HEAD); [ "$orig" = "$now" ] || echo "fleet: switched $orig -> $now"; exit $rc
+  timeout=30m0s retry=1 on=[transport]
+=== dotfiles.install (run) ===
+  run (interactive): cd ~/git/dotfiles && ./install.sh
+  timeout=0s retry=1 on=[transport]
+=== scratch.sync (sync) ===
+  precheck: if [ ! -e ~/git/scratch2/.git ]; then echo "state=missing"; else cd ~/git/scratch2 && g=$(git rev-parse --git-dir) && if [ -e "$g/MERGE_HEAD" ] || [ -d "$g/rebase-merge" ] || [ -d "$g/rebase-apply" ]; then s=in-progress; elif [ -n "$(git status --porcelain)" ]; then s=dirty; else s=clean; fi; b=$(git symbolic-ref -q --short HEAD || echo detached); echo "state=$s branch=$b"; fi
+  clone (if missing): mkdir -p "$(dirname ~/git/scratch2)" && git clone -q --branch main 'https://github.com/sfc-gh-eraigosa/dotfiles.git' ~/git/scratch2 && cd ~/git/scratch2 && b1=main
+  rescue (if dirty): cd ~/git/scratch2 && ts=$(date -u +%Y%m%dT%H%M%SZ) && orig=$(git rev-parse --abbrev-ref HEAD) && git checkout -q -b "fleet-rescue/$ts" && git add -A && git -c user.email=fleet@local -c user.name=fleet commit -q -m "fleet rescue $ts" && git checkout -q "$orig" && mkdir -p ~/.local/state/fleet/rescue/scratch && git worktree add ~/.local/state/fleet/rescue/scratch/$ts "fleet-rescue/$ts"
+  sync (local=rescue): cd ~/git/scratch2 && orig=$(git symbolic-ref -q --short HEAD || git rev-parse HEAD) && echo "fleet: orig=$orig" && git fetch origin main && git checkout main && git merge --ff-only FETCH_HEAD; rc=$?; now=$(git symbolic-ref -q --short HEAD || git rev-parse HEAD); [ "$orig" = "$now" ] || echo "fleet: switched $orig -> $now"; exit $rc
+  timeout=30m0s retry=1 on=[transport]

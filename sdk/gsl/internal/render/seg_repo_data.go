@@ -18,7 +18,6 @@ package render
 
 import (
 	"context"
-	"strings"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo"
@@ -40,6 +39,10 @@ type repoData struct {
 	// prNumber / prState are the PR details (0 / "" if absent).
 	prNumber int
 	prState  string
+	// prURL is the PR's web URL. Optional: empty when gh or the gss registry
+	// did not report one, which is why link() gates on it rather than deriving
+	// a URL from prNumber (the host/owner/repo are not known here).
+	prURL string
 	// worktreeCount is the number of linked worktrees (0 if not shown).
 	worktreeCount int
 	// showPR / showCount mirror the segment options.
@@ -47,6 +50,9 @@ type repoData struct {
 	showCount bool
 	// prio is the drop priority (config.Segment.EffectivePriority).
 	prio int
+	// links is the policy; branch is the full branch name the label links to.
+	links  Links
+	branch string
 }
 
 // priority implements prioritized. The repo/PR you are working in is the last
@@ -70,7 +76,9 @@ func (s *RepoSegment) detect(ctx context.Context) (segmentData, bool) {
 	}
 
 	var info *repo.RepoInfo
-	if s.NameMode == nameModeFeature || s.ShowPR {
+	if s.PR != nil {
+		info = s.PR
+	} else if s.NameMode == nameModeFeature || s.ShowPR {
 		if pr, perr := repo.PR(ctx, s.GH, s.Branch, loc.Toplevel, s.RegistryPath); perr == nil {
 			info = pr
 		}
@@ -90,6 +98,8 @@ func (s *RepoSegment) detect(ctx context.Context) (segmentData, bool) {
 		showPR:       s.ShowPR,
 		showCount:    s.ShowCount,
 		prio:         s.Priority,
+		links:        s.Links,
+		branch:       s.Branch,
 		worktreeCount: func() int {
 			if s.ShowCount && loc.WorktreeCount >= 2 {
 				return loc.WorktreeCount
@@ -101,20 +111,39 @@ func (s *RepoSegment) detect(ctx context.Context) (segmentData, bool) {
 	if s.ShowPR && info != nil && info.PRNumber > 0 {
 		d.prNumber = info.PRNumber
 		d.prState = info.PRState
+		if s.LinkPR {
+			d.prURL = info.PRURL
+		}
 	}
 
 	return d, true
 }
 
 // format implements segmentData.format for repoData. Pure; no I/O.
+func (d *repoData) format(st style.Style, level int) (text, colorKey string) {
+	text, colorKey, _ = d.formatLinked(st, level)
+	return text, colorKey
+}
+
+// formatLinked implements linkedFormatter: the text at this level plus the
+// spans recorded while building it. Pure; no I/O.
 //
 // Width is monotonically non-increasing in level (spec E5): each level removes
 // or shortens exactly one element and never adds one back.
-func (d *repoData) format(st style.Style, level int) (text, colorKey string) {
-	var b strings.Builder
+//
+// Links: glyph → repo home, label → the branch on GitHub, PR badge → the PR —
+// all gated on the repo family; the badge additionally on link_pr (prURL is
+// left empty otherwise). A hyperlink over a segment that displays no PR would
+// be an invisible click target, so the badge span exists only with the badge.
+func (d *repoData) formatLinked(st style.Style, level int) (string, string, []LinkSpan) {
+	var sb spanBuilder
+	repoURL := ""
+	if d.links.Repo {
+		repoURL = d.links.RepoURL
+	}
 
 	if g := glyph(st, d.indicatorKey); g != "" {
-		b.WriteString(g)
+		sb.linked(g, repoURL)
 	}
 
 	// Label. Level 3+ ellipsizes it — grapheme-safely, so a CJK or emoji repo
@@ -125,10 +154,10 @@ func (d *repoData) format(st style.Style, level int) (text, colorKey string) {
 			label = truncateText(label, repoLabelBudget)
 		}
 		if label != "" {
-			if b.Len() > 0 {
-				b.WriteString(" ")
+			if sb.len() > 0 {
+				sb.write(" ")
 			}
-			b.WriteString(label)
+			sb.linked(label, TreeURL(repoURL, d.branch))
 		}
 	}
 
@@ -139,23 +168,27 @@ func (d *repoData) format(st style.Style, level int) (text, colorKey string) {
 		if level >= 2 {
 			prefix = "#"
 		}
-		if b.Len() > 0 {
-			b.WriteString(" ")
+		if sb.len() > 0 {
+			sb.write(" ")
 		}
-		b.WriteString(prBadgeWithPrefix(st, prefix, d.prNumber, d.prState))
+		prURL := ""
+		if d.links.Repo {
+			prURL = d.prURL
+		}
+		sb.linked(prBadgeWithPrefix(st, prefix, d.prNumber, d.prState), prURL)
 	}
 
 	// Worktree-count badge: the first thing to go. It is a nice-to-have, and the
 	// worktree GLYPH already tells you that you are in a linked worktree.
 	if level < 1 && d.showCount && d.worktreeCount >= 2 {
-		if b.Len() > 0 {
-			b.WriteString(" ")
+		if sb.len() > 0 {
+			sb.write(" ")
 		}
-		b.WriteString(countBadge(st, "worktree_count", d.worktreeCount))
+		sb.write(countBadge(st, "worktree_count", d.worktreeCount))
 	}
 
-	if b.Len() == 0 {
-		return "", ""
+	if sb.len() == 0 {
+		return "", "", nil
 	}
-	return b.String(), d.themeKey
+	return sb.String(), d.themeKey, sb.spans
 }

@@ -1,0 +1,31 @@
+# Task 29 — answers persistence
+=== RUN   TestSavedAnswersNeverContainTheCredential
+--- PASS: TestSavedAnswersNeverContainTheCredential (0.00s)
+=== RUN   TestSavedAnswersFileIsOwnerOnly
+--- PASS: TestSavedAnswersFileIsOwnerOnly (0.00s)
+=== RUN   TestSaveCreatesTheParentDirectory
+--- PASS: TestSaveCreatesTheParentDirectory (0.00s)
+=== RUN   TestLoadRestoresPreferencesButNeverACredential
+--- PASS: TestLoadRestoresPreferencesButNeverACredential (0.00s)
+=== RUN   TestLoadIgnoresACredentialPlantedInTheFile
+--- PASS: TestLoadIgnoresACredentialPlantedInTheFile (0.00s)
+=== RUN   TestLoadDegradesGracefully
+=== RUN   TestLoadDegradesGracefully/missing_file
+=== RUN   TestLoadDegradesGracefully/corrupt_json
+=== RUN   TestLoadDegradesGracefully/a_directory_where_a_file_should_be
+=== RUN   TestLoadDegradesGracefully/empty_path
+--- PASS: TestLoadDegradesGracefully (0.00s)
+    --- PASS: TestLoadDegradesGracefully/missing_file (0.00s)
+    --- PASS: TestLoadDegradesGracefully/corrupt_json (0.00s)
+    --- PASS: TestLoadDegradesGracefully/a_directory_where_a_file_should_be (0.00s)
+    --- PASS: TestLoadDegradesGracefully/empty_path (0.00s)
+=== RUN   TestModelDoesNotPersistWithoutAnInjectedPath
+--- PASS: TestModelDoesNotPersistWithoutAnInjectedPath (0.00s)
+=== RUN   TestPreferencesRoundTripThroughTheModel
+--- PASS: TestPreferencesRoundTripThroughTheModel (0.00s)
+=== RUN   TestAnswersPathIsUnderTheConfigDir
+--- PASS: TestAnswersPathIsUnderTheConfigDir (0.00s)
+=== RUN   TestBranchCostsNoExtraRoundTrip
+--- PASS: TestBranchCostsNoExtraRoundTrip (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.005s

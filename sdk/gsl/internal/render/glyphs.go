@@ -241,6 +241,35 @@ func separator(st style.Style) string {
 type segmentBlock struct {
 	text     string
 	colorKey string
+	// links are the clickable byte ranges of text, each with its URL. They are
+	// deliberately NOT part of text: text is what the width machinery measures
+	// and truncates, and a URL is zero display width. Keeping them apart is what
+	// stops a long URL from being mistaken for content.
+	links []LinkSpan
+}
+
+// paintRuns emits text with every valid span wrapped as an OSC 8 hyperlink and,
+// unless st.Links == "plain", underlined. ST (ESC \\) terminates the OSC rather
+// than the legacy BEL: it is the form the spec prefers, and term.StripANSI
+// accepts either when measuring. Unlinked runs are emitted verbatim.
+func paintRuns(st style.Style, text string, spans []LinkSpan) string {
+	spans = validateSpans(len(text), spans)
+	if len(spans) == 0 {
+		return text
+	}
+	ul, ulOff := sgrUnderline, sgrNoUnderline
+	if st.Links == "plain" {
+		ul, ulOff = "", ""
+	}
+	var sb strings.Builder
+	pos := 0
+	for _, sp := range spans {
+		sb.WriteString(text[pos:sp.Start])
+		sb.WriteString("\x1b]8;;" + sp.URL + "\x1b\\" + ul + text[sp.Start:sp.End] + ulOff + "\x1b]8;;\x1b\\")
+		pos = sp.End
+	}
+	sb.WriteString(text[pos:])
+	return sb.String()
 }
 
 // join assembles the surviving segment blocks into the final status line.
@@ -267,7 +296,7 @@ func join(st style.Style, blocks []segmentBlock) string {
 	// but separator is not "powerline"), join with the style separator.
 	parts := make([]string, 0, len(blocks))
 	for _, b := range blocks {
-		parts = append(parts, paint(st, b.colorKey, b.text))
+		parts = append(parts, paint(st, b.colorKey, paintRuns(st, b.text, b.links)))
 	}
 	return strings.Join(parts, separator(st))
 }
@@ -281,7 +310,7 @@ func joinPowerline(st style.Style, blocks []segmentBlock) string {
 		// No glyph available: fall back to classic path without bridges.
 		parts := make([]string, 0, len(blocks))
 		for _, b := range blocks {
-			parts = append(parts, paint(st, b.colorKey, b.text))
+			parts = append(parts, paint(st, b.colorKey, paintRuns(st, b.text, b.links)))
 		}
 		return strings.Join(parts, separator(st))
 	}
@@ -304,9 +333,10 @@ func joinPowerline(st style.Style, blocks []segmentBlock) string {
 			sb.WriteString(fg)
 		}
 		// Space pad before and after the text (mirrors the existing style).
-		sb.WriteString(" ")
-		sb.WriteString(b.text)
-		sb.WriteString(" ")
+		// Hyperlinks cover only their spans: the padding and the bridge chevron
+		// are shared decoration, so making them clickable would extend one
+		// field's link over its neighbour's boundary.
+		sb.WriteString(" " + paintRuns(st, b.text, b.links) + " ")
 
 		// Emit the bridge chevron.
 		if i < len(blocks)-1 {

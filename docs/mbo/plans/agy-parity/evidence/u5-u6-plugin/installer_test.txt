@@ -1,0 +1,57 @@
+# 2026-09-03T15:11:31Z 73c70d6 bash opt/scripts/system/install_antigravity_skills_test.sh
+PASS: privacy_guard copied into ~/.gemini/config/hooks
+PASS: safety_guard copied into ~/.gemini/config/hooks
+PASS: antigravity_adapter copied into ~/.gemini/config/hooks
+PASS: strip_heredocs.awk sibling copied
+PASS: hooks are real files, not symlinks
+PASS: hooks.json rendered into ~/.gemini/config
+PASS: hooks.json is valid JSON
+PASS: no unsubstituted __HOME__ in hooks.json
+PASS: single hook entry runs both guards through the adapter
+PASS: hook commands use the rendered real HOME
+PASS: aliases.sh copied (not symlinked) into ~/.config/antigravity
+PASS: statusline shim copied
+PASS: agy settings.json created
+PASS: statusLine command configured in settings.json
+PASS: statusLine enabled in settings.json
+PASS: template: toolPermission seeded
+PASS: template: editorMode vim
+PASS: template: allowNonWorkspaceAccess true
+PASS: template: notifications on
+PASS: template: sandbox off
+PASS: template: allow list carries command(gss status)
+PASS: template: no _comment key survives the merge
+PASS: forced: deny carries command(rm -rf /)
+PASS: forced: ask carries command(git push --force)
+PASS: forced: ask carries command(sudo)
+PASS: plugin: dotfiles/plugin.json rendered
+PASS: plugin: commands/sync.toml rendered
+PASS: plugin: rules/AGENTS.md rendered
+PASS: plugin: enabled in config.json (created)
+PASS: re-run keeps hooks.json valid
+PASS: legacy ~/.gemini/hooks removed
+PASS: legacy repo-pointing policy link removed
+PASS: legacy ~/.config/gemini aliases link removed
+PASS: legacy ~/.agents/skills repo link removed
+PASS: host-owned legacy settings.json left alone
+PASS: original agy settings backed up
+PASS: existing settings keys preserved
+PASS: statusLine configured when settings.json pre-exists
+PASS: existing host: template NOT applied (no toolPermission)
+PASS: existing host: own allow entry survives the union
+PASS: existing host: forced allow entry added by the union
+PASS: existing host: host deny entry REPLACED (policy is immutable)
+PASS: existing host: forced deny carries command(mkfs)
+PASS: existing host: dotfiles plugin enabled
+PASS: existing host: other plugin entry preserved
+PASS: existing host: userSettings preserved
+PASS: merge: hooks.json still valid JSON
+PASS: merge: foreign herdr hook preserved next to guards
+PASS: merge: herdr command untouched
+PASS: merge: stale guards matcher replaced by the rendered one
+PASS: merge: rendered guards command uses the real HOME
+PASS: merge: no unsubstituted __HOME__
+PASS: invalid hooks.json: recreated as valid JSON with guards
+PASS: invalid hooks.json: original set aside as .invalid
+----
+PASS=54 FAIL=0

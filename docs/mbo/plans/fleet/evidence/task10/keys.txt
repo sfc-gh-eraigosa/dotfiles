@@ -1,0 +1,19 @@
+=== 2026-08-10T05:56:46Z — Task 10 evidence ===
+--- unit: no private-key transfer, per-host failures surfaced ---
+=== RUN   TestKeysSyncSendsOnlyPublicKeyMaterial
+--- PASS: TestKeysSyncSendsOnlyPublicKeyMaterial (0.00s)
+=== RUN   TestKeysSyncReportsPerHostFailure
+--- PASS: TestKeysSyncReportsPerHostFailure (0.00s)
+=== RUN   TestKeysSyncIsIdempotentOnTheRemoteSide
+--- PASS: TestKeysSyncIsIdempotentOnTheRemoteSide (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.003s
+
+--- grep guarantee: private-key transfer absent from the keys path ---
+no private-key transfer in code (only a comment explaining why) ✓
+
+--- LIVE (read-only): fleet keys list across the real fleet ---
+id_ed25519:              host-pi, host-desktop, host-nano
+
+--- coverage gate ---
+OK: coverage for fleet is 71% (minimum: 60%)

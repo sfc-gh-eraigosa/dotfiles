@@ -1,0 +1,25 @@
+# Task 22 — TUI wake wiring
+=== RUN   TestRefreshRepollsKeepingCursorAndSelection
+--- PASS: TestRefreshRepollsKeepingCursorAndSelection (0.00s)
+=== RUN   TestRefreshSkipsHostsBeingUpdated
+--- PASS: TestRefreshSkipsHostsBeingUpdated (0.00s)
+=== RUN   TestHelpOverlayRendersEveryKeyAndClosesOnAnyKey
+--- PASS: TestHelpOverlayRendersEveryKeyAndClosesOnAnyKey (0.00s)
+=== RUN   TestWakeKeyClaimsTheCursorHostInTheBackgroundLane
+--- PASS: TestWakeKeyClaimsTheCursorHostInTheBackgroundLane (0.00s)
+=== RUN   TestWakeKeyActsOnTheWholeSelection
+--- PASS: TestWakeKeyActsOnTheWholeSelection (0.00s)
+=== RUN   TestRefreshSkipsHostsBeingWoken
+--- PASS: TestRefreshSkipsHostsBeingWoken (0.00s)
+=== RUN   TestWakingHostIsReportedInFlight
+--- PASS: TestWakingHostIsReportedInFlight (0.00s)
+=== RUN   TestHelpListsTheWakeKey
+--- PASS: TestHelpListsTheWakeKey (0.00s)
+=== RUN   TestWakingRowRendersAsWaking
+--- PASS: TestWakingRowRendersAsWaking (0.00s)
+=== RUN   TestQuitGuardCountsWaking
+--- PASS: TestQuitGuardCountsWaking (0.00s)
+=== RUN   TestPollHostCarriesTheWakerIntoTheTUI
+--- PASS: TestPollHostCarriesTheWakerIntoTheTUI (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.004s

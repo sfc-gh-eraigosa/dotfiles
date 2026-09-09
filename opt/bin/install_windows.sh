@@ -32,15 +32,20 @@ if [ -z "$BASE_DIR" ]; then
   exit 1
 fi
 
-# gff gate (fail-open): source the helper relative to THIS script's location so
-# direct runs work too; a missing helper must never block the deploy, so stub
-# gff_on/gff_skip_msg to "always run" when the lib is absent.
+# gff gate: source the helper relative to THIS script's location so direct runs
+# work too. Stubs mirror each helper's DIRECTION when the lib is absent:
+#   gff_on      fail-OPEN  — a missing helper must never block the deploy.
+#   gff_opt_in  fail-CLOSED — an opt-in step must never install itself by
+#               accident. Without this stub the call would merely be a
+#               "command not found" (rc 127) that happens to read as false;
+#               state the contract explicitly rather than lean on that.
 _gff_lib="$(cd -- "$(dirname "$0")" && pwd -P)/../lib/gff.sh"
 if [ -f "$_gff_lib" ]; then
   # shellcheck source=opt/lib/gff.sh
   . "$_gff_lib"
 else
   gff_on() { return 0; }
+  gff_opt_in() { return 1; }
   gff_skip_msg() { echo "SKIP (gff: $1=false)"; }
 fi
 # Choice persistence + gff-owned skip state (needs gff_on, so sourced after).
@@ -179,25 +184,37 @@ deploy_windows_files() {
   cp -r --remove-destination "${BASE_DIR}/opt/Desktop/." "${win_desktop}/"
 }
 
-run_windows_customization() {
-  echo "Starting Windows customization... (this may take a few minutes)"
-
-  # -------------------------------------------------------------------------
-  # gff flag pass-through: append every exported GFF_INSTALL_WINDOWS_* name to
-  # WSLENV (/w = include when invoking Win32 from WSL) BEFORE the powershell.exe
-  # invocation, so the PowerShell setup scripts' Test-GffOn gates see the same
-  # flags. NOTE: the flag was originally /u per the plan — refuted empirically
-  # 2026-07-26 (P2-T5): /u means Win32->WSL only, so the vars never crossed;
-  # /w is the WSL->Win32 direction (learn.microsoft.com WSLENV flags). Runs at
-  # DEFERRED time — after install.sh's gff bootstrap `set -a` export — and
-  # de-duplicates, so re-runs never grow WSLENV. Unset vars simply never appear
-  # (fail-open on the Windows side too).
-  # -------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# gff flag pass-through: append every exported GFF_INSTALL_WINDOWS_* name to
+# WSLENV (/w = include when invoking Win32 from WSL) BEFORE a powershell.exe
+# invocation, so the PowerShell setup scripts' Test-GffOn/Test-GffOptIn gates
+# see the same flags. NOTE: the flag was originally /u per the plan — refuted
+# empirically 2026-07-26 (P2-T5): /u means Win32->WSL only, so the vars never
+# crossed; /w is the WSL->Win32 direction (learn.microsoft.com WSLENV flags).
+# Called at DEFERRED time — after install.sh's gff bootstrap `set -a` export —
+# and de-duplicates, so repeat calls never grow WSLENV. Unset vars simply never
+# appear (fail-open on the Windows side too).
+# -----------------------------------------------------------------------------
+export_gff_wslenv() {
   _gff_wslenv="${WSLENV:-}"
-  for _v in $(env | sed -n 's/^\(GFF_INSTALL_WINDOWS_[A-Z_]*\)=.*/\1/p'); do
+  # GFF_KEYBOARD_* rides along with GFF_INSTALL_WINDOWS_*: keyboard.macos.enabled
+  # is the cross-OS master switch for the macOS key layout, so the Windows side
+  # has to see it or the AutoHotkey half would ignore a global opt-out.
+  # Two -e expressions rather than a \| alternation: alternation in a BRE is a
+  # GNU extension and BSD sed (macOS) does not accept it.
+  for _v in $(env | sed -n \
+    -e 's/^\(GFF_INSTALL_WINDOWS_[A-Z_]*\)=.*/\1/p' \
+    -e 's/^\(GFF_KEYBOARD_[A-Z_]*\)=.*/\1/p'); do
     case ":${_gff_wslenv}:" in *":${_v}/w:"*) : ;; *) _gff_wslenv="${_gff_wslenv:+${_gff_wslenv}:}${_v}/w" ;; esac
   done
   export WSLENV="${_gff_wslenv}"
+}
+
+run_windows_customization() {
+  echo "Starting Windows customization... (this may take a few minutes)"
+
+  # gff flag pass-through to the powershell.exe child (see export_gff_wslenv).
+  export_gff_wslenv
 
   # setup-apps.ps1 does the non-elevated app installs, then fires ONE
   # Start-Process -Verb RunAs (setup-elevated.ps1) that performs all admin work
@@ -232,6 +249,84 @@ run_windows_customization() {
   : > "$WIN_SETUP_MARKER"
 }
 
+# -----------------------------------------------------------------------------
+# Opt-in unattended security-audit pipeline (docs/security-audit.md). FAIL-
+# CLOSED: unlike every other windows step, this runs ONLY when
+# install.windows.security-audit resolves to exactly 'true'
+# (gff set install.windows.security-audit true) — an audit installer must never
+# appear on a machine by accident, so absent-gff/unset means SKIP (gff_opt_in).
+# Independent of the y/n/s customization answer: it rides --deferred right
+# after the file deploy, so the deployed Desktop scripts are guaranteed present.
+# -----------------------------------------------------------------------------
+run_security_audit_setup() {
+  if ! gff_opt_in install.windows.security-audit; then
+    echo "SKIP (gff: install.windows.security-audit is opt-in and not enabled)"
+    return 0
+  fi
+  if [ -z "${ps_exe:-}" ] || [ -z "${win_desktop:-}" ] || [ ! -d "${win_desktop}" ]; then
+    echo "WARNING: Windows paths unresolved; cannot run security-audit setup." >&2
+    return 0
+  fi
+  export_gff_wslenv
+  _ssa_ps1_w="$(wslpath -w "${win_desktop}/Apps/scripts/setup-security-audit.ps1" 2>/dev/null || true)"
+  if [ -z "${_ssa_ps1_w}" ]; then
+    echo "WARNING: could not resolve setup-security-audit.ps1 as a Windows path; skipping." >&2
+    return 0
+  fi
+  echo "Setting up the unattended security-audit pipeline (opt-in flag is ON)..."
+  # Same rc-capture pattern as setup-apps.ps1: never die silently under set -e;
+  # always surface the log. </dev/null: powershell.exe eats parent stdin (above).
+  _ssa_rc=0
+  "$ps_exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${_ssa_ps1_w}" </dev/null > /tmp/setup_security_audit.log 2>&1 || _ssa_rc=$?
+  cat /tmp/setup_security_audit.log
+  if [ "${_ssa_rc}" -ne 0 ]; then
+    echo "WARNING: setup-security-audit.ps1 exited with code ${_ssa_rc} — see the output above." >&2
+    echo "         Re-run standalone: powershell.exe -ExecutionPolicy Bypass -File \"${_ssa_ps1_w}\"" >&2
+  fi
+  return 0
+}
+
+# -----------------------------------------------------------------------------
+# Opt-in Windows security hardening (docs/security-hardening.md). FAIL-CLOSED,
+# exactly like run_security_audit_setup above: runs ONLY when
+# install.windows.security-hardening resolves to 'true' (gff_opt_in). A step that
+# edits group membership, an event channel, and Defender policy must never fire
+# by accident, so absent-gff/unset means SKIP.
+# The PS script SELF-ELEVATES, so this raises its own UAC prompt — a SECOND one
+# when the y/n customization also runs (that chain has its own). It is
+# independent of the y/n/s answer and rides --deferred right after the deploy,
+# so the deployed Desktop scripts are guaranteed present.
+# -----------------------------------------------------------------------------
+run_security_hardening_setup() {
+  if ! gff_opt_in install.windows.security-hardening; then
+    echo "SKIP (gff: install.windows.security-hardening is opt-in and not enabled)"
+    return 0
+  fi
+  if [ -z "${ps_exe:-}" ] || [ -z "${win_desktop:-}" ] || [ ! -d "${win_desktop}" ]; then
+    echo "WARNING: Windows paths unresolved; cannot run security-hardening setup." >&2
+    return 0
+  fi
+  export_gff_wslenv
+  _ssh_ps1_w="$(wslpath -w "${win_desktop}/Apps/scripts/setup-security-hardening.ps1" 2>/dev/null || true)"
+  if [ -z "${_ssh_ps1_w}" ]; then
+    echo "WARNING: could not resolve setup-security-hardening.ps1 as a Windows path; skipping." >&2
+    return 0
+  fi
+  echo "Applying opt-in Windows security hardening (opt-in flag is ON)..."
+  echo "  A UAC prompt will appear — approve it (the script self-elevates)."
+  # Same rc-capture pattern as setup-apps.ps1: never die silently under set -e;
+  # always surface the log. </dev/null: powershell.exe eats parent stdin (above).
+  _ssh_rc=0
+  "$ps_exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${_ssh_ps1_w}" </dev/null > /tmp/setup_security_hardening.log 2>&1 || _ssh_rc=$?
+  cat /tmp/setup_security_hardening.log
+  if [ "${_ssh_rc}" -ne 0 ]; then
+    echo "WARNING: setup-security-hardening.ps1 exited with code ${_ssh_rc} — see the output above." >&2
+    echo "         Re-run standalone: powershell.exe -ExecutionPolicy Bypass -File \"${_ssh_ps1_w}\"" >&2
+    echo "         Inspect state:     powershell.exe -ExecutionPolicy Bypass -File \"${_ssh_ps1_w}\" -Status" >&2
+  fi
+  return 0
+}
+
 case "$MODE" in
   --ask)
     # Skip state: legacy sentinel (migrated when gff is available) or the gff
@@ -255,6 +350,8 @@ case "$MODE" in
     # behavior where the file deploy preceded the prompt); the customization
     # and the permanent-skip recording follow the recorded choice.
     deploy_windows_files
+    run_security_audit_setup
+    run_security_hardening_setup
     case "$(winsetup_take_choice)" in
       y) run_windows_customization ;;
       s) winsetup_record_skip ;;
@@ -264,6 +361,8 @@ case "$MODE" in
   --full|*)
     winsetup_skip_state && exit 0
     deploy_windows_files
+    run_security_audit_setup
+    run_security_hardening_setup
     print_prompt_text
     case "$(winsetup_ask)" in
       __notty__) notty_guidance ;;

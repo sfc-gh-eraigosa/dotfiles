@@ -1,0 +1,53 @@
+# 2026-09-03T15:11:31Z 73c70d6 bash opt/scripts/system/render-agy-plugin_test.sh
+PASS: render-agy-plugin.sh exists
+PASS: renderer runs against the repo (exit 0)
+PASS: plugin.json written
+PASS: plugin.json is valid JSON
+PASS: plugin name is dotfiles
+PASS: one TOML per command (8)
+PASS: sync.toml has a description
+PASS: sync.toml description came from the frontmatter
+PASS: sync.toml has a prompt block
+FAIL: no frontmatter fence leaks into the prompt (unexpected match: ^---$ in /tmp/tmp.zjHJjoA0Qv/dotfiles/commands/sync.toml)
+PASS: no literal $ARGUMENTS (agy does not substitute it)
+PASS: no Claude !-backtick injection lines
+PASS: injection rewritten as an instruction
+PASS: arguments rewritten as prose
+PASS: every TOML parses with description + prompt
+PASS: rules/AGENTS.md written
+PASS: rules carry an account memory section
+PASS: rules have no frontmatter fences
+PASS: MEMORY.md index is not inlined as a section
+PASS: stale TOML removed on re-render
+PASS: re-render keeps exactly one TOML per command
+PASS: missing args -> exit 1 (exit 1)
+PASS: missing repo commands dir -> exit 1 (exit 1)
+----
+PASS=22 FAIL=1
+# 2026-09-03T15:12:09Z 73c70d6 re-run after fixing the fence assertion (sync.md body has a legit --- rule)
+PASS: render-agy-plugin.sh exists
+PASS: renderer runs against the repo (exit 0)
+PASS: plugin.json written
+PASS: plugin.json is valid JSON
+PASS: plugin name is dotfiles
+PASS: one TOML per command (8)
+PASS: sync.toml has a description
+PASS: sync.toml description came from the frontmatter
+PASS: sync.toml has a prompt block
+PASS: no frontmatter key leaks into the prompt
+PASS: no frontmatter description line leaks into the prompt
+PASS: no literal $ARGUMENTS (agy does not substitute it)
+PASS: no Claude !-backtick injection lines
+PASS: injection rewritten as an instruction
+PASS: arguments rewritten as prose
+PASS: every TOML parses with description + prompt
+PASS: rules/AGENTS.md written
+PASS: rules carry an account memory section
+PASS: rules have no frontmatter fences
+PASS: MEMORY.md index is not inlined as a section
+PASS: stale TOML removed on re-render
+PASS: re-render keeps exactly one TOML per command
+PASS: missing args -> exit 1 (exit 1)
+PASS: missing repo commands dir -> exit 1 (exit 1)
+----
+PASS=24 FAIL=0

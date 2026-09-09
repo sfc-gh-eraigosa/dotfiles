@@ -37,6 +37,11 @@
 #                                                new_string: every string arg
 #                                                joined (instruction + code)}
 #
+# Sensitive-root check (agy-parity F5): after the guards, a write_file /
+# replace whose target is under ~/.ssh ~/.aws ~/.gnupg ~/.config/gss ~/.kube
+# ~/.docker is answered "ask" — the PreToolUse stand-in for Claude's
+# DirectoryAdded dir_added_guard.sh (agy has no directory event).
+#
 # Dependencies: jq, bash 3.2+
 
 set -u
@@ -122,5 +127,25 @@ done
 
 if [ -n "$ASK_REASON" ]; then
     verdict ask "$ASK_REASON"
+fi
+
+# Sensitive-root check (agy-parity F5): the agy analogue of Claude's
+# DirectoryAdded dir_added_guard.sh. agy has no directory event, so a FILE
+# tool whose target sits under a credentials/security-config root is answered
+# "ask" — the user confirms, the model is told why. run_command is untouched
+# (the shell guards own that surface). Guard "deny" above still wins.
+FILE_PATH="$(printf '%s' "$TRANSLATED" | jq -r 'select(.tool_name == "write_file" or .tool_name == "replace") | .tool_input.file_path // empty' 2>/dev/null)"
+if [ -n "$FILE_PATH" ]; then
+    # Expand a leading ~ (agy passes it through) and strip a trailing slash.
+    # shellcheck disable=SC2088  # matching a literal "~" in the payload string
+    case "$FILE_PATH" in
+        "~"|"~/"*) FILE_PATH="${HOME}${FILE_PATH#\~}" ;;
+    esac
+    FILE_PATH="${FILE_PATH%/}"
+    for sensitive_root in "$HOME/.ssh" "$HOME/.aws" "$HOME/.gnupg" "$HOME/.config/gss" "$HOME/.kube" "$HOME/.docker"; do
+        if [ "$FILE_PATH" = "$sensitive_root" ] || case "$FILE_PATH" in "$sensitive_root"/*) true ;; *) false ;; esac; then
+            verdict ask "antigravity_adapter: $FILE_PATH is under the sensitive path $sensitive_root (credentials / security config) — confirm before writing; never copy key or token contents into the conversation, commits, or PRs"
+        fi
+    done
 fi
 verdict allow

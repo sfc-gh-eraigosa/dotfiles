@@ -142,3 +142,60 @@ func TestDisplayWidth_MixedANSIAndEmoji(t *testing.T) {
 		t.Errorf("DisplayWidth mixed: want 7, got %d", w)
 	}
 }
+
+// TestStripANSI_OSC8 covers the hyperlink sequences the join layer wraps around
+// linkable segments. These are OSC, not CSI: before OSC support, every byte of
+// the embedded URL counted as display width, which would make the fit loop shed
+// segments that actually fit.
+func TestStripANSI_OSC8(t *testing.T) {
+	const url = "https://github.com/o/r/pull/247"
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "ST-terminated hyperlink",
+			in:   "\x1b]8;;" + url + "\x1b\\PR#247\x1b]8;;\x1b\\",
+			want: "PR#247",
+		},
+		{
+			name: "BEL-terminated hyperlink",
+			in:   "\x1b]8;;" + url + "\aPR#247\x1b]8;;\a",
+			want: "PR#247",
+		},
+		{
+			name: "hyperlink wrapping SGR-tinted text",
+			in:   "\x1b]8;;" + url + "\x1b\\\x1b[38;5;2mPR#247\x1b[0m\x1b]8;;\x1b\\",
+			want: "PR#247",
+		},
+		{
+			name: "unterminated OSC consumes to end of string",
+			in:   "abc\x1b]8;;" + url,
+			want: "abc",
+		},
+		{
+			name: "text with no escapes is returned unchanged",
+			in:   "PR#247",
+			want: "PR#247",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := StripANSI(tc.in); got != tc.want {
+				t.Errorf("StripANSI(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDisplayWidth_OSC8IsZeroWidth is the invariant the fit loop depends on:
+// wrapping text in a hyperlink must not change its measured width, however long
+// the URL is.
+func TestDisplayWidth_OSC8IsZeroWidth(t *testing.T) {
+	plain := "PR#247"
+	linked := "\x1b]8;;https://github.com/some-org/some-really-long-repo-name/pull/247\x1b\\PR#247\x1b]8;;\x1b\\"
+	if got, want := DisplayWidth(linked), DisplayWidth(plain); got != want {
+		t.Errorf("DisplayWidth(linked) = %d, want %d (same as unlinked)", got, want)
+	}
+}

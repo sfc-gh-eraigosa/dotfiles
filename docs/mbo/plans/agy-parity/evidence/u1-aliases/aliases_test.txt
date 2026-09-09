@@ -1,0 +1,33 @@
+# 2026-09-03T15:03:13Z 1f4a236 bash ai/antigravity/aliases_test.sh
+PASS: ai/antigravity/aliases.sh exists
+PASS: ai/antigravity/aliases.sh parses with bash -n (exit 0)
+PASS: no underscore-prefixed helper functions
+PASS: agy() not removed by accident
+PASS: agy() defined
+PASS: agy function defined after sourcing
+PASS: agy body calls 'command agy' (avoids recursion)
+PASS: agy-yolo removed (one canonical alias)
+PASS: agy-config function defined after sourcing
+PASS: agy_launch_flags function defined after sourcing
+PASS: AGY_CONFIG_DIR set
+PASS: AGY_YOLO_FILE set
+PASS: agy body calls agy_launch_flags
+PASS: yolo defaults OFF (no sentinel)
+PASS: agy-config yolo on creates sentinel
+PASS: agy-config yolo off removes sentinel
+PASS: agy-config status reports yolo OFF by default
+PASS: agy-config status reports yolo ON after opt-in
+PASS: agy-config rejects unknown setting (exit 2)
+PASS: agy-config yolo rejects bad value (exit 2)
+PASS: doctor prints the resolved binary line
+PASS: doctor: single binary => no warning, exit 0
+PASS: doctor: multiple binaries => WARNING + nonzero
+PASS: doctor: dedups repeated PATH entries (no false warning)
+PASS: doctor: resolves the binary under zsh (PATH-split regression)
+PASS: default: no flags injected
+PASS: yolo on: injects --dangerously-skip-permissions
+PASS: yolo on: prompt not captured into flags
+PASS: yolo on + print mode: flag still injected (applies to every mode)
+PASS: yolo off: no --dangerously-skip-permissions
+----
+PASS=30 FAIL=0

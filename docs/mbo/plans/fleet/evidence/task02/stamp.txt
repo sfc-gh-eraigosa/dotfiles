@@ -1,0 +1,12 @@
+=== 2026-08-10T05:21:14Z — Task 2 gates ===
+--- install-stamp_test.sh ---
+PASS: re-running overwrites the stamp (one commit line)
+----
+PASS=12 FAIL=0
+--- install_test.sh ---
+PASS: install.sh invokes the install stamp
+PASS: nothing runs after the stamp (only its closing 'fi')
+----
+PASS=13 FAIL=0
+--- bash -n ---
+syntax OK

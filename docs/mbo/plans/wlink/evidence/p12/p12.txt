@@ -1,0 +1,25 @@
+# P12 — doctor + ssh keepalive detection (EC-10)
+# captured 2026-08-25T06:29:46Z
+
+$ go test -cover ./internal/sshcfg/... ./cmd/...
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/sshcfg	(cached)	coverage: 84.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/cmd	0.184s	coverage: 73.7% of statements
+
+## LIVE — the real machine, the real ssh config
+$ wlink doctor
+[warn] ssh has no keepalive for github.com (ServerAliveInterval 0, ConnectTimeout none)
+       over a tunnel a connection can stall with TCP established and no bytes moving; with keepalives off neither end notices, so git hangs forever instead of failing
+       fix: wlink doctor --fix   (adds ServerAliveInterval 20 / ServerAliveCountMax 3)
+[ok]   resolv.conf is not managed by wlink; nothing to undo
+[ok]   resolv.conf matches what wlink wrote (no drift)
+[ok]   3 fleet name(s) to check
+3 checks passed, 1 finding(s)
+exit=1
+
+$ ssh -G github.com | grep -E 'serveralive|connecttimeout'   # independent confirmation
+serveralivecountmax 3
+serveraliveinterval 0
+connecttimeout none
+
+## This is the condition behind the observed git hangs: one ls-remote hung 45s
+## with TCP ESTABLISHED and zero bytes moving, while the next three completed in 2-3s.

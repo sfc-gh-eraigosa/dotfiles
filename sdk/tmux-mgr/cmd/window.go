@@ -11,6 +11,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// runTmux runs a tmux command and logs the failure if there is one, reporting
+// whether it succeeded. The call sites below used to discard the error and then
+// print a past-tense success line regardless — "Moved focus left" even when tmux
+// had refused the request. Callers now skip that line when this returns false.
+func runTmux(args ...string) bool {
+	if _, err := Tmgr.Run(args...); err != nil {
+		log.Printf("tmux %s: %v", strings.Join(args, " "), err)
+		return false
+	}
+	return true
+}
+
 var windowCmd = &cobra.Command{
 	Use:   "window",
 	Short: "Manage tmux windows and panes",
@@ -37,7 +49,9 @@ func init() {
 				fmt.Println("Invalid direction. Use left|right|up|down")
 				return
 			}
-			Tmgr.Run("select-pane", tmuxArg)
+			if !runTmux("select-pane", tmuxArg) {
+				return
+			}
 			log.Printf("Moved focus %s", dir)
 		},
 	})
@@ -66,7 +80,9 @@ func init() {
 				fmt.Fprintln(os.Stderr, "Error:", err)
 				os.Exit(1)
 			}
-			Tmgr.Run("split-window", tmuxArg, "-t", target)
+			if !runTmux("split-window", tmuxArg, "-t", target) {
+				return
+			}
 			log.Printf("Split window %s", dir)
 		},
 	})
@@ -81,7 +97,9 @@ func init() {
 			if len(args) > 0 {
 				tmuxArgs = append(tmuxArgs, "-n", args[0])
 			}
-			Tmgr.Run(tmuxArgs...)
+			if !runTmux(tmuxArgs...) {
+				return
+			}
 			log.Printf("Created new window")
 		},
 	})
@@ -90,7 +108,9 @@ func init() {
 		Use:   "kill",
 		Short: "Kill the current tmux pane",
 		Run: func(cmd *cobra.Command, args []string) {
-			Tmgr.Run("kill-pane")
+			if !runTmux("kill-pane") {
+				return
+			}
 			log.Printf("Killed current pane")
 		},
 	})
@@ -115,7 +135,9 @@ func init() {
 				fmt.Println("Invalid direction. Use left|right|up|down")
 				return
 			}
-			Tmgr.Run("swap-pane", tmuxArg)
+			if !runTmux("swap-pane", tmuxArg) {
+				return
+			}
 			log.Printf("Swapped pane %s", dir)
 		},
 	})
@@ -126,7 +148,9 @@ func init() {
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			name := args[0]
-			Tmgr.Run("rename-window", name)
+			if !runTmux("rename-window", name) {
+				return
+			}
 			log.Printf("Renamed window to %s", name)
 		},
 	})
@@ -137,8 +161,9 @@ func init() {
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			title := args[0]
-			// Ensure pane titles are visible
-			Tmgr.Run("set", "-g", "pane-border-status", "top")
+			// Ensure pane titles are visible. Cosmetic: SetPaneTitle below is the
+			// operation that actually has to succeed, and it reports its own error.
+			runTmux("set", "-g", "pane-border-status", "top")
 			err := Tmgr.SetPaneTitle(title)
 			if err != nil {
 				log.Printf("Error renaming pane to %s: %v", title, err)
@@ -174,11 +199,15 @@ func init() {
 
 				if dir == "width" || dir == "horizontal" || strings.HasSuffix(dir, "%") {
 					newW := (width * v) / 100
-					Tmgr.Run("resize-pane", "-x", strconv.Itoa(newW))
+					if !runTmux("resize-pane", "-x", strconv.Itoa(newW)) {
+						return
+					}
 					log.Printf("Resized width to %d (%d%%)", newW, v)
 				} else if dir == "height" || dir == "vertical" {
 					newH := (height * v) / 100
-					Tmgr.Run("resize-pane", "-y", strconv.Itoa(newH))
+					if !runTmux("resize-pane", "-y", strconv.Itoa(newH)) {
+						return
+					}
 					log.Printf("Resized height to %d (%d%%)", newH, v)
 				}
 				return
@@ -198,7 +227,9 @@ func init() {
 				fmt.Println("Invalid direction. Use left|right|up|down or width/height with %")
 				return
 			}
-			Tmgr.Run("resize-pane", tmuxArg, val)
+			if !runTmux("resize-pane", tmuxArg, val) {
+				return
+			}
 			log.Printf("Resized %s by %s", dir, val)
 		},
 	})

@@ -1,0 +1,11 @@
+# 2026-09-05 20:49 PDT — libs floor computed the way scripts/test.sh does (the repo-wide run aborts at gss/TestIsDirty on this host, see coverage-gate.txt): go test ./... -coverprofile && go tool cover -func | tail -1
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/log	0.008s	coverage: 90.2% of statements
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/cmdline	0.004s	coverage: 96.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/keymap	0.010s	coverage: 98.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/nav	0.010s	coverage: 98.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/overlay	0.010s	coverage: 95.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/prompt	0.010s	coverage: 97.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/search	0.009s	coverage: 94.0% of statements
+total:										(statements)		94.9%
+floor for libs in scripts/test.sh:  libs) echo 80 ;;

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/flags"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp"
@@ -67,6 +68,31 @@ func deriveToolCtx(p payload.Payload, env func(string) string) string {
 	return ""
 }
 
+// linkFlagsBudget bounds the gff flag resolution. It runs concurrently with the
+// origin lookup, so the render only ever waits this long for the flags, and a
+// slow or absent gff simply leaves every link family on.
+const linkFlagsBudget = 100 * time.Millisecond
+
+// buildLinks folds the config mode and the gff flags into the effective link
+// policy. "off" and gsl.links.enabled=false both disable every family; each
+// family flag disables its own. Antigravity has no known usage page, so it gets
+// no usage link unless the ai segment's usage_url option supplies one.
+func buildLinks(mode string, lf flags.Links, remoteURL string, antigravity bool) render.Links {
+	on := mode != config.LinksOff && lf.Enabled
+	l := render.Links{
+		Repo:    on && lf.Repo,
+		DirGit:  on && lf.DirGit,
+		AI:      on && lf.AI,
+		Time:    on && lf.Time,
+		RepoURL: remoteURL,
+		TimeURL: render.DefaultTimeURL,
+	}
+	if !antigravity {
+		l.UsageURL = render.DefaultClaudeUsageURL
+	}
+	return l
+}
+
 // runStatusLine is the shared wiring for both the render and status commands.
 // It loads config, resolves the style, builds deps, runs Detect+Fit, and
 // prints the result. It differs between the two callers only in:
@@ -118,6 +144,46 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 		}
 	}
 
+	// Link policy. The gff flags resolve concurrently (fail-open, bounded by
+	// linkFlagsBudget) while the one-exec origin lookup runs; both are threaded
+	// through Deps so no segment shells out for them.
+	flagCh := make(chan flags.Links, 1)
+	go func() {
+		fctx, fcancel := context.WithTimeout(ctx, linkFlagsBudget)
+		defer fcancel()
+		flagCh <- flags.Resolve(fctx, flags.GFFLookup(os.Getenv))
+	}()
+	// The PR lookup (gss registry, then gh) is pre-computed here too, so both
+	// the repo badge and the directory → vscode.dev changes link share it.
+	prCh := make(chan *repo.RepoInfo, 1)
+	go func() {
+		if cwd == "" || branch == "" {
+			prCh <- nil
+			return
+		}
+		top, terr := git.Toplevel(ctx, gitRunner, cwd)
+		if terr != nil {
+			prCh <- nil
+			return
+		}
+		info, perr := repo.PR(ctx, ghRunner, branch, top, repo.DefaultRegistryPath())
+		if perr != nil {
+			prCh <- nil
+			return
+		}
+		prCh <- info
+	}()
+	remoteURL := ""
+	if cwd != "" {
+		if u, rerr := git.RemoteWebURL(ctx, gitRunner, cwd); rerr == nil {
+			remoteURL = u
+		} else {
+			observe.Default().WithFields(logrus.Fields{"event": "links.remote_url", "error": rerr.Error()}).Debug("no origin web URL; repo links omitted")
+		}
+	}
+	linkFlags := <-flagCh
+	prInfo := <-prCh
+
 	// Derive the host-tool context and resolve the auto-theme palette.
 	home, _ := os.UserHomeDir()
 	toolCtx := deriveToolCtx(p, os.Getenv)
@@ -125,6 +191,7 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 
 	rawStyles := configToRawStyles(cfg.Styles)
 	st := style.ResolveConfig(os.Stderr, cfg.Style, rawStyles, false, autoPalette)
+	st.Links = cfg.EffectiveLinks()
 
 	deps := render.Deps{
 		Payload:      p,
@@ -137,6 +204,8 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 		MCP:          mcpRunner,
 		MCPOpts:      mcp.ActiveCountOptions{},
 		Clock:        time.Now,
+		Links:        buildLinks(cfg.EffectiveLinks(), linkFlags, remoteURL, p.IsAntigravity()),
+		PR:           prInfo,
 	}
 
 	segs := render.BuildSegments(cfg, deps)

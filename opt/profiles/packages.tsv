@@ -51,6 +51,16 @@ watch                -
 -                    net-tools
 -                    psmisc
 
+# Core DNS diagnostics: dig, nslookup, host. Part of the standard toolset on
+# every machine, not a dependency of any one feature — sdk/wlink resolves
+# natively in Go precisely so it needs nothing installed.
+# BREW is '-' DELIBERATELY: macOS already ships dig/nslookup/host in /usr/bin
+# as part of the base OS, so they are present on every platform without a brew
+# install. Do NOT "fix" this by adding `bind` — that formula is KEG-ONLY, so it
+# would not put dig on PATH (`dig` still resolves to /usr/bin/dig); it would
+# cost a large build and change nothing.
+-                    dnsutils
+
 # Nerd Font (gsl) prerequisites. install.sh's font step
 # (sdk/gsl/scripts/install_nerd_font_linux.sh) needs unzip + fontconfig (fc-cache)
 # + curl; installing them here guarantees they exist BEFORE that step runs. macOS
@@ -58,6 +68,28 @@ watch                -
 -                    unzip
 -                    fontconfig
 -                    curl
+
+# Symbol-font fallback for codepoints the Nerd Font does not carry. MesloLGS NF
+# covers the powerline separators (U+E0Bx) and the Nerd Font PUA icons (U+F0xx),
+# but its cmap stops short of Miscellaneous Technical: U+23F4/U+23F5 (the
+# media-control triangles Claude Code's own status footer renders) fall in NO
+# font shipped with Ubuntu, so they show as tofu on an otherwise-correct setup.
+# Symbola covers U+2190-2426 and carries no PUA range, so it complements the
+# Nerd Font as a fontconfig fallback rather than shadowing it. macOS ships
+# Apple Symbols with the same coverage, hence '-' in the BREW column.
+-                    fonts-symbola
+
+# X11 clipboard bridge for terminal programs. herdr's Linux clipboard path is
+# wl-copy -> xclip -> xsel and only THEN the OSC 52 escape, which gnome-terminal
+# (VTE) silently drops -- so with neither tool present every herdr mouse-copy
+# shows a "copied" toast while Cmd+V pastes the OLD clipboard (herdr #2399,
+# VTE #2495). .tmux.conf's copy-pipe binds already assume xsel. Both are tiny;
+# xclip is first in herdr's order, xsel is what tmux calls. Wayland sessions
+# want wl-clipboard instead (tracked in the dotfiles herdr clipboard issue).
+# macOS ships pbcopy/pbpaste, hence '-' in the BREW column. Guarded by
+# opt/bin/pkg-install_test.sh.
+-                    xclip
+-                    xsel
 
 # Kubernetes toolchain. apt has no kind package at all, and kubectl/helm need
 # third-party apt repos that lag upstream — so Linux/WSL gets the official

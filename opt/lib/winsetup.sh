@@ -55,6 +55,16 @@ winsetup_record_skip() {
 # positive in sessions with no controlling terminal (access(2) checks the
 # inode's mode bits, not ctty presence; verified 2026-07-26).
 winsetup_ask() {
+  # A pre-supplied answer wins over the terminal. This is what makes an
+  # unattended run possible: the operator answers once (e.g. in `fleet tui`
+  # before a concurrent update wave) and the answer travels with the run,
+  # instead of every host reaching a prompt nobody is watching. Unrecognized
+  # values fall through to the normal path rather than being guessed at.
+  case "${WINSETUP_ANSWER:-}" in
+    y|Y) echo y; return ;;
+    n|N) echo n; return ;;
+    s|S) echo s; return ;;
+  esac
   if ( : < /dev/tty ) 2>/dev/null; then
     printf 'Choice [y/n/s]: ' > /dev/tty
     read -r _ws_choice < /dev/tty || _ws_choice=""

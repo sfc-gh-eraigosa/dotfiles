@@ -1,0 +1,23 @@
+# P2 — linkstate.State schema (BLOCKING)
+# captured 2026-08-25T05:38:56Z
+
+$ go test -cover ./internal/linkstate/...
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/linkstate	(cached)	coverage: 100.0% of statements
+
+$ go test -v ./internal/linkstate/
+--- PASS: TestState_JSONMatchesTheSpecShape (0.00s)
+--- PASS: TestState_AbsencesAreNullNotZeroObjects (0.00s)
+--- PASS: TestState_EmptyCollectionsAreArraysNotNull (0.00s)
+--- PASS: TestState_Health (0.00s)
+--- PASS: TestState_NonWSLIsNotDegraded (0.00s)
+--- PASS: TestState_EmptyFleetIsNotDegraded (0.00s)
+--- PASS: TestTunnelStateWireValues (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/linkstate	0.003s
+
+$ go test ./... ; go vet ./...
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/cmd	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/linkstate	0.003s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/winhost	0.004s
+vet clean

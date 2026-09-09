@@ -277,11 +277,10 @@ func Resolve(w io.Writer, styleName string, userStyles map[string]Style, forceAS
 	}
 
 	// ── 2. Deep-merge user override (if any) ─────────────────────────────────
+	// An unknown style name with no user entry needs no merge: base is already
+	// powerline from the fallback above.
 	if user, ok := userStyles[styleName]; ok {
 		base = mergeInto(base, user)
-	} else if !found {
-		// Unknown style name AND no user entry → base is already powerline;
-		// nothing extra to merge.
 	}
 
 	// Special case: brand-new style name (not a built-in) with a user entry.

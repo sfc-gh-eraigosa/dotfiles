@@ -264,7 +264,7 @@ fi
 [ -f "$HOME/.openclaw.sh" ] && source "$HOME/.openclaw.sh"
 
 # OpenClaw Completion
-source <(openclaw completion --shell bash)
+command -v openclaw >/dev/null && source <(openclaw completion --shell bash)
 
 # tmux aliases
 # Added by tmux-mgr

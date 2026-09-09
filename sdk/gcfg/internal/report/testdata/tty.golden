@@ -1,0 +1,23 @@
+sfc-gh-eraigosa/dotfiles: 2 drift, 1 unmanaged, 1 not_honoured, 1 unreadable (5 families checked)
+
+general
+  drift      merge.delete_branch_on_merge
+             want true
+             live false
+  drift      description
+             want dotfiles and lab tooling
+             live old text
+
+labels
+  unmanaged  chore
+             live chore (not declared)
+
+security
+  not_honoured non_provider_patterns
+             want true
+             live false
+             GitHub accepted the write but the setting stayed off — non-provider patterns need GitHub Secret Protection on this plan
+
+actions
+  unreadable *
+             GET /repos/o/r/actions/permissions: HTTP 403 Resource not accessible by personal access token (needs repo:Administration:write)

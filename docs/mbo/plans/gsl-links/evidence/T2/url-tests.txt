@@ -1,0 +1,6 @@
+# T2 evidence — 2026-09-05T17:18:51Z
+$ cd sdk/gsl && go test ./internal/git/ ./internal/render/ -race -cover
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git	3.034s	coverage: 91.9% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/render	5.280s	coverage: 90.5% of statements
+
+# mutation checks (test must FAIL when the builder is broken): TreeURL=1 FileURL=1 TimeURL(city slice)=1 — all three bite

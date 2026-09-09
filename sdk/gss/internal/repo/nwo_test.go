@@ -164,6 +164,68 @@ func TestParseRemoteURL(t *testing.T) {
 	}
 }
 
+// TestResolve_DirScopesOriginLookup pins the fix for the silent wrong-repo
+// bug: `gss -r <other-repo> feature start` resolved the NWO from the *cwd*
+// repo, so the feature was registered under the wrong owner/repo with the
+// wrong base commit — no error, no warning. A Resolver with Dir set must
+// read origin from that directory.
+func TestResolve_DirScopesOriginLookup(t *testing.T) {
+	gitr := gitWithOrigin("git@github.com:octo/target.git")
+	r := repo.NewResolverInDir(nil, gitr, repo.NewCache(t.TempDir()), "/somewhere/target")
+
+	nwo, err := r.Resolve(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if nwo.String() != "octo/target" {
+		t.Errorf("nwo = %s; want octo/target", nwo)
+	}
+
+	var got []string
+	for _, c := range gitr.Calls {
+		if c.Name == "-C" {
+			got = append([]string{c.Name}, c.Args...)
+		}
+	}
+	if got == nil {
+		t.Fatalf("origin lookup did not use -C; calls = %+v", gitr.Calls)
+	}
+	if got[1] != "/somewhere/target" {
+		t.Errorf("git -C %q; want /somewhere/target", got[1])
+	}
+}
+
+// TestResolve_DirWinsOverCwdBoundGH is the exact failure that shipped: gh
+// resolves from the process cwd and cannot be pointed elsewhere by the
+// Resolver, so when Dir is set the directory's own origin must win over
+// whatever gh reports about cwd.
+func TestResolve_DirWinsOverCwdBoundGH(t *testing.T) {
+	cwdBoundGH := ghWithRepo("octo/playground") // gh sees the *cwd* repo
+	gitr := gitWithOrigin("git@github.com:octo/dotfiles.git")
+	r := repo.NewResolverInDir(cwdBoundGH, gitr, repo.NewCache(t.TempDir()), "/somewhere/dotfiles")
+
+	nwo, err := r.Resolve(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if nwo.String() != "octo/dotfiles" {
+		t.Errorf("nwo = %s; want octo/dotfiles (the --repo target, not cwd)", nwo)
+	}
+}
+
+// TestResolve_NoDirKeepsGHPath guards the default path: with no Dir, gh
+// stays authoritative and behaviour is unchanged.
+func TestResolve_NoDirKeepsGHPath(t *testing.T) {
+	r := repo.NewResolver(ghWithRepo("octo/proj"), gitWithOrigin("git@github.com:octo/proj.git"), repo.NewCache(t.TempDir()))
+	nwo, err := r.Resolve(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if nwo.String() != "octo/proj" {
+		t.Errorf("nwo = %s; want octo/proj", nwo)
+	}
+}
+
 func TestCache_RoundTripAndDivergence(t *testing.T) {
 	c := repo.NewCache(t.TempDir())
 	if _, ok := c.Get("urlA"); ok {

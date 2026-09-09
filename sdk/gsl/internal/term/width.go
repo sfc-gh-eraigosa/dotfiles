@@ -118,17 +118,45 @@ func StderrWidthSource() func() (int, bool) {
 // re-apply the colour.
 func StripANSI(s string) string { return ansiStripper(s) }
 
-// ansiStripper removes ANSI SGR escape sequences (ESC [ ... m) from s.
-// It handles only the SGR form this codebase emits; other OSC / DEC sequences
-// are left intact (they don't appear in gsl output).
+// ansiStripper removes ANSI escape sequences from s: CSI (ESC [ ... final) —
+// which covers the SGR colour sequences this codebase emits — and OSC
+// (ESC ] ... terminator), which covers the OSC 8 hyperlinks the join layer
+// wraps around linkable segments.
+//
+// OSC 8 matters for width: the sequence carries a full URL, and every one of
+// those bytes would otherwise be counted as display width by DisplayWidth. A
+// ~55-column PR URL would make the fit loop believe the line is 55 columns
+// wider than it is and start shedding segments that fit perfectly well.
+//
+// Both ST (ESC \) and the legacy BEL terminator are accepted, because
+// terminals differ on which they emit and gsl must measure either correctly.
+// An unterminated OSC consumes to end-of-string: that is the safe direction —
+// a partial escape is not display width either.
 func ansiStripper(s string) string {
-	if !strings.Contains(s, "\x1b[") {
+	if !strings.Contains(s, "\x1b") {
 		return s
 	}
 	var b strings.Builder
 	b.Grow(len(s))
 	i := 0
 	for i < len(s) {
+		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == ']' {
+			// OSC: ESC ] <params> <ST | BEL>, where ST is ESC \.
+			j := i + 2
+			for j < len(s) {
+				if s[j] == '\a' { // BEL
+					j++
+					break
+				}
+				if s[j] == '\x1b' && j+1 < len(s) && s[j+1] == '\\' { // ST
+					j += 2
+					break
+				}
+				j++
+			}
+			i = j
+			continue
+		}
 		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
 			// Scan past the CSI sequence: ESC [ <params> <final>
 			// Final byte is in range 0x40–0x7E.

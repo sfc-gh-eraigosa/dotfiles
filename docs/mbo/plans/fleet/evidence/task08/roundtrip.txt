@@ -1,0 +1,23 @@
+=== 2026-08-10T05:53:31Z — Task 8 membership round-trip (COPY of ssh config) ===
+$ fleet add tmphost --dry-run
+--- would write /tmp/fleet-rt.cfg ---
+# IP: 192.168.0.128
+Host host-pi  # fleet
+    Hostname host-pi
+  dry-run wrote nothing: yes
+$ fleet add tmphost
+added tmphost to the fleet
+$ fleet status tmphost
+HOST             COMMIT    LAST RUN      STATUS
+tmphost          -         -             unreachable
+  after re-add, Host tmphost blocks: 1 (expect 1 — idempotent)
+$ fleet remove tmphost  (unmark)
+tmphost removed from the fleet (ssh access kept)
+  ssh still resolves it: 10.0.0.99
+  in fleet scope: 0 (expect 0)
+$ fleet remove tmphost --purge
+tmphost purged from the ssh config entirely
+
+=== collateral-edit check: diff vs original ===
+BYTE-IDENTICAL to the original — zero collateral edits
+  backups taken: 3

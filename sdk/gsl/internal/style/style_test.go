@@ -771,12 +771,14 @@ func TestResolveConfig_AutoPalette_EmptyName_NoMerge(t *testing.T) {
 	sNoAuto := style.ResolveConfig(&buf, "powerline", nil, false, "")
 	sWithDark := style.ResolveConfig(&buf, "powerline", nil, false, "dark")
 
-	// Both should have the same segment keys (dark palette matches builtins).
+	// The "dark" auto-palette intentionally matches the builtins, so every
+	// segment colour must agree. This used to be an empty if body that asserted
+	// nothing beyond "did not panic"; making it a real comparison is what the
+	// surrounding comment always claimed it was doing.
 	for _, key := range style.SegmentColorKeys() {
 		if sNoAuto.Theme[key] != sWithDark.Theme[key] {
-			// The "dark" palette intentionally matches the builtins. But even if
-			// it didn't, the empty-name path must not crash.
-			// Just assert no panic.
+			t.Errorf("segment %q: auto-palette %q must match the builtin, got %q vs %q",
+				key, "dark", sNoAuto.Theme[key], sWithDark.Theme[key])
 		}
 	}
 }

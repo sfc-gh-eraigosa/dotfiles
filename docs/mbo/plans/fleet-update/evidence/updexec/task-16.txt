@@ -1,0 +1,21 @@
+# 2026-09-04T15:57:08Z task 16
+$ gofmt -l internal/updexec/
+$ go vet ./...
+$ go test -race ./internal/updexec/... -run Console|Background|Preamble|ExitCode -v
+=== RUN   TestConsoleStreamsBatchAndHandsOffInteractive
+--- PASS: TestConsoleStreamsBatchAndHandsOffInteractive (0.00s)
+=== RUN   TestBackgroundRefusesInteractive
+--- PASS: TestBackgroundRefusesInteractive (0.00s)
+=== RUN   TestPreambleAndStdinApplyToRunStepsOnly
+--- PASS: TestPreambleAndStdinApplyToRunStepsOnly (0.00s)
+=== RUN   TestExitCodeMapsExitErrorAndSSH255
+--- PASS: TestExitCodeMapsExitErrorAndSSH255 (0.00s)
+=== RUN   TestConsoleInteractiveRespectsDeadline
+--- PASS: TestConsoleInteractiveRespectsDeadline (0.00s)
+=== RUN   TestRetryOnExitCodeMatchesOnlyThatCode
+--- PASS: TestRetryOnExitCodeMatchesOnlyThatCode (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	1.030s
+$ go test -race -cover ./internal/updexec/... ./internal/runner/...
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	(cached)	coverage: 92.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	(cached)	coverage: 57.0% of statements

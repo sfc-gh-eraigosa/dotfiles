@@ -1,0 +1,29 @@
+# managed by dotfiles: opt/scripts/system/install_herdr.sh config
+#
+# Rendered into ~/.config/herdr/config.toml by install.sh (config phase, gff
+# flag install.tools.herdr-config). Re-rendered on every run while this marker
+# line is present; delete the marker to take ownership of the file (install.sh
+# then leaves it alone), or set HERDR_CONFIG_FORCE=1 to reclaim it.
+#
+# Full defaults: `herdr --default-config`   Validate: `herdr config check`
+# Apply to a running server: `herdr server reload-config`
+
+[theme]
+# herdr asks the host terminal for its light/dark appearance (DEC 2031 color
+# scheme reports) and switches between the two siblings below, so the same
+# shell opened from a "Solarized Dark" or "Solarized Light" terminal profile
+# gets a readable sidebar either way. `name` is the fallback when the host
+# does not answer: the fleet standard is Solarized Dark (terminal-theme.sh,
+# Windows Terminal profiles from setup-apps.ps1). Override at install time
+# with HERDR_THEME_DARK / HERDR_THEME_LIGHT (any built-in herdr theme name).
+name = "@HERDR_THEME_DARK@"
+auto_switch = true
+light_name = "@HERDR_THEME_LIGHT@"
+dark_name = "@HERDR_THEME_DARK@"
+
+[keys]
+# tmux-style prefix on ctrl+a. herdr's default ctrl+b is also tmux's default,
+# so a herdr pane running inside (or alongside) tmux would fight over it.
+# Press ctrl+a twice to send a literal ctrl+a to the pane (shell line-start).
+# Everything else keeps herdr's defaults: `prefix+?` lists every binding.
+prefix = "ctrl+a"

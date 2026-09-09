@@ -255,8 +255,12 @@ func appendMigrateLog(summary string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	// This file is written, so a failed Close can lose buffered data. Report it
+	// when the write itself succeeded rather than deferring it away.
 	_, err = fmt.Fprintf(f, "=== %s ===\n%s\n", time.Now().UTC().Format(time.RFC3339), summary)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
 	return err
 }
 

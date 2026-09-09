@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# commit-msg — judge the MESSAGE, whether it came from -m, -F, or an editor.
+#
+# The agent hook reads the message only when it is inline in the command;
+# `git commit -F file` and an editor session are invisible to it. Git hands
+# every message through here as a file, so this is the one place all forms
+# meet. Comment lines (#) are dropped: git strips them before recording.
+set -u
+# shellcheck source=_privacy_common.sh
+. "$(cd "$(dirname "$0")" && pwd)/_privacy_common.sh"
+privacy_hooks_load_rules "$0" || exit 1
+
+msg="$(grep -Ev '^#' "$1" 2>/dev/null || true)"
+privacy_hooks_judge commit-msg "$msg"
+privacy_hooks_chain commit-msg "$@"

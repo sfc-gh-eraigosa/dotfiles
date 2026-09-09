@@ -24,6 +24,7 @@ trap 'rm -rf "$H"' EXIT
 mkdir -p "$H/.claude/hooks"
 cp "$REPO_ROOT/ai/hooks/safety_guard.sh" "$H/.claude/hooks/"
 cp "$REPO_ROOT/ai/hooks/privacy_guard.sh" "$H/.claude/hooks/"
+cp "$REPO_ROOT/ai/hooks/privacy_rules.sh" "$H/.claude/hooks/"   # the guard fails closed without its rule library
 cp "$REPO_ROOT/ai/hooks/strip_heredocs.awk" "$H/.claude/hooks/"
 chmod +x "$H/.claude/hooks/"*.sh
 touch "$H/.claude/statusline-command.sh"
@@ -81,7 +82,7 @@ assert_exit_code 0 "Gemini-style BeforeTool hooks validate (event-agnostic)" \
 # Antigravity hooks.json layout (named hooks, no top-level "hooks" key), with
 # the adapter bridging agy's {toolCall}/{decision} dialect to the shared guards.
 mkdir -p "$H/.gemini/config/hooks"
-cp "$REPO_ROOT/ai/hooks/safety_guard.sh" "$REPO_ROOT/ai/hooks/privacy_guard.sh" \
+cp "$REPO_ROOT/ai/hooks/safety_guard.sh" "$REPO_ROOT/ai/hooks/privacy_guard.sh" "$REPO_ROOT/ai/hooks/privacy_rules.sh" \
    "$REPO_ROOT/ai/hooks/strip_heredocs.awk" "$REPO_ROOT/ai/hooks/antigravity_adapter.sh" \
    "$H/.gemini/config/hooks/"
 chmod +x "$H/.gemini/config/hooks/"*.sh

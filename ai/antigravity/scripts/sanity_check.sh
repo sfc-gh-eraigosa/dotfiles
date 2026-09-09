@@ -104,6 +104,31 @@ else
     echo "SKIP: ~/.gemini/antigravity-cli/settings.json not present"
 fi
 
+# 9. agy-parity: the forced deny/ask policy is present in agy's own settings
+# (re-applied on every install) and the rendered dotfiles plugin exists.
+echo "Verifying Antigravity forced permission policy + dotfiles plugin..."
+if [ -f "$AGY_SETTINGS" ]; then
+    if ! jq -e '.permissions.deny | index("command(rm -rf /)")' "$AGY_SETTINGS" > /dev/null 2>&1; then
+        echo "FAIL: forced deny policy missing from $AGY_SETTINGS (command(rm -rf /))"
+        exit 1
+    fi
+    if ! jq -e '.permissions.ask | index("command(sudo)")' "$AGY_SETTINGS" > /dev/null 2>&1; then
+        echo "FAIL: forced ask policy missing from $AGY_SETTINGS (command(sudo))"
+        exit 1
+    fi
+    echo "PASS: forced deny/ask policy present"
+else
+    echo "SKIP: ~/.gemini/antigravity-cli/settings.json not present"
+fi
+AGY_PLUGIN="$HOME/.gemini/config/plugins/dotfiles"
+if [ -f "$AGY_PLUGIN/plugin.json" ] && [ -f "$AGY_PLUGIN/rules/AGENTS.md" ] \
+   && [ -n "$(find "$AGY_PLUGIN/commands" -maxdepth 1 -name '*.toml' 2>/dev/null | head -1)" ]; then
+    echo "PASS: dotfiles plugin rendered ($AGY_PLUGIN)"
+else
+    echo "FAIL: dotfiles plugin not rendered under $AGY_PLUGIN"
+    exit 1
+fi
+
 echo "--------------------------------------------------"
 echo "SANITY CHECK PASSED SUCCESSFULLY"
 echo "--------------------------------------------------"

@@ -85,6 +85,51 @@ and auditable:
 - **Settings changes leave diffs**: ruleset snapshots + the GitHub audit log
   cover the one surface PRs can't.
 
+## Troubleshooting: a green PR that keeps getting dequeued
+
+Symptom: every required check is green, the branch is up to date and
+conflict-free, yet Mergify dequeues with
+
+> Mergify failed to merge the pull request. GitHub can't merge the pull
+> request after 10 minutes of retrying. Repository rule violations found —
+> N of 8 required status checks have not succeeded: M expected.
+
+That is a **queue livelock**, and it is a CI-trigger bug, not a code problem.
+Mergify writes `queued` / `dequeued` labels as it moves a PR through the
+queue. If a workflow that owns required checks is dispatched by
+`labeled` / `unlabeled` pull_request events, Mergify's own bookkeeping
+restarts that workflow at the exact moment it holds the merge lock — the
+required checks flip back to `expected`, GitHub refuses the merge, Mergify
+exhausts its 10-minute retry budget and dequeues, and the `dequeued` label
+write restarts the whole cycle.
+
+How to tell it apart from a real failure: list the check runs for the head
+SHA and look for many runs of the same job on **one unchanged commit**.
+
+```sh
+sha=$(gh pr view <N> --json headRefOid -q .headRefOid)
+gh api "repos/{owner}/{repo}/commits/$sha/check-runs?per_page=100" \
+  -q '.check_runs[] | "\(.started_at)\t\(.name)\t\(.conclusion)"' | sort -k2
+gh api "repos/{owner}/{repo}/issues/<N>/timeline?per_page=100" \
+  -q '.[] | select(.event | test("labeled")) | "\(.created_at)\t\(.event)\t\(.label.name)\t\(.actor.login)"'
+```
+
+If the label timeline and the extra runs line up second-for-second, it is
+this bug. Two rules keep it away, both learned the hard way:
+
+1. **Never let a label event restart a required check on a non-draft PR.**
+   `.github/workflows/docker-image.yml` gates its three root jobs on the
+   label name and draft status (see "MERGIFY QUEUE LIVELOCK" in that file's
+   `on:` block, found via #264). A label event carries no new code, so there
+   is nothing to re-validate.
+2. **Never fold label events into a shared, cancelling concurrency group.**
+   Entering the queue can add and remove labels in the same instant; two runs
+   start together and one cancels the other, and a required check whose newest
+   run is `cancelled` is not `success` (found via #243).
+
+A job skipped by `if:` reports its required check as successful, so gating
+jobs this way does not strand the merge.
+
 ## Break-glass (admin emergencies)
 
 The ruleset grants `Repository admin` unconditional bypass (`bypass_actors`,
@@ -94,6 +139,32 @@ logged confirmation) or edit the ruleset directly. Obligations after the
 fire: re-run `make ruleset-snapshot` and commit the diff if settings changed,
 and note the bypass in the PR. Bypass is deliberate friction — never part of
 the routine flow.
+
+## Pending: promote `Go Lint (golangci-lint)` to a ruleset-required check
+
+The `go-lint` job (`.github/workflows/docker-image.yml`) is STRICT — it runs
+`make lint-go` with no `continue-on-error` — and is listed in
+`.mergify.yml`'s `merge_protections`. It is **not yet in the GitHub ruleset's
+native required-check list**, which is still the real enforcer (see Rollout
+state below), so a Go regression currently fails that job without blocking a
+merge.
+
+Order matters, and it is the reverse of the obvious one:
+
+1. **Merge the PR that adds the job first.** Adding the context to the ruleset
+   beforehand would make every open PR wait on a check that cannot report —
+   their branches predate the job — which is the "waiting for queue
+   conditions" deadlock described above.
+2. Then add `Go Lint (golangci-lint)` to the ruleset's required checks.
+3. Then `make ruleset-snapshot` and commit the resulting
+   `.github/rulesets/main.json` diff.
+
+Why this check exists separately from the `lint` job: `make lint` is
+warn-only across every linter, so a 212-finding Go backlog accumulated on
+`main` under a permanently green "Lint" check. The Go category is now at zero
+across all six `sdk/` modules, which is the condition the `lint` job names for
+going strict "per linter as each category reaches zero". Shell (~90) and
+markdown (~979) are not there yet, so `make lint` itself stays warn-only.
 
 ## Rollout state
 

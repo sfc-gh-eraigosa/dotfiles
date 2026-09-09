@@ -1,0 +1,6 @@
+# 2026-09-05 21:05 PDT — RUN-RED: go test ./tui/overlay/ 2>&1 | head -5
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/overlay [github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/overlay.test]
+tui/overlay/overlay_test.go:28:9: undefined: Help
+tui/overlay/overlay_test.go:28:14: undefined: Plain
+tui/overlay/overlay_test.go:29:3: undefined: Section
+tui/overlay/overlay_test.go:36:51: undefined: Help

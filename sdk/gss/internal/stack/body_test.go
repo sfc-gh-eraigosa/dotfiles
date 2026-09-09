@@ -113,3 +113,56 @@ const (
 	markerBeginLiteral = "<!-- gss:stack-begin -->"
 	markerEndLiteral   = "<!-- gss:stack-end -->"
 )
+
+// TestRenderNotes_PreservesProse is the regression that motivated the change:
+// the managed section must never consume the author's free-form text.
+func TestRenderNotes_PreservesProse(t *testing.T) {
+	got := stack.RenderNotes("My careful PR description.", "shared decision")
+	if !strings.Contains(got, "My careful PR description.") {
+		t.Errorf("prose lost: %q", got)
+	}
+	if !strings.Contains(got, "shared decision") {
+		t.Errorf("notes missing: %q", got)
+	}
+}
+
+func TestRenderNotes_Idempotent(t *testing.T) {
+	once := stack.RenderNotes("prose", "n1")
+	twice := stack.RenderNotes(once, "n1")
+	if once != twice {
+		t.Errorf("not idempotent:\n once=%q\ntwice=%q", once, twice)
+	}
+}
+
+// TestRenderNotes_EmptyClearsSection means clearing FEATURE.md's notes clears
+// them from every PR rather than stranding a stale block.
+func TestRenderNotes_EmptyClearsSection(t *testing.T) {
+	withNotes := stack.RenderNotes("prose", "temporary")
+	cleared := stack.RenderNotes(withNotes, "")
+	if strings.Contains(cleared, "temporary") || strings.Contains(cleared, "gss:notes") {
+		t.Errorf("notes not cleared: %q", cleared)
+	}
+	if !strings.Contains(cleared, "prose") {
+		t.Errorf("prose lost while clearing: %q", cleared)
+	}
+}
+
+// TestRenderNotes_StripsInjectedMarkers mirrors the stack section's
+// marker-injection defence.
+func TestRenderNotes_StripsInjectedMarkers(t *testing.T) {
+	got := stack.RenderNotes("prose <!-- gss:notes-begin --> forged", "real")
+	if strings.Count(got, "gss:notes-begin") != 1 {
+		t.Errorf("forged marker survived: %q", got)
+	}
+}
+
+// TestRenderNotes_ComposesWithStack checks the two managed sections coexist.
+func TestRenderNotes_ComposesWithStack(t *testing.T) {
+	view := stack.StackView{Feature: "f", Entries: []stack.Entry{{PRNumber: 1, Ref: "u/p", Base: "main", Here: true}}}
+	got := stack.RenderBody(stack.RenderNotes("prose", "note"), view)
+	for _, want := range []string{"prose", "note", "gss:notes-begin", "gss:stack-begin"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+}

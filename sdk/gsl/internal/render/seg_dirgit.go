@@ -2,11 +2,9 @@ package render
 
 import (
 	"context"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
 )
 
@@ -36,6 +34,17 @@ type DirGitSegment struct {
 	Info *git.Info
 	// home overrides $HOME for ~-abbreviation (tests). Empty → os.UserHomeDir.
 	home string
+
+	// Links is the link policy (Deps.Links): DirGit gates the directory link,
+	// Repo the branch → GitHub tree link. Zero value ⇒ no links.
+	Links Links
+	// PR is the PRE-COMPUTED pull-request lookup (Deps.PR), used for the
+	// directory → vscode.dev "changes" link. Nil ⇒ no PR known.
+	PR *repo.RepoInfo
+	// DirLink selects the directory link target: "vscode" (default — the
+	// vscode.dev view of the PR changes, else of the branch, falling back to
+	// file:// off GitHub) or "file" (always file://).
+	DirLink string
 }
 
 // NewDirGitSegment builds a DirGitSegment. cwd may be "" to fall back to
@@ -64,92 +73,19 @@ func (s *DirGitSegment) status(ctx context.Context, dir string) (git.Info, bool)
 	return info, true
 }
 
-// Render implements Segment.
-//
-// Returns raw (unpainted) text plus the colorKey "dirgit". compactLevel is
-// accepted but only level 0 (full detail) is implemented; PHASE 2 will add
-// branch abbreviation and compaction for levels 1–3.
-func (s *DirGitSegment) Render(ctx context.Context, st style.Style, _ int) (text, colorKey string, ok bool) {
-	cwd := s.Cwd
-	if cwd == "" {
-		if wd, err := os.Getwd(); err == nil {
-			cwd = wd
-		}
-	}
-	if cwd == "" {
-		return "", "", false
-	}
-
-	var b strings.Builder
-	if g := glyph(st, "dirgit"); g != "" {
-		b.WriteString(g)
-		b.WriteString(" ")
-	}
-	b.WriteString(s.abbrev(cwd))
-
-	// Git detail (best-effort; omit on any error / cancellation).
-	if info, ok := s.status(ctx, cwd); ok {
-		s.appendGit(&b, st, info)
-	}
-
-	return b.String(), "dirgit", true
+// Render implements Segment. It delegates to RenderLinked and discards the
+// spans, so the legacy path can never drift from the detect/format path.
+func (s *DirGitSegment) Render(ctx context.Context, st style.Style, level int) (text, colorKey string, ok bool) {
+	text, colorKey, _, ok = s.RenderLinked(ctx, st, level)
+	return text, colorKey, ok
 }
 
-// abbrev returns the basename of dir, with $HOME collapsed to "~" and the
-// repo/home root itself shown as "~".
-func (s *DirGitSegment) abbrev(dir string) string {
-	home := s.home
-	if home == "" {
-		if h, err := os.UserHomeDir(); err == nil {
-			home = h
-		}
+// RenderLinked implements LinkedSegment: detect once, then format with spans.
+func (s *DirGitSegment) RenderLinked(ctx context.Context, st style.Style, level int) (text, colorKey string, spans []LinkSpan, ok bool) {
+	d, ok := s.detect(ctx)
+	if !ok {
+		return "", "", nil, false
 	}
-	if home != "" {
-		if dir == home {
-			return "~"
-		}
-		if strings.HasPrefix(dir, home+string(os.PathSeparator)) {
-			// Show ~/<basename> only as the basename to keep the segment short;
-			// a leading "~" indicates we're under home.
-			base := filepath.Base(dir)
-			return base
-		}
-	}
-	base := filepath.Base(dir)
-	if base == "" || base == "." {
-		return dir
-	}
-	return base
-}
-
-// appendGit writes the git portion (branch + p10k counts) to b. Nothing is
-// written when the branch is empty (defensive).
-func (s *DirGitSegment) appendGit(b *strings.Builder, st style.Style, info git.Info) {
-	if info.Branch != "" {
-		b.WriteString(" ")
-		if g := glyph(st, "branch"); g != "" {
-			b.WriteString(g)
-			b.WriteString(" ")
-		}
-		b.WriteString(info.Branch)
-	}
-
-	writeBadge := func(iconKey string, n int) {
-		if n > 0 {
-			b.WriteString(" ")
-			b.WriteString(countBadge(st, iconKey, n))
-		}
-	}
-
-	writeBadge("staged", info.Staged)
-	writeBadge("unstaged", info.Unstaged)
-	writeBadge("untracked", info.Untracked)
-
-	if info.Stashes > 0 {
-		b.WriteString(" ")
-		b.WriteString(countBadge(st, "stash", info.Stashes))
-	}
-
-	writeBadge("ahead", info.Ahead)
-	writeBadge("behind", info.Behind)
+	text, colorKey, spans = formatLinkedOf(d, st, level)
+	return text, colorKey, spans, text != ""
 }

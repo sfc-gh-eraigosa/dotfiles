@@ -1,0 +1,42 @@
+# 2026-09-03T15:14:11Z live dotfiles plugin + config.json
+~/.gemini/config/plugins/dotfiles:
+commands
+plugin.json
+rules
+
+~/.gemini/config/plugins/dotfiles/commands:
+gss-pr.toml
+gss-scan.toml
+gss.toml
+ssh-find.toml
+ssh-keys.toml
+sync.toml
+team.toml
+tmux-agent.toml
+description = "Stage, commit, and push pending changes via the gss skill in one guided flow"
+prompt = """
+
+5
+{
+  "agent-creator": {
+    "enabled": true
+  },
+  "code-review": {
+    "enabled": true
+  },
+  "conductor": {
+    "enabled": true
+  },
+  "mcp-local-memory": {
+    "enabled": true
+  },
+  "mcp-toolbox": {
+    "enabled": true
+  },
+  "superpowers": {
+    "enabled": true
+  },
+  "dotfiles": {
+    "enabled": true
+  }
+}

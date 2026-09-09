@@ -395,3 +395,30 @@ func TestConfigSet_Style(t *testing.T) {
 		}
 	})
 }
+
+// TestConfigSet_Links sets the links affordance mode and rejects bad values.
+func TestConfigSet_Links(t *testing.T) {
+	cfg := config.Default()
+	withTempConfig(t, cfg, func() {
+		captureStdout(t, func() {
+			if err := configSetCmd.RunE(configSetCmd, []string{"links", "plain"}); err != nil {
+				t.Fatalf("config set links plain: %v", err)
+			}
+		})
+		loaded, _ := config.Load(config.DefaultPath())
+		if loaded.Links != "plain" {
+			t.Errorf("Links: got %q, want %q", loaded.Links, "plain")
+		}
+		if err := configSetCmd.RunE(configSetCmd, []string{"links", "bogus"}); err == nil {
+			t.Error("config set links bogus: want an error")
+		}
+		out := captureStdout(t, func() {
+			if err := printConfigKey(loaded, "links"); err != nil {
+				t.Fatalf("config get links: %v", err)
+			}
+		})
+		if strings.TrimSpace(out) != "plain" {
+			t.Errorf("config get links = %q, want plain", out)
+		}
+	})
+}

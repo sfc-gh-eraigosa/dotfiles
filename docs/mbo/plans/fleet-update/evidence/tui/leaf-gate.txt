@@ -1,0 +1,55 @@
+Leaf E gate — go test -race -cover ./...
+Date: 2026-09-05
+
+$ cd sdk/fleet && go test -race -cover ./...
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	coverage: 63.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan	coverage: 90.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag	coverage: 96.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keys	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/lanscan	coverage: 80.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach	coverage: 82.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	coverage: 59.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf	coverage: 94.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail	coverage: 93.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	coverage: 91.9% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan	coverage: 93.9% of statements
+
+cmd coverage 63.0% >= the leaf D baseline of 60.7% — gate satisfied.
+
+NOTE: internal/updexec/exec_test.go's TestRescueOffBranchRestoresTheBranchWithoutAStash
+is a pre-existing flaky test (reproduced at 2/30 on the unmodified pre-task
+commit, unrelated to any change in this leaf) — see evidence/tui/task-27a.txt
+for the full write-up. It did not fail on this gate run.
+
+$ bash sdk/fleet/build.sh
+Building fleet v0.3.1-42-g232806e with go version go1.26.1 linux/arm64...
+fleet built and installed to ${HOME}/opt/bin/fleet
+
+$ ${HOME}/opt/bin/fleet tui --help
+Interactive host list: vim navigation, search, selection, concurrent updates
+
+Usage:
+  fleet tui [flags]
+
+Flags:
+      --file string         explicit fleet.yaml plan path (skips gff resolution)
+  -h, --help                help for tui
+      --jobs int            max concurrent background updates (default 4)
+      --ref string          baseline git ref (what hosts are compared against) (default "origin/main")
+      --update-ref string   git ref to update hosts TO (default "main")
+
+Global Flags:
+      --config string           ssh config path (default "${HOME}/.ssh/config")
+      --json                    machine-readable output
+      --marker string           comment marking a host as in-fleet (default "#fleet")
+      --no-wake                 do not try to rouse unreachable hosts (faster, literal answer)
+      --repo string             local dotfiles repo used for the baseline (default "${HOME}/git/dotfiles")
+      --wake-timeout duration   per-host budget for the reachability ladder (default 12s)
+
+G5 (a live TUI run, `u` on two hosts — one background, one needing sudo, to
+confirm the background lane streams through the plan executor and the
+interactive lane hands off to `fleet update`) is LEFT FOR THE OPERATOR. This
+agent did not run the TUI interactively, per the task's instruction.

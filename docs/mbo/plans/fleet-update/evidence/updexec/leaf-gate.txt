@@ -1,0 +1,3 @@
+# 2026-09-04T15:57:31Z leaf B gate
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	(cached)	coverage: 92.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	(cached)	coverage: 57.0% of statements

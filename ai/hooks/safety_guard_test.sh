@@ -11,8 +11,12 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 HOOK="$REPO_ROOT/ai/hooks/safety_guard.sh"
-PASS=0
-FAIL=0
+# Results are appended to a file, not kept in shell variables: several case
+# groups below run inside ( … ) subshells (own cwd / own $HOME) and a counter
+# incremented there never reaches the summary — a failing case would have gone
+# unreported and the driver would still exit 0.
+RESULTS="$(mktemp "${TMPDIR:-/tmp}/sg-results.XXXXXX")"
+trap 'rm -f "$RESULTS"' EXIT
 
 # usage: assert_exit <expected_code> <tool> <command> <label>
 assert_exit() {
@@ -25,10 +29,10 @@ assert_exit() {
     set -e
     if [ "$rc" = "$expected" ]; then
         echo "PASS: $label (exit $rc)"
-        PASS=$((PASS+1))
+        echo PASS >> "$RESULTS"
     else
         echo "FAIL: $label (expected $expected, got $rc) :: $out"
-        FAIL=$((FAIL+1))
+        echo FAIL >> "$RESULTS"
     fi
 }
 
@@ -43,10 +47,10 @@ assert_json_match() {
     set -e
     if [ "$rc" = "$expected" ] && echo "$out" | grep -q "$pattern"; then
         echo "PASS: $label (exit $rc + JSON match)"
-        PASS=$((PASS+1))
+        echo PASS >> "$RESULTS"
     else
         echo "FAIL: $label (expected $expected + pattern '$pattern', got $rc) :: $out"
-        FAIL=$((FAIL+1))
+        echo FAIL >> "$RESULTS"
     fi
 }
 
@@ -157,6 +161,65 @@ echo "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" > "$HOME/.config/gss/approval.to
         "cross-repo gss push: stale token (does not match target-repo HEAD)"
 )
 
+# === gss target-repo resolution: --repo/-r and $HOME-prefixed cd (issue #302) ===
+# The hook must resolve the target repo the way gss does — `--repo/-r <path>`
+# first, then a leading `cd <path> &&`, then the hook's CWD — and must expand
+# `~` / `$HOME` / `${HOME}` in that path (assistants write paths that way; the
+# privacy guard forbids the literal). A target it cannot resolve is a clear
+# deny, never a silent fallback to the CWD's HEAD. Runs under a throwaway
+# $HOME holding its own git repo so the cases do not depend on where this
+# checkout lives; the session cwd is THIS repo, a different one — the exact
+# shape from the issue. Commands are single-quoted: the `$HOME` reaches the
+# hook unexpanded, as it does from an assistant's Bash call.
+(
+    FAKE_HOME="$(mktemp -d "${TMPDIR:-/tmp}/sg-home.XXXXXX")"
+    git init -q "$FAKE_HOME/repo"
+    git -C "$FAKE_HOME/repo" -c user.name=sg-test -c user.email=sg-test commit -q --allow-empty -m init
+    mkdir -p "$FAKE_HOME/.config/gss"
+    TARGET_HEAD="$(git -C "$FAKE_HOME/repo" rev-parse HEAD)"
+    CWD_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+    export HOME="$FAKE_HOME"
+    unset GSS_WORKTREE_ROOT
+    cd "$REPO_ROOT"
+    echo "$TARGET_HEAD" > "$HOME/.config/gss/approval.token"
+    # Fresh token for the TARGET repo → allowed, whatever the cwd's HEAD is.
+    assert_exit 0 Bash 'cd $HOME/repo && gss push'                 'cd $HOME/<repo> && gss push: token matches target HEAD'
+    assert_exit 0 Bash 'cd ${HOME}/repo && gss push'               'cd ${HOME}/<repo> && gss push'
+    assert_exit 0 Bash 'cd "$HOME/repo" && gss push'               'cd "$HOME/<repo>" (quoted) && gss push'
+    assert_exit 0 Bash 'cd ~/repo && gss push'                     'cd ~/<repo> && gss push'
+    assert_exit 0 Bash 'cd "$HOME"/repo && gss push'               'cd "$HOME"/<repo> (quoted variable only) && gss push'
+    assert_exit 0 Bash 'gss push --repo $HOME/repo'                'gss push --repo <target>: token matches target HEAD'
+    assert_exit 0 Bash 'gss push -r $HOME/repo'                    'gss push -r <target>'
+    assert_exit 0 Bash 'gss --repo=$HOME/repo push'                'gss --repo=<target> push (global flag before the verb)'
+    assert_exit 0 Bash 'gss -r $HOME/repo push'                    'gss -r <target> push (global flag before the verb)'
+    assert_exit 0 Bash 'gss feature pr --ready --repo $HOME/repo'  'feature pr --ready --repo <target>'
+    # --repo wins over a leading cd (gss honours the flag, not the cwd).
+    assert_exit 0 Bash "cd $REPO_ROOT && gss push --repo \$HOME/repo" '--repo beats a leading cd'
+    # A token minted from the cwd repo is stale for the target — and the deny
+    # names the repo it compared against and how that repo was chosen.
+    echo "$CWD_HEAD" > "$HOME/.config/gss/approval.token"
+    assert_json_match 2 Bash 'cd $HOME/repo && gss push'    'cd $HOME/<repo>: token for the cwd repo is stale for the target' "$FAKE_HOME/repo"
+    assert_json_match 2 Bash 'cd $HOME/repo && gss push'    'stale deny says the target came from the leading cd'          'leading cd'
+    assert_json_match 2 Bash 'gss push --repo $HOME/repo'   'stale deny says the target came from --repo'                 'resolved from --repo'
+    assert_exit 2 Bash 'gss --repo $HOME/repo push'         'global --repo before the verb does not skip the token gate'
+    assert_exit 2 Bash 'gss -r $HOME/repo feature pr --ready' 'global -r before feature pr --ready does not skip the token gate'
+    # An unresolvable target is a clear deny, not a silent compare against cwd.
+    echo "$TARGET_HEAD" > "$HOME/.config/gss/approval.token"
+    assert_json_match 2 Bash 'cd $WORKTREE/repo && gss push' 'cd $OTHER_VAR/<repo>: could not resolve (only ~/$HOME expand)' 'could not resolve'
+    assert_json_match 2 Bash 'gss push --repo $HOME/nope'    '--repo <missing dir>: could not resolve'                     'could not resolve'
+    assert_json_match 2 Bash 'cd $HOMEX/repo && gss push'    'cd $HOMEX/<repo>: $HOME is not a prefix match'                'could not resolve'
+    assert_json_match 2 Bash 'cd ~other/repo && gss push'    'cd ~other/<repo>: only bare ~ expands'                        'could not resolve'
+    # `-r` in an earlier, unrelated segment is not gss's --repo; cwd is the target.
+    echo "$CWD_HEAD" > "$HOME/.config/gss/approval.token"
+    assert_exit 0 Bash 'ls -r /tmp && gss push'                    'unrelated -r before gss is not --repo'
+    # The same expansion serves the worker-worktree rules (9 and 11): a
+    # $HOME-spelled worktree path under the default root IS inside a worker.
+    WT_HOME='$HOME/.config/gss/worktrees/octo/repo/auth/erai/api'
+    assert_exit 0 Bash "cd $WT_HOME && gss feature checkpoint"         'bare checkpoint inside a $HOME-spelled worker worktree'
+    assert_exit 2 Bash "cd $WT_HOME && gss push --force-autonomous"    'push --force-autonomous in a $HOME-spelled worker worktree (wrong mode)'
+    rm -rf "$FAKE_HOME"
+)
+
 # === gss feature publish-verb token gate (PR-51) ===
 # pr --ready / merged / restack mutate remote state, so they require a fresh
 # approval token just like classic push/pr/sync.
@@ -205,5 +268,7 @@ assert_exit 0 Bash "cd $WT_PROBE && gss feature checkpoint"          "bare check
 rm -f "$HOME/.config/gss/approval.token"
 
 echo "---"
+PASS=$(grep -c '^PASS' "$RESULTS" || true)
+FAIL=$(grep -c '^FAIL' "$RESULTS" || true)
 echo "PASS: $PASS  FAIL: $FAIL"
 [ "$FAIL" -eq 0 ]

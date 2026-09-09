@@ -6,9 +6,9 @@ import (
 
 func TestDeriveNamespace(t *testing.T) {
 	tests := []struct {
-		name    string
-		url     string
-		want    string
+		name string
+		url  string
+		want string
 	}{
 		// HTTPS URLs
 		{

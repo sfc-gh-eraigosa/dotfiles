@@ -1,0 +1,32 @@
+# P3 — native Go DNS (drops the dig/dnsutils dependency)
+# captured 2026-08-25T05:43:43Z
+
+## Why stdlib, not a DNS library
+net.Resolver preserves exactly the distinctions wlink needs, so no new dependency:
+  blackhole -> IsTimeout=true  IsNotFound=false  => Silent
+  NXDOMAIN  -> IsTimeout=false IsNotFound=true   => NoAddress
+  SERVFAIL  -> neither                            => Unhelpful (reachable)
+
+$ go test -v -cover ./internal/probe/...
+--- PASS: TestLookupA_DistinguishesTheFourOutcomes (2.01s)
+    --- PASS: TestLookupA_DistinguishesTheFourOutcomes/resolved (0.00s)
+    --- PASS: TestLookupA_DistinguishesTheFourOutcomes/nxdomain_is_answered-without-an-address (0.00s)
+    --- PASS: TestLookupA_DistinguishesTheFourOutcomes/nodata_is_answered-without-an-address (0.00s)
+    --- PASS: TestLookupA_DistinguishesTheFourOutcomes/servfail_is_reachable-but-unhelpful,_NOT_silent (0.00s)
+    --- PASS: TestLookupA_DistinguishesTheFourOutcomes/no_response_at_all_is_silent (2.00s)
+--- PASS: TestLookupA_AcceptsServerWithoutPort (0.00s)
+--- PASS: TestLookupA_HonoursItsTimeout (0.30s)
+--- PASS: TestLookupA_RespectsContextCancellation (0.00s)
+coverage: 87.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/probe	2.313s	coverage: 87.1% of statements
+
+## dig-parity: the same four outcomes, side by side with the prototype's tool
+  dig @1.1.1.1        example.com                      -> 104.20.23.154   [expect Resolved]
+  dig @1.1.1.1        no-such-name-xyz123.invalid      ->    [expect NoAddress (NXDOMAIN)]
+  dig @198.51.100.53  example.com                      -> ;; communications error to 198.51.100.53#53: timed out   [expect Silent (blackhole)]
+
+$ grep -rn '"dig"' --include=*.go sdk/wlink   # dependency gone
+(none — no dig anywhere in the module)
+
+$ go list -m all | wc -l   # direct+indirect deps (no DNS library added)
+14

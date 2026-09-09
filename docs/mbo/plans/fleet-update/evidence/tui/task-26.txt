@@ -1,0 +1,40 @@
+Task 26 — --file and plan-aware status line
+Date: 2026-09-05
+
+RED
+---
+go test ./cmd/... -run 'TestResolveTUIPlanAppliesUpdateRef|TestUpdatingStatusNamesThePlan' -v
+Before resolveTUIPlan/planLabel existed:
+  cmd/tui_cmds_test.go:157:10: undefined: resolveTUIPlan
+And before the status text carried "plan: ...", TestUpdatingStatusNamesThePlan
+failed at runtime:
+  tui_cmds_test.go:177: status must name the plan, got "updating 1 host(s) (plan: )"
+  (planLabel had not yet been added to fall back to "built-in default" for
+  an empty Source)
+
+GREEN
+-----
+go test ./cmd/... -run 'TestResolveTUIPlanAppliesUpdateRef|TestUpdatingStatusNamesThePlan|TestDemoFrames' -v
+  --- PASS: TestResolveTUIPlanAppliesUpdateRef
+  --- PASS: TestUpdatingStatusNamesThePlan
+  --- PASS: TestDemoFrames
+  PASS
+
+Changes:
+- `tui --file` was already added in the first commit of this leaf; this
+  commit confirms/tests it via the new resolveTUIPlan helper (extracted
+  from tui.go's RunE so it is testable without cobra or a real ssh config):
+  it loads the plan via loadPlan and applies --update-ref through
+  plan.WithRef, validated before any host is contacted.
+- cmd/tui_model.go: the "updating…" status text (both the plain and the
+  "skipped ... already running" variants) now reads
+  "updating N host(s) (plan: <Source>)"; a new planLabel() falls back to
+  "built-in default" for an empty Source and truncates a long path from the
+  front so it can never push the status line past the terminal width.
+
+VERIFY
+------
+gofmt -l .            -> clean
+go vet ./...          -> clean
+go test -race ./...   -> all packages ok
+TestDemoFrames (the width guard) -> PASS

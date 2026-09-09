@@ -36,8 +36,8 @@ func TestFakeRunnerScript(t *testing.T) {
 
 func TestFakeRunnerRecordsCalls(t *testing.T) {
 	r := &fake.Runner{}
-	r.Run(context.Background(), "mcp", "list")
-	r.Run(context.Background(), "mcp", "status")
+	_, _ = r.Run(context.Background(), "mcp", "list")
+	_, _ = r.Run(context.Background(), "mcp", "status")
 	if r.CallCount() != 2 {
 		t.Errorf("CallCount = %d; want 2", r.CallCount())
 	}
@@ -45,7 +45,7 @@ func TestFakeRunnerRecordsCalls(t *testing.T) {
 
 func TestFakeRunnerReset(t *testing.T) {
 	r := &fake.Runner{}
-	r.Run(context.Background(), "mcp", "list")
+	_, _ = r.Run(context.Background(), "mcp", "list")
 	r.Reset()
 	if r.CallCount() != 0 {
 		t.Errorf("after Reset, CallCount = %d; want 0", r.CallCount())

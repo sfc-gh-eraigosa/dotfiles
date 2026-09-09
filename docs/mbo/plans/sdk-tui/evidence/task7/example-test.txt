@@ -1,0 +1,5 @@
+# 2026-09-05 21:20 PDT — go test -tags example ./tui/example/ -v (after fixing the example :mark command for space-containing row names; the first run failed with "usage: :mark <row>")
+=== RUN   TestExampleComposesAllPackages
+--- PASS: TestExampleComposesAllPackages (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/example	0.004s

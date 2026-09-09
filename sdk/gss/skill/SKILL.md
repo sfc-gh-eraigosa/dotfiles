@@ -83,6 +83,16 @@ feature worker worktree (design.md → "Command surface"):
 - **Feature / worker** (stacked PRs): the `gss feature …` subtree, for
   developing several dependent branches in parallel isolated worktrees.
 
+### Which lane to pick
+
+**Publishing your own work as an assistant → feature worker + `gss feature
+checkpoint`.** It is ungated because it only opens a *draft* PR. `gss push` /
+`gss pr` need `~/.config/gss/approval.token`, and minting that token *is* the
+human gate — self-minting defeats the control rather than satisfying it, so
+that lane is closed when you are working alone.
+
+Promotion back to human: `gss feature pr --ready` is token-gated.
+
 ## Feature worker workflow (stacked PRs)
 
 Use this when work splits into multiple dependent branches (a "stack") or when
@@ -105,12 +115,16 @@ design governs.
 ### Typical lifecycle
 
 1. `gss feature start <name> [--base main] [--description "…"]` — create the
-   feature.
+   feature. Targets the current repo, or `-r <path>` for another one. Add its
+   first worker in the same sitting (see
+   [Known rough edges](#known-rough-edges)).
 2. `gss feature worker add --feature <name> --purpose <p> --description "…"`
-   — add a worker worktree; `cd` into the printed path to work in it.
-3. Inside the worktree: `gss feature checkpoint` — rebase on base, push, and
+   — add a worker worktree. `--json` prints `worker_ref` / `branch` /
+   `worktree_path`; **keep the `worker_ref`** — it is how you address the
+   worker from anywhere.
+3. `gss feature checkpoint --worker <ref>` — rebase on base, push, and
    create/update the draft PR (refreshing the stack section across the
-   feature). Hooks may call `gss feature checkpoint --auto --worker <ref>`.
+   feature). Add `--auto` for hook/pane-close use.
 4. `gss feature list --tree` to see the stack; `gss feature conflicts` to see
    files touched by more than one worker.
 5. When a worker is approved: `gss feature pr --ready` (promote the draft —
@@ -121,6 +135,39 @@ design governs.
    feature if it empties and FEATURE.md is unedited).
 8. `gss feature audit [--repair]` — reconcile the registry against observed
    reality; run it first on a fresh machine (observable state wins).
+
+### Known rough edges
+
+Two hook-layer behaviours that `--help` will not tell you about:
+
+- **Address workers with `--worker <ref>`, not by `cd`-ing in.**
+  `safety_guard.sh` matches command text without expanding variables. It does
+  expand `~`, `$HOME` and `${HOME}` in a leading `cd <path> &&` and in
+  `--repo/-r <path>` (so `cd "$HOME/…/worker" && gss feature checkpoint` and
+  `gss push --repo "$HOME/…"` resolve the repo you meant), but any other
+  variable stays literal and the token gate refuses it — while
+  `privacy_guard.sh` blocks the expanded literal path. `--worker` works from
+  anywhere and is unambiguous.
+- **The approval token is checked against the repo gss will act on** —
+  `--repo/-r` first, else the leading `cd` target, else the session cwd — so
+  for a cross-repo publish mint the token from *that* repo
+  (`git -C "$HOME/…/other-repo" rev-parse HEAD > ~/.config/gss/approval.token`).
+  A stale deny names the repo it compared against and how it chose it.
+- **`--help` is refused for gated verbs outside a worktree** (the rules match
+  the verb, not the flags). Read `sdk/gss/cmd/feature_<verb>.go` for the flag
+  set, or pass `--worker` alongside `--help`.
+
+### PR bodies are yours to write
+
+`checkpoint` manages only the marked sections — the stack, and a feature-notes
+block mirrored from FEATURE.md's "Decisions & notes". Everything else in the
+body is preserved across checkpoints, so write a real PR description and it
+stays. Put decisions that apply to the whole feature in FEATURE.md and they
+propagate to every worker's PR.
+
+Teardown: `gss feature done <worker-ref>` removes a worker;
+`gss feature done --feature <name>` removes a feature that has no workers
+(both refuse to discard an edited FEATURE.md without `--force`).
 
 ### The approval token also gates the publish-class feature verbs
 

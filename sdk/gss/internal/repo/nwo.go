@@ -72,15 +72,30 @@ func ParseRemoteURL(url string) (NWO, error) {
 
 // Resolver resolves a repo's NWO via gh (with an origin-URL fallback) and
 // caches the result. A nil Cache disables caching.
+//
+// Dir scopes resolution to a specific repository. It exists because `gh`
+// resolves from the process working directory and cannot be redirected by
+// this type: without Dir, `gss -r <other-repo> feature …` resolved the NWO
+// from cwd and silently registered work under the wrong owner/repo, with
+// that repo's base commit. When Dir is set, git runs with `-C Dir` and that
+// origin is authoritative over gh.
 type Resolver struct {
 	GH    gh.Client
 	Git   git.Runner
 	Cache *Cache
+	Dir   string
 }
 
-// NewResolver wires the dependencies.
+// NewResolver wires the dependencies, resolving from the process working
+// directory.
 func NewResolver(ghc gh.Client, gitr git.Runner, cache *Cache) *Resolver {
 	return &Resolver{GH: ghc, Git: gitr, Cache: cache}
+}
+
+// NewResolverInDir wires the dependencies and pins resolution to dir — pass
+// the same path given to --repo. An empty dir behaves like NewResolver.
+func NewResolverInDir(ghc gh.Client, gitr git.Runner, cache *Cache, dir string) *Resolver {
+	return &Resolver{GH: ghc, Git: gitr, Cache: cache, Dir: dir}
 }
 
 // Resolve returns the NWO. A non-empty override is parsed and returned
@@ -98,7 +113,18 @@ func (r *Resolver) Resolve(ctx context.Context, override string) (NWO, error) {
 		}
 	}
 
-	nwo := r.viaGH(ctx)
+	// With Dir pinned, that directory's origin wins: gh reads the process
+	// cwd, so trusting it here is what silently registered work under the
+	// wrong repo. Fall back to gh only if the origin parse yields nothing.
+	var nwo NWO
+	if r.Dir != "" && originURL != "" {
+		if parsed, err := ParseRemoteURL(originURL); err == nil {
+			nwo = parsed
+		}
+	}
+	if !nwo.Valid() {
+		nwo = r.viaGH(ctx)
+	}
 	if !nwo.Valid() && originURL != "" {
 		if parsed, err := ParseRemoteURL(originURL); err == nil {
 			nwo = parsed
@@ -119,7 +145,11 @@ func (r *Resolver) originURL(ctx context.Context) string {
 	if r.Git == nil {
 		return ""
 	}
-	out, err := r.Git.Run(ctx, "remote", "get-url", "origin")
+	args := []string{"remote", "get-url", "origin"}
+	if r.Dir != "" {
+		args = append([]string{"-C", r.Dir}, args...)
+	}
+	out, err := r.Git.Run(ctx, args[0], args[1:]...)
 	if err != nil {
 		return ""
 	}

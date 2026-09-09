@@ -42,10 +42,10 @@ func singleOpt(id string, selected bool) *gffv1.ChoiceOption {
 
 func TestLint(t *testing.T) {
 	tests := []struct {
-		name        string
-		ff          *gffv1.FeatureFile
-		wantFindings bool // true = expect at least one finding; false = expect zero findings
-		wantRule    string // if non-empty, at least one finding must have this Rule
+		name         string
+		ff           *gffv1.FeatureFile
+		wantFindings bool   // true = expect at least one finding; false = expect zero findings
+		wantRule     string // if non-empty, at least one finding must have this Rule
 	}{
 		// --- Clean file: zero findings ---
 		{

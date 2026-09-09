@@ -1,0 +1,36 @@
+# P8 — pin/unpin + cross-validation against the shell prototype
+# captured 2026-08-25T06:08:26Z
+
+$ go test -cover ./cmd/... ; module-wide total
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/cmd	(cached)	coverage: 61.9% of statements
+module-wide: total:											(statements)			77.9%
+
+## SIDE BY SIDE on this machine — Go tool vs the prototype it replaces
+$ wlink pin --dry-run
+wlink: not probing [ashyumi] — already served by /etc/hosts or already an address (files precedes dns).
+wlink: candidate 192.168.0.1: resolved 3/3 fleet host(s).
+wlink: candidate 172.20.10.1: NO RESPONSE — not reachable from this network.
+wlink: selected 192.168.0.1 (3/3 fleet hosts).
+wlink: 192.168.0.1 also resolves public names; safe to pin first
+wlink: --dry-run; would write:
+--- /etc/resolv.conf ---
+# Managed by wlink — do not edit.
+# Regenerate: wlink pin   ·   Undo: wlink unpin
+# WSL's generated resolv.conf is disabled via /etc/wsl.conf (generateResolvConf).
+options timeout:1 attempts:1
+nameserver 192.168.0.1
+nameserver 10.255.255.254
+
+$ wsl_dns_lan.sh --dry-run
+wsl-dns: not probing ashyumi — already served by /etc/hosts (files precedes dns).
+wsl-dns: candidate 172.20.10.1: NO RESPONSE — not reachable from this network.
+wsl-dns: candidate 192.168.0.1: resolved 3/3 fleet host(s).
+wsl-dns: selected 192.168.0.1 (3/3 fleet hosts).
+wsl-dns: 192.168.0.1 also resolves github.com; safe to pin first.
+wsl-dns: --dry-run; would write:
+--- /etc/resolv.conf ---
+# Managed by dotfiles opt/scripts/system/wsl_dns_lan.sh — do not edit.
+
+## Agreement: same exclusion, same winner, same 3/3, same guard verdict.
+## Divergence (deliberate, EC-22): the prototype appended nameserver 1.1.1.1;
+## wlink does not hardcode a third-party resolver. Opt in via WLINK_FALLBACKS.

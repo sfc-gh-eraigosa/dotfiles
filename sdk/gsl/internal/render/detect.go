@@ -61,6 +61,28 @@ type prioritized interface {
 	priority() int
 }
 
+// linkedFormatter is the optional interface a segmentData implements when parts
+// of its content address something on the web. It is format() plus the link
+// spans over the SAME text, recorded while the text is built so the offsets are
+// exact. The join layer turns each span into an OSC 8 hyperlink.
+//
+// Spans are deliberately separate from the text: a URL is zero display width,
+// and format's contract is that what it returns IS the width-bearing text.
+// Keeping the URLs out of it is what stops a 50-column PR URL from being
+// measured, truncated, or ellipsized as if it were content.
+type linkedFormatter interface {
+	formatLinked(st style.Style, level int) (text, colorKey string, spans []LinkSpan)
+}
+
+// formatLinkedOf formats d at level, with its spans when it declares any.
+func formatLinkedOf(d segmentData, st style.Style, level int) (string, string, []LinkSpan) {
+	if lf, ok := d.(linkedFormatter); ok {
+		return lf.formatLinked(st, level)
+	}
+	text, colorKey := d.format(st, level)
+	return text, colorKey, nil
+}
+
 // priorityOf returns d's drop priority. A segmentData that declares none sorts
 // with the first-dropped group.
 func priorityOf(d segmentData) int {
@@ -188,9 +210,9 @@ func Format(datas []segmentData, st style.Style, level int) string {
 		if d == nil {
 			continue
 		}
-		text, colorKey := d.format(st, level)
+		text, colorKey, spans := formatLinkedOf(d, st, level)
 		if text != "" {
-			blocks = append(blocks, segmentBlock{text: text, colorKey: colorKey})
+			blocks = append(blocks, segmentBlock{text: text, colorKey: colorKey, links: spans})
 		}
 	}
 	if len(blocks) == 0 {
@@ -227,16 +249,18 @@ func finalTierBlocks(datas []segmentData, st style.Style) []segmentBlock {
 		if d == nil {
 			continue
 		}
-		text, colorKey := d.format(st, textLevel)
+		text, colorKey, spans := formatLinkedOf(d, st, textLevel)
 		if text == "" {
 			continue
 		}
-		// Drop the leading glyph.
-		text = dropLeadingGlyph(text)
-		if text == "" {
+		// Drop the leading glyph, and slide the spans left by what was removed.
+		dropped := dropLeadingGlyph(text)
+		if dropped == "" {
 			continue
 		}
-		blocks = append(blocks, segmentBlock{text: text, colorKey: colorKey})
+		spans = shiftSpans(spans, len(text)-len(dropped))
+		text = dropped
+		blocks = append(blocks, segmentBlock{text: text, colorKey: colorKey, links: spans})
 	}
 	return blocks
 }

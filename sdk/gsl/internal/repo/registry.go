@@ -99,12 +99,9 @@ func LoadRegistry(path string) (*Registry, error) {
 	for _, rf := range raw.Features {
 		f := Feature{Name: rf.Name, Workers: make([]Worker, 0, len(rf.Workers))}
 		for _, rw := range rf.Workers {
-			f.Workers = append(f.Workers, Worker{
-				Branch:   rw.Branch,
-				Worktree: rw.Worktree,
-				PRUrl:    rw.PRUrl,
-				PRState:  rw.PRState,
-			})
+			// rawWorker and Worker have identical fields; the conversion keeps
+			// them in lockstep (adding a field to only one is a compile error).
+			f.Workers = append(f.Workers, Worker(rw))
 		}
 		reg.Features = append(reg.Features, f)
 	}
@@ -118,6 +115,9 @@ type WorkerMatch struct {
 	// PRNumber is the trailing integer parsed from the worker's pr_url.
 	// Zero when HasPR is false.
 	PRNumber int
+	// PRURL is the worker's raw pr_url, carried through so the render layer can
+	// emit an OSC 8 hyperlink without re-deriving the URL from the number.
+	PRURL string
 	// PRState is copied verbatim from the worker's "pr_state" field.
 	// Empty string when HasPR is false.
 	PRState string
@@ -161,6 +161,7 @@ func buildMatch(featureName string, w Worker) *WorkerMatch {
 	if w.PRUrl != "" {
 		if n := parsePRNumber(w.PRUrl); n > 0 {
 			m.PRNumber = n
+			m.PRURL = w.PRUrl
 			m.PRState = w.PRState
 			m.HasPR = true
 		}

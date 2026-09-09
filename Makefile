@@ -39,7 +39,7 @@ build-base: ## Build the base image locally (fallback when the GHCR pull is unav
 	docker build -f docker/Dockerfile.base -t $(BASE_IMAGE) .
 
 .PHONY: test
-test: shell-test ## Run all tests (shell-test + scripts/test.sh all)
+test: shell-test hook-test ## Run all tests (shell-test + hook-test + scripts/test.sh all)
 	./scripts/test.sh all
 
 .PHONY: unit-test
@@ -61,8 +61,20 @@ claude-test: ## Run Claude Code sanity check (CLI, links, hooks, 27-case hook te
 	./ai/claude/scripts/sanity_check.sh
 
 .PHONY: claude-hook-test
-claude-hook-test: ## Run safety_guard hook test suite only
+claude-hook-test: hook-test ## (alias) Run every guard test suite — see hook-test
+
+.PHONY: hook-test
+hook-test: ## Run the guard suites: safety_guard, privacy_guard, git privacy hooks, git-hook installer, gitleaks installer, timing report (CI-gated, strict)
 	./ai/hooks/safety_guard_test.sh
+	./ai/hooks/privacy_guard_test.sh
+	./ai/githooks/githooks_test.sh
+	./opt/scripts/git/install_git_hooks_test.sh
+	./opt/scripts/git/install_gitleaks_test.sh
+	./opt/scripts/git/privacy_guard_timing_test.sh
+
+.PHONY: hook-timing
+hook-timing: ## How much time is the privacy guard costing? Per-hook stats from its timing log; red if any run is over budget (PRIVACY_GUARD_BUDGET_MS, default 1500)
+	./opt/scripts/git/privacy_guard_timing.sh
 
 .PHONY: ruleset-snapshot
 ruleset-snapshot: ## Refresh .github/rulesets/*.json from the live GitHub rulesets (reviewable audit trail; run after any ruleset change)
@@ -72,12 +84,20 @@ ruleset-snapshot: ## Refresh .github/rulesets/*.json from the live GitHub rulese
 git-doctor: ## Check git identity (user.email/name) against the authenticated GitHub account (pass extra repos as args to the script directly)
 	./opt/scripts/git/git_identity_doctor.sh .
 
+.PHONY: secret-scanning
+secret-scanning: ## Turn on GitHub secret scanning + push protection + non-provider patterns for this repo (server-side backstop; idempotent; free on public repos)
+	./opt/scripts/git/github_secret_scanning.sh
+
+.PHONY: secret-scanning-check
+secret-scanning-check: ## Verify GitHub secret scanning + push protection are on (exit 1 if not; non-provider patterns WARN only)
+	./opt/scripts/git/github_secret_scanning.sh --check
+
 .PHONY: skill-evals
 skill-evals: ## Validate agent-skill eval corpora (ai/skills/*/evals/evals.json) deterministically
 	./opt/scripts/system/skill-eval.sh --check
 
 .PHONY: sdk-bump
-sdk-bump: ## Report sdk/<tool> modules whose source changed since their last tag (conventional-commit semver). Read-only; CI applies the bump on merge.
+sdk-bump: ## Report sdk/<tool> modules whose source changed since their last release tag (conventional-commit semver). Read-only; CI cuts the tag on merge.
 	./opt/scripts/system/bump-sdk-version.sh --check
 
 # -----------------------------------------------------------------------------
@@ -105,7 +125,7 @@ check-legacy-paths: ## Fail if a legacy Go module path or src/<tool> reappears (
 		echo "ERROR: legacy module path in Go source — use github.com/sfc-gh-eraigosa/dotfiles/sdk/<tool>"; \
 		exit 1; \
 	fi
-	@for t in gss gsl wol tmux-mgr; do \
+	@for t in gss gsl wol tmux-mgr fleet; do \
 		if [ -e "src/$$t/go.mod" ]; then \
 			echo "ERROR: Go module src/$$t exists — Go modules live in sdk/"; exit 1; \
 		fi; \
@@ -120,12 +140,20 @@ lint-go: ## Lint Go modules (gofmt + golangci-lint, per-module)
 			echo "$$unformatted"; \
 			exit 1; \
 		fi
-	@for d in sdk/*; do \
+	@# Lint EVERY module before failing. The previous `|| exit 1` bailed on the
+	@# first failing module, and `sdk/*` globs alphabetically — so `sdk/fleet`
+	@# masked the findings of all five other modules from CI for months.
+	@failed=''; \
+	for d in sdk/*; do \
 		if [ -f "$$d/go.mod" ]; then \
 			echo "==> golangci-lint run ($$d)"; \
-			(cd "$$d" && golangci-lint run ./...) || exit 1; \
+			(cd "$$d" && golangci-lint run ./...) || failed="$$failed $$d"; \
 		fi; \
-	done
+	done; \
+	if [ -n "$$failed" ]; then \
+		echo "golangci-lint failed in:$$failed"; \
+		exit 1; \
+	fi
 
 .PHONY: lint-shell
 lint-shell: ## Lint shell scripts with shellcheck
@@ -197,7 +225,7 @@ shell-test: ## Run all *_test.sh shell test drivers (uses ai/_test_helpers.sh)
 	@echo "==> shell-test (discovering *_test.sh)"
 	@drivers=$$( \
 		{ \
-			find ai opt/scripts opt/bin opt/profiles -maxdepth 6 -name '*_test.sh' -type f 2>/dev/null; \
+			find ai opt/scripts opt/bin opt/profiles opt/lib -maxdepth 6 -name '*_test.sh' -type f 2>/dev/null; \
 			find . -maxdepth 1 -name '*_test.sh' -type f 2>/dev/null; \
 			find scripts -maxdepth 1 -name '*_test.sh' -type f 2>/dev/null; \
 		} | grep -v '^./opt/google-cloud-sdk' | sort -u \
@@ -240,5 +268,5 @@ gff-test: ## Run the gff unit suite with the coverage bars (90/95/90)
 	go test ./... -count=1 -coverpkg="$$COVERPKG" -coverprofile=cover.out && \
 	go tool cover -func=cover.out | tail -1 && rm -f cover.out
 
-gff-install: ## Build and install gff to ~/opt/bin (ldflags-stamped from VERSION)
+gff-install: ## Build and install gff to ~/opt/bin (ldflags-stamped from the git release tag)
 	bash sdk/gff/build.sh

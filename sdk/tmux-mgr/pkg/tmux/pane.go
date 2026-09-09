@@ -39,8 +39,9 @@ func AnchorPane(title string) (string, error) {
 	if err := exec.Command("tmux", "set-environment", "-g", "TMUX_MGR_ROOT_PANE", paneID).Run(); err != nil {
 		return "", fmt.Errorf("failed to save anchor to tmux environment: %w", err)
 	}
-	exec.Command("tmux", "set", "-g", "pane-border-status", "top").Run()
-	exec.Command("tmux", "select-pane", "-t", paneID, "-T", title).Run()
+	// Cosmetic: the anchor above is the operation that had to succeed.
+	_ = exec.Command("tmux", "set", "-g", "pane-border-status", "top").Run()
+	_ = exec.Command("tmux", "select-pane", "-t", paneID, "-T", title).Run()
 	return paneID, nil
 }
 
@@ -63,7 +64,8 @@ func AdoptPane() (string, error) {
 	if err := exec.Command("tmux", "set-environment", "-g", "TMUX_MGR_ROOT_PANE", paneID).Run(); err != nil {
 		return "", fmt.Errorf("failed to save anchor to tmux environment: %w", err)
 	}
-	exec.Command("tmux", "set", "-g", "pane-border-status", "top").Run()
-	exec.Command("tmux", "select-pane", "-t", paneID, "-T", "root").Run()
+	// Cosmetic: the anchor above is the operation that had to succeed.
+	_ = exec.Command("tmux", "set", "-g", "pane-border-status", "top").Run()
+	_ = exec.Command("tmux", "select-pane", "-t", paneID, "-T", "root").Run()
 	return paneID, nil
 }

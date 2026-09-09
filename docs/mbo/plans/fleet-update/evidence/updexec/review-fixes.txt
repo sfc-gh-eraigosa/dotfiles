@@ -1,0 +1,227 @@
+2026-09-04 — leaf B code-review fixes (sdk/fleet/internal/updexec, internal/runner)
+====================================================================================
+
+Method: strict TDD per finding. Each fix's test(s) were run against the
+pre-fix production code (via `git stash push -- <production files>`,
+keeping the new/updated test files in place) to CONFIRM RED, then the stash
+was popped (production fix restored) and the same tests re-run to confirm
+GREEN. Findings 1,3,4,6,7,8,9,10 and the bonus ErrWaitDelay item were
+confirmed together in one batch RED run (script.go + exec.go + runner.go +
+their sibling test-file edits stashed together); findings 2 and 5 needed a
+second, narrower RED run each because the first batch run's stub/plan setup
+turned out not to isolate them cleanly on the first pass (see notes below).
+
+--------------------------------------------------------------------------
+RED — batch run (script.go, exec.go, runner.go, and the accompanying edits
+to script_test.go / exec_test.go / coverage_test.go reverted to pre-fix;
+review_test.go / runner/review_test.go — new files — kept as-is):
+
+$ git stash push -- internal/updexec/script.go internal/updexec/exec.go \
+    internal/runner/runner.go internal/updexec/script_test.go \
+    internal/updexec/coverage_test.go internal/updexec/exec_test.go
+$ go test ./internal/updexec/... ./internal/runner/...
+
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner [...build...]
+internal/runner/review_test.go:31:25: f.RunInteractiveCtx undefined (type Fake has no field or method RunInteractiveCtx)
+internal/runner/review_test.go:49:14: f.RunInteractiveCtx undefined (type Fake has no field or method RunInteractiveCtx)
+internal/runner/review_test.go:54:15: f2.RunInteractiveCtx undefined (type Fake has no field or method RunInteractiveCtx)
+internal/runner/review_test.go:67:6: cannot use Exec{} (...) missing method RunInteractiveCtx
+--- FAIL: TestResetInMultiAndDefaultFormsTargetsOriginB1NotFetchHead (0.00s)
+    --- FAIL: .../multi (0.00s)
+        multi form under --reset must reset to "origin/$b1": ...git reset --hard FETCH_HEAD...
+    --- FAIL: .../default (0.00s)
+        default form under --reset must reset to "origin/$b1": ...git reset --hard FETCH_HEAD...
+--- FAIL: TestCarryNotesSurviveARetry (0.00s)
+    a stash carried on the FIRST attempt must still arm a restore after a later attempt succeeds: {Step: Kind: Status: ...} (no restore synthesized at all)
+--- FAIL: TestRescueRecordsOrigViaSymbolicRefNotAbbrevRef (0.00s)
+    orig must be recorded via symbolic-ref, falling back to the SHA: ...orig=$(git rev-parse --abbrev-ref HEAD)...
+--- FAIL: TestRescueCommitToleratesNothingToCommit (0.00s)
+    rescue commit must tolerate nothing-to-commit like ResetScript's does: ...commit -q -m "fleet rescue $ts" && git checkout... (no || true)
+--- FAIL: TestNoRestoreIsHonouredWhenTheSyncFails (0.00s)
+    --no-restore must be honoured even on the immediate (sync-failed) restore path
+--- FAIL: TestExtrasLoopTracksFailureAcrossIterations (0.00s)
+    extras must initialise a fail flag before the loop: for b in staging release; do ... done (no fail=0/fail=1/[ "$fail" = 0 ])
+--- FAIL: TestExtrasFailureFailsTheStepEvenWhenALaterExtraSucceeds (0.00s)
+    a failing non-last extra must fail the step, even though a later extra succeeds
+--- FAIL: TestInteractiveWithoutCtxRunnerRunsUnboundedAndNotes (0.01s)
+    a runner lacking RunInteractiveCtx must run unbounded, ignoring the expired deadline: context deadline exceeded
+--- FAIL: TestJitterDefaultsToRandomnessWhenRandIsNil (0.00s)
+    rand() must never return nil
+--- FAIL: TestASuccessfulAttemptIsNeverReportedAsTimedOut (0.05s)
+    a successful attempt must never be reported TimedOut, even if its deadline lapsed while draining output: {..Status:failed Reason:timed out after 10ms .. TimedOut:true}
+--- FAIL: TestBatchTreatsBareErrWaitDelayAsSuccess (0.00s)
+    a bare exec.ErrWaitDelay (child exited 0) must be treated as success: exec: WaitDelay expired before I/O complete
+FAIL	.../internal/updexec	31.085s
+FAIL	.../internal/runner [build failed]
+
+$ git stash pop   # production fixes restored
+
+--------------------------------------------------------------------------
+RED — finding 2 (isolated: script.go + script_test.go only reverted; first
+attempt at TestDefaultSyncFailsWhenFetchFails passed against buggy code for
+the wrong reason — a stub that also failed the ls-remote fallback tripped
+the script's PRE-EXISTING "cannot resolve the default branch" guard in both
+old and new code, proving nothing. Rewrote the stub so ls-remote SUCCEEDS,
+which lets the pre-fix bug actually surface: fetch fails, but the buggy `;`
+separator lets branch-resolution fall through, resolve via ls-remote, and
+proceed to checkout+merge anyway.)
+
+$ git stash push -- internal/updexec/script.go internal/updexec/script_test.go
+$ go test ./internal/updexec/ -run TestDefaultSyncFailsWhenFetchFails -v
+
+=== RUN   TestDefaultSyncFailsWhenFetchFails
+    review_test.go:122: a failed fetch must fail the whole default-form sync
+    script, even though the ls-remote fallback successfully resolved a
+    branch — it must never checkout/merge after a failed fetch
+--- FAIL: TestDefaultSyncFailsWhenFetchFails (0.01s)
+FAIL
+
+$ git stash pop
+
+--------------------------------------------------------------------------
+RED — finding 5 (isolated: exec.go only reverted, exec_test.go's rewritten
+TestRestoreFalseLeavesHostOnTarget / new TestDisabledRestoreDoesNotFailTheHost
+kept):
+
+$ git stash push -- internal/updexec/exec.go
+$ go test ./internal/updexec/ -run 'TestRestoreFalseLeavesHostOnTarget|TestDisabledRestoreDoesNotFailTheHost' -v
+
+=== RUN   TestRestoreFalseLeavesHostOnTarget
+=== RUN   TestRestoreFalseLeavesHostOnTarget/repo.Restore=false
+    exec_test.go:937: a successful sync with restore disabled must not fail
+    the host: [{Step:dotfiles.sync Status:ok ...} {Step:dotfiles.restore
+    Status:skipped Reason:restore disabled ...}]
+=== RUN   TestRestoreFalseLeavesHostOnTarget/Executor.NoRestore
+    exec_test.go:954: --no-restore on a successful sync must not fail the
+    host: [... same shape ...]
+--- FAIL: TestRestoreFalseLeavesHostOnTarget (0.00s)
+    --- FAIL: .../repo.Restore=false (0.00s)
+    --- FAIL: .../Executor.NoRestore (0.00s)
+=== RUN   TestDisabledRestoreDoesNotFailTheHost
+    exec_test.go:972: HostReport.Failed() = true, want false: [...]
+--- FAIL: TestDisabledRestoreDoesNotFailTheHost (0.00s)
+FAIL
+
+$ git stash pop
+
+--------------------------------------------------------------------------
+GREEN — the same isolated tests re-run with the fix restored:
+
+$ go test ./internal/updexec/ -run 'TestDefaultSyncFailsWhenFetchFails|TestRestoreFalseLeavesHostOnTarget|TestDisabledRestoreDoesNotFailTheHost' -v
+
+=== RUN   TestRestoreFalseLeavesHostOnTarget
+=== RUN   TestRestoreFalseLeavesHostOnTarget/repo.Restore=false
+=== RUN   TestRestoreFalseLeavesHostOnTarget/Executor.NoRestore
+--- PASS: TestRestoreFalseLeavesHostOnTarget (0.00s)
+    --- PASS: .../repo.Restore=false (0.00s)
+    --- PASS: .../Executor.NoRestore (0.00s)
+=== RUN   TestDisabledRestoreDoesNotFailTheHost
+--- PASS: TestDisabledRestoreDoesNotFailTheHost (0.00s)
+=== RUN   TestDefaultSyncFailsWhenFetchFails
+--- PASS: TestDefaultSyncFailsWhenFetchFails (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	0.009s
+
+--------------------------------------------------------------------------
+GREEN — full leaf gate:
+
+$ cd sdk/fleet && gofmt -l . && go vet ./... && go test -race -cover ./internal/updexec ./internal/runner
+
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	31.119s	coverage: 93.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	2.139s	coverage: 59.6% of statements
+
+(gofmt -l printed nothing; go vet printed nothing)
+
+--------------------------------------------------------------------------
+GREEN — whole module, confirming leaf B's changes did not regress anything
+concurrently edited in cmd/ or the ledger files:
+
+$ go test -race -cover ./...
+
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	1.338s	coverage: 62.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan	coverage: 90.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag	coverage: 96.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keys	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/lanscan	coverage: 80.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach	1.167s	coverage: 82.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	coverage: 59.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf	coverage: 94.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail	coverage: 93.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	coverage: 93.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan	coverage: 93.9% of statements
+
+--------------------------------------------------------------------------
+Findings closed (test name -> one-line fix):
+
+1. TestResetInMultiAndDefaultFormsTargetsOriginB1NotFetchHead /
+   TestResetInSingleBranchFormKeepsFetchHead
+   -> ResetScript now takes (checkoutRef, resetTo); multi/default forms
+      pass "origin/$b1" instead of the always-FETCH_HEAD.
+
+2. TestDefaultSyncFetchStaysInTheAndChain / TestDefaultSyncFailsWhenFetchFails
+   -> the default-form body wraps branch-resolution in `{ ... }` chained
+      with `&&` right after `git fetch origin`, so a failed fetch now stops
+      the whole chain instead of falling through via `;`.
+
+3. TestCarryNotesSurviveARetry
+   -> runWithRetry accumulates every attempt's parsed notes (allNotes) in
+      order instead of keeping only the last attempt's; armAndMaybeRestoreNow
+      now takes the FIRST "orig=" note rather than the last, so a later
+      attempt's "orig=<target>" (already switched by an earlier attempt)
+      cannot clobber the operator's true original branch.
+
+4. TestRescueRecordsOrigViaSymbolicRefNotAbbrevRef / TestRescueCommitToleratesNothingToCommit
+   -> RescueScript records orig via `git symbolic-ref -q --short HEAD ||
+      git rev-parse HEAD` (not --abbrev-ref, which prints "HEAD" verbatim
+      when detached) and wraps its commit in `|| true`, mirroring
+      ResetScript.
+
+5. TestRestoreFalseLeavesHostOnTarget (rewritten to pin the CORRECT
+   behaviour — it previously asserted the buggy Skipped-restore-Result
+   shape) / TestDisabledRestoreDoesNotFailTheHost
+   -> fireDueRestores/armAndMaybeRestoreNow synthesize NO "<repo>.restore"
+      Result at all when restore is disabled; the fact is recorded as a
+      note on the sync step's own Result instead, via noteRestoreDisabled.
+
+6. TestNoRestoreIsHonouredWhenTheSyncFails
+   -> armAndMaybeRestoreNow's immediate (sync-failed) path now also
+      consults restoreDisabled(repo) before calling runRestore, matching
+      the deferred path.
+
+7. TestExtrasLoopTracksFailureAcrossIterations / TestExtrasFailureFailsTheStepEvenWhenALaterExtraSucceeds
+   -> extrasScript tracks a `fail` flag across the loop (`|| fail=1` on
+      each mutating command, `[ "$fail" = 0 ]` as the loop's own exit),
+      since POSIX `for`'s exit status is only its last iteration's.
+
+8. TestInteractiveDeadlineKillsTheChild / TestInteractiveWithoutCtxRunnerRunsUnboundedAndNotes
+   -> Console.Interactive no longer races a goroutine against time.After;
+      it type-asserts the runner for the new (updexec-local)
+      interactiveCtxRunner interface and calls RunInteractiveCtx (added to
+      runner.Exec via exec.CommandContext + WaitDelay, and to runner.Fake)
+      when available, else runs unbounded.
+
+9. TestJitterDefaultsToRandomnessWhenRandIsNil
+   -> Executor.rand() defaults to math/rand/v2's Float64 when Rand is nil,
+      matching the field's doc comment (previously nil was passed straight
+      through to Backoff.Wait, which treats nil as the constant midpoint —
+      no jitter movement at all in production).
+
+10. TestASuccessfulAttemptIsNeverReportedAsTimedOut
+    -> timedOut is now `callErr != nil && timeout > 0 &&
+       errors.Is(ctx.Err(), DeadlineExceeded)` — a call that returned nil
+       error is never timed out, regardless of ctx.Err() by the time it
+       returns (closes the output-drain-window race the finding describes).
+
+Bonus (dropped-at-cap items, done):
+- script.go's ShQuote/ResetScript/RescueScript header comment now says
+  "copied ... cmd's copy retires in leaf D/E" instead of "moved".
+- TestBatchTreatsBareErrWaitDelayAsSuccess -> Console.Batch treats a bare
+  exec.ErrWaitDelay (not joined with a real *exec.ExitError) as success.
+
+Coverage: internal/updexec 93.6% (>= 90% floor); internal/runner 59.6%
+(unchanged from before this leaf's changes — runner's floor is elsewhere
+in the module's own gate, not this task's 90% requirement, which is
+scoped to updexec).

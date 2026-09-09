@@ -437,3 +437,27 @@ func TestDetectFormat_MatchesRender(t *testing.T) {
 		})
 	}
 }
+
+// TestDetectFormat_MatchesRender_Linked: the spans must be identical on both
+// render paths, not just the text — otherwise a link could exist in one and
+// not the other.
+func TestDetectFormat_MatchesRender_Linked(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", dir)
+	t.Setenv("XDG_CACHE_HOME", dir)
+	for _, styleName := range []string{"emoji", "powerline"} {
+		t.Run(styleName, func(t *testing.T) {
+			st := style.Resolve(discardWriter{}, styleName, nil, false)
+			cfg := config.Default()
+			renderOut := Render(context.Background(), cfg, st, buildGoldenSegmentsLinked(t, true, dir))
+			datas := Detect(context.Background(), cfg, st, buildGoldenSegmentsLinked(t, true, dir))
+			detectFormatOut := Format(datas, st, 0)
+			if renderOut != detectFormatOut {
+				t.Errorf("linked Detect+Format(0) != Render for %s\n Render:      %q\n Detect+Fmt:  %q", styleName, renderOut, detectFormatOut)
+			}
+			if !strings.Contains(renderOut, "\x1b]8;;https://github.com/o/r/tree/") {
+				t.Errorf("linked render lacks a tree link: %q", renderOut)
+			}
+		})
+	}
+}

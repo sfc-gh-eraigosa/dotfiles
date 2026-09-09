@@ -1,0 +1,39 @@
+# 2026-09-04T16:13:21Z task-22 RED
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd [github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd.test]
+cmd/update_init_test.go:19:16: undefined: writeDefaultPlan
+cmd/update_init_test.go:42:15: undefined: writeDefaultPlan
+cmd/update_init_test.go:46:15: undefined: writeDefaultPlan
+cmd/update_init_test.go:55:12: undefined: printDefaultPlan
+cmd/update_init_test.go:68:15: undefined: writeDefaultPlan
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd [build failed]
+FAIL
+
+# 2026-09-04T16:13:51Z task-22 GREEN
+=== RUN   TestInitFiresOneCmdPerHostAndBlocksNothing
+--- PASS: TestInitFiresOneCmdPerHostAndBlocksNothing (0.00s)
+=== RUN   TestInitWritesTheDefaultPlanOnce
+--- PASS: TestInitWritesTheDefaultPlanOnce (0.01s)
+=== RUN   TestInitPrintToStdout
+--- PASS: TestInitPrintToStdout (0.00s)
+=== RUN   TestInitOutputParsesToDefault
+--- PASS: TestInitOutputParsesToDefault (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	(cached)
+
+# VERIFY
+gofmt: (empty=clean)
+go vet: clean
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keys	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/lanscan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan	(cached)

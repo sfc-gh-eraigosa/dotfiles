@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
+	"github.com/spf13/cobra"
 )
 
 var configCmd = &cobra.Command{
@@ -50,6 +50,8 @@ func printConfigKey(cfg config.Config, key string) error {
 		fmt.Println(cfg.TimeFormat)
 	case "date_format":
 		fmt.Println(cfg.DateFormat)
+	case "links":
+		fmt.Println(cfg.EffectiveLinks())
 	case "segments":
 		data, _ := json.MarshalIndent(cfg.Segments, "", "  ")
 		fmt.Println(string(data))
@@ -81,6 +83,13 @@ var configSetCmd = &cobra.Command{
 			cfg.TimeFormat = value
 		case "date_format":
 			cfg.DateFormat = value
+		case "links":
+			switch value {
+			case config.LinksUnderline, config.LinksPlain, config.LinksOff:
+				cfg.Links = value
+			default:
+				return fmt.Errorf("gsl config set links: want underline|plain|off, got %q", value)
+			}
 		default:
 			return fmt.Errorf("gsl config set: unknown key %q", key)
 		}
@@ -238,7 +247,7 @@ func listStyles(cfg config.Config) error {
 		if _, ok := builtins[name]; !ok {
 			label = "user"
 		}
-		sb.WriteString(fmt.Sprintf("%s%-16s (%s)\n", marker, name, label))
+		fmt.Fprintf(&sb, "%s%-16s (%s)\n", marker, name, label)
 	}
 	fmt.Print(sb.String())
 	return nil

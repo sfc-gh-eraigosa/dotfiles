@@ -1,0 +1,85 @@
+Task 27a — leaf D review cleanups
+Date: 2026-09-05
+
+RED
+---
+go test ./internal/updexec/... -run 'TestScripts' -v
+  before Executor.Scripts existed: internal/updexec/scripts_test.go:14:16: e.Scripts undefined
+go test ./cmd/... -run 'TestReportNeverShowsAttemptOneOfOneForSingleAttemptSteps|TestReportShowsAttemptForARestoreStep' -v
+  before Result.MaxAttempts existed: cmd/update_report_test.go:57:56: unknown field MaxAttempts in struct literal
+
+GREEN
+-----
+go test ./internal/updexec/... -run 'TestScripts' -v
+  --- PASS: TestScriptsListsPrecheckSyncAndConditionalsForASyncStep
+  --- PASS: TestScriptsLabelsAreNeverEmptyAndCarryNoRawInjection (sync/run/gh-auth subtests)
+go test ./cmd/... -run 'TestReport' -v
+  --- PASS: TestReportNamesEveryStepAndTheLog
+  --- PASS: TestReportOmitsExitOnSkipAndOmitsLogWhenThereIsNone
+  --- PASS: TestReportNeverShowsAttemptOneOfOneForSingleAttemptSteps
+  --- PASS: TestReportShowsAttemptForARestoreStep
+go test ./cmd/... -run 'TestNewRunLogOutputIsReusableAcrossHosts|TestLoadPlan' -v
+  --- PASS (all)
+go test ./internal/updexec/... -run 'TestInteractiveDeadlineKillsTheChild|TestInteractiveWithoutCtxRunnerRunsUnboundedAndNotes|TestConsoleInteractiveRespectsDeadline' -v
+  --- PASS (all)
+
+Changes (a)-(e), per the leaf E worker's extended brief:
+
+(a) internal/updexec/exec.go: additive Executor.Scripts(p, st) ([]LabeledScript,
+    error) + LabeledScript{Label, Script, Optional}, built from the SAME
+    builder calls (PrecheckScript/CloneScript/RescueScript/SyncScript/
+    RunScript/GhAuthCheck/GhAuthLogin) runSync/runRun/runGhAuth call.
+    cmd/update_report.go's printDryRun now calls it instead of duplicating
+    the per-kind script-selection switch — cmd carries no script-selection
+    logic of its own.
+(b) internal/updexec/exec.go: Result gains MaxAttempts int, set at every
+    return point of runWithRetry (and carried through runGhAuth's post-login
+    Results) and by runRestore's fixed 3-attempt policy (already routed
+    through runWithRetry). cmd/update_report.go's printHostReport reads
+    res.MaxAttempts directly; totalAttemptsFor is deleted.
+(c) cmd/update_output.go: newRunLogOutput() drops its unused host
+    parameter; cmd/update.go's runUpdateWith builds ONE captureOutput
+    before the host loop and reuses it for every host (Open is keyed by
+    the host/header arguments each call, so the value itself carries no
+    per-host state).
+(d) cmd/answers_store.go: new fleetConfigFile(name) (string, error) helper,
+    used by answersPath and defaultPlanPath (itself still used by `update
+    init`); cmd/update_plan.go's loadPlan no longer stats the resolved path
+    itself before calling readPlanFile — it recovers the "file is missing"
+    fact via errors.Is(err, fs.ErrNotExist) on readPlanFile's own (wrapped)
+    stat error, so the file is stat'd exactly once per loadPlan call.
+(e) internal/updexec/exec.go: Console.Interactive drops the redundant
+    leading `ctx.Deadline()` check and always prefers interactiveCtxRunner
+    when the runner implements it (an undeadlined ctx behaves identically
+    either way, since exec.CommandContext never cancels without a
+    deadline), falling back to RunInteractive only when the capability is
+    absent.
+
+VERIFY
+------
+gofmt -l .            -> clean
+go vet ./...          -> clean
+go test -race ./...   -> all packages ok
+go test -race -cover ./... -> cmd 63.0% (>= 60.7% baseline), updexec 91.9%
+
+DEVIATION / NOTE
+----------------
+- internal/updexec/exec_test.go's pre-existing TestRescueOffBranchRestoresTheBranchWithoutAStash
+  is FLAKY independent of every change in this task: fakeIO.Batch matches a
+  script against a `map[string][]resp` keyed by registered substrings, and
+  when more than one registered substring matches the same script, Go's
+  randomized map-iteration order decides which response wins. Verified by
+  running the unmodified pre-task commit (d37a98b) 30 times: 2/30 failures
+  with the SAME symptom (the synthesized restore step missing from the
+  report). This is a pre-existing defect in the test's fixture, not
+  something this task introduced or was asked to fix (leaves A-D are
+  frozen); it is noted here rather than fixed silently.
+- (a)'s "or at least share the same builder calls as" was taken literally:
+  Executor.Scripts is a NEW pure method that runSync/runRun/runGhAuth do
+  NOT call — rewiring their stateful, retry-driving control flow to route
+  through Scripts was judged too risky to attempt safely in this session.
+  printDryRun is the only caller changed; it now shares the SAME builder
+  functions runSync/runRun/runGhAuth call, so the two paths can no longer
+  drift on WHICH scripts a step produces, even though the retry/attempt
+  logic remains separately implemented (necessarily — Scripts is pure and
+  synchronous, RunHost's retry loop is stateful).

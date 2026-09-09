@@ -1,0 +1,13 @@
+# task01 GREEN — 2026-09-06T05:56:59Z
+$ go test ./pkg/provider/ -cover
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider	0.004s	coverage: 100.0% of statements
+exit=0
+
+$ go list -deps ./pkg/provider  (non-stdlib, excluding the package itself; must be empty)
+third-party count: 0
+
+$ gofmt -l ./pkg/provider
+$ go vet ./pkg/provider
+vet-ok
+$ go test -race ./pkg/provider/
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider	1.015s

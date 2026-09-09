@@ -1,18 +1,15 @@
 package cmd
 
 import (
-	"fmt"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/internal/logging"
 	"log"
 	"os"
-	"path/filepath"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/pkg/tmux"
 	"github.com/spf13/cobra"
 )
 
 var (
-	// LogFile handles the logging stream.
-	LogFile *os.File
 	// Tmgr is the global instance of our tmux manager package.
 	Tmgr = &tmux.Manager{}
 )
@@ -28,17 +25,10 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	home, _ := os.UserHomeDir()
-	logDir := filepath.Join(home, ".config", "tmux-mgr")
-	os.MkdirAll(logDir, 0755)
-
-	f, err := os.OpenFile(filepath.Join(logDir, "tmux-mgr.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		fmt.Printf("Error opening log file: %v\n", err)
-	} else {
-		log.SetOutput(f)
-		LogFile = f
-	}
+	// Logging is the shared driver's now: rotated, under the state dir, and
+	// configurable via $TMUX_MGR_LOG_FILE / $TMUX_MGR_LOG_LEVEL. It cannot
+	// fail, so there is no error path to report here any more.
+	logging.Init()
 
 	rootCmd.PersistentFlags().BoolVarP(&Tmgr.Verbose, "verbose", "v", false, "Enable verbose output")
 }
@@ -51,9 +41,8 @@ func Execute() {
 	}
 }
 
-// CloseLog closes the log file.
-func CloseLog() {
-	if LogFile != nil {
-		LogFile.Close()
-	}
-}
+// CloseLog is retained as a no-op so main.go's `defer cmd.CloseLog()` keeps
+// compiling. The driver owns the file now: lumberjack writes each record and
+// rotates on size, so there is no handle for the process to close, and
+// nothing is buffered awaiting a flush.
+func CloseLog() {}

@@ -1,0 +1,2 @@
+# 2026-09-04T15:03:44Z baseline: go test -cover ./cmd/
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	(cached)	coverage: 60.7% of statements

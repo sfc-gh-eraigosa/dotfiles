@@ -1,0 +1,8 @@
+# 2026-09-05 21:25 PDT — from the lib worker (sdk/libs with tui/ present): cd sdk/gss && go build -o /tmp/gss-after . && ls -l /tmp/gss-after
+-rwxrwxr-x 1 <user> <user> 7675876 Sep  5 20:46 /tmp/gss-after
+
+# 2026-09-05 20:47 PDT — normalized rebuild of both (go build -trimpath -buildvcs=false), main checkout vs the lib worker
+-rwxrwxr-x 1 <user> <user> 7672586 Sep  5 20:47 /tmp/gss-after-norm
+-rwxrwxr-x 1 <user> <user> 7672586 Sep  5 20:47 /tmp/gss-before-norm
+4194b1688cd62c6c7a18b75aea7082500715b8f2e8c745091d0fb969c336b6bb  /tmp/gss-before-norm
+4194b1688cd62c6c7a18b75aea7082500715b8f2e8c745091d0fb969c336b6bb  /tmp/gss-after-norm

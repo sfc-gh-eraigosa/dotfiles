@@ -120,7 +120,12 @@ func (s *Service) AutoCheckpoint(ctx context.Context, opts AutoOpts) (AutoResult
 	// origin) was the worst failure shape for an unattended hook.
 	if w.PRURL != "" {
 		if pr, err := s.GH.PRView(ctx, prNumber(w.PRURL)); err == nil && !pr.IsDraft {
-			if err := s.GH.PREdit(ctx, prNumber(w.PRURL), gh.PREditOpts{Body: renderPRBody(reg.Features[fi], ref)}); err != nil {
+			// pr.Body is the PR's current text: pass it through so this
+			// refresh updates the managed sections without discarding the
+			// author's prose (PRView above already fetched it, so this
+			// costs no extra API call).
+			refreshed := renderPRBody(reg.Features[fi], ref, pr.Body, s.featureNotes(reg.Features[fi].Name))
+			if err := s.GH.PREdit(ctx, prNumber(w.PRURL), gh.PREditOpts{Body: refreshed}); err != nil {
 				return res, err
 			}
 			skipped, err := s.autoSkip(w, "PR is ready-for-review; auto-checkpoint is draft-only and did NOT push local commits (body refreshed). Run 'gss feature checkpoint' to push, or convert the PR back to draft.")
@@ -165,8 +170,11 @@ func (s *Service) appendAutoLog(worktree, reason string) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
-	_, _ = f.WriteString(fmt.Sprintf("\n## Auto-checkpoint log\n- %s %s\n", s.now(), reason))
+	// Best-effort diagnostic: this helper reports nothing to its caller (which
+	// is already returning an error of its own), so a failure to write or close
+	// the log is discarded explicitly rather than silently.
+	defer func() { _ = f.Close() }()
+	_, _ = fmt.Fprintf(f, "\n## Auto-checkpoint log\n- %s %s\n", s.now(), reason)
 }
 
 // splitPorcelain partitions `git status --porcelain` lines into tracked

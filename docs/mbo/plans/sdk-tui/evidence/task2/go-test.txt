@@ -1,0 +1,16 @@
+# 2026-09-05 20:27 PDT — go test ./tui/keymap/ -cover -v
+=== RUN   TestLookupUsesRealKeyNames
+--- PASS: TestLookupUsesRealKeyNames (0.00s)
+=== RUN   TestMergeReplacesInPlaceOrAppends
+--- PASS: TestMergeReplacesInPlaceOrAppends (0.00s)
+=== RUN   TestWithoutRemovesActions
+--- PASS: TestWithoutRemovesActions (0.00s)
+=== RUN   TestHeaderHintGroupsAndOrders
+--- PASS: TestHeaderHintGroupsAndOrders (0.00s)
+=== RUN   TestHelpRowsJoinKeys
+--- PASS: TestHelpRowsJoinKeys (0.00s)
+=== RUN   TestDispatchCallsTheBoundHandlerOnce
+--- PASS: TestDispatchCallsTheBoundHandlerOnce (0.00s)
+PASS
+coverage: 98.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/keymap	0.004s	coverage: 98.5% of statements

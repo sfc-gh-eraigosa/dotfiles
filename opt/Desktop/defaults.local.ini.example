@@ -1,0 +1,4 @@
+; Copy to defaults.local.ini beside defaults.ahk. That file is gitignored; this
+; example is the only copy that lives in the repo.
+[identity]
+email=you@example.com

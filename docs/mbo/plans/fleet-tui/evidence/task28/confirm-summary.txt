@@ -1,0 +1,19 @@
+# Task 28 — confirm summary, e, F
+=== RUN   TestConfirmStripShowsTheAnswersWithTheSecretMasked
+--- PASS: TestConfirmStripShowsTheAnswersWithTheSecretMasked (0.00s)
+=== RUN   TestConfirmSummaryAppearsOnARememberedWave
+--- PASS: TestConfirmSummaryAppearsOnARememberedWave (0.00s)
+=== RUN   TestEditReopensThePrefilledForm
+--- PASS: TestEditReopensThePrefilledForm (0.00s)
+=== RUN   TestForgetClearsEverything
+--- PASS: TestForgetClearsEverything (0.00s)
+=== RUN   TestForgetDoesNotFireWhileTyping
+=== RUN   TestForgetDoesNotFireWhileTyping/in_the_answer_form
+=== RUN   TestForgetDoesNotFireWhileTyping/in_search
+--- PASS: TestForgetDoesNotFireWhileTyping (0.00s)
+    --- PASS: TestForgetDoesNotFireWhileTyping/in_the_answer_form (0.00s)
+    --- PASS: TestForgetDoesNotFireWhileTyping/in_search (0.00s)
+=== RUN   TestHelpListsTheNewKeys
+--- PASS: TestHelpListsTheNewKeys (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.004s

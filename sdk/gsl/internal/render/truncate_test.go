@@ -86,7 +86,7 @@ func TestTruncateText_DoesNotSplitZWJCluster(t *testing.T) {
 		if hasWoman && !hasWhole {
 			t.Fatalf("cols=%d: truncateText split the ZWJ cluster: %q", cols, got)
 		}
-		if strings.HasSuffix(got, "‍") {
+		if strings.HasSuffix(got, "\u200d") {
 			t.Fatalf("cols=%d: truncateText left a dangling ZWJ: %q", cols, got)
 		}
 	}

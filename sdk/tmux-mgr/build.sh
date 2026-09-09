@@ -23,7 +23,12 @@ if [ -z "$GO_BIN" ]; then
     exit 0
 fi
 
-VERSION=$(cat "$DIR/VERSION")
+# Version comes from the module's git release tag (sdk/tmux-mgr/vX.Y.Z) —
+# the single source of truth. See sdk/version.sh for why the old VERSION
+# file was removed (it had to be committed to a protected branch).
+# shellcheck source=sdk/version.sh
+. "$DIR/../version.sh"
+VERSION="$(sdk_version "tmux-mgr" "$DIR")"
 COMMIT=$(git -C "$DIR" rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 DIRTY="false"

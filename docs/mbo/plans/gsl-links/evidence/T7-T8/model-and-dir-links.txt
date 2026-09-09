@@ -1,0 +1,58 @@
+# T7 + T8 evidence — 2026-09-05T18:19:02Z  (binary: gsl v0.4.0-31-g3f45690)
+$ cd sdk/gsl && go test ./... -race -cover
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/cmd	3.319s	coverage: 84.8% of statements
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/cmd/glyphcheck		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config	(cached)	coverage: 86.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/exec	(cached)	coverage: 81.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/flags	(cached)	coverage: 90.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh	(cached)	coverage: 88.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh/fake	(cached)	coverage: 81.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git	(cached)	coverage: 91.9% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git/fake	(cached)	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp	(cached)	coverage: 68.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp/fake	(cached)	coverage: 81.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/observe	(cached)	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload	1.038s	coverage: 93.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/preview	1.075s	coverage: 85.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/render	5.978s	coverage: 93.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo	(cached)	coverage: 95.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style	(cached)	coverage: 84.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/term	(cached)	coverage: 79.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/theme	(cached)	coverage: 86.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/version	(cached)	coverage: 75.0% of statements
+
+$ go test ./internal/render/ ./internal/payload/ -run "ModelID|ModelFamily|ModelURL|AI_Spans|VSCodeDev|DirGit_DirSpan|Repo_UsesPrecomputedPR" -v | grep -E "^--- "
+--- PASS: TestModelFamily (0.00s)
+--- PASS: TestModelURL (0.00s)
+--- PASS: TestVSCodeDevURLs (0.00s)
+--- PASS: TestAI_Spans_UsageFourFields (0.00s)
+--- PASS: TestAI_Spans_ModelURL_Gemini (0.00s)
+--- PASS: TestAI_Spans_ModelURL_UnknownFamilyHasNoModelLink (0.00s)
+--- PASS: TestAI_Spans_ModelURL_TemplateOverride (0.00s)
+--- PASS: TestBuildSegments_AIModelURLOption (0.00s)
+--- PASS: TestAI_Spans_NoUsageURL (0.00s)
+--- PASS: TestDirGit_DirSpan_PRChangesView (0.00s)
+--- PASS: TestDirGit_DirSpan_BranchView (0.00s)
+--- PASS: TestDirGit_DirSpan_FileFallbackWithoutGitHub (0.00s)
+--- PASS: TestDirGit_DirSpan_FileModeOption (0.00s)
+--- PASS: TestRepo_UsesPrecomputedPR (0.00s)
+--- PASS: TestParse_ModelID (0.00s)
+
+$ make lint-go (sdk/gsl)
+0 issues.
+
+$ live: this worktree (PR #279), Claude payload model claude-fable-5-1 → link targets
+
+https://claude.ai/settings/usage
+https://github.com/sfc-gh-eraigosa/dotfiles
+https://github.com/sfc-gh-eraigosa/dotfiles/pull/279
+https://github.com/sfc-gh-eraigosa/dotfiles/tree/worktree/gsl
+https://time.is/Los_Angeles
+https://vscode.dev/github/sfc-gh-eraigosa/dotfiles/pull/279/changes
+https://www.anthropic.com/claude/fable
+
+$ render wall time, 3 runs (ms), gsl status in this worktree
+21
+27
+21

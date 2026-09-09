@@ -1,0 +1,16 @@
+# task03 RED — 2026-09-06T06:02:36Z — go test ./internal/runner/ -run 'Bridge|RunCtx|Capabilit'
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner [github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner.test]
+internal/runner/bridge_test.go:18:23: (Exec{}).BridgeArgv undefined (type Exec has no field or method BridgeArgv)
+internal/runner/bridge_test.go:18:45: undefined: Forward
+internal/runner/bridge_test.go:58:16: e.BridgeArgv undefined (type Exec has no field or method BridgeArgv)
+internal/runner/bridge_test.go:58:38: undefined: Forward
+internal/runner/bridge_test.go:89:11: undefined: Forward
+internal/runner/bridge_test.go:92:15: undefined: Forward
+internal/runner/bridge_test.go:93:10: undefined: Forward
+internal/runner/bridge_test.go:94:15: undefined: Forward
+internal/runner/bridge_test.go:95:15: undefined: Forward
+internal/runner/bridge_test.go:96:15: undefined: Forward
+internal/runner/bridge_test.go:96:15: too many errors
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner [build failed]
+FAIL
+exit=1

@@ -8,7 +8,7 @@
 #     # Added by Antigravity CLI installer
 #     export PATH="/home/<user>/.local/bin:$PATH"
 #
-# On our hosts ~/.zshrc, ~/.bashrc and ~/.profile are SYMLINKS into the
+# On our hosts ~/.zshrc, ~/.zprofile, ~/.bashrc and ~/.profile are SYMLINKS into the
 # dotfiles repo, so the append lands in the repo working tree with a
 # hardcoded, machine-specific $HOME — unportable and never committable. The
 # repo profiles already export ~/.local/bin portably (opt/profiles/.profile
@@ -25,7 +25,7 @@ set -u
 MARKER='# Added by Antigravity CLI installer'
 stripped=0
 
-for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.profile"; do
+for rc in "$HOME/.zshrc" "$HOME/.zprofile" "$HOME/.bashrc" "$HOME/.profile"; do
     [ -L "$rc" ] || continue
     grep -qF "$MARKER" "$rc" 2>/dev/null || continue
     echo "  Stripping agy's PATH append from repo-managed $(basename "$rc")..."

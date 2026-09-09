@@ -1,0 +1,20 @@
+# 2026-09-03T15:16:00Z ai/antigravity/scripts/sanity_check.sh on the live host
+Verifying ~/.claude configuration links...
+PASS: ~/.claude config present
+Verifying ~/.claude/skills/...
+PASS: skills linked
+Verifying ~/.claude/commands/...
+PASS: commands linked
+Verifying CLAUDE.md context links...
+PASS: CLAUDE.md links resolve
+Verifying hooks...
+FAIL: configured hook command not executable: 'bash '~/.claude/hooks/herdr-agent-state.sh' session' (resolved: bash)
+FAIL: 1 configured-hook problem(s) in ~/.claude/settings.json
+FAIL: configured hook wiring in ~/.claude/settings.json is broken (see above)
+sanity rc=
+# 2026-09-03T15:17:06Z agy-parity sanity steps 7-9 run standalone (full sanity aborts earlier on a PRE-EXISTING Claude-side item: validate_hooks.sh cannot parse the quoted path in herdr's SessionStart hook command in ~/.claude/settings.json)
+PASS: configured hooks resolve; safety_guard blocks via the configured command
+agy hooks validate rc=0
+PASS: forced deny present
+PASS: forced ask present
+PASS: dotfiles plugin rendered

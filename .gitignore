@@ -32,6 +32,8 @@
 !.shellcheckrc
 !.markdownlint.jsonc
 !.ci-baseline-issues.md
+# gitleaks config read by the privacy guard (ai/hooks/privacy_rules.sh passes -c)
+!.gitleaks.toml
 
 # Repository Structure Exceptions
 !.github/
@@ -63,6 +65,7 @@ opt/bin/*
 !opt/bin/install_windows.sh
 !opt/bin/sshd-setup
 !opt/bin/claude-rc-boot
+!opt/bin/claude-pick
 # WSL docker shims: real executables (not aliases) so make/scripts resolve
 # docker even in non-interactive shells (see opt/profiles/.bash_aliases).
 !opt/bin/docker
@@ -72,6 +75,7 @@ opt/bin/*
 !opt/bin/pkg-install_test.sh
 !opt/bin/sshd-setup_test.sh
 !opt/bin/claude-rc-boot_test.sh
+!opt/bin/claude-pick_test.sh
 
 # Opt Subdirectory Configuration
 opt/.DS_Store
@@ -107,6 +111,9 @@ ai/claude/settings.json
 # credential and must never be committed.
 ai/gws/config.json
 ai/gws/client_secret.json
+# The ^e email hotkey in opt/Desktop/defaults.ahk reads its address from this
+# local file (seed it from defaults.local.ini.example); it must never be committed.
+opt/Desktop/defaults.local.ini
 .custom_alias
 *.swp
 

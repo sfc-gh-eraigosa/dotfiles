@@ -109,10 +109,18 @@ func (m *Manager) RestoreLayout(name string) error {
 		return fmt.Errorf("error unmarshaling layout: %w", err)
 	}
 
+	// This function returns an error, so a step that fails must not be swallowed
+	// and then reported as "Layout restored".
 	for _, win := range layout.Windows {
-		m.Run("select-window", "-t", strconv.Itoa(win.Index))
-		m.Run("select-layout", win.Layout)
-		m.Run("rename-window", "-t", strconv.Itoa(win.Index), win.Name)
+		for _, step := range [][]string{
+			{"select-window", "-t", strconv.Itoa(win.Index)},
+			{"select-layout", win.Layout},
+			{"rename-window", "-t", strconv.Itoa(win.Index), win.Name},
+		} {
+			if _, err := m.Run(step...); err != nil {
+				return fmt.Errorf("restore layout %s: tmux %s: %w", name, strings.Join(step, " "), err)
+			}
+		}
 	}
 
 	log.Printf("Layout %s restored", name)
@@ -171,8 +179,10 @@ func CreatePane(sessionID, worktreePath, command, symbol, label string) (string,
 		label = sessionID
 	}
 	styledTitle := fmt.Sprintf("#[bg=colour33,fg=white,bold] %s %s #[default]", symbol, label)
-	exec.Command("tmux", "select-pane", "-t", paneID, "-T", styledTitle).Run()
-	exec.Command("tmux", "set-option", "-w", "-t", paneID, "pane-border-status", "top").Run()
+	// Cosmetic pane decoration: the pane already exists and is returned below,
+	// so a styling failure must not fail pane creation.
+	_ = exec.Command("tmux", "select-pane", "-t", paneID, "-T", styledTitle).Run()
+	_ = exec.Command("tmux", "set-option", "-w", "-t", paneID, "pane-border-status", "top").Run()
 
 	fmt.Printf("Created tmux pane: %s\n", paneID)
 	return paneID, nil

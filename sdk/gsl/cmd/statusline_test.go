@@ -17,7 +17,9 @@ import (
 	"testing"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/flags"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/render"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/term"
 )
 
@@ -159,14 +161,14 @@ func fitOutput(t *testing.T, styleName string, columns int, payloadJSON string) 
 	if payloadJSON == "" {
 		origStdin := os.Stdin
 		f, _ := os.Open(os.DevNull)
-		t.Cleanup(func() { os.Stdin = origStdin; f.Close() })
+		t.Cleanup(func() { os.Stdin = origStdin; _ = f.Close() })
 		os.Stdin = f
 	} else {
 		r, w, _ := os.Pipe()
 		fmt.Fprint(w, payloadJSON)
-		w.Close()
+		_ = w.Close()
 		origStdin := os.Stdin
-		t.Cleanup(func() { os.Stdin = origStdin; r.Close() })
+		t.Cleanup(func() { os.Stdin = origStdin; _ = r.Close() })
 		os.Stdin = r
 	}
 
@@ -377,4 +379,39 @@ func TestRunStatusLine_FitLoopUsesDetectOnce(t *testing.T) {
 	}
 	// Non-panicking execution is also a signal: if Detect were called per-level
 	// and the fake runner ran out of scripted responses, it would panic.
+}
+
+// ─── buildLinks (link policy) ────────────────────────────────────────────────
+
+var flagsAllOn = flags.Links{Enabled: true, Repo: true, DirGit: true, AI: true, Time: true}
+
+func TestBuildLinks_ConfigOffBeatsFlags(t *testing.T) {
+	l := buildLinks("off", flagsAllOn, "https://github.com/o/r", false)
+	if l.Repo || l.DirGit || l.AI || l.Time {
+		t.Errorf("config off must disable every family: %+v", l)
+	}
+}
+
+func TestBuildLinks_MasterFlagOff(t *testing.T) {
+	l := buildLinks("underline", flags.Links{Enabled: false, Repo: true, DirGit: true, AI: true, Time: true}, "", false)
+	if l.Repo || l.DirGit || l.AI || l.Time {
+		t.Errorf("gsl.links.enabled=false must disable every family: %+v", l)
+	}
+}
+
+func TestBuildLinks_FamilyFlagOff(t *testing.T) {
+	l := buildLinks("underline", flags.Links{Enabled: true, Repo: true, DirGit: true, AI: true, Time: false}, "", false)
+	if l.Time || !l.Repo || !l.DirGit || !l.AI {
+		t.Errorf("only the time family should be off: %+v", l)
+	}
+}
+
+func TestBuildLinks_Defaults(t *testing.T) {
+	l := buildLinks("underline", flagsAllOn, "https://github.com/o/r", false)
+	if l.UsageURL != render.DefaultClaudeUsageURL || l.TimeURL != render.DefaultTimeURL || l.RepoURL != "https://github.com/o/r" {
+		t.Errorf("defaults: %+v", l)
+	}
+	if a := buildLinks("underline", flagsAllOn, "", true); a.UsageURL != "" {
+		t.Errorf("antigravity must have no usage URL by default: %q", a.UsageURL)
+	}
 }

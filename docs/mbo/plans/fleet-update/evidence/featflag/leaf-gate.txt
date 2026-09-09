@@ -1,0 +1,2 @@
+# 2026-09-04T15:22:48Z leaf gate
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag	(cached)	coverage: 96.4% of statements

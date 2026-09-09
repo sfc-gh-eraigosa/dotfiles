@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+# herdr-prefs — host-local herdr preferences without touching the dotfiles repo.
+#
+# install.sh renders a dotfiles-MANAGED ~/.config/herdr/config.toml (see
+# opt/scripts/system/install_herdr.sh config). The file is host-owned by
+# marker: install.sh rewrites it only while the "managed by dotfiles" line is
+# present. `herdr-prefs set` edits one key and removes that marker, so from
+# then on this host owns its config and install.sh leaves it alone.
+# `herdr-prefs reset` hands the file back to the fleet baseline.
+#
+# Usage:
+#   herdr-prefs status                 ownership + the keys people change most
+#   herdr-prefs get <section.key>
+#   herdr-prefs set <section.key> <value>   (true/false/numbers unquoted, else a string)
+#   herdr-prefs reset                  re-render the managed file (keeps a .bak)
+#
+# Env:
+#   HERDR_CONFIG_DIR   (default: ${XDG_CONFIG_HOME:-~/.config}/herdr)
+#   HERDR_SOCKET_PATH  used only to reload a running server after a change
+#
+# Keys are two-level TOML (`theme.name`, `keys.prefix`, `ui.sidebar_width`).
+# Valid theme names: run `herdr config check` after a typo — herdr lists them.
+set -eu
+
+CONFIG_DIR="${HERDR_CONFIG_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/herdr}"
+CONFIG="${CONFIG_DIR}/config.toml"
+SOCK="${HERDR_SOCKET_PATH:-${CONFIG_DIR}/herdr.sock}"
+MARKER="managed by dotfiles"
+# The skill folder is symlinked into ~/.claude/skills by sync-skills; `pwd -P`
+# resolves that to the physical repo checkout (portable: no GNU readlink -f).
+SELF_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+REPO_ROOT="$(cd "${SELF_DIR}/../../../.." && pwd -P)"
+INSTALLER="${REPO_ROOT}/opt/scripts/system/install_herdr.sh"
+
+die()   { echo "herdr-prefs: $*" >&2; exit 1; }
+usage() { sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+
+split_key() {
+    case "$1" in
+        *.*) SECTION="${1%%.*}"; KEY="${1#*.}" ;;
+        *)   die "key must be <section>.<key>, e.g. theme.name (got '$1')" ;;
+    esac
+    case "${SECTION}${KEY}" in *[!A-Za-z0-9_.-]*) die "bad key '$1'" ;; esac
+    case "${KEY}" in *.*) die "only two-level keys are supported (got '$1')" ;; esac
+}
+
+toml_get() {  # toml_get <section> <key>  -> raw value without quotes, or nothing
+    python3 - "${CONFIG}" "$1" "$2" <<'PY'
+import re, sys
+path, section, key = sys.argv[1:4]
+cur = None
+for line in open(path):
+    s = line.strip()
+    m = re.match(r'^\[([^\]]+)\]\s*(#.*)?$', s)
+    if m:
+        cur = m.group(1); continue
+    if cur != section or not s or s.startswith("#"):
+        continue
+    m = re.match(r'^([A-Za-z0-9_.-]+)\s*=\s*(.*?)\s*$', s)
+    if m and m.group(1) == key:
+        v = m.group(2)
+        # drop a trailing comment on unquoted values
+        if not v.startswith('"'):
+            v = v.split("#", 1)[0].strip()
+        print(v.strip('"'))
+        break
+PY
+}
+
+toml_set() {  # toml_set <section> <key> <value>
+    python3 - "${CONFIG}" "$1" "$2" "$3" "${MARKER}" <<'PY'
+import re, sys, os
+path, section, key, value, marker = sys.argv[1:6]
+if re.fullmatch(r'true|false|-?\d+(\.\d+)?', value):
+    rendered = value
+else:
+    rendered = '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+lines = open(path).read().splitlines()
+out, cur, done, sec_seen, last_in_sec = [], None, False, False, None
+for i, line in enumerate(lines):
+    s = line.strip()
+    m = re.match(r'^\[([^\]]+)\]\s*(#.*)?$', s)
+    if m:
+        cur = m.group(1)
+        if cur == section: sec_seen = True
+    elif cur == section and not done:
+        m = re.match(r'^([A-Za-z0-9_.-]+)\s*=', s)
+        if m and m.group(1) == key:
+            line = f"{key} = {rendered}"; done = True
+    out.append(line)
+    if cur == section and s and not s.startswith("#"):
+        last_in_sec = len(out) - 1
+if not done:
+    if sec_seen:
+        out.insert((last_in_sec if last_in_sec is not None else len(out) - 1) + 1, f"{key} = {rendered}")
+    else:
+        if out and out[-1].strip(): out.append("")
+        out += [f"[{section}]", f"{key} = {rendered}"]
+# Ownership handoff: drop the managed marker so install.sh leaves the file alone.
+handed = False
+for i, line in enumerate(out):
+    if marker in line and line.lstrip().startswith("#"):
+        out[i] = "# host-owned: edited with herdr-prefs; install.sh no longer rewrites this file (herdr-prefs reset to reclaim)"
+        handed = True
+        break
+tmp = path + ".tmp"
+with open(tmp, "w") as fh:
+    fh.write("\n".join(out) + "\n")
+os.replace(tmp, path)
+print("handed" if handed else "kept")
+PY
+}
+
+reload_server() {
+    [ -S "${SOCK}" ] || return 0
+    python3 - "${SOCK}" <<'PY' || echo "herdr-prefs: running server did not reload (applies on next launch)" >&2
+import json, socket, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.settimeout(5); s.connect(sys.argv[1])
+s.sendall(b'{"id":"herdr-prefs:reload","method":"server.reload_config","params":{}}\n')
+buf = b""
+while not buf.endswith(b"\n"):
+    c = s.recv(65536)
+    if not c: break
+    buf += c
+r = json.loads(buf.decode() or "{}")
+sys.exit(1 if "error" in r else 0)
+PY
+}
+
+ownership() {
+    if [ ! -e "${CONFIG}" ]; then echo "absent"
+    elif grep -q "${MARKER}" "${CONFIG}"; then echo "managed"
+    else echo "host-owned"; fi
+}
+
+# Ask the terminal which appearance it reports (DEC 2031 / DSR 996). herdr
+# forwards the host answer into its panes, so this is what auto_switch sees.
+# Prints light | dark | unknown; never guesses when there is no tty.
+host_appearance() {
+    python3 - <<'PY' 2>/dev/null || echo unknown
+import os, select, termios, tty, time
+try:
+    fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
+except OSError:
+    print("unknown"); raise SystemExit
+old = termios.tcgetattr(fd)
+try:
+    tty.setraw(fd)
+    os.write(fd, b"\x1b[?996n")
+    buf, t0 = b"", time.time()
+    while time.time() - t0 < 0.5 and not buf.endswith(b"n"):
+        r, _, _ = select.select([fd], [], [], 0.1)
+        if r:
+            buf += os.read(fd, 64)
+finally:
+    termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    os.close(fd)
+print({b"997;1n": "dark", b"997;2n": "light"}.get(buf[-6:], "unknown"))
+PY
+}
+
+cmd_status() {
+    echo "config: ${CONFIG}"
+    echo "ownership: $(ownership)  (managed = install.sh rewrites it; host-owned = install.sh leaves it alone)"
+    [ -e "${CONFIG}" ] || return 0
+    for k in theme.name theme.auto_switch theme.light_name theme.dark_name keys.prefix; do
+        split_key "${k}"
+        v="$(toml_get "${SECTION}" "${KEY}")"
+        echo "${k} = ${v:-<unset>}"
+    done
+    [ -S "${SOCK}" ] && echo "server: running (${SOCK})" || echo "server: not running"
+    echo "host appearance: $(host_appearance)  (what auto_switch follows: light -> light_name, dark -> dark_name, unknown -> name)"
+}
+
+cmd_get() {
+    [ $# -eq 1 ] || usage 1
+    [ -e "${CONFIG}" ] || die "no config at ${CONFIG}"
+    split_key "$1"
+    toml_get "${SECTION}" "${KEY}"
+}
+
+cmd_set() {
+    [ $# -eq 2 ] || usage 1
+    [ -e "${CONFIG}" ] || die "no config at ${CONFIG} (run install_herdr.sh config first)"
+    split_key "$1"
+    handoff="$(toml_set "${SECTION}" "${KEY}" "$2")"
+    echo "set $1 = $2 in ${CONFIG}"
+    if [ "${handoff}" = "handed" ]; then
+        echo "this file is now host-owned: install.sh will leave it alone (herdr-prefs reset to return to the fleet baseline)"
+    fi
+    reload_server
+}
+
+cmd_reset() {
+    [ -x "${INSTALLER}" ] || die "installer not found at ${INSTALLER}"
+    HERDR_CONFIG_FORCE=1 HERDR_CONFIG_DIR="${CONFIG_DIR}" "${INSTALLER}" config
+}
+
+[ $# -ge 1 ] || usage 1
+cmd="$1"; shift
+case "${cmd}" in
+    status) cmd_status "$@" ;;
+    get)    cmd_get "$@" ;;
+    set)    cmd_set "$@" ;;
+    reset)  cmd_reset "$@" ;;
+    -h|--help|help) usage 0 ;;
+    *) die "unknown command '${cmd}' (status|get|set|reset)" ;;
+esac

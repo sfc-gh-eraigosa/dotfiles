@@ -1,0 +1,28 @@
+# Task 21 — fleet wake verb (2026-08-17T06:06:59Z)
+
+## Unit
+=== RUN   TestRenderWakeShowsEveryRungAndTheVerdict
+--- PASS: TestRenderWakeShowsEveryRungAndTheVerdict (0.00s)
+=== RUN   TestRenderWakeReportsAnExhaustedLadder
+--- PASS: TestRenderWakeReportsAnExhaustedLadder (0.00s)
+=== RUN   TestWakeJSONCarriesTheWholeLadder
+--- PASS: TestWakeJSONCarriesTheWholeLadder (0.00s)
+=== RUN   TestWakeNeverSendsAnythingThatWritesToATarget
+--- PASS: TestWakeNeverSendsAnythingThatWritesToATarget (0.00s)
+=== RUN   TestRelayNudgeIsDetachedAndFlagPortable
+--- PASS: TestRelayNudgeIsDetachedAndFlagPortable (0.40s)
+=== RUN   TestFleetPeersExcludesTheTarget
+--- PASS: TestFleetPeersExcludesTheTarget (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.406s
+
+## Live — ladder vs an unreachable target with a real, reachable peer
+```
+sleeper
+  retry        x   still unreachable after 1 retries
+  local-prime  x   skipped: workstation is not on the target's subnet
+  peer-relay   x  via <peer>  relay via <peer>: exit status 255
+  => still unreachable
+```
+exit code: 1 — the relay was attempted and failed; no false green.
+Confirms F14c (local-prime skipped off-subnet under WSL2 NAT), peer ranking, and F16b.

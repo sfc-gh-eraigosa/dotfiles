@@ -1,0 +1,11 @@
+# Task 27 — sticky answers
+=== RUN   TestFirstWaveOpensTheAnswerForm
+--- PASS: TestFirstWaveOpensTheAnswerForm (0.00s)
+=== RUN   TestLaterWaveSkipsStraightToConfirm
+--- PASS: TestLaterWaveSkipsStraightToConfirm (0.00s)
+=== RUN   TestAnswersSurviveASelectionChange
+--- PASS: TestAnswersSurviveASelectionChange (0.00s)
+=== RUN   TestEscapingTheFormKeepsTheAnswers
+--- PASS: TestEscapingTheFormKeepsTheAnswers (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.005s

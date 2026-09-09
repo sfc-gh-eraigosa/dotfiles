@@ -1,0 +1,10 @@
+# gitleaks configuration for this repository.
+#
+# Read by the privacy guard (agent hook + git hooks) — ai/hooks/privacy_rules.sh
+# passes `-c <repo>/.gitleaks.toml` when this file exists. It extends the
+# upstream default ruleset; add reviewed false positives to an allowlist here
+# rather than bypassing the hook.
+title = "dotfiles privacy guard"
+
+[extend]
+useDefault = true

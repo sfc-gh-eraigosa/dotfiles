@@ -1,0 +1,6 @@
+# 2026-09-05 20:45 PDT — RUN-RED: go test ./tui/search/ 2>&1 | head -5
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/search [github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/search.test]
+tui/search/search_test.go:16:13: undefined: State
+tui/search/search_test.go:20:18: undefined: State
+tui/search/search_test.go:27:13: undefined: Compile
+tui/search/search_test.go:30:12: undefined: Compile

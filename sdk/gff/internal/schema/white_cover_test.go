@@ -10,7 +10,7 @@ import (
 
 func TestNormalizeMapKeysVariants(t *testing.T) {
 	in := map[any]any{
-		1: map[any]any{true: "x"},
+		1:      map[any]any{true: "x"},
 		"list": []any{map[any]any{2: "y"}, "z"},
 	}
 	out, ok := normalizeMapKeys(in).(map[string]any)

@@ -34,7 +34,7 @@ exists. "Observable state wins over the registry."`,
 		}
 		// audit is a recovery tool — give it only the registry + read-only
 		// git/gh observers + the repo path; no origin/NWO resolution.
-		svc := &feature.Service{Store: store, Git: git.NewSystemRunner(), GH: gh.NewSystemClient()}
+		svc := &feature.Service{Store: store, Git: git.NewSystemRunner(), GH: gh.NewSystemClientInDir(getRepoPath())}
 		rep, err := svc.Audit(context.Background(), feature.AuditOpts{
 			Feature:  auditFeature,
 			Repair:   auditRepair,

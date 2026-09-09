@@ -1,0 +1,14 @@
+=== 2026-08-11T14:28:55Z — review-gap fixes, final verification ===
+	.		coverage: 0.0% of statements
+ok  	./cmd	0.027s	coverage: 38.2% of statements
+ok  	./internal/drift	(cached)	coverage: 100.0% of statements
+ok  	./internal/keys	(cached)	coverage: 100.0% of statements
+	./internal/runner		coverage: 0.0% of statements
+ok  	./internal/sshconf	(cached)	coverage: 94.1% of statements
+ok  	./internal/stamp	(cached)	coverage: 100.0% of statements
+vet clean
+--- typo'd alias prints an error ---
+Error: unknown host(s) nosuchhost in /tmp/fleet-demo.cfg
+--- stale fleet: silent, exit 1 ---
+exit=1
+[0;32mOK[0m: coverage for fleet is 72% (minimum: 60%)

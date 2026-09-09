@@ -67,7 +67,9 @@ func init() {
 		Use:   "detach",
 		Short: "Detach from the current tmux session",
 		Run: func(cmd *cobra.Command, args []string) {
-			Tmgr.Run("detach-client")
+			if !runTmux("detach-client") {
+				return
+			}
 			log.Printf("Detached from session")
 		},
 	})

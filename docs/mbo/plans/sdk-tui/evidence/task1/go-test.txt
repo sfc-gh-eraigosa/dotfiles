@@ -1,0 +1,35 @@
+# 2026-09-05 20:12 PDT — go test ./tui/... -cover -v
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui	[no test files]
+=== RUN   TestLineEditing
+=== RUN   TestLineEditing/insert
+=== RUN   TestLineEditing/space_is_a_rune
+=== RUN   TestLineEditing/unicode
+=== RUN   TestLineEditing/backspace
+=== RUN   TestLineEditing/backspace_at_start_is_a_no-op
+=== RUN   TestLineEditing/left_then_insert
+=== RUN   TestLineEditing/delete_under_cursor
+=== RUN   TestLineEditing/home/end
+=== RUN   TestLineEditing/ctrl+a_/_ctrl+e
+=== RUN   TestLineEditing/ctrl+u_kills_to_start
+=== RUN   TestLineEditing/ctrl+w_kills_a_word
+=== RUN   TestLineEditing/right_clamps
+--- PASS: TestLineEditing (0.00s)
+    --- PASS: TestLineEditing/insert (0.00s)
+    --- PASS: TestLineEditing/space_is_a_rune (0.00s)
+    --- PASS: TestLineEditing/unicode (0.00s)
+    --- PASS: TestLineEditing/backspace (0.00s)
+    --- PASS: TestLineEditing/backspace_at_start_is_a_no-op (0.00s)
+    --- PASS: TestLineEditing/left_then_insert (0.00s)
+    --- PASS: TestLineEditing/delete_under_cursor (0.00s)
+    --- PASS: TestLineEditing/home/end (0.00s)
+    --- PASS: TestLineEditing/ctrl+a_/_ctrl+e (0.00s)
+    --- PASS: TestLineEditing/ctrl+u_kills_to_start (0.00s)
+    --- PASS: TestLineEditing/ctrl+w_kills_a_word (0.00s)
+    --- PASS: TestLineEditing/right_clamps (0.00s)
+=== RUN   TestLineDoesNotConsumeModeKeys
+--- PASS: TestLineDoesNotConsumeModeKeys (0.00s)
+=== RUN   TestLineRenderResetAtEnd
+--- PASS: TestLineRenderResetAtEnd (0.00s)
+PASS
+coverage: 97.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/prompt	0.006s	coverage: 97.3% of statements

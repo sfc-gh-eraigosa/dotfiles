@@ -1,0 +1,19 @@
+# P0 — module skeleton + shared logging
+# captured 2026-08-25T05:29:06Z
+
+$ go test ./...
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/cmd	(cached)
+
+$ go test -cover ./cmd/...
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/cmd	0.003s	coverage: 31.8% of statements
+
+$ ./build.sh && wlink --version
+wlink built and installed to /home/wenlock/opt/bin/wlink
+wlink 0.0.0-untagged (18d8436) built 2026-08-25T05:29:07Z linux/amd64
+
+$ grep -rn 'logrus.New|lumberjack|os.OpenFile' --include=*.go sdk/wlink   # no hand-rolled logger
+(none)
+
+$ git status --short -- sdk/wlink
+?? sdk/wlink/

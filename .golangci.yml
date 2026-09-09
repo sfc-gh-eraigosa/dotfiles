@@ -6,10 +6,12 @@
 # Pinned tool version (CI must match, see .github/workflows/docker-image.yml):
 #   golangci-lint v2.0.2 (latest stable line as of January 2026)
 #
-# This repo contains FOUR separate Go modules: sdk/gss, sdk/tmux-mgr, sdk/gsl,
-# sdk/wol. golangci-lint v2 auto-discovers each module when invoked from its
-# directory, so we keep this config free of repo-root path assumptions and
-# rely on the Makefile's `lint-go` target to iterate per-module.
+# This repo contains SIX separate Go modules: sdk/fleet, sdk/gff, sdk/gsl,
+# sdk/gss, sdk/tmux-mgr, sdk/wol. golangci-lint v2 auto-discovers each module
+# when invoked from its directory, so we keep this config free of repo-root
+# path assumptions and rely on the Makefile's `lint-go` target to iterate
+# per-module (that target lints ALL modules before failing — do not reintroduce
+# an early `|| exit 1`, which silently masked five modules for months).
 
 version: "2"
 
@@ -27,6 +29,24 @@ linters:
     - ineffassign   # detect dead assignments
     - staticcheck   # broad correctness + simplification ruleset
     - unused        # unused variables / functions / types
+
+  settings:
+    errcheck:
+      # Writes to a cobra command's own writer (cmd.OutOrStdout() /
+      # ErrOrStderr()) cannot be meaningfully recovered from: the command is
+      # already producing its final output, and there is nowhere left to report
+      # a failed write to. The Go stdlib takes the same position — fmt.Print*
+      # returns an error essentially nobody checks. Excluding the family here,
+      # once, keeps the 105 such call sites free of `_, _ =` noise so the
+      # remaining errcheck findings are all genuine unchecked-error bugs
+      # (Close, Run, Setenv, MkdirAll, WriteFile, ...) that DO deserve review.
+      #
+      # This is a deliberate narrowing of errcheck, not a backlog suppression:
+      # every other unchecked error in the tree is still a hard finding.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
 
   exclusions:
     # Standard auto-generated and vendored paths.

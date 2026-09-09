@@ -1,0 +1,19 @@
+=== 2026-08-10T05:15:55Z — Task 1 done-when gate ===
+--- go test ---
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.010s	coverage: 53.8% of statements
+--- go vet ---
+vet clean
+--- build.sh ---
+Building fleet v0.1.0 with go version go1.26.3 linux/arm64...
+fleet built and installed to $HOME/opt/bin/fleet
+--- fleet version ---
+fleet 0.1.0 (1e7eca0)
+  Dirty:      true
+  Build Date: 2026-08-10T05:16:03Z
+--- bash -n install.sh ---
+syntax OK
+[0;34m[TEST][0m Testing module: fleet
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.004s	coverage: 53.8% of statements
+[0;32mOK[0m: coverage for fleet is 70% (minimum: 60%)

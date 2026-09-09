@@ -1,0 +1,5 @@
+# 2026-09-05 21:15 PDT — RUN-RED: go test -tags example ./tui/example/ 2>&1 | head -5
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/example [github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/example.test]
+tui/example/model_test.go:25:20: undefined: newModel
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/example [build failed]
+FAIL

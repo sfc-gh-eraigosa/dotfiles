@@ -1,0 +1,27 @@
+=== 2026-08-10T05:58:30Z — Task 12 §5: rescue-worktree mechanism verification ===
+Design flagged 'git branch <name> stash@{0}' + 'git worktree add' as UNVERIFIED.
+Running the exact sequence on a throwaway local clone (no real host).
+git version: git version 2.47.3
+
+--- dirty state before rescue ---
+ M f
+?? g
+stash push: ok
+branch from stash@{0}: ok
+worktree add: ok
+
+--- is the uncommitted work recoverable from the rescue worktree? ---
+  f = UNCOMMITTED-WORK   (expect UNCOMMITTED-WORK)
+  g =    (expect untracked-too)
+
+--- and the main clone is clean, so pull --ff-only can proceed ---
+  porcelain lines: 0 (expect 0)
+
+VERDICT: rescue mechanism WORKS on this git — no fallback needed.
+=== 2026-08-10T06:00:36Z — Task 12 unit gates ===
+--- PASS: TestUpdateSkipsDirtyCloneByDefault (0.00s)
+--- PASS: TestUpdateProceedsOnCleanClone (0.00s)
+--- PASS: TestForceRescuesDirtyWorkBeforePulling (0.00s)
+--- PASS: TestRescuePreservesUntrackedWork (0.00s)
+--- PASS: TestUpdateSurfacesProbeFailure (0.00s)
+coverage gate: OK: coverage for fleet is 73% (minimum: 60%)

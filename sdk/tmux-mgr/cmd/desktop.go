@@ -21,7 +21,9 @@ func init() {
 			if args[0] == "switch" && len(args) > 1 {
 				target = args[1]
 			}
-			Tmgr.Run("select-window", "-t", target)
+			if !runTmux("select-window", "-t", target) {
+				return
+			}
 			log.Printf("Switched to window %s", target)
 		},
 	})

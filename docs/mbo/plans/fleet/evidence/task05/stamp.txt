@@ -1,0 +1,1 @@
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp	0.002s	coverage: 100.0% of statements

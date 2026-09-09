@@ -1,0 +1,52 @@
+# 2026-09-04T15:52:46Z task 13
+$ gofmt -l internal/updexec/
+$ go vet ./...
+$ go test -race ./internal/updexec/... -run Carry|Restore|OffBranch|OnTarget|Detached -v
+=== RUN   TestResetIsIncompatibleWithCarry
+--- PASS: TestResetIsIncompatibleWithCarry (0.00s)
+=== RUN   TestCarryStashesWithUntrackedAndCapturesTheSHA
+--- PASS: TestCarryStashesWithUntrackedAndCapturesTheSHA (0.00s)
+=== RUN   TestCarryRestoreRunsAfterTheLastStepUsingTheRepo
+--- PASS: TestCarryRestoreRunsAfterTheLastStepUsingTheRepo (0.00s)
+=== RUN   TestRestoreRunsEvenWhenAnIntermediateStepFailed
+--- PASS: TestRestoreRunsEvenWhenAnIntermediateStepFailed (0.00s)
+=== RUN   TestRestoreRunsImmediatelyWhenSyncFailsAfterStash
+--- PASS: TestRestoreRunsImmediatelyWhenSyncFailsAfterStash (0.00s)
+=== RUN   TestRestoreConflictKeepsTheStash
+--- PASS: TestRestoreConflictKeepsTheStash (0.00s)
+=== RUN   TestCleanOffBranchIsRestoredUnderEveryPolicy
+=== RUN   TestCleanOffBranchIsRestoredUnderEveryPolicy/skip
+=== RUN   TestCleanOffBranchIsRestoredUnderEveryPolicy/rescue
+=== RUN   TestCleanOffBranchIsRestoredUnderEveryPolicy/carry
+--- PASS: TestCleanOffBranchIsRestoredUnderEveryPolicy (0.00s)
+    --- PASS: TestCleanOffBranchIsRestoredUnderEveryPolicy/skip (0.00s)
+    --- PASS: TestCleanOffBranchIsRestoredUnderEveryPolicy/rescue (0.00s)
+    --- PASS: TestCleanOffBranchIsRestoredUnderEveryPolicy/carry (0.00s)
+=== RUN   TestOnTargetNeverSynthesizesARestore
+--- PASS: TestOnTargetNeverSynthesizesARestore (0.00s)
+=== RUN   TestRescueOffBranchRestoresTheBranchWithoutAStash
+--- PASS: TestRescueOffBranchRestoresTheBranchWithoutAStash (0.00s)
+=== RUN   TestDetachedHeadRestoresToTheSHA
+--- PASS: TestDetachedHeadRestoresToTheSHA (0.00s)
+=== RUN   TestRestoreFalseLeavesHostOnTarget
+=== RUN   TestRestoreFalseLeavesHostOnTarget/repo.Restore=false
+=== RUN   TestRestoreFalseLeavesHostOnTarget/Executor.NoRestore
+--- PASS: TestRestoreFalseLeavesHostOnTarget (0.00s)
+    --- PASS: TestRestoreFalseLeavesHostOnTarget/repo.Restore=false (0.00s)
+    --- PASS: TestRestoreFalseLeavesHostOnTarget/Executor.NoRestore (0.00s)
+=== RUN   TestRestoreCheckoutFailureKeepsEverything
+--- PASS: TestRestoreCheckoutFailureKeepsEverything (0.00s)
+=== RUN   TestRestoreStepHasFixedRetryPolicy
+=== RUN   TestRestoreStepHasFixedRetryPolicy/retries_transport_failures_3x_regardless_of_NoRetry
+=== RUN   TestRestoreStepHasFixedRetryPolicy/a_conflict_is_not_retried
+--- PASS: TestRestoreStepHasFixedRetryPolicy (0.00s)
+    --- PASS: TestRestoreStepHasFixedRetryPolicy/retries_transport_failures_3x_regardless_of_NoRetry (0.00s)
+    --- PASS: TestRestoreStepHasFixedRetryPolicy/a_conflict_is_not_retried (0.00s)
+=== RUN   TestRestoreUsesApplyBySHANeverPop
+--- PASS: TestRestoreUsesApplyBySHANeverPop (0.00s)
+=== RUN   TestRestoreRejectsUnvalidatedOrigOrSHA
+--- PASS: TestRestoreRejectsUnvalidatedOrigOrSHA (0.00s)
+=== RUN   TestCarryPrologueIsIdempotentAcrossAttempts
+--- PASS: TestCarryPrologueIsIdempotentAcrossAttempts (0.00s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	1.032s

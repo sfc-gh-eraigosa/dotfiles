@@ -200,7 +200,8 @@ func TestWriteFileAtomicErrorOnUnwritableDir(t *testing.T) {
 	if err := os.Chmod(rodir, 0o444); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chmod(rodir, 0o755) // cleanup
+	// Restore write permission so t.TempDir cleanup can remove the dir.
+	defer func() { _ = os.Chmod(rodir, 0o755) }()
 
 	path := filepath.Join(rodir, "file.yaml")
 	if err := WriteFileAtomic(path, []byte("test\n"), 0o644); err == nil {
@@ -355,7 +356,7 @@ func TestWriteFileAtomicTempWriteError(t *testing.T) {
 	if err := os.Chmod(rodir, 0o444); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chmod(rodir, 0o755)
+	defer func() { _ = os.Chmod(rodir, 0o755) }()
 
 	path := filepath.Join(rodir, "file.yaml")
 	if err := WriteFileAtomic(path, []byte("test\n"), 0o644); err == nil {
@@ -409,7 +410,7 @@ func TestMarshalDeterministic(t *testing.T) {
 		}
 	}
 
-	if !(aaa_pos < mmm_pos && mmm_pos < zzz_pos) {
+	if aaa_pos >= mmm_pos || mmm_pos >= zzz_pos {
 		t.Errorf("keys not in alphabetical order: aaa@%d, mmm@%d, zzz@%d", aaa_pos, mmm_pos, zzz_pos)
 	}
 }

@@ -1,6 +1,6 @@
 # Shell Portability Standard
 
-**Status:** specifying → building · **Slug:** `shell-portability` · **Owner:** edward-raigosa
+**Status:** specified (normative standard on `main`; build not started — no implementation PR) · **Slug:** `shell-portability` · **Owner:** edward-raigosa
 
 The contract every shell script and sourced profile fragment in this repo MUST follow so
 that one checkout behaves identically across our three supported host families. This standard

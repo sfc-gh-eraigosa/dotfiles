@@ -1,0 +1,12 @@
+# 2026-09-03T15:16:03Z bounded agy -p probe: does permissions.deny command(rm -rf /) prefix-match? (print mode, toolPermission default, no --dangerously-skip-permissions)
+## probe 1: benign command (expect: runs or asks; must NOT be denied)
+jetski: no output produced — a tool required the "command" permission that headless mode cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json (e.g. command(<target>)). Alternatively, re-run with --dangerously-skip-permissions to auto-approve all tools.
+{"conversation_id":"778b7cba-dab6-40cc-8290-d22a1d19dd8d","status":"SUCCESS","response":"","duration_seconds":6.6668468050000005,"num_turns":1,"usage":{"input_tokens":19553,"output_tokens":1213,"thinking_tokens":1143,"cache_read_tokens":0,"total_tokens":20766}}
+
+rc=0
+## probe 2: deny-listed prefix (expect: denied by permissions.deny)
+jetski: no output produced — a tool required the "command" permission that headless mode cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json (e.g. command(<target>)). Alternatively, re-run with --dangerously-skip-permissions to auto-approve all tools.
+{"conversation_id":"27db1201-248e-48d8-bcd0-47e0eda49610","status":"SUCCESS","response":"","duration_seconds":6.301090243,"num_turns":1,"usage":{"input_tokens":19559,"output_tokens":429,"thinking_tokens":368,"cache_read_tokens":0,"total_tokens":19988}}
+
+rc=0
+## /tmp/agy-parity-probe still exists? yes

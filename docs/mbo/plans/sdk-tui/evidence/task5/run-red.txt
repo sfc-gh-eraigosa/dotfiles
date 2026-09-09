@@ -1,0 +1,6 @@
+# 2026-09-05 20:55 PDT — RUN-RED: go test ./tui/cmdline/ 2>&1 | head -5
+# github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/cmdline [github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/cmdline.test]
+tui/cmdline/cmdline_test.go:18:8: undefined: Command
+tui/cmdline/cmdline_test.go:21:22: undefined: Command
+tui/cmdline/cmdline_test.go:22:25: undefined: Command
+tui/cmdline/cmdline_test.go:23:9: undefined: Command

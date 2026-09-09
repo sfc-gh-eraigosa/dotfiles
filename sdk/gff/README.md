@@ -85,6 +85,29 @@ enumerates every namespace `--source` accepts and where each one comes from. Exi
 always means a usage/definition error (unknown key/option/source, wrong type) —
 shell callers treat ≥2 as fail-open.
 
+## TUI keys
+
+`gff tui` follows the sdk vim grammar from `sdk/libs/tui/GUIDE.md`. The keys below are gff's
+table (`internal/tui/keys.go`); the footer, the `?` overlay, and `gff tui --help` all render
+from it. Search finds a flag anywhere on the current page (collapsed areas holding a hit expand
+themselves); the `:` line is the CLI's `set`/`unset` from inside the TUI.
+
+| Keys | Action |
+| :-- | :-- |
+| `j`/`k`, `↑`/`↓` | move |
+| `h`/`l`, `←`/`→` | previous / next category page |
+| `gg` / `G` | first / last row |
+| `ctrl+d` / `ctrl+u`, `ctrl+f` / `ctrl+b` (PgUp/PgDn) | half page / full page |
+| `/` then a regex | incremental search, smartcase (`claude` matches `Claude CLI`; `Claude` is exact-case); Enter commits, Esc cancels |
+| `n` / `N` | next / previous match (wraps); Esc in the list clears highlights |
+| `:set <key> <value>` · `:unset <key>` | write / clear a user override — same writer as the CLI. Bool: `true`/`false`; choice: comma-separated ids. Tab completes key paths |
+| `:/re` · `:help` · `:q` | search alias · help · quit |
+| Enter | expand an area / open a flag's detail (layers) |
+| Space | toggle a bool / open the choice picker |
+| `u` | clear the user override on the cursor row |
+| `?` / F1 | help |
+| `q` | quit |
+
 ## Layers & provenance — reading the LAYER column
 
 Every value gff prints was won by exactly one of five layers; `gff list`'s
@@ -144,16 +167,19 @@ round-trip is the quickest health-check that the whole chain works.
 
 ## Versioning & releases
 
-`VERSION` in this directory is the source of truth the build stamps into the
-binary (`build.sh` ldflags). Releases are automated repo-wide:
+The git tag `sdk/gff/vX.Y.Z` is the single source of truth. `build.sh` derives
+the version from it via `git describe` (see [`sdk/version.sh`](../version.sh))
+and stamps it into the binary through ldflags — there is no `VERSION` file.
+Releases are automated repo-wide:
 
-1. Merge a conventional-commit PR touching `sdk/gff/**` — `sdk-auto-bump.yml`
-   derives the semver bump and commits the new `sdk/gff/VERSION` on `main`.
-2. `tag-sdk-modules.yml` then cuts the annotated tag `sdk/gff/v<VERSION>`.
-3. Consumers pin it: `go run github.com/sfc-gh-eraigosa/dotfiles/sdk/gff@sdk/gff/v<VERSION>`.
+1. Merge a conventional-commit PR touching `sdk/gff/**`.
+2. `sdk-auto-bump.yml` derives the semver level from the commit subjects since
+   the last tag and cuts the annotated tag `sdk/gff/vX.Y.Z`. It makes no commit.
+3. Consumers pin it: `go run github.com/sfc-gh-eraigosa/dotfiles/sdk/gff@sdk/gff/vX.Y.Z`.
 
-So the default is the committed `VERSION`, and published tags always mirror it —
-no manual tagging.
+Between releases `build.sh` reports the honest `git describe` form — e.g.
+`0.1.0-43-g51c6ed1` means 43 commits past `v0.1.0`. `make sdk-bump` previews
+which modules are due for a release without changing anything.
 
 ## Troubleshooting
 

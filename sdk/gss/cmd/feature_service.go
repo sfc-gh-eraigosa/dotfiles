@@ -33,10 +33,15 @@ func newFeatureService() (*feature.Service, error) {
 	}
 	repoPath := getRepoPath()
 	runner := git.NewSystemRunner()
-	ghc := gh.NewSystemClient()
+	// Scope gh to --repo: it derives the target repository from its working
+	// directory, so an unscoped client resolves and mutates whatever repo
+	// the shell is sitting in. That is how `gss -r <dotfiles> feature start`
+	// run from another checkout registered the feature under that other
+	// repo, with its base commit, and still reported success.
+	ghc := gh.NewSystemClientInDir(repoPath)
 	regDir := expandHome(cfg.Paths.RegistryDir)
 
-	nwo, err := repo.NewResolver(ghc, runner, repo.NewCache(regDir)).Resolve(context.Background(), "")
+	nwo, err := repo.NewResolverInDir(ghc, runner, repo.NewCache(regDir), repoPath).Resolve(context.Background(), "")
 	if err != nil {
 		return nil, err
 	}

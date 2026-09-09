@@ -1,0 +1,18 @@
+# T5 live check — 2026-09-05T17:32:04Z  (binary: gsl v0.4.0-17-g34b3aa6; cwd: a worktree with PR #269; flags via DOTFILES_DIR path-source fallback)
+$ gsl status | link targets
+
+file://~/.herdr/worktrees/dotfiles/worktree-agy-defaults
+https://github.com/sfc-gh-eraigosa/dotfiles
+https://github.com/sfc-gh-eraigosa/dotfiles/pull/269
+https://github.com/sfc-gh-eraigosa/dotfiles/tree/worktree/agy_defaults
+https://time.is/Los_Angeles
+$ gff set gsl.links.time false; gsl status | grep -c time.is
+0
+$ gff unset gsl.links.time; gsl status | grep -c time.is
+1
+$ gsl config set links off; gsl status | grep -c "]8;;"
+0
+$ render wall time, 3 runs (ms)
+21
+21
+19

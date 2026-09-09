@@ -15,7 +15,9 @@ import (
 )
 
 func runAgent(cmd *cobra.Command, args []string) {
-	cmd.Help()
+	// Bare `tmux-mgr agent` just prints usage; a failed write to the help
+	// stream has nowhere left to be reported.
+	_ = cmd.Help()
 }
 
 func runAgentStart(cmd *cobra.Command, args []string) error {
@@ -277,7 +279,11 @@ func runAntigravityLoop(task, agyPath, requestedModel string) error {
 
 		runErr := c.Run()
 		if logFile != nil {
-			logFile.Close()
+			// A failed Close truncates the agent transcript, which is the whole
+			// point of the log — say so rather than dropping it.
+			if err := logFile.Close(); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: closing agent log: %v\n", err)
+			}
 		}
 
 		if runErr == nil {
@@ -330,7 +336,9 @@ func runClaudeLoop(task, claudePath, model string) error {
 
 	runErr := c.Run()
 	if logFile != nil {
-		logFile.Close()
+		if err := logFile.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: closing agent log: %v\n", err)
+		}
 	}
 
 	if runErr != nil {
@@ -480,14 +488,16 @@ func init() {
 	agentCmd.AddCommand(cleanupCmd)
 
 	startCmd.Flags().StringP("task-description", "d", "", "A natural language description of the agent's task.")
-	startCmd.MarkFlagRequired("task-description")
+	// Cannot fail: the flag is registered on the line above.
+	_ = startCmd.MarkFlagRequired("task-description")
 	startCmd.Flags().String("feature", "", "gss feature to add the worker to (default: the agent name; auto-created)")
 	startCmd.Flags().String("purpose", "", "gss worker purpose (default: the agent name)")
 
 	cleanupCmd.Flags().Bool("force", false, "Forward --force to `gss feature done` (remove despite dirty/dependents/open PR)")
 
 	executeCmd.Flags().StringP("task-description", "d", "", "The task description for the agent.")
-	executeCmd.MarkFlagRequired("task-description")
+	// Cannot fail: the flag is registered on the line above.
+	_ = executeCmd.MarkFlagRequired("task-description")
 
 	listCmd.Flags().BoolP("all", "a", false, "Show sessions from every repo (and global sessions). Default scopes to current repo.")
 }

@@ -1,0 +1,12 @@
+# 2026-09-03T15:14:11Z agy-config status via the COPIED ~/.config/antigravity/aliases.sh (fresh bash, no sentinel)
+agy launch config:
+  yolo    OFF   (agy-config yolo on|off)
+  (run 'agy-config doctor' to check the installed binary)
+--- doctor:
+agy binary diagnostics:
+  command agy -> ~/.local/bin/agy
+  on PATH (1):
+    ~/.local/bin/agy
+doctor rc=0
+--- launch flags (yolo off):
+flags=[]

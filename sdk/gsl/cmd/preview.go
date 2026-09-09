@@ -5,8 +5,8 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/spf13/cobra"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/preview"
+	"github.com/spf13/cobra"
 )
 
 var previewOnce bool

@@ -81,7 +81,8 @@ func parseDefinitionFile(path string) (*Definition, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open agent definition %s: %w", path, err)
 	}
-	defer f.Close()
+	// Read-only handle: a Close failure cannot affect the bytes already read.
+	defer func() { _ = f.Close() }()
 
 	def := &Definition{
 		SourcePath: path,

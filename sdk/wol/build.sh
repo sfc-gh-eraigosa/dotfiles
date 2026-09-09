@@ -21,7 +21,12 @@ if [ -z "$GO_BIN" ]; then
     exit 0
 fi
 
-VERSION=$(cat "$SCRIPT_DIR/VERSION")
+# Version comes from the module's git release tag (sdk/wol/vX.Y.Z) —
+# the single source of truth. See sdk/version.sh for why the old VERSION
+# file was removed (it had to be committed to a protected branch).
+# shellcheck source=sdk/version.sh
+. "$SCRIPT_DIR/../version.sh"
+VERSION="$(sdk_version "wol" "$SCRIPT_DIR")"
 COMMIT=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 DIRTY="false"

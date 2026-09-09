@@ -1,0 +1,18 @@
+# T5 lints — 2026-09-05T17:31:43Z
+$ gff lint
+exit=0
+$ gff list | grep ^gsl.
+gsl.links.ai                            bool    true      repo-live  Usage links — the model name, context %, and the 5h/7d rate fields open the host's usage page (Claude Code default claude.ai/settings/usage; the ai segment's `usage_url` option overrides, and is the only way to give Antigravity a target).
+gsl.links.dirgit                        bool    true      repo-live  Directory link — the dirgit directory name opens the working directory as a file:// URL (the file manager in VTE terminals).
+gsl.links.enabled                       bool    true      repo-live  Master switch for clickable (OSC 8) links on the gsl status line. false removes every link family below; `links` in ~/.config/gsl/config.json still chooses underline vs plain.
+gsl.links.repo                          bool    true      repo-live  Repo links — the PR badge to its pull request, the feature/worker/branch label and the dirgit branch to the branch on GitHub, and the root/worktree glyph to the repository home.
+gsl.links.time                          bool    true      repo-live  Time link — the date/time opens a timezone page built from the time segment's `link_url` template (default https://time.is/{tz_city}; placeholders {tz} {tz_city} {iso_utc} {unix}).
+$ make lint-shell
+# `make lint` may still be warn-only for its own non-shell backlog.)
+exit=0
+$ make lint-portability
+
+exit=0
+$ make lint-go (sdk/gsl)
+==> golangci-lint run (sdk/gsl)
+0 issues.

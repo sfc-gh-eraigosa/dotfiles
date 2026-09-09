@@ -8,10 +8,6 @@
 if is_arm64; then
   # These are x86_64 or platform-specific binaries in opt/bin
   UNSUPPORTED_TOOLS=(
-    "discuss"
-    "git-sizer"
-    "helion"
-    "rancher-compose"
     "toggle_browser.scpt"
     "enable-vmx.sh"
   )

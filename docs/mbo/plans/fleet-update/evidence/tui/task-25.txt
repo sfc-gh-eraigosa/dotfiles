@@ -1,0 +1,77 @@
+Task 25 — interactive handoff is fleet update
+Date: 2026-09-05
+
+RED
+---
+go test ./cmd/... -run 'TestHandoffDelegatesToFleetUpdate|TestHandoffEnvNeverCarriesTheSecret|TestNeedsTerminalRoutesToInteractiveQueue' -v
+Before handoffArgv/handoffEnv/errNeedsTerminal-routing existed, this failed
+to compile:
+  cmd/tui_cmds_test.go:91:14: undefined: handoffArgv
+  cmd/tui_cmds_test.go:112:24: undefined: handoffEnv
+An intermediate run of TestNeedsTerminalRoutesToInteractiveQueue (once the
+routing code existed but the test still asserted on immediate-pump timing)
+failed at runtime:
+  tui_cmds_test.go:132: expected "a" queued for the interactive handoff, got []
+(pump() immediately dequeued the just-queued host because no other host was
+running — fixed by keeping a second host "running" in the fixture, and by
+asserting on iaTotal instead of the returned tea.Cmd for the "still pumps"
+check).
+
+GREEN
+------
+go test ./cmd/... -run 'TestHandoff|TestNeedsTerminal' -v
+  --- PASS: TestHandoffAnnouncesHostAndProgress
+  --- PASS: TestHandoffDelegatesToFleetUpdate
+  --- PASS: TestHandoffEnvNeverCarriesTheSecret
+  --- PASS: TestNeedsTerminalRoutesToInteractiveQueue
+  PASS
+
+go test ./cmd/... -v 2>&1 | tail -5
+  ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.220s
+
+grep -n "updateScript\|unattendedUpdate\|rescueWorktree\|updateHost(" cmd/*.go
+  cmd/update_test.go:16:// updateScript, remoteUpdateScript, resetToFetched, rescueWorktree and
+(a comment naming the deleted symbols; no code reference remains)
+
+Changes:
+- Deleted from cmd: updateScript, remoteUpdateScript, resetToFetched,
+  rescueWorktree, unattendedUpdate, updateHost, UpdateResult.
+- cmd/update_test.go rewritten onto buildExecutor/Executor.RunHost and
+  updexec.SyncScript/RescueScript/RunScript, per the task's mapping; every
+  original test NAME kept.
+- cmd/tui_cmds.go: handoffWrapper now wraps an arbitrary local command line
+  (previously hardcoded `ssh -t <alias> <remote>`); new handoffArgv builds
+  `<self> update <alias> [--file F] [--ref R] [--reset]`; new handoffEnv
+  carries only WINSETUP_ANSWER/GEMINI_TEARDOWN_ANSWER, never the secret;
+  interactiveHandoff self-execs via an injected selfFn (tuiModel.self,
+  defaulting to os.Executable in newTUIModel).
+- cmd/tui_model.go: tuiModel gains `file` (the --file value, re-passed to
+  the self-exec) and `self` fields; bgUpdateDoneMsg now special-cases
+  errors.Is(msg.err, errNeedsTerminal) by moving the host to iaQueue
+  instead of marking the row failed.
+- internal/updexec: no changes this task (NeedsTerminal landed in task 24).
+
+VERIFY
+------
+gofmt -l .            -> clean
+go vet ./...          -> clean
+go test -race ./...   -> all packages ok
+go test ./cmd/... -cover -> 62.7%
+
+DEVIATION
+---------
+- TestInteractiveLaneCarriesTheAnswers and TestHandoffAnnouncesHostAndProgress
+  (existing tests, not named in the task) had to be rewritten/trimmed:
+  the former no longer has a "remote script" to inspect (the answers now
+  travel as the CHILD's environment via handoffEnv, not as an "export"
+  prefix on a remote command embedded in the handoff), and the latter's
+  assertion that the wrapper contains the literal "ssh -t" no longer holds
+  since handoffWrapper wraps an arbitrary local command line rather than
+  hardcoding an ssh invocation (the ssh -t now happens INSIDE the self-execed
+  `fleet update`, invisible to handoffWrapper's own template).
+- TestSudoIsGatedEvenWithNoCredential and the four
+  TestSudoSecretNeverAppearsInTheRemoteCommand-family tests in
+  tui_answers_test.go/tui_unattended_fix_test.go called the now-deleted
+  unattendedUpdate directly; they were rewritten onto bgPreamble()(a
+  synthetic KindRun step) + a literal "cd ~/git/dotfiles && ./install.sh"
+  suffix, preserving every original assertion's intent.

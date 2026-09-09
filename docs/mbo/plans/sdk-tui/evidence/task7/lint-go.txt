@@ -1,0 +1,19 @@
+# 2026-09-05 20:52 PDT — GOTOOLCHAIN=auto make lint-go (repo root, lib worker), after go mod tidy in sdk/tmux-mgr and sdk/wlink (x/sys v0.13.0 → v0.36.0 indirect, pulled in by libs via replace ../libs). The first run failed to load those two modules: "context loading failed: no go files to analyze: running `go mod tidy` may solve the problem" — reproduced as "go: updates to go.mod needed" with go build.
+==> gofmt check across sdk/...
+==> golangci-lint run (sdk/fleet)
+0 issues.
+==> golangci-lint run (sdk/gff)
+0 issues.
+==> golangci-lint run (sdk/gsl)
+0 issues.
+==> golangci-lint run (sdk/gss)
+0 issues.
+==> golangci-lint run (sdk/libs)
+0 issues.
+==> golangci-lint run (sdk/tmux-mgr)
+0 issues.
+==> golangci-lint run (sdk/wlink)
+0 issues.
+==> golangci-lint run (sdk/wol)
+0 issues.
+exit=0
