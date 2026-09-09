@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
 )
 
@@ -87,12 +88,24 @@ func Read(path string) (Capture, error) {
 
 	c.Observed = observed(c.Lines)
 	for _, l := range c.Lines {
-		if l.Stderr && !updexec.Benign(l.Text) {
+		if l.Stderr && !updexec.Benign(clean(l.Text)) {
 			c.Warnings++
 		}
 	}
 	return c, nil
 }
+
+// clean strips terminal colour (and the trailing whitespace it leaves)
+// before ANY classification. install.sh colourises its own output, and a
+// leading escape sequence hides the "WARNING:" prefix — and the shape of a
+// benign git line — from every matcher.
+//
+// Read strips for the same reason Problems does: the listing's WARN column
+// and the --problems digest must agree about what counts as an error, and
+// one of them stripping while the other did not made them disagree on
+// precisely the colourised lines. The stripped text is used for MATCHING
+// only; Lines keeps what the host actually wrote, so --show is unchanged.
+func clean(s string) string { return strings.TrimRight(ansi.Strip(s), " \t") }
 
 // parseLine splits the timestamp prefix and the stderr mark off one body
 // line. A line without a stamp keeps its whole text — a remote command that

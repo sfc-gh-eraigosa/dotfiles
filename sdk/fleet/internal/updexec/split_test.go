@@ -143,3 +143,23 @@ func TestInteractiveStepSaysItsOutputWentToTheTerminal(t *testing.T) {
 		t.Fatalf("an interactive step must say its output was not captured, got:\n%q", captured)
 	}
 }
+
+// TestBackgroundLaneDoesNotClaimAnInteractiveGap is the guard on the note
+// above. "interactive" is a property of the LANE, not of the plan flag:
+// Background runs an `interactive: true` run step as Batch and tees every
+// line into the capture, so the note would be a lie there — and a costly
+// one, since histindex reads it (and the empty-step shape it describes) as
+// "this run was never observed" and refuses to call the host clean. Writing
+// it on the TUI's lane inverted the exact signal it was added to provide.
+func TestBackgroundLaneDoesNotClaimAnInteractiveGap(t *testing.T) {
+	var captured []string
+	f := runner.Fake{Out: map[string]string{"h": "state=clean branch=main"}}
+	ex := Executor{IO: Background{Console{R: f}}, Out: memOutput{&captured}}
+	ex.RunHost("h", updplan.Default())
+
+	for _, l := range captured {
+		if strings.Contains(l, "not captured") {
+			t.Fatalf("the background lane captures a run step in full; it must not claim a gap: %q\n%q", l, captured)
+		}
+	}
+}

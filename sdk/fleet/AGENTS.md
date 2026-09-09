@@ -469,15 +469,19 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   stderr loudest-first, and collapses repeats to one entry with a count. Colour is stripped
   BEFORE matching, not just before printing: a leading escape sequence hid the `WARNING:`
   prefix from the matcher, so a coloured warning was not merely grouped separately, it was
-  not recognised at all. Pinned by `TestProblemsLeadWithTheAuthoredDiagnosis`,
-  `TestProblemsCollapseRepeats`, `TestProblemsStripColourBeforeGrouping`.
+  not recognised at all — and `Read`'s WARN count strips through the SAME `clean` helper,
+  or the table and the digest disagree on precisely the colourised lines. Pinned by
+  `TestProblemsLeadWithTheAuthoredDiagnosis`, `TestProblemsCollapseRepeats`,
+  `TestProblemsStripColourBeforeGrouping`,
+  `TestColouredBenignStderrIsNotCountedAsAWarning`.
 - **The digest CLASSIFIES; it never hides.** Every line still appears — advisories are
   labelled and sorted last, not suppressed, because a filter that hides is a filter that can
   hide the one line that mattered. Three reductions, all structural rather than selective:
   continuation lines attach to their parent as detail (an unfinished sentence ending `,` `:`
   `\`, a line indented **two** spaces past its severity tag, or the same tool tag at the same
   timestamp), near-duplicates differing only by an identifier collapse to one entry with a
-  count and an elided middle (`9× WARNING: ollama create teams-… failed`), and repeats
+  count and an elided middle (`9× WARNING: ollama create teams-… failed`, cut on rune
+  boundaries and carrying every merged entry's detail with it), and repeats
   collapse by count. Together those took a healthy host from 34 "problems" to 8.
   Each rule is deliberately shallow — a miss costs tidiness, never information.
   **Two traps found by real captures, both now pinned:** the tool-tag rule needs the same
@@ -613,7 +617,13 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   note that is indistinguishable in `fleet history` from a step that produced no output at
   all, which is exactly how a broken-sudo run and the successful re-run that fixed it came
   to look identical. Capturing it for real needs a pty proxy; naming the gap costs one
-  line. Pinned by `TestInteractiveStepSaysItsOutputWentToTheTerminal`.
+  line. **The note describes the LANE, not the plan flag.** `Background` (the TUI) runs an
+  `interactive: true` run step as Batch and tees every line into the capture, so writing
+  the note there would stamp "output went to the terminal" onto a file holding the whole
+  run — and `histindex` reads that as "never observed" and refuses to call the host clean,
+  inverting the exact signal the note exists to give. Pinned by
+  `TestInteractiveStepSaysItsOutputWentToTheTerminal` and
+  `TestBackgroundLaneDoesNotClaimAnInteractiveGap`.
 - **A `timed out` step is "we stopped waiting", not "it stopped".** The deadline kills the
   local `ssh`; the remote command keeps running (an `install.sh` in the middle of `apt` will
   finish on its own). Check the host before re-running, and list `timeout` in `retry.on` only

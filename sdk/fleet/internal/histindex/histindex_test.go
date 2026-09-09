@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
 )
@@ -639,6 +640,75 @@ func TestClassLabelsAgreeWithTheirCount(t *testing.T) {
 	} {
 		if got := tc.class.Label(tc.n); got != tc.want {
 			t.Errorf("Label(%d) = %q, want %q", tc.n, got, tc.want)
+		}
+	}
+}
+
+// TestColouredBenignStderrIsNotCountedAsAWarning pins that the listing's
+// WARN column and the --problems digest classify the SAME text. Read used
+// to hand updexec.Benign the raw line while Problems stripped colour first,
+// so a colourised `Already on 'main'` — routine git checkout chatter — was
+// benign to the digest and a warning to the table. The two views then
+// disagreed on exactly the colourised lines, which is what the shared
+// classifier exists to prevent: `fleet history` showed ⚠1 on a host that
+// `--problems` called clean.
+func TestColouredBenignStderrIsNotCountedAsAWarning(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "20260909T034714Z__gig.log",
+		"# fleet update — host=gig\n"+
+			"03:47:14 === step dotfiles.sync (sync) ===\n"+
+			"03:47:14 state=clean branch=main\n"+
+			"03:47:15 !! \x1b[32mAlready on 'main'\x1b[0m\n"+
+			"# 2026-09-09T03:50:36Z finished\n")
+
+	c, err := Read(filepath.Join(dir, "20260909T034714Z__gig.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Warnings != 0 {
+		t.Errorf("Warnings = %d, want 0 — colour must be stripped before Benign, exactly as Problems does", c.Warnings)
+	}
+	if got := len(c.Problems()); got != 0 {
+		t.Errorf("Problems() = %d, want 0 — the digest and the WARN column must agree", got)
+	}
+}
+
+// TestMergedNearDuplicatesKeepTheirDetail pins that collapsing two
+// near-identical failures into one counted entry does not delete the
+// continuation lines hanging off the second one. The elided middle already
+// costs the reader the identifier; silently dropping detail that nothing
+// else in the digest shows would make "classifies, never hides" false.
+func TestMergedNearDuplicatesKeepTheirDetail(t *testing.T) {
+	c := Capture{Lines: []Line{
+		{Time: "03:47:14", Text: "WARNING: ollama create teams-alpha failed to build"},
+		{Time: "03:47:14", Text: "WARNING:   base model alpha was never pulled"},
+		{Time: "03:47:15", Text: "WARNING: ollama create teams-bravo failed to build"},
+		{Time: "03:47:15", Text: "WARNING:   base model bravo was never pulled"},
+	}}
+
+	ps := c.Problems()
+	if len(ps) != 1 {
+		t.Fatalf("got %d problems, want the two to collapse into one: %+v", len(ps), ps)
+	}
+	if len(ps[0].Detail) != 2 {
+		t.Fatalf("Detail = %q, want both continuation lines to survive the merge", ps[0].Detail)
+	}
+}
+
+// TestElidedMiddleStaysValidUTF8 pins that the "…" elision cuts on rune
+// boundaries. Two different runes can share leading bytes ("…" is E2 80 A6,
+// "—" is E2 80 94), so a byte-exact prefix cut lands inside one and emits
+// half a rune — mojibake in the single line the digest exists to make
+// readable.
+func TestElidedMiddleStaysValidUTF8(t *testing.T) {
+	c := Capture{Lines: []Line{
+		{Time: "03:47:14", Text: "WARNING: could not reach the mirror … for repository alpha, skipping"},
+		{Time: "03:47:15", Text: "WARNING: could not reach the mirror — for repository bravo, skipping"},
+	}}
+
+	for _, p := range c.Problems() {
+		if !utf8.ValidString(p.Text) {
+			t.Errorf("digest line is not valid UTF-8: %q", p.Text)
 		}
 	}
 }

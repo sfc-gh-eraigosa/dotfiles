@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
-	"github.com/charmbracelet/x/ansi"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
 )
 
@@ -213,7 +213,7 @@ func (c Capture) Problems() []Problem {
 		// sequence hid the "WARNING:" prefix from the matcher entirely —
 		// the coloured half of a message was not merely grouped separately,
 		// it was not recognised as a problem at all.
-		l.Text = strings.TrimRight(ansi.Strip(l.Text), " \t")
+		l.Text = clean(l.Text)
 		problem := (!l.Stderr && authoredProblem.MatchString(strings.TrimSpace(l.Text))) ||
 			(l.Stderr && !updexec.Benign(l.Text))
 		if !problem {
@@ -302,6 +302,12 @@ func collapseNearDuplicates(ps []Problem) []Problem {
 			out[i].prefix, out[i].suffix = pre, suf
 			out[i].Count += p.Count
 			out[i].Text = pre + "…" + suf
+			// The merged entry's OWN continuation lines come with it. The
+			// elided middle already costs the reader the identifier; also
+			// dropping the detail under it would delete text nothing else
+			// shows, in a view whose whole contract is that it classifies
+			// rather than hides.
+			out[i].Detail = append(out[i].Detail, p.Detail...)
 			if p.First < out[i].First {
 				out[i].First = p.First
 			}
@@ -320,11 +326,20 @@ func collapseNearDuplicates(ps []Problem) []Problem {
 	return res
 }
 
+// commonPrefix and commonSuffix compare BYTES but cut on RUNE boundaries.
+// Two different runes can share leading bytes ("…" is E2 80 A6 and "—" is
+// E2 80 94), so a byte-exact cut can land inside one and put half a rune
+// into the elided text — mojibake in the single line the digest exists to
+// make readable. Backing off to the nearest boundary costs at most a byte
+// or two of shared affix.
 func commonPrefix(a, b string) string {
 	n := min(len(a), len(b))
 	i := 0
 	for i < n && a[i] == b[i] {
 		i++
+	}
+	for i > 0 && i < len(a) && !utf8.RuneStart(a[i]) {
+		i--
 	}
 	return a[:i]
 }
@@ -334,6 +349,9 @@ func commonSuffix(a, b string) string {
 	i := 0
 	for i < n && a[len(a)-1-i] == b[len(b)-1-i] {
 		i++
+	}
+	for i > 0 && !utf8.RuneStart(a[len(a)-i]) {
+		i--
 	}
 	return a[len(a)-i:]
 }
