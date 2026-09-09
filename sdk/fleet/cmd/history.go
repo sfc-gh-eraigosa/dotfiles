@@ -247,7 +247,9 @@ func init() {
 // Silence is ambiguous — it reads identically to a host that was never
 // checked — and the point of the view is to be able to trust it.
 func digestProblems(w io.Writer, runs []histindex.Run, oneHost bool, loc *time.Location) error {
-	sel := runs
+	// Declared without an initialiser: both branches assign it, so seeding
+	// it with runs was dead (ineffassign).
+	var sel []histindex.Run
 	if !oneHost {
 		sel = newestPerHost(runs)
 	} else {

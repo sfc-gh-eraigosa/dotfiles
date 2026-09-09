@@ -64,7 +64,7 @@ func TestHistoryListsNewestFirstWithOutcome(t *testing.T) {
 	if iSpark < 0 || iNano < 0 || iPi < 0 {
 		t.Fatalf("every host must be listed:\n%s", out)
 	}
-	if !(iSpark < iNano && iNano < iPi) {
+	if iSpark >= iNano || iNano >= iPi {
 		t.Errorf("want newest-first (spark, nano, pi):\n%s", out)
 	}
 
