@@ -13,7 +13,7 @@
 
 | Leaf/worker | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| (single) | classic gss lane (not a `gss feature` worker) | `worktree/fleet-error-view` | this worktree | [#310](https://github.com/sfc-gh-eraigosa/dotfiles/pull/310) (draft) | planning |
+| (single) | classic gss lane (not a `gss feature` worker) | `worktree/fleet-error-view` | this worktree | [#310](https://github.com/sfc-gh-eraigosa/dotfiles/pull/310) (merged 2026-09-08) | **merged** (2026-09-08: #310 on `main` @ `de0dd09`; tasks 1–13 done + green; task 14 = human live gate, outstanding — held at `merged`, not `done`; issue #308 closed 2026-09-08) |
 
 ## 1. Task ledger
 
