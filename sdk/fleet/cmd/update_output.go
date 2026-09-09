@@ -18,10 +18,10 @@ type captureOutput struct{ dir string }
 
 func (c captureOutput) Open(host, header string) (updexec.LineWriter, string) {
 	cap := applog.NewCapture(applog.CaptureOptions{
-		Tool:    logTool,
 		Dir:     c.dir,
 		Subject: host,
 		Header:  header,
+		Keep:    captureKeep,
 		Now:     nowFn,
 	})
 	if cap == nil {

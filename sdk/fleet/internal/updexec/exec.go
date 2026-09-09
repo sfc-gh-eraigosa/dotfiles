@@ -265,6 +265,24 @@ func (b Background) Interactive(ctx context.Context, host string, st updplan.Ste
 	return ErrNoTerminal
 }
 
+// batchLane is an OPTIONAL capability of a StepIO lane: it reports that a
+// step the PLAN marks interactive is nonetheless run in BATCH on this lane,
+// so its output does reach the capture after all.
+//
+// It exists because "interactive" is a property of the LANE, not of the plan
+// flag alone (see Background above). Without it, runWithRetry wrote
+// InteractiveNote into every TUI capture of the default plan's install.sh —
+// a step Background captures in full — and histindex then reported those
+// fully-observed runs as "not captured", which is exactly the inversion the
+// note was added to prevent.
+type batchLane interface {
+	runsAsBatch(kind updplan.Kind) bool
+}
+
+// runsAsBatch mirrors Interactive above: a run step is batched (and captured),
+// anything else needs a real terminal.
+func (Background) runsAsBatch(kind updplan.Kind) bool { return kind == updplan.KindRun }
+
 // teeable is an optional capability of a StepIO lane: one that can return a
 // copy of itself whose Batch/Interactive output ALSO reaches an extra
 // callback, without disturbing whatever Line callback it already had.
@@ -278,11 +296,26 @@ type teeable interface {
 	withLines(out, err func(host, line string)) StepIO
 }
 
-// stderrMark prefixes a stderr line in a host's captured log. Without it a
+// InteractiveNote is written into a capture in place of an interactive
+// step's output, which fleet never sees — see runWithRetry.
+//
+// EXPORTED because a reader has to be able to tell "this run had no
+// problems" from "this run's output went somewhere I cannot read". Reporting
+// the second as the first is how a host that was never actually observed
+// comes to look verified.
+const InteractiveNote = "(interactive step: output went to the terminal and is not captured here)"
+
+// StderrMark prefixes a stderr line in a host's captured log. Without it a
 // post-mortem of a headless run cannot tell a warning from progress — the
 // distinction exists on the wire now, and throwing it away at the capture is
 // where it would be lost for good.
-const stderrMark = "!! "
+//
+// It is EXPORTED because the reader (internal/histindex, behind `fleet
+// history`) has to strip exactly what this writes. Two copies of "!! " in
+// two packages is a silent drift waiting to happen: change one and the
+// history view starts showing the mark as literal text while still calling
+// the line stdout.
+const StderrMark = "!! "
 
 // withLines returns a copy of c whose callbacks ALSO invoke out/err, after
 // whatever callbacks c already had.
@@ -416,7 +449,7 @@ func (e Executor) RunHost(host string, p updplan.Plan) HostReport {
 			// The prefix is applied unconditionally: RunHost has a value
 			// receiver, so its rewired e.IO never escapes this call and there
 			// is no path that tees twice.
-			func(_, line string) { w.Line(stderrMark + line) },
+			func(_, line string) { w.Line(StderrMark + line) },
 		)
 	}
 
@@ -869,6 +902,25 @@ func (e Executor) runGhAuth(w LineWriter, host string, st updplan.Step) Result {
 		Attempts: res.Attempts + 1, MaxAttempts: res.MaxAttempts, Notes: notes}
 }
 
+// handsOverTerminal reports whether this step's output really is going
+// somewhere this process cannot see — the only condition under which a
+// capture should admit a gap.
+//
+// The plan's interactive flag alone is NOT that condition: Background runs an
+// interactive run step as Batch and tees every line into the capture, so
+// keying the note off the flag stamped "output went to the terminal" onto
+// captures that hold the whole run, and made histindex report them
+// unobserved.
+func (e Executor) handsOverTerminal(kind updplan.Kind, interactive bool) bool {
+	if !interactive {
+		return false
+	}
+	if b, ok := e.IO.(batchLane); ok && b.runsAsBatch(kind) {
+		return false
+	}
+	return true
+}
+
 // runWithRetry runs call under Executor's clock/sleep/rand, retrying per
 // retry when the failure class matches, up to a bounded number of
 // attempts, each under its own per-attempt deadline.
@@ -911,6 +963,16 @@ func (e Executor) runWithRetry(
 		}
 		header += " ==="
 		w.Line(header)
+		if e.handsOverTerminal(kind, interactive) {
+			// An interactive step hands the terminal to the remote command
+			// (ssh -t), so not one byte of its output passes through this
+			// process and none of it can reach the capture. Saying so is the
+			// difference between a log that is INCOMPLETE and one that looks
+			// like the step did nothing: a two-minute ./install.sh leaves the
+			// same empty banner as a no-op, and `fleet history` cannot tell
+			// the reader which it was unless the file admits the gap itself.
+			w.Line(InteractiveNote)
+		}
 
 		ctx := context.Background()
 		var cancel context.CancelFunc
