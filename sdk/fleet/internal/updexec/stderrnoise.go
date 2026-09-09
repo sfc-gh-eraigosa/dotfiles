@@ -23,7 +23,12 @@ var benignPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`^Pseudo-terminal will not be allocated`),
 	regexp.MustCompile(`^remote: (Enumerating|Counting|Compressing|Total|Finding|Resolving) `),
 	regexp.MustCompile(`^(Receiving|Resolving|Counting|Compressing|Unpacking|Enumerating) (objects|deltas):`),
-	regexp.MustCompile(`^From (https?://|git@|/)`),
+	// "From <remote>" and nothing else. Anchored at BOTH ends on purpose:
+	// the remote may be scp-style (github.com:owner/repo), a URL, or a local
+	// path, so enumerating spellings kept missing real ones — but requiring
+	// the line to be exactly the literal "From " plus one token keeps error
+	// text ("From X but then words", "remote: fatal: ...") out.
+	regexp.MustCompile(`^From \S+$`),
 	// NOTE: no leading-space patterns — Benign trims the line first, so
 	// `^ \* branch …` could never match, and every real `git fetch` would put
 	// a spurious ⚠ on the row.

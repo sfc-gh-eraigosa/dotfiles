@@ -278,11 +278,17 @@ type teeable interface {
 	withLines(out, err func(host, line string)) StepIO
 }
 
-// stderrMark prefixes a stderr line in a host's captured log. Without it a
+// StderrMark prefixes a stderr line in a host's captured log. Without it a
 // post-mortem of a headless run cannot tell a warning from progress — the
 // distinction exists on the wire now, and throwing it away at the capture is
 // where it would be lost for good.
-const stderrMark = "!! "
+//
+// It is EXPORTED because the reader (internal/histindex, behind `fleet
+// history`) has to strip exactly what this writes. Two copies of "!! " in
+// two packages is a silent drift waiting to happen: change one and the
+// history view starts showing the mark as literal text while still calling
+// the line stdout.
+const StderrMark = "!! "
 
 // withLines returns a copy of c whose callbacks ALSO invoke out/err, after
 // whatever callbacks c already had.
@@ -416,7 +422,7 @@ func (e Executor) RunHost(host string, p updplan.Plan) HostReport {
 			// The prefix is applied unconditionally: RunHost has a value
 			// receiver, so its rewired e.IO never escapes this call and there
 			// is no path that tees twice.
-			func(_, line string) { w.Line(stderrMark + line) },
+			func(_, line string) { w.Line(StderrMark + line) },
 		)
 	}
 

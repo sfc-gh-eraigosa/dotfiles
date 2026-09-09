@@ -26,6 +26,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `fleet keys list\|sync\|prune` | audit / authorize / remove authorized keys |
 | `fleet config pull\|push\|diff` | one-way ssh-config transfer: import FROM one host, publish TO hosts, or compare without changing anything |
 | `fleet wake [host...]` | rouse hosts asleep at layer 2: ladder `retry → local-prime → peer-relay`, printed rung by rung; `--json`; exits non-zero if any target stayed down |
+| `fleet history [host]` | list the captures past updates left behind (newest first: when · host · finished/unfinished · ⚠N · size); naming a host narrows to it. `--show` prints a run (`--run N`, 1 = newest), `--errors` keeps only stderr, `--grep RE` filters lines, `--limit N`, `--json` |
 
 ## Layout
 
@@ -44,6 +45,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `internal/cfgplan` | plan a ONE-WAY ssh-config transfer (pure): `Build` + `Apply` |
 | `internal/lanscan` | sweep a subnet for a listening port (injected dialer — no nmap, no socket in tests) |
 | `internal/keys` | authorized_keys diff (reports removals, never applies them) |
+| `internal/histindex` | read past captures (pure but for the file open): `Scan` decodes `<UTC>__<host>.log` positionally, `Read` splits header/body/footer and decodes the `!! ` mark, `Summarize` adds finished + warning count |
 | `internal/reach` | the wake ladder: rung order, peer ranking, provenance (pure; every impure edge injected via `Deps`) |
 | `cmd/answers_store.go` | the non-secret prompt preferences on disk (`0600`); the on-disk type has no credential field |
 | `internal/runner` | the **only** seam that touches a remote host (`Exec` real, `Fake` for tests); `RunStreamCtx` is the deadline-aware path |
@@ -456,6 +458,16 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   (`CaptureOptions` has no `Tool` field and an empty `Dir` means no capture at all), so
   neither layer can invent a location. Pinned by `TestUpdateCapturesOnlyWhereTheCallerNamed`,
   `TestZeroValueCaptureOutputWritesNothing`, and `libs/log`'s `TestEmptyDirMeansNoCapture`.
+- **`history` reads the capture; it never claims an exit code.** A capture records
+  OUTPUT, not a status, so the listing's RESULT column says `finished` / `unfinished` —
+  whether the run reached its footer — and never `ok` / `failed`, which the file cannot
+  prove. The warning count and the `--errors` projection go through `updexec.Benign`, the
+  SAME classifier the TUI's error pane uses, so the CLI and the dashboard cannot disagree
+  about what an error is; `internal/updexec.StderrMark` is exported for the same reason —
+  the reader must strip exactly what the writer wrote, and two copies of `"!! "` would
+  drift. The log directory and the timezone are both PARAMETERS of `runHistory` (see the
+  injected-capture invariant above). Pinned by `TestHistoryListsNewestFirstWithOutcome`,
+  `TestHistoryErrorsShowsOnlyStderr`, `TestHistoryUnknownHostNamesWhatExists`.
 - **Captures are kept 50 per HOST** (`captureKeep`), not globally. `libs/log` defaults to
   200, which is far more scrollback than an operator reads; 50 answers "what changed since
   this host last worked" while keeping the directory listable. Pruning is per subject and

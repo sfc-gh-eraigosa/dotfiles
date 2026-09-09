@@ -661,6 +661,43 @@ fleet keys prune                   # remove foreign keys — diff-first, confirm
   `authorized_keys` from local state.
 - Per-host failures are named and rolled into the exit code, never swallowed.
 
+### `fleet history [host]`
+
+Every `fleet update` — from the CLI or the dashboard — is captured to a per-host
+file under `~/.local/state/fleet/logs`. `history` is how you read them back.
+
+```sh
+fleet history                      # every run, newest first
+fleet history pi-01                # just this host's runs
+fleet history pi-01 --show         # print the newest run
+fleet history pi-01 --show --run 3 # the third-newest
+fleet history pi-01 --show --errors        # only what the host wrote to stderr
+fleet history pi-01 --show --grep 'sudo:'  # only matching lines
+fleet history --json | jq .
+```
+
+```console
+$ fleet history
+#  WHEN              HOST     RESULT    WARN  SIZE
+1  2026-09-08 20:47  db-01    finished  ⚠11   20.3K
+2  2026-09-08 20:47  nano-01  finished  ⚠19   29.5K
+3  2026-09-08 20:47  pi-01    finished  ⚠35   29.9K
+4  2026-09-08 20:47  web-01   finished  ⚠79   28.0K
+
+read one with: fleet history db-01 --show --run N
+```
+
+- **`RESULT` says `finished` / `unfinished`, never `ok` / `failed`.** A capture
+  records output, not an exit code. `unfinished` means the file has no footer —
+  the run was killed or is still going — which is a different fact from a run
+  that completed badly, and the table will not merge them.
+- **`WARN` counts non-benign stderr only.** `git` writes its entire fetch
+  progress to stderr, so counting raw stderr would badge every healthy run. The
+  classifier is the same one the dashboard's error pane uses, so the two views
+  can never disagree.
+- **Retention is 50 runs per host**, pruned as each new capture opens. A host
+  updated once a month never has its history evicted by one updated hourly.
+
 ### `fleet version`
 
 ```sh

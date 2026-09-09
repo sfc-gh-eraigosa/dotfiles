@@ -103,7 +103,7 @@ func TestCaptureMarksStderr(t *testing.T) {
 		if l == "installing" {
 			sawOut = true
 		}
-		if l == stderrMark+"WARNING: apt-get update failed" {
+		if l == StderrMark+"WARNING: apt-get update failed" {
 			sawErr = true
 		}
 	}
@@ -111,6 +111,6 @@ func TestCaptureMarksStderr(t *testing.T) {
 		t.Fatalf("stdout must reach the capture unprefixed: %q", captured)
 	}
 	if !sawErr {
-		t.Fatalf("stderr must reach the capture marked %q: %q", stderrMark, captured)
+		t.Fatalf("stderr must reach the capture marked %q: %q", StderrMark, captured)
 	}
 }
