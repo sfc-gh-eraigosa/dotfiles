@@ -278,3 +278,47 @@ func TestUncapturedRunIsNotCalledClean(t *testing.T) {
 		t.Errorf("it must say the output was not captured:\n%s", out)
 	}
 }
+
+// TestDigestGroupsByClassAndKeepsEverything pins the rendering contract the
+// operator asked for: classify, never hide. Advisories are labelled and put
+// last so triage reads top-down, but they are still printed, and a
+// continuation line is still shown as detail under its parent.
+func TestDigestGroupsByClassAndKeepsEverything(t *testing.T) {
+	old := flagHistoryProblems
+	flagHistoryProblems = true
+	t.Cleanup(func() { flagHistoryProblems = old })
+
+	dir := t.TempDir()
+	writeCapture(t, dir, "20260909T034714Z", "gig",
+		"# fleet update — host=gig started=x\n"+
+			"03:47:18 WARNING: could not install these apt packages: git jq\n"+
+			"03:47:19 !! npm warn install-scripts 2 packages have install scripts\n"+
+			"03:47:20 !! Updates are available for some Google Cloud CLI components. To install them,\n"+
+			"03:47:20 !! please run:\n"+
+			"# 2026-09-09T03:50:36Z finished\n")
+
+	var buf strings.Builder
+	if err := runHistory(&buf, []string{"gig"}, dir, time.UTC); err != nil {
+		t.Fatalf("runHistory: %v", err)
+	}
+	out := buf.String()
+
+	if !strings.Contains(out, "failures") || !strings.Contains(out, "advisories") {
+		t.Errorf("output must label the classes:\n%s", out)
+	}
+	// nothing is hidden
+	for _, want := range []string{
+		"could not install these apt packages",
+		"npm warn install-scripts",
+		"Updates are available for some Google Cloud CLI components",
+		"please run:",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("every line must still appear; missing %q:\n%s", want, out)
+		}
+	}
+	// failures lead advisories
+	if strings.Index(out, "could not install") > strings.Index(out, "npm warn") {
+		t.Errorf("failures must be listed before advisories:\n%s", out)
+	}
+}

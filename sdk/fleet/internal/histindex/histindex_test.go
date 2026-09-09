@@ -236,8 +236,8 @@ func TestProblemsLeadWithTheAuthoredDiagnosis(t *testing.T) {
 	if !strings.Contains(ps[1].Text, "could not install these apt packages") {
 		t.Errorf("problem 1 = %q, want the second authored WARNING", ps[1].Text)
 	}
-	if !ps[0].Authored || ps[2].Authored {
-		t.Errorf("Authored must separate install.sh's diagnosis from raw stderr: %+v", ps)
+	if ps[0].Class != ClassFailure || ps[2].Class != ClassStderr {
+		t.Errorf("Class must separate install.sh's diagnosis from raw stderr: %+v", ps)
 	}
 }
 
@@ -403,5 +403,242 @@ func TestARunStepWithOutputIsObserved(t *testing.T) {
 	c, _ := Read(filepath.Join(dir, "20260909T043222Z__gig.log"))
 	if !c.Observed {
 		t.Error("a run step with output WAS observed")
+	}
+}
+
+// TestAdvisoriesAreClassifiedNotHidden pins that a tool announcing news
+// about ITSELF is separated from something that actually failed — and that
+// it is still reported. npm's install-scripts notice and pip's upgrade
+// notice mean nothing went wrong; grouping them with "could not install
+// these apt packages" is what made a healthy host show 34 problems. They are
+// classified rather than suppressed: a filter that hides is a filter that
+// can hide the one line that mattered, and an operator triaging a fleet
+// needs to see everything once and decide for themselves.
+func TestAdvisoriesAreClassifiedNotHidden(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "20260909T034714Z__gig.log",
+		"# fleet update — host=gig started=x\n"+
+			"03:47:18 WARNING: could not install these apt packages: git jq\n"+
+			// npm, pip and gcloud all write these to STDERR — that is how
+			// they arrive in a real capture.
+			"03:47:19 !! npm warn install-scripts 2 packages have install scripts\n"+
+			"03:47:20 !! [notice] A new release of pip is available: 26.0.1 -> 26.2.1\n"+
+			"03:47:21 !! WARNING: Running pip as the 'root' user can result in broken permissions\n"+
+			"03:47:22 !! Updates are available for some Google Cloud CLI components.\n"+
+			"# 2026-09-09T03:50:36Z finished\n")
+
+	c, _ := Read(filepath.Join(dir, "20260909T034714Z__gig.log"))
+	ps := c.Problems()
+
+	if len(ps) != 5 {
+		t.Fatalf("every line must still be reported, got %d: %+v", len(ps), ps)
+	}
+
+	byClass := map[Class]int{}
+	for _, p := range ps {
+		byClass[p.Class]++
+	}
+	if byClass[ClassFailure] != 1 {
+		t.Errorf("exactly the apt failure is a failure, got %d: %+v", byClass[ClassFailure], ps)
+	}
+	if byClass[ClassAdvisory] != 4 {
+		t.Errorf("the four tool notices are advisories, got %d: %+v", byClass[ClassAdvisory], ps)
+	}
+
+	// failures sort ahead of advisories so triage reads top-down
+	if ps[0].Class != ClassFailure {
+		t.Errorf("failures must lead: %+v", ps)
+	}
+}
+
+// TestContinuationLinesFoldIntoTheirParent pins that a multi-line message is
+// ONE problem. All three shapes here are real, taken from live captures, and
+// each one was previously counted as several unrelated problems — which is
+// most of why a healthy host reported 34.
+//
+// Nothing is dropped: continuations are attached as detail, so the full text
+// is still there to read. The rules are deliberately shallow — an unfolded
+// line merely stands on its own, which is the old behaviour, so a miss costs
+// tidiness rather than information.
+func TestContinuationLinesFoldIntoTheirParent(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "20260909T034714Z__pi.log",
+		"# fleet update — host=pi started=x\n"+
+			// (a) an unfinished sentence continues: "…To install them," -> "please run:" -> the command
+			"03:47:10 !! Updates are available for some Google Cloud CLI components.  To install them,\n"+
+			"03:47:10 !! please run:\n"+
+			"03:47:10 !!   $ gcloud components update\n"+
+			// (b) indentation AFTER the severity tag marks a continuation
+			"03:47:20 WARNING: Wayland needs the keyd GNOME extension:\n"+
+			"03:47:20 WARNING:   ln -s /usr/local/share/keyd/gnome-extension-45 \\\n"+
+			"03:47:20 WARNING:         ~/.local/share/gnome-shell/extensions/keyd\n"+
+			// (c) a repeated tool tag is one message
+			// goenv writes to stderr, as it does in a real capture
+			"03:47:30 !! goenv: WARNING: System 'go' found at /usr/bin/go\n"+
+			"03:47:30 !! goenv: Since your shims are at the end of PATH, system 'go' will be used\n"+
+			"03:47:30 !! goenv: To fix this, add the following to your ~/.goenvrc:\n"+
+			"# 2026-09-09T03:50:36Z finished\n")
+
+	c, _ := Read(filepath.Join(dir, "20260909T034714Z__pi.log"))
+	ps := c.Problems()
+
+	if len(ps) != 3 {
+		var got []string
+		for _, p := range ps {
+			got = append(got, p.Text)
+		}
+		t.Fatalf("three messages, want 3 problems, got %d:\n%s", len(ps), strings.Join(got, "\n"))
+	}
+
+	byText := map[string]Problem{}
+	for _, p := range ps {
+		byText[p.Text] = p
+	}
+	gcloud, ok := byText["Updates are available for some Google Cloud CLI components.  To install them,"]
+	if !ok || len(gcloud.Detail) != 2 {
+		t.Errorf("gcloud message must carry its 2 continuation lines: %+v", gcloud)
+	}
+	keyd, ok := byText["WARNING: Wayland needs the keyd GNOME extension:"]
+	if !ok || len(keyd.Detail) != 2 {
+		t.Errorf("keyd message must carry its 2 indented lines: %+v", keyd)
+	}
+	goenv, ok := byText["goenv: WARNING: System 'go' found at /usr/bin/go"]
+	if !ok || len(goenv.Detail) != 2 {
+		t.Errorf("goenv message must carry its 2 same-tag lines: %+v", goenv)
+	}
+}
+
+// TestSeverityTagIsNotATagForFolding guards the rule above: "WARNING:" is a
+// severity marker every unrelated failure shares, so folding on it would
+// swallow every warning into whichever one came first.
+func TestSeverityTagIsNotATagForFolding(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "20260909T034714Z__pi.log",
+		"# fleet update — host=pi started=x\n"+
+			"03:47:10 WARNING: apt-get update failed; installs may be incomplete.\n"+
+			"03:47:11 WARNING: could not install these apt packages: git jq\n"+
+			"# 2026-09-09T03:50:36Z finished\n")
+
+	c, _ := Read(filepath.Join(dir, "20260909T034714Z__pi.log"))
+	if ps := c.Problems(); len(ps) != 2 {
+		t.Fatalf("two unrelated warnings are two problems, got %d: %+v", len(ps), ps)
+	}
+}
+
+// TestNearDuplicatesCollapseIntoOne pins the last of the three noise
+// sources. Nine ollama personas failed for ONE reason — a base model that
+// was never pulled — and listed as nine problems they crowded out
+// everything else on the host. They differ only by an identifier in the
+// middle, so they are one problem seen nine times.
+func TestNearDuplicatesCollapseIntoOne(t *testing.T) {
+	dir := t.TempDir()
+	var b strings.Builder
+	b.WriteString("# fleet update — host=pi started=x\n")
+	for _, name := range []string{
+		"ai-ci-aiarch", "architecture-adversary", "architecture-em",
+		"architecture-principal", "architecture-secarch", "architecture-sysarch",
+	} {
+		b.WriteString("03:47:30 WARNING: ollama create teams-" + name +
+			" failed (base model 'qwen3.8:27b' likely not pulled) — Modelfile still written\n")
+	}
+	b.WriteString("# 2026-09-09T03:50:36Z finished\n")
+	write(t, dir, "20260909T034714Z__pi.log", b.String())
+
+	c, _ := Read(filepath.Join(dir, "20260909T034714Z__pi.log"))
+	ps := c.Problems()
+
+	if len(ps) != 1 {
+		t.Fatalf("six spellings of one failure are one problem, got %d: %+v", len(ps), ps)
+	}
+	if ps[0].Count != 6 {
+		t.Errorf("Count = %d, want 6", ps[0].Count)
+	}
+	if !strings.Contains(ps[0].Text, "ollama create teams-") ||
+		!strings.Contains(ps[0].Text, "likely not pulled") {
+		t.Errorf("the collapsed text must keep both the shared head and tail: %q", ps[0].Text)
+	}
+	if !strings.Contains(ps[0].Text, "…") {
+		t.Errorf("the varying middle must be elided, not invented: %q", ps[0].Text)
+	}
+}
+
+// TestDistinctFailuresAreNotMerged guards it. These two share a long tag and
+// both end in a period, but they are entirely different problems; merging
+// them would erase one. Collapsing must need a substantial shared HEAD and
+// TAIL, not merely a common prefix.
+func TestDistinctFailuresAreNotMerged(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "20260909T034714Z__pi.log",
+		"# fleet update — host=pi started=x\n"+
+			"03:47:10 !! install_herdr: /home/u/.config/herdr/config.toml is hand-edited; leaving it alone.\n"+
+			"03:47:11 !! install_herdr: another herdr is earlier in PATH: /home/u/.local/bin/herdr; remove it.\n"+
+			"03:47:12 WARNING: apt-get update failed; installs may be incomplete.\n"+
+			"03:47:13 WARNING: could not install these apt packages: git jq\n"+
+			"# 2026-09-09T03:50:36Z finished\n")
+
+	c, _ := Read(filepath.Join(dir, "20260909T034714Z__pi.log"))
+	if ps := c.Problems(); len(ps) != 4 {
+		var got []string
+		for _, p := range ps {
+			got = append(got, p.Text)
+		}
+		t.Fatalf("four distinct problems must stay four, got %d:\n%s", len(ps), strings.Join(got, "\n"))
+	}
+}
+
+// TestFailureIsDecidedByContentNotStream pins that "WARNING: … failed" is a
+// failure wherever it was written. install.sh sends some of its own warnings
+// to stdout and others to stderr — on one host every install failure arrived
+// on stdout, on another every one arrived on stderr — so keying the class off
+// the stream classified a host's real failures as raw stderr and left the
+// failures group empty on exactly the hosts that had them.
+//
+// The stream still decides one thing: an unrecognised stderr line is
+// cause-level evidence (ClassStderr), because stderr is where subprocesses
+// report. It just cannot outrank an explicit WARNING:/ERROR: marker.
+func TestFailureIsDecidedByContentNotStream(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "20260909T034714Z__pi.log",
+		"# fleet update — host=pi started=x\n"+
+			"03:47:10 WARNING: ollama create teams-x failed (base model not pulled)\n"+
+			"03:47:11 !! WARNING: cannot detect the focused window on this wayland session.\n"+
+			"03:47:12 !! sudo: a password is required\n"+
+			"# 2026-09-09T03:50:36Z finished\n")
+
+	c, _ := Read(filepath.Join(dir, "20260909T034714Z__pi.log"))
+	got := map[string]Class{}
+	for _, p := range c.Problems() {
+		got[p.Text] = p.Class
+	}
+
+	if cl := got["WARNING: ollama create teams-x failed (base model not pulled)"]; cl != ClassFailure {
+		t.Errorf("a stdout WARNING is a failure, got %v", cl)
+	}
+	if cl := got["WARNING: cannot detect the focused window on this wayland session."]; cl != ClassFailure {
+		t.Errorf("a stderr WARNING is ALSO a failure — the stream must not decide, got %v", cl)
+	}
+	if cl := got["sudo: a password is required"]; cl != ClassStderr {
+		t.Errorf("an unmarked stderr line stays cause-level evidence, got %v", cl)
+	}
+}
+
+// TestClassLabelsAgreeWithTheirCount keeps the headline from reading as a
+// template bug. "stderr" is invariant; the other two inflect.
+func TestClassLabelsAgreeWithTheirCount(t *testing.T) {
+	for _, tc := range []struct {
+		class Class
+		n     int
+		want  string
+	}{
+		{ClassFailure, 1, "1 failure"},
+		{ClassFailure, 3, "3 failures"},
+		{ClassAdvisory, 1, "1 advisory"},
+		{ClassAdvisory, 2, "2 advisories"},
+		{ClassStderr, 1, "1 stderr"},
+		{ClassStderr, 4, "4 stderr"},
+	} {
+		if got := tc.class.Label(tc.n); got != tc.want {
+			t.Errorf("Label(%d) = %q, want %q", tc.n, got, tc.want)
+		}
 	}
 }

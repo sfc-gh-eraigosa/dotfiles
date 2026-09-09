@@ -471,6 +471,33 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   prefix from the matcher, so a coloured warning was not merely grouped separately, it was
   not recognised at all. Pinned by `TestProblemsLeadWithTheAuthoredDiagnosis`,
   `TestProblemsCollapseRepeats`, `TestProblemsStripColourBeforeGrouping`.
+- **The digest CLASSIFIES; it never hides.** Every line still appears — advisories are
+  labelled and sorted last, not suppressed, because a filter that hides is a filter that can
+  hide the one line that mattered. Three reductions, all structural rather than selective:
+  continuation lines attach to their parent as detail (an unfinished sentence ending `,` `:`
+  `\`, a line indented **two** spaces past its severity tag, or the same tool tag at the same
+  timestamp), near-duplicates differing only by an identifier collapse to one entry with a
+  count and an elided middle (`9× WARNING: ollama create teams-… failed`), and repeats
+  collapse by count. Together those took a healthy host from 34 "problems" to 8.
+  Each rule is deliberately shallow — a miss costs tidiness, never information.
+  **Two traps found by real captures, both now pinned:** the tool-tag rule needs the same
+  TIMESTAMP or a tool's independent remarks merge (`install_herdr:` says two unrelated
+  things); and the indentation rule needs **two** spaces, since `WARNING: text` always has
+  one and a single-space test folded the entire list into its first entry. A line already
+  recorded as a problem is a REPEAT, not a continuation — checked first, or a repeated
+  tagged line folds into itself and loses its count. Pinned by
+  `TestContinuationLinesFoldIntoTheirParent`, `TestSeverityTagIsNotATagForFolding`,
+  `TestNearDuplicatesCollapseIntoOne`, `TestDistinctFailuresAreNotMerged`.
+- **Class is decided by CONTENT, not by stream.** `install.sh` sends some of its own
+  warnings to stdout and others to stderr — on one host every install failure arrived on
+  stdout, on another every one arrived on stderr — so keying the class off the stream left
+  the `failures` group empty on exactly the hosts that had failures. An explicit
+  `WARNING:`/`ERROR:` marker is a failure wherever it was written; the stream only decides
+  the remainder, where an unrecognised stderr line is cause-level evidence. Advisories
+  (`npm warn`, `[notice]`, gcloud's component notice, pip's root-user warning) are matched
+  by a short, specific list — an unrecognised line stays a failure, the same conservative
+  default `Benign` uses. Pinned by `TestFailureIsDecidedByContentNotStream`,
+  `TestAdvisoriesAreClassifiedNotHidden`.
 - **An empty digest is "clean" ONLY if the run was observed.** An interactive run captures
   none of `install.sh`'s output, so it digests to nothing for the same reason a perfect run
   does; reporting that as clean would mark a host verified on the strength of a file known

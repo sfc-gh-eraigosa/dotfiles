@@ -700,15 +700,36 @@ mechanical cause underneath — so a stderr-only filter shows the mechanism and
 hides the consequence. Authored lines lead, repeats collapse:
 
 ```console
-$ fleet history web-01 --problems --run 2
-web-01  2026-09-08 20:47  11 problems
-  ! WARNING: GitHub CLI apt repo setup failed; gh will fall back to the distro version.
-  ! WARNING: apt-get update failed; installs may be incomplete.
-  ! WARNING: grouped install failed; retrying packages individually...
-  ! WARNING: could not install these apt packages: git gh git-lfs jq vim tmux zsh ...
-    37× sudo: a terminal is required to read the password; either use the -S option ...
-    37× sudo: a password is required
+$ fleet history pi-01 --problems
+pi-01  2026-09-08 13:47  4 failures · 2 stderr · 2 advisories
+  failures
+    WARNING: cannot detect the focused window on this wayland session.
+    WARNING: Wayland needs the keyd GNOME extension:
+        WARNING:   ln -s /usr/local/share/keyd/gnome-extension-45 \
+        WARNING:         ~/.local/share/gnome-shell/extensions/keyd
+    WARNING: REFUSING to install the keyd config: without per-app overrides,
+        WARNING: Cmd+C in a terminal would send SIGINT instead of copying.
+    9× WARNING: ollama create teams-… failed (base model 'qwen3.8:27b' likely not pulled)
+  stderr
+    5× WARN: skipping '….md' — a host-local memory of the same name exists
+  advisories
+    Updates are available for some Google Cloud CLI components.  To install them,
+        please run:
+        $ gcloud components update
 ```
+
+That host's raw log lists **34** separate problems. Nothing here is hidden —
+advisories are labelled and sorted last, continuation lines are attached to
+their parent, and lines differing only by an identifier collapse to one entry
+with a count and an elided middle.
+
+- **Class comes from content, not the stream.** `install.sh` writes some of its
+  own warnings to stdout and others to stderr, so an explicit `WARNING:` /
+  `ERROR:` marker is a failure wherever it appears; the stream only decides the
+  rest, where an unrecognised stderr line is cause-level evidence.
+- **Advisories are classified, never suppressed** — `npm warn`, `[notice]`,
+  gcloud's component notice. The list is short and specific: an unrecognised
+  line stays a failure.
 
 That run's raw log is 79 stderr lines, 74 of which are those two messages.
 

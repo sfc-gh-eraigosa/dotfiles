@@ -281,21 +281,40 @@ func digestProblems(w io.Writer, runs []histindex.Run, oneHost bool, loc *time.L
 			fmt.Fprintf(w, "%s  %s  %s\n", r.Host, when, state)
 			continue
 		}
-		fmt.Fprintf(w, "%s  %s  %s\n", r.Host, when, plural(len(ps), "problem"))
-		for _, p := range ps {
-			// The multiplier replaces the repetition: one failure seen 37
-			// times is one line, which is the entire reason this view exists.
-			count := ""
-			if p.Count > 1 {
-				count = fmt.Sprintf("%d× ", p.Count)
+		// Counts per class in the headline, so a host can be triaged
+		// without reading its list: "3 failures" is a different morning
+		// from "3 advisories".
+		byClass := map[histindex.Class][]histindex.Problem{}
+		var order []histindex.Class
+		for _, pr := range ps {
+			if _, ok := byClass[pr.Class]; !ok {
+				order = append(order, pr.Class)
 			}
-			// "!" marks the installer's own diagnosis — the actionable line —
-			// apart from the raw stderr underneath it.
-			mark := " "
-			if p.Authored {
-				mark = "!"
+			byClass[pr.Class] = append(byClass[pr.Class], pr)
+		}
+		var counts []string
+		for _, cl := range order {
+			counts = append(counts, cl.Label(len(byClass[cl])))
+		}
+		fmt.Fprintf(w, "%s  %s  %s\n", r.Host, when, strings.Join(counts, " · "))
+
+		for _, cl := range order {
+			fmt.Fprintf(w, "  %s\n", cl)
+			for _, pr := range byClass[cl] {
+				// The multiplier replaces the repetition: one failure seen
+				// 37 times is one line, which is the entire reason this
+				// view exists.
+				count := ""
+				if pr.Count > 1 {
+					count = fmt.Sprintf("%d× ", pr.Count)
+				}
+				fmt.Fprintf(w, "    %s%s\n", count, strings.TrimSpace(pr.Text))
+				// Continuation lines are shown, indented under their parent
+				// — classified, never hidden.
+				for _, d := range pr.Detail {
+					fmt.Fprintf(w, "        %s\n", strings.TrimSpace(d))
+				}
 			}
-			fmt.Fprintf(w, "  %s %s%s\n", mark, count, p.Text)
 		}
 		fmt.Fprintln(w)
 	}
