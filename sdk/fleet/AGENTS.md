@@ -446,6 +446,22 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
 - **The persistence path is INJECTED (`tuiModel.ansPath`), never resolved inside the model.**
   A model that called `answersPath()` itself made every test write to the developer's real
   `~/.config/fleet`. Empty path = no persistence, which is what tests get.
+- **So is the CAPTURE path — same rule, learned the same way twice.** `runUpdateWith`
+  injected its writer and its runner but resolved the capture itself via
+  `newRunLogOutput()`, so every test driving the real CLI path wrote a file into the
+  operator's own `~/.local/state/fleet/logs`; a plain `go test ./...` left three there per
+  run, and 351 of the 384 files accumulated were named after test fixtures (`h`, `host-a`,
+  `alpha`). The capture is now a parameter — production passes `newRunLogOutput()`, tests
+  pass `updexec.Discard{}` — and `libs/log` no longer resolves a directory of its own
+  (`CaptureOptions` has no `Tool` field and an empty `Dir` means no capture at all), so
+  neither layer can invent a location. Pinned by `TestUpdateCapturesOnlyWhereTheCallerNamed`,
+  `TestZeroValueCaptureOutputWritesNothing`, and `libs/log`'s `TestEmptyDirMeansNoCapture`.
+- **Captures are kept 50 per HOST** (`captureKeep`), not globally. `libs/log` defaults to
+  200, which is far more scrollback than an operator reads; 50 answers "what changed since
+  this host last worked" while keeping the directory listable. Pruning is per subject and
+  runs inside `NewCapture`, so a host updated once a month never has its history evicted by
+  one updated hourly — and equally, a RETIRED host's 50 files are never reclaimed, because
+  nothing new is ever captured for it. Pinned by `TestCaptureKeepsFiftyRunsPerHost`.
 - **Branch costs no extra round-trip.** The live checked-out branch rides in the *same*
   remote command as the stamp read, split on `probeDelim`. A second dial per host would
   double the poll for one column. Pinned by `TestBranchCostsNoExtraRoundTrip`.

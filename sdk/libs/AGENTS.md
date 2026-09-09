@@ -50,6 +50,23 @@ logger that cannot open its file writes to `io.Discard`, and `NewCapture`
 returns a nil `*Capture` that is safe to call. A tool that dies because it
 could not log is strictly worse than one that runs unlogged.
 
+**A capture is written ONLY where its caller named.** `CaptureOptions.Dir` is
+required: an empty `Dir` means *no capture*, never a fallback to
+`<state>/<tool>/logs`. The fallback existed and was actively harmful — it made
+every zero-value construction (which is what tests and not-yet-configured
+callers produce) write into the developer's own home. `go test ./...` was
+depositing files in `~/.local/state/fleet/logs` on every run; 351 of the 384
+files found there were named after test fixtures (`h`, `host-a`, `alpha`).
+There is deliberately no `Tool` field on `CaptureOptions` to resolve a
+directory *from*, so the mistake is unrepresentable rather than merely
+avoided. Pinned by `TestEmptyDirMeansNoCapture`.
+
+**Retention is per subject, and the caller sets it.** `Keep` (default 200) is
+how many captures survive for *that* subject; `Prune` runs inside `NewCapture`
+and never touches another subject's files, so a rarely-updated host cannot
+have its history evicted by a busy one. fleet sets 50. Pinned by
+`TestPruneKeepsNewestPerSubject`.
+
 **Environment**, per tool: `$FLEET_LOG_FILE`, `$FLEET_LOG_LEVEL`
 (hyphens become underscores: `tmux-mgr` → `$TMUX_MGR_LOG_FILE`).
 

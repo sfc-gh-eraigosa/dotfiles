@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
@@ -58,7 +59,7 @@ func TestJSONOutputStillExitsNonZeroOnFailure(t *testing.T) {
 
 	r := runner.Fake{Err: map[string]error{"alpha": fmt.Errorf("boom")}}
 	var buf strings.Builder
-	err := runUpdateWith(&buf, []string{"alpha"}, r)
+	err := runUpdateWith(&buf, []string{"alpha"}, r, updexec.Discard{})
 	if err == nil {
 		t.Fatalf("a failed host under --json must still return a non-nil error, output:\n%s", buf.String())
 	}
@@ -156,7 +157,7 @@ func TestHeadlessCaptureContainsRemoteOutput(t *testing.T) {
 
 	r := runner.Fake{Out: map[string]string{"alpha": "state=clean branch=main\nfatal: unable to access remote"}}
 	var buf strings.Builder
-	if err := runUpdateWith(&buf, []string{"alpha"}, r); err != nil {
+	if err := runUpdateWith(&buf, []string{"alpha"}, r, newRunLogOutput()); err != nil {
 		t.Fatalf("unexpected error: %v\noutput:\n%s", err, buf.String())
 	}
 

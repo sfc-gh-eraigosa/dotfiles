@@ -26,10 +26,10 @@ type Capture struct {
 
 // CaptureOptions configures a capture file.
 type CaptureOptions struct {
-	// Tool names the component; with Dir empty it selects
-	// <state>/<tool>/logs. Required unless Dir is set.
-	Tool string
-	// Dir overrides the directory entirely.
+	// Dir is the directory the capture file is written to. Required: an
+	// empty Dir means no capture at all. The caller resolves it (fleet uses
+	// StateDir("fleet")+"/logs"), so a capture is never written to a
+	// location the caller did not name.
 	Dir string
 	// Subject is what this run is about — a hostname, a target, a job id. It
 	// becomes part of the filename, sanitized.
@@ -50,12 +50,13 @@ func NewCapture(opts CaptureOptions) *Capture {
 	if now == nil {
 		now = time.Now
 	}
+	// An empty Dir disables the capture. It deliberately does NOT fall back
+	// to <state>/<tool>/logs: that fallback made every zero-value
+	// construction — which is what tests and not-yet-configured callers
+	// produce — write into the developer's own home. Losing a capture costs
+	// nothing (a nil *Capture is a safe no-op); writing one somewhere the
+	// caller never named costs a polluted state directory nobody audits.
 	dir := opts.Dir
-	if dir == "" {
-		if s := StateDir(opts.Tool); s != "" {
-			dir = filepath.Join(s, "logs")
-		}
-	}
 	if dir == "" {
 		return nil
 	}
