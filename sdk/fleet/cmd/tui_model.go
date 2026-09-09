@@ -328,6 +328,14 @@ func (m *tuiModel) clampViewport() {
 func (m tuiModel) visibleRows() int { return m.listHeight() }
 
 func (m *tuiModel) moveTo(i int) {
+	// History is a different VIEW of the same model, so the motion keys move
+	// whichever list is on screen. Branching here rather than in the keymap
+	// is what keeps j/k/gg/G/ctrl+d/ctrl+f working in both without a second
+	// routing table to drift out of sync.
+	if m.histOn {
+		m.histMoveTo(i)
+		return
+	}
 	if len(m.rows) == 0 {
 		return
 	}
@@ -342,6 +350,14 @@ func (m *tuiModel) moveTo(i int) {
 }
 
 func (m *tuiModel) move(d int) {
+	if m.histOn {
+		i := m.histIndexOf(m.histCursor)
+		if i < 0 {
+			i = 0
+		}
+		m.histMoveTo(i + d)
+		return
+	}
 	i := m.indexOf(m.cursor)
 	if i < 0 {
 		i = 0

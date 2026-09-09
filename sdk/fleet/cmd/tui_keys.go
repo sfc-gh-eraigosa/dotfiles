@@ -287,7 +287,8 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "g":
 		pendingG = true
 	case "G":
-		m.moveTo(len(m.rows) - 1)
+		// listLen, not len(m.rows): in history G means the OLDEST run.
+		m.moveTo(m.listLen() - 1)
 	case "j", "down":
 		m.move(1)
 	case "k", "up":

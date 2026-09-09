@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -183,5 +184,77 @@ func TestHistoryLoadFailureIsSaidNotSwallowed(t *testing.T) {
 
 	if m2.status == "" || !strings.Contains(m2.status, "history") {
 		t.Errorf("a failed history load must be reported in the status line, got %q", m2.status)
+	}
+}
+
+// histModelWith returns a model already in history with runs loaded, so the
+// motion tests exercise the real key path rather than poking state.
+func histModelWith(t *testing.T, n int) tuiModel {
+	t.Helper()
+	dir := t.TempDir()
+	for i := 0; i < n; i++ {
+		histCapture(t, dir, fmt.Sprintf("2026090%dT030000Z", i+1), "alpha", histRun)
+	}
+	runs, err := historyRuns(dir, []string{"alpha"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, _ := send(testModel("alpha"), "H")
+	mm, _ := m.Update(historyLoadedMsg{runs: runs})
+	return mm.(tuiModel)
+}
+
+// TestHistoryMotionUsesTheSameKeysAsTheHostList pins the payoff of history
+// being view state rather than a mode: j/k/G/gg and the half-page motions
+// move the RUN cursor with no new bindings and no duplicated routing. If
+// this needed its own key table, history should have been a mode.
+func TestHistoryMotionUsesTheSameKeysAsTheHostList(t *testing.T) {
+	m := histModelWith(t, 4)
+	first := m.histCursor
+
+	m2, _ := send(m, "j")
+	if m2.histCursor == first {
+		t.Error("j must move the run cursor")
+	}
+	m3, _ := send(m2, "k")
+	if m3.histCursor != first {
+		t.Errorf("k must move back to %q, got %q", first, m3.histCursor)
+	}
+
+	m4, _ := send(m, "G")
+	if m4.histCursor != m.histRuns[len(m.histRuns)-1].Path {
+		t.Error("G must jump to the oldest run")
+	}
+	m5, _ := send(m4, "g", "g")
+	if m5.histCursor != first {
+		t.Error("gg must jump back to the newest run")
+	}
+}
+
+// TestHistoryMotionLeavesTheHostCursorAlone pins the separation: the two
+// cursors are independent, so leaving history puts the operator back exactly
+// where they were in the host list.
+func TestHistoryMotionLeavesTheHostCursorAlone(t *testing.T) {
+	m := histModelWith(t, 3)
+	host := m.cursor
+
+	m2, _ := send(m, "j", "j", "G")
+	if m2.cursor != host {
+		t.Errorf("host cursor moved to %q while navigating history; want %q", m2.cursor, host)
+	}
+}
+
+// TestHistoryMotionClampsAtBothEnds pins that motion cannot run off the list
+// — the same clamping moveTo already gives the host list.
+func TestHistoryMotionClampsAtBothEnds(t *testing.T) {
+	m := histModelWith(t, 3)
+
+	m2, _ := send(m, "k", "k", "k", "k")
+	if m2.histCursor != m.histRuns[0].Path {
+		t.Error("k past the top must clamp to the newest run")
+	}
+	m3, _ := send(m, "j", "j", "j", "j", "j")
+	if m3.histCursor != m.histRuns[len(m.histRuns)-1].Path {
+		t.Error("j past the bottom must clamp to the oldest run")
 	}
 }

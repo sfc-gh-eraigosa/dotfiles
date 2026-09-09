@@ -69,3 +69,37 @@ func loadHistory(dir string, hosts []string) tea.Cmd {
 		return historyLoadedMsg{runs: runs, err: err}
 	}
 }
+
+// listLen is how many rows the ACTIVE list has — host rows normally, runs in
+// history. Motion keys compute their targets from it, which is what lets
+// j/k/gg/G/ctrl+d serve both lists without a second key table.
+func (m tuiModel) listLen() int {
+	if m.histOn {
+		return len(m.histRuns)
+	}
+	return len(m.rows)
+}
+
+// histIndexOf locates a run by PATH, the run list's stable key.
+func (m tuiModel) histIndexOf(path string) int {
+	for i, r := range m.histRuns {
+		if r.Path == path {
+			return i
+		}
+	}
+	return -1
+}
+
+// histMoveTo clamps like moveTo: motion may not run off either end.
+func (m *tuiModel) histMoveTo(i int) {
+	if len(m.histRuns) == 0 {
+		return
+	}
+	if i < 0 {
+		i = 0
+	}
+	if i > len(m.histRuns)-1 {
+		i = len(m.histRuns) - 1
+	}
+	m.histCursor = m.histRuns[i].Path
+}
