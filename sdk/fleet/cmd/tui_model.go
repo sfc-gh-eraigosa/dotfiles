@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/histindex"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
@@ -162,6 +163,26 @@ type tuiModel struct {
 	// hermeticity bug and a rude thing to do to someone's home directory.
 	// Empty (the test default) disables persistence entirely.
 	ansPath string
+
+	// ---- history -----------------------------------------------------------
+	// History is VIEW state, deliberately NOT a tuiMode. Modes exist to
+	// reroute keystrokes (a key typed in search is text, not a motion);
+	// history reroutes nothing -- every motion, the pane toggles and the
+	// search key mean exactly what they always did. Only what the panes READ
+	// changes, from a live stream to a stored capture. Making it a mode would
+	// have forced a second copy of the whole normal-mode routing table.
+	histOn bool
+	// histScope is the hosts the run list covers, snapshotted from
+	// updateTargets() when H was pressed -- the same selection-or-cursor rule
+	// the update and wake keys use. Snapshotted rather than re-read so that
+	// moving the cursor inside the run list cannot silently change which runs
+	// it lists.
+	histScope []string
+	histRuns  []histindex.Summary
+	// histCursor is keyed by the run's PATH for the same reason m.cursor is
+	// keyed by alias rather than an index: the list is re-sorted and
+	// re-loaded, and an index would point at a different row afterwards.
+	histCursor string
 
 	hosts map[string]sshconf.Host
 	// local is who THIS machine is, and localAlias is the fleet row that IS
@@ -1154,6 +1175,23 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.streams[msg.alias] = msg.st
 		return m, tea.Batch(readLine(msg.alias, msg.st), awaitDone(msg.alias, msg.st))
 
+	case historyLoadedMsg:
+		if msg.err != nil {
+			// A failed scan is SAID. An empty list that silently meant "I
+			// could not read the directory" is the same class of lie as
+			// calling an unobserved run clean.
+			m.status = fmt.Sprintf("history: %v", msg.err)
+			m.histOn = false
+			return m, nil
+		}
+		m.histRuns = msg.runs
+		m.histCursor = ""
+		if len(msg.runs) > 0 {
+			// Newest first: "what happened last" is the question someone
+			// opening history is nearly always asking.
+			m.histCursor = msg.runs[0].Path
+		}
+		return m, nil
 	case logLineMsg:
 		m.appendLogLine(msg.alias, msg.line, msg.stderr)
 		// Re-issue the reader: one Cmd per line is what turns the channel into

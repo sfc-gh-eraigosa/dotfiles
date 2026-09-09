@@ -28,6 +28,7 @@ var keyHelp = []struct {
 	{"🗂️", "h", "show / hide the host list", true},
 	{"⚠️", "e", "show / hide the stderr pane · (confirm) edit the remembered answers", true},
 	{"🖥️", "s", "ssh to cursor host", true},
+	{"\U0001f5c3\ufe0f", "H", "history: past runs for the selection (or cursor host)", true},
 	{"🔄", "r", "refresh", true},
 	{"🚪", "q", "quit", true},
 	{"⬍", "j / k / ↓ / ↑", "move cursor", false},
@@ -384,6 +385,22 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if t := m.updateTargets(); len(t) > 0 {
 			return m, m.startWake(t)
 		}
+	case "H":
+		// History is a toggle, and leaving restores the dashboard untouched:
+		// the alias cursor and the selection are never disturbed, because
+		// history is a different VIEW of the same model, not a different
+		// place in it.
+		if m.histOn {
+			m.histOn = false
+			return m, nil
+		}
+		m.histOn = true
+		// Snapshot the scope now, by the same selection-or-cursor rule the
+		// update and wake keys use. Re-reading it later would let moving the
+		// cursor inside the run list silently change which runs it lists.
+		m.histScope = m.updateTargets()
+		m.histRuns, m.histCursor = nil, ""
+		return m, loadHistory(m.logDir, m.histScope)
 	case "s":
 		// An ssh visit while the engine owns the host would race its update.
 		if m.cursor != "" && !m.inFlight(m.cursor) {
