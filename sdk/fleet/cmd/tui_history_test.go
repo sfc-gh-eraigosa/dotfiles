@@ -361,3 +361,137 @@ func TestHistoryFrameNeverExceedsTheTerminal(t *testing.T) {
 		}
 	}
 }
+
+// TestEnterOpensTheRunIntoThePanes pins the drill-down: enter on a run fills
+// the log pane with that capture and the stderr pane with its error
+// projection, read through histindex so the TUI and `fleet history` can never
+// disagree about what a capture contains.
+func TestEnterOpensTheRunIntoThePanes(t *testing.T) {
+	dir := t.TempDir()
+	histCapture(t, dir, "20260909T030000Z", "alpha",
+		"# fleet update — host=alpha started=x\n"+
+			"03:47:14 === step dotfiles.sync (sync) ===\n"+
+			"03:47:16 !! fatal: could not read Username\n"+
+			"03:47:17 Already up to date.\n"+
+			"# 2026-09-09T03:50:36Z finished\n")
+	runs, err := historyRuns(dir, []string{"alpha"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m, _ := send(testModel("alpha"), "H")
+	mm, _ := m.Update(historyLoadedMsg{runs: runs})
+	m2 := mm.(tuiModel)
+
+	_, cmd := send(m2, "enter")
+	if cmd == nil {
+		t.Fatal("enter must return a Cmd — reading a capture is I/O and never happens in Update")
+	}
+	msg := cmd()
+	opened, ok := msg.(historyOpenedMsg)
+	if !ok {
+		t.Fatalf("want historyOpenedMsg, got %T", msg)
+	}
+
+	m3m, _ := m2.Update(opened)
+	m3 := m3m.(tuiModel)
+
+	if !m3.histRunOpen() {
+		t.Fatal("the run must be open after enter")
+	}
+	body := m3.logEntries()
+	if len(body) != 3 {
+		t.Fatalf("want the capture's 3 body lines, got %d: %+v", len(body), body)
+	}
+	var sawErr bool
+	for _, e := range m3.errEntries() {
+		if strings.Contains(e.line, "could not read Username") {
+			sawErr = true
+		}
+	}
+	if !sawErr {
+		t.Error("the stderr pane must show the capture's stderr projection")
+	}
+}
+
+// TestEscUnwindsOneLevelAtATime pins the back-out: run -> list -> dashboard,
+// and only THEN esc's existing meaning of clearing selection and search. An
+// esc that dropped straight out of history would lose the operator's place
+// in a list they may have scrolled a long way down.
+func TestEscUnwindsOneLevelAtATime(t *testing.T) {
+	dir := t.TempDir()
+	histCapture(t, dir, "20260909T030000Z", "alpha", histRun)
+	runs, _ := historyRuns(dir, []string{"alpha"})
+
+	m, _ := send(testModel("alpha", "beta"), "space", "H")
+	mm, _ := m.Update(historyLoadedMsg{runs: runs})
+	m2 := mm.(tuiModel)
+	_, cmd := send(m2, "enter")
+	om, _ := m2.Update(cmd().(historyOpenedMsg))
+	open := om.(tuiModel)
+
+	if !open.histRunOpen() {
+		t.Fatal("precondition: a run is open")
+	}
+	back1, _ := send(open, "esc")
+	if back1.histRunOpen() {
+		t.Error("the first esc must close the run, not leave history")
+	}
+	if !back1.histOn {
+		t.Error("the first esc must stay in history")
+	}
+	if len(back1.selected) == 0 {
+		t.Error("the first esc must not clear the selection — it was unwinding history")
+	}
+
+	back2, _ := send(back1, "esc")
+	if back2.histOn {
+		t.Error("the second esc must leave history")
+	}
+	if len(back2.selected) == 0 {
+		t.Error("the second esc leaves history; it must not also clear the selection")
+	}
+
+	back3, _ := send(back2, "esc")
+	if len(back3.selected) != 0 {
+		t.Error("once out of history, esc resumes its normal meaning and clears the selection")
+	}
+}
+
+// TestOpeningARunNeverLosesLiveStreamLines pins the interaction the design
+// flagged as the real risk: the log pane is shared with a running update.
+// Viewing history must not discard lines the engine is still producing, so
+// they keep buffering into m.logs and are shown again on the way out.
+func TestOpeningARunNeverLosesLiveStreamLines(t *testing.T) {
+	dir := t.TempDir()
+	histCapture(t, dir, "20260909T030000Z", "alpha", histRun)
+	runs, _ := historyRuns(dir, []string{"alpha"})
+
+	m := testModel("alpha")
+	m.appendLog("alpha", "live line before history")
+
+	m2, _ := send(m, "H")
+	lm, _ := m2.Update(historyLoadedMsg{runs: runs})
+	m3 := lm.(tuiModel)
+	_, cmd := send(m3, "enter")
+	om, _ := m3.Update(cmd().(historyOpenedMsg))
+	open := om.(tuiModel)
+
+	// a line arrives from the still-running update while history is on screen
+	open.appendLog("alpha", "live line during history")
+
+	for _, e := range open.logEntries() {
+		if strings.Contains(e.line, "live line") {
+			t.Fatalf("the live stream must not leak into the opened capture: %q", e.line)
+		}
+	}
+
+	back, _ := send(open, "esc", "esc")
+	var got []string
+	for _, e := range back.logEntries() {
+		got = append(got, e.line)
+	}
+	if len(got) != 2 {
+		t.Fatalf("both live lines must survive the round trip, got %v", got)
+	}
+}

@@ -183,6 +183,13 @@ type tuiModel struct {
 	// keyed by alias rather than an index: the list is re-sorted and
 	// re-loaded, and an index would point at a different row afterwards.
 	histCursor string
+	// histPath is the capture currently OPEN (empty = the list level), and
+	// histLines is its parsed body rendered as stream entries. The live buffer
+	// in m.logs is deliberately left alone while this is set: an update that is
+	// still running keeps appending to it, so closing the run shows the present
+	// again with nothing lost.
+	histPath  string
+	histLines []logEntry
 
 	hosts map[string]sshconf.Host
 	// local is who THIS machine is, and localAlias is the fleet row that IS
@@ -842,10 +849,14 @@ func (m *tuiModel) appendLogLine(alias, line string, isErr bool) {
 	}
 }
 
-// errEntries is the error pane's projection: the stderr subset, in order.
+// errEntries is the error pane's projection: the stderr subset, in order, of
+// whichever source is on screen — the opened capture in history, the live
+// buffer otherwise. tailFor deliberately does NOT follow: a host row's FAIL
+// text is about the run that just failed, not about a capture the operator
+// happens to be reading.
 func (m tuiModel) errEntries() []logEntry {
 	out := make([]logEntry, 0, m.errCount)
-	for _, e := range m.logs {
+	for _, e := range m.logEntries() {
 		if e.stderr {
 			out = append(out, e)
 		}
@@ -887,7 +898,7 @@ func (m tuiModel) tailFor(alias string, n int) string {
 // costs the host list its rows once output exists: the pane is ON by default
 // so it is discoverable, but an empty box must not shrink the fleet view to a
 // fifth to display nothing.
-func (m tuiModel) logActive() bool { return m.logOpen && len(m.logs) > 0 }
+func (m tuiModel) logActive() bool { return m.logOpen && len(m.logEntries()) > 0 }
 
 // errActive is its stderr twin. It reads the COUNTER, not the projection —
 // this is consulted from every height query.
@@ -1068,7 +1079,7 @@ func (m *tuiModel) focusedStream() (streamNav, bool) {
 	switch {
 	case m.logFocused():
 		return streamNav{
-			entries: m.logs, follow: &m.logFollow, top: &m.logTop,
+			entries: m.logEntries(), follow: &m.logFollow, top: &m.logTop,
 			search: &m.logSearch, height: m.logHeight(), label: "log",
 		}, true
 	case m.errFocused():
@@ -1096,7 +1107,7 @@ func streamMatches(nav streamNav) []int {
 
 // logMatches are the log buffer's indexes matching its own pattern.
 func (m tuiModel) logMatches() []int {
-	return streamMatches(streamNav{entries: m.logs, search: &m.logSearch})
+	return streamMatches(streamNav{entries: m.logEntries(), search: &m.logSearch})
 }
 
 // streamJump moves the pane to the next/previous match, wrapping. It stops
@@ -1191,6 +1202,19 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.streams[msg.alias] = msg.st
 		return m, tea.Batch(readLine(msg.alias, msg.st), awaitDone(msg.alias, msg.st))
 
+	case historyOpenedMsg:
+		if msg.err != nil {
+			m.status = fmt.Sprintf("history: %v", msg.err)
+			return m, nil
+		}
+		m.histPath = msg.path
+		m.histLines = captureEntries(msg.host, msg.cap, m.now)
+		// A freshly opened capture reads from its start, not its tail: unlike a
+		// live stream there is no "newest" to follow, and the beginning is where
+		// the run explains itself.
+		m.logFollow, m.logTop = false, 0
+		m.errFollow, m.errTop = false, 0
+		return m, nil
 	case historyLoadedMsg:
 		if msg.err != nil {
 			// A failed scan is SAID. An empty list that silently meant "I

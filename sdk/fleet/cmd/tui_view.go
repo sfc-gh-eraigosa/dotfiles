@@ -432,7 +432,7 @@ func (m tuiModel) logViewN(h int) string {
 	}
 	mode := "following"
 	if !m.logFollow {
-		mode = fmt.Sprintf("scrolled %d/%d", m.logTop+1, len(m.logs))
+		mode = fmt.Sprintf("scrolled %d/%d", m.logTop+1, len(m.logEntries()))
 	}
 	keys := "tab: focus  l: hide"
 	if m.logFocused() {
@@ -453,8 +453,9 @@ func (m tuiModel) logViewN(h int) string {
 	}
 
 	start := m.logStart(h)
-	for i := start; i < len(m.logs) && i < start+h; i++ {
-		e := m.logs[i]
+	entries := m.logEntries()
+	for i := start; i < len(entries) && i < start+h; i++ {
+		e := entries[i]
 		// hh:mm:ss first, then the host, then the line. Short on purpose: the
 		// date is the session's, and seconds are what matter when reading how
 		// long a step took.
@@ -576,13 +577,13 @@ func streamStart(follow bool, top, n, h int) int {
 
 func (m tuiModel) logStart(h int) int {
 	if m.logFollow {
-		if s := len(m.logs) - h; s > 0 {
+		if s := len(m.logEntries()) - h; s > 0 {
 			return s
 		}
 		return 0
 	}
-	if m.logTop > len(m.logs)-1 {
-		return maxInt(0, len(m.logs)-1)
+	if m.logTop > len(m.logEntries())-1 {
+		return maxInt(0, len(m.logEntries())-1)
 	}
 	return m.logTop
 }

@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/histindex"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
 )
 
 // historyRuns loads the captured runs for hosts from dir, newest first, with
@@ -102,4 +105,68 @@ func (m *tuiModel) histMoveTo(i int) {
 		i = len(m.histRuns) - 1
 	}
 	m.histCursor = m.histRuns[i].Path
+}
+
+// historyOpenedMsg carries one capture's parsed contents back into Update.
+type historyOpenedMsg struct {
+	path string
+	// host travels with the message rather than being re-derived from the
+	// filename: the run list already knows it, and decoding it twice is a
+	// second place for the name to come out different.
+	host string
+	cap  histindex.Capture
+	err  error
+}
+
+// openHistoryRun reads and parses one capture inside a Cmd. Reading a file is
+// I/O, and I/O never happens in Update.
+func openHistoryRun(r histindex.Summary) tea.Cmd {
+	return func() tea.Msg {
+		c, err := histindex.Read(r.Path)
+		return historyOpenedMsg{path: r.Path, host: r.Host, cap: c, err: err}
+	}
+}
+
+// histAt returns the run under the run cursor.
+func (m tuiModel) histAt() (histindex.Summary, bool) {
+	i := m.histIndexOf(m.histCursor)
+	if i < 0 {
+		return histindex.Summary{}, false
+	}
+	return m.histRuns[i], true
+}
+
+// histRunOpen reports whether a capture is on screen rather than the list.
+// It is the second level of history, and esc unwinds it before leaving.
+func (m tuiModel) histRunOpen() bool { return m.histPath != "" }
+
+// logEntries is the ACTIVE source for the stream panes: the opened capture
+// when a run is on screen, the live buffer otherwise.
+//
+// The live buffer is never touched by history. An update still running keeps
+// appending to m.logs the whole time a capture is being read, and closing the
+// run shows it again with nothing missing — the pane is shared, so viewing
+// the past must not cost the operator the present.
+func (m tuiModel) logEntries() []logEntry {
+	if m.histRunOpen() {
+		return m.histLines
+	}
+	return m.logs
+}
+
+// captureEntries converts a parsed capture into the same logEntry the stream
+// panes already render, so the panes need no notion of where their lines came
+// from and the two sources cannot drift into two renderers.
+func captureEntries(host string, c histindex.Capture, now time.Time) []logEntry {
+	out := make([]logEntry, 0, len(c.Lines))
+	for _, l := range c.Lines {
+		out = append(out, logEntry{
+			alias:  host,
+			line:   l.Text,
+			at:     now,
+			stderr: l.Stderr,
+			warn:   l.Stderr && !updexec.Benign(l.Text),
+		})
+	}
+	return out
 }

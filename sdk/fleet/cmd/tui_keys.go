@@ -39,7 +39,8 @@ var keyHelp = []struct {
 	{"◉", "a", "select all (respects an active search)", false},
 	{"📖", "J / K", "scroll the log pane (G re-follows the tail)", false},
 	{"◍", "v", "visual range select", false},
-	{"⎋", "esc", "clear search / selection", false},
+	{"\u23ce", "enter", "(history) open the run under the cursor", false},
+	{"⎋", "esc", "(history) close the run, then leave history \u00b7 else clear search / selection", false},
 	{"⏰", "w", "wake selection (or cursor host)", false},
 	{"📥", "p", "pull ssh config FROM cursor host", false},
 	{"📤", "P", "push ssh config TO cursor host", false},
@@ -327,9 +328,30 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.vAnchor = &c
 		}
 	case "esc":
+		// History unwinds ONE level at a time, before esc resumes its normal
+		// meaning. Dropping straight out would lose the operator's place in a
+		// run list they may have scrolled a long way down, and clearing the
+		// selection on the way would discard the scoping that chose these
+		// runs in the first place.
+		if m.histRunOpen() {
+			m.histPath, m.histLines = "", nil
+			return m, nil
+		}
+		if m.histOn {
+			m.histOn = false
+			return m, nil
+		}
 		m.vAnchor = nil
 		m.selected = map[string]bool{}
 		m.search = searchState{}
+	case "enter":
+		// Only meaningful on the run list: enter opens the run under the
+		// cursor into the stream panes.
+		if m.histOn && !m.histRunOpen() {
+			if r, ok := m.histAt(); ok {
+				return m, openHistoryRun(r)
+			}
+		}
 	case "u":
 		// The form is asked once per session, not once per wave: retyping a
 		// credential for every wave is what made a fleet-wide update apply
