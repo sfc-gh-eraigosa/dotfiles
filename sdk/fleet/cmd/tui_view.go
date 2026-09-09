@@ -172,7 +172,13 @@ func (m tuiModel) View() string {
 
 	body := head
 	if m.hostOpen {
-		body += m.listPanel() + "\n"
+		// The same pane, a different list. History is a view of the model,
+		// so `h` still hides it and the stream panes below are untouched.
+		if m.histOn {
+			body += m.histPanel() + "\n"
+		} else {
+			body += m.listPanel() + "\n"
+		}
 	}
 	tail := "\n" + m.statusView()
 
@@ -274,6 +280,87 @@ func (m tuiModel) listPanel() string {
 		list.WriteString(trunc(m.rowView(i), m.panelInner()) + "\n")
 	}
 	return m.renderPanel(th.panel, strings.TrimRight(list.String(), "\n"))
+}
+
+// histPanel renders the run list in place of the host table. It is the same
+// panel, drawn from a different list — history is a view of the model, not a
+// separate screen — so it inherits renderPanel's width clamping and the
+// frame-fitting in View() without restating either.
+//
+// The columns are what makes a run triageable WITHOUT opening it: when it
+// ran, whether it reached its footer, and how many non-benign warnings it
+// carries. That is why the list holds histindex.Summary rather than the
+// filename-only Run.
+func (m tuiModel) histPanel() string {
+	if len(m.histRuns) == 0 {
+		// An empty frame reads as a broken pane. Say why it is empty: on a
+		// machine that has never updated anything this is the normal state,
+		// not a failure.
+		return m.wrapPanel(th.panel, th.dim.Render(
+			"no captured runs for this selection — a `fleet update` writes one per host per run"))
+	}
+
+	// The HOST column earns its width only when the scope spans more than one
+	// host; scoped to one, every row would repeat the name the operator just
+	// chose and spend cells the rest of the row needs.
+	multi := len(m.histScope) > 1
+
+	var list strings.Builder
+	head := fmt.Sprintf("%-16s %-10s %-6s %s", "WHEN", "RESULT", "WARN", "SIZE")
+	if multi {
+		head = fmt.Sprintf("%-16s %-16s %-10s %-6s %s", "WHEN", "HOST", "RESULT", "WARN", "SIZE")
+	}
+	list.WriteString(strings.Repeat(" ", rowMarkPrefix) + th.header.Render(head) + "\n")
+
+	h := m.visibleRows()
+	end := m.vp.top + h
+	if end > len(m.histRuns) {
+		end = len(m.histRuns)
+	}
+	for i := m.vp.top; i < end; i++ {
+		list.WriteString(trunc(m.histRowView(i), m.panelInner()) + "\n")
+	}
+	return m.renderPanel(th.panel, strings.TrimRight(list.String(), "\n"))
+}
+
+// histRowView renders one run. RESULT says finished / unfinished and never
+// ok / failed: a capture records OUTPUT, not an exit code, and a column
+// claiming success on that evidence would be inventing a fact.
+func (m tuiModel) histRowView(i int) string {
+	r := m.histRuns[i]
+
+	cur := "    "
+	if r.Path == m.histCursor {
+		cur = th.cursor.Render(">   ")
+	}
+
+	result := "finished"
+	if !r.Finished {
+		result = "unfinished"
+	}
+	warn := "-"
+	if r.Warnings > 0 {
+		warn = fmt.Sprintf("!%d", r.Warnings)
+	}
+	when := r.At.In(time.Local).Format("2006-01-02 15:04")
+
+	if len(m.histScope) > 1 {
+		return cur + fmt.Sprintf("%-16s %-16s %-10s %-6s %s",
+			when, r.Host, result, warn, histSize(r.Size))
+	}
+	return cur + fmt.Sprintf("%-16s %-10s %-6s %s", when, result, warn, histSize(r.Size))
+}
+
+// histSize renders a byte count compactly.
+func histSize(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1fM", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1fK", float64(n)/(1<<10))
+	default:
+		return fmt.Sprintf("%dB", n)
+	}
 }
 
 // logView is the framed streaming pane. It sits BELOW the host list rather

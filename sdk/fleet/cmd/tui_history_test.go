@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 var errTestScan = errors.New("scan boom")
@@ -256,5 +259,105 @@ func TestHistoryMotionClampsAtBothEnds(t *testing.T) {
 	m3, _ := send(m, "j", "j", "j", "j", "j")
 	if m3.histCursor != m.histRuns[len(m.histRuns)-1].Path {
 		t.Error("j past the bottom must clamp to the oldest run")
+	}
+}
+
+// TestHistoryPanelListsTheRuns pins what the run list shows: enough to triage
+// without opening anything — when it ran, whether it finished, and its
+// warning count — which is why the list holds Summary rather than Run.
+func TestHistoryPanelListsTheRuns(t *testing.T) {
+	m := histModelWith(t, 3)
+	m.vp.width, m.vp.height = 120, 40
+
+	out := m.histPanel()
+	for _, want := range []string{"WHEN", "RESULT", "WARN"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("run list must carry a %q column:\n%s", want, out)
+		}
+	}
+	if strings.Count(out, "finished") < 3 {
+		t.Errorf("all three runs must be listed:\n%s", out)
+	}
+}
+
+// TestHistoryPanelShowsHostOnlyWhenScopeIsWider pins that the HOST column
+// earns its width. Scoped to one host every row would repeat the same name,
+// spending cells the run list needs and telling the operator nothing they
+// did not just choose.
+func TestHistoryPanelShowsHostOnlyWhenScopeIsWider(t *testing.T) {
+	one := histModelWith(t, 2)
+	one.vp.width, one.vp.height = 120, 40
+	if strings.Contains(one.histPanel(), "HOST") {
+		t.Errorf("a single-host scope must not spend a HOST column:\n%s", one.histPanel())
+	}
+
+	two := one
+	two.histScope = []string{"alpha", "beta"}
+	if !strings.Contains(two.histPanel(), "HOST") {
+		t.Errorf("a multi-host scope must name the host per row:\n%s", two.histPanel())
+	}
+}
+
+// TestHistoryPanelMarksTheCursor pins that the run under the cursor is
+// visibly the one enter would open.
+func TestHistoryPanelMarksTheCursor(t *testing.T) {
+	m := histModelWith(t, 3)
+	m.vp.width, m.vp.height = 120, 40
+	if !strings.Contains(m.histPanel(), ">") {
+		t.Errorf("the cursor row must be marked:\n%s", m.histPanel())
+	}
+}
+
+// TestHistoryPanelSaysWhenThereIsNothing pins the empty case: a host that has
+// never been updated gets a sentence naming why the list is empty, never a
+// bare frame that reads as a broken pane.
+func TestHistoryPanelSaysWhenThereIsNothing(t *testing.T) {
+	m, _ := send(testModel("alpha"), "H")
+	mm, _ := m.Update(historyLoadedMsg{runs: nil})
+	m2 := mm.(tuiModel)
+	m2.vp.width, m2.vp.height = 120, 40
+
+	out := m2.histPanel()
+	if !strings.Contains(strings.ToLower(out), "no ") {
+		t.Errorf("an empty history must explain itself:\n%s", out)
+	}
+}
+
+// TestHistoryFrameNeverExceedsTheTerminal pins the height invariant for the
+// NEW panel. The existing 1219-size sweep renders the host list, so it says
+// nothing about this one — and bubbletea's renderer drops lines from the TOP
+// of an over-tall frame, so a single row of overflow silently walks the
+// banner off the screen. Both history states are swept: the run list, and the
+// empty-history prose, which WRAPS and is therefore the more likely to grow.
+//
+// ANSI256 is set deliberately: init() pins termenv.Ascii, under which every
+// style is a no-op and a frame carries no escape bytes at all — measuring a
+// layout under it proves nothing.
+func TestHistoryFrameNeverExceedsTheTerminal(t *testing.T) {
+	saved := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	t.Cleanup(func() { lipgloss.SetColorProfile(saved) })
+
+	full := histModelWith(t, 12)
+
+	empty, _ := send(testModel("alpha"), "H")
+	em, _ := empty.Update(historyLoadedMsg{runs: nil})
+	emptyM := em.(tuiModel)
+
+	for _, m := range []tuiModel{full, emptyM} {
+		for _, h := range []int{6, 8, 10, 14, 20, 30, 50} {
+			for _, w := range []int{40, 60, 80, 120, 200} {
+				for _, logOpen := range []bool{false, true} {
+					mm := m
+					mm.vp.height, mm.vp.width = h, w
+					mm.logOpen = logOpen
+					got := strings.Count(mm.View(), "\n") + 1
+					if got > h {
+						t.Fatalf("frame is %d lines in a %dx%d terminal (logOpen=%v); "+
+							"bubbletea drops from the TOP, so this eats the banner", got, w, h, logOpen)
+					}
+				}
+			}
+		}
 	}
 }
