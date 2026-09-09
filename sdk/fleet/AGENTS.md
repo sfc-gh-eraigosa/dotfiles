@@ -26,6 +26,8 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `fleet keys list\|sync\|prune` | audit / authorize / remove authorized keys |
 | `fleet config pull\|push\|diff` | one-way ssh-config transfer: import FROM one host, publish TO hosts, or compare without changing anything |
 | `fleet wake [host...]` | rouse hosts asleep at layer 2: ladder `retry → local-prime → peer-relay`, printed rung by rung; `--json`; exits non-zero if any target stayed down |
+| `fleet history [host]` | list the captures past updates left behind (newest first: when · host · finished/unfinished · ⚠N · size); naming a host narrows to it. `--show` prints a run (`--run N`, 1 = newest), `--errors` keeps only stderr, `--grep RE` filters lines, `--limit N`, `--json` |
+| `fleet history --problems` | the digest: what actually went wrong, deduped — the installer's own `WARNING:`/`ERROR:` lines first, then non-benign stderr with repeats collapsed (`37× sudo: a password is required`). With no host it reports the NEWEST run of every host, so one command answers "what is broken across the fleet" |
 
 ## Layout
 
@@ -44,6 +46,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `internal/cfgplan` | plan a ONE-WAY ssh-config transfer (pure): `Build` + `Apply` |
 | `internal/lanscan` | sweep a subnet for a listening port (injected dialer — no nmap, no socket in tests) |
 | `internal/keys` | authorized_keys diff (reports removals, never applies them) |
+| `internal/histindex` | read past captures (pure but for the file open): `Scan` decodes `<UTC>__<host>.log` positionally, `Read` splits header/body/footer and decodes the `!! ` mark, `Summarize` adds finished + warning count |
 | `internal/reach` | the wake ladder: rung order, peer ranking, provenance (pure; every impure edge injected via `Deps`) |
 | `cmd/answers_store.go` | the non-secret prompt preferences on disk (`0600`); the on-disk type has no credential field |
 | `internal/runner` | the **only** seam that touches a remote host (`Exec` real, `Fake` for tests); `RunStreamCtx` is the deadline-aware path |
@@ -446,6 +449,86 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
 - **The persistence path is INJECTED (`tuiModel.ansPath`), never resolved inside the model.**
   A model that called `answersPath()` itself made every test write to the developer's real
   `~/.config/fleet`. Empty path = no persistence, which is what tests get.
+- **So is the CAPTURE path — same rule, learned the same way twice.** `runUpdateWith`
+  injected its writer and its runner but resolved the capture itself via
+  `newRunLogOutput()`, so every test driving the real CLI path wrote a file into the
+  operator's own `~/.local/state/fleet/logs`; a plain `go test ./...` left three there per
+  run, and 351 of the 384 files accumulated were named after test fixtures (`h`, `host-a`,
+  `alpha`). The capture is now a parameter — production passes `newRunLogOutput()`, tests
+  pass `updexec.Discard{}` — and `libs/log` no longer resolves a directory of its own
+  (`CaptureOptions` has no `Tool` field and an empty `Dir` means no capture at all), so
+  neither layer can invent a location. Pinned by `TestUpdateCapturesOnlyWhereTheCallerNamed`,
+  `TestZeroValueCaptureOutputWritesNothing`, and `libs/log`'s `TestEmptyDirMeansNoCapture`.
+- **The digest cannot be built on the stdout/stderr split.** `install.sh` writes its own
+  explanation of what broke to STDOUT (`WARNING: could not install these apt packages: …`)
+  because it is a message to the operator; stderr carries the mechanical cause underneath.
+  On a host whose sudo was broken, stderr held 79 lines that were two distinct messages
+  repeated 37 times each, while the five lines naming what the machine was now MISSING were
+  all stdout — so `--errors` showed the mechanism and hid the consequence. `Problems()`
+  reads both, leads with the authored lines in the order they were written, then non-benign
+  stderr loudest-first, and collapses repeats to one entry with a count. Colour is stripped
+  BEFORE matching, not just before printing: a leading escape sequence hid the `WARNING:`
+  prefix from the matcher, so a coloured warning was not merely grouped separately, it was
+  not recognised at all — and `Read`'s WARN count strips through the SAME `clean` helper,
+  or the table and the digest disagree on precisely the colourised lines. Pinned by
+  `TestProblemsLeadWithTheAuthoredDiagnosis`, `TestProblemsCollapseRepeats`,
+  `TestProblemsStripColourBeforeGrouping`,
+  `TestColouredBenignStderrIsNotCountedAsAWarning`.
+- **The digest CLASSIFIES; it never hides.** Every line still appears — advisories are
+  labelled and sorted last, not suppressed, because a filter that hides is a filter that can
+  hide the one line that mattered. Three reductions, all structural rather than selective:
+  continuation lines attach to their parent as detail (an unfinished sentence ending `,` `:`
+  `\`, a line indented **two** spaces past its severity tag, or the same tool tag at the same
+  timestamp), near-duplicates differing only by an identifier collapse to one entry with a
+  count and an elided middle (`9× WARNING: ollama create teams-… failed`, cut on rune
+  boundaries and carrying every merged entry's detail with it), and repeats
+  collapse by count. Together those took a healthy host from 34 "problems" to 8.
+  Each rule is deliberately shallow — a miss costs tidiness, never information.
+  **Two traps found by real captures, both now pinned:** the tool-tag rule needs the same
+  TIMESTAMP or a tool's independent remarks merge (`install_herdr:` says two unrelated
+  things); and the indentation rule needs **two** spaces, since `WARNING: text` always has
+  one and a single-space test folded the entire list into its first entry. A line already
+  recorded as a problem is a REPEAT, not a continuation — checked first, or a repeated
+  tagged line folds into itself and loses its count. Pinned by
+  `TestContinuationLinesFoldIntoTheirParent`, `TestSeverityTagIsNotATagForFolding`,
+  `TestNearDuplicatesCollapseIntoOne`, `TestDistinctFailuresAreNotMerged`.
+- **Class is decided by CONTENT, not by stream.** `install.sh` sends some of its own
+  warnings to stdout and others to stderr — on one host every install failure arrived on
+  stdout, on another every one arrived on stderr — so keying the class off the stream left
+  the `failures` group empty on exactly the hosts that had failures. An explicit
+  `WARNING:`/`ERROR:` marker is a failure wherever it was written; the stream only decides
+  the remainder, where an unrecognised stderr line is cause-level evidence. Advisories
+  (`npm warn`, `[notice]`, gcloud's component notice, pip's root-user warning) are matched
+  by a short, specific list — an unrecognised line stays a failure, the same conservative
+  default `Benign` uses. Pinned by `TestFailureIsDecidedByContentNotStream`,
+  `TestAdvisoriesAreClassifiedNotHidden`.
+- **An empty digest is "clean" ONLY if the run was observed.** An interactive run captures
+  none of `install.sh`'s output, so it digests to nothing for the same reason a perfect run
+  does; reporting that as clean would mark a host verified on the strength of a file known
+  to be missing the only part that mattered — the same unearned success fleet exists to
+  catch. `Capture.Observed` is false when a `run` step's banner is followed by no output,
+  or when the capture carries `updexec.InteractiveNote`. The STRUCTURAL rule is the load-
+  bearing one: the note is recent and every capture already on disk predates it, which is
+  exactly the set of past runs someone opens this tool to investigate. A genuinely silent
+  batch step reads as unobserved too — the conservative direction. Pinned by
+  `TestUncapturedRunIsNotReportedAsProblemFree`, `TestARunStepWithNoOutputIsUnobserved`,
+  `TestARunStepWithOutputIsObserved`, `TestUncapturedRunIsNotCalledClean`.
+- **`history` reads the capture; it never claims an exit code.** A capture records
+  OUTPUT, not a status, so the listing's RESULT column says `finished` / `unfinished` —
+  whether the run reached its footer — and never `ok` / `failed`, which the file cannot
+  prove. The warning count and the `--errors` projection go through `updexec.Benign`, the
+  SAME classifier the TUI's error pane uses, so the CLI and the dashboard cannot disagree
+  about what an error is; `internal/updexec.StderrMark` is exported for the same reason —
+  the reader must strip exactly what the writer wrote, and two copies of `"!! "` would
+  drift. The log directory and the timezone are both PARAMETERS of `runHistory` (see the
+  injected-capture invariant above). Pinned by `TestHistoryListsNewestFirstWithOutcome`,
+  `TestHistoryErrorsShowsOnlyStderr`, `TestHistoryUnknownHostNamesWhatExists`.
+- **Captures are kept 50 per HOST** (`captureKeep`), not globally. `libs/log` defaults to
+  200, which is far more scrollback than an operator reads; 50 answers "what changed since
+  this host last worked" while keeping the directory listable. Pruning is per subject and
+  runs inside `NewCapture`, so a host updated once a month never has its history evicted by
+  one updated hourly — and equally, a RETIRED host's 50 files are never reclaimed, because
+  nothing new is ever captured for it. Pinned by `TestCaptureKeepsFiftyRunsPerHost`.
 - **Branch costs no extra round-trip.** The live checked-out branch rides in the *same*
   remote command as the stamp read, split on `probeDelim`. A second dial per host would
   double the poll for one column. Pinned by `TestBranchCostsNoExtraRoundTrip`.
@@ -526,6 +609,21 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   `fleet update init` always writes the starter plan and never updates a host called `init`.
   Deliberate: a plan-authoring verb needs a stable name more than that hostname needs
   protecting. Rename the host, or drive it from `fleet tui`.
+- **An interactive step's output is NOT in the capture — the capture says so.** `ssh -t`
+  hands the terminal to the remote command, so not one byte of an `interactive: true` step
+  (the default plan's `./install.sh`) passes through this process. The capture holds the
+  step banner, the `(interactive step: output went to the terminal …)` note, and nothing
+  else — a two-minute install that did the entire job leaves a ~570-byte file. Without the
+  note that is indistinguishable in `fleet history` from a step that produced no output at
+  all, which is exactly how a broken-sudo run and the successful re-run that fixed it came
+  to look identical. Capturing it for real needs a pty proxy; naming the gap costs one
+  line. **The note describes the LANE, not the plan flag.** `Background` (the TUI) runs an
+  `interactive: true` run step as Batch and tees every line into the capture, so writing
+  the note there would stamp "output went to the terminal" onto a file holding the whole
+  run — and `histindex` reads that as "never observed" and refuses to call the host clean,
+  inverting the exact signal the note exists to give. Pinned by
+  `TestInteractiveStepSaysItsOutputWentToTheTerminal` and
+  `TestBackgroundLaneDoesNotClaimAnInteractiveGap`.
 - **A `timed out` step is "we stopped waiting", not "it stopped".** The deadline kills the
   local `ssh`; the remote command keeps running (an `install.sh` in the middle of `apt` will
   finish on its own). Check the host before re-running, and list `timeout` in `retry.on` only

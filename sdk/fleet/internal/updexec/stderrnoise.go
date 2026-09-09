@@ -23,13 +23,24 @@ var benignPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`^Pseudo-terminal will not be allocated`),
 	regexp.MustCompile(`^remote: (Enumerating|Counting|Compressing|Total|Finding|Resolving) `),
 	regexp.MustCompile(`^(Receiving|Resolving|Counting|Compressing|Unpacking|Enumerating) (objects|deltas):`),
-	regexp.MustCompile(`^From (https?://|git@|/)`),
+	// "From <remote>" and nothing else. Anchored at BOTH ends on purpose:
+	// the remote may be scp-style (github.com:owner/repo), a URL, or a local
+	// path, so enumerating spellings kept missing real ones — but requiring
+	// the line to be exactly the literal "From " plus one token keeps error
+	// text ("From X but then words", "remote: fatal: ...") out.
+	regexp.MustCompile(`^From \S+$`),
 	// NOTE: no leading-space patterns — Benign trims the line first, so
 	// `^ \* branch …` could never match, and every real `git fetch` would put
 	// a spurious ⚠ on the row.
 	regexp.MustCompile(`^\* \[?new (branch|tag)\]?`),
 	regexp.MustCompile(`^\* branch\s+\S+\s+-> \S+$`),
 	regexp.MustCompile(`^[0-9a-f]{7,40}\.\.[0-9a-f]{7,40}\s+\S+\s+-> \S+$`),
+	// git checkout reports the branch you ended up on via stderr. Anchored
+	// at both ends and requiring the quoted branch to END the line: without
+	// that, "Already on 'main' but the working tree is dirty" would be
+	// swallowed along with the clean form. Before this, every host scored a
+	// warning on every run — a constant offset of 1 is the same as no signal.
+	regexp.MustCompile(`^(Already on|Switched to branch|Switched to a new branch) '[^']+'$`),
 	regexp.MustCompile(`^\[sudo\] password for `),
 }
 

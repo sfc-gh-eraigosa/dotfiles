@@ -103,7 +103,7 @@ func TestCaptureMarksStderr(t *testing.T) {
 		if l == "installing" {
 			sawOut = true
 		}
-		if l == stderrMark+"WARNING: apt-get update failed" {
+		if l == StderrMark+"WARNING: apt-get update failed" {
 			sawErr = true
 		}
 	}
@@ -111,6 +111,55 @@ func TestCaptureMarksStderr(t *testing.T) {
 		t.Fatalf("stdout must reach the capture unprefixed: %q", captured)
 	}
 	if !sawErr {
-		t.Fatalf("stderr must reach the capture marked %q: %q", stderrMark, captured)
+		t.Fatalf("stderr must reach the capture marked %q: %q", StderrMark, captured)
+	}
+}
+
+// TestInteractiveStepSaysItsOutputWentToTheTerminal pins that a capture is
+// HONEST about what it does not contain. An interactive step hands the
+// terminal to the remote command (ssh -t), so fleet never sees a byte of it:
+// the default plan's `./install.sh` can run for two minutes, do the entire
+// job, and leave the capture holding its step banner and nothing else.
+//
+// Read back by `fleet history` that is indistinguishable from an install
+// that produced no output at all — a real run against a host whose sudo was
+// broken looked identical to the successful re-run that fixed it. Naming the
+// gap costs one line and turns "apparently did nothing" into "went
+// somewhere else".
+func TestInteractiveStepSaysItsOutputWentToTheTerminal(t *testing.T) {
+	var captured []string
+	// A precheck the sync accepts, so the run reaches the interactive step.
+	f := runner.Fake{Out: map[string]string{"h": "state=clean branch=main"}}
+	ex := Executor{IO: Console{R: f}, Out: memOutput{&captured}}
+	ex.RunHost("h", updplan.Default())
+
+	var said bool
+	for _, l := range captured {
+		if strings.Contains(l, "interactive") && strings.Contains(l, "not captured") {
+			said = true
+		}
+	}
+	if !said {
+		t.Fatalf("an interactive step must say its output was not captured, got:\n%q", captured)
+	}
+}
+
+// TestBackgroundLaneDoesNotClaimAnInteractiveGap is the guard on the note
+// above. "interactive" is a property of the LANE, not of the plan flag:
+// Background runs an `interactive: true` run step as Batch and tees every
+// line into the capture, so the note would be a lie there — and a costly
+// one, since histindex reads it (and the empty-step shape it describes) as
+// "this run was never observed" and refuses to call the host clean. Writing
+// it on the TUI's lane inverted the exact signal it was added to provide.
+func TestBackgroundLaneDoesNotClaimAnInteractiveGap(t *testing.T) {
+	var captured []string
+	f := runner.Fake{Out: map[string]string{"h": "state=clean branch=main"}}
+	ex := Executor{IO: Background{Console{R: f}}, Out: memOutput{&captured}}
+	ex.RunHost("h", updplan.Default())
+
+	for _, l := range captured {
+		if strings.Contains(l, "not captured") {
+			t.Fatalf("the background lane captures a run step in full; it must not claim a gap: %q\n%q", l, captured)
+		}
 	}
 }

@@ -47,3 +47,73 @@ func TestBenignStderrTable(t *testing.T) {
 		}
 	}
 }
+
+// TestBenignAcceptsAnScpStyleFetchHeader pins a shape found in a REAL
+// capture, not in review: `git fetch` against an scp-style remote
+// (github.com:owner/repo — what an ssh clone actually has) prints
+// "From github.com:owner/repo" to stderr. The original pattern required
+// https://, git@ or a leading /, so it matched neither that nor anything
+// else this fleet produces — every healthy update scored a spurious ⚠, which
+// is precisely the "warning signal worth nothing" outcome the patterns exist
+// to prevent.
+func TestBenignAcceptsAnScpStyleFetchHeader(t *testing.T) {
+	for _, line := range []string{
+		"From github.com:sfc-gh-eraigosa/dotfiles",
+		"From git@github.com:sfc-gh-eraigosa/dotfiles",
+		"From https://github.com/sfc-gh-eraigosa/dotfiles",
+		"From /srv/mirrors/dotfiles.git",
+	} {
+		if !Benign(line) {
+			t.Errorf("Benign(%q) = false, want true — this is a routine fetch header", line)
+		}
+	}
+}
+
+// TestBenignStillRejectsAnErrorWearingTheSameShape guards the loosening
+// above. git reports failures through the same channels as progress, so a
+// pattern relaxed to accept "From <anything>" must not start accepting error
+// text that merely begins with a word and a colon.
+func TestBenignStillRejectsAnErrorWearingTheSameShape(t *testing.T) {
+	for _, line := range []string{
+		"remote: fatal: repository not found",
+		"From github.com:owner/repo but then extra words",
+		"fatal: could not read Username",
+		"error: failed to push some refs",
+	} {
+		if Benign(line) {
+			t.Errorf("Benign(%q) = true, want false — this is a real failure", line)
+		}
+	}
+}
+
+// TestBenignAcceptsGitCheckoutChatter pins the other line every healthy run
+// produces. `git checkout` reports which branch you ended up on via STDERR —
+// "Already on 'main'" when the sync was a no-op, "Switched to branch 'main'"
+// when it moved — so before this, every host scored exactly one warning on
+// every run no matter how clean it was. A constant offset of 1 is the same
+// as no signal: it is precisely what the benign list exists to remove.
+func TestBenignAcceptsGitCheckoutChatter(t *testing.T) {
+	for _, line := range []string{
+		"Already on 'main'",
+		"Switched to branch 'main'",
+		"Switched to a new branch 'feature/gff'",
+	} {
+		if !Benign(line) {
+			t.Errorf("Benign(%q) = false, want true — routine git checkout output", line)
+		}
+	}
+}
+
+// TestBenignStillRejectsCheckoutFailures guards the loosening above: the
+// quoted-branch shape must not swallow the errors git reports alongside it.
+func TestBenignStillRejectsCheckoutFailures(t *testing.T) {
+	for _, line := range []string{
+		"error: pathspec 'main' did not match any file(s) known to git",
+		"Already on 'main' but the working tree is dirty",
+		"fatal: invalid reference: main",
+	} {
+		if Benign(line) {
+			t.Errorf("Benign(%q) = true, want false", line)
+		}
+	}
+}

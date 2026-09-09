@@ -69,13 +69,20 @@ func buildExecutor(r runner.Runner, out updexec.Output, local updplan.Local) upd
 // runUpdate resolves the plan and flags, then runs every host serially
 // (interactive steps cannot share a terminal) through the plan executor.
 func runUpdate(cmd *cobra.Command, hosts []string) error {
-	return runUpdateWith(cmd.OutOrStdout(), hosts, runner.Exec{})
+	return runUpdateWith(cmd.OutOrStdout(), hosts, runner.Exec{}, newRunLogOutput())
 }
 
-// runUpdateWith is runUpdate with its output writer and runner injected, so
-// a test can drive the whole CLI path — plan resolution, the executor, the
-// headless capture, the report — without a cobra.Command or a real ssh.
-func runUpdateWith(out io.Writer, hosts []string, r runner.Runner) error {
+// runUpdateWith is runUpdate with its output writer, runner and CAPTURE
+// injected, so a test can drive the whole CLI path — plan resolution, the
+// executor, the headless capture, the report — without a cobra.Command, a
+// real ssh, or a write into the operator's own state directory.
+//
+// capture used to be resolved in here via newRunLogOutput(), which meant
+// every test driving this path wrote a real file under ~/.local/state/fleet
+// — the writer and the runner were injected but the one dependency that
+// touches the developer's home was not. Pass updexec.Discard{} for a test
+// that does not care; newRunLogOutput() is what production passes.
+func runUpdateWith(out io.Writer, hosts []string, r runner.Runner, capture updexec.Output) error {
 	local, err := resolveLocalPolicy(flagUpdateLocal, flagUpdateForce)
 	if err != nil {
 		return err
@@ -101,7 +108,6 @@ func runUpdateWith(out io.Writer, hosts []string, r runner.Runner) error {
 	// One capture value, reused across every host: it carries no per-host
 	// state (Open is keyed by the host/header arguments it is called with
 	// each time), so reconstructing it per host was pure churn.
-	capture := newRunLogOutput()
 	reports := make([]updexec.HostReport, 0, len(hosts))
 	for _, host := range hosts {
 		ex := buildExecutor(r, capture, local)

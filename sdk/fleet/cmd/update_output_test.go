@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
@@ -36,7 +38,7 @@ func TestHeadlessUpdateIsCaptured(t *testing.T) {
 
 	r := runner.Fake{Out: map[string]string{"alpha": "state=clean branch=main"}}
 	var buf strings.Builder
-	if err := runUpdateWith(&buf, []string{"alpha"}, r); err != nil {
+	if err := runUpdateWith(&buf, []string{"alpha"}, r, newRunLogOutput()); err != nil {
 		t.Fatalf("unexpected error: %v\noutput:\n%s", err, buf.String())
 	}
 
@@ -65,7 +67,7 @@ func TestAnUnusableCaptureDirDoesNotBreakTheCLIRun(t *testing.T) {
 
 	r := runner.Fake{Out: map[string]string{"alpha": "state=clean branch=main"}}
 	var buf strings.Builder
-	if err := runUpdateWith(&buf, []string{"alpha"}, r); err != nil {
+	if err := runUpdateWith(&buf, []string{"alpha"}, r, newRunLogOutput()); err != nil {
 		t.Fatalf("a lost capture must not fail the update: %v", err)
 	}
 }
@@ -139,5 +141,98 @@ func TestNewRunLogOutputIsReusableAcrossHosts(t *testing.T) {
 
 	if path1 == "" || path2 == "" || path1 == path2 {
 		t.Fatalf("expected two distinct capture paths, got %q and %q", path1, path2)
+	}
+}
+
+// countCaptures is how many capture files in dir belong to subject.
+func countCaptures(t *testing.T, dir, subject string) int {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+	n := 0
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), "__"+subject+".log") {
+			n++
+		}
+	}
+	return n
+}
+
+// TestCaptureKeepsFiftyRunsPerHost pins fleet's retention: a host's 51st run
+// evicts its oldest capture, and no other host's history is touched. The
+// shared default is 200, which is far more scrollback than an operator ever
+// reads and made ~/.local/state/fleet/logs grow to hundreds of files; 50 runs
+// per host is enough to answer "what changed since it last worked" while
+// keeping the directory something you can actually list.
+func TestCaptureKeepsFiftyRunsPerHost(t *testing.T) {
+	dir := t.TempDir()
+
+	// Names are timestamped to the second, so each capture needs its own.
+	saved := nowFn
+	defer func() { nowFn = saved }()
+	at := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
+	nowFn = func() time.Time { at = at.Add(time.Second); return at }
+
+	out := captureOutput{dir: dir}
+	for i := 0; i < 51; i++ {
+		w, _ := out.Open("alpha", "run")
+		w.Close("done")
+	}
+	w, _ := out.Open("beta", "run")
+	w.Close("done")
+
+	if got := countCaptures(t, dir, "alpha"); got != 50 {
+		t.Errorf("alpha: kept %d captures, want 50", got)
+	}
+	if got := countCaptures(t, dir, "beta"); got != 1 {
+		t.Errorf("beta: kept %d captures, want 1 — pruning must not cross hosts", got)
+	}
+}
+
+// TestZeroValueCaptureOutputWritesNothing pins that a captureOutput with no
+// dir — the zero value every test-built Executor and tuiModel produces —
+// captures nothing rather than writing into the operator's real state
+// directory. It used to resolve to <state>/fleet/logs, so `go test ./...`
+// deposited three files in the developer's own ~/.local/state/fleet/logs on
+// every run; 351 of the 384 files found there were named after test fixtures
+// (h, host-a, alpha). Losing a capture is free (Open falls back to Discard);
+// writing one somewhere nobody named is not.
+func TestZeroValueCaptureOutputWritesNothing(t *testing.T) {
+	// A state dir IS in scope — this is exactly where a stray file would go.
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+
+	w, path := captureOutput{}.Open("alpha", "header")
+	w.Line("some output")
+	w.Close("done")
+
+	if path != "" {
+		t.Errorf("a dirless capture reported path %q; it must capture nothing", path)
+	}
+	if entries, err := os.ReadDir(filepath.Join(state, "fleet", "logs")); err == nil && len(entries) > 0 {
+		t.Errorf("wrote %d file(s) into the real state dir: %v", len(entries), entries)
+	}
+}
+
+// TestUpdateCapturesOnlyWhereTheCallerNamed pins that the CLI update path
+// writes captures ONLY to a directory its caller chose. runUpdateWith injects
+// its output writer and its runner but used to resolve the capture directory
+// itself via fleetLogDir(), so every test driving the real CLI path deposited
+// a file in the developer's own ~/.local/state/fleet/logs. This is the same
+// rule tuiModel.ansPath already follows: the persistence path is INJECTED,
+// never resolved inside the thing being tested.
+func TestUpdateCapturesOnlyWhereTheCallerNamed(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+
+	withUpdateFile(t, updplan.DefaultYAML)
+	r := runner.Fake{Err: map[string]error{"alpha": fmt.Errorf("boom")}}
+	var buf strings.Builder
+	_ = runUpdateWith(&buf, []string{"alpha"}, r, updexec.Discard{})
+
+	if entries, err := os.ReadDir(filepath.Join(state, "fleet", "logs")); err == nil && len(entries) > 0 {
+		t.Fatalf("capture written to a directory the caller never named: %v", entries)
 	}
 }

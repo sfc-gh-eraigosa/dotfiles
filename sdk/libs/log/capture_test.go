@@ -187,3 +187,28 @@ func TestWriterSplitsIntoTimestampedLines(t *testing.T) {
 		t.Fatalf("expected two timestamped lines:\n%s", b)
 	}
 }
+
+// TestEmptyDirMeansNoCapture pins that an unset Dir disables the capture
+// rather than falling back to the real state directory. A zero-value
+// capture construction is what every test and every not-yet-configured
+// caller produces; resolving that to <state>/<tool>/logs meant a test run
+// silently wrote files into the developer's own home — which is how
+// ~/.local/state/fleet/logs accumulated 351 files named after test
+// fixtures. Writing to a nil *Capture is already a no-op, so "no directory"
+// can safely mean "no capture", matching the rule fleet's answers store
+// follows for its own path.
+func TestEmptyDirMeansNoCapture(t *testing.T) {
+	// A real HOME/XDG_STATE_HOME is in scope: if the fallback is still
+	// there, this is exactly where the stray file would land.
+	home := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", home)
+
+	c := NewCapture(CaptureOptions{Subject: "h", Now: fixedClock()})
+	if c != nil {
+		t.Fatalf("expected no capture when Dir is empty, got one at %q", c.Path())
+	}
+
+	if entries, err := os.ReadDir(filepath.Join(home, "fleet", "logs")); err == nil && len(entries) > 0 {
+		t.Fatalf("an empty Dir wrote %d file(s) into the state dir: %v", len(entries), entries)
+	}
+}
