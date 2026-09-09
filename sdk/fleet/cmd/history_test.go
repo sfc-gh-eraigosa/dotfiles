@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
 )
 
 // writeCapture drops a capture file into dir the way libs/log names them.
@@ -176,5 +178,103 @@ func TestHistoryUnknownHostNamesWhatExists(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "nano") || !strings.Contains(out, "spark") {
 		t.Errorf("an unknown host must name the hosts that do have captures:\n%s", out)
+	}
+}
+
+// TestProblemsDigestsNewestRunPerHost pins the fleet-wide answer to "what is
+// broken and where". With no host named it walks each host's NEWEST run only
+// — older runs are history, not the current state — and prints that run's
+// digest, so one command replaces reading four logs.
+func TestProblemsDigestsNewestRunPerHost(t *testing.T) {
+	old := flagHistoryProblems
+	flagHistoryProblems = true
+	t.Cleanup(func() { flagHistoryProblems = old })
+
+	dir := t.TempDir()
+	writeCapture(t, dir, "20260909T034714Z", "gig", capBad)
+	writeCapture(t, dir, "20260909T034715Z", "pi", capOK)
+	// an OLDER broken run for pi, which must NOT be reported: pi's newest is clean
+	writeCapture(t, dir, "20260901T000000Z", "pi", capBad)
+
+	var buf strings.Builder
+	if err := runHistory(&buf, nil, dir, time.UTC); err != nil {
+		t.Fatalf("runHistory: %v", err)
+	}
+	out := buf.String()
+
+	if !strings.Contains(out, "could not read Username") {
+		t.Errorf("gig's problem must be reported:\n%s", out)
+	}
+	if !strings.Contains(out, "clean") {
+		t.Errorf("a host whose newest run is clean must be SAID to be clean, not omitted:\n%s", out)
+	}
+	if strings.Count(out, "could not read Username") != 1 {
+		t.Errorf("only the newest run per host is digested; pi's older broken run must not appear:\n%s", out)
+	}
+}
+
+// TestProblemsCollapseRepeatsInOutput pins that the rendered digest carries
+// the multiplier rather than repeating a line — the whole reason to have a
+// digest instead of `--errors`.
+func TestProblemsCollapseRepeatsInOutput(t *testing.T) {
+	old := flagHistoryProblems
+	flagHistoryProblems = true
+	t.Cleanup(func() { flagHistoryProblems = old })
+
+	dir := t.TempDir()
+	writeCapture(t, dir, "20260909T034714Z", "gig", `# fleet update — host=gig started=x
+03:47:18 !! sudo: a password is required
+03:47:18 !! sudo: a password is required
+03:47:18 !! sudo: a password is required
+03:47:19 WARNING: could not install these apt packages: git gh jq
+# 2026-09-09T03:50:36Z finished
+`)
+
+	var buf strings.Builder
+	if err := runHistory(&buf, []string{"gig"}, dir, time.UTC); err != nil {
+		t.Fatalf("runHistory: %v", err)
+	}
+	out := buf.String()
+
+	if !strings.Contains(out, "3×") {
+		t.Errorf("a repeated failure must render with its multiplier:\n%s", out)
+	}
+	if strings.Count(out, "sudo: a password is required") != 1 {
+		t.Errorf("the repeated line must appear once, not three times:\n%s", out)
+	}
+	if !strings.Contains(out, "could not install these apt packages") {
+		t.Errorf("the authored diagnosis must be shown:\n%s", out)
+	}
+}
+
+// TestUncapturedRunIsNotCalledClean pins the fleet-wide view's honesty. An
+// interactive run captures none of install.sh's output, so its digest is
+// empty for the same reason a perfect run's is. Printing "clean" there would
+// report a host as verified on the strength of a file we know is missing the
+// only part that mattered — the same "reported success it never earned"
+// failure fleet exists to catch.
+func TestUncapturedRunIsNotCalledClean(t *testing.T) {
+	old := flagHistoryProblems
+	flagHistoryProblems = true
+	t.Cleanup(func() { flagHistoryProblems = old })
+
+	dir := t.TempDir()
+	writeCapture(t, dir, "20260909T043222Z", "gig",
+		"# fleet update — host=gig started=x\n"+
+			"04:32:23 === step dotfiles.install (run) ===\n"+
+			"04:32:23 "+updexec.InteractiveNote+"\n"+
+			"# 2026-09-09T04:34:20Z finished\n")
+
+	var buf strings.Builder
+	if err := runHistory(&buf, nil, dir, time.UTC); err != nil {
+		t.Fatalf("runHistory: %v", err)
+	}
+	out := buf.String()
+
+	if strings.Contains(out, "clean") {
+		t.Errorf("an unobserved run must never be reported clean:\n%s", out)
+	}
+	if !strings.Contains(out, "not captured") {
+		t.Errorf("it must say the output was not captured:\n%s", out)
 	}
 }

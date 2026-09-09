@@ -35,6 +35,12 @@ var benignPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`^\* \[?new (branch|tag)\]?`),
 	regexp.MustCompile(`^\* branch\s+\S+\s+-> \S+$`),
 	regexp.MustCompile(`^[0-9a-f]{7,40}\.\.[0-9a-f]{7,40}\s+\S+\s+-> \S+$`),
+	// git checkout reports the branch you ended up on via stderr. Anchored
+	// at both ends and requiring the quoted branch to END the line: without
+	// that, "Already on 'main' but the working tree is dirty" would be
+	// swallowed along with the clean form. Before this, every host scored a
+	// warning on every run — a constant offset of 1 is the same as no signal.
+	regexp.MustCompile(`^(Already on|Switched to branch|Switched to a new branch) '[^']+'$`),
 	regexp.MustCompile(`^\[sudo\] password for `),
 }
 

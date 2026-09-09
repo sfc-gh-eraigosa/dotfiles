@@ -687,6 +687,36 @@ $ fleet history
 read one with: fleet history db-01 --show --run N
 ```
 
+**Finding what went wrong** — `--problems` is the digest:
+
+```sh
+fleet history --problems            # newest run of every host: what is broken, where
+fleet history pi-01 --problems      # one host
+```
+
+It reads **both** streams. `install.sh` writes its own diagnosis to stdout
+(`WARNING: could not install these apt packages: …`) while stderr carries the
+mechanical cause underneath — so a stderr-only filter shows the mechanism and
+hides the consequence. Authored lines lead, repeats collapse:
+
+```console
+$ fleet history web-01 --problems --run 2
+web-01  2026-09-08 20:47  11 problems
+  ! WARNING: GitHub CLI apt repo setup failed; gh will fall back to the distro version.
+  ! WARNING: apt-get update failed; installs may be incomplete.
+  ! WARNING: grouped install failed; retrying packages individually...
+  ! WARNING: could not install these apt packages: git gh git-lfs jq vim tmux zsh ...
+    37× sudo: a terminal is required to read the password; either use the -S option ...
+    37× sudo: a password is required
+```
+
+That run's raw log is 79 stderr lines, 74 of which are those two messages.
+
+- **An empty digest reads `clean` only if the run was observed.** An interactive
+  run captures none of `install.sh`'s output, so it digests to nothing for the
+  same reason a perfect run does. Those report `not captured (interactive run)`
+  instead — a host nobody saw must never look verified.
+
 - **`RESULT` says `finished` / `unfinished`, never `ok` / `failed`.** A capture
   records output, not an exit code. `unfinished` means the file has no footer —
   the run was killed or is still going — which is a different fact from a run

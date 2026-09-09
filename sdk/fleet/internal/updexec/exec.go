@@ -278,6 +278,15 @@ type teeable interface {
 	withLines(out, err func(host, line string)) StepIO
 }
 
+// InteractiveNote is written into a capture in place of an interactive
+// step's output, which fleet never sees — see runWithRetry.
+//
+// EXPORTED because a reader has to be able to tell "this run had no
+// problems" from "this run's output went somewhere I cannot read". Reporting
+// the second as the first is how a host that was never actually observed
+// comes to look verified.
+const InteractiveNote = "(interactive step: output went to the terminal and is not captured here)"
+
 // StderrMark prefixes a stderr line in a host's captured log. Without it a
 // post-mortem of a headless run cannot tell a warning from progress — the
 // distinction exists on the wire now, and throwing it away at the capture is
@@ -917,6 +926,16 @@ func (e Executor) runWithRetry(
 		}
 		header += " ==="
 		w.Line(header)
+		if interactive {
+			// An interactive step hands the terminal to the remote command
+			// (ssh -t), so not one byte of its output passes through this
+			// process and none of it can reach the capture. Saying so is the
+			// difference between a log that is INCOMPLETE and one that looks
+			// like the step did nothing: a two-minute ./install.sh leaves the
+			// same empty banner as a no-op, and `fleet history` cannot tell
+			// the reader which it was unless the file admits the gap itself.
+			w.Line(InteractiveNote)
+		}
 
 		ctx := context.Background()
 		var cancel context.CancelFunc

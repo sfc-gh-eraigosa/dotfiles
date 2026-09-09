@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
 )
 
 func write(t *testing.T, dir, name, body string) {
@@ -188,5 +190,218 @@ func TestSummarizeReportsFinishAndWarnings(t *testing.T) {
 	}
 	if got["nano"].Finished {
 		t.Errorf("nano = %+v, want NOT finished — it has no footer", got["nano"])
+	}
+}
+
+// problemCapture is the shape a real broken run has: install.sh's own
+// WARNING: diagnosis on STDOUT, the mechanical noise underneath it on
+// stderr, repeated many times, plus routine chatter that is neither.
+const problemCapture = `# fleet update — host=gig started=x
+03:47:15 === step dotfiles.install (run) ===
+03:47:16 !! From https://github.com/o/r
+03:47:16 !! Already on 'main'
+03:47:18 !! sudo: a password is required
+03:47:18 !! sudo: a password is required
+03:47:18 !! sudo: a password is required
+03:47:18 WARNING: apt-get update failed; installs may be incomplete.
+03:47:19 WARNING: could not install these apt packages: git gh jq
+03:47:20 Installing fnm...
+# 2026-09-09T03:50:36Z finished
+`
+
+// TestProblemsLeadWithTheAuthoredDiagnosis pins the ordering that makes this
+// useful. install.sh writes its OWN explanation of what broke to stdout
+// ("WARNING: could not install these apt packages: …"); the stderr underneath
+// is the mechanical cause, repeated once per failed call. A digest that
+// showed only stderr — which is what a stdout/stderr split gives you — would
+// print 37 copies of "sudo: a password is required" and never once mention
+// that 32 packages are missing. The authored line comes first because it is
+// the one a human can act on.
+func TestProblemsLeadWithTheAuthoredDiagnosis(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "20260909T034714Z__gig.log", problemCapture)
+
+	c, err := Read(filepath.Join(dir, "20260909T034714Z__gig.log"))
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	ps := c.Problems()
+
+	if len(ps) != 3 {
+		t.Fatalf("got %d problems, want 3 (2 diagnoses + 1 collapsed stderr): %+v", len(ps), ps)
+	}
+	if !strings.HasPrefix(ps[0].Text, "WARNING: apt-get update failed") {
+		t.Errorf("problem 0 = %q, want the first authored WARNING", ps[0].Text)
+	}
+	if !strings.Contains(ps[1].Text, "could not install these apt packages") {
+		t.Errorf("problem 1 = %q, want the second authored WARNING", ps[1].Text)
+	}
+	if !ps[0].Authored || ps[2].Authored {
+		t.Errorf("Authored must separate install.sh's diagnosis from raw stderr: %+v", ps)
+	}
+}
+
+// TestProblemsCollapseRepeats pins the collapsing. The same failure repeated
+// once per privileged call is ONE problem seen N times, not N problems; a
+// digest that listed each occurrence would bury the other findings exactly
+// the way the raw log does.
+func TestProblemsCollapseRepeats(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "20260909T034714Z__gig.log", problemCapture)
+
+	c, _ := Read(filepath.Join(dir, "20260909T034714Z__gig.log"))
+	var sudo *Problem
+	for i := range c.Problems() {
+		if strings.Contains(c.Problems()[i].Text, "sudo") {
+			sudo = &c.Problems()[i]
+		}
+	}
+	if sudo == nil {
+		t.Fatal("the repeated sudo failure must be reported")
+	}
+	if sudo.Count != 3 {
+		t.Errorf("Count = %d, want 3 — the three occurrences collapse into one entry", sudo.Count)
+	}
+	if sudo.First != "03:47:18" {
+		t.Errorf("First = %q, want the earliest occurrence", sudo.First)
+	}
+}
+
+// TestProblemsExcludeRoutineChatter pins that benign stderr and ordinary
+// stdout never reach the digest. If a healthy run produced problems, the
+// digest would be as useless as the raw log.
+func TestProblemsExcludeRoutineChatter(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "20260909T034714Z__gig.log", problemCapture)
+
+	c, _ := Read(filepath.Join(dir, "20260909T034714Z__gig.log"))
+	for _, p := range c.Problems() {
+		if strings.Contains(p.Text, "From https://") ||
+			strings.Contains(p.Text, "Already on") ||
+			strings.Contains(p.Text, "Installing fnm") {
+			t.Errorf("routine line reached the digest: %q", p.Text)
+		}
+	}
+}
+
+// TestCleanRunHasNoProblems pins the other end: the run that fixed the host
+// must digest to nothing at all.
+func TestCleanRunHasNoProblems(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "20260909T034714Z__pi.log", realCapture)
+
+	c, _ := Read(filepath.Join(dir, "20260909T034714Z__pi.log"))
+	ps := c.Problems()
+	if len(ps) != 1 || !strings.Contains(ps[0].Text, "fatal: could not read Username") {
+		t.Fatalf("want only the genuine fatal line, got %+v", ps)
+	}
+}
+
+// TestUncapturedRunIsNotReportedAsProblemFree pins the distinction between
+// "nothing went wrong" and "I could not see what happened". An interactive
+// run's output never reaches the capture, so its digest is empty for the
+// same reason a perfect run's is — and calling that clean would present an
+// entirely unobserved host as verified, which is the exact failure mode
+// (a host reporting success it never earned) fleet exists to prevent.
+func TestUncapturedRunIsNotReportedAsProblemFree(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "20260909T034714Z__gig.log",
+		"# fleet update — host=gig started=x\n"+
+			"04:32:23 === step dotfiles.install (run) ===\n"+
+			"04:32:23 "+updexec.InteractiveNote+"\n"+
+			"# 2026-09-09T04:34:20Z finished\n")
+
+	c, err := Read(filepath.Join(dir, "20260909T034714Z__gig.log"))
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if len(c.Problems()) != 0 {
+		t.Fatalf("the note itself must not be a problem: %+v", c.Problems())
+	}
+	if c.Observed {
+		t.Error("a run whose output went to the terminal was NOT observed; " +
+			"an empty digest here means unseen, not clean")
+	}
+
+	clean, _ := Read(filepath.Join(dir, "20260909T034714Z__gig.log"))
+	_ = clean
+	dir2 := t.TempDir()
+	write(t, dir2, "20260909T034714Z__pi.log", realCapture)
+	c2, _ := Read(filepath.Join(dir2, "20260909T034714Z__pi.log"))
+	if !c2.Observed {
+		t.Error("a fully captured run IS observed")
+	}
+}
+
+// TestProblemsStripColourBeforeGrouping pins that escape sequences do not
+// reach the digest. install.sh colourises its own warnings, so the same
+// message wrapped in different escapes would group as two distinct problems
+// and would render as literal "[1;33m" noise in a summary whose entire job
+// is to be readable at a glance. --show still prints the file's own bytes;
+// the digest is a summary, and a summary normalises.
+func TestProblemsStripColourBeforeGrouping(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "20260909T034714Z__gig.log",
+		"# fleet update — host=gig started=x\n"+
+			"03:47:18 \x1b[1;33mWARNING: disk is nearly full\x1b[0m\n"+
+			"03:47:19 WARNING: disk is nearly full\n"+
+			"# 2026-09-09T03:50:36Z finished\n")
+
+	c, _ := Read(filepath.Join(dir, "20260909T034714Z__gig.log"))
+	ps := c.Problems()
+	if len(ps) != 1 {
+		t.Fatalf("the same message in two colourings is ONE problem, got %d: %+v", len(ps), ps)
+	}
+	if ps[0].Count != 2 {
+		t.Errorf("Count = %d, want 2", ps[0].Count)
+	}
+	if strings.Contains(ps[0].Text, "\x1b") {
+		t.Errorf("escape sequences must not reach the digest: %q", ps[0].Text)
+	}
+}
+
+// TestARunStepWithNoOutputIsUnobserved pins detection that works on
+// captures written BEFORE the interactive note existed — which is every
+// capture already on disk, and therefore every past run someone would use
+// this to investigate. A `run` step whose banner is followed by nothing at
+// all produced no output we can see: either it was interactive (ssh -t took
+// the terminal) or it was genuinely silent, and the capture cannot tell
+// which. Both mean "not observed", so the conservative reading is the
+// correct one — the failure direction is admitting we cannot vouch for a
+// run, never vouching for one we did not see.
+func TestARunStepWithNoOutputIsUnobserved(t *testing.T) {
+	dir := t.TempDir()
+	// exactly the shape of a real interactive capture: sync output, then an
+	// install banner with nothing after it.
+	write(t, dir, "20260909T043222Z__gig.log",
+		"# fleet update — host=gig started=x\n"+
+			"04:32:22 === step dotfiles.sync (sync) ===\n"+
+			"04:32:23 Already up to date.\n"+
+			"04:32:23 === step dotfiles.install (run) ===\n"+
+			"# 2026-09-09T04:34:20Z finished\n")
+
+	c, err := Read(filepath.Join(dir, "20260909T043222Z__gig.log"))
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if c.Observed {
+		t.Error("a run step that produced no captured output means the run was not observed")
+	}
+}
+
+// TestARunStepWithOutputIsObserved guards the other direction: a step that
+// actually produced output must not be written off as unseen, or the flag
+// would fire on every healthy run and mean nothing.
+func TestARunStepWithOutputIsObserved(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "20260909T043222Z__gig.log",
+		"# fleet update — host=gig started=x\n"+
+			"04:32:23 === step dotfiles.install (run) ===\n"+
+			"04:32:24 Installing packages...\n"+
+			"# 2026-09-09T04:34:20Z finished\n")
+
+	c, _ := Read(filepath.Join(dir, "20260909T043222Z__gig.log"))
+	if !c.Observed {
+		t.Error("a run step with output WAS observed")
 	}
 }

@@ -27,6 +27,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `fleet config pull\|push\|diff` | one-way ssh-config transfer: import FROM one host, publish TO hosts, or compare without changing anything |
 | `fleet wake [host...]` | rouse hosts asleep at layer 2: ladder `retry → local-prime → peer-relay`, printed rung by rung; `--json`; exits non-zero if any target stayed down |
 | `fleet history [host]` | list the captures past updates left behind (newest first: when · host · finished/unfinished · ⚠N · size); naming a host narrows to it. `--show` prints a run (`--run N`, 1 = newest), `--errors` keeps only stderr, `--grep RE` filters lines, `--limit N`, `--json` |
+| `fleet history --problems` | the digest: what actually went wrong, deduped — the installer's own `WARNING:`/`ERROR:` lines first, then non-benign stderr with repeats collapsed (`37× sudo: a password is required`). With no host it reports the NEWEST run of every host, so one command answers "what is broken across the fleet" |
 
 ## Layout
 
@@ -458,6 +459,29 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   (`CaptureOptions` has no `Tool` field and an empty `Dir` means no capture at all), so
   neither layer can invent a location. Pinned by `TestUpdateCapturesOnlyWhereTheCallerNamed`,
   `TestZeroValueCaptureOutputWritesNothing`, and `libs/log`'s `TestEmptyDirMeansNoCapture`.
+- **The digest cannot be built on the stdout/stderr split.** `install.sh` writes its own
+  explanation of what broke to STDOUT (`WARNING: could not install these apt packages: …`)
+  because it is a message to the operator; stderr carries the mechanical cause underneath.
+  On a host whose sudo was broken, stderr held 79 lines that were two distinct messages
+  repeated 37 times each, while the five lines naming what the machine was now MISSING were
+  all stdout — so `--errors` showed the mechanism and hid the consequence. `Problems()`
+  reads both, leads with the authored lines in the order they were written, then non-benign
+  stderr loudest-first, and collapses repeats to one entry with a count. Colour is stripped
+  BEFORE matching, not just before printing: a leading escape sequence hid the `WARNING:`
+  prefix from the matcher, so a coloured warning was not merely grouped separately, it was
+  not recognised at all. Pinned by `TestProblemsLeadWithTheAuthoredDiagnosis`,
+  `TestProblemsCollapseRepeats`, `TestProblemsStripColourBeforeGrouping`.
+- **An empty digest is "clean" ONLY if the run was observed.** An interactive run captures
+  none of `install.sh`'s output, so it digests to nothing for the same reason a perfect run
+  does; reporting that as clean would mark a host verified on the strength of a file known
+  to be missing the only part that mattered — the same unearned success fleet exists to
+  catch. `Capture.Observed` is false when a `run` step's banner is followed by no output,
+  or when the capture carries `updexec.InteractiveNote`. The STRUCTURAL rule is the load-
+  bearing one: the note is recent and every capture already on disk predates it, which is
+  exactly the set of past runs someone opens this tool to investigate. A genuinely silent
+  batch step reads as unobserved too — the conservative direction. Pinned by
+  `TestUncapturedRunIsNotReportedAsProblemFree`, `TestARunStepWithNoOutputIsUnobserved`,
+  `TestARunStepWithOutputIsObserved`, `TestUncapturedRunIsNotCalledClean`.
 - **`history` reads the capture; it never claims an exit code.** A capture records
   OUTPUT, not a status, so the listing's RESULT column says `finished` / `unfinished` —
   whether the run reached its footer — and never `ok` / `failed`, which the file cannot
@@ -554,6 +578,15 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   `fleet update init` always writes the starter plan and never updates a host called `init`.
   Deliberate: a plan-authoring verb needs a stable name more than that hostname needs
   protecting. Rename the host, or drive it from `fleet tui`.
+- **An interactive step's output is NOT in the capture — the capture says so.** `ssh -t`
+  hands the terminal to the remote command, so not one byte of an `interactive: true` step
+  (the default plan's `./install.sh`) passes through this process. The capture holds the
+  step banner, the `(interactive step: output went to the terminal …)` note, and nothing
+  else — a two-minute install that did the entire job leaves a ~570-byte file. Without the
+  note that is indistinguishable in `fleet history` from a step that produced no output at
+  all, which is exactly how a broken-sudo run and the successful re-run that fixed it came
+  to look identical. Capturing it for real needs a pty proxy; naming the gap costs one
+  line. Pinned by `TestInteractiveStepSaysItsOutputWentToTheTerminal`.
 - **A `timed out` step is "we stopped waiting", not "it stopped".** The deadline kills the
   local `ssh`; the remote command keeps running (an `install.sh` in the middle of `apt` will
   finish on its own). Check the host before re-running, and list `timeout` in `retry.on` only

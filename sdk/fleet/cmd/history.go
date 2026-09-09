@@ -15,11 +15,12 @@ import (
 )
 
 var (
-	flagHistoryShow   bool
-	flagHistoryRun    int
-	flagHistoryErrors bool
-	flagHistoryGrep   string
-	flagHistoryLimit  int
+	flagHistoryShow     bool
+	flagHistoryRun      int
+	flagHistoryErrors   bool
+	flagHistoryGrep     string
+	flagHistoryLimit    int
+	flagHistoryProblems bool
 )
 
 // historyDefaultLimit caps the default listing. Retention keeps 50 runs per
@@ -79,6 +80,9 @@ func runHistory(w io.Writer, args []string, dir string, loc *time.Location) erro
 		}
 	}
 
+	if flagHistoryProblems {
+		return digestProblems(w, sel, len(args) == 1, loc)
+	}
 	if flagHistoryShow {
 		return showRun(w, sel)
 	}
@@ -227,5 +231,88 @@ func init() {
 	historyCmd.Flags().BoolVar(&flagHistoryErrors, "errors", false, "with --show, keep only stderr lines")
 	historyCmd.Flags().StringVar(&flagHistoryGrep, "grep", "", "with --show, keep only lines matching this regexp")
 	historyCmd.Flags().IntVar(&flagHistoryLimit, "limit", historyDefaultLimit, "maximum rows to list (0 = all)")
+	historyCmd.Flags().BoolVar(&flagHistoryProblems, "problems", false,
+		"digest what went wrong: the installer's own diagnosis first, then non-benign stderr, repeats collapsed (no host = newest run of every host)")
 	rootCmd.AddCommand(historyCmd)
+}
+
+// digestProblems prints what actually went wrong, deduped.
+//
+// With no host named it reports each host's NEWEST run only: older runs are
+// history, not current state, and a fleet-wide answer to "what is broken"
+// must not resurrect a problem that a later run already fixed. With a host
+// named it digests that host's selected run (--run, default newest).
+//
+// A host whose newest run is clean is SAID to be clean rather than omitted.
+// Silence is ambiguous — it reads identically to a host that was never
+// checked — and the point of the view is to be able to trust it.
+func digestProblems(w io.Writer, runs []histindex.Run, oneHost bool, loc *time.Location) error {
+	sel := runs
+	if !oneHost {
+		sel = newestPerHost(runs)
+	} else {
+		n := flagHistoryRun
+		if n <= 0 {
+			n = 1
+		}
+		if n > len(runs) {
+			return fmt.Errorf("--run %d: only %d capture(s) available", n, len(runs))
+		}
+		sel = runs[n-1 : n]
+	}
+
+	for _, r := range sel {
+		c, err := histindex.Read(r.Path)
+		if err != nil {
+			fmt.Fprintf(w, "%s  %s  unreadable: %v\n", r.Host, r.At.In(loc).Format("2006-01-02 15:04"), err)
+			continue
+		}
+		ps := c.Problems()
+		when := r.At.In(loc).Format("2006-01-02 15:04")
+		if len(ps) == 0 {
+			// "No problems found" and "I could not see what happened"
+			// produce the SAME empty digest. Collapsing them would report a
+			// host as verified on the strength of a capture we know is
+			// missing the only part that mattered.
+			state := "clean"
+			if !c.Observed {
+				state = "not captured (interactive run — output went to the terminal)"
+			}
+			fmt.Fprintf(w, "%s  %s  %s\n", r.Host, when, state)
+			continue
+		}
+		fmt.Fprintf(w, "%s  %s  %s\n", r.Host, when, plural(len(ps), "problem"))
+		for _, p := range ps {
+			// The multiplier replaces the repetition: one failure seen 37
+			// times is one line, which is the entire reason this view exists.
+			count := ""
+			if p.Count > 1 {
+				count = fmt.Sprintf("%d× ", p.Count)
+			}
+			// "!" marks the installer's own diagnosis — the actionable line —
+			// apart from the raw stderr underneath it.
+			mark := " "
+			if p.Authored {
+				mark = "!"
+			}
+			fmt.Fprintf(w, "  %s %s%s\n", mark, count, p.Text)
+		}
+		fmt.Fprintln(w)
+	}
+	return nil
+}
+
+// newestPerHost keeps the first (newest — Scan sorts descending) run of each
+// host, preserving that order.
+func newestPerHost(runs []histindex.Run) []histindex.Run {
+	seen := map[string]bool{}
+	var out []histindex.Run
+	for _, r := range runs {
+		if seen[r.Host] {
+			continue
+		}
+		seen[r.Host] = true
+		out = append(out, r)
+	}
+	return out
 }

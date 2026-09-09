@@ -114,3 +114,32 @@ func TestCaptureMarksStderr(t *testing.T) {
 		t.Fatalf("stderr must reach the capture marked %q: %q", StderrMark, captured)
 	}
 }
+
+// TestInteractiveStepSaysItsOutputWentToTheTerminal pins that a capture is
+// HONEST about what it does not contain. An interactive step hands the
+// terminal to the remote command (ssh -t), so fleet never sees a byte of it:
+// the default plan's `./install.sh` can run for two minutes, do the entire
+// job, and leave the capture holding its step banner and nothing else.
+//
+// Read back by `fleet history` that is indistinguishable from an install
+// that produced no output at all — a real run against a host whose sudo was
+// broken looked identical to the successful re-run that fixed it. Naming the
+// gap costs one line and turns "apparently did nothing" into "went
+// somewhere else".
+func TestInteractiveStepSaysItsOutputWentToTheTerminal(t *testing.T) {
+	var captured []string
+	// A precheck the sync accepts, so the run reaches the interactive step.
+	f := runner.Fake{Out: map[string]string{"h": "state=clean branch=main"}}
+	ex := Executor{IO: Console{R: f}, Out: memOutput{&captured}}
+	ex.RunHost("h", updplan.Default())
+
+	var said bool
+	for _, l := range captured {
+		if strings.Contains(l, "interactive") && strings.Contains(l, "not captured") {
+			said = true
+		}
+	}
+	if !said {
+		t.Fatalf("an interactive step must say its output was not captured, got:\n%q", captured)
+	}
+}

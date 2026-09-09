@@ -2,6 +2,7 @@ package histindex
 
 import (
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
@@ -29,6 +30,15 @@ type Capture struct {
 	// Warnings counts NON-BENIGN stderr lines — the same number the TUI
 	// badges a row with. See Read.
 	Warnings int
+	// Observed is false when some of this run's output never reached the
+	// file — today, when it contains an interactive step whose output went
+	// to the terminal instead.
+	//
+	// It exists so a reader can tell "nothing went wrong" from "I could not
+	// see what happened". Both produce an empty problem digest, and
+	// presenting the second as the first would mark a host verified that was
+	// never actually observed.
+	Observed bool
 }
 
 // Stderr is the error projection: the same lines the TUI's stderr pane
@@ -75,6 +85,7 @@ func Read(path string) (Capture, error) {
 		c.Lines = append(c.Lines, parseLine(ln))
 	}
 
+	c.Observed = observed(c.Lines)
 	for _, l := range c.Lines {
 		if l.Stderr && !updexec.Benign(l.Text) {
 			c.Warnings++
@@ -143,4 +154,44 @@ func Summarize(r Run) (Summary, error) {
 		Finished: c.Footer != "",
 		Lines:    len(c.Lines),
 	}, nil
+}
+
+// runBanner matches the executor's step banner for a `run` step — the one
+// kind that can hand the terminal to the remote command.
+var runBanner = regexp.MustCompile(`^=== step .* \(run\)( |=)`)
+
+// stepBanner matches any step banner.
+var stepBanner = regexp.MustCompile(`^=== step `)
+
+// observed reports whether this capture holds everything the run produced.
+//
+// It is false when a `run` step's banner is followed by no output at all.
+// That is what an INTERACTIVE step leaves behind: ssh -t hands the terminal
+// to the remote command, so a two-minute ./install.sh that did the whole job
+// writes a banner and nothing else. Detecting it structurally rather than by
+// looking for InteractiveNote is deliberate — the note is recent, and every
+// capture already on disk predates it, which is precisely the set of past
+// runs someone would open this tool to investigate.
+//
+// A genuinely silent batch step reads the same way and is also reported
+// unobserved. That is the conservative direction: the cost is admitting we
+// cannot vouch for a run, versus vouching for one nobody saw.
+func observed(lines []Line) bool {
+	for i, l := range lines {
+		// The explicit marker, written by any executor new enough to emit
+		// it. Checked as well as the structural rule below, not instead of
+		// it: the note IS content, so a banner followed by the note looks
+		// "observed" to a purely structural test.
+		if l.Text == updexec.InteractiveNote {
+			return false
+		}
+		if !runBanner.MatchString(l.Text) {
+			continue
+		}
+		// Anything before the next banner counts as this step's output.
+		if i+1 >= len(lines) || stepBanner.MatchString(lines[i+1].Text) {
+			return false
+		}
+	}
+	return true
 }
