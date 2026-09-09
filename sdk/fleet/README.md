@@ -749,6 +749,42 @@ That run's raw log is 79 stderr lines, 74 of which are those two messages.
 - **Retention is 50 runs per host**, pruned as each new capture opens. A host
   updated once a month never has its history evicted by one updated hourly.
 
+### History inside the dashboard — `H`
+
+`fleet history` reads captures from the shell. `H` does it from the dashboard,
+where you are already standing when you wonder what happened last time.
+
+```
+H        open the past runs of the SELECTION (or the cursor host, like u and w)
+j k gg G move the run cursor          /  search        h l e  toggle the panes
+enter    open the run under the cursor into the log and stderr panes
+esc      close the run, then leave history
+```
+
+```console
+╭──────────────────────────────────────────────────────────────────────────╮
+│     WHEN             HOST             RESULT     WARN   SIZE             │
+│ >   2026-09-08 13:47 host-nano        finished   -      343B             │
+│     2026-09-08 13:30 host-pi          finished   !1     244B             │
+│     2026-09-07 03:15 host-nano        finished   -      207B             │
+╰──────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────────────────╮
+│ logs   scrolled 1/2   tab: focus  l: hide                                │
+│  12:00:00 host-pi       │ === step dotfiles.sync (sync) ===              │
+│ !12:00:00 host-pi       │ fatal: could not read Username for 'https://…' │
+╰──────────────────────────────────────────────────────────────────────────╯
+```
+
+- **It is the same panes, reading a different source.** History is a view of
+  the model, not a separate screen, so every motion, both pane toggles and `/`
+  keep working and there are no new bindings to learn beyond `H` and `enter`.
+- **Reading the past never costs you the present.** An update still running
+  keeps streaming into the log buffer the whole time a capture is on screen;
+  closing the run shows it again with nothing missing.
+- **`RESULT` says `finished` / `unfinished`, never `ok` / `failed`** — the same
+  honesty the CLI listing keeps, for the same reason: a capture records
+  output, not an exit code.
+
 ### `fleet version`
 
 ```sh

@@ -28,6 +28,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `fleet wake [host...]` | rouse hosts asleep at layer 2: ladder `retry → local-prime → peer-relay`, printed rung by rung; `--json`; exits non-zero if any target stayed down |
 | `fleet history [host]` | list the captures past updates left behind (newest first: when · host · finished/unfinished · ⚠N · size); naming a host narrows to it. `--show` prints a run (`--run N`, 1 = newest), `--errors` keeps only stderr, `--grep RE` filters lines, `--limit N`, `--json` |
 | `fleet history --problems` | the digest: what actually went wrong, deduped — the installer's own `WARNING:`/`ERROR:` lines first, then non-benign stderr with repeats collapsed (`37× sudo: a password is required`). With no host it reports the NEWEST run of every host, so one command answers "what is broken across the fleet" |
+| `fleet tui` → `H` | history INSIDE the dashboard: the run list for the selection (or cursor host), `enter` opens a run into the log/stderr panes, `esc` unwinds one level. Same motions, same pane toggles, same `/` search |
 
 ## Layout
 
@@ -47,6 +48,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `internal/lanscan` | sweep a subnet for a listening port (injected dialer — no nmap, no socket in tests) |
 | `internal/keys` | authorized_keys diff (reports removals, never applies them) |
 | `internal/histindex` | read past captures (pure but for the file open): `Scan` decodes `<UTC>__<host>.log` positionally, `Read` splits header/body/footer and decodes the `!! ` mark, `Summarize` adds finished + warning count |
+| `cmd/tui_history.go` | the dashboard's history view: `historyRuns` (scoped loader), the load/open Cmds and msgs, the run-keyed cursor, and `logEntries` -- the single accessor that swaps the panes between the live stream and a stored capture |
 | `internal/reach` | the wake ladder: rung order, peer ranking, provenance (pure; every impure edge injected via `Deps`) |
 | `cmd/answers_store.go` | the non-secret prompt preferences on disk (`0600`); the on-disk type has no credential field |
 | `internal/runner` | the **only** seam that touches a remote host (`Exec` real, `Fake` for tests); `RunStreamCtx` is the deadline-aware path |
@@ -474,6 +476,37 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   `TestProblemsLeadWithTheAuthoredDiagnosis`, `TestProblemsCollapseRepeats`,
   `TestProblemsStripColourBeforeGrouping`,
   `TestColouredBenignStderrIsNotCountedAsAWarning`.
+- **History in the TUI is VIEW state, never a `tuiMode`.** Modes exist to reroute
+  keystrokes -- a key typed in search is text, not a motion -- and history reroutes
+  nothing: every motion, both pane toggles and `/` keep their meaning. Only what the panes
+  READ changes, from the live stream to a stored capture. The branch lives in two motion
+  primitives (`move`/`moveTo`), in `listLen`, and in ONE source accessor (`logEntries`), so
+  a second copy of the normal-mode routing table never has to exist to drift out of sync.
+  Scope is snapshotted from `updateTargets()` at press time -- the same selection-or-cursor
+  rule the update and wake keys use -- so moving the run cursor cannot silently change
+  which runs the list covers. Pinned by `TestHistoryKeyScopeFollowsTheSelection`,
+  `TestHistoryMotionUsesTheSameKeysAsTheHostList`,
+  `TestHistoryMotionLeavesTheHostCursorAlone`, `TestEscUnwindsOneLevelAtATime`.
+- **Reading the past never costs the present.** The log pane is shared with a running
+  update, so opening a capture leaves `m.logs` completely alone: the engine keeps appending
+  the whole time a run is on screen, and closing it shows the live stream again with
+  nothing missing. `tailFor` deliberately does NOT follow the switch -- a host row's FAIL
+  text is about the run that failed, not about whatever the operator is reading. Pinned by
+  `TestOpeningARunNeverLosesLiveStreamLines`.
+- **An opened capture must drive the pane's EMPTINESS check too, not just its contents.**
+  `errCount` is maintained incrementally as live lines arrive and is therefore zero for a
+  capture read from disk, so the stderr pane rendered "stderr: none captured" directly
+  underneath the captured stderr line it was showing. `errTotal()` reads whichever source
+  is active; the counter still serves the live path, where it exists to keep height queries
+  off a 2000-entry filtered rebuild. **Found by the demo frames, not by a unit test** --
+  every unit assertion about the opened capture passed while the pane on screen said the
+  opposite, which is the case for rendering real frames and looking at them. Pinned by
+  `TestOpenedRunFillsTheStderrPane`.
+- **The new panel gets its own size sweep.** The existing 1219-size sweep renders the HOST
+  list and says nothing about the run list, and bubbletea drops lines from the TOP of an
+  over-tall frame -- one row of overflow walks the banner off the screen. Both history
+  states are swept, including the empty-history prose, which wraps and is the likelier to
+  grow. Pinned by `TestHistoryFrameNeverExceedsTheTerminal`.
 - **The digest CLASSIFIES; it never hides.** Every line still appears — advisories are
   labelled and sorted last, not suppressed, because a filter that hides is a filter that can
   hide the one line that mattered. Three reductions, all structural rather than selective:

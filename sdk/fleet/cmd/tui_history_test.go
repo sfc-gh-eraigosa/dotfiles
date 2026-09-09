@@ -495,3 +495,39 @@ func TestOpeningARunNeverLosesLiveStreamLines(t *testing.T) {
 		t.Fatalf("both live lines must survive the round trip, got %v", got)
 	}
 }
+
+// TestOpenedRunFillsTheStderrPane pins a bug the demo frames caught that the
+// unit tests missed: errEntries() correctly returned the capture's stderr,
+// but the pane's EMPTINESS check reads errCount — a counter maintained
+// incrementally as live lines arrive, and therefore zero for a capture that
+// was read from disk. The pane rendered "stderr: none captured" directly
+// underneath the very line it should have been showing.
+func TestOpenedRunFillsTheStderrPane(t *testing.T) {
+	dir := t.TempDir()
+	histCapture(t, dir, "20260909T030000Z", "alpha",
+		"# fleet update — host=alpha started=x\n"+
+			"03:47:14 === step dotfiles.sync (sync) ===\n"+
+			"03:47:16 !! fatal: could not read Username\n"+
+			"# 2026-09-09T03:50:36Z finished\n")
+	runs, _ := historyRuns(dir, []string{"alpha"})
+
+	m, _ := send(testModel("alpha"), "H")
+	lm, _ := m.Update(historyLoadedMsg{runs: runs})
+	m2 := lm.(tuiModel)
+	m2.errOpen = true
+	m2.vp.width, m2.vp.height = 100, 30
+
+	om, _ := m2.Update(openHistoryRun(runs[0])().(historyOpenedMsg))
+	open := om.(tuiModel)
+
+	if !open.errActive() {
+		t.Error("a capture carrying stderr must make the error pane active")
+	}
+	out := open.View()
+	if strings.Contains(out, "none captured") {
+		t.Errorf("the stderr pane claims nothing was captured while showing a captured run:\n%s", out)
+	}
+	if !strings.Contains(stripANSI(out), "could not read Username") {
+		t.Errorf("the capture's stderr line must appear in the pane:\n%s", out)
+	}
+}

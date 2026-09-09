@@ -190,6 +190,9 @@ type tuiModel struct {
 	// again with nothing lost.
 	histPath  string
 	histLines []logEntry
+	// histErrCount mirrors errCount for the opened capture: counted once at
+	// open, so the pane's height queries stay off a per-keystroke rebuild.
+	histErrCount int
 
 	hosts map[string]sshconf.Host
 	// local is who THIS machine is, and localAlias is the fleet row that IS
@@ -902,7 +905,23 @@ func (m tuiModel) logActive() bool { return m.logOpen && len(m.logEntries()) > 0
 
 // errActive is its stderr twin. It reads the COUNTER, not the projection —
 // this is consulted from every height query.
-func (m tuiModel) errActive() bool { return m.errOpen && m.errCount > 0 }
+func (m tuiModel) errActive() bool { return m.errOpen && m.errTotal() > 0 }
+
+// errTotal is how many stderr lines the ACTIVE source has. errCount is
+// maintained incrementally as live lines arrive and is therefore zero for a
+// capture read from disk — reading it directly made the pane render
+// "stderr: none captured" directly underneath the captured stderr line it
+// was supposed to be showing. Found by the demo frames, not by a unit test.
+//
+// The counter still serves the live path, where it exists to keep every
+// height query off a 2000-entry filtered rebuild; the opened capture is
+// counted once, when it is opened.
+func (m tuiModel) errTotal() int {
+	if m.histRunOpen() {
+		return m.histErrCount
+	}
+	return m.errCount
+}
 
 // pane names the three stacked panels the operator composes.
 type pane int
@@ -1209,6 +1228,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.histPath = msg.path
 		m.histLines = captureEntries(msg.host, msg.cap, m.now)
+		m.histErrCount = len(msg.cap.Stderr())
 		// A freshly opened capture reads from its start, not its tail: unlike a
 		// live stream there is no "newest" to follow, and the beginning is where
 		// the run explains itself.
