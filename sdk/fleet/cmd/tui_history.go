@@ -3,6 +3,8 @@ package cmd
 import (
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/histindex"
@@ -58,7 +60,26 @@ func historyRuns(dir string, hosts []string) ([]histindex.Summary, error) {
 // historyLoadedMsg carries the scan result back into Update.
 type historyLoadedMsg struct {
 	runs []histindex.Summary
-	err  error
+	// scope identifies WHICH request this answers. Two H presses with
+	// different scopes can be in flight at once, and without this the slower
+	// one overwrites the newer list — leaving histScope describing one set of
+	// hosts while the rows show another, which also flips the HOST-column
+	// decision and lets enter open a run outside the displayed scope.
+	scope []string
+	err   error
+}
+
+// sameScope reports whether two scope snapshots are the same request.
+func sameScope(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // loadHistory reads the run list from inside a Cmd. Scanning a directory and
@@ -69,7 +90,7 @@ type historyLoadedMsg struct {
 func loadHistory(dir string, hosts []string) tea.Cmd {
 	return func() tea.Msg {
 		runs, err := historyRuns(dir, hosts)
-		return historyLoadedMsg{runs: runs, err: err}
+		return historyLoadedMsg{runs: runs, scope: hosts, err: err}
 	}
 }
 
@@ -105,6 +126,27 @@ func (m *tuiModel) histMoveTo(i int) {
 		i = len(m.histRuns) - 1
 	}
 	m.histCursor = m.histRuns[i].Path
+	m.clampHistViewport(i)
+}
+
+// clampHistViewport keeps the run cursor on screen. The run list has its own
+// offset because m.vp belongs to the HOST list and clampViewport recomputes
+// it from the host cursor — slicing the runs by it rendered a header with
+// nothing under it, and pinned the cursor off-screen with no way to reach it.
+func (m *tuiModel) clampHistViewport(i int) {
+	h := m.visibleRows()
+	if h < 1 {
+		h = 1
+	}
+	if i < m.histTop {
+		m.histTop = i
+	}
+	if i >= m.histTop+h {
+		m.histTop = i - h + 1
+	}
+	if m.histTop < 0 {
+		m.histTop = 0
+	}
 }
 
 // historyOpenedMsg carries one capture's parsed contents back into Update.
@@ -114,8 +156,11 @@ type historyOpenedMsg struct {
 	// filename: the run list already knows it, and decoding it twice is a
 	// second place for the name to come out different.
 	host string
-	cap  histindex.Capture
-	err  error
+	// day is the run's date, so a captured line can be stamped with the time
+	// it was actually written rather than with the moment the TUI started.
+	day time.Time
+	cap histindex.Capture
+	err error
 }
 
 // openHistoryRun reads and parses one capture inside a Cmd. Reading a file is
@@ -123,7 +168,7 @@ type historyOpenedMsg struct {
 func openHistoryRun(r histindex.Summary) tea.Cmd {
 	return func() tea.Msg {
 		c, err := histindex.Read(r.Path)
-		return historyOpenedMsg{path: r.Path, host: r.Host, cap: c, err: err}
+		return historyOpenedMsg{path: r.Path, host: r.Host, day: r.At, cap: c, err: err}
 	}
 }
 
@@ -157,16 +202,65 @@ func (m tuiModel) logEntries() []logEntry {
 // captureEntries converts a parsed capture into the same logEntry the stream
 // panes already render, so the panes need no notion of where their lines came
 // from and the two sources cannot drift into two renderers.
-func captureEntries(host string, c histindex.Capture, now time.Time) []logEntry {
+func captureEntries(host string, c histindex.Capture, day time.Time) []logEntry {
 	out := make([]logEntry, 0, len(c.Lines))
 	for _, l := range c.Lines {
 		out = append(out, logEntry{
 			alias:  host,
 			line:   l.Text,
-			at:     now,
+			at:     stampOf(day, l.Time),
 			stderr: l.Stderr,
-			warn:   l.Stderr && !updexec.Benign(l.Text),
+			// Colour is stripped BEFORE classifying, exactly as
+			// histindex.Read does for the WARN column. Passing the raw line
+			// made a colourised benign git line count as 0 in the run list
+			// and yet raise the `!` gutter once the run was opened — the two
+			// views disagreeing about the same line.
+			warn: l.Stderr && !updexec.Benign(ansi.Strip(l.Text)),
 		})
 	}
 	return out
+}
+
+// stampOf rebuilds a captured line's wall-clock time from the run's date and
+// the line's "HH:MM:SS" prefix. The panes render this column to show how long
+// a step took; stamping every line with the model's construction time made a
+// three-minute run read as a single instant repeated.
+//
+// A line with no parsable stamp keeps the run's own time rather than being
+// dropped or zeroed — output written before the first stamp is still output.
+func stampOf(day time.Time, clock string) time.Time {
+	if clock == "" {
+		return day
+	}
+	t, err := time.Parse("15:04:05", clock)
+	if err != nil {
+		return day
+	}
+	return time.Date(day.Year(), day.Month(), day.Day(),
+		t.Hour(), t.Minute(), t.Second(), 0, day.Location())
+}
+
+// wireTUIPaths attaches the on-disk locations the model needs. It exists as
+// one function because logDir was declared, read in two places, and never
+// assigned: H scanned "" and always rendered "no captured runs", and the same
+// empty string reached beginStream, where libs/log's "an empty Dir means no
+// capture" rule meant the dashboard's own updates wrote NOTHING. Both paths
+// looked fine in tests, which inject a temp directory directly.
+//
+// Wiring stays HERE rather than in newTUIModel so the model remains a pure
+// value and tests never touch a real config or state directory.
+func wireTUIPaths(m *tuiModel) {
+	m.ansPath = answersPath()
+	m.ans = loadAnswers(m.ansPath)
+	m.logDir = fleetLogDir()
+}
+
+// closeHistoryRun returns the stream panes to the live buffer, restoring the
+// follow state the operator had before the capture was opened. Both exits
+// from an open run (esc, and toggling H off) go through it, so neither can
+// leave the panes showing a stored capture over a running update.
+func (m *tuiModel) closeHistoryRun() {
+	m.histPath, m.histLines, m.histErrCount = "", nil, 0
+	m.logFollow, m.errFollow = m.liveFollow, m.liveErrFollow
+	m.logTop, m.errTop = 0, 0
 }

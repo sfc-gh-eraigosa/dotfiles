@@ -93,8 +93,7 @@ var tuiCmd = &cobra.Command{
 		m.setLocal(detectLocal())
 		// Persistence is wired HERE, not in newTUIModel, so the model stays a
 		// pure value and tests never touch a real config directory.
-		m.ansPath = answersPath()
-		m.ans = loadAnswers(m.ansPath)
+		wireTUIPaths(&m)
 		// Re-passed to the interactive handoff's self-exec (`fleet update
 		// <alias> --file <tuiFile> ...`) so a routed host resolves the SAME
 		// plan the TUI itself loaded, not gff's own (possibly different)

@@ -334,10 +334,15 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// selection on the way would discard the scoping that chose these
 		// runs in the first place.
 		if m.histRunOpen() {
-			m.histPath, m.histLines = "", nil
+			m.closeHistoryRun()
 			return m, nil
 		}
 		if m.histOn {
+			// Toggling off must be as complete as esc: histRunOpen() keys off
+			// histPath alone, so leaving it set brought the dashboard back
+			// with the stored capture still filling the panes while a live
+			// update streamed into a buffer nobody could see.
+			m.closeHistoryRun()
 			m.histOn = false
 			return m, nil
 		}
@@ -383,7 +388,7 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Scrolling stops the tail from yanking the view away mid-read.
 		if m.logOpen {
 			m.logFollow = false
-			m.logTop = minInt(m.logTop+1, maxInt(0, len(m.logs)-1))
+			m.logTop = minInt(m.logTop+1, maxInt(0, len(m.logEntries())-1))
 		}
 	case "K":
 		if m.logOpen {
@@ -414,6 +419,11 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// history is a different VIEW of the same model, not a different
 		// place in it.
 		if m.histOn {
+			// Toggling off must be as complete as esc: histRunOpen() keys off
+			// histPath alone, so leaving it set brought the dashboard back
+			// with the stored capture still filling the panes while a live
+			// update streamed into a buffer nobody could see.
+			m.closeHistoryRun()
 			m.histOn = false
 			return m, nil
 		}

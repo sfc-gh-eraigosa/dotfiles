@@ -487,6 +487,41 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   which runs the list covers. Pinned by `TestHistoryKeyScopeFollowsTheSelection`,
   `TestHistoryMotionUsesTheSameKeysAsTheHostList`,
   `TestHistoryMotionLeavesTheHostCursorAlone`, `TestEscUnwindsOneLevelAtATime`.
+- **`m.logDir` must be WIRED, and the whole feature is silent when it is not.** It was
+  declared and read twice but never assigned outside tests: `H` scanned `""` and always
+  rendered "no captured runs", and the same empty string reached `beginStream`, where
+  `libs/log`'s "an empty `Dir` means no capture" rule meant the dashboard's own updates
+  wrote NOTHING. Both paths looked correct in tests, which inject a temp dir directly into
+  `historyRuns`. `wireTUIPaths` now attaches `ansPath` and `logDir` together, in one place,
+  so the next path cannot be half-wired. Pinned by `TestTUIWiresTheCaptureDirectory`.
+- **The run list has its OWN scroll offset (`histTop`).** `m.vp` belongs to the host list
+  and `clampViewport` recomputes it from the host cursor, so slicing runs by it rendered a
+  framed header with nothing under it whenever the host cursor sat deeper than the run
+  count — and pinned the run cursor off-screen with no way to reach it. Pinned by
+  `TestHistoryViewportFollowsTheRunCursor`.
+- **Both exits from an open run go through `closeHistoryRun`.** `histRunOpen()` keys off
+  `histPath` alone, so `H` toggling off while a run was open brought the dashboard back
+  with the stored capture still filling the panes over a live update. It also restores the
+  follow state the panes had before the open — a capture is read from its start, and
+  returning to a still-growing buffer frozen at line 1 is not a state anyone asked for.
+  Pinned by `TestHTogglingOffClosesTheOpenedRun`, `TestClosingARunRestoresLiveFollowing`.
+- **A stored line keeps the time it was WRITTEN.** Stamping every line with the model's
+  construction time made a three-minute run read as one instant repeated, in the column
+  that exists to show how long a step took. Pinned by
+  `TestCaptureLinesKeepTheirRecordedTime`.
+- **Everything that classifies a captured line strips colour first.** The `!` gutter passed
+  `Benign` the raw text while `histindex.Read` strips, so a colourised benign git line
+  counted 0 in the run list and raised a warning gutter once opened. Pinned by
+  `TestWarnGutterAgreesWithTheRunListColumn`.
+- **A history load is answered only for the scope that asked.** Two `H` presses with
+  different scopes race; without a scope tag the slower answer overwrote the newer list,
+  leaving `histScope` describing one set of hosts while the rows showed another — which
+  also flips the HOST-column decision and lets `enter` open a run outside the shown scope.
+  Pinned by `TestStaleHistoryLoadIsDropped`.
+- **Every pane read follows the active source — body AND chrome.** `errTotal` and
+  `warnTotals` join `logEntries`/`errEntries`: a title summing `m.warns` (live-only) over a
+  stored capture is the same lie as a body showing the wrong lines. Pinned by
+  `TestOpenedRunFillsTheStderrPane`, `TestStderrTitleFollowsTheOpenedCapture`.
 - **Reading the past never costs the present.** The log pane is shared with a running
   update, so opening a capture leaves `m.logs` completely alone: the engine keeps appending
   the whole time a run is on screen, and closing it shows the live stream again with

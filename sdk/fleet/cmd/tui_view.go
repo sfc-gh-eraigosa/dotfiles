@@ -313,11 +313,15 @@ func (m tuiModel) histPanel() string {
 	list.WriteString(strings.Repeat(" ", rowMarkPrefix) + th.header.Render(head) + "\n")
 
 	h := m.visibleRows()
-	end := m.vp.top + h
+	top := m.histTop
+	if top > maxInt(0, len(m.histRuns)-1) {
+		top = maxInt(0, len(m.histRuns)-1)
+	}
+	end := top + h
 	if end > len(m.histRuns) {
 		end = len(m.histRuns)
 	}
-	for i := m.vp.top; i < end; i++ {
+	for i := top; i < end; i++ {
 		list.WriteString(trunc(m.histRowView(i), m.panelInner()) + "\n")
 	}
 	return m.renderPanel(th.panel, strings.TrimRight(list.String(), "\n"))

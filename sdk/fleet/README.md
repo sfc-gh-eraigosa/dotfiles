@@ -770,8 +770,8 @@ esc      close the run, then leave history
 ╰──────────────────────────────────────────────────────────────────────────╯
 ╭──────────────────────────────────────────────────────────────────────────╮
 │ logs   scrolled 1/2   tab: focus  l: hide                                │
-│  12:00:00 host-pi       │ === step dotfiles.sync (sync) ===              │
-│ !12:00:00 host-pi       │ fatal: could not read Username for 'https://…' │
+│  03:30:00 host-pi       │ === step dotfiles.sync (sync) ===              │
+│ !03:30:02 host-pi       │ fatal: could not read Username for 'https://…' │
 ╰──────────────────────────────────────────────────────────────────────────╯
 ```
 

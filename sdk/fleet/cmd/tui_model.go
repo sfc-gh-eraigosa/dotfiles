@@ -193,6 +193,15 @@ type tuiModel struct {
 	// histErrCount mirrors errCount for the opened capture: counted once at
 	// open, so the pane's height queries stay off a per-keystroke rebuild.
 	histErrCount int
+	// histTop is the run list's own scroll offset. m.vp is the HOST list's and
+	// clampViewport recomputes it from the host cursor, so slicing the runs by
+	// it rendered a header with nothing under it whenever the host cursor sat
+	// deeper than the run count.
+	histTop int
+	// liveFollow / liveErrFollow remember whether the stream panes were
+	// following before a capture was opened, so closing it restores them.
+	liveFollow    bool
+	liveErrFollow bool
 
 	hosts map[string]sshconf.Host
 	// local is who THIS machine is, and localAlias is the fleet row that IS
@@ -867,8 +876,27 @@ func (m tuiModel) errEntries() []logEntry {
 	return out
 }
 
-// warnTotals is the status bar's summary: lines, and how many hosts wrote them.
+// warnTotals is the status bar's summary: lines, and how many hosts wrote
+// them. Over an OPENED capture it reports that capture's own figures: m.warns
+// is written only by appendLogLine, so the live run's totals would otherwise
+// be printed as the header of a stored run's stderr — the same body/heading
+// mismatch errTotal already had to fix.
 func (m tuiModel) warnTotals() (lines, hosts int) {
+	if m.histRunOpen() {
+		seen := map[string]bool{}
+		for _, e := range m.histLines {
+			if e.warn {
+				lines++
+				seen[e.alias] = true
+			}
+		}
+		return lines, len(seen)
+	}
+	return m.liveWarnTotals()
+}
+
+// liveWarnTotals is the streaming path's summary.
+func (m tuiModel) liveWarnTotals() (lines, hosts int) {
 	for _, n := range m.warns {
 		if n > 0 {
 			lines += n
@@ -1227,15 +1255,22 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.histPath = msg.path
-		m.histLines = captureEntries(msg.host, msg.cap, m.now)
+		m.histLines = captureEntries(msg.host, msg.cap, msg.day)
 		m.histErrCount = len(msg.cap.Stderr())
 		// A freshly opened capture reads from its start, not its tail: unlike a
 		// live stream there is no "newest" to follow, and the beginning is where
-		// the run explains itself.
+		// the run explains itself. The live pane's own follow state is
+		// remembered so closing the run hands it back as it was, rather than
+		// frozen at line 1 of a buffer that is still growing.
+		m.liveFollow, m.liveErrFollow = m.logFollow, m.errFollow
 		m.logFollow, m.logTop = false, 0
 		m.errFollow, m.errTop = false, 0
 		return m, nil
 	case historyLoadedMsg:
+		// Drop an answer to a request the operator has already moved on from.
+		if !sameScope(msg.scope, m.histScope) {
+			return m, nil
+		}
 		if msg.err != nil {
 			// A failed scan is SAID. An empty list that silently meant "I
 			// could not read the directory" is the same class of lie as
@@ -1246,6 +1281,9 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.histRuns = msg.runs
 		m.histCursor = ""
+		// The run list has its OWN offset; the host viewport is meaningless
+		// here and clampViewport recomputes it from the host cursor.
+		m.histTop = 0
 		if len(msg.runs) > 0 {
 			// Newest first: "what happened last" is the question someone
 			// opening history is nearly always asking.

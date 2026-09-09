@@ -166,7 +166,7 @@ func TestHistoryLoadedCursorsTheNewestRun(t *testing.T) {
 	}
 
 	m, _ := send(testModel("alpha"), "H")
-	mm, _ := m.Update(historyLoadedMsg{runs: runs})
+	mm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
 	m2 := mm.(tuiModel)
 
 	if len(m2.histRuns) != 2 {
@@ -182,7 +182,7 @@ func TestHistoryLoadedCursorsTheNewestRun(t *testing.T) {
 // directory" is the same class of lie as calling an unobserved run clean.
 func TestHistoryLoadFailureIsSaidNotSwallowed(t *testing.T) {
 	m, _ := send(testModel("alpha"), "H")
-	mm, _ := m.Update(historyLoadedMsg{err: errTestScan})
+	mm, _ := m.Update(historyLoadedMsg{err: errTestScan, scope: m.histScope})
 	m2 := mm.(tuiModel)
 
 	if m2.status == "" || !strings.Contains(m2.status, "history") {
@@ -203,7 +203,7 @@ func histModelWith(t *testing.T, n int) tuiModel {
 		t.Fatal(err)
 	}
 	m, _ := send(testModel("alpha"), "H")
-	mm, _ := m.Update(historyLoadedMsg{runs: runs})
+	mm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
 	return mm.(tuiModel)
 }
 
@@ -313,7 +313,7 @@ func TestHistoryPanelMarksTheCursor(t *testing.T) {
 // bare frame that reads as a broken pane.
 func TestHistoryPanelSaysWhenThereIsNothing(t *testing.T) {
 	m, _ := send(testModel("alpha"), "H")
-	mm, _ := m.Update(historyLoadedMsg{runs: nil})
+	mm, _ := m.Update(historyLoadedMsg{runs: nil, scope: m.histScope})
 	m2 := mm.(tuiModel)
 	m2.vp.width, m2.vp.height = 120, 40
 
@@ -341,7 +341,7 @@ func TestHistoryFrameNeverExceedsTheTerminal(t *testing.T) {
 	full := histModelWith(t, 12)
 
 	empty, _ := send(testModel("alpha"), "H")
-	em, _ := empty.Update(historyLoadedMsg{runs: nil})
+	em, _ := empty.Update(historyLoadedMsg{runs: nil, scope: empty.histScope})
 	emptyM := em.(tuiModel)
 
 	for _, m := range []tuiModel{full, emptyM} {
@@ -380,7 +380,7 @@ func TestEnterOpensTheRunIntoThePanes(t *testing.T) {
 	}
 
 	m, _ := send(testModel("alpha"), "H")
-	mm, _ := m.Update(historyLoadedMsg{runs: runs})
+	mm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
 	m2 := mm.(tuiModel)
 
 	_, cmd := send(m2, "enter")
@@ -424,7 +424,7 @@ func TestEscUnwindsOneLevelAtATime(t *testing.T) {
 	runs, _ := historyRuns(dir, []string{"alpha"})
 
 	m, _ := send(testModel("alpha", "beta"), "space", "H")
-	mm, _ := m.Update(historyLoadedMsg{runs: runs})
+	mm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
 	m2 := mm.(tuiModel)
 	_, cmd := send(m2, "enter")
 	om, _ := m2.Update(cmd().(historyOpenedMsg))
@@ -471,7 +471,7 @@ func TestOpeningARunNeverLosesLiveStreamLines(t *testing.T) {
 	m.appendLog("alpha", "live line before history")
 
 	m2, _ := send(m, "H")
-	lm, _ := m2.Update(historyLoadedMsg{runs: runs})
+	lm, _ := m2.Update(historyLoadedMsg{runs: runs, scope: m2.histScope})
 	m3 := lm.(tuiModel)
 	_, cmd := send(m3, "enter")
 	om, _ := m3.Update(cmd().(historyOpenedMsg))
@@ -512,7 +512,7 @@ func TestOpenedRunFillsTheStderrPane(t *testing.T) {
 	runs, _ := historyRuns(dir, []string{"alpha"})
 
 	m, _ := send(testModel("alpha"), "H")
-	lm, _ := m.Update(historyLoadedMsg{runs: runs})
+	lm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
 	m2 := lm.(tuiModel)
 	m2.errOpen = true
 	m2.vp.width, m2.vp.height = 100, 30
@@ -529,5 +529,256 @@ func TestOpenedRunFillsTheStderrPane(t *testing.T) {
 	}
 	if !strings.Contains(stripANSI(out), "could not read Username") {
 		t.Errorf("the capture's stderr line must appear in the pane:\n%s", out)
+	}
+}
+
+// --- fixes for the PR #320 review -----------------------------------------
+
+// TestTUIWiresTheCaptureDirectory pins the bug that made the whole feature a
+// no-op in the shipped binary: m.logDir was declared and read in two places
+// but NEVER assigned outside tests, so H scanned "" and always rendered "no
+// captured runs". Worse, the same empty dir reaches beginStream, so with
+// libs/log's "empty Dir means no capture" rule the dashboard's own updates
+// were writing NO captures at all — a regression the CLI tests could not see
+// because they inject a temp dir straight into historyRuns.
+func TestTUIWiresTheCaptureDirectory(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+
+	m := testModel("alpha")
+	wireTUIPaths(&m)
+
+	if m.logDir == "" {
+		t.Fatal("logDir must be wired, or H scans nothing and TUI updates capture nothing")
+	}
+	if !strings.HasPrefix(m.logDir, state) {
+		t.Errorf("logDir = %q, want it under the state dir %q", m.logDir, state)
+	}
+	if m.ansPath == "" {
+		t.Error("wiring must still attach the answers path")
+	}
+}
+
+// TestHistoryViewportFollowsTheRunCursor pins that the run list scrolls by its
+// OWN offset. It was sliced by m.vp.top, which clampViewport recomputes from
+// the HOST cursor: with the cursor deep in a long host list and a host with
+// few captures, top exceeded the run count and the panel rendered a header
+// with nothing under it.
+func TestHistoryViewportFollowsTheRunCursor(t *testing.T) {
+	m := histModelWith(t, 3)
+	m.vp.width, m.vp.height = 100, 30
+	m.vp.top = 24 // as if the host cursor were row 24 of a long fleet
+
+	out := stripANSI(m.histPanel())
+	if !strings.Contains(out, "finished") {
+		t.Fatalf("the run list must render regardless of the host viewport:\n%s", out)
+	}
+
+	// and the cursor must stay reachable when scrolling down a long list
+	long := histModelWith(t, 40)
+	long.vp.width, long.vp.height = 100, 20
+	for i := 0; i < 30; i++ {
+		long, _ = send(long, "j")
+	}
+	if !strings.Contains(stripANSI(long.histPanel()), ">") {
+		t.Error("the run cursor must remain visible when it moves past the pane height")
+	}
+}
+
+// TestHTogglingOffClosesTheOpenedRun pins that H off is as complete as esc.
+// Toggling off cleared histOn but not histPath, and histRunOpen() keys off
+// histPath alone — so the dashboard came back with the stored capture still
+// filling the log and stderr panes while a live update streamed unseen.
+func TestHTogglingOffClosesTheOpenedRun(t *testing.T) {
+	dir := t.TempDir()
+	histCapture(t, dir, "20260909T030000Z", "alpha", histRun)
+	runs, _ := historyRuns(dir, []string{"alpha"})
+
+	m, _ := send(testModel("alpha"), "H")
+	lm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
+	m2 := lm.(tuiModel)
+	om, _ := m2.Update(openHistoryRun(runs[0])().(historyOpenedMsg))
+	open := om.(tuiModel)
+	open.appendLog("alpha", "a live line")
+
+	off, _ := send(open, "H")
+	if off.histRunOpen() {
+		t.Error("toggling history off must close the opened run")
+	}
+	if len(off.logEntries()) != 1 || !strings.Contains(off.logEntries()[0].line, "a live line") {
+		t.Errorf("the panes must return to the live buffer, got %+v", off.logEntries())
+	}
+	if off.errTotal() != 0 {
+		t.Errorf("errTotal must return to the live count, got %d", off.errTotal())
+	}
+}
+
+// TestCaptureLinesKeepTheirRecordedTime pins that a stored line renders the
+// time it was WRITTEN. Every line was stamped m.now (model construction), so
+// a run captured over three minutes displayed as one instant repeated — and
+// the stamp column exists precisely to show how long a step took.
+func TestCaptureLinesKeepTheirRecordedTime(t *testing.T) {
+	dir := t.TempDir()
+	histCapture(t, dir, "20260909T030000Z", "alpha",
+		"# fleet update — host=alpha started=x\n"+
+			"03:47:14 first\n"+
+			"03:50:21 later\n"+
+			"# 2026-09-09T03:50:36Z finished\n")
+	runs, _ := historyRuns(dir, []string{"alpha"})
+
+	m, _ := send(testModel("alpha"), "H")
+	lm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
+	om, _ := lm.(tuiModel).Update(openHistoryRun(runs[0])().(historyOpenedMsg))
+	open := om.(tuiModel)
+
+	got := open.logEntries()
+	if len(got) != 2 {
+		t.Fatalf("want 2 lines, got %d", len(got))
+	}
+	if a, b := got[0].at.Format("15:04:05"), got[1].at.Format("15:04:05"); a == b {
+		t.Errorf("both lines stamped %s — the recorded times were discarded", a)
+	}
+	if got[0].at.Format("15:04:05") != "03:47:14" {
+		t.Errorf("first line stamped %s, want its recorded 03:47:14", got[0].at.Format("15:04:05"))
+	}
+}
+
+// TestCapitalJScrollsAnOpenedCapture pins the one J/K call site that was not
+// converted to logEntries(). With no update running the live buffer is empty,
+// so the clamp pinned logTop to 0 and J would not scroll a 300-line capture —
+// while tab-focusing the pane and pressing j worked, making it look arbitrary.
+func TestCapitalJScrollsAnOpenedCapture(t *testing.T) {
+	dir := t.TempDir()
+	var b strings.Builder
+	b.WriteString("# fleet update — host=alpha started=x\n")
+	for i := 0; i < 40; i++ {
+		fmt.Fprintf(&b, "03:47:%02d line %d\n", i%60, i)
+	}
+	b.WriteString("# 2026-09-09T03:50:36Z finished\n")
+	histCapture(t, dir, "20260909T030000Z", "alpha", b.String())
+	runs, _ := historyRuns(dir, []string{"alpha"})
+
+	m, _ := send(testModel("alpha"), "H")
+	lm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
+	om, _ := lm.(tuiModel).Update(openHistoryRun(runs[0])().(historyOpenedMsg))
+	open := om.(tuiModel)
+	open.logOpen = true
+	open.vp.width, open.vp.height = 100, 30
+
+	scrolled, _ := send(open, "J")
+	if scrolled.logTop == 0 {
+		t.Error("J must scroll an opened capture even when the live buffer is empty")
+	}
+}
+
+// TestClosingARunRestoresLiveFollowing pins that leaving history hands the
+// live pane back in a usable state. Opening a capture turns following OFF (a
+// stored run is read from its start); esc restored neither, so the operator
+// returned to a still-growing buffer frozen at line 1.
+func TestClosingARunRestoresLiveFollowing(t *testing.T) {
+	dir := t.TempDir()
+	histCapture(t, dir, "20260909T030000Z", "alpha", histRun)
+	runs, _ := historyRuns(dir, []string{"alpha"})
+
+	m, _ := send(testModel("alpha"), "H")
+	lm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
+	m2 := lm.(tuiModel)
+	if !m2.logFollow {
+		t.Skip("live following is off by default in this model; nothing to restore")
+	}
+	om, _ := m2.Update(openHistoryRun(runs[0])().(historyOpenedMsg))
+	open := om.(tuiModel)
+	if open.logFollow {
+		t.Fatal("precondition: opening a capture stops following")
+	}
+
+	back, _ := send(open, "esc")
+	if !back.logFollow || back.logTop != 0 {
+		t.Errorf("closing a run must resume following the live stream (follow=%v top=%d)",
+			back.logFollow, back.logTop)
+	}
+}
+
+// TestStderrTitleFollowsTheOpenedCapture pins the same class of mismatch this
+// branch already fixed once for errCount: the pane BODY followed the capture
+// while its TITLE still summed m.warns, a map only live lines ever write. An
+// older clean capture displayed under a header counting a different run's
+// warnings.
+func TestStderrTitleFollowsTheOpenedCapture(t *testing.T) {
+	dir := t.TempDir()
+	histCapture(t, dir, "20260909T030000Z", "alpha", histRun) // clean: no stderr
+	runs, _ := historyRuns(dir, []string{"alpha"})
+
+	m := testModel("alpha")
+	m.errOpen = true
+	m.vp.width, m.vp.height = 100, 30
+	// a live run that produced warnings
+	m.appendLogLine("alpha", "WARNING: apt-get update failed", true)
+	m.appendLogLine("alpha", "WARNING: grouped install failed", true)
+
+	m2, _ := send(m, "H")
+	lm, _ := m2.Update(historyLoadedMsg{runs: runs, scope: m2.histScope})
+	om, _ := lm.(tuiModel).Update(openHistoryRun(runs[0])().(historyOpenedMsg))
+	open := om.(tuiModel)
+
+	title := stripANSI(open.errViewN(6))
+	if strings.Contains(title, "2 warning") {
+		t.Errorf("the stderr title reports the LIVE run's warnings over a stored capture:\n%s", title)
+	}
+}
+
+// TestWarnGutterAgreesWithTheRunListColumn pins that the `!` gutter and the
+// list's WARN column classify identically. captureEntries passed Benign the
+// RAW line while histindex.Read strips colour first, so a colourised benign
+// git line counted as 0 in the list and was flagged as a warning once opened.
+func TestWarnGutterAgreesWithTheRunListColumn(t *testing.T) {
+	dir := t.TempDir()
+	histCapture(t, dir, "20260909T030000Z", "alpha",
+		"# fleet update — host=alpha started=x\n"+
+			"03:47:16 !! \x1b[1;33mAlready on 'main'\x1b[0m\n"+
+			"# 2026-09-09T03:50:36Z finished\n")
+	runs, _ := historyRuns(dir, []string{"alpha"})
+	if runs[0].Warnings != 0 {
+		t.Fatalf("precondition: the colourised git line is benign, got %d", runs[0].Warnings)
+	}
+
+	m, _ := send(testModel("alpha"), "H")
+	lm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
+	om, _ := lm.(tuiModel).Update(openHistoryRun(runs[0])().(historyOpenedMsg))
+	open := om.(tuiModel)
+
+	for _, e := range open.logEntries() {
+		if e.warn {
+			t.Errorf("line flagged as a warning though the list counted none: %q", e.line)
+		}
+	}
+}
+
+// TestStaleHistoryLoadIsDropped pins that a slow scan cannot overwrite a newer
+// one. Two H presses with different scopes race; if the first finishes second
+// the list would show scope A's runs while histScope says B — which also flips
+// the HOST-column decision and lets enter open a run outside the shown scope.
+func TestStaleHistoryLoadIsDropped(t *testing.T) {
+	dir := t.TempDir()
+	histCapture(t, dir, "20260909T030000Z", "alpha", histRun)
+	histCapture(t, dir, "20260909T040000Z", "beta", histRun)
+	aRuns, _ := historyRuns(dir, []string{"alpha"})
+	bRuns, _ := historyRuns(dir, []string{"beta"})
+
+	m, _ := send(testModel("alpha", "beta"), "H") // scope: alpha (cursor)
+	m2, _ := send(m, "H")                         // leave
+	m3, _ := send(m2, "j", "H")                   // scope: beta
+	scope := m3.histScope
+
+	// beta's result lands first, then alpha's stale one arrives
+	lm, _ := m3.Update(historyLoadedMsg{runs: bRuns, scope: scope})
+	cur := lm.(tuiModel)
+	sm, _ := cur.Update(historyLoadedMsg{runs: aRuns, scope: []string{"alpha"}})
+	after := sm.(tuiModel)
+
+	for _, r := range after.histRuns {
+		if r.Host == "alpha" {
+			t.Fatalf("a stale scan for a discarded scope overwrote the current list: %+v", after.histRuns)
+		}
 	}
 }
