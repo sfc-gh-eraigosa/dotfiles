@@ -147,6 +147,12 @@ fi
 if [ -d "${HOME}/.local/bin" ] ; then
   PATH="${HOME}/.local/bin:$PATH"
 fi
+# Rust: install_rust.sh runs rustup with --no-modify-path, so rustup never
+# appends `. "$HOME/.cargo/env"` through these symlinked files; this is the
+# PATH entry instead. Guarded, so hosts without Rust are unaffected.
+if [ -d "${HOME}/.cargo/bin" ] ; then
+  PATH="${HOME}/.cargo/bin:$PATH"
+fi
 if [ ! -d "${HOME}/.fonts/" ] ; then
   mkdir -p "${HOME}/.fonts/"
 fi

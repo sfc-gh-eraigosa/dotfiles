@@ -1,6 +1,6 @@
 ---
 name: herdr
-description: Use when the user mentions herdr or is working inside a herdr pane and wants to save/restore a pane layout, change herdr's theme, prefix or other preferences on this host only, start or check on an agent in another herdr pane, or asks why the herdr sidebar colors are unreadable. Requires HERDR_ENV=1.
+description: Use when the user mentions herdr or is working inside a herdr pane and wants to save/restore a pane layout, change herdr's theme, prefix or other preferences on this host only, start or check on an agent in another herdr pane, add, turn off or open a herdr plugin (file viewer, keybindings), or asks why the herdr sidebar colors are unreadable. Requires HERDR_ENV=1.
 ---
 
 # herdr
@@ -96,6 +96,44 @@ solarized-light, kanagawa / kanagawa-lotus, rose-pine / rose-pine-dawn,
 `terminal` (follows the host ANSI palette), and dark-only dracula, nord,
 vesper. A dark-only theme pinned with `auto_switch = false` is unreadable on
 a light profile; as `dark_name` it is not.
+
+## Plugins (`ai/herdr/plugins.tsv`)
+
+The fleet's herdr plugins are a manifest in the dotfiles repo, installed by
+`install_herdr.sh plugins` (install.sh deps phase, after `install_rust.sh`).
+Each row has its own gff flag, and its keybindings live beside it:
+
+```bash
+herdr plugin list                               # what is installed here, and at which ref
+gff set install.herdr-plugin.file-viewer false  # stop installing + binding it on this host
+gff unset install.herdr-plugin.file-viewer      # back to the repo default
+herdr plugin action invoke open-file-viewer --plugin herdr-file-viewer   # run an action without a key
+```
+
+| name | default | keys | what |
+| --- | --- | --- | --- |
+| file-viewer | on | `prefix+f` split, `prefix+shift+f` tab | git-aware read-only file viewer (`?` inside lists its keys) |
+| navigator | opt-in | `prefix+t` | fuzzy picker over workspaces, agents, directories and plugin actions |
+| reviewr | opt-in | `prefix+d` | review pane for agent diffs/files/PRs; line comments go back to the agent |
+| plugin-manager | opt-in | `prefix+m` | popup listing installed plugins; Enter runs an action |
+| ohmyzsh | opt-in | `prefix+shift+z` | `omz reload` in idle panes, slow-command/done notices |
+
+Opt in on one host with `gff set install.herdr-plugin.<name> true`, then rerun
+`install.sh` (or `install_herdr.sh plugins && install_herdr.sh config`).
+
+- herdr (0.9) has **no built-in menu** of plugin actions: navigator or
+  plugin-manager is the menu; otherwise bind a key or use
+  `herdr plugin action list` / `invoke`.
+- Adding a plugin is a repo change (a manifest row pinned to a tag or commit,
+  a flag in `.github/gff/features.yaml`, optional `ai/herdr/plugins/<name>.toml`
+  keys), never an ad-hoc `herdr plugin install` baked into a script. Plugins
+  run unsandboxed as the user: read `herdr-plugin.toml` and its scripts at the
+  pinned ref first.
+- A flag turned off never uninstalls; `herdr plugin uninstall <id>` does (and
+  keeps the plugin's config dir).
+- Keys arrive through the managed `config.toml`. A host-owned file (after
+  `herdr-prefs set`) does not get them: add the `[[keys.command]]` blocks from
+  the plugin's `.toml` by hand, then `herdr server reload-config`.
 
 ## Unreadable sidebar
 

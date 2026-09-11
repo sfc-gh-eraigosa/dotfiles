@@ -51,9 +51,11 @@ path, section, key = sys.argv[1:4]
 cur = None
 for line in open(path):
     s = line.strip()
-    m = re.match(r'^\[([^\]]+)\]\s*(#.*)?$', s)
+    # An array table ([[keys.command]], the plugin keybindings) ends the
+    # section above it; its entries are never <section>.<key> settings.
+    m = re.match(r'^\[\[([^\]]+)\]\]\s*(#.*)?$', s) or re.match(r'^\[([^\]]+)\]\s*(#.*)?$', s)
     if m:
-        cur = m.group(1); continue
+        cur = s if s.startswith("[[") else m.group(1); continue
     if cur != section or not s or s.startswith("#"):
         continue
     m = re.match(r'^([A-Za-z0-9_.-]+)\s*=\s*(.*?)\s*$', s)
@@ -79,9 +81,11 @@ lines = open(path).read().splitlines()
 out, cur, done, sec_seen, last_in_sec = [], None, False, False, None
 for i, line in enumerate(lines):
     s = line.strip()
-    m = re.match(r'^\[([^\]]+)\]\s*(#.*)?$', s)
+    # An array table ([[keys.command]]) ends the section above it, so a new
+    # [keys] key lands in [keys] itself, never inside a keybinding entry.
+    m = re.match(r'^\[\[([^\]]+)\]\]\s*(#.*)?$', s) or re.match(r'^\[([^\]]+)\]\s*(#.*)?$', s)
     if m:
-        cur = m.group(1)
+        cur = s if s.startswith("[[") else m.group(1)
         if cur == section: sec_seen = True
     elif cur == section and not done:
         m = re.match(r'^([A-Za-z0-9_.-]+)\s*=', s)

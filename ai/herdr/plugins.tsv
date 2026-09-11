@@ -1,0 +1,27 @@
+# herdr plugins installed by `install_herdr.sh plugins` (install.sh deps phase).
+#
+# One row per plugin, whitespace-separated:
+#   name        manifest name: the gff flag is install.herdr-plugin.<name>
+#               (declare it in .github/gff/features.yaml; undeclared = never
+#               installed) and ai/herdr/plugins/<name>.toml holds its keys
+#   plugin_id   the id herdr registers (herdr-plugin.toml `id`; not always the repo name)
+#   repo        GitHub owner/repo
+#   ref         PINNED release tag, or a full commit SHA when the repo has no
+#               tags. Plugins run unsandboxed build and action scripts as you:
+#               read herdr-plugin.toml and its scripts at the new ref before
+#               bumping.
+#
+# herdr (0.9.0) builds a plugin in a temporary checkout, so a build step that
+# symlinks to $HERDR_PLUGIN_ROOT dangles afterwards; such a plugin needs a case
+# in fixup_plugin_links (install_herdr.sh) — reviewr and ohmyzsh have one.
+#
+# Turn one off on this host:  gff set install.herdr-plugin.<name> false
+# Browse candidates:          https://herdr.dev/plugins/
+#
+# name          plugin_id           repo                          ref
+file-viewer     herdr-file-viewer   smarzban/herdr-file-viewer    v1.16.0
+# --- opt-in (boolDefault false): gff set install.herdr-plugin.<name> true ---
+navigator       herdr-navigator     thanhdat77/herdr-navigator    v0.3.6
+reviewr         persiyanov.reviewr  persiyanov/herdr-reviewr      v0.36.2
+plugin-manager  ray.plugin-manager  speardragon/herdr-plugin-manager  abba90a6b8cc414cbc70e76e7bf4ff721c7a9bf9
+ohmyzsh         ohmyzsh.shell       robbyrussell/herdr-ohmyzsh    bbc072ada531e6306276900a866a4b44a9b92e74

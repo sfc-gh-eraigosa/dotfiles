@@ -85,7 +85,7 @@ unset _ip_prev _ip_arg
 #     in the per-commit config layer; omitting it BAKES the step into the cached
 #     deps layer, so later edits to it stop taking effect per commit (a bug).
 _IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_TOOLS_HERDR_CONFIG INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
-_IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM INSTALL_SHELL_OH_MY_ZSH_UPDATE"
+_IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM INSTALL_RUNTIME_RUST INSTALL_SHELL_OH_MY_ZSH_UPDATE"
 apply_install_phase() {
   case "$INSTALL_PHASE" in
     deps)   for _f in $_IP_CONFIG_FLAGS; do export "GFF_${_f}=false"; done ;;
@@ -318,7 +318,9 @@ else gff_skip_msg install.tools.herdr-integrations; fi
 # a Solarized Light terminal profile. The rendered template turns on herdr's
 # host light/dark following with the fleet Solarized pair, so the right palette
 # is picked per terminal profile at runtime. The host owns the file: it is only
-# rewritten while it carries the "managed by dotfiles" marker.
+# rewritten while it carries the "managed by dotfiles" marker. Keybindings for
+# each enabled herdr plugin (install.herdr-plugin.<name>, ai/herdr/plugins.tsv)
+# are appended to it, so a plugin's keys follow its flag.
 if gff_on install.tools.herdr-config; then
   if [ -f "${BASE_DIR}/opt/scripts/system/install_herdr.sh" ]; then
     echo "Installing herdr config..."
@@ -681,6 +683,29 @@ if gff_on install.runtime.nvm; then
     curl -fsSL -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash > /dev/null 2>&1
   fi
 else gff_skip_msg install.runtime.nvm; fi
+
+# Rust (rustup + stable, minimal profile) into ~/.cargo from a SHA-256-verified
+# rustup-init. --no-modify-path: rustup would otherwise append to our symlinked
+# rc files (into the repo); the profiles own the ~/.cargo/bin PATH entry.
+# Prerequisite for the herdr plugins below that build from source.
+if gff_on install.runtime.rust; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_rust.sh" ]; then
+    "${BASE_DIR}/opt/scripts/system/install_rust.sh" || echo "WARNING: Rust install reported problems; continuing."
+  fi
+else gff_skip_msg install.runtime.rust; fi
+
+# herdr plugins from ai/herdr/plugins.tsv, each switched by its own gff flag
+# (install.herdr-plugin.<name>). Part of the herdr install, so it rides the
+# install.tools.herdr deps-phase key; it sits here, not beside the binary,
+# because a plugin may build with the Rust installed just above. The
+# per-plugin flags are read by install_herdr.sh, not gated here, so they
+# belong in neither _IP_* list.
+if gff_on install.tools.herdr; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_herdr.sh" ]; then
+    echo "Installing herdr plugins..."
+    "${BASE_DIR}/opt/scripts/system/install_herdr.sh" plugins || echo "WARNING: herdr plugins reported problems; continuing."
+  fi
+else gff_skip_msg install.tools.herdr; fi
 
 # install Antigravity CLI (agy) — Gemini CLI's successor (Gemini CLI EOL 2026-06-18)
 if gff_on install.ai.antigravity; then

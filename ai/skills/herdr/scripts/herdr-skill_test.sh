@@ -148,6 +148,10 @@ run_prefs() { HERDR_SOCKET_PATH="${SOCK}" HERDR_CONFIG_DIR="${CFG}" bash "${PREF
 # Seed the managed file exactly as install_herdr.sh config would.
 HERDR_CONFIG_DIR="${CFG}" HERDR_INSTALL_DIR="${TMP}/nobin" bash "${REPO_ROOT}/opt/scripts/system/install_herdr.sh" config >/dev/null 2>&1
 assert_grep "prefs fixture: seeded managed config" '^# managed by dotfiles' "${CFG}/config.toml"
+# The managed file carries plugin keybindings as [[keys.command]] array tables
+# after [keys]; the cases below must hold with them present.
+assert_eq "$(grep -c '^\[\[keys\.command\]\]$' "${CFG}/config.toml")" "2" \
+    "prefs fixture: plugin keybindings are [[keys.command]] array tables"
 
 # 7. status: reports managed vs host-owned and the live values.
 out="$(run_prefs status 2>&1)"
@@ -181,6 +185,14 @@ run_prefs set keys.new_tab prefix+c >/dev/null 2>&1
 assert_grep "prefs set: new key lands in its section" '^new_tab = "prefix\+c"$' "${CFG}/config.toml"
 assert_eq "$(awk '/^\[keys\]/{f=1;next} /^\[/{f=0} f && /^new_tab/{print "in-keys"}' "${CFG}/config.toml")" "in-keys" \
     "prefs set: appended key is inside [keys], not at EOF"
+# An array table ends [keys]: its entries are not keys.* settings, and a new
+# key is never written into one (it would bind into the last keybinding).
+assert_eq "$(awk '/^\[\[keys\.command\]\]/{f=1;next} /^\[/{f=0} f && /^new_tab/' "${CFG}/config.toml" | wc -l | tr -d ' ')" "0" \
+    "prefs set: a new [keys] key never lands inside a [[keys.command]] entry"
+assert_eq "$(run_prefs get keys.command)" "" "prefs get: a keybinding entry's field is not read as keys.<field>"
+assert_eq "$(run_prefs get keys.key)" "" "prefs get: [[keys.command]] entries do not shadow [keys]"
+assert_eq "$(grep -c '^command = "herdr-file-viewer\.' "${CFG}/config.toml")" "2" \
+    "prefs set: the plugin keybindings survive intact"
 out="$(run_prefs set nodots value 2>&1)"; rc=$?
 assert_eq "${rc}" "1" "prefs set: key must be section.key"
 

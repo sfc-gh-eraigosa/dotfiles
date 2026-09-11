@@ -1,0 +1,10 @@
+# navigator keybindings (https://github.com/thanhdat77/herdr-navigator).
+# Appended to the managed herdr config while gff install.herdr-plugin.navigator
+# is on. prefix+t opens one fuzzy picker over workspaces, agents, directories
+# and plugin actions: the menu herdr itself lacks. (Upstream also suggests
+# prefix+l for jump-back, which is herdr's focus_pane_right, so it is unbound.)
+[[keys.command]]
+key = "prefix+t"
+type = "plugin_action"
+command = "herdr-navigator.open"
+description = "jump to anything (workspaces, agents, actions)"

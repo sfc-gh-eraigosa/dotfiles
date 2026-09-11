@@ -1,0 +1,10 @@
+# reviewr keybindings (https://github.com/persiyanov/herdr-reviewr).
+# Appended to the managed herdr config while gff install.herdr-plugin.reviewr
+# is on. prefix+d toggles the review pane: diffs, files and PRs beside the
+# agent, with line comments sent back to its input. (Upstream suggests cmd+r;
+# a prefix chord works the same on every host.)
+[[keys.command]]
+key = "prefix+d"
+type = "plugin_action"
+command = "persiyanov.reviewr.toggle"
+description = "toggle the reviewr diff pane"

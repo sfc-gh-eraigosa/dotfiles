@@ -73,7 +73,23 @@ sets:
       - path: install.tools.herdr-config
         description: Runs `install_herdr.sh config` (config phase) to render ai/herdr/config.toml into ~/.config/herdr/config.toml so herdr follows the host terminal's light/dark appearance with the Solarized palette; converges a dotfiles-managed file, never clobbers a hand-edited one (HERDR_CONFIG_FORCE=1 to reclaim).
         boolDefault: true
-      # --- runtime (5) ---
+      # --- herdr-plugin (5) --- one flag per row of ai/herdr/plugins.tsv
+      - path: install.herdr-plugin.file-viewer
+        description: 'Installs the herdr-file-viewer plugin (git-aware, read-only file viewer; smarzban/herdr-file-viewer, MIT) at the ref pinned in ai/herdr/plugins.tsv, and adds its keybindings (prefix+f split, prefix+shift+f tab) to the managed herdr config. Runs inside the install.tools.herdr deps step, after install.runtime.rust; builds with cargo on hosts without a prebuilt binary (every aarch64 host). Off stops install and keybindings; it never uninstalls.'
+        boolDefault: true
+      - path: install.herdr-plugin.navigator
+        description: 'Installs herdr-navigator (thanhdat77/herdr-navigator, MIT): one fuzzy picker (prefix+t) over workspaces, agents, directories and plugin actions, the action menu herdr lacks. Builds with cargo (needs install.runtime.rust). Pinned in ai/herdr/plugins.tsv; opt-in (gff set install.herdr-plugin.navigator true). Off stops install and keybindings; it never uninstalls.'
+        boolDefault: false
+      - path: install.herdr-plugin.reviewr
+        description: 'Installs herdr-reviewr (persiyanov/herdr-reviewr, MIT): a review pane (prefix+d) for agent-written diffs, files and PRs, sending line comments back to the agent. Checksummed prebuilt binary; auto-opens on worktree events. Pinned in ai/herdr/plugins.tsv; opt-in (gff set install.herdr-plugin.reviewr true). Off stops install and keybindings; it never uninstalls.'
+        boolDefault: false
+      - path: install.herdr-plugin.plugin-manager
+        description: 'Installs herdr-plugin-manager (speardragon/herdr-plugin-manager, MIT): a popup (prefix+m) listing installed plugins and running their actions; also browses the marketplace. Its own installs/uninstalls bypass the manifest (install.sh restores manifest plugins). Needs python3 and curl. Pinned in ai/herdr/plugins.tsv; opt-in (gff set install.herdr-plugin.plugin-manager true). Off stops install and keybindings; it never uninstalls.'
+        boolDefault: false
+      - path: install.herdr-plugin.ohmyzsh
+        description: 'Installs herdr-ohmyzsh (robbyrussell/herdr-ohmyzsh, MIT): slow-command and done notifications in the sidebar plus prefix+shift+z to reload Oh My Zsh in idle panes. Links itself into the oh-my-zsh custom plugins dir; opt/profiles/.zshrc loads it only where that link exists. Pinned in ai/herdr/plugins.tsv; opt-in (gff set install.herdr-plugin.ohmyzsh true). Off stops install and keybindings; it never uninstalls.'
+        boolDefault: false
+      # --- runtime (6) ---
       - path: install.runtime.goenv
         description: Runs the goenv install/update and pinned Go toolchain block.
         boolDefault: true
@@ -85,6 +101,9 @@ sets:
         boolDefault: true
       - path: install.runtime.nvm
         description: Runs the nvm install block.
+        boolDefault: true
+      - path: install.runtime.rust
+        description: Runs install_rust.sh, which installs rustup and the stable Rust toolchain (minimal profile) into ~/.cargo from a SHA-256-verified rustup-init, without editing rc files (--no-modify-path; the profiles own the PATH entry). Prerequisite for install.tools.herdr-file-viewer on hosts that build it from source. A no-op when rustc is already >= RUST_MIN_VERSION.
         boolDefault: true
       - path: install.runtime.fnm
         description: Runs the fnm install block.

@@ -1,0 +1,12 @@
+# plugin-manager keybindings (https://github.com/speardragon/herdr-plugin-manager).
+# Appended to the managed herdr config while gff install.herdr-plugin.plugin-manager
+# is on. prefix+m opens a popup that lists every installed plugin and runs
+# any of its actions (Enter). Upstream suggests prefix+p, which is herdr's
+# previous_tab. Installs, updates and uninstalls made from the popup bypass
+# ai/herdr/plugins.tsv; the next install.sh run puts manifest plugins back
+# at their pinned refs.
+[[keys.command]]
+key = "prefix+m"
+type = "plugin_action"
+command = "ray.plugin-manager.open"
+description = "open the plugin manager"
