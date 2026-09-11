@@ -37,7 +37,8 @@
 #   a .bak). A running server is reloaded best-effort so the change is live.
 #
 #   Plugins come from the manifest ai/herdr/plugins.tsv (one row per plugin:
-#   name, herdr plugin id, owner/repo, pinned ref). Each row is switched by
+#   name, herdr plugin id, owner/repo[/subdir], pinned ref, and optionally
+#   the OSes it supports, e.g. `macos`). Each row is switched by
 #   its own gff flag, install.herdr-plugin.<name>, declared in
 #   .github/gff/features.yaml: `gff set install.herdr-plugin.<name> false`
 #   turns one off on this host. A row without a declared flag never installs
@@ -82,6 +83,8 @@
 #   HERDR_PLUGIN_KEYS_DIR  per-plugin keybinding fragments (default: ai/herdr/plugins in this repo)
 #   HERDR_FEATURES_FILE    gff flag defaults, used when install.sh has not exported
 #                          GFF_* (default: .github/gff/features.yaml in this repo)
+#   HERDR_HOST_OS          override the detected OS (linux | macos) for the manifest's
+#                          os column (tests)
 set -e
 
 MODE="${1:-install}"
@@ -321,11 +324,28 @@ install_integrations() {
 # ------------------------------------------------------------------------------
 # Plugins: the manifest, their gff flags, and herdr's record of what is installed
 # ------------------------------------------------------------------------------
-# manifest_rows: "name plugin_id owner/repo ref" per enabled-or-not row, with
+# manifest_rows: "name plugin_id owner/repo[/subdir] ref [os]" per row, with
 # comments and blank lines dropped.
 manifest_rows() {
     [ -r "${PLUGINS_MANIFEST}" ] || return 0
-    awk '!/^[[:space:]]*(#|$)/ { print $1, $2, $3, $4 }' "${PLUGINS_MANIFEST}"
+    awk '!/^[[:space:]]*(#|$)/ { print $1, $2, $3, $4, $5 }' "${PLUGINS_MANIFEST}"
+}
+
+host_os() {
+    if [ -n "${HERDR_HOST_OS:-}" ]; then echo "${HERDR_HOST_OS}"; return; fi
+    case "$(uname -s)" in
+        Linux)  echo linux ;;
+        Darwin) echo macos ;;
+        *)      echo other ;;
+    esac
+}
+
+# os_matches <os column>: an empty column or `any` means every OS; otherwise a
+# comma-separated list such as `macos` or `linux,macos`.
+os_matches() {
+    case "$1" in "" | any) return 0 ;; esac
+    case ",$1," in *",$(host_os),"*) return 0 ;; esac
+    return 1
 }
 
 # feature_default <key>: the boolDefault features.yaml declares for <key>, or
@@ -429,20 +449,25 @@ install_plugins() {
     status=0
     rows="$(manifest_rows)"
     [ -n "${rows}" ] || { echo "  herdr plugins: manifest lists none"; return 0; }
-    while read -r name id repo ref; do
+    while read -r name id repo ref os; do
         # Validate before anything reaches the herdr CLI (option injection).
-        case "${name}${id}${repo}${ref}" in
-            *[!A-Za-z0-9._/@-]*) warn "manifest row '${name}' has unexpected characters; skipping"; status=1; continue ;;
+        case "${name}${id}${repo}${ref}${os}" in
+            *[!A-Za-z0-9._/@,-]*) warn "manifest row '${name}' has unexpected characters; skipping"; status=1; continue ;;
         esac
+        # owner/repo, or owner/repo/subdir when the manifest is not at the root.
         case "${repo}" in
-            -*|*/*/*|"") warn "manifest row '${name}': repo '${repo}' is not owner/repo; skipping"; status=1; continue ;;
+            -*|/*|*/|*//*|*..*|"") warn "manifest row '${name}': repo '${repo}' is not owner/repo[/subdir]; skipping"; status=1; continue ;;
             */*) ;;
-            *) warn "manifest row '${name}': repo '${repo}' is not owner/repo; skipping"; status=1; continue ;;
+            *) warn "manifest row '${name}': repo '${repo}' is not owner/repo[/subdir]; skipping"; status=1; continue ;;
         esac
         case "${id}" in -*|"") warn "manifest row '${name}': bad plugin id '${id}'; skipping"; status=1; continue ;; esac
         case "${ref}" in -*|"") warn "manifest row '${name}' needs a pinned ref (release tag or commit); skipping"; status=1; continue ;; esac
         if ! plugin_flag_on "${name}"; then
             echo "  herdr plugin ${name}: off (gff install.herdr-plugin.${name})"
+            continue
+        fi
+        if ! os_matches "${os}"; then
+            echo "  herdr plugin ${name}: ${os} only; skipped on $(host_os)"
             continue
         fi
         have_ref="$(installed_plugin_field "${id}" requested_ref)"
@@ -482,11 +507,13 @@ render_config() {
 }
 
 # Append the keybinding fragment (ai/herdr/plugins/<name>.toml) of every
-# enabled manifest row, in manifest order. Rows without a fragment add nothing.
+# enabled manifest row for this OS, in manifest order. Rows without a
+# fragment add nothing.
 render_plugin_keys() {
-    manifest_rows | while read -r name _id _repo _ref; do
+    manifest_rows | while read -r name _id _repo _ref os; do
         case "${name}" in *[!A-Za-z0-9._-]*|"") continue ;; esac
         plugin_flag_on "${name}" || continue
+        os_matches "${os}" || continue
         frag="${PLUGIN_KEYS_DIR}/${name}.toml"
         [ -r "${frag}" ] || continue
         printf '\n'

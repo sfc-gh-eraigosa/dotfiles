@@ -1,0 +1,9 @@
+# spotify keybindings (https://github.com/iikjl/herdr-spotify).
+# Appended to the managed herdr config while gff install.herdr-plugin.spotify
+# is on, on macOS only (the manifest's os column). prefix+shift+s opens the
+# now-playing overlay: space play/pause, n next, b previous, q close.
+[[keys.command]]
+key = "prefix+shift+s"
+type = "plugin_action"
+command = "spotify-now-playing.open"
+description = "Spotify: now playing"

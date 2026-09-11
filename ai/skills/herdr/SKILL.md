@@ -117,6 +117,12 @@ herdr plugin action invoke open-file-viewer --plugin herdr-file-viewer   # run a
 | reviewr | opt-in | `prefix+d` | review pane for agent diffs/files/PRs; line comments go back to the agent |
 | plugin-manager | opt-in | `prefix+m` | popup listing installed plugins; Enter runs an action |
 | ohmyzsh | opt-in | `prefix+shift+z` | `omz reload` in idle panes, slow-command/done notices |
+| terminal-browser | opt-in | `prefix+shift+b` | real Chromium in a split; needs a kitty-graphics terminal (ghostty, kitty, WezTerm) |
+| spotify | opt-in, macOS only | `prefix+shift+s` | now-playing overlay with playback controls |
+
+file-viewer renders markdown with glow when it is on PATH: opt in with
+`gff set install.tools.glow true` (checksummed release binary into `~/opt/bin`).
+A row's optional `os` column (`macos`) skips it, and its keys, elsewhere.
 
 Opt in on one host with `gff set install.herdr-plugin.<name> true`, then rerun
 `install.sh` (or `install_herdr.sh plugins && install_herdr.sh config`).

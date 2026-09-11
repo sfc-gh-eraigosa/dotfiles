@@ -5,11 +5,15 @@
 #               (declare it in .github/gff/features.yaml; undeclared = never
 #               installed) and ai/herdr/plugins/<name>.toml holds its keys
 #   plugin_id   the id herdr registers (herdr-plugin.toml `id`; not always the repo name)
-#   repo        GitHub owner/repo
+#   repo        GitHub owner/repo, or owner/repo/subdir when herdr-plugin.toml
+#               is not at the repo root
 #   ref         PINNED release tag, or a full commit SHA when the repo has no
 #               tags. Plugins run unsandboxed build and action scripts as you:
 #               read herdr-plugin.toml and its scripts at the new ref before
 #               bumping.
+#   os          optional: comma-separated OSes the plugin supports (linux,
+#               macos). Other hosts skip it and get none of its keybindings.
+#               Omit for every OS.
 #
 # herdr (0.9.0) builds a plugin in a temporary checkout, so a build step that
 # symlinks to $HERDR_PLUGIN_ROOT dangles afterwards; such a plugin needs a case
@@ -18,10 +22,19 @@
 # Turn one off on this host:  gff set install.herdr-plugin.<name> false
 # Browse candidates:          https://herdr.dev/plugins/
 #
-# name          plugin_id           repo                          ref
+# name          plugin_id           repo                          ref       os
 file-viewer     herdr-file-viewer   smarzban/herdr-file-viewer    v1.16.0
 # --- opt-in (boolDefault false): gff set install.herdr-plugin.<name> true ---
 navigator       herdr-navigator     thanhdat77/herdr-navigator    v0.3.6
 reviewr         persiyanov.reviewr  persiyanov/herdr-reviewr      v0.36.2
 plugin-manager  ray.plugin-manager  speardragon/herdr-plugin-manager  abba90a6b8cc414cbc70e76e7bf4ff721c7a9bf9
 ohmyzsh         ohmyzsh.shell       robbyrussell/herdr-ohmyzsh    bbc072ada531e6306276900a866a4b44a9b92e74
+# terminal-browser: its build step pipes terminal-browser.sh/install into bash,
+# which downloads a ~135 MB Electron build checked against a SHA-256 that the
+# same script carries. The ref pins the plugin, not that payload: trust is
+# terminal-browser.sh. Needs a kitty-graphics terminal (ghostty, kitty,
+# WezTerm; not GNOME Terminal or Windows Terminal) and, on Linux, Electron's
+# libs (libnss3 libgtk-3-0 libasound2t64 libgbm1).
+terminal-browser  zenbu-labs.terminal-browser  zenbu-labs/terminal-browser/herdr-plugin  v0.8.1
+# spotify: macOS only (AppleScript); builds with go (install.runtime.goenv).
+spotify         spotify-now-playing  iikjl/herdr-spotify           v1.0.0    macos

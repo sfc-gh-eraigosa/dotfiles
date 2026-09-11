@@ -257,6 +257,12 @@ sets:
       - path: install.herdr-plugin.ohmyzsh
         description: fixture
         boolDefault: true
+      - path: install.herdr-plugin.maconly
+        description: fixture
+        boolDefault: true
+      - path: install.herdr-plugin.subdir
+        description: fixture
+        boolDefault: true
 YAML
 cat > "${PLUG_FIX}/plugins.tsv" <<'TSV'
 # name       plugin_id          repo                        ref
@@ -345,14 +351,16 @@ assert_eq "$(printf '%s' "${out}" | grep -c 'v1.15.0 -> v1.16.0')" "1" "plugins:
 cat > "${PLUG_FIX}/bad.tsv" <<'TSV'
 file-viewer  herdr-file-viewer  --upload-pack=evil/x        v1
 file-viewer  herdr-file-viewer  smarzban/herdr-file-viewer  --ref=main
-file-viewer  herdr-file-viewer  a/b/c                       v1
+file-viewer  herdr-file-viewer  a//b                        v1
+file-viewer  herdr-file-viewer  owner/../escape             v1
+file-viewer  herdr-file-viewer  smarzban/herdr-file-viewer  v1  linux;rm
 file-viewer  herdr-file-viewer  smarzban/herdr-file-viewer
 flaky        flaky.plugin       fail/flaky                  v1
 file-viewer  herdr-file-viewer  smarzban/herdr-file-viewer  v1.16.0
 TSV
 out="$(HERDR_PLUGINS_MANIFEST="${PLUG_FIX}/bad.tsv" run_plugins "${TMP}/p-bad")"; rc=$?
 assert_eq "${rc}" "1" "plugins: malformed rows or a failed install exit 1"
-assert_eq "$(grep -c -- '--upload-pack\|--ref=main\|a/b/c' "${STUB_LOG}")" "0" "plugins: malformed rows never reach herdr"
+assert_eq "$(grep -c -- '--upload-pack\|--ref=main\|a//b\|\.\./\|rm' "${STUB_LOG}")" "0" "plugins: malformed rows never reach herdr"
 assert_eq "$(printf '%s' "${out}" | grep -c 'flaky (fail/flaky@v1) failed to install')" "1" "plugins: a failed install is reported"
 assert_eq "$(grep -c '^plugin install smarzban/herdr-file-viewer --ref v1.16.0 ' "${STUB_LOG}")" "1" \
     "plugins: rows after a bad one still install"
@@ -395,7 +403,7 @@ run_config() {
     _cfg="$1"; shift
     env -u GFF_INSTALL_HERDR_PLUGIN_FILE_VIEWER -u GFF_INSTALL_HERDR_PLUGIN_NAVIGATOR \
         HERDR_INSTALL_DIR="${EMPTY_DIR}" HERDR_CONFIG_DIR="${_cfg}" \
-        HERDR_PLUGINS_MANIFEST="${PLUG_FIX}/plugins.tsv" HERDR_PLUGIN_KEYS_DIR="${PLUG_FIX}/keys" \
+        HERDR_PLUGINS_MANIFEST="${HERDR_PLUGINS_MANIFEST:-${PLUG_FIX}/plugins.tsv}" HERDR_PLUGIN_KEYS_DIR="${PLUG_FIX}/keys" \
         HERDR_FEATURES_FILE="${PLUG_FIX}/features.yaml" "$@" bash "${SCRIPT}" config 2>&1
 }
 
@@ -428,16 +436,40 @@ if command -v herdr >/dev/null 2>&1; then
     set +e
 fi
 
+# 22. The optional os column: a row for another OS is skipped (no install,
+#      no keybindings) and says why; a subdir path reaches herdr as-is.
+cat > "${PLUG_FIX}/os.tsv" <<'TSV'
+maconly  mac.plugin     owner/maconly            v1.0.0  macos
+subdir   sub.plugin     owner/monorepo/herdr-plugin  v2.0.0
+TSV
+printf '[[keys.command]]\nkey = "prefix+shift+s"\ntype = "plugin_action"\ncommand = "mac.plugin.open"\n' > "${PLUG_FIX}/keys/maconly.toml"
+out="$(HERDR_PLUGINS_MANIFEST="${PLUG_FIX}/os.tsv" run_plugins "${TMP}/p-os" HERDR_HOST_OS=linux)"; rc=$?
+assert_eq "${rc}" "0" "os: a row for another OS is not a failure"
+assert_eq "$(grep -c 'owner/maconly' "${STUB_LOG}")" "0" "os: a macos row is not installed on linux"
+assert_eq "$(printf '%s' "${out}" | grep -c 'maconly: macos only; skipped on linux')" "1" "os: the skip names the OS"
+assert_eq "$(grep -c '^plugin install owner/monorepo/herdr-plugin --ref v2.0.0 --yes$' "${STUB_LOG}")" "1" \
+    "subdir: owner/repo/subdir is passed to herdr as-is"
+out="$(HERDR_PLUGINS_MANIFEST="${PLUG_FIX}/os.tsv" run_plugins "${TMP}/p-os" HERDR_HOST_OS=macos)"; rc=$?
+assert_eq "$(grep -c '^plugin install owner/maconly --ref v1.0.0 --yes$' "${STUB_LOG}")" "1" "os: a macos row installs on macos"
+O_CFG="${TMP}/o-cfg"
+out="$(HERDR_PLUGINS_MANIFEST="${PLUG_FIX}/os.tsv" run_config "${O_CFG}" HERDR_HOST_OS=linux)"
+assert_grep_negative "os: no keybindings for a plugin this OS skips" 'mac\.plugin\.open' "${O_CFG}/config.toml"
+out="$(HERDR_PLUGINS_MANIFEST="${PLUG_FIX}/os.tsv" run_config "${O_CFG}" HERDR_HOST_OS=macos)"
+assert_grep "os: keybindings arrive on the OS the plugin supports" '^command = "mac\.plugin\.open"$' "${O_CFG}/config.toml"
+
 # --- the repo's manifest, fragments and flags agree ---------------------------
 MANIFEST="${REPO_ROOT}/ai/herdr/plugins.tsv"
 KEYS_DIR="${REPO_ROOT}/ai/herdr/plugins"
 assert_file_exists "${MANIFEST}" "plugin manifest is tracked at ai/herdr/plugins.tsv"
-rows="$(awk '!/^[[:space:]]*(#|$)/ { print $1, $2, $3, $4, NF }' "${MANIFEST}")"
+rows="$(awk '!/^[[:space:]]*(#|$)/ { print $1, $2, $3, $4, NF, $5 }' "${MANIFEST}")"
 assert_eq "$(printf '%s\n' "${rows}" | grep -c 'herdr-file-viewer smarzban/herdr-file-viewer')" "1" \
     "manifest lists herdr-file-viewer"
-while read -r name id _repo ref nf; do
+while read -r name id _repo ref nf os; do
     [ -n "${name}" ] || continue
-    assert_eq "${nf}" "4" "manifest row ${name} has exactly name, plugin_id, repo, ref"
+    case "${nf}" in 4|5) cols=ok ;; *) cols="${nf} columns" ;; esac
+    assert_eq "${cols}" "ok" "manifest row ${name} has name, plugin_id, repo, ref and an optional os"
+    case "${os}" in ""|any|linux|macos|linux,macos|macos,linux) osok=ok ;; *) osok="bad os '${os}'" ;; esac
+    assert_eq "${osok}" "ok" "manifest row ${name} names only known OSes"
     assert_grep "features.yaml declares install.herdr-plugin.${name}" \
         "path: install\\.herdr-plugin\\.${name}\$" "${FEATURES}"
     case "${ref}" in

@@ -45,7 +45,7 @@ sets:
       - path: install.pkg.brewfile
         description: Runs the macOS brew bundle block for the Brewfile extras including vault-setup.
         boolDefault: true
-      # --- tools (9) ---
+      # --- tools (10) ---
       - path: install.tools.sops
         description: Runs the install_sops.sh block that fetches the sops release binary.
         boolDefault: true
@@ -73,7 +73,10 @@ sets:
       - path: install.tools.herdr-config
         description: Runs `install_herdr.sh config` (config phase) to render ai/herdr/config.toml into ~/.config/herdr/config.toml so herdr follows the host terminal's light/dark appearance with the Solarized palette; converges a dotfiles-managed file, never clobbers a hand-edited one (HERDR_CONFIG_FORCE=1 to reclaim).
         boolDefault: true
-      # --- herdr-plugin (5) --- one flag per row of ai/herdr/plugins.tsv
+      - path: install.tools.glow
+        description: 'Opt-in. Runs install_glow.sh, which installs the glow markdown renderer (charmbracelet/glow, MIT) into ~/opt/bin from the release tarball, SHA-256-verified against its checksums.txt and pinned by GLOW_VERSION. herdr-file-viewer renders markdown through it. Enable with gff set install.tools.glow true.'
+        boolDefault: false
+      # --- herdr-plugin (7) --- one flag per row of ai/herdr/plugins.tsv
       - path: install.herdr-plugin.file-viewer
         description: 'Installs the herdr-file-viewer plugin (git-aware, read-only file viewer; smarzban/herdr-file-viewer, MIT) at the ref pinned in ai/herdr/plugins.tsv, and adds its keybindings (prefix+f split, prefix+shift+f tab) to the managed herdr config. Runs inside the install.tools.herdr deps step, after install.runtime.rust; builds with cargo on hosts without a prebuilt binary (every aarch64 host). Off stops install and keybindings; it never uninstalls.'
         boolDefault: true
@@ -88,6 +91,12 @@ sets:
         boolDefault: false
       - path: install.herdr-plugin.ohmyzsh
         description: 'Installs herdr-ohmyzsh (robbyrussell/herdr-ohmyzsh, MIT): slow-command and done notifications in the sidebar plus prefix+shift+z to reload Oh My Zsh in idle panes. Links itself into the oh-my-zsh custom plugins dir; opt/profiles/.zshrc loads it only where that link exists. Pinned in ai/herdr/plugins.tsv; opt-in (gff set install.herdr-plugin.ohmyzsh true). Off stops install and keybindings; it never uninstalls.'
+        boolDefault: false
+      - path: install.herdr-plugin.terminal-browser
+        description: 'Installs terminal-browser (zenbu-labs/terminal-browser, MIT): a real Chromium in a herdr split (prefix+shift+b). Its build pipes terminal-browser.sh/install into bash (~135 MB Electron, checksum carried by that script), so the pin covers the plugin, not the payload. Needs a kitty-graphics terminal and, on Linux, Electron''s libs. Pinned in ai/herdr/plugins.tsv; opt-in (gff set install.herdr-plugin.terminal-browser true). Off stops install and keybindings; it never uninstalls.'
+        boolDefault: false
+      - path: install.herdr-plugin.spotify
+        description: 'Installs herdr-spotify (iikjl/herdr-spotify, MIT): a Spotify now-playing overlay with playback controls (prefix+shift+s). macOS only (AppleScript); other hosts skip it. Builds with go. Pinned in ai/herdr/plugins.tsv; opt-in (gff set install.herdr-plugin.spotify true). Off stops install and keybindings; it never uninstalls.'
         boolDefault: false
       # --- runtime (6) ---
       - path: install.runtime.goenv
