@@ -192,7 +192,7 @@ fleet tui --update-ref feature/x         # update targets that ref instead of ma
 | `J` / `K` | scroll the log pane |
 | `gg` / `G` | (a stream pane focused) first line / resume following the tail |
 | `/` `n` `N` | (a stream pane focused) search that pane, next / previous match |
-| `r` | refresh |
+| `r` | refresh — and after an update, hand the status dots back to the selection |
 | `?` | help overlay |
 | `q` | quit (guarded while updates run) |
 
@@ -218,7 +218,10 @@ headless `fleet update` can be read the same way afterwards.
 
 The status dot left of each hostname is **navy** when selected, and flips
 **green** or **red** to report an update's outcome — so a finished wave reads at
-a glance. Each area (host list, log pane, help, answer form) is its own framed
+a glance. The outcome stays on the dot until you press `r`, which puts every dot
+back to showing the selection (the UPDATE column keeps its `ok` / `FAIL: …`), or
+until you deselect that host — leaving the selection always clears its dot. A
+later update's outcome shows on the dot again. Each area (host list, log pane, help, answer form) is its own framed
 panel.
 
 Rows are colored by status (green up-to-date · yellow behind · magenta
