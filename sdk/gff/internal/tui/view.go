@@ -242,39 +242,101 @@ func errStyleFor(pal style.Colors) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(pal.Red)
 }
 
+// Breadcrumb separators and the off-screen markers, as plain text so their
+// widths can be budgeted before styling.
+const (
+	crumbSep       = " · "
+	crumbMoreLeft  = "‹ "
+	crumbMoreRight = " ›"
+)
+
 // renderBreadcrumb renders the category pager header; the active page is
-// bracketed and emphasized.
+// bracketed and emphasized. With more than one source the header names the
+// scoped source and its position (Tab cycles). When the pages are wider than
+// the terminal only a window of them is drawn, scrolled so the active page is
+// always on screen, with ‹ / › marking pages cut off on either side.
 func (m *Model) renderBreadcrumb(pal style.Colors) string {
 	act := lipgloss.NewStyle().Bold(true).Foreground(pal.Text)
 	dim := lipgloss.NewStyle().Foreground(pal.Grey)
 	prefix := ""
-	if m.multiNS() && m.scopeNS != "" {
-		prefix = dim.Render(m.scopeNS + " ▸ ") // the scope the pages belong to
+	if nss := m.namespaces(); len(nss) > 1 && m.scopeNS != "" {
+		pos := 1
+		for i, ns := range nss {
+			if ns == m.scopeNS {
+				pos = i + 1
+			}
+		}
+		// the scope the pages belong to, and which of the sources it is
+		prefix = fmt.Sprintf("%s (%d/%d) ▸ ", m.scopeNS, pos, len(nss))
 	}
-	parts := make([]string, 0, len(m.pages))
+	labels := make([]string, len(m.pages))
 	for i, p := range m.pages {
+		labels[i] = p.label
 		if i == m.pageIdx {
-			parts = append(parts, act.Render("["+p.label+"]"))
-		} else {
-			parts = append(parts, dim.Render(p.label))
+			labels[i] = "[" + p.label + "]"
 		}
 	}
-	return prefix + strings.Join(parts, " · ")
+	start, end := 0, len(labels)
+	if m.width > 0 {
+		start, end = crumbWindow(labels, m.pageIdx, m.crumbTop, m.width-lipgloss.Width(prefix))
+		m.crumbTop = start
+	}
+	parts := make([]string, 0, end-start)
+	for i := start; i < end; i++ {
+		if i == m.pageIdx {
+			parts = append(parts, act.Render(labels[i]))
+		} else {
+			parts = append(parts, dim.Render(labels[i]))
+		}
+	}
+	var sb strings.Builder
+	sb.WriteString(dim.Render(prefix))
+	if start > 0 {
+		sb.WriteString(dim.Render(crumbMoreLeft))
+	}
+	sb.WriteString(strings.Join(parts, crumbSep))
+	if end < len(labels) {
+		sb.WriteString(dim.Render(crumbMoreRight))
+	}
+	return sb.String()
 }
 
-// multiNS reports whether the items span more than one namespace.
-func (m *Model) multiNS() bool {
-	first := ""
-	for _, it := range m.items {
-		if first == "" {
-			first = it.Namespace()
-			continue
-		}
-		if it.Namespace() != first {
-			return true
-		}
+// crumbWindow picks the [start, end) range of breadcrumb labels to draw in
+// budget columns. Like the row viewport it is sticky: the window keeps its
+// first label (top) and scrolls only as far as needed to show active, then
+// fills rightward; a window that reaches the last label is pulled back left
+// to use the free space. A single label wider than the budget is drawn anyway
+// (the terminal clips it) rather than drawing nothing.
+func crumbWindow(labels []string, active, top, budget int) (int, int) {
+	n := len(labels)
+	if n == 0 {
+		return 0, 0
 	}
-	return false
+	fits := func(s, e int) bool {
+		w := lipgloss.Width(crumbSep) * (e - s - 1)
+		for i := s; i < e; i++ {
+			w += lipgloss.Width(labels[i])
+		}
+		if s > 0 {
+			w += lipgloss.Width(crumbMoreLeft)
+		}
+		if e < n {
+			w += lipgloss.Width(crumbMoreRight)
+		}
+		return w <= budget
+	}
+	start := min(max(top, 0), active)
+	for start < active && !fits(start, active+1) {
+		start++
+	}
+	end := active + 1
+	for end < n && fits(start, end+1) {
+		end++
+	}
+	for end == n && start > 0 && fits(start-1, end) {
+		start--
+	}
+	return start, end
 }
 
 // viewHelp is the ?/F1 overlay: about + version, the key legend for the view
