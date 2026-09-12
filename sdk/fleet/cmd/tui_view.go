@@ -738,7 +738,8 @@ const (
 
 // markState decides the row's status dot. Selection is navy; a finished update
 // recolours it to its outcome so the list can be read at a glance without
-// looking at the UPDATE column — until `r` or a deselect clears it (dotCleared).
+// looking at the UPDATE column — until `r`, or a select/deselect of that host,
+// clears it (dotCleared).
 func (m tuiModel) markState(i int) markKind {
 	alias := m.rows[i].Alias
 	if st, ok := m.updating[alias]; ok && !m.dotCleared[alias] {

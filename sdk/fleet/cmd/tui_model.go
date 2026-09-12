@@ -606,7 +606,12 @@ func (m *tuiModel) clearDot(alias string) {
 // a green/red dot is a terminal state (the run itself stays in history), and
 // while it showed, the dot could not say whether the host was chosen. A host
 // still updating has no outcome yet, so its result shows when it lands.
+// Re-selecting a host that is already chosen (a completing `a`, a visual
+// range over it) changes nothing, so its outcome dot stays.
 func (m *tuiModel) selectHost(alias string) {
+	if m.selected[alias] {
+		return
+	}
 	m.selected[alias] = true
 	m.clearDot(alias)
 }

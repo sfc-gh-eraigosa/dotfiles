@@ -108,6 +108,12 @@ func TestSelectingAFinishedHostShowsTheSelection(t *testing.T) {
 	if got := markOf(m, "c"); got != markSel {
 		t.Fatalf("select-all must clear c's outcome dot, got %v", got)
 	}
+	// ...but a and b were already selected: their selection did not change, so
+	// completing it must not wipe their green/red outcome.
+	if markOf(m, "a") != markOK || markOf(m, "b") != markFail {
+		t.Fatalf("completing a selection must keep already-selected outcome dots: a=%v b=%v",
+			markOf(m, "a"), markOf(m, "b"))
+	}
 }
 
 // Selecting a host mid-update changes nothing about its coming outcome.
