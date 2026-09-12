@@ -150,6 +150,10 @@ type Summary struct {
 	Warnings int
 	Finished bool
 	Lines    int
+	// Unreadable marks a row kept for a run whose file could not be read, so
+	// Warnings, Finished and Lines are unknown rather than zero. Summarize
+	// never sets it; a caller that keeps such a row does.
+	Unreadable bool `json:",omitempty"`
 }
 
 // Summarize reads one run's file for its result. Finished is whether the

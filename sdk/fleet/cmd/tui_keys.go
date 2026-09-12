@@ -28,6 +28,7 @@ var keyHelp = []struct {
 	{"🗂️", "h", "show / hide the host list", true},
 	{"⚠️", "e", "show / hide the stderr pane · (confirm) edit the remembered answers", true},
 	{"🖥️", "s", "ssh to cursor host", true},
+	{"\U0001f5c3\ufe0f", "H", "history: past runs for the selection (or cursor host)", true},
 	{"🔄", "r", "refresh", true},
 	{"🚪", "q", "quit", true},
 	{"⬍", "j / k / ↓ / ↑", "move cursor", false},
@@ -38,7 +39,8 @@ var keyHelp = []struct {
 	{"◉", "a", "select all (respects an active search)", false},
 	{"📖", "J / K", "scroll the log pane (G re-follows the tail)", false},
 	{"◍", "v", "visual range select", false},
-	{"⎋", "esc", "clear search / selection", false},
+	{"\u23ce", "enter", "(history) open the run under the cursor", false},
+	{"⎋", "esc", "(history) close the run, then leave history \u00b7 else clear search / selection", false},
 	{"⏰", "w", "wake selection (or cursor host)", false},
 	{"📥", "p", "pull ssh config FROM cursor host", false},
 	{"📤", "P", "push ssh config TO cursor host", false},
@@ -286,7 +288,8 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "g":
 		pendingG = true
 	case "G":
-		m.moveTo(len(m.rows) - 1)
+		// listLen, not len(m.rows): in history G means the OLDEST run.
+		m.moveTo(m.listLen() - 1)
 	case "j", "down":
 		m.move(1)
 	case "k", "up":
@@ -325,9 +328,36 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.vAnchor = &c
 		}
 	case "esc":
+		// History unwinds ONE level at a time, before esc resumes its normal
+		// meaning. Dropping straight out would lose the operator's place in a
+		// run list they may have scrolled a long way down, and clearing the
+		// selection on the way would discard the scoping that chose these
+		// runs in the first place.
+		if m.histRunOpen() {
+			m.closeHistoryRun()
+			return m, nil
+		}
+		if m.histOn {
+			// Toggling off must be as complete as esc: histRunOpen() keys off
+			// histPath alone, so leaving it set brought the dashboard back
+			// with the stored capture still filling the panes while a live
+			// update streamed into a buffer nobody could see.
+			m.closeHistoryRun()
+			m.histOn = false
+			return m, nil
+		}
 		m.vAnchor = nil
 		m.selected = map[string]bool{}
 		m.search = searchState{}
+	case "enter":
+		// Only meaningful on the run list: enter opens the run under the
+		// cursor into the stream panes.
+		if m.histOn && !m.histRunOpen() && m.histPending == "" {
+			if r, ok := m.histAt(); ok {
+				m.histPending = r.Path
+				return m, openHistoryRun(r)
+			}
+		}
 	case "u":
 		// The form is asked once per session, not once per wave: retyping a
 		// credential for every wave is what made a fleet-wide update apply
@@ -359,7 +389,7 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Scrolling stops the tail from yanking the view away mid-read.
 		if m.logOpen {
 			m.logFollow = false
-			m.logTop = minInt(m.logTop+1, maxInt(0, len(m.logs)-1))
+			m.logTop = minInt(m.logTop+1, maxInt(0, len(m.logEntries())-1))
 		}
 	case "K":
 		if m.logOpen {
@@ -384,6 +414,27 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if t := m.updateTargets(); len(t) > 0 {
 			return m, m.startWake(t)
 		}
+	case "H":
+		// History is a toggle, and leaving restores the dashboard untouched:
+		// the alias cursor and the selection are never disturbed, because
+		// history is a different VIEW of the same model, not a different
+		// place in it.
+		if m.histOn {
+			// Toggling off must be as complete as esc: histRunOpen() keys off
+			// histPath alone, so leaving it set brought the dashboard back
+			// with the stored capture still filling the panes while a live
+			// update streamed into a buffer nobody could see.
+			m.closeHistoryRun()
+			m.histOn = false
+			return m, nil
+		}
+		m.histOn = true
+		// Snapshot the scope now, by the same selection-or-cursor rule the
+		// update and wake keys use. Re-reading it later would let moving the
+		// cursor inside the run list silently change which runs it lists.
+		m.histScope = m.updateTargets()
+		m.histRuns, m.histCursor = nil, ""
+		return m, loadHistory(m.logDir, m.histScope)
 	case "s":
 		// An ssh visit while the engine owns the host would race its update.
 		if m.cursor != "" && !m.inFlight(m.cursor) {

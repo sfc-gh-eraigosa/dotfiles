@@ -101,6 +101,7 @@ const TunnelKey = "t"
 //     `l` toggles the log pane and `s` opens an ssh session — the two a provider
 //     would most plausibly have tried to take.
 //   - This objective's own: t and T, the bridge keys.
+//   - History: H, which opens past runs for the selection in the dashboard.
 //
 // THIS IS A MIRROR, NOT THE SOURCE. The host tool's keymap is the source of
 // truth; this package is stdlib-only by contract and cannot import it. The
@@ -117,6 +118,8 @@ var ReservedKeys = map[rune]bool{
 	'p': true, 'P': true, 'A': true, 'F': true, 'e': true, 'J': true, 'K': true,
 	// this objective: the bridge keys
 	't': true, 'T': true,
+	// history: H opens the selection's past runs in the dashboard
+	'H': true,
 }
 
 // Provider is what fleet asks about a host. Probe answers "is your tool here,

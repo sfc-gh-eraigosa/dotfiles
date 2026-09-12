@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/histindex"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
@@ -198,6 +200,32 @@ func TestDemoFrames(t *testing.T) {
 			m.setLocal(localHost{Name: "some-laptop"})
 			return m
 		}},
+		{"18. HISTORY — H lists the selection's past runs", "WHEN", func() tuiModel {
+			m := settled()
+			m.vp = viewport{height: 26, width: 100}
+			m.histOn = true
+			m.histScope = []string{"host-nano", "host-pi"}
+			m.histRuns = demoRuns(t)
+			m.histCursor = m.histRuns[0].Path
+			return m
+		}},
+		{"19. HISTORY — enter opens a past run into the log and stderr panes", "could not read Username", func() tuiModel {
+			m := settled()
+			m.vp = viewport{height: 30, width: 100}
+			m.histOn, m.errOpen = true, true
+			m.histScope = []string{"host-nano", "host-pi"}
+			m.histRuns = demoRuns(t)
+			// The FAILED run, chosen by host rather than index: the list is
+			// newest-first, so an index would silently point elsewhere the
+			// moment a fixture is added.
+			var failed histindex.Summary
+			for _, r := range m.histRuns {
+				if r.Host == "host-pi" {
+					failed = r
+				}
+			}
+			return openVia(t, m, failed)
+		}},
 	}
 
 	for _, f := range frames {
@@ -243,4 +271,41 @@ func build2Empty() tuiModel {
 func mustSend(m tuiModel, keys ...string) tuiModel {
 	m, _ = send(m, keys...)
 	return m
+}
+
+// demoRuns writes a small, realistic set of captures and reads them back
+// through the real loader, so the history frames render from the same code
+// path an operator drives rather than from hand-built structs.
+func demoRuns(t *testing.T) []histindex.Summary {
+	t.Helper()
+	dir := t.TempDir()
+	write := func(stamp, host, body string) {
+		if err := os.WriteFile(filepath.Join(dir, stamp+"__"+host+".log"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("20260908T204714Z", "host-nano",
+		"# fleet update — host=host-nano plan=built-in default mode=fast-forward started=2026-09-08T20:47:14Z\n"+
+			"03:47:14 === step dotfiles.sync (sync) ===\n"+
+			"03:47:16 !! From github.com:owner/dotfiles\n"+
+			"03:47:16 Already up to date.\n"+
+			"03:47:17 === step dotfiles.install (run) ===\n"+
+			"03:47:20 Installing 28 core packages via apt...\n"+
+			"# 2026-09-08T20:50:36Z finished\n")
+	write("20260908T203000Z", "host-pi",
+		"# fleet update — host=host-pi plan=built-in default mode=fast-forward started=2026-09-08T20:30:00Z\n"+
+			"03:30:00 === step dotfiles.sync (sync) ===\n"+
+			"03:30:02 !! fatal: could not read Username for 'https://github.com'\n"+
+			"# 2026-09-08T20:30:03Z finished\n")
+	write("20260907T101500Z", "host-nano",
+		"# fleet update — host=host-nano plan=built-in default mode=fast-forward started=2026-09-07T10:15:00Z\n"+
+			"03:15:00 === step dotfiles.sync (sync) ===\n"+
+			"03:15:01 Already up to date.\n"+
+			"# 2026-09-07T10:15:04Z finished\n")
+
+	runs, err := historyRuns(dir, []string{"host-nano", "host-pi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return runs
 }

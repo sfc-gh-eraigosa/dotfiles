@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/histindex"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
@@ -163,6 +164,52 @@ type tuiModel struct {
 	// Empty (the test default) disables persistence entirely.
 	ansPath string
 
+	// ---- history -----------------------------------------------------------
+	// History is VIEW state, deliberately NOT a tuiMode. Modes exist to
+	// reroute keystrokes (a key typed in search is text, not a motion);
+	// history reroutes nothing -- every motion, the pane toggles and the
+	// search key mean exactly what they always did. Only what the panes READ
+	// changes, from a live stream to a stored capture. Making it a mode would
+	// have forced a second copy of the whole normal-mode routing table.
+	histOn bool
+	// histScope is the hosts the run list covers, snapshotted from
+	// updateTargets() when H was pressed -- the same selection-or-cursor rule
+	// the update and wake keys use. Snapshotted rather than re-read so that
+	// moving the cursor inside the run list cannot silently change which runs
+	// it lists.
+	histScope []string
+	histRuns  []histindex.Summary
+	// histCursor is keyed by the run's PATH for the same reason m.cursor is
+	// keyed by alias rather than an index: the list is re-sorted and
+	// re-loaded, and an index would point at a different row afterwards.
+	histCursor string
+	// histPath is the capture currently OPEN (empty = the list level), and
+	// histLines is its parsed body rendered as stream entries. The live buffer
+	// in m.logs is deliberately left alone while this is set: an update that is
+	// still running keeps appending to it, so closing the run shows the present
+	// again with nothing lost.
+	histPath  string
+	histLines []logEntry
+	// histPending is the run enter asked to open and whose read has not landed
+	// yet. The read is async, so its answer is accepted only while this still
+	// names it: leaving history clears it, and enter is ignored while it is
+	// set. Without that a late answer put a capture back on the dashboard, or
+	// a second enter's answer saved the already cleared follow state as the
+	// live one.
+	histPending string
+	// histErrCount mirrors errCount for the opened capture: counted once at
+	// open, so the pane's height queries stay off a per-keystroke rebuild.
+	histErrCount int
+	// histTop is the run list's own scroll offset. m.vp is the HOST list's and
+	// clampViewport recomputes it from the host cursor, so slicing the runs by
+	// it rendered a header with nothing under it whenever the host cursor sat
+	// deeper than the run count.
+	histTop int
+	// liveFollow / liveErrFollow remember whether the stream panes were
+	// following before a capture was opened, so closing it restores them.
+	liveFollow    bool
+	liveErrFollow bool
+
 	hosts map[string]sshconf.Host
 	// local is who THIS machine is, and localAlias is the fleet row that IS
 	// it ("" when we are running from a machine outside the fleet). Both are
@@ -307,6 +354,14 @@ func (m *tuiModel) clampViewport() {
 func (m tuiModel) visibleRows() int { return m.listHeight() }
 
 func (m *tuiModel) moveTo(i int) {
+	// History is a different VIEW of the same model, so the motion keys move
+	// whichever list is on screen. Branching here rather than in the keymap
+	// is what keeps j/k/gg/G/ctrl+d/ctrl+f working in both without a second
+	// routing table to drift out of sync.
+	if m.histOn {
+		m.histMoveTo(i)
+		return
+	}
 	if len(m.rows) == 0 {
 		return
 	}
@@ -321,6 +376,14 @@ func (m *tuiModel) moveTo(i int) {
 }
 
 func (m *tuiModel) move(d int) {
+	if m.histOn {
+		i := m.histIndexOf(m.histCursor)
+		if i < 0 {
+			i = 0
+		}
+		m.histMoveTo(i + d)
+		return
+	}
 	i := m.indexOf(m.cursor)
 	if i < 0 {
 		i = 0
@@ -391,8 +454,19 @@ func (m tuiModel) matches(r Row) bool {
 	return m.search.re != nil && m.search.re.MatchString(m.rowText(r))
 }
 
+// matchIndexes indexes the ACTIVE list, because moveTo does: in history the
+// positions are run rows, and matching host rows there handed a host's
+// position to the run cursor.
 func (m tuiModel) matchIndexes() []int {
 	var out []int
+	if m.histOn {
+		for i, r := range m.histRuns {
+			if m.search.re != nil && m.search.re.MatchString(histRowText(r)) {
+				out = append(out, i)
+			}
+		}
+		return out
+	}
 	for i, r := range m.rows {
 		if m.matches(r) {
 			out = append(out, i)
@@ -409,6 +483,9 @@ func (m *tuiModel) jumpMatch(d int) {
 		return
 	}
 	cur := m.indexOf(m.cursor)
+	if m.histOn {
+		cur = m.histIndexOf(m.histCursor)
+	}
 	if d > 0 {
 		for _, i := range idx {
 			if i > cur {
@@ -792,6 +869,12 @@ func (m *tuiModel) appendLogLine(alias, line string, isErr bool) {
 			}
 		}
 		m.logs = m.logs[drop:]
+		// While a run is open the offsets index the CAPTURE, and the live
+		// buffer's own offsets are reset when the run closes — so a busy
+		// update must not scroll the stored run the operator is reading.
+		if m.histRunOpen() {
+			return
+		}
 		if m.logTop >= drop {
 			m.logTop -= drop
 		} else {
@@ -805,10 +888,14 @@ func (m *tuiModel) appendLogLine(alias, line string, isErr bool) {
 	}
 }
 
-// errEntries is the error pane's projection: the stderr subset, in order.
+// errEntries is the error pane's projection: the stderr subset, in order, of
+// whichever source is on screen — the opened capture in history, the live
+// buffer otherwise. tailFor deliberately does NOT follow: a host row's FAIL
+// text is about the run that just failed, not about a capture the operator
+// happens to be reading.
 func (m tuiModel) errEntries() []logEntry {
 	out := make([]logEntry, 0, m.errCount)
-	for _, e := range m.logs {
+	for _, e := range m.logEntries() {
 		if e.stderr {
 			out = append(out, e)
 		}
@@ -816,8 +903,27 @@ func (m tuiModel) errEntries() []logEntry {
 	return out
 }
 
-// warnTotals is the status bar's summary: lines, and how many hosts wrote them.
+// warnTotals is the status bar's summary: lines, and how many hosts wrote
+// them. Over an OPENED capture it reports that capture's own figures: m.warns
+// is written only by appendLogLine, so the live run's totals would otherwise
+// be printed as the header of a stored run's stderr — the same body/heading
+// mismatch errTotal already had to fix.
 func (m tuiModel) warnTotals() (lines, hosts int) {
+	if m.histRunOpen() {
+		seen := map[string]bool{}
+		for _, e := range m.histLines {
+			if e.warn {
+				lines++
+				seen[e.alias] = true
+			}
+		}
+		return lines, len(seen)
+	}
+	return m.liveWarnTotals()
+}
+
+// liveWarnTotals is the streaming path's summary.
+func (m tuiModel) liveWarnTotals() (lines, hosts int) {
 	for _, n := range m.warns {
 		if n > 0 {
 			lines += n
@@ -850,11 +956,27 @@ func (m tuiModel) tailFor(alias string, n int) string {
 // costs the host list its rows once output exists: the pane is ON by default
 // so it is discoverable, but an empty box must not shrink the fleet view to a
 // fifth to display nothing.
-func (m tuiModel) logActive() bool { return m.logOpen && len(m.logs) > 0 }
+func (m tuiModel) logActive() bool { return m.logOpen && len(m.logEntries()) > 0 }
 
 // errActive is its stderr twin. It reads the COUNTER, not the projection —
 // this is consulted from every height query.
-func (m tuiModel) errActive() bool { return m.errOpen && m.errCount > 0 }
+func (m tuiModel) errActive() bool { return m.errOpen && m.errTotal() > 0 }
+
+// errTotal is how many stderr lines the ACTIVE source has. errCount is
+// maintained incrementally as live lines arrive and is therefore zero for a
+// capture read from disk — reading it directly made the pane render
+// "stderr: none captured" directly underneath the captured stderr line it
+// was supposed to be showing. Found by the demo frames, not by a unit test.
+//
+// The counter still serves the live path, where it exists to keep every
+// height query off a 2000-entry filtered rebuild; the opened capture is
+// counted once, when it is opened.
+func (m tuiModel) errTotal() int {
+	if m.histRunOpen() {
+		return m.histErrCount
+	}
+	return m.errCount
+}
 
 // pane names the three stacked panels the operator composes.
 type pane int
@@ -1031,7 +1153,7 @@ func (m *tuiModel) focusedStream() (streamNav, bool) {
 	switch {
 	case m.logFocused():
 		return streamNav{
-			entries: m.logs, follow: &m.logFollow, top: &m.logTop,
+			entries: m.logEntries(), follow: &m.logFollow, top: &m.logTop,
 			search: &m.logSearch, height: m.logHeight(), label: "log",
 		}, true
 	case m.errFocused():
@@ -1059,7 +1181,7 @@ func streamMatches(nav streamNav) []int {
 
 // logMatches are the log buffer's indexes matching its own pattern.
 func (m tuiModel) logMatches() []int {
-	return streamMatches(streamNav{entries: m.logs, search: &m.logSearch})
+	return streamMatches(streamNav{entries: m.logEntries(), search: &m.logSearch})
 }
 
 // streamJump moves the pane to the next/previous match, wrapping. It stops
@@ -1154,6 +1276,52 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.streams[msg.alias] = msg.st
 		return m, tea.Batch(readLine(msg.alias, msg.st), awaitDone(msg.alias, msg.st))
 
+	case historyOpenedMsg:
+		// Drop an answer the operator has already walked away from.
+		if !m.histOn || msg.path != m.histPending {
+			return m, nil
+		}
+		m.histPending = ""
+		if msg.err != nil {
+			m.status = fmt.Sprintf("history: %v", msg.err)
+			return m, nil
+		}
+		m.histPath = msg.path
+		m.histLines = captureEntries(msg.host, msg.cap, msg.day)
+		m.histErrCount = len(msg.cap.Stderr())
+		// A freshly opened capture reads from its start, not its tail: unlike a
+		// live stream there is no "newest" to follow, and the beginning is where
+		// the run explains itself. The live pane's own follow state is
+		// remembered so closing the run hands it back as it was, rather than
+		// frozen at line 1 of a buffer that is still growing.
+		m.liveFollow, m.liveErrFollow = m.logFollow, m.errFollow
+		m.logFollow, m.logTop = false, 0
+		m.errFollow, m.errTop = false, 0
+		return m, nil
+	case historyLoadedMsg:
+		// Drop an answer to a request the operator has already moved on from.
+		if !sameScope(msg.scope, m.histScope) {
+			return m, nil
+		}
+		if msg.err != nil {
+			// A failed scan is SAID. An empty list that silently meant "I
+			// could not read the directory" is the same class of lie as
+			// calling an unobserved run clean.
+			m.status = fmt.Sprintf("history: %v", msg.err)
+			m.histOn = false
+			return m, nil
+		}
+		m.histRuns = msg.runs
+		m.histCursor = ""
+		// The run list has its OWN offset; the host viewport is meaningless
+		// here and clampViewport recomputes it from the host cursor.
+		m.histTop = 0
+		if len(msg.runs) > 0 {
+			// Newest first: "what happened last" is the question someone
+			// opening history is nearly always asking.
+			m.histCursor = msg.runs[0].Path
+		}
+		return m, nil
 	case logLineMsg:
 		m.appendLogLine(msg.alias, msg.line, msg.stderr)
 		// Re-issue the reader: one Cmd per line is what turns the channel into
