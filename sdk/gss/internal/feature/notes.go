@@ -44,10 +44,17 @@ func (s *Service) featureNotes(featureName string) string {
 // content. Exported behaviour lives on featureNotes; this is split out so the
 // parsing is testable without touching the filesystem.
 func extractNotes(md string) string {
+	return extractSection(md, notesHeadingRe)
+}
+
+// extractSection returns the body of the first section whose heading matches
+// heading, up to the next heading of any level, HTML comments stripped and
+// whitespace trimmed. "" when the section is absent or empty.
+func extractSection(md string, heading *regexp.Regexp) string {
 	lines := strings.Split(md, "\n")
 	start := -1
 	for i, ln := range lines {
-		if notesHeadingRe.MatchString(strings.TrimSpace(ln)) {
+		if heading.MatchString(strings.TrimSpace(ln)) {
 			start = i + 1
 			break
 		}

@@ -182,6 +182,14 @@ classic `--force-autonomous` inside a worker worktree.
 - Give every feature and worker a short, specific `--description`; it seeds
   FEATURE.md / WORKER.md and the PR body (NFC-normalised; control chars and
   injection markers stripped).
+- **What the first checkpoint publishes**: the draft PR's **title is the worker's
+  `--description`** (fallback `<feature>: <purpose>`), and its **body is seeded
+  from `WORKER.md`** — the `## Goal` text, then `## Decisions & notes` — with
+  the stack section appended and this PR's own row already numbered. So fill
+  Goal and notes in `WORKER.md` *before* the first checkpoint and there is
+  nothing to `gh pr edit` afterwards. Later checkpoints preserve whatever the
+  PR body says on GitHub (edit it there, not in `WORKER.md`); only
+  `FEATURE.md`'s notes and the stack block are re-mirrored each time.
 - **`WORKER.md` placement (issue #132)**: `WORKER.md` is seeded **outside** the
   worker's git worktree, at
   `<worktrees-root>/<owner>/<repo>/<feature>/<user>/.gss-meta/<leaf>/WORKER.md`,

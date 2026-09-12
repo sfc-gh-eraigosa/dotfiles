@@ -3,7 +3,10 @@ package feature_test
 import (
 	"context"
 	stderrors "errors"
+	"fmt"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -18,13 +21,20 @@ import (
 // checkpointService seeds one worker and wires git/gh fakes.
 func checkpointService(t *testing.T, prURL string, gitScript []gitfake.Response, ghc *ghfake.Client) (*feature.Service, *registry.Store, *gitfake.Runner) {
 	t.Helper()
+	return checkpointServiceAt(t, "/wt/api", prURL, gitScript, ghc)
+}
+
+// checkpointServiceAt is checkpointService with the worker's worktree at wt,
+// so a test can plant a WORKER.md at feature.WorkerMetaPath(wt).
+func checkpointServiceAt(t *testing.T, wt, prURL string, gitScript []gitfake.Response, ghc *ghfake.Client) (*feature.Service, *registry.Store, *gitfake.Runner) {
+	t.Helper()
 	store := registry.NewStore(filepath.Join(t.TempDir(), "registry.json"))
 	if err := store.Update(func(r *registry.Registry) error {
 		*r = registry.Registry{SchemaVersion: 1, Features: []registry.Feature{{
 			Name: "auth", DefaultBaseBranch: "main",
 			Workers: []registry.Worker{{
 				User: "erai", Purpose: "api", Branch: "feature/auth/erai/api",
-				Worktree: "/wt/api", BaseBranch: "main", Description: "endpoints", PRURL: prURL,
+				Worktree: wt, BaseBranch: "main", Description: "endpoints", PRURL: prURL,
 			}},
 		}}}
 		return nil
@@ -33,6 +43,113 @@ func checkpointService(t *testing.T, prURL string, gitScript []gitfake.Response,
 	}
 	gitr := &gitfake.Runner{Script: gitScript}
 	return &feature.Service{Store: store, Git: gitr, GH: ghc}, store, gitr
+}
+
+// plantWorkerMD writes a WORKER.md for the worker whose worktree is wt.
+func plantWorkerMD(t *testing.T, wt, md string) {
+	t.Helper()
+	p := feature.WorkerMetaPath(wt)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(md), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+const seededWorkerMD = "# auth: api\n\n- **Description**: endpoints\n\n## Goal\nShip the endpoints.\n\n## Decisions & notes\n<!-- append freely -->\n- chose REST\n\n## Open questions\n"
+
+// TestCheckpoint_FirstCreateSeedsTitleAndBodyFromWorkerMD: the draft PR
+// opens with the worker description as its title and WORKER.md's Goal +
+// notes as its body, and the stack block is re-rendered with the new PR
+// number instead of "(no PR yet)" for the PR's own row. Before this, a
+// first checkpoint produced "<feature>: <purpose>" over a one-line body and
+// an unnumbered self-row, which every author then fixed by hand with gh.
+func TestCheckpoint_FirstCreateSeedsTitleAndBodyFromWorkerMD(t *testing.T) {
+	wt := filepath.Join(t.TempDir(), "auth", "erai", "api")
+	plantWorkerMD(t, wt, seededWorkerMD)
+	ghc := ghfake.NewClient()
+	svc, _, _ := checkpointServiceAt(t, wt, "", []gitfake.Response{{}, {}, {}}, ghc)
+
+	res, err := svc.Checkpoint(context.Background(), feature.CheckpointOpts{WorkerRef: "auth/erai/api"})
+	if err != nil {
+		t.Fatalf("Checkpoint: %v", err)
+	}
+	c := lastPRCreate(ghc)
+	if c == nil {
+		t.Fatal("PRCreate was never called")
+	}
+	if c.CreateOpts.Title != "endpoints" {
+		t.Errorf("title = %q; want the worker description", c.CreateOpts.Title)
+	}
+	for _, want := range []string{"Ship the endpoints.", "## Decisions & notes", "- chose REST", "<!-- gss:stack-begin -->"} {
+		if !strings.Contains(c.CreateOpts.Body, want) {
+			t.Errorf("created body missing %q:\n%s", want, c.CreateOpts.Body)
+		}
+	}
+	if strings.Contains(c.CreateOpts.Body, "append freely") {
+		t.Errorf("template comment leaked into the PR body:\n%s", c.CreateOpts.Body)
+	}
+	// One follow-up edit numbers the PR's own stack row.
+	e := lastPREdit(ghc)
+	num := prNumberOf(res.PRURL)
+	if e == nil || e.Num != num {
+		t.Fatalf("expected a PREdit on the new PR #%d after create; got %+v", num, e)
+	}
+	if !strings.Contains(e.EditOpts.Body, fmt.Sprintf("**#%d — erai/api (base: `main`)** ← you are here", num)) {
+		t.Errorf("stack row not renumbered after create:\n%s", e.EditOpts.Body)
+	}
+	if strings.Contains(e.EditOpts.Body, "(no PR yet)") {
+		t.Errorf("edited body still says (no PR yet):\n%s", e.EditOpts.Body)
+	}
+	if !strings.Contains(e.EditOpts.Body, "Ship the endpoints.") || strings.Count(e.EditOpts.Body, "<!-- gss:stack-begin -->") != 1 {
+		t.Errorf("renumbering must keep the prose and exactly one stack block:\n%s", e.EditOpts.Body)
+	}
+}
+
+// TestCheckpoint_FirstCreateWithoutWorkerMDFallsBack: no WORKER.md and no
+// description → the old "<feature>: <purpose>" title and description body.
+func TestCheckpoint_FirstCreateWithoutWorkerMDFallsBack(t *testing.T) {
+	ghc := ghfake.NewClient()
+	svc, store, _ := checkpointService(t, "", []gitfake.Response{{}, {}, {}}, ghc)
+	if err := store.Update(func(r *registry.Registry) error {
+		r.Features[0].Workers[0].Description = ""
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Checkpoint(context.Background(), feature.CheckpointOpts{WorkerRef: "auth/erai/api"}); err != nil {
+		t.Fatalf("Checkpoint: %v", err)
+	}
+	c := lastPRCreate(ghc)
+	if c == nil || c.CreateOpts.Title != "auth: api" {
+		t.Errorf("PRCreate = %+v; want fallback title \"auth: api\"", c)
+	}
+}
+
+// TestCheckpoint_ExistingPRKeepsItsBodyOverWorkerMD: WORKER.md seeds only
+// the first body. A later checkpoint must preserve what is on GitHub.
+func TestCheckpoint_ExistingPRKeepsItsBodyOverWorkerMD(t *testing.T) {
+	wt := filepath.Join(t.TempDir(), "auth", "erai", "api")
+	plantWorkerMD(t, wt, seededWorkerMD)
+	ghc := ghfake.NewClient()
+	ghc.SeedPR(gh.PR{Number: 7, Head: "feature/auth/erai/api", State: "OPEN", IsDraft: true,
+		URL: "https://github.com/o/r/pull/7", Body: "human prose written on GitHub"})
+	svc, _, _ := checkpointServiceAt(t, wt, "https://github.com/o/r/pull/7", []gitfake.Response{{}, {}, {}}, ghc)
+
+	if _, err := svc.Checkpoint(context.Background(), feature.CheckpointOpts{WorkerRef: "auth/erai/api"}); err != nil {
+		t.Fatalf("Checkpoint: %v", err)
+	}
+	e := lastPREdit(ghc)
+	if e == nil || e.Num != 7 {
+		t.Fatalf("expected PREdit on #7; got %+v", e)
+	}
+	if !strings.Contains(e.EditOpts.Body, "human prose written on GitHub") {
+		t.Errorf("existing PR body was not preserved:\n%s", e.EditOpts.Body)
+	}
+	if strings.Contains(e.EditOpts.Body, "Ship the endpoints.") {
+		t.Errorf("WORKER.md prose overwrote an existing PR body:\n%s", e.EditOpts.Body)
+	}
 }
 
 func TestCheckpoint_FirstTimeCreatesDraftPR(t *testing.T) {
@@ -269,6 +386,22 @@ func argsHasFC(args []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func lastPREdit(c *ghfake.Client) *ghfake.Call {
+	calls := c.Calls()
+	for i := len(calls) - 1; i >= 0; i-- {
+		if calls[i].Verb == ghfake.VerbPREdit {
+			return &calls[i]
+		}
+	}
+	return nil
+}
+
+// prNumberOf mirrors the package's unexported prNumber for assertions.
+func prNumberOf(url string) int {
+	n, _ := strconv.Atoi(url[strings.LastIndex(url, "/")+1:])
+	return n
 }
 
 func lastPRCreate(c *ghfake.Client) *ghfake.Call {
