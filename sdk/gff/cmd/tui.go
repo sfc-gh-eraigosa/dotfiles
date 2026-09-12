@@ -14,7 +14,8 @@ var tuiCmd = &cobra.Command{
 in a collapsible area tree with layer provenance.
 
 Keys (the sdk vim grammar — see sdk/libs/tui/GUIDE.md):
-  j/k ↑/↓ move   h/l ←/→ category page   gg/G first/last   ctrl+d/ctrl+u half page   ctrl+f/ctrl+b page
+  j/k ↑/↓ move   h/l ←/→ category page   tab/shift+tab next/prev source (namespace)
+  gg/G first/last   ctrl+d/ctrl+u half page   ctrl+f/ctrl+b page
   / regex search (smartcase; Enter commit, Esc cancel)   n/N next/prev match   Esc clear highlights
   : command line — :set <key> <value>  :unset <key>  :/re  :help  :q   (Tab completes key paths)
   Enter expand area / open details   Space toggle bool or pick choice   u clear override   ? help   q quit

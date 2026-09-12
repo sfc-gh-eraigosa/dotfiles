@@ -95,7 +95,8 @@ themselves); the `:` line is the CLI's `set`/`unset` from inside the TUI.
 | Keys | Action |
 | :-- | :-- |
 | `j`/`k`, `↑`/`↓` | move |
-| `h`/`l`, `←`/`→` | previous / next category page |
+| `h`/`l`, `←`/`→` | previous / next category page within the current source; the breadcrumb scrolls to keep the active page on screen (`‹`/`›` mark pages cut off) |
+| Tab / Shift+Tab | next / previous source (namespace) — lands on its All page; the header shows `<namespace> (i/n)` |
 | `gg` / `G` | first / last row |
 | `ctrl+d` / `ctrl+u`, `ctrl+f` / `ctrl+b` (PgUp/PgDn) | half page / full page |
 | `/` then a regex | incremental search, smartcase (`claude` matches `Claude CLI`; `Claude` is exact-case); Enter commits, Esc cancels |

@@ -92,9 +92,11 @@ type Model struct {
 	// clear where each area's flags come from. Wired by cmd.
 	Sources []SourceInfo
 
-	// breadcrumb pager
-	pages   []page
-	pageIdx int
+	// breadcrumb pager; crumbTop is the first page drawn when the breadcrumb
+	// is wider than the terminal (the lateral twin of nav.Cursor.Top).
+	pages    []page
+	pageIdx  int
+	crumbTop int
 
 	// detail state
 	detailItem   resolve.Resolved
@@ -163,6 +165,7 @@ func (m *Model) buildPages() {
 		}
 	}
 	m.pages = []page{{label: allLabel}}
+	m.crumbTop = 0
 	names := make([]string, 0, len(comps))
 	for c := range comps {
 		names = append(names, c)
@@ -226,6 +229,54 @@ func (m *Model) rescope() {
 		m.scopeNS = ns
 		m.buildPages()
 	}
+}
+
+// namespaces lists the sources in first-appearance order (the order their
+// area rows render on the All page).
+func (m *Model) namespaces() []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, it := range m.items {
+		if ns := it.Namespace(); !seen[ns] {
+			seen[ns] = true
+			out = append(out, ns)
+		}
+	}
+	return out
+}
+
+// switchSource is Tab (+1) / Shift+Tab (-1): scope the breadcrumb to the
+// next source, landing on the All page with the cursor on that source's
+// first row so the breadcrumb and the cursor name the same source.
+func (m *Model) switchSource(dir int) {
+	nss := m.namespaces()
+	n := len(nss)
+	if n <= 1 {
+		return
+	}
+	at := 0
+	for i, ns := range nss {
+		if ns == m.scopeNS {
+			at = i
+			break
+		}
+	}
+	m.scopeNS = nss[((at+dir)%n+n)%n]
+	m.buildPages()
+	m.pageIdx = 0
+	m.buildRows()
+	m.cur.To(m.firstScopedRow())
+}
+
+// firstScopedRow is the first row owned by the breadcrumb's source (0 when
+// none is, e.g. a category page, where every row already is).
+func (m *Model) firstScopedRow() int {
+	for i, r := range m.rows {
+		if r.ns == m.scopeNS {
+			return i
+		}
+	}
+	return 0
 }
 
 // openDetail enters the detail view for a feature row, resolving the
@@ -363,6 +414,12 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case keymap.PageRight:
 			m.turnPage(1)
 			return m, nil
+		case actSourceNext:
+			m.switchSource(1)
+			return m, nil
+		case actSourcePrev:
+			m.switchSource(-1)
+			return m, nil
 		case keymap.Help:
 			m.helpReturn = modeList
 			m.mode = modeHelp
@@ -444,7 +501,10 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// turnPage moves dir pages through the breadcrumb with wraparound.
+// turnPage moves dir pages through the breadcrumb with wraparound. Landing on
+// the All page parks the cursor on the scoped source's first row: row 0 may
+// belong to another source, and the breadcrumb would then name one source
+// while the cursor sat in another.
 func (m *Model) turnPage(dir int) {
 	n := len(m.pages)
 	if n <= 1 {
@@ -452,8 +512,8 @@ func (m *Model) turnPage(dir int) {
 	}
 	m.pageIdx = ((m.pageIdx+dir)%n + n) % n
 	m.buildRows()
-	m.cur.To(0)
 	m.cur.Top = 0
+	m.cur.To(m.firstScopedRow())
 }
 
 // activateFeature handles Space on a feature row.
