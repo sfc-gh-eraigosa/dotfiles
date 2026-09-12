@@ -145,6 +145,9 @@ for _p in docker kubectl; do
   [[ -x "$(whence -p $_p 2>/dev/null)" ]] || plugins=(${plugins:#$_p})
 done
 unset _p
+# herdr-ohmyzsh (opt-in herdr plugin, gff install.herdr-plugin.ohmyzsh) links
+# itself into custom/plugins/herdr; load it only on hosts where it is linked.
+[ -d "${ZSH_CUSTOM:-$ZSH/custom}/plugins/herdr" ] && plugins+=(herdr)
 
 # Only clone zsh-completions if not in editor terminal (expensive git operation).
 # Non-fatal + shallow + time-bounded: a network stall or failure here must never
@@ -161,6 +164,12 @@ fi
 export PATH="$PATH:$HOME/bin"
 if [ -d "${HOME}/opt/bin" ] ; then
     PATH="${HOME}/opt/bin:$PATH"
+fi
+# Rust: install_rust.sh runs rustup with --no-modify-path, so rustup never
+# appends `. "$HOME/.cargo/env"` through these symlinked files; this is the
+# PATH entry instead. Guarded, so hosts without Rust are unaffected.
+if [ -d "${HOME}/.cargo/bin" ] ; then
+    PATH="${HOME}/.cargo/bin:$PATH"
 fi
 if [ -d "${HOME}/opt/google-cloud-sdk/bin" ] ; then
     PATH="${HOME}/opt/google-cloud-sdk/bin:$PATH"

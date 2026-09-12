@@ -1,0 +1,16 @@
+# file-viewer keybindings (https://github.com/smarzban/herdr-file-viewer).
+# Appended to the managed herdr config by `install_herdr.sh config` while gff
+# install.herdr-plugin.file-viewer is on (see ai/herdr/plugins.tsv).
+# prefix+f toggles the viewer split (open, focus, then close on a repeat);
+# prefix+shift+f opens it in its own tab. Neither is a herdr default binding.
+[[keys.command]]
+key = "prefix+f"
+type = "plugin_action"
+command = "herdr-file-viewer.open-file-viewer"
+description = "open file viewer in split"
+
+[[keys.command]]
+key = "prefix+shift+f"
+type = "plugin_action"
+command = "herdr-file-viewer.open-file-viewer-tab"
+description = "open file viewer in tab"

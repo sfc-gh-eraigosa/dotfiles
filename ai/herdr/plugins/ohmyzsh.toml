@@ -1,0 +1,9 @@
+# ohmyzsh keybindings (https://github.com/robbyrussell/herdr-ohmyzsh).
+# Appended to the managed herdr config while gff install.herdr-plugin.ohmyzsh
+# is on. prefix+shift+z runs `omz reload` in every pane idle at a zsh prompt.
+# (Upstream suggests prefix+shift+r, which is herdr's reload_config.)
+[[keys.command]]
+key = "prefix+shift+z"
+type = "plugin_action"
+command = "ohmyzsh.shell.reload-all"
+description = "reload Oh My Zsh in idle panes"

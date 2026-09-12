@@ -36,6 +36,12 @@
       "prompt": "Can you set up herdr so my panes come back the same way after a reboot?",
       "expected_output": "Explains herdr already restores the session shape from session.json on server restart and that agent panes can resume via integrations (session.resume_agents_on_restore), so nothing extra is needed for the last layout; for named alternative layouts points to `herdr-layout save <name>` / `restore <name>`, kept host-local under ~/.config/herdr/layouts.",
       "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "I don't want the herdr file viewer plugin on this Pi, it takes forever to build. How do I turn it off here?",
+      "expected_output": "Explains the plugin comes from ai/herdr/plugins.tsv behind its own gff flag and runs `gff set install.herdr-plugin.file-viewer false` (host-local; `gff unset` restores the default), so install.sh stops installing it and drops its prefix+f / prefix+shift+f keybindings from the managed config on the next run. Notes the flag never uninstalls: `herdr plugin uninstall herdr-file-viewer` removes the installed copy. Does not edit the manifest or features.yaml in the dotfiles repo for a one-host change.",
+      "files": []
     }
   ]
 }

@@ -26,6 +26,7 @@
 #   install_herdr.sh                # the binary            (install.sh --phase deps)
 #   install_herdr.sh integrations   # agent integrations    (install.sh --phase config)
 #   install_herdr.sh config         # managed config.toml   (install.sh --phase config)
+#   install_herdr.sh plugins        # herdr plugins         (install.sh --phase deps)
 #
 #   `config` renders ai/herdr/config.toml into ~/.config/herdr/config.toml so
 #   herdr follows the host terminal's light/dark appearance with the fleet
@@ -34,6 +35,31 @@
 #   it still carries the "managed by dotfiles" marker; a hand-edited file
 #   without the marker is left alone (HERDR_CONFIG_FORCE=1 reclaims it, keeping
 #   a .bak). A running server is reloaded best-effort so the change is live.
+#
+#   Plugins come from the manifest ai/herdr/plugins.tsv (one row per plugin:
+#   name, herdr plugin id, owner/repo[/subdir], pinned ref, and optionally
+#   the OSes it supports, e.g. `macos`). Each row is switched by
+#   its own gff flag, install.herdr-plugin.<name>, declared in
+#   .github/gff/features.yaml: `gff set install.herdr-plugin.<name> false`
+#   turns one off on this host. A row without a declared flag never installs
+#   (fail-closed: plugins are unsandboxed third-party code).
+#
+#   `plugins` runs `herdr plugin install <owner/repo> --ref <ref> --yes` for
+#   each enabled row. A plugin runs its own build step at install time
+#   (herdr-file-viewer downloads a checksummed prebuilt on x86_64 Linux/macOS
+#   and builds with cargo elsewhere, hence install_rust.sh), so every ref is
+#   PINNED to a reviewed release tag or commit and bumping it is a PR. Refs
+#   are treated as immutable: a plugin already installed at the wanted ref is
+#   a no-op with no network call (a reinstall rebuilds it, about a minute of
+#   cargo on aarch64). HERDR_PLUGIN_FORCE=1 reinstalls anyway. A flag turned
+#   off stops dotfiles installing and binding that plugin; it never
+#   uninstalls one (`herdr plugin uninstall <id>` does, keeping its config).
+#
+#   `config` appends ai/herdr/plugins/<name>.toml (the plugin's keybindings)
+#   for each enabled row whose plugin is actually installed, so a plugin's
+#   keys ship with it and a failed or skipped install never leaves a dead
+#   binding (herdr accepts bindings to plugins that do not exist). install.sh
+#   therefore runs `plugins` before `config`.
 #
 #   `integrations` runs `herdr integration install <id>` for each id in
 #   HERDR_INTEGRATIONS whose agent CLI is present on this host. Ordering
@@ -55,6 +81,16 @@
 #   HERDR_CONFIG_FORCE=1  overwrite a hand-edited (unmanaged) config.toml, keeping a .bak
 #   HERDR_MANIFEST_URL  manifest location (default: https://herdr.dev/latest.json)
 #   HERDR_MANIFEST_FILE use a local manifest file instead of fetching (tests)
+#   HERDR_PLUGIN_FORCE=1   reinstall plugins already at the wanted ref
+#   HERDR_PLUGINS_MANIFEST plugin manifest (default: ai/herdr/plugins.tsv in this repo)
+#   HERDR_PLUGIN_KEYS_DIR  per-plugin keybinding fragments (default: ai/herdr/plugins in this repo)
+#   HERDR_GFF              gff binary asked for a plugin flag when install.sh has not
+#                          exported GFF_* (default: gff on PATH; a missing binary
+#                          falls back to the declared defaults)
+#   HERDR_FEATURES_FILE    declared flag defaults, the last resort (default:
+#                          .github/gff/features.yaml in this repo)
+#   HERDR_HOST_OS          override the detected OS (linux | macos) for the manifest's
+#                          os column (tests)
 set -e
 
 MODE="${1:-install}"
@@ -69,6 +105,9 @@ HERDR_THEME_DARK="${HERDR_THEME_DARK:-solarized}"
 HERDR_THEME_LIGHT="${HERDR_THEME_LIGHT:-solarized-light}"
 MANAGED_MARKER="managed by dotfiles"
 MANIFEST_URL="${HERDR_MANIFEST_URL:-https://herdr.dev/latest.json}"
+PLUGINS_MANIFEST="${HERDR_PLUGINS_MANIFEST:-${REPO_ROOT}/ai/herdr/plugins.tsv}"
+PLUGIN_KEYS_DIR="${HERDR_PLUGIN_KEYS_DIR:-${REPO_ROOT}/ai/herdr/plugins}"
+FEATURES_FILE="${HERDR_FEATURES_FILE:-${REPO_ROOT}/.github/gff/features.yaml}"
 RELEASE_BASE="https://github.com/herdrdev/herdr/releases/download"
 
 RED='\033[0;31m'
@@ -289,11 +328,252 @@ install_integrations() {
 }
 
 # ------------------------------------------------------------------------------
+# Plugins: the manifest, their gff flags, and herdr's record of what is installed
+# ------------------------------------------------------------------------------
+# manifest_rows: "name plugin_id owner/repo[/subdir] ref [os]" per row, with
+# comments and blank lines dropped.
+manifest_rows() {
+    [ -r "${PLUGINS_MANIFEST}" ] || return 0
+    awk '!/^[[:space:]]*(#|$)/ { print $1, $2, $3, $4, $5 }' "${PLUGINS_MANIFEST}"
+}
+
+host_os() {
+    if [ -n "${HERDR_HOST_OS:-}" ]; then echo "${HERDR_HOST_OS}"; return; fi
+    case "$(uname -s)" in
+        Linux)  echo linux ;;
+        Darwin) echo macos ;;
+        *)      echo other ;;
+    esac
+}
+
+# os_matches <os column>: an empty column or `any` means every OS; otherwise a
+# comma-separated list such as `macos` or `linux,macos`.
+os_matches() {
+    case "$1" in "" | any) return 0 ;; esac
+    case ",$1," in *",$(host_os),"*) return 0 ;; esac
+    return 1
+}
+
+# feature_default <key>: the boolDefault features.yaml declares for <key>, or
+# "false" when the key is not declared.
+feature_default() {
+    [ -r "${FEATURES_FILE}" ] || { echo false; return; }
+    awk -v key="$1" '
+        $1 == "-" && $2 == "path:" { inkey = ($3 == key); next }
+        inkey && $1 == "boolDefault:" { print $2; found = 1; exit }
+        END { if (!found) print "false" }
+    ' "${FEATURES_FILE}"
+}
+
+# gff_query <key>: the flag's effective value from gff itself (which layers
+# the host's `gff set` overrides over the repo defaults), or "" when gff is
+# absent or does not know the key.
+gff_query() {
+    GFF_BIN="${HERDR_GFF:-gff}"
+    command -v "${GFF_BIN}" >/dev/null 2>&1 || return 0
+    "${GFF_BIN}" --source "${REPO_ROOT}" get "$1" 2>/dev/null || true
+}
+
+# plugin_flag_on <name>: install.herdr-plugin.<name>. Resolution order:
+#   1. the exported GFF_* value — what install.sh materialises before any
+#      gate, and therefore authoritative inside a run;
+#   2. gff itself, for a standalone `install_herdr.sh plugins|config` — so a
+#      host's `gff set install.herdr-plugin.<name> true` is honoured without
+#      a full install.sh (it was not: standalone runs saw only the defaults
+#      and rendered every opt-in plugin off);
+#   3. the declared default in features.yaml. Undeclared => off.
+plugin_flag_on() {
+    _key="install.herdr-plugin.$1"
+    _var="GFF_$(printf '%s' "${_key}" | tr '[:lower:]' '[:upper:]' | tr '.-' '__')"
+    eval "_val=\${${_var}:-}"
+    [ -n "${_val}" ] || _val="$(gff_query "${_key}")"
+    [ -n "${_val}" ] || _val="$(feature_default "${_key}")"
+    [ "${_val}" = "true" ]
+}
+
+# require_json_reader: plugins.json is read with jq or python3. Neither means
+# "installed?" cannot be answered, and an unanswerable question must not
+# read as "no" (that reinstalls every plugin on every run). Called up front
+# by both modes because a die inside a $(...) helper only exits the subshell.
+require_json_reader() {
+    [ -r "${CONFIG_DIR}/plugins.json" ] || return 0
+    command -v jq >/dev/null 2>&1 || command -v python3 >/dev/null 2>&1 \
+        || die "jq or python3 is required to read ${CONFIG_DIR}/plugins.json"
+}
+
+# valid_row <name> <id> <repo> <ref> <os>: the manifest row shape BOTH modes
+# accept, checked before anything reaches the herdr CLI (option injection,
+# path escapes). Warns and returns 1 on a bad row.
+valid_row() {
+    case "$1" in *[!A-Za-z0-9._-]*|*..*|"") warn "manifest row '$1': bad name (want [A-Za-z0-9._-]); skipping"; return 1 ;; esac
+    case "$2" in *[!A-Za-z0-9._-]*|-*|*..*|"") warn "manifest row '$1': bad plugin id '$2'; skipping"; return 1 ;; esac
+    case "$3" in
+        *[!A-Za-z0-9._/-]*|-*|/*|*/|*//*|*..*|"") warn "manifest row '$1': repo '$3' is not owner/repo[/subdir]; skipping"; return 1 ;;
+        */*) ;;
+        *) warn "manifest row '$1': repo '$3' is not owner/repo[/subdir]; skipping"; return 1 ;;
+    esac
+    case "$4" in *[!A-Za-z0-9._/-]*|-*|*..*|"") warn "manifest row '$1' needs a pinned ref (release tag or commit); skipping"; return 1 ;; esac
+    case "$5" in *[!a-z,]*) warn "manifest row '$1': bad os '$5' (want e.g. macos or linux,macos); skipping"; return 1 ;; esac
+    return 0
+}
+
+# installed_plugin_field <plugin_id> <requested_ref|plugin_root|kind>: herdr's
+# own record of an installed plugin (plugins.json). Empty when it is not
+# installed (call require_json_reader first, so empty never means unreadable).
+installed_plugin_field() {
+    PLUGINS_JSON="${CONFIG_DIR}/plugins.json"
+    [ -r "${PLUGINS_JSON}" ] || return 0
+    if command -v jq >/dev/null 2>&1; then
+        jq -r --arg id "$1" --arg f "$2" '.[]? | select(.plugin_id == $id)
+            | (if $f == "plugin_root" then .plugin_root else .source[$f] end) // empty' \
+            "${PLUGINS_JSON}" 2>/dev/null | head -1
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 - "${PLUGINS_JSON}" "$1" "$2" <<'PY2'
+import json, sys
+path, pid, field = sys.argv[1:4]
+try:
+    with open(path) as fh:
+        doc = json.load(fh)
+except (OSError, ValueError):
+    doc = []
+for p in doc if isinstance(doc, list) else []:
+    if p.get("plugin_id") == pid:
+        node = p if field == "plugin_root" else (p.get("source") or {})
+        print(node.get(field) or "")
+        break
+PY2
+    fi
+}
+
+# herdr (0.9.0) runs a plugin's [[build]] in a temporary checkout with
+# HERDR_PLUGIN_ROOT pointing at it, then moves the checkout into place, so a
+# build step that symlinks to $HERDR_PLUGIN_ROOT leaves a dangling link.
+# Re-point those links at the final root. Runs on every pass, so a host that
+# installed the plugin earlier heals too.
+fixup_plugin_links() {
+    root="$(installed_plugin_field "$1" plugin_root)"
+    if [ -z "${root}" ] || [ ! -d "${root}" ]; then return 0; fi
+    case "$1" in
+        ohmyzsh.shell)
+            # Only a DANGLING custom/plugins/herdr (herdr's temp checkout) is
+            # re-pointed, through the plugin's own link step; a live link —
+            # including one the user chose — is left alone, like reviewr's.
+            command -v zsh >/dev/null 2>&1 || return 0
+            link="${ZSH_CUSTOM:-${ZSH:-${HOME}/.oh-my-zsh}/custom}/plugins/herdr"
+            if [ -L "${link}" ] && [ ! -e "${link}" ]; then
+                HERDR_PLUGIN_ROOT="${root}" zsh "${root}/bin/install-zsh-plugin" >/dev/null 2>&1 \
+                    || warn "could not link herdr-ohmyzsh into Oh My Zsh (${ZSH})"
+            fi
+            ;;
+        persiyanov.reviewr)
+            # The two places its herdr/install.sh links the binary.
+            for link in "${HOME}/.local/state/herdr/plugins/persiyanov.reviewr/bin/herdr-reviewr" \
+                        "${HOME}/.local/bin/herdr-reviewr"; do
+                if [ -L "${link}" ] && [ ! -e "${link}" ]; then
+                    ln -sfn "${root}/bin/herdr-reviewr" "${link}"
+                fi
+            done
+            ;;
+    esac
+}
+
+install_plugins() {
+    [ -r "${PLUGINS_MANIFEST}" ] || die "plugin manifest not readable: ${PLUGINS_MANIFEST}"
+    HERDR_BIN="${INSTALL_DIR}/herdr"
+    [ -x "${HERDR_BIN}" ] || HERDR_BIN="$(command -v herdr 2>/dev/null || true)"
+    if [ -z "${HERDR_BIN}" ]; then
+        warn "herdr is not installed; skipping plugins (is install.tools.herdr enabled?)"
+        return 0
+    fi
+    # Plugin build steps may need cargo; install_rust.sh puts it here without
+    # touching rc files, and install.sh may be a non-login shell.
+    CARGO_BIN="${CARGO_HOME:-${HOME}/.cargo}/bin"
+    case ":${PATH}:" in
+        *":${CARGO_BIN}:"*) ;;
+        *) if [ -d "${CARGO_BIN}" ]; then PATH="${CARGO_BIN}:${PATH}"; fi ;;
+    esac
+    # herdr-ohmyzsh links itself into $ZSH/custom/plugins at install time, and
+    # install.sh is not an interactive zsh: resolve the clone the way
+    # opt/profiles/.zshrc and oh-my-zsh_update.sh do.
+    if [ -z "${ZSH:-}" ]; then
+        if [ -d "${HOME}/.oh-my-zsh" ]; then ZSH="${HOME}/.oh-my-zsh"; else ZSH="${GIT_WORKSPACE:-${HOME}/git}/oh-my-zsh"; fi
+        export ZSH
+    fi
+    require_json_reader
+    status=0
+    rows="$(manifest_rows)"
+    [ -n "${rows}" ] || { echo "  herdr plugins: manifest lists none"; return 0; }
+    while read -r name id repo ref os; do
+        valid_row "${name}" "${id}" "${repo}" "${ref}" "${os}" || { status=1; continue; }
+        if ! plugin_flag_on "${name}"; then
+            echo "  herdr plugin ${name}: off (gff install.herdr-plugin.${name})"
+            continue
+        fi
+        if ! os_matches "${os}"; then
+            echo "  herdr plugin ${name}: ${os} only; skipped on $(host_os)"
+            continue
+        fi
+        # A plugin someone `herdr plugin link`ed (source.kind local) is that
+        # developer's checkout; a managed install over it would replace it.
+        have_kind="$(installed_plugin_field "${id}" kind)"
+        if [ -n "${have_kind}" ] && [ "${have_kind}" != "github" ]; then
+            echo "  herdr plugin ${name}: installed from ${have_kind} (herdr plugin link); leaving it alone"
+            continue
+        fi
+        have_ref="$(installed_plugin_field "${id}" requested_ref)"
+        if [ "${have_ref}" = "${ref}" ] && [ "${HERDR_PLUGIN_FORCE:-0}" != "1" ]; then
+            ok "  herdr plugin ${name}: already installed at ${ref}"
+            fixup_plugin_links "${id}"
+            continue
+        fi
+        if [ -n "${have_ref}" ]; then
+            info "  herdr plugin ${name}: ${have_ref} -> ${ref}..."
+        else
+            info "  herdr plugin ${name}: installing ${repo}@${ref}..."
+        fi
+        # </dev/null: `read` owns stdin in this loop; the install must not eat
+        # it. herdr's install preview is shown only when the install fails.
+        if plugin_out="$("${HERDR_BIN}" plugin install "${repo}" --ref "${ref}" --yes 2>&1 </dev/null)"; then
+            ok "  herdr plugin ${name}: installed at ${ref}"
+            fixup_plugin_links "${id}"
+        else
+            printf '%s\n' "${plugin_out}" | tail -n 20 | sed 's/^/    /' >&2
+            warn "plugin ${name} (${repo}@${ref}) failed to install"
+            status=1
+        fi
+    done <<EOF_ROWS
+${rows}
+EOF_ROWS
+    return "${status}"
+}
+
+# ------------------------------------------------------------------------------
 # Mode: managed config.toml
 # ------------------------------------------------------------------------------
 render_config() {
     sed -e "s|@HERDR_THEME_DARK@|${HERDR_THEME_DARK}|g" \
         -e "s|@HERDR_THEME_LIGHT@|${HERDR_THEME_LIGHT}|g" "${CONFIG_TEMPLATE}"
+    render_plugin_keys
+}
+
+# Append the keybinding fragment (ai/herdr/plugins/<name>.toml) of every
+# enabled manifest row for this OS whose plugin is installed, in manifest
+# order. Rows without a fragment add nothing. Warnings go to stderr; stdout
+# is the config.
+render_plugin_keys() {
+    manifest_rows | while read -r name id repo ref os; do
+        valid_row "${name}" "${id}" "${repo}" "${ref}" "${os}" || continue
+        plugin_flag_on "${name}" || continue
+        os_matches "${os}" || continue
+        if [ -z "$(installed_plugin_field "${id}" plugin_root)" ]; then
+            warn "plugin ${name} is on but not installed; its keys are not bound (run install_herdr.sh plugins, then config)"
+            continue
+        fi
+        frag="${PLUGIN_KEYS_DIR}/${name}.toml"
+        [ -r "${frag}" ] || continue
+        printf '\n'
+        cat "${frag}"
+    done
 }
 
 # Best-effort: only when a server is up (its API socket exists). Never fails
@@ -312,6 +592,7 @@ reload_running_server() {
 
 install_config() {
     [ -r "${CONFIG_TEMPLATE}" ] || die "config template not readable: ${CONFIG_TEMPLATE}"
+    require_json_reader
     for t in "${HERDR_THEME_DARK}" "${HERDR_THEME_LIGHT}"; do
         case "${t}" in
             *[!a-z0-9-]*|"") die "theme names must match [a-z0-9-]+ (got '${t}')" ;;
@@ -350,5 +631,6 @@ case "${MODE}" in
     install)      install_binary ;;
     integrations) install_integrations ;;
     config)       install_config ;;
-    *) die "unknown mode '${MODE}' (expected: install | integrations | config)" ;;
+    plugins)      install_plugins ;;
+    *) die "unknown mode '${MODE}' (expected: install | integrations | config | plugins)" ;;
 esac

@@ -1,0 +1,9 @@
+# terminal-browser keybindings (https://github.com/zenbu-labs/terminal-browser).
+# Appended to the managed herdr config while gff
+# install.herdr-plugin.terminal-browser is on. prefix+shift+b opens a real
+# Chromium in a right split (needs a kitty-graphics terminal).
+[[keys.command]]
+key = "prefix+shift+b"
+type = "plugin_action"
+command = "zenbu-labs.terminal-browser.open-split"
+description = "open terminal-browser in a split"

@@ -13,10 +13,17 @@
 #     fleet Solarized palette; it converges a managed file, never clobbers a
 #     hand-edited one (no marker) unless HERDR_CONFIG_FORCE=1, and reloads a
 #     running server best-effort;
-#   * the gff wiring is complete: all three flags exist in features.yaml, each key is
-#     in exactly one install-phase list, and the integrations block runs AFTER
-#     install_antigravity_skills.sh (which re-renders hooks.json and drops
-#     herdr's entry).
+#   * the plugins mode installs each row of ai/herdr/plugins.tsv whose own
+#     gff flag (install.herdr-plugin.<name>) is on, at its pinned ref; a plugin
+#     already at that ref is a no-op, an undeclared flag means never, and a
+#     malformed row never reaches the herdr CLI;
+#   * the config mode appends each enabled plugin's keybinding fragment, and
+#     only those;
+#   * the gff wiring is complete: every flag exists in features.yaml, each
+#     install.sh key is in exactly one install-phase list, the integrations
+#     block runs AFTER install_antigravity_skills.sh (which re-renders
+#     hooks.json and drops herdr's entry), and the plugins step runs after
+#     both the herdr binary and install_rust.sh.
 #
 # Network is never touched: the manifest is fed via HERDR_MANIFEST_FILE and
 # the "installed" herdr is a stub that only answers --version.
@@ -226,6 +233,360 @@ if [ -n "${agy_line}" ] && [ -n "${integ_line}" ] && [ "${integ_line}" -gt "${ag
 else
     assert_eq "integrations@${integ_line:-missing} agy@${agy_line:-missing}" "ordered" \
         "herdr integrations run after install_antigravity_skills.sh"
+fi
+
+# --- plugins mode: manifest rows, each behind its own gff flag ----------------
+PLUG_FIX="${TMP}/plugins"
+mkdir -p "${PLUG_FIX}/bin" "${PLUG_FIX}/keys"
+cat > "${PLUG_FIX}/features.yaml" <<'YAML'
+sets:
+  - area: install
+    features:
+      - path: install.herdr-plugin.file-viewer
+        description: fixture
+        boolDefault: true
+      - path: install.herdr-plugin.navigator
+        description: fixture
+        boolDefault: false
+      - path: install.herdr-plugin.flaky
+        description: fixture
+        boolDefault: true
+      - path: install.herdr-plugin.reviewr
+        description: fixture
+        boolDefault: true
+      - path: install.herdr-plugin.ohmyzsh
+        description: fixture
+        boolDefault: true
+      - path: install.herdr-plugin.maconly
+        description: fixture
+        boolDefault: true
+      - path: install.herdr-plugin.subdir
+        description: fixture
+        boolDefault: true
+YAML
+cat > "${PLUG_FIX}/plugins.tsv" <<'TSV'
+# name       plugin_id          repo                        ref
+file-viewer  herdr-file-viewer  smarzban/herdr-file-viewer  v1.16.0
+
+navigator    herdr-navigator    thanhdat77/herdr-navigator  v0.3.6
+undeclared   some.plugin        owner/undeclared            v1.0.0
+TSV
+printf '# fv keys\n[[keys.command]]\nkey = "prefix+f"\ntype = "plugin_action"\ncommand = "herdr-file-viewer.open-file-viewer"\n' \
+    > "${PLUG_FIX}/keys/file-viewer.toml"
+printf '[[keys.command]]\nkey = "prefix+n"\ntype = "plugin_action"\ncommand = "herdr-navigator.open"\n' \
+    > "${PLUG_FIX}/keys/navigator.toml"
+printf '[[keys.command]]\nkey = "prefix+u"\ntype = "plugin_action"\ncommand = "some.plugin.x"\n' \
+    > "${PLUG_FIX}/keys/undeclared.toml"
+# A gff stub: answers `get <key>` from ${PLUG_FIX}/gff-overrides ("key value"
+# per line, what a host's `gff set` would resolve to), exit 2 otherwise —
+# the real gff's answer for an unknown key.
+cat > "${PLUG_FIX}/bin/gff" <<'SH'
+#!/bin/sh
+while [ "$#" -gt 0 ]; do case "$1" in --source) shift 2 ;; get) shift; break ;; *) shift ;; esac; done
+v="$(awk -v k="$1" '$1 == k { print $2 }' "${GFF_OVERRIDES}" 2>/dev/null)"
+[ -n "$v" ] && { echo "$v"; exit 0; }
+echo "gff: resolve: unknown flag key: $1" >&2; exit 2
+SH
+chmod +x "${PLUG_FIX}/bin/gff"
+export GFF_OVERRIDES="${PLUG_FIX}/gff-overrides"
+: > "${GFF_OVERRIDES}"
+# A herdr stub that logs every call; `plugin install fail/...` fails.
+STUB_LOG="${PLUG_FIX}/calls.log"
+cat > "${PLUG_FIX}/bin/herdr" <<'SH'
+#!/bin/sh
+echo "$*" >> "${STUB_LOG}"
+case "$1" in
+  --version) echo "herdr 0.8.2" ;;
+  plugin) case "$3" in fail/*) exit 1 ;; esac ;;
+esac
+exit 0
+SH
+chmod +x "${PLUG_FIX}/bin/herdr"
+export STUB_LOG
+
+# installed_json <config dir> <plugin_id>...: herdr's plugins.json as it looks
+# after `herdr plugin install` of each id (github source, a root dir).
+installed_json() {
+    _d="$1"; shift; mkdir -p "${_d}"
+    { printf '['; sep=""
+      for _id in "$@"; do
+          printf '%s{"plugin_id":"%s","plugin_root":"%s/root-%s","source":{"kind":"github","requested_ref":"v0"}}' "${sep}" "${_id}" "${_d}" "${_id}"; sep=","
+      done; printf ']\n'; } > "${_d}/plugins.json"
+}
+
+# run_plugins <config dir> [VAR=value ...]: plugins mode against the fixtures,
+# with no GFF_* leaking in from the caller's environment.
+run_plugins() {
+    _cfg="$1"; shift
+    : > "${STUB_LOG}"
+    env -u GFF_INSTALL_HERDR_PLUGIN_FILE_VIEWER -u GFF_INSTALL_HERDR_PLUGIN_NAVIGATOR \
+        -u GFF_INSTALL_HERDR_PLUGIN_UNDECLARED -u GFF_INSTALL_HERDR_PLUGIN_FLAKY \
+        HERDR_INSTALL_DIR="${PLUG_FIX}/bin" HERDR_CONFIG_DIR="${_cfg}" \
+        HERDR_PLUGINS_MANIFEST="${HERDR_PLUGINS_MANIFEST:-${PLUG_FIX}/plugins.tsv}" HERDR_GFF="${PLUG_FIX}/bin/gff" \
+        HERDR_FEATURES_FILE="${PLUG_FIX}/features.yaml" "$@" bash "${SCRIPT}" plugins 2>&1
+}
+
+# 12. Standalone (no exported GFF_*): the declared defaults decide. file-viewer
+#     (default on) installs at its pinned ref; navigator (default off) and the
+#     row with no declared flag do not.
+out="$(run_plugins "${TMP}/p-fresh")"; rc=$?
+assert_eq "${rc}" "0" "plugins: fresh host exits 0"
+assert_eq "$(grep -c '^plugin install smarzban/herdr-file-viewer --ref v1.16.0 --yes$' "${STUB_LOG}")" "1" \
+    "plugins: default-on plugin is installed at its pinned ref"
+assert_eq "$(grep -c 'thanhdat77/herdr-navigator' "${STUB_LOG}")" "0" "plugins: default-off plugin is not installed"
+assert_eq "$(grep -c 'owner/undeclared' "${STUB_LOG}")" "0" "plugins: a row without a declared flag never installs"
+assert_eq "$(printf '%s' "${out}" | grep -c 'off (gff install.herdr-plugin.navigator)')" "1" \
+    "plugins: an off plugin names its flag"
+
+# 13. Exported GFF_* values (what install.sh passes) win over the defaults, and
+#     every enabled row is processed (the install call must not eat the
+#     manifest loop's stdin).
+out="$(run_plugins "${TMP}/p-env" GFF_INSTALL_HERDR_PLUGIN_NAVIGATOR=true)"; rc=$?
+assert_eq "${rc}" "0" "plugins: gff override exits 0"
+assert_eq "$(grep -c '^plugin install ' "${STUB_LOG}")" "2" "plugins: both enabled rows are installed"
+assert_eq "$(grep -c '^plugin install thanhdat77/herdr-navigator --ref v0.3.6 --yes$' "${STUB_LOG}")" "1" \
+    "plugins: gff true turns a default-off plugin on"
+out="$(run_plugins "${TMP}/p-env" GFF_INSTALL_HERDR_PLUGIN_FILE_VIEWER=false)"; rc=$?
+assert_eq "$(grep -c '^plugin install ' "${STUB_LOG}")" "0" "plugins: gff false turns a default-on plugin off"
+
+# 13b. Standalone (no exported GFF_*): a host's `gff set` override, as gff
+#      itself resolves it, turns a default-off plugin on — and the exported
+#      value, when present, still wins over it. Without a gff binary the
+#      declared default is the last resort.
+printf 'install.herdr-plugin.navigator true\n' > "${GFF_OVERRIDES}"
+out="$(run_plugins "${TMP}/p-gffset")"; rc=$?
+assert_eq "${rc}" "0" "plugins: standalone with a gff override exits 0"
+assert_eq "$(grep -c '^plugin install thanhdat77/herdr-navigator --ref v0.3.6 --yes$' "${STUB_LOG}")" "1" \
+    "plugins: standalone run honours the host's gff set override"
+out="$(run_plugins "${TMP}/p-gffset" GFF_INSTALL_HERDR_PLUGIN_NAVIGATOR=false)"
+assert_eq "$(grep -c 'thanhdat77/herdr-navigator' "${STUB_LOG}")" "0" "plugins: an exported GFF_* value wins over gff's answer"
+out="$(run_plugins "${TMP}/p-gffset" HERDR_GFF=/nonexistent/gff)"
+assert_eq "$(grep -c 'thanhdat77/herdr-navigator' "${STUB_LOG}")" "0" "plugins: no gff binary -> declared default (off)"
+: > "${GFF_OVERRIDES}"
+
+# 14. Already installed at the pinned ref: a no-op with no herdr call (fleet
+#     update re-runs install.sh everywhere; a reinstall rebuilds with cargo).
+P_CFG="${TMP}/p-have"; mkdir -p "${P_CFG}"
+printf '[{"plugin_id":"herdr-file-viewer","enabled":true,"source":{"requested_ref":"v1.16.0"}}]\n' > "${P_CFG}/plugins.json"
+out="$(run_plugins "${P_CFG}")"; rc=$?
+assert_eq "${rc}" "0" "plugins: already-installed exits 0"
+assert_eq "$(grep -c '^plugin install ' "${STUB_LOG}")" "0" "plugins: already at the pinned ref -> no reinstall"
+assert_eq "$(printf '%s' "${out}" | grep -c 'already installed at v1.16.0')" "1" "plugins: already-installed is reported"
+
+# 15. HERDR_PLUGIN_FORCE=1 reinstalls anyway.
+out="$(run_plugins "${P_CFG}" HERDR_PLUGIN_FORCE=1)"; rc=$?
+assert_eq "$(grep -c '^plugin install smarzban/herdr-file-viewer ' "${STUB_LOG}")" "1" "plugins: HERDR_PLUGIN_FORCE=1 reinstalls"
+
+# 16. Installed at an older ref: moves to the pinned one and says so.
+printf '[{"plugin_id":"herdr-file-viewer","enabled":true,"source":{"requested_ref":"v1.15.0"}}]\n' > "${P_CFG}/plugins.json"
+out="$(run_plugins "${P_CFG}")"; rc=$?
+assert_eq "$(grep -c '^plugin install smarzban/herdr-file-viewer --ref v1.16.0 ' "${STUB_LOG}")" "1" \
+    "plugins: an older ref is upgraded to the pinned one"
+assert_eq "$(printf '%s' "${out}" | grep -c 'v1.15.0 -> v1.16.0')" "1" "plugins: the upgrade is reported"
+
+# 16b. A plugin someone `herdr plugin link`ed is that developer's checkout:
+#      never replaced by a managed install, even with the manifest row on.
+printf '[{"plugin_id":"herdr-file-viewer","enabled":true,"plugin_root":"%s","source":{"kind":"local"}}]\n' "${P_CFG}" > "${P_CFG}/plugins.json"
+out="$(run_plugins "${P_CFG}")"; rc=$?
+assert_eq "${rc}" "0" "plugins: a linked plugin exits 0"
+assert_eq "$(grep -c '^plugin install ' "${STUB_LOG}")" "0" "plugins: a linked plugin is never reinstalled"
+assert_eq "$(printf '%s' "${out}" | grep -c 'installed from local (herdr plugin link); leaving it alone')" "1" "plugins: a linked plugin is reported"
+
+# 17. Malformed rows never reach the herdr CLI (option injection), and a
+#     failing install is reported without stopping the other rows.
+cat > "${PLUG_FIX}/bad.tsv" <<'TSV'
+file-viewer  herdr-file-viewer  --upload-pack=evil/x        v1
+file-viewer  herdr-file-viewer  smarzban/herdr-file-viewer  --ref=main
+file-viewer  herdr-file-viewer  a//b                        v1
+file-viewer  herdr-file-viewer  owner/../escape             v1
+file-viewer  herdr-file-viewer  smarzban/herdr-file-viewer  v1  linux;rm
+fv@2         herdr-file-viewer  smarzban/herdr-file-viewer  v1.16.0
+file-viewer  herdr-file-viewer  smarzban/herdr-file-viewer
+flaky        flaky.plugin       fail/flaky                  v1
+file-viewer  herdr-file-viewer  smarzban/herdr-file-viewer  v1.16.0
+TSV
+out="$(HERDR_PLUGINS_MANIFEST="${PLUG_FIX}/bad.tsv" run_plugins "${TMP}/p-bad")"; rc=$?
+assert_eq "${rc}" "1" "plugins: malformed rows or a failed install exit 1"
+assert_eq "$(grep -c -- '--upload-pack\|--ref=main\|a//b\|\.\./\|rm' "${STUB_LOG}")" "0" "plugins: malformed rows never reach herdr"
+assert_eq "$(printf '%s' "${out}" | grep -c "row 'fv@2': bad name")" "1" "plugins: a name the keys renderer would refuse is refused here too (one validator)"
+assert_eq "$(printf '%s' "${out}" | grep -c 'flaky (fail/flaky@v1) failed to install')" "1" "plugins: a failed install is reported"
+assert_eq "$(grep -c '^plugin install smarzban/herdr-file-viewer --ref v1.16.0 ' "${STUB_LOG}")" "1" \
+    "plugins: rows after a bad one still install"
+
+# 18a. herdr builds plugins in a temporary checkout, so links a build step made
+#      to $HERDR_PLUGIN_ROOT dangle once herdr moves it into place. The known
+#      cases are re-pointed at the final root on every pass.
+FX="${TMP}/fixup"; FX_HOME="${FX}/home"
+mkdir -p "${FX}/root-reviewr/bin" "${FX}/root-omz/bin" "${FX_HOME}/.local/bin" "${FX}/cfg" "${FX}/elsewhere"
+: > "${FX}/root-reviewr/bin/herdr-reviewr"; : > "${FX}/elsewhere/herdr-reviewr"
+ln -s "${FX}/gone/checkout/bin/herdr-reviewr" "${FX_HOME}/.local/bin/herdr-reviewr"       # dangling
+mkdir -p "${FX_HOME}/.local/state/herdr/plugins/persiyanov.reviewr/bin"
+ln -s "${FX}/elsewhere/herdr-reviewr" "${FX_HOME}/.local/state/herdr/plugins/persiyanov.reviewr/bin/herdr-reviewr"  # live
+# shellcheck disable=SC2016 # the stub expands HERDR_PLUGIN_ROOT when it runs
+printf 'echo "linked from ${HERDR_PLUGIN_ROOT}" > "%s/omz-linked"\n' "${FX}" > "${FX}/root-omz/bin/install-zsh-plugin"
+printf '[{"plugin_id":"persiyanov.reviewr","plugin_root":"%s","source":{"kind":"github","requested_ref":"v0.36.2"}},{"plugin_id":"ohmyzsh.shell","plugin_root":"%s","source":{"kind":"github","requested_ref":"abc1234"}}]\n' \
+    "${FX}/root-reviewr" "${FX}/root-omz" > "${FX}/cfg/plugins.json"
+mkdir -p "${FX}/omz/custom/plugins"; ln -s "${FX}/gone/checkout" "${FX}/omz/custom/plugins/herdr"   # dangling, as herdr leaves it
+printf 'reviewr persiyanov.reviewr persiyanov/herdr-reviewr v0.36.2\nohmyzsh ohmyzsh.shell robbyrussell/herdr-ohmyzsh abc1234\n' > "${FX}/plugins.tsv"
+out="$(HERDR_PLUGINS_MANIFEST="${FX}/plugins.tsv" run_plugins "${FX}/cfg" HOME="${FX_HOME}" ZSH="${FX}/omz")"; rc=$?
+assert_eq "${rc}" "0" "fixup: already-installed plugins with link fix-ups exit 0"
+assert_eq "$(readlink "${FX_HOME}/.local/bin/herdr-reviewr")" "${FX}/root-reviewr/bin/herdr-reviewr" \
+    "fixup: a dangling reviewr link is re-pointed at the final plugin root"
+assert_eq "$(readlink "${FX_HOME}/.local/state/herdr/plugins/persiyanov.reviewr/bin/herdr-reviewr")" "${FX}/elsewhere/herdr-reviewr" \
+    "fixup: a live link someone chose is left alone"
+if command -v zsh >/dev/null 2>&1; then
+    assert_eq "$(cat "${FX}/omz-linked" 2>/dev/null)" "linked from ${FX}/root-omz" \
+        "fixup: a dangling Oh My Zsh link is re-pointed through the plugin's own link step"
+    rm -f "${FX}/omz-linked"; ln -sfn "${FX}/elsewhere" "${FX}/omz/custom/plugins/herdr"   # live, user-chosen
+    out="$(HERDR_PLUGINS_MANIFEST="${FX}/plugins.tsv" run_plugins "${FX}/cfg" HOME="${FX_HOME}" ZSH="${FX}/omz")"
+    assert_eq "$([ -e "${FX}/omz-linked" ] && echo relinked || echo untouched)" "untouched" \
+        "fixup: a live Oh My Zsh link someone chose is left alone"
+fi
+
+# 18. No herdr at all: a warning, not a failure.
+out="$(HERDR_INSTALL_DIR="${EMPTY_DIR}" HERDR_CONFIG_DIR="${TMP}/p-none" PATH="${EMPTY_DIR}:/usr/bin:/bin" \
+    HERDR_PLUGINS_MANIFEST="${PLUG_FIX}/plugins.tsv" HERDR_FEATURES_FILE="${PLUG_FIX}/features.yaml" \
+    bash "${SCRIPT}" plugins 2>&1)"; rc=$?
+assert_eq "${rc}" "0" "plugins: no herdr -> exit 0"
+assert_eq "$(printf '%s' "${out}" | grep -c 'herdr is not installed; skipping plugins')" "1" "plugins: no herdr is reported"
+
+# --- config mode: each enabled plugin's keybindings ---------------------------
+# run_config <config dir> [VAR=value ...]
+run_config() {
+    _cfg="$1"; shift
+    env -u GFF_INSTALL_HERDR_PLUGIN_FILE_VIEWER -u GFF_INSTALL_HERDR_PLUGIN_NAVIGATOR \
+        HERDR_INSTALL_DIR="${EMPTY_DIR}" HERDR_CONFIG_DIR="${_cfg}" \
+        HERDR_PLUGINS_MANIFEST="${HERDR_PLUGINS_MANIFEST:-${PLUG_FIX}/plugins.tsv}" HERDR_PLUGIN_KEYS_DIR="${PLUG_FIX}/keys" \
+        HERDR_GFF="${PLUG_FIX}/bin/gff" HERDR_FEATURES_FILE="${PLUG_FIX}/features.yaml" "$@" bash "${SCRIPT}" config 2>&1
+}
+
+# 19. Enabled plugins' fragments are appended; off and undeclared ones are not.
+K_CFG="${TMP}/k-cfg"; installed_json "${K_CFG}" herdr-file-viewer herdr-navigator some.plugin
+out="$(run_config "${K_CFG}")"; rc=$?
+assert_eq "${rc}" "0" "config: plugin keys render exits 0"
+assert_grep "config: an enabled plugin's keybindings are appended" \
+    '^command = "herdr-file-viewer\.open-file-viewer"$' "${K_CFG}/config.toml"
+assert_grep_negative "config: an off plugin gets no keybindings" 'herdr-navigator\.open' "${K_CFG}/config.toml"
+assert_grep_negative "config: a row without a declared flag gets no keybindings" 'some\.plugin' "${K_CFG}/config.toml"
+assert_grep "config: the managed marker still leads the file" '^# managed by dotfiles' "${K_CFG}/config.toml"
+
+# 19c. A plugin that is on but not installed gets no keys, and says so —
+#      never a dead binding to an action that does not exist.
+N_CFG="${TMP}/n-cfg"; installed_json "${N_CFG}" herdr-file-viewer
+out="$(run_config "${N_CFG}" GFF_INSTALL_HERDR_PLUGIN_NAVIGATOR=true)"
+assert_grep_negative "config: an on-but-uninstalled plugin gets no keys" 'herdr-navigator\.open' "${N_CFG}/config.toml"
+assert_eq "$(printf '%s' "${out}" | grep -c 'navigator is on but not installed')" "1" "config: an on-but-uninstalled plugin is reported"
+
+# 19b. Standalone config: keys follow the host's gff set override too.
+printf 'install.herdr-plugin.navigator true\n' > "${GFF_OVERRIDES}"
+out="$(run_config "${K_CFG}")"
+assert_grep "config: standalone run renders keys for a gff-set plugin" '^command = "herdr-navigator\.open"$' "${K_CFG}/config.toml"
+: > "${GFF_OVERRIDES}"
+out="$(run_config "${K_CFG}")"
+assert_grep_negative "config: clearing the override drops the keys again" 'herdr-navigator\.open' "${K_CFG}/config.toml"
+
+# 20. Flipping a plugin's flag re-renders the managed file both ways.
+out="$(run_config "${K_CFG}" GFF_INSTALL_HERDR_PLUGIN_FILE_VIEWER=false GFF_INSTALL_HERDR_PLUGIN_NAVIGATOR=true)"; rc=$?
+assert_eq "$(printf '%s' "${out}" | grep -c 'Updating managed')" "1" "config: a flag flip updates the managed file"
+assert_grep_negative "config: keys go away with their flag" 'herdr-file-viewer\.open-file-viewer' "${K_CFG}/config.toml"
+assert_grep "config: keys arrive with their flag" '^command = "herdr-navigator\.open"$' "${K_CFG}/config.toml"
+
+# 21. The real template + manifest + fragments render a config herdr accepts.
+R_CFG="${TMP}/r-cfg/herdr"; installed_json "${R_CFG}" herdr-file-viewer
+out="$(env -u GFF_INSTALL_HERDR_PLUGIN_FILE_VIEWER HERDR_INSTALL_DIR="${EMPTY_DIR}" HERDR_GFF=/nonexistent/gff \
+    HERDR_CONFIG_DIR="${R_CFG}" bash "${SCRIPT}" config 2>&1)"; rc=$?
+assert_eq "${rc}" "0" "config: the repo's own plugin manifest renders"
+assert_grep "config: the repo's file-viewer keys render by default" \
+    '^command = "herdr-file-viewer\.open-file-viewer-tab"$' "${R_CFG}/config.toml"
+if command -v herdr >/dev/null 2>&1; then
+    assert_exit_code 0 "config: herdr config check accepts the rendered file" \
+        env XDG_CONFIG_HOME="${TMP}/r-cfg" herdr config check
+    set +e
+fi
+
+# 22. The optional os column: a row for another OS is skipped (no install,
+#      no keybindings) and says why; a subdir path reaches herdr as-is.
+cat > "${PLUG_FIX}/os.tsv" <<'TSV'
+maconly  mac.plugin     owner/maconly            v1.0.0  macos
+subdir   sub.plugin     owner/monorepo/herdr-plugin  v2.0.0
+TSV
+printf '[[keys.command]]\nkey = "prefix+shift+s"\ntype = "plugin_action"\ncommand = "mac.plugin.open"\n' > "${PLUG_FIX}/keys/maconly.toml"
+out="$(HERDR_PLUGINS_MANIFEST="${PLUG_FIX}/os.tsv" run_plugins "${TMP}/p-os" HERDR_HOST_OS=linux)"; rc=$?
+assert_eq "${rc}" "0" "os: a row for another OS is not a failure"
+assert_eq "$(grep -c 'owner/maconly' "${STUB_LOG}")" "0" "os: a macos row is not installed on linux"
+assert_eq "$(printf '%s' "${out}" | grep -c 'maconly: macos only; skipped on linux')" "1" "os: the skip names the OS"
+assert_eq "$(grep -c '^plugin install owner/monorepo/herdr-plugin --ref v2.0.0 --yes$' "${STUB_LOG}")" "1" \
+    "subdir: owner/repo/subdir is passed to herdr as-is"
+out="$(HERDR_PLUGINS_MANIFEST="${PLUG_FIX}/os.tsv" run_plugins "${TMP}/p-os" HERDR_HOST_OS=macos)"; rc=$?
+assert_eq "$(grep -c '^plugin install owner/maconly --ref v1.0.0 --yes$' "${STUB_LOG}")" "1" "os: a macos row installs on macos"
+O_CFG="${TMP}/o-cfg"; installed_json "${O_CFG}" mac.plugin sub.plugin
+out="$(HERDR_PLUGINS_MANIFEST="${PLUG_FIX}/os.tsv" run_config "${O_CFG}" HERDR_HOST_OS=linux)"
+assert_grep_negative "os: no keybindings for a plugin this OS skips" 'mac\.plugin\.open' "${O_CFG}/config.toml"
+out="$(HERDR_PLUGINS_MANIFEST="${PLUG_FIX}/os.tsv" run_config "${O_CFG}" HERDR_HOST_OS=macos)"
+assert_grep "os: keybindings arrive on the OS the plugin supports" '^command = "mac\.plugin\.open"$' "${O_CFG}/config.toml"
+
+# --- the repo's manifest, fragments and flags agree ---------------------------
+MANIFEST="${REPO_ROOT}/ai/herdr/plugins.tsv"
+KEYS_DIR="${REPO_ROOT}/ai/herdr/plugins"
+assert_file_exists "${MANIFEST}" "plugin manifest is tracked at ai/herdr/plugins.tsv"
+rows="$(awk '!/^[[:space:]]*(#|$)/ { print $1, $2, $3, $4, NF, $5 }' "${MANIFEST}")"
+assert_eq "$(printf '%s\n' "${rows}" | grep -c 'herdr-file-viewer smarzban/herdr-file-viewer')" "1" \
+    "manifest lists herdr-file-viewer"
+while read -r name id _repo ref nf os; do
+    [ -n "${name}" ] || continue
+    case "${nf}" in 4|5) cols=ok ;; *) cols="${nf} columns" ;; esac
+    assert_eq "${cols}" "ok" "manifest row ${name} has name, plugin_id, repo, ref and an optional os"
+    case "${os}" in ""|any|linux|macos|linux,macos|macos,linux) osok=ok ;; *) osok="bad os '${os}'" ;; esac
+    assert_eq "${osok}" "ok" "manifest row ${name} names only known OSes"
+    assert_grep "features.yaml declares install.herdr-plugin.${name}" \
+        "path: install\\.herdr-plugin\\.${name}\$" "${FEATURES}"
+    case "${ref}" in
+        v[0-9]*|[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) pinned=yes ;;
+        *) pinned="no (${ref})" ;;
+    esac
+    assert_eq "${pinned}" "yes" "manifest row ${name} pins a release tag or commit"
+    if [ -f "${KEYS_DIR}/${name}.toml" ]; then
+        foreign="$(grep '^command = ' "${KEYS_DIR}/${name}.toml" | grep -c -v -F "command = \"${id}.")"
+        assert_eq "${foreign}" "0" "keys for ${name} only bind ${id}'s own actions"
+    fi
+done <<EOF_ROWS
+${rows}
+EOF_ROWS
+for frag in "${KEYS_DIR}"/*.toml; do
+    fname="$(basename "${frag}" .toml)"
+    assert_eq "$(printf '%s\n' "${rows}" | awk -v n="${fname}" '$1 == n' | wc -l | tr -d ' ')" "1" \
+        "keys fragment ${fname}.toml belongs to a manifest row"
+done
+
+# --- install.sh wiring for plugins + Rust --------------------------------------
+assert_grep "install.sh runs install_herdr.sh in plugins mode" 'install_herdr\.sh" plugins' "${INSTALL_SH}"
+assert_grep "install.sh gates Rust on install.runtime.rust" 'gff_on install\.runtime\.rust;' "${INSTALL_SH}"
+assert_grep "features.yaml declares install.runtime.rust" 'path: install\.runtime\.rust$' "${FEATURES}"
+assert_eq "$(printf '%s' "${deps_line}" | grep -c -w 'INSTALL_RUNTIME_RUST')" "1" "INSTALL_RUNTIME_RUST is in _IP_DEPS_FLAGS"
+assert_eq "$(printf '%s' "${config_line}" | grep -c -w 'INSTALL_RUNTIME_RUST')" "0" "INSTALL_RUNTIME_RUST is NOT in _IP_CONFIG_FLAGS"
+assert_eq "$(grep -E '^_IP_(DEPS|CONFIG)_FLAGS=' "${INSTALL_SH}" | grep -c 'HERDR_PLUGIN_')" "0" \
+    "per-plugin flags are read by install_herdr.sh, so they are in neither phase list"
+assert_grep "features.yaml declares install.tools.herdr-plugins" 'path: install\.tools\.herdr-plugins$' "${FEATURES}"
+assert_grep "install.sh gates the plugins step on install.tools.herdr-plugins" 'gff_on install\.tools\.herdr-plugins;' "${INSTALL_SH}"
+assert_eq "$(printf '%s' "${config_line}" | grep -c -w 'INSTALL_TOOLS_HERDR_PLUGINS')" "1" \
+    "INSTALL_TOOLS_HERDR_PLUGINS is in _IP_CONFIG_FLAGS (reads repo content the deps layer never copies)"
+assert_eq "$(printf '%s' "${deps_line}" | grep -c -w 'INSTALL_TOOLS_HERDR_PLUGINS')" "0" \
+    "INSTALL_TOOLS_HERDR_PLUGINS is NOT in _IP_DEPS_FLAGS"
+bin_line="$(grep -n 'opt/scripts/system/install_herdr.sh" || echo' "${INSTALL_SH}" | head -1 | cut -d: -f1)"
+rust_line="$(grep -n 'install_rust.sh" ||' "${INSTALL_SH}" | head -1 | cut -d: -f1)"
+plug_line="$(grep -n 'install_herdr.sh" plugins' "${INSTALL_SH}" | head -1 | cut -d: -f1)"
+if [ -n "${bin_line}" ] && [ -n "${rust_line}" ] && [ -n "${plug_line}" ] \
+    && [ "${plug_line}" -gt "${bin_line}" ] && [ "${plug_line}" -gt "${rust_line}" ]; then
+    assert_eq "ordered" "ordered" "herdr plugins run after the herdr binary and Rust (line ${plug_line} > ${bin_line}, ${rust_line})"
+else
+    assert_eq "plugins@${plug_line:-missing} herdr@${bin_line:-missing} rust@${rust_line:-missing}" "ordered" \
+        "herdr plugins run after the herdr binary and Rust"
+fi
+cfg_line="$(grep -n 'install_herdr.sh" config' "${INSTALL_SH}" | head -1 | cut -d: -f1)"
+if [ -n "${cfg_line}" ] && [ -n "${plug_line}" ] && [ "${cfg_line}" -gt "${plug_line}" ]; then
+    assert_eq "ordered" "ordered" "the managed config renders after the plugins step, so a fresh run binds keys for what it installed (line ${cfg_line} > ${plug_line})"
+else
+    assert_eq "config@${cfg_line:-missing} plugins@${plug_line:-missing}" "ordered" "the managed config renders after the plugins step"
 fi
 
 _test_report

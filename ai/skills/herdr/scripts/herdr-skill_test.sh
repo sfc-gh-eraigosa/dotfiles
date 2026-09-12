@@ -146,8 +146,19 @@ assert_eq "$(tail -1 "${LOG}" | jq -r '[.params.workspace_id, .params.tab_label,
 CFG="${TMP}/cfg"; mkdir -p "${CFG}"
 run_prefs() { HERDR_SOCKET_PATH="${SOCK}" HERDR_CONFIG_DIR="${CFG}" bash "${PREFS}" "$@"; }
 # Seed the managed file exactly as install_herdr.sh config would.
-HERDR_CONFIG_DIR="${CFG}" HERDR_INSTALL_DIR="${TMP}/nobin" bash "${REPO_ROOT}/opt/scripts/system/install_herdr.sh" config >/dev/null 2>&1
+# The runner's shell may carry exported GFF_INSTALL_HERDR_PLUGIN_* (a `set -a;
+# eval "$(gff export --shell)"`); scrub them and pin gff away so this fixture
+# measures the code, not the environment. file-viewer is "installed" so its
+# keys render.
+printf '[{"plugin_id":"herdr-file-viewer","plugin_root":"%s","source":{"kind":"github","requested_ref":"v1.16.0"}}]\n' "${CFG}" > "${CFG}/plugins.json"
+# shellcheck disable=SC2046 # the -u list is built from the environment on purpose
+env $(env | sed -n 's/^\(GFF_INSTALL_HERDR_PLUGIN_[A-Z_]*\)=.*/-u \1/p') HERDR_GFF=/nonexistent/gff \
+    HERDR_CONFIG_DIR="${CFG}" HERDR_INSTALL_DIR="${TMP}/nobin" bash "${REPO_ROOT}/opt/scripts/system/install_herdr.sh" config >/dev/null 2>&1
 assert_grep "prefs fixture: seeded managed config" '^# managed by dotfiles' "${CFG}/config.toml"
+# The managed file carries plugin keybindings as [[keys.command]] array tables
+# after [keys]; the cases below must hold with them present.
+assert_eq "$(grep -c '^\[\[keys\.command\]\]$' "${CFG}/config.toml")" "2" \
+    "prefs fixture: plugin keybindings are [[keys.command]] array tables"
 
 # 7. status: reports managed vs host-owned and the live values.
 out="$(run_prefs status 2>&1)"
@@ -181,6 +192,20 @@ run_prefs set keys.new_tab prefix+c >/dev/null 2>&1
 assert_grep "prefs set: new key lands in its section" '^new_tab = "prefix\+c"$' "${CFG}/config.toml"
 assert_eq "$(awk '/^\[keys\]/{f=1;next} /^\[/{f=0} f && /^new_tab/{print "in-keys"}' "${CFG}/config.toml")" "in-keys" \
     "prefs set: appended key is inside [keys], not at EOF"
+# An array table ends [keys]: its entries are not keys.* settings, and a new
+# key is never written into one (it would bind into the last keybinding).
+assert_eq "$(awk '/^\[\[keys\.command\]\]/{f=1;next} /^\[/{f=0} f && /^new_tab/' "${CFG}/config.toml" | wc -l | tr -d ' ')" "0" \
+    "prefs set: a new [keys] key never lands inside a [[keys.command]] entry"
+assert_eq "$(run_prefs get keys.command)" "" "prefs get: a keybinding entry's field is not read as keys.<field>"
+assert_eq "$(run_prefs get keys.key)" "" "prefs get: [[keys.command]] entries do not shadow [keys]"
+assert_eq "$(grep -c '^command = "herdr-file-viewer\.' "${CFG}/config.toml")" "2" \
+    "prefs set: the plugin keybindings survive intact"
+# A scalar beside [[keys.command]] is a duplicate key: herdr would reject the
+# whole file and run on defaults. Refused, nothing written.
+out="$(run_prefs set keys.command foo 2>&1)"; rc=$?
+assert_eq "${rc}" "1" "prefs set: refuses a key that is an array of tables"
+assert_eq "$(printf '%s' "${out}" | grep -c 'array of tables')" "1" "prefs set: says why"
+assert_grep_negative "prefs set: nothing was written for it" '^command = "foo"' "${CFG}/config.toml"
 out="$(run_prefs set nodots value 2>&1)"; rc=$?
 assert_eq "${rc}" "1" "prefs set: key must be section.key"
 
