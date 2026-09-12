@@ -352,8 +352,9 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		// Only meaningful on the run list: enter opens the run under the
 		// cursor into the stream panes.
-		if m.histOn && !m.histRunOpen() {
+		if m.histOn && !m.histRunOpen() && m.histPending == "" {
 			if r, ok := m.histAt(); ok {
+				m.histPending = r.Path
 				return m, openHistoryRun(r)
 			}
 		}

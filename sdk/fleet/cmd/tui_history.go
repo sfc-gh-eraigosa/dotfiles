@@ -49,8 +49,8 @@ func historyRuns(dir string, hosts []string) ([]histindex.Summary, error) {
 		s, err := histindex.Summarize(r)
 		if err != nil {
 			// One unreadable capture must not cost the whole list: the row
-			// still names the run, it just carries no summary.
-			s = histindex.Summary{Run: r}
+			// still names the run, and says its summary is unknown.
+			s = histindex.Summary{Run: r, Unreadable: true}
 		}
 		out = append(out, s)
 	}
@@ -125,28 +125,43 @@ func (m *tuiModel) histMoveTo(i int) {
 	if i > len(m.histRuns)-1 {
 		i = len(m.histRuns) - 1
 	}
+	// Start from the window the operator is LOOKING at, which may already
+	// differ from histTop if the pane changed height since the last motion.
+	m.histTop = m.histWindowTop(m.histIndexOf(m.histCursor))
 	m.histCursor = m.histRuns[i].Path
-	m.clampHistViewport(i)
+	m.histTop = m.histWindowTop(i)
 }
 
-// clampHistViewport keeps the run cursor on screen. The run list has its own
-// offset because m.vp belongs to the HOST list and clampViewport recomputes
-// it from the host cursor — slicing the runs by it rendered a header with
-// nothing under it, and pinned the cursor off-screen with no way to reach it.
-func (m *tuiModel) clampHistViewport(i int) {
+// histWindowTop is the first run row to draw: histTop, pulled just far enough
+// to keep row i on screen at the pane's CURRENT height. The run list has its
+// own offset because m.vp belongs to the HOST list and clampViewport
+// recomputes it from the host cursor — slicing the runs by it rendered a
+// header with nothing under it.
+//
+// It is computed rather than only stored because the height changes under
+// the list without any motion: opening a run starts the log pane and
+// squeezes the list, and a stored offset then left the cursor off-screen.
+func (m tuiModel) histWindowTop(i int) int {
 	h := m.visibleRows()
 	if h < 1 {
 		h = 1
 	}
-	if i < m.histTop {
-		m.histTop = i
+	top := m.histTop
+	if i >= 0 {
+		if i < top {
+			top = i
+		}
+		if i >= top+h {
+			top = i - h + 1
+		}
 	}
-	if i >= m.histTop+h {
-		m.histTop = i - h + 1
+	if top > len(m.histRuns)-1 {
+		top = len(m.histRuns) - 1
 	}
-	if m.histTop < 0 {
-		m.histTop = 0
+	if top < 0 {
+		top = 0
 	}
+	return top
 }
 
 // historyOpenedMsg carries one capture's parsed contents back into Update.
@@ -228,16 +243,21 @@ func captureEntries(host string, c histindex.Capture, day time.Time) []logEntry 
 //
 // A line with no parsable stamp keeps the run's own time rather than being
 // dropped or zeroed — output written before the first stamp is still output.
+//
+// libs/log writes the stamp in UTC, so it is rebuilt in UTC and only then
+// moved to local time — the zone the run list's WHEN column and the live
+// lines use, so an opened run reads on the same clock as its row.
 func stampOf(day time.Time, clock string) time.Time {
 	if clock == "" {
-		return day
+		return day.In(time.Local)
 	}
 	t, err := time.Parse("15:04:05", clock)
 	if err != nil {
-		return day
+		return day.In(time.Local)
 	}
-	return time.Date(day.Year(), day.Month(), day.Day(),
-		t.Hour(), t.Minute(), t.Second(), 0, day.Location())
+	d := day.UTC()
+	return time.Date(d.Year(), d.Month(), d.Day(),
+		t.Hour(), t.Minute(), t.Second(), 0, time.UTC).In(time.Local)
 }
 
 // wireTUIPaths attaches the on-disk locations the model needs. It exists as
@@ -259,7 +279,15 @@ func wireTUIPaths(m *tuiModel) {
 // follow state the operator had before the capture was opened. Both exits
 // from an open run (esc, and toggling H off) go through it, so neither can
 // leave the panes showing a stored capture over a running update.
+//
+// With no run open there is nothing to restore: the follow state is saved
+// only when a run opens, so restoring it here handed back a stale or zero
+// value and a round trip through the run list stopped the live panes.
 func (m *tuiModel) closeHistoryRun() {
+	m.histPending = ""
+	if !m.histRunOpen() {
+		return
+	}
 	m.histPath, m.histLines, m.histErrCount = "", nil, 0
 	m.logFollow, m.errFollow = m.liveFollow, m.liveErrFollow
 	m.logTop, m.errTop = 0, 0

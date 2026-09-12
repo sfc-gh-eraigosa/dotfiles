@@ -224,9 +224,7 @@ func TestDemoFrames(t *testing.T) {
 					failed = r
 				}
 			}
-			m.histCursor = failed.Path
-			x, _ := m.Update(openHistoryRun(failed)().(historyOpenedMsg))
-			return x.(tuiModel)
+			return openVia(t, m, failed)
 		}},
 	}
 

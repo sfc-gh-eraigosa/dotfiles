@@ -190,6 +190,13 @@ type tuiModel struct {
 	// again with nothing lost.
 	histPath  string
 	histLines []logEntry
+	// histPending is the run enter asked to open and whose read has not landed
+	// yet. The read is async, so its answer is accepted only while this still
+	// names it: leaving history clears it, and enter is ignored while it is
+	// set. Without that a late answer put a capture back on the dashboard, or
+	// a second enter's answer saved the already cleared follow state as the
+	// live one.
+	histPending string
 	// histErrCount mirrors errCount for the opened capture: counted once at
 	// open, so the pane's height queries stay off a per-keystroke rebuild.
 	histErrCount int
@@ -447,8 +454,19 @@ func (m tuiModel) matches(r Row) bool {
 	return m.search.re != nil && m.search.re.MatchString(m.rowText(r))
 }
 
+// matchIndexes indexes the ACTIVE list, because moveTo does: in history the
+// positions are run rows, and matching host rows there handed a host's
+// position to the run cursor.
 func (m tuiModel) matchIndexes() []int {
 	var out []int
+	if m.histOn {
+		for i, r := range m.histRuns {
+			if m.search.re != nil && m.search.re.MatchString(histRowText(r)) {
+				out = append(out, i)
+			}
+		}
+		return out
+	}
 	for i, r := range m.rows {
 		if m.matches(r) {
 			out = append(out, i)
@@ -465,6 +483,9 @@ func (m *tuiModel) jumpMatch(d int) {
 		return
 	}
 	cur := m.indexOf(m.cursor)
+	if m.histOn {
+		cur = m.histIndexOf(m.histCursor)
+	}
 	if d > 0 {
 		for _, i := range idx {
 			if i > cur {
@@ -848,6 +869,12 @@ func (m *tuiModel) appendLogLine(alias, line string, isErr bool) {
 			}
 		}
 		m.logs = m.logs[drop:]
+		// While a run is open the offsets index the CAPTURE, and the live
+		// buffer's own offsets are reset when the run closes — so a busy
+		// update must not scroll the stored run the operator is reading.
+		if m.histRunOpen() {
+			return
+		}
 		if m.logTop >= drop {
 			m.logTop -= drop
 		} else {
@@ -1250,6 +1277,11 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(readLine(msg.alias, msg.st), awaitDone(msg.alias, msg.st))
 
 	case historyOpenedMsg:
+		// Drop an answer the operator has already walked away from.
+		if !m.histOn || msg.path != m.histPending {
+			return m, nil
+		}
+		m.histPending = ""
 		if msg.err != nil {
 			m.status = fmt.Sprintf("history: %v", msg.err)
 			return m, nil

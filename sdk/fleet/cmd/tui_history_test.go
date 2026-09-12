@@ -7,9 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
+
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/histindex"
 )
 
 var errTestScan = errors.New("scan boom")
@@ -383,7 +387,7 @@ func TestEnterOpensTheRunIntoThePanes(t *testing.T) {
 	mm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
 	m2 := mm.(tuiModel)
 
-	_, cmd := send(m2, "enter")
+	m2, cmd := send(m2, "enter")
 	if cmd == nil {
 		t.Fatal("enter must return a Cmd — reading a capture is I/O and never happens in Update")
 	}
@@ -426,7 +430,7 @@ func TestEscUnwindsOneLevelAtATime(t *testing.T) {
 	m, _ := send(testModel("alpha", "beta"), "space", "H")
 	mm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
 	m2 := mm.(tuiModel)
-	_, cmd := send(m2, "enter")
+	m2, cmd := send(m2, "enter")
 	om, _ := m2.Update(cmd().(historyOpenedMsg))
 	open := om.(tuiModel)
 
@@ -473,7 +477,7 @@ func TestOpeningARunNeverLosesLiveStreamLines(t *testing.T) {
 	m2, _ := send(m, "H")
 	lm, _ := m2.Update(historyLoadedMsg{runs: runs, scope: m2.histScope})
 	m3 := lm.(tuiModel)
-	_, cmd := send(m3, "enter")
+	m3, cmd := send(m3, "enter")
 	om, _ := m3.Update(cmd().(historyOpenedMsg))
 	open := om.(tuiModel)
 
@@ -517,8 +521,7 @@ func TestOpenedRunFillsTheStderrPane(t *testing.T) {
 	m2.errOpen = true
 	m2.vp.width, m2.vp.height = 100, 30
 
-	om, _ := m2.Update(openHistoryRun(runs[0])().(historyOpenedMsg))
-	open := om.(tuiModel)
+	open := openVia(t, m2, runs[0])
 
 	if !open.errActive() {
 		t.Error("a capture carrying stderr must make the error pane active")
@@ -597,8 +600,7 @@ func TestHTogglingOffClosesTheOpenedRun(t *testing.T) {
 	m, _ := send(testModel("alpha"), "H")
 	lm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
 	m2 := lm.(tuiModel)
-	om, _ := m2.Update(openHistoryRun(runs[0])().(historyOpenedMsg))
-	open := om.(tuiModel)
+	open := openVia(t, m2, runs[0])
 	open.appendLog("alpha", "a live line")
 
 	off, _ := send(open, "H")
@@ -628,8 +630,7 @@ func TestCaptureLinesKeepTheirRecordedTime(t *testing.T) {
 
 	m, _ := send(testModel("alpha"), "H")
 	lm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
-	om, _ := lm.(tuiModel).Update(openHistoryRun(runs[0])().(historyOpenedMsg))
-	open := om.(tuiModel)
+	open := openVia(t, lm.(tuiModel), runs[0])
 
 	got := open.logEntries()
 	if len(got) != 2 {
@@ -638,8 +639,10 @@ func TestCaptureLinesKeepTheirRecordedTime(t *testing.T) {
 	if a, b := got[0].at.Format("15:04:05"), got[1].at.Format("15:04:05"); a == b {
 		t.Errorf("both lines stamped %s — the recorded times were discarded", a)
 	}
-	if got[0].at.Format("15:04:05") != "03:47:14" {
-		t.Errorf("first line stamped %s, want its recorded 03:47:14", got[0].at.Format("15:04:05"))
+	// The file records UTC; the pane shows it in local time.
+	want := time.Date(2026, 9, 9, 3, 47, 14, 0, time.UTC).In(time.Local).Format("15:04:05")
+	if got[0].at.Format("15:04:05") != want {
+		t.Errorf("first line stamped %s, want its recorded 03:47:14Z (%s local)", got[0].at.Format("15:04:05"), want)
 	}
 }
 
@@ -660,8 +663,7 @@ func TestCapitalJScrollsAnOpenedCapture(t *testing.T) {
 
 	m, _ := send(testModel("alpha"), "H")
 	lm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
-	om, _ := lm.(tuiModel).Update(openHistoryRun(runs[0])().(historyOpenedMsg))
-	open := om.(tuiModel)
+	open := openVia(t, lm.(tuiModel), runs[0])
 	open.logOpen = true
 	open.vp.width, open.vp.height = 100, 30
 
@@ -686,8 +688,7 @@ func TestClosingARunRestoresLiveFollowing(t *testing.T) {
 	if !m2.logFollow {
 		t.Skip("live following is off by default in this model; nothing to restore")
 	}
-	om, _ := m2.Update(openHistoryRun(runs[0])().(historyOpenedMsg))
-	open := om.(tuiModel)
+	open := openVia(t, m2, runs[0])
 	if open.logFollow {
 		t.Fatal("precondition: opening a capture stops following")
 	}
@@ -718,8 +719,7 @@ func TestStderrTitleFollowsTheOpenedCapture(t *testing.T) {
 
 	m2, _ := send(m, "H")
 	lm, _ := m2.Update(historyLoadedMsg{runs: runs, scope: m2.histScope})
-	om, _ := lm.(tuiModel).Update(openHistoryRun(runs[0])().(historyOpenedMsg))
-	open := om.(tuiModel)
+	open := openVia(t, lm.(tuiModel), runs[0])
 
 	title := stripANSI(open.errViewN(6))
 	if strings.Contains(title, "2 warning") {
@@ -744,8 +744,7 @@ func TestWarnGutterAgreesWithTheRunListColumn(t *testing.T) {
 
 	m, _ := send(testModel("alpha"), "H")
 	lm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
-	om, _ := lm.(tuiModel).Update(openHistoryRun(runs[0])().(historyOpenedMsg))
-	open := om.(tuiModel)
+	open := openVia(t, lm.(tuiModel), runs[0])
 
 	for _, e := range open.logEntries() {
 		if e.warn {
@@ -780,5 +779,274 @@ func TestStaleHistoryLoadIsDropped(t *testing.T) {
 		if r.Host == "alpha" {
 			t.Fatalf("a stale scan for a discarded scope overwrote the current list: %+v", after.histRuns)
 		}
+	}
+}
+
+// --- fixes for the second PR #320 review ----------------------------------
+
+// openVia opens r the way the operator does — cursor on it, enter, and the
+// read's answer — so the pending-open check is exercised, never bypassed.
+func openVia(t *testing.T, m tuiModel, r histindex.Summary) tuiModel {
+	t.Helper()
+	m.histCursor = r.Path
+	m, cmd := send(m, "enter")
+	if cmd == nil {
+		t.Fatal("precondition: enter must issue the open")
+	}
+	om, _ := m.Update(cmd())
+	return om.(tuiModel)
+}
+
+// histOpen drives H → load → enter → open through the real Update path and
+// returns the model with the run on screen.
+func histOpen(t *testing.T, m tuiModel, runs []histindex.Summary) tuiModel {
+	t.Helper()
+	in, _ := send(m, "H")
+	lm, _ := in.Update(historyLoadedMsg{runs: runs, scope: in.histScope})
+	listed := lm.(tuiModel)
+	listed, cmd := send(listed, "enter")
+	if cmd == nil {
+		t.Fatal("precondition: enter must issue the open")
+	}
+	om, _ := listed.Update(cmd().(historyOpenedMsg))
+	return om.(tuiModel)
+}
+
+// TestLeavingHistoryWithoutOpeningKeepsTheLivePanes pins that a round trip
+// through the run list costs the live panes nothing. closeHistoryRun ran on
+// every exit and restored follow state that is only SAVED when a run opens —
+// so H,H (or H,esc) during a streaming update restored the zero value, and
+// both panes stopped following and jumped to line 1.
+func TestLeavingHistoryWithoutOpeningKeepsTheLivePanes(t *testing.T) {
+	for _, exit := range []string{"H", "esc"} {
+		m := testModel("alpha")
+		m.appendLog("alpha", "live")
+
+		in, _ := send(m, "H")
+		lm, _ := in.Update(historyLoadedMsg{runs: nil, scope: in.histScope})
+		out, _ := send(lm.(tuiModel), exit)
+		if !out.logFollow || !out.errFollow {
+			t.Errorf("H then %s: live panes stopped following (log=%v err=%v)",
+				exit, out.logFollow, out.errFollow)
+		}
+
+		// and a scrolled live pane keeps its place
+		s := testModel("alpha")
+		s.logFollow, s.logTop = false, 7
+		s.errFollow, s.errTop = false, 3
+		in2, _ := send(s, "H")
+		out2, _ := send(in2, exit)
+		if out2.logFollow || out2.logTop != 7 || out2.errFollow || out2.errTop != 3 {
+			t.Errorf("H then %s: a scrolled live pane lost its place (log=%v/%d err=%v/%d)",
+				exit, out2.logFollow, out2.logTop, out2.errFollow, out2.errTop)
+		}
+	}
+}
+
+// TestLiveEvictionLeavesAnOpenedCaptureWhereItIs pins that a busy update
+// cannot scroll a capture the operator is reading. The eviction shift in
+// appendLogLine corrects offsets into m.logs — but while a run is open,
+// logTop/errTop index the CAPTURE, so every evicted live line walked the
+// reader's view up by one.
+func TestLiveEvictionLeavesAnOpenedCaptureWhereItIs(t *testing.T) {
+	dir := t.TempDir()
+	var b strings.Builder
+	b.WriteString("# fleet update — host=alpha started=x\n")
+	for i := 0; i < 100; i++ {
+		fmt.Fprintf(&b, "03:47:%02d line %d\n", i%60, i)
+		fmt.Fprintf(&b, "03:47:%02d !! warning %d\n", i%60, i)
+	}
+	b.WriteString("# 2026-09-09T03:50:36Z finished\n")
+	histCapture(t, dir, "20260909T030000Z", "alpha", b.String())
+	runs, _ := historyRuns(dir, []string{"alpha"})
+
+	open := histOpen(t, testModel("alpha"), runs)
+	open.logTop, open.errTop = 50, 20
+
+	for i := 0; i < logCap+30; i++ {
+		open.appendLogLine("alpha", fmt.Sprintf("live %d", i), i%2 == 0)
+	}
+	if open.logTop != 50 || open.errTop != 20 {
+		t.Errorf("live eviction scrolled the opened capture: logTop=%d errTop=%d, want 50/20",
+			open.logTop, open.errTop)
+	}
+}
+
+// TestALateOpenAfterLeavingHistoryIsDropped pins that the async read cannot
+// resurrect a run the operator already walked away from. With enter then a
+// quick esc or H, the message landed after history was off and put the
+// stored capture back into the dashboard's panes — the exact state the H-off
+// fix exists to prevent.
+func TestALateOpenAfterLeavingHistoryIsDropped(t *testing.T) {
+	dir := t.TempDir()
+	histCapture(t, dir, "20260909T030000Z", "alpha", histRun)
+	runs, _ := historyRuns(dir, []string{"alpha"})
+
+	for _, exit := range []string{"H", "esc"} {
+		m := testModel("alpha")
+		m.appendLog("alpha", "live")
+		in, _ := send(m, "H")
+		lm, _ := in.Update(historyLoadedMsg{runs: runs, scope: in.histScope})
+		listed := lm.(tuiModel)
+		listed, cmd := send(listed, "enter")
+		gone, _ := send(listed, exit)
+
+		late, _ := gone.Update(cmd().(historyOpenedMsg))
+		got := late.(tuiModel)
+		if got.histRunOpen() {
+			t.Errorf("enter then %s: the late open put a capture on the dashboard", exit)
+		}
+		if !got.logFollow {
+			t.Errorf("enter then %s: the late open stopped the live pane following", exit)
+		}
+	}
+}
+
+// TestDoubleEnterStillRestoresLiveFollowing pins the other race: two enters
+// before the read lands give two messages, and the second saved the ALREADY
+// cleared follow state as the "live" one — so closing the run froze the live
+// pane at line 1.
+func TestDoubleEnterStillRestoresLiveFollowing(t *testing.T) {
+	dir := t.TempDir()
+	histCapture(t, dir, "20260909T030000Z", "alpha", histRun)
+	runs, _ := historyRuns(dir, []string{"alpha"})
+
+	in, _ := send(testModel("alpha"), "H")
+	lm, _ := in.Update(historyLoadedMsg{runs: runs, scope: in.histScope})
+	listed := lm.(tuiModel)
+	listed, cmd1 := send(listed, "enter")
+	listed, cmd2 := send(listed, "enter")
+
+	var mm tea.Model = listed
+	for _, c := range []tea.Cmd{cmd1, cmd2} {
+		if c != nil {
+			mm, _ = mm.Update(c())
+		}
+	}
+	open := mm.(tuiModel)
+	if !open.histRunOpen() {
+		t.Fatal("precondition: the run is open")
+	}
+	back, _ := send(open, "esc")
+	if !back.logFollow {
+		t.Error("closing the run after a double enter must resume following the live stream")
+	}
+}
+
+// TestSearchInHistoryLandsOnAMatchingRun pins that / n N search the list on
+// screen. jumpMatch matched HOST rows and handed the host index to moveTo,
+// which in history moves the RUN cursor — so /gam landed on whichever run
+// happened to share gamma's host-row position.
+func TestSearchInHistoryLandsOnAMatchingRun(t *testing.T) {
+	dir := t.TempDir()
+	histCapture(t, dir, "20260909T060000Z", "alpha", histRun)
+	histCapture(t, dir, "20260909T050000Z", "beta", histRun)
+	histCapture(t, dir, "20260909T040000Z", "alpha", histRun)
+	histCapture(t, dir, "20260909T030000Z", "beta", histRun)
+	histCapture(t, dir, "20260909T010000Z", "gamma", histRun)
+
+	m, _ := send(testModel("alpha", "beta", "gamma"), "a", "H")
+	runs, _ := historyRuns(dir, m.histScope)
+	lm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
+	listed := lm.(tuiModel)
+
+	found, _ := send(listed, "/", "g", "a", "m", "enter")
+	r, ok := found.histAt()
+	if !ok || r.Host != "gamma" {
+		t.Errorf("/gam in history must land on gamma's run, got %+v", r)
+	}
+	again, _ := send(found, "n")
+	if r2, _ := again.histAt(); r2.Host != "gamma" {
+		t.Errorf("n must stay on the only gamma run, got %+v", r2)
+	}
+	if again.cursor != listed.cursor {
+		t.Errorf("searching the run list moved the host cursor from %q to %q", listed.cursor, again.cursor)
+	}
+}
+
+// TestOpeningARunKeepsItsRowOnScreen pins that the run cursor survives the
+// list getting SHORTER. histTop was only adjusted by motion keys, and opening
+// a run starts the log pane, which squeezes the list — so with the cursor on
+// the last of nine runs the list showed runs 1-4 and no cursor at all.
+func TestOpeningARunKeepsItsRowOnScreen(t *testing.T) {
+	dir := t.TempDir()
+	for i := 0; i < 9; i++ {
+		histCapture(t, dir, fmt.Sprintf("2026090%dT030000Z", i+1), "alpha", histRun)
+	}
+	runs, _ := historyRuns(dir, []string{"alpha"})
+
+	m := testModel("alpha")
+	m.logOpen = true
+	m.vp.width, m.vp.height = 100, 30
+	in, _ := send(m, "H")
+	lm, _ := in.Update(historyLoadedMsg{runs: runs, scope: in.histScope})
+	listed, _ := send(lm.(tuiModel), "G")
+	listed, cmd := send(listed, "enter")
+	om, _ := listed.Update(cmd().(historyOpenedMsg))
+	open := om.(tuiModel)
+
+	if open.visibleRows() >= len(runs) {
+		t.Fatalf("precondition: the open run must squeeze the list below %d rows, got %d",
+			len(runs), open.visibleRows())
+	}
+	if !strings.Contains(stripANSI(open.histPanel()), ">") {
+		t.Errorf("the opened run's row scrolled out of the list:\n%s", stripANSI(open.histPanel()))
+	}
+	// and moving afterwards does not jump the window
+	up, _ := send(open, "k")
+	if !strings.Contains(stripANSI(up.histPanel()), ">") {
+		t.Errorf("k after opening lost the cursor:\n%s", stripANSI(up.histPanel()))
+	}
+}
+
+// TestCaptureStampsRenderInLocalTime pins that an opened run speaks the same
+// clock as everything around it. libs/log writes line stamps in UTC; the run
+// list's WHEN column and live lines are local, so in PDT a run listed at
+// 20:00 opened with lines stamped 03:47.
+func TestCaptureStampsRenderInLocalTime(t *testing.T) {
+	saved := time.Local
+	time.Local = time.FixedZone("PDT", -7*3600)
+	t.Cleanup(func() { time.Local = saved })
+
+	dir := t.TempDir()
+	histCapture(t, dir, "20260909T030000Z", "alpha",
+		"# fleet update — host=alpha started=x\n"+
+			"03:47:14 first\n"+
+			"# 2026-09-09T03:50:36Z finished\n")
+	runs, _ := historyRuns(dir, []string{"alpha"})
+	open := histOpen(t, testModel("alpha"), runs)
+
+	if got := open.logEntries()[0].at.Format("15:04:05"); got != "20:47:14" {
+		t.Errorf("line stamped %s, want 20:47:14 (03:47:14Z in PDT)", got)
+	}
+}
+
+// TestUnreadableCaptureIsNotCalledUnfinished pins the "never invent a fact"
+// rule for a row whose file could not be read. It got a zero summary and
+// rendered as "unfinished -" — a result and a warning count the file never
+// supported.
+func TestUnreadableCaptureIsNotCalledUnfinished(t *testing.T) {
+	dir := t.TempDir()
+	// a dangling symlink: listed by Scan, unreadable by Read, even as root
+	if err := os.Symlink(filepath.Join(dir, "gone"),
+		filepath.Join(dir, "20260909T030000Z__alpha.log")); err != nil {
+		t.Fatal(err)
+	}
+	runs, err := historyRuns(dir, []string{"alpha"})
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("precondition: one unreadable run listed, got %v %+v", err, runs)
+	}
+
+	m, _ := send(testModel("alpha"), "H")
+	lm, _ := m.Update(historyLoadedMsg{runs: runs, scope: m.histScope})
+	listed := lm.(tuiModel)
+	listed.vp.width, listed.vp.height = 120, 40
+
+	out := stripANSI(listed.histPanel())
+	if strings.Contains(out, "unfinished") {
+		t.Errorf("an unreadable capture must not claim the run was unfinished:\n%s", out)
+	}
+	if !strings.Contains(out, "unreadable") {
+		t.Errorf("an unreadable capture must say so:\n%s", out)
 	}
 }

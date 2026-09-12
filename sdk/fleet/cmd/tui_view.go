@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/histindex"
 )
 
 const spinnerInterval = 120 * time.Millisecond
@@ -313,10 +314,7 @@ func (m tuiModel) histPanel() string {
 	list.WriteString(strings.Repeat(" ", rowMarkPrefix) + th.header.Render(head) + "\n")
 
 	h := m.visibleRows()
-	top := m.histTop
-	if top > maxInt(0, len(m.histRuns)-1) {
-		top = maxInt(0, len(m.histRuns)-1)
-	}
+	top := m.histWindowTop(m.histIndexOf(m.histCursor))
 	end := top + h
 	if end > len(m.histRuns) {
 		end = len(m.histRuns)
@@ -338,21 +336,43 @@ func (m tuiModel) histRowView(i int) string {
 		cur = th.cursor.Render(">   ")
 	}
 
-	result := "finished"
-	if !r.Finished {
-		result = "unfinished"
-	}
-	warn := "-"
-	if r.Warnings > 0 {
-		warn = fmt.Sprintf("!%d", r.Warnings)
-	}
-	when := r.At.In(time.Local).Format("2006-01-02 15:04")
-
+	when, result, warn := histCells(r)
 	if len(m.histScope) > 1 {
 		return cur + fmt.Sprintf("%-16s %-16s %-10s %-6s %s",
 			when, r.Host, result, warn, histSize(r.Size))
 	}
 	return cur + fmt.Sprintf("%-16s %-10s %-6s %s", when, result, warn, histSize(r.Size))
+}
+
+// histCells is a run's WHEN, RESULT and WARN text — shared by the row and by
+// search, so `/unfinished` matches exactly what the operator reads.
+//
+// An unreadable capture says so in both columns. Its summary is empty, and
+// rendering that as "unfinished -" claimed a result and a warning count the
+// file never supplied.
+func histCells(r histindex.Summary) (when, result, warn string) {
+	when = r.At.In(time.Local).Format("2006-01-02 15:04")
+	switch {
+	case r.Unreadable:
+		return when, "unreadable", "?"
+	case r.Finished:
+		result = "finished"
+	default:
+		result = "unfinished"
+	}
+	warn = "-"
+	if r.Warnings > 0 {
+		warn = fmt.Sprintf("!%d", r.Warnings)
+	}
+	return when, result, warn
+}
+
+// histRowText is what a search pattern matches in the run list: the row's
+// cells, with the host always included so `/gamma` finds a host's runs even
+// when a single-host scope hides the HOST column.
+func histRowText(r histindex.Summary) string {
+	when, result, warn := histCells(r)
+	return strings.Join([]string{when, r.Host, result, warn}, " ")
 }
 
 // histSize renders a byte count compactly.
