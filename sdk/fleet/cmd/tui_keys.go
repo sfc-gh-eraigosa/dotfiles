@@ -312,14 +312,14 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case " ":
 		if a, b, ok := m.visualRange(); ok {
 			for i := a; i <= b; i++ {
-				m.selected[m.rows[i].Alias] = true
+				m.selectHost(m.rows[i].Alias)
 			}
 			m.vAnchor = nil
 		} else if m.cursor != "" {
 			if m.selected[m.cursor] {
 				m.deselect(m.cursor)
 			} else {
-				m.selected[m.cursor] = true
+				m.selectHost(m.cursor)
 			}
 		}
 	case "v":

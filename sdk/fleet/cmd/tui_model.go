@@ -582,7 +582,7 @@ func (m *tuiModel) selectAllFiltered() {
 		if all {
 			m.deselect(r.Alias)
 		} else {
-			m.selected[r.Alias] = true
+			m.selectHost(r.Alias)
 		}
 	}
 	if all {
@@ -601,9 +601,16 @@ func (m *tuiModel) clearDot(alias string) {
 	m.dotCleared[alias] = true
 }
 
-// deselect takes alias out of the selection. Leaving the selection always
-// clears the host's dot, whatever it was showing: a deselected host that kept
-// its green dot looked exactly like one that was still chosen.
+// selectHost and deselect are the only ways a host joins or leaves the
+// selection, and either one clears the host's finished outcome from its dot:
+// a green/red dot is a terminal state (the run itself stays in history), and
+// while it showed, the dot could not say whether the host was chosen. A host
+// still updating has no outcome yet, so its result shows when it lands.
+func (m *tuiModel) selectHost(alias string) {
+	m.selected[alias] = true
+	m.clearDot(alias)
+}
+
 func (m *tuiModel) deselect(alias string) {
 	delete(m.selected, alias)
 	m.clearDot(alias)

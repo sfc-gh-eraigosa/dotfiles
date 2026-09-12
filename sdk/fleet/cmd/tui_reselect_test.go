@@ -81,6 +81,98 @@ func TestRefreshHandsTheDotsBackToTheSelection(t *testing.T) {
 	}
 }
 
+// Owner follow-up: a green/red dot is a terminal state and the run stays in
+// history, so selecting such a host clears it too — no `r` needed first.
+func TestSelectingAFinishedHostShowsTheSelection(t *testing.T) {
+	m := finished(t)
+	m.cursor = "c" // unselected, green from a cursor-only update
+	m, _ = send(m, " ")
+	if got := markOf(m, "c"); got != markSel {
+		t.Fatalf("selecting a finished host shows the selection dot, got %v", got)
+	}
+
+	// Visual range select (v, move, space) clears every host it adds.
+	m = finished(t)
+	m.selected = map[string]bool{}
+	m.cursor = "a"
+	m, _ = send(m, "v", "j", "j", " ")
+	for _, h := range []string{"a", "b", "c"} {
+		if got := markOf(m, h); got != markSel {
+			t.Fatalf("visual select must clear %s's outcome dot, got %v", h, got)
+		}
+	}
+
+	// Select-all (a) with part of the rows unselected completes the selection.
+	m = finished(t)
+	m, _ = send(m, "a")
+	if got := markOf(m, "c"); got != markSel {
+		t.Fatalf("select-all must clear c's outcome dot, got %v", got)
+	}
+}
+
+// Selecting a host mid-update changes nothing about its coming outcome.
+func TestSelectingAnInFlightHostKeepsItsComingOutcome(t *testing.T) {
+	m := testModel("a")
+	m.updating["a"] = updState{phase: updRunning}
+	m.cursor = "a"
+	m, _ = send(m, " ")
+	if got := markOf(m, "a"); got != markSel {
+		t.Fatalf("a selected in-flight host shows the selection dot, got %v", got)
+	}
+	m.finishUpdate("a", "", nil)
+	if got := markOf(m, "a"); got != markOK {
+		t.Fatalf("its outcome still shows when it lands, got %v", got)
+	}
+}
+
+// Owner follow-up: deselecting a host mid-update must not make its update
+// status go away. Deselect clears only a FINISHED outcome from the dot; the
+// UPDATE column keeps showing queued / precheck / updating, the engine keeps
+// owning the host, and the outcome still lands on the dot.
+func TestDeselectDuringAnUpdateKeepsTheUpdateStatus(t *testing.T) {
+	phases := map[string]updPhase{"q": updQueued, "p": updPrecheck, "u": updRunning}
+	cells := map[string]string{"q": "queued", "p": "precheck", "u": "updating"}
+	for _, how := range []string{"space", "a", "esc"} {
+		m := testModel("q", "p", "u")
+		for h, ph := range phases {
+			m.selected[h] = true
+			m.updating[h] = updState{phase: ph}
+		}
+		m.bgQueue = []string{"q"}
+		switch how {
+		case "space":
+			for h := range phases {
+				m.cursor = h
+				m, _ = send(m, " ")
+			}
+		default:
+			m, _ = send(m, how)
+		}
+		for h, ph := range phases {
+			if len(m.selected) != 0 {
+				t.Fatalf("%s: the hosts must be deselected, selection %v", how, m.selected)
+			}
+			if got := m.updating[h].phase; got != ph {
+				t.Fatalf("%s: deselecting %s must not touch its update, phase %v -> %v", how, h, ph, got)
+			}
+			if !m.inFlight(h) {
+				t.Fatalf("%s: %s must still be owned by the update engine", how, h)
+			}
+			if got := m.updateCell(h); !strings.Contains(got, cells[h]) {
+				t.Fatalf("%s: %s's UPDATE column must still say %q, got %q", how, h, cells[h], got)
+			}
+		}
+		if len(m.bgQueue) != 1 || m.bgQueue[0] != "q" {
+			t.Fatalf("%s: deselecting must not drop a queued host from the queue, got %v", how, m.bgQueue)
+		}
+		m.finishUpdate("u", "", nil)
+		m.finishUpdate("p", "", errors.New("boom"))
+		if markOf(m, "u") != markOK || markOf(m, "p") != markFail {
+			t.Fatalf("%s: outcomes that land after a deselect still show: u=%v p=%v", how, markOf(m, "u"), markOf(m, "p"))
+		}
+	}
+}
+
 // r is an acknowledgment of what has finished — not of what is still running.
 func TestRefreshLeavesInFlightAndLaterOutcomesAlone(t *testing.T) {
 	m := finished(t)
