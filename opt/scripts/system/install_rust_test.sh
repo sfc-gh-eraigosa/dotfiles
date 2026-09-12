@@ -35,6 +35,7 @@ assert_grep "downloads rustup-init from the official dist server" 'static\.rust-
 assert_grep "verifies SHA-256 of the download" 'checksum mismatch' "${SCRIPT}"
 assert_grep_negative "never pipes a remote script into a shell" 'curl[^|]*\|[[:space:]]*(ba)?sh' "${SCRIPT}"
 assert_grep "never lets rustup edit rc files" '--no-modify-path' "${SCRIPT}"
+assert_grep "probes rustc through a pinned toolchain, not the cwd-following proxy" 'RUSTUP_TOOLCHAIN="\$\{RUST_TOOLCHAIN\}" "\$\{CARGO_HOME\}/bin/rustc"' "${SCRIPT}"
 assert_grep "maps the 64-bit Pi / Nano / Spark (aarch64)" 'aarch64-unknown-linux-gnu' "${SCRIPT}"
 assert_grep "maps 32-bit ARM Pis" 'armv7-unknown-linux-gnueabihf' "${SCRIPT}"
 assert_grep "maps Apple silicon" 'aarch64-apple-darwin' "${SCRIPT}"
@@ -48,15 +49,37 @@ mkdir -p "${DIST}/${TRIPLE}"
 LOG="${TMP}/calls.log"
 export LOG
 
+# mkrustc <version>: lays down a rustc stub that behaves like rustup's proxy —
+# it refuses to run unless a toolchain is selected (RUSTUP_TOOLCHAIN), which
+# is what a stray rust-toolchain.toml in the caller's cwd does to the real one.
+MK="${TMP}/mkrustc"
+cat > "${MK}" <<'SH'
+#!/bin/sh
+mkdir -p "${CARGO_HOME}/bin"
+{
+  echo '#!/bin/sh'
+  echo '[ -n "${RUSTUP_TOOLCHAIN:-}" ] || { echo "error: toolchain not installed (proxy needs RUSTUP_TOOLCHAIN)" >&2; exit 1; }'
+  echo "echo \"rustc $1 (fixture)\""
+} > "${CARGO_HOME}/bin/rustc"
+chmod +x "${CARGO_HOME}/bin/rustc"
+SH
+chmod +x "${MK}"; export MK
 # A fake rustup-init: logs its args and env, then lays down rustup + rustc
-# stubs the way the real one populates $CARGO_HOME/bin.
+# stubs the way the real one populates $CARGO_HOME/bin. The rustup stub logs
+# every call and, on `update`/`default`, re-lays rustc at
+# RUSTUP_UPDATED_VERSION (default 1.98.1) — so a test can make an update
+# succeed or leave rustc stale.
 cat > "${DIST}/${TRIPLE}/rustup-init" <<'SH'
 #!/bin/sh
 echo "rustup-init $* SKIP_PATH_CHECK=${RUSTUP_INIT_SKIP_PATH_CHECK:-}" >> "${LOG}"
 mkdir -p "${CARGO_HOME}/bin"
-printf '#!/bin/sh\necho "rustup $*" >> "%s"\n' "${LOG}" > "${CARGO_HOME}/bin/rustup"
-printf '#!/bin/sh\necho "rustc %s (fixture)"\n' "${FAKE_RUSTC_VERSION:-1.98.1}" > "${CARGO_HOME}/bin/rustc"
-chmod +x "${CARGO_HOME}/bin/rustup" "${CARGO_HOME}/bin/rustc"
+{
+  echo '#!/bin/sh'
+  echo "echo \"rustup \$*\" >> \"${LOG}\""
+  echo 'case "$1" in update|default) "${MK}" "${RUSTUP_UPDATED_VERSION:-1.98.1}" ;; esac'
+} > "${CARGO_HOME}/bin/rustup"
+chmod +x "${CARGO_HOME}/bin/rustup"
+"${MK}" "${FAKE_RUSTC_VERSION:-1.98.1}"
 SH
 sha_of() {
     if command -v sha256sum >/dev/null 2>&1; then sha256sum < "$1" | awk '{ print $1 }'
@@ -83,7 +106,9 @@ assert_eq "$(grep -c 'SKIP_PATH_CHECK=yes' "${LOG}")" "1" "a distro rustc in PAT
 assert_eq "$(printf '%s' "${out}" | grep -c 'rustc 1.98.1 .*sha256 verified')" "1" "success names the version and the verification"
 
 # 2. Re-run with rustup + a new-enough rustc: no-op, no download at all (the
-#    fixture dist is moved away to prove nothing is fetched).
+#    fixture dist is moved away to prove nothing is fetched). The rustc stub
+#    only answers with RUSTUP_TOOLCHAIN set, so this also proves the probe is
+#    pinned to our toolchain rather than the caller's cwd.
 mv "${DIST}" "${DIST}.away"
 out="$(run_rust "${CH}")"; rc=$?
 assert_eq "${rc}" "0" "already-installed exits 0"
@@ -91,22 +116,35 @@ assert_eq "$(printf '%s' "${out}" | grep -c 'Rust already installed: rustc 1.98.
 assert_eq "$(grep -c 'rustup' "${LOG}")" "0" "already-installed runs neither rustup-init nor rustup"
 mv "${DIST}.away" "${DIST}"
 
-# 3. rustc older than RUST_MIN_VERSION: `rustup update`, not a reinstall.
-printf '#!/bin/sh\necho "rustc 1.90.0 (old)"\n' > "${CH}/bin/rustc"
+# 3. rustc older than RUST_MIN_VERSION: `rustup update`, made the default,
+#    then re-checked — not a reinstall.
+CARGO_HOME="${CH}" "${MK}" 1.90.0
 out="$(run_rust "${CH}")"; rc=$?
-assert_eq "${rc}" "0" "old rustc exits 0"
+assert_eq "${rc}" "0" "old rustc exits 0 once the update converged"
 assert_eq "$(grep -c '^rustup update stable --no-self-update$' "${LOG}")" "1" "old rustc triggers rustup update"
+assert_eq "$(grep -c '^rustup default stable$' "${LOG}")" "1" "the updated channel is made the default (a pinned old default would otherwise stay)"
 assert_eq "$(grep -c '^rustup-init' "${LOG}")" "0" "old rustc does not rerun rustup-init"
 assert_eq "$(printf '%s' "${out}" | grep -c 'older than 1.96.0')" "1" "old rustc names the minimum"
+assert_eq "$(printf '%s' "${out}" | grep -c 'Rust ready: rustc 1.98.1')" "1" "success reports the rustc actually installed after the update"
+
+# 3b. The update ran but rustc is still too old: fail, do not claim ready.
+CARGO_HOME="${CH}" "${MK}" 1.90.0
+out="$(run_rust "${CH}" RUSTUP_UPDATED_VERSION=1.90.0)"; rc=$?
+assert_eq "${rc}" "1" "a non-converging update exits 1"
+assert_eq "$(printf '%s' "${out}" | grep -c 'still older than 1.96.0')" "1" "a non-converging update says so"
+assert_eq "$(printf '%s' "${out}" | grep -c 'Rust ready')" "0" "a non-converging update never claims ready"
+CARGO_HOME="${CH}" "${MK}" 1.98.1
 
 # 4. Version compare is numeric per field (1.100 is newer than 1.96).
-printf '#!/bin/sh\necho "rustc 1.100.0 (future)"\n' > "${CH}/bin/rustc"
+CARGO_HOME="${CH}" "${MK}" 1.100.0
 out="$(run_rust "${CH}")"; rc=$?
 assert_eq "$(grep -c '^rustup update' "${LOG}")" "0" "1.100.0 counts as newer than 1.96.0"
 
 # 5. RUST_UPDATE=1 updates even when new enough; RUST_TOOLCHAIN is honoured.
 out="$(run_rust "${CH}" RUST_UPDATE=1 RUST_TOOLCHAIN=beta)"; rc=$?
 assert_eq "$(grep -c '^rustup update beta --no-self-update$' "${LOG}")" "1" "RUST_UPDATE=1 updates the requested toolchain"
+assert_eq "$(grep -c '^rustup default beta$' "${LOG}")" "1" "RUST_TOOLCHAIN becomes the default after its update"
+CARGO_HOME="${CH}" "${MK}" 1.98.1
 
 # 6. Checksum mismatch: refused, rustup-init never runs, nothing installed.
 printf '%s *./rustup-init\n' "$(printf '0%.0s' $(seq 1 64))" > "${DIST}/${TRIPLE}/rustup-init.sha256"

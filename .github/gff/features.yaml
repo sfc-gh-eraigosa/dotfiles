@@ -45,7 +45,7 @@ sets:
       - path: install.pkg.brewfile
         description: Runs the macOS brew bundle block for the Brewfile extras including vault-setup.
         boolDefault: true
-      # --- tools (10) ---
+      # --- tools (11) ---
       - path: install.tools.sops
         description: Runs the install_sops.sh block that fetches the sops release binary.
         boolDefault: true
@@ -70,6 +70,9 @@ sets:
       - path: install.tools.herdr-integrations
         description: Runs `install_herdr.sh integrations` (config phase) to (re)install herdr's agent-state hooks for the agent CLIs present on the host (claude, antigravity-cli); must follow install_antigravity_skills.sh, which re-renders hooks.json.
         boolDefault: true
+      - path: install.tools.herdr-plugins
+        description: Runs `install_herdr.sh plugins` (config phase, after install.runtime.rust and before install.tools.herdr-config) to install each row of ai/herdr/plugins.tsv whose own install.herdr-plugin.<name> flag is on, at its pinned ref; a plugin already at its pin is a no-op. Off skips every plugin install without touching the per-plugin flags.
+        boolDefault: true
       - path: install.tools.herdr-config
         description: Runs `install_herdr.sh config` (config phase) to render ai/herdr/config.toml into ~/.config/herdr/config.toml so herdr follows the host terminal's light/dark appearance with the Solarized palette; converges a dotfiles-managed file, never clobbers a hand-edited one (HERDR_CONFIG_FORCE=1 to reclaim).
         boolDefault: true
@@ -78,7 +81,7 @@ sets:
         boolDefault: false
       # --- herdr-plugin (7) --- one flag per row of ai/herdr/plugins.tsv
       - path: install.herdr-plugin.file-viewer
-        description: 'Installs the herdr-file-viewer plugin (git-aware, read-only file viewer; smarzban/herdr-file-viewer, MIT) at the ref pinned in ai/herdr/plugins.tsv, and adds its keybindings (prefix+f split, prefix+shift+f tab) to the managed herdr config. Runs inside the install.tools.herdr deps step, after install.runtime.rust; builds with cargo on hosts without a prebuilt binary (every aarch64 host). Off stops install and keybindings; it never uninstalls.'
+        description: 'Installs the herdr-file-viewer plugin (git-aware, read-only file viewer; smarzban/herdr-file-viewer, MIT) at the ref pinned in ai/herdr/plugins.tsv, and adds its keybindings (prefix+f split, prefix+shift+f tab) to the managed herdr config. Installed by the install.tools.herdr-plugins config step, after install.runtime.rust; builds with cargo on hosts without a prebuilt binary (every aarch64 host). Off stops install and keybindings; it never uninstalls.'
         boolDefault: true
       - path: install.herdr-plugin.navigator
         description: 'Installs herdr-navigator (thanhdat77/herdr-navigator, MIT): one fuzzy picker (prefix+t) over workspaces, agents, directories and plugin actions, the action menu herdr lacks. Builds with cargo (needs install.runtime.rust). Pinned in ai/herdr/plugins.tsv; opt-in (gff set install.herdr-plugin.navigator true). Off stops install and keybindings; it never uninstalls.'
@@ -112,7 +115,7 @@ sets:
         description: Runs the nvm install block.
         boolDefault: true
       - path: install.runtime.rust
-        description: Runs install_rust.sh, which installs rustup and the stable Rust toolchain (minimal profile) into ~/.cargo from a SHA-256-verified rustup-init, without editing rc files (--no-modify-path; the profiles own the PATH entry). Prerequisite for install.tools.herdr-file-viewer on hosts that build it from source. A no-op when rustc is already >= RUST_MIN_VERSION.
+        description: Runs install_rust.sh, which installs rustup and the stable Rust toolchain (minimal profile) into ~/.cargo from a SHA-256-verified rustup-init, without editing rc files (--no-modify-path; the profiles own the PATH entry). Prerequisite for herdr plugins that build from source (every aarch64 host; see install.tools.herdr-plugins). A no-op when rustc is already >= RUST_MIN_VERSION.
         boolDefault: true
       - path: install.runtime.fnm
         description: Runs the fnm install block.

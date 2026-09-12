@@ -84,7 +84,7 @@ unset _ip_prev _ip_arg
 #   - CONFIG / SKILL / SYMLINK / any repo-content step -> _IP_CONFIG_FLAGS. Runs
 #     in the per-commit config layer; omitting it BAKES the step into the cached
 #     deps layer, so later edits to it stop taking effect per commit (a bug).
-_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_TOOLS_HERDR_CONFIG INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
+_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_TOOLS_HERDR_PLUGINS INSTALL_TOOLS_HERDR_CONFIG INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
 _IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_GLOW INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM INSTALL_RUNTIME_RUST INSTALL_SHELL_OH_MY_ZSH_UPDATE"
 apply_install_phase() {
   case "$INSTALL_PHASE" in
@@ -312,21 +312,6 @@ if gff_on install.tools.herdr-integrations; then
     "${BASE_DIR}/opt/scripts/system/install_herdr.sh" integrations || echo "WARNING: herdr integrations reported problems; continuing."
   fi
 else gff_skip_msg install.tools.herdr-integrations; fi
-
-# herdr managed config (~/.config/herdr/config.toml): herdr paints its own
-# sidebar/panel colors, and its default dark catppuccin theme is unreadable on
-# a Solarized Light terminal profile. The rendered template turns on herdr's
-# host light/dark following with the fleet Solarized pair, so the right palette
-# is picked per terminal profile at runtime. The host owns the file: it is only
-# rewritten while it carries the "managed by dotfiles" marker. Keybindings for
-# each enabled herdr plugin (install.herdr-plugin.<name>, ai/herdr/plugins.tsv)
-# are appended to it, so a plugin's keys follow its flag.
-if gff_on install.tools.herdr-config; then
-  if [ -f "${BASE_DIR}/opt/scripts/system/install_herdr.sh" ]; then
-    echo "Installing herdr config..."
-    "${BASE_DIR}/opt/scripts/system/install_herdr.sh" config || echo "WARNING: herdr config reported problems; continuing."
-  fi
-else gff_skip_msg install.tools.herdr-config; fi
 
 NIX_MANAGED_FILE="${HOME}/.config/nix_managed"
 
@@ -707,17 +692,33 @@ if gff_on install.runtime.rust; then
 else gff_skip_msg install.runtime.rust; fi
 
 # herdr plugins from ai/herdr/plugins.tsv, each switched by its own gff flag
-# (install.herdr-plugin.<name>). Part of the herdr install, so it rides the
-# install.tools.herdr deps-phase key; it sits here, not beside the binary,
-# because a plugin may build with the Rust installed just above. The
-# per-plugin flags are read by install_herdr.sh, not gated here, so they
-# belong in neither _IP_* list.
-if gff_on install.tools.herdr; then
+# (install.herdr-plugin.<name>). A CONFIG-phase step: it reads repo content
+# (the manifest, features.yaml) that the container's deps layer never copies,
+# and cargo (install.runtime.rust, a deps step just above) is present by
+# then. The per-plugin flags are read by install_herdr.sh, not gated here,
+# so they belong in neither _IP_* list.
+if gff_on install.tools.herdr-plugins; then
   if [ -f "${BASE_DIR}/opt/scripts/system/install_herdr.sh" ]; then
     echo "Installing herdr plugins..."
     "${BASE_DIR}/opt/scripts/system/install_herdr.sh" plugins || echo "WARNING: herdr plugins reported problems; continuing."
   fi
-else gff_skip_msg install.tools.herdr; fi
+else gff_skip_msg install.tools.herdr-plugins; fi
+
+# herdr managed config (~/.config/herdr/config.toml): herdr paints its own
+# sidebar/panel colors, and its default dark catppuccin theme is unreadable on
+# a Solarized Light terminal profile. The rendered template turns on herdr's
+# host light/dark following with the fleet Solarized pair, so the right palette
+# is picked per terminal profile at runtime. The host owns the file: it is only
+# rewritten while it carries the "managed by dotfiles" marker. Keybindings for
+# each enabled AND installed herdr plugin (install.herdr-plugin.<name>,
+# ai/herdr/plugins.tsv) are appended to it — hence after the plugins step, so
+# a fresh run binds the keys of what it just installed.
+if gff_on install.tools.herdr-config; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_herdr.sh" ]; then
+    echo "Installing herdr config..."
+    "${BASE_DIR}/opt/scripts/system/install_herdr.sh" config || echo "WARNING: herdr config reported problems; continuing."
+  fi
+else gff_skip_msg install.tools.herdr-config; fi
 
 # install Antigravity CLI (agy) — Gemini CLI's successor (Gemini CLI EOL 2026-06-18)
 if gff_on install.ai.antigravity; then

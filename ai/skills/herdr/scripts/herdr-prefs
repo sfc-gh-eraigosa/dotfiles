@@ -187,6 +187,12 @@ cmd_set() {
     [ $# -eq 2 ] || usage 1
     [ -e "${CONFIG}" ] || die "no config at ${CONFIG} (run install_herdr.sh config first)"
     split_key "$1"
+    # A scalar next to an array of tables of the same name ([[keys.command]],
+    # the plugin keybindings) is a duplicate key: herdr rejects the WHOLE
+    # file and runs on defaults. Refuse rather than write it.
+    if grep -q "^\[\[${SECTION}\.${KEY}\]\]" "${CONFIG}"; then
+        die "${SECTION}.${KEY} is an array of tables ([[${SECTION}.${KEY}]] blocks) in ${CONFIG}; a scalar there would make herdr reject the whole file. Edit those blocks by hand."
+    fi
     handoff="$(toml_set "${SECTION}" "${KEY}" "$2")"
     echo "set $1 = $2 in ${CONFIG}"
     if [ "${handoff}" = "handed" ]; then

@@ -104,9 +104,13 @@ version_ge() {
     }'
 }
 
+# ~/.cargo/bin/rustc is rustup's proxy: bare, it follows the caller's cwd
+# (a rust-toolchain.toml in any ancestor, `rustup override`) and errors when
+# that toolchain is absent — install.sh never cd's first, and installed
+# herdr plugins ship such files. Pin the probe to the toolchain we manage.
 rustc_version() {
     if [ -x "${CARGO_HOME}/bin/rustc" ]; then
-        "${CARGO_HOME}/bin/rustc" --version 2>/dev/null | awk '{ print $2 }'
+        RUSTUP_TOOLCHAIN="${RUST_TOOLCHAIN}" "${CARGO_HOME}/bin/rustc" --version 2>/dev/null | awk '{ print $2 }'
     fi
 }
 
@@ -114,6 +118,16 @@ update_toolchain() {
     info "Updating Rust toolchain '${RUST_TOOLCHAIN}' ($1)..."
     "${CARGO_HOME}/bin/rustup" update "${RUST_TOOLCHAIN}" --no-self-update \
         || die "rustup update ${RUST_TOOLCHAIN} failed"
+    # `rustup update` installs the channel but leaves a pinned default alone;
+    # make what we just updated the default, then prove it converged — the
+    # old path printed "Rust ready" and exited 0 with the same stale rustc,
+    # so every install.sh repeated the update without ever getting newer.
+    "${CARGO_HOME}/bin/rustup" default "${RUST_TOOLCHAIN}" >/dev/null 2>&1 \
+        || die "rustup default ${RUST_TOOLCHAIN} failed"
+    HAVE="$(rustc_version)"
+    [ -n "${HAVE}" ] || die "rustup update finished but ${CARGO_HOME}/bin/rustc does not run"
+    version_ge "${HAVE}" "${RUST_MIN_VERSION}" \
+        || die "rustc ${HAVE} is still older than ${RUST_MIN_VERSION} after updating '${RUST_TOOLCHAIN}'"
 }
 
 install_rustup() {
