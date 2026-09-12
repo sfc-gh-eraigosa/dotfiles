@@ -57,7 +57,14 @@ func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (Checkpoi
 		return CheckpointResult{}, fmt.Errorf("%w: rebase onto origin/%s: %s", errors.ErrRebaseConflict, base, strings.TrimSpace(string(out)))
 	}
 
-	title := fmt.Sprintf("%s: %s", ref.Feature, ref.Purpose) // from worker_ref; WORKER.md is never read
+	// Title: the description recorded by `worker add --description` (the
+	// same line WORKER.md carries), so the PR reads like its commit subject
+	// rather than a "<feature>: <purpose>" label. The label remains the
+	// fallback for a worker added without one.
+	title := strings.TrimSpace(w.Description)
+	if title == "" {
+		title = fmt.Sprintf("%s: %s", ref.Feature, ref.Purpose)
+	}
 
 	// Adopt-existing-PR: a registry row may have no pr_url yet an open PR
 	// already exists on GitHub for this head branch (opened on another
@@ -75,7 +82,14 @@ func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (Checkpoi
 
 	// Body is composed after adoption so an adopted PR's existing text is
 	// preserved rather than overwritten on the first checkpoint that finds it.
-	body := renderPRBody(feat, ref, s.currentPRBody(ctx, w.PRURL), s.featureNotes(feat.Name))
+	// A brand-new PR is seeded from WORKER.md (Goal + Decisions & notes)
+	// instead, so the author's notes reach reviewers without a second edit.
+	notes := s.featureNotes(feat.Name)
+	existing := s.currentPRBody(ctx, w.PRURL)
+	if w.PRURL == "" {
+		existing = s.workerProse(w)
+	}
+	body := renderPRBody(feat, ref, existing, notes)
 
 	res := CheckpointResult{Ref: ref.String()}
 	if w.PRURL == "" {
@@ -106,6 +120,20 @@ func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (Checkpoi
 		res.Created = true
 		res.PRURL = pr.URL
 		res.PRState = "draft"
+		// The stack block was rendered before this PR had a number, so its
+		// own row read "(no PR yet)" until the next checkpoint. Re-render
+		// with the number and edit once. Best-effort: the commits are pushed
+		// and the PR exists, so a failed edit must not fail the checkpoint —
+		// the next one re-renders the block anyway.
+		numbered := feat
+		numbered.Workers = append([]registry.Worker(nil), feat.Workers...)
+		for i := range numbered.Workers {
+			nw := &numbered.Workers[i]
+			if nw.User == ref.User && nw.Purpose == ref.Purpose && nw.Suffix == ref.Suffix {
+				nw.PRURL = pr.URL
+			}
+		}
+		_ = s.GH.PREdit(ctx, pr.Number, gh.PREditOpts{Body: renderPRBody(numbered, ref, body, notes)})
 	} else {
 		if out, err := s.Git.Run(ctx, "-C", w.Worktree, "push", "--force-with-lease", "origin", w.Branch); err != nil {
 			return CheckpointResult{}, fmt.Errorf("checkpoint: force-push: %w: %s", err, strings.TrimSpace(string(out)))
