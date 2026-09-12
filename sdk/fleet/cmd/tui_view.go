@@ -726,20 +726,44 @@ func (m tuiModel) rowView(i int) string {
 	return line + " " + m.updateCell(r.Alias)
 }
 
-// markFor is the row's status dot. Selection is navy; a finished update
+// markKind is what a row's status dot is saying.
+type markKind int
+
+const (
+	markNone markKind = iota
+	markSel
+	markOK
+	markFail
+)
+
+// markState decides the row's status dot. Selection is navy; a finished update
 // recolours it to its outcome so the list can be read at a glance without
-// looking at the UPDATE column.
-func (m tuiModel) markFor(i int) string {
+// looking at the UPDATE column — until `r`, or a select/deselect of that host,
+// clears it (dotCleared).
+func (m tuiModel) markState(i int) markKind {
 	alias := m.rows[i].Alias
-	if st, ok := m.updating[alias]; ok {
+	if st, ok := m.updating[alias]; ok && !m.dotCleared[alias] {
 		switch st.phase {
 		case updOK:
-			return th.markOK.Render("●")
+			return markOK
 		case updFail:
-			return th.markFail.Render("●")
+			return markFail
 		}
 	}
 	if m.isSelected(i) {
+		return markSel
+	}
+	return markNone
+}
+
+// markFor renders markState.
+func (m tuiModel) markFor(i int) string {
+	switch m.markState(i) {
+	case markOK:
+		return th.markOK.Render("●")
+	case markFail:
+		return th.markFail.Render("●")
+	case markSel:
 		return th.markSel.Render("●")
 	}
 	return " "

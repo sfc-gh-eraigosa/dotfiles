@@ -109,12 +109,19 @@ type tuiModel struct {
 
 	// update engine (background-first)
 	updating map[string]updState
-	bgQueue  []string
-	iaQueue  []string
-	iaTotal  int               // interactive-queue size this wave, for the handoff banner
-	streams  map[string]stream // in-flight output channels, by alias
-	logs     []logEntry        // interleaved, capped ring of streamed lines
-	logOpen  bool              // `l` toggles the pane; off restores a full-height list
+	// dotCleared marks hosts whose FINISHED outcome no longer paints the
+	// status dot: `r` clears every one, and leaving the selection clears that
+	// host's. Without it an outcome outranked the selection for the rest of the
+	// session and space toggled an invisible selection. The UPDATE column keeps
+	// the outcome text; the next finishUpdate for the host shows its dot again.
+	dotCleared map[string]bool
+
+	bgQueue []string
+	iaQueue []string
+	iaTotal int               // interactive-queue size this wave, for the handoff banner
+	streams map[string]stream // in-flight output channels, by alias
+	logs    []logEntry        // interleaved, capped ring of streamed lines
+	logOpen bool              // `l` toggles the pane; off restores a full-height list
 	// hostOpen and errOpen complete the pane set: the host table, the log, and
 	// the stderr stream. Session-only, never persisted — the defaults ARE the
 	// contract, and a preference file would be a second source of truth for
@@ -573,15 +580,55 @@ func (m *tuiModel) selectAllFiltered() {
 	}
 	for _, r := range rows {
 		if all {
-			delete(m.selected, r.Alias)
+			m.deselect(r.Alias)
 		} else {
-			m.selected[r.Alias] = true
+			m.selectHost(r.Alias)
 		}
 	}
 	if all {
 		m.status = "selection cleared"
 	} else {
 		m.status = fmt.Sprintf("%d host(s) selected", len(m.selected))
+	}
+}
+
+// clearDot stops a finished outcome from painting alias's status dot, so the
+// dot reads as selection again.
+func (m *tuiModel) clearDot(alias string) {
+	if m.dotCleared == nil {
+		m.dotCleared = map[string]bool{}
+	}
+	m.dotCleared[alias] = true
+}
+
+// selectHost and deselect are the only ways a host joins or leaves the
+// selection, and either one clears the host's finished outcome from its dot:
+// a green/red dot is a terminal state (the run itself stays in history), and
+// while it showed, the dot could not say whether the host was chosen. A host
+// still updating has no outcome yet, so its result shows when it lands.
+// Re-selecting a host that is already chosen (a completing `a`, a visual
+// range over it) changes nothing, so its outcome dot stays.
+func (m *tuiModel) selectHost(alias string) {
+	if m.selected[alias] {
+		return
+	}
+	m.selected[alias] = true
+	m.clearDot(alias)
+}
+
+func (m *tuiModel) deselect(alias string) {
+	delete(m.selected, alias)
+	m.clearDot(alias)
+}
+
+// showSelection is `r`'s state transition: every finished outcome gives its
+// dot back to the selection. Hosts still queued or updating have no outcome
+// yet, so their result will show when it lands.
+func (m *tuiModel) showSelection() {
+	for alias, st := range m.updating {
+		if st.phase == updOK || st.phase == updFail {
+			m.clearDot(alias)
+		}
 	}
 }
 
@@ -703,6 +750,7 @@ func (m *tuiModel) finishUpdate(alias, log string, err error) tea.Cmd {
 		st = updState{phase: updFail, log: strings.TrimSpace(log + " " + err.Error())}
 	}
 	m.updating[alias] = st
+	delete(m.dotCleared, alias) // a new outcome is news: the dot shows it again
 	cmds := []tea.Cmd{pollHost(m.hosts[alias], m.run, m.base)}
 	if c := m.pump(); c != nil {
 		cmds = append(cmds, c)

@@ -312,14 +312,14 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case " ":
 		if a, b, ok := m.visualRange(); ok {
 			for i := a; i <= b; i++ {
-				m.selected[m.rows[i].Alias] = true
+				m.selectHost(m.rows[i].Alias)
 			}
 			m.vAnchor = nil
 		} else if m.cursor != "" {
 			if m.selected[m.cursor] {
-				delete(m.selected, m.cursor)
+				m.deselect(m.cursor)
 			} else {
-				m.selected[m.cursor] = true
+				m.selectHost(m.cursor)
 			}
 		}
 	case "v":
@@ -347,6 +347,9 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.vAnchor = nil
+		for alias := range m.selected {
+			m.clearDot(alias) // leaving the selection clears the dot (see deselect)
+		}
 		m.selected = map[string]bool{}
 		m.search = searchState{}
 	case "enter":
@@ -469,6 +472,9 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, authorizeShell(m.cursor)
 		}
 	case "r":
+		// r is also the way back from a finished wave: the dots stop showing
+		// outcomes and show the selection again.
+		m.showSelection()
 		return m, m.refresh()
 	case "?":
 		m.mode = modeHelp
