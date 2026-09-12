@@ -81,8 +81,11 @@
 #   HERDR_PLUGIN_FORCE=1   reinstall plugins already at the wanted ref
 #   HERDR_PLUGINS_MANIFEST plugin manifest (default: ai/herdr/plugins.tsv in this repo)
 #   HERDR_PLUGIN_KEYS_DIR  per-plugin keybinding fragments (default: ai/herdr/plugins in this repo)
-#   HERDR_FEATURES_FILE    gff flag defaults, used when install.sh has not exported
-#                          GFF_* (default: .github/gff/features.yaml in this repo)
+#   HERDR_GFF              gff binary asked for a plugin flag when install.sh has not
+#                          exported GFF_* (default: gff on PATH; a missing binary
+#                          falls back to the declared defaults)
+#   HERDR_FEATURES_FILE    declared flag defaults, the last resort (default:
+#                          .github/gff/features.yaml in this repo)
 #   HERDR_HOST_OS          override the detected OS (linux | macos) for the manifest's
 #                          os column (tests)
 set -e
@@ -359,13 +362,28 @@ feature_default() {
     ' "${FEATURES_FILE}"
 }
 
-# plugin_flag_on <name>: install.herdr-plugin.<name>, resolved like install.sh
-# resolves every flag (the exported GFF_* value), falling back to the declared
-# default when this script runs on its own. Undeclared => off.
+# gff_query <key>: the flag's effective value from gff itself (which layers
+# the host's `gff set` overrides over the repo defaults), or "" when gff is
+# absent or does not know the key.
+gff_query() {
+    GFF_BIN="${HERDR_GFF:-gff}"
+    command -v "${GFF_BIN}" >/dev/null 2>&1 || return 0
+    "${GFF_BIN}" --source "${REPO_ROOT}" get "$1" 2>/dev/null || true
+}
+
+# plugin_flag_on <name>: install.herdr-plugin.<name>. Resolution order:
+#   1. the exported GFF_* value — what install.sh materialises before any
+#      gate, and therefore authoritative inside a run;
+#   2. gff itself, for a standalone `install_herdr.sh plugins|config` — so a
+#      host's `gff set install.herdr-plugin.<name> true` is honoured without
+#      a full install.sh (it was not: standalone runs saw only the defaults
+#      and rendered every opt-in plugin off);
+#   3. the declared default in features.yaml. Undeclared => off.
 plugin_flag_on() {
     _key="install.herdr-plugin.$1"
     _var="GFF_$(printf '%s' "${_key}" | tr '[:lower:]' '[:upper:]' | tr '.-' '__')"
     eval "_val=\${${_var}:-}"
+    [ -n "${_val}" ] || _val="$(gff_query "${_key}")"
     [ -n "${_val}" ] || _val="$(feature_default "${_key}")"
     [ "${_val}" = "true" ]
 }

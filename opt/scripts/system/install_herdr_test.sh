@@ -277,6 +277,19 @@ printf '[[keys.command]]\nkey = "prefix+n"\ntype = "plugin_action"\ncommand = "h
     > "${PLUG_FIX}/keys/navigator.toml"
 printf '[[keys.command]]\nkey = "prefix+u"\ntype = "plugin_action"\ncommand = "some.plugin.x"\n' \
     > "${PLUG_FIX}/keys/undeclared.toml"
+# A gff stub: answers `get <key>` from ${PLUG_FIX}/gff-overrides ("key value"
+# per line, what a host's `gff set` would resolve to), exit 2 otherwise —
+# the real gff's answer for an unknown key.
+cat > "${PLUG_FIX}/bin/gff" <<'SH'
+#!/bin/sh
+while [ "$#" -gt 0 ]; do case "$1" in --source) shift 2 ;; get) shift; break ;; *) shift ;; esac; done
+v="$(awk -v k="$1" '$1 == k { print $2 }' "${GFF_OVERRIDES}" 2>/dev/null)"
+[ -n "$v" ] && { echo "$v"; exit 0; }
+echo "gff: resolve: unknown flag key: $1" >&2; exit 2
+SH
+chmod +x "${PLUG_FIX}/bin/gff"
+export GFF_OVERRIDES="${PLUG_FIX}/gff-overrides"
+: > "${GFF_OVERRIDES}"
 # A herdr stub that logs every call; `plugin install fail/...` fails.
 STUB_LOG="${PLUG_FIX}/calls.log"
 cat > "${PLUG_FIX}/bin/herdr" <<'SH'
@@ -299,7 +312,7 @@ run_plugins() {
     env -u GFF_INSTALL_HERDR_PLUGIN_FILE_VIEWER -u GFF_INSTALL_HERDR_PLUGIN_NAVIGATOR \
         -u GFF_INSTALL_HERDR_PLUGIN_UNDECLARED -u GFF_INSTALL_HERDR_PLUGIN_FLAKY \
         HERDR_INSTALL_DIR="${PLUG_FIX}/bin" HERDR_CONFIG_DIR="${_cfg}" \
-        HERDR_PLUGINS_MANIFEST="${HERDR_PLUGINS_MANIFEST:-${PLUG_FIX}/plugins.tsv}" \
+        HERDR_PLUGINS_MANIFEST="${HERDR_PLUGINS_MANIFEST:-${PLUG_FIX}/plugins.tsv}" HERDR_GFF="${PLUG_FIX}/bin/gff" \
         HERDR_FEATURES_FILE="${PLUG_FIX}/features.yaml" "$@" bash "${SCRIPT}" plugins 2>&1
 }
 
@@ -325,6 +338,21 @@ assert_eq "$(grep -c '^plugin install thanhdat77/herdr-navigator --ref v0.3.6 --
     "plugins: gff true turns a default-off plugin on"
 out="$(run_plugins "${TMP}/p-env" GFF_INSTALL_HERDR_PLUGIN_FILE_VIEWER=false)"; rc=$?
 assert_eq "$(grep -c '^plugin install ' "${STUB_LOG}")" "0" "plugins: gff false turns a default-on plugin off"
+
+# 13b. Standalone (no exported GFF_*): a host's `gff set` override, as gff
+#      itself resolves it, turns a default-off plugin on — and the exported
+#      value, when present, still wins over it. Without a gff binary the
+#      declared default is the last resort.
+printf 'install.herdr-plugin.navigator true\n' > "${GFF_OVERRIDES}"
+out="$(run_plugins "${TMP}/p-gffset")"; rc=$?
+assert_eq "${rc}" "0" "plugins: standalone with a gff override exits 0"
+assert_eq "$(grep -c '^plugin install thanhdat77/herdr-navigator --ref v0.3.6 --yes$' "${STUB_LOG}")" "1" \
+    "plugins: standalone run honours the host's gff set override"
+out="$(run_plugins "${TMP}/p-gffset" GFF_INSTALL_HERDR_PLUGIN_NAVIGATOR=false)"
+assert_eq "$(grep -c 'thanhdat77/herdr-navigator' "${STUB_LOG}")" "0" "plugins: an exported GFF_* value wins over gff's answer"
+out="$(run_plugins "${TMP}/p-gffset" HERDR_GFF=/nonexistent/gff)"
+assert_eq "$(grep -c 'thanhdat77/herdr-navigator' "${STUB_LOG}")" "0" "plugins: no gff binary -> declared default (off)"
+: > "${GFF_OVERRIDES}"
 
 # 14. Already installed at the pinned ref: a no-op with no herdr call (fleet
 #     update re-runs install.sh everywhere; a reinstall rebuilds with cargo).
@@ -404,7 +432,7 @@ run_config() {
     env -u GFF_INSTALL_HERDR_PLUGIN_FILE_VIEWER -u GFF_INSTALL_HERDR_PLUGIN_NAVIGATOR \
         HERDR_INSTALL_DIR="${EMPTY_DIR}" HERDR_CONFIG_DIR="${_cfg}" \
         HERDR_PLUGINS_MANIFEST="${HERDR_PLUGINS_MANIFEST:-${PLUG_FIX}/plugins.tsv}" HERDR_PLUGIN_KEYS_DIR="${PLUG_FIX}/keys" \
-        HERDR_FEATURES_FILE="${PLUG_FIX}/features.yaml" "$@" bash "${SCRIPT}" config 2>&1
+        HERDR_GFF="${PLUG_FIX}/bin/gff" HERDR_FEATURES_FILE="${PLUG_FIX}/features.yaml" "$@" bash "${SCRIPT}" config 2>&1
 }
 
 # 19. Enabled plugins' fragments are appended; off and undeclared ones are not.
@@ -417,6 +445,14 @@ assert_grep_negative "config: an off plugin gets no keybindings" 'herdr-navigato
 assert_grep_negative "config: a row without a declared flag gets no keybindings" 'some\.plugin' "${K_CFG}/config.toml"
 assert_grep "config: the managed marker still leads the file" '^# managed by dotfiles' "${K_CFG}/config.toml"
 
+# 19b. Standalone config: keys follow the host's gff set override too.
+printf 'install.herdr-plugin.navigator true\n' > "${GFF_OVERRIDES}"
+out="$(run_config "${K_CFG}")"
+assert_grep "config: standalone run renders keys for a gff-set plugin" '^command = "herdr-navigator\.open"$' "${K_CFG}/config.toml"
+: > "${GFF_OVERRIDES}"
+out="$(run_config "${K_CFG}")"
+assert_grep_negative "config: clearing the override drops the keys again" 'herdr-navigator\.open' "${K_CFG}/config.toml"
+
 # 20. Flipping a plugin's flag re-renders the managed file both ways.
 out="$(run_config "${K_CFG}" GFF_INSTALL_HERDR_PLUGIN_FILE_VIEWER=false GFF_INSTALL_HERDR_PLUGIN_NAVIGATOR=true)"; rc=$?
 assert_eq "$(printf '%s' "${out}" | grep -c 'Updating managed')" "1" "config: a flag flip updates the managed file"
@@ -425,7 +461,7 @@ assert_grep "config: keys arrive with their flag" '^command = "herdr-navigator\.
 
 # 21. The real template + manifest + fragments render a config herdr accepts.
 R_CFG="${TMP}/r-cfg/herdr"
-out="$(env -u GFF_INSTALL_HERDR_PLUGIN_FILE_VIEWER HERDR_INSTALL_DIR="${EMPTY_DIR}" \
+out="$(env -u GFF_INSTALL_HERDR_PLUGIN_FILE_VIEWER HERDR_INSTALL_DIR="${EMPTY_DIR}" HERDR_GFF=/nonexistent/gff \
     HERDR_CONFIG_DIR="${R_CFG}" bash "${SCRIPT}" config 2>&1)"; rc=$?
 assert_eq "${rc}" "0" "config: the repo's own plugin manifest renders"
 assert_grep "config: the repo's file-viewer keys render by default" \
