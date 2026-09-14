@@ -104,7 +104,8 @@ var tuiCmd = &cobra.Command{
 		// from, not the child's own --repo default.
 		m.repo = flagRepo
 		// The lane policy resolves against the same checkout as the plan.
-		// Fail-closed: no gff, or the flag unset, means no host changes.
+		// Fail-closed: no gff, or a key that cannot resolve, means no host
+		// changes; the flag's own default (true) only applies when it resolves.
 		m.policy = bgPolicyFromFlags(&featflag.GFF{Repo: flagRepo}, flagRepo)
 		_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()
 		return err

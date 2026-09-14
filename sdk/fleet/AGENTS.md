@@ -447,9 +447,12 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   `errNeedsTerminal` does, with a status line naming the cause — a real pty
   gets sudo's normal tty-keyed timestamp, which install.sh's children DO
   share.
-- **The opt-in fix for such a host is a sudoers change, never a credential
-  bridge.** With `fleet.update.sudo-timestamp-global` on (`bgPolicy`, read
-  once at startup by `bgPolicyFromFlags`, fail-closed) the preamble becomes
+- **The fix for such a host is a sudoers change, never a credential
+  bridge.** With `fleet.update.sudo-timestamp-global` on — the default, on
+  purpose: it fires only once the operator has typed the sudo password for
+  that host, is announced in the stream, and one file undoes it (`bgPolicy`,
+  read once at startup by `bgPolicyFromFlags`, fail-closed: unresolvable
+  means off) — the preamble becomes
   `sudoGlobalFixup`: prime, and if a first child check fails, install
   `/etc/sudoers.d/fleet-timestamp` (`Defaults:<user> timestamp_type=global`,
   `visudo -cf`-vetted, 0440) with the credential the priming shell DOES hold,

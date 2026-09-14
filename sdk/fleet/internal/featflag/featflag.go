@@ -90,8 +90,9 @@ func Resolve(src Source, home, repoDir string) Settings {
 		settings.Enabled = enabled
 	}
 
-	// Fail-closed: only a resolved true opts in; an error is not noted as a
-	// fallback because "off" is the default, not a degradation.
+	// Fail-closed: only a resolved true enables it (the flag's own default is
+	// true, but it must RESOLVE — an unreadable gff must not change hosts). Not
+	// noted as a fallback: skipping a host change is the safe outcome.
 	if on, err := src.Bool(KeySudoGlobal); err == nil && on {
 		settings.SudoTimestampGlobal = true
 	}

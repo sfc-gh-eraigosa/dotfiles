@@ -318,7 +318,8 @@ var errNeedsTerminal = errors.New("fleet: this host's plan needs a terminal")
 // answers, so it lives on the model rather than in `answers`, which the form
 // and the answers store replace wholesale.
 type bgPolicy struct {
-	// sudoTimestampGlobal opts in to sudoGlobalFixup: fleet.update.sudo-timestamp-global.
+	// sudoTimestampGlobal enables sudoGlobalFixup: fleet.update.sudo-timestamp-global
+	// (on by default; false opts a centrally-managed host out).
 	sudoTimestampGlobal bool
 }
 
@@ -332,8 +333,10 @@ func bgPolicyFromFlags(src featflag.Source, repoDir string) bgPolicy {
 // change; the name has no '.' or '~', which sudoers.d would ignore.
 const sudoersDropIn = "/etc/sudoers.d/fleet-timestamp"
 
-// sudoGlobalFixup replaces the plain prime when the operator opted in
-// (fleet.update.sudo-timestamp-global): on a host where the primed credential
+// sudoGlobalFixup replaces the plain prime unless the operator opted out
+// (fleet.update.sudo-timestamp-global, on by default — it fires only once a
+// password was typed for the host, is announced, and one file undoes it): on
+// a host where the primed credential
 // does not reach install.sh's children, it installs a sudoers drop-in so it
 // does, and the host stays in the streaming lane instead of dropping to the
 // interactive one and re-prompting for a password already typed.
@@ -378,8 +381,8 @@ func bgPreamble(a answers) func(updplan.Step) string { return bgPreambleWith(a, 
 
 // bgPreambleWith builds the Background lane's per-run-step preamble: prime
 // and verify sudo (only when a credential was supplied — an empty `sudo -S`
-// would consume nothing and fail confusingly), via sudoGlobalFixup when the
-// operator opted in; then the sudoGate every run must pass regardless; then
+// would consume nothing and fail confusingly), via sudoGlobalFixup unless the
+// operator opted out; then the sudoGate every run must pass regardless; then
 // the operator's non-secret answers. Console and Background apply this ONLY
 // to updplan.KindRun steps, so a sync or gh-auth script never sees a sudo
 // preamble.

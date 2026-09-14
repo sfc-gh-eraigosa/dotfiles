@@ -219,3 +219,25 @@ func currentUser(t *testing.T) string {
 	}
 	return strings.TrimSpace(string(out))
 }
+
+// The default was chosen on purpose (see the flag's description): the fixup
+// fires only once the operator has typed the sudo password for that host, is
+// announced in the stream, and one file undoes it — so it is ON, while the
+// resolver stays fail-closed (TestBgPolicyComesFromTheGffFlag).
+func TestSudoGlobalFlagDefaultsOn(t *testing.T) {
+	b, err := os.ReadFile("../../../.github/gff/features.yaml")
+	if err != nil {
+		t.Skip("features.yaml not reachable from this checkout layout")
+	}
+	i := strings.Index(string(b), "path: "+featflag.KeySudoGlobal)
+	if i < 0 {
+		t.Fatalf("%s is not declared in features.yaml", featflag.KeySudoGlobal)
+	}
+	block := string(b)[i:]
+	if j := strings.Index(block, "\n      - path:"); j > 0 {
+		block = block[:j]
+	}
+	if !strings.Contains(block, "boolDefault: true") {
+		t.Fatalf("%s must default to true (deliberate; see its description):\n%s", featflag.KeySudoGlobal, block)
+	}
+}

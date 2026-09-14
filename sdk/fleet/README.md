@@ -281,8 +281,8 @@ status line naming why. A host with `Defaults timestamp_type=global` (or
 NOPASSWD) in sudoers has no PPID scoping to trip on and stays in the
 background lane.
 
-**Keeping password-sudo hosts in the streaming lane (opt-in).** Turn on
-`gff set fleet.update.sudo-timestamp-global true` and, on a host where the
+**Keeping password-sudo hosts in the streaming lane.** With
+`fleet.update.sudo-timestamp-global` (on by default), on a host where the
 credential you typed does not reach install.sh's children, the run installs
 `/etc/sudoers.d/fleet-timestamp` (`Defaults:<user> timestamp_type=global`,
 checked with `visudo -cf`) using the credential it just primed, prints a line
@@ -292,8 +292,16 @@ trade-off: for sudo's timeout (about 15 minutes) any process running as you
 on *that* host can sudo without a prompt. The password itself never leaves
 the priming shell — forwarding it to the children was reviewed and rejected,
 because anything inside install.sh's tree could then read the reusable
-password rather than merely gain root on one box. The flag is off by default
-and fail-closed.
+password rather than merely gain root on one box.
+
+The default is **on**, deliberately: it only ever fires when you have already
+typed the sudo password for that host, the change is announced in the stream
+and the captured log, and one file undoes it — whereas the alternative is the
+streaming TUI suspending itself to re-prompt for a password you just typed.
+On a host whose sudoers is managed centrally, `gff set
+fleet.update.sudo-timestamp-global false` restores the interactive fallback.
+Either way the flag is fail-closed: if gff or the key cannot be resolved, no
+host is changed.
 
 **Answers are sticky.** They survive `esc`, selection changes, and every later
 wave, so a fleet-wide update applies *the same* answers everywhere without you
