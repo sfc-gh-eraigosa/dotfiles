@@ -56,7 +56,10 @@ if [[ "$OS_TYPE" == "Linux" ]]; then
     # (usermod only takes effect at the next login); a session that already has
     # the group is served by a group-writable root:docker socket as it is.
     if [ -S "$DOCKER_SOCK" ]; then
-        _sock_state="$(stat -c '%U:%G %a' "$DOCKER_SOCK" 2>/dev/null)" # portability-ok: Linux-only branch (GNU stat)
+        # -L: judge the socket that chown/chmod change, not a symlink to it
+        # (Docker Desktop's WSL integration links /var/run/docker.sock; the
+        # link itself reads root:root 777, so it never looked right).
+        _sock_state="$(stat -L -c '%U:%G %a' "$DOCKER_SOCK" 2>/dev/null)" # portability-ok: Linux-only branch (GNU stat)
         _sock_ok=no
         case "$_sock_state" in
             "root:docker 666") _sock_ok=yes ;;

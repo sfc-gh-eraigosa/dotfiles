@@ -35,9 +35,14 @@ cat > "${TMP}/locale" <<'STUB'
 #!/bin/sh
 ok() { case "$1" in "" | C | POSIX | C.UTF-8 | C.utf8) return 0 ;; esac; return 1; }
 if [ "${1:-}" = "-a" ]; then printf 'C\nC.utf8\nPOSIX\n'; exit 0; fi
-ok "${LC_ALL:-}" || echo "locale: Cannot set LC_ALL to default locale: No such file or directory" >&2
-ok "${LC_CTYPE:-}" || echo "locale: Cannot set LC_CTYPE to default locale: No such file or directory" >&2
-ok "${LANG:-}" || echo "locale: Cannot set LC_CTYPE to default locale: No such file or directory" >&2
+# Like glibc, a set LC_ALL overrides every other variable.
+if [ -n "${LC_ALL:-}" ]; then
+    ok "${LC_ALL}" || echo "locale: Cannot set LC_ALL to default locale: No such file or directory" >&2
+else
+    ok "${LC_CTYPE:-}" || echo "locale: Cannot set LC_CTYPE to default locale: No such file or directory" >&2
+    ok "${LC_COLLATE:-}" || echo "locale: Cannot set LC_COLLATE to default locale: No such file or directory" >&2
+    ok "${LANG:-}" || echo "locale: Cannot set LC_CTYPE to default locale: No such file or directory" >&2
+fi
 echo "LANG=${LANG:-}"
 STUB
 chmod +x "${TMP}/locale"
@@ -72,6 +77,15 @@ for SH in bash dash zsh; do
     out="$(run "${SH}" LANG=en_US.UTF-8)"
     assert_eq "$(printf '%s\n' "${out}" | tail -1)" "LANG=C.UTF-8 LC_ALL= LC_CTYPE=" \
         "${SH}: an unavailable LANG falls back to C.UTF-8"
+
+    # A working LC_* next to a broken one is the user's choice: keep it.
+    out="$(run "${SH}" LANG=en_US.UTF-8 LC_CTYPE=C.UTF-8)"
+    assert_eq "$(printf '%s\n' "${out}" | tail -1)" "LANG=C.UTF-8 LC_ALL= LC_CTYPE=C.UTF-8" \
+        "${SH}: a working LC_CTYPE is kept when only LANG is broken"
+    out="$(env -i PATH="${TMP}:/usr/bin:/bin" LANG=C.UTF-8 LC_CTYPE=UTF-8 LC_COLLATE=C "${SH}" -c \
+        '. "$1"; locale_fallback; printf "LC_CTYPE=%s LC_COLLATE=%s\n" "${LC_CTYPE:-}" "${LC_COLLATE:-}"' _ "${LIB}" </dev/null 2>&1)"
+    assert_eq "$(printf '%s\n' "${out}" | tail -1)" "LC_CTYPE= LC_COLLATE=C" \
+        "${SH}: only the broken LC_* is dropped, a working one kept"
 
     out="$(run "${SH}" LANG=C.UTF-8)"
     assert_eq "${out}" "LANG=C.UTF-8 LC_ALL= LC_CTYPE=" "${SH}: a working locale is left alone, silently"
