@@ -173,23 +173,32 @@ cat > "${LSTUB}/locale" <<'STUB'
 ok() { case "$1" in "" | C | POSIX | C.UTF-8 | C.utf8) return 0 ;; esac; return 1; }
 if [ "${1:-}" = "-a" ]; then printf 'C\nC.utf8\nPOSIX\n'; exit 0; fi
 ok "${LC_ALL:-}" || echo "locale: Cannot set LC_ALL to default locale: No such file or directory" >&2
-ok "${LANG:-}" || echo "locale: Cannot set LC_CTYPE to default locale: No such file or directory" >&2
+# LC_CTYPE overrides LANG for its category, and LC_ALL overrides both (glibc).
+if [ -z "${LC_ALL:-}" ]; then
+    ok "${LC_CTYPE:-${LANG:-}}" || echo "locale: Cannot set LC_CTYPE to default locale: No such file or directory" >&2
+fi
 echo "LANG=${LANG:-}"
 STUB
 chmod +x "${LSTUB}/locale"
-# run_locale_block <env assignments...> -> "LANG=<v> LC_ALL=<v>" plus any message
+# run_locale_block <env assignments...> -> "LANG=<v> LC_ALL=<v> LC_CTYPE=<v>" plus any message
 run_locale_block() {
     # --norc/--noprofile and a closed stdin: bash reads ~/.bashrc when it thinks
     # stdin is a network connection, which would pollute the captured output.
-    env -i PATH="${LSTUB}:/usr/bin:/bin" "$@" bash --norc --noprofile -c "${LOCALE_BLOCK}"$'\n''printf "LANG=%s LC_ALL=%s\n" "${LANG:-}" "${LC_ALL:-}"' </dev/null
+    env -i PATH="${LSTUB}:/usr/bin:/bin" "$@" bash --norc --noprofile -c "${LOCALE_BLOCK}"$'\n''printf "LANG=%s LC_ALL=%s LC_CTYPE=%s\n" "${LANG:-}" "${LC_ALL:-}" "${LC_CTYPE:-}"' </dev/null
 }
 out="$(run_locale_block LANG=C.UTF-8 LC_ALL=en_US.UTF-8)"
-assert_eq "$(printf '%s\n' "$out" | tail -1)" "LANG=C.UTF-8 LC_ALL=" "an unavailable LC_ALL is dropped (LANG=C.UTF-8 already works)"
-assert_eq "$(printf '%s\n' "$out" | grep -c "en_US.UTF-8.*not installed")" "1" "the fallback says once which locale was missing"
+assert_eq "$(printf '%s\n' "$out" | tail -1)" "LANG=C.UTF-8 LC_ALL= LC_CTYPE=" "an unavailable LC_ALL is dropped (LANG=C.UTF-8 already works)"
+assert_eq "$(printf '%s\n' "$out" | grep -c "not installed.*dropped LC_ALL=en_US.UTF-8 for")" "1" "the fallback says once which locale was missing"
+# macOS's ssh_config forwards LC_CTYPE=UTF-8 (unknown to glibc) next to a LANG
+# the host does have: drop only LC_CTYPE, keep that LANG, and do not claim the
+# LANG is missing.
+out="$(run_locale_block LANG=POSIX LC_CTYPE=UTF-8)"
+assert_eq "$(printf '%s\n' "$out" | tail -1)" "LANG=POSIX LC_ALL= LC_CTYPE=" "a bad LC_CTYPE is dropped and an installed LANG is kept"
+assert_eq "$(printf '%s\n' "$out" | grep -c "dropped LC_CTYPE=UTF-8 for")" "1" "the fallback names the LC_CTYPE it dropped, not the LANG"
 out="$(run_locale_block LANG=en_US.UTF-8)"
-assert_eq "$(printf '%s\n' "$out" | tail -1)" "LANG=C.UTF-8 LC_ALL=" "an unavailable LANG falls back to C.UTF-8"
+assert_eq "$(printf '%s\n' "$out" | tail -1)" "LANG=C.UTF-8 LC_ALL= LC_CTYPE=" "an unavailable LANG falls back to C.UTF-8"
 out="$(run_locale_block LANG=C.UTF-8)"
-assert_eq "$out" "LANG=C.UTF-8 LC_ALL=" "a working locale is left alone, silently"
+assert_eq "$out" "LANG=C.UTF-8 LC_ALL= LC_CTYPE=" "a working locale is left alone, silently"
 rm -rf "${LSTUB}"
 LOCALE_LINE="$(grep -n '^# --- Locale fallback' "$INSTALL" | head -1 | cut -d: -f1)"
 FIRST_CHILD_LINE="$(grep -n '^\. "\${BASE_DIR}/opt/lib/gff.sh"' "$INSTALL" | head -1 | cut -d: -f1)"

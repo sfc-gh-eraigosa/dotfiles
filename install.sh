@@ -49,17 +49,33 @@ export PATH
 # host), and goenv even captured that warning into its GOROOT path. When
 # `locale` complains, drop the forwarded settings for this run and use a locale
 # the host has: C.UTF-8 when present, else C.
+#
+# Peel one layer at a time and stop as soon as `locale` is quiet: LC_ALL first,
+# then the per-category LC_* (macOS's ssh_config forwards LC_CTYPE=UTF-8, a
+# name glibc does not know), and LANG only if it is itself the problem — so a
+# LANG the host does have survives, and the message names what was dropped.
 if command -v locale >/dev/null 2>&1 && [ -n "$(locale 2>&1 >/dev/null)" ]; then
-  _il_want="${LC_ALL:-${LANG:-}}"
+  _il_drop="${LC_ALL:+LC_ALL=${LC_ALL}}"
   unset LC_ALL
   if [ -n "$(locale 2>&1 >/dev/null)" ]; then
-    if locale -a 2>/dev/null | grep -qix 'c\.utf-\{0,1\}8'; then LANG=C.UTF-8; else LANG=C; fi
-    export LANG
-    unset LANGUAGE LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY LC_MESSAGES \
-      LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT LC_IDENTIFICATION
+    for _il_v in LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY LC_MESSAGES \
+      LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT LC_IDENTIFICATION; do
+      # Only touch what is set: bash re-runs setlocale on every LC_* unset and
+      # warns once per category while LANG is still the broken one.
+      if [ -n "${!_il_v:-}" ]; then
+        _il_drop="${_il_drop:+${_il_drop} }${_il_v}=${!_il_v}"
+        unset "${_il_v}"
+      fi
+    done
+    if [ -n "$(locale 2>&1 >/dev/null)" ]; then
+      _il_drop="${_il_drop:+${_il_drop} }LANG=${LANG:-}"
+      if locale -a 2>/dev/null | grep -qix 'c\.utf-\{0,1\}8'; then LANG=C.UTF-8; else LANG=C; fi
+      export LANG
+      unset LANGUAGE
+    fi
   fi
-  echo "install.sh: locale '${_il_want}' is not installed on this host; using ${LANG:-C} for this run."
-  unset _il_want
+  echo "install.sh: locale not installed on this host; dropped ${_il_drop} for this run, using LANG=${LANG:-C}."
+  unset _il_drop _il_v
 fi
 # --- end locale fallback ------------------------------------------------------
 
