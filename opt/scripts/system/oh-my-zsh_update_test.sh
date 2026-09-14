@@ -27,6 +27,7 @@ export GIT_TERMINAL_PROMPT=0
 
 # _commit <repo> <file> <content> — add one commit to <repo>.
 _commit() {
+    mkdir -p "$(dirname "$1/$2")"
     printf '%s\n' "$3" > "$1/$2"
     git -C "$1" add -A >/dev/null
     git -C "$1" commit -q -m "add $2" >/dev/null
@@ -75,9 +76,8 @@ assert_eq "$(_head "$ROOT/local")" "$BEFORE" "already current: HEAD unchanged"
 assert_grep "already current: says so" 'up to date' "$OUT2"
 
 # === 4. Local edits that upstream does not touch survive a fast-forward ===
-# .zshrc copies opt/themes/agnoster.zsh-theme over the clone's copy on every
-# shell start, so the clone is PERMANENTLY dirty in one file. That must not
-# block updates.
+# A dirty tree alone must not block updates, and an edit to a file upstream
+# never touches is the user's business — the fast-forward must keep it.
 ROOT4="$(_fixture)"
 _commit "$ROOT4/upstream" agnoster.zsh-theme "upstream agnoster"
 git -C "$ROOT4/local" pull -q origin master
@@ -104,6 +104,86 @@ assert_grep "diverged: prints a WARNING" 'WARNING' "$OUT5"
 assert_grep "diverged: names the clone dir in the warning" "$ROOT5/local" "$OUT5"
 assert_eq "$(git -C "$ROOT5/local" rev-list --count HEAD)" "2" \
     "diverged: history untouched (2 commits: base + local)"
+assert_grep "diverged: the warning says it is local commits" 'local commit' "$OUT5"
+
+# === 5b. The dotfiles agnoster copy is healed so the clone fast-forwards ===
+# Regression (all 4 fleet hosts, 15 commits behind): older .zshrc copied
+# opt/themes/agnoster.zsh-theme over the TRACKED themes/agnoster.zsh-theme on
+# every shell start, and upstream e6561f57 changed that same file, so
+# `merge --ff-only` refused forever. When that copy is the clone's ONLY
+# modification it is disposable (.zshrc now keeps it in custom/themes/), so
+# the script restores the upstream file and fast-forwards.
+ROOT5B="$(_fixture)"
+_commit "$ROOT5B/upstream" themes/agnoster.zsh-theme "upstream agnoster v1"
+git -C "$ROOT5B/local" pull -q origin master
+printf '%s\n' "DOTFILES agnoster copy" > "$ROOT5B/local/themes/agnoster.zsh-theme"
+_commit "$ROOT5B/upstream" themes/agnoster.zsh-theme "upstream agnoster v2 (conda fix)"
+OUT5B="$ROOT5B/out.txt"
+RC="$(_run "$ROOT5B/local" "$OUT5B")"
+assert_eq "$RC" "0" "dotfiles theme copy: exits 0"
+assert_eq "$(_head "$ROOT5B/local")" "$(_head "$ROOT5B/upstream")" \
+    "dotfiles theme copy: healed and fast-forwarded to the upstream tip"
+assert_eq "$(cat "$ROOT5B/local/themes/agnoster.zsh-theme")" "upstream agnoster v2 (conda fix)" \
+    "dotfiles theme copy: the tracked theme is upstream's again"
+assert_eq "$(git -C "$ROOT5B/local" status --porcelain --untracked-files=no)" "" \
+    "dotfiles theme copy: the clone is clean afterwards"
+assert_grep "dotfiles theme copy: says it restored the theme" 'restored themes/agnoster\.zsh-theme' "$OUT5B"
+assert_grep_negative "dotfiles theme copy: no WARNING" 'WARNING' "$OUT5B"
+
+# === 5c. Some OTHER modified file upstream also changed: still refuses ===
+# Only the disposable theme copy is healed; a real local edit is never thrown
+# away, and the warning must name the file instead of blaming "local commits".
+ROOT5C="$(_fixture)"
+_commit "$ROOT5C/upstream" lib/git.zsh "upstream git lib v1"
+git -C "$ROOT5C/local" pull -q origin master
+printf '%s\n' "LOCAL git lib edit" > "$ROOT5C/local/lib/git.zsh"
+_commit "$ROOT5C/upstream" lib/git.zsh "upstream git lib v2"
+HEAD5C="$(_head "$ROOT5C/local")"
+OUT5C="$ROOT5C/out.txt"
+RC="$(_run "$ROOT5C/local" "$OUT5C")"
+assert_eq "$RC" "0" "modified file upstream changed: exits 0"
+assert_eq "$(_head "$ROOT5C/local")" "$HEAD5C" "modified file upstream changed: HEAD unchanged"
+assert_eq "$(cat "$ROOT5C/local/lib/git.zsh")" "LOCAL git lib edit" \
+    "modified file upstream changed: the local edit is preserved"
+assert_grep "modified file upstream changed: prints a WARNING" 'WARNING' "$OUT5C"
+assert_grep "modified file upstream changed: says modified tracked files" 'modified tracked file' "$OUT5C"
+assert_grep "modified file upstream changed: names the file" 'lib/git\.zsh' "$OUT5C"
+assert_grep_negative "modified file upstream changed: does not blame local commits" 'local commit' "$OUT5C"
+
+# === 5d. Theme copy PLUS another modification: nothing is healed ===
+# The theme is only disposable when it is the clone's sole modification; with
+# anything else dirty a human should look, so the tree is left exactly as is.
+ROOT5D="$(_fixture)"
+_commit "$ROOT5D/upstream" themes/agnoster.zsh-theme "upstream agnoster v1"
+_commit "$ROOT5D/upstream" lib/other.zsh "upstream other v1"
+git -C "$ROOT5D/local" pull -q origin master
+printf '%s\n' "DOTFILES agnoster copy" > "$ROOT5D/local/themes/agnoster.zsh-theme"
+printf '%s\n' "LOCAL other edit" > "$ROOT5D/local/lib/other.zsh"
+_commit "$ROOT5D/upstream" themes/agnoster.zsh-theme "upstream agnoster v2"
+HEAD5D="$(_head "$ROOT5D/local")"
+OUT5D="$ROOT5D/out.txt"
+RC="$(_run "$ROOT5D/local" "$OUT5D")"
+assert_eq "$RC" "0" "theme + other edit: exits 0"
+assert_eq "$(_head "$ROOT5D/local")" "$HEAD5D" "theme + other edit: HEAD unchanged"
+assert_eq "$(cat "$ROOT5D/local/themes/agnoster.zsh-theme")" "DOTFILES agnoster copy" \
+    "theme + other edit: the theme is not restored"
+assert_grep "theme + other edit: warning names the conflicting theme file" 'themes/agnoster\.zsh-theme' "$OUT5D"
+
+# === 5e. Local commits AND the theme copy: refuses as local commits, touches nothing ===
+ROOT5E="$(_fixture)"
+_commit "$ROOT5E/upstream" themes/agnoster.zsh-theme "upstream agnoster v1"
+git -C "$ROOT5E/local" pull -q origin master
+_commit "$ROOT5E/local" local.txt "local only"
+printf '%s\n' "DOTFILES agnoster copy" > "$ROOT5E/local/themes/agnoster.zsh-theme"
+_commit "$ROOT5E/upstream" themes/agnoster.zsh-theme "upstream agnoster v2"
+HEAD5E="$(_head "$ROOT5E/local")"
+OUT5E="$ROOT5E/out.txt"
+RC="$(_run "$ROOT5E/local" "$OUT5E")"
+assert_eq "$RC" "0" "local commits + theme copy: exits 0"
+assert_eq "$(_head "$ROOT5E/local")" "$HEAD5E" "local commits + theme copy: HEAD unchanged"
+assert_eq "$(cat "$ROOT5E/local/themes/agnoster.zsh-theme")" "DOTFILES agnoster copy" \
+    "local commits + theme copy: the working tree is left untouched"
+assert_grep "local commits + theme copy: the warning says local commits" 'local commit' "$OUT5E"
 
 # === 6. Upstream unreachable (offline): warns, exit 0, HEAD unchanged ===
 ROOT6="$(_fixture)"
@@ -187,6 +267,20 @@ if [ -n "${gitrepos_line}" ] && [ -n "${update_line}" ] && [ "${update_line}" -g
 else
     assert_eq "update@${update_line:-missing} gitrepos@${gitrepos_line:-missing}" "ordered" \
         "oh-my-zsh update runs after the gitrepos block"
+fi
+
+# === 12. .zshrc keeps the dotfiles agnoster theme OUT of the tracked tree ===
+# oh-my-zsh loads $ZSH_CUSTOM/themes/<name> before $ZSH/themes/<name>, and
+# custom/ is gitignored upstream — so copying there gives the same prompt
+# without dirtying the clone (the cause of the never-fast-forwards bug).
+ZSHRC="${REPO_ROOT}/opt/profiles/.zshrc"
+assert_grep ".zshrc copies the agnoster theme into custom/themes" \
+    'ZSH_CUSTOM:-\$ZSH/custom\}/themes' "${ZSHRC}"
+assert_grep_negative ".zshrc never copies into the tracked \$ZSH/themes" \
+    'cp .*"\$ZSH/themes/' "${ZSHRC}"
+if command -v zsh >/dev/null 2>&1; then
+    assert_exit_code 0 ".zshrc parses with zsh -n" zsh -n "${ZSHRC}"
+    set +e
 fi
 
 _test_report

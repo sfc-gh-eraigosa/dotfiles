@@ -10,10 +10,14 @@
 #
 # Contract:
 #   - Fast-forward ONLY. Never creates merge commits, never rebases, never
-#     touches a diverged branch. .zshrc copies opt/themes/agnoster.zsh-theme
-#     over the clone's copy at every shell start, so the tree is expected to
-#     be dirty in that one file; a dirty tree is fine as long as upstream does
-#     not touch the same paths (git refuses otherwise, and we warn).
+#     touches a diverged branch. A dirty tree is fine as long as upstream does
+#     not touch the same paths (git refuses otherwise, and we warn, naming the
+#     files — or the local commits, when that is the reason).
+#   - One exception to "never touch the tree": older .zshrc copied
+#     opt/themes/agnoster.zsh-theme over the TRACKED themes/agnoster.zsh-theme
+#     at every shell start (it now goes to custom/themes/). When that file is
+#     the clone's ONLY modification it is restored to upstream's copy before
+#     the fast-forward, so clones dirtied that way heal themselves.
 #   - Never fails the installer: every problem (offline, diverged, detached
 #     HEAD, missing clone) prints a note or WARNING and exits 0.
 #   - Never prompts: GIT_TERMINAL_PROMPT=0 and a bounded fetch timeout.
@@ -77,13 +81,66 @@ if [ "${OLD}" = "${NEW}" ]; then
     exit 0
 fi
 
-if git -C "${CLONE_DIR}" merge -q --ff-only "${UPSTREAM}" >/dev/null 2>&1; then
+# Local commits make a fast-forward impossible whatever the working tree
+# holds, so check them first and touch nothing.
+AHEAD="$(git -C "${CLONE_DIR}" rev-list --count "${UPSTREAM}..HEAD" 2>/dev/null || echo 0)"
+if [ "${AHEAD}" != "0" ]; then
+    echo "WARNING: oh-my-zsh: ${CLONE_DIR} has ${AHEAD} local commit(s) not on ${UPSTREAM};"
+    echo "         cannot fast-forward. Left untouched. To resolve by hand:"
+    echo "         git -C '${CLONE_DIR}' log ${UPSTREAM}..HEAD && git -C '${CLONE_DIR}' merge ${UPSTREAM}"
+    exit 0
+fi
+
+# Heal the dotfiles theme copy. Older .zshrc copied opt/themes/agnoster.zsh-theme
+# over the TRACKED themes/agnoster.zsh-theme at every shell start, so every
+# clone carries that one modification — and once upstream changed the same
+# file (e6561f57), --ff-only refused forever. That copy is disposable (.zshrc
+# now installs it into custom/themes/, which oh-my-zsh loads first), so when it
+# is the clone's ONLY modification, restore upstream's file. Anything else
+# dirty, or a staged change, means a human touched the clone: leave it alone.
+THEME_PATH="themes/agnoster.zsh-theme"
+DIRTY="$(git -C "${CLONE_DIR}" status --porcelain --untracked-files=no 2>/dev/null || true)"
+if [ "${DIRTY}" = " M ${THEME_PATH}" ]; then
+    if git -C "${CLONE_DIR}" checkout -q -- "${THEME_PATH}" 2>/dev/null; then
+        echo "oh-my-zsh: restored ${THEME_PATH} in ${CLONE_DIR} (the dotfiles copy now lives in custom/themes/)."
+    fi
+fi
+
+MERGE_ERR="$(git -C "${CLONE_DIR}" merge -q --ff-only "${UPSTREAM}" 2>&1 >/dev/null)"
+MERGE_RC=$?
+if [ "${MERGE_RC}" -eq 0 ]; then
     COUNT="$(git -C "${CLONE_DIR}" rev-list --count "${OLD}..${NEW}" 2>/dev/null || echo '?')"
     echo "oh-my-zsh: updated ${CLONE_DIR} ${OLD:0:8} -> ${NEW:0:8} (${COUNT} commit(s), fast-forward)."
     exit 0
 fi
 
-echo "WARNING: oh-my-zsh: ${CLONE_DIR} cannot be fast-forwarded to ${UPSTREAM} (local commits or"
-echo "         local edits to files upstream changed). Left untouched. To resolve by hand:"
-echo "         git -C '${CLONE_DIR}' status && git -C '${CLONE_DIR}' merge ${UPSTREAM}"
+# Not local commits (checked above), so the working tree is in the way: name
+# the locally modified tracked files that upstream also changed.
+LOCAL_MODS="$(git -C "${CLONE_DIR}" diff --name-only HEAD 2>/dev/null || true)"
+CONFLICTS=""
+while IFS= read -r _f; do
+    [ -n "${_f}" ] || continue
+    case "
+${LOCAL_MODS}
+" in
+        *"
+${_f}
+"*) CONFLICTS="${CONFLICTS:+${CONFLICTS} }${_f}" ;;
+    esac
+done <<EOF
+$(git -C "${CLONE_DIR}" diff --name-only HEAD "${UPSTREAM}" 2>/dev/null)
+EOF
+
+if [ -n "${CONFLICTS}" ]; then
+    echo "WARNING: oh-my-zsh: ${CLONE_DIR} cannot be fast-forwarded to ${UPSTREAM}:"
+    echo "         modified tracked file(s) that upstream also changed: ${CONFLICTS}"
+    echo "         Left untouched. To resolve by hand (drop or stash your edits, then re-run):"
+    echo "         git -C '${CLONE_DIR}' diff -- ${CONFLICTS}"
+else
+    echo "WARNING: oh-my-zsh: ${CLONE_DIR} cannot be fast-forwarded to ${UPSTREAM}. Left untouched."
+    if [ -n "${MERGE_ERR}" ]; then
+        printf '%s\n' "${MERGE_ERR}" | head -n 5 | sed 's/^/         git: /'
+    fi
+    echo "         To resolve by hand: git -C '${CLONE_DIR}' status && git -C '${CLONE_DIR}' merge --ff-only ${UPSTREAM}"
+fi
 exit 0

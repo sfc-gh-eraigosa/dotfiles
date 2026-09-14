@@ -10,6 +10,11 @@
 #   claude:      model = opus|sonnet|haiku|<id>|inherit ; effort = low|medium|high|xhigh|max
 #   antigravity: model = <id>                           ; effort = low|medium|high|max
 #   ollama:      model = <tag>                          ; num_ctx = context window
+#
+# ollama tags are NEVER pulled by the installer: an agent whose base model is not
+# already pulled on the host is skipped (Modelfile still written) and reported once
+# per model with the `ollama pull <tag>` to run. A tag the host's ollama is too old
+# to run surfaces ollama's own create error.
 schema_version: 1
 
 tiers:

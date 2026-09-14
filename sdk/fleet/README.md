@@ -268,11 +268,18 @@ per **session**, not once per wave:
 | gemini leftovers `[y/k/n]` | `GEMINI_TEARDOWN_ANSWER` — `yes` clean up, `keep` never ask again, `skip` this run only |
 
 The credential is primed and used in the **same ssh session** as install.sh
-(sudo's timestamp is tty/session-scoped, so priming in a separate connection is
-not guaranteed to carry), and the prime is **verified** with `sudo -n true`
-before the install starts — otherwise a long run would proceed with every
-privileged step silently skipping. A rejected password and a credential that
-did not persist are reported as distinct, named failures on the row.
+(sudo's default `timestamp_type=tty` has no tty to key on over ssh, so it
+falls back to the PPID of whatever process ran `sudo` — priming in a separate
+connection is not guaranteed to carry). The prime is then **verified from a
+forked child** (`sh -c 'sudo -n true; exit $?'` — the trailing command stops a bash `/bin/sh` from exec'ing sudo in place), not a bare check in the same shell —
+a bare check shares the primer's PPID and always passes, even on a host where
+install.sh's own children (a different PPID) never see the credential. A
+rejected password is reported as a named failure on the row; a credential
+that does not reach children instead **routes the host to the interactive
+lane**, the same handoff a step that flat-out needs a terminal gets, with a
+status line naming why. A host with `Defaults timestamp_type=global` (or
+NOPASSWD) in sudoers has no PPID scoping to trip on and stays in the
+background lane.
 
 **Answers are sticky.** They survive `esc`, selection changes, and every later
 wave, so a fleet-wide update applies *the same* answers everywhere without you

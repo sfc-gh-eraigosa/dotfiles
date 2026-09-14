@@ -198,8 +198,20 @@ comment on a binding line** (`c = C-c  # copy`) with `invalid key or action` and
 silently drops that binding — keep comments on their own lines. The test driver
 guards this.
 
-**I'm on Wayland.** The Xlib backend cannot see native Wayland windows, so the
-mapper needs keyd's GNOME shell extension instead:
+**I'm on Wayland.** The Xlib backend cannot see native Wayland windows, so what
+the mapper needs depends on the desktop. The installer works it out from
+`XDG_CURRENT_DESKTOP` / `XDG_SESSION_DESKTOP`, or (when run over SSH) from the
+logind session's `Desktop=` and the compositor this user is running;
+`macos-keys-linux.sh --doctor` prints what it found.
+
+| Wayland desktop | Mapper backend | Extra setup |
+| :-- | :-- | :-- |
+| wlroots compositors — labwc (Raspberry Pi OS), sway, wayfire, river, Hyprland | native (foreign-toplevel protocol) | none |
+| KDE Plasma | native (KWin script) | `python3-dbus` + `python3-gi` (the installer refuses without them) |
+| GNOME | keyd's GNOME shell extension | see below |
+| anything else | — | the installer refuses, naming the desktop it could not identify |
+
+GNOME needs the extension installed **and** enabled:
 
 ```bash
 ln -s /usr/local/share/keyd/gnome-extension-45 \
@@ -207,7 +219,8 @@ ln -s /usr/local/share/keyd/gnome-extension-45 \
 gnome-extensions enable keyd   # then log out and back in
 ```
 
-Until that is in place the installer refuses to remap anything, by design. On an
+Until that is in place the installer refuses to remap anything on GNOME
+Wayland, by design. On an
 X11 session no extension is needed — the installer hides `XDG_CURRENT_DESKTOP`
 from the mapper so it selects the dependency-free Xlib backend.
 

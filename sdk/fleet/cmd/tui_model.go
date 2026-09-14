@@ -1393,6 +1393,22 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.iaTotal++
 			return m, m.pump()
 		}
+		// sudoGate's child-process check (see tui_cmds.go) failed: the
+		// credential primed for this session does not reach install.sh's own
+		// children, so running install.sh in the background would silently
+		// skip every privileged step (the live defect this fix addresses).
+		// Route to the interactive queue instead — a real pty gets sudo's
+		// normal tty-keyed timestamp, which install.sh's children DO share.
+		if sudoGateFailed(msg.err) {
+			if m.running > 0 {
+				m.running--
+			}
+			m.updating[msg.alias] = updState{phase: updQueued}
+			m.iaQueue = append(m.iaQueue, msg.alias)
+			m.iaTotal++
+			m.status = fmt.Sprintf("%s: sudo credential does not reach child processes on this host (timestamp_type=tty without a tty) — using the terminal lane", msg.alias)
+			return m, m.pump()
+		}
 		// The tail of the streamed output is the row's failure explanation —
 		// the same text the non-streaming path used to capture at the end.
 		log := msg.log

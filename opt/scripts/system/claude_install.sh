@@ -23,6 +23,10 @@
 
 NPM_PKG="@anthropic-ai/claude-code"
 
+# shellcheck source=../../lib/npm_allow_scripts.sh
+_npm_allow_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../lib" 2>/dev/null && pwd)/npm_allow_scripts.sh"
+[ -f "${_npm_allow_lib}" ] && . "${_npm_allow_lib}"
+
 # Detect platform -> echoes one of: macos | wsl | linux | unknown
 detect_platform() {
     case "$(uname -s)" in
@@ -75,6 +79,12 @@ install_via_npm() {
             echo "ERROR: npm/node not available and nvm not initialized. Install nvm first."
             exit 1
         fi
+    fi
+
+    # Before the install/update, so its postinstall (which installs the claude
+    # binary) is allowed by name and npm stops listing it as unreviewed.
+    if command -v npm_allow_scripts >/dev/null 2>&1; then
+        npm_allow_scripts "$NPM_PKG"
     fi
 
     if npm ls -g --depth=0 "$NPM_PKG" &> /dev/null; then

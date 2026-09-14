@@ -204,7 +204,7 @@ const (
 )
 
 // sudoGate refuses to start a run step's script unless sudo will actually
-// work in THIS session.
+// work for install.sh's OWN CHILDREN in THIS session.
 //
 // install.sh treats its own failed `sudo -v` as non-fatal and carries on, so
 // without this gate a credential-less run produced a long cascade —
@@ -220,12 +220,68 @@ const (
 //
 // It is unconditional on purpose. Gating only when a credential was supplied
 // left exactly the case above ungated. It also cannot be inherited from the
-// precheck: that runs in a SEPARATE ssh connection, and sudo's timestamp is
-// scoped, so passing there says nothing about this session.
+// precheck: that runs in a SEPARATE ssh connection, and sudo's default
+// timestamp_type=tty has no tty to key on over ssh, so it falls back to the
+// PPID of whichever process ran `sudo` — a precheck passing there says
+// nothing about this session's PPID.
+//
+// The check MUST run from a forked child (`sh -c '...'`), not directly in
+// the preamble's own shell. Without the fork, the gate shares the primer's
+// exact PPID and always reports success — even on a host where the
+// credential does NOT reach install.sh's own children (pkg-install-apt, the
+// keep-alive loop, the docker step), each spawned with install.sh's PPID,
+// not the preamble shell's. That mismatch is exactly what let a
+// credential-less run above look primed while every privileged step inside
+// install.sh still failed (36x per run, live on a host with no tty and no
+// NOPASSWD). Forking one level down puts the test in the same PPID shape as
+// those children, so it actually answers "will THEY see this credential".
+//
+// The `; exit $?` after `sudo -n true` is load-bearing: a shell given a
+// single simple command via `-c` may exec it in place instead of forking
+// (bash does — and bash is /bin/sh on macOS, Fedora, Arch), which would give
+// sudo the preamble shell as its parent again and silently restore the
+// same-PPID false pass. A trailing command forces a real fork everywhere.
+//
+// A host with `Defaults timestamp_type=global` in sudoers (or NOPASSWD) has
+// no PPID scoping to trip on and passes the child check exactly like it
+// passed the old same-shell one — such a host keeps the background lane.
 //
 // Hosts that need no sudo are exempt rather than blocked: root, and machines
 // with no sudo at all (minimal containers).
-const sudoGate = `{ [ "$(id -u)" = 0 ] || ! command -v sudo >/dev/null 2>&1 || sudo -n true 2>/dev/null; }`
+const sudoGate = `{ [ "$(id -u)" = 0 ] || ! command -v sudo >/dev/null 2>&1 || sh -c 'sudo -n true; exit $?' 2>/dev/null; }`
+
+// errSudoNotInherited marks a background run the sudoGate stopped with its
+// rcSudoNoCache exit (92): the credential primed this session did not reach
+// the child-process check, so it would not reach install.sh's own children
+// either. tui_model routes such a host to the interactive queue (a real pty,
+// where sudo's tty keying works normally) instead of marking it failed.
+var errSudoNotInherited = errors.New("fleet: sudo credential does not reach child processes")
+
+// bgDoneErr turns a background run's report into the error its done channel
+// carries, typed for the two outcomes the model re-routes rather than fails.
+// The gate is recognised by the failing step's TYPED exit code, never by
+// matching "92" in text — that also matched exit 192 and any reason that
+// merely mentioned a 192.168.x address.
+func bgDoneErr(rep updexec.HostReport) error {
+	if rep.NeedsTerminal() {
+		return errNeedsTerminal
+	}
+	for _, r := range rep.Results {
+		if r.Status != updexec.OK {
+			if r.Exit == rcSudoNoCache {
+				return fmt.Errorf("%w: %w", errSudoNotInherited, rep.Err())
+			}
+			break
+		}
+	}
+	return rep.Err()
+}
+
+// sudoGateFailed reports whether a background run's error is the sudoGate's
+// (see errSudoNotInherited).
+func sudoGateFailed(err error) bool {
+	return errors.Is(err, errSudoNotInherited)
+}
 
 // explainExit turns the preamble's exit codes into something an operator can
 // act on. A bare "exit status 91" on a row would be useless.
@@ -383,11 +439,7 @@ func beginStream(alias string, plan updplan.Plan, a answers, r runner.Runner, di
 		go func() {
 			rep := ex.RunHost(alias, plan)
 			q.closeQ()
-			if rep.NeedsTerminal() {
-				done <- errNeedsTerminal
-				return
-			}
-			done <- rep.Err()
+			done <- bgDoneErr(rep)
 		}()
 
 		return streamStartedMsg{alias: alias, st: stream{lines: lines, done: done}}

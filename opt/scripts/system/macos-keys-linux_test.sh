@@ -43,10 +43,12 @@ cat > "$H/bin/keyd" <<'STUB'
 exit 0
 STUB
 
-# The Xlib import check and the X11 focused-window probe both run through python3.
+# The Xlib import check and the X11 focused-window probe both run through python3,
+# as does the KDE backend's dbus import probe (FAKE_DBUS_OK=0 fails only that one).
 cat > "$H/bin/python3" <<'STUB'
 #!/usr/bin/env bash
 echo "python3 $*" >> "$STUB_LOG"
+case "$*" in *"import dbus"*) [ "${FAKE_DBUS_OK:-1}" = "1" ] || exit 1 ;; esac
 [ "${FAKE_XLIB_OK:-1}" = "1" ] || exit 1
 exit 0
 STUB
@@ -100,7 +102,12 @@ cat > "$H/bin/loginctl" <<'STUB'
 [ "${FAKE_LOGINCTL_GUI:-0}" = "1" ] || exit 0
 case "$1" in
   list-sessions) echo "  7 1000 tester seat0 tty2" ;;
-  show-session)  case "$*" in *Type*) echo x11 ;; *User*) id -u ;; *) echo "" ;; esac ;;
+  show-session)  case "$*" in
+                   *Type*) echo "${FAKE_LOGINCTL_TYPE:-x11}" ;;
+                   *User*) id -u ;;
+                   *Desktop*) echo "${FAKE_LOGINCTL_DESKTOP:-}" ;;
+                   *) echo "" ;;
+                 esac ;;
 esac
 exit 0
 STUB
@@ -137,7 +144,17 @@ run_sut() { # run_sut [VAR=val ...]
     printf '[Desktop Entry]\nExec=keyd-application-mapper -d\n' \
       > "$H/home/.config/autostart/keyd-application-mapper.desktop"
   fi
-  env PATH="$H/bin:$PATH" HOME="$H/home" KEYD_ETC="$H/etc/keyd" \
+  if [ -n "${PRESEED_COMPOSITOR:-}" ]; then
+    # A running compositor, as /proc/<pid>/comm shows it (the SSH-install case,
+    # where the desktop's XDG_* variables are not in this shell's environment).
+    mkdir -p "$H/proc/4300"
+    printf '%s\n' "${PRESEED_COMPOSITOR}" > "$H/proc/4300/comm"
+  fi
+  # The desktop identity variables are unset so the build machine's own
+  # desktop (a GNOME dev box, say) never leaks into a case's verdict.
+  env -u XDG_CURRENT_DESKTOP -u XDG_SESSION_DESKTOP -u DESKTOP_SESSION \
+      -u WAYLAND_DISPLAY -u KDE_SESSION_VERSION \
+      PATH="$H/bin:$PATH" HOME="$H/home" KEYD_ETC="$H/etc/keyd" \
       STUB_LOG="$H/stublog" XDG_SESSION_TYPE=x11 DISPLAY=:99 \
       KEYD_DROPIN="$H/etc/systemd/keyd.service.d/10-dotfiles-restart.conf" \
       INPUT_DEVICES_DIR="$H/sys/class/input" PROC_DIR="$H/proc" \
@@ -189,12 +206,74 @@ assert_eq "$?" "0" "no python3-xlib: exits clean"
 assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "no" \
     "no python3-xlib: refuses to install the keyd config"
 
-# A Wayland session with no keyd GNOME extension is the same hazard.
-out="$(run_sut XDG_SESSION_TYPE=wayland FAKE_GNOME_EXT_OK=0 2>&1)"
+# A GNOME Wayland session with no keyd GNOME extension is the same hazard.
+out="$(run_sut XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=ubuntu:GNOME FAKE_GNOME_EXT_OK=0 2>&1)"
 assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "no" \
-    "wayland without the GNOME extension: refuses to install"
+    "wayland GNOME without the GNOME extension: refuses to install"
 case "$out" in *"SIGINT"*) r=0 ;; *) r=1 ;; esac
 assert_eq "$r" "0" "refusal explains the SIGINT hazard"
+case "$out" in *"gnome-extensions enable keyd"*) r=0 ;; *) r=1 ;; esac
+assert_eq "$r" "0" "wayland GNOME without the extension: prints the GNOME extension advice"
+
+# ...and with the extension present and enabled, GNOME Wayland is supported.
+out="$(run_sut XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME FAKE_GNOME_EXT_OK=1 2>&1)"
+assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "yes" \
+    "wayland GNOME with the extension enabled: installs"
+
+# --- Wayland compositors the mapper supports natively (no GNOME extension) -----
+# Regression (a Raspberry Pi, Debian 13 + labwc): every Wayland session was treated
+# as GNOME, so a wlroots desktop got GNOME-extension advice and a refusal, even
+# though keyd-application-mapper's wlroots and KDE backends need no extension.
+for desk in labwc:wlroots sway Hyprland LXDE-pi-labwc wayfire river KDE plasma; do
+  out="$(run_sut XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP="$desk" FAKE_GNOME_EXT_OK=0 2>&1)"
+  assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "yes" \
+      "wayland $desk: supported mapper backend, installs"
+  case "$out" in *"GNOME"*|*"REFUSING"*) r=1 ;; *) r=0 ;; esac
+  assert_eq "$r" "0" "wayland $desk: no GNOME advice, no refusal"
+done
+
+# KDE's mapper backend imports python3-dbus. Without it the mapper falls through
+# to Xlib, which on Wayland sees only XWayland windows: Cmd+C in a native Konsole
+# would be SIGINT. So a KDE session without the dbus bindings keeps the refusal.
+out="$(run_sut XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE FAKE_DBUS_OK=0 2>&1)"
+assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "no" \
+    "wayland KDE without python3-dbus: refuses to install"
+case "$out" in *"python3-dbus"*) r=0 ;; *) r=1 ;; esac
+assert_eq "$r" "0" "wayland KDE without python3-dbus: says which packages are missing"
+
+# XDG_SESSION_DESKTOP is enough on its own (some display managers set only it).
+out="$(run_sut XDG_SESSION_TYPE=wayland XDG_SESSION_DESKTOP=sway 2>&1)"
+assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "yes" \
+    "wayland via XDG_SESSION_DESKTOP=sway: installs"
+
+# Installed over SSH: no XDG_* in this shell, so the desktop is read from the
+# logind session (Desktop=) the same way the session type is.
+out="$(run_sut XDG_SESSION_TYPE=tty FAKE_LOGINCTL_GUI=1 FAKE_LOGINCTL_TYPE=wayland \
+    FAKE_LOGINCTL_DESKTOP=LXDE-pi-labwc 2>&1)"
+assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "yes" \
+    "SSH install, logind wayland session Desktop=LXDE-pi-labwc: installs"
+
+# ...or, when logind has no Desktop= either, from the compositor that is running.
+out="$(PRESEED_COMPOSITOR=labwc run_sut XDG_SESSION_TYPE=wayland 2>&1)"
+assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "yes" \
+    "wayland, no desktop vars, labwc process running: installs"
+out="$(PRESEED_COMPOSITOR=gnome-shell run_sut XDG_SESSION_TYPE=wayland FAKE_GNOME_EXT_OK=0 2>&1)"
+case "$out" in *"gnome-extensions enable keyd"*) r=0 ;; *) r=1 ;; esac
+assert_eq "$r" "0" "wayland, no desktop vars, gnome-shell running: GNOME advice"
+
+# An unidentified Wayland desktop keeps the safe refusal -- but with an accurate
+# message, not GNOME-extension instructions that do not apply.
+out="$(run_sut XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=mystery-wm FAKE_GNOME_EXT_OK=0 2>&1)"
+assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "no" \
+    "wayland unknown desktop: refuses to install"
+case "$out" in *"gnome-extensions"*) r=1 ;; *) r=0 ;; esac
+assert_eq "$r" "0" "wayland unknown desktop: no GNOME extension advice"
+case "$out" in *"mystery-wm"*) r=0 ;; *) r=1 ;; esac
+assert_eq "$r" "0" "wayland unknown desktop: names the desktop it could not identify"
+case "$out" in *"wlroots"*) r=0 ;; *) r=1 ;; esac
+assert_eq "$r" "0" "wayland unknown desktop: lists what the mapper does support"
+case "$out" in *"SIGINT"*) r=0 ;; *) r=1 ;; esac
+assert_eq "$r" "0" "wayland unknown desktop: still explains the SIGINT hazard"
 
 # --- ROLLBACK: mapper starts but cannot reach the keyd socket -------------------
 # A live process is not proof of success; it daemonizes and only then fails to

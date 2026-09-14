@@ -22,14 +22,16 @@ fi
 
 echo "Setting up jtop and jetson-stats..."
 
-# Install or update jetson-stats
+# Install or update jetson-stats. It must go in as root (jtop runs as a root
+# service), so pip's root-user and new-version notices are expected, not news;
+# silence them through pip's env vars, which a pip too old to know them ignores
+# (the equivalent flags would be an error there).
 if ! command -v jtop &> /dev/null; then
     echo "Installing jetson-stats..."
-    sudo pip3 install -U jetson-stats
 else
     echo "Updating jetson-stats..."
-    sudo pip3 install -U jetson-stats
 fi
+sudo PIP_ROOT_USER_ACTION=ignore PIP_DISABLE_PIP_VERSION_CHECK=1 pip3 install -U jetson-stats
 
 # Path to jetson_variables.py
 JTOP_VARS="/usr/local/lib/python3.10/dist-packages/jtop/core/jetson_variables.py"

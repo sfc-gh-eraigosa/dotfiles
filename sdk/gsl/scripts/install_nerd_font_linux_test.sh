@@ -68,8 +68,14 @@ seed() { # $1 = use-system-font, $2 = "with-profile"|"no-profile"
   fi
 }
 
+# The WSL branch keys off /proc/version; point it at a fake so the gnome cases
+# never reach the Windows host installer, even when the suite runs ON WSL.
+printf 'Linux version 6.8.0-generic (buildd@ubuntu)\n' > "$H/proc_version_linux"
+printf 'Linux version 6.6.87.2-microsoft-standard-WSL2\n' > "$H/proc_version_wsl"
+
 run() { # extra env assignments as args
   env PATH="$H/bin:/usr/bin:/bin" HOME="$H" \
+      NERD_FONT_PROC_VERSION="$H/proc_version_linux" \
       GS_STATE="$H/state" GS_SETLOG="$H/setlog" GS_RELOC="$H/reloc" \
       DBUS_SESSION_BUS_ADDRESS="unix:path=$H/run/bus" XDG_RUNTIME_DIR="$H/run" \
       "$@" bash "$INSTALLER" > "$H/out" 2>&1
@@ -102,6 +108,72 @@ assert_absent "no session bus: writes nothing" "$H/setlog" "use-system-font"
 seed "true" with-profile
 run XDG_RUNTIME_DIR="$H/run/nope"
 assert_absent "unwritable runtime dir: writes nothing" "$H/setlog" "use-system-font"
+
+# --- WSL over ssh: powershell.exe not on PATH, but present in System32 --------
+# Fleet runs over ssh into WSL have no /mnt/c dirs on PATH, so the old bare
+# `command -v powershell.exe` warned and skipped the Windows host install on
+# every run. The shared find_powershell falls back to the System32 copy that
+# wslpath locates. Stub wslpath maps into a fake Windows tree; the fake
+# powershell.exe records its argv.
+W="$H/win/System32/WindowsPowerShell/v1.0"
+mkdir -p "$W"
+cat > "$W/powershell.exe" <<'STUB'
+#!/bin/sh
+printf '%s\n' "$*" >> "$PS_LOG"
+exit 0
+STUB
+cat > "$H/bin/wslpath" <<'STUB'
+#!/bin/sh
+case "$1" in
+  -u) [ "$2" = 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' ] || exit 1
+      printf '%s\n' "$FAKE_WIN/System32/WindowsPowerShell/v1.0/powershell.exe" ;;
+  -w) printf 'C:\\fake%s\n' "$2" | tr '/' '\\' ;;
+  *) exit 1 ;;
+esac
+STUB
+chmod +x "$W/powershell.exe" "$H/bin/wslpath"
+
+seed "false" with-profile
+: > "$H/pslog"
+run NERD_FONT_PROC_VERSION="$H/proc_version_wsl" FAKE_WIN="$H/win" PS_LOG="$H/pslog"
+assert_absent "WSL: no 'powershell.exe not in PATH' skip when System32 has it" \
+  "$H/out" "not in PATH"
+assert_contains "WSL: runs the Windows host installer" "$H/out" \
+  "Installing MesloLGS NF on Windows host via PowerShell"
+assert_contains "WSL: invokes the System32 powershell.exe with the .ps1" \
+  "$H/pslog" "install_nerd_font_windows.ps1"
+
+# ... and with neither a PATH copy nor a System32 copy it still skips cleanly.
+seed "false" with-profile
+: > "$H/pslog"
+if run NERD_FONT_PROC_VERSION="$H/proc_version_wsl" FAKE_WIN="$H/nowhere" PS_LOG="$H/pslog"; then
+  ok "WSL, no powershell.exe anywhere: installer still exits clean"
+else
+  notok "WSL, no powershell.exe anywhere: installer still exits clean"
+fi
+assert_contains "WSL, no powershell.exe anywhere: says it skipped" "$H/out" \
+  "skipping Windows host install"
+if [ -s "$H/pslog" ]; then notok "WSL, no powershell.exe anywhere: nothing invoked"
+else ok "WSL, no powershell.exe anywhere: nothing invoked"; fi
+
+# --- scripts copied out of the repo (no opt/lib helper): PATH lookup still works
+SA="$H/standalone/scripts"
+mkdir -p "$SA" "$H/pathps"
+cp "$INSTALLER" "$SA/install_nerd_font_linux.sh"
+: > "$SA/install_nerd_font_windows.ps1"
+cp "$W/powershell.exe" "$H/pathps/powershell.exe"
+seed "false" with-profile
+: > "$H/pslog"
+if env PATH="$H/pathps:$H/bin:/usr/bin:/bin" HOME="$H" \
+     NERD_FONT_PROC_VERSION="$H/proc_version_wsl" FAKE_WIN="$H/nowhere" PS_LOG="$H/pslog" \
+     GS_STATE="$H/state" GS_SETLOG="$H/setlog" GS_RELOC="$H/reloc" \
+     bash "$SA/install_nerd_font_linux.sh" > "$H/out" 2>&1; then
+  ok "no helper (standalone copy): installer exits clean"
+else
+  notok "no helper (standalone copy): installer exits clean"
+fi
+assert_contains "no helper (standalone copy): falls back to powershell.exe on PATH" \
+  "$H/pslog" "install_nerd_font_windows.ps1"
 
 echo "----"
 echo "install_nerd_font_linux_test: $pass passed, $fail failed"

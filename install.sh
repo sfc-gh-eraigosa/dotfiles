@@ -27,7 +27,12 @@ export BASE_DIR
 # with a cascade of "installed but not resolvable" errors ("yq not resolvable
 # after install", "sync-plugins: 'yq' not found", "install_ai_teams: yq is
 # required"). Make the script independent of the caller's shell startup files.
-for _ip_dir in "${HOME}/opt/bin" "${HOME}/.local/bin"; do
+#
+# Each dir is PREPENDED, so the LAST one listed wins: ~/opt/bin comes last so it
+# resolves ahead of ~/.local/bin, the same order a login shell gets from
+# .profile. The reverse let an upstream installer's stale copy in ~/.local/bin
+# shadow the managed ~/opt/bin binary for the whole run.
+for _ip_dir in "${HOME}/.local/bin" "${HOME}/opt/bin"; do
   case ":${PATH}:" in
     *":${_ip_dir}:"*) ;;                    # already present — don't duplicate
     *) PATH="${_ip_dir}:${PATH}" ;;
@@ -167,27 +172,12 @@ if [ -f "${BASE_DIR}/opt/lib/hardware.sh" ]; then
     
     # Setup jtop and stats
     if [ -f "${BASE_DIR}/opt/scripts/system/setup_jtop.sh" ]; then
-      echo "Setting up jtop and jetson-stats..."
-      "${BASE_DIR}/opt/scripts/system/setup_jtop.sh"
+      "${BASE_DIR}/opt/scripts/system/setup_jtop.sh"   # announces itself
     fi
     
-    # Set Chromium as default browse
-    if command -v apt-get &> /dev/null; then
-      echo "Ensuring Chromium is installed and set as default..."
-      # DEBIAN_FRONTEND=noninteractive on the sudo env is load-bearing: a
-      # debconf prompt (tzdata-class) blocks forever when this runs without a
-      # tty — e.g. inside `docker build` (the Docker Image CI hang, PR #182).
-      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq chromium-browse
-      
-      # Set as default in update-alternatives
-      sudo update-alternatives --set x-www-browser /usr/bin/chromium-browser 2>/dev/null || true
-      sudo update-alternatives --set gnome-www-browser /usr/bin/chromium-browser 2>/dev/null || true
-      
-      # Set for xdg-utils if in a desktop environment
-      if command -v xdg-settings &> /dev/null; then
-        xdg-settings set default-web-browser chromium-browser.desktop 2>/dev/null || true
-      fi
-    fi
+    # Chromium as the default browser: the `chromium` .deb, never Ubuntu's
+    # snap-transitional chromium-browser (see the script's header).
+    "${BASE_DIR}/opt/scripts/system/setup_jetson_browser.sh"
   fi
 fi
 else gff_skip_msg install.system.jetson; fi
@@ -509,6 +499,13 @@ else gff_skip_msg install.tools.git-aliases; fi
 # (e.g. GitHub's email-privacy push block) at install time instead of at the
 # next failed push. Also runnable on demand via `make git-doctor`.
 bash "${BASE_DIR}/opt/scripts/git/git_identity_doctor.sh" || true
+
+# goenv puts its shims at the END of PATH unless this is set when `goenv init`
+# runs; .goenv.sh sets it for login shells, but install.sh never loads that file.
+# Exported here — above the gate — so ensure_go_on_path's init below gets it too.
+# Without it a host with a system Go (/usr/bin/go from apt's golang-go on the Pi)
+# had goenv warn on every run that the system go would win.
+export GOENV_PATH_ORDER=front
 
 # install/update goenv
 if gff_on install.runtime.goenv; then

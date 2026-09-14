@@ -4,6 +4,10 @@
 # ==============================================================================
 set -e
 
+# shellcheck source=../../lib/npm_allow_scripts.sh
+_npm_allow_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../lib" 2>/dev/null && pwd)/npm_allow_scripts.sh"
+[ -f "${_npm_allow_lib}" ] && . "${_npm_allow_lib}"
+
 # --- Configuration ---
 # Antigravity CLI reuses ~/.gemini: CLI settings live in
 # ~/.gemini/antigravity-cli/, the global customization root in ~/.gemini/config/.
@@ -211,6 +215,12 @@ setup_all() {
     # bootstrap doesn't hit Google's updater twice. `google-cli-setup.sh agy`
     # forces the install/update path explicitly.
     command -v agy >/dev/null 2>&1 || install_agy
+    # Allow gws's postinstall by name so npm stops listing it as unreviewed on
+    # every global install/update. User-level config, so only when npm is not
+    # running under sudo (root reads its own npmrc).
+    if [ -z "${SUDO:-}" ] && command -v npm_allow_scripts >/dev/null 2>&1; then
+        npm_allow_scripts "@googleworkspace/cli"
+    fi
     install_or_upgrade "gws" "@googleworkspace/cli"
     init_configs
     show_status
