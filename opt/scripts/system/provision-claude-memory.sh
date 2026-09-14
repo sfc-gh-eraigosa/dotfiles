@@ -15,8 +15,11 @@
 #   BASE_DIR  repo root (default: derived from this script's location)
 #   HOME      target home; CLAUDE_HOME defaults to $HOME/.claude
 # Behaviour: seed-and-preserve — copy scope:account files into the live dir,
-#   NEVER delete host-local files, skip a collision with a host-local file, and
-#   regenerate MEMORY.md from the union (account index + host-local lines).
+#   NEVER delete host-local files, and regenerate MEMORY.md from the union
+#   (account index + host-local lines). On a name collision with a host-local
+#   file: if it is the same memory minus the repo's `scope:` line (a pre-migration
+#   original), adopt the repo copy; otherwise keep the host edits and list every
+#   kept name on ONE stdout line (not a stderr warning per file per run).
 set -u
 
 BASE_DIR="${BASE_DIR:-$(cd "$(dirname "$0")/../../.." && pwd -P)}"
@@ -54,19 +57,49 @@ fi
 
 mkdir -p "$LIVE_DIR"
 
+# normalized FILE → the memory with every front-matter `scope:` line dropped,
+# trailing whitespace stripped, and trailing blank lines removed. Two files with
+# equal output are the SAME memory: a pre-migration host original differs from the
+# repo copy only by the `scope: account` line the repo added when it took it over.
+normalized() {
+    awk '
+        NR == 1 && /^---[[:space:]]*$/ { infm = 1; print "---"; next }
+        infm && /^---[[:space:]]*$/    { infm = 0; print "---"; next }
+        infm && /^[[:space:]]*scope:/  { next }
+        { sub(/[[:space:]]+$/, "") }
+        $0 == "" { blanks++; next }
+        { while (blanks > 0) { print ""; blanks-- } print }
+    ' "$1" 2>/dev/null
+}
+same_memory() { [ "$(normalized "$1")" = "$(normalized "$2")" ]; }
+
 # --- F2/F3/F4: copy scope:account files (seed-and-preserve). ---
+kept=""       # host copies that genuinely differ from the repo copy (never clobbered)
+kept_n=0
 for f in "$REPO_MEM"/*.md; do
     [ -e "$f" ] || continue
     b="$(basename "$f")"
     [ "$b" = "MEMORY.md" ] && continue        # the index is regenerated, not copied as a topic
     is_account "$f" || continue               # F2: only account-scoped files
     if [ -e "$LIVE_DIR/$b" ] && ! is_account "$LIVE_DIR/$b"; then
-        # F4: a host-local file already owns this name — never clobber it.
-        echo "  WARN: skipping '$b' — a host-local memory of the same name exists in $LIVE_DIR" >&2
+        if same_memory "$f" "$LIVE_DIR/$b"; then
+            # The host original of a memory the repo now ships: adopt the repo copy.
+            cp "$f" "$LIVE_DIR/$b"
+            echo "  memory: '$b' matched the repo copy except its scope line; replaced it with the repo version (now repo-managed)"
+            continue
+        fi
+        # F4: a host-local file with real edits owns this name — never clobber it.
+        kept="${kept:+$kept }$b"; kept_n=$((kept_n + 1))
         continue
     fi
     cp "$f" "$LIVE_DIR/$b"                     # repo wins for account files it ships (UC-3)
 done
+
+# ONE stdout line, not a stderr WARN per file: a host that keeps its own edits is a
+# stable, expected state and must not count as a fleet warning on every run.
+if [ "$kept_n" -gt 0 ]; then
+    echo "  memory: kept $kept_n host-local file(s) that differ from the repo's account memory of the same name: $kept — to reconcile, diff \"$REPO_MEM/<name>\" \"$LIVE_DIR/<name>\" (delete the host copy to adopt the repo version)"
+fi
 
 # --- F5: regenerate MEMORY.md from the UNION (repo account index + a line per
 # surviving host-local file). Never blind-copy the repo index — that would drop

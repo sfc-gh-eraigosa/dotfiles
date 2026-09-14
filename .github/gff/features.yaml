@@ -33,7 +33,7 @@ sets:
         boolDefault: true
       # --- desktop (2) ---
       - path: install.desktop.gnome-keys
-        description: Runs gnome-desktop-defaults.sh, which applies the gsettings half of the macOS key layout (Cmd+Space/M/H, an inert lone-Cmd tap, Super+C/V copy-paste in gnome-terminal). No-ops off a GNOME session. Also requires keyboard.macos.enabled.
+        description: Runs gnome-desktop-defaults.sh, which applies the gsettings half of the macOS key layout (Cmd+Space/M/H, an inert lone-Cmd tap, Ctrl+Alt+arrow tiling) and keeps gnome-terminal copy/paste on stock Ctrl+Shift+C/V, resetting the stale Super+C/V binding older runs left behind (keyd maps Cmd+C/V to Ctrl+Shift+C/V in terminals). No-ops off a GNOME session. Also requires keyboard.macos.enabled.
         boolDefault: true
       - path: install.desktop.macos-keys
         description: Runs macos-keys-linux.sh, which installs keyd and the macOS-style key layout so Cmd+C/V/X/A/Z and the macOS navigation chords work in EVERY Linux GUI app, not just the terminal. Compiles keyd from source and runs a root daemon. No-ops without a graphical session. Also requires keyboard.macos.enabled.
@@ -120,7 +120,7 @@ sets:
       - path: install.runtime.fnm
         description: Runs the fnm install block.
         boolDefault: true
-      # --- ai (6) ---
+      # --- ai (7) ---
       - path: install.ai.skills
         description: Runs the sync-skills.sh block that links shared skills into both assistants.
         boolDefault: true
@@ -138,6 +138,9 @@ sets:
         boolDefault: true
       - path: install.ai.teams
         description: Runs the install_ai_teams.sh block.
+        boolDefault: true
+      - path: install.ai.teams-ollama-create
+        description: Lets install_ai_teams.sh build the local ollama agents (`ollama create teams-<team>-<role>` from each generated Modelfile). It only creates agents whose base model is already pulled - it never pulls one - and prints one line per missing base model with the `ollama pull` command. Low-memory boards (Raspberry Pi, Jetson Nano) that cannot hold the 18 GB base models can set this false; the Modelfiles are still written. Also requires install.ai.teams.
         boolDefault: true
       # --- git (2) ---
       - path: install.git.hooks

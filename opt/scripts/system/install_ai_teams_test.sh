@@ -114,5 +114,105 @@ assert_eq "no claude agent emits a literal null color" \
 
 rm -rf "$H" "$H2" "$H3" "$H4"
 
+# --- ollama create: existence check, real errors, gff gate ------------------------------
+# Fleet runs (2026-09-11) on 7 GB boards showed `ollama create` AUTO-PULLING a missing
+# base model (18 GB qwen3-coder:30b) and a guessed warning text hiding the real failure.
+# A stub `ollama` on PATH records every call; `show` answers from OLLAMA_STUB_PRESENT.
+STUB="$(mktemp -d)"
+cat > "$STUB/ollama" <<'EOF'
+#!/usr/bin/env bash
+echo "$*" >> "$OLLAMA_STUB_LOG"
+case "$1" in
+  show)
+    if [ -n "${OLLAMA_STUB_SHOW_ERR:-}" ]; then echo "Error: ${OLLAMA_STUB_SHOW_ERR}" >&2; exit 1; fi
+    case " ${OLLAMA_STUB_PRESENT:-} " in *" $2 "*) echo "  Model"; exit 0 ;; esac
+    echo "Error: model '$2' not found" >&2; exit 1 ;;
+  create)
+    if [ -n "${OLLAMA_STUB_CREATE_ERR:-}" ]; then
+      echo "gathering model components" >&2
+      echo "Error: ${OLLAMA_STUB_CREATE_ERR}" >&2; exit 1
+    fi
+    echo "success"; exit 0 ;;
+esac
+exit 0
+EOF
+chmod +x "$STUB/ollama"
+
+# Every distinct base model the map names, and the deep-think one (the model the
+# fleet boards could not create).
+ALL_MODELS="$(yq -r '.tiers[].ollama.model' "$MODEL_MAP" | sort -u | tr '\n' ' ')"
+DT_MODEL="$(yq -r '.tiers."deep-think".ollama.model' "$MODEL_MAP")"
+NOT_DT=""
+for m in $ALL_MODELS; do [ "$m" = "$DT_MODEL" ] || NOT_DT="$NOT_DT $m"; done
+
+# run_ollama <home> [VAR=value ...] — ollama-only emit with the stub first on PATH.
+run_ollama() {
+  local h="$1"; shift
+  env PATH="$STUB:$PATH" TEAMS_DEST_HOME="$h" OLLAMA_STUB_LOG="$h/ollama.log" \
+    SKIP_OLLAMA_CREATE=0 GFF_INSTALL_AI_TEAMS_OLLAMA_CREATE= "$@" \
+    bash "$INSTALLER" --tool ollama >"$h/out" 2>"$h/err"
+}
+calls() { grep -c "^$2" "$1/ollama.log" 2>/dev/null | tr -d ' ' || true; }
+n_modelfiles() { find "$1/.config/ollama/teams" -name '*.Modelfile' | wc -l | tr -d ' '; }
+
+# (a) every base model present -> one create per persona, no skip summary.
+O1="$(mktemp -d)"
+run_ollama "$O1" OLLAMA_STUB_PRESENT="$ALL_MODELS" || bad "ollama present: installer exited non-zero"
+assert_eq "present base models: ollama create runs for all 22 agents" "$(calls "$O1" 'create ')" "22"
+assert_eq "present base models: no 'not pulled' summary" \
+  "$(grep -c 'not pulled' "$O1/out" | tr -d ' ')" "0"
+
+# (b) deep-think base model missing -> no create for those agents (no auto-pull),
+#     ONE summary line for the model, Modelfiles still written.
+O2="$(mktemp -d)"
+run_ollama "$O2" OLLAMA_STUB_PRESENT="$NOT_DT" || bad "ollama missing: installer exited non-zero"
+DT_N="$(grep -lxF "FROM ${DT_MODEL}" "$O2/.config/ollama/teams"/*/*.Modelfile 2>/dev/null | wc -l | tr -d ' ')"
+[ "${DT_N:-0}" -gt 0 ] && ok "fixture: ${DT_N} deep-think Modelfiles use ${DT_MODEL}" \
+  || bad "fixture: no Modelfile uses the deep-think model ${DT_MODEL}"
+assert_eq "missing base model: Modelfiles still written for all 22" "$(n_modelfiles "$O2")" "22"
+assert_eq "missing base model: create skipped for its ${DT_N} agents" \
+  "$(calls "$O2" 'create ')" "$((22 - DT_N))"
+assert_eq "missing base model: no create names a deep-think agent's Modelfile" \
+  "$(grep '^create ' "$O2/ollama.log" | while read -r _ _ _ mf; do grep -lxF "FROM ${DT_MODEL}" "$mf"; done | wc -l | tr -d ' ')" "0"
+SUMMARY="ollama: base model ${DT_MODEL} not pulled; skipped ${DT_N} teams-* agents (run: ollama pull ${DT_MODEL})"
+assert_eq "missing base model: exactly one summary line for ${DT_MODEL}" \
+  "$(grep -cF -- "$SUMMARY" "$O2/out" | tr -d ' ')" "1"
+assert_eq "missing base model: summary printed once per missing model (1 total)" \
+  "$(grep -c 'not pulled' "$O2/out" | tr -d ' ')" "1"
+assert_eq "missing base model: ollama show probes each base model once" \
+  "$(calls "$O2" "show ${DT_MODEL}")" "1"
+assert_eq "missing base model: nothing on stderr" "$(wc -c < "$O2/err" | tr -d ' ')" "0"
+
+# (c) create fails -> the REAL error is surfaced, not a guess.
+O3="$(mktemp -d)"
+REAL_ERR="pull model manifest: 412: requires a newer version of Ollama"
+run_ollama "$O3" OLLAMA_STUB_PRESENT="$ALL_MODELS" OLLAMA_STUB_CREATE_ERR="$REAL_ERR" \
+  && ok "create failure: installer still exits 0" || bad "create failure: installer exited non-zero"
+assert_contains "create failure: real ollama error surfaced" "$(cat "$O3/err")" "Error: ${REAL_ERR}"
+case "$(cat "$O3/err")" in
+  *"likely not pulled"*) bad "create failure: stale guessed warning text still printed" ;;
+  *) ok "create failure: no guessed 'likely not pulled' text" ;;
+esac
+
+# (d) ollama present but unreachable -> one warning, no create attempts.
+O4="$(mktemp -d)"
+run_ollama "$O4" OLLAMA_STUB_SHOW_ERR="could not connect to ollama server" \
+  || bad "ollama unreachable: installer exited non-zero"
+assert_eq "ollama unreachable: no create attempted" "$(calls "$O4" 'create ')" "0"
+assert_eq "ollama unreachable: exactly one warning line" \
+  "$(grep -c 'could not connect' "$O4/err" | tr -d ' ')" "1"
+assert_eq "ollama unreachable: Modelfiles still written" "$(n_modelfiles "$O4")" "22"
+
+# (e) gff flag off -> no ollama calls at all, Modelfiles still written.
+O5="$(mktemp -d)"
+run_ollama "$O5" OLLAMA_STUB_PRESENT="$ALL_MODELS" GFF_INSTALL_AI_TEAMS_OLLAMA_CREATE=false \
+  || bad "flag off: installer exited non-zero"
+assert_nofile "$O5/ollama.log" "flag off: ollama never invoked"
+assert_eq "flag off: Modelfiles still written" "$(n_modelfiles "$O5")" "22"
+assert_contains "flag off: says why create was skipped" "$(cat "$O5/out")" \
+  "SKIP (gff: install.ai.teams-ollama-create=false)"
+
+rm -rf "$STUB" "$O1" "$O2" "$O3" "$O4" "$O5"
+
 echo "== result: ${PASS} passed, ${FAIL} failed =="
 [ "$FAIL" -eq 0 ]

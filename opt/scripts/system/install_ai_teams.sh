@@ -28,6 +28,17 @@ DRY_RUN=0
 SKIP_OLLAMA_CREATE="${SKIP_OLLAMA_CREATE:-0}"
 ONLY_TOOL=""
 
+# gff gate (fail-open): install.sh exports GFF_* before calling us; a direct run
+# with no export resolves every flag to "on". Stub gff_on when the helper is absent
+# so a missing lib never blocks the step.
+if [ -f "${BASE_DIR}/opt/lib/gff.sh" ]; then
+  # shellcheck source=opt/lib/gff.sh
+  . "${BASE_DIR}/opt/lib/gff.sh"
+else
+  gff_on() { return 0; }
+  gff_skip_msg() { echo "SKIP (gff: $1=false)"; }
+fi
+
 usage() {
   cat <<'EOF'
 Usage: install_ai_teams.sh [--dry-run] [--tool claude|antigravity|ollama] [--skip-ollama-create]
@@ -35,7 +46,12 @@ Usage: install_ai_teams.sh [--dry-run] [--tool claude|antigravity|ollama] [--ski
 Transforms ai/teams personas into native agents for all three tools.
   --dry-run             Print the plan; write nothing, run no ollama create.
   --tool <name>         Emit for only one tool.
-  --skip-ollama-create  Generate Modelfiles but do not run `ollama create`.
+  --skip-ollama-create  Generate Modelfiles but do not run `ollama create`
+                        (same as the gff flag install.ai.teams-ollama-create=false).
+
+`ollama create` only runs for agents whose base model is already pulled; it never
+pulls one (a create against a missing base auto-downloads it, 18 GB on the fleet's
+small boards). Each missing base model is reported once with the pull command.
 EOF
 }
 
@@ -154,14 +170,68 @@ emit_ollama() {
   content="$(printf 'FROM %s\nPARAMETER num_ctx %s\nSYSTEM """\n%s\n"""\n' "$model" "$num_ctx" "$prompt")"
   atomic_write "$mf" "$content"
   if [ "$DRY_RUN" -eq 1 ] || [ "$SKIP_OLLAMA_CREATE" -eq 1 ]; then return; fi
-  if command -v ollama >/dev/null 2>&1; then
-    # Best-effort: base model may not be pulled. Never fail the install on this.
-    if ! ollama create "$name" -f "$mf" >/dev/null 2>&1; then
-      warn "ollama create $name failed (base model '$model' likely not pulled) — Modelfile still written"
-    fi
-  else
+  if ! command -v ollama >/dev/null 2>&1; then
     log "ollama not installed — wrote Modelfile only ($name)"
+    return
   fi
+  [ "$OLLAMA_UNUSABLE" -eq 0 ] || return 0
+  ollama_base_state "$model"
+  case "$OLLAMA_STATE" in
+    missing)  # never create: `ollama create` would auto-pull the base model
+      OLLAMA_SKIPPED="${OLLAMA_SKIPPED}${model}"$'\n'
+      return ;;
+    unusable) return ;;
+  esac
+  # Best-effort: never fail the install on this; show ollama's own error.
+  local err
+  if ! err="$(ollama create "$name" -f "$mf" 2>&1 >/dev/null)"; then
+    warn "ollama create $name failed: $(first_error_line "$err") — Modelfile still written"
+  fi
+}
+
+# --- ollama base-model probe (cached; bash 3.2 has no associative arrays) ----------------
+OLLAMA_PRESENT=" "    # space-delimited base models `ollama show` found
+OLLAMA_MISSING=" "    # ... and the ones it reported as not found
+OLLAMA_SKIPPED=""     # one line per agent whose create was skipped: its base model
+OLLAMA_UNUSABLE=0     # 1 once ollama itself failed (server down etc.): skip all creates
+OLLAMA_STATE=""       # result of the last ollama_base_state call
+
+# first_error_line TEXT → ollama's "Error: ..." line if any, else the first non-empty
+# line (progress lines like "gathering model components" precede the error).
+first_error_line() {
+  printf '%s\n' "$1" | tr -d '\r' | awk '
+    NF && first == "" { first = $0 }
+    /^[Ee]rror/ && err == "" { err = $0 }
+    END { if (err != "") print err; else if (first != "") print first; else print "no error output" }'
+}
+
+# ollama_base_state MODEL → sets OLLAMA_STATE to present | missing | unusable.
+# Runs `ollama show` once per model. Any failure other than "not found" means ollama
+# itself is unusable this run (server not running, API error, ...): warn ONCE and stop
+# creating.
+ollama_base_state() {
+  local m="$1" err
+  case "$OLLAMA_PRESENT" in *" $m "*) OLLAMA_STATE=present; return ;; esac
+  case "$OLLAMA_MISSING" in *" $m "*) OLLAMA_STATE=missing; return ;; esac
+  if err="$(ollama show "$m" 2>&1 >/dev/null)"; then
+    OLLAMA_PRESENT="${OLLAMA_PRESENT}${m} "; OLLAMA_STATE=present
+  else
+    case "$err" in
+      *"not found"*|*"Not Found"*|*"NOT FOUND"*)
+        OLLAMA_MISSING="${OLLAMA_MISSING}${m} "; OLLAMA_STATE=missing ;;
+      *)
+        OLLAMA_UNUSABLE=1; OLLAMA_STATE=unusable
+        warn "ollama: cannot query base model $m ($(first_error_line "$err")); skipped ollama create for all teams-* agents — Modelfiles still written" ;;
+    esac
+  fi
+}
+
+# One line per missing base model: how many agents it held back and how to fix it.
+report_ollama_skips() {
+  [ -n "$OLLAMA_SKIPPED" ] || return 0
+  printf '%s' "$OLLAMA_SKIPPED" | sort | uniq -c | while read -r n m; do
+    log "ollama: base model $m not pulled; skipped $n teams-* agents (run: ollama pull $m)"
+  done
 }
 
 # --- main ------------------------------------------------------------------------------
@@ -183,6 +253,14 @@ if [ "$DRY_RUN" -ne 1 ]; then
   # Legacy Gemini CLI teams dir (tool retired 2026-06-18): always pruned.
   rm -rf "${DEST_HOME}/.gemini/agents/teams"
   if want_tool ollama; then rm -rf "${OLLAMA_DIR}"; fi
+fi
+
+# gff: building the local ollama agents is its own switch so low-memory boards can keep
+# the Modelfiles without ever touching ollama. Checked once, before any ollama call.
+if want_tool ollama && [ "$DRY_RUN" -ne 1 ] && [ "$SKIP_OLLAMA_CREATE" -ne 1 ] \
+   && ! gff_on install.ai.teams-ollama-create; then
+  log "$(gff_skip_msg install.ai.teams-ollama-create) — writing Modelfiles only"
+  SKIP_OLLAMA_CREATE=1
 fi
 
 count=0
@@ -222,6 +300,8 @@ while IFS= read -r -d '' f; do
   want_tool ollama      && emit_ollama      "$f" "$team" "$role" "$tier" "$desc" "$prompt"
   count=$((count + 1))
 done < <(find "$TEAMS_DIR" -mindepth 2 -maxdepth 2 -name 'the_*.md' -print0 | sort -z)
+
+report_ollama_skips
 
 suffix=""; [ "$DRY_RUN" -eq 1 ] && suffix=" (dry-run)"
 echo "AI teams install complete: ${count} personas processed${suffix}."
