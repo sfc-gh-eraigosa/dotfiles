@@ -5,7 +5,12 @@
 #
 # Reads the shared manifest (opt/profiles/packages.tsv) so the package set stays
 # consistent with the other platforms. Resilient by design: it warns on any
-# package that can't be installed but never aborts the run. Safe to re-run.
+# package that can't be installed but never aborts the run. Safe to re-run:
+# every run installs the full list, which also upgrades installed packages to
+# their candidate (that is how gh stays on the pinned upstream release). When
+# sudo would need a password and there is no terminal to ask on, it touches
+# neither sudo nor apt: an info line if everything is installed, otherwise ONE
+# WARNING naming the missing packages. Either way it exits 0.
 #
 # Manifest location can be overridden with PKG_MANIFEST=/path/to/file.
 
@@ -36,6 +41,42 @@ if [ "${#PKGS[@]}" -eq 0 ]; then
   exit 0
 fi
 
+# Run a command as root: directly when we already are, via sudo otherwise.
+# `env VAR=...` rather than `sudo VAR=...` so the assignment works either way.
+if [ "$(id -u)" -eq 0 ]; then
+  as_root() { "$@"; }
+else
+  as_root() { sudo "$@"; }
+fi
+
+# True when sudo can run without a prompt (root, NOPASSWD, or a cached
+# credential).
+sudo_noninteractive() {
+  [ "$(id -u)" -eq 0 ] || sudo -n true 2>/dev/null
+}
+
+# sudo that cannot authenticate (no cached credential, no terminal to prompt
+# on — a background or piped install.sh run) would fail every call below. So
+# skip apt entirely instead of an apt-get update failure, a grouped-install
+# failure, and one more failure per package. With a terminal, sudo can prompt,
+# so fall through to the normal path.
+if ! sudo_noninteractive && [ ! -t 0 ]; then
+  pkg_installed() {
+    [ "$(dpkg-query -W -f='${Status}' "$1" 2>/dev/null)" = "install ok installed" ]
+  }
+  MISSING=()
+  for pkg in "${PKGS[@]}"; do
+    pkg_installed "$pkg" || MISSING+=("$pkg")
+  done
+  if [ "${#MISSING[@]}" -eq 0 ]; then
+    # Nothing to install; only the upgrade check is lost — not worth a WARNING.
+    echo "pkg-install-apt: all ${#PKGS[@]} packages installed; no sudo in this session, so skipping the upgrade check."
+  else
+    echo "WARNING: pkg-install-apt: sudo needs a password and there is no terminal; skipping apt install of: ${MISSING[*]}"
+  fi
+  exit 0
+fi
+
 # Register GitHub CLI's official apt repo before refreshing, so the manifest's
 # `gh` resolves to the latest upstream release rather than the stale one in
 # `universe`. Idempotent and non-fatal: if it fails, gh just falls back to the
@@ -49,18 +90,24 @@ fi
 # universe component index, which is where corkscrew / jc live — without this
 # they'd be reported "Unable to locate package".
 echo "Updating apt package lists..."
-sudo apt-get update -qq || echo "WARNING: apt-get update failed; installs may be incomplete."
+as_root apt-get update -qq || echo "WARNING: apt-get update failed; installs may be incomplete."
 
 echo "Installing ${#PKGS[@]} core packages via apt..."
 # apt-get install is all-or-nothing within one invocation: a single bad name
 # makes the whole batch install nothing. So if the grouped install fails, retry
 # each package on its own to keep one missing package from blocking the rest.
 # noninteractive: a debconf prompt (tzdata-class) hangs non-tty contexts (see PR #183)
-if ! sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${PKGS[@]}"; then
+if ! as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${PKGS[@]}"; then
+  # ...unless it was sudo that failed (a wrong password at the prompt): every
+  # retry would fail the same way, so report that once instead.
+  if ! sudo_noninteractive; then
+    echo "WARNING: pkg-install-apt: sudo could not authenticate; skipping the per-package retry."
+    exit 0
+  fi
   echo "WARNING: grouped install failed; retrying packages individually..."
   failed=()
   for pkg in "${PKGS[@]}"; do
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$pkg" || failed+=("$pkg")
+    as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$pkg" || failed+=("$pkg")
   done
   if [ "${#failed[@]}" -gt 0 ]; then
     echo "WARNING: could not install these apt packages: ${failed[*]}"
