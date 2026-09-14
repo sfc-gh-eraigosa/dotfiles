@@ -426,10 +426,27 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   logged, rendered (the form masks it), placed in argv, or exported as an env
   var — `/proc/<pid>/{cmdline,environ}` are world-readable. `runner.RunStdin` is
   the only channel. Pinned by `TestSudoSecretNeverAppearsInTheRemoteCommand`.
-- **Prime and install share one ssh session, and the prime is verified.** sudo's
-  timestamp is tty/session-scoped, so a separate priming connection may not
-  carry; `sudo -n true` gates the install so it can't run with every privileged
-  step silently skipping (exit 91 = bad password, 92 = did not persist).
+- **Prime and install share one ssh session, and the prime is verified from a
+  CHILD process.** sudo's default `timestamp_type=tty` has no tty to key on
+  over ssh, so it falls back to the PPID of whatever process ran `sudo` — a
+  separate priming connection may not carry, but neither does priming in the
+  SAME shell that then execs install.sh: install.sh's own children
+  (opt/bin/pkg-install-apt, the keep-alive loop, the docker step) have
+  install.sh's PPID, not the top shell's, and never saw a credential primed
+  there. `sudoGate` therefore checks with `sh -c 'sudo -n true'`, a forked
+  child in that same PPID shape, so it can't rubber-stamp a session where the
+  children would fail anyway (exit 91 = bad password, 92 = did not persist —
+  which now also means "does not reach children"; the TUI routes that case to
+  the interactive lane, see below, instead of failing the row). A host with
+  `Defaults timestamp_type=global` (or NOPASSWD) has no PPID scoping to trip
+  on and keeps the background lane.
+- **A failed child-process sudo check reroutes to the interactive lane, it
+  does not fail the row.** `sudoGateFailed` (tui_cmds.go) matches the gate's
+  exit 92 the same way `explainExit` already string-matches it; tui_model's
+  `bgUpdateDoneMsg` case queues the host onto `iaQueue` exactly like
+  `errNeedsTerminal` does, with a status line naming the cause — a real pty
+  gets sudo's normal tty-keyed timestamp, which install.sh's children DO
+  share.
 - **Bulk adopt is one pass, one write.** `discover --add-all` accumulates every
   `Mark` into a single config then writes once — N separate writes would mean N
   backups and N windows in which a partial write costs SSH access. Nothing

@@ -1,10 +1,13 @@
 package cmd
 
 import (
-	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
 // These pin the three defects found on the first real fleet run. Each one
@@ -162,5 +165,100 @@ func TestUnusableSudoIsExplainedAsNothingInstalled(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("explainExit should mention %q, got %q", want, got)
 		}
+	}
+}
+
+// DEFECT 4 (root-caused from `fleet history <host> --show --run 1` on a host
+// without passwordless sudo): sudo's default timestamp_type=tty has no tty
+// to key on when the session was primed over ssh, so it falls back to the
+// PPID of whatever process ran `sudo`. The old gate ran `sudo -n true`
+// directly in the SAME shell that had just primed the credential — same
+// PPID, so it always passed — while install.sh's own children
+// (opt/bin/pkg-install-apt, the keep-alive loop, the docker step) each have a
+// DIFFERENT PPID (install.sh's, not the top shell's) and never saw the
+// credential. The gate must instead test from a CHILD process, exactly the
+// shape install.sh's children are in, or it proves nothing.
+//
+// This is exercised for real: a fake `sudo` on PATH records which PPID
+// primed it and only answers `-n true` for that same PPID — reproducing the
+// live host's behaviour without touching a real sudoers file.
+func TestSudoGateChecksFromAChildProcess(t *testing.T) {
+	if !strings.Contains(sudoGate, "sh -c") {
+		t.Fatalf("the gate must fork a child before testing sudo, or it shares the primer's PPID and always passes:\n%s", sudoGate)
+	}
+
+	dir := t.TempDir()
+	fakeSudo := dir + "/sudo"
+	// Records the caller's PPID on a bare prime (`-v`); a `-n true` check
+	// succeeds only when invoked with that SAME PPID — modelling
+	// timestamp_type=tty falling back to PPID scoping with no tty.
+	script := `#!/bin/sh
+if [ "$1" = "-n" ]; then
+  [ -f "` + dir + `/primed.$PPID" ]
+  exit $?
+fi
+touch "` + dir + `/primed.$PPID"
+`
+	if err := os.WriteFile(fakeSudo, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	env := []string{"PATH=" + dir + ":/usr/bin:/bin"}
+
+	// Sanity: priming and a BARE `sudo -n true` in the SAME shell (the
+	// pre-fix gate's shape) share one PPID and trivially pass — this is
+	// exactly the false "cached" reading the live host produced.
+	same := exec.Command("/bin/bash", "-c", "sudo -v; sudo -n true && echo ok")
+	same.Env = env
+	if out, err := same.CombinedOutput(); err != nil || !strings.Contains(string(out), "ok") {
+		t.Fatalf("sanity check failed: priming and a bare check in one shell should share a PPID: err=%v out=%q", err, out)
+	}
+
+	// The actual gate forks a child before checking (see the "sh -c" assertion
+	// above) — the shape install.sh's own children are in. In that SAME
+	// primed session, the credential must NOT be visible there.
+	forked := exec.Command("/bin/bash", "-c", "sudo -v; "+sudoGate+" && echo ok")
+	forked.Env = env
+	out, err := forked.CombinedOutput()
+	if err == nil || strings.Contains(string(out), "ok") {
+		t.Fatalf("gate must fail from a child process when the credential does not carry to children: err=%v out=%q", err, out)
+	}
+}
+
+// bgDoneErr is what lets tui_model route a host away from the background lane
+// on exactly the sudoGate's rcSudoNoCache exit (92). It reads the step's TYPED
+// exit code: matching "92" in the error text also matched exit 192 and any
+// reason that merely mentioned a 192.168.x address, sending a genuinely failed
+// host to the terminal lane.
+func TestBgDoneErrRecognisesOnlyTheGateExitCode(t *testing.T) {
+	report := func(exit int, reason string) updexec.HostReport {
+		return updexec.HostReport{Results: []updexec.Result{
+			{Step: "sync", Status: updexec.OK},
+			{Step: "run1", Status: updexec.Failed, Exit: exit, Reason: reason},
+		}}
+	}
+	if err := bgDoneErr(report(rcSudoNoCache, "exit status 92")); !sudoGateFailed(err) {
+		t.Fatalf("the gate's exit code must be recognised, got %v", err)
+	}
+	for _, tc := range []struct {
+		exit   int
+		reason string
+	}{
+		{rcSudoAuth, "exit status 91"},                            // a rejected password is not a gate failure
+		{192, "exit status 192"},                                  // contains "92"
+		{1, "ssh: connect to host 192.168.1.92 port 22: refused"}, // mentions "92"
+	} {
+		if err := bgDoneErr(report(tc.exit, tc.reason)); sudoGateFailed(err) {
+			t.Fatalf("exit %d (%q) must not read as a gate failure", tc.exit, tc.reason)
+		}
+	}
+	if err := bgDoneErr(updexec.HostReport{Results: []updexec.Result{{Step: "run1", Status: updexec.OK}}}); err != nil {
+		t.Fatalf("a clean run is no error, got %v", err)
+	}
+	if sudoGateFailed(nil) {
+		t.Fatal("a nil error is not a gate failure")
+	}
+	// The row still explains itself: the step's own reason survives the wrap.
+	if err := bgDoneErr(report(rcSudoNoCache, "exit status 92")); !strings.Contains(err.Error(), "step run1: exit status 92") {
+		t.Fatalf("the wrapped error must keep the step's reason, got %v", err)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
@@ -167,6 +168,59 @@ func TestNeedsTerminalRoutesToInteractiveQueue(t *testing.T) {
 	}
 	if m2.iaTotal != 1 {
 		t.Fatalf("iaTotal must count the newly-queued host, got %d", m2.iaTotal)
+	}
+}
+
+// TestSudoGateFailureRoutesToInteractiveQueue pins the fix for the live
+// defect: a host without passwordless sudo primed the background lane's
+// credential, but that credential never reached install.sh's OWN children
+// (a different PPID — see TestSudoGateChecksFromAChildProcess), so every
+// privileged step silently skipped while the row still read `ok`. Now the
+// gate's failure (exit 92, rcSudoNoCache) must route the host to the
+// interactive queue — the same way errNeedsTerminal does — instead of
+// running install.sh in the background at all.
+func TestSudoGateFailureRoutesToInteractiveQueue(t *testing.T) {
+	m := testModel("a", "b")
+	m.updating["a"] = updState{phase: updRunning}
+	m.updating["b"] = updState{phase: updRunning}
+	m.running = 2
+
+	gate := updexec.HostReport{Results: []updexec.Result{
+		{Step: "run1", Status: updexec.Failed, Exit: rcSudoNoCache, Reason: "exit status 92"},
+	}}
+	mm, _ := m.Update(bgUpdateDoneMsg{alias: "a", err: bgDoneErr(gate)})
+	m2 := mm.(tuiModel)
+
+	if len(m2.iaQueue) != 1 || m2.iaQueue[0] != "a" {
+		t.Fatalf("expected %q queued for the interactive handoff, got %v", "a", m2.iaQueue)
+	}
+	if m2.updating["a"].phase == updFail {
+		t.Fatal("a host whose sudo credential does not reach children must not be marked failed")
+	}
+	if m2.iaTotal != 1 {
+		t.Fatalf("iaTotal must count the newly-queued host, got %d", m2.iaTotal)
+	}
+	if !strings.Contains(m2.status, "does not reach child processes") {
+		t.Fatalf("the status must explain WHY the host moved lanes, got %q", m2.status)
+	}
+}
+
+// TestSudoGatePassRemainsInBackground pins the other side: a run failure
+// that is NOT the sudo gate's exit code (92) must stay on the background
+// lane's normal failure path, not be swept into the interactive queue.
+func TestSudoGatePassRemainsInBackground(t *testing.T) {
+	m := testModel("a")
+	m.updating["a"] = updState{phase: updRunning}
+	m.running = 1
+
+	mm, _ := m.Update(bgUpdateDoneMsg{alias: "a", err: &fakeErr{"step run1: exit status 1"}})
+	m2 := mm.(tuiModel)
+
+	if len(m2.iaQueue) != 0 {
+		t.Fatalf("an unrelated failure must not be routed to the interactive queue, got %v", m2.iaQueue)
+	}
+	if m2.updating["a"].phase != updFail {
+		t.Fatalf("an unrelated failure must still fail the row, got phase=%v", m2.updating["a"].phase)
 	}
 }
 
