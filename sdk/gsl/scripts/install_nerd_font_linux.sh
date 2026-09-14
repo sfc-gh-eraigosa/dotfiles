@@ -114,18 +114,34 @@ configure_gnome_terminal_font
 # ── WSL: also install on the Windows host for Windows Terminal ───────────────
 # Windows Terminal renders WSL sessions using the host font stack; the font
 # must exist on Windows even when gsl runs in the Linux layer.
-if grep -qi microsoft /proc/version 2>/dev/null; then
-  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# NERD_FONT_PROC_VERSION is a test seam for the WSL check (default /proc/version).
+if grep -qi microsoft "${NERD_FONT_PROC_VERSION:-/proc/version}" 2>/dev/null; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
   WIN_INSTALLER_LINUX="${SCRIPT_DIR}/install_nerd_font_windows.ps1"
+
+  # find_powershell comes from the dotfiles repo's shared helper, found from
+  # this script's own location (sdk/gsl/scripts -> repo root). It checks PATH,
+  # then the System32 copy via wslpath: ssh sessions (fleet runs) have no /mnt/c
+  # dirs on PATH, but powershell.exe is still there and works.
+  _wps_lib="${SCRIPT_DIR}/../../../opt/lib/winpowershell.sh"
+  if [ -f "$_wps_lib" ]; then
+    # shellcheck source=opt/lib/winpowershell.sh
+    . "$_wps_lib"
+  else
+    # gsl scripts copied out of the repo: PATH lookup only (the old behavior).
+    find_powershell() { command -v powershell.exe; }  # helper-absent fallback
+  fi
+
   if [ ! -f "$WIN_INSTALLER_LINUX" ]; then
     echo "WARNING: Windows installer not found at ${WIN_INSTALLER_LINUX}; skipping Windows host install."
-  elif ! command -v powershell.exe >/dev/null 2>&1; then
-    echo "WARNING: powershell.exe not in PATH; skipping Windows host install."
+  elif ! ps_exe="$(find_powershell)"; then
+    echo "WARNING: powershell.exe not found (PATH or System32); skipping Windows host install."
   else
     WIN_INSTALLER_WIN="$(wslpath -w "$WIN_INSTALLER_LINUX")"
     echo "Installing MesloLGS NF on Windows host via PowerShell..."
-    powershell.exe -ExecutionPolicy Bypass -NonInteractive -WindowStyle Hidden \
-      -File "$WIN_INSTALLER_WIN"
+    # </dev/null: powershell.exe drains the parent's stdin under WSL interop.
+    "$ps_exe" -ExecutionPolicy Bypass -NonInteractive -WindowStyle Hidden \
+      -File "$WIN_INSTALLER_WIN" </dev/null
     echo "Windows host font install complete. Restart Windows Terminal to apply."
   fi
 fi

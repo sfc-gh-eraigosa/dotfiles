@@ -55,6 +55,10 @@ fi
 export WINSETUP_REPO_DIR="${BASE_DIR}"
 # shellcheck source=opt/lib/winsetup.sh
 . "$(cd -- "$(dirname "$0")" && pwd -P)/../lib/winsetup.sh"
+# find_powershell: shared PATH-then-System32 lookup (also used by the gsl
+# Nerd Font installer).
+# shellcheck source=opt/lib/winpowershell.sh
+. "$(cd -- "$(dirname "$0")" && pwd -P)/../lib/winpowershell.sh"
 
 gff_on install.windows.desktop-deploy || { gff_skip_msg install.windows.desktop-deploy; exit 0; }
 
@@ -124,11 +128,7 @@ deploy_windows_files() {
   # Locate powershell.exe: prefer PATH, fall back to the standard System32 path.
   # (Windows exes are not always on the WSL PATH, e.g. appendWindowsPath=false.)
   # -------------------------------------------------------------------------
-  ps_exe="$(command -v powershell.exe 2>/dev/null || true)"
-  if [ -z "$ps_exe" ]; then
-    _ps_fallback="$(wslpath -u 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' 2>/dev/null)"
-    [ -n "$_ps_fallback" ] && [ -x "$_ps_fallback" ] && ps_exe="$_ps_fallback"
-  fi
+  ps_exe="$(find_powershell || true)"
 
   if [ -z "$ps_exe" ]; then
     echo "NOTE: powershell.exe not found; skipping Windows Desktop deploy."
