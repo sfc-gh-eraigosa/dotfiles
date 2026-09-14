@@ -111,21 +111,30 @@ run_path_block() {
 }
 
 assert_eq "$(run_path_block '/usr/local/bin:/usr/bin:/bin')" \
-    "/fixture/home/.local/bin:/fixture/home/opt/bin:/usr/local/bin:/usr/bin:/bin" \
+    "/fixture/home/opt/bin:/fixture/home/.local/bin:/usr/local/bin:/usr/bin:/bin" \
     "non-login PATH gains ~/opt/bin and ~/.local/bin"
 
+# ~/opt/bin must WIN over ~/.local/bin, exactly as in a login shell (.profile
+# prepends ~/opt/bin last). The reverse order let an upstream installer's stale
+# copy in ~/.local/bin (herdr 0.8.2 on spark) shadow the managed ~/opt/bin one
+# for the whole install, and install_herdr reported the shadow every run.
+PROFILE_OPT_LAST="$(grep -n 'PATH=.*opt/bin' "${SELF_DIR}/opt/profiles/.profile" | tail -1 | cut -d: -f1)"
+PROFILE_LOCAL_LAST="$(grep -n 'PATH=.*\.local/bin' "${SELF_DIR}/opt/profiles/.profile" | tail -1 | cut -d: -f1)"
+assert_eq "$([ "$PROFILE_OPT_LAST" -gt "$PROFILE_LOCAL_LAST" ] && echo opt-first || echo local-first)" \
+    "opt-first" ".profile resolves ~/opt/bin ahead of ~/.local/bin (the order install.sh mirrors)"
+
 # Repeated fleet runs must not accumulate duplicate entries.
-CONFIGURED_PATH="/fixture/home/.local/bin:/fixture/home/opt/bin:/usr/bin:/bin"
+CONFIGURED_PATH="/fixture/home/opt/bin:/fixture/home/.local/bin:/usr/bin:/bin"
 assert_eq "$(run_path_block "$CONFIGURED_PATH")" "$CONFIGURED_PATH" \
     "already-configured PATH is unchanged (no duplicates)"
 
 assert_eq "$(run_path_block '/fixture/home/opt/bin:/usr/bin')" \
     "/fixture/home/.local/bin:/fixture/home/opt/bin:/usr/bin" \
-    "only the missing dir is prepended"
+    "only the missing dir is prepended (an existing entry is never moved)"
 
 # A neighbouring dir that merely shares a prefix must not read as "present".
 assert_eq "$(run_path_block '/fixture/home/opt/bin-extra:/usr/bin')" \
-    "/fixture/home/.local/bin:/fixture/home/opt/bin:/fixture/home/opt/bin-extra:/usr/bin" \
+    "/fixture/home/opt/bin:/fixture/home/.local/bin:/fixture/home/opt/bin-extra:/usr/bin" \
     "substring match does not count as present"
 
 # The block must precede the first consumer of an installed tool: the gff
@@ -135,6 +144,16 @@ GFF_PROBE_LINE="$(grep -n 'command -v gff' "$INSTALL" | head -1 | cut -d: -f1)"
 assert_eq "$([ -n "$PATH_BLOCK_LINE" ] && [ -n "$GFF_PROBE_LINE" ] && \
     [ "$PATH_BLOCK_LINE" -lt "$GFF_PROBE_LINE" ] && echo before || echo after)" \
     "before" "PATH block runs before the gff early-export probe"
+
+# goenv appends its shims to the END of PATH unless GOENV_PATH_ORDER=front, and
+# `goenv init` reads that variable when it runs. install.sh never loads
+# .goenv.sh (which sets it), so on a host with a system Go (/usr/bin/go on the
+# Pi, from apt's golang-go) every run printed goenv's "System 'go' found …
+# system 'go' will be used" warning. It must be exported before the first init.
+ORDER_LINE="$(grep -n '^[[:space:]]*export GOENV_PATH_ORDER=front' "$INSTALL" | head -1 | cut -d: -f1)"
+INIT_LINE="$(grep -n 'goenv init - bash' "$INSTALL" | grep -v '^[0-9]*:[[:space:]]*#' | head -1 | cut -d: -f1)"
+assert_eq "$([ -n "$ORDER_LINE" ] && [ -n "$INIT_LINE" ] && [ "$ORDER_LINE" -lt "$INIT_LINE" ] && echo before || echo missing-or-after)" \
+    "before" "install.sh exports GOENV_PATH_ORDER=front before the first goenv init"
 
 # === 8. Directly-executed helper scripts must carry the exec bit ===
 # install.sh invokes some helpers in command position ("${BASE_DIR}/foo.sh")

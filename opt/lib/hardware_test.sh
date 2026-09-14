@@ -117,4 +117,17 @@ assert_grep "install.sh gates setup_gpu.sh behind install.system.gpu" \
 assert_grep "install.system.gpu is declared in the gff inventory" \
     'path: install\.system\.gpu' "${REPO_ROOT}/.github/gff/features.yaml"
 
+# jetson-stats must be pip-installed as root (jtop runs as a root service), so
+# pip's "Running pip as the 'root' user" and "new release of pip" notices landed
+# in every Jetson fleet capture as stderr warnings. Silenced through pip's env
+# vars, which pips too old to know them ignore (a --root-user-action FLAG would
+# be an error on an older JetPack's pip).
+SETUP_JTOP="${REPO_ROOT}/opt/scripts/system/setup_jtop.sh"
+assert_grep_negative "setup_jtop.sh has no bare 'sudo pip3 install'" 'sudo pip3 install' "${SETUP_JTOP}"
+assert_grep "setup_jtop.sh silences pip's root-user notice" 'PIP_ROOT_USER_ACTION=ignore' "${SETUP_JTOP}"
+assert_grep "setup_jtop.sh silences pip's version check" 'PIP_DISABLE_PIP_VERSION_CHECK=1' "${SETUP_JTOP}"
+# setup_jtop.sh announces itself; install.sh echoing the same line printed it twice.
+assert_grep_negative "install.sh does not duplicate setup_jtop.sh's banner" \
+    'echo "Setting up jtop and jetson-stats' "${REPO_ROOT}/install.sh"
+
 _test_report
