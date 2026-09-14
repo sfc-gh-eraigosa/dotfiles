@@ -41,6 +41,28 @@ done
 unset _ip_dir
 export PATH
 
+# --- Locale fallback ----------------------------------------------------------
+# ssh forwards the caller's LANG/LC_* (Ubuntu's default SendEnv LANG LC_* /
+# AcceptEnv), so a `fleet update` launched from a session with
+# LC_ALL=en_US.UTF-8 reaches a host that may only have C.UTF-8. Every bash child
+# then printed "setlocale: LC_ALL: cannot change locale" (95x per run on a WSL
+# host), and goenv even captured that warning into its GOROOT path. When
+# `locale` complains, drop the forwarded settings for this run and use a locale
+# the host has: C.UTF-8 when present, else C.
+if command -v locale >/dev/null 2>&1 && [ -n "$(locale 2>&1 >/dev/null)" ]; then
+  _il_want="${LC_ALL:-${LANG:-}}"
+  unset LC_ALL
+  if [ -n "$(locale 2>&1 >/dev/null)" ]; then
+    if locale -a 2>/dev/null | grep -qix 'c\.utf-\{0,1\}8'; then LANG=C.UTF-8; else LANG=C; fi
+    export LANG
+    unset LANGUAGE LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY LC_MESSAGES \
+      LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT LC_IDENTIFICATION
+  fi
+  echo "install.sh: locale '${_il_want}' is not installed on this host; using ${LANG:-C} for this run."
+  unset _il_want
+fi
+# --- end locale fallback ------------------------------------------------------
+
 # gff_on is env-only and fail-open; it must exist before the FIRST gate. Sourcing
 # it here (not at the bootstrap point) is load-bearing: a gate that calls an
 # undefined gff_on gets exit 127, takes the else branch, and SKIPS the step —

@@ -155,6 +155,47 @@ INIT_LINE="$(grep -n 'goenv init - bash' "$INSTALL" | grep -v '^[0-9]*:[[:space:
 assert_eq "$([ -n "$ORDER_LINE" ] && [ -n "$INIT_LINE" ] && [ "$ORDER_LINE" -lt "$INIT_LINE" ] && echo before || echo missing-or-after)" \
     "before" "install.sh exports GOENV_PATH_ORDER=front before the first goenv init"
 
+# --- Locale fallback -----------------------------------------------------------
+# ssh forwards the caller's LANG/LC_* (Ubuntu's default SendEnv/AcceptEnv), so a
+# fleet run can arrive with LC_ALL=en_US.UTF-8 on a host that only generated
+# C.UTF-8. Every bash child then printed "setlocale: LC_ALL: cannot change
+# locale" (95x per run on the WSL host), and one such warning was even captured
+# INTO goenv's GOROOT path, breaking the gsl glyph check. install.sh must fall
+# back to a locale the host has before it spawns anything.
+set +e  # assert_exit_code above leaves errexit on; grep -c 0 would kill the driver
+LOCALE_BLOCK="$(awk '/^# --- Locale fallback/{f=1} f{print} f&&/^# --- end locale fallback/{exit}' "$INSTALL")"
+assert_grep "install.sh carries the locale fallback block" '^# --- Locale fallback' "$INSTALL"
+LSTUB="$(mktemp -d "${TMPDIR:-/tmp}/install_locale_test.XXXXXX")"
+# A `locale` like the WSL host's: only C, C.utf8 and POSIX exist; an unknown
+# LC_ALL or LANG makes it complain on stderr exactly as glibc's does.
+cat > "${LSTUB}/locale" <<'STUB'
+#!/bin/sh
+ok() { case "$1" in "" | C | POSIX | C.UTF-8 | C.utf8) return 0 ;; esac; return 1; }
+if [ "${1:-}" = "-a" ]; then printf 'C\nC.utf8\nPOSIX\n'; exit 0; fi
+ok "${LC_ALL:-}" || echo "locale: Cannot set LC_ALL to default locale: No such file or directory" >&2
+ok "${LANG:-}" || echo "locale: Cannot set LC_CTYPE to default locale: No such file or directory" >&2
+echo "LANG=${LANG:-}"
+STUB
+chmod +x "${LSTUB}/locale"
+# run_locale_block <env assignments...> -> "LANG=<v> LC_ALL=<v>" plus any message
+run_locale_block() {
+    # --norc/--noprofile and a closed stdin: bash reads ~/.bashrc when it thinks
+    # stdin is a network connection, which would pollute the captured output.
+    env -i PATH="${LSTUB}:/usr/bin:/bin" "$@" bash --norc --noprofile -c "${LOCALE_BLOCK}"$'\n''printf "LANG=%s LC_ALL=%s\n" "${LANG:-}" "${LC_ALL:-}"' </dev/null
+}
+out="$(run_locale_block LANG=C.UTF-8 LC_ALL=en_US.UTF-8)"
+assert_eq "$(printf '%s\n' "$out" | tail -1)" "LANG=C.UTF-8 LC_ALL=" "an unavailable LC_ALL is dropped (LANG=C.UTF-8 already works)"
+assert_eq "$(printf '%s\n' "$out" | grep -c "en_US.UTF-8.*not installed")" "1" "the fallback says once which locale was missing"
+out="$(run_locale_block LANG=en_US.UTF-8)"
+assert_eq "$(printf '%s\n' "$out" | tail -1)" "LANG=C.UTF-8 LC_ALL=" "an unavailable LANG falls back to C.UTF-8"
+out="$(run_locale_block LANG=C.UTF-8)"
+assert_eq "$out" "LANG=C.UTF-8 LC_ALL=" "a working locale is left alone, silently"
+rm -rf "${LSTUB}"
+LOCALE_LINE="$(grep -n '^# --- Locale fallback' "$INSTALL" | head -1 | cut -d: -f1)"
+FIRST_CHILD_LINE="$(grep -n '^\. "\${BASE_DIR}/opt/lib/gff.sh"' "$INSTALL" | head -1 | cut -d: -f1)"
+assert_eq "$([ -n "$LOCALE_LINE" ] && [ -n "$FIRST_CHILD_LINE" ] && [ "$LOCALE_LINE" -lt "$FIRST_CHILD_LINE" ] && echo before || echo after)" \
+    "before" "the locale fallback runs before install.sh starts using tools"
+
 # === 8. Directly-executed helper scripts must carry the exec bit ===
 # install.sh invokes some helpers in command position ("${BASE_DIR}/foo.sh")
 # rather than via `bash foo.sh`. A 100644 mode on any of those turns into a
