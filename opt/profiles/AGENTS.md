@@ -16,6 +16,7 @@ This directory contains the core configuration files for the shell environment, 
 - `.vimrc_default`, `.vimrc_editor.vim`, `.vimrc_green`, `.vimrc_white`: Various Vim configurations.
 - `.docker.sh`: Shell helpers for Docker.
 - `.goenv.sh`: Environment setup for Go.
+- `.locale.sh`: `locale_fallback [-q]` — drops a forwarded LC_ALL / LC_* / LANG this host never generated (ssh `SendEnv LANG LC_*`) and falls back to C.UTF-8. POSIX sh (dash reads `.profile` at GUI login); called quietly by `.profile`, `.bashrc`, `.zshrc`, and by `install.sh`. Any script can `. ~/.locale.sh && locale_fallback`.
 - `.gitrepos`: Likely a list of managed git repositories.
 - `.repos.env`: Environment variables related to repositories.
 - `.ruby-version`: Specifies the Ruby version for the project.

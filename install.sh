@@ -42,41 +42,14 @@ unset _ip_dir
 export PATH
 
 # --- Locale fallback ----------------------------------------------------------
-# ssh forwards the caller's LANG/LC_* (Ubuntu's default SendEnv LANG LC_* /
-# AcceptEnv), so a `fleet update` launched from a session with
-# LC_ALL=en_US.UTF-8 reaches a host that may only have C.UTF-8. Every bash child
-# then printed "setlocale: LC_ALL: cannot change locale" (95x per run on a WSL
-# host), and goenv even captured that warning into its GOROOT path. When
-# `locale` complains, drop the forwarded settings for this run and use a locale
-# the host has: C.UTF-8 when present, else C.
-#
-# Peel one layer at a time and stop as soon as `locale` is quiet: LC_ALL first,
-# then the per-category LC_* (macOS's ssh_config forwards LC_CTYPE=UTF-8, a
-# name glibc does not know), and LANG only if it is itself the problem — so a
-# LANG the host does have survives, and the message names what was dropped.
-if command -v locale >/dev/null 2>&1 && [ -n "$(locale 2>&1 >/dev/null)" ]; then
-  _il_drop="${LC_ALL:+LC_ALL=${LC_ALL}}"
-  unset LC_ALL
-  if [ -n "$(locale 2>&1 >/dev/null)" ]; then
-    for _il_v in LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY LC_MESSAGES \
-      LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT LC_IDENTIFICATION; do
-      # Only touch what is set: bash re-runs setlocale on every LC_* unset and
-      # warns once per category while LANG is still the broken one.
-      if [ -n "${!_il_v:-}" ]; then
-        _il_drop="${_il_drop:+${_il_drop} }${_il_v}=${!_il_v}"
-        unset "${_il_v}"
-      fi
-    done
-    if [ -n "$(locale 2>&1 >/dev/null)" ]; then
-      _il_drop="${_il_drop:+${_il_drop} }LANG=${LANG:-}"
-      if locale -a 2>/dev/null | grep -qix 'c\.utf-\{0,1\}8'; then LANG=C.UTF-8; else LANG=C; fi
-      export LANG
-      unset LANGUAGE
-    fi
-  fi
-  echo "install.sh: locale not installed on this host; dropped ${_il_drop} for this run, using LANG=${LANG:-C}."
-  unset _il_drop _il_v
-fi
+# ssh forwards the caller's LANG/LC_*, so a fleet run can arrive with a locale
+# this host never generated, and every bash child then warns "setlocale: cannot
+# change locale" (95x per run on a WSL host; once it even landed in goenv's
+# GOROOT path). Fall back before anything is spawned. The helper is the same
+# one .profile/.bashrc/.zshrc use (see its header); sourced from the repo so it
+# works before install.shell.profiles has linked ~/.locale.sh.
+. "${BASE_DIR}/opt/profiles/.locale.sh"
+locale_fallback
 # --- end locale fallback ------------------------------------------------------
 
 # gff_on is env-only and fail-open; it must exist before the FIRST gate. Sourcing
