@@ -49,9 +49,11 @@ AUTOSTART_ENTRY="${HOME}/.config/autostart/keyd-application-mapper.desktop"
 KILL_CMD="${KILL_CMD:-kill}"
 BUILD_CACHE="${HOME}/.cache/dotfiles/keyd"
 
-# Populated by detect_graphical_session().
+# Populated by detect_graphical_session(). GUI_DESKTOP is the logind session's
+# Desktop= name, used when this shell (e.g. SSH) has no XDG_* desktop variables.
 GUI_SESSION_TYPE=""
 GUI_DISPLAY=""
+GUI_DESKTOP=""
 
 log()  { echo "$*"; }
 warn() { echo "WARNING: $*" >&2; }
@@ -96,6 +98,7 @@ detect_graphical_session() {
 			x11 | wayland)
 				GUI_SESSION_TYPE="${_type}"
 				GUI_DISPLAY="$(loginctl show-session "${_s}" -p Display --value 2> /dev/null)"
+				GUI_DESKTOP="$(loginctl show-session "${_s}" -p Desktop --value 2> /dev/null)"
 				# loginctl's Display is often empty on X11; fall back to the
 				# socket the running Xorg actually created.
 				if [ -z "${GUI_DISPLAY}" ] && [ "${_type}" = "x11" ]; then
@@ -267,14 +270,55 @@ mapper_backend_ok() {
 			return $?
 			;;
 		wayland)
-			# Xlib cannot see native Wayland windows, so GNOME's shell extension
-			# is the only route. Require it to be present AND enabled.
-			gnome-extensions info keyd > /dev/null 2>&1 || return 1
-			gnome-extensions list --enabled 2> /dev/null | grep -q '^keyd' || return 1
-			return 0
+			# Xlib cannot see native Wayland windows. The mapper has native
+			# backends for wlroots compositors (foreign-toplevel protocol) and KDE
+			# (a KWin script); GNOME needs keyd's shell extension, present AND
+			# enabled. Anything unidentified stays refused.
+			case "$(wayland_desktop_kind)" in
+				wlroots | kde) return 0 ;;
+				gnome)
+					gnome-extensions info keyd > /dev/null 2>&1 || return 1
+					gnome-extensions list --enabled 2> /dev/null | grep -q '^keyd' || return 1
+					return 0
+					;;
+			esac
+			return 1
 			;;
 	esac
 	return 1
+}
+
+# The desktop names this session advertises, for messages and classification.
+wayland_desktop_names() {
+	echo "${XDG_CURRENT_DESKTOP:-} ${XDG_SESSION_DESKTOP:-} ${DESKTOP_SESSION:-} ${GUI_DESKTOP}" |
+		awk '{$1=$1; print}'
+}
+
+# Which of the mapper's Wayland backends applies: wlroots | kde | gnome | unknown.
+# First from the advertised desktop names (XDG_CURRENT_DESKTOP is a colon list
+# such as "labwc:wlroots" or "ubuntu:GNOME"; Raspberry Pi OS says
+# "LXDE-pi-labwc"), then -- over SSH, where none of those reach this shell and
+# logind may not record one -- from the compositor process this user runs.
+wayland_desktop_kind() {
+	_names="$(wayland_desktop_names | tr '[:upper:]' '[:lower:]')"
+	case "${_names}" in
+		*gnome*) echo gnome && return 0 ;;
+		*kde* | *plasma*) echo kde && return 0 ;;
+		*wlroots* | *labwc* | *sway* | *wayfire* | *river* | *hyprland*)
+			echo wlroots && return 0
+			;;
+	esac
+	for _d in "${PROC_DIR}"/[0-9]*; do
+		# Only this user's processes: a greeter's compositor is not our desktop.
+		[ -O "${_d}" ] || continue
+		{ IFS= read -r _comm < "${_d}/comm"; } 2> /dev/null || continue
+		case "${_comm}" in
+			gnome-shell) echo gnome && return 0 ;;
+			kwin_wayland) echo kde && return 0 ;;
+			labwc | sway | wayfire | river | Hyprland) echo wlroots && return 0 ;;
+		esac
+	done
+	echo unknown
 }
 
 # The mapper picks a backend in the order wlroots, cosmic, Gnome, X — and its
@@ -470,6 +514,10 @@ doctor() {
 	log "  host supported:      $(host_supported && echo yes || echo "no — skipping")"
 	if detect_graphical_session; then
 		log "  graphical session:   ${GUI_SESSION_TYPE} (DISPLAY=${GUI_DISPLAY:-unset})"
+		if [ "${GUI_SESSION_TYPE}" = "wayland" ]; then
+			_names="$(wayland_desktop_names)"
+			log "  wayland desktop:     $(wayland_desktop_kind) (${_names:-no desktop name advertised})"
+		fi
 	else
 		log "  graphical session:   none found"
 	fi
@@ -542,10 +590,20 @@ main() {
 	if ! mapper_backend_ok; then
 		warn "cannot detect the focused window on this ${GUI_SESSION_TYPE} session."
 		if [ "${GUI_SESSION_TYPE}" = "wayland" ]; then
-			warn "Wayland needs the keyd GNOME extension:"
-			warn "  ln -s /usr/local/share/keyd/gnome-extension-45 \\"
-			warn "        ~/.local/share/gnome-shell/extensions/keyd"
-			warn "  gnome-extensions enable keyd   # then log out and back in"
+			case "$(wayland_desktop_kind)" in
+				gnome)
+					warn "GNOME on Wayland needs the keyd GNOME extension:"
+					warn "  ln -s /usr/local/share/keyd/gnome-extension-45 \\"
+					warn "        ~/.local/share/gnome-shell/extensions/keyd"
+					warn "  gnome-extensions enable keyd   # then log out and back in"
+					;;
+				*)
+					_names="$(wayland_desktop_names)"
+					warn "could not identify this Wayland desktop (${_names:-no XDG_CURRENT_DESKTOP/XDG_SESSION_DESKTOP set})."
+					warn "The keyd application mapper supports wlroots compositors (labwc, sway,"
+					warn "wayfire, river, Hyprland), KDE Plasma, and GNOME with keyd's extension."
+					;;
+			esac
 		fi
 		warn "REFUSING to install the keyd config: without per-app overrides,"
 		warn "Cmd+C in a terminal would send SIGINT instead of copying."

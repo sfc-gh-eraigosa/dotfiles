@@ -82,9 +82,17 @@ else
   export ZSH="${Z_HOME}/git/oh-my-zsh"
 fi
 
-if [ -f ~/opt/themes/agnoster.zsh-theme ] ; then
-  cp ~/opt/themes/agnoster.zsh-theme "$ZSH/themes/agnoster.zsh-theme"
+# The dotfiles agnoster theme goes into custom/themes, NOT over the tracked
+# $ZSH/themes/agnoster.zsh-theme: oh-my-zsh loads $ZSH_CUSTOM/themes/<name>
+# first and custom/ is gitignored upstream, so the prompt is the same but the
+# clone stays clean and oh-my-zsh_update.sh can keep fast-forwarding it.
+# Copy only when missing or stale (`-nt` is a test builtin — no fork per shell).
+_omz_theme_src=~/opt/themes/agnoster.zsh-theme
+_omz_theme_dst="${ZSH_CUSTOM:-$ZSH/custom}/themes/agnoster.zsh-theme"
+if [ -f "$_omz_theme_src" ] && { [ ! -f "$_omz_theme_dst" ] || [ "$_omz_theme_src" -nt "$_omz_theme_dst" ]; }; then
+  { mkdir -p "${_omz_theme_dst%/*}" && cp "$_omz_theme_src" "$_omz_theme_dst"; } 2>/dev/null || :
 fi
+unset _omz_theme_src _omz_theme_dst
 
 # Set name of the theme to load.
 # Look in ~/.oh-my-zsh/themes/
