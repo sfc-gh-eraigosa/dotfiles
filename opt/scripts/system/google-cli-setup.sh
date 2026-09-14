@@ -216,9 +216,10 @@ setup_all() {
     # forces the install/update path explicitly.
     command -v agy >/dev/null 2>&1 || install_agy
     # Allow gws's postinstall by name so npm stops listing it as unreviewed on
-    # every global install/update. User-level config, so only when npm is not
-    # running under sudo (root reads its own npmrc).
-    if [ -z "${SUDO:-}" ] && command -v npm_allow_scripts >/dev/null 2>&1; then
+    # every global install/update. It is the user's npmrc, read by the user's
+    # own npm (claude_install.sh's `npm update -g` lists gws too), so it applies
+    # even when this script installs gws with sudo.
+    if command -v npm_allow_scripts >/dev/null 2>&1; then
         npm_allow_scripts "@googleworkspace/cli"
     fi
     install_or_upgrade "gws" "@googleworkspace/cli"

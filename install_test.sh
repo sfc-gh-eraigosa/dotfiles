@@ -155,6 +155,37 @@ INIT_LINE="$(grep -n 'goenv init - bash' "$INSTALL" | grep -v '^[0-9]*:[[:space:
 assert_eq "$([ -n "$ORDER_LINE" ] && [ -n "$INIT_LINE" ] && [ "$ORDER_LINE" -lt "$INIT_LINE" ] && echo before || echo missing-or-after)" \
     "before" "install.sh exports GOENV_PATH_ORDER=front before the first goenv init"
 
+# --- Locale fallback -----------------------------------------------------------
+# ssh forwards the caller's LANG/LC_*, so a fleet run can arrive with a locale
+# the host never generated (the WSL host: LC_ALL=en_US.UTF-8, only C.UTF-8). The
+# behaviour lives in opt/profiles/.locale.sh and is tested (bash/dash/zsh) by
+# opt/profiles/.locale_test.sh; here: install.sh's block, executed as shipped,
+# really falls back, and does so before install.sh starts using tools.
+set +e  # assert_exit_code above leaves errexit on; grep -c 0 would kill the driver
+LOCALE_BLOCK="$(awk '/^# --- Locale fallback/{f=1} f{print} f&&/^# --- end locale fallback/{exit}' "$INSTALL")"
+assert_grep "install.sh carries the locale fallback block" '^# --- Locale fallback' "$INSTALL"
+LSTUB="$(mktemp -d "${TMPDIR:-/tmp}/install_locale_test.XXXXXX")"
+cat > "${LSTUB}/locale" <<'STUB'
+#!/bin/sh
+ok() { case "$1" in "" | C | POSIX | C.UTF-8 | C.utf8) return 0 ;; esac; return 1; }
+if [ "${1:-}" = "-a" ]; then printf 'C\nC.utf8\nPOSIX\n'; exit 0; fi
+ok "${LC_ALL:-}" || echo "locale: Cannot set LC_ALL to default locale: No such file or directory" >&2
+ok "${LANG:-}" || echo "locale: Cannot set LC_CTYPE to default locale: No such file or directory" >&2
+echo "LANG=${LANG:-}"
+STUB
+chmod +x "${LSTUB}/locale"
+# --norc/--noprofile and a closed stdin: bash reads ~/.bashrc when it thinks
+# stdin is a network connection, which would pollute the captured output.
+out="$(env -i PATH="${LSTUB}:/usr/bin:/bin" BASE_DIR="${SELF_DIR}" LANG=C.UTF-8 LC_ALL=en_US.UTF-8 \
+    bash --norc --noprofile -c "${LOCALE_BLOCK}"$'\n''printf "LANG=%s LC_ALL=%s\n" "${LANG:-}" "${LC_ALL:-}"' </dev/null 2>&1)"
+assert_eq "$(printf '%s\n' "$out" | tail -1)" "LANG=C.UTF-8 LC_ALL=" "install.sh's block drops the unavailable forwarded LC_ALL"
+assert_eq "$(printf '%s\n' "$out" | grep -c 'dropped LC_ALL=en_US.UTF-8')" "1" "and says once what it dropped"
+rm -rf "${LSTUB}"
+LOCALE_LINE="$(grep -n '^# --- Locale fallback' "$INSTALL" | head -1 | cut -d: -f1)"
+FIRST_CHILD_LINE="$(grep -n '^\. "\${BASE_DIR}/opt/lib/gff.sh"' "$INSTALL" | head -1 | cut -d: -f1)"
+assert_eq "$([ -n "$LOCALE_LINE" ] && [ -n "$FIRST_CHILD_LINE" ] && [ "$LOCALE_LINE" -lt "$FIRST_CHILD_LINE" ] && echo before || echo after)" \
+    "before" "the locale fallback runs before install.sh starts using tools"
+
 # === 8. Directly-executed helper scripts must carry the exec bit ===
 # install.sh invokes some helpers in command position ("${BASE_DIR}/foo.sh")
 # rather than via `bash foo.sh`. A 100644 mode on any of those turns into a

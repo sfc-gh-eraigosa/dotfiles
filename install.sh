@@ -41,6 +41,17 @@ done
 unset _ip_dir
 export PATH
 
+# --- Locale fallback ----------------------------------------------------------
+# ssh forwards the caller's LANG/LC_*, so a fleet run can arrive with a locale
+# this host never generated, and every bash child then warns "setlocale: cannot
+# change locale" (95x per run on a WSL host; once it even landed in goenv's
+# GOROOT path). Fall back before anything is spawned. The helper is the same
+# one .profile/.bashrc/.zshrc use (see its header); sourced from the repo so it
+# works before install.shell.profiles has linked ~/.locale.sh.
+. "${BASE_DIR}/opt/profiles/.locale.sh"
+locale_fallback
+# --- end locale fallback ------------------------------------------------------
+
 # gff_on is env-only and fail-open; it must exist before the FIRST gate. Sourcing
 # it here (not at the bootstrap point) is load-bearing: a gate that calls an
 # undefined gff_on gets exit 127, takes the else branch, and SKIPS the step —

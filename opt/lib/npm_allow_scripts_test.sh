@@ -81,5 +81,11 @@ assert_grep "claude_install.sh allows claude-code's postinstall" \
     'npm_allow_scripts "\$NPM_PKG"' "${REPO_ROOT}/opt/scripts/system/claude_install.sh"
 assert_grep "google-cli-setup.sh allows gws's postinstall" \
     'npm_allow_scripts "@googleworkspace/cli"' "${REPO_ROOT}/opt/scripts/system/google-cli-setup.sh"
+# The allow list is user-level config read by the user's own npm (the nvm one
+# claude_install.sh updates, whose `npm update -g` lists gws). Gating it on
+# google-cli-setup's SUDO skipped it on a Pi whose load_node_env picked the
+# system npm, so the notice kept coming back every run.
+assert_grep_negative "google-cli-setup.sh does not gate the allow on SUDO" \
+    'SUDO.*npm_allow_scripts' "${REPO_ROOT}/opt/scripts/system/google-cli-setup.sh"
 
 _test_report

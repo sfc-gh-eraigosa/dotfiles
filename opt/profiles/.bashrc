@@ -1,6 +1,11 @@
 # shellcheck shell=bash
 # ~/.bashrc: executed by bash(1) for non-login shells.
 
+# Fall back to a locale this host has when ssh forwarded one it never generated
+# (LC_ALL / LC_CTYPE / LANG) — see ~/.locale.sh. Plain POSIX sh, so dash reading
+# .profile at a GUI login is safe; a working locale costs one `locale` call.
+[ -f "$HOME/.locale.sh" ] && . "$HOME/.locale.sh" && locale_fallback -q
+
 # Detect if we're in VSCode/Cursor terminal
 if [[ "$TERM_PROGRAM" == "vscode" ]] || [[ "$TERM_PROGRAM" == "cursor" ]] || [[ -n "$VSCODE_PID" ]] || [[ -n "$CURSOR_PID" ]]; then
     export EDITOR_TERMINAL=true

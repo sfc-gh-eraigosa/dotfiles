@@ -9,6 +9,11 @@
 # for ssh logins, install and configure the libpam-umask package.
 #umask 022
 
+# Fall back to a locale this host has when ssh forwarded one it never generated
+# (LC_ALL / LC_CTYPE / LANG) — see ~/.locale.sh. Plain POSIX sh, so dash reading
+# .profile at a GUI login is safe; a working locale costs one `locale` call.
+[ -f "$HOME/.locale.sh" ] && . "$HOME/.locale.sh" && locale_fallback -q
+
 if [ ! -z "${GREP_OPTIONS}" ]; then
   # shellcheck disable=SC2139  # intentional: bake the current GREP_OPTIONS into the alias, then unset it
   alias grep="grep ${GREP_OPTIONS}"
