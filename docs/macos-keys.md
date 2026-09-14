@@ -207,7 +207,7 @@ logind session's `Desktop=` and the compositor this user is running;
 | Wayland desktop | Mapper backend | Extra setup |
 | :-- | :-- | :-- |
 | wlroots compositors — labwc (Raspberry Pi OS), sway, wayfire, river, Hyprland | native (foreign-toplevel protocol) | none |
-| KDE Plasma | native (KWin script) | none |
+| KDE Plasma | native (KWin script) | `python3-dbus` + `python3-gi` (the installer refuses without them) |
 | GNOME | keyd's GNOME shell extension | see below |
 | anything else | — | the installer refuses, naming the desktop it could not identify |
 

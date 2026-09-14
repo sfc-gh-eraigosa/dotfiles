@@ -433,7 +433,7 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   SAME shell that then execs install.sh: install.sh's own children
   (opt/bin/pkg-install-apt, the keep-alive loop, the docker step) have
   install.sh's PPID, not the top shell's, and never saw a credential primed
-  there. `sudoGate` therefore checks with `sh -c 'sudo -n true'`, a forked
+  there. `sudoGate` therefore checks with `sh -c 'sudo -n true; exit $?'`, a forked
   child in that same PPID shape, so it can't rubber-stamp a session where the
   children would fail anyway (exit 91 = bad password, 92 = did not persist —
   which now also means "does not reach children"; the TUI routes that case to

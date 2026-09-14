@@ -222,6 +222,24 @@ touch "` + dir + `/primed.$PPID"
 	if err == nil || strings.Contains(string(out), "ok") {
 		t.Fatalf("gate must fail from a child process when the credential does not carry to children: err=%v out=%q", err, out)
 	}
+
+	// Where /bin/sh is bash (macOS, Fedora, Arch), `sh -c '<one command>'`
+	// execs that command in place instead of forking, handing sudo the
+	// primer's PPID again. The gate must still fork there.
+	bashPath, lerr := exec.LookPath("bash")
+	if lerr != nil {
+		t.Skip("no bash on PATH")
+	}
+	shDir := t.TempDir()
+	if err := os.Symlink(bashPath, shDir+"/sh"); err != nil {
+		t.Fatal(err)
+	}
+	bashSh := exec.Command("/bin/bash", "-c", "sudo -v; "+sudoGate+" && echo ok")
+	bashSh.Env = []string{"PATH=" + dir + ":" + shDir + ":/usr/bin:/bin"}
+	out, err = bashSh.CombinedOutput()
+	if err == nil || strings.Contains(string(out), "ok") {
+		t.Fatalf("gate must still fork when /bin/sh is bash (single-command -c exec optimization): err=%v out=%q", err, out)
+	}
 }
 
 // bgDoneErr is what lets tui_model route a host away from the background lane

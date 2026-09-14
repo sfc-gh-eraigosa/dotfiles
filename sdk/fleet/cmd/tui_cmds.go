@@ -236,13 +236,19 @@ const (
 // NOPASSWD). Forking one level down puts the test in the same PPID shape as
 // those children, so it actually answers "will THEY see this credential".
 //
+// The `; exit $?` after `sudo -n true` is load-bearing: a shell given a
+// single simple command via `-c` may exec it in place instead of forking
+// (bash does — and bash is /bin/sh on macOS, Fedora, Arch), which would give
+// sudo the preamble shell as its parent again and silently restore the
+// same-PPID false pass. A trailing command forces a real fork everywhere.
+//
 // A host with `Defaults timestamp_type=global` in sudoers (or NOPASSWD) has
 // no PPID scoping to trip on and passes the child check exactly like it
 // passed the old same-shell one — such a host keeps the background lane.
 //
 // Hosts that need no sudo are exempt rather than blocked: root, and machines
 // with no sudo at all (minimal containers).
-const sudoGate = `{ [ "$(id -u)" = 0 ] || ! command -v sudo >/dev/null 2>&1 || sh -c 'sudo -n true' 2>/dev/null; }`
+const sudoGate = `{ [ "$(id -u)" = 0 ] || ! command -v sudo >/dev/null 2>&1 || sh -c 'sudo -n true; exit $?' 2>/dev/null; }`
 
 // errSudoNotInherited marks a background run the sudoGate stopped with its
 // rcSudoNoCache exit (92): the credential primed this session did not reach

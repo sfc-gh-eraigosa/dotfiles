@@ -43,10 +43,12 @@ cat > "$H/bin/keyd" <<'STUB'
 exit 0
 STUB
 
-# The Xlib import check and the X11 focused-window probe both run through python3.
+# The Xlib import check and the X11 focused-window probe both run through python3,
+# as does the KDE backend's dbus import probe (FAKE_DBUS_OK=0 fails only that one).
 cat > "$H/bin/python3" <<'STUB'
 #!/usr/bin/env bash
 echo "python3 $*" >> "$STUB_LOG"
+case "$*" in *"import dbus"*) [ "${FAKE_DBUS_OK:-1}" = "1" ] || exit 1 ;; esac
 [ "${FAKE_XLIB_OK:-1}" = "1" ] || exit 1
 exit 0
 STUB
@@ -229,6 +231,15 @@ for desk in labwc:wlroots sway Hyprland LXDE-pi-labwc wayfire river KDE plasma; 
   case "$out" in *"GNOME"*|*"REFUSING"*) r=1 ;; *) r=0 ;; esac
   assert_eq "$r" "0" "wayland $desk: no GNOME advice, no refusal"
 done
+
+# KDE's mapper backend imports python3-dbus. Without it the mapper falls through
+# to Xlib, which on Wayland sees only XWayland windows: Cmd+C in a native Konsole
+# would be SIGINT. So a KDE session without the dbus bindings keeps the refusal.
+out="$(run_sut XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE FAKE_DBUS_OK=0 2>&1)"
+assert_eq "$([ -f "$H/etc/keyd/default.conf" ] && echo yes || echo no)" "no" \
+    "wayland KDE without python3-dbus: refuses to install"
+case "$out" in *"python3-dbus"*) r=0 ;; *) r=1 ;; esac
+assert_eq "$r" "0" "wayland KDE without python3-dbus: says which packages are missing"
 
 # XDG_SESSION_DESKTOP is enough on its own (some display managers set only it).
 out="$(run_sut XDG_SESSION_TYPE=wayland XDG_SESSION_DESKTOP=sway 2>&1)"

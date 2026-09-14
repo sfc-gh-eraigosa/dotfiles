@@ -275,7 +275,15 @@ mapper_backend_ok() {
 			# (a KWin script); GNOME needs keyd's shell extension, present AND
 			# enabled. Anything unidentified stays refused.
 			case "$(wayland_desktop_kind)" in
-				wlroots | kde) return 0 ;;
+				wlroots) return 0 ;;
+				kde)
+					# The KDE backend imports python3-dbus (+ GLib via gi). Without
+					# them the mapper silently falls through to its Xlib backend,
+					# which on Wayland sees only XWayland windows -- so Cmd+C in a
+					# native Konsole would be SIGINT. Prove the imports first.
+					python3 -c 'import dbus, dbus.mainloop.glib, gi.repository.GLib' > /dev/null 2>&1 || return 1
+					return 0
+					;;
 				gnome)
 					gnome-extensions info keyd > /dev/null 2>&1 || return 1
 					gnome-extensions list --enabled 2> /dev/null | grep -q '^keyd' || return 1
@@ -596,6 +604,10 @@ main() {
 					warn "  ln -s /usr/local/share/keyd/gnome-extension-45 \\"
 					warn "        ~/.local/share/gnome-shell/extensions/keyd"
 					warn "  gnome-extensions enable keyd   # then log out and back in"
+					;;
+				kde)
+					warn "KDE Plasma on Wayland needs python3-dbus and python3-gi for the mapper's KWin backend:"
+					warn "  sudo apt-get install python3-dbus python3-gi"
 					;;
 				*)
 					_names="$(wayland_desktop_names)"

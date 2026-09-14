@@ -271,7 +271,7 @@ The credential is primed and used in the **same ssh session** as install.sh
 (sudo's default `timestamp_type=tty` has no tty to key on over ssh, so it
 falls back to the PPID of whatever process ran `sudo` — priming in a separate
 connection is not guaranteed to carry). The prime is then **verified from a
-forked child** (`sh -c 'sudo -n true'`), not a bare check in the same shell —
+forked child** (`sh -c 'sudo -n true; exit $?'` — the trailing command stops a bash `/bin/sh` from exec'ing sudo in place), not a bare check in the same shell —
 a bare check shares the primer's PPID and always passes, even on a host where
 install.sh's own children (a different PPID) never see the credential. A
 rejected password is reported as a named failure on the row; a credential
