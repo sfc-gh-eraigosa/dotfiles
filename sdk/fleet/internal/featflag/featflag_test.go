@@ -128,3 +128,26 @@ func TestStaticMissingKeyReturnsError(t *testing.T) {
 		t.Fatalf("Strings: want error for missing key")
 	}
 }
+
+// fleet.update.sudo-timestamp-global lets the TUI's background lane install a
+// sudoers drop-in on a host where the supplied password does not reach
+// install.sh's children. That mutates the host, so unlike the other flags it
+// is FAIL-CLOSED: only an explicit, resolved `true` turns it on.
+func TestResolveSudoTimestampGlobalIsFailClosed(t *testing.T) {
+	for name, src := range map[string]Source{
+		"source error":   Static{Err: errors.New("boom")},
+		"key missing":    Static{Bools: map[string]bool{KeyEnabled: true}},
+		"explicit false": Static{Bools: map[string]bool{KeySudoGlobal: false}},
+	} {
+		if Resolve(src, t.TempDir(), t.TempDir()).SudoTimestampGlobal {
+			t.Fatalf("%s: SudoTimestampGlobal must be false", name)
+		}
+	}
+	got := Resolve(Static{Bools: map[string]bool{KeySudoGlobal: true}}, t.TempDir(), t.TempDir())
+	if !got.SudoTimestampGlobal {
+		t.Fatal("an explicit true must turn it on")
+	}
+	if !got.Enabled {
+		t.Fatal("the other flags keep their fail-open defaults alongside it")
+	}
+}

@@ -447,6 +447,22 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   `errNeedsTerminal` does, with a status line naming the cause — a real pty
   gets sudo's normal tty-keyed timestamp, which install.sh's children DO
   share.
+- **The opt-in fix for such a host is a sudoers change, never a credential
+  bridge.** With `fleet.update.sudo-timestamp-global` on (`bgPolicy`, read
+  once at startup by `bgPolicyFromFlags`, fail-closed) the preamble becomes
+  `sudoGlobalFixup`: prime, and if a first child check fails, install
+  `/etc/sudoers.d/fleet-timestamp` (`Defaults:<user> timestamp_type=global`,
+  `visudo -cf`-vetted, 0440) with the credential the priming shell DOES hold,
+  announce it on the run's output, re-prime, then let the ordinary gate decide.
+  A security review compared this with forwarding the password to the
+  children through an askpass FIFO + `sudo -A` shim and rejected the bridge:
+  a compromised step inside install.sh's tree (npm postinstall, plugin update)
+  would read the reusable plaintext password from it, whereas
+  `timestamp_type=global` only gives it root on that host for the sudo timeout
+  — which a primed sudo already grants. Do not reintroduce a bridge. The
+  password stays a plain shell variable in the priming shell (xtrace off, never
+  exported, never argv — `printf` is a builtin), pinned by
+  `TestSudoGlobal*` in `cmd/tui_sudoglobal_test.go`.
 - **Bulk adopt is one pass, one write.** `discover --add-all` accumulates every
   `Mark` into a single config then writes once — N separate writes would mean N
   backups and N windows in which a partial write costs SSH access. Nothing

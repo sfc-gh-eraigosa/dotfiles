@@ -10,6 +10,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
@@ -312,16 +313,83 @@ func explainExit(err error) string {
 // (see tuiModel.Update's bgUpdateDoneMsg case).
 var errNeedsTerminal = errors.New("fleet: this host's plan needs a terminal")
 
-// bgPreamble builds the Background lane's per-run-step preamble: prime and
-// verify sudo (only when a credential was supplied — an empty `sudo -S`
-// would consume nothing and fail confusingly), then the sudoGate every run
-// must pass regardless, then the operator's non-secret answers. Console and
-// Background apply this ONLY to updplan.KindRun steps, so a sync or gh-auth
-// script never sees a sudo preamble.
-func bgPreamble(a answers) func(updplan.Step) string {
+// bgPolicy is the operator's standing choices for the background lane, read
+// from gff once at startup (bgPolicyFromFlags) — policy, not per-wave
+// answers, so it lives on the model rather than in `answers`, which the form
+// and the answers store replace wholesale.
+type bgPolicy struct {
+	// sudoTimestampGlobal opts in to sudoGlobalFixup: fleet.update.sudo-timestamp-global.
+	sudoTimestampGlobal bool
+}
+
+// bgPolicyFromFlags resolves the lane policy; every field is fail-closed
+// (featflag.Settings.SudoTimestampGlobal), so no gff means no host changes.
+func bgPolicyFromFlags(src featflag.Source, repoDir string) bgPolicy {
+	return bgPolicy{sudoTimestampGlobal: featflag.Resolve(src, "", repoDir).SudoTimestampGlobal}
+}
+
+// sudoersDropIn is the file sudoGlobalFixup installs. Deleting it undoes the
+// change; the name has no '.' or '~', which sudoers.d would ignore.
+const sudoersDropIn = "/etc/sudoers.d/fleet-timestamp"
+
+// sudoGlobalFixup replaces the plain prime when the operator opted in
+// (fleet.update.sudo-timestamp-global): on a host where the primed credential
+// does not reach install.sh's children, it installs a sudoers drop-in so it
+// does, and the host stays in the streaming lane instead of dropping to the
+// interactive one and re-prompting for a password already typed.
+//
+// Why this and not a credential bridge: the security review compared
+// forwarding the password to the children (an askpass FIFO) with changing
+// sudo's timestamp scope, and the asymmetry was decisive — a compromised step
+// inside install.sh's tree (an npm postinstall, a plugin update) would read
+// the reusable PLAINTEXT password from a bridge, whereas with
+// timestamp_type=global it gains root on that one host for the sudo timeout,
+// which it could already get from a primed sudo. The password never leaves
+// the priming shell: it is read from stdin into a plain variable (never
+// exported, never a file, never argv — printf is a builtin) and expanded only
+// into a pipe to `sudo -S`, with xtrace switched off first so a `set -x` from
+// a sourced startup file cannot print it into the captured log.
+//
+// Order: prime and verify (exit rcSudoAuth on a bad password, before anything
+// else); a first child check exactly like the gate's; only when it fails —
+// the priming shell's own sudo calls DO carry the credential — write
+// `Defaults:<user> timestamp_type=global` to a temp file, have `visudo -cf`
+// vet it, install it 0440 root, say so on the run's output, and re-prime so a
+// global-scoped timestamp exists. Then the ordinary gate decides the lane; if
+// any of that failed (sudoers.d not included, visudo refused) nothing was
+// installed and the host takes today's interactive reroute.
+//
+// POSIX sh: the remote login shell runs this, and that is zsh on some hosts.
+var sudoGlobalFixup = "set +x 2>/dev/null; _fs_pw=$(cat); " +
+	fmt.Sprintf("printf '%%s\\n' \"$_fs_pw\" | sudo -S -p '' -v 2>/dev/null || { unset _fs_pw; exit %d; }; ", rcSudoAuth) +
+	"if ! " + sudoGate + "; then " +
+	"_fs_u=$(id -un); _fs_f=$(mktemp \"${TMPDIR:-/tmp}/fleet-sudoers.XXXXXX\") && " +
+	"printf 'Defaults:%s timestamp_type=global\\n' \"$_fs_u\" > \"$_fs_f\" && " +
+	"sudo visudo -cf \"$_fs_f\" >/dev/null 2>&1 && " +
+	"sudo install -m 0440 -o root \"$_fs_f\" " + sudoersDropIn + " && " +
+	"echo \"fleet: the sudo credential did not reach child processes; installed " + sudoersDropIn +
+	" (Defaults:$_fs_u timestamp_type=global) per fleet.update.sudo-timestamp-global - delete that file to undo\" && " +
+	"printf '%s\\n' \"$_fs_pw\" | sudo -S -p '' -v 2>/dev/null; " +
+	"rm -f \"$_fs_f\"; fi; unset _fs_pw _fs_u _fs_f; "
+
+// bgPreamble is bgPreambleWith under the default (all-off) policy — what the
+// tests and the dry-run path use.
+func bgPreamble(a answers) func(updplan.Step) string { return bgPreambleWith(a, bgPolicy{}) }
+
+// bgPreambleWith builds the Background lane's per-run-step preamble: prime
+// and verify sudo (only when a credential was supplied — an empty `sudo -S`
+// would consume nothing and fail confusingly), via sudoGlobalFixup when the
+// operator opted in; then the sudoGate every run must pass regardless; then
+// the operator's non-secret answers. Console and Background apply this ONLY
+// to updplan.KindRun steps, so a sync or gh-auth script never sees a sudo
+// preamble.
+func bgPreambleWith(a answers, p bgPolicy) func(updplan.Step) string {
 	return func(updplan.Step) string {
 		var b strings.Builder
-		if a.needsSudo() {
+		switch {
+		case a.needsSudo() && p.sudoTimestampGlobal:
+			b.WriteString(sudoGlobalFixup)
+		case a.needsSudo():
 			fmt.Fprintf(&b, "sudo -S -p '' -v 2>/dev/null || exit %d; ", rcSudoAuth)
 		}
 		fmt.Fprintf(&b, "%s || exit %d; ", sudoGate, rcSudoNoCache)
@@ -409,8 +477,14 @@ func (q *lineQueue) forward(ch chan<- outLine) {
 // itself now (updexec.Executor.RunHost), so beginStream no longer has to —
 // its own Line callback only has to feed the UI's log pane via lineQueue.
 func beginStream(alias string, plan updplan.Plan, a answers, r runner.Runner, dir string) tea.Cmd {
+	return beginStreamWith(alias, plan, a, bgPolicy{}, r, dir)
+}
+
+// beginStreamWith is beginStream under an explicit lane policy (the model
+// passes its own; see bgPolicy).
+func beginStreamWith(alias string, plan updplan.Plan, a answers, p bgPolicy, r runner.Runner, dir string) tea.Cmd {
 	secret := a.sudoSecret + "\n"
-	preamble := bgPreamble(a)
+	preamble := bgPreambleWith(a, p)
 	reset := a.forceReset()
 	return func() tea.Msg {
 		lines := make(chan outLine)

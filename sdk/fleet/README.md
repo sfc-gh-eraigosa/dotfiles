@@ -281,6 +281,20 @@ status line naming why. A host with `Defaults timestamp_type=global` (or
 NOPASSWD) in sudoers has no PPID scoping to trip on and stays in the
 background lane.
 
+**Keeping password-sudo hosts in the streaming lane (opt-in).** Turn on
+`gff set fleet.update.sudo-timestamp-global true` and, on a host where the
+credential you typed does not reach install.sh's children, the run installs
+`/etc/sudoers.d/fleet-timestamp` (`Defaults:<user> timestamp_type=global`,
+checked with `visudo -cf`) using the credential it just primed, prints a line
+saying so, and carries on streaming instead of dropping to the interactive
+lane. It is a one-time change per host; delete the file to undo. The
+trade-off: for sudo's timeout (about 15 minutes) any process running as you
+on *that* host can sudo without a prompt. The password itself never leaves
+the priming shell — forwarding it to the children was reviewed and rejected,
+because anything inside install.sh's tree could then read the reusable
+password rather than merely gain root on one box. The flag is off by default
+and fail-closed.
+
 **Answers are sticky.** They survive `esc`, selection changes, and every later
 wave, so a fleet-wide update applies *the same* answers everywhere without you
 retyping them — retyping is exactly how two waves end up diverging. On later

@@ -11,8 +11,9 @@ import (
 
 // Flag keys (declared in .github/gff/features.yaml, area `fleet`).
 const (
-	KeyEnabled = "fleet.update.enabled"
-	KeyConfig  = "fleet.update.config"
+	KeyEnabled    = "fleet.update.enabled"
+	KeyConfig     = "fleet.update.config"
+	KeySudoGlobal = "fleet.update.sudo-timestamp-global"
 )
 
 // Source is the minimal gff surface featflag needs. gff.GFF implements it in
@@ -31,6 +32,13 @@ type Settings struct {
 	// when the caller should fall back to its own default (unset, "home", an
 	// error, or an unrecognized selection all map to "").
 	ConfigPath string
+	// SudoTimestampGlobal is the one FAIL-CLOSED flag here: true only when
+	// fleet.update.sudo-timestamp-global explicitly resolved to true. It lets
+	// the TUI's background lane install a sudoers drop-in on a host where the
+	// supplied password does not reach install.sh's children (see
+	// cmd/tui_cmds.go sudoGlobalFixup) — a change to the host, so an error or
+	// a missing key must mean "don't".
+	SudoTimestampGlobal bool
 	// Note explains any fallback taken, empty when both flags resolved cleanly.
 	Note string
 }
@@ -80,6 +88,12 @@ func Resolve(src Source, home, repoDir string) Settings {
 		settings.Note = appendNote(settings.Note, fmt.Sprintf("fleet.update.enabled: %v (defaulting to enabled)", err))
 	} else {
 		settings.Enabled = enabled
+	}
+
+	// Fail-closed: only a resolved true opts in; an error is not noted as a
+	// fallback because "off" is the default, not a degradation.
+	if on, err := src.Bool(KeySudoGlobal); err == nil && on {
+		settings.SudoTimestampGlobal = true
 	}
 
 	locs, err := src.Strings(KeyConfig)

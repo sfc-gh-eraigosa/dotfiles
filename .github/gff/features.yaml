@@ -362,6 +362,9 @@ sets:
           options:
             - {id: home, description: "~/.config/fleet/fleet.yaml (XDG config dir)", stringValue: home, selected: true}
             - {id: repo, description: "<dotfiles clone>/opt/etc/fleet/fleet.yaml", stringValue: repo}
+      - path: fleet.update.sudo-timestamp-global
+        description: Lets the fleet TUI's streaming (background) lane fix a host where the sudo password you typed does not reach install.sh's child processes (no NOPASSWD, and no tty over ssh, so sudo keys its cache to one process). When on, the run installs /etc/sudoers.d/fleet-timestamp (`Defaults:<user> timestamp_type=global`, visudo-checked, using the credential it just primed), says so in the run's output, and stays in the streaming lane. Trade-off - for sudo's timeout (~15 min) any process running as you on THAT host can sudo without a prompt; the password itself never leaves the priming shell (a credential-forwarding bridge was reviewed and rejected because it would expose the reusable password). Off (the default) keeps today's behaviour - such a host drops to the interactive lane and re-prompts. Delete the drop-in to undo. Fail-closed - unresolvable means off.
+        boolDefault: false
 
   # gsl (Go Status Line) runtime flags — read by `gsl render` on every turn via
   # the gff Go SDK (sdk/gsl/internal/flags). Fail-open: any resolution error
