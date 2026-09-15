@@ -58,6 +58,19 @@ func TestARealWarningAppearsInBothPanes(t *testing.T) {
 	}
 }
 
+// TestColourisedChatterIsClassifiedLikeTheCapture pins that the live path
+// strips ANSI before classifying, as histindex.Read does for the same line on
+// disk: a coloured benign/advisory line must not badge live yet count 0 in
+// the history list.
+func TestColourisedChatterIsClassifiedLikeTheCapture(t *testing.T) {
+	m := testModel("a")
+	m.appendLogLine("a", "\x1b[33mnpm warn deprecated glob@7.2.3: old\x1b[0m", true)
+	m.appendLogLine("a", "\x1b[2mFrom github.com:o/r\x1b[0m", true)
+	if m.warns["a"] != 0 || len(m.errEntries()) != 0 {
+		t.Fatalf("coloured chatter counted: badge=%d pane=%d", m.warns["a"], len(m.errEntries()))
+	}
+}
+
 // TestBadgeCountEqualsTheErrorsPaneLineCount pins the invariant that makes
 // the badge trustworthy: whatever number the row shows is exactly the number
 // of lines an operator finds by opening the errors pane, mixing chatter,

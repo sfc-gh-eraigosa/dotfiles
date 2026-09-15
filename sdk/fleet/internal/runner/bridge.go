@@ -83,7 +83,9 @@ func (e Exec) RunBridgeCtx(ctx context.Context, host string, forwards []Forward)
 		done <- err
 		return lines, done
 	}
-	c := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	// argv[0] is "ssh" by BridgeArgv's construction; the rest goes through
+	// the same sshCmd choke point as every other lane (locale filter).
+	c := sshCmd(ctx, argv[1:])
 	c.Stdin = strings.NewReader("")
 	setDeathSignal(c)
 	return streamCombined(c)
@@ -93,7 +95,7 @@ func (e Exec) RunBridgeCtx(ctx context.Context, host string, forwards []Forward)
 // is returned in ExitCode with a nil error; a context that expires returns
 // ctx.Err() so a hung command is distinguishable from one that failed.
 func (e Exec) RunCtx(ctx context.Context, host, stdin string, argv ...string) (provider.ExecResult, error) {
-	c := exec.CommandContext(ctx, "ssh", append(e.baseArgs(host), argv...)...)
+	c := sshCmd(ctx, append(e.baseArgs(host), argv...))
 	c.Stdin = strings.NewReader(stdin)
 	var out, errb bytes.Buffer
 	c.Stdout, c.Stderr = &out, &errb

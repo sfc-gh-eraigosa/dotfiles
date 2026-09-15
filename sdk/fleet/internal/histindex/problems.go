@@ -189,9 +189,10 @@ func continues(prev, cur Line) bool {
 }
 
 // WarnFilter is the ONE rule for "does this stderr line count as a
-// warning" — the badge on a host's row, the history list's WARN column, and
-// this file's own Problems() digest all mean the same thing by "warning",
-// and before this they each decided it separately. updexec.Benign alone was
+// warning" — the badge on a host's row, the errors pane, and the history
+// list's WARN column all mean the same thing by "warning", and before this
+// they each decided it separately. (Problems() does NOT use it: the digest
+// classifies and groups advisories instead of dropping them.) updexec.Benign alone was
 // not enough: it knows routine ssh/git/sudo chatter, but not a tool
 // announcing news about ITSELF (gcloud's "components update" nag is real,
 // non-benign stderr on its own terms — it just isn't a WARNING).
