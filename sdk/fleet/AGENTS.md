@@ -664,9 +664,11 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
 - **`history` reads the capture; it never claims an exit code.** A capture records
   OUTPUT, not a status, so the listing's RESULT column says `finished` / `unfinished` —
   whether the run reached its footer — and never `ok` / `failed`, which the file cannot
-  prove. The warning count and the `--errors` projection go through `histindex.WarnFilter`,
-  the SAME classifier the TUI's error pane uses, so the CLI and the dashboard cannot
-  disagree about what a warning is; `internal/updexec.StderrMark` is exported for the same
+  prove. The warning count (`⚠N`) goes through `histindex.WarnFilter`, the SAME classifier
+  the TUI's badge and errors pane use, so the CLI and the dashboard cannot disagree about
+  what a warning is. `--errors` is deliberately the RAW stderr projection (`Capture.Stderr()`,
+  every stderr line — what the log pane marks with its `!` gutter), not the warning subset,
+  and `Problems()` keeps its own digest folding; `internal/updexec.StderrMark` is exported for the same
   reason — the reader must strip exactly what the writer wrote, and two copies of `"!! "`
   would drift. The log directory and the timezone are both PARAMETERS of `runHistory` (see
   the injected-capture invariant above). Pinned by `TestHistoryListsNewestFirstWithOutcome`,

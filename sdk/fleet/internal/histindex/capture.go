@@ -63,9 +63,10 @@ func (c Capture) Stderr() []Line {
 // raw stderr would badge every healthy run: git writes its entire fetch
 // progress to stderr, so a clean update produces several stderr lines and no
 // problem at all. WarnFilter is the SAME classifier the TUI's live badge and
-// this package's Problems() digest use — shared on purpose, so `fleet
-// history`, `--problems` and the dashboard's badge can never disagree about
-// what counts as a warning.
+// errors pane use — shared on purpose, so `fleet history`'s ⚠N and the
+// dashboard's badge can never disagree about what counts as a warning.
+// (Problems() keeps its own digest folding; it groups advisories rather than
+// dropping them.)
 func Read(path string) (Capture, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

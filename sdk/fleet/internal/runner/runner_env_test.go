@@ -74,12 +74,19 @@ func hasPrefix(s, prefix string) bool {
 }
 
 // TestEverySSHSiteUsesFilteredEnv pins that every ssh invocation Exec makes
-// goes through the ONE choke point (sshCmd), not seven independent
+// goes through the ONE choke point (sshCmd), not nine independent
 // exec.Command/exec.CommandContext calls that could individually forget the
 // filter. The var is swapped for a spy that records the Env each site built
 // and hands back a harmless local command instead of really invoking ssh —
 // no real ssh is ever run, no network touched.
+//
+// The locale vars are SET first: a CI container commonly has no LANG at all,
+// and without them the "no locale var survived" assertion would pass even
+// if filteredEnv were deleted from newSSHCmd.
 func TestEverySSHSiteUsesFilteredEnv(t *testing.T) {
+	t.Setenv("LANG", "en_US.UTF-8")
+	t.Setenv("LANGUAGE", "en_US:en")
+	t.Setenv("LC_ALL", "en_US.UTF-8")
 	var gotEnvs [][]string
 	restore := sshCmd
 	sshCmd = func(ctx context.Context, argv []string) *exec.Cmd {
@@ -106,13 +113,18 @@ func TestEverySSHSiteUsesFilteredEnv(t *testing.T) {
 	for range split {
 	}
 	<-done2
+	_, _ = e.RunCtx(context.Background(), "host-a", "", "echo", "hi")
+	blines, bdone := e.RunBridgeCtx(context.Background(), "host-a", []Forward{{Local: 8080, Remote: 80}})
+	for range blines {
+	}
+	<-bdone
 
-	if len(gotEnvs) != 7 {
-		t.Fatalf("got %d ssh invocations, want 7 (one per Runner method)", len(gotEnvs))
+	if len(gotEnvs) != 9 {
+		t.Fatalf("got %d ssh invocations, want 9 (one per Exec ssh method)", len(gotEnvs))
 	}
 	for i, env := range gotEnvs {
 		for _, kv := range env {
-			if hasPrefix(kv, "LANG=") || hasPrefix(kv, "LC_") {
+			if hasPrefix(kv, "LANG=") || hasPrefix(kv, "LANGUAGE=") || hasPrefix(kv, "LC_") {
 				t.Errorf("invocation %d carried a locale var: %q", i, kv)
 			}
 		}

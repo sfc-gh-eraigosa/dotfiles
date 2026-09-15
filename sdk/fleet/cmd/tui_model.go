@@ -10,6 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/histindex"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
@@ -901,7 +902,10 @@ func (m *tuiModel) appendLogLine(alias, line string, isErr bool) {
 		wf = &histindex.WarnFilter{}
 		m.warnFilters[alias] = wf
 	}
-	warn := wf.Warn(histindex.Line{Text: line, Stderr: isErr})
+	// Colour stripped BEFORE classifying, exactly as histindex.Read and
+	// captureEntries do for the same line read back from the capture — or a
+	// colourised advisory/benign line would badge live yet count 0 in history.
+	warn := wf.Warn(histindex.Line{Text: ansi.Strip(line), Stderr: isErr})
 	if warn {
 		if m.warns == nil {
 			m.warns = map[string]int{}
