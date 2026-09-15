@@ -1290,16 +1290,33 @@ func (m *tuiModel) streamTo(nav streamNav, i int) {
 // while changed lines land at the right row — the host list grows two older
 // rows above the live ones and the log pane grows a second header. A layout
 // change is when that mess shows, so it is when the frame is redrawn from a
-// blank screen. Ordinary keys and streamed lines never trigger it: a clear
-// on every event would flicker.
+// blank screen. Ordinary keys and later streamed lines never trigger it: a
+// clear on every event would flicker (the clear itself costs one blank
+// frame at the renderer's tick, which is why it is gated at all).
+//
+// The signature tracks what the height functions actually branch on. That
+// is logActive/errActive — a pane open AND non-empty — not the raw open
+// flags: the first streamed line of a session shrinks the host list to a
+// fifth and grows the log pane from a one-line hint to the whole budget, a
+// bigger shift than any toggle, though no pane was touched.
 type layoutSig struct {
 	mode                 tuiMode
 	host, log, err, hist bool
+	logAct, errAct       bool   // logActive()/errActive(): the heights key on these
 	run                  string // the opened history capture, "" for the list
 }
 
 func (m tuiModel) layoutSig() layoutSig {
-	return layoutSig{mode: m.mode, host: m.hostOpen, log: m.logOpen, err: m.errOpen, hist: m.histOn, run: m.histPath}
+	mode := m.mode
+	if mode == modeSearch {
+		// The search prompt reuses the status row: no geometry changes on
+		// `/` or its enter/esc, and a clear there would only flicker.
+		mode = modeNormal
+	}
+	return layoutSig{
+		mode: mode, host: m.hostOpen, log: m.logOpen, err: m.errOpen,
+		logAct: m.logActive(), errAct: m.errActive(), hist: m.histOn, run: m.histPath,
+	}
 }
 
 // Update is update plus the repaint rule above; every message goes through

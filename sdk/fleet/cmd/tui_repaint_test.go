@@ -1,51 +1,59 @@
 package cmd
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// Owner-reported (Termius on an iPad): after a second update and toggling the
-// stderr pane, the host list showed duplicate rows — two older `precheck`
-// rows above the four live ones — and two `logs` headers. The model had no
-// duplicates: every frame in that sequence is exactly the terminal's height
-// and no line is wider than it (checked at five sizes). What duplicates rows
-// is bubbletea's renderer meeting a terminal whose usable rows differ from
-// what it reported: a full-height frame scrolls the alt screen by one, and
-// from then on bubbletea repaints only lines whose text changed, so unchanged
-// lines keep their scrolled-up content. A layout change (a pane toggled, a
-// dialog opened) is when that becomes visible, so it is also when the frame
-// is repainted from scratch: Update batches tea.ClearScreen whenever the
-// layout signature changed. Ordinary keys and streamed lines must NOT clear
-// the screen — that would flicker on every line of output.
+// Pins the repaint rule documented on layoutSig in tui_model.go. Owner-reported
+// (Termius on an iPad): after a second update and toggling the stderr pane,
+// the host list showed duplicate rows — two older `precheck` rows above the
+// four live ones — and two `logs` headers. The model had no duplicates; what
+// duplicates rows is bubbletea's line-diff renderer meeting a terminal whose
+// usable rows differ from what it reported. A layout change is when that
+// becomes visible, so it is when Update batches tea.ClearScreen. Ordinary keys
+// and later streamed lines must NOT clear the screen — that would flicker on
+// every line of output.
 
-// hasClearScreen runs cmd (and whatever it batches) and reports whether
-// bubbletea's ClearScreen message is among the results. A command that does
-// not answer promptly is a stream reader parked on a channel (the reissued
-// read after a logLineMsg) — by construction not a repaint.
-func hasClearScreen(cmd tea.Cmd) bool {
+// cmdMsgs runs cmd and returns the messages it produces, flattening batches.
+// A command that does not answer promptly is a stream reader parked on a
+// channel — by construction not a repaint — and contributes nothing.
+func cmdMsgs(cmd tea.Cmd) []tea.Msg {
 	if cmd == nil {
-		return false
+		return nil
 	}
 	out := make(chan tea.Msg, 1)
 	go func() { out <- cmd() }()
 	select {
 	case msg := <-out:
-		if batch, ok := msg.(tea.BatchMsg); ok {
-			for _, c := range batch {
-				if hasClearScreen(c) {
-					return true
-				}
-			}
-			return false
+		batch, ok := msg.(tea.BatchMsg)
+		if !ok {
+			return []tea.Msg{msg}
 		}
-		return fmt.Sprintf("%T", msg) == "tea.clearScreenMsg"
+		var msgs []tea.Msg
+		for _, c := range batch {
+			msgs = append(msgs, cmdMsgs(c)...)
+		}
+		return msgs
 	case <-time.After(300 * time.Millisecond):
-		return false
+		return nil
 	}
+}
+
+// isClearScreen reports whether msg is bubbletea's ClearScreen. clearScreenMsg
+// is an empty struct, so interface equality against the constructor is exact.
+func isClearScreen(msg tea.Msg) bool { return msg == tea.ClearScreen() }
+
+// hasClearScreen reports whether cmd (or anything it batches) repaints.
+func hasClearScreen(cmd tea.Cmd) bool {
+	for _, msg := range cmdMsgs(cmd) {
+		if isClearScreen(msg) {
+			return true
+		}
+	}
+	return false
 }
 
 // repaintOnly reports whether cmd does nothing but repaint: nil, or a
@@ -56,22 +64,25 @@ func repaintOnly(cmd tea.Cmd) bool {
 	if cmd == nil {
 		return true
 	}
-	out := make(chan tea.Msg, 1)
-	go func() { out <- cmd() }()
-	select {
-	case msg := <-out:
-		if batch, ok := msg.(tea.BatchMsg); ok {
-			for _, c := range batch {
-				if !repaintOnly(c) {
-					return false
-				}
-			}
-			return true
-		}
-		return fmt.Sprintf("%T", msg) == "tea.clearScreenMsg"
-	case <-time.After(300 * time.Millisecond):
-		return false
+	msgs := cmdMsgs(cmd)
+	if len(msgs) == 0 {
+		return false // parked or timed out: something other than a repaint
 	}
+	for _, msg := range msgs {
+		if !isClearScreen(msg) {
+			return false
+		}
+	}
+	return true
+}
+
+// streaming gives alias a drained stream so the reader update re-issues after
+// a logLineMsg returns logEOFMsg at once instead of parking on a nil channel.
+func streaming(m tuiModel, alias string) tuiModel {
+	ch := make(chan outLine)
+	close(ch)
+	m.streams[alias] = stream{lines: ch}
+	return m
 }
 
 func TestLayoutChangesRepaintTheWholeScreen(t *testing.T) {
@@ -90,20 +101,58 @@ func TestLayoutChangesRepaintTheWholeScreen(t *testing.T) {
 		{[]string{"?"}, "help opened"},
 		{[]string{"?", "j"}, "help closed"},
 	} {
-		var mm tea.Model = m
-		var cmd tea.Cmd
-		for _, k := range tc.keys {
-			mm, cmd = mm.Update(key(k))
-		}
-		if !hasClearScreen(cmd) {
+		if _, cmd := send(m, tc.keys...); !hasClearScreen(cmd) {
 			t.Fatalf("%s: the frame must be repainted from scratch (keys %v)", tc.what, tc.keys)
 		}
 	}
 }
 
-func TestOrdinaryInputDoesNotRepaintTheWholeScreen(t *testing.T) {
-	m := testModel("a", "b")
+// The first line of output is the biggest layout change of a session: the
+// host list drops from full height to a fifth and the log pane grows from a
+// one-line hint to the whole budget — with no pane toggled. The heights key on
+// logActive/errActive (open AND non-empty), so the signature must too.
+func TestFirstStreamedLineRepaints(t *testing.T) {
+	m := streaming(testModel("a", "b"), "a")
 	m.vp = viewport{height: 40, width: 120}
+
+	listBefore, logBefore := m.listHeight(), m.logHeight()
+	next, cmd := m.Update(logLineMsg{alias: "a", line: "Installing sops..."})
+	m2 := next.(tuiModel)
+	if m2.listHeight() == listBefore || m2.logHeight() == logBefore {
+		t.Fatalf("premise: the first line must re-layout the frame, list %d->%d log %d->%d",
+			listBefore, m2.listHeight(), logBefore, m2.logHeight())
+	}
+	if !hasClearScreen(cmd) {
+		t.Fatal("the first streamed line re-lays out the frame and must repaint it")
+	}
+
+	// The first stderr line with the error pane open halves the log pane.
+	m2.errOpen = true
+	errBefore := m2.errHeight()
+	next, cmd = m2.Update(logLineMsg{alias: "a", line: "WARNING: x", stderr: true})
+	m3 := next.(tuiModel)
+	if m3.errHeight() == errBefore {
+		t.Fatalf("premise: the first stderr line must open the error pane, err %d->%d", errBefore, m3.errHeight())
+	}
+	if !hasClearScreen(cmd) {
+		t.Fatal("the first stderr line re-lays out the frame and must repaint it")
+	}
+}
+
+func TestOrdinaryInputDoesNotRepaintTheWholeScreen(t *testing.T) {
+	// Output already flowing on both streams: the layout has settled, and
+	// every later line lands inside a pane whose height does not move.
+	m := streaming(testModel("a", "b"), "a")
+	m.vp = viewport{height: 40, width: 120}
+	m.errOpen = true
+	for _, msg := range []tea.Msg{
+		logLineMsg{alias: "a", line: "Installing sops..."},
+		logLineMsg{alias: "a", line: "WARNING: x", stderr: true},
+	} {
+		next, _ := m.Update(msg)
+		m = next.(tuiModel)
+	}
+
 	for _, tc := range []struct {
 		msg  tea.Msg
 		what string
@@ -111,14 +160,21 @@ func TestOrdinaryInputDoesNotRepaintTheWholeScreen(t *testing.T) {
 		{key("j"), "cursor move"},
 		{key(" "), "selection toggle"},
 		{key("v"), "visual anchor"},
-		{logLineMsg{alias: "a", line: "Installing sops..."}, "a streamed line"},
-		{logLineMsg{alias: "a", line: "WARNING: x", stderr: true}, "a streamed stderr line"},
+		{logLineMsg{alias: "a", line: "Installing age..."}, "a later streamed line"},
+		{logLineMsg{alias: "a", line: "WARNING: y", stderr: true}, "a later streamed stderr line"},
 		{hostRowMsg{row: Row{Alias: "a", Class: "up-to-date"}}, "a row arriving"},
 		{tea.WindowSizeMsg{Width: 100, Height: 30}, "a resize (bubbletea repaints that itself)"},
 	} {
-		_, cmd := m.Update(tc.msg)
-		if hasClearScreen(cmd) {
+		if _, cmd := m.Update(tc.msg); hasClearScreen(cmd) {
 			t.Fatalf("%s must not clear the screen — that flickers on every event", tc.what)
+		}
+	}
+
+	// The search prompt reuses the status row, so entering and leaving search
+	// changes no geometry; a clear there would only flicker.
+	for _, keys := range [][]string{{"/"}, {"/", "a", "enter"}, {"/", "esc"}} {
+		if _, cmd := send(m, keys...); hasClearScreen(cmd) {
+			t.Fatalf("search (keys %v) is not a layout change", keys)
 		}
 	}
 
@@ -138,11 +194,17 @@ func TestRepaintIsBatchedWithTheKeysOwnCommand(t *testing.T) {
 	m.vp = viewport{height: 40, width: 120}
 	m.logDir = t.TempDir()
 	_, cmd := m.Update(key("H"))
+	msgs := cmdMsgs(cmd)
 	if !hasClearScreen(cmd) {
-		t.Fatal("opening history is a layout change")
+		t.Fatalf("opening history is a layout change, got %v", msgs)
 	}
-	batch, ok := cmd().(tea.BatchMsg)
-	if !ok || len(batch) < 2 {
-		t.Fatalf("the history load must still be issued next to the repaint, got %T", cmd())
+	loaded := false
+	for _, msg := range msgs {
+		if _, ok := msg.(historyLoadedMsg); ok {
+			loaded = true
+		}
+	}
+	if !loaded {
+		t.Fatalf("the history load must still be issued next to the repaint, got %v", msgs)
 	}
 }
