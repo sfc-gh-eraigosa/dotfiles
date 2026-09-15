@@ -54,7 +54,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `internal/runner` | the **only** seam that touches a remote host (`Exec` real, `Fake` for tests); `RunStreamCtx` is the deadline-aware path |
 | `internal/updplan` | the `fleet.yaml` schema, pure: `Parse` (`KnownFields`, defaults merge field by field, aggregated validation, path resolution), `Default`/`DefaultYAML`, `WithRef`/`WithRefs`, `Order`/`Dependents`/`LastStepUsing`, `Backoff.Wait` |
 | `internal/updexec` | the remote script builders (`Precheck`/`Sync`/`Clone`/`Rescue`/`Reset`/`Restore`/`Run`/`GhAuth*` — every builder re-validates its inputs) and the `Executor` (attempt loop, cascade, synthesized restore) over the `StepIO` lanes `Console` (CLI) and `Background` (TUI) |
-| `internal/featflag` | fail-open `Resolve` of `fleet.update.{enabled,config}`; `gff.go` is the **only** import of `sdk/gff/pkg/gff`, behind the `Source` interface; `Static` for tests |
+| `internal/featflag` | `Resolve` of `fleet.update.{enabled,config}` (fail-open) and `fleet.update.sudo-timestamp-global` (fail-closed — it mutates hosts); `gff.go` is the **only** import of `sdk/gff/pkg/gff`, behind the `Source` interface; `Static` for tests |
 | `cmd/update*.go` | `loadPlan` (`--file` → gff → `~/.config/fleet/fleet.yaml` → built-in, with the ownership/mode check), `runUpdate`, the report / `--json` / `--dry-run`, `update init`, the headless capture |
 
 Everything but `runner` is pure text-in/struct-out (the executor's clock, sleep, jitter and
@@ -147,11 +147,15 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   with `KnownFields(true)` (a typo like `retires:` is an error, not a silently ignored key)
   and aggregates with `errors.Join`, so two mistakes cost one round-trip. Pinned by
   `TestParseRejects`, `TestParseAggregatesEveryError`, `TestStepInheritsDefaultsFieldByField`.
-- **gff is fail-open here.** `featflag.Resolve` returns `Enabled: false` only for an explicit,
+- **gff is fail-open for the plan flags, fail-closed for the host-mutating one.**
+  `featflag.Resolve` returns `Enabled: false` only for an explicit,
   successfully-read `fleet.update.enabled=false`; a missing gff, an unknown key, a nil or
   typed-nil source, two selections on a single-choice flag, or a relative `--repo` all resolve
-  to enabled + the home path and say so in a `Note` (surfaced on the `plan:` line). Lookups
-  are scoped to the `--repo` checkout's LIVE feature file, not the cwd. Pinned by
+  to enabled + the home path and say so in a `Note` (surfaced on the `plan:` line). The one
+  exception is `fleet.update.sudo-timestamp-global` (`Settings.SudoTimestampGlobal`): it
+  changes a host's sudoers, so only a successfully-read `true` turns it on and no fallback is
+  Noted — off is its safe default, not a degradation (`TestResolveSudoTimestampGlobalIsFailClosed`).
+  Lookups are scoped to the `--repo` checkout's LIVE feature file, not the cwd. Pinned by
   `TestResolveDefaultsWhenSourceErrors`, `TestResolveUnknownKeyIsFailOpen`,
   `TestResolveNilSourceUsesDefaults`, `TestResolveTypedNilGFFIsFailOpen`,
   `TestResolveMultipleSelectionsIsFailOpenWithANote`, `TestResolveHonoursDisabled`,
@@ -451,12 +455,21 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   bridge.** With `fleet.update.sudo-timestamp-global` on — the default, on
   purpose: it fires only once the operator has typed the sudo password for
   that host, is announced in the stream, and one file undoes it (`bgPolicy`,
-  read once at startup by `bgPolicyFromFlags`, fail-closed: unresolvable
-  means off) — the preamble becomes
-  `sudoGlobalFixup`: prime, and if a first child check fails, install
-  `/etc/sudoers.d/fleet-timestamp` (`Defaults:<user> timestamp_type=global`,
-  `visudo -cf`-vetted, 0440) with the credential the priming shell DOES hold,
-  announce it on the run's output, re-prime, then let the ordinary gate decide.
+  derived by `policyFrom` from the ONE `featflag.Resolve` that `resolveTUIPlan`
+  performs for the plan — never a second resolution — fail-closed: unresolvable
+  means off) — the preamble becomes `sudoGlobalFixup`: prime; run the child
+  check; only if it fails, ONE `sudo sh -c` writes
+  `Defaults:<user> timestamp_type=global` to a **root-owned** temp file, has
+  `visudo -cf` vet it (stderr left on the stream — "unknown defaults entry"
+  on an old sudo is the diagnostic the operator needs), and installs it 0440
+  as `/etc/sudoers.d/fleet-timestamp`. Root owns the file from write to
+  install: a user-owned temp file would let anything running as the operator
+  swap the vetted content before the copy (a permanent sudoers rule, not the
+  bounded exposure below). Then announce, re-prime, re-check; if the check
+  STILL fails (sudoers.d not included from `/etc/sudoers`) the drop-in is
+  removed again, the stream says so, and the step exits `rcSudoFixupInert`
+  (93) so `tui_model` names that cause instead of tty keying. A reroute
+  therefore always means the host was left as found.
   A security review compared this with forwarding the password to the
   children through an askpass FIFO + `sudo -A` shim and rejected the bridge:
   a compromised step inside install.sh's tree (npm postinstall, plugin update)

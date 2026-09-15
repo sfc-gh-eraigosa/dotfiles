@@ -36,7 +36,7 @@ func TestRealTUIPreambleProducesValidShell(t *testing.T) {
 	}
 	a := answers{windows: "s", gemini: "keep"}
 	a.appendSecret("hunter2")
-	preamble := bgPreamble(a)(updplan.Step{Kind: updplan.KindRun})
+	preamble := bgPreamble(a, bgPolicy{})(updplan.Step{Kind: updplan.KindRun})
 
 	script := preamble + "cd /tmp && true"
 	if err := exec.Command("sh", "-n", "-c", script).Run(); err != nil {
@@ -91,7 +91,7 @@ update:
 		if err := os.WriteFile(file, []byte(yaml), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		p, err := resolveTUIPlan(file, "", dir)
+		p, _, err := resolveTUIPlan(file, "", dir, nil)
 		if err != nil {
 			t.Fatalf("an empty --update-ref must never be applied via WithRef (which would refuse an ambiguous multi-repo target): %v", err)
 		}
@@ -114,7 +114,7 @@ update:
 		if err := os.WriteFile(file, []byte(yaml), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		p, err := resolveTUIPlan(file, "", dir)
+		p, _, err := resolveTUIPlan(file, "", dir, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -133,7 +133,7 @@ func TestTUIUpdateRefIsAppliedWhenGiven(t *testing.T) {
 	if err := os.WriteFile(file, []byte(updplan.DefaultYAML), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	p, err := resolveTUIPlan(file, "hotfix", dir)
+	p, _, err := resolveTUIPlan(file, "hotfix", dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

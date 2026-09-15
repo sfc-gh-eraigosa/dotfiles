@@ -36,7 +36,7 @@ var tuiCmd = &cobra.Command{
 		// headless `fleet update` uses — the TUI grows no second plan loader.
 		// --update-ref is validated against the resolved plan before a single
 		// host is contacted, the same way --ref is validated for `update`.
-		plan, err := resolveTUIPlan(tuiFile, tuiUpdateRef, flagRepo)
+		plan, policy, err := resolveTUIPlan(tuiFile, tuiUpdateRef, flagRepo, &featflag.GFF{Repo: flagRepo})
 		if err != nil {
 			return err
 		}
@@ -103,10 +103,11 @@ var tuiCmd = &cobra.Command{
 		// resolves gff/the plan against the SAME checkout the TUI loaded
 		// from, not the child's own --repo default.
 		m.repo = flagRepo
-		// The lane policy resolves against the same checkout as the plan.
-		// Fail-closed: no gff, or a key that cannot resolve, means no host
-		// changes; the flag's own default (true) only applies when it resolves.
-		m.policy = bgPolicyFromFlags(&featflag.GFF{Repo: flagRepo}, flagRepo)
+		// The lane policy came out of the SAME gff resolution as the plan
+		// (resolveTUIPlan). Fail-closed: no gff, or a key that cannot
+		// resolve, means no host changes; the flag's own default (true) only
+		// applies when it resolves.
+		m.policy = policy
 		_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()
 		return err
 	},
@@ -122,25 +123,43 @@ var tuiCmd = &cobra.Command{
 // at all against a multi-repo plan with no "dotfiles" repo (WithRef's
 // ambiguous-repo error). Extracted so a test can drive it without cobra or
 // a real ssh config.
-func resolveTUIPlan(file, ref, repoDir string) (updplan.Plan, error) {
-	plan, err := loadPlan(file, &featflag.GFF{Repo: repoDir}, repoDir)
+//
+// It also returns the background lane's policy (bgPolicy), derived from the
+// ONE featflag resolution this function performs: the plan and the policy
+// must come from the same checkout and the same flag state, and each extra
+// resolution forks `git config` and re-parses the feature file. --file pins
+// the PLAN without consulting gff; the lane policy still reads gff (it has
+// nowhere else to come from), which is why src is a parameter — tests pass
+// nil (or a featflag.Static) and never touch the real feature file.
+func resolveTUIPlan(file, ref, repoDir string, src featflag.Source) (updplan.Plan, bgPolicy, error) {
+	settings := featflag.Resolve(src, "", repoDir)
+	policy := policyFrom(settings)
+	var (
+		plan updplan.Plan
+		err  error
+	)
+	if file != "" {
+		plan, err = readPlanFile(file, "")
+	} else {
+		plan, err = planFromSettings(settings)
+	}
 	if err != nil {
-		return updplan.Plan{}, err
+		return updplan.Plan{}, bgPolicy{}, err
 	}
 	if ref == "" {
-		return plan, nil
+		return plan, policy, nil
 	}
 	plan, err = plan.WithRef(ref)
 	if err != nil {
-		return updplan.Plan{}, fmt.Errorf("invalid --update-ref %q: %w", ref, err)
+		return updplan.Plan{}, bgPolicy{}, fmt.Errorf("invalid --update-ref %q: %w", ref, err)
 	}
-	return plan, nil
+	return plan, policy, nil
 }
 
 func init() {
 	tuiCmd.Flags().StringVar(&flagRef, "ref", "origin/main", "baseline git ref (what hosts are compared against)")
 	tuiCmd.Flags().StringVar(&tuiUpdateRef, "update-ref", "", "git ref to update hosts TO (default: the plan's own branch)")
 	tuiCmd.Flags().IntVar(&tuiJobs, "jobs", 4, "max concurrent background updates")
-	tuiCmd.Flags().StringVar(&tuiFile, "file", "", "explicit fleet.yaml plan path (skips gff resolution)")
+	tuiCmd.Flags().StringVar(&tuiFile, "file", "", "explicit fleet.yaml plan path (the plan skips gff resolution; lane flags such as fleet.update.sudo-timestamp-global still read gff)")
 	rootCmd.AddCommand(tuiCmd)
 }

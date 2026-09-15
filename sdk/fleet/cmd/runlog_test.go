@@ -35,7 +35,7 @@ func TestUpdateIsCapturedWithItsSubject(t *testing.T) {
 	dir := t.TempDir()
 	r := runner.Fake{Out: map[string]string{"host-a": "Installing sops...\ndone"}}
 
-	st := beginStream("host-a", singleRunStepPlan("test-plan"), answers{}, r, dir)().(streamStartedMsg).st
+	st := beginStream("host-a", singleRunStepPlan("test-plan"), answers{}, bgPolicy{}, r, dir)().(streamStartedMsg).st
 	var streamed []string
 	for l := range st.lines {
 		streamed = append(streamed, l.text)
@@ -64,7 +64,7 @@ func TestUpdateIsCapturedWithItsSubject(t *testing.T) {
 func TestForcedResetIsLabelledInTheCapture(t *testing.T) {
 	dir := t.TempDir()
 	r := runner.Fake{Out: map[string]string{"h": "x"}}
-	st := beginStream("h", singleRunStepPlan("test-plan"), answers{reset: "y"}, r, dir)().(streamStartedMsg).st
+	st := beginStream("h", singleRunStepPlan("test-plan"), answers{reset: "y"}, bgPolicy{}, r, dir)().(streamStartedMsg).st
 	for range st.lines {
 	}
 	<-st.done
@@ -80,7 +80,7 @@ func TestForcedResetIsLabelledInTheCapture(t *testing.T) {
 func TestAnUnusableCaptureDirDoesNotBreakTheStream(t *testing.T) {
 	r := runner.Fake{Out: map[string]string{"h": "still streams"}}
 	for _, dir := range []string{"", "/proc/cannot/mkdir/here"} {
-		st := beginStream("h", singleRunStepPlan("test-plan"), answers{}, r, dir)().(streamStartedMsg).st
+		st := beginStream("h", singleRunStepPlan("test-plan"), answers{}, bgPolicy{}, r, dir)().(streamStartedMsg).st
 		var got []string
 		for l := range st.lines {
 			got = append(got, l.text)

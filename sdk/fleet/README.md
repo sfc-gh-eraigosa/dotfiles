@@ -285,9 +285,13 @@ background lane.
 `fleet.update.sudo-timestamp-global` (on by default), on a host where the
 credential you typed does not reach install.sh's children, the run installs
 `/etc/sudoers.d/fleet-timestamp` (`Defaults:<user> timestamp_type=global`,
-checked with `visudo -cf`) using the credential it just primed, prints a line
-saying so, and carries on streaming instead of dropping to the interactive
-lane. It is a one-time change per host; delete the file to undo. The
+written, checked with `visudo -cf`, and installed by root from a root-owned
+temp file) using the credential it just primed, prints a line saying so, and
+carries on streaming instead of dropping to the interactive lane. It is a
+one-time change per host; delete the file to undo. If the drop-in turns out
+to change nothing (your `/etc/sudoers` does not include `sudoers.d`), the run
+removes it again, says so, and the host takes the interactive lane with a
+status line naming that cause. The
 trade-off: for sudo's timeout (about 15 minutes) any process running as you
 on *that* host can sudo without a prompt. The password itself never leaves
 the priming shell — forwarding it to the children was reviewed and rejected,

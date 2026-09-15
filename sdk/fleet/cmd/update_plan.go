@@ -43,8 +43,13 @@ func loadPlan(file string, src featflag.Source, repoDir string) (updplan.Plan, e
 	if file != "" {
 		return readPlanFile(file, "")
 	}
+	return planFromSettings(featflag.Resolve(src, "", repoDir))
+}
 
-	settings := featflag.Resolve(src, "", repoDir)
+// planFromSettings is loadPlan's steps 2-4 given already-resolved Settings,
+// so a caller that needs the Settings for something else too (the TUI's lane
+// policy, resolveTUIPlan) resolves gff exactly once.
+func planFromSettings(settings featflag.Settings) (updplan.Plan, error) {
 	if !settings.Enabled {
 		p := updplan.Default()
 		p.Source = "built-in default (fleet.update.enabled=false)"

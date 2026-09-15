@@ -21,7 +21,7 @@ import (
 // nothing.
 func TestAnswersAreExportedSoInstallShInheritsThem(t *testing.T) {
 	a := answers{windows: "s", gemini: "keep"}
-	script := bgPreamble(a)(updplan.Step{Kind: updplan.KindRun}) + "cd ~/git/dotfiles && ./install.sh"
+	script := bgPreamble(a, bgPolicy{})(updplan.Step{Kind: updplan.KindRun}) + "cd ~/git/dotfiles && ./install.sh"
 	if !strings.Contains(script, "export WINSETUP_ANSWER=s") {
 		t.Fatalf("answers must be exported, not prefixed:\n%s", script)
 	}
@@ -124,7 +124,7 @@ func TestAnswerFormIsFramedAsADialog(t *testing.T) {
 // UNCONDITIONAL, not merely present when a credential was supplied.
 func TestSudoIsGatedEvenWithNoCredential(t *testing.T) {
 	installStep := updplan.Step{Kind: updplan.KindRun}
-	noCred := bgPreamble(answers{})(installStep) + "cd ~/git/dotfiles && ./install.sh"
+	noCred := bgPreamble(answers{}, bgPolicy{})(installStep) + "cd ~/git/dotfiles && ./install.sh"
 	if !strings.Contains(noCred, "sudo -n true") {
 		t.Fatalf("a credential-less run must still verify sudo before installing:\n%s", noCred)
 	}
@@ -134,7 +134,7 @@ func TestSudoIsGatedEvenWithNoCredential(t *testing.T) {
 	// And it still primes when there IS one.
 	withSecret := answers{}
 	withSecret.appendSecret(probeMarker)
-	withCred := bgPreamble(withSecret)(installStep) + "cd ~/git/dotfiles && ./install.sh"
+	withCred := bgPreamble(withSecret, bgPolicy{})(installStep) + "cd ~/git/dotfiles && ./install.sh"
 	if !strings.Contains(withCred, "sudo -S -p '' -v") {
 		t.Fatalf("a supplied credential must still be primed:\n%s", withCred)
 	}
