@@ -233,7 +233,7 @@ func TestAnswerFormNavigatesAndSetsChoices(t *testing.T) {
 	}
 	// enter from the last field opens the confirm strip, not the wave itself.
 	m7, cmd := send(m6, "enter", "enter") // gemini -> reset -> confirm
-	if m7.mode != modeConfirm || cmd != nil {
+	if m7.mode != modeConfirm || !repaintOnly(cmd) {
 		t.Fatalf("last-field enter must open the confirm strip, mode=%v", m7.mode)
 	}
 }

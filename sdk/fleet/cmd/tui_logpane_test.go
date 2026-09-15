@@ -430,7 +430,7 @@ func TestDoublePressLeavesTheRunningUpdateAloneAndSaysSo(t *testing.T) {
 	m4, _ := send(m3, "u")
 	m5, cmd := send(m4, "enter")
 
-	if cmd != nil {
+	if !repaintOnly(cmd) { // closing the confirm strip repaints; nothing else may run
 		t.Fatal("a second press must not fire another run at an in-flight host")
 	}
 	if m5.updating["a"] != before {

@@ -1277,7 +1277,43 @@ func (m *tuiModel) streamTo(nav streamNav, i int) {
 
 // ---- the bubbletea Update -------------------------------------------------
 
+// layoutSig is the shape of the frame: which panes are on screen and which
+// view or dialog owns it. Update repaints the whole screen whenever it
+// changes.
+//
+// Why: bubbletea's renderer repaints only the lines whose text changed since
+// the last frame and skips the rest with a bare newline. That is right as
+// long as the terminal holds exactly the rows bubbletea painted. A terminal
+// whose usable rows differ from what it reported (a mobile client with its
+// own bar over the bottom row is the live case) scrolls a full-height frame
+// by one, and from then on every skipped line shows its scrolled-up content
+// while changed lines land at the right row — the host list grows two older
+// rows above the live ones and the log pane grows a second header. A layout
+// change is when that mess shows, so it is when the frame is redrawn from a
+// blank screen. Ordinary keys and streamed lines never trigger it: a clear
+// on every event would flicker.
+type layoutSig struct {
+	mode                 tuiMode
+	host, log, err, hist bool
+	run                  string // the opened history capture, "" for the list
+}
+
+func (m tuiModel) layoutSig() layoutSig {
+	return layoutSig{mode: m.mode, host: m.hostOpen, log: m.logOpen, err: m.errOpen, hist: m.histOn, run: m.histPath}
+}
+
+// Update is update plus the repaint rule above; every message goes through
+// update, and the ClearScreen rides next to whatever it returned.
 func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	before := m.layoutSig()
+	next, cmd := m.update(msg)
+	if nm, ok := next.(tuiModel); ok && nm.layoutSig() != before {
+		return nm, tea.Batch(cmd, tea.ClearScreen)
+	}
+	return next, cmd
+}
+
+func (m tuiModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.vp.height, m.vp.width = msg.Height, msg.Width
