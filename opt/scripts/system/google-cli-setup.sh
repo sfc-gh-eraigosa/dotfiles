@@ -100,6 +100,22 @@ install_agy() {
     fi
 }
 
+# update_gcloud keeps the gcloud THIS script installed (~/opt/google-cloud-sdk)
+# current, the way the installer treats herdr and gh. Left alone, it went stale
+# and nagged on stderr every run ("Updates are available for some Google Cloud
+# CLI components … gcloud components update"), which fleet counted as a warning
+# on every host. A no-op when already current. A gcloud from apt or brew has its
+# component manager disabled and is its package manager's to update, so it is
+# never asked. Never fatal: a failed update is one WARNING, the setup goes on.
+update_gcloud() {
+    local own="${HOME}/opt/google-cloud-sdk/bin/gcloud"
+    [ -x "$own" ] || return 0
+    echo -e "${BLUE}Updating gcloud components... (log: ${INSTALL_LOG})${NC}"
+    if ! "$own" components update --quiet >> "$INSTALL_LOG" 2>&1; then
+        echo "WARNING: gcloud components update failed (see ${INSTALL_LOG}); continuing."
+    fi
+}
+
 install_gcloud() {
     # Check if gcloud is in PATH or in the standard install location
     if command -v gcloud >/dev/null 2>&1 || [ -f "${HOME}/opt/google-cloud-sdk/bin/gcloud" ]; then
@@ -108,6 +124,7 @@ install_gcloud() {
         if ! command -v gcloud >/dev/null 2>&1; then
             export PATH="${HOME}/opt/google-cloud-sdk/bin:${PATH}"
         fi
+        update_gcloud
         return
     fi
 
