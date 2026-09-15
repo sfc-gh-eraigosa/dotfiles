@@ -120,7 +120,7 @@ func TestHistoryKeyScopeFollowsTheSelection(t *testing.T) {
 	if !m2.histOn {
 		t.Fatal("H must enter history")
 	}
-	if cmd == nil {
+	if repaintOnly(cmd) { // H repaints; the load must ride next to it
 		t.Error("H must return a Cmd to load the runs — I/O never happens in Update")
 	}
 	if len(m2.histScope) != 1 || m2.histScope[0] != m.cursor {

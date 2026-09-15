@@ -422,6 +422,24 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
 - **TUI in-flight ownership**: a host is in exactly one of `pending` / `updating` /
   `waking` / resolved. Refresh skips hosts an async path owns; every completion
   re-polls its host. Two async paths must never own one row.
+- **A layout change repaints the whole screen** (`tuiModel.Update` wraps `update`
+  and batches `tea.ClearScreen` when `layoutSig` changed — mode, open panes,
+  panes *active* (open AND non-empty: the heights key on `logActive`/`errActive`,
+  so the first streamed line of a session is a layout change), history list/run;
+  search mode is not one, its prompt reuses the status row). bubbletea repaints
+  only lines whose text changed and skips the rest; on a terminal whose usable
+  rows differ from what it reported (a mobile client with a bar over the bottom
+  row), a full-height frame scrolls by one and skipped lines keep stale content —
+  duplicate host rows, two log headers. Fleet's frames themselves never exceed
+  the terminal (`fitFrame`, and every budgeted panel line is truncated to
+  `panelInner` by `renderPanel`; the `wrapPanel` dialogs are measured instead).
+  The repaint recovers a one-shot shear like that; a device that persistently
+  under-reports its rows re-scrolls every frame and needs the (deferred) one-row
+  bottom reserve instead. It fires only on layout changes because a clear costs
+  one blank frame and would flicker on every streamed line. Pinned by
+  `TestLayoutChangesRepaintTheWholeScreen`, `TestFirstStreamedLineRepaints`,
+  `TestOrdinaryInputDoesNotRepaintTheWholeScreen`,
+  `TestRepaintIsBatchedWithTheKeysOwnCommand`.
 - **TUI updates are background-first**: `tea.ExecProcess` suspends the WHOLE TUI, so
   it is reserved for the sudo-precheck fallback and the `s` ssh action. The default
   lane runs over the runner seam with `BatchMode=yes` so a surprise prompt fails

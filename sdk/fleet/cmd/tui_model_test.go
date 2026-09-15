@@ -362,7 +362,7 @@ func TestDecliningConfirmRunsNothing(t *testing.T) {
 		t.Fatal("u must reach a confirmation before running anything")
 	}
 	m3, cmd := send(m2, "n")
-	if cmd != nil {
+	if !repaintOnly(cmd) { // closing the confirm strip repaints; nothing else may run
 		t.Fatal("declining must not start any update")
 	}
 	if len(m3.updating) != 0 || m3.busy() {

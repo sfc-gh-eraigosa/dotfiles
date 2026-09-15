@@ -400,7 +400,7 @@ func TestAHostCanBeUpdatedAgainAfterItFinishes(t *testing.T) {
 
 			m4, _ := send(done, "u")
 			m5, cmd := send(m4, "enter")
-			if cmd == nil {
+			if repaintOnly(cmd) { // closing the confirm strip repaints; the run must ride with it
 				t.Fatalf("a host that finished (%s) must be updatable again; status=%q",
 					first.name, m5.status)
 			}
@@ -430,7 +430,7 @@ func TestDoublePressLeavesTheRunningUpdateAloneAndSaysSo(t *testing.T) {
 	m4, _ := send(m3, "u")
 	m5, cmd := send(m4, "enter")
 
-	if cmd != nil {
+	if !repaintOnly(cmd) { // closing the confirm strip repaints; nothing else may run
 		t.Fatal("a second press must not fire another run at an in-flight host")
 	}
 	if m5.updating["a"] != before {
@@ -453,7 +453,7 @@ func TestMixedSelectionStartsIdleHostsAndNamesSkipped(t *testing.T) {
 
 	m2, _ := send(m, "u")
 	m3, cmd := send(m2, "enter")
-	if cmd == nil {
+	if repaintOnly(cmd) { // closing the confirm strip repaints; the run must ride with it
 		t.Fatal("the idle host should still have started")
 	}
 	if m3.updating["idle"].phase != updPrecheck {

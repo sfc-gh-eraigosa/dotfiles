@@ -1262,22 +1262,77 @@ func (m *tuiModel) streamJump(nav streamNav, d int) {
 	*nav.top = idx[len(idx)-1]
 }
 
-// streamTo moves the pane's viewport, clamped. Any explicit move stops
-// following.
+// streamTo moves the pane's viewport, clamped to the last FULL page (the
+// same rule streamStart renders with), so scrolling down stops where the
+// final line reaches the bottom instead of walking the pane down to one line.
+// Any explicit move stops following.
 func (m *tuiModel) streamTo(nav streamNav, i int) {
 	*nav.follow = false
 	if i < 0 {
 		i = 0
 	}
-	if max := len(nav.entries) - 1; i > max {
-		i = maxInt(0, max)
+	if last := maxInt(0, len(nav.entries)-maxInt(1, nav.height)); i > last {
+		i = last
 	}
 	*nav.top = i
 }
 
 // ---- the bubbletea Update -------------------------------------------------
 
+// layoutSig is the shape of the frame: which panes are on screen and which
+// view or dialog owns it. Update repaints the whole screen whenever it
+// changes.
+//
+// Why: bubbletea's renderer repaints only the lines whose text changed since
+// the last frame and skips the rest with a bare newline. That is right as
+// long as the terminal holds exactly the rows bubbletea painted. A terminal
+// whose usable rows differ from what it reported (a mobile client with its
+// own bar over the bottom row is the live case) scrolls a full-height frame
+// by one, and from then on every skipped line shows its scrolled-up content
+// while changed lines land at the right row — the host list grows two older
+// rows above the live ones and the log pane grows a second header. A layout
+// change is when that mess shows, so it is when the frame is redrawn from a
+// blank screen. Ordinary keys and later streamed lines never trigger it: a
+// clear on every event would flicker (the clear itself costs one blank
+// frame at the renderer's tick, which is why it is gated at all).
+//
+// The signature tracks what the height functions actually branch on. That
+// is logActive/errActive — a pane open AND non-empty — not the raw open
+// flags: the first streamed line of a session shrinks the host list to a
+// fifth and grows the log pane from a one-line hint to the whole budget, a
+// bigger shift than any toggle, though no pane was touched.
+type layoutSig struct {
+	mode                 tuiMode
+	host, log, err, hist bool
+	logAct, errAct       bool   // logActive()/errActive(): the heights key on these
+	run                  string // the opened history capture, "" for the list
+}
+
+func (m tuiModel) layoutSig() layoutSig {
+	mode := m.mode
+	if mode == modeSearch {
+		// The search prompt reuses the status row: no geometry changes on
+		// `/` or its enter/esc, and a clear there would only flicker.
+		mode = modeNormal
+	}
+	return layoutSig{
+		mode: mode, host: m.hostOpen, log: m.logOpen, err: m.errOpen,
+		logAct: m.logActive(), errAct: m.errActive(), hist: m.histOn, run: m.histPath,
+	}
+}
+
+// Update is update plus the repaint rule above; every message goes through
+// update, and the ClearScreen rides next to whatever it returned.
 func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	before := m.layoutSig()
+	next, cmd := m.update(msg)
+	if nm, ok := next.(tuiModel); ok && nm.layoutSig() != before {
+		return nm, tea.Batch(cmd, tea.ClearScreen)
+	}
+	return next, cmd
+}
+
+func (m tuiModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.vp.height, m.vp.width = msg.Height, msg.Width
