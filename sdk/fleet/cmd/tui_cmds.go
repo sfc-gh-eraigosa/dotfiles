@@ -10,6 +10,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
@@ -199,8 +200,9 @@ func (a answers) envPrefix() string {
 // Exit codes the remote preamble uses to distinguish sudo problems from a
 // genuine install failure, so a row's FAIL says which one happened.
 const (
-	rcSudoAuth    = 91 // the password was rejected
-	rcSudoNoCache = 92 // authentication worked but the credential did not persist
+	rcSudoAuth       = 91 // the password was rejected
+	rcSudoNoCache    = 92 // authentication worked but the credential did not persist
+	rcSudoFixupInert = 93 // sudoGlobalFixup installed the drop-in, sudo still did not reach children; the drop-in was removed again
 )
 
 // sudoGate refuses to start a run step's script unless sudo will actually
@@ -257,8 +259,17 @@ const sudoGate = `{ [ "$(id -u)" = 0 ] || ! command -v sudo >/dev/null 2>&1 || s
 // where sudo's tty keying works normally) instead of marking it failed.
 var errSudoNotInherited = errors.New("fleet: sudo credential does not reach child processes")
 
+// errSudoFixupInert refines errSudoNotInherited for the rcSudoFixupInert exit
+// (93): sudoGlobalFixup installed the sudoers drop-in, re-primed, and the
+// child check STILL failed (typically /etc/sudoers does not include
+// sudoers.d), so the preamble removed the drop-in again. The host takes the
+// same interactive reroute, but the status line must say what happened —
+// the run's own output announced an install, and "timestamp_type=tty" is no
+// longer the explanation.
+var errSudoFixupInert = errors.New("fleet: sudoers drop-in installed and removed again; sudo still does not reach child processes")
+
 // bgDoneErr turns a background run's report into the error its done channel
-// carries, typed for the two outcomes the model re-routes rather than fails.
+// carries, typed for the outcomes the model re-routes rather than fails.
 // The gate is recognised by the failing step's TYPED exit code, never by
 // matching "92" in text — that also matched exit 192 and any reason that
 // merely mentioned a 192.168.x address.
@@ -268,8 +279,11 @@ func bgDoneErr(rep updexec.HostReport) error {
 	}
 	for _, r := range rep.Results {
 		if r.Status != updexec.OK {
-			if r.Exit == rcSudoNoCache {
+			switch r.Exit {
+			case rcSudoNoCache:
 				return fmt.Errorf("%w: %w", errSudoNotInherited, rep.Err())
+			case rcSudoFixupInert:
+				return fmt.Errorf("%w: %w: %w", errSudoNotInherited, errSudoFixupInert, rep.Err())
 			}
 			break
 		}
@@ -295,6 +309,8 @@ func explainExit(err error) string {
 		return "sudo authentication failed (wrong password?)"
 	case strings.Contains(s, fmt.Sprint(rcSudoNoCache)):
 		return "sudo unusable in this session (no credential, or it did not persist) — nothing was installed"
+	case strings.Contains(s, fmt.Sprint(rcSudoFixupInert)):
+		return "sudo still unreachable from child processes after installing " + sudoersDropIn + " (removed again; is /etc/sudoers.d included from /etc/sudoers?) — nothing was installed"
 	}
 	return s
 }
@@ -312,22 +328,111 @@ func explainExit(err error) string {
 // (see tuiModel.Update's bgUpdateDoneMsg case).
 var errNeedsTerminal = errors.New("fleet: this host's plan needs a terminal")
 
+// bgPolicy is the operator's standing choices for the background lane, read
+// from gff once at startup (resolveTUIPlan → policyFrom) — policy, not
+// per-wave answers, so it lives on the model rather than in `answers`, which
+// the form and the answers store replace wholesale.
+type bgPolicy struct {
+	// sudoTimestampGlobal enables sudoGlobalFixup: fleet.update.sudo-timestamp-global
+	// (on by default; false opts a centrally-managed host out).
+	sudoTimestampGlobal bool
+}
+
+// policyFrom derives the lane policy from the Settings the plan load already
+// resolved — ONE gff resolution per startup, not one per consumer (each
+// lookup forks `git config` and re-parses the feature file). Every field is
+// fail-closed (featflag.Settings.SudoTimestampGlobal), so no gff means no
+// host changes.
+func policyFrom(s featflag.Settings) bgPolicy {
+	return bgPolicy{sudoTimestampGlobal: s.SudoTimestampGlobal}
+}
+
+// sudoersDropIn is the file sudoGlobalFixup installs. Deleting it undoes the
+// change; the name has no '.' or '~', which sudoers.d would ignore.
+const sudoersDropIn = "/etc/sudoers.d/fleet-timestamp"
+
+// sudoPrime primes and verifies sudo with the password on stdin: `-S` reads
+// it from stdin, `-p ”` prints no prompt, `-v` validates without running
+// anything, and sudo's own stderr ("Sorry, try again") stays out of the log.
+// The ONE spelling every preamble shares — the plain lane and the fixup must
+// never prime differently.
+const sudoPrime = "sudo -S -p '' -v 2>/dev/null"
+
+// sudoGlobalFixup replaces the plain prime+gate unless the operator opted out
+// (fleet.update.sudo-timestamp-global, on by default — it fires only once a
+// password was typed for the host, is announced, and one file undoes it): on
+// a host where the primed credential does not reach install.sh's children,
+// it installs a sudoers drop-in so it does, and the host stays in the
+// streaming lane instead of dropping to the interactive one and re-prompting
+// for a password already typed.
+//
+// Why this and not a credential bridge: the security review compared
+// forwarding the password to the children (an askpass FIFO) with changing
+// sudo's timestamp scope, and the asymmetry was decisive — a compromised step
+// inside install.sh's tree (an npm postinstall, a plugin update) would read
+// the reusable PLAINTEXT password from a bridge, whereas with
+// timestamp_type=global it gains root on that one host for the sudo timeout,
+// which it could already get from a primed sudo. The password never leaves
+// the priming shell: it is read from stdin into a plain variable (never
+// exported, never a file, never argv — printf is a builtin) and expanded only
+// into a pipe to `sudo -S`, with xtrace switched off first so a `set -x` from
+// a sourced startup file cannot print it into the captured log.
+//
+// Order: prime and verify (exit rcSudoAuth on a bad password, before anything
+// else). Then the child check exactly like the plain lane's gate; when it
+// passes nothing else happens. When it fails — the priming shell's own sudo
+// calls DO carry the credential — ONE `sudo sh -c` writes
+// `Defaults:<user> timestamp_type=global` to a root-owned temp file, has
+// `visudo -cf` vet it, and installs it 0440 root. Root owns the file from
+// write to install, so nothing running as the operator can swap its content
+// between the check and the copy (the user-owned temp file an earlier draft
+// used was exactly that window), and root's fresh `sh` has no noclobber or
+// xtrace inherited from the login shell. visudo's stderr is left on the
+// stream on purpose: "unknown defaults entry" on an old sudo is the one
+// diagnostic an opted-in operator needs; its "parsed OK" stdout is dropped.
+// A refusal exits rcSudoNoCache with nothing installed — today's reroute.
+// After the install the run says so, re-primes so a global-scoped timestamp
+// exists, and re-runs the child check. If that STILL fails (/etc/sudoers does
+// not include sudoers.d, a later drop-in overrides it) the drop-in is removed
+// again — the host is left as found, the announcement is retracted on the
+// stream — and the step exits rcSudoFixupInert so the model can say what
+// happened instead of blaming tty keying.
+//
+// The username travels to root's shell on stdin, never argv, and the
+// password never leaves the priming shell at all.
+//
+// POSIX sh: the remote login shell runs this, and that is zsh on some hosts.
+var sudoGlobalFixup = fmt.Sprintf(
+	`set +x 2>/dev/null; IFS= read -r _fs_pw; printf '%%s\n' "$_fs_pw" | %[1]s || exit %[2]d; `+
+		`%[3]s || { _fs_u=$(id -un); `+
+		`printf 'Defaults:%%s timestamp_type=global\n' "$_fs_u" | sudo -n sh -c 'f=$(mktemp) && cat >"$f" && visudo -cf "$f" >/dev/null && install -m 0440 -o root "$f" %[4]s; rc=$?; rm -f "$f"; exit $rc' || exit %[5]d; `+
+		`echo "fleet: the sudo credential did not reach child processes; installed %[4]s (Defaults:$_fs_u timestamp_type=global) per fleet.update.sudo-timestamp-global - delete that file to undo"; `+
+		`printf '%%s\n' "$_fs_pw" | %[1]s; `+
+		`%[3]s || { sudo -n rm -f %[4]s; echo "fleet: sudo still does not reach child processes with %[4]s installed (is /etc/sudoers.d included from /etc/sudoers?) - removed it again"; exit %[6]d; }; }; `+
+		`unset _fs_pw _fs_u; `,
+	sudoPrime, rcSudoAuth, sudoGate, sudoersDropIn, rcSudoNoCache, rcSudoFixupInert)
+
 // bgPreamble builds the Background lane's per-run-step preamble: prime and
-// verify sudo (only when a credential was supplied — an empty `sudo -S`
-// would consume nothing and fail confusingly), then the sudoGate every run
-// must pass regardless, then the operator's non-secret answers. Console and
-// Background apply this ONLY to updplan.KindRun steps, so a sync or gh-auth
-// script never sees a sudo preamble.
-func bgPreamble(a answers) func(updplan.Step) string {
-	return func(updplan.Step) string {
-		var b strings.Builder
-		if a.needsSudo() {
-			fmt.Fprintf(&b, "sudo -S -p '' -v 2>/dev/null || exit %d; ", rcSudoAuth)
-		}
+// verify sudo (only when a credential was supplied — an empty `sudo -S` would
+// consume nothing and fail confusingly), then the sudoGate every run must
+// pass regardless — both folded into sudoGlobalFixup unless the operator
+// opted out, since the fixup re-checks after its own repair; then the
+// operator's non-secret answers. Console and Background apply this ONLY to
+// updplan.KindRun steps, so a sync or gh-auth script never sees a sudo
+// preamble. The text depends on nothing per step, so it is built once.
+func bgPreamble(a answers, p bgPolicy) func(updplan.Step) string {
+	var b strings.Builder
+	switch {
+	case a.needsSudo() && p.sudoTimestampGlobal:
+		b.WriteString(sudoGlobalFixup)
+	case a.needsSudo():
+		fmt.Fprintf(&b, "%s || exit %d; %s || exit %d; ", sudoPrime, rcSudoAuth, sudoGate, rcSudoNoCache)
+	default:
 		fmt.Fprintf(&b, "%s || exit %d; ", sudoGate, rcSudoNoCache)
-		b.WriteString(a.envPrefix())
-		return b.String()
 	}
+	b.WriteString(a.envPrefix())
+	s := b.String()
+	return func(updplan.Step) string { return s }
 }
 
 // lineQueue is an unbounded, mutex-guarded FIFO decoupling a producer that
@@ -408,9 +513,9 @@ func (q *lineQueue) forward(ch chan<- outLine) {
 // The executor tees every line it sends into the capture (Output/LineWriter)
 // itself now (updexec.Executor.RunHost), so beginStream no longer has to —
 // its own Line callback only has to feed the UI's log pane via lineQueue.
-func beginStream(alias string, plan updplan.Plan, a answers, r runner.Runner, dir string) tea.Cmd {
+func beginStream(alias string, plan updplan.Plan, a answers, p bgPolicy, r runner.Runner, dir string) tea.Cmd {
 	secret := a.sudoSecret + "\n"
-	preamble := bgPreamble(a)
+	preamble := bgPreamble(a, p)
 	reset := a.forceReset()
 	return func() tea.Msg {
 		lines := make(chan outLine)

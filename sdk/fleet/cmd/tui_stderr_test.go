@@ -61,7 +61,7 @@ func TestStderrReachesBothPanesAndTheBadge(t *testing.T) {
 	m.vp = viewport{width: 120, height: 40}
 	m.errOpen = true
 
-	cmd := beginStream("h1", updplan.Default(), answers{}, f, t.TempDir())
+	cmd := beginStream("h1", updplan.Default(), answers{}, bgPolicy{}, f, t.TempDir())
 	msg := cmd()
 	st := msg.(streamStartedMsg).st
 

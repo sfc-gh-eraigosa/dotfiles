@@ -17,7 +17,7 @@ var probeMarker = strings.Repeat("Zq7", 3)
 // beginStream/Console.runScript produce for a run step — so these tests can
 // assert on the preamble without driving the whole executor.
 func runStepScript(a answers) string {
-	return bgPreamble(a)(updplan.Step{Kind: updplan.KindRun}) + "cd ~/git/dotfiles && ./install.sh"
+	return bgPreamble(a, bgPolicy{})(updplan.Step{Kind: updplan.KindRun}) + "cd ~/git/dotfiles && ./install.sh"
 }
 
 // The credential must never be reachable through argv or the environment:
@@ -43,7 +43,9 @@ func TestSudoSecretNeverAppearsInTheRemoteCommand(t *testing.T) {
 func TestSudoSecretIsSentOnStdinOnly(t *testing.T) {
 	seen := map[string]string{}
 	r := runner.Fake{Stdin: seen}
-	msg := beginStream("host-a", singleRunStepPlan("test-plan"), answers{sudoSecret: probeMarker}, r, "")()
+	a := answers{}
+	a.appendSecret(probeMarker)
+	msg := beginStream("host-a", singleRunStepPlan("test-plan"), a, bgPolicy{}, r, "")()
 	st, ok := msg.(streamStartedMsg)
 	if !ok {
 		t.Fatalf("unexpected message %T", msg)

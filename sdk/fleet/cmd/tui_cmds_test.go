@@ -65,7 +65,7 @@ func TestSudoPreambleIsPerRunStepSession(t *testing.T) {
 	spy := &scriptSpy{}
 	a := answers{}
 	a.appendSecret(probeMarker)
-	st := beginStream("host-a", twoStepPlan(), a, spy, "")().(streamStartedMsg).st
+	st := beginStream("host-a", twoStepPlan(), a, bgPolicy{}, spy, "")().(streamStartedMsg).st
 	for range st.lines {
 	}
 	<-st.done
@@ -235,7 +235,7 @@ func TestResolveTUIPlanAppliesUpdateRef(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p, err := resolveTUIPlan(file, "feature/x", dir)
+	p, _, err := resolveTUIPlan(file, "feature/x", dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +243,7 @@ func TestResolveTUIPlanAppliesUpdateRef(t *testing.T) {
 		t.Fatalf("--update-ref did not reach the plan, branch = %q", got)
 	}
 
-	if _, err := resolveTUIPlan(file, "bad ref", dir); err == nil {
+	if _, _, err := resolveTUIPlan(file, "bad ref", dir, nil); err == nil {
 		t.Fatal("an invalid --update-ref must be rejected before any host is contacted")
 	}
 }

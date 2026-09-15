@@ -186,6 +186,9 @@ Report: first line names the plan source; per host `=== host ===` then one line 
 ### F9 gff flags
 `fleet.update.enabled` (bool, default true) and `fleet.update.config` (single choice: `home`
 selected, `repo`) in `.github/gff/features.yaml`, area `fleet`. Fail-open on every error.
+`fleet.update.sudo-timestamp-global` (bool, default true; TUI background lane only) is the
+exception: it installs a sudoers drop-in on the host, so it is fail-closed — on only for a
+successfully-resolved `true`, and never Noted.
 
 ### F10 Headless run log
 Every CLI run tees each host's output to `$XDG_STATE_HOME/fleet/logs/` through

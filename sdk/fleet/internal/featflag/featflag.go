@@ -1,6 +1,8 @@
-// Package featflag resolves the fleet-update gff flags into fail-open
-// Settings. It never imports the gff SDK directly (see gff.go for that
-// adapter) so it stays trivially testable with the Static fixture below.
+// Package featflag resolves the fleet-update gff flags into Settings. The
+// plan flags (enabled, config) are fail-open; the one host-mutating flag
+// (sudo-timestamp-global) is fail-closed — see Settings. It never imports the
+// gff SDK directly (see gff.go for that adapter) so it stays trivially
+// testable with the Static fixture below.
 package featflag
 
 import (
@@ -11,8 +13,9 @@ import (
 
 // Flag keys (declared in .github/gff/features.yaml, area `fleet`).
 const (
-	KeyEnabled = "fleet.update.enabled"
-	KeyConfig  = "fleet.update.config"
+	KeyEnabled    = "fleet.update.enabled"
+	KeyConfig     = "fleet.update.config"
+	KeySudoGlobal = "fleet.update.sudo-timestamp-global"
 )
 
 // Source is the minimal gff surface featflag needs. gff.GFF implements it in
@@ -22,7 +25,10 @@ type Source interface {
 	Strings(key string) ([]string, error)
 }
 
-// Settings is the resolved, fail-open view of the fleet.update.* flags.
+// Settings is the resolved view of the fleet.update.* flags: fail-open for
+// Enabled and ConfigPath (an unreadable gff must never stop an update),
+// fail-closed for SudoTimestampGlobal (an unreadable gff must never change a
+// host).
 type Settings struct {
 	// Enabled is true unless the source explicitly resolved fleet.update.enabled
 	// to false. Any error resolving it defaults to true.
@@ -31,7 +37,16 @@ type Settings struct {
 	// when the caller should fall back to its own default (unset, "home", an
 	// error, or an unrecognized selection all map to "").
 	ConfigPath string
-	// Note explains any fallback taken, empty when both flags resolved cleanly.
+	// SudoTimestampGlobal is the one FAIL-CLOSED flag here: true only when
+	// fleet.update.sudo-timestamp-global explicitly resolved to true. It lets
+	// the TUI's background lane install a sudoers drop-in on a host where the
+	// supplied password does not reach install.sh's children (see
+	// cmd/tui_cmds.go sudoGlobalFixup) — a change to the host, so an error or
+	// a missing key must mean "don't".
+	SudoTimestampGlobal bool
+	// Note explains any fail-open fallback taken, empty when the two plan
+	// flags resolved cleanly. SudoTimestampGlobal never adds a Note: staying
+	// off is its default, not a degradation.
 	Note string
 }
 
@@ -65,9 +80,11 @@ func (s Static) Strings(key string) ([]string, error) {
 	return v, nil
 }
 
-// Resolve reads the fleet.update.* flags from src and returns fail-open
-// Settings: no code path here can return Enabled=false except an explicit,
-// successfully-resolved `false` for fleet.update.enabled.
+// Resolve reads the fleet.update.* flags from src. The plan flags are
+// fail-open: no code path here can return Enabled=false except an explicit,
+// successfully-resolved `false` for fleet.update.enabled. The host-mutating
+// flag is the inverse: SudoTimestampGlobal is true only for an explicit,
+// successfully-resolved `true`.
 func Resolve(src Source, home, repoDir string) Settings {
 	if src == nil || isTypedNil(src) {
 		return Settings{Enabled: true, Note: "featflag: no source configured, using built-in defaults"}
@@ -80,6 +97,13 @@ func Resolve(src Source, home, repoDir string) Settings {
 		settings.Note = appendNote(settings.Note, fmt.Sprintf("fleet.update.enabled: %v (defaulting to enabled)", err))
 	} else {
 		settings.Enabled = enabled
+	}
+
+	// Fail-closed: only a resolved true enables it (the flag's own default is
+	// true, but it must RESOLVE — an unreadable gff must not change hosts). Not
+	// noted as a fallback: skipping a host change is the safe outcome.
+	if on, err := src.Bool(KeySudoGlobal); err == nil && on {
+		settings.SudoTimestampGlobal = true
 	}
 
 	locs, err := src.Strings(KeyConfig)

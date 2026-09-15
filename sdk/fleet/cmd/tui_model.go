@@ -159,6 +159,7 @@ type tuiModel struct {
 	self      func() (string, error) // resolves the executable path for the interactive handoff's self-exec; os.Executable in production, injected in tests
 	ans       answers                // pre-supplied answers for this wave (memory-only credential)
 	ansField  answerField            // cursor in the answer form
+	policy    bgPolicy               // standing lane policy from gff (bgPolicyFromFlags); the form never edits it
 
 	// reachability ladder — its own ownership set, same invariant as updating
 	waking map[string]bool
@@ -720,7 +721,7 @@ func (m *tuiModel) pump() tea.Cmd {
 		m.bgQueue = m.bgQueue[1:]
 		m.updating[a] = updState{phase: updRunning}
 		m.running++
-		cmds = append(cmds, beginStream(a, m.plan, m.ans, m.run, m.logDir))
+		cmds = append(cmds, beginStream(a, m.plan, m.ans, m.policy, m.run, m.logDir))
 	}
 	// Interactive handoffs need the terminal to themselves, so they only run
 	// once no background update can print over them.
@@ -1406,7 +1407,14 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updating[msg.alias] = updState{phase: updQueued}
 			m.iaQueue = append(m.iaQueue, msg.alias)
 			m.iaTotal++
-			m.status = fmt.Sprintf("%s: sudo credential does not reach child processes on this host (timestamp_type=tty without a tty) — using the terminal lane", msg.alias)
+			// With the sudoers fixup on, the run may already have announced an
+			// install: say that it was tried and undone rather than blame tty
+			// keying, which is no longer the explanation.
+			why := "sudo credential does not reach child processes on this host (timestamp_type=tty without a tty)"
+			if errors.Is(msg.err, errSudoFixupInert) {
+				why = "sudo credential still does not reach child processes after installing " + sudoersDropIn + " (removed again — is /etc/sudoers.d included from /etc/sudoers?)"
+			}
+			m.status = fmt.Sprintf("%s: %s — using the terminal lane", msg.alias, why)
 			return m, m.pump()
 		}
 		// The tail of the streamed output is the row's failure explanation —
