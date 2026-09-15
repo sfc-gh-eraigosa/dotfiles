@@ -57,12 +57,15 @@ func (c Capture) Stderr() []Line {
 
 // Read parses one capture file.
 //
-// Warnings counts only stderr lines updexec.Benign rejects. Counting raw
-// stderr would badge every healthy run: git writes its entire fetch progress
-// to stderr, so a clean update produces several stderr lines and no problem
-// at all. Benign is the classifier the TUI already uses — shared on purpose,
-// so `fleet history --errors` and the dashboard's error pane can never
-// disagree about what counts as an error.
+// Warnings counts only what WarnFilter counts: non-benign stderr that is not
+// itself an advisory (a tool announcing news about ITSELF, like gcloud's
+// self-update nag) and not that advisory's own continuation lines. Counting
+// raw stderr would badge every healthy run: git writes its entire fetch
+// progress to stderr, so a clean update produces several stderr lines and no
+// problem at all. WarnFilter is the SAME classifier the TUI's live badge and
+// this package's Problems() digest use — shared on purpose, so `fleet
+// history`, `--problems` and the dashboard's badge can never disagree about
+// what counts as a warning.
 func Read(path string) (Capture, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -87,8 +90,12 @@ func Read(path string) (Capture, error) {
 	}
 
 	c.Observed = observed(c.Lines)
+	// One WarnFilter, walked in FILE order: a capture is always one host's
+	// output, so there is no interleaving to guard against here — that only
+	// applies to the TUI's live buffer, which keeps one filter per alias.
+	var wf WarnFilter
 	for _, l := range c.Lines {
-		if l.Stderr && !updexec.Benign(clean(l.Text)) {
+		if wf.Warn(Line{Time: l.Time, Text: clean(l.Text), Stderr: l.Stderr}) {
 			c.Warnings++
 		}
 	}

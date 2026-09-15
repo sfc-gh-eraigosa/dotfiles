@@ -202,19 +202,29 @@ The dashboard is three stacked panels you compose. The host table is on top; the
 the stderr stream share the bottom. Hide any of them and the rest take the space — one visible
 pane fills the viewport. Hiding the last one is refused, so there is no blank-screen state.
 
-The **stderr pane** exists because a host can print
+The **errors pane** exists because a host can print
 
 ```
 WARNING: apt-get update failed; installs may be incomplete.
 ```
 
 on stderr, exit **0**, and look like a clean `ok`. stdout and stderr are streamed on separate
-pipes now, so that line lands in the error pane, keeps a `!` gutter in the log (which still
+pipes now, so that line lands in the errors pane, keeps a `!` gutter in the log (which still
 shows everything, in arrival order), and puts `ok ⚠1` on the host's row without you opening
-anything. Routine ssh/git/sudo chatter — `Warning: Permanently added …`, git's progress, the
-sudo prompt echo — is excluded from the count, or every host would wear a ⚠ after every fetch.
-The per-host capture under `~/.local/state/fleet/logs/` marks the same lines with `!! `, so a
-headless `fleet update` can be read the same way afterwards.
+anything. The pane shows exactly the WARNING subset, not every stderr line: routine ssh/git/sudo
+chatter (`Warning: Permanently added …`, git's fetch/checkout progress, the sudo prompt echo)
+and a tool announcing news about ITSELF (gcloud's "components update" self-update nag, `npm warn`,
+pip's `[notice]`) are real stderr but never count as a warning or appear in this pane — they're
+still visible in the log pane if you want the raw stream. The per-host capture under
+`~/.local/state/fleet/logs/` marks the same lines with `!! `, so a headless `fleet update` can be
+read the same way afterwards, and `fleet history`'s `⚠N` column always agrees with what the pane
+would have shown.
+
+fleet's ssh never forwards YOUR locale to a host: whatever `LANG`/`LC_*` your shell (and
+`SendEnv` in your own `~/.ssh/config` or `/etc/ssh/ssh_config`) would otherwise send is stripped
+before every ssh invocation, so a host that never installed `en_US.UTF-8` falls back to its own
+default instead of printing `setlocale: LC_ALL: cannot change locale` on stderr on every command
+— which used to show up as a permanent, unfixable warning on an otherwise healthy host.
 
 The status dot left of each hostname is **navy** when selected, and flips
 **green** or **red** to report an update's outcome — so a finished wave reads at

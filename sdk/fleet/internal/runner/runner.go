@@ -111,6 +111,43 @@ func muxArgs() []string {
 	}
 }
 
+// sshCmd is the ONE place an *exec.Cmd for ssh gets built. Every method below
+// calls it instead of exec.Command/exec.CommandContext directly, so the
+// locale filter (see filteredEnv) applies to every ssh invocation by
+// construction rather than by each of seven call sites remembering to set it.
+// It is a var, not a func, so a test can swap in a spy that records what
+// would have run without any real ssh process ever starting.
+var sshCmd = newSSHCmd
+
+func newSSHCmd(ctx context.Context, argv []string) *exec.Cmd {
+	c := exec.CommandContext(ctx, "ssh", argv...)
+	c.Env = filteredEnv(os.Environ())
+	return c
+}
+
+// filteredEnv drops LANG, LANGUAGE and every LC_* variable from env, keeping
+// everything else (SSH_AUTH_SOCK, PATH, HOME, …) untouched.
+//
+// This machine's /etc/ssh/ssh_config sets `SendEnv LANG LC_*`, so ssh forwards
+// the OPERATOR's locale to whatever host it connects to. A host that never
+// installed that locale package answers with
+// `/bin/bash: warning: setlocale: LC_ALL: cannot change locale (en_US.UTF-8)`
+// on stderr, on every single command — which the TUI then badges as a
+// warning on an otherwise healthy host. ssh can only forward what it finds in
+// its own environment, so removing the variables here means SendEnv has
+// nothing to send and each remote falls back to its own default locale.
+func filteredEnv(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		key, _, _ := strings.Cut(kv, "=")
+		if key == "LANG" || key == "LANGUAGE" || strings.HasPrefix(key, "LC_") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
+}
+
 // Exec is the real SSH-backed runner.
 //
 // User and Identities exist for probes addressed by RAW IP. No per-alias Host
@@ -163,12 +200,12 @@ func (e Exec) baseArgs(host string) []string {
 func (e Exec) interactiveArgs(host string) []string { return InteractiveArgs(host) }
 
 func (e Exec) Run(host string, argv ...string) (string, error) {
-	out, err := exec.Command("ssh", append(e.baseArgs(host), argv...)...).Output()
+	out, err := sshCmd(context.Background(), append(e.baseArgs(host), argv...)).Output()
 	return strings.TrimSpace(string(out)), err
 }
 
 func (e Exec) RunInteractive(host string, argv ...string) error {
-	c := exec.Command("ssh", append(e.interactiveArgs(host), argv...)...)
+	c := sshCmd(context.Background(), append(e.interactiveArgs(host), argv...))
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return c.Run()
 }
@@ -182,7 +219,7 @@ func (e Exec) RunInteractive(host string, argv ...string) error {
 // actually stop the child holding the terminal (and, transitively, the
 // clone a later restore step needs).
 func (e Exec) RunInteractiveCtx(ctx context.Context, host string, argv ...string) error {
-	c := exec.CommandContext(ctx, "ssh", append(e.interactiveArgs(host), argv...)...)
+	c := sshCmd(ctx, append(e.interactiveArgs(host), argv...))
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 	c.WaitDelay = waitDelay
 	return c.Run()
@@ -216,13 +253,13 @@ func viaArgs(peer, host, timeout string, argv []string) []string {
 }
 
 func (e Exec) RunVia(peer, host string, argv ...string) (string, error) {
-	out, err := exec.Command("ssh", viaArgs(peer, host, e.timeout(), argv)...).Output()
+	out, err := sshCmd(context.Background(), viaArgs(peer, host, e.timeout(), argv)).Output()
 	return strings.TrimSpace(string(out)), err
 }
 
 func (e Exec) RunStdin(host, stdin string, argv ...string) (string, error) {
 	base := e.baseArgs(host)
-	c := exec.Command("ssh", append(base, argv...)...)
+	c := sshCmd(context.Background(), append(base, argv...))
 	c.Stdin = strings.NewReader(stdin)
 	// CombinedOutput: sudo writes its failure text to stderr, and that text is
 	// the whole diagnosis when authentication fails.
@@ -245,7 +282,7 @@ func (e Exec) RunStream(host, stdin string, argv ...string) (<-chan string, <-ch
 // time.
 func (e Exec) RunStreamCtx(ctx context.Context, host, stdin string, argv ...string) (<-chan string, <-chan error) {
 	base := e.baseArgs(host)
-	c := exec.CommandContext(ctx, "ssh", append(base, argv...)...)
+	c := sshCmd(ctx, append(base, argv...))
 	c.Stdin = strings.NewReader(stdin)
 	return streamCombined(c)
 }
@@ -330,7 +367,7 @@ func streamSplit(c *exec.Cmd) (<-chan Line, <-chan error) {
 
 // RunSplitStreamCtx is RunStreamCtx with the two streams kept apart.
 func (e Exec) RunSplitStreamCtx(ctx context.Context, host, stdin string, argv ...string) (<-chan Line, <-chan error) {
-	c := exec.CommandContext(ctx, "ssh", append(e.baseArgs(host), argv...)...)
+	c := sshCmd(ctx, append(e.baseArgs(host), argv...))
 	c.Stdin = strings.NewReader(stdin)
 	return streamSplit(c)
 }

@@ -80,6 +80,19 @@ var advisoryPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`^WARNING: Running pip as the '?root'? user`),
 }
 
+// isAdvisory reports whether t (already trimmed) matches one of
+// advisoryPatterns — pulled out of classify so WarnFilter can ask the same
+// question without going through the failure/stderr classification that
+// only makes sense for the Problems() digest.
+func isAdvisory(t string) bool {
+	for _, re := range advisoryPatterns {
+		if re.MatchString(t) {
+			return true
+		}
+	}
+	return false
+}
+
 // classify decides what a line means, from its CONTENT first.
 //
 // An explicit WARNING:/ERROR: marker makes it a failure wherever it was
@@ -93,10 +106,8 @@ var advisoryPatterns = []*regexp.Regexp{
 // cannot outrank an explicit marker.
 func classify(text string, stderr bool) Class {
 	t := strings.TrimSpace(text)
-	for _, re := range advisoryPatterns {
-		if re.MatchString(t) {
-			return ClassAdvisory
-		}
+	if isAdvisory(t) {
+		return ClassAdvisory
 	}
 	if authoredProblem.MatchString(t) {
 		return ClassFailure
@@ -175,6 +186,56 @@ func continues(prev, cur Line) bool {
 		return true
 	}
 	return false
+}
+
+// WarnFilter is the ONE rule for "does this stderr line count as a
+// warning" — the badge on a host's row, the history list's WARN column, and
+// this file's own Problems() digest all mean the same thing by "warning",
+// and before this they each decided it separately. updexec.Benign alone was
+// not enough: it knows routine ssh/git/sudo chatter, but not a tool
+// announcing news about ITSELF (gcloud's "components update" nag is real,
+// non-benign stderr on its own terms — it just isn't a WARNING).
+//
+// It is STATEFUL because that nag is three lines glued by punctuation
+// ("...To install them," / "please run:" / "  $ gcloud components update")
+// and only the first line's text is recognisable as advisory — the other two
+// look like ordinary stderr read in isolation. Filtering line by line with no
+// memory would count 1 advisory plus 2 warnings for a single message.
+//
+// A caller streaming several hosts at once (the TUI) MUST give each host its
+// own WarnFilter. This type does not key by host itself — it trusts the
+// caller to feed it one host's lines in order — so that another host's line
+// landing between an advisory's continuation lines can never break the fold.
+type WarnFilter struct {
+	// prevAdvisory is whether the line WARN last evaluated was itself an
+	// advisory OR was folded into one as a continuation — so a continuation
+	// can itself extend the exemption to what follows it (gcloud's third
+	// line continues the second, not the first).
+	prevAdvisory bool
+	prevLine     Line
+}
+
+// Warn reports whether l counts as a warning: a stderr line that is not
+// updexec.Benign, is not itself advisory text, and is not a continuation
+// (per the `continues` rule already used for the Problems() digest) of the
+// IMMEDIATELY PRECEDING line when that line was an advisory.
+//
+// The "when that line was an advisory" qualifier is deliberate and narrow:
+// continues() alone would also exempt whatever follows a REAL warning that
+// happens to end in ':' or ',', and a genuinely new problem must never be
+// hidden by an accident of punctuation in the one before it.
+func (f *WarnFilter) Warn(l Line) bool {
+	if !l.Stderr {
+		return false
+	}
+	clean := strings.TrimSpace(l.Text)
+	advisory := isAdvisory(clean)
+	cont := f.prevAdvisory && continues(f.prevLine, l)
+	f.prevAdvisory, f.prevLine = advisory || cont, l
+	if advisory || cont {
+		return false
+	}
+	return !updexec.Benign(l.Text)
 }
 
 // Problems is the digest: every distinct problem in the capture, the

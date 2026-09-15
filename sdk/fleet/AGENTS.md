@@ -319,6 +319,19 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   or is closed (`ssh -O exit -o ControlPath=~/.ssh/fleet-mux-* <host>`). `FLEET_NO_MUX=1`
   disables the whole mechanism. Pinned by `TestEveryRemotePathCarriesTheMuxOptions`,
   `TestControlPathIsShortEnoughToBeAUnixSocket`, `TestMultiplexingCanBeDisabled`.
+- **fleet's ssh never forwards the operator's locale.** Every ssh invocation goes through
+  ONE constructor, `runner.sshCmd`, whose `Env` is `filteredEnv(os.Environ())` with
+  `LANG`, `LANGUAGE` and every `LC_*` variable removed — the choke point exists precisely
+  so no future call site can rebuild its own `exec.Command("ssh", …)` and forget the
+  filter. This matters because an operator's `/etc/ssh/ssh_config` commonly sets
+  `SendEnv LANG LC_*`, which forwards their workstation locale to whatever host ssh
+  connects to; a host that never installed that locale package answers with
+  `/bin/bash: warning: setlocale: LC_ALL: cannot change locale (en_US.UTF-8)` on stderr,
+  on every single command, which `histindex.WarnFilter` (see above) then correctly counts
+  as a warning on an otherwise perfectly healthy host — ssh can only forward what it finds
+  in ITS OWN environment, so nothing on the remote needs to change. Everything else
+  (`SSH_AUTH_SOCK`, `PATH`, `HOME`, …) passes through untouched. Pinned by
+  `TestFilteredEnvDropsLocaleKeepsEverythingElse`, `TestEverySSHSiteUsesFilteredEnv`.
 - **A missing `~/.ssh/config` is an EMPTY fleet, not a failure.** Every command reads the
   inventory through `readConfig`; four of them once used `os.ReadFile` directly and treated
   "missing" as fatal, which made `fleet` refuse to start on precisely the fresh machine that
@@ -651,13 +664,35 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
 - **`history` reads the capture; it never claims an exit code.** A capture records
   OUTPUT, not a status, so the listing's RESULT column says `finished` / `unfinished` —
   whether the run reached its footer — and never `ok` / `failed`, which the file cannot
-  prove. The warning count and the `--errors` projection go through `updexec.Benign`, the
-  SAME classifier the TUI's error pane uses, so the CLI and the dashboard cannot disagree
-  about what an error is; `internal/updexec.StderrMark` is exported for the same reason —
-  the reader must strip exactly what the writer wrote, and two copies of `"!! "` would
-  drift. The log directory and the timezone are both PARAMETERS of `runHistory` (see the
-  injected-capture invariant above). Pinned by `TestHistoryListsNewestFirstWithOutcome`,
+  prove. The warning count and the `--errors` projection go through `histindex.WarnFilter`,
+  the SAME classifier the TUI's error pane uses, so the CLI and the dashboard cannot
+  disagree about what a warning is; `internal/updexec.StderrMark` is exported for the same
+  reason — the reader must strip exactly what the writer wrote, and two copies of `"!! "`
+  would drift. The log directory and the timezone are both PARAMETERS of `runHistory` (see
+  the injected-capture invariant above). Pinned by `TestHistoryListsNewestFirstWithOutcome`,
   `TestHistoryErrorsShowsOnlyStderr`, `TestHistoryUnknownHostNamesWhatExists`.
+- **A warning is more than "non-benign stderr" — `histindex.WarnFilter` is the ONE place
+  that decides, and everything that counts or badges a warning goes through it.**
+  `updexec.Benign` alone recognises routine ssh/git/sudo chatter but not a tool
+  announcing news about ITSELF: gcloud's 3-line self-update nag
+  (`Updates are available for some Google Cloud CLI components. …` / `please run:` /
+  `  $ gcloud components update`) is real, non-benign stderr on its own terms, and before
+  `WarnFilter` existed it badged every host that ran gcloud with a permanent ⚠3 that
+  had nothing to fix. `WarnFilter.Warn` is STATEFUL per line stream: a line is a warning
+  only if it is stderr, not `updexec.Benign`, not itself matching `advisoryPatterns`, and
+  not a `continues()` continuation of the IMMEDIATELY PRECEDING line when that line was
+  itself an advisory (narrower than `Problems()`'s own folding, which continues off any
+  prior problem — a real warning that happens to end in `:` must not give its own next
+  line a free pass). A caller streaming several hosts at once MUST give each host its
+  own `WarnFilter` (the TUI keeps `m.warnFilters` keyed by alias) or one host's line
+  landing between another's advisory and its continuation would break the fold; a single
+  capture (`histindex.Read`, `captureEntries`) is always one host, so one filter walked
+  in file order is enough. The errors pane (`errEntries`/`errCount`/`histErrCount`) shows
+  exactly the WARNING subset now, not every stderr line — the log pane still shows every
+  line, stderr gutter included, for anyone who wants the raw stream. Pinned by
+  `TestWarnFilterFoldsTheGcloudNagToZero`, `TestWarnFilterKeepsPerHostState`,
+  `TestWarnFilterExemptionRequiresAPrecedingAdvisory`, `TestGitChatterAndGcloudNagStayOutOfTheErrorsPane`,
+  `TestBadgeCountEqualsTheErrorsPaneLineCount`.
 - **Captures are kept 50 per HOST** (`captureKeep`), not globally. `libs/log` defaults to
   200, which is far more scrollback than an operator reads; 50 answers "what changed since
   this host last worked" while keeping the directory listable. Pruning is per subject and

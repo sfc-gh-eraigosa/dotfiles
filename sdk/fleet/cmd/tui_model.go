@@ -15,7 +15,6 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
-	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
@@ -149,17 +148,24 @@ type tuiModel struct {
 	errCount int
 	// warns counts each host's non-benign stderr lines: the row badge that
 	// says "this exited 0 but wrote warnings".
-	warns     map[string]int
-	jobs      int // max concurrent background updates
-	running   int // slots in use
-	updateRef string
-	plan      updplan.Plan           // loaded ONCE at startup; the model never calls loadPlan itself
-	file      string                 // the --file value the plan was loaded from, if any; re-passed to the interactive handoff's self-exec
-	repo      string                 // the --repo value the plan/gff resolution used; re-passed to the interactive handoff's self-exec so a routed host resolves against the SAME checkout
-	self      func() (string, error) // resolves the executable path for the interactive handoff's self-exec; os.Executable in production, injected in tests
-	ans       answers                // pre-supplied answers for this wave (memory-only credential)
-	ansField  answerField            // cursor in the answer form
-	policy    bgPolicy               // standing lane policy from gff (bgPolicyFromFlags); the form never edits it
+	warns map[string]int
+	// warnFilters is ONE histindex.WarnFilter per alias, so a multi-line
+	// advisory (gcloud's 3-line self-update nag) folds correctly even while
+	// several hosts interleave their output into the same m.logs buffer — a
+	// single shared filter would let another host's line land between an
+	// advisory's continuation lines and break the fold. Lazily populated the
+	// same way m.warns and m.logColor are.
+	warnFilters map[string]*histindex.WarnFilter
+	jobs        int // max concurrent background updates
+	running     int // slots in use
+	updateRef   string
+	plan        updplan.Plan           // loaded ONCE at startup; the model never calls loadPlan itself
+	file        string                 // the --file value the plan was loaded from, if any; re-passed to the interactive handoff's self-exec
+	repo        string                 // the --repo value the plan/gff resolution used; re-passed to the interactive handoff's self-exec so a routed host resolves against the SAME checkout
+	self        func() (string, error) // resolves the executable path for the interactive handoff's self-exec; os.Executable in production, injected in tests
+	ans         answers                // pre-supplied answers for this wave (memory-only credential)
+	ansField    answerField            // cursor in the answer form
+	policy      bgPolicy               // standing lane policy from gff (bgPolicyFromFlags); the form never edits it
 
 	// reachability ladder — its own ownership set, same invariant as updating
 	waking map[string]bool
@@ -235,29 +241,30 @@ type tuiModel struct {
 
 func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time.Time, ref string, jobs int, plan updplan.Plan) tuiModel {
 	m := tuiModel{
-		pending:   map[string]bool{},
-		selected:  map[string]bool{},
-		updating:  map[string]updState{},
-		streams:   map[string]stream{},
-		logColor:  map[string]int{},
-		logFollow: true,
-		errFollow: true,
-		warns:     map[string]int{},
-		hostOpen:  true, // the fleet is what the tool is for
-		logOpen:   true, // on by default: shipped off, it was undiscoverable
-		errOpen:   false,
-		focus:     paneHost,
-		waking:    map[string]bool{},
-		hosts:     map[string]sshconf.Host{},
-		jobs:      jobs,
-		updateRef: ref,
-		plan:      plan,
-		self:      os.Executable,
-		run:       r,
-		base:      base,
-		now:       now,
-		vp:        viewport{height: 20, width: 100},
-		spinner:   "⠋",
+		pending:     map[string]bool{},
+		selected:    map[string]bool{},
+		updating:    map[string]updState{},
+		streams:     map[string]stream{},
+		logColor:    map[string]int{},
+		logFollow:   true,
+		errFollow:   true,
+		warns:       map[string]int{},
+		warnFilters: map[string]*histindex.WarnFilter{},
+		hostOpen:    true, // the fleet is what the tool is for
+		logOpen:     true, // on by default: shipped off, it was undiscoverable
+		errOpen:     false,
+		focus:       paneHost,
+		waking:      map[string]bool{},
+		hosts:       map[string]sshconf.Host{},
+		jobs:        jobs,
+		updateRef:   ref,
+		plan:        plan,
+		self:        os.Executable,
+		run:         r,
+		base:        base,
+		now:         now,
+		vp:          viewport{height: 20, width: 100},
+		spinner:     "⠋",
 	}
 	for _, h := range hosts {
 		m.hosts[h.Alias] = h
@@ -663,8 +670,9 @@ func (m *tuiModel) startUpdate(targets []string) tea.Cmd {
 		// Re-running clears the previous outcome, or the row would show a
 		// stale "ok" while the new attempt is still deciding.
 		m.updating[a] = updState{phase: updPrecheck}
-		delete(m.warns, a)   // the badge must describe THIS attempt
-		delete(m.pending, a) // ownership moves to the engine
+		delete(m.warns, a)       // the badge must describe THIS attempt
+		delete(m.warnFilters, a) // a stale advisory from the LAST attempt must not fold this attempt's first real line
+		delete(m.pending, a)     // ownership moves to the engine
 		cmds = append(cmds, precheckSudo(a, m.run))
 	}
 	m.iaTotal = 0
@@ -885,7 +893,15 @@ func (m *tuiModel) appendLogLine(alias, line string, isErr bool) {
 	if _, ok := m.logColor[alias]; !ok {
 		m.logColor[alias] = len(m.logColor)
 	}
-	warn := isErr && !updexec.Benign(line)
+	if m.warnFilters == nil {
+		m.warnFilters = map[string]*histindex.WarnFilter{}
+	}
+	wf, ok := m.warnFilters[alias]
+	if !ok {
+		wf = &histindex.WarnFilter{}
+		m.warnFilters[alias] = wf
+	}
+	warn := wf.Warn(histindex.Line{Text: line, Stderr: isErr})
 	if warn {
 		if m.warns == nil {
 			m.warns = map[string]int{}
@@ -895,7 +911,7 @@ func (m *tuiModel) appendLogLine(alias, line string, isErr bool) {
 	m.logs = append(m.logs, logEntry{
 		alias: alias, line: line, at: nowFn(), stderr: isErr, warn: warn,
 	})
-	if isErr {
+	if warn {
 		m.errCount++
 	}
 	if len(m.logs) > logCap {
@@ -904,15 +920,16 @@ func (m *tuiModel) appendLogLine(alias, line string, isErr bool) {
 		//
 		// logTop and errTop index DIFFERENT slices, so a single eviction shifts
 		// them by different amounts: logTop indexes m.logs (every line), while
-		// errTop indexes the filtered stderr view. A dropped STDOUT line moves
-		// logTop but leaves the stderr view — and errTop — where they were; a
-		// dropped STDERR line moves both. Decrementing both by one (the old
-		// way) silently walked the error pane's scroll upward each time a
-		// progress line aged out.
+		// errTop indexes the filtered WARNING view. A dropped line that is not a
+		// warning (plain stdout, or benign/advisory stderr) moves logTop but
+		// leaves the warning view -- and errTop -- where they were; a dropped
+		// WARNING line moves both. Decrementing both by one (the old way)
+		// silently walked the error pane's scroll upward each time a progress
+		// line aged out.
 		drop := len(m.logs) - logCap
 		droppedErr := 0
 		for _, e := range m.logs[:drop] {
-			if e.stderr {
+			if e.warn {
 				droppedErr++
 				m.errCount--
 			}
@@ -937,15 +954,20 @@ func (m *tuiModel) appendLogLine(alias, line string, isErr bool) {
 	}
 }
 
-// errEntries is the error pane's projection: the stderr subset, in order, of
+// errEntries is the error pane's projection: the WARNING subset, in order, of
 // whichever source is on screen — the opened capture in history, the live
-// buffer otherwise. tailFor deliberately does NOT follow: a host row's FAIL
-// text is about the run that just failed, not about a capture the operator
-// happens to be reading.
+// buffer otherwise. It is NOT every stderr line: routine chatter (git's
+// fetch/checkout progress, sudo's prompt echo) and advisory noise (gcloud's
+// self-update nag, npm warn, pip's [notice]) are real stderr but never a
+// warning, and showing them here is what made the pane disagree with the
+// badge — the same line could raise "errors: 3" while the row showed no ⚠ at
+// all. tailFor deliberately does NOT follow: a host row's FAIL text is about
+// the run that just failed, not about a capture the operator happens to be
+// reading.
 func (m tuiModel) errEntries() []logEntry {
 	out := make([]logEntry, 0, m.errCount)
 	for _, e := range m.logEntries() {
-		if e.stderr {
+		if e.warn {
 			out = append(out, e)
 		}
 	}
@@ -1007,15 +1029,15 @@ func (m tuiModel) tailFor(alias string, n int) string {
 // fifth to display nothing.
 func (m tuiModel) logActive() bool { return m.logOpen && len(m.logEntries()) > 0 }
 
-// errActive is its stderr twin. It reads the COUNTER, not the projection —
+// errActive is its warning twin. It reads the COUNTER, not the projection —
 // this is consulted from every height query.
 func (m tuiModel) errActive() bool { return m.errOpen && m.errTotal() > 0 }
 
-// errTotal is how many stderr lines the ACTIVE source has. errCount is
+// errTotal is how many WARNING lines the ACTIVE source has. errCount is
 // maintained incrementally as live lines arrive and is therefore zero for a
 // capture read from disk — reading it directly made the pane render
-// "stderr: none captured" directly underneath the captured stderr line it
-// was supposed to be showing. Found by the demo frames, not by a unit test.
+// "no warnings" directly underneath the captured warning line it was
+// supposed to be showing. Found by the demo frames, not by a unit test.
 //
 // The counter still serves the live path, where it exists to keep every
 // height query off a 2000-entry filtered rebuild; the opened capture is
@@ -1392,7 +1414,12 @@ func (m tuiModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.histPath = msg.path
 		m.histLines = captureEntries(msg.host, msg.cap, msg.day)
-		m.histErrCount = len(msg.cap.Stderr())
+		// msg.cap.Warnings, not len(msg.cap.Stderr()): the pane shows WARNINGS
+		// now (Change A), and Warnings is the exact count histindex.Read already
+		// computed with the same WarnFilter captureEntries uses per line below —
+		// so the header total and the entries captureEntries hands the pane can
+		// never disagree.
+		m.histErrCount = msg.cap.Warnings
 		// A freshly opened capture reads from its start, not its tail: unlike a
 		// live stream there is no "newest" to follow, and the beginning is where
 		// the run explains itself. The live pane's own follow state is
