@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -206,5 +208,142 @@ func TestRepaintIsBatchedWithTheKeysOwnCommand(t *testing.T) {
 	}
 	if !loaded {
 		t.Fatalf("the history load must still be issued next to the repaint, got %v", msgs)
+	}
+}
+
+// Owner-reported with exact steps (Termius on an iPad): start an update on
+// all four hosts, open the error pane (e), tab to it, scroll down and up —
+// the frame "shortens and elongates", and the host list and pane frames come
+// back duplicated. Scrolling let a pane's top run to its LAST LINE, so near
+// the end it showed fewer lines than its budget and the whole frame lost a
+// row, then regained it on the way back up. A pager stops at the last FULL
+// page; with that, the frame's height never moves while scrolling.
+
+// streamingWave is four hosts updating, with stdout and stderr flowing.
+func streamingWave(t *testing.T, w, h int) tuiModel {
+	t.Helper()
+	hosts := []string{"host-nano", "host-spark", "host-gigabyte", "host-pi"}
+	var mm tea.Model = testModel(hosts...)
+	mm, _ = mm.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	for _, a := range hosts {
+		mm, _ = mm.Update(hostRowMsg{row: Row{Alias: a, Class: "up-to-date", Commit: "0c18669", Branch: "main"}})
+	}
+	m := mm.(tuiModel)
+	for _, a := range hosts {
+		m.selected[a] = true
+		m.updating[a] = updState{phase: updRunning}
+		m.running++
+	}
+	for i := 0; i < 80; i++ {
+		a := hosts[i%4]
+		m.appendLogLine(a, fmt.Sprintf("line %d from %s", i, a), false)
+		if i%3 == 0 {
+			m.appendLogLine(a, fmt.Sprintf("From github.com:x/dotfiles %d", i), true)
+		}
+	}
+	return m
+}
+
+func frameLines(m tuiModel) int { return len(strings.Split(m.View(), "\n")) }
+
+func TestScrollingAStreamPaneNeverChangesTheFrameHeight(t *testing.T) {
+	for _, sz := range [][2]int{{120, 40}, {160, 45}, {200, 50}} {
+		w, h := sz[0], sz[1]
+		m := streamingWave(t, w, h)
+		m, _ = send(m, "e", "tab", "tab") // the owner's steps: error pane open and focused
+		if !m.errFocused() {
+			t.Fatalf("%dx%d: premise: the error pane must have the keys", w, h)
+		}
+		steps := []string{}
+		for i := 0; i < 40; i++ {
+			steps = append(steps, "j")
+		}
+		for i := 0; i < 40; i++ {
+			steps = append(steps, "k")
+		}
+		steps = append(steps, "G", "ctrl+d", "ctrl+u", "g", "g")
+		for i, k := range steps {
+			m, _ = send(m, k)
+			if got := frameLines(m); got != h {
+				t.Fatalf("%dx%d: after %d keys (last %q, errTop=%d) the frame is %d lines, want exactly %d",
+					w, h, i+1, k, m.errTop, got, h)
+			}
+		}
+		// Same for the log pane.
+		m, _ = send(m, "tab", "tab")
+		if !m.logFocused() {
+			t.Fatalf("%dx%d: premise: the log pane must have the keys", w, h)
+		}
+		for i := 0; i < 90; i++ {
+			k := "j"
+			if i >= 60 {
+				k = "k"
+			}
+			m, _ = send(m, k)
+			if got := frameLines(m); got != h {
+				t.Fatalf("%dx%d: log pane key %d (%q, logTop=%d): frame %d lines, want %d", w, h, i+1, k, m.logTop, got, h)
+			}
+		}
+	}
+}
+
+// The last page of a scrolled pane is full, like any pager: scrolling past
+// the end stops at len-height, not at the final line.
+func TestScrolledPaneStopsAtTheLastFullPage(t *testing.T) {
+	m := streamingWave(t, 120, 40)
+	m, _ = send(m, "e", "tab", "tab")
+	for i := 0; i < 200; i++ {
+		m, _ = send(m, "j")
+	}
+	n, h := len(m.errEntries()), m.errHeight()
+	if want := n - h; m.errTop != want {
+		t.Fatalf("scrolling past the end must stop at the last full page: errTop=%d, want %d (n=%d h=%d)", m.errTop, want, n, h)
+	}
+}
+
+// A seeded walk through every key that moves or reshapes the panes: in
+// normal mode with output flowing, the frame is always exactly the
+// terminal's height. Pins the invariant for keys nobody thought to test.
+func TestFrameHeightIsInvariantAcrossAKeyWalk(t *testing.T) {
+	keys := []string{"j", "k", "J", "K", "G", "g", "ctrl+d", "ctrl+u", "tab", "e", "l", "h", " ", "n", "N", "esc"}
+	for _, sz := range [][2]int{{120, 40}, {200, 50}} {
+		w, h := sz[0], sz[1]
+		m := streamingWave(t, w, h)
+		seed := uint32(2026)
+		for i := 0; i < 600; i++ {
+			seed = seed*1664525 + 1013904223
+			k := keys[int(seed>>16)%len(keys)]
+			m, _ = send(m, k)
+			if m.mode != modeNormal || (!m.logActive() && !m.errActive()) {
+				continue // dialogs and an all-hidden stream area are sized by content
+			}
+			if got := frameLines(m); got != h {
+				t.Fatalf("%dx%d: step %d key %q (host=%v log=%v err=%v focus=%v logTop=%d errTop=%d): frame %d lines, want %d",
+					w, h, i, k, m.hostOpen, m.logOpen, m.errOpen, m.focus, m.logTop, m.errTop, got, h)
+			}
+		}
+	}
+}
+
+// Early in a wave a pane has fewer lines than its budget. It used to render
+// only those, so the frame grew a row with every streamed line until the pane
+// filled — a height change per line, with no repaint. Padded to its budget,
+// the frame is full height from the first line.
+func TestFrameIsFullHeightFromTheFirstStreamedLine(t *testing.T) {
+	for _, sz := range [][2]int{{120, 40}, {200, 50}} {
+		w, h := sz[0], sz[1]
+		var mm tea.Model = testModel("host-a", "host-b")
+		mm, _ = mm.Update(tea.WindowSizeMsg{Width: w, Height: h})
+		m := mm.(tuiModel)
+		m.errOpen = true
+		for i := 1; i <= 6; i++ {
+			m.appendLogLine("host-a", fmt.Sprintf("line %d", i), false)
+			if i%2 == 0 {
+				m.appendLogLine("host-a", fmt.Sprintf("warn %d", i), true)
+			}
+			if got := frameLines(m); got != h {
+				t.Fatalf("%dx%d: with %d streamed lines the frame is %d lines, want exactly %d", w, h, i, got, h)
+			}
+		}
 	}
 }

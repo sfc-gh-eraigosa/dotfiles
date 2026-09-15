@@ -1262,15 +1262,17 @@ func (m *tuiModel) streamJump(nav streamNav, d int) {
 	*nav.top = idx[len(idx)-1]
 }
 
-// streamTo moves the pane's viewport, clamped. Any explicit move stops
-// following.
+// streamTo moves the pane's viewport, clamped to the last FULL page (the
+// same rule streamStart renders with), so scrolling down stops where the
+// final line reaches the bottom instead of walking the pane down to one line.
+// Any explicit move stops following.
 func (m *tuiModel) streamTo(nav streamNav, i int) {
 	*nav.follow = false
 	if i < 0 {
 		i = 0
 	}
-	if max := len(nav.entries) - 1; i > max {
-		i = maxInt(0, max)
+	if last := maxInt(0, len(nav.entries)-maxInt(1, nav.height)); i > last {
+		i = last
 	}
 	*nav.top = i
 }

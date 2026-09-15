@@ -503,6 +503,7 @@ func (m tuiModel) logViewN(h int) string {
 			m.hostStyle(e.alias).Render(fmt.Sprintf("%-14s│", trunc(e.alias, 14))),
 			text)
 	}
+	padRows(&body, len(entries)-start, h)
 	return m.renderPanel(th.panel, strings.TrimRight(body.String(), "\n"))
 }
 
@@ -562,7 +563,22 @@ func (m tuiModel) errViewN(h int) string {
 			m.hostStyle(e.alias).Render(fmt.Sprintf("%-14s│", trunc(e.alias, 14))),
 			text)
 	}
+	padRows(&body, len(entries)-start, h)
 	return m.renderPanel(th.panel, strings.TrimRight(body.String(), "\n"))
+}
+
+// padRows fills an active stream pane out to the h rows it was allotted, with
+// a space per row so the frame's line count cannot be trimmed back. Without
+// it the pane — and so the whole frame — was a row short for every line it
+// lacked: it grew a row per streamed line early in a wave, and shrank while
+// scrolled near its end. bubbletea diff-paints by line index, so each height
+// change was a chance for a terminal that disagrees about its size to strand
+// stale rows (duplicate hosts, doubled pane frames). A pane's box is its full
+// budget from its first line.
+func padRows(body *strings.Builder, shown, h int) {
+	for i := maxInt(0, shown); i < h; i++ {
+		body.WriteString(" \n")
+	}
 }
 
 // plural keeps "1 warning on 1 host" from reading as a template bug.
@@ -585,31 +601,21 @@ func (m tuiModel) hostStyle(alias string) lipgloss.Style {
 	return th.statusBar
 }
 
-// streamStart is logStart's rule, parameterised so both panes share it.
+// streamStart is the first visible line of a stream pane, shared by both.
+// Following pins the tail. Scrolled, the top stops at the last FULL page
+// (n-h), like any pager — clamping only at the last line let a pane show a
+// handful of lines near its end, which is what made the frame shrink and grow
+// while scrolling (see padRows).
 func streamStart(follow bool, top, n, h int) int {
-	if follow {
-		if s := n - h; s > 0 {
-			return s
-		}
-		return 0
-	}
-	if top > n-1 {
-		return maxInt(0, n-1)
+	last := maxInt(0, n-h)
+	if follow || top > last {
+		return last
 	}
 	return top
 }
 
 func (m tuiModel) logStart(h int) int {
-	if m.logFollow {
-		if s := len(m.logEntries()) - h; s > 0 {
-			return s
-		}
-		return 0
-	}
-	if m.logTop > len(m.logEntries())-1 {
-		return maxInt(0, len(m.logEntries())-1)
-	}
-	return m.logTop
+	return streamStart(m.logFollow, m.logTop, len(m.logEntries()), h)
 }
 
 // logGutter is everything a log line prints before the text, summed from the
