@@ -18,8 +18,13 @@ func TestStderrLineIsTaggedAndCounted(t *testing.T) {
 	if len(m.logs) != 3 {
 		t.Fatalf("the log buffer keeps every line, got %d", len(m.logs))
 	}
-	if got := m.errEntries(); len(got) != 2 {
-		t.Fatalf("the error projection is the stderr subset, got %d", len(got))
+	// The error pane now shows the WARNING subset, not every stderr line: the
+	// benign "Receiving objects" progress line stays out of it, exactly like
+	// it stays out of the badge. Before this it pinned len==2 (all stderr),
+	// which is precisely the pane/badge disagreement Change A closes — the
+	// pane used to list a line the row never badged as a warning.
+	if got := m.errEntries(); len(got) != 1 {
+		t.Fatalf("the error projection is the WARNING subset, got %d", len(got))
 	}
 	if m.warns["a"] != 1 {
 		t.Fatalf("only non-benign stderr raises the warning count, got %d", m.warns["a"])

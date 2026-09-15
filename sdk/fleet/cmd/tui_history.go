@@ -8,7 +8,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/histindex"
-	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
 )
 
 // historyRuns loads the captured runs for hosts from dir, newest first, with
@@ -219,6 +218,12 @@ func (m tuiModel) logEntries() []logEntry {
 // from and the two sources cannot drift into two renderers.
 func captureEntries(host string, c histindex.Capture, day time.Time) []logEntry {
 	out := make([]logEntry, 0, len(c.Lines))
+	// ONE WarnFilter walked in FILE order: a capture is always one host, so
+	// there is no interleaving to guard against here (unlike the live TUI's
+	// m.warnFilters map). Using the SAME filter type histindex.Read uses for
+	// c.Warnings is what keeps the opened run's `!` gutter and the run list's
+	// WARN column in agreement.
+	var wf histindex.WarnFilter
 	for _, l := range c.Lines {
 		out = append(out, logEntry{
 			alias:  host,
@@ -230,7 +235,7 @@ func captureEntries(host string, c histindex.Capture, day time.Time) []logEntry 
 			// made a colourised benign git line count as 0 in the run list
 			// and yet raise the `!` gutter once the run was opened — the two
 			// views disagreeing about the same line.
-			warn: l.Stderr && !updexec.Benign(ansi.Strip(l.Text)),
+			warn: wf.Warn(histindex.Line{Time: l.Time, Text: ansi.Strip(l.Text), Stderr: l.Stderr}),
 		})
 	}
 	return out

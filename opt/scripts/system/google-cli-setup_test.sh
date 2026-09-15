@@ -95,4 +95,48 @@ GUARD_OK=$(awk '
 ' "$SCRIPT")
 assert_eq "$GUARD_OK" "ok" "nvm-latest reference is inside the 'if ! command -v npm' guard"
 
+# === gcloud: update the install this script owns ===
+# fleet history 2026-09-15: every host's run ended on gcloud's own stderr nag
+# ("Updates are available for some Google Cloud CLI components … gcloud
+# components update") — the installer put gcloud in ~/opt/google-cloud-sdk
+# once and never updated it. install_gcloud now updates THAT install when it
+# is already present; an apt/brew gcloud (component manager disabled) is left
+# to its package manager.
+set +e  # assert_exit_code above leaves errexit on
+GC_HOME="${TMPDIR_TEST}/gc-home"
+GC_LOG="${TMPDIR_TEST}/gc.log"
+mkdir -p "${GC_HOME}/opt/google-cloud-sdk/bin"
+# stub gcloud: logs its argv; FAIL_UPDATE=1 makes `components update` fail.
+cat > "${GC_HOME}/opt/google-cloud-sdk/bin/gcloud" <<STUB
+#!/bin/sh
+echo "gcloud \$*" >> "${GC_LOG}"
+if [ "\$1 \$2" = "components update" ] && [ -n "\${FAIL_UPDATE:-}" ]; then echo "ERROR: boom" >&2; exit 1; fi
+exit 0
+STUB
+chmod +x "${GC_HOME}/opt/google-cloud-sdk/bin/gcloud"
+run_install_gcloud() {
+    : > "${GC_LOG}"
+    PATH="${GC_HOME}/opt/google-cloud-sdk/bin:/usr/bin:/bin" HOME="${GC_HOME}" FAIL_UPDATE="${1:-}" \
+        bash -c ". '$SCRIPT'; INSTALL_LOG='${TMPDIR_TEST}/install.log'; install_gcloud; echo \"rc=\$?\"" 2>&1
+}
+out="$(run_install_gcloud)"
+assert_grep "an existing ~/opt gcloud is updated, quietly" '^gcloud components update --quiet$' "${GC_LOG}"
+assert_eq "$(printf '%s\n' "$out" | tail -1)" "rc=0" "updating returns 0"
+assert_eq "$(printf '%s\n' "$out" | grep -c 'WARNING')" "0" "a successful update prints no warning"
+
+out="$(run_install_gcloud 1)"
+assert_eq "$(printf '%s\n' "$out" | tail -1)" "rc=0" "a failed update does not abort the setup"
+assert_eq "$(printf '%s\n' "$out" | grep -c '^WARNING: gcloud components update failed')" "1" "a failed update says so once"
+assert_eq "$(printf '%s\n' "$out" | grep -c 'boom')" "0" "gcloud's own output goes to the install log, not the run"
+
+# A gcloud this script did not install (apt/brew: component manager
+# disabled) is never asked to update itself.
+OTHER="${TMPDIR_TEST}/other-bin"
+mkdir -p "${OTHER}"
+cp "${GC_HOME}/opt/google-cloud-sdk/bin/gcloud" "${OTHER}/gcloud"
+: > "${GC_LOG}"
+PATH="${OTHER}:/usr/bin:/bin" HOME="${TMPDIR_TEST}/empty-home" \
+    bash -c ". '$SCRIPT'; INSTALL_LOG='${TMPDIR_TEST}/install.log'; install_gcloud" >/dev/null 2>&1
+assert_grep_negative "a package-managed gcloud is left to its package manager" 'components update' "${GC_LOG}"
+
 _test_report

@@ -509,10 +509,14 @@ func (m tuiModel) logViewN(h int) string {
 
 // logStart is the first visible line: pinned to the tail while following, so
 // a running install keeps its newest output on screen without any input.
-// errViewN is the stderr pane: the same widget as the log, over the
-// stderr subset of the SAME buffer, so a line is never in one and missing from
-// the other. It exists because a host can write "WARNING: apt-get update
-// failed", exit 0, and otherwise look like a clean `ok`.
+// errViewN is the warnings pane: the same widget as the log, over the
+// WARNING subset of the SAME buffer (see errEntries), so a line is never in
+// one and missing from the other. It exists because a host can write
+// "WARNING: apt-get update failed", exit 0, and otherwise look like a clean
+// `ok`. It deliberately does NOT show every stderr line — routine ssh/git
+// chatter and self-announcing tool nags (gcloud, npm, pip) are real stderr
+// but never a warning, and the log pane already shows them (with their `!`
+// gutter) for anyone who wants the raw stream.
 func (m tuiModel) errViewN(h int) string {
 	if h < 0 {
 		h = 0
@@ -523,7 +527,7 @@ func (m tuiModel) errViewN(h int) string {
 	// re-styles character by character, so wrapping already-rendered text
 	// strands its escape bytes as visible cells (the defect that pushed the
 	// log pane's title onto a second row).
-	title := th.header.Render("errors — stderr")
+	title := th.header.Render("errors — warnings")
 	if lines, hosts := m.warnTotals(); lines > 0 {
 		title = th.header.Render("errors") + " " + th.warn.Render(fmt.Sprintf("⚠ %s on %s",
 			plural(lines, "warning"), plural(hosts, "host")))
@@ -544,7 +548,7 @@ func (m tuiModel) errViewN(h int) string {
 
 	if !m.errActive() {
 		return m.renderPanel(th.panel, th.dim.Render(
-			"⚠️  stderr: none captured — this pane fills when a host writes to stderr  (e: hide)"))
+			"⚠️  no warnings — this pane fills when a host writes a warning to stderr  (e: hide)"))
 	}
 
 	start := streamStart(m.errFollow, m.errTop, len(entries), h)
