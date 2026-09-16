@@ -31,6 +31,13 @@ func (s *Service) Restack(ctx context.Context, opts RestackOpts) error {
 	if err != nil {
 		return err
 	}
+	// Validate --onto BEFORE it can reach git or the registry (dotfiles#96):
+	// this value is persisted verbatim as the worker's BaseBranch and later
+	// replayed as a bare positional to `git rebase`, so a flag-like value
+	// (e.g. "--exec=<cmd>") would poison the registry for a later exploit.
+	if err := identity.ValidateBranchRef(opts.Onto); err != nil {
+		return err
+	}
 	reg, err := s.Store.Load()
 	if err != nil {
 		return err
@@ -48,8 +55,13 @@ func (s *Service) Restack(ctx context.Context, opts RestackOpts) error {
 		return err // e.g. stack.ErrCycle
 	}
 
-	// Rebase the worker's commits onto the new base.
-	if out, err := s.Git.Run(ctx, "-C", w.Worktree, "rebase", "--onto", opts.Onto, w.BaseBranch); err != nil {
+	// Rebase the worker's commits onto the new base. gitRebase always adds a
+	// "--" end-of-options separator before the positional upstream ref
+	// (dotfiles#96): opts.Onto and w.BaseBranch are validated above/at their
+	// write sites, but this stops the positional from EVER being
+	// reinterpreted as a git flag, even for a value that reached the
+	// registry some other way (e.g. a hand-edited registry.json).
+	if out, err := s.gitRebase(ctx, w.Worktree, []string{"--onto", opts.Onto}, w.BaseBranch); err != nil {
 		_, _ = s.Git.Run(ctx, "-C", w.Worktree, "rebase", "--abort")
 		return fmt.Errorf("%w: restack onto %s: %s", errors.ErrRebaseConflict, opts.Onto, strings.TrimSpace(string(out)))
 	}
@@ -90,7 +102,8 @@ func stackNodes(f registry.Feature, ref identity.WorkerRef) ([]stack.Node, stack
 	for i, w := range f.Workers {
 		n := stack.Node{Ref: workerRef(f.Name, w), Branch: w.Branch, BaseBranch: w.BaseBranch}
 		nodes[i] = n
-		if w.User == ref.User && w.Purpose == ref.Purpose && w.Suffix == ref.Suffix {
+		cand := identity.WorkerRef{Feature: f.Name, User: w.User, Purpose: w.Purpose, Suffix: w.Suffix}
+		if cand.SameWorker(ref) {
 			here = n
 		}
 	}

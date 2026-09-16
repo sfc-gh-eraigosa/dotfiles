@@ -116,3 +116,82 @@ func TestRestack_Cycle(t *testing.T) {
 		t.Errorf("cyclic stack: err = %v; want stack.ErrCycle", err)
 	}
 }
+
+// TestRestack_RejectsFlagLikeOnto pins the dotfiles#96 fix: --onto is
+// stored verbatim as a worker's BaseBranch and later replayed as a bare
+// positional to `git rebase`. Before the fix nothing validated its content,
+// so `--onto '--exec=touch /tmp/pwned'` poisoned the registry, and a later
+// restack replayed it as a `git rebase --onto <x> --exec=touch /tmp/pwned`
+// invocation — git treats a leading-dash positional as a flag, running the
+// command after each rebased commit. Restack must reject the value up
+// front and must never touch git.
+func TestRestack_RejectsFlagLikeOnto(t *testing.T) {
+	svc, _ := restackService(t, nil, ghRestack())
+	err := svc.Restack(context.Background(), feature.RestackOpts{WorkerRef: "auth/erai/api", Onto: "--exec=touch /tmp/pwned"})
+	if !stderrors.Is(err, errors.ErrInvalidIdent) {
+		t.Fatalf("err = %v; want ErrInvalidIdent", err)
+	}
+}
+
+// TestRestack_RebaseCallHasEndOfOptionsSeparator is defence-in-depth: even
+// with validation in place, the rebase invocation itself must terminate
+// options before the positional upstream branch, so a value that somehow
+// reaches this call site (e.g. a hand-edited registry.json) can't be
+// reinterpreted as a git flag.
+func TestRestack_RebaseCallHasEndOfOptionsSeparator(t *testing.T) {
+	svc, _ := restackService(t, []gitfake.Response{{}, {}}, ghRestack())
+	gitr := svc.Git.(*gitfake.Runner)
+	if err := svc.Restack(context.Background(), feature.RestackOpts{WorkerRef: "auth/erai/api", Onto: "develop"}); err != nil {
+		t.Fatalf("Restack: %v", err)
+	}
+	var rebaseArgs []string
+	for _, c := range gitr.Calls {
+		if argsHasFC(c.Args, "rebase") && argsHasFC(c.Args, "--onto") {
+			rebaseArgs = c.Args
+		}
+	}
+	if rebaseArgs == nil {
+		t.Fatal("no rebase --onto call recorded")
+	}
+	found := false
+	for i, a := range rebaseArgs {
+		if a == "--" && i == len(rebaseArgs)-2 {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("rebase args = %v; want a \"--\" end-of-options separator immediately before the positional base branch", rebaseArgs)
+	}
+}
+
+// TestRestack_IncrementsCount_WordlistSuffixPurpose pins a finding from the
+// PR #333 review: stackNodes (used by both Restack and Merged) still located
+// "here" via the lossy component-wise comparison. For a worker whose whole
+// Purpose ends in a suffix-wordlist word, "here" was never found (stayed the
+// zero Node{}), so stack.RestackOnto walked descendants from a root with no
+// real branch — restack_count silently failed to increment for exactly the
+// worker class dotfiles#258 was supposed to fix, defeating the
+// anti-laundering invariant restack_count gates.
+func TestRestack_IncrementsCount_WordlistSuffixPurpose(t *testing.T) {
+	store := registry.NewStore(filepath.Join(t.TempDir(), "registry.json"))
+	if err := store.Update(func(r *registry.Registry) error {
+		*r = registry.Registry{SchemaVersion: 1, Features: []registry.Feature{{
+			Name: "auth", DefaultBaseBranch: "main",
+			Workers: []registry.Worker{
+				{User: "erai", Purpose: "apt-pin", Branch: "feature/auth/erai/apt-pin", Worktree: "/wt/apt-pin", BaseBranch: "main", Description: "a"},
+			},
+		}}}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	svc := &feature.Service{Store: store, Git: &gitfake.Runner{Script: []gitfake.Response{{}, {}}}, GH: ghfake.NewClient()}
+
+	if err := svc.Restack(context.Background(), feature.RestackOpts{WorkerRef: "auth/erai/apt-pin", Onto: "develop"}); err != nil {
+		t.Fatalf("Restack: %v", err)
+	}
+	reg, _ := store.Load()
+	if got := reg.Features[0].Workers[0].RestackCount; got != 1 {
+		t.Errorf("restack_count = %d; want 1 — stackNodes must locate \"here\" for a purpose ending in a wordlist word", got)
+	}
+}

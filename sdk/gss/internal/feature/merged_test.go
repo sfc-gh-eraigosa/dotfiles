@@ -194,3 +194,40 @@ func TestMergedCascadesTwoLevels(t *testing.T) {
 		t.Errorf("cascade PRReady order = %v; want [43 44]", readied)
 	}
 }
+
+// TestMerged_RetargetsChild_WordlistSuffixPurpose pins a finding from the PR
+// #333 review: Merged calls the same stackNodes helper Restack does, so a
+// merged worker whose whole Purpose ends in a suffix-wordlist word also
+// never resolves "here" — stack.RetargetOnMerge/AutoPromoteChild then walk
+// from a bogus zero Node{}, so a real direct child is silently never
+// re-targeted (its PR base and registry BaseBranch stay pointed at the
+// now-dead merged branch) and never auto-promoted.
+func TestMerged_RetargetsChild_WordlistSuffixPurpose(t *testing.T) {
+	svc, store, ghc := mergedService(t, []registry.Worker{
+		mw("apt-pin", "feature/auth/erai/apt-pin", "main", "https://github.com/o/r/pull/42", 0),
+		mw("ui", "feature/auth/erai/ui", "feature/auth/erai/apt-pin", "https://github.com/o/r/pull/43", 0),
+	})
+	res, err := svc.Merged(context.Background(), feature.MergedOpts{WorkerRef: "auth/erai/apt-pin"})
+	if err != nil {
+		t.Fatalf("Merged: %v", err)
+	}
+	if len(res.Retargeted) != 1 || res.Retargeted[0] != "auth/erai/ui" {
+		t.Fatalf("retargeted = %v; want [auth/erai/ui] — stackNodes must locate \"here\" for a purpose ending in a wordlist word", res.Retargeted)
+	}
+	if res.Promoted != "auth/erai/ui" {
+		t.Errorf("promoted = %q; want auth/erai/ui (linear stack, restack_count 0)", res.Promoted)
+	}
+	reg, _ := store.Load()
+	if got := reg.Features[0].Workers[1].BaseBranch; got != "main" {
+		t.Errorf("ui base = %q; want main (re-targeted onto apt-pin's former base)", got)
+	}
+	retargeted := false
+	for _, c := range ghc.Calls() {
+		if c.Verb == ghfake.VerbPREdit && c.Num == 43 && c.EditOpts.Base == "main" {
+			retargeted = true
+		}
+	}
+	if !retargeted {
+		t.Error("expected gh pr edit --base main on ui's PR (43)")
+	}
+}

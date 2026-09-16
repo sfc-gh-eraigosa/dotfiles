@@ -49,6 +49,14 @@ func (s *Service) WorkerAdd(ctx context.Context, opts WorkerAddOpts) (WorkerResu
 	if err := identity.ValidatePurpose(opts.Purpose); err != nil {
 		return WorkerResult{}, err
 	}
+	// Validate --base BEFORE it can reach the registry (dotfiles#96): it is
+	// persisted verbatim as the worker's BaseBranch and later read back as
+	// the positional upstream ref for `git rebase` (restack.go).
+	if opts.BaseBranch != "" {
+		if err := identity.ValidateBranchRef(opts.BaseBranch); err != nil {
+			return WorkerResult{}, err
+		}
+	}
 	src := s.UserSources
 	src.Override = opts.User
 	user, err := identity.ResolveUser(src)
@@ -79,9 +87,17 @@ func (s *Service) WorkerAdd(ctx context.Context, opts WorkerAddOpts) (WorkerResu
 			base = "main"
 		}
 
-		taken := func(ref identity.WorkerRef) bool {
+		// SameWorker (not a component-wise Purpose/Suffix comparison) — a
+		// candidate whose whole --purpose reconstructs to the same leaf as
+		// an existing worker's (possibly differently-split) Purpose/Suffix
+		// must be treated as taken (dotfiles#258 / PR #333 review), or
+		// AllocateRef would allocate a second, textually-identical-leaf
+		// worker that findWorker's leaf-based match can no longer
+		// disambiguate from the first.
+		taken := func(cand identity.WorkerRef) bool {
 			for _, w := range f.Workers {
-				if w.User == ref.User && w.Purpose == ref.Purpose && w.Suffix == ref.Suffix {
+				existing := identity.WorkerRef{Feature: opts.Feature, User: w.User, Purpose: w.Purpose, Suffix: w.Suffix}
+				if existing.SameWorker(cand) {
 					return true
 				}
 			}

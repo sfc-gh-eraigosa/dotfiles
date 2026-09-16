@@ -102,3 +102,18 @@ func TestStart_InvalidName(t *testing.T) {
 		t.Error("invalid feature name: want error")
 	}
 }
+
+// TestStart_RejectsFlagLikeBase pins the dotfiles#96 fix at the third write
+// path into a BaseBranch value: `feature start --base` seeds
+// DefaultBaseBranch, which worker add falls back to when --base is omitted,
+// and from there flows into the same rebase call sites.
+func TestStart_RejectsFlagLikeBase(t *testing.T) {
+	svc, _, store := newService(t)
+	if _, err := svc.Start(context.Background(), feature.StartOpts{Name: "auth", Description: "x", BaseBranch: "--exec=touch /tmp/pwned"}); err == nil {
+		t.Error("flag-like --base: want a validation error")
+	}
+	reg, _ := store.Load()
+	if len(reg.Features) != 0 {
+		t.Errorf("registry features = %+v; want none (rejected before persisting)", reg.Features)
+	}
+}

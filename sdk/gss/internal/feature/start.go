@@ -68,6 +68,13 @@ func (s *Service) Start(ctx context.Context, opts StartOpts) (string, error) {
 	if base == "" {
 		base = "main"
 	}
+	// Validate --base BEFORE it can reach the registry (dotfiles#96): it
+	// seeds DefaultBaseBranch, which worker add falls back to when its own
+	// --base is omitted, from where it flows into the same rebase call
+	// sites as worker.go's --base.
+	if err := identity.ValidateBranchRef(base); err != nil {
+		return "", err
+	}
 
 	_, _ = s.Git.Run(ctx, "fetch", "origin") // best-effort
 	baseCommit := ""

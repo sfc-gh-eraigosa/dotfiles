@@ -83,7 +83,8 @@ func parentDraft(f registry.Feature, ref identity.WorkerRef) (string, bool) {
 	for i, w := range f.Workers {
 		n := stack.Node{Ref: workerRef(f.Name, w), Branch: w.Branch, BaseBranch: w.BaseBranch}
 		nodes[i] = n
-		if w.User == ref.User && w.Purpose == ref.Purpose && w.Suffix == ref.Suffix {
+		cand := identity.WorkerRef{Feature: f.Name, User: w.User, Purpose: w.Purpose, Suffix: w.Suffix}
+		if cand.SameWorker(ref) {
 			here = n
 		}
 	}

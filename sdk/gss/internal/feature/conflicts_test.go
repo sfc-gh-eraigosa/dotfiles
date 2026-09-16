@@ -118,3 +118,57 @@ func TestConflicts_UnknownFeature(t *testing.T) {
 		t.Error("unknown feature: want error")
 	}
 }
+
+// TestConflicts_BareDefaultsToAllFeatures pins the dotfiles#332 fix: the
+// command's help text says --feature defaults to "all", but a bare
+// `gss feature conflicts` (Feature: "") used to look up a feature literally
+// named "" and fail with `no such feature ""`. It must succeed instead —
+// exactly the repro in the issue, run against a registry with one feature.
+func TestConflicts_BareDefaultsToAllFeatures(t *testing.T) {
+	svc := conflictService(t, twoWorkers(), "a.go\n", "c.go\n")
+	rep, err := svc.Conflicts(context.Background(), feature.ConflictsOpts{Feature: ""})
+	if err != nil {
+		t.Fatalf("Conflicts(Feature=\"\"): %v; want no error (defaults to all features)", err)
+	}
+	if len(rep.Conflicts) != 0 {
+		t.Errorf("conflicts = %+v; want none", rep.Conflicts)
+	}
+}
+
+// TestConflicts_BareScansAcrossFeatures confirms the "all features" scan is
+// not just error-free but actually pools every feature's workers, since
+// that's the question an agent asks before fan-out: which paths are touched
+// by more than one worker, anywhere in the registry, not just within one
+// named feature.
+func TestConflicts_BareScansAcrossFeatures(t *testing.T) {
+	store := registry.NewStore(filepath.Join(t.TempDir(), "registry.json"))
+	if err := store.Update(func(r *registry.Registry) error {
+		*r = registry.Registry{SchemaVersion: 1, Features: []registry.Feature{
+			{Name: "auth", DefaultBaseBranch: "main", Workers: []registry.Worker{
+				{User: "erai", Purpose: "api", Branch: "b/auth-api", Worktree: "/wt/auth-api", BaseBranch: "main", Description: "a"},
+			}},
+			{Name: "billing", DefaultBaseBranch: "main", Workers: []registry.Worker{
+				{User: "erai", Purpose: "api", Branch: "b/billing-api", Worktree: "/wt/billing-api", BaseBranch: "main", Description: "b"},
+			}},
+		}}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	gitr := &gitfake.Runner{Script: []gitfake.Response{
+		{Stdout: []byte("shared.go\n")},
+		{Stdout: []byte("shared.go\n")},
+	}}
+	svc := &feature.Service{Store: store, Git: gitr}
+	rep, err := svc.Conflicts(context.Background(), feature.ConflictsOpts{Feature: ""})
+	if err != nil {
+		t.Fatalf("Conflicts: %v", err)
+	}
+	if len(rep.Conflicts) != 1 {
+		t.Fatalf("conflicts = %+v; want exactly 1 cross-feature overlap", rep.Conflicts)
+	}
+	c := rep.Conflicts[0]
+	if c.WorkerA != "auth/erai/api" || c.WorkerB != "billing/erai/api" {
+		t.Errorf("pair = %s <-> %s; want auth/erai/api <-> billing/erai/api", c.WorkerA, c.WorkerB)
+	}
+}

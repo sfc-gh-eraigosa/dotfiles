@@ -32,14 +32,35 @@ type WorkerRef struct {
 	Suffix  string // optional; "" means no suffix
 }
 
-// String renders the canonical worker_ref. The suffix, when present, joins
-// to the purpose with "-" (not "/").
-func (r WorkerRef) String() string {
-	s := r.Feature + "/" + r.User + "/" + r.Purpose
-	if r.Suffix != "" {
-		s += "-" + r.Suffix
+// Leaf returns the "purpose[-suffix]" tail of the ref — the part that,
+// together with Feature and User, identifies a worker. Suffix may be "".
+func (r WorkerRef) Leaf() string {
+	if r.Suffix == "" {
+		return r.Purpose
 	}
-	return s
+	return r.Purpose + "-" + r.Suffix
+}
+
+// SameWorker reports whether r and other identify the same worker: the
+// same Feature, the same User, and the same reconstructed Leaf.
+//
+// This is the ONLY correct way to ask "is this ref the same worker as that
+// one" (dotfiles#258, and the PR #333 review that found five more call
+// sites making the same mistake). ParseWorkerRef's Purpose/Suffix split is
+// lossy: a purpose whose own trailing token happens to be a
+// suffix-wordlist word re-splits differently depending on how it was
+// entered, so two WorkerRef values naming the identical worker can
+// disagree field-by-field on Purpose/Suffix while still joining to the
+// same Leaf string — concatenation makes the split point irrelevant to the
+// reconstruction. Every comparison that means "is this worker X" must call
+// SameWorker; comparing Purpose and Suffix directly reintroduces the bug.
+func (r WorkerRef) SameWorker(other WorkerRef) bool {
+	return r.Feature == other.Feature && r.User == other.User && r.Leaf() == other.Leaf()
+}
+
+// String renders the canonical worker_ref.
+func (r WorkerRef) String() string {
+	return r.Feature + "/" + r.User + "/" + r.Leaf()
 }
 
 // wordSet indexes the built-in pool for suffix detection in ParseWorkerRef.

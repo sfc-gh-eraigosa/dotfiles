@@ -701,10 +701,18 @@ stale entries / refresh PR states.
 ### `gss feature checkpoint [--message "..."]`
 
 Per-worker; refuses if cwd isn't inside a registered worker worktree.
+**Approval-token gated** (same sentinel/exit code as `pr --ready`:
+`ErrApprovalTokenMissing`, exit 22) — checkpoint is the verb that
+publishes most often, so leaving it out of the gate (issue #331 in the
+dotfiles tracker) left the widest hole in the approve-then-publish
+contract. The gate is checked before step 1, so a refusal touches
+neither git nor GitHub.
 
 1. `git fetch origin`.
-2. `git rebase origin/<base_branch>` — abort cleanly on conflict; user
-   resolves in the worktree.
+2. `git rebase -- origin/<base_branch>` — abort cleanly on conflict; user
+   resolves in the worktree. (The `--` end-of-options separator guards the
+   positional ref against ever being read as a git flag; see restack's
+   note below.)
 3. Render PR body from `WORKER.md` + `FEATURE.md` excerpts + auto-section
    (recent commits, files changed, time since last checkpoint) + **stack
    section** (see Stacked PRs below).
@@ -740,6 +748,20 @@ a full checkpoint yet.
 Manual stack edit: re-target a worker's branch onto a new base. Force-pushes
 the worker's branch and updates its PR's `base`. Updates registry. Walks the
 stack to fix dependent workers.
+
+`--onto` (and every other write path into a worker's `base_branch`: `feature
+start --base`, `worker add --base`) is validated as a git ref name before it
+can reach the registry, and is never allowed to start with `-` (issue #96 in
+the dotfiles tracker). Before this validation existed, `--onto` was stored
+verbatim as `base_branch` and later replayed as the bare positional upstream
+ref to `git rebase --onto <target> <base_branch>`; a value like
+`--exec=<cmd>` in that position is read by git as a flag rather than a
+refname, running `<cmd>` after every rebased commit. Every `git rebase` call
+in this package goes through the shared `(*Service).gitRebase` helper,
+which always inserts a `--` end-of-options separator ahead of the
+positional upstream ref, as defence-in-depth beyond the write-time
+validation — centralized (rather than copy-pasted per call site) so a
+future rebase call site can't add itself without the same protection.
 
 **Side effect on auto-promote eligibility**: every call increments the
 target worker's `restack_count` by 1 (and increments
@@ -2025,7 +2047,30 @@ resolution now lives.
 11. **`gss feature pr --ready` is approval-token gated.** Closes the
     security gap where a worker could silently flip a draft to ready.
     See [`gss feature pr`](#gss-feature-pr---ready) (token required
-    for `--ready`).
+    for `--ready`). **`gss feature checkpoint` is gated identically**
+    (dotfiles issue #331): checkpoint pushes and publishes a PR far more
+    often than `pr --ready` does, so it was the wider hole in the same
+    contract — scoping the gate to `--ready` only left checkpoint able to
+    push with a missing or stale token. Same sentinel
+    (`ErrApprovalTokenMissing`) and exit code (22) either way. The gate is
+    checked exactly once per call chain: AutoCheckpoint (`checkpoint
+    --auto`) verifies it BEFORE its own local WIP commit (not just before
+    the eventual push — a PR #333 review finding), then delegates to
+    `checkpointAfterApproval` rather than the public `Checkpoint`, since
+    the token is single-use and a second `Verify` on the same chain would
+    spuriously fail against an already-consumed token.
+
+    Relatedly: `identity.WorkerRef.SameWorker`/`.Leaf()` are the ONLY
+    correct way to ask "is this ref the same worker as that one." The
+    dotfiles#258 fix (`findWorker` comparing the reconstructed leaf
+    instead of the split Purpose/Suffix fields) was originally applied
+    at only one of six call sites making the identical mistake; the
+    same PR #333 review found the other five (`pr.go`'s `parentDraft`,
+    `restack.go`'s `stackNodes` — shared by `Merged` —, `worker.go`'s
+    allocation-time `taken` check, and two spots in `checkpoint.go`),
+    and all six now go through the same `identity.WorkerRef` methods.
+    Comparing `Purpose`/`Suffix` directly anywhere in this package
+    reintroduces the bug.
 12. **NWO cache pinned.** Lives at `<worktrees_root>/.nwo`; refreshed
     on `gh repo view` cache miss; `--repo` is read-only shadow; cache
     invalidates when `git remote get-url origin` diverges.

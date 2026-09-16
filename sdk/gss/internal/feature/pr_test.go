@@ -158,3 +158,35 @@ func TestPromoteReady_NoPR(t *testing.T) {
 		t.Error("worker without PR: want error")
 	}
 }
+
+// TestPromoteReady_BlocksOnDraftParent_WordlistSuffixPurpose pins a finding
+// from the PR #333 review: parentDraft (unlike findWorker) still located the
+// caller's own stack node via the lossy component-wise (User,Purpose,Suffix)
+// comparison dotfiles#258 fixed findWorker to stop using. For a child whose
+// whole Purpose ends in a suffix-wordlist word ("apt-pin"), parentDraft
+// never finds "here", so stack.Parent(nodes, zero-Node) reports "no parent"
+// (bottom of the stack) even though a real, still-draft parent exists — the
+// merge-bottom-up guard silently no-ops and the promotion proceeds.
+func TestPromoteReady_BlocksOnDraftParent_WordlistSuffixPurpose(t *testing.T) {
+	ap := &fakeApprover{}
+	ghc := ghfake.NewClient()
+	ghc.SeedPR(gh.PR{Number: 42, Head: "feature/auth/erai/api", State: "OPEN", IsDraft: true, URL: "https://github.com/o/r/pull/42"})
+	ghc.SeedPR(gh.PR{Number: 43, Head: "feature/auth/erai/apt-pin", State: "OPEN", IsDraft: true, URL: "https://github.com/o/r/pull/43"})
+	workers := []registry.Worker{
+		{User: "erai", Purpose: "api", Branch: "feature/auth/erai/api", BaseBranch: "main",
+			Description: "api", PRURL: "https://github.com/o/r/pull/42", PRState: "draft"},
+		{User: "erai", Purpose: "apt-pin", Branch: "feature/auth/erai/apt-pin", BaseBranch: "feature/auth/erai/api",
+			Description: "child", PRURL: "https://github.com/o/r/pull/43", PRState: "draft"},
+	}
+	svc, _ := readyService(t, ap, workers, ghc)
+
+	err := svc.PromoteReady(context.Background(), feature.ReadyOpts{WorkerRef: "auth/erai/apt-pin"})
+	if err == nil {
+		t.Fatal("child whose parent is still draft: want refusal, got success")
+	}
+	for _, c := range ghc.Calls() {
+		if c.Verb == ghfake.VerbPRReady {
+			t.Error("must not promote while the real parent is still draft")
+		}
+	}
+}
