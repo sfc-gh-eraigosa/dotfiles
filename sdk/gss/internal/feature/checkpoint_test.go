@@ -42,7 +42,11 @@ func checkpointServiceAt(t *testing.T, wt, prURL string, gitScript []gitfake.Res
 		t.Fatalf("seed: %v", err)
 	}
 	gitr := &gitfake.Runner{Script: gitScript}
-	return &feature.Service{Store: store, Git: gitr, GH: ghc}, store, gitr
+	// Approval defaults to a succeeding fake: these tests exercise the push
+	// path, which is now gated (dotfiles#331) — see TestCheckpoint_Refuses*
+	// below for the gate's own negative-path tests, which build the Service
+	// directly with a failing approver.
+	return &feature.Service{Store: store, Git: gitr, GH: ghc, Approval: &fakeApprover{}}, store, gitr
 }
 
 // plantWorkerMD writes a WORKER.md for the worker whose worktree is wt.
@@ -376,6 +380,62 @@ func TestCheckpoint_UnknownWorker(t *testing.T) {
 	svc, _, _ := checkpointService(t, "", nil, ghfake.NewClient())
 	if _, err := svc.Checkpoint(context.Background(), feature.CheckpointOpts{WorkerRef: "auth/erai/ghost"}); err == nil {
 		t.Error("unknown worker: want error")
+	}
+}
+
+// TestCheckpoint_RefusesWithoutApprovalToken pins the dotfiles#331 fix:
+// checkpoint fetches, rebases, PUSHES, and creates/updates the draft
+// PR — but never consulted the approval token, unlike `pr --ready`. A
+// missing/stale token must refuse with the same sentinel/exit code
+// (errors.ErrApprovalTokenMissing, exit 22) `pr --ready` uses, and must
+// touch neither git nor gh.
+func TestCheckpoint_RefusesWithoutApprovalToken(t *testing.T) {
+	store := registry.NewStore(filepath.Join(t.TempDir(), "registry.json"))
+	if err := store.Update(func(r *registry.Registry) error {
+		*r = registry.Registry{SchemaVersion: 1, Features: []registry.Feature{{
+			Name: "auth", DefaultBaseBranch: "main",
+			Workers: []registry.Worker{{
+				User: "erai", Purpose: "api", Branch: "feature/auth/erai/api",
+				Worktree: "/wt/api", BaseBranch: "main", Description: "endpoints",
+			}},
+		}}}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	gitr := &gitfake.Runner{Script: []gitfake.Response{{}, {}, {}}}
+	ghc := ghfake.NewClient()
+	ap := &fakeApprover{err: errors.ErrApprovalTokenMissing}
+	svc := &feature.Service{Store: store, Git: gitr, GH: ghc, Approval: ap}
+
+	_, err := svc.Checkpoint(context.Background(), feature.CheckpointOpts{WorkerRef: "auth/erai/api"})
+	if !stderrors.Is(err, errors.ErrApprovalTokenMissing) {
+		t.Fatalf("err = %v; want ErrApprovalTokenMissing", err)
+	}
+	if ap.calls == 0 {
+		t.Error("approval verifier was never consulted")
+	}
+	if len(gitr.Calls) != 0 {
+		t.Errorf("git calls = %+v; want none — checkpoint must not fetch/rebase/push before the gate", gitr.Calls)
+	}
+	if len(ghc.Calls()) != 0 {
+		t.Errorf("gh calls = %+v; want none", ghc.Calls())
+	}
+}
+
+// TestCheckpoint_NoApproverConfiguredRefuses: a Service wired without an
+// Approval verifier at all must refuse rather than silently skip the gate
+// (mirrors PromoteReady's "no approval verifier configured" behaviour).
+func TestCheckpoint_NoApproverConfiguredRefuses(t *testing.T) {
+	svc, _, gitr := checkpointService(t, "", []gitfake.Response{{}, {}, {}}, ghfake.NewClient())
+	svc.Approval = nil
+
+	_, err := svc.Checkpoint(context.Background(), feature.CheckpointOpts{WorkerRef: "auth/erai/api"})
+	if !stderrors.Is(err, errors.ErrApprovalTokenMissing) {
+		t.Fatalf("err = %v; want ErrApprovalTokenMissing", err)
+	}
+	if len(gitr.Calls) != 0 {
+		t.Errorf("git calls = %+v; want none", gitr.Calls)
 	}
 }
 

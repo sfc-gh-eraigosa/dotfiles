@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/errors"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/feature"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/gh"
 	ghfake "github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/gh/fake"
@@ -41,7 +42,11 @@ func autoService(t *testing.T, prURL string, script []gitfake.Response, ghc *ghf
 		t.Fatalf("seed: %v", err)
 	}
 	gitr := &gitfake.Runner{Script: script}
-	svc := &feature.Service{Store: store, Git: gitr, GH: ghc, Clock: fixedClock{t: timeFixed()}}
+	// Approval defaults to a succeeding fake: AutoCheckpoint's happy-path
+	// tests exercise the push path (via the delegate-to-Checkpoint call),
+	// which is now gated (dotfiles#331) — see TestAutoCheckpoint_* below for
+	// the gate's own negative-path tests, which build the Service directly.
+	svc := &feature.Service{Store: store, Git: gitr, GH: ghc, Clock: fixedClock{t: timeFixed()}, Approval: &fakeApprover{}}
 	return svc, gitr, wt
 }
 
@@ -202,5 +207,50 @@ func TestAuto_ReadyPRWithPendingWorkSkipsLoudly(t *testing.T) {
 	data, _ := os.ReadFile(feature.WorkerMetaPath(wt))
 	if !strings.Contains(string(data), "ready-for-review") {
 		t.Errorf("WORKER.md (meta path) missing ready-PR diagnostic:\n%s", data)
+	}
+}
+
+// TestAutoCheckpoint_PropagatesApprovalGate pins the dotfiles#331 fix on the
+// path a process hook actually uses: --auto delegates its push to
+// Checkpoint (auto.go:139), so gating Checkpoint must also gate the auto
+// variant. A missing/stale token must fail loudly (non-zero) rather than
+// pushing silently — before the fix, checkpoint pushed and reported success
+// with a deliberately stale approval.token in place.
+func TestAutoCheckpoint_PropagatesApprovalGate(t *testing.T) {
+	root := t.TempDir()
+	wt := filepath.Join(root, "wt")
+	if err := os.MkdirAll(wt, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	store := registry.NewStore(filepath.Join(root, "registry.json"))
+	if err := store.Update(func(r *registry.Registry) error {
+		*r = registry.Registry{SchemaVersion: 1, Features: []registry.Feature{{
+			Name: "auth", DefaultBaseBranch: "main",
+			Workers: []registry.Worker{{
+				User: "erai", Purpose: "api", Branch: "feature/auth/erai/api",
+				Worktree: wt, BaseBranch: "main", Description: "endpoints",
+			}},
+		}}}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	// branch, porcelain (clean), local HEAD, remote HEAD (diverged) → needPush
+	// without needCommit, so AutoCheckpoint delegates straight to Checkpoint.
+	gitr := &gitfake.Runner{Script: []gitfake.Response{
+		resp("feature/auth/erai/api"), resp(""), resp("aaa"), resp("bbb"),
+	}}
+	ap := &fakeApprover{err: errors.ErrApprovalTokenMissing}
+	svc := &feature.Service{Store: store, Git: gitr, GH: ghfake.NewClient(), Clock: fixedClock{t: timeFixed()}, Approval: ap}
+
+	_, err := svc.AutoCheckpoint(context.Background(), feature.AutoOpts{WorkerRef: "auth/erai/api"})
+	if !stderrors.Is(err, errors.ErrApprovalTokenMissing) {
+		t.Fatalf("err = %v; want ErrApprovalTokenMissing", err)
+	}
+	if ap.calls == 0 {
+		t.Error("approval verifier was never consulted")
+	}
+	if gitCallsHave(gitr, "push") {
+		t.Error("auto-checkpoint must not push when the approval gate refuses")
 	}
 }

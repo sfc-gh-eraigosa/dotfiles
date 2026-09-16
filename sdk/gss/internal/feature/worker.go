@@ -49,6 +49,14 @@ func (s *Service) WorkerAdd(ctx context.Context, opts WorkerAddOpts) (WorkerResu
 	if err := identity.ValidatePurpose(opts.Purpose); err != nil {
 		return WorkerResult{}, err
 	}
+	// Validate --base BEFORE it can reach the registry (dotfiles#96): it is
+	// persisted verbatim as the worker's BaseBranch and later read back as
+	// the positional upstream ref for `git rebase` (restack.go).
+	if opts.BaseBranch != "" {
+		if err := identity.ValidateBranchRef(opts.BaseBranch); err != nil {
+			return WorkerResult{}, err
+		}
+	}
 	src := s.UserSources
 	src.Override = opts.User
 	user, err := identity.ResolveUser(src)

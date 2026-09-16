@@ -49,10 +49,28 @@ func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (Checkpoi
 	w := feat.Workers[wi]
 	base := w.BaseBranch
 
+	// Approval gate (dotfiles#331) — checkpoint fetches, rebases, PUSHES,
+	// and creates/updates the draft PR, but until this fix only `pr --ready`
+	// consulted the approval token; checkpoint is the verb that publishes
+	// most often, so it was the widest hole in the approve-then-publish
+	// contract. Same sentinel/exit code as PromoteReady
+	// (errors.ErrApprovalTokenMissing, exit 22), checked before any git or
+	// gh call so a refusal touches neither.
+	if s.Approval == nil {
+		return CheckpointResult{}, fmt.Errorf("checkpoint: %w: no approval verifier configured", errors.ErrApprovalTokenMissing)
+	}
+	if err := s.Approval.Verify(ctx, w.Worktree, false); err != nil {
+		return CheckpointResult{}, fmt.Errorf("checkpoint: %w", err)
+	}
+
 	if out, err := s.Git.Run(ctx, "-C", w.Worktree, "fetch", "origin"); err != nil {
 		return CheckpointResult{}, fmt.Errorf("checkpoint: fetch: %w: %s", err, strings.TrimSpace(string(out)))
 	}
-	if out, err := s.Git.Run(ctx, "-C", w.Worktree, "rebase", "origin/"+base); err != nil {
+	// "--" (dotfiles#96): defence-in-depth, matching restack.go/rebase.go —
+	// the "origin/" prefix already prevents this positional from starting
+	// with "-", but the separator makes that invariant explicit rather than
+	// incidental.
+	if out, err := s.Git.Run(ctx, "-C", w.Worktree, "rebase", "--", "origin/"+base); err != nil {
 		_, _ = s.Git.Run(ctx, "-C", w.Worktree, "rebase", "--abort") // clean abort; user resolves
 		return CheckpointResult{}, fmt.Errorf("%w: rebase onto origin/%s: %s", errors.ErrRebaseConflict, base, strings.TrimSpace(string(out)))
 	}
@@ -162,14 +180,30 @@ func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (Checkpoi
 
 // findWorker returns the (featureIndex, workerIndex) of the worker matching
 // ref, or (-1, -1).
+//
+// Matches on the RECONSTRUCTED leaf string (identity.WorkerRef.String()'s
+// "purpose[-suffix]" tail), not on the split (Purpose, Suffix) fields
+// component-wise (dotfiles#258). ParseWorkerRef's structural split is lossy:
+// a purpose whose own trailing token happens to be a suffix-wordlist word
+// (e.g. stored as Purpose="apt-pin", Suffix="") re-splits on the next parse
+// as Purpose="apt", Suffix="pin". Component-wise comparison then misses,
+// even though the joined leaf ("apt-pin") is identical on both sides —
+// concatenation makes the split point irrelevant to the reconstructed
+// string, so comparing the reconstruction is exact regardless of how either
+// side happened to split.
 func findWorker(reg registry.Registry, ref identity.WorkerRef) (int, int) {
+	refLeaf := identity.WorkerRef{Purpose: ref.Purpose, Suffix: ref.Suffix}.String()
 	for fi := range reg.Features {
 		if reg.Features[fi].Name != ref.Feature {
 			continue
 		}
 		for wi := range reg.Features[fi].Workers {
 			w := reg.Features[fi].Workers[wi]
-			if w.User == ref.User && w.Purpose == ref.Purpose && w.Suffix == ref.Suffix {
+			if w.User != ref.User {
+				continue
+			}
+			wLeaf := identity.WorkerRef{Purpose: w.Purpose, Suffix: w.Suffix}.String()
+			if wLeaf == refLeaf {
 				return fi, wi
 			}
 		}

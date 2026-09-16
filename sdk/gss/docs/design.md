@@ -701,10 +701,18 @@ stale entries / refresh PR states.
 ### `gss feature checkpoint [--message "..."]`
 
 Per-worker; refuses if cwd isn't inside a registered worker worktree.
+**Approval-token gated** (same sentinel/exit code as `pr --ready`:
+`ErrApprovalTokenMissing`, exit 22) — checkpoint is the verb that
+publishes most often, so leaving it out of the gate (issue #331 in the
+dotfiles tracker) left the widest hole in the approve-then-publish
+contract. The gate is checked before step 1, so a refusal touches
+neither git nor GitHub.
 
 1. `git fetch origin`.
-2. `git rebase origin/<base_branch>` — abort cleanly on conflict; user
-   resolves in the worktree.
+2. `git rebase -- origin/<base_branch>` — abort cleanly on conflict; user
+   resolves in the worktree. (The `--` end-of-options separator guards the
+   positional ref against ever being read as a git flag; see restack's
+   note below.)
 3. Render PR body from `WORKER.md` + `FEATURE.md` excerpts + auto-section
    (recent commits, files changed, time since last checkpoint) + **stack
    section** (see Stacked PRs below).
@@ -740,6 +748,17 @@ a full checkpoint yet.
 Manual stack edit: re-target a worker's branch onto a new base. Force-pushes
 the worker's branch and updates its PR's `base`. Updates registry. Walks the
 stack to fix dependent workers.
+
+`--onto` (and every other write path into a worker's `base_branch`: `feature
+start --base`, `worker add --base`) is validated as a git ref name before it
+can reach the registry, and is never allowed to start with `-` (issue #96 in
+the dotfiles tracker). Before this validation existed, `--onto` was stored
+verbatim as `base_branch` and later replayed as the bare positional upstream
+ref to `git rebase --onto <target> <base_branch>`; a value like
+`--exec=<cmd>` in that position is read by git as a flag rather than a
+refname, running `<cmd>` after every rebased commit. The rebase call itself
+also gets a `--` end-of-options separator ahead of the positional, as
+defence-in-depth beyond the write-time validation.
 
 **Side effect on auto-promote eligibility**: every call increments the
 target worker's `restack_count` by 1 (and increments
@@ -2025,7 +2044,12 @@ resolution now lives.
 11. **`gss feature pr --ready` is approval-token gated.** Closes the
     security gap where a worker could silently flip a draft to ready.
     See [`gss feature pr`](#gss-feature-pr---ready) (token required
-    for `--ready`).
+    for `--ready`). **`gss feature checkpoint` is gated identically**
+    (dotfiles issue #331): checkpoint pushes and publishes a PR far more
+    often than `pr --ready` does, so it was the wider hole in the same
+    contract — scoping the gate to `--ready` only left checkpoint able to
+    push with a missing or stale token. Same sentinel
+    (`ErrApprovalTokenMissing`) and exit code (22) either way.
 12. **NWO cache pinned.** Lives at `<worktrees_root>/.nwo`; refreshed
     on `gh repo view` cache miss; `--repo` is read-only shadow; cache
     invalidates when `git remote get-url origin` diverges.

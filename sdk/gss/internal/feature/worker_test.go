@@ -142,3 +142,21 @@ func TestWorkerAdd_UnknownFeature(t *testing.T) {
 		t.Error("unknown feature: want error")
 	}
 }
+
+// TestWorkerAdd_RejectsFlagLikeBase pins the dotfiles#96 fix at the other
+// write path into BaseBranch: `worker add --base` flows unvalidated into
+// the registry, from where it is later replayed as a bare positional to
+// `git rebase` (checkpoint.go/rebase.go's "origin/"+base prefix defeats the
+// injection there, but restack.go's positional does not — see
+// TestRestack_RejectsFlagLikeOnto). No worktree must be created.
+func TestWorkerAdd_RejectsFlagLikeBase(t *testing.T) {
+	svc, be, _ := startedFeature(t)
+	if _, err := svc.WorkerAdd(context.Background(), feature.WorkerAddOpts{
+		Feature: "auth", Purpose: "api", Description: "x", BaseBranch: "--exec=touch /tmp/pwned",
+	}); err == nil {
+		t.Error("flag-like --base: want a validation error")
+	}
+	if len(be.created) != 0 {
+		t.Errorf("backend.Create called %d times; want 0 (rejected before materializing)", len(be.created))
+	}
+}

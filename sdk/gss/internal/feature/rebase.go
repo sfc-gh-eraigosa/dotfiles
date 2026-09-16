@@ -38,7 +38,11 @@ func (s *Service) Rebase(ctx context.Context, opts RebaseOpts) error {
 	if out, err := s.Git.Run(ctx, "-C", w.Worktree, "fetch", "origin"); err != nil {
 		return fmt.Errorf("feature rebase: fetch: %w: %s", err, strings.TrimSpace(string(out)))
 	}
-	if out, err := s.Git.Run(ctx, "-C", w.Worktree, "rebase", "origin/"+w.BaseBranch); err != nil {
+	// "--" (dotfiles#96): defence-in-depth, matching restack.go/checkpoint.go
+	// — the "origin/" prefix already prevents this positional from starting
+	// with "-", but the separator makes that invariant explicit rather than
+	// incidental.
+	if out, err := s.Git.Run(ctx, "-C", w.Worktree, "rebase", "--", "origin/"+w.BaseBranch); err != nil {
 		_, _ = s.Git.Run(ctx, "-C", w.Worktree, "rebase", "--abort")
 		return fmt.Errorf("%w: rebase onto origin/%s: %s", errors.ErrRebaseConflict, w.BaseBranch, strings.TrimSpace(string(out)))
 	}

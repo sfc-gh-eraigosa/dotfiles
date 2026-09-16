@@ -116,3 +116,50 @@ func TestRestack_Cycle(t *testing.T) {
 		t.Errorf("cyclic stack: err = %v; want stack.ErrCycle", err)
 	}
 }
+
+// TestRestack_RejectsFlagLikeOnto pins the dotfiles#96 fix: --onto is
+// stored verbatim as a worker's BaseBranch and later replayed as a bare
+// positional to `git rebase`. Before the fix nothing validated its content,
+// so `--onto '--exec=touch /tmp/pwned'` poisoned the registry, and a later
+// restack replayed it as a `git rebase --onto <x> --exec=touch /tmp/pwned`
+// invocation — git treats a leading-dash positional as a flag, running the
+// command after each rebased commit. Restack must reject the value up
+// front and must never touch git.
+func TestRestack_RejectsFlagLikeOnto(t *testing.T) {
+	svc, _ := restackService(t, nil, ghRestack())
+	err := svc.Restack(context.Background(), feature.RestackOpts{WorkerRef: "auth/erai/api", Onto: "--exec=touch /tmp/pwned"})
+	if !stderrors.Is(err, errors.ErrInvalidIdent) {
+		t.Fatalf("err = %v; want ErrInvalidIdent", err)
+	}
+}
+
+// TestRestack_RebaseCallHasEndOfOptionsSeparator is defence-in-depth: even
+// with validation in place, the rebase invocation itself must terminate
+// options before the positional upstream branch, so a value that somehow
+// reaches this call site (e.g. a hand-edited registry.json) can't be
+// reinterpreted as a git flag.
+func TestRestack_RebaseCallHasEndOfOptionsSeparator(t *testing.T) {
+	svc, _ := restackService(t, []gitfake.Response{{}, {}}, ghRestack())
+	gitr := svc.Git.(*gitfake.Runner)
+	if err := svc.Restack(context.Background(), feature.RestackOpts{WorkerRef: "auth/erai/api", Onto: "develop"}); err != nil {
+		t.Fatalf("Restack: %v", err)
+	}
+	var rebaseArgs []string
+	for _, c := range gitr.Calls {
+		if argsHasFC(c.Args, "rebase") && argsHasFC(c.Args, "--onto") {
+			rebaseArgs = c.Args
+		}
+	}
+	if rebaseArgs == nil {
+		t.Fatal("no rebase --onto call recorded")
+	}
+	found := false
+	for i, a := range rebaseArgs {
+		if a == "--" && i == len(rebaseArgs)-2 {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("rebase args = %v; want a \"--\" end-of-options separator immediately before the positional base branch", rebaseArgs)
+	}
+}
