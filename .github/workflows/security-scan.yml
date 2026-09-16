@@ -1,0 +1,54 @@
+name: Security Scan
+
+# govulncheck + gosec across every Go module (dotfiles#103): neither was
+# installed or run anywhere in CI, so known CVEs in the dependency tree and
+# common misuse patterns (unchecked os/exec, permissive file modes, ...)
+# were invisible between manual security reviews.
+#
+# NOT a required check yet, deliberately (continue-on-error below): a first
+# run across every module found 27 pre-existing govulncheck findings (most
+# are Go-stdlib CVEs tied to the pinned toolchain version, not a
+# same-scope dependency bump — sdk/gcfg and sdk/ghapp each carry a dozen)
+# and 156 pre-existing gosec findings spread across nearly every module.
+# Mirrors this repo's own precedent for `Go Lint (golangci-lint)` (see
+# docs/mergify.md's "Pending: promote ... to a ruleset-required check"):
+# land the visible, warn-only job first, triage the backlog, THEN promote
+# to strict + ruleset-required — in that order, never the reverse (adding
+# a required check whose backlog isn't clear yet just deadlocks the queue
+# waiting on a check that can never go green).
+#
+# Lives in its OWN workflow file, not docker-image.yml: that file's
+# required jobs are gated against Mergify's queued/dequeued label churn
+# (see "MERGIFY QUEUE LIVELOCK" in its `on:` block — PR #264, #243) because
+# restarting a REQUIRED check on a labeled/unlabeled event can livelock the
+# merge queue. This job isn't required, so it stays on the plain default
+# pull_request triggers and never needs that guard.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    name: Security Scan (govulncheck + gosec)
+    runs-on: ubuntu-latest
+    # See the file header: non-blocking until the pre-existing backlog is
+    # triaged and this is promoted the same way golangci-lint was.
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+
+      - name: govulncheck + gosec (per module)
+        run: make security

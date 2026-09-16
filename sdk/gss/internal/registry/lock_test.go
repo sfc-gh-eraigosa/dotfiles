@@ -15,6 +15,9 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/gofrs/flock"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/errors"
 )
@@ -179,6 +182,129 @@ func TestCheckOwner_RefusesUidMismatch(t *testing.T) {
 		t.Fatal("Load with uid mismatch: err = nil; want refusal")
 	} else if !stderrors.Is(err, errors.ErrPermissionMode) {
 		t.Errorf("err = %v; want wrapping ErrPermissionMode", err)
+	}
+}
+
+// TestUpdate_ReturnsErrLockHeldOnContention pins the dotfiles#97 fix: the
+// registry lock is advertised as failing fast with errors.ErrLockHeld /
+// exit code 13 when contended, but Update called the blocking flock APIs
+// (Lock/RLock) and never returned that sentinel — a second gss process
+// contending for the registry (the exact multi-writer / multi-agent
+// scenario the lock exists for) blocked forever instead. This holds the
+// lock externally (simulating another process) and asserts Update returns
+// promptly with ErrLockHeld rather than hanging.
+func TestUpdate_ReturnsErrLockHeldOnContention(t *testing.T) {
+	s := tmpStore(t)
+	// Seed so the lock file exists at s.LockPath.
+	if err := s.Update(func(r *Registry) error { addWorker(r, "api"); return nil }); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	holder := flock.New(s.LockPath)
+	if ok, err := holder.TryLock(); err != nil || !ok {
+		t.Fatalf("test setup: could not hold the lock externally: ok=%v err=%v", ok, err)
+	}
+	defer func() { _ = holder.Unlock() }()
+
+	s.LockTimeout = 100 * time.Millisecond
+	done := make(chan error, 1)
+	go func() {
+		done <- s.Update(func(r *Registry) error { addWorker(r, "contended"); return nil })
+	}()
+	select {
+	case err := <-done:
+		if !stderrors.Is(err, errors.ErrLockHeld) {
+			t.Fatalf("err = %v; want ErrLockHeld", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Update blocked far longer than LockTimeout — still hangs forever on contention")
+	}
+}
+
+// TestLoad_ReturnsErrLockHeldOnContention mirrors the above for the shared
+// (RLock) path: an exclusive holder blocks a would-be reader too, and Load
+// must fail fast the same way.
+func TestLoad_ReturnsErrLockHeldOnContention(t *testing.T) {
+	s := tmpStore(t)
+	if err := s.Update(func(r *Registry) error { addWorker(r, "api"); return nil }); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	holder := flock.New(s.LockPath)
+	if ok, err := holder.TryLock(); err != nil || !ok {
+		t.Fatalf("test setup: could not hold the lock externally: ok=%v err=%v", ok, err)
+	}
+	defer func() { _ = holder.Unlock() }()
+
+	s.LockTimeout = 100 * time.Millisecond
+	done := make(chan error, 1)
+	go func() {
+		_, err := s.Load()
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if !stderrors.Is(err, errors.ErrLockHeld) {
+			t.Fatalf("err = %v; want ErrLockHeld", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Load blocked far longer than LockTimeout — still hangs forever on contention")
+	}
+}
+
+// TestLoad_SharedLocksDoNotContend guards against an overcorrection: two
+// concurrent readers must NOT fail each other with ErrLockHeld — only an
+// exclusive holder should ever cause a timeout.
+func TestLoad_SharedLocksDoNotContend(t *testing.T) {
+	s := tmpStore(t)
+	if err := s.Update(func(r *Registry) error { addWorker(r, "api"); return nil }); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	s.LockTimeout = 200 * time.Millisecond
+	var wg sync.WaitGroup
+	errs := make([]error, 10)
+	wg.Add(10)
+	for i := range errs {
+		go func(i int) {
+			defer wg.Done()
+			_, errs[i] = s.Load()
+		}(i)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("concurrent Load %d: %v; want nil (shared locks must not contend)", i, err)
+		}
+	}
+}
+
+// TestConcurrentWorkerAdd_StillSucceedsWithBoundedTimeout re-runs the
+// existing high-contention same-process scenario with a short LockTimeout
+// to confirm the fix's retry loop still lets fast, brief holders all
+// succeed — the bounded wait must not turn ordinary same-process
+// contention into spurious ErrLockHeld failures.
+func TestConcurrentWorkerAdd_StillSucceedsWithBoundedTimeout(t *testing.T) {
+	s := tmpStore(t)
+	s.LockTimeout = 2 * time.Second
+	const n = 20
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func(i int) {
+			defer wg.Done()
+			if err := s.Update(func(r *Registry) error {
+				addWorker(r, fmt.Sprintf("q%d", i))
+				return nil
+			}); err != nil {
+				t.Errorf("Update %d: %v", i, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	reg, err := s.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := len(reg.Features[0].Workers); got != n {
+		t.Errorf("workers = %d; want %d", got, n)
 	}
 }
 

@@ -155,6 +155,27 @@ lint-go: ## Lint Go modules (gofmt + golangci-lint, per-module)
 		exit 1; \
 	fi
 
+.PHONY: security
+security: ## CVE + misuse scan (govulncheck + gosec), per-module (dotfiles#103)
+	@command -v govulncheck >/dev/null 2>&1 || go install golang.org/x/vuln/cmd/govulncheck@latest
+	@command -v gosec >/dev/null 2>&1 || go install github.com/securego/gosec/v2/cmd/gosec@latest
+	@govulncheck="$$(command -v govulncheck || echo "$$(go env GOPATH)/bin/govulncheck")"; \
+	gosec="$$(command -v gosec || echo "$$(go env GOPATH)/bin/gosec")"; \
+	failed=''; \
+	for d in sdk/*; do \
+		if [ -f "$$d/go.mod" ]; then \
+			echo "==> govulncheck ($$d)"; \
+			(cd "$$d" && "$$govulncheck" ./...) || failed="$$failed $$d(govulncheck)"; \
+			echo "==> gosec ($$d)"; \
+			(cd "$$d" && "$$gosec" -quiet ./...) || failed="$$failed $$d(gosec)"; \
+		fi; \
+	done; \
+	if [ -n "$$failed" ]; then \
+		echo "security findings in:$$failed"; \
+		exit 1; \
+	fi
+	@echo "OK: no vulnerability or misuse findings"
+
 .PHONY: lint-shell
 lint-shell: ## Lint shell scripts with shellcheck
 	@echo "==> shellcheck (all *.sh files)"

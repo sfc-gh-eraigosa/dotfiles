@@ -166,6 +166,19 @@ across all six `sdk/` modules, which is the condition the `lint` job names for
 going strict "per linter as each category reaches zero". Shell (~90) and
 markdown (~979) are not there yet, so `make lint` itself stays warn-only.
 
+## Pending: promote `Security Scan (govulncheck + gosec)` to required
+
+`.github/workflows/security-scan.yml` (dotfiles#103) runs `make security`
+(govulncheck + gosec, per Go module) on every PR, but the job carries
+`continue-on-error: true` and is not in `.mergify.yml`'s `merge_protections`.
+A first run found 27 pre-existing govulncheck findings (mostly Go-stdlib
+CVEs tied to the pinned toolchain version — sdk/gcfg and sdk/ghapp each
+carry a dozen — not a same-scope dependency bump) and 156 pre-existing gosec
+findings spread across nearly every module. Same shape as the Go Lint
+rollout above ("`make lint` is warn-only ... until every category reaches
+zero"): promote once the backlog is triaged to zero, in the same
+merge-first-then-ruleset order given above, never the reverse.
+
 ## Rollout state
 
 `merge_protections` currently runs alongside the ruleset's native required
