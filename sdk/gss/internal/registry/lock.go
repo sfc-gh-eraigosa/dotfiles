@@ -1,16 +1,29 @@
 package registry
 
 import (
+	"context"
 	stderrors "errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/gofrs/flock"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/errors"
+)
+
+// defaultLockTimeout bounds how long Update/Load wait for a contended
+// registry lock before giving up with errors.ErrLockHeld (dotfiles#97).
+// lockRetryInterval is how often the wait re-polls the lock within that
+// window; short enough that ordinary same-process contention (many quick
+// Update calls racing, as in TestConcurrentWorkerAdd) still resolves almost
+// immediately once the current holder releases.
+const (
+	defaultLockTimeout = 5 * time.Second
+	lockRetryInterval  = 20 * time.Millisecond
 )
 
 // Store is a file-backed registry with advisory-locked, atomic
@@ -23,6 +36,21 @@ type Store struct {
 	Path string
 	// LockPath is the advisory lock file; defaults to <dir>/.registry.lock.
 	LockPath string
+	// LockTimeout bounds how long Update/Load wait for a contended lock
+	// before failing with errors.ErrLockHeld. Zero uses defaultLockTimeout.
+	//
+	// Before this field existed, Update/Load called the blocking flock
+	// APIs (Lock/RLock), which wait indefinitely with no timeout and no
+	// ctx (dotfiles#97): the declared contract advertises a
+	// distinguishable, fail-fast ErrLockHeld/exit-13 for exactly the
+	// multi-writer scenario this lock exists for, but the code could never
+	// produce it — a second gss process contending for the registry just
+	// blocked forever. Update/Load now retry TryLock/TryRLock (via
+	// gofrs/flock's TryLockContext) until LockTimeout elapses, THEN return
+	// ErrLockHeld — bounded waiting, not unbounded blocking, while still
+	// letting brief same-process contention resolve without a spurious
+	// failure.
+	LockTimeout time.Duration
 	// euid returns the effective uid to compare against the file owner;
 	// nil uses os.Geteuid. Injected in tests to exercise the refusal path.
 	euid func() int
@@ -46,11 +74,12 @@ func (s *Store) effectiveUID() int {
 // Update runs fn under an exclusive lock, passing the current registry
 // (empty if the file is absent) and atomically persisting the mutated
 // result. fn returning an error aborts the write, leaving registry.json
-// untouched.
+// untouched. A contended lock fails with errors.ErrLockHeld after
+// LockTimeout rather than blocking forever (dotfiles#97).
 func (s *Store) Update(fn func(*Registry) error) error {
 	lk := flock.New(s.LockPath)
-	if err := lk.Lock(); err != nil {
-		return fmt.Errorf("registry: acquire lock %s: %w", s.LockPath, err)
+	if err := s.acquire(lk, false); err != nil {
+		return err
 	}
 	defer func() { _ = lk.Unlock() }()
 
@@ -65,14 +94,50 @@ func (s *Store) Update(fn func(*Registry) error) error {
 }
 
 // Load reads the registry under a shared lock. A missing file yields an
-// empty registry at the supported schema version.
+// empty registry at the supported schema version. A contended lock fails
+// with errors.ErrLockHeld after LockTimeout rather than blocking forever
+// (dotfiles#97).
 func (s *Store) Load() (Registry, error) {
 	lk := flock.New(s.LockPath)
-	if err := lk.RLock(); err != nil {
-		return Registry{}, fmt.Errorf("registry: acquire rlock %s: %w", s.LockPath, err)
+	if err := s.acquire(lk, true); err != nil {
+		return Registry{}, err
 	}
 	defer func() { _ = lk.Unlock() }()
 	return s.readLocked()
+}
+
+// acquire takes lk exclusively (shared=false) or as a reader (shared=true),
+// retrying (via gofrs/flock's TryLock*Context) until it succeeds or
+// s.lockTimeout() elapses. On timeout — the lock is still held by someone
+// else — it returns errors.ErrLockHeld, the declared, distinguishable
+// failure for lock contention (design.md resolution #10; exit code 13). Any
+// OTHER acquisition error (a real OS/syscall failure, not mere contention)
+// is returned as-is, unwrapped from ErrLockHeld, since it isn't the
+// "someone else holds it" condition the sentinel promises.
+func (s *Store) acquire(lk *flock.Flock, shared bool) error {
+	ctx, cancel := context.WithTimeout(context.Background(), s.lockTimeout())
+	defer cancel()
+	tryLock := lk.TryLockContext
+	verb := "lock"
+	if shared {
+		tryLock = lk.TryRLockContext
+		verb = "rlock"
+	}
+	locked, err := tryLock(ctx, lockRetryInterval)
+	if locked {
+		return nil
+	}
+	if err != nil && !stderrors.Is(err, context.DeadlineExceeded) && !stderrors.Is(err, context.Canceled) {
+		return fmt.Errorf("registry: acquire %s %s: %w", verb, s.LockPath, err)
+	}
+	return fmt.Errorf("%w: %s (%s) still held after %s", errors.ErrLockHeld, verb, s.LockPath, s.lockTimeout())
+}
+
+func (s *Store) lockTimeout() time.Duration {
+	if s.LockTimeout > 0 {
+		return s.LockTimeout
+	}
+	return defaultLockTimeout
 }
 
 func (s *Store) readLocked() (Registry, error) {

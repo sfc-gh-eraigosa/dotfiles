@@ -217,6 +217,41 @@ KEGOUT="$(PATH="$KEGBIN" bash "$SYNC" 2>&1 || true)"
 rm -rf "$KEGBIN" "$KEG_ROOT"
 assert_contains "$KEGOUT" "KEG_SETSID_USED" "discovers keg-only util-linux setsid via 'brew --prefix' when setsid is off PATH (macOS)"
 
+# --- Behavioral: warns when uvx is missing and an AWS plugin is enabled -------
+# dotfiles#312: deploy-on-aws/aws-serverless/aws-core's MCP servers launch via
+# `uvx`, which nothing in this repo installs or checks for — on a host without
+# it, those servers fail to connect at every future session start with a
+# confusing "Executable not found in $PATH: uvx", naming a binary the user
+# never chose to depend on. sync-plugins must warn once, actionably, at sync
+# time instead. Curated PATH (coreutils + yq, no uvx) makes this deterministic
+# regardless of whether uvx happens to be installed on the machine running
+# this test suite.
+NOUVX_BIN="$(mktemp -d)"
+for _t in bash sh env yq grep egrep awk sed tr cat head cut sort uniq dirname basename readlink mktemp xargs; do
+    _src="$(command -v "$_t" 2>/dev/null)" && ln -s "$_src" "$NOUVX_BIN/$_t" 2>/dev/null
+done
+NOUVXOUT="$(PATH="$NOUVX_BIN" bash "$SYNC" --dry-run 2>&1)"
+rm -rf "$NOUVX_BIN"
+assert_contains "$NOUVXOUT" "uvx is not on PATH" "warns when uvx is missing and an AWS (uvx-dependent) plugin is enabled"
+UVX_WARNING="$(printf '%s\n' "$NOUVXOUT" | grep "uvx is not on PATH")"
+assert_contains "$UVX_WARNING" "deploy-on-aws" "warning names deploy-on-aws"
+assert_contains "$UVX_WARNING" "aws-serverless" "warning names aws-serverless"
+assert_contains "$UVX_WARNING" "aws-core" "warning names aws-core"
+
+# --- Behavioral: no warning when uvx IS on PATH --------------------------------
+UVX_BIN="$(mktemp -d)"
+for _t in bash sh env yq grep egrep awk sed tr cat head cut sort uniq dirname basename readlink mktemp xargs; do
+    _src="$(command -v "$_t" 2>/dev/null)" && ln -s "$_src" "$UVX_BIN/$_t" 2>/dev/null
+done
+cat > "$UVX_BIN/uvx" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$UVX_BIN/uvx"
+UVXOUT="$(PATH="$UVX_BIN" bash "$SYNC" --dry-run 2>&1)"
+rm -rf "$UVX_BIN"
+assert_not_contains "$UVXOUT" "uvx is not on PATH" "does not warn when uvx is already on PATH"
+
 echo "----"
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

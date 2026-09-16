@@ -216,7 +216,27 @@ ${name}"
     [ "$any" = "0" ] && echo "sync-plugins: no Antigravity plugin sources in manifest (nothing to do)."
 }
 
+# Runtime-prerequisite check for the plugins whose MCP servers launch via
+# `uvx` (Astral's `uv` tool-runner — the npx equivalent for a PyPI CLI, a
+# single static binary with no Python prerequisite of its own). Neither uvx
+# nor uv is installed by this repo, so on a host without them these
+# plugins' servers fail to connect at every future session start
+# (dotfiles#312): a confusing "Executable not found in $PATH: uvx" surfaces
+# later, inside an assistant session, naming a binary the user never chose
+# to depend on. Scope is the AWS trio only — the only enabled rows that
+# need it today; extend this list if a future plugin adds the same
+# dependency. Read-only and runs in both dry-run and real mode.
+check_uvx_prereq() {
+    command -v uvx >/dev/null 2>&1 && return 0
+    local need
+    need="$(yq '.plugins[] | select(.enabled == true) | select(.name == "deploy-on-aws" or .name == "aws-serverless" or .name == "aws-core") | .name' "$MANIFEST" 2>/dev/null | tr '\n' ' ')"
+    need="${need% }"
+    [ -z "$need" ] && return 0
+    echo "sync-plugins: WARNING — uvx is not on PATH; the MCP server(s) for: $need will fail to connect. Install uv (https://docs.astral.sh/uv/getting-started/installation/), or set those plugins' 'enabled: false' in ai/plugins.yaml if they aren't needed on this host." >&2
+}
+
 echo "Syncing AI plugins from ${MANIFEST}$([ "$DRY_RUN" = "1" ] && echo ' (dry-run)')..."
 sync_claude
 sync_antigravity
+check_uvx_prereq
 echo "sync-plugins: done."
