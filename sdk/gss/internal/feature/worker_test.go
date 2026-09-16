@@ -160,3 +160,39 @@ func TestWorkerAdd_RejectsFlagLikeBase(t *testing.T) {
 		t.Errorf("backend.Create called %d times; want 0 (rejected before materializing)", len(be.created))
 	}
 }
+
+// TestWorkerAdd_DetectsLeafCollisionAcrossDifferentSplit pins a finding from
+// the PR #333 review: WorkerAdd's uniqueness check (`taken`, fed to
+// identity.AllocateRef) compared candidate/stored refs component-wise, the
+// same lossy comparison dotfiles#258 fixed findWorker to stop using. An
+// existing worker stored as Purpose="apt", Suffix="pin" (as AllocateRef
+// would draw it) and a new `--purpose apt-pin` request reconstruct to the
+// identical leaf "apt-pin", but component-wise comparison never matches
+// them — so `taken()` reported "free" and a second, textually-identical-leaf
+// worker could be allocated, silently colliding with the first (later
+// checkpoint/restack/done calls against ".../apt-pin" could operate on
+// either worker's worktree/branch/PR, whichever findWorker's leaf-based
+// match happens to hit first).
+func TestWorkerAdd_DetectsLeafCollisionAcrossDifferentSplit(t *testing.T) {
+	svc, _, store := startedFeature(t)
+	if err := store.Update(func(r *registry.Registry) error {
+		r.Features[0].Workers = append(r.Features[0].Workers, registry.Worker{
+			User: "erai", Purpose: "apt", Suffix: "pin",
+			Branch: "feature/auth/erai/apt-pin", Worktree: "/wt/apt-pin", BaseBranch: "main", Description: "existing",
+		})
+		return nil
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	res, err := svc.WorkerAdd(context.Background(), feature.WorkerAddOpts{
+		Feature: "auth", Purpose: "apt-pin", Description: "new",
+	})
+	if err != nil {
+		t.Fatalf("WorkerAdd: %v", err)
+	}
+	if res.Ref.Suffix == "" {
+		t.Errorf("expected a drawn suffix to disambiguate from the colliding leaf %q; got none (ref=%q)",
+			"apt-pin", res.Ref.String())
+	}
+}

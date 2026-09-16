@@ -163,3 +163,35 @@ func TestRestack_RebaseCallHasEndOfOptionsSeparator(t *testing.T) {
 		t.Errorf("rebase args = %v; want a \"--\" end-of-options separator immediately before the positional base branch", rebaseArgs)
 	}
 }
+
+// TestRestack_IncrementsCount_WordlistSuffixPurpose pins a finding from the
+// PR #333 review: stackNodes (used by both Restack and Merged) still located
+// "here" via the lossy component-wise comparison. For a worker whose whole
+// Purpose ends in a suffix-wordlist word, "here" was never found (stayed the
+// zero Node{}), so stack.RestackOnto walked descendants from a root with no
+// real branch — restack_count silently failed to increment for exactly the
+// worker class dotfiles#258 was supposed to fix, defeating the
+// anti-laundering invariant restack_count gates.
+func TestRestack_IncrementsCount_WordlistSuffixPurpose(t *testing.T) {
+	store := registry.NewStore(filepath.Join(t.TempDir(), "registry.json"))
+	if err := store.Update(func(r *registry.Registry) error {
+		*r = registry.Registry{SchemaVersion: 1, Features: []registry.Feature{{
+			Name: "auth", DefaultBaseBranch: "main",
+			Workers: []registry.Worker{
+				{User: "erai", Purpose: "apt-pin", Branch: "feature/auth/erai/apt-pin", Worktree: "/wt/apt-pin", BaseBranch: "main", Description: "a"},
+			},
+		}}}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	svc := &feature.Service{Store: store, Git: &gitfake.Runner{Script: []gitfake.Response{{}, {}}}, GH: ghfake.NewClient()}
+
+	if err := svc.Restack(context.Background(), feature.RestackOpts{WorkerRef: "auth/erai/apt-pin", Onto: "develop"}); err != nil {
+		t.Fatalf("Restack: %v", err)
+	}
+	reg, _ := store.Load()
+	if got := reg.Features[0].Workers[0].RestackCount; got != 1 {
+		t.Errorf("restack_count = %d; want 1 — stackNodes must locate \"here\" for a purpose ending in a wordlist word", got)
+	}
+}

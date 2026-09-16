@@ -383,6 +383,48 @@ func TestCheckpoint_UnknownWorker(t *testing.T) {
 	}
 }
 
+// TestCheckpoint_FirstCreateRenumbers_WordlistSuffixPurpose pins two
+// findings from the PR #333 review: the post-create PR-number backfill loop
+// and renderPRBody's "isHere" flag both still located the current worker's
+// own row via the lossy component-wise comparison. For a worker whose whole
+// Purpose ends in a suffix-wordlist word ("apt-pin"), neither ever matched,
+// so the freshly-created PR's own stack row stayed "(no PR yet)" / unmarked
+// — on every checkpoint, not just the first (renderPRBody runs every time).
+func TestCheckpoint_FirstCreateRenumbers_WordlistSuffixPurpose(t *testing.T) {
+	wt := filepath.Join(t.TempDir(), "auth", "erai", "apt-pin")
+	store := registry.NewStore(filepath.Join(t.TempDir(), "registry.json"))
+	if err := store.Update(func(r *registry.Registry) error {
+		*r = registry.Registry{SchemaVersion: 1, Features: []registry.Feature{{
+			Name: "auth", DefaultBaseBranch: "main",
+			Workers: []registry.Worker{{
+				User: "erai", Purpose: "apt-pin", Branch: "feature/auth/erai/apt-pin",
+				Worktree: wt, BaseBranch: "main", Description: "endpoints",
+			}},
+		}}}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ghc := ghfake.NewClient()
+	svc := &feature.Service{Store: store, Git: &gitfake.Runner{Script: []gitfake.Response{{}, {}, {}}}, GH: ghc, Approval: &fakeApprover{}}
+
+	res, err := svc.Checkpoint(context.Background(), feature.CheckpointOpts{WorkerRef: "auth/erai/apt-pin"})
+	if err != nil {
+		t.Fatalf("Checkpoint: %v", err)
+	}
+	num := prNumberOf(res.PRURL)
+	e := lastPREdit(ghc)
+	if e == nil || e.Num != num {
+		t.Fatalf("expected a PREdit on the new PR #%d after create; got %+v", num, e)
+	}
+	if strings.Contains(e.EditOpts.Body, "(no PR yet)") {
+		t.Errorf("stack row for a wordlist-suffix purpose still says (no PR yet):\n%s", e.EditOpts.Body)
+	}
+	if !strings.Contains(e.EditOpts.Body, "you are here") {
+		t.Errorf("stack row for a wordlist-suffix purpose not marked \"you are here\":\n%s", e.EditOpts.Body)
+	}
+}
+
 // TestCheckpoint_RefusesWithoutApprovalToken pins the dotfiles#331 fix:
 // checkpoint fetches, rebases, PUSHES, and creates/updates the draft
 // PR — but never consulted the approval token, unlike `pr --ready`. A

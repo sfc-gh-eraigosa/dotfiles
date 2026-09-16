@@ -254,3 +254,115 @@ func TestAutoCheckpoint_PropagatesApprovalGate(t *testing.T) {
 		t.Error("auto-checkpoint must not push when the approval gate refuses")
 	}
 }
+
+// TestAutoCheckpoint_ApprovalGateBlocksLocalCommit pins a finding from the
+// PR #333 review: the previous fix only proved the gate ran before PUSH.
+// AutoCheckpoint's own WIP `git add`/`git commit` (for needCommit) runs
+// BEFORE it delegates to Checkpoint, so with the gate placed only inside
+// Checkpoint, a missing/stale token still let a local commit land — this
+// contradicts the stated invariant ("a refusal touches neither git nor
+// gh") and could surprise a user who deliberately withheld approval. The
+// gate must be checked before ANY git mutation, including the local commit,
+// and checked exactly ONCE along this path (the token is single-use —
+// consumed on a successful Verify — so a second Verify inside a delegated
+// Checkpoint call would spuriously fail against an already-consumed token).
+func TestAutoCheckpoint_ApprovalGateBlocksLocalCommit(t *testing.T) {
+	root := t.TempDir()
+	wt := filepath.Join(root, "wt")
+	if err := os.MkdirAll(wt, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	store := registry.NewStore(filepath.Join(root, "registry.json"))
+	if err := store.Update(func(r *registry.Registry) error {
+		*r = registry.Registry{SchemaVersion: 1, Features: []registry.Feature{{
+			Name: "auth", DefaultBaseBranch: "main",
+			Workers: []registry.Worker{{
+				User: "erai", Purpose: "api", Branch: "feature/auth/erai/api",
+				Worktree: wt, BaseBranch: "main", Description: "endpoints",
+			}},
+		}}}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	// branch, porcelain (one tracked change) → needCommit=true. If the gate
+	// refuses before any mutation, git never even reaches "add"/"commit".
+	gitr := &gitfake.Runner{Script: []gitfake.Response{
+		resp("feature/auth/erai/api"), resp(" M a.go\n"), resp("aaa"), resp("bbb"),
+	}}
+	ap := &fakeApprover{err: errors.ErrApprovalTokenMissing}
+	svc := &feature.Service{Store: store, Git: gitr, GH: ghfake.NewClient(), Clock: fixedClock{t: timeFixed()}, Approval: ap}
+
+	_, err := svc.AutoCheckpoint(context.Background(), feature.AutoOpts{WorkerRef: "auth/erai/api"})
+	if !stderrors.Is(err, errors.ErrApprovalTokenMissing) {
+		t.Fatalf("err = %v; want ErrApprovalTokenMissing", err)
+	}
+	if gitCallsHave(gitr, "add") || gitCallsHave(gitr, "commit") {
+		t.Errorf("auto-checkpoint must not commit locally when the approval gate refuses; calls=%+v", gitr.Calls)
+	}
+	if ap.calls != 1 {
+		t.Errorf("approval verifier consulted %d times; want exactly 1", ap.calls)
+	}
+}
+
+// onceApprover simulates the real approval.Verifier's single-use token: it
+// succeeds on its first call and fails every call after, since a real token
+// is consumed (deleted) on a successful Verify.
+type onceApprover struct{ calls int }
+
+func (a *onceApprover) Verify(context.Context, string, bool) error {
+	a.calls++
+	if a.calls > 1 {
+		return errors.ErrApprovalTokenMissing
+	}
+	return nil
+}
+
+// TestAutoCheckpoint_VerifiesTokenExactlyOnceOnHappyPath pins the other
+// half of the ordering fix: moving the gate earlier in AutoCheckpoint must
+// NOT introduce a second Verify call when it later delegates to Checkpoint
+// — with a real (single-use) token verifier, a second Verify on the same
+// call chain would spuriously fail even though the first one succeeded,
+// breaking every successful auto-checkpoint that needs to push.
+func TestAutoCheckpoint_VerifiesTokenExactlyOnceOnHappyPath(t *testing.T) {
+	root := t.TempDir()
+	wt := filepath.Join(root, "wt")
+	if err := os.MkdirAll(wt, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	store := registry.NewStore(filepath.Join(root, "registry.json"))
+	if err := store.Update(func(r *registry.Registry) error {
+		*r = registry.Registry{SchemaVersion: 1, Features: []registry.Feature{{
+			Name: "auth", DefaultBaseBranch: "main",
+			Workers: []registry.Worker{{
+				User: "erai", Purpose: "api", Branch: "feature/auth/erai/api",
+				Worktree: wt, BaseBranch: "main", Description: "endpoints",
+			}},
+		}}}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	// branch, porcelain (dirty) -> needCommit; local, remote (diverged) ->
+	// needPush; then add, commit; then Checkpoint's own fetch, rebase, push,
+	// pr create.
+	gitr := &gitfake.Runner{Script: []gitfake.Response{
+		resp("feature/auth/erai/api"), resp(" M a.go\n"), resp("aaa"), resp("bbb"),
+		{}, {}, // add, commit
+		{}, {}, {}, // fetch, rebase, push (create path)
+	}}
+	ap := &onceApprover{}
+	ghc := ghfake.NewClient()
+	svc := &feature.Service{Store: store, Git: gitr, GH: ghc, Clock: fixedClock{t: timeFixed()}, Approval: ap}
+
+	res, err := svc.AutoCheckpoint(context.Background(), feature.AutoOpts{WorkerRef: "auth/erai/api"})
+	if err != nil {
+		t.Fatalf("AutoCheckpoint: %v", err)
+	}
+	if !res.Committed {
+		t.Error("expected the WIP commit to be reported")
+	}
+	if ap.calls != 1 {
+		t.Errorf("approval verifier consulted %d times; want exactly 1 (a second Verify would fail against a real single-use token)", ap.calls)
+	}
+}

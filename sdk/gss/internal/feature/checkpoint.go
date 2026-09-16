@@ -45,9 +45,7 @@ func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (Checkpoi
 	if fi < 0 {
 		return CheckpointResult{}, fmt.Errorf("%w: no such worker %q", errors.ErrInvalidIdent, opts.WorkerRef)
 	}
-	feat := reg.Features[fi]
-	w := feat.Workers[wi]
-	base := w.BaseBranch
+	w := reg.Features[fi].Workers[wi]
 
 	// Approval gate (dotfiles#331) — checkpoint fetches, rebases, PUSHES,
 	// and creates/updates the draft PR, but until this fix only `pr --ready`
@@ -63,14 +61,27 @@ func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (Checkpoi
 		return CheckpointResult{}, fmt.Errorf("checkpoint: %w", err)
 	}
 
+	return s.checkpointAfterApproval(ctx, ref, reg, fi, wi)
+}
+
+// checkpointAfterApproval does the actual rebase+push+PR work, on the
+// assumption the approval gate has ALREADY been satisfied by the caller
+// (Checkpoint above, or AutoCheckpoint after its own single Verify call —
+// see auto.go). It must NEVER call s.Approval.Verify itself: the token is
+// single-use (approval.Verifier consumes/deletes it on success), so a
+// second Verify along the same call chain would spuriously fail against an
+// already-consumed token even though the first call succeeded (PR #333
+// review finding — AutoCheckpoint used to delegate to the public
+// Checkpoint, which re-verified).
+func (s *Service) checkpointAfterApproval(ctx context.Context, ref identity.WorkerRef, reg registry.Registry, fi, wi int) (CheckpointResult, error) {
+	feat := reg.Features[fi]
+	w := feat.Workers[wi]
+	base := w.BaseBranch
+
 	if out, err := s.Git.Run(ctx, "-C", w.Worktree, "fetch", "origin"); err != nil {
 		return CheckpointResult{}, fmt.Errorf("checkpoint: fetch: %w: %s", err, strings.TrimSpace(string(out)))
 	}
-	// "--" (dotfiles#96): defence-in-depth, matching restack.go/rebase.go —
-	// the "origin/" prefix already prevents this positional from starting
-	// with "-", but the separator makes that invariant explicit rather than
-	// incidental.
-	if out, err := s.Git.Run(ctx, "-C", w.Worktree, "rebase", "--", "origin/"+base); err != nil {
+	if out, err := s.gitRebase(ctx, w.Worktree, nil, "origin/"+base); err != nil {
 		_, _ = s.Git.Run(ctx, "-C", w.Worktree, "rebase", "--abort") // clean abort; user resolves
 		return CheckpointResult{}, fmt.Errorf("%w: rebase onto origin/%s: %s", errors.ErrRebaseConflict, base, strings.TrimSpace(string(out)))
 	}
@@ -147,7 +158,8 @@ func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (Checkpoi
 		numbered.Workers = append([]registry.Worker(nil), feat.Workers...)
 		for i := range numbered.Workers {
 			nw := &numbered.Workers[i]
-			if nw.User == ref.User && nw.Purpose == ref.Purpose && nw.Suffix == ref.Suffix {
+			cand := identity.WorkerRef{Feature: feat.Name, User: nw.User, Purpose: nw.Purpose, Suffix: nw.Suffix}
+			if cand.SameWorker(ref) {
 				nw.PRURL = pr.URL
 			}
 		}
@@ -192,18 +204,12 @@ func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (Checkpoi
 // string, so comparing the reconstruction is exact regardless of how either
 // side happened to split.
 func findWorker(reg registry.Registry, ref identity.WorkerRef) (int, int) {
-	refLeaf := identity.WorkerRef{Purpose: ref.Purpose, Suffix: ref.Suffix}.String()
 	for fi := range reg.Features {
-		if reg.Features[fi].Name != ref.Feature {
-			continue
-		}
-		for wi := range reg.Features[fi].Workers {
-			w := reg.Features[fi].Workers[wi]
-			if w.User != ref.User {
-				continue
-			}
-			wLeaf := identity.WorkerRef{Purpose: w.Purpose, Suffix: w.Suffix}.String()
-			if wLeaf == refLeaf {
+		f := reg.Features[fi]
+		for wi := range f.Workers {
+			w := f.Workers[wi]
+			cand := identity.WorkerRef{Feature: f.Name, User: w.User, Purpose: w.Purpose, Suffix: w.Suffix}
+			if cand.SameWorker(ref) {
 				return fi, wi
 			}
 		}
@@ -226,17 +232,14 @@ func renderPRBody(f registry.Feature, here identity.WorkerRef, existing, notes s
 	view := stack.StackView{Feature: f.Name}
 	desc := ""
 	for _, w := range f.Workers {
-		isHere := w.User == here.User && w.Purpose == here.Purpose && w.Suffix == here.Suffix
+		cand := identity.WorkerRef{Feature: f.Name, User: w.User, Purpose: w.Purpose, Suffix: w.Suffix}
+		isHere := cand.SameWorker(here)
 		if isHere {
 			desc = w.Description
 		}
-		leaf := w.Purpose
-		if w.Suffix != "" {
-			leaf = w.Purpose + "-" + w.Suffix
-		}
 		view.Entries = append(view.Entries, stack.Entry{
 			PRNumber: prNumber(w.PRURL),
-			Ref:      w.User + "/" + leaf,
+			Ref:      w.User + "/" + cand.Leaf(),
 			Base:     w.BaseBranch,
 			Here:     isHere,
 		})

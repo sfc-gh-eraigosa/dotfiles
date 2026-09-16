@@ -56,6 +56,44 @@ func TestParseWorkerRef_RoundTrip(t *testing.T) {
 	}
 }
 
+// TestWorkerRef_SameWorker pins the canonical equality every "is this the
+// same worker" call site must use (dotfiles#258 / PR #333 review): two
+// refs that split their leaf differently must still compare equal when the
+// reconstructed leaf matches, and refs that are genuinely different must
+// not.
+func TestWorkerRef_SameWorker(t *testing.T) {
+	whole := identity.WorkerRef{Feature: "gh-latest", User: "erai", Purpose: "apt-pin"}
+	split := identity.WorkerRef{Feature: "gh-latest", User: "erai", Purpose: "apt", Suffix: "pin"}
+	if !whole.SameWorker(split) {
+		t.Errorf("SameWorker(%+v, %+v) = false; want true (same reconstructed leaf %q)", whole, split, whole.Leaf())
+	}
+	if !split.SameWorker(whole) {
+		t.Error("SameWorker must be symmetric")
+	}
+
+	other := identity.WorkerRef{Feature: "gh-latest", User: "erai", Purpose: "refactor", Suffix: "moss"}
+	if whole.SameWorker(other) {
+		t.Error("different leaves must not compare equal")
+	}
+	diffUser := identity.WorkerRef{Feature: "gh-latest", User: "someone-else", Purpose: "apt-pin"}
+	if whole.SameWorker(diffUser) {
+		t.Error("different users must not compare equal even with the same leaf")
+	}
+	diffFeature := identity.WorkerRef{Feature: "other-feature", User: "erai", Purpose: "apt-pin"}
+	if whole.SameWorker(diffFeature) {
+		t.Error("different features must not compare equal even with the same leaf")
+	}
+}
+
+func TestWorkerRef_Leaf(t *testing.T) {
+	if got := (identity.WorkerRef{Purpose: "refactor"}).Leaf(); got != "refactor" {
+		t.Errorf("Leaf() (no suffix) = %q; want refactor", got)
+	}
+	if got := (identity.WorkerRef{Purpose: "refactor", Suffix: "moss"}).Leaf(); got != "refactor-moss" {
+		t.Errorf("Leaf() (with suffix) = %q; want refactor-moss", got)
+	}
+}
+
 func TestParseWorkerRef_Invalid(t *testing.T) {
 	for _, s := range []string{"", "a/b", "a/b/c/d", "a//c", "/b/c", "a/b/"} {
 		_, err := identity.ParseWorkerRef(s)

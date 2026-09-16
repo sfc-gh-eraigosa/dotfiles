@@ -756,9 +756,12 @@ the dotfiles tracker). Before this validation existed, `--onto` was stored
 verbatim as `base_branch` and later replayed as the bare positional upstream
 ref to `git rebase --onto <target> <base_branch>`; a value like
 `--exec=<cmd>` in that position is read by git as a flag rather than a
-refname, running `<cmd>` after every rebased commit. The rebase call itself
-also gets a `--` end-of-options separator ahead of the positional, as
-defence-in-depth beyond the write-time validation.
+refname, running `<cmd>` after every rebased commit. Every `git rebase` call
+in this package goes through the shared `(*Service).gitRebase` helper,
+which always inserts a `--` end-of-options separator ahead of the
+positional upstream ref, as defence-in-depth beyond the write-time
+validation — centralized (rather than copy-pasted per call site) so a
+future rebase call site can't add itself without the same protection.
 
 **Side effect on auto-promote eligibility**: every call increments the
 target worker's `restack_count` by 1 (and increments
@@ -2049,7 +2052,25 @@ resolution now lives.
     often than `pr --ready` does, so it was the wider hole in the same
     contract — scoping the gate to `--ready` only left checkpoint able to
     push with a missing or stale token. Same sentinel
-    (`ErrApprovalTokenMissing`) and exit code (22) either way.
+    (`ErrApprovalTokenMissing`) and exit code (22) either way. The gate is
+    checked exactly once per call chain: AutoCheckpoint (`checkpoint
+    --auto`) verifies it BEFORE its own local WIP commit (not just before
+    the eventual push — a PR #333 review finding), then delegates to
+    `checkpointAfterApproval` rather than the public `Checkpoint`, since
+    the token is single-use and a second `Verify` on the same chain would
+    spuriously fail against an already-consumed token.
+
+    Relatedly: `identity.WorkerRef.SameWorker`/`.Leaf()` are the ONLY
+    correct way to ask "is this ref the same worker as that one." The
+    dotfiles#258 fix (`findWorker` comparing the reconstructed leaf
+    instead of the split Purpose/Suffix fields) was originally applied
+    at only one of six call sites making the identical mistake; the
+    same PR #333 review found the other five (`pr.go`'s `parentDraft`,
+    `restack.go`'s `stackNodes` — shared by `Merged` —, `worker.go`'s
+    allocation-time `taken` check, and two spots in `checkpoint.go`),
+    and all six now go through the same `identity.WorkerRef` methods.
+    Comparing `Purpose`/`Suffix` directly anywhere in this package
+    reintroduces the bug.
 12. **NWO cache pinned.** Lives at `<worktrees_root>/.nwo`; refreshed
     on `gh repo view` cache miss; `--repo` is read-only shadow; cache
     invalidates when `git remote get-url origin` diverges.
