@@ -91,6 +91,38 @@ func TestAuto_NoOpWhenCleanAndSynced(t *testing.T) {
 	}
 }
 
+// TestAuto_WipCommitFailureIncludesGitError pins the dotfiles#99 fix: on a
+// failed WIP commit, AutoCheckpoint used to call autoSkip with the static
+// string "wip commit failed", discarding the actual git error (e.g.
+// "unable to auto-detect committer email") — WORKER.md then recorded only
+// the static string, giving the user or agent nothing to diagnose without
+// running git by hand. git add's own failure path already included the
+// error (compare "git add failed: "+err.Error() just above); commit's did
+// not.
+func TestAuto_WipCommitFailureIncludesGitError(t *testing.T) {
+	const gitErr = "unable to auto-detect committer email"
+	svc, gitr, wt := autoService(t, "", []gitfake.Response{
+		resp("feature/auth/erai/api"), resp(" M a.go\n"), resp("aaa"), resp("bbb"), // branch, porcelain, local, remote
+		{},                           // git add succeeds
+		{Err: stderrors.New(gitErr)}, // git commit fails
+	}, ghfake.NewClient())
+
+	res, err := svc.AutoCheckpoint(context.Background(), feature.AutoOpts{WorkerRef: "auth/erai/api"})
+	if err == nil {
+		t.Fatal("wip commit failure: want a skip error")
+	}
+	if !strings.Contains(res.Skipped, gitErr) {
+		t.Errorf("Skipped = %q; want it to include the underlying git error %q", res.Skipped, gitErr)
+	}
+	data, _ := os.ReadFile(feature.WorkerMetaPath(wt))
+	if !strings.Contains(string(data), gitErr) {
+		t.Errorf("WORKER.md (meta path) missing the underlying git error:\n%s", data)
+	}
+	if gitCallsHave(gitr, "push") {
+		t.Error("a failed wip commit must not push")
+	}
+}
+
 func TestAuto_DetachedHEADSkipsWithDiagnostic(t *testing.T) {
 	svc, _, wt := autoService(t, "", []gitfake.Response{resp("HEAD")}, ghfake.NewClient())
 	res, err := svc.AutoCheckpoint(context.Background(), feature.AutoOpts{WorkerRef: "auth/erai/api"})

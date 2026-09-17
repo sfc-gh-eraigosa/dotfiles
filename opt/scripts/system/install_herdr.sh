@@ -27,6 +27,8 @@
 #   install_herdr.sh integrations   # agent integrations    (install.sh --phase config)
 #   install_herdr.sh config         # managed config.toml   (install.sh --phase config)
 #   install_herdr.sh plugins        # herdr plugins         (install.sh --phase deps)
+#   install_herdr.sh doctor         # host readiness checks (dotfiles#262); also
+#                                   # run best-effort at the end of `install`
 #
 #   `config` renders ai/herdr/config.toml into ~/.config/herdr/config.toml so
 #   herdr follows the host terminal's light/dark appearance with the fleet
@@ -234,6 +236,7 @@ install_binary() {
     if [ "${HAVE}" = "${WANT}" ] && [ "${HERDR_FORCE:-0}" != "1" ]; then
         ok "herdr already installed: ${INSTALL_DIR}/herdr (${HAVE})"
         report_shadowing
+        check_clipboard_tool || true
         return 0
     fi
 
@@ -274,6 +277,7 @@ install_binary() {
     "${INSTALL_DIR}/herdr" --version >/dev/null 2>&1 || die "installed binary does not run: ${INSTALL_DIR}/herdr"
     ok "Success! $("${INSTALL_DIR}/herdr" --version | head -1) (sha256 verified)"
     report_shadowing
+    check_clipboard_tool || true
 }
 
 # A host bootstrapped with the upstream installer has a second copy in
@@ -284,6 +288,49 @@ report_shadowing() {
     if [ -n "${RESOLVED}" ] && [ "${RESOLVED}" != "${INSTALL_DIR}/herdr" ]; then
         warn "another herdr is earlier in PATH: ${RESOLVED} (probably the upstream installer's copy). Remove it or let ~/opt/bin win."
     fi
+}
+
+# ------------------------------------------------------------------------------
+# Mode: doctor — host readiness checks beyond "does herdr run" (dotfiles#262)
+# ------------------------------------------------------------------------------
+# check_clipboard_tool: warn when no clipboard tool is on PATH for this
+# session type. herdr's Linux clipboard path is wl-copy -> xclip -> xsel, and
+# only when NONE of those exist does it fall back to emitting an OSC 52
+# escape to the outer terminal — which most terminals (gnome-terminal/VTE:
+# https://gitlab.gnome.org/GNOME/vte/-/issues/2495) silently drop. herdr still
+# shows its "copied to clipboard" toast either way (OSC 52 is one-way and
+# unconfirmable: https://github.com/herdrdev/herdr/issues/2399), so the only
+# symptom is paste returning stale content — exactly what opened this issue.
+# A fresh host must never silently fall into that path.
+#
+# macOS always has pbcopy/pbpaste, so the check is a no-op there. Otherwise:
+# Wayland (WAYLAND_DISPLAY set) needs wl-copy; X11 (DISPLAY set) needs xclip
+# or xsel (opt/profiles/packages.tsv installs both on every apt host as of
+# this fix). Neither var set usually means a headless/SSH session with no
+# local clipboard to write to regardless of tooling — see docs/macos-keys.md
+# for the remote-session guidance (native clipboard is a server-side no-op
+# there; only an OSC 52-capable local terminal or `herdr --remote` helps).
+check_clipboard_tool() {
+    case "$(uname -s)" in
+        Darwin) return 0 ;;
+    esac
+    if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+        command -v wl-copy >/dev/null 2>&1 && return 0
+        warn "Wayland session (\$WAYLAND_DISPLAY set) but wl-clipboard (wl-copy) is not on PATH — herdr copy will silently fail (falls back to an OSC 52 escape most terminals drop). Install wl-clipboard."
+        return 1
+    fi
+    if [ -n "${DISPLAY:-}" ]; then
+        if command -v xclip >/dev/null 2>&1 || command -v xsel >/dev/null 2>&1; then
+            return 0
+        fi
+        warn "X11 session (\$DISPLAY set) but neither xclip nor xsel is on PATH — herdr copy will silently fail (falls back to an OSC 52 escape gnome-terminal/VTE drops: https://gitlab.gnome.org/GNOME/vte/-/issues/2495). Install xclip or xsel."
+        return 1
+    fi
+    return 0
+}
+
+run_doctor() {
+    check_clipboard_tool && ok "herdr doctor: clipboard tool OK for this session type"
 }
 
 # ------------------------------------------------------------------------------
@@ -632,5 +679,6 @@ case "${MODE}" in
     integrations) install_integrations ;;
     config)       install_config ;;
     plugins)      install_plugins ;;
-    *) die "unknown mode '${MODE}' (expected: install | integrations | config | plugins)" ;;
+    doctor)       run_doctor ;;
+    *) die "unknown mode '${MODE}' (expected: install | integrations | config | plugins | doctor)" ;;
 esac

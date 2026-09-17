@@ -589,4 +589,86 @@ else
     assert_eq "config@${cfg_line:-missing} plugins@${plug_line:-missing}" "ordered" "the managed config renders after the plugins step"
 fi
 
+# --- doctor mode: dotfiles#262 clipboard-tool readiness check ---------------
+# herdr's Linux clipboard path is wl-copy -> xclip -> xsel, and only when NONE
+# of those exist does it fall back to the OSC 52 escape, which most terminals
+# (gnome-terminal/VTE: https://gitlab.gnome.org/GNOME/vte/-/issues/2495)
+# silently drop — herdr still shows its "copied" toast (OSC 52 is one-way,
+# unconfirmable) while paste gets stale clipboard content. A fresh host must
+# never silently fall into that path; `doctor` (and `install`, best-effort)
+# warn instead.
+assert_grep "doctor mode exists" '^[[:space:]]*doctor\)[[:space:]]*run_doctor' "${SCRIPT}"
+assert_grep "check_clipboard_tool exists" 'check_clipboard_tool\(\)' "${SCRIPT}"
+assert_grep "install mode also runs the clipboard check (best-effort, never fails the install)" \
+    'check_clipboard_tool.*\|\|.*true' "${SCRIPT}"
+
+# Curated minimal PATH (coreutils only, no xclip/xsel/wl-copy) so the checks
+# below are deterministic regardless of what happens to be installed on the
+# machine running this suite.
+BARE_BIN="$(mktemp -d)"
+for _t in bash sh env grep sed awk cat head tr cut sort uniq dirname basename readlink mktemp uname printf; do
+    _src="$(command -v "${_t}" 2>/dev/null)" && ln -s "${_src}" "${BARE_BIN}/${_t}" 2>/dev/null
+done
+
+out="$(env -i PATH="${BARE_BIN}" DISPLAY=:0 bash "${SCRIPT}" doctor 2>&1)"; rc=$?
+assert_eq "${rc}" "1" "doctor fails when an X11 session has neither xclip nor xsel"
+if printf '%s' "${out}" | grep -qi "xclip" && printf '%s' "${out}" | grep -qi "xsel"; then
+    echo "PASS: X11 warning names both xclip and xsel"; PASS=$((PASS+1))
+else
+    echo "FAIL: X11 warning does not name both xclip and xsel: ${out}"; FAIL=$((FAIL+1))
+fi
+
+out="$(env -i PATH="${BARE_BIN}" WAYLAND_DISPLAY=wayland-0 bash "${SCRIPT}" doctor 2>&1)"; rc=$?
+assert_eq "${rc}" "1" "doctor fails when a Wayland session has no wl-copy"
+if printf '%s' "${out}" | grep -qi "wl-clipboard\|wl-copy"; then
+    echo "PASS: Wayland warning names wl-clipboard/wl-copy"; PASS=$((PASS+1))
+else
+    echo "FAIL: Wayland warning does not mention wl-clipboard/wl-copy: ${out}"; FAIL=$((FAIL+1))
+fi
+
+out="$(env -i PATH="${BARE_BIN}" bash "${SCRIPT}" doctor 2>&1)"; rc=$?
+assert_eq "${rc}" "0" "doctor passes on a headless session (no DISPLAY, no WAYLAND_DISPLAY) — nothing local to check"
+
+XCLIP_BIN="$(mktemp -d)"
+for _t in bash sh env grep sed awk cat head tr cut sort uniq dirname basename readlink mktemp uname printf; do
+    _src="$(command -v "${_t}" 2>/dev/null)" && ln -s "${_src}" "${XCLIP_BIN}/${_t}" 2>/dev/null
+done
+cat >"${XCLIP_BIN}/xclip" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "${XCLIP_BIN}/xclip"
+assert_exit_code 0 "doctor passes on X11 once xclip is on PATH" \
+    env -i PATH="${XCLIP_BIN}" DISPLAY=:0 bash "${SCRIPT}" doctor
+
+WLCOPY_BIN="$(mktemp -d)"
+for _t in bash sh env grep sed awk cat head tr cut sort uniq dirname basename readlink mktemp uname printf; do
+    _src="$(command -v "${_t}" 2>/dev/null)" && ln -s "${_src}" "${WLCOPY_BIN}/${_t}" 2>/dev/null
+done
+cat >"${WLCOPY_BIN}/wl-copy" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "${WLCOPY_BIN}/wl-copy"
+assert_exit_code 0 "doctor passes on Wayland once wl-copy is on PATH" \
+    env -i PATH="${WLCOPY_BIN}" WAYLAND_DISPLAY=wayland-0 bash "${SCRIPT}" doctor
+
+# macOS always ships pbcopy/pbpaste; the check must be a no-op there
+# regardless of DISPLAY/WAYLAND_DISPLAY (neither is meaningful on macOS but
+# guard against a stray leftover env var anyway).
+DARWIN_BIN="$(mktemp -d)"
+for _t in bash sh env grep sed awk cat head tr cut sort uniq dirname basename readlink mktemp printf; do
+    _src="$(command -v "${_t}" 2>/dev/null)" && ln -s "${_src}" "${DARWIN_BIN}/${_t}" 2>/dev/null
+done
+cat >"${DARWIN_BIN}/uname" <<'EOF'
+#!/usr/bin/env bash
+[ "$1" = "-s" ] && { echo Darwin; exit 0; }
+exit 1
+EOF
+chmod +x "${DARWIN_BIN}/uname"
+assert_exit_code 0 "doctor is a no-op on macOS (pbcopy/pbpaste always present)" \
+    env -i PATH="${DARWIN_BIN}" DISPLAY=:0 bash "${SCRIPT}" doctor
+
+rm -rf "${BARE_BIN}" "${XCLIP_BIN}" "${WLCOPY_BIN}" "${DARWIN_BIN}"
+
 _test_report

@@ -152,14 +152,18 @@ case "$OUT" in
         ;;
 esac
 
-# === 7. manifest: Linux ships an X11 clipboard tool ===
+# === 7. manifest: Linux ships an X11 AND a Wayland clipboard tool ===
 # herdr's Linux clipboard path is wl-copy -> xclip -> xsel, and only THEN the
 # OSC 52 escape -- which gnome-terminal/VTE silently drops (VTE #2495). Without
 # one of these installed every herdr mouse-copy shows a "copied" toast while the
 # clipboard keeps its old contents (herdr #2399). .tmux.conf's copy-pipe binds
-# also assume xsel. Both must stay in the APT column; macOS has pbcopy.
+# also assume xsel. wl-clipboard (wl-copy/wl-paste) covers Wayland sessions the
+# same way (dotfiles#262 follow-up) -- unconditional, like xclip/xsel: apt has
+# no per-session-type conditional install, and an unused clipboard tool on the
+# other display server is harmless. All three must stay in the APT column;
+# macOS has pbcopy.
 MANIFEST="${REPO_ROOT}/opt/profiles/packages.tsv"
-for tool in xclip xsel; do
+for tool in xclip xsel wl-clipboard; do
     if awk '!/^[[:space:]]*(#|$)/ {print $2}' "$MANIFEST" | grep -qx "$tool"; then
         echo "PASS: packages.tsv installs $tool on apt hosts"
         PASS=$((PASS + 1))

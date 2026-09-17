@@ -5,7 +5,11 @@ import (
 	stderrors "errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/gofrs/flock"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/errors"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/feature"
@@ -187,5 +191,57 @@ func TestDone_ForceRemovesDirty(t *testing.T) {
 	reg, _ := store.Load()
 	if len(reg.Features) != 0 {
 		t.Errorf("--force should remove worker (and empty feature); got %+v", reg.Features)
+	}
+}
+
+// TestDone_RegistryUpdateFailureAfterWorktreeRemovalIsDiagnosable pins the
+// dotfiles#98 fix.
+//
+// The issue's primary suggestion was to swap the order (registry first,
+// then worktree), reasoning that a registry-only removal followed by a
+// failed Backend.Remove "can be cleaned up manually or by reconcile". That
+// reasoning doesn't hold: registry.Reconcile only detects a row pointing at
+// a MISSING worktree (its stale-worktree-dropped check) — never the
+// reverse. Swapping the order would trade the current, self-healing
+// failure mode (a stale row `audit --repair` already drops) for a
+// non-recoverable one (a live worktree, still attached to git, that gss no
+// longer tracks at all and no command can find again).
+//
+// So the order stays (worktree, then registry) and this test pins the
+// issue's own documented fallback instead: when Store.Update fails AFTER
+// the worktree is already gone, the returned error must say so explicitly
+// — the caller must not mistake a registry-only failure for "teardown
+// failed entirely" when the worktree in fact already vanished.
+func TestDone_RegistryUpdateFailureAfterWorktreeRemovalIsDiagnosable(t *testing.T) {
+	svc, store, _ := doneService(t, cleanFeatureMD(t), "", oneWorker())
+	// Force the LATER Store.Update (registry row removal) — not the
+	// EARLIER Store.Load at the top of Done — to fail with ErrLockHeld.
+	// Grabbing the lock externally for the whole test would block Load
+	// too (it also takes the lock, shared), so the competing holder is
+	// acquired precisely inside Backend.Remove's fake, synchronously,
+	// right after the worktree removal is recorded and right before Done
+	// reaches Store.Update.
+	store.LockTimeout = 50 * time.Millisecond
+	holder := flock.New(store.LockPath)
+	be := svc.Backend.(*fakeBackend)
+	be.afterRemove = func() {
+		if ok, err := holder.TryLock(); err != nil || !ok {
+			t.Fatalf("test setup: could not hold the registry lock externally: ok=%v err=%v", ok, err)
+		}
+	}
+	defer func() { _ = holder.Unlock() }()
+
+	_, err := svc.Done(context.Background(), feature.DoneOpts{WorkerRef: "auth/erai/api"})
+	if err == nil {
+		t.Fatal("Store.Update contended: want an error")
+	}
+	if !stderrors.Is(err, errors.ErrLockHeld) {
+		t.Errorf("err = %v; want it to still wrap ErrLockHeld", err)
+	}
+	if !strings.Contains(err.Error(), "already removed") {
+		t.Errorf("err = %v; want it to say the worktree was already removed (partial-teardown diagnostic)", err)
+	}
+	if len(be.removed) != 1 || be.removed[0] != "/wt/api" {
+		t.Errorf("backend.Remove calls = %v; want exactly one for /wt/api — the worktree really was removed despite the registry error", be.removed)
 	}
 }
