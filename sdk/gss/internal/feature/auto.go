@@ -97,23 +97,6 @@ func (s *Service) AutoCheckpoint(ctx context.Context, opts AutoOpts) (AutoResult
 		return res, nil
 	}
 
-	// Approval gate (dotfiles#331; ordering fixed per the PR #333 review) —
-	// checked here, before ANY git mutation, including the local WIP commit
-	// just below. Checking it only inside the delegated Checkpoint call (as
-	// the first #331 fix did) let a missing/stale token still commit
-	// locally, contradicting "a refusal touches neither git nor gh".
-	// Checked EXACTLY ONCE: the token is single-use (consumed on a
-	// successful Verify), so the delegate call below uses
-	// checkpointAfterApproval — never the public Checkpoint — to avoid a
-	// second Verify that would spuriously fail against an
-	// already-consumed token.
-	if s.Approval == nil {
-		return res, fmt.Errorf("%w: no approval verifier configured", errors.ErrApprovalTokenMissing)
-	}
-	if err := s.Approval.Verify(ctx, w.Worktree, false); err != nil {
-		return res, fmt.Errorf("auto-checkpoint: %w", err)
-	}
-
 	if needCommit {
 		addArgs := append([]string{w.Worktree, "add", "--"}, tracked...)
 		if _, err := s.Git.Run(ctx, "-C", addArgs...); err != nil {
@@ -155,12 +138,10 @@ func (s *Service) AutoCheckpoint(ctx context.Context, opts AutoOpts) (AutoResult
 		}
 	}
 
-	// Delegate the rebase + push + PR. checkpointAfterApproval (NOT the
-	// public Checkpoint) — approval was already verified once, above; see
-	// that function's doc comment on why a second Verify must never happen
-	// here. A rebase conflict is a skip (diagnostic + non-zero), not a hard
-	// failure.
-	if _, err := s.checkpointAfterApproval(ctx, ref, reg, fi, wi); err != nil {
+	// Delegate the rebase + push + PR to the shared body (also used by the
+	// public Checkpoint). A rebase conflict is a skip (diagnostic +
+	// non-zero), not a hard failure.
+	if _, err := s.runCheckpoint(ctx, ref, reg, fi, wi); err != nil {
 		if stderrors.Is(err, errors.ErrRebaseConflict) {
 			return s.autoSkip(w, "rebase conflict; resolve in the worktree then re-run")
 		}
