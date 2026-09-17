@@ -24,9 +24,17 @@ type fakeObserver struct {
 	openByBranch     map[string]gh.PR // head branch -> open PR; absent => none
 }
 
-func (o *fakeObserver) WorktreeExists(p string) bool                  { return !o.missingWorktrees[p] }
-func (o *fakeObserver) BranchExists(_ context.Context, b string) bool { return !o.missingBranches[b] }
-func (o *fakeObserver) BaseReachable(_ context.Context, b, _ string) bool {
+func (o *fakeObserver) WorktreeExists(p string) bool { return !o.missingWorktrees[p] }
+
+// BranchExists/BaseReachable ignore the worktree param (the fake keys
+// purely on branch name, same as before dotfiles#336) — the systemObserver
+// fix that makes this parameter meaningful is verified separately, against
+// a REAL git binary, in audit_systemobserver_test.go; a fake can't model
+// "scoped to the wrong repo" at all.
+func (o *fakeObserver) BranchExists(_ context.Context, _, b string) bool {
+	return !o.missingBranches[b]
+}
+func (o *fakeObserver) BaseReachable(_ context.Context, _, b, _ string) bool {
 	return !o.unreachable[b]
 }
 func (o *fakeObserver) PRView(_ context.Context, n int) (gh.PR, bool) {

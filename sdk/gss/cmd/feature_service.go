@@ -93,11 +93,23 @@ func fail(err error) {
 // currentWorkerRef resolves the worker_ref of the worktree containing cwd
 // (the per-worker default for checkpoint/pr/rebase). Returns ErrWrongMode if
 // cwd is not inside a registered worker worktree.
+//
+// dotfiles#336: a bare ErrWrongMode is the SAME message used for "you ran a
+// classic verb inside a worker worktree" — an unrelated case — so when cwd
+// is actually a former worker root whose registry row went missing (a
+// surviving WORKER.md is conclusive proof of that, since only `gss feature
+// done` ever removes it, deliberately, alongside the row), the error names
+// the missing row and the recovery command instead of reusing that
+// misleading text verbatim.
 func currentWorkerRef() (string, error) {
 	reg, _ := loadRegistry()
 	cwd, _ := os.Getwd()
 	ref, ok := mode.IsInWorker(cwd, reg)
 	if !ok {
+		if root, found := feature.FindOrphanedWorkerMD(cwd); found {
+			return "", fmt.Errorf("%w: %s looks like a gss worker worktree (found %s) but has no matching registry row — likely dropped by a cross-repo `audit --repair` run (dotfiles#336) or a lost-update race. `audit --repair` cannot recreate a missing row (it only ever drops one), so recover with `gss feature worker add --feature <name> --purpose <purpose> --description \"...\"` run against this directory",
+				errors.ErrWrongMode, root, feature.WorkerMetaPath(root))
+		}
 		return "", errors.ErrWrongMode
 	}
 	return ref, nil

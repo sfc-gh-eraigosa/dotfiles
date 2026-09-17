@@ -25,6 +25,33 @@ func WorkerMetaPath(worktree string) string {
 	return filepath.Join(filepath.Dir(worktree), ".gss-meta", filepath.Base(worktree), "WORKER.md")
 }
 
+// FindOrphanedWorkerMD walks upward from cwd looking for a directory whose
+// WORKER.md meta path (WorkerMetaPath) exists on disk, even though the
+// caller has already established cwd is not inside any REGISTERED worker
+// (mode.IsInWorker returned false). A hit is conclusive evidence the
+// directory WAS created as a real worker root — the only thing that
+// removes WORKER.md is `gss feature done`, which removes it deliberately
+// alongside the registry row — so if the row is gone but this file
+// survives, the row went missing out from under a live worker rather than
+// cwd simply never having been one (dotfiles#336: a cross-repo `audit
+// --repair` run is a confirmed cause). Returns the worktree-root candidate
+// and true on a hit; ("", false) when cwd carries no such trace at all the
+// way up to the filesystem root.
+func FindOrphanedWorkerMD(cwd string) (string, bool) {
+	dir := cwd
+	for dir != "" {
+		if _, err := os.Stat(WorkerMetaPath(dir)); err == nil {
+			return dir, true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", false
+		}
+		dir = parent
+	}
+	return "", false
+}
+
 // workerMetaDir is the per-leaf directory holding WORKER.md; teardown removes
 // it wholesale (done.go).
 func workerMetaDir(worktree string) string {

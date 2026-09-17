@@ -40,10 +40,21 @@ type Finding struct {
 // PR or rewrite git refs, which is what makes read-only mode provably
 // side-effect-free (design.md → "audit does not call gh pr create/edit/ready
 // ever").
+//
+// BranchExists/BaseReachable take the WORKER'S OWN worktree, not a fixed
+// repo path (dotfiles#336): the registry is shared across every repo on
+// the host (RegistryDir defaults to one global path under
+// ~/.config/gss/worktrees, not a per-repo one — the "per-repo registry.json"
+// in schema.go's package doc is aspirational, not what's actually
+// configured), so a single git repo can never answer "does this branch
+// exist" for a worker belonging to a DIFFERENT repo. Scoping to repoPath
+// made every cross-repo worker look branch-missing and silently drop its
+// row on --repair, even though its branch, worktree, and PR were all
+// perfectly healthy in ITS OWN repo.
 type Observer interface {
 	WorktreeExists(path string) bool
-	BranchExists(ctx context.Context, branch string) bool
-	BaseReachable(ctx context.Context, branch, base string) bool
+	BranchExists(ctx context.Context, worktree, branch string) bool
+	BaseReachable(ctx context.Context, worktree, branch, base string) bool
 	PRView(ctx context.Context, num int) (gh.PR, bool) // ok == false on 404
 	// PROpenForBranch returns the open PR whose head is branch, if any. It
 	// lets audit catch the inverse of pr-404: a worker with no recorded
@@ -54,9 +65,13 @@ type Observer interface {
 
 // AuditOpts configures Audit.
 type AuditOpts struct {
-	Feature  string // restrict to one feature (empty = all)
-	Repair   bool
-	RepoPath string // git -C target for the system observer (unused when Service.Observe is set)
+	Feature string // restrict to one feature (empty = all)
+	Repair  bool
+	// RepoPath is unused by the system observer as of dotfiles#336 (every
+	// worktree-scoped check now uses the worker's own worktree instead) and
+	// is kept only so an existing caller passing it doesn't break; it may
+	// be removed in a future cleanup.
+	RepoPath string
 }
 
 // AuditReport is the structured result of an audit run.
@@ -98,7 +113,7 @@ func (s *Service) Audit(ctx context.Context, opts AuditOpts) (AuditReport, error
 
 	obs := s.Observe
 	if obs == nil {
-		obs = &systemObserver{git: s.Git, gh: s.GH, repoPath: opts.RepoPath}
+		obs = &systemObserver{git: s.Git, gh: s.GH}
 	}
 	findings := runAudit(ctx, reg, obs, opts.Feature)
 	rep := AuditReport{Findings: findings}
@@ -148,7 +163,7 @@ func runAudit(ctx context.Context, reg registry.Registry, obs Observer, only str
 					Detail: w.Worktree, Remedy: "audit --repair drops the row (or restore the path)"})
 				continue // a missing worktree makes the git probes meaningless
 			}
-			if !obs.BranchExists(ctx, w.Branch) {
+			if !obs.BranchExists(ctx, w.Worktree, w.Branch) {
 				fs = append(fs, Finding{Worker: ref, Check: "branch-missing", Severity: SevError,
 					Detail: w.Branch, Remedy: "audit --repair drops the row"})
 				continue
@@ -158,7 +173,7 @@ func runAudit(ctx context.Context, reg registry.Registry, obs Observer, only str
 					Detail: fmt.Sprintf("branch %q is claimed by %d registry rows", w.Branch, branchClaims[w.Branch]),
 					Remedy: "pick one to keep, then gss feature done --force --worker <ref> on the loser (repair won't choose)"})
 			}
-			if !obs.BaseReachable(ctx, w.Branch, w.BaseBranch) {
+			if !obs.BaseReachable(ctx, w.Worktree, w.Branch, w.BaseBranch) {
 				fs = append(fs, Finding{Worker: ref, Check: "base-unreachable", Severity: SevError,
 					Detail: fmt.Sprintf("%s cannot reach base %s", w.Branch, w.BaseBranch),
 					Remedy: "gss feature restack (repair never rewrites git refs)"})
@@ -318,9 +333,8 @@ func (r AuditReport) JSON() ([]byte, error) {
 // systemObserver is the production Observer: os.Stat for worktrees, git for
 // branch/base reachability, gh for PR existence. Strictly read-only.
 type systemObserver struct {
-	git      git.Runner
-	gh       gh.Client
-	repoPath string
+	git git.Runner
+	gh  gh.Client
 }
 
 func (o *systemObserver) WorktreeExists(path string) bool {
@@ -328,16 +342,22 @@ func (o *systemObserver) WorktreeExists(path string) bool {
 	return err == nil && fi.IsDir()
 }
 
-func (o *systemObserver) BranchExists(ctx context.Context, branch string) bool {
-	_, err := o.git.Run(ctx, "-C", o.repoPath, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
+// BranchExists is scoped to worktree — the worker's OWN worktree — not to
+// any repo-wide path (dotfiles#336): the registry is shared across every
+// repo on the host, so a fixed path here would only ever answer the
+// question for ONE repo, wrongly reporting every OTHER repo's healthy
+// branches as missing.
+func (o *systemObserver) BranchExists(ctx context.Context, worktree, branch string) bool {
+	_, err := o.git.Run(ctx, "-C", worktree, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
 	return err == nil
 }
 
-func (o *systemObserver) BaseReachable(ctx context.Context, branch, base string) bool {
+// BaseReachable is scoped to worktree for the same reason as BranchExists.
+func (o *systemObserver) BaseReachable(ctx context.Context, worktree, branch, base string) bool {
 	if base == "" {
 		return true
 	}
-	_, err := o.git.Run(ctx, "-C", o.repoPath, "merge-base", branch, base)
+	_, err := o.git.Run(ctx, "-C", worktree, "merge-base", branch, base)
 	return err == nil
 }
 

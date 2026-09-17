@@ -125,3 +125,70 @@ func argsHas(args []string, want string) bool {
 	}
 	return false
 }
+
+// seedWorkerMD writes a WORKER.md at worktree's meta path, creating parent
+// dirs as needed.
+func seedWorkerMD(t *testing.T, worktree string) {
+	t.Helper()
+	meta := WorkerMetaPath(worktree)
+	if err := os.MkdirAll(filepath.Dir(meta), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(meta, []byte("# stub\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestFindOrphanedWorkerMD pins the dotfiles#336 fix (ask #2): when cwd is
+// not inside any registered worker per the registry (IsInWorker returned
+// false), but a WORKER.md still exists at what would be the meta path for
+// cwd (or an ancestor of cwd) — that's conclusive evidence this directory
+// WAS a real worker root and its registry row went missing out from under
+// it, rather than cwd simply never having been a worker at all. Nothing
+// else removes WORKER.md when a row is dropped this way (only `gss
+// feature done` removes it, deliberately, alongside the row).
+func TestFindOrphanedWorkerMD(t *testing.T) {
+	t.Run("cwd is the worktree root itself", func(t *testing.T) {
+		root := t.TempDir()
+		wt := filepath.Join(root, "auth", "erai", "api")
+		if err := os.MkdirAll(wt, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		seedWorkerMD(t, wt)
+		got, ok := FindOrphanedWorkerMD(wt)
+		if !ok || got != wt {
+			t.Errorf("FindOrphanedWorkerMD(%q) = (%q, %v); want (%q, true)", wt, got, ok, wt)
+		}
+	})
+
+	t.Run("cwd is a subdirectory of the worktree root", func(t *testing.T) {
+		root := t.TempDir()
+		wt := filepath.Join(root, "auth", "erai", "api")
+		sub := filepath.Join(wt, "internal", "deep")
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		seedWorkerMD(t, wt)
+		got, ok := FindOrphanedWorkerMD(sub)
+		if !ok || got != wt {
+			t.Errorf("FindOrphanedWorkerMD(%q) = (%q, %v); want (%q, true) (walks up to the worktree root)", sub, got, ok, wt)
+		}
+	})
+
+	t.Run("no WORKER.md anywhere up the tree", func(t *testing.T) {
+		root := t.TempDir()
+		dir := filepath.Join(root, "just", "a", "normal", "directory")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := FindOrphanedWorkerMD(dir); ok {
+			t.Error("no WORKER.md anywhere: want (_, false)")
+		}
+	})
+
+	t.Run("empty cwd", func(t *testing.T) {
+		if _, ok := FindOrphanedWorkerMD(""); ok {
+			t.Error(`FindOrphanedWorkerMD(""): want (_, false)`)
+		}
+	})
+}
