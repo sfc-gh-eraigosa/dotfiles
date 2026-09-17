@@ -124,7 +124,11 @@ func (s *Service) AutoCheckpoint(ctx context.Context, opts AutoOpts) (AutoResult
 			commitArgs = append(commitArgs, "-m", "untracked (not added):\n"+strings.Join(untracked, "\n"))
 		}
 		if _, err := s.Git.Run(ctx, "-C", commitArgs...); err != nil {
-			return s.autoSkip(w, "wip commit failed")
+			// dotfiles#99: include the underlying git error (e.g. "unable to
+			// auto-detect committer email"), not just a static string — the
+			// git runner returns combined stdout+stderr in err, so this is
+			// exactly what a human running the same commit by hand would see.
+			return s.autoSkip(w, "wip commit failed: "+err.Error())
 		}
 		res.Committed = true
 	}

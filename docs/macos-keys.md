@@ -185,12 +185,27 @@ path is `wl-copy` → `xclip` → `xsel`, and only when none of those exists doe
 it fall back to the OSC 52 escape, which gnome-terminal/VTE silently drops
 ([VTE #2495](https://gitlab.gnome.org/GNOME/vte/-/issues/2495),
 [herdr #2399](https://github.com/herdrdev/herdr/issues/2399)). `packages.tsv`
-installs `xclip` and `xsel` on every apt host for exactly this reason; on a
-machine provisioned before that, `sudo apt-get install xclip xsel` fixes the
-running herdr immediately (no restart — it resolves the tool per copy). On a
-Wayland session install `wl-clipboard` instead. Holding `Shift` while
-drag-selecting bypasses herdr's mouse capture and copies through gnome-terminal
-itself, if you need a one-off without installing anything.
+installs `xclip`, `xsel`, and `wl-clipboard` on every apt host for exactly
+this reason (all three, unconditionally — harmless either way); on a machine
+provisioned before that, `sudo apt-get install xclip xsel wl-clipboard` fixes
+the running herdr immediately (no restart — it resolves the tool per copy).
+Run `install_herdr.sh doctor` to check which of these your current session
+actually needs and whether it's present. Holding `Shift` while drag-selecting
+bypasses herdr's mouse capture and copies through gnome-terminal itself, if
+you need a one-off without installing anything.
+
+**herdr over SSH: copy doesn't reach my local clipboard.** The native path
+(`wl-copy`/`xclip`/`xsel`) writes to the *remote* host's clipboard, which is
+useless from a local terminal — only the OSC 52 escape crosses the SSH link,
+and only if the LOCAL terminal you're SSHed from understands it (kitty,
+alacritty, foot, ghostty; `opt/etc/keyd/app.conf` already has keyd sections
+for kitty/alacritty). gnome-terminal does not (see above), so a copy made
+while SSHed in from gnome-terminal silently fails the same way a local one
+without a clipboard tool does — there is no packages.tsv fix for this case,
+since the tool would be on the wrong host. Either SSH in from an OSC
+52-capable terminal, or use `herdr --remote` (herdr's own remote-client mode:
+the client runs locally and writes to your real, local clipboard directly,
+rather than relying on the server-side native path or OSC 52 at all).
 
 **Nothing is remapped at all.** `systemctl is-active keyd`, then
 `sudo keyd check` to validate the config. Note that keyd **rejects a trailing

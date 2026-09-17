@@ -110,7 +110,21 @@ func (s *Service) Done(ctx context.Context, opts DoneOpts) (DoneResult, error) {
 		return nil
 	})
 	if err != nil {
-		return res, err
+		// dotfiles#98: by this point Backend.Remove above already succeeded
+		// — the worktree is genuinely gone — so a bare registry error here
+		// would read as "teardown failed entirely" when only the
+		// bookkeeping half did. Say so explicitly.
+		//
+		// This was also the point the issue's own primary suggestion
+		// (swap the order: registry first, then worktree) targeted, but
+		// that trade is worse, not better: registry.Reconcile only detects
+		// a row pointing at a MISSING worktree (its stale-worktree-dropped
+		// check) — never the reverse. Swapping the order would trade this
+		// self-healing failure mode (`gss feature audit --repair` already
+		// drops the stale row) for a non-recoverable one — a live worktree,
+		// still attached to git, that gss would no longer track at all.
+		// The order stays; only the diagnostic changes.
+		return res, fmt.Errorf("feature done: worktree %s already removed, but the registry update failed — the stale row can be cleaned up with `gss feature audit --repair`: %w", w.Worktree, err)
 	}
 
 	if deleteFeature {
