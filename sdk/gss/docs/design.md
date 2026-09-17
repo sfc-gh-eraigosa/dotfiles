@@ -898,6 +898,21 @@ default) listing each finding with severity (`info`, `warn`, `error`)
 and a suggested remedy. Exit code is non-zero if any `error`-severity
 finding exists.
 
+**Every per-worker git check is scoped to that worker's OWN worktree, never
+to a single shared repo path (dotfiles#336).** `RegistryDir` defaults to one
+global path (`~/.config/gss/worktrees`), so `registry.json` is shared across
+every repo on the host — schema.go's "gss's per-repo registry.json" doc
+comment describes the original intent, not what's actually configured. An
+earlier version of "branch exists locally" ran `git -C <the invoking repo>
+rev-parse --verify <branch>` for every worker in the WHOLE registry, so a
+worker belonging to any OTHER repo always looked branch-missing (its branch
+genuinely doesn't exist in the wrong repo's `.git`) and `--repair` dropped
+its row — while its branch, worktree, and PR were all perfectly healthy in
+its own repo. Fixed by running that check (and the base-reachability one)
+against the worker's `worktree` path instead: each worker answers for
+itself, so cross-repo contamination is structurally impossible regardless
+of which repo the audit was invoked from.
+
 `--repair` attempts deterministic fixes:
 
 - Worker's worktree missing on disk → drop the registry row + emit a
