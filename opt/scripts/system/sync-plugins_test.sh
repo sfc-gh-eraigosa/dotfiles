@@ -252,6 +252,57 @@ UVXOUT="$(PATH="$UVX_BIN" bash "$SYNC" --dry-run 2>&1)"
 rm -rf "$UVX_BIN"
 assert_not_contains "$UVXOUT" "uvx is not on PATH" "does not warn when uvx is already on PATH"
 
+# --- Behavioral: transient git index.lock on `claude plugin update` retries --
+# Observed on real fleet-update runs: `claude plugin update` failed on a FRESH
+# clone dir with "fatal: Unable to create '.../.clone/.git/index.lock': File
+# exists" for several plugins in a row, each succeeding again moments later —
+# the CLI's own internal clone/checkout racing itself, not a genuinely stuck
+# process (that would need a manual `rm`, per the message). One short retry
+# recovers the common case instead of leaving a plugin silently stuck on its
+# previous version until the next sync.
+LOCK_BIN="$(mktemp -d)"
+for _t in bash sh env yq grep egrep awk sed tr cat head cut sort uniq dirname basename readlink mktemp xargs; do
+    _src="$(command -v "$_t" 2>/dev/null)" && ln -s "$_src" "$LOCK_BIN/$_t" 2>/dev/null
+done
+COUNT_DIR="$(mktemp -d)"
+cat > "$LOCK_BIN/claude" <<EOF
+#!/usr/bin/env bash
+if [ "\$1 \$2" = "plugin update" ]; then
+    name="\$3"
+    f="$COUNT_DIR/\${name//[^a-zA-Z0-9]/_}"
+    n=0; [ -f "\$f" ] && n=\$(cat "\$f")
+    n=\$((n + 1)); echo "\$n" > "\$f"
+    case "\$name" in
+        deploy-on-aws@claude-plugins-official)
+            # Locked on the first attempt only; clear by the retry.
+            if [ "\$n" -eq 1 ]; then
+                echo "fatal: Unable to create '/home/x/.claude/plugins/cache/temp_subdir_1.clone/.git/index.lock': File exists." >&2
+                exit 1
+            fi
+            exit 0 ;;
+        aws-serverless@claude-plugins-official)
+            # Always locked: the retry budget must still run out and warn.
+            echo "fatal: Unable to create '/home/x/.claude/plugins/cache/temp_subdir_2.clone/.git/index.lock': File exists." >&2
+            exit 1 ;;
+        superpowers@claude-plugins-official)
+            # A real, non-lock failure must never retry.
+            echo "some other real failure" >&2
+            exit 1 ;;
+    esac
+fi
+exit 0
+EOF
+chmod +x "$LOCK_BIN/claude"
+LOCKOUT="$(SYNC_PLUGINS_LOCK_RETRY_DELAY=0 PATH="$LOCK_BIN:$PATH" bash "$SYNC" 2>&1)"
+rm -rf "$LOCK_BIN"
+assert_eq "$(cat "$COUNT_DIR/deploy_on_aws_claude_plugins_official")" "2" "a transient index.lock failure is retried exactly once before succeeding"
+assert_not_contains "$LOCKOUT" "WARNING — 'claude plugin update deploy-on-aws@claude-plugins-official'" "a transient index.lock failure that clears on retry reports no warning"
+assert_eq "$(cat "$COUNT_DIR/aws_serverless_claude_plugins_official")" "2" "a persistent index.lock failure retries up to the budget, not forever"
+assert_contains "$LOCKOUT" "WARNING — 'claude plugin update aws-serverless@claude-plugins-official' failed" "a persistent index.lock failure still warns once the retry budget is spent"
+assert_eq "$(cat "$COUNT_DIR/superpowers_claude_plugins_official")" "1" "a non-lock failure is never retried"
+assert_contains "$LOCKOUT" "WARNING — 'claude plugin update superpowers@claude-plugins-official' failed" "a non-lock failure still warns immediately"
+rm -rf "$COUNT_DIR"
+
 echo "----"
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -76,23 +76,6 @@ if ! command -v apt-get >/dev/null 2>&1 || ! command -v dpkg >/dev/null 2>&1; th
   exit 0
 fi
 
-# Already configured and not forcing a refresh? Still ensure the pin exists —
-# it postdates the original script, so an existing install can have the repo
-# without it (and is therefore still stuck on the ESM version).
-if [ -f "$KEYRING" ] && [ -f "$SOURCES" ] && [ "${GH_REPO_FORCE:-0}" != "1" ]; then
-  # Hard-fail, deliberately: this is the path that HEALS a host provisioned
-  # before the pin existed, so it is exactly the one that must not swallow a
-  # failure. Warning and exiting 0 here made pkg-install-apt report success
-  # while apt still resolved gh to the stale ESM build — the bug persisting on
-  # a host that reads as fixed. Matches the || exit 1 on the writes below.
-  write_prefs || {
-    echo "setup_gh_apt_repo: could not write $PREFS; gh would stay pinned to ESM." >&2
-    exit 1
-  }
-  echo "setup_gh_apt_repo: GitHub CLI apt repo already configured; skipping (GH_REPO_FORCE=1 to refresh)."
-  exit 0
-fi
-
 # Pick whatever fetcher is present — curl ships on virtually every base image
 # and is already used by install.sh; wget is the upstream-documented tool.
 if command -v curl >/dev/null 2>&1; then
@@ -104,19 +87,55 @@ else
   exit 1
 fi
 
-echo "setup_gh_apt_repo: configuring GitHub CLI apt repository for latest gh..."
+# refresh_key — (re)download the current signing key into KEYRING. Always
+# re-run, even when a key already exists: GitHub rotates its signing key from
+# time to time, and the keyring file's mere existence says nothing about
+# whether its CONTENT still matches what apt needs to verify against — the
+# same "marker exists != still correct" gap the pin below closes, this time
+# for the key itself. Observed live: a host that configured the repo once,
+# before an upstream rotation, failed apt's signature check outright
+# ("Missing key <fingerprint>") and never healed, because the old fast path
+# only checked that this file was present. Cheap and safe to redo every run:
+# a few KB over HTTPS, atomically replacing the same path.
+refresh_key() {
+  local tmpkey
+  tmpkey="$(mktemp)" || return 1
+  trap 'rm -f "$tmpkey"' RETURN
+  if ! fetch "$KEY_URL" "$tmpkey"; then
+    echo "setup_gh_apt_repo: failed to download signing key from $KEY_URL." >&2
+    return 1
+  fi
+  sudo mkdir -p -m 755 /etc/apt/keyrings || return 1
+  sudo install -m 0644 "$tmpkey" "$KEYRING" || return 1
+}
 
-# Download the key to a temp file first so only the install needs sudo, then
-# place it with world-readable perms apt requires for a signed-by keyring.
-tmpkey="$(mktemp)"
-trap 'rm -f "$tmpkey"' EXIT
-if ! fetch "$KEY_URL" "$tmpkey"; then
-  echo "setup_gh_apt_repo: failed to download signing key from $KEY_URL." >&2
-  exit 1
+# Already configured and not forcing a refresh? Still ensure the key is
+# current and the pin exists — the pin postdates the original script, so an
+# existing install can have the repo without it (and is therefore still stuck
+# on the ESM version); the key can equally have gone stale since it was first
+# fetched (see refresh_key above).
+if [ -f "$KEYRING" ] && [ -f "$SOURCES" ] && [ "${GH_REPO_FORCE:-0}" != "1" ]; then
+  # Hard-fail, deliberately: this is the path that HEALS a host provisioned
+  # before the pin (or a key rotation) existed, so it is exactly the one that
+  # must not swallow a failure. Warning and exiting 0 here made pkg-install-apt
+  # report success while apt still resolved gh to the stale ESM build, or
+  # still failed its signature check against a stale key — the bug persisting
+  # on a host that reads as fixed. Matches the || exit 1 on the writes below.
+  refresh_key || {
+    echo "setup_gh_apt_repo: could not refresh $KEYRING; apt signature checks against cli.github.com may keep failing after an upstream key rotation." >&2
+    exit 1
+  }
+  write_prefs || {
+    echo "setup_gh_apt_repo: could not write $PREFS; gh would stay pinned to ESM." >&2
+    exit 1
+  }
+  echo "setup_gh_apt_repo: GitHub CLI apt repo already configured; refreshed the signing key (GH_REPO_FORCE=1 to also rewrite the repo entry)."
+  exit 0
 fi
 
-sudo mkdir -p -m 755 /etc/apt/keyrings || exit 1
-sudo install -m 0644 "$tmpkey" "$KEYRING" || exit 1
+echo "setup_gh_apt_repo: configuring GitHub CLI apt repository for latest gh..."
+
+refresh_key || exit 1
 
 # arch=... + signed-by=... scopes the repo to this machine's architecture and
 # pins it to the key we just installed.
