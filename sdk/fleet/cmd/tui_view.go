@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -30,6 +31,17 @@ type theme struct {
 
 func newTheme() theme {
 	c := func(s string) lipgloss.Color { return lipgloss.Color(s) }
+	// Panel/dialog borders default to lipgloss's rounded Unicode box-drawing
+	// set. Some mobile SSH clients' monospace fonts have no glyph for "─"
+	// (U+2500, the top/bottom edge) and substitute a fallback that renders
+	// WIDER than the single column the layout math assumed — every line
+	// below the border then reads as shifted (reported over Terminus on
+	// iPadOS). FLEET_ASCII_BORDERS=1 opts into lipgloss's pure-ASCII border
+	// (-, |, +), which every terminal renders at the width it claims to.
+	border := lipgloss.RoundedBorder()
+	if os.Getenv("FLEET_ASCII_BORDERS") != "" {
+		border = lipgloss.ASCIIBorder()
+	}
 	return theme{
 		title:     lipgloss.NewStyle().Bold(true).Foreground(c("6")),
 		header:    lipgloss.NewStyle().Bold(true).Underline(true),
@@ -44,11 +56,11 @@ func newTheme() theme {
 		// Yellow: a warning is not a failure. The outcome colours keep their
 		// meanings — green ok, red FAIL — and ⚠ sits alongside, never instead.
 		warn: lipgloss.NewStyle().Foreground(c("3")),
-		dialog: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
+		dialog: lipgloss.NewStyle().Border(border).
 			BorderForeground(lipgloss.Color("6")).Padding(0, 1),
 		// Every section gets the same frame as the answers dialog, so the
 		// screen reads as separated panels rather than one run-on block.
-		panel: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
+		panel: lipgloss.NewStyle().Border(border).
 			BorderForeground(lipgloss.Color("8")).Padding(0, 1),
 		// The selection dot is navy; it only turns red or green to report an
 		// update's OUTCOME. Colour therefore always means the same thing:

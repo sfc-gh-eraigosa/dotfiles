@@ -851,6 +851,13 @@ fleet version --json
 | `--no-wake` | off | never try to rouse an unreachable host — fast, literal answer |
 | `--wake-timeout` | `12s` | per-host budget for the reachability ladder |
 
+`FLEET_ASCII_BORDERS=1` switches the TUI's panel/dialog borders from lipgloss's
+rounded Unicode box-drawing set to plain ASCII (`-`/`|`/`+`). Some mobile SSH
+clients' monospace fonts have no glyph for the rounded set's "─" top/bottom
+edge and substitute a fallback that renders wider than the single column the
+layout assumed, shifting every line below the border (seen over Terminus on
+iPadOS) — set this if panel borders look garbled or misaligned on your client.
+
 ## Safety invariants
 
 Each of these is pinned by a test — they are the reason the tool is trustworthy
