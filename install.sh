@@ -474,13 +474,6 @@ else
   echo "SKIP (gff: install.tools.glow is opt-in and not enabled)"
 fi
 
-# Node workloads (ollama, k3s, the stacks) are deliberately NOT installed from
-# here. dotfiles is the host baseline; what runs on a node is the playground
-# repo's concern and converges through its own entry point, selectable as a
-# fleet plan (playground#396). An ollama installer briefly lived here
-# (dotfiles#340) and was removed (dotfiles#349): it duplicated the version
-# authority and bypassed ollama/'s tune-drop-in guard.
-
 # Install the Snowflake CLI (`snow`). Replaces the old .zshrc daily-maintenance
 # pip auto-install, which broke on PEP 668 (externally-managed-environment)
 # systems. macOS uses the homebrew-core formula; Linux uses pipx so the system
