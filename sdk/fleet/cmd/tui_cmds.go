@@ -336,6 +336,11 @@ type bgPolicy struct {
 	// sudoTimestampGlobal enables sudoGlobalFixup: fleet.update.sudo-timestamp-global
 	// (on by default; false opts a centrally-managed host out).
 	sudoTimestampGlobal bool
+	// asciiBorders is fleet.tui.ascii-borders — presentation, not lane
+	// behaviour. It rides here because bgPolicy is the one value that carries
+	// the single startup featflag resolution out of resolveTUIPlan; the theme
+	// is built from it (wantASCIIBorders, tui.go) before the program starts.
+	asciiBorders bool
 }
 
 // policyFrom derives the lane policy from the Settings the plan load already
@@ -344,7 +349,7 @@ type bgPolicy struct {
 // fail-closed (featflag.Settings.SudoTimestampGlobal), so no gff means no
 // host changes.
 func policyFrom(s featflag.Settings) bgPolicy {
-	return bgPolicy{sudoTimestampGlobal: s.SudoTimestampGlobal}
+	return bgPolicy{sudoTimestampGlobal: s.SudoTimestampGlobal, asciiBorders: s.ASCIIBorders}
 }
 
 // sudoersDropIn is the file sudoGlobalFixup installs. Deleting it undoes the

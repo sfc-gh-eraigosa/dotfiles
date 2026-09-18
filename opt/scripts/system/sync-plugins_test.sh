@@ -252,14 +252,19 @@ UVXOUT="$(PATH="$UVX_BIN" bash "$SYNC" --dry-run 2>&1)"
 rm -rf "$UVX_BIN"
 assert_not_contains "$UVXOUT" "uvx is not on PATH" "does not warn when uvx is already on PATH"
 
-# --- Behavioral: transient git index.lock on `claude plugin update` retries --
+# --- Behavioral: git index.lock on `claude plugin update` — bounded retry ----
 # Observed on real fleet-update runs: `claude plugin update` failed on a FRESH
 # clone dir with "fatal: Unable to create '.../.clone/.git/index.lock': File
-# exists" for several plugins in a row, each succeeding again moments later —
-# the CLI's own internal clone/checkout racing itself, not a genuinely stuck
-# process (that would need a manual `rm`, per the message). One short retry
-# recovers the common case instead of leaving a plugin silently stuck on its
-# previous version until the next sync.
+# exists". Live verification (dotfiles#343) found this is NOT reliably
+# transient — one plugin failed identically on every standalone attempt — so
+# the retry is a cheap bet on a genuinely momentary lock, not a fix for the
+# deterministic case (see the retry-budget comment in sync-plugins.sh before
+# raising SYNC_PLUGINS_LOCK_RETRIES). What must hold: a lock that clears is
+# recovered silently, a lock that persists warns ONCE after the budget with
+# the attempt count and exit code, a non-lock failure never retries — and the
+# retry notice goes to STDOUT, because fleet scores any unclassified stderr
+# line as a ⚠ on the host, which would make a recovered retry look like a
+# failure in `fleet history`.
 LOCK_BIN="$(mktemp -d)"
 for _t in bash sh env yq grep egrep awk sed tr cat head cut sort uniq dirname basename readlink mktemp xargs; do
     _src="$(command -v "$_t" 2>/dev/null)" && ln -s "$_src" "$LOCK_BIN/$_t" 2>/dev/null
@@ -293,14 +298,24 @@ fi
 exit 0
 EOF
 chmod +x "$LOCK_BIN/claude"
-LOCKOUT="$(SYNC_PLUGINS_LOCK_RETRY_DELAY=0 PATH="$LOCK_BIN:$PATH" bash "$SYNC" 2>&1)"
+LOCKERR="$(mktemp)"
+LOCKOUT="$(SYNC_PLUGINS_LOCK_RETRY_DELAY=0 PATH="$LOCK_BIN:$PATH" bash "$SYNC" 2>"$LOCKERR")"
+LOCKOUT="$LOCKOUT$(printf '\n'; cat "$LOCKERR")"
 rm -rf "$LOCK_BIN"
 assert_eq "$(cat "$COUNT_DIR/deploy_on_aws_claude_plugins_official")" "2" "a transient index.lock failure is retried exactly once before succeeding"
 assert_not_contains "$LOCKOUT" "WARNING — 'claude plugin update deploy-on-aws@claude-plugins-official'" "a transient index.lock failure that clears on retry reports no warning"
 assert_eq "$(cat "$COUNT_DIR/aws_serverless_claude_plugins_official")" "2" "a persistent index.lock failure retries up to the budget, not forever"
-assert_contains "$LOCKOUT" "WARNING — 'claude plugin update aws-serverless@claude-plugins-official' failed" "a persistent index.lock failure still warns once the retry budget is spent"
+assert_contains "$LOCKOUT" "WARNING — 'claude plugin update aws-serverless@claude-plugins-official' still hit a git index.lock" "a persistent index.lock failure still warns once the retry budget is spent"
+assert_contains "$LOCKOUT" "not just a slow-clearing lock" "…and the warning does not claim the lock was merely transient"
+assert_contains "$LOCKOUT" "after 2 attempt(s) (rc=1)" "…and it reports the attempts actually made and the exit code"
 assert_eq "$(cat "$COUNT_DIR/superpowers_claude_plugins_official")" "1" "a non-lock failure is never retried"
 assert_contains "$LOCKOUT" "WARNING — 'claude plugin update superpowers@claude-plugins-official' failed" "a non-lock failure still warns immediately"
+# Only the WARNING lines may reach stderr; a retry notice there would be
+# scored as a host warning by fleet even when the retry recovers.
+assert_contains "$LOCKOUT" "git lock updating deploy-on-aws@claude-plugins-official; retrying" "the retry is announced"
+assert_not_contains "$(cat "$LOCKERR")" "retrying (attempt" "…on stdout, never stderr (fleet would count it as a ⚠)"
+assert_contains "$(cat "$LOCKERR")" "WARNING — 'claude plugin update aws-serverless@claude-plugins-official' still hit a git index.lock" "the exhausted-budget warning is on stderr"
+rm -f "$LOCKERR"
 rm -rf "$COUNT_DIR"
 
 echo "----"

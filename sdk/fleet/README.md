@@ -851,6 +851,22 @@ fleet version --json
 | `--no-wake` | off | never try to rouse an unreachable host — fast, literal answer |
 | `--wake-timeout` | `12s` | per-host budget for the reachability ladder |
 
+**ASCII frames.** If a panel border renders as a row of `?` with the lines
+below it shifted (reported over Terminus on iPadOS; the same bytes render
+fine on other clients, and the client-side cause is not pinned down), tell
+the TUI to draw its frames — panel and dialog borders, and the log pane's
+column separator — in plain ASCII (`-`/`|`/`+`) instead of Unicode
+box-drawing:
+
+```sh
+gff set fleet.tui.ascii-borders true   # host default, on the machine you run fleet from
+FLEET_ASCII_BORDERS=1 fleet            # per session: force ASCII
+FLEET_ASCII_BORDERS=0 fleet            # per session: force the rounded frames back
+```
+
+The environment variable only honours `1` and `0`; anything else defers to
+the flag. Resolved once at startup.
+
 ## Safety invariants
 
 Each of these is pinned by a test — they are the reason the tool is trustworthy

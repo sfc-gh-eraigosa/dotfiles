@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -40,6 +41,9 @@ var tuiCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		// The frame glyphs are decided once, here, from the same resolution:
+		// the package default is rounded so tests stay deterministic.
+		th = newTheme(wantASCIIBorders(policy.asciiBorders))
 		// A MISSING config is an empty fleet, not a failure: on a fresh
 		// machine there is nothing to read yet, and refusing to start is
 		// how `fleet` became unusable on exactly the host that needed
@@ -154,6 +158,23 @@ func resolveTUIPlan(file, ref, repoDir string, src featflag.Source) (updplan.Pla
 		return updplan.Plan{}, bgPolicy{}, fmt.Errorf("invalid --update-ref %q: %w", ref, err)
 	}
 	return plan, policy, nil
+}
+
+// wantASCIIBorders decides the frame glyphs for this run. The gff flag
+// (fleet.tui.ascii-borders) is the host-scoped preference: set it on the
+// machine you run `fleet` from. FLEET_ASCII_BORDERS is the per-session
+// override for a client that differs from the host's default — "1" forces
+// ASCII, "0" forces the rounded frames back, anything else (including
+// unset) defers to the flag. Explicit values only: `!= ""` would have made
+// `FLEET_ASCII_BORDERS=0` turn ASCII on.
+func wantASCIIBorders(fromFlag bool) bool {
+	switch os.Getenv("FLEET_ASCII_BORDERS") {
+	case "1":
+		return true
+	case "0":
+		return false
+	}
+	return fromFlag
 }
 
 func init() {

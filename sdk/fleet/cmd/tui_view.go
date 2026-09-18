@@ -26,11 +26,30 @@ type theme struct {
 	markSel, markOK, markFail     lipgloss.Style
 	local                         lipgloss.Style
 	logHosts                      []lipgloss.Style
+	// colSep separates the host column from the text in the log and errors
+	// panes — "│" (U+2502) normally, "|" in ASCII mode, so the one knob
+	// covers every box-drawing glyph the frames emit, not just the border.
+	colSep string
 }
 
-func newTheme() theme {
+// newTheme builds the style set. ascii=true frames panels and dialogs with
+// lipgloss's plain ASCII border (-, |, +) and uses "|" as the log column
+// separator instead of the rounded Unicode box-drawing set. That is the
+// escape hatch for a client that renders box-drawing glyphs badly: over
+// Terminus on iPadOS the log pane's top border showed as a row of "?" with
+// every line below it shifted, while the same bytes render fine elsewhere.
+// The client-side cause is not pinned down (the frame bytes are identical to
+// the panels that do render), so this removes the glyphs from the equation
+// rather than claiming to know why they fail. Resolved once at startup —
+// see wantASCIIBorders in tui.go — never re-read while running.
+func newTheme(ascii bool) theme {
 	c := func(s string) lipgloss.Color { return lipgloss.Color(s) }
+	border, sep := lipgloss.RoundedBorder(), "│"
+	if ascii {
+		border, sep = lipgloss.ASCIIBorder(), "|"
+	}
 	return theme{
+		colSep:    sep,
 		title:     lipgloss.NewStyle().Bold(true).Foreground(c("6")),
 		header:    lipgloss.NewStyle().Bold(true).Underline(true),
 		statusBar: lipgloss.NewStyle().Foreground(c("6")),
@@ -44,11 +63,11 @@ func newTheme() theme {
 		// Yellow: a warning is not a failure. The outcome colours keep their
 		// meanings — green ok, red FAIL — and ⚠ sits alongside, never instead.
 		warn: lipgloss.NewStyle().Foreground(c("3")),
-		dialog: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
+		dialog: lipgloss.NewStyle().Border(border).
 			BorderForeground(lipgloss.Color("6")).Padding(0, 1),
 		// Every section gets the same frame as the answers dialog, so the
 		// screen reads as separated panels rather than one run-on block.
-		panel: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).
+		panel: lipgloss.NewStyle().Border(border).
 			BorderForeground(lipgloss.Color("8")).Padding(0, 1),
 		// The selection dot is navy; it only turns red or green to report an
 		// update's OUTCOME. Colour therefore always means the same thing:
@@ -90,7 +109,11 @@ func newTheme() theme {
 	}
 }
 
-var th = newTheme()
+// th is the live theme. The package default is deterministic (rounded frames,
+// no environment read) so every View() test renders the same glyphs
+// regardless of the developer's shell; `fleet tui` replaces it once at
+// startup from the resolved preference (tui.go).
+var th = newTheme(false)
 
 // banner is the intro header: tool identity, version, and primary key hints
 // framed in the same panel border as the rest of the dashboard.
@@ -500,7 +523,7 @@ func (m tuiModel) logViewN(h int) string {
 		fmt.Fprintf(&body, "%s%s %s %s\n",
 			gutter,
 			th.dim.Render(stamp),
-			m.hostStyle(e.alias).Render(fmt.Sprintf("%-14s│", trunc(e.alias, 14))),
+			m.hostStyle(e.alias).Render(fmt.Sprintf("%-14s%s", trunc(e.alias, 14), th.colSep)),
 			text)
 	}
 	padRows(&body, len(entries)-start, h)
@@ -564,7 +587,7 @@ func (m tuiModel) errViewN(h int) string {
 		}
 		fmt.Fprintf(&body, " %s %s %s\n",
 			th.dim.Render(stamp),
-			m.hostStyle(e.alias).Render(fmt.Sprintf("%-14s│", trunc(e.alias, 14))),
+			m.hostStyle(e.alias).Render(fmt.Sprintf("%-14s%s", trunc(e.alias, 14), th.colSep)),
 			text)
 	}
 	padRows(&body, len(entries)-start, h)

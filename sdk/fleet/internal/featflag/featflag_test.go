@@ -151,3 +151,25 @@ func TestResolveSudoTimestampGlobalIsFailClosed(t *testing.T) {
 		t.Fatal("the other flags keep their fail-open defaults alongside it")
 	}
 }
+
+// fleet.tui.ascii-borders is presentation-only and fail-open to the default
+// frames: only an explicit, successfully-resolved true turns it on.
+func TestResolveASCIIBordersOnlyWhenResolvedTrue(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	on := Resolve(Static{Bools: map[string]bool{KeyASCIIBorders: true}}, t.TempDir(), t.TempDir())
+	if !on.ASCIIBorders {
+		t.Fatalf("ASCIIBorders = false, want true for a resolved true")
+	}
+	off := Resolve(Static{Bools: map[string]bool{KeyASCIIBorders: false}}, t.TempDir(), t.TempDir())
+	if off.ASCIIBorders {
+		t.Fatalf("ASCIIBorders = true, want false for a resolved false")
+	}
+	missing := Resolve(Static{}, t.TempDir(), t.TempDir())
+	if missing.ASCIIBorders {
+		t.Fatalf("ASCIIBorders = true, want false when the key is missing")
+	}
+	if strings.Contains(missing.Note, "ascii-borders") {
+		t.Fatalf("Note mentions ascii-borders (%q); a missing presentation key is not a degradation", missing.Note)
+	}
+}

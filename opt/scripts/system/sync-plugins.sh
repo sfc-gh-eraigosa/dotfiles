@@ -126,25 +126,29 @@ enable_claude_plugin() {
     fi
 }
 
-# Retry budget for a transient git `index.lock` race observed in `claude
-# plugin update`'s own internal clone/checkout — not a git call this script
-# makes itself. On a real fleet-update run, four plugins in a row each failed
-# on a FRESH clone dir with "Unable to create '.../.clone/.git/index.lock':
-# File exists", each succeeding again a few plugins later: consistent with a
-# short-lived internal lock the CLI's own plugin manager briefly holds, not a
-# genuinely stuck/crashed process (that message's own remedy — "remove the
-# file manually" — would keep failing every retry too, which the budget below
-# still bounds). One short retry recovers the common case instead of leaving
-# a plugin silently stuck on its previous version until the next sync.
+# Retry budget for a git `index.lock` failure inside `claude plugin
+# update`'s own internal clone/checkout — not a git call this script makes
+# itself. On a real fleet-update run, four plugins in a row each failed on a
+# FRESH clone dir with "Unable to create '.../.clone/.git/index.lock': File
+# exists", each succeeding again a few plugins later — which reads like a
+# short-lived internal lock. Live-verified follow-up (dotfiles#343) found
+# it is NOT reliably transient: on one host, one specific plugin failed this
+# way 100% of the time across several standalone retries up to 15s apart, on
+# the latest published claude-code, with no stray process or lock file
+# between attempts — consistent with a real ordering bug in the CLI's own
+# checkout step, not a lock that will clear on its own. The bounded retry
+# below is kept anyway because it costs almost nothing and still recovers a
+# GENUINELY momentary lock; it is not a fix for the deterministic case, which
+# needs an upstream claude-code fix.
 PLUGIN_UPDATE_LOCK_RETRIES="${SYNC_PLUGINS_LOCK_RETRIES:-2}"
 PLUGIN_UPDATE_LOCK_DELAY="${SYNC_PLUGINS_LOCK_RETRY_DELAY:-2}"
 
 # update_claude_plugin <plugin> — converge to latest, retrying on the
-# transient index.lock race above. Any other failure (including a lock that
-# is still held after the retry budget) is reported immediately, exactly as
-# before this existed.
+# index.lock failure above (which may or may not clear — see the comment on
+# the retry budget). Any other failure (including a lock still held after
+# the retry budget) is reported immediately, exactly as before this existed.
 update_claude_plugin() {
-    local plugin="$1" out rc=0 attempt=1
+    local plugin="$1" out rc=0 attempt=1 lock=0
     if [ "$DRY_RUN" = "1" ]; then
         echo "DRY-RUN: claude plugin update $plugin"
         return 0
@@ -160,14 +164,23 @@ update_claude_plugin() {
         if ! printf '%s' "$out" | grep -q 'index\.lock'; then
             break # a real failure — never retry, fall through to the warning
         fi
+        lock=1
         if [ "$attempt" -ge "$PLUGIN_UPDATE_LOCK_RETRIES" ]; then
             break # retry budget spent — fall through to the warning
         fi
         attempt=$((attempt + 1))
-        echo "sync-plugins: transient git lock updating $plugin; retrying (attempt $attempt/$PLUGIN_UPDATE_LOCK_RETRIES)…" >&2
+        # stdout, deliberately: fleet counts every stderr line it cannot
+        # classify as benign as a ⚠ on the host, so a retry that RECOVERS
+        # would still score a warning in `fleet history`. Only the exhausted
+        # budget below is a warning.
+        echo "sync-plugins: git lock updating $plugin; retrying (attempt $attempt/$PLUGIN_UPDATE_LOCK_RETRIES)…"
         sleep "$PLUGIN_UPDATE_LOCK_DELAY"
     done
-    echo "sync-plugins: WARNING — 'claude plugin update $plugin' failed (rc=$rc); continuing." >&2
+    if [ "$lock" -eq 1 ]; then
+        echo "sync-plugins: WARNING — 'claude plugin update $plugin' still hit a git index.lock after $attempt attempt(s) (rc=$rc); this can be a real bug in claude's own checkout step, not just a slow-clearing lock (dotfiles#343) — continuing." >&2
+    else
+        echo "sync-plugins: WARNING — 'claude plugin update $plugin' failed (rc=$rc); continuing." >&2
+    fi
 }
 
 sync_claude() {
