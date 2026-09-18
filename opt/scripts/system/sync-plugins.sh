@@ -126,6 +126,50 @@ enable_claude_plugin() {
     fi
 }
 
+# Retry budget for a transient git `index.lock` race observed in `claude
+# plugin update`'s own internal clone/checkout — not a git call this script
+# makes itself. On a real fleet-update run, four plugins in a row each failed
+# on a FRESH clone dir with "Unable to create '.../.clone/.git/index.lock':
+# File exists", each succeeding again a few plugins later: consistent with a
+# short-lived internal lock the CLI's own plugin manager briefly holds, not a
+# genuinely stuck/crashed process (that message's own remedy — "remove the
+# file manually" — would keep failing every retry too, which the budget below
+# still bounds). One short retry recovers the common case instead of leaving
+# a plugin silently stuck on its previous version until the next sync.
+PLUGIN_UPDATE_LOCK_RETRIES="${SYNC_PLUGINS_LOCK_RETRIES:-2}"
+PLUGIN_UPDATE_LOCK_DELAY="${SYNC_PLUGINS_LOCK_RETRY_DELAY:-2}"
+
+# update_claude_plugin <plugin> — converge to latest, retrying on the
+# transient index.lock race above. Any other failure (including a lock that
+# is still held after the retry budget) is reported immediately, exactly as
+# before this existed.
+update_claude_plugin() {
+    local plugin="$1" out rc=0 attempt=1
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "DRY-RUN: claude plugin update $plugin"
+        return 0
+    fi
+    while :; do
+        echo "+ claude plugin update $plugin"
+        rc=0
+        out="$("${GUARD[@]+"${GUARD[@]}"}" claude plugin update "$plugin" </dev/null 2>&1)" || rc=$?
+        [ -n "$out" ] && echo "$out"
+        if [ "$rc" -eq 0 ]; then
+            return 0
+        fi
+        if ! printf '%s' "$out" | grep -q 'index\.lock'; then
+            break # a real failure — never retry, fall through to the warning
+        fi
+        if [ "$attempt" -ge "$PLUGIN_UPDATE_LOCK_RETRIES" ]; then
+            break # retry budget spent — fall through to the warning
+        fi
+        attempt=$((attempt + 1))
+        echo "sync-plugins: transient git lock updating $plugin; retrying (attempt $attempt/$PLUGIN_UPDATE_LOCK_RETRIES)…" >&2
+        sleep "$PLUGIN_UPDATE_LOCK_DELAY"
+    done
+    echo "sync-plugins: WARNING — 'claude plugin update $plugin' failed (rc=$rc); continuing." >&2
+}
+
 sync_claude() {
     if [ "$DRY_RUN" = "0" ] && ! command -v claude >/dev/null 2>&1; then
         echo "sync-plugins: 'claude' CLI not on PATH; skipping Claude plugins."
@@ -148,7 +192,7 @@ sync_claude() {
         run claude plugin install "$plugin"
         enable_claude_plugin "$plugin"
         # Converge to latest (no-op when current; a restart picks up changes).
-        run claude plugin update "$plugin"
+        update_claude_plugin "$plugin"
     done < <(yq '.plugins[] | select(.enabled == true) | select(.claude.plugin != null) | .claude.plugin' "$MANIFEST")
 }
 

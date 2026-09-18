@@ -61,6 +61,33 @@ prefs_before_exit=$(awk -v stop="${early_exit_line}" \
 assert_eq "${prefs_before_exit}" "1" \
     "write_prefs runs BEFORE the already-configured early-exit (heals old hosts)"
 
+# --- healing a rotated signing key ----------------------------------------
+# Observed live on a fleet-update host: apt's signature check failed outright
+# — "Missing key <fingerprint>, which is needed to verify signature" —
+# because the "already configured" fast path only checks that the keyring
+# FILE exists, never whether its CONTENT still matches what GitHub currently
+# signs with. A host that configured the repo once, before an upstream key
+# rotation, never notices and stays broken until someone manually sets
+# GH_REPO_FORCE=1. The key must be re-fetched unconditionally, the same way
+# write_prefs already heals the pin unconditionally above.
+assert_grep "refresh_key is defined" '^refresh_key\(\)' "${SCRIPT}"
+# shellcheck disable=SC2016 # asserting on setup_gh_apt_repo.sh's literal
+# source text (an ERE pattern), not expanding these variables ourselves
+assert_grep "refresh_key fetches the current signing key" \
+    'fetch "\$KEY_URL" "\$tmpkey"' "${SCRIPT}"
+
+refresh_before_exit=$(awk -v stop="${early_exit_line}" \
+    'NR < stop && /refresh_key \|\|/ {found=1} END {print found+0}' "${SCRIPT}")
+assert_eq "${refresh_before_exit}" "1" \
+    "refresh_key runs BEFORE the already-configured early-exit (heals a rotated key)"
+
+# A refresh_key failure must never exit 0, same invariant as write_prefs —
+# and on BOTH call sites (the heal path and the fresh-install path).
+assert_grep_negative "no refresh_key call soft-fails to a bare warning" \
+    'refresh_key \|\| echo' "${SCRIPT}"
+assert_eq "$(grep -c 'refresh_key ||' "${SCRIPT}")" "2" \
+    "both refresh_key call sites are guarded (heal path + fresh-install path)"
+
 # And on the fresh-install path as well.
 assert_grep "prefs path is reported in the completion message" \
     'prefs: \$\{PREFS\}' "${SCRIPT}"
