@@ -142,6 +142,22 @@ if [[ "$CMD_SCRUBBED" =~ ${CMD_START}git[[:space:]]+${SAFE_CHARS}*push${SAFE_CHA
     ask "Force push rewrites remote history and requires explicit confirmation."
 fi
 
+# --- 5d. `gh pr ready` / `gh pr merge` (confirmation tier, dotfiles#341) ---
+# The raw-CLI equivalents of `gss feature pr --ready` and a direct PR merge.
+# gss's own approval-token gate (rule 10 below) covers `gss feature pr
+# --ready`, `merged`, `restack`, and classic `push`/`pr` — but it only ever
+# sees `gss` invocations. An agent blocked by that gate could route around
+# it by reaching for `gh` directly instead, same effect, no gate at all.
+# Confirmation tier, not a deny: both are legitimate actions a human may
+# want run — they should not be a *silent* way past the gate. Everything
+# else on `gh pr` (view/list/checks/comment, and labeling `ready-for-merge`
+# for the Mergify queue — the normal, sanctioned path) is unaffected.
+if [[ "$CMD_SCRUBBED" =~ ${CMD_START}gh[[:space:]]+pr[[:space:]]+ready([[:space:]]|$) ]]; then
+    ask "gh pr ready is the raw-CLI equivalent of 'gss feature pr --ready', which gss gates on an approval token. Confirm this promotion is authorized."
+elif [[ "$CMD_SCRUBBED" =~ ${CMD_START}gh[[:space:]]+pr[[:space:]]+merge([[:space:]]|$) ]]; then
+    ask "gh pr merge merges outside the Mergify queue (the normal path is labeling 'ready-for-merge' and letting the queue serialize it). Confirm this direct merge is intended."
+fi
+
 # --- 6. Fork bomb ---
 if [[ "$CMD_SCRUBBED" =~ :\(\)\{[[:space:]]*:\|:\&[[:space:]]*\}\;: ]]; then
     deny "Fork bomb pattern detected."

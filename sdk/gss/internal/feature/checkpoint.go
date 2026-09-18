@@ -32,6 +32,19 @@ type CheckpointResult struct {
 // force-pushes + edits the existing PR, then records PR state in the
 // registry (design.md → "gss feature checkpoint"). A rebase conflict is
 // aborted cleanly and surfaced as errors.ErrRebaseConflict.
+//
+// Deliberately NOT approval-token gated (reversal of the dotfiles#331 fix,
+// dotfiles#341): checkpoint only ever creates or updates a DRAFT PR — it
+// never merges and never flips a PR to ready-for-review on its own — so it
+// carries none of the risk `pr --ready` / `merged` / `restack` / classic
+// `push`/`pr` do, and gating it identically forced a human-minted token on
+// every routine WIP push. An agent working alone cannot legitimately mint
+// that token itself (self-minting defeats the control rather than
+// satisfying it, per the skill's own documented threat model), so the gate
+// either did nothing (an agent minted it anyway) or blocked all routine
+// progress outright when a stricter harness policy correctly refused to let
+// it self-authorize. See design.md → "Approval token handshake" for the
+// current, narrower scope.
 func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (CheckpointResult, error) {
 	ref, err := identity.ParseWorkerRef(opts.WorkerRef)
 	if err != nil {
@@ -45,35 +58,14 @@ func (s *Service) Checkpoint(ctx context.Context, opts CheckpointOpts) (Checkpoi
 	if fi < 0 {
 		return CheckpointResult{}, fmt.Errorf("%w: no such worker %q", errors.ErrInvalidIdent, opts.WorkerRef)
 	}
-	w := reg.Features[fi].Workers[wi]
 
-	// Approval gate (dotfiles#331) — checkpoint fetches, rebases, PUSHES,
-	// and creates/updates the draft PR, but until this fix only `pr --ready`
-	// consulted the approval token; checkpoint is the verb that publishes
-	// most often, so it was the widest hole in the approve-then-publish
-	// contract. Same sentinel/exit code as PromoteReady
-	// (errors.ErrApprovalTokenMissing, exit 22), checked before any git or
-	// gh call so a refusal touches neither.
-	if s.Approval == nil {
-		return CheckpointResult{}, fmt.Errorf("checkpoint: %w: no approval verifier configured", errors.ErrApprovalTokenMissing)
-	}
-	if err := s.Approval.Verify(ctx, w.Worktree, false); err != nil {
-		return CheckpointResult{}, fmt.Errorf("checkpoint: %w", err)
-	}
-
-	return s.checkpointAfterApproval(ctx, ref, reg, fi, wi)
+	return s.runCheckpoint(ctx, ref, reg, fi, wi)
 }
 
-// checkpointAfterApproval does the actual rebase+push+PR work, on the
-// assumption the approval gate has ALREADY been satisfied by the caller
-// (Checkpoint above, or AutoCheckpoint after its own single Verify call —
-// see auto.go). It must NEVER call s.Approval.Verify itself: the token is
-// single-use (approval.Verifier consumes/deletes it on success), so a
-// second Verify along the same call chain would spuriously fail against an
-// already-consumed token even though the first call succeeded (PR #333
-// review finding — AutoCheckpoint used to delegate to the public
-// Checkpoint, which re-verified).
-func (s *Service) checkpointAfterApproval(ctx context.Context, ref identity.WorkerRef, reg registry.Registry, fi, wi int) (CheckpointResult, error) {
+// runCheckpoint does the actual rebase+push+PR work, shared by Checkpoint
+// (above) and AutoCheckpoint (auto.go), which have already resolved
+// ref/reg/fi/wi themselves.
+func (s *Service) runCheckpoint(ctx context.Context, ref identity.WorkerRef, reg registry.Registry, fi, wi int) (CheckpointResult, error) {
 	feat := reg.Features[fi]
 	w := feat.Workers[wi]
 	base := w.BaseBranch

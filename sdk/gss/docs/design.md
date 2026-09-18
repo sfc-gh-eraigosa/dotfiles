@@ -2059,21 +2059,39 @@ resolution now lives.
     `<repo>/.registry.lock`; writes use tmp-file + atomic `rename(2)`;
     refuse to operate if `stat(registry.json).uid != geteuid()`.
     `gofrs/flock` pinned as the BSD-3-Clause lock primitive.
-11. **`gss feature pr --ready` is approval-token gated.** Closes the
-    security gap where a worker could silently flip a draft to ready.
-    See [`gss feature pr`](#gss-feature-pr---ready) (token required
-    for `--ready`). **`gss feature checkpoint` is gated identically**
-    (dotfiles issue #331): checkpoint pushes and publishes a PR far more
-    often than `pr --ready` does, so it was the wider hole in the same
-    contract — scoping the gate to `--ready` only left checkpoint able to
-    push with a missing or stale token. Same sentinel
-    (`ErrApprovalTokenMissing`) and exit code (22) either way. The gate is
-    checked exactly once per call chain: AutoCheckpoint (`checkpoint
-    --auto`) verifies it BEFORE its own local WIP commit (not just before
-    the eventual push — a PR #333 review finding), then delegates to
-    `checkpointAfterApproval` rather than the public `Checkpoint`, since
-    the token is single-use and a second `Verify` on the same chain would
-    spuriously fail against an already-consumed token.
+11. **`gss feature pr --ready` is approval-token gated; `gss feature
+    checkpoint` deliberately is NOT.** `pr --ready` closes the security
+    gap where a worker could silently flip a draft to ready — same
+    sentinel (`ErrApprovalTokenMissing`) and exit code (22) as classic
+    `push`/`pr`. See [`gss feature pr`](#gss-feature-pr---ready).
+
+    dotfiles#331 briefly gated `checkpoint` identically, on the reasoning
+    that it pushes and publishes a PR far more often than `pr --ready`
+    does. That was reversed (dotfiles#341): checkpoint only ever
+    creates or updates a **draft** PR — it never merges and never flips a
+    PR to ready-for-review on its own — so it carries none of the risk
+    the still-gated verbs (`pr --ready`, `merged`, `restack`, classic
+    `push`/`pr`) do. Gating it identically forced a human-minted token on
+    every routine WIP push, and no local, agent-runnable mechanism can
+    actually distinguish a human minting that token from an agent minting
+    it on its own behalf — an agent working alone either mints it anyway
+    (the gate does nothing) or is correctly blocked from self-authorizing
+    by a stricter harness policy (the gate blocks all routine progress,
+    not just unauthorized publishes). Checkpoint's real safety property is
+    narrower and still holds: it is draft-only, so a checkpoint nobody
+    wanted is a closed draft PR away from undone, never a merge.
+
+    The gate that remains (`pr --ready`/`merged`/`restack`/classic
+    `push`/`pr`) is also enforced at the hook layer
+    ([`ai/hooks/safety_guard.sh`](../../../ai/hooks/safety_guard.sh) rule
+    10), which only recognizes `gss` invocations — an agent blocked there
+    can reach for `gh pr ready` / `gh pr merge` directly, same effect, no
+    gate. Rule 5d closes that specific bypass at confirmation tier (`ask`,
+    not `deny`): both are legitimate actions a human may want run, they
+    just should not be a *silent* way past the gate. This is the real
+    backstop for operators who want a hard stop regardless of an agent's
+    own judgment — a harness-level permission rule sees the actual
+    Bash/`gh`/`git` invocation, which a token file on disk never can.
 
     Relatedly: `identity.WorkerRef.SameWorker`/`.Leaf()` are the ONLY
     correct way to ask "is this ref the same worker as that one." The

@@ -101,6 +101,26 @@ assert_exit 3 Bash "git push --force-with-lease origin main" "git push --force-w
 assert_exit 0 Bash "git push origin main"            "plain git push allowed"
 assert_exit 0 Bash "echo reboot required after upgrade" "reboot as argument (not command) allowed"
 assert_exit 0 Bash "systemctl status nginx"          "systemctl status allowed"
+# `gh pr ready`/`gh pr merge` are the raw-CLI equivalents of `gss feature pr
+# --ready` and the Mergify-queue merge — same effect, but gss's own
+# approval-token gate (still enforced for pr --ready/merged/restack/push/pr)
+# never sees them, so an agent blocked by that gate could route around it by
+# reaching for `gh` directly instead. Confirmation tier, not a hard deny:
+# these are legitimate actions a human may want run, they just should not be
+# a silent way past the gate.
+assert_exit 3 Bash "gh pr ready 340"                       "gh pr ready asks (approval-token bypass)"
+assert_exit 3 Bash "gh pr ready 340 --repo owner/repo"     "gh pr ready --repo asks too"
+assert_exit 3 Bash "gh pr merge 340"                        "gh pr merge asks (raw merge bypass)"
+assert_exit 3 Bash "gh pr merge 340 --squash --auto"        "gh pr merge --squash --auto asks too"
+# Everything else on `gh pr` is normal, sanctioned agent workflow (viewing,
+# labeling for the Mergify queue, commenting, checking CI) and must stay
+# unaffected.
+assert_exit 0 Bash "gh pr view 340"                         "gh pr view allowed"
+assert_exit 0 Bash "gh pr list --state open"                "gh pr list allowed"
+assert_exit 0 Bash "gh pr edit 340 --add-label ready-for-merge" "gh pr edit --add-label ready-for-merge allowed (the sanctioned queue path)"
+assert_exit 0 Bash "gh pr checks 340"                       "gh pr checks allowed"
+assert_exit 0 Bash "gh pr comment 340 --body hi"            "gh pr comment allowed"
+assert_exit 0 Bash "echo 'run gh pr ready when CI is green'" "gh pr ready as argument text (not a command) allowed"
 
 # === Denied (exit 2) ===
 assert_exit 2 Bash "rm -rf *"                        "rm -rf wildcard"
