@@ -148,7 +148,7 @@ PLUGIN_UPDATE_LOCK_DELAY="${SYNC_PLUGINS_LOCK_RETRY_DELAY:-2}"
 # the retry budget). Any other failure (including a lock still held after
 # the retry budget) is reported immediately, exactly as before this existed.
 update_claude_plugin() {
-    local plugin="$1" out rc=0 attempt=1
+    local plugin="$1" out rc=0 attempt=1 lock=0
     if [ "$DRY_RUN" = "1" ]; then
         echo "DRY-RUN: claude plugin update $plugin"
         return 0
@@ -164,15 +164,20 @@ update_claude_plugin() {
         if ! printf '%s' "$out" | grep -q 'index\.lock'; then
             break # a real failure — never retry, fall through to the warning
         fi
+        lock=1
         if [ "$attempt" -ge "$PLUGIN_UPDATE_LOCK_RETRIES" ]; then
             break # retry budget spent — fall through to the warning
         fi
         attempt=$((attempt + 1))
-        echo "sync-plugins: git lock updating $plugin; retrying (attempt $attempt/$PLUGIN_UPDATE_LOCK_RETRIES)…" >&2
+        # stdout, deliberately: fleet counts every stderr line it cannot
+        # classify as benign as a ⚠ on the host, so a retry that RECOVERS
+        # would still score a warning in `fleet history`. Only the exhausted
+        # budget below is a warning.
+        echo "sync-plugins: git lock updating $plugin; retrying (attempt $attempt/$PLUGIN_UPDATE_LOCK_RETRIES)…"
         sleep "$PLUGIN_UPDATE_LOCK_DELAY"
     done
-    if printf '%s' "$out" | grep -q 'index\.lock'; then
-        echo "sync-plugins: WARNING — 'claude plugin update $plugin' still hit a git index.lock after $PLUGIN_UPDATE_LOCK_RETRIES attempt(s); this can be a real bug in claude's own checkout step, not just a slow-clearing lock (dotfiles#343) — continuing." >&2
+    if [ "$lock" -eq 1 ]; then
+        echo "sync-plugins: WARNING — 'claude plugin update $plugin' still hit a git index.lock after $attempt attempt(s) (rc=$rc); this can be a real bug in claude's own checkout step, not just a slow-clearing lock (dotfiles#343) — continuing." >&2
     else
         echo "sync-plugins: WARNING — 'claude plugin update $plugin' failed (rc=$rc); continuing." >&2
     fi

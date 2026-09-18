@@ -13,9 +13,10 @@ import (
 
 // Flag keys (declared in .github/gff/features.yaml, area `fleet`).
 const (
-	KeyEnabled    = "fleet.update.enabled"
-	KeyConfig     = "fleet.update.config"
-	KeySudoGlobal = "fleet.update.sudo-timestamp-global"
+	KeyEnabled      = "fleet.update.enabled"
+	KeyConfig       = "fleet.update.config"
+	KeySudoGlobal   = "fleet.update.sudo-timestamp-global"
+	KeyASCIIBorders = "fleet.tui.ascii-borders"
 )
 
 // Source is the minimal gff surface featflag needs. gff.GFF implements it in
@@ -44,9 +45,15 @@ type Settings struct {
 	// cmd/tui_cmds.go sudoGlobalFixup) — a change to the host, so an error or
 	// a missing key must mean "don't".
 	SudoTimestampGlobal bool
+	// ASCIIBorders is true only when fleet.tui.ascii-borders explicitly
+	// resolved to true: the TUI then frames its panels with plain ASCII
+	// (-, |, +) instead of Unicode box-drawing, for clients that render the
+	// latter badly. Presentation only; an error or a missing key keeps the
+	// default frames and adds no Note.
+	ASCIIBorders bool
 	// Note explains any fail-open fallback taken, empty when the two plan
-	// flags resolved cleanly. SudoTimestampGlobal never adds a Note: staying
-	// off is its default, not a degradation.
+	// flags resolved cleanly. SudoTimestampGlobal and ASCIIBorders never add
+	// a Note: staying off is their default, not a degradation.
 	Note string
 }
 
@@ -104,6 +111,9 @@ func Resolve(src Source, home, repoDir string) Settings {
 	// noted as a fallback: skipping a host change is the safe outcome.
 	if on, err := src.Bool(KeySudoGlobal); err == nil && on {
 		settings.SudoTimestampGlobal = true
+	}
+	if on, err := src.Bool(KeyASCIIBorders); err == nil && on {
+		settings.ASCIIBorders = true
 	}
 
 	locs, err := src.Strings(KeyConfig)
