@@ -82,9 +82,6 @@ sets:
       - path: install.tools.glow
         description: 'Opt-in. Runs install_glow.sh, which installs the glow markdown renderer (charmbracelet/glow, MIT) into ~/opt/bin from the release tarball, SHA-256-verified against its checksums.txt and pinned by GLOW_VERSION. herdr-file-viewer renders markdown through it. Enable with gff set install.tools.glow true.'
         boolDefault: false
-      - path: install.tools.ollama
-        description: 'Opt-in — GPU-node hosts only (spark1, jetson1; playground#379). Runs install_ollama.sh, which fetches ollama''s own install.sh for the pinned OLLAMA_VERSION release, SHA-256-verified against that release''s sha256sum.txt, then runs the verified LOCAL copy so ollama''s own CUDA/ROCm/Jetson detection stays in charge of the actual install. A host already on the pin is a no-op with no download. Enable with gff set install.tools.ollama true.'
-        boolDefault: false
       # --- herdr-plugin (7) --- one flag per row of ai/herdr/plugins.tsv
       - path: install.herdr-plugin.file-viewer
         description: 'Installs the herdr-file-viewer plugin (git-aware, read-only file viewer; smarzban/herdr-file-viewer, MIT) at the ref pinned in ai/herdr/plugins.tsv, and adds its keybindings (prefix+f split, prefix+shift+f tab) to the managed herdr config. Installed by the install.tools.herdr-plugins config step, after install.runtime.rust; builds with cargo on hosts without a prebuilt binary (every aarch64 host). Off stops install and keybindings; it never uninstalls.'
