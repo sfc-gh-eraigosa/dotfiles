@@ -33,6 +33,10 @@ brew 'pinentry'
 brew 'readline'
 brew 'sqlite'
 brew 'sops'
+# uv (and its uvx tool-runner) — the AWS Claude plugins enabled by default in
+# ai/plugins.yaml (deploy-on-aws, aws-serverless, aws-core) launch their MCP
+# servers via uvx (dotfiles#312). Linux/WSL gets it from install_uv.sh instead.
+brew 'uv'
 # util-linux provides `setsid`, which macOS lacks natively. sync-plugins.sh runs
 # `claude`/`agy` plugin installs under setsid so they get no controlling
 # terminal and fall back to non-interactive mode — without it a fresh

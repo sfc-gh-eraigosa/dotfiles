@@ -101,7 +101,7 @@ unset _ip_prev _ip_arg
 #     in the per-commit config layer; omitting it BAKES the step into the cached
 #     deps layer, so later edits to it stop taking effect per commit (a bug).
 _IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_TOOLS_HERDR_PLUGINS INSTALL_TOOLS_HERDR_CONFIG INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
-_IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_GLOW INSTALL_TOOLS_OLLAMA INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM INSTALL_RUNTIME_RUST INSTALL_SHELL_OH_MY_ZSH_UPDATE"
+_IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_UV INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_GLOW INSTALL_TOOLS_OLLAMA INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM INSTALL_RUNTIME_RUST INSTALL_SHELL_OH_MY_ZSH_UPDATE"
 apply_install_phase() {
   case "$INSTALL_PHASE" in
     deps)   for _f in $_IP_CONFIG_FLAGS; do export "GFF_${_f}=false"; done ;;
@@ -425,6 +425,18 @@ if gff_on install.tools.yq; then
     "${BASE_DIR}/opt/scripts/system/install_yq.sh" || echo "WARNING: yq install reported problems; continuing."
   fi
 else gff_skip_msg install.tools.yq; fi
+
+# Install uv (and its uvx tool-runner). macOS gets it from the Brewfile;
+# Linux/WSL fetches the official release, SHA-256-verified. On by default,
+# like yq/sops: the AWS Claude plugins enabled in ai/plugins.yaml
+# (deploy-on-aws, aws-serverless, aws-core) launch their MCP servers via
+# uvx, which otherwise fails to connect at every session start (#312).
+if gff_on install.tools.uv; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_uv.sh" ]; then
+    echo "Installing uv..."
+    "${BASE_DIR}/opt/scripts/system/install_uv.sh" || echo "WARNING: uv install reported problems; continuing."
+  fi
+else gff_skip_msg install.tools.uv; fi
 
 # Install the Kubernetes toolchain (kubectl, helm, kind). macOS gets them from
 # packages.tsv (brew); Linux/WSL fetches the official release binaries because

@@ -52,6 +52,9 @@ sets:
       - path: install.tools.yq
         description: Runs the install_yq.sh block that fetches the mikefarah yq binary.
         boolDefault: true
+      - path: install.tools.uv
+        description: 'Runs the install_uv.sh block that fetches Astral''s uv (and its uvx tool-runner) release binary, SHA-256-verified against the release''s <asset>.sha256 sidecar. On by default (like yq/sops): the AWS Claude plugins enabled in ai/plugins.yaml (deploy-on-aws, aws-serverless, aws-core) launch their MCP servers via uvx, which otherwise fails to connect at every session start (dotfiles#312).'
+        boolDefault: true
       - path: install.tools.k8s
         description: Runs the install_k8s_tools.sh block (kubectl, helm, kind).
         boolDefault: true
