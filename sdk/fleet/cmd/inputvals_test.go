@@ -493,3 +493,52 @@ func TestDryRunPrintsOnceUnlessAnInputIsPerHost(t *testing.T) {
 		t.Fatal("the inputs fixture declares per-host inputs")
 	}
 }
+
+// --- a flag answer is applied once per host, not once per step ------------
+
+func TestAFlagInputIsSetOnceOnTheFirstStepThatNeedsIt(t *testing.T) {
+	p, err := updplan.Parse([]byte(`
+version: 1
+update:
+  inputs:
+    - {id: ollama, type: bool, flag: converge.ollama.enabled}
+    - {id: later, type: bool, flag: converge.later, needed_by: [s2]}
+  repos:
+    r: {path: ~/r}
+  steps:
+    - {id: s1, kind: run, repo: r, run: ./a.sh}
+    - {id: s2, kind: run, repo: r, run: ./b.sh, needs: [s1]}
+    - {id: s3, kind: run, repo: r, run: ./c.sh, needs: [s2]}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	vals := inputValues{run: map[string]string{"ollama": "true", "later": "true"}}
+	got := map[string]string{}
+	for _, id := range []string{"s1", "s2", "s3"} {
+		st, _ := p.Step(id)
+		pre, err := inputPreamble(p, st, "h1", vals)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got[id] = pre
+	}
+	// gff state persists on the host, so setting it before the FIRST step
+	// that needs it covers every later one. Re-running `gff set` on each step
+	// was harmless but noisy — and on every retry too.
+	if !strings.Contains(got["s1"], "converge.ollama.enabled") {
+		t.Errorf("unqualified flag not set on the first run step: %q", got["s1"])
+	}
+	for _, id := range []string{"s2", "s3"} {
+		if strings.Contains(got[id], "converge.ollama.enabled") {
+			t.Errorf("unqualified flag re-set on %s: %q", id, got[id])
+		}
+	}
+	// A qualified one is set on the first step it names, and nowhere else.
+	if !strings.Contains(got["s2"], "converge.later") {
+		t.Errorf("qualified flag not set on its named step: %q", got["s2"])
+	}
+	if strings.Contains(got["s1"], "converge.later") || strings.Contains(got["s3"], "converge.later") {
+		t.Errorf("qualified flag leaked onto other steps: s1=%q s3=%q", got["s1"], got["s3"])
+	}
+}

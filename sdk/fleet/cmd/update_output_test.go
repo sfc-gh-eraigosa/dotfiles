@@ -262,3 +262,23 @@ func TestUpdateCapturesOnlyWhereTheCallerNamed(t *testing.T) {
 		t.Fatalf("capture written to a directory the caller never named: %v", entries)
 	}
 }
+
+// A step that stopped on an input problem (94/95) must say so in the
+// headless report, not just "exit status 94" — the number is meaningless to
+// an operator reading a log an hour later.
+func TestHeadlessReportExplainsInputExitCodes(t *testing.T) {
+	plan := singleRunStepPlan("p")
+	for code, want := range map[int]string{
+		rcInputFlag:     "input",
+		rcInputDiscover: "came up empty",
+	} {
+		rep := updexec.HostReport{Host: "h1", Results: []updexec.Result{{
+			Step: plan.Steps[0].ID, Status: updexec.Failed, Exit: code, Reason: fmt.Sprintf("exit status %d", code),
+		}}}
+		var b strings.Builder
+		printHostReport(&b, plan, rep)
+		if !strings.Contains(strings.ToLower(b.String()), want) {
+			t.Errorf("exit %d rendered without its explanation (want %q):\n%s", code, want, b.String())
+		}
+	}
+}
