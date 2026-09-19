@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag"
@@ -49,14 +50,37 @@ var (
 	flagUpdateRefs      []string
 	flagUpdateFile      string
 	flagUpdateDryRun    bool
+	flagUpdateInputs    []string
 )
 
 // buildExecutor assembles the Executor a live (non-dry-run) update runs
 // through, from the resolved CLI flags. out is the headless capture (task
 // 23's newRunLogOutput); nil is a valid Discard.
-func buildExecutor(r runner.Runner, out updexec.Output, local updplan.Local) updexec.Executor {
+func buildExecutor(r runner.Runner, out updexec.Output, local updplan.Local, plan updplan.Plan, host string, vals inputValues) updexec.Executor {
+	// The plan's declared inputs ride in on the same two channels the sudo
+	// answers already use: plain values in the export preamble, confidential
+	// ones on stdin. validateInputDelivery has already refused the one
+	// combination that cannot work (a confidential value for an interactive
+	// step), so an error here is unreachable and the preamble degrades to the
+	// local answers rather than taking the run down.
+	preamble := func(st updplan.Step) string {
+		pre := localAnswerPreamble(st)
+		ip, err := inputPreamble(plan, st, host, vals)
+		if err != nil {
+			return pre
+		}
+		return pre + ip
+	}
+	io := updexec.Console{R: r, Preamble: preamble}
+	// Stdin is attached ONLY when the plan actually has a confidential value
+	// to send. The CLI lane has no sudo secret of its own, and a non-nil
+	// Stdin that always returns "" would still change what the lane looks
+	// like to anything inspecting it.
+	if planHasConfidentialInput(plan) {
+		io.Stdin = func(st updplan.Step) string { return inputStdin(plan, st, host, vals) }
+	}
 	return updexec.Executor{
-		IO:        updexec.Console{R: r, Preamble: localAnswerPreamble},
+		IO:        io,
 		Out:       out,
 		Local:     local,
 		NoRestore: flagUpdateNoRestore,
@@ -101,8 +125,33 @@ func runUpdateWith(out io.Writer, hosts []string, r runner.Runner, capture updex
 		}
 	}
 
+	// The plan may declare values it cannot run without. Resolve them before
+	// a single host is contacted: discovering a missing token halfway through
+	// a fleet leaves half of it converged and half not.
+	vals, err := parseInputFlags(plan, flagUpdateInputs)
+	if err != nil {
+		return err
+	}
+	if err := validateInputDelivery(plan); err != nil {
+		return err
+	}
+
 	if flagUpdateDryRun {
-		return printDryRun(out, plan, local, flagUpdateReset)
+		// Per host, because a per-host input resolves differently on each.
+		for _, host := range hosts {
+			if len(hosts) > 1 {
+				fmt.Fprintf(out, "--- %s ---\n", host)
+			}
+			if err := printDryRunFor(out, plan, local, flagUpdateReset, host, vals); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	if missing := missingInputs(plan, hosts, vals); len(missing) > 0 {
+		return fmt.Errorf("the plan needs values this run has no answer for: %s\n  supply each with --input <id>=<value> (per-host: --input <host>:<id>=<value>)\n  a confidential value must come from a file or the environment: --input <id>=@<path> or --input <id>=env:<NAME>",
+			strings.Join(missing, ", "))
 	}
 
 	// One capture value, reused across every host: it carries no per-host
@@ -110,7 +159,7 @@ func runUpdateWith(out io.Writer, hosts []string, r runner.Runner, capture updex
 	// each time), so reconstructing it per host was pure churn.
 	reports := make([]updexec.HostReport, 0, len(hosts))
 	for _, host := range hosts {
-		ex := buildExecutor(r, capture, local)
+		ex := buildExecutor(r, capture, local, plan, host, vals)
 		reports = append(reports, ex.RunHost(host, plan))
 	}
 
@@ -151,5 +200,6 @@ func init() {
 	updateCmd.Flags().StringArrayVar(&flagUpdateRefs, "ref", nil, "git ref (branch or tag) to target: B or repo=B; repeatable; default = the plan's own branches")
 	updateCmd.Flags().StringVar(&flagUpdateFile, "file", "", "explicit fleet.yaml plan path (skips gff resolution)")
 	updateCmd.Flags().BoolVar(&flagUpdateDryRun, "dry-run", false, "print every effective script and send nothing")
+	updateCmd.Flags().StringArrayVar(&flagUpdateInputs, "input", nil, "value for a plan-declared input: <id>=<value>, <id>=@<file>, <id>=env:<NAME>, or <host>:<id>=… for a per-host one; repeatable")
 	rootCmd.AddCommand(updateCmd)
 }

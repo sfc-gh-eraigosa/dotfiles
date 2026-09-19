@@ -86,6 +86,17 @@ func printHostReport(w io.Writer, p updplan.Plan, rep updexec.HostReport) {
 // touches no runner at all, so it is structurally incapable of sending
 // anything.
 func printDryRun(w io.Writer, p updplan.Plan, local updplan.Local, reset bool) error {
+	return printDryRunFor(w, p, local, reset, "", inputValues{})
+}
+
+// printDryRunFor is printDryRun with the host and answered inputs, so the
+// preview shows the preamble a real run would prepend — the exports, and
+// crucially the `gff set` calls, which CHANGE the host. --dry-run is the
+// trust boundary ("print every effective script and send nothing"), so a
+// step whose effective script grew a host-mutating prefix has to show it.
+// Confidential values are never printed: they are read from stdin, so the
+// text carries the `read`, not the value.
+func printDryRunFor(w io.Writer, p updplan.Plan, local updplan.Local, reset bool, host string, vals inputValues) error {
 	fmt.Fprintf(w, "plan: %s\n", p.Source)
 	// cmd carries no script-selection logic of its own: Executor.Scripts is
 	// the SAME builder that runSync/runRun/runGhAuth call, so dry-run can
@@ -99,8 +110,18 @@ func printDryRun(w io.Writer, p updplan.Plan, local updplan.Local, reset bool) e
 		if err != nil {
 			return err
 		}
+		pre, err := inputPreamble(p, st, host, vals)
+		if err != nil {
+			return err
+		}
 		for _, ls := range scripts {
-			fmt.Fprintf(w, "  %s: %s\n", ls.Label, ls.Script)
+			script := ls.Script
+			// Only a run step carries the preamble, the same rule
+			// Console.runScript applies.
+			if pre != "" && st.Kind == updplan.KindRun {
+				script = pre + script
+			}
+			fmt.Fprintf(w, "  %s: %s\n", ls.Label, script)
 		}
 		fmt.Fprintf(w, "  timeout=%s retry=%d on=%v\n", st.Timeout, st.Retry.Attempts, st.Retry.On)
 	}

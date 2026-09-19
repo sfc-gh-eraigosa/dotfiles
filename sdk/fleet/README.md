@@ -378,6 +378,7 @@ fleet update init --print                    # ...or just show it
 | `--timeout D` | override every **batch** step's per-attempt timeout (interactive steps keep the plan's) |
 | `--no-retry` | run every step at most once |
 | `--ref B` / `--ref repo=B` | target a ref; repeatable. Bare `B` picks the repo named `dotfiles`, or the plan's only repo |
+| `--input <id>=<v>` | a value for a plan-declared input; `<id>=@<file>`, `<id>=env:<NAME>`, or `<host>:<id>=...` for a per-host one; repeatable |
 | `--file PATH` | read this plan; must exist |
 | `--dry-run` | print the plan source, every effective script and each step's timeout/retry; touch no runner |
 | `--json` (global) | the report as one JSON document, nothing else |
@@ -419,6 +420,17 @@ version: 1                              # must be 1
 update:
   root: ~/git                           # absolute or ~/ path; relative repo paths resolve under it
   baseline: <repo name>                 # which repo the STATUS column tracks (see below)
+  inputs:                               # values the plan needs before it can run (see below)
+    - id: <lower_snake>                 # required; the name used by --input
+      prompt: "..."                     # what to ask
+      type: text | password | bool | choice     # default text; password implies confidential
+      secret: true                      # confidential: delivered over stdin, never argv
+      scope: run | host                 # default run (once per run) vs once per host
+      env: UPPER_SNAKE                  # variable to export; default = the id upshouted
+      flag: <gff.flag.key>              # instead of an env var: `gff set` it on the host
+      options: [a, b]                   # choice only
+      default: a
+      needed_by: [<step id>, ...]       # default: every run step
   defaults:                             # merged into every step, field by field
     timeout: 30m                        # per ATTEMPT; 0 = none; interactive steps default to 0
     retry:
@@ -468,6 +480,47 @@ Step kinds:
   + `gh auth setup-git` interactively, then one re-check. An authenticated host makes
   zero interactive calls; `gh` missing reads `gh not installed`, not an auth failure;
   no token, `GH_TOKEN`, `GITHUB_TOKEN` or `--with-token` ever appears in a remote string.
+
+#### Values the plan needs — `inputs:`
+
+A shared plan cannot hardcode which cluster node a machine is, must not carry a join
+credential, and has no way to turn a repo's feature on for one host. `inputs:` declares
+those, and fleet collects them before the first host is contacted — discovering a
+missing value halfway through a fleet leaves half of it converged.
+
+```yaml
+update:
+  inputs:
+    - {id: node,   scope: host, env: CONVERGE_NODE, prompt: "which node is this host?"}
+    - {id: ollama, scope: host, type: bool, flag: converge.ollama.enabled}
+    - {id: k3s_join,  type: password, env: K3S_TOKEN, needed_by: [pg.converge]}
+```
+
+```sh
+fleet update h1 --input h1:node=jetson1 --input h1:ollama=true --input k3s_join=@<path>
+fleet update h1 --input k3s_join=env:<NAME>          # ...or from the environment
+```
+
+Three ways a value is delivered, each picked for what it protects:
+
+| Kind | Delivery |
+|---|---|
+| plain | `export <ENV>=<value>;` in the step's preamble — the `export` form, never `VAR=x cmd`, which scopes to the `cd` and never reaches the script |
+| `flag:` | `( cd <repo> && gff set <key> <value> )` before the step, so answering a question turns the feature on **in that host's gff state**. A failure here exits `94`, distinct from a script failure: a switch that silently stayed off is the whole problem this removes |
+| `secret:` / `type: password` | written to the step's **stdin** and read into the environment there (`IFS= read -r ...; export ...`). It never appears in the remote command line, which is world-readable through `/proc` on the host |
+
+**A confidential value is never a literal on the command line.** `--input k3s_join=<value>`
+is refused — local argv is world-readable through `/proc` too — so it must come from
+`@<file>` or `env:<NAME>`.
+
+**A confidential value cannot go to an `interactive: true` step**, whose stdin is the
+operator's terminal; there is nowhere to put it but argv. fleet refuses the plan up
+front and says so. Make the step batch (the TUI primes sudo for it) or have the script
+prompt for the value itself.
+
+`--dry-run` prints the **effective** script, preamble included, so the `gff set` that
+will change the host is visible before anything runs — and the confidential value is
+not, because it is a `read` from stdin rather than text in the command.
 
 #### What the status column tracks — `baseline:` and `stamp:`
 
