@@ -145,7 +145,7 @@ func resolveTUIPlan(file, ref, repoDir string, src featflag.Source) (updplan.Pla
 	if file != "" {
 		plan, err = readPlanFile(file, "")
 	} else {
-		plan, err = planFromSettings(settings)
+		plan, err = planFromSettings(settings, repoDir, flagRepoChosen)
 	}
 	if err != nil {
 		return updplan.Plan{}, bgPolicy{}, err

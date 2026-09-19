@@ -14,6 +14,14 @@ var (
 	flagMarker string
 	flagRepo   string
 	flagJSON   bool
+	// flagRepoChosen records that the user actually named the repo fleet
+	// operates on — an explicit --repo, or a cwd inside a repo that is not
+	// the dotfiles default. Plan discovery consults it to decide whether a
+	// repo's own fleet.yaml outranks the gff selection (see
+	// planFromSettingsFor); it must never be true for a bare `fleet` run in
+	// a neutral directory, or discovery would change which plan an existing
+	// user gets without anyone asking.
+	flagRepoChosen bool
 )
 
 var rootCmd = &cobra.Command{
@@ -56,6 +64,29 @@ func init() {
 	home, _ := os.UserHomeDir()
 	rootCmd.PersistentFlags().StringVar(&flagConfig, "config", filepath.Join(home, ".ssh", "config"), "ssh config path")
 	rootCmd.PersistentFlags().StringVar(&flagMarker, "marker", "#fleet", "comment marking a host as in-fleet")
-	rootCmd.PersistentFlags().StringVar(&flagRepo, "repo", filepath.Join(home, "git", "dotfiles"), "local dotfiles repo used for the baseline")
+	rootCmd.PersistentFlags().StringVar(&flagRepo, "repo", filepath.Join(home, "git", "dotfiles"), "repo fleet operates on: its fleet.yaml is discovered and it is the baseline (default: the git repo you are in, else ~/git/dotfiles)")
 	rootCmd.PersistentFlags().BoolVar(&flagJSON, "json", false, "machine-readable output")
+
+	// --repo defaults to the repo you are standing in, so `cd <repo> && fleet`
+	// operates on that repo without a flag. Resolved here rather than in the
+	// flag's default because the default is computed before cobra parses, and
+	// "was it given?" is only knowable afterwards.
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, _ []string) {
+		if cmd.Flags().Changed("repo") {
+			flagRepoChosen = true
+			return
+		}
+		cwd, err := os.Getwd()
+		if err != nil {
+			return
+		}
+		top, ok := repoFromCwd(cwd)
+		// Standing inside the dotfiles default is NOT a choice — leaving
+		// flagRepoChosen false there preserves today's plan precedence for
+		// everyone who simply runs fleet from their dotfiles checkout.
+		if ok && top != flagRepo {
+			flagRepo = top
+			flagRepoChosen = true
+		}
+	}
 }
