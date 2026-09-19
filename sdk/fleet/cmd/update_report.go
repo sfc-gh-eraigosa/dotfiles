@@ -71,6 +71,16 @@ func printHostReport(w io.Writer, p updplan.Plan, rep updexec.HostReport) {
 		if note == "" && len(res.Notes) > 0 {
 			note = strings.Join(res.Notes, "; ")
 		}
+		// A fleet-defined exit code is explained in words, the same words the
+		// TUI row uses: "exit status 94" in a log read an hour later says
+		// nothing, and the Notes that would have explained it lose to Reason.
+		if why := explainExitCode(res.Exit); why != "" && !strings.Contains(note, why) {
+			if note == "" {
+				note = why
+			} else {
+				note = note + " — " + why
+			}
+		}
 		if note != "" {
 			parts = append(parts, note)
 		}

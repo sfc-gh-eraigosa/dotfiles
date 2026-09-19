@@ -318,19 +318,31 @@ func explainExit(err error) string {
 		return ""
 	}
 	s := err.Error()
-	switch {
-	case strings.Contains(s, fmt.Sprint(rcSudoAuth)):
-		return "sudo authentication failed (wrong password?)"
-	case strings.Contains(s, fmt.Sprint(rcSudoNoCache)):
-		return "sudo unusable in this session (no credential, or it did not persist) — nothing was installed"
-	case strings.Contains(s, fmt.Sprint(rcSudoFixupInert)):
-		return "sudo still unreachable from child processes after installing " + sudoersDropIn + " (removed again; is /etc/sudoers.d included from /etc/sudoers?) — nothing was installed"
-	case strings.Contains(s, fmt.Sprint(rcInputFlag)):
-		return "a plan input could not be applied (gff set failed, or the input is undeliverable) — the script did not run"
-	case strings.Contains(s, fmt.Sprint(rcInputDiscover)):
-		return "a plan input the host was to find for itself came up empty or failed its rule — the script did not run"
+	for _, code := range []int{rcSudoAuth, rcSudoNoCache, rcSudoFixupInert, rcInputFlag, rcInputDiscover} {
+		if strings.Contains(s, fmt.Sprint(code)) {
+			return explainExitCode(code)
+		}
 	}
 	return s
+}
+
+// explainExitCode is the one place a fleet-defined exit code is turned into
+// words, shared by the TUI row and the headless report so neither can show
+// a bare number the other explains. "" for a code fleet does not define.
+func explainExitCode(code int) string {
+	switch code {
+	case rcSudoAuth:
+		return "sudo authentication failed (wrong password?)"
+	case rcSudoNoCache:
+		return "sudo unusable in this session (no credential, or it did not persist) — nothing was installed"
+	case rcSudoFixupInert:
+		return "sudo still unreachable from child processes after installing " + sudoersDropIn + " (removed again; is /etc/sudoers.d included from /etc/sudoers?) — nothing was installed"
+	case rcInputFlag:
+		return "a plan input could not be applied (gff set failed, or the input is undeliverable) — the script did not run"
+	case rcInputDiscover:
+		return "a plan input the host was to find for itself came up empty or failed its rule — the script did not run"
+	}
+	return ""
 }
 
 // bgUpdate runs an update WITHOUT taking the terminal, so many hosts update

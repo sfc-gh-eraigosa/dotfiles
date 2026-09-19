@@ -74,6 +74,14 @@ func inputPreamble(p updplan.Plan, st updplan.Step, host string, vals inputValue
 		// Nothing supplied, but the plan says how to find it: let the host
 		// answer. For a confidential value this is the best case — it is
 		// computed in the remote shell and never travels.
+		// A flag answer is gff state on the host, which persists: setting it
+		// before the FIRST step that needs it covers every later one. Doing
+		// it on each step (and each retry) was harmless but noisy, and made
+		// every step's preamble carry a host mutation that only one needed.
+		if in.Flag != "" && st.ID != firstStepFor(p, in) {
+			continue
+		}
+
 		if !ok && in.DefaultFrom != "" {
 			b.WriteString(discoverShell(in))
 			if in.Flag != "" {
@@ -115,6 +123,19 @@ func inputPreamble(p updplan.Plan, st updplan.Step, host string, vals inputValue
 		}
 	}
 	return b.String(), nil
+}
+
+// firstStepFor is the first step, in execution order, that an input applies
+// to — where a flag-bound answer is applied exactly once per host.
+func firstStepFor(p updplan.Plan, in updplan.Input) string {
+	for _, st := range p.Order() {
+		for _, cand := range p.InputsFor(st) {
+			if cand.ID == in.ID {
+				return st.ID
+			}
+		}
+	}
+	return ""
 }
 
 // flagSetShell is the `gff set` for a flag-bound answer. valueWord is
