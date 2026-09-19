@@ -85,7 +85,15 @@ func inputPreamble(p updplan.Plan, st updplan.Step, host string, vals inputValue
 		if !ok && in.DefaultFrom != "" {
 			b.WriteString(discoverShell(in))
 			if in.Flag != "" {
-				set, err := flagSetShell(st, in, repo, hasRepo, "\"$"+in.Env+"\"")
+				// A discovered value is applied ONLY if it would change what
+				// gff already resolves. The common `default_from: gff get <flag>`
+				// pattern makes it equal by construction, and a blind `gff set`
+				// there wrote the resolved value into the host's override file
+				// — pinning every host to whatever the repo default was the
+				// day it first ran, so a later boolDefault change never
+				// reached it (#357). A supplied value (below) is a request to
+				// pin, and is set outright.
+				set, err := flagSetIfChangedShell(st, in, repo, hasRepo, "\"$"+in.Env+"\"")
 				if err != nil {
 					return "", err
 				}
@@ -156,6 +164,22 @@ func flagSetShell(st updplan.Step, in updplan.Input, repo updplan.Repo, hasRepo 
 	// A subshell so the step's own `cd` is not disturbed.
 	return fmt.Sprintf("( cd %s && gff set %s %s ) || { echo %s >&2; exit %d; }; ",
 		repo.Path, shQuote(in.Flag), valueWord,
+		shQuote(fmt.Sprintf("fleet: gff set %s failed (is gff installed, and is the flag declared in that repo?)", in.Flag)),
+		rcInputFlag), nil
+}
+
+// flagSetIfChangedShell is flagSetShell for a value the host discovered for
+// itself: compare against what gff resolves right now, and set only on a
+// difference. Same repo cd, same failure exit, same message.
+func flagSetIfChangedShell(st updplan.Step, in updplan.Input, repo updplan.Repo, hasRepo bool, valueWord string) (string, error) {
+	if !hasRepo {
+		return "", fmt.Errorf("input %q sets gff flag %q but step %q targets no repo — gff resolves a flag from a checkout", in.ID, in.Flag, st.ID)
+	}
+	if !updplan.ValidPath(repo.Path) {
+		return "", fmt.Errorf("input %q: repo path %q is not a valid plan path", in.ID, repo.Path)
+	}
+	return fmt.Sprintf("( cd %s && { [ \"$(gff get %s 2>/dev/null)\" = %s ] || gff set %s %s; } ) || { echo %s >&2; exit %d; }; ",
+		repo.Path, shQuote(in.Flag), valueWord, shQuote(in.Flag), valueWord,
 		shQuote(fmt.Sprintf("fleet: gff set %s failed (is gff installed, and is the flag declared in that repo?)", in.Flag)),
 		rcInputFlag), nil
 }
@@ -409,6 +433,8 @@ func listInputs(w io.Writer, p updplan.Plan) {
 		fmt.Fprintln(w)
 
 		switch {
+		case in.DefaultFrom != "" && in.Flag != "":
+			fmt.Fprintf(w, "      default: found on the host (%s) — unchanged unless you --input it\n", in.DefaultFrom)
 		case in.DefaultFrom != "":
 			fmt.Fprintf(w, "      default: found on the host (%s)\n", in.DefaultFrom)
 		case in.Default != "":
