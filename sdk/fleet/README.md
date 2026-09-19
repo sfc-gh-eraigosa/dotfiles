@@ -466,19 +466,57 @@ Step kinds:
   zero interactive calls; `gh` missing reads `gh not installed`, not an auth failure;
   no token, `GH_TOKEN`, `GITHUB_TOKEN` or `--with-token` ever appears in a remote string.
 
+#### Which repo — `--repo`
+
+`--repo` is the repo fleet operates on: its plan is discovered (below) and it is the
+status baseline. It defaults to **the git work tree you are standing in**, so
+`cd ~/github/<org>/playground && fleet update <host>` runs *that* repo's plan; outside
+any work tree it falls back to `~/git/dotfiles`. An explicit `--repo` always wins.
+
+Standing inside the dotfiles default is not treated as *choosing* a repo — that keeps
+the resolution order below byte-identical for everyone who simply runs `fleet` from
+their dotfiles checkout.
+
 #### Which plan runs — resolution order
 
-1. `--file PATH` — must exist; skips everything below.
+1. `--file PATH` — must exist; skips everything below. A file that fails the
+   ownership/mode check is a hard error here: you named it, so you get the reason.
 2. gff `fleet.update.enabled` — `false` pins the built-in plan regardless of any file.
-3. gff `fleet.update.config` — `home` (the default) is `~/.config/fleet/fleet.yaml`
+   Discovery is not a way around that switch.
+3. **The repo's own plan, when the repo was chosen** (an explicit `--repo`, or a cwd
+   inside it). First hit wins:
+
+   | | |
+   |---|---|
+   | 1 | `<repo>/fleet.yaml` |
+   | 2 | `<repo>/.github/fleet.yaml` |
+   | 3 | `<repo>/.fleet/fleet.yaml` |
+   | 4 | `<repo>/opt/etc/fleet/fleet.yaml` — the dotfiles layout, which predates discovery |
+
+   The `plan:` line says where it came from:
+   `plan: <path> (discovered in <repo>)`.
+4. gff `fleet.update.config` — `home` (the default) is `~/.config/fleet/fleet.yaml`
    (`$XDG_CONFIG_HOME/fleet/fleet.yaml`); `repo` is `<--repo>/opt/etc/fleet/fleet.yaml`,
    the **tracked team plan** in the local dotfiles clone. Switch with
    `gff set fleet.update.config repo`.
-   Mind the mode check below: git does not record the group-write bit, so a clone made
-   under umask `002` (Ubuntu's default) has that file as `664` and `fleet` refuses it —
-   `chmod g-w opt/etc/fleet/fleet.yaml` once in your clone.
-4. That file missing ⇒ the built-in plan, and the report says so:
+5. That file missing ⇒ **the repo's own plan**, if one was discovered. This is the
+   "a real plan beats the built-in default" case, and it is why an unchosen repo still
+   gets its plan — it just never displaces a selection you already made.
+6. Nothing at all ⇒ the built-in plan, and the report says so:
    `plan: built-in default (no ~/.config/fleet/fleet.yaml)`.
+
+**A discovered plan that fails the mode check is skipped, not fatal.** git does not
+record the group-write bit, so a clone made under umask `002` (Ubuntu's default) has a
+`664` plan file — an entirely ordinary state that, before discovery, `fleet` only met
+when you pointed it at that file on purpose. Now that fleet finds it on its own, the
+same hard failure would break `fleet` for anyone merely standing in such a repo. So a
+discovered candidate that fails is reported on stderr with the fix and the search moves
+on:
+
+```
+warning: skipping discovered plan <path>: … refusing a group/world-writable plan file …
+         (if the mode is the problem: chmod g-w <path>)
+```
 
 gff is **fail-open** here: gff missing, a key unknown, a bad selection — all behave as
 enabled + `home`, with the reason appended to the `plan:` line. Lookups are scoped to
