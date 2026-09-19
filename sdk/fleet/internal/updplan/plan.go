@@ -143,15 +143,49 @@ type Repo struct {
 	Branches []string
 	Local    Local
 	Restore  bool
+	// Stamp is where this repo's install stamp lands on a host — the file
+	// `fleet status` reads to say what a host has actually converged to. It
+	// is DECLARED, never guessed: a repo with no stamp simply has no status
+	// data, which is a clearer answer than a path invented by convention
+	// that no entry point writes.
+	Stamp string
 }
 
 // Plan is a fully parsed, defaulted, validated, path-resolved fleet.yaml.
 type Plan struct {
-	Root     string
+	Root string
+	// Baseline names the repo the status column tracks. Empty falls back to
+	// BaselineRepo's rules.
+	Baseline string
 	Defaults Defaults
 	Repos    map[string]Repo
 	Steps    []Step
 	Source   string
+}
+
+// BaselineRepo is the repo `fleet status` and the TUI compare hosts against.
+//
+//  1. an explicit `baseline:`, which validation has already checked names a
+//     declared repo;
+//  2. else the repo named "dotfiles" — what every plan written before this
+//     feature meant;
+//  3. else the only repo, when there is exactly one;
+//  4. else nothing. Several repos and no way to tell which one is the
+//     subject is a question for the plan author, not something to guess.
+func (p Plan) BaselineRepo() (Repo, bool) {
+	if p.Baseline != "" {
+		r, ok := p.Repos[p.Baseline]
+		return r, ok
+	}
+	if r, ok := p.Repos["dotfiles"]; ok {
+		return r, true
+	}
+	if len(p.Repos) == 1 {
+		for _, r := range p.Repos {
+			return r, true
+		}
+	}
+	return Repo{}, false
 }
 
 // builtinDefaults are the plan-wide defaults per spec F1: 30m timeout, one
@@ -185,6 +219,9 @@ const DefaultYAML = "# fleet.yaml — the fleet-update plan.\n" +
 	"    dotfiles:\n" +
 	"      path: dotfiles\n" +
 	"      branches: [main]\n" +
+	"      # stamp: the file on each host that records what it converged to;\n" +
+	"      # `fleet status` reads it. A repo with no stamp has no status column.\n" +
+	"      stamp: ~/.local/state/dotfiles/install-stamp\n" +
 	"      # local: skip|rescue|carry (default skip); restore: true|false (default true)\n" +
 	"  steps:\n" +
 	"    - id: dotfiles.sync\n" +
@@ -241,6 +278,7 @@ type wireFile struct {
 
 type wireUpdate struct {
 	Root     string              `yaml:"root"`
+	Baseline string              `yaml:"baseline"`
 	Defaults wireDefaults        `yaml:"defaults"`
 	Repos    map[string]wireRepo `yaml:"repos"`
 	Steps    []wireStep          `yaml:"steps"`
@@ -294,6 +332,7 @@ type wireRepo struct {
 	Branches []string `yaml:"branches"`
 	Local    string   `yaml:"local"`
 	Restore  *bool    `yaml:"restore"`
+	Stamp    string   `yaml:"stamp"`
 }
 
 type wireExpect struct {
@@ -363,12 +402,22 @@ func Parse(data []byte) (Plan, error) {
 	steps, err := parseSteps(wf.Update.Steps, defs, repos)
 	errs.add(err)
 
+	// A baseline naming a repo that does not exist is a typo that would
+	// otherwise present as "no status column" with nothing to point at.
+	baseline := strings.TrimSpace(wf.Update.Baseline)
+	if baseline != "" {
+		if _, ok := repos[baseline]; !ok {
+			errs.addf("update", "baseline: %q is not a declared repo", baseline)
+		}
+	}
+
 	if err := errs.join(); err != nil {
 		return Plan{}, err
 	}
 
 	return Plan{
 		Root:     root,
+		Baseline: baseline,
 		Defaults: defs,
 		Repos:    repos,
 		Steps:    steps,

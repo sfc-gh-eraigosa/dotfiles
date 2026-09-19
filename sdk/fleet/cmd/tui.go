@@ -78,7 +78,12 @@ var tuiCmd = &cobra.Command{
 				return nil
 			}
 		}
-		base, err := newGitBaseline(flagRepo, flagRef)
+		// The plan resolved above says which repo the status column tracks.
+		stampAt, remoteAt, err := baselineTarget(plan)
+		if err != nil {
+			return err
+		}
+		base, err := newGitBaseline(flagRepo, flagRef, stampAt, remoteAt)
 		if err != nil {
 			return err
 		}

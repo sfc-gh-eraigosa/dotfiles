@@ -254,6 +254,15 @@ func parseRepos(in map[string]wireRepo, root string) (map[string]Repo, error) {
 		}
 		r.Path = resolveRepoPath(root, path)
 
+		// The stamp is a path on the HOST, not under root: entry points write
+		// it into the user's state dir, not next to the clone.
+		if w.Stamp != "" {
+			if !ValidPath(w.Stamp) {
+				errs.addf(scope, "stamp: invalid path %q", w.Stamp)
+			}
+			r.Stamp = w.Stamp
+		}
+
 		if w.URL != "" {
 			if !ValidURL(w.URL) {
 				errs.addf(scope, "url: invalid url %q", w.URL)
