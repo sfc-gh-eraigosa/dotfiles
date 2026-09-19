@@ -22,7 +22,7 @@ import (
 func TestUpdateSkipsDirtyCloneByDefault(t *testing.T) {
 	var sent []string
 	r := recordingRunner{fake: runner.Fake{Out: map[string]string{"alpha": "state=dirty branch=main"}}, log: &sent}
-	ex := buildExecutor(r, nil, "")
+	ex := buildExecutor(r, nil, "", updplan.Plan{}, "h1", inputValues{})
 	rep := ex.RunHost("alpha", updplan.Default())
 
 	sync := rep.Results[0]
@@ -41,7 +41,7 @@ func TestUpdateSkipsDirtyCloneByDefault(t *testing.T) {
 
 func TestUpdateProceedsOnCleanClone(t *testing.T) {
 	r := runner.Fake{Out: map[string]string{"alpha": "state=clean branch=main"}}
-	ex := buildExecutor(r, nil, "")
+	ex := buildExecutor(r, nil, "", updplan.Plan{}, "h1", inputValues{})
 	rep := ex.RunHost("alpha", updplan.Default())
 	if sync := rep.Results[0]; sync.Status == updexec.Skipped {
 		t.Fatalf("a clean clone must not be skipped: %+v", sync)
@@ -53,7 +53,7 @@ func TestUpdateProceedsOnCleanClone(t *testing.T) {
 func TestForceRescuesDirtyWorkBeforePulling(t *testing.T) {
 	var sent []string
 	r := recordingRunner{fake: runner.Fake{Out: map[string]string{"alpha": "state=dirty branch=main"}}, log: &sent}
-	ex := buildExecutor(r, nil, updplan.LocalRescue)
+	ex := buildExecutor(r, nil, updplan.LocalRescue, updplan.Plan{}, "h1", inputValues{})
 	ex.RunHost("alpha", updplan.Default())
 
 	joined := strings.Join(sent, " ")
@@ -89,7 +89,7 @@ func TestRescuePreservesUntrackedWork(t *testing.T) {
 
 func TestUpdateSurfacesProbeFailure(t *testing.T) {
 	r := runner.Fake{Err: map[string]error{"dead": runner.ErrFake}}
-	ex := buildExecutor(r, nil, "")
+	ex := buildExecutor(r, nil, "", updplan.Plan{}, "h1", inputValues{})
 	rep := ex.RunHost("dead", updplan.Default())
 	if !rep.Failed() {
 		t.Fatal("an unreachable host must surface an error")
@@ -145,7 +145,7 @@ func TestUpdateScriptTargetsGivenRef(t *testing.T) {
 func TestUpdateHostUsesTheRequestedRef(t *testing.T) {
 	var sent []string
 	r := recordingRunner{fake: runner.Fake{Out: map[string]string{"alpha": "state=clean branch=main"}}, log: &sent}
-	ex := buildExecutor(r, nil, "")
+	ex := buildExecutor(r, nil, "", updplan.Plan{}, "h1", inputValues{})
 	p, err := updplan.Default().WithRef("feature/x")
 	if err != nil {
 		t.Fatal(err)
@@ -206,7 +206,7 @@ func TestUpdateMakesExactlyOneNetworkCall(t *testing.T) {
 func TestUpdateDefaultPlanSendsExactlyOneFetchPerSyncStep(t *testing.T) {
 	var sent []string
 	r := recordingRunner{fake: runner.Fake{Out: map[string]string{"alpha": "state=clean branch=main"}}, log: &sent}
-	ex := buildExecutor(r, nil, "")
+	ex := buildExecutor(r, nil, "", updplan.Plan{}, "h1", inputValues{})
 	ex.RunHost("alpha", updplan.Default())
 
 	joined := strings.Join(sent, " ")
@@ -272,7 +272,7 @@ func TestTimeoutAndNoRetryFlagsReachTheExecutor(t *testing.T) {
 	flagUpdateReset = true
 	flagUpdateNoRestore = true
 
-	ex := buildExecutor(runner.Fake{}, nil, updplan.LocalSkip)
+	ex := buildExecutor(runner.Fake{}, nil, updplan.LocalSkip, updplan.Plan{}, "h1", inputValues{})
 	if ex.Timeout != 90*time.Second {
 		t.Fatalf("Timeout = %v, want 90s", ex.Timeout)
 	}

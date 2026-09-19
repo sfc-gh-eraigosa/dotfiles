@@ -157,6 +157,8 @@ type Plan struct {
 	// Baseline names the repo the status column tracks. Empty falls back to
 	// BaselineRepo's rules.
 	Baseline string
+	// Inputs are the values the plan needs before it can run; see inputs.go.
+	Inputs   []Input
 	Defaults Defaults
 	Repos    map[string]Repo
 	Steps    []Step
@@ -279,6 +281,7 @@ type wireFile struct {
 type wireUpdate struct {
 	Root     string              `yaml:"root"`
 	Baseline string              `yaml:"baseline"`
+	Inputs   []wireInput         `yaml:"inputs"`
 	Defaults wireDefaults        `yaml:"defaults"`
 	Repos    map[string]wireRepo `yaml:"repos"`
 	Steps    []wireStep          `yaml:"steps"`
@@ -333,6 +336,22 @@ type wireRepo struct {
 	Local    string   `yaml:"local"`
 	Restore  *bool    `yaml:"restore"`
 	Stamp    string   `yaml:"stamp"`
+}
+
+type wireInput struct {
+	ID          string   `yaml:"id"`
+	Prompt      string   `yaml:"prompt"`
+	Type        string   `yaml:"type"`
+	Secret      bool     `yaml:"secret"`
+	Scope       string   `yaml:"scope"`
+	Env         string   `yaml:"env"`
+	Flag        string   `yaml:"flag"`
+	Options     []string `yaml:"options"`
+	Default     string   `yaml:"default"`
+	DefaultFrom string   `yaml:"default_from"`
+	Validate    string   `yaml:"validate"`
+	Description string   `yaml:"description"`
+	NeededBy    []string `yaml:"needed_by"`
 }
 
 type wireExpect struct {
@@ -402,6 +421,9 @@ func Parse(data []byte) (Plan, error) {
 	steps, err := parseSteps(wf.Update.Steps, defs, repos)
 	errs.add(err)
 
+	inputs, err := parseInputs(wf.Update.Inputs, steps)
+	errs.add(err)
+
 	// A baseline naming a repo that does not exist is a typo that would
 	// otherwise present as "no status column" with nothing to point at.
 	baseline := strings.TrimSpace(wf.Update.Baseline)
@@ -418,6 +440,7 @@ func Parse(data []byte) (Plan, error) {
 	return Plan{
 		Root:     root,
 		Baseline: baseline,
+		Inputs:   inputs,
 		Defaults: defs,
 		Repos:    repos,
 		Steps:    steps,

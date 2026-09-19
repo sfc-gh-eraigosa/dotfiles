@@ -277,6 +277,16 @@ per **session**, not once per wave:
 | force reset `[y/n]` | hard-resets each host onto the fetched commit instead of fast-forwarding — for a host whose branch has diverged. **Destructive**, so the host's entire current state (local commits *and* uncommitted files) is committed to a `fleet-reset/<ts>` branch first. The confirm gate calls it out in red. |
 | gemini leftovers `[y/k/n]` | `GEMINI_TEARDOWN_ANSWER` — `yes` clean up, `keep` never ask again, `skip` this run only |
 
+**The password is checked before the wave, not by it.** Committing the form asks ONE
+target host whether the credential actually authenticates (the same `sudo -S -v` the
+run will use, secret on stdin). A rejected password puts the cursor back on the field,
+cleared, and says which host refused it — one retype instead of a fleet-wide failure,
+which is what a single mistyped character used to cost. A host that cannot answer at
+all (unreachable, no marker in the reply) is **not** a verdict on the password: the run
+continues and says the check was skipped. An empty password is a deliberate answer
+("skip privileged steps") and is never checked. The benign cases — already root, no
+sudo installed, a credential that needs no password — all pass.
+
 The credential is primed and used in the **same ssh session** as install.sh
 (sudo's default `timestamp_type=tty` has no tty to key on over ssh, so it
 falls back to the PPID of whatever process ran `sudo` — priming in a separate
@@ -378,6 +388,8 @@ fleet update init --print                    # ...or just show it
 | `--timeout D` | override every **batch** step's per-attempt timeout (interactive steps keep the plan's) |
 | `--no-retry` | run every step at most once |
 | `--ref B` / `--ref repo=B` | target a ref; repeatable. Bare `B` picks the repo named `dotfiles`, or the plan's only repo |
+| `--list-inputs` | describe every value this plan needs, then exit (needs no host) |
+| `--input <id>=<v>` | a value for a plan-declared input; `<id>=@<file>`, `<id>=env:<NAME>`, or `<host>:<id>=...` for a per-host one; repeatable |
 | `--file PATH` | read this plan; must exist |
 | `--dry-run` | print the plan source, every effective script and each step's timeout/retry; touch no runner |
 | `--json` (global) | the report as one JSON document, nothing else |
@@ -419,6 +431,21 @@ version: 1                              # must be 1
 update:
   root: ~/git                           # absolute or ~/ path; relative repo paths resolve under it
   baseline: <repo name>                 # which repo the STATUS column tracks (see below)
+  inputs:                               # values the plan needs before it can run (see below)
+    - id: <lower_snake>                 # required; the name used by --input
+      prompt: "..."                     # what to ask
+      type: text | password | bool | choice     # default text; password implies confidential; bool is true|false
+      secret: true                      # confidential: delivered over stdin, never argv
+      scope: run | host                 # default run (once per run) vs once per host
+      env: UPPER_SNAKE                  # variable to export; default = the id upshouted
+      flag: <gff.flag.key>              # instead of an env var: `gff set` it on the host
+      options: [a, b]                   # choice only
+      default: a                        # static fallback
+      default_from: <shell>             # ...or let the HOST find it (runs there)
+      validate: <regexp>                # POSIX ERE; checked before the fleet is touched (and on the host for a discovered value)
+      description: |                    # the longer "what is this for"
+        ...
+      needed_by: [<step id>, ...]       # default: every run step
   defaults:                             # merged into every step, field by field
     timeout: 30m                        # per ATTEMPT; 0 = none; interactive steps default to 0
     retry:
@@ -468,6 +495,102 @@ Step kinds:
   + `gh auth setup-git` interactively, then one re-check. An authenticated host makes
   zero interactive calls; `gh` missing reads `gh not installed`, not an auth failure;
   no token, `GH_TOKEN`, `GITHUB_TOKEN` or `--with-token` ever appears in a remote string.
+
+#### Values the plan needs — `inputs:`
+
+A shared plan cannot hardcode which cluster node a machine is, must not carry a join
+credential, and has no way to turn a repo's feature on for one host. `inputs:` declares
+those, and fleet collects them before the first host is contacted — discovering a
+missing value halfway through a fleet leaves half of it converged.
+
+```yaml
+update:
+  inputs:
+    - {id: node,   scope: host, env: CONVERGE_NODE, prompt: "which node is this host?"}
+    - {id: ollama, scope: host, type: bool, flag: converge.ollama.enabled}
+    - {id: k3s_join,  type: password, env: K3S_TOKEN, needed_by: [pg.converge]}
+```
+
+```sh
+fleet update h1 --input h1:node=jetson1 --input h1:ollama=true --input k3s_join=@<path>
+fleet update h1 --input k3s_join=env:<NAME>          # ...or from the environment
+```
+
+Three ways a value is delivered, each picked for what it protects:
+
+| Kind | Delivery |
+|---|---|
+| plain | `export <ENV>=<value>;` in the step's preamble — the `export` form, never `VAR=x cmd`, which scopes to the `cd` and never reaches the script |
+| `flag:` | `( cd <repo> && gff set <key> <value> )` before the step, so answering a question turns the feature on **in that host's gff state**. A failure here exits `94`, distinct from a script failure: a switch that silently stayed off is the whole problem this removes |
+| `secret:` / `type: password` | written to the step's **stdin** and read into the environment there (`IFS= read -r ...; export ...`). It never appears in the remote command line, which is world-readable through `/proc` on the host |
+
+**A host that can answer for itself is never asked.** `default_from:` is a command
+fleet runs **on the host** when the operator supplied nothing — the node name this
+machine is already registered as, the join token already on its disk:
+
+```yaml
+- id: node
+  scope: host
+  env: CONVERGE_NODE
+  default_from: make -s --no-print-directory -C ~/github/<org>/playground/k3s k3s-node
+  validate: '^[a-z][a-z0-9]*$'
+- id: joinkey
+  type: password
+  env: K3S_TOKEN
+  default_from: sudo -n cat /var/lib/rancher/k3s/server/node-token
+```
+
+For a confidential value this is the *better* path, not merely the friendlier one: the
+value is computed in the remote shell and **never travels** — not over stdin, not in
+fleet's memory, not in any command text.
+
+Discovery that comes up empty **fails the step** (`95`) rather than exporting a blank:
+converging with an empty node name is worse than not converging. A `validate:` rule is
+applied to what the host found as well, so a half-read token is caught there too — on
+the host, through `grep -E`, which is why a rule must be **POSIX ERE**: `[0-9]` not `\d`,
+`[[:space:]]` not `\s`, no `(?i)`. A rule using Go-only syntax is refused when the plan is
+read, since it would pass every local check and then fail on the host.
+
+A flag-bound input honours its `default:` the same way an answer is honoured — with
+`gff set`, not an environment variable — and a `default_from:` flag input sets the flag
+to whatever the host found.
+
+A **secret may not carry a static `default:`**: the plan file is plain text, and the
+value would then travel as a literal on every host's command line. `default_from:` is the
+fallback for a secret, computed on the host.
+
+**In the TUI**, a plan's inputs are applied exactly as above for every value the plan can
+answer on its own — a `default:`, a `default_from:` — but the TUI has no form for the
+values only an operator can supply. A plan that needs one is **refused before any host
+is contacted**, with the missing ids named, and points at `fleet update --input`.
+
+`--list-inputs` prints what a plan needs and where each value comes from, so you do not
+have to read the plan to find out:
+
+```
+  node — which k3s node is this host?
+      text, once per host, arrives as $CONVERGE_NODE
+      default: found on the host (make -s --no-print-directory -C … k3s-node)
+      must match: ^[a-z][a-z0-9]*$
+      The name this machine is registered as in k3s/cluster.yaml. Registry
+      entries target it through placement.node, so it must match exactly.
+```
+
+**A confidential value is never a literal on the command line.** `--input k3s_join=<value>`
+is refused — local argv is world-readable through `/proc` too — so it must come from
+`@<file>` or `env:<NAME>`.
+
+**A confidential value cannot go to an `interactive: true` step**, whose stdin is the
+operator's terminal; there is nowhere to put it but argv. fleet refuses the plan up
+front and says so. Make the step batch (the TUI primes sudo for it) or have the script
+prompt for the value itself. The exception is a secret nobody supplied that the host
+finds for itself through `default_from:` — nothing travels, so nothing needs a channel.
+An input's `needed_by:` may only name `run` steps: a sync or gh-auth step never receives
+a preamble or stdin, so a value bound to one could only be demanded and then dropped.
+
+`--dry-run` prints the **effective** script, preamble included, so the `gff set` that
+will change the host is visible before anything runs — and the confidential value is
+not, because it is a `read` from stdin rather than text in the command.
 
 #### What the status column tracks — `baseline:` and `stamp:`
 

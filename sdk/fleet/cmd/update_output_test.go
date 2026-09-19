@@ -91,7 +91,7 @@ func TestLocalAnswerEnvIsExportedForRunStepsOnly(t *testing.T) {
 		},
 	}
 
-	ex := buildExecutor(r, nil, "")
+	ex := buildExecutor(r, nil, "", updplan.Plan{}, "h1", inputValues{})
 	rep := ex.RunHost("alpha", plan)
 	if rep.Failed() {
 		t.Fatalf("unexpected failure: %+v", rep.Results)
@@ -108,19 +108,45 @@ func TestLocalAnswerEnvIsExportedForRunStepsOnly(t *testing.T) {
 	}
 }
 
-// The CLI lane never supplies Stdin at all — it has no sudo secret to send,
-// unlike the TUI's Background lane. Extends
+// The CLI lane supplies no Stdin for a plan with nothing confidential to
+// send — it has no sudo secret of its own, unlike the TUI's Background lane.
+// (A plan that declares a confidential input DOES get one; see
+// TestCLILaneCarriesStdinOnlyForConfidentialInputs.) Extends
 // TestSudoSecretNeverAppearsInTheRemoteCommand (tui_answers_test.go), which
 // covers the TUI's env-only contract; this covers the CLI's have-no-stdin
 // contract specifically.
 func TestCLILaneCarriesNoStdinAtAll(t *testing.T) {
-	ex := buildExecutor(runner.Fake{}, nil, "")
+	ex := buildExecutor(runner.Fake{}, nil, "", updplan.Plan{}, "h1", inputValues{})
 	c, ok := ex.IO.(updexec.Console)
 	if !ok {
 		t.Fatalf("IO is %T, want updexec.Console", ex.IO)
 	}
 	if c.Stdin != nil {
-		t.Fatal("the CLI lane must never supply Stdin — it has no credential to send")
+		t.Fatal("the CLI lane must not supply Stdin for a plan with nothing confidential to send")
+	}
+}
+
+// ...and the converse: a plan that declares a confidential input is exactly
+// when the CLI lane must carry stdin, because that is the only channel that
+// keeps the value out of the remote command line.
+func TestCLILaneCarriesStdinOnlyForConfidentialInputs(t *testing.T) {
+	plan, err := updplan.Parse([]byte("version: 1\nupdate:\n  inputs:\n    - {id: tok, type: password, env: TOK}\n  repos:\n    r: {path: ~/r}\n  steps:\n    - {id: s, kind: run, repo: r, run: ./x.sh}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	vals := inputValues{run: map[string]string{"tok": "shhh"}}
+	ex := buildExecutor(runner.Fake{}, nil, "", plan, "h1", vals)
+	c := ex.IO.(updexec.Console)
+	if c.Stdin == nil {
+		t.Fatal("a plan with a confidential input must carry stdin")
+	}
+	st, _ := plan.Step("s")
+	if got := c.Stdin(st); got != "shhh\n" {
+		t.Fatalf("stdin = %q", got)
+	}
+	// And the value must NOT be in the command text.
+	if got := c.Preamble(st); strings.Contains(got, "shhh") {
+		t.Fatalf("the confidential value reached the command: %q", got)
 	}
 }
 

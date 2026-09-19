@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -74,7 +75,9 @@ func routeAnswers(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		// Backs OUT of the form; it does NOT forget. Answers persist for the
 		// session so a fleet-wide update applies the same ones to every wave —
-		// `F` in normal mode is the deliberate way to forget them.
+		// `F` in normal mode is the deliberate way to forget them. A check
+		// still in flight is orphaned: its verdict must not reopen the form.
+		m.dropSudoCheck()
 		m.mode = modeNormal
 		m.status = "update cancelled"
 		return m, nil
@@ -91,20 +94,43 @@ func routeAnswers(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.ansField++
 			return m, nil
 		}
+		// A verdict is already on its way: a second enter would only fire a
+		// second `sudo -S -v` at the host (and a second strike on its
+		// faillock). The one in flight decides.
+		if m.sudoChecking {
+			return m, nil
+		}
 		// Persist the non-secret preferences as the form commits, so the next
 		// session starts where this one left off. A failed write is not worth
 		// interrupting a wave for — it costs a retype next time, nothing more.
 		_ = saveAnswers(m.ansPath, m.ans)
+
+		// Prove the credential against ONE host before the wave rather than
+		// letting every host discover the typo for itself. An empty password
+		// is a deliberate answer ("skip privileged steps"), not something to
+		// check, and a credential already proven this session is not re-asked.
+		if m.ans.needsSudo() && !m.sudoChecked {
+			if targets := m.updateTargets(); len(targets) > 0 {
+				m.sudoChecking = true
+				m.sudoCheckSeq++
+				m.status = fmt.Sprintf("checking the sudo password on %s…", targets[0])
+				return m, checkSudo(m.run, targets[0], m.ans.secret(), m.sudoCheckSeq)
+			}
+		}
 		m.mode = modeConfirm
 		return m, nil
 	}
 
 	switch m.ansField {
 	case fieldSudo:
+		// Any edit invalidates both a verdict already given and one still in
+		// flight: the host was asked about a different password.
 		if k.String() == "backspace" {
 			m.ans.trimSecret()
+			m.dropSudoCheck()
 		} else if r := k.Runes; len(r) > 0 {
 			m.ans.appendSecret(string(r))
+			m.dropSudoCheck()
 		}
 	case fieldWindows:
 		// Fixed choices, not free text: these map onto install.sh's own y/n/s.

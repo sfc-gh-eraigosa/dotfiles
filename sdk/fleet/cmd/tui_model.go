@@ -236,8 +236,21 @@ type tuiModel struct {
 	base       Baseliner
 	now        time.Time
 	spinner    string // frame injected; tests keep it fixed for stable goldens
-	status     string
-	quitReq    bool
+	// sudoChecked records that the typed credential has been proven against a
+	// host, so committing the form twice does not re-ask. Cleared whenever
+	// the secret changes.
+	sudoChecked bool
+	// sudoChecking is true while a verdict is outstanding: the form ignores
+	// a second commit rather than firing a second `sudo -S -v` at the host.
+	sudoChecking bool
+	// sudoCheckSeq numbers each check issued. A verdict carrying an older
+	// number belongs to a secret that has since been edited, or to a form
+	// the operator backed out of, and is dropped — a stale "accepted" must
+	// not prove a password it never saw, and a stale "rejected" must not
+	// wipe a retyped one.
+	sudoCheckSeq int
+	status       string
+	quitReq      bool
 }
 
 func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time.Time, ref string, jobs int, plan updplan.Plan) tuiModel {
@@ -657,6 +670,15 @@ func (m tuiModel) updateTargets() []string {
 // startUpdate seeds the engine: every target goes to precheck, which routes it
 // to the background wave or the interactive fallback.
 func (m *tuiModel) startUpdate(targets []string) tea.Cmd {
+	// The plan's declared inputs have no form in the TUI yet: a value the
+	// host can find for itself (default/default_from) is applied, but one
+	// only the operator can answer has nowhere to come from. Refuse here,
+	// before a host is contacted, exactly as the headless lane does —
+	// running the plan without the value would converge the wrong thing.
+	if missing := missingInputs(m.plan, targets, inputValues{}); len(missing) > 0 {
+		m.status = fmt.Sprintf("plan needs values the TUI cannot ask for: %s — run `fleet update --input <id>=<value> …` instead", strings.Join(missing, ", "))
+		return nil
+	}
 	var cmds []tea.Cmd
 	var busy []string
 	for _, a := range targets {
@@ -1360,6 +1382,8 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m tuiModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case sudoCheckMsg:
+		return m.applySudoCheck(msg)
 	case tea.WindowSizeMsg:
 		m.vp.height, m.vp.width = msg.Height, msg.Width
 		m.clampViewport()

@@ -162,12 +162,17 @@ func TestPreferencesRoundTripThroughTheModel(t *testing.T) {
 	m := testModel("a")
 	m.ansPath = path
 	m2, _ := send(m, "u")
-	m3, _ := send(m2, "p", "w")         // credential
-	m4, _ := send(m3, "enter")          // -> windows field
-	m5, _ := send(m4, "s")              // windows = s
-	m6, _ := send(m5, "enter")          // -> gemini field
-	m7, _ := send(m6, "k")              // gemini = keep
-	m8, _ := send(m7, "enter", "enter") // through the reset field -> confirm (and save)
+	m3, _ := send(m2, "p", "w")           // credential
+	m4, _ := send(m3, "enter")            // -> windows field
+	m5, _ := send(m4, "s")                // windows = s
+	m6, _ := send(m5, "enter")            // -> gemini field
+	m7, _ := send(m6, "k")                // gemini = keep
+	m8, cmd := send(m7, "enter", "enter") // through the reset field -> save, then verify the credential
+	// A typed password is now proven against a host before the confirm strip
+	// opens (tui_sudocheck.go). The preferences are saved BEFORE that check,
+	// which is what this test is really about — they must survive even a
+	// rejected password.
+	m8 = settleSudoCheck(m8, cmd)
 
 	if m8.mode != modeConfirm {
 		t.Fatalf("expected confirm, mode=%v", m8.mode)

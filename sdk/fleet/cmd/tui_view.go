@@ -954,6 +954,12 @@ func (m tuiModel) answersView() string {
 	// "up" would silently select the wrong answer. Arrows are the idiom the
 	// host list already uses.
 	b.WriteString("\n" + th.dim.Render("↑/↓ or tab: field   letters set the answer   enter: next   esc: cancel"))
+	// The pre-wave sudo check reports through m.status ("checking on h1…",
+	// "rejected by h1 — type it again"); the form replaces the status bar,
+	// so it has to carry the line itself or the check is invisible.
+	if m.status != "" {
+		b.WriteString("\n" + th.warn.Render(m.status))
+	}
 	return m.wrapPanel(th.panel, b.String())
 }
 

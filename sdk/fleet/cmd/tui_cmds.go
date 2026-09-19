@@ -141,11 +141,20 @@ func (a answers) forceReset() bool { return a.reset == "y" }
 // appendSecret / trimSecret keep the secret's mutation in one place so the
 // rest of the model never handles it directly.
 func (a *answers) appendSecret(s string) { a.sudoSecret += s }
+
+// clearSecret forgets the credential entirely — used when a host rejects it,
+// so the retype starts from empty rather than editing a wrong value.
+func (a *answers) clearSecret() { a.sudoSecret = "" }
+
 func (a *answers) trimSecret() {
 	if n := len(a.sudoSecret); n > 0 {
 		a.sudoSecret = a.sudoSecret[:n-1]
 	}
 }
+
+// secret hands the credential to the one caller that must send it. Kept
+// beside the other accessors so every use of the raw value is visible here.
+func (a answers) secret() string { return a.sudoSecret }
 
 // secretLen is what the view is allowed to know — enough to draw a mask.
 func (a answers) secretLen() int { return len(a.sudoSecret) }
@@ -250,7 +259,12 @@ const (
 //
 // Hosts that need no sudo are exempt rather than blocked: root, and machines
 // with no sudo at all (minimal containers).
-const sudoGate = `{ [ "$(id -u)" = 0 ] || ! command -v sudo >/dev/null 2>&1 || sh -c 'sudo -n true; exit $?' 2>/dev/null; }`
+const sudoGate = `{ ` + sudoExempt + ` || sh -c 'sudo -n true; exit $?' 2>/dev/null; }`
+
+// sudoExempt is the ONE spelling of who needs no sudo at all — root, and a
+// host with no sudo binary — shared by the wave's gate and the pre-wave
+// password check, so the two can never disagree about who is exempt.
+const sudoExempt = `[ "$(id -u)" = 0 ] || ! command -v sudo >/dev/null 2>&1`
 
 // errSudoNotInherited marks a background run the sudoGate stopped with its
 // rcSudoNoCache exit (92): the credential primed this session did not reach
@@ -311,6 +325,10 @@ func explainExit(err error) string {
 		return "sudo unusable in this session (no credential, or it did not persist) — nothing was installed"
 	case strings.Contains(s, fmt.Sprint(rcSudoFixupInert)):
 		return "sudo still unreachable from child processes after installing " + sudoersDropIn + " (removed again; is /etc/sudoers.d included from /etc/sudoers?) — nothing was installed"
+	case strings.Contains(s, fmt.Sprint(rcInputFlag)):
+		return "a plan input could not be applied (gff set failed, or the input is undeliverable) — the script did not run"
+	case strings.Contains(s, fmt.Sprint(rcInputDiscover)):
+		return "a plan input the host was to find for itself came up empty or failed its rule — the script did not run"
 	}
 	return s
 }
@@ -519,8 +537,7 @@ func (q *lineQueue) forward(ch chan<- outLine) {
 // itself now (updexec.Executor.RunHost), so beginStream no longer has to —
 // its own Line callback only has to feed the UI's log pane via lineQueue.
 func beginStream(alias string, plan updplan.Plan, a answers, p bgPolicy, r runner.Runner, dir string) tea.Cmd {
-	secret := a.sudoSecret + "\n"
-	preamble := bgPreamble(a, p)
+	preamble, stdin := bgLaneIO(alias, plan, a, p)
 	reset := a.forceReset()
 	return func() tea.Msg {
 		lines := make(chan outLine)
@@ -531,15 +548,10 @@ func beginStream(alias string, plan updplan.Plan, a answers, p bgPolicy, r runne
 
 		ex := updexec.Executor{
 			IO: updexec.Background{Console: updexec.Console{
-				R:       r,
-				Line:    func(_, l string) { q.push(outLine{text: l}) },
-				ErrLine: func(_, l string) { q.push(outLine{text: l, stderr: true}) },
-				Stdin: func(st updplan.Step) string {
-					if st.Kind != updplan.KindRun {
-						return ""
-					}
-					return secret
-				},
+				R:        r,
+				Line:     func(_, l string) { q.push(outLine{text: l}) },
+				ErrLine:  func(_, l string) { q.push(outLine{text: l, stderr: true}) },
+				Stdin:    stdin,
 				Preamble: preamble,
 			}},
 			Out:   captureOutput{dir: dir},
@@ -554,6 +566,28 @@ func beginStream(alias string, plan updplan.Plan, a answers, p bgPolicy, r runne
 
 		return streamStartedMsg{alias: alias, st: stream{lines: lines, done: done}}
 	}
+}
+
+// bgLaneIO composes what the Background lane prepends and pipes to a run
+// step. The plan's declared inputs follow the sudo preamble: the values the
+// host finds for itself (default_from) and the plan's static defaults, since
+// the TUI has no form for operator-supplied ones (startUpdate refuses a plan
+// that needs any). The stdin payload is the sudo line THEN any confidential
+// input lines, matching the order the preamble's reads consume them.
+func bgLaneIO(alias string, plan updplan.Plan, a answers, p bgPolicy) (preamble, stdin func(updplan.Step) string) {
+	secret := a.sudoSecret + "\n"
+	sudo := bgPreamble(a, p)
+	none := inputValues{}
+	preamble = func(st updplan.Step) string {
+		return sudo(st) + inputPreambleOrFail(plan, st, alias, none)
+	}
+	stdin = func(st updplan.Step) string {
+		if st.Kind != updplan.KindRun {
+			return ""
+		}
+		return secret + inputStdin(plan, st, alias, none)
+	}
+	return preamble, stdin
 }
 
 // readLine blocks until the next line (or EOF) and turns it into a Msg. It is
