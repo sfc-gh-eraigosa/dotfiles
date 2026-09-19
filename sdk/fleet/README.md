@@ -665,7 +665,8 @@ their dotfiles checkout.
 **A discovered plan that fails the mode check is skipped, not fatal.** git does not
 record the group-write bit, so a clone made under umask `002` (Ubuntu's default) has a
 `664` plan file — an entirely ordinary state that, before discovery, `fleet` only met
-when you pointed it at that file on purpose. Now that fleet finds it on its own, the
+when you pointed it at that file on purpose. (dotfiles' own `install.sh` normalises the
+tracked plan's mode on every host, so this stops recurring after the next update.) Now that fleet finds it on its own, the
 same hard failure would break `fleet` for anyone merely standing in such a repo. So a
 discovered candidate that fails is reported on stderr with the fix and the search moves
 on:

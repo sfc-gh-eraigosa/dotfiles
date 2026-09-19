@@ -86,6 +86,14 @@ if [ -x "${SCRIPT_DIR}/../scripts/system/setup_gh_apt_repo.sh" ]; then
     || echo "WARNING: GitHub CLI apt repo setup failed; gh will fall back to the distro version."
 fi
 
+# Same for git: Ubuntu freezes it at release (22.04 = 2.34.1, which segfaults
+# on claude's partial-clone plugin checkout — dotfiles#343). The git-core PPA
+# keeps the manifest's `git` current. Ubuntu-only; skips itself elsewhere.
+if [ -x "${SCRIPT_DIR}/../scripts/system/setup_git_apt_repo.sh" ]; then
+  "${SCRIPT_DIR}/../scripts/system/setup_git_apt_repo.sh" \
+    || echo "WARNING: git-core PPA setup failed; git will fall back to the distro version."
+fi
+
 # Refresh package lists first. A freshly imaged distro can be missing the
 # universe component index, which is where corkscrew / jc live — without this
 # they'd be reported "Unable to locate package".
