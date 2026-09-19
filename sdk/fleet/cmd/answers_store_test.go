@@ -172,14 +172,7 @@ func TestPreferencesRoundTripThroughTheModel(t *testing.T) {
 	// opens (tui_sudocheck.go). The preferences are saved BEFORE that check,
 	// which is what this test is really about — they must survive even a
 	// rejected password.
-	if cmd != nil {
-		if msg := cmd(); msg != nil {
-			if _, isCheck := msg.(sudoCheckMsg); isCheck {
-				next, _ := m8.Update(msg)
-				m8 = next.(tuiModel)
-			}
-		}
-	}
+	m8 = settleSudoCheck(m8, cmd)
 
 	if m8.mode != modeConfirm {
 		t.Fatalf("expected confirm, mode=%v", m8.mode)

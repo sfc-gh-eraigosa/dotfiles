@@ -421,11 +421,7 @@ func Parse(data []byte) (Plan, error) {
 	steps, err := parseSteps(wf.Update.Steps, defs, repos)
 	errs.add(err)
 
-	stepIDs := make(map[string]bool, len(steps))
-	for _, st := range steps {
-		stepIDs[st.ID] = true
-	}
-	inputs, err := parseInputs(wf.Update.Inputs, stepIDs)
+	inputs, err := parseInputs(wf.Update.Inputs, steps)
 	errs.add(err)
 
 	// A baseline naming a repo that does not exist is a typo that would

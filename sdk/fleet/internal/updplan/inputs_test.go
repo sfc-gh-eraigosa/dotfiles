@@ -205,3 +205,48 @@ func TestInputValidationOfTheNewFields(t *testing.T) {
 		})
 	}
 }
+
+// --- what the parser refuses because no lane could honour it --------------
+
+func TestInputsRefuseWhatCannotBeDelivered(t *testing.T) {
+	cases := []struct{ name, yaml, want string }{
+		// Only a run step receives the preamble and stdin; an input bound to
+		// a sync step would be demanded from the operator and then dropped.
+		{"needed_by a sync step", "\n    - {id: a, needed_by: [r.sync]}\n", "only a run step"},
+		// A secret with a static default would travel as a literal in the
+		// command text — the one delivery `secret:` exists to prevent.
+		{"secret with a static default", "\n    - {id: a, type: password, default: hunter2}\n", "default_from"},
+		// The validate rule also runs through `grep -E` on the host, which
+		// does not know Go's \d or (?i); catch it here, not on host three.
+		{"Go-only regexp class", "\n    - {id: a, validate: '^[a-z]\\d$'}\n", "Go-only"},
+		{"Go-only regexp flag", "\n    - {id: a, validate: '(?i)^x$'}\n", "Go-only"},
+		// bool means true|false, and a default is held to the same rule.
+		{"bool default that is not a bool", "\n    - {id: a, type: bool, default: yes}\n", "not a bool"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := Parse([]byte("version: 1\nupdate:\n  inputs:" + c.yaml +
+				"  repos:\n    r: {path: ~/r}\n  steps:\n    - {id: r.sync, kind: sync, repo: r}\n    - {id: s, kind: run, repo: r, run: ./x, needs: [r.sync]}\n"))
+			if err == nil {
+				t.Fatalf("accepted %s", c.name)
+			}
+			if !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("error %q does not mention %q", err, c.want)
+			}
+		})
+	}
+}
+
+func TestInputCheckIsOneRuleForEveryCaller(t *testing.T) {
+	b := Input{ID: "b", Type: InputBool}
+	if err := b.Check("true"); err != nil {
+		t.Errorf("true rejected: %v", err)
+	}
+	if err := b.Check("yes"); err == nil {
+		t.Error("a bool accepted 'yes'")
+	}
+	c := Input{ID: "c", Type: InputChoice, Options: []string{"fast", "slow"}}
+	if err := c.Check("medium"); err == nil {
+		t.Error("a choice accepted a value outside its options")
+	}
+}

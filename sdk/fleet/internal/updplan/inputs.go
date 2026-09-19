@@ -3,6 +3,7 @@ package updplan
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -47,9 +48,12 @@ type Input struct {
 	// For a confidential input this is the better path, not just the friendlier
 	// one: the value is computed in the remote shell and never travels at all.
 	DefaultFrom string
-	// Validate is an anchor-free regexp the value must match. Checked locally
-	// for an operator-supplied value, so a typo fails before the fleet is
-	// touched rather than on the third host.
+	// Validate is a regexp the value must match. Checked locally for an
+	// operator-supplied value, so a typo fails before the fleet is touched
+	// rather than on the third host — and on the HOST for a discovered one,
+	// through `grep -E`. The same text runs through both engines, so the
+	// parser restricts it to the POSIX ERE subset they agree on (see
+	// validateRe).
 	Validate *regexp.Regexp
 	// NeededBy limits the input to named steps. Empty means every run step —
 	// a sync step runs git, not the plan's script, and has no use for it.
@@ -77,7 +81,19 @@ const (
 var (
 	inputIDRe  = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 	inputEnvRe = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
+	// goOnlyRe spots syntax Go's RE2 accepts that POSIX `grep -E` does not:
+	// `(?i)` / `(?:` groups and the `\d` `\w` `\s` `\b` classes (GNU grep
+	// rejects `\d`, BSD and busybox grep differ again). A rule using them
+	// would pass every local check and then fail — or silently pass — on
+	// the host, so it is refused at parse time with the reason.
+	goOnlyRe = regexp.MustCompile(`\(\?|\\[A-Za-z]`)
 )
+
+// ValidInputEnv reports whether s is a name the preamble may emit as a
+// shell variable. Every remote-string builder re-validates its inputs
+// (AGENTS.md's "run: is verbatim" invariant), so a hand-built Input that
+// bypassed Parse still cannot smuggle a metacharacter.
+func ValidInputEnv(s string) bool { return inputEnvRe.MatchString(s) }
 
 // InputsFor returns the inputs a step should be given.
 func (p Plan) InputsFor(st Step) []Input {
@@ -90,11 +106,8 @@ func (p Plan) InputsFor(st Step) []Input {
 			}
 			continue
 		}
-		for _, id := range in.NeededBy {
-			if id == st.ID {
-				out = append(out, in)
-				break
-			}
+		if slices.Contains(in.NeededBy, st.ID) {
+			out = append(out, in)
 		}
 	}
 	return out
@@ -109,10 +122,43 @@ func (in Input) HasSource() bool { return in.Default != "" || in.DefaultFrom != 
 // declares none.
 func (p Plan) HasInputs() bool { return len(p.Inputs) > 0 }
 
-// parseInputs validates and defaults the inputs block. stepIDs is every
-// declared step id, so needed_by typos are caught here rather than presenting
-// as an input that silently never reaches anything.
-func parseInputs(in []wireInput, stepIDs map[string]bool) ([]Input, error) {
+// HasHostInputs reports whether any input resolves differently per host,
+// which is what decides whether a preview has to be shown once per host.
+func (p Plan) HasHostInputs() bool {
+	for _, in := range p.Inputs {
+		if in.Scope == ScopeHost {
+			return true
+		}
+	}
+	return false
+}
+
+// Check is the ONE rule for what a value of this input may be — the bool
+// literals, the choice's options, the validate regexp — shared by the parser
+// (for `default:`) and by the CLI (for --input), so a value cannot pass one
+// and fail the other.
+func (in Input) Check(val string) error {
+	if in.Type == InputBool && val != "true" && val != "false" {
+		return fmt.Errorf("%q is not a bool — use true or false", val)
+	}
+	if len(in.Options) > 0 && !slices.Contains(in.Options, val) {
+		return fmt.Errorf("%q is not one of %v", val, in.Options)
+	}
+	if in.Validate != nil && !in.Validate.MatchString(val) {
+		return fmt.Errorf("%q does not match validate %q", val, in.Validate.String())
+	}
+	return nil
+}
+
+// parseInputs validates and defaults the inputs block. steps is every
+// declared step, so a needed_by typo — or a needed_by naming a step that
+// never receives inputs — is caught here rather than presenting as a value
+// the operator is made to supply and that silently reaches nothing.
+func parseInputs(in []wireInput, steps []Step) ([]Input, error) {
+	kinds := make(map[string]Kind, len(steps))
+	for _, st := range steps {
+		kinds[st.ID] = st.Kind
+	}
 	errs := &errCollector{}
 	seen := make(map[string]bool, len(in))
 	out := make([]Input, 0, len(in))
@@ -164,9 +210,6 @@ func parseInputs(in []wireInput, stepIDs map[string]bool) ([]Input, error) {
 				errs.addf(scope, "options: a choice input must list its options")
 			}
 			v.Options = w.Options
-			if v.Default != "" && len(w.Options) > 0 && !contains(w.Options, v.Default) {
-				errs.addf(scope, "default: %q is not one of the options %v", v.Default, w.Options)
-			}
 		} else if len(w.Options) > 0 {
 			errs.addf(scope, "options: only a choice input has options")
 		}
@@ -175,17 +218,31 @@ func parseInputs(in []wireInput, stepIDs map[string]bool) ([]Input, error) {
 		v.DefaultFrom = strings.TrimSpace(w.DefaultFrom)
 
 		if w.Validate != "" {
+			if m := goOnlyRe.FindString(w.Validate); m != "" {
+				errs.addf(scope, "validate: %q is Go-only regexp syntax — the rule also runs through `grep -E` on the host, so use POSIX ERE (e.g. [0-9] for \\d, [[:space:]] for \\s)", m)
+			}
 			re, err := regexp.Compile(w.Validate)
 			if err != nil {
 				errs.addf(scope, "validate: %v", err)
 			} else {
 				v.Validate = re
-				// A default that its own rule rejects is a plan bug that would
-				// otherwise only surface on the host that fell back to it.
-				if v.Default != "" && !re.MatchString(v.Default) {
-					errs.addf(scope, "default: %q does not match validate %q", v.Default, w.Validate)
-				}
 			}
+		}
+		// A default that its own rules reject is a plan bug that would
+		// otherwise only surface on the host that fell back to it. Checked
+		// through Check so a default is held to exactly what --input is.
+		if v.Default != "" {
+			if err := v.Check(v.Default); err != nil {
+				errs.addf(scope, "default: %v", err)
+			}
+		}
+		// A plan file is plain text, usually committed. A confidential value
+		// written into it as `default:` would then be exported as a literal
+		// on every host's command line — the one delivery the secret flag
+		// exists to prevent. The host-side `default_from:` is the way to give
+		// a secret a fallback: it is computed there and never travels.
+		if v.Secret && v.Default != "" {
+			errs.addf(scope, "default: a secret input cannot carry a static default — it would travel as a literal; use default_from so the host computes it")
 		}
 
 		v.Env = strings.TrimSpace(w.Env)
@@ -204,21 +261,19 @@ func parseInputs(in []wireInput, stepIDs map[string]bool) ([]Input, error) {
 		}
 
 		for _, id := range v.NeededBy {
-			if !stepIDs[id] {
+			kind, ok := kinds[id]
+			switch {
+			case !ok:
 				errs.addf(scope, "needed_by: %q is not a declared step", id)
+			case kind != KindRun:
+				// Only a run step's script receives the preamble and stdin
+				// (updexec.Console gates both on KindRun); a value bound to a
+				// sync or gh-auth step would be demanded and then dropped.
+				errs.addf(scope, "needed_by: %q is a %s step — only a run step receives inputs", id, kind)
 			}
 		}
 
 		out = append(out, v)
 	}
 	return out, errs.join()
-}
-
-func contains(haystack []string, needle string) bool {
-	for _, h := range haystack {
-		if h == needle {
-			return true
-		}
-	}
-	return false
 }

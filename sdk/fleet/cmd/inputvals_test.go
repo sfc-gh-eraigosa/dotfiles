@@ -376,3 +376,120 @@ update:
 		t.Fatalf("generated preamble is not valid shell: %v\n%s\n--- preamble ---\n%s", err, out, pre)
 	}
 }
+
+// --- the fixes: defaults for flags, up-front refusals, fail-loud lanes ----
+
+func TestAFlagInputHonoursItsDefaultWithGffSet(t *testing.T) {
+	// A flag-bound input's default must land where an answer lands — in the
+	// host's gff state — not be exported as an env var nobody reads.
+	p, err := updplan.Parse([]byte(`
+version: 1
+update:
+  inputs:
+    - {id: ollama, type: bool, flag: converge.ollama.enabled, default: "false"}
+    - {id: gpu, type: bool, flag: converge.gpu.enabled, default_from: "test -e /dev/nvidia0 && echo true || echo false"}
+  repos:
+    pg: {path: ~/pg}
+  steps:
+    - {id: s, kind: run, repo: pg, run: ./install.sh}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, _ := p.Step("s")
+	pre, err := inputPreamble(p, st, "h1", inputValues{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(pre, "gff set 'converge.ollama.enabled' 'false'") {
+		t.Errorf("the static default did not become gff state: %q", pre)
+	}
+	if strings.Contains(pre, "export OLLAMA=") {
+		t.Errorf("a flag input's default was exported as an env var instead: %q", pre)
+	}
+	// A discovered value sets the flag to what the host found.
+	if !strings.Contains(pre, `gff set 'converge.gpu.enabled' "$GPU"`) {
+		t.Errorf("the discovered value did not reach gff set: %q", pre)
+	}
+}
+
+func TestUndeliverableInputsAreRefusedUpFront(t *testing.T) {
+	// A flag input on a run step with no repo: gff resolves a flag from a
+	// checkout, so there is nowhere to set it. Refused before a host is
+	// contacted — the live lane must never find this out mid-fleet.
+	p, err := updplan.Parse([]byte(`
+version: 1
+update:
+  inputs:
+    - {id: gpu, type: bool, flag: k3s.gpu}
+  repos:
+    pg: {path: ~/pg}
+  steps:
+    - {id: s, kind: run, run: ./bootstrap.sh}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateInputDelivery(p, inputValues{run: map[string]string{"gpu": "true"}}); err == nil {
+		t.Fatal("a flag input on a repo-less step was accepted")
+	}
+	// And should a lane ever reach the preamble with such a plan anyway,
+	// the step FAILS with the reason rather than running without its inputs.
+	st, _ := p.Step("s")
+	pre := inputPreambleOrFail(p, st, "h1", inputValues{run: map[string]string{"gpu": "true"}})
+	if !strings.Contains(pre, "exit 94") || !strings.Contains(pre, "targets no repo") {
+		t.Errorf("an undeliverable input did not fail the step loudly: %q", pre)
+	}
+}
+
+func TestASecretTheHostFindsIsAllowedOnAnInteractiveStep(t *testing.T) {
+	// README's own pattern: a join token read from the host's disk. Nothing
+	// travels, so an interactive step is no obstacle — unless the operator
+	// actually supplies a value, which would then need a channel.
+	p, err := updplan.Parse([]byte(`
+version: 1
+update:
+  inputs:
+    - {id: joinkey, type: password, env: K3S_TOKEN, default_from: "sudo -n cat /var/lib/rancher/k3s/server/node-token"}
+  repos:
+    pg: {path: ~/pg}
+  steps:
+    - {id: s, kind: run, repo: pg, run: ./install.sh, interactive: true}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateInputDelivery(p, inputValues{}); err != nil {
+		t.Fatalf("a host-discovered secret was refused on an interactive step: %v", err)
+	}
+	if err := validateInputDelivery(p, inputValues{run: map[string]string{"joinkey": "x"}}); err == nil {
+		t.Fatal("a supplied secret for an interactive step was accepted")
+	}
+}
+
+func TestBoolInputsAreCheckedBeforeTheFleetIsTouched(t *testing.T) {
+	p := inputsPlan(t, false)
+	if _, err := parseInputFlags(p, []string{"h1:ollama=yes"}); err == nil {
+		t.Fatal("a non-boolean value for a bool input was accepted")
+	}
+	var b strings.Builder
+	listInputs(&b, p)
+	if !strings.Contains(b.String(), "true, false") {
+		t.Errorf("--list-inputs does not name the bool literals:\n%s", b.String())
+	}
+}
+
+func TestDryRunPrintsOnceUnlessAnInputIsPerHost(t *testing.T) {
+	// A plan with no per-host input previews identically on every host, so
+	// it is printed once — a twelve-host fleet must not get twelve copies.
+	plain, err := updplan.Parse([]byte("version: 1\nupdate:\n  inputs:\n    - {id: lane, default: fast}\n  repos:\n    r: {path: ~/r}\n  steps:\n    - {id: s, kind: run, repo: r, run: ./x.sh}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain.HasHostInputs() {
+		t.Fatal("no input is per host here")
+	}
+	if !inputsPlan(t, false).HasHostInputs() {
+		t.Fatal("the inputs fixture declares per-host inputs")
+	}
+}

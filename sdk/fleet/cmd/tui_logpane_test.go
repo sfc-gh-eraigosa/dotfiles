@@ -469,23 +469,29 @@ func TestMixedSelectionStartsIdleHostsAndNamesSkipped(t *testing.T) {
 
 // commitForm walks the answer form to the confirm strip regardless of how many
 // fields it has, so adding one does not break every test that passes through.
-// commitForm walks the form to the end and commits it. When a password was
-// typed, committing now VERIFIES it against a host first (tui_sudocheck.go),
-// so the helper drives that round trip to completion — every caller means
-// "commit the form and land wherever that leaves us", not "stop halfway
-// through an async check".
+// When a password was typed, committing VERIFIES it against a host first
+// (tui_sudocheck.go), so the helper drives that round trip to completion —
+// every caller means "commit the form and land wherever that leaves us", not
+// "stop halfway through an async check".
 func commitForm(m tuiModel) tuiModel {
 	var cmd tea.Cmd
 	for i := 0; i < int(answerFieldCount); i++ {
 		m, cmd = send(m, "enter")
 	}
-	if cmd != nil {
-		if msg := cmd(); msg != nil {
-			if _, isCheck := msg.(sudoCheckMsg); isCheck {
-				next, _ := m.Update(msg)
-				m = next.(tuiModel)
-			}
-		}
+	return settleSudoCheck(m, cmd)
+}
+
+// settleSudoCheck runs the command a form commit returned and, when it is
+// the sudo verdict, folds it into the model — the one place the async round
+// trip is driven in tests, so a change to the check's protocol is a change
+// here and nowhere else.
+func settleSudoCheck(m tuiModel, cmd tea.Cmd) tuiModel {
+	if cmd == nil {
+		return m
+	}
+	if msg, ok := cmd().(sudoCheckMsg); ok {
+		next, _ := m.Update(msg)
+		return next.(tuiModel)
 	}
 	return m
 }

@@ -75,7 +75,9 @@ func routeAnswers(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		// Backs OUT of the form; it does NOT forget. Answers persist for the
 		// session so a fleet-wide update applies the same ones to every wave —
-		// `F` in normal mode is the deliberate way to forget them.
+		// `F` in normal mode is the deliberate way to forget them. A check
+		// still in flight is orphaned: its verdict must not reopen the form.
+		m.dropSudoCheck()
 		m.mode = modeNormal
 		m.status = "update cancelled"
 		return m, nil
@@ -92,6 +94,12 @@ func routeAnswers(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.ansField++
 			return m, nil
 		}
+		// A verdict is already on its way: a second enter would only fire a
+		// second `sudo -S -v` at the host (and a second strike on its
+		// faillock). The one in flight decides.
+		if m.sudoChecking {
+			return m, nil
+		}
 		// Persist the non-secret preferences as the form commits, so the next
 		// session starts where this one left off. A failed write is not worth
 		// interrupting a wave for — it costs a retype next time, nothing more.
@@ -104,8 +112,9 @@ func routeAnswers(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.ans.needsSudo() && !m.sudoChecked {
 			if targets := m.updateTargets(); len(targets) > 0 {
 				m.sudoChecking = true
+				m.sudoCheckSeq++
 				m.status = fmt.Sprintf("checking the sudo password on %s…", targets[0])
-				return m, checkSudo(m.run, targets[0], m.ans.secret())
+				return m, checkSudo(m.run, targets[0], m.ans.secret(), m.sudoCheckSeq)
 			}
 		}
 		m.mode = modeConfirm
@@ -114,12 +123,14 @@ func routeAnswers(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch m.ansField {
 	case fieldSudo:
+		// Any edit invalidates both a verdict already given and one still in
+		// flight: the host was asked about a different password.
 		if k.String() == "backspace" {
 			m.ans.trimSecret()
-			m.sudoChecked = false
+			m.dropSudoCheck()
 		} else if r := k.Runes; len(r) > 0 {
 			m.ans.appendSecret(string(r))
-			m.sudoChecked = false
+			m.dropSudoCheck()
 		}
 	case fieldWindows:
 		// Fixed choices, not free text: these map onto install.sh's own y/n/s.

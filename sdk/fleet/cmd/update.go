@@ -60,17 +60,9 @@ var (
 func buildExecutor(r runner.Runner, out updexec.Output, local updplan.Local, plan updplan.Plan, host string, vals inputValues) updexec.Executor {
 	// The plan's declared inputs ride in on the same two channels the sudo
 	// answers already use: plain values in the export preamble, confidential
-	// ones on stdin. validateInputDelivery has already refused the one
-	// combination that cannot work (a confidential value for an interactive
-	// step), so an error here is unreachable and the preamble degrades to the
-	// local answers rather than taking the run down.
+	// ones on stdin.
 	preamble := func(st updplan.Step) string {
-		pre := localAnswerPreamble(st)
-		ip, err := inputPreamble(plan, st, host, vals)
-		if err != nil {
-			return pre
-		}
-		return pre + ip
+		return localAnswerPreamble(st) + inputPreambleOrFail(plan, st, host, vals)
 	}
 	io := updexec.Console{R: r, Preamble: preamble}
 	// Stdin is attached ONLY when the plan actually has a confidential value
@@ -95,6 +87,20 @@ func buildExecutor(r runner.Runner, out updexec.Output, local updplan.Local, pla
 // (interactive steps cannot share a terminal) through the plan executor.
 func runUpdate(cmd *cobra.Command, hosts []string) error {
 	return runUpdateWith(cmd.OutOrStdout(), hosts, runner.Exec{}, newRunLogOutput())
+}
+
+// inputPreambleOrFail is inputPreamble for a lane that has already started:
+// validateInputDelivery refuses every undeliverable combination up front, so
+// an error here means a plan the checks did not foresee — and the step must
+// then FAIL, loudly, with the reason. Dropping the preamble and running the
+// script anyway would be the silent "feature stayed off" outcome rcInputFlag
+// exists to remove.
+func inputPreambleOrFail(plan updplan.Plan, st updplan.Step, host string, vals inputValues) string {
+	pre, err := inputPreamble(plan, st, host, vals)
+	if err != nil {
+		return fmt.Sprintf("echo %s >&2; exit %d; ", shQuote("fleet: "+err.Error()), rcInputFlag)
+	}
+	return pre
 }
 
 // runUpdateWith is runUpdate with its output writer, runner and CAPTURE
@@ -139,16 +145,18 @@ func runUpdateWith(out io.Writer, hosts []string, r runner.Runner, capture updex
 	if err != nil {
 		return err
 	}
-	if err := validateInputDelivery(plan); err != nil {
+	if err := validateInputDelivery(plan, vals); err != nil {
 		return err
 	}
 
 	if flagUpdateDryRun {
-		// Per host, because a per-host input resolves differently on each.
+		// Once per host only when a per-host input makes the preview differ
+		// between them; the ordinary plan prints once, as it always has.
+		if !plan.HasHostInputs() {
+			return printDryRunFor(out, plan, local, flagUpdateReset, hosts[0], vals)
+		}
 		for _, host := range hosts {
-			if len(hosts) > 1 {
-				fmt.Fprintf(out, "--- %s ---\n", host)
-			}
+			fmt.Fprintf(out, "=== %s ===\n", host)
 			if err := printDryRunFor(out, plan, local, flagUpdateReset, host, vals); err != nil {
 				return err
 			}
@@ -191,7 +199,14 @@ var updateCmd = &cobra.Command{
 	Use: "update <host>...",
 	Short: "Update hosts from a fleet.yaml plan (today's dotfiles fetch+ff+" +
 		"install.sh when none is configured)",
-	Args: cobra.MinimumNArgs(1),
+	// --list-inputs asks about the plan, not a host, so it is the one form
+	// that needs no host argument.
+	Args: func(cmd *cobra.Command, args []string) error {
+		if flagUpdateListIn {
+			return nil
+		}
+		return cobra.MinimumNArgs(1)(cmd, args)
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runUpdate(cmd, args)
 	},

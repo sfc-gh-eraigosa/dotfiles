@@ -388,7 +388,7 @@ fleet update init --print                    # ...or just show it
 | `--timeout D` | override every **batch** step's per-attempt timeout (interactive steps keep the plan's) |
 | `--no-retry` | run every step at most once |
 | `--ref B` / `--ref repo=B` | target a ref; repeatable. Bare `B` picks the repo named `dotfiles`, or the plan's only repo |
-| `--list-inputs` | describe every value this plan needs, then exit |
+| `--list-inputs` | describe every value this plan needs, then exit (needs no host) |
 | `--input <id>=<v>` | a value for a plan-declared input; `<id>=@<file>`, `<id>=env:<NAME>`, or `<host>:<id>=...` for a per-host one; repeatable |
 | `--file PATH` | read this plan; must exist |
 | `--dry-run` | print the plan source, every effective script and each step's timeout/retry; touch no runner |
@@ -434,7 +434,7 @@ update:
   inputs:                               # values the plan needs before it can run (see below)
     - id: <lower_snake>                 # required; the name used by --input
       prompt: "..."                     # what to ask
-      type: text | password | bool | choice     # default text; password implies confidential
+      type: text | password | bool | choice     # default text; password implies confidential; bool is true|false
       secret: true                      # confidential: delivered over stdin, never argv
       scope: run | host                 # default run (once per run) vs once per host
       env: UPPER_SNAKE                  # variable to export; default = the id upshouted
@@ -442,7 +442,7 @@ update:
       options: [a, b]                   # choice only
       default: a                        # static fallback
       default_from: <shell>             # ...or let the HOST find it (runs there)
-      validate: <regexp>                # the value must match, checked before the fleet is touched
+      validate: <regexp>                # POSIX ERE; checked before the fleet is touched (and on the host for a discovered value)
       description: |                    # the longer "what is this for"
         ...
       needed_by: [<step id>, ...]       # default: every run step
@@ -546,7 +546,23 @@ fleet's memory, not in any command text.
 
 Discovery that comes up empty **fails the step** (`95`) rather than exporting a blank:
 converging with an empty node name is worse than not converging. A `validate:` rule is
-applied to what the host found as well, so a half-read token is caught there too.
+applied to what the host found as well, so a half-read token is caught there too — on
+the host, through `grep -E`, which is why a rule must be **POSIX ERE**: `[0-9]` not `\d`,
+`[[:space:]]` not `\s`, no `(?i)`. A rule using Go-only syntax is refused when the plan is
+read, since it would pass every local check and then fail on the host.
+
+A flag-bound input honours its `default:` the same way an answer is honoured — with
+`gff set`, not an environment variable — and a `default_from:` flag input sets the flag
+to whatever the host found.
+
+A **secret may not carry a static `default:`**: the plan file is plain text, and the
+value would then travel as a literal on every host's command line. `default_from:` is the
+fallback for a secret, computed on the host.
+
+**In the TUI**, a plan's inputs are applied exactly as above for every value the plan can
+answer on its own — a `default:`, a `default_from:` — but the TUI has no form for the
+values only an operator can supply. A plan that needs one is **refused before any host
+is contacted**, with the missing ids named, and points at `fleet update --input`.
 
 `--list-inputs` prints what a plan needs and where each value comes from, so you do not
 have to read the plan to find out:
@@ -567,7 +583,10 @@ is refused — local argv is world-readable through `/proc` too — so it must c
 **A confidential value cannot go to an `interactive: true` step**, whose stdin is the
 operator's terminal; there is nowhere to put it but argv. fleet refuses the plan up
 front and says so. Make the step batch (the TUI primes sudo for it) or have the script
-prompt for the value itself.
+prompt for the value itself. The exception is a secret nobody supplied that the host
+finds for itself through `default_from:` — nothing travels, so nothing needs a channel.
+An input's `needed_by:` may only name `run` steps: a sync or gh-auth step never receives
+a preamble or stdin, so a value bound to one could only be demanded and then dropped.
 
 `--dry-run` prints the **effective** script, preamble included, so the `gff set` that
 will change the host is visible before anything runs — and the confidential value is

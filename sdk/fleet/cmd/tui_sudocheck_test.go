@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
@@ -30,6 +31,15 @@ func sudoModel(t *testing.T, r runner.Runner) tuiModel {
 func commit(m tuiModel) (tuiModel, tea.Cmd) {
 	mm, cmd := routeAnswers(m, tea.KeyMsg{Type: tea.KeyEnter})
 	return mm.(tuiModel), cmd
+}
+
+// awaiting is a model with a check in flight, and the verdict that answers
+// it — the state applySudoCheck acts on. A verdict carrying any other
+// sequence number is one the model must ignore.
+func awaiting(m tuiModel) (tuiModel, sudoCheckMsg) {
+	m.sudoChecking = true
+	m.sudoCheckSeq = 7
+	return m, sudoCheckMsg{host: "h1", seq: 7}
 }
 
 func TestSudoPasswordIsVerifiedBeforeTheConfirmStrip(t *testing.T) {
@@ -70,9 +80,9 @@ func TestTheSecretIsNotInTheVerifyCommand(t *testing.T) {
 }
 
 func TestARejectedPasswordReturnsToTheFieldAndClearsIt(t *testing.T) {
-	m := sudoModel(t, runner.Fake{})
-	m.mode = modeAnswers
-	mm, _ := m.Update(sudoCheckMsg{host: "h1", ok: false})
+	m, verdict := awaiting(sudoModel(t, runner.Fake{}))
+	verdict.ok = false
+	mm, _ := m.Update(verdict)
 	m2 := mm.(tuiModel)
 
 	if m2.mode != modeAnswers {
@@ -87,11 +97,89 @@ func TestARejectedPasswordReturnsToTheFieldAndClearsIt(t *testing.T) {
 	if !strings.Contains(m2.status, "h1") || !strings.Contains(strings.ToLower(m2.status), "reject") {
 		t.Errorf("status does not say what happened: %q", m2.status)
 	}
+	// ...and the operator can SEE that: the form replaces the status bar,
+	// so the verdict has to be drawn inside it.
+	if view := m2.answersView(); !strings.Contains(view, "rejected") {
+		t.Errorf("the form does not show the verdict:\n%s", view)
+	}
+}
+
+func TestTheFormShowsTheCheckInProgress(t *testing.T) {
+	m, _ := commit(sudoModel(t, runner.Fake{Out: map[string]string{"h1": "fleet-sudo-rc=0"}}))
+	if view := m.answersView(); !strings.Contains(view, "checking") {
+		t.Errorf("the form gives no sign a check is running:\n%s", view)
+	}
+}
+
+func TestASecondEnterDuringTheCheckIssuesNoSecondCheck(t *testing.T) {
+	// Enter with no visible reaction invites another enter. That must not
+	// become a second `sudo -S -v` against the host — the one in flight
+	// decides.
+	m, first := commit(sudoModel(t, runner.Fake{Out: map[string]string{"h1": "fleet-sudo-rc=0"}}))
+	if first == nil {
+		t.Fatal("no check issued")
+	}
+	m2, second := commit(m)
+	if second != nil {
+		t.Fatal("a second enter fired a second check")
+	}
+	if m2.mode != modeAnswers {
+		t.Fatalf("mode = %v, want the form to stay put until the verdict", m2.mode)
+	}
+}
+
+func TestAStaleVerdictIsIgnored(t *testing.T) {
+	// The operator typed, committed, then edited the password (or backed
+	// out) before the host answered. That answer is about a password that
+	// no longer exists: it must neither prove the new one nor wipe it.
+	m, _ := commit(sudoModel(t, runner.Fake{Out: map[string]string{"h1": "fleet-sudo-rc=0"}}))
+	m.ansField = fieldSudo
+	edited, _ := send(m, "backspace") // the in-flight check is now about a different secret
+	stale := sudoCheckMsg{host: "h1", ok: true, seq: m.sudoCheckSeq}
+	mm, _ := edited.Update(stale)
+	m2 := mm.(tuiModel)
+	if m2.mode != modeAnswers || m2.sudoChecked {
+		t.Fatalf("a verdict for an edited password was applied: mode=%v checked=%v", m2.mode, m2.sudoChecked)
+	}
+
+	// A rejection arriving after esc must not drag the form back open.
+	cancelled, _ := send(m, "esc")
+	mm, _ = cancelled.Update(sudoCheckMsg{host: "h1", ok: false, seq: m.sudoCheckSeq})
+	m3 := mm.(tuiModel)
+	if m3.mode != modeNormal {
+		t.Fatalf("a late verdict reopened the form: mode=%v", m3.mode)
+	}
+	if m3.ans.secretLen() == 0 {
+		t.Fatal("a late rejection wiped a password the operator kept")
+	}
+}
+
+func TestTheCheckIsBoundedByADeadline(t *testing.T) {
+	// A host whose sudo stalls in PAM must not hold the form open for good:
+	// the check runs under a deadline and a timeout reads as uncheckable.
+	r := runner.Fake{Block: map[string]bool{"h1": true}}
+	// The Fake honours ctx, so drive the real command under a short deadline
+	// and assert it reports rather than hangs.
+	prev := sudoCheckTimeout
+	sudoCheckTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { sudoCheckTimeout = prev })
+	cmd := checkSudo(r, "h1", "x", 1)
+	done := make(chan tea.Msg, 1)
+	go func() { done <- cmd() }()
+	select {
+	case msg := <-done:
+		if v, ok := msg.(sudoCheckMsg); !ok || !v.unreachable {
+			t.Fatalf("a timed-out check must read as uncheckable, got %+v", msg)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the check did not return within its deadline")
+	}
 }
 
 func TestAnAcceptedPasswordOpensTheConfirmStrip(t *testing.T) {
-	m := sudoModel(t, runner.Fake{})
-	mm, _ := m.Update(sudoCheckMsg{host: "h1", ok: true})
+	m, verdict := awaiting(sudoModel(t, runner.Fake{}))
+	verdict.ok = true
+	mm, _ := m.Update(verdict)
 	m2 := mm.(tuiModel)
 	if m2.mode != modeConfirm {
 		t.Fatalf("mode = %v, want modeConfirm", m2.mode)
@@ -104,8 +192,9 @@ func TestAnAcceptedPasswordOpensTheConfirmStrip(t *testing.T) {
 func TestAHostThatCannotBeCheckedDoesNotBlockTheRun(t *testing.T) {
 	// An unreachable host says nothing about the password. Refusing to run
 	// would be worse than running: the wave has its own per-host handling.
-	m := sudoModel(t, runner.Fake{})
-	mm, _ := m.Update(sudoCheckMsg{host: "h1", ok: false, unreachable: true})
+	m, verdict := awaiting(sudoModel(t, runner.Fake{}))
+	verdict.unreachable = true
+	mm, _ := m.Update(verdict)
 	m2 := mm.(tuiModel)
 	if m2.mode != modeConfirm {
 		t.Fatalf("mode = %v, want the run to proceed", m2.mode)
@@ -156,5 +245,51 @@ func TestARejectedRcIsReportedAsRejected(t *testing.T) {
 	msg := cmd().(sudoCheckMsg)
 	if msg.ok || msg.unreachable {
 		t.Fatalf("rc=1 must read as a rejected password, got %+v", msg)
+	}
+}
+
+func TestTheTUIRefusesAPlanWhoseInputsOnlyAnOperatorCanAnswer(t *testing.T) {
+	// The TUI has no form for plan inputs. A value the host can find for
+	// itself is applied; one only the operator can supply has nowhere to
+	// come from, so the update is refused before a host is contacted —
+	// never started with the value silently unset.
+	plan, err := updplan.Parse([]byte("version: 1\nupdate:\n  inputs:\n    - {id: node, scope: host, env: CONVERGE_NODE}\n  repos:\n    r: {path: ~/r}\n  steps:\n    - {id: s, kind: run, repo: r, run: ./x.sh}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := newTUIModel([]sshconf.Host{{Alias: "h1"}}, runner.Fake{}, fakeBaseline{}, testNow, "main", 2, plan)
+	if cmd := m.startUpdate([]string{"h1"}); cmd != nil {
+		t.Fatal("an update started for a plan with an unanswered input")
+	}
+	if !strings.Contains(m.status, "h1:node") || !strings.Contains(m.status, "--input") {
+		t.Errorf("status does not name the missing value and the way to supply it: %q", m.status)
+	}
+	if _, running := m.updating["h1"]; running {
+		t.Error("the host was marked updating")
+	}
+}
+
+func TestTheTUILaneAppliesThePlanInputsAHostCanAnswer(t *testing.T) {
+	// The same plan runs through `fleet update` and the TUI; a default or a
+	// host-side discovery must reach the step from both, after the sudo
+	// preamble, or the two lanes converge different things.
+	plan, err := updplan.Parse([]byte("version: 1\nupdate:\n  inputs:\n    - {id: lane, default: fast}\n    - {id: node, scope: host, env: CONVERGE_NODE, default_from: \"hostname -s\"}\n  repos:\n    r: {path: ~/r}\n  steps:\n    - {id: s, kind: run, repo: r, run: ./x.sh}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var a answers
+	a.appendSecret("hunter2")
+	preamble, stdin := bgLaneIO("h1", plan, a, bgPolicy{})
+	st, _ := plan.Step("s")
+	pre := preamble(st)
+	sudoAt, laneAt := strings.Index(pre, sudoPrime), strings.Index(pre, "export LANE='fast'")
+	if sudoAt < 0 || laneAt < 0 || laneAt < sudoAt {
+		t.Errorf("the plan default does not follow the sudo preamble: %q", pre)
+	}
+	if !strings.Contains(pre, "hostname -s") || !strings.Contains(pre, "export CONVERGE_NODE") {
+		t.Errorf("host-side discovery is missing from the TUI lane: %q", pre)
+	}
+	if got := stdin(st); got != "hunter2\n" {
+		t.Errorf("stdin = %q, want the sudo line alone when no confidential input travels", got)
 	}
 }
