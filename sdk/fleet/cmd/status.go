@@ -12,11 +12,13 @@ import (
 	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 	"github.com/spf13/cobra"
 )
 
@@ -40,26 +42,48 @@ type Row struct {
 }
 
 // Baseliner answers "what is current, and how far off is this commit?".
+// Probe is the one command run on each host to read its state for the
+// tracked repo. It lives here because the repo fleet is tracking decides
+// BOTH halves — what "current" means locally, and which stamp/clone to read
+// remotely — and splitting them across two parameters let them disagree.
 type Baseliner interface {
 	Head() string
 	Compare(sha string) (isAncestor bool, behind int)
+	Probe() string
 }
 
-// stampPath is where install-stamp.sh writes its record.
-const stampPath = "~/.local/state/dotfiles/install-stamp"
-
-// remoteRepo is where install.sh puts the clone on every fleet host.
+// baselineTarget answers "which file do I read on a host, and which clone do
+// I ask for its branch" from the plan (#351 feature 2) — closing the TODO
+// that used to sit here, which deferred exactly this because status had no
+// plan of its own to read.
 //
-// TODO(fleet-update plan §2, leaf D): once every host is expected to be on a
-// fleet.yaml plan, derive this from the loaded plan's "dotfiles" repo path
-// (updplan.Plan.Repos["dotfiles"].Path) instead of hardcoding it — status
-// and update would then agree by construction even when a plan overrides the
-// path. Deferred rather than done here: status has no plan-loading of its
-// own today, and wiring one in just to read one path was judged more
-// invasive than the consistency win, for a value that is still ~always
-// "dotfiles" in practice. Left as a hardcoded constant plus this note per
-// the leaf D task instructions, not silently skipped.
-const remoteRepo = "~/git/dotfiles"
+// The stamp is DECLARED, never conventional: a baseline repo without one has
+// no status data, and saying which field to add beats reporting every host
+// as unknown against a path no entry point writes.
+// legacyDotfilesStamp is where install-stamp.sh has always written, and what
+// the hardcoded const used to be. Only reachable for a baseline repo named
+// "dotfiles" that declares no stamp of its own.
+const legacyDotfilesStamp = "~/.local/state/dotfiles/install-stamp"
+
+func baselineTarget(p updplan.Plan) (stamp, repoPath string, err error) {
+	r, ok := p.BaselineRepo()
+	if !ok {
+		return "", "", fmt.Errorf("plan %s: several repos and no `baseline:` — add `baseline: <repo>` under `update:` to say which one the status column tracks", p.Source)
+	}
+	if r.Stamp == "" {
+		// Compatibility, not convention: every plan written before stamps
+		// existed has a `dotfiles` repo and no `stamp:`, and install-stamp.sh
+		// has always written this one path. Requiring a declaration there
+		// would break `fleet status` for every existing user on upgrade. Any
+		// OTHER repo must say where its stamp is — there is no path to fall
+		// back to, and inventing one reports every host as unknown.
+		if r.Name == "dotfiles" {
+			return legacyDotfilesStamp, r.Path, nil
+		}
+		return "", "", fmt.Errorf("plan %s: baseline repo %q declares no `stamp:` — add the path its entry point writes (e.g. stamp: ~/.local/state/%s/install-stamp)", p.Source, r.Name, r.Name)
+	}
+	return r.Stamp, r.Path, nil
+}
 
 // probeDelim separates the two payloads the probe brings back. It must be
 // something neither a stamp line nor a git branch name can contain, so the
@@ -72,8 +96,10 @@ const probeDelim = "__fleet_probe__"
 //
 // Everything is failure-tolerant: a host with no stamp, no clone, or no git
 // still answers, and the missing half simply renders as unknown.
-var probeCmd = "cat " + stampPath + " 2>/dev/null; echo '" + probeDelim + "'; " +
-	"git -C " + remoteRepo + " rev-parse --abbrev-ref HEAD 2>/dev/null || true"
+func probeCmdFor(stamp, repoPath string) string {
+	return "cat " + stamp + " 2>/dev/null; echo '" + probeDelim + "'; " +
+		"git -C " + repoPath + " rev-parse --abbrev-ref HEAD 2>/dev/null || true"
+}
 
 // splitProbe separates the stamp text from the live branch. A reply with no
 // delimiter is an older host answering the previous single-payload command —
@@ -137,7 +163,7 @@ func probeHost(h sshconf.Host, r runner.Runner, base Baseliner) Row {
 // would always be empty, and the ranking would be worthless.
 func probeHostWake(h sshconf.Host, peers func() []reach.Peer, r runner.Runner, base Baseliner, w waker) Row {
 	row := Row{Alias: h.Alias}
-	out, err := r.Run(h.Alias, probeCmd)
+	out, err := r.Run(h.Alias, base.Probe())
 
 	// A host that answered SSH and then refused us is not asleep, so the
 	// ladder has nothing to fix: running it would spend a full wake budget
@@ -153,7 +179,7 @@ func probeHostWake(h sshconf.Host, peers func() []reach.Peer, r runner.Runner, b
 			ps = peers()
 		}
 		if res := w(h, ps); res.Woke {
-			if out2, err2 := r.Run(h.Alias, probeCmd); err2 == nil {
+			if out2, err2 := r.Run(h.Alias, base.Probe()); err2 == nil {
 				out, err = out2, err2
 				row.Note = "woke via " + res.Via
 			}
@@ -374,10 +400,13 @@ func exitCode(rows []Row) int {
 
 // gitBaseline resolves origin/<branch> in the local dotfiles clone.
 type gitBaseline struct {
-	repo, ref, head string
+	repo, ref, head, probe string
 }
 
-func newGitBaseline(repo, ref string) (*gitBaseline, error) {
+// newGitBaseline resolves the local baseline AND builds the remote probe from
+// the same repo, so status can never compare against one repo while reading
+// another's stamp. stamp/remotePath come from the plan (baselineTarget).
+func newGitBaseline(repo, ref, stamp, remotePath string) (*gitBaseline, error) {
 	// A failed fetch is not fatal (fleet must work offline) but it MUST be
 	// reported: classifying against a stale origin/main can call a host
 	// up-to-date when it is not, and silence there is indistinguishable
@@ -389,10 +418,11 @@ func newGitBaseline(repo, ref string) (*gitBaseline, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolving %s in %s: %w", ref, repo, err)
 	}
-	return &gitBaseline{repo: repo, ref: ref, head: strings.TrimSpace(string(out))}, nil
+	return &gitBaseline{repo: repo, ref: ref, head: strings.TrimSpace(string(out)), probe: probeCmdFor(stamp, remotePath)}, nil
 }
 
-func (g *gitBaseline) Head() string { return g.head }
+func (g *gitBaseline) Head() string  { return g.head }
+func (g *gitBaseline) Probe() string { return g.probe }
 
 func (g *gitBaseline) Compare(sha string) (bool, int) {
 	if exec.Command("git", "-C", g.repo, "merge-base", "--is-ancestor", sha, g.ref).Run() != nil {
@@ -432,7 +462,17 @@ var statusCmd = &cobra.Command{
 			}
 			return fmt.Errorf("no fleet hosts found — mark hosts with %q in %s, or pass aliases explicitly", flagMarker, flagConfig)
 		}
-		base, err := newGitBaseline(flagRepo, flagRef)
+		// The plan says which repo the column tracks; --repo (feature 1) says
+		// which checkout answers "what is current".
+		plan, err := loadPlan("", &featflag.GFF{Repo: flagRepo}, flagRepo)
+		if err != nil {
+			return err
+		}
+		stampAt, remoteAt, err := baselineTarget(plan)
+		if err != nil {
+			return err
+		}
+		base, err := newGitBaseline(flagRepo, flagRef, stampAt, remoteAt)
 		if err != nil {
 			return err
 		}

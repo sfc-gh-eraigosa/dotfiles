@@ -2,6 +2,7 @@ package updplan
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -85,5 +86,127 @@ func TestDefaultYAMLRoundTripsToDefault(t *testing.T) {
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Parse(DefaultYAML) = %+v, want %+v", got, want)
+	}
+}
+
+// --- baseline + stamp: the status column follows the PLAN's repo (#351 F2) --
+
+func TestBaselineAndStampParse(t *testing.T) {
+	p, err := Parse([]byte(`
+version: 1
+update:
+  baseline: playground
+  repos:
+    dotfiles:
+      path: ~/git/dotfiles
+      stamp: ~/.local/state/dotfiles/install-stamp
+    playground:
+      path: ~/github/org/playground
+      url: git@github.com:org/playground.git
+      stamp: ~/.local/state/playground/install-stamp
+  steps:
+    - id: s
+      kind: sync
+      repo: playground
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Baseline != "playground" {
+		t.Fatalf("Baseline = %q, want playground", p.Baseline)
+	}
+	if got := p.Repos["playground"].Stamp; got != "~/.local/state/playground/install-stamp" {
+		t.Fatalf("stamp = %q", got)
+	}
+	r, ok := p.BaselineRepo()
+	if !ok || r.Name != "playground" {
+		t.Fatalf("BaselineRepo() = %v %v, want playground", r.Name, ok)
+	}
+}
+
+func TestBaselineMustNameADeclaredRepo(t *testing.T) {
+	_, err := Parse([]byte(`
+version: 1
+update:
+  baseline: nosuch
+  repos:
+    dotfiles: {path: ~/git/dotfiles}
+  steps:
+    - {id: s, kind: sync, repo: dotfiles}
+`))
+	if err == nil {
+		t.Fatal("a baseline naming an undeclared repo was accepted")
+	}
+	if !strings.Contains(err.Error(), "baseline") {
+		t.Fatalf("error %q does not name the offending field", err)
+	}
+}
+
+func TestBaselineRepoFallsBackPredictably(t *testing.T) {
+	// No `baseline:` — a plan written before this existed, or a one-repo plan.
+	one, err := Parse([]byte(`
+version: 1
+update:
+  repos:
+    solo: {path: ~/x, stamp: ~/.local/state/x/install-stamp}
+  steps:
+    - {id: s, kind: sync, repo: solo}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, ok := one.BaselineRepo(); !ok || r.Name != "solo" {
+		t.Fatalf("a single-repo plan should baseline on it, got %v %v", r.Name, ok)
+	}
+
+	// Several repos, one of them dotfiles: keep tracking dotfiles, which is
+	// what every plan written before this feature meant.
+	multi, err := Parse([]byte(`
+version: 1
+update:
+  repos:
+    dotfiles: {path: ~/git/dotfiles}
+    other:    {path: ~/x}
+  steps:
+    - {id: s, kind: sync, repo: other}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, ok := multi.BaselineRepo(); !ok || r.Name != "dotfiles" {
+		t.Fatalf("a multi-repo plan with dotfiles should baseline on it, got %v %v", r.Name, ok)
+	}
+
+	// Several repos, no dotfiles, no baseline: refuse to guess.
+	amb, err := Parse([]byte(`
+version: 1
+update:
+  repos:
+    a: {path: ~/a}
+    b: {path: ~/b}
+  steps:
+    - {id: s, kind: sync, repo: a}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, ok := amb.BaselineRepo(); ok {
+		t.Fatalf("an ambiguous plan should have no baseline, got %v", r.Name)
+	}
+}
+
+func TestBuiltInPlanDeclaresTheDotfilesStamp(t *testing.T) {
+	// Today's output must not change: the built-in plan carries what used to
+	// be the hardcoded consts, so status has one code path, not two.
+	p := Default()
+	r, ok := p.BaselineRepo()
+	if !ok {
+		t.Fatal("the built-in plan has no baseline repo")
+	}
+	if r.Stamp != "~/.local/state/dotfiles/install-stamp" {
+		t.Fatalf("built-in stamp = %q", r.Stamp)
+	}
+	if r.Path != "~/git/dotfiles" {
+		t.Fatalf("built-in baseline path = %q", r.Path)
 	}
 }

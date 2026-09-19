@@ -86,7 +86,7 @@ func TestBranchCostsNoExtraRoundTrip(t *testing.T) {
 	if !strings.Contains(joined, "rev-parse --abbrev-ref HEAD") {
 		t.Fatalf("probe must ask for the live branch: %q", joined)
 	}
-	if !strings.Contains(joined, stampPath) {
+	if !strings.Contains(joined, "~/.local/state/dotfiles/install-stamp") {
 		t.Fatalf("probe must still read the stamp: %q", joined)
 	}
 }

@@ -418,6 +418,7 @@ The full schema, with every default:
 version: 1                              # must be 1
 update:
   root: ~/git                           # absolute or ~/ path; relative repo paths resolve under it
+  baseline: <repo name>                 # which repo the STATUS column tracks (see below)
   defaults:                             # merged into every step, field by field
     timeout: 30m                        # per ATTEMPT; 0 = none; interactive steps default to 0
     retry:
@@ -428,6 +429,8 @@ update:
     <name>:                             # ^[a-z0-9][a-z0-9._-]*$
       path: <rel | /abs | ~/...>        # default = <name>; [A-Za-z0-9._/-], no "..", no leading "-"
       url: <https:// | ssh:// | git@…>  # optional; lets a MISSING clone be cloned (that clone is the one network call)
+      stamp: ~/.local/state/<n>/install-stamp   # what this repo's entry point writes on a host;
+                                        # required for a status column (no convention, no guessing)
       branches: [default]               # "default" = the remote HEAD, only allowed first; the rest are branch names
                                         # (a tag works only as the sole entry — multi-entry lists are branches)
       local: skip                       # skip | rescue | carry — what to do with a DIRTY clone (table below)
@@ -465,6 +468,37 @@ Step kinds:
   + `gh auth setup-git` interactively, then one re-check. An authenticated host makes
   zero interactive calls; `gh` missing reads `gh not installed`, not an auth failure;
   no token, `GH_TOKEN`, `GITHUB_TOKEN` or `--with-token` ever appears in a remote string.
+
+#### What the status column tracks — `baseline:` and `stamp:`
+
+`fleet status` and the TUI answer "what has this host actually converged to". That is
+two facts about **one repo**: the local baseline (`--repo` + `--ref`) and the stamp
+file the host wrote. The plan names the repo and the stamp, so the two can never
+disagree:
+
+```yaml
+update:
+  baseline: playground
+  repos:
+    playground:
+      path: ~/github/<org>/playground
+      url:  git@github.com:<org>/playground.git
+      stamp: ~/.local/state/playground/install-stamp
+```
+
+With no `baseline:`, the repo named `dotfiles` is used; failing that, the only repo,
+when there is exactly one. Several repos and no way to tell which is the subject is a
+question for the plan author — fleet says so instead of guessing.
+
+**`stamp:` is declared, never conventional.** A baseline repo without one has no status
+data, and naming the missing field beats reporting every host as `unknown` against a
+path no entry point writes. The one exception is compatibility, not convention: a
+baseline repo named `dotfiles` with no `stamp:` keeps `~/.local/state/dotfiles/install-stamp`,
+because every plan written before this feature looks exactly like that and an upgrade
+must not turn `fleet status` into a hard failure.
+
+Once a repo's plan is in play, dotfiles is not consulted at all — the baseline, the
+stamp and the branch column all come from that repo.
 
 #### Which repo — `--repo`
 

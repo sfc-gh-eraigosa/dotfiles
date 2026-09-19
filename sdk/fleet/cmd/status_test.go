@@ -10,6 +10,7 @@ import (
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
 var testNow = time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
@@ -56,6 +57,9 @@ type fakeBaseline struct {
 }
 
 func (f fakeBaseline) Head() string { return f.head }
+func (f fakeBaseline) Probe() string {
+	return probeCmdFor("~/.local/state/dotfiles/install-stamp", "~/git/dotfiles")
+}
 func (f fakeBaseline) Compare(sha string) (bool, int) {
 	return f.ancestor[sha], f.behind[sha]
 }
@@ -157,5 +161,106 @@ func TestSilenceErrorsDoesNotHideRealErrors(t *testing.T) {
 	}
 	if !strings.Contains(string(src), `fmt.Fprintln(os.Stderr, "Error:", err)`) {
 		t.Fatal("Execute() must print non-exitError errors, or SilenceErrors makes them vanish")
+	}
+}
+
+// --- the probe follows the PLAN's baseline repo (#351 feature 2) -----------
+
+func TestProbeCmdForUsesTheDeclaredStampAndRepo(t *testing.T) {
+	got := probeCmdFor("~/.local/state/playground/install-stamp", "~/github/org/playground")
+	for _, want := range []string{
+		"cat ~/.local/state/playground/install-stamp",
+		"git -C ~/github/org/playground rev-parse --abbrev-ref HEAD",
+		probeDelim,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("probe %q lacks %q", got, want)
+		}
+	}
+	// It must not carry the dotfiles defaults once a plan says otherwise —
+	// that was the bug this replaces (two hardcoded consts).
+	if strings.Contains(got, "state/dotfiles") || strings.Contains(got, "git/dotfiles") {
+		t.Fatalf("probe still hardcodes dotfiles: %q", got)
+	}
+}
+
+func TestBuiltInPlanProbeIsByteIdenticalToTheOldConstants(t *testing.T) {
+	// The regression guard for every existing user: with no plan of their
+	// own, the command that goes over the wire must not change at all.
+	r, ok := updplan.Default().BaselineRepo()
+	if !ok {
+		t.Fatal("built-in plan has no baseline repo")
+	}
+	want := "cat ~/.local/state/dotfiles/install-stamp 2>/dev/null; echo '" + probeDelim + "'; " +
+		"git -C ~/git/dotfiles rev-parse --abbrev-ref HEAD 2>/dev/null || true"
+	if got := probeCmdFor(r.Stamp, r.Path); got != want {
+		t.Fatalf("probe changed for the built-in plan:\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestBaselineTargetFromPlanRefusesARepoWithNoStamp(t *testing.T) {
+	// "Plan must declare it": a baseline repo with no stamp has no status
+	// data, and saying so beats inventing a path no entry point writes.
+	p, err := updplan.Parse([]byte("version: 1\nupdate:\n  repos:\n    solo: {path: ~/x}\n  steps:\n    - {id: s, kind: sync, repo: solo}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := baselineTarget(p); err == nil {
+		t.Fatal("a baseline repo with no stamp was accepted")
+	} else if !strings.Contains(err.Error(), "stamp") {
+		t.Fatalf("error %q does not name the missing field", err)
+	}
+
+	// ...and an ambiguous plan says which field to add, not "unknown".
+	amb, err := updplan.Parse([]byte("version: 1\nupdate:\n  repos:\n    a: {path: ~/a}\n    b: {path: ~/b}\n  steps:\n    - {id: s, kind: sync, repo: a}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := baselineTarget(amb); err == nil || !strings.Contains(err.Error(), "baseline") {
+		t.Fatalf("an ambiguous plan should point at `baseline:`, got %v", err)
+	}
+}
+
+func TestBaselineTargetFromPlanReturnsStampAndPath(t *testing.T) {
+	p, err := updplan.Parse([]byte("version: 1\nupdate:\n  baseline: pg\n  repos:\n    pg: {path: ~/github/org/pg, stamp: ~/.local/state/pg/install-stamp}\n  steps:\n    - {id: s, kind: sync, repo: pg}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stamp, path, err := baselineTarget(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stamp != "~/.local/state/pg/install-stamp" || path != "~/github/org/pg" {
+		t.Fatalf("baselineTarget = %q %q", stamp, path)
+	}
+}
+
+func TestAPreExistingDotfilesPlanKeepsItsStampWithoutDeclaringOne(t *testing.T) {
+	// Every plan written before this feature — the tracked team plan, and any
+	// hand-written ~/.config/fleet/fleet.yaml — has a `dotfiles` repo and no
+	// `stamp:`. Requiring one there would turn `fleet status` into a hard
+	// failure for every existing user on their next upgrade.
+	p, err := updplan.Parse([]byte("version: 1\nupdate:\n  root: ~/git\n  repos:\n    dotfiles: {path: dotfiles, branches: [main]}\n  steps:\n    - {id: s, kind: sync, repo: dotfiles}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stamp, path, err := baselineTarget(p)
+	if err != nil {
+		t.Fatalf("a pre-existing dotfiles plan must still work: %v", err)
+	}
+	if stamp != "~/.local/state/dotfiles/install-stamp" {
+		t.Fatalf("legacy stamp = %q", stamp)
+	}
+	if path != "~/git/dotfiles" {
+		t.Fatalf("legacy path = %q", path)
+	}
+	// The compatibility shim is for the historical repo NAME only — any other
+	// repo still has to declare its stamp.
+	other, err := updplan.Parse([]byte("version: 1\nupdate:\n  repos:\n    playground: {path: ~/x}\n  steps:\n    - {id: s, kind: sync, repo: playground}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := baselineTarget(other); err == nil {
+		t.Fatal("a non-dotfiles repo with no stamp was accepted")
 	}
 }
