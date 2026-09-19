@@ -885,6 +885,15 @@ else gff_skip_msg install.sdk.wol; fi
 
 # build and install fleet
 if gff_on install.sdk.fleet; then
+  # The tracked team plan must not be group/world-writable — fleet treats a
+  # plan file as executable config and refuses one that is. git does not store
+  # that bit, so a clone made under umask 002 (Ubuntu's default) has it as 664
+  # and every `fleet` run then warns "skipping discovered plan … chmod g-w".
+  # Normalising it here, on every host on every update, is the one place that
+  # reaches all clones; the README used to ask each person to do it by hand.
+  if [ -f "${BASE_DIR}/opt/etc/fleet/fleet.yaml" ]; then
+    chmod go-w "${BASE_DIR}/opt/etc/fleet/fleet.yaml" 2>/dev/null || true
+  fi
   if [ -f "${BASE_DIR}/sdk/fleet/build.sh" ]; then
     echo "Installing fleet (dotfiles install-status checker)..."
     bash "${BASE_DIR}/sdk/fleet/build.sh"

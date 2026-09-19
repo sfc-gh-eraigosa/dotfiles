@@ -177,7 +177,14 @@ update_claude_plugin() {
         sleep "$PLUGIN_UPDATE_LOCK_DELAY"
     done
     if [ "$lock" -eq 1 ]; then
-        echo "sync-plugins: WARNING — 'claude plugin update $plugin' still hit a git index.lock after $attempt attempt(s) (rc=$rc); this can be a real bug in claude's own checkout step, not just a slow-clearing lock (dotfiles#343) — continuing." >&2
+        # The lock is the symptom, not the cause: git 2.34.1 (Ubuntu 22.04's
+        # frozen release) SEGFAULTS on claude's --filter=tree:0 sparse-cone
+        # checkout, and a crashed git cannot remove its index.lock, so the
+        # next checkout dies on "File exists". Proven on the Jetson with a
+        # git exit-status shim; git 2.55 ran the same updates cleanly. A retry
+        # can never fix it — every attempt is a fresh clone that crashes the
+        # same way. Say which git this host runs, and what fixes it.
+        echo "sync-plugins: WARNING — 'claude plugin update $plugin' still hit a git index.lock after $attempt attempt(s) (rc=$rc); on this host git is $(git --version 2>/dev/null | awk '{print $3}' || echo unknown). git 2.34.x crashes on claude's partial-clone checkout and leaves the lock behind (dotfiles#343); dotfiles installs a current git from the git-core PPA on Ubuntu (setup_git_apt_repo.sh) — re-run install.sh, then this update — continuing." >&2
     else
         echo "sync-plugins: WARNING — 'claude plugin update $plugin' failed (rc=$rc); continuing." >&2
     fi
