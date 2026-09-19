@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -95,6 +96,18 @@ func routeAnswers(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// session starts where this one left off. A failed write is not worth
 		// interrupting a wave for — it costs a retype next time, nothing more.
 		_ = saveAnswers(m.ansPath, m.ans)
+
+		// Prove the credential against ONE host before the wave rather than
+		// letting every host discover the typo for itself. An empty password
+		// is a deliberate answer ("skip privileged steps"), not something to
+		// check, and a credential already proven this session is not re-asked.
+		if m.ans.needsSudo() && !m.sudoChecked {
+			if targets := m.updateTargets(); len(targets) > 0 {
+				m.sudoChecking = true
+				m.status = fmt.Sprintf("checking the sudo password on %s…", targets[0])
+				return m, checkSudo(m.run, targets[0], m.ans.secret())
+			}
+		}
 		m.mode = modeConfirm
 		return m, nil
 	}
@@ -103,8 +116,10 @@ func routeAnswers(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case fieldSudo:
 		if k.String() == "backspace" {
 			m.ans.trimSecret()
+			m.sudoChecked = false
 		} else if r := k.Runes; len(r) > 0 {
 			m.ans.appendSecret(string(r))
+			m.sudoChecked = false
 		}
 	case fieldWindows:
 		// Fixed choices, not free text: these map onto install.sh's own y/n/s.

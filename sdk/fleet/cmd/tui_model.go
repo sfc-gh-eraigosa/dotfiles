@@ -236,8 +236,13 @@ type tuiModel struct {
 	base       Baseliner
 	now        time.Time
 	spinner    string // frame injected; tests keep it fixed for stable goldens
-	status     string
-	quitReq    bool
+	// sudoChecked records that the typed credential has been proven against a
+	// host, so committing the form twice does not re-ask. Cleared whenever
+	// the secret changes.
+	sudoChecked  bool
+	sudoChecking bool
+	status       string
+	quitReq      bool
 }
 
 func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time.Time, ref string, jobs int, plan updplan.Plan) tuiModel {
@@ -1360,6 +1365,8 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m tuiModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case sudoCheckMsg:
+		return m.applySudoCheck(msg)
 	case tea.WindowSizeMsg:
 		m.vp.height, m.vp.width = msg.Height, msg.Width
 		m.clampViewport()

@@ -277,6 +277,16 @@ per **session**, not once per wave:
 | force reset `[y/n]` | hard-resets each host onto the fetched commit instead of fast-forwarding — for a host whose branch has diverged. **Destructive**, so the host's entire current state (local commits *and* uncommitted files) is committed to a `fleet-reset/<ts>` branch first. The confirm gate calls it out in red. |
 | gemini leftovers `[y/k/n]` | `GEMINI_TEARDOWN_ANSWER` — `yes` clean up, `keep` never ask again, `skip` this run only |
 
+**The password is checked before the wave, not by it.** Committing the form asks ONE
+target host whether the credential actually authenticates (the same `sudo -S -v` the
+run will use, secret on stdin). A rejected password puts the cursor back on the field,
+cleared, and says which host refused it — one retype instead of a fleet-wide failure,
+which is what a single mistyped character used to cost. A host that cannot answer at
+all (unreachable, no marker in the reply) is **not** a verdict on the password: the run
+continues and says the check was skipped. An empty password is a deliberate answer
+("skip privileged steps") and is never checked. The benign cases — already root, no
+sudo installed, a credential that needs no password — all pass.
+
 The credential is primed and used in the **same ssh session** as install.sh
 (sudo's default `timestamp_type=tty` has no tty to key on over ssh, so it
 falls back to the PPID of whatever process ran `sudo` — priming in a separate

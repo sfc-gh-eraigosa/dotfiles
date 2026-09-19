@@ -141,11 +141,20 @@ func (a answers) forceReset() bool { return a.reset == "y" }
 // appendSecret / trimSecret keep the secret's mutation in one place so the
 // rest of the model never handles it directly.
 func (a *answers) appendSecret(s string) { a.sudoSecret += s }
+
+// clearSecret forgets the credential entirely — used when a host rejects it,
+// so the retype starts from empty rather than editing a wrong value.
+func (a *answers) clearSecret() { a.sudoSecret = "" }
+
 func (a *answers) trimSecret() {
 	if n := len(a.sudoSecret); n > 0 {
 		a.sudoSecret = a.sudoSecret[:n-1]
 	}
 }
+
+// secret hands the credential to the one caller that must send it. Kept
+// beside the other accessors so every use of the raw value is visible here.
+func (a answers) secret() string { return a.sudoSecret }
 
 // secretLen is what the view is allowed to know — enough to draw a mask.
 func (a answers) secretLen() int { return len(a.sudoSecret) }
