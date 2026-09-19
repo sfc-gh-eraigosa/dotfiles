@@ -542,3 +542,70 @@ update:
 		t.Errorf("qualified flag leaked onto other steps: s1=%q s3=%q", got["s1"], got["s3"])
 	}
 }
+
+// --- a discovered flag value must not pin the host to its own default (#357)
+func TestADiscoveredFlagValueIsOnlySetWhenItWouldChangeSomething(t *testing.T) {
+	// `default_from: gff get <flag>` means "the host's current state is the
+	// default". Blindly `gff set`ting that back writes the RESOLVED value into
+	// the host's override file, so a later boolDefault change in the repo
+	// never reaches any host that has run the plan — and gff becomes a hard
+	// requirement even when nothing is being changed.
+	p, err := updplan.Parse([]byte(`
+version: 1
+update:
+  inputs:
+    - id: ollama
+      type: bool
+      flag: converge.ollama.enabled
+      default_from: gff get converge.ollama.enabled
+  repos:
+    r: {path: ~/r}
+  steps:
+    - {id: s, kind: run, repo: r, run: ./x.sh}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, _ := p.Step("s")
+
+	// Nothing supplied: the answer is whatever the host already resolves, so
+	// the set happens ONLY if it would change that — never as a blind write.
+	pre, err := inputPreamble(p, st, "h1", inputValues{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(pre, "gff get 'converge.ollama.enabled'") || !strings.Contains(pre, "|| gff set 'converge.ollama.enabled'") {
+		t.Errorf("a discovered flag value must compare before it sets:\n%s", pre)
+	}
+	// ...and the plain `gff set` form must not be there on its own.
+	if strings.Contains(pre, "&& gff set 'converge.ollama.enabled'") {
+		t.Errorf("a discovered flag value was set unconditionally:\n%s", pre)
+	}
+
+	// Supplied by the operator: that IS a request to pin it — set outright.
+	pre, err = inputPreamble(p, st, "h1", inputValues{run: map[string]string{"ollama": "true"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(pre, "&& gff set 'converge.ollama.enabled' 'true'") {
+		t.Errorf("a supplied flag value must be set outright:\n%s", pre)
+	}
+	if strings.Contains(pre, "gff get") {
+		t.Errorf("a supplied flag value must not run discovery:\n%s", pre)
+	}
+
+	// The generated shell must still parse.
+	cmd := exec.Command("sh", "-n")
+	cmd.Stdin = strings.NewReader(pre + "true\n")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("not valid shell: %v\n%s", err, out)
+	}
+
+	// And --list-inputs says so, so an operator knows nothing changes unless
+	// they --input it.
+	var b strings.Builder
+	listInputs(&b, p)
+	if !strings.Contains(b.String(), "unchanged unless") {
+		t.Errorf("--list-inputs does not say a discovered flag leaves the host unchanged:\n%s", b.String())
+	}
+}

@@ -521,7 +521,7 @@ Three ways a value is delivered, each picked for what it protects:
 | Kind | Delivery |
 |---|---|
 | plain | `export <ENV>=<value>;` in the step's preamble — the `export` form, never `VAR=x cmd`, which scopes to the `cd` and never reaches the script |
-| `flag:` | `( cd <repo> && gff set <key> <value> )` before the step, so answering a question turns the feature on **in that host's gff state**. A failure here exits `94`, distinct from a script failure: a switch that silently stayed off is the whole problem this removes |
+| `flag:` | `( cd <repo> && gff set <key> <value> )` before the step, so answering a question turns the feature on **in that host's gff state**. A failure here exits `94`, distinct from a script failure: a switch that silently stayed off is the whole problem this removes. A value the host *discovered* (`default_from:`) is set **only if it differs from what gff already resolves** — the common `default_from: gff get <flag>` pattern therefore changes nothing and writes nothing, so a later `boolDefault` change in the repo still reaches the host; only a value you `--input` is pinned outright |
 | `secret:` / `type: password` | written to the step's **stdin** and read into the environment there (`IFS= read -r ...; export ...`). It never appears in the remote command line, which is world-readable through `/proc` on the host |
 
 **A host that can answer for itself is never asked.** `default_from:` is a command
