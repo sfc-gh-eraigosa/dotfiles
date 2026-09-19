@@ -51,6 +51,7 @@ var (
 	flagUpdateFile      string
 	flagUpdateDryRun    bool
 	flagUpdateInputs    []string
+	flagUpdateListIn    bool
 )
 
 // buildExecutor assembles the Executor a live (non-dry-run) update runs
@@ -123,6 +124,12 @@ func runUpdateWith(out io.Writer, hosts []string, r runner.Runner, capture updex
 		if plan, err = plan.WithRefs(flagUpdateRefs); err != nil {
 			return err
 		}
+	}
+
+	// Answer "what do I have to supply, and why" without reading the plan.
+	if flagUpdateListIn {
+		listInputs(out, plan)
+		return nil
 	}
 
 	// The plan may declare values it cannot run without. Resolve them before
@@ -200,6 +207,7 @@ func init() {
 	updateCmd.Flags().StringArrayVar(&flagUpdateRefs, "ref", nil, "git ref (branch or tag) to target: B or repo=B; repeatable; default = the plan's own branches")
 	updateCmd.Flags().StringVar(&flagUpdateFile, "file", "", "explicit fleet.yaml plan path (skips gff resolution)")
 	updateCmd.Flags().BoolVar(&flagUpdateDryRun, "dry-run", false, "print every effective script and send nothing")
+	updateCmd.Flags().BoolVar(&flagUpdateListIn, "list-inputs", false, "describe every value this plan needs, then exit")
 	updateCmd.Flags().StringArrayVar(&flagUpdateInputs, "input", nil, "value for a plan-declared input: <id>=<value>, <id>=@<file>, <id>=env:<NAME>, or <host>:<id>=… for a per-host one; repeatable")
 	rootCmd.AddCommand(updateCmd)
 }

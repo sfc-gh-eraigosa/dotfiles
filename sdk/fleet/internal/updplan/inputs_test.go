@@ -145,3 +145,63 @@ func ids(in []Input) string {
 	}
 	return strings.Join(b, ",")
 }
+
+// --- friendliness: describe it, find it, check it -------------------------
+
+func TestInputDescriptionAndDiscovery(t *testing.T) {
+	p, err := Parse([]byte(`
+version: 1
+update:
+  inputs:
+    - id: node
+      prompt: "which k3s node is this host?"
+      description: |
+        The name this machine is registered as in k3s/cluster.yaml. Registry
+        entries target it through placement.node, so it must match exactly.
+      scope: host
+      env: CONVERGE_NODE
+      default_from: make -s -C ~/pg k3s-node
+      validate: '^[a-z][a-z0-9]*$'
+  repos:
+    pg: {path: ~/pg}
+  steps:
+    - {id: s, kind: run, repo: pg, run: ./install.sh}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := p.Inputs[0]
+	if !strings.Contains(in.Description, "placement.node") {
+		t.Errorf("description = %q", in.Description)
+	}
+	if in.DefaultFrom != "make -s -C ~/pg k3s-node" {
+		t.Errorf("default_from = %q", in.DefaultFrom)
+	}
+	if in.Validate == nil || !in.Validate.MatchString("jetson1") || in.Validate.MatchString("Jetson-1") {
+		t.Errorf("validate regexp did not compile as expected: %v", in.Validate)
+	}
+	// An input that can find its own value is not something the operator has
+	// to be asked for.
+	if !in.HasSource() {
+		t.Error("an input with default_from must report that it has a source")
+	}
+}
+
+func TestInputValidationOfTheNewFields(t *testing.T) {
+	cases := []struct{ name, yaml, want string }{
+		{"bad regexp", "\n    - {id: a, validate: \"([\"}\n", "validate"},
+		{"default fails its own validate", "\n    - {id: a, default: \"ZZZ\", validate: \"^[a-z]+$\"}\n", "default"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := Parse([]byte("version: 1\nupdate:\n  inputs:" + c.yaml +
+				"  repos:\n    r: {path: ~/r}\n  steps:\n    - {id: s, kind: run, repo: r, run: ./x}\n"))
+			if err == nil {
+				t.Fatalf("accepted %s", c.name)
+			}
+			if !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("error %q does not mention %q", err, c.want)
+			}
+		})
+	}
+}

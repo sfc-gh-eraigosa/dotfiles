@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -204,5 +205,174 @@ func TestDryRunShowsTheInputPreambleWithoutTheSecret(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("--dry-run does not show %q:\n%s", want, out)
 		}
+	}
+}
+
+// --- pre-fill from the host, and post-fill checks --------------------------
+
+func discoveryPlan(t *testing.T) updplan.Plan {
+	t.Helper()
+	p, err := updplan.Parse([]byte(`
+version: 1
+update:
+  inputs:
+    - id: node
+      prompt: "which k3s node is this host?"
+      description: "The name this machine is registered as in k3s/cluster.yaml."
+      scope: host
+      env: CONVERGE_NODE
+      default_from: make -s -C ~/pg k3s-node
+      validate: '^[a-z][a-z0-9]*$'
+    - id: joinkey
+      type: password
+      env: K3S_TOKEN
+      default_from: sudo -n cat /var/lib/rancher/k3s/server/node-token
+    - id: lane
+      default: fast
+  repos:
+    pg: {path: ~/pg}
+  steps:
+    - {id: s, kind: run, repo: pg, run: ./install.sh}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestAnInputThatTheHostCanAnswerIsNotAskedFor(t *testing.T) {
+	p := discoveryPlan(t)
+	if missing := missingInputs(p, []string{"h1"}, inputValues{}); len(missing) != 0 {
+		t.Fatalf("an operator was asked for values the host can find: %v", missing)
+	}
+}
+
+func TestDiscoveredValuesAreComputedOnTheHost(t *testing.T) {
+	p := discoveryPlan(t)
+	st, _ := p.Step("s")
+	pre, err := inputPreamble(p, st, "h1", inputValues{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The command runs in the remote shell and its output becomes the value.
+	if !strings.Contains(pre, "make -s -C ~/pg k3s-node") {
+		t.Errorf("preamble does not run the discovery command: %q", pre)
+	}
+	if !strings.Contains(pre, "export CONVERGE_NODE") {
+		t.Errorf("preamble does not export the discovered value: %q", pre)
+	}
+	// Discovery that finds nothing must FAIL the step, not export an empty
+	// string and let the script converge the wrong thing.
+	if !strings.Contains(pre, "exit 95") {
+		t.Errorf("preamble does not fail when discovery comes up empty: %q", pre)
+	}
+	// The post-fill check: a discovered value is held to the same rule.
+	if !strings.Contains(pre, "grep -qE") {
+		t.Errorf("a discovered value is not validated on the host: %q", pre)
+	}
+
+	// A confidential value discovered on the host never travels at all —
+	// nothing on stdin, nothing in the command but the lookup itself.
+	if !strings.Contains(pre, "node-token") {
+		t.Errorf("the confidential lookup is not in the preamble: %q", pre)
+	}
+	if got := inputStdin(p, st, "h1", inputValues{}); got != "" {
+		t.Errorf("a host-discovered confidential value still travelled: %q", got)
+	}
+
+	// A static default needs no command at all.
+	if !strings.Contains(pre, "export LANE='fast'") {
+		t.Errorf("static default not applied: %q", pre)
+	}
+}
+
+func TestAnOperatorValueBeatsDiscovery(t *testing.T) {
+	p := discoveryPlan(t)
+	st, _ := p.Step("s")
+	vals := inputValues{host: map[string]map[string]string{"h1": {"node": "spark1"}}}
+	pre, err := inputPreamble(p, st, "h1", vals)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(pre, "export CONVERGE_NODE='spark1'") {
+		t.Errorf("the supplied value was not used: %q", pre)
+	}
+	if strings.Contains(pre, "k3s-node") {
+		t.Errorf("discovery still ran even though a value was supplied: %q", pre)
+	}
+}
+
+func TestSuppliedValuesAreCheckedBeforeTheFleetIsTouched(t *testing.T) {
+	p := discoveryPlan(t)
+	_, err := parseInputFlags(p, []string{"h1:node=NOT-A-NODE"})
+	if err == nil {
+		t.Fatal("a value that fails its own validate rule was accepted")
+	}
+	if !strings.Contains(err.Error(), "validate") && !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("error %q does not explain the rule", err)
+	}
+	// ...and a good one still passes.
+	if _, err := parseInputFlags(p, []string{"h1:node=jetson1"}); err != nil {
+		t.Fatalf("a valid value was rejected: %v", err)
+	}
+}
+
+func TestListInputsExplainsEachValue(t *testing.T) {
+	p := discoveryPlan(t)
+	var b strings.Builder
+	listInputs(&b, p)
+	out := b.String()
+	for _, want := range []string{
+		"node", "which k3s node is this host?",
+		"registered as in k3s/cluster.yaml", // the description
+		"per host", "found on the host",     // scope and where it comes from
+		"joinkey", "confidential",
+		"lane", "fast",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("--list-inputs output does not mention %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestGeneratedShellSurvivesAwkwardText(t *testing.T) {
+	// Every message fleet builds ends up inside the remote command, so any
+	// plan text that reaches one has to be quoted as a WHOLE unit. Embedding
+	// an already-quoted fragment inside a quoted echo pushes it back OUT of
+	// the quotes, where the shell expands it — a regexp full of $ and * is
+	// the worst possible thing to hand an unsuspecting shell.
+	p, err := updplan.Parse([]byte(`
+version: 1
+update:
+  inputs:
+    - id: awkward
+      env: AWKWARD
+      default_from: "printf '%s' \"it's-here\""
+      validate: "^it's-[a-z]+$"
+    - id: flagged
+      type: bool
+      flag: "a.b.c"
+  repos:
+    r: {path: ~/r}
+  steps:
+    - {id: s, kind: run, repo: r, run: ./x.sh}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, _ := p.Step("s")
+	vals := inputValues{run: map[string]string{"flagged": "true"}}
+	pre, err := inputPreamble(p, st, "h1", vals)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// sh -n parses without running: the one check that actually proves the
+	// generated text is valid shell rather than merely looking like it.
+	cmd := exec.Command("sh", "-n")
+	cmd.Stdin = strings.NewReader(pre + "true\n")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generated preamble is not valid shell: %v\n%s\n--- preamble ---\n%s", err, out, pre)
 	}
 }

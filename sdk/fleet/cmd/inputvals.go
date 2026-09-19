@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -14,6 +15,12 @@ import (
 // script failed" — enabling a feature that silently stayed off is the exact
 // failure this whole mechanism exists to remove.
 const rcInputFlag = 94
+
+// rcInputDiscover is the exit a step reports when an input the host was
+// supposed to answer for itself came up empty, or failed its own rule.
+// Distinct from a script failure: converging with a blank node name or a
+// half-read token is worse than not converging at all.
+const rcInputDiscover = 95
 
 // inputValues is what the operator answered: run-scope values once, and
 // host-scope values per host alias.
@@ -50,8 +57,23 @@ func inputPreamble(p updplan.Plan, st updplan.Step, host string, vals inputValue
 	var b strings.Builder
 	for _, in := range ins {
 		val, ok := vals.lookup(host, in)
+
+		// Nothing supplied, but the plan says how to find it: let the host
+		// answer. For a confidential value this is the best case — it is
+		// computed in the remote shell and never travels.
+		if !ok && in.DefaultFrom != "" {
+			b.WriteString(discoverShell(in))
+			continue
+		}
+		if !ok && in.Default != "" {
+			fmt.Fprintf(&b, "export %s=%s; ", in.Env, shQuote(in.Default))
+			continue
+		}
 		if !ok {
-			continue // missingInputs reports these before a run starts
+			// Nothing supplied and nothing to fall back on. missingInputs
+			// has already refused the run; a dry-run of an unanswered plan
+			// simply shows the step without it.
+			continue
 		}
 
 		switch {
@@ -75,14 +97,56 @@ func inputPreamble(p updplan.Plan, st updplan.Step, host string, vals inputValue
 			// '~/pg'` looks for a directory literally named "~". Safe because
 			// updplan's ValidPath already restricts a repo path to
 			// [A-Za-z0-9._/-] plus a leading ~, with no "..".
-			fmt.Fprintf(&b, "( cd %s && gff set %s %s ) || { echo 'fleet: gff set %s failed (is gff installed, and is the flag declared in that repo?)' >&2; exit %d; }; ",
-				repo.Path, shQuote(in.Flag), shQuote(val), in.Flag, rcInputFlag)
+			fmt.Fprintf(&b, "( cd %s && gff set %s %s ) || { echo %s >&2; exit %d; }; ",
+				repo.Path, shQuote(in.Flag), shQuote(val),
+				shQuote(fmt.Sprintf("fleet: gff set %s failed (is gff installed, and is the flag declared in that repo?)", in.Flag)),
+				rcInputFlag)
 
 		default:
 			fmt.Fprintf(&b, "export %s=%s; ", in.Env, shQuote(val))
 		}
 	}
 	return b.String(), nil
+}
+
+// discoverShell builds the remote lookup for an input the host answers for
+// itself: run the command, refuse an empty result, check it against the
+// input's own rule, then export it.
+//
+// The value is assigned and exported in the remote shell, never interpolated
+// into the command text, so a confidential one is not exposed by the host's
+// own /proc — which is the whole reason to prefer discovery over sending it.
+func discoverShell(in updplan.Input) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s=\"$(%s 2>/dev/null || true)\"; ", in.Env, in.DefaultFrom)
+	// Every message is quoted as ONE unit. Interpolating an already-quoted
+	// fragment into a quoted echo pushes it back OUT of the quotes, where the
+	// shell expands it — and the text most likely to land here is a regexp,
+	// full of $ and * and (. `sh -n` rejected exactly that; see
+	// TestGeneratedShellSurvivesAwkwardText.
+	fmt.Fprintf(&b, "[ -n \"$%s\" ] || { echo %s >&2; exit %d; }; ",
+		in.Env,
+		shQuote(fmt.Sprintf("fleet: input %s: this host found nothing (%s) and no --input was given", in.ID, describeSource(in))),
+		rcInputDiscover)
+	if in.Validate != nil {
+		// grep, not a shell case: the rule is a regexp, and a glob would
+		// quietly accept values the plan's own validate would reject.
+		fmt.Fprintf(&b, "printf '%%s' \"$%s\" | grep -qE %s || { echo %s >&2; exit %d; }; ",
+			in.Env, shQuote(in.Validate.String()),
+			shQuote(fmt.Sprintf("fleet: input %s: what this host found does not match %s", in.ID, in.Validate.String())),
+			rcInputDiscover)
+	}
+	fmt.Fprintf(&b, "export %s; ", in.Env)
+	return b.String()
+}
+
+// describeSource names where a value comes from, for a message an operator
+// reads when it did not arrive.
+func describeSource(in updplan.Input) string {
+	if in.DefaultFrom != "" {
+		return "tried: " + in.DefaultFrom
+	}
+	return "no discovery declared"
 }
 
 // inputStdin is the payload the preamble's `read -r` calls consume: one
@@ -97,6 +161,8 @@ func inputStdin(p updplan.Plan, st updplan.Step, host string, vals inputValues) 
 			continue
 		}
 		if val, ok := vals.lookup(host, in); ok {
+			// (a host-discovered value never gets here: lookup misses and the
+			// preamble computes it remotely instead)
 			b.WriteString(val)
 			b.WriteString("\n")
 		}
@@ -138,6 +204,17 @@ func parseInputFlags(p updplan.Plan, raw []string) (inputValues, error) {
 		val, err := resolveInputSpec(in, spec)
 		if err != nil {
 			return vals, fmt.Errorf("--input %q: %w", item, err)
+		}
+		// Checked here, before a single host is contacted: a typo that only
+		// surfaces on the third host has already half-converged a fleet.
+		if in.Validate != nil && !in.Validate.MatchString(val) {
+			if in.Secret {
+				return vals, fmt.Errorf("--input %q: the value does not match validate %q", item, in.Validate.String())
+			}
+			return vals, fmt.Errorf("--input %q: %q does not match validate %q", item, val, in.Validate.String())
+		}
+		if len(in.Options) > 0 && !containsStr(in.Options, val) {
+			return vals, fmt.Errorf("--input %q: %q is not one of %v", item, val, in.Options)
 		}
 
 		if in.Scope == updplan.ScopeHost {
@@ -215,6 +292,11 @@ func validateInputDelivery(p updplan.Plan) error {
 func missingInputs(p updplan.Plan, hosts []string, vals inputValues) []string {
 	var out []string
 	for _, in := range p.Inputs {
+		// An input the plan can answer on its own — a static default, or a
+		// lookup the host performs — is not something to ask an operator for.
+		if in.HasSource() {
+			continue
+		}
 		if in.Scope == updplan.ScopeRun {
 			if _, ok := vals.run[in.ID]; !ok {
 				out = append(out, in.ID)
@@ -229,4 +311,69 @@ func missingInputs(p updplan.Plan, hosts []string, vals inputValues) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func containsStr(hay []string, needle string) bool {
+	for _, h := range hay {
+		if h == needle {
+			return true
+		}
+	}
+	return false
+}
+
+// listInputs explains every value the plan needs: what it is for, whether it
+// is asked once or per host, and where it comes from if the operator says
+// nothing. Answers "what do I have to supply, and why" without reading the
+// plan file.
+func listInputs(w io.Writer, p updplan.Plan) {
+	if !p.HasInputs() {
+		fmt.Fprintf(w, "plan %s declares no inputs.\n", p.Source)
+		return
+	}
+	fmt.Fprintf(w, "inputs declared by %s:\n\n", p.Source)
+	for _, in := range p.Inputs {
+		fmt.Fprintf(w, "  %s", in.ID)
+		if in.Prompt != "" {
+			fmt.Fprintf(w, " — %s", in.Prompt)
+		}
+		fmt.Fprintln(w)
+
+		scope := "once per run"
+		if in.Scope == updplan.ScopeHost {
+			scope = "once per host"
+		}
+		kind := string(in.Type)
+		if in.Secret {
+			kind = "confidential"
+		}
+		fmt.Fprintf(w, "      %s, %s", kind, scope)
+		if in.Flag != "" {
+			fmt.Fprintf(w, ", sets gff flag %s", in.Flag)
+		} else {
+			fmt.Fprintf(w, ", arrives as $%s", in.Env)
+		}
+		fmt.Fprintln(w)
+
+		switch {
+		case in.DefaultFrom != "":
+			fmt.Fprintf(w, "      default: found on the host (%s)\n", in.DefaultFrom)
+		case in.Default != "":
+			fmt.Fprintf(w, "      default: %s\n", in.Default)
+		default:
+			fmt.Fprintf(w, "      required: no default, supply it with --input\n")
+		}
+		if len(in.Options) > 0 {
+			fmt.Fprintf(w, "      one of: %s\n", strings.Join(in.Options, ", "))
+		}
+		if in.Validate != nil {
+			fmt.Fprintf(w, "      must match: %s\n", in.Validate.String())
+		}
+		for _, line := range strings.Split(strings.TrimSpace(in.Description), "\n") {
+			if line = strings.TrimSpace(line); line != "" {
+				fmt.Fprintf(w, "      %s\n", line)
+			}
+		}
+		fmt.Fprintln(w)
+	}
 }

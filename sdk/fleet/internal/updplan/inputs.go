@@ -20,7 +20,11 @@ import (
 type Input struct {
 	ID     string
 	Prompt string
-	Type   InputType
+	// Description is the longer explanation: what the value is for, where to
+	// find it, what happens if it is wrong. A prompt has to be one line; this
+	// does not.
+	Description string
+	Type        InputType
 	// Secret values never touch argv or a file: they are written to the
 	// remote shell's stdin and read into the environment there. Implied by
 	// type: password.
@@ -35,6 +39,18 @@ type Input struct {
 	Flag    string
 	Options []string
 	Default string
+	// DefaultFrom is a command run ON THE HOST to find the value when the
+	// operator supplied none — the k3s join token already on disk, the node
+	// name this machine is registered as. A host that can answer for itself
+	// should never be asked.
+	//
+	// For a confidential input this is the better path, not just the friendlier
+	// one: the value is computed in the remote shell and never travels at all.
+	DefaultFrom string
+	// Validate is an anchor-free regexp the value must match. Checked locally
+	// for an operator-supplied value, so a typo fails before the fleet is
+	// touched rather than on the third host.
+	Validate *regexp.Regexp
 	// NeededBy limits the input to named steps. Empty means every run step —
 	// a sync step runs git, not the plan's script, and has no use for it.
 	NeededBy []string
@@ -83,6 +99,10 @@ func (p Plan) InputsFor(st Step) []Input {
 	}
 	return out
 }
+
+// HasSource reports whether the input can produce a value without asking:
+// a static default, or a command the host can answer with.
+func (in Input) HasSource() bool { return in.Default != "" || in.DefaultFrom != "" }
 
 // HasInputs reports whether the plan declares any input at all, so callers
 // can skip the whole collection path on the overwhelmingly common plan that
@@ -149,6 +169,23 @@ func parseInputs(in []wireInput, stepIDs map[string]bool) ([]Input, error) {
 			}
 		} else if len(w.Options) > 0 {
 			errs.addf(scope, "options: only a choice input has options")
+		}
+
+		v.Description = strings.TrimSpace(w.Description)
+		v.DefaultFrom = strings.TrimSpace(w.DefaultFrom)
+
+		if w.Validate != "" {
+			re, err := regexp.Compile(w.Validate)
+			if err != nil {
+				errs.addf(scope, "validate: %v", err)
+			} else {
+				v.Validate = re
+				// A default that its own rule rejects is a plan bug that would
+				// otherwise only surface on the host that fell back to it.
+				if v.Default != "" && !re.MatchString(v.Default) {
+					errs.addf(scope, "default: %q does not match validate %q", v.Default, w.Validate)
+				}
+			}
 		}
 
 		v.Env = strings.TrimSpace(w.Env)

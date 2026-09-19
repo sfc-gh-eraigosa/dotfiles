@@ -339,16 +339,19 @@ type wireRepo struct {
 }
 
 type wireInput struct {
-	ID       string   `yaml:"id"`
-	Prompt   string   `yaml:"prompt"`
-	Type     string   `yaml:"type"`
-	Secret   bool     `yaml:"secret"`
-	Scope    string   `yaml:"scope"`
-	Env      string   `yaml:"env"`
-	Flag     string   `yaml:"flag"`
-	Options  []string `yaml:"options"`
-	Default  string   `yaml:"default"`
-	NeededBy []string `yaml:"needed_by"`
+	ID          string   `yaml:"id"`
+	Prompt      string   `yaml:"prompt"`
+	Type        string   `yaml:"type"`
+	Secret      bool     `yaml:"secret"`
+	Scope       string   `yaml:"scope"`
+	Env         string   `yaml:"env"`
+	Flag        string   `yaml:"flag"`
+	Options     []string `yaml:"options"`
+	Default     string   `yaml:"default"`
+	DefaultFrom string   `yaml:"default_from"`
+	Validate    string   `yaml:"validate"`
+	Description string   `yaml:"description"`
+	NeededBy    []string `yaml:"needed_by"`
 }
 
 type wireExpect struct {
