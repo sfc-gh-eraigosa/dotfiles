@@ -1,0 +1,52 @@
+name: Deploy to Railway
+
+# Reusable Railway deploy workflow.
+# Triggered on push to main when files under the service subdirectory change.
+# Requires two repository secrets:
+#   RAILWAY_TOKEN      — Railway API token (Account Settings → Tokens)
+#   RAILWAY_SERVICE_ID — Service ID from Railway dashboard → Service → Settings
+
+# Pin-to-SHA convention (mirrors docker-image.yml):
+# Every third-party action is pinned to a full 40-char commit SHA with a
+# trailing `# vX.Y.Z` comment. Dependabot bumps both together on new releases.
+#
+# To refresh a pin by hand:
+#   tag=$(gh api repos/<owner>/<repo>/releases/latest --jq .tag_name)
+#   sha=$(gh api repos/<owner>/<repo>/git/ref/tags/$tag --jq .object.sha)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "playweb/**"
+      - ".github/workflows/deploy-railway.yml"
+  # Allow manual re-deploys from the Actions tab
+  workflow_dispatch:
+
+# Cancel any in-flight deploy for the same ref so only the latest commit lands.
+concurrency:
+  group: deploy-railway-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Railway deploy (playweb)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install Railway CLI
+        # Install the official Railway CLI via npm.
+        # Pinned to a specific version for reproducibility.
+        run: npm install -g @railway/cli@3.17.2
+
+      - name: Deploy to Railway
+        working-directory: playweb
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway up \
+            --service "${{ secrets.RAILWAY_SERVICE_ID }}" \
+            --detach
