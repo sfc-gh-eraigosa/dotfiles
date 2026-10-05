@@ -68,6 +68,7 @@ gsl preview                         # Interactive TUI: toggle segments, cycle st
 gsl preview --once                  # Print one rendered frame and exit (CI / golden-file safe)
 gsl version                         # Show version, commit, dirty flag, build date, description, binary path
 gsl version --json                  # Same, as JSON
+gsl usage [--host claude|antigravity] [--json]  # Last 5h/7d usage the host reported (recorded by every render)
 ```
 
 `gsl render` is what both hosts call. `gsl status` is for humans at a shell prompt.

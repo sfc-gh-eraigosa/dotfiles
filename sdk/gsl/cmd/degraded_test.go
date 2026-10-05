@@ -109,6 +109,7 @@ func TestDegradedPaths(t *testing.T) {
 			// dir and a scratch config dir, and run from a non-repo cwd.
 			t.Setenv("XDG_CACHE_HOME", filepath.Join(home, "cache"))
 			t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+			t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
 			t.Chdir(t.TempDir())
 
 			if err := config.Save(config.DefaultPath(), config.Default()); err != nil {
