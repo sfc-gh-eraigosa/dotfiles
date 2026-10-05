@@ -3,9 +3,11 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/observe"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/usage"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -42,6 +44,8 @@ func runRender(cmd *cobra.Command, args []string) error {
 		p = payload.Payload{}
 	}
 
+	recordUsage(p)
+
 	// Determine cwd hint from payload.
 	cwdHint := ""
 	if p.Cwd != nil && *p.Cwd != "" {
@@ -49,6 +53,26 @@ func runRender(cmd *cobra.Command, args []string) error {
 	}
 
 	return runStatusLine(cmd, p, cwdHint)
+}
+
+// recordUsage saves the payload's rate limits for `gsl usage`. The host hands
+// them to gsl and nowhere else, so this is the only place they can be kept.
+// Best effort: a failure is logged and never costs the status line.
+func recordUsage(p payload.Payload) {
+	s, ok := usage.FromPayload(p, time.Now())
+	if !ok {
+		return
+	}
+	dir, err := usage.Dir()
+	if err == nil {
+		err = usage.Write(dir, s)
+	}
+	if err != nil {
+		observe.Default().WithFields(logrus.Fields{
+			"event": "usage.write_error",
+			"error": err.Error(),
+		}).Warn("could not record rate-limit usage")
+	}
 }
 
 // configToRawStyles converts config.Styles (map[string]any, raw JSON) to the
