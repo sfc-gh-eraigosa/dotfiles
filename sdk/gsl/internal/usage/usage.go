@@ -105,13 +105,15 @@ func Write(dir string, s Snapshot) error {
 	if err != nil {
 		return err
 	}
+	// On failure, the temp file is cleaned up best-effort; the write error is
+	// the one worth returning.
 	if _, err := tmp.Write(append(data, '\n')); err != nil {
-		tmp.Close()
-		os.Remove(tmp.Name())
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
 		return err
 	}
 	if err := tmp.Close(); err != nil {
-		os.Remove(tmp.Name())
+		_ = os.Remove(tmp.Name())
 		return err
 	}
 	return os.Rename(tmp.Name(), filepath.Join(dir, s.Host+".json"))
