@@ -59,9 +59,9 @@ What was verified on 2026-10-06 (herdr 0.9.3 locally):
   defaulting to every in-fleet host except the local one.
 - G3. A small herdr plugin, shipped from this repo, puts fleet one key away inside herdr: it
   opens `fleet tui` in a herdr popup, and offers a "sync fleet hosts as machines" action.
-- G4. Amend `fleet-connect` §4.6 so its herdr attach does not nest: inside herdr
-  (`HERDR_ENV=1`) the action is "save as machine", and only outside herdr is it
-  `herdr --remote`.
+- G4. Keep `fleet-connect` §4.6's herdr attach (`c`, `herdr --remote`) as designed, and give
+  "show this host in herdr" its own key, `R`, instead of overloading `c`. Two keys with two
+  meanings, each the same everywhere.
 
 **Non-goals**
 
@@ -116,7 +116,8 @@ Option A, in three units.
 
 ### 4.2 fleet (TUI key + CLI verb)
 
-- **TUI key `m`** ("machine"; free in today's keymap; `h`/`H` are taken). It acts on the
+- **TUI key `R`** ("remote herdr"; free in today's keymap: `r` is refresh, `h`/`H` are taken).
+  It acts on the
   selection, else the cursor host, by the same `updateTargets()` rule as update and wake.
   - Skips: the local host (`isLocalHost`, the `⌂` row), hosts with an update in flight, hosts
     already saved (by target).
@@ -126,7 +127,7 @@ Option A, in three units.
     wrong here: herdr refuses without a TTY.
   - Afterwards: inside herdr, the status line says `<alias> saved — prefix+w to switch to it`;
     outside herdr, `<alias> saved — open it with herdr --remote <alias>`.
-  - Added to `keyHelp` and to `pkg/provider.ReservedKeys` (`m` is not reserved today), which
+  - Added to `keyHelp` and to `pkg/provider.ReservedKeys` (`R` is not reserved today), which
     `TestEveryFleetKeyIsReservedAgainstProviders` enforces.
 - **CLI `fleet herdr sync [host...]`.** It defaults to every in-fleet host except the local one,
   serially. Saved hosts print `already saved`. A host whose `machine add` needs approval is not
@@ -144,9 +145,9 @@ Option A, in three units.
     still have a terminal.
 - Keys in `ai/herdr/plugins/fleet.toml`: `prefix+shift+h` → `open-fleet` (free in herdr 0.9.3
   defaults and in our managed config). No key for sync; it is reachable from fleet tui (`a`,
-  then `m`).
-- Install: a row in `ai/herdr/plugins.tsv` and the gff flag `install.herdr-plugin.fleet`, on by
-  default where `install.tools.fleet` is on. Because the plugin's source is this repo, the
+  then `R`).
+- Install: a row in `ai/herdr/plugins.tsv` and the gff flag `install.herdr-plugin.fleet`, **on by
+  default** (operator decision, 2026-10-06) wherever `install.tools.fleet` is on. Because the plugin's source is this repo, the
   installer **copies** it to `~/.config/herdr/plugins/local/fleet/` and runs `herdr plugin link`
   on the copy, which follows the repo rule "copy into well-known `$HOME` paths; no new symlinks
   into the checkout". The installer's existing "a `herdr plugin link`ed plugin is left alone"
@@ -155,13 +156,20 @@ Option A, in three units.
 
 ### 4.4 Amendment to `fleet-connect` §4.6 (applied in its own spec/plan when #292 is built)
 
-- The herdr provider keeps its one action key, `c`, but what it does depends on context:
-  - `HERDR_ENV=1`: "show in herdr", meaning save as machine (`herdrmach.AddArgv`). The label
-    says so. It can't be `m`: once fleet binds `m`, providers may not declare it.
-  - Otherwise: attach with `herdr --remote <alias> --session <name>`, as planned.
+- The herdr provider's `c` stays attach (`herdr --remote <alias> --session <name>`) in every
+  context, as planned. Inside herdr that nests, so the provider's row label points at `R`
+  (`c: attach · R: show in herdr`). `R` is a fleet key and works on any host row, including
+  from the drill-down. Providers can't declare it, so the meaning can't fork (operator decision,
+  2026-10-06: a separate key, not a context-dependent `c`).
 - Remote binary resolution order becomes `command -v herdr`, then `~/.local/bin/herdr`. That is
   herdr's own order, and after #370 both resolve to the managed binary. `~/opt/bin/herdr` stays a
   fallback for hosts not yet updated.
+
+### 4.5 Operator decisions (review of #372, 2026-10-06)
+
+1. "Show in herdr" gets its own key, `R`, rather than changing what `c` does inside herdr.
+2. The `fleet` herdr plugin is on by default.
+3. `prefix+w` is an acceptable way to switch to a saved machine until herdr offers an API for it.
 
 ## 5. Risks & blast radius
 
@@ -180,7 +188,7 @@ operator approves herdr's own prompt. No fleet inventory change, no ssh-config c
 ## 6. Rollback
 
 - `gff set install.herdr-plugin.fleet false`, then `herdr plugin unlink fleet`.
-- The `m` key and `fleet herdr sync` are additive; reverting the PR removes them.
+- The `R` key and `fleet herdr sync` are additive; reverting the PR removes them.
 - Saved machines persist in herdr. Remove one with `herdr machine remove <id>`. The remote
   server keeps running, which herdr documents.
 
@@ -188,7 +196,7 @@ operator approves herdr's own prompt. No fleet inventory change, no ssh-config c
 
 - **Unit:** `herdrmach` parser over **captured** `herdr machine list --json` (0.9.3) including
   an empty list and an unknown-field shape. `Saved` matches on target, not label. `AddArgv`
-  with a hostile alias stays one argv element. TUI tests: `m` skips local, in-flight and saved
+  with a hostile alias stays one argv element. TUI tests: `R` skips local, in-flight and saved
   hosts, issues one `ExecProcess` per remaining target in order, and sets the right status line
   for `HERDR_ENV` on/off.
 - **CLI transcripts:** `fleet herdr sync --dry-run`, `--json` over a fake runner, and the
@@ -196,7 +204,7 @@ operator approves herdr's own prompt. No fleet inventory change, no ssh-config c
 - **Live (operator):** `fleet herdr sync` on a host with no running server (`<nano>` is
   already saved, so it is the `already saved` case; a fresh host is the `saved` case), then a
   screenshot of the machine in the herdr sidebar. `prefix+shift+h` opens fleet tui in a popup,
-  and `m` on a host shows it in the sidebar.
+  and `R` on a host shows it in the sidebar.
 - **Install:** `install_herdr_test.sh` cases for the repo-owned plugin row (copied, linked,
   re-run is a no-op, a flag set to `false` installs nothing).
 
