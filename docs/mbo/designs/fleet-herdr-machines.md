@@ -6,7 +6,7 @@
 - **Relates to:** amends [`fleet-connect`](./fleet-connect.md) §4.6 (the herdr provider, leaf D,
   [#292](https://github.com/sfc-gh-eraigosa/dotfiles/issues/292), not yet built) · builds on
   [#370](https://github.com/sfc-gh-eraigosa/dotfiles/pull/370) (`~/.local/bin/herdr` link) ·
-  design issue [#371](https://github.com/sfc-gh-eraigosa/dotfiles/issues/371) · design PR: pending
+  design issue [#371](https://github.com/sfc-gh-eraigosa/dotfiles/issues/371) · design PR [#372](https://github.com/sfc-gh-eraigosa/dotfiles/pull/372)
 - **Author(s):** Edward Raigosa, Claude
 
 ## 1. Problem / context
