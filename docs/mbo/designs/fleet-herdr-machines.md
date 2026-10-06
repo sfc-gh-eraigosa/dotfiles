@@ -2,7 +2,7 @@
 
 - **Slug:** fleet-herdr-machines
 - **Date:** 2026-10-06
-- **Status:** Proposed
+- **Status:** Approved (operator review 2026-10-06, §4.5)
 - **Relates to:** amends [`fleet-connect`](./fleet-connect.md) §4.6 (the herdr provider, leaf D,
   [#292](https://github.com/sfc-gh-eraigosa/dotfiles/issues/292), not yet built) · builds on
   [#370](https://github.com/sfc-gh-eraigosa/dotfiles/pull/370) (`~/.local/bin/herdr` link) ·
