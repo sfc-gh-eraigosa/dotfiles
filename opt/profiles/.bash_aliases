@@ -255,7 +255,7 @@ alias cursor='/Applications/Cursor.app/Contents/MacOS/Cursor'
 function sfhelp() {
     echo "Help with sf ws commands:"
     cat <<'EOF'
-    sflist - list all workspaces, alias for "sf ws ls"
+    sfls - list all workspaces, alias for "sf ws ls"
 
     sfssh - ssh to the workspace, alias for "sf ws ssh gco2"
 
