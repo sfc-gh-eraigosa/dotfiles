@@ -281,10 +281,11 @@ func Entries(x Exec, t Target, ps []Presented) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(tmp.Name() + ".old")
-	defer os.Remove(tmp.Name())
+	// Cleanup is best-effort: a leftover temp file holds only public keys.
+	defer func() { _ = os.Remove(tmp.Name() + ".old") }()
+	defer func() { _ = os.Remove(tmp.Name()) }()
 	if _, err := io.WriteString(tmp, b.String()); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return "", err
 	}
 	if err := tmp.Close(); err != nil {
@@ -401,13 +402,13 @@ func copyFile(src, dst string, mode int) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }() // read-only: a close error loses nothing
 	out, err := os.OpenFile(dst, os.O_CREATE|mode|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
 	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
+		_ = out.Close() // the copy error is the one worth reporting
 		return err
 	}
 	return out.Close()
