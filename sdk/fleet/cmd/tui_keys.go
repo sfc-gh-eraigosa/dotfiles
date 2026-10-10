@@ -45,7 +45,7 @@ var keyHelp = []struct {
 	{"⏰", "w", "wake selection (or cursor host)", false},
 	{"📥", "p", "pull ssh config FROM cursor host", false},
 	{"📤", "P", "push ssh config TO cursor host", false},
-	{"🔑", "A", "authorize your key on an auth-failed host (ssh-copy-id)", false},
+	{"🔑", "A", "fix an auth-failed host: ssh-copy-id, or fleet trust for a host-key fault", false},
 	{"🗑️", "F", "forget answers (incl. saved preferences)", false},
 	{"⇥", "tab / enter", "(answer form) next field · esc backs out, keeping answers", false},
 }
@@ -494,8 +494,11 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// design, precisely so a password cannot be piped — and that is a
 		// feature here: no credential ever passes through fleet, so there is
 		// no secret-handling code to get wrong.
+		//
+		// A host-key row is the exception: the fault is in OUR known_hosts,
+		// so A runs `fleet trust` instead (see authorizeArgsFor).
 		if m.canAuthorize() {
-			return m, authorizeShell(m.cursor)
+			return m, authorizeShell(m.cursor, m.rows[m.indexOf(m.cursor)].Note)
 		}
 	case "r":
 		// r is also the way back from a finished wave: the dots stop showing

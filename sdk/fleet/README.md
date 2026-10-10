@@ -905,6 +905,44 @@ fleet keys prune                   # remove foreign keys — diff-first, confirm
   `authorized_keys` from local state.
 - Per-host failures are named and rolled into the exit code, never swallowed.
 
+### `fleet trust <alias>`
+
+Re-trust a host whose SSH host key **changed** (a reinstall, or DHCP handing its
+address to another machine) or was **never accepted**. `fleet status` names these
+rows `auth-failed (host key CHANGED|unverified)` and points here; `A` in `fleet tui`
+runs this on such a row instead of `ssh-copy-id` (which connects through the same
+`known_hosts` and is refused the same way, printing ssh's MITM banner twice).
+
+```console
+$ fleet trust gig        # real output; alias, address and home redacted
+!!!! HOST KEY CHANGED for gig (10.0.0.9)
+     Expected after a reinstall or when DHCP hands the address to another machine.
+     Otherwise it is the man-in-the-middle case ssh refused to guess about.
+  trusted now (~/.ssh/known_hosts):
+    ED25519 SHA256:nEpRjwA41zNIcUbX4ERgK7s1uZ/0A6hIZLuM0zOnEuw
+    RSA SHA256:j9VIO7/Lkgf/RPFx2+obVaNIYjP8G9zrPde5DXvla98
+    ECDSA SHA256:m/H3bsmS1SuR9G9ph90wfUMZihcziC9HD5RIOOgIJLc
+  presented by the host:
+    RSA SHA256:gArNN8nCLha/UlzA0USQwrpsbJNxTN9T+/AyPchNbh8
+    ECDSA SHA256:811Ka4o5Qoq15vPZ0iSwz8hU5/k3J0Q+zhz2zMEVyZE
+    ED25519 SHA256:l4dTM0zlvA7yqKgd/INOwAJov9XLQw3JYZy/+WVmmi8
+  verify on the host itself (console, or a path you already trust):
+    for f in /etc/ssh/ssh_host_*_key.pub; do ssh-keygen -lf "$f"; done
+type the alias (gig) to trust the presented key: no
+Error: host key NOT trusted — nothing changed
+```
+
+- **Nothing is accepted on a reflexive `y`.** You type the alias back, or pass
+  `--fingerprint SHA256:…` (non-interactive) and it proceeds only if the host
+  presents exactly that key.
+- `known_hosts` is backed up to `known_hosts.fleet-bak-<UTC>` first, every entry for
+  the host is removed (`ssh-keygen -R`), and the scanned keys are appended — hashed
+  when your client hashes.
+- **Every acceptance is recorded** at WARN (`host key trusted`, with old and new
+  fingerprints, the backup path and how it was confirmed) in
+  `~/.local/state/fleet/fleet.log`, so a key change never passes unnoticed.
+- The host is re-probed afterwards; one that still refuses is reported as a failure.
+
 ### `fleet history [host]`
 
 Every `fleet update` — from the CLI or the dashboard — is captured to a per-host
@@ -1082,6 +1120,8 @@ against real machines:
 - Failures are named per host and reflected in the exit code.
 - Wake never mutates a target: ICMP, `$SSH_CONNECTION`, and the probe, nothing else.
 - Only a direct re-probe can report a host woken — a working relay is not enough.
+- A changed host key is never accepted silently: `fleet trust` needs the alias typed
+  back (or a matching `--fingerprint`), backs up `known_hosts`, and logs the swap.
 
 ## Design
 

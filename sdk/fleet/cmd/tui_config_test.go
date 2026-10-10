@@ -122,3 +122,16 @@ func TestAuthorizeKeyIsDeclaredInKeyHelp(t *testing.T) {
 	}
 	t.Fatal("A must be declared in keyHelp or it ships undiscoverable")
 }
+
+// On a host-key row, A must run `fleet trust` (the CLI verb, so every guard
+// applies) instead of ssh-copy-id, which connects twice and fails twice.
+func TestAuthorizeOnAHostKeyRowRunsFleetTrust(t *testing.T) {
+	got := strings.Join(authorizeArgsFor("/x/fleet", "host-a", "host key CHANGED"), " ")
+	if got != "/x/fleet trust host-a" {
+		t.Fatalf("argv = %q", got)
+	}
+	got = strings.Join(authorizeArgsFor("/x/fleet", "host-a", "permission denied"), " ")
+	if !strings.HasPrefix(got, "ssh-copy-id ") {
+		t.Fatalf("a credential fault still authorizes a key, got %q", got)
+	}
+}

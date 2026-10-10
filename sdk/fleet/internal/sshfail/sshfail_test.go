@@ -71,3 +71,18 @@ func TestNoteNamesTheActualFault(t *testing.T) {
 		t.Fatalf("Note(plain error) = %q, want empty", got)
 	}
 }
+
+// A host-key fault is fixed on THIS machine (known_hosts), a credential fault on
+// the remote one (authorized_keys); callers route the operator by this split.
+func TestIsHostKeySeparatesTrustFromCredentials(t *testing.T) {
+	for note, want := range map[string]bool{
+		"host key CHANGED":    true,
+		"host key unverified": true,
+		"permission denied":   false,
+		"":                    false,
+	} {
+		if got := IsHostKey(note); got != want {
+			t.Errorf("IsHostKey(%q) = %v, want %v", note, got, want)
+		}
+	}
+}

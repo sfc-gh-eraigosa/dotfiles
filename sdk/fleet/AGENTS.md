@@ -23,6 +23,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `fleet update <host>...` | walks a `fleet.yaml` step plan per host, serially: a DAG of `sync` (fetch → ff-only, one network call) / `run` (verbatim shell, batch or `ssh -t`) / `gh-auth` steps; with no plan file it is today's fetch → ff → `install.sh`. Flags: `--local skip\|rescue\|carry`, `--force` (= `--local rescue`), `--no-restore`, `--reset`, `--timeout D`, `--no-retry`, `--ref B\|repo=B` (repeatable), `--file PATH`, `--dry-run` (prints every effective script, preamble included, sends nothing), `--list-inputs` (what the plan's `inputs:` need; no host), `--input [host:]id=v\|@file\|env:NAME` (repeatable; a confidential value only from a file or the environment); `--json` from root. `fleet update init [--file] [--overwrite] [--print]` writes the starter plan |
 | `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
 | `fleet remove <alias> [--purge]` | unmark (keeps SSH access); `--purge` deletes the block |
+| `fleet trust <alias>` | re-trust a host whose SSH host key changed / was never accepted: shows stored vs presented fingerprints, needs the alias typed back (or `--fingerprint SHA256:…`), backs up `known_hosts`, swaps, logs WARN `host key trusted`, re-probes |
 | `fleet keys list\|sync\|prune` | audit / authorize / remove authorized keys |
 | `fleet config pull\|push\|diff` | one-way ssh-config transfer: import FROM one host, publish TO hosts, or compare without changing anything |
 | `fleet wake [host...]` | rouse hosts asleep at layer 2: ladder `retry → local-prime → peer-relay`, printed rung by rung; `--json`; exits non-zero if any target stayed down |
@@ -43,6 +44,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `internal/sshconf` | parse **and edit** `~/.ssh/config` (the only inventory) |
 | `internal/stamp` | parse the install stamp |
 | `internal/drift` | classify drift + format age (`now` injected — never `time.Now()`) |
+| `internal/hostkey` | known_hosts evidence + repair for `fleet trust`: `Resolve` (`ssh -G`), `Known`, `Scan`, `Compare`, `Replace` (backup → `-R` → append); every command via an injected `Exec` |
 | `internal/sshfail` | read ssh's stderr to tell a refused *connection* from a refused *credential* |
 | `internal/cfgplan` | plan a ONE-WAY ssh-config transfer (pure): `Build` + `Apply` |
 | `internal/lanscan` | sweep a subnet for a listening port (injected dialer — no nmap, no socket in tests) |
@@ -241,6 +243,24 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   to read stays `unreachable` — `internal/sshfail` never invents a diagnosis. Pinned by
   `TestAuthFailureReportsAuthFailedNotUnreachable` and
   `TestFailureWithNoEvidenceStaysUnreachable`.
+- **A host-key fault is repaired here, never accepted silently.** `sshfail.IsHostKey`
+  splits the auth notes: a host-key fault lives in OUR `known_hosts`, a credential fault
+  in the remote `authorized_keys`, so `fleet status` sends the first to `fleet trust` and
+  only the second to `ssh-copy-id`, and TUI `A` self-execs `fleet trust` on a host-key row
+  (ssh-copy-id there connects twice and prints ssh's MITM banner twice, fixing nothing).
+  `fleet trust` never decides for the operator: a changed key needs the alias typed back
+  — a reflexive `y` is refused — or a `--fingerprint` the host actually presents; the
+  file is backed up before `ssh-keygen -R`, a failed removal appends nothing, every
+  acceptance is a WARN `host key trusted` record in `fleet.log` (old + new fingerprints,
+  backup, how confirmed), and a host still refusing afterwards is a failure. Pinned by
+  `TestTrustShowsBothFingerprintsAndRefusesWithoutTheTypedAlias`,
+  `TestTrustPinThatDoesNotMatchChangesNothing`, `TestTrustRecordsTheReplacementForLaterReview`,
+  `TestReplaceStopsBeforeAppendingWhenRemovalFails`,
+  `TestHostKeyRowsAreSentToFleetTrustNotSshCopyID`, `TestAuthorizeOnAHostKeyRowRunsFleetTrust`.
+- **Execute() is the one error printer, and a failed run prints no usage.** Root sets
+  `SilenceErrors`; `PersistentPreRun` sets `SilenceUsage`, so arg/flag mistakes (which
+  fail before it) still show usage. Pinned by `TestARuntimeFailurePrintsNoUsageAndNoCobraError`,
+  `TestAWrongArgCountStillShowsUsage`.
 - **`discover` is a local read; `--scan` is the ONE exception.** Without the flag it never
   opens a socket. The sweep needs no nmap — the shell `ssh-find` it replaces shells out to
   it, and on a machine without nmap that script exits before scanning anything, which is a
@@ -834,10 +854,10 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   distinct from never-installed.
 - `auth-failed (host key unverified)` almost always means the alias was never accepted
   into `~/.ssh/known_hosts` — common right after `ssh-find` rewrites a `Hostname`, since
-  the *new* address is an unknown host to ssh. Fix on the workstation:
-  `ssh-keyscan -H <alias> >> ~/.ssh/known_hosts` after checking the fingerprint.
-  `auth-failed (host key CHANGED)` is NOT routine — it is the MITM warning, and the row
-  is orange rather than red precisely so it is not mistaken for a dead host.
+  the *new* address is an unknown host to ssh. Fix: `fleet trust <alias>` after checking
+  the fingerprint. `auth-failed (host key CHANGED)` is NOT routine — it is the MITM
+  warning, and the row is orange rather than red precisely so it is not mistaken for a
+  dead host; `fleet trust` is the recovery, and it shows both fingerprints first.
 - **A host that needs waking every run is not healthy — it is power-saving.** The `woke via
   <peer>` note exists to keep that visible instead of smoothing it away. The permanent cure
   is on the host, not in fleet: a Wi-Fi NIC with `power_save on` sleeps through the

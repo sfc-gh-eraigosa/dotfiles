@@ -85,3 +85,8 @@ func Classify(err error) Kind { k, _ := match(err); return k }
 // Note is the short qualifier for the row: which auth fault, since the fixes
 // differ (ssh-keygen -R versus authorizing a key).
 func Note(err error) string { _, n := match(err); return n }
+
+// IsHostKey reports whether a Note is a host-key fault. Those are repaired on
+// THIS machine (known_hosts, via `fleet trust`); every other auth note needs a
+// change on the remote one (authorized_keys), so callers route on this split.
+func IsHostKey(note string) bool { return strings.HasPrefix(note, "host key ") }
