@@ -6,6 +6,7 @@ import (
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail"
 )
 
 // filterHosts narrows a fleet to the named aliases. An empty filter means every
@@ -53,6 +54,9 @@ func checkHosts(all []sshconf.Host, only []string) ([]sshconf.Host, error) {
 func bootstrapNeeded(rows []Row) []string {
 	var out []string
 	for _, r := range rows {
+		if sshfail.IsHostKey(r.Note) {
+			continue // a known_hosts fault, not a missing key: see hostKeyNeeded
+		}
 		if r.Class == string(drift.AuthFailed) || r.Class == string(drift.Unreachable) {
 			out = append(out, r.Alias)
 		}
@@ -69,6 +73,26 @@ func bootstrapNeeded(rows []Row) []string {
 // answer, and saying nothing is how someone waits for a sync that can never
 // come.
 func bootstrapHint(rows []Row) string {
+	return hostKeyHint(rows) + keyBootstrapHint(rows)
+}
+
+// hostKeyHint routes host-key faults to `fleet trust`. ssh-copy-id cannot help
+// them: it connects through the same known_hosts and is refused the same way.
+func hostKeyHint(rows []Row) string {
+	var b strings.Builder
+	for _, r := range rows {
+		if r.Class != string(drift.AuthFailed) || !sshfail.IsHostKey(r.Note) {
+			continue
+		}
+		if b.Len() == 0 {
+			b.WriteString("\nhost key not trusted — compare fingerprints, then accept (backed up + logged; or T in `fleet tui`):\n")
+		}
+		fmt.Fprintf(&b, "  fleet trust %-20s # %s\n", r.Alias, r.Note)
+	}
+	return b.String()
+}
+
+func keyBootstrapHint(rows []Row) string {
 	need := bootstrapNeeded(rows)
 	if len(need) == 0 {
 		return ""

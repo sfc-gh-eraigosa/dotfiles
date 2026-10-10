@@ -751,6 +751,25 @@ func authorizeShell(alias string) tea.Cmd {
 	})
 }
 
+// trustArgs self-execs the CLI verb, so the typed confirmation, the backup and
+// the audit record apply identically from the TUI and the command line.
+func trustArgs(self, alias string) []string { return []string{self, "trust", alias} }
+
+// trustShell suspends the TUI so `fleet trust` owns the terminal: it prints
+// both fingerprint sets and reads the typed alias itself. On return the host
+// is re-probed, like every other handover.
+func trustShell(alias string) tea.Cmd {
+	self, err := os.Executable()
+	if err != nil {
+		self = "fleet"
+	}
+	argv := trustArgs(self, alias)
+	c := exec.Command(argv[0], argv[1:]...)
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		return execDoneMsg{alias: alias, err: err, ssh: true}
+	})
+}
+
 // configShell suspends the TUI and runs the config verb, mirroring how `s`
 // hands over for an ssh session. The transfer prints a diff and asks for
 // confirmation, neither of which survives the background lane.

@@ -122,3 +122,78 @@ func TestAuthorizeKeyIsDeclaredInKeyHelp(t *testing.T) {
 	}
 	t.Fatal("A must be declared in keyHelp or it ships undiscoverable")
 }
+
+// A host-key fault and a credential fault have different fixes, so they get
+// different keys: T (fleet trust, fixes OUR known_hosts) and A (ssh-copy-id,
+// fixes THEIR authorized_keys). ssh-copy-id on a host-key row connects through
+// the same known_hosts, is refused, and prints ssh's MITM banner twice.
+func TestTrustAndAuthorizeSplitByFault(t *testing.T) {
+	m := newTUIModel(nil, nil, nil, time.Time{}, "", 1, updplan.Default())
+	for _, tc := range []struct {
+		class, note      string
+		trust, authorize bool
+	}{
+		{"auth-failed", "host key CHANGED", true, false},
+		{"auth-failed", "host key unverified", true, false},
+		{"auth-failed", "permission denied", false, true},
+		{"unreachable", "", false, false},
+		{"up-to-date", "", false, false},
+	} {
+		m.setRow(Row{Alias: "h", Class: tc.class, Note: tc.note})
+		m.cursor = "h"
+		if got := m.canTrust(); got != tc.trust {
+			t.Errorf("%s/%q: canTrust = %v", tc.class, tc.note, got)
+		}
+		if got := m.canAuthorize(); got != tc.authorize {
+			t.Errorf("%s/%q: canAuthorize = %v", tc.class, tc.note, got)
+		}
+	}
+}
+
+// T self-execs the CLI verb, so the typed confirmation, backup and audit
+// apply identically from either entry point.
+func TestTrustArgsRunTheCLIVerb(t *testing.T) {
+	if got := strings.Join(trustArgs("/x/fleet", "host-a"), " "); got != "/x/fleet trust host-a" {
+		t.Fatalf("argv = %q", got)
+	}
+}
+
+func TestTKeyHandsOverOnlyOnAHostKeyRow(t *testing.T) {
+	m := newTUIModel(nil, nil, nil, time.Time{}, "", 1, updplan.Default())
+	m.setRow(Row{Alias: "h", Class: "auth-failed", Note: "host key CHANGED"})
+	m.cursor = "h"
+	if _, cmd := m.Update(key("T")); cmd == nil {
+		t.Fatal("T on a host-key row must hand the terminal to fleet trust")
+	}
+	m.setRow(Row{Alias: "h", Class: "auth-failed", Note: "permission denied"})
+	if _, cmd := m.Update(key("T")); cmd != nil {
+		t.Fatal("T must do nothing where trusting a key cannot help")
+	}
+}
+
+func TestTrustKeyIsDeclaredInKeyHelp(t *testing.T) {
+	for _, k := range keyHelp {
+		if k.keys == "T" {
+			return
+		}
+	}
+	t.Fatal("T must be declared in keyHelp or it ships undiscoverable")
+}
+
+// The tip is what makes T discoverable: the moment the cursor sits on a
+// host-key row, the status line names the problem and the key.
+func TestStatusLineTipsTrustOnAHostKeyRow(t *testing.T) {
+	m := newTUIModel(nil, nil, nil, time.Time{}, "", 1, updplan.Default())
+	m.setRow(Row{Alias: "gig", Class: "auth-failed", Note: "host key CHANGED"})
+	m.cursor = "gig"
+	got := m.statusView()
+	for _, want := range []string{"host key CHANGED", "gig", "T"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("status line missing %q: %q", want, got)
+		}
+	}
+	m.setRow(Row{Alias: "gig", Class: "up-to-date"})
+	if strings.Contains(m.statusView(), "trust") {
+		t.Fatal("a healthy row must not carry the tip")
+	}
+}

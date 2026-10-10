@@ -71,7 +71,14 @@ func init() {
 	// operates on that repo without a flag. Resolved here rather than in the
 	// flag's default because the default is computed before cobra parses, and
 	// "was it given?" is only knowable afterwards.
+	// Execute() is the ONE place an error is printed; cobra printing it too
+	// produced "Error: ..." twice. Usage is silenced only once the run starts:
+	// arg/flag validation fails before PersistentPreRun and still shows it,
+	// while a failed RUN (a host refusing us) is not a usage mistake and the
+	// flag table only buried the line that said what failed.
+	rootCmd.SilenceErrors = true
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, _ []string) {
+		cmd.SilenceUsage = true
 		if cmd.Flags().Changed("repo") {
 			flagRepoChosen = true
 			return

@@ -39,12 +39,22 @@ trap 'rm -f "$tmp"' EXIT
 #     host's own allow additions survive while the forced convenience entries
 #     (e.g. gss push/pr/sync — gated by the safety_guard token, not a prompt)
 #     are guaranteed present.
+#   - _retiredAllow (a doc-style key, so never merged itself) lists allow rules
+#     the repo once shipped and has since withdrawn — e.g. a malformed rule
+#     Claude Code warns about at every startup. The template only seeds a
+#     FIRST run, so without this a withdrawn rule lives on every host already
+#     provisioned. Only exact matches are removed.
 if jq -s '
         (.[1] | with_entries(select(.key | startswith("_") | not))) as $forced
+        | (.[1]._retiredAllow // []) as $retired
         | .[0] as $host
         | ($host * $forced)
         | if ($forced.permissions.allow // null) != null
           then .permissions.allow = (((($host.permissions.allow // []) + $forced.permissions.allow) | unique))
+          else .
+          end
+        | if (.permissions.allow // null) != null
+          then .permissions.allow -= $retired
           else .
           end
     ' "$host" "$forced" > "$tmp" && [ -s "$tmp" ]; then

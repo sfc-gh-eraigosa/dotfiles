@@ -16,6 +16,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
@@ -815,7 +816,52 @@ func (m tuiModel) canAuthorize() bool {
 		return false
 	}
 	i := m.indexOf(m.cursor)
-	return i >= 0 && m.rows[i].Class == string(drift.AuthFailed)
+	return i >= 0 && m.rows[i].Class == string(drift.AuthFailed) && !sshfail.IsHostKey(m.rows[i].Note)
+}
+
+// canTrust is canAuthorize's twin for the OTHER auth fault: the host answered
+// but its key does not match our known_hosts. That is fixed here, by
+// `fleet trust`, not on the host — so it gets its own key (T) rather than
+// overloading A, whose ssh-copy-id would be refused by the same check.
+func (m tuiModel) canTrust() bool {
+	if !m.canStartConfigAction() {
+		return false
+	}
+	i := m.indexOf(m.cursor)
+	return i >= 0 && m.rows[i].Class == string(drift.AuthFailed) && sshfail.IsHostKey(m.rows[i].Note)
+}
+
+// rowTip is the status-line nudge for the cursor row: what is wrong and which
+// key fixes it. The keys otherwise live only in the `?` overlay, which is not
+// where anyone looks while staring at a red row. It names a key only when that
+// key would act: a host another path owns (polling, waking, updating) gets no
+// tip, and a healthy one needs none. `fleet status` prints the CLI side of the
+// same advice (bootstrapHint).
+func (m tuiModel) rowTip() string {
+	i := m.indexOf(m.cursor)
+	if i < 0 || !m.canStartConfigAction() {
+		return ""
+	}
+	r := m.rows[i]
+	if u, ok := m.updating[r.Alias]; ok && u.phase == updFail {
+		return r.Alias + ": last update failed — press H for its history, e for stderr, u to retry"
+	}
+	switch r.Class {
+	case string(drift.AuthFailed):
+		if m.canTrust() {
+			return fmt.Sprintf("%s: %s — press T to compare fingerprints and trust", r.Alias, r.Note)
+		}
+		return r.Alias + ": refused our key — press A to authorize it (ssh-copy-id), or s once if it uses a password"
+	case string(drift.Unreachable):
+		return r.Alias + ": unreachable — press w to wake it"
+	case string(drift.Behind):
+		return fmt.Sprintf("%s: %s behind — press u to update", r.Alias, plural(r.Behind, "commit"))
+	case string(drift.Unknown):
+		return r.Alias + ": install state unknown — press u to update"
+	case string(drift.Divergent):
+		return r.Alias + ": ahead/divergent (check BRANCH) — press u to update"
+	}
+	return ""
 }
 
 // canStartConfigAction reports whether the cursor host is free to act on. A

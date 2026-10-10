@@ -86,3 +86,36 @@ func TestStatusHintExplainsHowToPrimeAPasswordAuthHost(t *testing.T) {
 		}
 	}
 }
+
+// ssh-copy-id cannot fix a host-key fault: it connects with the same
+// known_hosts and fails the same way, printing ssh's MITM banner twice. A
+// host-key row is routed to `fleet trust` and kept out of the key-bootstrap list.
+func TestHostKeyRowsAreSentToFleetTrustNotSshCopyID(t *testing.T) {
+	rows := []Row{
+		{Alias: "rekeyed", Class: string(drift.AuthFailed), Note: "host key CHANGED"},
+		{Alias: "fresh", Class: string(drift.AuthFailed), Note: "host key unverified"},
+	}
+	if got := bootstrapNeeded(rows); len(got) != 0 {
+		t.Fatalf("host-key rows need no key bootstrap, got %v", got)
+	}
+	got := bootstrapHint(rows)
+	for _, want := range []string{"fleet trust rekeyed", "fleet trust fresh", "CHANGED", "T in `fleet tui`"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("hint missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "ssh-copy-id") {
+		t.Fatalf("hint offers ssh-copy-id for a host-key fault:\n%s", got)
+	}
+}
+
+func TestMixedFaultsGetBothHints(t *testing.T) {
+	got := bootstrapHint([]Row{
+		{Alias: "rekeyed", Class: string(drift.AuthFailed), Note: "host key CHANGED"},
+		{Alias: "blocked", Class: string(drift.AuthFailed), Note: "permission denied"},
+	})
+	if !strings.Contains(got, "fleet trust rekeyed") || !strings.Contains(got, "ssh-copy-id") ||
+		strings.Contains(got, "key: blocked, rekeyed") {
+		t.Fatalf("hint:\n%s", got)
+	}
+}

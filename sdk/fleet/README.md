@@ -184,7 +184,10 @@ fleet tui --update-ref feature/x         # update targets that ref instead of ma
 | `u` | update the selection (or the cursor host) |
 | `w` | wake the selection (or the cursor host) — rows tick `waking ⠋` |
 | `F` | forget the remembered answers (including the saved preferences) |
-| `s` | ssh to the cursor host |
+| `s` | ssh to the cursor host (once is enough to prime a password-auth host) |
+| `T` | **trust** a host whose SSH host key changed — runs `fleet trust` (compare fingerprints, type the alias) |
+| `A` | **authorize** your public key on a host that refuses it — runs `ssh-copy-id` |
+| `p` / `P` | pull ssh config FROM / push it TO the cursor host (`fleet config pull\|push`) |
 | `h` | show / hide the **host list** |
 | `l` | show / hide the streaming **log** pane |
 | `e` | show / hide the **stderr** pane (off by default) · on the confirm strip: edit the remembered answers |
@@ -195,6 +198,27 @@ fleet tui --update-ref feature/x         # update targets that ref instead of ma
 | `r` | refresh — and after an update, hand the status dots back to the selection |
 | `?` | help overlay |
 | `q` | quit (guarded while updates run) |
+
+`?` groups the keys into sections — **SSH & access** (`s` `T` `A` `p` `P`), Update &
+recover, Panes & history, Search & select, Navigate, General — in two columns on a
+terminal at least 80 cells wide. A short terminal drops whole sections from the end,
+so the access keys are the last to go.
+
+**The status line tells you which key fixes the cursor row**, whenever nothing more
+recent is being reported:
+
+```text
+1/1   gig: host key CHANGED — press T to compare fingerprints and trust
+1/1   pi: refused our key — press A to authorize it (ssh-copy-id), or s once if it uses a password
+1/1   nano: unreachable — press w to wake it
+1/1   lab: 24 commits behind — press u to update
+```
+
+A row whose last update failed points at `H` (history), `e` (stderr) and `u` (retry).
+`T`, `A` and `P` are different fixes on different machines: `T` repairs **your**
+`known_hosts`, `A` adds your public key to **the host's** `authorized_keys`, and `P`
+writes **the host's** `~/.ssh/config` (it needs a working login first). A reinstalled
+host typically wants `T`, then `A`, then optionally `P`.
 
 #### Three panes
 
@@ -905,6 +929,52 @@ fleet keys prune                   # remove foreign keys — diff-first, confirm
   `authorized_keys` from local state.
 - Per-host failures are named and rolled into the exit code, never swallowed.
 
+### `fleet trust <alias>`
+
+Re-trust a host whose SSH host key **changed** (a reinstall, or DHCP handing its
+address to another machine) or was **never accepted**. `fleet status` names these
+rows `auth-failed (host key CHANGED|unverified)` and points here; in `fleet tui` the
+status line on such a row says `press T`, which runs this command. (`A`'s
+`ssh-copy-id` cannot help here: it connects through the same `known_hosts` and is
+refused the same way, printing ssh's MITM banner twice.)
+
+```console
+$ fleet trust gig        # real output; alias, address and home redacted
+!!!! HOST KEY CHANGED for gig (10.0.0.9)
+     Expected after a reinstall or when DHCP hands the address to another machine.
+     Otherwise it is the man-in-the-middle case ssh refused to guess about.
+  trusted now (~/.ssh/known_hosts):
+    ED25519 SHA256:nEpRjwA41zNIcUbX4ERgK7s1uZ/0A6hIZLuM0zOnEuw
+    RSA SHA256:j9VIO7/Lkgf/RPFx2+obVaNIYjP8G9zrPde5DXvla98
+    ECDSA SHA256:m/H3bsmS1SuR9G9ph90wfUMZihcziC9HD5RIOOgIJLc
+  presented by the host:
+    RSA SHA256:gArNN8nCLha/UlzA0USQwrpsbJNxTN9T+/AyPchNbh8
+    ECDSA SHA256:811Ka4o5Qoq15vPZ0iSwz8hU5/k3J0Q+zhz2zMEVyZE
+    ED25519 SHA256:l4dTM0zlvA7yqKgd/INOwAJov9XLQw3JYZy/+WVmmi8
+  verify on the host itself (console, or a path you already trust):
+    for f in /etc/ssh/ssh_host_*_key.pub; do ssh-keygen -lf "$f"; done
+type the alias (gig) to trust the presented key: no
+Error: host key NOT trusted — nothing changed
+```
+
+- **Nothing is accepted on a reflexive `y`.** You type the alias back, or pass
+  `--fingerprint SHA256:…` (non-interactive) and it proceeds only if the host
+  presents exactly that key — and then writes only that key.
+- It follows what ssh itself resolves (`ssh -G`): the `HostKeyAlias` if one is set,
+  `[host]:port` off port 22, the resolved addresses under `CheckHostIP`, and **every**
+  `UserKnownHostsFile` (a stale key in `known_hosts2` breaks ssh just the same).
+- A key counts as already trusted only if **every** key type both sides know matches —
+  ssh prefers the types it knows, so one changed ED25519 key fails the connection even
+  when the RSA key still matches.
+- Each known_hosts file is backed up to `<file>.fleet-bak-<UTC>` first, every entry for
+  the host is removed (`ssh-keygen -R`), and the accepted keys are appended to the first
+  file — hashed when your client hashes. A failed write restores the backups; a missing
+  `known_hosts` is created. With `--fingerprint`, only the pinned key is written.
+- **Every acceptance is recorded** at WARN (`host key trusted`, with old and new
+  fingerprints, the backup path and how it was confirmed) in
+  `~/.local/state/fleet/fleet.log`, so a key change never passes unnoticed.
+- The host is re-probed afterwards; one that still refuses is reported as a failure.
+
 ### `fleet history [host]`
 
 Every `fleet update` — from the CLI or the dashboard — is captured to a per-host
@@ -1082,6 +1152,8 @@ against real machines:
 - Failures are named per host and reflected in the exit code.
 - Wake never mutates a target: ICMP, `$SSH_CONNECTION`, and the probe, nothing else.
 - Only a direct re-probe can report a host woken — a working relay is not enough.
+- A changed host key is never accepted silently: `fleet trust` needs the alias typed
+  back (or a matching `--fingerprint`), backs up `known_hosts`, and logs the swap.
 
 ## Design
 

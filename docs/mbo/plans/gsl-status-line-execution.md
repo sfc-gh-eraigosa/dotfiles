@@ -140,7 +140,7 @@ on sequencing and acceptance gates.
 
 1. **Build & install:** `bash sdk/gsl/build.sh` → `~/opt/bin/gsl`; check-deps green. (`make bin` auto-discovers it.)
 2. **Skill sync:** `sync-skills.sh` build loop gains `gsl`; the name `case` maps `gsl) dest_name="gsl-status"`, so `bash opt/scripts/system/sync-skills.sh --build` links `~/.claude/skills/gsl-status` and `~/.agents/skills/gsl-status`.
-3. **Claude shim:** `install_claude_skills.sh` symlinks `ai/claude/statusline-command.sh` → `~/.claude/statusline-command.sh` (backup-if-not-symlink guard, `chmod +x`). The settings template's `statusLine.command` already points at this path, and the `Bash($HOME/opt/bin/*:*)` allow-rule already covers `gsl render`.
+3. **Claude shim:** `install_claude_skills.sh` symlinks `ai/claude/statusline-command.sh` → `~/.claude/statusline-command.sh` (backup-if-not-symlink guard, `chmod +x`). The settings template's `statusLine.command` already points at this path, and the `Bash($HOME/opt/bin/*)` allow-rule already covers `gsl render`.
 4. **Gemini command:** `ai/gemini/commands/gsl-status.toml` is auto-linked by `install_gemini_skills.sh`'s existing `*.toml` glob — no script edit.
 5. **Full installer:** `./install.sh` already runs sync-skills + both install scripts, so a fresh clone wires everything with no new install.sh edit.
 
