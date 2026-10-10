@@ -44,7 +44,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `internal/sshconf` | parse **and edit** `~/.ssh/config` (the only inventory) |
 | `internal/stamp` | parse the install stamp |
 | `internal/drift` | classify drift + format age (`now` injected — never `time.Now()`) |
-| `internal/hostkey` | known_hosts evidence + repair for `fleet trust`: `Resolve` (`ssh -G`), `Known`, `Scan`, `Compare`, `Replace` (backup → `-R` → append); every command via an injected `Exec` |
+| `internal/hostkey` | known_hosts evidence + repair for `fleet trust`, all from what `ssh -G` resolves (HostKeyAlias, port, every UserKnownHostsFile, CheckHostIP addresses): `Resolve`, `Known`, `Scan` (per-key fingerprints), `Compare` (per key type, as ssh decides), `Entries` (lookup names, hashed by `ssh-keygen -H`), `Replace` (backup every file → `-R` each → append to the first; restore on a failed write); every command via an injected `Exec` |
 | `internal/sshfail` | read ssh's stderr to tell a refused *connection* from a refused *credential* |
 | `internal/cfgplan` | plan a ONE-WAY ssh-config transfer (pure): `Build` + `Apply` |
 | `internal/lanscan` | sweep a subnet for a listening port (injected dialer — no nmap, no socket in tests) |
@@ -252,12 +252,22 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   `ssh-copy-id` (which on a host-key row connects twice and prints ssh's MITM banner
   twice, fixing nothing). `fleet trust` never decides for the operator: a changed key
   needs the alias typed back — a reflexive `y` is refused — or a `--fingerprint` the host
-  actually presents; the file is backed up before `ssh-keygen -R`, a failed removal
-  appends nothing, every acceptance is a WARN `host key trusted` record in `fleet.log`
-  (old + new fingerprints, backup, how confirmed), and a host still refusing afterwards is
-  a failure. Pinned by `TestTrustShowsBothFingerprintsAndRefusesWithoutTheTypedAlias`,
+  actually presents, and a pin writes ONLY that key, never the host's unchecked others.
+  It works on the names and files ssh itself uses (`HostKeyAlias` verbatim, else
+  `[host]:port` off 22, plus CheckHostIP addresses; every `UserKnownHostsFile` — a stale
+  key in `known_hosts2` fails ssh too). `Compare` decides per key type, because ssh prefers
+  the types it knows: one mismatched type is `Changed` even if another matches (treating
+  "any match" as trusted would wave a swapped ED25519 key through behind a matching RSA
+  one). Every file is backed up before `ssh-keygen -R`, a failed removal appends nothing, a
+  failed append restores the backups, a missing `known_hosts` is created (0700 dir) rather
+  than failing first contact; every acceptance is a WARN `host key trusted` record in
+  `fleet.log` (old + new fingerprints, names, backups, how confirmed), and a host still
+  refusing afterwards is a failure. Pinned by `TestTrustShowsBothFingerprintsAndRefusesWithoutTheTypedAlias`,
   `TestTrustPinThatDoesNotMatchChangesNothing`, `TestTrustRecordsTheReplacementForLaterReview`,
-  `TestReplaceStopsBeforeAppendingWhenRemovalFails`,
+  `TestReplaceStopsBeforeAppendingWhenRemovalFails`, `TestReplaceRestoresTheBackupWhenTheAppendFails`,
+  `TestReplaceOnAFreshMachineCreatesTheFile`, `TestResolveHonoursHostKeyAlias`,
+  `TestResolveReadsEveryUserKnownHostsFile`, `TestCheckHostIPAddsTheResolvedAddresses`,
+  `TestCompare`, `TestTrustPinWritesOnlyThePinnedKey`,
   `TestHostKeyRowsAreSentToFleetTrustNotSshCopyID`, `TestTrustAndAuthorizeSplitByFault`,
   `TestTKeyHandsOverOnlyOnAHostKeyRow`.
 - **Every fault row names the key that fixes it.** `rowTip` puts it on the status line
@@ -271,10 +281,11 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   `group` from `helpGroups` (SSH & access first, General last); `layoutHelp` places whole
   sections into two balanced columns at `panelInner() >= 80` (one otherwise), with each
   section's key column sized to its own longest key, and drops trailing sections — never
-  the access keys — on a short terminal. Descriptions must fit a column at width 100.
+  the access keys — on a short terminal; a known size is never treated as unbounded, however
+  small. Descriptions must fit a column at width 100.
   Pinned by `TestEveryKeyBelongsToADeclaredHelpGroup`, `TestSSHKeysShareOneSection`,
   `TestHelpRendersSectionsInDeclaredOrder`, `TestShortTerminalHelpKeepsTheSSHSection`,
-  `TestHelpDescriptionsFitTheirColumn`.
+  `TestHelpDescriptionsFitTheirColumn`, `TestTinyTerminalHelpStaysSmall`.
 - **Execute() is the one error printer, and a failed run prints no usage.** Root sets
   `SilenceErrors`; `PersistentPreRun` sets `SilenceUsage`, so arg/flag mistakes (which
   fail before it) still show usage. Pinned by `TestARuntimeFailurePrintsNoUsageAndNoCobraError`,

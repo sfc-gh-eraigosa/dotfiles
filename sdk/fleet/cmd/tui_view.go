@@ -1066,9 +1066,11 @@ func (m tuiModel) helpView() string {
 	// under the banner the overlay is drawn below. A zero height is "we have
 	// not been told the terminal size yet", not "no room" — clamping there
 	// would hide keys on a terminal that has plenty of space.
-	room := -1
+	room := -1 // unknown size: unbounded
 	if m.vp.height > 0 {
-		room = m.vp.height - bannerHeight - 2 - 4
+		// Known size: never unbounded, however small — a non-positive budget
+		// must not fall through to the "unknown" case and render full height.
+		room = max(1, m.vp.height-bannerHeight-2-4)
 	}
 	inner := m.panelInner()
 	cols := 1

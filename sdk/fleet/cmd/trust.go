@@ -49,10 +49,11 @@ func runTrust(o trustOpts) error {
 	if err != nil {
 		return err
 	}
-	raw, presented, err := hostkey.Scan(o.X, t)
+	scanned, err := hostkey.Scan(o.X, t)
 	if err != nil {
 		return err
 	}
+	presented := hostkey.Keys(scanned)
 	verdict := hostkey.Compare(stored, presented)
 
 	switch verdict {
@@ -63,7 +64,7 @@ func runTrust(o trustOpts) error {
 		fmt.Fprintf(o.Out, "!!!! HOST KEY CHANGED for %s (%s)\n", o.Alias, t.HostName)
 		fmt.Fprintln(o.Out, "     Expected after a reinstall or when DHCP hands the address to another machine.")
 		fmt.Fprintln(o.Out, "     Otherwise it is the man-in-the-middle case ssh refused to guess about.")
-		fmt.Fprintf(o.Out, "  trusted now (%s):\n", t.KnownHosts)
+		fmt.Fprintf(o.Out, "  trusted now (%s):\n", strings.Join(t.KnownHosts, ", "))
 		for _, k := range stored {
 			fmt.Fprintf(o.Out, "    %s\n", k)
 		}
@@ -82,7 +83,17 @@ func runTrust(o trustOpts) error {
 		return err
 	}
 
-	backup, err := hostkey.Replace(o.X, t, raw, o.Now.UTC().Format("20060102T150405Z"))
+	// A pin vouches for exactly one key: write that one, never the host's
+	// other (unchecked) keys alongside it.
+	accepted := scanned
+	if o.Pin != "" {
+		accepted = hostkey.OnlyFingerprint(scanned, o.Pin)
+	}
+	entries, err := hostkey.Entries(o.X, t, accepted)
+	if err != nil {
+		return err
+	}
+	backups, err := hostkey.Replace(o.X, t, entries, o.Now.UTC().Format("20060102T150405Z"))
 	if err != nil {
 		return err
 	}
@@ -91,13 +102,14 @@ func runTrust(o trustOpts) error {
 		"hostname": t.HostName,
 		"verdict":  string(verdict),
 		"old":      joinKeys(stored),
-		"new":      joinKeys(presented),
-		"backup":   backup,
+		"new":      joinKeys(hostkey.Keys(accepted)),
+		"names":    strings.Join(t.Names(), ","),
+		"backup":   strings.Join(backups, ","),
 		"via":      how,
 	})
-	fmt.Fprintf(o.Out, "ok   %s: trusted %s\n", o.Alias, joinKeys(presented))
-	if backup != "" {
-		fmt.Fprintf(o.Out, "     previous known_hosts kept as %s\n", backup)
+	fmt.Fprintf(o.Out, "ok   %s: trusted %s\n", o.Alias, joinKeys(hostkey.Keys(accepted)))
+	for _, b := range backups {
+		fmt.Fprintf(o.Out, "     previous file kept as %s\n", b)
 	}
 	return probeAfterTrust(o, true)
 }

@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
@@ -153,5 +155,16 @@ func TestShortTerminalHelpKeepsTheSSHSection(t *testing.T) {
 	}
 	if strings.Contains(got, grpNav) {
 		t.Fatalf("navigation should be dropped before access keys:\n%s", got)
+	}
+}
+
+// Below 12 rows the budget goes to zero or negative; that once read as "size
+// unknown, unbounded" and the overlay rendered at full height, walking the
+// banner off the top of the terminal.
+func TestTinyTerminalHelpStaysSmall(t *testing.T) {
+	m := newTUIModel(nil, nil, nil, time.Time{}, "", 1, updplan.Default())
+	m.vp = viewport{height: 10, width: 100}
+	if h := lipgloss.Height(m.helpView()); h > 10 {
+		t.Fatalf("help is %d rows tall on a 10-row terminal", h)
 	}
 }

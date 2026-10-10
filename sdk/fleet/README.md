@@ -959,10 +959,17 @@ Error: host key NOT trusted — nothing changed
 
 - **Nothing is accepted on a reflexive `y`.** You type the alias back, or pass
   `--fingerprint SHA256:…` (non-interactive) and it proceeds only if the host
-  presents exactly that key.
-- `known_hosts` is backed up to `known_hosts.fleet-bak-<UTC>` first, every entry for
-  the host is removed (`ssh-keygen -R`), and the scanned keys are appended — hashed
-  when your client hashes.
+  presents exactly that key — and then writes only that key.
+- It follows what ssh itself resolves (`ssh -G`): the `HostKeyAlias` if one is set,
+  `[host]:port` off port 22, the resolved addresses under `CheckHostIP`, and **every**
+  `UserKnownHostsFile` (a stale key in `known_hosts2` breaks ssh just the same).
+- A key counts as already trusted only if **every** key type both sides know matches —
+  ssh prefers the types it knows, so one changed ED25519 key fails the connection even
+  when the RSA key still matches.
+- Each known_hosts file is backed up to `<file>.fleet-bak-<UTC>` first, every entry for
+  the host is removed (`ssh-keygen -R`), and the accepted keys are appended to the first
+  file — hashed when your client hashes. A failed write restores the backups; a missing
+  `known_hosts` is created. With `--fingerprint`, only the pinned key is written.
 - **Every acceptance is recorded** at WARN (`host key trusted`, with old and new
   fingerprints, the backup path and how it was confirmed) in
   `~/.local/state/fleet/fleet.log`, so a key change never passes unnoticed.

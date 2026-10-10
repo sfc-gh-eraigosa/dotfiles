@@ -16,9 +16,10 @@ import (
 // a test can assert on what known_hosts holds afterwards rather than on which
 // commands were issued.
 type fakeKnownHosts struct {
-	t        *testing.T
-	path     string
-	removals int
+	t         *testing.T
+	path      string
+	removals  int
+	extraScan string // more keyscan lines, for a host presenting several keys
 }
 
 func newFakeKnownHosts(t *testing.T, content string) *fakeKnownHosts {
@@ -54,9 +55,12 @@ func (f *fakeKnownHosts) exec(name, stdin string, args ...string) (string, error
 		if strings.Contains(stdin, "NEWKEY") {
 			out = append(out, "256 SHA256:new 10.0.0.9 (ED25519)")
 		}
+		if strings.Contains(stdin, "NEWRSA") {
+			out = append(out, "3072 SHA256:newrsa 10.0.0.9 (RSA)")
+		}
 		return strings.Join(out, "\n") + "\n", nil
 	case name == "ssh-keyscan":
-		return "10.0.0.9 ssh-ed25519 NEWKEY\n", nil
+		return "10.0.0.9 ssh-ed25519 NEWKEY\n" + f.extraScan, nil
 	case name == "ssh-keygen" && args[0] == "-R":
 		f.removals++
 		var keep []string
@@ -197,5 +201,19 @@ func TestTrustReportsWhenTheHostStillRefusesAfterwards(t *testing.T) {
 	tr := runTrustWith(t, kh, "gig\n", "", runner.Fake{Err: map[string]error{"gig": errors.New("exit status 255")}})
 	if tr.err == nil {
 		t.Fatal("a host that still refuses after the swap is not fixed")
+	}
+}
+
+// A --fingerprint pin vouches for ONE key; the host's other keys were never
+// checked by anyone and must not ride in with it.
+func TestTrustPinWritesOnlyThePinnedKey(t *testing.T) {
+	kh := newFakeKnownHosts(t, "10.0.0.9 ecdsa-sha2-nistp256 OLDKEY\n")
+	kh.extraScan = "10.0.0.9 ssh-rsa NEWRSA\n"
+	tr := runTrustWith(t, kh, "", "SHA256:new", runner.Fake{Out: map[string]string{"gig": ""}})
+	if tr.err != nil {
+		t.Fatal(tr.err)
+	}
+	if got := kh.read(); !strings.Contains(got, "NEWKEY") || strings.Contains(got, "NEWRSA") {
+		t.Fatalf("known_hosts after a pinned trust:\n%s", got)
 	}
 }
