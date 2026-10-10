@@ -921,6 +921,8 @@ func (m tuiModel) statusView() string {
 	line := th.statusBar.Render(strings.Join(bits, " · "))
 	if m.status != "" {
 		line += th.dim.Render("   " + m.status)
+	} else if tip := m.rowTip(); tip != "" {
+		line += th.warn.Render("   " + tip)
 	}
 	return line
 }
@@ -1060,38 +1062,137 @@ func (m tuiModel) confirmView() string {
 // the TOP by bubbletea, which would hide the "❓ keys" heading and the first
 // keys — the half a reader looks at first.
 func (m tuiModel) helpView() string {
-	// title + blank + [keys] + blank + footer, inside two border rows, under
-	// the banner the overlay is drawn below.
-	// A zero height is "we have not been told the terminal size yet" (no
-	// WindowSizeMsg has arrived), not "no room" — clamping there would hide
-	// keys on a terminal that has plenty of space.
-	room := len(keyHelp)
+	// title + blank + [sections] + blank + footer, inside two border rows,
+	// under the banner the overlay is drawn below. A zero height is "we have
+	// not been told the terminal size yet", not "no room" — clamping there
+	// would hide keys on a terminal that has plenty of space.
+	room := -1
 	if m.vp.height > 0 {
 		room = m.vp.height - bannerHeight - 2 - 4
-		if room < len(keyHelp) {
-			room-- // the "… N more" line costs a row of its own
-		}
 	}
-	shown := keyHelp
-	var more string
-	if room < len(shown) {
-		if room < 1 {
-			room = 1
+	inner := m.panelInner()
+	cols := 1
+	if inner >= helpTwoColumnMin {
+		cols = 2
+	}
+	colW := inner
+	if cols == 2 {
+		colW = (inner - helpGutter) / 2
+	}
+
+	sections := helpSections(colW)
+	placed, shown := layoutHelp(sections, cols, room)
+
+	var body string
+	if cols == 2 && len(placed) > 1 {
+		left := strings.Join(placed[0], "\n")
+		right := strings.Join(placed[1], "\n")
+		body = lipgloss.JoinHorizontal(lipgloss.Top,
+			lipgloss.NewStyle().Width(colW+helpGutter).Render(left), right)
+	} else {
+		var all []string
+		for _, c := range placed {
+			all = append(all, c...)
 		}
-		shown = keyHelp[:room]
-		more = fmt.Sprintf("  … %d more — make the window taller to see them", len(keyHelp)-room)
+		body = strings.Join(all, "\n")
 	}
 
 	var b strings.Builder
-	b.WriteString(th.header.Render("❓ keys") + "\n\n")
-	for _, k := range shown {
-		fmt.Fprintf(&b, "  %s %-18s %s\n", k.icon, k.keys, th.dim.Render(k.what))
+	b.WriteString(th.header.Render("❓ keys") + "\n\n" + body)
+	if hidden := len(keyHelp) - shown; hidden > 0 {
+		b.WriteString("\n" + th.dim.Render(fmt.Sprintf("  … %d more — make the window taller to see them", hidden)))
 	}
-	if more != "" {
-		b.WriteString(th.dim.Render(more) + "\n")
-	}
-	b.WriteString("\n" + th.dim.Render("any key to close"))
+	b.WriteString("\n\n" + th.dim.Render("any key to close"))
 	return m.renderPanel(th.panel, strings.TrimRight(b.String(), "\n"))
+}
+
+// Two columns from this inner width up: one column of grouped sections is ~50
+// rows tall, which no ordinary terminal shows whole.
+const (
+	helpTwoColumnMin = 80
+	helpGutter       = 2
+)
+
+// helpSections renders keyHelp grouped by helpGroups: each section is its
+// header line, then one line per key in keyHelp order. The key column is
+// sized PER SECTION, so the one long chord (ctrl+d / ctrl+u) does not starve
+// every other section's descriptions; each line is cut to colW.
+func helpSections(colW int) [][]string {
+	var out [][]string
+	for _, g := range helpGroups {
+		kw := 0
+		for _, k := range keyHelp {
+			if k.group == g {
+				kw = max(kw, lipgloss.Width(k.keys))
+			}
+		}
+		sec := []string{th.header.Render(g)}
+		for _, k := range keyHelp {
+			if k.group == g {
+				line := fmt.Sprintf(" %s %-*s %s", k.icon, kw, k.keys, th.dim.Render(k.what))
+				sec = append(sec, trunc(line, colW))
+			}
+		}
+		if len(sec) > 1 {
+			out = append(out, sec)
+		}
+	}
+	return out
+}
+
+// layoutHelp places whole sections, in order, into up to cols columns of at
+// most room rows (room < 0 = unknown terminal: unbounded), choosing the
+// shortest column height that fits everything so two columns come out
+// balanced. What does not fit is dropped from the END, so the access keys are
+// the last to go; only a first section that cannot fit on its own is cut.
+// It returns the columns and how many keys they show. A section after the
+// first in a column is preceded by a blank line, and the "… N more" line is
+// reserved whenever something is dropped.
+func layoutHelp(sections [][]string, cols, room int) ([][]string, int) {
+	fill := func(h int) ([][]string, int, bool) {
+		placed := make([][]string, 0, cols)
+		col, keys := []string(nil), 0
+		for i, sec := range sections {
+			gap := 0
+			if len(col) > 0 {
+				gap = 1
+			}
+			if len(col)+gap+len(sec) > h {
+				if len(col) > 0 && len(placed) < cols-1 {
+					placed = append(placed, col)
+					col, gap = nil, 0
+				}
+				if len(col)+gap+len(sec) > h {
+					if i == 0 && len(col) == 0 { // the first section is always shown
+						keep := min(max(h, 2), len(sec))
+						col = append(col, sec[:keep]...)
+						keys += keep - 1
+					}
+					return append(placed, col), keys, false
+				}
+			}
+			if gap == 1 {
+				col = append(col, "")
+			}
+			col = append(col, sec...)
+			keys += len(sec) - 1
+		}
+		return append(placed, col), keys, true
+	}
+	total := 0
+	for _, sec := range sections {
+		total += len(sec) + 1
+	}
+	for h := 1; room < 0 || h <= room; h++ {
+		if placed, keys, all := fill(h); all {
+			return placed, keys
+		}
+		if h > total {
+			break
+		}
+	}
+	placed, keys, _ := fill(max(room-1, 1)) // something is dropped: keep a row for "… N more"
+	return placed, keys
 }
 
 func max0(n int) int {

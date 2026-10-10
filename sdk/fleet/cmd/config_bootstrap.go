@@ -85,7 +85,7 @@ func hostKeyHint(rows []Row) string {
 			continue
 		}
 		if b.Len() == 0 {
-			b.WriteString("\nhost key not trusted — compare fingerprints, then accept (backed up + logged):\n")
+			b.WriteString("\nhost key not trusted — compare fingerprints, then accept (backed up + logged; or T in `fleet tui`):\n")
 		}
 		fmt.Fprintf(&b, "  fleet trust %-20s # %s\n", r.Alias, r.Note)
 	}

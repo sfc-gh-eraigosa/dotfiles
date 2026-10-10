@@ -99,7 +99,7 @@ func TestHostKeyRowsAreSentToFleetTrustNotSshCopyID(t *testing.T) {
 		t.Fatalf("host-key rows need no key bootstrap, got %v", got)
 	}
 	got := bootstrapHint(rows)
-	for _, want := range []string{"fleet trust rekeyed", "fleet trust fresh", "CHANGED"} {
+	for _, want := range []string{"fleet trust rekeyed", "fleet trust fresh", "CHANGED", "T in `fleet tui`"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("hint missing %q:\n%s", want, got)
 		}

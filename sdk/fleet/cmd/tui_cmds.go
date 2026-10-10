@@ -14,7 +14,6 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
-	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
@@ -741,27 +740,30 @@ func authorizeArgs(alias string) []string {
 	return []string{"ssh-copy-id", "-i", os.ExpandEnv("$HOME/.ssh/id_ed25519.pub"), alias}
 }
 
-// authorizeArgsFor picks the fix for the row's fault. A host-key fault lives in
-// OUR known_hosts, so ssh-copy-id would connect through it, be refused, and
-// print ssh's MITM banner twice without changing anything; it self-execs
-// `fleet trust` instead, so the CLI verb's typed confirmation, backup and audit
-// apply identically from either entry point.
-func authorizeArgsFor(self, alias, note string) []string {
-	if sshfail.IsHostKey(note) {
-		return []string{self, "trust", alias}
-	}
-	return authorizeArgs(alias)
+// authorizeShell suspends the TUI so ssh-copy-id owns the terminal and can
+// prompt for a password itself. On return the host is re-probed, so the row
+// reflects what changed rather than the stale auth-failed verdict.
+func authorizeShell(alias string) tea.Cmd {
+	argv := authorizeArgs(alias)
+	c := exec.Command(argv[0], argv[1:]...)
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		return execDoneMsg{alias: alias, err: err, ssh: true}
+	})
 }
 
-// authorizeShell suspends the TUI so the fix (ssh-copy-id, or fleet trust)
-// owns the terminal and can prompt itself. On return the host is re-probed, so
-// the row reflects what changed rather than the stale auth-failed verdict.
-func authorizeShell(alias, note string) tea.Cmd {
+// trustArgs self-execs the CLI verb, so the typed confirmation, the backup and
+// the audit record apply identically from the TUI and the command line.
+func trustArgs(self, alias string) []string { return []string{self, "trust", alias} }
+
+// trustShell suspends the TUI so `fleet trust` owns the terminal: it prints
+// both fingerprint sets and reads the typed alias itself. On return the host
+// is re-probed, like every other handover.
+func trustShell(alias string) tea.Cmd {
 	self, err := os.Executable()
 	if err != nil {
 		self = "fleet"
 	}
-	argv := authorizeArgsFor(self, alias, note)
+	argv := trustArgs(self, alias)
 	c := exec.Command(argv[0], argv[1:]...)
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return execDoneMsg{alias: alias, err: err, ssh: true}

@@ -19,7 +19,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | :-- | :-- |
 | `fleet status [host...]` | table of host · commit · **branch** · last run · status; `--json`; exits non-zero if any host is stale |
 | `fleet discover [--scan]` | list every concrete ssh-config host as `in-fleet` / `available`; `--scan` sweeps the subnet to refresh a moved `HostName` and offer unknown responders; `--json`; `--add-all` bulk-adopts (one pass, one backup; `--dry-run` / `--yes`) |
-| `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v`/`a` selection, concurrent background updates (`--jobs`), `w` wake, `s` ssh, `F` forget answers, `?` help. The header names **this** machine (`⌂ <hostname>`) and its row's alias is painted the same colour; the version's commit is an OSC 8 link to its GitHub page |
+| `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v`/`a` selection, concurrent background updates (`--jobs`), `w` wake, `s` ssh, `T` trust a changed host key, `A` authorize your key, `F` forget answers, `?` grouped help; the status line names the key that fixes the cursor row. The header names **this** machine (`⌂ <hostname>`) and its row's alias is painted the same colour; the version's commit is an OSC 8 link to its GitHub page |
 | `fleet update <host>...` | walks a `fleet.yaml` step plan per host, serially: a DAG of `sync` (fetch → ff-only, one network call) / `run` (verbatim shell, batch or `ssh -t`) / `gh-auth` steps; with no plan file it is today's fetch → ff → `install.sh`. Flags: `--local skip\|rescue\|carry`, `--force` (= `--local rescue`), `--no-restore`, `--reset`, `--timeout D`, `--no-retry`, `--ref B\|repo=B` (repeatable), `--file PATH`, `--dry-run` (prints every effective script, preamble included, sends nothing), `--list-inputs` (what the plan's `inputs:` need; no host), `--input [host:]id=v\|@file\|env:NAME` (repeatable; a confidential value only from a file or the environment); `--json` from root. `fleet update init [--file] [--overwrite] [--print]` writes the starter plan |
 | `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
 | `fleet remove <alias> [--purge]` | unmark (keeps SSH access); `--purge` deletes the block |
@@ -245,18 +245,36 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   `TestFailureWithNoEvidenceStaysUnreachable`.
 - **A host-key fault is repaired here, never accepted silently.** `sshfail.IsHostKey`
   splits the auth notes: a host-key fault lives in OUR `known_hosts`, a credential fault
-  in the remote `authorized_keys`, so `fleet status` sends the first to `fleet trust` and
-  only the second to `ssh-copy-id`, and TUI `A` self-execs `fleet trust` on a host-key row
-  (ssh-copy-id there connects twice and prints ssh's MITM banner twice, fixing nothing).
-  `fleet trust` never decides for the operator: a changed key needs the alias typed back
-  — a reflexive `y` is refused — or a `--fingerprint` the host actually presents; the
-  file is backed up before `ssh-keygen -R`, a failed removal appends nothing, every
-  acceptance is a WARN `host key trusted` record in `fleet.log` (old + new fingerprints,
-  backup, how confirmed), and a host still refusing afterwards is a failure. Pinned by
-  `TestTrustShowsBothFingerprintsAndRefusesWithoutTheTypedAlias`,
+  in the remote `authorized_keys`. They get different keys because they are different
+  fixes on different machines — TUI `T` self-execs `fleet trust` (only on a host-key row,
+  `canTrust`) and `A` runs `ssh-copy-id` (only on a credential row, `canAuthorize`);
+  `fleet status` likewise sends the first to `fleet trust` and only the second to
+  `ssh-copy-id` (which on a host-key row connects twice and prints ssh's MITM banner
+  twice, fixing nothing). `fleet trust` never decides for the operator: a changed key
+  needs the alias typed back — a reflexive `y` is refused — or a `--fingerprint` the host
+  actually presents; the file is backed up before `ssh-keygen -R`, a failed removal
+  appends nothing, every acceptance is a WARN `host key trusted` record in `fleet.log`
+  (old + new fingerprints, backup, how confirmed), and a host still refusing afterwards is
+  a failure. Pinned by `TestTrustShowsBothFingerprintsAndRefusesWithoutTheTypedAlias`,
   `TestTrustPinThatDoesNotMatchChangesNothing`, `TestTrustRecordsTheReplacementForLaterReview`,
   `TestReplaceStopsBeforeAppendingWhenRemovalFails`,
-  `TestHostKeyRowsAreSentToFleetTrustNotSshCopyID`, `TestAuthorizeOnAHostKeyRowRunsFleetTrust`.
+  `TestHostKeyRowsAreSentToFleetTrustNotSshCopyID`, `TestTrustAndAuthorizeSplitByFault`,
+  `TestTKeyHandsOverOnlyOnAHostKeyRow`.
+- **Every fault row names the key that fixes it.** `rowTip` puts it on the status line
+  (`press T` / `A` or `s` / `w` / `u`, and `H`·`e`·`u` after a failed update) whenever no
+  fresher `m.status` is being shown, and only when that key would act — a host another
+  path owns (polling, waking, updating) gets no tip. Keys living only in `?` were
+  undiscoverable at exactly the moment they were needed. Pinned by
+  `TestRowTipNamesTheKeyThatFixesTheRow`, `TestTheLatestStatusOutranksTheTip`,
+  `TestNoTipForAHostAnotherPathOwns`.
+- **`?` is grouped, and drops whole sections from the end.** Every `keyHelp` entry has a
+  `group` from `helpGroups` (SSH & access first, General last); `layoutHelp` places whole
+  sections into two balanced columns at `panelInner() >= 80` (one otherwise), with each
+  section's key column sized to its own longest key, and drops trailing sections — never
+  the access keys — on a short terminal. Descriptions must fit a column at width 100.
+  Pinned by `TestEveryKeyBelongsToADeclaredHelpGroup`, `TestSSHKeysShareOneSection`,
+  `TestHelpRendersSectionsInDeclaredOrder`, `TestShortTerminalHelpKeepsTheSSHSection`,
+  `TestHelpDescriptionsFitTheirColumn`.
 - **Execute() is the one error printer, and a failed run prints no usage.** Root sets
   `SilenceErrors`; `PersistentPreRun` sets `SilenceUsage`, so arg/flag mistakes (which
   fail before it) still show usage. Pinned by `TestARuntimeFailurePrintsNoUsageAndNoCobraError`,

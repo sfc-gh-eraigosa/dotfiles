@@ -7,8 +7,21 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// keyHelp is the single source of truth for the keymap: the help overlay
-// renders from it, so there is no second hand-written list to drift.
+// The `?` overlay's sections, in display order. A short terminal drops whole
+// sections from the END, so the access keys — the ones you reach for when a
+// host is broken — come first and navigation (which every vim user already
+// knows) goes before General's two keys, which the header strip always shows.
+const (
+	grpSSH     = "SSH & access"
+	grpUpdate  = "Update & recover"
+	grpPanes   = "Panes & history"
+	grpSearch  = "Search & select"
+	grpNav     = "Navigate"
+	grpGeneral = "General"
+)
+
+var helpGroups = []string{grpSSH, grpUpdate, grpPanes, grpSearch, grpNav, grpGeneral}
+
 // keyHelp is the single source of truth for the keymap: both the always-visible
 // header strip and the `?` overlay render from it, so a key can never again be
 // implemented and documented in the overlay while staying invisible on screen
@@ -17,37 +30,44 @@ import (
 // icon is a visual anchor next to the letter — the letter stays authoritative,
 // the icon just makes the strip scannable. hdr marks the few that earn a place
 // in the always-on header; the rest live in the overlay.
+//
+// group places the key in a `?` overlay section (helpGroups gives the order).
+// Keys that fix the same kind of problem sit together — everything about
+// getting INTO a host is one block — so the order of this table can stay what
+// the header strip needs without scattering the overlay.
 var keyHelp = []struct {
 	icon, keys, what string
 	hdr              bool
+	group            string
 }{
-	{"❓", "?", "toggle this help", true},
-	{"🔍", "/", "regex search (smartcase)", true},
-	{"●", "space", "toggle selection", true},
-	{"🚀", "u", "update selection (or cursor host)", true},
-	{"📜", "l", "show / hide the streaming log pane", true},
-	{"🗂️", "h", "show / hide the host list", true},
-	{"⚠️", "e", "show / hide the stderr pane · (confirm) edit the remembered answers", true},
-	{"🖥️", "s", "ssh to cursor host", true},
-	{"\U0001f5c3\ufe0f", "H", "history: past runs for the selection (or cursor host)", true},
-	{"🔄", "r", "refresh", true},
-	{"🚪", "q", "quit", true},
-	{"⬍", "j / k / ↓ / ↑", "move cursor", false},
-	{"⤒", "gg / G", "first / last host", false},
-	{"⇟", "ctrl+d / ctrl+u", "half page down / up", false},
-	{"⇞", "ctrl+f / ctrl+b", "page down / up", false},
-	{"➡️", "n / N", "next / previous match", false},
-	{"◉", "a", "select all (respects an active search)", false},
-	{"📖", "J / K", "scroll the log pane (G re-follows the tail)", false},
-	{"◍", "v", "visual range select", false},
-	{"\u23ce", "enter", "(history) open the run under the cursor", false},
-	{"⎋", "esc", "(history) close the run, then leave history \u00b7 else clear search / selection", false},
-	{"⏰", "w", "wake selection (or cursor host)", false},
-	{"📥", "p", "pull ssh config FROM cursor host", false},
-	{"📤", "P", "push ssh config TO cursor host", false},
-	{"🔑", "A", "fix an auth-failed host: ssh-copy-id, or fleet trust for a host-key fault", false},
-	{"🗑️", "F", "forget answers (incl. saved preferences)", false},
-	{"⇥", "tab / enter", "(answer form) next field · esc backs out, keeping answers", false},
+	{"❓", "?", "toggle this help", true, grpGeneral},
+	{"🔍", "/", "regex search (smartcase)", true, grpSearch},
+	{"●", "space", "toggle selection", true, grpSearch},
+	{"🚀", "u", "update selection (or cursor)", true, grpUpdate},
+	{"📜", "l", "show / hide the streaming log pane", true, grpPanes},
+	{"🗂️", "h", "show / hide the host list", true, grpPanes},
+	{"⚠️", "e", "stderr pane · in confirm: answers", true, grpPanes},
+	{"🖥️", "s", "ssh session (primes a password host)", true, grpSSH},
+	{"\U0001f5c3\ufe0f", "H", "history of past runs", true, grpPanes},
+	{"🔄", "r", "refresh", true, grpUpdate},
+	{"🚪", "q", "quit", true, grpGeneral},
+	{"⬍", "j / k / ↓ / ↑", "move cursor", false, grpNav},
+	{"⤒", "gg / G", "first / last host", false, grpNav},
+	{"⇟", "ctrl+d / ctrl+u", "half page down / up", false, grpNav},
+	{"⇞", "ctrl+f / ctrl+b", "page down / up", false, grpNav},
+	{"➡️", "n / N", "next / previous match", false, grpSearch},
+	{"◉", "a", "select all (honours the search)", false, grpSearch},
+	{"📖", "J / K", "scroll the log pane (G follows)", false, grpPanes},
+	{"◍", "v", "visual range select", false, grpSearch},
+	{"\u23ce", "enter", "open the history run at the cursor", false, grpPanes},
+	{"⎋", "esc", "close run · leave history · clear", false, grpSearch},
+	{"⏰", "w", "wake selection (or cursor)", false, grpUpdate},
+	{"📥", "p", "pull ssh config FROM cursor host", false, grpSSH},
+	{"📤", "P", "push ssh config TO cursor host", false, grpSSH},
+	{"🔑", "A", "authorize your key (ssh-copy-id)", false, grpSSH},
+	{"🔏", "T", "trust a changed host key (fleet trust)", false, grpSSH},
+	{"🗑️", "F", "forget answers + saved prefs", false, grpUpdate},
+	{"⇥", "tab / enter", "answer form: next field", false, grpUpdate},
 }
 
 // route owns every keystroke. Mode comes first: a key typed in search is text,
@@ -494,11 +514,15 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// design, precisely so a password cannot be piped — and that is a
 		// feature here: no credential ever passes through fleet, so there is
 		// no secret-handling code to get wrong.
-		//
-		// A host-key row is the exception: the fault is in OUR known_hosts,
-		// so A runs `fleet trust` instead (see authorizeArgsFor).
 		if m.canAuthorize() {
-			return m, authorizeShell(m.cursor, m.rows[m.indexOf(m.cursor)].Note)
+			return m, authorizeShell(m.cursor)
+		}
+	case "T":
+		// The other auth fault: the host's key does not match known_hosts.
+		// The fix is on THIS machine, so hand the terminal to `fleet trust`,
+		// which shows both fingerprints and makes the operator type the alias.
+		if m.canTrust() {
+			return m, trustShell(m.cursor)
 		}
 	case "r":
 		// r is also the way back from a finished wave: the dots stop showing
