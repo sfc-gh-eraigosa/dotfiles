@@ -363,9 +363,13 @@ func TestPinsToken(t *testing.T) {
 // value and restores them.
 func withPinsGlobals(t *testing.T, repo string, jsonOut bool) {
 	t.Helper()
-	oldRepo, oldJSON := flagRepo, flagJSON
-	flagRepo, flagJSON = repo, jsonOut
-	t.Cleanup(func() { flagRepo, flagJSON = oldRepo, oldJSON })
+	oldRepo, oldJSON, oldExplicit, oldDefault := flagRepo, flagJSON, flagRepoExplicit, defaultDotfilesRepo
+	// Hermetic: no fallback to the developer's real ~/git/dotfiles, whose
+	// manifest made "missing manifest" tests pass in CI and fail locally.
+	flagRepo, flagJSON, flagRepoExplicit, defaultDotfilesRepo = repo, jsonOut, false, ""
+	t.Cleanup(func() {
+		flagRepo, flagJSON, flagRepoExplicit, defaultDotfilesRepo = oldRepo, oldJSON, oldExplicit, oldDefault
+	})
 }
 
 func runPinsCmd(t *testing.T, d *pinsDeps, args ...string) (string, error) {
