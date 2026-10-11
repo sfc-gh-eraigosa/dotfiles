@@ -36,7 +36,7 @@ build: ## Build the docker test image (buildx; FROM the GHCR base; run build-bas
 
 .PHONY: build-base
 build-base: ## Build the base image locally (fallback when the GHCR pull is unavailable; login: gh auth token | docker login ghcr.io -u <user> --password-stdin)
-	docker build -f docker/Dockerfile.base -t $(BASE_IMAGE) .
+	docker build -f docker/Dockerfile.base --build-arg COMPOSE_VERSION="$$(awk '$$1 == "docker-compose" { print $$3; exit }' opt/profiles/versions.tsv)" -t $(BASE_IMAGE) .
 
 .PHONY: test
 test: shell-test hook-test ## Run all tests (shell-test + hook-test + scripts/test.sh all)

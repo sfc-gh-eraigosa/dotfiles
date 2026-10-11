@@ -707,11 +707,12 @@ else
 fi
 else gff_skip_msg install.runtime.rbenv; fi
 
-# install nvm
+# install/update nvm to the pin in opt/profiles/versions.tsv. Converging: a
+# bump updates an existing ~/.nvm in place (it used to install v0.39.7 once and
+# never touch it again).
 if gff_on install.runtime.nvm; then
-  if [ ! -d "${HOME}/.nvm" ]; then
-    echo "Installing nvm..."
-    curl -fsSL -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash > /dev/null 2>&1
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_nvm.sh" ]; then
+    "${BASE_DIR}/opt/scripts/system/install_nvm.sh" || echo "WARNING: nvm install reported problems; continuing."
   fi
 else gff_skip_msg install.runtime.nvm; fi
 

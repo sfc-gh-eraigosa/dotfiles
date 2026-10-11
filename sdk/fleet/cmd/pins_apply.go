@@ -60,6 +60,7 @@ var installerGates = map[string]installerGate{
 	"opt/scripts/git/install_gitleaks.sh":     {key: "install.git.gitleaks"},
 	"opt/scripts/system/install_k8s_tools.sh": {key: "install.tools.k8s"},
 	"opt/scripts/system/install_herdr.sh":     {key: "install.tools.herdr"},
+	"opt/scripts/system/install_nvm.sh":       {key: "install.runtime.nvm"},
 }
 
 // gffInstallerGate answers an installer's gate from the repo's gff. An

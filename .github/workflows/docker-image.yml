@@ -150,7 +150,11 @@ jobs:
 
       - name: Install golangci-lint
         run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+          # Version from the pins manifest, so `fleet pins bump golangci-lint`
+          # (and the weekly pins report) own it — no second copy here.
+          v=$(awk '$1 == "golangci-lint" { print $3; exit }' opt/profiles/versions.tsv)
+          [ -n "$v" ] || { echo "::error::golangci-lint missing from opt/profiles/versions.tsv"; exit 1; }
+          go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v${v}"
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Install shellcheck
@@ -273,7 +277,11 @@ jobs:
             sdk/**/*.sum
       - name: Install golangci-lint
         run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+          # Version from the pins manifest, so `fleet pins bump golangci-lint`
+          # (and the weekly pins report) own it — no second copy here.
+          v=$(awk '$1 == "golangci-lint" { print $3; exit }' opt/profiles/versions.tsv)
+          [ -n "$v" ] || { echo "::error::golangci-lint missing from opt/profiles/versions.tsv"; exit 1; }
+          go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v${v}"
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Run make lint-go
         run: make lint-go
