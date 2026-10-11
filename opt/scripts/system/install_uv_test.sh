@@ -68,9 +68,15 @@ make_release() {  # make_release <version>
 make_release 0.12.16
 make_release 0.11.0
 
+# Hermetic: never read the REAL opt/profiles/versions.tsv. Its pins move with
+# every `fleet pins bump`, and the fixtures here are built for the script's own
+# fallback version — a bump once broke this test in CI. PINS_GFF="" skips the
+# host's gff lookup for the track mode.
+NO_MANIFEST="${TMP}/no-versions.tsv"
 run_uv() {  # run_uv <install dir> [VAR=value ...]
     _dir="$1"; shift
-    env -u UV_VERSION -u UV_FORCE PATH="${BIN}:${PATH}" UV_INSTALL_DIR="${_dir}" \
+    env -u UV_VERSION -u UV_FORCE -u GFF_PINS_TRACK -u GFF_PINS_TRACK_MODE \
+        PINS_MANIFEST="${NO_MANIFEST}" PINS_GFF="" PATH="${BIN}:${PATH}" UV_INSTALL_DIR="${_dir}" \
         UV_RELEASE_BASE="file://${REL}" "$@" bash "${SCRIPT}" 2>&1
 }
 
@@ -120,7 +126,8 @@ ARMBIN="${TMP}/armstubs"; mkdir -p "${ARMBIN}"
 # shellcheck disable=SC2016 # $1 belongs to the stub, expanded when it runs
 printf '#!/bin/sh\ncase "$1" in -s) echo Linux ;; -m) echo armv7l ;; *) echo Linux ;; esac\n' > "${ARMBIN}/uname"
 chmod +x "${ARMBIN}/uname"
-out="$(env -u UV_VERSION -u UV_FORCE PATH="${ARMBIN}:${PATH}" UV_INSTALL_DIR="${TMP}/bin-arm" \
+out="$(env -u UV_VERSION -u UV_FORCE -u GFF_PINS_TRACK -u GFF_PINS_TRACK_MODE \
+       PINS_MANIFEST="${NO_MANIFEST}" PINS_GFF="" PATH="${ARMBIN}:${PATH}" UV_INSTALL_DIR="${TMP}/bin-arm" \
        UV_RELEASE_BASE="file://${REL}" bash "${SCRIPT}" 2>&1)"; rc=$?
 assert_eq "${rc}" "0" "32-bit ARM exits 0 (skip, not fail)"
 assert_eq "$([ -e "${TMP}/bin-arm/uv" ] && echo present || echo absent)" "absent" "32-bit ARM installs nothing"
