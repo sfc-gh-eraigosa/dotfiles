@@ -570,13 +570,27 @@ if command -v goenv &> /dev/null; then
   esac
   export PATH
   unset __goenv_path_safe
+  # The Go pin is the `go` row of opt/profiles/versions.tsv (@.go-version), so
+  # gff pins.track.mode=latest can float it; .go-version stays the fallback.
+  PINNED_GO_VERSION=""
   if [ -f "${BASE_DIR}/.go-version" ]; then
     PINNED_GO_VERSION=$(tr -d '[:space:]' < "${BASE_DIR}/.go-version")
-    echo "Ensuring Go ${PINNED_GO_VERSION} is installed (pinned via .go-version)..."
+  fi
+  if [ -f "${BASE_DIR}/opt/lib/pins.sh" ]; then
+    # shellcheck source=opt/lib/pins.sh
+    . "${BASE_DIR}/opt/lib/pins.sh"
+    PINNED_GO_VERSION=$(pins_want go "${PINNED_GO_VERSION}")
+  fi
+  if [ -n "${PINNED_GO_VERSION}" ] && [ "${PINNED_GO_VERSION}" != "latest" ]; then
+    echo "Ensuring Go ${PINNED_GO_VERSION} is installed (pinned via versions.tsv / .go-version)..."
     goenv install -s "${PINNED_GO_VERSION}"
     goenv global "${PINNED_GO_VERSION}"
   else
-    echo "WARNING: ${BASE_DIR}/.go-version not found; installing latest goenv-known Go."
+    if [ "${PINNED_GO_VERSION}" = "latest" ]; then
+      echo "pins.track.mode=latest: installing the latest goenv-known Go."
+    else
+      echo "WARNING: ${BASE_DIR}/.go-version not found; installing latest goenv-known Go."
+    fi
     goenv install -s latest
     LATEST_INSTALLED=$(goenv versions --bare | tail -1)
     if [ -n "$LATEST_INSTALLED" ]; then

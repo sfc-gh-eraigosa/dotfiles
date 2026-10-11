@@ -10,11 +10,33 @@
 #   * mikefarah yq is a single static Go binary, so fetching the official
 #     release is the most portable option (mirrors install_sops.sh).
 #
-# Safe to re-run. Override the version with YQ_VERSION=x.y.z.
+# Converges (objective `pins`): the version comes from opt/profiles/versions.tsv
+# (pins_want yq); a host whose ~/opt/bin/yq differs is re-downloaded, a host
+# already on it is a no-op. A mikefarah yq OUTSIDE ~/opt/bin (brew) is left
+# alone; the unrelated kislyuk yq (apt) is shadowed by ours, never modified.
+#
+# Environment:
+#   YQ_VERSION       version to install (default: versions.tsv, else 4.44.6)
+#   YQ_FORCE=1       reinstall even when already at YQ_VERSION
+#   YQ_INSTALL_DIR   where the binary goes (default ~/opt/bin)
+#   YQ_RELEASE_BASE  release URL base (tests point it at a file:// fixture)
 set -e
 
-YQ_VERSION="${YQ_VERSION:-4.44.6}"
-INSTALL_DIR="${HOME}/opt/bin"
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PINS_LIB="${SELF_DIR}/../../lib/pins.sh"
+if [ -f "${PINS_LIB}" ]; then
+    # shellcheck source=../../lib/pins.sh
+    . "${PINS_LIB}"
+fi
+# Fail-open: without the lib, the hardcoded default below still applies.
+command -v pins_want >/dev/null 2>&1 || pins_want() { printf '%s\n' "${2:-}"; }
+command -v pins_latest_gh >/dev/null 2>&1 || pins_latest_gh() { return 1; }
+
+YQ_VERSION="${YQ_VERSION:-$(pins_want yq 4.44.6)}"
+YQ_VERSION="${YQ_VERSION#v}"
+INSTALL_DIR="${YQ_INSTALL_DIR:-${HOME}/opt/bin}"
+RELEASE_BASE="${YQ_RELEASE_BASE:-https://github.com/mikefarah/yq/releases/download}"
+OWN="${INSTALL_DIR}/yq"
 
 # Put the install dir on PATH for the rest of this script. Without it, both the
 # "already installed" probe and the post-install verification below ask a PATH
@@ -32,11 +54,21 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Already present, runnable, AND the mikefarah build? Nothing to do. Probing
-# `yq --version | grep mikefarah` also means a stale kislyuk yq or a dangling
-# symlink is treated as "not installed" and gets replaced below.
-if command -v yq >/dev/null 2>&1 && yq --version 2>&1 | grep -qi mikefarah; then
-    echo -e "${GREEN}yq already installed: $(yq --version 2>&1 | head -1)${NC}"
+info() { echo -e "${BLUE}$*${NC}"; }
+ok()   { echo -e "${GREEN}$*${NC}"; }
+die()  { echo -e "${RED}install_yq: $*${NC}" >&2; exit 1; }
+
+is_mikefarah() { "$1" --version 2>&1 | grep -qi mikefarah; }
+# "yq (https://github.com/mikefarah/yq/) version v4.44.6" -> 4.44.6
+version_of() { "$1" --version 2>&1 | sed -n 's/.*version v\{0,1\}\([0-9][0-9.]*\).*/\1/p' | head -n 1 || true; }
+
+# Ownership: a mikefarah yq on PATH that is NOT ours belongs to brew — report it
+# and leave it alone (YQ_FORCE=1 installs ours anyway). A stale kislyuk yq or a
+# dangling symlink is not the tool we want, so we install ours in front of it.
+FOUND="$(command -v yq 2>/dev/null || true)"
+if [ "${YQ_FORCE:-0}" != "1" ] && [ ! -x "${OWN}" ] && [ -n "${FOUND}" ] \
+        && [ "${FOUND}" != "${OWN}" ] && is_mikefarah "${FOUND}"; then
+    info "yq at ${FOUND} ($(version_of "${FOUND}")) is managed outside ${INSTALL_DIR}; leaving it alone"
     exit 0
 fi
 
@@ -44,38 +76,58 @@ fi
 case "$(uname -s)" in
     Linux)  YQ_OS="linux"  ;;
     Darwin) YQ_OS="darwin" ;;
-    *) echo -e "${RED}install_yq: unsupported OS $(uname -s)${NC}"; exit 1 ;;
+    *) die "unsupported OS $(uname -s)" ;;
 esac
 case "$(uname -m)" in
     x86_64)         YQ_ARCH="amd64" ;;
     arm64|aarch64)  YQ_ARCH="arm64" ;;
     armv7l|armv6l)  YQ_ARCH="arm"   ;;
-    *) echo -e "${RED}install_yq: unsupported arch $(uname -m)${NC}"; exit 1 ;;
+    *) die "unsupported arch $(uname -m)" ;;
 esac
 
-mkdir -p "${INSTALL_DIR}"
+if [ "${YQ_VERSION}" = "latest" ]; then
+    YQ_VERSION="$(pins_latest_gh mikefarah/yq)" || die "could not resolve the latest yq release"
+fi
+case "${YQ_VERSION}" in
+    *[!0-9.]*|"") die "YQ_VERSION must look like 4.44.6 (got '${YQ_VERSION}')" ;;
+esac
 
-# Clear any stale entry (including a dangling symlink) before writing the binary.
-if [ -e "${INSTALL_DIR}/yq" ] || [ -L "${INSTALL_DIR}/yq" ]; then
-    rm -f "${INSTALL_DIR}/yq"
+HAVE=""
+if [ -x "${OWN}" ] && is_mikefarah "${OWN}"; then HAVE="$(version_of "${OWN}")"; fi
+if [ "${HAVE}" = "${YQ_VERSION}" ] && [ "${YQ_FORCE:-0}" != "1" ]; then
+    ok "yq already at ${HAVE}: ${OWN}"
+    exit 0
 fi
 
-URL="https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_${YQ_OS}_${YQ_ARCH}"
-echo -e "${BLUE}Installing yq ${YQ_VERSION} (${YQ_OS}/${YQ_ARCH}) to ${INSTALL_DIR}/yq...${NC}"
-curl -fsSL "$URL" -o "${INSTALL_DIR}/yq"
-chmod +x "${INSTALL_DIR}/yq"
+command -v curl >/dev/null 2>&1 || die "curl is required to download yq"
+mkdir -p "${INSTALL_DIR}"
+URL="${RELEASE_BASE}/v${YQ_VERSION}/yq_${YQ_OS}_${YQ_ARCH}"
+if [ -n "${HAVE}" ]; then
+    info "Updating yq ${HAVE} -> ${YQ_VERSION} (${YQ_OS}/${YQ_ARCH}) in ${INSTALL_DIR}..."
+else
+    info "Installing yq ${YQ_VERSION} (${YQ_OS}/${YQ_ARCH}) to ${OWN}..."
+fi
+TMP_BIN="$(mktemp "${INSTALL_DIR}/.yq.XXXXXX")"
+curl -fsSL "${URL}" -o "${TMP_BIN}" || { rm -f "${TMP_BIN}"; die "download failed: ${URL}"; }
+chmod +x "${TMP_BIN}"
 
 # Verify the binary we just wrote actually runs, THEN that PATH resolves to it.
 # Separating the two makes the failure message name the real problem instead of
 # blaming PATH for a corrupt download (or vice versa).
-if ! "${INSTALL_DIR}/yq" --version >/dev/null 2>&1; then
-    echo -e "${RED}install_yq: ${INSTALL_DIR}/yq was written but does not run (corrupt download?).${NC}"
-    exit 1
+if ! "${TMP_BIN}" --version >/dev/null 2>&1; then
+    rm -f "${TMP_BIN}"
+    die "${URL} was downloaded but does not run (corrupt download?)."
 fi
+# Clear any stale entry (including a dangling symlink) before moving it in.
+if [ -e "${OWN}" ] || [ -L "${OWN}" ]; then
+    rm -f "${OWN}"
+fi
+mv "${TMP_BIN}" "${OWN}"
+
 if command -v yq >/dev/null 2>&1 && yq --version >/dev/null 2>&1; then
-    echo -e "${GREEN}yq installed: $(yq --version 2>&1 | head -1)${NC}"
+    ok "yq installed: $(yq --version 2>&1 | head -1)"
 else
-    echo -e "${RED}install_yq: yq works at ${INSTALL_DIR}/yq but PATH does not resolve it.${NC}"
+    echo -e "${RED}install_yq: yq works at ${OWN} but PATH does not resolve it.${NC}"
     echo -e "${RED}            Add ${INSTALL_DIR} to PATH (see opt/profiles/.profile).${NC}"
     exit 1
 fi
