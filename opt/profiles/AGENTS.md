@@ -25,6 +25,7 @@ This directory contains the core configuration files for the shell environment, 
 
 - `Brewfile`: List of Homebrew packages to install.
 - `requirements.txt`: Python dependencies.
+- `versions.tsv`: the **version-pin manifest** for tools install.sh downloads (Go, uv, glow, rust, sops, yq, gitleaks, kubectl/helm/kind, herdr, keyd, Nerd Fonts, vault). Each row has a track (`pin`/`floor`/`latest`), a version (or `@file`), the upstream, the installer and a version probe. Installers read it through `opt/lib/pins.sh` (`pins_want`). Check and bump with `fleet pins status|bump|apply` (see `sdk/fleet/README.md`). Design: `docs/mbo/designs/pins.md`.
 
 ## Desktop & X11
 

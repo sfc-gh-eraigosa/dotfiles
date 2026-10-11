@@ -21,11 +21,27 @@
 
 set -o nounset
 
-KEYD_VERSION="v2.6.0"
-KEYD_REPO="https://github.com/rvaiya/keyd.git"
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+
+# keyd's git tag, from the `keyd` row of opt/profiles/versions.tsv (fail-open to
+# v2.6.0). KEYD_VERSION=x.y.z / vx.y.z in the environment overrides it.
+if [ -z "${KEYD_VERSION:-}" ]; then
+	if [ -f "${REPO_ROOT}/opt/lib/pins.sh" ]; then
+		# shellcheck source=../../lib/pins.sh
+		. "${REPO_ROOT}/opt/lib/pins.sh"
+	fi
+	if command -v pins_want > /dev/null 2>&1; then
+		KEYD_VERSION="$(pins_want keyd 2.6.0)"
+		if [ "${KEYD_VERSION}" = "latest" ]; then
+			KEYD_VERSION="$(pins_latest_gh rvaiya/keyd || echo 2.6.0)"
+		fi
+	else
+		KEYD_VERSION="2.6.0"
+	fi
+fi
+KEYD_VERSION="v${KEYD_VERSION#v}"
+KEYD_REPO="https://github.com/rvaiya/keyd.git"
 CONF_SRC_DIR="${REPO_ROOT}/opt/etc/keyd"
 
 # Overridable so the test driver can point the whole install at a temp dir

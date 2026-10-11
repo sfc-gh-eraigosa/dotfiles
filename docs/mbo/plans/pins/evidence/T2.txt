@@ -1,0 +1,194 @@
+# T2 evidence — converging installers + manifest-sourced defaults
+# date: 2026-10-11T05:04:30Z  host-os: Linux/aarch64  branch: feature/pins/edward-raigosa/build
+
+## RED (new/extended tests against the pre-change installers)
+install_sops_test.sh       PASS=11 FAIL=15
+install_yq_test.sh         PASS=5 FAIL=17
+install_k8s_tools_test.sh  PASS=12 FAIL=16
+install_gitleaks_test.sh   34 passed, 8 failed
+
+## GREEN
+bash opt/lib/pins_test.sh                          rc=0  PASS: 44  FAIL: 0
+bash opt/scripts/system/install_sops_test.sh       rc=0  PASS=26 FAIL=0
+bash opt/scripts/system/install_yq_test.sh         rc=0  PASS=22 FAIL=0
+bash opt/scripts/system/install_k8s_tools_test.sh  rc=0  PASS=28 FAIL=0
+bash opt/scripts/git/install_gitleaks_test.sh      rc=0  install_gitleaks_test: 42 passed, 0 failed
+bash opt/scripts/system/install_uv_test.sh         rc=0  PASS=34 FAIL=0
+bash opt/scripts/system/install_glow_test.sh       rc=0  PASS=28 FAIL=0
+bash opt/scripts/system/install_rust_test.sh       rc=0  PASS=42 FAIL=0
+bash opt/scripts/system/install_herdr_test.sh      rc=0  PASS=203 FAIL=0
+bash opt/scripts/system/macos-keys-linux_test.sh   rc=0  PASS=84 FAIL=0
+bash sdk/gsl/scripts/install_nerd_font_linux_test.sh rc=0  install_nerd_font_linux_test: 17 passed, 0 failed
+
+## Converge cases (full output of the four converging-installer drivers)
+### opt/scripts/system/install_sops_test.sh
+PASS: install_sops.sh exists
+PASS: parses with bash -n (exit 0)
+PASS: default version comes from versions.tsv via pins_want
+PASS: sources opt/lib/pins.sh relative to itself
+PASS: never pipes a remote script into a shell
+PASS: absent: exits 0
+PASS: absent: installs the pinned version
+PASS: equal: exits 0
+PASS: equal: says already at
+PASS: older: exits 0
+PASS: older: reports the upgrade
+PASS: older: converged to the pin
+PASS: force: exits 0
+PASS: force: does not short-circuit
+PASS: env override: exits 0
+PASS: env override: SOPS_VERSION wins
+PASS: env override: a leading v is tolerated
+PASS: manifest: a changed pin is what gets installed
+PASS: latest: exits 0
+PASS: latest: installs the resolved upstream release
+PASS: latest: an unresolvable upstream fails instead of guessing
+PASS: foreign: exits 0
+PASS: foreign: says it is leaving it alone
+PASS: foreign: installs nothing
+PASS: malformed SOPS_VERSION exits 1
+PASS: no manifest: falls back to 3.13.1
+----
+PASS=26 FAIL=0
+### opt/scripts/system/install_yq_test.sh
+PASS: install_yq.sh exists
+PASS: parses with bash -n (exit 0)
+PASS: default version comes from versions.tsv via pins_want
+PASS: sources opt/lib/pins.sh relative to itself
+PASS: never pipes a remote script into a shell
+PASS: absent: exits 0
+PASS: absent: installs the pinned version
+PASS: equal: exits 0
+PASS: equal: says already at
+PASS: older: exits 0
+PASS: older: reports the upgrade
+PASS: older: converged to the pin
+PASS: env override: exits 0
+PASS: env override: YQ_VERSION wins
+PASS: force: does not short-circuit
+PASS: latest: exits 0
+PASS: latest: installs the resolved upstream release
+PASS: foreign mikefarah: exits 0
+PASS: foreign mikefarah: says it is leaving it alone
+PASS: foreign mikefarah: installs nothing
+PASS: kislyuk: exits 0
+PASS: kislyuk: mikefarah yq installed into INSTALL_DIR
+----
+PASS=22 FAIL=0
+### opt/scripts/system/install_k8s_tools_test.sh
+PASS: install_k8s_tools.sh exists
+PASS: parses with bash -n (exit 0)
+PASS: kubectl default comes from versions.tsv
+PASS: helm default comes from versions.tsv
+PASS: kind default comes from versions.tsv
+PASS: kubectl latest still comes from dl.k8s.io stable.txt
+PASS: absent: exits 0
+PASS: absent: all three at the manifest pins
+PASS: equal: exits 0
+PASS: equal: all three say already at
+PASS: kubectl older: exits 0
+PASS: kubectl older: reports the upgrade
+PASS: kubectl older: converged; helm/kind untouched
+PASS: helm/kind older: exits 0
+PASS: helm/kind older: both converged
+PASS: env override: exits 0
+PASS: env override: each *_VERSION wins
+PASS: force: nothing short-circuits
+PASS: force: back on the pins
+PASS: latest: exits 0
+PASS: latest: each resolved upstream first
+PASS: no manifest: falls back to latest, as before pins
+PASS: foreign kubectl: exits 0
+PASS: foreign kubectl: says it is leaving it alone
+PASS: foreign kubectl: not installed over
+PASS: foreign kubectl: helm/kind still installed
+PASS: download failure: exits 1
+PASS: download failure: the other tools still installed
+----
+PASS=28 FAIL=0
+### opt/scripts/git/install_gitleaks_test.sh
+PASS: already installed => no-op
+PASS: already: says already
+PASS: already: no package-manager calls
+PASS: apt: installs via sudo apt-get (no apt-get update — one package, keep it fast)
+PASS: apt: install -y gitleaks logged
+PASS: apt: went through sudo
+PASS: apt: no apt-get update
+PASS: brew: installs via brew install
+PASS: brew: install gitleaks logged
+PASS: auto: apt candidate present => apt
+PASS: auto: used apt-get
+PASS: auto: no apt candidate, no brew => release download
+PASS: auto/release: fetched the checksums file
+PASS: auto/release: binary installed and runs
+PASS: release: pinned version, sha256-verified
+PASS: release: fetched gitleaks_8.21.2_linux_arm64.tar.gz
+PASS: release: binary in GITLEAKS_INSTALL_DIR
+PASS: release: checksum mismatch => exit 1
+PASS: release: nothing installed on mismatch
+PASS: release: says checksum
+PASS: --off: exit 0
+PASS: --off: writes off marker
+PASS: --off: installs nothing
+PASS: ensure after --off: clears the marker
+PASS: ensure: marker removed
+PASS: converge: own binary == want => exit 0
+PASS: converge: says already at 8.21.2
+PASS: converge: equal => no calls at all
+PASS: converge: own binary older => exit 0
+PASS: converge: older => upgraded to 8.21.2
+PASS: converge: older => release download, not apt
+PASS: converge: reports the upgrade
+PASS: foreign: apt/brew-owned gitleaks => exit 0
+PASS: foreign: says it is leaving it alone
+PASS: foreign: nothing installed or called
+PASS: manifest: default version from versions.tsv
+PASS: manifest: installed the manifest pin
+PASS: env override: GITLEAKS_VERSION beats the manifest
+PASS: env override: installed GITLEAKS_VERSION
+PASS: latest: resolves and converges to upstream
+PASS: latest: queried the releases API
+PASS: latest: installed 8.22.0
+----
+install_gitleaks_test: 42 passed, 0 failed
+
+## F4 manifest-sourced defaults (preamble smoke)
+opt/scripts/system/macos-keys-linux.sh (): KEYD_VERSION=v2.6.0
+opt/scripts/system/macos-keys-linux.sh (KEYD_VERSION=2.5.0): KEYD_VERSION=v2.5.0
+sdk/gsl/scripts/install_nerd_font_linux.sh (): NERD_FONTS_VERSION=v3.4.0
+sdk/gsl/scripts/install_nerd_font_macos.sh (PINS_MANIFEST=/nonexistent): NERD_FONTS_VERSION=v3.4.0
+opt/scripts/network/vault-setup.sh (): VAULT_VERSION=1.21.4
+opt/scripts/system/install_rust.sh (): RUST_MIN_VERSION=1.96.0
+opt/scripts/system/install_rust.sh (PINS_MANIFEST=<scratch>/m.tsv): RUST_MIN_VERSION=1.97.0
+opt/scripts/system/install_glow.sh (): GLOW_VERSION=3.0.0
+opt/scripts/system/install_uv.sh (): UV_VERSION=0.12.16
+opt/scripts/system/install_uv.sh (GFF_PINS_TRACK_MODE=latest): UV_VERSION=latest
+
+## bash -n (every touched script)
+ok  install.sh
+ok  opt/scripts/system/install_sops.sh
+ok  opt/scripts/system/install_yq.sh
+ok  opt/scripts/system/install_k8s_tools.sh
+ok  opt/scripts/system/install_uv.sh
+ok  opt/scripts/system/install_glow.sh
+ok  opt/scripts/system/install_rust.sh
+ok  opt/scripts/system/macos-keys-linux.sh
+ok  opt/scripts/git/install_gitleaks.sh
+ok  opt/scripts/network/vault-setup.sh
+ok  sdk/gsl/scripts/install_nerd_font_linux.sh
+ok  sdk/gsl/scripts/install_nerd_font_macos.sh
+
+## make lint-shell
+rc=0
+## make lint-portability
+==> shell-portability-scan  (scanned 218 files)
+TIER 1 — MUST FIX (POSIX /bin/sh breakage; login-loop class): 0
+TIER 2 — environment hazards (macOS bash 3.2 / BSD coreutils / non-interactive apt): 0
+TIER 3 — informational (all non-POSIX-clean files): 46 (run with --md for the full list)
+## make shell-test (summary)
+shell-test: 61 passed, 0 failed
+
+## Note
+Before this change install_gitleaks_test.sh already failed 10/25 on this host: its PATH included /usr/bin,
+where apt's gitleaks ("version is set by build process") short-circuited every install case.
+The driver now runs on a sandboxed PATH of symlinked coreutils (as the new sops/yq/k8s drivers do).

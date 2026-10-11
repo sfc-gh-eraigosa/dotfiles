@@ -7,7 +7,22 @@
 # Safe to re-run (idempotent).
 set -euo pipefail
 
-NERD_FONTS_VERSION="v3.4.0"
+# The release tag (v-prefixed) comes from the `nerd-fonts` row of
+# opt/profiles/versions.tsv (fail-open to v3.4.0); NERD_FONTS_VERSION overrides it.
+_nf_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/../../../opt/lib/pins.sh"
+if [ -z "${NERD_FONTS_VERSION:-}" ]; then
+  NERD_FONTS_VERSION="3.4.0"
+  if [ -f "${_nf_lib}" ]; then
+    # shellcheck source=../../../opt/lib/pins.sh
+    . "${_nf_lib}"
+    NERD_FONTS_VERSION="$(pins_want nerd-fonts 3.4.0)"
+    if [ "${NERD_FONTS_VERSION}" = "latest" ]; then
+      NERD_FONTS_VERSION="$(pins_latest_gh ryanoasis/nerd-fonts || echo 3.4.0)"
+    fi
+  fi
+fi
+NERD_FONTS_VERSION="v${NERD_FONTS_VERSION#v}"
+unset _nf_lib
 NERD_FONTS_ASSET="Meslo.zip"
 NERD_FONTS_URL_BASE="https://github.com/ryanoasis/nerd-fonts/releases/download/${NERD_FONTS_VERSION}"
 FONT_FAMILY="MesloLGS Nerd Font"

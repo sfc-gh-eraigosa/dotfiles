@@ -570,13 +570,27 @@ if command -v goenv &> /dev/null; then
   esac
   export PATH
   unset __goenv_path_safe
+  # The Go pin is the `go` row of opt/profiles/versions.tsv (@.go-version), so
+  # gff pins.track.mode=latest can float it; .go-version stays the fallback.
+  PINNED_GO_VERSION=""
   if [ -f "${BASE_DIR}/.go-version" ]; then
     PINNED_GO_VERSION=$(tr -d '[:space:]' < "${BASE_DIR}/.go-version")
-    echo "Ensuring Go ${PINNED_GO_VERSION} is installed (pinned via .go-version)..."
+  fi
+  if [ -f "${BASE_DIR}/opt/lib/pins.sh" ]; then
+    # shellcheck source=opt/lib/pins.sh
+    . "${BASE_DIR}/opt/lib/pins.sh"
+    PINNED_GO_VERSION=$(pins_want go "${PINNED_GO_VERSION}")
+  fi
+  if [ -n "${PINNED_GO_VERSION}" ] && [ "${PINNED_GO_VERSION}" != "latest" ]; then
+    echo "Ensuring Go ${PINNED_GO_VERSION} is installed (pinned via versions.tsv / .go-version)..."
     goenv install -s "${PINNED_GO_VERSION}"
     goenv global "${PINNED_GO_VERSION}"
   else
-    echo "WARNING: ${BASE_DIR}/.go-version not found; installing latest goenv-known Go."
+    if [ "${PINNED_GO_VERSION}" = "latest" ]; then
+      echo "pins.track.mode=latest: installing the latest goenv-known Go."
+    else
+      echo "WARNING: ${BASE_DIR}/.go-version not found; installing latest goenv-known Go."
+    fi
     goenv install -s latest
     LATEST_INSTALLED=$(goenv versions --bare | tail -1)
     if [ -n "$LATEST_INSTALLED" ]; then
@@ -891,9 +905,13 @@ if gff_on install.sdk.fleet; then
   # and every `fleet` run then warns "skipping discovered plan … chmod g-w".
   # Normalising it here, on every host on every update, is the one place that
   # reaches all clones; the README used to ask each person to do it by hand.
-  if [ -f "${BASE_DIR}/opt/etc/fleet/fleet.yaml" ]; then
-    chmod go-w "${BASE_DIR}/opt/etc/fleet/fleet.yaml" 2>/dev/null || true
-  fi
+  # pins.yaml (the pins-only rollout plan) gets the same treatment.
+  for _fleet_plan in fleet.yaml pins.yaml; do
+    if [ -f "${BASE_DIR}/opt/etc/fleet/${_fleet_plan}" ]; then
+      chmod go-w "${BASE_DIR}/opt/etc/fleet/${_fleet_plan}" 2>/dev/null || true
+    fi
+  done
+  unset _fleet_plan
   if [ -f "${BASE_DIR}/sdk/fleet/build.sh" ]; then
     echo "Installing fleet (dotfiles install-status checker)..."
     bash "${BASE_DIR}/sdk/fleet/build.sh"

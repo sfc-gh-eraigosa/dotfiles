@@ -1,0 +1,61 @@
+# T7 evidence — 2026-10-11T04:55:47Z
+$ go test ./cmd -run "Pins|SplitProbe|ProbeHostCarries|ProbeCmdFor|BuiltInPlanProbe" -count=1 -v
+--- PASS: TestPinsStatusInstalledJSONShape (0.00s)
+--- PASS: TestPinsStatusInstalledTable (0.00s)
+--- PASS: TestPinsApplyRunsEachInstallerOnceForDrift (0.00s)
+--- PASS: TestPinsApplyNamedMissingAndOk (0.00s)
+--- PASS: TestPinsApplyDryRunRunsNothing (0.00s)
+--- PASS: TestPinsApplyFailureIsNonZeroButOthersStillRun (0.00s)
+--- PASS: TestPinsApplyNothingToDoAndErrors (0.00s)
+--- PASS: TestPinsApplyRefusesInstallerOutsideRepo (0.00s)
+--- PASS: TestPinsTrackModeFromFlag (0.00s)
+--- PASS: TestPinsStatusRows (0.00s)
+--- PASS: TestPinsStatusPoolIsBoundedAndOrdered (0.06s)
+--- PASS: TestPinsStatusTableAndJSON (0.00s)
+--- PASS: TestPinsBumpNamedWritesOnlyThatField (0.01s)
+--- PASS: TestPinsBumpAllSkipsCurrentAheadLatestAndErrors (0.00s)
+--- PASS: TestPinsBumpDryRunWritesNothing (0.00s)
+--- PASS: TestPinsBumpToSkipsNetwork (0.00s)
+--- PASS: TestPinsBumpArgErrors (0.00s)
+--- PASS: TestPinsBumpNamedAlreadyCurrent (0.00s)
+--- PASS: TestPinsToken (0.00s)
+--- PASS: TestPinsCommandStatusExitsZeroWithRowErrors (0.00s)
+--- PASS: TestPinsCommandBump (0.00s)
+--- PASS: TestPinsCommandMissingManifest (0.00s)
+--- PASS: TestProbePinsSectionAsksTheHostsOwnFleetAgainstThePlanRepo (0.00s)
+--- PASS: TestSplitProbeThreeSections (0.00s)
+--- PASS: TestSplitProbeOlderRepliesHaveNoPins (0.00s)
+--- PASS: TestParsePinsSummary (0.00s)
+--- PASS: TestProbeHostCarriesThePinsSummary (0.00s)
+--- PASS: TestPinsCell (0.00s)
+--- PASS: TestRenderTableHasThePinsColumn (0.00s)
+--- PASS: TestRenderJSONCarriesPins (0.00s)
+--- PASS: TestProbeCmdForUsesTheDeclaredStampAndRepo (0.00s)
+--- PASS: TestBuiltInPlanProbeIsByteIdenticalToTheOldConstants (0.00s)
+--- PASS: TestDisabledPinsTheBuiltInEvenWithADiscoverablePlan (0.00s)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	0.096s
+$ go vet ./... && go test ./... -count=1 -coverprofile=c.out
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	3.831s	coverage: 75.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan	0.030s	coverage: 90.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift	0.028s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag	0.054s	coverage: 96.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/histindex	0.031s	coverage: 92.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/hostkey	0.041s	coverage: 82.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keys	0.028s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/lanscan	0.040s	coverage: 80.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/pins	1.255s	coverage: 94.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach	0.181s	coverage: 82.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	4.568s	coverage: 93.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf	0.031s	coverage: 94.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail	0.037s	coverage: 93.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp	0.028s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	1.272s	coverage: 92.9% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan	0.035s	coverage: 93.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider	0.029s	coverage: 100.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest	0.304s	coverage: 94.2% of statements
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest/stubplugin		coverage: 0.0% of statements
+$ go tool cover -func | tail -1
+total:												(statements)			87.6%
+$ golangci-lint run ./...
+0 issues.

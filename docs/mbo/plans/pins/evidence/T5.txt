@@ -1,0 +1,31 @@
+# T5 gate evidence — 2026-10-11T04:51Z
+$ go vet ./...
+vet: ok
+$ go test ./... -count=1
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	3.827s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan	0.020s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift	0.024s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag	0.049s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/histindex	0.029s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/hostkey	0.035s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keys	0.024s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/lanscan	0.034s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/pins	0.092s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach	0.176s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	4.583s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf	0.024s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail	0.031s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp	0.024s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	1.269s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan	0.027s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider	0.023s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest	0.283s
+$ go test ./internal/pins -cover
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/pins	0.071s	coverage: 92.9% of statements
+$ go test ./... -coverprofile=c.out && go tool cover -func=c.out | tail -1
+total:												(statements)			87.3%
+$ golangci-lint run ./...
+0 issues.
+lint rc=0
+$ go test ./cmd -run Pins -race -count=1
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	1.113s

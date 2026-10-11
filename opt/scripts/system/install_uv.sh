@@ -17,11 +17,22 @@
 #     apt does not package usefully — Debian/Ubuntu's `uv` lags upstream and
 #     WSL has no guaranteed apt source at all).
 #
-# Safe to re-run. Override the version with UV_VERSION=x.y.z (default:
-# latest known-good at the time this script was written).
+# Safe to re-run. Override the version with UV_VERSION=x.y.z (default: the
+# `uv` row of opt/profiles/versions.tsv, else 0.12.16; `latest` resolves the
+# newest GitHub release).
 set -e
 
-UV_VERSION="${UV_VERSION:-0.12.16}"
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PINS_LIB="${SELF_DIR}/../../lib/pins.sh"
+if [ -f "${PINS_LIB}" ]; then
+    # shellcheck source=../../lib/pins.sh
+    . "${PINS_LIB}"
+fi
+# Fail-open: without the lib (or the manifest) the hardcoded default applies.
+command -v pins_want >/dev/null 2>&1 || pins_want() { printf '%s\n' "${2:-}"; }
+command -v pins_latest_gh >/dev/null 2>&1 || pins_latest_gh() { return 1; }
+
+UV_VERSION="${UV_VERSION:-$(pins_want uv 0.12.16)}"
 INSTALL_DIR="${UV_INSTALL_DIR:-${HOME}/opt/bin}"
 RELEASE_BASE="${UV_RELEASE_BASE:-https://github.com/astral-sh/uv/releases/download}"
 
@@ -40,6 +51,9 @@ TMP_DIR=""
 cleanup() { if [ -n "${TMP_DIR}" ]; then rm -rf "${TMP_DIR}"; fi; }
 trap cleanup EXIT
 
+if [ "${UV_VERSION}" = "latest" ]; then
+    UV_VERSION="$(pins_latest_gh astral-sh/uv)" || die "could not resolve the latest uv release"
+fi
 case "${UV_VERSION}" in
     *[!0-9.]*|"") die "UV_VERSION must look like 0.12.16 (got '${UV_VERSION}')" ;;
 esac

@@ -1,0 +1,36 @@
+# opt/etc/fleet/pins.yaml — a pins-only rollout plan for `fleet update`.
+#
+#     fleet update --file opt/etc/fleet/pins.yaml <host>...
+#
+# Upgrades every tool whose installed version has drifted from
+# opt/profiles/versions.tsv, WITHOUT the interactive install.sh: fetch + ff-only
+# the dotfiles clone, rebuild fleet (so the host has `fleet pins`), then
+# `fleet pins apply`, which runs each drifted tool's converging installer once.
+# Every managed installer writes to ~/opt/bin without sudo, so this is safe in
+# the batch lane. Report-only rows (keyd, Nerd Fonts, vault) are listed, not
+# run — a full `fleet update` (install.sh) covers those.
+#
+# Like fleet.yaml, fleet refuses a plan file that is group/world-writable;
+# install.sh normalises both on every run. Design: docs/mbo/designs/pins.md (D5).
+version: 1
+update:
+  root: ~/git
+  repos:
+    dotfiles:
+      path: dotfiles
+      branches: [main]
+  steps:
+    - id: dotfiles.sync
+      kind: sync
+      repo: dotfiles
+    - id: dotfiles.pins
+      kind: run
+      repo: dotfiles
+      # Non-login ssh shells skip the profiles, so put goenv's shims on PATH
+      # for the fleet rebuild the same way install.sh does — and install the
+      # pinned Go FIRST: the sync may have just bumped .go-version, and the
+      # rebuild would otherwise fail with "goenv: version ... is not installed"
+      # (the go row is report-only, so apply alone can never fix that).
+      run: export PATH="$HOME/.goenv/shims:$HOME/.goenv/bin:$HOME/opt/bin:$PATH" && { ! command -v goenv >/dev/null 2>&1 || goenv install -s "$(tr -d '[:space:]' < .go-version)"; } && bash sdk/fleet/build.sh && "$HOME/opt/bin/fleet" pins apply
+      needs: [dotfiles.sync]
+      timeout: 20m

@@ -5,7 +5,21 @@
 set -e
 
 # --- Configuration ---
-VAULT_VERSION="1.21.4"
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PINS_LIB="${SELF_DIR}/../../lib/pins.sh"
+if [ -f "${PINS_LIB}" ]; then
+    # shellcheck source=../../lib/pins.sh
+    . "${PINS_LIB}"
+fi
+# Fail-open: without the lib (or the manifest) the hardcoded default applies.
+command -v pins_want >/dev/null 2>&1 || pins_want() { printf '%s\n' "${2:-}"; }
+command -v pins_latest_gh >/dev/null 2>&1 || pins_latest_gh() { return 1; }
+# Version from the `vault` row of opt/profiles/versions.tsv; VAULT_VERSION overrides.
+VAULT_VERSION="${VAULT_VERSION:-$(pins_want vault 1.21.4)}"
+if [ "${VAULT_VERSION}" = "latest" ]; then
+    VAULT_VERSION="$(pins_latest_gh hashicorp/vault || echo 1.21.4)"
+fi
+VAULT_VERSION="${VAULT_VERSION#v}"
 INSTALL_DIR="${HOME}/opt/bin"
 TMP_DIR="/tmp/vault_install"
 

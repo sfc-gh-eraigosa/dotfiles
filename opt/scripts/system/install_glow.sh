@@ -16,13 +16,23 @@
 #
 # Safe to re-run: a host already on GLOW_VERSION is a no-op with no download.
 # Env overrides:
-#   GLOW_VERSION       release to install (default: 3.0.0)
+#   GLOW_VERSION       release to install (default: versions.tsv `glow` row, else 3.0.0)
 #   GLOW_INSTALL_DIR   target dir (default: ~/opt/bin)
 #   GLOW_FORCE=1       reinstall even when the wanted version is present
 #   GLOW_RELEASE_BASE  release download base (default: https://github.com/charmbracelet/glow/releases/download)
 set -e
 
-GLOW_VERSION="${GLOW_VERSION:-3.0.0}"
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PINS_LIB="${SELF_DIR}/../../lib/pins.sh"
+if [ -f "${PINS_LIB}" ]; then
+    # shellcheck source=../../lib/pins.sh
+    . "${PINS_LIB}"
+fi
+# Fail-open: without the lib (or the manifest) the hardcoded default applies.
+command -v pins_want >/dev/null 2>&1 || pins_want() { printf '%s\n' "${2:-}"; }
+command -v pins_latest_gh >/dev/null 2>&1 || pins_latest_gh() { return 1; }
+
+GLOW_VERSION="${GLOW_VERSION:-$(pins_want glow 3.0.0)}"
 INSTALL_DIR="${GLOW_INSTALL_DIR:-${HOME}/opt/bin}"
 RELEASE_BASE="${GLOW_RELEASE_BASE:-https://github.com/charmbracelet/glow/releases/download}"
 
@@ -41,6 +51,9 @@ TMP_DIR=""
 cleanup() { if [ -n "${TMP_DIR}" ]; then rm -rf "${TMP_DIR}"; fi; }
 trap cleanup EXIT
 
+if [ "${GLOW_VERSION}" = "latest" ]; then
+    GLOW_VERSION="$(pins_latest_gh charmbracelet/glow)" || die "could not resolve the latest glow release"
+fi
 case "${GLOW_VERSION}" in
     *[!0-9.]*|"") die "GLOW_VERSION must look like 3.0.0 (got '${GLOW_VERSION}')" ;;
 esac

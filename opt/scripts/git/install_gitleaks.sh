@@ -13,16 +13,35 @@
 # Environment:
 #   GITLEAKS_INSTALL_METHOD  auto (default) | apt | brew | release
 #                            auto: apt when apt has a candidate, else brew, else release
-#   GITLEAKS_VERSION         release version for the download path (pinned below)
+#   GITLEAKS_VERSION         release version for the download path (default:
+#                            opt/profiles/versions.tsv via pins_want, else 8.21.2)
+#   GITLEAKS_FORCE=1         reinstall the release binary even when already at it
 #   GITLEAKS_INSTALL_DIR     where the release binary goes (default ~/opt/bin)
 #   GITLEAKS_RELEASE_BASE    release URL base (tests point it at a fixture)
 #
 # The release path is sha256-verified against the upstream checksums file and
 # fails closed on any mismatch. No `apt-get update`: one package, keep it fast.
+#
+# Converges (objective `pins`): a gitleaks in GITLEAKS_INSTALL_DIR (ours) that
+# differs from the wanted version is replaced from the release; one already on
+# it is a no-op. A gitleaks that resolves OUTSIDE that dir (apt/brew — apt's
+# build prints "version is set by build process") is left alone: another
+# package manager owns it. WANT=latest resolves via the GitHub releases API.
 set -u
 
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PINS_LIB="${SELF_DIR}/../../lib/pins.sh"
+if [ -f "${PINS_LIB}" ]; then
+    # shellcheck source=../../lib/pins.sh
+    . "${PINS_LIB}"
+fi
+# Fail-open: without the lib, the hardcoded default below still applies.
+command -v pins_want >/dev/null 2>&1 || pins_want() { printf '%s\n' "${2:-}"; }
+command -v pins_latest_gh >/dev/null 2>&1 || pins_latest_gh() { return 1; }
+
 METHOD="${GITLEAKS_INSTALL_METHOD:-auto}"
-VERSION="${GITLEAKS_VERSION:-8.21.2}"
+VERSION="${GITLEAKS_VERSION:-$(pins_want gitleaks 8.21.2)}"
+VERSION="${VERSION#v}"
 INSTALL_DIR="${GITLEAKS_INSTALL_DIR:-$HOME/opt/bin}"
 RELEASE_BASE="${GITLEAKS_RELEASE_BASE:-https://github.com/gitleaks/gitleaks/releases/download}"
 CFG_DIR="${PRIVACY_GUARD_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/privacy_guard}"
@@ -40,8 +59,32 @@ if [ "${1:-}" = "--off" ]; then
 fi
 [ -f "$MARKER" ] && { rm -f "$MARKER"; info "removed $MARKER (flag is on again)"; }
 
-if command -v gitleaks >/dev/null 2>&1; then
-    ok "gitleaks already installed: $(command -v gitleaks) ($(gitleaks version 2>/dev/null | head -n1))"
+# resolve_version: turn VERSION=latest into a concrete release, and refuse
+# anything that is not x.y.z before it reaches a URL.
+resolve_version() {
+    if [ "$VERSION" = "latest" ]; then
+        VERSION="$(pins_latest_gh gitleaks/gitleaks)" || die "could not resolve the latest gitleaks release"
+    fi
+    case "$VERSION" in *[!0-9.]*|"") die "GITLEAKS_VERSION must look like 8.21.2 (got '$VERSION')" ;; esac
+}
+# "gitleaks version 8.21.2" / "8.21.2" -> 8.21.2 ("" when there is none)
+version_of() { "$1" version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1 || true; }
+
+OWN="$INSTALL_DIR/gitleaks"
+FOUND="$(command -v gitleaks 2>/dev/null || true)"
+CONVERGE=0
+if [ -x "$OWN" ]; then
+    # Ours: converge it to the wanted version via the release download.
+    resolve_version
+    HAVE="$(version_of "$OWN")"
+    if [ "$HAVE" = "$VERSION" ] && [ "${GITLEAKS_FORCE:-0}" != "1" ]; then
+        ok "gitleaks already at $HAVE: $OWN"
+        exit 0
+    fi
+    info "Updating gitleaks ${HAVE:-unknown} -> $VERSION in $INSTALL_DIR..."
+    CONVERGE=1
+elif [ -n "$FOUND" ] && [ "${GITLEAKS_FORCE:-0}" != "1" ]; then
+    ok "gitleaks already installed: $FOUND ($(gitleaks version 2>/dev/null | head -n1)) — managed outside $INSTALL_DIR; leaving it alone"
     exit 0
 fi
 
@@ -69,6 +112,7 @@ install_release() {
         *) die "unsupported arch $(uname -m)" ;;
     esac
     command -v curl >/dev/null 2>&1 || die "curl is required for the release download"
+    resolve_version
     asset="gitleaks_${VERSION}_${os}_${arch}.tar.gz"
     sums="gitleaks_${VERSION}_checksums.txt"
     tmp="$(mktemp -d "${TMPDIR:-/tmp}/install_gitleaks.XXXXXX")"
@@ -89,6 +133,9 @@ install_release() {
     case ":$PATH:" in *":$INSTALL_DIR:"*) ;; *) warn "$INSTALL_DIR is not on PATH in this shell; the profiles put ~/opt/bin first in login shells" ;; esac
 }
 
+if [ "$CONVERGE" = "1" ]; then
+    install_release
+else
 case "$METHOD" in
     apt)     install_apt || { warn "apt install failed; falling back to the release download"; install_release; } ;;
     brew)    install_brew ;;
@@ -103,6 +150,7 @@ case "$METHOD" in
         fi ;;
     *) die "GITLEAKS_INSTALL_METHOD must be auto|apt|brew|release (got '$METHOD')" ;;
 esac
+fi
 
 if command -v gitleaks >/dev/null 2>&1 || [ -x "$INSTALL_DIR/gitleaks" ]; then
     ok "gitleaks ready: $(command -v gitleaks 2>/dev/null || echo "$INSTALL_DIR/gitleaks")"

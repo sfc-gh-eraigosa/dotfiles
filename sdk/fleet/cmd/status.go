@@ -13,6 +13,7 @@ import (
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/pins"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
@@ -39,6 +40,11 @@ type Row struct {
 	// which is exactly the state worth seeing before you target a machine, and
 	// the usual explanation for an otherwise mysterious ahead/divergent row.
 	Branch, InstalledBranch string
+	// Pins is the host's own `fleet pins status --installed` verdict: how
+	// many managed tools sit off their pin. nil means the host gave no
+	// usable answer (its fleet predates pins, or the reply did not parse)
+	// — never a fabricated "all ok".
+	Pins *pins.Summary
 }
 
 // Baseliner answers "what is current, and how far off is this commit?".
@@ -90,26 +96,66 @@ func baselineTarget(p updplan.Plan) (stamp, repoPath string, err error) {
 // split can never cut in the wrong place.
 const probeDelim = "__fleet_probe__"
 
-// probeCmd reads the install stamp AND the live checked-out branch in ONE
-// remote command, so knowing the branch costs no extra SSH round-trip. On a
-// large fleet a second dial per host would double the poll for one column.
+// pinsDelim opens the third probe section: the host's own pins verdict.
+const pinsDelim = "__fleet_pins__"
+
+// probeCmd reads the install stamp, the live checked-out branch AND the
+// host's pins drift in ONE remote command, so neither column costs an extra
+// SSH round-trip. On a large fleet a second dial per host would double the
+// poll for one column.
 //
-// Everything is failure-tolerant: a host with no stamp, no clone, or no git
-// still answers, and the missing half simply renders as unknown.
+// Everything is failure-tolerant: a host with no stamp, no clone, no git, or
+// a fleet too old to know `pins` still answers, and the missing part simply
+// renders as unknown. The pins section is appended LAST so a reply split by
+// an older fleet still finds the stamp and branch where they always were.
 func probeCmdFor(stamp, repoPath string) string {
 	return "cat " + stamp + " 2>/dev/null; echo '" + probeDelim + "'; " +
-		"git -C " + repoPath + " rev-parse --abbrev-ref HEAD 2>/dev/null || true"
+		"git -C " + repoPath + " rev-parse --abbrev-ref HEAD 2>/dev/null || true; " +
+		"echo '" + pinsDelim + "'; ~/opt/bin/fleet pins status --installed --json --repo " + repoPath + " 2>/dev/null || true"
 }
 
-// splitProbe separates the stamp text from the live branch. A reply with no
-// delimiter is an older host answering the previous single-payload command —
-// it still classifies correctly, it just has no branch to show.
-func splitProbe(out string) (stampText, liveBranch string) {
+// splitProbe separates the stamp text, the live branch and the pins JSON. A
+// reply with no delimiter is an older host answering the previous
+// single-payload command — it still classifies correctly, it just has no
+// branch or pins to show.
+func splitProbe(out string) (stampText, liveBranch, pinsText string) {
 	i := strings.Index(out, probeDelim)
 	if i < 0 {
-		return out, ""
+		return out, "", ""
 	}
-	return out[:i], strings.TrimSpace(out[i+len(probeDelim):])
+	stampText, rest := out[:i], out[i+len(probeDelim):]
+	if j := strings.Index(rest, pinsDelim); j >= 0 {
+		rest, pinsText = rest[:j], rest[j+len(pinsDelim):]
+	}
+	return stampText, strings.TrimSpace(rest), pinsText
+}
+
+// parsePinsSummary reads the summary out of `fleet pins status --installed
+// --json`. Anything else — empty, an "unknown command" from an old fleet, a
+// truncated reply, JSON without a summary — is nil, so the column says "-"
+// rather than a confident zero.
+func parsePinsSummary(s string) *pins.Summary {
+	var doc struct {
+		Summary *pins.Summary `json:"summary"`
+	}
+	if json.Unmarshal([]byte(strings.TrimSpace(s)), &doc) != nil {
+		return nil
+	}
+	return doc.Summary
+}
+
+// pinsCell renders the PINS column. Only drift raises it: a missing tool can
+// be absent on purpose (its gff install flag is off), so missing stays in the
+// JSON and never turns a host's cell into a warning.
+func pinsCell(s *pins.Summary) string {
+	switch {
+	case s == nil:
+		return "-"
+	case s.Drift == 0:
+		return "ok"
+	default:
+		return strconv.Itoa(s.Drift) + " drift"
+	}
 }
 
 // normalizeBranch turns git's answer into something displayable. A detached
@@ -185,8 +231,11 @@ func probeHostWake(h sshconf.Host, peers func() []reach.Peer, r runner.Runner, b
 			}
 		}
 	}
-	stampText, liveBranch := splitProbe(out)
+	stampText, liveBranch, pinsText := splitProbe(out)
 	row.Branch = normalizeBranch(liveBranch)
+	if err == nil {
+		row.Pins = parsePinsSummary(pinsText)
+	}
 	in := drift.Input{Reachable: err == nil, AuthFailed: authFailed, Baseline: base.Head()}
 	if err == nil {
 		s, perr := stamp.Parse(stampText)
@@ -330,7 +379,7 @@ func sortByAlias(rows []Row) {
 func renderTable(rows []Row, now time.Time) string {
 	sortWorstFirst(rows)
 	var b strings.Builder
-	fmt.Fprintf(&b, "%-16s %-9s %-22s %-13s %s\n", "HOST", "COMMIT", "BRANCH", "LAST RUN", "STATUS")
+	fmt.Fprintf(&b, "%-16s %-9s %-22s %-13s %-9s %s\n", "HOST", "COMMIT", "BRANCH", "LAST RUN", "PINS", "STATUS")
 	for _, r := range rows {
 		commit := r.Commit
 		if commit == "" {
@@ -340,7 +389,7 @@ func renderTable(rows []Row, now time.Time) string {
 		if r.Note != "" {
 			status += " (" + r.Note + ")"
 		}
-		fmt.Fprintf(&b, "%-16s %-9s %-22s %-13s %s\n", r.Alias, commit, branchCell(r), drift.FormatAge(now, r.Age), status)
+		fmt.Fprintf(&b, "%-16s %-9s %-22s %-13s %-9s %s\n", r.Alias, commit, branchCell(r), drift.FormatAge(now, r.Age), pinsCell(r.Pins), status)
 	}
 	return b.String()
 }
@@ -348,20 +397,22 @@ func renderTable(rows []Row, now time.Time) string {
 func renderJSON(rows []Row) string {
 	sortWorstFirst(rows)
 	type jsonRow struct {
-		Alias           string `json:"alias"`
-		Status          string `json:"status"`
-		Behind          int    `json:"behind"`
-		Commit          string `json:"commit"`
-		Branch          string `json:"branch,omitempty"`
-		InstalledBranch string `json:"installed_branch,omitempty"`
-		Note            string `json:"note,omitempty"`
-		InstalledAt     string `json:"installed_at,omitempty"`
+		Alias           string        `json:"alias"`
+		Status          string        `json:"status"`
+		Behind          int           `json:"behind"`
+		Commit          string        `json:"commit"`
+		Branch          string        `json:"branch,omitempty"`
+		InstalledBranch string        `json:"installed_branch,omitempty"`
+		Note            string        `json:"note,omitempty"`
+		InstalledAt     string        `json:"installed_at,omitempty"`
+		Pins            *pins.Summary `json:"pins,omitempty"`
 	}
 	out := make([]jsonRow, 0, len(rows))
 	for _, r := range rows {
 		j := jsonRow{
 			Alias: r.Alias, Status: r.Class, Behind: r.Behind, Commit: r.Commit,
 			Branch: r.Branch, InstalledBranch: r.InstalledBranch, Note: r.Note,
+			Pins: r.Pins,
 		}
 		if !r.Age.IsZero() {
 			j.InstalledAt = r.Age.UTC().Format(time.RFC3339)

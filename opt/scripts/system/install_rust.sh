@@ -24,7 +24,8 @@
 #
 # Safe to re-run. Env overrides:
 #   RUST_TOOLCHAIN     toolchain to install / update (default: stable)
-#   RUST_MIN_VERSION   oldest acceptable rustc (default: 1.96.0, herdr-file-viewer's MSRV)
+#   RUST_MIN_VERSION   oldest acceptable rustc (default: versions.tsv `rust` floor, else
+#                      1.96.0, herdr-file-viewer's MSRV)
 #   RUST_UPDATE=1      run `rustup update <toolchain>` even when rustc is new enough
 #   CARGO_HOME         cargo home (default: ~/.cargo; rustup's own variable)
 #   RUSTUP_HOME        rustup home (default: ~/.rustup; rustup's own variable)
@@ -32,8 +33,22 @@
 #   RUSTUP_INIT_BASE   rustup-init download base (default: https://static.rust-lang.org/rustup/dist)
 set -e
 
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PINS_LIB="${SELF_DIR}/../../lib/pins.sh"
+if [ -f "${PINS_LIB}" ]; then
+    # shellcheck source=../../lib/pins.sh
+    . "${PINS_LIB}"
+fi
+# Fail-open: without the lib (or the manifest) the hardcoded default applies.
+command -v pins_want >/dev/null 2>&1 || pins_want() { printf '%s\n' "${2:-}"; }
+command -v pins_latest_gh >/dev/null 2>&1 || pins_latest_gh() { return 1; }
+
 RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-stable}"
-RUST_MIN_VERSION="${RUST_MIN_VERSION:-1.96.0}"
+# The floor comes from the `rust` row of opt/profiles/versions.tsv (track floor).
+RUST_MIN_VERSION="${RUST_MIN_VERSION:-$(pins_want rust 1.96.0)}"
+if [ "${RUST_MIN_VERSION}" = "latest" ]; then
+    RUST_MIN_VERSION="$(pins_latest_gh rust-lang/rust || echo 1.96.0)"
+fi
 CARGO_HOME="${CARGO_HOME:-${HOME}/.cargo}"
 RUSTUP_INIT_BASE="${RUSTUP_INIT_BASE:-https://static.rust-lang.org/rustup/dist}"
 export CARGO_HOME

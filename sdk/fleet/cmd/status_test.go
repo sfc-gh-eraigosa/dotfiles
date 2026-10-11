@@ -186,13 +186,15 @@ func TestProbeCmdForUsesTheDeclaredStampAndRepo(t *testing.T) {
 
 func TestBuiltInPlanProbeIsByteIdenticalToTheOldConstants(t *testing.T) {
 	// The regression guard for every existing user: with no plan of their
-	// own, the command that goes over the wire must not change at all.
+	// own, the command that goes over the wire is exactly this — the stamp and
+	// branch sections unchanged, with only the pins section appended (pins §3.5).
 	r, ok := updplan.Default().BaselineRepo()
 	if !ok {
 		t.Fatal("built-in plan has no baseline repo")
 	}
 	want := "cat ~/.local/state/dotfiles/install-stamp 2>/dev/null; echo '" + probeDelim + "'; " +
-		"git -C ~/git/dotfiles rev-parse --abbrev-ref HEAD 2>/dev/null || true"
+		"git -C ~/git/dotfiles rev-parse --abbrev-ref HEAD 2>/dev/null || true; " +
+		"echo '" + pinsDelim + "'; ~/opt/bin/fleet pins status --installed --json --repo ~/git/dotfiles 2>/dev/null || true"
 	if got := probeCmdFor(r.Stamp, r.Path); got != want {
 		t.Fatalf("probe changed for the built-in plan:\n got %q\nwant %q", got, want)
 	}
