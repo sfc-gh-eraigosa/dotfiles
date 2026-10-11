@@ -11,13 +11,23 @@ name: pins drift report
 # the Mergify queue waits forever (docs/mergify.md). A human runs
 # `fleet pins bump <tool>` and lands it through gss.
 #
-# Not a required check, and deliberately NOT on pull_request / merge_group:
-# it reads the network, so it must never gate a merge.
+# On a pull_request that touches the manifest or the pins code it runs the
+# same lookup as a smoke test (does every pin still resolve upstream?) and
+# writes NO issue. It is still not a required check, and never on merge_group:
+# it reads the network, so it must never gate a merge — and a path-filtered
+# required check would leave the Mergify queue waiting forever.
 #
 # Pin-to-SHA convention: every third-party Action is pinned to a full 40-char
 # commit SHA with a trailing # vX.Y.Z comment (matches gff-ci.yml).
 
 on:
+  pull_request:
+    paths:
+      - 'opt/profiles/versions.tsv'
+      - '.go-version'
+      - 'sdk/fleet/internal/pins/**'
+      - 'sdk/fleet/cmd/pins*.go'
+      - '.github/workflows/pins-report.yml'
   schedule:
     - cron: '17 14 * * 1'   # Mondays 14:17 UTC, after Dependabot's Monday run
   workflow_dispatch:
@@ -27,8 +37,8 @@ permissions:
   issues: write
 
 concurrency:
-  group: pins-report
-  cancel-in-progress: false
+  group: pins-report-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   report:
@@ -55,7 +65,20 @@ jobs:
           "$RUNNER_TEMP/fleet" pins status --json --repo "$GITHUB_WORKSPACE" > "$RUNNER_TEMP/pins.json"
           "$RUNNER_TEMP/fleet" pins status --repo "$GITHUB_WORKSPACE"
 
+      - name: Every pin resolves upstream (PR smoke test)
+        if: github.event_name == 'pull_request'
+        run: |
+          errs=$(jq -r '.rows[] | select((.error // "") != "") | "\(.tool): \(.error)"' "$RUNNER_TEMP/pins.json")
+          if [ -n "$errs" ]; then
+            echo "::error::upstream lookup failed for:"
+            printf '%s\n' "$errs"
+            exit 1
+          fi
+          echo "every pin resolved upstream"
+
       - name: Upsert the report issue
+        # PRs only smoke-test the lookup; the tracking issue belongs to main.
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TITLE: 'pins: upstream drift report'
