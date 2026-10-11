@@ -12,7 +12,7 @@ $ HOME=<empty> fleet pins status --json | jq <report rows>   # the workflow path
 | helm | 4.2.4 | 4.3.0 | minor |
 | nerd-fonts | 3.4.0 | 3.5.1 | minor |
 | vault | 1.21.4 | 2.1.2 | major |
-$ fleet update --file opt/etc/fleet/pins.yaml --dry-run wenlock-nano
+$ fleet update --file opt/etc/fleet/pins.yaml --dry-run <user>-nano
 plan: opt/etc/fleet/pins.yaml
 === dotfiles.sync (sync) ===
 === dotfiles.pins (run) ===
