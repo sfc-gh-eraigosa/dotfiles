@@ -4,7 +4,7 @@
 # stricter rules in later phases.
 #
 # Pinned tool version (CI must match, see .github/workflows/docker-image.yml):
-#   golangci-lint v2.0.2 (latest stable line as of January 2026)
+#   golangci-lint v2.14.0 (bumped with Go 1.27: v2.0.2 cannot type-check the 1.27 stdlib)
 #
 # This repo contains SIX separate Go modules: sdk/fleet, sdk/gff, sdk/gsl,
 # sdk/gss, sdk/tmux-mgr, sdk/wol. golangci-lint v2 auto-discovers each module
