@@ -7,7 +7,7 @@
 ## 0. Worker registry
 | Leaf/worker | Worker ref | Branch | PR | State |
 | :-- | :-- | :-- | :-- | :-- |
-| build (L1+L2+L3) | `pins/edward-raigosa/build` | `feature/pins/edward-raigosa/build` | — | building |
+| build (L1+L2+L3) | `pins/edward-raigosa/build` | `feature/pins/edward-raigosa/build` | #377 | merged (`eb88d18`) |
 
 ## 1. Task ledger
 | Task | Status | Commit | Evidence | Notes |
@@ -54,3 +54,4 @@
 | :-- | :-- | :-- |
 | 2026-10-10 | 1 | design/spec/plan/trio written; feature `pins` + worker created |
 | 2026-10-10 | 1 | L1 + L2 built by parallel subagents; L3 (PINS column, pins.yaml, workflow, docs, go bump) by lead; code review → 6 fixes (d02af4d) |
+| 2026-10-11 | 2 | second review: 8 fixes (165e3a1), Go 1.26.9 for GO-2026-6617 (e71ed6b), CI guard + PR smoke test (8046ba1); merged via Mergify as `eb88d18`; #376 closed; follow-ups in #378 |

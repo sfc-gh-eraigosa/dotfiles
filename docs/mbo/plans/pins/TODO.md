@@ -39,4 +39,7 @@
 
 ### Close-out
 - [x] code review · ledgers
-- [ ] index row → in-review · checkpoint · PR ready
+- [x] index row → in-review · checkpoint · PR ready
+- [x] review round 2 (8 fixed, 2 declined → #378), Go 1.26.9, CI guard + PR smoke test
+- [x] merged as #377 (`eb88d18`, 2026-10-11); #376 closed
+- [ ] host rollout: `install.sh` per host, or `fleet update --file opt/etc/fleet/pins.yaml <hosts>` (human)
