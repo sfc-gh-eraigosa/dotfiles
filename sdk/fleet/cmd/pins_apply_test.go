@@ -48,11 +48,13 @@ func applyExec(_ context.Context, cmd string) (string, error) {
 
 type installerLog struct {
 	calls []string
+	modes []string
 	fail  map[string]bool
 }
 
-func (l *installerLog) run(_ context.Context, repo, installer string, out io.Writer) error {
+func (l *installerLog) run(_ context.Context, repo, installer, mode string, out io.Writer) error {
 	l.calls = append(l.calls, installer)
+	l.modes = append(l.modes, mode)
 	_, _ = io.WriteString(out, "ran "+installer+"\n")
 	if l.fail[installer] {
 		return errors.New("exit status 1")
@@ -278,7 +280,7 @@ func TestRunInstallerScriptRunsBashInRepo(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := runInstallerScript(context.Background(), root, "inst.sh", &out); err != nil {
+	if err := runInstallerScript(context.Background(), root, "inst.sh", "manifest", &out); err != nil {
 		t.Fatalf("err=%v out=%s", err, out.String())
 	}
 	if !strings.Contains(out.String(), "installing") {
@@ -287,7 +289,62 @@ func TestRunInstallerScriptRunsBashInRepo(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "bad.sh"), []byte("exit 4\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := runInstallerScript(context.Background(), root, "bad.sh", &out); err == nil {
+	if err := runInstallerScript(context.Background(), root, "bad.sh", "manifest", &out); err == nil {
 		t.Error("non-zero exit must be an error")
+	}
+}
+
+// --- review fixes: the host's track mode reaches the installers -------------
+
+func TestPinsApplyHandsTheTrackModeToEveryInstaller(t *testing.T) {
+	root := writeApplyRepo(t)
+	withPinsGlobals(t, root, false)
+	l := &installerLog{}
+	d := applyDeps(l)
+	d.trackMode = func(string) string { return "pin" }
+	if out, err := runPinsCmd(t, d, "apply"); err != nil {
+		t.Fatalf("err = %v\n%s", err, out)
+	}
+	if len(l.modes) == 0 {
+		t.Fatal("nothing ran")
+	}
+	for _, m := range l.modes {
+		if m != "pin" {
+			t.Fatalf("installer ran with mode %q, want pin (modes %v)", m, l.modes)
+		}
+	}
+}
+
+func TestPinsApplyLatestModeRerunsEveryInstalledTool(t *testing.T) {
+	// mode=latest makes every row "ok" offline (nothing to compare), so apply
+	// must re-run the installers of installed tools: they resolve latest and
+	// converge themselves. A missing tool is still left alone unless named.
+	root := writeApplyRepo(t)
+	withPinsGlobals(t, root, false)
+	l := &installerLog{}
+	d := applyDeps(l)
+	d.trackMode = func(string) string { return "latest" }
+	out, err := runPinsCmd(t, d, "apply")
+	if err != nil {
+		t.Fatalf("err = %v\n%s", err, out)
+	}
+	want := []string{"opt/scripts/system/install_uv.sh", "opt/scripts/system/install_k8s_tools.sh",
+		"opt/scripts/system/install_yq.sh", "opt/scripts/system/install_glow.sh"}
+	if strings.Join(l.calls, ",") != strings.Join(want, ",") {
+		t.Errorf("installers run = %v, want %v", l.calls, want)
+	}
+}
+
+func TestRunInstallerScriptExportsTheTrackMode(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "inst.sh"), []byte("echo mode=$GFF_PINS_TRACK_MODE\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := runInstallerScript(context.Background(), root, "inst.sh", "latest", &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "mode=latest") {
+		t.Fatalf("installer env lacked the mode: %q", out.String())
 	}
 }

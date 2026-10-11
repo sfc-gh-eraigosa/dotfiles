@@ -35,7 +35,7 @@ type pinsDeps struct {
 	// Installed-mode seams (see pins_apply.go).
 	exec         pins.Exec
 	trackMode    func(repo string) string
-	runInstaller func(ctx context.Context, repo, installer string, out io.Writer) error
+	runInstaller func(ctx context.Context, repo, installer, mode string, out io.Writer) error
 }
 
 func defaultPinsDeps() *pinsDeps {

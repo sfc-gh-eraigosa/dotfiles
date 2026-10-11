@@ -54,10 +54,31 @@ _pins_root() {
     fi
 }
 
+# Host track mode when nothing exported it (a bare installer run, or one
+# started by `fleet pins apply` on an old fleet): ask gff for pins.track.mode
+# from the repo root. PINS_GFF names the gff binary; set it empty to skip the
+# lookup (tests). Fail-open: no gff, an error or an unknown answer => manifest.
+_pins_gff_mode() {
+    if [ "${PINS_GFF+set}" = "set" ]; then
+        _pg_bin="$PINS_GFF"
+    else
+        _pg_bin=$(command -v gff 2>/dev/null || true)
+        [ -n "$_pg_bin" ] || { [ -x "${HOME:-}/opt/bin/gff" ] && _pg_bin="${HOME}/opt/bin/gff"; }
+    fi
+    _pg_val=""
+    if [ -n "$_pg_bin" ] && [ -x "$_pg_bin" ]; then
+        _pg_val=$(cd "$(_pins_root)" 2>/dev/null && "$_pg_bin" get pins.track.mode 2>/dev/null | head -n 1)
+    fi
+    case "$_pg_val" in
+        manifest|latest|pin) printf '%s\n' "$_pg_val" ;;
+        *) printf 'manifest\n' ;;
+    esac
+}
+
 pins_want() {
     _pw_tool="${1:-}"
     _pw_fb="${2:-}"
-    _pw_mode="${GFF_PINS_TRACK:-${GFF_PINS_TRACK_MODE:-manifest}}"
+    _pw_mode="${GFF_PINS_TRACK:-${GFF_PINS_TRACK_MODE:-$(_pins_gff_mode)}}"
     if [ "$_pw_mode" = "latest" ]; then
         printf 'latest\n'
         return 0

@@ -43,10 +43,13 @@ func pinsTrackModeFrom(src featflag.Source) string {
 }
 
 // runInstallerScript runs `bash <repo>/<installer>` with the terminal attached,
-// so sudo prompts and progress reach the operator.
-func runInstallerScript(ctx context.Context, repo, installer string, out io.Writer) error {
+// so sudo prompts and progress reach the operator. The host's track mode is
+// exported the way install.sh's `gff export` does, so a standalone apply
+// converges to the same versions an install would.
+func runInstallerScript(ctx context.Context, repo, installer, mode string, out io.Writer) error {
 	c := exec.CommandContext(ctx, "bash", filepath.Join(repo, filepath.FromSlash(installer)))
 	c.Dir = repo
+	c.Env = append(os.Environ(), "GFF_PINS_TRACK_MODE="+mode)
 	c.Stdin = os.Stdin
 	c.Stdout, c.Stderr = out, out
 	return c.Run()
@@ -92,7 +95,8 @@ type installerGroup struct {
 // on purpose: its gff flag is off). Rows with no installer are listed, not run.
 // Every installer is attempted; the error reports which failed.
 func runPinsApply(ctx context.Context, o pinsApplyOpts) error {
-	rows, _ := pins.CheckInstalled(ctx, o.M, o.D.exec, o.D.trackMode(o.M.Root))
+	mode := o.D.trackMode(o.M.Root)
+	rows, _ := pins.CheckInstalled(ctx, o.M, o.D.exec, mode)
 	byTool := map[string]pins.InstalledRow{}
 	for _, r := range rows {
 		byTool[r.Tool] = r
@@ -110,7 +114,11 @@ func runPinsApply(ctx context.Context, o pinsApplyOpts) error {
 	var groups []installerGroup
 	var reportOnly []string
 	for _, r := range rows { // manifest order => deterministic groups
-		selected := r.State == "drift" || (named[r.Tool] && r.State == "missing")
+		// In latest mode every installed row reads ok offline (there is no
+		// pin to compare), so re-run its installer: it resolves latest and
+		// converges, or no-ops when already current.
+		selected := r.State == "drift" || (named[r.Tool] && r.State == "missing") ||
+			(mode == "latest" && r.State == "ok")
 		if len(named) > 0 && !named[r.Tool] {
 			continue
 		}
@@ -159,7 +167,7 @@ func runPinsApply(ctx context.Context, o pinsApplyOpts) error {
 			continue
 		}
 		fmt.Fprintf(o.Out, "==> %s (%s)\n", g.Path, tools)
-		if err := o.D.runInstaller(ctx, o.M.Root, g.Path, o.Out); err != nil {
+		if err := o.D.runInstaller(ctx, o.M.Root, g.Path, mode, o.Out); err != nil {
 			fmt.Fprintf(o.Out, "FAILED %s: %v\n", g.Path, err)
 			failed = append(failed, g.Path)
 		}

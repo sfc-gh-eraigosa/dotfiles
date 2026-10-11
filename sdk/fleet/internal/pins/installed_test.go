@@ -55,7 +55,7 @@ func TestCheckInstalledStates(t *testing.T) {
 		"c --version": ok("c 9.9.9"),
 		"f --version": ok("version is set by build process"),
 		"g --version": ok("   \n"),
-		"h --version": {out: "h 5.9.9\n", err: errors.New("exit status 1")}, // exits non-zero but printed a version
+		"h --version": {out: "h 5.9.9\n", err: errors.New("exit status 1")}, // exits non-zero: its text is never trusted for a version
 	}
 	rows, sum := CheckInstalled(context.Background(), m, ex.run, "manifest")
 	want := []InstalledRow{
@@ -66,7 +66,7 @@ func TestCheckInstalledStates(t *testing.T) {
 		{"e-miss", "pin", "3.0.0", "", "missing"},
 		{"f-junk", "pin", "4.0.0", "", "unknown"},
 		{"g-empty", "pin", "5.0.0", "", "missing"},
-		{"h-fail", "pin", "6.0.0", "5.9.9", "drift"},
+		{"h-fail", "pin", "6.0.0", "", "unknown"},
 	}
 	if len(rows) != len(want) {
 		t.Fatalf("rows = %d", len(rows))
@@ -76,7 +76,7 @@ func TestCheckInstalledStates(t *testing.T) {
 			t.Errorf("row %d = %+v, want %+v", i, rows[i], want[i])
 		}
 	}
-	if sum != (Summary{OK: 2, Drift: 2, Missing: 2, Unknown: 2}) {
+	if sum != (Summary{OK: 2, Drift: 1, Missing: 2, Unknown: 3}) {
 		t.Errorf("summary = %+v", sum)
 	}
 }

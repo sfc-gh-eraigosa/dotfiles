@@ -26,7 +26,7 @@ go          pin     @.go-version  go:                          -                
 uv          pin     0.12.16       gh:astral-sh/uv              opt/scripts/system/install_uv.sh      uv --version
 glow        pin     3.0.0         gh:charmbracelet/glow        opt/scripts/system/install_glow.sh    glow --version
 rust        floor   1.96.0        gh:rust-lang/rust            opt/scripts/system/install_rust.sh    rustc --version
-sops        pin     3.13.1        gh:getsops/sops              opt/scripts/system/install_sops.sh    sops --version
+sops        pin     3.13.1        gh:getsops/sops              opt/scripts/system/install_sops.sh    sops --version --disable-version-check
 yq          pin     4.44.6        gh:mikefarah/yq              opt/scripts/system/install_yq.sh      yq --version
 gitleaks    pin     8.21.2        gh:gitleaks/gitleaks         opt/scripts/git/install_gitleaks.sh   gitleaks version
 kubectl     pin     1.37.0        text:https://dl.k8s.io/release/stable.txt  opt/scripts/system/install_k8s_tools.sh  kubectl version --client

@@ -49,6 +49,9 @@ TMP=$(mktemp -d "${TMPDIR:-/tmp}/pins_test.XXXXXX")
 trap 'rm -rf "$TMP"' EXIT
 
 unset GFF_PINS_TRACK GFF_PINS_TRACK_MODE PINS_ROOT 2>/dev/null || true
+# Hermetic by default: no real gff lookup unless a test points PINS_GFF at a stub.
+PINS_GFF=""
+export PINS_GFF
 
 # --- fixture manifest + @file root -------------------------------------------
 mkdir -p "$TMP/root/sub"
@@ -112,6 +115,16 @@ assert_out "5.0.0" "$(GFF_PINS_TRACK=pin pins_want lver 0.1.0)" "GFF_PINS_TRACK=
 assert_out "3.13.1" "$(GFF_PINS_TRACK=pin pins_want sops 1.0.0)" "GFF_PINS_TRACK=pin + pin row => its version"
 # gff exports the 3-segment key pins.track.mode as GFF_PINS_TRACK_MODE.
 assert_out "latest" "$(GFF_PINS_TRACK_MODE=latest pins_want sops 1.0.0)" "GFF_PINS_TRACK_MODE (gff export of pins.track.mode) is honoured"
+
+# --- pins_want: no export => ask gff directly (fleet pins apply, a bare run) ----
+GFFSTUB_DIR=$(mktemp -d)
+printf '#!/bin/sh\n[ "$1 $2" = "get pins.track.mode" ] && echo "${STUB_MODE:-manifest}"\n' > "$GFFSTUB_DIR/gff"
+chmod +x "$GFFSTUB_DIR/gff"
+assert_out "latest" "$(PINS_GFF="$GFFSTUB_DIR/gff" STUB_MODE=latest pins_want sops 1.0.0)" "no export: gff get pins.track.mode=latest is honoured"
+assert_out "3.13.1" "$(PINS_GFF="$GFFSTUB_DIR/gff" STUB_MODE=bogus pins_want sops 1.0.0)" "no export: an unknown gff answer fails open to manifest"
+assert_out "3.13.1" "$(PINS_GFF="$GFFSTUB_DIR/missing-gff" pins_want sops 1.0.0)" "no export: an absent gff fails open to manifest"
+assert_out "3.13.1" "$(PINS_GFF="$GFFSTUB_DIR/gff" STUB_MODE=latest GFF_PINS_TRACK_MODE=manifest pins_want sops 1.0.0)" "an export wins over asking gff"
+rm -rf "$GFFSTUB_DIR"
 assert_out "3.13.1" "$(GFF_PINS_TRACK=manifest GFF_PINS_TRACK_MODE=latest pins_want sops 1.0.0)" "GFF_PINS_TRACK wins over GFF_PINS_TRACK_MODE"
 
 # --- pins_want against the REAL repo manifest -----------------------------------

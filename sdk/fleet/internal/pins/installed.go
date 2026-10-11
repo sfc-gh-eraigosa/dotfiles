@@ -2,7 +2,9 @@ package pins
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -23,9 +25,31 @@ type Exec func(ctx context.Context, shellCmd string) (string, error)
 // holding the pipe open from hanging Wait.
 func ShellExec(ctx context.Context, shellCmd string) (string, error) {
 	c := exec.CommandContext(ctx, "sh", "-c", shellCmd)
+	home, _ := os.UserHomeDir()
+	// Probe from $HOME, not the caller's cwd: a repo's .go-version would make
+	// goenv answer for the version that repo wants, not the one installed.
+	if home != "" {
+		c.Dir = home
+	}
+	c.Env = append(os.Environ(), "PATH="+ProbePath(home, os.Getenv("PATH")))
 	c.WaitDelay = time.Second
 	out, err := c.CombinedOutput()
 	return string(out), err
+}
+
+// ProbePath prepends the per-user dirs the installers write to. `fleet status`
+// runs the probe over a plain non-login ssh command, whose PATH has none of
+// them, so without this every managed tool reads as missing and the host's
+// PINS cell reads a false "ok".
+func ProbePath(home, path string) string {
+	if home == "" {
+		return path
+	}
+	dirs := []string{"opt/bin", ".local/bin", ".cargo/bin", ".goenv/shims", ".goenv/bin"}
+	for i, d := range dirs {
+		dirs[i] = filepath.Join(home, d)
+	}
+	return strings.Join(dirs, ":") + ":" + path
 }
 
 // InstalledRow is one tool's installed-vs-wanted result. State is one of
@@ -91,7 +115,13 @@ func CheckInstalled(ctx context.Context, m *Manifest, ex Exec, mode string) ([]I
 
 func checkOne(ctx context.Context, e Entry, ex Exec, mode string) InstalledRow {
 	r := InstalledRow{Tool: e.Tool, Track: string(e.Track), Want: e.Version}
-	if e.Track == TrackLatest || mode == "latest" {
+	floats := e.Track == TrackLatest || mode == "latest"
+	// pin mode holds a latest row to its concrete version when it has one,
+	// exactly as pins_want does on the shell side.
+	if e.Track == TrackLatest && mode == "pin" && concreteVersion(e.Version) {
+		floats = false
+	}
+	if floats {
 		r.Want = "latest"
 	}
 	if e.Probe == "-" || e.Probe == "" {
@@ -106,15 +136,20 @@ func checkOne(ctx context.Context, e Entry, ex Exec, mode string) InstalledRow {
 		r.State = "unknown"
 		return r
 	}
-	// "not found" with a failing exit is the shell saying the command is absent,
-	// whatever digits its message happens to contain.
-	if err != nil && strings.Contains(out, "not found") {
-		r.State = "missing"
+	// A failing probe is never trusted for its version: "not found" is the
+	// shell saying the command is absent, and any other failure text can quote
+	// the WANTED version (goenv: "version '1.26.3' is not installed").
+	if err != nil {
+		if strings.Contains(out, "not found") || strings.TrimSpace(out) == "" {
+			r.State = "missing"
+		} else {
+			r.State = "unknown"
+		}
 		return r
 	}
 	v := ExtractVersion(out)
 	switch {
-	case v == "" && (err != nil || strings.TrimSpace(out) == ""):
+	case v == "" && strings.TrimSpace(out) == "":
 		r.State = "missing"
 		return r
 	case v == "":
@@ -139,4 +174,10 @@ func stateIf(good bool) string {
 		return "ok"
 	}
 	return "drift"
+}
+
+// concreteVersion reports whether a manifest version names a real version
+// rather than "-" (none).
+func concreteVersion(v string) bool {
+	return v != "" && v != "-"
 }
