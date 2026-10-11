@@ -104,8 +104,11 @@ func TestCheckInstalledModes(t *testing.T) {
 		t.Errorf("latest mode must still report installed: %+v", rows[0])
 	}
 
+	// pin mode only pins what would otherwise float; a floor is still a
+	// floor (b 1.5.0 >= 1.0.0 is ok), because the shell side (pins_want) has
+	// no exact-floor notion and the two must agree.
 	rows, _ = CheckInstalled(context.Background(), m, ex.run, "pin")
-	if rows[0].State != "drift" || rows[1].State != "drift" || rows[2].Want != "latest" || rows[2].State != "ok" {
+	if rows[0].State != "drift" || rows[1].State != "ok" || rows[2].Want != "latest" || rows[2].State != "ok" {
 		t.Errorf("pin mode rows = %+v", rows)
 	}
 

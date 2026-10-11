@@ -48,8 +48,8 @@ type Summary struct {
 
 // CheckInstalled probes every manifest row. mode is the gff `pins.track`
 // value: "manifest" (default; honour each row's track), "latest" (everything
-// is wanted at latest, so nothing can drift), or "pin" (floors are held to an
-// exact match too). Rows come back in manifest order.
+// is wanted at latest, so nothing can drift), or "pin" (rows tracked latest are
+// held to their concrete version when they have one; floors stay floors). Rows come back in manifest order.
 func CheckInstalled(ctx context.Context, m *Manifest, ex Exec, mode string) ([]InstalledRow, Summary) {
 	rows := make([]InstalledRow, len(m.Entries))
 	idx := make(chan int)
@@ -126,7 +126,7 @@ func checkOne(ctx context.Context, e Entry, ex Exec, mode string) InstalledRow {
 	switch {
 	case r.Want == "latest":
 		r.State = "ok"
-	case e.Track == TrackFloor && mode != "pin":
+	case e.Track == TrackFloor:
 		r.State = stateIf(Compare(v, e.Version) >= 0)
 	default:
 		r.State = stateIf(Compare(v, e.Version) == 0)
