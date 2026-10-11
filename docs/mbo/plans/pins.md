@@ -105,8 +105,9 @@ fleet pins apply [TOOL...] [--dry-run] [--repo DIR]
 
 ### 3.5 Status probe
 `probeCmdFor` appends `; echo '__fleet_pins__'; ~/opt/bin/fleet pins status --installed --json --repo <repoPath> 2>/dev/null || true`.
-`Row.Pins *pins.Summary` (nil = old host or malformed). Table column `PINS`: `ok` | `N drift` (+`, M missing`) | `-`.
-JSON field `pins`.
+`Row.Pins *pins.Summary` (nil = old host or malformed). Table column `PINS`: `ok` | `N drift` | `-` (missing is deliberately NOT shown: a tool can be absent because its gff
+flag is off; the JSON field `pins` carries the full summary). The TUI table is a follow-up: one more column pushes UPDATE
+off a 100-column terminal.
 
 ## 4. TDD build order
 Every task: RED test → fail → GREEN → pass → gates. Evidence goes to `plans/pins/evidence/<task>.txt`.
