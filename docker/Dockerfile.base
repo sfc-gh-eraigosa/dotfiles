@@ -17,6 +17,10 @@ ARG USER_GID=$USER_UID
 # Common debian config
 ARG UPGRADE_PACKAGES="true"
 ARG INSTALL_ZSH="true"
+# docker-compose version: owned by opt/profiles/versions.tsv (row docker-compose).
+# Both base builds pass it with --build-arg; this default must equal the manifest
+# (opt/lib/pins_test.sh enforces that), so a plain `docker build` agrees too.
+ARG COMPOSE_VERSION="2.23.3"
 ARG COMMON_SCRIPT_SOURCE="https://raw.githubusercontent.com/microsoft/vscode-dev-containers/master/script-library/common-debian.sh"
 ARG COMMON_SCRIPT_SHA="dev-mode"
 # Docker script args, location, and expected SHA - SHA generated on release
@@ -77,7 +81,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
         docker-compose-plugin \
     #
     # Use Docker script from script library to set things up (installs: docker, docker-compose, sets up dind, and a bunch of other stuff)
-    && LATEST_COMPOSE_VERSION="v2.23.3" \
+    && LATEST_COMPOSE_VERSION="v${COMPOSE_VERSION}" \
     && ARCH=$(uname -m) \
     && curl -SL "https://github.com/docker/compose/releases/download/${LATEST_COMPOSE_VERSION}/docker-compose-linux-${ARCH}" -o /usr/local/bin/docker-compose \
     && chmod +x /usr/local/bin/docker-compose \

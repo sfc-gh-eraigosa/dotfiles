@@ -36,3 +36,6 @@ herdr       latest  -             -                            opt/scripts/syste
 keyd        pin     2.6.0         gh:rvaiya/keyd               -                                     keyd --version
 nerd-fonts  pin     3.5.1         gh:ryanoasis/nerd-fonts      -                                     -
 vault       pin     1.21.4        gh:hashicorp/vault           -                                     vault version
+docker-compose  pin  2.23.3  gh:docker/compose  -  -
+nvm         pin     0.39.7        gh:nvm-sh/nvm                opt/scripts/system/install_nvm.sh     bash -c '. "$HOME/.nvm/nvm.sh" >/dev/null 2>&1 && nvm --version'
+golangci-lint  pin  2.14.0  gh:golangci/golangci-lint  -  -

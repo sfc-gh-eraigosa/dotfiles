@@ -1,0 +1,17 @@
+# goenv single-root fix — local proof 2026-10-11T17:02:11Z
+$ bash opt/profiles/goenv_profile_test.sh
+PASS: bash: the goenv global pin is honoured over the newest installed
+PASS: bash: global=system falls back to the newest installed
+PASS: bash: a global that is not installed falls back to the newest installed
+PASS: bash: an explicit GOENV_VERSION is left alone
+PASS: zsh: GOENV_ROOT is $HOME/.goenv (install.sh's tree)
+PASS: zsh: the goenv global pin is honoured over the newest installed
+PASS: zsh: global=system falls back to the newest installed
+PASS: zsh: a global that is not installed falls back to the newest installed
+PASS: zsh: an explicit GOENV_VERSION is left alone
+----
+PASS=10 FAIL=0
+
+$ real goenv on spark, interactive zsh from $HOME: profile on main vs fixed
+before:  go1.26.1  [1.26.1 (set by GOENV_VERSION environment variable)]
+after:   go1.26.9  [1.26.9 (set by ~/.goenv/version)]

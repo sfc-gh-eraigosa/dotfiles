@@ -193,7 +193,7 @@ fi
 # --- the seed manifest itself ------------------------------------------------------
 REAL="${REPO_ROOT}/opt/profiles/versions.tsv"
 _rows=$(awk '$1 !~ /^#/ && NF { n++ } END { print n + 0 }' "$REAL" 2>/dev/null)
-assert_out "14" "$_rows" "versions.tsv has the 14 seed rows"
+assert_out "17" "$_rows" "versions.tsv has the 17 managed rows"
 _dups=$(awk '$1 !~ /^#/ && NF { print $1 }' "$REAL" 2>/dev/null | sort | uniq -d)
 assert_out "" "$_dups" "versions.tsv has no duplicate tools"
 _bad=$(awk '$1 !~ /^#/ && NF && $2 != "pin" && $2 != "floor" && $2 != "latest" { print $1 }' "$REAL" 2>/dev/null)
@@ -202,6 +202,14 @@ _short=$(awk '$1 !~ /^#/ && NF && NF < 6 { print $1 }' "$REAL" 2>/dev/null)
 assert_out "" "$_short" "every versions.tsv row has tool track version upstream installer probe"
 _noinst=$(awk '$1 !~ /^#/ && NF && $5 != "-" { print $5 }' "$REAL" 2>/dev/null | while read -r p; do [ -f "${REPO_ROOT}/$p" ] || echo "$p"; done)
 assert_out "" "$_noinst" "every versions.tsv installer path exists"
+
+# Consumers that cannot source pins.sh read the manifest directly; keep them
+# from carrying a second copy that drifts.
+_compose=$(awk '$1 == "docker-compose" { print $3; exit }' "$REAL")
+_argdef=$(sed -n 's/^ARG COMPOSE_VERSION="\([^"]*\)".*/\1/p' "${REPO_ROOT}/docker/Dockerfile.base")
+assert_out "$_compose" "$_argdef" "Dockerfile.base ARG COMPOSE_VERSION default equals the manifest"
+_hard=$(grep -c 'golangci-lint@v[0-9]' "${REPO_ROOT}/.github/workflows/docker-image.yml")
+assert_out "0" "$_hard" "CI installs golangci-lint at the manifest version, not a hardcoded one"
 
 echo "---"
 echo "PASS: $PASS  FAIL: $FAIL"

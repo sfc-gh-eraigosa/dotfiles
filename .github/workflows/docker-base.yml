@@ -43,6 +43,7 @@ jobs:
       - name: Build base image
         run: |
           docker build -f docker/Dockerfile.base \
+            --build-arg COMPOSE_VERSION="$(awk '$1 == "docker-compose" { print $3; exit }' opt/profiles/versions.tsv)" \
             -t "$BASE_IMAGE:latest" \
             -t "$BASE_IMAGE:$(date -u +%Y%m%d)" \
             .

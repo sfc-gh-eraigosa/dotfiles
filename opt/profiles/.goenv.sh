@@ -1,6 +1,12 @@
 # shellcheck shell=bash
 # goenv configuration
-export GOENV_ROOT="$HOME/go"
+# ONE goenv tree: $HOME/.goenv, the clone install.sh maintains and installs the
+# pinned Go into (.go-version via opt/profiles/versions.tsv). The fleet pins
+# probe and opt/etc/fleet/pins.yaml read the same tree. This was $HOME/go, a
+# second tree that pin bumps never reached: every host's PINS read "ok" while
+# interactive shells kept running the old Go. GOPATH is unaffected (goenv
+# keeps it at $HOME/go/<version>). Test: opt/profiles/goenv_profile_test.sh.
+export GOENV_ROOT="$HOME/.goenv"
 export GOENV_PATH_ORDER=front
 
 # Detect if we're in an automated/editor environment
@@ -43,14 +49,22 @@ esac
 export PATH
 unset __goenv_path_safe _goenv_shell
 
-# Set shell version to latest installed version if not already set by .go-version or local
-if [ -z "$GOENV_VERSION" ]; then
-    LATEST_GO_VERSION=$(goenv versions --bare 2>/dev/null | tail -1)
-    if [ -n "$LATEST_GO_VERSION" ]; then
-        # Use 'goenv shell' which handles GOENV_VERSION correctly
-        # This requires the shell integration from 'goenv init'
-        goenv shell "$LATEST_GO_VERSION"
+# Pick the shell's Go unless one is already chosen (GOENV_VERSION, or a
+# .go-version / goenv local that goenv itself resolves). The `goenv global`
+# install.sh set is the PIN, so it wins whenever it is installed; only a
+# global of "system" or a not-yet-installed version falls back to the newest
+# installed Go. (This used to always pick the newest, overriding the pin.)
+if [ -z "${GOENV_VERSION:-}" ]; then
+    _goenv_global=$(goenv global 2>/dev/null)
+    if [ -z "$_goenv_global" ] || [ "$_goenv_global" = "system" ] || [ ! -d "$GOENV_ROOT/versions/$_goenv_global" ]; then
+        LATEST_GO_VERSION=$(goenv versions --bare 2>/dev/null | tail -1)
+        if [ -n "$LATEST_GO_VERSION" ]; then
+            # Use 'goenv shell' which handles GOENV_VERSION correctly
+            # This requires the shell integration from 'goenv init'
+            goenv shell "$LATEST_GO_VERSION"
+        fi
     fi
+    unset _goenv_global
 fi
 
 # Ensure goenv shims are in PATH
