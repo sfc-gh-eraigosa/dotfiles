@@ -1,0 +1,82 @@
+# T1 evidence — manifest + pins.sh resolver + pins.track flag
+# date: 2026-10-11T04:51:07Z  host-os: Linux  branch: feature/pins/edward-raigosa/build
+
+## RED (before opt/lib/pins.sh existed)
+FAIL: helper not found at <worktree>/opt/lib/pins.sh
+PASS: 0  FAIL: 1
+
+## GREEN: bash opt/lib/pins_test.sh
+PASS: pins_manifest honours PINS_MANIFEST
+PASS: pins_manifest defaults to <lib>/../profiles/versions.tsv
+PASS: pins_strip_v strips a leading v
+PASS: pins_strip_v leaves a bare version alone
+PASS: pins_strip_v leaves non-version words alone
+PASS: plain pin row => its version
+PASS: floor row => its version
+PASS: @file row => the file's trimmed content
+PASS: @file content has its leading v stripped
+PASS: leading v in the manifest is stripped
+PASS: @file that does not exist => fallback
+PASS: no row => fallback
+PASS: fallback has its leading v stripped too
+PASS: commented-out rows are ignored
+PASS: a commented row does not match its bare name
+PASS: latest row => latest
+PASS: latest row with a version => still latest under manifest
+PASS: pins_want always exits 0 (no row, no fallback) (exit 0)
+PASS: missing manifest => fallback
+PASS: missing manifest => exit 0 (exit 0)
+PASS: GFF_PINS_TRACK=latest => latest for a pin row
+PASS: GFF_PINS_TRACK=latest => latest even with no row
+PASS: GFF_PINS_TRACK=manifest honours the row
+PASS: GFF_PINS_TRACK=pin + latest row with '-' => fallback
+PASS: GFF_PINS_TRACK=pin + latest row with a version => that version
+PASS: GFF_PINS_TRACK=pin + pin row => its version
+PASS: GFF_PINS_TRACK_MODE (gff export of pins.track.mode) is honoured
+PASS: GFF_PINS_TRACK wins over GFF_PINS_TRACK_MODE
+PASS: real manifest: go resolves @.go-version from the repo root
+PASS: real manifest: herdr is tracked latest
+PASS: real manifest: keyd pin has no leading v
+PASS: pins_latest_gh prints the tag without v
+PASS: pins_latest_gh exits 0 on success (exit 0)
+PASS: pins_latest_gh is non-zero when the API call fails (exit 1)
+PASS: pins_latest_gh is non-zero when there is no tag_name (exit 1)
+PASS: pins_latest_gh parses a single-line response
+PASS: GITHUB_TOKEN is sent as a bearer token
+PASS: default API base is api.github.com
+PASS: no Authorization header without GITHUB_TOKEN
+PASS: versions.tsv has the 14 seed rows
+PASS: versions.tsv has no duplicate tools
+PASS: every versions.tsv track is pin|floor|latest
+PASS: every versions.tsv row has tool track version upstream installer probe
+PASS: every versions.tsv installer path exists
+---
+PASS: 44  FAIL: 0
+
+## GREEN: sh (dash) opt/lib/pins_test.sh
+PASS: 44  FAIL: 0
+
+## dash -n opt/lib/pins.sh
+ok
+
+## shellcheck -x -S warning opt/lib/pins.sh opt/lib/pins_test.sh
+clean (rc=0)
+
+## make lint-shell
+rc=0
+
+## make lint-portability
+==> shell-portability-scan  (scanned 216 files)
+TIER 1 — MUST FIX (POSIX /bin/sh breakage; login-loop class): 0
+TIER 2 — environment hazards (macOS bash 3.2 / BSD coreutils / non-interactive apt): 0
+TIER 3 — informational (all non-POSIX-clean files): 46 (run with --md for the full list)
+
+## gff lint .github/gff/features.yaml
+rc=0
+
+## gff export --shell | grep PINS
+GFF_PINS_TRACK_MODE=manifest
+
+## NOTE: gff lint rejects the 2-segment key from the spec:
+##   pins.track: [path-depth] path "pins.track" must have exactly 3 dotted segments, got 2
+## so the flag is pins.track.mode (env GFF_PINS_TRACK_MODE); pins.sh honours GFF_PINS_TRACK (contract name) first, then GFF_PINS_TRACK_MODE.
