@@ -166,6 +166,10 @@ panes open:
 1/5 · ⚠ 2 warnings on 2 hosts
 ```
 
+On a wide terminal (panel inner width of at least `pinsMinInner()`, 104 cells) the host
+table adds a `PINS` column between `LAST RUN` and `STATUS` (`ok` / `N drift` / `-`, as in
+`fleet status`). Narrower, it is hidden and a host with drift says so in the row tip.
+
 The interactive dashboard. Framed panels provide unified visual structure and clear
 discoverability for all actions. Opens **instantly** and streams rows in as each host
 answers — a slow or unreachable host never blocks the view.

@@ -805,6 +805,10 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   now run under `ANSI256` as well, which pins the WIDTH half against escape bytes being
   miscounted; neither of them catches a leaked style, so do not treat the 1219-size sweep as
   cover for one.
+- **PINS is width-gated, one helper.** `showPins()` (panel inner >= `pinsMinInner()` =
+  `rowPrefixWidth + pinsColWidth + updateMinWidth`) drives the header, `rowView`, and
+  `failWidth`, so they cannot disagree. Hidden, the table is byte-identical to before and
+  `rowTip()` names drift on an otherwise healthy row instead.
 - **Row width is derived, not guessed.** `rowPrefixWidth` sums the same numbers as
   `rowView`'s format string and `failWidth` budgets from it; the failure cause is dropped
   rather than clamped to a floor when nothing fits. Adding the BRANCH column against a

@@ -873,6 +873,16 @@ func (m tuiModel) rowTip() string {
 	case string(drift.Divergent):
 		return r.Alias + ": ahead/divergent (check BRANCH) — press u to update"
 	}
+	// The PINS column is width-gated; when it is hidden, a healthy-looking row
+	// must not hide tool drift.
+	if r.Pins != nil && r.Pins.Drift > 0 && !m.showPins() {
+		n := r.Pins.Drift
+		sub := "tools off their"
+		if n == 1 {
+			sub = "tool off its"
+		}
+		return fmt.Sprintf("%s: %d %s pin — run `fleet pins status --installed` on it", r.Alias, n, sub)
+	}
 	return ""
 }
 

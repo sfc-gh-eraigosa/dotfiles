@@ -291,9 +291,13 @@ func (m tuiModel) listPanel() string {
 	var list strings.Builder
 	// The header carries the SAME prefix width as a row (cursor + dot + space),
 	// or every column label sits four cells left of the data under it.
+	pinsHdr := ""
+	if m.showPins() {
+		pinsHdr = fmt.Sprintf("%-*s ", pinsCellWidth, "PINS")
+	}
 	list.WriteString(strings.Repeat(" ", rowMarkPrefix) +
-		th.header.Render(fmt.Sprintf("%-16s %-9s %-*s %-13s %-22s %s",
-			"HOST", "COMMIT", branchColWidth, "BRANCH", "LAST RUN", "STATUS", "UPDATE")) + "\n")
+		th.header.Render(fmt.Sprintf("%-16s %-9s %-*s %-13s %s%-22s %s",
+			"HOST", "COMMIT", branchColWidth, "BRANCH", "LAST RUN", pinsHdr, "STATUS", "UPDATE")) + "\n")
 
 	h := m.visibleRows()
 	end := m.vp.top + h
@@ -753,9 +757,9 @@ func (m tuiModel) rowView(i int) string {
 	}
 
 	// One space after the mark: without it the dot butted against the hostname.
-	line := fmt.Sprintf("%s%s %s %-9s %-*s %-13s %s", cur, mark, alias, commit,
+	line := fmt.Sprintf("%s%s %s %-9s %-*s %-13s %s%s", cur, mark, alias, commit,
 		branchColWidth, truncate(branchCell(r), branchColWidth), age,
-		style.Render(fmt.Sprintf("%-22s", status)))
+		m.pinsField(r), style.Render(fmt.Sprintf("%-22s", status)))
 	return line + " " + m.updateCell(r.Alias)
 }
 
@@ -870,7 +874,41 @@ const rowPrefixWidth = 3 + 1 + aliasColWidth + 1 + 9 + 1 + branchColWidth + 1 + 
 // PANEL's inner width, not the raw terminal: rows are framed now, so the
 // border and padding are not available to the row.
 func (m tuiModel) failWidth() int {
-	return m.panelInner() - rowPrefixWidth - len(failPrefix)
+	prefix := rowPrefixWidth
+	if m.showPins() {
+		prefix += pinsColWidth
+	}
+	return m.panelInner() - prefix - len(failPrefix)
+}
+
+// pinsCellWidth is the PINS cell; pinsColWidth adds its separator space.
+// updateMinWidth is the widest steady UPDATE cell ("<spinner> updating").
+const (
+	pinsCellWidth  = 8
+	pinsColWidth   = 1 + pinsCellWidth
+	updateMinWidth = 10
+)
+
+// pinsMinInner is the narrowest panel inner width that fits every existing
+// column plus PINS without truncating UPDATE. The header, the rows and
+// failWidth all key off showPins, so they cannot disagree.
+func pinsMinInner() int { return rowPrefixWidth + pinsColWidth + updateMinWidth }
+
+func (m tuiModel) showPins() bool { return m.panelInner() >= pinsMinInner() }
+
+// pinsField is the row's PINS cell plus its trailing space, or "" when the
+// panel is too narrow. Padding sits OUTSIDE the style (escape bytes would
+// otherwise be counted by %-*s); only drift is coloured.
+func (m tuiModel) pinsField(r Row) string {
+	if !m.showPins() {
+		return ""
+	}
+	txt := truncate(pinsCell(r.Pins), pinsCellWidth)
+	pad := strings.Repeat(" ", max0(pinsCellWidth-lipgloss.Width(txt)))
+	if r.Pins != nil && r.Pins.Drift > 0 {
+		txt = th.warn.Render(txt)
+	}
+	return txt + pad + " "
 }
 
 func truncate(s string, n int) string {
