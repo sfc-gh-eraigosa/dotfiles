@@ -16,6 +16,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
@@ -97,11 +98,14 @@ const logCap = 2000
 // hosts; either completion clears its claim and re-polls. No row is ever
 // owned by two async paths at once.
 type tuiModel struct {
-	rows    []Row
-	pending map[string]bool
-	cursor  string // ALIAS, not index — survives the worst-first re-sort
-	vp      viewport
-	mode    tuiMode
+	// localPowerSave names THIS machine's Wi-Fi interface when its power save
+	// is on ("" = none). A seam so tests never fork iw.
+	localPowerSave func() string
+	rows           []Row
+	pending        map[string]bool
+	cursor         string // ALIAS, not index — survives the worst-first re-sort
+	vp             viewport
+	mode           tuiMode
 
 	search   searchState
 	selected map[string]bool
@@ -280,6 +284,7 @@ func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time
 		vp:          viewport{height: 20, width: 100},
 		spinner:     "⠋",
 	}
+	m.localPowerSave = localPowerSaveIface
 	for _, h := range hosts {
 		m.hosts[h.Alias] = h
 		m.pending[h.Alias] = true
@@ -815,7 +820,60 @@ func (m tuiModel) canAuthorize() bool {
 		return false
 	}
 	i := m.indexOf(m.cursor)
-	return i >= 0 && m.rows[i].Class == string(drift.AuthFailed)
+	return i >= 0 && m.rows[i].Class == string(drift.AuthFailed) && !sshfail.IsHostKey(m.rows[i].Note)
+}
+
+// canTrust is canAuthorize's twin for the OTHER auth fault: the host answered
+// but its key does not match our known_hosts. That is fixed here, by
+// `fleet trust`, not on the host — so it gets its own key (T) rather than
+// overloading A, whose ssh-copy-id would be refused by the same check.
+func (m tuiModel) canTrust() bool {
+	if !m.canStartConfigAction() {
+		return false
+	}
+	i := m.indexOf(m.cursor)
+	return i >= 0 && m.rows[i].Class == string(drift.AuthFailed) && sshfail.IsHostKey(m.rows[i].Note)
+}
+
+// rowTip is the status-line nudge for the cursor row: what is wrong and which
+// key fixes it. The keys otherwise live only in the `?` overlay, which is not
+// where anyone looks while staring at a red row. It names a key only when that
+// key would act: a host another path owns (polling, waking, updating) gets no
+// tip, and a healthy one needs none. `fleet status` prints the CLI side of the
+// same advice (bootstrapHint).
+func (m tuiModel) rowTip() string {
+	i := m.indexOf(m.cursor)
+	if i < 0 || !m.canStartConfigAction() {
+		return ""
+	}
+	r := m.rows[i]
+	if u, ok := m.updating[r.Alias]; ok && u.phase == updFail {
+		return r.Alias + ": last update failed — press H for its history, e for stderr, u to retry"
+	}
+	switch r.Class {
+	case string(drift.AuthFailed):
+		if m.canTrust() {
+			return fmt.Sprintf("%s: %s — press T to compare fingerprints and trust", r.Alias, r.Note)
+		}
+		return r.Alias + ": refused our key — press A to authorize it (ssh-copy-id), or s once if it uses a password"
+	case string(drift.Unreachable):
+		// The same local cause bootstrapHint names under `fleet status`: a
+		// sleeping radio HERE makes live hosts look unreachable, and waking
+		// them cannot fix that.
+		if m.localPowerSave != nil {
+			if iface := m.localPowerSave(); iface != "" {
+				return fmt.Sprintf("%s: unreachable — this machine's Wi-Fi (%s) has power_save on, a likely cause (see `fleet status`); w to wake", r.Alias, iface)
+			}
+		}
+		return r.Alias + ": unreachable — press w to wake it"
+	case string(drift.Behind):
+		return fmt.Sprintf("%s: %s behind — press u to update", r.Alias, plural(r.Behind, "commit"))
+	case string(drift.Unknown):
+		return r.Alias + ": install state unknown — press u to update"
+	case string(drift.Divergent):
+		return r.Alias + ": ahead/divergent (check BRANCH) — press u to update"
+	}
+	return ""
 }
 
 // canStartConfigAction reports whether the cursor host is free to act on. A

@@ -285,7 +285,7 @@ state), and a `spacious` style (no fill, fg-only glyphs, wide separators).
 - **No edits required** to: `.gitignore` (`!src/**` already tracks `sdk/gsl/**`; the
   binary lives outside the repo), `install.sh` (already runs sync-skills + both install
   scripts), `Makefile` (`make bin` auto-discovers `src/*/build.sh`), and
-  `ai/claude/settings.json.template` (the existing `Bash($HOME/opt/bin/*:*)` allow rule already
+  `ai/claude/settings.json.template` (the existing `Bash($HOME/opt/bin/*)` allow rule already
   covers `gsl`; the `statusLine.command` line is already correct).
 
 ### Files to create / modify (summary)

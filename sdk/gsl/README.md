@@ -66,6 +66,20 @@ gsl preview              # interactive TUI
 gsl preview --once       # print one rendered frame and exit (CI / golden-file safe)
 ```
 
+### `gsl usage`
+
+The 5h / 7d rate-limit usage the host last handed to `gsl render` — the numbers
+on the status bar — for scripts. Every render that carries rate limits (Claude
+Code's `rate_limits`, or Antigravity's `quota`) records them per host under
+`${XDG_STATE_HOME:-~/.local/state}/gsl/usage/<host>.json`; they are as fresh as
+that host's last turn.
+
+```sh
+gsl usage                       # claude  7d 18%  resets Fri Oct 9 04:00 (in 4d 5h)   5h 8% …   seen 0s ago
+gsl usage --host claude --json  # one host as JSON; exit 1 if it has not reported yet
+gsl usage --json                # every host, as an array
+```
+
 ### `gsl version`
 
 ```sh

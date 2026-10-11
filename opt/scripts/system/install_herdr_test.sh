@@ -63,6 +63,8 @@ assert_grep "supports a version pin" 'HERDR_VERSION:-latest' "${SCRIPT}"
 # --- functional: a fixture manifest, no network -----------------------------
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/install_herdr_test.XXXXXX")"
 trap 'rm -rf "${TMP}"' EXIT
+# Every install-mode case would otherwise link the REAL ~/.local/bin/herdr.
+export HERDR_REMOTE_LINK="${TMP}/local-bin/herdr"
 FIXTURE="${TMP}/latest.json"
 cat > "${FIXTURE}" <<'JSON'
 {
@@ -98,6 +100,42 @@ chmod +x "${STUB_DIR}/herdr"
 out="$(HERDR_MANIFEST_FILE="${FIXTURE}" HERDR_INSTALL_DIR="${STUB_DIR}" bash "${SCRIPT}" 2>&1)"; rc=$?
 assert_eq "${rc}" "0" "already-installed path exits 0"
 assert_eq "$(printf '%s' "${out}" | grep -c 'already installed')" "1" "already-installed path says so"
+
+# 1b. The binary is also reachable at ~/.local/bin/herdr, the path `herdr
+#     --remote` / `herdr machine add` probe over a non-interactive ssh shell
+#     (which never has ~/opt/bin on PATH). Without it they install a second,
+#     unmanaged herdr there.
+assert_grep "links the remote-probe path by default" \
+    'HERDR_REMOTE_LINK:-\$\{HOME\}/\.local/bin/herdr' "${SCRIPT}"
+assert_eq "$(readlink "${HERDR_REMOTE_LINK}")" "${STUB_DIR}/herdr" \
+    "remote link: created, pointing at the managed binary"
+assert_eq "$(printf '%s' "${out}" | grep -c 'another herdr is earlier in PATH')" "0" \
+    "remote link: our own link is not reported as shadowing"
+out="$(HERDR_MANIFEST_FILE="${FIXTURE}" HERDR_INSTALL_DIR="${STUB_DIR}" bash "${SCRIPT}" 2>&1)"; rc=$?
+assert_eq "${rc}" "0" "remote link: re-run exits 0"
+assert_eq "$(printf '%s' "${out}" | grep -c 'Linked')" "0" "remote link: re-run is a no-op"
+
+# A standalone copy there (the upstream installer's, or one `herdr machine
+# add` dropped) is the stale binary remote clients would talk to: replace it.
+rm -f "${HERDR_REMOTE_LINK}"
+printf '#!/bin/sh\necho "herdr 0.7.0"\n' > "${HERDR_REMOTE_LINK}"; chmod +x "${HERDR_REMOTE_LINK}"
+out="$(HERDR_MANIFEST_FILE="${FIXTURE}" HERDR_INSTALL_DIR="${STUB_DIR}" bash "${SCRIPT}" 2>&1)"; rc=$?
+assert_eq "${rc}" "0" "remote link: standalone copy -> exit 0"
+assert_eq "$(readlink "${HERDR_REMOTE_LINK}")" "${STUB_DIR}/herdr" "remote link: standalone copy replaced by the link"
+assert_eq "$(printf '%s' "${out}" | grep -c 'Replacing standalone .*(0.7.0)')" "1" \
+    "remote link: replacement names the old version"
+
+# A link to some other herdr is repointed.
+rm -f "${HERDR_REMOTE_LINK}"; ln -s "${TMP}/elsewhere/herdr" "${HERDR_REMOTE_LINK}"
+out="$(HERDR_MANIFEST_FILE="${FIXTURE}" HERDR_INSTALL_DIR="${STUB_DIR}" bash "${SCRIPT}" 2>&1)"; rc=$?
+assert_eq "$(readlink "${HERDR_REMOTE_LINK}")" "${STUB_DIR}/herdr" "remote link: foreign link repointed"
+
+# A directory in the way is reported, never removed.
+rm -f "${HERDR_REMOTE_LINK}"; mkdir -p "${HERDR_REMOTE_LINK}"
+out="$(HERDR_MANIFEST_FILE="${FIXTURE}" HERDR_INSTALL_DIR="${STUB_DIR}" bash "${SCRIPT}" 2>&1)"; rc=$?
+assert_eq "${rc}" "0" "remote link: directory in the way -> exit 0"
+assert_eq "$(printf '%s' "${out}" | grep -c 'is a directory')" "1" "remote link: directory in the way is reported"
+rmdir "${HERDR_REMOTE_LINK}"
 
 # 2. Pinned to a release the manifest does not list -> refuse (fail closed).
 EMPTY_DIR="${TMP}/empty"; mkdir -p "${EMPTY_DIR}"

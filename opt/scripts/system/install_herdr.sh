@@ -98,6 +98,7 @@ set -e
 MODE="${1:-install}"
 HERDR_VERSION="${HERDR_VERSION:-latest}"
 INSTALL_DIR="${HERDR_INSTALL_DIR:-${HOME}/opt/bin}"
+REMOTE_LINK="${HERDR_REMOTE_LINK:-${HOME}/.local/bin/herdr}"
 HERDR_INTEGRATIONS="${HERDR_INTEGRATIONS:-claude antigravity-cli}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
@@ -235,6 +236,7 @@ install_binary() {
     HAVE="$(installed_version)"
     if [ "${HAVE}" = "${WANT}" ] && [ "${HERDR_FORCE:-0}" != "1" ]; then
         ok "herdr already installed: ${INSTALL_DIR}/herdr (${HAVE})"
+        link_remote_path
         report_shadowing
         check_clipboard_tool || true
         return 0
@@ -276,8 +278,36 @@ install_binary() {
 
     "${INSTALL_DIR}/herdr" --version >/dev/null 2>&1 || die "installed binary does not run: ${INSTALL_DIR}/herdr"
     ok "Success! $("${INSTALL_DIR}/herdr" --version | head -1) (sha256 verified)"
+    link_remote_path
     report_shadowing
     check_clipboard_tool || true
+}
+
+# `herdr --remote` and `herdr machine add` find the remote binary through the
+# remote's NON-interactive ssh shell (`command -v herdr`), then
+# ~/.local/bin/herdr, and install their own copy there when neither is the
+# matching version. That shell never has ~/opt/bin on PATH, so without this
+# link every fleet host gets a second, unmanaged herdr in ~/.local/bin, or
+# keeps a stale one there that remote clients then talk to. The link makes
+# the managed binary the one they find, at the version install.sh converges.
+link_remote_path() {
+    WANT_TARGET="${INSTALL_DIR}/herdr"
+    [ "${REMOTE_LINK}" = "${WANT_TARGET}" ] && return 0
+    if [ -L "${REMOTE_LINK}" ] && [ "$(readlink "${REMOTE_LINK}")" = "${WANT_TARGET}" ]; then
+        return 0
+    fi
+    if [ -d "${REMOTE_LINK}" ] && [ ! -L "${REMOTE_LINK}" ]; then
+        warn "${REMOTE_LINK} is a directory; not linking it to ${WANT_TARGET} (herdr --remote will not find the managed binary)"
+        return 0
+    fi
+    if [ -f "${REMOTE_LINK}" ] && [ ! -L "${REMOTE_LINK}" ]; then
+        OLD_VER="$("${REMOTE_LINK}" --version 2>/dev/null | awk '{ print $2 }')"
+        info "Replacing standalone ${REMOTE_LINK} (${OLD_VER:-unknown version}) with a link to ${WANT_TARGET}"
+    fi
+    mkdir -p "$(dirname "${REMOTE_LINK}")"
+    rm -f "${REMOTE_LINK}"
+    ln -s "${WANT_TARGET}" "${REMOTE_LINK}"
+    ok "Linked ${REMOTE_LINK} -> ${WANT_TARGET} (where herdr --remote looks)"
 }
 
 # A host bootstrapped with the upstream installer has a second copy in
@@ -285,6 +315,10 @@ install_binary() {
 # but say so rather than leave two herdr binaries silently diverging.
 report_shadowing() {
     RESOLVED="$(command -v herdr 2>/dev/null || true)"
+    # Our own remote-probe link resolves to the managed binary: not a shadow.
+    if [ "${RESOLVED}" = "${REMOTE_LINK}" ] && [ "$(readlink "${REMOTE_LINK}" 2>/dev/null)" = "${INSTALL_DIR}/herdr" ]; then
+        return 0
+    fi
     if [ -n "${RESOLVED}" ] && [ "${RESOLVED}" != "${INSTALL_DIR}/herdr" ]; then
         warn "another herdr is earlier in PATH: ${RESOLVED} (probably the upstream installer's copy). Remove it or let ~/opt/bin win."
     fi

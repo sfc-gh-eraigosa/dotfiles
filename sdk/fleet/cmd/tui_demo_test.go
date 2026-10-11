@@ -189,7 +189,7 @@ func TestDemoFrames(t *testing.T) {
 			m.appendLogLine("host-nano", "WARNING: apt-get update failed", true)
 			return m
 		}},
-		{"11. help overlay", "toggle this help", func() tuiModel {
+		{"11. help overlay", "SSH & access", func() tuiModel {
 			m, _ := send(settled(), "?")
 			return m
 		}},

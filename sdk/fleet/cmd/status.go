@@ -487,7 +487,7 @@ var statusCmd = &cobra.Command{
 		} else {
 			fmt.Fprintf(cmd.OutOrStdout(), "baseline: %s %s\n\n", flagRef, short(base.Head()))
 			fmt.Fprint(cmd.OutOrStdout(), renderTable(rows, time.Now()))
-			fmt.Fprint(cmd.OutOrStdout(), bootstrapHint(rows))
+			fmt.Fprint(cmd.OutOrStdout(), bootstrapHint(rows, localPowerSaveNote, p.Enabled))
 		}
 		return exitErrorFor(rows)
 	},

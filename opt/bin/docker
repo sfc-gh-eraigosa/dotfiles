@@ -33,7 +33,7 @@ fi
 # the same physical file) and anything not actually executable (a
 # dangling /usr/bin/docker symlink fails -x).
 #
-# The candidates MUST be collected before exec'ing (mapfile, not
+# The candidate list MUST NOT arrive on stdin (read it on fd 3, not
 # `while read ... done < <(...)`): a redirect-fed loop makes the pipe the
 # loop body's stdin, so the exec'd docker inherits the *unread rest of the
 # candidate list* as its stdin instead of ours. Anything piping data

@@ -89,4 +89,19 @@ bash "$APPLY" "$tmp/host5.json" "$tmp/forced5.json"
 assert_eq "$(jq -r 'has("_comment")' "$tmp/host5.json")" "false" "forced _comment doc key not merged into live settings"
 assert_eq "$(jq -r '.statusLine.command' "$tmp/host5.json")" "bash ~/.claude/statusline-command.sh" "real forced fields still merged when doc key present"
 
+# --- Case 7: _retiredAllow removes rules the repo itself once shipped, from
+# hosts already provisioned (the template only seeds a FIRST run, so a bad rule
+# it shipped lives on every existing host until something takes it out). Host
+# additions that are not retired survive; the doc key is not merged. ---
+cat > "$tmp/host7.json" <<'JSON'
+{ "permissions": { "allow": ["Bash($HOME/opt/bin/*:*)", "Bash(my-own-tool:*)", "Bash($HOME/opt/scripts/*/*:*)"] } }
+JSON
+cat > "$tmp/forced7.json" <<'JSON'
+{ "_retiredAllow": ["Bash($HOME/opt/bin/*:*)", "Bash($HOME/opt/scripts/*/*:*)"],
+  "permissions": { "allow": ["Bash($HOME/opt/bin/*)"] } }
+JSON
+bash "$APPLY" "$tmp/host7.json" "$tmp/forced7.json"
+assert_eq "$(jq -c '.permissions.allow' "$tmp/host7.json")" '["Bash($HOME/opt/bin/*)","Bash(my-own-tool:*)"]' "retired allow rules removed, host + forced rules kept"
+assert_eq "$(jq -r 'has("_retiredAllow")' "$tmp/host7.json")" "false" "_retiredAllow doc key not merged into live settings"
+
 _test_report
