@@ -14,7 +14,21 @@ func tipModel(r Row) tuiModel {
 	m := newTUIModel(nil, nil, nil, time.Time{}, "", 1, updplan.Default())
 	m.setRow(r)
 	m.cursor = r.Alias
+	m.localPowerSave = func() string { return "" } // never fork iw from a test
 	return m
+}
+
+// The TUI is the other half of bootstrapHint's advice: when THIS machine's
+// Wi-Fi is asleep, an unreachable row says so instead of only offering w.
+func TestUnreachableTipNamesTheLocalPowerSaveCause(t *testing.T) {
+	m := tipModel(Row{Alias: "h", Class: "unreachable"})
+	m.localPowerSave = func() string { return "wlan0" }
+	got := m.rowTip()
+	for _, want := range []string{"wlan0", "power_save", "w"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("tip missing %q: %q", want, got)
+		}
+	}
 }
 
 // Every fault row tells the operator which key fixes it. Without the tip the

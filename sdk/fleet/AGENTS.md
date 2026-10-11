@@ -243,6 +243,15 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   to read stays `unreachable` — `internal/sshfail` never invents a diagnosis. Pinned by
   `TestAuthFailureReportsAuthFailedNotUnreachable` and
   `TestFailureWithNoEvidenceStaysUnreachable`.
+- **The STATUS HINT keeps that split too — an unreachable host is never offered a key
+  fix.** `bootstrapNeeded` (the `ssh-copy-id`/password sentence) lists only `auth-failed`
+  hosts; `unreachableHosts` feeds a separate `unreachableHint` that names the network
+  fault, never a credential. It offers `fleet wake` only under `--no-wake`; otherwise status
+  already ran the wake ladder, so it says so instead of repeating the step that just failed. The two were once one bucket, so
+  a host that opened NO session was told to `ssh-copy-id` — advice that cannot help a host
+  you cannot connect to, and the exact misdirection the row-level invariant above exists to
+  prevent. Pinned by `TestUnreachableHostIsNotBlamedOnTheKey` and
+  `TestHostsThatRefuseUsAreReportedAsManualBootstrap`.
 - **A host-key fault is repaired here, never accepted silently.** `sshfail.IsHostKey`
   splits the auth notes: a host-key fault lives in OUR `known_hosts`, a credential fault
   in the remote `authorized_keys`. They get different keys because they are different
@@ -894,7 +903,20 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   to check). Disable it persistently with a NetworkManager drop-in —
   `/etc/NetworkManager/conf.d/wifi-powersave-off.conf` containing `[connection]` /
   `wifi.powersave = 2`. Fleet deliberately does **not** apply this for you; see the
-  non-mutation invariant.
+  non-mutation invariant. But it now **detects the mirror-image case** — when THIS
+  workstation's own Wi-Fi is asleep (`cmd/powersave.go`: `radioProbe.powerSaveOn` walks
+  `/sys/class/net/*`, skips anything not wireless or not `operstate` up, and asks
+  `iw dev <i> get power_save` under a 2 s timeout; `findIW` falls back to `/usr/sbin/iw` and
+  `/sbin/iw` because sbin is off a normal user's PATH on Pi OS/Debian), a cold peer's
+  broadcast ARP to US is dropped, so a live host reads as `unreachable` from here. The probe
+  runs at most once per process (`localPowerSaveIface`, a `sync.OnceValue`) and only when an
+  unreachable host gives the note somewhere to go. Status appends the one-line cause and
+  cure to the unreachable hint, and the TUI's unreachable row tip names it too. Best-effort
+  and silent off Linux, without iw, or on any unexpected answer. Pinned by
+  `TestParsePowerSave`, `TestFindIWFallsBackToTheSbinDirs`,
+  `TestRadioProbeReportsOnlyAnUpWirelessNICWithPowerSaveOn`,
+  `TestPowerSaveProbeRunsOnlyForAnUnreachableHost`, and
+  `TestUnreachableTipNamesTheLocalPowerSaveCause`.
 - **`BRANCH` shows the LIVE checkout, not the stamp.** `feature/x≠main` means "checked
   out feature/x, last installed from main" — usually the explanation for an
   `ahead/divergent` row. `detached` is a detached HEAD; `-` means no clone (or a host too

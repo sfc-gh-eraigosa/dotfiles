@@ -98,11 +98,14 @@ const logCap = 2000
 // hosts; either completion clears its claim and re-polls. No row is ever
 // owned by two async paths at once.
 type tuiModel struct {
-	rows    []Row
-	pending map[string]bool
-	cursor  string // ALIAS, not index — survives the worst-first re-sort
-	vp      viewport
-	mode    tuiMode
+	// localPowerSave names THIS machine's Wi-Fi interface when its power save
+	// is on ("" = none). A seam so tests never fork iw.
+	localPowerSave func() string
+	rows           []Row
+	pending        map[string]bool
+	cursor         string // ALIAS, not index — survives the worst-first re-sort
+	vp             viewport
+	mode           tuiMode
 
 	search   searchState
 	selected map[string]bool
@@ -281,6 +284,7 @@ func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time
 		vp:          viewport{height: 20, width: 100},
 		spinner:     "⠋",
 	}
+	m.localPowerSave = localPowerSaveIface
 	for _, h := range hosts {
 		m.hosts[h.Alias] = h
 		m.pending[h.Alias] = true
@@ -853,6 +857,14 @@ func (m tuiModel) rowTip() string {
 		}
 		return r.Alias + ": refused our key — press A to authorize it (ssh-copy-id), or s once if it uses a password"
 	case string(drift.Unreachable):
+		// The same local cause bootstrapHint names under `fleet status`: a
+		// sleeping radio HERE makes live hosts look unreachable, and waking
+		// them cannot fix that.
+		if m.localPowerSave != nil {
+			if iface := m.localPowerSave(); iface != "" {
+				return fmt.Sprintf("%s: unreachable — this machine's Wi-Fi (%s) has power_save on, a likely cause (see `fleet status`); w to wake", r.Alias, iface)
+			}
+		}
 		return r.Alias + ": unreachable — press w to wake it"
 	case string(drift.Behind):
 		return fmt.Sprintf("%s: %s behind — press u to update", r.Alias, plural(r.Behind, "commit"))
