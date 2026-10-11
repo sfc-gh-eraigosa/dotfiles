@@ -19,8 +19,7 @@ choose pinned or latest per tool or per host.
   lands it with `/sync` or gss.
 - **UC3: this host vs the pins.** `fleet pins status --installed` probes each tool locally and reports
   `ok | drift | missing | unknown` per row.
-- **UC4: converge.** `fleet pins apply` runs the installer for each row that's `drift`/`missing`, or only the named
-  tools. Report-only rows are listed, not run. `--dry-run` prints the plan.
+- **UC4: converge.** `fleet pins apply` runs the installer for each `drift` row (named tools may also be `missing`). Report-only rows are listed, not run. `--dry-run` prints the plan.
 - **UC5: fleet view.** `fleet status` (table and `--json`) has a PINS column per host, e.g. `ok` or `3 drift`, or `-`
   when the host's fleet predates pins.
 - **UC6: fleet rollout.** `fleet update --file opt/etc/fleet/pins.yaml <hosts>` syncs dotfiles,
@@ -61,8 +60,7 @@ opt/etc/fleet/pins.yaml ─► fleet update --file … (sync → build fleet →
   when installed ≥ pin. `latest` rows report the installed version with state `ok` (nothing to compare offline).
 - **F7 `fleet pins bump`**: only `pin`/`floor` rows. Named tools, or `--all` = every row with gap ≠ current.
   `--dry-run`. Writes atomically (temp + rename).
-- **F8 `fleet pins apply`**: rows in drift/missing with an installer run as
-  `bash <repo>/<installer>` with env `<TOOL>_FORCE=1`. The exit code is non-zero if any installer failed.
+- **F8 `fleet pins apply`**: runs `bash <repo>/<installer>` once per distinct installer, for rows in `drift`. A `missing` tool is installed only when named explicitly, because it may be absent on purpose (its gff flag is off). No `*_FORCE`: the converging installers (F3) act on the mismatch themselves. Report-only rows are listed, not run. The exit code is non-zero if any installer failed.
 - **F9 fleet status PINS column + JSON `pins` object** `{ok, drift, missing}`, or absent.
 - **F10 pins.yaml plan + install.sh chmod normalisation for it.**
 - **F11 weekly pins-report workflow** (schedule + dispatch, `issues: write`, not a required check).
@@ -78,7 +76,7 @@ opt/etc/fleet/pins.yaml ─► fleet update --file … (sync → build fleet →
 | F5 | newer upstream → minor/major/patch | equal → current | API error → row error, exit 0 | httptest-backed tests |
 | F6 | probe 4.40 vs pin 4.44 → drift | probe absent → missing | floor 1.97 vs 1.96 → ok | fake exec tests |
 | F7 | bump rewrites only the version field | latest rows untouched | `@file` rewrite | golden-file test |
-| F8 | drift row with installer → runs it with FORCE | report-only row → listed, not run | installer fails → non-zero exit | fake runner tests |
+| F8 | drift row → runs its installer once (deduped) | report-only row → listed, not run | installer fails → non-zero exit | fake runner tests |
 | F9 | probe section parsed → column | old host (no section) → `-` | malformed JSON → `-` + note | status tests |
 | F11 | workflow lints (actionlint) | — | — | `make lint` / actionlint |
 
