@@ -30,7 +30,8 @@ update:
       # for the fleet rebuild the same way install.sh does — and install the
       # pinned Go FIRST: the sync may have just bumped .go-version, and the
       # rebuild would otherwise fail with "goenv: version ... is not installed"
-      # (the go row is report-only, so apply alone can never fix that).
-      run: export PATH="$HOME/.goenv/shims:$HOME/.goenv/bin:$HOME/opt/bin:$PATH" && { ! command -v goenv >/dev/null 2>&1 || goenv install -s "$(tr -d '[:space:]' < .go-version)"; } && bash sdk/fleet/build.sh && "$HOME/opt/bin/fleet" pins apply
+      # (the go row is report-only, so apply alone can never fix that). goenv's
+      # progress goes to stdout (2>&1) so a Go bump doesn't put a warning on every host.
+      run: export PATH="$HOME/.goenv/shims:$HOME/.goenv/bin:$HOME/opt/bin:$PATH" && { ! command -v goenv >/dev/null 2>&1 || goenv install -s "$(tr -d '[:space:]' < .go-version)" 2>&1; } && bash sdk/fleet/build.sh && "$HOME/opt/bin/fleet" pins apply
       needs: [dotfiles.sync]
       timeout: 20m

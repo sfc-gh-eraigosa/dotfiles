@@ -42,6 +42,12 @@ var benignPatterns = []*regexp.Regexp{
 	// warning on every run — a constant offset of 1 is the same as no signal.
 	regexp.MustCompile(`^(Already on|Switched to branch|Switched to a new branch) '[^']+'$`),
 	regexp.MustCompile(`^\[sudo\] password for `),
+	// The go command announces every module it fetches on stderr; any
+	// install.sh step that builds a Go tool after a dependency bump prints
+	// these. Exact shape only — "go: downloading" followed by a module path
+	// and a version, ending the line — so "go: ... : verifying module:
+	// checksum mismatch" and friends still count.
+	regexp.MustCompile(`^go: downloading \S+ v\S+$`),
 }
 
 // Benign reports whether a stderr line is routine chatter rather than a

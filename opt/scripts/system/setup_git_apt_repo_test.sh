@@ -35,8 +35,10 @@ assert_grep "uses the host codename, never a hardcoded release" \
 # --- Ubuntu only ----------------------------------------------------------
 # The PPA has no Debian builds; a Debian host pointed at it fails every update.
 assert_grep "guards on ID=ubuntu from os-release" 'OS_ID" != "ubuntu"' "${SCRIPT}"
-assert_grep "skips (exit 0) rather than fails on a non-Ubuntu apt host" \
-    'has no builds here, skipping.*>&2' "${SCRIPT}"
+# A skip is not an error: the notice goes to stdout (no `>&2`), so fleet does
+# not count it as a warning on every Debian host.
+assert_grep "skips (exit 0) with a stdout notice on a non-Ubuntu apt host" \
+    'has no builds here, skipping\."$' "${SCRIPT}"
 
 # --- the ESM-beating pin (same trap as gh, issue #255) ---------------------
 assert_grep "writes an apt preferences file" 'PREFS=/etc/apt/preferences.d/git-core-ppa' "${SCRIPT}"
