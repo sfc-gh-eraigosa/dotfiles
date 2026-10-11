@@ -33,19 +33,21 @@ func TestCheckHostsRejectsAnUnknownAlias(t *testing.T) {
 }
 
 // keys sync APPENDS to a remote authorized_keys, so it needs access it does not
-// have on a host that refuses us. Claiming otherwise would be a lie.
+// have on a host that REFUSED us. Claiming otherwise would be a lie. A host that
+// never answered (unreachable) is a network fault, not a credential one, so it
+// belongs to unreachableHosts — not here, where it used to misdirect the
+// operator at `ssh-copy-id`.
 func TestHostsThatRefuseUsAreReportedAsManualBootstrap(t *testing.T) {
 	rows := []Row{
 		{Alias: "ok", Class: string(drift.UpToDate)},
 		{Alias: "blocked", Class: string(drift.AuthFailed)},
 		{Alias: "dead", Class: string(drift.Unreachable)},
 	}
-	got := bootstrapNeeded(rows)
-	if len(got) != 2 {
-		t.Fatalf("got %v, want blocked and dead both listed", got)
+	if got := bootstrapNeeded(rows); strings.Join(got, ",") != "blocked" {
+		t.Fatalf("bootstrapNeeded = %v, want only the auth-failed host", got)
 	}
-	if strings.Join(got, ",") != "blocked,dead" {
-		t.Fatalf("got %v, want stable order", got)
+	if got := unreachableHosts(rows); strings.Join(got, ",") != "dead" {
+		t.Fatalf("unreachableHosts = %v, want only the unreachable host", got)
 	}
 }
 
@@ -59,7 +61,7 @@ func TestStatusHintNamesHostsThatNeedManualBootstrap(t *testing.T) {
 		{Alias: "blocked", Class: string(drift.AuthFailed)},
 		{Alias: "dead", Class: string(drift.Unreachable)},
 	}
-	got := bootstrapHint(rows)
+	got := bootstrapHint(rows, "")
 	for _, want := range []string{"blocked", "dead", "ssh-copy-id"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("hint %q missing %q", got, want)
@@ -67,9 +69,45 @@ func TestStatusHintNamesHostsThatNeedManualBootstrap(t *testing.T) {
 	}
 }
 
+// The regression that started this: an unreachable host opened no SSH session,
+// so blaming the key and offering ssh-copy-id points the fix at the wrong
+// layer. It must be named as a NETWORK fault instead, and never inside the
+// `ssh-copy-id` sentence.
+func TestUnreachableHostIsNotBlamedOnTheKey(t *testing.T) {
+	rows := []Row{{Alias: "dead", Class: string(drift.Unreachable)}}
+	got := bootstrapHint(rows, "")
+	if strings.Contains(got, "ssh-copy-id") || strings.Contains(got, "with your key") {
+		t.Fatalf("an unreachable host must not be offered ssh-copy-id:\n%s", got)
+	}
+	for _, want := range []string{"dead", "NETWORK fault", "fleet wake"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("unreachable hint missing %q:\n%s", want, got)
+		}
+	}
+}
+
+// When this workstation's own Wi-Fi is asleep, the unreachable hint carries the
+// one-line cause and cure — but only when there is an unreachable host to
+// explain, and never on a healthy fleet.
+func TestUnreachableHintCarriesTheLocalPowerSaveCause(t *testing.T) {
+	note := powerSaveNote("wlan0", true)
+	if note == "" {
+		t.Fatal("a radio with power save on must produce a note")
+	}
+	rows := []Row{{Alias: "dead", Class: string(drift.Unreachable)}}
+	if got := bootstrapHint(rows, note); !strings.Contains(got, "power_save ON") || !strings.Contains(got, "wlan0") {
+		t.Fatalf("hint should carry the power-save note:\n%s", got)
+	}
+	// No unreachable host ⇒ no place for the note, even if the radio is asleep.
+	healthy := []Row{{Alias: "ok", Class: string(drift.UpToDate)}}
+	if got := bootstrapHint(healthy, note); got != "" {
+		t.Fatalf("a healthy fleet must stay silent, got:\n%s", got)
+	}
+}
+
 // A healthy fleet must not be nagged.
 func TestStatusHintIsSilentWhenEveryHostAnswers(t *testing.T) {
-	if got := bootstrapHint([]Row{{Alias: "ok", Class: string(drift.UpToDate)}}); got != "" {
+	if got := bootstrapHint([]Row{{Alias: "ok", Class: string(drift.UpToDate)}}, ""); got != "" {
 		t.Fatalf("hint = %q, want empty", got)
 	}
 }
@@ -79,7 +117,7 @@ func TestStatusHintIsSilentWhenEveryHostAnswers(t *testing.T) {
 // CLI-only operator would see a permanent auth-failed with nothing telling
 // them the way out.
 func TestStatusHintExplainsHowToPrimeAPasswordAuthHost(t *testing.T) {
-	got := bootstrapHint([]Row{{Alias: "blocked", Class: string(drift.AuthFailed)}})
+	got := bootstrapHint([]Row{{Alias: "blocked", Class: string(drift.AuthFailed)}}, "")
 	for _, want := range []string{"password", "fleet tui", "s"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("hint missing %q:\n%s", want, got)
@@ -98,7 +136,7 @@ func TestHostKeyRowsAreSentToFleetTrustNotSshCopyID(t *testing.T) {
 	if got := bootstrapNeeded(rows); len(got) != 0 {
 		t.Fatalf("host-key rows need no key bootstrap, got %v", got)
 	}
-	got := bootstrapHint(rows)
+	got := bootstrapHint(rows, "")
 	for _, want := range []string{"fleet trust rekeyed", "fleet trust fresh", "CHANGED", "T in `fleet tui`"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("hint missing %q:\n%s", want, got)
@@ -113,7 +151,7 @@ func TestMixedFaultsGetBothHints(t *testing.T) {
 	got := bootstrapHint([]Row{
 		{Alias: "rekeyed", Class: string(drift.AuthFailed), Note: "host key CHANGED"},
 		{Alias: "blocked", Class: string(drift.AuthFailed), Note: "permission denied"},
-	})
+	}, "")
 	if !strings.Contains(got, "fleet trust rekeyed") || !strings.Contains(got, "ssh-copy-id") ||
 		strings.Contains(got, "key: blocked, rekeyed") {
 		t.Fatalf("hint:\n%s", got)

@@ -44,20 +44,38 @@ func checkHosts(all []sshconf.Host, only []string) ([]sshconf.Host, error) {
 	return filterHosts(all, only), nil
 }
 
-// bootstrapNeeded lists hosts a key sync cannot help.
+// bootstrapNeeded lists hosts a key sync cannot help because they ANSWERED and
+// refused our credential.
 //
 // Authorizing a key means APPENDING to that host's authorized_keys, which
-// requires the access we are trying to establish. A host that refuses us — or
-// does not answer — must therefore be reported as needing manual bootstrap
-// (ssh-copy-id with a password, or console access) rather than left to look
-// like a sync that will fix itself.
+// requires the access we are trying to establish. An auth-failed host must
+// therefore be reported as needing manual bootstrap (ssh-copy-id with a
+// password, or console access) rather than left to look like a sync that will
+// fix itself.
+//
+// An UNREACHABLE host is deliberately NOT here. It opened no SSH session at
+// all, so the fault is the network, not the key — ssh-copy-id cannot help a
+// host you cannot connect to, and offering it sent a real investigation to the
+// wrong layer. Those hosts are named by unreachableHint instead.
 func bootstrapNeeded(rows []Row) []string {
 	var out []string
 	for _, r := range rows {
 		if sshfail.IsHostKey(r.Note) {
 			continue // a known_hosts fault, not a missing key: see hostKeyNeeded
 		}
-		if r.Class == string(drift.AuthFailed) || r.Class == string(drift.Unreachable) {
+		if r.Class == string(drift.AuthFailed) {
+			out = append(out, r.Alias)
+		}
+	}
+	return out
+}
+
+// unreachableHosts lists hosts that opened no SSH session — a network fact,
+// repaired by waking/powering/wiring the host, never by a key.
+func unreachableHosts(rows []Row) []string {
+	var out []string
+	for _, r := range rows {
+		if r.Class == string(drift.Unreachable) {
 			out = append(out, r.Alias)
 		}
 	}
@@ -72,8 +90,26 @@ func bootstrapNeeded(rows []Row) []string {
 // established, so the fix is necessarily manual. Saying so is the honest
 // answer, and saying nothing is how someone waits for a sync that can never
 // come.
-func bootstrapHint(rows []Row) string {
-	return hostKeyHint(rows) + keyBootstrapHint(rows)
+func bootstrapHint(rows []Row, powerSaveNote string) string {
+	return hostKeyHint(rows) + keyBootstrapHint(rows) + unreachableHint(rows, powerSaveNote)
+}
+
+// unreachableHint names the hosts no SSH session reached and says plainly that
+// this is a network fault, not a key one — the opposite of what the old shared
+// bootstrap sentence told an operator. powerSaveNote (empty unless THIS
+// workstation's own Wi-Fi is asleep) is appended because a sleeping local radio
+// is a common cause: a cold peer's broadcast ARP to us is dropped, so the host
+// is live yet unreachable from here.
+func unreachableHint(rows []Row, powerSaveNote string) string {
+	hosts := unreachableHosts(rows)
+	if len(hosts) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("\n%d host(s) unreachable — no SSH session opened: %s\n"+
+		"  this is a NETWORK fault, not a key — no credential fix applies to a host\n"+
+		"  you cannot open a connection to. The box may be powered off, off the\n"+
+		"  network, or asleep at layer 2 — `fleet wake <alias>` nudges the last case.\n",
+		len(hosts), strings.Join(hosts, ", ")) + powerSaveNote
 }
 
 // hostKeyHint routes host-key faults to `fleet trust`. ssh-copy-id cannot help

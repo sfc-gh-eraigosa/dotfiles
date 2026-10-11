@@ -243,6 +243,14 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   to read stays `unreachable` — `internal/sshfail` never invents a diagnosis. Pinned by
   `TestAuthFailureReportsAuthFailedNotUnreachable` and
   `TestFailureWithNoEvidenceStaysUnreachable`.
+- **The STATUS HINT keeps that split too — an unreachable host is never offered a key
+  fix.** `bootstrapNeeded` (the `ssh-copy-id`/password sentence) lists only `auth-failed`
+  hosts; `unreachableHosts` feeds a separate `unreachableHint` that names the network
+  fault and points at `fleet wake`, never at a credential. The two were once one bucket, so
+  a host that opened NO session was told to `ssh-copy-id` — advice that cannot help a host
+  you cannot connect to, and the exact misdirection the row-level invariant above exists to
+  prevent. Pinned by `TestUnreachableHostIsNotBlamedOnTheKey` and
+  `TestHostsThatRefuseUsAreReportedAsManualBootstrap`.
 - **A host-key fault is repaired here, never accepted silently.** `sshfail.IsHostKey`
   splits the auth notes: a host-key fault lives in OUR `known_hosts`, a credential fault
   in the remote `authorized_keys`. They get different keys because they are different
@@ -894,7 +902,14 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   to check). Disable it persistently with a NetworkManager drop-in —
   `/etc/NetworkManager/conf.d/wifi-powersave-off.conf` containing `[connection]` /
   `wifi.powersave = 2`. Fleet deliberately does **not** apply this for you; see the
-  non-mutation invariant.
+  non-mutation invariant. But it now **detects the mirror-image case** — when THIS
+  workstation's own Wi-Fi is asleep (`cmd/powersave.go`: `wifiPowerSaveOn` reads
+  `/sys/class/net/*/wireless` + `iw dev <i> get power_save`, best-effort and silent off
+  Linux or without a radio), a cold peer's broadcast ARP to US is dropped, so a live host
+  reads as `unreachable` from here. `localPowerSaveNote` appends the one-line cause and cure
+  to the unreachable status hint, but only when there is an unreachable host to explain.
+  Pinned by `TestParsePowerSave`, `TestPowerSaveNoteOnlyFiresWhenARadioIsAsleep`, and
+  `TestUnreachableHintCarriesTheLocalPowerSaveCause`.
 - **`BRANCH` shows the LIVE checkout, not the stamp.** `feature/x≠main` means "checked
   out feature/x, last installed from main" — usually the explanation for an
   `ahead/divergent` row. `detached` is a detached HEAD; `-` means no clone (or a host too
