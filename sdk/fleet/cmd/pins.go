@@ -32,6 +32,10 @@ const (
 type pinsDeps struct {
 	resolver   func(token string) pins.Resolver
 	credential func(ctx context.Context) string
+	// Installed-mode seams (see pins_apply.go).
+	exec         pins.Exec
+	trackMode    func(repo string) string
+	runInstaller func(ctx context.Context, repo, installer string, out io.Writer) error
 }
 
 func defaultPinsDeps() *pinsDeps {
@@ -40,6 +44,9 @@ func defaultPinsDeps() *pinsDeps {
 		credential: func(ctx context.Context) string {
 			return pinsToken(ctx, os.Getenv, exec.LookPath, runLocal)
 		},
+		exec:         pins.ShellExec,
+		trackMode:    pinsTrackMode,
+		runInstaller: runInstallerScript,
 	}
 }
 
@@ -166,10 +173,14 @@ func renderPinsStatus(w io.Writer, rows []pinsStatusRow) {
 	}
 }
 
-func renderPinsStatusJSON(w io.Writer, rows []pinsStatusRow) error {
+func writeJSON(w io.Writer, v any) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	return enc.Encode(struct {
+	return enc.Encode(v)
+}
+
+func renderPinsStatusJSON(w io.Writer, rows []pinsStatusRow) error {
+	return writeJSON(w, struct {
 		Rows []pinsStatusRow `json:"rows"`
 	}{rows})
 }
@@ -275,14 +286,18 @@ func newPinsCmd(d *pinsDeps) *cobra.Command {
 		Args:  cobra.NoArgs,
 	}
 
+	var installed bool
 	status := &cobra.Command{
 		Use:   "status",
-		Short: "Compare each pin with its upstream latest",
+		Short: "Compare each pin with its upstream latest (--installed: with what is installed here)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			m, err := loadPinsManifest()
 			if err != nil {
 				return err
+			}
+			if installed {
+				return runPinsInstalled(cmd.Context(), m, d, flagJSON, cmd.OutOrStdout())
 			}
 			rows := pinsStatusRows(cmd.Context(), m, d.resolver(d.credential(cmd.Context())), pinsWorkers)
 			if flagJSON {
@@ -292,6 +307,8 @@ func newPinsCmd(d *pinsDeps) *cobra.Command {
 			return nil
 		},
 	}
+
+	status.Flags().BoolVar(&installed, "installed", false, "compare with what is installed on this machine instead of upstream")
 
 	var all, dry bool
 	var to string
@@ -314,7 +331,7 @@ func newPinsCmd(d *pinsDeps) *cobra.Command {
 	bump.Flags().StringVar(&to, "to", "", "set this exact version (one TOOL; no network)")
 	bump.Flags().BoolVar(&dry, "dry-run", false, "print what would change; write nothing")
 
-	pc.AddCommand(status, bump)
+	pc.AddCommand(status, bump, newPinsApplyCmd(d))
 	return pc
 }
 
