@@ -71,6 +71,13 @@ distinct from never-installed.
 A host that only *looked* unreachable and was roused by the wake ladder reads its
 real class with provenance attached: `up-to-date (woke via nano-01)`.
 
+The `PINS` column is the host's own `fleet pins status --installed` verdict
+(see [`fleet pins`](#fleet-pins-status--bump--apply)): `ok`, `N drift` (N managed tools
+off their pin), or `-` when the host's fleet predates pins. It rides the same SSH
+round-trip. A *missing* tool never raises the cell, because it may be absent on purpose
+(its gff install flag is off). The JSON `pins` object carries the full
+`{ok, drift, missing, unknown}` summary.
+
 ### `fleet wake [host...]`
 
 Some hosts are asleep, not dead. A Wi-Fi NIC with power saving enabled sleeps
@@ -863,6 +870,41 @@ writes elsewhere; `--print` writes to stdout instead. It **shadows a host named
 > a host only starts reporting a real commit/age once it has run an `install.sh`
 > that *contains* the stamp step. Until then it reads `unknown` — correctly, not
 > as an error.
+
+### `fleet pins status` / `bump` / `apply`
+
+Version-pin management for the tools `install.sh` installs. The manifest is
+[`opt/profiles/versions.tsv`](../../opt/profiles/versions.tsv): one row per tool with a
+**track** (`pin` = exact, `floor` = at least, `latest` = follow upstream), the version
+(or `@file`, e.g. Go's `@.go-version`), the upstream to check, the converging installer
+(`-` = report-only, needs install.sh), and the probe that prints the installed version.
+The installers read their default version from the same file through `opt/lib/pins.sh`, so a
+bump reaches **every** host on its next install, not just new ones.
+
+```sh
+fleet pins status                  # each pin vs its latest upstream release (gap: patch/minor/major)
+fleet pins status --installed      # THIS host vs the pins: ok | drift | missing | unknown
+fleet pins bump yq sops            # rewrite those pins to latest (--all: every pin behind)
+fleet pins bump go --to 1.26.3     # an exact version, no network
+fleet pins apply                   # run the installer of every drifted tool, once each
+fleet pins apply vault --dry-run   # named tools may also be missing; dry-run prints the plan
+```
+
+`status` uses `$GITHUB_TOKEN` (or `gh auth token`) for the GitHub API. A failed lookup
+marks only that row `error`. `bump` only edits the manifest, so you land it like any
+change (`/sync`, gss). Choose the mode per host with gff: `gff set pins.track latest`
+makes every installer follow upstream, `pin` forces concrete pins even on `latest` rows,
+and `manifest` (the default) honours each row.
+
+**Fleet rollout without the interactive install.sh:**
+
+```sh
+fleet update --file opt/etc/fleet/pins.yaml web-01 db-01   # sync → rebuild fleet → fleet pins apply
+```
+
+Every managed installer writes to `~/opt/bin` without sudo, so this runs in the batch
+lane. A weekly workflow (`.github/workflows/pins-report.yml`) keeps one issue,
+*pins: upstream drift report*, listing pins behind upstream.
 
 ### `fleet discover`
 

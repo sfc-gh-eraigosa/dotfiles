@@ -1,0 +1,95 @@
+name: pins drift report
+
+# Weekly upstream-drift report for opt/profiles/versions.tsv (pins design D6).
+#
+# Builds fleet, runs `fleet pins status --json`, and upserts ONE open issue
+# titled "pins: upstream drift report" listing every pin behind its latest
+# upstream release. It closes the issue when nothing is behind.
+#
+# Why an issue and not a bump PR: a PR opened with this workflow's
+# GITHUB_TOKEN triggers no workflows, so the required checks never report and
+# the Mergify queue waits forever (docs/mergify.md). A human runs
+# `fleet pins bump <tool>` and lands it through gss.
+#
+# Not a required check, and deliberately NOT on pull_request / merge_group:
+# it reads the network, so it must never gate a merge.
+#
+# Pin-to-SHA convention: every third-party Action is pinned to a full 40-char
+# commit SHA with a trailing # vX.Y.Z comment (matches gff-ci.yml).
+
+on:
+  schedule:
+    - cron: '17 14 * * 1'   # Mondays 14:17 UTC, after Dependabot's Monday run
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: pins-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: upstream drift report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: sdk/fleet/go.mod
+          cache-dependency-path: sdk/fleet/go.sum
+
+      - name: Build fleet
+        working-directory: sdk/fleet
+        run: go build -o "$RUNNER_TEMP/fleet" .
+
+      - name: Check pins against upstream
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          "$RUNNER_TEMP/fleet" pins status --json --repo "$GITHUB_WORKSPACE" > "$RUNNER_TEMP/pins.json"
+          "$RUNNER_TEMP/fleet" pins status --repo "$GITHUB_WORKSPACE"
+
+      - name: Upsert the report issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: 'pins: upstream drift report'
+        run: |
+          set -euo pipefail
+          behind=$(jq '[.rows[] | select(.gap == "patch" or .gap == "minor" or .gap == "major" or (.error // "") != "")] | length' "$RUNNER_TEMP/pins.json")
+          existing=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number,title \
+            --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")
+
+          if [ "$behind" -eq 0 ]; then
+            echo "Every pin is current."
+            if [ -n "$existing" ]; then
+              gh issue close "$existing" --comment "Every pin in \`opt/profiles/versions.tsv\` is current as of $(date -u +%F)."
+            fi
+            exit 0
+          fi
+
+          {
+            echo "**${behind}** pin(s) in \`opt/profiles/versions.tsv\` are behind upstream as of $(date -u +%F)."
+            echo
+            echo "| Tool | Track | Pin | Latest | Gap | Released |"
+            echo "| :-- | :-- | :-- | :-- | :-- | :-- |"
+            jq -r '.rows[] | select(.gap == "patch" or .gap == "minor" or .gap == "major" or (.error // "") != "")
+              | "| \(.tool) | \(.track) | \(.pin) | \(.latest // "-") | \(if (.error // "") != "" then "error: " + .error else .gap end) | \(.released // "" | if . == "" then "-" else . end) |"' \
+              "$RUNNER_TEMP/pins.json"
+            echo
+            echo "Bump with \`fleet pins bump <tool>...\` (or \`--all\`), land it via gss, then roll out with"
+            echo "\`fleet update --file opt/etc/fleet/pins.yaml <hosts>\`. Read the release notes first, especially for major gaps."
+            echo
+            echo "_Updated by [pins-report](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})._"
+          } > "$RUNNER_TEMP/body.md"
+
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh issue create --title "$TITLE" --body-file "$RUNNER_TEMP/body.md"
+          fi
