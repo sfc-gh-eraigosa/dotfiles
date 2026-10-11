@@ -89,9 +89,14 @@ GOOD_SHA="$(sha_of "${DIST}/${TRIPLE}/rustup-init")"
 # The real .sha256 is "<hash> *./rustup-init".
 printf '%s *./rustup-init\n' "${GOOD_SHA}" > "${DIST}/${TRIPLE}/rustup-init.sha256"
 
+# Hermetic: never read the REAL opt/profiles/versions.tsv. Its pins move with
+# every `fleet pins bump`, and the fixtures here are built for the script's own
+# fallback version — a bump once broke this test in CI. PINS_GFF="" skips the
+# host's gff lookup for the track mode.
 run_rust() {
     : > "${LOG}"
-    env -u RUST_UPDATE -u RUST_TOOLCHAIN -u RUST_MIN_VERSION \
+    env -u RUST_UPDATE -u RUST_TOOLCHAIN -u RUST_MIN_VERSION -u GFF_PINS_TRACK -u GFF_PINS_TRACK_MODE \
+        PINS_MANIFEST="${TMP}/no-versions.tsv" PINS_GFF="" \
         CARGO_HOME="$1" RUST_HOST_TRIPLE="${TRIPLE}" RUSTUP_INIT_BASE="file://${DIST}" \
         "${@:2}" bash "${SCRIPT}" 2>&1
 }
