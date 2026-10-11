@@ -20,6 +20,7 @@ func TestBenignStderrTable(t *testing.T) {
 		` * [new branch]      main       -> origin/main`,
 		`   72392c9..9484943  main       -> origin/main`,
 		`[sudo] password for someone: `,
+		`go: downloading golang.org/x/image v0.41.0`,
 		``,
 		`   `,
 	}
@@ -40,6 +41,9 @@ func TestBenignStderrTable(t *testing.T) {
 		// its failures through the same "remote: " channel as its progress.
 		`remote: fatal: repository not found`,
 		`remote: Permission to example/dotfiles.git denied`,
+		// Only the plain download notice is benign; go's failures share the prefix.
+		`go: downloading golang.org/x/image v0.41.0: verifying module: checksum mismatch`,
+		`go: golang.org/x/image@v0.41.0: missing go.sum entry`,
 	}
 	for _, l := range real {
 		if Benign(l) {

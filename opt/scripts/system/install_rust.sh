@@ -131,7 +131,9 @@ rustc_version() {
 
 update_toolchain() {
     info "Updating Rust toolchain '${RUST_TOOLCHAIN}' ($1)..."
-    "${CARGO_HOME}/bin/rustup" update "${RUST_TOOLCHAIN}" --no-self-update \
+    # rustup writes its progress ("info: downloading ...") to stderr; keep it
+    # on stdout so fleet doesn't count it as warnings. Failures still die below.
+    "${CARGO_HOME}/bin/rustup" update "${RUST_TOOLCHAIN}" --no-self-update 2>&1 \
         || die "rustup update ${RUST_TOOLCHAIN} failed"
     # `rustup update` installs the channel but leaves a pinned default alone;
     # make what we just updated the default, then prove it converged — the

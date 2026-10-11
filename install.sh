@@ -583,7 +583,9 @@ if command -v goenv &> /dev/null; then
   fi
   if [ -n "${PINNED_GO_VERSION}" ] && [ "${PINNED_GO_VERSION}" != "latest" ]; then
     echo "Ensuring Go ${PINNED_GO_VERSION} is installed (pinned via versions.tsv / .go-version)..."
-    goenv install -s "${PINNED_GO_VERSION}"
+    # goenv reports its download progress on stderr; fleet counts every stderr
+    # line as a warning, so route it to stdout. A failure still exits non-zero.
+    goenv install -s "${PINNED_GO_VERSION}" 2>&1
     goenv global "${PINNED_GO_VERSION}"
   else
     if [ "${PINNED_GO_VERSION}" = "latest" ]; then
@@ -591,7 +593,7 @@ if command -v goenv &> /dev/null; then
     else
       echo "WARNING: ${BASE_DIR}/.go-version not found; installing latest goenv-known Go."
     fi
-    goenv install -s latest
+    goenv install -s latest 2>&1
     LATEST_INSTALLED=$(goenv versions --bare | tail -1)
     if [ -n "$LATEST_INSTALLED" ]; then
       goenv global "$LATEST_INSTALLED"

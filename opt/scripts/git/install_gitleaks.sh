@@ -12,7 +12,10 @@
 #
 # Environment:
 #   GITLEAKS_INSTALL_METHOD  auto (default) | apt | brew | release
-#                            auto: apt when apt has a candidate, else brew, else release
+#                            auto: brew when present, else the pinned release.
+#                            Never apt: Debian/Ubuntu ship 8.16 with no version
+#                            string, which can never meet the pin (and reads as
+#                            "unknown" to fleet pins).
 #   GITLEAKS_VERSION         release version for the download path (default:
 #                            opt/profiles/versions.tsv via pins_want, else 8.21.2)
 #   GITLEAKS_FORCE=1         reinstall the release binary even when already at it
@@ -88,11 +91,6 @@ elif [ -n "$FOUND" ] && [ "${GITLEAKS_FORCE:-0}" != "1" ]; then
     exit 0
 fi
 
-apt_candidate() {
-    command -v apt-get >/dev/null 2>&1 && command -v apt-cache >/dev/null 2>&1 || return 1
-    apt-cache policy gitleaks 2>/dev/null | grep -E '^\s*Candidate:' | grep -vq '(none)'
-}
-
 install_apt() {
     info "Installing gitleaks with apt-get..."
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq gitleaks
@@ -141,9 +139,7 @@ case "$METHOD" in
     brew)    install_brew ;;
     release) install_release ;;
     auto)
-        if apt_candidate; then
-            install_apt || { warn "apt install failed; falling back to the release download"; install_release; }
-        elif command -v brew >/dev/null 2>&1; then
+        if command -v brew >/dev/null 2>&1; then
             install_brew
         else
             install_release

@@ -119,10 +119,13 @@ reset
 run 0 "brew: installs via brew install" brew
 check "brew: install gitleaks logged" 'grep -q "^brew install gitleaks" "$STUB_LOG"'
 
-# 4. auto picks apt when apt has a candidate
-reset
-run 0 "auto: apt candidate present => apt" auto
-check "auto: used apt-get" 'grep -q "apt-get install" "$STUB_LOG"'
+# 4. auto never picks apt, even with a candidate: the distro build is stale
+#    and unversioned, so it could never meet the pin.
+reset; mv "$STUBS/brew" "$TMP/brew.off"
+run 0 "auto: apt candidate present, no brew => release, not apt" auto
+check "auto: did not use apt-get" '! grep -q "apt-get install" "$STUB_LOG"'
+check "auto: release binary installed" '[ -x "$INSTALL_DIR/gitleaks" ] && "$INSTALL_DIR/gitleaks" version | grep -q "$V"'
+mv "$TMP/brew.off" "$STUBS/brew"
 
 # 5. auto falls to release when apt has no candidate and brew is absent
 reset; mv "$STUBS/brew" "$TMP/brew.off"

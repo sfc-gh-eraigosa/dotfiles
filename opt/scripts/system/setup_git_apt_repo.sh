@@ -39,7 +39,7 @@ KEY_URL="https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x${FINGERPRINT}"
 REPO_URL=https://ppa.launchpadcontent.net/git-core/ppa/ubuntu
 
 if ! command -v apt-get >/dev/null 2>&1 || ! command -v dpkg >/dev/null 2>&1; then
-  echo "setup_git_apt_repo: not an apt/dpkg system; skipping." >&2
+  echo "setup_git_apt_repo: not an apt/dpkg system; skipping."
   exit 0
 fi
 # Ubuntu only: the PPA publishes no Debian builds, and a Debian host pointed at
@@ -50,7 +50,7 @@ if [ -r /etc/os-release ]; then
   CODENAME="$(. /etc/os-release && printf '%s' "${VERSION_CODENAME:-}")"
 fi
 if [ "$OS_ID" != "ubuntu" ] || [ -z "$CODENAME" ]; then
-  echo "setup_git_apt_repo: not Ubuntu (ID=${OS_ID:-?}, codename=${CODENAME:-?}); the git-core PPA has no builds here, skipping." >&2
+  echo "setup_git_apt_repo: not Ubuntu (ID=${OS_ID:-?}, codename=${CODENAME:-?}); the git-core PPA has no builds here, skipping."
   exit 0
 fi
 if ! command -v gpg >/dev/null 2>&1; then
