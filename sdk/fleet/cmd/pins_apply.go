@@ -169,11 +169,14 @@ func runPinsApply(ctx context.Context, o pinsApplyOpts) error {
 	var groups []installerGroup
 	var reportOnly []string
 	for _, r := range rows { // manifest order => deterministic groups
-		// In latest mode every installed row reads ok offline (there is no
-		// pin to compare), so re-run its installer: it resolves latest and
-		// converges, or no-ops when already current.
+		// A row wanted at `latest` (track latest, e.g. herdr, or every row
+		// under pins.track.mode=latest) reads ok offline: there is no pin to
+		// compare. Re-run its installer whenever the tool is installed; it
+		// resolves upstream latest and no-ops when already current. Without
+		// this only install.sh kept such tools on latest, never a pins.yaml
+		// rollout. A tool that is not installed is still left alone.
 		selected := r.State == "drift" || (named[r.Tool] && r.State == "missing") ||
-			(mode == "latest" && r.State == "ok")
+			(r.Want == "latest" && r.State == "ok")
 		if len(named) > 0 && !named[r.Tool] {
 			continue
 		}

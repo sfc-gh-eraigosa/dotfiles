@@ -444,3 +444,41 @@ func TestEveryRepoInstallerHasAGate(t *testing.T) {
 		}
 	}
 }
+
+// A row tracked `latest` (herdr) reads ok offline — there is no pin to compare
+// — so apply re-runs its installer whenever the tool is installed: the
+// installer resolves upstream latest and no-ops when already current. Without
+// this, only install.sh kept herdr on latest; a pins.yaml rollout never did.
+func TestPinsApplyRerunsInstalledLatestTrackedTools(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "opt", "profiles")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := "herdr latest - - opt/scripts/system/install_herdr.sh herdr --version\n" +
+		"gone  latest - - opt/scripts/system/install_gone.sh  gone --version\n" +
+		"yq    pin    4.44.6 - opt/scripts/system/install_yq.sh yq --version\n"
+	if err := os.WriteFile(filepath.Join(dir, "versions.tsv"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	withPinsGlobals(t, root, false)
+	l := &installerLog{}
+	d := applyDeps(l)
+	d.exec = func(_ context.Context, cmd string) (string, error) {
+		switch cmd {
+		case "herdr --version":
+			return "herdr 0.9.3", nil
+		case "yq --version":
+			return "yq version v4.44.6", nil
+		}
+		return "sh: 1: not found", errors.New("exit status 127")
+	}
+	if out, err := runPinsCmd(t, d, "apply"); err != nil {
+		t.Fatalf("err = %v\n%s", err, out)
+	}
+	// herdr: installed + latest -> re-run. gone: latest but NOT installed ->
+	// left alone (may be off on purpose). yq: pinned and current -> nothing.
+	if strings.Join(l.calls, ",") != "opt/scripts/system/install_herdr.sh" {
+		t.Fatalf("installers run = %v, want only install_herdr.sh", l.calls)
+	}
+}
