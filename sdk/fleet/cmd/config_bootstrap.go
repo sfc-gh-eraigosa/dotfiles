@@ -82,34 +82,47 @@ func unreachableHosts(rows []Row) []string {
 	return out
 }
 
-// bootstrapHint turns bootstrapNeeded into the sentence an operator needs.
+// bootstrapHint is the advice printed under the status table, one paragraph
+// per fault kind, each naming only the hosts it can actually help:
+//   - host-key faults → `fleet trust` (hostKeyHint);
+//   - auth-failed hosts → manual key bootstrap, ssh-copy-id or one interactive
+//     session for a password host (keyBootstrapHint) — authorizing a key needs
+//     the access being established, so fleet cannot do it for you;
+//   - unreachable hosts → a NETWORK fault, never a key (unreachableHint).
 //
-// A row reading auth-failed says the credential was refused; it does not say
-// that fleet cannot repair that for you. Authorizing a key means appending to
-// the host's authorized_keys, which requires the very access being
-// established, so the fix is necessarily manual. Saying so is the honest
-// answer, and saying nothing is how someone waits for a sync that can never
-// come.
-func bootstrapHint(rows []Row, powerSaveNote string) string {
-	return hostKeyHint(rows) + keyBootstrapHint(rows) + unreachableHint(rows, powerSaveNote)
+// powerSave is the lazy local Wi-Fi power-save advisory; it is only invoked
+// when an unreachable host gives it somewhere to go, because it forks `iw`.
+// wakeTried says whether `fleet status` already ran the wake ladder, so the
+// advice never repeats a step that just failed.
+func bootstrapHint(rows []Row, powerSave func() string, wakeTried bool) string {
+	return hostKeyHint(rows) + keyBootstrapHint(rows) + unreachableHint(rows, powerSave, wakeTried)
 }
 
 // unreachableHint names the hosts no SSH session reached and says plainly that
 // this is a network fault, not a key one — the opposite of what the old shared
-// bootstrap sentence told an operator. powerSaveNote (empty unless THIS
+// bootstrap sentence told an operator. The power-save note (empty unless THIS
 // workstation's own Wi-Fi is asleep) is appended because a sleeping local radio
 // is a common cause: a cold peer's broadcast ARP to us is dropped, so the host
 // is live yet unreachable from here.
-func unreachableHint(rows []Row, powerSaveNote string) string {
+func unreachableHint(rows []Row, powerSave func() string, wakeTried bool) string {
 	hosts := unreachableHosts(rows)
 	if len(hosts) == 0 {
 		return ""
 	}
+	wake := "or asleep at layer 2 — `fleet wake <alias>` nudges the last case."
+	if wakeTried {
+		wake = "or asleep — this run already tried the wake ladder, so check power and\n" +
+			"  cabling (or rerun with a longer --wake-timeout)."
+	}
+	note := ""
+	if powerSave != nil {
+		note = powerSave()
+	}
 	return fmt.Sprintf("\n%d host(s) unreachable — no SSH session opened: %s\n"+
 		"  this is a NETWORK fault, not a key — no credential fix applies to a host\n"+
 		"  you cannot open a connection to. The box may be powered off, off the\n"+
-		"  network, or asleep at layer 2 — `fleet wake <alias>` nudges the last case.\n",
-		len(hosts), strings.Join(hosts, ", ")) + powerSaveNote
+		"  network, %s\n",
+		len(hosts), strings.Join(hosts, ", "), wake) + note
 }
 
 // hostKeyHint routes host-key faults to `fleet trust`. ssh-copy-id cannot help

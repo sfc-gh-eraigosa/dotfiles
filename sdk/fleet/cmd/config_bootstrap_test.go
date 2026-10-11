@@ -61,11 +61,18 @@ func TestStatusHintNamesHostsThatNeedManualBootstrap(t *testing.T) {
 		{Alias: "blocked", Class: string(drift.AuthFailed)},
 		{Alias: "dead", Class: string(drift.Unreachable)},
 	}
-	got := bootstrapHint(rows, "")
+	got := bootstrapHint(rows, noNote, false)
 	for _, want := range []string{"blocked", "dead", "ssh-copy-id"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("hint %q missing %q", got, want)
 		}
+	}
+	// The ssh-copy-id advice names ONLY the auth-failed host. Substring checks
+	// on the whole hint passed even when the unreachable host was blamed on
+	// the key, so check the key sentence on its own.
+	key := keyBootstrapHint(rows)
+	if !strings.Contains(key, "blocked") || strings.Contains(key, "dead") {
+		t.Fatalf("key-bootstrap advice must name blocked and never dead:\n%s", key)
 	}
 }
 
@@ -75,7 +82,7 @@ func TestStatusHintNamesHostsThatNeedManualBootstrap(t *testing.T) {
 // `ssh-copy-id` sentence.
 func TestUnreachableHostIsNotBlamedOnTheKey(t *testing.T) {
 	rows := []Row{{Alias: "dead", Class: string(drift.Unreachable)}}
-	got := bootstrapHint(rows, "")
+	got := bootstrapHint(rows, noNote, false)
 	if strings.Contains(got, "ssh-copy-id") || strings.Contains(got, "with your key") {
 		t.Fatalf("an unreachable host must not be offered ssh-copy-id:\n%s", got)
 	}
@@ -95,19 +102,19 @@ func TestUnreachableHintCarriesTheLocalPowerSaveCause(t *testing.T) {
 		t.Fatal("a radio with power save on must produce a note")
 	}
 	rows := []Row{{Alias: "dead", Class: string(drift.Unreachable)}}
-	if got := bootstrapHint(rows, note); !strings.Contains(got, "power_save ON") || !strings.Contains(got, "wlan0") {
+	if got := bootstrapHint(rows, noteOf(note), false); !strings.Contains(got, "power_save ON") || !strings.Contains(got, "wlan0") {
 		t.Fatalf("hint should carry the power-save note:\n%s", got)
 	}
 	// No unreachable host ⇒ no place for the note, even if the radio is asleep.
 	healthy := []Row{{Alias: "ok", Class: string(drift.UpToDate)}}
-	if got := bootstrapHint(healthy, note); got != "" {
+	if got := bootstrapHint(healthy, noteOf(note), false); got != "" {
 		t.Fatalf("a healthy fleet must stay silent, got:\n%s", got)
 	}
 }
 
 // A healthy fleet must not be nagged.
 func TestStatusHintIsSilentWhenEveryHostAnswers(t *testing.T) {
-	if got := bootstrapHint([]Row{{Alias: "ok", Class: string(drift.UpToDate)}}, ""); got != "" {
+	if got := bootstrapHint([]Row{{Alias: "ok", Class: string(drift.UpToDate)}}, noNote, false); got != "" {
 		t.Fatalf("hint = %q, want empty", got)
 	}
 }
@@ -117,7 +124,7 @@ func TestStatusHintIsSilentWhenEveryHostAnswers(t *testing.T) {
 // CLI-only operator would see a permanent auth-failed with nothing telling
 // them the way out.
 func TestStatusHintExplainsHowToPrimeAPasswordAuthHost(t *testing.T) {
-	got := bootstrapHint([]Row{{Alias: "blocked", Class: string(drift.AuthFailed)}}, "")
+	got := bootstrapHint([]Row{{Alias: "blocked", Class: string(drift.AuthFailed)}}, noNote, false)
 	for _, want := range []string{"password", "fleet tui", "s"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("hint missing %q:\n%s", want, got)
@@ -136,7 +143,7 @@ func TestHostKeyRowsAreSentToFleetTrustNotSshCopyID(t *testing.T) {
 	if got := bootstrapNeeded(rows); len(got) != 0 {
 		t.Fatalf("host-key rows need no key bootstrap, got %v", got)
 	}
-	got := bootstrapHint(rows, "")
+	got := bootstrapHint(rows, noNote, false)
 	for _, want := range []string{"fleet trust rekeyed", "fleet trust fresh", "CHANGED", "T in `fleet tui`"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("hint missing %q:\n%s", want, got)
@@ -151,9 +158,44 @@ func TestMixedFaultsGetBothHints(t *testing.T) {
 	got := bootstrapHint([]Row{
 		{Alias: "rekeyed", Class: string(drift.AuthFailed), Note: "host key CHANGED"},
 		{Alias: "blocked", Class: string(drift.AuthFailed), Note: "permission denied"},
-	}, "")
+	}, noNote, false)
 	if !strings.Contains(got, "fleet trust rekeyed") || !strings.Contains(got, "ssh-copy-id") ||
 		strings.Contains(got, "key: blocked, rekeyed") {
 		t.Fatalf("hint:\n%s", got)
+	}
+}
+
+func noNote() string { return "" }
+
+func noteOf(s string) func() string { return func() string { return s } }
+
+// The power-save probe forks `iw` per wireless NIC, so it runs only when an
+// unreachable host gives the note somewhere to go.
+func TestPowerSaveProbeRunsOnlyForAnUnreachableHost(t *testing.T) {
+	calls := 0
+	probe := func() string { calls++; return "" }
+	bootstrapHint([]Row{{Alias: "ok", Class: string(drift.UpToDate)}, {Alias: "b", Class: string(drift.AuthFailed)}}, probe, true)
+	if calls != 0 {
+		t.Fatalf("probe ran %d time(s) on a fleet with no unreachable host", calls)
+	}
+	bootstrapHint([]Row{{Alias: "dead", Class: string(drift.Unreachable)}}, probe, true)
+	if calls != 1 {
+		t.Fatalf("probe ran %d time(s) for one unreachable host, want 1", calls)
+	}
+}
+
+// fleet status has ALREADY run the wake ladder unless --no-wake, so telling
+// the operator to run `fleet wake` repeats the step that just failed.
+func TestUnreachableHintDoesNotRepeatAWakeStatusAlreadyTried(t *testing.T) {
+	rows := []Row{{Alias: "dead", Class: string(drift.Unreachable)}}
+	tried := bootstrapHint(rows, noNote, true)
+	if strings.Contains(tried, "fleet wake <alias>` nudges") {
+		t.Fatalf("hint repeats the wake status already ran:\n%s", tried)
+	}
+	if !strings.Contains(tried, "already") {
+		t.Fatalf("hint should say the wake ladder was already tried:\n%s", tried)
+	}
+	if notTried := bootstrapHint(rows, noNote, false); !strings.Contains(notTried, "fleet wake") {
+		t.Fatalf("with --no-wake the hint should offer fleet wake:\n%s", notTried)
 	}
 }
