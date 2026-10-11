@@ -21,10 +21,64 @@ import (
 // installs follow the manifest, upstream latest, or exact pins.
 const pinsTrackKey = "pins.track.mode"
 
-// pinsTrackMode reads pins.track.mode from the repo's gff, failing open to
-// "manifest": an unreadable flag must never change what a host converges to.
+// pinsTrackMode resolves the host's track mode in the same order pins_want
+// does: GFF_PINS_TRACK, then GFF_PINS_TRACK_MODE (install.sh's gff export),
+// then gff itself. Failing open to "manifest": an unreadable flag must never
+// change what a host converges to.
 func pinsTrackMode(repo string) string {
-	return pinsTrackModeFrom(&featflag.GFF{Repo: repo})
+	return pinsTrackModeEnv(os.Getenv, &featflag.GFF{Repo: repo})
+}
+
+func pinsTrackModeEnv(getenv func(string) string, src featflag.Source) string {
+	for _, k := range []string{"GFF_PINS_TRACK", "GFF_PINS_TRACK_MODE"} {
+		switch v := getenv(k); v {
+		case "manifest", "latest", "pin":
+			return v
+		}
+	}
+	return pinsTrackModeFrom(src)
+}
+
+// installerGate is install.sh's gff gate around one installer. optIn mirrors
+// gff_opt_in (fail-CLOSED: runs only on an explicit true); the rest mirror
+// gff_on (fail-open: runs unless explicitly false).
+type installerGate struct {
+	key   string
+	optIn bool
+}
+
+// installerGates maps each manifest installer to the flag install.sh checks
+// before running it. TestEveryRepoInstallerHasAGate keeps it complete: apply
+// must never run an installer install.sh would have skipped (a gitleaks run
+// would even delete the --off marker that keeps the privacy guard off it).
+var installerGates = map[string]installerGate{
+	"opt/scripts/system/install_uv.sh":        {key: "install.tools.uv"},
+	"opt/scripts/system/install_glow.sh":      {key: "install.tools.glow", optIn: true},
+	"opt/scripts/system/install_rust.sh":      {key: "install.runtime.rust"},
+	"opt/scripts/system/install_sops.sh":      {key: "install.tools.sops"},
+	"opt/scripts/system/install_yq.sh":        {key: "install.tools.yq"},
+	"opt/scripts/git/install_gitleaks.sh":     {key: "install.git.gitleaks"},
+	"opt/scripts/system/install_k8s_tools.sh": {key: "install.tools.k8s"},
+	"opt/scripts/system/install_herdr.sh":     {key: "install.tools.herdr"},
+}
+
+// gffInstallerGate answers an installer's gate from the repo's gff. An
+// installer with no known gate is refused: running unknown code by default is
+// the wrong side to fail on.
+func gffInstallerGate(repo, installer string) (bool, string) {
+	g, ok := installerGates[installer]
+	if !ok {
+		return false, "no gff gate known for " + installer
+	}
+	return gateAllows(&featflag.GFF{Repo: repo}, g), g.key
+}
+
+func gateAllows(src featflag.Source, g installerGate) bool {
+	v, err := src.Bool(g.key)
+	if err != nil {
+		return !g.optIn
+	}
+	return v
 }
 
 func pinsTrackModeFrom(src featflag.Source) string {
@@ -45,11 +99,12 @@ func pinsTrackModeFrom(src featflag.Source) string {
 // runInstallerScript runs `bash <repo>/<installer>` with the terminal attached,
 // so sudo prompts and progress reach the operator. The host's track mode is
 // exported the way install.sh's `gff export` does, so a standalone apply
-// converges to the same versions an install would.
-func runInstallerScript(ctx context.Context, repo, installer, mode string, out io.Writer) error {
+// converges to the same versions an install would; PINS_TOOLS names the tools
+// this run is for, so a shared installer (k8s) leaves the others alone.
+func runInstallerScript(ctx context.Context, repo, installer, mode string, tools []string, out io.Writer) error {
 	c := exec.CommandContext(ctx, "bash", filepath.Join(repo, filepath.FromSlash(installer)))
 	c.Dir = repo
-	c.Env = append(os.Environ(), "GFF_PINS_TRACK_MODE="+mode)
+	c.Env = append(os.Environ(), "GFF_PINS_TRACK_MODE="+mode, "GFF_PINS_TRACK="+mode, "PINS_TOOLS="+strings.Join(tools, ","))
 	c.Stdin = os.Stdin
 	c.Stdout, c.Stderr = out, out
 	return c.Run()
@@ -136,6 +191,10 @@ func runPinsApply(ctx context.Context, o pinsApplyOpts) error {
 		if err := checkInstallerPath(e.Installer); err != nil {
 			return fmt.Errorf("apply: %s: %w", r.Tool, err)
 		}
+		if ok, flag := o.D.gate(o.M.Root, e.Installer); !ok {
+			fmt.Fprintf(o.Out, "%s: skipped — gff %s is off on this host (install.sh skips it too)\n", r.Tool, flag)
+			continue
+		}
 		placed := false
 		for i := range groups {
 			if groups[i].Path == e.Installer {
@@ -167,7 +226,7 @@ func runPinsApply(ctx context.Context, o pinsApplyOpts) error {
 			continue
 		}
 		fmt.Fprintf(o.Out, "==> %s (%s)\n", g.Path, tools)
-		if err := o.D.runInstaller(ctx, o.M.Root, g.Path, mode, o.Out); err != nil {
+		if err := o.D.runInstaller(ctx, o.M.Root, g.Path, mode, g.Tools, o.Out); err != nil {
 			fmt.Fprintf(o.Out, "FAILED %s: %v\n", g.Path, err)
 			failed = append(failed, g.Path)
 		}

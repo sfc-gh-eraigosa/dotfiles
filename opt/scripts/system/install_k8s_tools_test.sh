@@ -74,7 +74,7 @@ EOF
 run_k8s() {  # run_k8s <install dir> [VAR=value ...]
     _dir="$1"; shift
     env -u KUBECTL_VERSION -u HELM_VERSION -u KIND_VERSION -u K8S_TOOLS_FORCE \
-        -u GFF_PINS_TRACK -u GFF_PINS_TRACK_MODE \
+        -u GFF_PINS_TRACK -u GFF_PINS_TRACK_MODE -u PINS_TOOLS \
         PATH="${EXTRA_PATH:-${SYS}}:${SYS}" HOME="${TMP}/home" K8S_INSTALL_DIR="${_dir}" \
         KUBECTL_RELEASE_BASE="file://${K}" KUBECTL_STABLE_URL="file://${K}/stable.txt" \
         HELM_RELEASE_BASE="file://${H}" KIND_RELEASE_BASE="file://${KI}" \
@@ -152,5 +152,13 @@ D3="${TMP}/bin3"
 out="$(run_k8s "${D3}" KIND_VERSION=9.9.9)"; rc=$?
 assert_eq "${rc}" "1" "download failure: exits 1"
 assert_eq "$([ -x "${D3}/kubectl" ] && [ -x "${D3}/helm" ] && echo both || echo missing)" "both" "download failure: the other tools still installed"
+
+# 11. PINS_TOOLS (set by `fleet pins apply`) limits the run to the named tools,
+#     so a drifted kubectl never drags in an absent helm or kind.
+DPT="${TMP}/bin-pins-tools"
+out="$(run_k8s "${DPT}" PINS_TOOLS=kubectl)"; rc=$?
+assert_eq "${rc}" "0" "PINS_TOOLS=kubectl: exits 0"
+assert_eq "$([ -x "${DPT}/kubectl" ] && echo present || echo absent)" "present" "PINS_TOOLS=kubectl: kubectl installed"
+assert_eq "$([ -e "${DPT}/helm" ] || [ -e "${DPT}/kind" ] && echo dragged-in || echo left-alone)" "left-alone" "PINS_TOOLS=kubectl: helm and kind not installed"
 
 _test_report

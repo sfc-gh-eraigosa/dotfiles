@@ -22,6 +22,12 @@ var (
 	// a neutral directory, or discovery would change which plan an existing
 	// user gets without anyone asking.
 	flagRepoChosen bool
+	// flagRepoExplicit is narrower than flagRepoChosen: --repo was typed on
+	// the command line (a cwd-derived repo does not count).
+	flagRepoExplicit bool
+	// defaultDotfilesRepo is --repo's default, ~/git/dotfiles: where the pins
+	// manifest lives when the cwd repo is some other project.
+	defaultDotfilesRepo string
 )
 
 var rootCmd = &cobra.Command{
@@ -64,7 +70,8 @@ func init() {
 	home, _ := os.UserHomeDir()
 	rootCmd.PersistentFlags().StringVar(&flagConfig, "config", filepath.Join(home, ".ssh", "config"), "ssh config path")
 	rootCmd.PersistentFlags().StringVar(&flagMarker, "marker", "#fleet", "comment marking a host as in-fleet")
-	rootCmd.PersistentFlags().StringVar(&flagRepo, "repo", filepath.Join(home, "git", "dotfiles"), "repo fleet operates on: its fleet.yaml is discovered and it is the baseline (default: the git repo you are in, else ~/git/dotfiles)")
+	defaultDotfilesRepo = filepath.Join(home, "git", "dotfiles")
+	rootCmd.PersistentFlags().StringVar(&flagRepo, "repo", defaultDotfilesRepo, "repo fleet operates on: its fleet.yaml is discovered and it is the baseline (default: the git repo you are in, else ~/git/dotfiles)")
 	rootCmd.PersistentFlags().BoolVar(&flagJSON, "json", false, "machine-readable output")
 
 	// --repo defaults to the repo you are standing in, so `cd <repo> && fleet`
@@ -81,6 +88,7 @@ func init() {
 		cmd.SilenceUsage = true
 		if cmd.Flags().Changed("repo") {
 			flagRepoChosen = true
+			flagRepoExplicit = true
 			return
 		}
 		cwd, err := os.Getwd()

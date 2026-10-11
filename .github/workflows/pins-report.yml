@@ -84,7 +84,7 @@ jobs:
           TITLE: 'pins: upstream drift report'
         run: |
           set -euo pipefail
-          behind=$(jq '[.rows[] | select(.gap == "patch" or .gap == "minor" or .gap == "major" or (.error // "") != "")] | length' "$RUNNER_TEMP/pins.json")
+          behind=$(jq '[.rows[] | select((.track == "pin" and (.gap == "patch" or .gap == "minor" or .gap == "major")) or (.error // "") != "")] | length' "$RUNNER_TEMP/pins.json")
           existing=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number,title \
             --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")
 
@@ -96,12 +96,14 @@ jobs:
             exit 0
           fi
 
+          # Only exact pins can be "behind": a floor is satisfied by anything
+          # at or above it, so counting it would keep this issue open forever.
           {
             echo "**${behind}** pin(s) in \`opt/profiles/versions.tsv\` are behind upstream as of $(date -u +%F)."
             echo
             echo "| Tool | Track | Pin | Latest | Gap | Released |"
             echo "| :-- | :-- | :-- | :-- | :-- | :-- |"
-            jq -r '.rows[] | select(.gap == "patch" or .gap == "minor" or .gap == "major" or (.error // "") != "")
+            jq -r '.rows[] | select((.track == "pin" and (.gap == "patch" or .gap == "minor" or .gap == "major")) or (.error // "") != "")
               | "| \(.tool) | \(.track) | \(.pin) | \(.latest // "-") | \(if (.error // "") != "" then "error: " + .error else .gap end) | \(.released // "" | if . == "" then "-" else . end) |"' \
               "$RUNNER_TEMP/pins.json"
             echo

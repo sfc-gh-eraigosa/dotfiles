@@ -432,3 +432,23 @@ func TestPinsCommandMissingManifest(t *testing.T) {
 		t.Error("missing manifest should be an error")
 	}
 }
+
+// Run from inside ANOTHER git repo, fleet's --repo becomes that repo; pins
+// must still find the dotfiles manifest at the default clone unless --repo
+// was given explicitly.
+func TestLoadPinsManifestFallsBackToTheDefaultClone(t *testing.T) {
+	other := t.TempDir()
+	dot := writePinsRepo(t)
+	oldRepo, oldExplicit, oldDefault := flagRepo, flagRepoExplicit, defaultDotfilesRepo
+	t.Cleanup(func() { flagRepo, flagRepoExplicit, defaultDotfilesRepo = oldRepo, oldExplicit, oldDefault })
+
+	flagRepo, flagRepoExplicit, defaultDotfilesRepo = other, false, dot
+	m, err := loadPinsManifest()
+	if err != nil || m.Root != dot {
+		t.Fatalf("fallback: m=%v err=%v", m, err)
+	}
+	flagRepoExplicit = true
+	if _, err := loadPinsManifest(); err == nil {
+		t.Fatal("an explicit --repo without a manifest must be an error, not a silent fallback")
+	}
+}

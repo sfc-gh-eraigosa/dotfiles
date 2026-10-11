@@ -49,12 +49,14 @@ func applyExec(_ context.Context, cmd string) (string, error) {
 type installerLog struct {
 	calls []string
 	modes []string
+	tools []string
 	fail  map[string]bool
 }
 
-func (l *installerLog) run(_ context.Context, repo, installer, mode string, out io.Writer) error {
+func (l *installerLog) run(_ context.Context, repo, installer, mode string, tools []string, out io.Writer) error {
 	l.calls = append(l.calls, installer)
 	l.modes = append(l.modes, mode)
+	l.tools = append(l.tools, strings.Join(tools, ","))
 	_, _ = io.WriteString(out, "ran "+installer+"\n")
 	if l.fail[installer] {
 		return errors.New("exit status 1")
@@ -69,6 +71,7 @@ func applyDeps(l *installerLog) *pinsDeps {
 		exec:         applyExec,
 		trackMode:    func(string) string { return "manifest" },
 		runInstaller: l.run,
+		gate:         func(string, string) (bool, string) { return true, "" },
 	}
 }
 
@@ -280,7 +283,7 @@ func TestRunInstallerScriptRunsBashInRepo(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := runInstallerScript(context.Background(), root, "inst.sh", "manifest", &out); err != nil {
+	if err := runInstallerScript(context.Background(), root, "inst.sh", "manifest", nil, &out); err != nil {
 		t.Fatalf("err=%v out=%s", err, out.String())
 	}
 	if !strings.Contains(out.String(), "installing") {
@@ -289,7 +292,7 @@ func TestRunInstallerScriptRunsBashInRepo(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "bad.sh"), []byte("exit 4\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := runInstallerScript(context.Background(), root, "bad.sh", "manifest", &out); err == nil {
+	if err := runInstallerScript(context.Background(), root, "bad.sh", "manifest", nil, &out); err == nil {
 		t.Error("non-zero exit must be an error")
 	}
 }
@@ -341,10 +344,103 @@ func TestRunInstallerScriptExportsTheTrackMode(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := runInstallerScript(context.Background(), root, "inst.sh", "latest", &out); err != nil {
+	if err := runInstallerScript(context.Background(), root, "inst.sh", "latest", nil, &out); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "mode=latest") {
 		t.Fatalf("installer env lacked the mode: %q", out.String())
+	}
+}
+
+// --- review round 2 ---------------------------------------------------------
+
+// apply honours the same gff install gate install.sh does: a host that turned
+// a component off (gitleaks --off, k8s off) must not get it back from apply.
+func TestPinsApplySkipsAnInstallerWhoseGffGateIsOff(t *testing.T) {
+	root := writeApplyRepo(t)
+	withPinsGlobals(t, root, false)
+	l := &installerLog{}
+	d := applyDeps(l)
+	d.gate = func(_, installer string) (bool, string) {
+		if installer == "opt/scripts/system/install_k8s_tools.sh" {
+			return false, "install.tools.k8s"
+		}
+		return true, ""
+	}
+	out, err := runPinsCmd(t, d, "apply")
+	if err != nil {
+		t.Fatalf("err = %v\n%s", err, out)
+	}
+	if strings.Join(l.calls, ",") != "opt/scripts/system/install_uv.sh" {
+		t.Fatalf("installers run = %v; the k8s installer is gated off", l.calls)
+	}
+	if !strings.Contains(out, "install.tools.k8s") {
+		t.Fatalf("the skip must name the gff flag:\n%s", out)
+	}
+}
+
+// A shared installer is told WHICH tools to converge, so a drifted kubectl
+// never drags in an absent helm or kind.
+func TestPinsApplyTellsASharedInstallerWhichTools(t *testing.T) {
+	root := writeApplyRepo(t)
+	withPinsGlobals(t, root, false)
+	l := &installerLog{}
+	if out, err := runPinsCmd(t, applyDeps(l), "apply"); err != nil {
+		t.Fatalf("err = %v\n%s", err, out)
+	}
+	for i, c := range l.calls {
+		if c == "opt/scripts/system/install_k8s_tools.sh" && l.tools[i] != "kubectl,helm" {
+			t.Fatalf("k8s installer got tools %q, want kubectl,helm", l.tools[i])
+		}
+	}
+}
+
+func TestRunInstallerScriptExportsPinsTools(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "inst.sh"), []byte("echo tools=$PINS_TOOLS\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := runInstallerScript(context.Background(), root, "inst.sh", "manifest", []string{"kubectl", "helm"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "tools=kubectl,helm") {
+		t.Fatalf("installer env lacked PINS_TOOLS: %q", out.String())
+	}
+}
+
+// An explicit env mode wins over gff, in the same order pins_want reads it, so
+// fleet's row selection and the installers it starts never disagree.
+func TestTrackModeEnvWinsOverGff(t *testing.T) {
+	gffSays := featflag.Static{Strs: map[string][]string{"pins.track.mode": {"pin"}}}
+	env := func(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
+	if got := pinsTrackModeEnv(env(map[string]string{"GFF_PINS_TRACK_MODE": "latest"}), gffSays); got != "latest" {
+		t.Fatalf("GFF_PINS_TRACK_MODE ignored: %q", got)
+	}
+	if got := pinsTrackModeEnv(env(map[string]string{"GFF_PINS_TRACK": "latest", "GFF_PINS_TRACK_MODE": "pin"}), gffSays); got != "latest" {
+		t.Fatalf("GFF_PINS_TRACK must win, like pins_want: %q", got)
+	}
+	if got := pinsTrackModeEnv(env(map[string]string{"GFF_PINS_TRACK_MODE": "bogus"}), gffSays); got != "pin" {
+		t.Fatalf("an unknown env value falls through to gff: %q", got)
+	}
+	if got := pinsTrackModeEnv(env(nil), gffSays); got != "pin" {
+		t.Fatalf("no env: gff answers: %q", got)
+	}
+}
+
+// Every installer the real manifest names has a gff gate, so apply can never
+// run one install.sh would have skipped.
+func TestEveryRepoInstallerHasAGate(t *testing.T) {
+	m, err := pins.Load(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Skipf("not inside the dotfiles repo: %v", err)
+	}
+	for _, e := range m.Entries {
+		if e.Installer == "-" {
+			continue
+		}
+		if _, ok := installerGates[e.Installer]; !ok {
+			t.Errorf("%s: installer %s has no entry in installerGates", e.Tool, e.Installer)
+		}
 	}
 }

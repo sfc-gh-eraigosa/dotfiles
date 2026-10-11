@@ -124,6 +124,11 @@ assert_out "latest" "$(PINS_GFF="$GFFSTUB_DIR/gff" STUB_MODE=latest pins_want so
 assert_out "3.13.1" "$(PINS_GFF="$GFFSTUB_DIR/gff" STUB_MODE=bogus pins_want sops 1.0.0)" "no export: an unknown gff answer fails open to manifest"
 assert_out "3.13.1" "$(PINS_GFF="$GFFSTUB_DIR/missing-gff" pins_want sops 1.0.0)" "no export: an absent gff fails open to manifest"
 assert_out "3.13.1" "$(PINS_GFF="$GFFSTUB_DIR/gff" STUB_MODE=latest GFF_PINS_TRACK_MODE=manifest pins_want sops 1.0.0)" "an export wins over asking gff"
+# Memoised: three lookups in one shell start gff once.
+printf '#!/bin/sh\necho x >> "%s/calls"\necho latest\n' "$GFFSTUB_DIR" > "$GFFSTUB_DIR/gffcount"
+chmod +x "$GFFSTUB_DIR/gffcount"
+_calls=$( (unset _PINS_GFF_MODE_MEMO; PINS_GFF="$GFFSTUB_DIR/gffcount"; pins_want sops 1 >/dev/null; pins_want yq 1 >/dev/null; pins_want uv 1 >/dev/null); wc -l < "$GFFSTUB_DIR/calls" | tr -d ' ')
+assert_out "1" "$_calls" "gff is asked once per shell, not once per pins_want"
 rm -rf "$GFFSTUB_DIR"
 assert_out "3.13.1" "$(GFF_PINS_TRACK=manifest GFF_PINS_TRACK_MODE=latest pins_want sops 1.0.0)" "GFF_PINS_TRACK wins over GFF_PINS_TRACK_MODE"
 

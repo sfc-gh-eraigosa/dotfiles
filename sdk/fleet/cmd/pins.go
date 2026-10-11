@@ -35,7 +35,10 @@ type pinsDeps struct {
 	// Installed-mode seams (see pins_apply.go).
 	exec         pins.Exec
 	trackMode    func(repo string) string
-	runInstaller func(ctx context.Context, repo, installer, mode string, out io.Writer) error
+	runInstaller func(ctx context.Context, repo, installer, mode string, tools []string, out io.Writer) error
+	// gate answers install.sh's gff gate for an installer: run? and, when
+	// not, the flag that said no.
+	gate func(repo, installer string) (bool, string)
 }
 
 func defaultPinsDeps() *pinsDeps {
@@ -47,6 +50,7 @@ func defaultPinsDeps() *pinsDeps {
 		exec:         pins.ShellExec,
 		trackMode:    pinsTrackMode,
 		runInstaller: runInstallerScript,
+		gate:         gffInstallerGate,
 	}
 }
 
@@ -272,10 +276,19 @@ func runPinsBump(ctx context.Context, o pinsBumpOpts) error {
 
 func loadPinsManifest() (*pins.Manifest, error) {
 	m, err := pins.Load(flagRepo)
-	if err != nil {
-		return nil, fmt.Errorf("%w (is --repo %s a dotfiles checkout?)", err, flagRepo)
+	if err == nil {
+		return m, nil
 	}
-	return m, nil
+	// Run from inside some OTHER git repo, fleet adopts that repo as --repo
+	// (right for status and update, which follow the plan there). The pins
+	// manifest only ever lives in the dotfiles clone, so fall back to it —
+	// unless --repo was named on the command line, which is never overridden.
+	if !flagRepoExplicit && defaultDotfilesRepo != "" && defaultDotfilesRepo != flagRepo {
+		if m2, err2 := pins.Load(defaultDotfilesRepo); err2 == nil {
+			return m2, nil
+		}
+	}
+	return nil, fmt.Errorf("%w (is --repo %s a dotfiles checkout?)", err, flagRepo)
 }
 
 // newPinsCmd builds `fleet pins`. Wiring only: the work is in the run* funcs.

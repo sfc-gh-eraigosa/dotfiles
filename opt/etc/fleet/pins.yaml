@@ -27,7 +27,10 @@ update:
       kind: run
       repo: dotfiles
       # Non-login ssh shells skip the profiles, so put goenv's shims on PATH
-      # for the fleet rebuild the same way install.sh does.
-      run: export PATH="$HOME/.goenv/shims:$HOME/.goenv/bin:$HOME/opt/bin:$PATH" && bash sdk/fleet/build.sh && "$HOME/opt/bin/fleet" pins apply
+      # for the fleet rebuild the same way install.sh does — and install the
+      # pinned Go FIRST: the sync may have just bumped .go-version, and the
+      # rebuild would otherwise fail with "goenv: version ... is not installed"
+      # (the go row is report-only, so apply alone can never fix that).
+      run: export PATH="$HOME/.goenv/shims:$HOME/.goenv/bin:$HOME/opt/bin:$PATH" && { ! command -v goenv >/dev/null 2>&1 || goenv install -s "$(tr -d '[:space:]' < .go-version)"; } && bash sdk/fleet/build.sh && "$HOME/opt/bin/fleet" pins apply
       needs: [dotfiles.sync]
       timeout: 20m

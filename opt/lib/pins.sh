@@ -59,6 +59,20 @@ _pins_root() {
 # from the repo root. PINS_GFF names the gff binary; set it empty to skip the
 # lookup (tests). Fail-open: no gff, an error or an unknown answer => manifest.
 _pins_gff_mode() {
+    # Memoised per shell: an installer calls pins_want once per tool, and each
+    # lookup would otherwise start gff again.
+    # Keyed to the gff binary asked (PINS_GFF), so a different one re-asks.
+    _pg_key="${PINS_GFF-<path>}"
+    if [ -n "${_PINS_GFF_MODE_MEMO:-}" ] && [ "${_PINS_GFF_MODE_KEY-}" = "$_pg_key" ]; then
+        printf '%s\n' "$_PINS_GFF_MODE_MEMO"
+        return 0
+    fi
+    _PINS_GFF_MODE_KEY="$_pg_key"
+    _PINS_GFF_MODE_MEMO=$(_pins_gff_mode_lookup)
+    printf '%s\n' "$_PINS_GFF_MODE_MEMO"
+}
+
+_pins_gff_mode_lookup() {
     if [ "${PINS_GFF+set}" = "set" ]; then
         _pg_bin="$PINS_GFF"
     else
@@ -78,7 +92,13 @@ _pins_gff_mode() {
 pins_want() {
     _pw_tool="${1:-}"
     _pw_fb="${2:-}"
-    _pw_mode="${GFF_PINS_TRACK:-${GFF_PINS_TRACK_MODE:-$(_pins_gff_mode)}}"
+    if [ -n "${GFF_PINS_TRACK:-}" ] || [ -n "${GFF_PINS_TRACK_MODE:-}" ]; then
+        _pw_mode="${GFF_PINS_TRACK:-${GFF_PINS_TRACK_MODE}}"
+    else
+        # Not in a $(...) subshell, so the memo set inside survives the call.
+        _pins_gff_mode >/dev/null
+        _pw_mode="$_PINS_GFF_MODE_MEMO"
+    fi
     if [ "$_pw_mode" = "latest" ]; then
         printf 'latest\n'
         return 0

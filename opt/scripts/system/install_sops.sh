@@ -48,7 +48,9 @@ ok()   { echo -e "${GREEN}$*${NC}"; }
 die()  { echo -e "${RED}install_sops: $*${NC}" >&2; exit 1; }
 
 # "sops 3.13.1 (latest)" -> 3.13.1
-version_of() { "$1" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1 || true; }
+# --disable-version-check: plain `sops --version` asks GitHub for the latest
+# release on every call (and waits on it offline).
+version_of() { "$1" --version --disable-version-check 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1 || true; }
 
 # Ownership: a runnable sops on PATH that is NOT ours belongs to brew/apt —
 # report it and leave it alone (SOPS_FORCE=1 installs ours anyway).
@@ -99,7 +101,7 @@ fi
 TMP_BIN="$(mktemp "${INSTALL_DIR}/.sops.XXXXXX")"
 curl -fsSL "${URL}" -o "${TMP_BIN}" || { rm -f "${TMP_BIN}"; die "download failed: ${URL}"; }
 chmod +x "${TMP_BIN}"
-"${TMP_BIN}" --version >/dev/null 2>&1 || { rm -f "${TMP_BIN}"; die "downloaded binary does not run: ${URL}"; }
+"${TMP_BIN}" --version --disable-version-check >/dev/null 2>&1 || { rm -f "${TMP_BIN}"; die "downloaded binary does not run: ${URL}"; }
 
 # Clear any stale entry (including a dangling symlink) before moving the new
 # binary in. `-e` is false for a dangling symlink, so test `-L` too.
@@ -108,4 +110,4 @@ if [ -e "${OWN}" ] || [ -L "${OWN}" ]; then
 fi
 mv "${TMP_BIN}" "${OWN}"
 
-ok "Success! $("${OWN}" --version | head -1)"
+ok "Success! $("${OWN}" --version --disable-version-check | head -1)"

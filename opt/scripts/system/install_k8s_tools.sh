@@ -106,6 +106,13 @@ WANT=""; HAVE=""
 plan() {
     local name="$1" version="$2" repo="$3" found own out
     shift 3
+    # PINS_TOOLS (comma list, set by `fleet pins apply`) limits a run to the
+    # tools it was started for: a drifted kubectl must not drag in an absent
+    # helm or kind, which may be missing on purpose. Unset/empty = all three.
+    case ",${PINS_TOOLS:-${name}}," in
+        *",${name},"*) ;;
+        *) echo -e "${BLUE}${name}: not in PINS_TOOLS (${PINS_TOOLS}); leaving it alone${NC}"; return 1 ;;
+    esac
     own="${INSTALL_DIR}/${name}"
     found="$(command -v "${name}" 2>/dev/null || true)"
     if [ "${K8S_TOOLS_FORCE:-0}" != "1" ] && [ ! -x "${own}" ] && [ -n "${found}" ] \
