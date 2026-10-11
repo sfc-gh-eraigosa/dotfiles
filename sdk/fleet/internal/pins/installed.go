@@ -46,7 +46,7 @@ type Summary struct {
 	Unknown int `json:"unknown"`
 }
 
-// CheckInstalled probes every manifest row. mode is the gff `pins.track`
+// CheckInstalled probes every manifest row. mode is the gff `pins.track.mode`
 // value: "manifest" (default; honour each row's track), "latest" (everything
 // is wanted at latest, so nothing can drift), or "pin" (rows tracked latest are
 // held to their concrete version when they have one; floors stay floors). Rows come back in manifest order.

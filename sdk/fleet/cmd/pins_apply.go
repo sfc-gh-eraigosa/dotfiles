@@ -19,9 +19,9 @@ import (
 
 // pinsTrackKey is the gff choice flag (manifest|latest|pin) that says whether
 // installs follow the manifest, upstream latest, or exact pins.
-const pinsTrackKey = "pins.track"
+const pinsTrackKey = "pins.track.mode"
 
-// pinsTrackMode reads pins.track from the repo's gff, failing open to
+// pinsTrackMode reads pins.track.mode from the repo's gff, failing open to
 // "manifest": an unreadable flag must never change what a host converges to.
 func pinsTrackMode(repo string) string {
 	return pinsTrackModeFrom(&featflag.GFF{Repo: repo})

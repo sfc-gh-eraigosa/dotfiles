@@ -24,7 +24,7 @@ choose pinned or latest per tool or per host.
   when the host's fleet predates pins.
 - **UC6: fleet rollout.** `fleet update --file opt/etc/fleet/pins.yaml <hosts>` syncs dotfiles,
   rebuilds fleet and runs `fleet pins apply` on each host, with no interactive install.sh.
-- **UC7: float a host.** `gff set pins.track latest` makes every installer on that host follow
+- **UC7: float a host.** `gff set pins.track.mode latest` makes every installer on that host follow
   latest upstream. `pin` forces pins even on rows tracked `latest`. `manifest` (the default) honours each row.
 - **UC8: weekly report.** A scheduled workflow upserts one issue ("pins: upstream drift report")
   with the behind rows, and closes it when nothing is behind.
@@ -64,7 +64,7 @@ opt/etc/fleet/pins.yaml ─► fleet update --file … (sync → build fleet →
 - **F9 fleet status PINS column + JSON `pins` object** `{ok, drift, missing}`, or absent.
 - **F10 pins.yaml plan + install.sh chmod normalisation for it.**
 - **F11 weekly pins-report workflow** (schedule + dispatch, `issues: write`, not a required check).
-- **F12 gff flag `pins.track`** (choice: manifest|latest|pin, default manifest).
+- **F12 gff flag `pins.track.mode`** (gff requires 3-part keys; exported as `GFF_PINS_TRACK_MODE`) (choice: manifest|latest|pin, default manifest).
 
 ## 5. Evaluation criteria
 

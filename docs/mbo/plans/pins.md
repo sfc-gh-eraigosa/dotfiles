@@ -21,7 +21,7 @@ follows.
 | `opt/scripts/system/install_{sops,yq,k8s_tools}.sh` (+ new `_test.sh` for sops/yq/k8s) | converge | F3 |
 | `opt/scripts/git/install_gitleaks.sh` (+ existing test) | converge | F3 |
 | `opt/scripts/system/install_{uv,glow,rust}.sh`, `macos-keys-linux.sh`, `opt/scripts/network/vault-setup.sh`, `sdk/gsl/scripts/install_nerd_font_{linux,macos}.sh`, `install.sh` (Go block) | defaults from manifest | F4 |
-| `.github/gff/features.yaml` | `pins.track` choice flag | F12 |
+| `.github/gff/features.yaml` | `pins.track.mode` choice flag | F12 |
 | `sdk/fleet/internal/pins/{manifest,version,upstream,installed}.go` + tests | core | F1,F5,F6,F7 |
 | `sdk/fleet/cmd/pins.go` + `pins_test.go` | `fleet pins status|bump|apply` | F5–F8 |
 | `sdk/fleet/cmd/status.go` (+tests) | probe §3 + PINS column + JSON | F9 |
@@ -63,7 +63,7 @@ vault       pin     1.21.4        gh:hashicorp/vault           -                
 
 ### 3.2 Shell `opt/lib/pins.sh` (sourced; bash 3.2 + dash-safe body, no `set -e`)
 - `pins_manifest` → prints the manifest path: `$PINS_MANIFEST`, else `<lib dir>/../profiles/versions.tsv`.
-- `pins_want <tool> [fallback]` → prints a version or `latest`. Order: `GFF_PINS_TRACK=latest` → `latest`.
+- `pins_want <tool> [fallback]` → prints a version or `latest`. Order: `GFF_PINS_TRACK_MODE=latest` (gff key `pins.track.mode`; `GFF_PINS_TRACK` accepted as a direct-env alias) → `latest`.
   Then the manifest row: track `latest` prints `latest`, unless `GFF_PINS_TRACK=pin` and the row has a concrete version. Otherwise
   the version (`@file` resolved relative to the repo root, leading `v` stripped). If there's no row or no manifest, print the fallback.
   Always exits 0. (Per-tool env overrides stay in each script as `${X_VERSION:-$(pins_want x …)}`.)
@@ -90,7 +90,7 @@ func NewHTTPResolver(c *http.Client, token string) Resolver // gh:, go:, text:; 
 type Exec func(ctx context.Context, shellCmd string) (string, error)
 type InstalledRow struct { Tool, Track, Want, Installed, State string } // State: ok|drift|missing|unknown
 type Summary struct { OK, Drift, Missing, Unknown int }
-func CheckInstalled(ctx context.Context, m *Manifest, ex Exec, mode string) ([]InstalledRow, Summary) // mode = pins.track
+func CheckInstalled(ctx context.Context, m *Manifest, ex Exec, mode string) ([]InstalledRow, Summary) // mode = pins.track.mode
 ```
 `fleet pins status --installed --json` stdout (consumed by `fleet status`):
 `{"rows":[InstalledRow…],"summary":{"ok":N,"drift":N,"missing":N,"unknown":N}}` (lower-case keys).
@@ -112,7 +112,7 @@ off a 100-column terminal.
 ## 4. TDD build order
 Every task: RED test → fail → GREEN → pass → gates. Evidence goes to `plans/pins/evidence/<task>.txt`.
 
-- **T1 (L1)**: manifest + `pins.sh` + `pins_test.sh` + gff flag `pins.track`. Gate: `bash opt/lib/pins_test.sh`; `make lint-shell lint-portability`.
+- **T1 (L1)**: manifest + `pins.sh` + `pins_test.sh` + gff flag `pins.track.mode`. Gate: `bash opt/lib/pins_test.sh`; `make lint-shell lint-portability`.
 - **T2 (L1)**: converge sops/yq/gitleaks/k8s + tests with stubbed curl/version. Manifest defaults for uv/glow/rust/keyd/fonts/vault/install.sh go. Gate: each `*_test.sh`, lint.
 - **T3 (L2)**: `internal/pins` manifest/version (Parse, Set, Save, Extract, Compare, Gap). Gate: `go test ./internal/pins` ≥85% cov.
 - **T4 (L2)**: HTTP resolver with httptest. Gate: same.

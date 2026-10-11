@@ -905,9 +905,13 @@ if gff_on install.sdk.fleet; then
   # and every `fleet` run then warns "skipping discovered plan … chmod g-w".
   # Normalising it here, on every host on every update, is the one place that
   # reaches all clones; the README used to ask each person to do it by hand.
-  if [ -f "${BASE_DIR}/opt/etc/fleet/fleet.yaml" ]; then
-    chmod go-w "${BASE_DIR}/opt/etc/fleet/fleet.yaml" 2>/dev/null || true
-  fi
+  # pins.yaml (the pins-only rollout plan) gets the same treatment.
+  for _fleet_plan in fleet.yaml pins.yaml; do
+    if [ -f "${BASE_DIR}/opt/etc/fleet/${_fleet_plan}" ]; then
+      chmod go-w "${BASE_DIR}/opt/etc/fleet/${_fleet_plan}" 2>/dev/null || true
+    fi
+  done
+  unset _fleet_plan
   if [ -f "${BASE_DIR}/sdk/fleet/build.sh" ]; then
     echo "Installing fleet (dotfiles install-status checker)..."
     bash "${BASE_DIR}/sdk/fleet/build.sh"

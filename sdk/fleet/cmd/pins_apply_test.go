@@ -256,13 +256,13 @@ func TestPinsTrackModeFromFlag(t *testing.T) {
 		src  featflag.Source
 		want string
 	}{
-		{"latest", featflag.Static{Strs: map[string][]string{"pins.track": {"latest"}}}, "latest"},
-		{"pin", featflag.Static{Strs: map[string][]string{"pins.track": {"pin"}}}, "pin"},
-		{"manifest", featflag.Static{Strs: map[string][]string{"pins.track": {"manifest"}}}, "manifest"},
+		{"latest", featflag.Static{Strs: map[string][]string{"pins.track.mode": {"latest"}}}, "latest"},
+		{"pin", featflag.Static{Strs: map[string][]string{"pins.track.mode": {"pin"}}}, "pin"},
+		{"manifest", featflag.Static{Strs: map[string][]string{"pins.track.mode": {"manifest"}}}, "manifest"},
 		{"error fails open", featflag.Static{Err: errors.New("gff down")}, "manifest"},
 		{"unknown key fails open", featflag.Static{}, "manifest"},
-		{"junk fails open", featflag.Static{Strs: map[string][]string{"pins.track": {"weird"}}}, "manifest"},
-		{"empty fails open", featflag.Static{Strs: map[string][]string{"pins.track": {}}}, "manifest"},
+		{"junk fails open", featflag.Static{Strs: map[string][]string{"pins.track.mode": {"weird"}}}, "manifest"},
+		{"empty fails open", featflag.Static{Strs: map[string][]string{"pins.track.mode": {}}}, "manifest"},
 		{"nil source", nil, "manifest"},
 	}
 	for _, c := range cases {

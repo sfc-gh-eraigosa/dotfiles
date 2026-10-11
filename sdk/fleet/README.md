@@ -892,7 +892,7 @@ fleet pins apply vault --dry-run   # named tools may also be missing; dry-run pr
 
 `status` uses `$GITHUB_TOKEN` (or `gh auth token`) for the GitHub API. A failed lookup
 marks only that row `error`. `bump` only edits the manifest, so you land it like any
-change (`/sync`, gss). Choose the mode per host with gff: `gff set pins.track latest`
+change (`/sync`, gss). Choose the mode per host with gff: `gff set pins.track.mode latest`
 makes every installer follow upstream, `pin` forces concrete pins even on `latest` rows,
 and `manifest` (the default) honours each row.
 
