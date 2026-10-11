@@ -140,7 +140,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26'
+          # The toolchain every host installs (opt/profiles/versions.tsv → .go-version),
+          # so CI tests what the fleet runs — not a hardcoded minor that drifts.
+          go-version-file: .go-version
           # setup-go@v5 enables module caching by default (cache: true);
           # cache-dependency-path scopes the cache key to our four Go modules.
           cache-dependency-path: |
@@ -148,7 +150,7 @@ jobs:
 
       - name: Install golangci-lint
         run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.0.2
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Install shellcheck
@@ -264,12 +266,14 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26'
+          # The toolchain every host installs (opt/profiles/versions.tsv → .go-version),
+          # so CI tests what the fleet runs — not a hardcoded minor that drifts.
+          go-version-file: .go-version
           cache-dependency-path: |
             sdk/**/*.sum
       - name: Install golangci-lint
         run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.0.2
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Run make lint-go
         run: make lint-go
@@ -285,7 +289,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26'
+          # The toolchain every host installs (opt/profiles/versions.tsv → .go-version),
+          # so CI tests what the fleet runs — not a hardcoded minor that drifts.
+          go-version-file: .go-version
           cache-dependency-path: |
             sdk/**/*.sum
       - name: Run Go Unit Tests

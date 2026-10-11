@@ -161,5 +161,5 @@ func appendNote(existing, add string) string {
 // `var g *GFF; Resolve(g, …)` — which `src == nil` cannot see.
 func isTypedNil(src Source) bool {
 	v := reflect.ValueOf(src)
-	return v.Kind() == reflect.Ptr && v.IsNil()
+	return v.Kind() == reflect.Pointer && v.IsNil()
 }
