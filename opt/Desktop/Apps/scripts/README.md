@@ -8,7 +8,8 @@ shortcut to this folder ("Scripts") sits on the Desktop for quick access.
 
 | Script | Purpose |
 |--------|---------|
-| `setup-apps.ps1` | Full machine provisioning: WSL + Ubuntu distros, Ubuntu Mono font, Windows Terminal themes/profiles, and a standard set of **winget** desktop apps. Every phase is idempotent. A `-Status` mode reports WSL + app state. |
+| `setup-apps.ps1` | Full machine provisioning: WSL + the one distro (`lib\wsl.ps1`), Ubuntu Mono font, Windows Terminal themes/profiles, and a standard set of **winget** desktop apps. Every phase is idempotent. A `-Status` mode reports WSL + app state. |
+| `Start-DevStack.ps1` / `Stop-DevStack.ps1` | Start the dev stack (boot the one distro, whose systemd starts k3s-agent, ollama and sshd; open claude-remote; `-Docker` adds Docker Desktop) or stop it (Docker if running, then `wsl --shutdown`). Desktop launchers: `Start Dev Stack.cmd` / `Stop Dev Stack.cmd`. |
 | `install-wisprflow.ps1` | Install/update/uninstall the **Wispr Flow** voice-dictation app (its own MSI — not on winget). Idempotent; `-Status` / `-Latest` / `-Force` / `-Uninstall`. See **[WISPR-FLOW.md](./WISPR-FLOW.md)**. |
 | `suppress-copilot-key.ps1` | Configure **PowerToys** for Copilot-key dictation: KBM remap `Win+Shift+F23` → `F24` (so Windows never opens its Copilot Settings page), enable Keyboard Manager, disable FancyZones/PowerToys Run/Shortcut Guide (they fight the Cmd=Win layer), restart PowerToys. Idempotent, backs up; `-Status` / `-Remove`. Run by `install-wisprflow.ps1`. See **[WISPR-FLOW.md](./WISPR-FLOW.md)**. |
 | `macos.ahk` | macOS-style Windows shortcuts (Cmd→Ctrl, screenshots, hot corners) **and** the Wispr Flow hover-dictate driver: the Copilot key (via the KBM `F24` remap) clicks Flow's overlay to dictate into the field under the mouse. `Esc` cancels; `F10` toggles dictation; **`F11`** opens calibration mode to re-tune the overlay offsets. |
@@ -25,12 +26,10 @@ shortcut to this folder ("Scripts") sits on the Desktop for quick access.
 Runs six idempotent phases in order:
 
 1. **WSL** — installs the WSL platform if missing (skips if already set up). Installing the platform on a machine that lacks it needs an elevated run + reboot; everything else works un-elevated.
-2. **Distros** — ensures exactly two Ubuntu distributions exist and creates the Linux user:
-   - `Ubuntu` — Ubuntu 26.04 LTS ("Latest", pre-existing)
-   - `Ubuntu-24.04` — Ubuntu 24.04 LTS ("LTS", installed with the configured Linux user (`$DistroUser` in `setup-apps.ps1`) + passwordless sudo)
-3. **GitHub link** — symlinks the Windows GitHub folder into each distro at `~/GitHub`. It follows the Windows symlink (`%USERPROFILE%\GitHub` → `%USERPROFILE%\OneDrive\GitHub`) to its real OneDrive target, so the link works for sync.
+2. **Distro** — ensures the **one** WSL distro exists and creates the Linux user (`$DistroUser` in `setup-apps.ps1`, passwordless sudo). The distro is named once, in `lib\wsl.ps1` (`$WslDistro = 'Ubuntu-22.04'`): it is the k3s node, and sshd, ollama and claude-remote run in it too, so ssh, fleet and every script here land in the same place. Two distros once split ssh from the node (2026-10-11), and remote work kept touching the wrong one.
+3. **GitHub link** — symlinks the Windows GitHub folder into the distro at `~/GitHub`. It follows the Windows symlink (`%USERPROFILE%\GitHub` → `%USERPROFILE%\OneDrive\GitHub`) to its real OneDrive target, so the link works for sync.
 4. **Font** — (re)installs **Ubuntu Mono** per-user and clears any stale font-registry entry, fixing Terminal's "Unable to find the following fonts: Ubuntu Mono" warning.
-5. **Windows Terminal** — adds five color schemes (Solarized Dark, Solarized Light, Ocean, Green, GitHub Dark) and one profile per scheme **per distro** (10 profiles), each with a 100,000-line scrollback and the Ubuntu Mono font. settings.json is backed up first (`settings.json.bak-<timestamp>`).
+5. **Windows Terminal** — adds five color schemes (Solarized Dark, Solarized Light, Ocean, Green, GitHub Dark) and one profile per scheme for the distro (5 profiles), each with a 100,000-line scrollback and the Ubuntu Mono font. settings.json is backed up first (`settings.json.bak-<timestamp>`).
 6. **Apps** — winget-installs the list below, skipping anything already present.
 
 The two-distro pairing, the Linux username, the GitHub folder, the font, the scrollback size, and the theme list are all variables at the top of the script.

@@ -19,7 +19,7 @@
   Host port the forward listens on (default 22).
 
 .PARAMETER Distro
-  WSL distro whose sshd is the target (default Ubuntu).
+  WSL distro whose sshd is the target (default: the one distro, lib\wsl.ps1).
 
 .PARAMETER RegisterTask
   Also register the at-logon refresh Scheduled Task.
@@ -33,7 +33,7 @@
 #>
 param(
     [int]$ListenPort = 22,
-    [string]$Distro = 'Ubuntu',
+    [string]$Distro = $(. (Join-Path $PSScriptRoot 'lib\wsl.ps1'); $WslDistro),   # the one distro (lib\wsl.ps1)
     [switch]$RegisterTask,
     [switch]$UnregisterTask
 )

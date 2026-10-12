@@ -19,6 +19,8 @@ keyboard shortcuts, Wispr Flow voice dictation, app/font setup, and PowerToys.
 - **`setup-autostart.ps1`** — registers the elevated logon task for `macos.ahk` and,
   re-run standalone, **reloads** AutoHotkey after a re-deploy (self-elevates → UAC).
 - **`setup-apps.ps1`** — winget app install + Windows Terminal profiles/themes.
+- **`Start-DevStack.ps1` / `Stop-DevStack.ps1`** — boot the one WSL distro (k3s node, ollama, sshd) and open claude-remote / stop Docker and `wsl --shutdown`. Launched from the Desktop by `Start Dev Stack.cmd` / `Stop Dev Stack.cmd`.
+- **`lib/wsl.ps1`** — names the one WSL distro (`$WslDistro`); every script that targets WSL defaults to it.
 - **`setup-security-audit.ps1`** — opt-in (gff `install.windows.security-audit`,
   **fail-closed**) installer for the unattended security audit: registers the
   user-level `ClaudeSecurityAuditCollector` task (daily at `-At`, **repeating hourly
