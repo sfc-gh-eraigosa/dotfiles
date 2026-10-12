@@ -32,7 +32,7 @@ Runs six idempotent phases in order:
 5. **Windows Terminal** — adds five color schemes (Solarized Dark, Solarized Light, Ocean, Green, GitHub Dark) and one profile per scheme for the distro (5 profiles), each with a 100,000-line scrollback and the Ubuntu Mono font. settings.json is backed up first (`settings.json.bak-<timestamp>`).
 6. **Apps** — winget-installs the list below, skipping anything already present.
 
-The two-distro pairing, the Linux username, the GitHub folder, the font, the scrollback size, and the theme list are all variables at the top of the script.
+The distro comes from `lib\wsl.ps1`; the Linux username, the GitHub folder, the font, the scrollback size, and the theme list are variables at the top of the script.
 
 ### Installed applications
 
