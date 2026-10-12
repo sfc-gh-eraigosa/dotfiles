@@ -5,7 +5,7 @@
 .DESCRIPTION
     Default mode runs every phase, in order, idempotently:
       1. WSL            - install the WSL platform if missing (skips if ready).
-      2. Distros        - ensure the two Ubuntu distros exist; create the user.
+      2. Distro         - ensure the one WSL distro (lib\wsl.ps1) exists; create the user.
       3. GitHub link    - link the Windows GitHub folder into each distro.
       4. Font           - (re)install Ubuntu Mono so Terminal can find it.
       5. Windows Terminal - add color schemes + per-distro profiles.
@@ -47,13 +47,12 @@ else { function Test-GffOn([string]$Key) { return $true } }
 
 # ============================ Configuration =================================
 
-# The two (and only two) Ubuntu distributions. Key = wsl distro name,
-# value = friendly label used in Windows Terminal profile names.
-$LatestDistro = 'Ubuntu'         # pre-existing Ubuntu 26.04 LTS  -> "Latest"
-$LtsDistro    = 'Ubuntu-24.04'   # added                          -> "LTS"
+# The ONE WSL distribution (lib\wsl.ps1): the k3s node, where sshd, ollama and
+# claude-remote run too. Key = wsl distro name, value = the Windows Terminal
+# profile label. A second distro once split ssh from the node; see lib\wsl.ps1.
+. (Join-Path $PSScriptRoot 'lib\wsl.ps1')
 $Distros      = [ordered]@{
-    $LatestDistro = 'Ubuntu 26.04 (Latest)'
-    $LtsDistro    = 'Ubuntu 24.04 (LTS)'
+    $WslDistro = 'Ubuntu 22.04 (k3s node)'
 }
 
 $DistroUser   = 'wenlock'        # Linux user to ensure on newly-created distros
@@ -391,7 +390,7 @@ if (Test-GffOn 'install.windows.wsl-platform') {
 
 if ($wslOk) {
     # [2/6] Distros
-    Write-Host "`n=== [2/6] Ubuntu distributions ===" -ForegroundColor Cyan
+    Write-Host "`n=== [2/6] WSL distro ===" -ForegroundColor Cyan
     foreach ($distro in $Distros.Keys) { Ensure-Distro -Name $distro }
 
     # [3/6] GitHub folder link (follow the Windows symlink to its real target)

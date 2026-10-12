@@ -18,7 +18,7 @@
   Session-name prefix (default: the launcher's own default = short hostname).
 
 .PARAMETER Distro
-  WSL distro to launch (default: Ubuntu).
+  WSL distro to launch (default: the one distro, lib\wsl.ps1).
 
 .PARAMETER Uninstall
   Remove the shortcut instead of creating it.
@@ -29,7 +29,7 @@
 #>
 param(
     [string]$Prefix,
-    [string]$Distro = 'Ubuntu',
+    [string]$Distro = $(. (Join-Path $PSScriptRoot 'lib\wsl.ps1'); $WslDistro),   # the one distro (lib\wsl.ps1)
     [switch]$Uninstall
 )
 $ErrorActionPreference = 'Stop'
