@@ -14,6 +14,11 @@ if (Get-Process $dockerProcs -ErrorAction SilentlyContinue) {
 }
 Say 'wsl --shutdown'
 wsl.exe --shutdown
-$vm = Get-Process vmmem, vmmemWSL -ErrorAction SilentlyContinue
+# wsl --shutdown returns before the VM is gone: wait up to 15 s for vmmem to exit.
+for ($i = 0; $i -lt 15; $i++) {
+    $vm = Get-Process vmmem, vmmemWSL -ErrorAction SilentlyContinue
+    if (-not $vm) { break }
+    Start-Sleep -Seconds 1
+}
 if ($vm) { Write-Warning ("vmmem still resident: {0:N0} MB" -f (($vm | Measure-Object WorkingSet64 -Sum).Sum / 1MB)) }
 else { Write-Host 'Stack is down.' -ForegroundColor Green }
