@@ -45,11 +45,18 @@ func ProbePath(home, path string) string {
 	if home == "" {
 		return path
 	}
-	dirs := []string{"opt/bin", ".local/bin", ".cargo/bin", ".goenv/shims", ".goenv/bin"}
+	dirs := ProbeDirs()
 	for i, d := range dirs {
 		dirs[i] = filepath.Join(home, d)
 	}
 	return strings.Join(dirs, ":") + ":" + path
+}
+
+// ProbeDirs are the per-user tool dirs, relative to $HOME, that a non-login
+// ssh command's PATH lacks. One list for every place fleet runs something
+// remotely: the status probe (ProbePath) and an update step's preamble.
+func ProbeDirs() []string {
+	return []string{"opt/bin", ".local/bin", ".cargo/bin", ".goenv/shims", ".goenv/bin"}
 }
 
 // InstalledRow is one tool's installed-vs-wanted result. State is one of
