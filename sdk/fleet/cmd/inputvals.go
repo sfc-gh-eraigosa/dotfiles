@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/pins"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 )
 
@@ -55,6 +56,11 @@ func inputPreamble(p updplan.Plan, st updplan.Step, host string, vals inputValue
 	repo, hasRepo := p.RepoOf(st)
 
 	var b strings.Builder
+	// The preamble runs over a plain non-login ssh command, whose PATH lacks
+	// the per-user tool dirs — so `gff` (~/opt/bin) is not found unless a
+	// host happens to set PATH outside its interactive rc. Exported, so the
+	// step script that runs after this in the same shell sees it too.
+	b.WriteString(probePathExport())
 	for _, in := range ins {
 		// Every builder re-validates what it interpolates (AGENTS.md, the
 		// "run: is verbatim" invariant): Parse checked these, but a
@@ -458,4 +464,14 @@ func listInputs(w io.Writer, p updplan.Plan) {
 		}
 		fmt.Fprintln(w)
 	}
+}
+
+// probePathExport prepends pins.ProbeDirs to PATH, expanded on the host
+// ($HOME there, not here).
+func probePathExport() string {
+	dirs := pins.ProbeDirs()
+	for i, d := range dirs {
+		dirs[i] = "$HOME/" + d
+	}
+	return `export PATH="` + strings.Join(dirs, ":") + `:$PATH"; `
 }
