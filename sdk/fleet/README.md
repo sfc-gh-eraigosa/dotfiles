@@ -196,7 +196,7 @@ fleet tui --update-ref feature/x         # update targets that ref instead of ma
 | `w` | wake the selection (or the cursor host) — rows tick `waking ⠋` |
 | `F` | forget the remembered answers (including the saved preferences) |
 | `s` | ssh to the cursor host (once is enough to prime a password-auth host) |
-| `S` | attach the cursor host's **herdr** through the local client (`herdr --remote <alias>`) — copies land on *this* machine's clipboard, which a plain `s` session over ssh cannot do (see [docs/macos-keys.md](../../docs/macos-keys.md), "herdr over SSH"); needs a herdr installed here |
+| `S` | attach the cursor host's **herdr** through the local client (`herdr --remote <alias>`) — copies land on *this* machine's clipboard, which a plain `s` session over ssh cannot do (see [docs/macos-keys.md](../../docs/macos-keys.md), "herdr over SSH"); needs a herdr installed here. Inside a herdr pane the client refuses to nest, so `S` instead tells you to `herdr machine add <alias>` once and switch with `prefix+w` (or opt in with `experimental.allow_nested`) |
 | `T` | **trust** a host whose SSH host key changed — runs `fleet trust` (compare fingerprints, type the alias) |
 | `A` | **authorize** your public key on a host that refuses it — runs `ssh-copy-id` |
 | `p` / `P` | pull ssh config FROM / push it TO the cursor host (`fleet config pull\|push`) |

@@ -96,3 +96,23 @@ func TestShiftSIsInTheSSHHelpGroup(t *testing.T) {
 	}
 	t.Fatal("keyHelp has no S row")
 }
+
+// herdr refuses to start a client inside one of its own panes ("nested herdr
+// is disabled by default"), and fleet usually runs in one. Stripping HERDR_*
+// from the child's env would dodge a guard that exists because two TUIs
+// cannot share a prefix, so S explains the two real ways out instead.
+func TestShiftSInsideHerdrExplainsNestingInsteadOfRunning(t *testing.T) {
+	m := testModel("a")
+	m.cursor = "a"
+	m.herdrBin = func() string { return "/h/opt/bin/herdr" }
+	m.inHerdr = true
+	mm, cmd := send(m, "S")
+	if cmd != nil {
+		t.Fatal("S inside herdr must not launch a nested client")
+	}
+	for _, want := range []string{"nested", "herdr machine add a", "prefix+w", "allow_nested"} {
+		if !strings.Contains(mm.status, want) {
+			t.Errorf("status must mention %q, got %q", want, mm.status)
+		}
+	}
+}

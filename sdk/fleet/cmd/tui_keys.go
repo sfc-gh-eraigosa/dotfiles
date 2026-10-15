@@ -496,6 +496,16 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// runs the client here instead, so the same guard as `s` applies and
 		// the only extra failure is a missing local client.
 		if m.cursor != "" && !m.inFlight(m.cursor) {
+			// herdr refuses a client inside one of its own panes ("nested
+			// herdr is disabled by default") because two TUIs cannot share a
+			// prefix. Stripping HERDR_* from the child would dodge that guard,
+			// so name the two real ways out: the saved-machine route the
+			// fleet-herdr-machines design chose (then prefix+w switches the
+			// herdr already open), or opting into nesting on this host.
+			if m.inHerdr {
+				m.status = fmt.Sprintf("fleet is inside herdr and nested herdr is off — run `herdr machine add %s` once, then prefix+w to switch to it; or allow nesting with `herdr-prefs set experimental.allow_nested true`", m.cursor)
+				return m, nil
+			}
 			bin := m.herdrBin()
 			if bin == "" {
 				m.status = "herdr is not installed locally — `S` needs the client here (install.sh, or gff set install.tools.herdr true)"

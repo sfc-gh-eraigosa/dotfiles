@@ -28,7 +28,12 @@ func hosts(aliases ...string) []sshconf.Host {
 }
 
 func testModel(aliases ...string) tuiModel {
-	return newTUIModel(hosts(aliases...), runner.Fake{}, fakeBaseline{head: "abc"}, testNow, "main", 2, updplan.Default())
+	m := newTUIModel(hosts(aliases...), runner.Fake{}, fakeBaseline{head: "abc"}, testNow, "main", 2, updplan.Default())
+	// The constructor reads HERDR_ENV, and the suite itself is often run from
+	// a herdr pane; pin it off so a test that wants the inside-herdr branch
+	// says so explicitly instead of inheriting it from whoever ran `go test`.
+	m.inHerdr = false
+	return m
 }
 
 func key(s string) tea.KeyMsg {
