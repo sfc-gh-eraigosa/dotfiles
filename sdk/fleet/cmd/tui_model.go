@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -168,6 +169,7 @@ type tuiModel struct {
 	file        string                 // the --file value the plan was loaded from, if any; re-passed to the interactive handoff's self-exec
 	repo        string                 // the --repo value the plan/gff resolution used; re-passed to the interactive handoff's self-exec so a routed host resolves against the SAME checkout
 	self        func() (string, error) // resolves the executable path for the interactive handoff's self-exec; os.Executable in production, injected in tests
+	herdrBin    func() string          // resolves the LOCAL herdr client for the `S` attach; empty = not installed here. Injected in tests so the suite does not depend on the build host
 	ans         answers                // pre-supplied answers for this wave (memory-only credential)
 	ansField    answerField            // cursor in the answer form
 	policy      bgPolicy               // standing lane policy from gff (bgPolicyFromFlags); the form never edits it
@@ -278,6 +280,7 @@ func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time
 		updateRef:   ref,
 		plan:        plan,
 		self:        os.Executable,
+		herdrBin:    func() string { return localHerdr(exec.LookPath, fileExists, os.Getenv("HOME")) },
 		run:         r,
 		base:        base,
 		now:         now,

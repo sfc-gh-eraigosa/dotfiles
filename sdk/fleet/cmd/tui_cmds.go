@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -721,6 +722,42 @@ func sshShell(alias string) tea.Cmd {
 	// and the next probe would prompt all over again — the whole point of
 	// pressing `s` first.
 	c := exec.Command("ssh", append(runner.MuxArgs(), alias)...)
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		return execDoneMsg{alias: alias, err: err, ssh: true}
+	})
+}
+
+// localHerdr resolves the LOCAL herdr client that `S` hands the terminal to.
+// The order is the fleet-connect design's (§4.6): PATH first, then the two
+// per-user tool dirs the installer writes — ~/.local/bin (the managed link
+// from #370) and ~/opt/bin. Empty means nothing is installed here; the caller
+// says so rather than exec'ing a name that cannot resolve.
+func localHerdr(lookPath func(string) (string, error), exists func(string) bool, home string) string {
+	if p, err := lookPath("herdr"); err == nil && p != "" {
+		return p
+	}
+	for _, rel := range []string{".local/bin/herdr", "opt/bin/herdr"} {
+		if p := filepath.Join(home, rel); exists(p) {
+			return p
+		}
+	}
+	return ""
+}
+
+// herdrAttachArgv is the handoff herdr --remote runs: the local client attaches
+// to the host's server over ssh and writes copies to THIS machine's clipboard,
+// which is the whole reason `S` exists next to `s` (a plain ssh session leaves
+// the remote herdr writing to a clipboard nobody can read; docs/macos-keys.md).
+// No shell is involved, so the alias is an inert argv element.
+func herdrAttachArgv(bin, alias string) []string {
+	return []string{bin, "--remote", alias}
+}
+
+// herdrShell suspends the TUI for the herdr client and, like every other
+// handover, re-probes the host when it returns.
+func herdrShell(bin, alias string) tea.Cmd {
+	argv := herdrAttachArgv(bin, alias)
+	c := exec.Command(argv[0], argv[1:]...)
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return execDoneMsg{alias: alias, err: err, ssh: true}
 	})
