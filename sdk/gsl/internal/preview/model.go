@@ -127,6 +127,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.segmentEnabled["ai"] = !m.segmentEnabled["ai"]
 		case "4":
 			m.segmentEnabled["time"] = !m.segmentEnabled["time"]
+		case "5":
+			m.segmentEnabled["host"] = !m.segmentEnabled["host"]
 		}
 
 	case tickMsg:
@@ -154,7 +156,7 @@ func (m Model) View() string {
 	}
 	var sb strings.Builder
 
-	sb.WriteString("gsl preview  [s] cycle style  [f] cycle fixture  [1-4] toggle segments  [q] quit\n")
+	sb.WriteString("gsl preview  [s] cycle style  [f] cycle fixture  [1-5] toggle segments  [q] quit\n")
 	fmt.Fprintf(&sb, "style: %-12s  fixture: %s\n", m.currentStyleName(), m.fixtureName)
 	fmt.Fprintf(&sb, "segments: %s\n", m.segmentBadges())
 	sb.WriteString("─────────────────────────────────────────────────────\n")
@@ -174,8 +176,8 @@ func (m Model) currentStyleName() string {
 
 // segmentBadges returns a compact display of enabled/disabled segments.
 func (m Model) segmentBadges() string {
-	types := []string{"dirgit", "repo", "ai", "time"}
-	labels := map[string]string{"dirgit": "[1]dirgit", "repo": "[2]repo", "ai": "[3]ai", "time": "[4]time"}
+	types := []string{"host", "dirgit", "repo", "ai", "time"}
+	labels := map[string]string{"host": "[5]host", "dirgit": "[1]dirgit", "repo": "[2]repo", "ai": "[3]ai", "time": "[4]time"}
 	parts := make([]string, 0, len(types))
 	for _, t := range types {
 		lbl := labels[t]

@@ -26,7 +26,7 @@ func TestDefaultIsUsable(t *testing.T) {
 	}
 
 	// All 4 segments in order.
-	wantTypes := []string{"dirgit", "repo", "ai", "time"}
+	wantTypes := []string{"host", "dirgit", "repo", "ai", "time"}
 	if len(c.Segments) != len(wantTypes) {
 		t.Fatalf("Default() has %d segments; want %d", len(c.Segments), len(wantTypes))
 	}
@@ -315,5 +315,43 @@ func TestLinksRoundTrip(t *testing.T) {
 	_ = json.Unmarshal(raw, &m)
 	if _, ok := m["links"]; !ok {
 		t.Error("links key missing from the saved JSON")
+	}
+}
+
+// TestDefaultSegmentPriority_Host pins the host segment between the clock and
+// the AI segment: a narrow terminal sheds the time first, then where you are.
+func TestDefaultSegmentPriority_Host(t *testing.T) {
+	got := config.DefaultSegmentPriority("host")
+	if got <= config.PriorityTime || got >= config.PriorityAI {
+		t.Errorf("DefaultSegmentPriority(host) = %d; want between time (%d) and ai (%d)", got, config.PriorityTime, config.PriorityAI)
+	}
+}
+
+// TestEnableSegment_InsertsMissingKnownType covers a config.json written before
+// a segment type existed: enabling it must add the entry (host goes first,
+// anything else last) rather than fail with "unknown segment type".
+func TestEnableSegment_InsertsMissingKnownType(t *testing.T) {
+	c := config.Default()
+	c.Segments = []config.Segment{
+		{Type: "dirgit", Enabled: true},
+		{Type: "time", Enabled: true},
+	}
+	if err := c.EnableSegment("host"); err != nil {
+		t.Fatalf("EnableSegment(host) on a config without it: %v", err)
+	}
+	if c.Segments[0].Type != "host" || !c.Segments[0].Enabled {
+		t.Errorf("host should be inserted first and enabled; got %+v", c.Segments)
+	}
+	if err := c.EnableSegment("ai"); err != nil {
+		t.Fatalf("EnableSegment(ai): %v", err)
+	}
+	if last := c.Segments[len(c.Segments)-1]; last.Type != "ai" || !last.Enabled {
+		t.Errorf("ai should be appended last and enabled; got %+v", c.Segments)
+	}
+	if err := c.EnableSegment("bogus"); err == nil {
+		t.Error("EnableSegment(bogus) should still fail for an unknown type")
+	}
+	if len(c.Segments) != 4 {
+		t.Errorf("want 4 segments after inserts, got %d", len(c.Segments))
 	}
 }

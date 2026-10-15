@@ -114,6 +114,10 @@ func BuildSegments(cfg config.Config, deps Deps) []Segment {
 		}
 		prio := sc.EffectivePriority()
 		switch sc.Type {
+		case "host":
+			s := NewHostSegment(sc.Options)
+			s.Priority = prio
+			segs = append(segs, s)
 		case "dirgit":
 			dg := NewDirGitSegment(deps.Cwd, deps.Git)
 			dg.Priority = prio

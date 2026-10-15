@@ -1,6 +1,6 @@
 # gsl — Go Status Line
 
-`gsl` is a Go-based powerline-style status line with two integration points: it renders live context after every Claude Code assistant turn (receiving a JSON payload on stdin) and produces an on-demand status snapshot for Antigravity CLI and plain shells (via `gsl status`, e.g. wired to Antigravity's built-in `/statusline` command). Four independently configurable segments — `dirgit`, `repo`, `ai`, and `time` — run concurrently and self-omit gracefully when their data is absent, so the line is always fast and never blocks.
+`gsl` is a Go-based powerline-style status line with two integration points: it renders live context after every Claude Code assistant turn (receiving a JSON payload on stdin) and produces an on-demand status snapshot for Antigravity CLI and plain shells (via `gsl status`, e.g. wired to Antigravity's built-in `/statusline` command). Five independently configurable segments — `host`, `dirgit`, `repo`, `ai`, and `time` — run concurrently and self-omit gracefully when their data is absent, so the line is always fast and never blocks.
 
 ## Install
 
@@ -56,7 +56,7 @@ gsl status
 
 Interactive bubbletea TUI for exploring the status line without a live Claude session:
 
-- `1` / `2` / `3` / `4` — toggle `dirgit` / `repo` / `ai` / `time`
+- `1` / `2` / `3` / `4` / `5` — toggle `dirgit` / `repo` / `ai` / `time` / `host`
 - `s` — cycle through built-in styles
 - `f` — cycle through fixture payloads (clean repo root, dirty worktree)
 - `q` / `Ctrl+C` — quit
@@ -106,11 +106,38 @@ Keys valid for `config get`: `enabled`, `style`, `timezone`, `time_format`, `dat
 
 Keys valid for `config set`: `style`, `timezone`, `time_format`, `date_format`
 
-Segments valid for enable / disable / toggle: `dirgit`, `repo`, `ai`, `time`
+Segments valid for enable / disable / toggle: `host`, `dirgit`, `repo`, `ai`, `time`. Enabling a known segment that an older `config.json` lacks inserts it (`host` at the front, others at the end), so `gsl config enable host` is the one-step upgrade.
 
 ## Segments
 
-All four segments run concurrently under a shared 1-second parent deadline. Each segment also has its own 1-second hard cap (`segmentDeadline = 1000 ms`); the underlying git / mcp / gh detection packages apply tighter internal budgets (~800 ms for git, ~500 ms for MCP). A segment that times out is dropped while the rest still render.
+All five segments run concurrently under a shared 1-second parent deadline. Each segment also has its own 1-second hard cap (`segmentDeadline = 1000 ms`); the underlying git / mcp / gh detection packages apply tighter internal budgets (~800 ms for git, ~500 ms for MCP). A segment that times out is dropped while the rest still render.
+
+### `host`
+
+Which machine the line is on — meant for the far left, so a glance across a fleet of panes answers "where am I?" first. Shows:
+
+- A hardware-kind glyph, detected without subprocesses from `runtime.GOOS`, `/proc/version`, `/proc/device-tree/model`, the DMI vendor/product under `/sys/class/dmi/id`, and the container markers `/.dockerenv` / `/run/.containerenv`
+- The short hostname (domain stripped at the first dot), cut to 11 display columns with an ellipsis (`averyverylonghost` → `averyveryv…`)
+
+| Kind | Detected by | Glyph |
+|------|-------------|-------|
+| `macos` | `GOOS == darwin` | 🍎 |
+| `container` | `/.dockerenv` or `/run/.containerenv` exists (wins over the host hardware) | 📦 |
+| `wsl` | `/proc/version` mentions `microsoft` | 🪟 |
+| `rpi` | device-tree model starts `Raspberry Pi` | 🍓 |
+| `jetson` | device-tree model mentions `Jetson` | 🤖 |
+| `dgx` | DMI mentions `DGX` or the vendor is `NVIDIA` | 🧠 |
+| `linux` | anything else | 💻 |
+
+The glyphs are emoji in **both** built-in styles (icon keys `host` and `host_<kind>`); ascii mode shows `[host]`. Self-omits only when the hostname lookup fails. Drop priority sits between `time` and `ai`: a narrow terminal sheds the clock first, then the hostname.
+
+Segment options (`options` map of the `host` segment):
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `max_len` | int | `11` | Column budget for the hostname, ellipsis included. |
+| `icon` | string | — | Glyph to use verbatim; skips detection entirely. |
+| `kind` | string | auto | Force a kind from the table above when detection misses (an unknown value is ignored). |
 
 ### `dirgit`
 
@@ -196,6 +223,7 @@ A missing config file is not an error — `Default()` is used automatically. On 
 {
   "enabled": true,
   "segments": [
+    {"type": "host",   "enabled": true},
     {"type": "dirgit", "enabled": true},
     {"type": "repo",   "enabled": true, "options": {"show_pr": true, "show_count": true, "name": "feature"}},
     {"type": "ai",     "enabled": true},
@@ -216,9 +244,9 @@ Field reference:
 |-------|------|---------|-------------|
 | `enabled` | bool | `true` | Master on/off switch. When false, nothing is printed. |
 | `segments` | array | (see above) | Ordered list of segments; config order is render order. |
-| `segments[].type` | string | — | Segment kind: `dirgit`, `repo`, `ai`, `time`. |
+| `segments[].type` | string | — | Segment kind: `host`, `dirgit`, `repo`, `ai`, `time`. |
 | `segments[].enabled` | bool | `true` | Whether this segment is included in the render. |
-| `segments[].options` | object | `{}` | Segment-specific overrides (see `repo` options above). |
+| `segments[].options` | object | `{}` | Segment-specific overrides (see the `host`, `dirgit`, `repo`, `ai`, `time` options above). |
 | `timezone` | string | `"America/Los_Angeles"` | IANA timezone for the time segment. |
 | `time_format` | string | `"15:04:05"` | Go layout string for the clock. |
 | `date_format` | string | `"2006-01-02"` | Go layout string for the date. |
@@ -285,7 +313,7 @@ Segment colors are resolved automatically from the host tool's settings, then th
 
 ### What changes per palette
 
-The five **segment color keys** change: `repo_root`, `repo_worktree`, `ai`, `dirgit`, `time`. All five are defined in every palette.
+The six **segment color keys** change: `repo_root`, `repo_worktree`, `ai`, `dirgit`, `time`, `host`. All six are defined in every palette.
 
 For the `emoji` style (`Fill: false`), the palette is applied as a **foreground tint only** — there is no background block, so `accent`, `fg`, and `bg` theme keys are inert for that style.
 

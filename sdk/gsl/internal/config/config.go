@@ -49,6 +49,7 @@ type Segment struct {
 // renumber the others.
 const (
 	PriorityTime   = 10 // dropped first
+	PriorityHost   = 15 // which machine — outlives the clock, not the model
 	PriorityAI     = 20
 	PriorityDirGit = 30
 	PriorityRepo   = 40 // dropped last
@@ -66,9 +67,25 @@ func DefaultSegmentPriority(segType string) int {
 		return PriorityAI
 	case "time":
 		return PriorityTime
+	case "host":
+		return PriorityHost
 	default:
 		return 0
 	}
+}
+
+// KnownSegmentTypes lists every segment type gsl can render, in the default
+// left-to-right order. EnableSegment uses it to add a type that an older
+// config.json predates.
+var KnownSegmentTypes = []string{"host", "dirgit", "repo", "ai", "time"}
+
+func knownSegmentType(segType string) bool {
+	for _, t := range KnownSegmentTypes {
+		if t == segType {
+			return true
+		}
+	}
+	return false
 }
 
 // EffectivePriority returns the segment's drop priority: the user's explicit
@@ -139,6 +156,7 @@ func Default() Config {
 	return Config{
 		Enabled: true,
 		Segments: []Segment{
+			{Type: "host", Enabled: true},
 			{Type: "dirgit", Enabled: true},
 			{Type: "repo", Enabled: true},
 			{Type: "ai", Enabled: true},
@@ -232,13 +250,25 @@ func (c *Config) findSegment(segType string) *Segment {
 }
 
 // EnableSegment sets the Enabled flag on the segment identified by segType.
-// Returns an error if no such segment exists.
+//
+// A known type that is missing from Segments (a config.json saved before the
+// type existed — Load replaces the whole array) is inserted enabled: "host" at
+// the front, since it is designed for the far left, anything else at the end.
+// Returns an error only for a type gsl does not render.
 func (c *Config) EnableSegment(segType string) error {
-	seg := c.findSegment(segType)
-	if seg == nil {
+	if seg := c.findSegment(segType); seg != nil {
+		seg.Enabled = true
+		return nil
+	}
+	if !knownSegmentType(segType) {
 		return fmt.Errorf("config: unknown segment type %q", segType)
 	}
-	seg.Enabled = true
+	entry := Segment{Type: segType, Enabled: true}
+	if segType == "host" {
+		c.Segments = append([]Segment{entry}, c.Segments...)
+	} else {
+		c.Segments = append(c.Segments, entry)
+	}
 	return nil
 }
 

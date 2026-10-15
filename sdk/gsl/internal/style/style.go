@@ -22,6 +22,8 @@
 //
 // # Icons keys (conventional — renderers may add more)
 //
+//	host            generic machine glyph for the host segment
+//	host_<kind>     per-hardware-kind host glyph (macos, wsl, rpi, jetson, dgx, container)
 //	dirgit          current-directory glyph when inside a git repo
 //	repo_root       main worktree glyph
 //	repo_worktree   linked-worktree glyph
@@ -48,6 +50,7 @@
 //	ai           segment background for the AI segment
 //	dirgit       segment background for the dirgit segment
 //	time         segment background for the time segment
+//	host         segment background for the host segment
 //
 // Color values may be:
 //   - A decimal ANSI 256-color index string ("12", "201", …).

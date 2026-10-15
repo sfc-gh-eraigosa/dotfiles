@@ -211,3 +211,25 @@ func TestRender_ConcurrentRaceSafety(t *testing.T) {
 		t.Errorf("render concurrent: unexpected output %q", got)
 	}
 }
+
+// TestBuildSegments_Host wires the host segment from config: type "host",
+// its priority, and the max_len / icon / kind options.
+func TestBuildSegments_Host(t *testing.T) {
+	cfg := config.Config{
+		Enabled: true,
+		Segments: []config.Segment{
+			{Type: "host", Enabled: true, Priority: 7, Options: map[string]any{"max_len": float64(6), "icon": "🎮", "kind": "rpi"}},
+		},
+	}
+	segs := BuildSegments(cfg, Deps{})
+	if len(segs) != 1 {
+		t.Fatalf("BuildSegments: want 1 segment, got %d", len(segs))
+	}
+	hs, ok := segs[0].(*HostSegment)
+	if !ok {
+		t.Fatalf("BuildSegments: want *HostSegment, got %T", segs[0])
+	}
+	if hs.Priority != 7 || hs.MaxLen != 6 || hs.Icon != "🎮" || hs.Kind != "rpi" {
+		t.Errorf("host options not wired: %+v", hs)
+	}
+}

@@ -15,7 +15,7 @@ var previewCmd = &cobra.Command{
 	Use:   "preview",
 	Short: "Preview the status line interactively (or --once for a single frame)",
 	Long: `preview launches an interactive bubbletea TUI that lets you:
-  - toggle individual segments on/off (keys 1-4)
+  - toggle individual segments on/off (keys 1-5)
   - cycle through built-in styles (key s)
   - cycle through fixture payloads (key f)
   - watch the time segment tick live

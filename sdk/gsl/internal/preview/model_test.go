@@ -57,7 +57,7 @@ func TestNewModel_Defaults(t *testing.T) {
 		t.Errorf("FixtureName: got %q, want %q", m.FixtureName(), preview.FixtureClean)
 	}
 	// All segments should be enabled by default.
-	for _, seg := range []string{"dirgit", "repo", "ai", "time"} {
+	for _, seg := range []string{"host", "dirgit", "repo", "ai", "time"} {
 		if !m.SegmentEnabled(seg) {
 			t.Errorf("segment %q should be enabled by default", seg)
 		}
@@ -248,3 +248,23 @@ func TestModel_WindowWidth_ZeroIgnored(t *testing.T) {
 // (OSC 8 hyperlinks carry a URL that must count as zero columns) and measures
 // grapheme clusters, exactly as the fit loop does.
 func termDisplayWidth(s string) int { return term.DisplayWidth(s) }
+
+// TestModel_Update_ToggleHost: key '5' toggles the host segment and the badge
+// row reflects it.
+func TestModel_Update_ToggleHost(t *testing.T) {
+	m := preview.NewModel(preview.FixedClock())
+	if !strings.Contains(m.View(), "[5]host") {
+		t.Errorf("View should list the host toggle badge [5]host; got %q", m.View())
+	}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("5")})
+	um := updated.(preview.Model)
+	if um.SegmentEnabled("host") {
+		t.Error("after '5', host segment should be disabled")
+	}
+	if !strings.Contains(um.View(), "([5]host)") {
+		t.Errorf("disabled host badge should be parenthesised; got %q", um.View())
+	}
+	if !strings.Contains(um.View(), "[1-5] toggle segments") {
+		t.Errorf("help line should advertise keys 1-5; got %q", um.View())
+	}
+}

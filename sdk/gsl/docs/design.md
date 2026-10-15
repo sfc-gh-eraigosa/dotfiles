@@ -23,7 +23,7 @@ sdk/gsl/
     ├── mcp/                  mcp.Runner interface + SystemRunner (os/exec seam) + configured/active counts + cache
     ├── repo/                 repo.Locate (git worktree detection), repo.PR (registry + gh fallback), registry parsing
     ├── style/                Style struct, two built-ins (powerline/emoji), Resolve/ResolveConfig, ASCII fallback
-    ├── render/               Segment interface, BuildSegments, concurrent Render, four seg_*.go files, glyphs/ANSI
+    ├── render/               Segment interface, BuildSegments, concurrent Render, five seg_*.go files (host, dirgit, repo, ai, time), glyphs/ANSI
     ├── preview/              bubbletea TUI model, fixture payloads, RenderOnce (--once path)
     └── version/              Version/Commit/BuildDate/Dirty vars stamped by build.sh ldflags
 ```

@@ -40,3 +40,22 @@ func optString(opts map[string]any, key, def string) string {
 	}
 	return def
 }
+
+// optInt reads an integer option from opts, returning def when absent or not a
+// number. Config JSON decodes numbers into float64; an int is tolerated too.
+func optInt(opts map[string]any, key string, def int) int {
+	if opts == nil {
+		return def
+	}
+	v, ok := opts[key]
+	if !ok {
+		return def
+	}
+	switch n := v.(type) {
+	case float64:
+		return int(n)
+	case int:
+		return n
+	}
+	return def
+}
