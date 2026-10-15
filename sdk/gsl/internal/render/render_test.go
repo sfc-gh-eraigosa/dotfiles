@@ -233,3 +233,23 @@ func TestBuildSegments_Host(t *testing.T) {
 		t.Errorf("host options not wired: %+v", hs)
 	}
 }
+
+// TestBuildSegments_HostDeps: the hostname lookup and the hardware kind are
+// injectable through Deps like every other seam, so preview/golden callers
+// stay fixture-driven; a config `kind` option still wins over Deps.HostKind.
+func TestBuildSegments_HostDeps(t *testing.T) {
+	cfg := config.Config{Enabled: true, Segments: []config.Segment{{Type: "host", Enabled: true}}}
+	deps := Deps{Hostname: fixedHost("demohost"), HostKind: "rpi"}
+	segs := BuildSegments(cfg, deps)
+	got, _, ok := segs[0].Render(context.Background(), emojiStyleFixture(), 0)
+	if !ok || got != "🍓 demohost" {
+		t.Errorf("Deps-driven host: want %q, got %q (ok=%v)", "🍓 demohost", got, ok)
+	}
+
+	cfg.Segments[0].Options = map[string]any{"kind": "dgx"}
+	segs = BuildSegments(cfg, deps)
+	got, _, _ = segs[0].Render(context.Background(), emojiStyleFixture(), 0)
+	if got != "🧠 demohost" {
+		t.Errorf("config kind must beat Deps.HostKind: want %q, got %q", "🧠 demohost", got)
+	}
+}

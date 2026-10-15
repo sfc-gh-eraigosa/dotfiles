@@ -116,26 +116,26 @@ All five segments run concurrently under a shared 1-second parent deadline. Each
 
 Which machine the line is on — meant for the far left, so a glance across a fleet of panes answers "where am I?" first. Shows:
 
-- A hardware-kind glyph, detected without subprocesses from `runtime.GOOS`, `/proc/version`, `/proc/device-tree/model`, the DMI vendor/product under `/sys/class/dmi/id`, and the container markers `/.dockerenv` / `/run/.containerenv`
-- The short hostname (domain stripped at the first dot), cut to 11 display columns with an ellipsis (`averyverylonghost` → `averyveryv…`)
+- A hardware-kind glyph, detected without subprocesses from `runtime.GOOS`, `/proc/version`, `/proc/device-tree/model`, the DMI vendor/product under `/sys/class/dmi/id`, and the container signals (`/.dockerenv`, `/run/.containerenv`, `$container`, the cgroup path of PID 1)
+- The short hostname (domain stripped at the first dot; an IP literal is kept whole), cut to 11 display columns with an ellipsis (`averyverylonghost` → `averyveryv…`)
 
 | Kind | Detected by | Glyph |
 |------|-------------|-------|
 | `macos` | `GOOS == darwin` | 🍎 |
-| `container` | `/.dockerenv` or `/run/.containerenv` exists (wins over the host hardware) | 📦 |
+| `container` | `/.dockerenv` or `/run/.containerenv` exists, `$container` is set, or PID 1's cgroup names docker / kubepods / containerd / lxc / podman (wins over the host hardware) | 📦 |
 | `wsl` | `/proc/version` mentions `microsoft` | 🪟 |
-| `rpi` | device-tree model starts `Raspberry Pi` | 🍓 |
+| `rpi` | device-tree model mentions `Raspberry Pi` | 🍓 |
 | `jetson` | device-tree model mentions `Jetson` | 🤖 |
 | `dgx` | DMI mentions `DGX` or the vendor is `NVIDIA` | 🧠 |
 | `linux` | anything else | 💻 |
 
-The glyphs are emoji in **both** built-in styles (icon keys `host` and `host_<kind>`); ascii mode shows `[host]`. Self-omits only when the hostname lookup fails. Drop priority sits between `time` and `ai`: a narrow terminal sheds the clock first, then the hostname.
+The glyphs are emoji in **both** built-in styles (icon keys `host` and `host_<kind>`); ascii mode shows `[host]`. Self-omits when the hostname lookup fails or leaves nothing to show (empty name, or a name that is only a domain such as `.local`). Drop priority sits between `time` and `ai`: a narrow terminal sheds the clock first, then the hostname.
 
 Segment options (`options` map of the `host` segment):
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `max_len` | int | `11` | Column budget for the hostname, ellipsis included. |
+| `max_len` | int | `11` | Column budget for the hostname, ellipsis included (a numeric string such as `"8"` is accepted too). |
 | `icon` | string | — | Glyph to use verbatim; skips detection entirely. |
 | `kind` | string | auto | Force a kind from the table above when detection misses (an unknown value is ignored). |
 

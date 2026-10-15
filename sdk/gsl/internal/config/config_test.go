@@ -355,3 +355,34 @@ func TestEnableSegment_InsertsMissingKnownType(t *testing.T) {
 		t.Errorf("want 4 segments after inserts, got %d", len(c.Segments))
 	}
 }
+
+// TestDisableToggleSegment_InsertsMissingKnownType: disable and toggle must
+// accept a known type an older config.json lacks, exactly like enable does
+// (the README lists all three verbs for every segment).
+func TestDisableToggleSegment_InsertsMissingKnownType(t *testing.T) {
+	c := config.Default()
+	c.Segments = []config.Segment{{Type: "dirgit", Enabled: true}}
+
+	if err := c.DisableSegment("host"); err != nil {
+		t.Fatalf("DisableSegment(host) on a config without it: %v", err)
+	}
+	if c.Segments[0].Type != "host" || c.Segments[0].Enabled {
+		t.Errorf("disable should insert host first, disabled; got %+v", c.Segments)
+	}
+
+	c.Segments = []config.Segment{{Type: "dirgit", Enabled: true}}
+	if err := c.ToggleSegment("host"); err != nil {
+		t.Fatalf("ToggleSegment(host) on a config without it: %v", err)
+	}
+	if c.Segments[0].Type != "host" || !c.Segments[0].Enabled {
+		t.Errorf("toggle of an absent (effectively off) segment should insert it enabled; got %+v", c.Segments)
+	}
+	if err := c.ToggleSegment("host"); err != nil || c.Segments[0].Enabled {
+		t.Errorf("second toggle should disable it (err=%v); got %+v", err, c.Segments)
+	}
+	for _, verb := range []func(string) error{c.DisableSegment, c.ToggleSegment} {
+		if err := verb("bogus"); err == nil {
+			t.Error("unknown type should still be an error")
+		}
+	}
+}

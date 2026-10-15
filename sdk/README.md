@@ -143,9 +143,11 @@ most — *how much context is left* and *what branch am I actually on*. Both nee
 a detour that breaks your train of thought, and the second one is how edits end
 up on the wrong branch.
 
-**What it does about it.** Four segments render after every assistant turn:
-working directory + git state, repo/PR context, the AI segment (model, context
-window %, MCP count, 5h/7d rate-limit burn), and the clock. Each segment is
+**What it does about it.** Five segments render after every assistant turn:
+which machine you are on (a hardware-kind glyph — 🧠 DGX, 🍓 Pi, 🪟 WSL, 🍎 Mac —
+plus the hostname capped at 11 columns), working directory + git state, repo/PR
+context, the AI segment (model, context window %, MCP count, 5h/7d rate-limit
+burn), and the clock. Each segment is
 hard-capped at one second and drops itself rather than hanging your prompt — the
 status line can never be the reason Claude feels slow.
 
@@ -160,7 +162,9 @@ status line can never be the reason Claude feels slow.
 $ gsl status
   dotfiles  main   12   2026-08-23 08:54:22 PDT
 
-$ gsl preview --once          # single frame, full segments
+$ gsl preview --once          # single frame, full segments (fixture data)
+💻 demohost · 📁 myproject 🌿 m · 🏠 · 🤖 Sonnet 4.6 🧠 30% · ⏰ 03:00 PDT
+
 $ gsl config style emoji      # no Nerd Font? no problem
 ```
 

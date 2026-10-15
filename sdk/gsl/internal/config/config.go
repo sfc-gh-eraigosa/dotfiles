@@ -2,7 +2,7 @@
 //
 // Config file location: ${XDG_CONFIG_HOME:-~/.config}/gsl/config.json
 //
-// Default() returns a fully working configuration with all 4 segments
+// Default() returns a fully working configuration with all 5 segments
 // enabled. Load() for a missing file returns Default() with no error.
 // Save() creates parent directories as needed.
 package config
@@ -17,7 +17,8 @@ import (
 
 // Segment represents a single status-line segment.
 type Segment struct {
-	// Type is the segment kind: "dirgit", "repo", "ai", or "time".
+	// Type is the segment kind: "host", "dirgit", "repo", "ai", or "time"
+	// (KnownSegmentTypes).
 	Type string `json:"type"`
 	// Enabled controls whether this segment is rendered.
 	Enabled bool `json:"enabled"`
@@ -150,8 +151,8 @@ func (c Config) EffectiveLinks() string {
 	return LinksUnderline
 }
 
-// Default returns a fully usable Config with all 4 segments enabled in the
-// canonical order: dirgit, repo, ai, time.
+// Default returns a fully usable Config with all 5 segments enabled in the
+// canonical order: host, dirgit, repo, ai, time.
 func Default() Config {
 	return Config{
 		Enabled: true,
@@ -249,46 +250,56 @@ func (c *Config) findSegment(segType string) *Segment {
 	return nil
 }
 
-// EnableSegment sets the Enabled flag on the segment identified by segType.
-//
-// A known type that is missing from Segments (a config.json saved before the
-// type existed — Load replaces the whole array) is inserted enabled: "host" at
-// the front, since it is designed for the far left, anything else at the end.
-// Returns an error only for a type gsl does not render.
-func (c *Config) EnableSegment(segType string) error {
+// ensureSegment returns the segment entry for segType, inserting one when a
+// KNOWN type is missing from Segments: a config.json saved before the type
+// existed (Load replaces the whole array). The inserted entry starts disabled —
+// the verb that asked for it decides its state — and goes at the front for
+// "host" (designed for the far left) or at the end for anything else. Returns
+// an error only for a type gsl does not render.
+func (c *Config) ensureSegment(segType string) (*Segment, error) {
 	if seg := c.findSegment(segType); seg != nil {
-		seg.Enabled = true
-		return nil
+		return seg, nil
 	}
 	if !knownSegmentType(segType) {
-		return fmt.Errorf("config: unknown segment type %q", segType)
+		return nil, fmt.Errorf("config: unknown segment type %q", segType)
 	}
-	entry := Segment{Type: segType, Enabled: true}
+	entry := Segment{Type: segType}
 	if segType == "host" {
 		c.Segments = append([]Segment{entry}, c.Segments...)
-	} else {
-		c.Segments = append(c.Segments, entry)
+		return &c.Segments[0], nil
 	}
+	c.Segments = append(c.Segments, entry)
+	return &c.Segments[len(c.Segments)-1], nil
+}
+
+// EnableSegment sets the Enabled flag on the segment identified by segType,
+// inserting a known-but-missing type first (see ensureSegment).
+func (c *Config) EnableSegment(segType string) error {
+	seg, err := c.ensureSegment(segType)
+	if err != nil {
+		return err
+	}
+	seg.Enabled = true
 	return nil
 }
 
-// DisableSegment clears the Enabled flag on the segment identified by segType.
-// Returns an error if no such segment exists.
+// DisableSegment clears the Enabled flag on the segment identified by segType,
+// inserting a known-but-missing type first so the file records the choice.
 func (c *Config) DisableSegment(segType string) error {
-	seg := c.findSegment(segType)
-	if seg == nil {
-		return fmt.Errorf("config: unknown segment type %q", segType)
+	seg, err := c.ensureSegment(segType)
+	if err != nil {
+		return err
 	}
 	seg.Enabled = false
 	return nil
 }
 
-// ToggleSegment flips the Enabled flag on the segment identified by segType.
-// Returns an error if no such segment exists.
+// ToggleSegment flips the Enabled flag on the segment identified by segType. A
+// known-but-missing type is effectively off, so its first toggle turns it on.
 func (c *Config) ToggleSegment(segType string) error {
-	seg := c.findSegment(segType)
-	if seg == nil {
-		return fmt.Errorf("config: unknown segment type %q", segType)
+	seg, err := c.ensureSegment(segType)
+	if err != nil {
+		return err
 	}
 	seg.Enabled = !seg.Enabled
 	return nil

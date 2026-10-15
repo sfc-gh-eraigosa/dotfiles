@@ -9,6 +9,7 @@ package render
 
 import (
 	"context"
+	"net"
 	"strings"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
@@ -68,9 +69,13 @@ func (s *HostSegment) detect(_ context.Context) (segmentData, bool) {
 }
 
 // shortHostname strips the domain ("spark1.local" → "spark1") and surrounding
-// whitespace.
+// whitespace. An IP literal (minimal containers and cloud images sometimes
+// report one) is kept whole: "10.0.0.5" must not become "10".
 func shortHostname(h string) string {
 	h = strings.TrimSpace(h)
+	if net.ParseIP(h) != nil {
+		return h
+	}
 	if i := strings.IndexByte(h, '.'); i >= 0 {
 		h = h[:i]
 	}

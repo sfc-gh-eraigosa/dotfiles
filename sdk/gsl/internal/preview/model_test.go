@@ -268,3 +268,12 @@ func TestModel_Update_ToggleHost(t *testing.T) {
 		t.Errorf("help line should advertise keys 1-5; got %q", um.View())
 	}
 }
+
+// TestRenderOnce_HostIsFixture: the preview is fixture-driven end to end, so
+// the host segment shows the fixture host, never the real machine.
+func TestRenderOnce_HostIsFixture(t *testing.T) {
+	line := preview.RenderOnce()
+	if !strings.Contains(line, "💻 demohost") && !strings.Contains(line, "demohost") {
+		t.Errorf("RenderOnce should render the fixture host %q; got %q", "demohost", line)
+	}
+}

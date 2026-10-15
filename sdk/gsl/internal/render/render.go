@@ -84,6 +84,13 @@ type Deps struct {
 	// Clock returns the current time for the time segment. nil ⇒ time.Now.
 	Clock func() time.Time
 
+	// Hostname returns the machine name for the host segment. nil ⇒ os.Hostname.
+	// Injected so preview/golden callers render a fixture host, not the real one.
+	Hostname func() (string, error)
+	// HostKind, when set, replaces hardware detection for the host segment (a
+	// fixture kind for preview). The segment's own `kind` option still wins.
+	HostKind string
+
 	// Links is the per-render link policy (families already AND-ed with the
 	// config mode and the gff master flag by cmd). The zero value links
 	// nothing, so callers that never heard of links render exactly as before.
@@ -117,6 +124,10 @@ func BuildSegments(cfg config.Config, deps Deps) []Segment {
 		case "host":
 			s := NewHostSegment(sc.Options)
 			s.Priority = prio
+			s.Hostname = deps.Hostname
+			if s.Kind == "" {
+				s.Kind = deps.HostKind
+			}
 			segs = append(segs, s)
 		case "dirgit":
 			dg := NewDirGitSegment(deps.Cwd, deps.Git)

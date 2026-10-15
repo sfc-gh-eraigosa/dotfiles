@@ -1,5 +1,10 @@
 package render
 
+import (
+	"strconv"
+	"strings"
+)
+
 // optBool reads a boolean option from a config Segment.Options map, returning
 // def when the key is absent or not a bool. Config JSON decodes booleans into
 // Go bool already, but we tolerate string "true"/"false" defensively.
@@ -42,7 +47,8 @@ func optString(opts map[string]any, key, def string) string {
 }
 
 // optInt reads an integer option from opts, returning def when absent or not a
-// number. Config JSON decodes numbers into float64; an int is tolerated too.
+// number. Config JSON decodes numbers into float64; an int and a numeric string
+// ("8", the way the sibling bool options may be hand-written) are tolerated too.
 func optInt(opts map[string]any, key string, def int) int {
 	if opts == nil {
 		return def
@@ -56,6 +62,10 @@ func optInt(opts map[string]any, key string, def int) int {
 		return int(n)
 	case int:
 		return n
+	case string:
+		if i, err := strconv.Atoi(strings.TrimSpace(n)); err == nil {
+			return i
+		}
 	}
 	return def
 }

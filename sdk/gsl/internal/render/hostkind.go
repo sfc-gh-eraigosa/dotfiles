@@ -14,7 +14,9 @@ package render
 // Precedence, most specific first: macOS (GOOS) → container → WSL → device
 // tree (Pi / Jetson) → DMI (DGX) → generic Linux. A container wins over the
 // hardware it runs on because "inside a container" is what the user needs to
-// know about the shell they are typing into.
+// know about the shell they are typing into. Container evidence is the marker
+// files (/.dockerenv, /run/.containerenv), the $container variable, and the
+// cgroup path of PID 1 (docker / kubepods / containerd / lxc / podman).
 
 import (
 	"os"
@@ -64,6 +66,29 @@ type hostProbe struct {
 	DMIProduct string
 	// InContainer is true when /.dockerenv or /run/.containerenv exists.
 	InContainer bool
+	// ProcCgroup is /proc/1/cgroup: docker, containerd/Kubernetes and LXC put
+	// the container id in the cgroup path even when no marker file exists.
+	ProcCgroup string
+	// ContainerEnv is $container, set by systemd-nspawn, podman and LXC.
+	ContainerEnv string
+}
+
+// containerCgroupMarkers are substrings of /proc/1/cgroup that only occur
+// inside a container runtime's cgroup.
+var containerCgroupMarkers = []string{"/docker/", "/docker-", "kubepods", "containerd", "/lxc/", "/lxc.", "/podman", "libpod"}
+
+// inContainer folds the three container signals into one answer.
+func (p hostProbe) inContainer() bool {
+	if p.InContainer || p.ContainerEnv != "" {
+		return true
+	}
+	cg := strings.ToLower(p.ProcCgroup)
+	for _, m := range containerCgroupMarkers {
+		if strings.Contains(cg, m) {
+			return true
+		}
+	}
+	return false
 }
 
 // classifyHost maps a probe to a kind. Pure; see the precedence note above.
@@ -71,7 +96,7 @@ func classifyHost(p hostProbe) string {
 	if p.GOOS == "darwin" {
 		return hostKindMacOS
 	}
-	if p.InContainer {
+	if p.inContainer() {
 		return hostKindContainer
 	}
 	if strings.Contains(strings.ToLower(p.ProcVersion), "microsoft") {
@@ -101,6 +126,8 @@ func probeHost() hostProbe {
 		DMIVendor:       readSmallFile("/sys/class/dmi/id/sys_vendor"),
 		DMIProduct:      readSmallFile("/sys/class/dmi/id/product_name"),
 		InContainer:     fileExists("/.dockerenv") || fileExists("/run/.containerenv"),
+		ProcCgroup:      readSmallFile("/proc/1/cgroup"),
+		ContainerEnv:    os.Getenv("container"),
 	}
 }
 

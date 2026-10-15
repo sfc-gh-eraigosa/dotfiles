@@ -58,3 +58,27 @@ func TestHostGlyph(t *testing.T) {
 		t.Errorf("override glyph = %q; want 🎮", got)
 	}
 }
+
+// TestClassifyHost_ContainerSignals: containerd/k8s, LXC and nspawn do not
+// create /.dockerenv, so the cgroup path and the `container` env var count too.
+func TestClassifyHost_ContainerSignals(t *testing.T) {
+	cases := []struct {
+		name string
+		p    hostProbe
+		want string
+	}{
+		{"kubernetes pod via cgroup", hostProbe{GOOS: "linux", ProcCgroup: "0::/kubepods/burstable/pod1/abc", DMIVendor: "NVIDIA"}, hostKindContainer},
+		{"docker via cgroup", hostProbe{GOOS: "linux", ProcCgroup: "12:pids:/docker/abcdef"}, hostKindContainer},
+		{"containerd via cgroup", hostProbe{GOOS: "linux", ProcCgroup: "0::/system.slice/containerd.service/cri-containerd-abc"}, hostKindContainer},
+		{"lxc via cgroup", hostProbe{GOOS: "linux", ProcCgroup: "0::/lxc/web1", DeviceTreeModel: "Raspberry Pi 4"}, hostKindContainer},
+		{"nspawn/podman via env", hostProbe{GOOS: "linux", ContainerEnv: "podman"}, hostKindContainer},
+		{"plain host cgroup", hostProbe{GOOS: "linux", ProcCgroup: "0::/user.slice/user-1000.slice/session-3.scope"}, hostKindLinux},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := classifyHost(tc.p); got != tc.want {
+				t.Errorf("classifyHost(%+v) = %q; want %q", tc.p, got, tc.want)
+			}
+		})
+	}
+}

@@ -237,6 +237,11 @@ func (m Model) buildConfig() config.Config {
 	return cfg
 }
 
+// Fixture host for the host segment: the preview never shows the real machine.
+const fixtureHostKind = "linux"
+
+func fixtureHostname() (string, error) { return "demohost", nil }
+
 // buildDeps returns render.Deps wired to the current fixture fakes + fixed
 // clock pinned to m.now.
 func (m Model) buildDeps() render.Deps {
@@ -257,6 +262,8 @@ func (m Model) buildDeps() render.Deps {
 			MCPOpts:      mcp.ActiveCountOptions{},
 			Clock:        func() time.Time { return now },
 			Links:        previewLinks,
+			Hostname:     fixtureHostname,
+			HostKind:     fixtureHostKind,
 		}
 	default: // FixtureClean
 		gitResponses = CleanGitResponses()
@@ -271,6 +278,8 @@ func (m Model) buildDeps() render.Deps {
 			MCPOpts:      mcp.ActiveCountOptions{},
 			Clock:        func() time.Time { return now },
 			Links:        previewLinks,
+			Hostname:     fixtureHostname,
+			HostKind:     fixtureHostKind,
 		}
 	}
 }

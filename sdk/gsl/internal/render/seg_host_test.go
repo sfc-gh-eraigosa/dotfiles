@@ -192,3 +192,31 @@ func TestHost_PriorityDefault(t *testing.T) {
 		t.Errorf("host default priority = %d; want 15 (after time, before ai)", got)
 	}
 }
+
+func TestHost_MaxLenOptionAsString(t *testing.T) {
+	seg := NewHostSegment(map[string]any{"max_len": "5"})
+	seg.Hostname = fixedHost("longhostname")
+	seg.Probe = fixedProbe(hostProbe{GOOS: "linux"})
+
+	got, _, _ := seg.Render(context.Background(), asciiStyle(), 0)
+	if w := term.DisplayWidth(hostName(t, got)); w != 5 {
+		t.Errorf(`max_len="5": name %q is %d columns; want 5`, hostName(t, got), w)
+	}
+}
+
+func TestShortHostname(t *testing.T) {
+	cases := map[string]string{
+		"spark1.local":       "spark1",
+		"  box.example.com ": "box",
+		"10.0.0.5":           "10.0.0.5",
+		"fe80::1":            "fe80::1",
+		"plain":              "plain",
+		".local":             "",
+		"":                   "",
+	}
+	for in, want := range cases {
+		if got := shortHostname(in); got != want {
+			t.Errorf("shortHostname(%q) = %q; want %q", in, got, want)
+		}
+	}
+}
