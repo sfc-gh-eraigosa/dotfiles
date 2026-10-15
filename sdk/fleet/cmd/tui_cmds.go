@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -33,7 +35,8 @@ type (
 	execDoneMsg struct {
 		alias string
 		err   error
-		ssh   bool // true = plain ssh visit, false = interactive update handoff
+		ssh   bool   // true = plain ssh visit, false = interactive update handoff
+		note  string // status line to show on return (the herdr machine add outcome); empty = none
 	}
 	wakeDoneMsg struct {
 		alias, via string
@@ -761,6 +764,64 @@ func herdrShell(bin, alias string) tea.Cmd {
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return execDoneMsg{alias: alias, err: err, ssh: true}
 	})
+}
+
+// herdrMachineAddArgv saves the host as a herdr machine, labelled by its
+// alias (fleet-herdr-machines UC1). This is the inside-herdr twin of
+// herdrAttachArgv: a nested client is refused, a saved machine is not.
+func herdrMachineAddArgv(bin, alias string) []string {
+	return []string{bin, "machine", "add", alias, "--label", alias}
+}
+
+// savedHerdrTargets parses `herdr machine list --json` into the set of ssh
+// targets already saved. Targets, not labels: the operator may rename a
+// label, the target is what fleet knows the host by.
+func savedHerdrTargets(js string) (map[string]bool, error) {
+	var rows []struct {
+		Target string `json:"target"`
+	}
+	if err := json.Unmarshal([]byte(js), &rows); err != nil {
+		return nil, fmt.Errorf("unreadable output: %w", err)
+	}
+	out := map[string]bool{}
+	for _, r := range rows {
+		if r.Target != "" {
+			out[r.Target] = true
+		}
+	}
+	return out, nil
+}
+
+// listHerdrMachines is the production herdrMachines: a bounded local call,
+// since it runs on the keystroke.
+func listHerdrMachines(bin string) (map[string]bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out, err := runLocal(ctx, bin, "machine", "list", "--json")
+	if err != nil {
+		return nil, err
+	}
+	return savedHerdrTargets(out)
+}
+
+// machineAddDone is what the machine-add handoff reports back. herdr's own
+// output stayed on the terminal during the handoff, so the note names the
+// outcome and the next key, not the transcript.
+func machineAddDone(alias string, err error) execDoneMsg {
+	note := fmt.Sprintf("%s saved in herdr — prefix+w to switch to it", alias)
+	if err != nil {
+		note = fmt.Sprintf("herdr machine add %s failed (%v) — see its output above", alias, err)
+	}
+	return execDoneMsg{alias: alias, err: err, ssh: true, note: note}
+}
+
+// herdrMachineAddShell suspends the TUI so herdr can prompt (preparing a
+// missing or incompatible remote install needs approval) and re-probes the
+// host on return like every other handover.
+func herdrMachineAddShell(bin, alias string) tea.Cmd {
+	argv := herdrMachineAddArgv(bin, alias)
+	c := exec.Command(argv[0], argv[1:]...)
+	return tea.ExecProcess(c, func(err error) tea.Msg { return machineAddDone(alias, err) })
 }
 
 // configVerbArgs builds the argv for a one-way config transfer. It exists as a

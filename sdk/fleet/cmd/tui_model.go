@@ -161,19 +161,20 @@ type tuiModel struct {
 	// single shared filter would let another host's line land between an
 	// advisory's continuation lines and break the fold. Lazily populated the
 	// same way m.warns and m.logColor are.
-	warnFilters map[string]*histindex.WarnFilter
-	jobs        int // max concurrent background updates
-	running     int // slots in use
-	updateRef   string
-	plan        updplan.Plan           // loaded ONCE at startup; the model never calls loadPlan itself
-	file        string                 // the --file value the plan was loaded from, if any; re-passed to the interactive handoff's self-exec
-	repo        string                 // the --repo value the plan/gff resolution used; re-passed to the interactive handoff's self-exec so a routed host resolves against the SAME checkout
-	self        func() (string, error) // resolves the executable path for the interactive handoff's self-exec; os.Executable in production, injected in tests
-	inHerdr     bool                   // fleet itself runs in a herdr pane (HERDR_ENV=1): herdr refuses a nested client, so `S` explains instead
-	herdrBin    func() string          // resolves the LOCAL herdr client for the `S` attach; empty = not installed here. Injected in tests so the suite does not depend on the build host
-	ans         answers                // pre-supplied answers for this wave (memory-only credential)
-	ansField    answerField            // cursor in the answer form
-	policy      bgPolicy               // standing lane policy from gff (bgPolicyFromFlags); the form never edits it
+	warnFilters   map[string]*histindex.WarnFilter
+	jobs          int // max concurrent background updates
+	running       int // slots in use
+	updateRef     string
+	plan          updplan.Plan                              // loaded ONCE at startup; the model never calls loadPlan itself
+	file          string                                    // the --file value the plan was loaded from, if any; re-passed to the interactive handoff's self-exec
+	repo          string                                    // the --repo value the plan/gff resolution used; re-passed to the interactive handoff's self-exec so a routed host resolves against the SAME checkout
+	self          func() (string, error)                    // resolves the executable path for the interactive handoff's self-exec; os.Executable in production, injected in tests
+	inHerdr       bool                                      // fleet itself runs in a herdr pane (HERDR_ENV=1): herdr refuses a nested client, so `S` explains instead
+	herdrMachines func(bin string) (map[string]bool, error) // saved herdr machines by ssh target (`herdr machine list --json`); injected in tests
+	herdrBin      func() string                             // resolves the LOCAL herdr client for the `S` attach; empty = not installed here. Injected in tests so the suite does not depend on the build host
+	ans           answers                                   // pre-supplied answers for this wave (memory-only credential)
+	ansField      answerField                               // cursor in the answer form
+	policy        bgPolicy                                  // standing lane policy from gff (bgPolicyFromFlags); the form never edits it
 
 	// reachability ladder — its own ownership set, same invariant as updating
 	waking map[string]bool
@@ -262,32 +263,33 @@ type tuiModel struct {
 
 func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time.Time, ref string, jobs int, plan updplan.Plan) tuiModel {
 	m := tuiModel{
-		pending:     map[string]bool{},
-		selected:    map[string]bool{},
-		updating:    map[string]updState{},
-		streams:     map[string]stream{},
-		logColor:    map[string]int{},
-		logFollow:   true,
-		errFollow:   true,
-		warns:       map[string]int{},
-		warnFilters: map[string]*histindex.WarnFilter{},
-		hostOpen:    true, // the fleet is what the tool is for
-		logOpen:     true, // on by default: shipped off, it was undiscoverable
-		errOpen:     false,
-		focus:       paneHost,
-		waking:      map[string]bool{},
-		hosts:       map[string]sshconf.Host{},
-		jobs:        jobs,
-		updateRef:   ref,
-		plan:        plan,
-		self:        os.Executable,
-		herdrBin:    func() string { return localHerdr(exec.LookPath, fileExists, os.Getenv("HOME")) },
-		inHerdr:     os.Getenv("HERDR_ENV") == "1",
-		run:         r,
-		base:        base,
-		now:         now,
-		vp:          viewport{height: 20, width: 100},
-		spinner:     "⠋",
+		pending:       map[string]bool{},
+		selected:      map[string]bool{},
+		updating:      map[string]updState{},
+		streams:       map[string]stream{},
+		logColor:      map[string]int{},
+		logFollow:     true,
+		errFollow:     true,
+		warns:         map[string]int{},
+		warnFilters:   map[string]*histindex.WarnFilter{},
+		hostOpen:      true, // the fleet is what the tool is for
+		logOpen:       true, // on by default: shipped off, it was undiscoverable
+		errOpen:       false,
+		focus:         paneHost,
+		waking:        map[string]bool{},
+		hosts:         map[string]sshconf.Host{},
+		jobs:          jobs,
+		updateRef:     ref,
+		plan:          plan,
+		self:          os.Executable,
+		herdrBin:      func() string { return localHerdr(exec.LookPath, fileExists, os.Getenv("HOME")) },
+		inHerdr:       os.Getenv("HERDR_ENV") == "1",
+		herdrMachines: listHerdrMachines,
+		run:           r,
+		base:          base,
+		now:           now,
+		vp:            viewport{height: 20, width: 100},
+		spinner:       "⠋",
 	}
 	m.localPowerSave = localPowerSaveIface
 	for _, h := range hosts {
@@ -1613,6 +1615,9 @@ func (m tuiModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case execDoneMsg:
 		if msg.ssh {
+			if msg.note != "" {
+				m.status = msg.note
+			}
 			// An ssh visit returns with the terminal restored; re-poll so the
 			// row reflects anything the operator changed by hand.
 			return m, pollHost(m.hosts[msg.alias], m.run, m.base)

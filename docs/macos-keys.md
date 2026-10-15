@@ -205,7 +205,7 @@ without a clipboard tool does — there is no packages.tsv fix for this case,
 since the tool would be on the wrong host. Either SSH in from an OSC
 52-capable terminal, or use `herdr --remote` (herdr's own remote-client mode:
 the client runs locally and writes to your real, local clipboard directly,
-rather than relying on the server-side native path or OSC 52 at all). From `fleet tui`, `S` on the host row runs exactly that — from a plain terminal. Inside a herdr pane herdr refuses to nest (`nested herdr is disabled by default`); there, save the host once with `herdr machine add <alias>` and switch to it with `prefix+w`, which renders through the local client and so writes the local clipboard too.
+rather than relying on the server-side native path or OSC 52 at all). From `fleet tui`, `S` on the host row runs exactly that — from a plain terminal. Inside a herdr pane herdr refuses to nest (`nested herdr is disabled by default`); there, `S` saves the host as a herdr machine instead (`herdr machine add <alias>`, once) and you switch to it with `prefix+w`, which renders through the local client and so writes the local clipboard too.
 
 **Nothing is remapped at all.** `systemctl is-active keyd`, then
 `sudo keyd check` to validate the config. Note that keyd **rejects a trailing
