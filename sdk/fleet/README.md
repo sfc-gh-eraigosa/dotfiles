@@ -196,6 +196,7 @@ fleet tui --update-ref feature/x         # update targets that ref instead of ma
 | `w` | wake the selection (or the cursor host) — rows tick `waking ⠋` |
 | `F` | forget the remembered answers (including the saved preferences) |
 | `s` | ssh to the cursor host (once is enough to prime a password-auth host) |
+| `S` | attach the cursor host's **herdr** through the local client (`herdr --remote <alias>`) — copies land on *this* machine's clipboard, which a plain `s` session over ssh cannot do (see [docs/macos-keys.md](../../docs/macos-keys.md), "herdr over SSH"); needs a herdr installed here. Inside a herdr pane the client refuses to nest, so `S` instead saves the host as a herdr **machine** (`herdr machine add <alias> --label <alias>`, once — already-saved hosts are skipped) and the status line says `prefix+w` to switch the herdr you already have open to it |
 | `T` | **trust** a host whose SSH host key changed — runs `fleet trust` (compare fingerprints, type the alias) |
 | `A` | **authorize** your public key on a host that refuses it — runs `ssh-copy-id` |
 | `p` / `P` | pull ssh config FROM / push it TO the cursor host (`fleet config pull\|push`) |
@@ -210,7 +211,7 @@ fleet tui --update-ref feature/x         # update targets that ref instead of ma
 | `?` | help overlay |
 | `q` | quit (guarded while updates run) |
 
-`?` groups the keys into sections — **SSH & access** (`s` `T` `A` `p` `P`), Update &
+`?` groups the keys into sections — **SSH & access** (`s` `S` `T` `A` `p` `P`), Update &
 recover, Panes & history, Search & select, Navigate, General — in two columns on a
 terminal at least 80 cells wide. A short terminal drops whole sections from the end,
 so the access keys are the last to go.

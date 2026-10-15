@@ -48,6 +48,7 @@ var keyHelp = []struct {
 	{"🗂️", "h", "show / hide the host list", true, grpPanes},
 	{"⚠️", "e", "stderr pane · in confirm: answers", true, grpPanes},
 	{"🖥️", "s", "ssh session (primes a password host)", true, grpSSH},
+	{"🐑", "S", "herdr --remote · in herdr: machine add", false, grpSSH},
 	{"\U0001f5c3\ufe0f", "H", "history of past runs", true, grpPanes},
 	{"🔄", "r", "refresh", true, grpUpdate},
 	{"🚪", "q", "quit", true, grpGeneral},
@@ -488,6 +489,38 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// An ssh visit while the engine owns the host would race its update.
 		if m.cursor != "" && !m.inFlight(m.cursor) {
 			return m, sshShell(m.cursor)
+		}
+	case "S":
+		// The herdr twin of `s`. Over a plain ssh session the REMOTE herdr owns
+		// the clipboard and a copy never reaches this terminal; herdr --remote
+		// runs the client here instead, so the same guard as `s` applies and
+		// the only extra failure is a missing local client.
+		if m.cursor != "" && !m.inFlight(m.cursor) {
+			bin := m.herdrBin()
+			if bin == "" {
+				m.status = "herdr is not installed locally — `S` needs the client here (install.sh, or gff set install.tools.herdr true)"
+				return m, nil
+			}
+			// herdr refuses a client inside one of its own panes ("nested
+			// herdr is disabled by default") because two TUIs cannot share a
+			// prefix. Stripping HERDR_* from the child would dodge that guard,
+			// so inside herdr S takes the fleet-herdr-machines route: save the
+			// host as a herdr machine (once) and let prefix+w switch the herdr
+			// already open. The saved list decides which; a failed list is
+			// reported, never guessed around.
+			if m.inHerdr {
+				saved, err := m.herdrMachines(bin)
+				if err != nil {
+					m.status = fmt.Sprintf("herdr machine list failed (%v) — nothing added", err)
+					return m, nil
+				}
+				if saved[m.cursor] {
+					m.status = fmt.Sprintf("%s is already saved in herdr — prefix+w to switch to it", m.cursor)
+					return m, nil
+				}
+				return m, herdrMachineAddShell(bin, m.cursor)
+			}
+			return m, herdrShell(bin, m.cursor)
 		}
 	case "p", "P":
 		// Config transfer is ONE-WAY and the direction is the keystroke: `p`

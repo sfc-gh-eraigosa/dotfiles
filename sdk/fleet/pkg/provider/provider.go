@@ -97,7 +97,7 @@ const TunnelKey = "t"
 //     and space. `h` and `:` are reserved AHEAD of use — `h` is navigation real
 //     estate (the shared keymap's page-left; never help, which is `?`), and `:`
 //     is the command line. Reserving a key is not spending it.
-//   - Fleet's dashboard verbs, every one live today: r s u w v a p P A F e J K l.
+//   - Fleet's dashboard verbs, every one live today: r s S u w v a p P A F e J K l.
 //     `l` toggles the log pane and `s` opens an ssh session — the two a provider
 //     would most plausibly have tried to take.
 //   - This objective's own: t and T, the bridge keys.
@@ -116,6 +116,8 @@ var ReservedKeys = map[rune]bool{
 	// fleet's dashboard verbs
 	'r': true, 's': true, 'u': true, 'w': true, 'v': true, 'a': true,
 	'p': true, 'P': true, 'A': true, 'F': true, 'e': true, 'J': true, 'K': true,
+	// S attaches the host's herdr through the local client (herdr --remote)
+	'S': true,
 	// this objective: the bridge keys
 	't': true, 'T': true,
 	// history: H opens the selection's past runs in the dashboard
