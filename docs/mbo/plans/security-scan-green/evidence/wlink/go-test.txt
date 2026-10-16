@@ -1,0 +1,9 @@
+# go test ./... — sdk/wlink — go version go1.27.2 linux/arm64 — 2026-10-16T04:19:37Z
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/cmd	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/fleetsrc	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/linkstate	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/probe	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/resolvconf	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/sshcfg	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/winhost	(cached)

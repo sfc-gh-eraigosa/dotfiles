@@ -1,0 +1,23 @@
+# go test ./... — sdk/gsl — go version go1.27.2 linux/arm64 — 2026-10-16T04:19:19Z
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/cmd	2.548s
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/cmd/glyphcheck	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config	0.012s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/exec	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/flags	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh	0.257s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh/fake	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git/fake	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp	0.221s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp/fake	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/observe	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/preview	0.016s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/render	0.483s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style	0.008s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/term	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/theme	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/usage	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/version	(cached)

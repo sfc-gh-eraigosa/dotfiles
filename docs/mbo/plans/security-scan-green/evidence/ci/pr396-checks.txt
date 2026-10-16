@@ -1,0 +1,4 @@
+# PR #396 CI — 2026-10-16T04:15Z (after commit 6b34943)
+Security Scan (govulncheck + gosec): pass
+  https://github.com/sfc-gh-eraigosa/dotfiles/actions/runs/38849190878/job/116806479035
+all checks: 14 pass, 2 skipping (Build and Integration Test / Mergify Merge Queue), 0 fail

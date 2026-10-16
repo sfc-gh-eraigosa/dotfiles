@@ -38,8 +38,8 @@ const (
 	snapResolvSymlink = "resolv.conf.symlink"
 	snapResolvFile    = "resolv.conf.file"
 	snapResolvAbsent  = "resolv.conf.absent"
-	snapWslFile       = "wsl.conf.file"
-	snapWslAbsent     = "wsl.conf.absent"
+	snapWslFile       = "wsl.conf.file"   // #nosec G101 -- a snapshot filename, not a credential
+	snapWslAbsent     = "wsl.conf.absent" // #nosec G101 -- a snapshot filename, not a credential
 	// snapComplete is written LAST. Its absence means the snapshot was
 	// interrupted partway — a directory alone is not an undo point, and
 	// treating it as one lets a later unpin delete resolv.conf and restore
@@ -68,7 +68,7 @@ func TakeSnapshot(p Paths) error {
 	if HasSnapshot(p) {
 		return nil
 	}
-	if err := os.MkdirAll(p.BackupDir, 0o755); err != nil {
+	if err := os.MkdirAll(p.BackupDir, 0o755); err != nil { // #nosec G301 -- snapshot dir must be inspectable by the non-root user
 		return fmt.Errorf("creating snapshot dir: %w", err)
 	}
 
@@ -78,7 +78,7 @@ func TakeSnapshot(p Paths) error {
 		if rerr != nil {
 			return fmt.Errorf("reading resolv.conf symlink: %w", rerr)
 		}
-		if werr := os.WriteFile(filepath.Join(p.BackupDir, snapResolvSymlink), []byte(target+"\n"), 0o644); werr != nil {
+		if werr := os.WriteFile(filepath.Join(p.BackupDir, snapResolvSymlink), []byte(target+"\n"), 0o644); werr != nil { // #nosec G306 -- byte copy of a world-readable system file; must stay inspectable without root
 			return werr
 		}
 	case err == nil:
@@ -86,11 +86,11 @@ func TakeSnapshot(p Paths) error {
 		if rerr != nil {
 			return rerr
 		}
-		if werr := os.WriteFile(filepath.Join(p.BackupDir, snapResolvFile), content, 0o644); werr != nil {
+		if werr := os.WriteFile(filepath.Join(p.BackupDir, snapResolvFile), content, 0o644); werr != nil { // #nosec G306 -- byte copy of a world-readable system file; must stay inspectable without root
 			return werr
 		}
 	case errors.Is(err, os.ErrNotExist):
-		if werr := os.WriteFile(filepath.Join(p.BackupDir, snapResolvAbsent), nil, 0o644); werr != nil {
+		if werr := os.WriteFile(filepath.Join(p.BackupDir, snapResolvAbsent), nil, 0o644); werr != nil { // #nosec G306 -- empty marker file in the snapshot dir; must stay inspectable without root
 			return werr
 		}
 	default:
@@ -99,11 +99,11 @@ func TakeSnapshot(p Paths) error {
 
 	switch content, err := os.ReadFile(p.WslConf); {
 	case err == nil:
-		if werr := os.WriteFile(filepath.Join(p.BackupDir, snapWslFile), content, 0o644); werr != nil {
+		if werr := os.WriteFile(filepath.Join(p.BackupDir, snapWslFile), content, 0o644); werr != nil { // #nosec G306 -- byte copy of a world-readable system file; must stay inspectable without root
 			return werr
 		}
 	case errors.Is(err, os.ErrNotExist):
-		if werr := os.WriteFile(filepath.Join(p.BackupDir, snapWslAbsent), nil, 0o644); werr != nil {
+		if werr := os.WriteFile(filepath.Join(p.BackupDir, snapWslAbsent), nil, 0o644); werr != nil { // #nosec G306 -- empty marker file in the snapshot dir; must stay inspectable without root
 			return werr
 		}
 	default:
@@ -112,7 +112,7 @@ func TakeSnapshot(p Paths) error {
 
 	// Marker LAST: everything above must have succeeded for this snapshot to
 	// count as an undo point.
-	return os.WriteFile(filepath.Join(p.BackupDir, snapComplete), nil, 0o644)
+	return os.WriteFile(filepath.Join(p.BackupDir, snapComplete), nil, 0o644) // #nosec G306 -- empty marker file in the snapshot dir; must stay inspectable without root
 }
 
 // Apply snapshots, then writes both managed files.
@@ -184,7 +184,7 @@ func writeFileAtomic(path string, content []byte) (err error) {
 	if err = tmp.Close(); err != nil {
 		return err
 	}
-	if err = os.Chmod(tmpName, 0o644); err != nil {
+	if err = os.Chmod(tmpName, 0o644); err != nil { // #nosec G302 -- resolv.conf must stay world-readable for every process on the host
 		return err
 	}
 	return os.Rename(tmpName, path)
@@ -238,7 +238,7 @@ func Restore(p Paths) (RestoreReport, error) {
 		if err != nil {
 			return RestoreReport{}, err
 		}
-		if err := os.WriteFile(p.ResolvConf, content, 0o644); err != nil {
+		if err := os.WriteFile(p.ResolvConf, content, 0o644); err != nil { // #nosec G306 -- system file every process on the host must read
 			return RestoreReport{}, err
 		}
 	}
@@ -250,7 +250,7 @@ func Restore(p Paths) (RestoreReport, error) {
 		if err != nil {
 			return RestoreReport{}, err
 		}
-		if err := os.WriteFile(p.WslConf, content, 0o644); err != nil {
+		if err := os.WriteFile(p.WslConf, content, 0o644); err != nil { // #nosec G306 -- system file every process on the host must read
 			return RestoreReport{}, err
 		}
 	case fileExists(filepath.Join(p.BackupDir, snapWslAbsent)):
@@ -275,7 +275,7 @@ func repairStock(p Paths) (RestoreReport, error) {
 		return RestoreReport{}, fmt.Errorf("recreating the stock resolv.conf symlink: %w", err)
 	}
 	if content, err := os.ReadFile(p.WslConf); err == nil {
-		if werr := os.WriteFile(p.WslConf, []byte(RemoveGenerateResolvConf(string(content))), 0o644); werr != nil {
+		if werr := os.WriteFile(p.WslConf, []byte(RemoveGenerateResolvConf(string(content))), 0o644); werr != nil { // #nosec G306 -- system file every process on the host must read
 			return RestoreReport{}, werr
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {

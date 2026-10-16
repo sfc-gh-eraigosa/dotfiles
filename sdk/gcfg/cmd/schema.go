@@ -19,7 +19,7 @@ func newSchemaCmd(g *Globals) *cobra.Command {
 				return err
 			}
 			if out != "" {
-				if err := os.WriteFile(out, b, 0o644); err != nil {
+				if err := os.WriteFile(out, b, 0o644); err != nil { // #nosec G306 -- user-requested export path for a shareable artifact
 					return fmt.Errorf("gcfg: writing %s: %w", out, err)
 				}
 				fmt.Fprintf(cmd.ErrOrStderr(), "wrote %s\n", out)

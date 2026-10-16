@@ -1,0 +1,11 @@
+# go test ./... — sdk/gcfg — go version go1.27.2 linux/arm64 — 2026-10-16T04:19:36Z
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/cmd	0.043s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/engine	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/family	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/family/general	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/family/security	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/gh	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/report	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/schema	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/version	(cached)

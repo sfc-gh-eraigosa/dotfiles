@@ -1,0 +1,2 @@
+# gosec -quiet -exclude-generated -nosec-require-justification -exclude=G204,G304,G702,G703 — sdk/gss — pinned build (tools/security) — go version go1.27.2 linux/arm64 — 2026-10-16T04:19:23Z
+exit=0

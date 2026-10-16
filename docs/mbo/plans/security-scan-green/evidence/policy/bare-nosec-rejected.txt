@@ -1,0 +1,4 @@
+# gosec on a bare #nosec G306 (no justification) — must still report
+[/tmp/tmp.onVWeWbsJM/m/w.go:5] - G306 (CWE-276): Expect WriteFile permissions to be 0600 or less (Confidence: HIGH, Severity: MEDIUM)
+  > 5: func W(p string) error { return os.WriteFile(p, nil, 0o644) } // #nosec G306
+  Issues : 1

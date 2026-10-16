@@ -17,7 +17,7 @@ func writeFile(path string, body []byte, force bool) error {
 			return fmt.Errorf("%w: %s already exists — re-run with --force to replace it", ErrUsage, path)
 		}
 	}
-	if err := os.WriteFile(path, body, 0o644); err != nil {
+	if err := os.WriteFile(path, body, 0o644); err != nil { // #nosec G306 -- user-requested export path for a shareable artifact
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
 	return nil

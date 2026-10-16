@@ -67,12 +67,13 @@ var (
 // envelope's "code" field and consumed by tmux-mgr / slash commands;
 // they form a stable, snake_case public contract.
 const (
-	CodeRebaseConflict       = "rebase_conflict"
-	CodeGHAuthRequired       = "gh_auth_required"
-	CodeDirtyWorktree        = "dirty_worktree"
-	CodeLockHeld             = "lock_held"
-	CodeRegistryStale        = "registry_stale"
-	CodeNotInWorker          = "not_in_worker"
+	CodeRebaseConflict = "rebase_conflict"
+	CodeGHAuthRequired = "gh_auth_required"
+	CodeDirtyWorktree  = "dirty_worktree"
+	CodeLockHeld       = "lock_held"
+	CodeRegistryStale  = "registry_stale"
+	CodeNotInWorker    = "not_in_worker"
+	// #nosec G101 -- an error code, not a credential
 	CodePRReadyNeedsToken    = "pr_ready_needs_token"
 	CodeInvalidIdent         = "invalid_ident"
 	CodeWrongMode            = "wrong_mode"

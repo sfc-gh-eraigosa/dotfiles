@@ -189,7 +189,7 @@ func writeOutput(cmd *cobra.Command, content string) error {
 
 	// Atomic write: temp file in same dir + rename.
 	dir := filepath.Dir(outPath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G301 -- user-chosen output dir for a shareable snapshot
 		return fmt.Errorf("export: mkdir %s: %w", dir, err)
 	}
 

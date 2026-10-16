@@ -49,6 +49,12 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: .go-version
+          # tools/security pulls gosec's full module graph (~50 modules); key
+          # the cache on its go.sum and the scanned modules' go.sums so a run
+          # does not re-download everything before the first scan starts.
+          cache-dependency-path: |
+            tools/security/go.sum
+            sdk/*/go.sum
 
       - name: govulncheck + gosec (per module)
         run: make security

@@ -1,0 +1,39 @@
+# go test ./... — sdk/gss — go version go1.27.2 linux/arm64 — 2026-10-16T04:19:23Z
+# NOTE: cmd/TestIsDirty fails identically on main (its temp repo cannot commit in this environment) — pre-existing, unrelated
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss	[no test files]
+--- FAIL: TestIsDirty (0.46s)
+    status_test.go:54: Failed to commit: exit status 1. Status:
+        On branch master
+        
+        No commits yet
+        
+        Changes to be committed:
+          (use "git rm --cached <file>..." to unstage)
+        	new file:   test.txt
+        
+FAIL
+FAIL	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/cmd	0.463s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/approval	0.006s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/backup	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/classic	0.005s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/config	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/errors	0.006s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/feature	1.697s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/gh	0.011s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/gh/fake	0.011s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/git	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/git/fake	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/identity	0.012s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/mode	0.010s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/registry	0.949s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/repo	0.012s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/scan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/stack	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/status	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/sync	0.011s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/tmpl	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/version	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/worktree	(cached)
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/worktree/backendtest	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/worktree/git	(cached)
+FAIL

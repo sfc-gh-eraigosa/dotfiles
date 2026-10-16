@@ -28,13 +28,13 @@ alias tmux-start='tmux-mgr session new antigravity -a'
 `
 			home, _ := os.UserHomeDir()
 			configDir := filepath.Join(home, ".config", "tmux-mgr")
-			if err := os.MkdirAll(configDir, 0755); err != nil {
+			if err := os.MkdirAll(configDir, 0o700); err != nil {
 				fmt.Printf("Error creating %s: %v\n", configDir, err)
 				return
 			}
 
 			aliasFile := filepath.Join(configDir, "aliases.sh")
-			err := os.WriteFile(aliasFile, []byte(aliases), 0644)
+			err := os.WriteFile(aliasFile, []byte(aliases), 0o600)
 			if err != nil {
 				fmt.Printf("Error writing aliases file: %v\n", err)
 				return
@@ -44,7 +44,7 @@ alias tmux-start='tmux-mgr session new antigravity -a'
 
 			// Generate completions
 			completionDir := filepath.Join(configDir, "completions")
-			if err := os.MkdirAll(completionDir, 0755); err != nil {
+			if err := os.MkdirAll(completionDir, 0o700); err != nil {
 				fmt.Printf("Error creating %s: %v\n", completionDir, err)
 				return
 			}
@@ -78,7 +78,7 @@ fi
 
 			// The error here used to be discarded and f used unconditionally: if
 			// OpenFile failed, f was nil and f.WriteString panicked.
-			cf, err := os.OpenFile(aliasFile, os.O_APPEND|os.O_WRONLY, 0644)
+			cf, err := os.OpenFile(aliasFile, os.O_APPEND|os.O_WRONLY, 0o600)
 			if err != nil {
 				fmt.Printf("Error appending completions to %s: %v\n", aliasFile, err)
 				return
@@ -98,7 +98,7 @@ fi
 				if _, err := os.Stat(cfgPath); err == nil {
 					content, _ := os.ReadFile(cfgPath)
 					if !contains(string(content), "tmux-mgr/aliases.sh") {
-						f, err := os.OpenFile(cfgPath, os.O_APPEND|os.O_WRONLY, 0644)
+						f, err := os.OpenFile(cfgPath, os.O_APPEND|os.O_WRONLY, 0644) // #nosec G302 -- mode is unused: no O_CREATE, this appends to the user's existing rc file
 						if err == nil {
 							if _, err := f.WriteString(sourceLine); err != nil {
 								fmt.Printf("Error updating %s: %v\n", cfg, err)

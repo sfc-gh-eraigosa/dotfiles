@@ -109,7 +109,7 @@ func (v *Verifier) Issue(ctx context.Context, repoPath string) error {
 		return fmt.Errorf("approval: resolve HEAD: %w", err)
 	}
 	if dir := filepath.Dir(v.Path); dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return fmt.Errorf("approval: mkdir %s: %w", dir, err)
 		}
 	}

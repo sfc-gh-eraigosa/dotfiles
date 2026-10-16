@@ -94,7 +94,7 @@ func Dir() (string, error) {
 // Write stores s as <dir>/<host>.json, atomically: concurrent sessions render
 // at the same time, and a reader must never see half a file.
 func Write(dir string, s Snapshot) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(s, "", "  ")
