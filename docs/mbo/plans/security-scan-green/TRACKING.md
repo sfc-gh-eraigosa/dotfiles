@@ -11,8 +11,9 @@
 | Leaf | Worker ref | Branch | PR | State |
 | :-- | :-- | :-- | :-- | :-- |
 | design | security-scan-green/edward-raigosa/design | feature/security-scan-green/edward-raigosa/design | #395 | merged 2026-10-16 |
-| fix | security-scan-green/edward-raigosa/fix | feature/security-scan-green/edward-raigosa/fix | #396 | in-review |
-| promote | security-scan-green/edward-raigosa/promote | feature/security-scan-green/edward-raigosa/promote | #397 (draft, base = fix) | prepared; hold until #396 merges + green main |
+| fix | security-scan-green/edward-raigosa/fix | feature/security-scan-green/edward-raigosa/fix | #396 | merged 2026-10-16 |
+| promote | security-scan-green/edward-raigosa/promote | feature/security-scan-green/edward-raigosa/promote | #397 | merged 2026-10-16 (b9331d8) |
+| closeout | security-scan-green/edward-raigosa/closeout | feature/security-scan-green/edward-raigosa/closeout | (this PR) | docs only |
 
 ## 1. Task ledger
 | Task | Status | Commit | Evidence (command → result) | Notes |
@@ -23,7 +24,7 @@
 | 4 tmux-mgr | done | c1a6a16 | SaveSession mode test RED→GREEN; `evidence/tmux-mgr/gosec.txt` (regenerated) 0; go test ok | rc-file append keeps 0644 with justification (no O_CREATE) |
 | 5 fleet/gff/gcfg/wlink/ghapp/libs | done | c1a6a16 + review-1 | fleet plan-mode test updated 0644→0600 (RED→GREEN); gosec 0 in each (`evidence/<module>/gosec.txt`, regenerated) | wlink: copies vs marker files now carry accurate justifications; ghapp G704 justified |
 | 6 whole-repo | done | 6b34943 | local: `make security` OK, `make lint-go` 0 issues ×10; CI on #396: Security Scan **pass** (first green run), 14/14 checks pass (`evidence/ci/pr396-checks.txt`) | ready-for-merge after the /code-review round |
-| 7 promote | todo | | | separate PR |
+| 7 promote | done | b9331d8 (#397) | green main (`evidence/promote/green-main.txt`); strict workflow + Mergify line merged; red proof PR #399 held: Security Scan FAIL on G306, mergeState BLOCKED (`evidence/promote/red-proof.txt`) | ruleset mirrored + snapshot committed |
 
 ## 2. Feature → proof matrix (from spec §5)
 | Feature | Automated proof | Human/live proof | Notes |
@@ -31,13 +32,13 @@
 | F1 policy | [x] make security runs pinned gosec (`evidence/policy/make-security-after.txt`) | — | |
 | F2 tighten | [x] mode tests + per-module gosec zero (`evidence/<module>/`) | — | |
 | F3 keep+justify | [x] bare-#nosec negative proof (`evidence/policy/bare-nosec-rejected.txt`) | — | |
-| F4 promote | [ ] CI green on main | [ ] ruleset edit, red proof PR | |
+| F4 promote | [x] CI green on main (`evidence/promote/green-main.txt`) | [x] red proof PR #399 held (`evidence/promote/red-proof.txt`) · [x] ruleset edit (API PUT on ruleset 20600414) + `make ruleset-snapshot` | |
 
 ## 3. Validation done-when — the stop condition
 - [x] `make security` prints `OK: no vulnerability or misuse findings` (local, Go 1.27.2)
 - [x] every module's tests green (except the pre-existing gss cmd/TestIsDirty environment failure, identical on main)
-- [ ] fix PR merged; Security Scan green on `main` (green on the PR: `evidence/ci/pr396-checks.txt`)
-- [ ] promote PR merged; red proof PR held by the queue
+- [x] fix PR merged; Security Scan green on `main` (`evidence/promote/green-main.txt`, run 38850727674 at 456615c)
+- [x] promote PR merged (#397, b9331d8); red proof PR #399 held by the queue (`evidence/promote/red-proof.txt`)
 
 ## 4. Blockers & escalations
 | Date | Task | Blocker | Command + observed output | Resolution |
@@ -46,6 +47,8 @@
 ## 5. Session log (append-only)
 | Date | Session | What advanced |
 | :-- | :-- | :-- |
+| 2026-10-16 | ruleset | `Security Scan (govulncheck + gosec)` added to the main ruleset's required checks (API); `make ruleset-snapshot` diff committed. Objective fully done. |
+| 2026-10-16 | promote | #397 merged after green main; registry: design/fix/promote → merged (`gss feature merged`). Proof PR #399: Security Scan red on the planted G306, mergeState BLOCKED with ready-for-merge; closed, branch deleted. Objective complete except the by-hand ruleset mirror. |
 | 2026-10-16 | review-1 | `/code-review 396 high`: 8 findings. The serious one: the per-module `evidence/<module>/gosec.txt` files were a FAILED invocation (zsh passed the flags as one word → gosec printed its usage; my count grep read 0) and the before-baseline came from a gosec that could not type-check (826 export-data errors). Both regenerated with split flags and the pinned build: before = 56 findings on main, after = 0. Code fixes: temp-file cleanup on rename failure (test first), accurate wlink marker justifications, one 0700 constant across gss, pinned-version banner (`go list -m`), setup-go cache-dependency-path, documented gitleaks trigger. |
 | 2026-10-16 | ci | #396 CI settled: Security Scan pass, 14 pass / 0 fail. Promote leaf prepared as stacked draft #397 (strict workflow, Mergify line, docs); merges only after #396 + green main. |
 | 2026-10-16 | build (fix) | Tasks 1–5 done in one commit c1a6a16 on PR #396; gitleaks tripped on a go.sum checksum line (allowlisted with rationale) and the privacy hook on a constant whose name contains "Token" (nosec moved to the line above). |

@@ -1,0 +1,11 @@
+# Red proof — the required Security Scan holds the queue — observed 2026-10-16T05:00Z
+Proof PR #399 (branch proof/security-scan-gate, closed without merge, branch deleted):
+  added sdk/libs/log/proof_gate_tmp.go with os.WriteFile(p, b, 0o644)
+  label ready-for-merge applied
+
+Security Scan (govulncheck + gosec): FAIL
+  https://github.com/sfc-gh-eraigosa/dotfiles/actions/runs/38853456390/job/116819588305
+  [sdk/libs/log/proof_gate_tmp.go:9] - G306 (CWE-276): Expect WriteFile permissions to be 0600 or less (Confidence: HIGH, Severity: MEDIUM)
+  security findings in: sdk/libs(gosec)
+
+gh pr view 399 --json mergeStateStatus → BLOCKED (ready-for-merge present; every other check green)

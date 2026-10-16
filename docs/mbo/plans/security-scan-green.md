@@ -2,7 +2,7 @@
 
 - **Slug:** security-scan-green
 - **Date:** 2026-10-15
-- **Status:** In-progress
+- **Status:** Done
 - **Relates to:** spec `../specs/security-scan-green.md` · issue #394 · design PR #395 · fix PR (worker `fix`) · promotion PR (worker `promote`, after a green `main`)
 
 ## 1. Summary & verdict
