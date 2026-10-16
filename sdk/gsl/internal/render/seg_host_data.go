@@ -2,10 +2,13 @@ package render
 
 // seg_host_data.go — hostData segmentData + HostSegment.detect().
 //
-// The host segment has no compaction ladder: its text is already capped at
-// MaxLen columns at level 0, so every level renders the same width (format is
-// trivially non-increasing). When the line still does not fit, the fit loop
-// drops the whole segment by priority instead.
+// The host segment has no compaction ladder; it is FLEXIBLE instead. Every
+// level renders the hostname at its floor (MinLen columns, ellipsized), which
+// is what the goldens and the plain Render path show. Once the fit loop finds
+// a level where the whole line fits, it hands the leftover columns back
+// (flexible.withSlack) and the name grows toward its full length — capped by
+// MaxLen when one is set. When even the floor does not fit, the fit loop drops
+// the whole segment by priority.
 
 import (
 	"context"
@@ -18,8 +21,14 @@ import (
 
 // hostData is the detect-once intermediate for the host segment.
 type hostData struct {
-	// name is the short hostname, already cut to the column budget.
+	// name is the full short hostname (domain stripped, not yet cut).
 	name string
+	// floor is the column budget with no slack (MinLen).
+	floor int
+	// cap is the hard column ceiling, 0 = none (MaxLen).
+	cap int
+	// slack is the extra width the fit loop granted beyond floor.
+	slack int
 	// kind is the detected (or overridden) host kind.
 	kind string
 	// icon is the explicit glyph override ("" ⇒ derive from kind).
@@ -47,9 +56,9 @@ func (s *HostSegment) detect(_ context.Context) (segmentData, bool) {
 	if name == "" {
 		return nil, false
 	}
-	maxLen := s.MaxLen
-	if maxLen <= 0 {
-		maxLen = defaultHostMaxLen
+	floor := s.MinLen
+	if floor <= 0 {
+		floor = defaultHostMinLen
 	}
 
 	kind := s.Kind
@@ -61,10 +70,12 @@ func (s *HostSegment) detect(_ context.Context) (segmentData, bool) {
 	}
 
 	return &hostData{
-		name: truncateText(name, maxLen),
-		kind: kind,
-		icon: s.Icon,
-		prio: s.Priority,
+		name:  name,
+		floor: floor,
+		cap:   s.MaxLen,
+		kind:  kind,
+		icon:  s.Icon,
+		prio:  s.Priority,
 	}, true
 }
 
@@ -82,13 +93,31 @@ func shortHostname(h string) string {
 	return h
 }
 
-// format implements segmentData.format. Pure; identical at every level.
+// budget is the hostname column budget: floor plus any granted slack, never
+// above cap when one is set.
+func (d *hostData) budget() int {
+	n := d.floor + d.slack
+	if d.cap > 0 && n > d.cap {
+		n = d.cap
+	}
+	return n
+}
+
+// withSlack implements flexible: a copy allowed extra more columns.
+func (d *hostData) withSlack(extra int) segmentData {
+	c := *d
+	c.slack = extra
+	return &c
+}
+
+// format implements segmentData.format. Pure; identical at every level — the
+// width varies with the granted slack, not the compaction level.
 func (d *hostData) format(st style.Style, _ int) (text, colorKey string) {
 	var b strings.Builder
 	if g := hostGlyph(st, d.kind, d.icon); g != "" {
 		b.WriteString(g)
 		b.WriteString(" ")
 	}
-	b.WriteString(d.name)
+	b.WriteString(truncateText(d.name, d.budget()))
 	return b.String(), "host"
 }

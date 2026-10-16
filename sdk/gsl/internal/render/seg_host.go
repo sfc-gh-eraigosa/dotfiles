@@ -13,8 +13,10 @@ import (
 //
 // The glyph follows the detected hardware kind (hostkind.go) — 🧠 for a DGX,
 // 🍓 for a Raspberry Pi, … — and the hostname is the short name (domain
-// stripped) cut to MaxLen display columns with an ellipsis. It is meant to sit
-// at the far left of the line so a glance across a fleet of panes answers
+// stripped). Its width is FLEXIBLE: on a crowded line it is cut to MinLen
+// display columns with an ellipsis; when the fit loop finds slack the name
+// grows toward its full length (up to MaxLen when set). It is meant to sit at
+// the far left of the line so a glance across a fleet of panes answers
 // "where am I?" first.
 type HostSegment struct {
 	// Hostname returns the machine's name. Injected for deterministic tests;
@@ -23,8 +25,11 @@ type HostSegment struct {
 	// Probe gathers the hardware evidence. Injected for tests; nil ⇒ probeHost.
 	// It is only consulted when Icon is empty.
 	Probe func() hostProbe
-	// MaxLen caps the hostname at this many display columns (ellipsis
-	// included). 0 ⇒ defaultHostMaxLen.
+	// MinLen is the hostname's floor in display columns (ellipsis included):
+	// what a crowded line shows. 0 ⇒ defaultHostMinLen.
+	MinLen int
+	// MaxLen is a hard ceiling on the hostname's columns, applied even when
+	// the line has room. 0 ⇒ no ceiling (the full name).
 	MaxLen int
 	// Icon, when set, is used verbatim instead of the kind-derived glyph
 	// (config option "icon").
@@ -35,16 +40,19 @@ type HostSegment struct {
 	Priority int
 }
 
-// defaultHostMaxLen is the hostname column budget: long enough for most short
-// names, short enough that the segment never crowds the directory next to it.
-const defaultHostMaxLen = 11
+// defaultHostMinLen is the hostname floor: long enough for most short names,
+// short enough that the segment never crowds the directory next to it.
+const defaultHostMinLen = 11
 
 // NewHostSegment builds a HostSegment from the segment's config options
-// (max_len, icon, kind). opts may be nil.
+// (min_len, max_len, icon, kind). opts may be nil.
 func NewHostSegment(opts map[string]any) *HostSegment {
 	s := &HostSegment{
 		Icon: optString(opts, "icon", ""),
 		Kind: optString(opts, "kind", ""),
+	}
+	if n := optInt(opts, "min_len", 0); n > 0 {
+		s.MinLen = n
 	}
 	if n := optInt(opts, "max_len", 0); n > 0 {
 		s.MaxLen = n

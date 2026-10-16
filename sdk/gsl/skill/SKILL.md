@@ -23,7 +23,7 @@ the shim writes to stdout.
 
 | Segment  | What it shows |
 |----------|---------------|
-| `host`   | Hardware-kind glyph (🍎 macOS, 🪟 WSL, 🍓 Pi, 🤖 Jetson, 🧠 DGX, 📦 container, 💻 other) + short hostname capped at 11 columns; far-left by default. Options: `max_len`, `icon`, `kind` |
+| `host`   | Hardware-kind glyph (🍎 macOS, 🪟 WSL, 🍓 Pi, 🤖 Jetson, 🧠 DGX, 📦 container, 💻 other) + short hostname (floor 11 columns, grows to the full name when the line has room); far-left by default. Options: `min_len`, `max_len`, `icon`, `kind` |
 | `dirgit` | Current directory name (basename, `~` for `$HOME`) + branch + staged/unstaged/untracked/stash/ahead/behind badges |
 | `repo`   | Root-or-worktree indicator glyph + optional feature/worker/branch name + optional PR badge (tinted by state) + optional worktree count badge; self-omits outside a git repo. Links: glyph → repo home, label → branch on GitHub, badge → the PR |
 | `ai`     | Model display name + context-window usage + MCP active/configured count + 5h/7d rate-limit percentages. Renders under **both** Claude Code and agy. Self-omits only when there is genuinely no payload on stdin (e.g. bare `gsl status` in a plain shell) |

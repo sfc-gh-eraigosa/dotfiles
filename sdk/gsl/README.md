@@ -117,7 +117,7 @@ All five segments run concurrently under a shared 1-second parent deadline. Each
 Which machine the line is on — meant for the far left, so a glance across a fleet of panes answers "where am I?" first. Shows:
 
 - A hardware-kind glyph, detected without subprocesses from `runtime.GOOS`, `/proc/version`, `/proc/device-tree/model`, the DMI vendor/product under `/sys/class/dmi/id`, and the container signals (`/.dockerenv`, `/run/.containerenv`, `$container`, the cgroup path of PID 1)
-- The short hostname (domain stripped at the first dot; an IP literal is kept whole), cut to 11 display columns with an ellipsis (`averyverylonghost` → `averyveryv…`)
+- The short hostname (domain stripped at the first dot; an IP literal is kept whole). Its width is **flexible**: on a crowded line it is cut to 11 display columns with an ellipsis (`averyverylonghost` → `averyveryv…`); once the rest of the line fits, the fit loop hands the leftover columns to the host and the name grows toward its full length
 
 | Kind | Detected by | Glyph |
 |------|-------------|-------|
@@ -135,7 +135,8 @@ Segment options (`options` map of the `host` segment):
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `max_len` | int | `11` | Column budget for the hostname, ellipsis included (a numeric string such as `"8"` is accepted too). |
+| `min_len` | int | `11` | Floor: the hostname columns (ellipsis included) a crowded line shows. |
+| `max_len` | int | none | Ceiling applied even when the line has room; set it to `11` for a fixed-width host. Numeric strings such as `"8"` are accepted. |
 | `icon` | string | — | Glyph to use verbatim; skips detection entirely. |
 | `kind` | string | auto | Force a kind from the table above when detection misses (an unknown value is ignored). |
 
