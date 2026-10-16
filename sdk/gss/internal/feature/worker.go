@@ -145,7 +145,7 @@ func (s *Service) WorkerAdd(ctx context.Context, opts WorkerAddOpts) (WorkerResu
 	// in the consumer repo's git status. WorkerMetaPath is leaf-keyed, so
 	// sibling workers under one (feature,user) get distinct files.
 	metaPath := WorkerMetaPath(res.Worktree)
-	if err := os.MkdirAll(filepath.Dir(metaPath), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(metaPath), 0o700); err != nil {
 		return WorkerResult{}, fmt.Errorf("feature: create WORKER.md dir: %w", err)
 	}
 	if err := os.WriteFile(metaPath, []byte(content), 0o600); err != nil {

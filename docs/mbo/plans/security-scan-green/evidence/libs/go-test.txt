@@ -1,9 +1,9 @@
-# go test ./... — libs — 2026-10-16T04:00:14Z
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/log	0.006s
+# go test ./... — sdk/libs — go version go1.27.2 linux/arm64 — 2026-10-16T04:19:39Z
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/log	(cached)
 ?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui	[no test files]
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/cmdline	0.010s
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/keymap	0.009s
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/nav	0.009s
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/overlay	0.008s
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/prompt	0.009s
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/search	0.004s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/cmdline	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/keymap	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/nav	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/overlay	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/prompt	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/search	(cached)

@@ -1,9 +1,9 @@
-# go test ./... — wlink — 2026-10-16T04:00:08Z
+# go test ./... — sdk/wlink — go version go1.27.2 linux/arm64 — 2026-10-16T04:19:37Z
 ?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink	[no test files]
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/cmd	0.250s
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/fleetsrc	0.010s
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/linkstate	0.010s
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/probe	2.313s
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/resolvconf	0.133s
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/sshcfg	0.020s
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/winhost	0.009s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/cmd	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/fleetsrc	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/linkstate	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/probe	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/resolvconf	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/sshcfg	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/winhost	(cached)

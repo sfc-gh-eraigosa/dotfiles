@@ -103,7 +103,7 @@ func (s *Service) Start(ctx context.Context, opts StartOpts) (string, error) {
 	}
 
 	featDir := filepath.Join(s.WorktreeRoot, s.NWO, opts.Name)
-	if err := os.MkdirAll(featDir, 0o750); err != nil {
+	if err := os.MkdirAll(featDir, 0o700); err != nil {
 		return "", fmt.Errorf("feature: mkdir %s: %w", featDir, err)
 	}
 	content, err := tmpl.RenderEmbeddedFeature(tmpl.FeatureData{

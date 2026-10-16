@@ -19,7 +19,7 @@ amended).
 | :-- | :-- | :-- |
 | `Makefile` (`security` target) | pinned gosec, flags, rationale comment | F1 |
 | `sdk/gsl/internal/{config/config.go,gh/pr.go,mcp/cache.go,usage/usage.go}` (+ tests) | 0700/0600, `os.CreateTemp` | F2 |
-| `sdk/gss/internal/{approval/approval.go,config/config.go,repo/cache.go,registry/lock.go,feature/{auto,paths,start,worker}.go,errors/errors.go}` (+ tests) | 0700/0600/0750; G101 nosec | F2, F3 |
+| `sdk/gss/internal/{approval/approval.go,config/config.go,repo/cache.go,registry/lock.go,feature/{auto,paths,start,worker}.go,errors/errors.go}` (+ tests) | 0700/0600; G101 nosec | F2, F3 |
 | `sdk/tmux-mgr/{pkg/agent/session.go,pkg/tmux/tmux.go,cmd/{alias,migrate,agent}.go}` (+ tests) | 0700/0600; rc-file append nosec | F2, F3 |
 | `sdk/fleet/cmd/update_init.go` (+ test) | 0600 | F2 |
 | `sdk/gff/{internal/overrides/overrides.go,cmd/{export,gen}.go}` | 0750 helper dir; nosec on generated/export output | F2, F3 |
@@ -34,8 +34,9 @@ amended).
   (not `command -v gosec`), invoked as
   `gosec -quiet -exclude-generated -nosec-require-justification -exclude=G204,G304,G702,G703 ./...`.
 - `#nosec` form: `// #nosec G306 -- <consumer and why>` on the flagged line.
-- Modes: private dirs `0o700` (under `$HOME`/XDG) or `0o750` (inside a git worktree); private files
-  `0o600`; temp files via `os.CreateTemp(dir, pattern)` then rename.
+- Modes: private dirs `0o700` everywhere under `$HOME`/XDG — one constant, so the mode of `~/.config/gss`
+  itself does not depend on which command creates it first; private files `0o600`; temp files via
+  `os.CreateTemp(dir, pattern)` then rename, with the temp removed on any failure.
 
 ## 4. TDD build order
 1. **Policy** — edit Makefile; verify `make security` runs the pinned gosec with the flags (evidence:

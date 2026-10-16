@@ -1,6 +1,6 @@
-# go test ./... — fleet — 2026-10-16T04:01:21Z
+# go test ./... — sdk/fleet — go version go1.27.2 linux/arm64 — 2026-10-16T04:19:28Z
 ?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet	[no test files]
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	3.773s
 ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan	(cached)
 ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift	(cached)
 ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag	(cached)
@@ -16,6 +16,6 @@ ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail	(cached)
 ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp	(cached)
 ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	(cached)
 ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan	(cached)
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider	(cached)
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider	0.006s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest	0.288s
 ?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest/stubplugin	[no test files]

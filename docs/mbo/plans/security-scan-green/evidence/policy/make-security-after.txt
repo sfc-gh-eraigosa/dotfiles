@@ -1,5 +1,6 @@
-# make security — after fixes — 2026-10-16T04:02:39Z — go version go1.27.2 linux/arm64
-==> gosec Version: dev flags: -quiet -exclude-generated -nosec-require-justification -exclude=G204,G304,G702,G703
+# make security — after fixes (review round 1 applied) — 2026-10-16T04:19:40Z — go version go1.27.2 linux/arm64
+==> scanners (tools/security): github.com/securego/gosec/v2 v2.29.0 golang.org/x/vuln v1.9.0 golang.org/x/tools v0.52.0 
+==> gosec flags: -quiet -exclude-generated -nosec-require-justification -exclude=G204,G304,G702,G703
 ==> govulncheck (sdk/fleet)
 No vulnerabilities found.
 ==> gosec (sdk/fleet)

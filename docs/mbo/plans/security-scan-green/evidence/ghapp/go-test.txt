@@ -1,5 +1,5 @@
-# go test ./... — ghapp — 2026-10-16T04:00:11Z
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp	0.004s
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/cmd	0.921s
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/internal/version	0.004s
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/pkg/ghapp	1.803s
+# go test ./... — sdk/ghapp — go version go1.27.2 linux/arm64 — 2026-10-16T04:19:38Z
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/cmd	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/internal/version	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/ghapp/pkg/ghapp	(cached)

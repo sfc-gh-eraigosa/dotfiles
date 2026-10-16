@@ -189,14 +189,25 @@ func writeCache(path string, e cacheEntry) error {
 		return err
 	}
 	tmp := f.Name()
+	renamed := false
+	// Whatever fails below — write, close, or the rename itself — the temp
+	// file must not survive: this cache is rewritten on every status-line
+	// render, so a leaked temp per failure would accumulate forever.
+	defer func() {
+		if !renamed {
+			_ = os.Remove(tmp)
+		}
+	}()
 	if _, err := f.Write(data); err != nil {
 		_ = f.Close()
-		_ = os.Remove(tmp)
 		return err
 	}
 	if err := f.Close(); err != nil {
-		_ = os.Remove(tmp)
 		return err
 	}
-	return os.Rename(tmp, path)
+	if err := os.Rename(tmp, path); err != nil {
+		return err
+	}
+	renamed = true
+	return nil
 }

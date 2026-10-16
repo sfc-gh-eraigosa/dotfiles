@@ -42,7 +42,7 @@ Three independently testable units:
 ## 4. Behavior / features
 - **F1 policy**: pinned gosec, exclusion list with rationale, justification required on `#nosec`.
 - **F2 tighten**: gsl (config, PR cache, MCP cache + CreateTemp, usage dir), gss (approval token dir,
-  config, repo cache, registry dir, feature dirs + FEATURE.md/WORKER.md), tmux-mgr (sessions, layouts,
+  config, repo cache, registry dir, feature dirs + FEATURE.md/WORKER.md — every dir under `~/.config/gss` with the same 0700 constant), tmux-mgr (sessions, layouts,
   migrate log, agent.log, config dir, aliases.sh), fleet (default update plan), gff (atomic-write dir).
 - **F3 keep + justify**: gcfg export/schema (user-requested shareable export), gff `gen` output
   (generated source committed to the repo) and export dir, wlink snapshots/restores and the
@@ -55,7 +55,7 @@ Three independently testable units:
 | Feature | Trigger | Fires | Must-not-fire | Edge | Pass |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | F1 | `make security` | installs/uses gosec v2.29.0; passes the flag set | a locally newer/older gosec on PATH is not used | gosec cache stale | target prints the gosec version and `OK: no vulnerability or misuse findings` |
-| F2 | writer called in a unit test | file mode `0600`, dir mode `0700`/`0750` as specified | existing contents/behaviour change | pre-existing file with wider mode (left as is: WriteFile does not chmod) | mode assertions pass; module gosec `Issues : 0` |
+| F2 | writer called in a unit test | file mode `0600`, dir mode `0700` | existing contents/behaviour change | pre-existing file with wider mode (left as is: WriteFile does not chmod) | mode assertions pass; module gosec `Issues : 0` |
 | F3 | gosec run | zero findings | a `#nosec` without `--` justification | a new unjustified `#nosec` | gosec fails on a bare `#nosec` (proven once in evidence) |
 | F4 | PR with a new G306 | Security Scan check red, Mergify holds | green `main` deadlocking (check required before green) | runner toolchain drift | green `main` run observed before promotion; red proof PR captured |
 

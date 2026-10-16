@@ -10,6 +10,14 @@ title = "dotfiles privacy guard"
 useDefault = true
 
 # Reviewed false positives.
+#
+# go.sum checksum lines. Observed with gitleaks 8.30.1 (versions.tsv) through the
+# pre-commit hook's added-lines `gitleaks stdin` scan (ai/hooks/privacy_rules.sh):
+# rule generic-api-key matched the checksum line of module cloud.google.com/go/auth
+# in tools/security/go.sum (`.../auth v0.23.2 h1:<44-char base64>=`) — the keyword
+# "auth" in the module path plus the base64 checksum satisfies the rule.
+# `gitleaks dir` / a single-line stdin scan do not reproduce it; the diff stream
+# does. The regex is anchored to the `<module> <version> h1:<43 base64>=` shape.
 [[allowlists]]
 description = "go.sum content hashes: `<module> <version> h1:<base64>` lines trip generic-api-key when the module path contains a keyword such as auth/token (cloud.google.com/go/auth, golang.org/x/oauth2). The hash is a public checksum of published source, not a credential."
 regexTarget = "line"

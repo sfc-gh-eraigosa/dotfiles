@@ -1,6 +1,6 @@
-# go test ./... — tmux-mgr — 2026-10-16T03:59:58Z
+# go test ./... — sdk/tmux-mgr — go version go1.27.2 linux/arm64 — 2026-10-16T04:19:27Z
 ?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr	[no test files]
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/cmd	0.009s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/cmd	(cached)
 ?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/internal/logging	[no test files]
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/pkg/agent	0.011s
-ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/pkg/tmux	0.036s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/pkg/agent	0.016s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/pkg/tmux	(cached)

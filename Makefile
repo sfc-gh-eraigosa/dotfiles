@@ -176,7 +176,8 @@ security: ## CVE + misuse scan (govulncheck + gosec), per-module (dotfiles#103)
 	@(cd tools/security && go install github.com/securego/gosec/v2/cmd/gosec golang.org/x/vuln/cmd/govulncheck)
 	@govulncheck="$$(go env GOPATH)/bin/govulncheck"; \
 	gosec="$$(go env GOPATH)/bin/gosec"; \
-	echo "==> gosec $$("$$gosec" -version 2>/dev/null | head -1) flags: $(GOSEC_FLAGS)"; \
+	echo "==> scanners (tools/security): $$(cd tools/security && go list -m -f '{{.Path}} {{.Version}}' github.com/securego/gosec/v2 golang.org/x/vuln golang.org/x/tools | tr '\n' ' ')"; \
+	echo "==> gosec flags: $(GOSEC_FLAGS)"; \
 	failed=''; \
 	for d in sdk/*; do \
 		if [ -f "$$d/go.mod" ]; then \

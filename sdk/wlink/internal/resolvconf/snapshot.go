@@ -90,7 +90,7 @@ func TakeSnapshot(p Paths) error {
 			return werr
 		}
 	case errors.Is(err, os.ErrNotExist):
-		if werr := os.WriteFile(filepath.Join(p.BackupDir, snapResolvAbsent), nil, 0o644); werr != nil { // #nosec G306 -- byte copy of a world-readable system file; must stay inspectable without root
+		if werr := os.WriteFile(filepath.Join(p.BackupDir, snapResolvAbsent), nil, 0o644); werr != nil { // #nosec G306 -- empty marker file in the snapshot dir; must stay inspectable without root
 			return werr
 		}
 	default:
@@ -103,7 +103,7 @@ func TakeSnapshot(p Paths) error {
 			return werr
 		}
 	case errors.Is(err, os.ErrNotExist):
-		if werr := os.WriteFile(filepath.Join(p.BackupDir, snapWslAbsent), nil, 0o644); werr != nil { // #nosec G306 -- byte copy of a world-readable system file; must stay inspectable without root
+		if werr := os.WriteFile(filepath.Join(p.BackupDir, snapWslAbsent), nil, 0o644); werr != nil { // #nosec G306 -- empty marker file in the snapshot dir; must stay inspectable without root
 			return werr
 		}
 	default:
@@ -112,7 +112,7 @@ func TakeSnapshot(p Paths) error {
 
 	// Marker LAST: everything above must have succeeded for this snapshot to
 	// count as an undo point.
-	return os.WriteFile(filepath.Join(p.BackupDir, snapComplete), nil, 0o644) // #nosec G306 -- byte copy of a world-readable system file; must stay inspectable without root
+	return os.WriteFile(filepath.Join(p.BackupDir, snapComplete), nil, 0o644) // #nosec G306 -- empty marker file in the snapshot dir; must stay inspectable without root
 }
 
 // Apply snapshots, then writes both managed files.
