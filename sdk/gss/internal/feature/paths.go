@@ -76,7 +76,7 @@ func (s *Service) migrateLegacyWorkerMD(ctx context.Context, worktree string) er
 	}
 	meta := WorkerMetaPath(worktree)
 	if _, err := os.Stat(meta); os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(meta), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(meta), 0o750); err != nil {
 			return err
 		}
 		if err := os.Rename(legacy, meta); err != nil {

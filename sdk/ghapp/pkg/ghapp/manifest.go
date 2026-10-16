@@ -185,12 +185,12 @@ func exchange(ctx context.Context, o CreateOpts, code string, existing Apps) (Ap
 	if code == "" {
 		return App{}, errors.New("callback carried no code")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.APIURL+"/app-manifests/"+code+"/conversions", bytes.NewReader(nil))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.APIURL+"/app-manifests/"+code+"/conversions", bytes.NewReader(nil)) // #nosec G704 -- APIURL is the operator-configured GitHub API base, not request input
 	if err != nil {
 		return App{}, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	res, err := o.HTTP.Do(req)
+	res, err := o.HTTP.Do(req) // #nosec G704 -- APIURL is the operator-configured GitHub API base, not request input
 	if err != nil {
 		return App{}, fmt.Errorf("conversion request: %w", err)
 	}

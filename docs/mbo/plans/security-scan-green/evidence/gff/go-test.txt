@@ -1,0 +1,18 @@
+# go test ./... — gff — 2026-10-16T04:00:05Z
+go: downloading github.com/hashicorp/go-envparse v0.1.0
+go: downloading github.com/charmbracelet/x/exp/teatest v0.0.0-20260726004341-482a56510f1b
+go: downloading github.com/charmbracelet/x/exp/golden v0.0.0-20240806155701-69247e0abc2a
+go: downloading github.com/aymanbagabas/go-udiff v0.3.1
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff	0.005s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/cmd	0.708s
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/gen/gff/v1	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/gitx	0.015s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/overrides	0.029s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/paths	0.015s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/registry	0.036s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/resolve	0.029s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/schema	0.019s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/style	0.008s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/tui	1.048s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/internal/version	0.004s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gff/pkg/gff	0.061s

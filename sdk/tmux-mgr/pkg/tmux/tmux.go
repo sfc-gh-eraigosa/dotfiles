@@ -87,7 +87,7 @@ func (m *Manager) SaveLayout(name string) error {
 
 	home, _ := os.UserHomeDir()
 	path := filepath.Join(home, ".config", "tmux-mgr", name+".json")
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("error writing layout file: %w", err)
 	}
 

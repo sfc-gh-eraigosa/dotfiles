@@ -1,0 +1,33 @@
+# make security — after fixes — 2026-10-16T04:02:39Z — go version go1.27.2 linux/arm64
+==> gosec Version: dev flags: -quiet -exclude-generated -nosec-require-justification -exclude=G204,G304,G702,G703
+==> govulncheck (sdk/fleet)
+No vulnerabilities found.
+==> gosec (sdk/fleet)
+==> govulncheck (sdk/gcfg)
+No vulnerabilities found.
+==> gosec (sdk/gcfg)
+==> govulncheck (sdk/gff)
+No vulnerabilities found.
+==> gosec (sdk/gff)
+==> govulncheck (sdk/ghapp)
+No vulnerabilities found.
+==> gosec (sdk/ghapp)
+==> govulncheck (sdk/gsl)
+No vulnerabilities found.
+==> gosec (sdk/gsl)
+==> govulncheck (sdk/gss)
+No vulnerabilities found.
+==> gosec (sdk/gss)
+==> govulncheck (sdk/libs)
+No vulnerabilities found.
+==> gosec (sdk/libs)
+==> govulncheck (sdk/tmux-mgr)
+No vulnerabilities found.
+==> gosec (sdk/tmux-mgr)
+==> govulncheck (sdk/wlink)
+No vulnerabilities found.
+==> gosec (sdk/wlink)
+==> govulncheck (sdk/wol)
+No vulnerabilities found.
+==> gosec (sdk/wol)
+OK: no vulnerability or misuse findings

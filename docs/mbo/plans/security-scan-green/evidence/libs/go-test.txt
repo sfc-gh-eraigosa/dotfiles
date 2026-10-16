@@ -1,0 +1,9 @@
+# go test ./... — libs — 2026-10-16T04:00:14Z
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/log	0.006s
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/cmdline	0.010s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/keymap	0.009s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/nav	0.009s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/overlay	0.008s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/prompt	0.009s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/search	0.004s

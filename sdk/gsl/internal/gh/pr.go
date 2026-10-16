@@ -155,7 +155,7 @@ func readCache(path string) *prCache {
 // writeCache persists the PRInfo to the cache file at path with an explicit TTL.
 // Errors are silently ignored — a failed write is non-fatal (we just re-probe).
 func writeCache(path string, info *PRInfo, ttl time.Duration) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return
 	}
 	c := prCache{
@@ -169,7 +169,7 @@ func writeCache(path string, info *PRInfo, ttl time.Duration) {
 	if err != nil {
 		return
 	}
-	_ = os.WriteFile(path, data, 0o644)
+	_ = os.WriteFile(path, data, 0o600)
 }
 
 // cacheNegative remembers "there is no PR for this branch" for ttl.

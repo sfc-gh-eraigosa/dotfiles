@@ -28,8 +28,9 @@ func TestInitWritesTheDefaultPlanOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fi.Mode().Perm() != 0o644 {
-		t.Fatalf("file mode = %v, want 0644", fi.Mode().Perm())
+	// The plan is the operator's own file: private (security-scan-green, G306).
+	if fi.Mode().Perm() != 0o600 {
+		t.Fatalf("file mode = %v, want 0600", fi.Mode().Perm())
 	}
 	dfi, err := os.Stat(filepath.Dir(path))
 	if err != nil {

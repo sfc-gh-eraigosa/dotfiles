@@ -8,3 +8,11 @@ title = "dotfiles privacy guard"
 
 [extend]
 useDefault = true
+
+# Reviewed false positives.
+[[allowlists]]
+description = "go.sum content hashes: `<module> <version> h1:<base64>` lines trip generic-api-key when the module path contains a keyword such as auth/token (cloud.google.com/go/auth, golang.org/x/oauth2). The hash is a public checksum of published source, not a credential."
+regexTarget = "line"
+regexes = [
+  '''(?m)^\S+ v\d\S* h1:[A-Za-z0-9+/]{43}=$''',
+]

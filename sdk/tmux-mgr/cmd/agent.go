@@ -265,7 +265,7 @@ func runAntigravityLoop(task, agyPath, requestedModel string) error {
 
 		c := exec.Command(execPath, execArgs...)
 
-		logFile, err := os.OpenFile("agent.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		logFile, err := os.OpenFile("agent.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 		var outputBuf strings.Builder
 
 		if err == nil {
@@ -324,7 +324,7 @@ func runClaudeLoop(task, claudePath, model string) error {
 	claudeArgs = append(claudeArgs, "-p", instruction, "--dangerously-skip-permissions")
 	c := exec.Command(execPath, claudeArgs...)
 
-	logFile, err := os.OpenFile("agent.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	logFile, err := os.OpenFile("agent.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err == nil {
 		c.Stdout = io.MultiWriter(os.Stdout, logFile)
 		c.Stderr = io.MultiWriter(os.Stderr, logFile)

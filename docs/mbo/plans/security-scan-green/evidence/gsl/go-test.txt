@@ -1,0 +1,23 @@
+# go test ./... — gsl — 2026-10-16T03:59:48Z
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/cmd	2.772s
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/cmd/glyphcheck	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config	0.033s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/exec	1.737s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/flags	0.054s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh	0.306s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh/fake	0.030s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git	2.050s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git/fake	0.028s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp	0.240s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp/fake	0.029s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/observe	0.031s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload	0.031s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/preview	0.037s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/render	0.484s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo	0.031s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style	0.030s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/term	0.027s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/theme	0.040s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/usage	0.033s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/version	0.028s

@@ -1,0 +1,9 @@
+# go test ./... — wlink — 2026-10-16T04:00:08Z
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/cmd	0.250s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/fleetsrc	0.010s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/linkstate	0.010s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/probe	2.313s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/resolvconf	0.133s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/sshcfg	0.020s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wlink/internal/winhost	0.009s

@@ -271,13 +271,13 @@ func WriteStubIfMissing(path string, clock Clock) (bool, error) {
 	}
 
 	if dir := filepath.Dir(path); dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return false, fmt.Errorf("config: mkdir %s: %w", dir, err)
 		}
 	}
 	ts := clock.Now().UTC().Format(time.RFC3339)
 	content := fmt.Sprintf("# gss configuration — generated %s\n%s", ts, stubBody)
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		return false, fmt.Errorf("config: write %s: %w", path, err)
 	}
 	return true, nil

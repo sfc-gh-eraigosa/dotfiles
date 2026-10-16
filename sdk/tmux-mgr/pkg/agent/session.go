@@ -93,7 +93,7 @@ func GetSessionsDir() (string, error) {
 		return "", err
 	}
 	dir := filepath.Join(home, sessionsDir)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("failed to create sessions directory: %w", err)
 	}
 	return dir, nil
@@ -112,7 +112,7 @@ func SaveSession(s Session) error {
 	}
 
 	path := filepath.Join(dir, s.SessionID+".json")
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("failed to write session file: %w", err)
 	}
 

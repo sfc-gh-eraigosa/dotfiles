@@ -168,10 +168,10 @@ func (s *Service) appendAutoLog(worktree, reason string) {
 	// the first writer (a skip before any seed/manual checkpoint), so ensure
 	// the leaf meta dir exists before opening with O_CREATE.
 	path := WorkerMetaPath(worktree)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return
 	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return
 	}

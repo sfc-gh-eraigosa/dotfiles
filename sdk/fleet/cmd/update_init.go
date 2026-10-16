@@ -23,7 +23,7 @@ func writeDefaultPlan(path string, overwrite bool) (wrote bool, err error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return false, err
 	}
-	if err := os.WriteFile(path, []byte(updplan.DefaultYAML), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(updplan.DefaultYAML), 0o600); err != nil {
 		return false, err
 	}
 	return true, nil

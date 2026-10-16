@@ -155,19 +155,35 @@ lint-go: ## Lint Go modules (gofmt + golangci-lint, per-module)
 		exit 1; \
 	fi
 
+# gosec policy (docs/mbo/designs/security-scan-green.md, #394):
+#   - gosec AND govulncheck are built from tools/security (pinned versions +
+#     an x/tools that reads the .go-version toolchain's export data) into
+#     $(go env GOPATH)/bin and run from there, never from whatever is first on
+#     PATH (a goenv shim, a stale install), so local runs and CI agree. A
+#     release gosec built against an older x/tools fails on every file with
+#     "export data version 5 is greater than maximum supported version 4".
+#   - G204/G304 (+ their taint-analysis twins G702/G703) are excluded: these
+#     tools exist to run git/gh/ssh/tmux with the user's own arguments and to
+#     read config at $HOME/XDG paths. Argument validation is a per-call-site
+#     concern (see #96); flagging every exec/read is noise, not signal.
+#   - generated code (protoc output under sdk/gff/gen) is not ours to annotate.
+#   - every remaining `#nosec` must carry a justification
+#     (`// #nosec G306 -- resolv.conf must stay world-readable`), or it counts.
+GOSEC_FLAGS := -quiet -exclude-generated -nosec-require-justification -exclude=G204,G304,G702,G703
+
 .PHONY: security
 security: ## CVE + misuse scan (govulncheck + gosec), per-module (dotfiles#103)
-	@command -v govulncheck >/dev/null 2>&1 || go install golang.org/x/vuln/cmd/govulncheck@latest
-	@command -v gosec >/dev/null 2>&1 || go install github.com/securego/gosec/v2/cmd/gosec@latest
-	@govulncheck="$$(command -v govulncheck || echo "$$(go env GOPATH)/bin/govulncheck")"; \
-	gosec="$$(command -v gosec || echo "$$(go env GOPATH)/bin/gosec")"; \
+	@(cd tools/security && go install github.com/securego/gosec/v2/cmd/gosec golang.org/x/vuln/cmd/govulncheck)
+	@govulncheck="$$(go env GOPATH)/bin/govulncheck"; \
+	gosec="$$(go env GOPATH)/bin/gosec"; \
+	echo "==> gosec $$("$$gosec" -version 2>/dev/null | head -1) flags: $(GOSEC_FLAGS)"; \
 	failed=''; \
 	for d in sdk/*; do \
 		if [ -f "$$d/go.mod" ]; then \
 			echo "==> govulncheck ($$d)"; \
 			(cd "$$d" && "$$govulncheck" ./...) || failed="$$failed $$d(govulncheck)"; \
 			echo "==> gosec ($$d)"; \
-			(cd "$$d" && "$$gosec" -quiet ./...) || failed="$$failed $$d(gosec)"; \
+			(cd "$$d" && "$$gosec" $(GOSEC_FLAGS) ./...) || failed="$$failed $$d(gosec)"; \
 		fi; \
 	done; \
 	if [ -n "$$failed" ]; then \

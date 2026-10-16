@@ -6,8 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -176,7 +174,7 @@ func readCache(path string) (cacheEntry, bool) {
 // writeCache serialises the entry and atomically-ish writes it to path,
 // creating parent directories as needed.
 func writeCache(path string, e cacheEntry) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	data, err := json.Marshal(e)
@@ -184,10 +182,20 @@ func writeCache(path string, e cacheEntry) error {
 		return err
 	}
 	// Write via a temp file in the same directory for an atomic rename.
-	// Include the PID and a random suffix to avoid collisions when multiple
-	// gsl processes write the cache concurrently.
-	tmp := fmt.Sprintf("%s.%d.%d.tmp", path, os.Getpid(), rand.Int63()) //nolint:gosec
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	// os.CreateTemp picks a unique name (so concurrent gsl processes never
+	// collide) and creates it 0600; no PID/math-rand suffix needed (G404).
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmp)
 		return err
 	}
 	return os.Rename(tmp, path)

@@ -1,0 +1,11 @@
+# go test ./... — gcfg — 2026-10-16T04:00:08Z
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg	0.006s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/cmd	0.055s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/engine	0.017s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/family	0.015s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/family/general	0.017s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/family/security	0.017s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/gh	0.030s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/report	0.017s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/schema	0.028s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gcfg/internal/version	0.010s

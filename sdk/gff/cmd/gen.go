@@ -288,11 +288,11 @@ func runGen(_ *cobra.Command, _ []string) error {
 
 	outPath := filepath.Join(genOut, genPkg+".go")
 
-	if err := os.MkdirAll(genOut, 0o755); err != nil {
+	if err := os.MkdirAll(genOut, 0o755); err != nil { // #nosec G301 -- generated Go source committed to the repo
 		return fmt.Errorf("gen: mkdir %s: %w", genOut, err)
 	}
 
-	if err := os.WriteFile(outPath, formatted, 0o644); err != nil {
+	if err := os.WriteFile(outPath, formatted, 0o644); err != nil { // #nosec G306 -- generated Go source committed to the repo
 		return fmt.Errorf("gen: write %s: %w", outPath, err)
 	}
 

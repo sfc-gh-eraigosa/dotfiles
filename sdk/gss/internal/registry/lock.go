@@ -164,7 +164,7 @@ func (s *Store) writeLocked(reg Registry) error {
 	}
 	dir := filepath.Dir(s.Path)
 	if dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return fmt.Errorf("registry: mkdir %s: %w", dir, err)
 		}
 	}

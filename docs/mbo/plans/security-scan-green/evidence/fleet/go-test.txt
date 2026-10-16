@@ -1,0 +1,21 @@
+# go test ./... — fleet — 2026-10-16T04:01:21Z
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/cmd	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/histindex	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/hostkey	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keys	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/lanscan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/pins	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/reach	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/stamp	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider	(cached)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest	(cached)
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/pkg/provider/providertest/stubplugin	[no test files]

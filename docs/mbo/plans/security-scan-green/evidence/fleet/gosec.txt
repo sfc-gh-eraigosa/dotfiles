@@ -1,0 +1,176 @@
+# gosec -quiet -exclude-generated -nosec-require-justification -exclude=G204,G304,G702,G703 — fleet — 2026-10-16T04:00:05Z
+flag provided but not defined: -quiet -exclude-generated -nosec-require-justification -exclude
+
+gosec - Golang security checker
+
+gosec analyzes Go source code to look for common programming mistakes that
+can lead to security problems.
+
+VERSION: dev
+GIT TAG: 
+BUILD DATE: 
+
+USAGE:
+
+	# Check a single package
+	$ gosec $GOPATH/src/github.com/example/project
+
+	# Check all packages under the current directory and save results in
+	# json format.
+	$ gosec -fmt=json -out=results.json ./...
+
+	# Run a specific set of rules (by default all rules will be run):
+	$ gosec -include=G101,G203,G401  ./...
+
+	# Run all rules except the provided
+	$ gosec -exclude=G101 $GOPATH/src/github.com/example/project/...
+
+	# Exclude specific rules from specific paths
+	$ gosec --exclude-rules="cmd/.*:G204,G304" ./...
+
+	# Exclude all rules from scripts directory
+	$ gosec --exclude-rules="scripts/.*:*" ./...
+
+OPTIONS:
+
+  -ai-api-key string
+    	Key to access the AI API
+  -ai-api-provider string
+    	AI API provider to generate auto fixes to issues. Valid options are:
+    		- atlas (Atlas Cloud default), atlas-deepseek-v4-flash, atlas-qwen3-coder-next, atlas-kimi-k2.6, atlas:<model-id>;
+    	- gemini-3-pro-preview (gemini, default), gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite;
+    	- claude-sonnet-4-6 (claude, default), claude-opus-4-7, claude-opus-4-6, claude-sonnet-4-5, claude-opus-4-5, claude-haiku-4-5;
+    	- gpt-5.4 (openai, default), gpt-5.4-mini, gpt-5.4-nano
+  -ai-base-url string
+    	Base URL for AI API (e.g., for OpenAI-compatible services)
+  -ai-skip-ssl
+    	Skip SSL certificate verification for AI API
+  -color
+    	Prints the text format report with colorization when it goes in the stdout (default true)
+  -concurrency int
+    	Concurrency value (default 20)
+  -conf string
+    	Path to optional config file
+  -confidence string
+    	Filter out the issues with a lower confidence than the given value. Valid options are: low, medium, high (default "low")
+  -enable-audit
+    	Enable audit mode
+  -exclude value
+    	Comma separated list of rules IDs to exclude. (see rule list)
+  -exclude-dir value
+    	Exclude folder from scan (can be specified multiple times)
+  -exclude-generated
+    	Exclude generated files
+  -exclude-rules string
+    	Path-based rule exclusions. Format: "path:rule1,rule2;path2:rule3"
+    	Example: "cmd/.*:G204,G304;test/.*:G101"
+    	Use "*" to exclude all rules for a path: "scripts/.*:*"
+  -fmt string
+    	Set output format. Valid options are: json, yaml, csv, junit-xml, html, sonarqube, golint, sarif or text (default "text")
+  -include string
+    	Comma separated list of rules IDs to include. (see rule list)
+  -log string
+    	Log messages to file rather than stderr
+  -no-fail
+    	Do not fail the scanning, even if issues were found
+  -nosec
+    	Ignores #nosec comments when set
+  -nosec-require-justification -- justification
+    	Require a -- justification in every #nosec / //gosec:disable annotation
+  -nosec-require-rules
+    	Require at least one rule ID (e.g. G401) in every #nosec / //gosec:disable annotation
+  -nosec-tag string
+    	Set an alternative string for #nosec. Some examples: #dontanalyze, #falsepositive
+  -out string
+    	Set output file for results
+  -quiet
+    	Only show output when errors are found
+  -r	Appends "./..." to the target dir.
+  -severity string
+    	Filter out the issues with a lower severity than the given value. Valid options are: low, medium, high (default "low")
+  -show-ignored
+    	If enabled, ignored issues are printed
+  -sort
+    	Sort issues by severity (default true)
+  -stdout
+    	Stdout the results as well as write it in the output file
+  -tags string
+    	Comma separated list of build tags
+  -terse
+    	Shows only the results and summary
+  -tests
+    	Scan tests files
+  -track-suppressions
+    	Output suppression information, including its kind and justification
+  -verbose string
+    	Overrides the output format when stdout the results while saving them in the output file.
+    	Valid options are: json, yaml, csv, junit-xml, html, sonarqube, golint, sarif or text
+  -version
+    	Print version and quit with exit code 0
+
+
+RULES:
+
+	G101: Look for hardcoded credentials
+	G102: Bind to all interfaces
+	G103: Audit the use of unsafe block
+	G104: Audit errors not checked
+	G106: Audit the use of ssh.InsecureIgnoreHostKey function
+	G107: Url provided to HTTP request as taint input
+	G108: Profiling endpoint is automatically exposed
+	G109: Converting strconv.Atoi result to int32/int16
+	G110: Detect io.Copy instead of io.CopyN when decompression
+	G111: Detect http.Dir('/') as a potential risk
+	G112: Detect ReadHeaderTimeout not configured as a potential risk
+	G113: HTTP request smuggling via conflicting headers or bare LF in body parsing
+	G114: Use of net/http serve function that has no support for setting timeouts
+	G115: Type conversion which leads to integer overflow
+	G116: Detect Trojan Source attacks using bidirectional Unicode characters
+	G117: Potential exposure of secrets via JSON/YAML/XML/TOML marshaling
+	G118: Context propagation failure leading to goroutine/resource leaks
+	G119: Unsafe redirect policy may propagate sensitive headers
+	G120: Unbounded form parsing in HTTP handlers can cause memory exhaustion
+	G121: Unsafe CrossOriginProtection bypass patterns
+	G122: Filesystem TOCTOU race risk in filepath.Walk/WalkDir callbacks
+	G123: TLS resumption may bypass VerifyPeerCertificate when VerifyConnection is unset
+	G124: Insecure HTTP cookie configuration missing Secure, HttpOnly, or SameSite attributes
+	G201: SQL query construction using format string
+	G202: SQL query construction using string concatenation
+	G203: Use of unescaped data in HTML templates
+	G204: Audit use of command execution
+	G301: Poor file permissions used when creating a directory
+	G302: Poor file permissions used when creation file or using chmod
+	G303: Creating tempfile using a predictable path
+	G304: File path provided as taint input
+	G305: File path traversal when extracting zip archive
+	G306: Poor file permissions used when writing to a file
+	G307: Poor file permissions used when creating a file with os.Create
+	G401: Detect the usage of MD5 or SHA1
+	G402: Look for bad TLS connection settings
+	G403: Ensure minimum RSA key length of 2048 bits
+	G404: Insecure random number source (rand)
+	G405: Detect the usage of DES or RC4
+	G406: Detect the usage of deprecated MD4 or RIPEMD160
+	G407: Use of hardcoded IV/nonce for encryption
+	G408: Stateful misuse of ssh.PublicKeyCallback leading to auth bypass
+	G501: Import blocklist: crypto/md5
+	G502: Import blocklist: crypto/des
+	G503: Import blocklist: crypto/rc4
+	G504: Import blocklist: net/http/cgi
+	G505: Import blocklist: crypto/sha1
+	G506: Import blocklist: golang.org/x/crypto/md4
+	G507: Import blocklist: golang.org/x/crypto/ripemd160
+	G601: Implicit memory aliasing in RangeStmt
+	G602: Possible slice bounds out of range
+	G701: SQL injection via taint analysis
+	G702: Command injection via taint analysis
+	G703: Path traversal via taint analysis
+	G704: SSRF via taint analysis
+	G705: XSS via taint analysis
+	G706: Log injection via taint analysis
+	G707: SMTP command/header injection via taint analysis
+	G708: Server-side template injection via taint analysis
+	G709: Unsafe deserialization of untrusted data via taint analysis
+	G710: Open redirect via taint analysis
+
+exit=0

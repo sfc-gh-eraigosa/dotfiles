@@ -1,0 +1,3 @@
+# go test ./... — wol — 2026-10-16T04:00:14Z
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/wol	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/wol/cmd	0.004s

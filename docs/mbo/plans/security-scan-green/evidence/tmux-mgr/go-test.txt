@@ -1,0 +1,6 @@
+# go test ./... — tmux-mgr — 2026-10-16T03:59:58Z
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/cmd	0.009s
+?   	github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/internal/logging	[no test files]
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/pkg/agent	0.011s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/tmux-mgr/pkg/tmux	0.036s
