@@ -7,7 +7,8 @@
 #   number            issue number
 #   verdict           addressed | partially | open | obsolete
 #   priority          1..5  -> the issue gets exactly one priority:N label (others removed)
-#   suggested_action  close-with-evidence | relabel-only | edit-body | edit-body-and-relabel
+#   suggested_action  close-with-evidence | relabel-only | edit-body | edit-body-and-relabel | none
+#                     (none = verified, nothing to change; the label is still reconciled)
 #   close_comment     posted before closing (close-with-evidence only)
 #   new_body          the refreshed body (edit-body*). The CURRENT body is folded beneath it in a
 #                     <details> block automatically, so nothing the author wrote is lost.
@@ -104,6 +105,8 @@ while [ "$i" -lt "$count" ]; do
     IFS=$oldifs
     if [ -n "$remove" ]; then
       run "${GH[@]}" issue edit "$n" --remove-label "$remove" --add-label "priority:$prio"
+    elif [ "$current" = "priority:$prio" ]; then
+      echo "  = already priority:$prio"
     else
       run "${GH[@]}" issue edit "$n" --add-label "priority:$prio"
     fi

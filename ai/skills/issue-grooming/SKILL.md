@@ -49,11 +49,16 @@ For each cluster, establish what shipped **before** judging any issue:
 - The code or docs the issue names — open the path on `main` (`git show main:<path>` when the
   working tree is on a branch) and confirm the verb/flag/test/doc exists.
 
+An issue with no index row or ledger (a follow-up filed after its parent merged) is verified
+from the code on `main` plus `merged-prs.json` alone; say so in its evidence.
+
 Clusters are independent, so fan them out: one subagent per cluster, each given the issue
 numbers, the verification pointers above, the rubric below, and the exact JSON return shape in
 `references/verdict-schema.md`. Insist on *evidence you actually checked* (paths, PR numbers,
-SHAs) — a verdict without a citation is a guess. Merge the returned arrays into one
-`verdicts.json`.
+SHAs) — a verdict without a citation is a guess. Have each subagent write its array into the
+scratch dir (`verdicts-<cluster>.json`) rather than returning it in prose, then merge:
+`jq -s 'add | sort_by(.number)' verdicts-*.json > verdicts.json`. A pass of a handful of
+issues needs no fan-out — triage it inline with the same rubric and shape.
 
 ## 2 — Verdicts
 
@@ -78,7 +83,8 @@ A tracker whose remaining work is *only* a human/live gate (run it on a real hos
 | 5 | Parked, likely obsolete or superseded; kept open only as a reference. |
 
 Re-evaluate from scratch; ignore any priority label the issue already carries — it reflects the
-moment it was filed. Within a program, sub-issues inherit the parent's priority unless they are
+moment it was filed. Agreeing with a label set by a recent pass is the expected outcome, not a
+sign of anchoring. Within a program, sub-issues inherit the parent's priority unless they are
 the current blocking leaf (then one step higher).
 
 ## 4 — Refactor bodies that no longer fit
@@ -100,15 +106,22 @@ bash ai/skills/issue-grooming/scripts/groom-apply.sh <scratch>/groom/verdicts.js
 bash ai/skills/issue-grooming/scripts/groom-report.sh <scratch>/groom/verdicts.json
 ```
 
-Read the dry-run before sending: it is the only review step. `groom-apply.sh` sets exactly one
-`priority:N` label, refuses to close anything that is not `addressed`/`obsolete`, requires a
-`close_comment` for every close, and logs each action to `applied.log`. Closing is reversible
+Read the dry-run before sending: it is the only review step. A dry run still *reads* GitHub
+(current labels and bodies) but sends nothing; an issue whose label is already right prints
+`already priority:N`. `groom-apply.sh` sets exactly one `priority:N` label, refuses to close
+anything that is not `addressed`/`obsolete`, requires a `close_comment` for every close,
+retries transient `gh` failures three times, and logs each action to `applied.log` — compare
+its row count with the verdicts count before calling the pass done. Closing is reversible
 (`gh issue reopen`), so a grooming pass may close without asking; it must never delete content.
 
+**Targeted re-check** (a few issues, or "is #N still valid?"): snapshot as usual, filter with
+`jq '[.[] | select(.number == 359 or .number == 360)]'`, verify inline, and apply with
+`--only 359,360`. A `suggested_action` of `none` records "verified, nothing to change".
+
 Finish with the report from `groom-report.sh` (counts, then one table per verdict) in the
-final message, and — in this repo — one new row in the `docs/mbo/index.md` audit log naming the
-issues closed and any objective rows whose state changed. Commit that row through the normal
-gss flow.
+final message, and — in this repo, when anything changed — one new row in the
+`docs/mbo/index.md` audit log naming the issues closed and any objective rows whose state
+changed. Commit that row through the normal gss flow. A dry-run or no-change pass adds no row.
 
 ## Common mistakes
 

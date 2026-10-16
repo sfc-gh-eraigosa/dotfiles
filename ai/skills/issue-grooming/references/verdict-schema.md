@@ -14,7 +14,7 @@ fields; keep the names.
     "priority_rationale": "one sentence against the §3 rubric",
     "needs_refactor": false,
     "refactor_notes": ["stale src/gss path", "leaf B merged in #305 — drop it from the checklist"],
-    "suggested_action": "close-with-evidence | relabel-only | edit-body | edit-body-and-relabel",
+    "suggested_action": "close-with-evidence | relabel-only | edit-body | edit-body-and-relabel | none",
     "close_comment": "required when suggested_action is close-with-evidence; cites the evidence",
     "new_body": "required when suggested_action is edit-body*: the refreshed body (markdown). The original is folded beneath it automatically."
   }
@@ -23,7 +23,10 @@ fields; keep the names.
 
 Rules the apply script enforces:
 
-- `priority` must be 1–5; the issue ends with exactly that one `priority:N` label.
+- `priority` must be 1–5; the issue ends with exactly that one `priority:N` label (a label that
+  is already right is reported as `already priority:N` and not re-sent).
+- `none` means "verified, nothing to change": the priority label is still reconciled, nothing
+  else happens, and the report lists the issue as confirmed.
 - `close-with-evidence` is honoured only for `addressed` (reason *completed*) and `obsolete`
   (reason *not planned*), and only with a non-empty `close_comment`.
 - `edit-body*` needs `new_body`; the current body is appended inside `<details>` so nothing the
