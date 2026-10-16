@@ -2,7 +2,7 @@
 
 - **Slug:** security-scan-green
 - **Date:** 2026-10-15
-- **Status:** Proposed
+- **Status:** Approved (2026-10-15, maintainer, PR #395)
 - **Relates to:** issue #394 / design PR #395
 - **Author(s):** Edward Raigosa, Claude
 
@@ -139,3 +139,16 @@ Each leaf is a single revertable PR. Promotion is a one-line revert in
 
 > Produced via the `mbo-plan` skill after the user chose "make the whole scan green" with an
 > issue + design doc. Spec/plan follow in `../specs/` and `../plans/` with the execution trio.
+
+## 8. Amendments (post-approval, build findings)
+
+- **gosec `v2.29.0` renumbers the taint variants**: G702 (command injection via taint), G703 (path
+  traversal via taint) are the dataflow forms of G204/G304 and fall under the same rationale — the
+  exclusion list is `G204,G304,G702,G703`. G704 (SSRF via taint) fires twice in `ghapp`'s manifest
+  conversion POST, whose base URL is the operator-configured GitHub API; handled with a justified
+  `#nosec` at those two lines rather than a repo-wide exclusion.
+- **wlink snapshots stay world-readable**: they are byte copies of `/etc/resolv.conf` and
+  `/etc/wsl.conf`, already world-readable, and must be inspectable without root; the chmod/restore
+  modes are kept with the consumer named.
+- The `make security` run installs the pinned gosec into `$(go env GOPATH)/bin` and uses that path
+  rather than whatever `gosec` is first on `PATH`, so local and CI runs agree.
