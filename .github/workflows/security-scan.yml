@@ -5,17 +5,14 @@ name: Security Scan
 # common misuse patterns (unchecked os/exec, permissive file modes, ...)
 # were invisible between manual security reviews.
 #
-# NOT a required check yet, deliberately (continue-on-error below): a first
-# run across every module found 27 pre-existing govulncheck findings (most
-# are Go-stdlib CVEs tied to the pinned toolchain version, not a
-# same-scope dependency bump — sdk/gcfg and sdk/ghapp each carry a dozen)
-# and 156 pre-existing gosec findings spread across nearly every module.
-# Mirrors this repo's own precedent for `Go Lint (golangci-lint)` (see
-# docs/mergify.md's "Pending: promote ... to a ruleset-required check"):
-# land the visible, warn-only job first, triage the backlog, THEN promote
-# to strict + ruleset-required — in that order, never the reverse (adding
-# a required check whose backlog isn't clear yet just deadlocks the queue
-# waiting on a check that can never go green).
+# STRICT and a merge-queue requirement since security-scan-green (#394):
+# the 156-finding gosec backlog was triaged to zero and the scanners are
+# built from tools/security at pinned versions, so a finding here is new
+# and blocks the PR. The gosec policy (which rules are excluded and why,
+# justification-required #nosec) lives in the Makefile `security` target
+# and docs/mbo/designs/security-scan-green.md. Rollout followed this
+# repo's precedent for `Go Lint (golangci-lint)` (docs/mergify.md): land
+# the warn-only job, triage, THEN strict + required — never the reverse.
 #
 # Lives in its OWN workflow file, not docker-image.yml: that file's
 # required jobs are gated against Mergify's queued/dequeued label churn
@@ -38,9 +35,6 @@ jobs:
   security:
     name: Security Scan (govulncheck + gosec)
     runs-on: ubuntu-latest
-    # See the file header: non-blocking until the pre-existing backlog is
-    # triaged and this is promoted the same way golangci-lint was.
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
