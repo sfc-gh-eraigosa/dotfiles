@@ -3,7 +3,7 @@
 - **Slug:** security-scan-green
 - **Date:** 2026-10-15
 - **Status:** Proposed
-- **Relates to:** issue #394 / design PR (pending)
+- **Relates to:** issue #394 / design PR #395
 - **Author(s):** Edward Raigosa, Claude
 
 ## 1. Problem / context
