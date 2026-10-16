@@ -40,8 +40,9 @@
 - [x] VERIFY: `make security` OK → `evidence/policy/make-security-after.txt`; `make lint-go`
 - [x] CHECKPOINT; CI Security Scan green on the fix PR (`evidence/ci/pr396-checks.txt`)
 - [x] /code-review round applied (8 findings; evidence regenerated)
-- [ ] CI green on the review-fix push; label ready-for-merge
+- [x] CI green on the review-fix push; labelled ready-for-merge; #396 merged 456615c
 
 ### Task 7 — promote (plan §4.7, separate PR after green main)
 - [x] workflow `continue-on-error` removed; mergify protection line; docs/mergify.md updated (draft #397, stacked on fix)
-- [ ] human: ruleset mirror; red proof PR → `evidence/promote/`
+- [x] red proof PR #399 held → `evidence/promote/red-proof.txt`
+- [ ] human: ruleset mirror (add `Security Scan (govulncheck + gosec)` to the main ruleset, then `make ruleset-snapshot`)
