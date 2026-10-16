@@ -45,4 +45,4 @@
 ### Task 7 — promote (plan §4.7, separate PR after green main)
 - [x] workflow `continue-on-error` removed; mergify protection line; docs/mergify.md updated (draft #397, stacked on fix)
 - [x] red proof PR #399 held → `evidence/promote/red-proof.txt`
-- [ ] human: ruleset mirror (add `Security Scan (govulncheck + gosec)` to the main ruleset, then `make ruleset-snapshot`)
+- [x] ruleset mirror: `Security Scan (govulncheck + gosec)` added to ruleset 20600414 via the API (2026-10-16); `make ruleset-snapshot` committed

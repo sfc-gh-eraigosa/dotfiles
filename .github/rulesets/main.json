@@ -31,6 +31,7 @@
         ],
         "dismiss_stale_reviews_on_push": false,
         "require_code_owner_review": false,
+        "require_extra_approval_for_unattributed_changes": true,
         "require_last_push_approval": false,
         "required_approving_review_count": 0,
         "required_review_thread_resolution": false,
@@ -72,6 +73,10 @@
           },
           {
             "context": "Run Unit Tests",
+            "integration_id": 15368
+          },
+          {
+            "context": "Security Scan (govulncheck + gosec)",
             "integration_id": 15368
           }
         ],
