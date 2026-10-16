@@ -32,7 +32,8 @@ bash ai/skills/pr-grooming/scripts/pr-snapshot.sh -o <scratch>/pr-groom
 state; `prs.txt` has bodies, files, comments and check names; `mbo-rows.txt` lists the
 `docs/mbo/index.md` rows that mention each PR or its branch slug. Read all three before
 judging anything. Correct the category by hand where the heuristic is wrong (a `fix:` title on a
-docs change is not a bugfix).
+docs change is not a bugfix; a `wip:` draft that fixes a hanging test is a bugfix) and write the
+corrected category into the verdict — the report shows what you decided, not what the script guessed.
 
 Hooks note (this repo): the privacy hook blocks command text containing the login name or an
 absolute home path — refer to scratch and worktree dirs by a glob or `~`. The Bash tool runs
@@ -62,11 +63,14 @@ month.
 | `duplicate` | a merged PR / index row already covers it | `close-stale` — comment names the merged PR or row |
 | `refresh` | still wanted and still a bug; rebased and re-proven in this pass | `ready` — promote + comment "please re-review" with the proof |
 | `ready` | rebased, CI green, safe to land without review (patch/minor bump, docs-only fix) | `ready-for-merge` — Mergify lands it |
+| `finished` | a draft whose work is complete: body and ledger promise nothing more, CI green, no "decide later" note | `ready` — promote + comment; the owner reviews |
 | `rebase-only` | still valid; just behind `main` | rebase with `pr-rebase.sh`, verify CI, no state change |
 | `leave` | current and green, or waiting on a human decision | `none` or `comment` |
 
 A PR that is the **current session's own** work, or already carries `ready-for-merge`, is
-`leave` — the queue owns it.
+`leave` — the queue owns it. A draft whose body defers a decision to the owner ("decide if worth
+keeping", "issues stay open until the follow-ups land") is `rebase-only` or `leave` with a
+`comment`, not `finished`: promotion is the owner's call there, so say what you would do and stop.
 
 ## 3 — Verify before you judge
 
@@ -79,9 +83,16 @@ For each PR, establish the facts the verdict rests on:
   a design that cites a retired tool, a `docs/plans/` path that moved to `docs/mbo/plans/`,
   or a script that was rewritten, is evidence of staleness.
 - **Rebase state**: `mergeStateStatus` from the snapshot — `BEHIND` rebases cleanly, `DIRTY`
-  has conflicts (see what they are before deciding whether a refresh is worth it).
+  has conflicts (see what they are before deciding whether a refresh is worth it);
+  `pr-rebase.sh N --dry-run` prints the exact behind count without touching anything.
+- **No index row is ambiguous**: `mbo-rows.txt` matches the PR number and the second segment
+  of the branch (`feature/<slug>/…`); an empty result means either "nothing on `main` tracks
+  this" or "the PR adds the row itself" — check whether `docs/mbo/index.md` is in its file list.
 - **Bug still there** (bugfix only): reproduce on `origin/main` with the PR's own test or the
-  issue's steps *before* rebasing; after the rebase run the same check on the PR head.
+  issue's steps *before* rebasing; after the rebase run the same check on the PR head. A bug
+  that only shows on a live terminal or host cannot be re-proven here: record that in the
+  evidence, leave `ci_verified` false, and ask the owner for the run in the comment instead of
+  promoting.
 - **CI**: after any push, wait for the rollup (`gh pr checks N --watch`) and read failing
   job names — a failure that predates the rebase (an old gosec rule, a since-fixed flake)
   usually clears; one that persists is the PR's own.
@@ -119,7 +130,7 @@ bash ai/skills/pr-grooming/scripts/pr-report.sh <scratch>/pr-groom/verdicts.json
 ```
 
 Read the dry run — it is the review step. `pr-apply.sh` closes only `stale`/`duplicate` and
-only with a `close_comment`, promotes only `refresh`, labels `ready-for-merge` only for
+only with a `close_comment`, promotes only `refresh`/`finished`, labels `ready-for-merge` only for
 `ready` with a non-draft, passing (or `ci_verified`) head, retries transient `gh` failures
 three times and logs to `applied.log`; compare its row count with the verdicts before calling
 the pass done. Rebases happen before apply (§4), not inside it.
@@ -131,7 +142,10 @@ the row). Commit through the normal gss flow. Issues that a closed PR was going 
 open; if their body still points at the PR, run `issue-grooming` on them.
 
 **Targeted re-check** ("is #N still worth keeping?"): snapshot, read that PR block, verify
-inline, apply with `--only N`.
+inline, apply with `--only N`. A PR that an earlier pass already handled (its grooming
+comment is in the snapshot, nothing changed since) keeps its verdict with action `none` —
+the report then reads "verified, nothing to change" and no duplicate comment is posted.
+`pr-apply.sh` warns and exits 1 when `--only` matches no row.
 
 ## Common mistakes
 

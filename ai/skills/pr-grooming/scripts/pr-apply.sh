@@ -5,11 +5,11 @@
 #
 # VERDICTS.json is an array (see references/verdict-schema.md); the fields used here:
 #   number          PR number
-#   verdict         stale | duplicate | refresh | rebase-only | ready | leave
+#   verdict         stale | duplicate | refresh | finished | rebase-only | ready | leave
 #   suggested_action
 #       close-stale        comment + close (verdict must be stale or duplicate; needs close_comment)
 #       comment            post `comment` only (a review-refresh note, a decision request)
-#       ready              `gh pr ready` (+ comment if given)        — verdict refresh
+#       ready              `gh pr ready` (+ comment if given)        — verdict refresh or finished
 #       ready-for-merge    add the ready-for-merge label (+ comment) — verdict ready; refuses drafts,
 #                          failing CI, and non-passing merge state unless ci_verified is true
 #       none               nothing (rebases are done by pr-rebase.sh, not here)
@@ -73,11 +73,13 @@ ci_state() {
 }
 
 count=$(jq length "$VERDICTS")
+matched=0
 i=0
 while [ "$i" -lt "$count" ]; do
   row=$(jq -c ".[$i]" "$VERDICTS"); i=$((i + 1))
   n=$(printf '%s' "$row" | jq -r '.number')
   in_only "$n" || continue
+  matched=$((matched + 1))
   verdict=$(printf '%s' "$row" | jq -r '.verdict')
   action=$(printf '%s' "$row" | jq -r '.suggested_action // "none"')
   comment=$(printf '%s' "$row" | jq -r '.comment // empty')
@@ -95,7 +97,7 @@ while [ "$i" -lt "$count" ]; do
       run "${GH[@]}" pr close "$n" --comment "$(printf 'PR grooming %s — closing as %s. The branch is kept; reopen if this is still wanted.\n\n%s' "$TODAY" "$verdict" "$cc")"
       ;;
     ready)
-      [ "$verdict" = "refresh" ] || { echo "  !! ready is for verdict refresh (got '$verdict'); skipping #$n" >&2; continue; }
+      case "$verdict" in refresh|finished) ;; *) echo "  !! ready is for verdict refresh/finished (got '$verdict'); skipping #$n" >&2; continue ;; esac
       run "${GH[@]}" pr ready "$n"
       [ -z "$comment" ] || run "${GH[@]}" pr comment "$n" --body "$(printf 'PR grooming %s — refreshed, ready for review.\n\n%s' "$TODAY" "$comment")"
       ;;
@@ -113,5 +115,6 @@ while [ "$i" -lt "$count" ]; do
   esac
   [ "$DRY" -eq 0 ] && printf '%s\t#%s\t%s\t%s\n' "$TODAY" "$n" "$verdict" "$action" >> "$LOG"
 done
+if [ "$matched" -eq 0 ]; then echo "pr-apply: no verdict row matched${ONLY:+ --only $ONLY}" >&2; exit 1; fi
 [ "$DRY" -eq 1 ] && echo "dry-run: nothing was sent"
 exit 0

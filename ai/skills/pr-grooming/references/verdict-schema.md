@@ -7,8 +7,8 @@ One JSON array, one object per PR. `pr-apply.sh` and `pr-report.sh` read exactly
   {
     "number": 146,
     "title": "notebooklm-mcp: impl",
-    "category": "mbo-draft | stale-draft | bugfix | dependabot | other",
-    "verdict": "stale | duplicate | refresh | ready | rebase-only | leave",
+    "category": "mbo-draft | stale-draft | bugfix | dependabot | other  (the corrected one, not triage.tsv's guess)",
+    "verdict": "stale | duplicate | refresh | finished | ready | rebase-only | leave",
     "evidence": "1-3 sentences citing paths / PR numbers / index rows / commands actually checked",
     "rebased": false,
     "ci_verified": false,
@@ -23,7 +23,9 @@ Rules the apply script enforces:
 
 - `close-stale` only for `stale` / `duplicate`, only with a non-empty `close_comment`; the
   branch is never deleted and the comment says the PR can be reopened.
-- `ready` (`gh pr ready`) only for `refresh`.
+- `ready` (`gh pr ready`) only for `refresh` and `finished`.
+- `close_comment` and `comment` may be omitted or left `""` when unused — the script treats
+  both the same; a non-empty `comment` on `none` is ignored (use the `comment` action).
 - `ready-for-merge` only for `ready`, on a non-draft PR whose live rollup is passing, or with
   `ci_verified: true` set by whoever read the rollup after the rebase; a `DIRTY` merge state
   is refused (rebase first).
