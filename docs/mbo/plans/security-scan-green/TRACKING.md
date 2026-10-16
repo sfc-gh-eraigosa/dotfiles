@@ -10,32 +10,32 @@
 ## 0. Worker registry
 | Leaf | Worker ref | Branch | PR | State |
 | :-- | :-- | :-- | :-- | :-- |
-| design | security-scan-green/edward-raigosa/design | feature/security-scan-green/edward-raigosa/design | #395 | approved, docs landing |
-| fix | security-scan-green/edward-raigosa/fix | feature/security-scan-green/edward-raigosa/fix | (pending) | building |
+| design | security-scan-green/edward-raigosa/design | feature/security-scan-green/edward-raigosa/design | #395 | merged 2026-10-16 |
+| fix | security-scan-green/edward-raigosa/fix | feature/security-scan-green/edward-raigosa/fix | #396 | in-review |
 | promote | — | — | — | not started (after fix merges) |
 
 ## 1. Task ledger
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| 1 policy | todo | | | |
-| 2 gsl | todo | | | |
-| 3 gss | todo | | | |
-| 4 tmux-mgr | todo | | | |
-| 5 fleet/gff/gcfg/wlink/ghapp/libs | todo | | | |
-| 6 whole-repo | todo | | | |
+| 1 policy | done | c1a6a16 | `make security` → `OK: no vulnerability or misuse findings` (`evidence/policy/make-security-after.txt`); bare `#nosec G306` still reported (`evidence/policy/bare-nosec-rejected.txt`) | gosec v2.29.0 + x/tools v0.52.0 + x/vuln v1.9.0 built from tools/security; a release gosec cannot read Go 1.27 export data |
+| 2 gsl | done | c1a6a16 | 4 mode tests RED→GREEN; `evidence/gsl/gosec.txt` 0 findings; `evidence/gsl/go-test.txt` ok | CreateTemp replaces the math/rand suffix |
+| 3 gss | done | c1a6a16 | 3 mode tests RED→GREEN; `evidence/gss/gosec.txt` 0 findings; 22 internal packages ok | registry dir mkdir sits behind the lock → not test-reachable, tightened anyway; cmd/TestIsDirty fails identically on main (pre-existing) |
+| 4 tmux-mgr | done | c1a6a16 | SaveSession mode test RED→GREEN; `evidence/tmux-mgr/gosec.txt` 0; go test ok | rc-file append keeps 0644 with justification (no O_CREATE) |
+| 5 fleet/gff/gcfg/wlink/ghapp/libs | done | c1a6a16 | fleet plan-mode test updated 0644→0600 (RED→GREEN); gosec 0 in each (`evidence/<module>/gosec.txt`) | wlink snapshots/restores kept world-readable, consumer named; ghapp G704 justified |
+| 6 whole-repo | in-progress | c1a6a16 | local: `make security` OK, `make lint-go` 0 issues ×10 | awaiting CI Security Scan on #396 + human ready-for-merge |
 | 7 promote | todo | | | separate PR |
 
 ## 2. Feature → proof matrix (from spec §5)
 | Feature | Automated proof | Human/live proof | Notes |
 | :-- | :-- | :-- | :-- |
-| F1 policy | [ ] make security runs pinned gosec | — | |
-| F2 tighten | [ ] mode tests + per-module gosec zero | — | |
-| F3 keep+justify | [ ] bare-#nosec negative proof | — | |
+| F1 policy | [x] make security runs pinned gosec (`evidence/policy/make-security-after.txt`) | — | |
+| F2 tighten | [x] mode tests + per-module gosec zero (`evidence/<module>/`) | — | |
+| F3 keep+justify | [x] bare-#nosec negative proof (`evidence/policy/bare-nosec-rejected.txt`) | — | |
 | F4 promote | [ ] CI green on main | [ ] ruleset edit, red proof PR | |
 
 ## 3. Validation done-when — the stop condition
-- [ ] `make security` prints `OK: no vulnerability or misuse findings`
-- [ ] every module's tests green
+- [x] `make security` prints `OK: no vulnerability or misuse findings` (local, Go 1.27.2)
+- [x] every module's tests green (except the pre-existing gss cmd/TestIsDirty environment failure, identical on main)
 - [ ] fix PR merged; Security Scan green on `main`
 - [ ] promote PR merged; red proof PR held by the queue
 
@@ -46,4 +46,5 @@
 ## 5. Session log (append-only)
 | Date | Session | What advanced |
 | :-- | :-- | :-- |
+| 2026-10-16 | build (fix) | Tasks 1–5 done in one commit c1a6a16 on PR #396; gitleaks tripped on a go.sum checksum line (allowlisted with rationale) and the privacy hook on a constant whose name contains "Token" (nosec moved to the line above). |
 | 2026-10-15 | design → build | Design #395 approved; spec/plan/trio written; `fix` worker created; gosec v2.29.0 baseline under the policy flags: 60 findings left to fix/justify (G301 18, G306 21, G302 8, G101 3, G404 1, G704 2 + taint G702/G703 excluded by policy). |
