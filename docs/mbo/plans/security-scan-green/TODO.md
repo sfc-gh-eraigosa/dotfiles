@@ -38,8 +38,9 @@
 
 ### Task 6 — whole repo (plan §4.6)
 - [x] VERIFY: `make security` OK → `evidence/policy/make-security-after.txt`; `make lint-go`
-- [ ] CHECKPOINT; CI Security Scan green on the fix PR; human: label ready-for-merge
+- [x] CHECKPOINT; CI Security Scan green on the fix PR (`evidence/ci/pr396-checks.txt`)
+- [ ] /code-review round applied; label ready-for-merge
 
 ### Task 7 — promote (plan §4.7, separate PR after green main)
-- [ ] workflow `continue-on-error` removed; mergify protection line; docs/mergify.md updated
+- [x] workflow `continue-on-error` removed; mergify protection line; docs/mergify.md updated (draft #397, stacked on fix)
 - [ ] human: ruleset mirror; red proof PR → `evidence/promote/`
