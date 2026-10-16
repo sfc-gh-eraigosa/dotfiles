@@ -1,0 +1,4 @@
+# Security Scan on main after the fix leaf merged — observed 2026-10-16T04:29Z
+PR #396 merged (Mergify, squash). First Security Scan run on main at the merge commit:
+  completed success 456615c https://github.com/sfc-gh-eraigosa/dotfiles/actions/runs/38850727674
+This is the precondition docs/mergify.md sets for making the check required (merge first, then strict + ruleset).

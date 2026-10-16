@@ -166,18 +166,26 @@ across all six `sdk/` modules, which is the condition the `lint` job names for
 going strict "per linter as each category reaches zero". Shell (~90) and
 markdown (~979) are not there yet, so `make lint` itself stays warn-only.
 
-## Pending: promote `Security Scan (govulncheck + gosec)` to required
+## Promoted: `Security Scan (govulncheck + gosec)` is strict and required
 
 `.github/workflows/security-scan.yml` (dotfiles#103) runs `make security`
-(govulncheck + gosec, per Go module) on every PR, but the job carries
-`continue-on-error: true` and is not in `.mergify.yml`'s `merge_protections`.
-A first run found 27 pre-existing govulncheck findings (mostly Go-stdlib
-CVEs tied to the pinned toolchain version — sdk/gcfg and sdk/ghapp each
-carry a dozen — not a same-scope dependency bump) and 156 pre-existing gosec
-findings spread across nearly every module. Same shape as the Go Lint
-rollout above ("`make lint` is warn-only ... until every category reaches
-zero"): promote once the backlog is triaged to zero, in the same
-merge-first-then-ruleset order given above, never the reverse.
+(govulncheck + gosec, per Go module) on every PR. It landed warn-only with a
+backlog of 156 gosec findings across nine `sdk/` modules; `security-scan-green`
+(#394, design `docs/mbo/designs/security-scan-green.md`) triaged that backlog
+to zero and pinned the scanners (`tools/security`: a release gosec could not
+even read the Go 1.27 export data), after which this job dropped
+`continue-on-error` and joined `.mergify.yml`'s `merge_protections`.
+
+The gosec **policy** — G204/G304 and their taint twins G702/G703 excluded with
+a written rationale, generated code excluded, every `#nosec` must carry a
+justification — is documented once, in the Makefile `security` target's
+comment block. A new finding fails the job; fix it, or add
+`// #nosec Gxxx -- <consumer and why>` on that line.
+
+Rollout order was the same as for Go Lint above: (1) the fix PR merged and a
+green `main` run was observed, (2) this PR made the job strict + listed it in
+`merge_protections`, (3) the context is added to the ruleset's required checks
+and `make ruleset-snapshot` commits the `.github/rulesets/main.json` diff.
 
 ## Rollout state
 

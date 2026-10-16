@@ -42,6 +42,7 @@ merge_protections:
       - check-success = Run Shell Test Drivers
       - check-success = Shell Lint (shellcheck)
       - check-success = Run Unit Tests
+      - check-success = Security Scan (govulncheck + gosec)
 
   # External-contribution gate: any PR not authored by the maintainer (or
   # dependabot, a GitHub-operated trusted source) requires the maintainer's

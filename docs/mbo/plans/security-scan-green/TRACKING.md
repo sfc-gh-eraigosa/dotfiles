@@ -11,7 +11,7 @@
 | Leaf | Worker ref | Branch | PR | State |
 | :-- | :-- | :-- | :-- | :-- |
 | design | security-scan-green/edward-raigosa/design | feature/security-scan-green/edward-raigosa/design | #395 | merged 2026-10-16 |
-| fix | security-scan-green/edward-raigosa/fix | feature/security-scan-green/edward-raigosa/fix | #396 | in-review |
+| fix | security-scan-green/edward-raigosa/fix | feature/security-scan-green/edward-raigosa/fix | #396 | merged 2026-10-16 |
 | promote | security-scan-green/edward-raigosa/promote | feature/security-scan-green/edward-raigosa/promote | #397 (draft, base = fix) | prepared; hold until #396 merges + green main |
 
 ## 1. Task ledger
@@ -23,7 +23,7 @@
 | 4 tmux-mgr | done | c1a6a16 | SaveSession mode test RED→GREEN; `evidence/tmux-mgr/gosec.txt` (regenerated) 0; go test ok | rc-file append keeps 0644 with justification (no O_CREATE) |
 | 5 fleet/gff/gcfg/wlink/ghapp/libs | done | c1a6a16 + review-1 | fleet plan-mode test updated 0644→0600 (RED→GREEN); gosec 0 in each (`evidence/<module>/gosec.txt`, regenerated) | wlink: copies vs marker files now carry accurate justifications; ghapp G704 justified |
 | 6 whole-repo | done | 6b34943 | local: `make security` OK, `make lint-go` 0 issues ×10; CI on #396: Security Scan **pass** (first green run), 14/14 checks pass (`evidence/ci/pr396-checks.txt`) | ready-for-merge after the /code-review round |
-| 7 promote | todo | | | separate PR |
+| 7 promote | in-progress | d42199a | green main observed (`evidence/promote/green-main.txt`); #397 strict workflow + Mergify line + docs | needs: `gss feature merged`, merge, then by-hand ruleset + red proof PR |
 
 ## 2. Feature → proof matrix (from spec §5)
 | Feature | Automated proof | Human/live proof | Notes |
@@ -31,12 +31,12 @@
 | F1 policy | [x] make security runs pinned gosec (`evidence/policy/make-security-after.txt`) | — | |
 | F2 tighten | [x] mode tests + per-module gosec zero (`evidence/<module>/`) | — | |
 | F3 keep+justify | [x] bare-#nosec negative proof (`evidence/policy/bare-nosec-rejected.txt`) | — | |
-| F4 promote | [ ] CI green on main | [ ] ruleset edit, red proof PR | |
+| F4 promote | [x] CI green on main (`evidence/promote/green-main.txt`) | [ ] ruleset edit, red proof PR | |
 
 ## 3. Validation done-when — the stop condition
 - [x] `make security` prints `OK: no vulnerability or misuse findings` (local, Go 1.27.2)
 - [x] every module's tests green (except the pre-existing gss cmd/TestIsDirty environment failure, identical on main)
-- [ ] fix PR merged; Security Scan green on `main` (green on the PR: `evidence/ci/pr396-checks.txt`)
+- [x] fix PR merged; Security Scan green on `main` (`evidence/promote/green-main.txt`, run 38850727674 at 456615c)
 - [ ] promote PR merged; red proof PR held by the queue
 
 ## 4. Blockers & escalations
