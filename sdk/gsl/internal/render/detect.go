@@ -391,7 +391,9 @@ func Fit(datas []segmentData, st style.Style, cols int) string {
 			break
 		}
 		if term.DisplayWidth(out) <= cols {
-			return out
+			// The dropped segment freed columns; the flexible survivors may
+			// have them (the host grows back toward its full name).
+			return spendSlack(pruned, st, finalCompactLevel, out, cols)
 		}
 	}
 

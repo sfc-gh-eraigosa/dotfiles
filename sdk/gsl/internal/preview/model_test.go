@@ -273,7 +273,7 @@ func TestModel_Update_ToggleHost(t *testing.T) {
 // the host segment shows the fixture host, never the real machine.
 func TestRenderOnce_HostIsFixture(t *testing.T) {
 	line := preview.RenderOnce()
-	if !strings.Contains(line, "💻 demohost") && !strings.Contains(line, "demohost") {
-		t.Errorf("RenderOnce should render the fixture host %q; got %q", "demohost", line)
+	if !strings.Contains(line, "💻 demohost") {
+		t.Errorf("RenderOnce should render the fixture host with the fixture kind glyph %q; got %q", "💻 demohost", line)
 	}
 }

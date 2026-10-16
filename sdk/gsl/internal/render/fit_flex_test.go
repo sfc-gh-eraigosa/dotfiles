@@ -104,3 +104,27 @@ func TestFit_HostFloorIsElevenByDefault(t *testing.T) {
 		t.Errorf("floor format: want %q, got %q", want, text)
 	}
 }
+
+// TestFit_HostGrowsAfterSegmentDrop: slack must be spent on the Phase-2 path
+// too — when a lower-priority segment is dropped to make the line fit, the
+// columns it freed go to the host.
+func TestFit_HostGrowsAfterSegmentDrop(t *testing.T) {
+	st := asciiStyle()
+	host := flexDatas(t, nil)[0]
+	// Width of the host alone at its full name.
+	full := term.DisplayWidth(Fit([]segmentData{host}, st, 500))
+	// A wide static block with no priority: dropped first by the fit loop.
+	datas := []segmentData{host, &staticSegmentData{text: strings.Repeat("x", 40), colorKey: "dirgit"}}
+	cols := full + 2
+	out := Fit(datas, st, cols)
+	plain := term.StripANSI(out)
+	if strings.Contains(plain, "xxxx") {
+		t.Fatalf("cols=%d should force the static block out, got %q", cols, plain)
+	}
+	if !strings.Contains(plain, flexHost) {
+		t.Errorf("after dropping a segment the host should grow to its full name; got %q", plain)
+	}
+	if w := term.DisplayWidth(out); w > cols {
+		t.Errorf("width invariant broken: %d > %d", w, cols)
+	}
+}

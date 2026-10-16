@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 )
 
 // Segment represents a single status-line segment.
@@ -79,15 +80,6 @@ func DefaultSegmentPriority(segType string) int {
 // left-to-right order. EnableSegment uses it to add a type that an older
 // config.json predates.
 var KnownSegmentTypes = []string{"host", "dirgit", "repo", "ai", "time"}
-
-func knownSegmentType(segType string) bool {
-	for _, t := range KnownSegmentTypes {
-		if t == segType {
-			return true
-		}
-	}
-	return false
-}
 
 // EffectivePriority returns the segment's drop priority: the user's explicit
 // Priority when set, otherwise the built-in default for its type.
@@ -253,23 +245,27 @@ func (c *Config) findSegment(segType string) *Segment {
 // ensureSegment returns the segment entry for segType, inserting one when a
 // KNOWN type is missing from Segments: a config.json saved before the type
 // existed (Load replaces the whole array). The inserted entry starts disabled —
-// the verb that asked for it decides its state — and goes at the front for
-// "host" (designed for the far left) or at the end for anything else. Returns
-// an error only for a type gsl does not render.
+// the verb that asked for it decides its state — and goes where the canonical
+// order (KnownSegmentTypes) puts it: before the first existing segment that
+// canonically follows it, else at the end. Returns an error only for a type
+// gsl does not render.
 func (c *Config) ensureSegment(segType string) (*Segment, error) {
 	if seg := c.findSegment(segType); seg != nil {
 		return seg, nil
 	}
-	if !knownSegmentType(segType) {
+	rank := slices.Index(KnownSegmentTypes, segType)
+	if rank < 0 {
 		return nil, fmt.Errorf("config: unknown segment type %q", segType)
 	}
-	entry := Segment{Type: segType}
-	if segType == "host" {
-		c.Segments = append([]Segment{entry}, c.Segments...)
-		return &c.Segments[0], nil
+	at := len(c.Segments)
+	for i, seg := range c.Segments {
+		if r := slices.Index(KnownSegmentTypes, seg.Type); r > rank {
+			at = i
+			break
+		}
 	}
-	c.Segments = append(c.Segments, entry)
-	return &c.Segments[len(c.Segments)-1], nil
+	c.Segments = slices.Insert(c.Segments, at, Segment{Type: segType})
+	return &c.Segments[at], nil
 }
 
 // EnableSegment sets the Enabled flag on the segment identified by segType,

@@ -34,7 +34,8 @@ type HostSegment struct {
 	// Icon, when set, is used verbatim instead of the kind-derived glyph
 	// (config option "icon").
 	Icon string
-	// Kind, when a valid host kind, replaces detection (config option "kind").
+	// Kind, when set, replaces detection (config option "kind"). NewHostSegment
+	// drops an unknown value so the Deps fallback and detection still apply.
 	Kind string
 	// Priority is the DROP priority used by the fit loop.
 	Priority int
@@ -49,7 +50,9 @@ const defaultHostMinLen = 11
 func NewHostSegment(opts map[string]any) *HostSegment {
 	s := &HostSegment{
 		Icon: optString(opts, "icon", ""),
-		Kind: optString(opts, "kind", ""),
+	}
+	if k := optString(opts, "kind", ""); validHostKind(k) {
+		s.Kind = k
 	}
 	if n := optInt(opts, "min_len", 0); n > 0 {
 		s.MinLen = n
@@ -72,15 +75,27 @@ func (s *HostSegment) Render(ctx context.Context, st style.Style, level int) (te
 }
 
 // hostGlyph resolves the icon for kind: an explicit override wins, then the
-// per-kind icon ("host_<kind>"), then the generic "host" icon.
+// per-kind icon ("host_<kind>"), then the generic "host" icon. In ascii mode
+// the override only applies when it is itself plain ASCII, so one config key
+// cannot break the no-emoji guarantee every other glyph honours.
 func hostGlyph(st style.Style, kind, override string) string {
-	if override != "" {
+	if override != "" && (st.Glyphs != "ascii" || isASCII(override)) {
 		return override
 	}
 	if g := glyph(st, "host_"+kind); g != "" {
 		return g
 	}
 	return glyph(st, "host")
+}
+
+// isASCII reports whether s is printable 7-bit ASCII.
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x20 || s[i] > 0x7e {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *HostSegment) hostname() (string, error) {

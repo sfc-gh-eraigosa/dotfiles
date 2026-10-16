@@ -21,6 +21,7 @@ package render
 import (
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 )
 
@@ -43,12 +44,7 @@ var hostKinds = []string{
 
 // validHostKind reports whether s is a known kind (exact, case-sensitive).
 func validHostKind(s string) bool {
-	for _, k := range hostKinds {
-		if s == k {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(hostKinds, s)
 }
 
 // hostProbe is the raw evidence classifyHost decides on. Every field is

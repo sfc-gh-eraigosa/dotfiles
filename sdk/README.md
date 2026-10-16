@@ -145,7 +145,7 @@ up on the wrong branch.
 
 **What it does about it.** Five segments render after every assistant turn:
 which machine you are on (a hardware-kind glyph — 🧠 DGX, 🍓 Pi, 🪟 WSL, 🍎 Mac —
-plus the hostname capped at 11 columns), working directory + git state, repo/PR
+plus the hostname, 11 columns when crowded and the full name when there is room), working directory + git state, repo/PR
 context, the AI segment (model, context window %, MCP count, 5h/7d rate-limit
 burn), and the clock. Each segment is
 hard-capped at one second and drops itself rather than hanging your prompt — the

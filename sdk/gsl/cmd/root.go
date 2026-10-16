@@ -14,7 +14,7 @@ var rootCmd = &cobra.Command{
 payload on stdin after every assistant turn) and an on-demand line for
 Antigravity CLI / plain shell use.
 
-Segments: dirgit, repo, ai, time — configurable via ~/.config/gsl/config.json`,
+Segments: host, dirgit, repo, ai, time — configurable via ~/.config/gsl/config.json`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }

@@ -252,4 +252,12 @@ func TestBuildSegments_HostDeps(t *testing.T) {
 	if got != "🧠 demohost" {
 		t.Errorf("config kind must beat Deps.HostKind: want %q, got %q", "🧠 demohost", got)
 	}
+
+	// An INVALID config kind must not shadow the injected one.
+	cfg.Segments[0].Options = map[string]any{"kind": "RPi"}
+	segs = BuildSegments(cfg, deps)
+	got, _, _ = segs[0].Render(context.Background(), emojiStyleFixture(), 0)
+	if got != "🍓 demohost" {
+		t.Errorf("invalid config kind must fall back to Deps.HostKind: want %q, got %q", "🍓 demohost", got)
+	}
 }

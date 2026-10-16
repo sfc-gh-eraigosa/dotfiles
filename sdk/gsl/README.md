@@ -117,7 +117,7 @@ All five segments run concurrently under a shared 1-second parent deadline. Each
 Which machine the line is on — meant for the far left, so a glance across a fleet of panes answers "where am I?" first. Shows:
 
 - A hardware-kind glyph, detected without subprocesses from `runtime.GOOS`, `/proc/version`, `/proc/device-tree/model`, the DMI vendor/product under `/sys/class/dmi/id`, and the container signals (`/.dockerenv`, `/run/.containerenv`, `$container`, the cgroup path of PID 1)
-- The short hostname (domain stripped at the first dot; an IP literal is kept whole). Its width is **flexible**: on a crowded line it is cut to 11 display columns with an ellipsis (`averyverylonghost` → `averyveryv…`); once the rest of the line fits, the fit loop hands the leftover columns to the host and the name grows toward its full length
+- The short hostname (domain stripped at the first dot; an IP literal is kept whole). Its width is **flexible**: on a crowded line it is cut to 11 display columns with an ellipsis (`averyverylonghost` → `averyveryl…`); once the rest of the line fits, the fit loop hands the leftover columns to the host and the name grows toward its full length
 
 | Kind | Detected by | Glyph |
 |------|-------------|-------|
@@ -358,7 +358,7 @@ Detection (`Detect`) runs all subprocess I/O once, concurrently. The fit loop (`
 | 1 | Per-segment text compaction (abbreviated model name, shorter branch, condensed time) |
 | 2 | More aggressive text abbreviation |
 | 3 | Deepest text abbreviation |
-| 4 (final tier) | Leading glyph dropped from every segment, then lowest-priority segments dropped from the right (`time` → `ai` → `dirgit` → `repo`) until the output fits or one segment remains |
+| 4 (final tier) | Leading glyph dropped from every segment, then lowest-priority segments dropped (`time` → `host` → `ai` → `dirgit` → `repo`) until the output fits or one segment remains. Whenever a level fits, leftover columns go to the flexible `host` segment, which grows back toward its full name |
 
 `Fit` returns the first level whose `DisplayWidth` (grapheme-cluster-aware, ANSI-stripped, `uniseg.StringWidth`) is ≤ terminal columns, or the most compact form if nothing fits.
 

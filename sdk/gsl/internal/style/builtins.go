@@ -170,7 +170,7 @@ var builtins = map[string]Style{
 	"emoji":     emojiStyle,
 }
 
-// segmentColorKeys lists the five theme keys that every palette must define so
+// segmentColorKeys lists the six theme keys that every palette must define so
 // the emoji style (Fill:false) can apply fg-tint colors to every segment.
 // See EMOJI-F2-01/F2-02 in the design doc.
 var segmentColorKeys = []string{
@@ -184,8 +184,8 @@ var segmentColorKeys = []string{
 
 // palettes holds the compiled-in color palettes keyed by palette name.
 //
-// Each palette defines at minimum all five segment color keys
-// (repo_root, repo_worktree, ai, dirgit, time). Indices in the
+// Each palette defines at minimum all six segment color keys
+// (repo_root, repo_worktree, ai, dirgit, time, host). Indices in the
 // non-default palettes are chosen to be mid-luminance (approximate
 // luminance 30–220 out of 255) so they are legible as bare foreground
 // color on both light and dark terminal backgrounds. This is required
@@ -259,7 +259,7 @@ var palettes = map[string]map[string]string{
 // found. The returned map is a defensive copy.
 //
 // Callers use the returned map to merge auto-theme colors into a Style.Theme
-// for the five segment keys that the user did not override.
+// for the six segment keys that the user did not override.
 func Palette(name string) (map[string]string, bool) {
 	p, ok := palettes[name]
 	if !ok {

@@ -220,3 +220,20 @@ func TestShortHostname(t *testing.T) {
 		}
 	}
 }
+
+func TestHost_NonASCIIIconIgnoredInASCIIMode(t *testing.T) {
+	seg := NewHostSegment(map[string]any{"icon": "🎮"})
+	seg.Hostname = fixedHost("box")
+	seg.Probe = fixedProbe(hostProbe{GOOS: "linux"})
+
+	got, _, _ := seg.Render(context.Background(), asciiStyle(), 0)
+	if got != "[host] box" {
+		t.Errorf("ascii mode must not emit a non-ASCII icon override: want %q, got %q", "[host] box", got)
+	}
+}
+
+func TestNewHostSegment_DropsInvalidKind(t *testing.T) {
+	if seg := NewHostSegment(map[string]any{"kind": "RPi"}); seg.Kind != "" {
+		t.Errorf("an unknown kind option must be dropped at construction, got %q", seg.Kind)
+	}
+}

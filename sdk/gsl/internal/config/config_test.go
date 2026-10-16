@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 )
 
 // TestDefaultIsUsable verifies that Default() returns a config that passes
-// basic sanity checks: enabled, all 4 segments present and enabled, valid
+// basic sanity checks: enabled, all 5 segments present and enabled, valid
 // timezone and style defaults.
 func TestDefaultIsUsable(t *testing.T) {
 	c := config.Default()
@@ -25,7 +26,7 @@ func TestDefaultIsUsable(t *testing.T) {
 		t.Errorf("Default().Timezone = %q; want 'America/Los_Angeles'", c.Timezone)
 	}
 
-	// All 4 segments in order.
+	// All 5 segments in order.
 	wantTypes := []string{"host", "dirgit", "repo", "ai", "time"}
 	if len(c.Segments) != len(wantTypes) {
 		t.Fatalf("Default() has %d segments; want %d", len(c.Segments), len(wantTypes))
@@ -345,14 +346,32 @@ func TestEnableSegment_InsertsMissingKnownType(t *testing.T) {
 	if err := c.EnableSegment("ai"); err != nil {
 		t.Fatalf("EnableSegment(ai): %v", err)
 	}
-	if last := c.Segments[len(c.Segments)-1]; last.Type != "ai" || !last.Enabled {
-		t.Errorf("ai should be appended last and enabled; got %+v", c.Segments)
+	// Canonical order is host, dirgit, repo, ai, time: ai lands before time.
+	if c.Segments[2].Type != "ai" || !c.Segments[2].Enabled || c.Segments[3].Type != "time" {
+		t.Errorf("ai should be inserted before time (canonical order) and enabled; got %+v", c.Segments)
 	}
 	if err := c.EnableSegment("bogus"); err == nil {
 		t.Error("EnableSegment(bogus) should still fail for an unknown type")
 	}
 	if len(c.Segments) != 4 {
 		t.Errorf("want 4 segments after inserts, got %d", len(c.Segments))
+	}
+}
+
+// TestEnableSegment_CanonicalInsertPosition: a missing type goes where the
+// default order puts it, not blindly at the end.
+func TestEnableSegment_CanonicalInsertPosition(t *testing.T) {
+	c := config.Default()
+	c.Segments = []config.Segment{{Type: "repo", Enabled: true}, {Type: "time", Enabled: true}}
+	if err := c.EnableSegment("dirgit"); err != nil {
+		t.Fatal(err)
+	}
+	got := []string{}
+	for _, s := range c.Segments {
+		got = append(got, s.Type)
+	}
+	if want := "dirgit repo time"; strings.Join(got, " ") != want {
+		t.Errorf("order = %q; want %q", strings.Join(got, " "), want)
 	}
 }
 
