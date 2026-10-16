@@ -19,7 +19,7 @@ import (
 // update regenerates the golden files when set: `go test -run Golden -update`.
 var update = flag.Bool("update", false, "update golden files")
 
-// buildGoldenSegments wires the four real segments with deterministic fakes
+// buildGoldenSegments wires the five real segments with deterministic fakes
 // for the given location, glyph style, and a fixed clock + payload. Each
 // runner is private to its segment so the concurrent render is deterministic.
 //
@@ -30,6 +30,11 @@ func buildGoldenSegments(t *testing.T, isWorktree bool, mcpDir string) []Segment
 	t.Helper()
 
 	const displayCwd = "/home/user/project"
+
+	// host: fixed name + a DGX probe so the 🧠 kind icon is exercised.
+	hostSeg := NewHostSegment(nil)
+	hostSeg.Hostname = fixedHost("testhost.local")
+	hostSeg.Probe = fixedProbe(hostProbe{GOOS: "linux", DMIVendor: "NVIDIA", DMIProduct: "DGX Spark"})
 
 	// dirgit: scripted git.Status on branch "feature".
 	dirRunner := &gitfake.Runner{Script: gitStatusResponses("feature")}
@@ -47,7 +52,7 @@ func buildGoldenSegments(t *testing.T, isWorktree bool, mcpDir string) []Segment
 	// time: fixed clock in UTC for a stable abbreviation.
 	timeSeg := NewTimeSegment(fixedClock(), "UTC", "15:04", "Mon 01-02")
 
-	return []Segment{dirSeg, repoSeg, aiSeg, timeSeg}
+	return []Segment{hostSeg, dirSeg, repoSeg, aiSeg, timeSeg}
 }
 
 func boolToCount(isWorktree bool) int {
@@ -117,11 +122,11 @@ func TestGolden_SanityMarkers(t *testing.T) {
 	}{
 		{
 			name: "powerline_root", styleName: "powerline", worktree: false,
-			markers: []string{"project", "feature", "PR#21", "Opus 4.7", "14:30", "UTC"},
+			markers: []string{"🧠 testhost", "project", "feature", "PR#21", "Opus 4.7", "14:30", "UTC"},
 		},
 		{
 			name: "emoji_worktree", styleName: "emoji", worktree: true,
-			markers: []string{"🌳", "project", "PR#21", "🤖", "⏰"},
+			markers: []string{"🧠 testhost", "🌳", "project", "PR#21", "🤖", "⏰"},
 		},
 	}
 	for _, tc := range cases {
@@ -150,10 +155,10 @@ var goldenLinks = Links{Repo: true, DirGit: true, AI: true, Time: true,
 func buildGoldenSegmentsLinked(t *testing.T, isWorktree bool, mcpDir string) []Segment {
 	t.Helper()
 	segs := buildGoldenSegments(t, isWorktree, mcpDir)
-	segs[0].(*DirGitSegment).Links = goldenLinks
-	segs[1].(*RepoSegment).Links = goldenLinks
-	segs[2].(*AISegment).Links = goldenLinks
-	segs[3].(*TimeSegment).Links = goldenLinks
+	segs[1].(*DirGitSegment).Links = goldenLinks
+	segs[2].(*RepoSegment).Links = goldenLinks
+	segs[3].(*AISegment).Links = goldenLinks
+	segs[4].(*TimeSegment).Links = goldenLinks
 	return segs
 }
 

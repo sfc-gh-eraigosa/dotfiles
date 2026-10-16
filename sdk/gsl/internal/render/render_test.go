@@ -211,3 +211,53 @@ func TestRender_ConcurrentRaceSafety(t *testing.T) {
 		t.Errorf("render concurrent: unexpected output %q", got)
 	}
 }
+
+// TestBuildSegments_Host wires the host segment from config: type "host",
+// its priority, and the max_len / icon / kind options.
+func TestBuildSegments_Host(t *testing.T) {
+	cfg := config.Config{
+		Enabled: true,
+		Segments: []config.Segment{
+			{Type: "host", Enabled: true, Priority: 7, Options: map[string]any{"max_len": float64(6), "icon": "🎮", "kind": "rpi"}},
+		},
+	}
+	segs := BuildSegments(cfg, Deps{})
+	if len(segs) != 1 {
+		t.Fatalf("BuildSegments: want 1 segment, got %d", len(segs))
+	}
+	hs, ok := segs[0].(*HostSegment)
+	if !ok {
+		t.Fatalf("BuildSegments: want *HostSegment, got %T", segs[0])
+	}
+	if hs.Priority != 7 || hs.MaxLen != 6 || hs.Icon != "🎮" || hs.Kind != "rpi" {
+		t.Errorf("host options not wired: %+v", hs)
+	}
+}
+
+// TestBuildSegments_HostDeps: the hostname lookup and the hardware kind are
+// injectable through Deps like every other seam, so preview/golden callers
+// stay fixture-driven; a config `kind` option still wins over Deps.HostKind.
+func TestBuildSegments_HostDeps(t *testing.T) {
+	cfg := config.Config{Enabled: true, Segments: []config.Segment{{Type: "host", Enabled: true}}}
+	deps := Deps{Hostname: fixedHost("demohost"), HostKind: "rpi"}
+	segs := BuildSegments(cfg, deps)
+	got, _, ok := segs[0].Render(context.Background(), emojiStyleFixture(), 0)
+	if !ok || got != "🍓 demohost" {
+		t.Errorf("Deps-driven host: want %q, got %q (ok=%v)", "🍓 demohost", got, ok)
+	}
+
+	cfg.Segments[0].Options = map[string]any{"kind": "dgx"}
+	segs = BuildSegments(cfg, deps)
+	got, _, _ = segs[0].Render(context.Background(), emojiStyleFixture(), 0)
+	if got != "🧠 demohost" {
+		t.Errorf("config kind must beat Deps.HostKind: want %q, got %q", "🧠 demohost", got)
+	}
+
+	// An INVALID config kind must not shadow the injected one.
+	cfg.Segments[0].Options = map[string]any{"kind": "RPi"}
+	segs = BuildSegments(cfg, deps)
+	got, _, _ = segs[0].Render(context.Background(), emojiStyleFixture(), 0)
+	if got != "🍓 demohost" {
+		t.Errorf("invalid config kind must fall back to Deps.HostKind: want %q, got %q", "🍓 demohost", got)
+	}
+}

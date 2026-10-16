@@ -2,7 +2,7 @@
 //
 // Config file location: ${XDG_CONFIG_HOME:-~/.config}/gsl/config.json
 //
-// Default() returns a fully working configuration with all 4 segments
+// Default() returns a fully working configuration with all 5 segments
 // enabled. Load() for a missing file returns Default() with no error.
 // Save() creates parent directories as needed.
 package config
@@ -13,11 +13,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 )
 
 // Segment represents a single status-line segment.
 type Segment struct {
-	// Type is the segment kind: "dirgit", "repo", "ai", or "time".
+	// Type is the segment kind: "host", "dirgit", "repo", "ai", or "time"
+	// (KnownSegmentTypes).
 	Type string `json:"type"`
 	// Enabled controls whether this segment is rendered.
 	Enabled bool `json:"enabled"`
@@ -49,6 +51,7 @@ type Segment struct {
 // renumber the others.
 const (
 	PriorityTime   = 10 // dropped first
+	PriorityHost   = 15 // which machine — outlives the clock, not the model
 	PriorityAI     = 20
 	PriorityDirGit = 30
 	PriorityRepo   = 40 // dropped last
@@ -66,10 +69,17 @@ func DefaultSegmentPriority(segType string) int {
 		return PriorityAI
 	case "time":
 		return PriorityTime
+	case "host":
+		return PriorityHost
 	default:
 		return 0
 	}
 }
+
+// KnownSegmentTypes lists every segment type gsl can render, in the default
+// left-to-right order. EnableSegment uses it to add a type that an older
+// config.json predates.
+var KnownSegmentTypes = []string{"host", "dirgit", "repo", "ai", "time"}
 
 // EffectivePriority returns the segment's drop priority: the user's explicit
 // Priority when set, otherwise the built-in default for its type.
@@ -133,12 +143,13 @@ func (c Config) EffectiveLinks() string {
 	return LinksUnderline
 }
 
-// Default returns a fully usable Config with all 4 segments enabled in the
-// canonical order: dirgit, repo, ai, time.
+// Default returns a fully usable Config with all 5 segments enabled in the
+// canonical order: host, dirgit, repo, ai, time.
 func Default() Config {
 	return Config{
 		Enabled: true,
 		Segments: []Segment{
+			{Type: "host", Enabled: true},
 			{Type: "dirgit", Enabled: true},
 			{Type: "repo", Enabled: true},
 			{Type: "ai", Enabled: true},
@@ -231,34 +242,60 @@ func (c *Config) findSegment(segType string) *Segment {
 	return nil
 }
 
-// EnableSegment sets the Enabled flag on the segment identified by segType.
-// Returns an error if no such segment exists.
+// ensureSegment returns the segment entry for segType, inserting one when a
+// KNOWN type is missing from Segments: a config.json saved before the type
+// existed (Load replaces the whole array). The inserted entry starts disabled —
+// the verb that asked for it decides its state — and goes where the canonical
+// order (KnownSegmentTypes) puts it: before the first existing segment that
+// canonically follows it, else at the end. Returns an error only for a type
+// gsl does not render.
+func (c *Config) ensureSegment(segType string) (*Segment, error) {
+	if seg := c.findSegment(segType); seg != nil {
+		return seg, nil
+	}
+	rank := slices.Index(KnownSegmentTypes, segType)
+	if rank < 0 {
+		return nil, fmt.Errorf("config: unknown segment type %q", segType)
+	}
+	at := len(c.Segments)
+	for i, seg := range c.Segments {
+		if r := slices.Index(KnownSegmentTypes, seg.Type); r > rank {
+			at = i
+			break
+		}
+	}
+	c.Segments = slices.Insert(c.Segments, at, Segment{Type: segType})
+	return &c.Segments[at], nil
+}
+
+// EnableSegment sets the Enabled flag on the segment identified by segType,
+// inserting a known-but-missing type first (see ensureSegment).
 func (c *Config) EnableSegment(segType string) error {
-	seg := c.findSegment(segType)
-	if seg == nil {
-		return fmt.Errorf("config: unknown segment type %q", segType)
+	seg, err := c.ensureSegment(segType)
+	if err != nil {
+		return err
 	}
 	seg.Enabled = true
 	return nil
 }
 
-// DisableSegment clears the Enabled flag on the segment identified by segType.
-// Returns an error if no such segment exists.
+// DisableSegment clears the Enabled flag on the segment identified by segType,
+// inserting a known-but-missing type first so the file records the choice.
 func (c *Config) DisableSegment(segType string) error {
-	seg := c.findSegment(segType)
-	if seg == nil {
-		return fmt.Errorf("config: unknown segment type %q", segType)
+	seg, err := c.ensureSegment(segType)
+	if err != nil {
+		return err
 	}
 	seg.Enabled = false
 	return nil
 }
 
-// ToggleSegment flips the Enabled flag on the segment identified by segType.
-// Returns an error if no such segment exists.
+// ToggleSegment flips the Enabled flag on the segment identified by segType. A
+// known-but-missing type is effectively off, so its first toggle turns it on.
 func (c *Config) ToggleSegment(segType string) error {
-	seg := c.findSegment(segType)
-	if seg == nil {
-		return fmt.Errorf("config: unknown segment type %q", segType)
+	seg, err := c.ensureSegment(segType)
+	if err != nil {
+		return err
 	}
 	seg.Enabled = !seg.Enabled
 	return nil

@@ -61,6 +61,47 @@ type prioritized interface {
 	priority() int
 }
 
+// flexible is the optional interface a segmentData implements when it can
+// usefully SPEND leftover width — today, the host segment, whose floor is a
+// short ellipsized hostname but whose full name is worth showing when the
+// terminal has room. Fit renders every segment at its floor first (the
+// compaction ladder is unchanged), and only once a level fits does it hand the
+// remaining columns to the flexible segments, left to right.
+//
+// withSlack returns a COPY that may render up to extra columns wider than its
+// floor at the same level; the receiver is never mutated, so Fit stays pure
+// and the cached segmentData slice can be formatted again at any level.
+type flexible interface {
+	withSlack(extra int) segmentData
+}
+
+// spendSlack widens the flexible segments in datas, in order, until the line
+// is as wide as cols allows. It returns the (possibly unchanged) line. A
+// widened segment grows by at most the measured slack and the block count is
+// unchanged, so the result still fits; the width is re-measured anyway and a
+// widening that somehow overshoots is discarded.
+func spendSlack(datas []segmentData, st style.Style, level int, out string, cols int) string {
+	work := make([]segmentData, len(datas))
+	copy(work, datas)
+	for i, d := range work {
+		f, ok := d.(flexible)
+		if !ok {
+			continue
+		}
+		slack := cols - term.DisplayWidth(out)
+		if slack <= 0 {
+			break
+		}
+		work[i] = f.withSlack(slack)
+		if wider := Format(work, st, level); wider != "" && term.DisplayWidth(wider) <= cols {
+			out = wider
+		} else {
+			work[i] = d
+		}
+	}
+	return out
+}
+
 // linkedFormatter is the optional interface a segmentData implements when parts
 // of its content address something on the web. It is format() plus the link
 // spans over the SAME text, recorded while the text is built so the offsets are
@@ -326,7 +367,9 @@ func Fit(datas []segmentData, st style.Style, cols int) string {
 			return ""
 		}
 		if term.DisplayWidth(out) <= cols {
-			return out
+			// It fits with every flexible segment at its floor; give them the
+			// leftover columns (the host segment's full name, for instance).
+			return spendSlack(datas, st, level, out, cols)
 		}
 	}
 
@@ -348,7 +391,9 @@ func Fit(datas []segmentData, st style.Style, cols int) string {
 			break
 		}
 		if term.DisplayWidth(out) <= cols {
-			return out
+			// The dropped segment freed columns; the flexible survivors may
+			// have them (the host grows back toward its full name).
+			return spendSlack(pruned, st, finalCompactLevel, out, cols)
 		}
 	}
 

@@ -21,7 +21,7 @@
 //	                  passes them to the color-aware join layer.
 //	glyphs.go      — all glyph lookup + ANSI colouring is contained here.
 //	                  join owns all painting: fill blocks AND bridged chevrons.
-//	seg_*.go       — the four concrete segments (dirgit, repo, ai, time).
+//	seg_*.go       — the five concrete segments (host, dirgit, repo, ai, time).
 //
 // Every dependency a segment needs (runners, the parsed payload, a clock, the
 // config options) is injected at construction time so tests can drive the

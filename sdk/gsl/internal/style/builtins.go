@@ -55,6 +55,13 @@ var powerlineStyle = Style{
 	Fill:      true,
 	Glyphs:    "nerdfont",
 	Icons: map[string]string{
+		"host":           "💻",
+		"host_macos":     "🍎",
+		"host_wsl":       "🪟",
+		"host_rpi":       "🍓",
+		"host_jetson":    "🤖",
+		"host_dgx":       "🧠",
+		"host_container": "📦",
 		"dirgit":         nfFolder,
 		"repo_root":      nfRepoRoot,
 		"repo_worktree":  nfWorktree,
@@ -83,6 +90,7 @@ var powerlineStyle = Style{
 		"ai":            "cyan",
 		"dirgit":        "green",
 		"time":          "yellow",
+		"host":          "99", // medium purple — unused by every neighbour
 	},
 }
 
@@ -94,6 +102,13 @@ var emojiStyle = Style{
 	Fill:      false,
 	Glyphs:    "emoji",
 	Icons: map[string]string{
+		"host":           "💻",
+		"host_macos":     "🍎",
+		"host_wsl":       "🪟",
+		"host_rpi":       "🍓",
+		"host_jetson":    "🤖",
+		"host_dgx":       "🧠",
+		"host_container": "📦",
 		"dirgit":         "📁",
 		"repo_root":      "🏠",
 		"repo_worktree":  "🌳",
@@ -121,6 +136,7 @@ var emojiStyle = Style{
 		"ai":            "cyan",
 		"dirgit":        "green",
 		"time":          "yellow",
+		"host":          "99", // medium purple — unused by every neighbour
 	},
 }
 
@@ -128,6 +144,7 @@ var emojiStyle = Style{
 // (either by the named style or by the forceASCII flag in Resolve). All values
 // use plain printable ASCII so they are safe in any terminal.
 var asciiIcons = map[string]string{
+	"host":           "[host]",
 	"dirgit":         "[dir]",
 	"repo_root":      "[root]",
 	"repo_worktree":  "[wt]",
@@ -153,7 +170,7 @@ var builtins = map[string]Style{
 	"emoji":     emojiStyle,
 }
 
-// segmentColorKeys lists the five theme keys that every palette must define so
+// segmentColorKeys lists the six theme keys that every palette must define so
 // the emoji style (Fill:false) can apply fg-tint colors to every segment.
 // See EMOJI-F2-01/F2-02 in the design doc.
 var segmentColorKeys = []string{
@@ -162,12 +179,13 @@ var segmentColorKeys = []string{
 	"ai",
 	"dirgit",
 	"time",
+	"host",
 }
 
 // palettes holds the compiled-in color palettes keyed by palette name.
 //
-// Each palette defines at minimum all five segment color keys
-// (repo_root, repo_worktree, ai, dirgit, time). Indices in the
+// Each palette defines at minimum all six segment color keys
+// (repo_root, repo_worktree, ai, dirgit, time, host). Indices in the
 // non-default palettes are chosen to be mid-luminance (approximate
 // luminance 30–220 out of 255) so they are legible as bare foreground
 // color on both light and dark terminal backgrounds. This is required
@@ -193,6 +211,7 @@ var palettes = map[string]map[string]string{
 		"ai":            "cyan",    // ANSI 6 / system cyan
 		"dirgit":        "green",   // ANSI 2 / system green
 		"time":          "yellow",  // ANSI 3 / system yellow
+		"host":          "99",      // medium purple (r=2,g=1,b=5)  lum~125
 	},
 	// "light" — darker ANSI-256 shades for readability on light backgrounds.
 	// Each index is mid-luminance (~44–138/255) and legible on dark too.
@@ -207,6 +226,7 @@ var palettes = map[string]map[string]string{
 		"ai":            "37",
 		"dirgit":        "34",
 		"time":          "136",
+		"host":          "55", // (r=1,g=0,b=3) dark violet              lum~48
 	},
 	// "dark-daltonism" — red-green colorblind friendly; avoids red/green
 	// for segment identity. Uses blue/orange/teal ANSI-256 indices.
@@ -221,6 +241,7 @@ var palettes = map[string]map[string]string{
 		"ai":            "44",
 		"dirgit":        "73",
 		"time":          "178",
+		"host":          "99", // (r=2,g=1,b=5) medium purple            lum~125
 	},
 	// "dark8" — 8-color terminals; named-color strings so no 256-color
 	// escapes are emitted; the terminal's own palette applies.
@@ -230,6 +251,7 @@ var palettes = map[string]map[string]string{
 		"ai":            "cyan",
 		"dirgit":        "green",
 		"time":          "yellow",
+		"host":          "magenta",
 	},
 }
 
@@ -237,7 +259,7 @@ var palettes = map[string]map[string]string{
 // found. The returned map is a defensive copy.
 //
 // Callers use the returned map to merge auto-theme colors into a Style.Theme
-// for the five segment keys that the user did not override.
+// for the six segment keys that the user did not override.
 func Palette(name string) (map[string]string, bool) {
 	p, ok := palettes[name]
 	if !ok {

@@ -1,6 +1,7 @@
 package style_test
 
 import (
+	"io"
 	"strconv"
 	"strings"
 	"testing"
@@ -159,7 +160,7 @@ func TestPalette_MidLuminance(t *testing.T) {
 // TestSegmentColorKeys verifies the canonical key list.
 func TestSegmentColorKeys(t *testing.T) {
 	keys := style.SegmentColorKeys()
-	want := []string{"repo_root", "repo_worktree", "ai", "dirgit", "time"}
+	want := []string{"repo_root", "repo_worktree", "ai", "dirgit", "time", "host"}
 	if len(keys) != len(want) {
 		t.Fatalf("SegmentColorKeys(): len=%d, want %d", len(keys), len(want))
 	}
@@ -167,5 +168,36 @@ func TestSegmentColorKeys(t *testing.T) {
 		if keys[i] != k {
 			t.Errorf("SegmentColorKeys()[%d]: got %q, want %q", i, keys[i], k)
 		}
+	}
+}
+
+// TestHostIcons pins the host segment glyphs: the generic "host" icon in every
+// style (including the ascii fallback) and the per-kind emoji in both built-in
+// styles. The per-kind icons are emoji on purpose — the user asked for the
+// computer emoji even under the Nerd Font style.
+func TestHostIcons(t *testing.T) {
+	wantKinds := map[string]string{
+		"host":           "💻",
+		"host_macos":     "🍎",
+		"host_wsl":       "🪟",
+		"host_rpi":       "🍓",
+		"host_jetson":    "🤖",
+		"host_dgx":       "🧠",
+		"host_container": "📦",
+	}
+	for _, name := range []string{"powerline", "emoji"} {
+		st := style.Resolve(io.Discard, name, nil, false)
+		for key, want := range wantKinds {
+			if got := st.Icons[key]; got != want {
+				t.Errorf("style %q icon %q = %q; want %q", name, key, got, want)
+			}
+		}
+	}
+	ascii := style.Resolve(io.Discard, "powerline", nil, true)
+	if got := ascii.Icons["host"]; got != "[host]" {
+		t.Errorf("ascii host icon = %q; want [host]", got)
+	}
+	if _, has := ascii.Icons["host_dgx"]; has {
+		t.Error("ascii mode must not carry per-kind emoji icons")
 	}
 }

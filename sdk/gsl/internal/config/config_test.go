@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 )
 
 // TestDefaultIsUsable verifies that Default() returns a config that passes
-// basic sanity checks: enabled, all 4 segments present and enabled, valid
+// basic sanity checks: enabled, all 5 segments present and enabled, valid
 // timezone and style defaults.
 func TestDefaultIsUsable(t *testing.T) {
 	c := config.Default()
@@ -25,8 +26,8 @@ func TestDefaultIsUsable(t *testing.T) {
 		t.Errorf("Default().Timezone = %q; want 'America/Los_Angeles'", c.Timezone)
 	}
 
-	// All 4 segments in order.
-	wantTypes := []string{"dirgit", "repo", "ai", "time"}
+	// All 5 segments in order.
+	wantTypes := []string{"host", "dirgit", "repo", "ai", "time"}
 	if len(c.Segments) != len(wantTypes) {
 		t.Fatalf("Default() has %d segments; want %d", len(c.Segments), len(wantTypes))
 	}
@@ -315,5 +316,92 @@ func TestLinksRoundTrip(t *testing.T) {
 	_ = json.Unmarshal(raw, &m)
 	if _, ok := m["links"]; !ok {
 		t.Error("links key missing from the saved JSON")
+	}
+}
+
+// TestDefaultSegmentPriority_Host pins the host segment between the clock and
+// the AI segment: a narrow terminal sheds the time first, then where you are.
+func TestDefaultSegmentPriority_Host(t *testing.T) {
+	got := config.DefaultSegmentPriority("host")
+	if got <= config.PriorityTime || got >= config.PriorityAI {
+		t.Errorf("DefaultSegmentPriority(host) = %d; want between time (%d) and ai (%d)", got, config.PriorityTime, config.PriorityAI)
+	}
+}
+
+// TestEnableSegment_InsertsMissingKnownType covers a config.json written before
+// a segment type existed: enabling it must add the entry (host goes first,
+// anything else last) rather than fail with "unknown segment type".
+func TestEnableSegment_InsertsMissingKnownType(t *testing.T) {
+	c := config.Default()
+	c.Segments = []config.Segment{
+		{Type: "dirgit", Enabled: true},
+		{Type: "time", Enabled: true},
+	}
+	if err := c.EnableSegment("host"); err != nil {
+		t.Fatalf("EnableSegment(host) on a config without it: %v", err)
+	}
+	if c.Segments[0].Type != "host" || !c.Segments[0].Enabled {
+		t.Errorf("host should be inserted first and enabled; got %+v", c.Segments)
+	}
+	if err := c.EnableSegment("ai"); err != nil {
+		t.Fatalf("EnableSegment(ai): %v", err)
+	}
+	// Canonical order is host, dirgit, repo, ai, time: ai lands before time.
+	if c.Segments[2].Type != "ai" || !c.Segments[2].Enabled || c.Segments[3].Type != "time" {
+		t.Errorf("ai should be inserted before time (canonical order) and enabled; got %+v", c.Segments)
+	}
+	if err := c.EnableSegment("bogus"); err == nil {
+		t.Error("EnableSegment(bogus) should still fail for an unknown type")
+	}
+	if len(c.Segments) != 4 {
+		t.Errorf("want 4 segments after inserts, got %d", len(c.Segments))
+	}
+}
+
+// TestEnableSegment_CanonicalInsertPosition: a missing type goes where the
+// default order puts it, not blindly at the end.
+func TestEnableSegment_CanonicalInsertPosition(t *testing.T) {
+	c := config.Default()
+	c.Segments = []config.Segment{{Type: "repo", Enabled: true}, {Type: "time", Enabled: true}}
+	if err := c.EnableSegment("dirgit"); err != nil {
+		t.Fatal(err)
+	}
+	got := []string{}
+	for _, s := range c.Segments {
+		got = append(got, s.Type)
+	}
+	if want := "dirgit repo time"; strings.Join(got, " ") != want {
+		t.Errorf("order = %q; want %q", strings.Join(got, " "), want)
+	}
+}
+
+// TestDisableToggleSegment_InsertsMissingKnownType: disable and toggle must
+// accept a known type an older config.json lacks, exactly like enable does
+// (the README lists all three verbs for every segment).
+func TestDisableToggleSegment_InsertsMissingKnownType(t *testing.T) {
+	c := config.Default()
+	c.Segments = []config.Segment{{Type: "dirgit", Enabled: true}}
+
+	if err := c.DisableSegment("host"); err != nil {
+		t.Fatalf("DisableSegment(host) on a config without it: %v", err)
+	}
+	if c.Segments[0].Type != "host" || c.Segments[0].Enabled {
+		t.Errorf("disable should insert host first, disabled; got %+v", c.Segments)
+	}
+
+	c.Segments = []config.Segment{{Type: "dirgit", Enabled: true}}
+	if err := c.ToggleSegment("host"); err != nil {
+		t.Fatalf("ToggleSegment(host) on a config without it: %v", err)
+	}
+	if c.Segments[0].Type != "host" || !c.Segments[0].Enabled {
+		t.Errorf("toggle of an absent (effectively off) segment should insert it enabled; got %+v", c.Segments)
+	}
+	if err := c.ToggleSegment("host"); err != nil || c.Segments[0].Enabled {
+		t.Errorf("second toggle should disable it (err=%v); got %+v", err, c.Segments)
+	}
+	for _, verb := range []func(string) error{c.DisableSegment, c.ToggleSegment} {
+		if err := verb("bogus"); err == nil {
+			t.Error("unknown type should still be an error")
+		}
 	}
 }

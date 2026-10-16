@@ -23,7 +23,7 @@ sdk/gsl/
     ├── mcp/                  mcp.Runner interface + SystemRunner (os/exec seam) + configured/active counts + cache
     ├── repo/                 repo.Locate (git worktree detection), repo.PR (registry + gh fallback), registry parsing
     ├── style/                Style struct, two built-ins (powerline/emoji), Resolve/ResolveConfig, ASCII fallback
-    ├── render/               Segment interface, BuildSegments, concurrent Render, four seg_*.go files, glyphs/ANSI
+    ├── render/               Segment interface, BuildSegments, concurrent Render, five seg_*.go files (host, dirgit, repo, ai, time), glyphs/ANSI
     ├── preview/              bubbletea TUI model, fixture payloads, RenderOnce (--once path)
     └── version/              Version/Commit/BuildDate/Dirty vars stamped by build.sh ldflags
 ```
@@ -116,7 +116,7 @@ Resolution priority (see `internal/theme/resolve.go`):
 2. Terminal env — `$COLORTERM`/`$TERM` selects `dark` (truecolor/256color) or `dark8` (8-color).
 3. Hardcoded default: `dark`.
 
-Palette names: `dark`, `light`, `dark-daltonism`, `dark8`. All five segment color keys (`repo_root`, `repo_worktree`, `ai`, `dirgit`, `time`) are defined in every palette so the `emoji` style (which applies colors as fg-tint only, `Fill: false`) can always tint every segment.
+Palette names: `dark`, `light`, `dark-daltonism`, `dark8`. All six segment color keys (`repo_root`, `repo_worktree`, `ai`, `dirgit`, `time`, `host`) are defined in every palette so the `emoji` style (which applies colors as fg-tint only, `Fill: false`) can always tint every segment.
 
 `style.ResolveConfig` merges the resolved palette into `Style.Theme` for keys the user did not explicitly set. User config always wins. See `internal/style/resolve.go` (`ResolveConfig`) and `internal/style/builtins.go` (`palettes`, `Palette`, `SegmentColorKeys`).
 
