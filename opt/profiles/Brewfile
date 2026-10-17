@@ -78,7 +78,8 @@ brew 'jsonnet'
 brew 'fx'
 
 # snowflake tools
-# brew '1password-cli' # had to install manually
+# 1password-cli: opt-in via gff (install.tools.1password); install_1password.sh runs
+# `brew install --cask 1password-cli` itself, so it is not listed here.
 
 cask 'snowflake-snowsql'
 brew 'lcov'
