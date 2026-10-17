@@ -44,6 +44,7 @@ ADR may be design-only. **Always** register it in `index.md`.
 | If the objective is… | Run this workflow | Artifacts |
 | :-- | :-- | :-- |
 | **A new skill** (or editing one) | `skill-creator:skill-creator` → `superpowers:writing-skills` | spec (optional) + the skill + its `evals/evals.json` (validate with `make skill-evals`; see [`ai/skills/AGENTS.md`](../../ai/skills/AGENTS.md)) |
+| **Grooming the backlog** (triage / prioritize / close stale issues, periodic review) | `issue-grooming` (`ai/skills/issue-grooming/`) | `priority:1`–`priority:5` labels, evidence-comment closes, refreshed bodies, and one new **Audit log** row in `index.md` (no design/spec/plan — it is a maintenance pass over existing objectives) |
 | **A dotfiles feature** (shell, `opt/`, `ai/`, profiles, install) | `superpowers:brainstorming` → `superpowers:writing-plans` → `superpowers:test-driven-development`; obey the root `CLAUDE.md` conventions | spec + plan |
 | **A Go CLI under `sdk/`** | `brainstorming` → `superpowers:writing-plans` → `tdd`; mirror `sdk/gss` (cobra `cmd/`, `internal/` + mockable runner, `internal/version` ldflags); engage **go-team** agents (`go-goarch` for interfaces) | design + spec + plan |
 | **A Go RPC / gRPC service** | `go-goarch` (proto/interface + boundaries) → `writing-plans` → `go-godev` / `go-goqa` | design + spec + plan |

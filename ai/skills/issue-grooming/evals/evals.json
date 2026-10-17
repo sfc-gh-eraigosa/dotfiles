@@ -1,0 +1,35 @@
+{
+  "skill_name": "issue-grooming",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "look over the open issues, lets do some grooming. Identify which issues are addressed vs which ones are not, then decide on a priority for each, leave a label 1-5 where 1 is most important and 5 is least. Refactor any that need re-working to fit the current state of the repo.",
+      "expected_output": "Runs groom-snapshot.sh and groom-labels.sh, clusters the issues, verifies each cluster against docs/mbo/index.md, TRACKING ledgers, merged PRs and the code on main (fanning clusters out to subagents with the verdict-schema brief), produces verdicts.json, dry-runs then applies groom-apply.sh (one priority:N label each, addressed/obsolete closed with evidence comments, stale bodies refreshed with the original folded), and ends with the groom-report.sh tables plus an index.md audit-log row.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Is #339 still a real bug? gss feature checkpoint used to fail with 'Head sha can't be blank' — I think one of the September gss PRs fixed it but the issue is still open.",
+      "expected_output": "Treats this as a single-issue grooming: reads the issue, searches merged PRs by keyword and by the issue number in PR titles, checks the checkpoint PR-creation code path on main, and returns a verdict with cited evidence (addressed → close with an evidence comment; otherwise keeps it open with a priority and says what remains). Does not guess from the title.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "The fleet-connect program has a dozen sub-issues (#290-#301) and I've lost track of which leaves merged. Can you bring the issue bodies up to date and tell me what's actually left?",
+      "expected_output": "Clusters the sub-issues under their parent objective, reads the fleet-connect plan §6 and TRACKING ledger plus merged PR titles for each leaf name, marks merged leaves addressed (close with evidence) and the rest partially/open with inherited priorities, and rewrites remaining bodies to list only what is left — never pastes the old body back, relies on the apply script's details fold.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Close out anything in the backlog that's obviously done and label the rest by importance. Don't ask me per issue, just do it and show me a summary.",
+      "expected_output": "Proceeds autonomously but still verifies every close against main or a merged PR, uses groom-apply.sh (which refuses to close partially/open verdicts and requires a close comment), applies priority:1..5 labels, and returns the groom-report.sh summary with links; does not delete any issue content.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Can you list the open PRs for this repo in a Discord-friendly format?",
+      "expected_output": "Does NOT use issue-grooming; this is the pr-list skill (pull requests, chat formatting), not backlog triage.",
+      "files": []
+    }
+  ]
+}
