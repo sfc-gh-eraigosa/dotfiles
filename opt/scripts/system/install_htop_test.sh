@@ -48,13 +48,27 @@ assert_eq "$(grep -E '^_IP_CONFIG_FLAGS=' "${INSTALL_SH}" | grep -c -w 'INSTALL_
 assert_eq "$(grep -E '^_IP_DEPS_FLAGS=' "${INSTALL_SH}" | grep -c -w 'INSTALL_TOOLS_HTOP_FIT')" "0" \
   "INSTALL_TOOLS_HTOP_FIT is NOT a deps-phase key"
 for rc in .zshrc .bashrc; do
-  assert_grep "${rc} sources the deployed wrapper" '\.config/htop/htop-fit\.sh" \]' "${REPO_ROOT}/opt/profiles/${rc}"
+  # shellcheck disable=SC2016 # literal ${XDG_CONFIG_HOME...} is what we grep for
+  assert_grep "${rc} sources the wrapper from the XDG path install uses" '^\[ -f "\$\{XDG_CONFIG_HOME:-\$HOME/\.config\}/htop/htop-fit\.sh" \]' "${REPO_ROOT}/opt/profiles/${rc}"
 done
+assert_grep "flag off never undoes under --phase deps" 'INSTALL_PHASE" != "deps"' "${INSTALL_SH}"
+assert_grep "CPU count ignores OMP_NUM_THREADS/affinity (getconf, not bare nproc)" 'ncpu=\$\(getconf _NPROCESSORS_ONLN' "${FIT}"
+assert_grep "temp htoprc is removed even on a signal" "trap 'rm -f \"\\\$tmp\"' EXIT HUP INT TERM" "${FIT}"
 assert_grep "seed sorts by CPU%" '^\.sort_key=PERCENT_CPU$' "${SEED}"
 assert_grep "seed has tree view off (it would ignore the sort)" '^tree_view=0$' "${SEED}"
 assert_grep "seed uses the default two-column layout" '^header_layout=two_50_50$' "${SEED}"
 
 # --- render ------------------------------------------------------------------
+TMP="$(mktemp -d)"
+trap 'rm -rf "${TMP}"' EXIT
+
+# htop-fit.sh is a no-op without htop on PATH (CI runners may lack it): stub it.
+mkdir -p "${TMP}/bin"
+# shellcheck disable=SC2016 # expanded by the stub at run time, not here
+printf '#!/bin/sh\necho "htop ${STUB_HTOP_VERSION:-3.4.1}"\n' >"${TMP}/bin/htop"
+chmod +x "${TMP}/bin/htop"
+PATH="${TMP}/bin:${PATH}"
+
 # shellcheck source=../../etc/htop/htop-fit.sh
 . "${FIT}"
 
@@ -76,9 +90,6 @@ col_rows() { # file col ncpu
       print h + 0
     }' "$1"
 }
-
-TMP="$(mktemp -d)"
-trap 'rm -rf "${TMP}"' EXIT
 
 # Seed chrome: column titles + tab bar + function bar + 2 margin rows = 5.
 for case in "40 22 4" "24 22 4" "60 4 4" "50 8 10"; do
@@ -108,6 +119,14 @@ printf 'column_meters_0=CPU\ncolumn_meter_modes_0=1\ncolumn_meters_1=!\ncolumn_m
 _htop_fit_render "${TMP}/empty.rc" 30 4 4 0 >"${TMP}/out"
 assert_grep "an empty column (!) is filled without a stray !" '^column_meters_1=NetworkIO ' "${TMP}/out"
 
+sed 's/^hide_function_bar=.*/hide_function_bar=1/' "${SEED}" >"${TMP}/esc.rc"
+_htop_fit_render "${TMP}/esc.rc" 40 4 22 0 >"${TMP}/out"
+assert_eq "$(col_rows "${TMP}/out" 0 22)" "31" "hide_function_bar=1 (hidden only after ESC) still counts the bar"
+sed 's/^hide_function_bar=.*/hide_function_bar=2/' "${SEED}" >"${TMP}/hid.rc"
+_htop_fit_render "${TMP}/hid.rc" 40 4 22 0 >"${TMP}/out"
+assert_eq "$(col_rows "${TMP}/out" 0 22)" "32" "hide_function_bar=2 frees the bar row"
+
+assert_eq "$(STUB_HTOP_VERSION=3.0.5 _htop_fit_gpu || echo n)" "n" "auto GPU is off on htop older than 3.4"
 assert_eq "$(HTOP_FIT_GPU=1 _htop_fit_gpu && echo y)" "y" "HTOP_FIT_GPU=1 forces the GPU meter on"
 assert_eq "$(HTOP_FIT_GPU=0 _htop_fit_gpu || echo n)" "n" "HTOP_FIT_GPU=0 forces it off"
 
@@ -142,6 +161,13 @@ assert_exit_code 1 "remove takes htoprc away so htop uses its defaults" test -e 
 assert_file_exists "${D}/htoprc.dotfiles.bak" "remove keeps the managed htoprc as .dotfiles.bak"
 assert_exit_code 1 "remove clears the marker" test -e "${D}/.dotfiles-managed"
 
+# Flag cycling never overwrites an earlier backup.
+run install
+echo "delay=42" >>"${D}/htoprc"
+run remove
+assert_eq "$(find "${D}" -name 'htoprc.dotfiles.bak*' | wc -l | tr -d ' ')" "2" "a second remove keeps the first .dotfiles.bak"
+assert_grep "remove still moves a changed managed htoprc aside" '^delay=42$' "$(find "${D}" -name 'htoprc.dotfiles.bak.*')"
+
 U="${TMP}/user"
 mkdir -p "${U}"
 echo "user=1" >"${U}/htoprc"
@@ -150,5 +176,9 @@ assert_grep "remove leaves an htoprc dotfiles never managed" '^user=1$' "${U}/ht
 HTOP_CONFIG_DIR="${U}" bash "${SCRIPT}" install >/dev/null
 assert_grep "install backs up an unmanaged htoprc" '^user=1$' "${U}/htoprc.pre-dotfiles.bak"
 assert_exit_code 0 "then installs the seed" cmp -s "${SEED}" "${U}/htoprc"
+HTOP_CONFIG_DIR="${U}" bash "${SCRIPT}" remove >/dev/null
+echo "user=2" >"${U}/htoprc"
+HTOP_CONFIG_DIR="${U}" bash "${SCRIPT}" install >/dev/null
+assert_grep "re-enabling never overwrites the original pre-dotfiles backup" '^user=1$' "${U}/htoprc.pre-dotfiles.bak"
 
 _test_report

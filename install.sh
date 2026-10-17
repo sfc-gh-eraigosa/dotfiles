@@ -761,12 +761,16 @@ else gff_skip_msg install.tools.herdr-config; fi
 # .zshrc/.bashrc) that fills the header with history graphs so only the top
 # few processes show, plus the dotfiles htoprc. A CONFIG-phase step (copies
 # repo content). Off actively undoes it: the wrapper is removed and a
-# dotfiles-managed htoprc is moved aside, so htop returns to its defaults.
+# dotfiles-managed htoprc is moved aside, so htop returns to its defaults —
+# but not under --phase deps, which forces every config flag off to mean
+# "skip this step here", not "undo it".
 if gff_on install.tools.htop-fit; then
   "${BASE_DIR}/opt/scripts/system/install_htop.sh" install || echo "WARNING: htop setup reported problems; continuing."
 else
   gff_skip_msg install.tools.htop-fit
-  "${BASE_DIR}/opt/scripts/system/install_htop.sh" remove || echo "WARNING: htop setup removal reported problems; continuing."
+  if [ "$INSTALL_PHASE" != "deps" ]; then
+    "${BASE_DIR}/opt/scripts/system/install_htop.sh" remove || echo "WARNING: htop setup removal reported problems; continuing."
+  fi
 fi
 
 # install Antigravity CLI (agy) — Gemini CLI's successor (Gemini CLI EOL 2026-06-18)

@@ -35,6 +35,15 @@ MARKER="${DEST_DIR}/.dotfiles-managed"
 
 info() { echo "htop: $*"; }
 
+# keep CMD SRC DEST — cp/mv SRC to DEST without ever overwriting an earlier
+# backup (a taken name gets a timestamp suffix); prints the path used.
+keep() {
+  local dest="$3"
+  [ -e "${dest}" ] && dest="${dest}.$(date +%Y%m%d%H%M%S)"
+  "$1" "$2" "${dest}"
+  echo "${dest}"
+}
+
 sum_of() { cksum <"$1" | awk '{print $1 "-" $2}'; }
 
 # True when RC is the file dotfiles last installed, unchanged since.
@@ -60,11 +69,9 @@ do_install() {
     info "${RC} was changed since dotfiles installed it; leaving it alone (HTOP_CONFIG_FORCE=1 replaces it, keeping a .bak)."
     return 0
   elif [ -f "${MARKER}" ]; then
-    cp "${RC}" "${RC}.bak"
-    info "replacing changed ${RC} (kept ${RC}.bak)"
+    info "replacing changed ${RC} (kept $(keep cp "${RC}" "${RC}.bak"))"
   else
-    cp "${RC}" "${RC}.pre-dotfiles.bak"
-    info "kept your previous htoprc as ${RC}.pre-dotfiles.bak"
+    info "kept your previous htoprc as $(keep cp "${RC}" "${RC}.pre-dotfiles.bak")"
   fi
   cp "${SRC_DIR}/htoprc" "${RC}"
   sum_of "${RC}" >"${MARKER}"
@@ -78,8 +85,8 @@ do_remove() {
   fi
   if [ -f "${MARKER}" ]; then
     if [ -f "${RC}" ]; then
-      mv "${RC}" "${RC}.dotfiles.bak"
-      info "moved the dotfiles htoprc to ${RC}.dotfiles.bak; htop now starts from its defaults"
+      rc_is_managed_and_pristine || info "${RC} was changed since dotfiles installed it; moving it aside anyway"
+      info "moved the dotfiles htoprc to $(keep mv "${RC}" "${RC}.dotfiles.bak"); htop now starts from its defaults"
     fi
     rm -f "${MARKER}"
   fi

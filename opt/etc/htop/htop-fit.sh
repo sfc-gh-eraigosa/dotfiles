@@ -35,6 +35,13 @@ _htop_fit_gpu() {
     0 | off | false) return 1 ;;
   esac
   [ "$(uname -s 2>/dev/null)" = Linux ] || return 1
+  # The GPU meter and GPU_PERCENT column are new; an older htop drops them,
+  # which would throw the row math off. 3.4 is the oldest verified.
+  local ver
+  ver=$(command htop --version 2>/dev/null | awk 'NR == 1 { print $2 }')
+  case "$ver" in
+    [0-2].* | 3.[0-3] | 3.[0-3].*) return 1 ;;
+  esac
   local card drv
   find /sys/class/drm -maxdepth 1 -name 'card[0-9]*' 2>/dev/null |
     while IFS= read -r card; do
@@ -73,7 +80,7 @@ _htop_fit_render() {
     }
     { sub(/=!$/, "=") }   # "!" marks an empty column
     /^screen_tabs=/       { tabs = substr($0, 13) + 0 }
-    /^hide_function_bar=/ { fbar = (substr($0, 19) + 0) ? 0 : 1 }
+    /^hide_function_bar=/ { fbar = (substr($0, 19) + 0 == 2) ? 0 : 1 }   # 1 = hidden only after ESC
     /^header_margin=/     { margin = substr($0, 15) + 0 }
     /^screen:Main=/ && gpu && !/GPU_PERCENT/ { sub(/ Command$/, " GPU_PERCENT Command") }
     { line[NR] = $0 }
@@ -108,17 +115,20 @@ htop() {
     command htop "$@"
     return
   fi
-  local lines ncpu gpu=0 tmp ret
+  local lines ncpu gpu=0 tmp
   lines=${LINES:-$(tput lines 2>/dev/null || echo 24)}
-  ncpu=$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
+  # Not nproc: it honors OMP_NUM_THREADS and the affinity mask, htop does not.
+  ncpu=$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc --all 2>/dev/null || echo 1)
   _htop_fit_gpu && gpu=1
   tmp=$(mktemp "${TMPDIR:-/tmp}/htoprc.XXXXXX") || {
     command htop "$@"
     return
   }
   _htop_fit_render "$rc" "$lines" "${HTOP_PROC_ROWS:-4}" "$ncpu" "$gpu" >"$tmp"
-  HTOPRC=$tmp command htop "$@"
-  ret=$?
-  rm -f "$tmp"
-  return $ret
+  # Subshell + trap: the copy is removed even when htop dies on a signal
+  # (terminal or ssh session closed).
+  (
+    trap 'rm -f "$tmp"' EXIT HUP INT TERM
+    HTOPRC=$tmp command htop "$@"
+  )
 }
