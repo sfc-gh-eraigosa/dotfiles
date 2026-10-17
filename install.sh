@@ -100,7 +100,7 @@ unset _ip_prev _ip_arg
 #   - CONFIG / SKILL / SYMLINK / any repo-content step -> _IP_CONFIG_FLAGS. Runs
 #     in the per-commit config layer; omitting it BAKES the step into the cached
 #     deps layer, so later edits to it stop taking effect per commit (a bug).
-_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_TOOLS_HERDR_PLUGINS INSTALL_TOOLS_HERDR_CONFIG INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
+_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_TOOLS_HERDR_PLUGINS INSTALL_TOOLS_HERDR_CONFIG INSTALL_TOOLS_HTOP_FIT INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
 _IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_UV INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_GLOW INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM INSTALL_RUNTIME_RUST INSTALL_SHELL_OH_MY_ZSH_UPDATE"
 apply_install_phase() {
   case "$INSTALL_PHASE" in
@@ -756,6 +756,22 @@ if gff_on install.tools.herdr-config; then
     "${BASE_DIR}/opt/scripts/system/install_herdr.sh" config || echo "WARNING: herdr config reported problems; continuing."
   fi
 else gff_skip_msg install.tools.herdr-config; fi
+
+# htop setup: the htop() wrapper (~/.config/htop/htop-fit.sh, sourced by
+# .zshrc/.bashrc) that fills the header with history graphs so only the top
+# few processes show, plus the dotfiles htoprc. A CONFIG-phase step (copies
+# repo content). Off actively undoes it: the wrapper is removed and a
+# dotfiles-managed htoprc is moved aside, so htop returns to its defaults —
+# but not under --phase deps, which forces every config flag off to mean
+# "skip this step here", not "undo it".
+if gff_on install.tools.htop-fit; then
+  "${BASE_DIR}/opt/scripts/system/install_htop.sh" install || echo "WARNING: htop setup reported problems; continuing."
+else
+  gff_skip_msg install.tools.htop-fit
+  if [ "$INSTALL_PHASE" != "deps" ]; then
+    "${BASE_DIR}/opt/scripts/system/install_htop.sh" remove || echo "WARNING: htop setup removal reported problems; continuing."
+  fi
+fi
 
 # install Antigravity CLI (agy) — Gemini CLI's successor (Gemini CLI EOL 2026-06-18)
 if gff_on install.ai.antigravity; then
