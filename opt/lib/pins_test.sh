@@ -193,7 +193,7 @@ fi
 # --- the seed manifest itself ------------------------------------------------------
 REAL="${REPO_ROOT}/opt/profiles/versions.tsv"
 _rows=$(awk '$1 !~ /^#/ && NF { n++ } END { print n + 0 }' "$REAL" 2>/dev/null)
-assert_out "17" "$_rows" "versions.tsv has the 17 managed rows"
+assert_out "18" "$_rows" "versions.tsv has the 18 managed rows"
 _dups=$(awk '$1 !~ /^#/ && NF { print $1 }' "$REAL" 2>/dev/null | sort | uniq -d)
 assert_out "" "$_dups" "versions.tsv has no duplicate tools"
 _bad=$(awk '$1 !~ /^#/ && NF && $2 != "pin" && $2 != "floor" && $2 != "latest" { print $1 }' "$REAL" 2>/dev/null)
