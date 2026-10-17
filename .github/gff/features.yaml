@@ -45,7 +45,7 @@ sets:
       - path: install.pkg.brewfile
         description: Runs the macOS brew bundle block for the Brewfile extras including vault-setup.
         boolDefault: true
-      # --- tools (11) ---
+      # --- tools (13) ---
       - path: install.tools.sops
         description: Runs the install_sops.sh block that fetches the sops release binary.
         boolDefault: true
@@ -78,6 +78,9 @@ sets:
         boolDefault: true
       - path: install.tools.herdr-config
         description: Runs `install_herdr.sh config` (config phase) to render ai/herdr/config.toml into ~/.config/herdr/config.toml so herdr follows the host terminal's light/dark appearance with the Solarized palette; converges a dotfiles-managed file, never clobbers a hand-edited one (HERDR_CONFIG_FORCE=1 to reclaim).
+        boolDefault: true
+      - path: install.tools.htop-fit
+        description: Runs install_htop.sh (config phase), which installs the htop() wrapper (~/.config/htop/htop-fit.sh, sourced by .zshrc/.bashrc) that fills the meter header with history graphs (CPU/Memory/Swap, GPU when readable, Network/Disk/Load, per-core CPU) sized to the terminal so only the top 4 processes show, plus the dotfiles htoprc (default two-column meters, CPU% sort). Off removes the wrapper and moves a dotfiles-managed htoprc aside, returning htop to its built-in defaults.
         boolDefault: true
       - path: install.tools.glow
         description: 'Opt-in. Runs install_glow.sh, which installs the glow markdown renderer (charmbracelet/glow, MIT) into ~/opt/bin from the release tarball, SHA-256-verified against its checksums.txt and pinned by GLOW_VERSION. herdr-file-viewer renders markdown through it. Enable with gff set install.tools.glow true.'
