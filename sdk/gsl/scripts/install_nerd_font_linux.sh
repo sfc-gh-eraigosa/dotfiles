@@ -60,10 +60,32 @@ fi
 # ── Install Linux-side fonts ─────────────────────────────────────────────────
 font_dir="${HOME}/.local/share/fonts/MesloLGS"
 mkdir -p "$font_dir"
-# Capture fc-list output to avoid SIGPIPE breaking pipefail when grep exits early.
-_fc_list="$(fc-list 2>/dev/null)"
-if echo "$_fc_list" | grep -qi "MesloLGS Nerd Font"; then
-  echo "MesloLGS Nerd Font already installed; skipping download."
+
+# The Nerd Fonts patcher stamps "Nerd Fonts X.Y.Z" into every face's version
+# string, so the files on disk say which release they came from. Presence on
+# disk decides whether to (re)install — NOT `fc-list`: in the 2026-10-16 fleet
+# run fc-list came back empty for a font that WAS installed, the installer
+# re-downloaded it, and `unzip -o` replaced the faces under a running
+# gnome-terminal, which then drew every powerline glyph from a fallback font.
+installed_nerd_font_version() { # prints X.Y.Z; prints nothing when unreadable
+  LC_ALL=C tr -c '[:print:]' '\n' < "$1" 2>/dev/null |
+    grep -o 'Nerd Fonts [0-9][0-9.]*' | head -1 | awk '{print $3}'
+}
+
+_regular="${font_dir}/MesloLGSNerdFont-Regular.ttf"
+want="${NERD_FONTS_VERSION#v}"
+have=""
+had_files=0
+if [ -f "$_regular" ]; then
+  had_files=1
+  have="$(installed_nerd_font_version "$_regular")" || have=""
+fi
+
+if [ "$had_files" -eq 1 ] && [ "$have" = "$want" ]; then
+  echo "MesloLGS Nerd Font v${have} already installed (pinned v${want}); skipping download."
+  # fontconfig can still miss the directory (stale cache); re-register it
+  # rather than re-downloading — registering does not touch the files.
+  fc-list 2>/dev/null | grep -qi "MesloLGS Nerd Font" || fc-cache -f "$font_dir"
 else
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
@@ -78,7 +100,15 @@ else
     'MesloLGSNerdFont-BoldItalic.ttf' \
     -d "$font_dir"
   fc-cache -f "$font_dir"
-  echo "Installed MesloLGS Nerd Font into ${font_dir} and refreshed font cache."
+  echo "Installed MesloLGS Nerd Font v${want} into ${font_dir} and refreshed font cache."
+  if [ "$had_files" -eq 1 ]; then
+    echo "NOTE: replaced the MesloLGS Nerd Font files on disk (v${have:-unknown} -> v${want})."
+    echo "      Terminals that are already running keep the OLD files mapped and"
+    echo "      will draw powerline/icon glyphs from a fallback font until restarted."
+    echo "      Close EVERY window of the terminal emulator (gnome-terminal runs one"
+    echo "      server process for all windows) and open it again. A herdr session"
+    echo "      survives that: run 'herdr' to reattach."
+  fi
 fi
 
 echo "Verify: fc-list | grep -i MesloLGS"

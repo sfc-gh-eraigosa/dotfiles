@@ -45,7 +45,31 @@ done
 # ── Install font faces from the pinned release ───────────────────────────────
 font_dir="${HOME}/Library/Fonts"
 mkdir -p "$font_dir"
-if system_profiler SPFontsDataType 2>/dev/null | grep -qi "MesloLGS Nerd Font"; then
+
+# The Nerd Fonts patcher stamps "Nerd Fonts X.Y.Z" into every face's version
+# string, so the faces on disk say which release they came from. When the
+# pinned release is already in ~/Library/Fonts there is nothing to do; when the
+# pin moved past it the faces are replaced, which running terminals do not pick
+# up until restarted (they keep the old files mapped and fall back to another
+# font for the powerline/icon glyphs).
+installed_nerd_font_version() { # prints X.Y.Z; prints nothing when unreadable
+  LC_ALL=C tr -c '[:print:]' '\n' < "$1" 2>/dev/null |
+    grep -o 'Nerd Fonts [0-9][0-9.]*' | head -1 | awk '{print $3}'
+}
+
+_regular="${font_dir}/MesloLGSNerdFont-Regular.ttf"
+want="${NERD_FONTS_VERSION#v}"
+have=""
+had_files=0
+if [ -f "$_regular" ]; then
+  had_files=1
+  have="$(installed_nerd_font_version "$_regular")" || have=""
+fi
+
+if [ "$had_files" -eq 1 ] && [ "$have" = "$want" ]; then
+  echo "MesloLGS Nerd Font v${have} already installed (pinned v${want}); skipping download."
+elif [ "$had_files" -eq 0 ] && system_profiler SPFontsDataType 2>/dev/null | grep -qi "MesloLGS Nerd Font"; then
+  # Installed by something else (a brew cask, /Library/Fonts): not ours to replace.
   echo "MesloLGS Nerd Font already present in system fonts; skipping download."
 else
   tmp="$(mktemp -d)"
@@ -54,7 +78,13 @@ else
   curl -fsSL -o "${tmp}/${NERD_FONTS_ASSET}" "${NERD_FONTS_URL_BASE}/${NERD_FONTS_ASSET}"
   unzip -o -q "${tmp}/${NERD_FONTS_ASSET}" 'MesloLGSNerdFont-*.ttf' -d "$tmp"
   cp "${tmp}"/MesloLGSNerdFont-*.ttf "$font_dir"/
-  echo "Installed MesloLGS Nerd Font faces into ${font_dir}."
+  echo "Installed MesloLGS Nerd Font v${want} faces into ${font_dir}."
+  if [ "$had_files" -eq 1 ]; then
+    echo "NOTE: replaced the MesloLGS Nerd Font files on disk (v${have:-unknown} -> v${want})."
+    echo "      Terminals that are already running keep the OLD files mapped and"
+    echo "      will draw powerline/icon glyphs from a fallback font until restarted:"
+    echo "      quit and relaunch iTerm2 / Terminal.app (a new tab is not enough)."
+  fi
 fi
 
 # ── iTerm2 Dynamic Profile (loads live; NOT overwritten on quit) ─────────────

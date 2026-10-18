@@ -193,13 +193,18 @@ Run `sync-skills --build` to rebuild the binary and refresh all skill links.
 **Font setup (Nerd Font for powerline style)**
 
 `install.sh` runs the gsl-packaged font installers AFTER the gsl build so the
-`powerline` style renders glyphs correctly. Pinned release: `NERD_FONTS_VERSION=v3.4.0`
-(ryanoasis/nerd-fonts, `Meslo.zip` — family: `MesloLGS Nerd Font`).
+`powerline` style renders glyphs correctly. Pinned release: the `nerd-fonts` row of
+`opt/profiles/versions.tsv` (ryanoasis/nerd-fonts, `Meslo.zip` — family: `MesloLGS Nerd Font`;
+`NERD_FONTS_VERSION` overrides it). The Linux and macOS installers read the `Nerd Fonts X.Y.Z`
+version string the patcher stamps into the faces on disk: when it matches the pin they skip the
+download (even if `fc-list` misses the font); when the pin moved past it they replace the faces
+and print a **restart-your-terminal** notice, because a running terminal keeps the old files
+mapped and draws the powerline glyphs from a fallback font until it is relaunched.
 
 | OS | Installer | Notes |
 |----|-----------|-------|
-| macOS | `sdk/gsl/scripts/install_nerd_font_macos.sh` | Writes an iTerm2 Dynamic Profile (`gsl-nerd-font`) |
-| Linux/WSL | `sdk/gsl/scripts/install_nerd_font_linux.sh` | Points gnome-terminal's default profile at the font (only when it is still on the system font); also invokes the Windows installer from WSL for Windows Terminal |
+| macOS | `sdk/gsl/scripts/install_nerd_font_macos.sh` | Version-aware skip / replace-with-notice (above); writes an iTerm2 Dynamic Profile (`gsl-nerd-font`). Test: `install_nerd_font_macos_test.sh` |
+| Linux/WSL | `sdk/gsl/scripts/install_nerd_font_linux.sh` | Version-aware skip / replace-with-notice (above); points gnome-terminal's default profile at the font (only when it is still on the system font); also invokes the Windows installer from WSL for Windows Terminal. Test: `install_nerd_font_linux_test.sh` |
 | Windows | `sdk/gsl/scripts/install_nerd_font_windows.ps1` | Called by `setup-apps.ps1 → Install-NerdFont`; touchless (`-NonInteractive -ExecutionPolicy Bypass`) |
 
 After install, `sdk/gsl/scripts/check-font-glyphs.sh` proves the installed font

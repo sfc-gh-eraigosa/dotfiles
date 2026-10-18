@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Self-test for install_nerd_font_linux.sh — specifically the gnome-terminal
-# font wiring. Drives the REAL script with a stubbed toolchain (fc-list reports
-# the font already present, so the download path is skipped) and a stub
+# Self-test for install_nerd_font_linux.sh. Drives the REAL script with a
+# stubbed toolchain (curl logs its calls, unzip writes fake font faces that
+# carry a "Nerd Fonts X.Y.Z" version string like the real ones) and a stub
 # gsettings backed by a state table, so the assertions cover the actual
-# decision logic without touching the host's dconf or the network.
+# decision logic without touching the host's dconf, fonts, or the network.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -24,9 +24,41 @@ assert_absent() { # desc file needle
 H="$(mktemp -d)"
 trap 'rm -rf "$H"' EXIT
 mkdir -p "$H/bin" "$H/run"
+FONT_DIR="$H/.local/share/fonts/MesloLGS"
+FACES="MesloLGSNerdFont-Regular.ttf MesloLGSNerdFont-Bold.ttf MesloLGSNerdFont-Italic.ttf MesloLGSNerdFont-BoldItalic.ttf"
 
-for t in curl unzip fc-cache; do printf '#!/bin/sh\nexit 0\n' > "$H/bin/$t"; done
-printf '#!/bin/sh\necho "/f/MesloLGSNerdFont-Regular.ttf: MesloLGS Nerd Font:style=Regular"\n' > "$H/bin/fc-list"
+# curl and fc-cache record every invocation; unzip "extracts" fake faces into
+# the -d target, stamped with the version the download would have carried.
+cat > "$H/bin/curl" <<'STUB'
+#!/bin/sh
+printf '%s\n' "$*" >> "$CURL_LOG"
+exit 0
+STUB
+cat > "$H/bin/fc-cache" <<'STUB'
+#!/bin/sh
+printf '%s\n' "$*" >> "$FCCACHE_LOG"
+exit 0
+STUB
+cat > "$H/bin/unzip" <<'STUB'
+#!/bin/sh
+dest=.
+while [ $# -gt 0 ]; do
+  if [ "$1" = "-d" ]; then dest="$2"; shift; fi
+  shift
+done
+mkdir -p "$dest"
+for face in MesloLGSNerdFont-Regular MesloLGSNerdFont-Bold MesloLGSNerdFont-Italic MesloLGSNerdFont-BoldItalic; do
+  printf 'OTTO\000\001binary\000Version 1.210;Nerd Fonts %s\000MesloLGS NF\n' "$FAKE_NF_VERSION" > "$dest/$face.ttf"
+done
+exit 0
+STUB
+# fc-list reports the family only when FC_LIST_SEES_FONT=1 (default), so a
+# case can model the fontconfig miss seen in the 2026-10-16 fleet run.
+cat > "$H/bin/fc-list" <<'STUB'
+#!/bin/sh
+[ "${FC_LIST_SEES_FONT:-1}" = "1" ] || exit 0
+echo "/f/MesloLGSNerdFont-Regular.ttf: MesloLGS Nerd Font:style=Regular"
+STUB
 
 cat > "$H/bin/gsettings" <<'STUB'
 #!/usr/bin/env bash
@@ -54,7 +86,7 @@ PROF="b1dcc9dd-0000-0000-0000-000000000000"
 PKEY="org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:${PROF}/"
 
 seed() { # $1 = use-system-font, $2 = "with-profile"|"no-profile"
-  : > "$H/setlog"
+  : > "$H/setlog"; : > "$H/curllog"; : > "$H/fccachelog"
   {
     printf 'org.gnome.Terminal.ProfilesList\tdefault\t%s\n' "'${PROF}'"
     printf 'org.gnome.desktop.interface\tmonospace-font-name\t%s\n' "'Ubuntu Sans Mono 13'"
@@ -68,6 +100,20 @@ seed() { # $1 = use-system-font, $2 = "with-profile"|"no-profile"
   fi
 }
 
+seed_font() { # $1 = installed Nerd Fonts version, or "none" for no files on disk
+  rm -rf "$FONT_DIR"
+  [ "$1" = "none" ] && return 0
+  mkdir -p "$FONT_DIR"
+  for face in $FACES; do
+    printf 'OTTO\000\001binary\000Version 1.210;Nerd Fonts %s\000MesloLGS NF\n' "$1" > "$FONT_DIR/$face"
+  done
+}
+
+installed_version() { # the version string the faces on disk carry now
+  LC_ALL=C tr -c '[:print:]' '\n' < "$FONT_DIR/MesloLGSNerdFont-Regular.ttf" 2>/dev/null |
+    grep -o 'Nerd Fonts [0-9][0-9.]*' | head -1
+}
+
 # The WSL branch keys off /proc/version; point it at a fake so the gnome cases
 # never reach the Windows host installer, even when the suite runs ON WSL.
 printf 'Linux version 6.8.0-generic (buildd@ubuntu)\n' > "$H/proc_version_linux"
@@ -75,23 +121,64 @@ printf 'Linux version 6.6.87.2-microsoft-standard-WSL2\n' > "$H/proc_version_wsl
 
 run() { # extra env assignments as args
   env PATH="$H/bin:/usr/bin:/bin" HOME="$H" \
+      NERD_FONTS_VERSION=3.5.1 FAKE_NF_VERSION=3.5.1 \
       NERD_FONT_PROC_VERSION="$H/proc_version_linux" \
+      CURL_LOG="$H/curllog" FCCACHE_LOG="$H/fccachelog" \
       GS_STATE="$H/state" GS_SETLOG="$H/setlog" GS_RELOC="$H/reloc" \
       DBUS_SESSION_BUS_ADDRESS="unix:path=$H/run/bus" XDG_RUNTIME_DIR="$H/run" \
       "$@" bash "$INSTALLER" > "$H/out" 2>&1
 }
 
-# --- happy path: system font in use -> switch to the Nerd Font ----------------
+# --- pinned version already on disk: skip, and say which version ------------
 seed "true" with-profile
+seed_font 3.5.1
 if run; then ok "installer exits clean"; else notok "installer exits clean"; fi
-assert_contains "skips the download when the font is already installed" \
-  "$H/out" "already installed"
+assert_contains "pinned version on disk: skips the download" "$H/out" "already installed"
+assert_contains "pinned version on disk: names the version it found" "$H/out" "3.5.1"
+if [ -s "$H/curllog" ]; then notok "pinned version on disk: curl never runs"
+else ok "pinned version on disk: curl never runs"; fi
+assert_absent "pinned version on disk: no restart notice" "$H/out" "estart"
 assert_contains "sets use-system-font false" "$H/setlog" "use-system-font false"
 assert_contains "carries over the size already in effect (13)" \
   "$H/setlog" "font MesloLGS Nerd Font 13"
 
+# --- pin bumped past what is installed: replace the files AND say to restart --
+# A running terminal keeps the old inodes mapped and draws PUA glyphs from a
+# fallback font until it is restarted (what hit spark on 2026-10-16).
+seed "false" with-profile
+seed_font 3.4.0
+run
+assert_contains "pin bump: downloads the new release" "$H/curllog" "v3.5.1/Meslo.zip"
+if [ "$(installed_version)" = "Nerd Fonts 3.5.1" ]; then ok "pin bump: faces on disk are now 3.5.1"
+else notok "pin bump: faces on disk are now 3.5.1 (got: $(installed_version))"; fi
+assert_contains "pin bump: tells the user to restart the terminal" "$H/out" "restart"
+assert_contains "pin bump: says what changed (old version)" "$H/out" "3.4.0"
+assert_contains "pin bump: says what changed (new version)" "$H/out" "3.5.1"
+assert_contains "pin bump: refreshes the font cache" "$H/fccachelog" "$FONT_DIR"
+
+# --- fontconfig misses the family but the pinned files ARE on disk -----------
+# The 2026-10-16 fleet run re-downloaded a font that was already installed
+# because `fc-list` came back empty. Presence on disk decides, not fc-list.
+seed "false" with-profile
+seed_font 3.5.1
+run FC_LIST_SEES_FONT=0
+assert_contains "fc-list miss, files present: still skips" "$H/out" "already installed"
+if [ -s "$H/curllog" ]; then notok "fc-list miss, files present: curl never runs"
+else ok "fc-list miss, files present: curl never runs"; fi
+assert_contains "fc-list miss, files present: re-registers the dir with fc-cache" \
+  "$H/fccachelog" "$FONT_DIR"
+
+# --- nothing on disk: fresh install, nothing was replaced, no restart nag -----
+seed "false" with-profile
+seed_font none
+run
+assert_contains "fresh install: downloads" "$H/curllog" "v3.5.1/Meslo.zip"
+assert_contains "fresh install: reports the install" "$H/out" "Installed MesloLGS Nerd Font"
+assert_absent "fresh install: no restart notice (nothing was replaced)" "$H/out" "estart"
+
 # --- respects an explicit user font choice ------------------------------------
 seed "false" with-profile
+seed_font 3.5.1
 run
 assert_absent "leaves a custom font alone" "$H/setlog" "use-system-font"
 assert_contains "says why it left the font alone" "$H/out" "already uses a custom font"
@@ -165,6 +252,8 @@ cp "$W/powershell.exe" "$H/pathps/powershell.exe"
 seed "false" with-profile
 : > "$H/pslog"
 if env PATH="$H/pathps:$H/bin:/usr/bin:/bin" HOME="$H" \
+     NERD_FONTS_VERSION=3.5.1 FAKE_NF_VERSION=3.5.1 \
+     CURL_LOG="$H/curllog" FCCACHE_LOG="$H/fccachelog" \
      NERD_FONT_PROC_VERSION="$H/proc_version_wsl" FAKE_WIN="$H/nowhere" PS_LOG="$H/pslog" \
      GS_STATE="$H/state" GS_SETLOG="$H/setlog" GS_RELOC="$H/reloc" \
      bash "$SA/install_nerd_font_linux.sh" > "$H/out" 2>&1; then
