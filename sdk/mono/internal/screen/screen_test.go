@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hinshun/vt10x"
+	"github.com/mattn/go-runewidth"
 )
 
 func term(t *testing.T, cols, rows int, input string) vt10x.Terminal {
@@ -85,5 +86,28 @@ func TestRowReverseOfDefaultColors(t *testing.T) {
 	r := Row(term(t, 5, 1, "\x1b[7mX"), 0, 1)
 	if !strings.Contains(r, "\x1b[0;7;39;49mX") {
 		t.Fatalf("reverse video on default colors = %q, want 7 with default fg/bg", r)
+	}
+}
+
+// displayWidth is how many terminal columns s takes once escapes are removed,
+// counting wide runes (emoji) as two, as a real terminal draws them.
+func displayWidth(s string) int {
+	return runewidth.StringWidth(strip(s))
+}
+
+// TestRowWideRunesFitTheWidth: vt10x keeps an emoji in one cell, but a
+// terminal draws it two columns wide. Padding the row to `width` cells made
+// gsl's emoji line wider than the screen, so it wrapped, and on the bottom
+// row the terminal scrolled every frame (lost title bar, repeated lines).
+func TestRowWideRunesFitTheWidth(t *testing.T) {
+	vt := term(t, 30, 1, "📁 dotfiles 🌿 main · 🎮 8%")
+	for _, w := range []int{10, 20, 30} {
+		r := Row(vt, 0, w)
+		if got := displayWidth(r); got != w {
+			t.Errorf("width %d: row takes %d columns: %q", w, got, strip(r))
+		}
+	}
+	if r := strip(Row(vt, 0, 30)); !strings.HasPrefix(r, "📁 dotfiles 🌿 main") {
+		t.Errorf("row text = %q", r)
 	}
 }

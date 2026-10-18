@@ -34,9 +34,12 @@ func Run(o Options, in, out *os.File) (err error) {
 	if err != nil {
 		return err
 	}
-	_, _ = io.WriteString(out, "\x1b[?1049h\x1b[?25l\x1b[2J")
+	// ?7l turns autowrap off: a row that is ever wider than the terminal is
+	// clipped at the edge instead of wrapping, and wrapping on the bottom
+	// row would scroll the whole frame.
+	_, _ = io.WriteString(out, "\x1b[?1049h\x1b[?7l\x1b[?25l\x1b[2J")
 	defer func() {
-		_, _ = io.WriteString(out, "\x1b[0m\x1b[?25h\x1b[?1049l")
+		_, _ = io.WriteString(out, "\x1b[0m\x1b[?7h\x1b[?25h\x1b[?1049l")
 		_ = term.Restore(inFd, state)
 	}()
 

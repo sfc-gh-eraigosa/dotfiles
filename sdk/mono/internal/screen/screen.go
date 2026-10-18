@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/hinshun/vt10x"
+	"github.com/mattn/go-runewidth"
 )
 
 // Glyph attribute bits, mirroring vt10x's unexported attr* constants.
@@ -26,15 +27,22 @@ type Cells interface {
 	Size() (cols, rows int)
 }
 
-// Row renders row y of v as exactly width columns of ANSI text, starting and
-// ending with an SGR reset. Cells outside v render as blanks.
+// Row renders row y of v as exactly width terminal columns of ANSI text,
+// starting and ending with an SGR reset. Cells outside v render as blanks.
+//
+// Columns, not cells: vt10x keeps a wide rune (emoji, CJK) in one cell, but
+// the real terminal draws it two columns wide. Counting cells made gsl's
+// emoji line wider than the screen; it wrapped, and on the bottom row the
+// terminal scrolled on every frame. A wide rune that would not fit is
+// replaced by a blank.
 func Row(v Cells, y, width int) string {
 	cols, rows := v.Size()
 	var b strings.Builder
 	b.WriteString("\x1b[0m")
 	var cur vt10x.Glyph
 	cur.FG, cur.BG = vt10x.DefaultFG, vt10x.DefaultBG
-	for x := 0; x < width; x++ {
+	out := 0
+	for x := 0; out < width; x++ {
 		g := vt10x.Glyph{Char: ' ', FG: vt10x.DefaultFG, BG: vt10x.DefaultBG}
 		if x < cols && y < rows {
 			g = v.Cell(x, y)
@@ -42,11 +50,16 @@ func Row(v Cells, y, width int) string {
 		if g.Char == 0 {
 			g.Char = ' '
 		}
+		w := runewidth.RuneWidth(g.Char)
+		if out+w > width {
+			g.Char, w = ' ', 1
+		}
 		if g.FG != cur.FG || g.BG != cur.BG || g.Mode != cur.Mode {
 			b.WriteString(sgr(g))
 			cur = g
 		}
 		b.WriteRune(g.Char)
+		out += w
 	}
 	b.WriteString("\x1b[0m")
 	return b.String()

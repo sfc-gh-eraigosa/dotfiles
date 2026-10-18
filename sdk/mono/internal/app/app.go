@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/mattn/go-runewidth"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/cmdline"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/keymap"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/overlay"
@@ -664,8 +665,8 @@ func drawHelp(rows, body []string, w, h int) {
 	}
 }
 
-// width is the display width of s, ignoring ANSI escapes. Box-drawing,
-// "—" and "●" are one column; emoji are counted as two.
+// width is the display width of s in terminal columns, ignoring ANSI
+// escapes (wide runes such as emoji count two), matching screen.Row.
 func width(s string) int {
 	n := 0
 	for i := 0; i < len(s); {
@@ -678,11 +679,7 @@ func width(s string) int {
 			continue
 		}
 		r, sz := utf8.DecodeRuneInString(s[i:])
-		if r >= 0x1F300 || (r >= 0x2600 && r <= 0x27BF && r != 0x25CF) || r == 0x2753 {
-			n += 2
-		} else {
-			n++
-		}
+		n += runewidth.RuneWidth(r)
 		i += sz
 	}
 	return n
