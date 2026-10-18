@@ -452,6 +452,9 @@ openclaw() {
   openclaw "$@"
 }
 
+# htop wrapper: graph-filled header, top processes only (gff install.tools.htop-fit)
+[ -f "${XDG_CONFIG_HOME:-$HOME/.config}/htop/htop-fit.sh" ] && . "${XDG_CONFIG_HOME:-$HOME/.config}/htop/htop-fit.sh"
+
 # Added by tmux-mgr
 [ -f ${HOME}/.config/tmux-mgr/aliases.sh ] && source ${HOME}/.config/tmux-mgr/aliases.sh
 

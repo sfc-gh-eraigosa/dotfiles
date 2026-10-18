@@ -56,7 +56,16 @@ fi
 # Load NVM (still used by other Node tooling, e.g. gws)
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+# nvm's completion runs a bare `compinit` under zsh when none has run yet.
+# zsh login shells reach this file via ~/.zprofile -> ~/.profile BEFORE
+# ~/.zshrc shadows dangling vendor completions (Docker Desktop's WSL _docker
+# symlink), which printed "compinit: no such file or directory: .../_docker".
+# So load it in bash, or in zsh only once compinit has defined `compdef`.
+if [ -s "$NVM_DIR/bash_completion" ]; then
+    if [ -n "${BASH_VERSION-}" ] || command -v compdef >/dev/null 2>&1; then
+        \. "$NVM_DIR/bash_completion"
+    fi
+fi
 
 # Add tmux to PATH (for Nix systems)
 if [ -d "/nix/store/mlyqvaa6lcwjfbp1dvzxkd9g46fksdnj-tmux-3.6a/bin" ]; then

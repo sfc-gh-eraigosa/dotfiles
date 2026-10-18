@@ -271,6 +271,9 @@ fi
 # OpenClaw Completion
 command -v openclaw >/dev/null && source <(openclaw completion --shell bash)
 
+# htop wrapper: graph-filled header, top processes only (gff install.tools.htop-fit)
+[ -f "${XDG_CONFIG_HOME:-$HOME/.config}/htop/htop-fit.sh" ] && . "${XDG_CONFIG_HOME:-$HOME/.config}/htop/htop-fit.sh"
+
 # tmux aliases
 # Added by tmux-mgr
 [ -f ${HOME}/.config/tmux-mgr/aliases.sh ] && source ${HOME}/.config/tmux-mgr/aliases.sh

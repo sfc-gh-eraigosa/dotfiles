@@ -14,6 +14,20 @@ when `gff set fleet.update.config repo` is set — the one exception to "nothing
 at runtime", because a plan is executable config and copying it would hide which commit it
 came from. Schema and semantics: [sdk/fleet/README.md](../../sdk/fleet/README.md#fleet-update-host).
 
+## `htop/` — the dotfiles htop view
+
+Deployed by [`opt/scripts/system/install_htop.sh`](../scripts/system/install_htop.sh)
+(gff `install.tools.htop-fit`; flag off removes both and returns htop to its defaults).
+
+| File | Deployed to | Purpose |
+| :-- | :-- | :-- |
+| `htop-fit.sh` | `~/.config/htop/htop-fit.sh` | `htop()` wrapper sourced by `.zshrc`/`.bashrc`: fills the header with graphs sized to the terminal so only the top 4 processes show |
+| `htoprc` | `~/.config/htop/htoprc` | Default two-column meters, CPU% sort, tree view off. htop rewrites this file itself, so it is only updated while unchanged since install |
+
+`htop-fit.sh` is sourced by **both** bash and zsh: no zsh-only syntax, no bare
+globs (zsh aborts on a non-matching glob), and no apostrophes inside its
+single-quoted awk program.
+
 ## `keyd/` — macOS-style keyboard layout
 
 Deployed by [`opt/scripts/system/macos-keys-linux.sh`](../scripts/system/macos-keys-linux.sh).
