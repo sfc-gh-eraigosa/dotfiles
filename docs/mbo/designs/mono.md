@@ -2,8 +2,8 @@
 
 - **Slug:** mono
 - **Date:** 2026-10-17
-- **Status:** Proposed
-- **Relates to:** follows draft PR #404 (htop-fit); issue / PR to be opened for the build
+- **Status:** Approved (2026-10-17); built in draft PR #407
+- **Relates to:** follows PR #404 (htop-fit, merged); build in draft PR #407
 - **Author(s):** Edward Raigosa (requirements), Claude (write-up)
 
 ## 1. Problem / context
@@ -273,5 +273,49 @@ appear at all; `gsl config disable` still hides it locally).
   help overlay, and `mono config` editing a pane.
 - `make lint-portability`, shellcheck, `go test ./...` with the sdk coverage floor.
 
-> Produced via `superpowers:brainstorming`. Register in `../index.md`; spec goes in
-> `../specs/mono.md`.
+## 8. Build notes (decisions made while building)
+
+Calls made during the build, where the design left room or where building
+showed the design was wrong:
+
+- **Owner, mid-design:** `esc` was first going to leave a pane; the owner chose a
+  prefix instead (`ctrl+b`), so `esc` always belongs to the program.
+- **Install flag is `install.sdk.mono`**, not `install.tools.mono`: every sdk Go
+  tool uses `install.sdk.<tool>`. Config phase (`_IP_CONFIG_FLAGS`).
+- **Config fields are `cmd` + optional `every`** (one shape for both pane kinds)
+  rather than `run` vs `every`+`cmd`.
+- **No divider rows between panes.** A divider doubles a 1-row gsl pane; the
+  focused pane's name is in the title bar instead. While the prefix waits, the
+  key hint takes the whole title bar.
+- **Terminal emulator: `hinshun/vt10x`.** `charmbracelet/x/vt` needs
+  `x/ansi` 0.11, which breaks bubbletea v1 (used by `sdk/libs/tui`) at compile
+  time. vt10x rendered htop correctly in the spike (colors, alternate screen).
+  It already swaps colors for reverse video, so the renderer swaps back and
+  emits SGR 7, which also works on the terminal's default colors.
+- **Every pane's emulator answers terminal queries** (`WithWriter(tty)`).
+  bubbletea's package init asks for the background color and waits up to 5 s;
+  gsl links bubbletea, so `gsl status` in a silent pty took 5 s every run and
+  the pane showed "timed out".
+- **The input router stops after each mono key** and hands back the rest, so
+  `ctrl+b :focus mid` typed fast (one read) goes into the prompt, not the pane.
+- **`:config` runs `mono config` in a full-screen pane**, then reloads; reload
+  reconciles live: unchanged panes keep running (and their screens), changed
+  or removed ones stop, new ones start. `configArgv` refuses under
+  `testing.Testing()`.
+- **`mono doctor`** added: which tool each pane gets, why, and its rows.
+- **gsl refresher lock is a kernel `flock`** handed to the refresher as an
+  inherited descriptor, not an O_EXCL file with an mtime staleness rule: the
+  stale-lock takeover let 2–3 refreshers start at once under contention
+  (reproduced by a 16-way race test). Native Windows gets no refresher (no
+  flock), so `[video]` is hidden there.
+- **The gsl test fork bomb (2026-10-17).** The first `[video]` refresher
+  re-exec'd `os.Executable()`; under `go test` that is the test binary, which
+  ignores `video-refresh` (flag parsing stops at the first non-flag argument)
+  and re-runs the suite, which spawns again. About 2,800 detached `cmd.test`
+  processes crashed the WSL VM. Spawns now refuse under `testing.Testing()`
+  and inside a refresher, and the gsl cmd tests stub the spawner.
+  `TestPreviewCmd_Interactive_NoTTY` also hung forever whenever stdin was a
+  terminal; its input is now injectable.
+
+> Produced via `superpowers:brainstorming`. Registered in `../index.md`.
+

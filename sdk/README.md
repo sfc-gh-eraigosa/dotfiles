@@ -30,6 +30,7 @@ go install github.com/sfc-gh-eraigosa/dotfiles/sdk/gss@latest
 | **[gff](#-gff--flags-that-live-in-git)** | "Skip that step on this machine" | Layered feature flags with full provenance |
 | **[wlink](#-wlink--why-does-ssh-hang-but-the-ip-work)** | `ssh host` hangs from WSL but `ssh <ip>` works | Pins the resolver that actually knows your fleet, reversibly |
 | **[wol](#-wol--turn-it-on-from-anywhere)** | The machine you need is powered off | Wake-on-LAN magic packets |
+| **[mono](#-mono--the-whole-machine-on-one-screen)** | You keep three terminals open to watch one machine | htop, a GPU monitor and gsl stacked in one screen, picked per host |
 | **[gcfg](#-gcfg--repo-settings-that-live-in-git)** | Someone changed a repo setting and nobody knows who | GitHub settings as code: export, verify in CI, apply on purpose |
 | **[ghapp](#-ghapp--an-admin-token-that-expires-by-itself)** | A workflow needs admin rights and `GITHUB_TOKEN` hasn't got them | GitHub App credentials: one browser round-trip, hour-long tokens |
 | **[libs](#-libs--the-shared-foundation)** | You're writing tool #8 | Shared logging: rotation, capture, XDG paths |
@@ -366,6 +367,49 @@ packet left, not that anything woke. Many networks need the *subnet* broadcast
 wants port 7. WoL must also be enabled in the target's BIOS/NIC.
 
 → [Agent context](./wol/AGENTS.md)
+
+---
+
+## 🖥️ `mono` — the whole machine on one screen
+
+> htop, a GPU monitor and your status line, stacked in one terminal, with only the tools this machine can actually run.
+
+**The problem.** Watching one machine means three terminals: htop for CPU and
+memory, nvtop for the GPU, and something for git and the clock. On a laptop
+where nvtop has no GPU it can read, that pane is just empty, and the layout you
+like lives in nobody's dotfiles.
+
+**What it does about it.** One command fills the terminal with stacked panes,
+each a real program in its own pseudo-terminal: htop 60%, a GPU monitor 30%,
+`gsl status` 5% refreshed every second, under a title bar. Panes whose tool is
+missing or blind on this host drop out and the others grow. Every key goes to
+the focused program except `ctrl+b`, which leads to mono's own keys (the shared
+sdk keymap, so `j`/`k`/`?`/`:`/`q` mean what they mean in fleet and gff).
+
+**Reach for it when:**
+
+- You want htop, GPU load and your git status in view at once
+- The same dashboard should work on the WSL laptop, the NVIDIA box and a Pi
+- You want to add a pane (`journalctl -f`, `watch df -h`) without a multiplexer
+
+```console
+$ mono doctor
+PANE   SIZE  ROWS@40  RUNS         WHY
+title  5%    2        -            version, commit, focused pane, help hint
+htop   60%   35       htop         found htop
+gpu    30%   -        (not shown)  nvtop not installed; nvitop not installed
+gsl    5%    3        gsl status   found gsl
+
+$ mono config set panes.gpu.cmd nvitop
+$ mono                     # ctrl+b ? for keys, ctrl+b q to quit
+```
+
+**Gotchas.** Settings changed inside htop while it runs in mono are htop's
+own (`~/.config/htop/htoprc`). Mouse input isn't passed through yet. If you run
+mono inside a tmux on its default `ctrl+b` prefix, change one of them
+(`mono config set prefix ctrl+g`).
+
+→ [Agent context](./mono/AGENTS.md)
 
 ---
 
