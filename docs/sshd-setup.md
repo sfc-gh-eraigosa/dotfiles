@@ -93,5 +93,17 @@ Remove-NetFirewallRule -Name 'WSL-SSH-2222'
 Unregister-ScheduledTask -TaskName RefreshWslPortProxy -Confirm:$false   # if -RegisterTask was used
 ```
 
+If you skipped the Windows sshd and forwarded port 22 straight to WSL
+(`refresh-wsl-portproxy.ps1 -ListenPort 22`), undo just that, then delete the
+distro marker `install.sh` deployed (`lib\wsl.ps1` falls back to the next source):
+
+```powershell
+# Windows (admin)
+powershell -ExecutionPolicy Bypass -File refresh-wsl-portproxy.ps1 -UnregisterTask
+netsh interface portproxy delete v4tov4 listenport=22 listenaddress=0.0.0.0
+Remove-NetFirewallRule -Name 'WSL-SSH-22'
+Remove-Item "$([Environment]::GetFolderPath('Desktop'))\Apps\scripts\lib\wsl-distro.txt"
+```
+
 Key seeding is additive only — edit `~/.ssh/authorized_keys` (and on Windows
 `%ProgramData%\ssh\administrators_authorized_keys`) by hand to remove entries.

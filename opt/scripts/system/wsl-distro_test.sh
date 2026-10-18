@@ -29,6 +29,9 @@ assert_grep "wsl.ps1 keeps the fresh-box fallback" "return 'Ubuntu-22\.04'"     
 assert_grep_negative "no bare hardcoded assignment" "^\\\$WslDistro = '"               "$WSL_PS1"
 assert_grep "installer forwards DOTFILES_WSL_DISTRO" 'DOTFILES_WSL_DISTRO/w'           "$INSTALL_WIN"
 assert_grep "installer writes the deploy marker"   'Apps/scripts/lib/wsl-distro\.txt'  "$INSTALL_WIN"
+# shellcheck disable=SC2016  # literal PowerShell $fwName, not a shell expansion
+assert_grep "portproxy refresh opens its firewall port" 'New-NetFirewallRule -Name \$fwName' \
+  "${REPO_ROOT}/opt/Desktop/Apps/scripts/refresh-wsl-portproxy.ps1"
 
 echo "==== LIVE ===="
 PS_EXE=$(command -v powershell.exe 2>/dev/null || true)
