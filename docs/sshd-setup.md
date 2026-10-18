@@ -65,6 +65,65 @@ powershell -ExecutionPolicy Bypass -File opt\Desktop\Apps\scripts\refresh-wsl-po
 `-RegisterTask` installs an elevated at-logon Scheduled Task (`RefreshWslPortProxy`,
 30s delay) that repeats the refresh on every boot without UAC prompts; remove it
 with `-UnregisterTask`. `-ListenPort`/`-Distro` mirror the setup defaults.
+The script also opens the listen port inbound (`WSL-SSH-<port>`, scoped to
+`LocalSubnet`). Without that rule, a Wi-Fi network marked **Public** drops every LAN
+client even though the forward is correct. When Windows runs no sshd of its own,
+`-ListenPort 22` forwards the standard port straight to WSL, so the fleet
+`~/.ssh/config` entry needs no `Port` line.
+
+## WSL networking: pick one of three designs
+
+How a LAN client (fleet) reaches a WSL sshd depends on the distro's
+`networkingMode` in `%USERPROFILE%\.wslconfig`. The fleet machines use two of these.
+
+| | NAT + portproxy (default) | Bridged | Mirrored |
+| :-- | :-- | :-- | :-- |
+| `.wslconfig` | nothing (WSL default) | `networkingMode=bridged` + `vmSwitch=<switch>` | `networkingMode=mirrored` |
+| WSL's address | private NAT IP behind the Windows host | its own LAN IP from DHCP | shares the Windows host's IPs |
+| Inbound path | Windows `portproxy` -> WSL `:22` | straight to the VM; Windows is not in the path | the host's port, delivered into WSL |
+| Firewall | Windows rule `WSL-SSH-<port>` | none on the Windows host | Hyper-V firewall (`New-NetFirewallHyperVRule`) |
+| IP churn | changes most boots -> `RefreshWslPortProxy` task | none with a fixed MAC + DHCP reservation | none |
+| Inbound UDP | n/a | yes | **no** (kernel sockets get no inbound UDP) |
+| Works over Wi-Fi | yes | poorly: needs a Hyper-V external switch; most Wi-Fi adapters cannot carry a second MAC | yes |
+| Used by | Wi-Fi laptops | the k3s workstation | — (untested here) |
+| Set up by | `refresh-wsl-portproxy.ps1` (above) | by hand (below) | by hand |
+
+**Rule of thumb:** use NAT + portproxy. Use bridged only when the VM must be a real LAN
+peer that receives inbound UDP. A k3s node is the case that needs it: flannel's VXLAN
+overlay is UDP, and in mirrored mode those packets never reached the node (2026-10-11).
+Mirrored is the simplest option for TCP-only use (no forward, no IP churn), but no fleet
+machine runs it yet.
+
+### Bridged (the k3s workstation)
+
+The VM gets its own NIC on a Hyper-V **external** switch, so sshd answers on the VM's own
+LAN address and Windows' firewall and portproxy never see the traffic. On that machine:
+
+```ini
+# %USERPROFILE%\.wslconfig
+[wsl2]
+networkingMode=bridged
+vmSwitch=WSLBridge
+# Fixed, locally administered MAC (02:...) so DHCP hands out the same address each boot.
+macAddress=02:xx:xx:xx:xx:xx
+dhcp=true
+```
+
+1. Create the external switch once, bound to the **wired** adapter (admin PowerShell,
+   Hyper-V feature required): `New-VMSwitch -Name WSLBridge -NetAdapterName <Ethernet> -AllowManagementOS $true`.
+   (This is the standard command. How the workstation's own switch was created was not
+   recorded; check it there with `Get-VMSwitch WSLBridge`.)
+2. Write the `.wslconfig` above, then `wsl --shutdown` and start the distro again. Inside WSL,
+   `ip -4 addr show eth0` should now show a LAN address, not `172.x`.
+3. Optionally, reserve that MAC's address on the router. fleet only needs `HostName` in
+   `~/.ssh/config` to resolve.
+4. Skip `refresh-wsl-portproxy.ps1` and `setup-sshd.ps1 -WslPortProxy` on a bridged
+   machine. The VM is already a LAN peer, so a forward would only add a second path
+   through the Windows host and claim the host's port 22 for nothing.
+
+This setup is not automated by `install.sh`. It is hand-configured, with the rationale
+recorded in that machine's `.wslconfig`. Rollback: remove the three `networkingMode`/`vmSwitch`/`macAddress`
+lines, `wsl --shutdown`, and `Remove-VMSwitch WSLBridge`.
 
 ## Integration with dotfiles
 
