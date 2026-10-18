@@ -112,7 +112,7 @@ type Deps struct {
 	// Video is the GPU data cache for the video segment; nil hides it.
 	Video *video.Cache
 	// VideoSpawn starts the detached refresher (video.SpawnRefresher in cmd).
-	VideoSpawn func() error
+	VideoSpawn video.SpawnFunc
 }
 
 // BuildSegments constructs the ordered list of ENABLED segments from

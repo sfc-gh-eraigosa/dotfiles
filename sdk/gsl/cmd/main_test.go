@@ -16,7 +16,7 @@ var videoSpawnCalls atomic.Int64
 // 2026-10-17 fork bomb. video.SpawnRefresher also refuses on its own now;
 // this keeps the tests from even asking.
 func TestMain(m *testing.M) {
-	videoSpawn = func() error {
+	videoSpawn = func(*os.File) error {
 		videoSpawnCalls.Add(1)
 		return nil
 	}
@@ -25,7 +25,7 @@ func TestMain(m *testing.M) {
 
 func TestVideoSpawn_IsNoOpUnderTest(t *testing.T) {
 	before := videoSpawnCalls.Load()
-	if err := videoSpawn(); err != nil {
+	if err := videoSpawn(nil); err != nil {
 		t.Fatalf("videoSpawn() = %v, want nil", err)
 	}
 	if videoSpawnCalls.Load() != before+1 {

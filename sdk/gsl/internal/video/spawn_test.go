@@ -42,7 +42,7 @@ func TestCanSpawn(t *testing.T) {
 // SpawnRefresher must refuse rather than re-exec it.
 func TestSpawnRefresher_RefusesUnderGoTest(t *testing.T) {
 	t.Setenv(RefreshEnv, "")
-	if err := SpawnRefresher(); !errors.Is(err, ErrNoSpawn) {
+	if err := SpawnRefresher(nil); !errors.Is(err, ErrNoSpawn) {
 		t.Fatalf("SpawnRefresher() under go test = %v, want ErrNoSpawn", err)
 	}
 }

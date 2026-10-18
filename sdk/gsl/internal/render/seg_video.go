@@ -20,13 +20,13 @@ type VideoSegment struct {
 	Cache *video.Cache
 	// Spawn starts the detached refresher (video.SpawnRefresher in
 	// production). Injected so tests count starts without forking.
-	Spawn func() error
+	Spawn video.SpawnFunc
 	// Priority is the DROP priority (config.Segment.EffectivePriority).
 	Priority int
 }
 
 // NewVideoSegment builds a VideoSegment.
-func NewVideoSegment(c *video.Cache, spawn func() error) *VideoSegment {
+func NewVideoSegment(c *video.Cache, spawn video.SpawnFunc) *VideoSegment {
 	return &VideoSegment{Cache: c, Spawn: spawn}
 }
 

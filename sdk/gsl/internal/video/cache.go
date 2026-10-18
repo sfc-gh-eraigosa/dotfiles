@@ -16,7 +16,6 @@ import (
 const (
 	FreshFor        = time.Second
 	NoSourceBackoff = 30 * time.Second
-	LockStale       = 10 * time.Second
 	RefreshTimeout  = 5 * time.Second
 )
 
@@ -116,39 +115,32 @@ func (c Cache) stale(r Record, have bool) bool {
 	return age > NoSourceBackoff
 }
 
-// TryLock takes the refresher lock (O_EXCL). A lock older than LockStale is
-// treated as left by a crashed refresher and replaced.
-func (c Cache) TryLock() bool {
+// SpawnFunc starts a refresher that inherits lock. The refresher holds the
+// lock until it exits; the caller closes its own copy right after.
+type SpawnFunc func(lock *os.File) error
+
+// TryLock takes the refresher lock without waiting. It is a kernel lock
+// (flock) on video.lock, so it is released when the last process holding it
+// exits, crashes included: there is no stale lock to guess about. Two renders
+// can never both take it. On platforms without flock it always fails, which
+// leaves the segment hidden there.
+func (c Cache) TryLock() (*os.File, bool) {
 	if err := os.MkdirAll(c.Dir, 0o700); err != nil {
-		return false
+		return nil, false
 	}
-	for attempt := 0; attempt < 2; attempt++ {
-		f, err := os.OpenFile(c.lockPath(), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		if err == nil {
-			_ = f.Close()
-			return true
-		}
-		fi, serr := os.Stat(c.lockPath())
-		if serr != nil || c.now().Sub(fi.ModTime()) <= LockStale {
-			return false
-		}
-		_ = os.Remove(c.lockPath())
-	}
-	return false
+	return tryLockFile(c.lockPath())
 }
 
-// Unlock releases the refresher lock.
-func (c Cache) Unlock() { _ = os.Remove(c.lockPath()) }
-
 // Get is the render-path entry point. It reads the cache and, when the data is
-// stale, starts exactly one refresher via spawn (guarded by the lock) without
-// waiting for it. It returns the last known reading; show=false means there is
-// nothing to display (no data yet, or no GPU source on this host).
-func (c Cache) Get(spawn func() error) (s Stats, show bool) {
+// stale and no refresher holds the lock, starts one via spawn, handing it the
+// lock, without waiting for it. It returns the last known reading; show=false
+// means there is nothing to display (no data yet, or no GPU source here).
+func (c Cache) Get(spawn SpawnFunc) (s Stats, show bool) {
 	r, have := c.Read()
-	if c.stale(r, have) && spawn != nil && c.TryLock() {
-		if err := spawn(); err != nil {
-			c.Unlock()
+	if c.stale(r, have) && spawn != nil {
+		if lock, ok := c.TryLock(); ok {
+			_ = spawn(lock) // on error nobody inherited the lock; Close frees it
+			_ = lock.Close()
 		}
 	}
 	if !have || !r.OK {
@@ -157,9 +149,9 @@ func (c Cache) Get(spawn func() error) (s Stats, show bool) {
 	return r.Stats, true
 }
 
-// Refresh is what the detached refresher runs: collect, store, unlock.
+// Refresh is what the detached refresher runs: collect and store. The lock it
+// inherited is released when the refresher process exits.
 func (c Cache) Refresh(col Collector) error {
-	defer c.Unlock()
 	return c.refresh(col)
 }
 

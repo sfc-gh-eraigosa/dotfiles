@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -21,18 +22,22 @@ const RefreshEnv = "GSL_VIDEO_REFRESH"
 var ErrNoSpawn = errors.New("video: refusing to spawn refresher from a test binary or a refresher")
 
 // SpawnRefresher re-execs this binary as `gsl video-refresh`, detached, and
-// does not wait for it. It refuses (ErrNoSpawn) inside any Go test binary,
-// however it is named, and when RefreshEnv is already set.
-func SpawnRefresher() error {
+// does not wait for it. The child inherits lock (as fd 3), so the lock stays
+// held until the refresher exits. It refuses (ErrNoSpawn) inside any Go test
+// binary, however it is named, when RefreshEnv is already set, and on Windows.
+func SpawnRefresher(lock *os.File) error {
 	self, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	if !canSpawn(self, os.Getenv, testing.Testing()) {
+	if runtime.GOOS == "windows" || !canSpawn(self, os.Getenv, testing.Testing()) {
 		return ErrNoSpawn
 	}
 	cmd := exec.Command(self, "video-refresh")
 	cmd.Env = append(os.Environ(), RefreshEnv+"=1")
+	if lock != nil {
+		cmd.ExtraFiles = []*os.File{lock}
+	}
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
 		return err
