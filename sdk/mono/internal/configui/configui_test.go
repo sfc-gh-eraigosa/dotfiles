@@ -131,11 +131,11 @@ func TestReorderAddRemove(t *testing.T) {
 }
 
 func TestQuitGuardsUnsavedChanges(t *testing.T) {
-	m, path := newModel(t)
+	m, _ := newModel(t)
 	if _, ok := send(m, runes("q")).(tea.QuitMsg); !ok {
 		t.Fatal("clean q did not quit")
 	}
-	m, path = newModel(t)
+	m, path := newModel(t)
 	send(m, runes(":"))
 	typeLine(m, "set panes.htop.size 50%")
 	if send(m, runes("q")) != nil {

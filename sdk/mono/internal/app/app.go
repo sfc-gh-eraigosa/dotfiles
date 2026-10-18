@@ -607,15 +607,12 @@ func (palette) Err(s string) string    { return "\x1b[31m" + s + "\x1b[39m" }
 
 // HelpText is the help overlay body (shared with `mono --help`).
 func HelpText(keys keymap.Map, prefix string, panes []string, p overlay.Palette) string {
-	var cmds []string
-	for _, s := range []string{
+	cmds := []string{
 		":config            edit panes, tools and sizes, then reload",
 		":restart [pane]    restart a pane's program",
 		":focus <pane>      focus a pane by name",
 		":reload            re-read the config and re-check tools",
 		":q                 quit",
-	} {
-		cmds = append(cmds, s)
 	}
 	sections := []overlay.Section{{Title: "Commands", Lines: cmds}}
 	if len(panes) > 0 {
@@ -674,7 +671,7 @@ func width(s string) int {
 	for i := 0; i < len(s); {
 		if s[i] == 0x1b {
 			j := i + 1
-			for j < len(s) && !(s[j] >= 0x40 && s[j] <= 0x7e && j > i+1) {
+			for j < len(s) && (s[j] < 0x40 || s[j] > 0x7e || j <= i+1) {
 				j++
 			}
 			i = j + 1
@@ -707,7 +704,7 @@ func truncate(s string, w int) string {
 	for i := 0; i < len(s); {
 		if s[i] == 0x1b {
 			j := i + 1
-			for j < len(s) && !(s[j] >= 0x40 && s[j] <= 0x7e && j > i+1) {
+			for j < len(s) && (s[j] < 0x40 || s[j] > 0x7e || j <= i+1) {
 				j++
 			}
 			b.WriteString(s[i:min(j+1, len(s))])

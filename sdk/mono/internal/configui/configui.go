@@ -284,10 +284,10 @@ func (m *Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keymap.Command:
 		m.prompt("")
 	case keymap.Confirm:
-		switch {
-		case m.cur.Pos == 0:
+		switch m.cur.Pos {
+		case 0:
 			m.prompt("set prefix " + m.cfg.Prefix)
-		case m.cur.Pos == 1:
+		case 1:
 			m.prompt("set title.size " + m.cfg.Title.Size)
 		default:
 			p := m.cfg.Panes[pane]

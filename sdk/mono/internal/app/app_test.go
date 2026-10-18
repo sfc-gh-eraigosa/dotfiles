@@ -51,7 +51,7 @@ func plain(rows []string) string {
 	for _, r := range rows {
 		for i := 0; i < len(r); i++ {
 			if r[i] == 0x1b {
-				for i < len(r) && !(r[i] >= 0x40 && r[i] <= 0x7e && r[i] != '[') {
+				for i < len(r) && (r[i] < 0x40 || r[i] > 0x7e || r[i] == '[') {
 					i++
 				}
 				continue
