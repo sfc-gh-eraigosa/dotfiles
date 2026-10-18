@@ -20,7 +20,7 @@ keyboard shortcuts, Wispr Flow voice dictation, app/font setup, and PowerToys.
   re-run standalone, **reloads** AutoHotkey after a re-deploy (self-elevates → UAC).
 - **`setup-apps.ps1`** — winget app install + Windows Terminal profiles/themes.
 - **`Start-DevStack.ps1` / `Stop-DevStack.ps1`** — boot the one WSL distro (k3s node, ollama, sshd) and open claude-remote / stop Docker and `wsl --shutdown`. Launched from the Desktop by `Start Dev Stack.cmd` / `Stop Dev Stack.cmd`.
-- **`lib/wsl.ps1`** — names the one WSL distro (`$WslDistro`); every script that targets WSL defaults to it.
+- **`lib/wsl.ps1`** — resolves the one WSL distro (`$WslDistro`); every script that targets WSL defaults to it. Not hardcoded: first hit of `$env:DOTFILES_WSL_DISTRO` (install_windows.sh forwards the distro install.sh runs in via WSLENV), the distro in the script's own `\\wsl.localhost\<distro>\` UNC path, `lib\wsl-distro.txt` (written next to the Desktop copy at deploy time — untracked, per machine), then `Ubuntu-22.04` for a fresh machine. **Tested by `opt/scripts/system/wsl-distro_test.sh`** (static checks + a live `powershell.exe` run of each tier).
 - **`setup-security-audit.ps1`** — opt-in (gff `install.windows.security-audit`,
   **fail-closed**) installer for the unattended security audit: registers the
   user-level `ClaudeSecurityAuditCollector` task (daily at `-At`, **repeating hourly

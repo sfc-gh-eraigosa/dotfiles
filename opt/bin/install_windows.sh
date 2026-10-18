@@ -182,6 +182,16 @@ deploy_windows_files() {
   # Unlinking first always works, so overwrite via unlink+create. GNU-only
   # flag is fine: this deploy path only runs under WSL (Ubuntu coreutils).
   cp -r --remove-destination "${BASE_DIR}/opt/Desktop/." "${win_desktop}/"
+
+  # Pin the deployed scripts to the distro install.sh runs in: lib\wsl.ps1 reads
+  # this marker, so hand runs and scheduled tasks (e.g. RefreshWslPortProxy)
+  # target this distro instead of a name hardcoded for another machine.
+  # An explicit DOTFILES_WSL_DISTRO wins, as in export_gff_wslenv.
+  _wsl_distro="${DOTFILES_WSL_DISTRO:-${WSL_DISTRO_NAME:-}}"
+  if [ -n "$_wsl_distro" ]; then
+    printf '%s\r\n' "$_wsl_distro" > "${win_desktop}/Apps/scripts/lib/wsl-distro.txt"
+    echo "Pinned WSL distro '${_wsl_distro}' -> Apps/scripts/lib/wsl-distro.txt"
+  fi
 }
 
 # -----------------------------------------------------------------------------
@@ -207,6 +217,14 @@ export_gff_wslenv() {
     -e 's/^\(GFF_KEYBOARD_[A-Z_]*\)=.*/\1/p'); do
     case ":${_gff_wslenv}:" in *":${_v}/w:"*) : ;; *) _gff_wslenv="${_gff_wslenv:+${_gff_wslenv}:}${_v}/w" ;; esac
   done
+  # DOTFILES_WSL_DISTRO rides along too: lib\wsl.ps1 resolves "the one distro"
+  # from it first, so a script launched from here targets the distro install.sh
+  # runs in. An explicit DOTFILES_WSL_DISTRO from the caller wins.
+  _wsl_distro="${DOTFILES_WSL_DISTRO:-${WSL_DISTRO_NAME:-}}"
+  if [ -n "$_wsl_distro" ]; then
+    export DOTFILES_WSL_DISTRO="$_wsl_distro"
+    case ":${_gff_wslenv}:" in *":DOTFILES_WSL_DISTRO/w:"*) : ;; *) _gff_wslenv="${_gff_wslenv:+${_gff_wslenv}:}DOTFILES_WSL_DISTRO/w" ;; esac
+  fi
   export WSLENV="${_gff_wslenv}"
 }
 
