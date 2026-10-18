@@ -20,7 +20,7 @@ import (
 // `gff install` from the checkout registers it on a host; install.sh does that.
 const Namespace = "com.github.sfc-gh-eraigosa.dotfiles"
 
-// The five flags. Enabled is the master; the rest are link families.
+// The link flags. Enabled is the master; the rest are link families.
 const (
 	KeyEnabled = "gsl.links.enabled"
 	KeyRepo    = "gsl.links.repo"
@@ -29,19 +29,60 @@ const (
 	KeyTime    = "gsl.links.time"
 )
 
+// Per-section flags: gsl.section.<segment type>. A section can only be turned
+// OFF by its flag; failure means on.
+const (
+	KeySectionHost   = "gsl.section.host"
+	KeySectionDirGit = "gsl.section.dirgit"
+	KeySectionRepo   = "gsl.section.repo"
+	KeySectionAI     = "gsl.section.ai"
+	KeySectionTime   = "gsl.section.time"
+	KeySectionVideo  = "gsl.section.video"
+)
+
+// SectionKeys maps a segment type to its gff flag key.
+var SectionKeys = map[string]string{
+	"host":   KeySectionHost,
+	"dirgit": KeySectionDirGit,
+	"repo":   KeySectionRepo,
+	"ai":     KeySectionAI,
+	"time":   KeySectionTime,
+	"video":  KeySectionVideo,
+}
+
 // Links is the resolved flag set. The zero value is NOT the default — use
 // Resolve, which starts from all-true.
-type Links struct{ Enabled, Repo, DirGit, AI, Time bool }
+//
+// Sections holds the gsl.section.* answers keyed by segment type; it is always
+// fully populated by Resolve.
+type Links struct {
+	Enabled, Repo, DirGit, AI, Time bool
+	Sections                        map[string]bool
+}
+
+// SectionOff returns the segment types whose section flag resolved to false.
+func (l Links) SectionOff() map[string]bool {
+	off := map[string]bool{}
+	for t, on := range l.Sections {
+		if !on {
+			off[t] = true
+		}
+	}
+	return off
+}
 
 // Lookup answers one flag key. It is the seam tests replace with a fake.
 type Lookup func(key string) (bool, error)
 
-// Resolve evaluates the five keys concurrently and returns when all have
+// Resolve evaluates the link and section keys concurrently and returns when all have
 // answered or ctx is done; keys that errored or never answered read true.
 // The goroutines of a timed-out lookup are abandoned, not joined — the render
 // must not wait on them.
 func Resolve(ctx context.Context, look Lookup) Links {
-	out := Links{Enabled: true, Repo: true, DirGit: true, AI: true, Time: true}
+	out := Links{Enabled: true, Repo: true, DirGit: true, AI: true, Time: true, Sections: map[string]bool{}}
+	for t := range SectionKeys {
+		out.Sections[t] = true
+	}
 	if look == nil {
 		return out
 	}
@@ -50,6 +91,11 @@ func Resolve(ctx context.Context, look Lookup) Links {
 		val bool
 	}
 	keys := []string{KeyEnabled, KeyRepo, KeyDirGit, KeyAI, KeyTime}
+	secType := map[string]string{}
+	for t, k := range SectionKeys {
+		keys = append(keys, k)
+		secType[k] = t
+	}
 	ch := make(chan answer, len(keys))
 	for _, k := range keys {
 		go func(k string) {
@@ -74,6 +120,10 @@ func Resolve(ctx context.Context, look Lookup) Links {
 				out.AI = a.val
 			case KeyTime:
 				out.Time = a.val
+			default:
+				if t, ok := secType[a.key]; ok {
+					out.Sections[t] = a.val
+				}
 			}
 		case <-ctx.Done():
 			return out

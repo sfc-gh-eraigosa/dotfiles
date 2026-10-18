@@ -1,0 +1,20 @@
+#!/bin/sh
+# htop-fit — htop through the dotfiles htop-fit wrapper, as a command.
+#
+# The wrapper (htop-fit.sh) defines an htop() shell function that ~/.zshrc and
+# ~/.bashrc load, so it only exists in an interactive shell. Programs that
+# start htop themselves (mono's panes run /bin/sh -c "htop") got the plain
+# binary. This command loads the same wrapper and runs htop through it, so the
+# graph-filled header and top-processes view work there too, fitted to that
+# terminal's height.
+#
+# Deployed by opt/scripts/system/install_htop.sh to ~/opt/bin/htop-fit
+# (gff install.tools.htop-fit). Without the wrapper it is plain htop.
+fit="${XDG_CONFIG_HOME:-$HOME/.config}/htop/htop-fit.sh"
+if [ -r "$fit" ]; then
+  # shellcheck source=/dev/null
+  . "$fit"
+  htop "$@"
+  exit $?
+fi
+exec htop "$@"

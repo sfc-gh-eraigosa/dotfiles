@@ -100,7 +100,7 @@ unset _ip_prev _ip_arg
 #   - CONFIG / SKILL / SYMLINK / any repo-content step -> _IP_CONFIG_FLAGS. Runs
 #     in the per-commit config layer; omitting it BAKES the step into the cached
 #     deps layer, so later edits to it stop taking effect per commit (a bug).
-_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_TOOLS_HERDR_PLUGINS INSTALL_TOOLS_HERDR_CONFIG INSTALL_TOOLS_HTOP_FIT INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
+_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_TOOLS_HERDR_PLUGINS INSTALL_TOOLS_HERDR_CONFIG INSTALL_TOOLS_HTOP_FIT INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_MONO INSTALL_SDK_GSL INSTALL_SDK_GFF"
 _IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_UV INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_GLOW INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM INSTALL_RUNTIME_RUST INSTALL_SHELL_OH_MY_ZSH_UPDATE INSTALL_TOOLS_LASTPASS INSTALL_TOOLS_1PASSWORD"
 apply_install_phase() {
   case "$INSTALL_PHASE" in
@@ -939,6 +939,19 @@ if gff_on install.sdk.wol; then
     fi
   fi
 else gff_skip_msg install.sdk.wol; fi
+
+# build and install mono (stacked-pane dashboard: htop, a GPU monitor, gsl)
+if gff_on install.sdk.mono; then
+  if [ -f "${BASE_DIR}/sdk/mono/build.sh" ]; then
+    echo "Installing mono (stacked-pane dashboard)..."
+    bash "${BASE_DIR}/sdk/mono/build.sh" || echo "WARNING: mono build reported problems; continuing."
+    if [ -f "${HOME}/opt/bin/mono" ]; then
+        echo "--------------------------------------------------"
+        "${HOME}/opt/bin/mono" version
+        echo "--------------------------------------------------"
+    fi
+  fi
+else gff_skip_msg install.sdk.mono; fi
 
 # build and install fleet
 if gff_on install.sdk.fleet; then
