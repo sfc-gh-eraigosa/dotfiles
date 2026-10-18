@@ -15,6 +15,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/repo"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/video"
 	"github.com/sirupsen/logrus"
 )
 
@@ -102,6 +103,16 @@ type Deps struct {
 	// changes view) can use it without a second lookup. Nil ⇒ the repo
 	// segment looks it up itself, exactly as before.
 	PR *repo.RepoInfo
+
+	// SectionOff lists segment types whose gff gsl.section.<type> flag is OFF.
+	// A segment renders only when its flag is on AND it is enabled in config;
+	// the zero value (nil) means every flag is on.
+	SectionOff map[string]bool
+
+	// Video is the GPU data cache for the video segment; nil hides it.
+	Video *video.Cache
+	// VideoSpawn starts the detached refresher (video.SpawnRefresher in cmd).
+	VideoSpawn func() error
 }
 
 // BuildSegments constructs the ordered list of ENABLED segments from
@@ -116,7 +127,7 @@ type Deps struct {
 func BuildSegments(cfg config.Config, deps Deps) []Segment {
 	segs := make([]Segment, 0, len(cfg.Segments))
 	for _, sc := range cfg.Segments {
-		if !sc.Enabled {
+		if !sc.Enabled || deps.SectionOff[sc.Type] {
 			continue
 		}
 		prio := sc.EffectivePriority()
@@ -160,6 +171,10 @@ func BuildSegments(cfg config.Config, deps Deps) []Segment {
 			s.Priority = prio
 			s.Links = deps.Links
 			s.Links.TimeURL = optString(sc.Options, "link_url", deps.Links.TimeURL)
+			segs = append(segs, s)
+		case "video":
+			s := NewVideoSegment(deps.Video, deps.VideoSpawn)
+			s.Priority = prio
 			segs = append(segs, s)
 		default:
 			// Unknown segment type: skip silently.

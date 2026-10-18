@@ -419,3 +419,21 @@ sets:
       - path: gsl.links.time
         description: Time link — the date/time opens a timezone page built from the time segment's `link_url` template (default https://time.is/{tz_city}; placeholders {tz} {tz_city} {iso_utc} {unix}).
         boolDefault: true
+      - path: gsl.section.host
+        description: Show the gsl host segment — the machine name and hardware-kind glyph (laptop, WSL, Pi, Jetson, DGX, container). false hides it on this machine even when `gsl config enable host` is set; a segment renders only when this flag is on AND it is enabled in ~/.config/gsl/config.json.
+        boolDefault: true
+      - path: gsl.section.dirgit
+        description: Show the gsl dirgit segment — the working directory plus git branch and dirty/ahead/behind indicators. false hides it on this machine even when `gsl config enable dirgit` is set; a segment renders only when this flag is on AND it is enabled in ~/.config/gsl/config.json.
+        boolDefault: true
+      - path: gsl.section.repo
+        description: Show the gsl repo segment — the repository root/worktree glyph, feature/worker label and the PR badge. false hides it on this machine even when `gsl config enable repo` is set; a segment renders only when this flag is on AND it is enabled in ~/.config/gsl/config.json.
+        boolDefault: true
+      - path: gsl.section.ai
+        description: Show the gsl ai segment — the model name, context-window %, 5h/7d rate limits and MCP count (Claude Code / Antigravity payload). false hides it on this machine even when `gsl config enable ai` is set; a segment renders only when this flag is on AND it is enabled in ~/.config/gsl/config.json.
+        boolDefault: true
+      - path: gsl.section.time
+        description: Show the gsl time segment — the clock (date, time, timezone). false hides it on this machine even when `gsl config enable time` is set; a segment renders only when this flag is on AND it is enabled in ~/.config/gsl/config.json.
+        boolDefault: true
+      - path: gsl.section.video
+        description: Show the gsl video segment — GPU utilisation and memory as `[video] 12%|2.8G/16G` (nvidia-smi, Windows counters on WSL, or Linux DRM sysfs; hidden where no source exists). false hides it on this machine even when `gsl config enable video` is set; a segment renders only when this flag is on AND it is enabled in ~/.config/gsl/config.json.
+        boolDefault: true
