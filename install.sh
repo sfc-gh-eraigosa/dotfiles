@@ -100,8 +100,8 @@ unset _ip_prev _ip_arg
 #   - CONFIG / SKILL / SYMLINK / any repo-content step -> _IP_CONFIG_FLAGS. Runs
 #     in the per-commit config layer; omitting it BAKES the step into the cached
 #     deps layer, so later edits to it stop taking effect per commit (a bug).
-_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_TOOLS_HERDR_PLUGINS INSTALL_TOOLS_HERDR_CONFIG INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
-_IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_UV INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_GLOW INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM INSTALL_RUNTIME_RUST INSTALL_SHELL_OH_MY_ZSH_UPDATE"
+_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_TOOLS_HERDR_PLUGINS INSTALL_TOOLS_HERDR_CONFIG INSTALL_TOOLS_HTOP_FIT INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_GSL INSTALL_SDK_GFF"
+_IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_UV INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_GLOW INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM INSTALL_RUNTIME_RUST INSTALL_SHELL_OH_MY_ZSH_UPDATE INSTALL_TOOLS_LASTPASS INSTALL_TOOLS_1PASSWORD"
 apply_install_phase() {
   case "$INSTALL_PHASE" in
     deps)   for _f in $_IP_CONFIG_FLAGS; do export "GFF_${_f}=false"; done ;;
@@ -474,6 +474,30 @@ else
   echo "SKIP (gff: install.tools.glow is opt-in and not enabled)"
 fi
 
+# LastPass CLI (`lpass`). Every fleet platform packages it, so install_lastpass.sh
+# installs the distro package (apt / dnf / brew) instead of fetching a binary;
+# a host where lpass already runs is a no-op. On by default; drop it on a host
+# with `gff set install.tools.lastpass false`.
+if gff_on install.tools.lastpass; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_lastpass.sh" ]; then
+    echo "Installing lastpass-cli..."
+    "${BASE_DIR}/opt/scripts/system/install_lastpass.sh" || echo "WARNING: lastpass-cli install reported problems; continuing."
+  fi
+else gff_skip_msg install.tools.lastpass; fi
+
+# 1Password CLI (`op`). Opt-in like glow: gff_opt_in, so an unset flag or a
+# missing gff export means skip. Linux fetches the pinned release zip and
+# verifies its GPG signature against 1Password's key; macOS uses the brew cask.
+#   gff set install.tools.1password true
+if gff_opt_in install.tools.1password; then
+  if [ -f "${BASE_DIR}/opt/scripts/system/install_1password.sh" ]; then
+    echo "Installing 1password-cli..."
+    "${BASE_DIR}/opt/scripts/system/install_1password.sh" || echo "WARNING: 1password-cli install reported problems; continuing."
+  fi
+else
+  echo "SKIP (gff: install.tools.1password is opt-in and not enabled)"
+fi
+
 # Install the Snowflake CLI (`snow`). Replaces the old .zshrc daily-maintenance
 # pip auto-install, which broke on PEP 668 (externally-managed-environment)
 # systems. macOS uses the homebrew-core formula; Linux uses pipx so the system
@@ -756,6 +780,22 @@ if gff_on install.tools.herdr-config; then
     "${BASE_DIR}/opt/scripts/system/install_herdr.sh" config || echo "WARNING: herdr config reported problems; continuing."
   fi
 else gff_skip_msg install.tools.herdr-config; fi
+
+# htop setup: the htop() wrapper (~/.config/htop/htop-fit.sh, sourced by
+# .zshrc/.bashrc) that fills the header with history graphs so only the top
+# few processes show, plus the dotfiles htoprc. A CONFIG-phase step (copies
+# repo content). Off actively undoes it: the wrapper is removed and a
+# dotfiles-managed htoprc is moved aside, so htop returns to its defaults —
+# but not under --phase deps, which forces every config flag off to mean
+# "skip this step here", not "undo it".
+if gff_on install.tools.htop-fit; then
+  "${BASE_DIR}/opt/scripts/system/install_htop.sh" install || echo "WARNING: htop setup reported problems; continuing."
+else
+  gff_skip_msg install.tools.htop-fit
+  if [ "$INSTALL_PHASE" != "deps" ]; then
+    "${BASE_DIR}/opt/scripts/system/install_htop.sh" remove || echo "WARNING: htop setup removal reported problems; continuing."
+  fi
+fi
 
 # install Antigravity CLI (agy) — Gemini CLI's successor (Gemini CLI EOL 2026-06-18)
 if gff_on install.ai.antigravity; then

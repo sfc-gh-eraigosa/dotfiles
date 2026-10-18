@@ -25,6 +25,7 @@
 go          pin     @.go-version  go:                          -                                     go version
 uv          pin     0.13.0        gh:astral-sh/uv              opt/scripts/system/install_uv.sh      uv --version
 glow        pin     3.0.0         gh:charmbracelet/glow        opt/scripts/system/install_glow.sh    glow --version
+1password-cli  pin  2.41.0  -  opt/scripts/system/install_1password.sh  op --version
 rust        floor   1.99.0        gh:rust-lang/rust            opt/scripts/system/install_rust.sh    rustc --version
 sops        pin     3.13.3        gh:getsops/sops              opt/scripts/system/install_sops.sh    sops --version --disable-version-check
 yq          pin     4.54.1        gh:mikefarah/yq              opt/scripts/system/install_yq.sh      yq --version

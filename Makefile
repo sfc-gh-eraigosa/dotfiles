@@ -247,9 +247,10 @@ lint-markdown: ## Lint markdown files with markdownlint-cli2
 # Shell test framework (issue #46 phase 2)
 # -----------------------------------------------------------------------------
 # Each `*_test.sh` is a standalone bash driver using ai/_test_helpers.sh.
-# Discovery scans ai/, opt/scripts/, opt/bin/, opt/profiles/, and the
-# repo root for any *_test.sh (so install_test.sh at the root is picked
-# up). opt/google-cloud-sdk is excluded — it's a vendored SDK that ships
+# Discovery scans ai/, opt/scripts/, opt/bin/, opt/profiles/, opt/lib/,
+# the repo root (so install_test.sh at the root is picked up), and each Go
+# module's shell helpers under sdk/<module>/scripts/ (the gsl Nerd Font
+# installers and glyph checks ship their drivers there). opt/google-cloud-sdk is excluded — it's a vendored SDK that ships
 # its own scripts. NOTE: dotfile-prefixed driver names (e.g.
 # `.bash_aliases_test.sh`) are picked up by `find -name '*_test.sh'`
 # because find pattern matching does not skip dotfiles (only the shell
@@ -266,6 +267,7 @@ shell-test: ## Run all *_test.sh shell test drivers (uses ai/_test_helpers.sh)
 			find ai opt/scripts opt/bin opt/profiles opt/lib -maxdepth 6 -name '*_test.sh' -type f 2>/dev/null; \
 			find . -maxdepth 1 -name '*_test.sh' -type f 2>/dev/null; \
 			find scripts -maxdepth 1 -name '*_test.sh' -type f 2>/dev/null; \
+			find sdk -maxdepth 3 -path '*/scripts/*_test.sh' -type f 2>/dev/null; \
 		} | grep -v '^./opt/google-cloud-sdk' | sort -u \
 	) ; \
 	if [ -z "$$drivers" ]; then \

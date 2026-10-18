@@ -54,6 +54,7 @@ type installerGate struct {
 var installerGates = map[string]installerGate{
 	"opt/scripts/system/install_uv.sh":        {key: "install.tools.uv"},
 	"opt/scripts/system/install_glow.sh":      {key: "install.tools.glow", optIn: true},
+	"opt/scripts/system/install_1password.sh": {key: "install.tools.1password", optIn: true},
 	"opt/scripts/system/install_rust.sh":      {key: "install.runtime.rust"},
 	"opt/scripts/system/install_sops.sh":      {key: "install.tools.sops"},
 	"opt/scripts/system/install_yq.sh":        {key: "install.tools.yq"},
