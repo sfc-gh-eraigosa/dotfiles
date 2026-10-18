@@ -109,7 +109,7 @@ func (p *Pane) startInteractive() error {
 	cols, rows := p.cols, p.rows
 	p.mu.Unlock()
 	cmd := p.command()
-	tty, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
+	tty, err := pty.StartWithSize(cmd, winsize(cols, rows))
 	if err != nil {
 		p.setExited(fmt.Sprintf("could not start %q: %v", p.Spec.Cmd, err))
 		return err
@@ -235,7 +235,7 @@ func (p *Pane) capture() {
 	ctx, cancel := context.WithTimeout(context.Background(), max(5*time.Second, 5*p.Spec.Every))
 	defer cancel()
 	cmd := p.command()
-	tty, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
+	tty, err := pty.StartWithSize(cmd, winsize(cols, rows))
 	if err != nil {
 		p.setExited(fmt.Sprintf("could not start %q: %v", p.Spec.Cmd, err))
 		return
@@ -296,7 +296,7 @@ func (p *Pane) Resize(cols, rows int) {
 	}
 	p.vt.Resize(cols, rows)
 	if p.tty != nil {
-		_ = pty.Setsize(p.tty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
+		_ = pty.Setsize(p.tty, winsize(cols, rows))
 	}
 }
 
@@ -389,6 +389,13 @@ func (p *Pane) Snapshot(width, height int) View {
 	v.Cursor = screen.Cursor{X: c.X, Y: c.Y, Show: vt.CursorVisible() && c.Y < height && c.X < width}
 	vt.Unlock()
 	return v
+}
+
+// winsize is cols x rows as a pty size, clamped to what the kernel stores
+// (uint16) so a huge or bogus terminal size cannot wrap around.
+func winsize(cols, rows int) *pty.Winsize {
+	clamp := func(v int) uint16 { return uint16(min(max(v, 1), 0xFFFF)) } // #nosec G115 -- clamped to uint16 range
+	return &pty.Winsize{Cols: clamp(cols), Rows: clamp(rows)}
 }
 
 // terminate sends SIGHUP to the process group, waits up to KillGrace for the

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Self-test for check-deps.sh. Proves the seam gate passes on the
-# clean tree and fails when an internal/ package (outside git/mcp/gh)
+# clean tree and fails when an internal/ package (outside git/mcp/gh/video)
 # imports os/exec. The license-fail path is exercised in CI (needs
 # go-licenses + a banned dep) and is not simulated here.
 set -uo pipefail
@@ -26,7 +26,7 @@ assert_exit() {
 # 1) Clean tree passes (seam OK; license skipped without go-licenses, non-strict).
 assert_exit 0 "clean tree passes (non-strict)" env -u GSL_STRICT_CHECK bash "$CHECK"
 
-# 2) A seam violation under internal/ (outside git/mcp/gh) fails.
+# 2) A seam violation under internal/ (outside git/mcp/gh/video) fails.
 PROBE="$MODULE_DIR/internal/config/seamcheck_probe.go"
 cleanup() { rm -f "$PROBE"; }
 trap cleanup EXIT

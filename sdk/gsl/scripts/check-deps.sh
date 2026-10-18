@@ -3,13 +3,17 @@
 #
 # Three checks:
 #   1. os/exec seam — no package under internal/ EXCEPT internal/git,
-#      internal/mcp, internal/gh, and internal/exec may import "os/exec". Every
-#      subprocess call must go through those three seams so the logic stays
-#      fakeable. cmd/ is the composition root (wiring) and is intentionally
-#      exempt.
+#      internal/mcp, internal/gh, internal/video and internal/exec may import
+#      "os/exec". Every subprocess call must go through those four seams so
+#      the logic stays fakeable. internal/video is a seam like the other
+#      three: its GPU probes (nvidia-smi, powershell.exe) run behind
+#      video.Runner, which every test fakes, and its one other subprocess is
+#      the detached `gsl video-refresh`, which refuses to start under go test
+#      (the 2026-10-17 fork bomb). cmd/ is the composition root (wiring) and
+#      is intentionally exempt.
 #   2. internal/exec sub-gate — internal/exec is exempted from (1) because it
 #      holds the shared subprocess-containment helper (Setpgid + process-group
-#      kill + WaitDelay) that the three seams apply to their *exec.Cmd. It
+#      kill + WaitDelay) that the seams apply to their *exec.Cmd. It
 #      CONFIGURES commands; it must never RUN one, or it would become a fourth,
 #      unfakeable seam through the back door. Enforced by banning command
 #      construction/execution there.
@@ -26,20 +30,21 @@ cd "$MODULE_DIR"
 
 fail=0
 
-echo "== seam check: os/exec confined to internal/git + internal/mcp + internal/gh (+ internal/exec helper) =="
+echo "== seam check: os/exec confined to internal/git + internal/mcp + internal/gh + internal/video (+ internal/exec helper) =="
 violations="$(grep -rln '"os/exec"' --include='*.go' internal \
   | grep -v '_test\.go$' \
   | grep -v '^internal/git/' \
   | grep -v '^internal/mcp/' \
   | grep -v '^internal/gh/' \
+  | grep -v '^internal/video/' \
   | grep -v '^internal/exec/' || true)"
 if [ -n "$violations" ]; then
-  echo "FAIL: os/exec imported outside the git/mcp/gh seams:"
+  echo "FAIL: os/exec imported outside the git/mcp/gh/video seams:"
   echo "$violations" | sed 's/^/  - /'
-  echo "  Route subprocess calls through git.Runner / mcp.Runner / gh.Runner instead."
+  echo "  Route subprocess calls through git.Runner / mcp.Runner / gh.Runner / video.Runner instead."
   fail=1
 else
-  echo "OK: no os/exec outside internal/git + internal/mcp + internal/gh + internal/exec."
+  echo "OK: no os/exec outside internal/git + internal/mcp + internal/gh + internal/video + internal/exec."
 fi
 
 echo "== sub-gate: internal/exec configures commands, never runs them =="

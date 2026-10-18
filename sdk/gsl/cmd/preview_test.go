@@ -55,9 +55,14 @@ func TestPreviewCmd_Interactive_QuitsOnInput(t *testing.T) {
 	previewInput = strings.NewReader("q")
 	defer func() { previewInput = prev }()
 
+	// Signal only after captureStdout has put os.Stdout back: finishing the
+	// test while stdout is still the capture pipe made `go test -cover` write
+	// its report into the closed pipe ("write |1: file already closed").
 	done := make(chan error, 1)
 	go func() {
-		_ = captureStdout(t, func() { done <- runPreview(previewCmd, nil) })
+		var err error
+		_ = captureStdout(t, func() { err = runPreview(previewCmd, nil) })
+		done <- err
 	}()
 	select {
 	case <-done:
