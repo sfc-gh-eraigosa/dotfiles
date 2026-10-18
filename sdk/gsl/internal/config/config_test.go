@@ -26,8 +26,8 @@ func TestDefaultIsUsable(t *testing.T) {
 		t.Errorf("Default().Timezone = %q; want 'America/Los_Angeles'", c.Timezone)
 	}
 
-	// All 5 segments in order.
-	wantTypes := []string{"host", "dirgit", "repo", "ai", "time"}
+	// All 6 segments in order (video sits just before time).
+	wantTypes := []string{"host", "dirgit", "repo", "ai", "video", "time"}
 	if len(c.Segments) != len(wantTypes) {
 		t.Fatalf("Default() has %d segments; want %d", len(c.Segments), len(wantTypes))
 	}

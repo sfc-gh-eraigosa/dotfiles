@@ -3,6 +3,7 @@ package cmd
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestPreviewCmd_Once verifies that --once prints one non-empty line.
@@ -34,10 +35,38 @@ func TestPreviewCmd_Interactive_NoTTY(t *testing.T) {
 	previewOnce = false
 	defer func() { previewOnce = false }()
 
-	// This will fail with a bubbletea error because there is no real TTY in
-	// the test environment. We accept either nil or a non-nil error.
-	// The important invariant is: no panic.
+	// Feed "q" so the TUI quits instead of waiting on a real terminal (it used
+	// to hang the whole cmd suite whenever stdin was a TTY). We accept either a
+	// nil or a non-nil error; the invariant is: no panic, no hang.
+	prev := previewInput
+	previewInput = strings.NewReader("q")
+	defer func() { previewInput = prev }()
 	_ = captureStdout(t, func() {
 		_ = runPreview(previewCmd, nil)
 	})
+}
+
+// TestPreviewCmd_Interactive_QuitsOnInput is the regression test for the
+// interactive preview hanging the cmd suite whenever stdin is a terminal:
+// runPreview must take its input from previewInput, so a test can feed it "q".
+func TestPreviewCmd_Interactive_QuitsOnInput(t *testing.T) {
+	previewOnce = false
+	prev := previewInput
+	previewInput = strings.NewReader("q")
+	defer func() { previewInput = prev }()
+
+	// Signal only after captureStdout has put os.Stdout back: finishing the
+	// test while stdout is still the capture pipe made `go test -cover` write
+	// its report into the closed pipe ("write |1: file already closed").
+	done := make(chan error, 1)
+	go func() {
+		var err error
+		_ = captureStdout(t, func() { err = runPreview(previewCmd, nil) })
+		done <- err
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("interactive preview did not quit on \"q\" within 5s")
+	}
 }

@@ -18,9 +18,16 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/term"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/theme"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/video"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
+
+// videoSpawn starts the detached GPU refresher (video.SpawnRefresher). It is a
+// variable so the cmd tests can replace it with a no-op (see TestMain): a real
+// re-exec from inside `go test` would run the suite again, which renders,
+// which spawns, with nothing reaping the detached children.
+var videoSpawn = video.SpawnRefresher
 
 // deriveToolCtx determines the host-tool context string from the payload and
 // environment, for use with theme.Resolve.
@@ -206,6 +213,11 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 		Clock:        time.Now,
 		Links:        buildLinks(cfg.EffectiveLinks(), linkFlags, remoteURL, p.IsAntigravity()),
 		PR:           prInfo,
+		SectionOff:   linkFlags.SectionOff(),
+	}
+	if dir, derr := video.Dir(); derr == nil {
+		deps.Video = &video.Cache{Dir: dir}
+		deps.VideoSpawn = videoSpawn
 	}
 
 	segs := render.BuildSegments(cfg, deps)

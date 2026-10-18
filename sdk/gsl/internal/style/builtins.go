@@ -28,23 +28,24 @@ package style
 //	  — Nerd Font database (worktree_count prefix)
 
 const (
-	nfSepRight     = "" // Powerline right-filled separator
-	nfSepRightThin = "" // Powerline right-thin sub-separator
-	nfFolder       = "" // Folder icon (dirgit)
-	nfBranch       = "" // Branch icon
-	nfRepoRoot     = "" // Repo-root icon (main worktree)
-	nfWorktree     = "" // Worktree icon (linked worktree)
-	nfStaged       = "" // Staged-changes icon
-	nfUnstaged     = "" // Unstaged-changes icon (warning)
-	nfUntracked    = "" // Untracked-files icon (question mark)
-	nfStash        = "" // Stash icon
-	nfAhead        = "" // Ahead-of-remote icon
-	nfBehind       = "" // Behind-remote icon
-	nfAI           = "" // AI / rocket icon
-	nfMCP          = "" // MCP / plug icon
-	nfTime         = "" // Clock icon
-	nfContext      = "" // Context-window / circuit icon
-	nfWTCount      = "" // Worktree-count prefix icon
+	nfSepRight     = ""      // Powerline right-filled separator
+	nfSepRightThin = ""      // Powerline right-thin sub-separator
+	nfFolder       = ""      // Folder icon (dirgit)
+	nfBranch       = ""      // Branch icon
+	nfRepoRoot     = ""      // Repo-root icon (main worktree)
+	nfWorktree     = ""      // Worktree icon (linked worktree)
+	nfStaged       = ""      // Staged-changes icon
+	nfUnstaged     = ""      // Unstaged-changes icon (warning)
+	nfUntracked    = ""      // Untracked-files icon (question mark)
+	nfStash        = ""      // Stash icon
+	nfAhead        = ""      // Ahead-of-remote icon
+	nfBehind       = ""      // Behind-remote icon
+	nfAI           = ""      // AI / rocket icon
+	nfMCP          = ""      // MCP / plug icon
+	nfTime         = ""      // Clock icon
+	nfContext      = ""      // Context-window / circuit icon
+	nfVideo        = "\uf108" // Desktop / monitor icon (video)
+	nfWTCount      = ""      // Worktree-count prefix icon
 )
 
 // powerlineStyle is the default built-in style. It uses Powerline-style filled
@@ -69,6 +70,7 @@ var powerlineStyle = Style{
 		"ai":             nfAI,
 		"mcp":            nfMCP,
 		"time":           nfTime,
+		"video":          nfVideo,
 		"branch":         nfBranch,
 		"ahead":          nfAhead,
 		"behind":         nfBehind,
@@ -90,6 +92,7 @@ var powerlineStyle = Style{
 		"ai":            "cyan",
 		"dirgit":        "green",
 		"time":          "yellow",
+		"video":         "red",
 		"host":          "99", // medium purple — unused by every neighbour
 	},
 }
@@ -116,6 +119,7 @@ var emojiStyle = Style{
 		"ai":             "🤖",
 		"mcp":            "🔌",
 		"time":           "⏰",
+		"video":          "🎮",
 		"branch":         "🌿",
 		"ahead":          "⬆",
 		"behind":         "⬇",
@@ -136,6 +140,7 @@ var emojiStyle = Style{
 		"ai":            "cyan",
 		"dirgit":        "green",
 		"time":          "yellow",
+		"video":         "red",
 		"host":          "99", // medium purple — unused by every neighbour
 	},
 }
@@ -152,6 +157,7 @@ var asciiIcons = map[string]string{
 	"ai":             "[ai]",
 	"mcp":            "[mcp]",
 	"time":           "[time]",
+	"video":          "[video]",
 	"branch":         "br:",
 	"ahead":          "+",
 	"behind":         "-",
@@ -179,6 +185,7 @@ var segmentColorKeys = []string{
 	"ai",
 	"dirgit",
 	"time",
+	"video",
 	"host",
 }
 
@@ -211,7 +218,8 @@ var palettes = map[string]map[string]string{
 		"ai":            "cyan",    // ANSI 6 / system cyan
 		"dirgit":        "green",   // ANSI 2 / system green
 		"time":          "yellow",  // ANSI 3 / system yellow
-		"host":          "99",      // medium purple (r=2,g=1,b=5)  lum~125
+		"video":         "red",
+		"host":          "99", // medium purple (r=2,g=1,b=5)  lum~125
 	},
 	// "light" — darker ANSI-256 shades for readability on light backgrounds.
 	// Each index is mid-luminance (~44–138/255) and legible on dark too.
@@ -226,6 +234,7 @@ var palettes = map[string]map[string]string{
 		"ai":            "37",
 		"dirgit":        "34",
 		"time":          "136",
+		"video":         "160",
 		"host":          "55", // (r=1,g=0,b=3) dark violet              lum~48
 	},
 	// "dark-daltonism" — red-green colorblind friendly; avoids red/green
@@ -241,6 +250,7 @@ var palettes = map[string]map[string]string{
 		"ai":            "44",
 		"dirgit":        "73",
 		"time":          "178",
+		"video":         "172",
 		"host":          "99", // (r=2,g=1,b=5) medium purple            lum~125
 	},
 	// "dark8" — 8-color terminals; named-color strings so no 256-color
@@ -251,6 +261,7 @@ var palettes = map[string]map[string]string{
 		"ai":            "cyan",
 		"dirgit":        "green",
 		"time":          "yellow",
+		"video":         "red",
 		"host":          "magenta",
 	},
 }

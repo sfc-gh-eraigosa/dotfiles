@@ -17,14 +17,15 @@ came from. Schema and semantics: [sdk/fleet/README.md](../../sdk/fleet/README.md
 ## `htop/` — the dotfiles htop view
 
 Deployed by [`opt/scripts/system/install_htop.sh`](../scripts/system/install_htop.sh)
-(gff `install.tools.htop-fit`; flag off removes both and returns htop to its defaults).
+(gff `install.tools.htop-fit`; flag off removes all three and returns htop to its defaults).
 
 | File | Deployed to | Purpose |
 | :-- | :-- | :-- |
 | `htop-fit.sh` | `~/.config/htop/htop-fit.sh` | `htop()` wrapper sourced by `.zshrc`/`.bashrc`: fills the header with graphs sized to the terminal so only the top 4 processes show |
+| `htop-fit` | `~/opt/bin/htop-fit` | The same wrapper as a command, for programs that start htop without an interactive shell (mono's htop pane) |
 | `htoprc` | `~/.config/htop/htoprc` | Default two-column meters, CPU% sort, tree view off. htop rewrites this file itself, so it is only updated while unchanged since install |
 
-`htop-fit.sh` is sourced by **both** bash and zsh: no zsh-only syntax, no bare
+`htop-fit.sh` is sourced by bash, zsh **and** `/bin/sh` (the `htop-fit` command): no zsh-only syntax or bashisms, no bare
 globs (zsh aborts on a non-matching glob), and no apostrophes inside its
 single-quoted awk program.
 

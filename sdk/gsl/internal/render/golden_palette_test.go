@@ -88,6 +88,9 @@ func TestGolden_EmojiPerPalette(t *testing.T) {
 				if key == "repo_worktree" && !tc.worktree {
 					continue // repo_worktree segment absent in root mode
 				}
+				if key == "video" {
+					continue // no GPU reading in the golden fixtures, so video is hidden
+				}
 				colorVal := p[key]
 				// Only verify ANSI-256 index values (not named colors like "blue").
 				if _, isNamed := map[string]bool{

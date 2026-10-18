@@ -18,7 +18,7 @@ import (
 
 // Segment represents a single status-line segment.
 type Segment struct {
-	// Type is the segment kind: "host", "dirgit", "repo", "ai", or "time"
+	// Type is the segment kind: "host", "dirgit", "repo", "ai", "video", or "time"
 	// (KnownSegmentTypes).
 	Type string `json:"type"`
 	// Enabled controls whether this segment is rendered.
@@ -50,7 +50,8 @@ type Segment struct {
 // The gaps leave room for a user to interleave a custom value without having to
 // renumber the others.
 const (
-	PriorityTime   = 10 // dropped first
+	PriorityVideo  = 5  // dropped first: GPU load is nice-to-have
+	PriorityTime   = 10 // dropped right after video
 	PriorityHost   = 15 // which machine — outlives the clock, not the model
 	PriorityAI     = 20
 	PriorityDirGit = 30
@@ -69,6 +70,8 @@ func DefaultSegmentPriority(segType string) int {
 		return PriorityAI
 	case "time":
 		return PriorityTime
+	case "video":
+		return PriorityVideo
 	case "host":
 		return PriorityHost
 	default:
@@ -79,7 +82,7 @@ func DefaultSegmentPriority(segType string) int {
 // KnownSegmentTypes lists every segment type gsl can render, in the default
 // left-to-right order. EnableSegment uses it to add a type that an older
 // config.json predates.
-var KnownSegmentTypes = []string{"host", "dirgit", "repo", "ai", "time"}
+var KnownSegmentTypes = []string{"host", "dirgit", "repo", "ai", "video", "time"}
 
 // EffectivePriority returns the segment's drop priority: the user's explicit
 // Priority when set, otherwise the built-in default for its type.
@@ -143,8 +146,8 @@ func (c Config) EffectiveLinks() string {
 	return LinksUnderline
 }
 
-// Default returns a fully usable Config with all 5 segments enabled in the
-// canonical order: host, dirgit, repo, ai, time.
+// Default returns a fully usable Config with all 6 segments enabled in the
+// canonical order: host, dirgit, repo, ai, video, time.
 func Default() Config {
 	return Config{
 		Enabled: true,
@@ -153,6 +156,7 @@ func Default() Config {
 			{Type: "dirgit", Enabled: true},
 			{Type: "repo", Enabled: true},
 			{Type: "ai", Enabled: true},
+			{Type: "video", Enabled: true},
 			{Type: "time", Enabled: true},
 		},
 		Timezone:        "America/Los_Angeles",
@@ -202,7 +206,28 @@ func Load(path string) (Config, error) {
 	if err := json.Unmarshal(data, &c); err != nil {
 		return Config{}, fmt.Errorf("config: parse %s: %w", path, err)
 	}
+	c.migrateVideo()
 	return c, nil
+}
+
+// migrateVideo is a one-time migration for the video segment, which postdates
+// saved configs: a loaded segments array replaces the defaults, so without this
+// no existing user would ever see it. When the array has no video entry at all
+// it is inserted ENABLED immediately before time (or at the end). A user who
+// turned it off has an explicit disabled entry, which is left alone. Other
+// missing segment types keep the ensureSegment behaviour (added disabled).
+func (c *Config) migrateVideo() {
+	if c.findSegment("video") != nil {
+		return
+	}
+	at := len(c.Segments)
+	for i, seg := range c.Segments {
+		if seg.Type == "time" {
+			at = i
+			break
+		}
+	}
+	c.Segments = slices.Insert(c.Segments, at, Segment{Type: "video", Enabled: true})
 }
 
 // Save writes c to path as indented JSON, creating any missing parent

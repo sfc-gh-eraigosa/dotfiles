@@ -1,6 +1,6 @@
 # gsl — Go Status Line
 
-`gsl` is a Go-based powerline-style status line with two integration points: it renders live context after every Claude Code assistant turn (receiving a JSON payload on stdin) and produces an on-demand status snapshot for Antigravity CLI and plain shells (via `gsl status`, e.g. wired to Antigravity's built-in `/statusline` command). Five independently configurable segments — `host`, `dirgit`, `repo`, `ai`, and `time` — run concurrently and self-omit gracefully when their data is absent, so the line is always fast and never blocks.
+`gsl` is a Go-based powerline-style status line with two integration points: it renders live context after every Claude Code assistant turn (receiving a JSON payload on stdin) and produces an on-demand status snapshot for Antigravity CLI and plain shells (via `gsl status`, e.g. wired to Antigravity's built-in `/statusline` command). Six independently configurable segments — `host`, `dirgit`, `repo`, `ai`, `video`, and `time` — run concurrently and self-omit gracefully when their data is absent, so the line is always fast and never blocks.
 
 ## Install
 
@@ -106,7 +106,7 @@ Keys valid for `config get`: `enabled`, `style`, `timezone`, `time_format`, `dat
 
 Keys valid for `config set`: `style`, `timezone`, `time_format`, `date_format`
 
-Segments valid for enable / disable / toggle: `host`, `dirgit`, `repo`, `ai`, `time`. Enabling a known segment that an older `config.json` lacks inserts it (`host` at the front, others at the end), so `gsl config enable host` is the one-step upgrade.
+Segments valid for enable / disable / toggle: `host`, `dirgit`, `repo`, `ai`, `video`, `time`. Enabling a known segment that an older `config.json` lacks inserts it (`host` at the front, others at the end), so `gsl config enable host` is the one-step upgrade.
 
 ## Segments
 
@@ -212,6 +212,22 @@ Segment options (`options` map of the `time` segment):
 |--------|------|---------|-------------|
 | `link_url` | string | `https://time.is/{tz_city}` | Template for the date/time link (see [Links](#links)). Placeholders: `{tz}` (IANA name, e.g. `America/Los_Angeles`), `{tz_city}` (its last element, `Los_Angeles`), `{iso_utc}` (`20260905T150000Z`), `{unix}`. Empty disables the link. |
 
+### `video`
+
+GPU load and memory, just before the time: `🎮 6%|1.9G/7.7G` (`[video] 6%|1.9G/7.7G` in ascii) — utilization, then memory used / max. Hidden when no GPU source is found (macOS, Jetson, GPU-less hosts) or before the first reading lands.
+
+Sources, first that works:
+
+| Host | Source |
+| :-- | :-- |
+| NVIDIA (incl. WSL with NVIDIA) | `nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total` (first GPU) |
+| WSL without NVIDIA | Windows performance counters via `powershell.exe`: 3D-engine utilization, dedicated (else shared) adapter memory; max is dedicated memory, else the shared limit (half of physical RAM) |
+| Linux AMD / Intel | DRM sysfs `gpu_busy_percent`, `mem_info_vram_used` / `mem_info_vram_total` |
+
+**Never blocks the line.** Readings are cached in `${XDG_STATE_HOME:-~/.local/state}/gsl/video.json`. A render older than 1 s starts **one** detached `gsl video-refresh` (a kernel `flock` on `video.lock`, handed to the refresher and released by the kernel when it exits, crashes included; external command capped at 5 s) and shows the last reading, so on WSL values trail by about the PowerShell start-up time (~2 s). When a refresh finds no source, the next attempt waits 30 s. The refresher never spawns another refresher, is not started on native Windows (no `flock`; the segment stays hidden), and refuses to start at all inside a Go test binary (`testing.Testing()`): re-exec'ing a test binary re-runs the whole suite, which fork-bombed WSL on 2026-10-17.
+
+An existing `config.json` written before this segment existed gets `video` inserted, enabled, just before `time` on load.
+
 ## Configuration
 
 Config file: `${XDG_CONFIG_HOME:-~/.config}/gsl/config.json`
@@ -245,9 +261,9 @@ Field reference:
 |-------|------|---------|-------------|
 | `enabled` | bool | `true` | Master on/off switch. When false, nothing is printed. |
 | `segments` | array | (see above) | Ordered list of segments; config order is render order. |
-| `segments[].type` | string | — | Segment kind: `host`, `dirgit`, `repo`, `ai`, `time`. |
+| `segments[].type` | string | — | Segment kind: `host`, `dirgit`, `repo`, `ai`, `video`, `time`. |
 | `segments[].enabled` | bool | `true` | Whether this segment is included in the render. |
-| `segments[].options` | object | `{}` | Segment-specific overrides (see the `host`, `dirgit`, `repo`, `ai`, `time` options above). |
+| `segments[].options` | object | `{}` | Segment-specific overrides (see the `host`, `dirgit`, `repo`, `ai`, `video`, `time` options above). |
 | `timezone` | string | `"America/Los_Angeles"` | IANA timezone for the time segment. |
 | `time_format` | string | `"15:04:05"` | Go layout string for the clock. |
 | `date_format` | string | `"2006-01-02"` | Go layout string for the date. |
@@ -286,6 +302,17 @@ Links add zero display width: the fit loop measures, truncates, and sheds exactl
 
   `gsl render` reads the flags through the gff SDK from the dotfiles namespace, which `install.sh` registers with `gff install`. Without a registered namespace it falls back to the checkout named by `$DOTFILES_DIR`; if neither resolves, the flags read `true`.
 
+## Turning segments off with gff
+
+Each segment also has a gff flag, all `true` by default, for hosts where the line is too long:
+
+```bash
+gff set gsl.section.video false   # drop the GPU segment
+gff set gsl.section.host false    # host, dirgit, repo, ai, time work the same way
+```
+
+A segment renders only when its flag is on **and** it is enabled in `config.json` (`gsl config disable <segment>` still hides it locally). The flags resolve with the `gsl.links.*` flags, under the same budget, and fail open.
+
 ## Auto theme colors
 
 Segment colors are resolved automatically from the host tool's settings, then the terminal, then a hardcoded default. The user's `~/.config/gsl/config.json` `theme` map always wins over auto-resolved colors.
@@ -314,7 +341,7 @@ Segment colors are resolved automatically from the host tool's settings, then th
 
 ### What changes per palette
 
-The six **segment color keys** change: `repo_root`, `repo_worktree`, `ai`, `dirgit`, `time`, `host`. All six are defined in every palette.
+The seven **segment color keys** change: `repo_root`, `repo_worktree`, `ai`, `dirgit`, `time`, `video`, `host`. All seven are defined in every palette.
 
 For the `emoji` style (`Fill: false`), the palette is applied as a **foreground tint only** — there is no background block, so `accent`, `fg`, and `bg` theme keys are inert for that style.
 
