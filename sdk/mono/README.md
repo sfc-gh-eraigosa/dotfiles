@@ -11,6 +11,8 @@
 
 mono only *runs* tools. htop, nvtop and gsl are unmodified and still work on their own.
 
+The htop pane runs **`htop-fit`** when it is installed: your dotfiles htop view (history graphs filling the header, only the top few processes), fitted to the pane's height. It is the same wrapper `htop` uses in your shell, installed as a command (`~/opt/bin/htop-fit`, gff `install.tools.htop-fit`) because mono starts programs without an interactive shell, where the `htop()` function does not exist. Without it the pane runs plain htop. The fit is computed when htop starts, so after resizing the window `ctrl+b r` re-fits it.
+
 ## Keys
 
 Every key goes to the focused program, so htop's `q`, `/`, `esc` and F-keys behave exactly as in plain htop. The one exception is the prefix, **`ctrl+b`** by default. Press it, then:
@@ -49,7 +51,7 @@ Settings live in `${XDG_CONFIG_HOME:-~/.config}/mono/config.json` (`$MONO_CONFIG
   "prefix": "ctrl+b",
   "title": { "size": "5%" },
   "panes": [
-    { "name": "htop", "size": "60%", "cmd": "htop" },
+    { "name": "htop", "size": "60%", "cmd": "htop-fit", "fallbacks": ["htop"] },
     { "name": "gpu",  "size": "30%", "cmd": "nvtop", "fallbacks": ["nvitop"] },
     { "name": "gsl",  "size": "5%",  "cmd": "gsl status", "every": "1s" }
   ]
@@ -109,7 +111,7 @@ prefix: ctrl+b
 
 PANE   SIZE  ROWS@40  RUNS         WHY
 title  5%    2        -            version, commit, focused pane, help hint
-htop   60%   35       htop         found htop
+htop   60%   35       htop-fit     found htop-fit
 gpu    30%   -        (not shown)  nvtop not installed; nvitop not installed
 gsl    5%    3        gsl status   found gsl
 ```

@@ -20,6 +20,9 @@ func TestDefaultIsValidAndMatchesDesign(t *testing.T) {
 	if strings.Join(got, ",") != want {
 		t.Fatalf("default layout = %s, want %s", strings.Join(got, ","), want)
 	}
+	if c.Panes[0].Cmd != "htop-fit" || len(c.Panes[0].Fallbacks) != 1 || c.Panes[0].Fallbacks[0] != "htop" {
+		t.Fatalf("htop pane should prefer htop-fit, then htop: %+v", c.Panes[0])
+	}
 	if c.Prefix != "ctrl+b" || c.Panes[2].Every != "1s" || c.Panes[2].Cmd != "gsl status" {
 		t.Fatalf("unexpected default: %+v", c)
 	}

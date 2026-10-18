@@ -46,6 +46,7 @@ func TestChooseDefaultLayoutPerHost(t *testing.T) {
 		want string // chosen cmd per pane, "-" = dropped
 	}{
 		{"wsl intel: nvtop installed but blind", &fakeEnv{path: names("htop", "nvtop", "gsl")}, "htop - gsl status"},
+		{"dotfiles host: htop-fit preferred", &fakeEnv{path: names("htop-fit", "htop", "gsl")}, "htop-fit - gsl status"},
 		{"nvidia host", &fakeEnv{path: names("htop", "nvtop", "gsl", "nvidia-smi"), ok: nvsmi}, "htop nvtop gsl status"},
 		{"nvidia host, only nvitop", &fakeEnv{path: names("htop", "nvitop", "gsl", "nvidia-smi"), ok: nvsmi}, "htop nvitop gsl status"},
 		{"amd linux", &fakeEnv{path: names("htop", "nvtop", "gsl"), drivers: []string{"amdgpu"}}, "htop nvtop gsl status"},

@@ -55,7 +55,7 @@ func TestConfigVerbsEndToEnd(t *testing.T) {
 	for _, pn := range cfg.Panes {
 		got = append(got, pn.Name+":"+pn.Cmd)
 	}
-	if strings.Join(got, ",") != "htop:htop,gpu:nvitop,logs:journalctl -f" {
+	if strings.Join(got, ",") != "htop:htop-fit,gpu:nvitop,logs:journalctl -f" {
 		t.Fatalf("config after edits = %v", got)
 	}
 	if out, _ := run(t, "config", "path"); strings.TrimSpace(out) != p {

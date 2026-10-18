@@ -132,10 +132,12 @@ assert_eq "$(HTOP_FIT_GPU=0 _htop_fit_gpu || echo n)" "n" "HTOP_FIT_GPU=0 forces
 
 # --- install / remove --------------------------------------------------------
 D="${TMP}/cfg"
-run() { HTOP_CONFIG_DIR="${D}" bash "${SCRIPT}" "$@" >/dev/null; }
+B="${TMP}/optbin"
+run() { HTOP_CONFIG_DIR="${D}" HTOP_BIN_DIR="${B}" bash "${SCRIPT}" "$@" >/dev/null; }
 
 run install
 assert_file_exists "${D}/htop-fit.sh" "install copies the wrapper"
+assert_exit_code 0 "install puts an htop-fit command on PATH (~/opt/bin)" test -x "${B}/htop-fit"
 assert_exit_code 0 "fresh install seeds htoprc" cmp -s "${SEED}" "${D}/htoprc"
 assert_file_exists "${D}/.dotfiles-managed" "install writes the managed marker"
 
@@ -157,6 +159,7 @@ assert_exit_code 0 "a pristine managed htoprc is updated" cmp -s "${SEED}" "${D}
 
 run remove
 assert_exit_code 1 "remove deletes the wrapper" test -e "${D}/htop-fit.sh"
+assert_exit_code 1 "remove deletes the htop-fit command" test -e "${B}/htop-fit"
 assert_exit_code 1 "remove takes htoprc away so htop uses its defaults" test -e "${D}/htoprc"
 assert_file_exists "${D}/htoprc.dotfiles.bak" "remove keeps the managed htoprc as .dotfiles.bak"
 assert_exit_code 1 "remove clears the marker" test -e "${D}/.dotfiles-managed"
@@ -180,5 +183,33 @@ HTOP_CONFIG_DIR="${U}" bash "${SCRIPT}" remove >/dev/null
 echo "user=2" >"${U}/htoprc"
 HTOP_CONFIG_DIR="${U}" bash "${SCRIPT}" install >/dev/null
 assert_grep "re-enabling never overwrites the original pre-dotfiles backup" '^user=1$' "${U}/htoprc.pre-dotfiles.bak"
+
+# --- htop-fit command ----------------------------------------------------------
+# The wrapper is a shell function, so programs that start htop themselves
+# (mono runs panes with /bin/sh -c) got the plain binary. The htop-fit
+# command loads the same wrapper; check it under /bin/sh with a stub htop
+# that reports the config it was given.
+X="${TMP}/xdg"
+HTOP_CONFIG_DIR="${X}/htop" HTOP_BIN_DIR="${TMP}/runbin" bash "${SCRIPT}" install >/dev/null
+mkdir -p "${TMP}/fakehtop"
+# shellcheck disable=SC2016 # expanded by the stub at run time, not here
+printf '#!/bin/sh
+[ "$1" = --version ] && { echo "htop 3.4.1"; exit 0; }
+echo "HTOPRC=${HTOPRC:-none}"
+[ -n "$HTOPRC" ] && grep "^column_meters_0=" "$HTOPRC"
+' >"${TMP}/fakehtop/htop"
+chmod +x "${TMP}/fakehtop/htop"
+if command -v script >/dev/null 2>&1; then
+  out=$(XDG_CONFIG_HOME="${X}" PATH="${TMP}/fakehtop:${PATH}" LINES=30 \
+    script -qec "/bin/sh ${TMP}/runbin/htop-fit" /dev/null 2>&1 | tr -d '\r')
+  assert_eq "$(printf '%s\n' "${out}" | grep -c '^HTOPRC=/')" "1" "htop-fit runs htop with a fitted copy of htoprc"
+  assert_eq "$(printf '%s\n' "${out}" | grep -c '^column_meters_0=.* CPU Memory Swap')" "1" "the copy has the history graphs added"
+  rm -f "${X}/htop/htop-fit.sh"
+  out=$(XDG_CONFIG_HOME="${X}" PATH="${TMP}/fakehtop:${PATH}" \
+    script -qec "/bin/sh ${TMP}/runbin/htop-fit" /dev/null 2>&1 | tr -d '\r')
+  assert_eq "$(printf '%s\n' "${out}" | head -1)" "HTOPRC=none" "without the wrapper htop-fit runs plain htop"
+else
+  echo "SKIP: htop-fit command run (no script(1) for a tty)"
+fi
 
 _test_report

@@ -42,13 +42,15 @@ type Config struct {
 }
 
 // Default is the layout mono ships with: title 5%, htop 60%, a GPU monitor
-// 30%, and gsl 5% refreshed every second.
+// 30%, and gsl 5% refreshed every second. The htop pane prefers htop-fit (the
+// dotfiles htop wrapper as a command: graph-filled header, top processes
+// only, fitted to the pane) and falls back to plain htop.
 func Default() Config {
 	return Config{
 		Prefix: "ctrl+b",
 		Title:  Title{Size: "5%"},
 		Panes: []Pane{
-			{Name: "htop", Size: "60%", Cmd: "htop"},
+			{Name: "htop", Size: "60%", Cmd: "htop-fit", Fallbacks: []string{"htop"}},
 			{Name: "gpu", Size: "30%", Cmd: "nvtop", Fallbacks: []string{"nvitop"}},
 			{Name: "gsl", Size: "5%", Cmd: "gsl status", Every: "1s"},
 		},
