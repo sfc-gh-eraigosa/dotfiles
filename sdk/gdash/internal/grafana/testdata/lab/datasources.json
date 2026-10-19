@@ -1,0 +1,18 @@
+[
+  {
+    "isDefault": false,
+    "jsonData": {},
+    "name": "Alertmanager",
+    "type": "alertmanager",
+    "uid": "alertmanager"
+  },
+  {
+    "isDefault": true,
+    "jsonData": {
+      "timeInterval": "30s"
+    },
+    "name": "Prometheus",
+    "type": "prometheus",
+    "uid": "prometheus"
+  }
+]

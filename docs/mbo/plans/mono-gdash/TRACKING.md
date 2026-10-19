@@ -24,7 +24,7 @@
 | A1 scaffold | done | (this commit) | RED: `TestVersionPrintsStampedVersion` printed the root help (no version cmd); GREEN: `go test -cover ./...` → cmd 81.8%; `build.sh` builds, `gdash version` prints the stamped version; golangci-lint 0 issues (`evidence/a1/a1.txt`) | |
 | A2 config + auth | done | (this commit) | RED: build failures (no package) + `unknown command "config"`; GREEN: cmd 81.1%, auth 90.6% (≥ 80 bar), config 75.1%; E10/E11/E13 tests pass; lint 0 issues; gosec (repo flags) exit 0 (`evidence/a2/a2.txt`) | |
 | A3 client | done | (this commit) | RED: setup failed (no grafanatest); GREEN: 9 tests pass incl. E1 (`TestFetchAllCapsConcurrency`: 10 queries, peak ≤ 4) and E2 (`TestResolve`); grafana 89.2%; lint 0; gosec exit 0 (`evidence/a3/a3.txt`) | `grafanatest` serves the lab fixtures for every later package |
-| A4 dash + vars | todo | | | |
+| A4 dash + vars | done | (this commit) | RED: build failed (no packages, no `Datasources`); GREEN: dash 81.3% (all 4 lab dashboards parse to the expected kinds), vars 95.8% (≥ 80 bar), E3 `TestExpand` + E4 `TestRateInterval` pass; lint 0; gosec exit 0 (`evidence/a4/a4.txt`) | added `Client.Datasources` + `datasources.json` fixture: `$datasource` resolves by uid or name, `default`/unset → the default ds; scrape interval 30s from the ds |
 | A5 render | todo | | | record the charting choice |
 | A6 app | todo | | | |
 | A7 doctor + list | todo | | | |
@@ -52,7 +52,7 @@
 | Feature | Automated proof | Live proof | Notes |
 | :-- | :-- | :-- | :-- |
 | F1 fetch | [x] E1 E2 | [ ] `gdash conductor` on spark1 | |
-| F2 vars | [ ] E3 E4 | [ ] k3s-nodes `$node` panels draw | |
+| F2 vars | [x] E3 E4 | [ ] k3s-nodes `$node` panels draw | |
 | F3 panels/layout | [ ] E5 E6 | [ ] capture at 80 and 120+ cols | |
 | F4 refresh/stale | [ ] E7 E8 | [ ] Grafana unreachable → stale row | |
 | F5 keys | [ ] E9 | — | |
@@ -82,3 +82,4 @@
 | 2026-10-18 | playground session | Grafana via LAN NodePort (Q2/Q3 closed); spec + plan + trio written; owner approved |
 | 2026-10-19 | playground session | #411 merged; gdash worker created; Viewer token issued; Task 0 fixtures captured + scrubbed |
 | 2026-10-19 | playground session | owner picked k3s-nodes = Nodes Overview and kept Node Exporter as a 4th view `nodes`; spec F8 amended |
+| 2026-10-19 | playground session | A1–A4 done: scaffold, config + auth, client, dash + vars |

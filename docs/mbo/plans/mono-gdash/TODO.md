@@ -62,11 +62,11 @@
 
 ### Task A4 — dash + vars  (E3 E4)
 
-- [ ] RED: dash model per fixture; `vars_test.go` table (all forms, All/multi, formats, `$__interval`, `$__rate_interval`, `$__range`, unresolved → needs var)
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: `internal/dash`, `internal/vars`
-- [ ] RUN-GREEN → PASS; VERIFY vars ≥ 80%
-- [ ] EVIDENCE · COMMIT `gdash: dashboard model and template-variable expansion` · LEDGER · CHECKPOINT
+- [x] RED: dash model per fixture; `vars_test.go` table (all forms, All/multi, formats, `$__interval`, `$__rate_interval`, `$__range`, unresolved → needs var)
+- [x] RUN-RED → FAIL
+- [x] GREEN: `internal/dash`, `internal/vars`
+- [x] RUN-GREEN → PASS; VERIFY vars ≥ 80%
+- [x] EVIDENCE · COMMIT `gdash: dashboard model and template-variable expansion` · LEDGER · CHECKPOINT
 
 ### Task A5 — render  (E5 E6)
 

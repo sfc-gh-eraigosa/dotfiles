@@ -33,6 +33,16 @@ type Client interface {
 	Search(ctx context.Context, query string) ([]Hit, error)
 	Dashboard(ctx context.Context, uid string) (json.RawMessage, error)
 	Query(ctx context.Context, r QueryRequest) (Result, error)
+	Datasources(ctx context.Context) ([]Datasource, error)
+}
+
+// Datasource is one entry of /api/datasources (a Viewer may list them).
+type Datasource struct {
+	UID          string
+	Name         string
+	Type         string
+	IsDefault    bool
+	TimeInterval string // the scrape interval, e.g. "30s"; "" when unset
 }
 
 // Health is /api/health.
@@ -220,6 +230,26 @@ func (c *httpClient) Dashboard(ctx context.Context, uid string) (json.RawMessage
 	var raw json.RawMessage
 	err := c.do(ctx, http.MethodGet, "/api/dashboards/uid/"+url.PathEscape(uid), nil, &raw)
 	return raw, err
+}
+
+func (c *httpClient) Datasources(ctx context.Context) ([]Datasource, error) {
+	var wire []struct {
+		UID       string `json:"uid"`
+		Name      string `json:"name"`
+		Type      string `json:"type"`
+		IsDefault bool   `json:"isDefault"`
+		JSONData  struct {
+			TimeInterval string `json:"timeInterval"`
+		} `json:"jsonData"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/api/datasources", nil, &wire); err != nil {
+		return nil, err
+	}
+	out := make([]Datasource, 0, len(wire))
+	for _, w := range wire {
+		out = append(out, Datasource{UID: w.UID, Name: w.Name, Type: w.Type, IsDefault: w.IsDefault, TimeInterval: w.JSONData.TimeInterval})
+	}
+	return out, nil
 }
 
 type wireFrame struct {

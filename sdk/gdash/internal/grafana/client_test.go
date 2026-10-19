@@ -196,3 +196,20 @@ func TestTimeout(t *testing.T) {
 		t.Fatal("timeout not honoured")
 	}
 }
+
+func TestDatasources(t *testing.T) {
+	c, _ := client(t)
+	ds, err := c.Datasources(context.Background())
+	if err != nil || len(ds) != 2 {
+		t.Fatalf("Datasources = %+v %v", ds, err)
+	}
+	var def grafana.Datasource
+	for _, d := range ds {
+		if d.IsDefault {
+			def = d
+		}
+	}
+	if def.UID != "prometheus" || def.TimeInterval != "30s" {
+		t.Fatalf("default ds = %+v", def)
+	}
+}

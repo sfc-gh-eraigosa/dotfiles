@@ -95,6 +95,8 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/api/health":
 		s.file(w, "health.json")
+	case r.URL.Path == "/api/datasources":
+		s.file(w, "datasources.json")
 	case r.URL.Path == "/api/search":
 		s.search(w, r)
 	case strings.HasPrefix(r.URL.Path, "/api/dashboards/uid/"):
