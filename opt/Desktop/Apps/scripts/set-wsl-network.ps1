@@ -500,7 +500,7 @@ if ($plan.NoSwitch) {
 if ($plan.Changed) {
     Write-WslConfig $WslConfigPath $plan.Bytes
     Write-Log ".wslconfig networking set for '$Mode' (was $($plan.Before), now $($plan.After))"
-    Write-Host 'restart WSL to apply: wsl --shutdown'
+    Write-Log 'restart WSL to apply: wsl --shutdown'
 } else {
     Write-Host ".wslconfig already current for '$Mode'"
 }

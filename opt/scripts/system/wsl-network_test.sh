@@ -86,7 +86,7 @@ echo "$*" >> "$STUB_LOG"
 case "$*" in
   *GetFolderPath*) printf '%s\r\n' "$STUB_DESKTOP" ;;
   *LOCALAPPDATA*) printf '%s\r\n' "$STUB_LOCALAPPDATA" ;;
-  *RunAs*) echo "stub elevated"; exit "${STUB_ELEV_RC:-0}" ;;
+  *RunAs*) echo "stub elevated"; [ -n "${STUB_ELEV_LOG:-}" ] && printf '%s\r\n' "$STUB_ELEV_LOG" >> "$STUB_LOCALAPPDATA/dotfiles/set-wsl-network.log"; exit "${STUB_ELEV_RC:-0}" ;;
   *-Status*) echo "stub status"; exit "${STUB_STATUS_RC:-0}" ;;
 esac
 exit 0
@@ -106,7 +106,7 @@ sr() {
   : > "$_ST/log"
   OUT=$(env -u GFF_INSTALL_WINDOWS_WSL_NETWORK HOME="$_ST/home" PATH="$_ST/bin:$PATH" \
     STUB_LOG="$_ST/log" STUB_DESKTOP="${4:-$_ST/desktop}" STUB_LOCALAPPDATA="$_ST/localappdata" \
-    STUB_STATUS_RC="$2" STUB_ELEV_RC="$3" GFF_INSTALL_WINDOWS_WSL_NETWORK="$1" \
+    STUB_ELEV_LOG="${STUB_ELEV_LOG:-}" STUB_STATUS_RC="$2" STUB_ELEV_RC="$3" GFF_INSTALL_WINDOWS_WSL_NETWORK="$1" \
     bash "$IW" "$REPO_ROOT" --wsl-network 2>&1 </dev/null)
   RC=$?
   LOG=$(cat "$_ST/log")
@@ -148,6 +148,25 @@ case "$OUT" in *"exit"*"5"*|*"code 5"*) _r=ok ;; *) _r="rc not surfaced: $OUT" ;
 assert_eq "$_r" "ok" "the elevated child's exit code is surfaced"
 sr nat 1 0
 assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "0" "status rc 1 (error): no elevation"
+
+# The elevated run's log lines are shown; lines from earlier runs are not.
+mkdir -p "$_ST/localappdata/dotfiles"
+printf '2026-01-01 00:00:00 stale-line-from-earlier-run\r\n' > "$_ST/localappdata/dotfiles/set-wsl-network.log"
+STUB_ELEV_LOG="2026-01-02 00:00:00 restart WSL to apply: wsl --shutdown" sr mirrored 3 0
+case "$OUT" in *"restart WSL to apply: wsl --shutdown"*) _r=ok ;; *) _r="restart line not shown: $OUT" ;; esac
+assert_eq "$_r" "ok" "a restart line the elevated run logged is printed"
+case "$OUT" in *stale-line-from-earlier-run*) _r="stale line printed" ;; *) _r=ok ;; esac
+assert_eq "$_r" "ok" "log lines from earlier runs are not printed"
+sr mirrored 3 0
+case "$OUT" in *"restart WSL"*|*stale-line*) _r="unexpected log lines: $OUT" ;; *) _r=ok ;; esac
+assert_eq "$_r" "ok" "no new log lines -> nothing printed from the log"
+rm -f "$_ST/localappdata/dotfiles/set-wsl-network.log"
+sr mirrored 3 0
+assert_eq "$RC" "0" "missing log is tolerated"
+
+# An unknown mode is rejected before it reaches a -Command string.
+sr "x';calc" 3 0
+assert_eq "$RC/$(ncalls)" "0/0" "unknown mode -> warn, exit 0, no powershell call"
 
 # Desktop copy absent: the script dir lands under %LOCALAPPDATA%\dotfiles\wsl-network\.
 mkdir -p "$_ST/desktop2"

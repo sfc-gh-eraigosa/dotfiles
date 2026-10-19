@@ -80,7 +80,11 @@ export WINSETUP_REPO_DIR="${BASE_DIR}"
 # -----------------------------------------------------------------------------
 run_wsl_network_setup() {
   _wn_mode="${GFF_INSTALL_WINDOWS_WSL_NETWORK:-off}"
-  case "$_wn_mode" in off|"") return 0 ;; esac
+  case "$_wn_mode" in
+    off|"") return 0 ;;
+    nat|bridged|mirrored) : ;;
+    *) echo "WARNING: unknown WSL network mode '${_wn_mode}' (want nat|bridged|mirrored); skipping." >&2; return 0 ;;
+  esac
   _wn_ps="$(find_powershell || true)"
   [ -n "$_wn_ps" ] || return 0
 
@@ -95,15 +99,17 @@ run_wsl_network_setup() {
     _wn_raw="$("$_wn_ps" -NoProfile -Command "[Environment]::GetFolderPath('Desktop')" </dev/null 2>/dev/null | tr -d '\r' || true)"
     _wn_desk="$(wslpath -u "$_wn_raw" 2>/dev/null || true)"
   fi
+  # %LOCALAPPDATA% holds the fallback script copy and set-wsl-network.log.
+  # shellcheck disable=SC2016  # $env:LOCALAPPDATA is PowerShell syntax
+  _wn_raw="$("$_wn_ps" -NoProfile -Command '$env:LOCALAPPDATA' </dev/null 2>/dev/null | tr -d '\r' || true)"
+  _wn_la="$(wslpath -u "$_wn_raw" 2>/dev/null || true)"
+  if [ -n "$_wn_la" ] && [ ! -d "$_wn_la" ]; then _wn_la=""; fi
   _wn_cand="${_wn_desk}/Apps/scripts"
   if [ -n "$_wn_desk" ] && [ -f "${_wn_cand}/set-wsl-network.ps1" ] \
      && [ -f "${_wn_cand}/refresh-wsl-portproxy.ps1" ] && [ -f "${_wn_cand}/lib/wsl.ps1" ]; then
     _wn_dir="$_wn_cand"
   else
-    # shellcheck disable=SC2016  # $env:LOCALAPPDATA is PowerShell syntax
-    _wn_raw="$("$_wn_ps" -NoProfile -Command '$env:LOCALAPPDATA' </dev/null 2>/dev/null | tr -d '\r' || true)"
-    _wn_la="$(wslpath -u "$_wn_raw" 2>/dev/null || true)"
-    if [ -z "$_wn_la" ] || [ ! -d "$_wn_la" ]; then
+    if [ -z "$_wn_la" ]; then
       echo "WARNING: could not resolve %LOCALAPPDATA%; cannot apply WSL network mode '${_wn_mode}'." >&2
       return 0
     fi
@@ -116,7 +122,8 @@ run_wsl_network_setup() {
     fi
     # Pin the distro (lib\wsl.ps1 reads it) - the elevated child may not see WSLENV.
     if [ -n "${DOTFILES_WSL_DISTRO:-${WSL_DISTRO_NAME:-}}" ]; then
-      printf '%s\r\n' "${DOTFILES_WSL_DISTRO:-${WSL_DISTRO_NAME:-}}" > "${_wn_dir}/lib/wsl-distro.txt"
+      printf '%s\r\n' "${DOTFILES_WSL_DISTRO:-${WSL_DISTRO_NAME:-}}" > "${_wn_dir}/lib/wsl-distro.txt" \
+        || echo "WARNING: could not pin the WSL distro in ${_wn_dir}/lib; the script will auto-detect." >&2
     fi
   fi
   _wn_ps1_w="$(wslpath -w "${_wn_dir}/set-wsl-network.ps1" 2>/dev/null || true)"
@@ -125,7 +132,11 @@ run_wsl_network_setup() {
     return 0
   fi
 
-  _wn_log="$(mktemp "${TMPDIR:-/tmp}/wsl-network.XXXXXX")"
+  _wn_log="$(mktemp "${TMPDIR:-/tmp}/wsl-network.XXXXXX" 2>/dev/null || true)"
+  if [ -z "$_wn_log" ]; then
+    echo "WARNING: could not create a temp file; skipping the WSL network step." >&2
+    return 0
+  fi
   _wn_rc=0
   "$_wn_ps" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$_wn_ps1_w" -Status -Mode "$_wn_mode" </dev/null >"$_wn_log" 2>&1 || _wn_rc=$?
   tr -d '\r' <"$_wn_log"
@@ -135,16 +146,31 @@ run_wsl_network_setup() {
     3)
       echo "Applying WSL network mode '${_wn_mode}'..."
       echo "  A UAC prompt will appear - approve it (only this step needs admin)."
+      # The elevated child's window is separate, so show what it logged: count
+      # the log's lines before, print only those appended by this run.
+      _wn_applog=""
+      [ -n "$_wn_la" ] && _wn_applog="${_wn_la}/dotfiles/set-wsl-network.log"
+      _wn_before=0
+      if [ -n "$_wn_applog" ] && [ -f "$_wn_applog" ]; then
+        _wn_before="$(wc -l <"$_wn_applog" | tr -d ' ')"
+      fi
       _wn_psq=$(printf '%s' "$_wn_ps1_w" | sed "s/'/''/g")
       _wn_rc=0
       # -PassThru + exit $p.ExitCode surfaces the elevated child's own exit code.
       # The -File path is wrapped in literal double quotes for paths with spaces.
       "$_wn_ps" -NoProfile -NonInteractive -Command "try { \$p = Start-Process powershell -Verb RunAs -Wait -PassThru -WorkingDirectory \$env:SystemRoot -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"${_wn_psq}\"','-Mode','${_wn_mode}'; exit \$p.ExitCode } catch { Write-Host \$_.Exception.Message; exit 1 }" </dev/null || _wn_rc=$?
+      if [ -n "$_wn_applog" ] && [ -f "$_wn_applog" ]; then
+        _wn_new="$(tail -n +"$((_wn_before + 1))" "$_wn_applog" | tr -d '\r')"
+        if [ -n "$_wn_new" ]; then
+          echo "  set-wsl-network.log (this run):"
+          printf '%s\n' "$_wn_new" | sed 's/^/    /'
+        fi
+      fi
       if [ "$_wn_rc" -ne 0 ]; then
         echo "WARNING: elevated set-wsl-network.ps1 exited with code ${_wn_rc} (declined UAC or apply failed)." >&2
         echo "         Re-run: bash \"${BASE_DIR}/opt/bin/install_windows.sh\" \"${BASE_DIR}\" --wsl-network" >&2
       else
-        echo "WSL network mode '${_wn_mode}' applied. Run 'wsl --shutdown' from Windows to take effect when a restart is noted above."
+        echo "WSL network mode '${_wn_mode}' applied (details: ${_wn_applog:-the set-wsl-network.log under %LOCALAPPDATA%\\dotfiles})."
       fi
       ;;
     *)
