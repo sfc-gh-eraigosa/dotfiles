@@ -171,7 +171,7 @@ and gff are untouched.
 | `l` / `→` | next tool in the focused deck |
 | `esc` | leave nav mode |
 
-My reading of the owner's answer, **to confirm in review:** j/k are the only vertical keys
+The owner's answer, **confirmed in review (2026-10-18):** j/k are the only vertical keys
 needed, so they walk one line through the screen: down through the views of a deck, then on to
 the next pane. Owner said "up/down = dashboards/configs of the same tool", so inside a deck
 j/k change the view first. The title bar shows `NAV` while the mode is on, and the focused
@@ -317,8 +317,6 @@ and mono (my call):
 
 ## 8. Open questions
 
-| # | Question | Who | Default if unanswered |
-| :-- | :-- | :-- | :-- |
 All three are closed (owner, 2026-10-18).
 
 | # | Question | Resolution |
