@@ -31,6 +31,7 @@ go install github.com/sfc-gh-eraigosa/dotfiles/sdk/gss@latest
 | **[wlink](#-wlink--why-does-ssh-hang-but-the-ip-work)** | `ssh host` hangs from WSL but `ssh <ip>` works | Pins the resolver that actually knows your fleet, reversibly |
 | **[wol](#-wol--turn-it-on-from-anywhere)** | The machine you need is powered off | Wake-on-LAN magic packets |
 | **[mono](#-mono--the-whole-machine-on-one-screen)** | You keep three terminals open to watch one machine | htop, a GPU monitor and gsl stacked in one screen, picked per host |
+| **[gdash](#-gdash--your-grafana-dashboards-in-the-terminal)** | The graphs you need live in a browser tab | Grafana dashboards as braille charts and meters, read-only |
 | **[gcfg](#-gcfg--repo-settings-that-live-in-git)** | Someone changed a repo setting and nobody knows who | GitHub settings as code: export, verify in CI, apply on purpose |
 | **[ghapp](#-ghapp--an-admin-token-that-expires-by-itself)** | A workflow needs admin rights and `GITHUB_TOKEN` hasn't got them | GitHub App credentials: one browser round-trip, hour-long tokens |
 | **[libs](#-libs--the-shared-foundation)** | You're writing tool #8 | Shared logging: rotation, capture, XDG paths |
@@ -410,6 +411,47 @@ mono inside a tmux on its default `ctrl+b` prefix, change one of them
 (`mono config set prefix ctrl+g`).
 
 → [Agent context](./mono/AGENTS.md)
+
+---
+
+## 📈 `gdash` — your Grafana dashboards in the terminal
+
+> The lab's Grafana dashboards, drawn as braille charts and htop-style meters,
+> refreshed in place — and a pane in mono.
+
+**The problem.** The numbers that say whether the lab is healthy (conductor,
+the k3s nodes, CI) live in Grafana. Seeing them means a browser tab, a login,
+and a window you're not looking at when something drifts.
+
+**What it does about it.** `gdash <view>` fetches a dashboard and draws every
+panel the way Grafana defines it: same queries, template variables, units and
+thresholds. Time series become braille line charts, single values become
+meters, anything else becomes a one-line placeholder that says why. It
+authenticates with a read-only token that lives in a 0600 file, an env var or a
+password-manager command, never in its config. `gdash doctor --quiet` is how
+mono decides whether to show the pane.
+
+**Reach for it when:**
+
+- You want the conductor, nodes or CI graphs next to htop, not in a browser
+- You're on a host over SSH and want to know if the cluster is busy
+- You're checking a token works and every view's dashboard exists (`gdash doctor`)
+
+```console
+$ gdash doctor
+  ok   reachable                http://192.168.0.128:30300 (Grafana 13.1.3)
+  ok   authenticated            profile lab
+  ok   view k3s-nodes           dashboard "Kubernetes / Compute Resources / Nodes Overview" (058020e04168bfdea0c52269cb699df2)
+  ok   datasource Prometheus    answers a query
+
+$ gdash k3s-nodes           # j/k scroll, +/- range, r refresh, q quit
+```
+
+**Gotchas.** Variables with no saved value (Grafana fills them by running a
+query) need one per view: `gdash config set views.<v>.vars.<name> <value>`.
+Read-only: gdash never writes to Grafana.
+
+→ [Full docs](./gdash/README.md) · [Agent context](./gdash/AGENTS.md)
 
 ---
 

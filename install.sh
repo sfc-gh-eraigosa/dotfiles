@@ -958,6 +958,19 @@ if gff_on install.sdk.mono; then
   fi
 else gff_skip_msg install.sdk.mono; fi
 
+# build and install gdash (Grafana dashboards as terminal graphs; mono's middle pane)
+if gff_on install.sdk.gdash; then
+  if [ -f "${BASE_DIR}/sdk/gdash/build.sh" ]; then
+    echo "Installing gdash (Grafana dashboards as terminal graphs)..."
+    bash "${BASE_DIR}/sdk/gdash/build.sh" || echo "WARNING: gdash build reported problems; continuing."
+    if [ -f "${HOME}/opt/bin/gdash" ]; then
+        echo "--------------------------------------------------"
+        "${HOME}/opt/bin/gdash" version
+        echo "--------------------------------------------------"
+    fi
+  fi
+else gff_skip_msg install.sdk.gdash; fi
+
 # build and install fleet
 if gff_on install.sdk.fleet; then
   # The tracked team plan must not be group/world-writable — fleet treats a

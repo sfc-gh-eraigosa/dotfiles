@@ -1,0 +1,24 @@
+▢ Node & Pod Count — needs var $cluster (gdash config set views.fixture.vars.cl…
+▢ CPU Usage — needs var $cluster (gdash config set views.fixture.vars.cluster <…
+▢ Memory Usage — needs var $cluster (gdash config set views.fixture.vars.cluste…
+▢ CPU Utilization per Node — needs var $cluster (gdash config set views.fixture…
+▢ Memory Utilization per Node — needs var $cluster (gdash config set views.fixt…
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Kubernetes / Compute Resources / Nodes Overview · last 1h · updated 12:00:00 · …

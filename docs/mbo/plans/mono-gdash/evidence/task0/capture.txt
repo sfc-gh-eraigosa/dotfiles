@@ -1,0 +1,36 @@
+# Task 0 — lab Grafana fixtures, captured 2026-10-19T04:53:16Z from http://192.168.0.128:30300 (Viewer token gdash-viewer, read from ~/.config/gdash/lab.cred; never printed)
+
+## files
+   10915  ./dashboards/058020e04168bfdea0c52269cb699df2.json
+   20548  ./dashboards/7d57716318ee0dddbac5a7f451fb7753.json
+   43785  ./dashboards/ci-lab.json
+   27894  ./dashboards/conductor-metrics.json
+     102  ./health.json
+   17084  ./queries/058020e04168bfdea0c52269cb699df2/timeseries-1.json
+   10941  ./queries/7d57716318ee0dddbac5a7f451fb7753/gauge-6.json
+  532639  ./queries/7d57716318ee0dddbac5a7f451fb7753/table-9.json
+  668523  ./queries/7d57716318ee0dddbac5a7f451fb7753/timeseries-2.json
+  118778  ./queries/ci-lab/bargauge-70.json
+    8483  ./queries/ci-lab/stat-2.json
+   98651  ./queries/ci-lab/table-32.json
+   25909  ./queries/ci-lab/timeseries-22.json
+    9313  ./queries/conductor-metrics/stat-2.json
+   18310  ./queries/conductor-metrics/timeseries-9.json
+   11835  ./search.json
+
+## query responses
+queries/058020e04168bfdea0c52269cb699df2/timeseries-1.json   frames   2
+queries/7d57716318ee0dddbac5a7f451fb7753/gauge-6.json        frames   1
+queries/7d57716318ee0dddbac5a7f451fb7753/table-9.json        frames  60
+queries/7d57716318ee0dddbac5a7f451fb7753/timeseries-2.json   frames  62
+queries/ci-lab/bargauge-70.json                              frames  15
+queries/ci-lab/stat-2.json                                   frames   1
+queries/ci-lab/table-32.json                                 frames  10
+queries/ci-lab/timeseries-22.json                            frames   3
+queries/conductor-metrics/stat-2.json                        frames   1
+queries/conductor-metrics/timeseries-9.json                  frames   2
+
+## scrub checks
+$ grep -rlE 'glsa_|Bearer|eyJ' sdk/gdash/internal/grafana/testdata/lab → 0 files
+$ grep -rliE '<login>|<surname>' sdk/gdash/internal/grafana/testdata/lab → 0 files
+LAN addresses rewritten to TEST-NET-1: 192.0.2.128 192.0.2.201 192.0.2.63 192.0.2.66 

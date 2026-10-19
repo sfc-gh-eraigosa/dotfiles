@@ -1,0 +1,47 @@
+# A8 security + install + docs — 2026-10-19T06:04:37Z
+RED: security_test.go (builds the binary) + redaction tests written first → build failed (no EchoAuth / Redact).
+First GREEN run: E12 flagged `config get profiles.lab.auth.cmd` — the test itself had put the secret inside the auth.cmd string; fixed the test (the failing command now cats the token file to stderr, which gdash discards).
+Mutation check: with the client's redaction removed, E12 fails (doctor/list leak via an echoing server); restored → passes.
+
+$ go test -count=1 -v -run TestSecretNeverPrinted .   (6 credential setups × 8 commands, real binary)
+--- PASS: TestSecretNeverPrinted (1.40s)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash	1.414s
+
+$ go test -count=1 -cover ./...
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash	1.322s	coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/cmd	2.132s	coverage: 80.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/app	0.170s	coverage: 86.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/auth	0.833s	coverage: 91.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/config	0.015s	coverage: 75.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/dash	0.011s	coverage: 84.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/grafana	0.397s	coverage: 88.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/render	1.139s	coverage: 91.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/vars	0.006s	coverage: 95.8% of statements
+
+$ golangci-lint (GOENV_VERSION=1.26.3)
+0 issues.
+$ gosec (repo GOSEC_FLAGS)
+exit 0
+$ govulncheck — first run used the goenv 1.26.3 toolchain (the local lint workaround): exit 3, four findings, all in net/http@go1.26.3 (the stdlib, not gdash code).
+$ govulncheck + gosec built from tools/security (the repo's pinned scanners) under the .go-version toolchain go1.27.2 — what `make security` and CI run:
+No vulnerabilities found.   (exit 0)
+gosec (pinned, repo GOSEC_FLAGS): exit 0
+
+$ gff lint
+exit 0
+$ markdownlint-cli2 (touched docs)
+Summary: 0 issues in 0 files
+
+$ (install.sh gdash block, gff on)
+Installing gdash (Grafana dashboards as terminal graphs)...
+Building gdash v0.0.0-untagged with go version go1.27.2 linux/amd64...
+gdash built and installed to ~/opt/bin/gdash
+--------------------------------------------------
+gdash v0.0.0-untagged
+  Commit:      5290403
+  Build Date:  2026-10-19T06:04:20Z
+  Dirty:       true
+--------------------------------------------------
+
+$ (same block with GFF install.sdk.gdash=false)
+SKIP (gff: install.sdk.gdash=false)
