@@ -6,6 +6,7 @@ package auth
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -46,12 +47,29 @@ type bearer struct{ s Secret }
 
 func (b bearer) Apply(r *http.Request) { r.Header.Set("Authorization", "Bearer "+b.s.v) }
 
+// Redact removes the token from s (an error body that echoed it, say).
+func (b bearer) Redact(s string) string { return redact(s, b.s.v) }
+
 type basic struct {
 	user string
 	pw   Secret
 }
 
 func (b basic) Apply(r *http.Request) { r.SetBasicAuth(b.user, b.pw.v) }
+
+// Redact removes the password, and the header's base64 user:password, from s.
+func (b basic) Redact(s string) string {
+	return redact(s, b.pw.v, base64.StdEncoding.EncodeToString([]byte(b.user+":"+b.pw.v)))
+}
+
+func redact(s string, secrets ...string) string {
+	for _, v := range secrets {
+		if v != "" {
+			s = strings.ReplaceAll(s, v, Redacted)
+		}
+	}
+	return s
+}
 
 // Load reads the credential a profile names. With auth.user set it is the
 // basic-auth password; otherwise it is a bearer (service-account) token.

@@ -88,7 +88,8 @@ gss feature checkpoint
 
 Fix wrong commands here and note it in the TRACKING session log.
 
-- **2026-10-19:** on wslgiga1, `make lint-go` fails for **every** module because goenv can't find the repo's `.go-version` (1.27.2). Lint the module directly with `GOENV_VERSION=1.26.3 golangci-lint run ./...` (golangci-lint lives under that goenv version). Use the override **only** for golangci-lint: set for `go` itself, it makes `go test` and `build.sh` fail. CI is unaffected. If the Grafana token stops
+- **2026-10-19:** on wslgiga1, `make lint-go` fails for **every** module because goenv can't find the repo's `.go-version` (1.27.2). Lint the module directly with `GOENV_VERSION=1.26.3 golangci-lint run ./...` (golangci-lint lives under that goenv version). Use the override **only** for golangci-lint: set for `go` itself, it makes `go test` and `build.sh` fail. CI is unaffected.
+- **Security scans:** don't use the goenv 1.26.3 copies of govulncheck/gosec. Their old stdlib reports net/http findings that aren't gdash's. Build the pinned ones: `(cd tools/security && GOBIN=$PWD/../../.bin go install golang.org/x/vuln/cmd/govulncheck github.com/securego/gosec/v2/cmd/gosec)`, as `make security` does. If the Grafana token stops
 working (401), stop: the owner re-issues it. Never create Grafana credentials from an agent
 session without the owner's go-ahead.
 
@@ -96,7 +97,7 @@ session without the owner's go-ahead.
 
 > **Maintenance rule:** exactly ONE prompt here, the one that starts the NEXT session.
 
-```
+```text
 Execute docs/mbo/plans/mono-gdash/ (dotfiles). Read, in order: IMPLEMENTATION.md, TRACKING.md,
 TODO.md, then the plan ../mono-gdash.md and spec ../../specs/mono-gdash.md.
 Scope now: the `gdash` leaf, starting at Task 0 (lab facts + fixtures) — preconditions in

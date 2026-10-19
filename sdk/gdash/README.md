@@ -1,11 +1,120 @@
-# gdash
+# gdash — Grafana dashboards as terminal graphs
 
-Grafana dashboards as terminal graphs. **Being built**: see
-[`docs/mbo/plans/mono-gdash.md`](../../docs/mbo/plans/mono-gdash.md) for the
-plan and [`AGENTS.md`](./AGENTS.md) for the module map. Usage and a real demo
-land with plan task A8.
+> Your Grafana dashboards, drawn in the terminal: braille line charts for time
+> series, htop-style meters for single values, refreshed in place. Read-only.
+
+gdash draws a dashboard's panels the way Grafana defines them: same queries,
+same template variables, same units and thresholds. It runs on its own in any
+terminal, and `mono` runs it as a pane (a host that can't reach Grafana simply
+gets no gdash pane). Design, spec and plan:
+[`docs/mbo/`](../../docs/mbo/plans/mono-gdash.md).
+
+## Install
+
+`./install.sh` builds it into `~/opt/bin/gdash` behind the gff flag
+`install.sdk.gdash` (on by default). By hand: `bash sdk/gdash/build.sh`.
+
+## Set up a host (once)
+
+1. **A read-only token.** In Grafana: Administration → Service accounts → add
+   one with the **Viewer** role → add a token. Save it to a file only you can
+   read; gdash refuses a token file others can read:
+
+   ```bash
+   umask 077; cat > ~/.config/gdash/lab.cred     # paste the token, then ctrl+d
+   ```
+
+2. **A profile** — where Grafana is and where the token comes from (a 0600
+   file, an environment variable, or a command that prints it):
+
+   ```bash
+   gdash config add profile lab --url http://192.168.0.128:30300 --auth-file ~/.config/gdash/lab.cred
+   gdash doctor
+   ```
+
+3. **Find the dashboards**, then add a view per dashboard:
+
+   ```console
+   $ gdash list nodes
+   058020e04168bfdea0c52269cb699df2   Kubernetes / Compute Resources / Nodes Overview   General
+   7d57716318ee0dddbac5a7f451fb7753   Node Exporter / Nodes   General
+   $ gdash config add view k3s-nodes --dashboard 058020e04168bfdea0c52269cb699df2
+   $ gdash config set views.k3s-nodes.vars.cluster ""
+   ```
+
+   The lab's four views (mono's middle pane uses these names):
+
+   | View | Dashboard uid | Variables to set |
+   | :-- | :-- | :-- |
+   | `conductor` | `conductor-metrics` | — |
+   | `k3s-nodes` | `058020e04168bfdea0c52269cb699df2` | `cluster ""` |
+   | `nodes` | `7d57716318ee0dddbac5a7f451fb7753` | `cluster ""`, `instance <node-ip>:9100` |
+   | `ci` | `ci-lab` | — |
+
+   A panel whose query uses a variable with no saved value says
+   `needs var $x` with the exact `gdash config set` command to fix it.
+
+The config (`~/.config/gdash/config.json`, or `$GDASH_CONFIG`) never holds a
+credential; `gdash config set` refuses a key named like one.
+
+## Use
 
 ```console
-$ bash sdk/gdash/build.sh
-$ gdash version
+$ gdash doctor
+  ok   reachable                http://192.168.0.128:30300 (Grafana 13.1.3)
+  ok   authenticated            profile lab
+  ok   view ci                  dashboard "CI — lab runners" (ci-lab)
+  ok   view conductor           dashboard "Conductor — metrics against goals" (conductor-metrics)
+  ok   view k3s-nodes           dashboard "Kubernetes / Compute Resources / Nodes Overview" (058020e04168bfdea0c52269cb699df2)
+  ok   view nodes               dashboard "Node Exporter / Nodes" (7d57716318ee0dddbac5a7f451fb7753)
+  ok   datasource Prometheus    answers a query
+$ gdash k3s-nodes          # full screen; q quits
+Node & Pod Count
+50│⠉⠉⠉⠉⠉⠒⠒⠒⠒⠒⠒⠒⠒⠒⠤⠤⠤⠤⠤⠤⠤⠤⠤⢄⣀⣀⣀⣀⣀⣀⣀⣀⣀⠤⠤⠤⠤⠤⠤⠤⠤⠤⠒⠒⠒⠒⠒⠒⠒⠒⠒⠉⠉⠉⠉⠉
+  │
+  │
+  │
+  │
+ 4│⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀
+● nodes 4  ● pods 50
 ```
+
+`gdash doctor --quiet` checks only that Grafana answers and the token is
+accepted, in under 2 seconds, and prints nothing — it is mono's probe.
+
+## Keys
+
+| Key | Action |
+| :-- | :-- |
+| `r` | refresh now |
+| `+` `=` / `-` | wider / narrower time range (5m … 7d) |
+| `j` `down` / `k` `up` | scroll a line |
+| `ctrl+d` / `ctrl+u` | half page down / up |
+| `ctrl+f` `pgdown` / `ctrl+b` `pgup` | page down / up |
+| `gg` / `G` | top / bottom |
+| `?` `f1` | help |
+| `q` `ctrl+c` | quit |
+
+## What it draws
+
+- `timeseries` and `graph` panels: a braille chart with min/max on a y-axis
+  and each series' last value in the legend (`legendFormat` honoured).
+- `stat`, `gauge`, `bargauge`: a meter, with a bar when the panel has a known
+  maximum (percentages, or `max` set) and threshold colors — or `!`/`!!`
+  markers under `NO_COLOR`.
+- Anything else (tables, library panels, non-Prometheus datasources): one line
+  saying what it is and that gdash doesn't draw it.
+- Two columns at 120 cells and wider. Refresh every 30 s by default (`refresh`
+  per view, never under 5 s); a fetch that fails keeps the last good data on
+  screen with its age — stale, never blank.
+
+## Gotchas
+
+- Variables with no saved value (Grafana fills them by running a query) need a
+  value per view: `gdash config set views.<view>.vars.<name> <value>`.
+- The lab URL is plain HTTP, so the Viewer token crosses the LAN unencrypted.
+  Point the profile at `https://grafana.theranch.test` once that name resolves.
+- `auth.cmd` must answer without prompting (mono restarts gdash on every view
+  switch); a logged-in password-manager CLI, a file or an env var all work.
+
+→ [Agent context](./AGENTS.md)

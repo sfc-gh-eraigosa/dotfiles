@@ -7,7 +7,7 @@ for time series, htop-style meters for single values, a labelled placeholder
 for anything else. It runs alone, and `mono` runs it as a pane (mono only
 starts it; it never imports this module).
 
-**Being built** under the `mono-gdash` objective:
+Built under the `mono-gdash` objective:
 [design](../../docs/mbo/designs/mono-gdash.md) ·
 [spec](../../docs/mbo/specs/mono-gdash.md) ·
 [plan](../../docs/mbo/plans/mono-gdash.md) ·
@@ -15,9 +15,17 @@ starts it; it never imports this module).
 
 | Path | What |
 | :-- | :-- |
-| `cmd/` | cobra CLI: `gdash [view]`, `gdash version` (more per plan A2–A7) |
-| `internal/version` | build metadata stamped by `build.sh` |
+| `cmd/` | cobra CLI: `gdash [view]` (and `--dashboard/--profile/--range/--refresh`), `config`, `doctor [--quiet]`, `list`, `version` |
+| `internal/config` | profiles + views, validation, dotted get/set, 0600 save; refuses inline credentials |
+| `internal/auth` | the credential from exactly one of file (0600) / env / cmd; `Secret` never prints; credentials redact themselves |
+| `internal/grafana` | read-only client (health, search, dashboard, datasources, ds/query → series); `Resolve`; `FetchAll` (≤ 4 at once) |
+| `internal/grafana/grafanatest` | a fake Grafana serving the lab fixtures; used by every test |
 | `internal/grafana/testdata/lab/` | scrubbed fixtures from the lab Grafana (plan Task 0); `capture.py` re-captures |
+| `internal/dash` | dashboard JSON → panels (chart / meter / row / placeholder), gridPos order, refIds assigned |
+| `internal/vars` | template variables and `$__interval` family; datasource references |
+| `internal/render` | pure drawing: braille charts, meters, rows, placeholders, units; golden frames |
+| `internal/app` | the bubbletea TUI: layout, scroll, refresh (skip while busy), stale-not-blank; the live fetcher |
+| `security_test.go` | builds the binary and proves the credential never reaches stdout/stderr (E12) |
 
 ## Rules
 

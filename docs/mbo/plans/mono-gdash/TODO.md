@@ -95,12 +95,12 @@
 
 ### Task A8 — security + install + docs  (E12)
 
-- [ ] RED: `security_test.go` (the fixture secret never appears in captured stdout/stderr across doctor, errors, config get, %v, JSON, panic)
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: any redaction fixes; `install.sh` block (`gff_on install.sdk.gdash`); `.github/gff/features.yaml` flag; `sdk/AGENTS.md` + `sdk/README.md` rows and section; README demo from a **real** run
-- [ ] VERIFY: `make security` · `make lint-go` · `make lint-markdown` · `./install.sh` builds gdash
-- [ ] EVIDENCE · COMMIT `gdash: secret-never-printed guard, install.sh + gff flag, sdk docs` · LEDGER · CHECKPOINT
-- [ ] label the gdash PR `ready-for-merge` once every check is green
+- [x] RED: `security_test.go` (the fixture secret never appears in captured stdout/stderr across doctor, errors, config get, %v, JSON, panic)
+- [x] RUN-RED → FAIL
+- [x] GREEN: any redaction fixes; `install.sh` block (`gff_on install.sdk.gdash`); `.github/gff/features.yaml` flag; `sdk/AGENTS.md` + `sdk/README.md` rows and section; README demo from a **real** run
+- [x] VERIFY: `make security` · `make lint-go` · `make lint-markdown` · `./install.sh` builds gdash
+- [x] EVIDENCE · COMMIT `gdash: secret-never-printed guard, install.sh + gff flag, sdk docs` · LEDGER · CHECKPOINT
+- [x] label the gdash PR `ready-for-merge` once every check is green
 
 ---
 

@@ -224,3 +224,22 @@ func TestHTTPErrorCarriesGrafanasMessage(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+type redactingCred string
+
+func (r redactingCred) Apply(req *http.Request) { req.Header.Set("Authorization", "Bearer "+string(r)) }
+func (r redactingCred) Redact(s string) string {
+	return strings.ReplaceAll(s, string(r), "‹redacted›")
+}
+
+// A server that echoes the Authorization header in its error body must not
+// get the credential into gdash's error message.
+func TestErrorsAreRedacted(t *testing.T) {
+	s := grafanatest.New(t)
+	s.Status, s.EchoAuth = 401, true
+	c := grafana.NewHTTP(s.URL, redactingCred("sekrit-value"), time.Second)
+	_, err := c.Health(context.Background())
+	if err == nil || strings.Contains(err.Error(), "sekrit-value") || !strings.Contains(err.Error(), "‹redacted›") {
+		t.Fatalf("error = %v", err)
+	}
+}

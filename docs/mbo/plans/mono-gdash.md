@@ -75,6 +75,7 @@ func Placeholder(p dash.Panel, reason string, w int) []string
 ```
 
 **CLI.**
+
 - `gdash [view]` runs the TUI.
 - `gdash list [query]` prints `uid\ttitle\tfolder`.
 - `gdash doctor [--profile p] [--quiet]` has exit codes 0 (all checks pass) and 1 (any fails).
@@ -82,11 +83,13 @@ func Placeholder(p dash.Panel, reason string, w int) []string
 - `gdash version`.
 
 **mono config.**
+
 - A pane has either `cmd` (plain) or `tools: [{name, probe?, views: [{name, cmd, every?, fallbacks?, probe?, cwd?}]}]`.
 - New top-level keys: `nav_key` (default `"space"`) and `nav_esc_ms` (default `300`).
 
 **mono deck pseudocode.**
-```
+
+```text
 switchView(pane, tool, view):
     if same → return
     pane.running.Stop(HUP, kill after 500ms)
@@ -104,7 +107,7 @@ lists the spec rules it proves.
 
 | Task | Write first (RED) | Implement | Done-when | Spec |
 | :-- | :-- | :-- | :-- | :-- |
-| **0 — lab facts + fixtures** | — (capture task) | Use the owner-issued Viewer token (`~/.config/gdash/lab.cred`, 0600) against `http://192.168.0.128:30300`. Record the Grafana version, the uids/titles of the conductor, k3s-nodes and CI dashboards, and their datasource types. Capture `/api/health`, `/api/search`, each dashboard JSON, and one `/api/ds/query` response per panel type into `internal/grafana/testdata/lab/`. Scrub tokens; leave only the documented NodePort address as a host | fixtures committed; `grep -rE '(glsa_|eyJ)' testdata` finds nothing; TRACKING records the three uids and the version | Q2 |
+| **0 — lab facts + fixtures** | — (capture task) | Use the owner-issued Viewer token (`~/.config/gdash/lab.cred`, 0600) against `http://192.168.0.128:30300`. Record the Grafana version, the uids/titles of the conductor, k3s-nodes and CI dashboards, and their datasource types. Capture `/api/health`, `/api/search`, each dashboard JSON, and one `/api/ds/query` response per panel type into `internal/grafana/testdata/lab/`. Scrub tokens; leave only the documented NodePort address as a host | fixtures committed; `grep -rE '(glsa_\|eyJ)' testdata` finds nothing; TRACKING records the three uids and the version | Q2 |
 | A1 — scaffold | `cmd_test`: `gdash version` prints the stamped version | go.mod, main, build.sh, version, cobra root, AGENTS/CLAUDE/README stubs; `coverage_min gdash 60` | `bash sdk/gdash/build.sh` builds; tests pass; `git status --short -- sdk/gdash` shows files tracked | §4.5 |
 | A2 — config + auth | E10, E11, E13, plus config validation tables | `internal/config`, `internal/auth`, `cmd/config.go` | listed tests pass; auth ≥ 80% coverage | F6 |
 | A3 — client | E1, E2 against fixtures | `internal/grafana` HTTP impl, concurrency cap 4, timeouts | pass | F1 |
@@ -169,7 +172,7 @@ lists the spec rules it proves.
 | `deck` | `sdk/mono/**` (except default layout until C1), `sdk/libs/tui/keymap` if touched, `scripts/test.sh` mono row | — | B1–B6 done-when; lint + security green | no |
 | `integrate` | `sdk/mono` default config, `evidence/e2e/` | `gdash` (binary + `doctor --quiet` contract, spec F7), `deck` (deck schema, spec F8) | C1–C2 done-when | — |
 
-```
+```text
 gdash ──┐
         ├──► integrate
 deck  ──┘

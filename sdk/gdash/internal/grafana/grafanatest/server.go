@@ -30,6 +30,9 @@ type Server struct {
 	// and Message as its body.
 	Status  int
 	Message string
+	// EchoAuth makes those error bodies repeat the request's Authorization
+	// header, like a careless proxy (the E12 leak test).
+	EchoAuth bool
 
 	dir     string
 	byExpr  map[string]json.RawMessage
@@ -90,6 +93,9 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		msg := s.Message
 		if msg == "" {
 			msg = http.StatusText(s.Status)
+		}
+		if s.EchoAuth {
+			msg = `{"message":"refused: ` + r.Header.Get("Authorization") + `"}`
 		}
 		http.Error(w, msg, s.Status)
 		return

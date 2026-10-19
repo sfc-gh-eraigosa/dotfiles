@@ -13,7 +13,7 @@
 | Leaf | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | design | `mono-gdash/edward-raigosa/design` | `feature/mono-gdash/edward-raigosa/design` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/mono-gdash/edward-raigosa/design` | #411 | design + spec + plan + trio |
-| gdash | `mono-gdash/edward-raigosa/gdash` | `feature/mono-gdash/edward-raigosa/gdash` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/mono-gdash/edward-raigosa/gdash` | — | Task 0 |
+| gdash | `mono-gdash/edward-raigosa/gdash` | `feature/mono-gdash/edward-raigosa/gdash` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/mono-gdash/edward-raigosa/gdash` | #413 | Task 0 + A1–A8 done |
 | deck | — | — | — | — | not created |
 
 ## 1. Task ledger
@@ -28,7 +28,7 @@
 | A5 render | done | (this commit) | RED: build failed (no package); GREEN: render 91.6% (≥ 80 bar); 37 goldens (10 lab panels × 80/120/1 col + edges), reviewed by eye; width sweep 1–130 × color on/off: no line wider than its width; NO_COLOR threshold markers; lint 0; gosec exit 0 (`evidence/a5/a5.txt`) | **charting: in-repo braille plotter, not ntcharts** (no dependency, deterministic goldens). Review fix: `-0.0%` axis label → `0.0%` |
 | A6 app | done | (this commit) | RED: setup failed; fixes on the way: injectable tick (tea.Tick slept 30s in tests), gdash keys first in help; GREEN: app 86.0%, cmd 79.7%; E7 stale/E8 skip-if-busy/E9 keys pass; 6 frame goldens incl. 120-col two-column CI; **live** on the lab: k3s-nodes, conductor, ci, nodes all draw (`evidence/a6/a6.txt`, `live-*.txt`) | live found a real bug: multi-target panels without refId → HTTP 400; `dash.Parse` now assigns refIds; HTTP errors carry Grafana's message. Follow-up (not v1): resolve `label_values()` query variables via the ds resource API (a Viewer may call it) so `$cluster`/`$instance` need no override |
 | A7 doctor + list | done | (this commit) | RED: build failed; GREEN: 8 doctor/list tests incl. E14 (ok / 401 / down / missing dashboard) and E15 (`--quiet` against a hanging Grafana fails in 2.01 s); cmd 80.4%; lint 0; gosec exit 0; **live**: doctor all ok (4 views + Prometheus), `--quiet` 35 ms, no-config host exit 1 silently (`evidence/a7/`) | |
-| A8 security + install + docs | todo | | | |
+| A8 security + install + docs | done | (this commit) | RED: build failed (no EchoAuth/Redact); GREEN: E12 `TestSecretNeverPrinted` builds the binary and runs 6 credential setups × 8 commands against a fake Grafana that echoes the Authorization header: no leak; mutation (redaction off) → fails; module coverage 81.2%; lint 0; pinned govulncheck: no vulnerabilities; pinned gosec exit 0; gff lint ok; markdownlint 0 on touched docs; install.sh block builds/skips by flag (`evidence/a8/a8.txt`) | credentials redact themselves (bearer: the token; basic: the password and base64 user:password) and the client scrubs every error message |
 | B1 config schema | todo | | | |
 | B2 probe + doctor | todo | | | |
 | B3 deck runtime | todo | | | |
@@ -39,6 +39,7 @@
 | C2 live evidence | todo | | | |
 
 **Lab facts (Task 0, 2026-10-19):**
+
 - **Grafana:** `13.1.3`; dashboard schemaVersion 39; every target's datasource is `prometheus`, via the `$datasource` variable.
 - **conductor:** `conductor-metrics`, "Conductor — metrics against goals". 17 panels: 3 row, 6 stat, 8 timeseries.
 - **CI:** `ci-lab`, "CI — lab runners". 37 panels: 5 row, 16 stat, 10 timeseries, 4 table, 2 bargauge.
@@ -56,7 +57,7 @@
 | F3 panels/layout | [x] E5 E6 | [x] live captures at 80 and 120 cols (`evidence/a6/live-*.txt`) | |
 | F4 refresh/stale | [x] E7 E8 | [ ] Grafana unreachable → stale row | |
 | F5 keys | [x] E9 | — | |
-| F6 config/auth | [~] E10 E11 E13 (E12 is A8) | [ ] `config get` shows ‹redacted› | |
+| F6 config/auth | [x] E10–E13 | [x] no secret in any output (E12, real binary) | |
 | F7 doctor/list | [x] E14 E15 | [x] doctor passes live (wslgiga1); exit 1 with no config. spark1 in C2 | |
 | F8 decks | [ ] E16–E19 E24 | [ ] one gdash process while cycling | |
 | F9 nav | [ ] E20–E23 | [ ] capture of the deck cycle | |
@@ -84,3 +85,4 @@
 | 2026-10-19 | playground session | owner picked k3s-nodes = Nodes Overview and kept Node Exporter as a 4th view `nodes`; spec F8 amended |
 | 2026-10-19 | playground session | A1–A4 done: scaffold, config + auth, client, dash + vars |
 | 2026-10-19 | playground session | A5–A6 done: render (in-repo braille), app + `gdash <view>`; first live run against the lab, refId bug found and fixed |
+| 2026-10-19 | playground session | A7–A8 done: doctor/list (live: all ok, --quiet 35 ms), E12 leak test on the real binary, install.sh + gff flag, docs; gdash leaf complete |

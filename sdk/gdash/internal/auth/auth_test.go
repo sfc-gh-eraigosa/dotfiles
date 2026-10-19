@@ -168,3 +168,20 @@ func TestExactlyOneSource(t *testing.T) {
 		t.Fatal("two sources accepted")
 	}
 }
+
+func TestCredentialsRedact(t *testing.T) {
+	t.Setenv("GDASH_TEST_CRED", fixtureCred())
+	for _, a := range []config.Auth{{Env: "GDASH_TEST_CRED"}, {User: "viewer", Env: "GDASH_TEST_CRED"}} {
+		c, err := Load(a)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, ok := c.(interface{ Redact(string) string })
+		if !ok {
+			t.Fatalf("%T cannot redact", c)
+		}
+		if got := r.Redact("echo: Bearer " + fixtureCred()); strings.Contains(got, fixtureCred()) {
+			t.Fatalf("Redact left the secret: %q", got)
+		}
+	}
+}

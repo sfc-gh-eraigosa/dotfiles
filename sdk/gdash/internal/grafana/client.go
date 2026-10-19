@@ -26,6 +26,13 @@ type Credential interface {
 	Apply(r *http.Request)
 }
 
+// redactor is a Credential that can scrub itself out of text. The client
+// runs every error message through it, so a server or proxy that echoes the
+// Authorization header back cannot get the credential onto the screen.
+type redactor interface {
+	Redact(s string) string
+}
+
 // Client is everything gdash asks of Grafana.
 type Client interface {
 	Health(ctx context.Context) (Health, error)
@@ -191,11 +198,11 @@ func (c *httpClient) do(ctx context.Context, method, path string, body any, out 
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		// net/http errors carry the URL, never the headers: no secret leaks here.
-		return fmt.Errorf("grafana %s: %w", strings.SplitN(path, "?", 2)[0], err)
+		return fmt.Errorf("grafana %s: %s", strings.SplitN(path, "?", 2)[0], c.redact(err.Error()))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
-		return &HTTPError{Status: resp.StatusCode, Path: strings.SplitN(path, "?", 2)[0], Message: errorMessage(resp.Body)}
+		return &HTTPError{Status: resp.StatusCode, Path: strings.SplitN(path, "?", 2)[0], Message: c.redact(errorMessage(resp.Body))}
 	}
 	switch o := out.(type) {
 	case nil:
@@ -207,6 +214,13 @@ func (c *httpClient) do(ctx context.Context, method, path string, body any, out 
 	default:
 		return json.NewDecoder(resp.Body).Decode(out)
 	}
+}
+
+func (c *httpClient) redact(s string) string {
+	if r, ok := c.cred.(redactor); ok {
+		return r.Redact(s)
+	}
+	return s
 }
 
 func (c *httpClient) Health(ctx context.Context) (Health, error) {
@@ -303,7 +317,7 @@ func (c *httpClient) Query(ctx context.Context, r QueryRequest) (Result, error) 
 			continue
 		}
 		if w.Error != "" {
-			res.Errors[ref] = w.Error
+			res.Errors[ref] = c.redact(w.Error)
 		}
 		for _, f := range w.Frames {
 			res.Series = append(res.Series, framesToSeries(ref, f)...)
