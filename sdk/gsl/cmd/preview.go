@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -10,6 +11,11 @@ import (
 )
 
 var previewOnce bool
+
+// previewInput is where the interactive preview reads keys from; nil means the
+// terminal (bubbletea's default). Tests set it to a reader that sends "q" so
+// the TUI quits instead of waiting on a real terminal forever.
+var previewInput io.Reader
 
 var previewCmd = &cobra.Command{
 	Use:   "preview",
@@ -42,7 +48,11 @@ func runPreview(cmd *cobra.Command, args []string) error {
 	}
 
 	m := preview.NewModel(nil) // nil clock → real time.Now
-	p := tea.NewProgram(m, tea.WithOutput(os.Stdout))
+	opts := []tea.ProgramOption{tea.WithOutput(os.Stdout)}
+	if previewInput != nil {
+		opts = append(opts, tea.WithInput(previewInput))
+	}
+	p := tea.NewProgram(m, opts...)
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("gsl preview: %w", err)
 	}

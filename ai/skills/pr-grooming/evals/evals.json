@@ -1,0 +1,41 @@
+{
+  "skill_name": "pr-grooming",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Review the open PRs and groom them: drafts older than 30 days might be won't-do (check for a duplicate or superseding MBO and prefer the merged one), old bug fixes should be re-proven, rebased and promoted, dependabot bumps rebased and queued if green, everything else rebased and CI-checked. Do it now.",
+      "expected_output": "Runs pr-snapshot.sh, reads triage.tsv/prs.txt/mbo-rows.txt, verifies each PR against origin/main and docs/mbo/index.md (merged PRs by slug, paths on main, merge state, CI), rebases BEHIND PRs with pr-rebase.sh and re-checks CI, writes verdicts.json, dry-runs then applies pr-apply.sh (stale/duplicate closed with a reason comment and the branch kept, refreshed bugfixes promoted with proof, green patch bumps labelled ready-for-merge), and ends with the pr-report.sh tables plus an index.md audit row when objective state changed.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "There are three dependabot PRs sitting open for a couple of weeks. Can you get them merged if they're safe?",
+      "expected_output": "Classifies them as dependabot, rebases each onto main, waits for the post-rebase CI rollup, labels ready-for-merge only the patch/minor bumps whose rollup is green (ci_verified), and leaves a comment on any major bump or red run explaining what failed instead of forcing it.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "PR #146 has been a draft since June and now conflicts with main. Is it still worth keeping?",
+      "expected_output": "Targeted re-check: snapshots, reads the PR block and the index.md rows for its slug, checks whether its files/tooling still exist on main and whether a merged PR superseded it, and returns a verdict with cited evidence; if stale, closes with a comment naming the tracker issue and the kept branch (apply --only 146), never deletes the branch.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "That fix PR for the install.sh PATH bug from August never got reviewed. Bring it up to date.",
+      "expected_output": "Treats it as a bugfix refresh: reproduces the bug on origin/main first, rebases the PR (resolving conflicts in a throwaway worktree), proves the PR head fixes it, promotes it to ready and comments with the before/after proof asking for a review refresh — does not label ready-for-merge itself.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Give me a Discord-friendly list of the open PRs.",
+      "expected_output": "Does NOT use pr-grooming; this is the pr-list skill (chat formatting, no state changes).",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "Groom the issue backlog and label everything 1-5.",
+      "expected_output": "Does NOT use pr-grooming; this is the issue-grooming skill (issues, priority labels).",
+      "files": []
+    }
+  ]
+}

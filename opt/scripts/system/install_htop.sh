@@ -8,6 +8,9 @@
 #   * copies opt/etc/htop/htop-fit.sh to ~/.config/htop/htop-fit.sh, which
 #     ~/.zshrc and ~/.bashrc source: an htop() wrapper that fills the header
 #     with history graphs so only the top few processes show (see that file);
+#   * copies opt/etc/htop/htop-fit to ~/opt/bin/htop-fit: the same wrapper as
+#     a command, for programs that start htop without an interactive shell
+#     (mono's htop pane runs it);
 #   * installs opt/etc/htop/htoprc as ~/.config/htop/htoprc (htop's default
 #     two-column meters, CPU% sort, no tree view). An existing htoprc that
 #     dotfiles does not manage is first kept as htoprc.pre-dotfiles.bak.
@@ -17,12 +20,12 @@
 #     keeping a .bak).
 #
 # remove:
-#   * deletes the wrapper, and moves a dotfiles-managed htoprc aside to
+#   * deletes the wrapper and the htop-fit command, and moves a dotfiles-managed htoprc aside to
 #     htoprc.dotfiles.bak so htop starts from its built-in defaults. An htoprc
 #     dotfiles never managed is left alone.
 #
 # Env: HTOP_CONFIG_DIR (default ${XDG_CONFIG_HOME:-~/.config}/htop),
-#      HTOP_CONFIG_FORCE=1.
+#      HTOP_BIN_DIR (default ~/opt/bin), HTOP_CONFIG_FORCE=1.
 set -eu
 
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -32,6 +35,8 @@ DEST_DIR="${HTOP_CONFIG_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/htop}"
 RC="${DEST_DIR}/htoprc"
 FIT="${DEST_DIR}/htop-fit.sh"
 MARKER="${DEST_DIR}/.dotfiles-managed"
+BIN_DIR="${HTOP_BIN_DIR:-${HOME}/opt/bin}"
+LAUNCHER="${BIN_DIR}/htop-fit"
 
 info() { echo "htop: $*"; }
 
@@ -55,6 +60,10 @@ do_install() {
   mkdir -p "${DEST_DIR}"
   cp "${SRC_DIR}/htop-fit.sh" "${FIT}"
   info "installed ${FIT}"
+  mkdir -p "${BIN_DIR}"
+  cp "${SRC_DIR}/htop-fit" "${LAUNCHER}"
+  chmod 0755 "${LAUNCHER}"
+  info "installed ${LAUNCHER}"
 
   if [ -f "${RC}" ] && cmp -s "${SRC_DIR}/htoprc" "${RC}"; then
     sum_of "${RC}" >"${MARKER}"
@@ -82,6 +91,10 @@ do_remove() {
   if [ -f "${FIT}" ]; then
     rm -f "${FIT}"
     info "removed ${FIT}"
+  fi
+  if [ -f "${LAUNCHER}" ]; then
+    rm -f "${LAUNCHER}"
+    info "removed ${LAUNCHER}"
   fi
   if [ -f "${MARKER}" ]; then
     if [ -f "${RC}" ]; then

@@ -22,6 +22,7 @@ path-prefixed `sdk/<tool>/vX.Y.Z` tags.
 | [`fleet/`](./fleet/AGENTS.md) | `fleet` | Multi-host install-drift status, TUI, wake ladder, SSH key management. |
 | [`gff/`](./gff/AGENTS.md) | `gff` | git fast features — layered feature flags gating `install.sh`. |
 | [`wol/`](./wol/AGENTS.md) | `wol` | Wake-on-LAN magic packets. |
+| [`mono/`](./mono/AGENTS.md) | `mono` | One-screen dashboard: htop, a GPU monitor and gsl stacked in panes, picked per host. |
 | [`wlink/`](./wlink/AGENTS.md) | `wlink` | WSL link — pins the resolver that knows your fleet; tunnel readiness, drift, ssh-keepalive doctor. |
 | [`gcfg/`](./gcfg/AGENTS.md) | `gcfg` | GitHub settings as code — `.github/gcfg.yaml` exported, verified in CI, applied on purpose. |
 | [`ghapp/`](./ghapp/AGENTS.md) | `ghapp` | GitHub App credential toolkit — manifest-flow create, short-lived installation tokens. |

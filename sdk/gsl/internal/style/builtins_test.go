@@ -160,7 +160,7 @@ func TestPalette_MidLuminance(t *testing.T) {
 // TestSegmentColorKeys verifies the canonical key list.
 func TestSegmentColorKeys(t *testing.T) {
 	keys := style.SegmentColorKeys()
-	want := []string{"repo_root", "repo_worktree", "ai", "dirgit", "time", "host"}
+	want := []string{"repo_root", "repo_worktree", "ai", "dirgit", "time", "video", "host"}
 	if len(keys) != len(want) {
 		t.Fatalf("SegmentColorKeys(): len=%d, want %d", len(keys), len(want))
 	}
