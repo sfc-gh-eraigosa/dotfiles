@@ -1,0 +1,24 @@
+── CPU ─────────────────────────────────────────────────────────────────────────
+▢ CPU Usage — needs var $cluster (gdash config set views.fixture.vars.cluster <…
+▢ Load Average — needs var $cluster (gdash config set views.fixture.vars.cluste…
+── Memory ──────────────────────────────────────────────────────────────────────
+▢ Memory Usage — needs var $cluster (gdash config set views.fixture.vars.cluste…
+▢ Memory Usage — needs var $cluster (gdash config set views.fixture.vars.cluste…
+── Disk ────────────────────────────────────────────────────────────────────────
+▢ Disk I/O — needs var $cluster (gdash config set views.fixture.vars.cluster <v…
+▢ Disk Space Usage — table not supported
+── Network ─────────────────────────────────────────────────────────────────────
+▢ Network Received — needs var $cluster (gdash config set views.fixture.vars.cl…
+▢ Network Transmitted — needs var $cluster (gdash config set views.fixture.vars…
+
+
+
+
+
+
+
+
+
+
+
+Node Exporter / Nodes · last 1h · updated 12:00:00 · every 30s · ? help

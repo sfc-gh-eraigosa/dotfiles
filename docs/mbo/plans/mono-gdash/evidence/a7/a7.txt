@@ -1,0 +1,27 @@
+# A7 doctor + list — 2026-10-19T05:57:50Z
+RED: doctor_test.go written first → build failed (no doctor/list commands).
+$ go test -v -run "Doctor|List" ./cmd/
+--- PASS: TestDoctorAllPass (0.04s)
+--- PASS: TestDoctorMissingDashboard (0.02s)
+--- PASS: TestDoctorRefusedCredential (0.01s)
+--- PASS: TestDoctorGrafanaDown (0.01s)
+--- PASS: TestDoctorQuiet (0.03s)
+--- PASS: TestDoctorQuietTimeout (2.01s)
+--- PASS: TestDoctorNoProfile (0.00s)
+--- PASS: TestList (0.02s)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/cmd	2.158s
+$ go test -cover ./...
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/cmd	2.146s	coverage: 80.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/app	0.193s	coverage: 86.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/auth	0.837s	coverage: 90.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/config	0.015s	coverage: 75.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/dash	0.021s	coverage: 84.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/grafana	0.395s	coverage: 88.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/render	1.171s	coverage: 91.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/vars	0.012s	coverage: 95.8% of statements
+$ golangci-lint
+0 issues.
+$ gosec
+exit 0
+
+Live run: live.txt

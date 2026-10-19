@@ -12,10 +12,10 @@
 
 ## Preflight (once)
 
-- [ ] #411 merged → `gh pr view 411 --json state -q .state` = `MERGED`
-- [ ] Grafana health → `curl -s -m 5 http://192.168.0.128:30300/api/health` shows `"database": "ok"`
-- [ ] token file → `stat -c %a ~/.config/gdash/lab.cred` = `600`, and an authenticated `/api/search?limit=1` returns 200
-- [ ] SETUP: `gss feature worker add --feature mono-gdash --purpose gdash --description "gdash: Grafana dashboards as terminal graphs" --json` → paste into IMPLEMENTATION §2 + TRACKING §0
+- [x] #411 merged → `gh pr view 411 --json state -q .state` = `MERGED`
+- [x] Grafana health → `curl -s -m 5 http://192.168.0.128:30300/api/health` shows `"database": "ok"`
+- [x] token file → `stat -c %a ~/.config/gdash/lab.cred` = `600`, and an authenticated `/api/search?limit=1` returns 200
+- [x] SETUP: `gss feature worker add --feature mono-gdash --purpose gdash --description "gdash: Grafana dashboards as terminal graphs" --json` → paste into IMPLEMENTATION §2 + TRACKING §0
 - [ ] SETUP: `gss feature worker add --feature mono-gdash --purpose deck --description "mono deck panes + nav mode" --json` → paste the same way
 
 ---
@@ -24,83 +24,83 @@
 
 ### Task 0 — lab facts + fixtures  (plan §4 Task 0)
 
-- [ ] SETUP: `mkdir -p sdk/gdash/internal/grafana/testdata/lab`
-- [ ] capture `/api/health` and `/api/search?type=dash-db` (token from the file inside the curl header; never echoed)
-- [ ] identify the conductor, k3s-nodes and CI dashboards; record uid, title and datasource types in TRACKING "Lab facts"
-- [ ] capture each dashboard JSON and one `/api/ds/query` response per panel type
-- [ ] scrub: `grep -rE '(glsa_|eyJ|Bearer)' sdk/gdash/internal/grafana/testdata` → nothing; no hostnames but the NodePort address
-- [ ] ALLOWLIST: `git status --short -- sdk/gdash` lists the fixtures
-- [ ] EVIDENCE: `evidence/task0/capture.txt` (endpoints, sizes, scrub check)
-- [ ] COMMIT `gdash: lab Grafana fixtures (conductor, k3s-nodes, ci) for the test suite` · LEDGER · CHECKPOINT
+- [x] SETUP: `mkdir -p sdk/gdash/internal/grafana/testdata/lab`
+- [x] capture `/api/health` and `/api/search?type=dash-db` (token from the file inside the curl header; never echoed)
+- [x] identify the conductor, k3s-nodes and CI dashboards; record uid, title and datasource types in TRACKING "Lab facts"
+- [x] capture each dashboard JSON and one `/api/ds/query` response per panel type
+- [x] scrub: `grep -rE '(glsa_|eyJ|Bearer)' sdk/gdash/internal/grafana/testdata` → nothing; no hostnames but the NodePort address
+- [x] ALLOWLIST: `git status --short -- sdk/gdash` lists the fixtures
+- [x] EVIDENCE: `evidence/task0/capture.txt` (endpoints, sizes, scrub check)
+- [x] COMMIT `gdash: lab Grafana fixtures (conductor, k3s-nodes, ci) for the test suite` · LEDGER · CHECKPOINT
 
 **Done when:** fixtures are committed and scrubbed, and the three uids are in TRACKING.
 
 ### Task A1 — scaffold
 
-- [ ] RED: `cmd/cmd_test.go` asserts `gdash version` prints the stamped version
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: go.mod, main.go, build.sh (sources `../version.sh`), version, cobra root; AGENTS.md + `CLAUDE.md -> AGENTS.md` + README stub; `scripts/test.sh` `coverage_min` row `gdash) echo 60`
-- [ ] RUN-GREEN → PASS; `bash sdk/gdash/build.sh` builds
-- [ ] ALLOWLIST: `git status --short -- sdk/gdash`
-- [ ] EVIDENCE · COMMIT `gdash: module scaffold (cobra root, version, build.sh)` · LEDGER · CHECKPOINT
+- [x] RED: `cmd/cmd_test.go` asserts `gdash version` prints the stamped version
+- [x] RUN-RED → FAIL
+- [x] GREEN: go.mod, main.go, build.sh (sources `../version.sh`), version, cobra root; AGENTS.md + `CLAUDE.md -> AGENTS.md` + README stub; `scripts/test.sh` `coverage_min` row `gdash) echo 60`
+- [x] RUN-GREEN → PASS; `bash sdk/gdash/build.sh` builds
+- [x] ALLOWLIST: `git status --short -- sdk/gdash`
+- [x] EVIDENCE · COMMIT `gdash: module scaffold (cobra root, version, build.sh)` · LEDGER · CHECKPOINT
 
 ### Task A2 — config + auth  (E10 E11 E13)
 
-- [ ] RED: config validation tables; `auth_test.go` (0644 refused, symlink resolved, cmd no-tty 5 s timeout, empty stdout error); `cmd/config_test.go` (refuse inline secret)
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: `internal/config`, `internal/auth` (Secret type), `cmd/config.go`
-- [ ] RUN-GREEN → PASS; VERIFY `go test -cover ./internal/auth` ≥ 80%
-- [ ] EVIDENCE · COMMIT `gdash: config profiles/views and credential sources (file 0600, env, cmd)` · LEDGER · CHECKPOINT
+- [x] RED: config validation tables; `auth_test.go` (0644 refused, symlink resolved, cmd no-tty 5 s timeout, empty stdout error); `cmd/config_test.go` (refuse inline secret)
+- [x] RUN-RED → FAIL
+- [x] GREEN: `internal/config`, `internal/auth` (Secret type), `cmd/config.go`
+- [x] RUN-GREEN → PASS; VERIFY `go test -cover ./internal/auth` ≥ 80%
+- [x] EVIDENCE · COMMIT `gdash: config profiles/views and credential sources (file 0600, env, cmd)` · LEDGER · CHECKPOINT
 
 ### Task A3 — client  (E1 E2)
 
-- [ ] RED: `grafana/client_test.go` against an httptest server serving `testdata/lab`
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: HTTP client, title resolution, at most 4 concurrent panel queries, timeouts
-- [ ] RUN-GREEN → PASS
-- [ ] EVIDENCE · COMMIT `gdash: Grafana client (search, dashboard, ds/query) over the lab fixtures` · LEDGER · CHECKPOINT
+- [x] RED: `grafana/client_test.go` against an httptest server serving `testdata/lab`
+- [x] RUN-RED → FAIL
+- [x] GREEN: HTTP client, title resolution, at most 4 concurrent panel queries, timeouts
+- [x] RUN-GREEN → PASS
+- [x] EVIDENCE · COMMIT `gdash: Grafana client (search, dashboard, ds/query) over the lab fixtures` · LEDGER · CHECKPOINT
 
 ### Task A4 — dash + vars  (E3 E4)
 
-- [ ] RED: dash model per fixture; `vars_test.go` table (all forms, All/multi, formats, `$__interval`, `$__rate_interval`, `$__range`, unresolved → needs var)
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: `internal/dash`, `internal/vars`
-- [ ] RUN-GREEN → PASS; VERIFY vars ≥ 80%
-- [ ] EVIDENCE · COMMIT `gdash: dashboard model and template-variable expansion` · LEDGER · CHECKPOINT
+- [x] RED: dash model per fixture; `vars_test.go` table (all forms, All/multi, formats, `$__interval`, `$__rate_interval`, `$__range`, unresolved → needs var)
+- [x] RUN-RED → FAIL
+- [x] GREEN: `internal/dash`, `internal/vars`
+- [x] RUN-GREEN → PASS; VERIFY vars ≥ 80%
+- [x] EVIDENCE · COMMIT `gdash: dashboard model and template-variable expansion` · LEDGER · CHECKPOINT
 
 ### Task A5 — render  (E5 E6)
 
-- [ ] DECIDE: ntcharts vs in-repo braille plotter (bubbletea v1 + `make security`); record in TRACKING notes
-- [ ] RED: golden frames (chart, meter, placeholder, stale, needs-var × 80×24, 120×40, 1-col); `units_test.go`
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: `internal/render`; `-update` the goldens, then **review each one by eye**
-- [ ] RUN-GREEN → PASS; VERIFY render ≥ 80%
-- [ ] EVIDENCE · COMMIT `gdash: braille charts, meters and placeholders (golden frames)` · LEDGER · CHECKPOINT
+- [x] DECIDE: ntcharts vs in-repo braille plotter (bubbletea v1 + `make security`); record in TRACKING notes
+- [x] RED: golden frames (chart, meter, placeholder, stale, needs-var × 80×24, 120×40, 1-col); `units_test.go`
+- [x] RUN-RED → FAIL
+- [x] GREEN: `internal/render`; `-update` the goldens, then **review each one by eye**
+- [x] RUN-GREEN → PASS; VERIFY render ≥ 80%
+- [x] EVIDENCE · COMMIT `gdash: braille charts, meters and placeholders (golden frames)` · LEDGER · CHECKPOINT
 
 ### Task A6 — app  (E7 E8 E9)
 
-- [ ] RED: `stale_test.go`, `TestRefreshSkipIfBusy`, `keys_test.go`, app frame goldens
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: `internal/app`, `cmd/view.go`
-- [ ] RUN-GREEN → PASS; run `gdash conductor` against the fixture server by hand
-- [ ] EVIDENCE · COMMIT `gdash: the dashboard TUI (layout, scroll, refresh, stale-not-blank)` · LEDGER · CHECKPOINT
+- [x] RED: `stale_test.go`, `TestRefreshSkipIfBusy`, `keys_test.go`, app frame goldens
+- [x] RUN-RED → FAIL
+- [x] GREEN: `internal/app`, `cmd/view.go`
+- [x] RUN-GREEN → PASS; run `gdash conductor` against the fixture server by hand
+- [x] EVIDENCE · COMMIT `gdash: the dashboard TUI (layout, scroll, refresh, stale-not-blank)` · LEDGER · CHECKPOINT
 
 ### Task A7 — doctor + list  (E14 E15)
 
-- [ ] RED: `cmd/doctor_test.go` (ok / 401 / down / missing dashboard; `--quiet` hang exits 1 in ≤ 2.5 s); list output
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: `cmd/doctor.go`, `cmd/list.go`
-- [ ] RUN-GREEN → PASS
-- [ ] EVIDENCE · COMMIT `gdash: doctor (+ --quiet probe for mono) and list` · LEDGER · CHECKPOINT
+- [x] RED: `cmd/doctor_test.go` (ok / 401 / down / missing dashboard; `--quiet` hang exits 1 in ≤ 2.5 s); list output
+- [x] RUN-RED → FAIL
+- [x] GREEN: `cmd/doctor.go`, `cmd/list.go`
+- [x] RUN-GREEN → PASS
+- [x] EVIDENCE · COMMIT `gdash: doctor (+ --quiet probe for mono) and list` · LEDGER · CHECKPOINT
 
 ### Task A8 — security + install + docs  (E12)
 
-- [ ] RED: `security_test.go` (the fixture secret never appears in captured stdout/stderr across doctor, errors, config get, %v, JSON, panic)
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: any redaction fixes; `install.sh` block (`gff_on install.sdk.gdash`); `.github/gff/features.yaml` flag; `sdk/AGENTS.md` + `sdk/README.md` rows and section; README demo from a **real** run
-- [ ] VERIFY: `make security` · `make lint-go` · `make lint-markdown` · `./install.sh` builds gdash
-- [ ] EVIDENCE · COMMIT `gdash: secret-never-printed guard, install.sh + gff flag, sdk docs` · LEDGER · CHECKPOINT
-- [ ] label the gdash PR `ready-for-merge` once every check is green
+- [x] RED: `security_test.go` (the fixture secret never appears in captured stdout/stderr across doctor, errors, config get, %v, JSON, panic)
+- [x] RUN-RED → FAIL
+- [x] GREEN: any redaction fixes; `install.sh` block (`gff_on install.sdk.gdash`); `.github/gff/features.yaml` flag; `sdk/AGENTS.md` + `sdk/README.md` rows and section; README demo from a **real** run
+- [x] VERIFY: `make security` · `make lint-go` · `make lint-markdown` · `./install.sh` builds gdash
+- [x] EVIDENCE · COMMIT `gdash: secret-never-printed guard, install.sh + gff flag, sdk docs` · LEDGER · CHECKPOINT
+- [x] label the gdash PR `ready-for-merge` once every check is green
 
 ---
 
@@ -155,7 +155,7 @@
 
 ### Task C1 — default `mid` deck
 
-- [ ] RED: default-config golden expects the `mid` deck; E16 compat golden still passes
+- [ ] RED: default-config golden expects the `mid` deck with four gdash views; E16 compat golden still passes
 - [ ] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
 - [ ] COMMIT `mono: default mid pane becomes a deck (gpu + gdash conductor/k3s-nodes/ci)` · LEDGER · CHECKPOINT
 
@@ -163,7 +163,7 @@
 
 - [ ] spark1: `gdash doctor` passes → `evidence/e2e/doctor-spark1.txt`
 - [ ] host without credentials: `gdash doctor` exit 1; mono `mid` = GPU pane → `evidence/e2e/doctor-nocred.txt`
-- [ ] mono on spark1 cycling gpu → conductor → k3s-nodes → ci (`tmux capture-pane` each) → `evidence/e2e/deck-cycle.txt`
+- [ ] mono on spark1 cycling gpu → conductor → k3s-nodes → nodes → ci (`tmux capture-pane` each) → `evidence/e2e/deck-cycle.txt`
 - [ ] `ps` shows one gdash process while cycling → `evidence/e2e/one-process.txt`
 - [ ] TRACKING §2 and §3 all ticked; `index.md` → `done`
 - [ ] COMMIT · CHECKPOINT · `ready-for-merge`

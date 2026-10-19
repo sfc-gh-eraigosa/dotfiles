@@ -1,0 +1,24 @@
+# LIVE: gdash nodes at 80x24 against the lab Grafana (http://192.168.0.128:30300), 2026-10-19T05:55:12Z; node names and LAN addresses masked
+── CPU ─────────────────────────────────────────────────────────────────────────
+▢ CPU Usage — needs var $instance (gdash config set views.nodes.vars.instance <…
+▢ Load Average — needs var $instance (gdash config set views.nodes.vars.instanc…
+── Memory ──────────────────────────────────────────────────────────────────────
+▢ Memory Usage — needs var $instance (gdash config set views.nodes.vars.instanc…
+▢ Memory Usage — needs var $instance (gdash config set views.nodes.vars.instanc…
+── Disk ────────────────────────────────────────────────────────────────────────
+▢ Disk I/O — needs var $instance (gdash config set views.nodes.vars.instance <v…
+▢ Disk Space Usage — table not supported
+── Network ─────────────────────────────────────────────────────────────────────
+▢ Network Received — needs var $instance (gdash config set views.nodes.vars.ins…
+▢ Network Transmitted — needs var $instance (gdash config set views.nodes.vars.…
+
+
+
+
+
+
+
+
+
+
+Node Exporter / Nodes · last 1h · updated 22:55:12 · every 30s · ? help

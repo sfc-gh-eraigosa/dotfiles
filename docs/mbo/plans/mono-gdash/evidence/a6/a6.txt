@@ -1,0 +1,80 @@
+# A6 app — 2026-10-19T05:52:15Z
+RED: app_test.go + frame_test.go written first → setup failed (no package). First GREEN run hung: tea.Tick sleeps 30s when a test executes it → Options.Tick made injectable (tests use an instant tick). Then TestKeys failed: at 12 rows the help overlay clipped gdash's own keys → they now come first in Keys().
+
+$ (cd sdk/gdash && go test -count=1 -cover ./...)
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/cmd	0.011s	coverage: 81.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/app	0.185s	coverage: 86.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/auth	0.823s	coverage: 90.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/config	0.012s	coverage: 75.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/dash	0.013s	coverage: 81.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/grafana	0.363s	coverage: 89.1% of statements
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/grafana/grafanatest		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/render	1.195s	coverage: 91.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/vars	0.006s	coverage: 95.8% of statements
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/version		coverage: 0.0% of statements
+
+$ go test -v ./internal/app/
+--- PASS: TestFirstFetchDraws (0.00s)
+--- PASS: TestStaleKeepsLastGoodData (0.00s)
+--- PASS: TestFirstFetchFailsShowsErrorAndCountdown (0.00s)
+--- PASS: TestRefreshSkipIfBusy (0.00s)
+--- PASS: TestRefreshFloor (0.00s)
+--- PASS: TestKeys (0.04s)
+--- PASS: TestHelpRendersFromTheTable (0.00s)
+--- PASS: TestFrames (0.11s)
+--- PASS: TestPanelSubset (0.01s)
+--- PASS: TestUnknownDashboardIsANamedError (0.01s)
+--- PASS: TestVarsOverrideReachesQueries (0.01s)
+
+frame goldens: 6 (conductor 80x24/120x40/1x24, ci 120x40 two-column, k3s-nodes + nodes needs-var), reviewed by eye. conductor-80x24:
+── Now: the five measures against their goals (trailing 7 days) ────────────────
+Dispatch pass rate [||||||||||||||                                    29.00% !!]
+Draft yield  —
+Passes per day  —
+Busy share  —
+Longest idle stretch  —
+Goals met  —
+── Over time: each measure, with its goal as the dashed line ───────────────────
+Dispatch pass rate
+100.00%│                                                                        
+       │                                                                        
+       │⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒
+       │                                                                        
+       │⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉
+  0.00%│                                                                        
+● measured 29.00%  ● goal 60.00%
+Draft yield
+
+
+
+                                    no data
+
+
+Conductor — metrics against goals · last 1h · updated 12:00:00 · every 30s · ? …
+
+$ golangci-lint (GOENV_VERSION=1.26.3)
+0 issues.
+$ gosec (repo GOSEC_FLAGS)
+exit 0
+
+## live run against the lab Grafana (live-*.txt)
+First live run of k3s-nodes: 3 of 5 panels failed with HTTP 400. Cause: saved dashboards leave refId out on multi-target panels (Grafana assigns A, B, C… on load); gdash sent duplicate empty refIds. Fix: dash.Parse assigns missing refIds (TestMissingRefIDsAreAssigned); HTTPError now carries Grafana's message (TestHTTPErrorCarriesGrafanasMessage). Goldens re-reviewed: only change is legends now honouring legendFormat ("nodes 4 ● pods 43" instead of the raw query).
+After the fix: k3s-nodes, conductor, ci and nodes all fetch and draw (status rows in live-*.txt); nodes shows needs-var for $instance until vars.instance is set (by design, spec F2).
+
+$ (cd sdk/gdash && go test -count=1 -cover ./...) after the fix
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/cmd	0.010s	coverage: 79.7% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/app	0.173s	coverage: 86.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/auth	0.827s	coverage: 90.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/config	0.009s	coverage: 75.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/dash	0.011s	coverage: 84.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/grafana	0.373s	coverage: 88.3% of statements
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/grafana/grafanatest		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/render	1.034s	coverage: 91.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/vars	0.009s	coverage: 95.8% of statements
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/version		coverage: 0.0% of statements
+$ golangci-lint
+0 issues.
+$ gosec
+exit 0

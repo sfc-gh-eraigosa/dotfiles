@@ -1,0 +1,40 @@
+── Now: the five measures against their goals (trailing 7 days) ────────────────────────────────────────────────────────
+Dispatch pass ra… [||||||||                      29.00% !!] Draft yield  —
+Passes per day  —                                           Busy share  —
+Longest idle stretch  —                                     Goals met  —
+── Over time: each measure, with its goal as the dashed line ───────────────────────────────────────────────────────────
+Dispatch pass rate                                          Draft yield
+100.00%│                                                    
+       │                                                    
+       │⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒ 
+       │                                                                              no data
+       │⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉ 
+  0.00%│                                                    
+● measured 29.00%  ● goal 60.00%                            
+Passes per day                                              Busy share
+                                                            
+                                                            
+                                                            
+                          no data                                                     no data
+                                                            
+                                                            
+                                                            
+Longest idle stretch
+
+
+
+                          no data
+
+
+
+── The counts behind the measures (same 7-day window) ──────────────────────────────────────────────────────────────────
+Dispatches                                                  Drafts
+                                                            
+                                                            
+                                                            
+                          no data                                                     no data
+                                                            
+                                                            
+                                                            
+Local model time
+Conductor — metrics against goals · last 1h · updated 12:00:00 · every 30s · ? help

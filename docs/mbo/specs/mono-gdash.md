@@ -3,6 +3,10 @@
 - **Slug:** mono-gdash
 - **Date:** 2026-10-18
 - **Status:** Approved (owner, 2026-10-18: "the plan already covers what we need and the spec adds execution detail")
+- **Amended:** 2026-10-19 (owner): gdash gets **four** views, not three:
+  - `k3s-nodes` is "Kubernetes / Compute Resources / Nodes Overview";
+  - "Node Exporter / Nodes" joins as `nodes`;
+  - both "are also good ones, use them".
 - **Relates to:** design [`../designs/mono-gdash.md`](../designs/mono-gdash.md) · issue [#410](https://github.com/sfc-gh-eraigosa/dotfiles/issues/410) · PR [#411](https://github.com/sfc-gh-eraigosa/dotfiles/pull/411) · plan [`../plans/mono-gdash.md`](../plans/mono-gdash.md)
 
 The design is the "why and shape". This spec turns each of its decisions into a testable rule.
@@ -21,7 +25,7 @@ on its own in any terminal. A host that can't reach Grafana sees today's mono, u
 | # | Actor / trigger | Flow | Acceptance |
 | :-- | :-- | :-- | :-- |
 | U1 | Owner runs `gdash conductor` on spark1 | gdash loads the `conductor` view, fetches the dashboard and its panels from `http://192.168.0.128:30300`, and draws them | Every Prometheus timeseries panel is a braille chart with a legend and the last value; stat panels are meters; anything else is a labelled placeholder. Refreshes every 30 s |
-| U2 | Owner starts `mono` on a host with gdash configured | The `mid` deck shows `gpu`; `esc esc`, then `l`, switches to `gdash · conductor`; `j` goes to `k3s-nodes`, then `ci`, then past the last view into the next pane | The title bar reads `NAV` and `mid ◀ gdash ▶ · k3s-nodes 2/3`; only the visible view's process runs |
+| U2 | Owner starts `mono` on a host with gdash configured | The `mid` deck shows `gpu`; `esc esc`, then `l`, switches to `gdash · conductor`; `j` goes to `k3s-nodes`, `nodes`, then `ci`, then past the last view into the next pane | The title bar reads `NAV` and `mid ◀ gdash ▶ · k3s-nodes 2/4`; only the visible view's process runs |
 | U3 | mono on a host with no Grafana access (e.g. WSL off-LAN) or no gdash credentials | gdash's probe fails, so the gdash tool is dropped | The `mid` pane is today's GPU pane, or is dropped entirely where there's no GPU; `mono doctor` names why |
 | U4 | Grafana goes away while gdash runs | The next refresh fails | The last good data stays on screen with its age and the error on a status row; it is never blank |
 | U5 | Owner sets up a new host | `gdash config add profile lab --url … --auth-file ~/.config/gdash/lab.cred`, then `gdash list conductor`, then `gdash config add view conductor --dashboard <uid>` | `gdash doctor` passes every row; no secret is in any file gdash writes or anything it prints |
@@ -29,7 +33,7 @@ on its own in any terminal. A host that can't reach Grafana sees today's mono, u
 
 ## 3. Architecture
 
-```
+```text
 sdk/gdash  (new, standalone; mono never imports it)
   cmd/            cobra: gdash [view], list, doctor, config, version
   internal/config profiles + views + validation; XDG path; $GDASH_CONFIG
@@ -58,6 +62,7 @@ sdk/mono  (changed)
 ## 4. Behavior / features
 
 ### F1 — gdash fetch
+
 - `GET /api/dashboards/uid/<uid>`. A title resolves through `GET /api/search?query=<title>&type=dash-db`;
   zero or more than one exact match is an error naming the candidates.
 - `POST /api/ds/query`, one request per panel, with `from`/`to` from the view's range and
@@ -67,6 +72,7 @@ sdk/mono  (changed)
 - **(spec)** Panels are queried at most 4 at a time.
 
 ### F2 — template variables
+
 - A variable takes its value from the view's `vars`, else from the dashboard's `current`.
 - `All` and multi-value expand Prometheus-style: `(a|b|c)` inside a regex matcher, else `.*` for `All` with no explicit list.
 - `$__interval` = intervalMs as a duration (`15s`, `1m`); `$__rate_interval` = max(4 × scrape
@@ -77,6 +83,7 @@ sdk/mono  (changed)
 - An unresolved variable marks that panel `needs var $x`. The other panels still draw.
 
 ### F3 — panels and layout
+
 - **Types:** `timeseries`/`graph` → line chart. `stat`/`gauge`/`bargauge` → meter, one per series, using
   the last non-null value. Anything else, or a non-Prometheus datasource →
   `▢ <title> — <type> not supported`. A `row` panel is a header; a collapsed row hides its panels.
@@ -91,17 +98,20 @@ sdk/mono  (changed)
   (`NO_COLOR`), it uses ASCII markers instead **(spec)**.
 
 ### F4 — refresh and staleness
+
 - **Ticks:** at the view's `refresh` (default `30s`, floor `5s`). A tick that finds the previous fetch
   still running is skipped and counted.
 - **On error:** keep the last good frame and show `stale 2m14s · <error>` on the status row.
   A first fetch that fails shows the error with a retry countdown, not an empty screen.
 
 ### F5 — keys (gdash)
+
 - `j`/`k`/`ctrl+d`/`ctrl+u`/`g`/`G` scroll, from the shared `sdk/libs/tui` keymap. `r` refreshes now.
   `+`/`-` step the range through `5m 15m 1h 3h 6h 12h 24h 7d`. `q`/`ctrl+c` quit.
 - `?` shows the key help, rendered from the binding table.
 
 ### F6 — config and credentials
+
 - **Config:** `${XDG_CONFIG_HOME:-~/.config}/gdash/config.json`; `$GDASH_CONFIG` overrides it. The
   file is written 0600 and its directory 0700.
 - **Auth:** exactly one of `auth.file`, `auth.env`, `auth.cmd`; `auth.user` adds basic auth.
@@ -115,6 +125,7 @@ sdk/mono  (changed)
   `password` or `secret`, and refuse an `auth.file` that isn't 0600.
 
 ### F7 — doctor and list
+
 - **`gdash doctor [--profile p]`:** one line per check. The checks are: the URL answers `/api/health`;
   authentication works (`/api/user` or `/api/search?limit=1`); each view's dashboard is found;
   each referenced datasource answers a 1-point query. The exit code is 0 only if every check
@@ -123,6 +134,7 @@ sdk/mono  (changed)
 - **`gdash list [query]`:** prints `uid<TAB>title<TAB>folder`, sorted by title.
 
 ### F8 — mono decks
+
 - **Config:** a pane has either `cmd` (plain) or `tools` (deck), never both. Each tool has a `name`, an
   optional `probe` and one or more `views`. Each view has a `name`, and `cmd`, `every`,
   `fallbacks`, `probe` and `cwd` as today. **Names are unique** within their parent.
@@ -141,9 +153,21 @@ sdk/mono  (changed)
 - **`mono config` dotted paths:** `panes.<p>.tools.<t>.views.<v>.<field>`, plus
   `add|remove|move` at the tool and view levels, all mirroring today's verbs.
 - **Default layout:** `mid` becomes a deck: `gpu` (nvtop → nvitop), then `gdash` with views
-  `conductor`, `k3s-nodes`, `ci`, and `probe: "gdash doctor --quiet"`.
+  `conductor`, `k3s-nodes`, `nodes`, `ci`, and `probe: "gdash doctor --quiet"`. The lab
+  dashboards behind the views (owner, 2026-10-19):
+
+  | View | Dashboard uid | Title |
+  | :-- | :-- | :-- |
+  | `conductor` | `conductor-metrics` | Conductor — metrics against goals |
+  | `k3s-nodes` | `058020e04168bfdea0c52269cb699df2` | Kubernetes / Compute Resources / Nodes Overview |
+  | `nodes` | `7d57716318ee0dddbac5a7f451fb7753` | Node Exporter / Nodes (per node, `$instance`) |
+  | `ci` | `ci-lab` | CI — lab runners |
+
+  These uids go in the README's per-host setup walkthrough. They are not compiled in: views
+  stay user config (design §4.5).
 
 ### F9 — nav mode
+
 - **Enter:** `<prefix> <nav_key>` (default `space`), or `esc` twice within `nav_esc_ms`
   (default 300; `0` turns double-esc off). The first `esc` is forwarded at once; the second is
   swallowed.
@@ -197,7 +221,7 @@ sdk/mono  (changed)
   `make lint-markdown` must all be green.
 - **Live evidence** (human-observable, captured to `plans/mono-gdash/evidence/`):
   - `gdash doctor` from spark1 (passes) and from a host without credentials (fails, exit 1);
-  - `tmux capture-pane` of mono on a lab host cycling `gpu → gdash conductor → k3s-nodes → ci`;
+  - `tmux capture-pane` of mono on a lab host cycling `gpu → gdash conductor → k3s-nodes → nodes → ci`;
   - `ps` showing a single gdash process while cycling.
 
 ## 7. Prerequisites / dependencies
