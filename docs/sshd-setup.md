@@ -19,7 +19,7 @@ The login-time hook in `opt/profiles/.bashrc` stays disabled by design.
 # Linux / macOS / WSL
 opt/bin/sshd-setup status        # read-only report
 opt/bin/sshd-setup --dry-run enable
-opt/bin/sshd-setup enable        # install + start + firewall + keys + ~/.sshd.env
+opt/bin/sshd-setup enable        # install + start + firewall + keys + gff flag (+ WSL networking mode)
 opt/bin/sshd-setup keys          # (re)seed authorized_keys only
 ```
 
@@ -52,6 +52,10 @@ your existing keys are never truncated. Pass `-GithubUser <login>` to the ps1 to
 
 Note: the WSL sshd only answers while the distro is running; the Windows one always does.
 
+On a machine that runs `install.sh`, steps 2's Windows side is normally automatic: see
+[WSL networking is a flag](#wsl-networking-is-a-flag) below. The manual commands here stay
+valid for a machine that does not use `install.sh`.
+
 The portproxy pins the WSL IP at setup time, and **WSL's NAT IP changes on most
 reboots**, silently breaking the forward. `refresh-wsl-portproxy.ps1` re-resolves
 the IP and rewrites the rule (no-op when current), logging each decision to
@@ -73,6 +77,11 @@ client even though the forward is correct. When Windows runs no sshd of its own,
 
 ## WSL networking: pick one of three designs
 
+> **This is now a gff flag.** `install.windows.wsl-network` (`off|nat|bridged|mirrored`,
+> default `off`) records the design; `install.sh` applies it. See
+> [WSL networking is a flag](#wsl-networking-is-a-flag). The tables and manual steps below
+> explain what each mode does.
+
 How a LAN client (fleet) reaches a WSL sshd depends on the distro's
 `networkingMode` in `%USERPROFILE%\.wslconfig`. The fleet machines use two of these.
 
@@ -86,7 +95,7 @@ How a LAN client (fleet) reaches a WSL sshd depends on the distro's
 | Inbound UDP | n/a | yes | **no** (kernel sockets get no inbound UDP) |
 | Works over Wi-Fi | yes | poorly: needs a Hyper-V external switch; most Wi-Fi adapters cannot carry a second MAC | yes |
 | Used by | Wi-Fi laptops | the k3s workstation | — (untested here) |
-| Set up by | `refresh-wsl-portproxy.ps1` (above) | by hand (below) | by hand |
+| Set up by | `install.windows.wsl-network=nat` (or `refresh-wsl-portproxy.ps1`) | `=bridged` (the `WSLBridge` switch is by hand) | `=mirrored` |
 
 **Rule of thumb:** use NAT + portproxy. Use bridged only when the VM must be a real LAN
 peer that receives inbound UDP. A k3s node is the case that needs it: flannel's VXLAN
@@ -121,15 +130,57 @@ dhcp=true
    machine. The VM is already a LAN peer, so a forward would only add a second path
    through the Windows host and claim the host's port 22 for nothing.
 
-This setup is not automated by `install.sh`. It is hand-configured, with the rationale
-recorded in that machine's `.wslconfig`. Rollback: remove the three `networkingMode`/`vmSwitch`/`macAddress`
-lines, `wsl --shutdown`, and `Remove-VMSwitch WSLBridge`.
+`install.sh` never creates the `WSLBridge` switch (step 1 stays manual) and never runs
+`wsl --shutdown` (step 2's restart is yours). An existing `networkingMode=bridged` is recorded
+and left byte for byte as it is. Rollback: remove the `networkingMode`/`vmSwitch`/`macAddress`/`dhcp`
+lines, `wsl --shutdown`, `Remove-VMSwitch WSLBridge`, then `gff unset install.windows.wsl-network`.
+
+## WSL networking is a flag
+
+`install.windows.wsl-network` holds the design for this host. Set it, or override it per
+machine, like any gff flag; the resolution layers and provenance are in `gff get`:
+
+```bash
+gff get install.windows.wsl-network         # value + where it came from
+gff set install.windows.wsl-network bridged # pin it on this host
+gff unset install.windows.wsl-network       # back to the default (off)
+```
+
+How it gets its value:
+
+1. **Existing setup is recorded, never changed.** Detection reads `.wslconfig`
+   (`networkingMode=bridged|mirrored`) and the WSL portproxy / `RefreshWslPortProxy` task
+   (`nat`), and records that with `gff set`. A machine that works today keeps working.
+2. **Fresh enablement asks once.** `sshd-setup enable` on WSL with nothing detected recommends a
+   mode (k3s present and a wired adapter: `bridged`; otherwise `nat`) and asks. Pre-answer with
+   `WSLNET_ANSWER=<off|nat|bridged|mirrored|skip>`; with no TTY and no answer nothing is
+   recorded. `fleet` sends `WSLNET_ANSWER` (default `skip`), settable in the fleet answers form.
+3. **`install.sh` applies it** (see [install-windows.md](./install-windows.md)). `off` is hands off.
+
+Behaviors worth knowing:
+
+- `nat` keeps a `dhcp=` key and `mirrored` keeps an existing `vmSwitch`/`macAddress`: WSL ignores
+  them in those modes, so they are left alone rather than churned.
+- A fresh `bridged` setup asks for one UAC prompt per `install.sh` run until the `WSLBridge`
+  switch exists; without it the step only prints the `New-VMSwitch` command.
+- On `mirrored`, a Hyper-V firewall rule that cannot be read without admin is treated as
+  current (the read-only `-Status` check never elevates).
+- Changing mode cleans up the previous mode's artifacts (portproxy, task, firewall rule) only
+  when this run changed `networkingMode`; a mode that was merely recorded is never cleaned up.
+- The apply script logs to `%LOCALAPPDATA%\dotfiles\set-wsl-network.log` and backs up
+  `.wslconfig` to `.wslconfig.bak-<timestamp>` before any edit.
 
 ## Integration with dotfiles
 
-`enable` writes `SSHD_LOGIN=true` to `~/.sshd.env`, the marker the existing
-`opt/scripts/network/sshd_run.sh` (invoked from `install.sh`) checks before (re)starting an
-already-installed sshd. `sshd_run.sh` remains start-only; `sshd-setup` is the install path.
+sshd is switched by the gff flag `install.network.sshd` (default `false`).
+`sshd-setup enable` runs `gff set install.network.sshd true`; `install.sh` gates
+`opt/scripts/network/sshd_run.sh` with it. `sshd_run.sh` remains start-only and no longer reads
+any file; `sshd-setup` is the install path. `sshd-setup status` prints `sshd flag: <value>`.
+
+**Migration from `~/.sshd.env`.** The old marker (`SSHD_LOGIN=true` in `~/.sshd.env`) is
+migrated once by `install.sh`: it runs `gff set install.network.sshd true` and deletes the
+file. Nothing else reads `~/.sshd.env`. `install.sh` now requires a working gff (freshly built,
+or an existing `~/opt/bin/gff` that runs) and exits 1 otherwise.
 
 ## Rollback
 
@@ -137,10 +188,21 @@ already-installed sshd. `sshd_run.sh` remains start-only; `sshd-setup` is the in
 # Linux / WSL
 sudo systemctl disable --now ssh && sudo apt-get remove openssh-server
 sudo ufw delete allow 22/tcp          # if ufw was configured
-rm ~/.sshd.env                        # remove the dotfiles marker
+gff unset install.network.sshd        # drop the dotfiles flag (back to false)
 # macOS
 sudo systemsetup -setremotelogin off
 ```
+
+WSL networking, per mode (then `gff unset install.windows.wsl-network`, and `wsl --shutdown`
+where `.wslconfig` changes):
+
+| Mode | Undo |
+| :-- | :-- |
+| `nat` | the `refresh-wsl-portproxy.ps1 -UnregisterTask` + `netsh ... portproxy delete` + `Remove-NetFirewallRule WSL-SSH-<port>` steps below |
+| `bridged` | remove the `networkingMode`/`vmSwitch`/`macAddress`/`dhcp` lines (or restore a `.wslconfig.bak-<timestamp>`); `Remove-VMSwitch WSLBridge` |
+| `mirrored` | remove `networkingMode=mirrored`; `Remove-NetFirewallHyperVRule` for the rule the apply step added |
+
+Unsetting the flag alone changes nothing on Windows; it only stops `install.sh` from applying it.
 
 ```powershell
 # Windows (admin)

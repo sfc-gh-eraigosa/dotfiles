@@ -310,6 +310,7 @@ per **session**, not once per wave:
 |-------|-------|
 | sudo password | primes `sudo -S -v` on the host so install.sh's privileged steps actually run. Masked on screen; held in memory only; sent over ssh **stdin** — never argv or env, both of which are world-readable via `/proc`. Leave empty to skip privileged steps. |
 | windows setup `[y/n/s]` | `WINSETUP_ANSWER` — install.sh's Windows desktop prompt (`s` = never ask again, recorded as a gff override) |
+| WSL networking | `WSLNET_ANSWER` — install.sh's WSL networking prompt (`off\|nat\|bridged\|mirrored\|skip`, default `skip`: nothing is recorded; the existing setup is still detected and recorded) |
 | force reset `[y/n]` | hard-resets each host onto the fetched commit instead of fast-forwarding — for a host whose branch has diverged. **Destructive**, so the host's entire current state (local commits *and* uncommitted files) is committed to a `fleet-reset/<ts>` branch first. The confirm gate calls it out in red. |
 | gemini leftovers `[y/k/n]` | `GEMINI_TEARDOWN_ANSWER` — `yes` clean up, `keep` never ask again, `skip` this run only |
 
@@ -525,7 +526,7 @@ Step kinds:
   is missing and a `url` is set. A merge or rebase in progress is skipped under every
   policy.
 - **`run`** — `cd <path> && <run>` (or just `<run>` with no `repo`), batch or, with
-  `interactive: true`, over `ssh -t`. `WINSETUP_ANSWER` / `GEMINI_TEARDOWN_ANSWER`
+  `interactive: true`, over `ssh -t`. `WINSETUP_ANSWER` / `GEMINI_TEARDOWN_ANSWER` / `WSLNET_ANSWER`
   from your local environment are exported into run steps only.
 - **`gh-auth`** — `gh auth status` in batch; only if that fails, `gh auth login --web`
   + `gh auth setup-git` interactively, then one re-check. An authenticated host makes

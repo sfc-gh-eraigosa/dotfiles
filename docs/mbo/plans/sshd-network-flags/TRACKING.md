@@ -19,15 +19,15 @@
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| 1 gff helpers | todo | | | |
-| 2 install.sh requires gff | todo | | | |
-| 3 sshd flag + migration | todo | | | |
-| 4 wsl-network flag + detect/ask | todo | | | |
-| 5 sshd-setup uses the flag | todo | | | |
-| 6 set-wsl-network.ps1 | todo | | | |
-| 7 deferred --wsl-network step | todo | | | |
-| 8 fleet WSLNET_ANSWER | todo | | | |
-| 9 docs + registration + e2e | todo | | | |
+| 1 gff helpers | done | 1ab59cf | `bash opt/lib/gff_test.sh; sh opt/lib/gff_test.sh` -> 37/37 PASS (bash+sh) |  |
+| 2 install.sh requires gff | done | e5d9bf3 | `bash opt/scripts/system/wsl-network_test.sh` -> STATIC 2/2 PASS |  |
+| 3 sshd flag + migration | done | c998eff | `opt/lib/sshdflags_test.sh` -> 14/14 PASS (bash+sh) |  |
+| 4 wsl-network flag + detect/ask | done | 61e3eee + fix d2fe7b0 | `opt/lib/wslnet_test.sh` -> 68/68 PASS (bash+sh) |  |
+| 5 sshd-setup uses the flag | done | 283fcb0 | `bash opt/bin/sshd-setup_test.sh` -> 35/35 PASS |  |
+| 6 set-wsl-network.ps1 | done | 92abaa3 + fix a415be4 | `wsl-network_test.sh` -> 59/59 PASS |  |
+| 7 deferred --wsl-network step | done | 525b7c9 + fix 399013f | `wsl-network_test.sh` -> 86/86 PASS |  |
+| 8 fleet WSLNET_ANSWER | done | 097ac40 | `cd sdk/fleet && go test ./...` ok; cmd coverage 76.3% |  |
+| 9 docs + registration + e2e | in-progress | (this commit) | docs done; automated gates in `evidence/task-9/` | H1-H3 pending (operator) |
 
 ## 2. Feature → proof matrix (from spec §5)
 
@@ -62,3 +62,4 @@
 | Date | Session | What advanced |
 | :-- | :-- | :-- |
 | 2026-10-18 | planning | Spec approved by the operator; plan + trio written; build not started |
+| 2026-10-18 | task 9 | Tasks 1-8 done; docs registered, index row in-review; H1-H3 human gates pending |

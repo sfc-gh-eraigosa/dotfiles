@@ -1,0 +1,6 @@
+Mon Oct 19 03:01:20 UTC 2026
+$ make lint-markdown
+==> markdownlint-cli2
+/bin/sh: 1: markdownlint-cli2: not found
+make: *** [Makefile:244: lint-markdown] Error 127
+exit=2
