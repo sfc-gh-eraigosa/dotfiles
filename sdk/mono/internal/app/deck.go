@@ -259,7 +259,8 @@ func (a *App) switchLocked(i, t, v int) []launch {
 	s.tool, s.view = t, v
 	s.p = pane.New(a.specFor(s), a.opts.OnChange)
 	s.fresh = true
-	go old.Stop()
+	a.stopping.Add(1)
+	go func() { defer a.stopping.Done(); old.Stop() }()
 	return a.relayoutLocked()
 }
 
@@ -371,7 +372,17 @@ func (a *App) focusPathLocked(path string) ([]launch, error) {
 		}
 	}
 	a.focus = i
-	return a.switchLocked(i, t, v), nil
+	if a.heightsLocked()[i+1] == 0 { // hidden by zoom: show it, don't focus the invisible
+		if z := a.zoomIndexLocked(); z >= 0 {
+			if a.zoom == a.slots[z].name {
+				a.zoom = ""
+			} else {
+				a.noAuto[a.slots[z].name] = true
+			}
+		}
+	}
+	starts := a.switchLocked(i, t, v)
+	return append(starts, a.relayoutLocked()...), nil
 }
 
 // doubleEsc watches what is about to be forwarded: a lone esc is forwarded
@@ -405,7 +416,19 @@ func (a *App) doubleEsc(b []byte) ([]byte, bool) {
 // leaves, and any other key leaves without reaching the program.
 func (a *App) navBytes(b []byte) {
 	nav := NavKeys()
+	a.mu.Lock()
+	if len(a.navPartial) > 0 { // the rest of an escape sequence split across reads
+		b = append(a.navPartial, b...)
+		a.navPartial = nil
+	}
+	a.mu.Unlock()
 	for len(b) > 0 {
+		if input.IncompleteEscape(b) {
+			a.mu.Lock()
+			a.navPartial = append([]byte(nil), b...)
+			a.mu.Unlock()
+			return
+		}
 		k, n := input.Decode(b)
 		b = b[n:]
 		a.mu.Lock()

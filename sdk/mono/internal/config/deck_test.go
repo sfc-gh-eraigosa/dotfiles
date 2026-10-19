@@ -205,3 +205,24 @@ func names(ps []Pane) []string {
 	}
 	return out
 }
+
+// Review finding 1: middle: single must not collide with a fixed pane named
+// mid, nor fold two merged tools that share a name.
+func TestMiddleSingleRefusesCollisions(t *testing.T) {
+	f := false
+	c := Config{Prefix: "ctrl+b", Title: Title{Size: "5%"}, Middle: MiddleSingle, Panes: []Pane{
+		{Name: "a", Size: "40%", Cmd: "a"},
+		{Name: "b", Size: "40%", Cmd: "b"},
+		{Name: "mid", Size: "5%", Cmd: "gsl status", Zoomable: &f},
+	}}
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "mid") {
+		t.Fatalf("a fixed pane named mid with middle: single: %v", err)
+	}
+	d := Config{Prefix: "ctrl+b", Title: Title{Size: "5%"}, Middle: MiddleSingle, Panes: []Pane{
+		{Name: "gpu", Size: "40%", Cmd: "nvtop"},
+		{Name: "deck", Size: "40%", Tools: []Tool{{Name: "gpu", Views: []View{{Name: "x", Cmd: "x"}}}}},
+	}}
+	if err := d.Validate(); err == nil || !strings.Contains(err.Error(), "gpu") {
+		t.Fatalf("two merged tools named gpu: %v", err)
+	}
+}

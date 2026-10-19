@@ -18,7 +18,7 @@
   93283 root       20   0 1536M  106M 39244 S  1.7  0.1  4h45:37 containerd
  203927 <node>    20   0  7796  6612  3808 R  1.7  0.0  0:01.28 htop
   22489 <node>    20   0  134M 24728 13664 S  1.3  0.0  1h03:18 ~/git/dotfiles/opt/bin/herdr server
- 206667 <node>    20   0  381M 51376 15228 S  1.3  0.0  0:01.32 ~/.local/share/uv/tools/nvitop/bin/python /home/wenlo
+ 206667 <node>    20   0  381M 51376 15228 S  1.3  0.0  0:01.32 ~/.local/share/uv/tools/nvitop/bin/python ~
    2262 root       20   0 4041M 60728 16236 S  1.0  0.0  2h02:10 /usr/bin/promtail -config.file=/etc/promtail/promtail.yaml
  170920 <node>    20   0 5588M  584M 99560 S  1.0  0.3  0:00.96 claude --dangerously-skip-permissions --resume 1e67f5c4-7834-49b0
  207687 <node>    20   0  6680  5084  4036 S  1.0  0.0  0:00.03 /usr/bin/zsh -c source ~/.claude/shell-snapshots/snap

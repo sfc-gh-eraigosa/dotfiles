@@ -163,12 +163,48 @@ func validateDeck(p Pane) error {
 	return nil
 }
 
+// validateMerge refuses a middle: single layout whose merge would be
+// ambiguous: a pane that stays separate named "mid", or two merged tools
+// sharing a name (review of mono-gdash #414).
+func (c Config) validateMerge() error {
+	if c.MiddleMode() != MiddleSingle {
+		return nil
+	}
+	var middle []Pane
+	for _, p := range c.Panes {
+		if p.CanZoom() {
+			middle = append(middle, p)
+		}
+	}
+	if len(middle) < 2 {
+		return nil
+	}
+	for _, p := range c.Panes {
+		if !p.CanZoom() && p.Name == "mid" {
+			return fmt.Errorf("middle: single merges the middle panes into one named mid, but pane %q (zoomable: false) already has that name; rename it", p.Name)
+		}
+	}
+	seen := map[string]string{}
+	for _, p := range middle {
+		for _, t := range p.Deck() {
+			if other, ok := seen[t.Name]; ok {
+				return fmt.Errorf("middle: single would merge two tools named %q (from panes %s and %s); rename one", t.Name, other, p.Name)
+			}
+			seen[t.Name] = p.Name
+		}
+	}
+	return nil
+}
+
 // validateTop checks middle, nav_key and nav_esc_ms.
 func (c Config) validateTop() error {
 	switch c.Middle {
 	case "", MiddleSplit, MiddleSingle:
 	default:
 		return fmt.Errorf("middle must be %q or %q, got %q", MiddleSplit, MiddleSingle, c.Middle)
+	}
+	if err := c.validateMerge(); err != nil {
+		return err
 	}
 	if c.NavEscMs != nil && (*c.NavEscMs < 0 || *c.NavEscMs > 2000) {
 		return fmt.Errorf("nav_esc_ms must be 0 (double-esc off) to 2000, got %d", *c.NavEscMs)

@@ -39,7 +39,7 @@
 | C1 default mid deck | done | (this commit) | `TestDefaultLayout`: htop 60% · mid 30% deck (gpu; gdash zoom + probe + 4 views) · gsl 5% fixed; `middle: single` → one 90% deck of 3 tools; #407 configs still round-trip (`evidence/b6-c1/evidence.txt`) | done in the deck PR (gdash leaf already merged); hosts with a saved config keep theirs (README says how to adopt) |
 | D1 gdash docs: managing views | done | (this commit) | README: Managing views (add/change/remove, variables, subsets, into mono), Another host, Troubleshooting from real doctor failures; every command run once (`evidence/d1/d1.txt`); markdownlint 0 | owner 2026-10-19 |
 | E1 one color scheme across the sdk | done | (this commit) | survey: no shared library — gsl (style+theme), gff (a copy of gsl's), fleet (hardcoded ANSI), mono/gdash (hardcoded); new `sdk/libs/tui/theme` (95.3%), gdash + mono moved onto it; contract test `TestColorsComeFromTheSharedTheme` across all four palettes (`evidence/e1/e1.txt`) | owner 2026-10-19; **follow-up**: move gsl, gff and fleet onto `libs/tui/theme` (each keeps palette tests; gsl gates contrast) |
-| C2 live evidence | todo | | | |
+| C2 live evidence | done | (this commit) | **spark1** (branch build, new default): `mono doctor` 5 of 5 views usable; start = htop + nvtop split; esc esc · j · l → gdash conductor zoomed (`NAV ZOOM`), then k3s-nodes, nodes, ci — each drawn with live data, one gdash process each time; h → gpu, split back; quit clean, 0 leftovers. **wslgiga1**: same walk + htop zoom; no-credentials host → gdash dropped, gpu only (`evidence/c2/`) | evidence lives in `evidence/c2/` (the plan said `e2e/`). Found on the way: the lab Grafana fails its liveness probe and restarts (playground#752) — that, not gdash, was the cold-start probe failure |
 
 **Lab facts (Task 0, 2026-10-19):**
 
@@ -56,14 +56,14 @@
 | Feature | Automated proof | Live proof | Notes |
 | :-- | :-- | :-- | :-- |
 | F1 fetch | [x] E1 E2 | [x] `gdash conductor` live (from wslgiga1; spark1 in C2) | |
-| F2 vars | [x] E3 E4 | [ ] k3s-nodes `$node` panels draw | |
+| F2 vars | [x] E3 E4 | [x] k3s-nodes panels draw live (vars.cluster "") | |
 | F3 panels/layout | [x] E5 E6 | [x] live captures at 80 and 120 cols (`evidence/a6/live-*.txt`) | |
-| F4 refresh/stale | [x] E7 E8 | [ ] Grafana unreachable → stale row | |
+| F4 refresh/stale | [x] E7 E8 | [~] Grafana restarts observed (playground#752); stale row covered by E7 | |
 | F5 keys | [x] E9 | — | |
 | F6 config/auth | [x] E10–E13 | [x] no secret in any output (E12, real binary) | |
-| F7 doctor/list | [x] E14 E15 | [x] doctor passes live (wslgiga1); exit 1 with no config. spark1 in C2 | |
-| F8 decks | [x] E16–E19 E24 | [ ] one gdash process while cycling | |
-| F9 nav | [x] E20–E23 | [ ] capture of the deck cycle | |
+| F7 doctor/list | [x] E14 E15 | [x] doctor passes live on wslgiga1 and spark1; exit 1 with no config | |
+| F8 decks | [x] E16–E19 E24 | [x] one gdash process while cycling (spark1) | |
+| F9 nav | [x] E20–E23 | [x] deck cycle captured on spark1 and wslgiga1 | |
 
 ## 3. Validation done-when — the stop condition
 
@@ -93,3 +93,4 @@
 | 2026-10-19 | playground session | owner: zoom + one-pane middle (F10, E25–E27), gdash always uses the whole middle; tasks B7, D1, E1 added; deck worker created |
 | 2026-10-19 | playground session | deck leaf B1–B7 + C1 done (decks, nav mode, zoom, one-pane middle, default mid deck) |
 | 2026-10-19 | playground session | D1 + E1 done: gdash docs (views, other host, troubleshooting); sdk color library `libs/tui/theme`, gdash + mono on it |
+| 2026-10-19 | playground session | C2 live on spark1 + wslgiga1; independent review of the deck PR: 4 findings fixed (merge name clash, focus on a hidden pane, leaks at quit, split arrows in nav) |

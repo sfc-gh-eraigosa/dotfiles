@@ -1,0 +1,44 @@
+ mono vdev — none   ● htop                                                                                                    ctrl+b ? help
+
+
+    0[||     6.0%]   3[||     4.5%]   6[|      3.2%]   9[||||||94.8%]  10[||      3.2%] 13[||      7.7%] 16[||      2.6%] 19[||      4.5%]
+    1[||     2.0%]   4[||     5.2%]   7[||     3.9%]                   11[||      2.6%] 14[||      3.9%] 17[||      3.2%]
+    2[||     5.2%]   5[|||   12.8%]   8[||     9.0%]                   12[||      3.8%] 15[|||    11.0%] 18[||||||100.0%]
+  Mem[||||||||||||||||||||||||||||||||||||||||||||||||||||71.9G/122G] Tasks: 394, 2936 thr, 312 kthr; 3 running
+  Swp[|||||||                                            1.35G/16.0G] Load average: 2.04 3.83 3.77
+  Avg                                                                 Uptime: 16 days, 10:46:54
+                                                                      Net                                                                ⢸
+                                                                                                                                         ⢸
+     ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣦                                                                    ⢸
+  Mem                                                               ⣤    ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣸
+                                                                    ⣿ Dis
+                                                                    ⣿
+     ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣿
+  Swp                                                                    ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀
+                                                                      Loa
+
+     ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣤
+                                                                         ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣤
+
+  [Main] [I/O]
+    PID USER       PRI  NI  VIRT   RES   SHR S  CPU%▽MEM%   TIME+  Command
+2751194 <node>     20   0  256G 88036 19152 R 101.9  0.1  0:02.37 shellcheck -x -P SCRIPTDIR scripts/at-rest.sh scripts/converge.sh scripts
+2752069 <node>     20   0  256G  154M 19152 R  98.6  0.1  0:01.53 shellcheck -x ~/.config/gss/worktrees/sfc-gh-eraigosa/playgro
+3776070 <node>     20   0 3823M 1038M  116M S  22.6  0.8  7:02.55 /snap/firefox/8968/usr/lib/firefox/firefox -contentproc -isForBrowser -pr
+2174754 <node>     20   0 29420 11248  3204 S   7.7  0.0 19h59:50 htop
+F1Help  F2Setup F3SearchF4FilterF5Tree  F6SortByF7Nice -F8Nice +F9Kill  F10Quit
+ Device 0 [NVIDIA GB10] PCIe GEN 1@ 1x RX: N/A TX: N/A
+ GPU 2418MHz MEM N/A MHz TEMP  43°C FAN N/A% POW  11 W
+ GPU[                           1%] MEM[                          N/A]
+
+    PID    USER DEV     TYPE  GPU        GPU MEM    CPU  HOST MEM Command
+2641407  ollama   0  Compute   0%       20191MiB     0%  21949MiB /usr/local/lib/ollama/llama-server --model /usr/share/ollama/.ollama/model
+  32648 <node>   0  Graphic   0%         153MiB     0%    499MiB /usr/bin/gnome-shell
+  32260 <node>   0  Graphic   0%         136MiB     0%    198MiB /usr/lib/xorg/Xorg vt2 -displayfd 3 -auth /run/user/1000/gdm/Xauthority -n
+3078029 <node>   0  Graphic   1%          68MiB     5%    340MiB /usr/lib/claude-desktop/claude-desktop --type=gpu-process --ozone-platform
+  33240 <node>   0  Graphic   0%          48MiB     0%    110MiB /usr/libexec/xdg-desktop-portal-gnome
+ 824338 <node>   0  Graphic   0%          41MiB     0%    113MiB /usr/bin/nautilus --gapplication-service
+
+F2Setup   F6Sort    F9Kill    F10Quit    F12Save Config
+ 🧠 <node>   ~   2026-10-19 07:59:55 PDT 
+

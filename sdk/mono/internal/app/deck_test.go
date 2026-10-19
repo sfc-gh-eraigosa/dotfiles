@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/config"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/pane"
 )
 
 // Deck tests run small shell programs that print a marker and then wait.
@@ -277,4 +278,93 @@ func TestMiddleSingleRuntime(t *testing.T) {
 	if got := strings.Join(a.Running(), ","); got != "mid/top/top,bot" {
 		t.Fatalf("running = %s", got)
 	}
+}
+
+// Review finding 2: :focus on a pane hidden by zoom makes it visible
+// instead of focusing something you cannot see.
+func TestFocusUnhidesAZoomedOutPane(t *testing.T) {
+	a, _ := startDeck(t, deckConfig(false))
+	if err := a.focusNamed([]string{"top"}); err != nil {
+		t.Fatal(err)
+	}
+	a.HandleBytes([]byte{0x02, 'z'}) // zoom top: mid gets 0 rows
+	if h := a.Heights(); h[2] != 0 {
+		t.Fatalf("setup: mid not hidden: %v", h)
+	}
+	if err := a.focusNamed([]string{"mid"}); err != nil {
+		t.Fatal(err)
+	}
+	h := a.Heights()
+	if a.FocusedName() != "mid" || h[2] == 0 {
+		t.Fatalf("focus %s with mid rows %d (heights %v): the focused pane must be visible", a.FocusedName(), h[2], h)
+	}
+}
+
+// Review finding 3: programs a view switch stopped, and panes a reload
+// started, never outlive Stop.
+func TestStopWaitsForSwitchedAwayPrograms(t *testing.T) {
+	cfg := deckConfig(false)
+	// a1 ignores SIGHUP, so only the SIGKILL after KillGrace ends it.
+	cfg.Panes[1].Tools[0].Views[0].Cmd = "sh -c 'trap \"\" HUP; echo VIEW-A1; while :; do sleep 1; done'"
+	a, clk := startDeck(t, cfg)
+	eventually(t, a, "a1", func(s string) bool { return strings.Contains(s, "VIEW-A1") })
+	old := a.paneFor(t, "mid")
+	focusMid(t, a)
+	enterNav(a, clk)
+	a.HandleBytes([]byte("l")) // switch away: a1 is being stopped in the background
+	a.Stop()
+	// The kill has been sent once Stop returns; the exit is recorded by the
+	// pane's waiter a moment later. Without the fix the kill only comes after
+	// KillGrace (500 ms), so 100 ms tells the two apart.
+	deadline := time.Now().Add(100 * time.Millisecond)
+	for {
+		if exited, _ := old.Exited(); exited {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("Stop returned while a switched-away program was still running")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestNoPanesStartAfterStop(t *testing.T) {
+	a, _ := startDeck(t, deckConfig(false))
+	before := strings.Join(a.Running(), ",")
+	a.Stop()
+	a.applyMu.Lock()
+	a.apply(deckConfig(true)) // a reload landing after quit
+	a.applyMu.Unlock()
+	if got := strings.Join(a.Running(), ","); got != before {
+		t.Fatalf("apply after Stop changed the panes: %s → %s", before, got)
+	}
+}
+
+// Review finding 4: an arrow key split across two reads in nav mode is an
+// arrow, not esc (which would leave nav mode and leak "[A" to the program).
+func TestNavSplitEscapeSequence(t *testing.T) {
+	a, clk := startDeck(t, deckConfig(false))
+	if err := a.focusNamed([]string{"top"}); err != nil {
+		t.Fatal(err)
+	}
+	enterNav(a, clk)
+	a.HandleBytes([]byte("\x1b["))
+	a.HandleBytes([]byte("B")) // down
+	if !a.Nav() || a.FocusedName() != "mid" {
+		t.Fatalf("split down-arrow: nav %v, focus %s", a.Nav(), a.FocusedName())
+	}
+}
+
+// paneFor is the running pane of a slot (tests only).
+func (a *App) paneFor(t *testing.T, name string) *pane.Pane {
+	t.Helper()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, s := range a.slots {
+		if s.name == name {
+			return s.p
+		}
+	}
+	t.Fatalf("no slot %s", name)
+	return nil
 }

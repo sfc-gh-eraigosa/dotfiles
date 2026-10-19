@@ -10,7 +10,7 @@
                                                                  Uptime: 5 days, 18:39:37
 
     PID USER      PRI  NI  VIRT   RES   SHR S CPU%▽MEM%   TIME+  Command
- 206667 <node>    20   0  381M 51240 15228 S 75.0  0.0  0:01.15 ~/.local/share/uv/tools/nvitop/bin/python /home/wenlo
+ 206667 <node>    20   0  381M 51240 15228 S 75.0  0.0  0:01.15 ~/.local/share/uv/tools/nvitop/bin/python ~
   26912 <node>    20   0 5588M  574M 99496 S 12.4  0.3  3h47:24 claude --dangerously-skip-permissions --resume 1e67f5c4-7834-49b0
   93243 root       20   0 1595M  163M 48512 S  5.9  0.1  7h20:51 /usr/local/bin/k3s agent
   93283 root       20   0 1536M  106M 39244 S  5.9  0.1  4h45:37 containerd

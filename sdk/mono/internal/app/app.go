@@ -55,25 +55,28 @@ type App struct {
 	keys   keymap.Map
 	router input.Router
 
-	mu      sync.Mutex
-	choices []probe.Choice
-	slots   []*slot // usable panes, top to bottom (deck.go)
-	focus   int
-	zoom    string          // the pane zoomed by hand; "" = none (spec F10)
-	noAuto  map[string]bool // a zoom: true tool's auto-zoom turned off by z
-	nav     bool            // nav mode (spec F9)
-	lastEsc time.Time       // a lone esc just forwarded, for double-esc
-	mode    mode
-	cmd     cmdline.State
-	reg     cmdline.Registry
-	modal   *pane.Pane
-	msg     string
-	width   int
-	height  int
-	quit    bool
+	mu         sync.Mutex
+	choices    []probe.Choice
+	slots      []*slot // usable panes, top to bottom (deck.go)
+	focus      int
+	zoom       string          // the pane zoomed by hand; "" = none (spec F10)
+	noAuto     map[string]bool // a zoom: true tool's auto-zoom turned off by z
+	nav        bool            // nav mode (spec F9)
+	lastEsc    time.Time       // a lone esc just forwarded, for double-esc
+	navPartial []byte          // an escape sequence split across reads in nav mode
+	mode       mode
+	cmd        cmdline.State
+	reg        cmdline.Registry
+	modal      *pane.Pane
+	msg        string
+	width      int
+	height     int
+	quit       bool
 
-	applyMu sync.Mutex     // one apply at a time
-	pending *config.Config // the newest config waiting to be applied
+	applyMu  sync.Mutex     // one apply at a time
+	pending  *config.Config // the newest config waiting to be applied
+	stopping sync.WaitGroup // programs a view switch is stopping (Stop waits)
+	closed   bool           // Stop ran: apply installs nothing new
 }
 
 // New builds the dashboard; panes start on the first Resize.
@@ -184,6 +187,10 @@ func (a *App) Resize(width, height int) {
 func (a *App) apply(cfg config.Config) {
 	choices := probe.Choose(context.Background(), a.opts.Env, cfg.Effective())
 	a.mu.Lock()
+	if a.closed { // mono is quitting: a late reload starts nothing
+		a.mu.Unlock()
+		return
+	}
 	old := map[string]*slot{}
 	for _, s := range a.slots {
 		old[s.name] = s
@@ -243,7 +250,10 @@ func (a *App) apply(cfg config.Config) {
 
 // Stop ends every pane (in parallel; each gets KillGrace).
 func (a *App) Stop() {
+	a.applyMu.Lock() // no apply in flight; none after (closed)
+	defer a.applyMu.Unlock()
 	a.mu.Lock()
+	a.closed = true
 	var ps []*pane.Pane
 	for _, s := range a.slots {
 		if s.p != nil {
@@ -260,6 +270,7 @@ func (a *App) Stop() {
 		go func(p *pane.Pane) { defer wg.Done(); p.Stop() }(p)
 	}
 	wg.Wait()
+	a.stopping.Wait() // and every program a view switch was stopping
 }
 
 // HandleBytes routes one read from the keyboard.
