@@ -75,12 +75,11 @@ wslnet_detect() {
     case "$(_wslnet_file_mode "${_wd_cfg}")" in
       bridged)  echo bridged; return 0 ;;
       mirrored) echo mirrored; return 0 ;;
-      nat)      echo nat; return 0 ;;
     esac
   fi
   if command -v "${WSLNET_NETSH:-netsh.exe}" >/dev/null 2>&1; then
     if "${WSLNET_NETSH:-netsh.exe}" interface portproxy show v4tov4 </dev/null 2>/dev/null \
-        | tr -d '\r' | awk '$2 == "22" && $1 ~ /^[0-9]+\./ { f = 1 } END { exit !f }'; then
+        | tr -d '\r' | awk '$4 == "22" && $1 ~ /^[0-9]+\./ { f = 1 } END { exit !f }'; then
       echo nat
       return 0
     fi

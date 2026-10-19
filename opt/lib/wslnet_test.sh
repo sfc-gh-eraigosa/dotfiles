@@ -85,6 +85,15 @@ for sh_bin in bash sh; do
   fixture; export STUB_ROWS='0.0.0.0         8080        172.20.0.2      8080'
   run_case "$sh_bin" "detect: portproxy for another port only -> nothing" '[ -z "$(wslnet_detect)" ]'; rm -rf "$T"
 
+  fixture; printf '[wsl2]\nnetworkingMode=nat\n' > "$WSLNET_WSLCONFIG"
+  run_case "$sh_bin" "detect: file networkingMode=nat, no rule/task -> nothing recorded" '[ -z "$(wslnet_detect)" ]'; rm -rf "$T"
+
+  fixture; export STUB_ROWS='0.0.0.0         2222        172.20.0.2      22'
+  run_case "$sh_bin" "detect: listen 2222 -> connect 22 -> nat" '[ "$(wslnet_detect)" = nat ]'; rm -rf "$T"
+
+  fixture; export STUB_ROWS='0.0.0.0         22          172.20.0.2      8080'
+  run_case "$sh_bin" "detect: listen 22 -> connect 8080 -> nothing" '[ -z "$(wslnet_detect)" ]'; rm -rf "$T"
+
   fixture; export STUB_TASK=1
   run_case "$sh_bin" "detect: RefreshWslPortProxy task -> nat" '[ "$(wslnet_detect)" = nat ]'; rm -rf "$T"
 
