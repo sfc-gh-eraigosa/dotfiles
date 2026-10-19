@@ -129,7 +129,7 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   Everything ELSE interpolated into a remote string is allowlisted (`ValidRef`, `ValidPath`,
   `ValidRepoName`, `ValidURL`, `ValidHostname`, `ValidSHA`) and every builder re-validates,
   so a hand-built `Repo`/`Step` that bypassed `Parse` still cannot smuggle a metacharacter.
-  The CLI's `WINSETUP_ANSWER`/`GEMINI_TEARDOWN_ANSWER` preamble and the TUI's sudo stdin apply
+  The CLI's `WINSETUP_ANSWER`/`GEMINI_TEARDOWN_ANSWER`/`WSLNET_ANSWER` (always sent, default `skip`) preamble and the TUI's sudo stdin apply
   to run steps only — never to a sync or gh-auth script. Pinned by
   `TestRunScriptIsVerbatimAfterCd`, `TestLoadPlanRefusesAWorldWritableFile`,
   `TestDryRunSendsNothing`, `TestBuildersRejectUnvalidatedInput`,

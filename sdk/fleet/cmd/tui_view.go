@@ -989,6 +989,8 @@ func (m tuiModel) answersView() string {
 		val(m.ans.windows, "(unset = host decides)"))) + "\n")
 	b.WriteString(sel(fieldGemini, fmt.Sprintf("%-25s %s", "🧹 gemini leftovers [y/k/n]",
 		val(m.ans.gemini, "(unset = host decides)"))) + "\n")
+	b.WriteString(sel(fieldWslnet, fmt.Sprintf("%-25s %s", "🌐 wsl network [o/n/b/m]",
+		val(m.ans.wslnet, "(unset = skip, record nothing)"))) + "\n")
 	// j/k are deliberately NOT navigation here: the choice fields use
 	// install.sh's own letters and `k` means "keep", so making it also mean
 	// "up" would silently select the wrong answer. Arrows are the idiom the
@@ -1082,7 +1084,8 @@ func (m tuiModel) confirmView() string {
 
 	b.WriteString(th.dim.Render("   🔑 sudo ") + th.statusBar.Render(maskOrNone(m.ans.secretLen())) +
 		th.dim.Render("   🪟 windows ") + th.statusBar.Render(orUnset(m.ans.windows)) +
-		th.dim.Render("   🧹 gemini ") + th.statusBar.Render(orUnset(m.ans.gemini)) + "\n")
+		th.dim.Render("   🧹 gemini ") + th.statusBar.Render(orUnset(m.ans.gemini)) +
+		th.dim.Render("   🌐 wslnet ") + th.statusBar.Render(orUnset(m.ans.wslnet)) + "\n")
 	if m.ans.forceReset() {
 		b.WriteString("   " + th.fail.Render("⚠️  force reset") +
 			th.dim.Render(" — each host is hard-reset onto origin; its current state is saved to a fleet-reset/<ts> branch first") + "\n")

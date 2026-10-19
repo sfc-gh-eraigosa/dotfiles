@@ -238,9 +238,10 @@ func TestSudoGlobalInertDropInIsRemovedAgain(t *testing.T) {
 func TestSudoGlobalPreambleShape(t *testing.T) {
 	a := secretAnswers()
 	// Flag off is byte-for-byte the preamble every host ran before the flag
-	// existed — the default lane must not drift while the fixup evolves.
+	// existed (plus the always-sent WSLNET_ANSWER=skip) — the default lane must
+	// not drift while the fixup evolves.
 	if off, want := bgPreamble(a, bgPolicy{})(updplan.Step{Kind: updplan.KindRun}),
-		`sudo -S -p '' -v 2>/dev/null || exit 91; `+sudoGate+` || exit 92; `; off != want {
+		`sudo -S -p '' -v 2>/dev/null || exit 91; `+sudoGate+` || exit 92; export WSLNET_ANSWER=skip; `; off != want {
 		t.Fatalf("flag off must be exactly today's preamble:\n got %s\nwant %s", off, want)
 	}
 	on := bgPreamble(a, sudoGlobalOn)(updplan.Step{Kind: updplan.KindRun})

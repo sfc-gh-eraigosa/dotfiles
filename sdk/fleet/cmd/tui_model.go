@@ -40,6 +40,7 @@ const (
 	fieldSudo answerField = iota
 	fieldWindows
 	fieldGemini
+	fieldWslnet
 	fieldReset
 	answerFieldCount
 )

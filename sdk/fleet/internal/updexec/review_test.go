@@ -491,7 +491,7 @@ func TestBackgroundRunStepScriptIsValidShell(t *testing.T) {
 	}
 	preamble := `sudo -S -p '' -v 2>/dev/null || exit 91; ` +
 		`{ [ "$(id -u)" = 0 ] || ! command -v sudo >/dev/null 2>&1 || sudo -n true 2>/dev/null; } || exit 92; ` +
-		`export WINSETUP_ANSWER=s GEMINI_TEARDOWN_ANSWER=keep; `
+		`export WINSETUP_ANSWER=s GEMINI_TEARDOWN_ANSWER=keep WSLNET_ANSWER=skip; `
 	c := Console{Preamble: func(updplan.Step) string { return preamble }}
 	st := updplan.Step{ID: "install", Kind: updplan.KindRun}
 	script := c.runScript(st, "cd /tmp && true")

@@ -13,7 +13,7 @@ import (
 // Sticky answers widened the credential's lifetime from one wave to one
 // process, which is the trade the operator asked for. Widening it to "forever,
 // on disk" is a different trade nobody asked for, so the on-disk shape simply
-// has nowhere to put it: `storedAnswers` has two fields, and the credential is
+// has nowhere to put it: `storedAnswers` has three fields, and the credential is
 // not one of them. That is stronger than remembering to strip it, because the
 // type cannot express the mistake.
 //
@@ -27,6 +27,7 @@ import (
 type storedAnswers struct {
 	Windows string `json:"windows,omitempty"`
 	Gemini  string `json:"gemini,omitempty"`
+	Wslnet  string `json:"wslnet,omitempty"`
 }
 
 // fleetConfigDir is where fleet's own config files live — answers.json today,
@@ -85,7 +86,7 @@ func saveAnswers(path string, a answers) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(storedAnswers{Windows: a.windows, Gemini: a.gemini}, "", "  ")
+	b, err := json.MarshalIndent(storedAnswers{Windows: a.windows, Gemini: a.gemini, Wslnet: a.wslnet}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -109,5 +110,5 @@ func loadAnswers(path string) answers {
 	if err := json.Unmarshal(b, &s); err != nil {
 		return answers{}
 	}
-	return answers{windows: s.Windows, gemini: s.Gemini}
+	return answers{windows: s.Windows, gemini: s.Gemini, wslnet: s.Wslnet}
 }
