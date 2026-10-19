@@ -1,0 +1,30 @@
+{
+  "prefix": "ctrl+b",
+  "title": {
+    "size": "5%"
+  },
+  "panes": [
+    {
+      "name": "htop",
+      "size": "60%",
+      "cmd": "htop-fit",
+      "fallbacks": [
+        "htop"
+      ]
+    },
+    {
+      "name": "gpu",
+      "size": "30%",
+      "cmd": "nvtop",
+      "fallbacks": [
+        "nvitop"
+      ]
+    },
+    {
+      "name": "gsl",
+      "size": "5%",
+      "cmd": "gsl status",
+      "every": "1s"
+    }
+  ]
+}

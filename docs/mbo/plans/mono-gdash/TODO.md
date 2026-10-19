@@ -108,11 +108,11 @@
 
 ### Task B1 — config schema  (E16)
 
-- [ ] RED: `compat_test.go` (the #407 default round-trips byte-identical); validation (cmd XOR tools, unique names)
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: Tools/Views; 1×1 normalization; save preserves plain panes
-- [ ] RUN-GREEN → PASS
-- [ ] EVIDENCE · COMMIT `mono: deck panes in the config (tools × views); plain panes unchanged` · LEDGER · CHECKPOINT
+- [x] RED: `compat_test.go` (the #407 default round-trips byte-identical); validation (cmd XOR tools, unique names)
+- [x] RUN-RED → FAIL
+- [x] GREEN: Tools/Views; 1×1 normalization; save preserves plain panes
+- [x] RUN-GREEN → PASS
+- [x] EVIDENCE · COMMIT `mono: deck panes in the config (tools × views); plain panes unchanged` · LEDGER · CHECKPOINT
 
 ### Task B2 — probe + doctor  (E17)
 

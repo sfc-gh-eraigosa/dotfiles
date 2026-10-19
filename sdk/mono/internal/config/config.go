@@ -18,15 +18,18 @@ import (
 
 // Pane is one stacked region. Cmd runs in a pseudo-terminal; with Every set
 // it is re-run on that interval and its latest output shown (gsl), otherwise
-// it is a long-lived interactive program (htop).
+// it is a long-lived interactive program (htop). A pane with Tools instead of
+// Cmd is a deck (deck.go).
 type Pane struct {
 	Name      string   `json:"name"`
 	Size      string   `json:"size"`                // percent of terminal rows, "60%"
-	Cmd       string   `json:"cmd"`                 // run through sh -c
+	Cmd       string   `json:"cmd,omitempty"`       // run through sh -c; empty for a deck
 	Every     string   `json:"every,omitempty"`     // "1s": re-run interval
 	Fallbacks []string `json:"fallbacks,omitempty"` // tried in order when Cmd is unusable
 	Probe     string   `json:"probe,omitempty"`     // "": built-in check, "none": skip, else a command (exit 0 = usable)
 	Cwd       string   `json:"cwd,omitempty"`       // "" = where mono was started
+	Tools     []Tool   `json:"tools,omitempty"`     // a deck: tools × views (spec F8)
+	Zoomable  *bool    `json:"zoomable,omitempty"`  // nil/true: part of the middle (spec F10)
 }
 
 // Title is the top bar.
@@ -36,9 +39,12 @@ type Title struct {
 
 // Config is the whole file.
 type Config struct {
-	Prefix string `json:"prefix"`
-	Title  Title  `json:"title"`
-	Panes  []Pane `json:"panes"`
+	Prefix   string `json:"prefix"`
+	Title    Title  `json:"title"`
+	Panes    []Pane `json:"panes"`
+	Middle   string `json:"middle,omitempty"`     // "split" (default) or "single" (spec F10)
+	NavKey   string `json:"nav_key,omitempty"`    // after the prefix, enters nav mode; default "space"
+	NavEscMs *int   `json:"nav_esc_ms,omitempty"` // double-esc window; 0 turns it off; default 300
 }
 
 // Default is the layout mono ships with: title 5%, htop 60%, a GPU monitor
@@ -146,6 +152,9 @@ func (c Config) Validate() error {
 	if len(c.Panes) == 0 {
 		return errors.New("panes: at least one pane is required")
 	}
+	if err := c.validateTop(); err != nil {
+		return err
+	}
 	seen := map[string]bool{}
 	for i, p := range c.Panes {
 		if !nameRe.MatchString(p.Name) {
@@ -158,7 +167,7 @@ func (c Config) Validate() error {
 		if err := validatePaneField(p, "size", p.Size); err != nil {
 			return err
 		}
-		if err := validatePaneField(p, "cmd", p.Cmd); err != nil {
+		if err := validateDeck(p); err != nil {
 			return err
 		}
 		if err := validatePaneField(p, "every", p.Every); err != nil {
@@ -223,8 +232,13 @@ func (c Config) Find(name string) int {
 
 // Keys lists every settable key, for help and completion.
 func (c Config) Keys() []string {
-	keys := []string{"prefix", "title.size"}
+	keys := []string{"prefix", "title.size", "middle", "nav_key", "nav_esc_ms"}
 	for _, p := range c.Panes {
+		if p.IsDeck() {
+			keys = append(keys, "panes."+p.Name+".size", "panes."+p.Name+".zoomable")
+			keys = append(keys, c.deckKeys(p)...)
+			continue
+		}
 		for _, f := range paneFields {
 			keys = append(keys, "panes."+p.Name+"."+f)
 		}
@@ -232,7 +246,7 @@ func (c Config) Keys() []string {
 	return keys
 }
 
-var paneFields = []string{"cmd", "size", "every", "fallbacks", "probe", "cwd"}
+var paneFields = []string{"cmd", "size", "every", "fallbacks", "probe", "cwd", "zoomable"}
 
 // Get returns the value at a dotted key (fallbacks comma-joined).
 func (c Config) Get(key string) (string, error) {
@@ -241,6 +255,15 @@ func (c Config) Get(key string) (string, error) {
 		return c.Prefix, nil
 	case "title.size":
 		return c.Title.Size, nil
+	case "middle":
+		return c.MiddleMode(), nil
+	case "nav_key":
+		return c.Nav(), nil
+	case "nav_esc_ms":
+		return strconv.Itoa(c.EscMs()), nil
+	}
+	if strings.Count(key, ".") >= 4 {
+		return c.getDeck(key)
 	}
 	i, field, err := c.paneKey(key)
 	if err != nil {
@@ -260,6 +283,8 @@ func (c Config) Get(key string) (string, error) {
 		return p.Probe, nil
 	case "cwd":
 		return p.Cwd, nil
+	case "zoomable":
+		return strconv.FormatBool(p.CanZoom()), nil
 	}
 	return "", fmt.Errorf("unknown key %q", key)
 }
@@ -273,7 +298,23 @@ func (c Config) Set(key, value string) (Config, error) {
 		out.Prefix = value
 	case "title.size":
 		out.Title.Size = value
+	case "middle":
+		out.Middle = value
+	case "nav_key":
+		out.NavKey = value
+	case "nav_esc_ms":
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return c, fmt.Errorf("nav_esc_ms must be a number of milliseconds, got %q", value)
+		}
+		out.NavEscMs = &n
 	default:
+		if strings.Count(key, ".") >= 4 {
+			if err := out.setDeck(key, value); err != nil {
+				return c, err
+			}
+			break
+		}
 		i, field, err := out.paneKey(key)
 		if err != nil {
 			return c, err
@@ -292,6 +333,12 @@ func (c Config) Set(key, value string) (Config, error) {
 			p.Probe = value
 		case "cwd":
 			p.Cwd = value
+		case "zoomable":
+			b, err := strconv.ParseBool(value)
+			if err != nil {
+				return c, fmt.Errorf("%s must be true or false, got %q", key, value)
+			}
+			p.Zoomable = &b
 		}
 	}
 	if err := out.Validate(); err != nil {
@@ -366,7 +413,29 @@ func (c Config) clone() Config {
 	out.Panes = make([]Pane, len(c.Panes))
 	for i, p := range c.Panes {
 		p.Fallbacks = append([]string(nil), p.Fallbacks...)
+		if p.Zoomable != nil {
+			z := *p.Zoomable
+			p.Zoomable = &z
+		}
+		tools := make([]Tool, len(p.Tools))
+		for j, t := range p.Tools {
+			views := make([]View, len(t.Views))
+			for k, v := range t.Views {
+				v.Fallbacks = append([]string(nil), v.Fallbacks...)
+				views[k] = v
+			}
+			t.Views = views
+			tools[j] = t
+		}
+		if p.Tools == nil {
+			tools = nil
+		}
+		p.Tools = tools
 		out.Panes[i] = p
+	}
+	if c.NavEscMs != nil {
+		n := *c.NavEscMs
+		out.NavEscMs = &n
 	}
 	return out
 }

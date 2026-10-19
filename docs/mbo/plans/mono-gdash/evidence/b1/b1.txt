@@ -1,0 +1,23 @@
+# B1 config schema (+ B7 config half) — 2026-10-19T14:29:05Z
+RED: deck_test.go written first → build failed (no Tool/View/Effective/AddTool…). testdata/default-407.json captured from #407's Default() before any change.
+$ go test -count=1 -cover -v ./internal/config/ (deck tests)
+--- PASS: TestAddRemoveMove (0.00s)
+--- PASS: TestCompat407RoundTrip (0.01s)
+--- PASS: TestDeckValidates (0.00s)
+--- PASS: TestPlainPaneIsAOneByOneDeck (0.00s)
+--- PASS: TestDeckGetSet (0.00s)
+--- PASS: TestAddRemoveToolAndView (0.00s)
+--- PASS: TestMiddleSingle (0.00s)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/config	0.017s	coverage: 73.2% of statements
+$ go test ./... (mono)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/cmd	0.027s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/app	0.610s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/config	0.026s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/configui	0.023s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/input	0.007s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/layout	0.006s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/pane	2.741s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/probe	0.004s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/screen	0.007s
+$ go test -count=1 -cover ./internal/config/   (whole package; the 73.2% above is the -run subset)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/config	0.032s	coverage: 85.0% of statements

@@ -14,7 +14,7 @@
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | design | `mono-gdash/edward-raigosa/design` | `feature/mono-gdash/edward-raigosa/design` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/mono-gdash/edward-raigosa/design` | #411 | design + spec + plan + trio |
 | gdash | `mono-gdash/edward-raigosa/gdash` | `feature/mono-gdash/edward-raigosa/gdash` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/mono-gdash/edward-raigosa/gdash` | #413 | Task 0 + A1–A8 done |
-| deck | — | — | — | — | not created |
+| deck | `mono-gdash/edward-raigosa/deck` | `feature/mono-gdash/edward-raigosa/deck` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/mono-gdash/edward-raigosa/deck` | — | B1 |
 
 ## 1. Task ledger
 
@@ -29,7 +29,7 @@
 | A6 app | done | (this commit) | RED: setup failed; fixes on the way: injectable tick (tea.Tick slept 30s in tests), gdash keys first in help; GREEN: app 86.0%, cmd 79.7%; E7 stale/E8 skip-if-busy/E9 keys pass; 6 frame goldens incl. 120-col two-column CI; **live** on the lab: k3s-nodes, conductor, ci, nodes all draw (`evidence/a6/a6.txt`, `live-*.txt`) | live found a real bug: multi-target panels without refId → HTTP 400; `dash.Parse` now assigns refIds; HTTP errors carry Grafana's message. Follow-up (not v1): resolve `label_values()` query variables via the ds resource API (a Viewer may call it) so `$cluster`/`$instance` need no override |
 | A7 doctor + list | done | (this commit) | RED: build failed; GREEN: 8 doctor/list tests incl. E14 (ok / 401 / down / missing dashboard) and E15 (`--quiet` against a hanging Grafana fails in 2.01 s); cmd 80.4%; lint 0; gosec exit 0; **live**: doctor all ok (4 views + Prometheus), `--quiet` 35 ms, no-config host exit 1 silently (`evidence/a7/`) | |
 | A8 security + install + docs | done | (this commit) | RED: build failed (no EchoAuth/Redact); GREEN: E12 `TestSecretNeverPrinted` builds the binary and runs 6 credential setups × 8 commands against a fake Grafana that echoes the Authorization header: no leak; mutation (redaction off) → fails; module coverage 81.2%; lint 0; pinned govulncheck: no vulnerabilities; pinned gosec exit 0; gff lint ok; markdownlint 0 on touched docs; install.sh block builds/skips by flag (`evidence/a8/a8.txt`) | credentials redact themselves (bearer: the token; basic: the password and base64 user:password) and the client scrubs every error message |
-| B1 config schema | todo | | | |
+| B1 config schema | done | (this commit) | RED: build failed; GREEN: E16 `TestCompat407RoundTrip` (the #407 file round-trips byte for byte), deck validation (11 bad shapes refused), get/set at tool/view level, add/remove tool/view; config 85.0%; all mono packages pass (`evidence/b1/b1.txt`) | also B7's config half: `zoomable`, tool `zoom`, `middle: single` → `Effective()` (E27) |
 | B2 probe + doctor | todo | | | |
 | B3 deck runtime | todo | | | |
 | B4 nav mode | todo | | | |
