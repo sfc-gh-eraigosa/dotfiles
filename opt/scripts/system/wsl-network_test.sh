@@ -61,6 +61,10 @@ assert_grep "apply needs admin" 'IsInRole\(\[Security\.Principal\.WindowsBuiltIn
 assert_grep "nat reuses refresh-wsl-portproxy.ps1" "Join-Path \\\$PSScriptRoot 'refresh-wsl-portproxy\.ps1'" "$SET_NET"
 assert_grep "mirrored uses the WSL VMCreatorId" '\{40E0AC32-46A5-438A-A0B2-2B479E8F2E90\}' "$SET_NET"
 assert_grep "Get-VMSwitch is probed, guarded" 'Get-Command Get-VMSwitch' "$SET_NET"
+# The refresh child's output must not become Invoke-Refresh's return value.
+# shellcheck disable=SC2016  # literal PowerShell, not a shell expansion
+assert_grep "refresh output goes to the host" '-File \$RefreshScript @Arguments \| Out-Host' "$SET_NET"
+assert_grep "test seams need WSLNET_TEST=1" "env:WSLNET_TEST -eq '1'" "$SET_NET"
 
 echo "==== LIVE ===="
 PS_EXE=$(command -v powershell.exe 2>/dev/null || true)
@@ -197,6 +201,42 @@ run "$D" -Status -Mode nat -ConfigOnly
 assert_eq "$RC" "0" "-Status nat on an empty file -> 0"
 run "$D" -Mode nat -ConfigOnly
 assert_eq "$RC:$(nbak "$D"):$(wc -c <"$D/.wslconfig" | tr -d ' ')" "0:0:0" "nat on an empty file: exit 0, no backup, still empty"
+
+# Test seams (honored only with WSLNET_TEST=1) reach Windows via WSLENV.
+export WSLENV="${WSLENV:+${WSLENV}:}WSLNET_TEST:WSLNET_TEST_SWITCH:WSLNET_TEST_REFRESH"
+export WSLNET_TEST=1
+
+# bridged when the switch can't be read unelevated: the elevated run decides.
+D=$(fixture bridged-unknown '[wsl2]\nmemory=1GB\n')
+WSLNET_TEST_SWITCH=unknown run "$D" -Status -Mode bridged -ConfigOnly
+assert_eq "$RC" "3" "-Status bridged, switch unknown, file not bridged -> 3"
+WSLNET_TEST_SWITCH=absent run "$D" -Status -Mode bridged -ConfigOnly
+assert_eq "$RC" "0" "-Status bridged, switch confirmed absent -> 0"
+WSLNET_TEST_SWITCH=unknown run "$(fixture bridged-unknown-cur "$BR")" -Status -Mode bridged -ConfigOnly
+assert_eq "$RC" "0" "-Status bridged on a bridged file stays 0 even when the switch is unknown"
+
+# A fresh bridged setup with the switch present writes the four keys.
+D=$(fixture bridged-fresh '[wsl2]\r\nmemory=1GB\r\n')
+WSLNET_TEST_SWITCH=present run "$D" -Mode bridged -ConfigOnly
+_mac=$(sed -n 's/^macAddress=\([^[:cntrl:]]*\).*/\1/p' "$D/.wslconfig")
+case "$_mac" in 02:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]) _r=ok ;; *) _r="bad mac '$_mac'" ;; esac
+assert_eq "$_r" "ok" "fresh bridged MAC is 02: + 5 lowercase hex bytes"
+same "$D/.wslconfig" "[wsl2]\r\nmemory=1GB\r\nnetworkingMode=bridged\r\nvmSwitch=WSLBridge\r\ndhcp=true\r\nmacAddress=${_mac}\r\n" \
+  "fresh bridged writes networkingMode/vmSwitch/dhcp/macAddress, CRLF kept"
+assert_eq "$(nbak "$D")" "1" "fresh bridged backs up first"
+
+# A failing refresh must fail the nat apply (and its output must show).
+STUB="$TMP_NET/stub-refresh.ps1"
+D=$(fixture nat-refresh '[wsl2]\nmemory=1GB\n')
+printf "Write-Host 'stub-refresh: ERROR could not refresh'\r\nexit 1\r\n" > "$STUB"
+WSLNET_TEST_REFRESH=$(wslpath -w "$STUB") run "$D" -Mode nat
+assert_eq "$RC" "1" "nat apply exits 1 when refresh-wsl-portproxy fails"
+case "$OUT" in *"stub-refresh: ERROR"*) _r=shown ;; *) _r="hidden: $OUT" ;; esac
+assert_eq "$_r" "shown" "the refresh output reaches the operator"
+printf "Write-Host 'stub-refresh: ok'\r\nexit 0\r\n" > "$STUB"
+WSLNET_TEST_REFRESH=$(wslpath -w "$STUB") run "$D" -Mode nat
+assert_eq "$RC" "0" "nat apply exits 0 when refresh-wsl-portproxy succeeds"
+unset WSLNET_TEST
 
 # Full -Status (no -ConfigOnly) is read-only and reports the Windows side.
 D=$(fixture status-full '[wsl2]\nmemory=1GB\n')

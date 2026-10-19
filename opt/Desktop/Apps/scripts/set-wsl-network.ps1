@@ -66,6 +66,22 @@ $RefreshScript  = Join-Path $PSScriptRoot 'refresh-wsl-portproxy.ps1'
 $logDir         = Join-Path $env:LOCALAPPDATA 'dotfiles'
 $logFile        = Join-Path $logDir 'set-wsl-network.log'
 
+# Test seams (wsl-network_test.sh), honored only with WSLNET_TEST=1:
+#   WSLNET_TEST_SWITCH=present|absent|unknown  the WSLBridge probe result; only
+#                                              with -Status or -ConfigOnly
+#   WSLNET_TEST_REFRESH=<path>                 a stand-in refresh script; only
+#                                              for -Mode nat, which then skips
+#                                              the admin check and all cleanup
+$TestMode    = $env:WSLNET_TEST -eq '1'
+$TestSwitch  = $null
+$TestRefresh = $false
+if ($TestMode) {
+    if (($Status -or $ConfigOnly) -and $env:WSLNET_TEST_SWITCH -match '^(present|absent|unknown)$') { $TestSwitch = $env:WSLNET_TEST_SWITCH }
+    if ($env:WSLNET_TEST_REFRESH -and $Mode -eq 'nat' -and -not $Status) {
+        $RefreshScript = $env:WSLNET_TEST_REFRESH; $TestRefresh = $true
+    }
+}
+
 function Write-Log([string]$msg) {
     if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
     "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $msg" | Add-Content -Path $logFile
@@ -210,13 +226,17 @@ function Get-BridgeMac {
 
 # present | absent | unknown (could not read: needs admin / Hyper-V Administrators)
 function Get-BridgeSwitchState {
+    if ($TestSwitch) { return $TestSwitch }
     if (-not (Get-Command Get-VMSwitch -ErrorAction SilentlyContinue)) { return 'absent' }   # no Hyper-V module
     try {
         $s = @(Get-VMSwitch -Name $SwitchName -ErrorAction Stop | Where-Object { "$($_.SwitchType)" -eq 'External' })
         if ($s.Count -gt 0) { return 'present' } else { return 'absent' }
     } catch {
-        if ("$($_.CategoryInfo.Category)" -eq 'PermissionDenied' -or $_.Exception.Message -match 'permission|access.*denied') { return 'unknown' }
-        return 'absent'
+        # Only a definite "no such switch" is absent; anything else (no
+        # permission when not elevated) is unknown, so -Status asks for the
+        # elevated run instead of guessing.
+        if ("$($_.CategoryInfo.Category)" -eq 'ObjectNotFound' -or $_.Exception.Message -match 'unable to find') { return 'absent' }
+        return 'unknown'
     }
 }
 
@@ -335,7 +355,9 @@ function Invoke-Refresh([string[]]$Arguments) {
     if (-not (Test-Path -LiteralPath $RefreshScript)) {
         Write-Log "ERROR: $RefreshScript not found"; return $false
     }
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RefreshScript @Arguments
+    # Out-Host: the child's output goes to the operator, not into this
+    # function's return value (an array of strings + a bool is always truthy).
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RefreshScript @Arguments | Out-Host
     return ($LASTEXITCODE -eq 0)
 }
 
@@ -405,7 +427,10 @@ if ($Status) {
     if ($plan.Changed) { $why += ".wslconfig ($($plan.Before) -> $($plan.After))" }
     if ($plan.NoSwitch) {
         if ($plan.SwitchState -eq 'unknown') {
-            Write-Host "switch: $SwitchName unknown (needs admin); once it exists, run elevated: set-wsl-network.ps1 -Mode bridged"
+            # Can't see it unelevated: let the elevated apply decide (it writes
+            # the config when the switch exists, else prints this hint).
+            Write-Host "switch: $SwitchName unknown (needs admin); the elevated apply will check it. If missing, create it with:"
+            $why += "switch $SwitchName unknown (needs admin)"
         } else {
             Write-Host "switch: no External Hyper-V switch '$SwitchName'; create it (elevated), then re-run install.sh:"
         }
@@ -456,7 +481,9 @@ if ($Status) {
 # -Mode (apply)
 # ---------------------------------------------------------------------------
 if ($Mode -eq 'off') { Write-Host 'wsl-network: off - hands off, nothing changed'; exit 0 }
-if (-not $ConfigOnly -and -not (Test-Admin)) {
+if ($TestRefresh) {
+    Write-Host "test: refresh script $RefreshScript (admin check and cleanup skipped)"
+} elseif (-not $ConfigOnly -and -not (Test-Admin)) {
     Write-Host "ERROR: set-wsl-network.ps1 -Mode $Mode needs an elevated PowerShell (Run as administrator)."
     Write-Host '       -Status and -ConfigOnly run without elevation.'
     exit 1
@@ -486,7 +513,7 @@ switch ($Mode) {
 }
 
 # Clean up the previous mode only when this run switched networkingMode.
-if ($plan.Before -ne $plan.After) {
+if ($plan.Before -ne $plan.After -and -not $TestRefresh) {
     switch ($Mode) {
         'nat'      { Remove-MirroredRule }
         'bridged'  { Remove-NatLeftovers }
