@@ -70,12 +70,12 @@
 
 ### Task A5 — render  (E5 E6)
 
-- [ ] DECIDE: ntcharts vs in-repo braille plotter (bubbletea v1 + `make security`); record in TRACKING notes
-- [ ] RED: golden frames (chart, meter, placeholder, stale, needs-var × 80×24, 120×40, 1-col); `units_test.go`
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: `internal/render`; `-update` the goldens, then **review each one by eye**
-- [ ] RUN-GREEN → PASS; VERIFY render ≥ 80%
-- [ ] EVIDENCE · COMMIT `gdash: braille charts, meters and placeholders (golden frames)` · LEDGER · CHECKPOINT
+- [x] DECIDE: ntcharts vs in-repo braille plotter (bubbletea v1 + `make security`); record in TRACKING notes
+- [x] RED: golden frames (chart, meter, placeholder, stale, needs-var × 80×24, 120×40, 1-col); `units_test.go`
+- [x] RUN-RED → FAIL
+- [x] GREEN: `internal/render`; `-update` the goldens, then **review each one by eye**
+- [x] RUN-GREEN → PASS; VERIFY render ≥ 80%
+- [x] EVIDENCE · COMMIT `gdash: braille charts, meters and placeholders (golden frames)` · LEDGER · CHECKPOINT
 
 ### Task A6 — app  (E7 E8 E9)
 

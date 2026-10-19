@@ -1,0 +1,36 @@
+# A5 render — 2026-10-19T05:45:01Z
+Decision: an in-repo braille plotter (internal/render), not ntcharts — no new dependency, no bubbletea/lipgloss version risk, deterministic goldens.
+RED: units_test.go + golden_test.go written first → build failed (no package).
+
+$ (cd sdk/gdash && go test -count=1 -cover -v ./internal/render/)
+--- PASS: TestGoldenFixturePanels (0.05s)
+--- PASS: TestGoldenEdges (0.00s)
+--- PASS: TestWidthInvariant (0.79s)
+--- PASS: TestColorOnlyWhenAsked (0.06s)
+--- PASS: TestThresholdMarkersWithoutColor (0.00s)
+--- PASS: TestFormatValue (0.00s)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/render	0.909s	coverage: 91.6% of statements
+
+goldens: 37 files, reviewed by eye (one fix: -0.0% on an axis → 0.0%). Samples:
+--- conducto-timeseries-9-w80
+Dispatch pass rate
+100.00%│                                                                        
+       │                                                                        
+       │⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒
+       │                                                                        
+       │⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉
+  0.00%│                                                                        
+● measured 29.00%  ● goal 60.00%
+--- conducto-stat-2-w80
+Dispatch pass rate [||||||||||||||                                    29.00% !!]
+--- 7d577163-gauge-6-w80
+Memory Usage [|||||                                                        9.1%]
+--- ci-lab-table-32-w80
+▢ Top 10 slowest jobs (mean, last 24h) — table not supported
+--- row-collapsed-w80
+▸ Hidden things (3 hidden) ─────────────────────────────────────────────────────
+
+$ golangci-lint (GOENV_VERSION=1.26.3)
+0 issues.
+$ gosec (repo GOSEC_FLAGS)
+exit 0

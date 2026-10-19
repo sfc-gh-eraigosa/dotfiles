@@ -25,7 +25,7 @@
 | A2 config + auth | done | (this commit) | RED: build failures (no package) + `unknown command "config"`; GREEN: cmd 81.1%, auth 90.6% (≥ 80 bar), config 75.1%; E10/E11/E13 tests pass; lint 0 issues; gosec (repo flags) exit 0 (`evidence/a2/a2.txt`) | |
 | A3 client | done | (this commit) | RED: setup failed (no grafanatest); GREEN: 9 tests pass incl. E1 (`TestFetchAllCapsConcurrency`: 10 queries, peak ≤ 4) and E2 (`TestResolve`); grafana 89.2%; lint 0; gosec exit 0 (`evidence/a3/a3.txt`) | `grafanatest` serves the lab fixtures for every later package |
 | A4 dash + vars | done | (this commit) | RED: build failed (no packages, no `Datasources`); GREEN: dash 81.3% (all 4 lab dashboards parse to the expected kinds), vars 95.8% (≥ 80 bar), E3 `TestExpand` + E4 `TestRateInterval` pass; lint 0; gosec exit 0 (`evidence/a4/a4.txt`) | added `Client.Datasources` + `datasources.json` fixture: `$datasource` resolves by uid or name, `default`/unset → the default ds; scrape interval 30s from the ds |
-| A5 render | todo | | | record the charting choice |
+| A5 render | done | (this commit) | RED: build failed (no package); GREEN: render 91.6% (≥ 80 bar); 37 goldens (10 lab panels × 80/120/1 col + edges), reviewed by eye; width sweep 1–130 × color on/off: no line wider than its width; NO_COLOR threshold markers; lint 0; gosec exit 0 (`evidence/a5/a5.txt`) | **charting: in-repo braille plotter, not ntcharts** (no dependency, deterministic goldens). Review fix: `-0.0%` axis label → `0.0%` |
 | A6 app | todo | | | |
 | A7 doctor + list | todo | | | |
 | A8 security + install + docs | todo | | | |
@@ -53,7 +53,7 @@
 | :-- | :-- | :-- | :-- |
 | F1 fetch | [x] E1 E2 | [ ] `gdash conductor` on spark1 | |
 | F2 vars | [x] E3 E4 | [ ] k3s-nodes `$node` panels draw | |
-| F3 panels/layout | [ ] E5 E6 | [ ] capture at 80 and 120+ cols | |
+| F3 panels/layout | [~] E6; E5 render level (app frames in A6) | [ ] capture at 80 and 120+ cols | |
 | F4 refresh/stale | [ ] E7 E8 | [ ] Grafana unreachable → stale row | |
 | F5 keys | [ ] E9 | — | |
 | F6 config/auth | [~] E10 E11 E13 (E12 is A8) | [ ] `config get` shows ‹redacted› | |
