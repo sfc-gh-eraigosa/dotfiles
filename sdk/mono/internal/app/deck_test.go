@@ -196,7 +196,9 @@ func TestNavWalk(t *testing.T) {
 	}
 }
 
-// E22: any other key leaves nav mode and does not reach the program.
+// E22: any other key leaves nav mode and still reaches the program, so a
+// vim user's "esc esc :wq" loses nothing (sdk/mono AGENTS: mono never eats
+// a key outside the prefix).
 func TestNavOtherKeyLeaves(t *testing.T) {
 	a, clk := startDeck(t, deckConfig(false))
 	if err := a.focusNamed([]string{"top"}); err != nil {
@@ -208,9 +210,61 @@ func TestNavOtherKeyLeaves(t *testing.T) {
 		t.Fatal("x did not leave nav mode")
 	}
 	a.HandleBytes([]byte("Q\r"))
-	s := eventually(t, a, "the typed Q echoed by cat", func(s string) bool { return strings.Contains(s, "Q") })
-	if strings.Contains(s, "x") && strings.Contains(strings.Split(s, "Q")[0], "x") {
-		t.Fatalf("the nav-leaving x reached the program:\n%s", s)
+	eventually(t, a, "the nav-leaving x and the typed Q echoed by cat", func(s string) bool { return strings.Contains(s, "xQ") })
+}
+
+// The prefix in nav mode leaves nav mode and starts a command: ctrl+b q
+// quits mono rather than typing q into the program.
+func TestNavPrefixRunsCommand(t *testing.T) {
+	a, clk := startDeck(t, deckConfig(false))
+	enterNav(a, clk)
+	a.HandleBytes([]byte{0x02})
+	a.HandleBytes([]byte("q"))
+	if !a.Quit() {
+		t.Fatal("ctrl+b q in nav mode did not quit")
+	}
+}
+
+// One read holding "esc esc ctrl+b z": nav mode begins and the prefix key
+// still runs as a command (zoom), not dropped with the router left waiting.
+func TestNavBurstKeepsPrefixKey(t *testing.T) {
+	a, _ := startDeck(t, deckConfig(false))
+	if err := a.focusNamed([]string{"top"}); err != nil {
+		t.Fatal(err)
+	}
+	before := a.Heights()
+	a.HandleBytes([]byte("\x1b\x1b\x02z"))
+	if !a.Nav() {
+		t.Fatal("esc esc did not enter nav mode")
+	}
+	if z := a.Heights(); z[2] != 0 || z[1] == before[1] {
+		t.Fatalf("ctrl+b z in the burst did not zoom: %v → %v", before, z)
+	}
+	// A prefix that ends the read waits for its key across reads.
+	b, _ := startDeck(t, deckConfig(false))
+	b.HandleBytes([]byte("\x1b\x1b\x02"))
+	b.HandleBytes([]byte("q"))
+	if !b.Quit() {
+		t.Fatal("esc esc ctrl+b | q did not quit")
+	}
+}
+
+// Both escapes reach the program: double-esc only adds nav mode.
+func TestDoubleEscForwardsBoth(t *testing.T) {
+	a, clk := startDeck(t, deckConfig(false))
+	if err := a.focusNamed([]string{"top"}); err != nil {
+		t.Fatal(err)
+	}
+	var got []byte
+	fwd1, e1 := a.doubleEsc([]byte(esc))
+	clk.add(50 * time.Millisecond)
+	fwd2, e2 := a.doubleEsc([]byte(esc))
+	got = append(append(got, fwd1...), fwd2...)
+	if string(got) != esc+esc || e1 || !e2 {
+		t.Fatalf("forwarded %q, entered %v/%v", got, e1, e2)
+	}
+	if fwd, e := a.doubleEsc([]byte(esc + esc)); string(fwd) != esc+esc || !e {
+		t.Fatalf("one-read esc esc forwarded %q, entered %v", fwd, e)
 	}
 }
 
@@ -367,4 +421,33 @@ func (a *App) paneFor(t *testing.T, name string) *pane.Pane {
 	}
 	t.Fatalf("no slot %s", name)
 	return nil
+}
+
+// prefix r on a deck re-checks its tools against the running config; it does
+// not re-read the config file (an unsaved or broken edit is not applied).
+func TestDeckRestartRechecksWithoutReload(t *testing.T) {
+	loaded := false
+	var mu sync.Mutex
+	clk := &clock{t: time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)}
+	a, err := New(Options{Config: deckConfig(false), Env: env{}, Title: "mono vtest", ConfigPath: "/nonexistent/config.json", Now: clk.now,
+		Load: func(string) (config.Config, error) {
+			mu.Lock()
+			loaded = true
+			mu.Unlock()
+			return config.Config{}, nil
+		}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.Resize(60, 40)
+	t.Cleanup(a.Stop)
+	focusMid(t, a)
+	a.HandleBytes([]byte{0x02, 'r'})
+	eventually(t, a, "re-check message", func(s string) bool { return strings.Contains(s, "re-checked tools") })
+	eventually(t, a, "deck still running", func(s string) bool { return strings.Contains(s, "VIEW-A1") })
+	mu.Lock()
+	defer mu.Unlock()
+	if loaded {
+		t.Fatal("prefix r on a deck re-read the config file")
+	}
 }

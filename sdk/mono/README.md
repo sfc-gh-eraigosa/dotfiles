@@ -141,10 +141,13 @@ pane is a deck of the GPU monitor and [gdash](../gdash/README.md) (the lab's
 Grafana dashboards). On a host that can't reach Grafana, gdash's probe fails
 and the pane is just the GPU monitor, as before.
 
-**Nav mode** moves without the prefix: `esc esc` (the first esc still reaches
-the program at once) or `ctrl+b space`, then `j`/`k` walk the deck's views and
-on to the next pane, `h`/`l` switch tools, `z` zooms, and `esc` (or any other
-key) leaves. The title bar says where you are, `mid ◀ gdash ▶ · ci 4/4`, and
+**Nav mode** moves without the prefix: `esc esc` (both escapes still reach
+the program) or `ctrl+b space`, then `j`/`k` walk the deck's views and on to
+the next pane, `h`/`l` switch tools, `z` zooms, and `esc` leaves. Any other
+key leaves too and goes where it would have gone — typed text to the program,
+`ctrl+b` to start a command — so nothing you type is lost. On a deck, `ctrl+b r`
+also re-checks its tools (say gdash after Grafana comes back) without
+re-reading the config file; `:reload` does that. The title bar says where you are, `mid ◀ gdash ▶ · ci 4/4`, and
 shows `NAV` and `ZOOM`.
 
 **The middle** is every pane except the fixed ones (`zoomable: false`, the

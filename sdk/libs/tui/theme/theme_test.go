@@ -105,3 +105,29 @@ func TestSeriesWraps(t *testing.T) {
 		t.Fatal("SeriesColor must wrap and never panic")
 	}
 }
+
+func TestFor(t *testing.T) {
+	p, on := For("mono", envOf(map[string]string{"MONO_THEME": Light, "TERM": "xterm-256color"}))
+	if p.Name != Light || !on {
+		t.Fatalf("For = %q, %v", p.Name, on)
+	}
+	if _, on := For("mono", envOf(map[string]string{"NO_COLOR": "1", "TERM": "xterm-256color"})); on {
+		t.Fatal("NO_COLOR still enabled")
+	}
+}
+
+func TestChrome(t *testing.T) {
+	c := ChromeFor("mono", envOf(map[string]string{"MONO_THEME": Dark, "TERM": "xterm-256color"}))
+	if got := c.Accent("x"); got != Paint("x", c.P.Accent) {
+		t.Fatalf("Accent = %q", got)
+	}
+	if got := c.Err("x"); got != Paint("x", c.P.Crit) {
+		t.Fatalf("Err = %q", got)
+	}
+	off := ChromeFor("mono", envOf(map[string]string{"NO_COLOR": "1"}))
+	for _, got := range []string{off.Dim("x"), off.Bold("x"), off.Accent("x"), off.Err("x")} {
+		if got != "x" {
+			t.Fatalf("NO_COLOR painted %q", got)
+		}
+	}
+}
