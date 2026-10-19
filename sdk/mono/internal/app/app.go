@@ -18,6 +18,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/cmdline"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/keymap"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/overlay"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/theme"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/input"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/pane"
@@ -626,12 +627,19 @@ func (a *App) titleBarLocked(w int) string {
 	return style + left + strings.Repeat(" ", gap) + right + "\x1b[0m"
 }
 
+// palette paints mono's own text (help overlay) from the sdk's shared
+// scheme (sdk/libs/tui/theme), so it matches gdash, fleet and gsl.
 type palette struct{}
+
+func scheme() theme.Palette {
+	p, _ := theme.Get(theme.Resolve("mono", os.Getenv, theme.EnvDarkBackground(os.Getenv)))
+	return p
+}
 
 func (palette) Dim(s string) string    { return "\x1b[2m" + s + "\x1b[22m" }
 func (palette) Bold(s string) string   { return "\x1b[1m" + s + "\x1b[22m" }
-func (palette) Accent(s string) string { return "\x1b[36m" + s + "\x1b[39m" }
-func (palette) Err(s string) string    { return "\x1b[31m" + s + "\x1b[39m" }
+func (palette) Accent(s string) string { return theme.Paint(s, scheme().Accent) }
+func (palette) Err(s string) string    { return theme.Paint(s, scheme().Crit) }
 
 // HelpText is the help overlay body (shared with `mono --help`).
 func HelpText(keys keymap.Map, prefix string, panes []string, p overlay.Palette) string {

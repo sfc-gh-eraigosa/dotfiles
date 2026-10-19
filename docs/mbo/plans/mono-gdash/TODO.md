@@ -173,10 +173,10 @@
 
 ### Task E1 — one color scheme across the sdk (last)
 
-- [ ] SURVEY: how fleet and gsl color their output (library? palette? NO_COLOR?)
-- [ ] RED: contract test that gdash's colors come from the shared scheme
-- [ ] GREEN: the shared scheme in `sdk/libs` (if none exists), with gdash using it
-- [ ] VERIFY: lint, security, goldens · COMMIT · LEDGER · CHECKPOINT
+- [x] SURVEY: how fleet and gsl color their output (library? palette? NO_COLOR?)
+- [x] RED: contract test that gdash's colors come from the shared scheme
+- [x] GREEN: the shared scheme in `sdk/libs` (if none exists), with gdash using it
+- [x] VERIFY: lint, security, goldens · COMMIT · LEDGER · CHECKPOINT
 
 ### Task C2 — live evidence
 

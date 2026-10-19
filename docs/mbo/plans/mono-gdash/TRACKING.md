@@ -38,7 +38,7 @@
 | B6 boundary + docs | done | (this commit) | E24 `TestMonoNeverImportsGdash` (go.mod + `go list -deps`); mutation → fails; README (deck/nav/zoom/middle sections, config fields) + AGENTS; `coverage_min mono 60`; markdownlint 0; lint 0 (`evidence/b6-c1/evidence.txt`) | |
 | C1 default mid deck | done | (this commit) | `TestDefaultLayout`: htop 60% · mid 30% deck (gpu; gdash zoom + probe + 4 views) · gsl 5% fixed; `middle: single` → one 90% deck of 3 tools; #407 configs still round-trip (`evidence/b6-c1/evidence.txt`) | done in the deck PR (gdash leaf already merged); hosts with a saved config keep theirs (README says how to adopt) |
 | D1 gdash docs: managing views | done | (this commit) | README: Managing views (add/change/remove, variables, subsets, into mono), Another host, Troubleshooting from real doctor failures; every command run once (`evidence/d1/d1.txt`); markdownlint 0 | owner 2026-10-19 |
-| E1 one color scheme across the sdk | todo | | | owner 2026-10-19; last |
+| E1 one color scheme across the sdk | done | (this commit) | survey: no shared library — gsl (style+theme), gff (a copy of gsl's), fleet (hardcoded ANSI), mono/gdash (hardcoded); new `sdk/libs/tui/theme` (95.3%), gdash + mono moved onto it; contract test `TestColorsComeFromTheSharedTheme` across all four palettes (`evidence/e1/e1.txt`) | owner 2026-10-19; **follow-up**: move gsl, gff and fleet onto `libs/tui/theme` (each keeps palette tests; gsl gates contrast) |
 | C2 live evidence | todo | | | |
 
 **Lab facts (Task 0, 2026-10-19):**
@@ -92,3 +92,4 @@
 | 2026-10-19 | playground session | independent review of the gdash leaf: 5 findings (multi-value PromQL escaping, `$1` treated as a var, redact-before-truncate, password in URL, collapsed-row selection) fixed test-first; -race clean (`evidence/review/review.txt`) |
 | 2026-10-19 | playground session | owner: zoom + one-pane middle (F10, E25–E27), gdash always uses the whole middle; tasks B7, D1, E1 added; deck worker created |
 | 2026-10-19 | playground session | deck leaf B1–B7 + C1 done (decks, nav mode, zoom, one-pane middle, default mid deck) |
+| 2026-10-19 | playground session | D1 + E1 done: gdash docs (views, other host, troubleshooting); sdk color library `libs/tui/theme`, gdash + mono on it |

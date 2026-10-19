@@ -8,6 +8,7 @@ package configui
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/keymap"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/nav"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/overlay"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/theme"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/layout"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/probe"
@@ -346,10 +348,17 @@ func (m *Model) ask(c overlay.Confirm, yes func() tea.Cmd) {
 
 type pal struct{}
 
-func (pal) Dim(s string) string    { return "\x1b[2m" + s + "\x1b[22m" }
-func (pal) Bold(s string) string   { return "\x1b[1m" + s + "\x1b[22m" }
-func (pal) Accent(s string) string { return "\x1b[36m" + s + "\x1b[39m" }
-func (pal) Err(s string) string    { return "\x1b[31m" + s + "\x1b[39m" }
+func (pal) Dim(s string) string  { return "\x1b[2m" + s + "\x1b[22m" }
+func (pal) Bold(s string) string { return "\x1b[1m" + s + "\x1b[22m" }
+
+// Accent and Err come from the sdk's shared scheme (sdk/libs/tui/theme).
+func (pal) Accent(s string) string { return theme.Paint(s, scheme().OK) }
+func (pal) Err(s string) string    { return theme.Paint(s, scheme().Crit) }
+
+func scheme() theme.Palette {
+	p, _ := theme.Get(theme.Resolve("mono", os.Getenv, theme.EnvDarkBackground(os.Getenv)))
+	return p
+}
 
 // View implements tea.Model.
 func (m *Model) View() string {
