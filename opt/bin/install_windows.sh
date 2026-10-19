@@ -7,7 +7,7 @@
 # ask Windows for its actual path via PowerShell and translate it with wslpath.
 #
 # Usage (called from install.sh):
-#   bash "${BASE_DIR}/opt/bin/install_windows.sh" "<BASE_DIR>" [--ask|--deferred]
+#   bash "${BASE_DIR}/opt/bin/install_windows.sh" "<BASE_DIR>" [--ask|--deferred|--wsl-network]
 #
 #   --ask       WSL-detect, check the skip state, prompt y/n/s, persist the
 #               choice (~/.cache/dotfiles/win-setup-choice). Runs EARLY in
@@ -18,6 +18,10 @@
 #               permanent skip for "s". Runs at the END of install.sh, after
 #               the gff bootstrap has exported GFF_* (so the WSLENV hand-off
 #               below actually carries the flags).
+#   --wsl-network  Apply the recorded WSL networking mode
+#               (GFF_INSTALL_WINDOWS_WSL_NETWORK): read-only -Status check, then
+#               ONE elevated set-wsl-network.ps1 run only when it would change
+#               something. Independent of the desktop-deploy gate.
 #   (no mode)   Legacy standalone flow: ask, then execute immediately.
 #
 # No-op when not running inside WSL / Windows.
@@ -59,6 +63,101 @@ export WINSETUP_REPO_DIR="${BASE_DIR}"
 # Nerd Font installer).
 # shellcheck source=opt/lib/winpowershell.sh
 . "$(cd -- "$(dirname "$0")" && pwd -P)/../lib/winpowershell.sh"
+
+# -----------------------------------------------------------------------------
+# --wsl-network: apply the WSL networking mode that sshd-setup recorded
+# (GFF_INSTALL_WINDOWS_WSL_NETWORK = off|nat|bridged|mirrored). Handled BEFORE
+# the desktop-deploy gate and the /proc/version check: the mode is recorded
+# independently of the Desktop deploy, and a missing powershell.exe simply
+# means there is nothing to apply (exit 0, quiet).
+#
+# Flow: ask `set-wsl-network.ps1 -Status -Mode <m>` (read-only, no elevation).
+#   rc 0 -> already current, done.   rc 3 -> ONE elevated `-Mode <m>` run.
+# The script dir must be a LOCAL Windows path (an elevated process cannot read a
+# \\wsl.localhost UNC path): the Desktop copy when complete, else a copy under
+# %LOCALAPPDATA%\dotfiles\wsl-network\. </dev/null on every powershell.exe call
+# (it eats the parent's stdin under WSL interop). Never fails the install.
+# -----------------------------------------------------------------------------
+run_wsl_network_setup() {
+  _wn_mode="${GFF_INSTALL_WINDOWS_WSL_NETWORK:-off}"
+  case "$_wn_mode" in off|"") return 0 ;; esac
+  _wn_ps="$(find_powershell || true)"
+  [ -n "$_wn_ps" ] || return 0
+
+  _wn_src="${BASE_DIR}/opt/Desktop/Apps/scripts"
+  _wn_dir=""
+  # Reuse the Desktop path cached by deploy_windows_files when present.
+  _wn_desk=""
+  if [ -f "${HOME}/.cache/dotfiles/winenv.sh" ]; then
+    _wn_desk="$(sed -n 's/^WIN_DESKTOP="\(.*\)"$/\1/p' "${HOME}/.cache/dotfiles/winenv.sh" | head -n 1)"
+  fi
+  if [ -z "$_wn_desk" ] || [ ! -d "$_wn_desk" ]; then
+    _wn_raw="$("$_wn_ps" -NoProfile -Command "[Environment]::GetFolderPath('Desktop')" </dev/null 2>/dev/null | tr -d '\r' || true)"
+    _wn_desk="$(wslpath -u "$_wn_raw" 2>/dev/null || true)"
+  fi
+  _wn_cand="${_wn_desk}/Apps/scripts"
+  if [ -n "$_wn_desk" ] && [ -f "${_wn_cand}/set-wsl-network.ps1" ] \
+     && [ -f "${_wn_cand}/refresh-wsl-portproxy.ps1" ] && [ -f "${_wn_cand}/lib/wsl.ps1" ]; then
+    _wn_dir="$_wn_cand"
+  else
+    # shellcheck disable=SC2016  # $env:LOCALAPPDATA is PowerShell syntax
+    _wn_raw="$("$_wn_ps" -NoProfile -Command '$env:LOCALAPPDATA' </dev/null 2>/dev/null | tr -d '\r' || true)"
+    _wn_la="$(wslpath -u "$_wn_raw" 2>/dev/null || true)"
+    if [ -z "$_wn_la" ] || [ ! -d "$_wn_la" ]; then
+      echo "WARNING: could not resolve %LOCALAPPDATA%; cannot apply WSL network mode '${_wn_mode}'." >&2
+      return 0
+    fi
+    _wn_dir="${_wn_la}/dotfiles/wsl-network"
+    if ! { mkdir -p "${_wn_dir}/lib" \
+        && cp -f "${_wn_src}/set-wsl-network.ps1" "${_wn_src}/refresh-wsl-portproxy.ps1" "${_wn_dir}/" \
+        && cp -f "${_wn_src}/lib/wsl.ps1" "${_wn_src}/lib/gff.ps1" "${_wn_dir}/lib/"; }; then
+      echo "WARNING: could not copy the WSL network scripts to ${_wn_dir}; skipping." >&2
+      return 0
+    fi
+    # Pin the distro (lib\wsl.ps1 reads it) - the elevated child may not see WSLENV.
+    if [ -n "${DOTFILES_WSL_DISTRO:-${WSL_DISTRO_NAME:-}}" ]; then
+      printf '%s\r\n' "${DOTFILES_WSL_DISTRO:-${WSL_DISTRO_NAME:-}}" > "${_wn_dir}/lib/wsl-distro.txt"
+    fi
+  fi
+  _wn_ps1_w="$(wslpath -w "${_wn_dir}/set-wsl-network.ps1" 2>/dev/null || true)"
+  if [ -z "$_wn_ps1_w" ]; then
+    echo "WARNING: could not resolve set-wsl-network.ps1 as a Windows path; skipping." >&2
+    return 0
+  fi
+
+  _wn_log="$(mktemp "${TMPDIR:-/tmp}/wsl-network.XXXXXX")"
+  _wn_rc=0
+  "$_wn_ps" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$_wn_ps1_w" -Status -Mode "$_wn_mode" </dev/null >"$_wn_log" 2>&1 || _wn_rc=$?
+  tr -d '\r' <"$_wn_log"
+  rm -f "$_wn_log"
+  case "$_wn_rc" in
+    0) echo "WSL network '${_wn_mode}' already current" ;;
+    3)
+      echo "Applying WSL network mode '${_wn_mode}'..."
+      echo "  A UAC prompt will appear - approve it (only this step needs admin)."
+      _wn_psq=$(printf '%s' "$_wn_ps1_w" | sed "s/'/''/g")
+      _wn_rc=0
+      # -PassThru + exit $p.ExitCode surfaces the elevated child's own exit code.
+      # The -File path is wrapped in literal double quotes for paths with spaces.
+      "$_wn_ps" -NoProfile -NonInteractive -Command "try { \$p = Start-Process powershell -Verb RunAs -Wait -PassThru -WorkingDirectory \$env:SystemRoot -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"${_wn_psq}\"','-Mode','${_wn_mode}'; exit \$p.ExitCode } catch { Write-Host \$_.Exception.Message; exit 1 }" </dev/null || _wn_rc=$?
+      if [ "$_wn_rc" -ne 0 ]; then
+        echo "WARNING: elevated set-wsl-network.ps1 exited with code ${_wn_rc} (declined UAC or apply failed)." >&2
+        echo "         Re-run: bash \"${BASE_DIR}/opt/bin/install_windows.sh\" \"${BASE_DIR}\" --wsl-network" >&2
+      else
+        echo "WSL network mode '${_wn_mode}' applied. Run 'wsl --shutdown' from Windows to take effect when a restart is noted above."
+      fi
+      ;;
+    *)
+      echo "WARNING: set-wsl-network.ps1 -Status exited with code ${_wn_rc}; not applying." >&2
+      ;;
+  esac
+  return 0
+}
+
+if [ "$MODE" = "--wsl-network" ]; then
+  run_wsl_network_setup
+  exit 0
+fi
 
 gff_on install.windows.desktop-deploy || { gff_skip_msg install.windows.desktop-deploy; exit 0; }
 

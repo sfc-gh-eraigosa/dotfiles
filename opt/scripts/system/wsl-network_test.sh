@@ -66,6 +66,104 @@ assert_grep "Get-VMSwitch is probed, guarded" 'Get-Command Get-VMSwitch' "$SET_N
 assert_grep "refresh output goes to the host" '-File \$RefreshScript @Arguments \| Out-Host' "$SET_NET"
 assert_grep "test seams need WSLNET_TEST=1" "env:WSLNET_TEST -eq '1'" "$SET_NET"
 
+# F6 trigger: install.sh runs the deferred --wsl-network step, and it is NOT
+# behind the desktop-deploy gate (the mode is recorded independently of it).
+assert_grep "install.sh calls install_windows.sh --wsl-network" 'install_windows\.sh" "\$\{BASE_DIR\}" --wsl-network' "$INSTALL_SH"
+_gate_end=$(awk '/gff_skip_msg install\.windows\.desktop-deploy; fi/ {n=NR} END {print n}' "$INSTALL_SH")
+_call_line=$(grep -n -e '--wsl-network' "$INSTALL_SH" | head -1 | cut -d: -f1)
+if [ -n "$_gate_end" ] && [ -n "$_call_line" ] && [ "$_call_line" -gt "$_gate_end" ]; then _r=outside; else _r="gate_end=$_gate_end call=$_call_line"; fi
+assert_eq "$_r" "outside" "--wsl-network call is after (outside) the desktop-deploy gate"
+assert_grep "install.sh gates the call on the recorded mode" 'GFF_INSTALL_WINDOWS_WSL_NETWORK:-off\}" != off' "$INSTALL_SH"
+
+echo "==== STUBBED (install_windows.sh --wsl-network; stub powershell.exe, never the real one) ===="
+IW="${REPO_ROOT}/opt/bin/install_windows.sh"
+_ST=$(mktemp -d)
+trap 'rm -rf "$_ST"' EXIT
+mkdir -p "$_ST/bin" "$_ST/nops" "$_ST/desktop" "$_ST/localappdata" "$_ST/home"
+cat > "$_ST/bin/powershell.exe" <<'STUB'
+#!/bin/sh
+echo "$*" >> "$STUB_LOG"
+case "$*" in
+  *GetFolderPath*) printf '%s\r\n' "$STUB_DESKTOP" ;;
+  *LOCALAPPDATA*) printf '%s\r\n' "$STUB_LOCALAPPDATA" ;;
+  *RunAs*) echo "stub elevated"; exit "${STUB_ELEV_RC:-0}" ;;
+  *-Status*) echo "stub status"; exit "${STUB_STATUS_RC:-0}" ;;
+esac
+exit 0
+STUB
+cat > "$_ST/bin/wslpath" <<'STUB'
+#!/bin/sh
+case "$1" in
+  -u) printf '%s\n' "$2" ;;
+  -w) printf 'W:%s\n' "$2" ;;
+esac
+STUB
+cp "$_ST/bin/wslpath" "$_ST/nops/wslpath"
+chmod +x "$_ST/bin/powershell.exe" "$_ST/bin/wslpath" "$_ST/nops/wslpath"
+
+# sr <mode-or-empty> <status-rc> <elev-rc> [desktop-dir]: run the step; sets OUT, RC, LOG.
+sr() {
+  : > "$_ST/log"
+  OUT=$(env -u GFF_INSTALL_WINDOWS_WSL_NETWORK HOME="$_ST/home" PATH="$_ST/bin:$PATH" \
+    STUB_LOG="$_ST/log" STUB_DESKTOP="${4:-$_ST/desktop}" STUB_LOCALAPPDATA="$_ST/localappdata" \
+    STUB_STATUS_RC="$2" STUB_ELEV_RC="$3" GFF_INSTALL_WINDOWS_WSL_NETWORK="$1" \
+    bash "$IW" "$REPO_ROOT" --wsl-network 2>&1 </dev/null)
+  RC=$?
+  LOG=$(cat "$_ST/log")
+}
+ncalls() { printf '%s' "$LOG" | grep -c . | tr -d ' '; }
+
+sr "" 0 0
+assert_eq "$RC/$(ncalls)" "0/0" "mode unset -> exit 0, no powershell call"
+sr off 0 0
+assert_eq "$RC/$(ncalls)" "0/0" "mode off -> exit 0, no powershell call"
+
+# Desktop copy present: used in place, no LOCALAPPDATA copy.
+mkdir -p "$_ST/desktop/Apps/scripts/lib"
+cp "${REPO_ROOT}/opt/Desktop/Apps/scripts/set-wsl-network.ps1" "${REPO_ROOT}/opt/Desktop/Apps/scripts/refresh-wsl-portproxy.ps1" "$_ST/desktop/Apps/scripts/"
+cp "${REPO_ROOT}/opt/Desktop/Apps/scripts/lib/wsl.ps1" "${REPO_ROOT}/opt/Desktop/Apps/scripts/lib/gff.ps1" "$_ST/desktop/Apps/scripts/lib/"
+sr nat 0 0
+assert_eq "$RC" "0" "nat, status 0 -> exit 0"
+case "$OUT" in *"WSL network 'nat' already current"*) _r=ok ;; *) _r="missing: $OUT" ;; esac
+assert_eq "$_r" "ok" "status 0 prints the already-current line"
+assert_eq "$(printf '%s' "$LOG" | grep -c -e 'GetFolderPath' -e '-Status')" "2" "status 0: desktop lookup + one -Status call"
+assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "0" "status 0: never elevates"
+case "$LOG" in *"-Status -Mode nat"*) _r=ok ;; *) _r="argv: $LOG" ;; esac
+assert_eq "$_r" "ok" "the -Status call carries -Mode nat"
+assert_eq "$([ -e "$_ST/localappdata/dotfiles" ] && echo copied || echo none)" "none" "Desktop copy present: nothing copied to LOCALAPPDATA"
+
+# rc 3: exactly one elevated run, Mode passed, local path (no UNC), exit code surfaced.
+sr nat 3 0
+assert_eq "$RC" "0" "nat, status 3, elevation ok -> exit 0"
+assert_eq "$(printf '%s' "$LOG" | grep -c -e '-Verb RunAs')" "1" "status 3: one -Verb RunAs call"
+case "$LOG" in *"'-Mode','nat'"*) _r=ok ;; *) _r="argv: $LOG" ;; esac
+assert_eq "$_r" "ok" "the elevated call passes -Mode nat"
+case "$LOG" in *wsl.localhost*|*'\\wsl'*) _r="UNC path: $LOG" ;; *) _r=ok ;; esac
+assert_eq "$_r" "ok" "the elevated call never uses a UNC path"
+case "$OUT" in *"UAC"*) _r=ok ;; *) _r="no UAC notice: $OUT" ;; esac
+assert_eq "$_r" "ok" "a UAC notice is printed before elevating"
+sr nat 3 5
+assert_eq "$RC" "0" "a failing elevated run does not kill the install (exit 0)"
+case "$OUT" in *"exit"*"5"*|*"code 5"*) _r=ok ;; *) _r="rc not surfaced: $OUT" ;; esac
+assert_eq "$_r" "ok" "the elevated child's exit code is surfaced"
+sr nat 1 0
+assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "0" "status rc 1 (error): no elevation"
+
+# Desktop copy absent: the script dir lands under %LOCALAPPDATA%\dotfiles\wsl-network\.
+mkdir -p "$_ST/desktop2"
+sr nat 3 0 "$_ST/desktop2"
+_dst="$_ST/localappdata/dotfiles/wsl-network"
+_r=ok
+for _f in set-wsl-network.ps1 refresh-wsl-portproxy.ps1 lib/wsl.ps1 lib/gff.ps1; do [ -f "$_dst/$_f" ] || _r="missing $_f"; done
+assert_eq "$_r" "ok" "no Desktop copy: scripts copied to LOCALAPPDATA/dotfiles/wsl-network (+lib)"
+case "$LOG" in *"W:${_dst}/set-wsl-network.ps1"*) _r=ok ;; *) _r="argv: $LOG" ;; esac
+assert_eq "$_r" "ok" "the -File path is the LOCALAPPDATA copy"
+
+# No powershell.exe at all: quiet exit 0.
+OUT=$(env HOME="$_ST/home" PATH="$_ST/nops:/usr/bin:/bin" GFF_INSTALL_WINDOWS_WSL_NETWORK=nat \
+  bash "$IW" "$REPO_ROOT" --wsl-network 2>&1 </dev/null); RC=$?
+assert_eq "$RC" "0" "no powershell.exe -> exit 0"
+
 echo "==== LIVE ===="
 PS_EXE=$(command -v powershell.exe 2>/dev/null || true)
 if [ -z "$PS_EXE" ] || ! command -v wslpath >/dev/null 2>&1 || [ ! -f "$SET_NET" ]; then

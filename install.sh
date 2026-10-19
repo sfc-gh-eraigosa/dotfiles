@@ -1102,6 +1102,13 @@ if gff_on install.windows.desktop-deploy; then
   fi
 else gff_skip_msg install.windows.desktop-deploy; fi
 
+# Apply the WSL networking mode sshd-setup recorded (elevates only when it would
+# change something). Deliberately OUTSIDE the desktop-deploy gate above: the mode
+# is recorded independently of it. A non-WSL host never has a non-off mode.
+if [ "${GFF_INSTALL_WINDOWS_WSL_NETWORK:-off}" != off ] && [ -f "${BASE_DIR}/opt/bin/install_windows.sh" ]; then
+  bash "${BASE_DIR}/opt/bin/install_windows.sh" "${BASE_DIR}" --wsl-network
+fi
+
 # Final reminder (WSL): if the interactive Windows setup ran this invocation, the
 # one thing that can't be scripted is Wispr Flow's shortcuts — surface it last so
 # it isn't scrolled away by earlier output. install_windows.sh sets this marker.
