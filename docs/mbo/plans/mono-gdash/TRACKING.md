@@ -27,7 +27,7 @@
 | A4 dash + vars | done | (this commit) | RED: build failed (no packages, no `Datasources`); GREEN: dash 81.3% (all 4 lab dashboards parse to the expected kinds), vars 95.8% (≥ 80 bar), E3 `TestExpand` + E4 `TestRateInterval` pass; lint 0; gosec exit 0 (`evidence/a4/a4.txt`) | added `Client.Datasources` + `datasources.json` fixture: `$datasource` resolves by uid or name, `default`/unset → the default ds; scrape interval 30s from the ds |
 | A5 render | done | (this commit) | RED: build failed (no package); GREEN: render 91.6% (≥ 80 bar); 37 goldens (10 lab panels × 80/120/1 col + edges), reviewed by eye; width sweep 1–130 × color on/off: no line wider than its width; NO_COLOR threshold markers; lint 0; gosec exit 0 (`evidence/a5/a5.txt`) | **charting: in-repo braille plotter, not ntcharts** (no dependency, deterministic goldens). Review fix: `-0.0%` axis label → `0.0%` |
 | A6 app | done | (this commit) | RED: setup failed; fixes on the way: injectable tick (tea.Tick slept 30s in tests), gdash keys first in help; GREEN: app 86.0%, cmd 79.7%; E7 stale/E8 skip-if-busy/E9 keys pass; 6 frame goldens incl. 120-col two-column CI; **live** on the lab: k3s-nodes, conductor, ci, nodes all draw (`evidence/a6/a6.txt`, `live-*.txt`) | live found a real bug: multi-target panels without refId → HTTP 400; `dash.Parse` now assigns refIds; HTTP errors carry Grafana's message. Follow-up (not v1): resolve `label_values()` query variables via the ds resource API (a Viewer may call it) so `$cluster`/`$instance` need no override |
-| A7 doctor + list | todo | | | |
+| A7 doctor + list | done | (this commit) | RED: build failed; GREEN: 8 doctor/list tests incl. E14 (ok / 401 / down / missing dashboard) and E15 (`--quiet` against a hanging Grafana fails in 2.01 s); cmd 80.4%; lint 0; gosec exit 0; **live**: doctor all ok (4 views + Prometheus), `--quiet` 35 ms, no-config host exit 1 silently (`evidence/a7/`) | |
 | A8 security + install + docs | todo | | | |
 | B1 config schema | todo | | | |
 | B2 probe + doctor | todo | | | |
@@ -57,7 +57,7 @@
 | F4 refresh/stale | [x] E7 E8 | [ ] Grafana unreachable → stale row | |
 | F5 keys | [x] E9 | — | |
 | F6 config/auth | [~] E10 E11 E13 (E12 is A8) | [ ] `config get` shows ‹redacted› | |
-| F7 doctor/list | [ ] E14 E15 | [ ] doctor pass on spark1, exit 1 without credentials | |
+| F7 doctor/list | [x] E14 E15 | [x] doctor passes live (wslgiga1); exit 1 with no config. spark1 in C2 | |
 | F8 decks | [ ] E16–E19 E24 | [ ] one gdash process while cycling | |
 | F9 nav | [ ] E20–E23 | [ ] capture of the deck cycle | |
 

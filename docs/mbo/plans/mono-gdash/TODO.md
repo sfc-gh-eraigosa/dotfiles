@@ -87,11 +87,11 @@
 
 ### Task A7 — doctor + list  (E14 E15)
 
-- [ ] RED: `cmd/doctor_test.go` (ok / 401 / down / missing dashboard; `--quiet` hang exits 1 in ≤ 2.5 s); list output
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: `cmd/doctor.go`, `cmd/list.go`
-- [ ] RUN-GREEN → PASS
-- [ ] EVIDENCE · COMMIT `gdash: doctor (+ --quiet probe for mono) and list` · LEDGER · CHECKPOINT
+- [x] RED: `cmd/doctor_test.go` (ok / 401 / down / missing dashboard; `--quiet` hang exits 1 in ≤ 2.5 s); list output
+- [x] RUN-RED → FAIL
+- [x] GREEN: `cmd/doctor.go`, `cmd/list.go`
+- [x] RUN-GREEN → PASS
+- [x] EVIDENCE · COMMIT `gdash: doctor (+ --quiet probe for mono) and list` · LEDGER · CHECKPOINT
 
 ### Task A8 — security + install + docs  (E12)
 

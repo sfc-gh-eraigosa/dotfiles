@@ -1,0 +1,20 @@
+# A7 doctor + list — LIVE against the lab Grafana, 2026-10-19T05:57:38Z
+$ gdash doctor
+  ok   reachable                http://192.168.0.128:30300 (Grafana 13.1.3)
+  ok   authenticated            profile lab
+  ok   view ci                  dashboard "CI — lab runners" (ci-lab)
+  ok   view conductor           dashboard "Conductor — metrics against goals" (conductor-metrics)
+  ok   view k3s-nodes           dashboard "Kubernetes / Compute Resources / Nodes Overview" (058020e04168bfdea0c52269cb699df2)
+  ok   view nodes               dashboard "Node Exporter / Nodes" (7d57716318ee0dddbac5a7f451fb7753)
+  ok   datasource Prometheus    answers a query
+exit 0
+
+$ time gdash doctor --quiet  (mono probe)
+exit 0, output above (none), 35 ms
+
+$ GDASH_CONFIG=<empty dir>/config.json gdash doctor --quiet   (a host with no gdash config)
+exit 1
+
+$ gdash list nodes
+058020e04168bfdea0c52269cb699df2	Kubernetes / Compute Resources / Nodes Overview	General
+7d57716318ee0dddbac5a7f451fb7753	Node Exporter / Nodes	General
