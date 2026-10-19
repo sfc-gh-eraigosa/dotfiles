@@ -54,11 +54,11 @@
 
 ### Task A3 — client  (E1 E2)
 
-- [ ] RED: `grafana/client_test.go` against an httptest server serving `testdata/lab`
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: HTTP client, title resolution, at most 4 concurrent panel queries, timeouts
-- [ ] RUN-GREEN → PASS
-- [ ] EVIDENCE · COMMIT `gdash: Grafana client (search, dashboard, ds/query) over the lab fixtures` · LEDGER · CHECKPOINT
+- [x] RED: `grafana/client_test.go` against an httptest server serving `testdata/lab`
+- [x] RUN-RED → FAIL
+- [x] GREEN: HTTP client, title resolution, at most 4 concurrent panel queries, timeouts
+- [x] RUN-GREEN → PASS
+- [x] EVIDENCE · COMMIT `gdash: Grafana client (search, dashboard, ds/query) over the lab fixtures` · LEDGER · CHECKPOINT
 
 ### Task A4 — dash + vars  (E3 E4)
 

@@ -1,0 +1,20 @@
+# A3 Grafana client — 2026-10-19T05:36:05Z
+RED: client_test.go before any code → setup failed (package grafanatest does not exist)
+
+$ (cd sdk/gdash && go test -count=1 -cover -v ./internal/grafana/)
+--- PASS: TestHealthAndWhoami (0.02s)
+--- PASS: TestSearch (0.01s)
+--- PASS: TestDashboardRawJSON (0.01s)
+--- PASS: TestResolve (0.01s)
+--- PASS: TestQueryParsesFrames (0.01s)
+--- PASS: TestQueryReportsPerQueryErrors (0.01s)
+--- PASS: TestFetchAllCapsConcurrency (0.16s)
+--- PASS: TestPointsAndInterval (0.00s)
+--- PASS: TestTimeout (0.11s)
+coverage: 89.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/grafana	0.341s	coverage: 89.2% of statements
+
+$ golangci-lint (GOENV_VERSION=1.26.3)
+0 issues.
+$ gosec (repo GOSEC_FLAGS)
+exit 0

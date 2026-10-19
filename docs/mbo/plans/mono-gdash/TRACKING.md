@@ -23,7 +23,7 @@
 | 0 lab facts + fixtures | done | (this commit) | `capture.py` → 4 dashboards, 10 panel queries, all with frames; scrub greps → 0 files (`evidence/task0/capture.txt`) | issued by the service account `gdash-viewer` (Viewer; admin API → 403), created 2026-10-19 with the owner's go-ahead |
 | A1 scaffold | done | (this commit) | RED: `TestVersionPrintsStampedVersion` printed the root help (no version cmd); GREEN: `go test -cover ./...` → cmd 81.8%; `build.sh` builds, `gdash version` prints the stamped version; golangci-lint 0 issues (`evidence/a1/a1.txt`) | |
 | A2 config + auth | done | (this commit) | RED: build failures (no package) + `unknown command "config"`; GREEN: cmd 81.1%, auth 90.6% (≥ 80 bar), config 75.1%; E10/E11/E13 tests pass; lint 0 issues; gosec (repo flags) exit 0 (`evidence/a2/a2.txt`) | |
-| A3 client | todo | | | |
+| A3 client | done | (this commit) | RED: setup failed (no grafanatest); GREEN: 9 tests pass incl. E1 (`TestFetchAllCapsConcurrency`: 10 queries, peak ≤ 4) and E2 (`TestResolve`); grafana 89.2%; lint 0; gosec exit 0 (`evidence/a3/a3.txt`) | `grafanatest` serves the lab fixtures for every later package |
 | A4 dash + vars | todo | | | |
 | A5 render | todo | | | record the charting choice |
 | A6 app | todo | | | |
@@ -51,7 +51,7 @@
 
 | Feature | Automated proof | Live proof | Notes |
 | :-- | :-- | :-- | :-- |
-| F1 fetch | [ ] E1 E2 | [ ] `gdash conductor` on spark1 | |
+| F1 fetch | [x] E1 E2 | [ ] `gdash conductor` on spark1 | |
 | F2 vars | [ ] E3 E4 | [ ] k3s-nodes `$node` panels draw | |
 | F3 panels/layout | [ ] E5 E6 | [ ] capture at 80 and 120+ cols | |
 | F4 refresh/stale | [ ] E7 E8 | [ ] Grafana unreachable → stale row | |
