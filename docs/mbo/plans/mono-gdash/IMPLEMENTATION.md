@@ -86,7 +86,9 @@ gss feature checkpoint
 
 ## 7. Resuming, recovery, and corrections
 
-Fix wrong commands here and note it in the TRACKING session log. If the Grafana token stops
+Fix wrong commands here and note it in the TRACKING session log.
+
+- **2026-10-19:** on wslgiga1, `make lint-go` fails for **every** module because goenv can't find the repo's `.go-version` (1.27.2). Lint the module directly with `GOENV_VERSION=1.26.3 golangci-lint run ./...` (golangci-lint lives under that goenv version). Use the override **only** for golangci-lint: set for `go` itself, it makes `go test` and `build.sh` fail. CI is unaffected. If the Grafana token stops
 working (401), stop: the owner re-issues it. Never create Grafana credentials from an agent
 session without the owner's go-ahead.
 

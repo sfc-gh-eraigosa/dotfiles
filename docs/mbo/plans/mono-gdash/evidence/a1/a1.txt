@@ -1,0 +1,28 @@
+# A1 scaffold — 2026-10-19T05:28:01Z
+$ (cd sdk/gdash && go test -count=1 -cover ./...)
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/cmd	0.005s	coverage: 81.8% of statements
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/version		coverage: 0.0% of statements
+
+$ bash sdk/gdash/build.sh && ~/opt/bin/gdash version
+gdash built and installed to ~/opt/bin/gdash
+gdash v0.0.0-untagged
+  Commit:      a1cb51f
+  Build Date:  2026-10-19T05:28:04Z
+  Dirty:       true
+
+$ (cd sdk/gdash && GOENV_VERSION=1.26.3 golangci-lint run ./...)
+0 issues.
+
+$ git ls-files sdk/gdash | grep -v testdata (tracked)
+sdk/gdash/AGENTS.md
+sdk/gdash/CLAUDE.md
+sdk/gdash/README.md
+sdk/gdash/build.sh
+sdk/gdash/cmd/cmd_test.go
+sdk/gdash/cmd/root.go
+sdk/gdash/cmd/version.go
+sdk/gdash/go.mod
+sdk/gdash/go.sum
+sdk/gdash/internal/version/version.go
+sdk/gdash/main.go

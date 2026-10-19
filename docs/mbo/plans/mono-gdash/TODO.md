@@ -37,12 +37,12 @@
 
 ### Task A1 — scaffold
 
-- [ ] RED: `cmd/cmd_test.go` asserts `gdash version` prints the stamped version
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: go.mod, main.go, build.sh (sources `../version.sh`), version, cobra root; AGENTS.md + `CLAUDE.md -> AGENTS.md` + README stub; `scripts/test.sh` `coverage_min` row `gdash) echo 60`
-- [ ] RUN-GREEN → PASS; `bash sdk/gdash/build.sh` builds
-- [ ] ALLOWLIST: `git status --short -- sdk/gdash`
-- [ ] EVIDENCE · COMMIT `gdash: module scaffold (cobra root, version, build.sh)` · LEDGER · CHECKPOINT
+- [x] RED: `cmd/cmd_test.go` asserts `gdash version` prints the stamped version
+- [x] RUN-RED → FAIL
+- [x] GREEN: go.mod, main.go, build.sh (sources `../version.sh`), version, cobra root; AGENTS.md + `CLAUDE.md -> AGENTS.md` + README stub; `scripts/test.sh` `coverage_min` row `gdash) echo 60`
+- [x] RUN-GREEN → PASS; `bash sdk/gdash/build.sh` builds
+- [x] ALLOWLIST: `git status --short -- sdk/gdash`
+- [x] EVIDENCE · COMMIT `gdash: module scaffold (cobra root, version, build.sh)` · LEDGER · CHECKPOINT
 
 ### Task A2 — config + auth  (E10 E11 E13)
 
