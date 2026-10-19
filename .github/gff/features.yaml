@@ -192,8 +192,8 @@ sets:
         boolDefault: true
       # --- network (1) ---
       - path: install.network.sshd
-        description: Runs the sshd_run.sh block when ~/.sshd.env is present.
-        boolDefault: true
+        description: Enables sshd on this host (set by sshd-setup enable); install.sh starts it when true.
+        boolDefault: false
       # --- windows (11) ---
       - path: install.windows.desktop-deploy
         description: Runs the install_windows.sh invocation that deploys opt/Desktop onto the Windows Desktop.
