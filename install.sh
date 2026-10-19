@@ -669,22 +669,22 @@ if [ "$INSTALL_PHASE" != "all" ] && ! command -v go >/dev/null 2>&1; then
   exit 1
 fi
 
-# build gff first so every later step can be feature-flag gated (fail-open:
-# if the build fails or gff is absent, all steps run — flags only ever skip).
-if gff_bootstrap_ok=false; command -v go >/dev/null 2>&1 && [ -f "${BASE_DIR}/sdk/gff/build.sh" ]; then
-  bash "${BASE_DIR}/sdk/gff/build.sh" && gff_bootstrap_ok=true || echo "WARNING: gff build failed; all components will run."
-fi
-if [ "$gff_bootstrap_ok" = "true" ] && [ -x "${HOME}/opt/bin/gff" ]; then
-  # set -a exports the plain VAR=v lines gff emits so GFF_* reaches child
-  # scripts (install_windows.sh reads them via `env` for the WSLENV handoff).
-  set -a
-  eval "$(cd "${BASE_DIR}" && "${HOME}/opt/bin/gff" export --shell 2>/dev/null || true)"
-  set +a
-  # Register this checkout's namespace so cross-repo consumers (gsl render, from
-  # ANY cwd) can resolve the flags. Fail-open: a failure only warns.
-  (cd "${BASE_DIR}" && "${HOME}/opt/bin/gff" install >/dev/null 2>&1) \
-    || echo "WARNING: gff install (namespace registration) failed; gsl link flags fail open (links stay on)."
-fi
+# gff is REQUIRED: every later step is feature-flag gated, so running without it
+# would silently run every component (and skip the sshd/WSL-network flags).
+# gff_require builds it (when go is available), falls back to an existing binary
+# with a WARNING, and otherwise fails the install.
+gff_require "${BASE_DIR}" || exit 1
+# Let every later helper find the binary before ~/opt/bin is on PATH.
+export GFF_BIN="${HOME}/opt/bin/gff" GFF_REPO_DIR="${BASE_DIR}"
+# set -a exports the plain VAR=v lines gff emits so GFF_* reaches child
+# scripts (install_windows.sh reads them via `env` for the WSLENV handoff).
+set -a
+eval "$(cd "${BASE_DIR}" && "${HOME}/opt/bin/gff" export --shell 2>/dev/null || true)"
+set +a
+# Register this checkout's namespace so cross-repo consumers (gsl render, from
+# ANY cwd) can resolve the flags. Fail-open: a failure only warns.
+(cd "${BASE_DIR}" && "${HOME}/opt/bin/gff" install >/dev/null 2>&1) \
+  || echo "WARNING: gff install (namespace registration) failed; gsl link flags fail open (links stay on)."
 # Re-assert build-phase overrides: the gff export above can have overwritten the
 # GFF_* the later runtime gates (pyenv/rbenv/nvm) read.
 apply_install_phase
