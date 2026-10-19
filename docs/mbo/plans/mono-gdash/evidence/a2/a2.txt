@@ -1,0 +1,24 @@
+# A2 config + auth — 2026-10-19T05:32:43Z
+RED (before any code): config_test/auth_test failed to build (undefined: Profile; no non-test Go files); cmd config tests: unknown command "config"
+
+$ (cd sdk/gdash && go test -count=1 -cover ./...)
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash		coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/cmd	0.014s	coverage: 81.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/auth	0.831s	coverage: 90.6% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/config	0.015s	coverage: 75.1% of statements
+	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/version		coverage: 0.0% of statements
+
+$ go test -run "TestFileSourceRefusesLooseMode|TestCmdNoTTYTimeout|TestSetRefusesInlineCredentials|TestConfigSetRefusesInlineCredential|TestSecretNeverFormats" -v ./... (E10 E11 E13)
+--- PASS: TestConfigSetRefusesInlineCredential (0.00s)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/cmd	0.011s
+--- PASS: TestSecretNeverFormats (0.00s)
+--- PASS: TestFileSourceRefusesLooseMode (0.00s)
+--- PASS: TestCmdNoTTYTimeout (0.82s)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/auth	0.829s
+--- PASS: TestSetRefusesInlineCredentials (0.00s)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/config	0.005s
+
+$ GOENV_VERSION=1.26.3 golangci-lint run ./...
+0 issues.
+$ gosec (repo GOSEC_FLAGS)
+exit 0

@@ -46,11 +46,11 @@
 
 ### Task A2 — config + auth  (E10 E11 E13)
 
-- [ ] RED: config validation tables; `auth_test.go` (0644 refused, symlink resolved, cmd no-tty 5 s timeout, empty stdout error); `cmd/config_test.go` (refuse inline secret)
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: `internal/config`, `internal/auth` (Secret type), `cmd/config.go`
-- [ ] RUN-GREEN → PASS; VERIFY `go test -cover ./internal/auth` ≥ 80%
-- [ ] EVIDENCE · COMMIT `gdash: config profiles/views and credential sources (file 0600, env, cmd)` · LEDGER · CHECKPOINT
+- [x] RED: config validation tables; `auth_test.go` (0644 refused, symlink resolved, cmd no-tty 5 s timeout, empty stdout error); `cmd/config_test.go` (refuse inline secret)
+- [x] RUN-RED → FAIL
+- [x] GREEN: `internal/config`, `internal/auth` (Secret type), `cmd/config.go`
+- [x] RUN-GREEN → PASS; VERIFY `go test -cover ./internal/auth` ≥ 80%
+- [x] EVIDENCE · COMMIT `gdash: config profiles/views and credential sources (file 0600, env, cmd)` · LEDGER · CHECKPOINT
 
 ### Task A3 — client  (E1 E2)
 

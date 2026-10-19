@@ -22,7 +22,7 @@
 | :-- | :-- | :-- | :-- | :-- |
 | 0 lab facts + fixtures | done | (this commit) | `capture.py` → 4 dashboards, 10 panel queries, all with frames; scrub greps → 0 files (`evidence/task0/capture.txt`) | issued by the service account `gdash-viewer` (Viewer; admin API → 403), created 2026-10-19 with the owner's go-ahead |
 | A1 scaffold | done | (this commit) | RED: `TestVersionPrintsStampedVersion` printed the root help (no version cmd); GREEN: `go test -cover ./...` → cmd 81.8%; `build.sh` builds, `gdash version` prints the stamped version; golangci-lint 0 issues (`evidence/a1/a1.txt`) | |
-| A2 config + auth | todo | | | |
+| A2 config + auth | done | (this commit) | RED: build failures (no package) + `unknown command "config"`; GREEN: cmd 81.1%, auth 90.6% (≥ 80 bar), config 75.1%; E10/E11/E13 tests pass; lint 0 issues; gosec (repo flags) exit 0 (`evidence/a2/a2.txt`) | |
 | A3 client | todo | | | |
 | A4 dash + vars | todo | | | |
 | A5 render | todo | | | record the charting choice |
@@ -56,7 +56,7 @@
 | F3 panels/layout | [ ] E5 E6 | [ ] capture at 80 and 120+ cols | |
 | F4 refresh/stale | [ ] E7 E8 | [ ] Grafana unreachable → stale row | |
 | F5 keys | [ ] E9 | — | |
-| F6 config/auth | [ ] E10–E13 | [ ] `config get` shows ‹redacted› | |
+| F6 config/auth | [~] E10 E11 E13 (E12 is A8) | [ ] `config get` shows ‹redacted› | |
 | F7 doctor/list | [ ] E14 E15 | [ ] doctor pass on spark1, exit 1 without credentials | |
 | F8 decks | [ ] E16–E19 E24 | [ ] one gdash process while cycling | |
 | F9 nav | [ ] E20–E23 | [ ] capture of the deck cycle | |
