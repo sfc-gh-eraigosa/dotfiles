@@ -33,7 +33,7 @@
 | B2 probe + doctor | done | (this commit) | RED: build failed / doctor rows missing; GREEN: E17 `TestDeckDropsPerViewToolPane` (all / no Grafana / no GPU / neither → pane dropped), tool probe runs once, plain pane = one view; doctor shows a row per view with reasons and zoom; `middle: single` shown; all mono packages pass (`evidence/b2/b2.txt`) | |
 | B3 deck runtime | done | (this commit) | RED: build failed; GREEN: E18 `TestOnlyVisibleViewRuns` (one program per deck; switching stops the old), E19 `TestFocusCommand`, title label (`TestTitleLabel`, ASCII fallback); -race clean; app 79.9% (`evidence/b3-b4-b7/evidence.txt`) | `ctrl+b r` on a deck also re-checks its tools |
 | B4 nav mode | done | (this commit) | E20 `TestNavEntry` (esc esc at 100 ms enters, 400 ms does not, prefix+space, `nav_esc_ms: 0`), E21 `TestNavWalk`, E22 `TestNavOtherKeyLeaves`, E23 README key table (rows added) (`evidence/b3-b4-b7/evidence.txt`) | h/l re-labelled from the shared PageLeft/PageRight; new keys in `?` help, not the 60-col title hint |
-| B5 config verbs + UI | todo | | | |
+| B5 config verbs + UI | done | (this commit) | RED: unknown command add-view / missing deck rows; GREEN: `mono config add-tool|add-view|remove-tool|remove-view`, dotted set on views, `set middle single`; the config screen lists a deck's tools and views (zoom marked) and shows `middle:`; enter edits the first view (`evidence/b5/b5.txt`) | |
 | B7 zoom + one-pane mode | done | (this commit + B1) | E25 `TestZoomKeepsTitleAndFooter`, E26 `TestToolZoom`, E27 `TestMiddleSingle` + `TestMiddleSingleRuntime` (`evidence/b3-b4-b7/evidence.txt`) | amended 2026-10-19 |
 | B6 boundary + docs | todo | | | |
 | C1 default mid deck | todo | | | after both leaves merge |

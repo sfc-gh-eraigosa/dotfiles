@@ -136,9 +136,9 @@
 
 ### Task B5 — config verbs + UI
 
-- [ ] RED: dotted-path verb tables; configui deck-row frame test
-- [ ] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
-- [ ] EVIDENCE · COMMIT `mono: config verbs and screen for decks` · LEDGER · CHECKPOINT
+- [x] RED: dotted-path verb tables; configui deck-row frame test
+- [x] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
+- [x] EVIDENCE · COMMIT `mono: config verbs and screen for decks` · LEDGER · CHECKPOINT
 
 ### Task B7 — zoom + one-pane mode  (E25 E26 E27; amended 2026-10-19)
 
