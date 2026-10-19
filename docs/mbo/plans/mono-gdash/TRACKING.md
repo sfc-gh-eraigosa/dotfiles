@@ -86,3 +86,4 @@
 | 2026-10-19 | playground session | A1–A4 done: scaffold, config + auth, client, dash + vars |
 | 2026-10-19 | playground session | A5–A6 done: render (in-repo braille), app + `gdash <view>`; first live run against the lab, refId bug found and fixed |
 | 2026-10-19 | playground session | A7–A8 done: doctor/list (live: all ok, --quiet 35 ms), E12 leak test on the real binary, install.sh + gff flag, docs; gdash leaf complete |
+| 2026-10-19 | playground session | independent review of the gdash leaf: 5 findings (multi-value PromQL escaping, `$1` treated as a var, redact-before-truncate, password in URL, collapsed-row selection) fixed test-first; -race clean (`evidence/review/review.txt`) |

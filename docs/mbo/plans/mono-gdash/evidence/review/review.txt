@@ -1,0 +1,25 @@
+# Independent review of the gdash leaf (pr-review-toolkit:code-reviewer), 2026-10-19T06:12:58Z
+Reviewer: go test -race ./... clean; go vet clean; concurrency, TUI model, frame parsing, privacy: nothing significant. Five findings, all fixed test-first:
+1. multi-value default format wrote \. (one backslash) inside a PromQL string → Prometheus parse error. Fix: double backslashes (as Grafana). The old test asserted the wrong value.
+   LIVE check against the lab Prometheus: single backslash → HTTP 400 'unknown escape sequence'; doubled → 1 frame, no error.
+2. $1 in label_replace counted as a missing variable → panel blocked. Fix: undeclared $names are left alone (TestUndeclaredReferencesAreLeftAlone).
+3. error body truncated to 200 bytes before redaction → a token crossing byte 200 could survive as a prefix. Fix: redact first, truncate by runes (TestRedactBeforeTruncate).
+4. http://user:pw@host accepted, saved and printed. Fix: Validate refuses userinfo in the URL; doctor prints u.Redacted() (TestValidate 'password in url').
+5. panels inside a collapsed row could not be selected by title; unmatched titles silently drew nothing. Fix: collapsed rows keep Children; selection searches them and shows 'no panel with this title' (TestPanelSubsetFindsCollapsedAndReportsMissing).
+
+RED: all five new/changed tests failed before the fixes.
+$ go test -count=1 -race -cover ./...
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash	2.654s	coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/cmd	4.094s	coverage: 80.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/app	2.746s	coverage: 86.3% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/auth	1.846s	coverage: 91.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/config	1.024s	coverage: 75.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/dash	1.123s	coverage: 84.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/grafana	2.904s	coverage: 88.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/render	25.744s	coverage: 91.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/vars	1.025s	coverage: 95.8% of statements
+$ golangci-lint
+0 issues.
+$ pinned govulncheck / gosec
+No vulnerabilities found.
+gosec exit 0

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -89,7 +90,7 @@ func doctor(ctx context.Context, c config.Config, pname string, p config.Profile
 		ck.row(false, "reachable", err.Error())
 		return false
 	}
-	ck.row(true, "reachable", fmt.Sprintf("%s (Grafana %s)", p.URL, h.Version))
+	ck.row(true, "reachable", fmt.Sprintf("%s (Grafana %s)", redactedURL(p.URL), h.Version))
 	if err := cl.Whoami(ctx); err != nil {
 		ck.row(false, "authenticated", err.Error())
 		return false
@@ -162,6 +163,14 @@ func doctor(ctx context.Context, c config.Config, pname string, p config.Profile
 		}
 	}
 	return !ck.failed
+}
+
+// redactedURL hides any password a URL carries.
+func redactedURL(raw string) string {
+	if u, err := url.Parse(raw); err == nil {
+		return u.Redacted()
+	}
+	return raw
 }
 
 func values(m map[string]string) []string {

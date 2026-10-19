@@ -59,6 +59,7 @@ func TestValidate(t *testing.T) {
 	}{
 		{"valid", Config{Profiles: map[string]Profile{"lab": ok}, DefaultProfile: "lab", Views: map[string]View{"ci": {Dashboard: "ci-lab"}}}, ""},
 		{"no url", Config{Profiles: map[string]Profile{"lab": {Auth: Auth{Env: "X"}}}}, "profiles.lab.url"},
+		{"password in url", Config{Profiles: map[string]Profile{"lab": {URL: "http://admin:pw@h", Auth: Auth{Env: "X"}}}}, "auth.user"},
 		{"bad scheme", Config{Profiles: map[string]Profile{"lab": {URL: "ftp://h", Auth: Auth{Env: "X"}}}}, "profiles.lab.url"},
 		{"no auth source", Config{Profiles: map[string]Profile{"lab": {URL: "http://h"}}}, "profiles.lab.auth"},
 		{"two auth sources", Config{Profiles: map[string]Profile{"lab": {URL: "http://h", Auth: Auth{Env: "X", Cmd: "lpass show"}}}}, "exactly one"},

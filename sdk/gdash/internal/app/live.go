@@ -125,15 +125,24 @@ func (l *Live) selected() []dash.Panel {
 	if len(l.view.Panels) == 0 {
 		return l.d.Panels
 	}
-	want := map[string]bool{}
-	for _, t := range l.view.Panels {
-		want[t] = true
+	byTitle := map[string]dash.Panel{}
+	for _, p := range l.d.Panels {
+		if p.Kind != dash.KindRow {
+			byTitle[p.Title] = p
+		}
+		for _, c := range p.Children { // inside a collapsed row
+			if _, seen := byTitle[c.Title]; !seen {
+				byTitle[c.Title] = c
+			}
+		}
 	}
 	var out []dash.Panel
-	for _, p := range l.d.Panels {
-		if p.Kind != dash.KindRow && want[p.Title] {
-			out = append(out, p)
+	for _, t := range l.view.Panels {
+		p, ok := byTitle[t]
+		if !ok {
+			p = dash.Panel{Kind: dash.KindUnsupported, Title: t, Reason: "no panel with this title on the dashboard"}
 		}
+		out = append(out, p)
 	}
 	return out
 }

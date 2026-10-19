@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattn/go-runewidth"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/config"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/dash"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/grafana"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/grafana/grafanatest"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/render"
@@ -105,4 +106,26 @@ func TestVarsOverrideReachesQueries(t *testing.T) {
 		t.Fatalf("overrides did not resolve the variables:\n%s", m.View())
 	}
 	fmt.Fprint(os.Stderr, "")
+}
+
+// A view can name panels inside a collapsed row, and a title that matches
+// nothing says so instead of drawing nothing.
+func TestPanelSubsetFindsCollapsedAndReportsMissing(t *testing.T) {
+	d := dashWithCollapsedRow(t)
+	l := &Live{view: config.View{Panels: []string{"inside", "no such panel"}}, d: &d}
+	got := l.selected()
+	if len(got) != 2 || got[0].Title != "inside" || got[1].Kind != dash.KindUnsupported || !strings.Contains(got[1].Reason, "no panel") {
+		t.Fatalf("selected = %+v", got)
+	}
+}
+
+func dashWithCollapsedRow(t *testing.T) dash.Dashboard {
+	t.Helper()
+	raw := `{"dashboard":{"panels":[{"type":"row","title":"r","collapsed":true,"gridPos":{"y":0},
+		"panels":[{"type":"timeseries","title":"inside","gridPos":{"y":1}}]}]}}`
+	d, err := dash.Parse([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
 }

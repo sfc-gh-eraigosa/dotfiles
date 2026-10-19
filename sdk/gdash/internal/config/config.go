@@ -151,6 +151,9 @@ func (c Config) Validate() error {
 		if p.URL == "" || err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 			return fmt.Errorf("profiles.%s.url: want an http(s) URL, got %q", name, p.URL)
 		}
+		if u.User != nil {
+			return fmt.Errorf("profiles.%s.url: put no user or password in the URL; use auth.user and auth.file, auth.env or auth.cmd", name)
+		}
 		switch src := p.Auth.Sources(); len(src) {
 		case 0:
 			return fmt.Errorf("profiles.%s.auth: set one of auth.file, auth.env or auth.cmd", name)

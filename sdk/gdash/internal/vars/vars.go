@@ -87,8 +87,9 @@ func defaultDS(ds []grafana.Datasource) *grafana.Datasource {
 
 var refRE = regexp.MustCompile(`\$\{([^}]+)\}|\[\[([^\]]+)\]\]|\$(\w+)`)
 
-// Expand substitutes every variable reference in expr. References it cannot
-// resolve are left in place and returned, so the panel can say "needs var".
+// Expand substitutes every variable reference in expr. A declared variable
+// with no value is left in place and returned, so the panel can say "needs
+// var"; a $name the dashboard does not declare is left alone.
 func (e Env) Expand(expr string) (string, []string) {
 	missing := map[string]bool{}
 	out := refRE.ReplaceAllStringFunc(expr, func(m string) string {
@@ -98,12 +99,13 @@ func (e Env) Expand(expr string) (string, []string) {
 		if v, ok := e.builtin(name); ok {
 			return v
 		}
-		if strings.HasPrefix(name, "__") {
-			missing[name] = true
+		val, declared := e.values[name]
+		if !declared {
+			// Not a variable of this dashboard (a label_replace "$1", an
+			// unknown builtin): Grafana leaves it as it is, and so does gdash.
 			return m
 		}
-		val, ok := e.values[name]
-		if !ok || !val.set {
+		if !val.set {
 			missing[name] = true
 			return m
 		}
@@ -166,9 +168,11 @@ func render(v value, format string) (string, bool) {
 	case "csv", "raw":
 		return strings.Join(v.list, ","), true
 	}
+	// The result lands inside a PromQL double-quoted string, where a lone
+	// backslash is an invalid escape: double it, as Grafana does.
 	esc := make([]string, len(v.list))
 	for i, s := range v.list {
-		esc[i] = regexp.QuoteMeta(s)
+		esc[i] = strings.ReplaceAll(regexp.QuoteMeta(s), `\`, `\\`)
 	}
 	return "(" + strings.Join(esc, "|") + ")", true
 }

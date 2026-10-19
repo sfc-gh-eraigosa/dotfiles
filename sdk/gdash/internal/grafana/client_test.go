@@ -243,3 +243,17 @@ func TestErrorsAreRedacted(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+// The body is redacted before it is cut to length, so a token echoed past
+// byte 200 cannot survive as a prefix.
+func TestRedactBeforeTruncate(t *testing.T) {
+	s := grafanatest.New(t)
+	s.Status = 401
+	tok := strings.Repeat("t", 64)
+	s.Message = `{"message":"` + strings.Repeat("x", 180) + " Bearer " + tok + `"}`
+	c := grafana.NewHTTP(s.URL, redactingCred(tok), time.Second)
+	_, err := c.Health(context.Background())
+	if err == nil || strings.Contains(err.Error(), strings.Repeat("t", 8)) {
+		t.Fatalf("a token prefix survived: %v", err)
+	}
+}

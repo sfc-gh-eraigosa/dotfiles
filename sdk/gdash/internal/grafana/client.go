@@ -202,7 +202,7 @@ func (c *httpClient) do(ctx context.Context, method, path string, body any, out 
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
-		return &HTTPError{Status: resp.StatusCode, Path: strings.SplitN(path, "?", 2)[0], Message: c.redact(errorMessage(resp.Body))}
+		return &HTTPError{Status: resp.StatusCode, Path: strings.SplitN(path, "?", 2)[0], Message: errorMessage(resp.Body, c.redact)}
 	}
 	switch o := out.(type) {
 	case nil:
@@ -452,7 +452,7 @@ func FetchAll(ctx context.Context, c Client, reqs []QueryRequest) []Result {
 // errorMessage reads Grafana's error body: its JSON "message", else the
 // first line of the text, at most 200 characters. Grafana's error bodies
 // never echo request headers, so no credential can surface here.
-func errorMessage(r io.Reader) string {
+func errorMessage(r io.Reader, redact func(string) string) string {
 	b, _ := io.ReadAll(io.LimitReader(r, 1<<16))
 	var j struct {
 		Message string `json:"message"`
@@ -468,8 +468,11 @@ func errorMessage(r io.Reader) string {
 	if msg == "" {
 		msg = strings.TrimSpace(strings.SplitN(string(b), "\n", 2)[0])
 	}
-	if len(msg) > 200 {
-		msg = msg[:200] + "…"
+	// Redact the whole message first: cut first, and a token that crossed
+	// the cut would survive as a prefix the redactor cannot match.
+	msg = redact(msg)
+	if r := []rune(msg); len(r) > 200 {
+		msg = string(r[:200]) + "…"
 	}
 	return msg
 }

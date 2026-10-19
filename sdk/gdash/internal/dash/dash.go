@@ -62,8 +62,9 @@ type Panel struct {
 	Decimals   *int
 	Min, Max   *float64
 	Thresholds []Threshold
-	Collapsed  bool // KindRow: a collapsed row
-	Hidden     int  // KindRow: how many panels the collapsed row hides
+	Collapsed  bool    // KindRow: a collapsed row
+	Hidden     int     // KindRow: how many panels the collapsed row hides
+	Children   []Panel // KindRow, collapsed: the hidden panels (drawn only when a view names them)
 }
 
 // Variable is one templating entry.
@@ -239,6 +240,9 @@ func convert(p wirePanel, vars []Variable) Panel {
 	switch {
 	case p.Type == "row":
 		out.Kind, out.Collapsed, out.Hidden = KindRow, p.Collapsed, len(p.Panels)
+		for _, c := range p.Panels {
+			out.Children = append(out.Children, convert(c, vars))
+		}
 		return out
 	case len(p.LibraryPanel) > 0 && string(p.LibraryPanel) != "null":
 		out.Kind, out.Reason = KindUnsupported, "library panel"

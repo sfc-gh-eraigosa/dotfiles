@@ -35,7 +35,7 @@ func TestExpand(t *testing.T) {
 		{`up{node="${node}"}`, `up{node="jetson1"}`},
 		{`up{node="[[node]]"}`, `up{node="jetson1"}`},
 		{`up{node=~"${node:regex}"}`, `up{node=~"jetson1"}`},
-		{`up{x=~"$multi"}`, `up{x=~"(a\.b|c)"}`},
+		{`up{x=~"$multi"}`, `up{x=~"(a\\.b|c)"}`}, // PromQL strings need \\ (Grafana does the same)
 		{`up{x=~"${multi:pipe}"}`, `up{x=~"a.b|c"}`},
 		{`up{x=~"${multi:csv}"}`, `up{x=~"a.b,c"}`},
 		{`up{x=~"${multi:raw}"}`, `up{x=~"a.b,c"}`},
@@ -53,7 +53,7 @@ func TestExpand(t *testing.T) {
 			t.Errorf("Expand(%s) = %s missing=%v, want %s", tc.in, got, missing, tc.want)
 		}
 	}
-	for _, in := range []string{`up{x="$unset"}`, `up{x="$nosuch"}`, `up{x="${node:json}"}`, `up{x="$__nosuch"}`} {
+	for _, in := range []string{`up{x="$unset"}`, `up{x="${node:json}"}`} {
 		if _, missing := e.Expand(in); len(missing) == 0 {
 			t.Errorf("Expand(%s): an unresolvable reference was not reported", in)
 		}
@@ -120,5 +120,17 @@ func TestFormatDuration(t *testing.T) {
 		if got := FormatDuration(d); got != want {
 			t.Errorf("FormatDuration(%v) = %s, want %s", d, got, want)
 		}
+	}
+}
+
+// Undeclared $names (a label_replace "$1", an unknown builtin) are left as
+// they are, like Grafana does, instead of blocking the panel.
+func TestUndeclaredReferencesAreLeftAlone(t *testing.T) {
+	e := env(t, []dash.Variable{{Name: "node", Values: []string{"jetson1"}, Set: true}}, nil)
+	in := `label_replace(up{node="$node"}, "host", "$1", "instance", "(.*):.*") / $__nosuch`
+	got, missing := e.Expand(in)
+	want := `label_replace(up{node="jetson1"}, "host", "$1", "instance", "(.*):.*") / $__nosuch`
+	if got != want || len(missing) != 0 {
+		t.Fatalf("Expand = %s missing=%v", got, missing)
 	}
 }
