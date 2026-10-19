@@ -2,7 +2,7 @@
 
 - **Slug:** mono-gdash
 - **Date:** 2026-10-18
-- **Status:** Draft
+- **Status:** Approved (owner, 2026-10-18), open questions closed
 - **Relates to:** builds on [`mono`](./mono.md) ([#407](https://github.com/sfc-gh-eraigosa/dotfiles/pull/407)) · design issue [#410](https://github.com/sfc-gh-eraigosa/dotfiles/issues/410) · design PR [#411](https://github.com/sfc-gh-eraigosa/dotfiles/pull/411)
 - **Author(s):** Edward Raigosa, Claude
 
@@ -46,7 +46,9 @@ Verified facts this design rests on:
    current value, and htop-style meters for single-value panels. It runs alone in any terminal,
    and mono runs it as a pane.
 2. **Configurable Grafana URL and credentials (owner)**, so the same binary works on **any host
-   that can reach Grafana on k3s**: through a port-forward, an ingress, or a node address.
+   that can reach Grafana on k3s**. The lab already exposes Grafana on the LAN as a NodePort,
+   `http://192.168.0.128:30300` (owner; checked 2026-10-18: Grafana 13.1.3 answers there with no
+   tunnel), so no host needs a port-forward.
 3. **First content: the existing conductor, k3s nodes, and CI dashboards (owner)**, drawn from
    their Grafana definitions rather than hand-written queries.
 4. **A mono pane can hold N tools, each with N views (owner).** Inside that pane:
@@ -222,7 +224,7 @@ and mono (my call):
 ```json
 {
   "profiles": {
-    "lab": { "url": "http://localhost:3000", "auth": { "file": "~/.config/gdash/lab.cred" } }
+    "lab": { "url": "http://192.168.0.128:30300", "auth": { "file": "~/.config/gdash/lab.cred" } }
   },
   "default_profile": "lab",
   "views": {
@@ -233,10 +235,13 @@ and mono (my call):
 }
 ```
 
-- **`url` is whatever this host uses to reach Grafana (owner)**: a port-forward
-  (`kubectl -n observability port-forward svc/observability-grafana 3000:80`, or fleet's `t`
-  tunnel), an ingress name, or a NodePort. gdash doesn't start tunnels itself (my call; that is
-  fleet's job).
+- **`url` defaults to the lab's NodePort, `http://192.168.0.128:30300` (owner)**, the same on
+  every fleet host. A NodePort answers on every node's address, so another node's IP at `:30300`
+  works too. It is plain HTTP, so the Viewer token crosses the LAN unencrypted. That is
+  acceptable for a read-only token on the home LAN, and **the URL moves to the HTTPS vanity
+  name `https://grafana.theranch.test` once that name resolves on the fleet hosts** (owner).
+  It doesn't resolve yet. The URL stays configurable per profile. gdash never starts tunnels
+  or port-forwards (my call).
 - **Credentials (owner: configurable; source my call):** a Grafana **service-account token**
   (Viewer role), read from exactly one of: `auth.file` (must be mode 0600, else refuse with the
   fix), `auth.env` (the name of an environment variable), or `auth.cmd` (a command whose stdout is
@@ -314,9 +319,13 @@ and mono (my call):
 
 | # | Question | Who | Default if unanswered |
 | :-- | :-- | :-- | :-- |
-| Q1 | ~~Pane-focus key~~ → **answered: nav mode** (§4.2); confirm the j/k walk-through reading | owner | as written in §4.2 |
-| Q2 | Dashboard uids/titles for conductor, k3s nodes, CI, their datasources (assumed Prometheus), and the Grafana version | builder, via `gdash list` against the lab | **the plan's first task** port-forwards `observability-grafana` on jetson1 with an owner-issued Viewer service-account token, records the version, and captures the scrubbed fixtures every later task builds against; non-Prometheus panels become placeholders |
-| Q3 | Which URL each fleet host uses for Grafana (port-forward vs ingress) | owner, per host | documented in README, not baked in |
+All three are closed (owner, 2026-10-18).
+
+| # | Question | Resolution |
+| :-- | :-- | :-- |
+| Q1 | Pane-focus key, and the j/k walk-through reading | **As designed**: nav mode, with j/k walking a deck's views and then the panes (§4.2) |
+| Q2 | Dashboard uids/titles, their datasources, the Grafana version | Grafana is **13.1.3**. **The plan's first task** calls `http://192.168.0.128:30300` directly, with an owner-issued Viewer service-account token and no port-forward. It runs `gdash list`, records the three dashboard uids and their datasources, and captures the scrubbed fixtures every later task builds against. Non-Prometheus panels become placeholders |
+| Q3 | Which URL each fleet host uses | **The NodePort `http://192.168.0.128:30300` on every host** (§4.4); the HTTPS vanity name `https://grafana.theranch.test` once it resolves |
 
 > Produced via `superpowers:brainstorming`. Registered in `../index.md`. The spec goes in
 > `../specs/mono-gdash.md` and the plan in `../plans/mono-gdash.md` after design approval.
