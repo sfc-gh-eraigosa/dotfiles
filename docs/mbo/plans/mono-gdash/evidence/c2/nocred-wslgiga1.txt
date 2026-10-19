@@ -1,0 +1,18 @@
+# a host without gdash credentials (wslgiga1, GDASH_CONFIG pointed at an empty dir), 2026-10-19T15:00:32Z
+$ gdash doctor --quiet; echo $?
+1
+$ mono doctor   (new default)
+config: <scratch>/nocred/mono.json
+prefix: ctrl+b
+middle: split
+
+PANE                 SIZE  ROWS@40  RUNS         WHY
+title                5%    2        -            version, commit, focused pane, help hint
+htop                 60%   24       htop-fit     found htop-fit
+mid                  30%   12       deck         1 of 5 views usable
+  └ gpu/nvtop                       nvitop       found nvitop (nvtop not installed)
+  └ gdash/conductor                 (not shown)  tool probe `gdash doctor --quiet` failed
+  └ gdash/k3s-nodes                 (not shown)  tool probe `gdash doctor --quiet` failed
+  └ gdash/nodes                     (not shown)  tool probe `gdash doctor --quiet` failed
+  └ gdash/ci                        (not shown)  tool probe `gdash doctor --quiet` failed
+gsl                  5%    2        gsl status   found gsl

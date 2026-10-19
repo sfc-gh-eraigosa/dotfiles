@@ -1,0 +1,39 @@
+ mono vdev — none   ● htop   NAV   ZOOM                                                                             ctrl+b ? help
+
+
+    0[||| 14.3%]    4[||   5.0%]   8[||   4.0%]  12[||   9.4%]    16[||   5.3%]   20[||   3.3%]  24[||   3.7%]  28[||   1.4%]
+    1[||   8.4%]    5[|    0.3%]   9[||   2.3%]  13[||   1.0%]    17[||   1.0%]   21[||   2.0%]  25[     0.0%]  29[||   2.0%]
+    2[||   8.4%]    6[||   3.7%]  10[||   3.0%]  14[||  11.1%]    18[||   9.6%]   22[||   4.0%]  26[||   5.0%]  30[||   5.7%]
+    3[||   4.6%]    7[||   1.7%]  11[||   2.7%]  15[||   2.3%]    19[||   2.3%]   23[||   1.0%]  27[||   1.7%]  31[|    0.3%]
+  Mem[||||||                                       4.45G/189G]   Tasks: 178, 1449 thr; 1 running
+  Swp[                                                  0K/0K]   Load average: 0.61 2.03 1.91
+                                                                 Uptime: 5 days, 18:39:52
+
+    PID USER      PRI  NI  VIRT   RES   SHR S CPU%▽MEM%   TIME+  Command
+  26912 <node>    20   0 5588M  584M 99560 S 19.6  0.3  3h47:26 claude --dangerously-skip-permissions --resume 1e67f5c4-7834-49b0
+  93243 root       20   0 1595M  164M 48512 S  3.0  0.1  7h20:52 /usr/local/bin/k3s agent
+ 203844 <node>    20   0 2824M 14440  6780 S  2.3  0.0  0:00.95 /tmp/claude-1000/-home-<node>github-sfc-gh-eraigosa-playground-
+2049045 <node>    20   0 5615M  304M 82936 S  2.0  0.2 16:58.38 claude --dangerously-skip-permissions --remote-control <node>gig
+  26921 <node>    20   0 5588M  584M 99560 S  1.7  0.3  1h47:20 claude --dangerously-skip-permissions --resume 1e67f5c4-7834-49b0
+  93283 root       20   0 1536M  106M 39244 S  1.7  0.1  4h45:37 containerd
+ 203927 <node>    20   0  7796  6612  3808 R  1.7  0.0  0:01.28 htop
+  22489 <node>    20   0  134M 24728 13664 S  1.3  0.0  1h03:18 ~/git/dotfiles/opt/bin/herdr server
+ 206667 <node>    20   0  381M 51376 15228 S  1.3  0.0  0:01.32 ~/.local/share/uv/tools/nvitop/bin/python ~
+   2262 root       20   0 4041M 60728 16236 S  1.0  0.0  2h02:10 /usr/bin/promtail -config.file=/etc/promtail/promtail.yaml
+ 170920 <node>    20   0 5588M  584M 99560 S  1.0  0.3  0:00.96 claude --dangerously-skip-permissions --resume 1e67f5c4-7834-49b0
+ 207687 <node>    20   0  6680  5084  4036 S  1.0  0.0  0:00.03 /usr/bin/zsh -c source ~/.claude/shell-snapshots/snap
+2951949 root       20   0 1595M  164M 48512 S  1.0  0.1  6:34.01 /usr/local/bin/k3s agent
+    225 avahi      20   0  8556  2412   952 S  0.7  0.0 25:00.22 avahi-daemon: running [<node>-2.local]
+    580 root       20   0 3492M 49356 16584 S  0.7  0.0 12:40.12 /usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd
+   1689 root       20   0 1244M  9148  3400 S  0.7  0.0 34:08.41 /var/lib/rancher/k3s/data/e1784de142752c8bc4497493cd3619f1edd74e7
+   1756 root       20   0 1244M  9816  3684 S  0.7  0.0  1h39:13 /var/lib/rancher/k3s/data/e1784de142752c8bc4497493cd3619f1edd74e7
+   5199 root       20   0 4041M 60728 16236 S  0.7  0.0  3:53.46 /usr/bin/promtail -config.file=/etc/promtail/promtail.yaml
+  23276 <node>    20   0  134M 24728 13664 S  0.7  0.0  1:49.48 ~/git/dotfiles/opt/bin/herdr server
+  93262 root       20   0 1595M  164M 48512 S  0.7  0.1 11:46.57 /usr/local/bin/k3s agent
+  93297 root       20   0 1595M  164M 48512 S  0.7  0.1 10:41.63 /usr/local/bin/k3s agent
+ 203848 <node>    20   0 2824M 14440  6780 S  0.7  0.0  0:00.32 /tmp/claude-1000/-home-<node>github-sfc-gh-eraigosa-playground-
+ 204075 <node>    20   0 2824M 14440  6780 S  0.7  0.0  0:00.05 /tmp/claude-1000/-home-<node>github-sfc-gh-eraigosa-playground-
+ 787419 root       20   0 24188  3972  1932 S  0.7  0.0  3:22.99 /lib/systemd/systemd-udevd
+F1Help  F2Setup F3SearchF4FilterF5Tree  F6SortByF7Nice -F8Nice +F9Kill  F10Quit
+  ollama  main 1   21   0%|2.6G/24G   2026-10-19 07:46:24 PDT 
+

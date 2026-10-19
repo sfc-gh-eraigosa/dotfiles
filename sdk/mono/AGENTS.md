@@ -15,13 +15,13 @@ by default. User docs: [README.md](./README.md). Design:
 | Package | Owns |
 | :-- | :-- |
 | `cmd/` | cobra CLI: `mono` (dashboard), `mono config [get\|set\|add\|remove\|move\|path]`, `mono doctor`, `mono version` |
-| `internal/config` | the file: defaults, validation (errors name the field), dotted-key get/set, atomic save |
+| `internal/config` | the file: defaults, validation (errors name the field), dotted-key get/set, atomic save; `deck.go`: tools × views, `zoomable`, `middle` (`Effective()`), nav settings |
 | `internal/layout` | percentages → whole rows (pure) |
 | `internal/probe` | which command each pane gets on this host (PATH + hardware probes) |
 | `internal/pane` | one program in a pty + a `vt10x` emulated screen; `every` re-runs; resize, restart, stop |
 | `internal/screen` | emulator cells → ANSI rows; diffing frame writer |
 | `internal/input` | raw bytes → program, except the prefix; decodes the key after it |
-| `internal/app` | dashboard core (`HandleBytes`, `Resize`, `Frame`, terminal-free and tested) + `Run` (raw mode, alt screen, signals) |
+| `internal/app` | dashboard core (`HandleBytes`, `Resize`, `Frame`, terminal-free and tested) + `Run` (raw mode, alt screen, signals); `deck.go`: slots (a deck shows one view), zoom heights over the middle, nav mode, double-esc |
 | `internal/configui` | the `mono config` screen (bubbletea, `sdk/libs/tui`) |
 
 ## Rules

@@ -8,6 +8,7 @@ package configui
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/keymap"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/nav"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/overlay"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/theme"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/layout"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/probe"
@@ -291,7 +293,12 @@ func (m *Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.prompt("set title.size " + m.cfg.Title.Size)
 		default:
 			p := m.cfg.Panes[pane]
-			m.prompt("set panes." + p.Name + ".cmd " + p.Cmd)
+			if p.IsDeck() { // a deck: edit its first view's command
+				t := p.Tools[0]
+				m.prompt("set panes." + p.Name + ".tools." + t.Name + ".views." + t.Views[0].Name + ".cmd " + t.Views[0].Cmd)
+			} else {
+				m.prompt("set panes." + p.Name + ".cmd " + p.Cmd)
+			}
 		}
 	case ActSize:
 		if pane >= 0 {
@@ -341,10 +348,17 @@ func (m *Model) ask(c overlay.Confirm, yes func() tea.Cmd) {
 
 type pal struct{}
 
-func (pal) Dim(s string) string    { return "\x1b[2m" + s + "\x1b[22m" }
-func (pal) Bold(s string) string   { return "\x1b[1m" + s + "\x1b[22m" }
-func (pal) Accent(s string) string { return "\x1b[36m" + s + "\x1b[39m" }
-func (pal) Err(s string) string    { return "\x1b[31m" + s + "\x1b[39m" }
+func (pal) Dim(s string) string  { return "\x1b[2m" + s + "\x1b[22m" }
+func (pal) Bold(s string) string { return "\x1b[1m" + s + "\x1b[22m" }
+
+// Accent and Err come from the sdk's shared scheme (sdk/libs/tui/theme).
+func (pal) Accent(s string) string { return theme.Paint(s, scheme().OK) }
+func (pal) Err(s string) string    { return theme.Paint(s, scheme().Crit) }
+
+func scheme() theme.Palette {
+	p, _ := theme.Get(theme.Resolve("mono", os.Getenv, theme.EnvDarkBackground(os.Getenv)))
+	return p
+}
 
 // View implements tea.Model.
 func (m *Model) View() string {
@@ -357,7 +371,7 @@ func (m *Model) View() string {
 		return m.confirm.Render(p)
 	}
 	var b strings.Builder
-	title := "mono config — " + m.Path
+	title := "mono config — " + m.Path + "   middle: " + m.cfg.MiddleMode()
 	if m.Dirty() {
 		title += "  [modified]"
 	}
@@ -384,7 +398,26 @@ func (m *Model) View() string {
 				status = p.Err("✗ not shown: " + c.Reason)
 			}
 		}
+		if pn.IsDeck() {
+			cmd = fmt.Sprintf("deck: %d tools", len(pn.Tools))
+		}
 		rows = append(rows, fmt.Sprintf("%-8s %-5s %-9s %-28s %s", pn.Name, pn.Size, every, cmd, status))
+	}
+	// A deck lists its tools and views under its row (not selectable rows:
+	// the cursor stays one per pane, so set and remove keep their indexes).
+	detail := map[int][]string{}
+	for i, pn := range m.cfg.Panes {
+		for _, t := range pn.Tools {
+			name := t.Name
+			if t.Zoom {
+				name += " (zoom)"
+			}
+			var views []string
+			for _, v := range t.Views {
+				views = append(views, v.Name+": "+v.Cmd)
+			}
+			detail[i+2] = append(detail[i+2], p.Dim(fmt.Sprintf("    └ %-14s %s", name, strings.Join(views, " · "))))
+		}
 	}
 	top, bottom := m.cur.Visible()
 	for i := top; i < bottom && i < len(rows); i++ {
@@ -393,6 +426,9 @@ func (m *Model) View() string {
 			mark = "> "
 		}
 		b.WriteString(mark + rows[i] + "\n")
+		for _, d := range detail[i] {
+			b.WriteString("  " + d + "\n")
+		}
 	}
 	b.WriteString("\n" + p.Bold("Preview") + p.Dim(fmt.Sprintf("  (%d rows)", m.height)) + "\n")
 	b.WriteString(m.preview())

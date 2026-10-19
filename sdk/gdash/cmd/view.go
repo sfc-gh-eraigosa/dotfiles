@@ -13,6 +13,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/grafana"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/render"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/theme"
 	"golang.org/x/term"
 )
 
@@ -93,11 +94,14 @@ func runView(args []string) error {
 	if err != nil {
 		return err
 	}
-	color := os.Getenv("NO_COLOR") == "" && term.IsTerminal(int(os.Stdout.Fd())) //nolint:gosec // Fd fits an int
+	// The sdk's one color scheme (sdk/libs/tui/theme): NO_COLOR, then
+	// GDASH_THEME / SDK_THEME, tmux or 8 colors → dark8, else the background.
+	color := theme.Enabled(os.Getenv) && term.IsTerminal(int(os.Stdout.Fd())) //nolint:gosec // Fd fits an int
+	pal, _ := theme.Get(theme.Resolve("gdash", os.Getenv, theme.EnvDarkBackground(os.Getenv)))
 	m := app.New(app.Options{
 		Fetcher: app.NewLive(grafana.NewHTTP(p.URL, cred, HTTPTimeout), v),
 		View:    name, Range: v.Range, Refresh: v.Refresh,
-		Render: render.Opts{Color: color},
+		Render: render.Opts{Color: color, Palette: pal},
 	})
 	_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()
 	return err

@@ -1,0 +1,44 @@
+ mono vdev — none   ● mid ◀ gdash · nodes 3/4   NAV   ZOOM                                                                    ctrl+b ? help
+
+── CPU ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+▢ CPU Usage — needs var $instance (gdash config set views.nodes.vars… ▢ Load Average — needs var $instance (gdash config set views.nodes.v…
+── Memory ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+▢ Memory Usage — needs var $instance (gdash config set views.nodes.v… ▢ Memory Usage — needs var $instance (gdash config set views.nodes.v…
+── Disk ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+▢ Disk I/O — needs var $instance (gdash config set views.nodes.vars.… ▢ Disk Space Usage — table not supported
+── Network ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+▢ Network Received — needs var $instance (gdash config set views.nod… ▢ Network Transmitted — needs var $instance (gdash config set views.…
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Node Exporter / Nodes · last 1h · updated 08:00:05 · every 30s · ? help
+ 🧠 <node>   ~   2026-10-19 08:00:08 PDT 
+

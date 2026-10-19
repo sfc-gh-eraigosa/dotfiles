@@ -8,7 +8,7 @@ requiring it — nothing here is forced on anyone.
 | Package | What it is |
 |---------|-----------|
 | [`log/`](./log) | **The logging standard.** logrus for structured diagnostics, lumberjack for rotation, `Capture` for raw captured output. |
-| [`tui/`](./tui) | **Shared TUI behaviors** — `keymap` (data-driven keys + dispatch), `nav` (cursor/viewport, `gg`), `prompt` (line editor), `search` (smartcase `/`, `n`/`N`), `cmdline` (`:` verbs + Tab completion), `overlay` (help + confirm). Read [`tui/GUIDE.md`](./tui/GUIDE.md) before writing a TUI. |
+| [`tui/`](./tui) | **Shared TUI behaviors** — `keymap` (data-driven keys + dispatch), `nav` (cursor/viewport, `gg`), `prompt` (line editor), `search` (smartcase `/`, `n`/`N`), `cmdline` (`:` verbs + Tab completion), `overlay` (help + confirm), `theme` (**the sdk color scheme**: palettes `dark`/`light`/`dark8`/`dark-daltonism` of semantic roles + series colors, one resolve rule — `NO_COLOR`, `<TOOL>_THEME`/`SDK_THEME`, tmux or 8 colors → `dark8`, else the background). Read [`tui/GUIDE.md`](./tui/GUIDE.md) before writing a TUI. |
 
 ## Using it from a tool
 

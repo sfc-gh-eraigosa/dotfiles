@@ -15,6 +15,7 @@ import (
 	"github.com/mattn/go-runewidth"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/dash"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/grafana"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/theme"
 )
 
 // ChartHeight is a chart's rows: title, six plot rows, legend (spec F3).
@@ -22,23 +23,24 @@ const ChartHeight = 8
 
 // Opts are the drawing choices that do not depend on the data.
 type Opts struct {
-	Color bool // ANSI 256-color escapes; off under NO_COLOR
+	Color   bool          // ANSI color escapes; off under NO_COLOR
+	Palette theme.Palette // the sdk's shared scheme (sdk/libs/tui/theme); zero = dark
 }
 
-// Series colors (256-color palette), in Grafana's classic order.
-var palette = []int{112, 220, 39, 208, 196, 141, 51, 213}
+func (o Opts) palette() theme.Palette {
+	if o.Palette.Name != "" {
+		return o.Palette
+	}
+	p, _ := theme.Get(theme.Dark)
+	return p
+}
 
-const (
-	colOK    = 112
-	colWarn  = 220
-	colCrit  = 196
-	colDim   = 244
-	colTitle = -1 // bold, no color
-)
+// colTitle marks a bold title segment (no color of its own).
+const colTitle = "bold"
 
 type seg struct {
 	text  string
-	color int // 0 = none; colTitle = bold
+	color string // "" = none; colTitle = bold; else a theme color
 }
 
 // renderLine joins segments, truncated to w display columns.
@@ -57,11 +59,11 @@ func renderLine(segs []seg, w int, o Opts) string {
 		if t == "" {
 			continue
 		}
-		if o.Color && s.color != 0 {
+		if o.Color && s.color != "" {
 			if s.color == colTitle {
-				b.WriteString("\x1b[1m" + t + "\x1b[0m")
+				b.WriteString("\x1b[1m" + t + theme.Reset)
 			} else {
-				b.WriteString("\x1b[38;5;" + strconv.Itoa(s.color) + "m" + t + "\x1b[0m")
+				b.WriteString(theme.Paint(t, s.color))
 			}
 			continue
 		}
@@ -99,7 +101,7 @@ func Row(p dash.Panel, w int, o Opts) []string {
 	if pad < 0 {
 		pad = 0
 	}
-	return []string{renderLine([]seg{{label, colTitle}, {strings.Repeat("─", pad), colDim}}, w, o)}
+	return []string{renderLine([]seg{{label, colTitle}, {strings.Repeat("─", pad), o.palette().Dim}}, w, o)}
 }
 
 // Placeholder is one line: "▢ <title> — <reason>".
@@ -109,7 +111,7 @@ func Placeholder(p dash.Panel, reason string, w int) []string {
 
 // Status is the status row (staleness, errors, the refresh clock).
 func Status(text string, w int, o Opts) []string {
-	return []string{renderLine([]seg{{fit(text, w), colWarn}}, w, o)}
+	return []string{renderLine([]seg{{fit(text, w), o.palette().Warn}}, w, o)}
 }
 
 // legendNames names each series: the target's legendFormat when it has one,
@@ -197,7 +199,7 @@ func Chart(p dash.Panel, series []grafana.Series, w, h int, o Opts) []string {
 			if r == plotRows/2 {
 				text = centre("no data", w)
 			}
-			lines = append(lines, renderLine([]seg{{text, colDim}}, w, o))
+			lines = append(lines, renderLine([]seg{{text, o.palette().Dim}}, w, o))
 		}
 		return append(lines, "")
 	}
@@ -219,10 +221,10 @@ func Chart(p dash.Panel, series []grafana.Series, w, h int, o Opts) []string {
 
 	dw, dh := pw*2, plotRows*4
 	cells := make([][]rune, plotRows)
-	colors := make([][]int, plotRows)
+	colors := make([][]string, plotRows)
 	for r := range cells {
 		cells[r] = make([]rune, pw)
-		colors[r] = make([]int, pw)
+		colors[r] = make([]string, pw)
 	}
 	span := t1.Sub(t0)
 	xOf := func(t time.Time) int {
@@ -234,7 +236,7 @@ func Chart(p dash.Panel, series []grafana.Series, w, h int, o Opts) []string {
 	yOf := func(v float64) int { // 0 = top
 		return dh - 1 - int(math.Round((v-lo)/(hi-lo)*float64(dh-1)))
 	}
-	dot := func(x, y, color int) {
+	dot := func(x, y int, color string) {
 		if x < 0 || y < 0 || x >= dw || y >= dh {
 			return
 		}
@@ -242,8 +244,9 @@ func Chart(p dash.Panel, series []grafana.Series, w, h int, o Opts) []string {
 		cells[r][c] |= brailleBit(x%2, y%4)
 		colors[r][c] = color
 	}
+	pal := o.palette()
 	for si, s := range series {
-		color := palette[si%len(palette)]
+		color := pal.SeriesColor(si)
 		px, py, have := 0, 0, false
 		for i, v := range s.Values {
 			if i >= len(s.Times) {
@@ -272,7 +275,7 @@ func Chart(p dash.Panel, series []grafana.Series, w, h int, o Opts) []string {
 			case plotRows - 1:
 				label = loLabel
 			}
-			segs = append(segs, seg{strings.Repeat(" ", lw-runewidth.StringWidth(label)) + label, colDim}, seg{"│", colDim})
+			segs = append(segs, seg{strings.Repeat(" ", lw-runewidth.StringWidth(label)) + label, pal.Dim}, seg{"│", pal.Dim})
 		}
 		for c := 0; c < pw; c++ {
 			ch := ' '
@@ -288,14 +291,14 @@ func Chart(p dash.Panel, series []grafana.Series, w, h int, o Opts) []string {
 	var legend []seg
 	for i, s := range series {
 		if i > 0 {
-			legend = append(legend, seg{"  ", 0})
+			legend = append(legend, seg{"  ", ""})
 		}
 		last, ok := s.Last()
 		val := "—"
 		if ok {
 			val = FormatValue(last, p.Unit, p.Decimals)
 		}
-		legend = append(legend, seg{"●", palette[i%len(palette)]}, seg{" " + names[i] + " " + val, 0})
+		legend = append(legend, seg{"●", pal.SeriesColor(i)}, seg{" " + names[i] + " " + val, ""})
 	}
 	lines = append(lines, renderLine(legend, w, o))
 	return lines
@@ -370,7 +373,7 @@ func abs(v int) int {
 // with no known maximum (not a percentage, no max set) shows the value alone.
 func Meter(p dash.Panel, series []grafana.Series, w int, o Opts) []string {
 	if len(series) == 0 {
-		return []string{renderLine([]seg{{fit(p.Title+"  —", w), colDim}}, w, o)}
+		return []string{renderLine([]seg{{fit(p.Title+"  —", w), o.palette().Dim}}, w, o)}
 	}
 	names := legendNames(p, series)
 	lo, hi, bar := 0.0, 0.0, false
@@ -406,24 +409,25 @@ func Meter(p dash.Panel, series []grafana.Series, w int, o Opts) []string {
 				mark = " !!"
 			}
 		}
-		color := map[level]int{levelOK: colOK, levelWarn: colWarn, levelCrit: colCrit}[lvl]
+		pal := o.palette()
+		color := map[level]string{levelOK: pal.OK, levelWarn: pal.Warn, levelCrit: pal.Crit}[lvl]
 		labelW := min(max(w*3/10, 1), runewidth.StringWidth(label))
 		label = fit(label, labelW)
 		valW := runewidth.StringWidth(val + mark)
 		barW := w - labelW - 1 - 2 - valW - 1
 		if !bar || barW < 3 || !ok {
-			out = append(out, renderLine([]seg{{label + " ", 0}, {val, color}, {mark, 0}}, w, o))
+			out = append(out, renderLine([]seg{{label + " ", ""}, {val, color}, {mark, ""}}, w, o))
 			continue
 		}
 		frac := (v - lo) / (hi - lo)
 		frac = math.Max(0, math.Min(1, frac))
 		filled := int(math.Round(frac * float64(barW)))
 		out = append(out, renderLine([]seg{
-			{label + " [", 0},
+			{label + " [", ""},
 			{strings.Repeat("|", filled), color},
-			{strings.Repeat(" ", barW-filled+1), 0},
+			{strings.Repeat(" ", barW-filled+1), ""},
 			{val, color},
-			{mark + "]", 0},
+			{mark + "]", ""},
 		}, w, o))
 	}
 	return out

@@ -1,0 +1,19 @@
+# Independent review of the deck PR (pr-review-toolkit:code-reviewer), 2026-10-19T15:03:01Z
+Reviewer: go test -race ./... clean; locking, zoom heights, nav, double-esc, #407 compat, probe, theme: nothing significant. Findings, fixed test-first (each new test failed first):
+1. middle: single + a fixed pane named mid (or two merged tools sharing a name) → duplicate slot names; reload leaked a running pane. Fix: Validate refuses both (TestMiddleSingleRefusesCollisions).
+2. :focus onto a pane hidden by zoom focused the invisible pane. Fix: un-hide it (clear the manual zoom or the auto-zoom) and always relayout (TestFocusUnhidesAZoomedOutPane).
+3. programs a view switch was stopping, or panes a late reload started, could outlive Stop. Fix: Stop takes applyMu, sets closed (apply installs nothing after), waits for the switch stops (TestStopWaitsForSwitchedAwayPrograms: failed at 0.05 s before; TestNoPanesStartAfterStop).
+4. (minor) an arrow key split across reads in nav mode read as esc. Fix: nav mode keeps an incomplete escape until the rest arrives (TestNavSplitEscapeSequence).
+$ go test -count=1 -race ./... (mono)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono	1.177s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/cmd	1.108s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/app	2.651s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/config	1.078s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/configui	1.067s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/input	1.022s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/layout	1.017s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/pane	3.757s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/probe	1.022s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/screen	1.018s
+$ golangci-lint
+0 issues.

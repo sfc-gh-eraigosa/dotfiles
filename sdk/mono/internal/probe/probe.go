@@ -6,6 +6,7 @@ package probe
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -64,20 +65,84 @@ var gpuTools = map[string]string{"nvtop": "any", "nvitop": "nvidia", "gpustat": 
 // Choice is the outcome for one pane.
 type Choice struct {
 	Pane   config.Pane
-	Cmd    string // the command that will run; "" = pane dropped
+	Cmd    string // the command that will run first; "" = pane dropped
 	Reason string // why Cmd was chosen, or why each candidate was refused
+	// Views are the views that can run, in tool then view order (a plain pane
+	// has one, named after the pane); Dropped are the rest, with reasons.
+	Views   []ViewChoice
+	Dropped []ViewChoice
+}
+
+// ViewChoice is the outcome for one view of a deck.
+type ViewChoice struct {
+	Tool, View string
+	Zoom       bool   // the tool fills the middle when on screen
+	Cmd        string // the command that will run ("" when dropped)
+	Every, Cwd string
+	Reason     string
 }
 
 // Usable reports whether the pane will run.
 func (c Choice) Usable() bool { return c.Cmd != "" }
 
-// Choose picks a command for every pane, in config order.
+// Choose picks a command for every pane, in config order. A deck is decided
+// per view, then per tool (its probe, run once), then per pane: a pane with
+// no usable view is dropped (spec F8).
 func Choose(ctx context.Context, env Env, panes []config.Pane) []Choice {
 	out := make([]Choice, len(panes))
 	for i, p := range panes {
-		out[i] = choose(ctx, env, p)
+		if p.IsDeck() {
+			out[i] = chooseDeck(ctx, env, p)
+			continue
+		}
+		c := choose(ctx, env, p)
+		vc := ViewChoice{Tool: p.Name, View: p.Name, Cmd: c.Cmd, Every: p.Every, Cwd: p.Cwd, Reason: c.Reason}
+		if c.Usable() {
+			c.Views = []ViewChoice{vc}
+		} else {
+			c.Dropped = []ViewChoice{vc}
+		}
+		out[i] = c
 	}
 	return out
+}
+
+func chooseDeck(ctx context.Context, env Env, p config.Pane) Choice {
+	ch := Choice{Pane: p}
+	for _, t := range p.Tools {
+		if t.Probe != "" {
+			pctx, cancel := context.WithTimeout(ctx, Timeout)
+			ok := env.Run(pctx, t.Probe)
+			cancel()
+			if !ok {
+				for _, v := range t.Views {
+					ch.Dropped = append(ch.Dropped, ViewChoice{Tool: t.Name, View: v.Name, Zoom: t.Zoom, Reason: "tool probe `" + t.Probe + "` failed"})
+				}
+				continue
+			}
+		}
+		for _, v := range t.Views {
+			c := choose(ctx, env, config.Pane{Name: v.Name, Cmd: v.Cmd, Fallbacks: v.Fallbacks, Probe: v.Probe})
+			vc := ViewChoice{Tool: t.Name, View: v.Name, Zoom: t.Zoom, Cmd: c.Cmd, Every: v.Every, Cwd: v.Cwd, Reason: c.Reason}
+			if c.Usable() {
+				ch.Views = append(ch.Views, vc)
+			} else {
+				ch.Dropped = append(ch.Dropped, vc)
+			}
+		}
+	}
+	total := len(ch.Views) + len(ch.Dropped)
+	if len(ch.Views) == 0 {
+		var why []string
+		for _, d := range ch.Dropped {
+			why = append(why, d.Tool+"/"+d.View+": "+d.Reason)
+		}
+		ch.Reason = "no usable view (" + strings.Join(why, "; ") + ")"
+		return ch
+	}
+	ch.Cmd = ch.Views[0].Cmd
+	ch.Reason = fmt.Sprintf("%d of %d views usable", len(ch.Views), total)
+	return ch
 }
 
 func choose(ctx context.Context, env Env, p config.Pane) Choice {

@@ -1,0 +1,26 @@
+# E1 one color scheme across the sdk — 2026-10-19T14:52:18Z
+
+## Survey (a): do fleet and gsl use a library? No.
+- gsl: sdk/gsl/internal/style (palettes dark, light, dark-daltonism, dark8; role keys per segment) + internal/theme (resolves the palette NAME from the AI tool's settings or the terminal; tmux / 8-color → dark8).
+- gff: sdk/gff/internal/style — a port of gsl's split (its doc says so): semantic slots Grey/Green/Blue/Orange/Red/Purple/Text/Border, palettes dark/light/dark8, GFF_THEME override, terminal background via lipgloss.
+- fleet: hardcoded basic ANSI per role in cmd/tui_view.go (2 ok, 1 fail, 3 warn, 4 running, 6 title, 8 border) + a fixed 256-color host list (33 208 141 37 178 169 45 113).
+- mono: hardcoded 36 accent / 31 error; gdash: its own 256-color series list.
+## (b): made it a library — sdk/libs/tui/theme
+Palettes dark/light/dark8/dark-daltonism (gsl's names; gff's dark slots; gsl's light indices; fleet's host colors as the dark series), roles OK/Warn/Crit/Info/Accent/Dim/Text/Border + Series, Enabled (NO_COLOR, TERM=dumb), Resolve(tool) (<TOOL>_THEME → SDK_THEME → tmux/8-color dark8 → background), EnvDarkBackground (COLORFGBG), FG/Paint. No dependencies.
+Adopted: gdash (charts, meters, rows, status) and mono (help overlay, config screen). Not migrated here (follow-up): gsl, gff, fleet — each has its own palette tests (gsl gates contrast).
+
+RED: theme_test.go and gdash render/theme_test.go written first → build failed.
+--- PASS: TestEveryPaletteHasEveryRole (0.00s)
+--- PASS: TestDaltonismAvoidsRedGreen (0.00s)
+--- PASS: TestResolve (0.00s)
+--- PASS: TestEnabled (0.00s)
+--- PASS: TestEnvDarkBackground (0.00s)
+--- PASS: TestFG (0.00s)
+--- PASS: TestSeriesWraps (0.00s)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/theme	0.009s	coverage: 95.3% of statements
+--- PASS: TestColorsComeFromTheSharedTheme (0.00s)
+--- PASS: TestZeroPaletteIsDark (0.00s)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/render	0.012s
+libs: 8 packages ok; lint 0 issues.
+gdash: 9 packages ok; lint 0 issues.
+mono: 10 packages ok; lint 0 issues.

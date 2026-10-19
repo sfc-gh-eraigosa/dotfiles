@@ -1,0 +1,30 @@
+# D1 gdash docs: managing views — 2026-10-19
+Every command in the new README sections was run once against a copy of the
+lab config (GDASH_CONFIG=<copy>; the real one untouched), from wslgiga1:
+
+$ gdash list alert
+alertmanager-overview	Alertmanager / Overview	General
+$ gdash config add view alerts --dashboard alertmanager-overview --range 6h --refresh 15s
+$ gdash config get views.alerts.range
+6h
+$ gdash config set views.nodes.vars.instance 192.168.0.128:9100
+$ gdash config set views.ci.panels 'Active jobs,Pass rate (1h)'
+$ gdash config get views.ci.panels
+Active jobs,Pass rate (1h)
+$ gdash config remove view alerts
+$ gdash config get views.alerts.dashboard
+Error: no view named "alerts"
+$ gdash config set profiles.lab.auth.token abc
+Error: profiles.lab.auth.token: gdash never stores a credential in its config; set auth.file (a 0600 file), auth.env or auth.cmd instead
+$ gdash nope
+Error: no view named "nope" (views: ci, conductor, k3s-nodes, nodes)
+$ gdash doctor        → every row ok, exit 0
+$ GDASH_CONFIG=<empty> gdash doctor
+Error: no Grafana profile yet: gdash config add profile lab --url http://<grafana> --auth-file ~/.config/gdash/lab.cred
+
+Troubleshooting rows, captured from real failures:
+  wrong token  →  FAIL authenticated   grafana /api/search: HTTP 401 (the credential was refused): Invalid API key
+  wrong port   →  FAIL reachable       grafana /api/health: Get "http://192.168.0.128:30399/api/health": dial tcp 192.168.0.128:30399: connect: connection refused
+  0644 token   →  FAIL credential      auth.file: <dir>/bad.cred is mode 0644, readable by others: chmod 600 <dir>/bad.cred
+
+markdownlint-cli2 sdk/gdash/README.md → 0 issues; TestReadmeKeyTableMatchesBindings → ok

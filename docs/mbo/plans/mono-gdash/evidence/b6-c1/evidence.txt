@@ -1,0 +1,20 @@
+# B6 boundary + docs, C1 default mid deck — 2026-10-19T14:44:08Z
+C1 RED: TestDefaultLayout failed (default still htop/gpu/gsl). GREEN changed Default(); seven older tests had used Default() as a plain-pane fixture (a pane named gpu) — they now load #407's default from testdata/default-407.json, so plain-pane mechanics stay tested unchanged; TestDefaultIsValidAndMatchesDesign updated to the new design.
+B6: TestMonoNeverImportsGdash; mutation (a 'sdk/gdash' line in go.mod) → FAIL 'go.mod depends on sdk/gdash'; restored → ok.
+--- PASS: TestMonoNeverImportsGdash (0.20s)
+--- PASS: TestCompat407RoundTrip (0.02s)
+--- PASS: TestDefaultLayout (0.00s)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono	0.184s	coverage: 0.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/cmd	0.074s	coverage: 74.5% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/app	0.966s	coverage: 79.9% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/config	0.055s	coverage: 85.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/configui	0.032s	coverage: 78.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/input	0.004s	coverage: 90.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/layout	0.007s	coverage: 97.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/pane	2.745s	coverage: 92.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/probe	0.008s	coverage: 86.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/screen	0.005s	coverage: 89.8% of statements
+$ golangci-lint
+0 issues.
+$ markdownlint (touched docs)
+Summary: 0 issues in 0 files
