@@ -42,7 +42,7 @@
 - **Grafana:** `13.1.3`; dashboard schemaVersion 39; every target's datasource is `prometheus`, via the `$datasource` variable.
 - **conductor:** `conductor-metrics`, "Conductor — metrics against goals". 17 panels: 3 row, 6 stat, 8 timeseries.
 - **CI:** `ci-lab`, "CI — lab runners". 37 panels: 5 row, 16 stat, 10 timeseries, 4 table, 2 bargauge.
-- **k3s-nodes, owner to pick:** both candidates were captured.
+- **k3s-nodes and nodes (owner, 2026-10-19): use both.** `k3s-nodes` is the Nodes Overview, and Node Exporter becomes the extra view `nodes`. The spec amendment lists all four views.
   - `7d57716318ee0dddbac5a7f451fb7753` "Node Exporter / Nodes": 12 panels (4 row, 6 timeseries, 1 gauge, 1 table); vars `cluster`, `instance`.
   - `058020e04168bfdea0c52269cb699df2` "Kubernetes / Compute Resources / Nodes Overview": 5 timeseries; var `cluster`.
 - **Not supported in v1:** `table` panels (4 in CI, 1 in Node Exporter) become placeholders under spec F3, so A5 must render the placeholder for them.
@@ -81,3 +81,4 @@
 | 2026-10-18 | design session (claude-mono) | design #411; owner answered nav mode |
 | 2026-10-18 | playground session | Grafana via LAN NodePort (Q2/Q3 closed); spec + plan + trio written; owner approved |
 | 2026-10-19 | playground session | #411 merged; gdash worker created; Viewer token issued; Task 0 fixtures captured + scrubbed |
+| 2026-10-19 | playground session | owner picked k3s-nodes = Nodes Overview and kept Node Exporter as a 4th view `nodes`; spec F8 amended |

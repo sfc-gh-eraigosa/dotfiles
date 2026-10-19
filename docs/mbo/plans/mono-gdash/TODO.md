@@ -155,7 +155,7 @@
 
 ### Task C1 — default `mid` deck
 
-- [ ] RED: default-config golden expects the `mid` deck; E16 compat golden still passes
+- [ ] RED: default-config golden expects the `mid` deck with four gdash views; E16 compat golden still passes
 - [ ] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
 - [ ] COMMIT `mono: default mid pane becomes a deck (gpu + gdash conductor/k3s-nodes/ci)` · LEDGER · CHECKPOINT
 
@@ -163,7 +163,7 @@
 
 - [ ] spark1: `gdash doctor` passes → `evidence/e2e/doctor-spark1.txt`
 - [ ] host without credentials: `gdash doctor` exit 1; mono `mid` = GPU pane → `evidence/e2e/doctor-nocred.txt`
-- [ ] mono on spark1 cycling gpu → conductor → k3s-nodes → ci (`tmux capture-pane` each) → `evidence/e2e/deck-cycle.txt`
+- [ ] mono on spark1 cycling gpu → conductor → k3s-nodes → nodes → ci (`tmux capture-pane` each) → `evidence/e2e/deck-cycle.txt`
 - [ ] `ps` shows one gdash process while cycling → `evidence/e2e/one-process.txt`
 - [ ] TRACKING §2 and §3 all ticked; `index.md` → `done`
 - [ ] COMMIT · CHECKPOINT · `ready-for-merge`

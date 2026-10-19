@@ -129,8 +129,8 @@ lists the spec rules it proves.
 
 | Task | Do | Done-when |
 | :-- | :-- | :-- |
-| C1 — default `mid` deck | the default config gains the `mid` deck (`gpu` + `gdash` views, probe `gdash doctor --quiet`) | E16's compat golden still passes for user configs; the default-config golden is updated |
-| C2 — live evidence | on spark1: `gdash doctor`; mono cycling the deck (`tmux capture-pane`); `ps` showing one gdash; on a host without credentials: `gdash doctor` exit 1 and mono's `mid` = GPU pane | captures in `evidence/e2e/`; TRACKING proof matrix all ticked |
+| C1 — default `mid` deck | the default config gains the `mid` deck (`gpu` + `gdash` views `conductor`, `k3s-nodes`, `nodes`, `ci`, probe `gdash doctor --quiet`; spec F8 table) | E16's compat golden still passes for user configs; the default-config golden is updated |
+| C2 — live evidence | on spark1: `gdash doctor`; mono cycling the deck through all four gdash views (`tmux capture-pane`); `ps` showing one gdash; on a host without credentials: `gdash doctor` exit 1 and mono's `mid` = GPU pane | captures in `evidence/e2e/`; TRACKING proof matrix all ticked |
 
 ## 5. Verification mapping
 

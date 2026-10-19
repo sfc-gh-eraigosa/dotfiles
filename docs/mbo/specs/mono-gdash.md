@@ -3,6 +3,10 @@
 - **Slug:** mono-gdash
 - **Date:** 2026-10-18
 - **Status:** Approved (owner, 2026-10-18: "the plan already covers what we need and the spec adds execution detail")
+- **Amended:** 2026-10-19 (owner): gdash gets **four** views, not three:
+  - `k3s-nodes` is "Kubernetes / Compute Resources / Nodes Overview";
+  - "Node Exporter / Nodes" joins as `nodes`;
+  - both "are also good ones, use them".
 - **Relates to:** design [`../designs/mono-gdash.md`](../designs/mono-gdash.md) · issue [#410](https://github.com/sfc-gh-eraigosa/dotfiles/issues/410) · PR [#411](https://github.com/sfc-gh-eraigosa/dotfiles/pull/411) · plan [`../plans/mono-gdash.md`](../plans/mono-gdash.md)
 
 The design is the "why and shape". This spec turns each of its decisions into a testable rule.
@@ -21,7 +25,7 @@ on its own in any terminal. A host that can't reach Grafana sees today's mono, u
 | # | Actor / trigger | Flow | Acceptance |
 | :-- | :-- | :-- | :-- |
 | U1 | Owner runs `gdash conductor` on spark1 | gdash loads the `conductor` view, fetches the dashboard and its panels from `http://192.168.0.128:30300`, and draws them | Every Prometheus timeseries panel is a braille chart with a legend and the last value; stat panels are meters; anything else is a labelled placeholder. Refreshes every 30 s |
-| U2 | Owner starts `mono` on a host with gdash configured | The `mid` deck shows `gpu`; `esc esc`, then `l`, switches to `gdash · conductor`; `j` goes to `k3s-nodes`, then `ci`, then past the last view into the next pane | The title bar reads `NAV` and `mid ◀ gdash ▶ · k3s-nodes 2/3`; only the visible view's process runs |
+| U2 | Owner starts `mono` on a host with gdash configured | The `mid` deck shows `gpu`; `esc esc`, then `l`, switches to `gdash · conductor`; `j` goes to `k3s-nodes`, `nodes`, then `ci`, then past the last view into the next pane | The title bar reads `NAV` and `mid ◀ gdash ▶ · k3s-nodes 2/4`; only the visible view's process runs |
 | U3 | mono on a host with no Grafana access (e.g. WSL off-LAN) or no gdash credentials | gdash's probe fails, so the gdash tool is dropped | The `mid` pane is today's GPU pane, or is dropped entirely where there's no GPU; `mono doctor` names why |
 | U4 | Grafana goes away while gdash runs | The next refresh fails | The last good data stays on screen with its age and the error on a status row; it is never blank |
 | U5 | Owner sets up a new host | `gdash config add profile lab --url … --auth-file ~/.config/gdash/lab.cred`, then `gdash list conductor`, then `gdash config add view conductor --dashboard <uid>` | `gdash doctor` passes every row; no secret is in any file gdash writes or anything it prints |
@@ -141,7 +145,18 @@ sdk/mono  (changed)
 - **`mono config` dotted paths:** `panes.<p>.tools.<t>.views.<v>.<field>`, plus
   `add|remove|move` at the tool and view levels, all mirroring today's verbs.
 - **Default layout:** `mid` becomes a deck: `gpu` (nvtop → nvitop), then `gdash` with views
-  `conductor`, `k3s-nodes`, `ci`, and `probe: "gdash doctor --quiet"`.
+  `conductor`, `k3s-nodes`, `nodes`, `ci`, and `probe: "gdash doctor --quiet"`. The lab
+  dashboards behind the views (owner, 2026-10-19):
+
+  | View | Dashboard uid | Title |
+  | :-- | :-- | :-- |
+  | `conductor` | `conductor-metrics` | Conductor — metrics against goals |
+  | `k3s-nodes` | `058020e04168bfdea0c52269cb699df2` | Kubernetes / Compute Resources / Nodes Overview |
+  | `nodes` | `7d57716318ee0dddbac5a7f451fb7753` | Node Exporter / Nodes (per node, `$instance`) |
+  | `ci` | `ci-lab` | CI — lab runners |
+
+  These uids go in the README's per-host setup walkthrough. They are not compiled in: views
+  stay user config (design §4.5).
 
 ### F9 — nav mode
 - **Enter:** `<prefix> <nav_key>` (default `space`), or `esc` twice within `nav_esc_ms`
@@ -197,7 +212,7 @@ sdk/mono  (changed)
   `make lint-markdown` must all be green.
 - **Live evidence** (human-observable, captured to `plans/mono-gdash/evidence/`):
   - `gdash doctor` from spark1 (passes) and from a host without credentials (fails, exit 1);
-  - `tmux capture-pane` of mono on a lab host cycling `gpu → gdash conductor → k3s-nodes → ci`;
+  - `tmux capture-pane` of mono on a lab host cycling `gpu → gdash conductor → k3s-nodes → nodes → ci`;
   - `ps` showing a single gdash process while cycling.
 
 ## 7. Prerequisites / dependencies
