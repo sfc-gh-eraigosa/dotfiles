@@ -3,7 +3,7 @@
 - **Slug:** mono-gdash
 - **Date:** 2026-10-18
 - **Status:** Draft
-- **Relates to:** builds on [`mono`](./mono.md) ([#407](https://github.com/sfc-gh-eraigosa/dotfiles/pull/407)) · design issue [#410](https://github.com/sfc-gh-eraigosa/dotfiles/issues/410) · design PR (pending)
+- **Relates to:** builds on [`mono`](./mono.md) ([#407](https://github.com/sfc-gh-eraigosa/dotfiles/pull/407)) · design issue [#410](https://github.com/sfc-gh-eraigosa/dotfiles/issues/410) · design PR [#411](https://github.com/sfc-gh-eraigosa/dotfiles/pull/411)
 - **Author(s):** Edward Raigosa, Claude
 
 Lines marked **(owner)** are the owner's decisions from the design conversation. Lines marked
