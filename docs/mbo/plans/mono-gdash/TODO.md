@@ -108,45 +108,51 @@
 
 ### Task B1 — config schema  (E16)
 
-- [ ] RED: `compat_test.go` (the #407 default round-trips byte-identical); validation (cmd XOR tools, unique names)
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: Tools/Views; 1×1 normalization; save preserves plain panes
-- [ ] RUN-GREEN → PASS
-- [ ] EVIDENCE · COMMIT `mono: deck panes in the config (tools × views); plain panes unchanged` · LEDGER · CHECKPOINT
+- [x] RED: `compat_test.go` (the #407 default round-trips byte-identical); validation (cmd XOR tools, unique names)
+- [x] RUN-RED → FAIL
+- [x] GREEN: Tools/Views; 1×1 normalization; save preserves plain panes
+- [x] RUN-GREEN → PASS
+- [x] EVIDENCE · COMMIT `mono: deck panes in the config (tools × views); plain panes unchanged` · LEDGER · CHECKPOINT
 
 ### Task B2 — probe + doctor  (E17)
 
-- [ ] RED: `probe/deck_test.go`, doctor rows
-- [ ] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
-- [ ] EVIDENCE · COMMIT `mono: drop per view, tool, pane; doctor rows per view` · LEDGER · CHECKPOINT
+- [x] RED: `probe/deck_test.go`, doctor rows
+- [x] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
+- [x] EVIDENCE · COMMIT `mono: drop per view, tool, pane; doctor rows per view` · LEDGER · CHECKPOINT
 
 ### Task B3 — deck runtime  (E18 E19)
 
-- [ ] RED: `TestOnlyVisibleViewRuns` (fake runner: HUP→KILL ≤ 500 ms), title label, `:focus` command tests
-- [ ] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
-- [ ] EVIDENCE · COMMIT `mono: deck runtime (only the visible view runs), title label, :focus` · LEDGER · CHECKPOINT
+- [x] RED: `TestOnlyVisibleViewRuns` (fake runner: HUP→KILL ≤ 500 ms), title label, `:focus` command tests
+- [x] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
+- [x] EVIDENCE · COMMIT `mono: deck runtime (only the visible view runs), title label, :focus` · LEDGER · CHECKPOINT
 
 ### Task B4 — nav mode  (E20 E21 E22 E23)
 
-- [ ] RED: `nav_test.go` with an injected clock (prefix+space; esc esc at 200/400 ms; `nav_esc_ms: 0`; walk, ends, other key leaves without forwarding); README key-table test
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: `app/nav.go`; `keys.go` stops stripping PageLeft/PageRight and re-labels them; help/title/README from the one table
-- [ ] RUN-GREEN → PASS
-- [ ] EVIDENCE · COMMIT `mono: nav mode (prefix+space or esc esc; hjkl through decks and panes)` · LEDGER · CHECKPOINT
+- [x] RED: `nav_test.go` with an injected clock (prefix+space; esc esc at 200/400 ms; `nav_esc_ms: 0`; walk, ends, other key leaves without forwarding); README key-table test
+- [x] RUN-RED → FAIL
+- [x] GREEN: `app/nav.go`; `keys.go` stops stripping PageLeft/PageRight and re-labels them; help/title/README from the one table
+- [x] RUN-GREEN → PASS
+- [x] EVIDENCE · COMMIT `mono: nav mode (prefix+space or esc esc; hjkl through decks and panes)` · LEDGER · CHECKPOINT
 
 ### Task B5 — config verbs + UI
 
-- [ ] RED: dotted-path verb tables; configui deck-row frame test
-- [ ] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
-- [ ] EVIDENCE · COMMIT `mono: config verbs and screen for decks` · LEDGER · CHECKPOINT
+- [x] RED: dotted-path verb tables; configui deck-row frame test
+- [x] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
+- [x] EVIDENCE · COMMIT `mono: config verbs and screen for decks` · LEDGER · CHECKPOINT
+
+### Task B7 — zoom + one-pane mode  (E25 E26 E27; amended 2026-10-19)
+
+- [x] RED: `zoom_test.go` (z keeps the title and gsl; tool zoom auto on/off), `middle_test.go` (single merges the middle panes only)
+- [x] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
+- [x] EVIDENCE · COMMIT `mono: zoom and one-pane middle` · LEDGER · CHECKPOINT
 
 ### Task B6 — boundary + docs  (E24)
 
-- [ ] RED: `boundary_test.go` (no `sdk/gdash` import or go.mod require)
-- [ ] RUN-RED: temporarily add a bad import → FAIL, then remove it
-- [ ] GREEN: README/AGENTS deck + nav sections; `scripts/test.sh` `mono) echo 60`
-- [ ] VERIFY: `make lint-go` · `make security` · `make lint-markdown`
-- [ ] EVIDENCE · COMMIT `mono: boundary guard and deck/nav docs` · LEDGER · CHECKPOINT
+- [x] RED: `boundary_test.go` (no `sdk/gdash` import or go.mod require)
+- [x] RUN-RED: temporarily add a bad import → FAIL, then remove it
+- [x] GREEN: README/AGENTS deck + nav sections; `scripts/test.sh` `mono) echo 60`
+- [x] VERIFY: `make lint-go` · `make security` · `make lint-markdown`
+- [x] EVIDENCE · COMMIT `mono: boundary guard and deck/nav docs` · LEDGER · CHECKPOINT
 - [ ] label the deck PR `ready-for-merge` once every check is green
 
 ---
@@ -155,15 +161,28 @@
 
 ### Task C1 — default `mid` deck
 
-- [ ] RED: default-config golden expects the `mid` deck with four gdash views; E16 compat golden still passes
-- [ ] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
-- [ ] COMMIT `mono: default mid pane becomes a deck (gpu + gdash conductor/k3s-nodes/ci)` · LEDGER · CHECKPOINT
+- [x] RED: default-config golden expects the `mid` deck with four gdash views; E16 compat golden still passes
+- [x] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
+- [x] COMMIT `mono: default mid pane becomes a deck (gpu + gdash conductor/k3s-nodes/ci)` · LEDGER · CHECKPOINT
+
+### Task D1 — gdash docs: managing views
+
+- [x] README: views (add, change, remove, subset, variables), another host, troubleshooting
+- [x] run every command in it once; markdownlint clean
+- [x] COMMIT · LEDGER · CHECKPOINT
+
+### Task E1 — one color scheme across the sdk (last)
+
+- [x] SURVEY: how fleet and gsl color their output (library? palette? NO_COLOR?)
+- [x] RED: contract test that gdash's colors come from the shared scheme
+- [x] GREEN: the shared scheme in `sdk/libs` (if none exists), with gdash using it
+- [x] VERIFY: lint, security, goldens · COMMIT · LEDGER · CHECKPOINT
 
 ### Task C2 — live evidence
 
-- [ ] spark1: `gdash doctor` passes → `evidence/e2e/doctor-spark1.txt`
-- [ ] host without credentials: `gdash doctor` exit 1; mono `mid` = GPU pane → `evidence/e2e/doctor-nocred.txt`
-- [ ] mono on spark1 cycling gpu → conductor → k3s-nodes → nodes → ci (`tmux capture-pane` each) → `evidence/e2e/deck-cycle.txt`
-- [ ] `ps` shows one gdash process while cycling → `evidence/e2e/one-process.txt`
-- [ ] TRACKING §2 and §3 all ticked; `index.md` → `done`
+- [x] spark1: `gdash doctor` passes (all rows ok after copying config + 0600 token per README)
+- [x] host without credentials: `gdash doctor --quiet` exit 1; mono `mid` = GPU tool only → `evidence/c2/nocred-wslgiga1.txt`
+- [x] mono on spark1 cycling gpu → conductor → k3s-nodes → nodes → ci (`tmux capture-pane` each) → `evidence/c2/spark1-*.txt`
+- [x] one gdash view process while cycling (pgrep: 1 at every view; 0 after quit)
+- [ ] TRACKING §2 and §3 all ticked; `index.md` → `done` (after the PR merges)
 - [ ] COMMIT · CHECKPOINT · `ready-for-merge`

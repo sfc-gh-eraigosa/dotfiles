@@ -2,7 +2,7 @@
 
 `mono` fills one terminal with stacked panes, each running a real program in its own pseudo-terminal: by default **htop** on top, a **GPU monitor** in the middle, and **gsl** at the bottom, refreshed every second. Panes whose tool is missing, or can't work on this machine, are left out and the others grow into their rows, so the same config works on a WSL laptop, an NVIDIA box, and a Raspberry Pi.
 
-```
+```text
 ┌ mono v0.1.0 — a1b2c3d   ● htop                               ctrl+b ? help ┐  title  5%
 │ htop                                                                       │  htop  60%
 │ nvtop  (dropped where it has no GPU to read; htop and gsl take its rows)   │  gpu   30%
@@ -21,6 +21,10 @@ Every key goes to the focused program, so htop's `q`, `/`, `esc` and F-keys beha
 | :-- | :-- |
 | `j` `down` | focus the next pane |
 | `k` `up` | focus the previous pane |
+| `h` `left` | previous tool in a deck pane |
+| `l` `right` | next tool in a deck pane |
+| `z` | zoom the pane over the middle |
+| `space` | nav mode: hjkl and z, no prefix |
 | `:` | command line (see Commands below) |
 | `?` `f1` | this help |
 | `q` `ctrl+c` | quit mono (stops every pane) |
@@ -36,7 +40,7 @@ Commands (`ctrl+b :`):
 | :-- | :-- |
 | `:config` | open the config screen full size; mono reloads when it closes |
 | `:restart [pane]` | restart a pane's program (default: the focused one) |
-| `:focus <pane>` | focus a pane by name |
+| `:focus <pane>[/<tool>[/<view>]]` | focus a pane, a deck's tool, or one of its views |
 | `:reload` | re-read the config and re-check tools |
 | `:q` | quit |
 
@@ -52,8 +56,14 @@ Settings live in `${XDG_CONFIG_HOME:-~/.config}/mono/config.json` (`$MONO_CONFIG
   "title": { "size": "5%" },
   "panes": [
     { "name": "htop", "size": "60%", "cmd": "htop-fit", "fallbacks": ["htop"] },
-    { "name": "gpu",  "size": "30%", "cmd": "nvtop", "fallbacks": ["nvitop"] },
-    { "name": "gsl",  "size": "5%",  "cmd": "gsl status", "every": "1s" }
+    { "name": "mid",  "size": "30%", "tools": [
+        { "name": "gpu", "views": [ { "name": "nvtop", "cmd": "nvtop", "fallbacks": ["nvitop"] } ] },
+        { "name": "gdash", "probe": "gdash doctor --quiet", "zoom": true, "views": [
+            { "name": "conductor", "cmd": "gdash conductor" },
+            { "name": "k3s-nodes", "cmd": "gdash k3s-nodes" },
+            { "name": "nodes",     "cmd": "gdash nodes" },
+            { "name": "ci",        "cmd": "gdash ci" } ] } ] },
+    { "name": "gsl",  "size": "5%",  "cmd": "gsl status", "every": "1s", "zoomable": false }
   ]
 }
 ```
@@ -69,6 +79,13 @@ Settings live in `${XDG_CONFIG_HOME:-~/.config}/mono/config.json` (`$MONO_CONFIG
 | `panes[].fallbacks` | commands tried in order when `cmd` can't run here |
 | `panes[].probe` | `""` built-in check, `"none"` to skip it, or a command whose exit 0 means usable |
 | `panes[].cwd` | working directory; `""` is where mono started |
+| `panes[].tools` | instead of `cmd`: a **deck**, a list of tools, each with `views` (a view takes `cmd`, `every`, `fallbacks`, `probe`, `cwd`). One view is on screen at a time |
+| `panes[].tools[].probe` | a command that must exit 0 for the tool to show (`gdash doctor --quiet`); it runs once |
+| `panes[].tools[].zoom` | `true`: the tool fills the whole middle while it is on screen |
+| `panes[].zoomable` | `false` keeps the pane out of the middle: zoom never moves it (the gsl footer) |
+| `middle` | `split` (default): the middle panes share their rows, `z` zooms one. `single`: they merge into one deck holding all their tools |
+| `nav_key` | the key after the prefix that enters nav mode (`space`) |
+| `nav_esc_ms` | the esc-esc window for entering nav mode (`300`); `0` turns double-esc off |
 
 Edit it from the command line:
 
@@ -115,6 +132,36 @@ htop   60%   35       htop-fit     found htop-fit
 gpu    30%   -        (not shown)  nvtop not installed; nvitop not installed
 gsl    5%    3        gsl status   found gsl
 ```
+
+## Decks, nav mode and zoom
+
+A **deck** pane holds several tools, each with several views; only the view
+on screen runs, and switching starts its program fresh. The default `mid`
+pane is a deck of the GPU monitor and [gdash](../gdash/README.md) (the lab's
+Grafana dashboards). On a host that can't reach Grafana, gdash's probe fails
+and the pane is just the GPU monitor, as before.
+
+**Nav mode** moves without the prefix: `esc esc` (the first esc still reaches
+the program at once) or `ctrl+b space`, then `j`/`k` walk the deck's views and
+on to the next pane, `h`/`l` switch tools, `z` zooms, and `esc` (or any other
+key) leaves. The title bar says where you are, `mid ◀ gdash ▶ · ci 4/4`, and
+shows `NAV` and `ZOOM`.
+
+**The middle** is every pane except the fixed ones (`zoomable: false`, the
+gsl footer); the title bar is never part of it. `z` gives the focused middle
+pane every middle row and `z` again restores the split. gdash has
+`zoom: true`, so it takes the whole middle whenever it is on screen and gives
+the rows back when you switch away. To make the middle **one pane** instead,
+holding htop, the GPU monitor and gdash as tools:
+
+```bash
+mono config set middle single     # back: mono config set middle split
+mono config add-view mid gdash alerts -- gdash alerts   # another gdash view
+```
+
+A host that already has a `~/.config/mono/config.json` keeps its layout; to
+pick up the new default, move that file aside (or `mono config remove gpu`
+and add the deck with `mono config add-tool`).
 
 ## How it works
 

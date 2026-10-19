@@ -82,6 +82,60 @@ Node & Pod Count
 `gdash doctor --quiet` checks only that Grafana answers and the token is
 accepted, in under 2 seconds, and prints nothing — it is mono's probe.
 
+## Managing views
+
+A view is a name for one dashboard, plus how gdash shows it. Add as many as
+you like; `gdash <view>` opens one, and mono's `mid` pane can list them too.
+
+```bash
+gdash list alert                          # find the uid
+gdash config add view alerts --dashboard alertmanager-overview --range 6h --refresh 15s
+gdash alerts
+```
+
+| To… | Run |
+| :-- | :-- |
+| change how far back it shows | `gdash config set views.alerts.range 24h` (or `+`/`-` while viewing) |
+| change how often it updates | `gdash config set views.alerts.refresh 1m` (never under `5s`) |
+| set a dashboard variable | `gdash config set views.nodes.vars.instance 192.168.0.128:9100` |
+| show only some panels | `gdash config set views.ci.panels "Active jobs,Pass rate (1h)"` |
+| see one setting | `gdash config get views.alerts.range` |
+| remove it | `gdash config remove view alerts` |
+| put it in mono's middle pane | `mono config add-view mid gdash alerts -- gdash alerts` |
+
+A panel that says `needs var $x` is waiting for a variable the dashboard
+fills in by running a query; the panel prints the exact `gdash config set`
+that fixes it. A titled panel that doesn't exist says `no panel with this
+title on the dashboard`.
+
+## Another host
+
+The config (`~/.config/gdash/config.json`) holds no secret, so copy it as is;
+copy the token file too and keep it private:
+
+```bash
+scp ~/.config/gdash/config.json <host>:~/.config/gdash/config.json
+scp ~/.config/gdash/lab.cred <host>:~/.config/gdash/lab.cred
+ssh <host> 'chmod 600 ~/.config/gdash/lab.cred && gdash doctor'
+```
+
+## Troubleshooting
+
+`gdash doctor` says which step fails; `mono doctor` shows whether mono will
+show gdash (its probe is `gdash doctor --quiet`).
+
+| `gdash doctor` says | Cause | Fix |
+| :-- | :-- | :-- |
+| `FAIL reachable … connection refused` | wrong URL or port, or Grafana down | `gdash config get profiles.lab.url`; try it with `curl <url>/api/health` |
+| `FAIL authenticated … HTTP 401 (the credential was refused): Invalid API key` | the token is wrong, expired or deleted | make a new Viewer token in Grafana and write it to the token file |
+| `FAIL credential … is mode 0644, readable by others: chmod 600 …` | the token file is readable by others | run the `chmod 600` it prints |
+| `FAIL view x … no dashboard matches` | the dashboard was renamed or deleted | `gdash list`, then `gdash config set views.x.dashboard <uid>` |
+| `Error: no Grafana profile yet` | this host has no gdash config | see [Set up a host](#set-up-a-host-once) |
+| `Error: no view named "x" (views: …)` | a typo, or the view is on another host | one of the names it lists |
+
+In mono, a gdash view that is missing while the others show usually means
+the probe failed when mono started; `ctrl+b r` on the `mid` pane checks again.
+
 ## Keys
 
 | Key | Action |

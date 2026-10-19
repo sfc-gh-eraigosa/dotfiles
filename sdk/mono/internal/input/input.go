@@ -69,6 +69,10 @@ func (r *Router) Feed(b []byte) (events []Event, rest []byte) {
 	return events, nil
 }
 
+// IncompleteEscape is incompleteEscape for callers that decode keys
+// themselves (mono's nav mode).
+func IncompleteEscape(b []byte) bool { return incompleteEscape(b) }
+
 // incompleteEscape reports whether b is the start of a CSI or SS3 sequence
 // whose final byte has not arrived. A lone ESC is complete: it is the Esc key.
 func incompleteEscape(b []byte) bool {

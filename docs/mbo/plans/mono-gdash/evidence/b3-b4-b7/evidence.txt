@@ -1,0 +1,33 @@
+# B3 deck runtime + B4 nav mode + B7 zoom/one-pane (runtime) — 2026-10-19T14:38:19Z
+RED: internal/app/deck_test.go written first → build failed (no Running/Heights/Nav/FocusedName/FocusedPath, Options.Now).
+GREEN, then 3 older tests failed for real reasons: the title-bar hint overflowed at 60 cols (new keys moved to the ? help, not the hint); new help strings were cut in a 60-col overlay (shortened); TestUnknownPrefixKeyIsExplained used z as an unbound key (now zoom → uses x). E23 then caught the README key table drifting (rows added).
+
+$ go test -count=1 -v -run "OnlyVisible|TitleLabel|FocusCommand|NavEntry|NavWalk|NavOtherKey|Zoom|ToolZoom|MiddleSingleRuntime" ./internal/app/
+--- PASS: TestOnlyVisibleViewRuns (0.09s)
+--- PASS: TestTitleLabel (0.03s)
+--- PASS: TestFocusCommand (0.04s)
+--- PASS: TestNavEntry (0.05s)
+--- PASS: TestNavWalk (0.02s)
+--- PASS: TestNavOtherKeyLeaves (0.04s)
+--- PASS: TestZoomKeepsTitleAndFooter (0.03s)
+--- PASS: TestToolZoom (0.03s)
+--- PASS: TestMiddleSingleRuntime (0.02s)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/app	0.357s
+
+$ go test -count=1 -race ./internal/app/ ./internal/config/ ./internal/probe/ ./cmd/
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/app	1.982s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/config	1.062s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/probe	1.017s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/cmd	1.074s
+$ go test -count=1 -cover ./... (mono)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/cmd	0.039s	coverage: 71.4% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/app	0.944s	coverage: 79.9% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/config	0.035s	coverage: 85.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/configui	0.025s	coverage: 77.1% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/input	0.005s	coverage: 90.0% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/layout	0.006s	coverage: 97.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/pane	2.722s	coverage: 92.8% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/probe	0.005s	coverage: 86.2% of statements
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/screen	0.005s	coverage: 89.8% of statements
+$ golangci-lint
+0 issues.

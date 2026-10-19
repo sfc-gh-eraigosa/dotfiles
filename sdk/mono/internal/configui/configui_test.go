@@ -2,6 +2,8 @@ package configui
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -31,7 +33,7 @@ var (
 func newModel(t *testing.T) (*Model, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.json")
-	m := New(path, config.Default(), env{})
+	m := New(path, legacyDefault(t), env{})
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m.Update(m.Init()()) // run the tool check synchronously
 	return m, path
@@ -200,4 +202,19 @@ func TestFooterHintFitsAndGroupsKeys(t *testing.T) {
 	if len(hint) > 110 {
 		t.Errorf("footer is %d columns; keep it on one line of a 110-column terminal: %q", len(hint), hint)
 	}
+}
+
+// legacyDefault is #407's default (plain htop, gpu and gsl panes): the
+// fixture for the screen's plain-pane mechanics, which decks did not change.
+func legacyDefault(t *testing.T) config.Config {
+	t.Helper()
+	b, err := os.ReadFile("../config/testdata/default-407.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c config.Config
+	if err := json.Unmarshal(b, &c); err != nil {
+		t.Fatal(err)
+	}
+	return c
 }

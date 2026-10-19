@@ -203,8 +203,9 @@ func TestPrefixQuit(t *testing.T) {
 
 func TestUnknownPrefixKeyIsExplained(t *testing.T) {
 	a := start(t, testConfig(), env{})
-	a.HandleBytes([]byte("\x02z"))
-	if bar := strings.Split(plain(first(a)), "\n")[0]; !strings.Contains(bar, "ctrl+b z is not a mono key") {
+	// x: any key mono does not bind (z was the example until it became zoom).
+	a.HandleBytes([]byte("\x02x"))
+	if bar := strings.Split(plain(first(a)), "\n")[0]; !strings.Contains(bar, "ctrl+b x is not a mono key") {
 		t.Fatalf("bar = %q", bar)
 	}
 }

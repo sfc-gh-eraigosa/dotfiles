@@ -27,6 +27,11 @@ Keys for get/set:
   panes.<name>.fallbacks  comma-separated commands tried when cmd cannot run
   panes.<name>.probe      "" built-in check, "none", or a command (exit 0 = usable)
   panes.<name>.cwd        working directory ("" = where mono started)
+  panes.<name>.zoomable   true (part of the middle; z zooms it) or false (fixed, like the gsl footer)
+  middle                  split (the middle panes share rows) or single (one deck of all their tools)
+  nav_key / nav_esc_ms    nav mode's key after the prefix (space), and the esc esc window (300; 0 = off)
+  panes.<p>.tools.<t>.{probe,zoom}                       a deck tool's check, and whether it fills the middle
+  panes.<p>.tools.<t>.views.<v>.{cmd,every,fallbacks,probe,cwd}   a deck view (add-tool/add-view to add)
 
 Settings live in ${XDG_CONFIG_HOME:-~/.config}/mono/config.json ($MONO_CONFIG overrides).`,
 	Args: cobra.NoArgs,

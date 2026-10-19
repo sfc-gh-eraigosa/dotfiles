@@ -7,6 +7,11 @@
   - `k3s-nodes` is "Kubernetes / Compute Resources / Nodes Overview";
   - "Node Exporter / Nodes" joins as `nodes`;
   - both "are also good ones, use them".
+- **Amended:** 2026-10-19 (owner): **the middle of the screen, zoom, and one-pane mode** (new feature F10).
+  - Panes can be zoomed, and the middle can be configured as a single pane.
+  - gdash always uses the whole middle.
+  - The other tools share the middle and can be zoomed.
+  - The title and the gsl footer never move.
 - **Relates to:** design [`../designs/mono-gdash.md`](../designs/mono-gdash.md) · issue [#410](https://github.com/sfc-gh-eraigosa/dotfiles/issues/410) · PR [#411](https://github.com/sfc-gh-eraigosa/dotfiles/pull/411) · plan [`../plans/mono-gdash.md`](../plans/mono-gdash.md)
 
 The design is the "why and shape". This spec turns each of its decisions into a testable rule.
@@ -152,8 +157,14 @@ sdk/mono  (changed)
 - **`mono doctor`:** one row per pane/tool/view with `runs`, `fallback <cmd>` or `dropped: <reason>`.
 - **`mono config` dotted paths:** `panes.<p>.tools.<t>.views.<v>.<field>`, plus
   `add|remove|move` at the tool and view levels, all mirroring today's verbs.
-- **Default layout:** `mid` becomes a deck: `gpu` (nvtop → nvitop), then `gdash` with views
-  `conductor`, `k3s-nodes`, `nodes`, `ci`, and `probe: "gdash doctor --quiet"`. The lab
+- **Default layout:** the panes are as follows.
+  - **htop:** 60%, unchanged.
+  - **`mid`:** 30%, a deck. Its tools are `gpu` (nvtop → nvitop) and `gdash`.
+    `gdash` has `"zoom": true`, `probe: "gdash doctor --quiet"` and views
+    `conductor`, `k3s-nodes`, `nodes`, `ci`.
+  - **gsl:** 5%, `"zoomable": false`.
+  - **`middle`:** `split`. `mono config set middle single` turns htop, gpu and
+    gdash into one 90% deck instead. The lab
   dashboards behind the views (owner, 2026-10-19):
 
   | View | Dashboard uid | Title |
@@ -165,6 +176,26 @@ sdk/mono  (changed)
 
   These uids go in the README's per-host setup walkthrough. They are not compiled in: views
   stay user config (design §4.5).
+
+### F10 — the middle, zoom, and one-pane mode (amended 2026-10-19)
+
+- **The middle** is every pane with `zoomable` unset or `true`. A pane with
+  `"zoomable": false` (the gsl footer in the default layout) keeps its rows in
+  every mode, and the title bar is never part of the middle.
+- **Zoom:** `z` in nav mode, or `<prefix> z`, toggles the focused middle pane
+  to take every middle row. The other middle panes get no rows and keep
+  running unseen; toggling again restores the split. `<prefix> z` on a
+  non-zoomable pane says so on the title bar.
+- **Always-zoomed tools:** a deck tool with `"zoom": true` fills the middle
+  whenever it is the tool on screen, and gives the rows back when you switch
+  away. The default layout's `gdash` tool has it.
+- **One-pane mode:** `"middle": "split"` (the default) or `"single"`
+  (`mono config set middle single`). `single` merges every middle pane into
+  one deck named `mid`. It sits where the first middle pane was, its size is
+  the sum of theirs, and its tools are each pane's tools in order (a plain
+  pane becomes one tool named after it). Non-middle panes are untouched.
+- **Title:** `ZOOM` shows on the title bar while a pane is zoomed (manually or
+  by its tool).
 
 ### F9 — nav mode
 
@@ -207,6 +238,9 @@ sdk/mono  (changed)
 | E22 | F9 | `x` in nav mode | leave, not forwarded | reach the program | — | `TestNavOtherKeyLeaves` |
 | E23 | F8/F9 | README key table vs binding table | identical | drift | — | `app/readme_test.go` (extends #407's) |
 | E24 | §3 | mono imports | none from sdk/gdash | — | — | `sdk/mono/boundary_test.go` |
+| E25 | F10 | `z` on a middle pane, then again | it takes every middle row; title and gsl unchanged; then the split returns | `z` on gsl: a message, no change | the title or a non-zoomable pane moves | `app/zoom_test.go TestZoomKeepsTitleAndFooter` |
+| E26 | F10 | the deck switches to a `zoom: true` tool, then away | auto-zoom, then restore | manual zoom combined with an auto tool | the middle stays zoomed after switching away | `app/zoom_test.go TestToolZoom` |
+| E27 | F10 | `middle: single` | one `mid` deck: tools htop, gpu, gdash; 90% | a layout with a single middle pane is left alone | the gsl footer is merged | `config/middle_test.go` |
 
 ## 6. Verification harness
 

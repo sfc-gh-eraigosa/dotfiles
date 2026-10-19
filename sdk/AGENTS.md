@@ -27,7 +27,7 @@ path-prefixed `sdk/<tool>/vX.Y.Z` tags.
 | [`wlink/`](./wlink/AGENTS.md) | `wlink` | WSL link — pins the resolver that knows your fleet; tunnel readiness, drift, ssh-keepalive doctor. |
 | [`gcfg/`](./gcfg/AGENTS.md) | `gcfg` | GitHub settings as code — `.github/gcfg.yaml` exported, verified in CI, applied on purpose. |
 | [`ghapp/`](./ghapp/AGENTS.md) | `ghapp` | GitHub App credential toolkit — manifest-flow create, short-lived installation tokens. |
-| [`libs/`](./libs/AGENTS.md) | *(library)* | Shared Go packages — `log`. Not a CLI. |
+| [`libs/`](./libs/AGENTS.md) | *(library)* | Shared Go packages — `log`, `tui` (keys, nav, prompts, overlays, and `theme`, the one color scheme). Not a CLI. |
 
 ## Adding a module
 
@@ -66,6 +66,7 @@ only for the reader who trusts it.
   directly — it never commits to `main`.
 - **Test/lint discovery** is by directory under `sdk/` (`scripts/test.sh` + the
   `Makefile` Go loops); `src/` stays scanned until the cutover completes.
+- **Colors come from `libs/tui/theme`** (gdash and mono do; gsl, gff and fleet still carry their own copies, migration tracked in the mono-gdash ledger). Pick roles (`OK`, `Warn`, `Crit`…), not raw numbers.
 - **TUIs compose `libs/tui`** and follow [`libs/tui/GUIDE.md`](./libs/tui/GUIDE.md)
   (keymap-as-data, vim grammar, prompt routing, help/confirm). fleet predates the
   lib and is ported under the `sdk-tui` phase-3 objective.
