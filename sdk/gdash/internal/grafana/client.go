@@ -146,8 +146,9 @@ func NewHTTP(base string, cred Credential, timeout time.Duration) Client {
 
 // HTTPError is a non-2xx answer.
 type HTTPError struct {
-	Status int
-	Path   string
+	Status  int
+	Path    string
+	Message string // Grafana's "message" (or the start of its body), when it sent one
 }
 
 func (e *HTTPError) Error() string {
@@ -160,7 +161,11 @@ func (e *HTTPError) Error() string {
 	case http.StatusNotFound:
 		hint = " (not found)"
 	}
-	return fmt.Sprintf("grafana %s: HTTP %d%s", e.Path, e.Status, hint)
+	msg := ""
+	if e.Message != "" {
+		msg = ": " + e.Message
+	}
+	return fmt.Sprintf("grafana %s: HTTP %d%s%s", e.Path, e.Status, hint, msg)
 }
 
 func (c *httpClient) do(ctx context.Context, method, path string, body any, out any) error {
@@ -190,8 +195,7 @@ func (c *httpClient) do(ctx context.Context, method, path string, body any, out 
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
-		return &HTTPError{Status: resp.StatusCode, Path: strings.SplitN(path, "?", 2)[0]}
+		return &HTTPError{Status: resp.StatusCode, Path: strings.SplitN(path, "?", 2)[0], Message: errorMessage(resp.Body)}
 	}
 	switch o := out.(type) {
 	case nil:
@@ -429,4 +433,29 @@ func FetchAll(ctx context.Context, c Client, reqs []QueryRequest) []Result {
 	}
 	wg.Wait()
 	return out
+}
+
+// errorMessage reads Grafana's error body: its JSON "message", else the
+// first line of the text, at most 200 characters. Grafana's error bodies
+// never echo request headers, so no credential can surface here.
+func errorMessage(r io.Reader) string {
+	b, _ := io.ReadAll(io.LimitReader(r, 1<<16))
+	var j struct {
+		Message string `json:"message"`
+		Error   string `json:"error"`
+	}
+	msg := ""
+	if json.Unmarshal(b, &j) == nil {
+		msg = j.Message
+		if msg == "" {
+			msg = j.Error
+		}
+	}
+	if msg == "" {
+		msg = strings.TrimSpace(strings.SplitN(string(b), "\n", 2)[0])
+	}
+	if len(msg) > 200 {
+		msg = msg[:200] + "…"
+	}
+	return msg
 }

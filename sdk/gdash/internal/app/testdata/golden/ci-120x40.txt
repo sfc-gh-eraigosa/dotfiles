@@ -1,0 +1,40 @@
+── Now ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Active jobs 0                                               Waiting jobs  —
+Utilization  —                                              Queue free  —
+Pass rate (1h)  —                                           Completed (1h)  —
+Failed (1h)  —                                              OOM kills (1h)  —
+── Load and throughput ─────────────────────────────────────────────────────────────────────────────────────────────────
+Active jobs per 15 min                                      Jobs started and finished per 15 min
+8│⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⢉⣉⣉⣉⣉⣉⡝⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⢫⣉⣉⣉⣉⣉⣉⣉⣉⣉⣉⣉⣉⣉⡉⠉⠉ 
+ │                    ⢸                                 ⢣   
+ │                    ⢸                                 ⠘⠒⡆ 
+ │                    ⡜         ⣀⣀⣀⠤⠒⠒⠒⠒⠒⠒⠉⠑⠒⠒⠤⠤⠤⢄⡀       ⢱                           no data
+ │                    ⡇     ⢀⠤⠚⠉                  ⠈⠑⠒⠤⠤⠤⡀ ⠘ 
+0│⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⡧⠔⠒⠉⠉⠉⠁                           ⠈⠑⠢ 
+● peak 2  ● average 0.467  ● capacity 8                     
+Results per 15 min                                          Utilization and queue free
+                                                            
+                                                            
+                                                            
+                          no data                                                     no data
+                                                            
+                                                            
+                                                            
+── Jobs ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+▢ Top 10 slowest jobs (mean, last 24h) — table not support… ▢ Failures by workflow (last 24h) — table not supported
+Job runtime p95 by workflow (24h window)                    Pass rate
+                                                            
+                                                            
+                                                            
+                          no data                                                     no data
+                                                            
+                                                            
+                                                            
+── Resources (runner pods) ─────────────────────────────────────────────────────────────────────────────────────────────
+CPU by container                                            Memory by container
+                                                            
+                                                            
+                                                            
+                          no data                                                     no data
+                                                            
+CI — lab runners · last 1h · updated 12:00:00 · every 30s · ? help

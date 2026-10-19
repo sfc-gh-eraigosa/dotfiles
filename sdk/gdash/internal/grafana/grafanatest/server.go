@@ -26,8 +26,10 @@ type Server struct {
 	Delay time.Duration
 	// OnQuery, when set, is called as each /api/ds/query starts and ends.
 	OnQuery func(start bool)
-	// Status, when non-zero, answers every request with this HTTP status.
-	Status int
+	// Status, when non-zero, answers every request with this HTTP status,
+	// and Message as its body.
+	Status  int
+	Message string
 
 	dir     string
 	byExpr  map[string]json.RawMessage
@@ -85,7 +87,11 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if s.Status != 0 {
-		http.Error(w, http.StatusText(s.Status), s.Status)
+		msg := s.Message
+		if msg == "" {
+			msg = http.StatusText(s.Status)
+		}
+		http.Error(w, msg, s.Status)
 		return
 	}
 	if r.URL.Path != "/api/health" && r.Header.Get("Authorization") == "" {

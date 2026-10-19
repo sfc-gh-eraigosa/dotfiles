@@ -213,3 +213,14 @@ func TestDatasources(t *testing.T) {
 		t.Fatalf("default ds = %+v", def)
 	}
 }
+
+func TestHTTPErrorCarriesGrafanasMessage(t *testing.T) {
+	s := grafanatest.New(t)
+	s.Status = 400
+	s.Message = `{"message":"duplicate refId"}`
+	c := grafana.NewHTTP(s.URL, bearer("fixture"), time.Second)
+	_, err := c.Health(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "HTTP 400") || !strings.Contains(err.Error(), "duplicate refId") {
+		t.Fatalf("error = %v", err)
+	}
+}

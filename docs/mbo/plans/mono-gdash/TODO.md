@@ -79,11 +79,11 @@
 
 ### Task A6 — app  (E7 E8 E9)
 
-- [ ] RED: `stale_test.go`, `TestRefreshSkipIfBusy`, `keys_test.go`, app frame goldens
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: `internal/app`, `cmd/view.go`
-- [ ] RUN-GREEN → PASS; run `gdash conductor` against the fixture server by hand
-- [ ] EVIDENCE · COMMIT `gdash: the dashboard TUI (layout, scroll, refresh, stale-not-blank)` · LEDGER · CHECKPOINT
+- [x] RED: `stale_test.go`, `TestRefreshSkipIfBusy`, `keys_test.go`, app frame goldens
+- [x] RUN-RED → FAIL
+- [x] GREEN: `internal/app`, `cmd/view.go`
+- [x] RUN-GREEN → PASS; run `gdash conductor` against the fixture server by hand
+- [x] EVIDENCE · COMMIT `gdash: the dashboard TUI (layout, scroll, refresh, stale-not-blank)` · LEDGER · CHECKPOINT
 
 ### Task A7 — doctor + list  (E14 E15)
 

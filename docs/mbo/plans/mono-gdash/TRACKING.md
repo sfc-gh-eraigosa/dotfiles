@@ -26,7 +26,7 @@
 | A3 client | done | (this commit) | RED: setup failed (no grafanatest); GREEN: 9 tests pass incl. E1 (`TestFetchAllCapsConcurrency`: 10 queries, peak ≤ 4) and E2 (`TestResolve`); grafana 89.2%; lint 0; gosec exit 0 (`evidence/a3/a3.txt`) | `grafanatest` serves the lab fixtures for every later package |
 | A4 dash + vars | done | (this commit) | RED: build failed (no packages, no `Datasources`); GREEN: dash 81.3% (all 4 lab dashboards parse to the expected kinds), vars 95.8% (≥ 80 bar), E3 `TestExpand` + E4 `TestRateInterval` pass; lint 0; gosec exit 0 (`evidence/a4/a4.txt`) | added `Client.Datasources` + `datasources.json` fixture: `$datasource` resolves by uid or name, `default`/unset → the default ds; scrape interval 30s from the ds |
 | A5 render | done | (this commit) | RED: build failed (no package); GREEN: render 91.6% (≥ 80 bar); 37 goldens (10 lab panels × 80/120/1 col + edges), reviewed by eye; width sweep 1–130 × color on/off: no line wider than its width; NO_COLOR threshold markers; lint 0; gosec exit 0 (`evidence/a5/a5.txt`) | **charting: in-repo braille plotter, not ntcharts** (no dependency, deterministic goldens). Review fix: `-0.0%` axis label → `0.0%` |
-| A6 app | todo | | | |
+| A6 app | done | (this commit) | RED: setup failed; fixes on the way: injectable tick (tea.Tick slept 30s in tests), gdash keys first in help; GREEN: app 86.0%, cmd 79.7%; E7 stale/E8 skip-if-busy/E9 keys pass; 6 frame goldens incl. 120-col two-column CI; **live** on the lab: k3s-nodes, conductor, ci, nodes all draw (`evidence/a6/a6.txt`, `live-*.txt`) | live found a real bug: multi-target panels without refId → HTTP 400; `dash.Parse` now assigns refIds; HTTP errors carry Grafana's message. Follow-up (not v1): resolve `label_values()` query variables via the ds resource API (a Viewer may call it) so `$cluster`/`$instance` need no override |
 | A7 doctor + list | todo | | | |
 | A8 security + install + docs | todo | | | |
 | B1 config schema | todo | | | |
@@ -51,11 +51,11 @@
 
 | Feature | Automated proof | Live proof | Notes |
 | :-- | :-- | :-- | :-- |
-| F1 fetch | [x] E1 E2 | [ ] `gdash conductor` on spark1 | |
+| F1 fetch | [x] E1 E2 | [x] `gdash conductor` live (from wslgiga1; spark1 in C2) | |
 | F2 vars | [x] E3 E4 | [ ] k3s-nodes `$node` panels draw | |
-| F3 panels/layout | [~] E6; E5 render level (app frames in A6) | [ ] capture at 80 and 120+ cols | |
-| F4 refresh/stale | [ ] E7 E8 | [ ] Grafana unreachable → stale row | |
-| F5 keys | [ ] E9 | — | |
+| F3 panels/layout | [x] E5 E6 | [x] live captures at 80 and 120 cols (`evidence/a6/live-*.txt`) | |
+| F4 refresh/stale | [x] E7 E8 | [ ] Grafana unreachable → stale row | |
+| F5 keys | [x] E9 | — | |
 | F6 config/auth | [~] E10 E11 E13 (E12 is A8) | [ ] `config get` shows ‹redacted› | |
 | F7 doctor/list | [ ] E14 E15 | [ ] doctor pass on spark1, exit 1 without credentials | |
 | F8 decks | [ ] E16–E19 E24 | [ ] one gdash process while cycling | |
@@ -83,3 +83,4 @@
 | 2026-10-19 | playground session | #411 merged; gdash worker created; Viewer token issued; Task 0 fixtures captured + scrubbed |
 | 2026-10-19 | playground session | owner picked k3s-nodes = Nodes Overview and kept Node Exporter as a 4th view `nodes`; spec F8 amended |
 | 2026-10-19 | playground session | A1–A4 done: scaffold, config + auth, client, dash + vars |
+| 2026-10-19 | playground session | A5–A6 done: render (in-repo braille), app + `gdash <view>`; first live run against the lab, refId bug found and fixed |

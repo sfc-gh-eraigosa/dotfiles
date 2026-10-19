@@ -235,6 +235,7 @@ func convert(p wirePanel, vars []Variable) Panel {
 		}
 		out.Targets = append(out.Targets, Target{RefID: t.RefID, Expr: t.Expr, LegendFormat: t.LegendFormat, Instant: t.Instant, Datasource: ds})
 	}
+	assignRefIDs(out.Targets)
 	switch {
 	case p.Type == "row":
 		out.Kind, out.Collapsed, out.Hidden = KindRow, p.Collapsed, len(p.Panels)
@@ -291,3 +292,36 @@ func varRef(s string) (string, bool) {
 
 // VarRef is varRef for other packages.
 func VarRef(s string) (string, bool) { return varRef(s) }
+
+// assignRefIDs gives targets without a refId the first free letter, A, B, C…,
+// as Grafana does when it loads a dashboard.
+func assignRefIDs(ts []Target) {
+	taken := map[string]bool{}
+	for _, t := range ts {
+		taken[t.RefID] = true
+	}
+	next := 0
+	for i := range ts {
+		if ts[i].RefID != "" {
+			continue
+		}
+		for {
+			id := refName(next)
+			next++
+			if !taken[id] {
+				ts[i].RefID, taken[id] = id, true
+				break
+			}
+		}
+	}
+}
+
+// refName is A…Z, then AA, AB… like Grafana's.
+func refName(n int) string {
+	s := ""
+	for n >= 0 {
+		s = string(rune('A'+n%26)) + s
+		n = n/26 - 1
+	}
+	return s
+}

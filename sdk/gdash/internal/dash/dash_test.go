@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/grafana/grafanatest"
@@ -146,5 +147,30 @@ func TestEdgeShapes(t *testing.T) {
 	}
 	if _, err := Parse([]byte("not json")); err == nil {
 		t.Fatal("garbage parsed")
+	}
+}
+
+// Saved dashboards may leave refId out; Grafana assigns A, B, C… on load,
+// and gdash must too, or a multi-target query has duplicate empty refIds
+// (found live on Kubernetes / Nodes Overview: HTTP 400).
+func TestMissingRefIDsAreAssigned(t *testing.T) {
+	d := load(t, "058020e04168bfdea0c52269cb699df2")
+	for _, p := range d.Panels {
+		seen := map[string]bool{}
+		for _, tg := range p.Targets {
+			if tg.RefID == "" || seen[tg.RefID] {
+				t.Fatalf("%s: refIds %+v", p.Title, p.Targets)
+			}
+			seen[tg.RefID] = true
+		}
+	}
+	raw := `{"dashboard":{"panels":[{"type":"timeseries","targets":[{"refId":"B","expr":"a"},{"expr":"b"},{"expr":"c"}]}]}}`
+	d2, _ := Parse([]byte(raw))
+	got := []string{}
+	for _, tg := range d2.Panels[0].Targets {
+		got = append(got, tg.RefID)
+	}
+	if strings.Join(got, ",") != "B,A,C" {
+		t.Fatalf("refIds = %v, want B,A,C (skip the taken letter)", got)
 	}
 }
