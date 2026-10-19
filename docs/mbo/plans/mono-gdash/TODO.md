@@ -122,17 +122,17 @@
 
 ### Task B3 — deck runtime  (E18 E19)
 
-- [ ] RED: `TestOnlyVisibleViewRuns` (fake runner: HUP→KILL ≤ 500 ms), title label, `:focus` command tests
-- [ ] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
-- [ ] EVIDENCE · COMMIT `mono: deck runtime (only the visible view runs), title label, :focus` · LEDGER · CHECKPOINT
+- [x] RED: `TestOnlyVisibleViewRuns` (fake runner: HUP→KILL ≤ 500 ms), title label, `:focus` command tests
+- [x] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
+- [x] EVIDENCE · COMMIT `mono: deck runtime (only the visible view runs), title label, :focus` · LEDGER · CHECKPOINT
 
 ### Task B4 — nav mode  (E20 E21 E22 E23)
 
-- [ ] RED: `nav_test.go` with an injected clock (prefix+space; esc esc at 200/400 ms; `nav_esc_ms: 0`; walk, ends, other key leaves without forwarding); README key-table test
-- [ ] RUN-RED → FAIL
-- [ ] GREEN: `app/nav.go`; `keys.go` stops stripping PageLeft/PageRight and re-labels them; help/title/README from the one table
-- [ ] RUN-GREEN → PASS
-- [ ] EVIDENCE · COMMIT `mono: nav mode (prefix+space or esc esc; hjkl through decks and panes)` · LEDGER · CHECKPOINT
+- [x] RED: `nav_test.go` with an injected clock (prefix+space; esc esc at 200/400 ms; `nav_esc_ms: 0`; walk, ends, other key leaves without forwarding); README key-table test
+- [x] RUN-RED → FAIL
+- [x] GREEN: `app/nav.go`; `keys.go` stops stripping PageLeft/PageRight and re-labels them; help/title/README from the one table
+- [x] RUN-GREEN → PASS
+- [x] EVIDENCE · COMMIT `mono: nav mode (prefix+space or esc esc; hjkl through decks and panes)` · LEDGER · CHECKPOINT
 
 ### Task B5 — config verbs + UI
 
@@ -142,9 +142,9 @@
 
 ### Task B7 — zoom + one-pane mode  (E25 E26 E27; amended 2026-10-19)
 
-- [ ] RED: `zoom_test.go` (z keeps the title and gsl; tool zoom auto on/off), `middle_test.go` (single merges the middle panes only)
-- [ ] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
-- [ ] EVIDENCE · COMMIT `mono: zoom and one-pane middle` · LEDGER · CHECKPOINT
+- [x] RED: `zoom_test.go` (z keeps the title and gsl; tool zoom auto on/off), `middle_test.go` (single merges the middle panes only)
+- [x] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
+- [x] EVIDENCE · COMMIT `mono: zoom and one-pane middle` · LEDGER · CHECKPOINT
 
 ### Task B6 — boundary + docs  (E24)
 

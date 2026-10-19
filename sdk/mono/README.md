@@ -21,6 +21,10 @@ Every key goes to the focused program, so htop's `q`, `/`, `esc` and F-keys beha
 | :-- | :-- |
 | `j` `down` | focus the next pane |
 | `k` `up` | focus the previous pane |
+| `h` `left` | previous tool in a deck pane |
+| `l` `right` | next tool in a deck pane |
+| `z` | zoom the pane over the middle |
+| `space` | nav mode: hjkl and z, no prefix |
 | `:` | command line (see Commands below) |
 | `?` `f1` | this help |
 | `q` `ctrl+c` | quit mono (stops every pane) |
@@ -36,7 +40,7 @@ Commands (`ctrl+b :`):
 | :-- | :-- |
 | `:config` | open the config screen full size; mono reloads when it closes |
 | `:restart [pane]` | restart a pane's program (default: the focused one) |
-| `:focus <pane>` | focus a pane by name |
+| `:focus <pane>[/<tool>[/<view>]]` | focus a pane, a deck's tool, or one of its views |
 | `:reload` | re-read the config and re-check tools |
 | `:q` | quit |
 

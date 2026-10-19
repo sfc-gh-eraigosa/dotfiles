@@ -7,6 +7,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -19,7 +20,6 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/overlay"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/input"
-	"github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/layout"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/pane"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/probe"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/screen"
@@ -44,6 +44,7 @@ type Options struct {
 	ConfigArgv func() []string                          // the `mono config` command for :config; nil disables it
 	OnChange   func()                                   // called when a redraw is due (from any goroutine)
 	Load       func(path string) (config.Config, error) // nil = config.Load
+	Now        func() time.Time                         // nil = time.Now (double-esc timing)
 }
 
 // App is the dashboard state.
@@ -55,9 +56,12 @@ type App struct {
 
 	mu      sync.Mutex
 	choices []probe.Choice
-	panes   []*pane.Pane // usable panes, top to bottom
-	pcts    []int        // their sizes
+	slots   []*slot // usable panes, top to bottom (deck.go)
 	focus   int
+	zoom    string          // the pane zoomed by hand; "" = none (spec F10)
+	noAuto  map[string]bool // a zoom: true tool's auto-zoom turned off by z
+	nav     bool            // nav mode (spec F9)
+	lastEsc time.Time       // a lone esc just forwarded, for double-esc
 	mode    mode
 	cmd     cmdline.State
 	reg     cmdline.Registry
@@ -82,11 +86,14 @@ func New(o Options) (*App, error) {
 	if o.OnChange == nil {
 		o.OnChange = func() {}
 	}
+	if o.Now == nil {
+		o.Now = time.Now
+	}
 	pb, err := config.PrefixByte(o.Config.Prefix)
 	if err != nil {
 		return nil, err
 	}
-	a := &App{opts: o, cfg: o.Config, keys: Keys(o.Config.Prefix), router: input.Router{Prefix: pb}}
+	a := &App{opts: o, cfg: o.Config, keys: Keys(o.Config.Prefix, o.Config.Nav()), router: input.Router{Prefix: pb}, noAuto: map[string]bool{}}
 	a.registerCommands()
 	return a, nil
 }
@@ -100,9 +107,11 @@ func (a *App) registerCommands() {
 	}
 	paneNames := func(_ int, prefix string) []string {
 		var out []string
-		for _, p := range a.panes {
-			if strings.HasPrefix(p.Spec.Name, prefix) {
-				out = append(out, p.Spec.Name)
+		for _, s := range a.slots {
+			for _, path := range s.paths() {
+				if strings.HasPrefix(path, prefix) {
+					out = append(out, path)
+				}
 			}
 		}
 		return out
@@ -112,7 +121,7 @@ func (a *App) registerCommands() {
 			Run: func([]string) (tea.Cmd, error) { return nil, a.openConfig() }},
 		cmdline.Spec{Name: "restart", Help: "restart [pane]  restart a pane's program (default: focused)", Complete: paneNames,
 			Run: func(args []string) (tea.Cmd, error) { return nil, a.restart(args) }},
-		cmdline.Spec{Name: "focus", Help: "focus <pane>", Complete: paneNames,
+		cmdline.Spec{Name: "focus", Help: "focus <pane>[/<tool>[/<view>]]", Complete: paneNames,
 			Run: func(args []string) (tea.Cmd, error) { return nil, a.focusNamed(args) }},
 		cmdline.Spec{Name: "reload", Help: "re-read the config file and re-check tools",
 			Run: func([]string) (tea.Cmd, error) { return nil, a.reload() }},
@@ -138,8 +147,8 @@ func (a *App) PaneNames() []string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	var out []string
-	for _, p := range a.panes {
-		out = append(out, p.Spec.Name)
+	for _, s := range a.slots {
+		out = append(out, s.name)
 	}
 	return out
 }
@@ -157,111 +166,89 @@ func (a *App) Resize(width, height int) {
 		return
 	}
 	a.mu.Lock()
-	a.relayoutLocked()
+	starts := a.relayoutLocked()
 	if a.modal != nil {
 		a.modal.Resize(a.width, a.height)
 	}
 	a.mu.Unlock()
+	startAll(starts)
 	a.opts.OnChange()
 }
 
 // apply reconciles the running panes with cfg: unchanged panes keep running,
-// changed or removed ones stop, new ones start. Callers hold applyMu, so two
-// applies never interleave (a pane resized before it started, or an older
-// config landing last).
+// changed or removed ones stop, new ones start. A deck keeps the tool and
+// view it was showing when they are still usable. Callers hold applyMu, so
+// two applies never interleave (a pane resized before it started, or an
+// older config landing last).
 func (a *App) apply(cfg config.Config) {
-	choices := probe.Choose(context.Background(), a.opts.Env, cfg.Panes)
+	choices := probe.Choose(context.Background(), a.opts.Env, cfg.Effective())
 	a.mu.Lock()
-	old := map[string]*pane.Pane{}
-	for _, p := range a.panes {
-		old[p.Spec.Name] = p
+	old := map[string]*slot{}
+	for _, s := range a.slots {
+		old[s.name] = s
 	}
-	var panes []*pane.Pane
-	var pcts []int
-	var started []*pane.Pane
+	var slots []*slot
 	for _, c := range choices {
 		if !c.Usable() {
 			continue
 		}
-		every, _ := time.ParseDuration(c.Pane.Every)
-		dir := c.Pane.Cwd
-		if dir == "" {
-			dir = a.opts.Dir
+		s := newSlot(c)
+		if o, ok := old[s.name]; ok {
+			s.keepPlace(o)
 		}
-		spec := pane.Spec{Name: c.Pane.Name, Cmd: c.Cmd, Every: every, Dir: dir}
-		if p, ok := old[spec.Name]; ok && p.Spec == spec {
-			delete(old, spec.Name)
-			panes = append(panes, p)
+		spec := a.specFor(s)
+		if o, ok := old[s.name]; ok && o.p != nil && o.p.Spec == spec {
+			s.p = o.p
+			delete(old, s.name)
 		} else {
-			p := pane.New(spec, a.opts.OnChange)
-			panes = append(panes, p)
-			started = append(started, p)
+			s.p = pane.New(spec, a.opts.OnChange)
+			s.fresh = true
 		}
-		pct, _ := config.ParseSize(c.Pane.Size)
-		pcts = append(pcts, pct)
+		slots = append(slots, s)
 	}
 	focused := ""
-	if a.focus < len(a.panes) {
-		focused = a.panes[a.focus].Spec.Name
+	if a.focus < len(a.slots) {
+		focused = a.slots[a.focus].name
 	}
-	a.cfg, a.choices, a.panes, a.pcts = cfg, choices, panes, pcts
+	a.cfg, a.choices, a.slots = cfg, choices, slots
 	a.focus = 0
-	for i, p := range panes {
-		if p.Spec.Name == focused {
+	for i, s := range slots {
+		if s.name == focused {
 			a.focus = i
 		}
 	}
+	if a.zoom != "" && a.slotIndexLocked(a.zoom) < 0 {
+		a.zoom = ""
+	}
 	if pb, err := config.PrefixByte(cfg.Prefix); err == nil {
 		a.router.Prefix = pb
-		a.keys = Keys(cfg.Prefix)
+		a.keys = Keys(cfg.Prefix, cfg.Nav())
 	}
-	heights := a.heightsLocked()
-	w := a.width
+	starts := a.relayoutLocked()
 	a.mu.Unlock()
 
 	var wg sync.WaitGroup
-	for _, p := range old {
-		wg.Add(1)
-		go func(p *pane.Pane) { defer wg.Done(); p.Stop() }(p)
-	}
-	for i, p := range panes {
-		h := heights[i+1]
-		if contains(started, p) {
-			_ = p.Start(w, h)
-		} else {
-			p.Resize(w, h)
+	for _, s := range old {
+		if s.p == nil {
+			continue
 		}
+		wg.Add(1)
+		go func(p *pane.Pane) { defer wg.Done(); p.Stop() }(s.p)
 	}
+	startAll(starts)
 	wg.Wait()
 	a.opts.OnChange()
-}
-
-func contains(ps []*pane.Pane, p *pane.Pane) bool {
-	for _, q := range ps {
-		if q == p {
-			return true
-		}
-	}
-	return false
-}
-
-// heightsLocked is [title, pane...] rows for the current size.
-func (a *App) heightsLocked() []int {
-	title, _ := config.ParseSize(a.cfg.Title.Size)
-	return layout.Rows(a.height, append([]int{title}, a.pcts...))
-}
-
-func (a *App) relayoutLocked() {
-	h := a.heightsLocked()
-	for i, p := range a.panes {
-		p.Resize(a.width, h[i+1])
-	}
 }
 
 // Stop ends every pane (in parallel; each gets KillGrace).
 func (a *App) Stop() {
 	a.mu.Lock()
-	ps := append([]*pane.Pane(nil), a.panes...)
+	var ps []*pane.Pane
+	for _, s := range a.slots {
+		if s.p != nil {
+			ps = append(ps, s.p)
+		}
+	}
 	if a.modal != nil {
 		ps = append(ps, a.modal)
 	}
@@ -313,11 +300,29 @@ func (a *App) HandleBytes(b []byte) {
 		return
 	}
 	a.mu.Lock()
+	nav := a.nav
+	a.mu.Unlock()
+	if nav {
+		a.navBytes(b)
+		return
+	}
+	a.mu.Lock()
 	events, rest := a.router.Feed(b)
 	a.mu.Unlock()
-	for _, ev := range events {
+	for i, ev := range events {
 		if ev.Key == nil {
-			a.focused(func(p *pane.Pane) { p.Write(ev.Forward) })
+			fwd, entered := a.doubleEsc(ev.Forward)
+			if len(fwd) > 0 {
+				a.focused(func(p *pane.Pane) { p.Write(fwd) })
+			}
+			if entered {
+				var more []byte
+				for _, e := range events[i+1:] {
+					more = append(more, e.Forward...)
+				}
+				a.navBytes(append(more, rest...))
+				return
+			}
 			continue
 		}
 		a.prefixKey(*ev.Key)
@@ -332,8 +337,8 @@ func (a *App) HandleBytes(b []byte) {
 func (a *App) focused(fn func(*pane.Pane)) {
 	a.mu.Lock()
 	var p *pane.Pane
-	if a.focus < len(a.panes) {
-		p = a.panes[a.focus]
+	if a.focus < len(a.slots) {
+		p = a.slots[a.focus].p
 	}
 	a.mu.Unlock()
 	if p != nil {
@@ -343,23 +348,27 @@ func (a *App) focused(fn func(*pane.Pane)) {
 
 func (a *App) prefixKey(k tea.KeyMsg) {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	act, ok := a.keys.Lookup(k)
 	a.msg = ""
 	if !ok {
 		a.msg = fmt.Sprintf("%s %s is not a mono key — %s ? for help", a.cfg.Prefix, keymap.KeyName(k), a.cfg.Prefix)
+		a.mu.Unlock()
 		return
 	}
-	n := len(a.panes)
+	var starts []launch
 	switch act {
 	case keymap.Down:
-		if n > 0 {
-			a.focus = (a.focus + 1) % n
-		}
+		a.cyclePaneLocked(1)
 	case keymap.Up:
-		if n > 0 {
-			a.focus = (a.focus - 1 + n) % n
-		}
+		a.cyclePaneLocked(-1)
+	case keymap.PageLeft:
+		starts = a.stepToolLocked(-1)
+	case keymap.PageRight:
+		starts = a.stepToolLocked(1)
+	case ActZoom:
+		starts = a.toggleZoomLocked()
+	case ActNav:
+		a.nav = true
 	case keymap.Help:
 		a.mode = modeHelp
 	case keymap.Command:
@@ -368,16 +377,24 @@ func (a *App) prefixKey(k tea.KeyMsg) {
 	case keymap.Quit:
 		a.quit = true
 	case ActRestart:
-		if a.focus < n {
-			p := a.panes[a.focus]
+		if a.focus < len(a.slots) {
+			s := a.slots[a.focus]
+			p := s.p
 			go func() { _ = p.Restart() }()
+			if s.deck {
+				a.mu.Unlock()
+				_ = a.reload() // a deck also re-checks its tools
+				return
+			}
 		}
 	case ActSendPrefix:
-		if a.focus < n {
-			a.panes[a.focus].Write([]byte{a.router.Prefix})
+		if a.focus < len(a.slots) {
+			a.slots[a.focus].p.Write([]byte{a.router.Prefix})
 		}
 	case keymap.Back:
 	}
+	a.mu.Unlock()
+	startAll(starts)
 }
 
 func (a *App) commandKey(k tea.KeyMsg) {
@@ -408,13 +425,13 @@ func (a *App) restart(args []string) error {
 	a.mu.Lock()
 	var target *pane.Pane
 	if len(args) == 0 {
-		if a.focus < len(a.panes) {
-			target = a.panes[a.focus]
+		if a.focus < len(a.slots) {
+			target = a.slots[a.focus].p
 		}
 	} else {
-		for _, p := range a.panes {
-			if p.Spec.Name == args[0] {
-				target = p
+		for _, s := range a.slots {
+			if s.name == args[0] {
+				target = s.p
 			}
 		}
 	}
@@ -426,19 +443,17 @@ func (a *App) restart(args []string) error {
 	return nil
 }
 
+// focusNamed is :focus <pane>[/<tool>[/<view>]] (spec E19).
 func (a *App) focusNamed(args []string) error {
 	if len(args) != 1 {
-		return fmt.Errorf("usage: focus <pane>")
+		return fmt.Errorf("usage: focus <pane>[/<tool>[/<view>]]")
 	}
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	for i, p := range a.panes {
-		if p.Spec.Name == args[0] {
-			a.focus = i
-			return nil
-		}
-	}
-	return fmt.Errorf("no running pane named %q", args[0])
+	starts, err := a.focusPathLocked(args[0])
+	a.mu.Unlock()
+	startAll(starts)
+	a.opts.OnChange()
+	return err
 }
 
 func (a *App) reload() error {
@@ -523,7 +538,10 @@ func (a *App) Frame() ([]string, screen.Cursor) {
 		return v.Rows, v.Cursor
 	}
 	heights := a.heightsLocked()
-	panes := append([]*pane.Pane(nil), a.panes...)
+	var panes []*pane.Pane
+	for _, s := range a.slots {
+		panes = append(panes, s.p)
+	}
 	md, focus, prefix, msg := a.mode, a.focus, a.cfg.Prefix, a.msg
 	cmdText := a.cmd.Input.String()
 	bar := a.titleBarLocked(w)
@@ -557,6 +575,9 @@ func (a *App) Frame() ([]string, screen.Cursor) {
 			break
 		}
 		ph := heights[i+1]
+		if ph == 0 || p == nil { // hidden by zoom: keeps running, not drawn
+			continue
+		}
 		v := p.Snapshot(w, ph)
 		if v.Exited && ph > 0 {
 			v.Rows[ph-1] = "\x1b[0;7m" + pad(fmt.Sprintf(" %s %s — %s r restart ", p.Spec.Name, v.ExitReason, prefix), w) + "\x1b[0m"
@@ -581,8 +602,14 @@ func (a *App) Frame() ([]string, screen.Cursor) {
 
 func (a *App) titleBarLocked(w int) string {
 	left := " " + a.opts.Title
-	if a.focus < len(a.panes) {
-		left += "   ● " + a.panes[a.focus].Spec.Name
+	if a.focus < len(a.slots) {
+		left += "   ● " + a.slots[a.focus].label(os.Getenv("FLEET_ASCII_BORDERS") == "1")
+	}
+	if a.nav {
+		left += "   NAV"
+	}
+	if a.zoomIndexLocked() >= 0 {
+		left += "   ZOOM"
 	}
 	right := a.cfg.Prefix + " ? help "
 	style := "\x1b[0;7m"

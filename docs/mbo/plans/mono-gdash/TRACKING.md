@@ -31,10 +31,10 @@
 | A8 security + install + docs | done | (this commit) | RED: build failed (no EchoAuth/Redact); GREEN: E12 `TestSecretNeverPrinted` builds the binary and runs 6 credential setups × 8 commands against a fake Grafana that echoes the Authorization header: no leak; mutation (redaction off) → fails; module coverage 81.2%; lint 0; pinned govulncheck: no vulnerabilities; pinned gosec exit 0; gff lint ok; markdownlint 0 on touched docs; install.sh block builds/skips by flag (`evidence/a8/a8.txt`) | credentials redact themselves (bearer: the token; basic: the password and base64 user:password) and the client scrubs every error message |
 | B1 config schema | done | (this commit) | RED: build failed; GREEN: E16 `TestCompat407RoundTrip` (the #407 file round-trips byte for byte), deck validation (11 bad shapes refused), get/set at tool/view level, add/remove tool/view; config 85.0%; all mono packages pass (`evidence/b1/b1.txt`) | also B7's config half: `zoomable`, tool `zoom`, `middle: single` → `Effective()` (E27) |
 | B2 probe + doctor | done | (this commit) | RED: build failed / doctor rows missing; GREEN: E17 `TestDeckDropsPerViewToolPane` (all / no Grafana / no GPU / neither → pane dropped), tool probe runs once, plain pane = one view; doctor shows a row per view with reasons and zoom; `middle: single` shown; all mono packages pass (`evidence/b2/b2.txt`) | |
-| B3 deck runtime | todo | | | |
-| B4 nav mode | todo | | | |
+| B3 deck runtime | done | (this commit) | RED: build failed; GREEN: E18 `TestOnlyVisibleViewRuns` (one program per deck; switching stops the old), E19 `TestFocusCommand`, title label (`TestTitleLabel`, ASCII fallback); -race clean; app 79.9% (`evidence/b3-b4-b7/evidence.txt`) | `ctrl+b r` on a deck also re-checks its tools |
+| B4 nav mode | done | (this commit) | E20 `TestNavEntry` (esc esc at 100 ms enters, 400 ms does not, prefix+space, `nav_esc_ms: 0`), E21 `TestNavWalk`, E22 `TestNavOtherKeyLeaves`, E23 README key table (rows added) (`evidence/b3-b4-b7/evidence.txt`) | h/l re-labelled from the shared PageLeft/PageRight; new keys in `?` help, not the 60-col title hint |
 | B5 config verbs + UI | todo | | | |
-| B7 zoom + one-pane mode | todo | | | amended 2026-10-19 |
+| B7 zoom + one-pane mode | done | (this commit + B1) | E25 `TestZoomKeepsTitleAndFooter`, E26 `TestToolZoom`, E27 `TestMiddleSingle` + `TestMiddleSingleRuntime` (`evidence/b3-b4-b7/evidence.txt`) | amended 2026-10-19 |
 | B6 boundary + docs | todo | | | |
 | C1 default mid deck | todo | | | after both leaves merge |
 | D1 gdash docs: managing views | todo | | | owner 2026-10-19 |
@@ -62,8 +62,8 @@
 | F5 keys | [x] E9 | — | |
 | F6 config/auth | [x] E10–E13 | [x] no secret in any output (E12, real binary) | |
 | F7 doctor/list | [x] E14 E15 | [x] doctor passes live (wslgiga1); exit 1 with no config. spark1 in C2 | |
-| F8 decks | [ ] E16–E19 E24 | [ ] one gdash process while cycling | |
-| F9 nav | [ ] E20–E23 | [ ] capture of the deck cycle | |
+| F8 decks | [~] E16–E19 (E24 in B6) | [ ] one gdash process while cycling | |
+| F9 nav | [x] E20–E23 | [ ] capture of the deck cycle | |
 
 ## 3. Validation done-when — the stop condition
 

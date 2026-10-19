@@ -183,7 +183,7 @@ func (c Config) validateTop() error {
 
 // deckKey splits panes.<p>.tools.<t>[.views.<v>].<field>.
 type deckKey struct {
-	pane, tool, view, field int // indexes; view -1 = a tool field
+	pane, tool, view int // indexes; view -1 = a tool field
 }
 
 func (c Config) parseDeckKey(key string) (deckKey, string, error) {
@@ -191,7 +191,7 @@ func (c Config) parseDeckKey(key string) (deckKey, string, error) {
 	bad := func() (deckKey, string, error) {
 		return deckKey{}, "", fmt.Errorf("unknown key %q (deck keys: panes.<p>.tools.<t>.{probe,zoom}, panes.<p>.tools.<t>.views.<v>.{%s})", key, strings.Join(viewFields, ","))
 	}
-	if !(len(parts) == 5 || len(parts) == 7) || parts[0] != "panes" || parts[2] != "tools" {
+	if (len(parts) != 5 && len(parts) != 7) || parts[0] != "panes" || parts[2] != "tools" {
 		return bad()
 	}
 	pi := c.Find(parts[1])
