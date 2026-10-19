@@ -47,18 +47,28 @@ type Config struct {
 	NavEscMs *int   `json:"nav_esc_ms,omitempty"` // double-esc window; 0 turns it off; default 300
 }
 
-// Default is the layout mono ships with: title 5%, htop 60%, a GPU monitor
-// 30%, and gsl 5% refreshed every second. The htop pane prefers htop-fit (the
+// Default is the layout mono ships with: title 5%, htop 60%, a 30% deck
+// "mid" holding a GPU monitor and gdash (the lab's Grafana dashboards), and
+// gsl 5% refreshed every second. The htop pane prefers htop-fit (the
 // dotfiles htop wrapper as a command: graph-filled header, top processes
-// only, fitted to the pane) and falls back to plain htop.
+// only, fitted to the pane) and falls back to plain htop. gdash fills the
+// whole middle while it is on screen (zoom), and drops out on a host that
+// can't reach Grafana (its probe); gsl is fixed (not part of the middle).
 func Default() Config {
+	fixed := false
+	gdash := func(v string) View { return View{Name: v, Cmd: "gdash " + v} }
 	return Config{
 		Prefix: "ctrl+b",
 		Title:  Title{Size: "5%"},
 		Panes: []Pane{
 			{Name: "htop", Size: "60%", Cmd: "htop-fit", Fallbacks: []string{"htop"}},
-			{Name: "gpu", Size: "30%", Cmd: "nvtop", Fallbacks: []string{"nvitop"}},
-			{Name: "gsl", Size: "5%", Cmd: "gsl status", Every: "1s"},
+			{Name: "mid", Size: "30%", Tools: []Tool{
+				{Name: "gpu", Views: []View{{Name: "nvtop", Cmd: "nvtop", Fallbacks: []string{"nvitop"}}}},
+				{Name: "gdash", Probe: "gdash doctor --quiet", Zoom: true, Views: []View{
+					gdash("conductor"), gdash("k3s-nodes"), gdash("nodes"), gdash("ci"),
+				}},
+			}},
+			{Name: "gsl", Size: "5%", Cmd: "gsl status", Every: "1s", Zoomable: &fixed},
 		},
 	}
 }

@@ -31,7 +31,7 @@ func withConfig(t *testing.T) string {
 }
 
 func TestConfigVerbsEndToEnd(t *testing.T) {
-	p := withConfig(t)
+	p := withLegacyConfig(t)
 	if out, err := run(t, "config", "get", "panes.gsl.every"); err != nil || strings.TrimSpace(out) != "1s" {
 		t.Fatalf("get on missing file = %q %v", out, err)
 	}
@@ -88,7 +88,7 @@ func (fakeEnv) Run(context.Context, string) bool { return false }
 func (fakeEnv) DRMDrivers() []string             { return nil }
 
 func TestDoctorExplainsEachPane(t *testing.T) {
-	withConfig(t)
+	withLegacyConfig(t)
 	prev := doctorEnv
 	doctorEnv = fakeEnv{}
 	defer func() { doctorEnv = prev }()
@@ -135,4 +135,19 @@ func TestVersionJSON(t *testing.T) {
 		t.Fatalf("version --json = %q %v", out, err)
 	}
 	versionJSON = false
+}
+
+// withLegacyConfig writes #407's default (plain htop, gpu, gsl): the fixture
+// for plain-pane verbs and doctor rows, which decks did not change.
+func withLegacyConfig(t *testing.T) string {
+	t.Helper()
+	p := withConfig(t)
+	b, err := os.ReadFile("../internal/config/testdata/default-407.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return p
 }

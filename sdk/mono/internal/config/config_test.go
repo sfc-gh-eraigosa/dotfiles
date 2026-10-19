@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +17,7 @@ func TestDefaultIsValidAndMatchesDesign(t *testing.T) {
 	for _, p := range c.Panes {
 		got = append(got, p.Name+"="+p.Size)
 	}
-	want := "5%,htop=60%,gpu=30%,gsl=5%"
+	want := "5%,htop=60%,mid=30%,gsl=5%" // mid became a deck (mono-gdash C1)
 	if strings.Join(got, ",") != want {
 		t.Fatalf("default layout = %s, want %s", strings.Join(got, ","), want)
 	}
@@ -40,7 +41,7 @@ func TestLoadMissingIsDefault(t *testing.T) {
 
 func TestSaveLoadRoundTrip(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "sub", "config.json")
-	c, err := Default().Set("panes.gpu.cmd", "nvitop")
+	c, err := legacyDefault(t).Set("panes.gpu.cmd", "nvitop")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +70,7 @@ func TestLoadRejectsBadFile(t *testing.T) {
 }
 
 func TestSetValidationNamesFieldAndChangesNothing(t *testing.T) {
-	c := Default()
+	c := legacyDefault(t)
 	cases := []struct{ key, val, want string }{
 		{"panes.htop.size", "0%", "panes.htop.size"},
 		{"panes.htop.size", "abc", "panes.htop.size"},
@@ -94,7 +95,7 @@ func TestSetValidationNamesFieldAndChangesNothing(t *testing.T) {
 }
 
 func TestSetGetEveryField(t *testing.T) {
-	c := Default()
+	c := legacyDefault(t)
 	for key, val := range map[string]string{
 		"prefix":              "ctrl+g",
 		"title.size":          "10%",
@@ -121,7 +122,7 @@ func TestSetGetEveryField(t *testing.T) {
 }
 
 func TestAddRemoveMove(t *testing.T) {
-	c := Default()
+	c := legacyDefault(t)
 	c, err := c.Add(Pane{Name: "logs", Size: "10%", Cmd: "journalctl -f"}, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -197,4 +198,19 @@ func TestSaveWritesThroughASymlink(t *testing.T) {
 	if err != nil || got.Panes[0].Size != "40%" {
 		t.Fatalf("target not updated: %+v %v", got.Panes[0], err)
 	}
+}
+
+// legacyDefault is #407's default (plain htop, gpu and gsl panes): the
+// fixture for plain-pane mechanics, which decks did not change.
+func legacyDefault(t *testing.T) Config {
+	t.Helper()
+	b, err := os.ReadFile("testdata/default-407.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c Config
+	if err := json.Unmarshal(b, &c); err != nil {
+		t.Fatal(err)
+	}
+	return c
 }

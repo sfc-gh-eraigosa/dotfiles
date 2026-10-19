@@ -33,10 +33,10 @@
 | B2 probe + doctor | done | (this commit) | RED: build failed / doctor rows missing; GREEN: E17 `TestDeckDropsPerViewToolPane` (all / no Grafana / no GPU / neither → pane dropped), tool probe runs once, plain pane = one view; doctor shows a row per view with reasons and zoom; `middle: single` shown; all mono packages pass (`evidence/b2/b2.txt`) | |
 | B3 deck runtime | done | (this commit) | RED: build failed; GREEN: E18 `TestOnlyVisibleViewRuns` (one program per deck; switching stops the old), E19 `TestFocusCommand`, title label (`TestTitleLabel`, ASCII fallback); -race clean; app 79.9% (`evidence/b3-b4-b7/evidence.txt`) | `ctrl+b r` on a deck also re-checks its tools |
 | B4 nav mode | done | (this commit) | E20 `TestNavEntry` (esc esc at 100 ms enters, 400 ms does not, prefix+space, `nav_esc_ms: 0`), E21 `TestNavWalk`, E22 `TestNavOtherKeyLeaves`, E23 README key table (rows added) (`evidence/b3-b4-b7/evidence.txt`) | h/l re-labelled from the shared PageLeft/PageRight; new keys in `?` help, not the 60-col title hint |
-| B5 config verbs + UI | done | (this commit) | RED: unknown command add-view / missing deck rows; GREEN: `mono config add-tool|add-view|remove-tool|remove-view`, dotted set on views, `set middle single`; the config screen lists a deck's tools and views (zoom marked) and shows `middle:`; enter edits the first view (`evidence/b5/b5.txt`) | |
+| B5 config verbs + UI | done | (this commit) | RED: unknown command add-view / missing deck rows; GREEN: `mono config` add-tool / add-view / remove-tool / remove-view, dotted set on views, `set middle single`; the config screen lists a deck's tools and views (zoom marked) and shows the middle mode; enter edits the first view (`evidence/b5/b5.txt`) | |
 | B7 zoom + one-pane mode | done | (this commit + B1) | E25 `TestZoomKeepsTitleAndFooter`, E26 `TestToolZoom`, E27 `TestMiddleSingle` + `TestMiddleSingleRuntime` (`evidence/b3-b4-b7/evidence.txt`) | amended 2026-10-19 |
-| B6 boundary + docs | todo | | | |
-| C1 default mid deck | todo | | | after both leaves merge |
+| B6 boundary + docs | done | (this commit) | E24 `TestMonoNeverImportsGdash` (go.mod + `go list -deps`); mutation → fails; README (deck/nav/zoom/middle sections, config fields) + AGENTS; `coverage_min mono 60`; markdownlint 0; lint 0 (`evidence/b6-c1/evidence.txt`) | |
+| C1 default mid deck | done | (this commit) | `TestDefaultLayout`: htop 60% · mid 30% deck (gpu; gdash zoom + probe + 4 views) · gsl 5% fixed; `middle: single` → one 90% deck of 3 tools; #407 configs still round-trip (`evidence/b6-c1/evidence.txt`) | done in the deck PR (gdash leaf already merged); hosts with a saved config keep theirs (README says how to adopt) |
 | D1 gdash docs: managing views | todo | | | owner 2026-10-19 |
 | E1 one color scheme across the sdk | todo | | | owner 2026-10-19; last |
 | C2 live evidence | todo | | | |
@@ -62,7 +62,7 @@
 | F5 keys | [x] E9 | — | |
 | F6 config/auth | [x] E10–E13 | [x] no secret in any output (E12, real binary) | |
 | F7 doctor/list | [x] E14 E15 | [x] doctor passes live (wslgiga1); exit 1 with no config. spark1 in C2 | |
-| F8 decks | [~] E16–E19 (E24 in B6) | [ ] one gdash process while cycling | |
+| F8 decks | [x] E16–E19 E24 | [ ] one gdash process while cycling | |
 | F9 nav | [x] E20–E23 | [ ] capture of the deck cycle | |
 
 ## 3. Validation done-when — the stop condition
@@ -91,3 +91,4 @@
 | 2026-10-19 | playground session | A7–A8 done: doctor/list (live: all ok, --quiet 35 ms), E12 leak test on the real binary, install.sh + gff flag, docs; gdash leaf complete |
 | 2026-10-19 | playground session | independent review of the gdash leaf: 5 findings (multi-value PromQL escaping, `$1` treated as a var, redact-before-truncate, password in URL, collapsed-row selection) fixed test-first; -race clean (`evidence/review/review.txt`) |
 | 2026-10-19 | playground session | owner: zoom + one-pane middle (F10, E25–E27), gdash always uses the whole middle; tasks B7, D1, E1 added; deck worker created |
+| 2026-10-19 | playground session | deck leaf B1–B7 + C1 done (decks, nav mode, zoom, one-pane middle, default mid deck) |

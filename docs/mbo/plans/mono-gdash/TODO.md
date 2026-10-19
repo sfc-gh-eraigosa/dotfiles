@@ -148,11 +148,11 @@
 
 ### Task B6 — boundary + docs  (E24)
 
-- [ ] RED: `boundary_test.go` (no `sdk/gdash` import or go.mod require)
-- [ ] RUN-RED: temporarily add a bad import → FAIL, then remove it
-- [ ] GREEN: README/AGENTS deck + nav sections; `scripts/test.sh` `mono) echo 60`
-- [ ] VERIFY: `make lint-go` · `make security` · `make lint-markdown`
-- [ ] EVIDENCE · COMMIT `mono: boundary guard and deck/nav docs` · LEDGER · CHECKPOINT
+- [x] RED: `boundary_test.go` (no `sdk/gdash` import or go.mod require)
+- [x] RUN-RED: temporarily add a bad import → FAIL, then remove it
+- [x] GREEN: README/AGENTS deck + nav sections; `scripts/test.sh` `mono) echo 60`
+- [x] VERIFY: `make lint-go` · `make security` · `make lint-markdown`
+- [x] EVIDENCE · COMMIT `mono: boundary guard and deck/nav docs` · LEDGER · CHECKPOINT
 - [ ] label the deck PR `ready-for-merge` once every check is green
 
 ---
@@ -161,9 +161,9 @@
 
 ### Task C1 — default `mid` deck
 
-- [ ] RED: default-config golden expects the `mid` deck with four gdash views; E16 compat golden still passes
-- [ ] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
-- [ ] COMMIT `mono: default mid pane becomes a deck (gpu + gdash conductor/k3s-nodes/ci)` · LEDGER · CHECKPOINT
+- [x] RED: default-config golden expects the `mid` deck with four gdash views; E16 compat golden still passes
+- [x] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
+- [x] COMMIT `mono: default mid pane becomes a deck (gpu + gdash conductor/k3s-nodes/ci)` · LEDGER · CHECKPOINT
 
 ### Task D1 — gdash docs: managing views
 

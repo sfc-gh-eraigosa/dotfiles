@@ -49,6 +49,7 @@ coverage_min() {
         wlink)    echo 60 ;;
         fleet)    echo 60 ;;
         gdash)    echo 60 ;;
+        mono)     echo 60 ;;
         libs)     echo 80 ;;
         *)        echo "" ;;
     esac
