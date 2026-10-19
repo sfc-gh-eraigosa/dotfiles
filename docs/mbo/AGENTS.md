@@ -44,6 +44,7 @@ ADR may be design-only. **Always** register it in `index.md`.
 | If the objective is… | Run this workflow | Artifacts |
 | :-- | :-- | :-- |
 | **A new skill** (or editing one) | `skill-creator:skill-creator` → `superpowers:writing-skills` | spec (optional) + the skill + its `evals/evals.json` (validate with `make skill-evals`; see [`ai/skills/AGENTS.md`](../../ai/skills/AGENTS.md)) |
+| **Grooming the backlog** (triage / prioritize / close stale issues, periodic review) | `issue-grooming` (`ai/skills/issue-grooming/`) | `priority:1`–`priority:5` labels, evidence-comment closes, refreshed bodies, and one new **Audit log** row in `index.md` (no design/spec/plan — it is a maintenance pass over existing objectives) |
 | **Grooming the open PRs** (stale drafts, old bug fixes, dependency bumps, rebase + CI checks, periodic PR review) | `pr-grooming` (`ai/skills/pr-grooming/`) | stale/duplicate drafts closed with a reason comment (branch kept), behind PRs rebased, refreshed bug fixes promoted, green bumps labelled `ready-for-merge`, an audit-log row here when an objective's state changed |
 | **A dotfiles feature** (shell, `opt/`, `ai/`, profiles, install) | `superpowers:brainstorming` → `superpowers:writing-plans` → `superpowers:test-driven-development`; obey the root `CLAUDE.md` conventions | spec + plan |
 | **A Go CLI under `sdk/`** | `brainstorming` → `superpowers:writing-plans` → `tdd`; mirror `sdk/gss` (cobra `cmd/`, `internal/` + mockable runner, `internal/version` ldflags); engage **go-team** agents (`go-goarch` for interfaces) | design + spec + plan |
