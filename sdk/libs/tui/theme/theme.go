@@ -114,6 +114,14 @@ func Resolve(tool string, env func(string) string, darkBackground func() bool) s
 	return Dark
 }
 
+// For is a tool's palette, resolved once from the environment (Resolve with
+// EnvDarkBackground), and whether color is wanted at all (Enabled). Tools
+// call it at startup and keep the result, rather than resolving per paint.
+func For(tool string, env func(string) string) (Palette, bool) {
+	p, _ := Get(Resolve(tool, env, EnvDarkBackground(env)))
+	return p, Enabled(env)
+}
+
 // EnvDarkBackground guesses the background from COLORFGBG ("fg;bg", set by
 // rxvt, konsole and others): bg 7 or 9–15 is light. Unknown is dark, the
 // common case. Tools on a real TTY may use a terminal query instead (gff
@@ -158,4 +166,43 @@ func Paint(s, c string) string {
 		return f + s + Reset
 	}
 	return s
+}
+
+// Chrome paints a tool's own text (help overlays, dialogs) from one palette:
+// Accent for headers, Crit for errors, SGR dim and bold. With Off set (color
+// unwanted) every method returns its text unchanged. It satisfies
+// libs/tui/overlay.Palette.
+type Chrome struct {
+	P   Palette
+	Off bool
+}
+
+// ChromeFor is For as a Chrome, resolved once.
+func ChromeFor(tool string, env func(string) string) Chrome {
+	p, on := For(tool, env)
+	return Chrome{P: p, Off: !on}
+}
+
+func (c Chrome) sgr(s, on, off string) string {
+	if c.Off {
+		return s
+	}
+	return on + s + off
+}
+
+func (c Chrome) Dim(s string) string  { return c.sgr(s, "\x1b[2m", "\x1b[22m") }
+func (c Chrome) Bold(s string) string { return c.sgr(s, "\x1b[1m", "\x1b[22m") }
+
+func (c Chrome) Accent(s string) string {
+	if c.Off {
+		return s
+	}
+	return Paint(s, c.P.Accent)
+}
+
+func (c Chrome) Err(s string) string {
+	if c.Off {
+		return s
+	}
+	return Paint(s, c.P.Crit)
 }

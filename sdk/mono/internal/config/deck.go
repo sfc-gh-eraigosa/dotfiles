@@ -128,6 +128,14 @@ func validateDeck(p Pane) error {
 	if !p.IsDeck() {
 		return validatePaneField(p, "cmd", p.Cmd)
 	}
+	// A deck runs its views: these pane fields would be silently ignored.
+	for _, f := range []struct{ name, val string }{
+		{"every", p.Every}, {"probe", p.Probe}, {"cwd", p.Cwd}, {"fallbacks", strings.Join(p.Fallbacks, " ")},
+	} {
+		if f.val != "" || (f.name == "fallbacks" && len(p.Fallbacks) > 0) {
+			return fmt.Errorf("%s.%s: a deck ignores it — set it on each view (a probe also fits on a tool)", key, f.name)
+		}
+	}
 	tools := map[string]bool{}
 	for i, t := range p.Tools {
 		tk := fmt.Sprintf("%s.tools[%d]", key, i)

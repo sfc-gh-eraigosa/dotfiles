@@ -65,6 +65,10 @@ func TestDeckValidates(t *testing.T) {
 		"bad middle":          func(c *Config) { c.Middle = "triple" },
 		"negative nav_esc_ms": func(c *Config) { n := -1; c.NavEscMs = &n },
 		"bad nav_key":         func(c *Config) { c.NavKey = "ctrl+shift+q" },
+		"deck every":          func(c *Config) { c.Panes[1].Every = "1s" },
+		"deck probe":          func(c *Config) { c.Panes[1].Probe = "test -x gdash" },
+		"deck cwd":            func(c *Config) { c.Panes[1].Cwd = "/srv" },
+		"deck fallbacks":      func(c *Config) { c.Panes[1].Fallbacks = []string{""} },
 	}
 	for name, mut := range bad {
 		c := decked()

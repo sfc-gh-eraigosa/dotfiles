@@ -66,7 +66,8 @@ type Model struct {
 
 	cfg     config.Config
 	saved   config.Config
-	choices []probe.Choice
+	choices []probe.Choice // per configured pane (the status column)
+	eff     []probe.Choice // per pane mono runs, cfg.Effective() (the preview)
 	keys    keymap.Map
 	cur     nav.Cursor
 	mode    mode
@@ -80,7 +81,7 @@ type Model struct {
 	height  int
 }
 
-type probedMsg []probe.Choice
+type probedMsg struct{ panes, eff []probe.Choice }
 
 // New builds the screen for cfg as loaded from path.
 func New(path string, cfg config.Config, env probe.Env) *Model {
@@ -104,7 +105,14 @@ func (m *Model) Config() config.Config { return m.cfg }
 
 func (m *Model) probe() tea.Cmd {
 	cfg, env := m.cfg, m.Env
-	return func() tea.Msg { return probedMsg(probe.Choose(context.Background(), env, cfg.Panes)) }
+	return func() tea.Msg {
+		msg := probedMsg{panes: probe.Choose(context.Background(), env, cfg.Panes)}
+		msg.eff = msg.panes
+		if cfg.MiddleMode() == config.MiddleSingle { // merged: what mono runs differs
+			msg.eff = probe.Choose(context.Background(), env, cfg.Effective())
+		}
+		return msg
+	}
 }
 
 // Init starts the tool check.
@@ -227,7 +235,7 @@ func (m *Model) say(s string, isErr bool) { m.msg, m.isErr = s, isErr }
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case probedMsg:
-		m.choices = msg
+		m.choices, m.eff = msg.panes, msg.eff
 		return m, nil
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -346,23 +354,13 @@ func (m *Model) ask(c overlay.Confirm, yes func() tea.Cmd) {
 	m.confirm, m.onYes, m.mode = c, yes, modeConfirm
 }
 
-type pal struct{}
-
-func (pal) Dim(s string) string  { return "\x1b[2m" + s + "\x1b[22m" }
-func (pal) Bold(s string) string { return "\x1b[1m" + s + "\x1b[22m" }
-
-// Accent and Err come from the sdk's shared scheme (sdk/libs/tui/theme).
-func (pal) Accent(s string) string { return theme.Paint(s, scheme().OK) }
-func (pal) Err(s string) string    { return theme.Paint(s, scheme().Crit) }
-
-func scheme() theme.Palette {
-	p, _ := theme.Get(theme.Resolve("mono", os.Getenv, theme.EnvDarkBackground(os.Getenv)))
-	return p
-}
+// pal paints from the sdk's shared scheme (sdk/libs/tui/theme), the same
+// roles as mono's help overlay. Resolved once.
+var pal = theme.ChromeFor("mono", os.Getenv)
 
 // View implements tea.Model.
 func (m *Model) View() string {
-	p := pal{}
+	p := pal
 	if m.mode == modeHelp {
 		return overlay.Help(p, "❓ mono config keys", m.keys, "any key to close",
 			overlay.Section{Title: "Commands", Lines: m.commandLines()})
@@ -371,11 +369,12 @@ func (m *Model) View() string {
 		return m.confirm.Render(p)
 	}
 	var b strings.Builder
+	var head, tail strings.Builder
 	title := "mono config — " + m.Path + "   middle: " + m.cfg.MiddleMode()
 	if m.Dirty() {
 		title += "  [modified]"
 	}
-	b.WriteString(p.Bold(title) + "\n\n")
+	head.WriteString(p.Bold(title) + "\n\n")
 
 	rows := []string{
 		fmt.Sprintf("%-8s %s", "prefix", m.cfg.Prefix),
@@ -419,41 +418,57 @@ func (m *Model) View() string {
 			detail[i+2] = append(detail[i+2], p.Dim(fmt.Sprintf("    └ %-14s %s", name, strings.Join(views, " · "))))
 		}
 	}
-	top, bottom := m.cur.Visible()
-	for i := top; i < bottom && i < len(rows); i++ {
-		mark := "  "
-		if i == m.cur.Pos {
-			mark = "> "
-		}
-		b.WriteString(mark + rows[i] + "\n")
-		for _, d := range detail[i] {
-			b.WriteString("  " + d + "\n")
-		}
-	}
-	b.WriteString("\n" + p.Bold("Preview") + p.Dim(fmt.Sprintf("  (%d rows)", m.height)) + "\n")
-	b.WriteString(m.preview())
-	b.WriteString("\n")
+	tail.WriteString("\n" + p.Bold("Preview") + p.Dim(fmt.Sprintf("  (%d rows)", m.height)) + "\n")
+	tail.WriteString(m.preview())
+	tail.WriteString("\n")
 	switch {
 	case m.mode == modeCommand:
-		b.WriteString(":" + m.cmd.Input.Render("█"))
+		tail.WriteString(":" + m.cmd.Input.Render("█"))
 	case m.msg != "" && m.isErr:
-		b.WriteString(p.Err(m.msg))
+		tail.WriteString(p.Err(m.msg))
 	case m.msg != "":
-		b.WriteString(p.Dim(m.msg))
+		tail.WriteString(p.Dim(m.msg))
 	default:
-		b.WriteString(p.Dim(m.keys.HeaderHint("  ")))
+		tail.WriteString(p.Dim(m.keys.HeaderHint("  ")))
 	}
+	// The list gets what the head and tail leave, counted in lines: a deck's
+	// detail lines take room too. It scrolls to keep the selected row (and as
+	// much of its detail as fits) on screen.
+	var lines []string
+	sel := 0
+	for i, r := range rows {
+		mark := "  "
+		if i == m.cur.Pos {
+			mark, sel = "> ", len(lines)
+		}
+		lines = append(lines, mark+r)
+		for _, d := range detail[i] {
+			lines = append(lines, "  "+d)
+		}
+	}
+	budget := max(m.height-strings.Count(head.String(), "\n")-strings.Count(tail.String(), "\n")-1, 1)
+	top := 0
+	if end := min(sel+1+len(detail[m.cur.Pos]), len(lines)); end > budget {
+		top = min(sel, end-budget)
+	}
+	b.WriteString(head.String())
+	for _, l := range lines[top:min(top+budget, len(lines))] {
+		b.WriteString(l + "\n")
+	}
+	b.WriteString(tail.String())
 	return b.String()
 }
 
 // preview draws one line per region with its row count at the current
-// terminal height, using only the panes that pass the tool check.
+// terminal height: the panes mono runs (cfg.Effective, so middle: single
+// shows the merged deck) that pass the tool check.
 func (m *Model) preview() string {
 	title, _ := config.ParseSize(m.cfg.Title.Size)
 	pcts := []int{title}
 	var names []string
-	for i, pn := range m.cfg.Panes {
-		if len(m.choices) == len(m.cfg.Panes) && !m.choices[i].Usable() {
+	eff := m.cfg.Effective()
+	for i, pn := range eff {
+		if len(m.eff) == len(eff) && !m.eff[i].Usable() {
 			continue
 		}
 		n, _ := config.ParseSize(pn.Size)
