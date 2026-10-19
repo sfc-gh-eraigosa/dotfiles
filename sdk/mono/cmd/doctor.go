@@ -26,8 +26,8 @@ var doctorCmd = &cobra.Command{
 			return err
 		}
 		out := c.OutOrStdout()
-		fmt.Fprintf(out, "config: %s\nprefix: %s\n\n", path, cfg.Prefix)
-		choices := probe.Choose(context.Background(), doctorEnv, cfg.Panes)
+		fmt.Fprintf(out, "config: %s\nprefix: %s\nmiddle: %s\n\n", path, cfg.Prefix, cfg.MiddleMode())
+		choices := probe.Choose(context.Background(), doctorEnv, cfg.Effective())
 		title, _ := config.ParseSize(cfg.Title.Size)
 		pcts := []int{title}
 		total := title
@@ -44,11 +44,25 @@ var doctorCmd = &cobra.Command{
 		fmt.Fprintf(tw, "title\t%s\t%d\t-\tversion, commit, focused pane, help hint\n", cfg.Title.Size, rows[0])
 		i := 1
 		for _, ch := range choices {
+			runs := ch.Cmd
+			if ch.Pane.IsDeck() && ch.Usable() {
+				runs = "deck"
+			}
 			if ch.Usable() {
-				fmt.Fprintf(tw, "%s\t%s\t%d\t%s\t%s\n", ch.Pane.Name, ch.Pane.Size, rows[i], ch.Cmd, ch.Reason)
+				fmt.Fprintf(tw, "%s\t%s\t%d\t%s\t%s\n", ch.Pane.Name, ch.Pane.Size, rows[i], runs, ch.Reason)
 				i++
 			} else {
 				fmt.Fprintf(tw, "%s\t%s\t-\t(not shown)\t%s\n", ch.Pane.Name, ch.Pane.Size, ch.Reason)
+			}
+			if !ch.Pane.IsDeck() {
+				continue
+			}
+			// One row per view: what runs and why each was kept or dropped.
+			for _, v := range ch.Views {
+				fmt.Fprintf(tw, "  └ %s/%s\t\t\t%s\t%s%s\n", v.Tool, v.View, v.Cmd, v.Reason, zoomNote(v.Zoom))
+			}
+			for _, v := range ch.Dropped {
+				fmt.Fprintf(tw, "  └ %s/%s\t\t\t(not shown)\t%s\n", v.Tool, v.View, v.Reason)
 			}
 		}
 		_ = tw.Flush()
@@ -62,4 +76,11 @@ var doctorCmd = &cobra.Command{
 func init() {
 	doctorCmd.Flags().IntVar(&doctorRows, "rows", 40, "terminal height to compute rows for")
 	rootCmd.AddCommand(doctorCmd)
+}
+
+func zoomNote(z bool) string {
+	if z {
+		return " · zoom: fills the middle"
+	}
+	return ""
 }

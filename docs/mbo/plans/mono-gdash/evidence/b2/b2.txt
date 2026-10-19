@@ -1,0 +1,37 @@
+# B2 probe + doctor — 2026-10-19T14:31:08Z
+RED: probe/deck_test.go → build failed (Choice has no Views); doctor_deck_test.go → doctor output missing the per-view rows.
+$ go test -v -run "Deck|PlainPane" ./internal/probe/   (E17)
+--- PASS: TestDeckDropsPerViewToolPane (0.00s)
+--- PASS: TestDeckToolProbeRunsOnce (0.00s)
+--- PASS: TestDeckChoiceCarriesViewSettings (0.00s)
+--- PASS: TestPlainPaneHasOneView (0.00s)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/probe	0.005s	coverage: 77.7% of statements
+$ go test -v -run TestDoctorRowPerView ./cmd/   (doctor output, fake host: htop, gsl, gdash; Grafana probe ok; no nvtop)
+
+        config: /tmp/TestDoctorRowPerView243357306/001/config.json
+        prefix: ctrl+b
+        middle: split
+        
+        PANE                 SIZE  ROWS@40  RUNS             WHY
+        title                5%    2        -                version, commit, focused pane, help hint
+        htop                 60%   24       htop             found htop
+        mid                  30%   12       deck             2 of 3 views usable
+          └ gdash/conductor                 gdash conductor  found gdash · zoom: fills the middle
+          └ gdash/ci                        gdash ci         found gdash · zoom: fills the middle
+          └ gpu/nvtop                       (not shown)      nvtop not installed
+        gsl                  5%    2        gsl status       found gsl
+        
+--- PASS: TestDoctorRowPerView (0.01s)
+--- PASS: TestDoctorMiddleSingle (0.01s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/cmd	0.023s
+$ go test ./... (mono)
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/cmd	0.036s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/app	0.626s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/config	0.031s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/configui	0.019s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/input	0.007s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/layout	0.004s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/pane	2.738s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/probe	0.007s
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/mono/internal/screen	0.007s

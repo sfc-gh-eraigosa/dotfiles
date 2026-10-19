@@ -116,9 +116,9 @@
 
 ### Task B2 — probe + doctor  (E17)
 
-- [ ] RED: `probe/deck_test.go`, doctor rows
-- [ ] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
-- [ ] EVIDENCE · COMMIT `mono: drop per view, tool, pane; doctor rows per view` · LEDGER · CHECKPOINT
+- [x] RED: `probe/deck_test.go`, doctor rows
+- [x] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
+- [x] EVIDENCE · COMMIT `mono: drop per view, tool, pane; doctor rows per view` · LEDGER · CHECKPOINT
 
 ### Task B3 — deck runtime  (E18 E19)
 
