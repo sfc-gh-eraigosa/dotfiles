@@ -58,6 +58,7 @@ locale_fallback
 # failing CLOSED on exactly the fresh machines gff must be harmless on.
 . "${BASE_DIR}/opt/lib/gff.sh"
 . "${BASE_DIR}/opt/lib/sshdflags.sh"
+. "${BASE_DIR}/opt/lib/wslnet.sh"
 
 # Early flag export (fail-open): pre-bootstrap gates read env only. If a gff
 # binary already exists (any run after the first), materialize the overrides
@@ -690,6 +691,7 @@ set +a
 # GFF_* the later runtime gates (pyenv/rbenv/nvm) read.
 apply_install_phase
 sshd_migrate
+wslnet_sync  # record an existing WSL network setup (or ask once if sshd is enabled); exports GFF_INSTALL_WINDOWS_WSL_NETWORK
 apply_install_phase  # sshd_migrate may export GFF_INSTALL_NETWORK_SSHD=true; re-pin the phase split
 
 # install/update pyenv
