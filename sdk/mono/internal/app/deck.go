@@ -385,9 +385,10 @@ func (a *App) focusPathLocked(path string) ([]launch, error) {
 	return append(starts, a.relayoutLocked()...), nil
 }
 
-// doubleEsc watches what is about to be forwarded: a lone esc is forwarded
-// at once and remembered; a second within nav_esc_ms is swallowed and enters
-// nav mode (spec F9). It returns what to forward and whether nav mode began.
+// doubleEsc watches what is about to be forwarded: every esc is forwarded
+// (mono never eats a key outside the prefix), and a second within
+// nav_esc_ms also enters nav mode (spec F9). It returns what to forward and
+// whether nav mode began.
 func (a *App) doubleEsc(b []byte) ([]byte, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -400,20 +401,22 @@ func (a *App) doubleEsc(b []byte) ([]byte, bool) {
 	case "\x1b":
 		if !a.lastEsc.IsZero() && now.Sub(a.lastEsc) <= window {
 			a.lastEsc, a.nav = time.Time{}, true
-			return nil, true
+			return b, true
 		}
 		a.lastEsc = now
 		return b, false
 	case "\x1b\x1b": // both escapes in one read
 		a.lastEsc, a.nav = time.Time{}, true
-		return b[:1], true
+		return b, true
 	}
 	a.lastEsc = time.Time{}
 	return b, false
 }
 
-// navBytes handles keys in nav mode: hjkl and z move without the prefix, esc
-// leaves, and any other key leaves without reaching the program.
+// navBytes handles keys in nav mode: hjkl and z move without the prefix and
+// esc leaves. Any other key leaves and is handled as if nav mode were off —
+// typed text reaches the program and the prefix starts a command — so
+// nothing typed is lost.
 func (a *App) navBytes(b []byte) {
 	nav := NavKeys()
 	a.mu.Lock()
@@ -430,12 +433,16 @@ func (a *App) navBytes(b []byte) {
 			return
 		}
 		k, n := input.Decode(b)
+		raw := b[:n]
 		b = b[n:]
 		a.mu.Lock()
 		act, ok := nav.Lookup(k)
 		var starts []launch
+		pass := false
 		switch {
-		case !ok || act == keymap.Back:
+		case !ok:
+			a.nav, pass = false, true
+		case act == keymap.Back:
 			a.nav = false
 		case act == keymap.Down:
 			starts = a.navMoveLocked(1)
@@ -452,6 +459,9 @@ func (a *App) navBytes(b []byte) {
 		a.mu.Unlock()
 		startAll(starts)
 		if !still {
+			if pass {
+				b = append(append([]byte(nil), raw...), b...)
+			}
 			if len(b) > 0 {
 				a.HandleBytes(b)
 				return

@@ -200,11 +200,13 @@ sdk/mono  (changed)
 ### F9 — nav mode
 
 - **Enter:** `<prefix> <nav_key>` (default `space`), or `esc` twice within `nav_esc_ms`
-  (default 300; `0` turns double-esc off). The first `esc` is forwarded at once; the second is
-  swallowed.
+  (default 300; `0` turns double-esc off). Both escapes are forwarded at once — mono never eats a
+  key outside the prefix; the second also enters nav mode.
 - **In nav mode:** `j`/`↓` and `k`/`↑` walk the deck's views, then carry on to the
   neighbouring panes. `h`/`←` and `l`/`→` switch tools within the deck. Nothing wraps.
-- **Leave:** `esc` leaves nav mode. Any other key leaves it **and is not forwarded**.
+- **Leave:** `esc` leaves nav mode. Any other key leaves it and is handled as if nav mode were
+  off: text reaches the program and the prefix starts a command, so `esc esc :wq` in vim loses
+  nothing. (Changed after the #414 review: the first cut dropped that key.)
 - **Title:** the title bar shows `NAV`, and the focused pane's border or label is accented.
 - **One-shot prefix keys** (`<prefix> j/k ? : r q`) are unchanged.
 - **Key tables:** mono's `Keys()` keeps `PageLeft`/`PageRight` and re-labels them. The help

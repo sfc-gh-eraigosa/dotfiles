@@ -48,7 +48,8 @@ func Keys(prefix string, nav ...string) keymap.Map {
 
 // NavKeys is what nav mode understands, with no prefix: the same moves as
 // the prefix table, plus esc to leave. Any other key leaves nav mode and is
-// not passed to the program (spec F9).
+// handled as usual — typed text reaches the program, the prefix starts a
+// command — so nothing typed is lost (spec F9).
 func NavKeys() keymap.Map {
 	return keymap.Map{
 		{Action: keymap.Down, Keys: []string{"j", "down"}, Help: "next view of the deck, then the next pane"},

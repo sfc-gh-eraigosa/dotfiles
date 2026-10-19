@@ -312,7 +312,7 @@ func (a *App) HandleBytes(b []byte) {
 		return
 	}
 	a.mu.Lock()
-	nav := a.nav
+	nav := a.nav && !a.router.Pending() // a prefix typed before nav began keeps its key
 	a.mu.Unlock()
 	if nav {
 		a.navBytes(b)
@@ -328,11 +328,29 @@ func (a *App) HandleBytes(b []byte) {
 				a.focused(func(p *pane.Pane) { p.Write(fwd) })
 			}
 			if entered {
+				// The rest of this read goes to nav mode, in order. The router
+				// stops after a prefix key, so a Key event can only be last:
+				// it still runs as the prefix command it was typed as.
 				var more []byte
+				var key *tea.KeyMsg
 				for _, e := range events[i+1:] {
+					if e.Key != nil {
+						key = e.Key
+						break
+					}
 					more = append(more, e.Forward...)
 				}
-				a.navBytes(append(more, rest...))
+				if key == nil {
+					a.navBytes(append(more, rest...))
+					return
+				}
+				a.navBytes(more)
+				a.prefixKey(*key)
+				if len(rest) > 0 {
+					a.HandleBytes(rest)
+					return
+				}
+				a.opts.OnChange()
 				return
 			}
 			continue
@@ -395,7 +413,7 @@ func (a *App) prefixKey(k tea.KeyMsg) {
 			go func() { _ = p.Restart() }()
 			if s.deck {
 				a.mu.Unlock()
-				_ = a.reload() // a deck also re-checks its tools
+				a.recheck() // a deck also re-checks its tools
 				return
 			}
 		}
@@ -473,9 +491,24 @@ func (a *App) reload() error {
 	if err != nil {
 		return err
 	}
+	a.queueApply(cfg, "reloaded "+a.opts.ConfigPath)
+	return nil
+}
+
+// recheck re-runs the tool checks against the running config, without
+// re-reading the file (prefix r on a deck: a tool installed since start).
+func (a *App) recheck() {
+	a.mu.Lock()
+	cfg := a.cfg
+	a.mu.Unlock()
+	a.queueApply(cfg, "re-checked tools")
+}
+
+// queueApply applies cfg off the input path; the newest queued config wins.
+func (a *App) queueApply(cfg config.Config, msg string) {
 	a.mu.Lock()
 	a.pending = &cfg
-	a.msg = "reloaded " + a.opts.ConfigPath
+	a.msg = msg
 	a.mu.Unlock()
 	go func() {
 		a.applyMu.Lock()
@@ -488,7 +521,6 @@ func (a *App) reload() error {
 			a.apply(*next)
 		}
 	}()
-	return nil
 }
 
 // openConfig runs `mono config` full screen; when it exits mono reloads.
@@ -638,19 +670,9 @@ func (a *App) titleBarLocked(w int) string {
 	return style + left + strings.Repeat(" ", gap) + right + "\x1b[0m"
 }
 
-// palette paints mono's own text (help overlay) from the sdk's shared
-// scheme (sdk/libs/tui/theme), so it matches gdash, fleet and gsl.
-type palette struct{}
-
-func scheme() theme.Palette {
-	p, _ := theme.Get(theme.Resolve("mono", os.Getenv, theme.EnvDarkBackground(os.Getenv)))
-	return p
-}
-
-func (palette) Dim(s string) string    { return "\x1b[2m" + s + "\x1b[22m" }
-func (palette) Bold(s string) string   { return "\x1b[1m" + s + "\x1b[22m" }
-func (palette) Accent(s string) string { return theme.Paint(s, scheme().Accent) }
-func (palette) Err(s string) string    { return theme.Paint(s, scheme().Crit) }
+// chrome paints mono's own text (help overlay) from the sdk's shared scheme
+// (sdk/libs/tui/theme), so it matches gdash, fleet and gsl. Resolved once.
+var chrome = theme.ChromeFor("mono", os.Getenv)
 
 // HelpText is the help overlay body (shared with `mono --help`).
 func HelpText(keys keymap.Map, prefix string, panes []string, p overlay.Palette) string {
@@ -677,7 +699,7 @@ func (a *App) helpBodyLocked() []string {
 			panes = append(panes, fmt.Sprintf("%-8s (not shown: %s)", c.Pane.Name, c.Reason))
 		}
 	}
-	return strings.Split(HelpText(a.keys, a.cfg.Prefix, panes, palette{}), "\n")
+	return strings.Split(HelpText(a.keys, a.cfg.Prefix, panes, chrome), "\n")
 }
 
 // drawHelp boxes body in the middle of rows. Below 4 columns there is no room
