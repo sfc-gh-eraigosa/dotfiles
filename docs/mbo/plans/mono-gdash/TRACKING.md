@@ -13,14 +13,14 @@
 | Leaf | Worker ref | Branch | Worktree path | PR | State |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | design | `mono-gdash/edward-raigosa/design` | `feature/mono-gdash/edward-raigosa/design` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/mono-gdash/edward-raigosa/design` | #411 | design + spec + plan + trio |
-| gdash | — | — | — | — | not created |
+| gdash | `mono-gdash/edward-raigosa/gdash` | `feature/mono-gdash/edward-raigosa/gdash` | `~/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/mono-gdash/edward-raigosa/gdash` | — | Task 0 |
 | deck | — | — | — | — | not created |
 
 ## 1. Task ledger
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| 0 lab facts + fixtures | todo | | | needs the owner's Viewer token |
+| 0 lab facts + fixtures | done | (this commit) | `capture.py` → 4 dashboards, 10 panel queries, all with frames; scrub greps → 0 files (`evidence/task0/capture.txt`) | issued by the service account `gdash-viewer` (Viewer; admin API → 403), created 2026-10-19 with the owner's go-ahead |
 | A1 scaffold | todo | | | |
 | A2 config + auth | todo | | | |
 | A3 client | todo | | | |
@@ -38,8 +38,14 @@
 | C1 default mid deck | todo | | | after both leaves merge |
 | C2 live evidence | todo | | | |
 
-**Lab facts (Task 0 fills these):** Grafana version `13.1.3` (checked 2026-10-18 via
-`/api/health`) · conductor uid `—` · k3s-nodes uid `—` · CI uid `—` · datasource types `—`.
+**Lab facts (Task 0, 2026-10-19):**
+- **Grafana:** `13.1.3`; dashboard schemaVersion 39; every target's datasource is `prometheus`, via the `$datasource` variable.
+- **conductor:** `conductor-metrics`, "Conductor — metrics against goals". 17 panels: 3 row, 6 stat, 8 timeseries.
+- **CI:** `ci-lab`, "CI — lab runners". 37 panels: 5 row, 16 stat, 10 timeseries, 4 table, 2 bargauge.
+- **k3s-nodes, owner to pick:** both candidates were captured.
+  - `7d57716318ee0dddbac5a7f451fb7753` "Node Exporter / Nodes": 12 panels (4 row, 6 timeseries, 1 gauge, 1 table); vars `cluster`, `instance`.
+  - `058020e04168bfdea0c52269cb699df2` "Kubernetes / Compute Resources / Nodes Overview": 5 timeseries; var `cluster`.
+- **Not supported in v1:** `table` panels (4 in CI, 1 in Node Exporter) become placeholders under spec F3, so A5 must render the placeholder for them.
 
 ## 2. Feature → proof matrix (spec §5)
 
@@ -74,3 +80,4 @@
 | :-- | :-- | :-- |
 | 2026-10-18 | design session (claude-mono) | design #411; owner answered nav mode |
 | 2026-10-18 | playground session | Grafana via LAN NodePort (Q2/Q3 closed); spec + plan + trio written; owner approved |
+| 2026-10-19 | playground session | #411 merged; gdash worker created; Viewer token issued; Task 0 fixtures captured + scrubbed |

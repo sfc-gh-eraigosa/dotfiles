@@ -1,0 +1,1101 @@
+{
+  "dashboard": {
+    "annotations": {
+      "list": []
+    },
+    "description": "The conductor's five measures (workstreams/METRICS.md) over time, each against its goal (workstreams/conductor/goals.tsv), scraped from conductor serve /metrics on spark1 through the observability LAN bridge.",
+    "editable": true,
+    "graphTooltip": 1,
+    "id": 3642041033601024,
+    "links": [
+      {
+        "targetBlank": true,
+        "title": "METRICS.md",
+        "type": "link",
+        "url": "https://github.com/sfc-gh-eoperator/playground/blob/main/workstreams/METRICS.md"
+      }
+    ],
+    "panels": [
+      {
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "id": 1,
+        "title": "Now: the five measures against their goals (trailing 7 days)",
+        "type": "row"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "description": "Dispatches that passed their check, of all attempts in the trailing 7 days (infra misses excluded). Goal ≥ 0.6.",
+        "fieldConfig": {
+          "defaults": {
+            "decimals": 2,
+            "max": 1,
+            "min": 0,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "green",
+                  "value": 0.6
+                }
+              ]
+            },
+            "unit": "percentunit"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 4,
+          "x": 0,
+          "y": 1
+        },
+        "id": 2,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "value"
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_measure{name=\"dispatch_pass_rate\"}",
+            "legendFormat": "Dispatch pass rate",
+            "refId": "A"
+          }
+        ],
+        "title": "Dispatch pass rate",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "description": "Drafts the loop accepted (promoted or landed), of all drafts written in the window. Goal ≥ 0.25.",
+        "fieldConfig": {
+          "defaults": {
+            "decimals": 2,
+            "max": 1,
+            "min": 0,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "green",
+                  "value": 0.25
+                }
+              ]
+            },
+            "unit": "percentunit"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 4,
+          "x": 4,
+          "y": 1
+        },
+        "id": 3,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "value"
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_measure{name=\"draft_yield\"}",
+            "legendFormat": "Draft yield",
+            "refId": "A"
+          }
+        ],
+        "title": "Draft yield",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "description": "Dispatches that passed, per day of the window. Goal ≥ 8.",
+        "fieldConfig": {
+          "defaults": {
+            "decimals": 2,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "green",
+                  "value": 8
+                }
+              ]
+            },
+            "unit": "none"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 4,
+          "x": 8,
+          "y": 1
+        },
+        "id": 4,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "value"
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_measure{name=\"passes_per_day\"}",
+            "legendFormat": "Passes per day",
+            "refId": "A"
+          }
+        ],
+        "title": "Passes per day",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "description": "Seconds a local model was dispatching or on trial, of the window. Goal ≥ 0.3.",
+        "fieldConfig": {
+          "defaults": {
+            "decimals": 2,
+            "max": 1,
+            "min": 0,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "green",
+                  "value": 0.3
+                }
+              ]
+            },
+            "unit": "percentunit"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 4,
+          "x": 12,
+          "y": 1
+        },
+        "id": 5,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "value"
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_measure{name=\"busy_share\"}",
+            "legendFormat": "Busy share",
+            "refId": "A"
+          }
+        ],
+        "title": "Busy share",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "description": "The longest gap with no dispatch, in hours. Goal ≤ 3 h.",
+        "fieldConfig": {
+          "defaults": {
+            "decimals": 2,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 3
+                }
+              ]
+            },
+            "unit": "h"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 4,
+          "x": 16,
+          "y": 1
+        },
+        "id": 6,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "value"
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_measure{name=\"longest_idle_h\"}",
+            "legendFormat": "Longest idle stretch",
+            "refId": "A"
+          }
+        ],
+        "title": "Longest idle stretch",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "description": "How many of the five measures meet their goal right now.",
+        "fieldConfig": {
+          "defaults": {
+            "max": 5,
+            "min": 0,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 3
+                },
+                {
+                  "color": "green",
+                  "value": 5
+                }
+              ]
+            },
+            "unit": "none"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 4,
+          "x": 20,
+          "y": 1
+        },
+        "id": 7,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ]
+          },
+          "textMode": "value"
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "sum(conductor_goal_met)",
+            "legendFormat": "met",
+            "refId": "A"
+          }
+        ],
+        "title": "Goals met",
+        "type": "stat"
+      },
+      {
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 5
+        },
+        "id": 8,
+        "title": "Over time: each measure, with its goal as the dashed line",
+        "type": "row"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "description": "Dispatches that passed their check, of all attempts in the trailing 7 days (infra misses excluded). Goal ≥ 0.6.",
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 10,
+              "lineWidth": 2,
+              "spanNulls": true
+            },
+            "decimals": 2,
+            "max": 1,
+            "min": 0,
+            "unit": "percentunit"
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "goal"
+              },
+              "properties": [
+                {
+                  "id": "custom.lineStyle",
+                  "value": {
+                    "dash": [
+                      10,
+                      10
+                    ],
+                    "fill": "dash"
+                  }
+                },
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "orange",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 0
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 6
+        },
+        "id": 9,
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "multi"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_measure{name=\"dispatch_pass_rate\"}",
+            "legendFormat": "measured",
+            "refId": "A"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_goal{name=\"dispatch_pass_rate\"}",
+            "legendFormat": "goal",
+            "refId": "B"
+          }
+        ],
+        "title": "Dispatch pass rate",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "description": "Drafts the loop accepted (promoted or landed), of all drafts written in the window. Goal ≥ 0.25.",
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 10,
+              "lineWidth": 2,
+              "spanNulls": true
+            },
+            "decimals": 2,
+            "max": 1,
+            "min": 0,
+            "unit": "percentunit"
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "goal"
+              },
+              "properties": [
+                {
+                  "id": "custom.lineStyle",
+                  "value": {
+                    "dash": [
+                      10,
+                      10
+                    ],
+                    "fill": "dash"
+                  }
+                },
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "orange",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 0
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 6
+        },
+        "id": 10,
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "multi"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_measure{name=\"draft_yield\"}",
+            "legendFormat": "measured",
+            "refId": "A"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_goal{name=\"draft_yield\"}",
+            "legendFormat": "goal",
+            "refId": "B"
+          }
+        ],
+        "title": "Draft yield",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "description": "Dispatches that passed, per day of the window. Goal ≥ 8.",
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 10,
+              "lineWidth": 2,
+              "spanNulls": true
+            },
+            "decimals": 2,
+            "unit": "none"
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "goal"
+              },
+              "properties": [
+                {
+                  "id": "custom.lineStyle",
+                  "value": {
+                    "dash": [
+                      10,
+                      10
+                    ],
+                    "fill": "dash"
+                  }
+                },
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "orange",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 0
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 14
+        },
+        "id": 11,
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "multi"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_measure{name=\"passes_per_day\"}",
+            "legendFormat": "measured",
+            "refId": "A"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_goal{name=\"passes_per_day\"}",
+            "legendFormat": "goal",
+            "refId": "B"
+          }
+        ],
+        "title": "Passes per day",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "description": "Seconds a local model was dispatching or on trial, of the window. Goal ≥ 0.3.",
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 10,
+              "lineWidth": 2,
+              "spanNulls": true
+            },
+            "decimals": 2,
+            "max": 1,
+            "min": 0,
+            "unit": "percentunit"
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "goal"
+              },
+              "properties": [
+                {
+                  "id": "custom.lineStyle",
+                  "value": {
+                    "dash": [
+                      10,
+                      10
+                    ],
+                    "fill": "dash"
+                  }
+                },
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "orange",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 0
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 14
+        },
+        "id": 12,
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "multi"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_measure{name=\"busy_share\"}",
+            "legendFormat": "measured",
+            "refId": "A"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_goal{name=\"busy_share\"}",
+            "legendFormat": "goal",
+            "refId": "B"
+          }
+        ],
+        "title": "Busy share",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "description": "The longest gap with no dispatch, in hours. Goal ≤ 3 h.",
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 10,
+              "lineWidth": 2,
+              "spanNulls": true
+            },
+            "decimals": 2,
+            "unit": "h"
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "goal"
+              },
+              "properties": [
+                {
+                  "id": "custom.lineStyle",
+                  "value": {
+                    "dash": [
+                      10,
+                      10
+                    ],
+                    "fill": "dash"
+                  }
+                },
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "orange",
+                    "mode": "fixed"
+                  }
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 0
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 22
+        },
+        "id": 13,
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "multi"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_measure{name=\"longest_idle_h\"}",
+            "legendFormat": "measured",
+            "refId": "A"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_goal{name=\"longest_idle_h\"}",
+            "legendFormat": "goal",
+            "refId": "B"
+          }
+        ],
+        "title": "Longest idle stretch",
+        "type": "timeseries"
+      },
+      {
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 30
+        },
+        "id": 14,
+        "title": "The counts behind the measures (same 7-day window)",
+        "type": "row"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "description": "Attempts and passes in the window; the pass rate is their ratio.",
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 0,
+              "lineWidth": 2,
+              "spanNulls": true
+            },
+            "unit": "none"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 31
+        },
+        "id": 15,
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "multi"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_count{name=\"attempts\"}",
+            "legendFormat": "attempts",
+            "refId": "A"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_count{name=\"succeeded\"}",
+            "legendFormat": "passed",
+            "refId": "B"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_count{name=\"infra_misses\"}",
+            "legendFormat": "infra misses (excluded)",
+            "refId": "C"
+          }
+        ],
+        "title": "Dispatches",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "description": "Drafts written and drafts accepted; the yield is their ratio.",
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 0,
+              "lineWidth": 2,
+              "spanNulls": true
+            },
+            "unit": "none"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 31
+        },
+        "id": 16,
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "multi"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_count{name=\"draft_attempts\"}",
+            "legendFormat": "written",
+            "refId": "A"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_count{name=\"drafts_accepted\"}",
+            "legendFormat": "accepted",
+            "refId": "B"
+          }
+        ],
+        "title": "Drafts",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "description": "Hours a local model was busy, and the longest idle stretch, in the window.",
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "fillOpacity": 0,
+              "lineWidth": 2,
+              "spanNulls": true
+            },
+            "unit": "h"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 16,
+          "y": 31
+        },
+        "id": 17,
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "multi"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_count{name=\"busy_seconds\"} / 3600",
+            "legendFormat": "busy hours",
+            "refId": "A"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${datasource}"
+            },
+            "expr": "conductor_count{name=\"longest_idle_seconds\"} / 3600",
+            "legendFormat": "longest idle (h)",
+            "refId": "B"
+          }
+        ],
+        "title": "Local model time",
+        "type": "timeseries"
+      }
+    ],
+    "refresh": "1m",
+    "schemaVersion": 39,
+    "tags": [
+      "conductor",
+      "workstreams"
+    ],
+    "templating": {
+      "list": [
+        {
+          "current": {
+            "selected": false,
+            "text": "Prometheus",
+            "value": "Prometheus"
+          },
+          "hide": 0,
+          "label": "Data source",
+          "name": "datasource",
+          "query": "prometheus",
+          "refresh": 1,
+          "type": "datasource"
+        }
+      ]
+    },
+    "time": {
+      "from": "now-7d",
+      "to": "now"
+    },
+    "timepicker": {},
+    "title": "Conductor — metrics against goals",
+    "uid": "conductor-metrics",
+    "version": 1
+  },
+  "meta": {
+    "annotationsPermissions": {
+      "dashboard": {
+        "canAdd": false,
+        "canDelete": false,
+        "canEdit": false
+      }
+    },
+    "apiVersion": "v0alpha1",
+    "canAdmin": false,
+    "canDelete": false,
+    "canEdit": false,
+    "canSave": false,
+    "canStar": true,
+    "created": "2026-10-17T05:21:18Z",
+    "createdBy": "Anonymous",
+    "expires": "0001-01-01T00:00:00Z",
+    "folderId": 0,
+    "folderTitle": "General",
+    "folderUid": "",
+    "folderUrl": "",
+    "hasAcl": false,
+    "isFolder": false,
+    "provisioned": true,
+    "provisionedExternalId": "conductor-metrics.json",
+    "slug": "conductor-e28094-metrics-against-goals",
+    "type": "db",
+    "updated": "2026-10-17T05:21:18Z",
+    "updatedBy": "Anonymous",
+    "url": "/d/conductor-metrics/conductor-e28094-metrics-against-goals",
+    "version": 1
+  }
+}

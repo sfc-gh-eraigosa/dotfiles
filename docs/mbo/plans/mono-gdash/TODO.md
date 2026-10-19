@@ -12,10 +12,10 @@
 
 ## Preflight (once)
 
-- [ ] #411 merged → `gh pr view 411 --json state -q .state` = `MERGED`
-- [ ] Grafana health → `curl -s -m 5 http://192.168.0.128:30300/api/health` shows `"database": "ok"`
-- [ ] token file → `stat -c %a ~/.config/gdash/lab.cred` = `600`, and an authenticated `/api/search?limit=1` returns 200
-- [ ] SETUP: `gss feature worker add --feature mono-gdash --purpose gdash --description "gdash: Grafana dashboards as terminal graphs" --json` → paste into IMPLEMENTATION §2 + TRACKING §0
+- [x] #411 merged → `gh pr view 411 --json state -q .state` = `MERGED`
+- [x] Grafana health → `curl -s -m 5 http://192.168.0.128:30300/api/health` shows `"database": "ok"`
+- [x] token file → `stat -c %a ~/.config/gdash/lab.cred` = `600`, and an authenticated `/api/search?limit=1` returns 200
+- [x] SETUP: `gss feature worker add --feature mono-gdash --purpose gdash --description "gdash: Grafana dashboards as terminal graphs" --json` → paste into IMPLEMENTATION §2 + TRACKING §0
 - [ ] SETUP: `gss feature worker add --feature mono-gdash --purpose deck --description "mono deck panes + nav mode" --json` → paste the same way
 
 ---
@@ -24,14 +24,14 @@
 
 ### Task 0 — lab facts + fixtures  (plan §4 Task 0)
 
-- [ ] SETUP: `mkdir -p sdk/gdash/internal/grafana/testdata/lab`
-- [ ] capture `/api/health` and `/api/search?type=dash-db` (token from the file inside the curl header; never echoed)
-- [ ] identify the conductor, k3s-nodes and CI dashboards; record uid, title and datasource types in TRACKING "Lab facts"
-- [ ] capture each dashboard JSON and one `/api/ds/query` response per panel type
-- [ ] scrub: `grep -rE '(glsa_|eyJ|Bearer)' sdk/gdash/internal/grafana/testdata` → nothing; no hostnames but the NodePort address
-- [ ] ALLOWLIST: `git status --short -- sdk/gdash` lists the fixtures
-- [ ] EVIDENCE: `evidence/task0/capture.txt` (endpoints, sizes, scrub check)
-- [ ] COMMIT `gdash: lab Grafana fixtures (conductor, k3s-nodes, ci) for the test suite` · LEDGER · CHECKPOINT
+- [x] SETUP: `mkdir -p sdk/gdash/internal/grafana/testdata/lab`
+- [x] capture `/api/health` and `/api/search?type=dash-db` (token from the file inside the curl header; never echoed)
+- [x] identify the conductor, k3s-nodes and CI dashboards; record uid, title and datasource types in TRACKING "Lab facts"
+- [x] capture each dashboard JSON and one `/api/ds/query` response per panel type
+- [x] scrub: `grep -rE '(glsa_|eyJ|Bearer)' sdk/gdash/internal/grafana/testdata` → nothing; no hostnames but the NodePort address
+- [x] ALLOWLIST: `git status --short -- sdk/gdash` lists the fixtures
+- [x] EVIDENCE: `evidence/task0/capture.txt` (endpoints, sizes, scrub check)
+- [x] COMMIT `gdash: lab Grafana fixtures (conductor, k3s-nodes, ci) for the test suite` · LEDGER · CHECKPOINT
 
 **Done when:** fixtures are committed and scrubbed, and the three uids are in TRACKING.
 
