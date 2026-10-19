@@ -34,8 +34,11 @@
 | B3 deck runtime | todo | | | |
 | B4 nav mode | todo | | | |
 | B5 config verbs + UI | todo | | | |
+| B7 zoom + one-pane mode | todo | | | amended 2026-10-19 |
 | B6 boundary + docs | todo | | | |
 | C1 default mid deck | todo | | | after both leaves merge |
+| D1 gdash docs: managing views | todo | | | owner 2026-10-19 |
+| E1 one color scheme across the sdk | todo | | | owner 2026-10-19; last |
 | C2 live evidence | todo | | | |
 
 **Lab facts (Task 0, 2026-10-19):**
@@ -87,3 +90,4 @@
 | 2026-10-19 | playground session | A5–A6 done: render (in-repo braille), app + `gdash <view>`; first live run against the lab, refId bug found and fixed |
 | 2026-10-19 | playground session | A7–A8 done: doctor/list (live: all ok, --quiet 35 ms), E12 leak test on the real binary, install.sh + gff flag, docs; gdash leaf complete |
 | 2026-10-19 | playground session | independent review of the gdash leaf: 5 findings (multi-value PromQL escaping, `$1` treated as a var, redact-before-truncate, password in URL, collapsed-row selection) fixed test-first; -race clean (`evidence/review/review.txt`) |
+| 2026-10-19 | playground session | owner: zoom + one-pane middle (F10, E25–E27), gdash always uses the whole middle; tasks B7, D1, E1 added; deck worker created |

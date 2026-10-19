@@ -140,6 +140,12 @@
 - [ ] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
 - [ ] EVIDENCE · COMMIT `mono: config verbs and screen for decks` · LEDGER · CHECKPOINT
 
+### Task B7 — zoom + one-pane mode  (E25 E26 E27; amended 2026-10-19)
+
+- [ ] RED: `zoom_test.go` (z keeps the title and gsl; tool zoom auto on/off), `middle_test.go` (single merges the middle panes only)
+- [ ] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
+- [ ] EVIDENCE · COMMIT `mono: zoom and one-pane middle` · LEDGER · CHECKPOINT
+
 ### Task B6 — boundary + docs  (E24)
 
 - [ ] RED: `boundary_test.go` (no `sdk/gdash` import or go.mod require)
@@ -158,6 +164,19 @@
 - [ ] RED: default-config golden expects the `mid` deck with four gdash views; E16 compat golden still passes
 - [ ] RUN-RED → FAIL · GREEN · RUN-GREEN → PASS
 - [ ] COMMIT `mono: default mid pane becomes a deck (gpu + gdash conductor/k3s-nodes/ci)` · LEDGER · CHECKPOINT
+
+### Task D1 — gdash docs: managing views
+
+- [ ] README: views (add, change, remove, subset, variables), another host, troubleshooting
+- [ ] run every command in it once; markdownlint clean
+- [ ] COMMIT · LEDGER · CHECKPOINT
+
+### Task E1 — one color scheme across the sdk (last)
+
+- [ ] SURVEY: how fleet and gsl color their output (library? palette? NO_COLOR?)
+- [ ] RED: contract test that gdash's colors come from the shared scheme
+- [ ] GREEN: the shared scheme in `sdk/libs` (if none exists), with gdash using it
+- [ ] VERIFY: lint, security, goldens · COMMIT · LEDGER · CHECKPOINT
 
 ### Task C2 — live evidence
 

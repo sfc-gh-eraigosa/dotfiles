@@ -126,6 +126,7 @@ lists the spec rules it proves.
 | B3 — deck runtime | E18, E19 | `app/deck.go`: visible view runs, title label, `:focus`, `r` re-probe | pass | F8 |
 | B4 — nav mode | E20, E21, E22, E23 | `app/nav.go`, `keys.go` (stop stripping PageLeft/Right), help/README from table | pass | F9 |
 | B5 — config verbs + UI | dotted-path verb tables; configui deck row frame test | `cmd/config.go`, `configui` | pass | F8 |
+| B7 — zoom + one-pane mode (amended 2026-10-19) | E25, E26, E27 | `zoomable`, tool `zoom`, `middle: single` in config; zoom key (`z` in nav, `<prefix> z`); heights computed over the middle only | pass | F10 |
 | B6 — boundary + docs | E24 | `boundary_test.go`; README/AGENTS deck + nav sections | pass; `make lint-go`, `make security` green | §3 |
 
 ### Integration (worker `deck`, after both leaves merge)
@@ -133,6 +134,8 @@ lists the spec rules it proves.
 | Task | Do | Done-when |
 | :-- | :-- | :-- |
 | C1 — default `mid` deck | the default config gains the `mid` deck (`gpu` + `gdash` views `conductor`, `k3s-nodes`, `nodes`, `ci`, probe `gdash doctor --quiet`; spec F8 table) | E16's compat golden still passes for user configs; the default-config golden is updated |
+| D1 — gdash docs: managing views (owner, 2026-10-19) | — | `sdk/gdash/README.md`: adding, changing and removing views, panel subsets, variables, moving a setup to another host, and a troubleshooting table per `doctor` failure, all tried against the real tool | markdownlint clean; every command in it run once |
+| E1 — one color scheme across the sdk (owner, 2026-10-19; last) | a contract test that gdash's colors come from the shared scheme | survey how fleet and gsl color their output; if neither uses a shared library, add one to `sdk/libs` and move gdash (and the tools the owner names) onto it | gdash's output uses the same palette as fleet and gsl; the tests pass |
 | C2 — live evidence | on spark1: `gdash doctor`; mono cycling the deck through all four gdash views (`tmux capture-pane`); `ps` showing one gdash; on a host without credentials: `gdash doctor` exit 1 and mono's `mid` = GPU pane | captures in `evidence/e2e/`; TRACKING proof matrix all ticked |
 
 ## 5. Verification mapping
