@@ -167,9 +167,9 @@
 
 ### Task D1 — gdash docs: managing views
 
-- [ ] README: views (add, change, remove, subset, variables), another host, troubleshooting
-- [ ] run every command in it once; markdownlint clean
-- [ ] COMMIT · LEDGER · CHECKPOINT
+- [x] README: views (add, change, remove, subset, variables), another host, troubleshooting
+- [x] run every command in it once; markdownlint clean
+- [x] COMMIT · LEDGER · CHECKPOINT
 
 ### Task E1 — one color scheme across the sdk (last)
 

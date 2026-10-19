@@ -1,0 +1,39 @@
+ mono vdev — none   ● mid gpu ▶ · nvtop   NAV                                                                       ctrl+b ? help
+
+
+    0[||| 12.6%]    4[||   5.2%]   8[||   6.0%]  12[||   5.8%]    16[||   5.9%]   20[||   2.6%]  24[||   8.7%]  28[||   5.8%]
+    1[||   7.9%]    5[     0.0%]   9[||   2.6%]  13[|    0.7%]    17[||   2.0%]   21[||   2.6%]  25[|    0.6%]  29[||||74.2%]
+    2[||   4.6%]    6[||   4.6%]  10[||   2.6%]  14[||   2.6%]    18[||   3.3%]   22[||   3.9%]  26[||   6.5%]  30[||   3.9%]
+    3[|    0.7%]    7[|    0.7%]  11[|    1.3%]  15[     0.0%]    19[||   1.3%]   23[|    1.3%]  27[     0.0%]  31[     0.0%]
+  Mem[||||||                                       4.47G/189G]   Tasks: 171, 1444 thr; 1 running
+  Swp[                                                  0K/0K]   Load average: 0.69 2.12 1.94
+                                                                 Uptime: 5 days, 18:39:37
+
+    PID USER      PRI  NI  VIRT   RES   SHR S CPU%▽MEM%   TIME+  Command
+ 206667 <node>    20   0  381M 51240 15228 S 75.0  0.0  0:01.15 ~/.local/share/uv/tools/nvitop/bin/python /home/wenlo
+  26912 <node>    20   0 5588M  574M 99496 S 12.4  0.3  3h47:24 claude --dangerously-skip-permissions --resume 1e67f5c4-7834-49b0
+  93243 root       20   0 1595M  163M 48512 S  5.9  0.1  7h20:51 /usr/local/bin/k3s agent
+  93283 root       20   0 1536M  106M 39244 S  5.9  0.1  4h45:37 containerd
+ 203844 <node>    20   0 2752M 14208  6780 S  2.6  0.0  0:00.61 /tmp/claude-1000/-home-<node>github-sfc-gh-eraigosa-playground-
+ 203927 <node>    20   0  7796  6564  3808 R  2.6  0.0  0:00.90 htop
+   1756 root       20   0 1244M  9776  3684 S  2.0  0.0  1h39:12 /var/lib/rancher/k3s/data/e1784de142752c8bc4497493cd3619f1edd74e7
+  32643 root       20   0 1536M  106M 39244 S  2.0  0.1  0:03.49 containerd
+  93297 root       20   0 1595M  163M 48512 S  2.0  0.1 10:41.53 /usr/local/bin/k3s agent
+  22489 <node>    20   0  130M 24584 13532 S  1.3  0.0  1h03:18 ~/git/dotfiles/opt/bin/herdr server
+  26921 <node>    20   0 5588M  574M 99496 S  1.3  0.3  1h47:20 claude --dangerously-skip-permissions --resume 1e67f5c4-7834-49b0
+  36496 root       20   0 1536M  106M 39244 S  1.3  0.1  0:01.81 containerd
+F1Help  F2Setup F3SearchF4FilterF5Tree  F6SortByF7Nice -F8Nice +F9Kill  F10Quit
+Mon Oct 19 07:46:09 2026                        (Press h for help or q to quit)
+╒═════════════════════════════════════════════════════════════════════════════╕
+│ NVITOP 1.7.1        Driver Version: 610.88        CUDA Driver Version: 13.3 │
+├───────────────────────────────┬──────────────────────┬──────────────────────┤
+│ GPU Fan Temp Perf Pwr:Usg/Cap │         Memory-Usage │ GPU-Util  Compute M. │
+╞═══════════════════════════════╪══════════════════════╪══════════════════════╪════════════════════════╤═════════════════════════╕
+│   0 65%  48C  P0  123W / 370W │   2664MiB / 24.00GiB │      1%      Default │ MEM: █▍ 2664MiB  10.8% │ UTL: ▏ 1%     @ 1785MHz │
+╘═══════════════════════════════╧══════════════════════╧══════════════════════╧════════════════════════╧═════════════════════════╛
+[ CPU: ███▏ 3.9%                                                           UPTIME: 5.8 days ]  ( Load Average:  0.69  2.12  1.94 )
+[ MEM: ██▌ 3.2%                                                               USED: 6.11GiB ]  [ SWP: ▏ 0.0%                     ]
+
+╒════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╕
+  ollama  main 1   21   1%|2.6G/24G   2026-10-19 07:46:08 PDT 
+

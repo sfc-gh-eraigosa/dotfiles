@@ -37,7 +37,7 @@
 | B7 zoom + one-pane mode | done | (this commit + B1) | E25 `TestZoomKeepsTitleAndFooter`, E26 `TestToolZoom`, E27 `TestMiddleSingle` + `TestMiddleSingleRuntime` (`evidence/b3-b4-b7/evidence.txt`) | amended 2026-10-19 |
 | B6 boundary + docs | done | (this commit) | E24 `TestMonoNeverImportsGdash` (go.mod + `go list -deps`); mutation → fails; README (deck/nav/zoom/middle sections, config fields) + AGENTS; `coverage_min mono 60`; markdownlint 0; lint 0 (`evidence/b6-c1/evidence.txt`) | |
 | C1 default mid deck | done | (this commit) | `TestDefaultLayout`: htop 60% · mid 30% deck (gpu; gdash zoom + probe + 4 views) · gsl 5% fixed; `middle: single` → one 90% deck of 3 tools; #407 configs still round-trip (`evidence/b6-c1/evidence.txt`) | done in the deck PR (gdash leaf already merged); hosts with a saved config keep theirs (README says how to adopt) |
-| D1 gdash docs: managing views | todo | | | owner 2026-10-19 |
+| D1 gdash docs: managing views | done | (this commit) | README: Managing views (add/change/remove, variables, subsets, into mono), Another host, Troubleshooting from real doctor failures; every command run once (`evidence/d1/d1.txt`); markdownlint 0 | owner 2026-10-19 |
 | E1 one color scheme across the sdk | todo | | | owner 2026-10-19; last |
 | C2 live evidence | todo | | | |
 
