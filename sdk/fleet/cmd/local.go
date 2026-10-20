@@ -19,6 +19,19 @@ const localGlyph = "⌂"
 // status colour for it would make "up to date" and "this is me" look alike.
 const localColor = "213"
 
+// localColorFor is localColor for a palette: the light pink 213 is for dark
+// backgrounds, so light gets a deep pink (162) and dark8 the terminal's own
+// bright magenta (13), which basic-ANSI terminals recolor with their theme.
+func localColorFor(palette string) string {
+	switch palette {
+	case "light":
+		return "162"
+	case "dark8":
+		return "13"
+	}
+	return localColor
+}
+
 // localHost is who THIS machine is, in the only two terms an ssh config can
 // be matched against: the name it calls itself, and the addresses it answers
 // on. Both are captured once at startup and then treated as data, so every

@@ -52,8 +52,8 @@ func newTheme(ascii bool) theme {
 // (sdk/libs/tui/theme): statuses are roles and hosts are series colors, so a
 // palette looks the same in fleet as in gff, gsl, mono and gdash. Colour keeps
 // one meaning throughout — OK succeeded, Crit failed, Warn needs a look
-// (behind, or keys refused while the machine is up), Info running or chosen,
-// Accent headers and the selection.
+// (keys refused while the machine is up), Info running, chosen or behind
+// (an update waits), Accent headers, the selection and divergent.
 func newThemeFor(ascii bool, p sdktheme.Palette) theme {
 	c := func(s string) lipgloss.Color { return lipgloss.Color(s) }
 	fg := func(s string) lipgloss.Style { return lipgloss.NewStyle().Foreground(c(s)) }
@@ -95,7 +95,7 @@ func newThemeFor(ascii bool, p sdktheme.Palette) theme {
 		// this one style, which is what ties the two together at a glance.
 		// Bold as well as coloured, so the row is still findable on a terminal
 		// that drops the palette.
-		local: fg(localColor).Bold(true),
+		local: fg(localColorFor(p.Name)).Bold(true),
 		// The selection dot is Info; it only turns OK or Crit to report an
 		// update's OUTCOME: chosen, succeeded, failed.
 		markSel:  fg(p.Info),
@@ -103,7 +103,7 @@ func newThemeFor(ascii bool, p sdktheme.Palette) theme {
 		markFail: fg(p.Crit).Bold(true),
 		byClass: map[string]lipgloss.Style{
 			string(drift.UpToDate):    fg(p.OK),
-			string(drift.Behind):      fg(p.Warn),
+			string(drift.Behind):      fg(p.Info), // an update waits: news, not a problem
 			string(drift.Divergent):   fg(p.Accent),
 			string(drift.Unknown):     lipgloss.NewStyle().Faint(true),
 			string(drift.Unreachable): fg(p.Crit).Bold(true),

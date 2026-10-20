@@ -111,7 +111,7 @@ func TestThemeDrawsFromSharedScheme(t *testing.T) {
 			"title":       {fg(th.title), p.Accent},
 			"selected":    {fg(th.selected), p.Accent},
 			"up-to-date":  {fg(th.byClass[string(drift.UpToDate)]), p.OK},
-			"behind":      {fg(th.byClass[string(drift.Behind)]), p.Warn},
+			"behind":      {fg(th.byClass[string(drift.Behind)]), p.Info},
 			"unreachable": {fg(th.byClass[string(drift.Unreachable)]), p.Crit},
 			"auth-failed": {fg(th.byClass[string(drift.AuthFailed)]), p.Warn},
 		}
@@ -149,5 +149,32 @@ func TestFleetPaletteResolves(t *testing.T) {
 	}
 	if got := fleetPalette(env(map[string]string{"TMUX": "x", "TERM": "tmux-256color"}), dark).Name; got != "dark8" {
 		t.Errorf("tmux → %s", got)
+	}
+}
+
+// Every drift class reads differently by color, not only by weight: behind
+// (an update waits) is Info, auth-failed (look at your keys) is Warn,
+// unreachable Crit — "the colour difference is the whole point".
+func TestDriftClassesDifferByColor(t *testing.T) {
+	for _, name := range sdktheme.Names() {
+		p, _ := sdktheme.Get(name)
+		th := newThemeFor(false, p)
+		seen := map[string]string{}
+		for _, cl := range []drift.Class{drift.UpToDate, drift.Behind, drift.Divergent, drift.Unreachable, drift.AuthFailed} {
+			c, _ := th.byClass[string(cl)].GetForeground().(lipgloss.Color)
+			if other, dup := seen[string(c)]; dup {
+				t.Errorf("%s: %s and %s are both %q", name, other, cl, c)
+			}
+			seen[string(c)] = string(cl)
+		}
+		// "You are here" is none of the class colors, and readable on its
+		// palette's background (light gets a dark pink, not dark's 213).
+		local, _ := th.local.GetForeground().(lipgloss.Color)
+		if cl, dup := seen[string(local)]; dup {
+			t.Errorf("%s: local color %q is %s's", name, local, cl)
+		}
+		if name == sdktheme.Light && local == "213" {
+			t.Errorf("light: local is the dark-background pink 213")
+		}
 	}
 }

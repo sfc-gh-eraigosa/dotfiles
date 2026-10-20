@@ -272,8 +272,8 @@ Deselecting a host mid-update leaves its update alone: the UPDATE column keeps
 ticking and the outcome still lands on the dot. Each area (host list, log pane, help, answer form) is its own framed
 panel.
 
-Rows are colored by status (ok up-to-date · warn behind · accent divergent ·
-dim unknown · crit unreachable · bold warn auth-failed) and degrade cleanly on
+Rows are colored by status (ok up-to-date · info behind · accent divergent ·
+dim unknown · crit unreachable · warn auth-failed) and degrade cleanly on
 terminals without color. The colors are the sdk's shared scheme
 ([`libs/tui/theme`](../libs/tui/theme)), the same in fleet, gff, gsl, mono and
 gdash: palettes `dark`, `light`, `dark8` and `dark-daltonism`, picked by
