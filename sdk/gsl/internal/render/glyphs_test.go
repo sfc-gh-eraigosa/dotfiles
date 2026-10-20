@@ -349,3 +349,40 @@ func TestJoinBlocks_Emoji_Unchanged(t *testing.T) {
 		t.Errorf("emoji join: should not emit background colors, got %q", got)
 	}
 }
+
+// A filled block with the default fg gets whichever of black or white reads
+// better on it: white on a dark block (and on named colors, which the
+// terminal themes), black on a light one — the shared dark palette's ok
+// green (42) and warn orange (214) are too light for white text.
+func TestPaint_FillPicksReadableText(t *testing.T) {
+	for _, tc := range []struct {
+		bg, wantFG string
+	}{
+		{"blue", "\x1b[38;5;7m"},
+		{"26", "\x1b[38;5;7m"},  // dark blue
+		{"124", "\x1b[38;5;7m"}, // dark red
+		{"42", "\x1b[38;5;16m"},
+		{"214", "\x1b[38;5;16m"},
+		{"255", "\x1b[38;5;16m"},
+		{"240", "\x1b[38;5;7m"},
+	} {
+		st := style.Style{Fill: true, Theme: map[string]string{"repo_root": tc.bg, "fg": "default"}}
+		if got := paint(st, "repo_root", "X"); !strings.Contains(got, tc.wantFG) {
+			t.Errorf("bg %s: %q lacks fg %q", tc.bg, got, tc.wantFG)
+		}
+		st.Separator, st.Icons = "powerline", map[string]string{"sep_right": ">"}
+		if got := join(st, []segmentBlock{{text: "X", colorKey: "repo_root"}}); !strings.Contains(got, tc.wantFG) {
+			t.Errorf("powerline bg %s: %q lacks fg %q", tc.bg, got, tc.wantFG)
+		}
+	}
+}
+
+// fillText also reads 38;5;N and truecolor fills, the forms a user config may
+// hold, so a light truecolor block still gets black text.
+func TestFillText_AllColorForms(t *testing.T) {
+	for bg, want := range map[string]string{"38;5;214": "\x1b[38;5;16m", "38;2;250;250;210": "\x1b[38;5;16m", "38;2;20;20;60": "\x1b[38;5;7m"} {
+		if got := fillText(bg); got != want {
+			t.Errorf("fillText(%q) = %q, want %q", bg, got, want)
+		}
+	}
+}

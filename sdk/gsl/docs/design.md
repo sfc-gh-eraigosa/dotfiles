@@ -113,7 +113,7 @@ Theme color resolution is handled by a detection-only package (`internal/theme`)
 
 Resolution priority (see `internal/theme/resolve.go`):
 1. Host-tool settings file — Claude `~/.claude/settings.json` `"theme"` enum, or Antigravity `~/.gemini/antigravity-cli/settings.json` (legacy fallback `~/.gemini/settings.json`) `"ui"."theme"` free-form string via keyword bridge (`"light"`, `"daltonism"`/`"colorblind"`, else dark).
-2. Terminal env — `$COLORTERM`/`$TERM` selects `dark` (truecolor/256color) or `dark8` (8-color).
+2. Terminal env — the sdk's shared rule (`libs/tui/theme.Resolve`, with `GSL_THEME`/`SDK_THEME` above both steps): tmux without `$COLORFGBG` or 8 colors → `dark8`, else `$COLORFGBG`'s background → `dark`/`light`. Palette colors are the shared scheme's roles (see README "Auto theme colors").
 3. Hardcoded default: `dark`.
 
 Palette names: `dark`, `light`, `dark-daltonism`, `dark8`. All six segment color keys (`repo_root`, `repo_worktree`, `ai`, `dirgit`, `time`, `host`) are defined in every palette so the `emoji` style (which applies colors as fg-tint only, `Fill: false`) can always tint every segment.

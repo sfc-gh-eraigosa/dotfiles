@@ -1,13 +1,17 @@
 package theme
 
-import "strings"
+import (
+	"strings"
 
-// Resolve returns the palette name to use based on the host tool context,
-// settings files, and terminal environment variables.
+	sdktheme "github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/theme"
+)
+
+// Resolve returns the palette name, by the sdk's one rule
+// (sdk/libs/tui/theme.Resolve) with the host tool's theme setting as its hint:
 //
-// Priority order:
+//  1. GSL_THEME, then SDK_THEME, when it names a palette.
 //
-//  1. Host-tool settings file:
+//  2. The host-tool settings file (the hint):
 //     - toolCtx == "claude": read <home>/.claude/settings.json field "theme".
 //     Enum values: "dark" → "dark"; "light" → "light";
 //     "dark-daltonism" → "dark-daltonism"; "system"/absent → "dark".
@@ -20,12 +24,11 @@ import "strings"
 //     contains "daltonism" or "colorblind" → "dark-daltonism";
 //     any other non-empty value (including unknown themes) → "dark".
 //     (Unknown non-empty antigravity theme → "dark", NOT terminal fallthrough.)
+//     A missing antigravity file, or no tool, gives no hint.
 //
-//  2. Terminal fallback (only when toolCtx=="" OR the settings file is
-//     missing/unreadable AND toolCtx==""):
-//     env("COLORTERM") == "truecolor" or "24bit" → "dark";
-//     env("TERM") contains "256color" → "dark";
-//     else → "dark8" (8-color named-color palette).
+//  3. The terminal (no hint): inside tmux/screen without COLORFGBG, or
+//     without 256 colors → "dark8"; else COLORFGBG's background, dark when
+//     unknown → "dark" / "light".
 //
 // env and home are injected for testability. The production caller should
 // pass os.Getenv and the result of os.UserHomeDir (or $HOME) respectively.
@@ -33,23 +36,18 @@ import "strings"
 // Resolve contains no I/O itself — all file access is via the settings helpers
 // in settings.go, which degrade gracefully on any error.
 func Resolve(toolCtx string, env func(string) string, home string) string {
-	switch toolCtx {
-	case "claude":
-		raw := readClaudeTheme(home)
-		return claudeEnumToPalette(raw)
-
-	case "antigravity":
-		raw := readAntigravityTheme(home)
-		if raw == "" {
-			// Missing/unreadable → terminal fallback.
-			return terminalPalette(env)
+	hint := func() string {
+		switch toolCtx {
+		case "claude":
+			return claudeEnumToPalette(readClaudeTheme(home))
+		case "antigravity":
+			if raw := readAntigravityTheme(home); raw != "" {
+				return antigravityKeywordToPalette(raw)
+			}
 		}
-		return antigravityKeywordToPalette(raw)
-
-	default:
-		// toolCtx == "" (or unknown): terminal fallback only.
-		return terminalPalette(env)
+		return "" // missing/unreadable antigravity settings, or no tool: terminal
 	}
+	return sdktheme.Resolve("gsl", env, sdktheme.EnvDarkBackground(env), hint)
 }
 
 // claudeEnumToPalette maps the Claude settings.json "theme" value to a palette
@@ -101,28 +99,4 @@ func keywordToPalette(raw string) string {
 	}
 	// Non-empty unknown theme → dark (NOT terminal fallthrough per spec).
 	return "dark"
-}
-
-// terminalPalette resolves a palette from terminal environment variables.
-//
-//   - inside tmux/screen ($TMUX set, or $TERM tmux*/screen*) → "dark8":
-//     the true background is unknowable from env alone there, and basic ANSI
-//     indices are recolored by the outer terminal's own theme, so contrast
-//     stays correct on any background (mirrors gff's rule, dotfiles#187)
-//   - $COLORTERM == "truecolor" or "24bit" → "dark"
-//   - $TERM contains "256color"            → "dark"
-//   - otherwise                            → "dark8"
-func terminalPalette(env func(string) string) string {
-	term := strings.ToLower(env("TERM"))
-	if env("TMUX") != "" || strings.HasPrefix(term, "tmux") || strings.HasPrefix(term, "screen") {
-		return "dark8"
-	}
-	ct := strings.ToLower(env("COLORTERM"))
-	if ct == "truecolor" || ct == "24bit" {
-		return "dark"
-	}
-	if strings.Contains(term, "256color") {
-		return "dark"
-	}
-	return "dark8"
 }

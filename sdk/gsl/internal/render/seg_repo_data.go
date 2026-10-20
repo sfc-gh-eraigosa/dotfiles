@@ -175,7 +175,7 @@ func (d *repoData) formatLinked(st style.Style, level int) (string, string, []Li
 		if d.links.Repo {
 			prURL = d.prURL
 		}
-		sb.linked(prBadgeWithPrefix(st, prefix, d.prNumber, d.prState), prURL)
+		sb.linked(prBadgeWithPrefix(st, prefix, d.prNumber, d.prState, d.themeKey), prURL)
 	}
 
 	// Worktree-count badge: the first thing to go. It is a nice-to-have, and the

@@ -422,3 +422,21 @@ func TestResolve_ToolSettingsStillWinInsideTmux(t *testing.T) {
 		t.Errorf("claude settings inside tmux: got %q, want light", got)
 	}
 }
+
+// The sdk's one rule (libs/tui/theme): GSL_THEME / SDK_THEME win over the
+// host tool's setting, and the terminal step reads COLORFGBG's background.
+func TestResolve_SharedRule(t *testing.T) {
+	home := t.TempDir() // no settings files: claude → "dark"
+	if got := theme.Resolve("claude", envMap(map[string]string{"GSL_THEME": "light"}), home); got != "light" {
+		t.Errorf("GSL_THEME over the claude setting: got %q, want light", got)
+	}
+	if got := theme.Resolve("", envMap(map[string]string{"SDK_THEME": "dark-daltonism"}), home); got != "dark-daltonism" {
+		t.Errorf("SDK_THEME: got %q", got)
+	}
+	if got := theme.Resolve("", envMap(map[string]string{"TERM": "xterm-256color", "COLORFGBG": "0;15"}), home); got != "light" {
+		t.Errorf("COLORFGBG light background: got %q, want light", got)
+	}
+	if got := theme.Resolve("", envMap(map[string]string{"TMUX": "x", "TERM": "tmux-256color", "COLORFGBG": "15;0"}), home); got != "dark" {
+		t.Errorf("tmux with COLORFGBG: got %q, want dark", got)
+	}
+}
