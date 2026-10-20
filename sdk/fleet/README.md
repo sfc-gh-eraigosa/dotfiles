@@ -272,9 +272,14 @@ Deselecting a host mid-update leaves its update alone: the UPDATE column keeps
 ticking and the outcome still lands on the dot. Each area (host list, log pane, help, answer form) is its own framed
 panel.
 
-Rows are colored by status (green up-to-date · yellow behind · magenta
-divergent · dim unknown · red unreachable) and degrade cleanly on terminals
-without color.
+Rows are colored by status (ok up-to-date · warn behind · accent divergent ·
+dim unknown · crit unreachable · bold warn auth-failed) and degrade cleanly on
+terminals without color. The colors are the sdk's shared scheme
+([`libs/tui/theme`](../libs/tui/theme)), the same in fleet, gff, gsl, mono and
+gdash: palettes `dark`, `light`, `dark8` and `dark-daltonism`, picked by
+`FLEET_THEME` or `SDK_THEME`, else `dark8` inside tmux (unless `COLORFGBG` is
+set) or on an 8-color terminal, else your terminal's background
+(`FLEET_THEME=dark-daltonism fleet` for red-green safe colors).
 
 **Updates run concurrently in the background.** `u` prechecks each target with
 `sudo -n true`, then updates up to `--jobs` (default 4) hosts at once *without

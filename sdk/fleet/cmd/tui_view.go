@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/histindex"
+	sdktheme "github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/theme"
 )
 
 const spinnerInterval = 120 * time.Millisecond
@@ -43,70 +44,84 @@ type theme struct {
 // rather than claiming to know why they fail. Resolved once at startup —
 // see wantASCIIBorders in tui.go — never re-read while running.
 func newTheme(ascii bool) theme {
+	p, _ := sdktheme.Get(sdktheme.Dark)
+	return newThemeFor(ascii, p)
+}
+
+// newThemeFor draws every color from p, the sdk's shared scheme
+// (sdk/libs/tui/theme): statuses are roles and hosts are series colors, so a
+// palette looks the same in fleet as in gff, gsl, mono and gdash. Colour keeps
+// one meaning throughout — OK succeeded, Crit failed, Warn needs a look
+// (behind, or keys refused while the machine is up), Info running or chosen,
+// Accent headers and the selection.
+func newThemeFor(ascii bool, p sdktheme.Palette) theme {
 	c := func(s string) lipgloss.Color { return lipgloss.Color(s) }
+	fg := func(s string) lipgloss.Style { return lipgloss.NewStyle().Foreground(c(s)) }
 	border, sep := lipgloss.RoundedBorder(), "│"
 	if ascii {
 		border, sep = lipgloss.ASCIIBorder(), "|"
 	}
+	// One colour per host in the log pane, so interleaved output from a
+	// concurrent wave can be told apart at a glance. The series never holds
+	// the crit colour: a host that merely happened to be assigned it would
+	// read as broken.
+	hosts := make([]lipgloss.Style, len(p.Series))
+	for i, s := range p.Series {
+		hosts[i] = fg(s)
+	}
 	return theme{
 		colSep:    sep,
-		title:     lipgloss.NewStyle().Bold(true).Foreground(c("6")),
+		title:     fg(p.Accent).Bold(true),
 		header:    lipgloss.NewStyle().Bold(true).Underline(true),
-		statusBar: lipgloss.NewStyle().Foreground(c("6")),
+		statusBar: fg(p.Info),
 		dim:       lipgloss.NewStyle().Faint(true),
 		cursor:    lipgloss.NewStyle().Bold(true),
-		selected:  lipgloss.NewStyle().Foreground(c("5")),
+		selected:  fg(p.Accent),
 		match:     lipgloss.NewStyle().Reverse(true),
-		ok:        lipgloss.NewStyle().Foreground(c("2")),
-		fail:      lipgloss.NewStyle().Foreground(c("1")).Bold(true),
-		running:   lipgloss.NewStyle().Foreground(c("4")),
-		// Yellow: a warning is not a failure. The outcome colours keep their
-		// meanings — green ok, red FAIL — and ⚠ sits alongside, never instead.
-		warn: lipgloss.NewStyle().Foreground(c("3")),
+		ok:        fg(p.OK),
+		fail:      fg(p.Crit).Bold(true),
+		running:   fg(p.Info),
+		// A warning is not a failure. The outcome colours keep their
+		// meanings — ok and FAIL — and ⚠ sits alongside, never instead.
+		warn: fg(p.Warn),
 		dialog: lipgloss.NewStyle().Border(border).
-			BorderForeground(lipgloss.Color("6")).Padding(0, 1),
+			BorderForeground(c(p.Accent)).Padding(0, 1),
 		// Every section gets the same frame as the answers dialog, so the
 		// screen reads as separated panels rather than one run-on block.
 		panel: lipgloss.NewStyle().Border(border).
-			BorderForeground(lipgloss.Color("8")).Padding(0, 1),
-		// The selection dot is navy; it only turns red or green to report an
-		// update's OUTCOME. Colour therefore always means the same thing:
-		// blue = chosen, green = succeeded, red = failed.
-		// One colour per host in the log pane, so interleaved output from a
-		// concurrent wave can be told apart at a glance. Reds are excluded:
-		// red already means "this update failed" everywhere else, and a host
-		// that merely happened to be assigned it would read as broken.
-		logHosts: []lipgloss.Style{
-			lipgloss.NewStyle().Foreground(lipgloss.Color("33")),  // blue
-			lipgloss.NewStyle().Foreground(lipgloss.Color("208")), // orange
-			lipgloss.NewStyle().Foreground(lipgloss.Color("141")), // purple
-			lipgloss.NewStyle().Foreground(lipgloss.Color("37")),  // teal
-			lipgloss.NewStyle().Foreground(lipgloss.Color("178")), // gold
-			lipgloss.NewStyle().Foreground(lipgloss.Color("169")), // pink
-			lipgloss.NewStyle().Foreground(lipgloss.Color("45")),  // cyan
-			lipgloss.NewStyle().Foreground(lipgloss.Color("113")), // light green
-		},
+			BorderForeground(c(p.Border)).Padding(0, 1),
+		logHosts: hosts,
 		// "You are here" — the header badge and the matching row's alias share
 		// this one style, which is what ties the two together at a glance.
 		// Bold as well as coloured, so the row is still findable on a terminal
 		// that drops the palette.
-		local:    lipgloss.NewStyle().Foreground(lipgloss.Color(localColor)).Bold(true),
-		markSel:  lipgloss.NewStyle().Foreground(lipgloss.Color("25")),
-		markOK:   lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
-		markFail: lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true),
+		local: fg(localColor).Bold(true),
+		// The selection dot is Info; it only turns OK or Crit to report an
+		// update's OUTCOME: chosen, succeeded, failed.
+		markSel:  fg(p.Info),
+		markOK:   fg(p.OK),
+		markFail: fg(p.Crit).Bold(true),
 		byClass: map[string]lipgloss.Style{
-			string(drift.UpToDate):    lipgloss.NewStyle().Foreground(c("2")),
-			string(drift.Behind):      lipgloss.NewStyle().Foreground(c("3")),
-			string(drift.Divergent):   lipgloss.NewStyle().Foreground(c("5")),
+			string(drift.UpToDate):    fg(p.OK),
+			string(drift.Behind):      fg(p.Warn),
+			string(drift.Divergent):   fg(p.Accent),
 			string(drift.Unknown):     lipgloss.NewStyle().Faint(true),
-			string(drift.Unreachable): lipgloss.NewStyle().Foreground(c("1")).Bold(true),
-			// Orange, not the unreachable red: the machine is UP. The colour
+			string(drift.Unreachable): fg(p.Crit).Bold(true),
+			// Warn, not the unreachable Crit: the machine is UP. The colour
 			// difference is the whole point — it says "look at your keys, not
 			// at the network".
-			string(drift.AuthFailed): lipgloss.NewStyle().Foreground(c("208")).Bold(true),
+			string(drift.AuthFailed): fg(p.Warn).Bold(true),
 			"polling":                lipgloss.NewStyle().Faint(true),
 		},
 	}
+}
+
+// fleetPalette resolves fleet's palette the way every sdk tool does
+// (libs/tui/theme.Resolve): FLEET_THEME, SDK_THEME, tmux or 8 colors →
+// dark8, else the terminal background.
+func fleetPalette(env func(string) string, darkBackground func() bool) sdktheme.Palette {
+	p, _ := sdktheme.Get(sdktheme.Resolve("fleet", env, darkBackground))
+	return p
 }
 
 // th is the live theme. The package default is deterministic (rounded frames,

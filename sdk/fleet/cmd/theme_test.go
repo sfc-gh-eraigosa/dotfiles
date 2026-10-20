@@ -3,6 +3,10 @@ package cmd
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/drift"
+	sdktheme "github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/theme"
 )
 
 // The ASCII frames exist for a client that renders box-drawing glyphs badly
@@ -88,5 +92,62 @@ func TestASCIIThemeRendersNoBoxDrawingThroughView(t *testing.T) {
 	}
 	if !strings.Contains(out, "host-nano     |") {
 		t.Errorf("log column separator is not ASCII \"|\":\n%s", out)
+	}
+}
+
+// Colors come from the sdk's shared scheme (libs/tui/theme): each status is a
+// role, each host a series color, so the same palette looks the same in
+// fleet, gff, gsl, mono and gdash. No color number is chosen here.
+func TestThemeDrawsFromSharedScheme(t *testing.T) {
+	for _, name := range sdktheme.Names() {
+		p, _ := sdktheme.Get(name)
+		th := newThemeFor(false, p)
+		fg := func(s lipgloss.Style) string { c, _ := s.GetForeground().(lipgloss.Color); return string(c) }
+		roles := map[string][2]string{
+			"ok":          {fg(th.ok), p.OK},
+			"fail":        {fg(th.fail), p.Crit},
+			"warn":        {fg(th.warn), p.Warn},
+			"running":     {fg(th.running), p.Info},
+			"title":       {fg(th.title), p.Accent},
+			"selected":    {fg(th.selected), p.Accent},
+			"up-to-date":  {fg(th.byClass[string(drift.UpToDate)]), p.OK},
+			"behind":      {fg(th.byClass[string(drift.Behind)]), p.Warn},
+			"unreachable": {fg(th.byClass[string(drift.Unreachable)]), p.Crit},
+			"auth-failed": {fg(th.byClass[string(drift.AuthFailed)]), p.Warn},
+		}
+		for role, got := range roles {
+			if got[0] != got[1] {
+				t.Errorf("%s %s = %q, want %q", name, role, got[0], got[1])
+			}
+		}
+		if c, _ := th.panel.GetBorderBottomForeground().(lipgloss.Color); string(c) != p.Border {
+			t.Errorf("%s panel border = %q, want %q", name, c, p.Border)
+		}
+		if len(th.logHosts) != len(p.Series) {
+			t.Fatalf("%s: %d host colors, want the %d series colors", name, len(th.logHosts), len(p.Series))
+		}
+		for i, s := range th.logHosts {
+			if fg(s) != p.Series[i] {
+				t.Errorf("%s host %d = %q, want %q", name, i, fg(s), p.Series[i])
+			}
+		}
+	}
+	// The package default every View() test renders through is dark, and the
+	// dark series keeps fleet's original host colors.
+	if fg := th.logHosts[0].GetForeground().(lipgloss.Color); fg != "33" {
+		t.Errorf("default first host color = %q, want 33", fg)
+	}
+}
+
+// fleet tui resolves its palette the same way every sdk tool does:
+// FLEET_THEME, then SDK_THEME, tmux → dark8, else the background.
+func TestFleetPaletteResolves(t *testing.T) {
+	env := func(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
+	dark := func() bool { return true }
+	if got := fleetPalette(env(map[string]string{"FLEET_THEME": "light", "TERM": "xterm-256color"}), dark).Name; got != "light" {
+		t.Errorf("FLEET_THEME=light → %s", got)
+	}
+	if got := fleetPalette(env(map[string]string{"TMUX": "x", "TERM": "tmux-256color"}), dark).Name; got != "dark8" {
+		t.Errorf("tmux → %s", got)
 	}
 }
