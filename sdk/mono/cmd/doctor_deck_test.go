@@ -23,6 +23,7 @@ func (deckEnv) DRMDrivers() []string                 { return nil }
 func deckConfig() config.Config {
 	f := false
 	c := config.Default()
+	c.Middle = config.MiddleSplit
 	c.Panes = []config.Pane{
 		{Name: "htop", Size: "60%", Cmd: "htop"},
 		{Name: "mid", Size: "30%", Tools: []config.Tool{

@@ -182,17 +182,37 @@ func TestNavWalk(t *testing.T) {
 	if got := a.FocusedPath(); got != "mid/b/b2" {
 		t.Fatalf("path = %s", got)
 	}
-	a.HandleBytes([]byte("j")) // past the last view → next pane
-	if a.FocusedName() != "bot" {
-		t.Fatalf("j past the last view → %s", a.FocusedName())
-	}
-	a.HandleBytes([]byte("j")) // last pane: stays
-	if a.FocusedName() != "bot" {
-		t.Fatalf("j at the bottom wrapped to %s", a.FocusedName())
+	a.HandleBytes([]byte("j")) // last view, and bot is fixed: stays
+	if got := a.FocusedPath(); got != "mid/b/b2" {
+		t.Fatalf("j past the last view → %s (a fixed pane is not a nav stop)", got)
 	}
 	a.HandleBytes([]byte("k"))
-	if got := a.FocusedPath(); got != "mid/b/b2" {
-		t.Fatalf("k back into the deck → %s", got)
+	if got := a.FocusedPath(); got != "mid/b/b1" {
+		t.Fatalf("k back through the deck → %s", got)
+	}
+}
+
+// prefix j/k cycle the middle panes only: a fixed pane (zoomable: false, the
+// gsl footer) is never a stop, but :focus still reaches it by name.
+func TestCycleSkipsFixedPanes(t *testing.T) {
+	a, _ := startDeck(t, deckConfig(false))
+	if err := a.focusNamed([]string{"top"}); err != nil {
+		t.Fatal(err)
+	}
+	var seen []string
+	for i := 0; i < 4; i++ {
+		a.HandleBytes([]byte{0x02, 'j'})
+		seen = append(seen, a.FocusedName())
+	}
+	if got := strings.Join(seen, " "); got != "mid top mid top" {
+		t.Fatalf("ctrl+b j visits %s", got)
+	}
+	a.HandleBytes([]byte{0x02, 'k'})
+	if a.FocusedName() != "mid" {
+		t.Fatalf("ctrl+b k → %s", a.FocusedName())
+	}
+	if err := a.focusNamed([]string{"bot"}); err != nil || a.FocusedName() != "bot" {
+		t.Fatalf(":focus bot → %s, %v", a.FocusedName(), err)
 	}
 }
 

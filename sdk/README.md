@@ -381,9 +381,10 @@ where nvtop has no GPU it can read, that pane is just empty, and the layout you
 like lives in nobody's dotfiles.
 
 **What it does about it.** One command fills the terminal with stacked panes,
-each a real program in its own pseudo-terminal: htop 60%, a GPU monitor 30%,
-`gsl status` 5% refreshed every second, under a title bar. Panes whose tool is
-missing or blind on this host drop out and the others grow. Every key goes to
+each a real program in its own pseudo-terminal: a title bar, `gsl status` at
+the bottom refreshed every second, and between them one full-height middle
+showing one tool at a time — gdash (the lab's Grafana dashboards), a GPU
+monitor, htop. Tools missing or blind on this host drop out. Every key goes to
 the focused program except `ctrl+b`, which leads to mono's own keys (the shared
 sdk keymap, so `j`/`k`/`?`/`:`/`q` mean what they mean in fleet and gff).
 

@@ -17,12 +17,12 @@ func TestDefaultIsValidAndMatchesDesign(t *testing.T) {
 	for _, p := range c.Panes {
 		got = append(got, p.Name+"="+p.Size)
 	}
-	want := "5%,htop=60%,mid=30%,gsl=5%" // mid became a deck (mono-gdash C1)
+	want := "5%,mid=30%,htop=60%,gsl=5%" // mid first: one gdash-first middle
 	if strings.Join(got, ",") != want {
 		t.Fatalf("default layout = %s, want %s", strings.Join(got, ","), want)
 	}
-	if c.Panes[0].Cmd != "htop-fit" || len(c.Panes[0].Fallbacks) != 1 || c.Panes[0].Fallbacks[0] != "htop" {
-		t.Fatalf("htop pane should prefer htop-fit, then htop: %+v", c.Panes[0])
+	if c.Panes[1].Cmd != "htop-fit" || len(c.Panes[1].Fallbacks) != 1 || c.Panes[1].Fallbacks[0] != "htop" {
+		t.Fatalf("htop pane should prefer htop-fit, then htop: %+v", c.Panes[1])
 	}
 	if c.Prefix != "ctrl+b" || c.Panes[2].Every != "1s" || c.Panes[2].Cmd != "gsl status" {
 		t.Fatalf("unexpected default: %+v", c)
@@ -34,7 +34,7 @@ func TestLoadMissingIsDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Panes[0].Name != "htop" {
+	if c.Panes[0].Name != "mid" {
 		t.Fatalf("got %+v", c)
 	}
 }
@@ -195,8 +195,8 @@ func TestSaveWritesThroughASymlink(t *testing.T) {
 		t.Fatal("Save replaced the symlink with a regular file")
 	}
 	got, err := Load(real)
-	if err != nil || got.Panes[0].Size != "40%" {
-		t.Fatalf("target not updated: %+v %v", got.Panes[0], err)
+	if err != nil || got.Panes[1].Size != "40%" {
+		t.Fatalf("target not updated: %+v %v", got.Panes[1], err)
 	}
 }
 

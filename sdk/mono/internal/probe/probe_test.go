@@ -43,15 +43,15 @@ func TestChooseDefaultLayoutPerHost(t *testing.T) {
 	cases := []struct {
 		name string
 		env  *fakeEnv
-		want string // chosen cmd per pane, "-" = dropped
+		want string // chosen cmd per pane (mid, htop, gsl), "-" = dropped
 	}{
-		{"wsl intel: nvtop installed but blind", &fakeEnv{path: names("htop", "nvtop", "gsl")}, "htop - gsl status"},
-		{"dotfiles host: htop-fit preferred", &fakeEnv{path: names("htop-fit", "htop", "gsl")}, "htop-fit - gsl status"},
-		{"nvidia host", &fakeEnv{path: names("htop", "nvtop", "gsl", "nvidia-smi"), ok: nvsmi}, "htop nvtop gsl status"},
-		{"nvidia host, only nvitop", &fakeEnv{path: names("htop", "nvitop", "gsl", "nvidia-smi"), ok: nvsmi}, "htop nvitop gsl status"},
-		{"amd linux", &fakeEnv{path: names("htop", "nvtop", "gsl"), drivers: []string{"amdgpu"}}, "htop nvtop gsl status"},
-		{"amd linux, nvitop needs nvidia", &fakeEnv{path: names("htop", "nvitop", "gsl"), drivers: []string{"amdgpu"}}, "htop - gsl status"},
-		{"nvidia-smi present but no device", &fakeEnv{path: names("htop", "nvtop", "nvidia-smi")}, "htop - -"},
+		{"wsl intel: nvtop installed but blind", &fakeEnv{path: names("htop", "nvtop", "gsl")}, "- htop gsl status"},
+		{"dotfiles host: htop-fit preferred", &fakeEnv{path: names("htop-fit", "htop", "gsl")}, "- htop-fit gsl status"},
+		{"nvidia host", &fakeEnv{path: names("htop", "nvtop", "gsl", "nvidia-smi"), ok: nvsmi}, "nvtop htop gsl status"},
+		{"nvidia host, only nvitop", &fakeEnv{path: names("htop", "nvitop", "gsl", "nvidia-smi"), ok: nvsmi}, "nvitop htop gsl status"},
+		{"amd linux", &fakeEnv{path: names("htop", "nvtop", "gsl"), drivers: []string{"amdgpu"}}, "nvtop htop gsl status"},
+		{"amd linux, nvitop needs nvidia", &fakeEnv{path: names("htop", "nvitop", "gsl"), drivers: []string{"amdgpu"}}, "- htop gsl status"},
+		{"nvidia-smi present but no device", &fakeEnv{path: names("htop", "nvtop", "nvidia-smi")}, "- htop -"},
 		{"bare host", &fakeEnv{path: names()}, "- - -"},
 	}
 	for _, tc := range cases {
@@ -73,7 +73,7 @@ func TestChooseDefaultLayoutPerHost(t *testing.T) {
 
 func TestChooseReasons(t *testing.T) {
 	env := &fakeEnv{path: names("nvtop")}
-	c := Choose(context.Background(), env, config.Default().Panes)[1]
+	c := Choose(context.Background(), env, config.Default().Panes)[0]
 	if c.Usable() || !strings.Contains(c.Reason, "nvtop: no GPU it can read") || !strings.Contains(c.Reason, "nvitop not installed") {
 		t.Fatalf("reason = %q", c.Reason)
 	}
