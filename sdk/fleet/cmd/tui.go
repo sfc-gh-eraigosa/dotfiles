@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
@@ -43,7 +44,7 @@ var tuiCmd = &cobra.Command{
 		}
 		// The frame glyphs are decided once, here, from the same resolution:
 		// the package default is rounded so tests stay deterministic.
-		th = newTheme(wantASCIIBorders(policy.asciiBorders))
+		th = newThemeFor(wantASCIIBorders(policy.asciiBorders), fleetPalette(os.Getenv, lipgloss.HasDarkBackground))
 		// A MISSING config is an empty fleet, not a failure: on a fresh
 		// machine there is nothing to read yet, and refusing to start is
 		// how `fleet` became unusable on exactly the host that needed

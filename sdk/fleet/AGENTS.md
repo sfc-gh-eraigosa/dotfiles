@@ -464,7 +464,7 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   `TestAuthFailedHostIsNeverOfferedAsALiveRelayPeer`.
 - **The dashboard says which machine it is RUNNING on, and never guesses.** Every row looks
   like a remote, so the header carries a `⌂ <hostname>` badge and the matching row's alias is
-  painted the same colour (`localColor`, deliberately none of the drift classes' colours —
+  painted the same colour (`localColorFor` — per palette —, deliberately none of the drift classes' colours —
   location is a different question from status). The match is by ADDRESS *and* by NAME and
   either suffices, because each covers the other's blind spot: a DHCP move makes a configured
   `HostName` stale while the alias still names the box, and a nickname alias says nothing
