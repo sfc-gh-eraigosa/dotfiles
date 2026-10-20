@@ -123,8 +123,8 @@ normal ─act─▶ confirm ─y/enter|n/esc▶ normal
   refs, values), then `enter/y = do it · esc/n = cancel`; anything else declines. Declining
   must change nothing. Use it for every irreversible or multi-target action.
 - Palette: the lib renders through a tiny `overlay.Palette` interface (`Dim`, `Bold`,
-  `Accent`, `Err`); tools adapt their lipgloss theme. `overlay.Plain` is the `NO_COLOR` /
-  test palette.
+  `Accent`, `Err`); `theme.ChromeFor("<tool>", os.Getenv)` satisfies it from the shared
+  scheme. `overlay.Plain` is the `NO_COLOR` / test palette.
 
 ## 8. Rendering rules
 
@@ -133,7 +133,12 @@ normal ─act─▶ confirm ─y/enter|n/esc▶ normal
 - The viewport follows the cursor (`nav.Cursor.Clamp`); overflow shows `… N more above/below`.
 - Fixed chrome (title, breadcrumb, footer, error line) is counted in the height budget so a
   prompt never pushes the list off screen. Minimum budget is one row.
-- Provenance / status colors come from the tool's theme; the lib does not choose colors.
+- Colors come from [`theme`](./theme): resolve once at startup with
+  `theme.Resolve("<tool>", os.Getenv, darkBackground)` (or `theme.For`), then draw every
+  status from a role — `OK` succeeded, `Warn` needs a look, `Crit` failed, `Info` running or
+  neutral, `Accent` headers and focus, `Dim` help, `Border` frames — and identities (hosts,
+  chart lines) from `SeriesColor(i)`, which never returns the crit color. Don't hardcode
+  color numbers in a tool: the same palette name must look the same in every tool.
 
 ## 9. Testing rules
 
