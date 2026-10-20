@@ -29,15 +29,15 @@ func layerColor(pal style.Colors, layer string) lipgloss.Style {
 	}
 	switch layer {
 	case "user-override":
-		return lipgloss.NewStyle().Foreground(pal.Orange)
+		return lipgloss.NewStyle().Foreground(pal.Warn)
 	case "system-override":
-		return lipgloss.NewStyle().Foreground(pal.Red)
+		return lipgloss.NewStyle().Foreground(pal.Crit)
 	case "repo-live":
-		return lipgloss.NewStyle().Foreground(pal.Green)
+		return lipgloss.NewStyle().Foreground(pal.OK)
 	case "user-snapshot":
-		return lipgloss.NewStyle().Foreground(pal.Blue)
+		return lipgloss.NewStyle().Foreground(pal.Info)
 	default:
-		return lipgloss.NewStyle().Foreground(pal.Grey)
+		return lipgloss.NewStyle().Foreground(pal.Dim)
 	}
 }
 
@@ -97,9 +97,9 @@ func (m *Model) viewList() string {
 	pal := style.Active()
 	var sb strings.Builder
 
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(pal.Purple)
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(pal.Accent)
 	cursorStyle := lipgloss.NewStyle().Bold(true).Foreground(pal.Text)
-	dimStyle := lipgloss.NewStyle().Foreground(pal.Grey)
+	dimStyle := lipgloss.NewStyle().Foreground(pal.Dim)
 
 	// Fixed header: the category breadcrumb.
 	sb.WriteString(m.renderBreadcrumb(pal))
@@ -231,7 +231,7 @@ func matchStyleFor(pal style.Colors) lipgloss.Style {
 	if noColor() {
 		return lipgloss.NewStyle()
 	}
-	return lipgloss.NewStyle().Bold(true).Foreground(pal.Orange)
+	return lipgloss.NewStyle().Bold(true).Foreground(pal.Warn)
 }
 
 // errStyleFor is the footer/error red, plain under NO_COLOR.
@@ -239,7 +239,7 @@ func errStyleFor(pal style.Colors) lipgloss.Style {
 	if noColor() {
 		return lipgloss.NewStyle()
 	}
-	return lipgloss.NewStyle().Foreground(pal.Red)
+	return lipgloss.NewStyle().Foreground(pal.Crit)
 }
 
 // Breadcrumb separators and the off-screen markers, as plain text so their
@@ -257,7 +257,7 @@ const (
 // always on screen, with ‹ / › marking pages cut off on either side.
 func (m *Model) renderBreadcrumb(pal style.Colors) string {
 	act := lipgloss.NewStyle().Bold(true).Foreground(pal.Text)
-	dim := lipgloss.NewStyle().Foreground(pal.Grey)
+	dim := lipgloss.NewStyle().Foreground(pal.Dim)
 	prefix := ""
 	if nss := m.namespaces(); len(nss) > 1 && m.scopeNS != "" {
 		pos := 1
@@ -345,8 +345,8 @@ func crumbWindow(labels []string, active, top, budget int) (int, int) {
 // footer, overlay, and --help can never disagree.
 func (m *Model) viewHelp() string {
 	pal := style.Active()
-	dim := lipgloss.NewStyle().Foreground(pal.Grey)
-	bold := lipgloss.NewStyle().Bold(true).Foreground(pal.Purple)
+	dim := lipgloss.NewStyle().Foreground(pal.Dim)
+	bold := lipgloss.NewStyle().Bold(true).Foreground(pal.Accent)
 	title := lipgloss.NewStyle().Bold(true).Foreground(pal.Text)
 	var sb strings.Builder
 
@@ -501,9 +501,9 @@ func plainValue(v *gffv1.Value) string {
 func (m *Model) viewDetail() string {
 	pal := style.Active()
 	title := lipgloss.NewStyle().Bold(true).Foreground(pal.Text)
-	dim := lipgloss.NewStyle().Foreground(pal.Grey)
-	bold := lipgloss.NewStyle().Bold(true).Foreground(pal.Purple)
-	winStyle := lipgloss.NewStyle().Bold(true).Foreground(pal.Orange)
+	dim := lipgloss.NewStyle().Foreground(pal.Dim)
+	bold := lipgloss.NewStyle().Bold(true).Foreground(pal.Accent)
+	winStyle := lipgloss.NewStyle().Bold(true).Foreground(pal.Warn)
 
 	it := m.detailItem
 	feat := it.Feature
@@ -576,7 +576,7 @@ func (m *Model) viewDetail() string {
 			}
 			line := fmt.Sprintf("  %s  %-16s  %-30s  %s", mark, opt.GetId(), opt.GetDescription(), optionValueStr(opt))
 			if sel[opt.GetId()] {
-				sb.WriteString(lipgloss.NewStyle().Foreground(pal.Green).Render(line))
+				sb.WriteString(lipgloss.NewStyle().Foreground(pal.OK).Render(line))
 			} else {
 				sb.WriteString(dim.Render(line))
 			}
@@ -601,10 +601,10 @@ func (m *Model) viewPicker() string {
 	}
 
 	pal := style.Active()
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(pal.Purple)
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(pal.Accent)
 	cursorStyle := lipgloss.NewStyle().Bold(true).Foreground(pal.Text)
-	dimStyle := lipgloss.NewStyle().Foreground(pal.Grey)
-	selectedStyle := lipgloss.NewStyle().Foreground(pal.Green)
+	dimStyle := lipgloss.NewStyle().Foreground(pal.Dim)
+	selectedStyle := lipgloss.NewStyle().Foreground(pal.OK)
 
 	sb.WriteString(headerStyle.Render(
 		fmt.Sprintf("Pick option for: %s (%s)", item.Feature.GetPath(), modeStr),

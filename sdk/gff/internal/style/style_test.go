@@ -6,7 +6,11 @@ package style
 // terminal background is detectable (lipgloss/termenv OSC-11 + COLORFGBG);
 // gsl's status line renders to a pipe and never could.
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/theme"
+)
 
 func envOf(m map[string]string) func(string) string {
 	return func(k string) string { return m[k] }
@@ -53,7 +57,7 @@ func TestPalette_AllNamesExistAndDiffer(t *testing.T) {
 		if !ok {
 			t.Fatalf("Palette(%q) not found", name)
 		}
-		if p.Blue == "" || p.Grey == "" || p.Orange == "" {
+		if p.Info == "" || p.Dim == "" || p.Warn == "" {
 			t.Errorf("Palette(%q) has empty slots: %+v", name, p)
 		}
 		if name != "dark8" && p.Text == "" {
@@ -62,7 +66,7 @@ func TestPalette_AllNamesExistAndDiffer(t *testing.T) {
 	}
 	d, _ := Palette("dark")
 	l, _ := Palette("light")
-	if d.Blue == l.Blue || d.Grey == l.Grey {
+	if d.Info == l.Info || d.Dim == l.Dim {
 		t.Error("dark and light palettes must differ (light uses mid-luminance tones per gsl)")
 	}
 }
@@ -80,8 +84,8 @@ func TestDark8AvoidsWhiteOnLightThemes(t *testing.T) {
 	if p.Text != "" {
 		t.Errorf("dark8.Text = %q, want \"\" (terminal default foreground)", p.Text)
 	}
-	if p.Grey != "8" {
-		t.Errorf("dark8.Grey = %q, want 8 (bright black — themed grey)", p.Grey)
+	if p.Dim != "8" {
+		t.Errorf("dark8.Dim = %q, want 8 (bright black — themed grey)", p.Dim)
 	}
 	if p.Border != "8" {
 		t.Errorf("dark8.Border = %q, want 8", p.Border)
@@ -129,5 +133,35 @@ func TestResolve_TmuxExplicitSignalsStillWin(t *testing.T) {
 	got = Resolve(envOf(map[string]string{"TMUX": "x", "TERM": "tmux-256color", "COLORFGBG": "0;15"}), func() bool { return false })
 	if got != "light" {
 		t.Errorf("COLORFGBG in tmux: got %q, want light", got)
+	}
+}
+
+// gff's slots are the sdk's shared roles (libs/tui/theme), so every palette
+// name looks the same in gff as in fleet, gsl, mono and gdash.
+func TestSlotsAreSharedRoles(t *testing.T) {
+	for _, name := range theme.Names() {
+		p, ok := Palette(name)
+		if !ok {
+			t.Fatalf("Palette(%q) missing — gff must offer every shared palette", name)
+		}
+		r, _ := theme.Get(name)
+		got := []string{string(p.Dim), string(p.OK), string(p.Info), string(p.Warn), string(p.Crit), string(p.Accent), string(p.Text), string(p.Border)}
+		want := []string{r.Dim, r.OK, r.Info, r.Warn, r.Crit, r.Accent, r.Text, r.Border}
+		for i := range got {
+			if got[i] != want[i] {
+				t.Errorf("%s slot %d = %q, want shared %q", name, i, got[i], want[i])
+			}
+		}
+	}
+}
+
+func TestResolve_SDKThemeAndDaltonism(t *testing.T) {
+	got := Resolve(envOf(map[string]string{"SDK_THEME": "dark-daltonism", "TERM": "xterm-256color"}), func() bool { return true })
+	if got != "dark-daltonism" {
+		t.Errorf("SDK_THEME=dark-daltonism: got %q", got)
+	}
+	got = Resolve(envOf(map[string]string{"GFF_THEME": "light", "SDK_THEME": "dark8", "TERM": "xterm-256color"}), func() bool { return true })
+	if got != "light" {
+		t.Errorf("GFF_THEME must beat SDK_THEME: got %q", got)
 	}
 }
