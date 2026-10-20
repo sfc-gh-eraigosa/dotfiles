@@ -55,6 +55,9 @@ func TestResolve(t *testing.T) {
 		{"8-color terminal → dark8", map[string]string{"TERM": "xterm"}, dark, Dark8},
 		{"truecolor, dark background", map[string]string{"COLORTERM": "truecolor", "TERM": "xterm"}, dark, Dark},
 		{"256color, light background", map[string]string{"TERM": "xterm-256color"}, light, Light},
+		// COLORFGBG is an explicit background signal that does reach tmux.
+		{"tmux with COLORFGBG → background", map[string]string{"TMUX": "x", "TERM": "tmux-256color", "COLORFGBG": "0;15"}, light, Light},
+		{"tmux 8-color with COLORFGBG → dark8", map[string]string{"TMUX": "x", "TERM": "screen", "COLORFGBG": "0;15"}, light, Dark8},
 	}
 	for _, tc := range cases {
 		if got := Resolve("gdash", envOf(tc.env), tc.bg); got != tc.want {
@@ -128,6 +131,36 @@ func TestChrome(t *testing.T) {
 	for _, got := range []string{off.Dim("x"), off.Bold("x"), off.Accent("x"), off.Err("x")} {
 		if got != "x" {
 			t.Fatalf("NO_COLOR painted %q", got)
+		}
+	}
+}
+
+// A hint (gsl's host-tool setting) comes after the overrides and before the
+// terminal rules; one that names no palette is skipped.
+func TestResolveHints(t *testing.T) {
+	dark := func() bool { return true }
+	hint := func(v string) func() string { return func() string { return v } }
+	tmux := map[string]string{"TMUX": "x", "TERM": "tmux-256color"}
+	if got := Resolve("gsl", envOf(tmux), dark, hint(Light)); got != Light {
+		t.Errorf("hint in tmux = %s, want light", got)
+	}
+	if got := Resolve("gsl", envOf(map[string]string{"GSL_THEME": Dark8, "TERM": "xterm-256color"}), dark, hint(Light)); got != Dark8 {
+		t.Errorf("override vs hint = %s, want dark8", got)
+	}
+	if got := Resolve("gsl", envOf(tmux), dark, hint(""), hint("neon"), hint(DarkDaltonism)); got != DarkDaltonism {
+		t.Errorf("first naming hint = %s, want dark-daltonism", got)
+	}
+}
+
+// Series colors name things (hosts, chart lines); none may be the palette's
+// crit, which means "failed" everywhere (fleet's rule for host colors).
+func TestSeriesAvoidCrit(t *testing.T) {
+	for _, name := range Names() {
+		p, _ := Get(name)
+		for i, c := range p.Series {
+			if c == p.Crit {
+				t.Errorf("%s.Series[%d] = %s is the crit color", name, i, c)
+			}
 		}
 	}
 }

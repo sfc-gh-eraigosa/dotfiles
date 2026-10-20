@@ -40,7 +40,7 @@ type Palette struct {
 	Dim    string   // secondary text, help
 	Text   string   // emphasized foreground
 	Border string   // rules and boxes
-	Series []string // chart lines, hosts — in order
+	Series []string // chart lines, hosts — in order; never the Crit color
 }
 
 // SeriesColor is the i-th series color, wrapping; never panics.
@@ -60,13 +60,14 @@ var palettes = map[string]Palette{
 		Series: []string{"33", "208", "141", "37", "178", "169", "45", "113"}},
 	// light: gsl's mid-luminance light indices (legible on light and dark).
 	Light: {Name: Light, OK: "34", Warn: "136", Crit: "124", Info: "26", Accent: "92", Dim: "241", Text: "16", Border: "247",
-		Series: []string{"26", "130", "92", "30", "136", "125", "31", "28"}},
-	// dark8: basic ANSI, recolored by the terminal's own theme (tmux, 8-color).
+		Series: []string{"26", "130", "55", "30", "136", "90", "31", "28"}},
+	// dark8: basic ANSI, recolored by the terminal's own theme (tmux, 8-color);
+	// its series skips red (crit) and adds bright blue.
 	Dark8: {Name: Dark8, OK: "2", Warn: "3", Crit: "1", Info: "4", Accent: "5", Dim: "8", Text: "", Border: "8",
-		Series: []string{"4", "3", "5", "6", "2", "1"}},
+		Series: []string{"4", "3", "5", "6", "2", "12"}},
 	// dark-daltonism: red-green safe — ok is teal and crit orange, as in gsl.
 	DarkDaltonism: {Name: DarkDaltonism, OK: "73", Warn: "178", Crit: "208", Info: "69", Accent: "99", Dim: "245", Text: "255", Border: "240",
-		Series: []string{"69", "208", "44", "178", "99", "73", "172", "147"}},
+		Series: []string{"69", "172", "147", "44", "99", "73", "110", "180"}},
 }
 
 // Names lists the palettes.
@@ -89,10 +90,13 @@ func Enabled(env func(string) string) bool {
 
 // Resolve picks the palette for a tool, the same way for every sdk tool:
 //  1. <TOOL>_THEME, then SDK_THEME, when it names a palette;
-//  2. inside tmux/screen, or on a terminal without 256 colors: dark8, so the
-//     terminal's own theme colors it (gsl and gff's rule);
-//  3. otherwise the background: dark → dark, light → light.
-func Resolve(tool string, env func(string) string, darkBackground func() bool) string {
+//  2. each hint in order, when it names one — a tool's own signal, such as
+//     gsl reading the host AI tool's theme setting;
+//  3. inside tmux/screen without COLORFGBG, or on a terminal without 256
+//     colors: dark8, so the terminal's own theme colors it (tmux does not
+//     pass a background query through; COLORFGBG does reach it);
+//  4. otherwise the background: dark → dark, light → light.
+func Resolve(tool string, env func(string) string, darkBackground func() bool, hints ...func() string) string {
 	for _, k := range []string{strings.ToUpper(strings.ReplaceAll(tool, "-", "_")) + "_THEME", "SDK_THEME"} {
 		if v := env(k); v != "" {
 			if _, ok := palettes[v]; ok {
@@ -100,8 +104,19 @@ func Resolve(tool string, env func(string) string, darkBackground func() bool) s
 			}
 		}
 	}
+	for _, h := range hints {
+		if h == nil {
+			continue
+		}
+		if v := h(); v != "" {
+			if _, ok := palettes[v]; ok {
+				return v
+			}
+		}
+	}
 	term := strings.ToLower(env("TERM"))
-	if env("TMUX") != "" || strings.HasPrefix(term, "tmux") || strings.HasPrefix(term, "screen") {
+	inTmux := env("TMUX") != "" || strings.HasPrefix(term, "tmux") || strings.HasPrefix(term, "screen")
+	if inTmux && env("COLORFGBG") == "" {
 		return Dark8
 	}
 	ct := strings.ToLower(env("COLORTERM"))
