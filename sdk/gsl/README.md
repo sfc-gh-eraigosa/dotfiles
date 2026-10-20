@@ -315,29 +315,30 @@ A segment renders only when its flag is on **and** it is enabled in `config.json
 
 ## Auto theme colors
 
-Segment colors are resolved automatically from the host tool's settings, then the terminal, then a hardcoded default. The user's `~/.config/gsl/config.json` `theme` map always wins over auto-resolved colors.
+Segment colors are the sdk's shared color scheme ([`libs/tui/theme`](../libs/tui/theme)), so a palette name looks the same here as in gff, fleet, mono and gdash. The palette is picked by the sdk's one rule, with the host tool's theme setting as gsl's hint. The user's `~/.config/gsl/config.json` `theme` map always wins over auto-resolved colors.
 
 ### Resolution priority
 
-1. **Host-tool settings file** (read once per render, degrading gracefully on any error):
+1. **`GSL_THEME`, then `SDK_THEME`**, when it names a palette.
+2. **Host-tool settings file** (read once per render, degrading gracefully on any error):
    - **Claude Code** — `~/.claude/settings.json` field `"theme"` (enum). Values: `"dark"` → dark palette; `"light"` → light palette; `"dark-daltonism"` → daltonism palette; `"system"` or absent → dark palette.
    - **Antigravity CLI** — `~/.gemini/antigravity-cli/settings.json` field `"ui.theme"`, falling back to the legacy Gemini CLI file `~/.gemini/settings.json` (free-form string, keyword bridge): contains `"light"` → light palette; contains `"daltonism"` or `"colorblind"` → daltonism palette; any other non-empty value → dark palette. If both files are missing or unreadable, falls through to terminal detection.
-
-2. **Terminal environment** (only when no host-tool context is detected, or the settings file is absent/unreadable for Antigravity):
-   - `$COLORTERM == "truecolor"` or `"24bit"` → `dark` palette
-   - `$TERM` contains `"256color"` → `dark` palette
-   - Otherwise → `dark8` palette (8-color named-color palette; no 256-color escapes emitted)
-
-3. **Hardcoded default**: the `dark` palette (same as the pre-existing built-in style theme values).
+3. **Terminal environment** (no host-tool context, or no Antigravity settings):
+   - inside tmux/screen without `$COLORFGBG`, or a terminal without 256 colors (`$COLORTERM` truecolor/24bit, or `$TERM` containing `256color`) → `dark8`
+   - otherwise `$COLORFGBG`'s background: light → `light`, dark or unknown → `dark`
 
 ### Palette names
 
+Each segment is one of the shared scheme's roles: `repo_root` Info, `repo_worktree` Accent, `ai` series color 4, `dirgit` OK, `time` Warn, `video` Crit, `host` series color 3.
+
 | Palette | When used | Notes |
-|---------|-----------|-------|
-| `dark` | Dark terminals, truecolor / 256-color | Named ANSI colors (system 8): green, blue, magenta, cyan, yellow |
+| --- | --- | --- |
+| `dark` | Dark terminals, truecolor / 256-color | Fixed ANSI-256 colors, the same on every terminal theme |
 | `light` | Light-background terminals | ANSI-256 indices, darker shades for fg readability |
-| `dark-daltonism` | Red-green colorblind users | Blue/orange/teal ANSI-256; avoids red/green for segment identity |
-| `dark8` | 8-color terminals | Named ANSI colors (same as `dark`); no 256-color escapes |
+| `dark-daltonism` | Red-green colorblind users | Blue/orange/teal ANSI-256; ok is teal and crit orange |
+| `dark8` | tmux, 8-color terminals | Named ANSI colors themed by the terminal; no 256-color escapes |
+
+On a filled (powerline) block with the default foreground, the text is white, or black on a light block, whichever reads better. The PR badge's state color is a role too (open OK, merged Accent, closed Crit); on a filled block it is a small chip in that color rather than a tint on the block.
 
 ### What changes per palette
 

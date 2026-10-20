@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
+	sdktheme "github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/theme"
 )
 
 // approxLuminance returns an approximate luminance (0–255) for an ANSI-256
@@ -199,5 +200,42 @@ func TestHostIcons(t *testing.T) {
 	}
 	if _, has := ascii.Icons["host_dgx"]; has {
 		t.Error("ascii mode must not carry per-kind emoji icons")
+	}
+}
+
+// gsl's segment colors are the sdk's shared roles (libs/tui/theme), so a
+// palette name looks the same on the status line as in gff, fleet, mono and
+// gdash. dark8 is spelled with color names, so no 256-color escape reaches
+// an 8-color terminal.
+func TestPalette_SegmentsAreSharedRoles(t *testing.T) {
+	names := map[string]string{"0": "black", "1": "red", "2": "green", "3": "yellow", "4": "blue", "5": "magenta", "6": "cyan", "7": "white"}
+	for _, palName := range sdktheme.Names() {
+		p, ok := style.Palette(palName)
+		if !ok {
+			t.Fatalf("palette %q missing", palName)
+		}
+		r, _ := sdktheme.Get(palName)
+		want := map[string]string{
+			"repo_root": r.Info, "repo_worktree": r.Accent, "ai": r.SeriesColor(3),
+			"dirgit": r.OK, "time": r.Warn, "video": r.Crit, "host": r.SeriesColor(2),
+		}
+		for key, w := range want {
+			if palName == sdktheme.Dark8 {
+				w = names[w]
+			}
+			if p[key] != w {
+				t.Errorf("%s.%s = %q, want shared %q", palName, key, p[key], w)
+			}
+		}
+		if palName == sdktheme.Dark8 {
+			continue // eight colors: worktree and host share magenta, as before
+		}
+		seen := map[string]string{}
+		for _, key := range style.SegmentColorKeys() {
+			if other, dup := seen[p[key]]; dup {
+				t.Errorf("%s: %s and %s are both %q", palName, other, key, p[key])
+			}
+			seen[p[key]] = key
+		}
 	}
 }

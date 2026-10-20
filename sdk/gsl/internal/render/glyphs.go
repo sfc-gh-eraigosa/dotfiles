@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/theme"
 )
 
 // truecolorRe matches a well-formed truecolor SGR fragment: "38;2;r;g;b" or
@@ -195,8 +196,7 @@ func paint(st style.Style, bgKey, text string) string {
 		}
 		fg := fgSeq(themeColor(st, "fg"), true)
 		if fg == "" {
-			// Default fg on a coloured block is hard to read; use white.
-			fg = fgSeq("white", true)
+			fg = fillText(color)
 		}
 		return bg + fg + text + ansiReset
 	}
@@ -206,6 +206,14 @@ func paint(st style.Style, bgKey, text string) string {
 		return text
 	}
 	return fg + text + ansiReset
+}
+
+// fillText is the default-fg text color on a filled block of color bg:
+// black or white by contrast (sdk/libs/tui/theme.TextOn) — the shared dark
+// palette's green 42 and orange 214 carry white text at under 2:1. Names and
+// 0–15 are themed by the terminal, so they keep white, as before.
+func fillText(bg string) string {
+	return fgSeq(theme.TextOn(bg), true)
 }
 
 // separator returns the inter-segment separator string for the style.
@@ -326,7 +334,7 @@ func joinPowerline(st style.Style, blocks []segmentBlock) string {
 		bg := bgSeq(color, true)
 		fg := fgSeq(themeColor(st, "fg"), true)
 		if fg == "" {
-			fg = fgSeq("white", true)
+			fg = fillText(color)
 		}
 		if bg != "" {
 			sb.WriteString(bg)
