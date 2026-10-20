@@ -218,3 +218,13 @@ func TestRepo_UsesPrecomputedPR(t *testing.T) {
 		t.Errorf("gh must not be called when the PR is precomputed; got %d calls", gh.CallCount())
 	}
 }
+
+// Under Fill, the text after the PR badge returns to the block's own text
+// color — black on a light block — not a fixed white.
+func TestPRBadge_FillRestoresBlockText(t *testing.T) {
+	st := style.Style{Fill: true, Theme: map[string]string{"fg": "default", "repo_worktree": "42"}}
+	got := prBadgeWithPrefix(st, "PR#", 7, "OPEN", "repo_worktree")
+	if !strings.HasSuffix(got, "\x1b[38;5;16m") {
+		t.Errorf("badge on a light block ends %q, want black text restored", got)
+	}
+}

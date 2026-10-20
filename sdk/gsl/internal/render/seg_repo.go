@@ -140,13 +140,14 @@ func workerLabel(branch string) string {
 // background block. The single trailing ansiReset for the whole segment is
 // owned by paint(), NOT by this helper.
 func prBadge(st style.Style, number int, state string) string {
-	return prBadgeWithPrefix(st, "PR#", number, state)
+	return prBadgeWithPrefix(st, "PR#", number, state, "repo_root")
 }
 
 // prBadgeWithPrefix is prBadge with a caller-chosen prefix, so the compaction
 // ladder can shrink "PR#157" to "#157" at deeper levels without duplicating the
-// state-tinting logic.
-func prBadgeWithPrefix(st style.Style, prefix string, number int, state string) string {
+// state-tinting logic. segKey is the theme key of the segment the badge sits
+// in: under Fill, the text after the badge returns to that block's text color.
+func prBadgeWithPrefix(st style.Style, prefix string, number int, state, segKey string) string {
 	text := prefix + strconv.Itoa(number)
 	var colorKey string
 	switch strings.ToUpper(state) {
@@ -168,7 +169,7 @@ func prBadgeWithPrefix(st style.Style, prefix string, number int, state string) 
 		// subsequent parts of the same segment retain the powerline background.
 		segFG := fgSeq(themeColor(st, "fg"), true)
 		if segFG == "" {
-			segFG = fgSeq("white", true)
+			segFG = fillText(themeColor(st, segKey)) // what paint chose for the block
 		}
 		return seq + text + segFG
 	}

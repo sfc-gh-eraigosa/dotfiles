@@ -1,5 +1,7 @@
 package style
 
+import "github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/theme"
+
 // Nerd Font glyph codepoints used by the powerline style.
 //
 // These are Unicode private-use-area codepoints provided by the
@@ -84,16 +86,11 @@ var powerlineStyle = Style{
 		"sep_right_thin": nfSepRightThin,
 	},
 	Theme: map[string]string{
-		"fg":            "default",
-		"bg":            "default",
-		"accent":        "white",
-		"repo_root":     "blue",    // main worktree — blue tint
-		"repo_worktree": "magenta", // linked worktree — magenta tint
-		"ai":            "cyan",
-		"dirgit":        "green",
-		"time":          "yellow",
-		"video":         "red",
-		"host":          "99", // medium purple — unused by every neighbour
+		"fg":     "default",
+		"bg":     "default",
+		"accent": "white",
+		// repo_root, repo_worktree, ai, dirgit, time, video, host: the
+		// shared dark palette, filled in by init (see palettes).
 	},
 }
 
@@ -132,16 +129,10 @@ var emojiStyle = Style{
 		"sep_right_thin": "·",
 	},
 	Theme: map[string]string{
-		"fg":            "default",
-		"bg":            "default",
-		"accent":        "default",
-		"repo_root":     "blue",
-		"repo_worktree": "magenta",
-		"ai":            "cyan",
-		"dirgit":        "green",
-		"time":          "yellow",
-		"video":         "red",
-		"host":          "99", // medium purple — unused by every neighbour
+		"fg":     "default",
+		"bg":     "default",
+		"accent": "default",
+		// segment colors: the shared dark palette, filled in by init.
 	},
 }
 
@@ -189,81 +180,54 @@ var segmentColorKeys = []string{
 	"host",
 }
 
-// palettes holds the compiled-in color palettes keyed by palette name.
+// palettes maps each segment color key to a role of the sdk's one color
+// scheme (sdk/libs/tui/theme), so a palette name looks the same on the status
+// line as in gff, fleet, mono and gdash. Built once from the library:
 //
-// Each palette defines at minimum all six segment color keys
-// (repo_root, repo_worktree, ai, dirgit, time, host). Indices in the
-// non-default palettes are chosen to be mid-luminance (approximate
-// luminance 30–220 out of 255) so they are legible as bare foreground
-// color on both light and dark terminal backgrounds. This is required
-// because the emoji style (Fill:false) renders color as fg-tint only —
-// there is no background block for contrast.
+//	repo_root → Info     repo_worktree → Accent   ai   → Series[3]
+//	dirgit    → OK       time          → Warn     host → Series[2]
+//	video     → Crit
 //
-// Palette selection:
-//
-//   - "dark"           — default; uses ANSI named-color strings (system 8)
-//     that map to the terminal's own dark-palette colors (green, blue, …).
-//   - "light"          — for light-background terminals; uses ANSI-256
-//     indices with lower luminance (darker shades) for fg readability.
-//   - "dark-daltonism" — red-green colorblind friendly; avoids red/green;
-//     uses blue/orange/teal ANSI-256 indices.
-//   - "dark8"          — 8-color terminals; uses named-color strings so the
-//     terminal's own palette applies (no 256-color escapes emitted).
-var palettes = map[string]map[string]string{
-	// "dark" is the default palette — named colors (system 8) matching the
-	// existing powerline/emoji built-in style theme values.
-	"dark": {
-		"repo_root":     "blue",    // ANSI 4 / system blue
-		"repo_worktree": "magenta", // ANSI 5 / system magenta
-		"ai":            "cyan",    // ANSI 6 / system cyan
-		"dirgit":        "green",   // ANSI 2 / system green
-		"time":          "yellow",  // ANSI 3 / system yellow
-		"video":         "red",
-		"host":          "99", // medium purple (r=2,g=1,b=5)  lum~125
-	},
-	// "light" — darker ANSI-256 shades for readability on light backgrounds.
-	// Each index is mid-luminance (~44–138/255) and legible on dark too.
-	//   repo_root     26: (r=0,g=1,b=4) medium-dark blue           lum~83
-	//   repo_worktree 92: (r=2,g=0,b=4) medium purple              lum~44
-	//   ai            37: (r=0,g=3,b=3) medium teal/cyan           lum~138
-	//   dirgit        34: (r=0,g=3,b=0) medium green               lum~125
-	//   time         136: (r=3,g=2,b=0) medium amber/brown         lum~134
-	"light": {
-		"repo_root":     "26",
-		"repo_worktree": "92",
-		"ai":            "37",
-		"dirgit":        "34",
-		"time":          "136",
-		"video":         "160",
-		"host":          "55", // (r=1,g=0,b=3) dark violet              lum~48
-	},
-	// "dark-daltonism" — red-green colorblind friendly; avoids red/green
-	// for segment identity. Uses blue/orange/teal ANSI-256 indices.
-	//   repo_root     69: (r=1,g=2,b=5) medium blue-violet         lum~135
-	//   repo_worktree 208: (r=5,g=2,b=0) medium orange             lum~151
-	//   ai            44: (r=0,g=4,b=4) medium cyan                lum~169
-	//   dirgit        73: (r=1,g=3,b=3) medium teal                lum~158
-	//   time         178: (r=4,g=3,b=0) medium golden amber        lum~171
-	"dark-daltonism": {
-		"repo_root":     "69",
-		"repo_worktree": "208",
-		"ai":            "44",
-		"dirgit":        "73",
-		"time":          "178",
-		"video":         "172",
-		"host":          "99", // (r=2,g=1,b=5) medium purple            lum~125
-	},
-	// "dark8" — 8-color terminals; named-color strings so no 256-color
-	// escapes are emitted; the terminal's own palette applies.
-	"dark8": {
-		"repo_root":     "blue",
-		"repo_worktree": "magenta",
-		"ai":            "cyan",
-		"dirgit":        "green",
-		"time":          "yellow",
-		"video":         "red",
-		"host":          "magenta",
-	},
+// Every index stays mid-luminance (TestPalette_MidLuminance), which the
+// emoji style (Fill:false, color as fg tint only) needs on either background.
+// dark8 is spelled with color names ("blue", …), so no 256-color escape is
+// emitted and the terminal's own palette applies.
+var palettes = buildPalettes()
+
+// The built-in styles' segment colors are the dark palette, so a style with
+// no auto-palette looks exactly like one resolved to "dark".
+func init() {
+	for _, st := range []*Style{&powerlineStyle, &emojiStyle} {
+		for k, v := range palettes[theme.Dark] {
+			st.Theme[k] = v
+		}
+	}
+}
+
+func buildPalettes() map[string]map[string]string {
+	named := map[string]string{"0": "black", "1": "red", "2": "green", "3": "yellow", "4": "blue", "5": "magenta", "6": "cyan", "7": "white"}
+	out := map[string]map[string]string{}
+	for _, name := range theme.Names() {
+		r, _ := theme.Get(name)
+		m := map[string]string{
+			"repo_root":     r.Info,
+			"repo_worktree": r.Accent,
+			"ai":            r.SeriesColor(3),
+			"dirgit":        r.OK,
+			"time":          r.Warn,
+			"video":         r.Crit,
+			"host":          r.SeriesColor(2),
+		}
+		if name == theme.Dark8 {
+			for k, v := range m {
+				if n, ok := named[v]; ok {
+					m[k] = n
+				}
+			}
+		}
+		out[name] = m
+	}
+	return out
 }
 
 // Palette returns the color map for the named palette, and whether it was
