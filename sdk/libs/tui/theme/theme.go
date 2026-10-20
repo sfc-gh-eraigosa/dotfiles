@@ -14,6 +14,7 @@
 package theme
 
 import (
+	"math"
 	"strconv"
 	"strings"
 )
@@ -40,7 +41,7 @@ type Palette struct {
 	Dim    string   // secondary text, help
 	Text   string   // emphasized foreground
 	Border string   // rules and boxes
-	Series []string // chart lines, hosts — in order
+	Series []string // chart lines, hosts — in order; never the Crit color
 }
 
 // SeriesColor is the i-th series color, wrapping; never panics.
@@ -60,13 +61,15 @@ var palettes = map[string]Palette{
 		Series: []string{"33", "208", "141", "37", "178", "169", "45", "113"}},
 	// light: gsl's mid-luminance light indices (legible on light and dark).
 	Light: {Name: Light, OK: "34", Warn: "136", Crit: "124", Info: "26", Accent: "92", Dim: "241", Text: "16", Border: "247",
-		Series: []string{"26", "130", "92", "30", "136", "125", "31", "28"}},
-	// dark8: basic ANSI, recolored by the terminal's own theme (tmux, 8-color).
+		Series: []string{"26", "130", "55", "30", "136", "90", "31", "28"}},
+	// dark8: basic ANSI, recolored by the terminal's own theme (tmux, 8-color);
+	// its series skips red (crit) and adds bright blue.
 	Dark8: {Name: Dark8, OK: "2", Warn: "3", Crit: "1", Info: "4", Accent: "5", Dim: "8", Text: "", Border: "8",
-		Series: []string{"4", "3", "5", "6", "2", "1"}},
-	// dark-daltonism: red-green safe — ok is teal and crit orange, as in gsl.
+		Series: []string{"4", "3", "5", "6", "2", "12"}},
+	// dark-daltonism: red-green safe — ok is teal and crit orange, as in gsl;
+	// so its series holds no orange at all (172 read as failing).
 	DarkDaltonism: {Name: DarkDaltonism, OK: "73", Warn: "178", Crit: "208", Info: "69", Accent: "99", Dim: "245", Text: "255", Border: "240",
-		Series: []string{"69", "208", "44", "178", "99", "73", "172", "147"}},
+		Series: []string{"69", "75", "147", "44", "99", "73", "110", "152"}},
 }
 
 // Names lists the palettes.
@@ -89,10 +92,13 @@ func Enabled(env func(string) string) bool {
 
 // Resolve picks the palette for a tool, the same way for every sdk tool:
 //  1. <TOOL>_THEME, then SDK_THEME, when it names a palette;
-//  2. inside tmux/screen, or on a terminal without 256 colors: dark8, so the
-//     terminal's own theme colors it (gsl and gff's rule);
-//  3. otherwise the background: dark → dark, light → light.
-func Resolve(tool string, env func(string) string, darkBackground func() bool) string {
+//  2. each hint in order, when it names one — a tool's own signal, such as
+//     gsl reading the host AI tool's theme setting;
+//  3. inside tmux/screen without COLORFGBG, or on a terminal without 256
+//     colors: dark8, so the terminal's own theme colors it (tmux does not
+//     pass a background query through; COLORFGBG does reach it);
+//  4. otherwise the background: dark → dark, light → light.
+func Resolve(tool string, env func(string) string, darkBackground func() bool, hints ...func() string) string {
 	for _, k := range []string{strings.ToUpper(strings.ReplaceAll(tool, "-", "_")) + "_THEME", "SDK_THEME"} {
 		if v := env(k); v != "" {
 			if _, ok := palettes[v]; ok {
@@ -100,8 +106,19 @@ func Resolve(tool string, env func(string) string, darkBackground func() bool) s
 			}
 		}
 	}
+	for _, h := range hints {
+		if h == nil {
+			continue
+		}
+		if v := h(); v != "" {
+			if _, ok := palettes[v]; ok {
+				return v
+			}
+		}
+	}
 	term := strings.ToLower(env("TERM"))
-	if env("TMUX") != "" || strings.HasPrefix(term, "tmux") || strings.HasPrefix(term, "screen") {
+	inTmux := env("TMUX") != "" || strings.HasPrefix(term, "tmux") || strings.HasPrefix(term, "screen")
+	if inTmux && env("COLORFGBG") == "" {
 		return Dark8
 	}
 	ct := strings.ToLower(env("COLORTERM"))
@@ -138,6 +155,73 @@ func EnvDarkBackground(env func(string) string) func() bool {
 }
 
 var named = map[string]int{"black": 0, "red": 1, "green": 2, "yellow": 3, "blue": 4, "magenta": 5, "cyan": 6, "white": 7}
+
+// BasicName is the color name ("blue") for a basic ANSI index "0"–"7", for
+// renderers that spell those as names so no 256-color escape is emitted.
+func BasicName(c string) (string, bool) {
+	for name, n := range named {
+		if strconv.Itoa(n) == c {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+// TextOn is the text color that reads best on a fill of bg: "16" (black) when
+// its contrast beats white's, else "7" (white). bg may be an ANSI-256 index,
+// "38;5;N" / "48;5;N", or "38;2;r;g;b" / "48;2;r;g;b". Names and 0–15 are
+// themed by the terminal, so their brightness is unknown: white, as before.
+func TextOn(bg string) string {
+	r, g, b, ok := rgbOf(strings.TrimSpace(bg))
+	if !ok {
+		return "7"
+	}
+	lin := func(c float64) float64 {
+		c /= 255
+		if c <= 0.03928 {
+			return c / 12.92
+		}
+		return math.Pow((c+0.055)/1.055, 2.4)
+	}
+	l := 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b)
+	if (l+0.05)/0.05 > 1.05/(l+0.05) {
+		return "16"
+	}
+	return "7"
+}
+
+// rgbOf is a fill's RGB, for the forms TextOn takes; ok is false for names,
+// 0–15 and anything malformed.
+func rgbOf(c string) (r, g, b float64, ok bool) {
+	parts := strings.Split(c, ";")
+	switch {
+	case len(parts) == 3 && (parts[0] == "38" || parts[0] == "48") && parts[1] == "5":
+		c, parts = parts[2], nil
+	case len(parts) == 5 && (parts[0] == "38" || parts[0] == "48") && parts[1] == "2":
+		var v [3]float64
+		for i, p := range parts[2:] {
+			n, err := strconv.Atoi(p)
+			if err != nil || n < 0 || n > 255 {
+				return 0, 0, 0, false
+			}
+			v[i] = float64(n)
+		}
+		return v[0], v[1], v[2], true
+	case len(parts) != 1:
+		return 0, 0, 0, false
+	}
+	n, err := strconv.Atoi(c)
+	if err != nil || n < 16 || n > 255 {
+		return 0, 0, 0, false
+	}
+	if n >= 232 {
+		v := float64(8 + (n-232)*10)
+		return v, v, v, true
+	}
+	level := []float64{0, 95, 135, 175, 215, 255}
+	i := n - 16
+	return level[i/36], level[i/6%6], level[i%6], true
+}
 
 // FG is the foreground escape for a color: "" → none, 0–7 or a name → the
 // basic code (themed by the terminal), 8–15 → bright, else 256-color.
