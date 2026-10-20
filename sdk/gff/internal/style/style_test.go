@@ -57,7 +57,7 @@ func TestPalette_AllNamesExistAndDiffer(t *testing.T) {
 		if !ok {
 			t.Fatalf("Palette(%q) not found", name)
 		}
-		if p.Blue == "" || p.Grey == "" || p.Orange == "" {
+		if p.Info == "" || p.Dim == "" || p.Warn == "" {
 			t.Errorf("Palette(%q) has empty slots: %+v", name, p)
 		}
 		if name != "dark8" && p.Text == "" {
@@ -66,7 +66,7 @@ func TestPalette_AllNamesExistAndDiffer(t *testing.T) {
 	}
 	d, _ := Palette("dark")
 	l, _ := Palette("light")
-	if d.Blue == l.Blue || d.Grey == l.Grey {
+	if d.Info == l.Info || d.Dim == l.Dim {
 		t.Error("dark and light palettes must differ (light uses mid-luminance tones per gsl)")
 	}
 }
@@ -84,8 +84,8 @@ func TestDark8AvoidsWhiteOnLightThemes(t *testing.T) {
 	if p.Text != "" {
 		t.Errorf("dark8.Text = %q, want \"\" (terminal default foreground)", p.Text)
 	}
-	if p.Grey != "8" {
-		t.Errorf("dark8.Grey = %q, want 8 (bright black — themed grey)", p.Grey)
+	if p.Dim != "8" {
+		t.Errorf("dark8.Dim = %q, want 8 (bright black — themed grey)", p.Dim)
 	}
 	if p.Border != "8" {
 		t.Errorf("dark8.Border = %q, want 8", p.Border)
@@ -145,7 +145,7 @@ func TestSlotsAreSharedRoles(t *testing.T) {
 			t.Fatalf("Palette(%q) missing — gff must offer every shared palette", name)
 		}
 		r, _ := theme.Get(name)
-		got := []string{string(p.Grey), string(p.Green), string(p.Blue), string(p.Orange), string(p.Red), string(p.Purple), string(p.Text), string(p.Border)}
+		got := []string{string(p.Dim), string(p.OK), string(p.Info), string(p.Warn), string(p.Crit), string(p.Accent), string(p.Text), string(p.Border)}
 		want := []string{r.Dim, r.OK, r.Info, r.Warn, r.Crit, r.Accent, r.Text, r.Border}
 		for i := range got {
 			if got[i] != want[i] {

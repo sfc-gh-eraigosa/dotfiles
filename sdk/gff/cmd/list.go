@@ -73,15 +73,15 @@ func layerStyle(layer string) lipgloss.Style {
 	pal := style.Active()
 	switch layer {
 	case "user-override":
-		return lipgloss.NewStyle().Foreground(pal.Orange)
+		return lipgloss.NewStyle().Foreground(pal.Warn)
 	case "system-override":
-		return lipgloss.NewStyle().Foreground(pal.Red)
+		return lipgloss.NewStyle().Foreground(pal.Crit)
 	case "repo-live":
-		return lipgloss.NewStyle().Foreground(pal.Green)
+		return lipgloss.NewStyle().Foreground(pal.OK)
 	case "user-snapshot":
-		return lipgloss.NewStyle().Foreground(pal.Blue)
+		return lipgloss.NewStyle().Foreground(pal.Info)
 	default: // system-snapshot, none
-		return lipgloss.NewStyle().Foreground(pal.Grey)
+		return lipgloss.NewStyle().Foreground(pal.Dim)
 	}
 }
 
@@ -89,9 +89,9 @@ func valueStyle(value string) lipgloss.Style {
 	pal := style.Active()
 	switch value {
 	case "true":
-		return lipgloss.NewStyle().Foreground(pal.Green)
+		return lipgloss.NewStyle().Foreground(pal.OK)
 	case "false":
-		return lipgloss.NewStyle().Foreground(pal.Red)
+		return lipgloss.NewStyle().Foreground(pal.Crit)
 	}
 	return lipgloss.NewStyle()
 }
@@ -124,7 +124,7 @@ func renderPrettyTable(rows [][]string, width int) string {
 		Rows(rows...).
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == lgtable.HeaderRow {
-				return cell.Bold(true).Foreground(style.Active().Purple)
+				return cell.Bold(true).Foreground(style.Active().Accent)
 			}
 			if row < 0 || row >= len(rows) {
 				return cell

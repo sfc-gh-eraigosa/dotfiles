@@ -1,7 +1,7 @@
 // Package style is gff's adapter onto the sdk's one color scheme,
 // sdk/libs/tui/theme: the palettes, their colors and the rule for picking
-// one live there, shared with fleet, gsl, mono and gdash. This package keeps
-// gff's slot names (Grey, Green, …) so the TUI and the styled `gff list`
+// one live there, shared with fleet, gsl, mono and gdash. This package gives
+// gff the roles as lipgloss colors so the TUI and the styled `gff list`
 // table draw from one place and always match.
 //
 // Resolution is theme.Resolve("gff", …):
@@ -24,17 +24,18 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/theme"
 )
 
-// Colors holds the semantic color slots used by the TUI and list table,
-// each one of the shared scheme's roles.
+// Colors holds the color slots used by the TUI and list table: the shared
+// scheme's roles, under the same names (under dark-daltonism OK is teal and
+// Crit orange, so the slots are named for meaning, not hue).
 type Colors struct {
-	Grey   lipgloss.Color // Dim: help text, default markers
-	Green  lipgloss.Color // OK: true / enabled
-	Blue   lipgloss.Color // Info: repo-live layer
-	Orange lipgloss.Color // Warn: user-override layer
-	Red    lipgloss.Color // Crit: false / errors
-	Purple lipgloss.Color // Accent: header emphasis
-	Text   lipgloss.Color // Text: emphasized foreground ("" = terminal default)
-	Border lipgloss.Color // Border: table borders
+	Dim    lipgloss.Color // help text, default markers
+	OK     lipgloss.Color // true / enabled
+	Info   lipgloss.Color // repo-live layer
+	Warn   lipgloss.Color // user-override layer
+	Crit   lipgloss.Color // false / errors
+	Accent lipgloss.Color // header emphasis
+	Text   lipgloss.Color // emphasized foreground ("" = terminal default)
+	Border lipgloss.Color // table borders
 }
 
 // Palette returns the named shared palette as gff's slots. ok=false for
@@ -46,8 +47,8 @@ func Palette(name string) (Colors, bool) {
 	}
 	c := func(s string) lipgloss.Color { return lipgloss.Color(s) }
 	return Colors{
-		Grey: c(p.Dim), Green: c(p.OK), Blue: c(p.Info), Orange: c(p.Warn),
-		Red: c(p.Crit), Purple: c(p.Accent), Text: c(p.Text), Border: c(p.Border),
+		Dim: c(p.Dim), OK: c(p.OK), Info: c(p.Info), Warn: c(p.Warn),
+		Crit: c(p.Crit), Accent: c(p.Accent), Text: c(p.Text), Border: c(p.Border),
 	}, true
 }
 
