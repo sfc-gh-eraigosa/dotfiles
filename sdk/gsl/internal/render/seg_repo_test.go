@@ -52,7 +52,14 @@ func TestRepo_Indicator_Powerline(t *testing.T) {
 	if colorKey != "repo_root" {
 		t.Errorf("repo root: want colorKey=repo_root, got %q", colorKey)
 	}
-	// raw text must NOT contain bg escape sequences (painting is in the join layer)
+	// raw text must NOT contain bg escape sequences (painting is in the join
+	// layer) — except the PR badge's chip, which sets its own background and
+	// hands the block's back (TestPRBadge_FillIsAReadableChip).
+	if i := strings.Index(got, "PR#"); i >= 0 {
+		if chip := strings.LastIndex(got[:i], "\x1b[48;"); chip >= 0 {
+			got = got[:chip] // the text before the badge's chip
+		}
+	}
 	if strings.Contains(got, "48;5;") {
 		t.Errorf("repo root: raw text should not contain bg escape, got %q", got)
 	}
@@ -163,16 +170,16 @@ func TestRepo_NameModes(t *testing.T) {
 func TestRepo_PRBadge_StateTints(t *testing.T) {
 	// Direct unit test of prBadge state colouring.
 	st := style.Style{}
-	if got := prBadge(st, 7, "OPEN"); !strings.Contains(got, "38;5;2") {
+	if got := prBadgeWithPrefix(st, "PR#", 7, "OPEN", "repo_root"); !strings.Contains(got, "38;5;2") {
 		t.Errorf("prBadge OPEN: want green, got %q", got)
 	}
-	if got := prBadge(st, 7, "MERGED"); !strings.Contains(got, "38;5;5") {
+	if got := prBadgeWithPrefix(st, "PR#", 7, "MERGED", "repo_root"); !strings.Contains(got, "38;5;5") {
 		t.Errorf("prBadge MERGED: want magenta, got %q", got)
 	}
-	if got := prBadge(st, 7, "CLOSED"); !strings.Contains(got, "38;5;1") {
+	if got := prBadgeWithPrefix(st, "PR#", 7, "CLOSED", "repo_root"); !strings.Contains(got, "38;5;1") {
 		t.Errorf("prBadge CLOSED: want red, got %q", got)
 	}
-	if got := prBadge(st, 7, "WEIRD"); got != "PR#7" {
+	if got := prBadgeWithPrefix(st, "PR#", 7, "WEIRD", "repo_root"); got != "PR#7" {
 		t.Errorf("prBadge unknown state: want plain PR#7, got %q", got)
 	}
 }
@@ -219,12 +226,30 @@ func TestRepo_UsesPrecomputedPR(t *testing.T) {
 	}
 }
 
-// Under Fill, the text after the PR badge returns to the block's own text
-// color — black on a light block — not a fixed white.
-func TestPRBadge_FillRestoresBlockText(t *testing.T) {
-	st := style.Style{Fill: true, Theme: map[string]string{"fg": "default", "repo_worktree": "42"}}
-	got := prBadgeWithPrefix(st, "PR#", 7, "OPEN", "repo_worktree")
-	if !strings.HasSuffix(got, "\x1b[38;5;16m") {
-		t.Errorf("badge on a light block ends %q, want black text restored", got)
+// The badge's state color is a palette role — OPEN the OK (dirgit) color,
+// MERGED Accent (repo_worktree), CLOSED Crit (video) — so it follows the
+// palette like everything else.
+func TestPRBadge_StateFromPaletteRoles(t *testing.T) {
+	st := style.Style{Theme: map[string]string{"dirgit": "42", "repo_worktree": "63", "video": "203"}}
+	for state, want := range map[string]string{"OPEN": "38;5;42", "MERGED": "38;5;63", "CLOSED": "38;5;203"} {
+		if got := prBadgeWithPrefix(st, "PR#", 7, state, "repo_root"); !strings.Contains(got, want) {
+			t.Errorf("%s badge = %q, want %s", state, got, want)
+		}
+	}
+}
+
+// Under Fill, a fg tint on a colored block is unreadable (green on the dark
+// palette's blue 39). The badge becomes a chip: the state color as its own
+// background with readable text, then the block's background and text return.
+func TestPRBadge_FillIsAReadableChip(t *testing.T) {
+	st := style.Style{Fill: true, Theme: map[string]string{"fg": "default", "dirgit": "42", "repo_root": "39", "repo_worktree": "63"}}
+	got := prBadgeWithPrefix(st, "PR#", 7, "OPEN", "repo_root")
+	want := "\x1b[48;5;42m\x1b[38;5;16mPR#7\x1b[48;5;39m\x1b[38;5;16m"
+	if got != want {
+		t.Errorf("OPEN chip on repo_root = %q, want %q", got, want)
+	}
+	got = prBadgeWithPrefix(st, "PR#", 7, "OPEN", "repo_worktree")
+	if !strings.HasSuffix(got, "\x1b[48;5;63m\x1b[38;5;7m") {
+		t.Errorf("chip on a dark block must restore white text, got %q", got)
 	}
 }

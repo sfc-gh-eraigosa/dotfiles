@@ -376,3 +376,13 @@ func TestPaint_FillPicksReadableText(t *testing.T) {
 		}
 	}
 }
+
+// fillText also reads 38;5;N and truecolor fills, the forms a user config may
+// hold, so a light truecolor block still gets black text.
+func TestFillText_AllColorForms(t *testing.T) {
+	for bg, want := range map[string]string{"38;5;214": "\x1b[38;5;16m", "38;2;250;250;210": "\x1b[38;5;16m", "38;2;20;20;60": "\x1b[38;5;7m"} {
+		if got := fillText(bg); got != want {
+			t.Errorf("fillText(%q) = %q, want %q", bg, got, want)
+		}
+	}
+}

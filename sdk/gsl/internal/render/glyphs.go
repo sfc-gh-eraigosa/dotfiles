@@ -1,11 +1,11 @@
 package render
 
 import (
-	"math"
 	"strconv"
 	"strings"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/theme"
 )
 
 // truecolorRe matches a well-formed truecolor SGR fragment: "38;2;r;g;b" or
@@ -209,37 +209,11 @@ func paint(st style.Style, bgKey, text string) string {
 }
 
 // fillText is the default-fg text color on a filled block of color bg:
-// white, unless bg is a light ANSI-256 index (16–255), where black (16)
-// reads better — the shared dark palette's green 42 and orange 214 carry
-// white text at under 2:1. Named colors and 0–15 are themed by the terminal,
-// so they keep white, as before.
+// black or white by contrast (sdk/libs/tui/theme.TextOn) — the shared dark
+// palette's green 42 and orange 214 carry white text at under 2:1. Names and
+// 0–15 are themed by the terminal, so they keep white, as before.
 func fillText(bg string) string {
-	n, err := strconv.Atoi(strings.TrimSpace(bg))
-	if err != nil || n < 16 || n > 255 {
-		return fgSeq("white", true)
-	}
-	var r, g, b float64
-	if n >= 232 {
-		v := float64(8 + (n-232)*10)
-		r, g, b = v, v, v
-	} else {
-		level := []float64{0, 95, 135, 175, 215, 255}
-		i := n - 16
-		r, g, b = level[i/36], level[i/6%6], level[i%6]
-	}
-	lin := func(c float64) float64 {
-		c /= 255
-		if c <= 0.03928 {
-			return c / 12.92
-		}
-		return math.Pow((c+0.055)/1.055, 2.4)
-	}
-	l := 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b)
-	// Black wins when its contrast, (l+.05)/.05, beats white's, 1.05/(l+.05).
-	if (l+0.05)/0.05 > 1.05/(l+0.05) {
-		return fgSeq("16", true)
-	}
-	return fgSeq("white", true)
+	return fgSeq(theme.TextOn(bg), true)
 }
 
 // separator returns the inter-segment separator string for the style.

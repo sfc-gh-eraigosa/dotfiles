@@ -338,7 +338,7 @@ Each segment is one of the shared scheme's roles: `repo_root` Info, `repo_worktr
 | `dark-daltonism` | Red-green colorblind users | Blue/orange/teal ANSI-256; ok is teal and crit orange |
 | `dark8` | tmux, 8-color terminals | Named ANSI colors themed by the terminal; no 256-color escapes |
 
-On a filled (powerline) block with the default foreground, the text is white, or black on a light block, whichever reads better.
+On a filled (powerline) block with the default foreground, the text is white, or black on a light block, whichever reads better. The PR badge's state color is a role too (open OK, merged Accent, closed Crit); on a filled block it is a small chip in that color rather than a tint on the block.
 
 ### What changes per palette
 

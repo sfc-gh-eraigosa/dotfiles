@@ -205,7 +205,6 @@ func init() {
 }
 
 func buildPalettes() map[string]map[string]string {
-	named := map[string]string{"0": "black", "1": "red", "2": "green", "3": "yellow", "4": "blue", "5": "magenta", "6": "cyan", "7": "white"}
 	out := map[string]map[string]string{}
 	for _, name := range theme.Names() {
 		r, _ := theme.Get(name)
@@ -220,7 +219,7 @@ func buildPalettes() map[string]map[string]string {
 		}
 		if name == theme.Dark8 {
 			for k, v := range m {
-				if n, ok := named[v]; ok {
+				if n, ok := theme.BasicName(v); ok {
 					m[k] = n
 				}
 			}

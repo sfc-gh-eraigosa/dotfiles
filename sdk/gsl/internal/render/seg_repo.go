@@ -129,49 +129,50 @@ func workerLabel(branch string) string {
 	return branch[idx+1:]
 }
 
-// prBadge renders "PR#<n>" tinted by PR state. OPEN → green, MERGED → magenta,
-// CLOSED → red; any other/empty state is left untinted. The "#" prefix keeps
-// the badge readable across glyph modes (no dedicated PR glyph in the style
-// table).
+// prBadgeWithPrefix renders "<prefix><n>" tinted by PR state, so the
+// compaction ladder can shrink "PR#157" to "#157" at deeper levels. The state
+// color is a palette role: OPEN the OK color (theme key dirgit), MERGED Accent
+// (repo_worktree), CLOSED Crit (video), falling back to named green, magenta
+// and red for a theme without them. Any other/empty state is left untinted.
 //
-// When st.Fill is true the badge tint colour is applied for the number only,
-// then the segment's own fg is restored so that any content appended after the
-// badge (e.g. the worktree-count badge) stays inside the same powerline
-// background block. The single trailing ansiReset for the whole segment is
-// owned by paint(), NOT by this helper.
-func prBadge(st style.Style, number int, state string) string {
-	return prBadgeWithPrefix(st, "PR#", number, state, "repo_root")
-}
-
-// prBadgeWithPrefix is prBadge with a caller-chosen prefix, so the compaction
-// ladder can shrink "PR#157" to "#157" at deeper levels without duplicating the
-// state-tinting logic. segKey is the theme key of the segment the badge sits
-// in: under Fill, the text after the badge returns to that block's text color.
+// segKey is the theme key of the segment the badge sits in. Under Fill a fg
+// tint on the colored block is unreadable, so the badge is a chip — the state
+// color as its own background with readable text — and then the block's
+// background and text color return, so content after the badge stays inside
+// the same powerline block. The single trailing ansiReset for the whole
+// segment is owned by paint(), NOT by this helper.
 func prBadgeWithPrefix(st style.Style, prefix string, number int, state, segKey string) string {
 	text := prefix + strconv.Itoa(number)
-	var colorKey string
+	var key, fallback string
 	switch strings.ToUpper(state) {
 	case "OPEN":
-		colorKey = "green"
+		key, fallback = "dirgit", "green"
 	case "MERGED":
-		colorKey = "magenta"
+		key, fallback = "repo_worktree", "magenta"
 	case "CLOSED":
-		colorKey = "red"
+		key, fallback = "video", "red"
 	default:
 		return text
 	}
-	seq := fgSeq(colorKey, true)
-	if seq == "" {
-		return text
+	color := themeColor(st, key)
+	if color == "" {
+		color = fallback
 	}
 	if st.Fill {
-		// Re-emit the segment foreground after the tinted number so that
-		// subsequent parts of the same segment retain the powerline background.
+		chip := bgSeq(color, true)
+		if chip == "" {
+			return text
+		}
+		block := themeColor(st, segKey)
 		segFG := fgSeq(themeColor(st, "fg"), true)
 		if segFG == "" {
-			segFG = fillText(themeColor(st, segKey)) // what paint chose for the block
+			segFG = fillText(block) // what paint chose for the block
 		}
-		return seq + text + segFG
+		return chip + fillText(color) + text + bgSeq(block, true) + segFG
+	}
+	seq := fgSeq(color, true)
+	if seq == "" {
+		return text
 	}
 	return seq + text + ansiReset
 }
