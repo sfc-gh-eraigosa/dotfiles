@@ -1,6 +1,7 @@
 package theme
 
 import (
+	"math"
 	"strings"
 	"testing"
 )
@@ -160,6 +161,76 @@ func TestSeriesAvoidCrit(t *testing.T) {
 		for i, c := range p.Series {
 			if c == p.Crit {
 				t.Errorf("%s.Series[%d] = %s is the crit color", name, i, c)
+			}
+		}
+	}
+}
+
+// TextOn picks black or white for text on a fill, by contrast: white on a
+// dark fill and on names / 0–15 (the terminal themes those), black on a
+// light ANSI-256 or truecolor fill, in any form gsl accepts.
+func TestTextOn(t *testing.T) {
+	for bg, want := range map[string]string{
+		"blue": "7", "4": "7", "12": "7", "": "7", "nonsense": "7",
+		"26": "7", "124": "7", "240": "7",
+		"42": "16", "214": "16", "255": "16",
+		"38;5;214": "16", "48;5;26": "7",
+		"38;2;250;250;210": "16", "48;2;20;20;60": "7", "38;2;300;0;0": "7",
+	} {
+		if got := TextOn(bg); got != want {
+			t.Errorf("TextOn(%q) = %q, want %q", bg, got, want)
+		}
+	}
+}
+
+func TestBasicName(t *testing.T) {
+	if n, ok := BasicName("4"); !ok || n != "blue" {
+		t.Errorf("BasicName(4) = %q, %v", n, ok)
+	}
+	if _, ok := BasicName("12"); ok {
+		t.Error("12 is not a basic color")
+	}
+}
+
+// "Never the crit color" means the hue, not just the string: a series color
+// within 25° of crit's hue would read as failing (dark-daltonism once held
+// 172, an orange beside its crit 208).
+func TestSeriesHueAwayFromCrit(t *testing.T) {
+	hue := func(c string) (float64, bool) {
+		r, g, b, ok := rgbOf(c)
+		if !ok {
+			return 0, false
+		}
+		mx, mn := math.Max(r, math.Max(g, b)), math.Min(r, math.Min(g, b))
+		if mx-mn < 40 { // near grey: no hue to confuse
+			return 0, false
+		}
+		var h float64
+		switch mx {
+		case r:
+			h = math.Mod((g-b)/(mx-mn), 6)
+		case g:
+			h = (b-r)/(mx-mn) + 2
+		default:
+			h = (r-g)/(mx-mn) + 4
+		}
+		return math.Mod(h*60+360, 360), true
+	}
+	for _, name := range Names() {
+		p, _ := Get(name)
+		ch, ok := hue(p.Crit)
+		if !ok {
+			continue // dark8: named basics, checked by TestSeriesAvoidCrit
+		}
+		for i, c := range p.Series {
+			sh, ok := hue(c)
+			if !ok {
+				continue
+			}
+			d := math.Abs(sh - ch)
+			d = math.Min(d, 360-d)
+			if d < 25 {
+				t.Errorf("%s.Series[%d] = %s is %.0f° from crit %s", name, i, c, d, p.Crit)
 			}
 		}
 	}
