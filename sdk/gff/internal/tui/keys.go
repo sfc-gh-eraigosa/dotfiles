@@ -67,11 +67,11 @@ func newPalette() overlay.Palette {
 	return palette{pal: style.Active()}
 }
 
-func (p palette) Dim(s string) string { return lipgloss.NewStyle().Foreground(p.pal.Grey).Render(s) }
+func (p palette) Dim(s string) string { return lipgloss.NewStyle().Foreground(p.pal.Dim).Render(s) }
 func (p palette) Bold(s string) string {
-	return lipgloss.NewStyle().Bold(true).Foreground(p.pal.Purple).Render(s)
+	return lipgloss.NewStyle().Bold(true).Foreground(p.pal.Accent).Render(s)
 }
 func (p palette) Accent(s string) string {
 	return lipgloss.NewStyle().Bold(true).Foreground(p.pal.Text).Render(s)
 }
-func (p palette) Err(s string) string { return lipgloss.NewStyle().Foreground(p.pal.Red).Render(s) }
+func (p palette) Err(s string) string { return lipgloss.NewStyle().Foreground(p.pal.Crit).Render(s) }

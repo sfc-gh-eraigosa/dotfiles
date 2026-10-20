@@ -109,6 +109,12 @@ themselves); the `:` line is the CLI's `set`/`unset` from inside the TUI.
 | `?` / F1 | help |
 | `q` | quit |
 
+**Colors** are the sdk's shared scheme ([`libs/tui/theme`](../libs/tui/theme)), the same
+in gff, fleet, gsl, mono and gdash: palettes `dark`, `light`, `dark8` and
+`dark-daltonism`, picked by `GFF_THEME` or `SDK_THEME`, else `dark8` inside tmux
+(unless `COLORFGBG` is set) or on an 8-color terminal, else your terminal's background.
+`NO_COLOR` turns color off.
+
 ## Layers & provenance — reading the LAYER column
 
 Every value gff prints was won by exactly one of five layers; `gff list`'s

@@ -135,7 +135,7 @@ func renderSourcesTable(rows []sourceRow, width int) string {
 		Headers("NAMESPACE", "URL", "COMMIT", "STATUS").
 		StyleFunc(func(rowIdx, _ int) lipgloss.Style {
 			if rowIdx == lgtable.HeaderRow {
-				return cell.Bold(true).Foreground(pal.Purple)
+				return cell.Bold(true).Foreground(pal.Accent)
 			}
 			if rowIdx >= 0 && rowIdx < len(rows) && rows[rowIdx].CurrentRepo {
 				return cell.Foreground(pal.Text)
