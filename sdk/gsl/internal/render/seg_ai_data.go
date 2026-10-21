@@ -6,7 +6,8 @@ package render
 //   level 0: <glyph> <model> <ctx%> <token-ratio> [<mcp>] [5h%] [7d%]
 //   level 1: drop 7d rate limit
 //   level 2: drop token ratio (keep ctx% only)
-//   level 3: shorten model name + drop MCP count
+//   level 3: shorten model name; MCP down to its connected count
+//   level 4: drop MCP (see mcpPart for its own ladder)
 
 import (
 	"context"
@@ -27,8 +28,7 @@ type aiData struct {
 	ctxPct        *float64
 	tokenUsed     *float64
 	tokenTotal    *float64
-	mcpActive     int // -1 = unavailable
-	mcpConfigured int
+	mcp           mcp.Status
 	rate5h        *float64
 	rate7d        *float64
 	hasPayload    bool
@@ -46,14 +46,15 @@ func (d *aiData) priority() int {
 	return config.PriorityAI
 }
 
-// detect implements detectable for AISegment. Runs all MCP subprocess I/O once.
+// detect implements detectable for AISegment. It reads the MCP cache (never
+// probes) and, when the cache is due, asks MCPSpawn for an out-of-band refresh.
 func (s *AISegment) detect(ctx context.Context) (segmentData, bool) {
 	p := s.Payload
 	if p.Model == nil && p.ContextWindow == nil && p.RateLimits == nil {
 		return nil, false
 	}
 
-	d := &aiData{hasPayload: true, mcpActive: -1, prio: s.Priority, links: s.Links}
+	d := &aiData{hasPayload: true, prio: s.Priority, links: s.Links}
 
 	if p.Model != nil && p.Model.DisplayName != nil {
 		d.modelName = *p.Model.DisplayName
@@ -75,15 +76,12 @@ func (s *AISegment) detect(ctx context.Context) (segmentData, bool) {
 		}
 	}
 
-	// MCP detection (subprocess I/O happens here).
+	// MCP: cache only (mcp.Get never spawns); a due refresh runs out of band.
 	if s.Cwd != "" {
-		if n, err := mcp.ConfiguredCount(s.Cwd); err == nil {
-			d.mcpConfigured = n
-			if s.MCP != nil {
-				if active, aErr := mcp.ActiveCount(ctx, s.MCP, s.MCPOpts); aErr == nil {
-					d.mcpActive = active
-				}
-			}
+		st, _ := mcp.Get(ctx, s.Cwd, s.MCPOpts)
+		d.mcp = st
+		if st.RefreshDue && s.MCPSpawn != nil {
+			s.spawnOnce.Do(func() { _ = s.MCPSpawn(s.Cwd) })
 		}
 	}
 
@@ -151,20 +149,14 @@ func (d *aiData) formatLinked(st style.Style, level int) (string, string, []Link
 		sb.linked(ctx, usage)
 	}
 
-	// ── MCP count (dropped at level 3) ─────────────────────────────────────
-	if level < 3 && (d.mcpConfigured > 0 || d.mcpActive > 0) {
+	// ── MCP health (its own ladder; see mcpPart) ────────────────────────────
+	if part := mcpPart(d.mcp, level); part != "" {
 		sep()
 		if g := glyph(st, "mcp"); g != "" {
 			sb.write(g)
 			sb.write(" ")
 		}
-		if d.mcpActive >= 0 {
-			sb.write(strconv.Itoa(d.mcpActive))
-			sb.write("/")
-			sb.write(strconv.Itoa(d.mcpConfigured))
-		} else {
-			sb.write(strconv.Itoa(d.mcpConfigured))
-		}
+		sb.write(part)
 	}
 
 	// ── Rate limits ──────────────────────────────────────────────────────────
@@ -182,6 +174,50 @@ func (d *aiData) formatLinked(st style.Style, level int) (string, string, []Link
 		return "", "", nil
 	}
 	return sb.String(), "ai", sb.spans
+}
+
+// mcpPart is the MCP health for a compaction level (plan F8):
+//
+//	L0 "6✓ 5✗ 1!" · L1 "6✓ 5✗" · L2 "6/12" · L3 "6" · L4 dropped
+//
+// Zero parts are left out of the breakdown. The denominator is the larger of
+// the configured count and what the probe saw, since claude.ai connectors are
+// in no config file — so it is never below the numerator and never 0. A
+// status never probed (cold cache) shows "?/N" until L3, and nothing at all
+// is shown for an empty status.
+func mcpPart(s mcp.Status, level int) string {
+	probed := s.Connected + s.Failed + s.NeedsAuth
+	total := max(s.Configured, probed)
+	if total == 0 || level >= 4 {
+		return ""
+	}
+	if s.FetchedAt.IsZero() {
+		if level >= 3 {
+			return ""
+		}
+		return "?/" + strconv.Itoa(total)
+	}
+	switch level {
+	case 0, 1:
+		var parts []string
+		add := func(n int, mark string) {
+			if n > 0 {
+				parts = append(parts, strconv.Itoa(n)+mark)
+			}
+		}
+		add(s.Connected, "✓")
+		add(s.Failed, "✗")
+		if level == 0 {
+			add(s.NeedsAuth, "!")
+		}
+		if len(parts) == 0 {
+			return "0/" + strconv.Itoa(total)
+		}
+		return strings.Join(parts, " ")
+	case 2:
+		return strconv.Itoa(s.Connected) + "/" + strconv.Itoa(total)
+	}
+	return strconv.Itoa(s.Connected)
 }
 
 // modelBudget is the display-width cap for a shortened model name.

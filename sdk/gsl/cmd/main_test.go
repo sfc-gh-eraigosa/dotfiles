@@ -24,6 +24,7 @@ func TestMain(m *testing.M) {
 		videoSpawnCalls.Add(1)
 		return nil
 	}
+	mcpSpawn = func(string) error { return nil } // never re-exec cmd.test
 	state, err := os.MkdirTemp("", "gsl-cmd-test-state-")
 	if err != nil {
 		panic(err)

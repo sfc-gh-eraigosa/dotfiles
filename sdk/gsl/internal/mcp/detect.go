@@ -2,32 +2,33 @@ package mcp
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 )
 
-// claudeConfig is the minimal schema we need from ~/.claude.json.
-// Only mcpServers and projects are read; all other keys are ignored.
-type claudeConfig struct {
-	// McpServers is the global list of configured MCP servers.
-	McpServers map[string]json.RawMessage `json:"mcpServers"`
-	// Projects maps absolute project directory paths to their per-project
-	// settings. We only read the inner mcpServers sub-object.
-	Projects map[string]claudeProject `json:"projects"`
+// detect.go — the configured-server scan (plan F6): which MCP servers are
+// configured for a working directory, read from config files only. No
+// subprocess, so it is safe on the render path.
+
+// claudeDir is the Claude Code config directory: $CLAUDE_CONFIG_DIR, else
+// ~/.claude. "" when neither resolves.
+func claudeDir() string {
+	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
+		return dir
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".claude")
 }
 
-type claudeProject struct {
-	McpServers map[string]json.RawMessage `json:"mcpServers"`
-}
-
-// mcpJSON is the minimal schema for .mcp.json (per-project, in cwd).
-type mcpJSON struct {
-	McpServers map[string]json.RawMessage `json:"mcpServers"`
-}
-
-// claudeConfigPath returns the path to ~/.claude.json, honoring
-// CLAUDE_CONFIG_DIR if set.
-func claudeConfigPath() string {
+// claudeJSONPath is ~/.claude.json, or $CLAUDE_CONFIG_DIR/.claude.json.
+func claudeJSONPath() string {
 	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
 		return filepath.Join(dir, ".claude.json")
 	}
@@ -38,93 +39,171 @@ func claudeConfigPath() string {
 	return filepath.Join(home, ".claude.json")
 }
 
-// ConfiguredCount counts how many MCP servers are configured for the given
-// working directory by reading two JSON config files — no subprocess is
-// involved.
-//
-// Sources:
-//  1. ~/.claude.json (or $CLAUDE_CONFIG_DIR/.claude.json):
-//     - Global mcpServers: keys at .mcpServers
-//     - Per-project mcpServers: keys at .projects[cwd].mcpServers
-//  2. .mcp.json inside cwd: keys at .mcpServers
-//
-// Deduplication policy: counts are SUMMED across the three sources without
-// deduplication.  This keeps the logic simple and avoids the need to compare
-// heterogeneous server-definition objects; callers should treat the result as
-// an upper bound rather than a precise unique count.  The three sources
-// typically don't overlap in practice because global servers, per-project
-// overrides, and .mcp.json serve different scopes.
-//
-// Missing files contribute 0 and are NOT treated as errors.  Only genuine
-// parse errors (non-empty, malformed JSON) are propagated.
-func ConfiguredCount(cwd string) (int, error) {
-	total := 0
-
-	// ── Source 1: ~/.claude.json ──────────────────────────────────────────────
-	cfgPath := claudeConfigPath()
-	if cfgPath != "" {
-		n, err := countClaudeJSON(cfgPath, cwd)
-		if err != nil {
-			return 0, err
-		}
-		total += n
-	}
-
-	// ── Source 2: <cwd>/.mcp.json ─────────────────────────────────────────────
-	mcpPath := filepath.Join(cwd, ".mcp.json")
-	n, err := countMcpJSON(mcpPath)
-	if err != nil {
-		return 0, err
-	}
-	total += n
-
-	return total, nil
+// approval is the .mcp.json gate: settings keys that decide which project
+// (.mcp.json) servers Claude Code actually loads.
+type approval struct {
+	EnableAll *bool    `json:"enableAllProjectMcpServers"`
+	Enabled   []string `json:"enabledMcpjsonServers"`
+	Disabled  []string `json:"disabledMcpjsonServers"`
 }
 
-// countClaudeJSON reads ~/.claude.json (or whatever path is given) and
-// returns the sum of global mcpServers keys plus per-cwd project
-// mcpServers keys.  Returns (0, nil) when the file does not exist.
-func countClaudeJSON(path, cwd string) (int, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return 0, nil
-		}
-		return 0, err
-	}
-	if len(data) == 0 {
-		return 0, nil
-	}
-
-	var cfg claudeConfig
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return 0, err
-	}
-
-	count := len(cfg.McpServers)
-	if proj, ok := cfg.Projects[cwd]; ok {
-		count += len(proj.McpServers)
-	}
-	return count, nil
+type claudeJSON struct {
+	McpServers map[string]json.RawMessage `json:"mcpServers"`
+	Projects   map[string]struct {
+		McpServers map[string]json.RawMessage `json:"mcpServers"`
+		approval
+	} `json:"projects"`
 }
 
-// countMcpJSON reads a .mcp.json file and returns the number of keys under
-// mcpServers.  Returns (0, nil) when the file does not exist.
-func countMcpJSON(path string) (int, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return 0, nil
-		}
-		return 0, err
+type settingsJSON struct {
+	approval
+	EnabledPlugins map[string]bool `json:"enabledPlugins"`
+}
+
+// readJSON decodes path into v. A missing or empty file is (false, nil): a
+// config that does not exist contributes nothing and is not an error.
+func readJSON(path string, v any) (bool, error) {
+	if path == "" {
+		return false, nil
 	}
-	if len(data) == 0 {
-		return 0, nil
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) || (err == nil && len(strings.TrimSpace(string(data))) == 0) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if err := json.Unmarshal(data, v); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// mcpJSONServers reads a .mcp.json in either shape: {"mcpServers": {...}} or
+// the flat {"<name>": {...}} some plugins ship.
+func mcpJSONServers(path string) ([]string, error) {
+	var raw map[string]json.RawMessage
+	if ok, err := readJSON(path, &raw); !ok || err != nil {
+		return nil, err
+	}
+	if inner, ok := raw["mcpServers"]; ok {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(inner, &m); err != nil {
+			return nil, err
+		}
+		raw = m
+	}
+	var out []string
+	for name, v := range raw {
+		if t := strings.TrimSpace(string(v)); strings.HasPrefix(t, "{") {
+			out = append(out, name)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// ConfiguredServers returns the DE-DUPLICATED set of servers configured for
+// cwd, resolved across every scope (plan F6):
+//   - a name in several scopes counts once, at its highest scope: Local
+//     (<cwd>/.mcp.json) > Project (~/.claude.json projects[cwd]) > User
+//     (~/.claude.json) > Plugin;
+//   - Local servers pass the approval gate: names in disabledMcpjsonServers
+//     are dropped; unless enableAllProjectMcpServers is on, a non-empty
+//     enabledMcpjsonServers list is the allow-list. The keys are read from
+//     ~/.claude.json's project entry, <cwd>/.claude/settings{,.local}.json
+//     and the user settings.json;
+//   - Plugin servers come from <claude dir>/plugins/cache/<market>/<plugin>/
+//     <version>/.mcp.json for plugins enabled in the user settings.json,
+//     under the CLI's own names, "plugin:<plugin>:<server>".
+//
+// A missing config file contributes nothing and is NOT an error; malformed
+// JSON is.
+func ConfiguredServers(cwd string) ([]ServerStatus, error) {
+	found := map[string]Scope{}
+	add := func(name string, sc Scope) {
+		if cur, ok := found[name]; !ok || sc < cur { // lower Scope value = higher precedence
+			found[name] = sc
+		}
 	}
 
-	var m mcpJSON
-	if err := json.Unmarshal(data, &m); err != nil {
-		return 0, err
+	var cj claudeJSON
+	if _, err := readJSON(claudeJSONPath(), &cj); err != nil {
+		return nil, err
 	}
-	return len(m.McpServers), nil
+	for name := range cj.McpServers {
+		add(name, ScopeUser)
+	}
+	gate := approval{}
+	merge := func(a approval) {
+		if a.EnableAll != nil {
+			gate.EnableAll = a.EnableAll
+		}
+		gate.Enabled = append(gate.Enabled, a.Enabled...)
+		gate.Disabled = append(gate.Disabled, a.Disabled...)
+	}
+	if proj, ok := cj.Projects[cwd]; ok {
+		for name := range proj.McpServers {
+			add(name, ScopeProject)
+		}
+		merge(proj.approval)
+	}
+
+	var user settingsJSON
+	if _, err := readJSON(filepath.Join(claudeDir(), "settings.json"), &user); err != nil {
+		return nil, err
+	}
+	merge(user.approval)
+	for _, f := range []string{"settings.json", "settings.local.json"} {
+		var ps settingsJSON
+		if _, err := readJSON(filepath.Join(cwd, ".claude", f), &ps); err != nil {
+			return nil, err
+		}
+		merge(ps.approval)
+	}
+
+	local, err := mcpJSONServers(filepath.Join(cwd, ".mcp.json"))
+	if err != nil {
+		return nil, err
+	}
+	disabled, enabled := set(gate.Disabled), set(gate.Enabled)
+	allowAll := (gate.EnableAll != nil && *gate.EnableAll) || len(enabled) == 0
+	for _, name := range local {
+		if disabled[name] || (!allowAll && !enabled[name]) {
+			continue
+		}
+		add(name, ScopeLocal)
+	}
+
+	for key, on := range user.EnabledPlugins {
+		plugin, market, ok := strings.Cut(key, "@")
+		if !on || !ok {
+			continue
+		}
+		versions, _ := filepath.Glob(filepath.Join(claudeDir(), "plugins", "cache", market, plugin, "*", ".mcp.json"))
+		for _, path := range versions {
+			servers, err := mcpJSONServers(path)
+			if err != nil {
+				continue // one broken plugin cache must not hide the rest
+			}
+			for _, name := range servers {
+				add("plugin:"+plugin+":"+name, ScopePlugin)
+			}
+		}
+	}
+
+	out := make([]ServerStatus, 0, len(found))
+	for name, sc := range found {
+		out = append(out, ServerStatus{Name: name, Scope: sc})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+func set(xs []string) map[string]bool {
+	m := make(map[string]bool, len(xs))
+	for _, x := range xs {
+		m[x] = true
+	}
+	return m
 }

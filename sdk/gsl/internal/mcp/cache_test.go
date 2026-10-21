@@ -1,257 +1,201 @@
-package mcp_test
+package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp/fake"
 )
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
+// clock is a settable time source.
+type clock struct{ t time.Time }
 
-// writeCacheFile writes a cache file with the given count and timestamp age.
-// A negative age means the entry is that many seconds in the past (stale).
-func writeCacheFile(t *testing.T, path string, count int, age time.Duration) {
+func (c *clock) now() time.Time      { return c.t }
+func (c *clock) add(d time.Duration) { c.t = c.t.Add(d) }
+
+func testOpts(t *testing.T) (Options, *clock) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
-	}
-	ts := time.Now().Add(-age).Unix()
-	data, _ := json.Marshal(map[string]any{"count": count, "ts": ts})
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		t.Fatalf("WriteFile(%s): %v", path, err)
-	}
+	t.Setenv("HOME", t.TempDir()) // no real ~/.claude.json in Configured
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	c := &clock{t: time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)}
+	return Options{CacheDir: t.TempDir(), TTL: time.Minute, Now: c.now}, c
 }
 
-// opts returns an ActiveCountOptions pre-configured for a test:
-//   - CacheFile points to a temp directory so tests don't share state.
-//   - Now is real time.Now() unless overridden by the caller.
-func opts(t *testing.T) (mcp.ActiveCountOptions, string) {
-	dir := t.TempDir()
-	cacheFile := filepath.Join(dir, "gsl", "mcp.json")
-	return mcp.ActiveCountOptions{CacheFile: cacheFile}, cacheFile
+func listOutput(connected, failed int) []byte {
+	var b strings.Builder
+	b.WriteString("Checking MCP server health…\n\n")
+	for i := 0; i < connected; i++ {
+		b.WriteString("c" + string(rune('a'+i)) + ": https://x.invalid - ✔ Connected\n")
+	}
+	for i := 0; i < failed; i++ {
+		b.WriteString("f" + string(rune('a'+i)) + ": https://x.invalid - ✘ Failed to connect\n")
+	}
+	return []byte(b.String())
 }
 
-// ─── parsing ──────────────────────────────────────────────────────────────────
-
-func TestParseConnectedCount_Mixed(t *testing.T) {
-	// We test via ActiveCount by injecting scripted Runner output.
-	o, _ := opts(t)
-	r := &fake.Runner{
-		Script: []fake.Response{
-			{
-				// 3 connected, 2 failed — as produced by `claude mcp list`.
-				Stdout: []byte(
-					"claude.ai Slack: https://mcp.slack.com/mcp - ✓ Connected\n" +
-						"claude.ai Linear: https://mcp.linear.app/mcp - ✓ Connected\n" +
-						"plugin:github:github: https://api.githubcopilot.com/mcp/ (HTTP) - ✗ Failed to connect\n" +
-						"plugin:deploy-on-aws:awsiac: uvx awslabs.aws-iac-mcp-server@latest - ✗ Failed to connect\n" +
-						"claude.ai Google Drive: https://drivemcp.googleapis.com/mcp/v1 - ✓ Connected\n",
-				),
-			},
-		},
+// E12: Get never spawns — not even on a cold cache. A `claude` on PATH that
+// would leave a marker proves nothing ran.
+func TestGet_NeverSpawns(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script stand-in")
 	}
-	count, err := mcp.ActiveCount(context.Background(), r, o)
+	o, _ := testOpts(t)
+	bin := t.TempDir()
+	marker := filepath.Join(t.TempDir(), "ran")
+	script := "#!/bin/sh\ntouch " + marker + "\n"
+	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte(script), 0o755); err != nil { //nolint:gosec // test stub must be executable
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	s, err := Get(context.Background(), t.TempDir(), o)
 	if err != nil {
-		t.Fatalf("ActiveCount: unexpected error: %v", err)
+		t.Fatal(err)
 	}
-	if count != 3 {
-		t.Errorf("ActiveCount = %d; want 3 connected", count)
+	if !s.Stale || !s.RefreshDue {
+		t.Errorf("cold cache: Stale=%v RefreshDue=%v, want both true", s.Stale, s.RefreshDue)
 	}
-}
-
-// TestParseConnectedCount_CheckmarkInName guards against the false-positive
-// where a "✓" embedded in a server name (or any non-status position) inflates
-// the count. Only the "✓ Connected" status token in the status position counts.
-func TestParseConnectedCount_CheckmarkInName(t *testing.T) {
-	o, _ := opts(t)
-	r := &fake.Runner{
-		Script: []fake.Response{
-			{
-				// First server has a "✓" in its NAME but is actually FAILED.
-				// Second server is genuinely connected. Want count == 1.
-				Stdout: []byte(
-					"my✓server: https://example.com/mcp - ✗ Failed to connect\n" +
-						"real-server: https://example.com/mcp - ✓ Connected\n",
-				),
-			},
-		},
-	}
-	count, err := mcp.ActiveCount(context.Background(), r, o)
-	if err != nil {
-		t.Fatalf("ActiveCount: unexpected error: %v", err)
-	}
-	if count != 1 {
-		t.Errorf("ActiveCount = %d; want 1 (✓ in a name must not be counted)", count)
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("Get ran claude")
 	}
 }
 
-func TestActiveCount_AllConnected(t *testing.T) {
-	o, _ := opts(t)
-	r := &fake.Runner{
-		Script: []fake.Response{
-			{Stdout: []byte("server-a: url-a - ✓ Connected\nserver-b: url-b - ✓ Connected\n")},
-		},
+// E11: the cache is keyed by cwd — repo A's count is never served to repo B.
+func TestStatus_CacheKeyedByCwd(t *testing.T) {
+	o, _ := testOpts(t)
+	a, b := t.TempDir(), t.TempDir()
+	r := &fake.Runner{Script: []fake.Response{{Stdout: listOutput(5, 0)}, {Stdout: listOutput(1, 0)}}}
+	if err := Refresh(context.Background(), r, a, o); err != nil {
+		t.Fatal(err)
 	}
-	count, err := mcp.ActiveCount(context.Background(), r, o)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err := Refresh(context.Background(), r, b, o); err != nil {
+		t.Fatal(err)
 	}
-	if count != 2 {
-		t.Errorf("count = %d; want 2", count)
+	sa, _ := Get(context.Background(), a, o)
+	sb, _ := Get(context.Background(), b, o)
+	if sa.Connected != 5 || sb.Connected != 1 {
+		t.Fatalf("A=%d B=%d, want 5 and 1", sa.Connected, sb.Connected)
 	}
-}
-
-func TestActiveCount_AllFailed(t *testing.T) {
-	o, _ := opts(t)
-	r := &fake.Runner{
-		Script: []fake.Response{
-			{Stdout: []byte("server-a: url-a - ✗ Failed to connect\nserver-b: url-b - ✗ Failed to connect\n")},
-		},
-	}
-	count, err := mcp.ActiveCount(context.Background(), r, o)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if count != 0 {
-		t.Errorf("count = %d; want 0", count)
+	if sb.Stale || sb.RefreshDue {
+		t.Errorf("fresh entry: Stale=%v RefreshDue=%v", sb.Stale, sb.RefreshDue)
 	}
 }
 
-// ─── cache hit (spy test) ─────────────────────────────────────────────────────
-
-// TestActiveCount_CacheHit_NoSubprocess is the key spy test:
-// when a fresh cache entry exists (age < 60s), ActiveCount MUST NOT call the
-// Runner at all.  We assert Runner.CallCount() == 0.
-func TestActiveCount_CacheHit_NoSubprocess(t *testing.T) {
-	o, cacheFile := opts(t)
-
-	// Pre-write a FRESH cache entry (5 seconds old, well under 60s TTL).
-	writeCacheFile(t, cacheFile, 7, 5*time.Second)
-
-	r := &fake.Runner{} // scripted to return nothing; any call would panic the test
-
-	count, err := mcp.ActiveCount(context.Background(), r, o)
-	if err != nil {
-		t.Fatalf("ActiveCount with fresh cache: unexpected error: %v", err)
+// An expired entry is still served (stale beats nothing) and asks for a refresh.
+func TestGet_StaleServedAndDue(t *testing.T) {
+	o, c := testOpts(t)
+	cwd := t.TempDir()
+	if err := Refresh(context.Background(), &fake.Runner{Default: fake.Response{Stdout: listOutput(3, 1)}}, cwd, o); err != nil {
+		t.Fatal(err)
 	}
-	if count != 7 {
-		t.Errorf("count = %d; want 7 (from cache)", count)
-	}
-
-	// THE CRITICAL SPY ASSERTION: zero subprocess calls.
-	if calls := r.CallCount(); calls != 0 {
-		t.Errorf("Runner.CallCount() = %d; want 0 (cache hit must not call the Runner)", calls)
+	c.add(2 * time.Minute)
+	s, _ := Get(context.Background(), cwd, o)
+	if s.Connected != 3 || s.Failed != 1 || !s.Stale || !s.RefreshDue {
+		t.Fatalf("stale entry = %+v", s)
 	}
 }
 
-// ─── stale cache ─────────────────────────────────────────────────────────────
-
-func TestActiveCount_StaleCache_CallsRunner(t *testing.T) {
-	o, cacheFile := opts(t)
-
-	// Write a STALE cache entry (90 seconds old, over 60s TTL).
-	writeCacheFile(t, cacheFile, 42, 90*time.Second)
-
-	r := &fake.Runner{
-		Script: []fake.Response{
-			{Stdout: []byte("server: url - ✓ Connected\n")},
-		},
+// Failures are cached negatively with exponential backoff: no refresh is due
+// until the retry time, and each failure doubles it. The last good status is
+// kept. Force (the `gsl mcp refresh` verb) ignores the backoff.
+func TestRefresh_NegativeCacheBackoff(t *testing.T) {
+	o, c := testOpts(t)
+	cwd := t.TempDir()
+	ctx := context.Background()
+	if err := Refresh(ctx, &fake.Runner{Default: fake.Response{Stdout: listOutput(2, 0)}}, cwd, o); err != nil {
+		t.Fatal(err)
 	}
-
-	count, err := mcp.ActiveCount(context.Background(), r, o)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	c.add(2 * time.Minute) // stale
+	bad := &fake.Runner{Default: fake.Response{Err: errors.New("claude: not found")}}
+	if err := Refresh(ctx, bad, cwd, o); err == nil {
+		t.Fatal("a failed probe must return its error")
 	}
-	if count != 1 {
-		t.Errorf("count = %d; want 1 (fresh from runner)", count)
+	s, _ := Get(ctx, cwd, o)
+	if s.Connected != 2 || !s.Stale || s.RefreshDue {
+		t.Fatalf("after a failure: %+v (want last good 2, stale, not due)", s)
 	}
-	if calls := r.CallCount(); calls != 1 {
-		t.Errorf("Runner.CallCount() = %d; want 1 (stale cache must invoke runner)", calls)
+	c.add(backoff(1) + time.Second)
+	if s, _ = Get(ctx, cwd, o); !s.RefreshDue {
+		t.Fatal("refresh not due after the first backoff")
 	}
-}
-
-// ─── runner timeout / error ───────────────────────────────────────────────────
-
-// TestActiveCount_RunnerTimeout_FallbackToCachedValue: when the runner times
-// out and there IS a cached (even stale) value, return that value, no error.
-func TestActiveCount_RunnerTimeout_FallbackToCachedValue(t *testing.T) {
-	o, cacheFile := opts(t)
-
-	// Write a stale-but-present cache entry.
-	writeCacheFile(t, cacheFile, 5, 120*time.Second)
-
-	// Runner is scripted to return an error (simulating timeout).
-	r := &fake.Runner{
-		Script: []fake.Response{
-			{Err: errors.New("context deadline exceeded")},
-		},
+	_ = Refresh(ctx, bad, cwd, o)
+	c.add(backoff(1) + time.Second)
+	if s, _ = Get(ctx, cwd, o); s.RefreshDue {
+		t.Fatal("second failure did not double the backoff")
 	}
-
-	count, err := mcp.ActiveCount(context.Background(), r, o)
-	if err != nil {
-		t.Fatalf("expected fallback to cached value on runner error, got error: %v", err)
+	calls := len(bad.Calls)
+	if err := Refresh(ctx, bad, cwd, o); err != nil || len(bad.Calls) != calls {
+		t.Fatalf("Refresh during backoff ran the probe (err=%v)", err)
 	}
-	if count != 5 {
-		t.Errorf("count = %d; want 5 (stale cache fallback)", count)
+	o.Force = true
+	_ = Refresh(ctx, bad, cwd, o)
+	if len(bad.Calls) != calls+1 {
+		t.Fatal("Force did not bypass the backoff")
+	}
+	if backoff(1) != 30*time.Second || backoff(2) != time.Minute || backoff(20) != 30*time.Minute {
+		t.Errorf("backoff = %v %v %v", backoff(1), backoff(2), backoff(20))
 	}
 }
 
-// TestActiveCount_RunnerTimeout_NoCache_ReturnsError: when the runner fails
-// and there is NO cached value at all, return ErrNoCache.
-func TestActiveCount_RunnerTimeout_NoCache_ReturnsError(t *testing.T) {
-	o, _ := opts(t) // no cache file written
-
-	r := &fake.Runner{
-		Script: []fake.Response{
-			{Err: errors.New("context deadline exceeded")},
-		},
+// Single-flight: while a refresh holds the lock, another does not probe and no
+// refresh is due; a lock left by a crashed refresh expires.
+func TestRefresh_SingleFlight(t *testing.T) {
+	o, _ := testOpts(t)
+	cwd := t.TempDir()
+	lock := filepath.Join(o.CacheDir, key(cwd)+".lock")
+	if err := os.WriteFile(lock, nil, 0o600); err != nil {
+		t.Fatal(err)
 	}
-
-	_, err := mcp.ActiveCount(context.Background(), r, o)
-	if !errors.Is(err, mcp.ErrNoCache) {
-		t.Errorf("err = %v; want mcp.ErrNoCache", err)
+	r := &fake.Runner{Default: fake.Response{Stdout: listOutput(1, 0)}}
+	if err := Refresh(context.Background(), r, cwd, o); err != nil || len(r.Calls) != 0 {
+		t.Fatalf("Refresh with the lock held: err=%v calls=%d", err, len(r.Calls))
+	}
+	if s, _ := Get(context.Background(), cwd, o); s.RefreshDue {
+		t.Error("a refresh is in flight: none should be due")
+	}
+	old := time.Now().Add(-10 * time.Minute)
+	if err := os.Chtimes(lock, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := Refresh(context.Background(), r, cwd, o); err != nil || len(r.Calls) != 1 {
+		t.Fatalf("a stale lock must not block forever: err=%v calls=%d", err, len(r.Calls))
+	}
+	if _, err := os.Stat(lock); err == nil {
+		t.Error("Refresh left its lock behind")
 	}
 }
 
-// ─── cache persistence ────────────────────────────────────────────────────────
+// Configured comes from the config scan on every Get (cheap file reads), and
+// the probe's servers survive the round trip.
+func TestGet_ConfiguredAndServers(t *testing.T) {
+	o, _ := testOpts(t)
+	cwd := t.TempDir()
+	if err := os.WriteFile(filepath.Join(cwd, ".mcp.json"), []byte(`{"mcpServers":{"a":{},"b":{}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := os.ReadFile("testdata/mcp-list-real.txt")
+	if err := Refresh(context.Background(), &fake.Runner{Default: fake.Response{Stdout: out}}, cwd, o); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := Get(context.Background(), cwd, o)
+	if s.Configured != 2 || s.Connected != 13 || len(s.Servers) != 66 || s.FetchedAt.IsZero() {
+		t.Fatalf("Get = configured %d connected %d servers %d fetched %v", s.Configured, s.Connected, len(s.Servers), s.FetchedAt)
+	}
+}
 
-// TestActiveCount_WritesCache verifies that a successful runner call writes a
-// cache file that a subsequent call reads (proving the write path works).
-func TestActiveCount_WritesCache(t *testing.T) {
-	o, _ := opts(t)
-
-	r := &fake.Runner{
-		Script: []fake.Response{
-			{Stdout: []byte("s1: u1 - ✓ Connected\ns2: u2 - ✓ Connected\n")},
-		},
+// The probe runs `claude mcp list`, exactly.
+func TestRefresh_RunsClaudeMCPList(t *testing.T) {
+	o, _ := testOpts(t)
+	r := &fake.Runner{Default: fake.Response{Stdout: listOutput(1, 0)}}
+	if err := Refresh(context.Background(), r, t.TempDir(), o); err != nil {
+		t.Fatal(err)
 	}
-
-	// First call: cache cold → runner invoked → cache written.
-	count, err := mcp.ActiveCount(context.Background(), r, o)
-	if err != nil {
-		t.Fatalf("first call error: %v", err)
-	}
-	if count != 2 {
-		t.Errorf("first call count = %d; want 2", count)
-	}
-
-	// Second call with a fresh runner (no scripted responses): must hit cache.
-	r2 := &fake.Runner{}
-	count2, err := mcp.ActiveCount(context.Background(), r2, o)
-	if err != nil {
-		t.Fatalf("second call error: %v", err)
-	}
-	if count2 != 2 {
-		t.Errorf("second call count = %d; want 2 (from cache)", count2)
-	}
-	if calls := r2.CallCount(); calls != 0 {
-		t.Errorf("second call Runner.CallCount() = %d; want 0 (should be cache hit)", calls)
+	if len(r.Calls) != 1 || r.Calls[0].Name != "claude" || strings.Join(r.Calls[0].Args, " ") != "mcp list" {
+		t.Fatalf("calls = %+v", r.Calls)
 	}
 }

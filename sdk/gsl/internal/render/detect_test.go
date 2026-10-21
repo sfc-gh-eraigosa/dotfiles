@@ -13,7 +13,6 @@ package render
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -21,7 +20,6 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 	gitfake "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git/fake"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp"
-	mcpfake "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp/fake"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/term"
 )
@@ -60,9 +58,6 @@ func TestDetect_RunsOnce(t *testing.T) {
 	}
 
 	writeMcpJSON(t, dir, 2)
-	mcpRunner := &mcpfake.Runner{Default: mcpfake.Response{
-		Stdout: []byte("a: x - ✓ Connected\nb: y - ✗ no\n"),
-	}}
 
 	st := emojiStyleFixture()
 	cfg := config.Default()
@@ -73,8 +68,7 @@ func TestDetect_RunsOnce(t *testing.T) {
 		Branch:       "feature",
 		RegistryPath: registryPath(),
 		Git:          cg,
-		MCP:          mcpRunner,
-		MCPOpts:      mcp.ActiveCountOptions{CacheFile: filepath.Join(dir, "ac.json")},
+		MCPOpts:      mcpOneOfTwo(),
 		Clock:        fixedClock(),
 	}
 	segs := BuildSegments(cfg, deps)
@@ -156,7 +150,7 @@ func TestAISegmentData_Levels(t *testing.T) {
 	st := emojiStyleFixture()
 
 	// Build one AISegment (no MCP to keep things simple).
-	seg := NewAISegment(p, "", nil, mcp.ActiveCountOptions{})
+	seg := NewAISegment(p, "", mcp.Options{})
 	ctx := context.Background()
 
 	data, ok := seg.detect(ctx)

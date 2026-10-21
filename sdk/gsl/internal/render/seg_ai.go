@@ -3,6 +3,7 @@ package render
 import (
 	"context"
 	"strconv"
+	"sync"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload"
@@ -20,14 +21,15 @@ import (
 type AISegment struct {
 	// Payload is the parsed Claude stdin payload (may be the empty struct).
 	Payload payload.Payload
-	// Cwd is the working directory used for mcp.ConfiguredCount. When empty,
-	// MCP detection is skipped.
+	// Cwd keys the MCP cache and the configured-server scan. When empty, the
+	// MCP part is skipped.
 	Cwd string
-	// MCP is the injected mcp.Runner used by mcp.ActiveCount. When nil, the
-	// active count is omitted (configured count may still render).
-	MCP mcp.Runner
-	// MCPOpts is forwarded to mcp.ActiveCount (cache file / clock injection).
-	MCPOpts mcp.ActiveCountOptions
+	// MCPOpts is forwarded to mcp.Get (cache dir / TTL / clock injection).
+	MCPOpts mcp.Options
+	// MCPSpawn, when non-nil, is called (at most once) with Cwd when the
+	// cached status is due a refresh. The render never probes itself.
+	MCPSpawn  func(cwd string) error
+	spawnOnce sync.Once
 	// Priority is the DROP priority used by the fit loop (config.Segment.Priority,
 	// or the built-in default for this type when unset). It is independent of the
 	// segment's position in the line.
@@ -39,8 +41,8 @@ type AISegment struct {
 }
 
 // NewAISegment builds an AISegment.
-func NewAISegment(p payload.Payload, cwd string, mcpRunner mcp.Runner, mcpOpts mcp.ActiveCountOptions) *AISegment {
-	return &AISegment{Payload: p, Cwd: cwd, MCP: mcpRunner, MCPOpts: mcpOpts}
+func NewAISegment(p payload.Payload, cwd string, mcpOpts mcp.Options) *AISegment {
+	return &AISegment{Payload: p, Cwd: cwd, MCPOpts: mcpOpts}
 }
 
 // Render implements Segment. It delegates to RenderLinked and discards the

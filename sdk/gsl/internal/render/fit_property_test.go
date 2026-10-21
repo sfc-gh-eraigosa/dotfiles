@@ -18,6 +18,7 @@ import (
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/term"
 )
@@ -140,8 +141,7 @@ func propAI(f fitFixture) segmentData {
 		ctxPct:        f64ptr(42),
 		tokenUsed:     f64ptr(84000),
 		tokenTotal:    f64ptr(200000),
-		mcpActive:     6,
-		mcpConfigured: 12,
+		mcp:           mcp.Status{Configured: 12, Connected: 6, FetchedAt: time.Unix(1, 0)},
 		rate5h:        f64ptr(80),
 		rate7d:        f64ptr(15),
 		hasPayload:    true,
@@ -310,7 +310,7 @@ func TestFit_DropOrderIndependentOfConfigOrder(t *testing.T) {
 		return []segmentData{
 			&dirGitData{cwd: "/x/Da", home: "/x"},                                                          // "Da"
 			&repoData{themeKey: "repo_root", indicatorKey: "repo_root", label: "Rb"},                       // "Rb"
-			&aiData{hasPayload: true, modelName: "Ac", mcpActive: -1},                                      // "Ac"
+			&aiData{hasPayload: true, modelName: "Ac"},                                      // "Ac"
 			&timeData{t: time.Date(2026, 7, 11, 0, 0, 0, 0, time.UTC), timeLayout: "Td", dateLayout: "Xy"}, // "Td"
 		}
 	}

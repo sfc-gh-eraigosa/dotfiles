@@ -29,6 +29,10 @@ import (
 // which spawns, with nothing reaping the detached children.
 var videoSpawn = video.SpawnRefresher
 
+// mcpSpawn starts the detached MCP refresh (mcp.SpawnRefresh) when the cached
+// status is due one; a variable so the cmd tests can stub it (TestMain).
+var mcpSpawn = mcp.SpawnRefresh
+
 // deriveToolCtx determines the host-tool context string from the payload and
 // environment, for use with theme.Resolve.
 //
@@ -123,7 +127,6 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 
 	gitRunner := git.NewSystemRunner()
 	ghRunner := gh.NewSystemRunner()
-	mcpRunner := mcp.NewSystemRunner()
 
 	// Determine cwd: prefer the caller-supplied hint, fall back to os.Getwd.
 	cwd := cwdHint
@@ -208,8 +211,8 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 		RegistryPath: repo.DefaultRegistryPath(),
 		Git:          gitRunner,
 		GH:           ghRunner,
-		MCP:          mcpRunner,
-		MCPOpts:      mcp.ActiveCountOptions{},
+		MCPOpts:      mcp.Options{},
+		MCPSpawn:     mcpSpawn,
 		Clock:        time.Now,
 		Links:        buildLinks(cfg.EffectiveLinks(), linkFlags, remoteURL, p.IsAntigravity()),
 		PR:           prInfo,

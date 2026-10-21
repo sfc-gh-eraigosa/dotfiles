@@ -10,7 +10,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	ghfake "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh/fake"
 	gitfake "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git/fake"
-	mcpfake "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp/fake"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp"
@@ -240,6 +239,12 @@ func (m Model) buildConfig() config.Config {
 // Fixture host for the host segment: the preview never shows the real machine.
 const fixtureHostKind = "linux"
 
+// fixtureMCP is the preview's MCP health: hermetic (no cache, no config
+// files) and EMPTY, so the part is omitted — as it was on a CI host with no
+// ~/.claude.json. The preview line already sits near 80 columns, and any
+// breakdown there compacts the model name the preview exists to show.
+func fixtureMCP(time.Time) *mcp.Status { return &mcp.Status{} }
+
 func fixtureHostname() (string, error) { return "demohost", nil }
 
 // buildDeps returns render.Deps wired to the current fixture fakes + fixed
@@ -258,8 +263,7 @@ func (m Model) buildDeps() render.Deps {
 			RegistryPath: "",
 			Git:          &gitfake.Runner{Script: gitResponses},
 			GH:           &ghfake.Runner{},
-			MCP:          &mcpfake.Runner{Default: mcpfake.Response{Stdout: []byte("")}},
-			MCPOpts:      mcp.ActiveCountOptions{},
+			MCPOpts:      mcp.Options{Fixed: fixtureMCP(now)},
 			Clock:        func() time.Time { return now },
 			Links:        previewLinks,
 			Hostname:     fixtureHostname,
@@ -274,8 +278,7 @@ func (m Model) buildDeps() render.Deps {
 			RegistryPath: "",
 			Git:          &gitfake.Runner{Script: gitResponses},
 			GH:           &ghfake.Runner{},
-			MCP:          &mcpfake.Runner{Default: mcpfake.Response{Stdout: []byte("")}},
-			MCPOpts:      mcp.ActiveCountOptions{},
+			MCPOpts:      mcp.Options{Fixed: fixtureMCP(now)},
 			Clock:        func() time.Time { return now },
 			Links:        previewLinks,
 			Hostname:     fixtureHostname,

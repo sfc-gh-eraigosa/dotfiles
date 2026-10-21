@@ -80,6 +80,26 @@ gsl usage --host claude --json  # one host as JSON; exit 1 if it has not reporte
 gsl usage --json                # every host, as an array
 ```
 
+### `gsl mcp`
+
+MCP server health. `claude mcp list` takes seconds (it dials every server), so
+the status line never runs it: it reads a per-directory cache
+(`${XDG_CACHE_HOME:-~/.cache}/gsl/mcp/<sha256(cwd)[:16]>.json`, fresh for 2
+minutes) and, when that is stale, starts `gsl mcp refresh` detached.
+
+```bash
+gsl mcp status          # the cached counts, plus which servers failed or need auth
+gsl mcp status --json   # the same, as JSON
+gsl mcp refresh         # probe now (ignores the failure backoff) and print the result
+```
+
+The configured count de-duplicates servers across `~/.claude.json`, the
+project entry, `.mcp.json` and enabled plugins, and honours
+`disabledMcpjsonServers` / `enabledMcpjsonServers` /
+`enableAllProjectMcpServers`. A failed probe keeps the last good counts and
+backs off (30 s, doubling to 30 min). `go test -tags integration ./internal/mcp/`
+checks the parser against the installed CLI.
+
 ### `gsl version`
 
 ```sh
@@ -110,7 +130,7 @@ Segments valid for enable / disable / toggle: `host`, `dirgit`, `repo`, `ai`, `v
 
 ## Segments
 
-All five segments run concurrently under a shared 1-second parent deadline. Each segment also has its own 1-second hard cap (`segmentDeadline = 1000 ms`); the underlying git / mcp / gh detection packages apply tighter internal budgets (~800 ms for git, ~500 ms for MCP). A segment that times out is dropped while the rest still render.
+All five segments run concurrently under a shared 1-second parent deadline. Each segment also has its own 1-second hard cap (`segmentDeadline = 1000 ms`); the underlying git / gh detection packages apply tighter internal budgets (~800 ms for git). MCP never runs on the render path: the AI segment reads a cache (see `gsl mcp`). A segment that times out is dropped while the rest still render.
 
 ### `host`
 
@@ -186,7 +206,7 @@ Links (see [Links](#links)): the root/worktree glyph opens the repository home, 
 
 - Model display name (e.g. `claude-sonnet-4-5`)
 - Context-window usage: `<pct>% <used>k/<total>k` (token counts abbreviated with k/m suffixes)
-- MCP server count: `<active>/<configured>` when servers are configured; active count uses a short-lived subprocess query with a cache
+- MCP health, read from a per-directory cache and never probed during a render. It shrinks with width: `6✓ 5✗ 1!` (connected, failed, needs auth) → `6✓ 5✗` → `6/12` → `6` → dropped. `?/12` means configured but not probed yet. When the cache is stale the render starts `gsl mcp refresh` in the background (one at a time, backing off after a failure)
 - 5-hour and 7-day rate-limit usage percentages (`5h 42%`, `7d 10%`)
 
 Segment options (`options` map of the `ai` segment):
