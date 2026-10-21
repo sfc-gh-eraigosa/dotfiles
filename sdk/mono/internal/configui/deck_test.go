@@ -11,6 +11,8 @@ import (
 
 func deckCfg() config.Config {
 	c := config.Default()
+	c.Middle = config.MiddleSplit
+	c.Panes[0], c.Panes[1] = c.Panes[1], c.Panes[0] // htop, mid, gsl
 	c.Panes[1] = config.Pane{Name: "mid", Size: "30%", Tools: []config.Tool{
 		{Name: "gpu", Views: []config.View{{Name: "nvtop", Cmd: "nvtop"}}},
 		{Name: "gdash", Zoom: true, Probe: "gdash doctor --quiet", Views: []config.View{{Name: "conductor", Cmd: "gdash conductor"}, {Name: "ci", Cmd: "gdash ci"}}},
