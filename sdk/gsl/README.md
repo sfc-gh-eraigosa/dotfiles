@@ -125,9 +125,39 @@ gsl config validate                   # lint config.json; prints each problem, e
 
 `config set style` refuses a name that is neither builtin nor defined under `styles`.
 
+**The studio.** `gsl config` with no subcommand (on a terminal) opens a config
+studio: rows for the style, palette, links and time settings and every segment,
+a live preview of the line — detected once against the current repo, re-fitted
+on every edit — with a column ruler, the MCP health panel, and `w` to save. The
+next `gsl render` draws what you saved. `:` commands mirror the CLI
+(`:set palette dark`, `:toggle video`, `:width 80`, `:refresh`, `:w`, `:wq`, `:q!`).
+
+| Keys | Does |
+| :-- | :-- |
+| `j` `down` | move down |
+| `k` `up` | move up |
+| `gg` | first row |
+| `G` | last row |
+| `ctrl+d` | half page down |
+| `ctrl+u` | half page up |
+| `ctrl+f` `pgdown` | page down |
+| `ctrl+b` `pgup` | page up |
+| `:` | command line (:set :toggle :width :refresh :w :wq :q) |
+| `?` `f1` | this help |
+| `q` `ctrl+c` | quit (asks when there are unsaved changes) |
+| `space` | toggle the segment, or the next style / palette / links |
+| `enter` | edit the row on the command line |
+| `J` | move the segment right |
+| `K` | move the segment left |
+| `<` | narrow the preview by 10 columns |
+| `>` | widen the preview by 10 columns |
+| `r` | probe the MCP servers now (a few seconds) |
+| `w` | save to config.json |
+
+
 Keys valid for `config get`: `enabled`, `style`, `timezone`, `time_format`, `date_format`, `segments`, `styles`
 
-Keys valid for `config set`: `style`, `timezone`, `time_format`, `date_format`
+Keys valid for `config set`: `style`, `palette` (`auto`, `dark`, `light`, `dark8`, `dark-daltonism`; `GSL_THEME` / `SDK_THEME` still win for a session), `timezone`, `time_format`, `date_format`, `links`
 
 Segments valid for enable / disable / toggle: `host`, `dirgit`, `repo`, `ai`, `video`, `time`. Enabling a known segment that an older `config.json` lacks inserts it (`host` at the front, others at the end), so `gsl config enable host` is the one-step upgrade.
 

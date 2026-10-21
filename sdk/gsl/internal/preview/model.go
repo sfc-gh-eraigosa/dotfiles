@@ -53,9 +53,9 @@ type Model struct {
 	fixtureIdx int
 	// styleIdx is the index into styleOrder.
 	styleIdx int
-	// segmentEnabled tracks per-segment enable state (by type name).
-	segmentEnabled map[string]bool
-	// cfg is the base config (all segments enabled; may be mutated via toggles).
+	// cfg is the working config; its Segments are the ONLY enable state.
+	// Toggles copy the slice before changing it, so Update stays
+	// value-semantic: a caller's model never sees another copy's toggle (E22).
 	cfg config.Config
 	// now is the current time (ticked every second).
 	now time.Time
@@ -72,10 +72,12 @@ type Model struct {
 // function (tests / --once).
 func NewModel(clock func() time.Time) Model {
 	cfg := config.Default()
-	enabled := make(map[string]bool, len(cfg.Segments))
-	for _, seg := range cfg.Segments {
-		enabled[seg.Type] = true
+	segs := make([]config.Segment, len(cfg.Segments))
+	copy(segs, cfg.Segments)
+	for i := range segs {
+		segs[i].Enabled = true
 	}
+	cfg.Segments = segs
 	now := time.Now()
 	if clock != nil {
 		now = clock()
@@ -84,7 +86,6 @@ func NewModel(clock func() time.Time) Model {
 		fixtureName:    fixtureNames[0],
 		fixtureIdx:     0,
 		styleIdx:       0,
-		segmentEnabled: enabled,
 		cfg:            cfg,
 		now:            now,
 		clock:          clock,
@@ -119,15 +120,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.fixtureIdx = (m.fixtureIdx + 1) % len(fixtureNames)
 			m.fixtureName = fixtureNames[m.fixtureIdx]
 		case "1":
-			m.segmentEnabled["dirgit"] = !m.segmentEnabled["dirgit"]
+			m.cfg = toggled(m.cfg, "dirgit")
 		case "2":
-			m.segmentEnabled["repo"] = !m.segmentEnabled["repo"]
+			m.cfg = toggled(m.cfg, "repo")
 		case "3":
-			m.segmentEnabled["ai"] = !m.segmentEnabled["ai"]
+			m.cfg = toggled(m.cfg, "ai")
 		case "4":
-			m.segmentEnabled["time"] = !m.segmentEnabled["time"]
+			m.cfg = toggled(m.cfg, "time")
 		case "5":
-			m.segmentEnabled["host"] = !m.segmentEnabled["host"]
+			m.cfg = toggled(m.cfg, "host")
 		}
 
 	case tickMsg:
@@ -180,7 +181,7 @@ func (m Model) segmentBadges() string {
 	parts := make([]string, 0, len(types))
 	for _, t := range types {
 		lbl := labels[t]
-		if !m.segmentEnabled[t] {
+		if !m.enabled(t) {
 			lbl = "(" + lbl + ")"
 		}
 		parts = append(parts, lbl)
@@ -223,15 +224,32 @@ func (m Model) renderLine() string {
 	return render.Fit(datas, st, cols)
 }
 
-// buildConfig returns a config derived from m.cfg with segment enables applied.
-func (m Model) buildConfig() config.Config {
-	cfg := m.cfg
+// toggled returns cfg with segment typ flipped, on a COPY of the slice.
+func toggled(cfg config.Config, typ string) config.Config {
 	segs := make([]config.Segment, len(cfg.Segments))
 	copy(segs, cfg.Segments)
 	for i := range segs {
-		segs[i].Enabled = m.segmentEnabled[segs[i].Type]
+		if segs[i].Type == typ {
+			segs[i].Enabled = !segs[i].Enabled
+		}
 	}
 	cfg.Segments = segs
+	return cfg
+}
+
+// enabled reports whether segment typ is on in the working config.
+func (m Model) enabled(typ string) bool {
+	for _, s := range m.cfg.Segments {
+		if s.Type == typ {
+			return s.Enabled
+		}
+	}
+	return false
+}
+
+// buildConfig is the working config with the selected style.
+func (m Model) buildConfig() config.Config {
+	cfg := m.cfg
 	cfg.Style = m.currentStyleName()
 	return cfg
 }
@@ -315,7 +333,7 @@ func (m Model) FixtureName() string { return m.fixtureName }
 func (m Model) CurrentStyleName() string { return m.currentStyleName() }
 
 // SegmentEnabled reports whether the given segment type is enabled.
-func (m Model) SegmentEnabled(segType string) bool { return m.segmentEnabled[segType] }
+func (m Model) SegmentEnabled(segType string) bool { return m.enabled(segType) }
 
 // Quitting reports whether the model has received a quit signal.
 func (m Model) Quitting() bool { return m.quitting }

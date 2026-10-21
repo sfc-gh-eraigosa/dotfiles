@@ -285,7 +285,7 @@ is not function-disjoint, **merge the leaves** rather than rebasing around it.
 | `agy` | [#196](https://github.com/sfc-gh-eraigosa/dotfiles/pull/196) (was #167) | **merged 2026-08-09** | full suite green; `FuzzParse` 20 s smoke clean (E20, E21); reconciled with main's tmux-palette rule (#190) |
 | `mcp` | this PR (one PR for `mcp` → `style` → `tui` → rollout, per the 2026-10-20 ask) | **built** | E8 `TestParseStatus_Golden` on a byte capture (13✔/5✘/26 auth/22 not configured); E10 `TestConfiguredServers_*`; E11 `TestStatus_CacheKeyedByCwd`; E12 `TestGet_NeverSpawns`; E13 `TestMCPPart_Levels`; E9 `TestParseStatus_RealCLI` (`-tags integration`) passed against the live CLI (66 servers, 16 s); live: a fresh-cache render ran `claude` 0 times, three stale renders (~60 ms each) started one refresh |
 | `style` | this PR | **built** | E14 `TestResolveBlockColors_AlwaysConcrete` + `TestJoinPowerline_NoUnpaintedBlock`; E15 `TestContrast_AllBuiltinPalettes` (dark/light/daltonism × every role ≥ 4.5:1); E16 `TestColorMode_Ladder` + `TestJoin_ModeNeverHasNoEscape`; E17 `TestSegments_NoEmbeddedReset`; `gsl config validate` (`TestValidateConfig_*`); live: `NO_COLOR` render has 0 escapes, `--color 16` no 256-codes, 0 unpainted chevrons |
-| `tui` | — | **not started** | blocked on `width` + `mcp` + `style` |
+| `tui` | this PR | **built** | E22 `tui.TestModel_Update_IsValueSemantic` + `preview.TestModel_Update_IsValueSemantic` (the aliased map deleted); E23 `cmd.TestConfigCmd_Routing`; per-key tests, prompt-owns-keys, `TestView_FitsWidth` (40/80/200), `TestREADMEKeyTable`; live: opened in tmux, edited, `w` saved, next `gsl render` reflected it ([evidence](gsl-ultra/evidence/README.md)) |
 
 Deviation log (mcp, 2026-10-20): the CLI now prints a **`Not configured`**
 state (no sigil) and `! Needs authentication` with an ASCII `!`; both are in the
@@ -308,6 +308,14 @@ A tint with no theme value stays plain; only a FILL falls back (dark palette,
 then neutral grey). "Emoji default golden byte-identical" no longer holds — the
 MCP breakdown and readable fill text changed it deliberately; every golden diff
 is escape-only (text verified identical with escapes stripped).
+
+Deviation log (tui, 2026-10-20): the studio is `internal/tui`, value-semantic,
+on `sdk/libs/tui` (keymap/nav/cmdline/overlay/theme) — no `bubbles`, and
+`lipgloss` is not needed (only `x/ansi`, already in the graph). The live preview
+is `render.DetectAll` once + `Snapshot.Line` per edit (a sample payload stands
+in for Claude's so the ai segment shows); `prepare`/`styleFor` are shared with
+the status line. The palette picker writes a new `palette` config key (env still
+wins for a session).
 
 Deviation log: main's [#190](https://github.com/sfc-gh-eraigosa/dotfiles/pull/190) added a
 tmux/screen → `dark8` rule to `theme/resolve.go` after this plan was written; the `agy` leaf's

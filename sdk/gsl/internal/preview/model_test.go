@@ -277,3 +277,31 @@ func TestRenderOnce_HostIsFixture(t *testing.T) {
 		t.Errorf("RenderOnce should render the fixture host with the fixture kind glyph %q; got %q", "💻 demohost", line)
 	}
 }
+
+// E22: Update is value-semantic — toggling a segment on the returned model
+// leaves the caller's model as it was (the old per-segment map was shared
+// between copies, so the caller saw the toggle too).
+func TestModel_Update_IsValueSemantic(t *testing.T) {
+	m := preview.NewModel(preview.FixedClock())
+	for _, k := range []string{"1", "2", "3", "4", "5"} {
+		before := map[string]bool{}
+		for _, s := range []string{"host", "dirgit", "repo", "ai", "time"} {
+			before[s] = m.SegmentEnabled(s)
+		}
+		next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)})
+		for s, was := range before {
+			if m.SegmentEnabled(s) != was {
+				t.Fatalf("key %s changed the caller's %s", k, s)
+			}
+		}
+		changed := false
+		for s, was := range before {
+			if next.(preview.Model).SegmentEnabled(s) != was {
+				changed = true
+			}
+		}
+		if !changed {
+			t.Fatalf("key %s toggled nothing on the returned model", k)
+		}
+	}
+}

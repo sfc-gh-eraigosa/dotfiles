@@ -125,6 +125,60 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
+	deps, st, err := prepare(ctx, cfg, p, cwdHint)
+	if err != nil {
+		return err
+	}
+	deps.MCPSpawn = mcpSpawn
+	if dir, derr := video.Dir(); derr == nil {
+		deps.Video = &video.Cache{Dir: dir}
+		deps.VideoSpawn = videoSpawn
+	}
+
+	segs := render.BuildSegments(cfg, deps)
+
+	// Detect-once: ALL subprocess I/O happens here, exactly once.
+	datas := render.Detect(ctx, cfg, st, segs)
+
+	// Resolve the terminal width through the single, testable resolver.
+	// Precedence: payload.terminal_width → ioctl(stdout) → ioctl(stderr) →
+	// $COLUMNS → cfg.FallbackColumns.
+	cols, source := resolveColumns(p, os.Getenv, term.StdoutWidthSource(), term.StderrWidthSource())
+	if source == sourceDefault {
+		cols = cfg.EffectiveFallbackColumns()
+	}
+	observe.Default().WithFields(logrus.Fields{
+		"event":  "width.resolved",
+		"cols":   cols,
+		"source": source,
+	}).Debug("resolved terminal width")
+
+	// Fit: escalate compaction levels until the output fits, or use the most
+	// compact form. No additional I/O after Detect.
+	line := render.Fit(datas, st, cols)
+	if line != "" {
+		fmt.Println(line)
+	}
+	return nil
+}
+
+// paletteFor is the palette for a render: GSL_THEME / SDK_THEME (a session
+// override) first, then config.json's palette, then the shared rule with the
+// host tool's theme as its hint (theme.Resolve).
+func paletteFor(cfg config.Config, toolCtx string, env func(string) string, home string) string {
+	if cfg.Palette != "" && env("GSL_THEME") == "" && env("SDK_THEME") == "" {
+		if _, ok := style.Palette(cfg.Palette); ok {
+			return cfg.Palette
+		}
+	}
+	return theme.Resolve(toolCtx, env, home)
+}
+
+// prepare is everything a render needs before Detect: the cwd, git status
+// (once), the PR and link policy, and the style — shared by the status line
+// and the config studio so they draw the same line. The caller adds the
+// refresher hooks (MCPSpawn, Video).
+func prepare(ctx context.Context, cfg config.Config, p payload.Payload, cwdHint string) (render.Deps, style.Style, error) {
 	gitRunner := git.NewSystemRunner()
 	ghRunner := gh.NewSystemRunner()
 
@@ -194,19 +248,10 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 	linkFlags := <-flagCh
 	prInfo := <-prCh
 
-	// Derive the host-tool context and resolve the auto-theme palette.
-	home, _ := os.UserHomeDir()
-	toolCtx := deriveToolCtx(p, os.Getenv)
-	autoPalette := theme.Resolve(toolCtx, os.Getenv, home)
-
-	rawStyles := configToRawStyles(cfg.Styles)
-	mode, ascii, ferr := renderFlags(os.Getenv)
-	if ferr != nil {
-		return ferr
+	st, err := styleFor(cfg, deriveToolCtx(p, os.Getenv))
+	if err != nil {
+		return render.Deps{}, style.Style{}, err
 	}
-	st := style.ResolveConfig(os.Stderr, cfg.Style, rawStyles, ascii, autoPalette)
-	st.Mode = mode
-	st.Links = cfg.EffectiveLinks()
 
 	deps := render.Deps{
 		Payload:      p,
@@ -217,40 +262,24 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 		Git:          gitRunner,
 		GH:           ghRunner,
 		MCPOpts:      mcp.Options{},
-		MCPSpawn:     mcpSpawn,
 		Clock:        time.Now,
 		Links:        buildLinks(cfg.EffectiveLinks(), linkFlags, remoteURL, p.IsAntigravity()),
 		PR:           prInfo,
 		SectionOff:   linkFlags.SectionOff(),
 	}
-	if dir, derr := video.Dir(); derr == nil {
-		deps.Video = &video.Cache{Dir: dir}
-		deps.VideoSpawn = videoSpawn
+	return deps, st, nil
+}
+
+// styleFor resolves cfg's style for a host tool: the palette (paletteFor),
+// --color / --glyphs, and the links mode.
+func styleFor(cfg config.Config, toolCtx string) (style.Style, error) {
+	home, _ := os.UserHomeDir()
+	mode, ascii, err := renderFlags(os.Getenv)
+	if err != nil {
+		return style.Style{}, err
 	}
-
-	segs := render.BuildSegments(cfg, deps)
-
-	// Detect-once: ALL subprocess I/O happens here, exactly once.
-	datas := render.Detect(ctx, cfg, st, segs)
-
-	// Resolve the terminal width through the single, testable resolver.
-	// Precedence: payload.terminal_width → ioctl(stdout) → ioctl(stderr) →
-	// $COLUMNS → cfg.FallbackColumns.
-	cols, source := resolveColumns(p, os.Getenv, term.StdoutWidthSource(), term.StderrWidthSource())
-	if source == sourceDefault {
-		cols = cfg.EffectiveFallbackColumns()
-	}
-	observe.Default().WithFields(logrus.Fields{
-		"event":  "width.resolved",
-		"cols":   cols,
-		"source": source,
-	}).Debug("resolved terminal width")
-
-	// Fit: escalate compaction levels until the output fits, or use the most
-	// compact form. No additional I/O after Detect.
-	line := render.Fit(datas, st, cols)
-	if line != "" {
-		fmt.Println(line)
-	}
-	return nil
+	st := style.ResolveConfig(os.Stderr, cfg.Style, configToRawStyles(cfg.Styles), ascii, paletteFor(cfg, toolCtx, os.Getenv, home))
+	st.Mode = mode
+	st.Links = cfg.EffectiveLinks()
+	return st, nil
 }

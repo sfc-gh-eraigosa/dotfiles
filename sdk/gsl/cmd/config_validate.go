@@ -44,6 +44,11 @@ func validateConfig(cfg config.Config) []string {
 	if err := knownStyle(cfg, cfg.Style); err != nil {
 		bad("style: %q — %v", cfg.Style, err)
 	}
+	if cfg.Palette != "" {
+		if _, ok := style.Palette(cfg.Palette); !ok {
+			bad("palette: %q — want dark, light, dark8 or dark-daltonism (or unset for auto)", cfg.Palette)
+		}
+	}
 	switch cfg.Links {
 	case "", config.LinksUnderline, config.LinksPlain, config.LinksOff:
 	default:

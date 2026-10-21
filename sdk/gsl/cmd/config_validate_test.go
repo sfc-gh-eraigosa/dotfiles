@@ -78,3 +78,23 @@ func TestConfigValidateCmd(t *testing.T) {
 		}
 	})
 }
+
+func TestPaletteFor(t *testing.T) {
+	env := func(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
+	cfg := config.Default()
+	cfg.Palette = "light"
+	home := t.TempDir()
+	if got := paletteFor(cfg, "", env(map[string]string{"TERM": "xterm-256color"}), home); got != "light" {
+		t.Errorf("config palette: %s", got)
+	}
+	if got := paletteFor(cfg, "", env(map[string]string{"SDK_THEME": "dark8"}), home); got != "dark8" {
+		t.Errorf("SDK_THEME must win for the session: %s", got)
+	}
+	cfg.Palette = "neon"
+	if got := paletteFor(cfg, "", env(map[string]string{"TERM": "xterm-256color"}), home); got != "dark" {
+		t.Errorf("an unknown config palette falls through: %s", got)
+	}
+	if p := strings.Join(validateConfig(cfg), "\n"); !strings.Contains(p, `palette: "neon"`) {
+		t.Errorf("validate missed the palette: %s", p)
+	}
+}
