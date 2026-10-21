@@ -2,7 +2,7 @@
 
 - **Slug:** gsl-ultra
 - **Date:** 2026-07-11
-- **Status:** In progress — 4 of 7 leaves built (see §6.2)
+- **Status:** All 7 leaves built — mcp · style · tui and the §6 rollout in [#424](https://github.com/sfc-gh-eraigosa/dotfiles/pull/424) (see §6.2)
 - **Relates to:** spec `../specs/gsl-ultra.md` · design `../designs/gsl-ultra.md` · issue [#158](https://github.com/sfc-gh-eraigosa/dotfiles/issues/158) · absorbs #31
 
 ## 1. Summary & verdict
@@ -275,7 +275,7 @@ is not function-disjoint, **merge the leaves** rather than rebasing around it.
 
 **Landing order:** `iface` → (`width` ∥ `latency` ∥ `agy`) → `mcp` → `style` → `tui`.
 
-### 6.2 Execution ledger (updated 2026-09-07 audit; #196 merged 2026-08-09)
+### 6.2 Execution ledger (updated 2026-10-20; #196 merged 2026-08-09; the rest in #424)
 
 | Leaf | PR | State | Gate evidence |
 | :-- | :-- | :-- | :-- |
@@ -316,6 +316,14 @@ is `render.DetectAll` once + `Snapshot.Line` per edit (a sample payload stands
 in for Claude's so the ai segment shows); `prepare`/`styleFor` are shared with
 the status line. The palette picker writes a new `palette` config key (env still
 wins for a session).
+
+§6 rollout (2026-10-20): CI step "gsl race + vet + dependency/license gate"
+(`go vet`, `go test -race`, `GSL_STRICT_CHECK=1 scripts/check-deps.sh` — strict
+gate green locally: seams OK, licenses permissive); the `cmd` suite is hermetic
+(`newGitRunner`/`newGHRunner` seams stubbed in TestMain: 206 real git + 5 real
+`gh pr view` forks → 0, 1.8 s → 0.8 s); README / AGENTS / SKILL updated; the
+`gsl-visual-improvements` index row was already corrected (`done`) by the
+2026-09-07 audit. `install.sh` already fails when gsl's `build.sh` (and so its seam gate) fails: `if ! bash …/sdk/gsl/build.sh`.
 
 Deviation log: main's [#190](https://github.com/sfc-gh-eraigosa/dotfiles/pull/190) added a
 tmux/screen → `dark8` rule to `theme/resolve.go` after this plan was written; the `agy` leaf's

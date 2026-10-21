@@ -29,6 +29,14 @@ import (
 // which spawns, with nothing reaping the detached children.
 var videoSpawn = video.SpawnRefresher
 
+// newGitRunner and newGHRunner are the subprocess seams prepare uses;
+// variables so the cmd tests run hermetic (TestMain: gh never touches the
+// network, git never forks).
+var (
+	newGitRunner = func() git.Runner { return git.NewSystemRunner() }
+	newGHRunner  = func() gh.Runner { return gh.NewSystemRunner() }
+)
+
 // mcpSpawn starts the detached MCP refresh (mcp.SpawnRefresh) when the cached
 // status is due one; a variable so the cmd tests can stub it (TestMain).
 var mcpSpawn = mcp.SpawnRefresh
@@ -179,8 +187,8 @@ func paletteFor(cfg config.Config, toolCtx string, env func(string) string, home
 // and the config studio so they draw the same line. The caller adds the
 // refresher hooks (MCPSpawn, Video).
 func prepare(ctx context.Context, cfg config.Config, p payload.Payload, cwdHint string) (render.Deps, style.Style, error) {
-	gitRunner := git.NewSystemRunner()
-	ghRunner := gh.NewSystemRunner()
+	gitRunner := newGitRunner()
+	ghRunner := newGHRunner()
 
 	// Determine cwd: prefer the caller-supplied hint, fall back to os.Getwd.
 	cwd := cwdHint
