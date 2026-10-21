@@ -164,7 +164,9 @@ sdk/mono  (changed)
     `conductor`, `k3s-nodes`, `nodes`, `ci`.
   - **gsl:** 5%, `"zoomable": false`.
   - **`middle`:** `split`. `mono config set middle single` turns htop, gpu and
-    gdash into one 90% deck instead. The lab
+    gdash into one 90% deck instead. *(Amended 2026-10-20, owner: the default
+    is now `single` with `mid` first and gdash its first tool, so the deck
+    opens on gdash · conductor, then gpu, then htop.)* The lab
   dashboards behind the views (owner, 2026-10-19):
 
   | View | Dashboard uid | Title |
@@ -236,7 +238,7 @@ sdk/mono  (changed)
 | E18 | F8 | switch view | old process HUP→KILL ≤ 500 ms, new starts at pane size | two views running | rapid switching | `app/deck_test.go TestOnlyVisibleViewRuns` (fake pane runner) |
 | E19 | F8 | `:focus mid/gdash/ci`, bad name | jump / error listing names | crash | partial path `mid` | `app/command_test.go` |
 | E20 | F9 | prefix+space; esc esc at 200 ms; at 400 ms; `nav_esc_ms:0` | enter / enter / no / no | delay the first esc | esc esc inside nav → stays out | `app/nav_test.go` (injected clock) |
-| E21 | F9 | j at last view → next pane; k at first pane; h/l at ends | walk / stop / stop | wrap | plain pane j/k = panes | `TestNavWalk` |
+| E21 | F9 | j at last view → next pane; k at first pane; h/l at ends | walk / stop / stop | wrap | plain pane j/k = panes; fixed (`zoomable: false`) panes are never a stop for nav j/k or `<prefix> j/k` (amended 2026-10-20) | `TestNavWalk`, `TestCycleSkipsFixedPanes` |
 | E22 | F9 | `x` in nav mode | leave, not forwarded | reach the program | — | `TestNavOtherKeyLeaves` |
 | E23 | F8/F9 | README key table vs binding table | identical | drift | — | `app/readme_test.go` (extends #407's) |
 | E24 | §3 | mono imports | none from sdk/gdash | — | — | `sdk/mono/boundary_test.go` |

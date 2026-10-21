@@ -231,11 +231,21 @@ func (a *App) visibleLocked() []bool {
 	return out
 }
 
-// cyclePaneLocked is prefix j/k: the next or previous visible pane, wrapping
-// as before decks.
+// navigableLocked is visibleLocked minus the fixed panes (zoomable: false,
+// the gsl footer): j/k never stop on them; :focus still can.
+func (a *App) navigableLocked() []bool {
+	out := a.visibleLocked()
+	for i, s := range a.slots {
+		out[i] = out[i] && s.zoomable
+	}
+	return out
+}
+
+// cyclePaneLocked is prefix j/k: the next or previous navigable pane,
+// wrapping as before decks.
 func (a *App) cyclePaneLocked(d int) {
 	n := len(a.slots)
-	vis := a.visibleLocked()
+	vis := a.navigableLocked()
 	for step := 1; step <= n; step++ {
 		i := ((a.focus+d*step)%n + n) % n
 		if vis[i] {
@@ -276,8 +286,8 @@ func (a *App) stepToolLocked(d int) []launch {
 	return a.switchLocked(a.focus, t, 0)
 }
 
-// navDownLocked: the next view of the deck, past its last view the next
-// visible pane; the last pane stays (spec E21).
+// navMoveLocked: the next view of the deck, past its last view the next
+// navigable pane; the last pane stays (spec E21).
 func (a *App) navMoveLocked(d int) []launch {
 	if a.focus >= len(a.slots) {
 		return nil
@@ -288,7 +298,7 @@ func (a *App) navMoveLocked(d int) []launch {
 			return a.switchLocked(a.focus, s.tool, v)
 		}
 	}
-	vis := a.visibleLocked()
+	vis := a.navigableLocked()
 	for i := a.focus + d; i >= 0 && i < len(a.slots); i += d {
 		if vis[i] {
 			a.focus = i
