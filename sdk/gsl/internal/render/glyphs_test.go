@@ -95,7 +95,6 @@ func TestPaint_NoColor_PlainText(t *testing.T) {
 	}
 }
 
-
 func TestCountBadge(t *testing.T) {
 	st := style.Style{Icons: map[string]string{"staged": "+"}}
 	if got := countBadge(st, "staged", 3); got != "+3" {

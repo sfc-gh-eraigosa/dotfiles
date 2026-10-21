@@ -33,12 +33,12 @@ import (
 // Env is what the studio needs from the outside world; cmd wires the real
 // ones, tests fakes.
 type Env struct {
-	Path    string                                  // config.json, for the title and Save
+	Path    string // config.json, for the title and Save
 	Save    func(path string, c config.Config) error
-	Line    func(c config.Config, cols int) string  // the status line c renders at cols
-	MCP     func() mcp.Status                       // the cached MCP status (never probes)
-	Refresh func() error                            // the out-of-band probe (r)
-	Styles  []string                                // style names to offer, in order
+	Line    func(c config.Config, cols int) string // the status line c renders at cols
+	MCP     func() mcp.Status                      // the cached MCP status (never probes)
+	Refresh func() error                           // the out-of-band probe (r)
+	Styles  []string                               // style names to offer, in order
 }
 
 // Studio actions on top of keymap.Vim.

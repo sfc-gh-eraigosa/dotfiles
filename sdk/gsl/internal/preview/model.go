@@ -83,12 +83,12 @@ func NewModel(clock func() time.Time) Model {
 		now = clock()
 	}
 	return Model{
-		fixtureName:    fixtureNames[0],
-		fixtureIdx:     0,
-		styleIdx:       0,
-		cfg:            cfg,
-		now:            now,
-		clock:          clock,
+		fixtureName: fixtureNames[0],
+		fixtureIdx:  0,
+		styleIdx:    0,
+		cfg:         cfg,
+		now:         now,
+		clock:       clock,
 	}
 }
 

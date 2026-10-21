@@ -23,15 +23,15 @@ import (
 
 // aiData is the detect-once intermediate for the AI segment.
 type aiData struct {
-	modelName     string
-	modelID       string
-	ctxPct        *float64
-	tokenUsed     *float64
-	tokenTotal    *float64
-	mcp           mcp.Status
-	rate5h        *float64
-	rate7d        *float64
-	hasPayload    bool
+	modelName  string
+	modelID    string
+	ctxPct     *float64
+	tokenUsed  *float64
+	tokenTotal *float64
+	mcp        mcp.Status
+	rate5h     *float64
+	rate7d     *float64
+	hasPayload bool
 	// prio is the drop priority (config.Segment.EffectivePriority).
 	prio int
 	// links is the policy the spans are gated on.

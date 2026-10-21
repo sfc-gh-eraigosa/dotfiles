@@ -167,7 +167,6 @@ func TestRepo_NameModes(t *testing.T) {
 	}
 }
 
-
 func TestRepo_Spans_GlyphLabelBadge(t *testing.T) {
 	seg, _ := newRepoSeg(true, 1, nil)
 	seg.Links = Links{Repo: true, RepoURL: "https://github.com/o/r"}
