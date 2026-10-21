@@ -18,7 +18,7 @@ Every key goes to the focused program, so htop's `q`, `/`, `esc` and F-keys beha
 
 | Keys | What it does |
 | :-- | :-- |
-| `j` `down` | focus the next pane (fixed panes, like the gsl footer, are skipped) |
+| `j` `down` | focus the next pane |
 | `k` `up` | focus the previous pane |
 | `h` `left` | previous tool in a deck pane |
 | `l` `right` | next tool in a deck pane |
@@ -30,6 +30,8 @@ Every key goes to the focused program, so htop's `q`, `/`, `esc` and F-keys beha
 | `r` | restart the focused pane's program |
 | `esc` | cancel the prefix |
 | `ctrl+b` | send ctrl+b itself to the program |
+
+`j` and `k` skip the fixed panes (`zoomable: false`, like the gsl footer); `:focus <pane>` still reaches one by name.
 
 The keys come from the shared sdk keymap (`sdk/libs/tui`, `keymap.Vim`), so they mean the same thing as in fleet and gff. While the prefix waits, the title bar lists them; `ctrl+b ?` shows the full help.
 
