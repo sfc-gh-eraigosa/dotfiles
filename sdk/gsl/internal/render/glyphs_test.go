@@ -56,7 +56,7 @@ func TestPaint_Fill(t *testing.T) {
 			"fg":        "default",
 		},
 	}
-	got := paint(st, "repo_root", "X")
+	got := paint(st, "repo_root", "X", nil)
 	// Expect a background blue (48;5;4), a white fg fallback (38;5;7), the text,
 	// and a reset.
 	if !strings.Contains(got, "\x1b[48;5;4m") {
@@ -78,7 +78,7 @@ func TestPaint_NoFill_TintsForeground(t *testing.T) {
 		Fill:  false,
 		Theme: map[string]string{"repo_worktree": "magenta"},
 	}
-	got := paint(st, "repo_worktree", "X")
+	got := paint(st, "repo_worktree", "X", nil)
 	if !strings.Contains(got, "\x1b[38;5;5m") {
 		t.Errorf("paint no-fill: missing magenta fg in %q", got)
 	}
@@ -89,100 +89,12 @@ func TestPaint_NoFill_TintsForeground(t *testing.T) {
 
 func TestPaint_NoColor_PlainText(t *testing.T) {
 	st := style.Style{Fill: false} // no theme at all
-	got := paint(st, "repo_root", "plain")
+	got := paint(st, "repo_root", "plain", nil)
 	if got != "plain" {
 		t.Errorf("paint with no theme should be plain, got %q", got)
 	}
 }
 
-// TestColorCode_Trusted confirms the trusted path retains full backward
-// compatibility: named colors, decimal indices, and verbatim raw fragments
-// (including ';'-bearing strings) all pass through unchanged.
-func TestColorCode_Trusted(t *testing.T) {
-	cases := []struct {
-		value string
-		layer string
-		want  string
-	}{
-		{"blue", "38", "38;5;4"},
-		{"magenta", "48", "48;5;5"},
-		{"12", "38", "38;5;12"},
-		// Raw fragment with ';' passes through verbatim on the trusted path.
-		{"38;5;201", "38", "38;5;201"},
-		{"default", "38", ""},
-		{"", "48", ""},
-		{"notacolor", "38", ""},
-		// Trusted path: arbitrary ';'-bearing string passes through (user config
-		// owns it; back-compat guarantee).
-		{"38;5;1;48;5;2", "38", "38;5;1;48;5;2"},
-		{"0;31", "38", "0;31"},
-	}
-	for _, tc := range cases {
-		if got := colorCode(tc.value, tc.layer, true); got != tc.want {
-			t.Errorf("colorCode(%q,%q,trusted) = %q, want %q", tc.value, tc.layer, got, tc.want)
-		}
-	}
-}
-
-// TestColorCode_Untrusted validates that the untrusted path strictly accepts
-// only well-formed color values and rejects injection attempts.
-func TestColorCode_Untrusted(t *testing.T) {
-	cases := []struct {
-		name    string
-		value   string
-		layer   string
-		want    string // "" means rejection (no escape emitted)
-		wantNot string // when non-empty, asserts this substring is absent (injection guard)
-	}{
-		// Valid: bare decimal ANSI-256 index.
-		{name: "valid index 0", value: "0", layer: "38", want: "38;5;0"},
-		{name: "valid index 123", value: "123", layer: "38", want: "38;5;123"},
-		{name: "valid index 255", value: "255", layer: "48", want: "48;5;255"},
-		// Valid: known named colors.
-		{name: "valid named green", value: "green", layer: "38", want: "38;5;2"},
-		{name: "valid named white", value: "white", layer: "48", want: "48;5;7"},
-		// Valid: well-formed truecolor fg sequence.
-		{name: "valid truecolor fg 38;2;10;20;30", value: "38;2;10;20;30", layer: "38", want: "38;2;10;20;30"},
-		{name: "valid truecolor bg 48;2;0;128;255", value: "48;2;0;128;255", layer: "48", want: "48;2;0;128;255"},
-		// Valid: truecolor with layer mismatch (value is authoritative, not retargeted).
-		{name: "valid truecolor layer mismatch", value: "38;2;255;0;0", layer: "48", want: "38;2;255;0;0"},
-		// Empty / default → always "" regardless of trust.
-		{name: "empty", value: "", layer: "38", want: ""},
-		{name: "default", value: "default", layer: "38", want: ""},
-		// Rejected: out-of-range ANSI-256 index.
-		{name: "reject index 256", value: "256", layer: "38", want: ""},
-		{name: "reject index 999", value: "999", layer: "38", want: ""},
-		// Rejected: unknown named color (not in namedColor map).
-		{name: "reject unknown name", value: "notacolor", layer: "38", want: ""},
-		// Injection: composite escape + semicolon injection.
-		{name: "reject SGR reset injection 0m ESC", value: "0m\x1b[2J", layer: "38", want: "", wantNot: "\x1b"},
-		// Injection: stacked SGR (fg + bg in one value — not a valid truecolor).
-		{name: "reject stacked SGR 38;5;1;48;5;2", value: "38;5;1;48;5;2", layer: "38", want: "", wantNot: "48;5;2"},
-		// Injection: command injection via semicolon.
-		{name: "reject shell injection ; rm -rf", value: "; rm -rf", layer: "38", want: ""},
-		// Injection: raw ESC byte.
-		{name: "reject raw ESC byte", value: "\x1b[31m", layer: "38", want: "", wantNot: "\x1b"},
-		// Injection: truecolor with out-of-range component.
-		{name: "reject truecolor r=256", value: "38;2;256;0;0", layer: "38", want: ""},
-		{name: "reject truecolor g=256", value: "38;2;0;256;0", layer: "38", want: ""},
-		{name: "reject truecolor b=256", value: "38;2;0;0;256", layer: "38", want: ""},
-		// Injection: negative component.
-		{name: "reject truecolor negative r", value: "38;2;-1;0;0", layer: "38", want: ""},
-		// Rejection: truecolor with wrong leading byte (not 38 or 48).
-		{name: "reject truecolor bad prefix 99", value: "99;2;10;20;30", layer: "38", want: ""},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := colorCode(tc.value, tc.layer, false)
-			if got != tc.want {
-				t.Errorf("colorCode(%q,%q,untrusted) = %q, want %q", tc.value, tc.layer, got, tc.want)
-			}
-			if tc.wantNot != "" && strings.Contains(got, tc.wantNot) {
-				t.Errorf("colorCode(%q,%q,untrusted): result %q must not contain %q (injection)", tc.value, tc.layer, got, tc.wantNot)
-			}
-		})
-	}
-}
 
 func TestCountBadge(t *testing.T) {
 	st := style.Style{Icons: map[string]string{"staged": "+"}}
@@ -353,36 +265,67 @@ func TestJoinBlocks_Emoji_Unchanged(t *testing.T) {
 // A filled block with the default fg gets whichever of black or white reads
 // better on it: white on a dark block (and on named colors, which the
 // terminal themes), black on a light one — the shared dark palette's ok
-// green (42) and warn orange (214) are too light for white text.
+
+// fillText also reads 38;5;N and truecolor fills, the forms a user config may
+
+// A filled block with the default fg gets readable text: white on a
+// terminal-themed 0–15 block, black or white by contrast on anything else —
+// in every colour form a config may hold.
 func TestPaint_FillPicksReadableText(t *testing.T) {
-	for _, tc := range []struct {
-		bg, wantFG string
-	}{
-		{"blue", "\x1b[38;5;7m"},
-		{"26", "\x1b[38;5;7m"},  // dark blue
-		{"124", "\x1b[38;5;7m"}, // dark red
-		{"42", "\x1b[38;5;16m"},
-		{"214", "\x1b[38;5;16m"},
-		{"255", "\x1b[38;5;16m"},
-		{"240", "\x1b[38;5;7m"},
+	for bg, wantFG := range map[string]string{
+		"blue": "\x1b[38;5;7m", "26": "\x1b[38;5;15m", "124": "\x1b[38;5;15m",
+		"42": "\x1b[38;5;16m", "214": "\x1b[38;5;16m", "38;5;214": "\x1b[38;5;16m",
+		"#fafad2": "\x1b[38;5;16m", "38;2;20;20;60": "\x1b[38;5;15m",
 	} {
-		st := style.Style{Fill: true, Theme: map[string]string{"repo_root": tc.bg, "fg": "default"}}
-		if got := paint(st, "repo_root", "X"); !strings.Contains(got, tc.wantFG) {
-			t.Errorf("bg %s: %q lacks fg %q", tc.bg, got, tc.wantFG)
-		}
-		st.Separator, st.Icons = "powerline", map[string]string{"sep_right": ">"}
-		if got := join(st, []segmentBlock{{text: "X", colorKey: "repo_root"}}); !strings.Contains(got, tc.wantFG) {
-			t.Errorf("powerline bg %s: %q lacks fg %q", tc.bg, got, tc.wantFG)
+		st := style.Style{Fill: true, Theme: map[string]string{"repo_root": bg, "fg": "default"}}
+		if got := paint(st, "repo_root", "X", nil); !strings.Contains(got, wantFG) {
+			t.Errorf("bg %s: %q lacks fg %q", bg, got, wantFG)
 		}
 	}
 }
 
-// fillText also reads 38;5;N and truecolor fills, the forms a user config may
-// hold, so a light truecolor block still gets black text.
-func TestFillText_AllColorForms(t *testing.T) {
-	for bg, want := range map[string]string{"38;5;214": "\x1b[38;5;16m", "38;2;250;250;210": "\x1b[38;5;16m", "38;2;20;20;60": "\x1b[38;5;7m"} {
-		if got := fillText(bg); got != want {
-			t.Errorf("fillText(%q) = %q, want %q", bg, got, want)
+// E14: whatever the theme holds, every powerline block emits a background and
+// a foreground, and the trailing chevron is never a bare (unpainted) wedge.
+func TestJoinPowerline_NoUnpaintedBlock(t *testing.T) {
+	for _, v := range []string{"default", "#00ff00", "nope", ""} {
+		st := powerlineStyleFixture()
+		st.Theme = map[string]string{"repo_root": v, "dirgit": v, "fg": "default"}
+		out := join(st, []segmentBlock{{text: "a", colorKey: "dirgit"}, {text: "b", colorKey: "repo_root"}, {text: "c", colorKey: "no-such-key"}})
+		blocks := strings.Split(out, ">")
+		for i, b := range blocks[:len(blocks)-1] {
+			if !strings.Contains(b, "\x1b[48;") || !strings.Contains(b, "\x1b[38;") {
+				t.Errorf("theme %q block %d unpainted: %q", v, i, b)
+			}
 		}
+		if strings.Contains(out, ansiReset+">") {
+			t.Errorf("theme %q: a stray unpainted chevron in %q", v, out)
+		}
+	}
+}
+
+// E16: under NO_COLOR (ModeNever) the line carries no escape at all — no
+// colour, no hyperlink — on every path.
+func TestJoin_ModeNeverHasNoEscape(t *testing.T) {
+	blocks := []segmentBlock{{text: "main PR#21", colorKey: "repo_root",
+		links: []LinkSpan{{Start: 5, End: 10, URL: wantPRURL, Role: "ok"}}}}
+	for _, st := range []style.Style{asciiStyle(), powerlineStyleFixture(), joinEmojiStyle()} {
+		st.Mode = style.ModeNever
+		if out := join(st, blocks); strings.ContainsRune(out, 0x1b) || !strings.Contains(out, "main PR#21") {
+			t.Errorf("%s: %q", st.Separator, out)
+		}
+	}
+}
+
+// Colour downsamples to the terminal: a hex block on a 16-colour terminal
+// uses the basic codes, on truecolor its exact value.
+func TestJoin_ModeDownsamples(t *testing.T) {
+	st := style.Style{Fill: true, Theme: map[string]string{"repo_root": "#00ff00"}}
+	st.Mode = style.Mode16
+	if got := paint(st, "repo_root", "x", nil); !strings.Contains(got, "\x1b[102m") {
+		t.Errorf("16: %q", got)
+	}
+	st.Mode = style.ModeTruecolor
+	if got := paint(st, "repo_root", "x", nil); !strings.Contains(got, "\x1b[48;2;0;255;0m") {
+		t.Errorf("truecolor: %q", got)
 	}
 }

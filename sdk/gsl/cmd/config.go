@@ -76,6 +76,9 @@ var configSetCmd = &cobra.Command{
 		}
 		switch key {
 		case "style":
+			if err := knownStyle(cfg, value); err != nil {
+				return fmt.Errorf("gsl config set style %q: %w", value, err)
+			}
 			cfg.Style = value
 		case "timezone":
 			cfg.Timezone = value

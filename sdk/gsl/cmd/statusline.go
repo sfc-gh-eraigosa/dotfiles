@@ -200,7 +200,12 @@ func runStatusLine(_ *cobra.Command, p payload.Payload, cwdHint string) error {
 	autoPalette := theme.Resolve(toolCtx, os.Getenv, home)
 
 	rawStyles := configToRawStyles(cfg.Styles)
-	st := style.ResolveConfig(os.Stderr, cfg.Style, rawStyles, false, autoPalette)
+	mode, ascii, ferr := renderFlags(os.Getenv)
+	if ferr != nil {
+		return ferr
+	}
+	st := style.ResolveConfig(os.Stderr, cfg.Style, rawStyles, ascii, autoPalette)
+	st.Mode = mode
 	st.Links = cfg.EffectiveLinks()
 
 	deps := render.Deps{

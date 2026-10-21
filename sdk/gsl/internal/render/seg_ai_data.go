@@ -150,13 +150,18 @@ func (d *aiData) formatLinked(st style.Style, level int) (string, string, []Link
 	}
 
 	// ── MCP health (its own ladder; see mcpPart) ────────────────────────────
-	if part := mcpPart(d.mcp, level); part != "" {
+	if runs := mcpParts(d.mcp, level); len(runs) > 0 {
 		sep()
 		if g := glyph(st, "mcp"); g != "" {
 			sb.write(g)
 			sb.write(" ")
 		}
-		sb.write(part)
+		for i, r := range runs {
+			if i > 0 {
+				sb.write(" ")
+			}
+			sb.styled(r.text, r.role, "")
+		}
 	}
 
 	// ── Rate limits ──────────────────────────────────────────────────────────
@@ -186,38 +191,53 @@ func (d *aiData) formatLinked(st style.Style, level int) (string, string, []Link
 // status never probed (cold cache) shows "?/N" until L3, and nothing at all
 // is shown for an empty status.
 func mcpPart(s mcp.Status, level int) string {
+	var b strings.Builder
+	for i, p := range mcpParts(s, level) {
+		if i > 0 {
+			b.WriteString(" ")
+		}
+		b.WriteString(p.text)
+	}
+	return b.String()
+}
+
+// mcpRun is one piece of the MCP part with the role it is painted in.
+type mcpRun struct{ text, role string }
+
+// mcpParts is mcpPart as runs: connected ok, failed err, needs-auth warn.
+func mcpParts(s mcp.Status, level int) []mcpRun {
 	probed := s.Connected + s.Failed + s.NeedsAuth
 	total := max(s.Configured, probed)
 	if total == 0 || level >= 4 {
-		return ""
+		return nil
 	}
 	if s.FetchedAt.IsZero() {
 		if level >= 3 {
-			return ""
+			return nil
 		}
-		return "?/" + strconv.Itoa(total)
+		return []mcpRun{{"?/" + strconv.Itoa(total), string(style.RoleMuted)}}
 	}
 	switch level {
 	case 0, 1:
-		var parts []string
-		add := func(n int, mark string) {
+		var runs []mcpRun
+		add := func(n int, mark string, role style.Role) {
 			if n > 0 {
-				parts = append(parts, strconv.Itoa(n)+mark)
+				runs = append(runs, mcpRun{strconv.Itoa(n) + mark, string(role)})
 			}
 		}
-		add(s.Connected, "✓")
-		add(s.Failed, "✗")
+		add(s.Connected, "✓", style.RoleOK)
+		add(s.Failed, "✗", style.RoleErr)
 		if level == 0 {
-			add(s.NeedsAuth, "!")
+			add(s.NeedsAuth, "!", style.RoleWarn)
 		}
-		if len(parts) == 0 {
-			return "0/" + strconv.Itoa(total)
+		if len(runs) == 0 {
+			return []mcpRun{{"0/" + strconv.Itoa(total), ""}}
 		}
-		return strings.Join(parts, " ")
+		return runs
 	case 2:
-		return strconv.Itoa(s.Connected) + "/" + strconv.Itoa(total)
+		return []mcpRun{{strconv.Itoa(s.Connected) + "/" + strconv.Itoa(total), ""}}
 	}
-	return strconv.Itoa(s.Connected)
+	return []mcpRun{{strconv.Itoa(s.Connected), ""}}
 }
 
 // modelBudget is the display-width cap for a shortened model name.

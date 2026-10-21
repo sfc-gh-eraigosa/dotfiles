@@ -167,6 +167,11 @@ var builtins = map[string]Style{
 	"emoji":     emojiStyle,
 }
 
+// stateColorKeys are the state roles every palette also defines (render
+// paints the MCP breakdown and the PR badge with them); the auto-palette merge
+// covers them like the segment keys.
+var stateColorKeys = []string{"ok", "warn", "err", "accent", "muted"}
+
 // segmentColorKeys lists the six theme keys that every palette must define so
 // the emoji style (Fill:false) can apply fg-tint colors to every segment.
 // See EMOJI-F2-01/F2-02 in the design doc.
@@ -216,6 +221,12 @@ func buildPalettes() map[string]map[string]string {
 			"time":          r.Warn,
 			"video":         r.Crit,
 			"host":          r.SeriesColor(2),
+			// state roles: the MCP breakdown and the PR badge
+			"ok":     r.OK,
+			"warn":   r.Warn,
+			"err":    r.Crit,
+			"accent": r.Accent,
+			"muted":  r.Dim,
 		}
 		if name == theme.Dark8 {
 			for k, v := range m {

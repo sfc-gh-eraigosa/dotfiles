@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"testing"
+
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
 )
 
 // TestExecute_Help exercises the Execute function via --help which should
@@ -23,4 +25,25 @@ func TestExecute_HelpFlag(t *testing.T) {
 		_ = rootCmd.Execute()
 		rootCmd.SetArgs(nil)
 	})
+}
+
+func TestRenderFlags(t *testing.T) {
+	env := func(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
+	defer func() { colorFlag, glyphsFlag = "auto", "auto" }()
+	colorFlag, glyphsFlag = "auto", "auto"
+	if m, ascii, err := renderFlags(env(map[string]string{"NO_COLOR": "1"})); err != nil || m != style.ModeNever || ascii {
+		t.Errorf("NO_COLOR: %v %v %v", m, ascii, err)
+	}
+	colorFlag, glyphsFlag = "truecolor", "ascii"
+	if m, ascii, err := renderFlags(env(map[string]string{"NO_COLOR": "1"})); err != nil || m != style.ModeTruecolor || !ascii {
+		t.Errorf("flags: %v %v %v", m, ascii, err)
+	}
+	colorFlag = "rainbow"
+	if _, _, err := renderFlags(env(nil)); err == nil {
+		t.Error("bad --color accepted")
+	}
+	colorFlag, glyphsFlag = "auto", "fancy"
+	if _, _, err := renderFlags(env(nil)); err == nil {
+		t.Error("bad --glyphs accepted")
+	}
 }

@@ -167,22 +167,6 @@ func TestRepo_NameModes(t *testing.T) {
 	}
 }
 
-func TestRepo_PRBadge_StateTints(t *testing.T) {
-	// Direct unit test of prBadge state colouring.
-	st := style.Style{}
-	if got := prBadgeWithPrefix(st, "PR#", 7, "OPEN", "repo_root"); !strings.Contains(got, "38;5;2") {
-		t.Errorf("prBadge OPEN: want green, got %q", got)
-	}
-	if got := prBadgeWithPrefix(st, "PR#", 7, "MERGED", "repo_root"); !strings.Contains(got, "38;5;5") {
-		t.Errorf("prBadge MERGED: want magenta, got %q", got)
-	}
-	if got := prBadgeWithPrefix(st, "PR#", 7, "CLOSED", "repo_root"); !strings.Contains(got, "38;5;1") {
-		t.Errorf("prBadge CLOSED: want red, got %q", got)
-	}
-	if got := prBadgeWithPrefix(st, "PR#", 7, "WEIRD", "repo_root"); got != "PR#7" {
-		t.Errorf("prBadge unknown state: want plain PR#7, got %q", got)
-	}
-}
 
 func TestRepo_Spans_GlyphLabelBadge(t *testing.T) {
 	seg, _ := newRepoSeg(true, 1, nil)
@@ -204,8 +188,8 @@ func TestRepo_Spans_FamilyOff(t *testing.T) {
 	seg, _ := newRepoSeg(true, 1, nil)
 	seg.Links = Links{Repo: false, RepoURL: "https://github.com/o/r"}
 	_, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
-	if len(spans) != 0 {
-		t.Errorf("repo family off must yield no spans (PR included): %+v", spans)
+	if n := linkCount(spans); n != 0 {
+		t.Errorf("repo family off must yield no links (PR included): %+v", spans)
 	}
 }
 
@@ -228,28 +212,44 @@ func TestRepo_UsesPrecomputedPR(t *testing.T) {
 
 // The badge's state color is a palette role — OPEN the OK (dirgit) color,
 // MERGED Accent (repo_worktree), CLOSED Crit (video) — so it follows the
-// palette like everything else.
-func TestPRBadge_StateFromPaletteRoles(t *testing.T) {
-	st := style.Style{Theme: map[string]string{"dirgit": "42", "repo_worktree": "63", "video": "203"}}
-	for state, want := range map[string]string{"OPEN": "38;5;42", "MERGED": "38;5;63", "CLOSED": "38;5;203"} {
-		if got := prBadgeWithPrefix(st, "PR#", 7, state, "repo_root"); !strings.Contains(got, want) {
-			t.Errorf("%s badge = %q, want %s", state, got, want)
+
+// Under Fill, a fg tint on a colored block is unreadable (green on the dark
+// palette's blue 39). The badge becomes a chip: the state color as its own
+
+// The PR badge is text and a role — never an escape (plan F11/E17).
+func TestPRBadge_TextAndRole(t *testing.T) {
+	for state, want := range map[string]string{"OPEN": "ok", "merged": "accent", "CLOSED": "err", "WEIRD": ""} {
+		text, role := prBadge("PR#", 7, state)
+		if text != "PR#7" || role != want {
+			t.Errorf("%s → %q %q, want PR#7 %q", state, text, role, want)
 		}
 	}
 }
 
-// Under Fill, a fg tint on a colored block is unreadable (green on the dark
-// palette's blue 39). The badge becomes a chip: the state color as its own
-// background with readable text, then the block's background and text return.
-func TestPRBadge_FillIsAReadableChip(t *testing.T) {
-	st := style.Style{Fill: true, Theme: map[string]string{"fg": "default", "dirgit": "42", "repo_root": "39", "repo_worktree": "63"}}
-	got := prBadgeWithPrefix(st, "PR#", 7, "OPEN", "repo_root")
-	want := "\x1b[48;5;42m\x1b[38;5;16mPR#7\x1b[48;5;39m\x1b[38;5;16m"
+// Painted by the join layer: under Fill the badge is a chip — the state colour
+// behind readable text — and the block's colours return after it; as a tint
+// it is the state colour as foreground.
+func TestPRBadge_PaintedByJoin(t *testing.T) {
+	st := style.Style{Fill: true, Separator: "space", Theme: map[string]string{"fg": "default", "ok": "42", "repo_root": "39", "err": "203"}}
+	b := []segmentBlock{{text: "gsl PR#7", colorKey: "repo_root", links: []LinkSpan{{Start: 4, End: 8, Role: "ok"}}}}
+	got := join(st, b)
+	want := "\x1b[48;5;39m\x1b[38;5;16mgsl \x1b[48;5;42m\x1b[38;5;16mPR#7\x1b[48;5;39m\x1b[38;5;16m" + ansiReset
 	if got != want {
-		t.Errorf("OPEN chip on repo_root = %q, want %q", got, want)
+		t.Errorf("fill chip:\n got %q\nwant %q", got, want)
 	}
-	got = prBadgeWithPrefix(st, "PR#", 7, "OPEN", "repo_worktree")
-	if !strings.HasSuffix(got, "\x1b[48;5;63m\x1b[38;5;7m") {
-		t.Errorf("chip on a dark block must restore white text, got %q", got)
+	st.Fill = false
+	if got := join(st, b); !strings.Contains(got, "\x1b[38;5;42mPR#7\x1b[38;5;39m") {
+		t.Errorf("tint: %q", got)
 	}
+}
+
+// linkCount counts the spans that are links (a span may only carry a role).
+func linkCount(spans []LinkSpan) int {
+	n := 0
+	for _, sp := range spans {
+		if sp.URL != "" {
+			n++
+		}
+	}
+	return n
 }

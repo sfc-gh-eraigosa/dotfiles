@@ -136,7 +136,7 @@ func ResolveConfig(w io.Writer, styleName string, rawUserStyles map[string]map[s
 			if base.Theme == nil {
 				base.Theme = make(map[string]string, len(paletteColors))
 			}
-			for _, key := range segmentColorKeys {
+			for _, key := range append(append([]string(nil), segmentColorKeys...), stateColorKeys...) {
 				if userTheme[key] {
 					// User explicitly set this key → do not overwrite.
 					continue

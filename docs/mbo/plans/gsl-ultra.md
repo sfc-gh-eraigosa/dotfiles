@@ -284,7 +284,7 @@ is not function-disjoint, **merge the leaves** rather than rebasing around it.
 | `latency` | [#196](https://github.com/sfc-gh-eraigosa/dotfiles/pull/196) (was #166) | **merged 2026-08-09** | full suite green incl. procgroup/gh-cache tests (E18, E19, E24) |
 | `agy` | [#196](https://github.com/sfc-gh-eraigosa/dotfiles/pull/196) (was #167) | **merged 2026-08-09** | full suite green; `FuzzParse` 20 s smoke clean (E20, E21); reconciled with main's tmux-palette rule (#190) |
 | `mcp` | this PR (one PR for `mcp` → `style` → `tui` → rollout, per the 2026-10-20 ask) | **built** | E8 `TestParseStatus_Golden` on a byte capture (13✔/5✘/26 auth/22 not configured); E10 `TestConfiguredServers_*`; E11 `TestStatus_CacheKeyedByCwd`; E12 `TestGet_NeverSpawns`; E13 `TestMCPPart_Levels`; E9 `TestParseStatus_RealCLI` (`-tags integration`) passed against the live CLI (66 servers, 16 s); live: a fresh-cache render ran `claude` 0 times, three stale renders (~60 ms each) started one refresh |
-| `style` | — | **not started** | blocked on `width` (raw-text-aware truncation) |
+| `style` | this PR | **built** | E14 `TestResolveBlockColors_AlwaysConcrete` + `TestJoinPowerline_NoUnpaintedBlock`; E15 `TestContrast_AllBuiltinPalettes` (dark/light/daltonism × every role ≥ 4.5:1); E16 `TestColorMode_Ladder` + `TestJoin_ModeNeverHasNoEscape`; E17 `TestSegments_NoEmbeddedReset`; `gsl config validate` (`TestValidateConfig_*`); live: `NO_COLOR` render has 0 escapes, `--color 16` no 256-codes, 0 unpainted chevrons |
 | `tui` | — | **not started** | blocked on `width` + `mcp` + `style` |
 
 Deviation log (mcp, 2026-10-20): the CLI now prints a **`Not configured`**
@@ -296,6 +296,18 @@ ignores the backoff) and `Fixed` (hermetic preview/goldens). The L2 denominator
 is `max(Configured, probed)`: claude.ai connectors are in no config file, so the
 config count alone gave `13/6`. The preview fixture is empty — any MCP part
 pushes its 80-column line into compacting the model name it exists to show.
+
+Deviation log (style, 2026-10-20): palettes come from the sdk's shared
+`libs/tui/theme` (#415) — the catppuccin/tokyonight/nord/gruvbox/dracula set is
+dropped, as one scheme across tools was decided after this plan. The resolver
+returns `Color` (an ANSI index **or** RGB) rather than bare `RGB`: 0–15 must stay
+indices for the terminal's theme to recolour them, which is what `dark8` is for.
+State roles (`ok/warn/err/accent/muted`) join the palettes; the PR badge and MCP
+breakdown are `LinkSpan.Role` runs painted by the join layer (a chip under fill).
+A tint with no theme value stays plain; only a FILL falls back (dark palette,
+then neutral grey). "Emoji default golden byte-identical" no longer holds — the
+MCP breakdown and readable fill text changed it deliberately; every golden diff
+is escape-only (text verified identical with escapes stripped).
 
 Deviation log: main's [#190](https://github.com/sfc-gh-eraigosa/dotfiles/pull/190) added a
 tmux/screen → `dark8` rule to `theme/resolve.go` after this plan was written; the `agy` leaf's

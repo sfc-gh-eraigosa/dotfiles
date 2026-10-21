@@ -120,7 +120,10 @@ gsl config disable [segment]          # disable the master switch (no arg) or a 
 gsl config toggle <segment>           # toggle a named segment on/off
 gsl config style [name]               # show the current style, or set it to <name>
 gsl config style --list               # list all builtin + user-defined styles (* = active)
+gsl config validate                   # lint config.json; prints each problem, exits 1 if any
 ```
+
+`config set style` refuses a name that is neither builtin nor defined under `styles`.
 
 Keys valid for `config get`: `enabled`, `style`, `timezone`, `time_format`, `date_format`, `segments`, `styles`
 
@@ -428,6 +431,26 @@ gsl config style emoji       # switch to emoji style
 gsl config style powerline   # switch back
 gsl config style --list      # show all styles with active marker (*)
 ```
+
+### Colours
+
+Theme values may be a name (`blue`), an index (`0`–`255`), `#rrggbb`, or the
+fragments `38;5;N` / `38;2;r;g;b`; anything else is ignored (and reported by
+`gsl config validate`). Colours are emitted for what the terminal supports:
+
+- `NO_COLOR` (any value) or `TERM=dumb` → no escape at all — no colour, no hyperlinks;
+- `COLORTERM=truecolor` → `#rrggbb` exactly; `TERM=*256color` (or no `TERM`, as
+  under Claude Code) → the nearest of 256; any other `TERM` → the 16 basic colours;
+- `--color auto|never|16|256|truecolor` and `--glyphs auto|ascii` on `render` /
+  `status` override the detection.
+
+On a filled (powerline) block the text is the style's `fg` when set, else
+black or white — whichever contrasts more (always ≥ 4.5:1; white on a
+terminal-themed 0–15 colour). A block whose colour is missing or unusable falls
+back to the palette's, so the ribbon never has an unpainted block or a stray
+chevron. The PR badge and the MCP breakdown are painted by role (`ok`, `warn`,
+`err`, `accent`, `muted` — theme keys too): on a filled block as a small chip,
+otherwise as a tint. Segments never embed escapes; the join layer paints.
 
 ### Glyph modes
 
