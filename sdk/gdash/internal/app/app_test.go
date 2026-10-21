@@ -16,13 +16,15 @@ import (
 
 type fakeFetcher struct {
 	calls atomic.Int32
+	width atomic.Int32 // the width of the last fetch
 	err   error
 	data  Data
 	rng   time.Duration
 }
 
-func (f *fakeFetcher) Fetch(_ context.Context, _ int, rng time.Duration, _ bool) (Data, error) {
+func (f *fakeFetcher) Fetch(_ context.Context, width int, rng time.Duration, _ bool) (Data, error) {
 	f.calls.Add(1)
+	f.width.Store(int32(width))
 	f.rng = rng
 	if f.err != nil {
 		return Data{}, f.err
@@ -231,5 +233,63 @@ func TestHelpRendersFromTheTable(t *testing.T) {
 	}
 	if !Keys().Has("r") || !Keys().Has("+") || Keys().Has("/") {
 		t.Fatal("gdash keymap: want r and +, not / (no search)")
+	}
+}
+
+// A program starts before it knows its size (bubbletea sends the first
+// WindowSizeMsg after Init). Fetching then asked Grafana for a 1-cell-wide
+// chart — two points per series — and that degraded frame stayed up until
+// the next refresh or `r`. Under mono every view switch starts gdash fresh,
+// so every switch showed it. The first fetch now waits for the size.
+func TestFirstFetchWaitsForTheSize(t *testing.T) {
+	f := &fakeFetcher{data: sample()}
+	m := New(Options{Fetcher: f, Range: "1h", Refresh: "30s", View: "sample", Now: time.Now, Tick: instantTick})
+	run(m, m.Init())
+	if n := f.calls.Load(); n != 0 {
+		t.Fatalf("fetched %d time(s) before the size was known (width %d)", n, f.width.Load())
+	}
+	_, cmd := m.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+	run(m, cmd)
+	if f.calls.Load() != 1 || f.width.Load() != 72 {
+		t.Fatalf("after the size: calls %d width %d, want 1 fetch at width 72", f.calls.Load(), f.width.Load())
+	}
+	if !strings.Contains(m.View(), "Pass rate") {
+		t.Fatalf("no frame after the first fetch:\n%s", m.View())
+	}
+}
+
+// A width change redraws at the new width (mono's zoom, a terminal resize);
+// a height-only change does not refetch.
+func TestResizeRefetchesOnlyWhenTheWidthChanges(t *testing.T) {
+	f := &fakeFetcher{data: sample()}
+	m, _ := newModel(f, "30s")
+	run(m, m.Init())
+	if f.calls.Load() != 1 || f.width.Load() != 72 {
+		t.Fatalf("init: calls %d width %d", f.calls.Load(), f.width.Load())
+	}
+	_, cmd := m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
+	run(m, cmd)
+	if f.calls.Load() != 1 {
+		t.Fatalf("a height-only resize refetched (calls %d)", f.calls.Load())
+	}
+	_, cmd = m.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
+	run(m, cmd)
+	if f.calls.Load() != 2 || f.width.Load() != 91 { // two columns: (200-1)/2 - 8
+		t.Fatalf("width change: calls %d width %d, want 2 at width 91", f.calls.Load(), f.width.Load())
+	}
+}
+
+// A resize while a fetch is in flight queues one more at the new width.
+func TestResizeWhileBusyFetchesAgainAfter(t *testing.T) {
+	f := &fakeFetcher{data: sample()}
+	m, _ := newModel(f, "30s")
+	cmd := m.Init() // the fetch is in flight; do not run it yet
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 12})
+	if !m.pending {
+		t.Fatal("a resize while busy did not queue a refetch")
+	}
+	run(m, cmd)
+	if f.calls.Load() != 2 || f.width.Load() != 92 {
+		t.Fatalf("calls %d width %d, want the queued fetch at width 92", f.calls.Load(), f.width.Load())
 	}
 }

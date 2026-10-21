@@ -83,7 +83,9 @@ type Model struct {
 	help    bool
 	pendG   bool
 	busy    bool
-	pending bool // a range change arrived while busy: fetch again after
+	pending bool // a range or width change arrived while busy: fetch again after
+	inited  bool // Init ran: the refresh clock is going
+	fetchW  int  // the chart width the last fetch asked for; 0 = none yet
 	skipped int
 
 	data      *Data
@@ -136,8 +138,21 @@ func absDur(d time.Duration) time.Duration {
 // Range is the current time range.
 func (m *Model) Range() time.Duration { return Ranges[m.rangeAt] }
 
-// Init fetches at once and starts the refresh clock.
-func (m *Model) Init() tea.Cmd { return tea.Batch(m.fetch(false), m.tick()) }
+// Init starts the refresh clock, and fetches at once when the size is already
+// known. A program usually starts before its first WindowSizeMsg; fetching
+// then would ask for a 1-cell-wide chart (two points per series) and leave
+// that degraded frame up until the next refresh, so the first fetch waits for
+// the size (Update).
+func (m *Model) Init() tea.Cmd {
+	m.inited = true
+	if m.w == 0 {
+		return m.tick()
+	}
+	return tea.Batch(m.fetch(false), m.tick())
+}
+
+// dataWidth is the chart width a fetch asks Grafana for.
+func (m *Model) dataWidth() int { return max(m.colWidth()-8, 1) }
 
 func (m *Model) tick() tea.Cmd {
 	return m.opt.Tick(m.refresh)
@@ -153,7 +168,8 @@ func (m *Model) colWidth() int {
 func (m *Model) fetch(reload bool) tea.Cmd {
 	m.busy = true
 	m.attempted = m.opt.Now()
-	f, width, rng := m.opt.Fetcher, max(m.colWidth()-8, 1), m.Range()
+	f, width, rng := m.opt.Fetcher, m.dataWidth(), m.Range()
+	m.fetchW = width
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), FetchTimeout)
 		defer cancel()
@@ -168,6 +184,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
 		m.clamp()
+		// The first size, or a new width: the data on screen was fetched for
+		// another width (or not at all), so fetch again at this one.
+		if m.inited && m.w > 0 && m.dataWidth() != m.fetchW {
+			if m.busy {
+				m.pending = true
+				return m, nil
+			}
+			return m, m.fetch(false)
+		}
 	case tickMsg:
 		if m.busy {
 			m.skipped++
