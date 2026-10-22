@@ -24,6 +24,8 @@ import (
 // storedAnswers is the entire on-disk surface. Adding a credential field here
 // would be the bug; `TestSavedAnswersNeverContainTheCredential` asserts on the
 // serialised bytes so a rename cannot smuggle one in.
+// The WSL networking answer is not here either: it is a per-host choice, so it
+// lives for one session and is never re-sent to other hosts in later ones.
 type storedAnswers struct {
 	Windows string `json:"windows,omitempty"`
 	Gemini  string `json:"gemini,omitempty"`

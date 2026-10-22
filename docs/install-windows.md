@@ -22,6 +22,30 @@ no manual export (`gff set install.windows.wispr-flow false && ./install.sh` jus
 - **No TTY** (backgrounded, or piped through `tail`/redirection) — the ask phase prints guidance
   instead of prompting, and the run performs the file deploy but no customization.
 
+## The deferred WSL networking step
+
+After the Desktop deploy, `install.sh` runs `install_windows.sh --wsl-network-auto`, which applies the
+gff flag `install.windows.wsl-network` (`off|nat|bridged|mirrored`, see
+[sshd-setup.md](./sshd-setup.md#wsl-networking-is-a-flag)). It first runs
+`set-wsl-network.ps1 -Status` **without elevation**; only if that reports something would change
+does it start one elevated run, with **its own UAC prompt** (separate from the `[y]` batch's).
+A machine that is already current never sees UAC, and `off` does nothing. After an elevated run
+it prints the new lines of `%LOCALAPPDATA%\dotfiles\set-wsl-network.log`. It never runs
+`wsl --shutdown` (it prints the command) and never creates the Hyper-V `WSLBridge` switch; a
+fresh `bridged` setup therefore asks for one UAC prompt per run until the switch exists.
+Declining UAC prints a warning and the rerun command:
+`bash <repo>/opt/bin/install_windows.sh <repo> --wsl-network`.
+
+A mode that was **recorded because it was found** on the machine (see
+[sshd-setup.md](./sshd-setup.md#wsl-networking-is-a-flag)) is only reported by this step: when
+`-Status` lists differences it prints them and the command above, and changes nothing. Running
+that command by hand, or choosing a different mode, hands the setup to dotfiles from then on. With
+no terminal, or when `install.sh` runs over ssh (a `fleet` wave uses `ssh -t`: a terminal, but
+nobody at the Windows desktop), the step never raises UAC; it prints the command to run at the
+machine. That command itself raises UAC whenever it has a terminal, ssh or not. A mode
+the machine cannot take as it is (`-Status` exit 4, e.g. `mirrored` while the Windows OpenSSH
+service holds port 22) is reported and left alone.
+
 ## Deploy vs. customization
 
 The `opt/Desktop/*` file deploy runs per-run regardless of the y/n answer — only the PowerShell

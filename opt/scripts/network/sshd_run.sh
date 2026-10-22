@@ -2,15 +2,6 @@
 # Check if sshd is running as a system service
 # Supports: systemctl (Linux), launchctl (macOS), and pgrep (fallback)
 
-if [ -f ~/.sshd.env ] ; then
-    . ~/.sshd.env
-fi
-
-if [ "${SSHD_LOGIN}" != "true" ] ; then
-    echo "SSHD_LOGIN is not set to true in ~/.sshd.env. Skipping."
-    exit 0
-fi
-
 # 1. Check systemctl (Modern Linux)
 if command -v systemctl &> /dev/null; then
     if systemctl is-active --quiet sshd || systemctl is-active --quiet ssh; then

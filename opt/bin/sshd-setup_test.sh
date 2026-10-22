@@ -165,6 +165,20 @@ EOF
 chmod +x "${TMPDIR_TEST}/mocks/apt-get"
 printf 'ssh-ed25519 AAAA-k\n' > "${TMPDIR_TEST}/keys_fixture2"
 
+# stub gff: logs every call; `list` serves $GFF_LIST_FILE; `version` ok.
+cat > "${TMPDIR_TEST}/mocks/gff" <<'EOF'
+#!/usr/bin/env bash
+echo "$*" >> "${GFF_LOG:?}"
+case "$1" in
+  version) exit 0 ;;
+  list) [ -f "${GFF_LIST_FILE:-/nonexistent}" ] && cat "$GFF_LIST_FILE"; exit 0 ;;
+  get) echo "${GFF_GET_VALUE:-true}"; exit 0 ;;
+esac
+exit 0
+EOF
+chmod +x "${TMPDIR_TEST}/mocks/gff"
+export GFF_LOG="${TMPDIR_TEST}/gff.log"; : > "$GFF_LOG"
+
 # native-first: sshd already running -> no apt-get install call
 cat > "${TMPDIR_TEST}/mocks/systemctl" <<'EOF'
 #!/usr/bin/env bash
@@ -174,9 +188,11 @@ EOF
 chmod +x "${TMPDIR_TEST}/mocks/systemctl"
 PKG_LOG="${TMPDIR_TEST}/pkg.log"; : > "$PKG_LOG"
 PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" HOME="$FAKE_HOME" PKG_LOG="$PKG_LOG" \
+  GFF_BIN="${TMPDIR_TEST}/mocks/gff" \
   SSHD_SETUP_KEYS_URL="${TMPDIR_TEST}/keys_fixture2" bash "$SSHD_SETUP" enable >/dev/null 2>&1
 assert_eq "$(cat "$PKG_LOG")" "" "enable skips install when sshd already running"
-assert_grep "sshd.env written with SSHD_LOGIN" "SSHD_LOGIN=true" "${FAKE_HOME}/.sshd.env"
+assert_grep "enable records the gff flag" "set install.network.sshd true" "$GFF_LOG"
+assert_exit_code 1 "enable writes no ~/.sshd.env" test -f "${FAKE_HOME}/.sshd.env"
 
 # NOT running + NOT installed -> installs openssh-server via apt-get
 cat > "${TMPDIR_TEST}/mocks/systemctl" <<'EOF'
@@ -196,6 +212,7 @@ chmod +x "${TMPDIR_TEST}/mocks/pgrep"
 : > "$PKG_LOG"
 INST_HOME="${TMPDIR_TEST}/insthome"; mkdir -p "$INST_HOME"
 PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" HOME="$INST_HOME" PKG_LOG="$PKG_LOG" \
+  GFF_BIN="${TMPDIR_TEST}/mocks/gff" \
   SSHD_SETUP_SSHD_PATH=/nonexistent SSHD_SETUP_KEYS_URL="${TMPDIR_TEST}/keys_fixture2" \
   bash "$SSHD_SETUP" enable >/dev/null 2>&1
 case "$(cat "$PKG_LOG")" in
@@ -216,6 +233,60 @@ DRY_HOME="${TMPDIR_TEST}/dryhome"; mkdir -p "$DRY_HOME"
 PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" HOME="$DRY_HOME" \
   SSHD_SETUP_KEYS_URL="${TMPDIR_TEST}/keys_fixture2" bash "$SSHD_SETUP" --dry-run enable >/dev/null 2>&1
 assert_exit_code 1 "dry-run wrote no sshd.env" test -f "${DRY_HOME}/.sshd.env"
+: > "$GFF_LOG"
+OUT=$(PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" HOME="$DRY_HOME" GFF_BIN="${TMPDIR_TEST}/mocks/gff" \
+  SSHD_SETUP_KEYS_URL="${TMPDIR_TEST}/keys_fixture2" bash "$SSHD_SETUP" --dry-run enable 2>&1)
+case "$OUT" in *"DRY: gff set install.network.sshd true"*) echo "PASS: dry-run prints gff set line"; PASS=$((PASS+1));;
+  *) echo "FAIL: dry-run missing gff set line (got: $OUT)"; FAIL=$((FAIL+1));; esac
+assert_eq "$(cat "$GFF_LOG")" "" "dry-run makes no gff calls"
+
+# no usable gff -> exit 1 with the install.sh hint
+set +e
+OUT=$(PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" HOME="$DRY_HOME" GFF_BIN="${TMPDIR_TEST}/nogff" \
+  SSHD_SETUP_KEYS_URL="${TMPDIR_TEST}/keys_fixture2" bash "$SSHD_SETUP" enable 2>&1); RC=$?
+set -e
+assert_eq "$RC" "1" "enable without gff exits 1"
+case "$OUT" in *"sshd-setup: gff not found — run install.sh first"*) echo "PASS: missing gff hint"; PASS=$((PASS+1));;
+  *) echo "FAIL: missing gff hint (got: $OUT)"; FAIL=$((FAIL+1));; esac
+
+# WSL enable: nothing detected, WSLNET_ANSWER=nat -> records the mode, prints next step
+echo "Linux version 6.6 microsoft-standard-WSL2" > "${TMPDIR_TEST}/proc_wsl"
+WSL_HOME="${TMPDIR_TEST}/wslhome"; mkdir -p "$WSL_HOME"
+: > "$GFF_LOG"; rm -f "${TMPDIR_TEST}/gff_list"
+wsl_enable() {
+  PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" HOME="$WSL_HOME" GFF_BIN="${TMPDIR_TEST}/mocks/gff" \
+    SSHD_SETUP_PROC_VERSION="${TMPDIR_TEST}/proc_wsl" \
+    WSLNET_WSLCONFIG="${TMPDIR_TEST}/none.wslconfig" WSLNET_NETSH="${TMPDIR_TEST}/nonetsh" \
+    WSLNET_PS="${TMPDIR_TEST}/nops" WSLNET_K3S_BIN="${TMPDIR_TEST}/nok3s" WSLNET_ANSWER=nat \
+    GFF_LIST_FILE="${TMPDIR_TEST}/gff_list" \
+    SSHD_SETUP_KEYS_URL="${TMPDIR_TEST}/keys_fixture2" bash "$SSHD_SETUP" enable 2>&1
+}
+set +e; OUT=$(wsl_enable); RC=$?; set -e
+assert_eq "$RC" "0" "WSL enable exits 0 (no set -u/-e abort)"
+assert_grep "WSL enable records nat" "set install.windows.wsl-network nat" "$GFF_LOG"
+case "$OUT" in *"Next: re-run install.sh to apply it on Windows."*) echo "PASS: WSL next-step line"; PASS=$((PASS+1));;
+  *) echo "FAIL: WSL next-step line missing (got: $OUT)"; FAIL=$((FAIL+1));; esac
+
+# re-run with the mode already set by this machine: no set, no prompt
+printf 'install.windows.wsl-network choice nat user-override\n' > "${TMPDIR_TEST}/gff_list"
+: > "$GFF_LOG"
+set +e; OUT=$(wsl_enable); RC=$?; set -e
+assert_eq "$RC" "0" "WSL re-run exits 0"
+if grep -q "set install.windows.wsl-network" "$GFF_LOG"; then
+  echo "FAIL: re-run re-set wsl-network"; FAIL=$((FAIL+1))
+else echo "PASS: re-run leaves wsl-network alone"; PASS=$((PASS+1)); fi
+case "$OUT" in *"How should this Windows host"*) echo "FAIL: re-run prompted"; FAIL=$((FAIL+1));;
+  *) echo "PASS: re-run did not prompt"; PASS=$((PASS+1));; esac
+
+# status prints the flag, not sshd.env
+OUT=$(PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" HOME="$DRY_HOME" GFF_BIN="${TMPDIR_TEST}/mocks/gff" GFF_GET_VALUE=true bash "$SSHD_SETUP" status 2>&1)
+case "$OUT" in *"sshd flag: true"*) echo "PASS: status shows flag"; PASS=$((PASS+1));;
+  *) echo "FAIL: status flag (got: $OUT)"; FAIL=$((FAIL+1));; esac
+case "$OUT" in *"sshd.env"*) echo "FAIL: status still mentions sshd.env"; FAIL=$((FAIL+1));;
+  *) echo "PASS: status drops sshd.env"; PASS=$((PASS+1));; esac
+OUT=$(PATH="${TMPDIR_TEST}/mocks:${SANDBOX_PATH}" HOME="$DRY_HOME" GFF_BIN="${TMPDIR_TEST}/nogff" bash "$SSHD_SETUP" status 2>&1)
+case "$OUT" in *"sshd flag: unknown (gff not found)"*) echo "PASS: status without gff"; PASS=$((PASS+1));;
+  *) echo "FAIL: status without gff (got: $OUT)"; FAIL=$((FAIL+1));; esac
 assert_exit_code 1 "dry-run wrote no authorized_keys" test -f "${DRY_HOME}/.ssh/authorized_keys"
 
 _test_report

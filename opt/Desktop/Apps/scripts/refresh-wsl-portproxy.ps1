@@ -78,6 +78,18 @@ if ($current -eq $wslIp) {
     Write-Log "portproxy :$ListenPort -> ${wslIp}:22 updated (was $was)"
 }
 
+# A forward nobody can reach is no forward: open the listen port inbound, or a
+# LAN client (fleet) times out even though the rule above is correct. Same rule
+# name as setup-sshd.ps1 -WslPortProxy. LocalSubnet keeps sshd off strangers on
+# a Public network (Wi-Fi often is) while letting same-LAN hosts in.
+$fwName = "WSL-SSH-$ListenPort"
+if (-not (Get-NetFirewallRule -Name $fwName -ErrorAction SilentlyContinue)) {
+    New-NetFirewallRule -Name $fwName -DisplayName "WSL sshd ($ListenPort)" `
+        -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort $ListenPort `
+        -RemoteAddress LocalSubnet -Profile Any | Out-Null
+    Write-Log "firewall rule '$fwName' created (inbound TCP $ListenPort, LocalSubnet)"
+}
+
 if ($RegisterTask) {
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
         -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -ListenPort $ListenPort -Distro $Distro"

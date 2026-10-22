@@ -7,7 +7,7 @@
 # ask Windows for its actual path via PowerShell and translate it with wslpath.
 #
 # Usage (called from install.sh):
-#   bash "${BASE_DIR}/opt/bin/install_windows.sh" "<BASE_DIR>" [--ask|--deferred]
+#   bash "${BASE_DIR}/opt/bin/install_windows.sh" "<BASE_DIR>" [--ask|--deferred|--wsl-network]
 #
 #   --ask       WSL-detect, check the skip state, prompt y/n/s, persist the
 #               choice (~/.cache/dotfiles/win-setup-choice). Runs EARLY in
@@ -18,6 +18,10 @@
 #               permanent skip for "s". Runs at the END of install.sh, after
 #               the gff bootstrap has exported GFF_* (so the WSLENV hand-off
 #               below actually carries the flags).
+#   --wsl-network  Apply the recorded WSL networking mode
+#               (GFF_INSTALL_WINDOWS_WSL_NETWORK): read-only -Status check, then
+#               ONE elevated set-wsl-network.ps1 run only when it would change
+#               something. Independent of the desktop-deploy gate.
 #   (no mode)   Legacy standalone flow: ask, then execute immediately.
 #
 # No-op when not running inside WSL / Windows.
@@ -59,6 +63,179 @@ export WINSETUP_REPO_DIR="${BASE_DIR}"
 # Nerd Font installer).
 # shellcheck source=opt/lib/winpowershell.sh
 . "$(cd -- "$(dirname "$0")" && pwd -P)/../lib/winpowershell.sh"
+# wslnet_detected_mode / wslnet_forget_detected for --wsl-network-auto.
+# shellcheck source=opt/lib/wslnet.sh
+. "$(cd -- "$(dirname "$0")" && pwd -P)/../lib/wslnet.sh"
+
+# -----------------------------------------------------------------------------
+# --wsl-network: apply the WSL networking mode that sshd-setup recorded
+# (GFF_INSTALL_WINDOWS_WSL_NETWORK = off|nat|bridged|mirrored). Handled BEFORE
+# the desktop-deploy gate and the /proc/version check: the mode is recorded
+# independently of the Desktop deploy, and a missing powershell.exe simply
+# means there is nothing to apply (exit 0, quiet).
+#
+# Flow: ask `set-wsl-network.ps1 -Status -Mode <m>` (read-only, no elevation).
+#   rc 0 -> already current, done.   rc 3 -> ONE elevated `-Mode <m>` run.
+#   rc 4 -> the mode cannot be applied as the machine is (reason printed).
+# --wsl-network-auto (what install.sh runs) is the same, except for a mode that
+# wslnet_sync recorded because it FOUND it on the machine (wslnet_detected_mode):
+# that setup is reported, never changed. Running --wsl-network by hand, or
+# choosing another mode, hands it to dotfiles from then on.
+# The script dir must be a LOCAL Windows path (an elevated process cannot read a
+# \\wsl.localhost UNC path): the Desktop copy when complete, else a copy under
+# %LOCALAPPDATA%\dotfiles\wsl-network\. </dev/null on every powershell.exe call
+# (it eats the parent's stdin under WSL interop). Never fails the install.
+# -----------------------------------------------------------------------------
+run_wsl_network_setup() {
+  _wn_auto="${1:-}"
+  _wn_mode="${GFF_INSTALL_WINDOWS_WSL_NETWORK:-off}"
+  case "$_wn_mode" in
+    off|"") return 0 ;;
+    nat|bridged|mirrored) : ;;
+    *) echo "WARNING: unknown WSL network mode '${_wn_mode}' (want nat|bridged|mirrored); skipping." >&2; return 0 ;;
+  esac
+  # _wn_found: the mode is one this machine already had, so the automatic run
+  # only reports it. A marker for another mode is stale: the operator chose since.
+  _wn_found=""
+  _wn_det="$(wslnet_detected_mode)"
+  if [ -n "$_wn_det" ] && [ "$_wn_det" != "$_wn_mode" ]; then
+    wslnet_forget_detected
+  elif [ -n "$_wn_det" ] && [ "$_wn_auto" = auto ]; then
+    _wn_found=1
+  fi
+  _wn_ps="$(find_powershell || true)"
+  [ -n "$_wn_ps" ] || return 0
+
+  _wn_src="${BASE_DIR}/opt/Desktop/Apps/scripts"
+  _wn_dir=""
+  # Reuse the Desktop path cached by deploy_windows_files when present.
+  _wn_desk=""
+  if [ -f "${HOME}/.cache/dotfiles/winenv.sh" ]; then
+    _wn_desk="$(sed -n 's/^WIN_DESKTOP="\(.*\)"$/\1/p' "${HOME}/.cache/dotfiles/winenv.sh" | head -n 1)"
+  fi
+  if [ -z "$_wn_desk" ] || [ ! -d "$_wn_desk" ]; then
+    _wn_raw="$("$_wn_ps" -NoProfile -Command "[Environment]::GetFolderPath('Desktop')" </dev/null 2>/dev/null | tr -d '\r' || true)"
+    _wn_desk="$(wslpath -u "$_wn_raw" 2>/dev/null || true)"
+  fi
+  # %LOCALAPPDATA% holds the fallback script copy and set-wsl-network.log.
+  # shellcheck disable=SC2016  # $env:LOCALAPPDATA is PowerShell syntax
+  _wn_raw="$("$_wn_ps" -NoProfile -Command '$env:LOCALAPPDATA' </dev/null 2>/dev/null | tr -d '\r' || true)"
+  _wn_la="$(wslpath -u "$_wn_raw" 2>/dev/null || true)"
+  if [ -n "$_wn_la" ] && [ ! -d "$_wn_la" ]; then _wn_la=""; fi
+  _wn_cand="${_wn_desk}/Apps/scripts"
+  if [ -n "$_wn_desk" ] && [ -f "${_wn_cand}/set-wsl-network.ps1" ] \
+     && [ -f "${_wn_cand}/refresh-wsl-portproxy.ps1" ] && [ -f "${_wn_cand}/lib/wsl.ps1" ]; then
+    _wn_dir="$_wn_cand"
+  else
+    if [ -z "$_wn_la" ]; then
+      echo "WARNING: could not resolve %LOCALAPPDATA%; cannot apply WSL network mode '${_wn_mode}'." >&2
+      return 0
+    fi
+    _wn_dir="${_wn_la}/dotfiles/wsl-network"
+    if ! { mkdir -p "${_wn_dir}/lib" \
+        && cp -f "${_wn_src}/set-wsl-network.ps1" "${_wn_src}/refresh-wsl-portproxy.ps1" "${_wn_dir}/" \
+        && cp -f "${_wn_src}/lib/wsl.ps1" "${_wn_src}/lib/gff.ps1" "${_wn_dir}/lib/"; }; then
+      echo "WARNING: could not copy the WSL network scripts to ${_wn_dir}; skipping." >&2
+      return 0
+    fi
+    # Pin the distro (lib\wsl.ps1 reads it) - the elevated child may not see WSLENV.
+    if [ -n "${DOTFILES_WSL_DISTRO:-${WSL_DISTRO_NAME:-}}" ]; then
+      printf '%s\r\n' "${DOTFILES_WSL_DISTRO:-${WSL_DISTRO_NAME:-}}" > "${_wn_dir}/lib/wsl-distro.txt" \
+        || echo "WARNING: could not pin the WSL distro in ${_wn_dir}/lib; the script will auto-detect." >&2
+    fi
+  fi
+  _wn_ps1_w="$(wslpath -w "${_wn_dir}/set-wsl-network.ps1" 2>/dev/null || true)"
+  if [ -z "$_wn_ps1_w" ]; then
+    echo "WARNING: could not resolve set-wsl-network.ps1 as a Windows path; skipping." >&2
+    return 0
+  fi
+
+  _wn_log="$(mktemp "${TMPDIR:-/tmp}/wsl-network.XXXXXX" 2>/dev/null || true)"
+  if [ -z "$_wn_log" ]; then
+    echo "WARNING: could not create a temp file; skipping the WSL network step." >&2
+    return 0
+  fi
+  _wn_rc=0
+  "$_wn_ps" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$_wn_ps1_w" -Status -Mode "$_wn_mode" </dev/null >"$_wn_log" 2>&1 || _wn_rc=$?
+  tr -d '\r' <"$_wn_log"
+  rm -f "$_wn_log"
+  case "$_wn_rc" in
+    0)
+      echo "WSL network '${_wn_mode}' already current"
+      # A complete setup run by hand is now dotfiles' to keep current.
+      [ -n "$_wn_found" ] || wslnet_forget_detected
+      ;;
+    3)
+      if [ -n "$_wn_found" ]; then
+        echo "WSL network '${_wn_mode}' was recorded from this machine's existing setup, so install.sh leaves it as it is (differences above)."
+        echo "  To have dotfiles complete and manage it: bash \"${BASE_DIR}/opt/bin/install_windows.sh\" \"${BASE_DIR}\" --wsl-network"
+        return 0
+      fi
+      # The elevation is a UAC prompt on the Windows desktop, and -Wait blocks
+      # until someone answers it. With no terminal nobody can, and on the
+      # automatic run over ssh (a fleet wave uses ssh -t: a terminal, but
+      # nobody at that desktop) nobody is expected to: say what to run instead
+      # and leave the machine as it is. The hand-run --wsl-network is the
+      # operator's own request, so ssh alone does not stop it.
+      if ! wslnet_has_tty || { [ "$_wn_auto" = auto ] && [ -n "${SSH_CONNECTION:-}" ]; }; then
+        echo "WARNING: WSL network mode '${_wn_mode}' needs an elevated run (a UAC prompt on this machine's desktop), and nobody is there to answer it (no terminal, or install.sh over ssh); not applying." >&2
+        echo "         At this machine: bash \"${BASE_DIR}/opt/bin/install_windows.sh\" \"${BASE_DIR}\" --wsl-network" >&2
+        return 0
+      fi
+      echo "Applying WSL network mode '${_wn_mode}'..."
+      echo "  A UAC prompt will appear - approve it (only this step needs admin)."
+      # The elevated child's window is separate, so show what it logged: count
+      # the log's lines before, print only those appended by this run.
+      _wn_applog=""
+      [ -n "$_wn_la" ] && _wn_applog="${_wn_la}/dotfiles/set-wsl-network.log"
+      _wn_before=0
+      if [ -n "$_wn_applog" ] && [ -f "$_wn_applog" ]; then
+        _wn_before="$(wc -l <"$_wn_applog" | tr -d ' ')"
+      fi
+      _wn_psq=$(printf '%s' "$_wn_ps1_w" | sed "s/'/''/g")
+      _wn_rc=0
+      # -PassThru + exit $p.ExitCode surfaces the elevated child's own exit code.
+      # The -File path is wrapped in literal double quotes for paths with spaces.
+      "$_wn_ps" -NoProfile -NonInteractive -Command "try { \$p = Start-Process powershell -Verb RunAs -Wait -PassThru -WorkingDirectory \$env:SystemRoot -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"${_wn_psq}\"','-Mode','${_wn_mode}'; exit \$p.ExitCode } catch { Write-Host \$_.Exception.Message; exit 1 }" </dev/null || _wn_rc=$?
+      if [ -n "$_wn_applog" ] && [ -f "$_wn_applog" ]; then
+        _wn_new="$(tail -n +"$((_wn_before + 1))" "$_wn_applog" | tr -d '\r')"
+        if [ -n "$_wn_new" ]; then
+          echo "  set-wsl-network.log (this run):"
+          printf '%s\n' "$_wn_new" | sed 's/^/    /'
+        fi
+      fi
+      if [ "$_wn_rc" -ne 0 ]; then
+        echo "WARNING: elevated set-wsl-network.ps1 exited with code ${_wn_rc} (declined UAC or apply failed)." >&2
+        echo "         Re-run: bash \"${BASE_DIR}/opt/bin/install_windows.sh\" \"${BASE_DIR}\" --wsl-network" >&2
+      else
+        echo "WSL network mode '${_wn_mode}' applied (details: ${_wn_applog:-the set-wsl-network.log under %LOCALAPPDATA%\\dotfiles})."
+        wslnet_forget_detected
+      fi
+      ;;
+    4)
+      if [ -n "$_wn_found" ]; then
+        # Not a change refused: the clash is on the machine already. Left as
+        # it is, but loudly, since ssh may be reaching the wrong sshd.
+        echo "WARNING: this machine's existing WSL network setup ('${_wn_mode}') has a problem (reason above); install.sh leaves it as it is." >&2
+        return 0
+      fi
+      echo "WARNING: WSL network mode '${_wn_mode}' cannot be applied on this machine as it is (reason above); nothing changed." >&2
+      ;;
+    *)
+      echo "WARNING: set-wsl-network.ps1 -Status exited with code ${_wn_rc}; not applying." >&2
+      ;;
+  esac
+  return 0
+}
+
+if [ "$MODE" = "--wsl-network" ]; then
+  run_wsl_network_setup
+  exit 0
+fi
+if [ "$MODE" = "--wsl-network-auto" ]; then
+  run_wsl_network_setup auto
+  exit 0
+fi
 
 gff_on install.windows.desktop-deploy || { gff_skip_msg install.windows.desktop-deploy; exit 0; }
 
@@ -182,6 +359,16 @@ deploy_windows_files() {
   # Unlinking first always works, so overwrite via unlink+create. GNU-only
   # flag is fine: this deploy path only runs under WSL (Ubuntu coreutils).
   cp -r --remove-destination "${BASE_DIR}/opt/Desktop/." "${win_desktop}/"
+
+  # Pin the deployed scripts to the distro install.sh runs in: lib\wsl.ps1 reads
+  # this marker, so hand runs and scheduled tasks (e.g. RefreshWslPortProxy)
+  # target this distro instead of a name hardcoded for another machine.
+  # An explicit DOTFILES_WSL_DISTRO wins, as in export_gff_wslenv.
+  _wsl_distro="${DOTFILES_WSL_DISTRO:-${WSL_DISTRO_NAME:-}}"
+  if [ -n "$_wsl_distro" ]; then
+    printf '%s\r\n' "$_wsl_distro" > "${win_desktop}/Apps/scripts/lib/wsl-distro.txt"
+    echo "Pinned WSL distro '${_wsl_distro}' -> Apps/scripts/lib/wsl-distro.txt"
+  fi
 }
 
 # -----------------------------------------------------------------------------
@@ -207,6 +394,14 @@ export_gff_wslenv() {
     -e 's/^\(GFF_KEYBOARD_[A-Z_]*\)=.*/\1/p'); do
     case ":${_gff_wslenv}:" in *":${_v}/w:"*) : ;; *) _gff_wslenv="${_gff_wslenv:+${_gff_wslenv}:}${_v}/w" ;; esac
   done
+  # DOTFILES_WSL_DISTRO rides along too: lib\wsl.ps1 resolves "the one distro"
+  # from it first, so a script launched from here targets the distro install.sh
+  # runs in. An explicit DOTFILES_WSL_DISTRO from the caller wins.
+  _wsl_distro="${DOTFILES_WSL_DISTRO:-${WSL_DISTRO_NAME:-}}"
+  if [ -n "$_wsl_distro" ]; then
+    export DOTFILES_WSL_DISTRO="$_wsl_distro"
+    case ":${_gff_wslenv}:" in *":DOTFILES_WSL_DISTRO/w:"*) : ;; *) _gff_wslenv="${_gff_wslenv:+${_gff_wslenv}:}DOTFILES_WSL_DISTRO/w" ;; esac
+  fi
   export WSLENV="${_gff_wslenv}"
 }
 
