@@ -38,6 +38,7 @@ PS_EXE=$(command -v powershell.exe 2>/dev/null || true)
 if [ -z "$PS_EXE" ] || ! command -v wslpath >/dev/null 2>&1; then
   echo "SKIP: powershell.exe/wslpath not available"
   _test_report
+  exit $?
 fi
 
 # resolve <dir-holding-wsl.ps1, Windows form> [env assignments...]
