@@ -78,4 +78,8 @@ type LinkedSegment interface {
 type LinkSpan struct {
 	Start, End int
 	URL        string
+	// Role, when set, paints the run with a style role ("ok", "err", …) —
+	// the PR badge's state, the MCP breakdown's parts. Like URL it is data,
+	// never an escape: the join layer paints it (plan F11).
+	Role string
 }

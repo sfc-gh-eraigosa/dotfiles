@@ -417,7 +417,7 @@ func Fit(datas []segmentData, st style.Style, cols int) string {
 	if text == "" {
 		return ""
 	}
-	return paint(st, blocks[0].colorKey, text)
+	return paint(st, blocks[0].colorKey, text, nil)
 }
 
 // dropOrder returns the indices of the non-nil segments in the order Fit should

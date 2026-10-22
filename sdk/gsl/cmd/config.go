@@ -13,8 +13,15 @@ import (
 
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Manage the gsl configuration",
-	Long:  "Manage the gsl configuration file (~/.config/gsl/config.json).",
+	Short: "Manage the gsl configuration (no subcommand: the config studio)",
+	Long: `Manage the gsl configuration file (~/.config/gsl/config.json).
+
+With no subcommand, gsl config opens the studio (needs a terminal): rows for
+the style, palette, links and time settings and every segment, a live preview
+of the line at an adjustable width with a ruler, the MCP health panel, and w to
+save. The subcommands are unchanged.`,
+	Args: cobra.NoArgs,
+	RunE: runConfigStudio,
 }
 
 var configGetCmd = &cobra.Command{
@@ -76,7 +83,18 @@ var configSetCmd = &cobra.Command{
 		}
 		switch key {
 		case "style":
+			if err := knownStyle(cfg, value); err != nil {
+				return fmt.Errorf("gsl config set style %q: %w", value, err)
+			}
 			cfg.Style = value
+		case "palette":
+			if value == "auto" {
+				value = ""
+			}
+			if _, ok := style.Palette(value); value != "" && !ok {
+				return fmt.Errorf("gsl config set palette: want auto, dark, light, dark8 or dark-daltonism, got %q", value)
+			}
+			cfg.Palette = value
 		case "timezone":
 			cfg.Timezone = value
 		case "time_format":

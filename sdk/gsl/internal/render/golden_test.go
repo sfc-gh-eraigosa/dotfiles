@@ -11,8 +11,6 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 	ghfake "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh/fake"
 	gitfake "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git/fake"
-	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp"
-	mcpfake "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp/fake"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/style"
 )
 
@@ -46,8 +44,7 @@ func buildGoldenSegments(t *testing.T, isWorktree bool, mcpDir string) []Segment
 
 	// ai: full payload; MCP configured=2 (.mcp.json in mcpDir), active=1 via fake.
 	writeMcpJSON(t, mcpDir, 2)
-	mcpRunner := &mcpfake.Runner{Default: mcpfake.Response{Stdout: []byte("a: x - ✓ Connected\nb: y - ✗ no\n")}}
-	aiSeg := NewAISegment(samplePayload(), mcpDir, mcpRunner, mcp.ActiveCountOptions{CacheFile: filepath.Join(mcpDir, "ac.json")})
+	aiSeg := NewAISegment(samplePayload(), mcpDir, mcpOneOfTwo())
 
 	// time: fixed clock in UTC for a stable abbreviation.
 	timeSeg := NewTimeSegment(fixedClock(), "UTC", "15:04", "Mon 01-02")

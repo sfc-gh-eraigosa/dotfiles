@@ -9,7 +9,6 @@ import (
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp"
-	mcpfake "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp/fake"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/payload"
 )
 
@@ -19,14 +18,14 @@ func isolateMCPEnv(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", dir) // empty dir → no .claude.json
-	t.Setenv("XDG_CACHE_HOME", dir)    // isolate the mcp ActiveCount cache
+	t.Setenv("XDG_CACHE_HOME", dir)    // isolate the mcp cache
 	return dir
 }
 
 func TestAI_NoPayload_Omits(t *testing.T) {
 	isolateMCPEnv(t)
 	st := asciiStyle()
-	seg := NewAISegment(payload.Payload{}, "", nil, mcp.ActiveCountOptions{})
+	seg := NewAISegment(payload.Payload{}, "", mcp.Options{})
 	if _, _, ok := seg.Render(context.Background(), st, 0); ok {
 		t.Error("ai: empty payload should self-omit (ok=false)")
 	}
@@ -40,10 +39,8 @@ func TestAI_FullPayload_ASCII(t *testing.T) {
 	st := asciiStyle()
 	// Active count via fake: one connected (✓) line, cache disabled by
 	// pointing at a fresh file that doesn't exist yet.
-	r := &mcpfake.Runner{Default: mcpfake.Response{Stdout: []byte("srvA: x - ✓ Connected\nsrvB: y - ✗ Failed\n")}}
-	opts := mcp.ActiveCountOptions{CacheFile: filepath.Join(cwd, "active.json")}
 
-	seg := NewAISegment(samplePayload(), cwd, r, opts)
+	seg := NewAISegment(samplePayload(), cwd, mcpOneOfTwo())
 	got, colorKey, ok := seg.Render(context.Background(), st, 0)
 	if !ok {
 		t.Fatal("ai: full payload should render (ok=true)")
@@ -51,7 +48,7 @@ func TestAI_FullPayload_ASCII(t *testing.T) {
 	if colorKey != "ai" {
 		t.Errorf("ai: want colorKey=ai, got %q", colorKey)
 	}
-	for _, want := range []string{"Opus 4.7", "42%", "84k", "200k", "1/2", "5h 80%", "7d 15%"} {
+	for _, want := range []string{"Opus 4.7", "42%", "84k", "200k", "1✓ 1✗", "5h 80%", "7d 15%"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("ai output %q missing %q", got, want)
 		}
@@ -63,7 +60,7 @@ func TestAI_NilFieldsSkippedGracefully(t *testing.T) {
 	st := asciiStyle()
 	// Only a model name; context + rate limits absent.
 	p := payload.Payload{Model: &payload.Model{DisplayName: strptr("Sonnet")}}
-	seg := NewAISegment(p, "", nil, mcp.ActiveCountOptions{})
+	seg := NewAISegment(p, "", mcp.Options{})
 	got, _, ok := seg.Render(context.Background(), st, 0)
 	if !ok {
 		t.Fatal("ai: model-only payload should render")
@@ -82,7 +79,7 @@ func TestAI_ModelOnlyNoName_ShowsAnchorWhenOtherDataPresent(t *testing.T) {
 	p := payload.Payload{
 		ContextWindow: &payload.ContextWindow{UsedPercentage: f64ptr(10)},
 	}
-	seg := NewAISegment(p, "", nil, mcp.ActiveCountOptions{})
+	seg := NewAISegment(p, "", mcp.Options{})
 	got, _, ok := seg.Render(context.Background(), st, 0)
 	if !ok {
 		t.Fatal("ai: ctx-only payload should render")
@@ -112,7 +109,7 @@ func writeMcpJSON(t *testing.T, dir string, n int) {
 }
 
 func TestAI_Spans_UsageFourFields(t *testing.T) {
-	seg := NewAISegment(samplePayload(), "", nil, mcp.ActiveCountOptions{})
+	seg := NewAISegment(samplePayload(), "", mcp.Options{})
 	seg.Links = Links{AI: true, UsageURL: DefaultClaudeUsageURL}
 	text, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
 	if len(spans) != 4 {
@@ -133,7 +130,7 @@ func TestAI_Spans_UsageFourFields(t *testing.T) {
 func TestAI_Spans_ModelURL_Gemini(t *testing.T) {
 	p := samplePayload()
 	p.Model = &payload.Model{ID: strptr("Gemini 3.5 Flash (Medium)"), DisplayName: strptr("Gemini 3.5 Flash (Medium)")}
-	seg := NewAISegment(p, "", nil, mcp.ActiveCountOptions{})
+	seg := NewAISegment(p, "", mcp.Options{})
 	seg.Links = Links{AI: true, UsageURL: DefaultClaudeUsageURL}
 	_, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
 	if len(spans) != 4 || spans[0].URL != DefaultGeminiModelURL {
@@ -144,7 +141,7 @@ func TestAI_Spans_ModelURL_Gemini(t *testing.T) {
 func TestAI_Spans_ModelURL_UnknownFamilyHasNoModelLink(t *testing.T) {
 	p := samplePayload()
 	p.Model = &payload.Model{DisplayName: strptr("Mystery")}
-	seg := NewAISegment(p, "", nil, mcp.ActiveCountOptions{})
+	seg := NewAISegment(p, "", mcp.Options{})
 	seg.Links = Links{AI: true, UsageURL: DefaultClaudeUsageURL}
 	text, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
 	if len(spans) != 3 || strings.Contains(text[spans[0].Start:spans[0].End], "Mystery") {
@@ -155,7 +152,7 @@ func TestAI_Spans_ModelURL_UnknownFamilyHasNoModelLink(t *testing.T) {
 func TestAI_Spans_ModelURL_TemplateOverride(t *testing.T) {
 	p := samplePayload()
 	p.Model = &payload.Model{ID: strptr("claude-fable-5-1"), DisplayName: strptr("Fable")}
-	seg := NewAISegment(p, "", nil, mcp.ActiveCountOptions{})
+	seg := NewAISegment(p, "", mcp.Options{})
 	seg.Links = Links{AI: true, ModelURL: "https://x/{family}/{model_id}"}
 	_, _, spans, _ := seg.RenderLinked(context.Background(), asciiStyle(), 0)
 	if len(spans) != 1 || spans[0].URL != "https://x/fable/claude-fable-5-1" {
@@ -183,7 +180,7 @@ func TestBuildSegments_AIModelURLOption(t *testing.T) {
 }
 
 func TestAI_Spans_NoUsageURL(t *testing.T) {
-	seg := NewAISegment(samplePayload(), "", nil, mcp.ActiveCountOptions{})
+	seg := NewAISegment(samplePayload(), "", mcp.Options{})
 	seg.Links = Links{AI: true}
 	// No usage URL ⇒ no context/rate spans; the model name still opens its
 	// model page (built-in family map).

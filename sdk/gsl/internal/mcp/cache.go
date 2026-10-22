@@ -1,198 +1,233 @@
 package mcp
 
 import (
-	"bufio"
-	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
-// cacheTTL is how long a written cache entry is considered fresh.
-const cacheTTL = 60 * time.Second
+// cache.go — the stale-while-revalidate MCP cache (plan F7).
+//
+// One JSON file per working directory, ${XDG_CACHE_HOME:-~/.cache}/gsl/mcp/
+// <sha256(cwd)[:16]>.json. A render reads it with Get (never spawns); Refresh
+// is the only writer and runs out of band, single-flight under a lockfile,
+// with failures cached negatively under exponential backoff.
 
-// runnerTimeout caps how long we wait for `claude mcp list`.
-const runnerTimeout = 500 * time.Millisecond
+const (
+	// defaultTTL is how long a probe stays fresh. The probe takes ~4 s and dials
+	// every server, so it is not worth repeating more often than this.
+	defaultTTL = 2 * time.Minute
+	// probeTimeout bounds one `claude mcp list` (measured 3.4–4.1 s).
+	probeTimeout = 30 * time.Second
+	// backoffBase and backoffMax bound the negative cache: 30 s, 1 m, 2 m, …
+	backoffBase = 30 * time.Second
+	backoffMax  = 30 * time.Minute
+)
 
-// cacheEntry is the JSON structure written to the cache file.
-type cacheEntry struct {
-	Count int   `json:"count"`
-	TS    int64 `json:"ts"` // Unix timestamp (seconds) of when the entry was written
+// entry is one cwd's cache file.
+type entry struct {
+	Cwd       string    `json:"cwd"` // guards against a key collision
+	Status    Status    `json:"status"`
+	FetchedAt time.Time `json:"fetched_at"` // last successful probe; zero = never
+	Failures  int       `json:"failures,omitempty"`
+	RetryAt   time.Time `json:"retry_at,omitempty"` // no probe before this
+	LastError string    `json:"last_error,omitempty"`
 }
 
-// ErrNoCache is returned when ActiveCount has no cached value to fall back to
-// and the Runner call fails (timeout or other error).
-var ErrNoCache = errors.New("mcp: no cache and runner failed")
-
-// ActiveCountOptions configures ActiveCount.  Zero value uses system defaults.
-type ActiveCountOptions struct {
-	// CacheFile overrides the default cache path
-	// (${XDG_CACHE_HOME:-$HOME/.cache}/gsl/mcp.json).
-	CacheFile string
-
-	// Now, if non-nil, replaces time.Now() for cache-age calculations.
-	// Useful in tests.
-	Now func() time.Time
+// backoff is the wait after the n-th consecutive failure.
+func backoff(n int) time.Duration {
+	d := backoffBase
+	for i := 1; i < n && d < backoffMax; i++ {
+		d *= 2
+	}
+	return min(d, backoffMax)
 }
 
-// defaultCacheFile returns the default path for the gsl MCP cache.
-func defaultCacheFile() (string, error) {
-	cacheBase := os.Getenv("XDG_CACHE_HOME")
-	if cacheBase == "" {
+// key is the cache file stem for cwd: the first 16 hex digits of its sha256.
+func key(cwd string) string {
+	sum := sha256.Sum256([]byte(cwd))
+	return hex.EncodeToString(sum[:])[:16]
+}
+
+func (o Options) now() time.Time {
+	if o.Now != nil {
+		return o.Now()
+	}
+	return time.Now()
+}
+
+func (o Options) ttl() time.Duration {
+	if o.TTL > 0 {
+		return o.TTL
+	}
+	return defaultTTL
+}
+
+func (o Options) dir() (string, error) {
+	if o.CacheDir != "" {
+		return o.CacheDir, nil
+	}
+	base := os.Getenv("XDG_CACHE_HOME")
+	if base == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", err
 		}
-		cacheBase = filepath.Join(home, ".cache")
+		base = filepath.Join(home, ".cache")
 	}
-	return filepath.Join(cacheBase, "gsl", "mcp.json"), nil
+	return filepath.Join(base, "gsl", "mcp"), nil
 }
 
-// ActiveCount returns the number of MCP servers that are currently reporting
-// as connected/healthy.
+// Get returns the MCP status for cwd from the CACHE ONLY.
 //
-// Caching: the count is written to ${XDG_CACHE_HOME:-$HOME/.cache}/gsl/mcp.json
-// (or opts.CacheFile if set).  If a fresh entry exists (age < 60 s) the
-// cached value is returned immediately and the Runner is NOT called.
+// CONTRACT — the load-bearing invariant of the whole design:
 //
-// Subprocess: when the cache is absent or stale, Run(ctx, "claude", "mcp",
-// "list") is called with a ~500 ms timeout.  The output is parsed line by line;
-// a line is counted as connected when it contains the connected status token
-// "✓ Connected" in the status position.  Lines containing "✗" (failed) or that
-// lack the connected token are excluded.  The format
-// `<name>: <url> - ✓ Connected` is tolerated, as are minor spacing variations,
-// because matching keys on the "✓ Connected" status token rather than a bare
-// "✓" anywhere in the line (which a server name could contain).
+//	Get MUST NEVER spawn a subprocess, and MUST NEVER block on the network.
 //
-// Error handling:
-//   - Runner timeout or error with a non-stale cached value: returns the last
-//     cached count (stale but better than nothing).
-//   - Runner timeout or error with no cached value at all: returns (0,
-//     ErrNoCache) so the caller can decide (e.g. fall back to ConfiguredCount).
-//   - Fresh cache hit: returns the cached count and nil error.
-func ActiveCount(ctx context.Context, r Runner, opts ActiveCountOptions) (int, error) {
-	cacheFile := opts.CacheFile
-	if cacheFile == "" {
-		cf, err := defaultCacheFile()
-		if err != nil {
-			return 0, err
-		}
-		cacheFile = cf
+// It is called on the render hot path, once per assistant turn, and `claude
+// mcp list` takes 3.4–4.1 s. Configured is recomputed from the config files
+// (ConfiguredServers: file reads only). A fresh entry comes back with
+// Stale=false; an expired one still comes back — a slightly old count beats
+// none — with Stale=true; a cold cache returns only Configured, Stale=true.
+// RefreshDue tells the caller to start SpawnRefresh: stale, the backoff has
+// passed, and no refresh is already running.
+func Get(_ context.Context, cwd string, o Options) (Status, error) {
+	if o.Fixed != nil {
+		return *o.Fixed, nil
+	}
+	var s Status
+	servers, cfgErr := ConfiguredServers(cwd)
+	dir, err := o.dir()
+	if err != nil {
+		s.Configured, s.Stale = len(servers), true
+		return s, err
+	}
+	now := o.now()
+	e, ok := readEntry(filepath.Join(dir, key(cwd)+".json"))
+	if ok && e.Cwd == cwd {
+		s = e.Status
+		s.FetchedAt = e.FetchedAt
+	}
+	s.Configured = len(servers)
+	s.Stale = s.FetchedAt.IsZero() || now.Sub(s.FetchedAt) >= o.ttl()
+	s.RefreshDue = s.Stale && !now.Before(e.RetryAt) && !lockHeld(filepath.Join(dir, key(cwd)+".lock"))
+	return s, cfgErr
+}
+
+// Refresh runs the probe OUT OF BAND and rewrites cwd's cache entry.
+//
+// This is the ONLY function in the package that shells out; `gsl mcp refresh`
+// calls it, and the render path starts that verb detached (SpawnRefresh) —
+// never synchronously. The probe runs in the process's working directory, so
+// callers run it from cwd (SpawnRefresh sets it).
+//
+// Single-flight: a lockfile per cwd; a second Refresh while one runs returns
+// nil without probing. Negative caching: a failed probe keeps the last good
+// status, records the error and backs off (30 s doubling to 30 m); Refresh
+// during the backoff returns nil without probing unless o.Force.
+func Refresh(ctx context.Context, r Runner, cwd string, o Options) error {
+	dir, err := o.dir()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	path := filepath.Join(dir, key(cwd)+".json")
+	release, ok := acquire(filepath.Join(dir, key(cwd)+".lock"))
+	if !ok {
+		return nil // another refresh is running
+	}
+	defer release()
+
+	now := o.now()
+	e, had := readEntry(path)
+	if !had || e.Cwd != cwd {
+		e = entry{Cwd: cwd}
+	}
+	if !o.Force && now.Before(e.RetryAt) {
+		return nil // backing off after a failure
 	}
 
-	now := time.Now
-	if opts.Now != nil {
-		now = opts.Now
-	}
-
-	// ── Try cache ─────────────────────────────────────────────────────────────
-	entry, hasCached := readCache(cacheFile)
-	if hasCached {
-		age := now().Sub(time.Unix(entry.TS, 0))
-		if age < cacheTTL {
-			// Fresh cache hit — do NOT invoke the Runner.
-			return entry.Count, nil
-		}
-	}
-
-	// ── Call Runner ───────────────────────────────────────────────────────────
-	tctx, cancel := context.WithTimeout(ctx, runnerTimeout)
+	pctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
-
-	out, runErr := r.Run(tctx, "claude", "mcp", "list")
-	if runErr != nil {
-		// Runner failed — fall back to stale cache if available.
-		if hasCached {
-			return entry.Count, nil
-		}
-		return 0, ErrNoCache
+	out, runErr := r.Run(pctx, "claude", "mcp", "list")
+	st := ParseStatus(out)
+	// `claude mcp list` may exit non-zero when some servers fail; a parsed
+	// list is still an answer. Only no answer at all is a failure.
+	if runErr != nil && len(st.Servers) == 0 {
+		e.Failures++
+		e.RetryAt = now.Add(backoff(e.Failures))
+		e.LastError = runErr.Error()
+		_ = writeCache(path, e)
+		return runErr
 	}
-
-	count := parseConnectedCount(out)
-
-	// ── Write cache ───────────────────────────────────────────────────────────
-	_ = writeCache(cacheFile, cacheEntry{Count: count, TS: now().Unix()})
-
-	return count, nil
+	// FetchedAt is when the answer arrived: the probe itself takes seconds.
+	e = entry{Cwd: cwd, Status: st, FetchedAt: o.now()}
+	return writeCache(path, e)
 }
 
-// connectedToken is the status token `claude mcp list` prints for a connected
-// server in the status position of each line, e.g.:
-//
-//	<name>: <url> - ✓ Connected
-//	<name>: <url> - ✗ Failed to connect
-//
-// We match on this whole token (check mark + the word "Connected") rather than a
-// bare "✓", so a "✓" appearing inside a server name or some unrelated line does
-// not inflate the count.
-const connectedToken = "✓ Connected"
-
-// parseConnectedCount scans the output of `claude mcp list` and counts lines
-// whose status position reports a connected server.
-//
-// A line is counted only when it contains the connectedToken ("✓ Connected").
-// This rejects two classes of false positive flagged in review:
-//   - a "✓" embedded in a server name (only the status token "✓ Connected"
-//     matches, not a bare check mark elsewhere on the line);
-//   - lines that are not status lines at all.
-//
-// Whitespace between the check mark and "Connected" is normalised to a single
-// space so minor CLI spacing differences (tabs / multiple spaces) still match,
-// while keeping the matcher deliberately simple — not a full grammar.
-func parseConnectedCount(output []byte) int {
-	count := 0
-	sc := bufio.NewScanner(bytes.NewReader(output))
-	for sc.Scan() {
-		// Collapse runs of whitespace so "✓   Connected" / "✓\tConnected"
-		// still match the canonical "✓ Connected" token.
-		line := strings.Join(strings.Fields(sc.Text()), " ")
-		if strings.Contains(line, connectedToken) {
-			count++
-		}
+// acquire takes the single-flight lock (a kernel flock — see tryLock).
+func acquire(path string) (release func(), ok bool) {
+	f, ok := tryLock(path)
+	if !ok {
+		return nil, false
 	}
-	return count
+	return func() {
+		if f != nil {
+			_ = f.Close() // closing drops the flock; the file stays, harmlessly
+		}
+	}, true
 }
 
-// readCache reads and deserialises the cache file.  Returns (entry, true) on
-// success, or (zero, false) if the file is absent, empty, or malformed.
-func readCache(path string) (cacheEntry, bool) {
+// lockHeld reports a refresh in flight: someone holds the flock.
+func lockHeld(path string) bool {
+	if _, err := os.Stat(path); err != nil {
+		return false
+	}
+	release, ok := acquire(path)
+	if ok {
+		release()
+	}
+	return !ok
+}
+
+// readEntry reads one cache file; ok=false when absent or malformed.
+func readEntry(path string) (entry, bool) {
 	data, err := os.ReadFile(path)
 	if err != nil || len(data) == 0 {
-		return cacheEntry{}, false
+		return entry{}, false
 	}
-	var e cacheEntry
+	var e entry
 	if err := json.Unmarshal(data, &e); err != nil {
-		return cacheEntry{}, false
+		return entry{}, false
 	}
 	return e, true
 }
 
-// writeCache serialises the entry and atomically-ish writes it to path,
-// creating parent directories as needed.
-func writeCache(path string, e cacheEntry) error {
+// writeCache serialises v and atomically writes it to path (0600 in a 0700
+// directory), creating the directory as needed.
+func writeCache(path string, v any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	data, err := json.Marshal(e)
+	data, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
-	// Write via a temp file in the same directory for an atomic rename.
-	// os.CreateTemp picks a unique name (so concurrent gsl processes never
-	// collide) and creates it 0600; no PID/math-rand suffix needed (G404).
+	// os.CreateTemp picks a unique name (concurrent gsl processes never
+	// collide) and creates it 0600.
 	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
 	if err != nil {
 		return err
 	}
 	tmp := f.Name()
 	renamed := false
-	// Whatever fails below — write, close, or the rename itself — the temp
-	// file must not survive: this cache is rewritten on every status-line
-	// render, so a leaked temp per failure would accumulate forever.
+	// Whatever fails below, the temp file must not survive.
 	defer func() {
 		if !renamed {
 			_ = os.Remove(tmp)

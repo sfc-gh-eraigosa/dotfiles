@@ -112,6 +112,10 @@ type Config struct {
 	// "off" (no links at all). Which fields are linked is governed by the
 	// gsl.links.* gff flags, not by this key. See EffectiveLinks.
 	Links string `json:"links,omitempty"`
+	// Palette pins the colour palette ("dark", "light", "dark8",
+	// "dark-daltonism"); "" = auto (the host tool's theme, then the terminal).
+	// GSL_THEME / SDK_THEME in the environment still win for a session.
+	Palette string `json:"palette,omitempty"`
 	// Styles holds user-defined style overrides keyed by segment type or
 	// element name. Kept as map[string]any for CP1; CP2 will type it further.
 	Styles map[string]any `json:"styles,omitempty"`

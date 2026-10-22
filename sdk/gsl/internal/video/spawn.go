@@ -4,10 +4,10 @@ import (
 	"errors"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
+
+	gslexec "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/exec"
 )
 
 // RefreshEnv is set in the refresher's environment. A process that sees it is
@@ -38,25 +38,15 @@ func SpawnRefresher(lock *os.File) error {
 	if lock != nil {
 		cmd.ExtraFiles = []*os.File{lock}
 	}
-	detach(cmd)
+	gslexec.Detach(cmd)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
 	return cmd.Process.Release()
 }
 
-// canSpawn is the recursion guard, split out so it is testable without
-// forking. self is the running executable; getenv is os.Getenv and inTest is
-// testing.Testing() in production. inTest is the authoritative check: a test
-// binary built with `go test -c -o <name>` has no .test suffix, and Go stops
-// parsing flags at the first non-flag argument, so re-exec'ing it as
-// `<bin> video-refresh` runs the entire suite. The name check stays as a
-// second layer.
+// canSpawn is the shared recursion guard (internal/exec.CanSpawn) keyed on
+// this refresher's RefreshEnv.
 func canSpawn(self string, getenv func(string) string, inTest bool) bool {
-	if inTest || getenv(RefreshEnv) != "" {
-		return false
-	}
-	base := strings.ToLower(filepath.Base(self))
-	base = strings.TrimSuffix(base, ".exe")
-	return !strings.HasSuffix(base, ".test")
+	return gslexec.CanSpawn(self, getenv, inTest, RefreshEnv)
 }
