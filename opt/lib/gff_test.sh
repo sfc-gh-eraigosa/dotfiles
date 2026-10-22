@@ -5,6 +5,7 @@
 #   bash opt/lib/gff_test.sh
 #   sh   opt/lib/gff_test.sh
 # shellcheck disable=SC2034 # GFF_* test vars are read indirectly by gff_on via eval
+# shellcheck disable=SC2030,SC2031,SC2123 # the PATH tests deliberately narrow PATH (also in subshells)
 set -u
 
 # Resolve the helper from this script's own location (POSIX: no BASH_SOURCE)
@@ -179,6 +180,88 @@ else
     echo "FAIL: gff binary absent from PATH => opt-in skips (expected 1, got $_rc)"
     FAIL=$((FAIL+1))
 fi
+
+# === gff_cli / gff_user_set / gff_require (stub GFF_BIN) ===
+_T=$(mktemp -d)
+trap 'rm -rf "$_T"' EXIT
+mkdir -p "$_T/repo" "$_T/fakego" "$_T/empty"
+cat > "$_T/gff" <<'STUB'
+#!/bin/sh
+echo "pwd=$PWD args=$*" >> "${GFF_STUB_LOG}"
+case "${GFF_STUB_MODE:-ok}" in
+  fail) exit 1 ;;
+esac
+if [ "$1" = "list" ]; then
+  echo "install.network.sshd                    bool    true      ${GFF_STUB_LAYER:-user-override}      Gates sshd."
+  echo "install.windows.sshd                    bool    true      repo-live      Gates the standalone script."
+fi
+exit 0
+STUB
+chmod +x "$_T/gff"
+printf '#!/bin/sh\nexit 0\n' > "$_T/fakego/go"
+chmod +x "$_T/fakego/go"
+GFF_STUB_LOG="$_T/log"; GFF_STUB_LAYER=user-override; GFF_STUB_MODE=ok
+export GFF_STUB_LOG GFF_STUB_LAYER GFF_STUB_MODE
+GFF_BIN="$_T/gff"; GFF_REPO_DIR="$_T/repo"
+
+assert_rc() {  # usage: assert_rc <expected_rc> <label> <cmd...>
+    _e="$1"; _l="$2"; shift 2
+    "$@"; _r=$?
+    if [ "$_r" -eq "$_e" ]; then
+        echo "PASS: $_l (exit $_r)"; PASS=$((PASS+1))
+    else
+        echo "FAIL: $_l (expected $_e, got $_r)"; FAIL=$((FAIL+1))
+    fi
+}
+assert_contains() {  # usage: assert_contains <needle> <haystack> <label>
+    case "$2" in
+        *"$1"*) echo "PASS: $3"; PASS=$((PASS+1)) ;;
+        *) echo "FAIL: $3 (missing '$1' in '$2')"; FAIL=$((FAIL+1)) ;;
+    esac
+}
+
+GFF_STUB_LAYER=user-override
+assert_rc 0 "gff_user_set: user-override => 0" gff_user_set install.network.sshd
+GFF_STUB_LAYER=system-override
+assert_rc 0 "gff_user_set: system-override => 0" gff_user_set install.network.sshd
+GFF_STUB_LAYER=repo-live
+assert_rc 1 "gff_user_set: repo-live => 1" gff_user_set install.network.sshd
+GFF_STUB_LAYER=user-override
+assert_rc 1 "gff_user_set: key with no row => 1" gff_user_set install.no.such
+GFF_STUB_MODE=fail
+assert_rc 1 "gff_user_set: gff exits 1 => 1" gff_user_set install.network.sshd
+GFF_STUB_MODE=ok
+
+: > "$_T/log"
+gff_cli version
+assert_contains "pwd=$_T/repo args=version" "$(cat "$_T/log")" "gff_cli runs from GFF_REPO_DIR"
+GFF_STUB_MODE=fail
+assert_rc 1 "gff_cli passes the exit code through" gff_cli version
+GFF_STUB_MODE=ok
+
+_ok_build="true"; _bad_build="false"
+_PATH0=$PATH
+PATH="$_T/fakego:$_PATH0"
+GFF_BUILD_CMD=$_ok_build
+assert_rc 0 "gff_require: build ok + binary ok => 0" gff_require "$_T"
+GFF_BUILD_CMD=$_bad_build
+_out=$(gff_require "$_T" 2>&1); _rc=$?
+assert_out 0 "$_rc" "gff_require: build fails + binary ok => 0"
+assert_contains "WARNING: gff build failed; using existing gff" "$_out" "gff_require: build-failed warning"
+_out=$(GFF_BIN="$_T/nogff" gff_require "$_T" 2>&1); _rc=$?
+assert_out 1 "$_rc" "gff_require: build fails + no binary => 1"
+assert_contains "ERROR: install.sh requires a working gff" "$_out" "gff_require: error line (build failed, no binary)"
+
+PATH="$_T/empty"
+_out=$(gff_require "$_T" 2>&1); _rc=$?
+assert_out 0 "$_rc" "gff_require: no go + binary ok => 0"
+assert_contains "WARNING: no 'go' on PATH; using existing gff" "$_out" "gff_require: no-go warning"
+_out=$(GFF_BIN="$_T/nogff" gff_require "$_T" 2>&1); _rc=$?
+assert_out 1 "$_rc" "gff_require: no go + no binary => 1"
+assert_contains "ERROR: install.sh requires a working gff" "$_out" "gff_require: error line (no go, no binary)"
+assert_contains "no 'go' on PATH" "$_out" "gff_require: error mentions missing go"
+PATH=$_PATH0
+unset GFF_BUILD_CMD
 
 echo "---"
 echo "PASS: $PASS  FAIL: $FAIL"

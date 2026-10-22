@@ -125,6 +125,7 @@ func precheckSudo(alias string, r runner.Runner) tea.Cmd {
 const (
 	envWinsetupAnswer       = "WINSETUP_ANSWER"
 	envGeminiTeardownAnswer = "GEMINI_TEARDOWN_ANSWER"
+	envWslnetAnswer         = "WSLNET_ANSWER"
 )
 
 // answers are the operator's pre-supplied responses to install.sh's prompts,
@@ -135,6 +136,7 @@ type answers struct {
 	sudoSecret string // memory only: never persisted, logged, or put in argv
 	windows    string // y | n | s          -> WINSETUP_ANSWER
 	gemini     string // yes | keep | skip  -> GEMINI_TEARDOWN_ANSWER
+	wslnet     string // "" (= skip) | skip | off | nat | bridged | mirrored -> WSLNET_ANSWER
 	reset      string // y | n — force the clone onto origin before installing
 }
 
@@ -166,11 +168,29 @@ func (a answers) secretLen() int { return len(a.sudoSecret) }
 // needsSudo reports whether we have a credential to prime with.
 func (a answers) needsSudo() bool { return a.sudoSecret != "" }
 
+// wslnetOrSkip is the value sent as WSLNET_ANSWER: the chosen mode, or "skip"
+// (ask nothing, record nothing) when the operator left it unset.
+func (a answers) wslnetOrSkip() string { return wslnetAnswer(a.wslnet) }
+
+// wslnetAnswer maps any candidate WSLNET_ANSWER onto install.sh's own set
+// (skip|off|nat|bridged|mirrored); anything else, unset included, is "skip".
+// The value is spliced into a remote shell string, so it is allowlisted: a
+// stray WSLNET_ANSWER in the local environment can never reach the host
+// verbatim. (WINSETUP_ANSWER and GEMINI_TEARDOWN_ANSWER are not yet; that
+// predates this answer and is tracked separately.)
+func wslnetAnswer(v string) string {
+	switch v {
+	case "skip", "off", "nat", "bridged", "mirrored":
+		return v
+	}
+	return "skip"
+}
+
 // remembered reports whether a previous wave (or the persisted preferences)
 // already filled anything in. It decides whether `u` opens the form or goes
 // straight to the confirm strip.
 func (a answers) remembered() bool {
-	return a.sudoSecret != "" || a.windows != "" || a.gemini != "" || a.reset != ""
+	return a.sudoSecret != "" || a.windows != "" || a.gemini != "" || a.wslnet != "" || a.reset != ""
 }
 
 func maskOrNone(n int) string {
@@ -198,9 +218,9 @@ func (a answers) envPrefix() string {
 	if a.gemini != "" {
 		b = append(b, envGeminiTeardownAnswer+"="+a.gemini)
 	}
-	if len(b) == 0 {
-		return ""
-	}
+	// WSLNET_ANSWER is ALWAYS sent (default skip): an unattended wave must
+	// never reach install.sh's WSL networking prompt.
+	b = append(b, envWslnetAnswer+"="+a.wslnetOrSkip())
 	// MUST be `export …;`, not the `VAR=x cmd` prefix form. The prefix form
 	// scopes the assignment to that ONE command, so
 	// `WINSETUP_ANSWER=s cd ~/git/dotfiles && ./install.sh` sets it for `cd`
@@ -679,7 +699,7 @@ func handoffArgv(self, alias, file, ref, repo string, reset bool) []string {
 }
 
 // handoffEnv is the child's environment: the operator's non-secret prompt
-// answers only (WINSETUP_ANSWER/GEMINI_TEARDOWN_ANSWER) layered onto the
+// answers only (WINSETUP_ANSWER/GEMINI_TEARDOWN_ANSWER/WSLNET_ANSWER) layered onto the
 // parent's own environment — NEVER the sudo secret. The child prompts for
 // its own credential on its own tty (it owns the terminal), so it has no
 // need to receive one from the parent, and /proc/<pid>/environ is
@@ -692,6 +712,7 @@ func handoffEnv(a answers) []string {
 	if a.gemini != "" {
 		env = append(env, envGeminiTeardownAnswer+"="+a.gemini)
 	}
+	env = append(env, envWslnetAnswer+"="+a.wslnetOrSkip())
 	return env
 }
 

@@ -57,6 +57,8 @@ locale_fallback
 # undefined gff_on gets exit 127, takes the else branch, and SKIPS the step —
 # failing CLOSED on exactly the fresh machines gff must be harmless on.
 . "${BASE_DIR}/opt/lib/gff.sh"
+. "${BASE_DIR}/opt/lib/sshdflags.sh"
+. "${BASE_DIR}/opt/lib/wslnet.sh"
 
 # Early flag export (fail-open): pre-bootstrap gates read env only. If a gff
 # binary already exists (any run after the first), materialize the overrides
@@ -100,7 +102,7 @@ unset _ip_prev _ip_arg
 #   - CONFIG / SKILL / SYMLINK / any repo-content step -> _IP_CONFIG_FLAGS. Runs
 #     in the per-commit config layer; omitting it BAKES the step into the cached
 #     deps layer, so later edits to it stop taking effect per commit (a bug).
-_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_TOOLS_HERDR_PLUGINS INSTALL_TOOLS_HERDR_CONFIG INSTALL_TOOLS_HTOP_FIT INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_MONO INSTALL_SDK_GSL INSTALL_SDK_GFF"
+_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_TOOLS_HERDR_PLUGINS INSTALL_TOOLS_HERDR_CONFIG INSTALL_TOOLS_HTOP_FIT INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_MONO INSTALL_SDK_GSL INSTALL_SDK_GFF INSTALL_NETWORK_SSHD"
 _IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_UV INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_GLOW INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM INSTALL_RUNTIME_RUST INSTALL_SHELL_OH_MY_ZSH_UPDATE INSTALL_TOOLS_LASTPASS INSTALL_TOOLS_1PASSWORD"
 apply_install_phase() {
   case "$INSTALL_PHASE" in
@@ -669,25 +671,28 @@ if [ "$INSTALL_PHASE" != "all" ] && ! command -v go >/dev/null 2>&1; then
   exit 1
 fi
 
-# build gff first so every later step can be feature-flag gated (fail-open:
-# if the build fails or gff is absent, all steps run — flags only ever skip).
-if gff_bootstrap_ok=false; command -v go >/dev/null 2>&1 && [ -f "${BASE_DIR}/sdk/gff/build.sh" ]; then
-  bash "${BASE_DIR}/sdk/gff/build.sh" && gff_bootstrap_ok=true || echo "WARNING: gff build failed; all components will run."
-fi
-if [ "$gff_bootstrap_ok" = "true" ] && [ -x "${HOME}/opt/bin/gff" ]; then
-  # set -a exports the plain VAR=v lines gff emits so GFF_* reaches child
-  # scripts (install_windows.sh reads them via `env` for the WSLENV handoff).
-  set -a
-  eval "$(cd "${BASE_DIR}" && "${HOME}/opt/bin/gff" export --shell 2>/dev/null || true)"
-  set +a
-  # Register this checkout's namespace so cross-repo consumers (gsl render, from
-  # ANY cwd) can resolve the flags. Fail-open: a failure only warns.
-  (cd "${BASE_DIR}" && "${HOME}/opt/bin/gff" install >/dev/null 2>&1) \
-    || echo "WARNING: gff install (namespace registration) failed; gsl link flags fail open (links stay on)."
-fi
+# gff is REQUIRED: every later step is feature-flag gated, so running without it
+# would silently run every component (and skip the sshd/WSL-network flags).
+# gff_require builds it (when go is available), falls back to an existing binary
+# with a WARNING, and otherwise fails the install.
+gff_require "${BASE_DIR}" || exit 1
+# Let every later helper find the binary before ~/opt/bin is on PATH.
+export GFF_BIN="${HOME}/opt/bin/gff" GFF_REPO_DIR="${BASE_DIR}"
+# set -a exports the plain VAR=v lines gff emits so GFF_* reaches child
+# scripts (install_windows.sh reads them via `env` for the WSLENV handoff).
+set -a
+eval "$(cd "${BASE_DIR}" && "${HOME}/opt/bin/gff" export --shell 2>/dev/null || true)"
+set +a
+# Register this checkout's namespace so cross-repo consumers (gsl render, from
+# ANY cwd) can resolve the flags. Fail-open: a failure only warns.
+(cd "${BASE_DIR}" && "${HOME}/opt/bin/gff" install >/dev/null 2>&1) \
+  || echo "WARNING: gff install (namespace registration) failed; gsl link flags fail open (links stay on)."
 # Re-assert build-phase overrides: the gff export above can have overwritten the
 # GFF_* the later runtime gates (pyenv/rbenv/nvm) read.
 apply_install_phase
+sshd_migrate
+wslnet_sync  # sshd on: record an existing WSL network setup (marked as found), or ask once; exports GFF_INSTALL_WINDOWS_WSL_NETWORK
+apply_install_phase  # sshd_migrate may export GFF_INSTALL_NETWORK_SSHD=true; re-pin the phase split
 
 # install/update pyenv
 if gff_on install.runtime.pyenv; then
@@ -1069,10 +1074,8 @@ if gff_on install.runtime.fnm; then
 else gff_skip_msg install.runtime.fnm; fi
 
 # setup sshd server if requested
-if gff_on install.network.sshd; then
-  if [ -f "${HOME}/.sshd.env" ]; then
-    "${BASE_DIR}/opt/scripts/network/sshd_run.sh"
-  fi
+if gff_opt_in install.network.sshd; then
+  "${BASE_DIR}/opt/scripts/network/sshd_run.sh"
 else gff_skip_msg install.network.sshd; fi
 
 if gff_on install.system.gitrepos; then
@@ -1111,6 +1114,14 @@ if gff_on install.windows.desktop-deploy; then
     bash "${BASE_DIR}/opt/bin/install_windows.sh" "${BASE_DIR}" --deferred
   fi
 else gff_skip_msg install.windows.desktop-deploy; fi
+
+# Apply the WSL networking mode sshd-setup recorded (elevates only when it would
+# change something; a setup that was merely found on the machine is reported,
+# never changed). Deliberately OUTSIDE the desktop-deploy gate above: the mode
+# is recorded independently of it. A non-WSL host never has a non-off mode.
+if [ "${GFF_INSTALL_WINDOWS_WSL_NETWORK:-off}" != off ] && [ -f "${BASE_DIR}/opt/bin/install_windows.sh" ]; then
+  bash "${BASE_DIR}/opt/bin/install_windows.sh" "${BASE_DIR}" --wsl-network-auto
+fi
 
 # Final reminder (WSL): if the interactive Windows setup ran this invocation, the
 # one thing that can't be scripted is Wispr Flow's shortcuts — surface it last so

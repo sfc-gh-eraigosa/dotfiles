@@ -3,6 +3,16 @@
 # Only acts when invoked; see docs/sshd-setup.md. Windows: setup-sshd.ps1.
 set -euo pipefail
 
+# Libs live next to this script (../lib); the gff checkout is the repo root.
+_SELF_DIR="$(cd -- "$(dirname "$0")" && pwd -P)"
+GFF_REPO_DIR="$(cd -- "${_SELF_DIR}/../.." && pwd -P)"
+GFF_BIN="${GFF_BIN:-$(command -v gff || echo "${HOME}/opt/bin/gff")}"
+export GFF_REPO_DIR GFF_BIN
+# shellcheck source=opt/lib/gff.sh
+. "${_SELF_DIR}/../lib/gff.sh"
+# shellcheck source=opt/lib/wslnet.sh
+. "${_SELF_DIR}/../lib/wslnet.sh"
+
 DRY_RUN=0
 run() { if [ "$DRY_RUN" = 1 ]; then echo "DRY: $*"; else "$@"; fi; }
 
@@ -33,12 +43,15 @@ sshd_installed() {
     [ -x "${SSHD_SETUP_SSHD_PATH:-/usr/sbin/sshd}" ]
 }
 
+gff_usable() { "$GFF_BIN" version >/dev/null 2>&1; }
+
 cmd_status() {
     echo "platform: $(detect_platform)"
     if sshd_running; then echo "sshd: running"
     elif sshd_installed; then echo "sshd: installed, not running"
     else echo "sshd: not installed"; fi
-    [ -f "${HOME}/.sshd.env" ] && echo "sshd.env: present" || echo "sshd.env: absent"
+    if gff_usable; then echo "sshd flag: $(gff_cli get install.network.sshd 2>/dev/null || echo unknown)"
+    else echo "sshd flag: unknown (gff not found)"; fi
     [ -f "${HOME}/.ssh/authorized_keys" ] \
         && echo "authorized_keys: $(wc -l < "${HOME}/.ssh/authorized_keys" | tr -d ' ') line(s)" \
         || echo "authorized_keys: absent"
@@ -123,25 +136,24 @@ configure_firewall() {
     fi
 }
 
-write_sshd_env() {
-    if ! grep -qs "^SSHD_LOGIN=true" "${HOME}/.sshd.env" 2>/dev/null; then
-        if [ "$DRY_RUN" = 1 ]; then echo "DRY: write SSHD_LOGIN=true to ~/.sshd.env"
-        else echo "SSHD_LOGIN=true" >> "${HOME}/.sshd.env"; fi
-    fi
+record_sshd_flag() {
+    if [ "$DRY_RUN" = 1 ]; then echo "DRY: gff set install.network.sshd true"; return 0; fi
+    gff_cli set install.network.sshd true
+    GFF_INSTALL_NETWORK_SSHD=true
+    export GFF_INSTALL_NETWORK_SSHD
 }
 
 wsl_handoff() {
-    cat <<'EOF'
-sshd-setup: WSL detected. The sshd above serves THIS distro. For the
-Windows-native sshd (port 22, survives reboots) run in an ADMIN PowerShell:
-
-  powershell -ExecutionPolicy Bypass -File <dotfiles>\opt\Desktop\Apps\scripts\setup-sshd.ps1
-
-Add -WslPortProxy to also expose this WSL sshd to your LAN (default port 2222).
-EOF
+    # Windows-native sshd (port 22, survives reboots) is a separate, admin-only step.
+    echo "sshd-setup: for the Windows-native sshd run setup-sshd.ps1 (opt/Desktop/Apps/scripts) in an ADMIN PowerShell."
+    echo "Next: re-run install.sh to apply it on Windows."
 }
 
 cmd_enable() {
+    if [ "$DRY_RUN" != 1 ] && ! gff_usable; then
+        echo "sshd-setup: gff not found — run install.sh first" >&2
+        exit 1
+    fi
     if sshd_running; then
         echo "sshd-setup: native sshd already running — skipping install/start"
     else
@@ -150,8 +162,11 @@ cmd_enable() {
     fi
     configure_firewall
     seed_keys
-    write_sshd_env
-    if [ "$(detect_platform)" = wsl ]; then wsl_handoff; fi
+    record_sshd_flag
+    if [ "$(detect_platform)" = wsl ]; then
+        if [ "$DRY_RUN" != 1 ]; then WSLNET_PROC_VERSION="${SSHD_SETUP_PROC_VERSION:-/proc/version}" wslnet_sync --ask; fi
+        wsl_handoff
+    fi
     echo "sshd-setup: done. Rollback: see docs/sshd-setup.md#rollback"
 }
 

@@ -40,6 +40,7 @@ const (
 	fieldSudo answerField = iota
 	fieldWindows
 	fieldGemini
+	fieldWslnet
 	fieldReset
 	answerFieldCount
 )
@@ -114,6 +115,10 @@ type tuiModel struct {
 
 	// update engine (background-first)
 	updating map[string]updState
+	// wslnetFor holds the WSL networking answer per host, bound when a wave
+	// starts. The mode is a per-host choice, so it reaches only the hosts of
+	// the wave it was given for; a later wave sends skip unless set again.
+	wslnetFor map[string]string
 	// dotCleared marks hosts whose FINISHED outcome no longer paints the
 	// status dot: `r` clears every one, and leaving the selection clears that
 	// host's. Without it an outcome outranked the selection for the rest of the
@@ -693,6 +698,7 @@ func (m *tuiModel) startUpdate(targets []string) tea.Cmd {
 	}
 	var cmds []tea.Cmd
 	var busy []string
+	var started []string
 	for _, a := range targets {
 		// Guard on the PHASE, not on presence in the map. A finished host
 		// keeps its ok/FAIL entry so the row can still show the outcome, so a
@@ -709,6 +715,16 @@ func (m *tuiModel) startUpdate(targets []string) tea.Cmd {
 		delete(m.warnFilters, a) // a stale advisory from the LAST attempt must not fold this attempt's first real line
 		delete(m.pending, a)     // ownership moves to the engine
 		cmds = append(cmds, precheckSudo(a, m.run))
+		started = append(started, a)
+	}
+	if m.ans.wslnet != "" {
+		if m.wslnetFor == nil {
+			m.wslnetFor = map[string]string{}
+		}
+		for _, a := range started {
+			m.wslnetFor[a] = m.ans.wslnet
+		}
+		m.ans.wslnet = ""
 	}
 	m.iaTotal = 0
 
@@ -756,6 +772,16 @@ func planLabel(source string) string {
 }
 
 // pump fills free job slots from the background queue. When the wave is fully
+// hostAnswers is the answer set host a's update runs with: the session's
+// answers plus the WSL networking answer bound to a when its wave started
+// (consumed here, so a re-run of that host does not resend it).
+func (m *tuiModel) hostAnswers(a string) answers {
+	ans := m.ans
+	ans.wslnet = m.wslnetFor[a]
+	delete(m.wslnetFor, a)
+	return ans
+}
+
 // drained it releases the interactive fallback queue, one host at a time.
 func (m *tuiModel) pump() tea.Cmd {
 	var cmds []tea.Cmd
@@ -764,7 +790,7 @@ func (m *tuiModel) pump() tea.Cmd {
 		m.bgQueue = m.bgQueue[1:]
 		m.updating[a] = updState{phase: updRunning}
 		m.running++
-		cmds = append(cmds, beginStream(a, m.plan, m.ans, m.policy, m.run, m.logDir))
+		cmds = append(cmds, beginStream(a, m.plan, m.hostAnswers(a), m.policy, m.run, m.logDir))
 	}
 	// Interactive handoffs need the terminal to themselves, so they only run
 	// once no background update can print over them.
@@ -778,7 +804,7 @@ func (m *tuiModel) pump() tea.Cmd {
 			total = len(m.iaQueue) + 1
 		}
 		pos := total - len(m.iaQueue)
-		return tea.Batch(append(cmds, interactiveHandoff(m.self, a, m.file, m.updateRef, m.repo, m.ans, pos, total))...)
+		return tea.Batch(append(cmds, interactiveHandoff(m.self, a, m.file, m.updateRef, m.repo, m.hostAnswers(a), pos, total))...)
 	}
 	return tea.Batch(cmds...)
 }

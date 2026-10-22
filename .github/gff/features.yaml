@@ -195,9 +195,9 @@ sets:
         boolDefault: true
       # --- network (1) ---
       - path: install.network.sshd
-        description: Runs the sshd_run.sh block when ~/.sshd.env is present.
-        boolDefault: true
-      # --- windows (11) ---
+        description: Enables sshd on this host (set by sshd-setup enable); install.sh starts it when true.
+        boolDefault: false
+      # --- windows (13) ---
       - path: install.windows.desktop-deploy
         description: Runs the install_windows.sh invocation that deploys opt/Desktop onto the Windows Desktop.
         boolDefault: true
@@ -228,9 +228,15 @@ sets:
       - path: install.windows.sshd
         description: Gates the standalone setup-sshd.ps1 script on the Windows side.
         boolDefault: true
-      - path: install.windows.portproxy
-        description: Gates the standalone refresh-wsl-portproxy.ps1 script on the Windows side.
-        boolDefault: true
+      - path: install.windows.wsl-network
+        description: "How this Windows host exposes its WSL sshd to the LAN: off | nat (portproxy) | bridged | mirrored. Recorded from the existing setup, or asked once when sshd is first enabled."
+        choiceDefault:
+          mode: CHOICE_MODE_SINGLE
+          options:
+            - {id: off,      description: no LAN exposure,                stringValue: off, selected: true}
+            - {id: nat,      description: NAT with a Windows portproxy,   stringValue: nat}
+            - {id: bridged,  description: Hyper-V bridged networking,     stringValue: bridged}
+            - {id: mirrored, description: WSL mirrored networking,        stringValue: mirrored}
       - path: install.windows.security-audit
         description: Opt-in (fail-closed) unattended weekly security audit - setup-security-audit.ps1 registers the ClaudeSecurityAuditCollector task and seeds the Claude analysis task. Enable with gff set install.windows.security-audit true.
         boolDefault: false

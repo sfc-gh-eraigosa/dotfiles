@@ -232,7 +232,7 @@ func TestAnswerFormNavigatesAndSetsChoices(t *testing.T) {
 		t.Fatalf("choices not recorded: %+v", m6.ans)
 	}
 	// enter from the last field opens the confirm strip, not the wave itself.
-	m7, cmd := send(m6, "enter", "enter") // gemini -> reset -> confirm
+	m7, cmd := send(m6, "enter", "enter", "enter") // gemini -> wslnet -> reset -> confirm
 	if m7.mode != modeConfirm || !repaintOnly(cmd) {
 		t.Fatalf("last-field enter must open the confirm strip, mode=%v", m7.mode)
 	}

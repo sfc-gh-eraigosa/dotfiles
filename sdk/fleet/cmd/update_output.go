@@ -59,9 +59,10 @@ func localAnswerPreamble(updplan.Step) string {
 	if v := os.Getenv(envGeminiTeardownAnswer); v != "" {
 		assigns = append(assigns, envGeminiTeardownAnswer+"="+v)
 	}
-	if len(assigns) == 0 {
-		return ""
-	}
+	// WSLNET_ANSWER is always exported: the local env value when it is one of
+	// install.sh's modes, else skip, so install.sh never stalls on the WSL
+	// networking prompt and nothing unvalidated reaches the remote shell.
+	assigns = append(assigns, envWslnetAnswer+"="+wslnetAnswer(os.Getenv(envWslnetAnswer)))
 	// MUST end with "; " (or "&& "): Console.runScript now prepends
 	// Preamble's text VERBATIM, with no separator added — every producer is
 	// responsible for terminating its own text into valid shell. This used

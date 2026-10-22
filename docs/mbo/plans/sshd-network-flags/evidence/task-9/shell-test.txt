@@ -1,0 +1,2250 @@
+Mon Oct 19 03:01:20 UTC 2026
+$ make shell-test
+==> shell-test (discovering *_test.sh)
+----
+RUN: ./install_test.sh
+PASS: install.sh parses with bash -n (exit 0)
+PASS: no 'git add -A' in install.sh
+PASS: no 'git add .' in install.sh
+PASS: no hardcoded $HOME in install.sh
+PASS: no hardcoded /Users/eraigosa in install.sh
+PASS: every absolute cd uses $HOME / $BASE_DIR / /tmp
+PASS: BASE_DIR is exported
+PASS: symlink idempotency guard present
+PASS: no naked 'ln -s' (need -sf for idempotency)
+PASS: claude settings backup-on-conflict guard present
+PASS: antigravity aliases backup-on-conflict guard present
+PASS: install.sh invokes the install stamp
+PASS: nothing runs after the stamp (only its closing 'fi')
+PASS: install.sh carries the self-sufficient PATH block
+PASS: non-login PATH gains ~/opt/bin and ~/.local/bin
+PASS: .profile resolves ~/opt/bin ahead of ~/.local/bin (the order install.sh mirrors)
+PASS: already-configured PATH is unchanged (no duplicates)
+PASS: only the missing dir is prepended (an existing entry is never moved)
+PASS: substring match does not count as present
+PASS: PATH block runs before the gff early-export probe
+PASS: install.sh exports GOENV_PATH_ORDER=front before the first goenv init
+PASS: install.sh carries the locale fallback block
+PASS: install.sh's block drops the unavailable forwarded LC_ALL
+PASS: and says once what it dropped
+PASS: the locale fallback runs before install.sh starts using tools
+PASS: install.sh has directly-invoked helper scripts to check
+PASS: every directly-invoked helper in install.sh is executable
+----
+PASS=27 FAIL=0
+----
+RUN: ai/antigravity/aliases_test.sh
+PASS: ai/antigravity/aliases.sh exists
+PASS: ai/antigravity/aliases.sh parses with bash -n (exit 0)
+PASS: no underscore-prefixed helper functions
+PASS: agy() not removed by accident
+PASS: agy() defined
+PASS: agy function defined after sourcing
+PASS: agy body calls 'command agy' (avoids recursion)
+PASS: agy-yolo removed (one canonical alias)
+PASS: agy-config function defined after sourcing
+PASS: agy_launch_flags function defined after sourcing
+PASS: AGY_CONFIG_DIR set
+PASS: AGY_YOLO_FILE set
+PASS: agy body calls agy_launch_flags
+PASS: yolo defaults OFF (no sentinel)
+PASS: agy-config yolo on creates sentinel
+PASS: agy-config yolo off removes sentinel
+PASS: agy-config status reports yolo OFF by default
+PASS: agy-config status reports yolo ON after opt-in
+PASS: agy-config rejects unknown setting (exit 2)
+PASS: agy-config yolo rejects bad value (exit 2)
+PASS: doctor prints the resolved binary line
+PASS: doctor: single binary => no warning, exit 0
+PASS: doctor: multiple binaries => WARNING + nonzero
+PASS: doctor: dedups repeated PATH entries (no false warning)
+PASS: doctor: resolves the binary under zsh (PATH-split regression)
+PASS: default: no flags injected
+PASS: yolo on: injects --dangerously-skip-permissions
+PASS: yolo on: prompt not captured into flags
+PASS: yolo on + print mode: flag still injected (applies to every mode)
+PASS: yolo off: no --dangerously-skip-permissions
+----
+PASS=30 FAIL=0
+----
+RUN: ai/claude/aliases_test.sh
+PASS: no underscore-prefixed helper functions
+PASS: claude() not removed by accident
+PASS: CLAUDE_YOLO_FILE cross-repo contract var preserved
+PASS: remote-control passes an explicit session name (anti prompt-swallow)
+PASS: claude function defined after sourcing
+PASS: claude-config function defined after sourcing
+PASS: claude_launch_flags function defined after sourcing
+PASS: claude body does not call _claude_yolo_enabled
+PASS: claude-config body does not call _claude_yolo_enabled
+PASS: CLAUDE_CONFIG_DIR set
+PASS: CLAUDE_YOLO_FILE set
+PASS: CLAUDE_REMOTE_ENABLED_FILE set
+PASS: remote defaults OFF (no enabled sentinel)
+PASS: yolo defaults OFF (no enabled sentinel)
+PASS: claude-config remote on creates enabled sentinel
+PASS: claude-config remote off removes enabled sentinel
+PASS: claude-config yolo on creates yolo sentinel
+PASS: claude-config yolo off removes yolo sentinel
+PASS: claude-config status reports remote OFF by default
+PASS: claude-config status reports yolo OFF by default
+PASS: claude-config rejects unknown setting (exit 2)
+PASS: doctor prints the resolved binary line
+PASS: doctor: single binary => no warning, exit 0
+PASS: doctor: multiple binaries => WARNING + nonzero
+PASS: doctor: dedups repeated PATH entries (no false warning)
+PASS: doctor: resolves the binary under zsh (PATH-split regression)
+PASS: default opt-out: no flags injected for interactive prompt
+PASS: remote on: injects --remote-control with explicit name
+PASS: remote on: user prompt is NOT captured into the flags (anti prompt-swallow)
+PASS: remote on but non-tty: no --remote-control
+PASS: remote on but -p print mode: no --remote-control
+PASS: remote on but --print mode: no --remote-control
+PASS: prompt containing '-p' is not mistaken for print mode
+PASS: yolo on: injects --dangerously-skip-permissions
+PASS: yolo off: no --dangerously-skip-permissions
+PASS: yolo+remote on: both flags injected, prompt preserved
+----
+PASS=36 FAIL=0
+----
+RUN: ai/claude/scripts/validate_hooks_test.sh
+PASS: valid configured hooks + statusLine pass validation (exit 0)
+PASS: dead configured hook path FAILS validation (catches #111) (exit 1)
+PASS: fail-open safety_guard (allows known-bad) FAILS the exercise (exit 1)
+PASS: Gemini-style BeforeTool hooks validate (event-agnostic) (exit 0)
+PASS: Antigravity hooks.json validates (adapter + both guards, bare names) (exit 0)
+PASS: adapter with NO guard argument FAILS validation (exit 1)
+PASS: Antigravity fail-open guard behind the adapter FAILS the exercise (exit 1)
+----
+PASS=7 FAIL=0
+----
+RUN: ai/githooks/githooks_test.sh
+PASS: pre-commit: staged real home path is refused
+PASS: pre-commit: staged hostname is refused
+PASS: pre-commit: staged git-config email is refused (identity from git config)
+PASS: pre-commit: username as a PREFIX of a longer token is refused
+PASS: pre-commit: placeholders are allowed
+PASS: pre-commit: only ADDED lines are judged, pre-existing leaks do not block
+PASS: commit-msg: home path in the message is refused
+PASS: commit-msg: message from a FILE is judged too
+PASS: commit-msg: clean message passes
+PASS: commit-msg: --signoff trailer with the configured git email is allowed
+PASS: commit-msg: Co-authored-by trailer with the configured git email is allowed
+PASS: commit-msg: a trailer naming SOMEONE ELSE's address is still refused
+PASS: commit-msg: the configured email OUTSIDE a trailer is still refused
+PASS: pre-push: a leaked commit (made with --no-verify) is refused at push
+PASS: pre-push: clean commits (incl. a --signoff trailer) pass even when older history (already on origin) has a leak
+PASS: pre-push: a NEW branch (no remote counterpart) is judged against what origin lacks
+PASS: pre-commit: a gitleaks finding is refused (stub rule)
+PASS: pre-commit: clean content with gitleaks present passes
+PASS: git hooks log their timing (pre-commit + commit-msg)
+PASS: over budget => SLOW warning on stderr, commit still succeeds
+PASS: PRIVACY_GUARD_SKIP=1 is an explicit, loud bypass
+----
+githooks_test: 21 passed, 0 failed
+----
+RUN: ai/hooks/antigravity_adapter_test.sh
+PASS: run_command echo -> allow
+PASS: run_command rm -rf / -> deny (safety_guard wins)
+PASS: missing guard -> ask (never silent allow)
+PASS: write_to_file under ~/.ssh -> ask
+PASS: tilde-prefixed target under ~/.aws -> ask
+PASS: replace_file_content under ~/.gnupg -> ask
+PASS: edit_file under ~/.config/gss -> ask
+PASS: ask reason names the sensitive root
+PASS: write_to_file in a workspace path -> allow
+PASS: sibling path sharing a prefix (~/.sshd_notes) is NOT under ~/.ssh -> allow
+PASS: run_command is unaffected by the file-path check
+----
+PASS=11 FAIL=0
+----
+RUN: ai/hooks/dir_added_guard_test.sh
+PASS: benign project dir is silent
+PASS: adding HOME/.ssh warns
+PASS: subdir of ~/.aws warns
+PASS: tilde form of ~/.config/gss warns
+PASS: prefix-similar dir is silent (no false positive on ~/.ssh-backup)
+PASS: empty input is silent
+PASS: malformed JSON is silent
+All dir_added_guard cases passed
+----
+RUN: ai/hooks/privacy_guard_test.sh
+PASS: tracked: $HOME + ~ variables (exit 0)
+PASS: tracked: write_file (shared dialect) (exit 0)
+PASS: tracked: write_file (shared dialect) JSON check (exit 0 + JSON match)
+PASS: tracked: ${USER} + <user> placeholder (exit 0)
+PASS: tracked: Windows path with <user> placeholder (exit 0)
+PASS: tracked: password references a variable (exit 0)
+PASS: tracked: password placeholder (exit 0)
+PASS: ignored file: leak allowed (local only) (exit 0)
+PASS: outside any repo: leak allowed (local only) (exit 0)
+PASS: non-publish Bash: out of scope (exit 0)
+PASS: non-publish shell (shared dialect): out of scope (exit 0)
+PASS: clean commit message (exit 0)
+PASS: tracked: non-user system /home path (exit 0)
+PASS: non-write/non-bash tool passes through (exit 0)
+PASS: tracked Write: C:\Users\<name> (Rule A) (exit 2)
+PASS: tracked write_file: C:\Users\<name> (Rule A) (exit 2)
+PASS: tracked Write: /mnt/c/Users/<name> (Rule A) (exit 2)
+PASS: tracked Edit: WSL user path (Rule A) (exit 2)
+PASS: tracked replace: WSL user path (Rule A) (exit 2)
+PASS: tracked Write: real /home/<user><you> (Rule B) (exit 2)
+PASS: tracked Write: bare login username (Rule C) (exit 2)
+PASS: tracked Write: bare hostname (Rule C) (exit 2)
+PASS: gh pr create body: WSL user path (exit 2)
+PASS: gh pr create body (shared dialect): WSL user path (exit 2)
+PASS: git commit message: Windows user path (exit 2)
+PASS: tracked Write: AWS access key (Rule D) (exit 2)
+PASS: tracked Write: PEM private key (Rule D) (exit 2)
+PASS: tracked Write: GitHub PAT (Rule D) (exit 2)
+PASS: tracked Write: hard-coded password (Rule D heuristic) (exit 2)
+PASS: hook declares a #! shebang
+PASS: clean commit allowed under shebang-driven direct exec (exit 0)
+PASS: Bash heredoc into a TRACKED file (exit 2)
+PASS: sed -i into a TRACKED file (exit 2)
+PASS: tee into a TRACKED file (exit 2)
+PASS: interpreter write into a TRACKED file (exit 2)
+PASS: Bash heredoc into a GITIGNORED file stays allowed (exit 0)
+PASS: redirect to /dev/null is not a file write (exit 0)
+PASS: git commit with a clean MESSAGE but a leak STAGED (exit 2)
+PASS: git commit -F reads the message FILE (exit 2)
+PASS: git commit: Signed-off-by trailer with the configured git email is allowed (exit 0)
+PASS: git commit: a trailer naming SOMEONE ELSE is refused (angle brackets are not a placeholder) (exit 2)
+PASS: git commit: the configured email OUTSIDE a trailer is refused (exit 2)
+PASS: git push judges the outgoing commits (exit 2)
+PASS: gss push (the repo's own canonical publisher) (exit 2)
+PASS: gss feature checkpoint (push + PR) (exit 2)
+PASS: gh pr create --body-file reads the body FILE (exit 2)
+PASS: gh release create notes (exit 2)
+PASS: gh gist create publishes a file verbatim (exit 2)
+PASS: username as a PREFIX of a longer token (exit 2)
+PASS: hostname as a PREFIX of a longer token (exit 2)
+PASS: the repo's git user.email (exit 2)
+PASS: ANY email address in tracked content (exit 2)
+PASS: placeholder / example.com addresses stay allowed (exit 0)
+PASS: Anthropic API key (exit 2)
+PASS: OpenAI project key (exit 2)
+PASS: JWT (exit 2)
+PASS: Slack incoming webhook (exit 2)
+PASS: credential inside a URL (exit 2)
+PASS: extra identity tokens from the identity file (exit 2)
+PASS: an allowlisted token is not a leak (exit 0)
+PASS: a deny is logged (exit 2)
+PASS: block log records the category
+PASS: fails CLOSED when jq is unavailable (exit 2)
+PASS: gitleaks finding denies the write (exit 2)
+PASS: the deny names the gitleaks rule
+PASS: gitleaks is called with --no-banner --exit-code 2
+PASS: gitleaks clean => allowed (exit 0)
+PASS: builtin shapes remain the floor when gitleaks is clean (exit 2)
+PASS: PRIVACY_GUARD_GITLEAKS=0 disables the delegation (exit 0)
+PASS: config file gitleaks=off disables the delegation (exit 0)
+PASS: legacy gitleaks (no stdin subcommand) falls back to detect --pipe (exit 2)
+PASS: legacy fallback used detect --pipe
+PASS: a repo .gitleaks.toml is passed to gitleaks (exit 0)
+PASS: gitleaks received -c <repo>/.gitleaks.toml
+PASS: gitleaks is NOT run for a gitignored file (no cost where nothing is judged) (exit 0)
+PASS: gitleaks was not invoked for the ignored file
+PASS: a timed run is logged (exit 0)
+PASS: timing log has tool, ms and bytes
+PASS: over budget => SLOW warning, still allowed
+PASS: within the default budget => no warning
+PASS: REAL gitleaks: a Twilio API key (absent from the built-in shapes) is refused (exit 2)
+PASS: REAL gitleaks: ordinary prose passes (exit 0)
+----
+privacy_guard_test: 82 passed, 0 failed
+----
+RUN: ai/hooks/safety_guard_test.sh
+PASS: plain ls (exit 0)
+PASS: plain ls (shared dialect) (exit 0)
+PASS: plain ls (shared dialect) JSON check (exit 0 + JSON match)
+PASS: git status (exit 0)
+PASS: rm -rf safe subdir (exit 0)
+PASS: dd --help allowed (exit 0)
+PASS: non-Bash tool passes through (exit 0)
+PASS: echo containing curl| (exit 0)
+PASS: chmod -R safe subdir (exit 0)
+PASS: rm -f single file with later unrelated * (exit 0)
+PASS: rm -f single file with later cmd containing * (exit 0)
+PASS: commit msg heredoc containing rm -rf * (exit 0)
+PASS: commit msg heredoc containing curl|sh (exit 0)
+PASS: commit msg heredoc (literal) containing dd (exit 0)
+PASS: real rm -rf * after a heredoc (exit 2)
+PASS: dd file-to-file (benign) (exit 0)
+PASS: dd to /dev/null (benchmark) (exit 0)
+PASS: dd reading from /dev/zero (exit 0)
+PASS: parted --list (read-only) (exit 0)
+PASS: parted -l short (exit 0)
+PASS: reboot asks for confirmation (exit 3)
+PASS: shutdown asks for confirmation (exit 3)
+PASS: systemctl poweroff asks (exit 3)
+PASS: init 0 asks (exit 3)
+PASS: git push -f asks (exit 3)
+PASS: git push --force asks (exit 3)
+PASS: git push --force-with-lease asks (exit 3)
+PASS: plain git push allowed (exit 0)
+PASS: reboot as argument (not command) allowed (exit 0)
+PASS: systemctl status allowed (exit 0)
+PASS: gh pr ready asks (approval-token bypass) (exit 3)
+PASS: gh pr ready --repo asks too (exit 3)
+PASS: gh pr merge asks (raw merge bypass) (exit 3)
+PASS: gh pr merge --squash --auto asks too (exit 3)
+PASS: gh pr view allowed (exit 0)
+PASS: gh pr list allowed (exit 0)
+PASS: gh pr edit --add-label ready-for-merge allowed (the sanctioned queue path) (exit 0)
+PASS: gh pr checks allowed (exit 0)
+PASS: gh pr comment allowed (exit 0)
+PASS: gh pr ready as argument text (not a command) allowed (exit 0)
+PASS: rm -rf wildcard (exit 2)
+PASS: rm -f wildcard (deletes all in cwd) (exit 2)
+PASS: rm -rf dot wildcard (exit 2)
+PASS: rm -rf current dir (exit 2)
+PASS: rm -rf parent dir (exit 2)
+PASS: rm -rf /etc (exit 2)
+PASS: rm -rf root (exit 2)
+PASS: dd disk wipe (exit 2)
+PASS: dd disk wipe (macOS disk*) (exit 2)
+PASS: dd to nvme (exit 2)
+PASS: parted with device target (exit 2)
+PASS: mkfs (exit 2)
+PASS: fdisk (exit 2)
+PASS: chmod -R / (exit 2)
+PASS: chown -R / (exit 2)
+PASS: fork bomb (exit 2)
+PASS: curl pipe to sh (exit 2)
+PASS: curl pipe to sudo bash (exit 2)
+PASS: wget pipe to bash (exit 2)
+PASS: redirect to block device (exit 2)
+PASS: redirect to nvme (exit 2)
+PASS: gss push without token (exit 2)
+PASS: gss pr without token (exit 2)
+PASS: gss sync without token (exit 2)
+PASS: chained token-gen + gss push (blocked by design) (exit 2)
+PASS: gss push with stale token (exit 2)
+PASS: gss push with fresh token (exit 0)
+PASS: cross-repo gss push: token matches target-repo HEAD (exit 0)
+PASS: cross-repo gss push: stale token (does not match target-repo HEAD) (exit 2)
+PASS: cd $HOME/<repo> && gss push: token matches target HEAD (exit 0)
+PASS: cd ${HOME}/<repo> && gss push (exit 0)
+PASS: cd "$HOME/<repo>" (quoted) && gss push (exit 0)
+PASS: cd ~/<repo> && gss push (exit 0)
+PASS: cd "$HOME"/<repo> (quoted variable only) && gss push (exit 0)
+PASS: gss push --repo <target>: token matches target HEAD (exit 0)
+PASS: gss push -r <target> (exit 0)
+PASS: gss --repo=<target> push (global flag before the verb) (exit 0)
+PASS: gss -r <target> push (global flag before the verb) (exit 0)
+PASS: feature pr --ready --repo <target> (exit 0)
+PASS: --repo beats a leading cd (exit 0)
+PASS: cd $HOME/<repo>: token for the cwd repo is stale for the target (exit 2 + JSON match)
+PASS: stale deny says the target came from the leading cd (exit 2 + JSON match)
+PASS: stale deny says the target came from --repo (exit 2 + JSON match)
+PASS: global --repo before the verb does not skip the token gate (exit 2)
+PASS: global -r before feature pr --ready does not skip the token gate (exit 2)
+PASS: cd $OTHER_VAR/<repo>: could not resolve (only ~/$HOME expand) (exit 2 + JSON match)
+PASS: --repo <missing dir>: could not resolve (exit 2 + JSON match)
+PASS: cd $HOMEX/<repo>: $HOME is not a prefix match (exit 2 + JSON match)
+PASS: cd ~other/<repo>: only bare ~ expands (exit 2 + JSON match)
+PASS: unrelated -r before gss is not --repo (exit 0)
+PASS: bare checkpoint inside a $HOME-spelled worker worktree (exit 0)
+PASS: push --force-autonomous in a $HOME-spelled worker worktree (wrong mode) (exit 2)
+PASS: feature pr --ready without token (exit 2)
+PASS: feature merged without token (exit 2)
+PASS: feature restack without token (exit 2)
+PASS: feature list needs no token (exit 0)
+PASS: feature pr without --ready needs no token (exit 0)
+PASS: feature pr --ready with fresh token (exit 0)
+PASS: feature merged with fresh token (exit 0)
+PASS: push --force-autonomous in a worker worktree (wrong mode) (exit 2)
+PASS: pr --force-autonomous in a worker worktree (wrong mode) (exit 2)
+PASS: push --force-autonomous on a regular checkout (exit 0)
+PASS: checkpoint without --worker outside a worktree (exit 2)
+PASS: checkpoint --worker is fine anywhere (exit 0)
+PASS: bare checkpoint inside a worker worktree (exit 0)
+---
+PASS: 105  FAIL: 0
+----
+RUN: ai/skills/herdr/scripts/herdr-skill_test.sh
+PASS: herdr-layout exists
+PASS: herdr-prefs exists
+PASS: SKILL.md exists
+PASS: herdr-layout parses (exit 0)
+PASS: herdr-prefs parses (exit 0)
+PASS: layout save: missing socket exits 1
+PASS: layout save: missing socket is explained
+PASS: layout save: missing socket writes nothing
+PASS: layout save: exits 0
+PASS: layout save: writes <dir>/<name>.json
+PASS: layout save: calls layout.export
+PASS: layout save: keeps the split tree
+PASS: layout save: keeps pane commands
+PASS: layout save: keeps pane labels
+PASS: layout save: strips ephemeral pane_ids
+PASS: layout save: records zoom state
+PASS: layout save: records the name
+PASS: layout save: records saved_at
+PASS: layout save: prints the file path
+PASS: layout save --tab: forwards tab_id
+PASS: layout save: server error exits 1
+PASS: layout save: server error code is shown
+PASS: layout save: server error writes nothing
+PASS: layout save: path-like name is rejected
+PASS: layout list: names, one per line
+PASS: layout show: prints the JSON
+PASS: layout show: unknown name exits 1
+PASS: layout delete: removes the file
+PASS: layout restore: exits 0
+PASS: layout restore: calls layout.apply
+PASS: layout restore: sends the saved root
+PASS: layout restore: tab label defaults to the name
+PASS: layout restore: does not steal focus by default
+PASS: layout restore: reports the new tab id
+PASS: layout restore: forwards --workspace/--label/--focus/--replace-tab
+PASS: prefs fixture: seeded managed config
+PASS: prefs fixture: plugin keybindings are [[keys.command]] array tables
+PASS: prefs status: managed file is reported
+PASS: prefs status: shows theme.name
+PASS: prefs status: shows keys.prefix
+PASS: prefs status: host appearance is unknown without a tty (never guessed)
+PASS: prefs get: reads a string
+PASS: prefs get: reads a boolean
+PASS: prefs set: exits 0
+PASS: prefs set: rewrites the key in place
+PASS: prefs set: exactly one name key remains
+PASS: prefs set: other keys untouched
+PASS: prefs set: comments preserved
+PASS: prefs set: managed marker removed (host owns the file now)
+PASS: prefs set: ownership handoff is recorded in the file
+PASS: prefs set: reloads the running server
+PASS: prefs set: tells the user install.sh will leave it alone
+PASS: prefs status: host-owned after set
+PASS: prefs set: boolean stays unquoted
+PASS: prefs set: creates a missing section
+PASS: prefs set: number stays unquoted
+PASS: prefs set: new key lands in its section
+PASS: prefs set: appended key is inside [keys], not at EOF
+PASS: prefs set: a new [keys] key never lands inside a [[keys.command]] entry
+PASS: prefs get: a keybinding entry's field is not read as keys.<field>
+PASS: prefs get: [[keys.command]] entries do not shadow [keys]
+PASS: prefs set: the plugin keybindings survive intact
+PASS: prefs set: refuses a key that is an array of tables
+PASS: prefs set: says why
+PASS: prefs set: nothing was written for it
+PASS: prefs set: key must be section.key
+PASS: prefs reset: exits 0
+PASS: prefs reset: managed marker is back
+PASS: prefs reset: fleet theme is back
+PASS: prefs reset: the host-owned file was backed up
+PASS: prefs reset via symlinked skill dir: exits 0
+PASS: prefs reset via symlinked skill dir: managed marker is back
+PASS: SKILL.md: frontmatter name is herdr
+PASS: SKILL.md: description starts with a trigger, not a workflow
+PASS: SKILL.md: gates on HERDR_ENV like the upstream skill
+PASS: SKILL.md: documents layout save
+PASS: SKILL.md: documents prefs set
+PASS: SKILL.md: warns that restore does not carry running processes
+PASS: SKILL.md: says layouts are host-local, not in the repo
+PASS: evals corpus exists
+----
+PASS=80 FAIL=0
+----
+RUN: opt/bin/claude-pick_test.sh
+PASS: claude-pick parses with bash -n (exit 0)
+PASS: --help exits 0 (exit 0)
+PASS: help points at the aliases.sh wrapper
+PASS: fixture worktree created
+PASS: fixture worktree .git is a file (the case PR #47 missed)
+PASS: --list finds a normal clone
+PASS: --list finds a git worktree
+PASS: --list finds a dotted repo name
+PASS: --list skips non-repo dirs
+PASS: --list does not descend into .git
+PASS: --list reaches gss-depth worker worktrees
+PASS: dots sanitized out of the tmux session name
+PASS: session name carries no dots
+PASS: CLAUDE_PICK_SESSION_PREFIX honored
+PASS: no launch flags — wrapper owns them, so no duplicate --remote-control
+PASS: bare claude under an interactive shell
+PASS: worktree path accepted as a repo
+PASS: subdir resolves to the work-tree root
+PASS: path-shaped target rejected (/tmp/tmp.oOWRg2GHMX/nope/typo)
+PASS: path-shaped target rejected (./nope)
+PASS: path-shaped target rejected (../nope)
+PASS: free text rejected
+PASS: three-segment target rejected
+PASS: owner/repo reuses an existing clone
+PASS: clone target resolves to its work tree
+PASS: trailing slash stripped from clone name
+PASS: .git suffix stripped from clone name
+PASS: no-TTY launch refused
+PASS: no-TTY error points at --print
+PASS: --print without a target refused
+PASS: --print works with neither tmux nor claude on PATH
+PASS: --print emits the command without claude present
+PASS: launch path still refuses under a minimal PATH
+PASS: picker returns a repo from the discovered list
+PASS: picker offers the clone entry last
+PASS: picker offers discovered repos
+PASS: picker clone entry clones/reuses and returns the work tree
+PASS: CLAUDE_PICK_LIB=1 sources without running main
+PASS: --list is empty when no roots exist
+----
+PASS=39 FAIL=0
+----
+RUN: opt/bin/claude-rc-boot_test.sh
+PASS: claude-rc-boot parses with bash -n (exit 0)
+PASS: --help exits 0 (exit 0)
+PASS: help mentions Remote Control
+PASS: name format with prefix
+PASS: env prefix honored
+PASS: prefix sanitized
+PASS: already-running exits 0
+PASS: already-running message
+PASS: no second launch when session running
+PASS: log records skip
+PASS: claude launched when nothing running
+PASS: launch args carry session name
+PASS: log records start
+PASS: tmux used when outside tmux
+PASS: tmux wraps claude with stable session name
+PASS: no direct claude exec when tmux wraps
+PASS: log records tmux session
+----
+PASS=17 FAIL=0
+----
+RUN: opt/bin/pkg-install_test.sh
+PASS: pkg-install parses with bash -n (exit 0)
+PASS: pkg-install-apt parses with bash -n (exit 0)
+PASS: pkg-install-brew parses with bash -n (exit 0)
+PASS: unknown platform exits 1
+PASS: unknown platform prints meaningful error
+PASS: Linux without apt-get exits 1
+PASS: Linux+no-apt prints meaningful error
+PASS: pkg-install-apt exits 1 when apt-get is absent
+PASS: pkg-install-apt explains the missing apt-get
+PASS: pkg-install-brew exits 1 when brew is absent
+PASS: pkg-install-brew explains the missing brew
+PASS: pkg-install-apt exits 1 on missing manifest
+PASS: pkg-install-apt explains the missing manifest
+PASS: packages.tsv installs xclip on apt hosts
+PASS: packages.tsv installs xsel on apt hosts
+PASS: packages.tsv installs wl-clipboard on apt hosts
+PASS: all installed, no sudo: exits 0
+PASS: all installed, no sudo: no sudo command beyond the -n probe
+PASS: all installed, no sudo: never calls apt-get (not even update)
+PASS: all installed, no sudo: skips the gh apt repo setup
+PASS: all installed, no sudo: no WARNING
+PASS: all installed, no sudo: says why the upgrade check is skipped
+PASS: all installed, sudo usable: exits 0
+PASS: all installed, sudo usable: runs the gh apt repo setup
+PASS: all installed, sudo usable: refreshes the package lists
+PASS: all installed, sudo usable: grouped install of the full list (upgrades)
+PASS: all installed, sudo usable: installs via sudo env DEBIAN_FRONTEND=noninteractive
+PASS: sudo unavailable: exits 0 (non-fatal, like the other failure paths)
+PASS: sudo unavailable: zero apt-get calls
+PASS: sudo unavailable: no sudo command beyond the -n probe
+PASS: sudo unavailable: skips the gh apt repo setup
+PASS: sudo unavailable: exactly one WARNING
+PASS: sudo unavailable: the warning explains why and lists the missing packages
+PASS: sudo unavailable: the already-installed package is not listed
+PASS: sudo unavailable: no per-package retry storm
+PASS: some missing, sudo usable: exits 0
+PASS: some missing, sudo usable: grouped install of the full list
+PASS: some missing, sudo usable: refreshes the package lists once
+PASS: grouped failure: exits 0
+PASS: grouped failure: 1 grouped + 3 single-package installs
+PASS: grouped failure: announces the retry
+PASS: root: exits 0
+PASS: root: never calls sudo
+PASS: root: installs the package list directly
+----
+PASS=44 FAIL=0
+----
+RUN: opt/bin/sshd-setup_test.sh
+PASS: sshd-setup parses with bash -n (exit 0)
+PASS: no args exits 1
+PASS: usage lists subcommands
+PASS: detects wsl from microsoft /proc/version
+PASS: detects plain linux
+PASS: status reports running
+PASS: status exits 0 even when sshd absent
+PASS: status reports not installed
+PASS: gh api user wins precedence
+PASS: falls back to origin owner (https URL)
+PASS: falls back to origin owner (ssh URL)
+PASS: no derivation source exits 1
+PASS: first keys run adds 2 lines
+PASS: second keys run adds nothing
+PASS: empty keys response exits 1
+PASS: authorized_keys untouched on empty response
+PASS: enable skips install when sshd already running
+PASS: enable records the gff flag
+PASS: enable writes no ~/.sshd.env (exit 1)
+PASS: enable installs openssh-server when absent
+PASS: dry-run wrote no sshd.env (exit 1)
+PASS: dry-run prints gff set line
+PASS: dry-run makes no gff calls
+PASS: enable without gff exits 1
+PASS: missing gff hint
+PASS: WSL enable exits 0 (no set -u/-e abort)
+PASS: WSL enable records nat
+PASS: WSL next-step line
+PASS: WSL re-run exits 0
+PASS: re-run leaves wsl-network alone
+PASS: re-run did not prompt
+PASS: status shows flag
+PASS: status drops sshd.env
+PASS: status without gff
+PASS: dry-run wrote no authorized_keys (exit 1)
+----
+PASS=35 FAIL=0
+----
+RUN: opt/lib/gff_test.sh
+PASS: var unset => run (fail-open) (exit 0)
+PASS: =true => run (exit 0)
+PASS: =false => skip (the only disabling value) (exit 1)
+PASS: =FALSE => run (uppercase is not false) (exit 0)
+PASS: =0 => run (0 is not false) (exit 0)
+PASS: garbage value => run (fail-open) (exit 0)
+PASS: key mangling: install.windows.wispr-flow reads GFF_INSTALL_WINDOWS_WISPR_FLOW (exit 1)
+PASS: mangled var unset again => run (exit 0)
+PASS: opt-in: var unset => skip (fail-closed) (exit 1)
+PASS: opt-in: =true => run (the only enabling value) (exit 0)
+PASS: opt-in: =false => skip (exit 1)
+PASS: opt-in: =TRUE => skip (uppercase is not true) (exit 1)
+PASS: opt-in: =1 => skip (1 is not true) (exit 1)
+PASS: opt-in: ='true ' => skip (no trimming) (exit 1)
+PASS: opt-in: empty => skip (exit 1)
+PASS: unset var: gff_on runs (0) but gff_opt_in skips (1) — directions are inverted
+PASS: opt-in key mangling: install.windows.security-audit reads GFF_INSTALL_WINDOWS_SECURITY_AUDIT (exit 0)
+PASS: gff_skip_msg echoes exactly 'SKIP (gff: <key>=false)'
+PASS: gff binary absent from PATH => run (exit 0)
+PASS: gff binary absent from PATH => opt-in skips (exit 1)
+PASS: gff_user_set: user-override => 0 (exit 0)
+PASS: gff_user_set: system-override => 0 (exit 0)
+PASS: gff_user_set: repo-live => 1 (exit 1)
+PASS: gff_user_set: key with no row => 1 (exit 1)
+PASS: gff_user_set: gff exits 1 => 1 (exit 1)
+PASS: gff_cli runs from GFF_REPO_DIR
+PASS: gff_cli passes the exit code through (exit 1)
+PASS: gff_require: build ok + binary ok => 0 (exit 0)
+PASS: gff_require: build fails + binary ok => 0
+PASS: gff_require: build-failed warning
+PASS: gff_require: build fails + no binary => 1
+PASS: gff_require: error line (build failed, no binary)
+PASS: gff_require: no go + binary ok => 0
+PASS: gff_require: no-go warning
+PASS: gff_require: no go + no binary => 1
+PASS: gff_require: error line (no go, no binary)
+PASS: gff_require: error mentions missing go
+---
+PASS: 37  FAIL: 0
+----
+RUN: opt/lib/hardware_test.sh
+PASS: hardware.sh exists
+PASS: hardware.sh parses with bash -n (exit 0)
+PASS: hardware.sh parses with dash -n (POSIX) (exit 0)
+PASS: setup_gpu.sh exists
+PASS: setup_gpu.sh parses with bash -n (exit 0)
+PASS: is_jetson is defined
+PASS: is_jetson is a silent predicate (rc=1)
+PASS: is_arm64 is defined
+PASS: is_arm64 is a silent predicate (rc=1)
+PASS: is_linux is defined
+PASS: is_linux is a silent predicate (rc=0)
+PASS: is_darwin is defined
+PASS: is_darwin is a silent predicate (rc=1)
+PASS: is_dgx is defined
+PASS: is_dgx is a silent predicate (rc=1)
+PASS: is_dgx_spark is defined
+PASS: is_dgx_spark is a silent predicate (rc=1)
+PASS: has_nvidia_gpu is defined
+PASS: has_nvidia_gpu is a silent predicate (rc=1)
+PASS: has_unified_gpu_memory is defined
+PASS: has_unified_gpu_memory is a silent predicate (rc=1)
+PASS: DGX Spark release table matches the is_dgx_spark pattern (exit 0)
+PASS: a non-Spark DGX does NOT match the is_dgx_spark pattern (exit 1)
+PASS: DMI product_family fallback matches DGX Spark (exit 0)
+PASS: is_jetson and is_dgx are mutually exclusive
+PASS: has_unified_gpu_memory implies has_nvidia_gpu
+PASS: setup_gpu.sh --dry-run exits 0 on this host (exit 0)
+PASS: setup_gpu.sh no-ops on a GPU-less host
+PASS: setup_gpu.sh defers to jtop on Jetson
+PASS: setup_gpu.sh installs nvitop as the primary tool
+PASS: install.sh gates setup_gpu.sh behind install.system.gpu
+PASS: install.system.gpu is declared in the gff inventory
+PASS: setup_jtop.sh has no bare 'sudo pip3 install'
+PASS: setup_jtop.sh silences pip's root-user notice
+PASS: setup_jtop.sh silences pip's version check
+PASS: install.sh does not duplicate setup_jtop.sh's banner
+----
+PASS=36 FAIL=0
+----
+RUN: opt/lib/npm_allow_scripts_test.sh
+PASS: npm_allow_scripts.sh exists
+PASS: parses with bash -n (exit 0)
+PASS: an empty list gains the package
+PASS: a second package is appended, comma-separated
+PASS: a package already listed is not set again
+PASS: the list is unchanged
+PASS: an npm without the key is never asked to set it
+PASS: writes the user-level config
+PASS: no npm on PATH is a quiet no-op
+PASS: claude_install.sh allows claude-code's postinstall
+PASS: google-cli-setup.sh allows gws's postinstall
+PASS: google-cli-setup.sh does not gate the allow on SUDO
+----
+PASS=12 FAIL=0
+----
+RUN: opt/lib/pins_test.sh
+PASS: pins_manifest honours PINS_MANIFEST
+PASS: pins_manifest defaults to <lib>/../profiles/versions.tsv
+PASS: pins_strip_v strips a leading v
+PASS: pins_strip_v leaves a bare version alone
+PASS: pins_strip_v leaves non-version words alone
+PASS: plain pin row => its version
+PASS: floor row => its version
+PASS: @file row => the file's trimmed content
+PASS: @file content has its leading v stripped
+PASS: leading v in the manifest is stripped
+PASS: @file that does not exist => fallback
+PASS: no row => fallback
+PASS: fallback has its leading v stripped too
+PASS: commented-out rows are ignored
+PASS: a commented row does not match its bare name
+PASS: latest row => latest
+PASS: latest row with a version => still latest under manifest
+PASS: pins_want always exits 0 (no row, no fallback) (exit 0)
+PASS: missing manifest => fallback
+PASS: missing manifest => exit 0 (exit 0)
+PASS: GFF_PINS_TRACK=latest => latest for a pin row
+PASS: GFF_PINS_TRACK=latest => latest even with no row
+PASS: GFF_PINS_TRACK=manifest honours the row
+PASS: GFF_PINS_TRACK=pin + latest row with '-' => fallback
+PASS: GFF_PINS_TRACK=pin + latest row with a version => that version
+PASS: GFF_PINS_TRACK=pin + pin row => its version
+PASS: GFF_PINS_TRACK_MODE (gff export of pins.track.mode) is honoured
+PASS: no export: gff get pins.track.mode=latest is honoured
+PASS: no export: an unknown gff answer fails open to manifest
+PASS: no export: an absent gff fails open to manifest
+PASS: an export wins over asking gff
+PASS: gff is asked once per shell, not once per pins_want
+PASS: GFF_PINS_TRACK wins over GFF_PINS_TRACK_MODE
+PASS: real manifest: go resolves @.go-version from the repo root
+PASS: real manifest: herdr is tracked latest
+PASS: real manifest: keyd pin has no leading v
+PASS: pins_latest_gh prints the tag without v
+PASS: pins_latest_gh exits 0 on success (exit 0)
+PASS: pins_latest_gh is non-zero when the API call fails (exit 1)
+PASS: pins_latest_gh is non-zero when there is no tag_name (exit 1)
+PASS: pins_latest_gh parses a single-line response
+PASS: GITHUB_TOKEN is sent as a bearer token
+PASS: default API base is api.github.com
+PASS: no Authorization header without GITHUB_TOKEN
+PASS: versions.tsv has the 19 managed rows
+PASS: versions.tsv has no duplicate tools
+PASS: every versions.tsv track is pin|floor|latest
+PASS: every versions.tsv row has tool track version upstream installer probe
+PASS: every versions.tsv installer path exists
+PASS: Dockerfile.base ARG COMPOSE_VERSION default equals the manifest
+PASS: CI installs golangci-lint at the manifest version, not a hardcoded one
+---
+PASS: 51  FAIL: 0
+----
+RUN: opt/lib/sshdflags_test.sh
+PASS: [bash] SSHD_LOGIN=true, unset key -> set true, file gone, message
+PASS: [bash] GFF_INSTALL_NETWORK_SSHD exported in caller shell
+PASS: [bash] already user-override -> no set, stale file removed
+PASS: [bash] no SSHD_LOGIN=true -> no set, file removed
+PASS: [bash] set fails -> file kept, warning, rc 0
+PASS: [bash] no file -> silent, no gff calls
+PASS: [bash] second run is a no-op
+PASS: [sh] SSHD_LOGIN=true, unset key -> set true, file gone, message
+PASS: [sh] GFF_INSTALL_NETWORK_SSHD exported in caller shell
+PASS: [sh] already user-override -> no set, stale file removed
+PASS: [sh] no SSHD_LOGIN=true -> no set, file removed
+PASS: [sh] set fails -> file kept, warning, rc 0
+PASS: [sh] no file -> silent, no gff calls
+PASS: [sh] second run is a no-op
+----------------------------------------
+sshdflags_test: 14 passed, 0 failed
+----
+RUN: opt/lib/winpowershell_test.sh
+PASS: no powershell.exe on PATH: finds the System32 fallback via wslpath
+PASS: powershell.exe on PATH: uses the PATH copy
+PASS: no PATH copy and no System32 file: returns 1 with no output
+PASS: no wslpath (not WSL): returns 1 with no output
+PASS: sourcing the helper prints nothing
+PASS: install_nerd_font_linux.sh resolves powershell via find_powershell
+PASS: install_nerd_font_linux.sh sources opt/lib/winpowershell.sh
+PASS: install_nerd_font_linux.sh no longer gates on bare 'command -v powershell.exe'
+PASS: install_nerd_font_linux.sh invokes the resolved path, not bare powershell.exe
+PASS: install_windows.sh resolves powershell via find_powershell
+PASS: install_windows.sh no longer carries its own System32 lookup
+----
+PASS=11 FAIL=0
+----
+RUN: opt/lib/winsetup_test.sh
+PASS: [bash] choice round-trip y
+PASS: [bash] take_choice absent -> none
+PASS: [bash] sentinel honored without gff
+PASS: [bash] sentinel migrates to gff override
+PASS: [bash] env override false -> skipped
+PASS: [bash] clean state -> not skipped
+PASS: [bash] record_skip delegates to gff
+PASS: [bash] record_skip sentinel fallback
+PASS: [bash] record_skip runs gff from WINSETUP_REPO_DIR
+PASS: [bash] ask without tty -> __notty__
+PASS: [sh] choice round-trip y
+PASS: [sh] take_choice absent -> none
+PASS: [sh] sentinel honored without gff
+PASS: [sh] sentinel migrates to gff override
+PASS: [sh] env override false -> skipped
+PASS: [sh] clean state -> not skipped
+PASS: [sh] record_skip delegates to gff
+PASS: [sh] record_skip sentinel fallback
+PASS: [sh] record_skip runs gff from WINSETUP_REPO_DIR
+PASS: [sh] ask without tty -> __notty__
+----------------------------------------
+winsetup_test: 20 passed, 0 failed
+----
+RUN: opt/lib/wslnet_test.sh
+PASS: [bash] detect: [wsl2] bridged
+PASS: [bash] detect: [wsl2] mirrored
+PASS: [bash] detect: key under [experimental] (older WSL)
+PASS: [bash] detect: CRLF + BOM
+PASS: [bash] detect: bridged file wins over a portproxy rule
+PASS: [bash] detect: no file + portproxy rule to :22 -> nat
+PASS: [bash] detect: portproxy for another port only -> nothing
+PASS: [bash] detect: file networkingMode=nat, no rule/task -> nothing recorded
+PASS: [bash] detect: listen 2222 -> connect 22 -> nat
+PASS: [bash] detect: listen 22 -> connect 8080 -> nothing
+PASS: [bash] detect: RefreshWslPortProxy task -> nat
+PASS: [bash] detect: nothing -> empty
+PASS: [bash] wslconfig: no interop, one candidate in a dir with a space
+PASS: [bash] wslconfig: no interop, two candidates -> empty
+PASS: [bash] wslconfig+detect: interop profile path with a space
+PASS: [bash] recommend: k3s + wired adapter -> bridged
+PASS: [bash] recommend: k3s + Wi-Fi only -> nat
+PASS: [bash] recommend: no k3s -> nat
+PASS: [bash] recommend: k3s-agent unit enabled + wired -> bridged
+PASS: [bash] ask: WSLNET_ANSWER=nat
+PASS: [bash] ask: WSLNET_ANSWER=skip
+PASS: [bash] ask: junk answer, no TTY -> skip
+PASS: [bash] ask: no answer, no TTY -> skip
+PASS: [bash] ask: TTY re-asks once on an invalid answer
+PASS: [bash] ask: TTY invalid twice -> skip
+PASS: [bash] ask: TTY Enter accepts recommended; prompt marks it
+PASS: [bash] sync: not WSL -> no gff calls
+PASS: [bash] sync: key user-set -> only list
+PASS: [bash] sync: detected -> set + message
+PASS: [bash] sync: export visible in caller shell (not a subshell)
+PASS: [bash] sync: gff set fails -> warning, rc 0, no export
+PASS: [bash] sync: nothing detected + sshd off -> no set, no prompt
+PASS: [bash] sync: sshd on + answer nat -> set nat, exported
+PASS: [bash] sync: answer skip -> no set + hint
+PASS: [sh] detect: [wsl2] bridged
+PASS: [sh] detect: [wsl2] mirrored
+PASS: [sh] detect: key under [experimental] (older WSL)
+PASS: [sh] detect: CRLF + BOM
+PASS: [sh] detect: bridged file wins over a portproxy rule
+PASS: [sh] detect: no file + portproxy rule to :22 -> nat
+PASS: [sh] detect: portproxy for another port only -> nothing
+PASS: [sh] detect: file networkingMode=nat, no rule/task -> nothing recorded
+PASS: [sh] detect: listen 2222 -> connect 22 -> nat
+PASS: [sh] detect: listen 22 -> connect 8080 -> nothing
+PASS: [sh] detect: RefreshWslPortProxy task -> nat
+PASS: [sh] detect: nothing -> empty
+PASS: [sh] wslconfig: no interop, one candidate in a dir with a space
+PASS: [sh] wslconfig: no interop, two candidates -> empty
+PASS: [sh] wslconfig+detect: interop profile path with a space
+PASS: [sh] recommend: k3s + wired adapter -> bridged
+PASS: [sh] recommend: k3s + Wi-Fi only -> nat
+PASS: [sh] recommend: no k3s -> nat
+PASS: [sh] recommend: k3s-agent unit enabled + wired -> bridged
+PASS: [sh] ask: WSLNET_ANSWER=nat
+PASS: [sh] ask: WSLNET_ANSWER=skip
+PASS: [sh] ask: junk answer, no TTY -> skip
+PASS: [sh] ask: no answer, no TTY -> skip
+PASS: [sh] ask: TTY re-asks once on an invalid answer
+PASS: [sh] ask: TTY invalid twice -> skip
+PASS: [sh] ask: TTY Enter accepts recommended; prompt marks it
+PASS: [sh] sync: not WSL -> no gff calls
+PASS: [sh] sync: key user-set -> only list
+PASS: [sh] sync: detected -> set + message
+PASS: [sh] sync: export visible in caller shell (not a subshell)
+PASS: [sh] sync: gff set fails -> warning, rc 0, no export
+PASS: [sh] sync: nothing detected + sshd off -> no set, no prompt
+PASS: [sh] sync: sshd on + answer nat -> set nat, exported
+PASS: [sh] sync: answer skip -> no set + hint
+----------------------------------------
+wslnet_test: 68 passed, 0 failed
+----
+RUN: opt/profiles/.bash_aliases_test.sh
+PASS: .bash_aliases exists
+PASS: .bash_aliases parses with bash -n (exit 0)
+PASS: .bash_aliases sources cleanly in clean subshell (exit 0)
+PASS: .bash_aliases produces no stderr output when sourced
+PASS: alias 'k' is defined after sourcing
+PASS: alias 'python' maps to python3
+PASS: function 'sfssh' (Snowflake ws ssh) is defined
+PASS: sfcreate default composes unchanged command
+PASS: sfcreate default omits --instance-profile
+PASS: sfcreate -s appends --instance-profile small
+PASS: sfcreate -s -nc <name> composes all flags
+----
+PASS=11 FAIL=0
+----
+RUN: opt/profiles/.gitools_test.sh
+PASS: git-reset discards divergence and untracked files
+PASS: git-reset outside a repo fails with error
+PASS: git-reset on HOME repo aborts without explicit Yes
+PASS: git-clean resets to upstream and removes untracked files
+PASS: git-reset-all resets child repos and skips non-repos
+PASS: sourcing the fragment produces no output or side effects
+All gitools cases passed
+----
+RUN: opt/profiles/.locale_test.sh
+PASS: .locale.sh exists
+PASS: parses under bash -n (exit 0)
+PASS: parses under dash -n (sourced by .profile at GUI login) (exit 0)
+PASS: bash: an unavailable LC_ALL is dropped, the working LANG kept
+PASS: bash: the message names exactly what was dropped
+PASS: bash: a bad LC_CTYPE alone is dropped, LANG kept (macOS client)
+PASS: bash: an unavailable LANG falls back to C.UTF-8
+PASS: bash: a working LC_CTYPE is kept when only LANG is broken
+PASS: bash: only the broken LC_* is dropped, a working one kept
+PASS: bash: a working locale is left alone, silently
+FAIL: bash: -q fixes it without a word (got 'bash: warning: setlocale: LC_ALL: cannot change locale (en_US.UTF-8): No such file or directory
+LANG=C.UTF-8 LC_ALL= LC_CTYPE=' want 'LANG=C.UTF-8 LC_ALL= LC_CTYPE=')
+PASS: dash: an unavailable LC_ALL is dropped, the working LANG kept
+PASS: dash: the message names exactly what was dropped
+PASS: dash: a bad LC_CTYPE alone is dropped, LANG kept (macOS client)
+PASS: dash: an unavailable LANG falls back to C.UTF-8
+PASS: dash: a working LC_CTYPE is kept when only LANG is broken
+PASS: dash: only the broken LC_* is dropped, a working one kept
+PASS: dash: a working locale is left alone, silently
+PASS: dash: -q fixes it without a word
+PASS: zsh: an unavailable LC_ALL is dropped, the working LANG kept
+PASS: zsh: the message names exactly what was dropped
+PASS: zsh: a bad LC_CTYPE alone is dropped, LANG kept (macOS client)
+PASS: zsh: an unavailable LANG falls back to C.UTF-8
+PASS: zsh: a working LC_CTYPE is kept when only LANG is broken
+PASS: zsh: only the broken LC_* is dropped, a working one kept
+PASS: zsh: a working locale is left alone, silently
+PASS: zsh: -q fixes it without a word
+PASS: no locale binary: a quiet no-op
+PASS: install.sh sources the helper from the repo
+PASS: install.sh calls it (with its message)
+PASS: install.sh falls back before it starts using tools
+PASS: .profile calls locale_fallback quietly
+PASS: .bashrc calls locale_fallback quietly
+PASS: .zshrc calls locale_fallback quietly
+PASS: .profile still parses under dash -n (exit 0)
+----
+PASS=34 FAIL=1
+----
+RUN: opt/profiles/goenv_profile_test.sh
+PASS: bash: GOENV_ROOT is $HOME/.goenv (install.sh's tree)
+PASS: bash: the goenv global pin is honoured over the newest installed
+PASS: bash: global=system falls back to the newest installed
+PASS: bash: a global that is not installed falls back to the newest installed
+PASS: bash: an explicit GOENV_VERSION is left alone
+PASS: zsh: GOENV_ROOT is $HOME/.goenv (install.sh's tree)
+PASS: zsh: the goenv global pin is honoured over the newest installed
+PASS: zsh: global=system falls back to the newest installed
+PASS: zsh: a global that is not installed falls back to the newest installed
+PASS: zsh: an explicit GOENV_VERSION is left alone
+----
+PASS=10 FAIL=0
+----
+RUN: opt/profiles/profile_test.sh
+PASS: .profile exists
+PASS: .profile parses with bash -n (exit 0)
+PASS: .profile parses with dash -n (POSIX) (exit 0)
+PASS: .zprofile exists
+PASS: .profile parses with zsh -n (exit 0)
+PASS: .zprofile parses with zsh -n (exit 0)
+PASS: /etc/environment does NOT clobber PATH (sentinel survives)
+PASS: quoted value from /etc/environment is exported, quotes stripped
+PASS: unquoted value from /etc/environment is exported
+PASS: leading 'export ' in /etc/environment is handled
+PASS: indented line is skipped (fail-safe, not mis-parsed)
+PASS: line with no '=' is skipped
+PASS: empty PATH falls back to /etc/environment's PATH
+PASS: missing /etc/environment is tolerated (exit 0)
+PASS: dedupe: /a appears exactly once
+PASS: dedupe: /b appears exactly once
+PASS: dedupe: /c appears exactly once
+PASS: dedupe: no empty PATH field (implicit CWD) survives
+PASS: dedupe: first-occurrence order is preserved
+PASS: dedupe: resulting PATH has no duplicates at all
+PASS: .zprofile sources /etc/profile for profile.d drop-ins
+----
+PASS=21 FAIL=0
+----
+RUN: opt/profiles/rc_test.sh
+PASS: .bashrc exists
+PASS: .bashrc parses with bash -n (exit 0)
+PASS: .bashrc sources cleanly in clean subshell (exit 0)
+PASS: .bashrc produces no stderr output when sourced
+PASS: .zshrc exists
+PASS: .zshrc parses with zsh -n (exit 0)
+PASS: .zshrc sources cleanly in clean subshell (exit 0)
+PASS: .zshrc produces no stderr output when sourced
+----
+PASS=8 FAIL=0
+----
+RUN: opt/scripts/docker/setup_docker_perms_test.sh
+PASS: parses with bash -n (exit 0)
+PASS: correct socket: exit 0
+PASS: a correct socket is never chown'd or chmod'd
+PASS: no sudo error on an up-to-date host
+PASS: a group-writable socket for an in-group session is left alone
+PASS: and nothing is reported as skipped
+PASS: a session outside the group still gets the 666 fallback
+PASS: no sudo: exit 0
+PASS: no sudo: nothing is chown'd
+PASS: no sudo: no sudo error lines
+PASS: no sudo: one line says what was skipped
+PASS: sudo: the socket group is fixed
+PASS: sudo: the socket mode is fixed
+PASS: no sudo: usermod is not attempted
+PASS: no sudo: no usermod sudo error
+PASS: sudo: the user is added to the docker group
+----
+PASS=16 FAIL=0
+----
+RUN: opt/scripts/git/git_identity_doctor_test.sh
+PASS: gh unauthenticated degrades to info, exit 0
+PASS: ID-based noreply passes
+PASS: legacy username-only noreply warns
+PASS: noreply of a different account warns
+PASS: public email passes
+PASS: private email FAILS with push-block explanation
+PASS: unassociated email warns about attribution
+PASS: missing user scope warns with refresh hint
+PASS: unset user.email warns
+All git_identity_doctor cases passed
+----
+RUN: opt/scripts/git/github_secret_scanning_test.sh
+PASS: ensure: enables all three when disabled
+PASS: ensure: exactly one PATCH
+PASS: ensure: PATCH body carries secret_scanning
+PASS: ensure: body enables push protection
+PASS: ensure: body enables non-provider patterns
+PASS: ensure: reports what it enabled
+PASS: ensure: already enabled is a no-op
+PASS: ensure: no PATCH when already enabled
+PASS: ensure: says already enabled
+PASS: ensure: enables only the missing one
+PASS: ensure: one PATCH for a partial state
+PASS: ensure: repo defaults to the current checkout (gh repo view)
+PASS: ensure: resolved acme/dots from gh repo view
+PASS: check: exit 1 when anything is disabled
+PASS: check: names the disabled settings
+PASS: check: names non-provider patterns as disabled
+PASS: check: never PATCHes
+PASS: check: exit 0 when all enabled
+PASS: ensure: non-provider patterns not honoured => WARN, exit 0
+PASS: ensure: warns that non-provider patterns did not stick
+PASS: check: core settings on, non-provider off => exit 0 with WARN
+PASS: check: WARN names non-provider patterns
+PASS: ensure: not authenticated => SKIP, exit 0 (install must not break offline)
+PASS: ensure: says SKIP when unauthenticated
+PASS: check: not authenticated => exit 2 (cannot determine)
+PASS: ensure: gh missing => SKIP, exit 0
+PASS: check: gh missing => exit 2
+PASS: ensure: private repo PATCH refused => exit 1
+PASS: ensure: explains the paid requirement for private repos
+----
+github_secret_scanning_test: 29 passed, 0 failed
+----
+RUN: opt/scripts/git/install_git_hooks_test.sh
+PASS: installer exits 0 on a fresh HOME (got 0) ::   git hooks: installed to /tmp/tmp.MObnf0DX9A/home/<user>/git/hooks and set as global core.hooksPath
+PASS: installs an executable pre-commit
+PASS: installs an executable commit-msg
+PASS: installs an executable pre-push
+PASS: installs the shared rules library beside the hooks
+PASS: sets core.hooksPath to the install dir (got '/tmp/tmp.MObnf0DX9A/home/<user>/git/hooks')
+PASS: second run is a no-op (exit 0)
+PASS: chains to the repo-local .git/hooks/pre-commit (exit 0) :: LOCAL-HOOK-RAN
+----
+install_git_hooks_test: 8 passed, 0 failed
+----
+RUN: opt/scripts/git/install_gitleaks_test.sh
+PASS: already installed => no-op
+PASS: already: says already
+PASS: already: no package-manager calls
+PASS: apt: installs via sudo apt-get (no apt-get update — one package, keep it fast)
+PASS: apt: install -y gitleaks logged
+PASS: apt: went through sudo
+PASS: apt: no apt-get update
+PASS: brew: installs via brew install
+PASS: brew: install gitleaks logged
+PASS: auto: apt candidate present, no brew => release, not apt
+PASS: auto: did not use apt-get
+PASS: auto: release binary installed
+PASS: auto: no apt candidate, no brew => release download
+PASS: auto/release: fetched the checksums file
+PASS: auto/release: binary installed and runs
+PASS: release: pinned version, sha256-verified
+PASS: release: fetched gitleaks_8.21.2_linux_x64.tar.gz
+PASS: release: binary in GITLEAKS_INSTALL_DIR
+PASS: release: checksum mismatch => exit 1
+PASS: release: nothing installed on mismatch
+PASS: release: says checksum
+PASS: --off: exit 0
+PASS: --off: writes off marker
+PASS: --off: installs nothing
+PASS: ensure after --off: clears the marker
+PASS: ensure: marker removed
+PASS: converge: own binary == want => exit 0
+PASS: converge: says already at 8.21.2
+PASS: converge: equal => no calls at all
+PASS: converge: own binary older => exit 0
+PASS: converge: older => upgraded to 8.21.2
+PASS: converge: older => release download, not apt
+PASS: converge: reports the upgrade
+PASS: foreign: apt/brew-owned gitleaks => exit 0
+PASS: foreign: says it is leaving it alone
+PASS: foreign: nothing installed or called
+PASS: manifest: default version from versions.tsv
+PASS: manifest: installed the manifest pin
+PASS: env override: GITLEAKS_VERSION beats the manifest
+PASS: env override: installed GITLEAKS_VERSION
+PASS: latest: resolves and converges to upstream
+PASS: latest: queried the releases API
+PASS: latest: installed 8.22.0
+----
+install_gitleaks_test: 43 passed, 0 failed
+----
+RUN: opt/scripts/git/privacy_guard_timing_test.sh
+PASS: missing log => exit 0
+PASS: missing log: says no data
+PASS: all within budget => exit 0
+PASS: summary: run count
+PASS: summary: max
+PASS: summary: median
+PASS: summary: slow count zero
+PASS: per-hook breakdown names pre-commit
+PASS: one run over the default budget => exit 1 (make hook-timing goes red)
+PASS: slow count reported
+PASS: slow run identified by hook and time
+PASS: --budget-ms raises the bar => exit 0
+PASS: --budget-ms lowers the bar => more slow
+PASS: lower budget counts every run over 100ms
+----
+privacy_guard_timing_test: 14 passed, 0 failed
+----
+RUN: opt/scripts/misc/open-url_test.sh
+PASS: open-url parses with bash -n (exit 0)
+PASS: no URL argument exits 2
+PASS: Darwin dispatch execs 'open'
+PASS: Linux dispatch tries xdg-open
+PASS: is_wsl helper present
+PASS: WSL path tries wslview before explorer.exe
+PASS: WSL fallback to explorer.exe
+PASS: Linux non-WSL path uses xdg-open
+PASS: Darwin branch uses 'open'
+----
+PASS=9 FAIL=0
+----
+RUN: opt/scripts/system/apply-forced-settings_test.sh
+PASS: forced hooks overwrite host hooks
+PASS: forced hook command applied verbatim
+PASS: forced statusLine added
+PASS: host enabledPlugins preserved
+PASS: host theme preserved
+PASS: host permissions.allow preserved
+PASS: host permissions.defaultMode preserved
+PASS: forced permissions.deny overwrites
+PASS: forced permissions.ask added
+PASS: missing host file fails (exit 1)
+PASS: invalid host JSON fails (exit 1)
+PASS: invalid host file left unchanged
+PASS: missing forced file fails (exit 1)
+PASS: host-only allow entry preserved (union)
+PASS: forced allow entry added (union)
+PASS: duplicate allow entry deduped
+PASS: ask is replaced (not unioned)
+PASS: forced _comment doc key not merged into live settings
+PASS: real forced fields still merged when doc key present
+PASS: retired allow rules removed, host + forced rules kept
+PASS: _retiredAllow doc key not merged into live settings
+----
+PASS=21 FAIL=0
+----
+RUN: opt/scripts/system/bump-sdk-version_test.sh
+PASS: feat -> --check exits 1 (release needed) (exit 1)
+PASS: feat -> minor 0.1.0->0.2.0 reported
+PASS: --plan emits tab-separated tool/version/level
+PASS: --plan exits 0 even when a release is pending (exit 0)
+PASS: tag cut -> --check exits 0 (nothing left to release) (exit 0)
+PASS: tag cut -> nothing reported for foo
+PASS: tag cut -> --plan emits nothing
+PASS: fix -> patch 1.2.3->1.2.4
+PASS: bang-breaking -> major 2.5.1->3.0.0
+PASS: body-breaking -> major 0.4.0->1.0.0
+PASS: highest level wins -> minor 0.3.0->0.4.0
+PASS: unrelated module's commit does not release self
+PASS: unrelated module itself does release
+PASS: untagged module -> initial release planned (exit 1) (exit 1)
+PASS: untagged module -> 0.1.0 initial
+PASS: untagged module --plan emits initial
+PASS: multi: a minor, b patch, one plan
+PASS: non-module dir ignored (exit 0)
+PASS: unknown argument exits 2 (exit 2)
+PASS: --repo pointing outside a git repo exits 2 (exit 2)
+----
+PASS=20 FAIL=0
+----
+RUN: opt/scripts/system/claude_install_test.sh
+PASS: script is sourceable (BASH_SOURCE guard)
+PASS: defines cleanup_conflicting_installs
+PASS: cleanup never touches ~/.claude (documented)
+PASS: sourcing loads functions without running install
+PASS: removes native install when canonical is confirmed
+PASS: keeps native install when no canonical is confirmed
+PASS: skips when canonical also resolves under ~/.local
+PASS: keeps a convenience symlink that points at the canonical binary
+PASS: no-op when there is no native install
+PASS: resolve_canonical_claude honors CLAUDE_CANONICAL_BIN
+----
+PASS=10 FAIL=0
+----
+RUN: opt/scripts/system/gemini_teardown_test.sh
+PASS: gemini_teardown.sh parses with bash -n (exit 0)
+PASS: no leftovers: exits 0 (exit 0)
+PASS: non-TTY prompt mode only reports
+PASS: non-TTY: gemini binary untouched
+PASS: non-TTY: aliases untouched
+PASS: --yes shows findings + references
+PASS: references included in the ask
+PASS: --yes: npm uninstall invoked (via fake npm)
+PASS: --yes: HOME-local gemini binary removed
+PASS: --yes: dangling legacy aliases symlink removed (dir pruned)
+PASS: --yes: ~/.gemini.profile removed
+PASS: --yes: stale source lines removed from real .zshrc
+PASS: --yes: stale aliases line removed from real .zshrc
+PASS: --yes: unrelated .zshrc lines survive
+PASS: --yes: ~/.gemini data dir preserved (agy reuses it)
+PASS: --keep writes the marker
+PASS: marker present: teardown is silent, asks nothing
+PASS: marker present: leftovers untouched
+PASS: --reset re-enables the ask
+PASS: system prefix: npm uninstall escalated via sudo
+PASS: system prefix: uninstall reached npm
+PASS: system prefix: escalation is announced
+PASS: writable prefix: no sudo escalation
+PASS: writable prefix: uninstall still runs
+PASS: no deletion without an explicit yes
+----
+PASS=25 FAIL=0
+----
+RUN: opt/scripts/system/gnome-desktop-defaults_test.sh
+PASS: no session bus: exits clean
+PASS: no session bus: reports the skip
+PASS: no session bus: writes nothing
+PASS: non-GNOME desktop: writes nothing
+PASS: unwritable runtime dir: writes nothing
+PASS: applies cleanly on a GNOME session (exit 0)
+PASS: resets a stale Super+C copy bind to stock
+PASS: resets a stale Super+V paste bind to stock
+PASS: paste ends up on Ctrl+Shift+V
+PASS: never binds gnome-terminal copy/paste to Super
+PASS: frees Super+V from the message tray
+PASS: Cmd+Space opens the Activities search
+PASS: frees Super+Space from the input-source switcher
+PASS: Cmd+M and Cmd+H both minimize
+PASS: a lone Cmd tap does nothing (overlay-key cleared)
+PASS: leaves Ctrl+C alone (SIGINT preserved)
+PASS: second run is a no-op
+PASS: no gnome-terminal schema: still exits clean (exit 0)
+PASS: no gnome-terminal schema: touches no copy key
+PASS: no gnome-terminal schema: still frees the tray key
+PASS: stock terminal copy/paste: not touched
+PASS: user-customized terminal copy/paste: not touched
+PASS: tray already free of Super+V and Super+M: not rewritten
+PASS: tray on Super+M is moved aside for Cmd+M minimize
+----
+PASS=24 FAIL=0
+----
+RUN: opt/scripts/system/google-cli-setup_test.sh
+PASS: google-cli-setup.sh parses with bash -n (exit 0)
+PASS: source-safe (no side effects when sourced)
+PASS: load_node_env skips nvm-latest when npm is already on PATH
+PASS: discovery order is fnm > nodenv > nvm-latest
+PASS: nvm-latest reference is inside the 'if ! command -v npm' guard
+PASS: an existing ~/opt gcloud is updated, quietly
+PASS: updating returns 0
+PASS: a successful update prints no warning
+PASS: a failed update does not abort the setup
+PASS: a failed update says so once
+PASS: gcloud's own output goes to the install log, not the run
+PASS: a package-managed gcloud is left to its package manager
+----
+PASS=12 FAIL=0
+----
+RUN: opt/scripts/system/install-stamp_test.sh
+PASS: install-stamp.sh parses with bash -n (exit 0)
+PASS: phase=all writes the stamp
+PASS: stamp records a 40-char commit sha
+PASS: stamp records a unix epoch installed_at
+PASS: stamp records the branch
+PASS: stamp records the hostname
+PASS: phase=deps writes no stamp (exit 1)
+PASS: phase=config writes no stamp (exit 1)
+PASS: unset INSTALL_PHASE defaults to stamping
+PASS: non-git BASE_DIR exits 0 (never fails the install)
+PASS: non-git BASE_DIR writes no stamp (exit 1)
+PASS: re-running overwrites the stamp (one commit line)
+----
+PASS=12 FAIL=0
+----
+RUN: opt/scripts/system/install_1password_test.sh
+PASS: install_1password.sh exists
+PASS: parses with bash -n (exit 0)
+PASS: verifies op.sig with gpg
+PASS: pins the 1Password signing-key fingerprint
+PASS: fetches the key from 1Password's own host, not a keyserver
+PASS: never asks a keyserver
+PASS: fails closed without gpg
+PASS: never pipes a remote script into a shell
+PASS: maps aarch64 (Spark, Jetson, 64-bit Pi)
+PASS: maps 32-bit ARM Pis
+PASS: macOS uses the brew cask
+PASS: installs to ~/opt/bin like the other fetched tools
+SKIP: gpg, zip and unzip are needed to build the signed fixtures (missing on this host)
+----
+PASS=12 FAIL=0
+----
+RUN: opt/scripts/system/install_ai_teams_test.sh
+== install_ai_teams_test ==
+  ✓ claude emits 22 agents
+  ✓ retired gemini emitter writes nothing
+  ✓ antigravity emits 22 agents
+  ✓ ollama emits 22 Modelfiles
+  ✓ file exists: web/fe.md
+  ✓ file exists: /tmp/tmp.zUvO8rZ2BM/.config/antigravity/agents/web-fe.yaml
+  ✓ standard -> claude sonnet
+  ✓ standard -> claude effort med
+  ✓ deep-think -> claude opus
+  ✓ deep-think -> claude effort hi
+  ✓ fast -> claude haiku
+  ✓ deep-think -> antigravity o3
+  ✓ ollama standard FROM follows model-map (qwen3-coder:30b)
+  ✓ ollama num_ctx follows model-map (8192)
+  ✓ claude frontmatter parses, name=web-fe
+  ✓ antigravity yaml parses, name=web-fe
+  ✓ description compiled (PROACTIVELY)
+  ✓ description negative-scoped (Do NOT)
+  ✓ compose order: safety < conventions < handoff-footer
+  ✓ idempotent: re-run byte-identical
+  ✓ file exists: web/fe.md
+  ✓ --tool claude does not emit antigravity
+  ✓ --tool claude does not emit ollama
+  ✓ --dry-run writes no files
+  ✓ prune removes zombie claude agent on re-run
+  ✓ prune keeps the real 22 claude agents
+  ✓ no claude agent emits a literal null color
+  ✓ present base models: ollama create runs for all 22 agents
+  ✓ present base models: no 'not pulled' summary
+  ✓ fixture: 9 deep-think Modelfiles use qwen3.8:27b
+  ✓ missing base model: Modelfiles still written for all 22
+  ✓ missing base model: create skipped for its 9 agents
+  ✓ missing base model: no create names a deep-think agent's Modelfile
+  ✓ missing base model: exactly one summary line for qwen3.8:27b
+  ✓ missing base model: summary printed once per missing model (1 total)
+  ✓ missing base model: ollama show probes each base model once
+  ✓ missing base model: nothing on stderr
+  ✓ create failure: installer still exits 0
+  ✓ create failure: real ollama error surfaced
+  ✓ create failure: no guessed 'likely not pulled' text
+  ✓ ollama unreachable: no create attempted
+  ✓ ollama unreachable: exactly one warning line
+  ✓ ollama unreachable: Modelfiles still written
+  ✓ flag off: ollama never invoked
+  ✓ flag off: Modelfiles still written
+  ✓ flag off: says why create was skipped
+== result: 46 passed, 0 failed ==
+----
+RUN: opt/scripts/system/install_antigravity_skills_test.sh
+PASS: privacy_guard copied into ~/.gemini/config/hooks
+PASS: safety_guard copied into ~/.gemini/config/hooks
+PASS: antigravity_adapter copied into ~/.gemini/config/hooks
+PASS: strip_heredocs.awk sibling copied
+PASS: hooks are real files, not symlinks
+PASS: hooks.json rendered into ~/.gemini/config
+PASS: hooks.json is valid JSON
+PASS: no unsubstituted __HOME__ in hooks.json
+PASS: single hook entry runs both guards through the adapter
+PASS: hook commands use the rendered real HOME
+PASS: aliases.sh copied (not symlinked) into ~/.config/antigravity
+PASS: statusline shim copied
+PASS: agy settings.json created
+PASS: statusLine command configured in settings.json
+PASS: statusLine enabled in settings.json
+PASS: template: toolPermission seeded
+PASS: template: editorMode vim
+PASS: template: allowNonWorkspaceAccess true
+PASS: template: notifications on
+PASS: template: sandbox off
+PASS: template: allow list carries command(gss status)
+PASS: template: no _comment key survives the merge
+PASS: forced: deny carries command(rm -rf /)
+PASS: forced: ask carries command(git push --force)
+PASS: forced: ask carries command(sudo)
+PASS: plugin: dotfiles/plugin.json rendered
+PASS: plugin: commands/sync.toml rendered
+PASS: plugin: rules/AGENTS.md rendered
+PASS: plugin: enabled in config.json (created)
+PASS: re-run keeps hooks.json valid
+PASS: legacy ~/.gemini/hooks removed
+PASS: legacy repo-pointing policy link removed
+PASS: legacy ~/.config/gemini aliases link removed
+PASS: legacy ~/.agents/skills repo link removed
+PASS: host-owned legacy settings.json left alone
+PASS: original agy settings backed up
+PASS: existing settings keys preserved
+PASS: statusLine configured when settings.json pre-exists
+PASS: existing host: template NOT applied (no toolPermission)
+PASS: existing host: own allow entry survives the union
+PASS: existing host: forced allow entry added by the union
+PASS: existing host: host deny entry REPLACED (policy is immutable)
+PASS: existing host: forced deny carries command(mkfs)
+PASS: existing host: dotfiles plugin enabled
+PASS: existing host: other plugin entry preserved
+PASS: existing host: userSettings preserved
+PASS: merge: hooks.json still valid JSON
+PASS: merge: foreign herdr hook preserved next to guards
+PASS: merge: herdr command untouched
+PASS: merge: stale guards matcher replaced by the rendered one
+PASS: merge: rendered guards command uses the real HOME
+PASS: merge: no unsubstituted __HOME__
+PASS: invalid hooks.json: recreated as valid JSON with guards
+PASS: invalid hooks.json: original set aside as .invalid
+----
+PASS=54 FAIL=0
+----
+RUN: opt/scripts/system/install_claude_skills_test.sh
+PASS: safety_guard copied into ~/.claude/hooks
+PASS: privacy_guard copied into ~/.claude/hooks
+PASS: hooks are real files, not symlinks
+PASS: copied hook is executable
+PASS: settings.json is a real file, not a symlink
+PASS: safety_guard wired to well-known $HOME path
+PASS: privacy_guard wired
+PASS: forced permissions.deny applied
+PASS: gss push is auto-allowed (no harness prompt)
+PASS: gss push is NOT in ask (no double prompt)
+PASS: genuinely dangerous verbs (sudo) stay in ask
+PASS: no repo-internal path in fresh settings
+PASS: account memory provisioned into the computed live slug dir
+PASS: provisioned MEMORY.md lists an account memory
+PASS: host enabledPlugins preserved
+PASS: host theme preserved
+PASS: stale repo-internal hook path reconciled
+PASS: no repo-internal path after merge
+----
+PASS=18 FAIL=0
+----
+RUN: opt/scripts/system/install_glow_test.sh
+PASS: install_glow.sh exists
+PASS: parses with bash -n (exit 0)
+PASS: verifies against the release checksums.txt
+PASS: fails closed on a missing checksum
+PASS: never pipes a remote script into a shell
+PASS: maps aarch64 (Spark, Jetson, 64-bit Pi)
+PASS: maps 32-bit ARM Pis
+PASS: maps macOS
+PASS: installs to ~/opt/bin like the other fetched tools
+PASS: fresh host exits 0
+PASS: the pinned version is installed
+PASS: success says it verified the checksum
+PASS: already-installed exits 0
+PASS: already-installed is reported
+PASS: version change exits 0
+PASS: version change is reported
+PASS: the new version is in place
+PASS: checksum mismatch exits 1
+PASS: checksum mismatch is the stated reason
+PASS: nothing is installed on a mismatch
+PASS: unlisted asset exits 1
+PASS: unlisted asset is refused
+PASS: malformed GLOW_VERSION exits 1
+PASS: features.yaml declares install.tools.glow
+PASS: install.tools.glow is opt-in (boolDefault false)
+PASS: install.sh gates glow fail-closed with gff_opt_in
+PASS: INSTALL_TOOLS_GLOW is a deps-phase key
+PASS: INSTALL_TOOLS_GLOW is NOT a config-phase key
+----
+PASS=28 FAIL=0
+----
+RUN: opt/scripts/system/install_herdr_test.sh
+PASS: install_herdr.sh exists
+PASS: parses with bash -n (exit 0)
+PASS: reads the manifest herdr publishes
+PASS: verifies SHA-256 of the download
+PASS: fails closed when the manifest has no checksum
+PASS: never pipes a remote script into a shell
+PASS: covers the 64-bit Pi / Nano / Spark (aarch64)
+PASS: skips (not fails) on 32-bit ARM, which has no upstream build
+PASS: installs to ~/opt/bin like the other fetched tools
+PASS: supports a version pin
+PASS: already-installed path exits 0
+PASS: already-installed path says so
+PASS: links the remote-probe path by default
+PASS: remote link: created, pointing at the managed binary
+PASS: remote link: our own link is not reported as shadowing
+PASS: remote link: re-run exits 0
+PASS: remote link: re-run is a no-op
+PASS: remote link: standalone copy -> exit 0
+PASS: remote link: standalone copy replaced by the link
+PASS: remote link: replacement names the old version
+PASS: remote link: foreign link repointed
+PASS: remote link: directory in the way -> exit 0
+PASS: remote link: directory in the way is reported
+PASS: unknown pinned release exits 1
+PASS: unknown pinned release is reported
+PASS: missing checksum exits 1
+PASS: missing checksum is the stated reason
+PASS: integrations: absent agent CLI -> exit 0
+PASS: integrations: absent agent CLI is skipped
+PASS: integrations: present agent CLI -> exit 0
+PASS: integrations: present agent CLI runs 'herdr integration install <id>'
+PASS: integrations: no herdr -> exit 0
+PASS: integrations: no herdr is reported
+PASS: config template is tracked at ai/herdr/config.toml
+PASS: template turns on host light/dark following
+PASS: template carries the managed marker
+PASS: template renders the dark theme from a token
+PASS: template renders the light theme from a token
+PASS: template ships no hardcoded home path
+PASS: template sets the prefix to ctrl+a (tmux muscle memory, no ctrl+b clash)
+PASS: config: fresh host exits 0
+PASS: config: fresh host gets config.toml
+PASS: config: dark fallback theme is solarized
+PASS: config: auto_switch is on
+PASS: config: light sibling is solarized-light
+PASS: config: dark sibling is solarized
+PASS: config: written file carries the managed marker
+PASS: config: no unrendered tokens remain
+PASS: config: rendered file keeps the ctrl+a prefix
+PASS: config: no herdr -> no reload attempted
+PASS: config: re-run exits 0
+PASS: config: re-run leaves a managed file byte-identical
+PASS: config: re-run reports up to date
+PASS: config: theme override exits 0
+PASS: config: HERDR_THEME_DARK renders name
+PASS: config: HERDR_THEME_DARK renders dark_name
+PASS: config: HERDR_THEME_LIGHT renders light_name
+PASS: config: hand-edited file -> exit 0
+PASS: config: hand-edited file is untouched
+PASS: config: hand-edited file is reported, not clobbered
+PASS: config: warning names the override
+PASS: config: force exits 0
+PASS: config: force writes the managed file
+PASS: config: force keeps a backup of the hand-edited file
+PASS: config: live server path exits 0
+PASS: config: running server gets 'herdr server reload-config'
+PASS: features.yaml declares install.tools.herdr
+PASS: features.yaml declares install.tools.herdr-integrations
+PASS: install.sh gates the binary on install.tools.herdr
+PASS: install.sh gates integrations on install.tools.herdr-integrations
+PASS: features.yaml declares install.tools.herdr-config
+PASS: install.sh gates the managed config on install.tools.herdr-config
+PASS: install.sh runs install_herdr.sh in config mode
+PASS: INSTALL_TOOLS_HERDR is in _IP_DEPS_FLAGS
+PASS: INSTALL_TOOLS_HERDR is NOT in _IP_CONFIG_FLAGS
+PASS: INSTALL_TOOLS_HERDR_INTEGRATIONS is in _IP_CONFIG_FLAGS
+PASS: INSTALL_TOOLS_HERDR_INTEGRATIONS is NOT in _IP_DEPS_FLAGS
+PASS: INSTALL_TOOLS_HERDR_CONFIG is in _IP_CONFIG_FLAGS
+PASS: INSTALL_TOOLS_HERDR_CONFIG is NOT in _IP_DEPS_FLAGS
+PASS: herdr integrations run after install_antigravity_skills.sh (line 315 > 269)
+PASS: plugins: fresh host exits 0
+PASS: plugins: default-on plugin is installed at its pinned ref
+PASS: plugins: default-off plugin is not installed
+PASS: plugins: a row without a declared flag never installs
+PASS: plugins: an off plugin names its flag
+PASS: plugins: gff override exits 0
+PASS: plugins: both enabled rows are installed
+PASS: plugins: gff true turns a default-off plugin on
+PASS: plugins: gff false turns a default-on plugin off
+PASS: plugins: standalone with a gff override exits 0
+PASS: plugins: standalone run honours the host's gff set override
+PASS: plugins: an exported GFF_* value wins over gff's answer
+PASS: plugins: no gff binary -> declared default (off)
+PASS: plugins: already-installed exits 0
+PASS: plugins: already at the pinned ref -> no reinstall
+PASS: plugins: already-installed is reported
+PASS: plugins: HERDR_PLUGIN_FORCE=1 reinstalls
+PASS: plugins: an older ref is upgraded to the pinned one
+PASS: plugins: the upgrade is reported
+PASS: plugins: a linked plugin exits 0
+PASS: plugins: a linked plugin is never reinstalled
+PASS: plugins: a linked plugin is reported
+PASS: plugins: malformed rows or a failed install exit 1
+PASS: plugins: malformed rows never reach herdr
+PASS: plugins: a name the keys renderer would refuse is refused here too (one validator)
+PASS: plugins: a failed install is reported
+PASS: plugins: rows after a bad one still install
+PASS: fixup: already-installed plugins with link fix-ups exit 0
+PASS: fixup: a dangling reviewr link is re-pointed at the final plugin root
+PASS: fixup: a live link someone chose is left alone
+PASS: fixup: a dangling Oh My Zsh link is re-pointed through the plugin's own link step
+PASS: fixup: a live Oh My Zsh link someone chose is left alone
+PASS: plugins: no herdr -> exit 0
+PASS: plugins: no herdr is reported
+PASS: config: plugin keys render exits 0
+PASS: config: an enabled plugin's keybindings are appended
+PASS: config: an off plugin gets no keybindings
+PASS: config: a row without a declared flag gets no keybindings
+PASS: config: the managed marker still leads the file
+PASS: config: an on-but-uninstalled plugin gets no keys
+PASS: config: an on-but-uninstalled plugin is reported
+PASS: config: standalone run renders keys for a gff-set plugin
+PASS: config: clearing the override drops the keys again
+PASS: config: a flag flip updates the managed file
+PASS: config: keys go away with their flag
+PASS: config: keys arrive with their flag
+PASS: config: the repo's own plugin manifest renders
+PASS: config: the repo's file-viewer keys render by default
+PASS: config: herdr config check accepts the rendered file (exit 0)
+PASS: os: a row for another OS is not a failure
+PASS: os: a macos row is not installed on linux
+PASS: os: the skip names the OS
+PASS: subdir: owner/repo/subdir is passed to herdr as-is
+PASS: os: a macos row installs on macos
+PASS: os: no keybindings for a plugin this OS skips
+PASS: os: keybindings arrive on the OS the plugin supports
+PASS: plugin manifest is tracked at ai/herdr/plugins.tsv
+PASS: manifest lists herdr-file-viewer
+PASS: manifest row file-viewer has name, plugin_id, repo, ref and an optional os
+PASS: manifest row file-viewer names only known OSes
+PASS: features.yaml declares install.herdr-plugin.file-viewer
+PASS: manifest row file-viewer pins a release tag or commit
+PASS: keys for file-viewer only bind herdr-file-viewer's own actions
+PASS: manifest row navigator has name, plugin_id, repo, ref and an optional os
+PASS: manifest row navigator names only known OSes
+PASS: features.yaml declares install.herdr-plugin.navigator
+PASS: manifest row navigator pins a release tag or commit
+PASS: keys for navigator only bind herdr-navigator's own actions
+PASS: manifest row reviewr has name, plugin_id, repo, ref and an optional os
+PASS: manifest row reviewr names only known OSes
+PASS: features.yaml declares install.herdr-plugin.reviewr
+PASS: manifest row reviewr pins a release tag or commit
+PASS: keys for reviewr only bind persiyanov.reviewr's own actions
+PASS: manifest row plugin-manager has name, plugin_id, repo, ref and an optional os
+PASS: manifest row plugin-manager names only known OSes
+PASS: features.yaml declares install.herdr-plugin.plugin-manager
+PASS: manifest row plugin-manager pins a release tag or commit
+PASS: keys for plugin-manager only bind ray.plugin-manager's own actions
+PASS: manifest row ohmyzsh has name, plugin_id, repo, ref and an optional os
+PASS: manifest row ohmyzsh names only known OSes
+PASS: features.yaml declares install.herdr-plugin.ohmyzsh
+PASS: manifest row ohmyzsh pins a release tag or commit
+PASS: keys for ohmyzsh only bind ohmyzsh.shell's own actions
+PASS: manifest row terminal-browser has name, plugin_id, repo, ref and an optional os
+PASS: manifest row terminal-browser names only known OSes
+PASS: features.yaml declares install.herdr-plugin.terminal-browser
+PASS: manifest row terminal-browser pins a release tag or commit
+PASS: keys for terminal-browser only bind zenbu-labs.terminal-browser's own actions
+PASS: manifest row spotify has name, plugin_id, repo, ref and an optional os
+PASS: manifest row spotify names only known OSes
+PASS: features.yaml declares install.herdr-plugin.spotify
+PASS: manifest row spotify pins a release tag or commit
+PASS: keys for spotify only bind spotify-now-playing's own actions
+PASS: keys fragment file-viewer.toml belongs to a manifest row
+PASS: keys fragment navigator.toml belongs to a manifest row
+PASS: keys fragment ohmyzsh.toml belongs to a manifest row
+PASS: keys fragment plugin-manager.toml belongs to a manifest row
+PASS: keys fragment reviewr.toml belongs to a manifest row
+PASS: keys fragment spotify.toml belongs to a manifest row
+PASS: keys fragment terminal-browser.toml belongs to a manifest row
+PASS: install.sh runs install_herdr.sh in plugins mode
+PASS: install.sh gates Rust on install.runtime.rust
+PASS: features.yaml declares install.runtime.rust
+PASS: INSTALL_RUNTIME_RUST is in _IP_DEPS_FLAGS
+PASS: INSTALL_RUNTIME_RUST is NOT in _IP_CONFIG_FLAGS
+PASS: per-plugin flags are read by install_herdr.sh, so they are in neither phase list
+PASS: features.yaml declares install.tools.herdr-plugins
+PASS: install.sh gates the plugins step on install.tools.herdr-plugins
+PASS: INSTALL_TOOLS_HERDR_PLUGINS is in _IP_CONFIG_FLAGS (reads repo content the deps layer never copies)
+PASS: INSTALL_TOOLS_HERDR_PLUGINS is NOT in _IP_DEPS_FLAGS
+PASS: herdr plugins run after the herdr binary and Rust (line 769 > 463, 756)
+PASS: the managed config renders after the plugins step, so a fresh run binds keys for what it installed (line 785 > 769)
+PASS: doctor mode exists
+PASS: check_clipboard_tool exists
+PASS: install mode also runs the clipboard check (best-effort, never fails the install)
+PASS: doctor fails when an X11 session has neither xclip nor xsel
+PASS: X11 warning names both xclip and xsel
+PASS: doctor fails when a Wayland session has no wl-copy
+PASS: Wayland warning names wl-clipboard/wl-copy
+PASS: doctor passes on a headless session (no DISPLAY, no WAYLAND_DISPLAY) — nothing local to check
+PASS: doctor passes on X11 once xclip is on PATH (exit 0)
+PASS: doctor passes on Wayland once wl-copy is on PATH (exit 0)
+PASS: doctor is a no-op on macOS (pbcopy/pbpaste always present) (exit 0)
+----
+PASS=203 FAIL=0
+----
+RUN: opt/scripts/system/install_htop_test.sh
+PASS: install_htop.sh exists
+PASS: htop-fit.sh exists
+PASS: seed htoprc exists
+PASS: install_htop.sh parses with bash -n (exit 0)
+PASS: htop-fit.sh parses with bash -n (exit 0)
+PASS: htop-fit.sh parses with zsh -n (exit 0)
+PASS: features.yaml declares install.tools.htop-fit
+PASS: install.tools.htop-fit defaults on
+PASS: install.sh gates on install.tools.htop-fit
+PASS: install.sh removes when the flag is off
+PASS: INSTALL_TOOLS_HTOP_FIT is a config-phase key
+PASS: INSTALL_TOOLS_HTOP_FIT is NOT a deps-phase key
+PASS: .zshrc sources the wrapper from the XDG path install uses
+PASS: .bashrc sources the wrapper from the XDG path install uses
+PASS: flag off never undoes under --phase deps
+PASS: CPU count ignores OMP_NUM_THREADS/affinity (getconf, not bare nproc)
+PASS: temp htoprc is removed even on a signal
+PASS: seed sorts by CPU%
+PASS: seed has tree view off (it would ignore the sort)
+PASS: seed uses the default two-column layout
+PASS: lines=40 ncpu=22: header leaves exactly 4 process rows
+PASS: lines=24 ncpu=22: header leaves exactly 4 process rows
+PASS: lines=60 ncpu=4: header leaves exactly 4 process rows
+PASS: lines=50 ncpu=8: header leaves exactly 10 process rows
+PASS: graphs come before padding
+PASS: per-core CPU graph fills the remainder
+PASS: no GPU meter without a readable GPU
+PASS: render keeps every other setting line
+PASS: GPU graph leads the right column when readable
+PASS: GPU% column added before Command
+PASS: a short terminal adds nothing
+PASS: an empty column (!) is filled without a stray !
+PASS: hide_function_bar=1 (hidden only after ESC) still counts the bar
+PASS: hide_function_bar=2 frees the bar row
+PASS: auto GPU is off on htop older than 3.4
+PASS: HTOP_FIT_GPU=1 forces the GPU meter on
+PASS: HTOP_FIT_GPU=0 forces it off
+PASS: install copies the wrapper
+PASS: install puts an htop-fit command on PATH (~/opt/bin) (exit 0)
+PASS: fresh install seeds htoprc (exit 0)
+PASS: install writes the managed marker
+PASS: re-install is idempotent (exit 0)
+PASS: a changed managed htoprc is kept
+PASS: HTOP_CONFIG_FORCE=1 replaces it (exit 0)
+PASS: forced replace keeps a .bak
+PASS: a pristine managed htoprc is updated (exit 0)
+PASS: remove deletes the wrapper (exit 1)
+PASS: remove deletes the htop-fit command (exit 1)
+PASS: remove takes htoprc away so htop uses its defaults (exit 1)
+PASS: remove keeps the managed htoprc as .dotfiles.bak
+PASS: remove clears the marker (exit 1)
+PASS: a second remove keeps the first .dotfiles.bak
+PASS: remove still moves a changed managed htoprc aside
+PASS: remove leaves an htoprc dotfiles never managed
+PASS: install backs up an unmanaged htoprc
+PASS: then installs the seed (exit 0)
+PASS: re-enabling never overwrites the original pre-dotfiles backup
+PASS: htop-fit runs htop with a fitted copy of htoprc
+PASS: the copy has the history graphs added
+PASS: without the wrapper htop-fit runs plain htop
+----
+PASS=60 FAIL=0
+----
+RUN: opt/scripts/system/install_k8s_tools_test.sh
+PASS: install_k8s_tools.sh exists
+PASS: parses with bash -n (exit 0)
+PASS: kubectl default comes from versions.tsv
+PASS: helm default comes from versions.tsv
+PASS: kind default comes from versions.tsv
+PASS: kubectl latest still comes from dl.k8s.io stable.txt
+PASS: absent: exits 0
+PASS: absent: all three at the manifest pins
+PASS: equal: exits 0
+PASS: equal: all three say already at
+PASS: kubectl older: exits 0
+PASS: kubectl older: reports the upgrade
+PASS: kubectl older: converged; helm/kind untouched
+PASS: helm/kind older: exits 0
+PASS: helm/kind older: both converged
+PASS: env override: exits 0
+PASS: env override: each *_VERSION wins
+PASS: force: nothing short-circuits
+PASS: force: back on the pins
+PASS: latest: exits 0
+PASS: latest: each resolved upstream first
+PASS: no manifest: falls back to latest, as before pins
+PASS: foreign kubectl: exits 0
+PASS: foreign kubectl: says it is leaving it alone
+PASS: foreign kubectl: not installed over
+PASS: foreign kubectl: helm/kind still installed
+PASS: download failure: exits 1
+PASS: download failure: the other tools still installed
+PASS: PINS_TOOLS=kubectl: exits 0
+PASS: PINS_TOOLS=kubectl: kubectl installed
+PASS: PINS_TOOLS=kubectl: helm and kind not installed
+----
+PASS=31 FAIL=0
+----
+RUN: opt/scripts/system/install_lastpass_test.sh
+PASS: install_lastpass.sh exists
+PASS: parses with bash -n (exit 0)
+PASS: never installs the distro lastpass-cli package
+PASS: clones the upstream repo at a tag
+PASS: pins the tag to a commit
+PASS: apt runs non-interactively
+PASS: never pipes a remote script into a shell
+PASS: macOS uses brew
+PASS: installs to ~/opt/bin like the other fetched tools
+PASS: names the floor and why
+PASS: fresh apt host exits 0
+PASS: build deps installed once through sudo, non-interactively
+PASS: the distro lastpass-cli package is never installed
+PASS: clones upstream at the pinned tag
+PASS: checks the tag's commit
+PASS: builds once
+PASS: lpass lands in LASTPASS_INSTALL_DIR
+PASS: success names the built version
+PASS: host with distro 1.3.7 exits 0
+PASS: a lpass below 1.5.0 is replaced by a build
+PASS: says the present version is below the floor
+PASS: says what the old version loses (items with a URL)
+PASS: already-installed exits 0
+PASS: already-installed is reported
+PASS: already-installed touches neither sudo, git nor cmake
+PASS: commit mismatch exits 1
+PASS: commit mismatch is refused in so many words
+PASS: nothing is built on a commit mismatch
+PASS: nothing installed on a commit mismatch
+PASS: no-sudo/no-tty exits 0
+PASS: no-sudo/no-tty warns once
+PASS: no-sudo/no-tty touches neither apt nor the build
+PASS: headers present, no sudo: exits 0
+PASS: headers present: builds without privileges
+PASS: headers present: sudo is never used for a package install
+PASS: built version off the pin exits 1
+PASS: macOS exits 0
+PASS: macOS installs the brew formula
+PASS: macOS never calls sudo or cmake
+PASS: unsupported OS exits 1
+PASS: versions.tsv pins lastpass-cli
+PASS: fleet pins apply knows the installer's gff gate
+PASS: features.yaml declares install.tools.lastpass
+PASS: install.tools.lastpass is on by default (boolDefault true)
+PASS: install.sh gates lastpass fail-open with gff_on
+PASS: INSTALL_TOOLS_LASTPASS is a deps-phase key
+----
+PASS=46 FAIL=0
+----
+RUN: opt/scripts/system/install_nvm_test.sh
+PASS: absent: exits 0
+PASS: absent: installs the manifest pin
+PASS: the nvm installer gets PROFILE=/dev/null
+PASS: already at pin: exits 0
+PASS: already at pin: the installer is not run
+PASS: already at pin: says so
+PASS: older nvm: exits 0
+PASS: older nvm: updated to the new pin
+PASS: older nvm: reports the update
+PASS: NVM_VERSION override wins over the manifest
+PASS: malformed NVM_VERSION exits 1
+----
+PASS=11 FAIL=0
+----
+RUN: opt/scripts/system/install_rust_test.sh
+PASS: install_rust.sh exists
+PASS: parses with bash -n (exit 0)
+PASS: downloads rustup-init from the official dist server
+PASS: verifies SHA-256 of the download
+PASS: never pipes a remote script into a shell
+PASS: never lets rustup edit rc files
+PASS: probes rustc through a pinned toolchain, not the cwd-following proxy
+PASS: maps the 64-bit Pi / Nano / Spark (aarch64)
+PASS: maps 32-bit ARM Pis
+PASS: maps Apple silicon
+PASS: fresh host exits 0
+PASS: rustup-init runs non-interactively with --no-modify-path, minimal profile, stable
+PASS: a distro rustc in PATH does not stop rustup-init
+PASS: success names the version and the verification
+PASS: already-installed exits 0
+PASS: already-installed is reported
+PASS: already-installed runs neither rustup-init nor rustup
+PASS: old rustc exits 0 once the update converged
+PASS: old rustc triggers rustup update
+PASS: the updated channel is made the default (a pinned old default would otherwise stay)
+PASS: old rustc does not rerun rustup-init
+PASS: old rustc names the minimum
+PASS: success reports the rustc actually installed after the update
+PASS: a non-converging update exits 1
+PASS: a non-converging update says so
+PASS: a non-converging update never claims ready
+PASS: 1.100.0 counts as newer than 1.96.0
+PASS: RUST_UPDATE=1 updates the requested toolchain
+PASS: RUST_TOOLCHAIN becomes the default after its update
+PASS: checksum mismatch exits 1
+PASS: checksum mismatch is the stated reason
+PASS: a mismatched rustup-init never runs
+PASS: nothing is installed on a mismatch
+PASS: malformed checksum exits 1
+PASS: malformed checksum is refused
+PASS: missing checksum exits 1
+PASS: rustup-init never runs without a checksum
+PASS: features.yaml declares install.runtime.rust
+PASS: install.sh gates install_rust.sh on install.runtime.rust
+PASS: INSTALL_RUNTIME_RUST is a deps-phase key (a toolchain is an external install)
+PASS: opt/profiles/.profile puts ~/.cargo/bin on PATH (guarded)
+PASS: opt/profiles/.zshrc puts ~/.cargo/bin on PATH (guarded)
+----
+PASS=42 FAIL=0
+----
+RUN: opt/scripts/system/install_sops_test.sh
+PASS: install_sops.sh exists
+PASS: parses with bash -n (exit 0)
+PASS: default version comes from versions.tsv via pins_want
+PASS: sources opt/lib/pins.sh relative to itself
+PASS: never pipes a remote script into a shell
+PASS: absent: exits 0
+PASS: absent: installs the pinned version
+PASS: equal: exits 0
+PASS: equal: says already at
+PASS: older: exits 0
+PASS: older: reports the upgrade
+PASS: older: converged to the pin
+PASS: force: exits 0
+PASS: force: does not short-circuit
+PASS: env override: exits 0
+PASS: env override: SOPS_VERSION wins
+PASS: env override: a leading v is tolerated
+PASS: manifest: a changed pin is what gets installed
+PASS: latest: exits 0
+PASS: latest: installs the resolved upstream release
+PASS: latest: an unresolvable upstream fails instead of guessing
+PASS: foreign: exits 0
+PASS: foreign: says it is leaving it alone
+PASS: foreign: installs nothing
+PASS: malformed SOPS_VERSION exits 1
+PASS: no manifest: falls back to 3.13.1
+----
+PASS=26 FAIL=0
+----
+RUN: opt/scripts/system/install_uv_test.sh
+PASS: install_uv.sh exists
+PASS: parses with bash -n (exit 0)
+PASS: verifies against the release's <asset>.sha256 sidecar
+PASS: fails closed on a missing checksum
+PASS: never pipes a remote script into a shell
+PASS: maps x86_64 to the gnu-libc asset
+PASS: maps aarch64 (Spark, Jetson, 64-bit Pi) to the gnu-libc asset
+PASS: skips 32-bit ARM (no fleet host is 32-bit)
+PASS: installs to ~/opt/bin like the other fetched tools
+PASS: installs the uvx binary alongside uv
+PASS: fresh host exits 0
+PASS: the pinned uv version is installed
+PASS: uvx is installed alongside uv
+PASS: success says it verified the checksum
+PASS: already-installed exits 0
+PASS: already-installed is reported
+PASS: version change exits 0
+PASS: version change is reported
+PASS: the new version is in place
+PASS: uvx is updated alongside uv
+PASS: checksum mismatch exits 1
+PASS: checksum mismatch is the stated reason
+PASS: nothing is installed on a mismatch
+PASS: empty sidecar exits 1
+PASS: empty sidecar is refused
+PASS: malformed UV_VERSION exits 1
+PASS: 32-bit ARM exits 0 (skip, not fail)
+PASS: 32-bit ARM installs nothing
+PASS: features.yaml declares install.tools.uv
+PASS: install.tools.uv is ON by default (every host needs it, like yq/sops)
+PASS: install.sh gates uv with gff_on (default-on, fail-open like yq/sops)
+PASS: INSTALL_TOOLS_UV is a deps-phase key
+PASS: INSTALL_TOOLS_UV is NOT a config-phase key
+PASS: Brewfile installs uv on macOS
+----
+PASS=34 FAIL=0
+----
+RUN: opt/scripts/system/install_yq_test.sh
+PASS: install_yq.sh exists
+PASS: parses with bash -n (exit 0)
+PASS: default version comes from versions.tsv via pins_want
+PASS: sources opt/lib/pins.sh relative to itself
+PASS: never pipes a remote script into a shell
+PASS: absent: exits 0
+PASS: absent: installs the pinned version
+PASS: equal: exits 0
+PASS: equal: says already at
+PASS: older: exits 0
+PASS: older: reports the upgrade
+PASS: older: converged to the pin
+PASS: env override: exits 0
+PASS: env override: YQ_VERSION wins
+PASS: force: does not short-circuit
+PASS: latest: exits 0
+PASS: latest: installs the resolved upstream release
+PASS: foreign mikefarah: exits 0
+PASS: foreign mikefarah: says it is leaving it alone
+PASS: foreign mikefarah: installs nothing
+PASS: kislyuk: exits 0
+PASS: kislyuk: mikefarah yq installed into INSTALL_DIR
+----
+PASS=22 FAIL=0
+----
+RUN: opt/scripts/system/macos-keys-linux_test.sh
+PASS: no graphical session: exits clean
+FAIL: no graphical session: reports the skip (got '1' want '0')
+PASS: no graphical session: installs no keyd config
+PASS: no evdev input layer: exits clean
+PASS: no evdev input layer: reports the skip
+PASS: no evdev input layer: installs nothing
+PASS: no python3-xlib: exits clean
+PASS: no python3-xlib: refuses to install the keyd config
+PASS: wayland GNOME without the GNOME extension: refuses to install
+FAIL: refusal explains the SIGINT hazard (got '1' want '0')
+FAIL: wayland GNOME without the extension: prints the GNOME extension advice (got '1' want '0')
+FAIL: wayland GNOME with the extension enabled: installs (got 'no' want 'yes')
+FAIL: wayland labwc:wlroots: supported mapper backend, installs (got 'no' want 'yes')
+PASS: wayland labwc:wlroots: no GNOME advice, no refusal
+FAIL: wayland sway: supported mapper backend, installs (got 'no' want 'yes')
+PASS: wayland sway: no GNOME advice, no refusal
+FAIL: wayland Hyprland: supported mapper backend, installs (got 'no' want 'yes')
+PASS: wayland Hyprland: no GNOME advice, no refusal
+FAIL: wayland LXDE-pi-labwc: supported mapper backend, installs (got 'no' want 'yes')
+PASS: wayland LXDE-pi-labwc: no GNOME advice, no refusal
+FAIL: wayland wayfire: supported mapper backend, installs (got 'no' want 'yes')
+PASS: wayland wayfire: no GNOME advice, no refusal
+FAIL: wayland river: supported mapper backend, installs (got 'no' want 'yes')
+PASS: wayland river: no GNOME advice, no refusal
+FAIL: wayland KDE: supported mapper backend, installs (got 'no' want 'yes')
+PASS: wayland KDE: no GNOME advice, no refusal
+FAIL: wayland plasma: supported mapper backend, installs (got 'no' want 'yes')
+PASS: wayland plasma: no GNOME advice, no refusal
+PASS: wayland KDE without python3-dbus: refuses to install
+FAIL: wayland KDE without python3-dbus: says which packages are missing (got '1' want '0')
+FAIL: wayland via XDG_SESSION_DESKTOP=sway: installs (got 'no' want 'yes')
+FAIL: SSH install, logind wayland session Desktop=LXDE-pi-labwc: installs (got 'no' want 'yes')
+FAIL: wayland, no desktop vars, labwc process running: installs (got 'no' want 'yes')
+FAIL: wayland, no desktop vars, gnome-shell running: GNOME advice (got '1' want '0')
+PASS: wayland unknown desktop: refuses to install
+PASS: wayland unknown desktop: no GNOME extension advice
+FAIL: wayland unknown desktop: names the desktop it could not identify (got '1' want '0')
+FAIL: wayland unknown desktop: lists what the mapper does support (got '1' want '0')
+FAIL: wayland unknown desktop: still explains the SIGINT hazard (got '1' want '0')
+PASS: mapper that cannot reach the socket: config rolled back
+FAIL: rollback is announced (got '1' want '0')
+PASS: stale mapper + stale broken log: exits clean
+FAIL: stale mapper + stale broken log: healthy fresh mapper keeps the config installed (got 'no' want 'yes')
+FAIL: stale mapper + stale broken log: the old mapper is stopped (pattern not found: ^kill 4242 in /tmp/tmp.g0FrjBSMRb/stublog)
+FAIL: stale mapper + stale broken log: a fresh mapper is started (pattern not found: mapper started in /tmp/tmp.g0FrjBSMRb/stublog)
+PASS: stale mapper + stale broken log: no rollback
+FAIL: replace stops the real mapper (pattern not found: ^kill 4242 in /tmp/tmp.g0FrjBSMRb/stublog)
+PASS: replace leaves a bystander shell that mentions the path alone
+FAIL: bare-argv mapper is recognized and replaced (pattern not found: ^kill 4244 in /tmp/tmp.g0FrjBSMRb/stublog)
+FAIL: bare-argv mapper: clean replacement keeps the config installed (got 'no' want 'yes')
+PASS: un-stoppable mapper: exits clean
+FAIL: un-stoppable mapper: the layout survives (got 'no' want 'yes')
+FAIL: un-stoppable mapper: the refusal is announced (got '1' want '0')
+PASS: un-stoppable mapper: no stale-log rollback
+FAIL: stale autostart entry is removed on install (got 'yes' want 'no')
+PASS: stale autostart entry is removed on uninstall
+PASS: mapper never starts: config rolled back
+PASS: happy path: exits clean
+FAIL: happy path: installs /etc/keyd/default.conf (got 'no' want 'yes')
+FAIL: happy path: installs ~/.config/keyd/app.conf (got 'no' want 'yes')
+FAIL: happy path: installs the supervised mapper user unit (got 'no' want 'yes')
+FAIL: happy path: enables the keyd service (pattern not found: systemctl enable keyd in /tmp/tmp.g0FrjBSMRb/stublog)
+FAIL: happy path: keyd restarts itself after a crash (file not found: /tmp/tmp.g0FrjBSMRb/etc/systemd/keyd.service.d/10-dotfiles-restart.conf)
+FAIL: happy path: a crash LOOP gives up instead of thrashing (file not found: /tmp/tmp.g0FrjBSMRb/etc/systemd/keyd.service.d/10-dotfiles-restart.conf)
+FAIL: x11 unit forces the Xlib backend (file not found: /tmp/tmp.g0FrjBSMRb/home/<user>/systemd/user/keyd-application-mapper.service)
+FAIL: unit does not run the mapper with -d (file not found: /tmp/tmp.g0FrjBSMRb/home/<user>/systemd/user/keyd-application-mapper.service)
+FAIL: unit restarts the mapper if it dies (file not found: /tmp/tmp.g0FrjBSMRb/home/<user>/systemd/user/keyd-application-mapper.service)
+FAIL: unit wraps ExecStart in sg to get the keyd group (file not found: /tmp/tmp.g0FrjBSMRb/home/<user>/systemd/user/keyd-application-mapper.service)
+PASS: default.conf: no trailing comments on binding lines
+PASS: default.conf: Super is the Command key
+PASS: default.conf: the cmd layer keeps Meta held
+PASS: default.conf: does not use the hold-breaking :C layer
+PASS: default.conf: Cmd+C is an explicit Ctrl+C
+PASS: default.conf: tab is left for GNOME (not remapped)
+PASS: default.conf: space is left for GNOME (not remapped)
+PASS: default.conf: m is left for GNOME (not remapped)
+PASS: default.conf: h is left for GNOME (not remapped)
+PASS: default.conf: l is left for GNOME (not remapped)
+PASS: default.conf: Cmd+Left is start-of-line
+PASS: default.conf: [alt] layer leaves Alt+arrows to the browser
+PASS: default.conf: no Meta-emitting binding inside a Meta-triggered layer
+PASS: app.conf: gnome-terminal is covered
+PASS: app.conf: Cmd+C in a terminal copies instead of sending SIGINT
+PASS: app.conf: Cmd+S cannot freeze the terminal with XOFF
+----
+PASS=44 FAIL=40
+----
+RUN: opt/scripts/system/oh-my-zsh_update_test.sh
+PASS: oh-my-zsh_update.sh parses with bash -n (exit 0)
+PASS: behind upstream: exits 0
+PASS: behind upstream: HEAD fast-forwarded to the upstream tip
+PASS: behind upstream: reports the update
+PASS: behind upstream: no WARNING
+PASS: already current: exits 0
+PASS: already current: HEAD unchanged
+PASS: already current: says so
+PASS: dirty-but-untouched file: exits 0
+PASS: dirty-but-untouched file: still fast-forwards
+PASS: dirty-but-untouched file: local edit preserved
+PASS: diverged: exits 0 (never fails the install)
+PASS: diverged: HEAD unchanged (no merge commit)
+PASS: diverged: prints a WARNING
+PASS: diverged: names the clone dir in the warning
+PASS: diverged: history untouched (2 commits: base + local)
+PASS: diverged: the warning says it is local commits
+PASS: dotfiles theme copy: exits 0
+PASS: dotfiles theme copy: healed and fast-forwarded to the upstream tip
+PASS: dotfiles theme copy: the tracked theme is upstream's again
+PASS: dotfiles theme copy: the clone is clean afterwards
+PASS: dotfiles theme copy: says it restored the theme
+PASS: dotfiles theme copy: no WARNING
+PASS: modified file upstream changed: exits 0
+PASS: modified file upstream changed: HEAD unchanged
+PASS: modified file upstream changed: the local edit is preserved
+PASS: modified file upstream changed: prints a WARNING
+PASS: modified file upstream changed: says modified tracked files
+PASS: modified file upstream changed: names the file
+PASS: modified file upstream changed: does not blame local commits
+PASS: theme + other edit: exits 0
+PASS: theme + other edit: HEAD unchanged
+PASS: theme + other edit: the theme is not restored
+PASS: theme + other edit: warning names the conflicting theme file
+PASS: local commits + theme copy: exits 0
+PASS: local commits + theme copy: HEAD unchanged
+PASS: local commits + theme copy: the working tree is left untouched
+PASS: local commits + theme copy: the warning says local commits
+PASS: fetch failure: exits 0
+PASS: fetch failure: HEAD unchanged
+PASS: fetch failure: prints a WARNING
+PASS: missing clone: exits 0
+PASS: missing clone: no WARNING (nothing to update is not an error)
+PASS: non-git dir: exits 0
+PASS: default location: exits 0
+PASS: default location: ~/.oh-my-zsh was updated
+PASS: default location: ~/git/oh-my-zsh left alone when ~/.oh-my-zsh exists
+PASS: fallback location: exits 0
+PASS: fallback location: ~/git/oh-my-zsh was updated
+PASS: features.yaml declares install.shell.oh-my-zsh-update
+PASS: install.sh gates the update on install.shell.oh-my-zsh-update
+PASS: install.sh calls oh-my-zsh_update.sh
+PASS: INSTALL_SHELL_OH_MY_ZSH_UPDATE is in _IP_DEPS_FLAGS
+PASS: INSTALL_SHELL_OH_MY_ZSH_UPDATE is NOT in _IP_CONFIG_FLAGS
+PASS: oh-my-zsh update runs after the gitrepos block (line 1079 > 1068)
+PASS: .zshrc copies the agnoster theme into custom/themes
+PASS: .zshrc never copies into the tracked $ZSH/themes
+PASS: .zshrc parses with zsh -n (exit 0)
+----
+PASS=58 FAIL=0
+----
+RUN: opt/scripts/system/provision-claude-memory_test.sh
+PASS: F2: account file 1 provisioned to computed slug dir
+PASS: F2: account file 2 provisioned
+PASS: F2: index provisioned
+PASS: F5: index lists account entry
+PASS: F3: host-local file preserved across provision
+PASS: F5: union index lists host-local entry
+PASS: F5: union index still lists account entry
+PASS: F4: collision preserves the host file's content
+PASS: F6: second run yields an identical MEMORY.md
+PASS: fixture: pre-migration copy has no scope line
+PASS: scope-only diff: host copy replaced by the repo version
+PASS: scope-only diff: stdout says the host copy was replaced
+PASS: scope-only diff: nothing on stderr
+PASS: scope-only diff: second run is silent about it (now repo-managed)
+PASS: differs: host acct-one.md kept
+PASS: differs: host acct-two.md kept
+PASS: differs: acct-one.md named on exactly one stdout line
+PASS: differs: acct-two.md named on exactly one stdout line
+PASS: differs: both names on ONE summary line
+PASS: differs: summary says how to reconcile (diff)
+PASS: differs: nothing on stderr
+PASS: absent: account file provisioned verbatim
+PASS: absent: nothing to report on stdout
+PASS: absent: nothing on stderr
+----
+PASS=24 FAIL=0
+----
+RUN: opt/scripts/system/render-agy-plugin_test.sh
+PASS: render-agy-plugin.sh exists
+PASS: renderer runs against the repo (exit 0)
+PASS: plugin.json written
+PASS: plugin.json is valid JSON
+PASS: plugin name is dotfiles
+PASS: one TOML per command (8)
+PASS: sync.toml has a description
+PASS: sync.toml description came from the frontmatter
+PASS: sync.toml has a prompt block
+PASS: no frontmatter key leaks into the prompt
+PASS: no frontmatter description line leaks into the prompt
+PASS: no literal $ARGUMENTS (agy does not substitute it)
+PASS: no Claude !-backtick injection lines
+PASS: injection rewritten as an instruction
+PASS: arguments rewritten as prose
+PASS: every TOML parses with description + prompt
+PASS: rules/AGENTS.md written
+PASS: rules carry an account memory section
+PASS: rules have no frontmatter fences
+PASS: MEMORY.md index is not inlined as a section
+PASS: stale TOML removed on re-render
+PASS: re-render keeps exactly one TOML per command
+PASS: missing args -> exit 1 (exit 1)
+PASS: missing repo commands dir -> exit 1 (exit 1)
+----
+PASS=24 FAIL=0
+----
+RUN: opt/scripts/system/security-audit-collect_test.sh
+==== STATIC contract checks (source of $HOME/git/dotfiles/opt/Desktop/Apps/scripts/security-audit-collect.ps1) ====
+PASS: ErrorActionPreference = Stop
+PASS: no ErrorActionPreference = Continue
+PASS: Add-Section function defined
+PASS: empty section -> (none), never blank
+PASS: lens failure emits COLLECTION ERROR
+PASS: Deny-Marker uses exception type name
+PASS: Deny-Marker has no .Message (byte-stable)
+PASS: 4104 self-exclusion filter applied
+PASS: 4104 regex built from fragments
+PASS: probe-first Read-Events helper
+PASS: denied-log caught by type
+PASS: empty-log detected locale-independently
+PASS: masquerade path anchored to SystemRoot
+PASS: Norm-Ver preserves IPv4 literals
+PASS: -StdOut param (no-write mode)
+PASS: -BaseDir param
+PASS: -Days param
+PASS: -OncePerDay gate param
+PASS: -LowPriority param
+PASS: gate keys on the canonical report date
+PASS: low priority drops to BelowNormal
+PASS: once-per-day gate runs before the first lens (line 70 < 210)
+PASS: section present: A1. RUN / RUNONCE
+PASS: section present: A3. WINLOGON
+PASS: section present: A4. IFEO
+PASS: section present: A5. COM hijack
+PASS: section present: A6. LOGON-SCRIPT
+PASS: section present: A7. UAC-BYPASS
+PASS: section present: B1. NON-MICROSOFT AUTO-START SERVICES
+PASS: section present: B4. WMI EVENT-SUBSCRIPTION
+PASS: section present: C1. DEFENDER CORE STATUS
+PASS: section present: C2. DEFENDER EXCLUSIONS
+PASS: section present: E2. TCP LISTENERS
+PASS: section present: E4. PORTPROXY
+PASS: section present: F1. OUTBOUND TO PUBLIC IPs
+PASS: section present: F2. HOSTS FILE
+PASS: section present: G2. SYSTEM-PROCESS MASQUERADE
+PASS: section present: H2. PRIVILEGED GROUP MEMBERSHIP
+PASS: section present: I2. UAC
+PASS: section present: J1. SERVICE INSTALLED
+PASS: section present: K. SECURITY-LOG VISIBILITY GAP
+==== LIVE run tier ====
+PASS: collector exited 0
+PASS: output has AUDIT TIMESTAMP header
+PASS: output has no COLLECTION ERROR
+PASS: output has >=25 sections (39)
+PASS: no section header is followed immediately by another header
+PASS: 4104 lens does not self-flag (suspicious = 0)
+make: *** [Makefile:265: shell-test] Terminated

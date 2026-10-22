@@ -161,6 +161,20 @@ func routeAnswers(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case " ", "right", "left":
 			m.ans.windows = cycle(m.ans.windows, []string{"", "n", "s", "y"}, k.String() != "left")
 		}
+	case fieldWslnet:
+		// Mirrors install.sh's WSLNET_ANSWER modes; "" (unset) means skip.
+		switch k.String() {
+		case "o":
+			m.ans.wslnet = "off"
+		case "n":
+			m.ans.wslnet = "nat"
+		case "b":
+			m.ans.wslnet = "bridged"
+		case "m":
+			m.ans.wslnet = "mirrored"
+		case " ", "right", "left":
+			m.ans.wslnet = cycle(m.ans.wslnet, []string{"", "off", "nat", "bridged", "mirrored"}, k.String() != "left")
+		}
 	case fieldReset:
 		switch k.String() {
 		case "y", "n":
