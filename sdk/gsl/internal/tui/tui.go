@@ -82,7 +82,8 @@ const (
 
 // Setting rows, then one row per segment.
 const (
-	rowStyle = iota
+	rowWidth = iota // the preview's width (view only, not saved)
+	rowStyle
 	rowPalette
 	rowLinks
 	rowTimezone
@@ -104,7 +105,11 @@ var (
 	dateFormats = []string{"2006-01-02", "Mon 01-02", "Mon Jan 2", "01/02", "Jan 2"}
 )
 
-// settingKeys are the :set keys, in row order.
+// widths are what space cycles the preview width through ("auto" = the
+// window); :width takes any 20–300.
+var widths = []string{"auto", "60", "80", "100", "120", "160", "200"}
+
+// settingKeys are the :set keys, in row order (after the width row).
 var settingKeys = []string{"style", "palette", "links", "timezone", "time_format", "date_format"}
 
 // choices are the options for a :set key, with the current value kept in
@@ -506,8 +511,19 @@ func (m Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		var err error
 		if seg >= 0 {
 			err = m.toggle(m.cfg.Segments[seg].Type)
+		} else if m.cur.Pos == rowWidth {
+			w := "auto"
+			if m.previewCols > 0 {
+				w = strconv.Itoa(m.previewCols)
+			}
+			if n := next(widths, w); n == "auto" {
+				m.previewCols = 0
+			} else {
+				v, _ := strconv.Atoi(n)
+				m.setWidth(v)
+			}
 		} else {
-			key := settingKeys[m.cur.Pos]
+			key := settingKeys[m.cur.Pos-rowStyle]
 			err = m.set(key, shown(key, next(m.choices(key), m.current(key))))
 		}
 		if err != nil {
@@ -583,6 +599,8 @@ func (m Model) setHint() string {
 // setLine is the :set pre-filled for the setting under the cursor.
 func (m Model) setLine() string {
 	switch m.cur.Pos {
+	case rowWidth:
+		return "width " + strconv.Itoa(m.cols())
 	case rowStyle:
 		return "set style " + m.cfg.Style
 	case rowPalette:
@@ -652,7 +670,12 @@ func (m Model) View() string {
 	if loc, err := time.LoadLocation(m.cfg.Timezone); err == nil {
 		now = now.In(loc)
 	}
+	width := "auto (" + strconv.Itoa(m.cols()) + ")"
+	if m.previewCols > 0 {
+		width = strconv.Itoa(m.previewCols)
+	}
 	rows := []string{
+		row("width", width) + pal.Dim("  preview columns — not saved"),
 		row("style", m.cfg.Style),
 		row("palette", orAuto(m.cfg.Palette)),
 		row("links", orDefault(m.cfg.Links, config.LinksUnderline)),

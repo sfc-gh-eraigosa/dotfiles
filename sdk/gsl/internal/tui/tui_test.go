@@ -143,6 +143,7 @@ func TestNew_ListsEveryKnownSegment(t *testing.T) {
 // follows at once.
 func TestKeys_SpaceCyclesAndToggles(t *testing.T) {
 	m, _ := newModel(t)
+	m = keys(m, runes("j")) // past the width row, onto style
 	style0 := m.Config().Style
 	m = keys(m, space) // row 0: style
 	if m.Config().Style == style0 || !m.Dirty() {
@@ -169,6 +170,7 @@ func TestKeys_SpaceCyclesAndToggles(t *testing.T) {
 // J/K reorder segments (only on segment rows), and the cursor follows.
 func TestKeys_Reorder(t *testing.T) {
 	m, _ := newModel(t)
+	m = keys(m, runes("j")) // past the width row, onto style
 	m = keys(m, runes("K")) // on the style row: nothing
 	if m.Dirty() {
 		t.Fatal("K on a setting row changed something")
@@ -188,6 +190,7 @@ func TestKeys_Reorder(t *testing.T) {
 // command runs on enter and is validated.
 func TestKeys_EnterEditsAndValidates(t *testing.T) {
 	m, _ := newModel(t)
+	m = keys(m, runes("j"))                                // past the width row, onto style
 	m = keys(m, runes("j"), runes("j"), runes("j"), enter) // timezone
 	if !strings.Contains(m.View(), ":set timezone ") {
 		t.Fatalf("no prompt:\n%s", m.View())
@@ -229,6 +232,7 @@ func TestPromptOwnsKeys(t *testing.T) {
 // w saves; the saved config is what the next render reads.
 func TestKeys_SaveRoundTrip(t *testing.T) {
 	m, f := newModel(t)
+	m = keys(m, runes("j")) // past the width row, onto style
 	m = keys(m, runes("j"), space, runes("w"))
 	if len(f.saved) != 1 || f.saved[0].Palette != "dark" || m.Dirty() {
 		t.Fatalf("saved %+v dirty %v", f.saved, m.Dirty())
@@ -243,6 +247,7 @@ func TestKeys_SaveRoundTrip(t *testing.T) {
 // q quits at once when clean; with unsaved changes it asks, and n keeps you.
 func TestKeys_QuitAsksWhenDirty(t *testing.T) {
 	m, _ := newModel(t)
+	m = keys(m, runes("j")) // past the width row, onto style
 	if _, cmd := step(m, runes("q")); !quits(cmd) {
 		t.Fatal("clean q did not quit")
 	}
@@ -363,6 +368,7 @@ var tab = tea.KeyMsg{Type: tea.KeyTab}
 // through its known options; a custom current value stays in the cycle.
 func TestSpaceCyclesEverySetting(t *testing.T) {
 	m, _ := newModel(t)
+	m = keys(m, runes("j"))                         // past the width row, onto style
 	m = keys(m, runes("j"), runes("j"), runes("j")) // timezone
 	tz0 := m.Config().Timezone
 	m = keys(m, space)
@@ -424,5 +430,28 @@ func TestSetHintsAndCompletion(t *testing.T) {
 	m = keys(m, runes(":"), runes("set timezone "))
 	if v := m.View(); !strings.Contains(v, "UTC") || !strings.Contains(v, "any IANA zone") {
 		t.Errorf("timezone options hint:\n%s", v)
+	}
+}
+
+// The width row comes first: space cycles the preview width (auto, 60 … 200)
+// and the ruler follows; it changes the view, not the config.
+func TestWidthRow(t *testing.T) {
+	m, _ := newModel(t)
+	if v := m.View(); !strings.Contains(v, "> width") || !strings.Contains(v, "auto (100)") {
+		t.Fatalf("width row:\n%s", v)
+	}
+	m = keys(m, space)
+	if !strings.Contains(m.View(), "60 cols") || m.Dirty() {
+		t.Fatalf("space → 60, not saved:\n%s", m.View())
+	}
+	for i := 0; i < 6; i++ {
+		m = keys(m, space)
+	}
+	if !strings.Contains(m.View(), "auto (100)") {
+		t.Fatalf("the cycle wraps back to auto:\n%s", m.View())
+	}
+	m = keys(m, enter)
+	if !strings.Contains(m.View(), ":width 100") {
+		t.Fatalf("enter types :width:\n%s", m.View())
 	}
 }

@@ -126,7 +126,8 @@ gsl config validate                   # lint config.json; prints each problem, e
 `config set style` refuses a name that is neither builtin nor defined under `styles`.
 
 **The studio.** `gsl config` with no subcommand (on a terminal) opens a config
-studio: rows for the style, palette, links and time settings and every segment
+studio: rows for the preview width (view only, not saved), the style, palette,
+links and time settings, and every segment
 (`space` turns one on/off, `J`/`K` move it right/left — the rows are the line's order),
 a live preview of the line — detected once against the current repo, re-fitted
 on every edit — with a column ruler, the MCP health panel, and `w` to save. The
