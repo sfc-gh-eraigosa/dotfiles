@@ -144,6 +144,15 @@ run_wsl_network_setup() {
   case "$_wn_rc" in
     0) echo "WSL network '${_wn_mode}' already current" ;;
     3)
+      # The elevation is a UAC prompt on the Windows desktop, and -Wait blocks
+      # until someone answers it. With no terminal (a batch fleet wave over
+      # ssh) nobody is there to click, so the install would hang: say what to
+      # run instead and leave the machine as it is. WSLNET_TTY is a test seam.
+      if ! ( : < "${WSLNET_TTY:-/dev/tty}" ) 2>/dev/null; then
+        echo "WARNING: WSL network mode '${_wn_mode}' needs an elevated run, and this session has no terminal to answer UAC; not applying." >&2
+        echo "         From an interactive shell: bash \"${BASE_DIR}/opt/bin/install_windows.sh\" \"${BASE_DIR}\" --wsl-network" >&2
+        return 0
+      fi
       echo "Applying WSL network mode '${_wn_mode}'..."
       echo "  A UAC prompt will appear - approve it (only this step needs admin)."
       # The elevated child's window is separate, so show what it logged: count

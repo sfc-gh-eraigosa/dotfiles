@@ -78,6 +78,7 @@ assert_grep "install.sh gates the call on the recorded mode" 'GFF_INSTALL_WINDOW
 echo "==== STUBBED (install_windows.sh --wsl-network; stub powershell.exe, never the real one) ===="
 IW="${REPO_ROOT}/opt/bin/install_windows.sh"
 _ST=$(mktemp -d)
+: > "$_ST/tty"   # stand-in terminal for the UAC gate (sr passes it as WSLNET_TTY)
 trap 'rm -rf "$_ST"' EXIT
 mkdir -p "$_ST/bin" "$_ST/nops" "$_ST/desktop" "$_ST/localappdata" "$_ST/home"
 cat > "$_ST/bin/powershell.exe" <<'STUB'
@@ -107,6 +108,7 @@ sr() {
   OUT=$(env -u GFF_INSTALL_WINDOWS_WSL_NETWORK HOME="$_ST/home" PATH="$_ST/bin:$PATH" \
     STUB_LOG="$_ST/log" STUB_DESKTOP="${4:-$_ST/desktop}" STUB_LOCALAPPDATA="$_ST/localappdata" \
     STUB_ELEV_LOG="${STUB_ELEV_LOG:-}" STUB_STATUS_RC="$2" STUB_ELEV_RC="$3" GFF_INSTALL_WINDOWS_WSL_NETWORK="$1" \
+    WSLNET_TTY="${SR_TTY:-$_ST/tty}" \
     bash "$IW" "$REPO_ROOT" --wsl-network 2>&1 </dev/null)
   RC=$?
   LOG=$(cat "$_ST/log")
@@ -148,6 +150,12 @@ case "$OUT" in *"exit"*"5"*|*"code 5"*) _r=ok ;; *) _r="rc not surfaced: $OUT" ;
 assert_eq "$_r" "ok" "the elevated child's exit code is surfaced"
 sr nat 1 0
 assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "0" "status rc 1 (error): no elevation"
+# rc 3 with no terminal (a batch fleet wave): never elevate, since nobody can answer UAC.
+SR_TTY="$_ST/no-such-tty" sr nat 3 0
+assert_eq "$RC" "0" "status 3, no terminal -> exit 0"
+assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "0" "status 3, no terminal: no elevation"
+case "$OUT" in *"no terminal to answer UAC"*) _r=ok ;; *) _r="no no-terminal warning: $OUT" ;; esac
+assert_eq "$_r" "ok" "status 3, no terminal: says why and how to re-run"
 
 # The elevated run's log lines are shown; lines from earlier runs are not.
 mkdir -p "$_ST/localappdata/dotfiles"
