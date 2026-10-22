@@ -26,7 +26,7 @@ the shim writes to stdout.
 | `host`   | Hardware-kind glyph (🍎 macOS, 🪟 WSL, 🍓 Pi, 🤖 Jetson, 🧠 DGX, 📦 container, 💻 other) + short hostname (floor 11 columns, grows to the full name when the line has room); far-left by default. Options: `min_len`, `max_len`, `icon`, `kind` |
 | `dirgit` | Current directory name (basename, `~` for `$HOME`) + branch + staged/unstaged/untracked/stash/ahead/behind badges |
 | `repo`   | Root-or-worktree indicator glyph + optional feature/worker/branch name + optional PR badge (tinted by state) + optional worktree count badge; self-omits outside a git repo. Links: glyph → repo home, label → branch on GitHub, badge → the PR |
-| `ai`     | Model display name + context-window usage + MCP health (`6✓ 5✗ 1!` connected / failed / needs auth, shrinking to `6/12` → `6` with width; read from a cache, never probed during a render) + 5h/7d rate-limit percentages. Renders under **both** Claude Code and agy. Self-omits only when there is genuinely no payload on stdin (e.g. bare `gsl status` in a plain shell) |
+| `model` / `context` / `mcp` / `limits` | The AI segments (one `ai` segment until #426; `ai` still names all four): model name · context-window usage · MCP health (`6✓ 5✗ 1!` connected / failed / needs auth, shrinking to `6/12` → `6`; read from a cache, never probed during a render) · 5h/7d rate limits. Each toggles, moves and drops on its own; side by side they draw as one block. Render under **both** Claude Code and agy; self-omit only when there is no payload on stdin (e.g. bare `gsl status`) |
 | `time`   | Date + time formatted by config Go layouts + timezone abbreviation; always renders |
 
 Each segment is independently enabled/disabled via `gsl config enable/disable/toggle <segment>`.
@@ -49,7 +49,7 @@ identify the caller. gsl keys on agy's in-band **`product`** field, which it sen
 render. That is what selects the theme source above — without it an agy render is read as a
 Claude render and the Antigravity `colorScheme` is ignored entirely.
 
-**Quota → rate-limit synthesis.** agy reports quota *remaining*; the `ai` segment shows
+**Quota → rate-limit synthesis.** agy reports quota *remaining*; the `limits` segment shows
 *used*. gsl inverts it (`used = (1 - remaining_fraction) * 100`) and maps buckets onto the
 5h/7d windows by **suffix heuristic** — a key containing `week`/`7d` is the seven-day
 window, one containing `5h`/`hour` is the five-hour window. Bucket keys are *not* hardcoded,
@@ -93,7 +93,7 @@ gsl config style [name]             # Show the current style, or set it to <name
 gsl config style --list             # List all builtin + user-defined styles (* = active)
 ```
 
-**Segments** valid for enable/disable/toggle: `dirgit`, `repo`, `ai`, `time`
+**Segments** valid for enable/disable/toggle: `host`, `dirgit`, `repo`, `model`, `context`, `mcp`, `limits`, `video`, `time` (`ai` = all four AI segments)
 
 ### Segment options
 
@@ -106,8 +106,8 @@ Set under `segments[].options` in `~/.config/gsl/config.json`.
 | `repo` | `name` | `"feature"` | Label source: `feature` / `worker` / `branch` / `off` |
 | `repo` | `link_pr` | `true` | Make the PR badge a hyperlink to the PR (URL from the gss registry `pr_url`, or `gh pr view --json url`; unlinked when neither supplies one) |
 | `dirgit` | `dir_link` | `"vscode"` | Directory link: `vscode` = vscode.dev GitHub view (PR changes if the branch has a PR, else the branch; `file://` off GitHub), `file` = always `file://` |
-| `ai` | `usage_url` | Claude: `https://claude.ai/settings/usage`; agy: none | Target of the context / 5h / 7d links. The only way to give Antigravity a usage target. |
-| `ai` | `model_url` | built-in family map | Model-name link. Empty = Claude families → `https://www.anthropic.com/claude/{family}`, gemini → Google's Gemini models page; template placeholders `{family}` `{model_id}` `{display_name}`; unknown family → no link |
+| `context`, `limits` | `usage_url` | Claude: `https://claude.ai/settings/usage`; agy: none | Target of the context / 5h / 7d links. The only way to give Antigravity a usage target. |
+| `model` | `model_url` | built-in family map | Model-name link. Empty = Claude families → `https://www.anthropic.com/claude/{family}`, gemini → Google's Gemini models page; template placeholders `{family}` `{model_id}` `{display_name}`; unknown family → no link |
 | `time` | `link_url` | `https://time.is/{tz_city}` | Template for the date/time link. Placeholders `{tz}` `{tz_city}` `{iso_utc}` `{unix}`; empty disables it |
 
 ### Links (OSC 8 hyperlinks)

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"time"
@@ -140,7 +141,7 @@ func Refresh(ctx context.Context, r Runner, cwd string, o Options) error {
 	path := filepath.Join(dir, key(cwd)+".json")
 	release, ok := acquire(filepath.Join(dir, key(cwd)+".lock"))
 	if !ok {
-		return nil // another refresh is running
+		return ErrInFlight // another refresh is running
 	}
 	defer release()
 
@@ -169,6 +170,29 @@ func Refresh(ctx context.Context, r Runner, cwd string, o Options) error {
 	// FetchedAt is when the answer arrived: the probe itself takes seconds.
 	e = entry{Cwd: cwd, Status: st, FetchedAt: o.now()}
 	return writeCache(path, e)
+}
+
+// ErrInFlight is Refresh declining because another refresh for the same cwd
+// is already probing (single-flight). The background caller ignores it; the
+// `gsl mcp refresh` verb waits for that probe instead (WaitIdle).
+var ErrInFlight = errors.New("mcp: a refresh is already running for this directory")
+
+// WaitIdle blocks until no refresh for cwd is running, or until ctx is done
+// (it then returns ctx's error). It polls the single-flight lock.
+func WaitIdle(ctx context.Context, cwd string, o Options) error {
+	dir, err := o.dir()
+	if err != nil {
+		return err
+	}
+	lock := filepath.Join(dir, key(cwd)+".lock")
+	for lockHeld(lock) {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+	return nil
 }
 
 // acquire takes the single-flight lock (a kernel flock — see tryLock).

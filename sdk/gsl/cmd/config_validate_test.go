@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -20,7 +21,7 @@ func TestValidateConfig_FindsProblems(t *testing.T) {
 	cfg.Links = "sometimes"
 	cfg.Timezone = "Mars/Olympus_Mons"
 	cfg.FallbackColumns = -3
-	cfg.Segments = append(cfg.Segments, config.Segment{Type: "weather", Enabled: true}, config.Segment{Type: "ai", Enabled: true})
+	cfg.Segments = append(cfg.Segments, config.Segment{Type: "weather", Enabled: true}, config.Segment{Type: "mcp", Enabled: true}, config.Segment{Type: "ai", Enabled: true})
 	cfg.Styles = map[string]any{
 		"powerline": map[string]any{
 			"separator": "zigzag",
@@ -31,7 +32,7 @@ func TestValidateConfig_FindsProblems(t *testing.T) {
 	got := strings.Join(validateConfig(cfg), "\n")
 	for _, want := range []string{
 		`style: "neon"`, `links: "sometimes"`, `timezone: "Mars/Olympus_Mons"`, "fallback_columns: -3",
-		`segments: unknown type "weather"`, `segments: "ai" listed twice`,
+		`segments: unknown type "weather"`, `segments: "mcp" listed twice`, `segments: "ai" is now [model context mcp limits]`,
 		`styles.powerline.separator: "zigzag"`, `styles.powerline.glyphs: "hieroglyphs"`,
 		`styles.powerline.theme.repo_root: "nope"`, `styles.powerline.theme.time`,
 	} {
@@ -97,4 +98,24 @@ func TestPaletteFor(t *testing.T) {
 	if p := strings.Join(validateConfig(cfg), "\n"); !strings.Contains(p, `palette: "neon"`) {
 		t.Errorf("validate missed the palette: %s", p)
 	}
+}
+
+// A file that still lists "ai" validates OK (it migrates on load) but gets a
+// note saying what it became and how to write the new form.
+func TestConfigValidateCmd_LegacyAINote(t *testing.T) {
+	cfg := config.Default()
+	withTempConfig(t, cfg, func() {
+		raw := `{"enabled":true,"segments":[{"type":"dirgit","enabled":true},{"type":"ai","enabled":true}]}`
+		if err := os.WriteFile(config.DefaultPath(), []byte(raw), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		out := captureStdout(t, func() {
+			if err := configValidateCmd.RunE(configValidateCmd, nil); err != nil {
+				t.Errorf("a legacy ai entry is not an error: %v", err)
+			}
+		})
+		if !strings.Contains(out, `note: segments lists "ai"`) || !strings.Contains(out, "model, context, mcp, limits") || !strings.Contains(out, "OK") {
+			t.Errorf("out = %q", out)
+		}
+	})
 }

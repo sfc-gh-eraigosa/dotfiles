@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/config"
@@ -25,6 +28,9 @@ and each theme colour — a name, 0-255, #rrggbb or 38;5;N / 38;2;r;g;b).`,
 			return err
 		}
 		problems := validateConfig(cfg)
+		if legacyAI(config.DefaultPath()) {
+			fmt.Printf("note: segments lists \"ai\" — gsl reads it as %s; save from `gsl config` (w) to write the new form\n", strings.Join(config.AIParts, ", "))
+		}
 		if len(problems) == 0 {
 			fmt.Printf("OK: %s\n", config.DefaultPath())
 			return nil
@@ -64,6 +70,10 @@ func validateConfig(cfg config.Config) []string {
 	}
 	seen := map[string]bool{}
 	for _, s := range cfg.Segments {
+		if s.Type == "ai" {
+			bad("segments: \"ai\" is now %v — gsl migrates it when it loads the file; save once (gsl config, w) to write the new form", config.AIParts)
+			continue
+		}
 		if !slices.Contains(config.KnownSegmentTypes, s.Type) {
 			bad("segments: unknown type %q — known: %v", s.Type, config.KnownSegmentTypes)
 		}
@@ -104,6 +114,29 @@ func validateConfig(cfg config.Config) []string {
 		}
 	}
 	return out
+}
+
+// legacyAI reports a config file that still lists the old "ai" segment, which
+// Load has already migrated by the time validateConfig sees it (#426).
+func legacyAI(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	var raw struct {
+		Segments []struct {
+			Type string `json:"type"`
+		} `json:"segments"`
+	}
+	if json.Unmarshal(data, &raw) != nil {
+		return false
+	}
+	for _, s := range raw.Segments {
+		if s.Type == "ai" {
+			return true
+		}
+	}
+	return false
 }
 
 // knownStyle is nil when name is a builtin style or one the config defines.

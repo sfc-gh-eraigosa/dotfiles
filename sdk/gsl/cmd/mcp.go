@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -68,11 +70,26 @@ backoff and the single-flight lock apply.`,
 		o := mcpOptions
 		background := os.Getenv(mcp.RefreshEnv) != ""
 		o.Force = !background
-		if err := mcp.Refresh(cmd.Context(), mcpRunner, cwd, o); err != nil {
-			return fmt.Errorf("mcp refresh: %w", err)
-		}
+		err = mcp.Refresh(cmd.Context(), mcpRunner, cwd, o)
 		if background {
-			return nil
+			if errors.Is(err, mcp.ErrInFlight) {
+				return nil // single-flight: the other refresher writes the result
+			}
+			return err
+		}
+		if errors.Is(err, mcp.ErrInFlight) {
+			// The status line started a probe moments ago: wait for its answer
+			// rather than run a second one (or print the stale result).
+			fmt.Fprintln(cmd.ErrOrStderr(), "a refresh is already running (started by the status line) — waiting for it…")
+			wctx, cancel := context.WithTimeout(cmd.Context(), 60*time.Second)
+			defer cancel()
+			if werr := mcp.WaitIdle(wctx, cwd, mcpOptions); werr != nil {
+				return fmt.Errorf("mcp refresh: still running after 60 s: %w", werr)
+			}
+			err = nil
+		}
+		if err != nil {
+			return fmt.Errorf("mcp refresh: %w", err)
 		}
 		s, _ := mcp.Get(cmd.Context(), cwd, mcpOptions)
 		writeMCPStatus(cmd.OutOrStdout(), s, time.Now())

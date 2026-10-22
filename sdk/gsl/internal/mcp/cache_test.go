@@ -156,9 +156,14 @@ func TestRefresh_SingleFlight(t *testing.T) {
 		t.Fatal("could not take the lock")
 	}
 	r := &fake.Runner{Default: fake.Response{Stdout: listOutput(1, 0)}}
-	if err := Refresh(context.Background(), r, cwd, o); err != nil || len(r.Calls) != 0 {
-		t.Fatalf("Refresh with the lock held: err=%v calls=%d", err, len(r.Calls))
+	if err := Refresh(context.Background(), r, cwd, o); !errors.Is(err, ErrInFlight) || len(r.Calls) != 0 {
+		t.Fatalf("Refresh with the lock held: err=%v calls=%d (want ErrInFlight, no probe)", err, len(r.Calls))
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	if err := WaitIdle(ctx, cwd, o); err == nil {
+		t.Error("WaitIdle returned while the lock was still held")
+	}
+	cancel()
 	if s, _ := Get(context.Background(), cwd, o); s.RefreshDue {
 		t.Error("a refresh is in flight: none should be due")
 	}

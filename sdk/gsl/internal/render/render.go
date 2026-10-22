@@ -159,8 +159,11 @@ func BuildSegments(cfg config.Config, deps Deps) []Segment {
 			s.Links = deps.Links
 			s.PR = deps.PR
 			segs = append(segs, s)
-		case "ai":
+		case "ai", "model", "context", "mcp", "limits":
 			s := NewAISegment(deps.Payload, deps.Cwd, deps.MCPOpts)
+			if sc.Type != "ai" {
+				s.Part = sc.Type // one piece of the old ai segment (#426)
+			}
 			s.MCPSpawn = deps.MCPSpawn
 			s.Priority = prio
 			s.Links = deps.Links

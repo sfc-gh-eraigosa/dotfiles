@@ -29,6 +29,7 @@ type aiData struct {
 	tokenUsed  *float64
 	tokenTotal *float64
 	mcp        mcp.Status
+	part       string // "" = all (the legacy ai segment); else one piece (#426)
 	rate5h     *float64
 	rate7d     *float64
 	hasPayload bool
@@ -54,7 +55,7 @@ func (s *AISegment) detect(ctx context.Context) (segmentData, bool) {
 		return nil, false
 	}
 
-	d := &aiData{hasPayload: true, prio: s.Priority, links: s.Links}
+	d := &aiData{hasPayload: true, prio: s.Priority, links: s.Links, part: s.Part}
 
 	if p.Model != nil && p.Model.DisplayName != nil {
 		d.modelName = *p.Model.DisplayName
@@ -77,7 +78,7 @@ func (s *AISegment) detect(ctx context.Context) (segmentData, bool) {
 	}
 
 	// MCP: cache only (mcp.Get never spawns); a due refresh runs out of band.
-	if s.Cwd != "" {
+	if s.Cwd != "" && (s.Part == "" || s.Part == "mcp") {
 		st, _ := mcp.Get(ctx, s.Cwd, s.MCPOpts)
 		d.mcp = st
 		if st.RefreshDue && s.MCPSpawn != nil {
@@ -114,28 +115,31 @@ func (d *aiData) formatLinked(st style.Style, level int) (string, string, []Link
 			sb.write(" ")
 		}
 	}
+	show := func(part string) bool { return d.part == "" || d.part == part }
 
 	// ── Model display name ──────────────────────────────────────────────────
-	if d.modelName != "" {
-		if g := glyph(st, "ai"); g != "" {
+	if show("model") {
+		if d.modelName != "" {
+			if g := glyph(st, "ai"); g != "" {
+				sb.write(g)
+				sb.write(" ")
+			}
+			// The CANONICAL name at every level (spec UC-4: "Claude Opus 4.8 (1M
+			// context)" RENDERS AS "Opus 4.8" — the vendor prefix and the context
+			// parenthetical are 20 columns of noise the user did not ask for), and
+			// the budget-capped short form once compaction bites.
+			name := canonicalModelName(d.modelName)
+			if level >= 3 {
+				name = shortenModelName(d.modelName)
+			}
+			sb.linked(name, modelPage)
+		} else if g := glyph(st, "ai"); g != "" {
 			sb.write(g)
-			sb.write(" ")
 		}
-		// The CANONICAL name at every level (spec UC-4: "Claude Opus 4.8 (1M
-		// context)" RENDERS AS "Opus 4.8" — the vendor prefix and the context
-		// parenthetical are 20 columns of noise the user did not ask for), and the
-		// budget-capped short form once compaction bites.
-		name := canonicalModelName(d.modelName)
-		if level >= 3 {
-			name = shortenModelName(d.modelName)
-		}
-		sb.linked(name, modelPage)
-	} else if g := glyph(st, "ai"); g != "" {
-		sb.write(g)
 	}
 
 	// ── Context window ──────────────────────────────────────────────────────
-	if d.ctxPct != nil {
+	if show("context") && d.ctxPct != nil {
 		sep()
 		if g := glyph(st, "context"); g != "" {
 			sb.write(g)
@@ -150,7 +154,7 @@ func (d *aiData) formatLinked(st style.Style, level int) (string, string, []Link
 	}
 
 	// ── MCP health (its own ladder; see mcpPart) ────────────────────────────
-	if runs := mcpParts(d.mcp, level); len(runs) > 0 {
+	if runs := mcpParts(d.mcp, level); show("mcp") && len(runs) > 0 {
 		sep()
 		if g := glyph(st, "mcp"); g != "" {
 			sb.write(g)
@@ -166,11 +170,11 @@ func (d *aiData) formatLinked(st style.Style, level int) (string, string, []Link
 
 	// ── Rate limits ──────────────────────────────────────────────────────────
 	// Level 0: 5h + 7d (matching the original seg_ai.go order); level 1: 5h only; level 2+: none.
-	if level <= 1 && d.rate5h != nil {
+	if show("limits") && level <= 1 && d.rate5h != nil {
 		sep()
 		sb.linked("5h "+pct(*d.rate5h), usage)
 	}
-	if level == 0 && d.rate7d != nil {
+	if show("limits") && level == 0 && d.rate7d != nil {
 		sep()
 		sb.linked("7d "+pct(*d.rate7d), usage)
 	}

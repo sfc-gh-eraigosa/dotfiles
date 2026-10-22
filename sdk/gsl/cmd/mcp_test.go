@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -92,4 +94,49 @@ func TestWriteMCPStatus_Stale(t *testing.T) {
 	if !strings.Contains(b.String(), "probed 3m0s ago (stale)") {
 		t.Fatalf("%q", b.String())
 	}
+}
+
+// slowRunner answers after a delay, like a real `claude mcp list`.
+type slowRunner struct {
+	d     time.Duration
+	out   []byte
+	calls atomic.Int32
+}
+
+func (r *slowRunner) Run(context.Context, string, ...string) ([]byte, error) {
+	r.calls.Add(1)
+	time.Sleep(r.d)
+	return r.out, nil
+}
+
+// A manual refresh while the status line's probe is running waits for that
+// probe and prints its fresh answer — no second probe, no stale result.
+func TestMCPCmd_RefreshWaitsForInFlight(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no flock")
+	}
+	r := &slowRunner{d: 600 * time.Millisecond, out: listOutput(4)}
+	withMCP(t, r)
+	cwd, _ := os.Getwd()
+	done := make(chan error, 1)
+	go func() { done <- mcp.Refresh(context.Background(), r, cwd, mcpOptions) }()
+	time.Sleep(150 * time.Millisecond) // the background probe holds the lock
+	out, err := runMCP(t, "refresh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if <-done != nil || r.calls.Load() != 1 {
+		t.Fatalf("probes = %d, want 1 (the manual refresh must wait, not probe again)", r.calls.Load())
+	}
+	if !strings.Contains(out, "already running") || !strings.Contains(out, "4 connected") {
+		t.Fatalf("out = %q", out)
+	}
+}
+
+func listOutput(connected int) []byte {
+	var b strings.Builder
+	for i := 0; i < connected; i++ {
+		b.WriteString("s" + string(rune('a'+i)) + ": x - ✔ Connected\n")
+	}
+	return []byte(b.String())
 }
