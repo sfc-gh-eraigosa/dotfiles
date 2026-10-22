@@ -39,3 +39,22 @@ func TestSnapshot_RefitsWithoutDetecting(t *testing.T) {
 		t.Error("master off must render nothing")
 	}
 }
+
+// The time segment follows the config handed to Line — timezone and formats
+// are edited in the studio after the one detection.
+func TestSnapshot_TimeFollowsConfig(t *testing.T) {
+	cfg := config.Default()
+	cfg.Timezone, cfg.TimeFormat, cfg.DateFormat = "UTC", "15:04", "2006-01-02"
+	st := asciiStyle()
+	deps := Deps{Clock: func() time.Time { return time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC) },
+		Hostname: func() (string, error) { return "demohost", nil }}
+	snap := DetectAll(context.Background(), cfg, st, deps)
+	if got := term.StripANSI(snap.Line(cfg, st, 200)); !strings.Contains(got, "12:00") {
+		t.Fatalf("baseline: %q", got)
+	}
+	edited := cfg
+	edited.Timezone, edited.TimeFormat = "Asia/Tokyo", "3:04 PM"
+	if got := term.StripANSI(snap.Line(edited, st, 200)); !strings.Contains(got, "9:00 PM") {
+		t.Errorf("edited time not shown: %q", got)
+	}
+}

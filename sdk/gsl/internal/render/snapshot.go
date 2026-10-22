@@ -12,6 +12,8 @@ import (
 // further I/O (the detect/format split exists for exactly this).
 type Snapshot struct {
 	byType map[string]segmentData
+	deps   Deps
+	st     style.Style
 }
 
 // DetectAll detects every segment type — the ones cfg lists, in its order,
@@ -45,7 +47,7 @@ func DetectAll(ctx context.Context, cfg config.Config, st style.Style, deps Deps
 		}
 	}
 	datas := Detect(ctx, all, st, segs)
-	snap := Snapshot{byType: map[string]segmentData{}}
+	snap := Snapshot{byType: map[string]segmentData{}, deps: deps, st: st}
 	for i, t := range types {
 		if i < len(datas) && datas[i] != nil {
 			snap.byType[t] = datas[i]
@@ -62,9 +64,32 @@ func (s Snapshot) Line(cfg config.Config, st style.Style, cols int) string {
 	}
 	var datas []segmentData
 	for _, sc := range cfg.Segments {
-		if d, ok := s.byType[sc.Type]; ok && sc.Enabled {
+		if !sc.Enabled {
+			continue
+		}
+		if sc.Type == "time" { // its timezone and formats are config: re-detect (no I/O)
+			if d := s.redetect(cfg, sc); d != nil {
+				datas = append(datas, d)
+			}
+			continue
+		}
+		if d, ok := s.byType[sc.Type]; ok {
 			datas = append(datas, d)
 		}
 	}
 	return Fit(datas, st, cols)
+}
+
+// redetect detects one segment against cfg with the snapshot's deps.
+func (s Snapshot) redetect(cfg config.Config, sc config.Segment) segmentData {
+	one := cfg
+	one.Segments = []config.Segment{sc}
+	segs := BuildSegments(one, s.deps)
+	if len(segs) == 0 {
+		return nil
+	}
+	if datas := Detect(context.Background(), one, s.st, segs); len(datas) == 1 {
+		return datas[0]
+	}
+	return nil
 }

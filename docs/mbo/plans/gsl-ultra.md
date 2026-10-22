@@ -325,6 +325,18 @@ gate green locally: seams OK, licenses permissive); the `cmd` suite is hermetic
 `gsl-visual-improvements` index row was already corrected (`done`) by the
 2026-09-07 audit. `install.sh` already fails when gsl's `build.sh` (and so its seam gate) fails: `if ! bash …/sdk/gsl/build.sh`.
 
+Final review (2026-10-21), fixed: the studio preview re-detects the time
+segment per edit and paints links "off"; `.mcp.json` servers count only once
+approved, and the scopes use Claude Code's meaning (local = ~/.claude.json
+projects[cwd] > project = .mcp.json); only the newest cached plugin version
+counts, and project `enabledPlugins` too; the refresh lock is a kernel flock
+(no stale-lock race); a bare TERM keeps 256 colours (only linux/vt*/ansi/
+cons25 drop to 16); chips on light basic colours get dark text; an unset
+timezone reads "UTC" (it renders as UTC) and the cycle offers "Local"; the
+spawn guard + detach live once in internal/exec. Kept: user theme values that
+were raw SGR fragments ("1;33") are not colours — ignored and reported by
+`gsl config validate`, as the README says.
+
 Deviation log: main's [#190](https://github.com/sfc-gh-eraigosa/dotfiles/pull/190) added a
 tmux/screen → `dark8` rule to `theme/resolve.go` after this plan was written; the `agy` leaf's
 `keywordToPalette` bridge composes with it (host-tool settings still take precedence; the tmux rule

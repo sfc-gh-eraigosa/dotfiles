@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/mcp"
 )
@@ -62,19 +63,21 @@ func names(m map[string]mcp.Scope) []string {
 	return out
 }
 
-// E10: a name in several scopes counts once, at its highest scope
-// (local .mcp.json > project > user > plugin).
+// E10: a name in several scopes counts once, at its highest scope — Claude
+// Code's: local (~/.claude.json projects[cwd]) > project (an approved
+// .mcp.json) > user (~/.claude.json) > plugin.
 func TestConfiguredServers_Dedup(t *testing.T) {
 	home, cwd := fakeHome(t)
 	writeJSON(t, filepath.Join(home, ".claude.json"), map[string]any{
 		"mcpServers": map[string]any{"shared": srv(), "user-only": srv()},
 		"projects": map[string]any{cwd: map[string]any{
-			"mcpServers": map[string]any{"shared": srv(), "proj-only": srv()},
+			"mcpServers":                 map[string]any{"shared": srv(), "local-only": srv()},
+			"enableAllProjectMcpServers": true,
 		}},
 	})
-	writeJSON(t, filepath.Join(cwd, ".mcp.json"), map[string]any{"mcpServers": map[string]any{"shared": srv()}})
+	writeJSON(t, filepath.Join(cwd, ".mcp.json"), map[string]any{"mcpServers": map[string]any{"shared": srv(), "mcpjson-only": srv()}})
 	got := byName(t, cwd)
-	want := map[string]mcp.Scope{"shared": mcp.ScopeLocal, "user-only": mcp.ScopeUser, "proj-only": mcp.ScopeProject}
+	want := map[string]mcp.Scope{"shared": mcp.ScopeLocal, "local-only": mcp.ScopeLocal, "mcpjson-only": mcp.ScopeProject, "user-only": mcp.ScopeUser}
 	if len(got) != len(want) {
 		t.Fatalf("servers = %v, want %v", names(got), want)
 	}
@@ -85,40 +88,51 @@ func TestConfiguredServers_Dedup(t *testing.T) {
 	}
 }
 
-// .mcp.json servers: disabledMcpjsonServers is subtracted; with
-// enableAllProjectMcpServers off, an enabledMcpjsonServers list is the
-// allow-list. The keys may sit in ~/.claude.json's project entry or in the
-// project's .claude/settings*.json.
+// .mcp.json servers load only once approved: enableAllProjectMcpServers, or
+// a name in enabledMcpjsonServers; disabledMcpjsonServers always wins. With no
+// approval at all, none count (Claude Code asks first). The keys may sit in
+// ~/.claude.json's project entry or the project's .claude/settings*.json.
 func TestConfiguredServers_McpJSONApproval(t *testing.T) {
 	home, cwd := fakeHome(t)
 	writeJSON(t, filepath.Join(cwd, ".mcp.json"), map[string]any{"mcpServers": map[string]any{"a": srv(), "b": srv(), "c": srv()}})
+	if got := names(byName(t, cwd)); len(got) != 0 {
+		t.Fatalf("unapproved .mcp.json servers counted: %v", got)
+	}
 	writeJSON(t, filepath.Join(home, ".claude.json"), map[string]any{
 		"projects": map[string]any{cwd: map[string]any{"disabledMcpjsonServers": []string{"b"}}},
 	})
-	if got := names(byName(t, cwd)); len(got) != 2 || got[0] != "a" || got[1] != "c" {
-		t.Fatalf("disabled b: got %v", got)
-	}
 	writeJSON(t, filepath.Join(cwd, ".claude", "settings.local.json"), map[string]any{"enabledMcpjsonServers": []string{"a", "b"}})
 	if got := names(byName(t, cwd)); len(got) != 1 || got[0] != "a" {
 		t.Fatalf("allow-list a,b minus disabled b: got %v", got)
 	}
-	writeJSON(t, filepath.Join(cwd, ".claude", "settings.local.json"), map[string]any{"enabledMcpjsonServers": []string{"a"}, "enableAllProjectMcpServers": true})
-	if got := names(byName(t, cwd)); len(got) != 2 {
+	writeJSON(t, filepath.Join(cwd, ".claude", "settings.local.json"), map[string]any{"enableAllProjectMcpServers": true})
+	if got := names(byName(t, cwd)); len(got) != 2 || got[0] != "a" || got[1] != "c" {
 		t.Fatalf("enableAll (still minus disabled b): got %v", got)
+	}
+	writeJSON(t, filepath.Join(cwd, ".claude", "settings.local.json"), map[string]any{"enableAllProjectMcpServers": false, "enabledMcpjsonServers": []string{"c"}})
+	if got := names(byName(t, cwd)); len(got) != 1 || got[0] != "c" {
+		t.Fatalf("explicit false + allow-list c: got %v", got)
 	}
 }
 
-// Plugin servers come from the plugin cache, only for enabled plugins, under
-// the CLI's own "plugin:<plugin>:<server>" names; both .mcp.json shapes
-// (wrapped and flat) are read, and several cached versions count once.
+// Plugin servers come from the plugin cache, only for enabled plugins (user
+// or project settings), under the CLI's "plugin:<plugin>:<server>" names,
+// from the NEWEST cached version only; both .mcp.json shapes are read.
 func TestConfiguredServers_Plugins(t *testing.T) {
 	home, cwd := fakeHome(t)
 	writeJSON(t, filepath.Join(home, ".claude", "settings.json"), map[string]any{
-		"enabledPlugins": map[string]any{"aws@market": true, "github@market": true, "off@market": false},
+		"enabledPlugins": map[string]any{"aws@market": true, "off@market": false},
+	})
+	writeJSON(t, filepath.Join(cwd, ".claude", "settings.json"), map[string]any{
+		"enabledPlugins": map[string]any{"github@market": true},
 	})
 	cache := filepath.Join(home, ".claude", "plugins", "cache", "market")
-	writeJSON(t, filepath.Join(cache, "aws", "1.0.0", ".mcp.json"), map[string]any{"mcpServers": map[string]any{"aws-mcp": srv()}})
+	writeJSON(t, filepath.Join(cache, "aws", "1.0.0", ".mcp.json"), map[string]any{"mcpServers": map[string]any{"aws-mcp": srv(), "dropped-in-1.1": srv()}})
 	writeJSON(t, filepath.Join(cache, "aws", "1.1.0", ".mcp.json"), map[string]any{"mcpServers": map[string]any{"aws-mcp": srv()}})
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(filepath.Join(cache, "aws", "1.0.0"), old, old); err != nil {
+		t.Fatal(err)
+	}
 	writeJSON(t, filepath.Join(cache, "github", "abc123", ".mcp.json"), map[string]any{"github": srv()})
 	writeJSON(t, filepath.Join(cache, "off", "1.0.0", ".mcp.json"), map[string]any{"mcpServers": map[string]any{"nope": srv()}})
 	got := byName(t, cwd)

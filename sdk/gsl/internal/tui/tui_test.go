@@ -380,8 +380,8 @@ func TestSpaceCyclesEverySetting(t *testing.T) {
 		seen[m.Config().Timezone] = true
 		m = keys(m, space)
 	}
-	if !seen[tz0] || !seen[""] || !seen["UTC"] {
-		t.Errorf("the timezone cycle should hold the original %q, local and UTC: %v", tz0, seen)
+	if !seen[tz0] || !seen["Local"] || !seen["UTC"] {
+		t.Errorf("the timezone cycle should hold the original %q, Local and UTC: %v", tz0, seen)
 	}
 	m = keys(m, runes("j")) // time format
 	f0 := m.Config().TimeFormat

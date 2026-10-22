@@ -107,7 +107,7 @@ type segmentBlock struct {
 // paintRuns emits text with every valid span applied: a Role paints its run
 // (Fill: a chip, the role as background with readable text; else a tint),
 // a URL wraps it as an OSC 8 hyperlink, underlined unless st.Links ==
-// "plain". After a styled run, restore (the block's own escape) puts the
+// "plain" (and not at all when it is "off"). After a styled run, restore (the block's own escape) puts the
 // block back; with no block colour the foreground is reset to the default.
 // ST (ESC \) terminates the OSC; term.StripANSI accepts it when measuring.
 // Under ModeNever nothing is emitted: the text is returned as is.
@@ -138,7 +138,7 @@ func paintRuns(st style.Style, text string, spans []LinkSpan, restore string) st
 				}
 			}
 		}
-		if sp.URL != "" {
+		if sp.URL != "" && st.Links != "off" {
 			run = "\x1b]8;;" + sp.URL + "\x1b\\" + ul + run + ulOff + "\x1b]8;;\x1b\\"
 		}
 		sb.WriteString(run)

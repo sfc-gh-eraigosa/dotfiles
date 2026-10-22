@@ -5,8 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -25,9 +23,6 @@ const (
 	defaultTTL = 2 * time.Minute
 	// probeTimeout bounds one `claude mcp list` (measured 3.4–4.1 s).
 	probeTimeout = 30 * time.Second
-	// lockTTL is how long a lock is honoured; older locks are from a refresh
-	// that crashed or was killed and are broken.
-	lockTTL = 2 * time.Minute
 	// backoffBase and backoffMax bound the negative cache: 30 s, 1 m, 2 m, …
 	backoffBase = 30 * time.Second
 	backoffMax  = 30 * time.Minute
@@ -176,27 +171,29 @@ func Refresh(ctx context.Context, r Runner, cwd string, o Options) error {
 	return writeCache(path, e)
 }
 
-// acquire takes the single-flight lock, breaking one older than lockTTL.
+// acquire takes the single-flight lock (a kernel flock — see tryLock).
 func acquire(path string) (release func(), ok bool) {
-	for attempt := 0; attempt < 2; attempt++ {
-		f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		if err == nil {
-			_ = f.Close()
-			return func() { _ = os.Remove(path) }, true
-		}
-		if !errors.Is(err, fs.ErrExist) || lockHeld(path) {
-			return nil, false
-		}
-		_ = os.Remove(path) // stale: its refresh died
+	f, ok := tryLock(path)
+	if !ok {
+		return nil, false
 	}
-	return nil, false
+	return func() {
+		if f != nil {
+			_ = f.Close() // closing drops the flock; the file stays, harmlessly
+		}
+	}, true
 }
 
-// lockHeld reports a lock younger than lockTTL. The lock's age is wall-clock
-// (file mtime), independent of Options.Now.
+// lockHeld reports a refresh in flight: someone holds the flock.
 func lockHeld(path string) bool {
-	fi, err := os.Stat(path)
-	return err == nil && time.Since(fi.ModTime()) < lockTTL
+	if _, err := os.Stat(path); err != nil {
+		return false
+	}
+	release, ok := acquire(path)
+	if ok {
+		release()
+	}
+	return !ok
 }
 
 // readEntry reads one cache file; ok=false when absent or malformed.

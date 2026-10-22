@@ -38,9 +38,9 @@ func ParseColorMode(s string) (ColorMode, error) {
 }
 
 // DetectColorMode resolves the mode: an explicit flag wins; else NO_COLOR (any
-// value) or TERM=dumb → never; COLORTERM truecolor/24bit → truecolor; TERM
-// with 256color → 256; no TERM at all (a pipe under Claude Code) → 256; any
-// other TERM → 16. An unparseable flag is ignored (cmd reports it).
+// value) or TERM=dumb → never; COLORTERM truecolor/24bit → truecolor; a
+// terminal known to have 16 colours (linux, vt*, ansi, cons25) → 16; anything
+// else → 256. An unparseable flag is ignored (cmd reports it).
 func DetectColorMode(env func(string) string, flag string) ColorMode {
 	if m, err := ParseColorMode(flag); err == nil && m != ModeAuto {
 		return m
@@ -51,8 +51,10 @@ func DetectColorMode(env func(string) string, flag string) ColorMode {
 		return ModeNever
 	case strings.Contains(strings.ToLower(env("COLORTERM")), "truecolor"), strings.EqualFold(env("COLORTERM"), "24bit"):
 		return ModeTruecolor
-	case term == "", strings.Contains(term, "256color"):
-		return Mode256
+	case term == "linux", term == "ansi", term == "cons25", strings.HasPrefix(term, "vt"):
+		return Mode16 // known to have only the 16 basic colours
 	}
-	return Mode16
+	// A bare TERM (xterm over ssh, screen, tmux — and no TERM at all, as under
+	// Claude Code) has meant 256 colours for gsl all along; keep it.
+	return Mode256
 }

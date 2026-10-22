@@ -281,10 +281,16 @@ func ResolveBlockColors(st Style, role Role) (bg, fg Color) {
 	return bg, TextOn(bg)
 }
 
-// TextOn is readable default text for a fill of bg: white on a themed 0–15
-// colour, else black or white by contrast.
+// TextOn is readable default text for a fill of bg. On a terminal-themed
+// 0–15 colour: black (0) on the light ones (yellow, white, the bright
+// green/yellow/cyan/white), white (7) on the rest — the theme recolours both,
+// keeping them apart. Else black or white by contrast.
 func TextOn(bg Color) Color {
 	if bg.themed() {
+		switch bg.index {
+		case 3, 7, 10, 11, 14, 15:
+			return Index(0)
+		}
 		return Index(7)
 	}
 	c := bg.RGB()

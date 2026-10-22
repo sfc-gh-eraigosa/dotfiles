@@ -98,7 +98,9 @@ var linkModes = []string{config.LinksUnderline, config.LinksPlain, config.LinksO
 // The options space cycles through (and :set hints and Tab completes) for the
 // free-form settings. Any IANA zone or Go layout can still be typed.
 var (
-	timezones = []string{"", "UTC", "America/Los_Angeles", "America/Denver", "America/Chicago",
+	// "Local" is this machine's zone (time.LoadLocation's name for it); an
+	// unset timezone renders as UTC, so it is never offered as "local".
+	timezones = []string{"Local", "UTC", "America/Los_Angeles", "America/Denver", "America/Chicago",
 		"America/New_York", "America/Sao_Paulo", "Europe/London", "Europe/Berlin",
 		"Asia/Kolkata", "Asia/Shanghai", "Asia/Tokyo", "Australia/Sydney"}
 	timeFormats = []string{"15:04", "15:04:05", "3:04 PM", "3:04:05 PM"}
@@ -155,13 +157,14 @@ func (m Model) current(key string) string {
 	return m.cfg.DateFormat
 }
 
-// shown is how an option reads: "" is auto (palette) or local (timezone).
+// shown is how an option reads: "" is auto (palette) or UTC (timezone — the
+// time segment renders an unset zone as UTC).
 func shown(key, v string) string {
 	if v != "" {
 		return v
 	}
 	if key == "timezone" {
-		return "local"
+		return "UTC"
 	}
 	return "auto"
 }
@@ -268,8 +271,8 @@ func (m *Model) set(key, value string) error {
 		}
 		c.Links = value
 	case "timezone":
-		if value == "local" {
-			value = ""
+		if strings.EqualFold(value, "local") {
+			value = "Local"
 		}
 		if _, err := time.LoadLocation(value); err != nil {
 			return fmt.Errorf("timezone %q: not an IANA zone", value)
@@ -679,7 +682,7 @@ func (m Model) View() string {
 		row("style", m.cfg.Style),
 		row("palette", orAuto(m.cfg.Palette)),
 		row("links", orDefault(m.cfg.Links, config.LinksUnderline)),
-		row("timezone", orDefault(m.cfg.Timezone, "local")),
+		row("timezone", orDefault(m.cfg.Timezone, "UTC")),
 		row("time", m.cfg.TimeFormat) + pal.Dim("  e.g. "+now.Format(m.cfg.TimeFormat)),
 		row("date", m.cfg.DateFormat) + pal.Dim("  e.g. "+now.Format(m.cfg.DateFormat)),
 	}

@@ -4,10 +4,10 @@ import (
 	"errors"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
+
+	gslexec "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/exec"
 )
 
 // RefreshEnv is set in the refresher's environment. A process that sees it is
@@ -36,20 +36,15 @@ func SpawnRefresh(cwd string) error {
 	cmd := exec.Command(self, "mcp", "refresh") //nolint:gosec // G204: our own binary, fixed args
 	cmd.Dir = cwd
 	cmd.Env = append(os.Environ(), RefreshEnv+"=1")
-	detach(cmd)
+	gslexec.Detach(cmd)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
 	return cmd.Process.Release()
 }
 
-// canSpawn is the recursion guard, testable without forking: never from a Go
-// test binary (inTest is authoritative; the name check is a second layer) and
-// never from a refresher.
+// canSpawn is the shared recursion guard (internal/exec.CanSpawn) keyed on
+// this refresher's RefreshEnv.
 func canSpawn(self string, getenv func(string) string, inTest bool) bool {
-	if inTest || getenv(RefreshEnv) != "" {
-		return false
-	}
-	base := strings.TrimSuffix(strings.ToLower(filepath.Base(self)), ".exe")
-	return !strings.HasSuffix(base, ".test")
+	return gslexec.CanSpawn(self, getenv, inTest, RefreshEnv)
 }

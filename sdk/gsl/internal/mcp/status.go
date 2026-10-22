@@ -83,8 +83,8 @@ type Scope int
 
 const (
 	ScopeUnknown Scope = iota
-	ScopeLocal         // <cwd>/.mcp.json
-	ScopeProject       // ~/.claude.json → .projects[cwd].mcpServers
+	ScopeLocal         // ~/.claude.json → .projects[cwd].mcpServers (Claude Code's "local")
+	ScopeProject       // <cwd>/.mcp.json, once approved (Claude Code's "project")
 	ScopeUser          // ~/.claude.json → .mcpServers
 	ScopePlugin        // ~/.claude/plugins/cache/**/.mcp.json (gated by enabledPlugins)
 )

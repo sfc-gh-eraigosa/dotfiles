@@ -171,3 +171,15 @@ func TestVSCodeDevURLs(t *testing.T) {
 		t.Error("non-GitHub, empty branch, or PR 0 must yield no URL")
 	}
 }
+
+// links "off" emits no hyperlink even when spans carry URLs (the studio keeps
+// one detection, so its preview must honour the setting at paint time); a
+// role still paints.
+func TestPaintRuns_LinksOff(t *testing.T) {
+	st := asciiStyle()
+	st.Links = "off"
+	got := paintRuns(st, "PR#21", []LinkSpan{{Start: 0, End: 5, URL: wantPRURL, Role: "ok"}}, "")
+	if strings.Contains(got, "\x1b]8;") || strings.Contains(got, ulOn) {
+		t.Errorf("links off still linked: %q", got)
+	}
+}

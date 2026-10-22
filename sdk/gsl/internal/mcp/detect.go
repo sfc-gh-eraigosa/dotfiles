@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 // detect.go — the configured-server scan (plan F6): which MCP servers are
@@ -104,18 +105,20 @@ func mcpJSONServers(path string) ([]string, error) {
 }
 
 // ConfiguredServers returns the DE-DUPLICATED set of servers configured for
-// cwd, resolved across every scope (plan F6):
+// cwd, resolved across every scope the way Claude Code does (plan F6):
 //   - a name in several scopes counts once, at its highest scope: Local
-//     (<cwd>/.mcp.json) > Project (~/.claude.json projects[cwd]) > User
+//     (~/.claude.json projects[cwd]) > Project (<cwd>/.mcp.json) > User
 //     (~/.claude.json) > Plugin;
-//   - Local servers pass the approval gate: names in disabledMcpjsonServers
-//     are dropped; unless enableAllProjectMcpServers is on, a non-empty
-//     enabledMcpjsonServers list is the allow-list. The keys are read from
+//   - Project (.mcp.json) servers load only once approved —
+//     enableAllProjectMcpServers, or the name in enabledMcpjsonServers — and
+//     never when in disabledMcpjsonServers. With no approval, none count:
+//     Claude Code asks before loading them. The keys are read from
 //     ~/.claude.json's project entry, <cwd>/.claude/settings{,.local}.json
 //     and the user settings.json;
-//   - Plugin servers come from <claude dir>/plugins/cache/<market>/<plugin>/
-//     <version>/.mcp.json for plugins enabled in the user settings.json,
-//     under the CLI's own names, "plugin:<plugin>:<server>".
+//   - Plugin servers come from the NEWEST cached version,
+//     <claude dir>/plugins/cache/<market>/<plugin>/<version>/.mcp.json, of
+//     each plugin enabled in the user or project settings, under the CLI's
+//     own names, "plugin:<plugin>:<server>".
 //
 // A missing config file contributes nothing and is NOT an error; malformed
 // JSON is.
@@ -144,7 +147,7 @@ func ConfiguredServers(cwd string) ([]ServerStatus, error) {
 	}
 	if proj, ok := cj.Projects[cwd]; ok {
 		for name := range proj.McpServers {
-			add(name, ScopeProject)
+			add(name, ScopeLocal)
 		}
 		merge(proj.approval)
 	}
@@ -154,12 +157,19 @@ func ConfiguredServers(cwd string) ([]ServerStatus, error) {
 		return nil, err
 	}
 	merge(user.approval)
+	plugins := map[string]bool{}
+	for k, on := range user.EnabledPlugins {
+		plugins[k] = on
+	}
 	for _, f := range []string{"settings.json", "settings.local.json"} {
 		var ps settingsJSON
 		if _, err := readJSON(filepath.Join(cwd, ".claude", f), &ps); err != nil {
 			return nil, err
 		}
 		merge(ps.approval)
+		for k, on := range ps.EnabledPlugins { // project settings win
+			plugins[k] = on
+		}
 	}
 
 	local, err := mcpJSONServers(filepath.Join(cwd, ".mcp.json"))
@@ -167,28 +177,29 @@ func ConfiguredServers(cwd string) ([]ServerStatus, error) {
 		return nil, err
 	}
 	disabled, enabled := set(gate.Disabled), set(gate.Enabled)
-	allowAll := (gate.EnableAll != nil && *gate.EnableAll) || len(enabled) == 0
+	allowAll := gate.EnableAll != nil && *gate.EnableAll
 	for _, name := range local {
 		if disabled[name] || (!allowAll && !enabled[name]) {
 			continue
 		}
-		add(name, ScopeLocal)
+		add(name, ScopeProject)
 	}
 
-	for key, on := range user.EnabledPlugins {
+	for key, on := range plugins {
 		plugin, market, ok := strings.Cut(key, "@")
 		if !on || !ok {
 			continue
 		}
-		versions, _ := filepath.Glob(filepath.Join(claudeDir(), "plugins", "cache", market, plugin, "*", ".mcp.json"))
-		for _, path := range versions {
-			servers, err := mcpJSONServers(path)
-			if err != nil {
-				continue // one broken plugin cache must not hide the rest
-			}
-			for _, name := range servers {
-				add("plugin:"+plugin+":"+name, ScopePlugin)
-			}
+		path := newestPluginMCP(filepath.Join(claudeDir(), "plugins", "cache", market, plugin))
+		if path == "" {
+			continue
+		}
+		servers, err := mcpJSONServers(path)
+		if err != nil {
+			continue // one broken plugin cache must not hide the rest
+		}
+		for _, name := range servers {
+			add("plugin:"+plugin+":"+name, ScopePlugin)
 		}
 	}
 
@@ -198,6 +209,24 @@ func ConfiguredServers(cwd string) ([]ServerStatus, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
+}
+
+// newestPluginMCP is the .mcp.json of the most recently installed version
+// under a plugin's cache dir: older versions stay on disk after an update, and
+// a server the new version dropped must not still count.
+func newestPluginMCP(dir string) string {
+	versions, _ := filepath.Glob(filepath.Join(dir, "*", ".mcp.json"))
+	best, bestTime := "", time.Time{}
+	for _, p := range versions {
+		fi, err := os.Stat(filepath.Dir(p))
+		if err != nil {
+			continue
+		}
+		if best == "" || fi.ModTime().After(bestTime) {
+			best, bestTime = p, fi.ModTime()
+		}
+	}
+	return best
 }
 
 func set(xs []string) map[string]bool {

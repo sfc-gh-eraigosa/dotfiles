@@ -143,13 +143,17 @@ func TestRefresh_NegativeCacheBackoff(t *testing.T) {
 }
 
 // Single-flight: while a refresh holds the lock, another does not probe and no
-// refresh is due; a lock left by a crashed refresh expires.
+// refresh is due; once it lets go (or dies — the kernel drops a flock), the
+// next one probes.
 func TestRefresh_SingleFlight(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no flock")
+	}
 	o, _ := testOpts(t)
 	cwd := t.TempDir()
-	lock := filepath.Join(o.CacheDir, key(cwd)+".lock")
-	if err := os.WriteFile(lock, nil, 0o600); err != nil {
-		t.Fatal(err)
+	held, ok := tryLock(filepath.Join(o.CacheDir, key(cwd)+".lock"))
+	if !ok {
+		t.Fatal("could not take the lock")
 	}
 	r := &fake.Runner{Default: fake.Response{Stdout: listOutput(1, 0)}}
 	if err := Refresh(context.Background(), r, cwd, o); err != nil || len(r.Calls) != 0 {
@@ -158,15 +162,12 @@ func TestRefresh_SingleFlight(t *testing.T) {
 	if s, _ := Get(context.Background(), cwd, o); s.RefreshDue {
 		t.Error("a refresh is in flight: none should be due")
 	}
-	old := time.Now().Add(-10 * time.Minute)
-	if err := os.Chtimes(lock, old, old); err != nil {
-		t.Fatal(err)
-	}
+	_ = held.Close()
 	if err := Refresh(context.Background(), r, cwd, o); err != nil || len(r.Calls) != 1 {
-		t.Fatalf("a stale lock must not block forever: err=%v calls=%d", err, len(r.Calls))
+		t.Fatalf("after the holder let go: err=%v calls=%d", err, len(r.Calls))
 	}
-	if _, err := os.Stat(lock); err == nil {
-		t.Error("Refresh left its lock behind")
+	if s, _ := Get(context.Background(), cwd, o); s.RefreshDue {
+		t.Error("fresh after the refresh: none should be due")
 	}
 }
 
@@ -176,6 +177,12 @@ func TestGet_ConfiguredAndServers(t *testing.T) {
 	o, _ := testOpts(t)
 	cwd := t.TempDir()
 	if err := os.WriteFile(filepath.Join(cwd, ".mcp.json"), []byte(`{"mcpServers":{"a":{},"b":{}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(cwd, ".claude"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cwd, ".claude", "settings.local.json"), []byte(`{"enableAllProjectMcpServers":true}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	out, _ := os.ReadFile("testdata/mcp-list-real.txt")

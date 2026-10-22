@@ -146,9 +146,14 @@ func TestColorMode_Ladder(t *testing.T) {
 		{map[string]string{"COLORTERM": "truecolor", "TERM": "xterm"}, "", ModeTruecolor},
 		{map[string]string{"COLORTERM": "24bit"}, "", ModeTruecolor},
 		{map[string]string{"TERM": "xterm-256color"}, "", Mode256},
-		{map[string]string{"TERM": "xterm"}, "", Mode16},
+		// A bare TERM (xterm over ssh, screen, tmux) has meant 256 colours for
+		// gsl all along; only terminals known to have 16 drop to them.
+		{map[string]string{"TERM": "xterm"}, "", Mode256},
+		{map[string]string{"TERM": "screen"}, "", Mode256},
+		{map[string]string{"TERM": "linux"}, "", Mode16},
+		{map[string]string{"TERM": "vt100"}, "", Mode16},
 		{map[string]string{}, "", Mode256}, // a pipe under Claude Code: no TERM
-		{map[string]string{"TERM": "xterm"}, "truecolor", ModeTruecolor},
+		{map[string]string{"TERM": "linux"}, "truecolor", ModeTruecolor},
 		{map[string]string{"NO_COLOR": "1"}, "256", Mode256}, // an explicit flag wins
 		{map[string]string{"TERM": "xterm-256color"}, "never", ModeNever},
 		{map[string]string{"TERM": "xterm-256color"}, "auto", Mode256},
@@ -185,6 +190,22 @@ func TestParseColor_RejectsInjection(t *testing.T) {
 			if strings.Count(seq, "\x1b") != 1 || !strings.HasSuffix(seq, "m") {
 				t.Errorf("%q in %v → %q", v, m, seq)
 			}
+		}
+	}
+}
+
+// Text on a terminal-themed 0–15 colour: dark on the light ones (white,
+// yellow and the brights), white on the dark ones — a white MERGED chip on
+// the powerline "accent: white" must not vanish.
+func TestTextOn_ThemedColours(t *testing.T) {
+	for _, light := range []int{3, 7, 10, 11, 14, 15} {
+		if got := TextOn(Index(light)); got != Index(0) {
+			t.Errorf("TextOn(%d) = %+v, want black (0)", light, got)
+		}
+	}
+	for _, dark := range []int{0, 1, 4, 5, 8} {
+		if got := TextOn(Index(dark)); got != Index(7) {
+			t.Errorf("TextOn(%d) = %+v, want white (7)", dark, got)
 		}
 	}
 }
