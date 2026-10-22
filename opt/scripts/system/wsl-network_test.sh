@@ -65,6 +65,9 @@ assert_grep "Get-VMSwitch is probed, guarded" 'Get-Command Get-VMSwitch' "$SET_N
 # shellcheck disable=SC2016  # literal PowerShell, not a shell expansion
 assert_grep "refresh output goes to the host" '-File \$RefreshScript @Arguments \| Out-Host' "$SET_NET"
 assert_grep "test seams need WSLNET_TEST=1" "env:WSLNET_TEST -eq '1'" "$SET_NET"
+assert_grep "mirrored is refused while Windows OpenSSH is on" 'Test-WindowsSshdOn)) { Write-Host' "$SET_NET"
+# shellcheck disable=SC2016  # literal PowerShell $r, not a shell expansion
+assert_grep "NAT cleanup keeps forwards that do not target WSL" 'Test-WslTarget \$r\.ConnectAddr' "$SET_NET"
 
 # F6 trigger: install.sh runs the deferred --wsl-network step, and it is NOT
 # behind the desktop-deploy gate (the mode is recorded independently of it).
@@ -354,7 +357,7 @@ run "$D" -Mode nat -ConfigOnly
 assert_eq "$RC:$(nbak "$D"):$(wc -c <"$D/.wslconfig" | tr -d ' ')" "0:0:0" "nat on an empty file: exit 0, no backup, still empty"
 
 # Test seams (honored only with WSLNET_TEST=1) reach Windows via WSLENV.
-export WSLENV="${WSLENV:+${WSLENV}:}WSLNET_TEST:WSLNET_TEST_SWITCH:WSLNET_TEST_REFRESH"
+export WSLENV="${WSLENV:+${WSLENV}:}WSLNET_TEST:WSLNET_TEST_SWITCH:WSLNET_TEST_REFRESH:WSLNET_TEST_WINSSHD"
 export WSLNET_TEST=1
 
 # bridged when the switch can't be read unelevated: the elevated run decides.
@@ -387,7 +390,25 @@ assert_eq "$_r" "shown" "the refresh output reaches the operator"
 printf "Write-Host 'stub-refresh: ok'\r\nexit 0\r\n" > "$STUB"
 WSLNET_TEST_REFRESH=$(wslpath -w "$STUB") run "$D" -Mode nat
 assert_eq "$RC" "0" "nat apply exits 0 when refresh-wsl-portproxy succeeds"
+
+# mirrored while Windows OpenSSH is on: both would claim port 22, so refuse (exit 4).
+D=$(fixture mirrored-winsshd '[wsl2]\nmemory=1GB\n')
+WSLNET_TEST_WINSSHD=on run "$D" -Status -Mode mirrored -ConfigOnly
+assert_eq "$RC" "4" "-Status mirrored with Windows sshd on exits 4"
+case "$OUT" in *"cannot apply mirrored"*"Choose nat"*) _r=ok ;; *) _r="no reason: $OUT" ;; esac
+assert_eq "$_r" "ok" "-Status mirrored with Windows sshd on says why and what to do"
+WSLNET_TEST_WINSSHD=on run "$D" -Mode mirrored -ConfigOnly
+assert_eq "$RC" "4" "apply mirrored with Windows sshd on exits 4"
+same "$D/.wslconfig" '[wsl2]\nmemory=1GB\n' "apply mirrored refused: .wslconfig untouched"
+WSLNET_TEST_WINSSHD=off run "$D" -Status -Mode mirrored -ConfigOnly
+assert_eq "$RC" "3" "-Status mirrored with Windows sshd off: would change (exit 3)"
 unset WSLNET_TEST
+
+# NAT cleanup only removes forwards that target WSL: Test-SameSubnet, run alone.
+_sub=$("$PS_EXE" -NoProfile -NonInteractive -Command \
+  "\$t=\$null; \$e=\$null; \$a=[System.Management.Automation.Language.Parser]::ParseFile('${SET_NET_W}', [ref]\$t, [ref]\$e); \$f=\$a.Find({ param(\$n) \$n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and \$n.Name -eq 'Test-SameSubnet' }, \$true); Invoke-Expression \$f.Extent.Text; '{0},{1},{2}' -f (Test-SameSubnet '172.20.1.5' '172.20.0.1' 20), (Test-SameSubnet '192.168.0.10' '172.20.0.1' 20), (Test-SameSubnet 'junk' '172.20.0.1' 20)" \
+  </dev/null 2>&1 | tr -d '\r')
+assert_eq "$_sub" "True,False,False" "Test-SameSubnet: same /20 yes, LAN host no, junk no"
 
 # Full -Status (no -ConfigOnly) is read-only and reports the Windows side.
 D=$(fixture status-full '[wsl2]\nmemory=1GB\n')

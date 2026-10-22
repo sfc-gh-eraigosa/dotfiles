@@ -19,6 +19,9 @@
               only prints the command to create it. It never creates a switch.
     mirrored  networkingMode=mirrored plus a Hyper-V firewall rule letting
               inbound TCP 22 reach WSL.
+              Refused (exit 4) while the Windows OpenSSH service is running
+              or enabled: mirrored WSL shares the host's ports, so both would
+              claim 22 (nat avoids this by listening on 2222).
 
   Cleanup of the previous mode runs only when this run changed networkingMode
   in .wslconfig (a real switch the operator chose), never after a mode that
@@ -35,7 +38,8 @@
 
 .PARAMETER Status
   Read-only report. Exit 0 = current for -Mode, 3 = applying -Mode would
-  change something. Needs no elevation; anything it can't read without admin
+  change something, 4 = -Mode cannot be applied as the machine is (mirrored
+  with Windows OpenSSH on). Needs no elevation; anything it can't read without admin
   is reported as "unknown (needs admin)" and treated as current.
 
 .PARAMETER ConfigOnly
@@ -72,10 +76,13 @@ $logFile        = Join-Path $logDir 'set-wsl-network.log'
 #   WSLNET_TEST_REFRESH=<path>                 a stand-in refresh script; only
 #                                              for -Mode nat, which then skips
 #                                              the admin check and all cleanup
+#   WSLNET_TEST_WINSSHD=on|off                 the Windows OpenSSH probe result
 $TestMode    = $env:WSLNET_TEST -eq '1'
 $TestSwitch  = $null
 $TestRefresh = $false
+$TestWinSshd = $null
 if ($TestMode) {
+    if ($env:WSLNET_TEST_WINSSHD -match '^(on|off)$') { $TestWinSshd = $env:WSLNET_TEST_WINSSHD -eq 'on' }
     if (($Status -or $ConfigOnly) -and $env:WSLNET_TEST_SWITCH -match '^(present|absent|unknown)$') { $TestSwitch = $env:WSLNET_TEST_SWITCH }
     if ($env:WSLNET_TEST_REFRESH -and $Mode -eq 'nat' -and -not $Status) {
         $RefreshScript = $env:WSLNET_TEST_REFRESH; $TestRefresh = $true
@@ -320,6 +327,17 @@ function Write-WslConfig([string]$Path, [byte[]]$Bytes) {
 # ---------------------------------------------------------------------------
 function Get-NatPort { if (Get-Service sshd -ErrorAction SilentlyContinue) { 2222 } else { 22 } }
 
+# Windows OpenSSH listens on the host's port 22. Mirrored WSL shares the host's
+# ports, so a WSL sshd and the Windows one would both claim 22: mirrored is
+# refused while the service runs or is set to start (nat moves to 2222).
+function Test-WindowsSshdOn {
+    if ($null -ne $TestWinSshd) { return $TestWinSshd }
+    $s = Get-Service sshd -ErrorAction SilentlyContinue
+    return [bool]($s -and ($s.Status -eq 'Running' -or "$($s.StartType)" -ne 'Disabled'))
+}
+
+$MirroredSshdHint = "the Windows OpenSSH service (sshd) is running or enabled, and mirrored networking would put WSL's sshd on the same port 22. Choose nat (it listens on 2222), or stop and disable it: Stop-Service sshd; Set-Service sshd -StartupType Disabled"
+
 # v4tov4 rows: { ListenAddr, ListenPort, ConnectAddr, ConnectPort }
 function Get-PortProxyRules {
     $rows = @()
@@ -389,13 +407,43 @@ function Remove-MirroredRule {
     }
 }
 
+# Test-SameSubnet A B LEN - A and B share the first LEN bits (IPv4).
+function Test-SameSubnet([string]$A, [string]$B, [int]$Len) {
+    try {
+        $x = [BitConverter]::ToUInt32(([Net.IPAddress]::Parse($A)).GetAddressBytes()[3..0], 0)
+        $y = [BitConverter]::ToUInt32(([Net.IPAddress]::Parse($B)).GetAddressBytes()[3..0], 0)
+    } catch { return $false }
+    if ($Len -le 0) { return $true }
+    $mask = [uint32]([math]::Pow(2, 32) - [math]::Pow(2, 32 - [math]::Min($Len, 32)))
+    return (($x -band $mask) -eq ($y -band $mask))
+}
+
+# A forward is WSL's when it targets the distro's current address or the WSL
+# virtual switch's subnet (the address moves across WSL restarts). Any other
+# 0.0.0.0:22/2222 forward belongs to someone else and is left alone.
+function Test-WslTarget([string]$Addr) {
+    $ip = Get-WslIp
+    if ($ip -and $Addr -eq $ip) { return $true }
+    foreach ($a in @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+                     Where-Object { $_.InterfaceAlias -like 'vEthernet (WSL*' })) {
+        if (Test-SameSubnet $Addr $a.IPAddress $a.PrefixLength) { return $true }
+    }
+    return $false
+}
+
 function Remove-NatLeftovers {
     if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
         if (-not (Invoke-Refresh @('-UnregisterTask'))) { Write-Warning "could not unregister '$TaskName'" }
     }
     $rules = Get-PortProxyRules
     foreach ($p in $NatPorts) {
-        if (Get-WslRule $rules $p) {
+        $r = Get-WslRule $rules $p
+        if ($r -and -not (Test-WslTarget $r.ConnectAddr)) {
+            # Its firewall rule opens the port for that forward too: keep both.
+            Write-Log "left portproxy 0.0.0.0:$p -> $($r.ConnectAddr):22 alone (not a WSL address)"
+            continue
+        }
+        if ($r) {
             netsh interface portproxy delete v4tov4 listenport=$p listenaddress=0.0.0.0 | Out-Null
             Write-Log "removed portproxy 0.0.0.0:$p -> WSL:22"
         }
@@ -427,6 +475,7 @@ if ($Status) {
     Write-Host "mode: $Mode (requested)"
     Show-Config $cfg
     if ($Mode -eq 'off') { Write-Host 'status: current (off is hands-off)'; exit 0 }
+    if ($Mode -eq 'mirrored' -and (Test-WindowsSshdOn)) { Write-Host "status: cannot apply mirrored: $MirroredSshdHint"; exit 4 }
 
     $why = @()
     $plan = Get-ConfigPlan $cfg
@@ -487,6 +536,7 @@ if ($Status) {
 # -Mode (apply)
 # ---------------------------------------------------------------------------
 if ($Mode -eq 'off') { Write-Host 'wsl-network: off - hands off, nothing changed'; exit 0 }
+if ($Mode -eq 'mirrored' -and (Test-WindowsSshdOn)) { Write-Log "ERROR: not applying mirrored: $MirroredSshdHint"; exit 4 }
 if ($TestRefresh) {
     Write-Host "test: refresh script $RefreshScript (admin check and cleanup skipped)"
 } elseif (-not $ConfigOnly -and -not (Test-Admin)) {

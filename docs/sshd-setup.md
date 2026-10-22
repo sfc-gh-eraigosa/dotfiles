@@ -175,6 +175,11 @@ Behaviors worth knowing:
   current (the read-only `-Status` check never elevates).
 - Changing mode cleans up the previous mode's artifacts (portproxy, task, firewall rule) only
   when this run changed `networkingMode`; a mode that was merely recorded is never cleaned up.
+  The cleanup removes only forwards that target WSL (its current address or the WSL switch's
+  subnet); another 0.0.0.0:22/2222 forward, and its firewall rule, are left alone.
+- `mirrored` is refused (`-Status` exit 4) while the Windows OpenSSH service (`sshd`) is running
+  or enabled: mirrored WSL shares the host's ports, so both would claim 22. `nat` avoids the
+  clash by listening on 2222.
 - The apply script logs to `%LOCALAPPDATA%\dotfiles\set-wsl-network.log` and backs up
   `.wslconfig` to `.wslconfig.bak-<timestamp>` before any edit.
 
