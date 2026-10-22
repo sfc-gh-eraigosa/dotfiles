@@ -13,7 +13,7 @@ import (
 // Sticky answers widened the credential's lifetime from one wave to one
 // process, which is the trade the operator asked for. Widening it to "forever,
 // on disk" is a different trade nobody asked for, so the on-disk shape simply
-// has nowhere to put it: `storedAnswers` has three fields, and the credential is
+// has nowhere to put it: `storedAnswers` has two fields, and the credential is
 // not one of them. That is stronger than remembering to strip it, because the
 // type cannot express the mistake.
 //

@@ -92,7 +92,7 @@ func TestWslnetFieldCyclesAndHasDirectKeys(t *testing.T) {
 func TestWslnetFormRowAndStrip(t *testing.T) {
 	m := testModel("a")
 	m.mode = modeAnswers
-	if v := m.answersView(); !strings.Contains(v, "(unset = skip; this session only)") {
+	if v := m.answersView(); !strings.Contains(v, "(unset = skip; this wave only)") {
 		t.Fatalf("form must label the unset wslnet row:\n%s", v)
 	}
 	m.ans.wslnet = "nat"
@@ -127,5 +127,26 @@ func TestWslnetAnswerIsAllowlisted(t *testing.T) {
 	}
 	if got := (answers{wslnet: "$(id)"}).envPrefix(); got != "export WSLNET_ANSWER=skip; " {
 		t.Fatalf("an unlisted stored mode must become skip, got %q", got)
+	}
+}
+
+// The WSL networking answer is bound to the hosts of the wave it was given
+// for: a later wave on another host must not inherit it (it sends skip).
+func TestWslnetAnswerIsBoundToItsWave(t *testing.T) {
+	m := testModel("a", "b")
+	m.ans.wslnet = "bridged"
+	m.startUpdate([]string{"a"})
+	if m.ans.wslnet != "" {
+		t.Fatalf("the answer must be consumed by the wave, still %q", m.ans.wslnet)
+	}
+	m.startUpdate([]string{"b"})
+	if got := m.hostAnswers("b").wslnetOrSkip(); got != "skip" {
+		t.Fatalf("a later wave's host must get skip, got %q", got)
+	}
+	if got := m.hostAnswers("a").wslnetOrSkip(); got != "bridged" {
+		t.Fatalf("the wave's own host must get its answer, got %q", got)
+	}
+	if got := m.hostAnswers("a").wslnetOrSkip(); got != "skip" {
+		t.Fatalf("the answer is used once per host, then skip; got %q", got)
 	}
 }

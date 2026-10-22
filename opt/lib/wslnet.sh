@@ -14,6 +14,11 @@ wslnet_is_wsl() {
   grep -qi microsoft "${WSLNET_PROC_VERSION:-/proc/version}" 2>/dev/null
 }
 
+# wslnet_has_tty - a terminal is there to read an answer from (WSLNET_TTY seam).
+wslnet_has_tty() {
+  ( : < "${WSLNET_TTY:-/dev/tty}" ) 2>/dev/null
+}
+
 _wslnet_ps_ok() {
   command -v "${WSLNET_PS:-powershell.exe}" >/dev/null 2>&1
 }
@@ -59,7 +64,13 @@ _wslnet_file_mode() {
   _fm_bom="$(printf '\357\273\277')"
   tr -d '\r' < "$1" | sed "1s/^${_fm_bom}//" | awk '
     function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
-    /^[ \t]*\[/ { sec = tolower(trim($0)); next }
+    # A header exactly as Get-LineSections reads one: [ name ], nothing after it.
+    /^[ \t]*\[/ {
+      s = $0; sub(/^[ \t]*\[[ \t]*/, "", s)
+      if (match(s, /[ \t]*\][ \t]*$/) && RSTART > 1 && index(substr(s, 1, RSTART - 1), "]") == 0) {
+        sec = "[" tolower(substr(s, 1, RSTART - 1)) "]"; next
+      }
+    }
     /^[ \t]*[#;]/ { next }
     {
       i = index($0, "=")
@@ -86,7 +97,7 @@ wslnet_detect() {
   fi
   if command -v "${WSLNET_NETSH:-netsh.exe}" >/dev/null 2>&1; then
     if "${WSLNET_NETSH:-netsh.exe}" interface portproxy show v4tov4 </dev/null 2>/dev/null \
-        | tr -d '\r' | awk '$4 == "22" && $1 ~ /^[0-9]+\./ { f = 1 } END { exit !f }'; then
+        | tr -d '\r' | awk '$1 == "0.0.0.0" && ($2 == "22" || $2 == "2222") && $4 == "22" { f = 1 } END { exit !f }'; then
       echo nat
       return 0
     fi
@@ -135,7 +146,7 @@ wslnet_ask() {
     return 0
   fi
   _wa_tty="${WSLNET_TTY:-/dev/tty}"
-  if ! ( : < "${_wa_tty}" ) 2>/dev/null; then
+  if ! wslnet_has_tty; then
     echo skip
     return 0
   fi
@@ -224,7 +235,9 @@ wslnet_sync() {
     # written first: without it the mode would read as chosen. No marker, no record.
     if ! _wslnet_mark wsl-network-detected "${_ws_mode}"; then
       echo "WARNING: could not write $(_wslnet_state_dir)/wsl-network-detected; not recording the existing WSL networking (${_ws_mode}) this run."
-    elif _wslnet_record "${_ws_mode}"; then
+    elif ! _wslnet_record "${_ws_mode}"; then
+      wslnet_forget_detected  # nothing recorded, so nothing is marked found
+    else
       echo "Recorded existing WSL networking: install.windows.wsl-network=${_ws_mode} (nothing changed; install.sh leaves a found setup as it is)."
     fi
     return 0

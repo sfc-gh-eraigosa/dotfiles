@@ -67,7 +67,9 @@ assert_grep "refresh output goes to the host" '-File \$RefreshScript @Arguments 
 assert_grep "test seams need WSLNET_TEST=1" "env:WSLNET_TEST -eq '1'" "$SET_NET"
 assert_grep "mirrored is refused while Windows OpenSSH is on" 'Test-WindowsSshdOn)) { Write-Host' "$SET_NET"
 # shellcheck disable=SC2016  # literal PowerShell $r, not a shell expansion
-assert_grep "NAT cleanup keeps forwards that do not target WSL" 'Test-WslTarget \$r\.ConnectAddr \$targets' "$SET_NET"
+assert_grep "NAT cleanup keeps forwards that do not target WSL" 'Test-WslTarget \$r\.ConnectAddr \$targets \$p' "$SET_NET"
+assert_grep "nat refuses to replace a forward that is not WSL's" 'status: cannot apply nat:' "$SET_NET"
+assert_grep_negative "no blanket 172.16.0.0/12 as WSL" "Addr = '172\.16\.0\.0'" "$SET_NET"
 
 # F6 trigger: install.sh runs the deferred --wsl-network step, and it is NOT
 # behind the desktop-deploy gate (the mode is recorded independently of it).
@@ -157,11 +159,13 @@ assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "0" "status rc 1 (error): n
 SR_TTY="$_ST/no-such-tty" sr nat 3 0
 assert_eq "$RC" "0" "status 3, no terminal -> exit 0"
 assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "0" "status 3, no terminal: no elevation"
-case "$OUT" in *"nobody at this machine's desktop can answer UAC"*) _r=ok ;; *) _r="no no-terminal warning: $OUT" ;; esac
+case "$OUT" in *"nobody is there to answer it"*) _r=ok ;; *) _r="no no-terminal warning: $OUT" ;; esac
 assert_eq "$_r" "ok" "status 3, no terminal: says why and how to re-run"
 # rc 3 over ssh (fleet's ssh -t: a terminal, but nobody at the Windows desktop).
+SR_SSH="192.0.2.1 50000 192.0.2.2 22" SR_FLAG=--wsl-network-auto sr nat 3 0
+assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "0" "auto run over ssh, status 3: no elevation"
 SR_SSH="192.0.2.1 50000 192.0.2.2 22" sr nat 3 0
-assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "0" "status 3 over ssh: no elevation"
+assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "1" "hand-run --wsl-network over ssh with a terminal: elevates (the operator asked)"
 
 # A setup install.sh FOUND (wslnet_sync's marker) is reported by the automatic
 # run, never changed; a hand-run --wsl-network or a different mode takes it over.
@@ -184,8 +188,9 @@ found nat; SR_FLAG=--wsl-network sr nat 3 7
 assert_eq "$(marker)" "nat" "hand-run apply failed: still marked as found"
 rm -f "$_ST/state/wsl-network-detected"
 found mirrored; SR_FLAG=--wsl-network-auto sr mirrored 4 0
-case "$OUT" in *WARNING*) _r="warned: $OUT" ;; *"left as it is"*) _r=ok ;; *) _r="no notice: $OUT" ;; esac
-assert_eq "$_r" "ok" "auto, found setup, status 4: an info line, no warning"
+case "$OUT" in *"WARNING: this machine's existing WSL network setup"*"leaves it as it is"*) _r=ok ;; *) _r="no warning: $OUT" ;; esac
+assert_eq "$_r" "ok" "auto, found setup, status 4: a real clash on the machine is warned about, not changed"
+assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "0" "auto, found setup, status 4: no elevation"
 rm -f "$_ST/state/wsl-network-detected"
 # rc 4: the mode cannot be applied as the machine is (e.g. mirrored + Windows sshd).
 sr mirrored 4 0

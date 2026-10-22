@@ -172,13 +172,14 @@ run_wsl_network_setup() {
         return 0
       fi
       # The elevation is a UAC prompt on the Windows desktop, and -Wait blocks
-      # until someone answers it. With no terminal, or over ssh (a fleet wave
-      # uses ssh -t: a terminal, but nobody at that desktop), nobody is there
-      # to click, so the install would hang: say what to run instead and leave
-      # the machine as it is. WSLNET_TTY is a test seam.
-      if [ -n "${SSH_CONNECTION:-}" ] || ! ( : < "${WSLNET_TTY:-/dev/tty}" ) 2>/dev/null; then
-        echo "WARNING: WSL network mode '${_wn_mode}' needs an elevated run, and nobody at this machine's desktop can answer UAC (ssh or no terminal); not applying." >&2
-        echo "         From an interactive shell: bash \"${BASE_DIR}/opt/bin/install_windows.sh\" \"${BASE_DIR}\" --wsl-network" >&2
+      # until someone answers it. With no terminal nobody can, and on the
+      # automatic run over ssh (a fleet wave uses ssh -t: a terminal, but
+      # nobody at that desktop) nobody is expected to: say what to run instead
+      # and leave the machine as it is. The hand-run --wsl-network is the
+      # operator's own request, so ssh alone does not stop it.
+      if ! wslnet_has_tty || { [ "$_wn_auto" = auto ] && [ -n "${SSH_CONNECTION:-}" ]; }; then
+        echo "WARNING: WSL network mode '${_wn_mode}' needs an elevated run (a UAC prompt on this machine's desktop), and nobody is there to answer it (no terminal, or install.sh over ssh); not applying." >&2
+        echo "         At this machine: bash \"${BASE_DIR}/opt/bin/install_windows.sh\" \"${BASE_DIR}\" --wsl-network" >&2
         return 0
       fi
       echo "Applying WSL network mode '${_wn_mode}'..."
@@ -213,7 +214,9 @@ run_wsl_network_setup() {
       ;;
     4)
       if [ -n "$_wn_found" ]; then
-        echo "WSL network '${_wn_mode}' was recorded from this machine's existing setup and is left as it is (see above)."
+        # Not a change refused: the clash is on the machine already. Left as
+        # it is, but loudly, since ssh may be reaching the wrong sshd.
+        echo "WARNING: this machine's existing WSL network setup ('${_wn_mode}') has a problem (reason above); install.sh leaves it as it is." >&2
         return 0
       fi
       echo "WARNING: WSL network mode '${_wn_mode}' cannot be applied on this machine as it is (reason above); nothing changed." >&2

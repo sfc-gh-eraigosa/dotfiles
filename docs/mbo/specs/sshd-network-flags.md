@@ -51,8 +51,8 @@ never asks about it again.
 but nobody is watching it.
 - `sdk/fleet` sends `WSLNET_ANSWER` the way it already sends `WINSETUP_ANSWER`. The default is
   `skip`: ask nothing, record nothing, and print the `gff set` command.
-- The operator can pre-answer a mode in `fleet tui`. The answer lasts one session; it is never
-  saved to `answers.json`, because the mode is a per-host choice.
+- The operator can pre-answer a mode in `fleet tui`. The answer goes to the hosts of one wave;
+  it is never saved to `answers.json` or carried to a later wave, because the mode is a per-host choice.
 - Valid values are `skip|off|nat|bridged|mirrored`. Anything else falls through to the normal path.
 - No TTY and no answer behaves as `skip`.
 

@@ -40,7 +40,9 @@ A mode that was **recorded because it was found** on the machine (see
 [sshd-setup.md](./sshd-setup.md#wsl-networking-is-a-flag)) is only reported by this step: when
 `-Status` lists differences it prints them and the command above, and changes nothing. Running
 that command by hand, or choosing a different mode, hands the setup to dotfiles from then on. With
-no terminal (a batch `fleet` wave) the step never raises UAC; it prints the same command. A mode
+no terminal, or when `install.sh` runs over ssh (a `fleet` wave uses `ssh -t`: a terminal, but
+nobody at the Windows desktop), the step never raises UAC; it prints the command to run at the
+machine. That command itself raises UAC whenever it has a terminal, ssh or not. A mode
 the machine cannot take as it is (`-Status` exit 4, e.g. `mirrored` while the Windows OpenSSH
 service holds port 22) is reported and left alone.
 

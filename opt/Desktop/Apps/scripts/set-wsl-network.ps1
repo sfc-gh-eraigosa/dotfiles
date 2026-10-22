@@ -419,26 +419,36 @@ function Test-SameSubnet([string]$A, [string]$B, [int]$Len) {
     return (($x -band $mask) -eq ($y -band $mask))
 }
 
-# Get-WslTargets - what a WSL forward can point at: the distro's current
-# address, the WSL virtual switch's subnets, and WSL's NAT range 172.16.0.0/12.
-# The range matters at cleanup time: .wslconfig is already rewritten, WSL may
-# be stopped (no vEthernet (WSL)) or on a new subnet since a reboot, and the
-# stale forward still points at an old 172.x address. Resolved once per run.
+# Get-WslTargets - how to tell a WSL forward: the distro's current address,
+# the WSL virtual switch's subnets, and, per listen port, whether dotfiles' own
+# WSL-SSH-<port> firewall rule exists (refresh-wsl-portproxy.ps1 creates it
+# with the forward). The rule is what identifies a STALE forward: WSL may be
+# stopped (no vEthernet (WSL)) or on a new subnet since a reboot, so the old
+# 172.x target matches neither address. Resolved once per run.
 function Get-WslTargets {
-    $nets = @(@{ Addr = '172.16.0.0'; Len = 12 })
+    $nets = @()
     foreach ($a in @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
                      Where-Object { $_.InterfaceAlias -like 'vEthernet (WSL*' })) {
         $nets += @{ Addr = $a.IPAddress; Len = [int]$a.PrefixLength }
     }
-    return @{ Ip = (Get-WslIp); Nets = $nets }
+    $own = @{}
+    foreach ($p in $NatPorts) { $own[$p] = [bool](Get-NetFirewallRule -Name "WSL-SSH-$p" -ErrorAction SilentlyContinue) }
+    return @{ Ip = (Get-WslIp); Nets = $nets; Own = $own }
 }
 
-# Test-WslTarget ADDR TARGETS - a forward to ADDR is WSL's. Any other
-# 0.0.0.0:22/2222 forward belongs to someone else and is left alone.
-function Test-WslTarget([string]$Addr, $Targets) {
+# Test-WslTarget ADDR TARGETS PORT - the 0.0.0.0:PORT forward to ADDR is WSL's.
+# Any other one belongs to someone else: nat will not take it over and the
+# cleanup leaves it alone.
+function Test-WslTarget([string]$Addr, $Targets, [int]$Port) {
     if ($Targets.Ip -and $Addr -eq $Targets.Ip) { return $true }
+    if ($Targets.Own[$Port]) { return $true }
     foreach ($n in $Targets.Nets) { if (Test-SameSubnet $Addr $n.Addr $n.Len) { return $true } }
     return $false
+}
+
+# The nat listen port already forwards somewhere that is not WSL.
+function Get-ForeignForwardHint([int]$Port, [string]$Addr) {
+    "0.0.0.0:$Port already forwards to ${Addr}:22, which is not WSL; nat would replace it. Remove it (netsh interface portproxy delete v4tov4 listenport=$Port listenaddress=0.0.0.0) or choose another mode"
 }
 
 function Remove-NatLeftovers {
@@ -450,7 +460,7 @@ function Remove-NatLeftovers {
     foreach ($p in $NatPorts) {
         $r = Get-WslRule $rules $p
         if ($r -and $null -eq $targets) { $targets = Get-WslTargets }
-        if ($r -and -not (Test-WslTarget $r.ConnectAddr $targets)) {
+        if ($r -and -not (Test-WslTarget $r.ConnectAddr $targets $p)) {
             # Its firewall rule opens the port for that forward too: keep both.
             Write-Log "left portproxy 0.0.0.0:$p -> $($r.ConnectAddr):22 alone (not a WSL address)"
             continue
@@ -528,7 +538,12 @@ if ($Status) {
                 $rule = Get-WslRule $rules $p
                 if (-not $rule) { $why += "portproxy :$p" }
                 else {
-                    $ip = Get-WslIp
+                    $targets = Get-WslTargets
+                    if (-not (Test-WslTarget $rule.ConnectAddr $targets $p)) {
+                        Write-Host "status: cannot apply nat: $(Get-ForeignForwardHint $p $rule.ConnectAddr)"
+                        exit 4
+                    }
+                    $ip = $targets.Ip
                     if ($ip -and $rule.ConnectAddr -ne $ip) { $why += "portproxy :$p stale ($($rule.ConnectAddr) -> $ip)" }
                 }
                 if ($fw[$p] -eq 'absent') { $why += "firewall WSL-SSH-$p" }
@@ -549,6 +564,14 @@ if ($Status) {
 # ---------------------------------------------------------------------------
 if ($Mode -eq 'off') { Write-Host 'wsl-network: off - hands off, nothing changed'; exit 0 }
 if ($Mode -eq 'mirrored' -and (Test-WindowsSshdOn)) { Write-Log "ERROR: not applying mirrored: $MirroredSshdHint"; exit 4 }
+# Before anything is written: nat would replace a forward that is not WSL's.
+if ($Mode -eq 'nat' -and -not $ConfigOnly -and -not $TestRefresh) {
+    $natPort = Get-NatPort
+    $natRule = Get-WslRule (Get-PortProxyRules) $natPort
+    if ($natRule -and -not (Test-WslTarget $natRule.ConnectAddr (Get-WslTargets) $natPort)) {
+        Write-Log "ERROR: not applying nat: $(Get-ForeignForwardHint $natPort $natRule.ConnectAddr)"; exit 4
+    }
+}
 if ($TestRefresh) {
     Write-Host "test: refresh script $RefreshScript (admin check and cleanup skipped)"
 } elseif (-not $ConfigOnly -and -not (Test-Admin)) {

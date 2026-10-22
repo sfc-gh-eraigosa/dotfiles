@@ -85,6 +85,18 @@ for sh_bin in bash sh; do
   fixture; export STUB_ROWS='0.0.0.0         22          172.20.0.2      22'
   run_case "$sh_bin" "detect: no file + portproxy rule to :22 -> nat" '[ "$(wslnet_detect)" = nat ]'; rm -rf "$T"
 
+  fixture; export STUB_ROWS='0.0.0.0         2222        172.20.0.2      22'
+  run_case "$sh_bin" "detect: 0.0.0.0:2222 -> :22 (Windows sshd host) -> nat" '[ "$(wslnet_detect)" = nat ]'; rm -rf "$T"
+
+  fixture; export STUB_ROWS='127.0.0.1       8022        10.0.0.5        22'
+  run_case "$sh_bin" "detect: a forward not shaped like WSL's (127.0.0.1:8022) is not nat" '[ -z "$(wslnet_detect)" ]'; rm -rf "$T"
+
+  fixture; printf '[ wsl2 ]\nnetworkingMode=bridged\n' > "$WSLNET_WSLCONFIG"
+  run_case "$sh_bin" "detect: a [ wsl2 ] header (spaces) is [wsl2], as in Get-LineSections" '[ "$(wslnet_detect)" = bridged ]'; rm -rf "$T"
+
+  fixture; printf '[wsl2]\nnetworkingMode=bridged\n[wsl2] # not a header\nnetworkingMode=mirrored\n' > "$WSLNET_WSLCONFIG"
+  run_case "$sh_bin" "detect: [wsl2] # comment is not a header, as in Get-LineSections" '[ "$(wslnet_detect)" = mirrored ]'; rm -rf "$T"
+
   fixture; export STUB_ROWS='0.0.0.0         8080        172.20.0.2      8080'
   run_case "$sh_bin" "detect: portproxy for another port only -> nothing" '[ -z "$(wslnet_detect)" ]'; rm -rf "$T"
 
@@ -175,7 +187,7 @@ for sh_bin in bash sh; do
   fixture; export GFF_INSTALL_NETWORK_SSHD=true; printf '[wsl2]\nnetworkingMode=mirrored\n' > "$WSLNET_WSLCONFIG"; export GFF_SET_RC=1
   run_case "$sh_bin" "sync: gff set fails -> warning, rc 0, no export" '
     out=$(wslnet_sync); rc=$?; [ "$rc" -eq 0 ] && [ -z "${GFF_INSTALL_WINDOWS_WSL_NETWORK:-}" ] &&
-    case "$out" in WARNING:*) true ;; *) false ;; esac'; rm -rf "$T"
+    case "$out" in WARNING:*) true ;; *) false ;; esac && [ -z "$(wslnet_detected_mode)" ]'; rm -rf "$T"
 
   fixture
   run_case "$sh_bin" "sync: nothing detected + sshd off -> no set, no prompt" '

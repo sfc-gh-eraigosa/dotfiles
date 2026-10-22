@@ -154,14 +154,15 @@ How it gets its value:
    it as found (`~/.local/state/dotfiles/wsl-network-detected`). `install.sh` then only reports a
    found setup, even an incomplete one. A machine that works today keeps working, untouched, until
    you hand it over: run `install_windows.sh <repo> --wsl-network` yourself, or set another mode.
+   (`gff set` to the same mode it already has does not hand it over.)
    With sshd off nothing is detected or recorded, and Windows is not probed.
 2. **Fresh enablement asks once.** With nothing detected, `sshd-setup enable` on WSL recommends a
    mode (k3s present and a wired adapter: `bridged`; otherwise `nat`) and asks. Pre-answer with
    `WSLNET_ANSWER=<off|nat|bridged|mirrored|skip>`; with no TTY and no answer nothing is
    recorded. Answering `skip` at the prompt is remembered (`wsl-network-skipped`): `install.sh`
    does not ask again, and `sshd-setup enable` does. `fleet` sends `WSLNET_ANSWER` (default
-   `skip`), set per session in the fleet answers form and never saved, because the mode is a
-   per-host choice.
+   `skip`), set in the fleet answers form for one wave (its hosts only) and never saved, because
+   the mode is a per-host choice.
 3. **`install.sh` applies a chosen mode** (see [install-windows.md](./install-windows.md)). `off` is
    hands off, and so is a found one (1).
 
@@ -175,13 +176,15 @@ Behaviors worth knowing:
   current (the read-only `-Status` check never elevates).
 - Changing mode cleans up the previous mode's artifacts (portproxy, task, firewall rule) only
   when this run changed `networkingMode`; a mode that was merely recorded is never cleaned up.
-  The cleanup removes only forwards that target WSL (its current address, the WSL switch's
-  subnet, or WSL's NAT range 172.16.0.0/12); another 0.0.0.0:22/2222 forward, and its
-  firewall rule, are left alone.
+  A `0.0.0.0:22`/`2222` forward counts as WSL's when it targets WSL's current address or the WSL
+  switch's subnet, or when dotfiles' own `WSL-SSH-<port>` firewall rule exists for it (that is
+  what identifies a stale one after a WSL restart). The cleanup leaves any other forward, and
+  its firewall rule, alone, and `nat` refuses (`-Status` exit 4) to replace one on its port.
 - `mirrored` is refused (`-Status` exit 4) while the Windows OpenSSH service (`sshd`) is running
   or starts automatically: mirrored WSL shares the host's ports, so both would claim 22. A
   Manual, stopped service (how the optional feature installs it) does not block it. `nat`
-  avoids the clash by listening on 2222. A found `mirrored` setup only gets an info line.
+  avoids the clash by listening on 2222. A found `mirrored` setup that clashes this way is left
+  alone with a warning.
 - The apply script logs to `%LOCALAPPDATA%\dotfiles\set-wsl-network.log` and backs up
   `.wslconfig` to `.wslconfig.bak-<timestamp>` before any edit.
 
