@@ -222,6 +222,16 @@ for sh_bin in bash sh; do
   fixture; export GFF_INSTALL_NETWORK_SSHD=true WSLNET_ANSWER=skip; printf 'x\n' > "${T}/tty"; export WSLNET_TTY="${T}/tty"
   run_case "$sh_bin" "sync: a pre-answered skip (fleet) is not remembered" '
     wslnet_sync >/dev/null; [ ! -f "'"$T"'/state/wsl-network-skipped" ]'; rm -rf "$T"
+
+  fixture; export GFF_INSTALL_NETWORK_SSHD=true; printf 'bogus\nbogus\n' > "${T}/tty"; export WSLNET_TTY="${T}/tty"
+  run_case "$sh_bin" "sync: two invalid entries are not remembered as a skip" '
+    wslnet_sync >/dev/null 2>&1; [ ! -f "'"$T"'/state/wsl-network-skipped" ]'; rm -rf "$T"
+
+  fixture; export GFF_INSTALL_NETWORK_SSHD=true; printf '[wsl2]\nnetworkingMode=bridged\n' > "$WSLNET_WSLCONFIG"
+  : > "${T}/state"   # a file where the state dir should be: the marker cannot be written
+  run_case "$sh_bin" "sync: found marker unwritable -> nothing recorded, warning" '
+    out=$(wslnet_sync); ! grep -q "args=set" "'"$T"'/gff.log" &&
+    case "$out" in WARNING:*wsl-network-detected*) true ;; *) false ;; esac'; rm -rf "$T"
 done
 
 echo "----------------------------------------"

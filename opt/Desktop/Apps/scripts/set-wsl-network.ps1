@@ -20,8 +20,8 @@
     mirrored  networkingMode=mirrored plus a Hyper-V firewall rule letting
               inbound TCP 22 reach WSL.
               Refused (exit 4) while the Windows OpenSSH service is running
-              or enabled: mirrored WSL shares the host's ports, so both would
-              claim 22 (nat avoids this by listening on 2222).
+              or starts automatically: mirrored WSL shares the host's
+              ports, so both would claim 22 (nat listens on 2222 instead).
 
   Cleanup of the previous mode runs only when this run changed networkingMode
   in .wslconfig (a real switch the operator chose), never after a mode that
@@ -329,14 +329,15 @@ function Get-NatPort { if (Get-Service sshd -ErrorAction SilentlyContinue) { 222
 
 # Windows OpenSSH listens on the host's port 22. Mirrored WSL shares the host's
 # ports, so a WSL sshd and the Windows one would both claim 22: mirrored is
-# refused while the service runs or is set to start (nat moves to 2222).
+# refused while the service runs or starts at boot (nat moves to 2222). A
+# Manual, stopped service (how the optional feature installs it) holds nothing.
 function Test-WindowsSshdOn {
     if ($null -ne $TestWinSshd) { return $TestWinSshd }
     $s = Get-Service sshd -ErrorAction SilentlyContinue
-    return [bool]($s -and ($s.Status -eq 'Running' -or "$($s.StartType)" -ne 'Disabled'))
+    return [bool]($s -and ($s.Status -eq 'Running' -or "$($s.StartType)" -eq 'Automatic'))
 }
 
-$MirroredSshdHint = "the Windows OpenSSH service (sshd) is running or enabled, and mirrored networking would put WSL's sshd on the same port 22. Choose nat (it listens on 2222), or stop and disable it: Stop-Service sshd; Set-Service sshd -StartupType Disabled"
+$MirroredSshdHint = "the Windows OpenSSH service (sshd) is running or starts automatically, and mirrored networking would put WSL's sshd on the same port 22. Choose nat (it listens on 2222), or stop and disable it: Stop-Service sshd; Set-Service sshd -StartupType Disabled"
 
 # v4tov4 rows: { ListenAddr, ListenPort, ConnectAddr, ConnectPort }
 function Get-PortProxyRules {
@@ -418,16 +419,25 @@ function Test-SameSubnet([string]$A, [string]$B, [int]$Len) {
     return (($x -band $mask) -eq ($y -band $mask))
 }
 
-# A forward is WSL's when it targets the distro's current address or the WSL
-# virtual switch's subnet (the address moves across WSL restarts). Any other
-# 0.0.0.0:22/2222 forward belongs to someone else and is left alone.
-function Test-WslTarget([string]$Addr) {
-    $ip = Get-WslIp
-    if ($ip -and $Addr -eq $ip) { return $true }
+# Get-WslTargets - what a WSL forward can point at: the distro's current
+# address, the WSL virtual switch's subnets, and WSL's NAT range 172.16.0.0/12.
+# The range matters at cleanup time: .wslconfig is already rewritten, WSL may
+# be stopped (no vEthernet (WSL)) or on a new subnet since a reboot, and the
+# stale forward still points at an old 172.x address. Resolved once per run.
+function Get-WslTargets {
+    $nets = @(@{ Addr = '172.16.0.0'; Len = 12 })
     foreach ($a in @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
                      Where-Object { $_.InterfaceAlias -like 'vEthernet (WSL*' })) {
-        if (Test-SameSubnet $Addr $a.IPAddress $a.PrefixLength) { return $true }
+        $nets += @{ Addr = $a.IPAddress; Len = [int]$a.PrefixLength }
     }
+    return @{ Ip = (Get-WslIp); Nets = $nets }
+}
+
+# Test-WslTarget ADDR TARGETS - a forward to ADDR is WSL's. Any other
+# 0.0.0.0:22/2222 forward belongs to someone else and is left alone.
+function Test-WslTarget([string]$Addr, $Targets) {
+    if ($Targets.Ip -and $Addr -eq $Targets.Ip) { return $true }
+    foreach ($n in $Targets.Nets) { if (Test-SameSubnet $Addr $n.Addr $n.Len) { return $true } }
     return $false
 }
 
@@ -436,9 +446,11 @@ function Remove-NatLeftovers {
         if (-not (Invoke-Refresh @('-UnregisterTask'))) { Write-Warning "could not unregister '$TaskName'" }
     }
     $rules = Get-PortProxyRules
+    $targets = $null
     foreach ($p in $NatPorts) {
         $r = Get-WslRule $rules $p
-        if ($r -and -not (Test-WslTarget $r.ConnectAddr)) {
+        if ($r -and $null -eq $targets) { $targets = Get-WslTargets }
+        if ($r -and -not (Test-WslTarget $r.ConnectAddr $targets)) {
             # Its firewall rule opens the port for that forward too: keep both.
             Write-Log "left portproxy 0.0.0.0:$p -> $($r.ConnectAddr):22 alone (not a WSL address)"
             continue

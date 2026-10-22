@@ -174,9 +174,10 @@ func (a answers) wslnetOrSkip() string { return wslnetAnswer(a.wslnet) }
 
 // wslnetAnswer maps any candidate WSLNET_ANSWER onto install.sh's own set
 // (skip|off|nat|bridged|mirrored); anything else, unset included, is "skip".
-// The value is spliced into a remote shell string, so it is allowlisted like
-// every other interpolated value: a hand-edited answers.json or a stray
-// WSLNET_ANSWER in the local environment can never reach the host verbatim.
+// The value is spliced into a remote shell string, so it is allowlisted: a
+// stray WSLNET_ANSWER in the local environment can never reach the host
+// verbatim. (WINSETUP_ANSWER and GEMINI_TEARDOWN_ANSWER are not yet; that
+// predates this answer and is tracked separately.)
 func wslnetAnswer(v string) string {
 	switch v {
 	case "skip", "off", "nat", "bridged", "mirrored":

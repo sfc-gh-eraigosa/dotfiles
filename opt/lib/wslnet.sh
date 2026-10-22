@@ -158,6 +158,9 @@ wslnet_ask() {
     [ -z "${_wa_ans}" ] && _wa_ans="${_wa_rec}"
     if _wslnet_valid "${_wa_ans}"; then
       exec 3<&-
+      # Only a typed "skip" is remembered (wslnet_sync stops asking); two
+      # invalid entries fall through to skip below and are not.
+      [ "${_wa_ans}" = skip ] && _wslnet_mark wsl-network-skipped skip
       echo "${_wa_ans}"
       return 0
     fi
@@ -188,10 +191,10 @@ wslnet_forget_detected() {
   rm -f "$(_wslnet_state_dir)/wsl-network-detected" 2>/dev/null || true
 }
 
+# _wslnet_mark NAME VALUE - write a state marker; non-zero when it could not.
 _wslnet_mark() {
   _mk_d="$(_wslnet_state_dir)"
   mkdir -p "${_mk_d}" 2>/dev/null && printf '%s\n' "$2" > "${_mk_d}/$1" 2>/dev/null
-  return 0
 }
 
 # _wslnet_record MODE - set the flag; export for the rest of this install run.
@@ -217,8 +220,11 @@ wslnet_sync() {
   gff_opt_in install.network.sshd || return 0
   _ws_mode="$(wslnet_detect)"
   if [ -n "${_ws_mode}" ]; then
-    if _wslnet_record "${_ws_mode}"; then
-      _wslnet_mark wsl-network-detected "${_ws_mode}"
+    # The marker is what keeps install.sh's hands off a found setup, so it is
+    # written first: without it the mode would read as chosen. No marker, no record.
+    if ! _wslnet_mark wsl-network-detected "${_ws_mode}"; then
+      echo "WARNING: could not write $(_wslnet_state_dir)/wsl-network-detected; not recording the existing WSL networking (${_ws_mode}) this run."
+    elif _wslnet_record "${_ws_mode}"; then
       echo "Recorded existing WSL networking: install.windows.wsl-network=${_ws_mode} (nothing changed; install.sh leaves a found setup as it is)."
     fi
     return 0
@@ -229,10 +235,6 @@ wslnet_sync() {
   fi
   _ws_ans="$(wslnet_ask "$(wslnet_recommend)")"
   if [ "${_ws_ans}" = "skip" ]; then
-    # Remember an operator's skip; a missing TTY or a pre-answered skip is not one.
-    if [ -z "${WSLNET_ANSWER:-}" ] && ( : < "${WSLNET_TTY:-/dev/tty}" ) 2>/dev/null; then
-      _wslnet_mark wsl-network-skipped skip
-    fi
     echo "Choose later: gff set install.windows.wsl-network <off|nat|bridged|mirrored>"
     return 0
   fi

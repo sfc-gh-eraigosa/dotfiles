@@ -67,7 +67,7 @@ assert_grep "refresh output goes to the host" '-File \$RefreshScript @Arguments 
 assert_grep "test seams need WSLNET_TEST=1" "env:WSLNET_TEST -eq '1'" "$SET_NET"
 assert_grep "mirrored is refused while Windows OpenSSH is on" 'Test-WindowsSshdOn)) { Write-Host' "$SET_NET"
 # shellcheck disable=SC2016  # literal PowerShell $r, not a shell expansion
-assert_grep "NAT cleanup keeps forwards that do not target WSL" 'Test-WslTarget \$r\.ConnectAddr' "$SET_NET"
+assert_grep "NAT cleanup keeps forwards that do not target WSL" 'Test-WslTarget \$r\.ConnectAddr \$targets' "$SET_NET"
 
 # F6 trigger: install.sh runs the deferred --wsl-network step, and it is NOT
 # behind the desktop-deploy gate (the mode is recorded independently of it).
@@ -108,7 +108,7 @@ chmod +x "$_ST/bin/powershell.exe" "$_ST/bin/wslpath" "$_ST/nops/wslpath"
 # sr <mode-or-empty> <status-rc> <elev-rc> [desktop-dir]: run the step; sets OUT, RC, LOG.
 sr() {
   : > "$_ST/log"
-  OUT=$(env -u GFF_INSTALL_WINDOWS_WSL_NETWORK HOME="$_ST/home" PATH="$_ST/bin:$PATH" \
+  OUT=$(env -u GFF_INSTALL_WINDOWS_WSL_NETWORK -u SSH_CONNECTION ${SR_SSH:+SSH_CONNECTION="$SR_SSH"} HOME="$_ST/home" PATH="$_ST/bin:$PATH" \
     STUB_LOG="$_ST/log" STUB_DESKTOP="${4:-$_ST/desktop}" STUB_LOCALAPPDATA="$_ST/localappdata" \
     STUB_ELEV_LOG="${STUB_ELEV_LOG:-}" STUB_STATUS_RC="$2" STUB_ELEV_RC="$3" GFF_INSTALL_WINDOWS_WSL_NETWORK="$1" \
     WSLNET_TTY="${SR_TTY:-$_ST/tty}" WSLNET_STATE_DIR="$_ST/state" \
@@ -157,8 +157,11 @@ assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "0" "status rc 1 (error): n
 SR_TTY="$_ST/no-such-tty" sr nat 3 0
 assert_eq "$RC" "0" "status 3, no terminal -> exit 0"
 assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "0" "status 3, no terminal: no elevation"
-case "$OUT" in *"no terminal to answer UAC"*) _r=ok ;; *) _r="no no-terminal warning: $OUT" ;; esac
+case "$OUT" in *"nobody at this machine's desktop can answer UAC"*) _r=ok ;; *) _r="no no-terminal warning: $OUT" ;; esac
 assert_eq "$_r" "ok" "status 3, no terminal: says why and how to re-run"
+# rc 3 over ssh (fleet's ssh -t: a terminal, but nobody at the Windows desktop).
+SR_SSH="192.0.2.1 50000 192.0.2.2 22" sr nat 3 0
+assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "0" "status 3 over ssh: no elevation"
 
 # A setup install.sh FOUND (wslnet_sync's marker) is reported by the automatic
 # run, never changed; a hand-run --wsl-network or a different mode takes it over.
@@ -179,6 +182,10 @@ assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "1" "auto, mode differs fro
 assert_eq "$(marker)" "none" "auto, operator chose: the stale found marker is dropped"
 found nat; SR_FLAG=--wsl-network sr nat 3 7
 assert_eq "$(marker)" "nat" "hand-run apply failed: still marked as found"
+rm -f "$_ST/state/wsl-network-detected"
+found mirrored; SR_FLAG=--wsl-network-auto sr mirrored 4 0
+case "$OUT" in *WARNING*) _r="warned: $OUT" ;; *"left as it is"*) _r=ok ;; *) _r="no notice: $OUT" ;; esac
+assert_eq "$_r" "ok" "auto, found setup, status 4: an info line, no warning"
 rm -f "$_ST/state/wsl-network-detected"
 # rc 4: the mode cannot be applied as the machine is (e.g. mirrored + Windows sshd).
 sr mirrored 4 0
