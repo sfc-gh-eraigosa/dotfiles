@@ -18,7 +18,7 @@ Every key goes to the focused program, so htop's `q`, `/`, `esc` and F-keys beha
 
 | Keys | What it does |
 | :-- | :-- |
-| `j` `down` | focus the next pane (fixed panes, like the gsl footer, are skipped) |
+| `j` `down` | focus the next pane |
 | `k` `up` | focus the previous pane |
 | `h` `left` | previous tool in a deck pane |
 | `l` `right` | next tool in a deck pane |
