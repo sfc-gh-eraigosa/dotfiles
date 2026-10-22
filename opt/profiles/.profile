@@ -173,8 +173,11 @@ fi
 if [ ! -d "${HOME}/go" ] ; then
     mkdir "${HOME}/go"
 fi
-if [ -d "${HOME}/go/shims" ] ; then
-    PATH="${HOME}/go/shims:$PATH"
+# goenv shims come from $HOME/.goenv, the one tree install.sh pins Go in (see
+# .goenv.sh). $HOME/go/shims is the retired second tree, still on old hosts:
+# its shims hardcode GOENV_ROOT=$HOME/go and run the old Go in login shells.
+if [ -d "${HOME}/.goenv/shims" ] ; then
+    PATH="${HOME}/.goenv/shims:$PATH"
 fi
 
 export PATH="$PATH:${HOME}/.rvm/bin" # Add RVM to PATH for scripting
