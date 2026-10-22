@@ -20,7 +20,7 @@ func TestValidateConfig_FindsProblems(t *testing.T) {
 	cfg.Links = "sometimes"
 	cfg.Timezone = "Mars/Olympus_Mons"
 	cfg.FallbackColumns = -3
-	cfg.Segments = append(cfg.Segments, config.Segment{Type: "weather", Enabled: true}, config.Segment{Type: "ai", Enabled: true})
+	cfg.Segments = append(cfg.Segments, config.Segment{Type: "weather", Enabled: true}, config.Segment{Type: "mcp", Enabled: true}, config.Segment{Type: "ai", Enabled: true})
 	cfg.Styles = map[string]any{
 		"powerline": map[string]any{
 			"separator": "zigzag",
@@ -31,7 +31,7 @@ func TestValidateConfig_FindsProblems(t *testing.T) {
 	got := strings.Join(validateConfig(cfg), "\n")
 	for _, want := range []string{
 		`style: "neon"`, `links: "sometimes"`, `timezone: "Mars/Olympus_Mons"`, "fallback_columns: -3",
-		`segments: unknown type "weather"`, `segments: "ai" listed twice`,
+		`segments: unknown type "weather"`, `segments: "mcp" listed twice`, `segments: "ai" is now [model context mcp limits]`,
 		`styles.powerline.separator: "zigzag"`, `styles.powerline.glyphs: "hieroglyphs"`,
 		`styles.powerline.theme.repo_root: "nope"`, `styles.powerline.theme.time`,
 	} {

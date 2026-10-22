@@ -3,6 +3,7 @@ package preview
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -225,23 +226,28 @@ func (m Model) renderLine() string {
 }
 
 // toggled returns cfg with segment typ flipped, on a COPY of the slice.
+// "ai" flips its four parts together (#426): all on, or all off.
 func toggled(cfg config.Config, typ string) config.Config {
 	segs := make([]config.Segment, len(cfg.Segments))
 	copy(segs, cfg.Segments)
+	on := !enabledIn(cfg, typ)
 	for i := range segs {
-		if segs[i].Type == typ {
-			segs[i].Enabled = !segs[i].Enabled
+		if segs[i].Type == typ || (typ == "ai" && slices.Contains(config.AIParts, segs[i].Type)) {
+			segs[i].Enabled = on
 		}
 	}
 	cfg.Segments = segs
 	return cfg
 }
 
-// enabled reports whether segment typ is on in the working config.
-func (m Model) enabled(typ string) bool {
-	for _, s := range m.cfg.Segments {
-		if s.Type == typ {
-			return s.Enabled
+// enabled reports whether segment typ is on in the working config; "ai" is
+// on while any of its parts is.
+func (m Model) enabled(typ string) bool { return enabledIn(m.cfg, typ) }
+
+func enabledIn(cfg config.Config, typ string) bool {
+	for _, s := range cfg.Segments {
+		if s.Enabled && (s.Type == typ || (typ == "ai" && slices.Contains(config.AIParts, s.Type))) {
+			return true
 		}
 	}
 	return false

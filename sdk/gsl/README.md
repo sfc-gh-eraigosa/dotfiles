@@ -1,6 +1,6 @@
 # gsl — Go Status Line
 
-`gsl` is a Go-based powerline-style status line with two integration points: it renders live context after every Claude Code assistant turn (receiving a JSON payload on stdin) and produces an on-demand status snapshot for Antigravity CLI and plain shells (via `gsl status`, e.g. wired to Antigravity's built-in `/statusline` command). Six independently configurable segments — `host`, `dirgit`, `repo`, `ai`, `video`, and `time` — run concurrently and self-omit gracefully when their data is absent, so the line is always fast and never blocks.
+`gsl` is a Go-based powerline-style status line with two integration points: it renders live context after every Claude Code assistant turn (receiving a JSON payload on stdin) and produces an on-demand status snapshot for Antigravity CLI and plain shells (via `gsl status`, e.g. wired to Antigravity's built-in `/statusline` command). Nine independently configurable segments — `host`, `dirgit`, `repo`, the AI pieces `model`, `context`, `mcp`, `limits`, then `video` and `time` — run concurrently and self-omit gracefully when their data is absent, so the line is always fast and never blocks.
 
 ## Install
 
@@ -46,7 +46,7 @@ echo '{"cwd":"/home/user/myproject","model":{"display_name":"claude-sonnet-4-5"}
 
 ### `gsl status`
 
-Renders the status line without reading stdin. The `ai` segment self-omits (no Claude payload). Useful for Antigravity CLI (its `/statusline` custom command can run it) and shell scripts:
+Renders the status line without reading stdin. The AI segments (`model`, `context`, `mcp`, `limits`) self-omit (no Claude payload). Useful for Antigravity CLI (its `/statusline` custom command can run it) and shell scripts:
 
 ```sh
 gsl status
@@ -56,7 +56,7 @@ gsl status
 
 Interactive bubbletea TUI for exploring the status line without a live Claude session:
 
-- `1` / `2` / `3` / `4` / `5` — toggle `dirgit` / `repo` / `ai` / `time` / `host`
+- `1` / `2` / `3` / `4` / `5` — toggle `dirgit` / `repo` / the AI segments (all four) / `time` / `host`
 - `s` — cycle through built-in styles
 - `f` — cycle through fixture payloads (clean repo root, dirty worktree)
 - `q` / `Ctrl+C` — quit
@@ -161,7 +161,7 @@ Keys valid for `config get`: `enabled`, `style`, `timezone`, `time_format`, `dat
 
 Keys valid for `config set`: `style`, `palette` (`auto`, `dark`, `light`, `dark8`, `dark-daltonism`; `GSL_THEME` / `SDK_THEME` still win for a session), `timezone`, `time_format`, `date_format`, `links`
 
-Segments valid for enable / disable / toggle: `host`, `dirgit`, `repo`, `ai`, `video`, `time`. Enabling a known segment that an older `config.json` lacks inserts it (`host` at the front, others at the end), so `gsl config enable host` is the one-step upgrade.
+Segments valid for enable / disable / toggle: `host`, `dirgit`, `repo`, `model`, `context`, `mcp`, `limits`, `video`, `time` — and `ai`, which means all four AI segments. Enabling a known segment that an older `config.json` lacks inserts it (`host` at the front, others at the end), so `gsl config enable host` is the one-step upgrade.
 
 ## Segments
 
@@ -184,7 +184,7 @@ Which machine the line is on — meant for the far left, so a glance across a fl
 | `dgx` | DMI mentions `DGX` or the vendor is `NVIDIA` | 🧠 |
 | `linux` | anything else | 💻 |
 
-The glyphs are emoji in **both** built-in styles (icon keys `host` and `host_<kind>`); ascii mode shows `[host]`. Self-omits when the hostname lookup fails or leaves nothing to show (empty name, or a name that is only a domain such as `.local`). Drop priority sits between `time` and `ai`: a narrow terminal sheds the clock first, then the hostname.
+The glyphs are emoji in **both** built-in styles (icon keys `host` and `host_<kind>`); ascii mode shows `[host]`. Self-omits when the hostname lookup fails or leaves nothing to show (empty name, or a name that is only a domain such as `.local`). Drop priority sits between `time` and the AI segments: a narrow terminal sheds the clock first, then the hostname.
 
 Segment options (`options` map of the `host` segment):
 
@@ -235,21 +235,36 @@ Segment options (set in the `options` map of the `repo` segment in `config.json`
 
 Links (see [Links](#links)): the root/worktree glyph opens the repository home, the name label opens the branch on GitHub, and the PR badge opens the pull request.
 
-### `ai`
+### `model`, `context`, `mcp`, `limits` (the AI segments)
 
-**Payload-dependent — self-omits when no Claude payload is present** (i.e., in `gsl status` / Antigravity mode). When a payload is present, shows:
+**Payload-dependent — self-omit when no Claude payload is present** (i.e., in
+`gsl status` / Antigravity mode). These were one `ai` segment; they are four now
+(#426), so each can be turned on or off, moved, and given its own drop priority.
+Side by side (the default) they draw as one block, exactly as `ai` did.
 
-- Model display name (e.g. `claude-sonnet-4-5`)
-- Context-window usage: `<pct>% <used>k/<total>k` (token counts abbreviated with k/m suffixes)
-- MCP health, read from a per-directory cache and never probed during a render. It shrinks with width: `6✓ 5✗ 1!` (connected, failed, needs auth) → `6✓ 5✗` → `6/12` → `6` → dropped. `?/12` means configured but not probed yet. When the cache is stale the render starts `gsl mcp refresh` in the background (one at a time, backing off after a failure)
-- 5-hour and 7-day rate-limit usage percentages (`5h 42%`, `7d 10%`)
+| Segment | Shows | Shrinks to | Default drop order |
+| --- | --- | --- | --- |
+| `model` | the model name (`Opus 5.5`) | a short form at level 3 | last of the four |
+| `context` | context-window usage, `31% 310k/1m` | `31%` at level 2 | 3rd |
+| `mcp` | MCP health, `6✓ 5✗ 1!` (connected, failed, needs auth) | `6✓ 5✗` → `6/12` → `6` → dropped | 2nd |
+| `limits` | rate limits, `5h 42% 7d 10%` (Antigravity: from its quota) | `5h 42%` → dropped | 1st |
 
-Segment options (`options` map of the `ai` segment):
+The MCP part is read from a per-directory cache and never probed during a
+render; `?/12` means configured but not probed yet, and a stale cache starts
+`gsl mcp refresh` in the background (one at a time, backing off after a
+failure).
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `usage_url` | string | Claude Code: `https://claude.ai/settings/usage`; Antigravity: none | Target of the context / 5h / 7d links (see [Links](#links)). Set it to give Antigravity a target. |
-| `model_url` | string | built-in family map | Target of the model-name link. Empty = the built-in map: Claude families (`fable`, `mythos`, `opus`, `sonnet`, `haiku`) → `https://www.anthropic.com/claude/{family}`, `gemini` → `https://ai.google.dev/gemini-api/docs/models`. A template may use `{family}`, `{model_id}`, `{display_name}`. Unknown family → no model link. |
+**Migration.** A config that lists `ai` reads as the four, in its place, with the
+same on/off state and priority; `gsl config validate` points it out, and saving
+from `gsl config` writes the new form. `gsl config enable|disable|toggle ai`
+acts on all four.
+
+Options (in each segment's `options` map):
+
+| Option | Segment | Default | Description |
+|--------|---------|---------|-------------|
+| `usage_url` | `context`, `limits` | Claude Code: `https://claude.ai/settings/usage`; Antigravity: none | Target of the context / 5h / 7d links (see [Links](#links)). Set it to give Antigravity a target. |
+| `model_url` | `model` | built-in family map | Target of the model-name link. Empty = the built-in map: Claude families (`fable`, `mythos`, `opus`, `sonnet`, `haiku`) → `https://www.anthropic.com/claude/{family}`, `gemini` → `https://ai.google.dev/gemini-api/docs/models`. A template may use `{family}`, `{model_id}`, `{display_name}`. Unknown family → no model link. |
 
 ### `time`
 
@@ -298,7 +313,10 @@ A missing config file is not an error — `Default()` is used automatically. On 
     {"type": "host",   "enabled": true},
     {"type": "dirgit", "enabled": true},
     {"type": "repo",   "enabled": true, "options": {"show_pr": true, "show_count": true, "name": "feature"}},
-    {"type": "ai",     "enabled": true},
+    {"type": "model",   "enabled": true},
+    {"type": "context", "enabled": true},
+    {"type": "mcp",     "enabled": true},
+    {"type": "limits",  "enabled": true},
     {"type": "time",   "enabled": true}
   ],
   "timezone":    "America/Los_Angeles",
@@ -316,9 +334,9 @@ Field reference:
 |-------|------|---------|-------------|
 | `enabled` | bool | `true` | Master on/off switch. When false, nothing is printed. |
 | `segments` | array | (see above) | Ordered list of segments; config order is render order. |
-| `segments[].type` | string | — | Segment kind: `host`, `dirgit`, `repo`, `ai`, `video`, `time`. |
+| `segments[].type` | string | — | Segment kind: `host`, `dirgit`, `repo`, `model`, `context`, `mcp`, `limits`, `video`, `time` (`ai`, the old name, migrates to the four). |
 | `segments[].enabled` | bool | `true` | Whether this segment is included in the render. |
-| `segments[].options` | object | `{}` | Segment-specific overrides (see the `host`, `dirgit`, `repo`, `ai`, `video`, `time` options above). |
+| `segments[].options` | object | `{}` | Segment-specific overrides (see the segment options above). |
 | `timezone` | string | `"America/Los_Angeles"` | IANA timezone for the time segment. |
 | `time_format` | string | `"15:04:05"` | Go layout string for the clock. |
 | `date_format` | string | `"2006-01-02"` | Go layout string for the date. |
@@ -336,8 +354,8 @@ Every field with a web home is an [OSC 8](https://gist.github.com/egmontkob/eb11
 | `dirgit` branch, `repo` name label | `https://github.com/<owner>/<repo>/tree/<branch>` (GitHub remotes only; derived from `git remote get-url origin`) |
 | `repo` root/worktree glyph | the repository home |
 | `repo` PR badge | the pull request (`link_pr`) |
-| `ai` model name | the model's page, by family from `model.id` (e.g. `https://www.anthropic.com/claude/fable`; `model_url` overrides) |
-| `ai` context %, 5h %, 7d % | the usage page (`usage_url`; Claude Code default `https://claude.ai/settings/usage`) |
+| `model` | the model's page, by family from `model.id` (e.g. `https://www.anthropic.com/claude/fable`; `model_url` overrides) |
+| `context` %, `limits` 5h % / 7d % | the usage page (`usage_url`; Claude Code default `https://claude.ai/settings/usage`) |
 | `time` date/time | the `link_url` template (default `https://time.is/{tz_city}`) |
 
 Links add zero display width: the fit loop measures, truncates, and sheds exactly as it does without them, and a truncated field keeps its link on the part that survives.
@@ -441,7 +459,7 @@ Detection (`Detect`) runs all subprocess I/O once, concurrently. The fit loop (`
 | 1 | Per-segment text compaction (abbreviated model name, shorter branch, condensed time) |
 | 2 | More aggressive text abbreviation |
 | 3 | Deepest text abbreviation |
-| 4 (final tier) | Leading glyph dropped from every segment, then lowest-priority segments dropped (`time` → `host` → `ai` → `dirgit` → `repo`) until the output fits or one segment remains. Whenever a level fits, leftover columns go to the flexible `host` segment, which grows back toward its full name |
+| 4 (final tier) | Leading glyph dropped from every segment, then lowest-priority segments dropped (`video` → `time` → `host` → `limits` → `mcp` → `context` → `model` → `dirgit` → `repo`) until the output fits or one segment remains. Whenever a level fits, leftover columns go to the flexible `host` segment, which grows back toward its full name |
 
 `Fit` returns the first level whose `DisplayWidth` (grapheme-cluster-aware, ANSI-stripped, `uniseg.StringWidth`) is ≤ terminal columns, or the most compact form if nothing fits.
 

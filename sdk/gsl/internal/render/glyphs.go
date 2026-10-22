@@ -149,6 +149,7 @@ func paintRuns(st style.Style, text string, spans []LinkSpan, restore string) st
 }
 
 func join(st style.Style, blocks []segmentBlock) string {
+	blocks = mergeAdjacent(blocks)
 	if len(blocks) == 0 {
 		return ""
 	}
@@ -189,6 +190,33 @@ func joinPowerline(st style.Style, blocks []segmentBlock) string {
 		sb.WriteString(ansiReset)
 	}
 	return sb.String()
+}
+
+// mergeAdjacent joins neighbouring blocks of the same colour into one block,
+// text separated by a space and spans shifted to match. The ai segment's four
+// parts (#426) are separate segments — each toggles, reorders and drops on its
+// own — yet side by side they draw as the one block they used to be.
+func mergeAdjacent(blocks []segmentBlock) []segmentBlock {
+	if len(blocks) < 2 {
+		return blocks
+	}
+	out := []segmentBlock{blocks[0]}
+	for _, b := range blocks[1:] {
+		last := &out[len(out)-1]
+		if b.colorKey == "" || b.colorKey != last.colorKey {
+			out = append(out, b)
+			continue
+		}
+		shift := len(last.text) + 1
+		links := append([]LinkSpan(nil), last.links...)
+		for _, sp := range b.links {
+			sp.Start += shift
+			sp.End += shift
+			links = append(links, sp)
+		}
+		*last = segmentBlock{text: last.text + " " + b.text, colorKey: last.colorKey, links: links}
+	}
+	return out
 }
 
 // countBadge renders a "<glyph><n>" badge, e.g. "+3" / "⇡2". The glyph is

@@ -163,14 +163,14 @@ func TestAI_Spans_ModelURL_TemplateOverride(t *testing.T) {
 func TestBuildSegments_AIModelURLOption(t *testing.T) {
 	cfg := config.Default()
 	for i := range cfg.Segments {
-		if cfg.Segments[i].Type == "ai" {
+		if cfg.Segments[i].Type == "model" { // the old ai segment's model piece (#426)
 			cfg.Segments[i].Options = map[string]any{"model_url": "https://x/{family}"}
 		}
 	}
 	segs := BuildSegments(cfg, Deps{Payload: samplePayload(), Links: Links{AI: true}})
 	var ai *AISegment
 	for _, s := range segs {
-		if a, ok := s.(*AISegment); ok {
+		if a, ok := s.(*AISegment); ok && a.Part == "model" {
 			ai = a
 		}
 	}

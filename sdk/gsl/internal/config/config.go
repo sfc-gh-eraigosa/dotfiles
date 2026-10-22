@@ -50,12 +50,18 @@ type Segment struct {
 // The gaps leave room for a user to interleave a custom value without having to
 // renumber the others.
 const (
-	PriorityVideo  = 5  // dropped first: GPU load is nice-to-have
-	PriorityTime   = 10 // dropped right after video
-	PriorityHost   = 15 // which machine — outlives the clock, not the model
-	PriorityAI     = 20
-	PriorityDirGit = 30
-	PriorityRepo   = 40 // dropped last
+	PriorityVideo = 5  // dropped first: GPU load is nice-to-have
+	PriorityTime  = 10 // dropped right after video
+	PriorityHost  = 15 // which machine — outlives the clock, not the model
+	PriorityAI    = 20 // the legacy all-in-one ai segment (migrates to the four below)
+	// The ai segment's pieces (#426): all between host and dirgit, as ai was,
+	// shedding the least important first.
+	PriorityLimits  = 17
+	PriorityMCP     = 18
+	PriorityContext = 19
+	PriorityModel   = 20
+	PriorityDirGit  = 30
+	PriorityRepo    = 40 // dropped last
 )
 
 // DefaultSegmentPriority returns the built-in drop priority for a segment type.
@@ -68,6 +74,14 @@ func DefaultSegmentPriority(segType string) int {
 		return PriorityDirGit
 	case "ai":
 		return PriorityAI
+	case "model":
+		return PriorityModel
+	case "context":
+		return PriorityContext
+	case "mcp":
+		return PriorityMCP
+	case "limits":
+		return PriorityLimits
 	case "time":
 		return PriorityTime
 	case "video":
@@ -82,7 +96,12 @@ func DefaultSegmentPriority(segType string) int {
 // KnownSegmentTypes lists every segment type gsl can render, in the default
 // left-to-right order. EnableSegment uses it to add a type that an older
 // config.json predates.
-var KnownSegmentTypes = []string{"host", "dirgit", "repo", "ai", "video", "time"}
+var KnownSegmentTypes = []string{"host", "dirgit", "repo", "model", "context", "mcp", "limits", "video", "time"}
+
+// AIParts are the segments the old all-in-one "ai" segment became (#426), in
+// its order. "ai" is still accepted: Load migrates it, and the segment verbs
+// read it as all four.
+var AIParts = []string{"model", "context", "mcp", "limits"}
 
 // EffectivePriority returns the segment's drop priority: the user's explicit
 // Priority when set, otherwise the built-in default for its type.
@@ -159,7 +178,10 @@ func Default() Config {
 			{Type: "host", Enabled: true},
 			{Type: "dirgit", Enabled: true},
 			{Type: "repo", Enabled: true},
-			{Type: "ai", Enabled: true},
+			{Type: "model", Enabled: true},
+			{Type: "context", Enabled: true},
+			{Type: "mcp", Enabled: true},
+			{Type: "limits", Enabled: true},
 			{Type: "video", Enabled: true},
 			{Type: "time", Enabled: true},
 		},
@@ -210,8 +232,45 @@ func Load(path string) (Config, error) {
 	if err := json.Unmarshal(data, &c); err != nil {
 		return Config{}, fmt.Errorf("config: parse %s: %w", path, err)
 	}
+	c.migrateAI()
 	c.migrateVideo()
 	return c, nil
+}
+
+// migrateAI replaces an "ai" entry with its four parts, in its place (#426):
+// the same on/off state and explicit priority; model_url goes to model,
+// usage_url to context and limits (the fields that linked to it).
+func (c *Config) migrateAI() {
+	i := slices.IndexFunc(c.Segments, func(s Segment) bool { return s.Type == "ai" })
+	if i < 0 {
+		return
+	}
+	ai := c.Segments[i]
+	parts := make([]Segment, 0, len(AIParts))
+	for _, t := range AIParts {
+		if c.findSegment(t) != nil {
+			continue // already split (hand-edited): keep that one
+		}
+		p := Segment{Type: t, Enabled: ai.Enabled, Priority: ai.Priority}
+		pick := func(keys ...string) {
+			for _, k := range keys {
+				if v, ok := ai.Options[k]; ok {
+					if p.Options == nil {
+						p.Options = map[string]any{}
+					}
+					p.Options[k] = v
+				}
+			}
+		}
+		switch t {
+		case "model":
+			pick("model_url")
+		case "context", "limits":
+			pick("usage_url")
+		}
+		parts = append(parts, p)
+	}
+	c.Segments = slices.Concat(c.Segments[:i:i], parts, c.Segments[i+1:])
 }
 
 // migrateVideo is a one-time migration for the video segment, which postdates
@@ -300,6 +359,14 @@ func (c *Config) ensureSegment(segType string) (*Segment, error) {
 // EnableSegment sets the Enabled flag on the segment identified by segType,
 // inserting a known-but-missing type first (see ensureSegment).
 func (c *Config) EnableSegment(segType string) error {
+	if segType == "ai" { // the old name: all four parts
+		for _, t := range AIParts {
+			if err := c.EnableSegment(t); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	seg, err := c.ensureSegment(segType)
 	if err != nil {
 		return err
@@ -311,6 +378,14 @@ func (c *Config) EnableSegment(segType string) error {
 // DisableSegment clears the Enabled flag on the segment identified by segType,
 // inserting a known-but-missing type first so the file records the choice.
 func (c *Config) DisableSegment(segType string) error {
+	if segType == "ai" { // the old name: all four parts
+		for _, t := range AIParts {
+			if err := c.DisableSegment(t); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	seg, err := c.ensureSegment(segType)
 	if err != nil {
 		return err
@@ -322,6 +397,14 @@ func (c *Config) DisableSegment(segType string) error {
 // ToggleSegment flips the Enabled flag on the segment identified by segType. A
 // known-but-missing type is effectively off, so its first toggle turns it on.
 func (c *Config) ToggleSegment(segType string) error {
+	if segType == "ai" { // the old name: all four parts
+		for _, t := range AIParts {
+			if err := c.ToggleSegment(t); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	seg, err := c.ensureSegment(segType)
 	if err != nil {
 		return err

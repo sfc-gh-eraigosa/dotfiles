@@ -30,6 +30,11 @@ type AISegment struct {
 	// cached status is due a refresh. The render never probes itself.
 	MCPSpawn  func(cwd string) error
 	spawnOnce sync.Once
+	// Part is which piece of the AI data this segment draws (#426): "model",
+	// "context", "mcp" or "limits"; "" is the legacy all-in-one ai segment.
+	// All four share one detection; side by side they merge back into one
+	// block (join), so a default line reads exactly as the old ai segment.
+	Part string
 	// Priority is the DROP priority used by the fit loop (config.Segment.Priority,
 	// or the built-in default for this type when unset). It is independent of the
 	// segment's position in the line.

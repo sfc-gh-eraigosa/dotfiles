@@ -64,6 +64,10 @@ func validateConfig(cfg config.Config) []string {
 	}
 	seen := map[string]bool{}
 	for _, s := range cfg.Segments {
+		if s.Type == "ai" {
+			bad("segments: \"ai\" is now %v — gsl migrates it when it loads the file; save once (gsl config, w) to write the new form", config.AIParts)
+			continue
+		}
 		if !slices.Contains(config.KnownSegmentTypes, s.Type) {
 			bad("segments: unknown type %q — known: %v", s.Type, config.KnownSegmentTypes)
 		}

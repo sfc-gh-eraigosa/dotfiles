@@ -26,8 +26,9 @@ func TestDefaultIsUsable(t *testing.T) {
 		t.Errorf("Default().Timezone = %q; want 'America/Los_Angeles'", c.Timezone)
 	}
 
-	// All 6 segments in order (video sits just before time).
-	wantTypes := []string{"host", "dirgit", "repo", "ai", "video", "time"}
+	// All 9 segments in order (the ai segment's four parts, #426; video just
+	// before time).
+	wantTypes := []string{"host", "dirgit", "repo", "model", "context", "mcp", "limits", "video", "time"}
 	if len(c.Segments) != len(wantTypes) {
 		t.Fatalf("Default() has %d segments; want %d", len(c.Segments), len(wantTypes))
 	}
@@ -346,15 +347,17 @@ func TestEnableSegment_InsertsMissingKnownType(t *testing.T) {
 	if err := c.EnableSegment("ai"); err != nil {
 		t.Fatalf("EnableSegment(ai): %v", err)
 	}
-	// Canonical order is host, dirgit, repo, ai, time: ai lands before time.
-	if c.Segments[2].Type != "ai" || !c.Segments[2].Enabled || c.Segments[3].Type != "time" {
-		t.Errorf("ai should be inserted before time (canonical order) and enabled; got %+v", c.Segments)
+	// "ai" is its four parts (#426); canonical order puts them before time.
+	for i, want := range []string{"host", "dirgit", "model", "context", "mcp", "limits", "time"} {
+		if c.Segments[i].Type != want || !c.Segments[i].Enabled {
+			t.Fatalf("segments after enable ai = %+v", c.Segments)
+		}
 	}
 	if err := c.EnableSegment("bogus"); err == nil {
 		t.Error("EnableSegment(bogus) should still fail for an unknown type")
 	}
-	if len(c.Segments) != 4 {
-		t.Errorf("want 4 segments after inserts, got %d", len(c.Segments))
+	if len(c.Segments) != 7 {
+		t.Errorf("want 7 segments after inserts, got %d", len(c.Segments))
 	}
 }
 
