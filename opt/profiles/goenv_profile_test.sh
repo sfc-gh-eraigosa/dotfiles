@@ -75,4 +75,20 @@ for sh in bash zsh; do
     assert_eq "${out#*|}" "1.26.1" "${sh}: an explicit GOENV_VERSION is left alone"
 done
 
+# 5. A login shell (.profile, no .goenv.sh) finds go in $HOME/.goenv/shims,
+#    never the retired $HOME/go/shims, whose shims run the old tree's Go
+#    (wslgiga1/spark1/jetson1 on 2026-10-22: `bash -lc 'go version'` was 1.26.1).
+PROFILE="${SELF_DIR}/.profile"
+for sh in bash sh; do
+    command -v "${sh}" >/dev/null 2>&1 || { echo "SKIP: ${sh} not installed"; continue; }
+    H="${TMP}/${sh}-login"
+    for tree in go .goenv; do
+        mkdir -p "${H}/${tree}/shims"
+        printf '#!/bin/sh\necho %s\n' "${tree}" > "${H}/${tree}/shims/go"
+        chmod +x "${H}/${tree}/shims/go"
+    done
+    out=$(env -i HOME="${H}" PATH=/usr/bin:/bin "${sh}" -c ". '${PROFILE}' >/dev/null 2>&1; go" 2>/dev/null)
+    assert_eq "${out}" ".goenv" "${sh}: a login shell runs go from \$HOME/.goenv/shims, not the retired \$HOME/go/shims"
+done
+
 _test_report
