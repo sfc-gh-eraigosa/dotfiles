@@ -13,6 +13,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/preview"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/render"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/tui"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/video"
 	"github.com/spf13/cobra"
 )
 
@@ -54,6 +55,12 @@ func studioEnv(cfg config.Config) (tui.Env, error) {
 	deps, st, err := prepare(ctx, cfg, preview.CleanRepoPayload(), "")
 	if err != nil {
 		return tui.Env{}, err
+	}
+	// The GPU reading is a cache the status line attaches after prepare; the
+	// studio reads it too (no refresher — it only shows), or the video row
+	// would toggle a segment the preview can never draw.
+	if dir, derr := video.Dir(); derr == nil {
+		deps.Video = &video.Cache{Dir: dir}
 	}
 	snap := render.DetectAll(ctx, cfg, st, deps)
 	cwd := deps.Cwd

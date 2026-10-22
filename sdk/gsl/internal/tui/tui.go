@@ -94,6 +94,73 @@ const (
 var palettes = []string{"", "dark", "light", "dark8", "dark-daltonism"}
 var linkModes = []string{config.LinksUnderline, config.LinksPlain, config.LinksOff}
 
+// The options space cycles through (and :set hints and Tab completes) for the
+// free-form settings. Any IANA zone or Go layout can still be typed.
+var (
+	timezones = []string{"", "UTC", "America/Los_Angeles", "America/Denver", "America/Chicago",
+		"America/New_York", "America/Sao_Paulo", "Europe/London", "Europe/Berlin",
+		"Asia/Kolkata", "Asia/Shanghai", "Asia/Tokyo", "Australia/Sydney"}
+	timeFormats = []string{"15:04", "15:04:05", "3:04 PM", "3:04:05 PM"}
+	dateFormats = []string{"2006-01-02", "Mon 01-02", "Mon Jan 2", "01/02", "Jan 2"}
+)
+
+// settingKeys are the :set keys, in row order.
+var settingKeys = []string{"style", "palette", "links", "timezone", "time_format", "date_format"}
+
+// choices are the options for a :set key, with the current value kept in
+// the cycle when it is a custom one. "" (auto / local) is shown as its word.
+func (m Model) choices(key string) []string {
+	withCurrent := func(list []string, cur string) []string {
+		if slices.Contains(list, cur) {
+			return list
+		}
+		return append(append([]string(nil), list...), cur)
+	}
+	switch key {
+	case "style":
+		return m.env.Styles
+	case "palette":
+		return palettes
+	case "links":
+		return linkModes
+	case "timezone":
+		return withCurrent(timezones, m.cfg.Timezone)
+	case "time_format":
+		return withCurrent(timeFormats, m.cfg.TimeFormat)
+	case "date_format":
+		return withCurrent(dateFormats, m.cfg.DateFormat)
+	}
+	return nil
+}
+
+// current is the value of a :set key, as cycling compares it.
+func (m Model) current(key string) string {
+	switch key {
+	case "style":
+		return m.cfg.Style
+	case "palette":
+		return m.cfg.Palette
+	case "links":
+		return orDefault(m.cfg.Links, config.LinksUnderline)
+	case "timezone":
+		return m.cfg.Timezone
+	case "time_format":
+		return m.cfg.TimeFormat
+	}
+	return m.cfg.DateFormat
+}
+
+// shown is how an option reads: "" is auto (palette) or local (timezone).
+func shown(key, v string) string {
+	if v != "" {
+		return v
+	}
+	if key == "timezone" {
+		return "local"
+	}
+	return "auto"
+}
+
 // Model is the studio. Use New; Update returns a changed copy.
 type Model struct {
 	env         Env
@@ -196,6 +263,9 @@ func (m *Model) set(key, value string) error {
 		}
 		c.Links = value
 	case "timezone":
+		if value == "local" {
+			value = ""
+		}
 		if _, err := time.LoadLocation(value); err != nil {
 			return fmt.Errorf("timezone %q: not an IANA zone", value)
 		}
@@ -298,11 +368,21 @@ func (m *Model) registry() *cmdline.Registry {
 		}
 	}
 	keyComplete := func(i int, prefix string) []string {
-		if i != 0 {
-			return nil
+		var list []string
+		switch i {
+		case 0:
+			list = settingKeys
+		case 1: // the value: the options for the key already typed
+			f := strings.Fields(m.cmd.Input.String())
+			if len(f) < 2 {
+				return nil
+			}
+			for _, v := range m.choices(f[1]) {
+				list = append(list, shown(f[1], v))
+			}
 		}
 		var out []string
-		for _, k := range []string{"style", "palette", "links", "timezone", "time_format", "date_format"} {
+		for _, k := range list {
 			if strings.HasPrefix(k, prefix) {
 				out = append(out, k)
 			}
@@ -424,21 +504,11 @@ func (m Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.move(seg, d)
 	case keymap.Select:
 		var err error
-		switch m.cur.Pos {
-		case rowStyle:
-			err = m.set("style", next(m.env.Styles, m.cfg.Style))
-		case rowPalette:
-			err = m.set("palette", next(palettes, m.cfg.Palette))
-		case rowLinks:
-			cur := m.cfg.Links
-			if cur == "" {
-				cur = config.LinksUnderline
-			}
-			err = m.set("links", next(linkModes, cur))
-		case rowTimezone, rowTime, rowDate:
-			m.prompt(m.setLine())
-		default:
+		if seg >= 0 {
 			err = m.toggle(m.cfg.Segments[seg].Type)
+		} else {
+			key := settingKeys[m.cur.Pos]
+			err = m.set(key, shown(key, next(m.choices(key), m.current(key))))
 		}
 		if err != nil {
 			m.say(err.Error(), true)
@@ -477,6 +547,37 @@ func (m Model) hints() keymap.Map {
 		out = append(out, b)
 	}
 	return out
+}
+
+// setHint is the line above a ":set …" prompt: the keys, then the options
+// for the key being set (Tab cycles them).
+func (m Model) setHint() string {
+	text := m.cmd.Input.String()
+	f := strings.Fields(text)
+	if len(f) == 0 || f[0] != "set" {
+		return ""
+	}
+	if len(f) == 1 || (len(f) == 2 && !strings.HasSuffix(text, " ")) {
+		return "keys: " + strings.Join(settingKeys, " · ") + "   (Tab completes)"
+	}
+	var opts []string
+	for _, v := range m.choices(f[1]) {
+		opts = append(opts, shown(f[1], v))
+	}
+	if len(opts) == 0 {
+		return ""
+	}
+	// The "or anything" note leads: a long list is cut at the screen edge.
+	var lead string
+	switch f[1] {
+	case "timezone":
+		lead = "options (Tab cycles; or any IANA zone)"
+	case "time_format", "date_format":
+		lead = "options (Tab cycles; or any Go layout)"
+	default:
+		return "options: " + strings.Join(opts, " · ") + "   (Tab cycles)"
+	}
+	return lead + ": " + strings.Join(opts, " · ")
 }
 
 // setLine is the :set pre-filled for the setting under the cursor.
@@ -547,13 +648,17 @@ func (m Model) View() string {
 	}
 	add(pal.Bold(title))
 	add("")
+	now := time.Now()
+	if loc, err := time.LoadLocation(m.cfg.Timezone); err == nil {
+		now = now.In(loc)
+	}
 	rows := []string{
 		row("style", m.cfg.Style),
 		row("palette", orAuto(m.cfg.Palette)),
 		row("links", orDefault(m.cfg.Links, config.LinksUnderline)),
 		row("timezone", orDefault(m.cfg.Timezone, "local")),
-		row("time", m.cfg.TimeFormat),
-		row("date", m.cfg.DateFormat),
+		row("time", m.cfg.TimeFormat) + pal.Dim("  e.g. "+now.Format(m.cfg.TimeFormat)),
+		row("date", m.cfg.DateFormat) + pal.Dim("  e.g. "+now.Format(m.cfg.DateFormat)),
 	}
 	for _, s := range m.cfg.Segments {
 		box := "[ ]"
@@ -570,11 +675,15 @@ func (m Model) View() string {
 		if i == settingRows {
 			add(pal.Dim("  segments — left → right on the line (J/K to move, space on/off)"))
 		}
-		mark := "  "
+		mark, hint := "  ", ""
 		if i == m.cur.Pos {
 			mark = "> "
+			hint = "   ‹space: next · enter: type›"
+			if i >= settingRows {
+				hint = "   ‹space: on/off · J/K: move›"
+			}
 		}
-		add(mark + rows[i])
+		add(mark + rows[i] + pal.Dim(hint))
 	}
 	if bottom < len(rows) {
 		add(pal.Dim(fmt.Sprintf("  … %d more below", len(rows)-bottom)))
@@ -597,6 +706,9 @@ func (m Model) View() string {
 	add("")
 	switch {
 	case m.mode == modeCommand:
+		if h := m.setHint(); h != "" {
+			add(pal.Dim(h))
+		}
 		add(":" + m.cmd.Input.Render("█"))
 	case m.msg != "" && m.isErr:
 		add(pal.Err(m.msg))

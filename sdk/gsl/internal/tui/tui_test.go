@@ -356,3 +356,73 @@ func lastLine(v string) string {
 	lines := strings.Split(strings.TrimRight(v, "\n"), "\n")
 	return lines[len(lines)-1]
 }
+
+var tab = tea.KeyMsg{Type: tea.KeyTab}
+
+// space cycles every setting — timezone and the time/date formats too —
+// through its known options; a custom current value stays in the cycle.
+func TestSpaceCyclesEverySetting(t *testing.T) {
+	m, _ := newModel(t)
+	m = keys(m, runes("j"), runes("j"), runes("j")) // timezone
+	tz0 := m.Config().Timezone
+	m = keys(m, space)
+	if m.Config().Timezone == tz0 {
+		t.Fatalf("space did not change the timezone (%q)", tz0)
+	}
+	seen := map[string]bool{}
+	for i := 0; i < 40 && !seen[m.Config().Timezone]; i++ {
+		seen[m.Config().Timezone] = true
+		m = keys(m, space)
+	}
+	if !seen[tz0] || !seen[""] || !seen["UTC"] {
+		t.Errorf("the timezone cycle should hold the original %q, local and UTC: %v", tz0, seen)
+	}
+	m = keys(m, runes("j")) // time format
+	f0 := m.Config().TimeFormat
+	if m = keys(m, space); m.Config().TimeFormat == f0 {
+		t.Error("space did not change the time format")
+	}
+	m = keys(m, runes("j")) // date format
+	d0 := m.Config().DateFormat
+	if m = keys(m, space); m.Config().DateFormat == d0 {
+		t.Error("space did not change the date format")
+	}
+}
+
+// The selected row says what space and enter do there, and a format row
+// shows what the format looks like now.
+func TestRowHints(t *testing.T) {
+	m, _ := newModel(t)
+	if v := m.View(); !strings.Contains(v, "space: next") || !strings.Contains(v, "enter: type") {
+		t.Errorf("setting row hint missing:\n%s", v)
+	}
+	m = keys(m, runes("G"))
+	if v := m.View(); !strings.Contains(v, "space: on/off") || !strings.Contains(v, "J/K: move") {
+		t.Errorf("segment row hint missing:\n%s", v)
+	}
+	if v := m.View(); !strings.Contains(v, "e.g. ") {
+		t.Errorf("format rows should show an example:\n%s", v)
+	}
+}
+
+// :set shows the keys, then the options for the key being set, and Tab
+// completes them.
+func TestSetHintsAndCompletion(t *testing.T) {
+	m, _ := newModel(t)
+	m = keys(m, runes(":"), runes("set "))
+	if v := m.View(); !strings.Contains(v, "keys: style · palette · links · timezone · time_format · date_format") {
+		t.Errorf("no key hint:\n%s", v)
+	}
+	m = keys(m, runes("palette "))
+	if v := m.View(); !strings.Contains(v, "options: auto · dark · light · dark8 · dark-daltonism") {
+		t.Errorf("no options hint:\n%s", v)
+	}
+	m = keys(m, runes("li"), tab, enter)
+	if m.Config().Palette != "light" {
+		t.Fatalf("Tab did not complete li → light: %q", m.Config().Palette)
+	}
+	m = keys(m, runes(":"), runes("set timezone "))
+	if v := m.View(); !strings.Contains(v, "UTC") || !strings.Contains(v, "any IANA zone") {
+		t.Errorf("timezone options hint:\n%s", v)
+	}
+}
