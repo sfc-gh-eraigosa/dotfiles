@@ -58,10 +58,10 @@ func Keys() keymap.Map {
 		keymap.PageLeft, keymap.PageRight, keymap.Search, keymap.NextMatch,
 		keymap.PrevMatch, keymap.ClearHighlight,
 	).Merge(
-		keymap.Binding{Action: keymap.Select, Keys: []string{"space"}, Help: "toggle the segment, or the next style / palette / links", Short: "toggle", Header: true},
-		keymap.Binding{Action: keymap.Confirm, Keys: []string{"enter"}, Help: "edit the row on the command line", Short: "edit"},
-		keymap.Binding{Action: ActMoveDown, Keys: []string{"J"}, Help: "move the segment right", Short: "reorder", Group: "reorder"},
-		keymap.Binding{Action: ActMoveUp, Keys: []string{"K"}, Help: "move the segment left", Short: "reorder", Group: "reorder"},
+		keymap.Binding{Action: keymap.Select, Keys: []string{"space"}, Help: "on a segment: turn it on/off; on style / palette / links: the next value", Short: "toggle", Header: true},
+		keymap.Binding{Action: keymap.Confirm, Keys: []string{"enter"}, Help: "edit the setting on the command line (on a segment: on/off)", Short: "edit"},
+		keymap.Binding{Action: ActMoveDown, Keys: []string{"J"}, Help: "move the segment right (later on the line)", Short: "reorder", Group: "reorder"},
+		keymap.Binding{Action: ActMoveUp, Keys: []string{"K"}, Help: "move the segment left (earlier on the line)", Short: "reorder", Group: "reorder"},
 		keymap.Binding{Action: ActNarrower, Keys: []string{"<"}, Help: "narrow the preview by 10 columns", Short: "width", Group: "width"},
 		keymap.Binding{Action: ActWider, Keys: []string{">"}, Help: "widen the preview by 10 columns", Short: "width", Group: "width"},
 		keymap.Binding{Action: ActRefresh, Keys: []string{"r"}, Help: "probe the MCP servers now (a few seconds)", Short: "mcp"},
@@ -455,6 +455,30 @@ func (m Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// hints is the key table as the footer shows it for the row under the
+// cursor: on a setting, space is "next" and enter "edit"; on a segment,
+// space is "on/off" and J/K "reorder". Still the one key table — only which
+// bindings show, and their short labels, change.
+func (m Model) hints() keymap.Map {
+	onSegment := m.cur.Pos >= settingRows
+	out := make(keymap.Map, 0, len(m.keys))
+	for _, b := range m.keys {
+		switch b.Action {
+		case keymap.Select:
+			b.Short = "next"
+			if onSegment {
+				b.Short = "on/off"
+			}
+		case keymap.Confirm:
+			b.Header = !onSegment
+		case ActMoveDown, ActMoveUp:
+			b.Header = onSegment
+		}
+		out = append(out, b)
+	}
+	return out
+}
+
 // setLine is the :set pre-filled for the setting under the cursor.
 func (m Model) setLine() string {
 	switch m.cur.Pos {
@@ -543,6 +567,9 @@ func (m Model) View() string {
 		add(pal.Dim(fmt.Sprintf("  … %d more above", top)))
 	}
 	for i := top; i < bottom && i < len(rows); i++ {
+		if i == settingRows {
+			add(pal.Dim("  segments — left → right on the line (J/K to move, space on/off)"))
+		}
 		mark := "  "
 		if i == m.cur.Pos {
 			mark = "> "
@@ -576,7 +603,7 @@ func (m Model) View() string {
 	case m.msg != "":
 		add(pal.Dim(m.msg))
 	default:
-		add(pal.Dim(m.keys.HeaderHint("  ")))
+		add(pal.Dim(m.hints().HeaderHint("  ")))
 	}
 	return strings.Join(lines, "\n")
 }

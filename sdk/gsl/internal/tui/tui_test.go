@@ -310,7 +310,7 @@ func TestKeyTablesAgree(t *testing.T) {
 			t.Errorf("help overlay lacks %q", b.Help)
 		}
 	}
-	if !strings.Contains(m.View(), Keys().HeaderHint("  ")) {
+	if !strings.Contains(m.View(), m.hints().HeaderHint("  ")) {
 		t.Errorf("footer is not the key table's hint")
 	}
 }
@@ -324,4 +324,35 @@ func TestREADMEKeyTable(t *testing.T) {
 	if !strings.Contains(string(readme), KeyTable()) {
 		t.Errorf("README key table is out of date; paste:\n%s", KeyTable())
 	}
+}
+
+// The footer follows the row: on a setting, space picks the next value and
+// enter edits; on a segment, space turns it on/off and J/K reorder it. A
+// heading says the segment rows are the line's left-to-right order.
+func TestFooterFollowsTheRow(t *testing.T) {
+	m, _ := newModel(t)
+	m = keys(m, runes("j")) // palette
+	foot := lastLine(m.View())
+	if !strings.Contains(foot, "space next") || !strings.Contains(foot, "enter edit") || strings.Contains(foot, "J/K") {
+		t.Errorf("setting row footer: %q", foot)
+	}
+	m = keys(m, runes("G")) // a segment
+	foot = lastLine(m.View())
+	if !strings.Contains(foot, "space on/off") || !strings.Contains(foot, "J/K reorder") {
+		t.Errorf("segment row footer: %q", foot)
+	}
+	if !strings.Contains(m.View(), "left → right on the line") {
+		t.Errorf("no segment-order heading:\n%s", m.View())
+	}
+	help := keys(m, runes("?")).View()
+	for _, want := range []string{"move the segment right (later on the line)", "move the segment left (earlier on the line)"} {
+		if !strings.Contains(help, want) {
+			t.Errorf("help lacks %q", want)
+		}
+	}
+}
+
+func lastLine(v string) string {
+	lines := strings.Split(strings.TrimRight(v, "\n"), "\n")
+	return lines[len(lines)-1]
 }

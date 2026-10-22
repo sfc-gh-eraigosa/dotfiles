@@ -126,7 +126,8 @@ gsl config validate                   # lint config.json; prints each problem, e
 `config set style` refuses a name that is neither builtin nor defined under `styles`.
 
 **The studio.** `gsl config` with no subcommand (on a terminal) opens a config
-studio: rows for the style, palette, links and time settings and every segment,
+studio: rows for the style, palette, links and time settings and every segment
+(`space` turns one on/off, `J`/`K` move it right/left — the rows are the line's order),
 a live preview of the line — detected once against the current repo, re-fitted
 on every edit — with a column ruler, the MCP health panel, and `w` to save. The
 next `gsl render` draws what you saved. `:` commands mirror the CLI
@@ -145,10 +146,10 @@ next `gsl render` draws what you saved. `:` commands mirror the CLI
 | `:` | command line (:set :toggle :width :refresh :w :wq :q) |
 | `?` `f1` | this help |
 | `q` `ctrl+c` | quit (asks when there are unsaved changes) |
-| `space` | toggle the segment, or the next style / palette / links |
-| `enter` | edit the row on the command line |
-| `J` | move the segment right |
-| `K` | move the segment left |
+| `space` | on a segment: turn it on/off; on style / palette / links: the next value |
+| `enter` | edit the setting on the command line (on a segment: on/off) |
+| `J` | move the segment right (later on the line) |
+| `K` | move the segment left (earlier on the line) |
 | `<` | narrow the preview by 10 columns |
 | `>` | widen the preview by 10 columns |
 | `r` | probe the MCP servers now (a few seconds) |
