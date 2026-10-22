@@ -80,6 +80,26 @@ gsl usage --host claude --json  # one host as JSON; exit 1 if it has not reporte
 gsl usage --json                # every host, as an array
 ```
 
+### `gsl mcp`
+
+MCP server health. `claude mcp list` takes seconds (it dials every server), so
+the status line never runs it: it reads a per-directory cache
+(`${XDG_CACHE_HOME:-~/.cache}/gsl/mcp/<sha256(cwd)[:16]>.json`, fresh for 2
+minutes) and, when that is stale, starts `gsl mcp refresh` detached.
+
+```bash
+gsl mcp status          # the cached counts, plus which servers failed or need auth
+gsl mcp status --json   # the same, as JSON
+gsl mcp refresh         # probe now (ignores the failure backoff) and print the result
+```
+
+The configured count de-duplicates servers across `~/.claude.json`, the
+project entry, `.mcp.json` and enabled plugins, and honours
+`disabledMcpjsonServers` / `enabledMcpjsonServers` /
+`enableAllProjectMcpServers`. A failed probe keeps the last good counts and
+backs off (30 s, doubling to 30 min). `go test -tags integration ./internal/mcp/`
+checks the parser against the installed CLI.
+
 ### `gsl version`
 
 ```sh
@@ -100,17 +120,52 @@ gsl config disable [segment]          # disable the master switch (no arg) or a 
 gsl config toggle <segment>           # toggle a named segment on/off
 gsl config style [name]               # show the current style, or set it to <name>
 gsl config style --list               # list all builtin + user-defined styles (* = active)
+gsl config validate                   # lint config.json; prints each problem, exits 1 if any
 ```
+
+`config set style` refuses a name that is neither builtin nor defined under `styles`.
+
+**The studio.** `gsl config` with no subcommand (on a terminal) opens a config
+studio: rows for the preview width (view only, not saved), the style, palette,
+links and time settings, and every segment
+(`space` turns one on/off, `J`/`K` move it right/left — the rows are the line's order),
+a live preview of the line — detected once against the current repo, re-fitted
+on every edit — with a column ruler, the MCP health panel, and `w` to save. The
+next `gsl render` draws what you saved. `:` commands mirror the CLI
+(`:set palette dark`, `:toggle video`, `:width 80`, `:refresh`, `:w`, `:wq`, `:q!`).
+
+| Keys | Does |
+| :-- | :-- |
+| `j` `down` | move down |
+| `k` `up` | move up |
+| `gg` | first row |
+| `G` | last row |
+| `ctrl+d` | half page down |
+| `ctrl+u` | half page up |
+| `ctrl+f` `pgdown` | page down |
+| `ctrl+b` `pgup` | page up |
+| `:` | command line (:set :toggle :width :refresh :w :wq :q) |
+| `?` `f1` | this help |
+| `q` `ctrl+c` | quit (asks when there are unsaved changes) |
+| `space` | on a segment: turn it on/off; on style / palette / links: the next value |
+| `enter` | edit the setting on the command line (on a segment: on/off) |
+| `J` | move the segment right (later on the line) |
+| `K` | move the segment left (earlier on the line) |
+| `<` | narrow the preview by 10 columns |
+| `>` | widen the preview by 10 columns |
+| `r` | probe the MCP servers now (a few seconds) |
+| `w` | save to config.json |
+
 
 Keys valid for `config get`: `enabled`, `style`, `timezone`, `time_format`, `date_format`, `segments`, `styles`
 
-Keys valid for `config set`: `style`, `timezone`, `time_format`, `date_format`
+Keys valid for `config set`: `style`, `palette` (`auto`, `dark`, `light`, `dark8`, `dark-daltonism`; `GSL_THEME` / `SDK_THEME` still win for a session), `timezone`, `time_format`, `date_format`, `links`
 
 Segments valid for enable / disable / toggle: `host`, `dirgit`, `repo`, `ai`, `video`, `time`. Enabling a known segment that an older `config.json` lacks inserts it (`host` at the front, others at the end), so `gsl config enable host` is the one-step upgrade.
 
 ## Segments
 
-All five segments run concurrently under a shared 1-second parent deadline. Each segment also has its own 1-second hard cap (`segmentDeadline = 1000 ms`); the underlying git / mcp / gh detection packages apply tighter internal budgets (~800 ms for git, ~500 ms for MCP). A segment that times out is dropped while the rest still render.
+All five segments run concurrently under a shared 1-second parent deadline. Each segment also has its own 1-second hard cap (`segmentDeadline = 1000 ms`); the underlying git / gh detection packages apply tighter internal budgets (~800 ms for git). MCP never runs on the render path: the AI segment reads a cache (see `gsl mcp`). A segment that times out is dropped while the rest still render.
 
 ### `host`
 
@@ -186,7 +241,7 @@ Links (see [Links](#links)): the root/worktree glyph opens the repository home, 
 
 - Model display name (e.g. `claude-sonnet-4-5`)
 - Context-window usage: `<pct>% <used>k/<total>k` (token counts abbreviated with k/m suffixes)
-- MCP server count: `<active>/<configured>` when servers are configured; active count uses a short-lived subprocess query with a cache
+- MCP health, read from a per-directory cache and never probed during a render. It shrinks with width: `6✓ 5✗ 1!` (connected, failed, needs auth) → `6✓ 5✗` → `6/12` → `6` → dropped. `?/12` means configured but not probed yet. When the cache is stale the render starts `gsl mcp refresh` in the background (one at a time, backing off after a failure)
 - 5-hour and 7-day rate-limit usage percentages (`5h 42%`, `7d 10%`)
 
 Segment options (`options` map of the `ai` segment):
@@ -408,6 +463,26 @@ gsl config style emoji       # switch to emoji style
 gsl config style powerline   # switch back
 gsl config style --list      # show all styles with active marker (*)
 ```
+
+### Colours
+
+Theme values may be a name (`blue`), an index (`0`–`255`), `#rrggbb`, or the
+fragments `38;5;N` / `38;2;r;g;b`; anything else is ignored (and reported by
+`gsl config validate`). Colours are emitted for what the terminal supports:
+
+- `NO_COLOR` (any value) or `TERM=dumb` → no escape at all — no colour, no hyperlinks;
+- `COLORTERM=truecolor` → `#rrggbb` exactly; `TERM=*256color` (or no `TERM`, as
+  under Claude Code) → the nearest of 256; any other `TERM` → the 16 basic colours;
+- `--color auto|never|16|256|truecolor` and `--glyphs auto|ascii` on `render` /
+  `status` override the detection.
+
+On a filled (powerline) block the text is the style's `fg` when set, else
+black or white — whichever contrasts more (always ≥ 4.5:1; white on a
+terminal-themed 0–15 colour). A block whose colour is missing or unusable falls
+back to the palette's, so the ribbon never has an unpainted block or a stray
+chevron. The PR badge and the MCP breakdown are painted by role (`ok`, `warn`,
+`err`, `accent`, `muted` — theme keys too): on a filled block as a small chip,
+otherwise as a tint. Segments never embed escapes; the join layer paints.
 
 ### Glyph modes
 

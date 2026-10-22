@@ -41,7 +41,7 @@ func TestRepo_LinkPRDisabled(t *testing.T) {
 	if !ok {
 		t.Fatal("want ok=true")
 	}
-	if len(spans) != 0 {
+	if n := linkCount(spans); n != 0 {
 		t.Errorf("link_pr=false: want no link, got %+v", spans)
 	}
 	if !strings.Contains(text, "PR#21") {
@@ -68,7 +68,7 @@ func TestRepo_NoLinkWhenPRHidden(t *testing.T) {
 func TestJoin_EmitsOSC8(t *testing.T) {
 	blocks := []segmentBlock{
 		{text: "left", colorKey: "repo_root"},
-		{text: "PR#21", colorKey: "repo_root", links: []LinkSpan{{0, 5, wantPRURL}}},
+		{text: "PR#21", colorKey: "repo_root", links: []LinkSpan{{Start: 0, End: 5, URL: wantPRURL}}},
 	}
 	for _, st := range []struct {
 		name  string
@@ -100,7 +100,7 @@ func TestJoin_EmitsOSC8(t *testing.T) {
 func TestJoin_OSC8_DoesNotChangeWidth(t *testing.T) {
 	plain := []segmentBlock{{text: "PR#21", colorKey: "repo_root"}}
 	linked := []segmentBlock{{text: "PR#21", colorKey: "repo_root",
-		links: []LinkSpan{{0, 5, "https://github.com/some-org/a-very-long-repository-name/pull/21"}}}}
+		links: []LinkSpan{{Start: 0, End: 5, URL: "https://github.com/some-org/a-very-long-repository-name/pull/21"}}}}
 	for _, st := range []struct {
 		name  string
 		style style.Style
@@ -123,7 +123,7 @@ func TestJoin_OSC8_DoesNotChangeWidth(t *testing.T) {
 func TestTruncate_PreservesLink(t *testing.T) {
 	st := asciiStyle()
 	blocks := []segmentBlock{
-		{text: "a-long-repo-label PR#21", colorKey: "repo_root", links: []LinkSpan{{0, 17, wantPRURL}}},
+		{text: "a-long-repo-label PR#21", colorKey: "repo_root", links: []LinkSpan{{Start: 0, End: 17, URL: wantPRURL}}},
 	}
 	out := truncateToWidth(blocks, st, 12)
 	if len(out) == 0 {

@@ -129,50 +129,20 @@ func workerLabel(branch string) string {
 	return branch[idx+1:]
 }
 
-// prBadgeWithPrefix renders "<prefix><n>" tinted by PR state, so the
-// compaction ladder can shrink "PR#157" to "#157" at deeper levels. The state
-// color is a palette role: OPEN the OK color (theme key dirgit), MERGED Accent
-// (repo_worktree), CLOSED Crit (video), falling back to named green, magenta
-// and red for a theme without them. Any other/empty state is left untinted.
-//
-// segKey is the theme key of the segment the badge sits in. Under Fill a fg
-// tint on the colored block is unreadable, so the badge is a chip — the state
-// color as its own background with readable text — and then the block's
-// background and text color return, so content after the badge stays inside
-// the same powerline block. The single trailing ansiReset for the whole
-// segment is owned by paint(), NOT by this helper.
-func prBadgeWithPrefix(st style.Style, prefix string, number int, state, segKey string) string {
-	text := prefix + strconv.Itoa(number)
-	var key, fallback string
+// prBadge is the PR badge's text, "<prefix><n>", and the style role its
+// state paints with: OPEN ok, MERGED accent, CLOSED err; any other state has
+// no role (plain). The badge carries no escape — the join layer paints the
+// role (plan F11): on a filled block as a chip, the state colour behind
+// readable text, then the block again; otherwise as a tint.
+func prBadge(prefix string, number int, state string) (text, role string) {
+	text = prefix + strconv.Itoa(number)
 	switch strings.ToUpper(state) {
 	case "OPEN":
-		key, fallback = "dirgit", "green"
+		role = string(style.RoleOK)
 	case "MERGED":
-		key, fallback = "repo_worktree", "magenta"
+		role = string(style.RoleAccent)
 	case "CLOSED":
-		key, fallback = "video", "red"
-	default:
-		return text
+		role = string(style.RoleErr)
 	}
-	color := themeColor(st, key)
-	if color == "" {
-		color = fallback
-	}
-	if st.Fill {
-		chip := bgSeq(color, true)
-		if chip == "" {
-			return text
-		}
-		block := themeColor(st, segKey)
-		segFG := fgSeq(themeColor(st, "fg"), true)
-		if segFG == "" {
-			segFG = fillText(block) // what paint chose for the block
-		}
-		return chip + fillText(color) + text + bgSeq(block, true) + segFG
-	}
-	seq := fgSeq(color, true)
-	if seq == "" {
-		return text
-	}
-	return seq + text + ansiReset
+	return text, role
 }

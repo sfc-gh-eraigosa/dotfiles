@@ -12,7 +12,7 @@ import (
 func TestWriteCache_PrivateModes(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "cache")
 	path := filepath.Join(dir, "ac.json")
-	if err := writeCache(path, cacheEntry{Count: 1}); err != nil {
+	if err := writeCache(path, entry{Cwd: "x"}); err != nil {
 		t.Fatalf("writeCache: %v", err)
 	}
 	for p, want := range map[string]os.FileMode{path: 0o600, dir: 0o700} {
@@ -40,7 +40,7 @@ func TestWriteCache_RenameFailureLeavesNoTempFile(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(path, "occupied"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeCache(path, cacheEntry{Count: 1}); err == nil {
+	if err := writeCache(path, entry{Cwd: "x"}); err == nil {
 		t.Fatal("writeCache over a non-empty directory should fail")
 	}
 	entries, err := os.ReadDir(dir)

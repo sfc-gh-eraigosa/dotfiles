@@ -26,7 +26,7 @@ the shim writes to stdout.
 | `host`   | Hardware-kind glyph (🍎 macOS, 🪟 WSL, 🍓 Pi, 🤖 Jetson, 🧠 DGX, 📦 container, 💻 other) + short hostname (floor 11 columns, grows to the full name when the line has room); far-left by default. Options: `min_len`, `max_len`, `icon`, `kind` |
 | `dirgit` | Current directory name (basename, `~` for `$HOME`) + branch + staged/unstaged/untracked/stash/ahead/behind badges |
 | `repo`   | Root-or-worktree indicator glyph + optional feature/worker/branch name + optional PR badge (tinted by state) + optional worktree count badge; self-omits outside a git repo. Links: glyph → repo home, label → branch on GitHub, badge → the PR |
-| `ai`     | Model display name + context-window usage + MCP active/configured count + 5h/7d rate-limit percentages. Renders under **both** Claude Code and agy. Self-omits only when there is genuinely no payload on stdin (e.g. bare `gsl status` in a plain shell) |
+| `ai`     | Model display name + context-window usage + MCP health (`6✓ 5✗ 1!` connected / failed / needs auth, shrinking to `6/12` → `6` with width; read from a cache, never probed during a render) + 5h/7d rate-limit percentages. Renders under **both** Claude Code and agy. Self-omits only when there is genuinely no payload on stdin (e.g. bare `gsl status` in a plain shell) |
 | `time`   | Date + time formatted by config Go layouts + timezone abbreviation; always renders |
 
 Each segment is independently enabled/disabled via `gsl config enable/disable/toggle <segment>`.
@@ -70,6 +70,8 @@ gsl preview --once                  # Print one rendered frame and exit (CI / go
 gsl version                         # Show version, commit, dirty flag, build date, description, binary path
 gsl version --json                  # Same, as JSON
 gsl usage [--host claude|antigravity] [--json]  # Last 5h/7d usage the host reported (recorded by every render)
+gsl mcp status [--json]                         # Cached MCP health for this directory (which servers failed / need auth)
+gsl mcp refresh                                 # Probe now (`claude mcp list`, a few seconds) and rewrite the cache
 ```
 
 `gsl render` is what both hosts call. `gsl status` is for humans at a shell prompt.
@@ -79,9 +81,11 @@ gsl usage [--host claude|antigravity] [--json]  # Last 5h/7d usage the host repo
 Config file: **`~/.config/gsl/config.json`**
 
 ```
+gsl config                          # The config studio (a terminal): edit rows, live preview, w to save
+gsl config validate                 # Lint config.json; each problem printed, exit 1 if any
 gsl config get                      # Print the full config as JSON
 gsl config get <key>                # Print one field: enabled, style, timezone, time_format, date_format, segments, styles
-gsl config set <key> <value>        # Set a field: style, timezone, time_format, date_format
+gsl config set <key> <value>        # Set a field: style, palette, links, timezone, time_format, date_format
 gsl config enable [segment]         # Enable the master switch (no arg) or a named segment
 gsl config disable [segment]        # Disable the master switch (no arg) or a named segment
 gsl config toggle <segment>         # Toggle a named segment on/off

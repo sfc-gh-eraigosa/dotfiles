@@ -77,10 +77,13 @@ type Deps struct {
 	// Runners (injected seams). Any may be nil; the affected detail is omitted.
 	Git git.Runner
 	GH  gh.Runner
-	MCP mcp.Runner
 
-	// MCPOpts is forwarded to mcp.ActiveCount (cache file / clock).
-	MCPOpts mcp.ActiveCountOptions
+	// MCPOpts is forwarded to mcp.Get (cache dir / TTL / clock). The render
+	// path only READS the MCP cache; it never runs the probe.
+	MCPOpts mcp.Options
+	// MCPSpawn starts the out-of-band refresh (mcp.SpawnRefresh in cmd) when
+	// the cached status is due one. nil ⇒ never refresh (tests, preview).
+	MCPSpawn func(cwd string) error
 
 	// Clock returns the current time for the time segment. nil ⇒ time.Now.
 	Clock func() time.Time
@@ -157,7 +160,8 @@ func BuildSegments(cfg config.Config, deps Deps) []Segment {
 			s.PR = deps.PR
 			segs = append(segs, s)
 		case "ai":
-			s := NewAISegment(deps.Payload, deps.Cwd, deps.MCP, deps.MCPOpts)
+			s := NewAISegment(deps.Payload, deps.Cwd, deps.MCPOpts)
+			s.MCPSpawn = deps.MCPSpawn
 			s.Priority = prio
 			s.Links = deps.Links
 			// The usage_url option overrides the host default (also the way to

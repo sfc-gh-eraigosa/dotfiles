@@ -31,6 +31,8 @@ Every key goes to the focused program, so htop's `q`, `/`, `esc` and F-keys beha
 | `esc` | cancel the prefix |
 | `ctrl+b` | send ctrl+b itself to the program |
 
+`j` and `k` skip the fixed panes (`zoomable: false`, like the gsl footer); `:focus <pane>` still reaches one by name.
+
 The keys come from the shared sdk keymap (`sdk/libs/tui`, `keymap.Vim`), so they mean the same thing as in fleet and gff. While the prefix waits, the title bar lists them; `ctrl+b ?` shows the full help.
 
 Commands (`ctrl+b :`):

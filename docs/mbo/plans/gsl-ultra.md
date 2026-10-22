@@ -2,7 +2,7 @@
 
 - **Slug:** gsl-ultra
 - **Date:** 2026-07-11
-- **Status:** In progress — 4 of 7 leaves built (see §6.2)
+- **Status:** All 7 leaves built — mcp · style · tui and the §6 rollout in [#424](https://github.com/sfc-gh-eraigosa/dotfiles/pull/424) (see §6.2)
 - **Relates to:** spec `../specs/gsl-ultra.md` · design `../designs/gsl-ultra.md` · issue [#158](https://github.com/sfc-gh-eraigosa/dotfiles/issues/158) · absorbs #31
 
 ## 1. Summary & verdict
@@ -275,7 +275,7 @@ is not function-disjoint, **merge the leaves** rather than rebasing around it.
 
 **Landing order:** `iface` → (`width` ∥ `latency` ∥ `agy`) → `mcp` → `style` → `tui`.
 
-### 6.2 Execution ledger (updated 2026-09-07 audit; #196 merged 2026-08-09)
+### 6.2 Execution ledger (updated 2026-10-20; #196 merged 2026-08-09; the rest in #424)
 
 | Leaf | PR | State | Gate evidence |
 | :-- | :-- | :-- | :-- |
@@ -283,9 +283,59 @@ is not function-disjoint, **merge the leaves** rather than rebasing around it.
 | `width` | [#196](https://github.com/sfc-gh-eraigosa/dotfiles/pull/196) (was #165) | **merged 2026-08-09** | full `go test ./...` green incl. `fit_property_test.go` (E1–E7) |
 | `latency` | [#196](https://github.com/sfc-gh-eraigosa/dotfiles/pull/196) (was #166) | **merged 2026-08-09** | full suite green incl. procgroup/gh-cache tests (E18, E19, E24) |
 | `agy` | [#196](https://github.com/sfc-gh-eraigosa/dotfiles/pull/196) (was #167) | **merged 2026-08-09** | full suite green; `FuzzParse` 20 s smoke clean (E20, E21); reconciled with main's tmux-palette rule (#190) |
-| `mcp` | — | **not started** | blocked on `latency` (exec seam) |
-| `style` | — | **not started** | blocked on `width` (raw-text-aware truncation) |
-| `tui` | — | **not started** | blocked on `width` + `mcp` + `style` |
+| `mcp` | this PR (one PR for `mcp` → `style` → `tui` → rollout, per the 2026-10-20 ask) | **built** | E8 `TestParseStatus_Golden` on a byte capture (13✔/5✘/26 auth/22 not configured); E10 `TestConfiguredServers_*`; E11 `TestStatus_CacheKeyedByCwd`; E12 `TestGet_NeverSpawns`; E13 `TestMCPPart_Levels`; E9 `TestParseStatus_RealCLI` (`-tags integration`) passed against the live CLI (66 servers, 16 s); live: a fresh-cache render ran `claude` 0 times, three stale renders (~60 ms each) started one refresh |
+| `style` | this PR | **built** | E14 `TestResolveBlockColors_AlwaysConcrete` + `TestJoinPowerline_NoUnpaintedBlock`; E15 `TestContrast_AllBuiltinPalettes` (dark/light/daltonism × every role ≥ 4.5:1); E16 `TestColorMode_Ladder` + `TestJoin_ModeNeverHasNoEscape`; E17 `TestSegments_NoEmbeddedReset`; `gsl config validate` (`TestValidateConfig_*`); live: `NO_COLOR` render has 0 escapes, `--color 16` no 256-codes, 0 unpainted chevrons |
+| `tui` | this PR | **built** | E22 `tui.TestModel_Update_IsValueSemantic` + `preview.TestModel_Update_IsValueSemantic` (the aliased map deleted); E23 `cmd.TestConfigCmd_Routing`; per-key tests, prompt-owns-keys, `TestView_FitsWidth` (40/80/200), `TestREADMEKeyTable`; live: opened in tmux, edited, `w` saved, next `gsl render` reflected it ([evidence](gsl-ultra/evidence/README.md)) |
+
+Deviation log (mcp, 2026-10-20): the CLI now prints a **`Not configured`**
+state (no sigil) and `! Needs authentication` with an ASCII `!`; both are in the
+capture. `State` gains `StateNotConfigured` (counted in `Servers` only) and
+`Status` gains `RefreshDue` (stale ∧ backoff passed ∧ no lock) so the render
+knows when to start `SpawnRefresh`; `Options` gains `Force` (manual refresh
+ignores the backoff) and `Fixed` (hermetic preview/goldens). The L2 denominator
+is `max(Configured, probed)`: claude.ai connectors are in no config file, so the
+config count alone gave `13/6`. The preview fixture is empty — any MCP part
+pushes its 80-column line into compacting the model name it exists to show.
+
+Deviation log (style, 2026-10-20): palettes come from the sdk's shared
+`libs/tui/theme` (#415) — the catppuccin/tokyonight/nord/gruvbox/dracula set is
+dropped, as one scheme across tools was decided after this plan. The resolver
+returns `Color` (an ANSI index **or** RGB) rather than bare `RGB`: 0–15 must stay
+indices for the terminal's theme to recolour them, which is what `dark8` is for.
+State roles (`ok/warn/err/accent/muted`) join the palettes; the PR badge and MCP
+breakdown are `LinkSpan.Role` runs painted by the join layer (a chip under fill).
+A tint with no theme value stays plain; only a FILL falls back (dark palette,
+then neutral grey). "Emoji default golden byte-identical" no longer holds — the
+MCP breakdown and readable fill text changed it deliberately; every golden diff
+is escape-only (text verified identical with escapes stripped).
+
+Deviation log (tui, 2026-10-20): the studio is `internal/tui`, value-semantic,
+on `sdk/libs/tui` (keymap/nav/cmdline/overlay/theme) — no `bubbles`, and
+`lipgloss` is not needed (only `x/ansi`, already in the graph). The live preview
+is `render.DetectAll` once + `Snapshot.Line` per edit (a sample payload stands
+in for Claude's so the ai segment shows); `prepare`/`styleFor` are shared with
+the status line. The palette picker writes a new `palette` config key (env still
+wins for a session).
+
+§6 rollout (2026-10-20): CI step "gsl race + vet + dependency/license gate"
+(`go vet`, `go test -race`, `GSL_STRICT_CHECK=1 scripts/check-deps.sh` — strict
+gate green locally: seams OK, licenses permissive); the `cmd` suite is hermetic
+(`newGitRunner`/`newGHRunner` seams stubbed in TestMain: 206 real git + 5 real
+`gh pr view` forks → 0, 1.8 s → 0.8 s); README / AGENTS / SKILL updated; the
+`gsl-visual-improvements` index row was already corrected (`done`) by the
+2026-09-07 audit. `install.sh` already fails when gsl's `build.sh` (and so its seam gate) fails: `if ! bash …/sdk/gsl/build.sh`.
+
+Final review (2026-10-21), fixed: the studio preview re-detects the time
+segment per edit and paints links "off"; `.mcp.json` servers count only once
+approved, and the scopes use Claude Code's meaning (local = ~/.claude.json
+projects[cwd] > project = .mcp.json); only the newest cached plugin version
+counts, and project `enabledPlugins` too; the refresh lock is a kernel flock
+(no stale-lock race); a bare TERM keeps 256 colours (only linux/vt*/ansi/
+cons25 drop to 16); chips on light basic colours get dark text; an unset
+timezone reads "UTC" (it renders as UTC) and the cycle offers "Local"; the
+spawn guard + detach live once in internal/exec. Kept: user theme values that
+were raw SGR fragments ("1;33") are not colours — ignored and reported by
+`gsl config validate`, as the README says.
 
 Deviation log: main's [#190](https://github.com/sfc-gh-eraigosa/dotfiles/pull/190) added a
 tmux/screen → `dark8` rule to `theme/resolve.go` after this plan was written; the `agy` leaf's

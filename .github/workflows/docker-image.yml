@@ -323,6 +323,17 @@ jobs:
           PATH="$(go env GOPATH)/bin:$PATH"
           export PATH
           GSS_STRICT_CHECK=1 bash sdk/gss/scripts/check-deps.sh
+      - name: gsl race + vet + dependency/license gate
+        # gsl-ultra plan §6: the race detector and a standalone vet (make
+        # unit-test runs neither), and gsl's os/exec seam + license gate as its
+        # own step — install.sh has no `set -e`, so this is where it can fail.
+        working-directory: sdk/gsl
+        run: |
+          go vet ./...
+          go test -race ./...
+          PATH="$(go env GOPATH)/bin:$PATH"
+          export PATH
+          GSL_STRICT_CHECK=1 bash scripts/check-deps.sh
 
   shell-tests:
     name: Run Shell Test Drivers
