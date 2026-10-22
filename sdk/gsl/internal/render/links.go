@@ -46,6 +46,16 @@ func (s *spanBuilder) write(text string) { s.b.WriteString(text) }
 func (s *spanBuilder) len() int          { return s.b.Len() }
 func (s *spanBuilder) String() string    { return s.b.String() }
 
+// styled writes text with a role (painted by the join layer) and, when url is
+// non-empty, a link over the same run.
+func (s *spanBuilder) styled(text, role, url string) {
+	start := s.b.Len()
+	s.b.WriteString(text)
+	if text != "" && (role != "" || url != "") {
+		s.spans = append(s.spans, LinkSpan{Start: start, End: s.b.Len(), URL: url, Role: role})
+	}
+}
+
 // linked writes text and, when url is non-empty, records a span over it.
 func (s *spanBuilder) linked(text, url string) {
 	start := s.b.Len()
@@ -61,7 +71,7 @@ func (s *spanBuilder) linked(text, url string) {
 func validateSpans(n int, spans []LinkSpan) []LinkSpan {
 	out := make([]LinkSpan, 0, len(spans))
 	for _, sp := range spans {
-		if sp.URL == "" || sp.Start < 0 || sp.End > n || sp.Start >= sp.End {
+		if (sp.URL == "" && sp.Role == "") || sp.Start < 0 || sp.End > n || sp.Start >= sp.End {
 			continue
 		}
 		out = append(out, sp)
@@ -111,7 +121,7 @@ func reanchorSpans(orig, stripped string, spans []LinkSpan) []LinkSpan {
 			continue
 		}
 		start := cursor + idx
-		out = append(out, LinkSpan{Start: start, End: start + len(frag), URL: sp.URL})
+		out = append(out, LinkSpan{Start: start, End: start + len(frag), URL: sp.URL, Role: sp.Role})
 		cursor = start + len(frag)
 	}
 	return out

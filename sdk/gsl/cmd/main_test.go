@@ -1,10 +1,19 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 	"sync/atomic"
 	"testing"
+
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh"
+	ghfake "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/gh/fake"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git"
+	gitfake "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/git/fake"
 )
+
+// errNoSubprocess is what the hermetic runners answer with.
+var errNoSubprocess = errors.New("cmd tests: no subprocess")
 
 // videoSpawnCalls counts how often a status-line render asked for a GPU
 // refresher during this test run. The real spawner is never used here.
@@ -24,6 +33,12 @@ func TestMain(m *testing.M) {
 		videoSpawnCalls.Add(1)
 		return nil
 	}
+	mcpSpawn = func(string) error { return nil } // never re-exec cmd.test
+	// Hermetic (plan §6): no real git or gh — gh pr view is a network call.
+	// A runner that knows nothing makes every segment take its "not a repo /
+	// no PR" path; tests that need git output inject their own.
+	newGitRunner = func() git.Runner { return &gitfake.Runner{Default: gitfake.Response{Err: errNoSubprocess}} }
+	newGHRunner = func() gh.Runner { return &ghfake.Runner{Default: ghfake.Response{Err: errNoSubprocess}} }
 	state, err := os.MkdirTemp("", "gsl-cmd-test-state-")
 	if err != nil {
 		panic(err)

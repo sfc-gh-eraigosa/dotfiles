@@ -14,7 +14,7 @@ const ulOn, ulOff = "\x1b[4m", "\x1b[24m"
 
 func TestPaintRuns_WrapsExactlyTheSpan(t *testing.T) {
 	st := asciiStyle() // Links == "" ⇒ underline
-	got := paintRuns(st, "root main PR#21", []LinkSpan{{Start: 10, End: 15, URL: wantPRURL}})
+	got := paintRuns(st, "root main PR#21", []LinkSpan{{Start: 10, End: 15, URL: wantPRURL}}, "")
 	want := "root main " + osc8Open(wantPRURL) + ulOn + "PR#21" + ulOff + osc8Close
 	if got != want {
 		t.Errorf("paintRuns = %q, want %q", got, want)
@@ -24,21 +24,21 @@ func TestPaintRuns_WrapsExactlyTheSpan(t *testing.T) {
 func TestPaintRuns_PlainModeHasNoUnderline(t *testing.T) {
 	st := asciiStyle()
 	st.Links = "plain"
-	got := paintRuns(st, "PR#21", []LinkSpan{{0, 5, wantPRURL}})
+	got := paintRuns(st, "PR#21", []LinkSpan{{Start: 0, End: 5, URL: wantPRURL}}, "")
 	if strings.Contains(got, ulOn) || !strings.Contains(got, osc8Open(wantPRURL)) {
 		t.Errorf("plain mode: got %q", got)
 	}
 }
 
 func TestPaintRuns_NoSpansIsIdentity(t *testing.T) {
-	if got := paintRuns(asciiStyle(), "abc", nil); got != "abc" {
+	if got := paintRuns(asciiStyle(), "abc", nil, ""); got != "abc" {
 		t.Errorf("got %q", got)
 	}
 }
 
 func TestValidateSpans_DropsBadOnes(t *testing.T) {
 	spans := validateSpans(5, []LinkSpan{
-		{3, 5, "u3"}, {0, 2, "u1"}, {1, 3, "overlap"}, {4, 9, "range"}, {0, 1, ""}, {2, 2, "empty"},
+		{Start: 3, End: 5, URL: "u3"}, {Start: 0, End: 2, URL: "u1"}, {Start: 1, End: 3, URL: "overlap"}, {Start: 4, End: 9, URL: "range"}, {Start: 0, End: 1, URL: ""}, {Start: 2, End: 2, URL: "empty"},
 	})
 	if len(spans) != 2 || spans[0].URL != "u1" || spans[1].URL != "u3" {
 		t.Errorf("validateSpans = %+v", spans)
@@ -46,7 +46,7 @@ func TestValidateSpans_DropsBadOnes(t *testing.T) {
 }
 
 func TestClipSpans(t *testing.T) {
-	got := clipSpans([]LinkSpan{{0, 4, "a"}, {5, 9, "b"}, {10, 12, "c"}}, 7)
+	got := clipSpans([]LinkSpan{{Start: 0, End: 4, URL: "a"}, {Start: 5, End: 9, URL: "b"}, {Start: 10, End: 12, URL: "c"}}, 7)
 	if len(got) != 2 || got[1].End != 7 {
 		t.Errorf("clipSpans = %+v", got)
 	}
@@ -54,7 +54,7 @@ func TestClipSpans(t *testing.T) {
 
 func TestReanchorSpans_SurvivesANSIStrip(t *testing.T) {
 	orig := "x \x1b[38;5;5mPR#21\x1b[38;5;7m y"
-	spans := []LinkSpan{{2, 2 + len("\x1b[38;5;5mPR#21\x1b[38;5;7m"), wantPRURL}}
+	spans := []LinkSpan{{Start: 2, End: 2 + len("\x1b[38;5;5mPR#21\x1b[38;5;7m"), URL: wantPRURL}}
 	stripped := term.StripANSI(orig)
 	got := reanchorSpans(orig, stripped, spans)
 	if len(got) != 1 || stripped[got[0].Start:got[0].End] != "PR#21" {
@@ -63,7 +63,7 @@ func TestReanchorSpans_SurvivesANSIStrip(t *testing.T) {
 }
 
 func TestShiftSpans(t *testing.T) {
-	got := shiftSpans([]LinkSpan{{0, 2, "glyph"}, {3, 7, "label"}}, 3)
+	got := shiftSpans([]LinkSpan{{Start: 0, End: 2, URL: "glyph"}, {Start: 3, End: 7, URL: "label"}}, 3)
 	if len(got) != 1 || got[0].Start != 0 || got[0].End != 4 {
 		t.Errorf("shiftSpans = %+v", got)
 	}
@@ -72,7 +72,7 @@ func TestShiftSpans(t *testing.T) {
 func TestJoin_SpansZeroWidth_BothPaths(t *testing.T) {
 	plain := []segmentBlock{{text: "main PR#21", colorKey: "repo_root"}}
 	linked := []segmentBlock{{text: "main PR#21", colorKey: "repo_root",
-		links: []LinkSpan{{0, 4, "https://github.com/o/r/tree/main"}, {5, 10, wantPRURL}}}}
+		links: []LinkSpan{{Start: 0, End: 4, URL: "https://github.com/o/r/tree/main"}, {Start: 5, End: 10, URL: wantPRURL}}}}
 	for _, st := range []style.Style{asciiStyle(), powerlineStyleFixture()} {
 		if term.DisplayWidth(join(st, linked)) != term.DisplayWidth(join(st, plain)) {
 			t.Errorf("spans changed width for %s", st.Separator)
@@ -86,7 +86,7 @@ func TestJoin_SpansZeroWidth_BothPaths(t *testing.T) {
 
 func TestTruncateToWidth_ClipsSpans(t *testing.T) {
 	blocks := []segmentBlock{{text: "a-long-repo-label PR#21", colorKey: "repo_root",
-		links: []LinkSpan{{0, 17, "https://github.com/o/r/tree/x"}, {18, 23, wantPRURL}}}}
+		links: []LinkSpan{{Start: 0, End: 17, URL: "https://github.com/o/r/tree/x"}, {Start: 18, End: 23, URL: wantPRURL}}}}
 	out := truncateToWidth(blocks, asciiStyle(), 12)
 	if len(out) != 1 || len(out[0].links) != 1 || out[0].links[0].End > len(out[0].text)-len(ellipsis) {
 		t.Errorf("truncate: %+v", out)
@@ -169,5 +169,17 @@ func TestVSCodeDevURLs(t *testing.T) {
 	}
 	if VSCodeDevPRURL("https://gitlab.com/o/r", 1) != "" || VSCodeDevTreeURL("https://github.com/o/r", "") != "" || VSCodeDevPRURL("https://github.com/o/r", 0) != "" {
 		t.Error("non-GitHub, empty branch, or PR 0 must yield no URL")
+	}
+}
+
+// links "off" emits no hyperlink even when spans carry URLs (the studio keeps
+// one detection, so its preview must honour the setting at paint time); a
+// role still paints.
+func TestPaintRuns_LinksOff(t *testing.T) {
+	st := asciiStyle()
+	st.Links = "off"
+	got := paintRuns(st, "PR#21", []LinkSpan{{Start: 0, End: 5, URL: wantPRURL, Role: "ok"}}, "")
+	if strings.Contains(got, "\x1b]8;") || strings.Contains(got, ulOn) {
+		t.Errorf("links off still linked: %q", got)
 	}
 }

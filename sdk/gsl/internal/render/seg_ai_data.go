@@ -6,7 +6,8 @@ package render
 //   level 0: <glyph> <model> <ctx%> <token-ratio> [<mcp>] [5h%] [7d%]
 //   level 1: drop 7d rate limit
 //   level 2: drop token ratio (keep ctx% only)
-//   level 3: shorten model name + drop MCP count
+//   level 3: shorten model name; MCP down to its connected count
+//   level 4: drop MCP (see mcpPart for its own ladder)
 
 import (
 	"context"
@@ -22,16 +23,15 @@ import (
 
 // aiData is the detect-once intermediate for the AI segment.
 type aiData struct {
-	modelName     string
-	modelID       string
-	ctxPct        *float64
-	tokenUsed     *float64
-	tokenTotal    *float64
-	mcpActive     int // -1 = unavailable
-	mcpConfigured int
-	rate5h        *float64
-	rate7d        *float64
-	hasPayload    bool
+	modelName  string
+	modelID    string
+	ctxPct     *float64
+	tokenUsed  *float64
+	tokenTotal *float64
+	mcp        mcp.Status
+	rate5h     *float64
+	rate7d     *float64
+	hasPayload bool
 	// prio is the drop priority (config.Segment.EffectivePriority).
 	prio int
 	// links is the policy the spans are gated on.
@@ -46,14 +46,15 @@ func (d *aiData) priority() int {
 	return config.PriorityAI
 }
 
-// detect implements detectable for AISegment. Runs all MCP subprocess I/O once.
+// detect implements detectable for AISegment. It reads the MCP cache (never
+// probes) and, when the cache is due, asks MCPSpawn for an out-of-band refresh.
 func (s *AISegment) detect(ctx context.Context) (segmentData, bool) {
 	p := s.Payload
 	if p.Model == nil && p.ContextWindow == nil && p.RateLimits == nil {
 		return nil, false
 	}
 
-	d := &aiData{hasPayload: true, mcpActive: -1, prio: s.Priority, links: s.Links}
+	d := &aiData{hasPayload: true, prio: s.Priority, links: s.Links}
 
 	if p.Model != nil && p.Model.DisplayName != nil {
 		d.modelName = *p.Model.DisplayName
@@ -75,15 +76,12 @@ func (s *AISegment) detect(ctx context.Context) (segmentData, bool) {
 		}
 	}
 
-	// MCP detection (subprocess I/O happens here).
+	// MCP: cache only (mcp.Get never spawns); a due refresh runs out of band.
 	if s.Cwd != "" {
-		if n, err := mcp.ConfiguredCount(s.Cwd); err == nil {
-			d.mcpConfigured = n
-			if s.MCP != nil {
-				if active, aErr := mcp.ActiveCount(ctx, s.MCP, s.MCPOpts); aErr == nil {
-					d.mcpActive = active
-				}
-			}
+		st, _ := mcp.Get(ctx, s.Cwd, s.MCPOpts)
+		d.mcp = st
+		if st.RefreshDue && s.MCPSpawn != nil {
+			s.spawnOnce.Do(func() { _ = s.MCPSpawn(s.Cwd) })
 		}
 	}
 
@@ -151,19 +149,18 @@ func (d *aiData) formatLinked(st style.Style, level int) (string, string, []Link
 		sb.linked(ctx, usage)
 	}
 
-	// ── MCP count (dropped at level 3) ─────────────────────────────────────
-	if level < 3 && (d.mcpConfigured > 0 || d.mcpActive > 0) {
+	// ── MCP health (its own ladder; see mcpPart) ────────────────────────────
+	if runs := mcpParts(d.mcp, level); len(runs) > 0 {
 		sep()
 		if g := glyph(st, "mcp"); g != "" {
 			sb.write(g)
 			sb.write(" ")
 		}
-		if d.mcpActive >= 0 {
-			sb.write(strconv.Itoa(d.mcpActive))
-			sb.write("/")
-			sb.write(strconv.Itoa(d.mcpConfigured))
-		} else {
-			sb.write(strconv.Itoa(d.mcpConfigured))
+		for i, r := range runs {
+			if i > 0 {
+				sb.write(" ")
+			}
+			sb.styled(r.text, r.role, "")
 		}
 	}
 
@@ -182,6 +179,65 @@ func (d *aiData) formatLinked(st style.Style, level int) (string, string, []Link
 		return "", "", nil
 	}
 	return sb.String(), "ai", sb.spans
+}
+
+// mcpPart is the MCP health for a compaction level (plan F8):
+//
+//	L0 "6✓ 5✗ 1!" · L1 "6✓ 5✗" · L2 "6/12" · L3 "6" · L4 dropped
+//
+// Zero parts are left out of the breakdown. The denominator is the larger of
+// the configured count and what the probe saw, since claude.ai connectors are
+// in no config file — so it is never below the numerator and never 0. A
+// status never probed (cold cache) shows "?/N" until L3, and nothing at all
+// is shown for an empty status.
+func mcpPart(s mcp.Status, level int) string {
+	var b strings.Builder
+	for i, p := range mcpParts(s, level) {
+		if i > 0 {
+			b.WriteString(" ")
+		}
+		b.WriteString(p.text)
+	}
+	return b.String()
+}
+
+// mcpRun is one piece of the MCP part with the role it is painted in.
+type mcpRun struct{ text, role string }
+
+// mcpParts is mcpPart as runs: connected ok, failed err, needs-auth warn.
+func mcpParts(s mcp.Status, level int) []mcpRun {
+	probed := s.Connected + s.Failed + s.NeedsAuth
+	total := max(s.Configured, probed)
+	if total == 0 || level >= 4 {
+		return nil
+	}
+	if s.FetchedAt.IsZero() {
+		if level >= 3 {
+			return nil
+		}
+		return []mcpRun{{"?/" + strconv.Itoa(total), string(style.RoleMuted)}}
+	}
+	switch level {
+	case 0, 1:
+		var runs []mcpRun
+		add := func(n int, mark string, role style.Role) {
+			if n > 0 {
+				runs = append(runs, mcpRun{strconv.Itoa(n) + mark, string(role)})
+			}
+		}
+		add(s.Connected, "✓", style.RoleOK)
+		add(s.Failed, "✗", style.RoleErr)
+		if level == 0 {
+			add(s.NeedsAuth, "!", style.RoleWarn)
+		}
+		if len(runs) == 0 {
+			return []mcpRun{{"0/" + strconv.Itoa(total), ""}}
+		}
+		return runs
+	case 2:
+		return []mcpRun{{strconv.Itoa(s.Connected) + "/" + strconv.Itoa(total), ""}}
+	}
+	return []mcpRun{{strconv.Itoa(s.Connected), ""}}
 }
 
 // modelBudget is the display-width cap for a shortened model name.

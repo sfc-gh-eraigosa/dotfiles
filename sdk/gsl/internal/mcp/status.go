@@ -1,7 +1,7 @@
 package mcp
 
 import (
-	"context"
+	"strings"
 	"time"
 )
 
@@ -47,6 +47,11 @@ const (
 	StateNeedsAuth
 	// StateConnecting — the health check was still in flight.
 	StateConnecting
+	// StateNotConfigured — listed by the CLI but not set up (e.g. a plugin or
+	// claude.ai connector the user never configured). Not a failure: it is
+	// counted in Servers only, never in Connected/Failed/NeedsAuth. The CLI
+	// added this after the plan was written (seen in the 2026-10 capture).
+	StateNotConfigured
 )
 
 // String renders the state as the lowercase keyword the CLI itself uses.
@@ -60,6 +65,8 @@ func (s State) String() string {
 		return "needs authentication"
 	case StateConnecting:
 		return "connecting"
+	case StateNotConfigured:
+		return "not configured"
 	default:
 		return "unknown"
 	}
@@ -76,8 +83,8 @@ type Scope int
 
 const (
 	ScopeUnknown Scope = iota
-	ScopeLocal         // <cwd>/.mcp.json
-	ScopeProject       // ~/.claude.json → .projects[cwd].mcpServers
+	ScopeLocal         // ~/.claude.json → .projects[cwd].mcpServers (Claude Code's "local")
+	ScopeProject       // <cwd>/.mcp.json, once approved (Claude Code's "project")
 	ScopeUser          // ~/.claude.json → .mcpServers
 	ScopePlugin        // ~/.claude/plugins/cache/**/.mcp.json (gated by enabledPlugins)
 )
@@ -110,6 +117,11 @@ type Status struct {
 	// Callers SHOULD still render it — a stale count beats no count — and MAY
 	// signal staleness in the UI. Renderers must not block to refresh it.
 	Stale bool
+	// RefreshDue is true when the entry is stale (or missing) AND the negative
+	// cache's backoff allows another probe: the caller should start an
+	// out-of-band refresh (SpawnRefresh). False while a failure backs off, so
+	// a broken `claude` does not respawn on every render.
+	RefreshDue bool
 }
 
 // Empty reports whether there is nothing worth rendering: no servers
@@ -133,6 +145,14 @@ type Options struct {
 
 	// Now, if non-nil, replaces time.Now (tests).
 	Now func() time.Time
+
+	// Fixed, when non-nil, is returned by Get as-is with no file access at
+	// all: the hermetic preview and golden fixtures.
+	Fixed *Status
+
+	// Force makes Refresh probe even while a failure is backing off (the
+	// explicit `gsl mcp refresh` verb); the single-flight lock still applies.
+	Force bool
 }
 
 // ParseStatus extracts the health picture from `claude mcp list` output.
@@ -150,58 +170,52 @@ type Options struct {
 // ParseStatus (it comes from the config scan) — only Connected/Failed/
 // NeedsAuth/Servers are.
 func ParseStatus(out []byte) Status {
-	// Implemented in the `mcp` leaf.
-	return Status{}
+	var s Status
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimRight(line, "\r")
+		i := strings.LastIndex(line, " - ")
+		if i < 0 {
+			continue // "Checking MCP server health…", blanks, banners
+		}
+		left, field := line[:i], strings.TrimSpace(line[i+3:])
+		name := left
+		if j := strings.Index(left, ": "); j >= 0 {
+			name = left[:j]
+		}
+		name = strings.TrimSpace(name)
+		if name == "" || field == "" {
+			continue
+		}
+		st := classify(field)
+		s.Servers = append(s.Servers, ServerStatus{Name: name, State: st})
+		switch st {
+		case StateConnected:
+			s.Connected++
+		case StateFailed:
+			s.Failed++
+		case StateNeedsAuth:
+			s.NeedsAuth++
+		}
+	}
+	return s
 }
 
-// Get returns the MCP status for cwd from the CACHE ONLY.
-//
-// CONTRACT — this is the load-bearing invariant of the whole design:
-//
-//	Get MUST NEVER spawn a subprocess, and MUST NEVER block on the network.
-//
-// It is called on the render hot path, once per assistant turn. `claude mcp
-// list` takes 3.4–4.1 s because it dials every server; there is no timeout at
-// which running it inline is acceptable.
-//
-// A fresh entry is returned with Stale=false. An EXPIRED entry is still
-// returned, with Stale=true — a slightly-old count is strictly better than no
-// count — and the caller SHOULD trigger an out-of-band Refresh. A cold cache
-// returns a Status carrying only the config-derived Configured count, with
-// Stale=true.
-func Get(ctx context.Context, cwd string, o Options) (Status, error) {
-	// Implemented in the `mcp` leaf.
-	return Status{}, nil
-}
-
-// Refresh runs the probe OUT OF BAND and rewrites the cwd-keyed cache entry.
-//
-// This is the ONLY function in the package that shells out. It is invoked by
-// `gsl mcp refresh` (which the render path forks in a DETACHED process when it
-// observes a stale entry) — never synchronously from a render.
-//
-// Refresh MUST be single-flight (a lockfile in the cache dir): concurrent gsl
-// processes across panes must not stampede N copies of a 4-second probe.
-// Failures MUST be cached NEGATIVELY with exponential backoff, so a broken
-// `claude` binary does not cause a respawn on every keystroke.
-func Refresh(ctx context.Context, r Runner, cwd string, o Options) error {
-	// Implemented in the `mcp` leaf.
-	return nil
-}
-
-// ConfiguredServers returns the DE-DUPLICATED set of servers configured for
-// cwd, resolved across every scope.
-//
-// Rules (plan F6):
-//   - De-duplicate by server NAME; a name in several scopes resolves to its
-//     highest-precedence scope (Local > Project > User > Plugin).
-//   - Include plugin servers from ~/.claude/plugins/cache/**/.mcp.json, gated
-//     by `enabledPlugins` in ~/.claude/settings.json.
-//   - SUBTRACT names listed in `disabledMcpjsonServers`.
-//   - Honour `enableAllProjectMcpServers`.
-//
-// A missing config file contributes nothing and is NOT an error.
-func ConfiguredServers(cwd string) ([]ServerStatus, error) {
-	// Implemented in the `mcp` leaf.
-	return nil, nil
+// classify maps a status field to a State by keyword, case-insensitively.
+// Order matters: "not configured" and "not connected" contain other keywords,
+// and "failed to connect" must not read as connecting.
+func classify(field string) State {
+	f := strings.ToLower(field)
+	switch {
+	case strings.Contains(f, "not configured"):
+		return StateNotConfigured
+	case strings.Contains(f, "needs authentication"), strings.Contains(f, "needs auth"):
+		return StateNeedsAuth
+	case strings.Contains(f, "failed"), strings.Contains(f, "not connected"), strings.Contains(f, "error"):
+		return StateFailed
+	case strings.Contains(f, "connecting"):
+		return StateConnecting
+	case strings.Contains(f, "connected"):
+		return StateConnected
+	}
+	return StateUnknown
 }

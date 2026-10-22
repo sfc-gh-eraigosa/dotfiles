@@ -1,0 +1,68 @@
+Checking MCP server health…
+
+claude.ai Connector 01: https://mcp-01.example.invalid/mcp - ✔ Connected
+claude.ai Connector 02: https://mcp-02.example.invalid/mcp - ! Needs authentication
+claude.ai Connector 03: https://mcp-03.example.invalid/mcp - ✔ Connected
+claude.ai Connector 04: https://mcp-04.example.invalid/mcp - ✔ Connected
+claude.ai Connector 05: https://mcp-05.example.invalid/mcp - ✔ Connected
+claude.ai Connector 06: https://mcp-06.example.invalid/mcp - ✔ Connected
+claude.ai Connector 07: https://mcp-07.example.invalid/mcp - ✔ Connected
+claude.ai Connector 08: https://mcp-08.example.invalid/mcp - ! Needs authentication
+plugin:p09:server: https://mcp-09.example.invalid/mcp - ✘ Failed to connect — HTTP 400: Error POSTing to endpoint: bad request: Authorization header is badly formatted
+plugin:p10:server: mcp-server-10 --stdio - ✔ Connected
+plugin:p11:server: https://mcp-11.example.invalid/mcp - ✔ Connected
+plugin:p12:server: mcp-server-12 --stdio - ✔ Connected
+plugin:p13:server: mcp-server-13 --stdio - ✔ Connected
+plugin:p14:server: mcp-server-14 --stdio - ✔ Connected
+plugin:p15:server: mcp-server-15 --stdio - ✔ Connected
+plugin:p16:server: mcp-server-16 --stdio - ✔ Connected
+plugin:p17:server: https://mcp-17.example.invalid/mcp - ! Needs authentication
+plugin:p18:server: https://mcp-18.example.invalid/mcp - ! Needs authentication
+plugin:p19:server: https://mcp-19.example.invalid/mcp - ! Needs authentication
+plugin:p20:server: https://mcp-20.example.invalid/mcp - ! Needs authentication
+plugin:p21:server: https://mcp-21.example.invalid/mcp - ! Needs authentication
+plugin:p22:server: https://mcp-22.example.invalid/mcp - ! Needs authentication
+plugin:p23:server: https://mcp-23.example.invalid/mcp - ! Needs authentication
+plugin:p24:server: mcp-server-24 --stdio - Not configured
+plugin:p25:server: mcp-server-25 --stdio - Not configured
+plugin:p26:server: mcp-server-26 --stdio - Not configured
+plugin:p27:server: mcp-server-27 --stdio - Not configured
+plugin:p28:server: https://mcp-28.example.invalid/mcp - ! Needs authentication
+plugin:p29:server: mcp-server-29 --stdio - Not configured
+plugin:p30:server: mcp-server-30 --stdio - Not configured
+plugin:p31:server: https://mcp-31.example.invalid/mcp - ! Needs authentication
+plugin:p32:server: https://mcp-32.example.invalid/mcp - ! Needs authentication
+plugin:p33:server: mcp-server-33 --stdio - Not configured
+plugin:p34:server: mcp-server-34 --stdio - Not configured
+plugin:p35:server: https://mcp-35.example.invalid/mcp - ! Needs authentication
+plugin:p36:server: https://mcp-36.example.invalid/mcp - ! Needs authentication
+plugin:p37:server: https://mcp-37.example.invalid/mcp - ! Needs authentication
+plugin:p38:server: https://mcp-38.example.invalid/mcp - ! Needs authentication
+plugin:p39:server: https://mcp-39.example.invalid/mcp - ! Needs authentication
+plugin:p40:server: https://mcp-40.example.invalid/mcp - ! Needs authentication
+plugin:p41:server: mcp-server-41 --stdio - Not configured
+plugin:p42:server: mcp-server-42 --stdio - Not configured
+plugin:p43:server: https://mcp-43.example.invalid/mcp - ! Needs authentication
+plugin:p44:server: https://mcp-44.example.invalid/mcp - ✘ Failed to connect — Server rejected the configured Authorization header (HTTP 401). Check that the token is valid for this MCP endpoint — OAuth fallback is disabled when headers.Authorization is set. Error detail: {"error":{"code":-32003,"message":"Invalid access token"},"id":0,"jsonrpc":"2.0"}
+plugin:p45:server: https://mcp-45.example.invalid/mcp - ✘ Failed to connect — Server rejected the configured Authorization header (HTTP 401). Check that the token is valid for this MCP endpoint — OAuth fallback is disabled when headers.Authorization is set. Error detail: {"id":0,"jsonrpc":"2.0","error":{"message":"Invalid access token","code":-32001}}
+plugin:p46:server: https://mcp-46.example.invalid/mcp - ✘ Failed to connect — Server rejected the configured Authorization header (HTTP 401). Check that the token is valid for this MCP endpoint — OAuth fallback is disabled when headers.Authorization is set. Error detail: {"id":0,"jsonrpc":"2.0","error":{"code":-32001,"message":"Invalid access token"}}
+plugin:p47:server: https://mcp-47.example.invalid/mcp - ! Needs authentication
+plugin:p48:server: mcp-server-48 --stdio - Not configured
+plugin:p49:server: mcp-server-49 --stdio - Not configured
+plugin:p50:server: mcp-server-50 --stdio - Not configured
+plugin:p51:server: mcp-server-51 --stdio - Not configured
+plugin:p52:server: https://mcp-52.example.invalid/mcp - ! Needs authentication
+plugin:p53:server: https://mcp-53.example.invalid/mcp - ! Needs authentication
+plugin:p54:server: https://mcp-54.example.invalid/mcp - ! Needs authentication
+plugin:p55:server: https://mcp-55.example.invalid/mcp - ! Needs authentication
+plugin:p56:server: https://mcp-56.example.invalid/mcp - ! Needs authentication
+plugin:p57:server: mcp-server-57 --stdio - Not configured
+plugin:p58:server: mcp-server-58 --stdio - Not configured
+plugin:p59:server: mcp-server-59 --stdio - Not configured
+plugin:p60:server: mcp-server-60 --stdio - Not configured
+plugin:p61:server: mcp-server-61 --stdio - Not configured
+plugin:p62:server: mcp-server-62 --stdio - Not configured
+plugin:p63:server: mcp-server-63 --stdio - Not configured
+plugin:p64:server: mcp-server-64 --stdio - Not configured
+plugin:p65:server: https://mcp-65.example.invalid/mcp - ! Needs authentication
+plugin:p66:server: https://mcp-66.example.invalid/mcp - ✘ Failed to connect — MCP endpoint not found at https://example.invalid. Check the URL in your MCP config.

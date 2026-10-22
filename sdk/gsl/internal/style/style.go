@@ -89,4 +89,9 @@ type Style struct {
 	// from the config `links` key ("off" never reaches here — it removes the
 	// spans before rendering).
 	Links string `json:"links,omitempty"`
+
+	// Mode is the terminal's colour capability (cmd: DetectColorMode from the
+	// environment and --color). ModeAuto renders as Mode256; ModeNever emits
+	// no escape at all — no colour, no hyperlink.
+	Mode ColorMode `json:"-"`
 }
