@@ -714,11 +714,22 @@ func (m Model) View() string {
 
 	cols := m.cols()
 	add("")
-	add(pal.Bold("Preview") + pal.Dim(fmt.Sprintf("  (%d cols — < > to change)", cols)))
-	if m.env.Line != nil {
-		add(m.env.Line(m.cfg, min(cols, w)))
+	label := fmt.Sprintf("  (%d cols — < > to change)", cols)
+	if cols > w {
+		label = fmt.Sprintf("  (%d cols, wrapped to the %d-col window — < > to change)", cols, w)
 	}
-	add(ruler(min(cols, w)))
+	add(pal.Bold("Preview") + pal.Dim(label))
+	// Render at the chosen width, always: a preview wider than the window
+	// wraps onto more rows (with its ruler) instead of being re-rendered
+	// narrower, which would compact the very segments you widened it to see.
+	if m.env.Line != nil {
+		for _, l := range strings.Split(ansi.Hardwrap(m.env.Line(m.cfg, cols), w, true), "\n") {
+			add(l)
+		}
+	}
+	for _, l := range strings.Split(ansi.Hardwrap(ruler(cols), w, true), "\n") {
+		add(l)
+	}
 
 	add("")
 	add(pal.Bold("MCP") + "  " + mcpSummary(m.mcp, time.Now()))

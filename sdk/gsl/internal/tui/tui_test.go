@@ -455,3 +455,27 @@ func TestWidthRow(t *testing.T) {
 		t.Fatalf("enter types :width:\n%s", m.View())
 	}
 }
+
+// A preview wider than the window is rendered at the chosen width and wrapped
+// onto more rows — not re-rendered narrower (300 used to show a 100-col line).
+func TestPreviewWiderThanWindowWraps(t *testing.T) {
+	m, _ := newModel(t) // window 100
+	var got int
+	m.env.Line = func(c config.Config, cols int) string { got = cols; return strings.Repeat("x", cols) }
+	m = keys(m, runes(":"), runes("width 250"), enter)
+	v := m.View()
+	if got != 250 {
+		t.Fatalf("rendered at %d, want 250", got)
+	}
+	if n := strings.Count(v, strings.Repeat("x", 100)); n != 2 {
+		t.Errorf("want the 250-col line wrapped over 3 rows (2 full): %d full rows", n)
+	}
+	if !strings.Contains(v, "wrapped") {
+		t.Errorf("the label should say it is wrapped:\n%s", v)
+	}
+	for i, line := range strings.Split(v, "\n") {
+		if term.DisplayWidth(line) > 100 {
+			t.Errorf("line %d is wider than the window: %d", i, term.DisplayWidth(line))
+		}
+	}
+}
