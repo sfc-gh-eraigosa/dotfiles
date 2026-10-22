@@ -51,6 +51,9 @@ wslnet_wslconfig() {
 
 # _wslnet_file_mode FILE - echo the networkingMode value (lowercase) found in
 # [wsl2] (preferred) or [experimental]. CRLF and a UTF-8 BOM are tolerated.
+# The value is read the way set-wsl-network.ps1 (Get-KeyValue) reads it: a
+# trailing " # ..." / " ; ..." comment and surrounding quotes are dropped, so
+# the two sides never disagree about the same file.
 _wslnet_file_mode() {
   _fm_bom="$(printf '\357\273\277')"
   tr -d '\r' < "$1" | sed "1s/^${_fm_bom}//" | awk '
@@ -61,7 +64,10 @@ _wslnet_file_mode() {
       i = index($0, "=")
       if (i == 0) next
       if (tolower(trim(substr($0, 1, i - 1))) != "networkingmode") next
-      v = tolower(trim(substr($0, i + 1)))
+      v = substr($0, i + 1)
+      sub(/[ \t]+[#;].*$/, "", v)
+      v = trim(v); gsub(/^"+|"+$/, "", v)
+      v = tolower(trim(v))
       if (sec == "[wsl2]") w = v
       else if (sec == "[experimental]") e = v
     }

@@ -191,7 +191,13 @@ function Set-Wsl2Key($cfg, [string]$Key, [string]$Value) {
     $hits = Find-KeyLines $cfg 'wsl2' $Key
     if ($hits.Count -gt 0) {
         if ((Get-KeyValue $cfg 'wsl2' $Key) -ceq $Value -and $hits.Count -eq 1) { return }
-        for ($k = $hits.Count - 1; $k -ge 1; $k--) { $cfg.Lines.RemoveAt($hits[$k]) }
+        for ($k = $hits.Count - 1; $k -ge 1; $k--) {
+            $i = $hits[$k]
+            # As in Remove-Key: dropping an unterminated last line leaves the
+            # line before it as the unterminated last line.
+            if ($cfg.Lines[$i].E -eq '' -and $i -gt 0) { $cfg.Lines[$i - 1].E = '' }
+            $cfg.Lines.RemoveAt($i)
+        }
         $cfg.Lines[$hits[0]].T = "$Key=$Value"
         return
     }

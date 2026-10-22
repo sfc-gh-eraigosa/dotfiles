@@ -72,6 +72,9 @@ for sh_bin in bash sh; do
   fixture; printf '[experimental]\nnetworkingMode=mirrored\n' > "$WSLNET_WSLCONFIG"
   run_case "$sh_bin" "detect: key under [experimental] (older WSL)" '[ "$(wslnet_detect)" = mirrored ]'; rm -rf "$T"
 
+  fixture; printf '[wsl2]\nnetworkingMode="Mirrored"  # set by hand\n' > "$WSLNET_WSLCONFIG"
+  run_case "$sh_bin" "detect: quoted value + inline comment (as set-wsl-network.ps1 reads it)" '[ "$(wslnet_detect)" = mirrored ]'; rm -rf "$T"
+
   fixture; printf '\357\273\277[wsl2]\r\nnetworkingMode=bridged\r\n' > "$WSLNET_WSLCONFIG"
   run_case "$sh_bin" "detect: CRLF + BOM" '[ "$(wslnet_detect)" = bridged ]'; rm -rf "$T"
 
