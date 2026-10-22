@@ -24,7 +24,7 @@ no manual export (`gff set install.windows.wispr-flow false && ./install.sh` jus
 
 ## The deferred WSL networking step
 
-After the Desktop deploy, `install.sh` runs `install_windows.sh --wsl-network`, which applies the
+After the Desktop deploy, `install.sh` runs `install_windows.sh --wsl-network-auto`, which applies the
 gff flag `install.windows.wsl-network` (`off|nat|bridged|mirrored`, see
 [sshd-setup.md](./sshd-setup.md#wsl-networking-is-a-flag)). It first runs
 `set-wsl-network.ps1 -Status` **without elevation**; only if that reports something would change
@@ -35,6 +35,14 @@ it prints the new lines of `%LOCALAPPDATA%\dotfiles\set-wsl-network.log`. It nev
 fresh `bridged` setup therefore asks for one UAC prompt per run until the switch exists.
 Declining UAC prints a warning and the rerun command:
 `bash <repo>/opt/bin/install_windows.sh <repo> --wsl-network`.
+
+A mode that was **recorded because it was found** on the machine (see
+[sshd-setup.md](./sshd-setup.md#wsl-networking-is-a-flag)) is only reported by this step: when
+`-Status` lists differences it prints them and the command above, and changes nothing. Running
+that command by hand, or choosing a different mode, hands the setup to dotfiles from then on. With
+no terminal (a batch `fleet` wave) the step never raises UAC; it prints the same command. A mode
+the machine cannot take as it is (`-Status` exit 4, e.g. `mirrored` while the Windows OpenSSH
+service holds port 22) is reported and left alone.
 
 ## Deploy vs. customization
 

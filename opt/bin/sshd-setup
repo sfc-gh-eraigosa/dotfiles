@@ -164,7 +164,7 @@ cmd_enable() {
     seed_keys
     record_sshd_flag
     if [ "$(detect_platform)" = wsl ]; then
-        if [ "$DRY_RUN" != 1 ]; then WSLNET_PROC_VERSION="${SSHD_SETUP_PROC_VERSION:-/proc/version}" wslnet_sync; fi
+        if [ "$DRY_RUN" != 1 ]; then WSLNET_PROC_VERSION="${SSHD_SETUP_PROC_VERSION:-/proc/version}" wslnet_sync --ask; fi
         wsl_handoff
     fi
     echo "sshd-setup: done. Rollback: see docs/sshd-setup.md#rollback"

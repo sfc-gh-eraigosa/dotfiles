@@ -49,7 +49,7 @@ STUB
   export WSLNET_PROC_VERSION="${T}/proc_version"
   export WSLNET_NETSH="${T}/bin/netsh.exe" WSLNET_PS="${T}/bin/powershell.exe"
   export WSLNET_WSLCONFIG="${T}/wslconfig" WSLNET_USERS_DIR="${T}/users"
-  export WSLNET_K3S_BIN="${T}/nok3s" WSLNET_TTY="${T}/notty"
+  export WSLNET_K3S_BIN="${T}/nok3s" WSLNET_TTY="${T}/notty" WSLNET_STATE_DIR="${T}/state"
   unset WSLNET_ANSWER STUB_ROWS STUB_TASK STUB_WIRED STUB_PROFILE GFF_LAYER GFF_SET_RC
   unset GFF_INSTALL_NETWORK_SSHD GFF_INSTALL_WINDOWS_WSL_NETWORK
   # PATH: stubs first so systemctl probing is controlled too.
@@ -162,16 +162,17 @@ for sh_bin in bash sh; do
   run_case "$sh_bin" "sync: key user-set -> only list" '
     wslnet_sync; ! grep -q "args=set" "'"$T"'/gff.log" && grep -q "args=list" "'"$T"'/gff.log"'; rm -rf "$T"
 
-  fixture; printf '[wsl2]\nnetworkingMode=bridged\n' > "$WSLNET_WSLCONFIG"
+  fixture; export GFF_INSTALL_NETWORK_SSHD=true; printf '[wsl2]\nnetworkingMode=bridged\n' > "$WSLNET_WSLCONFIG"
   run_case "$sh_bin" "sync: detected -> set + message" '
     out=$(wslnet_sync) && grep -q "args=set install.windows.wsl-network bridged" "'"$T"'/gff.log" &&
-    [ "$out" = "Recorded existing WSL networking: install.windows.wsl-network=bridged (nothing changed)." ]'; rm -rf "$T"
+    [ "$out" = "Recorded existing WSL networking: install.windows.wsl-network=bridged (nothing changed; install.sh leaves a found setup as it is)." ] &&
+    [ "$(wslnet_detected_mode)" = bridged ]'; rm -rf "$T"
 
-  fixture; printf '[wsl2]\nnetworkingMode=mirrored\n' > "$WSLNET_WSLCONFIG"
+  fixture; export GFF_INSTALL_NETWORK_SSHD=true; printf '[wsl2]\nnetworkingMode=mirrored\n' > "$WSLNET_WSLCONFIG"
   run_case "$sh_bin" "sync: export visible in caller shell (not a subshell)" '
     wslnet_sync >/dev/null; [ "${GFF_INSTALL_WINDOWS_WSL_NETWORK:-}" = mirrored ]'; rm -rf "$T"
 
-  fixture; printf '[wsl2]\nnetworkingMode=mirrored\n' > "$WSLNET_WSLCONFIG"; export GFF_SET_RC=1
+  fixture; export GFF_INSTALL_NETWORK_SSHD=true; printf '[wsl2]\nnetworkingMode=mirrored\n' > "$WSLNET_WSLCONFIG"; export GFF_SET_RC=1
   run_case "$sh_bin" "sync: gff set fails -> warning, rc 0, no export" '
     out=$(wslnet_sync); rc=$?; [ "$rc" -eq 0 ] && [ -z "${GFF_INSTALL_WINDOWS_WSL_NETWORK:-}" ] &&
     case "$out" in WARNING:*) true ;; *) false ;; esac'; rm -rf "$T"
@@ -189,6 +190,38 @@ for sh_bin in bash sh; do
   run_case "$sh_bin" "sync: answer skip -> no set + hint" '
     out=$(wslnet_sync); ! grep -q "args=set" "'"$T"'/gff.log" &&
     [ "$out" = "Choose later: gff set install.windows.wsl-network <off|nat|bridged|mirrored>" ]'; rm -rf "$T"
+
+  # ---- sync: sshd gate, found-vs-chosen marker, remembered skip ----
+  fixture; printf '[wsl2]\nnetworkingMode=bridged\n' > "$WSLNET_WSLCONFIG"
+  printf '#!/bin/sh\ntouch "%s/ps.called"\n' "$T" > "${T}/bin/powershell.exe"
+  run_case "$sh_bin" "sync: sshd off -> nothing recorded, Windows never probed" '
+    out=$(wslnet_sync); [ -z "$out" ] && ! grep -q "args=set" "'"$T"'/gff.log" &&
+    [ ! -e "'"$T"'/ps.called" ] && [ -z "$(wslnet_detected_mode)" ]'; rm -rf "$T"
+
+  fixture; export GFF_INSTALL_NETWORK_SSHD=true WSLNET_ANSWER=nat
+  mkdir -p "${T}/state"; printf 'bridged\n' > "${T}/state/wsl-network-detected"
+  run_case "$sh_bin" "sync: a chosen mode clears the found marker" '
+    wslnet_sync >/dev/null; [ -z "$(wslnet_detected_mode)" ]'; rm -rf "$T"
+
+  fixture; export GFF_INSTALL_NETWORK_SSHD=true; printf 'skip\nnat\n' > "${T}/tty"; export WSLNET_TTY="${T}/tty"
+  run_case "$sh_bin" "sync: an operator skip is remembered; the next run does not ask" '
+    wslnet_sync >/dev/null 2>&1; [ -f "'"$T"'/state/wsl-network-skipped" ] &&
+    out=$(wslnet_sync 2>&1); [ -z "$out" ] && ! grep -q "args=set" "'"$T"'/gff.log"'; rm -rf "$T"
+
+  fixture; export GFF_INSTALL_NETWORK_SSHD=true; printf 'nat\n' > "${T}/tty"; export WSLNET_TTY="${T}/tty"
+  mkdir -p "${T}/state"; printf 'skip\n' > "${T}/state/wsl-network-skipped"
+  run_case "$sh_bin" "sync --ask: asks despite a remembered skip, then forgets it" '
+    wslnet_sync --ask >/dev/null 2>&1; grep -q "args=set install.windows.wsl-network nat" "'"$T"'/gff.log" &&
+    [ ! -f "'"$T"'/state/wsl-network-skipped" ]'; rm -rf "$T"
+
+  fixture; export GFF_INSTALL_NETWORK_SSHD=true WSLNET_ANSWER=nat
+  mkdir -p "${T}/state"; printf 'skip\n' > "${T}/state/wsl-network-skipped"
+  run_case "$sh_bin" "sync: WSLNET_ANSWER still applies over a remembered skip" '
+    wslnet_sync >/dev/null; grep -q "args=set install.windows.wsl-network nat" "'"$T"'/gff.log"'; rm -rf "$T"
+
+  fixture; export GFF_INSTALL_NETWORK_SSHD=true WSLNET_ANSWER=skip; printf 'x\n' > "${T}/tty"; export WSLNET_TTY="${T}/tty"
+  run_case "$sh_bin" "sync: a pre-answered skip (fleet) is not remembered" '
+    wslnet_sync >/dev/null; [ ! -f "'"$T"'/state/wsl-network-skipped" ]'; rm -rf "$T"
 done
 
 echo "----------------------------------------"

@@ -148,14 +148,22 @@ gff unset install.windows.wsl-network       # back to the default (off)
 
 How it gets its value:
 
-1. **Existing setup is recorded, never changed.** Detection reads `.wslconfig`
-   (`networkingMode=bridged|mirrored`) and the WSL portproxy / `RefreshWslPortProxy` task
-   (`nat`), and records that with `gff set`. A machine that works today keeps working.
-2. **Fresh enablement asks once.** `sshd-setup enable` on WSL with nothing detected recommends a
+1. **Existing setup is recorded, never changed.** While sshd is enabled
+   (`install.network.sshd`), detection reads `.wslconfig` (`networkingMode=bridged|mirrored`) and
+   the WSL portproxy / `RefreshWslPortProxy` task (`nat`), records that with `gff set`, and marks
+   it as found (`~/.local/state/dotfiles/wsl-network-detected`). `install.sh` then only reports a
+   found setup, even an incomplete one. A machine that works today keeps working, untouched, until
+   you hand it over: run `install_windows.sh <repo> --wsl-network` yourself, or set another mode.
+   With sshd off nothing is detected or recorded, and Windows is not probed.
+2. **Fresh enablement asks once.** With nothing detected, `sshd-setup enable` on WSL recommends a
    mode (k3s present and a wired adapter: `bridged`; otherwise `nat`) and asks. Pre-answer with
    `WSLNET_ANSWER=<off|nat|bridged|mirrored|skip>`; with no TTY and no answer nothing is
-   recorded. `fleet` sends `WSLNET_ANSWER` (default `skip`), settable in the fleet answers form.
-3. **`install.sh` applies it** (see [install-windows.md](./install-windows.md)). `off` is hands off.
+   recorded. Answering `skip` at the prompt is remembered (`wsl-network-skipped`): `install.sh`
+   does not ask again, and `sshd-setup enable` does. `fleet` sends `WSLNET_ANSWER` (default
+   `skip`), set per session in the fleet answers form and never saved, because the mode is a
+   per-host choice.
+3. **`install.sh` applies a chosen mode** (see [install-windows.md](./install-windows.md)). `off` is
+   hands off, and so is a found one (1).
 
 Behaviors worth knowing:
 

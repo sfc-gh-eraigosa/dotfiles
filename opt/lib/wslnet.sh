@@ -2,10 +2,11 @@
 # wslnet.sh — detect / recommend / ask for the install.windows.wsl-network gff
 # flag (POSIX/dash-safe). Needs opt/lib/gff.sh (gff_cli, gff_user_set,
 # gff_opt_in) sourced first. Read-only: nothing here changes Windows or
-# .wslconfig; it only records the mode in gff.
+# .wslconfig; it only records the mode in gff (plus the state markers below).
 # Test seams: WSLNET_PROC_VERSION, WSLNET_WSLCONFIG, WSLNET_USERS_DIR
 # (/mnt/c/Users), WSLNET_NETSH (netsh.exe), WSLNET_PS (powershell.exe),
-# WSLNET_K3S_BIN (/usr/local/bin/k3s), WSLNET_ANSWER, WSLNET_TTY (/dev/tty).
+# WSLNET_K3S_BIN (/usr/local/bin/k3s), WSLNET_ANSWER, WSLNET_TTY (/dev/tty),
+# WSLNET_STATE_DIR (~/.local/state/dotfiles).
 # Every powershell.exe/netsh.exe call gets </dev/null: under WSL interop they
 # otherwise consume the parent's stdin.
 
@@ -166,6 +167,33 @@ wslnet_ask() {
   echo skip
 }
 
+# Per-host state beside the gff flag. wsl-network-detected holds the mode that
+# was recorded because it was found on the machine, not chosen: install.sh's
+# automatic apply step leaves such a setup exactly as it is (see
+# install_windows.sh --wsl-network-auto). wsl-network-skipped means the
+# operator already answered "skip", so install.sh does not ask again.
+_wslnet_state_dir() {
+  echo "${WSLNET_STATE_DIR:-${XDG_STATE_HOME:-${HOME}/.local/state}/dotfiles}"
+}
+
+# wslnet_detected_mode - echo the mode recorded from detection, or nothing.
+wslnet_detected_mode() {
+  _dm_f="$(_wslnet_state_dir)/wsl-network-detected"
+  [ -f "${_dm_f}" ] && sed -n '1p' "${_dm_f}"
+  return 0
+}
+
+# wslnet_forget_detected - the recorded mode is now managed (chosen or applied).
+wslnet_forget_detected() {
+  rm -f "$(_wslnet_state_dir)/wsl-network-detected" 2>/dev/null || true
+}
+
+_wslnet_mark() {
+  _mk_d="$(_wslnet_state_dir)"
+  mkdir -p "${_mk_d}" 2>/dev/null && printf '%s\n' "$2" > "${_mk_d}/$1" 2>/dev/null
+  return 0
+}
+
 # _wslnet_record MODE - set the flag; export for the rest of this install run.
 _wslnet_record() {
   if gff_cli set install.windows.wsl-network "$1" >/dev/null 2>&1; then
@@ -177,24 +205,41 @@ _wslnet_record() {
   return 1
 }
 
-# wslnet_sync - always returns 0. Records an existing setup silently; asks only
-# when sshd is being enabled and no mode is known.
+# wslnet_sync [--ask] - always returns 0. Only acts while sshd is enabled
+# (install.network.sshd): with sshd off the mode is irrelevant, and skipping
+# keeps install.sh from probing Windows on every run. Records an existing setup
+# silently, marked as detected so it is never changed. With nothing detected it
+# takes WSLNET_ANSWER, else asks - once: a "skip" answer is remembered, and only
+# --ask (sshd-setup enable, an explicit request) asks again.
 wslnet_sync() {
   wslnet_is_wsl || return 0
   gff_user_set install.windows.wsl-network && return 0
+  gff_opt_in install.network.sshd || return 0
   _ws_mode="$(wslnet_detect)"
   if [ -n "${_ws_mode}" ]; then
-    _wslnet_record "${_ws_mode}" \
-      && echo "Recorded existing WSL networking: install.windows.wsl-network=${_ws_mode} (nothing changed)."
+    if _wslnet_record "${_ws_mode}"; then
+      _wslnet_mark wsl-network-detected "${_ws_mode}"
+      echo "Recorded existing WSL networking: install.windows.wsl-network=${_ws_mode} (nothing changed; install.sh leaves a found setup as it is)."
+    fi
     return 0
   fi
-  gff_opt_in install.network.sshd || return 0
+  _ws_skipped="$(_wslnet_state_dir)/wsl-network-skipped"
+  if ! _wslnet_valid "${WSLNET_ANSWER:-}" && [ "${1:-}" != "--ask" ] && [ -f "${_ws_skipped}" ]; then
+    return 0
+  fi
   _ws_ans="$(wslnet_ask "$(wslnet_recommend)")"
   if [ "${_ws_ans}" = "skip" ]; then
+    # Remember an operator's skip; a missing TTY or a pre-answered skip is not one.
+    if [ -z "${WSLNET_ANSWER:-}" ] && ( : < "${WSLNET_TTY:-/dev/tty}" ) 2>/dev/null; then
+      _wslnet_mark wsl-network-skipped skip
+    fi
     echo "Choose later: gff set install.windows.wsl-network <off|nat|bridged|mirrored>"
     return 0
   fi
-  _wslnet_record "${_ws_ans}" \
-    && echo "Recorded WSL networking: install.windows.wsl-network=${_ws_ans}."
+  if _wslnet_record "${_ws_ans}"; then
+    wslnet_forget_detected
+    rm -f "${_ws_skipped}" 2>/dev/null || true
+    echo "Recorded WSL networking: install.windows.wsl-network=${_ws_ans}."
+  fi
   return 0
 }

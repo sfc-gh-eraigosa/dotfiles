@@ -691,7 +691,7 @@ set +a
 # GFF_* the later runtime gates (pyenv/rbenv/nvm) read.
 apply_install_phase
 sshd_migrate
-wslnet_sync  # record an existing WSL network setup (or ask once if sshd is enabled); exports GFF_INSTALL_WINDOWS_WSL_NETWORK
+wslnet_sync  # sshd on: record an existing WSL network setup (marked as found), or ask once; exports GFF_INSTALL_WINDOWS_WSL_NETWORK
 apply_install_phase  # sshd_migrate may export GFF_INSTALL_NETWORK_SSHD=true; re-pin the phase split
 
 # install/update pyenv
@@ -1116,10 +1116,11 @@ if gff_on install.windows.desktop-deploy; then
 else gff_skip_msg install.windows.desktop-deploy; fi
 
 # Apply the WSL networking mode sshd-setup recorded (elevates only when it would
-# change something). Deliberately OUTSIDE the desktop-deploy gate above: the mode
+# change something; a setup that was merely found on the machine is reported,
+# never changed). Deliberately OUTSIDE the desktop-deploy gate above: the mode
 # is recorded independently of it. A non-WSL host never has a non-off mode.
 if [ "${GFF_INSTALL_WINDOWS_WSL_NETWORK:-off}" != off ] && [ -f "${BASE_DIR}/opt/bin/install_windows.sh" ]; then
-  bash "${BASE_DIR}/opt/bin/install_windows.sh" "${BASE_DIR}" --wsl-network
+  bash "${BASE_DIR}/opt/bin/install_windows.sh" "${BASE_DIR}" --wsl-network-auto
 fi
 
 # Final reminder (WSL): if the interactive Windows setup ran this invocation, the

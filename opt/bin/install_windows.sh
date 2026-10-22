@@ -63,6 +63,9 @@ export WINSETUP_REPO_DIR="${BASE_DIR}"
 # Nerd Font installer).
 # shellcheck source=opt/lib/winpowershell.sh
 . "$(cd -- "$(dirname "$0")" && pwd -P)/../lib/winpowershell.sh"
+# wslnet_detected_mode / wslnet_forget_detected for --wsl-network-auto.
+# shellcheck source=opt/lib/wslnet.sh
+. "$(cd -- "$(dirname "$0")" && pwd -P)/../lib/wslnet.sh"
 
 # -----------------------------------------------------------------------------
 # --wsl-network: apply the WSL networking mode that sshd-setup recorded
@@ -73,18 +76,33 @@ export WINSETUP_REPO_DIR="${BASE_DIR}"
 #
 # Flow: ask `set-wsl-network.ps1 -Status -Mode <m>` (read-only, no elevation).
 #   rc 0 -> already current, done.   rc 3 -> ONE elevated `-Mode <m>` run.
+#   rc 4 -> the mode cannot be applied as the machine is (reason printed).
+# --wsl-network-auto (what install.sh runs) is the same, except for a mode that
+# wslnet_sync recorded because it FOUND it on the machine (wslnet_detected_mode):
+# that setup is reported, never changed. Running --wsl-network by hand, or
+# choosing another mode, hands it to dotfiles from then on.
 # The script dir must be a LOCAL Windows path (an elevated process cannot read a
 # \\wsl.localhost UNC path): the Desktop copy when complete, else a copy under
 # %LOCALAPPDATA%\dotfiles\wsl-network\. </dev/null on every powershell.exe call
 # (it eats the parent's stdin under WSL interop). Never fails the install.
 # -----------------------------------------------------------------------------
 run_wsl_network_setup() {
+  _wn_auto="${1:-}"
   _wn_mode="${GFF_INSTALL_WINDOWS_WSL_NETWORK:-off}"
   case "$_wn_mode" in
     off|"") return 0 ;;
     nat|bridged|mirrored) : ;;
     *) echo "WARNING: unknown WSL network mode '${_wn_mode}' (want nat|bridged|mirrored); skipping." >&2; return 0 ;;
   esac
+  # _wn_found: the mode is one this machine already had, so the automatic run
+  # only reports it. A marker for another mode is stale: the operator chose since.
+  _wn_found=""
+  _wn_det="$(wslnet_detected_mode)"
+  if [ -n "$_wn_det" ] && [ "$_wn_det" != "$_wn_mode" ]; then
+    wslnet_forget_detected
+  elif [ -n "$_wn_det" ] && [ "$_wn_auto" = auto ]; then
+    _wn_found=1
+  fi
   _wn_ps="$(find_powershell || true)"
   [ -n "$_wn_ps" ] || return 0
 
@@ -142,8 +160,17 @@ run_wsl_network_setup() {
   tr -d '\r' <"$_wn_log"
   rm -f "$_wn_log"
   case "$_wn_rc" in
-    0) echo "WSL network '${_wn_mode}' already current" ;;
+    0)
+      echo "WSL network '${_wn_mode}' already current"
+      # A complete setup run by hand is now dotfiles' to keep current.
+      [ -n "$_wn_found" ] || wslnet_forget_detected
+      ;;
     3)
+      if [ -n "$_wn_found" ]; then
+        echo "WSL network '${_wn_mode}' was recorded from this machine's existing setup, so install.sh leaves it as it is (differences above)."
+        echo "  To have dotfiles complete and manage it: bash \"${BASE_DIR}/opt/bin/install_windows.sh\" \"${BASE_DIR}\" --wsl-network"
+        return 0
+      fi
       # The elevation is a UAC prompt on the Windows desktop, and -Wait blocks
       # until someone answers it. With no terminal (a batch fleet wave over
       # ssh) nobody is there to click, so the install would hang: say what to
@@ -180,7 +207,11 @@ run_wsl_network_setup() {
         echo "         Re-run: bash \"${BASE_DIR}/opt/bin/install_windows.sh\" \"${BASE_DIR}\" --wsl-network" >&2
       else
         echo "WSL network mode '${_wn_mode}' applied (details: ${_wn_applog:-the set-wsl-network.log under %LOCALAPPDATA%\\dotfiles})."
+        wslnet_forget_detected
       fi
+      ;;
+    4)
+      echo "WARNING: WSL network mode '${_wn_mode}' cannot be applied on this machine as it is (reason above); nothing changed." >&2
       ;;
     *)
       echo "WARNING: set-wsl-network.ps1 -Status exited with code ${_wn_rc}; not applying." >&2
@@ -191,6 +222,10 @@ run_wsl_network_setup() {
 
 if [ "$MODE" = "--wsl-network" ]; then
   run_wsl_network_setup
+  exit 0
+fi
+if [ "$MODE" = "--wsl-network-auto" ]; then
+  run_wsl_network_setup auto
   exit 0
 fi
 

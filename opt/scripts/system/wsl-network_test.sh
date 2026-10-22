@@ -108,8 +108,8 @@ sr() {
   OUT=$(env -u GFF_INSTALL_WINDOWS_WSL_NETWORK HOME="$_ST/home" PATH="$_ST/bin:$PATH" \
     STUB_LOG="$_ST/log" STUB_DESKTOP="${4:-$_ST/desktop}" STUB_LOCALAPPDATA="$_ST/localappdata" \
     STUB_ELEV_LOG="${STUB_ELEV_LOG:-}" STUB_STATUS_RC="$2" STUB_ELEV_RC="$3" GFF_INSTALL_WINDOWS_WSL_NETWORK="$1" \
-    WSLNET_TTY="${SR_TTY:-$_ST/tty}" \
-    bash "$IW" "$REPO_ROOT" --wsl-network 2>&1 </dev/null)
+    WSLNET_TTY="${SR_TTY:-$_ST/tty}" WSLNET_STATE_DIR="$_ST/state" \
+    bash "$IW" "$REPO_ROOT" "${SR_FLAG:---wsl-network}" 2>&1 </dev/null)
   RC=$?
   LOG=$(cat "$_ST/log")
 }
@@ -156,6 +156,32 @@ assert_eq "$RC" "0" "status 3, no terminal -> exit 0"
 assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "0" "status 3, no terminal: no elevation"
 case "$OUT" in *"no terminal to answer UAC"*) _r=ok ;; *) _r="no no-terminal warning: $OUT" ;; esac
 assert_eq "$_r" "ok" "status 3, no terminal: says why and how to re-run"
+
+# A setup install.sh FOUND (wslnet_sync's marker) is reported by the automatic
+# run, never changed; a hand-run --wsl-network or a different mode takes it over.
+found() { mkdir -p "$_ST/state"; printf '%s\n' "$1" > "$_ST/state/wsl-network-detected"; }
+marker() { cat "$_ST/state/wsl-network-detected" 2>/dev/null || echo none; }
+found nat; SR_FLAG=--wsl-network-auto sr nat 3 0
+assert_eq "$RC/$(printf '%s' "$LOG" | grep -c -e RunAs)" "0/0" "auto, found nat, status 3: no elevation"
+case "$OUT" in *"leaves it as it is"*) _r=ok ;; *) _r="no hands-off notice: $OUT" ;; esac
+assert_eq "$_r" "ok" "auto, found setup: says it is left alone and how to hand it over"
+assert_eq "$(marker)" "nat" "auto, found setup: still marked as found"
+SR_FLAG=--wsl-network-auto sr nat 0 0
+assert_eq "$(marker)" "nat" "auto, found setup already current: still marked as found"
+SR_FLAG=--wsl-network sr nat 3 0
+assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "1" "hand-run --wsl-network on a found setup: elevates"
+assert_eq "$(marker)" "none" "hand-run apply succeeded: dotfiles manages it from now on"
+found bridged; SR_FLAG=--wsl-network-auto sr nat 3 0
+assert_eq "$(printf '%s' "$LOG" | grep -c -e RunAs)" "1" "auto, mode differs from the found one (operator chose): elevates"
+assert_eq "$(marker)" "none" "auto, operator chose: the stale found marker is dropped"
+found nat; SR_FLAG=--wsl-network sr nat 3 7
+assert_eq "$(marker)" "nat" "hand-run apply failed: still marked as found"
+rm -f "$_ST/state/wsl-network-detected"
+# rc 4: the mode cannot be applied as the machine is (e.g. mirrored + Windows sshd).
+sr mirrored 4 0
+assert_eq "$RC/$(printf '%s' "$LOG" | grep -c -e RunAs)" "0/0" "status 4: no elevation"
+case "$OUT" in *"cannot be applied"*) _r=ok ;; *) _r="no rc-4 warning: $OUT" ;; esac
+assert_eq "$_r" "ok" "status 4: says nothing changed"
 
 # The elevated run's log lines are shown; lines from earlier runs are not.
 mkdir -p "$_ST/localappdata/dotfiles"
