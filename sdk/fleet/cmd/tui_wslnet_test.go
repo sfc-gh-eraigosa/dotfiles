@@ -98,3 +98,27 @@ func TestLocalAnswerPreambleWslnet(t *testing.T) {
 		t.Fatalf("preamble must honour the env, got %q", got)
 	}
 }
+
+// The answer is spliced into a remote shell string, so only install.sh's own
+// modes travel; anything else (a stray local env value, a hand-edited
+// answers.json) degrades to skip instead of reaching the host verbatim.
+func TestWslnetAnswerIsAllowlisted(t *testing.T) {
+	t.Setenv(envWslnetAnswer, "nat; touch /tmp/pwned")
+	if got := localAnswerPreamble(updplan.Step{Kind: updplan.KindRun}); got != "export WSLNET_ANSWER=skip; " {
+		t.Fatalf("an unlisted local WSLNET_ANSWER must become skip, got %q", got)
+	}
+	t.Setenv(envWslnetAnswer, "mirrored")
+	if got := localAnswerPreamble(updplan.Step{Kind: updplan.KindRun}); got != "export WSLNET_ANSWER=mirrored; " {
+		t.Fatalf("a listed local WSLNET_ANSWER must pass through, got %q", got)
+	}
+	if got := (answers{wslnet: "$(id)"}).envPrefix(); got != "export WSLNET_ANSWER=skip; " {
+		t.Fatalf("an unlisted stored mode must become skip, got %q", got)
+	}
+	path := filepath.Join(t.TempDir(), "answers.json")
+	if err := saveAnswers(path, answers{wslnet: "$(id)"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadAnswers(path).wslnet; got != "" {
+		t.Fatalf("an unlisted persisted mode must load as unset, got %q", got)
+	}
+}

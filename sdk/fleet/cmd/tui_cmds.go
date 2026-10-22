@@ -170,11 +170,19 @@ func (a answers) needsSudo() bool { return a.sudoSecret != "" }
 
 // wslnetOrSkip is the value sent as WSLNET_ANSWER: the chosen mode, or "skip"
 // (ask nothing, record nothing) when the operator left it unset.
-func (a answers) wslnetOrSkip() string {
-	if a.wslnet == "" {
-		return "skip"
+func (a answers) wslnetOrSkip() string { return wslnetAnswer(a.wslnet) }
+
+// wslnetAnswer maps any candidate WSLNET_ANSWER onto install.sh's own set
+// (skip|off|nat|bridged|mirrored); anything else, unset included, is "skip".
+// The value is spliced into a remote shell string, so it is allowlisted like
+// every other interpolated value: a hand-edited answers.json or a stray
+// WSLNET_ANSWER in the local environment can never reach the host verbatim.
+func wslnetAnswer(v string) string {
+	switch v {
+	case "skip", "off", "nat", "bridged", "mirrored":
+		return v
 	}
-	return a.wslnet
+	return "skip"
 }
 
 // remembered reports whether a previous wave (or the persisted preferences)

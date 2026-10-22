@@ -110,5 +110,14 @@ func loadAnswers(path string) answers {
 	if err := json.Unmarshal(b, &s); err != nil {
 		return answers{}
 	}
-	return answers{windows: s.Windows, gemini: s.Gemini, wslnet: s.Wslnet}
+	return answers{windows: s.Windows, gemini: s.Gemini, wslnet: storedWslnet(s.Wslnet)}
+}
+
+// storedWslnet keeps a persisted WSL networking answer only when it is one of
+// the modes the form can produce; anything else loads as unset.
+func storedWslnet(v string) string {
+	if v != "" && wslnetAnswer(v) == v {
+		return v
+	}
+	return ""
 }
