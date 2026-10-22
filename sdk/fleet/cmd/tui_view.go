@@ -1005,7 +1005,7 @@ func (m tuiModel) answersView() string {
 	b.WriteString(sel(fieldGemini, fmt.Sprintf("%-25s %s", "🧹 gemini leftovers [y/k/n]",
 		val(m.ans.gemini, "(unset = host decides)"))) + "\n")
 	b.WriteString(sel(fieldWslnet, fmt.Sprintf("%-25s %s", "🌐 wsl network [o/n/b/m]",
-		val(m.ans.wslnet, "(unset = skip, record nothing)"))) + "\n")
+		val(m.ans.wslnet, "(unset = skip; this session only)"))) + "\n")
 	// j/k are deliberately NOT navigation here: the choice fields use
 	// install.sh's own letters and `k` means "keep", so making it also mean
 	// "up" would silently select the wrong answer. Arrows are the idiom the

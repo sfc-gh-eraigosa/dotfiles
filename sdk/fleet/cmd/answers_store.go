@@ -24,10 +24,11 @@ import (
 // storedAnswers is the entire on-disk surface. Adding a credential field here
 // would be the bug; `TestSavedAnswersNeverContainTheCredential` asserts on the
 // serialised bytes so a rename cannot smuggle one in.
+// The WSL networking answer is not here either: it is a per-host choice, so it
+// lives for one session and is never re-sent to other hosts in later ones.
 type storedAnswers struct {
 	Windows string `json:"windows,omitempty"`
 	Gemini  string `json:"gemini,omitempty"`
-	Wslnet  string `json:"wslnet,omitempty"`
 }
 
 // fleetConfigDir is where fleet's own config files live — answers.json today,
@@ -86,7 +87,7 @@ func saveAnswers(path string, a answers) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(storedAnswers{Windows: a.windows, Gemini: a.gemini, Wslnet: a.wslnet}, "", "  ")
+	b, err := json.MarshalIndent(storedAnswers{Windows: a.windows, Gemini: a.gemini}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -110,14 +111,5 @@ func loadAnswers(path string) answers {
 	if err := json.Unmarshal(b, &s); err != nil {
 		return answers{}
 	}
-	return answers{windows: s.Windows, gemini: s.Gemini, wslnet: storedWslnet(s.Wslnet)}
-}
-
-// storedWslnet keeps a persisted WSL networking answer only when it is one of
-// the modes the form can produce; anything else loads as unset.
-func storedWslnet(v string) string {
-	if v != "" && wslnetAnswer(v) == v {
-		return v
-	}
-	return ""
+	return answers{windows: s.Windows, gemini: s.Gemini}
 }

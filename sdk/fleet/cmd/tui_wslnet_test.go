@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -43,13 +44,26 @@ func TestWslnetCountsAsRemembered(t *testing.T) {
 	}
 }
 
-func TestWslnetStoreRoundTrips(t *testing.T) {
+// The WSL networking mode is a per-host choice: one session's answer must not
+// be saved and re-sent to every host in every later session.
+func TestWslnetIsNeverSaved(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "answers.json")
-	if err := saveAnswers(path, answers{wslnet: "mirrored"}); err != nil {
+	if err := saveAnswers(path, answers{wslnet: "mirrored", windows: "y"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := loadAnswers(path); got.wslnet != "mirrored" {
-		t.Fatalf("wslnet lost in round-trip: %+v", got)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "wslnet") || strings.Contains(string(b), "mirrored") {
+		t.Fatalf("answers.json must not carry the wslnet answer:\n%s", b)
+	}
+	// A file written by an older fleet still loads, without the answer.
+	if err := os.WriteFile(path, []byte(`{"windows":"y","wslnet":"bridged"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadAnswers(path); got.wslnet != "" || got.windows != "y" {
+		t.Fatalf("an old saved wslnet must load as unset, got %+v", got)
 	}
 }
 
@@ -78,7 +92,7 @@ func TestWslnetFieldCyclesAndHasDirectKeys(t *testing.T) {
 func TestWslnetFormRowAndStrip(t *testing.T) {
 	m := testModel("a")
 	m.mode = modeAnswers
-	if v := m.answersView(); !strings.Contains(v, "(unset = skip, record nothing)") {
+	if v := m.answersView(); !strings.Contains(v, "(unset = skip; this session only)") {
 		t.Fatalf("form must label the unset wslnet row:\n%s", v)
 	}
 	m.ans.wslnet = "nat"
@@ -113,12 +127,5 @@ func TestWslnetAnswerIsAllowlisted(t *testing.T) {
 	}
 	if got := (answers{wslnet: "$(id)"}).envPrefix(); got != "export WSLNET_ANSWER=skip; " {
 		t.Fatalf("an unlisted stored mode must become skip, got %q", got)
-	}
-	path := filepath.Join(t.TempDir(), "answers.json")
-	if err := saveAnswers(path, answers{wslnet: "$(id)"}); err != nil {
-		t.Fatal(err)
-	}
-	if got := loadAnswers(path).wslnet; got != "" {
-		t.Fatalf("an unlisted persisted mode must load as unset, got %q", got)
 	}
 }

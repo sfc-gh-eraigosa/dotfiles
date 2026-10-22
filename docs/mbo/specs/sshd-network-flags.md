@@ -51,7 +51,8 @@ never asks about it again.
 but nobody is watching it.
 - `sdk/fleet` sends `WSLNET_ANSWER` the way it already sends `WINSETUP_ANSWER`. The default is
   `skip`: ask nothing, record nothing, and print the `gff set` command.
-- The operator can pre-answer a mode in `fleet tui`.
+- The operator can pre-answer a mode in `fleet tui`. The answer lasts one session; it is never
+  saved to `answers.json`, because the mode is a per-host choice.
 - Valid values are `skip|off|nat|bridged|mirrored`. Anything else falls through to the normal path.
 - No TTY and no answer behaves as `skip`.
 
@@ -175,8 +176,8 @@ mode is not `off`, on WSL with Windows interop. `set-wsl-network.ps1 -Mode <m>`:
 | F1 | no usable gff | gff builds, or an existing binary runs | no `go` + existing binary; Docker `--phase deps` / `config` | exit 1 + message only with no usable gff; CI Build job still green |
 | F2 | flag `true` | flag `false` / unset | Docker phases | `sshd_run.sh` runs only when on |
 | F3 | `~/.sshd.env` present | file absent | key already set; no `SSHD_LOGIN`; `gff set` fails | flag + file state per F3; idempotent second run |
-| F4 | key not set, on WSL | key set; not WSL | bridged + portproxy both present (the file wins); no interop | correct mode recorded, nothing changed |
-| F5 | sshd on, key not set, nothing detected | sshd off; key set; F4 matched | no TTY; `WSLNET_ANSWER` = `skip` / a mode / junk | recommendation per F5; answer recorded or guidance printed |
+| F4 | sshd on, key not set, on WSL | sshd off (no probe); key set; not WSL | bridged + portproxy both present (the file wins); no interop | correct mode recorded and marked found; the deferred step reports a found mode and never changes it |
+| F5 | sshd on, key not set, nothing detected | sshd off; key set; F4 matched | no TTY; `WSLNET_ANSWER` = `skip` / a mode / junk | recommendation per F5; answer recorded or guidance printed; a prompt `skip` is remembered (install.sh stops asking, `sshd-setup enable` asks) |
 | F6 | deferred step, mode not `off` | `off`; already current (no UAC prompt) | bridged without a switch; an existing bridged config; no `.wslconfig`; Desktop copy absent | changes per F6; other keys preserved; no shutdown; no cleanup after a recorded mode |
 
 ## 6. Verification harness
