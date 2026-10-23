@@ -427,7 +427,7 @@ and a window you're not looking at when something drifts.
 **What it does about it.** `gdash <view>` fetches a dashboard and draws every
 panel the way Grafana defines it: same queries, template variables, units and
 thresholds. Time series become braille line charts, single values become
-meters, anything else becomes a one-line placeholder that says why. It
+meters, tables become text tables, anything else becomes a one-line placeholder that says why. It
 authenticates with a read-only token that lives in a 0600 file, an env var or a
 password-manager command, never in its config. `gdash doctor --quiet` is how
 mono decides whether to show the pane.

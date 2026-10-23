@@ -1,1 +1,11 @@
-▢ Disk Space Usage — table not supported
+Disk Space Usage
+Mounted on                               Size  Available
+/                                      4.0 TB     2.9 TB
+/boot/efi                            311.8 MB   305.2 MB
+/boot/firmware                       534.8 MB   451.0 MB
+/init                                101.3 GB   101.3 GB
+/mnt/c                                 2.0 TB   734.8 GB
+/mnt/data                              2.0 TB     1.6 TB
+/mnt/wsl                             101.3 GB   101.3 GB
+/mnt/wslg                            101.3 GB   101.3 GB
+… 22 more

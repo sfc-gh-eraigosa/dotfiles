@@ -41,6 +41,10 @@ func TestFormatValue(t *testing.T) {
 		{0, "short", nil, "0"},
 		{-0.00001, "percentunit", nil, "0.0%"}, // no negative zero
 		{-0.00001, "percent", nil, "0.0%"},
+		{0.0123, "currencyUSD", nil, "$0.01"},
+		{0, "currencyUSD", nil, "$0.00"},
+		{-2.5, "currencyUSD", nil, "-$2.50"},
+		{12345, "currencyUSD", nil, "$12.3k"},
 	}
 	for _, tc := range cases {
 		if got := FormatValue(tc.v, tc.unit, tc.dec); got != tc.want {

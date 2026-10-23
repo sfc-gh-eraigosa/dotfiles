@@ -40,6 +40,15 @@ func FormatValue(v float64, unit string, decimals *int) string {
 			return seconds(v / 1000)
 		}
 		return sig3(v) + " ms"
+	case "currencyUSD":
+		sign := ""
+		if v < 0 && fixed(v, 2) != "0.00" {
+			sign, v = "-", -v
+		}
+		if v >= 1000 {
+			return sign + "$" + short(v)
+		}
+		return sign + "$" + fixed(v, 2)
 	case "none":
 		if decimals != nil {
 			return fixed(v, 0)
