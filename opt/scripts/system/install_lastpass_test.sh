@@ -73,7 +73,17 @@ SHADOW="${TMP}/shadow"; mkdir -p "${SHADOW}"   # first on PATH: no real lpass le
 #!/bin/sh
 echo "git $*" >> "$STUB_LOG"
 case "$1" in
-    clone) for last; do :; done; mkdir -p "$last"; exit 0 ;;
+    clone) for last; do :; done; mkdir -p "$last"
+        # upstream v1.6.1 pins.h, abridged: the array the installer patches;
+        # STUB_PINS_H picks a layout a later tag might have
+        case "${STUB_PINS_H:-upstream}" in
+            none) ;;
+            upstream) printf '#ifndef PINS_H\n#define PINS_H\nconst char *PK_PINS[] = {\n\t/* current lastpass.com primary (leaf) */\n\t"YDjIAXSYj+mh+25FGifAiKN4oNOAj+as6gQv4naQG0M=",\n\t/* GlobalSign ECC OV SSL CA 2018 intermediate CA */\n\t"OD/WDbD3VsfMwwNzzy9MWd9JXppKB77Vb3ST2wn9meg="\n};\n#endif\n' > "$last/pins.h" ;;
+            spaces) printf 'const char *PK_PINS[] = {\n    "YDjIAXSYj+mh+25FGifAiKN4oNOAj+as6gQv4naQG0M=",\n    "OD/WDbD3VsfMwwNzzy9MWd9JXppKB77Vb3ST2wn9meg="  \n};\n' > "$last/pins.h" ;;
+            two-arrays) printf 'const char *PK_PINS[] = {\n\t"OD/WDbD3VsfMwwNzzy9MWd9JXppKB77Vb3ST2wn9meg="\n};\nconst char *LEAF_PINS[] = {\n\t"YDjIAXSYj+mh+25FGifAiKN4oNOAj+as6gQv4naQG0M="\n};\n' > "$last/pins.h" ;;
+            odd) printf 'const char *PK_PINS[] = {\n\t"YDjIAXSYj+mh+25FGifAiKN4oNOAj+as6gQv4naQG0M=", "OD/WDbD3VsfMwwNzzy9MWd9JXppKB77Vb3ST2wn9meg="\n};\n' > "$last/pins.h" ;;
+        esac
+        exit 0 ;;
     -C) [ "$3" = rev-parse ] && echo "${STUB_GIT_COMMIT:-feaeacf1549da07a646505cc531e63d6dfdc0f3f}" ;;
 esac
 exit 0
@@ -83,7 +93,9 @@ EOS
 #!/bin/sh
 echo "cmake $*" >> "$STUB_LOG"
 if [ "$1" = "--build" ]; then
-    mkdir -p "$2"; printf '#!/bin/sh\necho "LastPass CLI v%s"\n' "${STUB_BUILT_VERSION:-1.6.1}" > "$2/lpass"; chmod +x "$2/lpass"
+    # the built binary carries pins.h as it was at build time, as the real one does
+    # (STUB_BUILD_IGNORES_PINS=1: a build that compiled some other header)
+    mkdir -p "$2"; { printf '#!/bin/sh\necho "LastPass CLI v%s"\n' "${STUB_BUILT_VERSION:-1.6.1}"; [ "${STUB_BUILD_IGNORES_PINS:-0}" = 1 ] || sed "s/^/# /" "$2/../pins.h" 2>/dev/null; } > "$2/lpass"; chmod +x "$2/lpass"
 fi
 exit 0
 EOS
@@ -112,6 +124,16 @@ assert_eq "$(grep -c '^git -C .* rev-parse HEAD' "${LOG}")" "1" "checks the tag'
 assert_eq "$(grep -c '^cmake --build' "${LOG}")" "1" "builds once"
 assert_file_exists "${DEST}/lpass" "lpass lands in LASTPASS_INSTALL_DIR"
 assert_eq "$(printf '%s' "${out}" | grep -c 'Success! lastpass-cli 1.6.1')" "1" "success names the built version"
+# LastPass moved lastpass.com to a GlobalSign E46 chain in October 2026; 1.6.1's
+# pins.h predates it, so a stock build fails every login (upstream #740/#741).
+assert_eq "$(grep -c 'l9l5rsCxnWfS7st1kW3EqURDe6gYtprAmX8et0XpFIA=' "${DEST}/lpass")" "1" "the build pins GlobalSign GCC E46 OV TLS CA 2025"
+assert_eq "$(grep -c '4EoCLOMvTM8sf2BGKHuCijKpCfXnUUR/g/0scfb9gXM=' "${DEST}/lpass")" "1" "the build pins GlobalSign Root E46"
+assert_eq "$(grep -c 'OD/WDbD3VsfMwwNzzy9MWd9JXppKB77Vb3ST2wn9meg=' "${DEST}/lpass")" "1" "upstream's own pins are kept"
+# Each pin is its own element: upstream's last entry gained its comma (adjacent
+# literals would otherwise concatenate into one bogus pin), and ours end in one.
+assert_eq "$(grep -c '^# 	"OD/WDbD3VsfMwwNzzy9MWd9JXppKB77Vb3ST2wn9meg=",$' "${DEST}/lpass")" "1" "upstream's last pin gains its comma"
+assert_eq "$(grep -c '^# 	"l9l5rsCxnWfS7st1kW3EqURDe6gYtprAmX8et0XpFIA=",$' "${DEST}/lpass")" "1" "the intermediate pin is its own element"
+assert_eq "$(grep -c '^# 	"4EoCLOMvTM8sf2BGKHuCijKpCfXnUUR/g/0scfb9gXM=",$' "${DEST}/lpass")" "1" "the root pin is its own element"
 
 # 2. apt's 1.3.7 is on PATH: below the floor, so it is replaced, and the message says why.
 out="$(run_lp STUB_LPASS_VERSION=1.3.7)"; rc=$?
@@ -120,13 +142,60 @@ assert_eq "$(grep -c '^cmake --build' "${LOG}")" "1" "a lpass below 1.5.0 is rep
 assert_eq "$(printf '%s' "${out}" | grep -c '1.3.7 is below 1.5.0')" "1" "says the present version is below the floor"
 assert_eq "$(printf '%s' "${out}" | grep -ci 'URL')" "1" "says what the old version loses (items with a URL)"
 
-# 3. Already on the pin in the install dir: no-op, nothing privileged, no clone.
-mkdir -p "${DEST}"; printf '#!/bin/sh\necho "LastPass CLI v1.6.1"\n' > "${DEST}/lpass"; chmod +x "${DEST}/lpass"
+# 3. Already on the pin in the install dir, with the CA pins: no-op, nothing privileged, no clone.
+mkdir -p "${DEST}"; printf '#!/bin/sh\necho "LastPass CLI v1.6.1"\n# "l9l5rsCxnWfS7st1kW3EqURDe6gYtprAmX8et0XpFIA=",\n# "4EoCLOMvTM8sf2BGKHuCijKpCfXnUUR/g/0scfb9gXM="\n' > "${DEST}/lpass"; chmod +x "${DEST}/lpass"
 : > "${LOG}"
 out="$(env STUB_LOG="${LOG}" STUB_TMP="${TMP}" STUB_DEST="${DEST}" LASTPASS_INSTALL_DIR="${DEST}" HOME="${TMP}/home" PATH="${SHADOW}:${BIN}:/usr/bin:/bin" bash "${SCRIPT}" 2>&1 </dev/null)"; rc=$?
 assert_eq "${rc}" "0" "already-installed exits 0"
 assert_eq "$(printf '%s' "${out}" | grep -c 'already installed: .*(1.6.1)')" "1" "already-installed is reported"
 assert_eq "$(wc -l < "${LOG}" | tr -d ' ')" "0" "already-installed touches neither sudo, git nor cmake"
+
+# 3b. A 1.6.1 built before the pins (every host until 2026-10-24): rebuilt once, and says why.
+printf '#!/bin/sh\necho "LastPass CLI v1.6.1"\n' > "${DEST}/lpass"; chmod +x "${DEST}/lpass"
+: > "${LOG}"
+out="$(env STUB_LOG="${LOG}" STUB_TMP="${TMP}" STUB_DEST="${DEST}" LASTPASS_INSTALL_DIR="${DEST}" HOME="${TMP}/home" TMPDIR="${TMP}" PATH="${SHADOW}:${BIN}:/usr/bin:/bin" bash "${SCRIPT}" 2>&1 </dev/null)"; rc=$?
+assert_eq "${rc}" "0" "unpinned 1.6.1 exits 0"
+assert_eq "$(grep -c '^cmake --build' "${LOG}")" "1" "an unpinned 1.6.1 is rebuilt"
+assert_eq "$(printf '%s' "${out}" | grep -c 'lacks the LastPass CA pins')" "1" "says the present build lacks the pins"
+assert_eq "$(grep -c 'l9l5rsCxnWfS7st1kW3EqURDe6gYtprAmX8et0XpFIA=' "${DEST}/lpass")" "1" "the rebuilt lpass carries the pin"
+
+# 3c. pins.h is not where the patch expects it (upstream moved it): refuse rather than build an lpass that cannot log in.
+out="$(run_lp STUB_PINS_H=none)"; rc=$?
+assert_eq "${rc}" "1" "no pins.h exits 1"
+assert_eq "$(grep -c '^cmake' "${LOG}")" "0" "nothing is built without pins.h"
+
+# 3d. Another layout a later tag might ship: spaces, trailing whitespace — patched, each pin its own element.
+out="$(run_lp STUB_PINS_H=spaces)"; rc=$?
+assert_eq "${rc}" "0" "space-indented pins.h exits 0"
+assert_eq "$(grep -c '^#     "OD/WDbD3VsfMwwNzzy9MWd9JXppKB77Vb3ST2wn9meg=",$' "${DEST}/lpass")" "1" "space-indented: the last pin gains its comma (trailing space dropped)"
+
+# 3e. A second array after PK_PINS: only PK_PINS gets the CA pins.
+out="$(run_lp STUB_PINS_H=two-arrays)"; rc=$?
+assert_eq "${rc}" "0" "two arrays exits 0"
+assert_eq "$(sed -n '/LEAF_PINS/,/};/p' "${DEST}/lpass" | grep -c 'l9l5rs\|4EoCLO')" "0" "the second array is left alone"
+assert_eq "$(sed -n '/PK_PINS/,/};/p' "${DEST}/lpass" | grep -c 'l9l5rs\|4EoCLO')" "2" "PK_PINS carries both pins"
+
+# 3f. A line the patch cannot read (two pins on one line): refuse, build nothing.
+out="$(run_lp STUB_PINS_H=odd)"; rc=$?
+assert_eq "${rc}" "1" "unreadable pins.h exits 1"
+assert_eq "$(grep -c '^cmake' "${LOG}")" "0" "nothing is built from an unreadable pins.h"
+
+# 3g. The build compiled something other than the patched header: refuse to install it.
+out="$(run_lp STUB_BUILD_IGNORES_PINS=1)"; rc=$?
+assert_eq "${rc}" "1" "a build without the pins exits 1"
+assert_eq "$(printf '%s' "${out}" | grep -c 'does not carry the LastPass CA pins')" "1" "says the build lacks the pins"
+installed_unpinned=no; [ -e "${DEST}/lpass" ] && installed_unpinned=yes
+assert_eq "${installed_unpinned}" "no" "an unpinned build is not installed"
+
+# 3h. An unpinned 1.6.1 that cannot be rebuilt (no sudo, no tty, no headers): say it stays broken.
+rm -f "${TMP}/deps-installed"; mkdir -p "${DEST}"; printf '#!/bin/sh\necho "LastPass CLI v1.6.1"\n' > "${DEST}/lpass"; chmod +x "${DEST}/lpass"
+: > "${LOG}"
+out="$(env STUB_LOG="${LOG}" STUB_TMP="${TMP}" STUB_DEST="${DEST}" STUB_SUDO_NEEDS_PASSWORD=1 LASTPASS_INSTALL_DIR="${DEST}" HOME="${TMP}/home" TMPDIR="${TMP}" PATH="${SHADOW}:${BIN}:/usr/bin:/bin" bash "${SCRIPT}" 2>&1 </dev/null)"; rc=$?
+assert_eq "${rc}" "0" "unpinned and unbuildable exits 0 (fleet update must not stall)"
+assert_eq "$(printf '%s' "${out}" | grep -c 'cannot log in to LastPass')" "1" "warns that the present lpass cannot log in"
+
+# 3i. Another pinned version: no extra pins apply (the bump drops the patch).
+assert_eq "$(LASTPASS_VERSION=1.7.0 bash -c '. /dev/null; LPASS_VERSION=1.7.0; '"$(sed -n '/^LPASS_EXTRA_PINS=()/,/^fi$/p' "${SCRIPT}")"'; echo ${#LPASS_EXTRA_PINS[@]}')" "0" "a version other than 1.6.1 carries no extra pins"
 
 # 4. The tag resolves to another commit: refuse, install nothing.
 out="$(run_lp STUB_GIT_COMMIT=0000000000000000000000000000000000000000)"; rc=$?
@@ -157,6 +226,7 @@ out="$(run_lp STUB_OS=Darwin)"; rc=$?
 assert_eq "${rc}" "0" "macOS exits 0"
 assert_eq "$(grep -c '^brew install lastpass-cli$' "${LOG}")" "1" "macOS installs the brew formula"
 assert_eq "$(grep -c 'sudo\|cmake' "${LOG}")" "0" "macOS never calls sudo or cmake"
+assert_eq "$(printf '%s' "${out}" | grep -c "brew's lpass lacks the LastPass CA pins")" "1" "macOS warns when brew's lpass lacks the pins"
 
 # 9. Unsupported OS is refused.
 out="$(run_lp STUB_OS=FreeBSD)"; rc=$?
