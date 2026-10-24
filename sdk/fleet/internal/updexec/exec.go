@@ -516,6 +516,11 @@ func (e Executor) RunHostCtx(ctx context.Context, host string, p updplan.Plan) H
 		}
 
 		res := e.runStepWithRetry(w, host, st, p)
+		if res.Status == Failed && ctx.Err() != nil {
+			// A step that failed because the cancel killed it (an
+			// interactive gh login, say) was cancelled, not failed.
+			res.Status, res.Reason = Cancelled, "cancelled"
+		}
 		status[st.ID] = res.Status
 		rep.Results = append(rep.Results, res)
 
@@ -525,7 +530,10 @@ func (e Executor) RunHostCtx(ctx context.Context, host string, p updplan.Plan) H
 		e.fireDueRestores(w, host, p, pending, st.ID, &rep)
 	}
 
-	if ctx.Err() != nil {
+	// Key the footer off the report, not ctx: a cancel that lands after the
+	// last step finished stopped nothing, and the capture must agree with
+	// the row (HostReport.Cancelled is what the TUI renders).
+	if rep.Cancelled() {
 		w.Close("cancelled")
 		return rep
 	}
@@ -1007,6 +1015,11 @@ func (e Executor) runWithRetry(
 	var allNotes []string
 
 	for n := 1; n <= maxAttempts; n++ {
+		if e.ctx().Err() != nil {
+			// Cancelled before (or between) attempts: nothing is sent, and
+			// no banner claims an attempt that never ran.
+			break
+		}
 		attempts = n
 		header := fmt.Sprintf("=== step %s (%s)", id, kind)
 		if maxAttempts > 1 {
@@ -1028,10 +1041,6 @@ func (e Executor) runWithRetry(
 			w.Line(InteractiveNote)
 		}
 
-		if e.ctx().Err() != nil {
-			// Cancelled before (or between) attempts: nothing is sent.
-			break
-		}
 		ctx := e.ctx()
 		var cancel context.CancelFunc
 		if timeout > 0 {

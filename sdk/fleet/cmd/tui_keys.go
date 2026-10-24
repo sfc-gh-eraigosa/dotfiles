@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -89,22 +90,13 @@ func quitKey(m tuiModel) (tea.Model, tea.Cmd) {
 		m.status = "updates in progress — press q again to cancel them and quit"
 		return m, nil
 	}
-	m.quitting = true
 	n := m.cancelUpdates(m.inFlightUpdates())
+	if n == 0 {
+		return m, tea.Quit // busy only with wakes: nothing to wait for
+	}
+	m.quitting = true
 	m.status = fmt.Sprintf("cancelling %s — quitting when they stop (q again quits now)", plural(n, "update"))
 	return m, nil
-}
-
-func sameAliases(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 // route owns every keystroke. Mode comes first: a key typed in search is text,
@@ -384,7 +376,7 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(targets) == 0 {
 			return quitKey(m)
 		}
-		if !sameAliases(m.cancelArm, targets) {
+		if !slices.Equal(m.cancelArm, targets) {
 			m.cancelArm = targets
 			m.status = fmt.Sprintf("ctrl+c again to cancel %s: %s — any other key keeps them running",
 				plural(len(targets), "update"), strings.Join(targets, ", "))

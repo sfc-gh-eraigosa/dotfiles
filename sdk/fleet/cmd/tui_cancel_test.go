@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updexec"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/libs/tui/keymap"
 )
 
 // running puts alias in flight the way pump + streamStartedMsg do, with a
@@ -204,5 +205,50 @@ func TestThirdQQuitsWithoutWaiting(t *testing.T) {
 	_, c := send(m, "q")
 	if !isQuit(c) {
 		t.Fatal("a third q must quit immediately")
+	}
+}
+
+// fleet's cancel key is the shared sdk one (keymap.Interrupt, GUIDE.md §3):
+// fleet routes keys by hand until it moves onto libs/tui, so this pins the
+// two together — a change to the shared key fails here, not in a user's hands.
+func TestCancelKeyIsTheSharedInterruptBinding(t *testing.T) {
+	documented := map[string]bool{}
+	for _, k := range keyHelp {
+		documented[k.keys] = true
+	}
+	for _, key := range keymap.Interrupt.Keys {
+		if !documented[key] {
+			t.Errorf("keymap.Interrupt binds %q but fleet's keyHelp does not document it", key)
+		}
+	}
+	if keymap.Interrupt.Action != keymap.Cancel {
+		t.Fatalf("keymap.Interrupt is %q, want %q", keymap.Interrupt.Action, keymap.Cancel)
+	}
+
+	m, called := running(t, testModel("a"), "a")
+	m, _ = ctrlC(m)
+	m, _ = ctrlC(m)
+	if !*called {
+		t.Error("ctrl+c twice must cancel the running update, as keymap.Interrupt says")
+	}
+}
+
+// A first q answered by the updates ending on their own is spent: the next
+// update starts the warning over instead of one q cancelling it.
+func TestAnUnansweredQuitWarningLapsesWhenUpdatesEnd(t *testing.T) {
+	m, _ := running(t, testModel("a"), "a")
+	m, _ = send(m, "q")
+	if !m.quitReq {
+		t.Fatal("the first q must warn")
+	}
+	mm, _ := m.Update(bgUpdateDoneMsg{alias: "a"})
+	m = mm.(tuiModel)
+	if m.quitReq {
+		t.Fatal("the warning must lapse once nothing is running")
+	}
+	m, called := running(t, m, "a")
+	m, c := send(m, "q")
+	if *called || isQuit(c) || m.quitting {
+		t.Fatal("a q after the warning lapsed must warn again, not cancel or quit")
 	}
 }

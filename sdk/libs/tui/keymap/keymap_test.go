@@ -49,6 +49,24 @@ func TestMergeReplacesInPlaceOrAppends(t *testing.T) {
 	assert.NotEqual(t, "open the log pane", Vim[indexOf(Vim, PageRight)].Help, "Vim is never mutated")
 }
 
+func TestMergeTakesKeysFromOtherActions(t *testing.T) {
+	m := Vim.Merge(Interrupt)
+	got, ok := m.Lookup(k(tea.KeyCtrlC))
+	require.True(t, ok)
+	assert.Equal(t, Cancel, got, "ctrl+c cancels once Interrupt is merged")
+	assert.Equal(t, []string{"q"}, m.Keys(Quit), "quit keeps q")
+	assert.Equal(t, []string{"q", "ctrl+c"}, Vim.Keys(Quit), "Vim is never mutated")
+	assert.Contains(t, m.HeaderHint("  "), "q quit")
+
+	// A binding left with no keys is dropped rather than shown keyless.
+	m = Vim.Merge(Binding{Action: "edit", Keys: []string{"?", "f1"}, Help: "edit"})
+	assert.Equal(t, -1, indexOf(m, Help))
+	assert.Equal(t, len(Vim), len(m))
+
+	// Re-merging an action with its own keys takes nothing from anyone.
+	assert.Equal(t, Vim, Vim.Merge(Vim[indexOf(Vim, Quit)]))
+}
+
 func TestWithoutRemovesActions(t *testing.T) {
 	m := Vim.Without(PageLeft, PageRight, "absent")
 	assert.Equal(t, len(Vim)-2, len(m))

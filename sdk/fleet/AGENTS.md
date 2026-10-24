@@ -496,11 +496,14 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   `cancelled`. A due `<repo>.restore` still runs, on `context.WithoutCancel`, so stopping an
   update never strands stashed work. In the TUI `ctrl+c` cancels the in-flight hosts among
   `updateTargets()` (else every in-flight update), armed by the first press and confirmed by
-  an immediate second — any other key disarms it; with nothing to cancel it still quits. A
+  an immediate second — any other key disarms it; with nothing to cancel it still quits. That
+  is the sdk's shared `keymap.Interrupt` (`sdk/libs/tui/GUIDE.md` §3); fleet still routes keys
+  by hand, so `TestCancelKeyIsTheSharedInterruptBinding` keeps the two in step. A
   cancel that lands before a cancel func exists (precheck, or between `pump` and
   `streamStartedMsg`) is recorded in `cancelReq` and honoured by the arriving message. `q`
-  while busy warns, then cancels everything and exits once `busy()` is false; a third `q`
-  exits at once. The row reads `cancelled`, never `FAIL`. Pinned by
+  while busy warns, then cancels everything and exits once no update is in flight (a wake
+  ladder is not cancelled and does not hold the exit); a third `q` exits at once, and a
+  warning the updates outlived lapses. The row reads `cancelled`, never `FAIL`. Pinned by
   `TestCancelMidStepStopsTheHostWithoutRetrying`, `TestRestoreStillRunsAfterCancel`,
   `TestCtrlCArmsThenCancelsTheRunningUpdate`, `TestCancelBeforeTheStreamStartsCancelsItOnArrival`,
   `TestQuitCancelsEveryUpdateAndExitsOnceTheyStop`.

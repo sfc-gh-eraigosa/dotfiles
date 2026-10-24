@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -1002,9 +1003,10 @@ func (m *tuiModel) cancelUpdates(aliases []string) int {
 		}
 		switch s.phase {
 		case updQueued:
-			m.bgQueue = without(m.bgQueue, a)
-			m.iaQueue = without(m.iaQueue, a)
+			m.bgQueue = slices.DeleteFunc(slices.Clone(m.bgQueue), func(v string) bool { return v == a })
+			m.iaQueue = slices.DeleteFunc(slices.Clone(m.iaQueue), func(v string) bool { return v == a })
 			m.updating[a] = updState{phase: updCancelled}
+			delete(m.dotCleared, a) // a new outcome is news (see finishUpdate)
 		case updPrecheck, updRunning:
 			if c := m.cancels[a]; c != nil {
 				c()
@@ -1020,16 +1022,6 @@ func (m *tuiModel) cancelUpdates(aliases []string) int {
 		n++
 	}
 	return n
-}
-
-func without(xs []string, x string) []string {
-	out := xs[:0:0]
-	for _, v := range xs {
-		if v != x {
-			out = append(out, v)
-		}
-	}
-	return out
 }
 
 // startWake claims each target and runs its ladder in the BACKGROUND lane.
@@ -1573,15 +1565,25 @@ func (m tuiModel) layoutSig() layoutSig {
 func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	before := m.layoutSig()
 	next, cmd := m.update(msg)
+	nm, ok := next.(tuiModel)
+	if !ok {
+		return next, cmd
+	}
 	// A quit waiting on cancelled updates fires on whichever message
-	// released the last of them.
-	if nm, ok := next.(tuiModel); ok && nm.quitting && !nm.busy() {
+	// released the last of them. It waits on updates only: a wake ladder
+	// was never cancelled and must not hold the exit.
+	if nm.quitting && len(nm.inFlightUpdates()) == 0 {
 		return nm, tea.Quit
 	}
-	if nm, ok := next.(tuiModel); ok && nm.layoutSig() != before {
+	// A first q answered by the updates ending on their own must not turn a
+	// later, unrelated q into "cancel everything".
+	if nm.quitReq && !nm.quitting && !nm.busy() {
+		nm.quitReq = false
+	}
+	if nm.layoutSig() != before {
 		return nm, tea.Batch(cmd, tea.ClearScreen)
 	}
-	return next, cmd
+	return nm, cmd
 }
 
 func (m tuiModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -1624,6 +1626,7 @@ func (m tuiModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.cancelReq[msg.alias] {
 			delete(m.cancelReq, msg.alias)
 			m.updating[msg.alias] = updState{phase: updCancelled}
+			delete(m.dotCleared, msg.alias)
 			return m, nil
 		}
 		m.updating[msg.alias] = updState{phase: updQueued}
@@ -1716,7 +1719,7 @@ func (m tuiModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// A cancelled run stops here: it is neither a failure nor a host to
 		// reroute to the interactive lane.
 		if isCancelled(msg.err) {
-			return m, m.finishUpdate(msg.alias, "", msg.err)
+			return m, m.finishUpdate(msg.alias, msg.log, msg.err)
 		}
 		// A step the Background lane cannot service (ErrNoTerminal) is not a
 		// failure — it just needs a real terminal, so the host moves to the
