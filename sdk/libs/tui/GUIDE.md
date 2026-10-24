@@ -54,12 +54,21 @@ wiring five small packages instead of writing them.
 | `Command` | `:` | yes | open the command line |
 | `Help` | `?` `f1` | yes | help overlay (**never** `h` — it is a motion) |
 | `Quit` | `q` `ctrl+c` | yes | quit |
+| `Cancel` | `ctrl+c` | tool | stop running work (`keymap.Interrupt`) — only in a tool that has work to stop; see below |
 | `Select` | `space` | tool | the row's primary action (toggle, select, pick) |
 | `Confirm` / `Back` | `enter` / `esc` | tool | open / drill in; back out |
 
 Keys are bubbletea `KeyMsg.String()` names (`"ctrl+d"`, `"pgdown"`, `"f1"`, `" "` for
 space is written `"space"`). `gg` is the one two-key chord; `nav.Cursor` owns its pending
 state — never a package-level variable.
+
+**ctrl+c interrupts, then quits.** A tool that runs work it can stop (fleet's updates)
+merges `keymap.Interrupt`: ctrl+c then means `Cancel`, and `Merge` takes it from `Quit`,
+which keeps `q`. The handler cancels what is running — scoped like the action that started
+it, confirmed by a second press when it stops more than the user is looking at — and quits
+when nothing is running, so ctrl+c is never a dead key. `q` with work in flight warns, then
+cancels and quits once the work has stopped. A tool with nothing to cancel leaves ctrl+c on
+`Quit`.
 
 Tools add their own actions (`Toggle`, `Refresh`, `SSH`, `Unset`…) with `Merge`. Prefer
 lowercase single letters for frequent actions, uppercase for the destructive or rare
@@ -175,4 +184,4 @@ normal ─act─▶ confirm ─y/enter|n/esc▶ normal
 | :-- | :-- | :-- |
 | 1 | `sdk-tui` — this lib + guide | see index |
 | 2 | `gff-tui-vim` — first consumer (vim nav, `/`, `:`) | see index |
-| 3 | `fleet` TUI port onto the lib (delete `cmd/tui_keys.go` routing, keep fleet's actions) · gsl-ultra config studio built on it from day one | idea |
+| 3 | `fleet` TUI port onto the lib (delete `cmd/tui_keys.go` routing, keep fleet's actions) — [#436](https://github.com/sfc-gh-eraigosa/dotfiles/issues/436) · gsl-ultra config studio built on it from day one | idea |

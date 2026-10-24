@@ -26,7 +26,8 @@ func exitErrorForReports(reports []updexec.HostReport) error {
 	return fmt.Errorf("%d host(s) not updated", failures)
 }
 
-// statusLabel renders a Result's Status per spec F8: ok|FAIL|skip|dep-fail.
+// statusLabel renders a Result's Status per spec F8: ok|FAIL|skip|dep-fail,
+// plus cancelled for a step the operator stopped.
 func stepStatusLabel(s updexec.Status) string {
 	switch s {
 	case updexec.OK:
@@ -37,6 +38,8 @@ func stepStatusLabel(s updexec.Status) string {
 		return "skip"
 	case updexec.DepFailed:
 		return "dep-fail"
+	case updexec.Cancelled:
+		return "cancelled"
 	default:
 		return string(s)
 	}

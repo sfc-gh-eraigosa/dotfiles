@@ -142,7 +142,10 @@ func listRuns(w io.Writer, runs []histindex.Run, loc *time.Location) error {
 	fmt.Fprintln(tw, "#\tWHEN\tHOST\tRESULT\tWARN\tSIZE")
 	for i, s := range sums {
 		result := "finished"
-		if !s.Finished {
+		switch {
+		case s.Cancelled:
+			result = "cancelled"
+		case !s.Finished:
 			result = "unfinished"
 		}
 		warn := "-"

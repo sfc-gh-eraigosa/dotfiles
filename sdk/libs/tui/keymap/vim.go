@@ -23,3 +23,9 @@ var Vim = Map{
 	{Action: Select, Keys: []string{"space"}, Help: "select / toggle the row"},
 	{Action: Confirm, Keys: []string{"enter"}, Help: "open / confirm"},
 }
+
+// Interrupt is the canonical binding for a tool with work it can stop:
+// ctrl+c cancels what is running instead of quitting. Merging it takes ctrl+c
+// from Quit, which keeps q (GUIDE.md §3). The handler must still quit when
+// nothing is running, so ctrl+c is never a dead key.
+var Interrupt = Binding{Action: Cancel, Keys: []string{"ctrl+c"}, Help: "cancel running work (quits when idle)", Short: "cancel"}

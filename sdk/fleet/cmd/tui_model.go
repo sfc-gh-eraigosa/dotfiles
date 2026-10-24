@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -54,6 +56,7 @@ const (
 	updRunning                  // update in flight
 	updOK
 	updFail
+	updCancelled // the operator stopped it (ctrl+c, or q while busy)
 )
 
 // updState is a host's update status plus the tail of its captured output.
@@ -264,6 +267,21 @@ type tuiModel struct {
 	sudoCheckSeq int
 	status       string
 	quitReq      bool
+	// quitting is set by the second q while busy: every update has been
+	// cancelled and the dashboard exits as soon as none is left in flight
+	// (see Update). A third q exits without waiting.
+	quitting bool
+
+	// cancels holds each running background update's cancel func, by alias,
+	// from streamStartedMsg until its bgUpdateDoneMsg.
+	cancels map[string]context.CancelFunc
+	// cancelReq marks a host cancelled while no cancel func exists yet — in
+	// precheck, or between pump issuing beginStream and its streamStartedMsg.
+	// The arriving message honours it, so no cancel is lost to that window.
+	cancelReq map[string]bool
+	// cancelArm is what the first ctrl+c offered to cancel; a second ctrl+c
+	// cancels exactly these hosts, and any other key disarms it.
+	cancelArm []string
 }
 
 func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time.Time, ref string, jobs int, plan updplan.Plan) tuiModel {
@@ -665,7 +683,7 @@ func (m *tuiModel) deselect(alias string) {
 // yet, so their result will show when it lands.
 func (m *tuiModel) showSelection() {
 	for alias, st := range m.updating {
-		if st.phase == updOK || st.phase == updFail {
+		if st.phase == updOK || st.phase == updFail || st.phase == updCancelled {
 			m.clearDot(alias)
 		}
 	}
@@ -714,6 +732,7 @@ func (m *tuiModel) startUpdate(targets []string) tea.Cmd {
 		delete(m.warns, a)       // the badge must describe THIS attempt
 		delete(m.warnFilters, a) // a stale advisory from the LAST attempt must not fold this attempt's first real line
 		delete(m.pending, a)     // ownership moves to the engine
+		delete(m.cancelReq, a)   // a cancel aimed at an earlier attempt must not stop this one
 		cmds = append(cmds, precheckSudo(a, m.run))
 		started = append(started, a)
 	}
@@ -816,7 +835,10 @@ func (m *tuiModel) finishUpdate(alias, log string, err error) tea.Cmd {
 		m.running--
 	}
 	st := updState{phase: updOK, log: log}
-	if err != nil {
+	switch {
+	case isCancelled(err):
+		st = updState{phase: updCancelled, log: log}
+	case err != nil:
 		st = updState{phase: updFail, log: strings.TrimSpace(log + " " + err.Error())}
 	}
 	m.updating[alias] = st
@@ -932,6 +954,74 @@ func (m tuiModel) inFlight(alias string) bool {
 	}
 	s, ok := m.updating[alias]
 	return ok && (s.phase == updQueued || s.phase == updPrecheck || s.phase == updRunning)
+}
+
+// inFlightUpdates lists every host the update engine still owns (queued,
+// in precheck, or running), alias-sorted so a status line reads the same
+// on every press.
+func (m tuiModel) inFlightUpdates() []string {
+	var out []string
+	for _, r := range m.rows {
+		if s, ok := m.updating[r.Alias]; ok && (s.phase == updQueued || s.phase == updPrecheck || s.phase == updRunning) {
+			out = append(out, r.Alias)
+		}
+	}
+	return out
+}
+
+// cancelTargets is ctrl+c's scope: the in-flight hosts among updateTargets()
+// (selection, else cursor) — the same rule `u` uses — and, when none of
+// those is in flight, every in-flight update.
+func (m tuiModel) cancelTargets() []string {
+	all := m.inFlightUpdates()
+	in := map[string]bool{}
+	for _, a := range all {
+		in[a] = true
+	}
+	var scoped []string
+	for _, a := range m.updateTargets() {
+		if in[a] {
+			scoped = append(scoped, a)
+		}
+	}
+	if len(scoped) > 0 {
+		return scoped
+	}
+	return all
+}
+
+// cancelUpdates stops each host's update wherever it is: a queued host leaves
+// its queue, a running one has its context cancelled (killing the step's
+// local ssh), and one with no cancel func yet is marked so the message that
+// brings it honours the cancel. Returns how many it touched.
+func (m *tuiModel) cancelUpdates(aliases []string) int {
+	n := 0
+	for _, a := range aliases {
+		s, ok := m.updating[a]
+		if !ok {
+			continue
+		}
+		switch s.phase {
+		case updQueued:
+			m.bgQueue = slices.DeleteFunc(slices.Clone(m.bgQueue), func(v string) bool { return v == a })
+			m.iaQueue = slices.DeleteFunc(slices.Clone(m.iaQueue), func(v string) bool { return v == a })
+			m.updating[a] = updState{phase: updCancelled}
+			delete(m.dotCleared, a) // a new outcome is news (see finishUpdate)
+		case updPrecheck, updRunning:
+			if c := m.cancels[a]; c != nil {
+				c()
+			} else {
+				if m.cancelReq == nil {
+					m.cancelReq = map[string]bool{}
+				}
+				m.cancelReq[a] = true
+			}
+		default:
+			continue
+		}
+		n++
+	}
+	return n
 }
 
 // startWake claims each target and runs its ladder in the BACKGROUND lane.
@@ -1475,10 +1565,25 @@ func (m tuiModel) layoutSig() layoutSig {
 func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	before := m.layoutSig()
 	next, cmd := m.update(msg)
-	if nm, ok := next.(tuiModel); ok && nm.layoutSig() != before {
+	nm, ok := next.(tuiModel)
+	if !ok {
+		return next, cmd
+	}
+	// A quit waiting on cancelled updates fires on whichever message
+	// released the last of them. It waits on updates only: a wake ladder
+	// was never cancelled and must not hold the exit.
+	if nm.quitting && len(nm.inFlightUpdates()) == 0 {
+		return nm, tea.Quit
+	}
+	// A first q answered by the updates ending on their own must not turn a
+	// later, unrelated q into "cancel everything".
+	if nm.quitReq && !nm.quitting && !nm.busy() {
+		nm.quitReq = false
+	}
+	if nm.layoutSig() != before {
 		return nm, tea.Batch(cmd, tea.ClearScreen)
 	}
-	return next, cmd
+	return nm, cmd
 }
 
 func (m tuiModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -1518,6 +1623,12 @@ func (m tuiModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// password-needing host to the interactive lane when we HAVE its
 		// password defeats the whole point of collecting one: the operator
 		// typed a password and was prompted for it anyway (live defect).
+		if m.cancelReq[msg.alias] {
+			delete(m.cancelReq, msg.alias)
+			m.updating[msg.alias] = updState{phase: updCancelled}
+			delete(m.dotCleared, msg.alias)
+			return m, nil
+		}
 		m.updating[msg.alias] = updState{phase: updQueued}
 		if msg.interactive && !m.ans.needsSudo() {
 			m.iaQueue = append(m.iaQueue, msg.alias)
@@ -1529,6 +1640,16 @@ func (m tuiModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case streamStartedMsg:
 		m.streams[msg.alias] = msg.st
+		if msg.cancel != nil {
+			if m.cancels == nil {
+				m.cancels = map[string]context.CancelFunc{}
+			}
+			m.cancels[msg.alias] = msg.cancel
+			if m.cancelReq[msg.alias] {
+				delete(m.cancelReq, msg.alias)
+				msg.cancel()
+			}
+		}
 		return m, tea.Batch(readLine(msg.alias, msg.st), awaitDone(msg.alias, msg.st))
 
 	case historyOpenedMsg:
@@ -1593,6 +1714,13 @@ func (m tuiModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case bgUpdateDoneMsg:
+		delete(m.cancels, msg.alias)
+		delete(m.cancelReq, msg.alias)
+		// A cancelled run stops here: it is neither a failure nor a host to
+		// reroute to the interactive lane.
+		if isCancelled(msg.err) {
+			return m, m.finishUpdate(msg.alias, msg.log, msg.err)
+		}
 		// A step the Background lane cannot service (ErrNoTerminal) is not a
 		// failure — it just needs a real terminal, so the host moves to the
 		// interactive queue instead of landing on the row as FAIL.

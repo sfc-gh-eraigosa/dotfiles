@@ -4,6 +4,7 @@
 package keymap
 
 import (
+	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -31,6 +32,7 @@ const (
 	Command        Action = "command"
 	Help           Action = "help"
 	Quit           Action = "quit"
+	Cancel         Action = "cancel"
 	Select         Action = "select"
 	Confirm        Action = "confirm"
 	Back           Action = "back"
@@ -94,10 +96,13 @@ func (m Map) Has(key string) bool {
 }
 
 // Merge returns a copy with each binding replaced in place (same Action) or
-// appended. The receiver is never mutated.
+// appended. A key has one action, so a merged binding takes its keys from any
+// other binding; one left with no keys is dropped. The receiver is never
+// mutated.
 func (m Map) Merge(bs ...Binding) Map {
 	out := append(Map(nil), m...)
 	for _, nb := range bs {
+		out = out.release(nb)
 		replaced := false
 		for i := range out {
 			if out[i].Action == nb.Action {
@@ -109,6 +114,24 @@ func (m Map) Merge(bs ...Binding) Map {
 		if !replaced {
 			out = append(out, nb)
 		}
+	}
+	return out
+}
+
+// release returns m with nb's keys removed from every binding of another
+// action, dropping a binding that has none left. It copies each Keys slice it
+// edits, so bindings shared with the receiver of Merge stay untouched.
+func (m Map) release(nb Binding) Map {
+	out := make(Map, 0, len(m))
+	for _, b := range m {
+		if b.Action != nb.Action {
+			kept := slices.DeleteFunc(slices.Clone(b.Keys), func(k string) bool { return slices.Contains(nb.Keys, k) })
+			if len(kept) == 0 && len(b.Keys) > 0 {
+				continue
+			}
+			b.Keys = kept
+		}
+		out = append(out, b)
 	}
 	return out
 }
