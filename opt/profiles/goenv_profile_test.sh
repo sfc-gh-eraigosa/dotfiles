@@ -73,6 +73,18 @@ for sh in bash zsh; do
     H=$(make_home "${sh}-explicit" 1.26.9 1.26.1 1.26.9)
     out=$(effective "${sh}" "${H}" GOENV_VERSION=1.26.1)
     assert_eq "${out#*|}" "1.26.1" "${sh}: an explicit GOENV_VERSION is left alone"
+
+    # 6. A fallback pick the profile exported is re-decided, not inherited as
+    #    if explicit: a long-lived parent (herdr/tmux server) started before
+    #    the pin was installed must not hold every later pane on the old Go
+    #    (spark, 2026-10-23: herdr from 2026-10-02 kept GOENV_VERSION=1.26.1).
+    H=$(make_home "${sh}-inherited" 1.27.3 1.26.1 1.27.3)
+    out=$(effective "${sh}" "${H}" GOENV_VERSION=1.26.1 GOENV_VERSION_AUTO=1.26.1)
+    assert_eq "${out#*|}" "1.27.3" "${sh}: an inherited auto-picked GOENV_VERSION yields to the installed pin"
+    H=$(make_home "${sh}-autoset" system 1.26.1 1.27.0)
+    out=$(env -i HOME="${H}" PATH=/usr/bin:/bin TERM_PROGRAM=vscode "${sh}" -c "
+        . '${GOENV_SH}'; printf '%s' \"\${GOENV_VERSION_AUTO:-}\"" 2>/dev/null)
+    assert_eq "${out}" "1.27.0" "${sh}: the fallback pick is marked as the profile's own"
 done
 
 # 5. A login shell (.profile, no .goenv.sh) finds go in $HOME/.goenv/shims,

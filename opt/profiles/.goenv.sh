@@ -54,6 +54,12 @@ unset __goenv_path_safe _goenv_shell
 # install.sh set is the PIN, so it wins whenever it is installed; only a
 # global of "system" or a not-yet-installed version falls back to the newest
 # installed Go. (This used to always pick the newest, overriding the pin.)
+# A pick made here is exported as GOENV_VERSION, so it is also marked in
+# GOENV_VERSION_AUTO: a child shell (a herdr/tmux pane under a server started
+# before the pin was installed) re-decides it instead of treating it as explicit.
+if [ -n "${GOENV_VERSION:-}" ] && [ "${GOENV_VERSION}" = "${GOENV_VERSION_AUTO:-}" ]; then
+    unset GOENV_VERSION GOENV_VERSION_AUTO
+fi
 if [ -z "${GOENV_VERSION:-}" ]; then
     _goenv_global=$(goenv global 2>/dev/null)
     if [ -z "$_goenv_global" ] || [ "$_goenv_global" = "system" ] || [ ! -d "$GOENV_ROOT/versions/$_goenv_global" ]; then
@@ -62,6 +68,7 @@ if [ -z "${GOENV_VERSION:-}" ]; then
             # Use 'goenv shell' which handles GOENV_VERSION correctly
             # This requires the shell integration from 'goenv init'
             goenv shell "$LATEST_GO_VERSION"
+            export GOENV_VERSION_AUTO="$LATEST_GO_VERSION"
         fi
     fi
     unset _goenv_global

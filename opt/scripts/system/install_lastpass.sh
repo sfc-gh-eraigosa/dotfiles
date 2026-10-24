@@ -222,7 +222,7 @@ if ! have_deps; then
     fi
     if command -v apt-get >/dev/null 2>&1; then
         info "Installing lastpass-cli build dependencies via apt..."
-        as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+        as_root env DEBIAN_FRONTEND=noninteractive NEEDRESTART_SUSPEND=1 apt-get install -y -qq --no-install-recommends \
             git cmake pkg-config gcc make libcurl4-openssl-dev libxml2-dev libssl-dev
     elif command -v dnf >/dev/null 2>&1; then
         info "Installing lastpass-cli build dependencies via dnf..."
@@ -235,8 +235,19 @@ fi
 
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/install_lastpass.XXXXXX")"
 SRC="${TMP_DIR}/lastpass-cli"
+# quietly <step> <cmd...>: the clone and build go to a log that is printed only
+# when a step fails. A healthy run must write nothing to stderr: fleet update
+# counts every stderr line as a warning, and 1.6.1's OpenSSL 3 deprecations
+# plus git's detached-HEAD advice came to ~170 lines per host.
+BUILD_LOG="${TMP_DIR}/build.log"
+quietly() {
+    local step="$1"; shift
+    "$@" >>"${BUILD_LOG}" 2>&1 && return 0
+    cat "${BUILD_LOG}" >&2
+    die "${step} failed"
+}
 info "Building lastpass-cli ${LPASS_VERSION} from ${REPO} (tag v${LPASS_VERSION})..."
-git clone -q --depth 1 --branch "v${LPASS_VERSION}" "${REPO}" "${SRC}" || die "could not clone ${REPO} at tag v${LPASS_VERSION}"
+quietly "cloning ${REPO} at tag v${LPASS_VERSION}" git clone -q --depth 1 --branch "v${LPASS_VERSION}" "${REPO}" "${SRC}"
 if [ -n "${LPASS_COMMIT}" ]; then
     GOT="$(git -C "${SRC}" rev-parse HEAD)"
     [ "${GOT}" = "${LPASS_COMMIT}" ] || die "tag v${LPASS_VERSION} resolves to ${GOT}, not the pinned ${LPASS_COMMIT}; refusing to build it"
@@ -244,8 +255,8 @@ else
     warn "no LASTPASS_COMMIT pinned for ${LPASS_VERSION}; building whatever tag v${LPASS_VERSION} points at"
 fi
 patch_pins "${SRC}/pins.h" || die "could not add the LastPass CA pins to ${SRC}/pins.h (did upstream move the PK_PINS array?); refusing to build an lpass that cannot log in"
-cmake -S "${SRC}" -B "${SRC}/build" -DCMAKE_BUILD_TYPE=Release >/dev/null || die "cmake configure failed"
-cmake --build "${SRC}/build" -j"$(nproc 2>/dev/null || echo 2)" >/dev/null || die "cmake build failed"
+quietly "cmake configure" cmake -S "${SRC}" -B "${SRC}/build" -DCMAKE_BUILD_TYPE=Release
+quietly "cmake build" cmake --build "${SRC}/build" -j"$(nproc 2>/dev/null || echo 2)"
 [ -x "${SRC}/build/lpass" ] || die "the build produced no lpass binary"
 BUILT="$(version_of "${SRC}/build/lpass")"
 [ "${BUILT}" = "${LPASS_VERSION}" ] || die "built lpass reports ${BUILT:-nothing}, expected ${LPASS_VERSION}; refusing to install it"
