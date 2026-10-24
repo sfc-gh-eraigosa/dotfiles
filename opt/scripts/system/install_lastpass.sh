@@ -16,6 +16,13 @@
 #   * macOS uses Homebrew, whose formula is current (1.6.x).
 #   * Pinned (versions.tsv row `lastpass-cli`) to a tag AND that tag's commit:
 #     a tag that resolves elsewhere is refused and nothing is installed.
+#   * Patched with LastPass's current CA pins (LPASS_EXTRA_PINS). lpass refuses
+#     any server key not in its compiled-in pins.h, and in October 2026
+#     lastpass.com moved to a GlobalSign E46 chain that 1.6.1 does not pin, so a
+#     stock build fails every call with "SSL peer certificate or SSH remote key
+#     was not OK" (upstream issue #740, PR #741). The patch only adds pins;
+#     chain and hostname verification are unchanged. A 1.6.1 built without them
+#     is rebuilt once. Drop the patch when a release carries the pins.
 #
 # Safe to re-run: a lpass at the pin in LASTPASS_INSTALL_DIR is a no-op. Like
 # pkg-install-apt, when sudo would need a password and there is no terminal to
@@ -52,6 +59,12 @@ else
 fi
 # Below this the server drops items that carry a URL (see the header).
 LPASS_MIN=1.5.0
+# SPKI SHA-256 pins (base64) added to pins.h, checked against the live chain
+# on 2026-10-24 (openssl s_client | x509 -pubkey | pkey -outform der | sha256).
+LPASS_EXTRA_PINS=(
+    "l9l5rsCxnWfS7st1kW3EqURDe6gYtprAmX8et0XpFIA=|GlobalSign GCC E46 OV TLS CA 2025 intermediate CA (lastpass.com from 2026-10)"
+    "4EoCLOMvTM8sf2BGKHuCijKpCfXnUUR/g/0scfb9gXM=|GlobalSign Root E46 (that intermediate's root)"
+)
 INSTALL_DIR="${LASTPASS_INSTALL_DIR:-${HOME}/opt/bin}"
 REPO="${LASTPASS_REPO:-https://github.com/lastpass/lastpass-cli.git}"
 OWN="${INSTALL_DIR}/lpass"
@@ -74,6 +87,24 @@ trap cleanup EXIT
 version_of() { "$1" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1 || true; }
 # version_ge A B: A >= B as dotted numbers
 version_ge() { [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n 1)" = "$2" ]; }
+# has_pins BIN: every LPASS_EXTRA_PINS key is compiled into BIN (pins.h strings are literals)
+has_pins() {
+    local p
+    for p in "${LPASS_EXTRA_PINS[@]}"; do grep -aqF "${p%%|*}" "$1" 2>/dev/null || return 1; done
+}
+# patch_pins PINS_H: add each missing LPASS_EXTRA_PINS key to the PK_PINS array, keeping upstream's
+patch_pins() {
+    local h="$1" p
+    [ -f "${h}" ] && grep -q '^};' "${h}" || return 1
+    for p in "${LPASS_EXTRA_PINS[@]}"; do
+        grep -qF "\"${p%%|*}\"" "${h}" && continue
+        # the array's last entry has no comma: give it one, then append ours before `};`
+        sed -i -e "s|^\(\t\"[^\"]*\"\)\$|\1,|" -e "/^};/i\\
+\t/* ${p#*|} */\\
+\t\"${p%%|*}\"" "${h}"
+    done
+    has_pins "${h}"
+}
 
 case "${LPASS_VERSION}" in
     *[!0-9.]*|"") die "LASTPASS_VERSION must look like 1.6.1 (got '${LPASS_VERSION}')" ;;
@@ -98,17 +129,25 @@ fi
 HAVE=""
 if [ -x "${OWN}" ]; then HAVE="$(version_of "${OWN}")"; fi
 if [ "${HAVE}" = "${LPASS_VERSION}" ] && [ "${LASTPASS_FORCE:-0}" != "1" ]; then
-    ok "lastpass-cli already installed: ${OWN} (${HAVE})"
-    exit 0
-fi
-# A lpass elsewhere on PATH (the distro package) is only good enough at or above the floor.
-if [ -z "${HAVE}" ] && command -v lpass >/dev/null 2>&1 && [ "${LASTPASS_FORCE:-0}" != "1" ]; then
-    FOUND_VER="$(version_of lpass)"
-    if [ -n "${FOUND_VER}" ] && version_ge "${FOUND_VER}" "${LPASS_MIN}"; then
-        ok "lastpass-cli already installed: $(command -v lpass) (${FOUND_VER})"
+    if has_pins "${OWN}"; then
+        ok "lastpass-cli already installed: ${OWN} (${HAVE})"
         exit 0
     fi
-    info "lpass ${FOUND_VER:-?} is below ${LPASS_MIN} (at $(command -v lpass)): the LastPass server drops items that carry a URL from that client; building ${LPASS_VERSION} into ${INSTALL_DIR} (first on PATH)"
+    info "lpass ${HAVE} at ${OWN} lacks the LastPass CA pins (every login fails since lastpass.com's October 2026 certificate); rebuilding it with them"
+fi
+# A lpass elsewhere on PATH (the distro package) is only good enough at or above the floor, with the pins.
+if [ -z "${HAVE}" ] && command -v lpass >/dev/null 2>&1 && [ "${LASTPASS_FORCE:-0}" != "1" ]; then
+    FOUND="$(command -v lpass)"
+    FOUND_VER="$(version_of lpass)"
+    if [ -n "${FOUND_VER}" ] && version_ge "${FOUND_VER}" "${LPASS_MIN}" && has_pins "${FOUND}"; then
+        ok "lastpass-cli already installed: ${FOUND} (${FOUND_VER})"
+        exit 0
+    fi
+    if [ -n "${FOUND_VER}" ] && version_ge "${FOUND_VER}" "${LPASS_MIN}"; then
+        info "lpass ${FOUND_VER} at ${FOUND} lacks the LastPass CA pins (every login fails); building ${LPASS_VERSION} with them into ${INSTALL_DIR} (first on PATH)"
+    else
+        info "lpass ${FOUND_VER:-?} is below ${LPASS_MIN} (at ${FOUND}): the LastPass server drops items that carry a URL from that client; building ${LPASS_VERSION} into ${INSTALL_DIR} (first on PATH)"
+    fi
 fi
 
 # Run a command as root: directly when we already are, via sudo otherwise.
@@ -155,6 +194,7 @@ if [ -n "${LPASS_COMMIT}" ]; then
 else
     warn "no LASTPASS_COMMIT pinned for ${LPASS_VERSION}; building whatever tag v${LPASS_VERSION} points at"
 fi
+patch_pins "${SRC}/pins.h" || die "could not add the LastPass CA pins to ${SRC}/pins.h (did upstream move the PK_PINS array?); refusing to build an lpass that cannot log in"
 cmake -S "${SRC}" -B "${SRC}/build" -DCMAKE_BUILD_TYPE=Release >/dev/null || die "cmake configure failed"
 cmake --build "${SRC}/build" -j"$(nproc 2>/dev/null || echo 2)" >/dev/null || die "cmake build failed"
 [ -x "${SRC}/build/lpass" ] || die "the build produced no lpass binary"
