@@ -152,12 +152,20 @@ the probe failed when mono started; `ctrl+b r` on the `mid` pane checks again.
 ## What it draws
 
 - `timeseries` and `graph` panels: a braille chart with min/max on a y-axis
-  and each series' last value in the legend (`legendFormat` honoured).
+  and each series' last value in the legend (`legendFormat` honoured). Series
+  with `stacking.mode: normal` stack; a long legend wraps onto up to three
+  lines rather than being cut.
 - `stat`, `gauge`, `bargauge`: a meter, with a bar when the panel has a known
   maximum (percentages, or `max` set) and threshold colors — or `!`/`!!`
-  markers under `NO_COLOR`.
-- Anything else (tables, library panels, non-Prometheus datasources): one line
-  saying what it is and that gdash doesn't draw it.
+  markers under `NO_COLOR`. A `bargauge` with no maximum scales its bars to
+  its largest value. `noValue` text replaces the `—` of an empty query.
+- `table`: a row per label set, a column per label plus the value (`Value #A`,
+  `Value #B`… with several queries). The `organize`, `groupBy` and `sortBy`
+  transformations, the panel's `sortBy` option and per-column `unit`
+  overrides apply; other transformations are skipped. Eight rows show, then
+  `… N more`; in two columns a table too wide for its half takes the row.
+- Anything else (library panels, non-Prometheus datasources, other panel
+  types): one line saying what it is and that gdash doesn't draw it.
 - Two columns at 120 cells and wider. Refresh every 30 s by default (`refresh`
   per view, never under 5 s); a fetch that fails keeps the last good data on
   screen with its age — stale, never blank.

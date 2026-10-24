@@ -169,17 +169,25 @@ func finite(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
 
 // Chart draws a braille line chart: a title row, h-2 plot rows with min/max
 // on a y-axis, and a legend with each series' last value.
+//
+// A legend too wide for one line wraps onto more (up to maxLegendLines),
+// and the plot gives those rows up so the chart keeps its height.
 func Chart(p dash.Panel, series []grafana.Series, w, h int, o Opts) []string {
 	if h < 3 {
 		h = 3
 	}
-	plotRows := h - 2
+	legend := chartLegend(p, series, w, min(maxLegendLines, h-2), o)
+	plotRows := h - 1 - len(legend)
 	lines := make([]string, 0, h)
 	lines = append(lines, renderLine([]seg{{fit(p.Title, w), colTitle}}, w, o))
 
+	plotted := series
+	if p.Stacked {
+		plotted = stack(series)
+	}
 	lo, hi := math.Inf(1), math.Inf(-1)
 	var t0, t1 time.Time
-	for _, s := range series {
+	for _, s := range plotted {
 		for i, v := range s.Values {
 			if !finite(v) || i >= len(s.Times) {
 				continue
@@ -194,9 +202,9 @@ func Chart(p dash.Panel, series []grafana.Series, w, h int, o Opts) []string {
 		}
 	}
 	if math.IsInf(lo, 1) { // no data at all
-		for r := 0; r < plotRows; r++ {
+		for r := 0; r < h-2; r++ {
 			text := ""
-			if r == plotRows/2 {
+			if r == (h-2)/2 {
 				text = centre("no data", w)
 			}
 			lines = append(lines, renderLine([]seg{{text, o.palette().Dim}}, w, o))
@@ -245,7 +253,7 @@ func Chart(p dash.Panel, series []grafana.Series, w, h int, o Opts) []string {
 		colors[r][c] = color
 	}
 	pal := o.palette()
-	for si, s := range series {
+	for si, s := range plotted {
 		color := pal.SeriesColor(si)
 		px, py, have := 0, 0, false
 		for i, v := range s.Values {
@@ -287,21 +295,48 @@ func Chart(p dash.Panel, series []grafana.Series, w, h int, o Opts) []string {
 		lines = append(lines, renderLine(mergeSegs(segs), w, o))
 	}
 
+	return append(lines, legend...)
+}
+
+// maxLegendLines is the most rows a chart's legend may take from its plot.
+const maxLegendLines = 3
+
+// chartLegend lays out "● name value" entries, wrapping between entries,
+// in at most maxLines lines; the last line is cut if they still do not fit.
+func chartLegend(p dash.Panel, series []grafana.Series, w, maxLines int, o Opts) []string {
+	if len(series) == 0 {
+		return []string{""}
+	}
+	maxLines = max(maxLines, 1)
+	pal := o.palette()
 	names := legendNames(p, series)
-	var legend []seg
+	var rows [][]seg
+	var cur []seg
+	curW := 0
 	for i, s := range series {
-		if i > 0 {
-			legend = append(legend, seg{"  ", ""})
-		}
 		last, ok := s.Last()
 		val := "—"
 		if ok {
 			val = FormatValue(last, p.Unit, p.Decimals)
 		}
-		legend = append(legend, seg{"●", pal.SeriesColor(i)}, seg{" " + names[i] + " " + val, ""})
+		text := " " + names[i] + " " + val
+		ew := 1 + runewidth.StringWidth(text)
+		if curW > 0 && curW+2+ew > w && len(rows) < maxLines-1 {
+			rows, cur, curW = append(rows, cur), nil, 0
+		}
+		if curW > 0 {
+			cur = append(cur, seg{"  ", ""})
+			curW += 2
+		}
+		cur = append(cur, seg{"●", pal.SeriesColor(i)}, seg{text, ""})
+		curW += ew
 	}
-	lines = append(lines, renderLine(legend, w, o))
-	return lines
+	rows = append(rows, cur)
+	out := make([]string, len(rows))
+	for i, r := range rows {
+		out[i] = renderLine(r, w, o)
+	}
+	return out
 }
 
 // mergeSegs joins neighbouring segments of the same color (fewer escapes).
@@ -373,7 +408,7 @@ func abs(v int) int {
 // with no known maximum (not a percentage, no max set) shows the value alone.
 func Meter(p dash.Panel, series []grafana.Series, w int, o Opts) []string {
 	if len(series) == 0 {
-		return []string{renderLine([]seg{{fit(p.Title+"  —", w), o.palette().Dim}}, w, o)}
+		return []string{renderLine([]seg{{fit(p.Title+"  "+noValue(p), w), o.palette().Dim}}, w, o)}
 	}
 	names := legendNames(p, series)
 	lo, hi, bar := 0.0, 0.0, false
@@ -388,47 +423,105 @@ func Meter(p dash.Panel, series []grafana.Series, w int, o Opts) []string {
 	if p.Min != nil {
 		lo = *p.Min
 	}
-	out := make([]string, 0, len(series))
+	if !bar && p.Type == "bargauge" { // Grafana scales bars to the largest value
+		for _, s := range series {
+			if v, ok := s.Last(); ok && v > hi {
+				hi = v
+			}
+		}
+		bar = hi > lo
+	}
+	// Rows share a label column and a value column so their bars line up
+	// and compare (a bar gauge's rows are one chart).
+	type meterRow struct {
+		label, val, mark, color string
+		v                       float64
+		ok                      bool
+	}
+	pal := o.palette()
+	rows := make([]meterRow, len(series))
+	labelW, valW := 0, 0
 	for i, s := range series {
-		label := p.Title
+		r := meterRow{label: p.Title}
 		if len(series) > 1 {
-			label = names[i]
+			r.label = names[i]
 		}
-		v, ok := s.Last()
-		if !ok {
-			v = math.NaN()
+		r.v, r.ok = s.Last()
+		if !r.ok {
+			r.v = math.NaN()
 		}
-		val := FormatValue(v, p.Unit, p.Decimals)
-		lvl := thresholdLevel(p.Thresholds, v)
-		mark := ""
+		r.val = FormatValue(r.v, p.Unit, p.Decimals)
+		if !r.ok && p.NoValue != "" {
+			r.val = p.NoValue
+		}
+		lvl := thresholdLevel(p.Thresholds, r.v)
 		if !o.Color {
 			switch lvl {
 			case levelWarn:
-				mark = " !"
+				r.mark = " !"
 			case levelCrit:
-				mark = " !!"
+				r.mark = " !!"
 			}
 		}
-		pal := o.palette()
-		color := map[level]string{levelOK: pal.OK, levelWarn: pal.Warn, levelCrit: pal.Crit}[lvl]
-		labelW := min(max(w*3/10, 1), runewidth.StringWidth(label))
-		label = fit(label, labelW)
-		valW := runewidth.StringWidth(val + mark)
-		barW := w - labelW - 1 - 2 - valW - 1
-		if !bar || barW < 3 || !ok {
-			out = append(out, renderLine([]seg{{label + " ", ""}, {val, color}, {mark, ""}}, w, o))
+		r.color = map[level]string{levelOK: pal.OK, levelWarn: pal.Warn, levelCrit: pal.Crit}[lvl]
+		labelW = max(labelW, runewidth.StringWidth(r.label))
+		if r.ok {
+			valW = max(valW, runewidth.StringWidth(r.val+r.mark))
+		}
+		rows[i] = r
+	}
+	labelW = min(max(w*3/10, 1), labelW)
+	barW := w - labelW - 1 - 2 - valW - 1
+	out := make([]string, 0, len(series))
+	for _, r := range rows {
+		label := fit(r.label, labelW)
+		if len(rows) > 1 {
+			label += strings.Repeat(" ", labelW-runewidth.StringWidth(label))
+		}
+		if !bar || barW < 3 || !r.ok {
+			out = append(out, renderLine([]seg{{label + " ", ""}, {r.val, r.color}, {r.mark, ""}}, w, o))
 			continue
 		}
-		frac := (v - lo) / (hi - lo)
+		frac := (r.v - lo) / (hi - lo)
 		frac = math.Max(0, math.Min(1, frac))
 		filled := int(math.Round(frac * float64(barW)))
+		pad := valW - runewidth.StringWidth(r.val+r.mark)
 		out = append(out, renderLine([]seg{
 			{label + " [", ""},
-			{strings.Repeat("|", filled), color},
-			{strings.Repeat(" ", barW-filled+1), ""},
-			{val, color},
-			{mark + "]", ""},
+			{strings.Repeat("|", filled), r.color},
+			{strings.Repeat(" ", barW-filled+1+pad), ""},
+			{r.val, r.color},
+			{r.mark + "]", ""},
 		}, w, o))
+	}
+	return out
+}
+
+// noValue is what a panel shows for no value: its noValue text, else "—".
+func noValue(p dash.Panel) string {
+	if p.NoValue != "" {
+		return p.NoValue
+	}
+	return "—"
+}
+
+// stack returns the series with each one's points raised by the sum of the
+// series before it at the same instant (Grafana's normal stacking; a null
+// point adds nothing and stays null).
+func stack(series []grafana.Series) []grafana.Series {
+	below := map[int64]float64{}
+	out := make([]grafana.Series, len(series))
+	for i, s := range series {
+		s.Values = append([]float64(nil), s.Values...)
+		for j, v := range s.Values {
+			if j >= len(s.Times) || !finite(v) {
+				continue
+			}
+			t := s.Times[j].UnixMilli()
+			below[t] += v
+			s.Values[j] = below[t]
+		}
+		out[i] = s
 	}
 	return out
 }

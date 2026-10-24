@@ -293,3 +293,34 @@ func TestResizeWhileBusyFetchesAgainAfter(t *testing.T) {
 		t.Fatalf("calls %d width %d, want the queued fetch at width 92", f.calls.Load(), f.width.Load())
 	}
 }
+
+// In two columns, a table too wide for its half takes the whole row (a
+// half-width table cuts every cell); one that fits stays beside its
+// neighbour.
+func TestWideTableTakesTheRow(t *testing.T) {
+	label := strings.Repeat("x", 80)
+	tbl := func(title, v string) PanelData {
+		return PanelData{
+			Panel:  dash.Panel{Kind: dash.KindTable, Title: title, Targets: []dash.Target{{RefID: "A"}}, Table: &dash.Table{}},
+			Series: []grafana.Series{{RefID: "A", Labels: map[string]string{"task": v}, Times: []time.Time{time.Unix(0, 0)}, Values: []float64{1}}},
+		}
+	}
+	meter := PanelData{Panel: dash.Panel{Kind: dash.KindMeter, Title: "Funnel"}}
+	out := Layout(Data{Panels: []PanelData{meter, tbl("Wide", label), tbl("Narrow", "t-1"), meter}}, 140, "v", render.Opts{})
+	joined := strings.Join(out, "\n")
+	if !strings.Contains(joined, label) {
+		t.Fatalf("wide table was cut:\n%s", joined)
+	}
+	if strings.Contains(out[0], "Wide") {
+		t.Fatalf("wide table shares the meter's row:\n%s", joined)
+	}
+	found := false
+	for _, l := range out {
+		if strings.HasPrefix(l, "Narrow") && strings.Contains(l, "Funnel") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("narrow table should sit beside the next panel:\n%s", joined)
+	}
+}

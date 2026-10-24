@@ -80,7 +80,7 @@ func (l *Live) Fetch(ctx context.Context, width int, rng time.Duration, reload b
 	var idx []int
 	for i, p := range panels {
 		pd := PanelData{Panel: p}
-		if p.Kind == dash.KindChart || p.Kind == dash.KindMeter {
+		if p.Kind == dash.KindChart || p.Kind == dash.KindMeter || p.Kind == dash.KindTable {
 			q, missing, reason := l.queries(p, env, maxDP)
 			pd.Missing, pd.Reason = missing, reason
 			if len(missing) == 0 && reason == "" && len(q) > 0 {

@@ -1,1 +1,11 @@
-▢ Top 10 slowest jobs (mean, last 24h) — table not supported
+Top 10 slowest jobs (mean, last 24h)
+__name__                       job               workflow                mean
+ci:job_duration_seconds:avg1d  conductor         conductor-ci         4.6 min
+ci:job_duration_seconds:avg1d  ollama-contracts  ollama-contracts-ci  4.5 min
+ci:job_duration_seconds:avg1d  test              bots-ci              3.7 min
+ci:job_duration_seconds:avg1d  lint              bots-ci              3.1 min
+ci:job_duration_seconds:avg1d  k3s-verify        k3s-ci               2.4 min
+ci:job_duration_seconds:avg1d  build             bots-ci              1.2 min
+ci:job_duration_seconds:avg1d  images            images               1.0 min
+ci:job_duration_seconds:avg1d  alert-gate        alert-gate            57.9 s
+… 2 more

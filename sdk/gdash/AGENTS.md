@@ -3,8 +3,8 @@
 > **Context DAG:** [dotfiles](../../AGENTS.md) › [sdk](../AGENTS.md) › **gdash**
 
 gdash draws a Grafana dashboard's panels in the terminal: braille line charts
-for time series, htop-style meters for single values, a labelled placeholder
-for anything else. It runs alone, and `mono` runs it as a pane (mono only
+for time series, htop-style meters for single values, text tables for table
+panels, a labelled placeholder for anything else. It runs alone, and `mono` runs it as a pane (mono only
 starts it; it never imports this module).
 
 Built under the `mono-gdash` objective:
@@ -21,9 +21,9 @@ Built under the `mono-gdash` objective:
 | `internal/grafana` | read-only client (health, search, dashboard, datasources, ds/query → series); `Resolve`; `FetchAll` (≤ 4 at once) |
 | `internal/grafana/grafanatest` | a fake Grafana serving the lab fixtures; used by every test |
 | `internal/grafana/testdata/lab/` | scrubbed fixtures from the lab Grafana (plan Task 0); `capture.py` re-captures |
-| `internal/dash` | dashboard JSON → panels (chart / meter / row / placeholder), gridPos order, refIds assigned |
+| `internal/dash` | dashboard JSON → panels (chart / meter / table / row / placeholder), gridPos order, refIds assigned |
 | `internal/vars` | template variables and `$__interval` family; datasource references |
-| `internal/render` | pure drawing: braille charts, meters, rows, placeholders, units; golden frames |
+| `internal/render` | pure drawing: braille charts, meters, tables, rows, placeholders, units; golden frames |
 | `internal/app` | the bubbletea TUI: layout, scroll, refresh (skip while busy), stale-not-blank; the live fetcher |
 | `security_test.go` | builds the binary and proves the credential never reaches stdout/stderr (E12) |
 

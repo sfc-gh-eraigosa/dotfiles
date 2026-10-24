@@ -87,6 +87,8 @@ func draw(fp fixturePanel, w int, o Opts) []string {
 		return Chart(fp.panel, fp.series, w, ChartHeight, o)
 	case dash.KindMeter:
 		return Meter(fp.panel, fp.series, w, o)
+	case dash.KindTable:
+		return TableView(fp.panel, fp.series, w, o)
 	default:
 		return Placeholder(fp.panel, fp.panel.Reason, w)
 	}

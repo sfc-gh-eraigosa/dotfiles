@@ -383,7 +383,8 @@ func formatRange(d time.Duration) string {
 }
 
 // Layout draws every panel: rows full width, other panels in one column, or
-// two side by side at twoColumnsAt cells and wider (spec F3).
+// two side by side at twoColumnsAt cells and wider (spec F3). A table too
+// wide for its column takes the whole row instead of cutting every cell.
 func Layout(d Data, w int, view string, o render.Opts) []string {
 	colW, two := w, w >= twoColumnsAt
 	if two {
@@ -400,6 +401,11 @@ func Layout(d Data, w int, view string, o render.Opts) []string {
 		if pd.Panel.Kind == dash.KindRow {
 			flush()
 			out = append(out, render.Row(pd.Panel, w, o)...)
+			continue
+		}
+		if two && pd.Panel.Kind == dash.KindTable && render.TableWidth(pd.Panel, pd.Series) > colW {
+			flush()
+			out = append(out, drawPanel(pd, w, view, o)...)
 			continue
 		}
 		block := drawPanel(pd, colW, view, o)
@@ -432,6 +438,8 @@ func drawPanel(pd PanelData, w int, view string, o render.Opts) []string {
 		return render.Placeholder(p, "error: "+pd.Err, w)
 	case p.Kind == dash.KindChart:
 		return render.Chart(p, pd.Series, w, render.ChartHeight, o)
+	case p.Kind == dash.KindTable:
+		return render.TableView(p, pd.Series, w, o)
 	}
 	return render.Meter(p, pd.Series, w, o)
 }

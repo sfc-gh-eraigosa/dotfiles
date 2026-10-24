@@ -37,8 +37,8 @@ func TestParseFixtures(t *testing.T) {
 		row, chart, meter, unsupported int
 	}{
 		"conductor-metrics":                {"Conductor — metrics against goals", 3, 8, 6, 0},
-		"ci-lab":                           {"CI — lab runners", 5, 10, 18, 4}, // 16 stat + 2 bargauge; 4 tables
-		"7d57716318ee0dddbac5a7f451fb7753": {"Node Exporter / Nodes", 4, 6, 1, 1},
+		"ci-lab":                           {"CI — lab runners", 5, 10, 18, 0}, // 16 stat + 2 bargauge; 4 tables
+		"7d57716318ee0dddbac5a7f451fb7753": {"Node Exporter / Nodes", 4, 6, 1, 0},
 		"058020e04168bfdea0c52269cb699df2": {"Kubernetes / Compute Resources / Nodes Overview", 0, 5, 0, 0},
 	}
 	for uid, want := range cases {
@@ -49,6 +49,9 @@ func TestParseFixtures(t *testing.T) {
 		}
 		if k[KindRow] != want.row || k[KindChart] != want.chart || k[KindMeter] != want.meter || k[KindUnsupported] != want.unsupported {
 			t.Errorf("%s: kinds %v, want row %d chart %d meter %d unsupported %d", uid, k, want.row, want.chart, want.meter, want.unsupported)
+		}
+		if uid == "ci-lab" && k[KindTable] != 4 {
+			t.Errorf("ci-lab: %d tables, want 4", k[KindTable])
 		}
 	}
 }
@@ -81,17 +84,73 @@ func TestPanelDetails(t *testing.T) {
 	if len(stat.Targets) == 0 || stat.Targets[0].Expr == "" || stat.Targets[0].Datasource.UID != "${datasource}" {
 		t.Fatalf("targets = %+v", stat.Targets)
 	}
-	unsupported := 0
+}
+
+// A table keeps what gdash needs to lay it out like Grafana: the organize
+// transformation, the sort (a sortBy transformation or the panel option)
+// and per-column unit overrides.
+func TestTablePanel(t *testing.T) {
+	var top *Panel
 	for _, p := range load(t, "ci-lab").Panels {
-		if p.Kind == KindUnsupported {
-			unsupported++
-			if p.Reason != "table not supported" {
-				t.Errorf("reason = %q", p.Reason)
-			}
+		if p.ID == 32 {
+			top = &p
 		}
 	}
-	if unsupported == 0 {
-		t.Fatal("no unsupported panels found in ci-lab")
+	if top == nil || top.Kind != KindTable || top.Table == nil {
+		t.Fatalf("panel 32 = %+v", top)
+	}
+	tb := top.Table
+	if !tb.Exclude["Time"] || tb.Rename["Value"] != "mean" || tb.Rename["job_name"] != "job" {
+		t.Fatalf("organize = %+v", tb)
+	}
+	if tb.SortBy != "mean" || !tb.SortDesc {
+		t.Fatalf("sort = %q desc %v", tb.SortBy, tb.SortDesc)
+	}
+	var disk *Panel
+	for _, p := range load(t, "7d57716318ee0dddbac5a7f451fb7753").Panels {
+		if p.ID == 9 {
+			disk = &p
+		}
+	}
+	if g := disk.Table.GroupBy; g["mountpoint"] != "" || g["Value #A"] != "lastNotNull" || len(g) != 3 {
+		t.Fatalf("groupBy = %+v", g)
+	}
+	if disk.Table.SortBy != "Mounted on" || disk.Table.SortDesc {
+		t.Fatalf("disk sort = %q", disk.Table.SortBy)
+	}
+	raw := `{"panels":[{"type":"table","title":"Waiting","gridPos":{"y":1},
+	  "options":{"sortBy":[{"displayName":"Waiting","desc":true}]},
+	  "transformations":[{"id":"organize","options":{"excludeByName":{"job":true},"indexByName":{"task":0,"Value":1},"renameByName":{"Value":"Waiting"}}}],
+	  "fieldConfig":{"defaults":{"unit":"none"},"overrides":[{"matcher":{"id":"byName","options":"Waiting"},"properties":[{"id":"unit","value":"s"},{"id":"custom.width","value":90}]}]},
+	  "targets":[{"refId":"A","expr":"x","instant":true,"format":"table"}]}]}`
+	d, err := Parse([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tb = d.Panels[0].Table
+	if d.Panels[0].Kind != KindTable || tb.SortBy != "Waiting" || !tb.SortDesc || !tb.Exclude["job"] {
+		t.Fatalf("table = %+v", d.Panels[0])
+	}
+	if tb.Index["task"] != 0 || tb.Index["Value"] != 1 || tb.Units["Waiting"] != "s" {
+		t.Fatalf("index/units = %+v", tb)
+	}
+}
+
+// Options that change what a chart or meter shows: noValue text, stacking.
+func TestDisplayOptions(t *testing.T) {
+	raw := `{"panels":[
+	  {"type":"stat","title":"Tier-3","gridPos":{"y":1},"fieldConfig":{"defaults":{"noValue":"no tier-3 runs"}}},
+	  {"type":"timeseries","title":"Calls","gridPos":{"y":2},"fieldConfig":{"defaults":{"custom":{"stacking":{"group":"A","mode":"normal"}}}}},
+	  {"type":"timeseries","title":"Plain","gridPos":{"y":3},"fieldConfig":{"defaults":{"custom":{"stacking":{"mode":"none"}}}}}]}`
+	d, err := Parse([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Panels[0].NoValue != "no tier-3 runs" {
+		t.Fatalf("noValue = %q", d.Panels[0].NoValue)
+	}
+	if !d.Panels[1].Stacked || d.Panels[2].Stacked {
+		t.Fatalf("stacked = %v, %v", d.Panels[1].Stacked, d.Panels[2].Stacked)
 	}
 }
 

@@ -1,6 +1,6 @@
 // Package dash turns a Grafana dashboard's JSON into the panels gdash draws:
 // charts, meters, row headers and labelled placeholders, in gridPos order
-// (spec F3). It knows nothing about HTTP or terminals.
+// (spec F3), and tables. It knows nothing about HTTP or terminals.
 package dash
 
 import (
@@ -18,10 +18,28 @@ const (
 	KindMeter                   // stat, gauge, bargauge → htop-style meter
 	KindRow                     // a row header
 	KindUnsupported             // a one-line placeholder saying why
+	KindTable                   // table → one row per series, a column per label
 )
 
 func (k Kind) String() string {
-	return [...]string{"chart", "meter", "row", "unsupported"}[k]
+	return [...]string{"chart", "meter", "row", "unsupported", "table"}[k]
+}
+
+// Table is how a table panel shapes its columns: Grafana's organize
+// transformation, the sort, and per-column units. Keys are field names as
+// Grafana names them (a label, "Value", or "Value #A" with several queries);
+// SortBy and Units keys are the displayed (renamed) names.
+type Table struct {
+	Exclude  map[string]bool
+	Rename   map[string]string
+	Index    map[string]int
+	SortBy   string
+	SortDesc bool
+	Units    map[string]string
+	// GroupBy is set when a groupBy transformation keeps only some fields:
+	// field → "" for a group key, else its first aggregation (the column is
+	// then named "<field> (<calc>)").
+	GroupBy map[string]string
 }
 
 // DSRef is a datasource reference as the dashboard wrote it; UID may be a
@@ -62,6 +80,9 @@ type Panel struct {
 	Decimals   *int
 	Min, Max   *float64
 	Thresholds []Threshold
+	NoValue    string  // what to show when there is no value (fieldConfig noValue)
+	Stacked    bool    // KindChart: series stack (custom.stacking.mode normal)
+	Table      *Table  // KindTable: column layout
 	Collapsed  bool    // KindRow: a collapsed row
 	Hidden     int     // KindRow: how many panels the collapsed row hides
 	Children   []Panel // KindRow, collapsed: the hidden panels (drawn only when a view names them)
@@ -104,9 +125,47 @@ type wirePanel struct {
 		Hide         bool            `json:"hide"`
 		Datasource   json.RawMessage `json:"datasource"`
 	} `json:"targets"`
+	Options struct {
+		SortBy []struct {
+			DisplayName string `json:"displayName"`
+			Desc        bool   `json:"desc"`
+		} `json:"sortBy"`
+	} `json:"options"`
+	Transformations []struct {
+		ID      string `json:"id"`
+		Options struct {
+			ExcludeByName map[string]bool   `json:"excludeByName"`
+			RenameByName  map[string]string `json:"renameByName"`
+			IndexByName   map[string]int    `json:"indexByName"`
+			Fields        map[string]struct {
+				Operation    string   `json:"operation"`
+				Aggregations []string `json:"aggregations"`
+			} `json:"fields"`
+			Sort []struct {
+				Field string `json:"field"`
+				Desc  bool   `json:"desc"`
+			} `json:"sort"`
+		} `json:"options"`
+	} `json:"transformations"`
 	FieldConfig struct {
+		Overrides []struct {
+			Matcher struct {
+				ID      string          `json:"id"`
+				Options json.RawMessage `json:"options"`
+			} `json:"matcher"`
+			Properties []struct {
+				ID    string          `json:"id"`
+				Value json.RawMessage `json:"value"`
+			} `json:"properties"`
+		} `json:"overrides"`
 		Defaults struct {
-			Unit       string   `json:"unit"`
+			Unit    string `json:"unit"`
+			NoValue string `json:"noValue"`
+			Custom  struct {
+				Stacking struct {
+					Mode string `json:"mode"`
+				} `json:"stacking"`
+			} `json:"custom"`
 			Decimals   *int     `json:"decimals"`
 			Min        *float64 `json:"min"`
 			Max        *float64 `json:"max"`
@@ -222,6 +281,7 @@ func convert(p wirePanel, vars []Variable) Panel {
 	out := Panel{ID: p.ID, Title: p.Title, Type: p.Type, GridPos: p.GridPos}
 	fd := p.FieldConfig.Defaults
 	out.Unit, out.Decimals, out.Min, out.Max = fd.Unit, fd.Decimals, fd.Min, fd.Max
+	out.NoValue, out.Stacked = fd.NoValue, fd.Custom.Stacking.Mode == "normal"
 	for _, s := range fd.Thresholds.Steps {
 		out.Thresholds = append(out.Thresholds, Threshold{Color: s.Color, Value: s.Value})
 	}
@@ -251,6 +311,8 @@ func convert(p wirePanel, vars []Variable) Panel {
 		out.Kind = KindChart
 	case p.Type == "stat" || p.Type == "gauge" || p.Type == "bargauge":
 		out.Kind = KindMeter
+	case p.Type == "table":
+		out.Kind, out.Table = KindTable, tableSpec(p)
 	default:
 		out.Kind, out.Reason = KindUnsupported, p.Type+" not supported"
 		return out
@@ -262,6 +324,58 @@ func convert(p wirePanel, vars []Variable) Panel {
 		}
 	}
 	return out
+}
+
+// tableSpec reads the transformations and options gdash applies to a table.
+// Transformations it does not know (groupBy, merge, calculateField…) are
+// skipped: the table still shows the raw columns.
+func tableSpec(p wirePanel) *Table {
+	tb := &Table{Exclude: map[string]bool{}, Rename: map[string]string{}, Index: map[string]int{}, Units: map[string]string{}}
+	for _, tr := range p.Transformations {
+		o := tr.Options
+		switch tr.ID {
+		case "organize":
+			for k, v := range o.ExcludeByName {
+				tb.Exclude[k] = v
+			}
+			for k, v := range o.RenameByName {
+				tb.Rename[k] = v
+			}
+			for k, v := range o.IndexByName {
+				tb.Index[k] = v
+			}
+		case "groupBy":
+			tb.GroupBy = map[string]string{}
+			for f, op := range o.Fields {
+				switch {
+				case op.Operation == "groupby":
+					tb.GroupBy[f] = ""
+				case op.Operation == "aggregate" && len(op.Aggregations) > 0:
+					tb.GroupBy[f] = op.Aggregations[0]
+				}
+			}
+		case "sortBy":
+			if len(o.Sort) > 0 {
+				tb.SortBy, tb.SortDesc = o.Sort[0].Field, o.Sort[0].Desc
+			}
+		}
+	}
+	if s := p.Options.SortBy; tb.SortBy == "" && len(s) > 0 {
+		tb.SortBy, tb.SortDesc = s[0].DisplayName, s[0].Desc
+	}
+	for _, ov := range p.FieldConfig.Overrides {
+		var name string
+		if ov.Matcher.ID != "byName" || json.Unmarshal(ov.Matcher.Options, &name) != nil {
+			continue
+		}
+		for _, prop := range ov.Properties {
+			var unit string
+			if prop.ID == "unit" && json.Unmarshal(prop.Value, &unit) == nil {
+				tb.Units[name] = unit
+			}
+		}
+	}
+	return tb
 }
 
 // dsType is a target's datasource plugin type. A "${var}" uid takes the
