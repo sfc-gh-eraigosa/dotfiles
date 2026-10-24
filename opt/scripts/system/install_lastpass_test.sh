@@ -72,6 +72,7 @@ SHADOW="${TMP}/shadow"; mkdir -p "${SHADOW}"   # first on PATH: no real lpass le
     cat > "${BIN}/git" <<'EOS'
 #!/bin/sh
 echo "git $*" >> "$STUB_LOG"
+[ "${STUB_NOISY:-0}" = 1 ] && [ "$1" = clone ] && echo "Note: switching to 'feaeacf'. You are in 'detached HEAD' state." >&2
 case "$1" in
     clone) for last; do :; done; mkdir -p "$last"
         # upstream v1.6.1 pins.h, abridged: the array the installer patches;
@@ -92,6 +93,8 @@ EOS
     cat > "${BIN}/cmake" <<'EOS'
 #!/bin/sh
 echo "cmake $*" >> "$STUB_LOG"
+[ "${STUB_NOISY:-0}" = 1 ] && echo "pbkdf2.c:42: warning: 'HMAC_Update' is deprecated" >&2
+if [ "$1" = "--build" ] && [ "${STUB_BUILD_FAILS:-0}" = 1 ]; then echo "cipher.c:7: error: boom" >&2; exit 2; fi
 if [ "$1" = "--build" ]; then
     # the built binary carries pins.h as it was at build time, as the real one does
     # (STUB_BUILD_IGNORES_PINS=1: a build that compiled some other header)
@@ -117,7 +120,7 @@ run_lp() {  # run_lp [VAR=value ...]  (stdin is not a terminal)
 # 1. Fresh Debian-like host, sudo cached: deps via apt, clone at the tag, commit checked, built, installed.
 out="$(run_lp)"; rc=$?
 assert_eq "${rc}" "0" "fresh apt host exits 0"
-assert_eq "$(grep -c '^sudo env DEBIAN_FRONTEND=noninteractive apt-get install' "${LOG}")" "1" "build deps installed once through sudo, non-interactively"
+assert_eq "$(grep -c '^sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_SUSPEND=1 apt-get install' "${LOG}")" "1" "build deps installed once through sudo, non-interactively, without needrestart's report"
 assert_eq "$(grep -c 'apt-get install.*lastpass-cli' "${LOG}")" "0" "the distro lastpass-cli package is never installed"
 assert_eq "$(grep -c '^git clone .*--branch v1.6.1 .*lastpass/lastpass-cli' "${LOG}")" "1" "clones upstream at the pinned tag"
 assert_eq "$(grep -c '^git -C .* rev-parse HEAD' "${LOG}")" "1" "checks the tag's commit"
@@ -134,6 +137,21 @@ assert_eq "$(grep -c 'OD/WDbD3VsfMwwNzzy9MWd9JXppKB77Vb3ST2wn9meg=' "${DEST}/lpa
 assert_eq "$(grep -c '^# 	"OD/WDbD3VsfMwwNzzy9MWd9JXppKB77Vb3ST2wn9meg=",$' "${DEST}/lpass")" "1" "upstream's last pin gains its comma"
 assert_eq "$(grep -c '^# 	"l9l5rsCxnWfS7st1kW3EqURDe6gYtprAmX8et0XpFIA=",$' "${DEST}/lpass")" "1" "the intermediate pin is its own element"
 assert_eq "$(grep -c '^# 	"4EoCLOMvTM8sf2BGKHuCijKpCfXnUUR/g/0scfb9gXM=",$' "${DEST}/lpass")" "1" "the root pin is its own element"
+
+# 1b. A healthy build is silent on stderr however chatty the toolchain is:
+#     fleet update counts every stderr line as a warning, and lastpass-cli's
+#     OpenSSL 3 deprecations alone were ~170 lines per host (2026-10-23).
+: > "${LOG}"; rm -rf "${DEST}" "${TMP}/deps-installed"
+err="$(env -u LASTPASS_FORCE STUB_NOISY=1 STUB_LOG="${LOG}" STUB_TMP="${TMP}" STUB_DEST="${DEST}" \
+    LASTPASS_INSTALL_DIR="${DEST}" HOME="${TMP}/home" TMPDIR="${TMP}" \
+    PATH="${SHADOW}:${BIN}:/usr/bin:/bin" bash "${SCRIPT}" 2>&1 >/dev/null </dev/null)"; rc=$?
+assert_eq "${rc}" "0" "noisy toolchain build exits 0"
+assert_eq "${err}" "" "a successful build writes nothing to stderr"
+
+# 1c. A failed build still shows why: the captured compiler output reaches stderr.
+out="$(run_lp STUB_BUILD_FAILS=1)"; rc=$?
+assert_eq "${rc}" "1" "a failed build exits 1"
+assert_eq "$(printf '%s' "${out}" | grep -c 'cipher.c:7: error: boom')" "1" "a failed build prints the compiler's output"
 
 # 2. apt's 1.3.7 is on PATH: below the floor, so it is replaced, and the message says why.
 out="$(run_lp STUB_LPASS_VERSION=1.3.7)"; rc=$?
