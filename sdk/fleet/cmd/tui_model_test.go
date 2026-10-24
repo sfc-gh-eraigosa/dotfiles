@@ -562,8 +562,14 @@ func TestQuitIsGuardedWhileUpdatesRun(t *testing.T) {
 	if !strings.Contains(m2.status, "q again") {
 		t.Fatalf("the guard must tell the operator how to force it, got %q", m2.status)
 	}
-	if _, cmd := send(m2, "q"); cmd == nil {
-		t.Fatal("a second q must force the quit")
+	// The second q cancels and waits for the update to stop (see
+	// TestQuitCancelsEveryUpdateAndExitsOnceTheyStop); a third exits now.
+	m3, _ := send(m2, "q")
+	if !m3.quitting || !strings.Contains(m3.status, "cancelling") {
+		t.Fatalf("a second q must cancel the updates and wait, got %q", m3.status)
+	}
+	if _, cmd := send(m3, "q"); !isQuit(cmd) {
+		t.Fatal("a third q must quit without waiting")
 	}
 }
 

@@ -54,10 +54,12 @@ type (
 	// logEOFMsg says a host's stream ended; the completion arrives separately
 	// on doneCh, so the two are joined in the model.
 	logEOFMsg struct{ alias string }
-	// streamStartedMsg hands the freshly-opened channels to the model.
+	// streamStartedMsg hands the freshly-opened channels to the model, with
+	// the cancel func that stops this host's run (ctrl+c, or q while busy).
 	streamStartedMsg struct {
-		alias string
-		st    stream
+		alias  string
+		st     stream
+		cancel context.CancelFunc
 	}
 )
 
@@ -312,6 +314,9 @@ var errSudoFixupInert = errors.New("fleet: sudoers drop-in installed and removed
 // matching "92" in text — that also matched exit 192 and any reason that
 // merely mentioned a 192.168.x address.
 func bgDoneErr(rep updexec.HostReport) error {
+	if rep.Cancelled() {
+		return errCancelled
+	}
 	if rep.NeedsTerminal() {
 		return errNeedsTerminal
 	}
@@ -381,6 +386,12 @@ func explainExitCode(code int) string {
 // such a host to the interactive queue instead of marking its row failed
 // (see tuiModel.Update's bgUpdateDoneMsg case).
 var errNeedsTerminal = errors.New("fleet: this host's plan needs a terminal")
+
+// errCancelled marks a background run the operator cancelled: the row reads
+// "cancelled", never FAIL, and the host is not rerouted to another lane.
+var errCancelled = errors.New("cancelled")
+
+func isCancelled(err error) bool { return errors.Is(err, errCancelled) }
 
 // bgPolicy is the operator's standing choices for the background lane, read
 // from gff once at startup (resolveTUIPlan → policyFrom) — policy, not
@@ -594,13 +605,15 @@ func beginStream(alias string, plan updplan.Plan, a answers, p bgPolicy, r runne
 			Reset: reset,
 		}
 
+		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
-			rep := ex.RunHost(alias, plan)
+			defer cancel()
+			rep := ex.RunHostCtx(ctx, alias, plan)
 			q.closeQ()
 			done <- bgDoneErr(rep)
 		}()
 
-		return streamStartedMsg{alias: alias, st: stream{lines: lines, done: done}}
+		return streamStartedMsg{alias: alias, st: stream{lines: lines, done: done}, cancel: cancel}
 	}
 }
 

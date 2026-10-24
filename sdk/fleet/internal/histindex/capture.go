@@ -157,7 +157,10 @@ type Summary struct {
 	Run
 	Warnings int
 	Finished bool
-	Lines    int
+	// Cancelled is a run the operator stopped (its footer says "cancelled");
+	// such a run is not Finished, and unlike a cut-off one it says so.
+	Cancelled bool `json:",omitempty"`
+	Lines     int
 	// Unreadable marks a row kept for a run whose file could not be read, so
 	// Warnings, Finished and Lines are unknown rather than zero. Summarize
 	// never sets it; a caller that keeps such a row does.
@@ -173,11 +176,13 @@ func Summarize(r Run) (Summary, error) {
 	if err != nil {
 		return Summary{}, err
 	}
+	cancelled := strings.HasSuffix(c.Footer, " cancelled")
 	return Summary{
-		Run:      r,
-		Warnings: c.Warnings,
-		Finished: c.Footer != "",
-		Lines:    len(c.Lines),
+		Run:       r,
+		Warnings:  c.Warnings,
+		Finished:  c.Footer != "" && !cancelled,
+		Cancelled: cancelled,
+		Lines:     len(c.Lines),
 	}, nil
 }
 

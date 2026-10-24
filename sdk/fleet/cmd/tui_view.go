@@ -397,6 +397,8 @@ func histCells(r histindex.Summary) (when, result, warn string) {
 	switch {
 	case r.Unreadable:
 		return when, "unreadable", "?"
+	case r.Cancelled:
+		result = "cancelled"
 	case r.Finished:
 		result = "finished"
 	default:
@@ -843,6 +845,8 @@ func (m tuiModel) updateCell(alias string) string {
 			return th.ok.Render("ok") + " " + th.warn.Render(fmt.Sprintf("⚠%d", n))
 		}
 		return th.ok.Render("ok")
+	case updCancelled:
+		return th.warn.Render("cancelled")
 	case updFail:
 		msg := "FAIL"
 		// A remote failure can emit an arbitrarily long line; the row must stay

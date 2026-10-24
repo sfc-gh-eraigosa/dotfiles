@@ -19,7 +19,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | :-- | :-- |
 | `fleet status [host...]` | table of host · commit · **branch** · last run · status; `--json`; exits non-zero if any host is stale |
 | `fleet discover [--scan]` | list every concrete ssh-config host as `in-fleet` / `available`; `--scan` sweeps the subnet to refresh a moved `HostName` and offer unknown responders; `--json`; `--add-all` bulk-adopts (one pass, one backup; `--dry-run` / `--yes`) |
-| `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v`/`a` selection, concurrent background updates (`--jobs`), `w` wake, `s` ssh, `S` herdr attach via the local client (`herdr --remote`, so copies reach this machine's clipboard; inside a herdr pane it saves the host as a herdr machine instead and says `prefix+w`), `T` trust a changed host key, `A` authorize your key, `F` forget answers, `?` grouped help; the status line names the key that fixes the cursor row. The header names **this** machine (`⌂ <hostname>`) and its row's alias is painted the same colour; the version's commit is an OSC 8 link to its GitHub page |
+| `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v`/`a` selection, concurrent background updates (`--jobs`), `ctrl+c` cancels updates in flight (scoped like `u`; press twice), `w` wake, `s` ssh, `S` herdr attach via the local client (`herdr --remote`, so copies reach this machine's clipboard; inside a herdr pane it saves the host as a herdr machine instead and says `prefix+w`), `T` trust a changed host key, `A` authorize your key, `F` forget answers, `?` grouped help; the status line names the key that fixes the cursor row. The header names **this** machine (`⌂ <hostname>`) and its row's alias is painted the same colour; the version's commit is an OSC 8 link to its GitHub page |
 | `fleet update <host>...` | walks a `fleet.yaml` step plan per host, serially: a DAG of `sync` (fetch → ff-only, one network call) / `run` (verbatim shell, batch or `ssh -t`) / `gh-auth` steps; with no plan file it is today's fetch → ff → `install.sh`. Flags: `--local skip\|rescue\|carry`, `--force` (= `--local rescue`), `--no-restore`, `--reset`, `--timeout D`, `--no-retry`, `--ref B\|repo=B` (repeatable), `--file PATH`, `--dry-run` (prints every effective script, preamble included, sends nothing), `--list-inputs` (what the plan's `inputs:` need; no host), `--input [host:]id=v\|@file\|env:NAME` (repeatable; a confidential value only from a file or the environment); `--json` from root. `fleet update init [--file] [--overwrite] [--print]` writes the starter plan |
 | `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
 | `fleet remove <alias> [--purge]` | unmark (keeps SSH access); `--purge` deletes the block |
@@ -490,6 +490,20 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   panel's width budget intact. Pinned by `TestCommitURLAcceptsEveryRemoteSpelling`,
   `TestCommitURLNeedsARealSHA`, `TestCommitURLOnlyLinksKnownForges`,
   `TestBannerVersionLinksTheCommitAtZeroWidth`, `TestBannerVersionIsPlainWithoutASHA`.
+- **Updates are cancellable, and quitting cancels them.** `Executor.RunHostCtx` threads one
+  context through every step: a cancel kills the step's local `ssh` (the same path a timeout
+  takes), is never retried, cuts a backoff short, and marks that step and every unstarted one
+  `cancelled`. A due `<repo>.restore` still runs, on `context.WithoutCancel`, so stopping an
+  update never strands stashed work. In the TUI `ctrl+c` cancels the in-flight hosts among
+  `updateTargets()` (else every in-flight update), armed by the first press and confirmed by
+  an immediate second — any other key disarms it; with nothing to cancel it still quits. A
+  cancel that lands before a cancel func exists (precheck, or between `pump` and
+  `streamStartedMsg`) is recorded in `cancelReq` and honoured by the arriving message. `q`
+  while busy warns, then cancels everything and exits once `busy()` is false; a third `q`
+  exits at once. The row reads `cancelled`, never `FAIL`. Pinned by
+  `TestCancelMidStepStopsTheHostWithoutRetrying`, `TestRestoreStillRunsAfterCancel`,
+  `TestCtrlCArmsThenCancelsTheRunningUpdate`, `TestCancelBeforeTheStreamStartsCancelsItOnArrival`,
+  `TestQuitCancelsEveryUpdateAndExitsOnceTheyStop`.
 - **TUI in-flight ownership**: a host is in exactly one of `pending` / `updating` /
   `waking` / resolved. Refresh skips hosts an async path owns; every completion
   re-polls its host. Two async paths must never own one row.
@@ -858,9 +872,9 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   inverting the exact signal the note exists to give. Pinned by
   `TestInteractiveStepSaysItsOutputWentToTheTerminal` and
   `TestBackgroundLaneDoesNotClaimAnInteractiveGap`.
-- **A `timed out` step is "we stopped waiting", not "it stopped".** The deadline kills the
+- **A `timed out` (or `cancelled`) step is "we stopped waiting", not "it stopped".** The deadline kills the
   local `ssh`; the remote command keeps running (an `install.sh` in the middle of `apt` will
-  finish on its own). Check the host before re-running, and list `timeout` in `retry.on` only
+  finish on its own; a non-tty remote job usually dies at its next write once ssh is gone). Check the host before re-running, and list `timeout` in `retry.on` only
   for steps that are safe to start twice.
 - **Manual recovery after a failed carry/restore**: the report line names everything you
   need — `restore-failed stash=<sha> branch=<orig>`. On the host:

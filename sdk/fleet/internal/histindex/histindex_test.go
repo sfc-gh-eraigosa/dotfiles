@@ -194,6 +194,25 @@ func TestSummarizeReportsFinishAndWarnings(t *testing.T) {
 	}
 }
 
+// A run the operator cancelled closes its capture with a "cancelled" footer:
+// it is neither finished nor cut off, and the listing says which.
+func TestSummarizeReportsACancelledRun(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "20260909T034714Z__pi.log",
+		"# fleet update — host=pi started=x\n03:47:14 working\n# 2026-09-09T03:47:20Z cancelled\n")
+	runs, err := Scan(dir)
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("Scan: %v %v", runs, err)
+	}
+	s, err := Summarize(runs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.Cancelled || s.Finished {
+		t.Fatalf("summary = %+v, want cancelled and not finished", s)
+	}
+}
+
 // problemCapture is the shape a real broken run has: install.sh's own
 // WARNING: diagnosis on STDOUT, the mechanical noise underneath it on
 // stderr, repeated many times, plus routine chatter that is neither.

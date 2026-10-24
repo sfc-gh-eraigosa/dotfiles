@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -44,6 +45,7 @@ var keyHelp = []struct {
 	{"🔍", "/", "regex search (smartcase)", true, grpSearch},
 	{"●", "space", "toggle selection", true, grpSearch},
 	{"🚀", "u", "update selection (or cursor)", true, grpUpdate},
+	{"🛑", "ctrl+c", "cancel running updates", false, grpUpdate},
 	{"📜", "l", "show / hide the streaming log pane", true, grpPanes},
 	{"🗂️", "h", "show / hide the host list", true, grpPanes},
 	{"⚠️", "e", "stderr pane · in confirm: answers", true, grpPanes},
@@ -51,7 +53,7 @@ var keyHelp = []struct {
 	{"🐑", "S", "herdr --remote · in herdr: machine add", false, grpSSH},
 	{"\U0001f5c3\ufe0f", "H", "history of past runs", true, grpPanes},
 	{"🔄", "r", "refresh", true, grpUpdate},
-	{"🚪", "q", "quit", true, grpGeneral},
+	{"🚪", "q", "quit (cancels updates first)", true, grpGeneral},
 	{"⬍", "j / k / ↓ / ↑", "move cursor", false, grpNav},
 	{"⤒", "gg / G", "first / last host", false, grpNav},
 	{"⇟", "ctrl+d / ctrl+u", "half page down / up", false, grpNav},
@@ -69,6 +71,40 @@ var keyHelp = []struct {
 	{"🔏", "T", "trust a changed host key (fleet trust)", false, grpSSH},
 	{"🗑️", "F", "forget answers + saved prefs", false, grpUpdate},
 	{"⇥", "tab / enter", "answer form: next field", false, grpUpdate},
+}
+
+// quitKey is q (and ctrl+c with nothing to cancel). Quitting mid-update
+// would orphan work the operator can't see — the local ssh dies with fleet
+// and the remote job stops wherever its next write lands — so a busy
+// dashboard asks first, then cancels every update and exits once they have
+// stopped; a third press exits without waiting.
+func quitKey(m tuiModel) (tea.Model, tea.Cmd) {
+	switch {
+	case m.quitting:
+		return m, tea.Quit
+	case !m.busy():
+		return m, tea.Quit
+	case !m.quitReq:
+		m.quitReq = true
+		m.status = "updates in progress — press q again to cancel them and quit"
+		return m, nil
+	}
+	m.quitting = true
+	n := m.cancelUpdates(m.inFlightUpdates())
+	m.status = fmt.Sprintf("cancelling %s — quitting when they stop (q again quits now)", plural(n, "update"))
+	return m, nil
+}
+
+func sameAliases(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // route owns every keystroke. Mode comes first: a key typed in search is text,
@@ -273,6 +309,9 @@ var pendingG bool
 
 func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := k.String()
+	if key != "ctrl+c" {
+		m.cancelArm = nil // only an immediate second ctrl+c confirms a cancel
+	}
 
 	if pendingG {
 		pendingG = false
@@ -338,14 +377,25 @@ func routeNormal(m tuiModel, k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "tab":
 		m.cycleFocus()
 		return m, nil
-	case "q", "ctrl+c":
-		// Quitting mid-update would orphan work the operator can't see.
-		if m.busy() && !m.quitReq {
-			m.quitReq = true
-			m.status = "updates in progress — press q again to force quit"
+	case "ctrl+c":
+		// ctrl+c interrupts: it cancels updates in flight, scoped like `u`.
+		// With nothing to cancel it keeps its old meaning, quit.
+		targets := m.cancelTargets()
+		if len(targets) == 0 {
+			return quitKey(m)
+		}
+		if !sameAliases(m.cancelArm, targets) {
+			m.cancelArm = targets
+			m.status = fmt.Sprintf("ctrl+c again to cancel %s: %s — any other key keeps them running",
+				plural(len(targets), "update"), strings.Join(targets, ", "))
 			return m, nil
 		}
-		return m, tea.Quit
+		m.cancelArm = nil
+		n := m.cancelUpdates(targets)
+		m.status = fmt.Sprintf("cancelling %s: %s", plural(n, "update"), strings.Join(targets, ", "))
+		return m, m.pump()
+	case "q":
+		return quitKey(m)
 	case "g":
 		pendingG = true
 	case "G":

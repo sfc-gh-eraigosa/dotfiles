@@ -22,6 +22,9 @@ const (
 	Failed    Status = "failed"
 	Skipped   Status = "skipped"
 	DepFailed Status = "dependency-failed"
+	// Cancelled is a step the operator stopped (RunHostCtx's context ended)
+	// mid-attempt, or one that never started because of it.
+	Cancelled Status = "cancelled"
 )
 
 // Result is one step's outcome on one host.
@@ -77,6 +80,16 @@ func (h HostReport) Err() error {
 		}
 	}
 	return nil
+}
+
+// Cancelled reports whether the operator cancelled this run.
+func (h HostReport) Cancelled() bool {
+	for _, r := range h.Results {
+		if r.Status == Cancelled {
+			return true
+		}
+	}
+	return false
 }
 
 // NeedsTerminal reports whether this run stopped on a step that needed a
@@ -385,6 +398,18 @@ type Executor struct {
 
 	NoRestore, Reset, NoRetry bool
 	Timeout                   time.Duration // >0 overrides every batch step (--timeout)
+
+	// runCtx is RunHostCtx's context, carried on the value receiver so every
+	// step, retry and backoff of that one run sees it. Unexported: a caller
+	// cancels through RunHostCtx, never by building an Executor around one.
+	runCtx context.Context
+}
+
+func (e Executor) ctx() context.Context {
+	if e.runCtx != nil {
+		return e.runCtx
+	}
+	return context.Background()
 }
 
 func (e Executor) out() Output {
@@ -401,6 +426,8 @@ func (e Executor) now() time.Time {
 	return time.Now()
 }
 
+// sleep waits out a retry backoff, returning early when the run is
+// cancelled: a two-minute backoff must not hold a cancelled host hostage.
 func (e Executor) sleep(d time.Duration) {
 	if d <= 0 {
 		return
@@ -409,7 +436,12 @@ func (e Executor) sleep(d time.Duration) {
 		e.Sleep(d)
 		return
 	}
-	time.Sleep(d)
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+	case <-e.ctx().Done():
+	}
 }
 
 func (e Executor) modeLabel() string {
@@ -435,6 +467,16 @@ func (e Executor) effectiveTimeout(st updplan.Step) time.Duration {
 
 // RunHost walks p's steps, in Order(), against host.
 func (e Executor) RunHost(host string, p updplan.Plan) HostReport {
+	return e.RunHostCtx(context.Background(), host, p)
+}
+
+// RunHostCtx is RunHost under ctx. Cancelling ctx kills the step in flight
+// (its local ssh, exactly as a timeout does), skips its retries, and marks it
+// and every step not yet started Cancelled. A due restore still runs, on a
+// context the cancel does not reach: stopping an update must not strand the
+// operator's stashed work or leave the clone on the target branch.
+func (e Executor) RunHostCtx(ctx context.Context, host string, p updplan.Plan) HostReport {
+	e.runCtx = ctx
 	started := e.now()
 	header := fmt.Sprintf("fleet update — host=%s plan=%s mode=%s started=%s",
 		host, p.Source, e.modeLabel(), started.Format(time.RFC3339))
@@ -458,6 +500,13 @@ func (e Executor) RunHost(host string, p updplan.Plan) HostReport {
 	pending := map[string]*restoreInfo{}
 
 	for _, st := range p.Order() {
+		if ctx.Err() != nil {
+			res := Result{Step: st.ID, Kind: st.Kind, Status: Cancelled, Reason: "cancelled"}
+			status[st.ID] = res.Status
+			rep.Results = append(rep.Results, res)
+			e.fireDueRestores(w, host, p, pending, st.ID, &rep)
+			continue
+		}
 		if blocker := e.firstStopBlocker(st, status, p); blocker != "" {
 			res := Result{Step: st.ID, Kind: st.Kind, Status: DepFailed, Reason: "blocked by " + blocker}
 			status[st.ID] = res.Status
@@ -476,6 +525,10 @@ func (e Executor) RunHost(host string, p updplan.Plan) HostReport {
 		e.fireDueRestores(w, host, p, pending, st.ID, &rep)
 	}
 
+	if ctx.Err() != nil {
+		w.Close("cancelled")
+		return rep
+	}
 	w.Close("finished")
 	return rep
 }
@@ -624,6 +677,7 @@ func (e Executor) fireDueRestores(w LineWriter, host string, p updplan.Plan, pen
 // retry policy (3 attempts, retried only on a transport failure, 5m
 // per-attempt timeout) — never affected by Executor.NoRetry or Timeout.
 func (e Executor) runRestore(w LineWriter, host string, repo updplan.Repo, pi *restoreInfo) Result {
+	e.runCtx = context.WithoutCancel(e.ctx()) // cleanup outlives a cancel (see RunHostCtx)
 	id := repo.Name + ".restore"
 	call := func(ctx context.Context) (string, error) {
 		script, err := RestoreScript(repo, pi.orig, pi.sha)
@@ -866,7 +920,7 @@ func (e Executor) runGhAuth(w LineWriter, host string, st updplan.Step) Result {
 	}
 
 	res := e.runWithRetry(w, st.ID, st.Kind, false, st.Retry, e.effectiveTimeout(st), e.NoRetry, st.Expect, checkOnce)
-	if res.Status == OK {
+	if res.Status == OK || res.Status == Cancelled {
 		return res
 	}
 	if res.Exit == 127 {
@@ -879,7 +933,7 @@ func (e Executor) runGhAuth(w LineWriter, host string, st updplan.Step) Result {
 		return Result{Step: st.ID, Kind: st.Kind, Status: Failed, Reason: err.Error(),
 			Duration: e.now().Sub(start), Attempts: res.Attempts, MaxAttempts: res.MaxAttempts}
 	}
-	if err := e.IO.Interactive(context.Background(), host, st, loginScript); err != nil {
+	if err := e.IO.Interactive(e.ctx(), host, st, loginScript); err != nil {
 		reason := err.Error()
 		needsTerminal := errors.Is(err, ErrNoTerminal)
 		if needsTerminal {
@@ -890,7 +944,7 @@ func (e Executor) runGhAuth(w LineWriter, host string, st updplan.Step) Result {
 			NeedsTerminal: needsTerminal}
 	}
 
-	out, err2 := checkOnce(context.Background())
+	out, err2 := checkOnce(e.ctx())
 	exit := exitCode(err2)
 	notes := parseNotes(out)
 	if err2 == nil && containsInt(st.Expect.Exit, exit) {
@@ -974,7 +1028,11 @@ func (e Executor) runWithRetry(
 			w.Line(InteractiveNote)
 		}
 
-		ctx := context.Background()
+		if e.ctx().Err() != nil {
+			// Cancelled before (or between) attempts: nothing is sent.
+			break
+		}
+		ctx := e.ctx()
 		var cancel context.CancelFunc
 		if timeout > 0 {
 			ctx, cancel = context.WithTimeout(ctx, timeout)
@@ -1006,6 +1064,9 @@ func (e Executor) runWithRetry(
 				Duration: e.now().Sub(start), Attempts: attempts, MaxAttempts: maxAttempts, Notes: allNotes}
 		}
 
+		if e.ctx().Err() != nil {
+			break // cancelled mid-attempt: never retried
+		}
 		class := classify(callErr, timedOut)
 		if n == maxAttempts || !matchesRetry(retry.On, class, exit) {
 			break
@@ -1014,6 +1075,11 @@ func (e Executor) runWithRetry(
 		e.sleep(wait)
 	}
 
+	if e.ctx().Err() != nil {
+		return Result{Step: id, Kind: kind, Status: Cancelled, Exit: exitCode(callErr),
+			Reason: "cancelled", Duration: e.now().Sub(start),
+			Attempts: attempts, MaxAttempts: maxAttempts, Notes: allNotes}
+	}
 	exit := exitCode(callErr)
 	notes := allNotes
 	reason := reasonFor(callErr, timedOut, exit, timeout)
