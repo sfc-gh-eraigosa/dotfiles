@@ -24,6 +24,8 @@ type DoneResult struct {
 	Removed        string // worker_ref removed
 	FeatureDeleted bool   // empty-feature cleanup removed the feature row + FEATURE.md
 	RetainedNotice string // one-line stderr notice when an orphaned feature is retained
+	BranchDeleted  bool   // the local branch was deleted (PR confirmed merged)
+	BranchNotice   string // one-line stderr notice when branch deletion was attempted and failed
 }
 
 // Done tears down a worker (design.md → "gss feature done"): it refuses on a
@@ -50,6 +52,7 @@ func (s *Service) Done(ctx context.Context, opts DoneOpts) (DoneResult, error) {
 	feat := reg.Features[fi]
 	w := feat.Workers[wi]
 	res := DoneResult{Removed: ref.String()}
+	prStateNow := w.PRState // refined below when we ask GitHub
 
 	if !opts.Force {
 		if out, _ := s.gitOut(ctx, w.Worktree, "status", "--porcelain"); strings.TrimSpace(out) != "" {
@@ -60,9 +63,28 @@ func (s *Service) Done(ctx context.Context, opts DoneOpts) (DoneResult, error) {
 				return res, fmt.Errorf("feature done: %s still bases on %s; re-target it or pass --force", workerRef(feat.Name, other), ref.String())
 			}
 		}
-		if w.PRURL != "" && w.PRState != "" && w.PRState != "merged" {
-			return res, fmt.Errorf("feature done: PR for %s is %q (unmerged); pass --force", ref.String(), w.PRState)
+		if w.PRURL != "" && w.PRState != "merged" {
+			// The cached pr_state goes stale the moment the PR merges on its
+			// own (Mergify), so ask GitHub before refusing (dotfiles#438).
+			observed, oerr := s.observePR(ctx, w)
+			switch {
+			case oerr == nil:
+				prStateNow = observed
+				s.persistPRState(ref, observed)
+				if observed != "merged" && observed != "closed" {
+					return res, fmt.Errorf("feature done: PR for %s is %q (unmerged); pass --force", ref.String(), observed)
+				}
+			case w.PRState != "":
+				return res, fmt.Errorf("feature done: PR for %s is cached as %q and GitHub could not be reached to refresh it (%v); pass --force", ref.String(), w.PRState, oerr)
+			}
 		}
+	}
+
+	// Resolve the main repo now: once the worktree is gone there is nothing
+	// left to ask, and the local branch has to be deleted from the repo.
+	repoDir := ""
+	if prStateNow == "merged" {
+		repoDir = s.repoDirFor(ctx, w.Worktree)
 	}
 
 	// Tear down the worktree (the backend owns the inode).
@@ -132,7 +154,81 @@ func (s *Service) Done(ctx context.Context, opts DoneOpts) (DoneResult, error) {
 		_ = os.Remove(featDir) // best-effort (only if now empty)
 		res.FeatureDeleted = true
 	}
+
+	// GitHub already deleted the remote branch of a merged PR; drop the local
+	// one too. Only when the PR is confirmed merged — never an open PR's.
+	if prStateNow == "merged" {
+		if err := s.deleteLocalBranch(ctx, repoDir, w); err != nil {
+			res.BranchNotice = fmt.Sprintf("worker removed, but local branch %s was not deleted: %v", w.Branch, err)
+		} else {
+			res.BranchDeleted = true
+		}
+	}
 	return res, nil
+}
+
+// observePR asks GitHub for the worker's PR state, in the registry's
+// vocabulary. An error means the state could not be observed.
+func (s *Service) observePR(ctx context.Context, w registry.Worker) (string, error) {
+	if s.GH == nil {
+		return "", fmt.Errorf("no GitHub client")
+	}
+	if s.NWO != "" && !strings.Contains(w.PRURL, "/"+s.NWO+"/pull/") {
+		return "", fmt.Errorf("PR %s does not belong to %s", w.PRURL, s.NWO)
+	}
+	num := registry.PRNumberFromURL(w.PRURL)
+	if num <= 0 {
+		return "", fmt.Errorf("no PR number in %q", w.PRURL)
+	}
+	pr, err := s.GH.PRView(ctx, num)
+	if err != nil {
+		return "", err
+	}
+	st := registry.PRStateOf(pr)
+	if st == "" {
+		return "", fmt.Errorf("GitHub returned no state for PR #%d", num)
+	}
+	return st, nil
+}
+
+// persistPRState records an observed pr_state on one worker row under the
+// store lock (best-effort: the caller already has the answer it needs).
+func (s *Service) persistPRState(ref identity.WorkerRef, state string) {
+	_ = s.Store.Update(func(r *registry.Registry) error {
+		if f, wi := findWorker(*r, ref); f >= 0 {
+			r.Features[f].Workers[wi].PRState = state
+		}
+		return nil
+	})
+}
+
+// repoDirFor returns the main repo's git dir for a worker worktree: the
+// configured RepoPath, else the worktree's common git dir. "" when unknown.
+func (s *Service) repoDirFor(ctx context.Context, worktree string) string {
+	if s.RepoPath != "" {
+		return s.RepoPath
+	}
+	out, err := s.gitOut(ctx, worktree, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil || out == "" || !filepath.IsAbs(out) {
+		return ""
+	}
+	return out
+}
+
+// deleteLocalBranch removes the worker's branch from the main repo. Callers
+// must have confirmed the PR merged: the commits were squashed, so -D (not -d)
+// is the only form that works.
+func (s *Service) deleteLocalBranch(ctx context.Context, repoDir string, w registry.Worker) error {
+	if repoDir == "" {
+		return fmt.Errorf("main repository not found")
+	}
+	if w.Branch == "" || w.Branch == w.BaseBranch || w.Branch == "main" || w.Branch == "master" {
+		return fmt.Errorf("refusing to delete protected branch %q", w.Branch)
+	}
+	if _, err := s.Git.Run(ctx, "-C", repoDir, "branch", "-D", w.Branch); err != nil {
+		return err
+	}
+	return nil
 }
 
 // DoneFeature tears down a whole feature: the registry row, FEATURE.md, and

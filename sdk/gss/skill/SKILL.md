@@ -133,6 +133,11 @@ design governs.
    children and auto-promotes the next where eligible.
 7. `gss feature done [<ref>] [--force]` — tear down a finished worker (and the
    feature if it empties and FEATURE.md is unedited).
+7a. `gss feature gc [--feature <name>] [--apply] [--json]` — sweep every worker of
+   this repo whose PR is merged or closed (state refreshed from GitHub), whose
+   tree is clean and pushed, and that nothing bases on. Dry run by default;
+   `--apply` removes through `done` (never `--force`) and deletes the local
+   branch of each merged PR.
 8. `gss feature audit [--repair]` — reconcile the registry against observed
    reality; run it first on a fresh machine (observable state wins).
 

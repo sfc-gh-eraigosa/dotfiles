@@ -35,6 +35,7 @@ type Service struct {
 	Clock        config.Clock
 	WorktreeRoot string               // expanded worktrees root
 	NWO          string               // "owner/repo"
+	RepoPath     string               // main checkout (for local branch deletion); "" → derived from the worktree
 	BranchPrefix string               // default "feature"
 	UserSources  identity.UserSources // Override is set per WorkerAdd call
 }

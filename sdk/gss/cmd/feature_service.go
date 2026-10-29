@@ -58,6 +58,7 @@ func newFeatureService() (*feature.Service, error) {
 		Clock:        config.SystemClock{},
 		WorktreeRoot: expandHome(cfg.Paths.WorktreeRoot),
 		NWO:          nwo.String(),
+		RepoPath:     repoPath,
 		BranchPrefix: "feature",
 		UserSources: identity.UserSources{
 			// GHLogin is intentionally nil: the gh.Client has no CurrentUser
