@@ -58,6 +58,9 @@ func (r GCResult) JSON() ([]byte, error) { return json.MarshalIndent(r, "", "  "
 // about another repo's PR number would answer for the wrong PR.
 func (s *Service) GC(ctx context.Context, opts GCOpts) (GCResult, error) {
 	res := GCResult{Candidates: []GCCandidate{}, Removed: []string{}, Skipped: []GCSkip{}, Failed: []GCSkip{}}
+	if s.NWO == "" {
+		return res, fmt.Errorf("feature gc: the repository is unknown, so no registry row can be shown to be ours")
+	}
 	reg, err := s.Store.Load()
 	if err != nil {
 		return res, err

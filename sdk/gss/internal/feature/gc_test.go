@@ -509,3 +509,118 @@ func TestGC_UpstreamGone_HEADDiffersFromPRHeadIsSkipped(t *testing.T) {
 	assert.Equal(t, 0, len(res.Candidates))
 	assert.Contains(t, skipReasons(res)["auth/erai/stale"], "no upstream")
 }
+
+// --- Done hardening (agy review of #439) ---
+
+func (e *gcEnv) setRow(leaf string, mut func(*registry.Worker)) {
+	e.t.Helper()
+	require.NoError(e.t, e.store.Update(func(r *registry.Registry) error {
+		for i := range r.Features[0].Workers {
+			if w := &r.Features[0].Workers[i]; w.Purpose == leaf {
+				mut(w)
+			}
+		}
+		return nil
+	}))
+}
+
+func TestDone_KeepsBranchWithUnpushedCommits(t *testing.T) {
+	e := newGCEnv(t)
+	wt, _ := e.addBranchOnly("ahead", gh.PR{Number: 91, State: "MERGED", HeadSHA: "same"})
+	require.NoError(t, os.WriteFile(filepath.Join(wt, "late.txt"), []byte("l"), 0o644))
+	gitIn(t, wt, "add", ".")
+	gitIn(t, wt, "commit", "-m", "after the PR head, never pushed")
+
+	res, err := e.svc.Done(context.Background(), feature.DoneOpts{WorkerRef: "auth/erai/ahead"})
+	require.NoError(t, err)
+	assert.False(t, exists(wt), "worktree is removed")
+	assert.False(t, res.BranchDeleted)
+	assert.Contains(t, res.BranchNotice, "neither on the merged PR head nor on any remote")
+	assert.True(t, e.branchExists("feature/auth/erai/ahead"), "unpushed commits stay reachable")
+}
+
+func TestDone_DeletesBranchWhenTipIsPushedEvenIfNotPRHead(t *testing.T) {
+	e := newGCEnv(t)
+	e.addBranchOnly("pushed", gh.PR{Number: 92, State: "MERGED", HeadSHA: "deadbeef"})
+	res, err := e.svc.Done(context.Background(), feature.DoneOpts{WorkerRef: "auth/erai/pushed"})
+	require.NoError(t, err)
+	assert.True(t, res.BranchDeleted, res.BranchNotice)
+}
+
+func TestDone_CachedMergedStillAsksGitHubForHeadSHA(t *testing.T) {
+	e := newGCEnv(t)
+	e.addBranchOnly("cached", gh.PR{Number: 93, State: "MERGED", HeadSHA: "same"})
+	e.setRow("cached", func(w *registry.Worker) {
+		w.PRURL, w.PRState = fmt.Sprintf("https://github.com/%s/pull/93", gcNWO), "merged"
+	})
+	res, err := e.svc.Done(context.Background(), feature.DoneOpts{WorkerRef: "auth/erai/cached"})
+	require.NoError(t, err)
+	assert.True(t, res.BranchDeleted)
+	assert.Equal(t, []int{93}, e.prViews())
+}
+
+func TestDone_FailsClosedOnLookupError(t *testing.T) {
+	for name, cached := range map[string]string{"cached open": "open", "cached empty": "", "cached merged": "merged"} {
+		t.Run(name, func(t *testing.T) {
+			e := newGCEnv(t)
+			wt := e.addWorker("api", "main", 94, cached, "merged")
+			e.gh.ScriptError(ghfake.VerbPRView, fmt.Errorf("network down"))
+			_, err := e.svc.Done(context.Background(), feature.DoneOpts{WorkerRef: "auth/erai/api"})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "could not be reached")
+			assert.True(t, exists(wt))
+		})
+	}
+}
+
+func TestDone_RefusesWhenGitStatusFails(t *testing.T) {
+	e := newGCEnv(t)
+	missing := filepath.Join(e.root, gcNWO, "auth", "erai", "ghost")
+	e.register(registry.Worker{User: "erai", Purpose: "ghost", Branch: "feature/auth/erai/ghost", Worktree: missing, BaseBranch: "main"})
+	_, err := e.svc.Done(context.Background(), feature.DoneOpts{WorkerRef: "auth/erai/ghost"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot inspect worktree")
+	assert.Equal(t, 1, len(e.rows()))
+}
+
+func TestDone_RefusesAnotherReposRow(t *testing.T) {
+	e := newGCEnv(t)
+	// A same-named branch in OUR repo must survive.
+	gitIn(t, e.main, "branch", "feature/auth/erai/foreign", "main")
+	other := filepath.Join(e.root, "octo", "other", "auth", "erai", "foreign")
+	e.register(registry.Worker{User: "erai", Purpose: "foreign", Branch: "feature/auth/erai/foreign", Worktree: other,
+		BaseBranch: "main", PRURL: "https://github.com/octo/other/pull/99", PRState: "merged"})
+	e.seed(99, "merged")
+
+	_, err := e.svc.Done(context.Background(), feature.DoneOpts{WorkerRef: "auth/erai/foreign"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "another repo")
+	assert.Equal(t, 0, len(e.gh.Calls()), "no GitHub lookup for another repo's row")
+	assert.Equal(t, "merged", e.rows()["foreign"].PRState)
+	assert.True(t, e.branchExists("feature/auth/erai/foreign"))
+}
+
+func TestGC_FailsClosedWithoutNWO(t *testing.T) {
+	e := gcFixture(t)
+	e.svc.NWO = ""
+	_, err := e.svc.GC(context.Background(), feature.GCOpts{Apply: true})
+	require.Error(t, err)
+	assert.Equal(t, 8, len(e.rows()))
+}
+
+func TestObservePR_BranchLookupLimitAndEmptyURL(t *testing.T) {
+	e := newGCEnv(t)
+	e.addBranchOnly("nourl")
+	e.gh.SeedPR(gh.PR{Number: 95, State: "MERGED", Head: "feature/auth/erai/nourl"}) // no URL: not provably ours
+	res, err := e.svc.GC(context.Background(), feature.GCOpts{})
+	require.NoError(t, err)
+	assert.Equal(t, "no PR found on GitHub", skipReasons(res)["auth/erai/nourl"])
+	found := false
+	for _, c := range e.gh.Calls() {
+		if c.Verb == ghfake.VerbPRList && c.Filter.Head == "feature/auth/erai/nourl" {
+			found = true
+			assert.Equal(t, 30, c.Filter.Limit)
+		}
+	}
+	assert.True(t, found, "branch lookup happened")
+}

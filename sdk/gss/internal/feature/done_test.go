@@ -31,6 +31,14 @@ func doneService(t *testing.T, featureMD string, status string, workers []regist
 	if err := os.WriteFile(filepath.Join(featDir, "FEATURE.md"), []byte(featureMD), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// Worker paths written as "/wt/<leaf>" live under this repo's worktree dir
+	// (Done only touches rows of its own repo).
+	workers = append([]registry.Worker(nil), workers...)
+	for i := range workers {
+		if leaf, ok := strings.CutPrefix(workers[i].Worktree, "/wt/"); ok {
+			workers[i].Worktree = filepath.Join(root, "octo/proj", "wt", leaf)
+		}
+	}
 	store := registry.NewStore(filepath.Join(root, "registry.json"))
 	if err := store.Update(func(r *registry.Registry) error {
 		*r = registry.Registry{SchemaVersion: 1, Features: []registry.Feature{{
@@ -241,7 +249,7 @@ func TestDone_RegistryUpdateFailureAfterWorktreeRemovalIsDiagnosable(t *testing.
 	if !strings.Contains(err.Error(), "already removed") {
 		t.Errorf("err = %v; want it to say the worktree was already removed (partial-teardown diagnostic)", err)
 	}
-	if len(be.removed) != 1 || be.removed[0] != "/wt/api" {
+	if len(be.removed) != 1 || !strings.HasSuffix(be.removed[0], "/wt/api") {
 		t.Errorf("backend.Remove calls = %v; want exactly one for /wt/api — the worktree really was removed despite the registry error", be.removed)
 	}
 }
