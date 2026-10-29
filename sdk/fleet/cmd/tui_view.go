@@ -138,6 +138,14 @@ func (m tuiModel) banner() string {
 	if badge := m.localBadge(); badge != "" {
 		title += "   " + badge
 	}
+	// The plan badge takes only what the host badge left: "where am I"
+	// outranks "what would run", so on a narrow pane this is what gives way,
+	// and below a usable stub it is dropped rather than shown as "📦 p…".
+	if w := m.panelInner() - lipgloss.Width(title) - 3; w >= 12 {
+		if badge := m.planBadge(w); badge != "" {
+			title += "   " + badge
+		}
+	}
 	b.WriteString(title + "\n")
 	b.WriteString(th.dim.Render(headerHints(0)) + "\n")
 	b.WriteString(th.dim.Render(headerHints(1)))

@@ -174,6 +174,9 @@ type tuiModel struct {
 	running       int // slots in use
 	updateRef     string
 	plan          updplan.Plan                              // loaded ONCE at startup; the model never calls loadPlan itself
+	entry         updplan.Entry                             // plan.Entry(), computed once in newTUIModel — the plan never changes after startup
+	hasEntry      bool                                      // the plan has a run step to headline
+	entrySHA      string                                    // short commit `u` would deliver for the entry repo (resolveEntrySHA); "" = unknown
 	file          string                                    // the --file value the plan was loaded from, if any; re-passed to the interactive handoff's self-exec
 	repo          string                                    // the --repo value the plan/gff resolution used; re-passed to the interactive handoff's self-exec so a routed host resolves against the SAME checkout
 	self          func() (string, error)                    // resolves the executable path for the interactive handoff's self-exec; os.Executable in production, injected in tests
@@ -314,6 +317,7 @@ func newTUIModel(hosts []sshconf.Host, r runner.Runner, base Baseliner, now time
 		vp:            viewport{height: 20, width: 100},
 		spinner:       "⠋",
 	}
+	m.entry, m.hasEntry = plan.Entry()
 	m.localPowerSave = localPowerSaveIface
 	for _, h := range hosts {
 		m.hosts[h.Alias] = h

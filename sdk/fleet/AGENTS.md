@@ -19,7 +19,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | :-- | :-- |
 | `fleet status [host...]` | table of host · commit · **branch** · last run · status; `--json`; exits non-zero if any host is stale |
 | `fleet discover [--scan]` | list every concrete ssh-config host as `in-fleet` / `available`; `--scan` sweeps the subnet to refresh a moved `HostName` and offer unknown responders; `--json`; `--add-all` bulk-adopts (one pass, one backup; `--dry-run` / `--yes`) |
-| `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v`/`a` selection, concurrent background updates (`--jobs`), `ctrl+c` cancels updates in flight (scoped like `u`; press twice), `w` wake, `s` ssh, `S` herdr attach via the local client (`herdr --remote`, so copies reach this machine's clipboard; inside a herdr pane it saves the host as a herdr machine instead and says `prefix+w`), `T` trust a changed host key, `A` authorize your key, `F` forget answers, `?` grouped help; the status line names the key that fixes the cursor row. The header names **this** machine (`⌂ <hostname>`) and its row's alias is painted the same colour; the version's commit is an OSC 8 link to its GitHub page |
+| `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v`/`a` selection, concurrent background updates (`--jobs`), `ctrl+c` cancels updates in flight (scoped like `u`; press twice), `w` wake, `s` ssh, `S` herdr attach via the local client (`herdr --remote`, so copies reach this machine's clipboard; inside a herdr pane it saves the host as a herdr machine instead and says `prefix+w`), `T` trust a changed host key, `A` authorize your key, `F` forget answers, `?` grouped help; the status line names the key that fixes the cursor row. The header names **this** machine (`⌂ <hostname>`) and its row's alias is painted the same colour, then what `u` would run (`📦 <repo>:<entry> [+N] (<sha>)`); the version's commit is an OSC 8 link to its GitHub page |
 | `fleet update <host>...` | walks a `fleet.yaml` step plan per host, serially: a DAG of `sync` (fetch → ff-only, one network call) / `run` (verbatim shell, batch or `ssh -t`) / `gh-auth` steps; with no plan file it is today's fetch → ff → `install.sh`. Flags: `--local skip\|rescue\|carry`, `--force` (= `--local rescue`), `--no-restore`, `--reset`, `--timeout D`, `--no-retry`, `--ref B\|repo=B` (repeatable), `--file PATH`, `--dry-run` (prints every effective script, preamble included, sends nothing), `--list-inputs` (what the plan's `inputs:` need; no host), `--input [host:]id=v\|@file\|env:NAME` (repeatable; a confidential value only from a file or the environment); `--json` from root. `fleet update init [--file] [--overwrite] [--print]` writes the starter plan |
 | `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
 | `fleet remove <alias> [--purge]` | unmark (keeps SSH access); `--purge` deletes the block |
@@ -40,10 +40,12 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `cmd/tui_view.go` | pure `View()` + the one lipgloss `theme` |
 | `cmd/tui_keys.go` | keymap + mode routing (`keyHelp` is the single source of truth) |
 | `cmd/tui_cmds.go` | tea.Cmd producers: poll, precheck, background update, handoffs |
+| `cmd/plan_badge.go` | the header's `📦 <repo>:<entry> (<sha>)` badge — `updplan.Plan.Entry()` (baseline repo's last run step, `+N` other runs) and `resolveEntrySHA`, the commit `u` would deliver (`origin/<branch>`, `--update-ref` included) |
 | `cmd/local.go` | "which of these rows is the machine I am typing on" — `detectLocal` (the one impure edge) + the pure `isLocalHost` match, and the `⌂` glyph / colour the header badge and the row share |
 | `internal/sshconf` | parse **and edit** `~/.ssh/config` (the only inventory) |
 | `internal/stamp` | parse the install stamp |
 | `internal/drift` | classify drift + format age (`now` injected — never `time.Now()`) |
+| `internal/homedir` | `Expand(p, home)` — the one `~` / `~/…` resolver (hostkey and the header badge share it) |
 | `internal/hostkey` | known_hosts evidence + repair for `fleet trust`, all from what `ssh -G` resolves (HostKeyAlias, port, every UserKnownHostsFile, CheckHostIP addresses): `Resolve`, `Known`, `Scan` (per-key fingerprints), `Compare` (per key type, as ssh decides), `Entries` (lookup names, hashed by `ssh-keygen -H`), `Replace` (backup every file → `-R` each → append to the first; restore on a failed write); every command via an injected `Exec` |
 | `internal/sshfail` | read ssh's stderr to tell a refused *connection* from a refused *credential* |
 | `internal/cfgplan` | plan a ONE-WAY ssh-config transfer (pure): `Build` + `Apply` |
@@ -462,6 +464,21 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   peer — we cannot run a command through a hop that refuses us. Pinned by
   `TestWakeLadderNeverFiresForAnAuthFailure` and
   `TestAuthFailedHostIsNeverOfferedAsALiveRelayPeer`.
+- **The header says what `u` would run, after where you are.** `📦 <repo>:<entry> (<sha>)` is
+  `updplan.Plan.Entry()` — the baseline repo's last run step (the same repo the status column
+  tracks), else the plan's last run step, with `+N` for the other run steps — computed once in
+  `newTUIModel`. The `(sha)` is the commit `u` DELIVERS, not what this machine has checked out:
+  `origin/<Branches[0]>` (`--update-ref` is already folded in; `default` is `origin/HEAD`),
+  resolved in this machine's clone at the plan's own path — never `--repo`, which can be a
+  different repo (the dotfiles default under a playground plan), while a gss worktree shares its
+  refs with that clone anyway. One git call, with a 2s timeout and a `--show-toplevel` check (`git -C` walks up, so a plain dir under a git-managed `$HOME` would
+  otherwise answer with the parent's commit). Anything unresolvable is no `(sha)`, never a guess.
+  Like `base.Head()` it is read once — a local update does not move what the fleet is brought to.
+  `run:` text is stripped of control characters before rendering. The badge only gets the width
+  the host badge left and is dropped below 12 columns. Pinned by `TestBannerNamesThePlanEntryAndCommit`,
+  `TestPlanBadgeGivesWayToTheHostBadge`, `TestResolveEntrySHA*`,
+  `TestGitRevParseRefusesADirectoryInsideAnotherRepo`, `TestPlanBadgeStripsControlCharacters`
+  and the `TestEntry*` cases in `internal/updplan`.
 - **The dashboard says which machine it is RUNNING on, and never guesses.** Every row looks
   like a remote, so the header carries a `⌂ <hostname>` badge and the matching row's alias is
   painted the same colour (`localColorFor` — per palette —, deliberately none of the drift classes' colours —
