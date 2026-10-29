@@ -95,3 +95,44 @@ func (p Plan) LastStepUsing(repo string) (string, bool) {
 	}
 	return last, found
 }
+
+// Entry is the headline of a plan: the run step a reader means by "what will
+// `fleet update` execute here", and the repo it runs in.
+type Entry struct {
+	Repo Repo
+	Run  string
+	// Others is how many OTHER run steps the plan has, so a one-line summary
+	// can say there is more than it shows.
+	Others int
+}
+
+// Entry picks the baseline repo's last run step in Order() — the repo the
+// status column already tracks, so the header and the column agree on what
+// the plan is "about". With no run step on the baseline repo it falls back to
+// the plan's last run step overall; a plan with no run step at all has no
+// entry.
+func (p Plan) Entry() (Entry, bool) {
+	base, haveBase := p.BaselineRepo()
+	var last, lastBase *Step
+	runs := 0
+	for _, st := range p.Order() {
+		if st.Kind != KindRun {
+			continue
+		}
+		st := st
+		runs++
+		last = &st
+		if haveBase && st.Repo == base.Name {
+			lastBase = &st
+		}
+	}
+	pick := lastBase
+	if pick == nil {
+		pick = last
+	}
+	if pick == nil {
+		return Entry{}, false
+	}
+	r, _ := p.RepoOf(*pick)
+	return Entry{Repo: r, Run: pick.Run, Others: runs - 1}, true
+}

@@ -107,3 +107,94 @@ update:
 		t.Errorf("LastStepUsing(r) = %q, want r.build", got)
 	}
 }
+
+func parseEntryPlan(t *testing.T, yaml string) Plan {
+	t.Helper()
+	p, err := Parse([]byte(yaml))
+	if err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+	return p
+}
+
+// TestEntryIsTheBaselineRepoLastRunStep: the header names what the plan will
+// run — the baseline repo's last run step in execution order, not the sync.
+func TestEntryIsTheBaselineRepoLastRunStep(t *testing.T) {
+	p := parseEntryPlan(t, `version: 1
+update:
+  repos:
+    playground: { path: ~/github/x/playground }
+  steps:
+    - { id: playground.sync, kind: sync, repo: playground }
+    - { id: playground.converge, kind: run, repo: playground, run: ./install.sh, needs: [playground.sync] }
+`)
+	e, ok := p.Entry()
+	if !ok {
+		t.Fatal("Entry() ok = false, want true")
+	}
+	if e.Repo.Name != "playground" || e.Run != "./install.sh" || e.Others != 0 {
+		t.Fatalf("Entry() = %+v, want playground ./install.sh +0", e)
+	}
+}
+
+// TestEntryCountsTheOtherRunSteps: a multi-repo plan still has one headline,
+// and Others says there is more than it shows.
+func TestEntryCountsTheOtherRunSteps(t *testing.T) {
+	p := parseEntryPlan(t, `version: 1
+update:
+  baseline: playground
+  repos:
+    dotfiles: { path: dotfiles }
+    playground: { path: ~/github/x/playground }
+  steps:
+    - { id: pg.install, kind: run, repo: playground, run: ./install.sh, needs: [df.install] }
+    - { id: df.install, kind: run, repo: dotfiles, run: ./install.sh }
+    - { id: pg.post, kind: run, repo: playground, run: make check, needs: [pg.install] }
+`)
+	e, ok := p.Entry()
+	if !ok || e.Repo.Name != "playground" || e.Run != "make check" || e.Others != 2 {
+		t.Fatalf("Entry() = %+v ok=%v, want playground `make check` +2", e, ok)
+	}
+}
+
+// TestEntryWithoutABaselineRunFallsBackToTheLastRun: no run step on the
+// baseline repo still names whatever the plan runs last.
+func TestEntryWithoutABaselineRunFallsBackToTheLastRun(t *testing.T) {
+	p := parseEntryPlan(t, `version: 1
+update:
+  baseline: dotfiles
+  repos:
+    dotfiles: { path: dotfiles }
+    tools: { path: tools }
+  steps:
+    - { id: df.sync, kind: sync, repo: dotfiles }
+    - { id: tools.build, kind: run, repo: tools, run: make, needs: [df.sync] }
+`)
+	e, ok := p.Entry()
+	if !ok || e.Repo.Name != "tools" || e.Run != "make" || e.Others != 0 {
+		t.Fatalf("Entry() = %+v ok=%v, want tools make +0", e, ok)
+	}
+}
+
+// TestEntryOfTheBuiltInPlanIsDotfilesInstall: the default plan is exactly
+// today's fetch → ff-only → ./install.sh.
+func TestEntryOfTheBuiltInPlanIsDotfilesInstall(t *testing.T) {
+	e, ok := Default().Entry()
+	if !ok || e.Repo.Name != "dotfiles" || e.Run != "./install.sh" {
+		t.Fatalf("Default().Entry() = %+v ok=%v, want dotfiles ./install.sh", e, ok)
+	}
+}
+
+// TestEntryOfASyncOnlyPlanIsNothing: no run step means nothing to name.
+func TestEntryOfASyncOnlyPlanIsNothing(t *testing.T) {
+	p := parseEntryPlan(t, `version: 1
+update:
+  repos:
+    dotfiles: { path: dotfiles }
+  steps:
+    - { id: df.sync, kind: sync, repo: dotfiles }
+`)
+	if e, ok := p.Entry(); ok {
+		t.Fatalf("Entry() = %+v, want ok=false for a plan with no run step", e)
+	}
+}

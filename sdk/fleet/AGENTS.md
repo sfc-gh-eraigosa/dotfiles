@@ -19,7 +19,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | :-- | :-- |
 | `fleet status [host...]` | table of host · commit · **branch** · last run · status; `--json`; exits non-zero if any host is stale |
 | `fleet discover [--scan]` | list every concrete ssh-config host as `in-fleet` / `available`; `--scan` sweeps the subnet to refresh a moved `HostName` and offer unknown responders; `--json`; `--add-all` bulk-adopts (one pass, one backup; `--dry-run` / `--yes`) |
-| `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v`/`a` selection, concurrent background updates (`--jobs`), `ctrl+c` cancels updates in flight (scoped like `u`; press twice), `w` wake, `s` ssh, `S` herdr attach via the local client (`herdr --remote`, so copies reach this machine's clipboard; inside a herdr pane it saves the host as a herdr machine instead and says `prefix+w`), `T` trust a changed host key, `A` authorize your key, `F` forget answers, `?` grouped help; the status line names the key that fixes the cursor row. The header names **this** machine (`⌂ <hostname>`) and its row's alias is painted the same colour; the version's commit is an OSC 8 link to its GitHub page |
+| `fleet tui` | streaming dashboard: vim nav (`gg`/`G`/`ctrl+d`), `/` regex search, `space`/`v`/`a` selection, concurrent background updates (`--jobs`), `ctrl+c` cancels updates in flight (scoped like `u`; press twice), `w` wake, `s` ssh, `S` herdr attach via the local client (`herdr --remote`, so copies reach this machine's clipboard; inside a herdr pane it saves the host as a herdr machine instead and says `prefix+w`), `T` trust a changed host key, `A` authorize your key, `F` forget answers, `?` grouped help; the status line names the key that fixes the cursor row. The header names **this** machine (`⌂ <hostname>`) and its row's alias is painted the same colour, then what `u` would run (`📦 <repo>:<entry> [+N] (<sha>)`); the version's commit is an OSC 8 link to its GitHub page |
 | `fleet update <host>...` | walks a `fleet.yaml` step plan per host, serially: a DAG of `sync` (fetch → ff-only, one network call) / `run` (verbatim shell, batch or `ssh -t`) / `gh-auth` steps; with no plan file it is today's fetch → ff → `install.sh`. Flags: `--local skip\|rescue\|carry`, `--force` (= `--local rescue`), `--no-restore`, `--reset`, `--timeout D`, `--no-retry`, `--ref B\|repo=B` (repeatable), `--file PATH`, `--dry-run` (prints every effective script, preamble included, sends nothing), `--list-inputs` (what the plan's `inputs:` need; no host), `--input [host:]id=v\|@file\|env:NAME` (repeatable; a confidential value only from a file or the environment); `--json` from root. `fleet update init [--file] [--overwrite] [--print]` writes the starter plan |
 | `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
 | `fleet remove <alias> [--purge]` | unmark (keeps SSH access); `--purge` deletes the block |
@@ -40,6 +40,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `cmd/tui_view.go` | pure `View()` + the one lipgloss `theme` |
 | `cmd/tui_keys.go` | keymap + mode routing (`keyHelp` is the single source of truth) |
 | `cmd/tui_cmds.go` | tea.Cmd producers: poll, precheck, background update, handoffs |
+| `cmd/plan_badge.go` | the header's `📦 <repo>:<entry> (<sha>)` badge — `updplan.Plan.Entry()` (baseline repo's last run step, `+N` other runs) and `detectEntrySHA`, the one impure edge reading this machine's checkout HEAD |
 | `cmd/local.go` | "which of these rows is the machine I am typing on" — `detectLocal` (the one impure edge) + the pure `isLocalHost` match, and the `⌂` glyph / colour the header badge and the row share |
 | `internal/sshconf` | parse **and edit** `~/.ssh/config` (the only inventory) |
 | `internal/stamp` | parse the install stamp |
@@ -462,6 +463,15 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   peer — we cannot run a command through a hop that refuses us. Pinned by
   `TestWakeLadderNeverFiresForAnAuthFailure` and
   `TestAuthFailedHostIsNeverOfferedAsALiveRelayPeer`.
+- **The header says what `u` would run, after where you are.** `📦 <repo>:<entry> (<sha>)` is
+  `updplan.Plan.Entry()` — the baseline repo's last run step (the same repo the status column
+  tracks), else the plan's last run step, with `+N` for the other run steps — and the short HEAD
+  of THIS machine's checkout of that repo (what is on disk now; the sync step fast-forwards before
+  the entry runs). `detectEntrySHA` reads it once in `tui.go`, like `detectLocal`; no checkout
+  means no `(sha)`, not a guess. The badge only gets the width the host badge left and is dropped
+  below 12 columns — "where am I" outranks "what would run". Pinned by
+  `TestBannerNamesThePlanEntryAndCommit`, `TestPlanBadgeGivesWayToTheHostBadge` and the
+  `TestEntry*` cases in `internal/updplan`.
 - **The dashboard says which machine it is RUNNING on, and never guesses.** Every row looks
   like a remote, so the header carries a `⌂ <hostname>` badge and the matching row's alias is
   painted the same colour (`localColorFor` — per palette —, deliberately none of the drift classes' colours —
