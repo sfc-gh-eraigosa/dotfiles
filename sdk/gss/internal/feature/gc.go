@@ -81,7 +81,7 @@ func (s *Service) GC(ctx context.Context, opts GCOpts) (GCResult, error) {
 				continue
 			}
 			ref := workerRef(feat.Name, w)
-			cand, reason := s.gcCheck(ctx, feat, w)
+			cand, reason := s.gcCheck(ctx, feat, w, opts.Apply)
 			if reason != "" {
 				res.Skipped = append(res.Skipped, GCSkip{Worker: ref, Reason: reason})
 				continue
@@ -114,8 +114,10 @@ func (s *Service) inThisRepo(w registry.Worker) bool {
 	return strings.HasPrefix(w.Worktree, root)
 }
 
-// gcCheck decides one in-scope worker. A non-empty reason means skip.
-func (s *Service) gcCheck(ctx context.Context, feat registry.Feature, w registry.Worker) (GCCandidate, string) {
+// gcCheck decides one in-scope worker. A non-empty reason means skip. The
+// refreshed PR state is written to the registry only when persist is set, so
+// a dry run leaves the shared registry byte-identical.
+func (s *Service) gcCheck(ctx context.Context, feat registry.Feature, w registry.Worker, persist bool) (GCCandidate, string) {
 	ref := workerRef(feat.Name, w)
 	pr, state, err := s.observePR(ctx, w)
 	if err == errNoPR {
@@ -124,7 +126,7 @@ func (s *Service) gcCheck(ctx context.Context, feat registry.Feature, w registry
 	if err != nil {
 		return GCCandidate{}, fmt.Sprintf("cannot refresh PR state from GitHub: %v", err)
 	}
-	if parsed, perr := identity.ParseWorkerRef(ref); perr == nil {
+	if parsed, perr := identity.ParseWorkerRef(ref); persist && perr == nil {
 		s.persistPRState(parsed, pr, state)
 	}
 	num := pr.Number

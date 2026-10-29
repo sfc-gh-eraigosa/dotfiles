@@ -417,7 +417,7 @@ func (e *gcEnv) addBranchOnly(leaf string, prs ...gh.PR) (wt, headSHA string) {
 	return wt, headSHA
 }
 
-func TestGC_NoPRURL_FoundByBranchAndPersisted(t *testing.T) {
+func TestGC_NoPRURL_FoundByBranch_DryRunWritesNothing(t *testing.T) {
 	e := newGCEnv(t)
 	e.addBranchOnly("byhead", gh.PR{Number: 41, State: "MERGED", HeadSHA: "same"})
 
@@ -426,8 +426,20 @@ func TestGC_NoPRURL_FoundByBranchAndPersisted(t *testing.T) {
 	assert.Equal(t, 1, len(res.Candidates))
 	assert.Equal(t, 41, res.Candidates[0].PR)
 	row := e.rows()["byhead"]
-	assert.Equal(t, "merged", row.PRState)
-	assert.Contains(t, row.PRURL, "/pull/41")
+	assert.Equal(t, "", row.PRState, "a dry run must not write the shared registry")
+	assert.Equal(t, "", row.PRURL)
+}
+
+func TestGC_NoPRURL_OpenPRFoundByBranchIsPersistedOnApply(t *testing.T) {
+	e := newGCEnv(t)
+	e.addBranchOnly("stillopen", gh.PR{Number: 43, State: "OPEN", HeadSHA: "same"})
+
+	res, err := e.svc.GC(context.Background(), feature.GCOpts{Apply: true})
+	require.NoError(t, err)
+	assert.Empty(t, res.Removed)
+	row := e.rows()["stillopen"]
+	assert.Equal(t, "open", row.PRState)
+	assert.Contains(t, row.PRURL, "/pull/43")
 }
 
 func TestGC_NoPRURL_OpenPRWinsOverNewerClosed(t *testing.T) {
