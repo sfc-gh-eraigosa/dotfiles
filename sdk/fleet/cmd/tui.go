@@ -101,9 +101,10 @@ var tuiCmd = &cobra.Command{
 		// model as data — the model never reads the hostname itself, or every
 		// test would render whatever machine it happened to run on.
 		m.setLocal(detectLocal())
-		// The header's plan badge names the commit this machine's checkout of
-		// the plan's entry repo is on — read here, for the same reason.
-		m.entrySHA = detectEntrySHA(plan)
+		// The header's plan badge names the commit `u` would deliver — read
+		// here, for the same reason.
+		home, _ := os.UserHomeDir()
+		m.entrySHA = resolveEntrySHA(m.entry, m.hasEntry, home, gitRevParse)
 		// Persistence is wired HERE, not in newTUIModel, so the model stays a
 		// pure value and tests never touch a real config directory.
 		wireTUIPaths(&m)

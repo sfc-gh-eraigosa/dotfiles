@@ -40,11 +40,12 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `cmd/tui_view.go` | pure `View()` + the one lipgloss `theme` |
 | `cmd/tui_keys.go` | keymap + mode routing (`keyHelp` is the single source of truth) |
 | `cmd/tui_cmds.go` | tea.Cmd producers: poll, precheck, background update, handoffs |
-| `cmd/plan_badge.go` | the header's `📦 <repo>:<entry> (<sha>)` badge — `updplan.Plan.Entry()` (baseline repo's last run step, `+N` other runs) and `detectEntrySHA`, the one impure edge reading this machine's checkout HEAD |
+| `cmd/plan_badge.go` | the header's `📦 <repo>:<entry> (<sha>)` badge — `updplan.Plan.Entry()` (baseline repo's last run step, `+N` other runs) and `resolveEntrySHA`, the commit `u` would deliver (`origin/<branch>`, `--update-ref` included) |
 | `cmd/local.go` | "which of these rows is the machine I am typing on" — `detectLocal` (the one impure edge) + the pure `isLocalHost` match, and the `⌂` glyph / colour the header badge and the row share |
 | `internal/sshconf` | parse **and edit** `~/.ssh/config` (the only inventory) |
 | `internal/stamp` | parse the install stamp |
 | `internal/drift` | classify drift + format age (`now` injected — never `time.Now()`) |
+| `internal/homedir` | `Expand(p, home)` — the one `~` / `~/…` resolver (hostkey and the header badge share it) |
 | `internal/hostkey` | known_hosts evidence + repair for `fleet trust`, all from what `ssh -G` resolves (HostKeyAlias, port, every UserKnownHostsFile, CheckHostIP addresses): `Resolve`, `Known`, `Scan` (per-key fingerprints), `Compare` (per key type, as ssh decides), `Entries` (lookup names, hashed by `ssh-keygen -H`), `Replace` (backup every file → `-R` each → append to the first; restore on a failed write); every command via an injected `Exec` |
 | `internal/sshfail` | read ssh's stderr to tell a refused *connection* from a refused *credential* |
 | `internal/cfgplan` | plan a ONE-WAY ssh-config transfer (pure): `Build` + `Apply` |
@@ -465,13 +466,19 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   `TestAuthFailedHostIsNeverOfferedAsALiveRelayPeer`.
 - **The header says what `u` would run, after where you are.** `📦 <repo>:<entry> (<sha>)` is
   `updplan.Plan.Entry()` — the baseline repo's last run step (the same repo the status column
-  tracks), else the plan's last run step, with `+N` for the other run steps — and the short HEAD
-  of THIS machine's checkout of that repo (what is on disk now; the sync step fast-forwards before
-  the entry runs). `detectEntrySHA` reads it once in `tui.go`, like `detectLocal`; no checkout
-  means no `(sha)`, not a guess. The badge only gets the width the host badge left and is dropped
-  below 12 columns — "where am I" outranks "what would run". Pinned by
-  `TestBannerNamesThePlanEntryAndCommit`, `TestPlanBadgeGivesWayToTheHostBadge` and the
-  `TestEntry*` cases in `internal/updplan`.
+  tracks), else the plan's last run step, with `+N` for the other run steps — computed once in
+  `newTUIModel`. The `(sha)` is the commit `u` DELIVERS, not what this machine has checked out:
+  `origin/<Branches[0]>` (`--update-ref` is already folded in; `default` is `origin/HEAD`),
+  resolved in this machine's clone at the plan's own path — never `--repo`, which can be a
+  different repo (the dotfiles default under a playground plan), while a gss worktree shares its
+  refs with that clone anyway. One git call, with a 2s timeout and a `--show-toplevel` check (`git -C` walks up, so a plain dir under a git-managed `$HOME` would
+  otherwise answer with the parent's commit). Anything unresolvable is no `(sha)`, never a guess.
+  Like `base.Head()` it is read once — a local update does not move what the fleet is brought to.
+  `run:` text is stripped of control characters before rendering. The badge only gets the width
+  the host badge left and is dropped below 12 columns. Pinned by `TestBannerNamesThePlanEntryAndCommit`,
+  `TestPlanBadgeGivesWayToTheHostBadge`, `TestResolveEntrySHA*`,
+  `TestGitRevParseRefusesADirectoryInsideAnotherRepo`, `TestPlanBadgeStripsControlCharacters`
+  and the `TestEntry*` cases in `internal/updplan`.
 - **The dashboard says which machine it is RUNNING on, and never guesses.** Every row looks
   like a remote, so the header carries a `⌂ <hostname>` badge and the matching row's alias is
   painted the same colour (`localColorFor` — per palette —, deliberately none of the drift classes' colours —

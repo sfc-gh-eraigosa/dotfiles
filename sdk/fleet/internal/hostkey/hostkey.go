@@ -29,6 +29,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/homedir"
 )
 
 // Exec runs a local command with stdin and returns its stdout.
@@ -132,10 +134,8 @@ func Resolve(x Exec, alias string) (Target, error) {
 }
 
 func expandHome(p string) string {
-	if rest, ok := strings.CutPrefix(p, "~/"); ok {
-		if h, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(h, rest)
-		}
+	if h, err := os.UserHomeDir(); err == nil {
+		return homedir.Expand(p, h)
 	}
 	return p
 }
