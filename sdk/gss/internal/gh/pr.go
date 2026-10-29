@@ -16,6 +16,7 @@ package gh
 //	Base      <- baseRefName
 //	Head      <- headRefName
 //	URL       <- url
+//	HeadSHA   <- headRefOid    (the PR head's commit)
 type PR struct {
 	Number    int
 	Title     string
@@ -26,6 +27,7 @@ type PR struct {
 	Base      string
 	Head      string
 	URL       string
+	HeadSHA   string
 }
 
 // PRCreateOpts is the input to Client.PRCreate. It maps onto

@@ -883,6 +883,13 @@ the reason. `--apply` removes each candidate through `feature done` without
 deleted. `--json` prints `{candidates, removed, skipped:[{worker,reason}],
 failed, freed_bytes}`. Exit 0 unless a removal failed.
 
+A row with no recorded `pr_url` is looked up by head branch
+(`gh pr list --head <branch> --state all`); an open PR wins over newer closed
+ones, else the most recent, and the found url/state are written to the row.
+No PR found: skipped, "no PR found on GitHub". "Pushed" means local HEAD
+equals the PR's head SHA (so a deleted upstream is fine) or has nothing ahead
+of `@{u}`; with neither, the worker is skipped.
+
 ### `gss feature audit [--feature <name>] [--repair] [--json]`
 
 Passive scanner that walks the registry and surfaces inconsistencies

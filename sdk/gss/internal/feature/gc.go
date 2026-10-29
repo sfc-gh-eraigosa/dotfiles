@@ -117,17 +117,17 @@ func (s *Service) inThisRepo(w registry.Worker) bool {
 // gcCheck decides one in-scope worker. A non-empty reason means skip.
 func (s *Service) gcCheck(ctx context.Context, feat registry.Feature, w registry.Worker) (GCCandidate, string) {
 	ref := workerRef(feat.Name, w)
-	if w.PRURL == "" {
-		return GCCandidate{}, "no PR recorded"
+	pr, state, err := s.observePR(ctx, w)
+	if err == errNoPR {
+		return GCCandidate{}, errNoPR.Error()
 	}
-	state, err := s.observePR(ctx, w)
 	if err != nil {
 		return GCCandidate{}, fmt.Sprintf("cannot refresh PR state from GitHub: %v", err)
 	}
 	if parsed, perr := identity.ParseWorkerRef(ref); perr == nil {
-		s.persistPRState(parsed, state)
+		s.persistPRState(parsed, pr, state)
 	}
-	num := registry.PRNumberFromURL(w.PRURL)
+	num := pr.Number
 	if state != "merged" && state != "closed" {
 		return GCCandidate{}, fmt.Sprintf("PR #%d is %s", num, state)
 	}
@@ -143,7 +143,7 @@ func (s *Service) gcCheck(ctx context.Context, feat registry.Feature, w registry
 	if out != "" {
 		return GCCandidate{}, "worktree has uncommitted changes"
 	}
-	n, err := s.unpushedCommits(ctx, w.Worktree)
+	n, err := s.unpushedCommits(ctx, w.Worktree, pr.HeadSHA)
 	if err != nil {
 		return GCCandidate{}, fmt.Sprintf("cannot check for unpushed commits: %v", err)
 	}
@@ -157,16 +157,21 @@ func (s *Service) gcCheck(ctx context.Context, feat registry.Feature, w registry
 	return GCCandidate{Worker: ref, PR: num, PRState: state, Bytes: dirSize(w.Worktree), Action: action}, ""
 }
 
-// unpushedCommits counts commits on HEAD that the remote does not have: those
-// ahead of the upstream when it still exists, else those reachable from no
-// remote-tracking ref at all.
-func (s *Service) unpushedCommits(ctx context.Context, worktree string) (int, error) {
+// unpushedCommits counts commits on HEAD the remote lacks. A HEAD equal to the
+// PR's head SHA is pushed by definition (this holds after GitHub deleted the
+// branch and the upstream is gone). Otherwise it counts @{u}..HEAD; with
+// neither available it errors, so the caller skips the worker.
+func (s *Service) unpushedCommits(ctx context.Context, worktree, prHead string) (int, error) {
+	head, err := s.gitOut(ctx, worktree, "rev-parse", "HEAD")
+	if err != nil {
+		return 0, err
+	}
+	if prHead != "" && head == prHead {
+		return 0, nil
+	}
 	out, err := s.gitOut(ctx, worktree, "rev-list", "--count", "@{u}..HEAD")
 	if err != nil {
-		out, err = s.gitOut(ctx, worktree, "rev-list", "--count", "HEAD", "--not", "--remotes")
-		if err != nil {
-			return 0, err
-		}
+		return 0, fmt.Errorf("no upstream and HEAD is not the PR head")
 	}
 	return strconv.Atoi(strings.TrimSpace(out))
 }

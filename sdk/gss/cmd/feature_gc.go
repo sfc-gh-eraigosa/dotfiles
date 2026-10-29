@@ -16,6 +16,12 @@ var (
 	gcJSON    bool
 )
 
+// Seams for tests: how the service is built and how a failed run exits.
+var (
+	gcServiceFactory = newFeatureService
+	gcExit           = os.Exit
+)
+
 var featureGCCmd = &cobra.Command{
 	Use:   "gc",
 	Short: "Remove workers whose PR is merged or closed (dry run by default)",
@@ -35,7 +41,7 @@ shared registry are never examined or touched.
 non-zero only if a removal failed.`,
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		svc, err := newFeatureService()
+		svc, err := gcServiceFactory()
 		if err != nil {
 			fail(err)
 		}
@@ -53,7 +59,7 @@ non-zero only if a removal failed.`,
 			fmt.Fprint(cmd.OutOrStdout(), res.Text(gcApply))
 		}
 		if len(res.Failed) > 0 {
-			os.Exit(1)
+			gcExit(1)
 		}
 	},
 }

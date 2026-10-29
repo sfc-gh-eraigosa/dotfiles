@@ -29,6 +29,8 @@ func TestIsDirty(t *testing.T) {
 	mustGit(t, tempDir, "config", "user.email", "test@example.com")
 	mustGit(t, tempDir, "config", "user.name", "Test User")
 	mustGit(t, tempDir, "config", "commit.gpgsign", "false")
+	// Keep a global pre-commit hook (e.g. a privacy guard) out of the temp repo.
+	mustGit(t, tempDir, "config", "core.hooksPath", "/dev/null")
 
 	// Case 1: Clean repo (initially empty)
 	if isDirty(tempDir) {

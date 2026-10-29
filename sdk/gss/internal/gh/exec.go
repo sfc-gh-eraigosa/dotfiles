@@ -73,7 +73,7 @@ type Exec interface {
 // prJSONFields is the fixed --json field set requested by PRView / PRList.
 // Keeping it in one place guarantees the two verbs decode into the same PR
 // shape.
-const prJSONFields = "number,title,body,state,isDraft,mergeable,baseRefName,headRefName,url"
+const prJSONFields = "number,title,body,state,isDraft,mergeable,baseRefName,headRefName,headRefOid,url"
 
 // repoJSONFields is the --json field set requested by RepoView.
 const repoJSONFields = "name,owner,nameWithOwner,defaultBranchRef"
@@ -258,6 +258,7 @@ type prWire struct {
 	Mergeable   string `json:"mergeable"`
 	BaseRefName string `json:"baseRefName"`
 	HeadRefName string `json:"headRefName"`
+	HeadRefOid  string `json:"headRefOid"`
 	URL         string `json:"url"`
 }
 
@@ -269,6 +270,7 @@ func (w prWire) toPR() PR {
 		State:     w.State,
 		IsDraft:   w.IsDraft,
 		Mergeable: w.Mergeable,
+		HeadSHA:   w.HeadRefOid,
 		Base:      w.BaseRefName,
 		Head:      w.HeadRefName,
 		URL:       w.URL,

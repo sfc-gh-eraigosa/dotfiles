@@ -387,3 +387,113 @@ func TestGC_JSONShape(t *testing.T) {
 		assert.Contains(t, string(data), key)
 	}
 }
+
+// --- lookup by head branch (rows with no pr_url) ---
+
+// addBranchOnly is addWorker for a row whose pr_url was never recorded: the PRs
+// for its branch exist only on the fake GitHub, found by head branch.
+func (e *gcEnv) addBranchOnly(leaf string, prs ...gh.PR) (wt, headSHA string) {
+	e.t.Helper()
+	wt = e.addWorker(leaf, "main", 900, "", "open")
+	branch := "feature/auth/erai/" + leaf
+	require.NoError(e.t, e.store.Update(func(r *registry.Registry) error {
+		for i := range r.Features[0].Workers {
+			if w := &r.Features[0].Workers[i]; w.Purpose == leaf {
+				w.PRURL, w.PRState = "", ""
+			}
+		}
+		return nil
+	}))
+	headSHA = gitIn(e.t, wt, "rev-parse", "HEAD")
+	e.seed(900, "closed") // placeholder PR from addWorker; wrong head, never matched
+	for _, p := range prs {
+		p.Head = branch
+		p.URL = fmt.Sprintf("https://github.com/%s/pull/%d", gcNWO, p.Number)
+		if p.HeadSHA == "same" {
+			p.HeadSHA = headSHA
+		}
+		e.gh.SeedPR(p)
+	}
+	return wt, headSHA
+}
+
+func TestGC_NoPRURL_FoundByBranchAndPersisted(t *testing.T) {
+	e := newGCEnv(t)
+	e.addBranchOnly("byhead", gh.PR{Number: 41, State: "MERGED", HeadSHA: "same"})
+
+	res, err := e.svc.GC(context.Background(), feature.GCOpts{})
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(res.Candidates))
+	assert.Equal(t, 41, res.Candidates[0].PR)
+	row := e.rows()["byhead"]
+	assert.Equal(t, "merged", row.PRState)
+	assert.Contains(t, row.PRURL, "/pull/41")
+}
+
+func TestGC_NoPRURL_OpenPRWinsOverNewerClosed(t *testing.T) {
+	e := newGCEnv(t)
+	e.addBranchOnly("two", gh.PR{Number: 51, State: "OPEN", HeadSHA: "same"}, gh.PR{Number: 52, State: "CLOSED", HeadSHA: "same"})
+
+	res, err := e.svc.GC(context.Background(), feature.GCOpts{})
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(res.Candidates))
+	assert.Contains(t, skipReasons(res)["auth/erai/two"], "PR #51 is open")
+}
+
+func TestGC_NoPRURL_MostRecentWhenNoneOpen(t *testing.T) {
+	e := newGCEnv(t)
+	e.addBranchOnly("recent", gh.PR{Number: 61, State: "CLOSED", HeadSHA: "same"}, gh.PR{Number: 62, State: "MERGED", HeadSHA: "same"})
+	res, err := e.svc.GC(context.Background(), feature.GCOpts{})
+	require.NoError(t, err)
+	assert.Equal(t, 62, res.Candidates[0].PR)
+}
+
+func TestGC_NoPRAnywhereIsSkipped(t *testing.T) {
+	e := newGCEnv(t)
+	e.addBranchOnly("nopr")
+	res, err := e.svc.GC(context.Background(), feature.GCOpts{})
+	require.NoError(t, err)
+	assert.Equal(t, "no PR found on GitHub", skipReasons(res)["auth/erai/nopr"])
+}
+
+func TestDone_NoPRURL_UsesBranchLookup(t *testing.T) {
+	e := newGCEnv(t)
+	wt, _ := e.addBranchOnly("open1", gh.PR{Number: 71, State: "OPEN"})
+	_, err := e.svc.Done(context.Background(), feature.DoneOpts{WorkerRef: "auth/erai/open1"})
+	require.Error(t, err)
+	assert.True(t, exists(wt))
+
+	wt2, _ := e.addBranchOnly("merged1", gh.PR{Number: 72, State: "MERGED"})
+	_, err = e.svc.Done(context.Background(), feature.DoneOpts{WorkerRef: "auth/erai/merged1"})
+	require.NoError(t, err)
+	assert.False(t, exists(wt2))
+	assert.False(t, e.branchExists("feature/auth/erai/merged1"))
+}
+
+// --- head SHA vs unpushed check ---
+
+// dropUpstream simulates GitHub deleting the branch after merge and a prune.
+func (e *gcEnv) dropUpstream(leaf string) {
+	branch := "feature/auth/erai/" + leaf
+	gitIn(e.t, e.main, "push", "origin", "--delete", branch)
+	gitIn(e.t, e.main, "fetch", "--prune", "origin")
+}
+
+func TestGC_UpstreamGone_PRHeadEqualsHEADIsPushed(t *testing.T) {
+	e := newGCEnv(t)
+	e.addBranchOnly("gone", gh.PR{Number: 81, State: "MERGED", HeadSHA: "same"})
+	e.dropUpstream("gone")
+	res, err := e.svc.GC(context.Background(), feature.GCOpts{Apply: true})
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(res.Removed))
+}
+
+func TestGC_UpstreamGone_HEADDiffersFromPRHeadIsSkipped(t *testing.T) {
+	e := newGCEnv(t)
+	e.addBranchOnly("stale", gh.PR{Number: 82, State: "MERGED", HeadSHA: "0000000000000000000000000000000000000000"})
+	e.dropUpstream("stale")
+	res, err := e.svc.GC(context.Background(), feature.GCOpts{})
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(res.Candidates))
+	assert.Contains(t, skipReasons(res)["auth/erai/stale"], "no upstream")
+}

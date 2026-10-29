@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/errors"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/gh"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/identity"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/registry"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gss/internal/tmpl"
@@ -63,17 +64,19 @@ func (s *Service) Done(ctx context.Context, opts DoneOpts) (DoneResult, error) {
 				return res, fmt.Errorf("feature done: %s still bases on %s; re-target it or pass --force", workerRef(feat.Name, other), ref.String())
 			}
 		}
-		if w.PRURL != "" && w.PRState != "merged" {
+		if w.PRState != "merged" && (w.PRURL != "" || s.GH != nil) {
 			// The cached pr_state goes stale the moment the PR merges on its
 			// own (Mergify), so ask GitHub before refusing (dotfiles#438).
-			observed, oerr := s.observePR(ctx, w)
+			pr, observed, oerr := s.observePR(ctx, w)
 			switch {
 			case oerr == nil:
 				prStateNow = observed
-				s.persistPRState(ref, observed)
+				s.persistPRState(ref, pr, observed)
 				if observed != "merged" && observed != "closed" {
 					return res, fmt.Errorf("feature done: PR for %s is %q (unmerged); pass --force", ref.String(), observed)
 				}
+			case oerr == errNoPR || (w.PRURL == "" && w.PRState == ""):
+				// never had a PR: nothing to wait for
 			case w.PRState != "":
 				return res, fmt.Errorf("feature done: PR for %s is cached as %q and GitHub could not be reached to refresh it (%v); pass --force", ref.String(), w.PRState, oerr)
 			}
@@ -167,36 +170,73 @@ func (s *Service) Done(ctx context.Context, opts DoneOpts) (DoneResult, error) {
 	return res, nil
 }
 
-// observePR asks GitHub for the worker's PR state, in the registry's
-// vocabulary. An error means the state could not be observed.
-func (s *Service) observePR(ctx context.Context, w registry.Worker) (string, error) {
+// errNoPR means GitHub has no PR for the worker's branch.
+var errNoPR = fmt.Errorf("no PR found on GitHub")
+
+// observePR asks GitHub for the worker's PR: by recorded URL, or — for a row
+// with no pr_url — by head branch. Several PRs for a branch: an open one wins
+// (so a worker with a live PR is never treated as finished), else the most
+// recent. It returns the PR and its state in the registry's vocabulary.
+func (s *Service) observePR(ctx context.Context, w registry.Worker) (gh.PR, string, error) {
 	if s.GH == nil {
-		return "", fmt.Errorf("no GitHub client")
+		return gh.PR{}, "", fmt.Errorf("no GitHub client")
 	}
-	if s.NWO != "" && !strings.Contains(w.PRURL, "/"+s.NWO+"/pull/") {
-		return "", fmt.Errorf("PR %s does not belong to %s", w.PRURL, s.NWO)
-	}
-	num := registry.PRNumberFromURL(w.PRURL)
-	if num <= 0 {
-		return "", fmt.Errorf("no PR number in %q", w.PRURL)
-	}
-	pr, err := s.GH.PRView(ctx, num)
-	if err != nil {
-		return "", err
+	var pr gh.PR
+	if w.PRURL != "" {
+		if s.NWO != "" && !strings.Contains(w.PRURL, "/"+s.NWO+"/pull/") {
+			return gh.PR{}, "", fmt.Errorf("PR %s does not belong to %s", w.PRURL, s.NWO)
+		}
+		num := registry.PRNumberFromURL(w.PRURL)
+		if num <= 0 {
+			return gh.PR{}, "", fmt.Errorf("no PR number in %q", w.PRURL)
+		}
+		var err error
+		if pr, err = s.GH.PRView(ctx, num); err != nil {
+			return gh.PR{}, "", err
+		}
+		if pr.URL == "" {
+			pr.URL = w.PRURL
+		}
+	} else {
+		if w.Branch == "" {
+			return gh.PR{}, "", errNoPR
+		}
+		prs, err := s.GH.PRList(ctx, gh.PRFilter{State: "all", Head: w.Branch, Limit: 5})
+		if err != nil {
+			return gh.PR{}, "", err
+		}
+		found := false
+		for _, c := range prs {
+			if s.NWO != "" && c.URL != "" && !strings.Contains(c.URL, "/"+s.NWO+"/pull/") {
+				continue
+			}
+			open := func(p gh.PR) bool { st := registry.PRStateOf(p); return st == "open" || st == "draft" }
+			switch {
+			case !found, open(c) && !open(pr), open(c) == open(pr) && c.Number > pr.Number:
+				pr, found = c, true
+			}
+		}
+		if !found {
+			return gh.PR{}, "", errNoPR
+		}
 	}
 	st := registry.PRStateOf(pr)
 	if st == "" {
-		return "", fmt.Errorf("GitHub returned no state for PR #%d", num)
+		return gh.PR{}, "", fmt.Errorf("GitHub returned no state for PR #%d", pr.Number)
 	}
-	return st, nil
+	return pr, st, nil
 }
 
 // persistPRState records an observed pr_state on one worker row under the
 // store lock (best-effort: the caller already has the answer it needs).
-func (s *Service) persistPRState(ref identity.WorkerRef, state string) {
+func (s *Service) persistPRState(ref identity.WorkerRef, pr gh.PR, state string) {
 	_ = s.Store.Update(func(r *registry.Registry) error {
 		if f, wi := findWorker(*r, ref); f >= 0 {
-			r.Features[f].Workers[wi].PRState = state
+			w := &r.Features[f].Workers[wi]
+			w.PRState = state
+			if w.PRURL == "" {
+				w.PRURL = pr.URL
+			}
 		}
 		return nil
 	})
