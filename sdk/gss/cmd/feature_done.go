@@ -18,9 +18,11 @@ var featureDoneCmd = &cobra.Command{
 	Use:   "done [<worker-ref>]",
 	Short: "Tear down a worker, or a whole feature with --feature",
 	Long: `Remove a worker: refuses on a dirty worktree, remaining dependents, or an
-open/unmerged PR unless --force; then removes the worktree and drops the
+open/unmerged PR unless --force (the PR state is refreshed from GitHub first,
+so a PR that merged on its own passes; a closed PR passes too); then removes the worktree and drops the
 registry row. When that empties the feature and FEATURE.md is unedited, the
-feature row + file are deleted too. Resolves the worker from cwd when no
+feature row + file are deleted too. A merged PR's local branch is deleted as
+well. See 'gss feature gc' to sweep every finished worker at once. Resolves the worker from cwd when no
 <worker-ref> is given.
 
 With --feature <name> and no worker-ref, tears down the feature itself
@@ -56,6 +58,12 @@ FEATURE.md has edits, unless --force.`,
 		fmt.Fprintf(cmd.OutOrStdout(), "Removed worker %s\n", res.Removed)
 		if res.FeatureDeleted {
 			fmt.Fprintln(cmd.OutOrStdout(), "  feature was empty and template-clean → deleted")
+		}
+		if res.BranchDeleted {
+			fmt.Fprintln(cmd.OutOrStdout(), "  PR merged -> local branch deleted")
+		}
+		if res.BranchNotice != "" {
+			fmt.Fprintln(cmd.ErrOrStderr(), res.BranchNotice)
 		}
 		if res.RetainedNotice != "" {
 			fmt.Fprintln(cmd.ErrOrStderr(), res.RetainedNotice)

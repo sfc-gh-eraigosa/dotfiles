@@ -143,3 +143,11 @@ func prState(pr gh.PR) string {
 	}
 	return strings.ToLower(pr.State)
 }
+
+// PRNumberFromURL extracts the pull-request number from a PR URL, or 0 when
+// the URL carries none.
+func PRNumberFromURL(url string) int { return prNumberFromURL(url) }
+
+// PRStateOf maps a gh.PR to the registry's pr_state vocabulary
+// (draft/open/closed/merged); the same mapping Reconcile applies.
+func PRStateOf(pr gh.PR) string { return prState(pr) }

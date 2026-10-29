@@ -831,7 +831,11 @@ files in sync before merge.
 Refuses if:
 
 - worktree is dirty (unless `--force`);
-- PR is open & unmerged (unless `--force`);
+- PR is open or draft (unless `--force`). The registry's cached `pr_state`
+  is only a hint: when it is not `merged`, `done` first asks GitHub
+  (`PRView`), persists what it saw, and refuses only if the PR really is
+  open/draft. Merged and closed both pass. If GitHub cannot be reached the
+  cached state decides (refuse, with the reason);
 - another active worker still has this worker as its `base_branch` (unless
   `--force`, in which case dependents get re-targeted to this worker's
   `base_branch` — i.e. the merge case, but eager).
@@ -839,7 +843,9 @@ Refuses if:
 Steps:
 
 1. `git worktree remove <path>`.
-2. `git branch -D <branch>` (local).
+2. `git branch -D <branch>` (local) — only when the PR is confirmed
+   merged (the remote branch is already deleted by GitHub); a closed or
+   open PR's branch is never touched.
 3. Remove from registry.
 4. **Empty-feature cleanup** — if removing this worker leaves the
    feature with zero workers:
@@ -862,6 +868,27 @@ Steps:
      whitespace and final-newline differences only; any substantive
      edit (added section, modified bullet, prose appended to
      `## Decisions & notes`) wins retention.
+
+### `gss feature gc [--feature <name>] [--apply] [--json]`
+
+Sweeps finished workers (dotfiles#438). Candidates are workers **of the
+resolved repo** (`--repo`/cwd; rows whose worktree is under another repo's
+directory in the shared registry are never examined, reported or written)
+whose PR is merged or closed after a GitHub refresh, whose worktree is
+clean, whose branch has no commits missing from the remote, and that no
+other worker bases on. Dry run by default: one line per candidate (worker,
+PR number and state, size on disk, action) and one per skipped worker with
+the reason. `--apply` removes each candidate through `feature done` without
+`--force`, so every `done` guard re-applies and a merged PR's local branch is
+deleted. `--json` prints `{candidates, removed, skipped:[{worker,reason}],
+failed, freed_bytes}`. Exit 0 unless a removal failed.
+
+A row with no recorded `pr_url` is looked up by head branch
+(`gh pr list --head <branch> --state all`); an open PR wins over newer closed
+ones, else the most recent, and the found url/state are written to the row.
+No PR found: skipped, "no PR found on GitHub". "Pushed" means local HEAD
+equals the PR's head SHA (so a deleted upstream is fine) or has nothing ahead
+of `@{u}`; with neither, the worker is skipped.
 
 ### `gss feature audit [--feature <name>] [--repair] [--json]`
 
