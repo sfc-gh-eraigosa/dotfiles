@@ -119,9 +119,6 @@ if [ "$EDITOR_TERMINAL" = "false" ]; then
     fi
     echo "|$id|$ip" > ~/.info
     # SSH BANNER -------------------------
-    if [ -f ~/.motd ]; then 
-        rm ~/.motd
-    fi
     owner=$(whoami)
     # Extract first two parts of hostname, avoiding trailing dots if second part is empty
     host=$(hostname | cut -d. -f1,2)
@@ -138,9 +135,15 @@ if [ "$EDITOR_TERMINAL" = "false" ]; then
         i=$((i+1))
     done
     
-    echo -e "\033[1;37m┌${line}┐" > ~/.motd
-    echo -e "\033[1;37m│\033[01;31m $host \033[01;32mOWNED BY $owner \033[1;37m│" >> ~/.motd
-    echo -e "\033[1;37m└${line}┘\033[00m" >> ~/.motd
+    # Build in a temp file and rename over ~/.motd: shells started together
+    # (restored terminal tabs) would otherwise race on rm/append.
+    motd_tmp=$(mktemp ~/.motd.XXXXXX)
+    {
+        echo -e "\033[1;37m┌${line}┐"
+        echo -e "\033[1;37m│\033[01;31m $host \033[01;32mOWNED BY $owner \033[1;37m│"
+        echo -e "\033[1;37m└${line}┘\033[00m"
+    } > "$motd_tmp"
+    mv -f "$motd_tmp" ~/.motd
     cat ~/.motd
 fi
 
