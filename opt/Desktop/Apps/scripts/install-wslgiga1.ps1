@@ -3,9 +3,10 @@
   One-time (idempotent) setup so the wslgiga1 Windows host recovers by itself
   after sign-in and reapplies the GPU power cap at boot. Run elevated.
 .DESCRIPTION
-  Easiest: double-click install-wslgiga1.cmd (same folder). It asks for UAC, runs
-  this script with -ExecutionPolicy Bypass and keeps the window open so you can
-  read the Autologon steps. By hand, from an elevated PowerShell:
+  Easiest: double-click install-wslgiga1.cmd (same folder; run it from a command
+  prompt with -WhatIf for a dry run, the only argument it takes). It asks for UAC,
+  runs this script with -ExecutionPolicy Bypass and keeps the window open so you
+  can read the Autologon steps. By hand, from an elevated PowerShell:
     powershell.exe -ExecutionPolicy Bypass -File .\install-wslgiga1.ps1 [-WhatIf]
 
   - Registers PlaygroundLogon: at logon of the operator, limited (not elevated),
@@ -111,9 +112,10 @@ $sysDir = Join-Path $env:ProgramData 'playground'
 $capCopy = Join-Path $sysDir 'playground-gpu-cap.ps1'
 $capSrc = Join-Path $scripts 'playground-gpu-cap.ps1'
 
-function New-LockedAcl {
+# New-LockedAcl: SYSTEM and Administrators full, Users read, nothing inherited. -KeepOwner leaves the owner alone (tests, where Administrators cannot be set unelevated).
+function New-LockedAcl([switch]$KeepOwner) {
     $acl = New-Object Security.AccessControl.DirectorySecurity
-    $acl.SetOwner($SidAdmins)
+    if (-not $KeepOwner) { $acl.SetOwner($SidAdmins) }
     $acl.SetAccessRuleProtection($true, $false)
     $inh = [Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit'
     $none = [Security.AccessControl.PropagationFlags]::None
@@ -125,29 +127,60 @@ function New-LockedAcl {
     return $acl
 }
 
-# Assert-LockedAcl: throw if any principal but SYSTEM/Administrators holds a right that lets it change the folder, its files, or their ACL/owner.
-function Assert-LockedAcl([string]$path) {
+# Test-RiskyRights: true if the rights let a principal change data, delete, or change the ACL/owner. Also true for any
+# generic bit (GENERIC_ALL 0x10000000, GENERIC_EXECUTE 0x20000000, GENERIC_WRITE 0x40000000): NTFS maps them to specific
+# bits when stored, so one showing up is unexpected and refused.
+function Test-RiskyRights([int]$rights) {
+    $specific = 0x2 -bor 0x4 -bor 0x10 -bor 0x100 -bor 0x10000 -bor 0x40 -bor 0x40000 -bor 0x80000   # WriteData, AppendData, WriteEA, WriteAttributes, Delete, DeleteChild, WRITE_DAC, WRITE_OWNER
+    $generic = 0x10000000 -bor 0x20000000 -bor 0x40000000   # GENERIC_ALL, GENERIC_EXECUTE, GENERIC_WRITE 
+    return [bool](($rights -band $specific) -or ($rights -band $generic))
+}
+
+# Assert-LockedAcl: throw if any principal but SYSTEM/Administrators holds a risky right on <path>, or the owner is not
+# $ExpectedOwner (default Administrators/SYSTEM). An InheritOnly ACE does not apply to the object itself, so it is skipped
+# only for CREATOR OWNER / CREATOR GROUP (it is replaced by the real owner on new children); any other InheritOnly ACE is still judged.
+function Assert-LockedAcl([string]$path, [Security.Principal.SecurityIdentifier]$ExpectedOwner) {
     $acl = Get-Acl -LiteralPath $path
     $owner = $acl.GetOwner([Security.Principal.SecurityIdentifier])
-    if ($owner -ne $SidAdmins -and $owner -ne $SidSystem) { throw "$path is owned by $owner, not Administrators" }
-    $bad = [Security.AccessControl.FileSystemRights]'WriteData,AppendData,WriteExtendedAttributes,WriteAttributes,Delete,DeleteSubdirectoriesAndFiles,ChangePermissions,TakeOwnership'
+    if ($ExpectedOwner) { if ($owner -ne $ExpectedOwner) { throw "$path is owned by $owner, expected $ExpectedOwner" } }
+    elseif ($owner -ne $SidAdmins -and $owner -ne $SidSystem) { throw "$path is owned by $owner, not Administrators" }
+    $creator = 'S-1-3-0', 'S-1-3-1'
     foreach ($r in $acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier])) {
         if ($r.AccessControlType -ne 'Allow') { continue }
-        if ($r.IdentityReference -eq $SidSystem -or $r.IdentityReference -eq $SidAdmins) { continue }
-        if ($r.FileSystemRights -band $bad) { throw "$path lets $($r.IdentityReference) write ($($r.FileSystemRights)); refusing" }
+        $id = $r.IdentityReference
+        if ($id -eq $SidSystem -or $id -eq $SidAdmins) { continue }
+        $io = [bool]([int]$r.PropagationFlags -band [int][Security.AccessControl.PropagationFlags]::InheritOnly)
+        if ($io -and ($creator -contains $id.Value)) { continue }
+        if (Test-RiskyRights ([int]$r.FileSystemRights)) { throw "$path lets $id write ($($r.FileSystemRights)); refusing" }
     }
 }
 
+# Invoke-Icacls: run icacls, throw (with its output) on a non-zero exit.
+function Invoke-Icacls {
+    $out = & icacls.exe @args 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "icacls $($args -join ' ') failed (exit $LASTEXITCODE): $(($out | Out-String).Trim())" }
+}
+
 # Lock-Folder: create/repair <dir> so only SYSTEM and Administrators can write.
-function Lock-Folder([string]$dir) {
+# Order matters: children first (own them, drop their explicit ACEs so they inherit), the directory's protected ACL LAST;
+# `icacls /reset` on the directory itself would re-enable inheritance and undo the lock.
+# -ExpectedOwner/-KeepOwner exist for unelevated tests, where the owner cannot be set to Administrators.
+function Lock-Folder([string]$dir, [switch]$KeepOwner, [Security.Principal.SecurityIdentifier]$ExpectedOwner) {
     if (Test-Path -LiteralPath $dir) {
         if (Test-Reparse $dir) { throw "$dir is a reparse point (junction or symlink); refusing. Remove it and re-run." }
     } else { $null = New-Item -ItemType Directory -Path $dir }
-    # Take ownership of everything below, then drop all explicit ACEs and inherit from the rebuilt parent.
-    & icacls.exe $dir /setowner '*S-1-5-32-544' /T /C /L | Out-Null
-    Set-Acl -LiteralPath $dir -AclObject (New-LockedAcl)
-    & icacls.exe $dir /reset /T /C /L | Out-Null
-    Assert-LockedAcl $dir
+    $children = @(Get-ChildItem -LiteralPath $dir -Force -ErrorAction Stop)
+    foreach ($c in $children) {
+        if ($c.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "$($c.FullName) is a reparse point; refusing." }
+        if (-not $KeepOwner) { Invoke-Icacls $c.FullName /setowner '*S-1-5-32-544' /T /C /L }
+        Invoke-Icacls $c.FullName /reset /T /C /L
+    }
+    if (-not $KeepOwner) { Invoke-Icacls $dir /setowner '*S-1-5-32-544' }
+    # DirectoryInfo.SetAccessControl writes only the sections set on the object (access, and owner unless -KeepOwner);
+    # Set-Acl also asks for the audit section, which needs SeSecurityPrivilege.
+    (Get-Item -LiteralPath $dir -Force).SetAccessControl((New-LockedAcl -KeepOwner:$KeepOwner))
+    Assert-LockedAcl $dir $ExpectedOwner
+    foreach ($c in @(Get-ChildItem -LiteralPath $dir -Force -Recurse -ErrorAction Stop)) { Assert-LockedAcl $c.FullName $ExpectedOwner }
 }
 
 # --- state: plan the mutating steps; every one goes through ShouldProcess ----
