@@ -33,6 +33,8 @@ Every key goes to the focused program, so htop's `q`, `/`, `esc` and F-keys beha
 
 `j` and `k` skip the fixed panes (`zoomable: false`, like the gsl footer); `:focus <pane>` still reaches one by name.
 
+Zoom is a layout change, not a move: `:focus`, `j` and `k` choose the pane your keys go to, and `z` gives that pane the middle's rows. With one pane in the middle (`middle: single`) it already has them, so `z` says there is nothing to zoom.
+
 The keys come from the shared sdk keymap (`sdk/libs/tui`, `keymap.Vim`), so they mean the same thing as in fleet and gff. While the prefix waits, the title bar lists them; `ctrl+b ?` shows the full help.
 
 Commands (`ctrl+b :`):

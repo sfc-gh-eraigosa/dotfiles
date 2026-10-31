@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/grafana/grafanatest"
 )
@@ -231,5 +232,27 @@ func TestMissingRefIDsAreAssigned(t *testing.T) {
 	}
 	if strings.Join(got, ",") != "B,A,C" {
 		t.Fatalf("refIds = %v, want B,A,C (skip the taken letter)", got)
+	}
+}
+
+// A dashboard's own time picker is the window its panels were written for.
+func TestParseDefaultRange(t *testing.T) {
+	cases := map[string]time.Duration{
+		`"time":{"from":"now-7d","to":"now"}`:               7 * 24 * time.Hour,
+		`"time":{"from":"now-15m","to":"now"}`:              15 * time.Minute,
+		`"time":{"from":"now-7d/d","to":"now"}`:             0, // rounded: not a plain span
+		`"time":{"from":"now-2d","to":"now-1d"}`:            0, // ends in the past
+		`"time":{"from":"2026-10-01T00:00:00Z","to":"now"}`: 0, // absolute
+		`"time":{"from":"now-1y","to":"now"}`:               0, // a unit gdash has no duration for
+		`"timezone":"utc"`:                                  0, // no time block at all
+	}
+	for body, want := range cases {
+		d, err := Parse([]byte(`{"title":"t",` + body + `}`))
+		if err != nil {
+			t.Fatalf("%s: %v", body, err)
+		}
+		if d.Range != want {
+			t.Errorf("%s: Range = %v, want %v", body, d.Range, want)
+		}
 	}
 }
