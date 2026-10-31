@@ -16,6 +16,7 @@ import (
 // Data is one fetched dashboard, ready to draw.
 type Data struct {
 	Title  string
+	Range  time.Duration // the range these panels were queried over
 	Panels []PanelData
 }
 
@@ -47,7 +48,16 @@ type Live struct {
 // NewLive is a Fetcher for one view.
 func NewLive(c grafana.Client, view config.View) *Live { return &Live{c: c, view: view} }
 
-// Fetch implements Fetcher.
+// defaultRange is the dashboard's own range as a +/- step, else gdash's.
+func (l *Live) defaultRange() time.Duration {
+	if l.d.Range > 0 {
+		return Ranges[nearest(l.d.Range)]
+	}
+	d, _ := config.ParseDuration(config.DefaultRange)
+	return d
+}
+
+// Fetch implements Fetcher. A rng of 0 asks for the dashboard's own range.
 func (l *Live) Fetch(ctx context.Context, width int, rng time.Duration, reload bool) (Data, error) {
 	if l.uid == "" {
 		uid, err := grafana.Resolve(ctx, l.c, l.view.Dashboard)
@@ -71,11 +81,14 @@ func (l *Live) Fetch(ctx context.Context, width int, rng time.Duration, reload b
 		}
 		l.d, l.ds = &d, ds
 	}
+	if rng == 0 {
+		rng = l.defaultRange()
+	}
 	panels := l.selected()
 	maxDP := grafana.MaxDataPoints(width)
 	env := vars.New(l.d.Vars, l.view.Vars, l.ds, rng, maxDP)
 	now := time.Now()
-	out := Data{Title: l.d.Title, Panels: make([]PanelData, len(panels))}
+	out := Data{Title: l.d.Title, Range: rng, Panels: make([]PanelData, len(panels))}
 	var reqs []grafana.QueryRequest
 	var idx []int
 	for i, p := range panels {

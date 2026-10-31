@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
+
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/gdash/internal/config"
 )
 
 // Kind is how gdash draws a panel.
@@ -106,6 +109,7 @@ type Dashboard struct {
 	Title  string
 	Panels []Panel
 	Vars   []Variable
+	Range  time.Duration // its time picker's "now-<span>" to "now"; 0 = none gdash can follow
 }
 
 type wirePanel struct {
@@ -179,6 +183,21 @@ type wirePanel struct {
 	} `json:"fieldConfig"`
 }
 
+// pickerRange is the span of a relative time picker ending now. Anything else
+// (absolute times, a window ending in the past, a rounded "now-7d/d", a unit
+// config.ParseDuration has no length for) is 0.
+func pickerRange(from, to string) time.Duration {
+	span, ok := strings.CutPrefix(from, "now-")
+	if !ok || to != "now" {
+		return 0
+	}
+	d, err := config.ParseDuration(span)
+	if err != nil {
+		return 0
+	}
+	return d
+}
+
 // Parse reads /api/dashboards/uid/<uid> output (or a bare dashboard object).
 func Parse(raw []byte) (Dashboard, error) {
 	var env struct {
@@ -192,9 +211,13 @@ func Parse(raw []byte) (Dashboard, error) {
 		body = raw
 	}
 	var w struct {
-		UID        string      `json:"uid"`
-		Title      string      `json:"title"`
-		Panels     []wirePanel `json:"panels"`
+		UID    string      `json:"uid"`
+		Title  string      `json:"title"`
+		Panels []wirePanel `json:"panels"`
+		Time   struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+		} `json:"time"`
 		Templating struct {
 			List []struct {
 				Name       string          `json:"name"`
@@ -210,7 +233,7 @@ func Parse(raw []byte) (Dashboard, error) {
 	if err := json.Unmarshal(body, &w); err != nil {
 		return Dashboard{}, fmt.Errorf("dashboard JSON: %w", err)
 	}
-	d := Dashboard{UID: w.UID, Title: w.Title}
+	d := Dashboard{UID: w.UID, Title: w.Title, Range: pickerRange(w.Time.From, w.Time.To)}
 	for _, v := range w.Templating.List {
 		vr := Variable{Name: v.Name, Type: v.Type, IncludeAll: v.IncludeAll, Multi: v.Multi}
 		if v.AllValue != nil {

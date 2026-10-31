@@ -54,7 +54,7 @@ type Profile struct {
 type View struct {
 	Profile   string            `json:"profile,omitempty"` // "" = default_profile
 	Dashboard string            `json:"dashboard"`         // uid or exact title
-	Range     string            `json:"range,omitempty"`   // "1h", "7d"
+	Range     string            `json:"range,omitempty"`   // "1h", "7d"; empty = the dashboard's own
 	Refresh   string            `json:"refresh,omitempty"` // "30s"; floor 5s at run time
 	Vars      map[string]string `json:"vars,omitempty"`    // template-variable overrides
 	Panels    []string          `json:"panels,omitempty"`  // optional subset, by title
@@ -207,9 +207,6 @@ func (c Config) Resolve(name string) (View, Profile, error) {
 	p, ok := c.Profiles[pname]
 	if !ok {
 		return View{}, Profile{}, fmt.Errorf("view %q: no profile named %q", name, pname)
-	}
-	if v.Range == "" {
-		v.Range = DefaultRange
 	}
 	if v.Refresh == "" {
 		v.Refresh = DefaultRefresh

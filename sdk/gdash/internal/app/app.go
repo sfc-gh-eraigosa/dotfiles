@@ -56,7 +56,7 @@ func Keys() keymap.Map {
 type Options struct {
 	Fetcher Fetcher
 	View    string // the view's name, for the status row
-	Range   string // "1h"
+	Range   string // "1h"; empty = the dashboard's own (Fetch with rng 0)
 	Refresh string // "30s"
 	Render  render.Opts
 	Now     func() time.Time
@@ -77,6 +77,7 @@ type Model struct {
 	keys    keymap.Map
 	refresh time.Duration
 	rangeAt int
+	auto    bool // no range chosen yet: the first answer's Range is taken
 
 	w, h    int
 	offset  int
@@ -111,6 +112,10 @@ func New(o Options) *Model {
 	}
 	if m.refresh < MinRefresh {
 		m.refresh = MinRefresh
+	}
+	m.auto = o.Range == ""
+	if m.auto {
+		o.Range = config.DefaultRange
 	}
 	if d, err := config.ParseDuration(o.Range); err == nil {
 		m.rangeAt = nearest(d)
@@ -169,6 +174,9 @@ func (m *Model) fetch(reload bool) tea.Cmd {
 	m.busy = true
 	m.attempted = m.opt.Now()
 	f, width, rng := m.opt.Fetcher, m.dataWidth(), m.Range()
+	if m.auto {
+		rng = 0
+	}
 	m.fetchW = width
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), FetchTimeout)
@@ -200,6 +208,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(m.fetch(false), m.tick())
 	case dataMsg:
+		if m.auto && msg.err == nil {
+			m.auto = false
+			if msg.data.Range > 0 {
+				m.rangeAt = nearest(msg.data.Range)
+			}
+		}
 		m.busy = false
 		if msg.err != nil {
 			m.err = msg.err
@@ -271,6 +285,7 @@ func (m *Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.rangeAt--
 		}
 		if m.rangeAt != before {
+			m.auto = false
 			if m.busy {
 				m.pending = true
 				return m, nil
