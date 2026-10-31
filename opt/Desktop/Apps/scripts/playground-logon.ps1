@@ -44,16 +44,23 @@ function Log($m) {
 # (person, unknown author, or unreadable: never auto-resume).
 function Get-PauseState([string]$dir) {
     $file = Join-Path $dir 'paused'
-    if (-not (Test-Path -LiteralPath $file)) { return @{ State = 'none'; Why = 'no paused flag' } }
+    # Only "not found" means no flag. Any other error (access denied, parent not
+    # traversable) cannot show the flag is absent, so it holds.
+    try { $null = Get-Item -LiteralPath $file -Force -ErrorAction Stop }
+    catch [System.Management.Automation.ItemNotFoundException] { return @{ State = 'none'; Why = 'no paused flag' } }
+    catch { return @{ State = 'hold'; Why = "paused flag cannot be checked ($($_.Exception.GetType().Name)); treated as paused" } }
     try {
         $raw = Get-Content -LiteralPath $file -Raw -ErrorAction Stop
+        # PS 5.1 unwraps a one-element JSON array into its member: require a literal object.
+        if ($raw.TrimStart() -notmatch '^\{') { throw 'not a JSON object' }
         $obj = $raw | ConvertFrom-Json -ErrorAction Stop
+        if ($obj -isnot [pscustomobject]) { throw 'not a JSON object' }
         $author = [string]$obj.author
     } catch {
         return @{ State = 'hold'; Why = 'paused flag exists but cannot be read; treated as paused' }
     }
-    if ($author -eq 'watchdog') { return @{ State = 'watchdog'; Why = 'paused by the watchdog' } }
-    if ($author -eq 'person') { return @{ State = 'hold'; Why = 'paused by a person' } }
+    if ($author -ceq 'watchdog') { return @{ State = 'watchdog'; Why = 'paused by the watchdog' } }
+    if ($author -ceq 'person') { return @{ State = 'hold'; Why = 'paused by a person' } }
     return @{ State = 'hold'; Why = "paused flag has author '$author'; treated as paused" }
 }
 
@@ -85,6 +92,10 @@ function Get-AppExe([string]$dir) {
 }
 
 function Start-App {
+    $ErrorActionPreference = 'Stop'   # this function scope only: any error is caught and logged
+    try { Start-AppUnchecked } catch { Log "app step failed: $($_.Exception.Message)" }
+}
+function Start-AppUnchecked {
     $exe = Get-AppExe $StateDir
     if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { Log "app not found: $exe (skipped)"; return }
     $name = [IO.Path]::GetFileNameWithoutExtension($exe)
@@ -114,10 +125,10 @@ try {
 
     $startScript = Join-Path $PSScriptRoot 'Start-DevStack.ps1'
     Step 'Start-DevStack.ps1' {
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $startScript
+        & (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') -NoProfile -ExecutionPolicy Bypass -File $startScript
     }
     Step 'k3sops node resume --if-author watchdog' {
-        & wsl.exe -d $WslDistro --exec bash -lc '$HOME/.local/bin/k3sops node resume --if-author watchdog'
+        & (Join-Path $env:SystemRoot 'System32\wsl.exe') -d $WslDistro --exec bash -lc '$HOME/.local/bin/k3sops node resume --if-author watchdog'
     }
     Start-App
     Log 'logon recovery done'

@@ -5,17 +5,25 @@
 .DESCRIPTION
   Reads <StateDir>\gpu-cap-w (an integer 100-350; default 280 when the file is
   missing or invalid), runs `nvidia-smi.exe -pl <n>`, reads `power.limit` back
-  from every GPU and exits non-zero if any differs. Logs to <StateDir>\logs\.
+  from every GPU and exits non-zero if any differs. Logs to %ProgramData%\playground\logs.
 
   StateDir is the OPERATOR's %LOCALAPPDATA%\playground. Under SYSTEM,
   %LOCALAPPDATA% is SYSTEM's own profile, so the installer passes the operator's
   absolute path as -StateDir in the task action. Without it the script falls back
   to $env:LOCALAPPDATA and says so in the log.
 
+  SYSTEM trust: the operator owns StateDir, so SYSTEM only READS the one file
+  gpu-cap-w from it, and only if neither StateDir nor the file is a reparse point
+  (junction or symlink); otherwise it uses the default. SYSTEM WRITES only to the
+  locked LogDir (%ProgramData%\playground\logs, created by the installer's ACL),
+  never to anything the operator controls.
+
   Exit: 0 applied and verified (or dry run), 1 mismatch or nvidia-smi failed,
   2 nvidia-smi.exe not found.
 .PARAMETER StateDir
-  Folder holding gpu-cap-w and logs\. Default: $env:LOCALAPPDATA\playground.
+  Operator folder holding gpu-cap-w (read only). Default: $env:LOCALAPPDATA\playground.
+.PARAMETER LogDir
+  Where the log goes. Default: %ProgramData%\playground\logs (SYSTEM-locked).
 .PARAMETER DryRun
   Resolve and print the cap and the command; do not run nvidia-smi, do not write a log.
 .EXAMPLE
@@ -23,6 +31,7 @@
 #>
 param(
     [string]$StateDir,
+    [string]$LogDir,
     [switch]$DryRun
 )
 $ErrorActionPreference = 'Stop'
@@ -36,6 +45,13 @@ function Get-CapWatts([string]$dir) {
     if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
         return @{ Watts = $DefaultWatts; Note = "no gpu-cap-w, default $DefaultWatts" }
     }
+    # The operator owns this folder: never follow a junction or symlink out of it.
+    foreach ($path in $dir, $file) {
+        $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+        if ($item -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            return @{ Watts = $DefaultWatts; Note = "$path is a reparse point, refused, default $DefaultWatts" }
+        }
+    }
     $text = ''
     try { $text = ([string](Get-Content -LiteralPath $file -TotalCount 1 -ErrorAction Stop)).Trim() }
     catch { return @{ Watts = $DefaultWatts; Note = "gpu-cap-w unreadable or empty, default $DefaultWatts" } }
@@ -48,13 +64,16 @@ function Get-CapWatts([string]$dir) {
 
 $fellBack = $false
 if (-not $StateDir) { $StateDir = Join-Path $env:LOCALAPPDATA 'playground'; $fellBack = $true }
-$logFile = Join-Path (Join-Path $StateDir 'logs') 'gpu-cap.log'
+if (-not $LogDir) { $LogDir = Join-Path (Join-Path $env:ProgramData 'playground') 'logs' }
+$logFile = Join-Path $LogDir 'gpu-cap.log'
 function Log($m) {
     $line = '{0} {1}' -f (Get-Date -Format 'yyyy-MM-ddTHH:mm:sszzz'), $m
     Write-Host $line
     if ($DryRun) { return }
     try {
-        $null = New-Item -ItemType Directory -Force -Path (Split-Path $logFile) -ErrorAction Stop
+        $ld = Get-Item -LiteralPath $LogDir -Force -ErrorAction SilentlyContinue
+        if ($ld -and ($ld.Attributes -band [IO.FileAttributes]::ReparsePoint)) { return }   # never log through a reparse point
+        $null = New-Item -ItemType Directory -Force -Path $LogDir -ErrorAction Stop
         $line | Out-File -FilePath $logFile -Append -Encoding ascii
     } catch { }   # a log that cannot be written must not stop the cap
 }
