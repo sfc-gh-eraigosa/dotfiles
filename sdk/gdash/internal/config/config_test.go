@@ -97,7 +97,7 @@ func TestViewResolvesDefaults(t *testing.T) {
 	c := Config{Profiles: map[string]Profile{"lab": {URL: "http://h", Auth: Auth{Env: "X"}}}, DefaultProfile: "lab",
 		Views: map[string]View{"ci": {Dashboard: "ci-lab"}}}
 	v, p, err := c.Resolve("ci")
-	if err != nil || p.URL != "http://h" || v.Range != "1h" || v.Refresh != "30s" {
+	if err != nil || p.URL != "http://h" || v.Range != "" || v.Refresh != "30s" {
 		t.Fatalf("Resolve = %+v %+v %v", v, p, err)
 	}
 	if _, _, err := c.Resolve("nope"); err == nil || !strings.Contains(err.Error(), "ci") {

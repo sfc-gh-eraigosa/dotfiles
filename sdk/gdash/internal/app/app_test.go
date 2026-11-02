@@ -324,3 +324,64 @@ func TestWideTableTakesTheRow(t *testing.T) {
 		t.Fatalf("narrow table should sit beside the next panel:\n%s", joined)
 	}
 }
+
+// A view with no range opens on the dashboard's own, so panels written over
+// $__range show the window they were written for.
+func TestNoRangeUsesTheDashboards(t *testing.T) {
+	data := sample()
+	data.Range = 7 * 24 * time.Hour
+	f := &fakeFetcher{data: data}
+	m := New(Options{Fetcher: f, Refresh: "30s", View: "sample", Tick: instantTick})
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+	run(m, m.Init())
+	if f.rng != 0 {
+		t.Fatalf("first fetch asked for %v, want 0 (the dashboard's)", f.rng)
+	}
+	if m.Range() != 7*24*time.Hour {
+		t.Fatalf("Range = %v, want the dashboard's 7d", m.Range())
+	}
+	_, cmd := m.Update(tickMsg{})
+	run(m, cmd)
+	if f.rng != 7*24*time.Hour {
+		t.Fatalf("next fetch asked for %v, want 7d", f.rng)
+	}
+}
+
+// A range set on the view or with --range wins over the dashboard's.
+func TestExplicitRangeBeatsTheDashboards(t *testing.T) {
+	data := sample()
+	data.Range = 7 * 24 * time.Hour
+	f := &fakeFetcher{data: data}
+	m, _ := newModel(f, "30s") // Range: "1h"
+	run(m, m.Init())
+	if f.rng != time.Hour || m.Range() != time.Hour {
+		t.Fatalf("fetch %v, Range %v, want 1h for both", f.rng, m.Range())
+	}
+}
+
+// Pressing + or - before the first answer is a choice: the answer must not
+// overrule it.
+func TestRangeKeyBeatsTheDashboards(t *testing.T) {
+	data := sample()
+	data.Range = 7 * 24 * time.Hour
+	f := &fakeFetcher{data: data}
+	m := New(Options{Fetcher: f, Refresh: "30s", View: "sample", Tick: instantTick})
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+	init := m.Init() // the first fetch is in flight
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("-")})
+	run(m, init)
+	if m.Range() != 15*time.Minute {
+		t.Fatalf("Range = %v, want the 15m the key chose", m.Range())
+	}
+}
+
+// A dashboard with no usable range keeps gdash's own default.
+func TestNoRangeAnywhereStaysAtTheDefault(t *testing.T) {
+	f := &fakeFetcher{data: sample()}
+	m := New(Options{Fetcher: f, Refresh: "30s", View: "sample", Tick: instantTick})
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+	run(m, m.Init())
+	if m.Range() != time.Hour {
+		t.Fatalf("Range = %v, want 1h", m.Range())
+	}
+}

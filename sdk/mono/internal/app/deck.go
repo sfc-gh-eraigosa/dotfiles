@@ -171,6 +171,9 @@ func (a *App) splitHeightsLocked() []int {
 // zoomIndexLocked is the zoomed slot: the one zoomed by hand, else the first
 // whose tool on screen is zoom: true (and not turned off with z); -1 = none.
 func (a *App) zoomIndexLocked() int {
+	if a.middleCountLocked() < 2 { // it already has every middle row
+		return -1
+	}
 	if a.zoom != "" {
 		if i := a.slotIndexLocked(a.zoom); i >= 0 && a.slots[i].zoomable {
 			return i
@@ -182,6 +185,17 @@ func (a *App) zoomIndexLocked() int {
 		}
 	}
 	return -1
+}
+
+// middleCountLocked is how many slots share the middle.
+func (a *App) middleCountLocked() int {
+	n := 0
+	for _, s := range a.slots {
+		if s.zoomable {
+			n++
+		}
+	}
+	return n
 }
 
 func (a *App) slotIndexLocked(name string) int {
@@ -310,6 +324,7 @@ func (a *App) navMoveLocked(d int) []launch {
 
 // toggleZoomLocked is z: zoom the focused pane over the middle, or give the
 // rows back. A zoom: true tool's own zoom is turned off (and on) the same way.
+// A lone middle pane has nothing to take rows from, so z just says so.
 func (a *App) toggleZoomLocked() []launch {
 	if a.focus >= len(a.slots) {
 		return nil
@@ -317,6 +332,10 @@ func (a *App) toggleZoomLocked() []launch {
 	s := a.slots[a.focus]
 	if !s.zoomable {
 		a.msg = s.name + " is not part of the middle (zoomable: false)"
+		return nil
+	}
+	if a.middleCountLocked() < 2 {
+		a.msg = s.name + " already fills the middle: nothing to zoom"
 		return nil
 	}
 	auto := s.tools[s.tool].zoom

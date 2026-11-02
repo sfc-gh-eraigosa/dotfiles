@@ -95,7 +95,7 @@ gdash alerts
 
 | To… | Run |
 | :-- | :-- |
-| change how far back it shows | `gdash config set views.alerts.range 24h` (or `+`/`-` while viewing) |
+| change how far back it shows | `gdash config set views.alerts.range 24h` (or `+`/`-` while viewing). With none set, a view opens on the dashboard's own time range, else 1h |
 | change how often it updates | `gdash config set views.alerts.refresh 1m` (never under `5s`) |
 | set a dashboard variable | `gdash config set views.nodes.vars.instance 192.168.0.128:9100` |
 | show only some panels | `gdash config set views.ci.panels "Active jobs,Pass rate (1h)"` |

@@ -354,6 +354,46 @@ func TestMiddleSingleRuntime(t *testing.T) {
 	}
 }
 
+// With one pane in the middle it already fills it: z says so rather than
+// flipping a ZOOM label over an unchanged layout, and a zoom: true tool does
+// not claim ZOOM either.
+func TestNothingToZoomInASingleMiddle(t *testing.T) {
+	cfg := deckConfig(true)
+	cfg.Middle = "single"
+	a, clk := startDeck(t, cfg)
+	before := a.Heights()
+	focusMid(t, a)
+	enterNav(a, clk)
+	a.HandleBytes([]byte("l")) // to tool b (zoom: true)
+	a.HandleBytes([]byte{0x1b})
+	a.HandleBytes([]byte{0x02, 'z'})
+	s := eventually(t, a, "a message that there is nothing to zoom", func(s string) bool { return strings.Contains(s, "already fills the middle") })
+	if strings.Contains(s, "ZOOM") {
+		t.Fatalf("ZOOM on the title with nothing zoomed:\n%s", s)
+	}
+	if got := a.Heights(); got[1] != before[1] || got[2] != before[2] {
+		t.Fatalf("layout moved: %v → %v", before, got)
+	}
+}
+
+// A hand zoom ends when the middle drops to one pane, where z could no longer
+// clear it: it must not come back with the second pane.
+func TestReloadToOneMiddlePaneDropsTheZoom(t *testing.T) {
+	a, _ := startDeck(t, deckConfig(false))
+	before := a.Heights()
+	if err := a.focusNamed([]string{"top"}); err != nil {
+		t.Fatal(err)
+	}
+	a.HandleBytes([]byte{0x02, 'z'})
+	single := deckConfig(false)
+	single.Middle = "single"
+	a.apply(single)
+	a.apply(deckConfig(false))
+	if got := a.Heights(); got[1] != before[1] || got[2] != before[2] {
+		t.Fatalf("the zoom came back: %v, want %v", got, before)
+	}
+}
+
 // Review finding 2: :focus on a pane hidden by zoom makes it visible
 // instead of focusing something you cannot see.
 func TestFocusUnhidesAZoomedOutPane(t *testing.T) {

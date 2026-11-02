@@ -225,7 +225,7 @@ func (a *App) apply(cfg config.Config) {
 			a.focus = i
 		}
 	}
-	if a.zoom != "" && a.slotIndexLocked(a.zoom) < 0 {
+	if a.zoom != "" && (a.slotIndexLocked(a.zoom) < 0 || a.middleCountLocked() < 2) {
 		a.zoom = ""
 	}
 	if pb, err := config.PrefixByte(cfg.Prefix); err == nil {

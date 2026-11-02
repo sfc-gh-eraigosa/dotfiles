@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
@@ -128,4 +129,17 @@ func dashWithCollapsedRow(t *testing.T) dash.Dashboard {
 		t.Fatal(err)
 	}
 	return d
+}
+
+// Live answers a rng of 0 with the dashboard's own range, as a +/- step.
+func TestLiveTakesTheDashboardsRange(t *testing.T) {
+	s := grafanatest.New(t)
+	c := grafana.NewHTTP(s.URL, bearer("fixture"), 5*time.Second)
+	d, err := NewLive(c, config.View{Dashboard: "ci-lab"}).Fetch(context.Background(), 80, 0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Range != 24*time.Hour { // the fixture's picker is now-24h
+		t.Fatalf("Range = %v, want 24h", d.Range)
+	}
 }

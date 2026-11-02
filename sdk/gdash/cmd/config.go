@@ -177,7 +177,7 @@ func init() {
 	v := configAddViewCmd.Flags()
 	v.StringVar(&addView.dashboard, "dashboard", "", "dashboard uid or exact title (see gdash list)")
 	v.StringVar(&addView.profile, "profile", "", "profile to use (default: default_profile)")
-	v.StringVar(&addView.rng, "range", "", "time range, e.g. 1h, 7d (default 1h)")
+	v.StringVar(&addView.rng, "range", "", "time range, e.g. 1h, 7d (default: the dashboard's own, else 1h)")
 	v.StringVar(&addView.refresh, "refresh", "", "refresh interval, e.g. 30s (default 30s, floor 5s)")
 	configAddCmd.AddCommand(configAddProfileCmd, configAddViewCmd)
 	configCmd.AddCommand(configPathCmd, configGetCmd, configSetCmd, configAddCmd, configRemoveCmd)

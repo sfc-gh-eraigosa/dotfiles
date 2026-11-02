@@ -82,7 +82,8 @@ sdk/mono  (changed)
 - `All` and multi-value expand Prometheus-style: `(a|b|c)` inside a regex matcher, else `.*` for `All` with no explicit list.
 - `$__interval` = intervalMs as a duration (`15s`, `1m`); `$__rate_interval` = max(4 × scrape
   interval, `$__interval` + scrape interval), with the scrape interval from the datasource's
-  `timeInterval`, default `15s`; `$__range` = the range (`1h`).
+  `timeInterval`, default `15s`; `$__range` = the range (`1h`). A view with no range takes the
+  dashboard's relative time picker, as the nearest `+`/`-` step, else `1h`.
 - **Forms:** `$var`, `${var}` and `[[var]]` are all expanded. **(spec)** `${var:format}` supports `regex`, `pipe`,
   `csv` and `raw`; any other format leaves the panel marked `needs var $var`.
 - An unresolved variable marks that panel `needs var $x`. The other panels still draw.
@@ -196,7 +197,8 @@ sdk/mono  (changed)
   one deck named `mid`. It sits where the first middle pane was, its size is
   the sum of theirs, and its tools are each pane's tools in order (a plain
   pane becomes one tool named after it). Non-middle panes are untouched.
-- **Title:** `ZOOM` shows on the title bar while a pane is zoomed (manually or
+- **Title:** with one pane in the middle nothing can zoom: `z` says so and `ZOOM` stays off.
+  Otherwise `ZOOM` shows on the title bar while a pane is zoomed (manually or
   by its tool).
 
 ### F9 — nav mode
