@@ -183,19 +183,35 @@ type wirePanel struct {
 	} `json:"fieldConfig"`
 }
 
-// pickerRange is the span of a relative time picker ending now. Anything else
-// (absolute times, a window ending in the past, a rounded "now-7d/d", a unit
-// config.ParseDuration has no length for) is 0.
-func pickerRange(from, to string) time.Duration {
-	span, ok := strings.CutPrefix(from, "now-")
-	if !ok || to != "now" {
+// pickerRange is the span of a relative time picker ending now, with Grafana's
+// "/d" rounding dropped and its calendar units at their usual lengths. Anything
+// else (absolute times, a window ending in the past, a malformed block) is 0:
+// the picker is a hint, so it never fails the dashboard.
+func pickerRange(raw json.RawMessage) time.Duration {
+	var t struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	}
+	if json.Unmarshal(raw, &t) != nil {
 		return 0
+	}
+	span, ok := strings.CutPrefix(t.From, "now-")
+	if !ok || (t.To != "now" && !strings.HasPrefix(t.To, "now/")) {
+		return 0
+	}
+	span, _, _ = strings.Cut(span, "/")
+	scale := time.Duration(1)
+	switch {
+	case strings.HasSuffix(span, "M"):
+		span, scale = strings.TrimSuffix(span, "M")+"d", 30
+	case strings.HasSuffix(span, "y"):
+		span, scale = strings.TrimSuffix(span, "y")+"d", 365
 	}
 	d, err := config.ParseDuration(span)
 	if err != nil {
 		return 0
 	}
-	return d
+	return d * scale
 }
 
 // Parse reads /api/dashboards/uid/<uid> output (or a bare dashboard object).
@@ -211,13 +227,10 @@ func Parse(raw []byte) (Dashboard, error) {
 		body = raw
 	}
 	var w struct {
-		UID    string      `json:"uid"`
-		Title  string      `json:"title"`
-		Panels []wirePanel `json:"panels"`
-		Time   struct {
-			From string `json:"from"`
-			To   string `json:"to"`
-		} `json:"time"`
+		UID        string          `json:"uid"`
+		Title      string          `json:"title"`
+		Panels     []wirePanel     `json:"panels"`
+		Time       json.RawMessage `json:"time"`
 		Templating struct {
 			List []struct {
 				Name       string          `json:"name"`
@@ -233,7 +246,7 @@ func Parse(raw []byte) (Dashboard, error) {
 	if err := json.Unmarshal(body, &w); err != nil {
 		return Dashboard{}, fmt.Errorf("dashboard JSON: %w", err)
 	}
-	d := Dashboard{UID: w.UID, Title: w.Title, Range: pickerRange(w.Time.From, w.Time.To)}
+	d := Dashboard{UID: w.UID, Title: w.Title, Range: pickerRange(w.Time)}
 	for _, v := range w.Templating.List {
 		vr := Variable{Name: v.Name, Type: v.Type, IncludeAll: v.IncludeAll, Multi: v.Multi}
 		if v.AllValue != nil {

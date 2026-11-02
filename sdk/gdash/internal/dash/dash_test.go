@@ -240,10 +240,13 @@ func TestParseDefaultRange(t *testing.T) {
 	cases := map[string]time.Duration{
 		`"time":{"from":"now-7d","to":"now"}`:               7 * 24 * time.Hour,
 		`"time":{"from":"now-15m","to":"now"}`:              15 * time.Minute,
-		`"time":{"from":"now-7d/d","to":"now"}`:             0, // rounded: not a plain span
+		`"time":{"from":"now-7d/d","to":"now/d"}`:           7 * 24 * time.Hour, // rounded
+		`"time":{"from":"now-1M","to":"now"}`:               30 * 24 * time.Hour,
+		`"time":{"from":"now-1y/y","to":"now"}`:             365 * 24 * time.Hour,
+		`"time":{"from":1700000000000,"to":1700000100000}`:  0, // a hint: never fatal
 		`"time":{"from":"now-2d","to":"now-1d"}`:            0, // ends in the past
 		`"time":{"from":"2026-10-01T00:00:00Z","to":"now"}`: 0, // absolute
-		`"time":{"from":"now-1y","to":"now"}`:               0, // a unit gdash has no duration for
+		`"time":{"from":"now-1w2d","to":"now"}`:             0, // not a span gdash reads
 		`"timezone":"utc"`:                                  0, // no time block at all
 	}
 	for body, want := range cases {

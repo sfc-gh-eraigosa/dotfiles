@@ -376,6 +376,24 @@ func TestNothingToZoomInASingleMiddle(t *testing.T) {
 	}
 }
 
+// A hand zoom ends when the middle drops to one pane, where z could no longer
+// clear it: it must not come back with the second pane.
+func TestReloadToOneMiddlePaneDropsTheZoom(t *testing.T) {
+	a, _ := startDeck(t, deckConfig(false))
+	before := a.Heights()
+	if err := a.focusNamed([]string{"top"}); err != nil {
+		t.Fatal(err)
+	}
+	a.HandleBytes([]byte{0x02, 'z'})
+	single := deckConfig(false)
+	single.Middle = "single"
+	a.apply(single)
+	a.apply(deckConfig(false))
+	if got := a.Heights(); got[1] != before[1] || got[2] != before[2] {
+		t.Fatalf("the zoom came back: %v, want %v", got, before)
+	}
+}
+
 // Review finding 2: :focus on a pane hidden by zoom makes it visible
 // instead of focusing something you cannot see.
 func TestFocusUnhidesAZoomedOutPane(t *testing.T) {
