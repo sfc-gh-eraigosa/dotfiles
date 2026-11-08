@@ -227,7 +227,7 @@ func TestCancelKeyIsTheSharedInterruptBinding(t *testing.T) {
 
 	m, called := running(t, testModel("a"), "a")
 	m, _ = ctrlC(m)
-	m, _ = ctrlC(m)
+	_, _ = ctrlC(m) // the second press: only the cancel side effect matters
 	if !*called {
 		t.Error("ctrl+c twice must cancel the running update, as keymap.Interrupt says")
 	}
