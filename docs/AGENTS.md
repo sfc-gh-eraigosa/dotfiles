@@ -21,5 +21,6 @@ Reference guides and the repo's objective-driven design system.
 - [`gitignore-allowlist.md`](./gitignore-allowlist.md) — the `*`-default `.gitignore` allowlist: opted-in paths, verification recipe, worked examples.
 - [`install-windows.md`](./install-windows.md) — `install.sh` Windows/WSL interactivity flow, `[y]/[s]` semantics, gff overrides.
 - [`security-audit.md`](./security-audit.md) — opt-in unattended weekly security audit: Windows collector task + Claude analysis task, gff-gated **fail-closed**.
+- [`sshd-hardening.md`](./sshd-hardening.md) — **default-on** Linux sshd hardening drop-in (passwords off, root out, `AllowUsers` this user, `sshd -t` + rollback, refuses without an authorized key) and unattended security upgrades on apt hosts; flags `install.network.sshd-hardening` and `install.system.unattended-upgrades`.
 - [`security-hardening.md`](./security-hardening.md) — opt-in Windows hardening (follow-up to the audit): Event Log Readers, TaskScheduler/Operational channel, 5 Defender ASR rules in **audit mode only**. Self-elevating, idempotent, precisely reversible; gff-gated **fail-closed**.
 - [`mergify.md`](./mergify.md) — the merge model: Mergify queue, solo-maintainer rules and rationale, external-contributor review gate, AI-work traceability, break-glass.

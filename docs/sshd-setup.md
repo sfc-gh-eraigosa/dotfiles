@@ -11,6 +11,8 @@ local firewall, and seed `authorized_keys` from your GitHub public keys:
 | Windows | `opt/Desktop/Apps/scripts/setup-sshd.ps1` | OpenSSH.Server capability | `sshd` service, auto-start | `New-NetFirewallRule` TCP 22 |
 
 Nothing runs at boot or login unless the tool set it up — **invoking it is the opt-in**.
+An sshd that *is* on gets the default-on hardening drop-in (passwords off, root out,
+`AllowUsers` you) from [`sshd-hardening.md`](./sshd-hardening.md) on the next `install.sh`.
 The login-time hook in `opt/profiles/.bashrc` stays disabled by design.
 
 ## Quickstart
