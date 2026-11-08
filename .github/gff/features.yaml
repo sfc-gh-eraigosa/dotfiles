@@ -5,7 +5,7 @@ namespace: com.github.sfc-gh-eraigosa.dotfiles
 sets:
   - area: install
     features:
-      # --- system (5) ---
+      # --- system (6) ---
       - path: install.system.wsl-interop
         description: Runs the wsl_interop_binfmt.sh block that keeps the WSLInterop binfmt registration alive.
         boolDefault: true
@@ -20,6 +20,9 @@ sets:
         boolDefault: true
       - path: install.system.nano-profile
         description: Runs the block that wires .nano_profile sourcing into .zshrc and .profile.
+        boolDefault: true
+      - path: install.system.unattended-upgrades
+        description: "Runs setup_unattended_upgrades.sh: on an apt host with systemd, installs unattended-upgrades, turns on APT::Periodic (daily index refresh + unattended security upgrades, the distro's default origins) and enables the two apt timers. SKIPs elsewhere. Default on; gff set install.system.unattended-upgrades false leaves a host alone."
         boolDefault: true
       # --- shell (3) ---
       - path: install.shell.profiles
@@ -193,10 +196,13 @@ sets:
       - path: install.fonts.nerd-font
         description: Runs the Nerd Font configuration block (OS dispatch plus the glyph-coverage check).
         boolDefault: true
-      # --- network (1) ---
+      # --- network (2) ---
       - path: install.network.sshd
         description: Enables sshd on this host (set by sshd-setup enable); install.sh starts it when true.
         boolDefault: false
+      - path: install.network.sshd-hardening
+        description: "Runs sshd_harden.sh: writes /etc/ssh/sshd_config.d/10-dotfiles-hardening.conf (PasswordAuthentication no, PermitRootLogin no, AllowUsers <this user>, MaxAuthTries 3, LoginGraceTime 30), validates with sshd -t, reloads. Refuses (never locks you out) while this user has no authorized key; SKIPs where sshd or its Include dir is absent. Default on; gff set install.network.sshd-hardening false leaves a host alone; SSHD_ALLOW_USERS widens the allow-list."
+        boolDefault: true
       # --- windows (13) ---
       - path: install.windows.desktop-deploy
         description: Runs the install_windows.sh invocation that deploys opt/Desktop onto the Windows Desktop.

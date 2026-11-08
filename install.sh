@@ -102,8 +102,8 @@ unset _ip_prev _ip_arg
 #   - CONFIG / SKILL / SYMLINK / any repo-content step -> _IP_CONFIG_FLAGS. Runs
 #     in the per-commit config layer; omitting it BAKES the step into the cached
 #     deps layer, so later edits to it stop taking effect per commit (a bug).
-_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_TOOLS_HERDR_PLUGINS INSTALL_TOOLS_HERDR_CONFIG INSTALL_TOOLS_HTOP_FIT INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_MONO INSTALL_SDK_GSL INSTALL_SDK_GFF INSTALL_NETWORK_SSHD"
-_IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_UV INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_GLOW INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM INSTALL_RUNTIME_RUST INSTALL_SHELL_OH_MY_ZSH_UPDATE INSTALL_TOOLS_LASTPASS INSTALL_TOOLS_1PASSWORD"
+_IP_CONFIG_FLAGS="INSTALL_SHELL_PROFILES INSTALL_SHELL_DEFAULT_ZSH INSTALL_DESKTOP_GNOME_KEYS INSTALL_AI_SKILLS INSTALL_AI_ANTIGRAVITY INSTALL_AI_CLAUDE INSTALL_TOOLS_GIT_ALIASES INSTALL_TOOLS_HERDR_INTEGRATIONS INSTALL_TOOLS_HERDR_PLUGINS INSTALL_TOOLS_HERDR_CONFIG INSTALL_TOOLS_HTOP_FIT INSTALL_SDK_GSS INSTALL_SDK_TMUX_MGR INSTALL_SDK_WOL INSTALL_SDK_MONO INSTALL_SDK_GSL INSTALL_SDK_GFF INSTALL_NETWORK_SSHD INSTALL_NETWORK_SSHD_HARDENING"
+_IP_DEPS_FLAGS="INSTALL_PKG_COMMON_CORE INSTALL_PKG_BREWFILE INSTALL_TOOLS_SOPS INSTALL_TOOLS_YQ INSTALL_TOOLS_UV INSTALL_TOOLS_K8S INSTALL_TOOLS_HERDR INSTALL_TOOLS_GLOW INSTALL_TOOLS_SNOWFLAKE INSTALL_TOOLS_DOCKER INSTALL_RUNTIME_GOENV INSTALL_RUNTIME_PYENV INSTALL_RUNTIME_RBENV INSTALL_RUNTIME_NVM INSTALL_RUNTIME_RUST INSTALL_SHELL_OH_MY_ZSH_UPDATE INSTALL_TOOLS_LASTPASS INSTALL_TOOLS_1PASSWORD INSTALL_SYSTEM_UNATTENDED_UPGRADES"
 apply_install_phase() {
   case "$INSTALL_PHASE" in
     deps)   for _f in $_IP_CONFIG_FLAGS; do export "GFF_${_f}=false"; done ;;
@@ -1077,6 +1077,22 @@ else gff_skip_msg install.runtime.fnm; fi
 if gff_opt_in install.network.sshd; then
   "${BASE_DIR}/opt/scripts/network/sshd_run.sh"
 else gff_skip_msg install.network.sshd; fi
+
+# sshd hardening (default on): a drop-in that turns password login off, keeps
+# root out and allow-lists this user. The script refuses while this user has
+# no authorized key, so it can never lock a host out, and SKIPs on a host with
+# no sshd. gff set install.network.sshd-hardening false leaves a host alone.
+if gff_on install.network.sshd-hardening; then
+  "${BASE_DIR}/opt/scripts/network/sshd_harden.sh" ||
+    echo "WARNING: sshd hardening did not apply (see above); continuing."
+else gff_skip_msg install.network.sshd-hardening; fi
+
+# Unattended security upgrades (default on): apt hosts with systemd get
+# unattended-upgrades, APT::Periodic and the two apt timers. SKIPs elsewhere.
+if gff_on install.system.unattended-upgrades; then
+  "${BASE_DIR}/opt/scripts/system/setup_unattended_upgrades.sh" ||
+    echo "WARNING: unattended-upgrades setup reported problems; continuing."
+else gff_skip_msg install.system.unattended-upgrades; fi
 
 if gff_on install.system.gitrepos; then
   if [ -f "${HOME}/.gitrepos" ] ; then
