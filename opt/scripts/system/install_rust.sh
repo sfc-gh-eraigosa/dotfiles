@@ -131,6 +131,17 @@ rustc_version() {
 
 update_toolchain() {
     info "Updating Rust toolchain '${RUST_TOOLCHAIN}' ($1)..."
+    # Components retired upstream (rls in 2022; its rls-preview and
+    # rust-analysis siblings) stay recorded in an old toolchain and make
+    # `rustup update` fail outright: "component 'rls-preview' for target …
+    # is unavailable for download for channel stable" (seen on a 2020-era
+    # rustc 1.42). Nothing here needs them, so drop them before updating.
+    for _c in rls rls-preview rust-analysis; do
+        if "${CARGO_HOME}/bin/rustup" component list --installed --toolchain "${RUST_TOOLCHAIN}" 2>/dev/null | grep -q "^${_c}-"; then
+            info "Removing retired rustup component '${_c}' so the update can proceed..."
+            "${CARGO_HOME}/bin/rustup" component remove "${_c}" --toolchain "${RUST_TOOLCHAIN}" >/dev/null 2>&1 || true
+        fi
+    done
     # rustup writes its progress ("info: downloading ...") to stderr; keep it
     # on stdout so fleet doesn't count it as warnings. Failures still die below.
     "${CARGO_HOME}/bin/rustup" update "${RUST_TOOLCHAIN}" --no-self-update 2>&1 \

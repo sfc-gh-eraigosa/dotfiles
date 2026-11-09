@@ -90,7 +90,7 @@ else
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
   echo "Downloading ${NERD_FONTS_ASSET} (${NERD_FONTS_VERSION})..."
-  curl -fsSL -o "${tmp}/${NERD_FONTS_ASSET}" "${NERD_FONTS_URL_BASE}/${NERD_FONTS_ASSET}"
+  curl -fsSL --retry 3 --retry-delay 2 -o "${tmp}/${NERD_FONTS_ASSET}" "${NERD_FONTS_URL_BASE}/${NERD_FONTS_ASSET}"
   # Extract the four MesloLGS NerdFont faces (Regular, Bold, Italic, BoldItalic).
   # The v3.x archive uses no-space names: MesloLGSNerdFont-{style}.ttf
   unzip -o -q "${tmp}/${NERD_FONTS_ASSET}" \

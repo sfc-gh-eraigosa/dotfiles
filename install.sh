@@ -148,6 +148,11 @@ if [ "$(uname -s)" = "Darwin" ] && command -v brew >/dev/null 2>&1; then
   echo "Updating Homebrew once up front (auto-update is disabled for the rest of this run)..."
   brew update --quiet || echo "WARNING: brew update failed; continuing with the Homebrew already on disk."
   export HOMEBREW_NO_AUTO_UPDATE=1
+  # Homebrew 7 made "ask mode" the default: every install/upgrade that pulls in
+  # dependencies prints a plan and waits at "Do you want to proceed? [y/n]".
+  # This installer is meant to run unattended once its own prompts are
+  # answered, so opt out for the whole run (an explicit `--ask` still asks).
+  export HOMEBREW_NO_ASK=1
 fi
 
 git config --global pager.branch false
@@ -156,16 +161,34 @@ git config --global push.default current
 [ ! -d "${HOME}/git" ] && mkdir -p "${HOME}/git"
 
 
-# Ensure ~/opt is a symlink to the repo's opt directory
-if [ -L "${HOME}/opt" ] && [ "$(readlink "${HOME}/opt")" = "${BASE_DIR}/opt" ]; then
-  : # Already correctly linked
-elif [ -e "${HOME}/opt" ]; then
-  echo "WARNING: ${HOME}/opt exists but is not linked to dotfiles. Backing up to ${HOME}/opt.bak"
-  mv "${HOME}/opt" "${HOME}/opt.bak"
-  ln -sf "${BASE_DIR}/opt" "${HOME}/opt"
-else
-  ln -sf "${BASE_DIR}/opt" "${HOME}/opt"
+# Ensure ~/opt is a symlink to the repo's opt directory.
+#
+# Compare PHYSICAL paths, not link text: on a Mac where ~/git -> ~/Documents/git
+# the same checkout has two spellings, and the old string compare of
+# `readlink ~/opt` against BASE_DIR declared a correct link "not linked". It
+# then `mv`'d ~/opt INTO the ~/opt.bak an earlier run had left ("mv: … are
+# identical"), and `ln -sf` onto a symlink-to-directory FOLLOWED the link and
+# dropped a stray `opt/opt` symlink INSIDE the repo. `ln -sfn` (-n: never follow
+# an existing symlink) and a timestamped backup name close both holes.
+_opt_target="$(cd -P "${BASE_DIR}/opt" && pwd)"
+_opt_current=""
+if [ -e "${HOME}/opt" ]; then
+  _opt_current="$(cd -P "${HOME}/opt" 2>/dev/null && pwd)"
 fi
+if [ -L "${HOME}/opt" ] && [ -n "${_opt_current}" ] && [ "${_opt_current}" = "${_opt_target}" ]; then
+  : # Already linked to this checkout, by whichever spelling of its path
+elif [ -e "${HOME}/opt" ] || [ -L "${HOME}/opt" ]; then
+  _opt_bak="${HOME}/opt.bak"
+  if [ -e "${_opt_bak}" ] || [ -L "${_opt_bak}" ]; then
+    _opt_bak="${HOME}/opt.bak.$(date +%Y%m%d%H%M%S)"
+  fi
+  echo "WARNING: ${HOME}/opt exists but is not linked to dotfiles. Backing up to ${_opt_bak}"
+  mv "${HOME}/opt" "${_opt_bak}"
+  ln -sfn "${BASE_DIR}/opt" "${HOME}/opt"
+else
+  ln -sfn "${BASE_DIR}/opt" "${HOME}/opt"
+fi
+unset _opt_target _opt_current _opt_bak
 
 # Windows/WSL only — ASK phase: capture the y/n/s customization answer up front
 # (all interactivity front-loaded). The deploy + PowerShell EXECUTION runs at

@@ -19,6 +19,7 @@
 #
 # Safe to re-run: exits early when `snow` is already resolvable.
 set -e
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # pipx installs into ~/.local/bin; brew into its own prefix (already on PATH on
 # macOS). Put ~/.local/bin on PATH for the rest of this script so both the
@@ -29,6 +30,12 @@ set -e
 case ":${PATH}:" in
     *":${HOME}/.local/bin:"*) ;;
     *) PATH="${HOME}/.local/bin:${PATH}"; export PATH ;;
+esac
+# uv (install_uv.sh) lands in ~/opt/bin; make it resolvable when this script
+# runs standalone from a shell that has not sourced ~/.profile.
+case ":${PATH}:" in
+    *":${HOME}/opt/bin:"*) ;;
+    *) PATH="${HOME}/opt/bin:${PATH}"; export PATH ;;
 esac
 
 RED='\033[0;31m'
@@ -43,14 +50,32 @@ fi
 
 case "$(uname -s)" in
     Darwin)
+        # uv may be missing only because its download failed moments ago
+        # (install.sh runs install_uv.sh right before this step); try once more
+        # here rather than falling through to a from-source brew build.
+        if ! command -v uv >/dev/null 2>&1 && [ -x "${SELF_DIR}/install_uv.sh" ]; then
+            echo -e "${BLUE}uv not found; running install_uv.sh first...${NC}"
+            "${SELF_DIR}/install_uv.sh" || true
+            hash -r 2>/dev/null || true
+        fi
         if command -v uv >/dev/null 2>&1; then
+            # Pin the interpreter range: left alone, uv picks the NEWEST Python on
+            # the host (3.15 here), for which pydantic-core has no wheel, so it
+            # tried to compile it (and cryptography) with maturin and failed. The
+            # Snowflake connector supports 3.10-3.13; inside that range every
+            # dependency has a prebuilt wheel and uv prefers an interpreter that is
+            # already installed (brew's python@3.10 here) over downloading one.
             echo -e "${BLUE}Installing snowflake-cli via uv tool (into ~/.local/bin)...${NC}"
-            uv tool install snowflake-cli
-        elif command -v brew >/dev/null 2>&1; then
-            echo -e "${BLUE}uv not found; installing snowflake-cli via brew (compiles on Intel Macs)...${NC}"
+            uv tool install --python '>=3.10,<3.14' snowflake-cli
+        elif [ "$(uname -m)" = "arm64" ] && command -v brew >/dev/null 2>&1; then
+            # Bottled on Apple silicon: a quick pour, so brew is a fine fallback.
+            echo -e "${BLUE}uv unavailable; installing snowflake-cli via brew...${NC}"
             brew install snowflake-cli
         else
-            echo -e "${RED}install_snowflake_cli: neither uv nor Homebrew found — run install_uv.sh or install brew first${NC}"
+            # Intel: no bottles, and the formula builds cryptography + pydantic-core
+            # and therefore Rust AND LLVM from source — hours. Refuse instead.
+            echo -e "${RED}install_snowflake_cli: uv is unavailable and the brew formula would compile Rust + LLVM from source on this Intel Mac (hours).${NC}"
+            echo -e "${RED}                       Fix uv first (opt/scripts/system/install_uv.sh), then re-run.${NC}"
             exit 1
         fi
         ;;

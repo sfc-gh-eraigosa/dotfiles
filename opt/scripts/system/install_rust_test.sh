@@ -35,6 +35,7 @@ assert_grep "downloads rustup-init from the official dist server" 'static\.rust-
 assert_grep "verifies SHA-256 of the download" 'checksum mismatch' "${SCRIPT}"
 assert_grep_negative "never pipes a remote script into a shell" 'curl[^|]*\|[[:space:]]*(ba)?sh' "${SCRIPT}"
 assert_grep "never lets rustup edit rc files" '--no-modify-path' "${SCRIPT}"
+assert_grep "drops retired components (rls) before updating, or rustup update fails" 'rustup" component remove "\$\{_c\}"' "${SCRIPT}"
 assert_grep "probes rustc through a pinned toolchain, not the cwd-following proxy" 'RUSTUP_TOOLCHAIN="\$\{RUST_TOOLCHAIN\}" "\$\{CARGO_HOME\}/bin/rustc"' "${SCRIPT}"
 assert_grep "maps the 64-bit Pi / Nano / Spark (aarch64)" 'aarch64-unknown-linux-gnu' "${SCRIPT}"
 assert_grep "maps 32-bit ARM Pis" 'armv7-unknown-linux-gnueabihf' "${SCRIPT}"

@@ -48,6 +48,7 @@ assert_grep "maps aarch64 (Spark, Jetson, 64-bit Pi, Apple silicon) to the per-O
 assert_grep "skips 32-bit ARM (no fleet host is 32-bit)" 'armv7l\|armv6l' "${SCRIPT}"
 assert_grep "installs to ~/opt/bin like the other fetched tools" 'UV_INSTALL_DIR:-\$\{HOME\}/opt/bin' "${SCRIPT}"
 assert_grep "installs the uvx binary alongside uv" 'uvx' "${SCRIPT}"
+assert_eq "$(grep -c 'curl -fsSL --retry 3 --retry-delay 2 ' "${SCRIPT}")" "2" "both downloads retry transient (5xx) errors"
 
 # --- fixtures: a fake release for Linux/x86_64 --------------------------------
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/install_uv_test.XXXXXX")"

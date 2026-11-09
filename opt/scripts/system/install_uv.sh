@@ -119,13 +119,16 @@ else
     info "Installing uv ${UV_VERSION} (${UV_TARGET}) to ${INSTALL_DIR}..."
 fi
 
-curl -fsSL "${URL}/${STEM}.tar.gz.sha256" -o "${TMP_DIR}/sha256" || die "could not fetch ${URL}/${STEM}.tar.gz.sha256"
+# --retry: GitHub's release CDN answers 504 for a while now and then (seen on
+# the tiny .sha256 sidecars while the tarball itself was fine); curl retries
+# only transient failures (timeouts, 429, 5xx), so a real 404 still fails fast.
+curl -fsSL --retry 3 --retry-delay 2 "${URL}/${STEM}.tar.gz.sha256" -o "${TMP_DIR}/sha256" || die "could not fetch ${URL}/${STEM}.tar.gz.sha256"
 SHA="$(awk '{ print tolower($1) }' "${TMP_DIR}/sha256")"
 # Fail closed: the release must list a well-formed checksum for this asset.
 if [ "${#SHA}" -ne 64 ] || [ -n "$(printf '%s' "${SHA}" | tr -d '0-9a-f')" ]; then
     die "release ${UV_VERSION} lists no valid SHA-256 for ${STEM}.tar.gz; refusing to install an unverified binary"
 fi
-curl -fsSL "${URL}/${STEM}.tar.gz" -o "${TMP_DIR}/uv.tar.gz" || die "download failed: ${URL}/${STEM}.tar.gz"
+curl -fsSL --retry 3 --retry-delay 2 "${URL}/${STEM}.tar.gz" -o "${TMP_DIR}/uv.tar.gz" || die "download failed: ${URL}/${STEM}.tar.gz"
 ACTUAL="$(sha256_of "${TMP_DIR}/uv.tar.gz")"
 [ "${ACTUAL}" = "${SHA}" ] || die "checksum mismatch for ${STEM}.tar.gz: expected ${SHA}, got ${ACTUAL}"
 

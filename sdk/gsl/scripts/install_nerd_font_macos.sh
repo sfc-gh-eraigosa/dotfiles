@@ -75,7 +75,7 @@ else
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
   echo "Downloading ${NERD_FONTS_ASSET} (${NERD_FONTS_VERSION})..."
-  curl -fsSL -o "${tmp}/${NERD_FONTS_ASSET}" "${NERD_FONTS_URL_BASE}/${NERD_FONTS_ASSET}"
+  curl -fsSL --retry 3 --retry-delay 2 -o "${tmp}/${NERD_FONTS_ASSET}" "${NERD_FONTS_URL_BASE}/${NERD_FONTS_ASSET}"
   unzip -o -q "${tmp}/${NERD_FONTS_ASSET}" 'MesloLGSNerdFont-*.ttf' -d "$tmp"
   cp "${tmp}"/MesloLGSNerdFont-*.ttf "$font_dir"/
   echo "Installed MesloLGS Nerd Font v${want} faces into ${font_dir}."
