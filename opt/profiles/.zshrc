@@ -290,24 +290,12 @@ if [ -d "${HOME}/.sdkman" ] ; then
 fi
 set -o vi
 unset GIT_URL
-test -f ${HOME}/.rbenv/shims/gh && rm -f ${HOME}/.rbenv/shims/gh
 
 #
 # node in path
 export PATH="$PATH:$HOME/.nodenv/shims"
 
 test -n "$(alias ruby)" && unalias ruby
-
-#
-# we're in codespaces, setup some custom things
-# change to workspace if defined
-if [ -d "${CODESPACE_VSCODE_FOLDER}" ]; then
-  cd "${CODESPACE_VSCODE_FOLDER}"
-  git config pull.rebase true
-  if [ -n "${MY_GITHUB_TOKEN}" ] ; then
-    export GITHUB_TOKEN="${MY_GITHUB_TOKEN}"
-  fi
-fi
 
 # source any secrets
 if [ -f ~/.secrets.env ] ; then
