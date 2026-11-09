@@ -9,7 +9,11 @@
 #     a host without it those servers fail to connect at every session start
 #     ("Executable not found in $PATH: uvx", dotfiles#312). sync-plugins.sh
 #     warns about the gap; this closes it.
-#   * macOS installs uv from opt/profiles/Brewfile (brew 'uv').
+#   * macOS: Apple-silicon Macs install uv from opt/profiles/Brewfile (brew 'uv',
+#     bottled) and this script leaves that brew-managed copy alone. Intel Macs get
+#     NO Homebrew bottles any more (Sept 2026), and `brew 'uv'` there means
+#     building uv — and Rust, and LLVM — from source for hours, so this script
+#     installs the official x86_64-apple-darwin release for them instead.
 #   * uv is a single static Rust binary with official release tarballs and a
 #     per-asset SHA-256 sidecar (<asset>.sha256), so fetching + verifying it
 #     ourselves is the most portable option on Linux/WSL (mirrors
@@ -59,12 +63,20 @@ case "${UV_VERSION}" in
 esac
 
 case "$(uname -s)" in
-    Linux) ;;
-    *) die "install_uv.sh is Linux-only; macOS installs uv from opt/profiles/Brewfile" ;;
+    Linux)  UV_OS="unknown-linux-gnu" ;;
+    Darwin)
+        UV_OS="apple-darwin"
+        # A Homebrew-managed uv (the Brewfile's bottle on Apple silicon) wins;
+        # never shadow it with a second copy in ~/opt/bin.
+        if command -v brew >/dev/null 2>&1 && brew list --formula uv >/dev/null 2>&1; then
+            ok "uv is managed by Homebrew ($(brew --prefix 2>/dev/null)/bin/uv); leaving it alone"
+            exit 0
+        fi ;;
+    *) die "unsupported OS $(uname -s)" ;;
 esac
 case "$(uname -m)" in
-    x86_64)        UV_TARGET="x86_64-unknown-linux-gnu" ;;
-    arm64|aarch64) UV_TARGET="aarch64-unknown-linux-gnu" ;;
+    x86_64)        UV_TARGET="x86_64-${UV_OS}" ;;
+    arm64|aarch64) UV_TARGET="aarch64-${UV_OS}" ;;
     armv7l|armv6l)
         # uv publishes 32-bit ARM builds, but no fleet host is 32-bit — skip
         # rather than add asset-matrix surface nothing here exercises.

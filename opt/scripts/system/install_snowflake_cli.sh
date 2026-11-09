@@ -6,9 +6,14 @@
 #   * .zshrc used to auto-install the CLI with `pip3 install` from daily
 #     maintenance. On Debian Bookworm+ (PEP 668 externally-managed-environment)
 #     the system pip refuses, printing an error at login once a day, forever.
-#   * The supported, PEP 668-safe paths are the homebrew-core `snowflake-cli`
-#     formula on macOS and `pipx install snowflake-cli` on Linux (pipx gives
-#     the CLI its own venv, leaving the system Python untouched).
+#   * The supported, PEP 668-safe paths are `uv tool install snowflake-cli` on
+#     macOS (prebuilt wheels on both Mac architectures; uv is installed just
+#     before this step by install_uv.sh / the Brewfile), the homebrew-core
+#     `snowflake-cli` formula as the macOS fallback, and `pipx install
+#     snowflake-cli` on Linux. Each gives the CLI its own venv, leaving the
+#     system Python untouched. The brew formula is only the FALLBACK because on
+#     an Intel Mac (no bottles since Sept 2026) it compiles cryptography and
+#     pydantic-core, which drags in a from-source Rust AND LLVM build — hours.
 #   * The PyPI package was renamed snowflake-cli-labs -> snowflake-cli; this
 #     script installs the current name.
 #
@@ -38,12 +43,16 @@ fi
 
 case "$(uname -s)" in
     Darwin)
-        if ! command -v brew >/dev/null 2>&1; then
-            echo -e "${RED}install_snowflake_cli: Homebrew not found — install it first: https://brew.sh/${NC}"
+        if command -v uv >/dev/null 2>&1; then
+            echo -e "${BLUE}Installing snowflake-cli via uv tool (into ~/.local/bin)...${NC}"
+            uv tool install snowflake-cli
+        elif command -v brew >/dev/null 2>&1; then
+            echo -e "${BLUE}uv not found; installing snowflake-cli via brew (compiles on Intel Macs)...${NC}"
+            brew install snowflake-cli
+        else
+            echo -e "${RED}install_snowflake_cli: neither uv nor Homebrew found — run install_uv.sh or install brew first${NC}"
             exit 1
         fi
-        echo -e "${BLUE}Installing snowflake-cli via brew...${NC}"
-        brew install snowflake-cli
         ;;
     Linux)
         # pipx is the PEP 668-safe installer for PyPI CLIs. Bootstrap it from

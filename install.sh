@@ -136,6 +136,20 @@ if [ "$(id -u)" -ne 0 ] && command -v sudo &> /dev/null; then
   fi
 fi
 
+# --- Homebrew: refresh once, then freeze it for the rest of this run ---------
+# Every brew call below may otherwise auto-update Homebrew ITSELF mid-run. On a
+# long run that swaps Homebrew's Ruby under a build already in flight — seen as
+# `global.rb: key not found: "HOMEBREW_CURL_HEADER_FILE_MIN_VERSION" (KeyError)`
+# → "Failed to fix install linkage" at the end of a 20-minute boost build on an
+# Intel Mac (nothing is bottled there any more, so most installs are long
+# source builds). One explicit update up front keeps formulae current; the pin
+# keeps Homebrew's own code stable until this script exits.
+if [ "$(uname -s)" = "Darwin" ] && command -v brew >/dev/null 2>&1; then
+  echo "Updating Homebrew once up front (auto-update is disabled for the rest of this run)..."
+  brew update --quiet || echo "WARNING: brew update failed; continuing with the Homebrew already on disk."
+  export HOMEBREW_NO_AUTO_UPDATE=1
+fi
+
 git config --global pager.branch false
 git config --global push.default current
 
@@ -393,6 +407,13 @@ fi
 if gff_on install.pkg.brewfile; then
 if [[ "$(uname -s)" == "Darwin" ]]; then
   if command -v brew &> /dev/null; then
+    # Intel Macs get no Homebrew bottles any more, so brew bundle COMPILES most
+    # of the Brewfile. Repair/diagnose the compiler toolchain first (a stale CLT
+    # libc++ dir, an Xcode too old for brew) or every C++ formula fails with a
+    # non-fatal WARNING far below. Fail-open; see the script header.
+    if [ -f "${BASE_DIR}/opt/scripts/system/macos-toolchain-preflight.sh" ]; then
+      bash "${BASE_DIR}/opt/scripts/system/macos-toolchain-preflight.sh"
+    fi
     echo "Detected macOS. Running brew bundle for macOS extras..."
     brew bundle --no-upgrade --file="${BASE_DIR}/opt/profiles/Brewfile" || {
       echo "WARNING: Some brew formulas failed to install. Review the output above."
@@ -428,8 +449,9 @@ if gff_on install.tools.yq; then
   fi
 else gff_skip_msg install.tools.yq; fi
 
-# Install uv (and its uvx tool-runner). macOS gets it from the Brewfile;
-# Linux/WSL fetches the official release, SHA-256-verified. On by default,
+# Install uv (and its uvx tool-runner). Apple-silicon Macs get the bottle from
+# the Brewfile (install_uv.sh then leaves the brew-managed copy alone); Intel
+# Macs and Linux/WSL fetch the official release, SHA-256-verified. On by default,
 # like yq/sops: the AWS Claude plugins enabled in ai/plugins.yaml
 # (deploy-on-aws, aws-serverless, aws-core) launch their MCP servers via
 # uvx, which otherwise fails to connect at every session start (#312).
