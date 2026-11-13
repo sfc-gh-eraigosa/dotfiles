@@ -65,7 +65,9 @@ brew 'bazelisk'
 
 # cask "docker"
 cask 'gpg-suite'
-brew 'azure-cli'
+# azure-cli moved from homebrew-core to a cask; `brew 'azure-cli'` now fails
+# with "No available formula with the name".
+cask 'azure-cli'
 
 brew 'goenv'
 # golang replaced by goenv: https://github.com/go-nv/goenv/blob/master/INSTALL.md
@@ -97,7 +99,6 @@ brew 'lcov'
 brew 'just' if Hardware::CPU.arm?
 brew 'clang-format' if Hardware::CPU.arm?
 brew 'opa'
-brew 'azure-cli'
 brew 'grpcui'
 brew 'grpcurl'
 brew 'kind'
