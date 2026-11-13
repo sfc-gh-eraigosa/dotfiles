@@ -13,7 +13,7 @@
 #
 # SKIPs (exit 0) without apt-get (macOS, Fedora) or without a running systemd
 # (containers, WSL without systemd). Idempotent: a host already set up is a no-op.
-# A 20auto-upgrades that is not ours is backed up (.bak-<timestamp>) first.
+# A 20auto-upgrades that is not ours is backed up (.<timestamp>.bak) first.
 #
 # Usage: setup_unattended_upgrades.sh [--dry-run | --status]
 # Env (tests): UU_APT_CONF_DIR (/etc/apt/apt.conf.d), UU_SYSTEMD_DIR (/run/systemd/system),
@@ -80,6 +80,14 @@ if [ -n "${SUDO}" ] && ! ${SUDO} true 2>/dev/null; then
   exit 0
 fi
 
+# Backups end in .bak: apt skips only that suffix silently, and any other name in
+# apt.conf.d prints "N: Ignoring file ... invalid filename extension" on every apt
+# run. Earlier versions wrote .bak-<timestamp>; rename those once.
+for old in "${AUTO}".bak-*; do
+  [ -e "${old}" ] || continue
+  ${SUDO} mv "${old}" "${AUTO}.${old##*.bak-}.bak" && echo "renamed ${old##*/} to ${AUTO##*/}.${old##*.bak-}.bak (apt ignores it silently)"
+done
+
 changed=0
 if ! installed; then
   echo "installing ${PKG}..."
@@ -96,7 +104,7 @@ if ! file_current; then
   trap 'rm -f "${TMP}"' EXIT
   render > "${TMP}"
   if [ -f "${AUTO}" ]; then
-    BACKUP="${AUTO}.bak-$(date +%Y%m%d%H%M%S)"
+    BACKUP="${AUTO}.$(date +%Y%m%d%H%M%S).bak"
     ${SUDO} cp -p "${AUTO}" "${BACKUP}" && echo "kept the previous file as ${BACKUP}"
   fi
   ${SUDO} mkdir -p "${CONF_DIR}"

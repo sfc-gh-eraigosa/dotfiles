@@ -9,8 +9,8 @@
 # Usage: git_identity_doctor.sh [repo-path ...]
 #   Checks the global git config plus each given repo (default: the current
 #   repo when run inside one). Requires gh for account checks; degrades to
-#   local-only checks without it. The optional `user` token scope
-#   (gh auth refresh -h github.com -s user) enables definitive
+#   local-only checks without it. The optional read-only `user:email` scope
+#   (gh auth refresh -h github.com -s user:email) enables definitive
 #   email-visibility verdicts.
 #
 # Exit codes: 0 all OK · 1 warnings · 2 failures (push likely rejected)
@@ -87,7 +87,7 @@ check_email() {
     absent)
       warn "$scope: user.email=$email is not associated with ${GH_LOGIN} — commits will not be attributed to the account" ;;
     *)
-      warn "$scope: user.email=$email — cannot verify visibility (token lacks the 'user' scope; run: gh auth refresh -h github.com -s user). If the email-privacy push block is enabled and this email is private, pushes will be rejected." ;;
+      warn "$scope: user.email=$email — cannot verify visibility (token lacks the read-only 'user:email' scope; run: gh auth refresh -h github.com -s user:email). If the email-privacy push block is enabled and this email is private, pushes will be rejected." ;;
   esac
 }
 
