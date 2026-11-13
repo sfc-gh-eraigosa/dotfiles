@@ -97,6 +97,12 @@ run_case "unassociated email warns about attribution" \
 run_case "missing user scope warns with refresh hint" \
   noscope "priv@x.com" 1 "gh auth refresh"
 
+# The hint names the least scope that reads user/emails: read-only user:email,
+# not `user`, which can also write the profile. Any non-noreply value reaches the
+# visibility check, so the fixture needs no address.
+run_case "refresh hint asks for read-only user:email" \
+  noscope "fixture-identity" 1 "gh auth refresh -h github.com -s user:email"
+
 # Empty email: unset both scopes then expect a warning.
 git config --global --unset user.email
 git -C "$REPO" config --unset user.email

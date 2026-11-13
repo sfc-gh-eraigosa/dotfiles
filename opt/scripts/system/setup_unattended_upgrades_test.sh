@@ -107,8 +107,21 @@ assert_eq "$(cat "$(AUTO)")" "${before}" "re-apply: file unchanged"
 fresh foreign installed; printf 'APT::Periodic::Unattended-Upgrade "0";\n' > "$(AUTO)"
 out="$(run bash "${SCRIPT}")"; rc=$?
 assert_eq "${rc}" "0" "foreign: exit 0"
-assert_in_subshell "foreign: a .bak copy exists" "ls '${CONF}' | grep -q '20auto-upgrades.bak-'"
+assert_in_subshell "foreign: a .bak copy exists" "ls '${CONF}' | grep -qE '^20auto-upgrades\.[0-9]{14}\.bak$'"
+# apt silently skips only names that END in .bak; anything else in apt.conf.d makes
+# every apt run print "N: Ignoring file ... invalid filename extension".
+assert_in_subshell "foreign: the copy ends in .bak (apt skips it silently)" "! ls '${CONF}' | grep -q '\.bak-'"
 assert_grep "foreign: replaced" '^APT::Periodic::Unattended-Upgrade "1";$' "$(AUTO)"
+
+# 5b. A .bak-<timestamp> copy left by an earlier version is renamed to <timestamp>.bak,
+# even on a host that is otherwise current (found live 2026-11-13 on three hosts).
+fresh legacy installed; : > "${TIMERS}"; run bash "${SCRIPT}" >/dev/null
+printf 'old\n' > "$(AUTO).bak-20261110200219"
+out="$(run bash "${SCRIPT}")"; rc=$?
+assert_eq "${rc}" "0" "legacy backup: exit 0"
+assert_file_exists "$(AUTO).20261110200219.bak" "legacy backup: renamed to <timestamp>.bak"
+[ ! -e "$(AUTO).bak-20261110200219" ] && echo "PASS: legacy backup: old name gone" || echo "FAIL: legacy backup: old name still there"
+assert_eq "$(cat "$(AUTO).20261110200219.bak")" "old" "legacy backup: content kept"
 
 # 6. --dry-run writes and installs nothing; --status reads only.
 fresh dry

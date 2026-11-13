@@ -155,6 +155,14 @@ INIT_LINE="$(grep -n 'goenv init - bash' "$INSTALL" | grep -v '^[0-9]*:[[:space:
 assert_eq "$([ -n "$ORDER_LINE" ] && [ -n "$INIT_LINE" ] && [ "$ORDER_LINE" -lt "$INIT_LINE" ] && echo before || echo missing-or-after)" \
     "before" "install.sh exports GOENV_PATH_ORDER=front before the first goenv init"
 
+# The pinned Go is installed BEFORE the first goenv init. The init code reads
+# .go-version, and while that version is missing it prints "goenv: version 'X' is
+# not installed" on stderr: a fleet warning on every host after each Go bump
+# (2026-11-13, go1.27.4).
+PIN_INSTALL_LINE="$(grep -n 'goenv install -s "\${PINNED_GO_VERSION}"' "$INSTALL" | head -1 | cut -d: -f1)"
+assert_eq "$([ -n "$PIN_INSTALL_LINE" ] && [ -n "$INIT_LINE" ] && [ "$PIN_INSTALL_LINE" -lt "$INIT_LINE" ] && echo before || echo missing-or-after)" \
+    "before" "install.sh installs the pinned Go before the first goenv init"
+
 # --- Locale fallback -----------------------------------------------------------
 # ssh forwards the caller's LANG/LC_*, so a fleet run can arrive with a locale
 # the host never generated (the WSL host: LC_ALL=en_US.UTF-8, only C.UTF-8). The

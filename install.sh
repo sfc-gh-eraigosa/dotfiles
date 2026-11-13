@@ -579,23 +579,11 @@ fi
 # Falls back to "latest" only if .go-version is missing.
 export PATH="${HOME}/.goenv/bin:${PATH}"
 if command -v goenv &> /dev/null; then
-  # Pass the shell to `goenv init` EXPLICITLY. Bare `goenv init -` infers the
-  # shell from $SHELL, so on a host whose login shell is zsh it emits zsh code
-  # (a `while IFS=: read -rA …` PATH loop) even though this script runs under
-  # bash — bash then errors `read: -A: invalid option`, the loop's `_NEW_PATH`
-  # stays empty, and `export PATH="$_NEW_PATH"` wipes PATH, after which every
-  # coreutil (tr, uname, git…) is "command not found" and the install collapses.
-  # `goenv init - bash` forces bash-safe output. The guard below is a belt-and-
-  # suspenders backstop: if any goenv build still drops the system bin dirs,
-  # restore a known-good PATH. See docs/mbo/specs/shell-portability.md.
-  __goenv_path_safe="${PATH}"
-  eval "$(goenv init - bash)"
-  case ":${PATH}:" in
-    *":/usr/bin:"*) : ;;                          # system PATH survived
-    *) PATH="${PATH}:${__goenv_path_safe}" ;;     # init clobbered PATH; restore
-  esac
-  export PATH
-  unset __goenv_path_safe
+  # Install the pinned Go BEFORE `goenv init`: the init code it emits runs goenv
+  # against .go-version in the cwd, and while that version is not installed yet
+  # it prints "goenv: version 'X' is not installed" to stderr, which fleet counts
+  # as a warning on every host after each Go bump (2026-11-13, go1.27.4). The
+  # install needs only goenv/bin on PATH, which is set just above.
   # The Go pin is the `go` row of opt/profiles/versions.tsv (@.go-version), so
   # gff pins.track.mode=latest can float it; .go-version stays the fallback.
   PINNED_GO_VERSION=""
@@ -625,6 +613,23 @@ if command -v goenv &> /dev/null; then
       goenv global "$LATEST_INSTALLED"
     fi
   fi
+  # Pass the shell to `goenv init` EXPLICITLY. Bare `goenv init -` infers the
+  # shell from $SHELL, so on a host whose login shell is zsh it emits zsh code
+  # (a `while IFS=: read -rA …` PATH loop) even though this script runs under
+  # bash — bash then errors `read: -A: invalid option`, the loop's `_NEW_PATH`
+  # stays empty, and `export PATH="$_NEW_PATH"` wipes PATH, after which every
+  # coreutil (tr, uname, git…) is "command not found" and the install collapses.
+  # `goenv init - bash` forces bash-safe output. The guard below is a belt-and-
+  # suspenders backstop: if any goenv build still drops the system bin dirs,
+  # restore a known-good PATH. See docs/mbo/specs/shell-portability.md.
+  __goenv_path_safe="${PATH}"
+  eval "$(goenv init - bash)"
+  case ":${PATH}:" in
+    *":/usr/bin:"*) : ;;                          # system PATH survived
+    *) PATH="${PATH}:${__goenv_path_safe}" ;;     # init clobbered PATH; restore
+  esac
+  export PATH
+  unset __goenv_path_safe
 fi
 else gff_skip_msg install.runtime.goenv; fi
 
