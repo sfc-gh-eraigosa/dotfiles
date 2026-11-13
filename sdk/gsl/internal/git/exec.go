@@ -19,6 +19,7 @@ package git
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
 
 	gslexec "github.com/sfc-gh-eraigosa/dotfiles/sdk/gsl/internal/exec"
@@ -85,6 +86,14 @@ func buildArgs(dir, subcommand string, extra ...string) []string {
 // the I/O pipes. Without that, a grandchild inheriting the stdout pipe keeps
 // Wait() blocked long past ctx's deadline (measured: 5004 ms against an 800 ms
 // deadline).
+//
+// Locks: every invocation runs with GIT_OPTIONAL_LOCKS=0. `git status` takes
+// .git/index.lock to write back a refreshed index, and the group kill above is
+// SIGKILL, which git cannot clean up after. On a slow disk a status that
+// overran its deadline therefore left a stale index.lock that failed the next
+// real git command in the repository ("Unable to create index.lock: File
+// exists"). gsl only reads, so it never needs that lock. Appended last so it
+// wins over a value inherited from the environment.
 func (r *SystemRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	bin := r.Path
 	if bin == "" {
@@ -98,6 +107,7 @@ func (r *SystemRunner) Run(ctx context.Context, name string, args ...string) ([]
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
+	cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0")
 	gslexec.Harden(cmd)
 	if err := cmd.Run(); err != nil {
 		gslexec.LogSubprocessError("git", bin, full, err)

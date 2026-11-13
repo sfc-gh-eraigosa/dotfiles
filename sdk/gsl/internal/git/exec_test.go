@@ -220,3 +220,31 @@ func TestSystemRunner_MissingBinary_LogsAtWarn(t *testing.T) {
 			"level); got: %q", got)
 	}
 }
+
+// TestSystemRunner_DisablesOptionalLocks pins the fix for stale
+// .git/index.lock files. `git status` takes index.lock to write back a
+// refreshed index; gsl SIGKILLs git at its 800 ms deadline, and a killed git
+// cannot remove the lock, so the next real git command in that repository
+// fails with "Unable to create index.lock: File exists". With
+// GIT_OPTIONAL_LOCKS=0 git reads the index without locking it. The value must
+// win over one inherited from the caller's environment.
+func TestSystemRunner_DisablesOptionalLocks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-script stand-in for git")
+	}
+	t.Setenv("GIT_OPTIONAL_LOCKS", "1")
+	fakeGit := filepath.Join(t.TempDir(), "git")
+	script := "#!/bin/sh\nprintf '%s' \"$GIT_OPTIONAL_LOCKS\"\n"
+	if err := os.WriteFile(fakeGit, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &git.SystemRunner{Path: fakeGit}
+	out, err := r.Run(context.Background(), "status")
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := string(out); got != "0" {
+		t.Fatalf("git saw GIT_OPTIONAL_LOCKS=%q, want \"0\"", got)
+	}
+}
