@@ -2,7 +2,8 @@
 # install_nerd_font_macos.sh — gsl-packaged macOS Nerd Font installer.
 # 1. Preflight base requirements (brew, python3, curl, unzip).
 # 2. Install the pinned MesloLGS NF faces into ~/Library/Fonts.
-# 3. Write an iTerm2 Dynamic Profile (loads live, survives quit) and
+# 3. Write an iTerm2 Dynamic Profile (loads live, survives quit), make it
+#    iTerm2's default profile when iTerm2 is installed and idle, and
 #    best-effort Terminal.app config.
 # Safe to re-run (idempotent).
 set -euo pipefail
@@ -91,13 +92,55 @@ fi
 # Replaces the old com.googlecode.iterm2.plist patching that lost writes when
 # iTerm2 was running. DynamicProfiles are read live by a running iTerm2.
 dyn_dir="${HOME}/Library/Application Support/iTerm2/DynamicProfiles"
+dyn_file="${dyn_dir}/gsl-nerd-font.json"
+ITERM2_APP="${ITERM2_APP:-/Applications/iTerm.app}"
+ITERM2_DOMAIN="com.googlecode.iterm2"
+GSL_GUID="gsl-nerd-font"
+
+# Writing the profile is not enough: iTerm2 keeps opening tabs with its default
+# profile, whose font (often an old "...for Powerline" Meslo) has the powerline
+# arrows but none of the Nerd Font icons gsl draws, so they render as boxes.
+# When iTerm2 is installed, the gsl profile inherits the current default
+# profile (colors, keys, everything but the font) and becomes the default.
+iterm2_default_guid() {
+  defaults read "$ITERM2_DOMAIN" "Default Bookmark Guid" 2>/dev/null || true
+}
+iterm2_profile_name() { # $1 = guid; prints that static profile's Name
+  python3 - "$1" <<'PY' 2>/dev/null || true
+import os, plistlib, sys
+p = os.path.expanduser("~/Library/Preferences/com.googlecode.iterm2.plist")
+try:
+    with open(p, "rb") as f:
+        prefs = plistlib.load(f)
+except Exception:
+    sys.exit(0)
+for b in prefs.get("New Bookmarks", []):
+    if b.get("Guid") == sys.argv[1]:
+        print(b.get("Name", ""))
+PY
+}
+
+parent=""
+if [ -d "$ITERM2_APP" ]; then
+  _default="$(iterm2_default_guid)"
+  if [ "$_default" = "$GSL_GUID" ] && [ -f "$dyn_file" ]; then
+    # Already the default: keep the parent chosen on the first run.
+    parent="$(sed -n 's/.*"Dynamic Profile Parent Name": "\(.*\)",*$/\1/p' "$dyn_file" | head -1)"
+  elif [ -n "$_default" ]; then
+    parent="$(iterm2_profile_name "$_default")"
+  fi
+fi
+
 mkdir -p "$dyn_dir"
-cat > "${dyn_dir}/gsl-nerd-font.json" <<JSON
+parent_line=""
+[ -n "$parent" ] && parent_line="\"Dynamic Profile Parent Name\": \"${parent}\","
+cat > "$dyn_file" <<JSON
 {
   "Profiles": [
     {
       "Name": "gsl Nerd Font",
-      "Guid": "gsl-nerd-font",
+      "Guid": "${GSL_GUID}",
+      ${parent_line}
       "Normal Font": "${FONT_FAMILY} ${FONT_SIZE}",
       "Non Ascii Font": "${FONT_FAMILY} ${FONT_SIZE}",
       "Use Non-ASCII Font": true
@@ -105,8 +148,24 @@ cat > "${dyn_dir}/gsl-nerd-font.json" <<JSON
   ]
 }
 JSON
-echo "Wrote iTerm2 Dynamic Profile: ${dyn_dir}/gsl-nerd-font.json"
-echo "  In iTerm2: Preferences → Profiles → select 'gsl Nerd Font' (or set it as Default)."
+echo "Wrote iTerm2 Dynamic Profile: ${dyn_file}${parent:+ (inherits '${parent}')}"
+
+if [ ! -d "$ITERM2_APP" ]; then
+  echo "  iTerm2 not installed; the profile is ready if you install it."
+elif [ "${GSL_ITERM2_SET_DEFAULT:-1}" = "0" ]; then
+  echo "  GSL_ITERM2_SET_DEFAULT=0: leaving iTerm2's default profile alone."
+elif [ "$(iterm2_default_guid)" = "$GSL_GUID" ]; then
+  echo "  iTerm2 already opens new tabs with 'gsl Nerd Font'."
+elif pgrep -xq iTerm2; then
+  # A running iTerm2 rewrites its preferences from memory on quit, so a
+  # default set now would be lost. Say how to do it instead.
+  echo "  iTerm2 is running, so its default profile was not changed. Quit iTerm2"
+  echo "  and re-run this script, or: Settings → Profiles → 'gsl Nerd Font'"
+  echo "  → Other Actions → Set as Default."
+else
+  defaults write "$ITERM2_DOMAIN" "Default Bookmark Guid" -string "$GSL_GUID"
+  echo "  Set 'gsl Nerd Font' as iTerm2's default profile (new tabs use it)."
+fi
 
 # ── Terminal.app (best effort; weaker PUA fallback than iTerm2) ──────────────
 # Terminal.app renders fewer Nerd Font PUA glyphs than iTerm2 (no broad PUA
