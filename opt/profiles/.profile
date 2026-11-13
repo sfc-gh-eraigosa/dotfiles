@@ -262,8 +262,14 @@ case "$-" in
             else
                 echo ".ruby.env is missing, you can install with : . opt/scripts/docker/setup_ruby-docker.sh"
             fi
-            # Source git environment shortcuts
-            [ -f "${HOME}/.dindcenv" ] && . "${HOME}/.dindcenv"
+            # Source git environment shortcuts. .bash_aliases sources it too (for
+            # non-login shells); the unexported guard keeps a login shell from
+            # loading it twice, and stdout is dropped because the file ends by
+            # printing its command list.
+            if [ -f "${HOME}/.dindcenv" ] && [ -z "${_DINDCENV_LOADED:-}" ]; then
+                . "${HOME}/.dindcenv" >/dev/null
+                _DINDCENV_LOADED=1
+            fi
         fi
         ;;
 esac
