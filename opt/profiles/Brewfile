@@ -12,7 +12,10 @@ tap 'nektos/tap'
 tap 'hashicorp/tap'
 
 # for cortext
-brew 'podman'
+# podman's formula is arm64-only (`depends_on arch: :arm64`); on an Intel Mac
+# `brew bundle` fails it every run ("The arm64 architecture is required"), so
+# skip it there instead of counting it as a failed dependency.
+brew 'podman' if Hardware::CPU.arm?
 
 cask 'claude-code'
 
@@ -35,8 +38,11 @@ brew 'sqlite'
 brew 'sops'
 # uv (and its uvx tool-runner) — the AWS Claude plugins enabled by default in
 # ai/plugins.yaml (deploy-on-aws, aws-serverless, aws-core) launch their MCP
-# servers via uvx (dotfiles#312). Linux/WSL gets it from install_uv.sh instead.
-brew 'uv'
+# servers via uvx (dotfiles#312). Apple-silicon Macs get the bottle here; Intel
+# Macs get NO Homebrew bottles any more (Sept 2026) and this formula would build
+# uv — and Rust, and LLVM — from source for hours, so install_uv.sh fetches the
+# official x86_64-apple-darwin release there instead (as Linux/WSL already does).
+brew 'uv' if Hardware::CPU.arm?
 # util-linux provides `setsid`, which macOS lacks natively. sync-plugins.sh runs
 # `claude`/`agy` plugin installs under setsid so they get no controlling
 # terminal and fall back to non-interactive mode — without it a fresh
@@ -83,8 +89,13 @@ brew 'fx'
 
 cask 'snowflake-snowsql'
 brew 'lcov'
-brew 'just'
-brew 'clang-format'
+# just is a Rust program and clang-format is cut from the LLVM tree: with no
+# Intel bottles (Sept 2026) each means a from-source Rust + LLVM build — many
+# hours on a 2017 MacBook Pro — so they are Apple-silicon-only here. Install
+# them by hand on an Intel Mac if you want them (GitHub release binaries exist
+# for just: https://github.com/casey/just/releases).
+brew 'just' if Hardware::CPU.arm?
+brew 'clang-format' if Hardware::CPU.arm?
 brew 'opa'
 brew 'azure-cli'
 brew 'grpcui'

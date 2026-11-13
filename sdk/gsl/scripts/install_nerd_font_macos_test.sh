@@ -27,7 +27,28 @@ mkdir -p "$H/bin"
 FONT_DIR="$H/Library/Fonts"
 FACES="MesloLGSNerdFont-Regular.ttf MesloLGSNerdFont-Bold.ttf MesloLGSNerdFont-Italic.ttf MesloLGSNerdFont-BoldItalic.ttf"
 
-for t in brew python3 osascript; do printf '#!/bin/sh\nexit 0\n' > "$H/bin/$t"; done
+for t in brew osascript; do printf '#!/bin/sh\nexit 0\n' > "$H/bin/$t"; done
+# iTerm2 stubs, so the suite never touches the real iTerm2 preferences:
+# python3 answers the profile-name lookup with $FAKE_PARENT_NAME; defaults
+# keeps "Default Bookmark Guid" in $H/iterm-default; pgrep reports iTerm2
+# running when ITERM_RUNNING=1.
+cat > "$H/bin/python3" <<'STUB'
+#!/bin/sh
+cat > /dev/null
+[ -n "${FAKE_PARENT_NAME:-}" ] && echo "$FAKE_PARENT_NAME"
+exit 0
+STUB
+cat > "$H/bin/defaults" <<'STUB'
+#!/bin/sh
+case "$1" in
+  read)  [ -s "$ITERM_DEFAULT_FILE" ] || exit 1; cat "$ITERM_DEFAULT_FILE" ;;
+  write) printf '%s\n' "$5" > "$ITERM_DEFAULT_FILE" ;;
+esac
+STUB
+cat > "$H/bin/pgrep" <<'STUB'
+#!/bin/sh
+[ "${ITERM_RUNNING:-0}" = "1" ]
+STUB
 cat > "$H/bin/curl" <<'STUB'
 #!/bin/sh
 printf '%s\n' "$*" >> "$CURL_LOG"
@@ -72,6 +93,7 @@ installed_version() {
 run() { # extra env assignments as args
   env PATH="$H/bin:/usr/bin:/bin" HOME="$H" \
       NERD_FONTS_VERSION=3.5.1 FAKE_NF_VERSION=3.5.1 CURL_LOG="$H/curllog" \
+      ITERM2_APP="$H/no-iTerm.app" ITERM_DEFAULT_FILE="$H/iterm-default" \
       "$@" bash "$INSTALLER" > "$H/out" 2>&1
 }
 
@@ -108,6 +130,39 @@ run
 assert_contains "fresh install: downloads" "$H/curllog" "v3.5.1/Meslo.zip"
 assert_contains "fresh install: reports the install" "$H/out" "Installed MesloLGS Nerd Font"
 assert_absent "fresh install: no replaced-files notice" "$H/out" "replaced"
+
+# --- iTerm2: make the gsl profile the one new tabs actually use --------------
+DYN="$H/Library/Application Support/iTerm2/DynamicProfiles/gsl-nerd-font.json"
+seed_font 3.5.1
+mkdir -p "$H/iTerm.app"
+
+rm -f "$H/iterm-default"; run
+assert_contains "no iTerm2: says it is not installed" "$H/out" "iTerm2 not installed"
+if [ -s "$H/iterm-default" ]; then notok "no iTerm2: default untouched"; else ok "no iTerm2: default untouched"; fi
+
+echo OLD-GUID > "$H/iterm-default"
+run ITERM2_APP="$H/iTerm.app" FAKE_PARENT_NAME=SolarizedLight
+assert_contains "iTerm2 idle: becomes the default" "$H/iterm-default" "gsl-nerd-font"
+assert_contains "iTerm2 idle: inherits the old default profile" "$DYN" '"Dynamic Profile Parent Name": "SolarizedLight",'
+assert_contains "iTerm2 idle: says so" "$H/out" "default profile (new tabs use it)"
+
+run ITERM2_APP="$H/iTerm.app"
+assert_contains "re-run: keeps the first parent" "$DYN" '"Dynamic Profile Parent Name": "SolarizedLight",'
+assert_contains "re-run: already the default" "$H/out" "already opens new tabs"
+
+echo OLD-GUID > "$H/iterm-default"
+run ITERM2_APP="$H/iTerm.app" ITERM_RUNNING=1 FAKE_PARENT_NAME=Default
+assert_contains "iTerm2 running: default untouched" "$H/iterm-default" "OLD-GUID"
+assert_contains "iTerm2 running: explains how to set it" "$H/out" "Set as Default"
+
+run ITERM2_APP="$H/iTerm.app" GSL_ITERM2_SET_DEFAULT=0
+assert_contains "opt-out: default untouched" "$H/iterm-default" "OLD-GUID"
+
+echo OLD-GUID > "$H/iterm-default"
+run ITERM2_APP="$H/iTerm.app"
+assert_absent "unknown parent: no parent line" "$DYN" "Parent Name"
+if python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$DYN" 2>/dev/null || /usr/bin/python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$DYN"; then
+  ok "profile is valid JSON"; else notok "profile is valid JSON"; fi
 
 echo "----"
 echo "install_nerd_font_macos_test: $pass passed, $fail failed"

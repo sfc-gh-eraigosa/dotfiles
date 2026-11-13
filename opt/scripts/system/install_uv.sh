@@ -9,7 +9,11 @@
 #     a host without it those servers fail to connect at every session start
 #     ("Executable not found in $PATH: uvx", dotfiles#312). sync-plugins.sh
 #     warns about the gap; this closes it.
-#   * macOS installs uv from opt/profiles/Brewfile (brew 'uv').
+#   * macOS: Apple-silicon Macs install uv from opt/profiles/Brewfile (brew 'uv',
+#     bottled) and this script leaves that brew-managed copy alone. Intel Macs get
+#     NO Homebrew bottles any more (Sept 2026), and `brew 'uv'` there means
+#     building uv — and Rust, and LLVM — from source for hours, so this script
+#     installs the official x86_64-apple-darwin release for them instead.
 #   * uv is a single static Rust binary with official release tarballs and a
 #     per-asset SHA-256 sidecar (<asset>.sha256), so fetching + verifying it
 #     ourselves is the most portable option on Linux/WSL (mirrors
@@ -59,12 +63,20 @@ case "${UV_VERSION}" in
 esac
 
 case "$(uname -s)" in
-    Linux) ;;
-    *) die "install_uv.sh is Linux-only; macOS installs uv from opt/profiles/Brewfile" ;;
+    Linux)  UV_OS="unknown-linux-gnu" ;;
+    Darwin)
+        UV_OS="apple-darwin"
+        # A Homebrew-managed uv (the Brewfile's bottle on Apple silicon) wins;
+        # never shadow it with a second copy in ~/opt/bin.
+        if command -v brew >/dev/null 2>&1 && brew list --formula uv >/dev/null 2>&1; then
+            ok "uv is managed by Homebrew ($(brew --prefix 2>/dev/null)/bin/uv); leaving it alone"
+            exit 0
+        fi ;;
+    *) die "unsupported OS $(uname -s)" ;;
 esac
 case "$(uname -m)" in
-    x86_64)        UV_TARGET="x86_64-unknown-linux-gnu" ;;
-    arm64|aarch64) UV_TARGET="aarch64-unknown-linux-gnu" ;;
+    x86_64)        UV_TARGET="x86_64-${UV_OS}" ;;
+    arm64|aarch64) UV_TARGET="aarch64-${UV_OS}" ;;
     armv7l|armv6l)
         # uv publishes 32-bit ARM builds, but no fleet host is 32-bit — skip
         # rather than add asset-matrix surface nothing here exercises.
@@ -107,13 +119,16 @@ else
     info "Installing uv ${UV_VERSION} (${UV_TARGET}) to ${INSTALL_DIR}..."
 fi
 
-curl -fsSL "${URL}/${STEM}.tar.gz.sha256" -o "${TMP_DIR}/sha256" || die "could not fetch ${URL}/${STEM}.tar.gz.sha256"
+# --retry: GitHub's release CDN answers 504 for a while now and then (seen on
+# the tiny .sha256 sidecars while the tarball itself was fine); curl retries
+# only transient failures (timeouts, 429, 5xx), so a real 404 still fails fast.
+curl -fsSL --retry 3 --retry-delay 2 "${URL}/${STEM}.tar.gz.sha256" -o "${TMP_DIR}/sha256" || die "could not fetch ${URL}/${STEM}.tar.gz.sha256"
 SHA="$(awk '{ print tolower($1) }' "${TMP_DIR}/sha256")"
 # Fail closed: the release must list a well-formed checksum for this asset.
 if [ "${#SHA}" -ne 64 ] || [ -n "$(printf '%s' "${SHA}" | tr -d '0-9a-f')" ]; then
     die "release ${UV_VERSION} lists no valid SHA-256 for ${STEM}.tar.gz; refusing to install an unverified binary"
 fi
-curl -fsSL "${URL}/${STEM}.tar.gz" -o "${TMP_DIR}/uv.tar.gz" || die "download failed: ${URL}/${STEM}.tar.gz"
+curl -fsSL --retry 3 --retry-delay 2 "${URL}/${STEM}.tar.gz" -o "${TMP_DIR}/uv.tar.gz" || die "download failed: ${URL}/${STEM}.tar.gz"
 ACTUAL="$(sha256_of "${TMP_DIR}/uv.tar.gz")"
 [ "${ACTUAL}" = "${SHA}" ] || die "checksum mismatch for ${STEM}.tar.gz: expected ${SHA}, got ${ACTUAL}"
 

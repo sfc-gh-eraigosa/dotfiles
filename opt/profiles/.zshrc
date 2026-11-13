@@ -273,6 +273,21 @@ if command -v nodenv &> /dev/null; then
 fi
 
 if [ -f "$HOME/git/powerlevel10k/powerlevel10k.zsh-theme" ]; then
+  # gitstatusd is p10k's git daemon. When no binary is on disk p10k downloads
+  # one while the shell starts, which held a new tab for minutes and then
+  # printed "[ERROR]: gitstatus failed to initialize". Without a binary, turn
+  # off both the download and gitstatus (p10k falls back to its slower git
+  # segment); `~/git/powerlevel10k/gitstatus/install -f` fetches it again.
+  # With a binary, p10k gives the daemon 5 s to answer before giving up.
+  _gs_bins=(
+    "$HOME"/git/powerlevel10k/gitstatus/usrbin/gitstatusd*(N)
+    "${GITSTATUS_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/gitstatus}"/gitstatusd-*(N)
+  )
+  if (( ${#_gs_bins} == 0 )); then
+    export GITSTATUS_AUTO_INSTALL=0
+    POWERLEVEL9K_DISABLE_GITSTATUS=true
+  fi
+  unset _gs_bins
   source "$HOME/git/powerlevel10k/powerlevel10k.zsh-theme"
 fi
 
@@ -290,24 +305,12 @@ if [ -d "${HOME}/.sdkman" ] ; then
 fi
 set -o vi
 unset GIT_URL
-test -f ${HOME}/.rbenv/shims/gh && rm -f ${HOME}/.rbenv/shims/gh
 
 #
 # node in path
 export PATH="$PATH:$HOME/.nodenv/shims"
 
 test -n "$(alias ruby)" && unalias ruby
-
-#
-# we're in codespaces, setup some custom things
-# change to workspace if defined
-if [ -d "${CODESPACE_VSCODE_FOLDER}" ]; then
-  cd "${CODESPACE_VSCODE_FOLDER}"
-  git config pull.rebase true
-  if [ -n "${MY_GITHUB_TOKEN}" ] ; then
-    export GITHUB_TOKEN="${MY_GITHUB_TOKEN}"
-  fi
-fi
 
 # source any secrets
 if [ -f ~/.secrets.env ] ; then

@@ -135,7 +135,13 @@ fi
 # Source git environment shortcuts
 #
 if [ -f $HOME/.dindcenv ] ; then
-    source $HOME/.dindcenv
+    # .profile may already have loaded it in this (login) shell; the guard is
+    # unexported so every new interactive shell still gets the aliases. stdout
+    # is dropped: the file ends by printing its command list (dindc-help).
+    if [ -z "${_DINDCENV_LOADED:-}" ]; then
+        source $HOME/.dindcenv >/dev/null
+        _DINDCENV_LOADED=1
+    fi
 else
     echo ".dindcenv is missing, you can install with : . opt/scripts/docker/setup_dindc_alias.sh"
 fi

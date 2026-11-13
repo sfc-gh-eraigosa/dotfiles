@@ -40,11 +40,15 @@ set +e
 assert_grep "verifies against the release's <asset>.sha256 sidecar" '\.sha256' "${SCRIPT}"
 assert_grep "fails closed on a missing checksum" 'refusing to install an unverified binary' "${SCRIPT}"
 assert_grep_negative "never pipes a remote script into a shell" 'curl[^|]*\|[[:space:]]*(ba)?sh' "${SCRIPT}"
-assert_grep "maps x86_64 to the gnu-libc asset" 'x86_64\).*unknown-linux-gnu' "${SCRIPT}"
-assert_grep "maps aarch64 (Spark, Jetson, 64-bit Pi) to the gnu-libc asset" 'arm64\|aarch64.*unknown-linux-gnu' "${SCRIPT}"
+assert_grep "Linux maps to the gnu-libc asset family" 'Linux\).*UV_OS="unknown-linux-gnu"' "${SCRIPT}"
+assert_grep "macOS maps to the apple-darwin asset family (Intel Macs have no brew bottles)" 'UV_OS="apple-darwin"' "${SCRIPT}"
+assert_grep "a Homebrew-managed uv on macOS is left alone" 'brew list --formula uv' "${SCRIPT}"
+assert_grep "maps x86_64 to the per-OS asset" 'x86_64\).*UV_TARGET="x86_64-\$\{UV_OS\}"' "${SCRIPT}"
+assert_grep "maps aarch64 (Spark, Jetson, 64-bit Pi, Apple silicon) to the per-OS asset" 'arm64\|aarch64.*UV_TARGET="aarch64-\$\{UV_OS\}"' "${SCRIPT}"
 assert_grep "skips 32-bit ARM (no fleet host is 32-bit)" 'armv7l\|armv6l' "${SCRIPT}"
 assert_grep "installs to ~/opt/bin like the other fetched tools" 'UV_INSTALL_DIR:-\$\{HOME\}/opt/bin' "${SCRIPT}"
 assert_grep "installs the uvx binary alongside uv" 'uvx' "${SCRIPT}"
+assert_eq "$(grep -c 'curl -fsSL --retry 3 --retry-delay 2 ' "${SCRIPT}")" "2" "both downloads retry transient (5xx) errors"
 
 # --- fixtures: a fake release for Linux/x86_64 --------------------------------
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/install_uv_test.XXXXXX")"
@@ -54,8 +58,8 @@ BIN="${TMP}/stubs"; mkdir -p "${BIN}"
 printf '#!/bin/sh\ncase "$1" in -s) echo Linux ;; -m) echo x86_64 ;; *) echo Linux ;; esac\n' > "${BIN}/uname"
 chmod +x "${BIN}/uname"
 REL="${TMP}/releases"
-make_release() {  # make_release <version>
-    stem="uv-x86_64-unknown-linux-gnu"
+make_release() {  # make_release <version> [asset stem]
+    stem="${2:-uv-x86_64-unknown-linux-gnu}"
     mkdir -p "${TMP}/build/${1}/${stem}" "${REL}/${1}"
     printf '#!/bin/sh\necho "uv %s (fixture)"\n' "$1" > "${TMP}/build/${1}/${stem}/uv"
     printf '#!/bin/sh\necho "uvx %s (fixture)"\n' "$1" > "${TMP}/build/${1}/${stem}/uvx"
@@ -133,6 +137,36 @@ assert_eq "${rc}" "0" "32-bit ARM exits 0 (skip, not fail)"
 assert_eq "$([ -e "${TMP}/bin-arm/uv" ] && echo present || echo absent)" "absent" "32-bit ARM installs nothing"
 
 # --- gff wiring -------------------------------------------------------------
+# 8. Intel Mac (no Homebrew bottles): installs the x86_64-apple-darwin asset.
+#    `brew` is stubbed as present-but-without-a-managed-uv (list exits 1).
+MACBIN="${TMP}/stubs-mac"; mkdir -p "${MACBIN}"
+# shellcheck disable=SC2016 # $1 belongs to the stub, expanded when it runs
+printf '#!/bin/sh\ncase "$1" in -s) echo Darwin ;; -m) echo x86_64 ;; *) echo Darwin ;; esac\n' > "${MACBIN}/uname"
+printf '#!/bin/sh\nexit 1\n' > "${MACBIN}/brew"
+chmod +x "${MACBIN}/uname" "${MACBIN}/brew"
+make_release 0.12.16 uv-x86_64-apple-darwin
+DM="${TMP}/bin-mac"
+out="$(env -u UV_VERSION -u UV_FORCE -u GFF_PINS_TRACK -u GFF_PINS_TRACK_MODE \
+    PINS_MANIFEST="${NO_MANIFEST}" PINS_GFF="" PATH="${MACBIN}:${PATH}" UV_INSTALL_DIR="${DM}" \
+    UV_RELEASE_BASE="file://${REL}" bash "${SCRIPT}" 2>&1)"; rc=$?
+assert_eq "${rc}" "0" "Intel Mac exits 0"
+assert_eq "$("${DM}/uv" --version 2>/dev/null)" "uv 0.12.16 (fixture)" "Intel Mac installs the x86_64-apple-darwin asset"
+assert_eq "$(printf '%s' "${out}" | grep -c 'x86_64-apple-darwin')" "1" "Intel Mac names the apple-darwin target"
+
+# 9. Apple silicon with the Brewfile's bottled uv: left alone, nothing installed.
+MACBREW="${TMP}/stubs-mac-brew"; mkdir -p "${MACBREW}"
+cp "${MACBIN}/uname" "${MACBREW}/uname"
+# shellcheck disable=SC2016 # $1 belongs to the stub, expanded when it runs
+printf '#!/bin/sh\ncase "$1" in --prefix) echo /opt/homebrew ;; *) exit 0 ;; esac\n' > "${MACBREW}/brew"
+chmod +x "${MACBREW}/brew"
+DB="${TMP}/bin-mac-brew"
+out="$(env -u UV_VERSION -u UV_FORCE -u GFF_PINS_TRACK -u GFF_PINS_TRACK_MODE \
+    PINS_MANIFEST="${NO_MANIFEST}" PINS_GFF="" PATH="${MACBREW}:${PATH}" UV_INSTALL_DIR="${DB}" \
+    UV_RELEASE_BASE="file://${REL}" bash "${SCRIPT}" 2>&1)"; rc=$?
+assert_eq "${rc}" "0" "brew-managed uv exits 0"
+assert_eq "$(printf '%s' "${out}" | grep -c 'managed by Homebrew')" "1" "brew-managed uv is reported and left alone"
+assert_eq "$([ -e "${DB}/uv" ] && echo present || echo absent)" "absent" "brew-managed uv installs nothing"
+
 assert_grep "features.yaml declares install.tools.uv" 'path: install\.tools\.uv$' "${FEATURES}"
 assert_eq "$(awk '$2 == "path:" { k = $3 } k == "install.tools.uv" && $1 == "boolDefault:" { print $2; exit }' "${FEATURES}")" \
     "true" "install.tools.uv is ON by default (every host needs it, like yq/sops)"
@@ -144,6 +178,6 @@ assert_eq "$(grep -E '^_IP_CONFIG_FLAGS=' "${INSTALL_SH}" | grep -c -w 'INSTALL_
 
 # macOS gets uv from the Brewfile (mirrors sops/glow's split: static Go/Rust
 # binary fetched+verified on Linux, brew on macOS).
-assert_grep "Brewfile installs uv on macOS" "brew 'uv'" "${BREWFILE}"
+assert_grep "Brewfile installs uv only on Apple-silicon Macs (Intel builds Rust+LLVM from source)" "brew 'uv' if Hardware::CPU.arm\?" "${BREWFILE}"
 
 _test_report
