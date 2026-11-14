@@ -257,10 +257,10 @@ export PATH=${HOME}/opt/bin:$PATH
 case "$-" in
     *i*)
         if [ -n "$BASH_VERSION" ] || [ -n "$ZSH_VERSION" ]; then
+            # Opt-in: only on a host where setup_ruby-docker.sh was run. A host
+            # without it gets no hint at every login.
             if [ -f "${HOME}/.ruby.env" ] ; then
                 . "${HOME}/.ruby.env"
-            else
-                echo ".ruby.env is missing, you can install with : . opt/scripts/docker/setup_ruby-docker.sh"
             fi
             # Source git environment shortcuts. .bash_aliases sources it too (for
             # non-login shells); the unexported guard keeps a login shell from

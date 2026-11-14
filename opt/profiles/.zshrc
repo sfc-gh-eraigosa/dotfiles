@@ -158,6 +158,14 @@ for _p in docker kubectl; do
   [[ -x "$(whence -p $_p 2>/dev/null)" ]] || plugins=(${plugins:#$_p})
 done
 unset _p
+# ~/opt/bin/docker is our own shim: always executable, also on a host with no
+# docker behind it (a Pi). There the plugin's probe ran the shim, which
+# printed "docker: no docker CLI found on PATH" at every login. Ask the shim
+# whether it has anything to hand over to before keeping the plugin.
+if [[ "$(whence -p docker 2>/dev/null)" == "$HOME/opt/bin/docker" ]] \
+   && ! "$HOME/opt/bin/docker" --shim-has-backend 2>/dev/null; then
+  plugins=(${plugins:#docker})
+fi
 # herdr-ohmyzsh (opt-in herdr plugin, gff install.herdr-plugin.ohmyzsh) links
 # itself into custom/plugins/herdr; load it only on hosts where it is linked.
 [ -d "${ZSH_CUSTOM:-$ZSH/custom}/plugins/herdr" ] && plugins+=(herdr)
