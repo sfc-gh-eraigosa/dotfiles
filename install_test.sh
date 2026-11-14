@@ -53,11 +53,12 @@ assert_grep "BASE_DIR is exported" \
 
 # === 3. Idempotency shape ===
 # An installer that re-runs cleanly must guard symlink creation: the
-# canonical pattern checks `-L` AND `readlink == expected target`
-# before recreating. install.sh uses this for ~/opt (lines around the
-# `Ensure ~/opt is a symlink to the repo's opt directory` block).
+# canonical pattern checks `-L` AND that the link resolves to this checkout
+# before recreating. install.sh compares `cd -P` physical paths
+# (_opt_current vs _opt_target), not `readlink`, so a link spelled through
+# another symlinked path (~/git -> elsewhere) still counts as correct.
 assert_grep "symlink idempotency guard present" \
-    '\[[[:space:]]+-L[[:space:]]+"\$\{HOME\}/opt"[[:space:]]+\][[:space:]]+&&[[:space:]]+\[[[:space:]]+"\$\(readlink' \
+    '\[[[:space:]]+-L[[:space:]]+"\$\{HOME\}/opt"[[:space:]]+\][[:space:]]+&&.*"\$\{_opt_current\}"[[:space:]]+=[[:space:]]+"\$\{_opt_target\}"' \
     "$INSTALL"
 
 # `ln -sf` should be used (overwrite-safe), never `ln -s` alone (which
@@ -106,8 +107,11 @@ assert_grep "install.sh carries the self-sufficient PATH block" \
     '^# --- Self-sufficient PATH' "$INSTALL"
 
 # run_path_block <initial PATH> -> resulting PATH, with HOME pinned to a fixture.
+# Resolve bash up front: the fixture PATHs need not contain its dir (macOS
+# keeps it in /bin, which '/fixture/home/opt/bin:/usr/bin' lacks).
+BASH_BIN="$(command -v bash)"
 run_path_block() {
-    env HOME=/fixture/home PATH="$1" bash -c "$PATH_BLOCK"'; printf %s "$PATH"'
+    env HOME=/fixture/home PATH="$1" "$BASH_BIN" -c "$PATH_BLOCK"'; printf %s "$PATH"'
 }
 
 assert_eq "$(run_path_block '/usr/local/bin:/usr/bin:/bin')" \
