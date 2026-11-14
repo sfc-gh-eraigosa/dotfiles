@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"errors"
+	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
@@ -176,5 +178,59 @@ func TestIdentifyLeavesAHostWithNoWorkingCredentialUnidentified(t *testing.T) {
 	got := identify(mk, []scanIdentity{{Identity: "~/.ssh/id_fleet"}}, []string{"10.0.0.11"}, 4)
 	if got[0].Identified {
 		t.Fatalf("responder = %+v, want unidentified", got[0])
+	}
+}
+
+// An unidentified row must carry ssh's own reason: a host-key gap, a refused key
+// and a dropped connection are three different fixes, and "would not
+// authenticate" sent the operator after the wrong one.
+func TestIdentifyRecordsWhyAResponderWasNotIdentified(t *testing.T) {
+	fail := func(stderr string) error {
+		_, err := exec.Command("sh", "-c", `printf '%s' "$1" >&2; exit 255`, "sh", stderr).Output()
+		return err
+	}
+	errs := map[string]error{
+		"10.0.0.1": fail("Host key verification failed."),
+		"10.0.0.2": fail("op@10.0.0.2: Permission denied (publickey,password)."),
+		"10.0.0.3": fail("op@10.0.0.3: Permission denied (publickey)."),
+		"10.0.0.4": fail("Connection closed by 10.0.0.4 port 22"),
+		"10.0.0.5": errors.New("no stderr to read"),
+	}
+	mk := func(scanIdentity) runner.Runner { return runner.Fake{Err: errs} }
+	got := map[string]string{}
+	for _, r := range identify(mk, nil, []string{"10.0.0.1", "10.0.0.2", "10.0.0.3", "10.0.0.4", "10.0.0.5"}, 4) {
+		got[r.IP] = r.Cause
+	}
+	want := map[string]string{
+		"10.0.0.1": "host key unverified",
+		"10.0.0.2": "key not accepted; host takes a password",
+		"10.0.0.3": "key not accepted",
+		"10.0.0.4": "dropped the connection",
+		"10.0.0.5": "would not authenticate",
+	}
+	for ip, w := range want {
+		if got[ip] != w {
+			t.Errorf("%s cause = %q, want %q", ip, got[ip], w)
+		}
+	}
+	rows := classifyScan(nil, []responder{{IP: "10.0.0.2", Cause: want["10.0.0.2"]}}, nil)
+	if out := renderScan(rows); !strings.Contains(out, "key not accepted; host takes a password — not written") {
+		t.Fatalf("render dropped the cause:\n%s", out)
+	}
+}
+
+// The bootstrap hint speaks only when NOTHING was identified; one identified
+// row proves the fleet's credentials work and the hint would be noise.
+func TestScanHintOnlyWhenNothingWasIdentified(t *testing.T) {
+	none := []scanRow{{IP: "10.0.0.1", Kind: scanUnidentified}}
+	if !strings.Contains(scanHint(none), "ssh-copy-id") {
+		t.Fatalf("hint = %q, want the bootstrap path", scanHint(none))
+	}
+	some := append(none, scanRow{IP: "10.0.0.2", Kind: scanCurrent})
+	if h := scanHint(some); h != "" {
+		t.Fatalf("hint = %q, want none once a host was identified", h)
+	}
+	if h := scanHint(nil); h != "" {
+		t.Fatalf("hint = %q, want none for an empty sweep", h)
 	}
 }

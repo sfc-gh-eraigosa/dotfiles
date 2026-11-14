@@ -90,3 +90,21 @@ func Note(err error) string { _, n := match(err); return n }
 // THIS machine (known_hosts, via `fleet trust`); every other auth note needs a
 // change on the remote one (authorized_keys), so callers route on this split.
 func IsHostKey(note string) bool { return strings.HasPrefix(note, "host key ") }
+
+// AuthMethods is the list ssh prints after a refused login —
+// `Permission denied (publickey,password).` yields [publickey password]. It is
+// how a scan tells "this host only takes keys" from "this host would take a
+// password", which decides whether ssh-copy-id can bootstrap it at all. Nil
+// when the stderr carries no such line.
+func AuthMethods(err error) []string {
+	s := stderrOf(err)
+	_, rest, ok := strings.Cut(s, "Permission denied (")
+	if !ok {
+		return nil
+	}
+	list, _, ok := strings.Cut(rest, ")")
+	if !ok || list == "" {
+		return nil
+	}
+	return strings.Split(list, ",")
+}

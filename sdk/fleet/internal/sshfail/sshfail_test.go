@@ -86,3 +86,21 @@ func TestIsHostKeySeparatesTrustFromCredentials(t *testing.T) {
 		}
 	}
 }
+
+// The methods list is what tells a scan whether a refused host can be
+// bootstrapped with a password, so it must come from ssh's own words.
+func TestAuthMethodsReadsTheRefusalList(t *testing.T) {
+	got := AuthMethods(realExitError(t, "wenlock@10.0.0.5: Permission denied (publickey,password)."))
+	if len(got) != 2 || got[0] != "publickey" || got[1] != "password" {
+		t.Fatalf("AuthMethods = %q, want [publickey password]", got)
+	}
+	for _, err := range []error{
+		realExitError(t, "Connection closed by 10.0.0.5 port 22"),
+		errors.New("permission denied"),
+		nil,
+	} {
+		if got := AuthMethods(err); got != nil {
+			t.Fatalf("AuthMethods(%v) = %q, want nil", err, got)
+		}
+	}
+}

@@ -7,6 +7,8 @@ import (
 	"net/netip"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -15,15 +17,20 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/lanscan"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail"
 	"github.com/spf13/cobra"
 )
 
 // responder is one address that answered on :22, plus what it said its name is
 // when we could authenticate. Identified is false when the port answered but
 // no usable session followed — that is a real and common state on a home LAN.
+// Cause is then ssh's own reason, from the last credential tried: "would not
+// authenticate" covered a host-key gap, a refused key and a dropped connection
+// alike, and those send the operator to three different fixes.
 type responder struct {
 	IP, Hostname string
 	Identified   bool
+	Cause        string
 }
 
 type scanKind string
@@ -36,8 +43,8 @@ const (
 )
 
 type scanRow struct {
-	IP, Hostname, Alias, WasIP string
-	Kind                       scanKind
+	IP, Hostname, Alias, WasIP, Cause string
+	Kind                              scanKind
 }
 
 // classifyScan decides what the sweep found relative to the config we already
@@ -61,7 +68,7 @@ func classifyScan(hosts []sshconf.Host, found []responder, resolve func(string) 
 	}
 	out := make([]scanRow, 0, len(found))
 	for _, r := range found {
-		row := scanRow{IP: r.IP, Hostname: r.Hostname}
+		row := scanRow{IP: r.IP, Hostname: r.Hostname, Cause: r.Cause}
 		switch {
 		case !r.Identified:
 			row.Kind = scanUnidentified
@@ -202,17 +209,40 @@ func identify(mk func(scanIdentity) runner.Runner, ids []scanIdentity, ips []str
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			out[i] = responder{IP: ip}
+			var last error
 			for _, id := range ids {
 				name, err := mk(id).Run(ip, "hostname")
 				if err == nil && strings.TrimSpace(name) != "" {
 					out[i].Hostname, out[i].Identified = strings.TrimSpace(name), true
 					return
 				}
+				last = err
 			}
+			out[i].Cause = scanCause(last)
 		}(i, ip)
 	}
 	wg.Wait()
 	return out
+}
+
+// scanCause turns a failed probe into the reason a row shows. It only repeats
+// what ssh said; with nothing to read it keeps the old generic wording rather
+// than inventing a diagnosis.
+func scanCause(err error) string {
+	note := sshfail.Note(err)
+	switch {
+	case sshfail.IsHostKey(note):
+		return note
+	case note != "":
+		methods := sshfail.AuthMethods(err)
+		if slices.Contains(methods, "password") || slices.Contains(methods, "keyboard-interactive") {
+			return "key not accepted; host takes a password"
+		}
+		return "key not accepted"
+	case sshfail.Classify(err) == sshfail.Network:
+		return "dropped the connection"
+	}
+	return "would not authenticate"
 }
 
 // subnetDeps are the impure edges of subnet detection, injected so the decision
@@ -340,10 +370,32 @@ func renderScan(rows []scanRow) string {
 		case scanCurrent:
 			fmt.Fprintf(&b, "    %-20s %s  (current)\n", r.Alias, r.IP)
 		case scanUnidentified:
-			fmt.Fprintf(&b, "  ? %-20s %s  (answers :22, would not authenticate — not written)\n", "", r.IP)
+			cause := r.Cause
+			if cause == "" {
+				cause = "would not authenticate"
+			}
+			fmt.Fprintf(&b, "  ? %-20s %s  (answers :22, %s — not written)\n", "", r.IP, cause)
 		}
 	}
 	return b.String()
+}
+
+// scanHint speaks only when the sweep identified NOTHING: on a fresh machine
+// every responder refusing this key is the expected state, and the way out is
+// one authorized host, not a better scan. Any identified row means the fleet's
+// credentials work somewhere, so there is nothing general to say.
+func scanHint(rows []scanRow) string {
+	if len(rows) == 0 {
+		return ""
+	}
+	for _, r := range rows {
+		if r.Kind != scanUnidentified {
+			return ""
+		}
+	}
+	return "\nno responder accepted this machine's key. to bootstrap from a host that\n" +
+		"  already knows the fleet: ssh-copy-id <user>@<that-host>, then\n" +
+		"  fleet config pull <that-alias>, then fleet keys sync.\n"
 }
 
 // lookupHost resolves a configured HostName to its addresses. A failure is not
@@ -393,8 +445,14 @@ func runScan(cmd *cobra.Command) error {
 	}
 	// Probing is by address, so the credentials must be handed over explicitly;
 	// see scanIdentities. Resolution is what keeps a NAME-based config stable.
+	trust, err := os.MkdirTemp("", "fleet-scan-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(trust)
+	scratch := filepath.Join(trust, "known_hosts")
 	mk := func(id scanIdentity) runner.Runner {
-		e := runner.Exec{ConnectTimeout: "3", User: id.User}
+		e := runner.Exec{ConnectTimeout: "3", User: id.User, ScanKnownHosts: scratch}
 		if id.Identity != "" {
 			e.Identities = []string{id.Identity}
 		}
@@ -403,6 +461,7 @@ func runScan(cmd *cobra.Command) error {
 	found := identify(mk, scanIdentities(hosts), open, scanWorkers)
 	rows := classifyScan(hosts, found, lookupHost)
 	fmt.Fprint(out, renderScan(rows))
+	fmt.Fprint(out, scanHint(rows))
 
 	next, changed, err := applyScan(cfg, rows, flagMarker)
 	if err != nil {

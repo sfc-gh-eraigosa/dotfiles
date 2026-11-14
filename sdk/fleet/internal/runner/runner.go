@@ -156,10 +156,53 @@ func filteredEnv(env []string) []string {
 // reachability. Both are empty for every alias-addressed call, which keeps
 // ssh_config the single source of truth there. ssh expands a leading ~ in -i
 // itself, so paths are passed through as written in the config.
+//
+// ScanKnownHosts is for the subnet sweep alone, which by definition meets
+// addresses this machine has never connected to. Under BatchMode an unknown
+// host key fails before authentication even starts, so on a fresh workstation
+// (no known_hosts yet) every responder was reported "would not authenticate"
+// without a single credential being tried. When set, a host key never seen
+// before is accepted into THAT file — never into the operator's own — while
+// ~/.ssh/known_hosts is still consulted, so a key that CHANGED there is still
+// refused. Empty for every other path.
 type Exec struct {
 	ConnectTimeout string
 	User           string
 	Identities     []string
+	ScanKnownHosts string
+}
+
+// scanTrustArgs is the probe-only trust policy described on Exec. The scratch
+// file comes FIRST because ssh records an accepted key in the first
+// UserKnownHostsFile listed.
+func (e Exec) scanTrustArgs() []string {
+	if e.ScanKnownHosts == "" {
+		return nil
+	}
+	return []string{
+		"-o", "StrictHostKeyChecking=accept-new",
+		"-o", "UserKnownHostsFile=" + e.ScanKnownHosts + " ~/.ssh/known_hosts",
+	}
+}
+
+// connArgs is muxArgs for every lane but the scan probe. A probe that trusted a
+// key via the scratch file must not leave a master behind: a later `fleet
+// status` for that address would ride it for ControlPersist and skip host-key
+// verification against the operator's real known_hosts entirely. It may still
+// REUSE a master someone opened deliberately (ControlMaster=no), which is how a
+// password-only host primed from the TUI stays identifiable.
+func (e Exec) connArgs() []string {
+	mux := muxArgs()
+	if e.ScanKnownHosts == "" || mux == nil {
+		return mux
+	}
+	out := append([]string(nil), mux...)
+	for i := range out {
+		if out[i] == "ControlMaster=auto" {
+			out[i] = "ControlMaster=no"
+		}
+	}
+	return out
 }
 
 // identityArgs presents the credentials explicitly. It yields nothing when
@@ -190,7 +233,8 @@ func (e Exec) timeout() string {
 func (e Exec) baseArgs(host string) []string {
 	args := []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=" + e.timeout()}
 	args = append(args, e.identityArgs()...)
-	args = append(args, muxArgs()...)
+	args = append(args, e.scanTrustArgs()...)
+	args = append(args, e.connArgs()...)
 	return append(args, host)
 }
 

@@ -155,3 +155,40 @@ func TestDirectLanesStillMultiplex(t *testing.T) {
 		}
 	}
 }
+
+// A scan probe meets addresses this machine has never seen. Under BatchMode an
+// unknown host key failed every one of them before a credential was tried, so a
+// fresh workstation reported its whole subnet as "would not authenticate". The
+// probe accepts new keys into a scratch file, never the operator's own, and
+// keeps reading ~/.ssh/known_hosts so a CHANGED key is still refused.
+func TestScanProbeAcceptsNewHostKeysIntoTheScratchFileOnly(t *testing.T) {
+	got := Exec{ScanKnownHosts: "/tmp/scan/known_hosts"}.baseArgs("10.0.0.5")
+	if !hasPair(got, "-o", "StrictHostKeyChecking=accept-new") {
+		t.Fatalf("args = %q, want accept-new", got)
+	}
+	if !hasPair(got, "-o", "UserKnownHostsFile=/tmp/scan/known_hosts ~/.ssh/known_hosts") {
+		t.Fatalf("args = %q, want the scratch file FIRST (ssh writes there) and the real one still read", got)
+	}
+	plain := Exec{}.baseArgs("h")
+	for _, a := range plain {
+		if strings.Contains(a, "StrictHostKeyChecking") || strings.Contains(a, "UserKnownHostsFile") {
+			t.Fatalf("an ordinary lane changed its host-key policy: %q", plain)
+		}
+	}
+}
+
+// A master opened under the scratch trust would let a later `fleet status`
+// skip verification against the real known_hosts for ControlPersist. The probe
+// may ride an existing master but must never create one.
+func TestScanProbeNeverOpensAMaster(t *testing.T) {
+	got := Exec{ScanKnownHosts: "/tmp/scan/known_hosts"}.baseArgs("10.0.0.5")
+	if hasPair(got, "-o", "ControlMaster=auto") {
+		t.Fatalf("args = %q, a scan probe must not open a master", got)
+	}
+	if !hasPair(got, "-o", "ControlMaster=no") {
+		t.Fatalf("args = %q, want ControlMaster=no so a deliberately primed master is still reused", got)
+	}
+	if !hasPair(muxArgs(), "-o", "ControlMaster=auto") {
+		t.Fatal("connArgs mutated the shared mux options")
+	}
+}

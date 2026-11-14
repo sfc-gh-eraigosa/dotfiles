@@ -329,6 +329,21 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   unfixed binary look fixed — compare with `FLEET_NO_MUX=1`. Pinned by
   `TestScanIdentitiesCollectsDistinctFleetCredentials`,
   `TestIdentifyTriesEachFleetIdentityUntilOneAuthenticates`.
+- **A scan probe gets past the host key without trusting it for anyone else.** Under
+  `BatchMode` an address never connected to fails on the unknown host key before a
+  credential is offered, so on a fresh workstation (no `known_hosts`) every responder —
+  this machine included — was reported "would not authenticate" without one key being
+  tried. `runner.Exec.ScanKnownHosts` makes the probe `StrictHostKeyChecking=accept-new`
+  into a per-scan scratch file listed FIRST (ssh writes there) with `~/.ssh/known_hosts`
+  still read, so a CHANGED key is still refused and the operator's file is never written.
+  The probe uses `ControlMaster=no`: it may ride a master someone primed, but never leaves
+  one behind, or a later `fleet status` would skip real verification for ControlPersist.
+  Each unidentified row names ssh's reason (`host key unverified` / `key not accepted` /
+  `…; host takes a password` / `dropped the connection`), and a sweep that identified
+  nothing prints the `ssh-copy-id` → `config pull` → `keys sync` bootstrap. Pinned by
+  `TestScanProbeAcceptsNewHostKeysIntoTheScratchFileOnly`, `TestScanProbeNeverOpensAMaster`,
+  `TestIdentifyRecordsWhyAResponderWasNotIdentified`, `TestScanHintOnlyWhenNothingWasIdentified`,
+  `TestAuthMethodsReadsTheRefusalList`.
 - **Under WSL the subnet comes from the WINDOWS host, not from this kernel.** The default
   route here leaves on the Hyper-V NAT interface (`172.x/20`), a private segment the fleet
   is not on; WSL holds no interface on the real LAN, so it can route there but cannot
