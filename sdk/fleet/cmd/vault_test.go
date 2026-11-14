@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -306,5 +307,79 @@ func TestFleetInventoryAndKnownHosts(t *testing.T) {
 	}
 	if len(k.Lines) != 2 || k.Lines[0] != "a ssh-ed25519 KEY" {
 		t.Fatalf("lines: %v", k.Lines)
+	}
+}
+
+func TestEveryVaultSubcommandIsGated(t *testing.T) {
+	e := vaultEnv(t, false)
+	subs := newVaultCmd().Commands()
+	if len(subs) == 0 {
+		t.Fatal("no subcommands")
+	}
+	for _, sc := range subs {
+		out, err := runVault(t, "lpass\n", sc.Name())
+		if err == nil || !strings.Contains(err.Error()+out, "gff set fleet.vault.enabled true") {
+			t.Errorf("%s is not gated: err=%v out=%s", sc.Name(), err, out)
+		}
+	}
+	if len(e.store.Calls) != 0 {
+		t.Fatalf("store called: %v", e.store.Calls)
+	}
+}
+
+type exitErr int
+
+func (e exitErr) Error() string { return "exit status" }
+func (e exitErr) ExitCode() int { return int(e) }
+
+func khExec(t *testing.T, keygen func() (string, error)) func(string, string, ...string) (string, error) {
+	kh := filepath.Join(t.TempDir(), "kh")
+	if err := os.WriteFile(kh, []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return func(name, _ string, args ...string) (string, error) {
+		if name == "ssh" {
+			return "hostname " + args[1] + "\nport 22\nuserknownhostsfile " + kh + "\n", nil
+		}
+		return keygen()
+	}
+}
+
+func TestKnownHostsNoEntryIsNotAnError(t *testing.T) {
+	x := khExec(t, func() (string, error) { return "", exitErr(1) })
+	k, err := knownHostsFor(x, []string{"a"})
+	if err != nil || len(k.Lines) != 0 {
+		t.Fatalf("%v %v", k, err)
+	}
+}
+
+func TestKnownHostsKeygenMissingIsAnError(t *testing.T) {
+	x := khExec(t, func() (string, error) {
+		return "", errors.New(`exec: "ssh-keygen": executable file not found in $PATH`)
+	})
+	if _, err := knownHostsFor(x, []string{"a"}); err == nil {
+		t.Fatal("want error")
+	}
+}
+
+func TestKnownHostsEveryAliasUnresolvableIsAnError(t *testing.T) {
+	x := func(string, string, ...string) (string, error) { return "", errors.New("not found") }
+	if _, err := knownHostsFor(x, []string{"a", "b"}); err == nil {
+		t.Fatal("want error")
+	}
+	if k, err := knownHostsFor(x, nil); err != nil || len(k.Lines) != 0 {
+		t.Fatalf("no aliases is fine: %v %v", k, err)
+	}
+}
+
+func TestStatusShowsKnownHostsErrorAndKeepsGoing(t *testing.T) {
+	e := vaultEnv(t, true)
+	configure(t, "ws1")
+	putBlob(t, e.store, "known_hosts", vault.KnownHosts{Lines: []string{"a k"}})
+	putBlob(t, e.store, "inventory", vault.Inventory{})
+	fleetKnownHosts = func() (vault.KnownHosts, error) { return vault.KnownHosts{}, errors.New("ssh-keygen: not found") }
+	out, err := runVault(t, "", "status")
+	if err != nil || !strings.Contains(out, "known_hosts: local fleet lines unreadable: ssh-keygen: not found") || !strings.Contains(out, "inventory:") {
+		t.Fatalf("%v\n%s", err, out)
 	}
 }
