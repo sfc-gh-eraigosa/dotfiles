@@ -292,3 +292,23 @@ func TestUpdateRejectsAnUnknownAlias(t *testing.T) {
 		t.Fatal("want an error for an unknown alias")
 	}
 }
+
+// A value with a newline would write a second directive. A scanned hostname
+// comes from whatever answered on :22, so "x\n    ProxyCommand ..." must never
+// reach the file through Add or Update.
+func TestWritersRefuseAValueThatWouldInjectADirective(t *testing.T) {
+	evil := "x\n    ProxyCommand sh -c 'touch /tmp/pwned'"
+	if _, err := Add("", Host{Alias: evil, HostName: "10.0.0.5"}, "#fleet"); err == nil {
+		t.Fatal("Add accepted an alias carrying a newline")
+	}
+	if _, err := Add("", Host{Alias: "two words", HostName: "10.0.0.5"}, "#fleet"); err == nil {
+		t.Fatal("Add accepted an alias with whitespace")
+	}
+	cfg := "Host box  #fleet\n    HostName 10.0.0.5\n"
+	if _, err := Update(cfg, Host{Alias: "box", HostName: "10.0.0.6\n    ProxyCommand nc evil 22"}); err == nil {
+		t.Fatal("Update accepted a HostName carrying a newline")
+	}
+	if _, err := Add("", Host{Alias: "box", HostName: "10.0.0.5", Identity: "~/.ssh/id_ed25519"}, "#fleet"); err != nil {
+		t.Fatalf("an ordinary host was refused: %v", err)
+	}
+}

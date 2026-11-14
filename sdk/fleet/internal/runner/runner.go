@@ -100,12 +100,17 @@ const controlPath = "~/.ssh/fleet-mux-%C"
 // socket the unattended commands will reuse.
 func MuxArgs() []string { return muxArgs() }
 
-func muxArgs() []string {
+func muxArgs() []string { return muxArgsWith("auto") }
+
+// muxArgsWith spells the mux options with an explicit ControlMaster value, so a
+// lane that must reuse but never create a master says so instead of patching
+// the shared slice after the fact.
+func muxArgsWith(master string) []string {
 	if os.Getenv("FLEET_NO_MUX") != "" {
 		return nil
 	}
 	return []string{
-		"-o", "ControlMaster=auto",
+		"-o", "ControlMaster=" + master,
 		"-o", "ControlPath=" + controlPath,
 		"-o", "ControlPersist=" + controlPersist,
 	}
@@ -156,10 +161,61 @@ func filteredEnv(env []string) []string {
 // reachability. Both are empty for every alias-addressed call, which keeps
 // ssh_config the single source of truth there. ssh expands a leading ~ in -i
 // itself, so paths are passed through as written in the config.
+//
+// ScanKnownHosts is for the subnet sweep alone, which by definition meets
+// addresses this machine has never connected to. Under BatchMode an unknown
+// host key fails before authentication even starts, so on a fresh workstation
+// (no known_hosts yet) every responder was reported "would not authenticate"
+// without a single credential being tried. When set, it is the full
+// UserKnownHostsFile list: a scratch file FIRST (ssh records an accepted key in
+// the first file listed), then every file the operator's own config names, so a
+// key that CHANGED in any of them is still refused and none of them is written.
+// Empty for every other path.
 type Exec struct {
 	ConnectTimeout string
 	User           string
 	Identities     []string
+	ScanKnownHosts []string
+}
+
+// scanTrustArgs is the probe-only policy described on Exec.
+//
+// accept-new completes authentication with hosts nobody has vouched for, so
+// everything that would hand such a host more than a public-key signature is
+// switched off here rather than trusted to the operator's config: a `Host *`
+// with ForwardAgent yes would otherwise lend the agent to every device on the
+// LAN that answers :22. Each path is quoted: the list is one whitespace-split
+// value, and a TMPDIR with a space in it would split into two bogus files.
+func (e Exec) scanTrustArgs() []string {
+	if len(e.ScanKnownHosts) == 0 {
+		return nil
+	}
+	quoted := make([]string, len(e.ScanKnownHosts))
+	for i, f := range e.ScanKnownHosts {
+		quoted[i] = `"` + f + `"`
+	}
+	return []string{
+		"-o", "StrictHostKeyChecking=accept-new",
+		"-o", "UserKnownHostsFile=" + strings.Join(quoted, " "),
+		"-o", "ForwardAgent=no",
+		"-o", "ForwardX11=no",
+		"-o", "ClearAllForwardings=yes",
+		"-o", "PermitLocalCommand=no",
+		"-o", "SendEnv=-*",
+	}
+}
+
+// connArgs is muxArgs for every lane but the scan probe. A probe that trusted a
+// key via the scratch file must not leave a master behind: a later `fleet
+// status` for that address would ride it for ControlPersist and skip host-key
+// verification against the operator's real known_hosts entirely. It may still
+// REUSE a master someone opened deliberately (ControlMaster=no), which is how a
+// password-only host primed from the TUI stays identifiable.
+func (e Exec) connArgs() []string {
+	if len(e.ScanKnownHosts) == 0 {
+		return muxArgs()
+	}
+	return muxArgsWith("no")
 }
 
 // identityArgs presents the credentials explicitly. It yields nothing when
@@ -190,7 +246,8 @@ func (e Exec) timeout() string {
 func (e Exec) baseArgs(host string) []string {
 	args := []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=" + e.timeout()}
 	args = append(args, e.identityArgs()...)
-	args = append(args, muxArgs()...)
+	args = append(args, e.scanTrustArgs()...)
+	args = append(args, e.connArgs()...)
 	return append(args, host)
 }
 

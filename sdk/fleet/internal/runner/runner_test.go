@@ -155,3 +155,54 @@ func TestDirectLanesStillMultiplex(t *testing.T) {
 		}
 	}
 }
+
+// A scan probe meets addresses this machine has never seen. Under BatchMode an
+// unknown host key failed every one of them before a credential was tried, so a
+// fresh workstation reported its whole subnet as "would not authenticate". The
+// probe accepts new keys into a scratch file, never the operator's own, and
+// keeps reading every file the operator's config names, so a CHANGED key is
+// still refused.
+func TestScanProbeAcceptsNewHostKeysIntoTheScratchFileOnly(t *testing.T) {
+	got := Exec{ScanKnownHosts: []string{"/tmp/my scan/known_hosts", "/home/op/.ssh/known_hosts", "/home/op/.ssh/known_hosts2"}}.baseArgs("10.0.0.5")
+	if !hasPair(got, "-o", "StrictHostKeyChecking=accept-new") {
+		t.Fatalf("args = %q, want accept-new", got)
+	}
+	want := `UserKnownHostsFile="/tmp/my scan/known_hosts" "/home/op/.ssh/known_hosts" "/home/op/.ssh/known_hosts2"`
+	if !hasPair(got, "-o", want) {
+		t.Fatalf("args = %q, want %s: scratch FIRST, every operator file kept, each quoted", got, want)
+	}
+	plain := Exec{}.baseArgs("h")
+	for _, a := range plain {
+		if strings.Contains(a, "StrictHostKeyChecking") || strings.Contains(a, "UserKnownHostsFile") {
+			t.Fatalf("an ordinary lane changed its host-key policy: %q", plain)
+		}
+	}
+}
+
+// accept-new authenticates to hosts nobody vouched for, so a probe must not
+// lend them the agent, X11, a tunnel, a LocalCommand or the operator's env,
+// whatever a `Host *` block in their config says.
+func TestScanProbeForwardsNothingToAnUnverifiedHost(t *testing.T) {
+	got := Exec{ScanKnownHosts: []string{"/tmp/s/known_hosts"}}.baseArgs("10.0.0.5")
+	for _, opt := range []string{"ForwardAgent=no", "ForwardX11=no", "ClearAllForwardings=yes", "PermitLocalCommand=no", "SendEnv=-*"} {
+		if !hasPair(got, "-o", opt) {
+			t.Errorf("args = %q, want -o %s", got, opt)
+		}
+	}
+}
+
+// A master opened under the scratch trust would let a later `fleet status`
+// skip verification against the real known_hosts for ControlPersist. The probe
+// may ride an existing master but must never create one.
+func TestScanProbeNeverOpensAMaster(t *testing.T) {
+	got := Exec{ScanKnownHosts: []string{"/tmp/s/known_hosts"}}.baseArgs("10.0.0.5")
+	if hasPair(got, "-o", "ControlMaster=auto") {
+		t.Fatalf("args = %q, a scan probe must not open a master", got)
+	}
+	if !hasPair(got, "-o", "ControlMaster=no") {
+		t.Fatalf("args = %q, want ControlMaster=no so a deliberately primed master is still reused", got)
+	}
+	if !hasPair(muxArgs(), "-o", "ControlMaster=auto") {
+		t.Fatal("the shared mux options changed")
+	}
+}

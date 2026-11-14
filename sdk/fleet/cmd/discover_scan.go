@@ -7,23 +7,32 @@ import (
 	"net/netip"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/hostkey"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/lanscan"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/runner"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail"
 	"github.com/spf13/cobra"
 )
 
 // responder is one address that answered on :22, plus what it said its name is
 // when we could authenticate. Identified is false when the port answered but
 // no usable session followed — that is a real and common state on a home LAN.
+// Cause is then ssh's own reason, from the last credential tried: "would not
+// authenticate" covered a host-key gap, a refused key and a dropped connection
+// alike, and those send the operator to three different fixes.
 type responder struct {
 	IP, Hostname string
 	Identified   bool
+	Cause        string
 }
 
 type scanKind string
@@ -33,11 +42,25 @@ const (
 	scanMoved        scanKind = "moved"        // known alias at a NEW address
 	scanNew          scanKind = "new"          // identified, not in the config
 	scanUnidentified scanKind = "unidentified" // answered :22, would not authenticate
+	// scanUnverified is a responder CLAIMING a known alias from a new address
+	// whose host key does not prove it. Since probes accept unknown keys, any
+	// device on the LAN can answer `hostname` with "nas"; writing that as a move
+	// would point every later command for nas at it.
+	scanUnverified scanKind = "unverified"
 )
 
+// causeUnknown is what a row says when ssh left nothing to read.
+const causeUnknown = "would not authenticate"
+
+// scanName is what a reported hostname must look like before it may become an
+// alias or select one. The answer comes from whatever device took the probe,
+// and a newline in it would write a second ssh_config directive — a
+// ProxyCommand that runs locally on the next ssh.
+var scanName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$`)
+
 type scanRow struct {
-	IP, Hostname, Alias, WasIP string
-	Kind                       scanKind
+	IP, Hostname, Alias, WasIP, Cause string
+	Kind                              scanKind
 }
 
 // classifyScan decides what the sweep found relative to the config we already
@@ -61,7 +84,7 @@ func classifyScan(hosts []sshconf.Host, found []responder, resolve func(string) 
 	}
 	out := make([]scanRow, 0, len(found))
 	for _, r := range found {
-		row := scanRow{IP: r.IP, Hostname: r.Hostname}
+		row := scanRow{IP: r.IP, Hostname: r.Hostname, Cause: r.Cause}
 		switch {
 		case !r.Identified:
 			row.Kind = scanUnidentified
@@ -202,17 +225,103 @@ func identify(mk func(scanIdentity) runner.Runner, ids []scanIdentity, ips []str
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			out[i] = responder{IP: ip}
+			var last error
 			for _, id := range ids {
 				name, err := mk(id).Run(ip, "hostname")
-				if err == nil && strings.TrimSpace(name) != "" {
-					out[i].Hostname, out[i].Identified = strings.TrimSpace(name), true
-					return
+				if err != nil {
+					last = err
+					continue
 				}
+				// It authenticated: another credential would only reach the
+				// same shell, so the answer is final either way.
+				switch name = strings.TrimSpace(name); {
+				case name == "":
+					out[i].Cause = "logged in, but reported no hostname"
+				case !scanName.MatchString(name):
+					out[i].Cause = "logged in, but reported an unusable hostname"
+				default:
+					out[i].Hostname, out[i].Identified = name, true
+				}
+				return
 			}
+			out[i].Cause = scanCause(last)
 		}(i, ip)
 	}
 	wg.Wait()
 	return out
+}
+
+// scanCause turns a failed probe into the reason a row shows. It only repeats
+// what ssh said; with nothing to read it keeps the old generic wording rather
+// than inventing a diagnosis.
+func scanCause(err error) string {
+	note := sshfail.Note(err)
+	switch {
+	case sshfail.IsHostKey(note):
+		return note
+	case note != "":
+		methods := sshfail.AuthMethods(err)
+		if slices.Contains(methods, "password") || slices.Contains(methods, "keyboard-interactive") {
+			return "key not accepted; host takes a password"
+		}
+		return "key not accepted"
+	case sshfail.Reason(err) != "":
+		return sshfail.Reason(err)
+	}
+	return causeUnknown
+}
+
+// moveVerdict is what a responder's host key says about its claim to an alias.
+type moveVerdict int
+
+const (
+	moveVerified     moveVerdict = iota // presents a key already trusted for the alias
+	moveUnverifiable                    // nothing stored for the alias in a type it presented
+	moveMismatch                        // the alias has a key of that type, and it differs
+)
+
+// judgeMove compares the key a responder presented with the keys known for the
+// alias it claims. One mismatched type is a mismatch even if another matches,
+// for the reason hostkey.Compare gives: ssh would refuse it.
+func judgeMove(stored, presented []hostkey.Key) moveVerdict {
+	verified := false
+	for _, p := range presented {
+		for _, s := range stored {
+			if s.Type != p.Type {
+				continue
+			}
+			if s.Fingerprint != p.Fingerprint {
+				return moveMismatch
+			}
+			verified = true
+		}
+	}
+	if verified {
+		return moveVerified
+	}
+	return moveUnverifiable
+}
+
+// verifyMoves downgrades every `moved` row whose responder cannot prove it is
+// the alias it named. A genuine DHCP move presents the same host key the alias
+// always had; anything else is reported and never written. check is injected
+// so the decision is tested without ssh-keygen.
+func verifyMoves(rows []scanRow, check func(alias, ip string) moveVerdict) []scanRow {
+	for i, r := range rows {
+		if r.Kind != scanMoved {
+			continue
+		}
+		switch check(r.Alias, r.IP) {
+		case moveVerified:
+			continue
+		case moveMismatch:
+			rows[i].Cause = "its host key does NOT match " + r.Alias + "'s"
+		default:
+			rows[i].Cause = "no known host key for " + r.Alias + " to check it against"
+		}
+		rows[i].Kind = scanUnverified
+	}
+	return rows
 }
 
 // subnetDeps are the impure edges of subnet detection, injected so the decision
@@ -339,11 +448,88 @@ func renderScan(rows []scanRow) string {
 			fmt.Fprintf(&b, "  + %-20s %s  (new)\n", r.Alias, r.IP)
 		case scanCurrent:
 			fmt.Fprintf(&b, "    %-20s %s  (current)\n", r.Alias, r.IP)
+		case scanUnverified:
+			fmt.Fprintf(&b, "  ! %-20s %s → %s  (claims to be %s, but %s — not written)\n", r.Alias, r.WasIP, r.IP, r.Alias, r.Cause)
 		case scanUnidentified:
-			fmt.Fprintf(&b, "  ? %-20s %s  (answers :22, would not authenticate — not written)\n", "", r.IP)
+			cause := r.Cause
+			if cause == "" {
+				cause = causeUnknown
+			}
+			fmt.Fprintf(&b, "  ? %-20s %s  (answers :22, %s — not written)\n", "", r.IP, cause)
 		}
 	}
 	return b.String()
+}
+
+// scanHint speaks only when the sweep identified NOTHING: on a fresh machine
+// every responder refusing this key is the expected state, and the way out is
+// one authorized host, not a better scan. Any identified row means the fleet's
+// credentials work somewhere, so there is nothing general to say.
+//
+// It also speaks only when a refused KEY is among the causes: if every
+// responder timed out or presented a changed host key, ssh-copy-id is the wrong
+// fix, and for a changed key it would train the operator past a MITM warning.
+// A claimed move that was not written always gets its own recovery line.
+func scanHint(rows []scanRow) string {
+	var b strings.Builder
+	for _, r := range rows {
+		if r.Kind == scanUnverified {
+			fmt.Fprintf(&b, "\nif %s really moved to %s: check the fingerprint out of band, set its\n"+
+				"  HostName to %s, then run fleet trust %s.\n", r.Alias, r.IP, r.IP, r.Alias)
+		}
+	}
+	refused := false
+	for _, r := range rows {
+		if r.Kind != scanUnidentified {
+			return b.String()
+		}
+		refused = refused || strings.HasPrefix(r.Cause, "key not accepted")
+	}
+	if refused {
+		b.WriteString("\nno responder accepted this machine's key. to bootstrap from a host that\n" +
+			"  already knows the fleet: ssh-copy-id <user>@<that-host>, then\n" +
+			"  fleet config pull <that-alias>, then fleet keys sync.\n")
+	}
+	return b.String()
+}
+
+// scanKnownHosts is the probe's UserKnownHostsFile list: the scratch file
+// first, then whatever the operator's own config resolves for an address on
+// this subnet (`ssh -G`, so a custom UserKnownHostsFile or known_hosts2 still
+// gets to refuse a changed key). If ssh cannot answer, ssh's defaults stand in.
+func scanKnownHosts(scratch, sample string, resolve func(string) (hostkey.Target, error)) []string {
+	out := []string{scratch}
+	if t, err := resolve(sample); err == nil && len(t.KnownHosts) > 0 {
+		return append(out, t.KnownHosts...)
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		out = append(out, filepath.Join(home, ".ssh", "known_hosts"), filepath.Join(home, ".ssh", "known_hosts2"))
+	}
+	return out
+}
+
+// checkMove is verifyMoves' real check. A responder that left NO entry in the
+// scratch file was verified by ssh itself against the operator's own files (or
+// rode a master fleet opened under them), so there is nothing more to prove.
+func checkMove(scratch string) func(alias, ip string) moveVerdict {
+	return func(alias, ip string) moveVerdict {
+		presented, err := hostkey.KnownIn(hostkey.Run, scratch, ip)
+		if err != nil {
+			return moveUnverifiable
+		}
+		if len(presented) == 0 {
+			return moveVerified
+		}
+		t, err := hostkey.Resolve(hostkey.Run, alias)
+		if err != nil {
+			return moveUnverifiable
+		}
+		stored, err := hostkey.Known(hostkey.Run, t)
+		if err != nil {
+			return moveUnverifiable
+		}
+		return judgeMove(stored, presented)
+	}
 }
 
 // lookupHost resolves a configured HostName to its addresses. A failure is not
@@ -393,16 +579,27 @@ func runScan(cmd *cobra.Command) error {
 	}
 	// Probing is by address, so the credentials must be handed over explicitly;
 	// see scanIdentities. Resolution is what keeps a NAME-based config stable.
+	trust, err := os.MkdirTemp("", "fleet-scan-")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.RemoveAll(trust) }()
+	scratch := filepath.Join(trust, "known_hosts")
+	var known []string
+	if len(open) > 0 {
+		known = scanKnownHosts(scratch, open[0], func(a string) (hostkey.Target, error) { return hostkey.Resolve(hostkey.Run, a) })
+	}
 	mk := func(id scanIdentity) runner.Runner {
-		e := runner.Exec{ConnectTimeout: "3", User: id.User}
+		e := runner.Exec{ConnectTimeout: "3", User: id.User, ScanKnownHosts: known}
 		if id.Identity != "" {
 			e.Identities = []string{id.Identity}
 		}
 		return e
 	}
 	found := identify(mk, scanIdentities(hosts), open, scanWorkers)
-	rows := classifyScan(hosts, found, lookupHost)
+	rows := verifyMoves(classifyScan(hosts, found, lookupHost), checkMove(scratch))
 	fmt.Fprint(out, renderScan(rows))
+	fmt.Fprint(out, scanHint(rows))
 
 	next, changed, err := applyScan(cfg, rows, flagMarker)
 	if err != nil {

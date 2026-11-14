@@ -329,6 +329,35 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   unfixed binary look fixed — compare with `FLEET_NO_MUX=1`. Pinned by
   `TestScanIdentitiesCollectsDistinctFleetCredentials`,
   `TestIdentifyTriesEachFleetIdentityUntilOneAuthenticates`.
+- **A scan probe gets past the host key without trusting it for anyone else.** Under
+  `BatchMode` an address never connected to fails on the unknown host key before a
+  credential is offered, so on a fresh workstation (no `known_hosts`) every responder —
+  this machine included — was reported "would not authenticate" without one key being
+  tried. `runner.Exec.ScanKnownHosts` makes the probe `StrictHostKeyChecking=accept-new`
+  into a per-scan scratch file listed FIRST (ssh writes there), followed by every
+  `UserKnownHostsFile` the operator's own config resolves (`ssh -G`, so a custom file or
+  `known_hosts2` still refuses a CHANGED key), each path quoted; the operator's files are
+  never written. The probe uses `ControlMaster=no` (may ride a master someone primed, never
+  leaves one behind) and turns off agent/X11/port forwarding, `LocalCommand` and `SendEnv`
+  regardless of a `Host *` block — it now authenticates to hosts nobody vouched for.
+- **Because any LAN device can now answer, what it says is untrusted input.** A reported
+  hostname must be one `[A-Za-z0-9._-]` token or the row is unidentified (`logged in, but
+  reported an unusable hostname`); `sshconf.Add`/`Update` independently refuse any field with
+  a control character and any alias with whitespace or `#`, so a newline can never plant a
+  `ProxyCommand`. A responder CLAIMING an existing alias from a new address is a `moved`
+  write only when its host key proves it (`judgeMove` against `hostkey.Known` for the alias;
+  a key ssh verified from the operator's own files leaves no scratch entry and counts as
+  proven); otherwise it is `unverified`, never written, and the hint names the `fleet trust`
+  recovery. Each unidentified row names ssh's reason (`host key unverified`, `key not
+  accepted[; host takes a password]`, `timed out`, `refused/closed the connection`, …), and
+  the ssh-copy-id bootstrap hint prints only when nothing was identified AND a refused key is
+  among the causes. Pinned by `TestScanProbeAcceptsNewHostKeysIntoTheScratchFileOnly`,
+  `TestScanProbeForwardsNothingToAnUnverifiedHost`, `TestScanProbeNeverOpensAMaster`,
+  `TestIdentifyRecordsWhyAResponderWasNotIdentified`,
+  `TestAClaimedMoveIsWrittenOnlyWhenTheHostKeyProvesIt`, `TestJudgeMove`,
+  `TestScanHintOnlyWhenARefusedKeyIsTheProblem`, `TestScanKnownHostsKeepsTheOperatorsFiles`,
+  `TestWritersRefuseAValueThatWouldInjectADirective`, `TestAuthMethodsReadsTheRefusalList`,
+  `TestReasonNamesWhichNetworkFailureItWas`.
 - **Under WSL the subnet comes from the WINDOWS host, not from this kernel.** The default
   route here leaves on the Hyper-V NAT interface (`172.x/20`), a private segment the fleet
   is not on; WSL holds no interface on the real LAN, so it can route there but cannot

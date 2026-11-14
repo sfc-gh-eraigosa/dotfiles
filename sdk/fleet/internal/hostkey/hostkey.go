@@ -179,18 +179,34 @@ func Known(x Exec, t Target) ([]Key, error) {
 	var keys []Key
 	for _, file := range t.existing() {
 		for _, n := range t.Names() {
-			out, _ := x("ssh-keygen", "", "-F", n, "-f", file)
-			for l := range strings.SplitSeq(out, "\n") {
-				if l = strings.TrimSpace(l); l == "" || strings.HasPrefix(l, "#") {
-					continue
-				}
-				k, err := fingerprint(x, l)
-				if err != nil {
-					return nil, err
-				}
-				keys = append(keys, k)
+			ks, err := KnownIn(x, file, n)
+			if err != nil {
+				return nil, err
 			}
+			keys = append(keys, ks...)
 		}
+	}
+	return keys, nil
+}
+
+// KnownIn fingerprints what ONE known_hosts file holds under ONE lookup name.
+// A missing file or a name with no entry is an empty list: ssh-keygen -F exits
+// 1 for both, and neither holds a key.
+func KnownIn(x Exec, file, name string) ([]Key, error) {
+	if _, err := os.Stat(file); err != nil {
+		return nil, nil
+	}
+	out, _ := x("ssh-keygen", "", "-F", name, "-f", file)
+	var keys []Key
+	for l := range strings.SplitSeq(out, "\n") {
+		if l = strings.TrimSpace(l); l == "" || strings.HasPrefix(l, "#") {
+			continue
+		}
+		k, err := fingerprint(x, l)
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
 	}
 	return keys, nil
 }

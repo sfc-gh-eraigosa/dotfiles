@@ -86,3 +86,37 @@ func TestIsHostKeySeparatesTrustFromCredentials(t *testing.T) {
 		}
 	}
 }
+
+// The methods list is what tells a scan whether a refused host can be
+// bootstrapped with a password, so it must come from ssh's own words.
+func TestAuthMethodsReadsTheRefusalList(t *testing.T) {
+	got := AuthMethods(realExitError(t, "wenlock@10.0.0.5: Permission denied (publickey,password)."))
+	if len(got) != 2 || got[0] != "publickey" || got[1] != "password" {
+		t.Fatalf("AuthMethods = %q, want [publickey password]", got)
+	}
+	for _, err := range []error{
+		realExitError(t, "Connection closed by 10.0.0.5 port 22"),
+		errors.New("permission denied"),
+		nil,
+	} {
+		if got := AuthMethods(err); got != nil {
+			t.Fatalf("AuthMethods(%v) = %q, want nil", err, got)
+		}
+	}
+}
+
+// "dropped the connection" for a timeout sends the operator to sshd when the
+// handshake was merely slow; each network failure keeps its own name.
+func TestReasonNamesWhichNetworkFailureItWas(t *testing.T) {
+	for _, tc := range []struct{ stderr, want string }{
+		{"ssh: connect to host 10.0.0.5 port 22: Connection timed out", "timed out"},
+		{"ssh: connect to host 10.0.0.5 port 22: Operation timed out", "timed out"},
+		{"ssh: connect to host 10.0.0.5 port 22: Connection refused", "refused the connection"},
+		{"Connection closed by 10.0.0.5 port 22", "closed the connection"},
+		{"op@10.0.0.5: Permission denied (publickey).", ""},
+	} {
+		if got := Reason(realExitError(t, tc.stderr)); got != tc.want {
+			t.Errorf("Reason(%q) = %q, want %q", tc.stderr, got, tc.want)
+		}
+	}
+}
