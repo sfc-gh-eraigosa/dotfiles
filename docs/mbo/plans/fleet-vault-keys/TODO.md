@@ -13,6 +13,8 @@
 > `ALLOWLIST` `.gitignore` check · `DOCS` · `COMMIT` · `LEDGER` update TRACKING.md ·
 > `CHECKPOINT` push/PR refresh.
 
+> **Order (operator priority, 2026-11-13):** capture-from-one-node first — T3 → T9 → T10 → T11 → T8 → T12 → T13 → T14 → T15 → T16. **Four stacked PRs:** PR1 #452 = T1, T2, T4–T7, T9, T10 (save/push); PR2 `pull` = T11; PR3 `lifecycle` = T8, T12–T16; PR4 `op` = T3 (1Password, saved branch 953dca5) once an account exists (see IMPLEMENTATION §2). T10 also captures an EXISTING key: encrypted → prompt + verify; unencrypted → generated passphrase encrypts the vault copy, local file untouched unless `--encrypt-local`; captured key enters the roster `active`.
+
 All `go test` commands run from `sdk/fleet/` in the worker worktree.
 
 ## Preflight (once)

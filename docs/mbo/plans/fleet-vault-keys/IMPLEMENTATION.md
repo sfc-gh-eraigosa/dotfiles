@@ -34,7 +34,29 @@ the ledger is a claim, the command is the proof.
 
 ## 2. Worker map
 
-Sequential, single PR (plan §6.1 default).
+**Operator rulings 2026-11-13: four stacked PRs** (1Password moved last — needs an account) (supersedes the plan §6.1 single-PR default):
+
+| PR | Tasks | Worker | Base |
+| :-- | :-- | :-- | :-- |
+| 1 save/push (#452) | docs, T1, T2, T3, T4, T5, T6, T7, T9, T10 | `fleet-vault-keys/${USER}/design` | `main` |
+| 2 pull | T11 | `fleet-vault-keys/${USER}/pull` (create at T11 start) | PR 1's branch |
+| 3 rest | T8, T12, T13, T14, T15, T16 | `fleet-vault-keys/${USER}/lifecycle` (create at T8 start) | PR 2's branch |
+| 4 1Password | T3 (built: local branch `fleet-vault-keys-op-adapter-saved` @ 953dca5, reviewed) + its live test G1 | `fleet-vault-keys/${USER}/op` (create after PR 3, once the operator has a 1Password account) | PR 3's branch |
+
+Record each new worker's `gss feature worker add --json` output verbatim below when created.
+
+`pull` (2026-11-13, user and home path shown as `${USER}` / `$HOME`):
+
+```json
+{
+  "worker_ref": "fleet-vault-keys/${USER}/pull",
+  "branch": "feature/fleet-vault-keys/${USER}/pull",
+  "worktree_path": "$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/fleet-vault-keys/${USER}/pull",
+  "base_branch": "feature/fleet-vault-keys/${USER}/design"
+}
+```
+
+Original single-PR row (PR 1):
 
 | Leaf | Worker ref | Branch | Worktree path | PR |
 | :-- | :-- | :-- | :-- | :-- |
