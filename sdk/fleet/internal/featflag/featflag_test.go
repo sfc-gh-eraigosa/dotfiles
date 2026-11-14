@@ -173,3 +173,32 @@ func TestResolveASCIIBordersOnlyWhenResolvedTrue(t *testing.T) {
 		t.Fatalf("Note mentions ascii-borders (%q); a missing presentation key is not a degradation", missing.Note)
 	}
 }
+
+// fleet.vault.enabled gates the whole opt-in vault feature. FAIL-CLOSED: only
+// an explicit, successfully-resolved true enables it, and a degraded read adds
+// no Note (staying off is the default, not a degradation).
+func TestResolveVaultEnabledIsFailClosed(t *testing.T) {
+	var typedNil *Static
+	for name, src := range map[string]Source{
+		"source error":   Static{Err: errors.New("boom")},
+		"unknown key":    Static{Bools: map[string]bool{KeyEnabled: true}},
+		"explicit false": Static{Bools: map[string]bool{KeyVaultEnabled: false}},
+		"typed nil":      typedNil,
+		"nil":            nil,
+	} {
+		got := Resolve(src, t.TempDir(), t.TempDir())
+		if got.VaultEnabled {
+			t.Fatalf("%s: VaultEnabled must be false", name)
+		}
+		if strings.Contains(got.Note, "vault") {
+			t.Fatalf("%s: Note mentions vault (%q); staying off is not a degradation", name, got.Note)
+		}
+	}
+	got := Resolve(Static{Bools: map[string]bool{KeyVaultEnabled: true}}, t.TempDir(), t.TempDir())
+	if !got.VaultEnabled {
+		t.Fatal("an explicit true must turn it on")
+	}
+	if !got.Enabled {
+		t.Fatal("the other flags keep their fail-open defaults alongside it")
+	}
+}
