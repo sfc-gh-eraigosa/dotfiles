@@ -119,7 +119,8 @@ func (s *Store) read(ctx context.Context, name string) ([]byte, error) {
 	if err != nil {
 		return nil, classify(err)
 	}
-	return out, nil
+	// lpass appends exactly one "\n" to the stored notes; strip it so data round-trips.
+	return bytes.TrimSuffix(out, []byte("\n")), nil
 }
 
 // Get returns the note body and its version.
@@ -131,7 +132,7 @@ func (s *Store) Get(ctx context.Context, name string) (vault.Blob, error) {
 	return vault.Blob{Data: vault.Secret(out), Version: version(out)}, nil
 }
 
-// Put creates (version "") or updates the item, returning the hash of data.
+// Put creates (version "") or updates the item, returning the version a re-read reports.
 func (s *Store) Put(ctx context.Context, name string, data vault.Secret, ver string) (string, error) {
 	if err := s.Ready(ctx); err != nil {
 		return "", err
@@ -157,7 +158,12 @@ func (s *Store) Put(ctx context.Context, name string, data vault.Secret, ver str
 	if _, err := s.exec(ctx, bin, []byte(data), sub, "--sync=now", "--non-interactive", "--notes", s.item(name)); err != nil {
 		return "", classify(err)
 	}
-	return version([]byte(data)), nil
+	// The re-read is authoritative: it is what the next Get will hash.
+	b, err := s.Get(ctx, name)
+	if err != nil {
+		return "", err
+	}
+	return b.Version, nil
 }
 
 // List returns the logical names of this folder's fleet: items.

@@ -55,7 +55,7 @@ func (f *fakeLpass) exec(_ context.Context, name string, stdin []byte, args ...s
 		if !ok {
 			return nil, errors.New("lpass: exit status 1: Error: Could not find specified account(s).")
 		}
-		return []byte(n), nil
+		return []byte(n + "\n"), nil // real lpass appends one newline
 	case "add", "edit":
 		item := args[len(args)-1]
 		f.notes[item] = string(stdin)
@@ -207,7 +207,7 @@ func TestPutUpdateSendsEditWithStdin(t *testing.T) {
 	if err != nil || v != sum(marker) {
 		t.Fatalf("v=%s err=%v", v, err)
 	}
-	last := f.calls[len(f.calls)-1]
+	last := f.calls[len(f.calls)-2] // edit, then the authoritative re-read
 	want := []string{"lpass", "edit", "--sync=now", "--non-interactive", "--notes", "fleet/fleet:roster"}
 	if !reflect.DeepEqual(last.argv, want) || string(last.stdin) != marker {
 		t.Errorf("last = %v %q", last.argv, last.stdin)
@@ -307,5 +307,38 @@ func TestOtherExecErrorsAreWrappedNotMisclassified(t *testing.T) {
 	_, err := s.Get(context.Background(), "roster")
 	if !errors.Is(err, boom) || errors.Is(err, vault.ErrNotFound) || errors.Is(err, vault.ErrSignedOut) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestPutThenGetRoundTripsBytesAndVersion(t *testing.T) {
+	f := newFake()
+	s := newStore(f)
+	payload := "{\"k\":\"" + marker + "\"}\n" // payload itself ends in a newline
+	v, err := s.Put(context.Background(), "roster", vault.Secret(payload), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := s.Get(context.Background(), "roster")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b.Data) != payload || b.Version != v {
+		t.Fatalf("data=%q version %s vs Put %s", []byte(b.Data), b.Version, v)
+	}
+}
+
+func TestPutWithTheReturnedVersionSucceeds(t *testing.T) {
+	f := newFake()
+	s := newStore(f)
+	v1, err := s.Put(context.Background(), "roster", vault.Secret("one"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v2, err := s.Put(context.Background(), "roster", vault.Secret("two"), v1)
+	if err != nil {
+		t.Fatalf("false conflict: %v", err)
+	}
+	if v2 == v1 || f.notes["fleet/fleet:roster"] != "two" {
+		t.Fatalf("v2=%s", v2)
 	}
 }
