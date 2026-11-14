@@ -152,3 +152,80 @@ func TestFingerprintMatchesSshKeygen(t *testing.T) {
 		t.Fatalf("ssh-keygen fingerprint differs from ours")
 	}
 }
+
+func TestWriteSameSecondKeepsEveryEarlierKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "id")
+	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	var privs [][]byte
+	var baks []string
+	for i := 0; i < 3; i++ {
+		priv, pub, _ := Generate(testPass, "c")
+		bak, err := Write(path, priv, pub, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		privs = append(privs, priv)
+		baks = append(baks, bak)
+	}
+	if baks[0] != "" || baks[1] != path+".bak-20260102T030405" || baks[2] != path+".bak-20260102T030405-1" {
+		t.Fatalf("backup names: %q", baks)
+	}
+	for i := 1; i < 3; i++ {
+		got, err := os.ReadFile(baks[i])
+		if err != nil || string(got) != string(privs[i-1]) {
+			t.Fatalf("backup %d lost the earlier key (err=%v)", i, err)
+		}
+	}
+}
+
+func TestWriteDoesNotFollowAPlantedBackupSymlink(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "id")
+	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	priv1, pub1, _ := Generate(testPass, "c")
+	if _, err := Write(path, priv1, pub1, now); err != nil {
+		t.Fatal(err)
+	}
+	victim := filepath.Join(dir, "victim")
+	_ = os.WriteFile(victim, []byte("untouched"), 0o644)
+	if err := os.Symlink(victim, path+".bak-20260102T030405"); err != nil {
+		t.Fatal(err)
+	}
+	priv2, pub2, _ := Generate(testPass, "c")
+	bak, err := Write(path, priv2, pub2, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(victim); string(got) != "untouched" {
+		t.Fatal("symlink target was written through")
+	}
+	if got, _ := os.ReadFile(bak); string(got) != string(priv1) {
+		t.Fatal("backup does not hold the old key")
+	}
+}
+
+func TestWriteReportsBackupWhenPubFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "id")
+	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	priv1, pub1, _ := Generate(testPass, "c")
+	if _, err := Write(path, priv1, pub1, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path + ".pub"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path+".pub", 0o700); err != nil { // makes the .pub step fail
+		t.Fatal(err)
+	}
+	priv2, pub2, _ := Generate(testPass, "c")
+	bak, err := Write(path, priv2, pub2, now)
+	if err == nil || !strings.Contains(err.Error(), ".pub") {
+		t.Fatalf("want an error mentioning .pub, got %v", err)
+	}
+	if bak == "" {
+		t.Fatal("backup path dropped on error")
+	}
+	if got, _ := os.ReadFile(bak); string(got) != string(priv1) {
+		t.Fatal("reported backup does not hold the old key")
+	}
+}
