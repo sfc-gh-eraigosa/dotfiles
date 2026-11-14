@@ -31,6 +31,8 @@ type fakeLpass struct {
 	notes    map[string]string // full item name -> notes
 	lsOut    string
 	missing  bool // binary not installed
+	// afterWrite, when set, answers `show` once an add/edit has been made.
+	afterWrite func() ([]byte, error)
 }
 
 func newFake() *fakeLpass { return &fakeLpass{loggedIn: true, notes: map[string]string{}} }
@@ -47,6 +49,9 @@ func (f *fakeLpass) exec(_ context.Context, name string, stdin []byte, args ...s
 		}
 		return nil, nil
 	case "show":
+		if f.afterWrite != nil && f.writes() > 0 {
+			return f.afterWrite()
+		}
 		if !f.loggedIn {
 			return nil, errors.New("lpass: exit status 1: Error: Could not find decryption key. Perhaps you need to login with `lpass login`.")
 		}
@@ -289,6 +294,7 @@ func TestSignInUsesLPASSUserAndTrust(t *testing.T) {
 }
 
 func TestSignInWithoutUserTellsTheOperator(t *testing.T) {
+	t.Setenv("LPASS_USER", "")
 	os.Unsetenv("LPASS_USER")
 	s := newStore(newFake())
 	s.Interactive = func(context.Context, io.Reader, io.Writer, io.Writer, string, ...string) error {
@@ -340,5 +346,72 @@ func TestPutWithTheReturnedVersionSucceeds(t *testing.T) {
 	}
 	if v2 == v1 || f.notes["fleet/fleet:roster"] != "two" {
 		t.Fatalf("v2=%s", v2)
+	}
+}
+
+func TestPutRefusesAForeignOrNormalisedReRead(t *testing.T) {
+	f := newFake()
+	f.afterWrite = func() ([]byte, error) { return []byte("someone else's bytes\n"), nil }
+	v, err := newStore(f).Put(context.Background(), "roster", vault.Secret("mine"), "")
+	if !errors.Is(err, vault.ErrConflict) || v != "" || !strings.Contains(err.Error(), "changed by another writer or normalised after write") {
+		t.Fatalf("v=%q err=%v", v, err)
+	}
+}
+
+func TestPutReportsWriteLandedWhenReReadFails(t *testing.T) {
+	f := newFake()
+	boom := errors.New("network down")
+	f.afterWrite = func() ([]byte, error) { return nil, boom }
+	v, err := newStore(f).Put(context.Background(), "roster", vault.Secret("mine"), "")
+	if v != "" || !errors.Is(err, boom) || !strings.Contains(err.Error(), "written but re-read failed") {
+		t.Fatalf("v=%q err=%v", v, err)
+	}
+}
+
+func TestAmbiguousNameIsAnErrorAndNeverEdited(t *testing.T) {
+	f := newFake()
+	f.notes["fleet/fleet:roster"] = "Multiple matches found.\nfleet/fleet:roster [id: 1]\nfleet/fleet:roster [id: 2]"
+	s := newStore(f)
+	if _, err := s.Get(context.Background(), "roster"); err == nil || !strings.Contains(err.Error(), "fleet/fleet:roster") || errors.Is(err, vault.ErrNotFound) {
+		t.Fatalf("get err = %v", err)
+	}
+	for _, ver := range []string{"", sum("x")} {
+		if _, err := s.Put(context.Background(), "roster", vault.Secret("y"), ver); err == nil || f.writes() != 0 {
+			t.Fatalf("ver=%q err=%v writes=%d", ver, err, f.writes())
+		}
+	}
+}
+
+func TestListSkipsLinesWithoutTheFolderPrefix(t *testing.T) {
+	f := newFake()
+	f.lsOut = "fleet:x [id: 1]\nfleet/fleet:y [id: 2]\n"
+	names, err := newStore(f).List(context.Background())
+	if err != nil || !reflect.DeepEqual(names, []string{"y"}) {
+		t.Fatalf("names=%v err=%v", names, err)
+	}
+}
+
+func TestReadyReturnsContextErrorNotSignedOut(t *testing.T) {
+	f := newFake()
+	f.loggedIn = false
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := newStore(f).Ready(ctx)
+	if !errors.Is(err, context.Canceled) || errors.Is(err, vault.ErrSignedOut) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestSignInTrimsLPASSUser(t *testing.T) {
+	t.Setenv("LPASS_USER", "  me@example.com\n")
+	var got []string
+	s := newStore(newFake())
+	s.Interactive = func(_ context.Context, _ io.Reader, _, _ io.Writer, name string, args ...string) error {
+		got = append([]string{name}, args...)
+		return nil
+	}
+	_ = s.SignIn(context.Background(), nil, io.Discard, io.Discard)
+	if got[len(got)-1] != "me@example.com" {
+		t.Fatalf("argv = %v", got)
 	}
 }

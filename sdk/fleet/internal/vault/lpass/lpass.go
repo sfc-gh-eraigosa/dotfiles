@@ -100,6 +100,9 @@ func (s *Store) Ready(ctx context.Context) error {
 		if errors.Is(err, vault.ErrNotInstalled) {
 			return vault.ErrNotInstalled
 		}
+		if cerr := ctx.Err(); cerr != nil {
+			return cerr
+		}
 		return fmt.Errorf("%w: %v", vault.ErrSignedOut, err)
 	}
 	return nil
@@ -107,7 +110,7 @@ func (s *Store) Ready(ctx context.Context) error {
 
 // SignIn runs `lpass login --trust $LPASS_USER` on the operator's terminal.
 func (s *Store) SignIn(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer) error {
-	user := os.Getenv("LPASS_USER")
+	user := strings.TrimSpace(os.Getenv("LPASS_USER"))
 	if user == "" {
 		return errors.New("lpass: LPASS_USER is not set; run `lpass login --trust <email>` yourself, then retry")
 	}
@@ -118,6 +121,9 @@ func (s *Store) read(ctx context.Context, name string) ([]byte, error) {
 	out, err := s.exec(ctx, bin, nil, "show", "--sync=now", "--notes", s.item(name))
 	if err != nil {
 		return nil, classify(err)
+	}
+	if bytes.HasPrefix(out, []byte("Multiple matches found")) {
+		return nil, fmt.Errorf("lpass: %s is ambiguous (multiple items share that name)", s.item(name))
 	}
 	// lpass appends exactly one "\n" to the stored notes; strip it so data round-trips.
 	return bytes.TrimSuffix(out, []byte("\n")), nil
@@ -132,7 +138,10 @@ func (s *Store) Get(ctx context.Context, name string) (vault.Blob, error) {
 	return vault.Blob{Data: vault.Secret(out), Version: version(out)}, nil
 }
 
-// Put creates (version "") or updates the item, returning the version a re-read reports.
+// Put creates (version "") or updates the item, returning the version a
+// re-read reports. The version check is best-effort: lpass has no
+// compare-and-swap, so a race window exists between the show and the
+// edit/add, and concurrent creates can produce duplicate names.
 func (s *Store) Put(ctx context.Context, name string, data vault.Secret, ver string) (string, error) {
 	if err := s.Ready(ctx); err != nil {
 		return "", err
@@ -161,7 +170,10 @@ func (s *Store) Put(ctx context.Context, name string, data vault.Secret, ver str
 	// The re-read is authoritative: it is what the next Get will hash.
 	b, err := s.Get(ctx, name)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("lpass: %s written but re-read failed (the write may have landed): %w", name, err)
+	}
+	if !bytes.Equal(b.Data, data) {
+		return "", fmt.Errorf("%w: lpass: %s changed by another writer or normalised after write", vault.ErrConflict, name)
 	}
 	return b.Version, nil
 }
@@ -179,7 +191,10 @@ func (s *Store) List(ctx context.Context) ([]string, error) {
 		if i := strings.LastIndex(line, " [id:"); i >= 0 {
 			line = line[:i]
 		}
-		line = strings.TrimPrefix(line, s.folder+"/")
+		line, ok := strings.CutPrefix(line, s.folder+"/")
+		if !ok {
+			continue
+		}
 		if rest, ok := strings.CutPrefix(line, itemPrefix); ok && rest != "" {
 			names = append(names, unescape(rest))
 		}
