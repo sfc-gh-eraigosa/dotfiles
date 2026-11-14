@@ -60,7 +60,7 @@ func TestLiveRoundTrip(t *testing.T) {
 			t.Fatalf("get after create: %v", err)
 		}
 		if b.Version != v1 {
-			t.Logf("NOTE: Put returned %s but Get hashes to %s (lpass notes round-trip differs)", v1, b.Version)
+			t.Errorf("Put returned %s but Get hashes to %s", v1, b.Version)
 		}
 	case err != nil:
 		t.Fatalf("get: %v", err)
@@ -84,8 +84,14 @@ func TestLiveRoundTrip(t *testing.T) {
 		t.Fatal("version did not change after update")
 	}
 	if b2.Version != v2 {
-		t.Logf("NOTE: Put returned %s but Get hashes to %s", v2, b2.Version)
+		t.Errorf("Put returned %s but Get hashes to %s", v2, b2.Version)
 	}
+
+	v3, err := s.Put(ctx, "spike", payload(4), v2)
+	if err != nil {
+		t.Fatalf("put with the version the previous Put returned: %v", err)
+	}
+	t.Logf("version after chained put: %s", v3)
 
 	if _, err := s.Put(ctx, "spike", payload(3), v1); !errors.Is(err, vault.ErrConflict) {
 		t.Fatalf("stale put: want ErrConflict, got %v", err)
