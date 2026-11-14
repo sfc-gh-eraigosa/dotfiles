@@ -214,6 +214,33 @@ func planFromSettingsFor(settings featflag.Settings, repoDir string, repoChosen 
 	return p, nil
 }
 
+// fileTrustResult classifies why a config file is not trusted.
+type fileTrustResult int
+
+const (
+	trustOK fileTrustResult = iota
+	trustWritable
+	trustUnverifiable
+	trustForeign
+)
+
+// fileTrust is the shared mode/owner rule for config files fleet acts on: not
+// group/world-writable and owned by the current uid. The mode is returned for
+// the caller's message.
+func fileTrust(fi os.FileInfo) (fileTrustResult, os.FileMode) {
+	if fi.Mode().Perm()&0o022 != 0 {
+		return trustWritable, fi.Mode().Perm()
+	}
+	uid, ok := checkOwner(fi)
+	if !ok {
+		return trustUnverifiable, fi.Mode().Perm()
+	}
+	if uid != os.Getuid() {
+		return trustForeign, fi.Mode().Perm()
+	}
+	return trustOK, fi.Mode().Perm()
+}
+
 // readPlanFile stats, validates ownership/mode, reads, and parses one plan
 // file. note, when non-empty, is appended to the recorded Source (e.g. the
 // gff fallback note) on one line.
@@ -222,14 +249,12 @@ func readPlanFile(path, note string) (updplan.Plan, error) {
 	if err != nil {
 		return updplan.Plan{}, fmt.Errorf("loadPlan: %s: %w", path, err)
 	}
-	if fi.Mode().Perm()&0o022 != 0 {
-		return updplan.Plan{}, fmt.Errorf("loadPlan: %s: refusing a group/world-writable plan file (mode %v) — a plan file is executable config", path, fi.Mode().Perm())
-	}
-	uid, ok := checkOwner(fi)
-	if !ok {
+	switch trust, mode := fileTrust(fi); trust {
+	case trustWritable:
+		return updplan.Plan{}, fmt.Errorf("loadPlan: %s: refusing a group/world-writable plan file (mode %v) — a plan file is executable config", path, mode)
+	case trustUnverifiable:
 		return updplan.Plan{}, fmt.Errorf("loadPlan: %s: could not verify file ownership on this platform, refusing", path)
-	}
-	if uid != os.Getuid() {
+	case trustForeign:
 		return updplan.Plan{}, fmt.Errorf("loadPlan: %s: refusing a plan file not owned by the current user", path)
 	}
 
