@@ -600,6 +600,12 @@ bash "${BASE_DIR}/opt/scripts/git/git_identity_doctor.sh" || true
 # Without it a host with a system Go (/usr/bin/go from apt's golang-go on the Pi)
 # had goenv warn on every run that the system go would win.
 export GOENV_PATH_ORDER=front
+# One module cache for every Go version. goenv sets GOPATH to $HOME/go/<version>
+# and the cache defaults to $GOPATH/pkg/mod, so each Go bump started from an
+# empty cache: the sdk builds below re-downloaded every module ("go: downloading"
+# on stderr, a fleet warning each) and every version kept its own copy. Modules
+# are version-independent; .goenv.sh sets the same path for shells.
+export GOMODCACHE="${GOMODCACHE:-${HOME}/go/pkg/mod}"
 
 # install/update goenv
 if gff_on install.runtime.goenv; then

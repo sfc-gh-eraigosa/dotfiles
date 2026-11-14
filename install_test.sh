@@ -56,8 +56,10 @@ assert_grep "BASE_DIR is exported" \
 # canonical pattern checks `-L` AND `readlink == expected target`
 # before recreating. install.sh uses this for ~/opt (lines around the
 # `Ensure ~/opt is a symlink to the repo's opt directory` block).
+# #448 compares PHYSICAL paths (cd -P), not readlink text: on a Mac with
+# ~/git -> ~/Documents/git a correct link has two spellings.
 assert_grep "symlink idempotency guard present" \
-    '\[[[:space:]]+-L[[:space:]]+"\$\{HOME\}/opt"[[:space:]]+\][[:space:]]+&&[[:space:]]+\[[[:space:]]+"\$\(readlink' \
+    '\[[[:space:]]+-L[[:space:]]+"\$\{HOME\}/opt"[[:space:]]+\][[:space:]]+&&.*"\$\{_opt_current\}"[[:space:]]+=[[:space:]]+"\$\{_opt_target\}"' \
     "$INSTALL"
 
 # `ln -sf` should be used (overwrite-safe), never `ln -s` alone (which
@@ -162,6 +164,16 @@ assert_eq "$([ -n "$ORDER_LINE" ] && [ -n "$INIT_LINE" ] && [ "$ORDER_LINE" -lt 
 PIN_INSTALL_LINE="$(grep -n 'goenv install -s "\${PINNED_GO_VERSION}"' "$INSTALL" | head -1 | cut -d: -f1)"
 assert_eq "$([ -n "$PIN_INSTALL_LINE" ] && [ -n "$INIT_LINE" ] && [ "$PIN_INSTALL_LINE" -lt "$INIT_LINE" ] && echo before || echo missing-or-after)" \
     "before" "install.sh installs the pinned Go before the first goenv init"
+
+# One module cache for every Go version, exported before the first goenv init
+# (the sdk builds follow it). goenv's GOPATH is $HOME/go/<version>, so without
+# it each Go bump re-downloaded every module: ~35 "go: downloading" stderr
+# lines per host on 2026-11-14, each a fleet warning.
+MODCACHE_LINE="$(grep -n '^[[:space:]]*export GOMODCACHE=' "$INSTALL" | head -1 | cut -d: -f1)"
+assert_eq "$([ -n "$MODCACHE_LINE" ] && [ -n "$INIT_LINE" ] && [ "$MODCACHE_LINE" -lt "$INIT_LINE" ] && echo before || echo missing-or-after)" \
+    "before" "install.sh exports a shared GOMODCACHE before the first goenv init"
+MODCACHE_VAL="$(env -i HOME=/h bash -c "$(sed -n "${MODCACHE_LINE:-1}p" "$INSTALL"); printf '%s' \"\$GOMODCACHE\"")"
+assert_eq "$MODCACHE_VAL" "/h/go/pkg/mod" "install.sh's GOMODCACHE is \$HOME/go/pkg/mod, the same cache the shell profile uses"
 
 # --- Locale fallback -----------------------------------------------------------
 # ssh forwards the caller's LANG/LC_*, so a fleet run can arrive with a locale
