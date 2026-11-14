@@ -1,0 +1,13 @@
+{
+  "id": "abcdefghijklmnopqrstuvwxyz",
+  "title": "fleet:roster",
+  "version": 3,
+  "vault": {"id": "v1v1v1v1v1v1v1v1v1v1v1v1v1", "name": "Private"},
+  "category": "SECURE_NOTE",
+  "tags": ["fleet"],
+  "last_edited_by": "ZZZZZZZZZZZZZZZZZZZZZZZZZZ",
+  "fields": [
+    {"id": "notesPlain", "type": "STRING", "purpose": "NOTES", "label": "notesPlain", "reference": "op://Private/fleet:roster/notesPlain"},
+    {"id": "f1", "type": "CONCEALED", "label": "payload", "value": "PRIVATE-MATERIAL-123", "reference": "op://Private/fleet:roster/payload"}
+  ]
+}

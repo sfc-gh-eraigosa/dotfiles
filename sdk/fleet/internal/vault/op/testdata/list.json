@@ -1,0 +1,6 @@
+[
+  {"id": "a1", "title": "fleet:roster", "version": 3, "vault": {"id": "v1", "name": "Private"}, "category": "SECURE_NOTE", "tags": ["fleet"]},
+  {"id": "a2", "title": "fleet:key/mac1", "version": 1, "vault": {"id": "v1", "name": "Private"}, "category": "SECURE_NOTE", "tags": ["fleet"]},
+  {"id": "a3", "title": "unrelated note", "version": 1, "vault": {"id": "v1", "name": "Private"}, "category": "SECURE_NOTE", "tags": ["fleet"]},
+  {"id": "a4", "title": "fleet:", "version": 1, "vault": {"id": "v1", "name": "Private"}, "category": "SECURE_NOTE", "tags": ["fleet"]}
+]
