@@ -148,6 +148,9 @@ var keysSyncCmd = &cobra.Command{
 	Use:   "sync [key-name...]",
 	Short: "Authorize managed PUBLIC keys on every fleet host",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := preflight(cmd.Context()); err != nil {
+			return err
+		}
 		mine, err := managedKeys()
 		if err != nil {
 			return err

@@ -498,6 +498,9 @@ var statusCmd = &cobra.Command{
 	SilenceErrors: true,
 	SilenceUsage:  true,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := preflight(cmd.Context()); err != nil {
+			return err
+		}
 		// A MISSING config is an empty fleet, not a failure: on a fresh
 		// machine there is nothing to read yet, and refusing to start is
 		// how `fleet` became unusable on exactly the host that needed

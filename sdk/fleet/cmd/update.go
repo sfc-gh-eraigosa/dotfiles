@@ -208,6 +208,9 @@ var updateCmd = &cobra.Command{
 		return cobra.MinimumNArgs(1)(cmd, args)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := preflight(cmd.Context()); err != nil {
+			return err
+		}
 		return runUpdate(cmd, args)
 	},
 }
