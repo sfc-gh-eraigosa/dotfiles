@@ -282,11 +282,7 @@ func vaultStatus(ctx context.Context, out io.Writer, cfg vault.Config) {
 	lk, unresolved, kerr := fleetKnownHosts()
 	defer func() {
 		if kerr == nil && len(unresolved) > 0 {
-			names := make([]string, len(unresolved))
-			for i, u := range unresolved {
-				names[i], _, _ = strings.Cut(u, ": ")
-			}
-			fmt.Fprintf(out, "known_hosts: %d fleet host(s) unresolved: %s\n", len(unresolved), strings.Join(names, ", "))
+			fmt.Fprintf(out, "known_hosts: %d fleet host(s) unresolved: %s\n", len(unresolved), strings.Join(unresolved, ", "))
 		}
 	}()
 	switch {
@@ -445,7 +441,8 @@ func linesDrift(a, b []string) int {
 // Contract (relied on by `fleet vault push`): the returned KnownHosts is
 // COMPLETE only when the unresolved list is empty. Each unresolved entry is
 // "alias: reason" for an alias whose lines are missing from the result (ssh -G
-// failed, or one of its known_hosts files could not be read); the reason never
+// failed, one of its known_hosts files could not be read, or no known_hosts
+// entry exists for any of its names: "alias: no known_hosts entry"); the reason never
 // carries key material. A caller that uploads the result as the vault copy
 // must refuse while the list is non-empty unless the user opts in
 // (--allow-partial), or the vault silently loses those hosts. Errors: any
@@ -460,7 +457,7 @@ func knownHostsFor(x hostkey.Exec, aliases []string) (vault.KnownHosts, []string
 			unresolved = append(unresolved, a+": "+err.Error())
 			continue
 		}
-		bad := ""
+		bad, found := "", false
 		for _, file := range t.KnownHosts {
 			if _, err := os.Stat(file); err != nil {
 				if !errors.Is(err, fs.ErrNotExist) && bad == "" {
@@ -475,16 +472,22 @@ func knownHostsFor(x hostkey.Exec, aliases []string) (vault.KnownHosts, []string
 					return vault.KnownHosts{}, nil, fmt.Errorf("ssh-keygen -F %s: %w", n, err)
 				}
 				for l := range strings.SplitSeq(out, "\n") {
-					if l = strings.TrimSpace(l); l == "" || strings.HasPrefix(l, "#") || seen[l] {
+					if l = strings.TrimSpace(l); l == "" || strings.HasPrefix(l, "#") {
 						continue
 					}
-					seen[l] = true
-					lines = append(lines, l)
+					found = true
+					if !seen[l] {
+						seen[l] = true
+						lines = append(lines, l)
+					}
 				}
 			}
 		}
-		if bad != "" {
+		switch {
+		case bad != "":
 			unresolved = append(unresolved, a+": "+bad)
+		case !found:
+			unresolved = append(unresolved, a+": no known_hosts entry")
 		}
 	}
 	if len(aliases) > 0 && len(unresolved) == len(aliases) {
