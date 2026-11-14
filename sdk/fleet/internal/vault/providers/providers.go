@@ -5,13 +5,16 @@ import (
 	"fmt"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/vault"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/vault/lpass"
 )
 
-// Open returns the Store for cfg.Provider. The "op" and "lpass" adapters land
-// in later tasks; until then they report ErrNotInstalled.
+// Open returns the Store for cfg.Provider. The "op" adapter lands in a later
+// task; until then it reports ErrNotInstalled.
 func Open(cfg vault.Config, x vault.Exec) (vault.Store, error) {
 	switch cfg.Provider {
-	case "op", "lpass":
+	case "lpass":
+		return lpass.New(cfg, x), nil
+	case "op":
 		return nil, vault.ErrNotInstalled
 	default:
 		return nil, fmt.Errorf("unknown vault provider %q (supported: %q, %q)", cfg.Provider, "op", "lpass")

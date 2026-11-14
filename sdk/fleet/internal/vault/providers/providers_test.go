@@ -14,10 +14,15 @@ func TestOpenRejectsAnUnknownProvider(t *testing.T) {
 	}
 }
 
-func TestOpenKnownProvidersNotYetInstalled(t *testing.T) {
-	for _, p := range []string{"op", "lpass"} {
-		if _, err := Open(vault.Config{Provider: p}, nil); err != vault.ErrNotInstalled {
-			t.Errorf("%s: %v", p, err)
-		}
+func TestOpenOpIsNotYetInstalled(t *testing.T) {
+	if _, err := Open(vault.Config{Provider: "op"}, nil); err != vault.ErrNotInstalled {
+		t.Error(err)
+	}
+}
+
+func TestOpenLpassReturnsTheAdapter(t *testing.T) {
+	s, err := Open(vault.Config{Provider: "lpass"}, SystemExec)
+	if err != nil || s.Name() != "lpass" {
+		t.Fatalf("s=%v err=%v", s, err)
 	}
 }
