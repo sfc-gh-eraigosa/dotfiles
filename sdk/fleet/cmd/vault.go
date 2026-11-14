@@ -58,7 +58,7 @@ func newVaultCmd() *cobra.Command {
 		Use:   "vault",
 		Short: "Keep this workstation's SSH key in a password manager (gated by gff fleet.vault.enabled)",
 	}
-	c.AddCommand(newVaultSetupCmd(), newVaultStatusCmd())
+	c.AddCommand(newVaultSetupCmd(), newVaultStatusCmd(), newVaultPushCmd())
 	return c
 }
 

@@ -229,3 +229,41 @@ func TestWriteReportsBackupWhenPubFails(t *testing.T) {
 		t.Fatal("reported backup does not hold the old key")
 	}
 }
+
+func TestEncryptProtectsAPlainKeyWithThePassphrase(t *testing.T) {
+	plain := plainTestKey(t)
+	want, err := ssh.ParsePrivateKey(plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enc, err := Encrypt(plain, testPass, "captured")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ssh.ParseRawPrivateKey(enc); err == nil {
+		t.Fatal("Encrypt output parses without a passphrase")
+	}
+	got, err := ssh.ParsePrivateKeyWithPassphrase(enc, testPass)
+	if err != nil {
+		t.Fatalf("right passphrase failed: %v", err)
+	}
+	if ssh.FingerprintSHA256(got.PublicKey()) != ssh.FingerprintSHA256(want.PublicKey()) {
+		t.Fatal("Encrypt changed the key")
+	}
+}
+
+func TestEncryptRefusesEmptyPassphraseAndGarbage(t *testing.T) {
+	if _, err := Encrypt(plainTestKey(t), nil, "x"); err == nil {
+		t.Fatal("want error for empty passphrase")
+	}
+	if _, err := Encrypt([]byte("not a key"), testPass, "x"); err == nil {
+		t.Fatal("want error for garbage")
+	}
+	enc, err := Encrypt(plainTestKey(t), testPass, "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Encrypt(enc, []byte("other"), "x"); err == nil {
+		t.Fatal("want error re-encrypting an already-encrypted key")
+	}
+}
