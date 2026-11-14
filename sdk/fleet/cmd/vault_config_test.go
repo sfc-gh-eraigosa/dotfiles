@@ -124,3 +124,32 @@ func TestVaultActiveNeedsBothGateAndConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestVaultConfigExpandsTildeInKey(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	c, _, err := loadVaultConfig(writeVaultYAML(t, "provider: op\nkey: ~/.ssh/foo\n", 0o600))
+	if err != nil || c.Key != filepath.Join(home, ".ssh", "foo") {
+		t.Fatalf("Key = %q, err %v; want ~ expanded", c.Key, err)
+	}
+	c, _, _ = loadVaultConfig(writeVaultYAML(t, "provider: op\nkey: /abs/k\n", 0o600))
+	if c.Key != "/abs/k" {
+		t.Fatalf("absolute key changed: %q", c.Key)
+	}
+}
+
+func TestVaultConfigRejectsUnknownKeys(t *testing.T) {
+	_, _, err := loadVaultConfig(writeVaultYAML(t, "provider: op\nvualt: Work\n", 0o600))
+	if err == nil || !strings.Contains(err.Error(), "vualt") {
+		t.Fatalf("want an error naming vualt, got %v", err)
+	}
+}
+
+// An empty file decodes to a zero config, so it is rejected for its missing
+// provider exactly as before (not treated as unconfigured, no panic on EOF).
+func TestVaultConfigEmptyFileIsAMissingProviderError(t *testing.T) {
+	_, ok, err := loadVaultConfig(writeVaultYAML(t, "", 0o600))
+	if ok || err == nil || !strings.Contains(err.Error(), "unknown provider") {
+		t.Fatalf("got ok=%v err=%v, want the unknown-provider error", ok, err)
+	}
+}
