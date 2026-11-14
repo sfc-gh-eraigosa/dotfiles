@@ -75,3 +75,28 @@ func TestRosterUnknownAndCrossWorkstation(t *testing.T) {
 		t.Fatal("RetirableOn should be false")
 	}
 }
+
+func TestActivateRetiredIsNoOp(t *testing.T) {
+	now := time.Now()
+	r := Roster{Entries: []RosterEntry{
+		{Workstation: "w", Public: "old", Fingerprint: "o", State: KeyRetired},
+		{Workstation: "w", Public: "act", Fingerprint: "a", State: KeyActive},
+	}}
+	if got := r.Activate("o", now); got != nil {
+		t.Fatalf("want nil, got %v", got)
+	}
+	if r.Entries[0].State != KeyRetired || r.Entries[1].State != KeyActive {
+		t.Fatalf("states changed: %+v", r.Entries)
+	}
+}
+
+func TestAddDuplicateFingerprintIsNoOp(t *testing.T) {
+	now := time.Now()
+	r := Roster{}
+	r.Add("w", "p", "f", now)
+	r.Activate("f", now)
+	r.Add("w", "p2", "f", now.Add(time.Hour))
+	if len(r.Entries) != 1 || r.Entries[0].State != KeyActive || r.Entries[0].Public != "p" {
+		t.Fatalf("roster changed: %+v", r.Entries)
+	}
+}

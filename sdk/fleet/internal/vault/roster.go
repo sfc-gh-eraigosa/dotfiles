@@ -15,6 +15,11 @@ func (r Roster) Managed() []string {
 
 // Add appends a new pending entry.
 func (r *Roster) Add(ws, pub, fp string, now time.Time) {
+	for _, e := range r.Entries {
+		if e.Fingerprint == fp {
+			return
+		}
+	}
 	r.Entries = append(r.Entries, RosterEntry{Workstation: ws, Public: pub, Fingerprint: fp, State: KeyPending, Changed: now})
 }
 
@@ -45,6 +50,9 @@ func (r *Roster) Activate(fp string, now time.Time) (retired []RosterEntry) {
 		}
 	}
 	if idx < 0 {
+		return nil
+	}
+	if r.Entries[idx].State == KeyRetired {
 		return nil
 	}
 	ws := r.Entries[idx].Workstation

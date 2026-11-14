@@ -93,3 +93,27 @@ func TestDecodeRejectsAWrongKindOrSchema(t *testing.T) {
 		t.Fatal("want base64 error")
 	}
 }
+
+func TestEncodedFieldNamesArePinned(t *testing.T) {
+	ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	cases := map[string]struct {
+		v    any
+		keys []string
+	}{
+		"KeyPair":    {KeyPair{Created: ts}, []string{"private", "passphrase", "public", "fingerprint", "created"}},
+		"Roster":     {Roster{Entries: []RosterEntry{{State: KeyActive, VerifiedOn: []string{"h"}}}}, []string{"entries", "workstation", "public", "fingerprint", "state", "changed", "verified_on"}},
+		"Inventory":  {Inventory{}, []string{"config"}},
+		"KnownHosts": {KnownHosts{Lines: []string{"x"}}, []string{"lines"}},
+	}
+	for name, c := range cases {
+		e, err := Encode(c.v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, k := range c.keys {
+			if !strings.Contains(string(e), `"`+k+`":`) {
+				t.Errorf("%s: key %q missing in %s", name, k, e)
+			}
+		}
+	}
+}

@@ -11,9 +11,11 @@ const SchemaV1 = "fleet-vault/v1"
 
 // KeyPair is one workstation's SSH key material.
 type KeyPair struct {
-	Private, Passphrase Secret
-	Public, Fingerprint string
-	Created             time.Time
+	Private     Secret    `json:"private"`
+	Passphrase  Secret    `json:"passphrase"`
+	Public      string    `json:"public"`
+	Fingerprint string    `json:"fingerprint"`
+	Created     time.Time `json:"created"`
 }
 
 // KeyState is a roster entry's lifecycle state.
@@ -27,22 +29,28 @@ const (
 
 // RosterEntry tracks one key of one workstation.
 type RosterEntry struct {
-	Workstation string
-	Public      string
-	Fingerprint string
-	State       KeyState
-	Changed     time.Time
-	VerifiedOn  []string
+	Workstation string    `json:"workstation"`
+	Public      string    `json:"public"`
+	Fingerprint string    `json:"fingerprint"`
+	State       KeyState  `json:"state"`
+	Changed     time.Time `json:"changed"`
+	VerifiedOn  []string  `json:"verified_on"`
 }
 
 // Roster is the fleet-wide key roster.
-type Roster struct{ Entries []RosterEntry }
+type Roster struct {
+	Entries []RosterEntry `json:"entries"`
+}
 
 // Inventory is the #fleet Host blocks, as ssh_config text.
-type Inventory struct{ Config string }
+type Inventory struct {
+	Config string `json:"config"`
+}
 
 // KnownHosts holds known_hosts lines for fleet aliases.
-type KnownHosts struct{ Lines []string }
+type KnownHosts struct {
+	Lines []string `json:"lines"`
+}
 
 type envelope struct {
 	Schema string `json:"schema"`
