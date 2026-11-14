@@ -85,6 +85,19 @@ for sh in bash zsh; do
     out=$(env -i HOME="${H}" PATH=/usr/bin:/bin TERM_PROGRAM=vscode "${sh}" -c "
         . '${GOENV_SH}'; printf '%s' \"\${GOENV_VERSION_AUTO:-}\"" 2>/dev/null)
     assert_eq "${out}" "1.27.0" "${sh}: the fallback pick is marked as the profile's own"
+
+    # 7. One module cache for every Go version. goenv sets GOPATH to
+    #    $HOME/go/<version>, and the module cache defaults to $GOPATH/pkg/mod,
+    #    so each Go bump started from an empty cache: every module re-downloaded
+    #    ("go: downloading" on stderr, ~35 fleet warnings per host on
+    #    2026-11-14) and kept again per version (5 GB on jetson1).
+    H=$(make_home "${sh}-modcache" 1.27.4 1.27.4)
+    out=$(env -i HOME="${H}" PATH=/usr/bin:/bin TERM_PROGRAM=vscode "${sh}" -c "
+        . '${GOENV_SH}'; printf '%s' \"\${GOMODCACHE:-}\"" 2>/dev/null)
+    assert_eq "${out}" "${H}/go/pkg/mod" "${sh}: GOMODCACHE is \$HOME/go/pkg/mod, shared by every goenv version"
+    out=$(env -i HOME="${H}" PATH=/usr/bin:/bin TERM_PROGRAM=vscode GOMODCACHE=/elsewhere "${sh}" -c "
+        . '${GOENV_SH}'; printf '%s' \"\${GOMODCACHE:-}\"" 2>/dev/null)
+    assert_eq "${out}" "/elsewhere" "${sh}: a GOMODCACHE already set is left alone"
 done
 
 # 5. A login shell (.profile, no .goenv.sh) finds go in $HOME/.goenv/shims,

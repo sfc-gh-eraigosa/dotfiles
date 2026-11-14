@@ -5,9 +5,13 @@
 # probe and opt/etc/fleet/pins.yaml read the same tree. This was $HOME/go, a
 # second tree that pin bumps never reached: every host's PINS read "ok" while
 # interactive shells kept running the old Go. GOPATH is unaffected (goenv
-# keeps it at $HOME/go/<version>). Test: opt/profiles/goenv_profile_test.sh.
+# keeps it at $HOME/go/<version>), but the module cache is not: it is shared
+# below. Test: opt/profiles/goenv_profile_test.sh.
 export GOENV_ROOT="$HOME/.goenv"
 export GOENV_PATH_ORDER=front
+# One module cache for every Go version, not $GOPATH/pkg/mod per version: a Go
+# bump otherwise re-downloads every module. install.sh exports the same path.
+export GOMODCACHE="${GOMODCACHE:-$HOME/go/pkg/mod}"
 
 # Detect if we're in an automated/editor environment
 if [[ "$TERM_PROGRAM" == "vscode" ]] || [[ "$TERM_PROGRAM" == "cursor" ]] || [[ -n "$VSCODE_PID" ]] || [[ -n "$CURSOR_PID" ]] || [[ -n "${GEMINI_CLI:-}" ]] || [[ -n "${ANTIGRAVITY_AGENT:-}" ]]; then
