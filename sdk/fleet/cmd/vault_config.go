@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -66,7 +68,10 @@ func loadVaultConfig(path string) (vault.Config, bool, error) {
 		return vault.Config{}, false, fmt.Errorf("vault config: %s: %w", path, err)
 	}
 	var f vaultFile
-	if err := yaml.Unmarshal(data, &f); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)                                             // a typo like `vualt:` must not silently fall back to the default vault
+	if err := dec.Decode(&f); err != nil && !errors.Is(err, io.EOF) { // io.EOF = empty file
+
 		return vault.Config{}, false, fmt.Errorf("vault config: %s: %w", path, err)
 	}
 	c := vault.Config{Provider: f.Provider, Vault: f.Vault, Workstation: f.Workstation, Key: f.Key}
@@ -87,11 +92,14 @@ func loadVaultConfig(path string) (vault.Config, bool, error) {
 		c.Workstation, _, _ = strings.Cut(h, ".")
 	}
 	if c.Key == "" {
+		c.Key = "~/.ssh/id_ed25519"
+	}
+	if c.Key == "~" || strings.HasPrefix(c.Key, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return vault.Config{}, false, fmt.Errorf("vault config: resolving default key path: %w", err)
+			return vault.Config{}, false, fmt.Errorf("vault config: expanding %q: %w", c.Key, err)
 		}
-		c.Key = filepath.Join(home, ".ssh", "id_ed25519")
+		c.Key = filepath.Join(home, strings.TrimPrefix(c.Key, "~"))
 	}
 	return c, true, nil
 }
