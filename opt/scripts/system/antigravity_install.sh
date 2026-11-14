@@ -56,9 +56,41 @@ fi
 # Load NVM (still used by other Node tooling, e.g. gws).
 # --no-use skips nvm's automatic `nvm use default` at load time, which cost
 # ~5 s per shell on the Intel Mac (nvm_auto -> nvm_ensure_version_installed).
-# `nvm use <ver>` still works on demand; `node` resolves to whatever is on PATH.
+# `nvm use <ver>` still works on demand; `node` resolves to whatever is on PATH,
+# or to nvm's default version when nothing else provides one (the block below).
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use
+# >>> nvm-default-node (identical in opt/profiles/.bashrc and the profile
+# antigravity_install.sh writes; nvm_default_node_test.sh holds them equal)
+# --no-use leaves nvm's default version off PATH, and with it `npm` and every
+# npm-installed CLI (claude, gws): "command not found" on a fresh Pi, where
+# nvm's is the only node, and on hosts with an OS node too, because the CLIs
+# live in nvm's bin. Put that bin on PATH directly: no `nvm use`, so the
+# start-up saving stays. It goes first when there is no other node, and last
+# when there is one (Homebrew, nodenv, apt), so that node keeps winning.
+case ":$PATH:" in
+    *":$NVM_DIR/versions/node/"*) ;;                              # already there (nested shell)
+    *)
+        if [ -d "$NVM_DIR/versions/node" ]; then
+            _nvm_default=""
+            [ -r "$NVM_DIR/alias/default" ] && read -r _nvm_default < "$NVM_DIR/alias/default"
+            case "$_nvm_default" in
+                v[0-9]*) ;;                                           # an exact version
+                *) _nvm_default=$(nvm version default 2>/dev/null || true) ;;   # lts/*, node, 24: ask nvm
+            esac
+            if [ -n "$_nvm_default" ] && [ -x "$NVM_DIR/versions/node/$_nvm_default/bin/node" ]; then
+                if command -v node >/dev/null 2>&1; then
+                    PATH="$PATH:$NVM_DIR/versions/node/$_nvm_default/bin"
+                else
+                    PATH="$NVM_DIR/versions/node/$_nvm_default/bin:$PATH"
+                fi
+                export PATH
+            fi
+            unset _nvm_default
+        fi
+        ;;
+esac
+# <<< nvm-default-node
 # nvm's completion runs a bare `compinit` under zsh when none has run yet.
 # zsh login shells reach this file via ~/.zprofile -> ~/.profile BEFORE
 # ~/.zshrc shadows dangling vendor completions (Docker Desktop's WSL _docker
