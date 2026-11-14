@@ -30,7 +30,7 @@ the ledger is a claim, the command is the proof.
 | Vendor CLIs | `command -v op lpass` | both present (Task 0 needs them signed in by the operator) |
 | Worker exists | `gss feature list --feature fleet-vault-keys --json` | worker `design` present, PR #452 |
 | Base is current | `git -C <worktree> fetch origin && git -C <worktree> log --oneline -1 origin/main` | rebase if the worker is behind |
-| Fleet suite green on base | `cd sdk/fleet && ./scripts/test.sh` | PASS except the pre-existing failures listed in §5 |
+| Fleet suite green on base | `./scripts/test.sh` (repo root) | PASS except the pre-existing failures listed in §5 |
 
 ## 2. Worker map
 
@@ -81,7 +81,7 @@ W="$HOME/.config/gss/worktrees/sfc-gh-eraigosa/dotfiles/fleet-vault-keys/${USER}
 cd "$W/sdk/fleet"
 go test ./internal/vault/... -run TestName -v          # one test
 go test ./... -cover                                     # package coverage
-./scripts/test.sh                                        # full suite + 60 % floor
+cd "$W" && ./scripts/test.sh                            # full suite + 60 % floor (repo root)
 cd "$W" && make lint-go                                  # lint
 git -C "$W" -c commit.gpgsign=false commit -m "<plan message>"
 gss feature checkpoint --worker fleet-vault-keys/${USER}/design   # after confirmation

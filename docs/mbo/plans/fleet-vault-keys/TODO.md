@@ -26,16 +26,15 @@ All `go test` commands run from `sdk/fleet/` in the worker worktree.
 
 ---
 
-### Task 0 — vendor CLI spike  (plan Task 0)
+### Task 0 — vendor CLI spike  (plan Task 0; operator ruling 2026-11-13: Go live test, not a bash transcript; lpass only, op deferred)
 
-- [ ] SETUP: ask the operator to sign in (`op signin`, `lpass login <email>`)
-- [ ] VERIFY: op create→get→update→get→list→delete on `fleet:spike`; tee to `evidence/spike/op.txt` (payload/values redacted)
-- [ ] VERIFY: same for lpass → `evidence/spike/lpass.txt`
-- [ ] VERIFY: WSL notes (`op --version`, Linux vs `op.exe`, session persistence)
-- [ ] LEDGER: mark every vendor-argv line confirmed/corrected in TRACKING §1
-- [ ] COMMIT: `docs(fleet-vault-keys): vendor CLI spike transcripts (T0)`
+- [ ] SETUP: operator runs `lpass login --trust <email>`; `lpass status` → logged in
+- [ ] RED: `internal/vault/lpass/live_test.go` (`//go:build live`, skips unless `FLEET_VAULT_LIVE=lpass`): `TestLiveRoundTrip` — Put create → Get (version) → Put update with that version → Get (version changed) → Put with the stale version → `ErrConflict` → List contains it → delete in `t.Cleanup`
+- [ ] RUN (after Task 4): `FLEET_VAULT_LIVE=lpass go test -tags live -run TestLiveRoundTrip -v ./internal/vault/lpass/` → PASS; output (no payload values) teed to `evidence/spike/lpass.txt`
+- [ ] LEDGER: mark each lpass argv line confirmed/corrected in TRACKING §1; op lines stay unconfirmed
+- [ ] COMMIT: folded into Task 4's commit
 
-**Done when:** both transcripts committed; every §3 vendor line marked.
+**Done when:** the live round-trip passes against the real lpass and every lpass argv line is marked.
 
 ### Task 1 — vault contract  (plan Task 1)
 
