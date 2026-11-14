@@ -72,6 +72,7 @@ opt/bin/*
 # WSL docker shims: real executables (not aliases) so make/scripts resolve
 # docker even in non-interactive shells (see opt/profiles/.bash_aliases).
 !opt/bin/docker
+!opt/bin/docker_test.sh
 !opt/bin/docker-compose
 !opt/bin/docker-credential-desktop.exe
 # Test drivers for the committed opt/bin tools (issue #46 phase 2)

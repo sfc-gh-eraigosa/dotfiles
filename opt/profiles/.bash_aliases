@@ -142,9 +142,9 @@ if [ -f $HOME/.dindcenv ] ; then
         source $HOME/.dindcenv >/dev/null
         _DINDCENV_LOADED=1
     fi
-else
-    echo ".dindcenv is missing, you can install with : . opt/scripts/docker/setup_dindc_alias.sh"
 fi
+# No hint when ~/.dindcenv is absent: it is opt-in
+# (opt/scripts/docker/setup_dindc_alias.sh), not something every host lacks.
 
 
 ## different git-reset

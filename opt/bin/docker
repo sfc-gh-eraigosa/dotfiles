@@ -19,10 +19,19 @@
 #
 # Mirrors the decision logic (and the fail-loud message) of the
 # .bash_aliases block — keep the two in sync.
+#
+# `docker --shim-has-backend` only answers whether any of the three exists:
+# exit 0 if so, 1 if not, and prints nothing. .zshrc asks before it loads the
+# oh-my-zsh docker plugin, whose `docker --version` probe otherwise reaches
+# the fail-loud message below at every login on a host with no docker.
 set -eu
+
+PROBE=0
+if [ "${1:-}" = "--shim-has-backend" ]; then PROBE=1; fi
 
 DD_LINUX="/mnt/wsl/docker-desktop/cli-tools/usr/bin/docker"
 if [ -x "${DD_LINUX}" ]; then
+    [ "${PROBE}" -eq 1 ] && exit 0
     exec "${DD_LINUX}" "$@"
 fi
 
@@ -48,6 +57,7 @@ while IFS= read -r cand <&3; do
     [ "${cand}" = "${self}" ] && continue
     [ "$(cd -- "$(dirname "${cand}")" 2>/dev/null && pwd -P)/$(basename "${cand}")" = "${self}" ] && continue
     if [ -x "${cand}" ]; then
+        [ "${PROBE}" -eq 1 ] && exit 0
         exec "${cand}" "$@"
     fi
 done 3< <(type -aP docker 2>/dev/null)
@@ -63,10 +73,13 @@ if [ -x "${DD_EXE}" ] && grep -qs '^enabled' /proc/sys/fs/binfmt_misc/WSLInterop
     # (docker-credential-desktop.exe) by bare name — it must be on the PATH
     # the Windows process inherits, or builds/pulls die with "error getting
     # credentials". Its home is docker.exe's own directory.
+    [ "${PROBE}" -eq 1 ] && exit 0
     PATH="${PATH}:$(dirname "${DD_EXE}")"
     export PATH
     exec "${DD_EXE}" "$@"
 fi
+
+[ "${PROBE}" -eq 1 ] && exit 1
 
 # Fail loud, with advice matching the platform: the Desktop/interop
 # story only applies on WSL; everywhere else the answer is "install
