@@ -3,7 +3,7 @@
 - **Slug:** fleet-vault-keys
 - **Date:** 2026-11-13
 - **Status:** Draft
-- **Relates to:** issue #451 / PR #(pending) / design [`../designs/fleet-vault-keys.md`](../designs/fleet-vault-keys.md)
+- **Relates to:** issue #451 / PR #452 / design [`../designs/fleet-vault-keys.md`](../designs/fleet-vault-keys.md)
 
 ## 1. Goal
 

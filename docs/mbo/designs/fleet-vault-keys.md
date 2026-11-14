@@ -3,7 +3,7 @@
 - **Slug:** fleet-vault-keys
 - **Date:** 2026-11-13
 - **Status:** Draft
-- **Relates to:** issue #451 / PR #(pending) · builds on [`fleet`](./fleet.md), [`fleet-config`](./fleet-config.md); follows PR #450 (scan host-key fix)
+- **Relates to:** issue #451 / PR #452 · builds on [`fleet`](./fleet.md), [`fleet-config`](./fleet-config.md); follows PR #450 (scan host-key fix)
 - **Author(s):** operator + Claude
 
 ## 1. Problem / context
