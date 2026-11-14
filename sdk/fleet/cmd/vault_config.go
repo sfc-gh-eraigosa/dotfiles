@@ -74,32 +74,9 @@ func loadVaultConfig(path string) (vault.Config, bool, error) {
 
 		return vault.Config{}, false, fmt.Errorf("vault config: %s: %w", path, err)
 	}
-	c := vault.Config{Provider: f.Provider, Vault: f.Vault, Workstation: f.Workstation, Key: f.Key}
-	switch c.Provider {
-	case "op":
-		if c.Vault == "" {
-			c.Vault = "Private"
-		}
-	case "lpass":
-		if c.Vault == "" {
-			c.Vault = "fleet"
-		}
-	default:
-		return vault.Config{}, false, fmt.Errorf("vault config: %s: unknown provider %q (want \"op\" or \"lpass\")", path, c.Provider)
-	}
-	if c.Workstation == "" {
-		h, _ := os.Hostname()
-		c.Workstation, _, _ = strings.Cut(h, ".")
-	}
-	if c.Key == "" {
-		c.Key = "~/.ssh/id_ed25519"
-	}
-	if c.Key == "~" || strings.HasPrefix(c.Key, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return vault.Config{}, false, fmt.Errorf("vault config: expanding %q: %w", c.Key, err)
-		}
-		c.Key = filepath.Join(home, strings.TrimPrefix(c.Key, "~"))
+	c, err := applyVaultDefaults(vault.Config{Provider: f.Provider, Vault: f.Vault, Workstation: f.Workstation, Key: f.Key})
+	if err != nil {
+		return vault.Config{}, false, fmt.Errorf("vault config: %s: %w", path, err)
 	}
 	return c, true, nil
 }
@@ -117,4 +94,37 @@ func saveVaultConfig(path string, c vault.Config) error {
 		return err
 	}
 	return os.Chmod(path, 0o600) // WriteFile keeps an existing file's mode
+}
+
+// applyVaultDefaults fills the provider-specific vault name, the short
+// hostname workstation and the default key path (with "~" expanded). An
+// unknown provider is an error. Shared by loadVaultConfig and `vault setup`.
+func applyVaultDefaults(c vault.Config) (vault.Config, error) {
+	switch c.Provider {
+	case "op":
+		if c.Vault == "" {
+			c.Vault = "Private"
+		}
+	case "lpass":
+		if c.Vault == "" {
+			c.Vault = "fleet"
+		}
+	default:
+		return vault.Config{}, fmt.Errorf("unknown provider %q (want \"op\" or \"lpass\")", c.Provider)
+	}
+	if c.Workstation == "" {
+		h, _ := os.Hostname()
+		c.Workstation, _, _ = strings.Cut(h, ".")
+	}
+	if c.Key == "" {
+		c.Key = "~/.ssh/id_ed25519"
+	}
+	if c.Key == "~" || strings.HasPrefix(c.Key, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return vault.Config{}, fmt.Errorf("expanding %q: %w", c.Key, err)
+		}
+		c.Key = filepath.Join(home, strings.TrimPrefix(c.Key, "~"))
+	}
+	return c, nil
 }
