@@ -70,16 +70,24 @@ func vaultGate() error {
 	return nil
 }
 
+// gated is the only way a vault RunE is built: the gff gate runs before the
+// verb, so a subcommand cannot forget it (TestEveryVaultSubcommandIsGated).
+func gated(run func(*cobra.Command) error) func(*cobra.Command, []string) error {
+	return func(cmd *cobra.Command, _ []string) error {
+		if err := vaultGate(); err != nil {
+			return err
+		}
+		return run(cmd)
+	}
+}
+
 func newVaultSetupCmd() *cobra.Command {
 	var provider, vaultName, workstation, key string
 	c := &cobra.Command{
 		Use:   "setup",
 		Short: "Choose a password manager, check it is usable, and save vault.yaml",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := vaultGate(); err != nil {
-				return err
-			}
+		RunE: gated(func(cmd *cobra.Command) error {
 			in, out := bufio.NewReader(cmd.InOrStdin()), cmd.OutOrStdout()
 			if provider == "" {
 				fmt.Fprint(out, "Password manager [lpass/op]: ")
@@ -120,7 +128,7 @@ func newVaultSetupCmd() *cobra.Command {
 			}
 			fmt.Fprintf(out, "saved %s (provider %s, vault %s, workstation %s)\nnext: fleet vault push\n", vaultConfigPath(), cfg.Provider, cfg.Vault, cfg.Workstation)
 			return nil
-		},
+		}),
 	}
 	c.Flags().StringVar(&provider, "provider", "", "password manager: lpass or op (skips the prompt)")
 	c.Flags().StringVar(&vaultName, "vault", "", "vault name (op) or folder (lpass)")
@@ -134,10 +142,7 @@ func newVaultStatusCmd() *cobra.Command {
 		Use:   "status",
 		Short: "Show provider, key, inventory and known_hosts state against the vault",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := vaultGate(); err != nil {
-				return err
-			}
+		RunE: gated(func(cmd *cobra.Command) error {
 			out := cmd.OutOrStdout()
 			cfg, ok, err := loadVaultConfig(vaultConfigPath())
 			if err != nil {
@@ -153,7 +158,7 @@ func newVaultStatusCmd() *cobra.Command {
 			}
 			vaultStatus(ctx, out, cfg)
 			return nil
-		},
+		}),
 	}
 }
 
@@ -425,21 +430,29 @@ func linesDrift(a, b []string) int {
 
 // knownHostsFor collects the known_hosts lines ssh would consult for each
 // alias, resolving names and files through hostkey.Resolve (ssh -G) the way
-// `fleet trust` does. An alias with no entry contributes nothing.
+// `fleet trust` does. ssh-keygen exit 1 means "no entry" and is fine; any
+// other failure (a missing binary, a bad file) is an error, as is every alias
+// failing to resolve - an empty result must never mean "the tools broke". A
+// partial resolve failure still returns the lines found.
 func knownHostsFor(x hostkey.Exec, aliases []string) (vault.KnownHosts, error) {
 	seen := map[string]bool{}
-	var lines []string
+	var lines, failed []string
 	for _, a := range aliases {
 		t, err := hostkey.Resolve(x, a)
 		if err != nil {
-			continue // unresolvable alias: nothing to record
+			failed = append(failed, err.Error())
+			continue
 		}
 		for _, file := range t.KnownHosts {
 			if _, err := os.Stat(file); err != nil {
 				continue
 			}
 			for _, n := range t.Names() {
-				out, _ := x("ssh-keygen", "", "-F", n, "-f", file) // exit 1 = no entry
+				out, err := x("ssh-keygen", "", "-F", n, "-f", file)
+				var ec interface{ ExitCode() int }
+				if err != nil && !(errors.As(err, &ec) && ec.ExitCode() == 1) {
+					return vault.KnownHosts{}, fmt.Errorf("ssh-keygen -F %s: %w", n, err)
+				}
 				for l := range strings.SplitSeq(out, "\n") {
 					if l = strings.TrimSpace(l); l == "" || strings.HasPrefix(l, "#") || seen[l] {
 						continue
@@ -449,6 +462,9 @@ func knownHostsFor(x hostkey.Exec, aliases []string) (vault.KnownHosts, error) {
 				}
 			}
 		}
+	}
+	if len(aliases) > 0 && len(failed) == len(aliases) {
+		return vault.KnownHosts{}, fmt.Errorf("no fleet alias resolved (first: %s)", failed[0])
 	}
 	sort.Strings(lines)
 	return vault.KnownHosts{Lines: lines}, nil
