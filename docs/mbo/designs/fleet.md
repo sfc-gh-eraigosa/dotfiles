@@ -92,6 +92,9 @@ found four defects that make porting-as-is the wrong move:
 
 Migration: `fleet keys` supersedes the script and its skill. Retire
 `src/ssh-key-sync/` once parity is proven by the evidence in §7 — not before.
+**Done 2026-11-14:** parity shown
+([evidence](../plans/fleet/evidence/ssh-key-sync-retirement.md)), `ssh-key-sync.sh` deleted,
+and the `ssh-key-sync` skill rewritten to drive `fleet keys` (incl. the new `enroll`/`delete`).
 
 ## 4. Decision
 

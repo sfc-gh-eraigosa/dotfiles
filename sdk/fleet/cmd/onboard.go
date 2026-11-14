@@ -164,11 +164,38 @@ func reportIdentity(cmd *cobra.Command) {
 		fmt.Fprintln(out, "skipped; create one later with `ssh-keygen -t ed25519`")
 		return
 	}
-	if err := generateKey(cmd, filepath.Join(dir, "id_ed25519")); err != nil {
+	path := filepath.Join(dir, "id_ed25519")
+	if err := generateKey(cmd, path); err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "could not generate a key: %v\n", err)
 		return
 	}
-	fmt.Fprintln(out, "generated ~/.ssh/id_ed25519 — authorize it on a host with `A` in the TUI")
+	fmt.Fprintln(out, "generated ~/.ssh/id_ed25519")
+	fmt.Fprint(out, newKeyNextSteps(path, authorizeLocal, selfDest()))
+}
+
+// newKeyNextSteps is what a freshly generated key still needs. The scan lists
+// this machine as a fleet host too, so the key is authorized for logins here
+// right away (backed up, existing keys kept). Every OTHER host refuses it until
+// a machine that already has access runs `fleet keys enroll` — without saying
+// so, a first run ends with a fleet of hosts that will all say auth-failed.
+func newKeyNextSteps(path string, authorize func(pub string) (string, error), self string) string {
+	var b strings.Builder
+	raw, err := os.ReadFile(path + ".pub")
+	if err == nil {
+		var pub string
+		if pub, err = normalizePub(string(raw)); err == nil {
+			var st string
+			if st, err = authorize(pub); err == nil {
+				fmt.Fprintf(&b, "authorized it for logins to this machine (~/.ssh/authorized_keys: %s)\n", st)
+			}
+		}
+	}
+	if err != nil {
+		fmt.Fprintf(&b, "could not authorize it for logins to this machine: %v\n", err)
+	}
+	b.WriteString("no other machine accepts this key yet.\n")
+	b.WriteString(enrollHint(self))
+	return b.String()
 }
 
 // isTerminal reports whether f is a real terminal that can answer a prompt.

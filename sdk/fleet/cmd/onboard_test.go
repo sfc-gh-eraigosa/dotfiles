@@ -113,3 +113,36 @@ func TestAPipeIsNotATerminal(t *testing.T) {
 		t.Fatal("a pipe reported as a terminal")
 	}
 }
+
+// A key generated on first run used to end with "press A in the TUI", which
+// cannot work when every host takes keys only. It must be authorized for
+// logins to THIS machine and name the enroll command for everything else.
+func TestNewKeyNextStepsAuthorizesLocallyAndNamesEnroll(t *testing.T) {
+	dir := t.TempDir()
+	key := dir + "/id_ed25519"
+	mustWriteFile(t, key, []byte("priv"), 0o600)
+	mustWriteFile(t, key+".pub", []byte("ssh-ed25519 AAAAC3Nza fleet\n"), 0o644)
+	var got []string
+	msg := newKeyNextSteps(key, func(pub string) (string, error) {
+		got = append(got, pub)
+		return "added", nil
+	}, "me@10.0.0.42")
+	if len(got) != 1 || got[0] != "ssh-ed25519 AAAAC3Nza fleet" {
+		t.Fatalf("authorized %v", got)
+	}
+	for _, want := range []string{"this machine", "fleet keys enroll me@10.0.0.42"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("message missing %q:\n%s", want, msg)
+		}
+	}
+	if strings.Contains(msg, "press A") {
+		t.Fatalf("A cannot help a keys-only fleet:\n%s", msg)
+	}
+}
+
+func TestNewKeyNextStepsStillNamesEnrollWhenLocalAuthorizeFails(t *testing.T) {
+	msg := newKeyNextSteps(t.TempDir()+"/missing", func(string) (string, error) { return "added", nil }, "me@h")
+	if !strings.Contains(msg, "could not authorize") || !strings.Contains(msg, "fleet keys enroll me@h") {
+		t.Fatalf("msg:\n%s", msg)
+	}
+}

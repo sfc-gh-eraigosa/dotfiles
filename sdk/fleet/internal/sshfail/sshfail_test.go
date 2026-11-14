@@ -90,7 +90,7 @@ func TestIsHostKeySeparatesTrustFromCredentials(t *testing.T) {
 // The methods list is what tells a scan whether a refused host can be
 // bootstrapped with a password, so it must come from ssh's own words.
 func TestAuthMethodsReadsTheRefusalList(t *testing.T) {
-	got := AuthMethods(realExitError(t, "wenlock@10.0.0.5: Permission denied (publickey,password)."))
+	got := AuthMethods(realExitError(t, "me@10.0.0.5: Permission denied (publickey,password)."))
 	if len(got) != 2 || got[0] != "publickey" || got[1] != "password" {
 		t.Fatalf("AuthMethods = %q, want [publickey password]", got)
 	}
@@ -118,5 +118,43 @@ func TestReasonNamesWhichNetworkFailureItWas(t *testing.T) {
 		if got := Reason(realExitError(t, tc.stderr)); got != tc.want {
 			t.Errorf("Reason(%q) = %q, want %q", tc.stderr, got, tc.want)
 		}
+	}
+}
+
+// A host that refuses our key AND offers no password method can only be fixed
+// from a machine that already reaches it: ssh-copy-id has nothing to log in
+// with. That split decides whether fleet offers `A` or `fleet keys enroll`.
+func TestKeysOnlyDetectsHostsThatTakeNoPassword(t *testing.T) {
+	for _, tc := range []struct {
+		name, stderr string
+		want         bool
+	}{
+		{"publickey only", "me@10.0.0.5: Permission denied (publickey).\r\n", true},
+		{"publickey + gssapi", "Permission denied (publickey,gssapi-keyex,gssapi-with-mic).", true},
+		{"takes a password", "Permission denied (publickey,password).", false},
+		{"keyboard-interactive", "Permission denied (publickey,keyboard-interactive).", false},
+		{"no method list", "Host key verification failed.", false},
+		{"network", "ssh: connect to host x port 22: No route to host", false},
+	} {
+		if got := KeysOnly(realExitError(t, tc.stderr)); got != tc.want {
+			t.Errorf("%s: KeysOnly = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+	if KeysOnly(nil) || KeysOnly(errors.New("plain")) {
+		t.Fatal("no stderr is no evidence: KeysOnly must be false")
+	}
+}
+
+func TestIsKeysOnlyReadsTheRowNote(t *testing.T) {
+	if !IsKeysOnly(KeysOnlyNote) {
+		t.Fatalf("IsKeysOnly(%q) = false", KeysOnlyNote)
+	}
+	for _, n := range []string{"", "permission denied", "host key unverified", "woke via arp"} {
+		if IsKeysOnly(n) {
+			t.Errorf("IsKeysOnly(%q) = true", n)
+		}
+	}
+	if IsHostKey(KeysOnlyNote) {
+		t.Fatal("a keys-only note must never route to fleet trust")
 	}
 }

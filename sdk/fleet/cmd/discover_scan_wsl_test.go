@@ -276,9 +276,20 @@ func TestJudgeMove(t *testing.T) {
 // was refused for that reason (timeouts, a changed host key), and once any
 // host was identified.
 func TestScanHintOnlyWhenARefusedKeyIsTheProblem(t *testing.T) {
+	old := selfDest
+	selfDest = func() string { return "me@10.0.0.9" }
+	defer func() { selfDest = old }()
+
+	// Keys only: ssh-copy-id has nothing to log in with, so the bootstrap
+	// path is `fleet keys enroll`, run from a machine that already has access.
 	refused := []scanRow{{IP: "10.0.0.1", Kind: scanUnidentified, Cause: "key not accepted"}}
-	if !strings.Contains(scanHint(refused), "ssh-copy-id") {
-		t.Fatalf("hint = %q, want the bootstrap path", scanHint(refused))
+	if h := scanHint(refused); !strings.Contains(h, "fleet keys enroll me@10.0.0.9") || strings.Contains(h, "ssh-copy-id") {
+		t.Fatalf("hint = %q, want the enroll path only", h)
+	}
+	// A responder that takes a password can still be bootstrapped directly.
+	pw := []scanRow{{IP: "10.0.0.1", Kind: scanUnidentified, Cause: "key not accepted; host takes a password"}}
+	if h := scanHint(pw); !strings.Contains(h, "ssh-copy-id") {
+		t.Fatalf("hint = %q, want ssh-copy-id for a password host", h)
 	}
 	for name, rows := range map[string][]scanRow{
 		"identified": append(refused, scanRow{IP: "10.0.0.2", Kind: scanCurrent}),
@@ -286,8 +297,8 @@ func TestScanHintOnlyWhenARefusedKeyIsTheProblem(t *testing.T) {
 		"changed":    {{IP: "10.0.0.1", Kind: scanUnidentified, Cause: "host key CHANGED"}},
 		"empty":      nil,
 	} {
-		if h := scanHint(rows); strings.Contains(h, "ssh-copy-id") {
-			t.Errorf("%s: hint = %q, want no ssh-copy-id advice", name, h)
+		if h := scanHint(rows); strings.Contains(h, "ssh-copy-id") || strings.Contains(h, "keys enroll") {
+			t.Errorf("%s: hint = %q, want no key-bootstrap advice", name, h)
 		}
 	}
 	claimed := []scanRow{{IP: "10.0.0.66", Alias: "nas", Kind: scanUnverified}}

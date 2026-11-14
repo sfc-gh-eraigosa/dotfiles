@@ -24,7 +24,7 @@ facts. `opt/scripts/system/install-stamp.sh` now records the second one; this to
 | `fleet add <alias>` | **adopt** an existing ssh-config entry (marks in place, no `--hostname`); with `--hostname H` **creates** a new `#fleet` block. `--dry-run` |
 | `fleet remove <alias> [--purge]` | unmark (keeps SSH access); `--purge` deletes the block |
 | `fleet trust <alias>` | re-trust a host whose SSH host key changed / was never accepted: shows stored vs presented fingerprints, needs the alias typed back (or `--fingerprint SHA256:…`), backs up `known_hosts`, swaps, logs WARN `host key trusted`, re-probes |
-| `fleet keys list\|sync\|prune` | audit / authorize / remove authorized keys |
+| `fleet keys list\|sync\|enroll\|delete\|prune` | audit / authorize this machine's keys / authorize ANOTHER machine's key from one that has access / revoke one key / remove foreign keys |
 | `fleet config pull\|push\|diff` | one-way ssh-config transfer: import FROM one host, publish TO hosts, or compare without changing anything |
 | `fleet wake [host...]` | rouse hosts asleep at layer 2: ladder `retry → local-prime → peer-relay`, printed rung by rung; `--json`; exits non-zero if any target stayed down |
 | `fleet history [host]` | list the captures past updates left behind (newest first: when · host · finished/unfinished · ⚠N · size); naming a host narrows to it. `--show` prints a run (`--run N`, 1 = newest), `--errors` keeps only stderr, `--grep RE` filters lines, `--limit N`, `--json` |
@@ -483,6 +483,19 @@ I/O are all injected), so the decision surface is unit-tested without opening a 
   is ever read, transmitted, or written. `keys sync --host` authorizes only named hosts,
   and hosts that refuse us are reported as needing MANUAL bootstrap, because appending to
   a remote `authorized_keys` requires the access we are trying to establish.
+- **A keys-only refusal is routed to `fleet keys enroll`, never to `ssh-copy-id`.** When
+  ssh's `Permission denied (…)` lists no `password`/`keyboard-interactive`
+  (`sshfail.KeysOnly`), the probe sets `sshfail.KeysOnlyNote`; `A` is withheld
+  (`canAuthorize`), and the status hint, scan hint, TUI tip and first-run onboarding all
+  name `fleet keys enroll <selfDest()>` — to be run on a machine that already has access.
+  Every add to an `authorized_keys` (sync, enroll, onboarding) goes through ONE builder,
+  `appendKeyCmd`: append-only, needle-matched on type+blob (comment ignored), backup
+  before write, newline-safe, quoted for sh and zsh. Pinned by the `TestAppendKeyCmd*`,
+  `TestEnroll*` and `TestKeysOnly*` tests.
+- **An empty config is never backed up.** `writeConfig` skips the backup when the old file
+  is empty/whitespace: onboarding creates it empty seconds before the scan writes it, and
+  the 0-byte `config.bak-*` read like lost data. Pinned by
+  `TestWriteConfigSkipsTheBackupOfAnEmptyFile`.
 - **The TUI delegates config transfer to the CLI verb.** `p` / `P` suspend the TUI and run
   `fleet config pull|push`, so the diff is visible and every guard applies identically from
   either entry point. A second confirm flow inside the TUI would be a second place for

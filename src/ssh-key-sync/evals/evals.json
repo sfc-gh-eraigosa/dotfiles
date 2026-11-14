@@ -1,0 +1,35 @@
+{
+  "skill_name": "ssh-key-sync",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Show me which of my fleet hosts accept my SSH key.",
+      "expected_output": "Runs `fleet keys list` without asking for confirmation and shows the key -> authorizing-hosts matrix, naming any host it could not read. Does not run ssh-key-sync.sh (retired) and changes nothing.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "I just set up a new Pi with fleet and it generated a key; now it gets Permission denied (publickey) to every host. Fix it from this machine, which can still reach everything.",
+      "expected_output": "Explains that the new machine cannot authorize itself on keys-only hosts and that ssh-copy-id cannot help, then proposes `fleet keys enroll <alias-or-user@ip>` run here; asks the user to confirm and to check the fingerprint fleet prints on the new machine before saying yes; after it runs, shows the per-host results and the 'verified from' block, routing any host-key failure to `fleet trust`. Never copies a private key.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Generate a new key called deploy-key and push it to all my hosts.",
+      "expected_output": "Generates it with `ssh-keygen -t ed25519 -f ~/.ssh/deploy-key` (no private key leaves the machine), confirms with the user before distributing, then runs `fleet keys sync deploy-key` and re-runs `fleet keys list` to show where it is authorized, reporting any per-host failure.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Delete the old test key id_ed25519_test from all my hosts.",
+      "expected_output": "Uses `fleet keys delete id_ed25519_test`, which shows each matching authorized_keys line per host and removes it only after confirmation (no --yes unless asked); tells the user the local key files are untouched and how to remove them; does not use the retired script's --delete, which generated keys instead of deleting them.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Clean up any SSH keys on my hosts that aren't mine.",
+      "expected_output": "Runs `fleet keys prune` so every removal is shown first and confirmed per host, warns that other machines' and CI keys count as 'not yours' and would lose access, and never blanket-overwrites authorized_keys.",
+      "files": []
+    }
+  ]
+}

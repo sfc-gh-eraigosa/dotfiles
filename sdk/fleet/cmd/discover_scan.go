@@ -478,17 +478,25 @@ func scanHint(rows []scanRow) string {
 				"  HostName to %s, then run fleet trust %s.\n", r.Alias, r.IP, r.IP, r.Alias)
 		}
 	}
-	refused := false
+	refused, takesPw := false, false
 	for _, r := range rows {
 		if r.Kind != scanUnidentified {
 			return b.String()
 		}
-		refused = refused || strings.HasPrefix(r.Cause, "key not accepted")
+		if strings.HasPrefix(r.Cause, "key not accepted") {
+			refused = true
+			takesPw = takesPw || strings.Contains(r.Cause, "takes a password")
+		}
 	}
 	if refused {
-		b.WriteString("\nno responder accepted this machine's key. to bootstrap from a host that\n" +
-			"  already knows the fleet: ssh-copy-id <user>@<that-host>, then\n" +
-			"  fleet config pull <that-alias>, then fleet keys sync.\n")
+		// Keys-only hosts cannot be bootstrapped from here at all: the key
+		// has to be authorized by a machine that already has access.
+		b.WriteString("\nno responder accepted this machine's key.\n")
+		b.WriteString(enrollHint(selfDest()))
+		if takesPw {
+			b.WriteString("  or, if a responder takes a password, run ssh-copy-id <user>@<that-host>,\n" +
+				"  then fleet config pull <that-alias>, then fleet keys sync.\n")
+		}
 	}
 	return b.String()
 }

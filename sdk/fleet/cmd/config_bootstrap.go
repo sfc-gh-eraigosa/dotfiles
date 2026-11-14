@@ -141,17 +141,41 @@ func hostKeyHint(rows []Row) string {
 	return b.String()
 }
 
+// keyBootstrapHint splits refused hosts by what can fix them. A host that
+// takes keys only has no password for ssh-copy-id to use, so the key must be
+// authorized from a machine that already reaches it (`fleet keys enroll`); a
+// host that may take a password keeps the ssh-copy-id / `A` route.
 func keyBootstrapHint(rows []Row) string {
 	need := bootstrapNeeded(rows)
 	if len(need) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("\n%d host(s) cannot be reached with your key: %s\n"+
-		"  authorize it with `ssh-copy-id <alias>` (or press A in `fleet tui`) —\n"+
-		"  `fleet keys sync` cannot help: appending to a remote authorized_keys\n"+
-		"  needs the access it is trying to establish.\n"+
-		"  if the host wants a password rather than a key, open `fleet tui` and\n"+
-		"  press `s` once: no BatchMode probe can ever answer a password prompt,\n"+
-		"  so that session is the only thing that can prime the shared connection.\n",
+	var keysOnly, pwHosts []string
+	for _, r := range rows {
+		if r.Class != string(drift.AuthFailed) || sshfail.IsHostKey(r.Note) {
+			continue
+		}
+		if sshfail.IsKeysOnly(r.Note) {
+			keysOnly = append(keysOnly, r.Alias)
+		} else {
+			pwHosts = append(pwHosts, r.Alias)
+		}
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "\n%d host(s) cannot be reached with your key: %s\n"+
+		"  `fleet keys sync` cannot help from here: appending to a remote\n"+
+		"  authorized_keys needs the access it is trying to establish.\n",
 		len(need), strings.Join(need, ", "))
+	if len(keysOnly) > 0 {
+		fmt.Fprintf(&b, "  %s take(s) keys only — no password to bootstrap with.\n", strings.Join(keysOnly, ", "))
+		b.WriteString(enrollHint(selfDest()))
+	}
+	if len(pwHosts) > 0 {
+		fmt.Fprintf(&b, "  for %s: authorize it with `ssh-copy-id <alias>` (or press A in\n"+
+			"  `fleet tui`) if the host takes a password. if it wants a password for\n"+
+			"  every login, open `fleet tui` and press `s` once: no BatchMode probe can\n"+
+			"  answer a password prompt, so that session is the only thing that can\n"+
+			"  prime the shared connection.\n", strings.Join(pwHosts, ", "))
+	}
+	return b.String()
 }

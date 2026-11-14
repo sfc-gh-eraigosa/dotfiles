@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshfail"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/updplan"
 	"strings"
 	"testing"
@@ -195,5 +196,27 @@ func TestStatusLineTipsTrustOnAHostKeyRow(t *testing.T) {
 	m.setRow(Row{Alias: "gig", Class: "up-to-date"})
 	if strings.Contains(m.statusView(), "trust") {
 		t.Fatal("a healthy row must not carry the tip")
+	}
+}
+
+// A keys-only host refuses ssh-copy-id too (it has no password to type), so
+// A must not be offered there; the tip names `fleet keys enroll` instead.
+func TestKeysOnlyRowOffersEnrollNotA(t *testing.T) {
+	old := selfDest
+	selfDest = func() string { return "me@10.0.0.175" }
+	defer func() { selfDest = old }()
+
+	m := newTUIModel(nil, nil, nil, time.Time{}, "", 1, updplan.Default())
+	m.setRow(Row{Alias: "h", Class: "auth-failed", Note: sshfail.KeysOnlyNote})
+	m.cursor = "h"
+	if m.canAuthorize() {
+		t.Fatal("A offered on a host that takes no password")
+	}
+	if m.canTrust() {
+		t.Fatal("a refused key is not a host-key fault")
+	}
+	tip := m.rowTip()
+	if !strings.Contains(tip, "fleet keys enroll me@10.0.0.175") || strings.Contains(tip, "press A") {
+		t.Fatalf("tip = %q", tip)
 	}
 }
