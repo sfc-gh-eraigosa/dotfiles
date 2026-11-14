@@ -79,7 +79,7 @@ func Load(ctx context.Context, x Exec, self, keyPath string, passphrase vault.Se
 	if err != nil {
 		return err
 	}
-	defer srv.Close()
+	defer func() { _ = srv.Close() }() // best-effort teardown
 
 	env := make([]string, 0, len(os.Environ())+3)
 	for _, e := range os.Environ() {

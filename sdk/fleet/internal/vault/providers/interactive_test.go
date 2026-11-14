@@ -30,7 +30,7 @@ func TestOpenWiresTheSharedRunnerAndPassesTheFileThrough(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	for _, p := range []string{"lpass", "op"} {
 		s, err := Open(vault.Config{Provider: p}, SystemExec)
 		if err != nil {
