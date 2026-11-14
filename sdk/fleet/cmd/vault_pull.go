@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -131,7 +132,7 @@ func vaultPull(cmd *cobra.Command, as string, replaceKey bool) error {
 			restore = true
 		}
 	}
-	invPlan, err := planInventory(ctx, cmd.InOrStdin(), out, store, names)
+	invPlan, err := planPullInventory(ctx, cmd.InOrStdin(), out, store, names)
 	if err != nil {
 		return err
 	}
@@ -286,9 +287,9 @@ type invPlanT struct {
 	write bool
 }
 
-// planInventory computes the merged ssh config (never replacing) and, on
+// planPullInventory computes the merged ssh config (never replacing) and, on
 // macOS, asks whether to add the Host * keychain block. It writes nothing.
-func planInventory(ctx context.Context, in io.Reader, out io.Writer, store vault.Store, names []string) (invPlanT, error) {
+func planPullInventory(ctx context.Context, in io.Reader, out io.Writer, store vault.Store, names []string) (invPlanT, error) {
 	var p invPlanT
 	local, err := readConfig(flagConfig)
 	if err != nil {
@@ -296,7 +297,7 @@ func planInventory(ctx context.Context, in io.Reader, out io.Writer, store vault
 	}
 	next := local
 	var msg strings.Builder
-	if !contains(names, "inventory") {
+	if !slices.Contains(names, "inventory") {
 		msg.WriteString("inventory: not in vault\n")
 	} else {
 		b, gerr := store.Get(ctx, "inventory")
@@ -384,7 +385,7 @@ func planKnownHosts(ctx context.Context, store vault.Store, names []string, path
 		path = r // write through a symlink so the link survives
 	}
 	p := khPlanT{path: path, mode: 0o644}
-	if !contains(names, "known_hosts") {
+	if !slices.Contains(names, "known_hosts") {
 		return p, nil
 	}
 	b, err := store.Get(ctx, "known_hosts")
