@@ -46,8 +46,14 @@ func Generate(passphrase []byte, comment string) (private, public []byte, err er
 
 // Write stores the key pair at path (0600) and path+".pub" (0644), creating
 // the parent directory 0700 if missing. Existing files are first copied to
-// <file>.bak-<now> (0600); the private key's backup path is returned ("" when
-// nothing existed).
+// <file>.bak-<now> (0600, fsync'd, never overwriting: a taken name gets a -1,
+// -2, ... suffix); the private key's backup path is returned ("" when nothing
+// existed).
+//
+// Partial state: the private key is replaced before the .pub. If a step after
+// the private key's backup fails, the backup path is still returned together
+// with the error, so the old key is never lost; when the error says the .pub
+// failed, the new private key is already in place and the .pub is stale.
 func Write(path string, private, public []byte, now time.Time) (backup string, err error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return "", err
@@ -55,33 +61,56 @@ func Write(path string, private, public []byte, now time.Time) (backup string, e
 	suffix := ".bak-" + now.Format(tsLayout)
 	pubPath := path + ".pub"
 	if b, rerr := os.ReadFile(path); rerr == nil {
-		backup = path + suffix
-		if err := os.WriteFile(backup, b, 0o600); err != nil {
-			return "", err
-		}
-		if err := os.Chmod(backup, 0o600); err != nil {
+		if backup, err = writeBackup(path+suffix, b); err != nil {
 			return "", err
 		}
 	} else if !os.IsNotExist(rerr) {
 		return "", rerr
 	}
 	if b, rerr := os.ReadFile(pubPath); rerr == nil {
-		if err := os.WriteFile(pubPath+suffix, b, 0o600); err != nil {
-			return "", err
-		}
-		if err := os.Chmod(pubPath+suffix, 0o600); err != nil {
-			return "", err
+		if _, err := writeBackup(pubPath+suffix, b); err != nil {
+			return backup, fmt.Errorf("keystore: backing up .pub (private key not yet replaced): %w", err)
 		}
 	} else if !os.IsNotExist(rerr) {
-		return "", rerr
+		return backup, fmt.Errorf("keystore: reading existing .pub (private key not yet replaced): %w", rerr)
 	}
 	if err := atomicWrite(path, private, 0o600); err != nil {
-		return "", err
+		return backup, err
 	}
 	if err := atomicWrite(pubPath, public, 0o644); err != nil {
-		return "", err
+		return backup, fmt.Errorf("keystore: private key written but .pub failed: %w", err)
 	}
 	return backup, nil
+}
+
+// writeBackup creates name exclusively (0600), trying name-1, name-2, ... when
+// taken, writes data and fsyncs. O_EXCL never follows a planted symlink.
+func writeBackup(name string, data []byte) (string, error) {
+	for i := 0; i < 1000; i++ {
+		p := name
+		if i > 0 {
+			p = fmt.Sprintf("%s-%d", name, i)
+		}
+		f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if errors.Is(err, os.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		_, werr := f.Write(data)
+		if werr == nil {
+			werr = f.Sync()
+		}
+		if cerr := f.Close(); werr == nil {
+			werr = cerr
+		}
+		if werr != nil {
+			return "", werr
+		}
+		return p, nil
+	}
+	return "", fmt.Errorf("keystore: no free backup name for %s", name)
 }
 
 func atomicWrite(path string, data []byte, mode os.FileMode) error {
