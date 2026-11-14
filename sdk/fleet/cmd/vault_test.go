@@ -348,11 +348,27 @@ func khExec(t *testing.T, keygen func() (string, error)) func(string, string, ..
 	}
 }
 
-func TestKnownHostsNoEntryIsNotAnError(t *testing.T) {
-	x := khExec(t, func() (string, error) { return "", exitErr(1) })
-	k, _, err := knownHostsFor(x, []string{"a"})
-	if err != nil || len(k.Lines) != 0 {
-		t.Fatalf("%v %v", k, err)
+func TestKnownHostsAliasWithNoEntryIsListedUnresolved(t *testing.T) {
+	kh := filepath.Join(t.TempDir(), "kh")
+	if err := os.WriteFile(kh, []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	x := func(name, _ string, args ...string) (string, error) {
+		if name == "ssh" {
+			return "hostname " + args[1] + "\nport 22\nuserknownhostsfile " + kh + "\n", nil
+		}
+		if args[1] == "a" {
+			return "a ssh-ed25519 KEY\n", nil
+		}
+		return "", exitErr(1) // no entry
+	}
+	k, bad, err := knownHostsFor(x, []string{"a", "b"})
+	if err != nil || len(k.Lines) != 1 || len(bad) != 1 || bad[0] != "b: no known_hosts entry" {
+		t.Fatalf("%v %v %v", k, bad, err)
+	}
+	// every alias without an entry is still an error
+	if _, _, err := knownHostsFor(x, []string{"b"}); err == nil {
+		t.Fatal("all unresolved must be an error")
 	}
 }
 
@@ -422,7 +438,7 @@ func TestKnownHostsUnreadableFileIsReportedNotSkipped(t *testing.T) {
 		if name == "ssh" {
 			return "hostname " + args[1] + "\nport 22\nuserknownhostsfile " + filepath.Join(dir, "kh") + "\n", nil
 		}
-		return "", nil
+		return "k ssh-ed25519 K\n", nil
 	}
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores modes")
@@ -450,7 +466,7 @@ func TestStatusShowsUnresolvedFleetHosts(t *testing.T) {
 		return vault.KnownHosts{Lines: []string{"a k"}}, []string{"b: no route", "c: no route"}, nil
 	}
 	out, err := runVault(t, "", "status")
-	if err != nil || !strings.Contains(out, "known_hosts: in vault, 0 lines differ") || !strings.Contains(out, "known_hosts: 2 fleet host(s) unresolved: b, c") {
+	if err != nil || !strings.Contains(out, "known_hosts: in vault, 0 lines differ") || !strings.Contains(out, "known_hosts: 2 fleet host(s) unresolved: b: no route, c: no route") {
 		t.Fatalf("%v\n%s", err, out)
 	}
 }
