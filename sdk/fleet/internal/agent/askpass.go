@@ -88,7 +88,7 @@ func startAskpass(ctx context.Context, pass []byte) (*askpassServer, error) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }() // best-effort; nothing to do if close fails
 		_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		if _, err := conn.Write(payload); err == nil {
 			s.read.Store(true)
@@ -122,7 +122,7 @@ func AskpassClient(sock string, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("agent: askpass dial: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }() // best-effort; nothing to do if close fails
 	_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 	n, err := io.Copy(out, conn)
 	if err != nil {

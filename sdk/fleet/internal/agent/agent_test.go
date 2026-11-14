@@ -235,7 +235,7 @@ func TestAskpassServesOnceThenCloses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	var out bytes.Buffer
 	if err := AskpassClient(s.Sock, &out); err != nil {
 		t.Fatalf("first client: %v", err)
@@ -262,7 +262,7 @@ func TestAskpassHonoursCancel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	cancel()
 	done := make(chan struct{})
 	go func() { s.wait(); close(done) }()
@@ -297,7 +297,7 @@ func TestAskpassSocketDirIs0700(t *testing.T) {
 	if len(s.Sock) > maxSockPath {
 		t.Fatalf("sock path %d bytes > %d", len(s.Sock), maxSockPath)
 	}
-	s.Close()
+	_ = s.Close()
 	if _, err := os.Stat(s.Dir); !os.IsNotExist(err) {
 		t.Fatalf("socket dir not removed: %v", err)
 	}

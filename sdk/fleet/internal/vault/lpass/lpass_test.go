@@ -295,7 +295,7 @@ func TestSignInUsesLPASSUserAndTrust(t *testing.T) {
 
 func TestSignInWithoutUserTellsTheOperator(t *testing.T) {
 	t.Setenv("LPASS_USER", "")
-	os.Unsetenv("LPASS_USER")
+	_ = os.Unsetenv("LPASS_USER") // t.Setenv above restores the original on cleanup
 	s := newStore(newFake())
 	s.Interactive = func(context.Context, io.Reader, io.Writer, io.Writer, string, ...string) error {
 		t.Fatal("must not run")

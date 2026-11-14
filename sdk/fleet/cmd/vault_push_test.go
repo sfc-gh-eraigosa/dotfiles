@@ -200,7 +200,7 @@ func (s *conflictStore) Put(ctx context.Context, name string, data vault.Secret,
 		s.raced = true
 		var r vault.Roster
 		cur := ""
-		if b, err := s.Fake.Get(ctx, "roster"); err == nil {
+		if b, err := s.Get(ctx, "roster"); err == nil {
 			cur = b.Version
 			r, _ = vault.Decode[vault.Roster](b.Data)
 		}

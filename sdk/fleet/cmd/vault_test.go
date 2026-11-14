@@ -168,7 +168,7 @@ func stdinFile(t *testing.T, content string) *os.File {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { f.Close() })
+	t.Cleanup(func() { _ = f.Close() })
 	return f
 }
 
@@ -244,8 +244,6 @@ func TestStatusNotConfigured(t *testing.T) {
 		t.Fatalf("err=%v out=%s", err, out)
 	}
 }
-
-const testPub = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l8GKJl test"
 
 func writeLocalKey(t *testing.T, home string) (path, fp string) {
 	t.Helper()
@@ -522,7 +520,7 @@ func TestKnownHostsUnreadableFileIsReportedNotSkipped(t *testing.T) {
 	if err := os.Chmod(dir, 0o000); err != nil {
 		t.Skip(err)
 	}
-	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) }) // restore so TempDir cleanup can remove it
 	x := func(name, _ string, args ...string) (string, error) {
 		if name == "ssh" {
 			return "hostname " + args[1] + "\nport 22\nuserknownhostsfile " + filepath.Join(dir, "kh") + "\n", nil

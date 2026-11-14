@@ -478,7 +478,7 @@ func knownHostsFor(x hostkey.Exec, aliases []string) (vault.KnownHosts, []unreso
 			for _, n := range t.Names() {
 				out, err := x("ssh-keygen", "", "-F", n, "-f", file)
 				var ec interface{ ExitCode() int }
-				if err != nil && !(errors.As(err, &ec) && ec.ExitCode() == 1) {
+				if err != nil && (!errors.As(err, &ec) || ec.ExitCode() != 1) {
 					return vault.KnownHosts{}, nil, fmt.Errorf("ssh-keygen -F %s: %w", n, err)
 				}
 				for l := range strings.SplitSeq(out, "\n") {
