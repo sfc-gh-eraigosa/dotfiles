@@ -1,0 +1,37 @@
+# T0 live spike — lpass LastPass CLI v1.6.2.GIT — 2026-11-14T02:42:52Z
+$ FLEET_VAULT_LIVE=lpass go test -tags live -run TestLiveRoundTrip -v ./internal/vault/lpass/
+=== RUN   TestLiveRoundTrip
+    live_test.go:57: created, version 8b99a04a6b7c60d474b62f50ffe974642a67419683db0a3bc6ef14be89ec805f
+    live_test.go:63: NOTE: Put returned 8b99a04a6b7c60d474b62f50ffe974642a67419683db0a3bc6ef14be89ec805f but Get hashes to a64761377642421e529f6a29bc25a9807189b5682797d0a059a68c53e1b83752 (lpass notes round-trip differs)
+    live_test.go:71: version before update: a64761377642421e529f6a29bc25a9807189b5682797d0a059a68c53e1b83752
+    live_test.go:77: Put returned version 7834318aa1dc4956ffcc46e74df3cabc1079de8ec9c2ecd536f2a3a522464536
+    live_test.go:82: version after update: 69fc2580a3e0666f4104b36d54c0f110ee8f666756f653d8afe263b547c463e5
+    live_test.go:87: NOTE: Put returned 7834318aa1dc4956ffcc46e74df3cabc1079de8ec9c2ecd536f2a3a522464536 but Get hashes to 69fc2580a3e0666f4104b36d54c0f110ee8f666756f653d8afe263b547c463e5
+--- PASS: TestLiveRoundTrip (7.55s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/vault/lpass	8.151s
+exit=0
+
+# run 2 (after b29734b) — 2026-11-14T02:44:17Z
+=== RUN   TestLiveRoundTrip
+    live_test.go:68: reusing existing item
+    live_test.go:71: version before update: 7834318aa1dc4956ffcc46e74df3cabc1079de8ec9c2ecd536f2a3a522464536
+    live_test.go:77: Put returned version 83f74849e47202b9b0628f916af79900d3fd0d281c7d7690a9f5946b1b2d9ef6
+    live_test.go:82: version after update: 83f74849e47202b9b0628f916af79900d3fd0d281c7d7690a9f5946b1b2d9ef6
+    live_test.go:94: version after chained put: 8d93dd86b0ba09d9beb85bf5cf45d96a5c88f0be6dc51123850e2e656e1216c1
+--- PASS: TestLiveRoundTrip (6.07s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/vault/lpass	6.535s
+exit=0
+
+# run 3 (after 544d6c5) — 2026-11-14T02:47:34Z
+=== RUN   TestLiveRoundTrip
+    live_test.go:68: reusing existing item
+    live_test.go:71: version before update: 8d93dd86b0ba09d9beb85bf5cf45d96a5c88f0be6dc51123850e2e656e1216c1
+    live_test.go:77: Put returned version 0b164796a1edf96e994670c1db26d6598fb32f5538f75cb3b644c97a178451c8
+    live_test.go:82: version after update: 0b164796a1edf96e994670c1db26d6598fb32f5538f75cb3b644c97a178451c8
+    live_test.go:94: version after chained put: f080e8a58556e8da83ae01b20f15e5eabe1d211f161c2e121943064c6258fcc7
+--- PASS: TestLiveRoundTrip (4.72s)
+PASS
+ok  	github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/vault/lpass	5.109s
+exit=0

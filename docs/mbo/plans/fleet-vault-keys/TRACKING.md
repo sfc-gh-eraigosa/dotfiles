@@ -19,11 +19,11 @@
 
 | Task | Status | Commit | Evidence (command → result) | Notes |
 | :-- | :-- | :-- | :-- | :-- |
-| T0 vendor spike | todo | | | needs operator sign-in |
-| T1 vault contract | todo | | | |
-| T2 payload + roster | todo | | | |
+| T0 vendor spike | done (lpass); op deferred | 40479f9..544d6c5 | `FLEET_VAULT_LIVE=lpass go test -tags live -run TestLiveRoundTrip ./internal/vault/lpass/` → PASS ×3 (evidence/spike/lpass.txt); run 1 found the trailing-\n version bug | Go live test per operator ruling; `fleet/fleet:spike` left in vault, safe to delete after 2026-11-20 |
+| T1 vault contract | done | 7414fc8 | `go test -cover ./internal/vault/...` → PASS, vault 94.9 %, providers 100 % | review clean |
+| T2 payload + roster | done | 2df7add, a72a737 | `go test -cover ./internal/vault/...` → PASS, vault 96.4 % | JSON field names pinned; retired keys stay retired |
 | T3 op adapter | todo | | | |
-| T4 lpass adapter | todo | | | |
+| T4 lpass adapter | done | 40479f9, b29734b, 544d6c5 | `go test -cover ./internal/vault/...` → PASS, lpass 91.1 %, providers 94.1 %; live PASS | best-effort CAS documented; ambiguous names refused |
 | T5 vault.yaml + gate | todo | | | |
 | T6 keystore | todo | | | |
 | T7 agent + askpass | todo | | | |
@@ -41,8 +41,8 @@
 
 | Line | Status | Correction |
 | :-- | :-- | :-- |
-| op ready / signin / get / create / update / list | unconfirmed | |
-| lpass ready / login / get / create / update / list | unconfirmed | |
+| op ready / signin / get / create / update / list | unconfirmed | deferred: no 1Password on the operator's machine |
+| lpass ready / login / get / create / update / list | confirmed (live, v1.6.2) | login uses `--trust $LPASS_USER`; `show --notes` appends one `\n` (stripped in Get) |
 
 ## 2. Feature → proof matrix (from spec §5)
 
@@ -88,3 +88,4 @@ never silently patched.
 | Date | Session | What advanced |
 | :-- | :-- | :-- |
 | 2026-11-13 | planning | Plan + execution trio written on worker `design` (PR #452). |
+| 2026-11-13 | build 1 | T1, T2, T4 (+T0 lpass live) done, subagent-driven with per-task review. Rulings: lpass-first, op deferred; T0 as a Go `live` test. |
