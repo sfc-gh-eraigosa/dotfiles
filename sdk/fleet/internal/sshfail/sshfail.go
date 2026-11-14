@@ -41,33 +41,40 @@ const (
 var markers = []struct {
 	sig, note string
 	kind      Kind
+	reason    string // what a row may say about a NETWORK failure; see Reason
 }{
-	{"REMOTE HOST IDENTIFICATION HAS CHANGED", "host key CHANGED", Auth},
-	{"Host key verification failed", "host key unverified", Auth},
-	{"Permission denied", "permission denied", Auth},
-	{"Too many authentication failures", "permission denied", Auth},
-	{"Connection refused", "", Network},
-	{"Connection timed out", "", Network},
-	{"Connection closed by", "", Network},
-	{"No route to host", "", Network},
-	{"Network is unreachable", "", Network},
-	{"Could not resolve hostname", "", Network},
-	{"Operation timed out", "", Network},
+	{"REMOTE HOST IDENTIFICATION HAS CHANGED", "host key CHANGED", Auth, ""},
+	{"Host key verification failed", "host key unverified", Auth, ""},
+	{"Permission denied", "permission denied", Auth, ""},
+	{"Too many authentication failures", "permission denied", Auth, ""},
+	{"Connection refused", "", Network, "refused the connection"},
+	{"Connection timed out", "", Network, "timed out"},
+	{"Connection closed by", "", Network, "closed the connection"},
+	{"Connection reset", "", Network, "reset the connection"},
+	{"No route to host", "", Network, "no route to host"},
+	{"Network is unreachable", "", Network, "network unreachable"},
+	{"Could not resolve hostname", "", Network, "name did not resolve"},
+	{"Operation timed out", "", Network, "timed out"},
 }
 
 // match is the single scan both exported functions share, so a signature can
 // never classify one way and annotate another.
 func match(err error) (Kind, string) {
+	k, n, _ := matchAll(err)
+	return k, n
+}
+
+func matchAll(err error) (Kind, string, string) {
 	s := stderrOf(err)
 	if s == "" {
-		return Unknown, ""
+		return Unknown, "", ""
 	}
 	for _, m := range markers {
 		if strings.Contains(s, m.sig) {
-			return m.kind, m.note
+			return m.kind, m.note, m.reason
 		}
 	}
-	return Unknown, ""
+	return Unknown, "", ""
 }
 
 // stderrOf recovers what the ssh process wrote. A plain error carries none.
@@ -85,6 +92,12 @@ func Classify(err error) Kind { k, _ := match(err); return k }
 // Note is the short qualifier for the row: which auth fault, since the fixes
 // differ (ssh-keygen -R versus authorizing a key).
 func Note(err error) string { _, n := match(err); return n }
+
+// Reason names WHICH network failure it was — a refusal, a timeout and a
+// closed session point at different causes (sshd down, a slow handshake past
+// ConnectTimeout, MaxStartups or a ban). Empty for anything that is not a
+// recognised network failure; Note stays the qualifier for auth faults.
+func Reason(err error) string { _, _, r := matchAll(err); return r }
 
 // IsHostKey reports whether a Note is a host-key fault. Those are repaired on
 // THIS machine (known_hosts, via `fleet trust`); every other auth note needs a

@@ -104,3 +104,19 @@ func TestAuthMethodsReadsTheRefusalList(t *testing.T) {
 		}
 	}
 }
+
+// "dropped the connection" for a timeout sends the operator to sshd when the
+// handshake was merely slow; each network failure keeps its own name.
+func TestReasonNamesWhichNetworkFailureItWas(t *testing.T) {
+	for _, tc := range []struct{ stderr, want string }{
+		{"ssh: connect to host 10.0.0.5 port 22: Connection timed out", "timed out"},
+		{"ssh: connect to host 10.0.0.5 port 22: Operation timed out", "timed out"},
+		{"ssh: connect to host 10.0.0.5 port 22: Connection refused", "refused the connection"},
+		{"Connection closed by 10.0.0.5 port 22", "closed the connection"},
+		{"op@10.0.0.5: Permission denied (publickey).", ""},
+	} {
+		if got := Reason(realExitError(t, tc.stderr)); got != tc.want {
+			t.Errorf("Reason(%q) = %q, want %q", tc.stderr, got, tc.want)
+		}
+	}
+}

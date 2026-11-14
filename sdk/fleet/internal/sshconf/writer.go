@@ -3,6 +3,7 @@ package sshconf
 import (
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 // blockRange locates the [start,end) line range of alias's Host block.
@@ -56,11 +57,35 @@ func render(h Host, marker string) string {
 	return b.String()
 }
 
+// checkInert refuses a field that would write more than its own directive. A
+// newline in any value starts a NEW line of ssh_config, and a value that reached
+// us from a remote host (a scanned hostname) could use that to plant a
+// ProxyCommand that runs locally on the next ssh. An alias is one token, so it
+// may not contain whitespace or start a comment either. This is the last line
+// of defence; callers that take values from the network validate first.
+func checkInert(h Host) error {
+	for _, f := range []struct{ name, v string }{
+		{"alias", h.Alias}, {"HostName", h.HostName}, {"User", h.User},
+		{"Port", h.Port}, {"IdentityFile", h.Identity},
+	} {
+		if strings.IndexFunc(f.v, unicode.IsControl) >= 0 {
+			return fmt.Errorf("sshconf: %s %q contains a control character", f.name, f.v)
+		}
+	}
+	if strings.IndexFunc(h.Alias, unicode.IsSpace) >= 0 || strings.Contains(h.Alias, "#") {
+		return fmt.Errorf("sshconf: alias %q must be a single token", h.Alias)
+	}
+	return nil
+}
+
 // Add upserts a fleet-marked Host block. Re-adding an identical host is a
 // no-op on the file's bytes (idempotent), and no other block is touched.
 func Add(cfg string, h Host, marker string) (string, error) {
 	if strings.TrimSpace(h.Alias) == "" {
 		return "", fmt.Errorf("sshconf: alias is required")
+	}
+	if err := checkInert(h); err != nil {
+		return "", err
 	}
 	if _, _, exists := blockRange(strings.Split(cfg, "\n"), h.Alias); exists {
 		purged, err := Purge(cfg, h.Alias)
@@ -164,6 +189,9 @@ func Purge(cfg, alias string) (string, error) {
 // An empty field means "leave it alone", never "blank it": omission is not an
 // instruction to delete.
 func Update(cfg string, h Host) (string, error) {
+	if err := checkInert(h); err != nil {
+		return "", err
+	}
 	if strings.TrimSpace(h.Alias) == "" {
 		return "", fmt.Errorf("sshconf: alias is required")
 	}
