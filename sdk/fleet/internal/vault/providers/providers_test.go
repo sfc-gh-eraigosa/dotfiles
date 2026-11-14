@@ -14,9 +14,10 @@ func TestOpenRejectsAnUnknownProvider(t *testing.T) {
 	}
 }
 
-func TestOpenOpIsNotYetInstalled(t *testing.T) {
-	if _, err := Open(vault.Config{Provider: "op"}, nil); err != vault.ErrNotInstalled {
-		t.Error(err)
+func TestOpenOpReturnsTheAdapter(t *testing.T) {
+	s, err := Open(vault.Config{Provider: "op"}, SystemExec)
+	if err != nil || s.Name() != "op" {
+		t.Fatalf("s=%v err=%v", s, err)
 	}
 }
 
