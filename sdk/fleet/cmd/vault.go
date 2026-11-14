@@ -36,7 +36,7 @@ var (
 	// fleetInventory and fleetKnownHosts gather the local half of the
 	// vault's inventory and known_hosts items (status compares; push uploads).
 	fleetInventory  = inventoryFromConfig
-	fleetKnownHosts = func() (vault.KnownHosts, []string, error) {
+	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
 		hosts, err := fleetHosts()
 		if err != nil {
 			return vault.KnownHosts{}, nil, err
@@ -282,7 +282,7 @@ func vaultStatus(ctx context.Context, out io.Writer, cfg vault.Config) {
 	lk, unresolved, kerr := fleetKnownHosts()
 	defer func() {
 		if kerr == nil && len(unresolved) > 0 {
-			fmt.Fprintf(out, "known_hosts: %d fleet host(s) unresolved: %s\n", len(unresolved), strings.Join(unresolved, ", "))
+			fmt.Fprintf(out, "known_hosts: %d fleet host(s) unresolved: %s\n", len(unresolved), joinUnresolved(unresolved, ", "))
 		}
 	}()
 	switch {
@@ -438,6 +438,26 @@ func linesDrift(a, b []string) int {
 // alias, resolving names and files through hostkey.Resolve (ssh -G) the way
 // `fleet trust` does.
 //
+// unresolvedHost is a fleet alias whose known_hosts lines are missing from a
+// knownHostsFor result. Names are the known_hosts lookup names it is known by
+// (the alias, plus ssh -G's HostName/IPs when that resolved), so a caller can
+// find the alias's lines elsewhere (push keeps the vault's under
+// --allow-partial). Reason never carries key material.
+type unresolvedHost struct {
+	Alias, Reason string
+	Names         []string
+}
+
+func (u unresolvedHost) String() string { return u.Alias + ": " + u.Reason }
+
+func joinUnresolved(us []unresolvedHost, sep string) string {
+	s := make([]string, len(us))
+	for i, u := range us {
+		s[i] = u.String()
+	}
+	return strings.Join(s, sep)
+}
+
 // Contract (relied on by `fleet vault push`): the returned KnownHosts is
 // COMPLETE only when the unresolved list is empty. Each unresolved entry is
 // "alias: reason" for an alias whose lines are missing from the result (ssh -G
@@ -448,13 +468,14 @@ func linesDrift(a, b []string) int {
 // (--allow-partial), or the vault silently loses those hosts. Errors: any
 // ssh-keygen failure other than exit 1 (= no entry, fine), and every alias
 // being unresolved.
-func knownHostsFor(x hostkey.Exec, aliases []string) (vault.KnownHosts, []string, error) {
+func knownHostsFor(x hostkey.Exec, aliases []string) (vault.KnownHosts, []unresolvedHost, error) {
 	seen := map[string]bool{}
-	var lines, unresolved []string
+	var lines []string
+	var unresolved []unresolvedHost
 	for _, a := range aliases {
 		t, err := hostkey.Resolve(x, a)
 		if err != nil {
-			unresolved = append(unresolved, a+": "+err.Error())
+			unresolved = append(unresolved, unresolvedHost{Alias: a, Reason: err.Error(), Names: []string{a}})
 			continue
 		}
 		bad, found := "", false
@@ -483,11 +504,12 @@ func knownHostsFor(x hostkey.Exec, aliases []string) (vault.KnownHosts, []string
 				}
 			}
 		}
+		names := append([]string{a}, t.Names()...)
 		switch {
 		case bad != "":
-			unresolved = append(unresolved, a+": "+bad)
+			unresolved = append(unresolved, unresolvedHost{Alias: a, Reason: bad, Names: names})
 		case !found:
-			unresolved = append(unresolved, a+": no known_hosts entry")
+			unresolved = append(unresolved, unresolvedHost{Alias: a, Reason: "no known_hosts entry", Names: names})
 		}
 	}
 	if len(aliases) > 0 && len(unresolved) == len(aliases) {
