@@ -1,7 +1,6 @@
 package op
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -470,10 +469,9 @@ func TestSignInRunsOpSignin(t *testing.T) {
 	}
 }
 
-func TestRunInteractiveWiresStdio(t *testing.T) {
-	var out bytes.Buffer
-	if err := runInteractive(context.Background(), strings.NewReader("hi"), &out, io.Discard, "cat"); err != nil || out.String() != "hi" {
-		t.Fatalf("out=%q err=%v", out.String(), err)
+func TestSignInWithoutARunnerErrors(t *testing.T) {
+	if err := New(vault.Config{}, nil).SignIn(context.Background(), nil, io.Discard, io.Discard); err == nil {
+		t.Fatal("want error when no interactive runner is wired")
 	}
 }
 

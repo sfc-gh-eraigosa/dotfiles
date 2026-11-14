@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -20,10 +22,13 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 	"golang.org/x/term"
 
-	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keystore"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/vault"
 )
+
+// pushNeverRemoves is said in push's help and diff: removals and cleared
+// fields need roster-aware semantics (PR 3, T14), so push only merges.
+const pushNeverRemoves = "push adds and updates hosts; it never removes them from the vault"
 
 // maxPushRounds bounds the re-read/re-ask loop when another workstation keeps
 // writing the same items.
@@ -60,7 +65,8 @@ func newVaultPushCmd() *cobra.Command {
 		Long: "push is one-way: it never reads anything back onto this machine. It shows what would change in\n" +
 			"each of key/<workstation>, roster, inventory and known_hosts, asks once, then writes with\n" +
 			"compare-and-set; if another workstation wrote in between it re-reads, re-diffs and asks again.\n" +
-			"The existing local key is captured as-is; nothing new is generated.",
+			"The existing local key is captured as-is; nothing new is generated.\n" +
+			"Inventory: " + pushNeverRemoves + ".",
 		Args: cobra.NoArgs,
 		RunE: gated(func(cmd *cobra.Command) error { return vaultPush(cmd, o) }),
 	}
@@ -127,8 +133,7 @@ func (p vaultPushPlan) changed() []string {
 
 func vaultPush(cmd *cobra.Command, o vaultPushOpts) error {
 	out, errw := cmd.OutOrStdout(), cmd.ErrOrStderr()
-	stdin := cmd.InOrStdin()
-	in := bufio.NewReader(stdin)
+	stdin := cmd.InOrStdin() // the real *os.File in production: the sign-in child gets it as-is
 	cfg, ok, err := loadVaultConfig(vaultConfigPath())
 	if err != nil {
 		return err
@@ -145,9 +150,11 @@ func vaultPush(cmd *cobra.Command, o vaultPushOpts) error {
 	if err != nil {
 		return err
 	}
-	if err := ensureSignedIn(ctx, store, in, out, errw); err != nil {
+	if err := ensureSignedIn(ctx, store, cfg.Provider, stdin, out, errw); err != nil {
 		return err
 	}
+	// Built only AFTER sign-in, and never handed to a child process.
+	in := bufio.NewReader(stdin)
 
 	lk, err := readLocalKey(cfg.Key)
 	if err != nil {
@@ -185,7 +192,7 @@ func vaultPush(cmd *cobra.Command, o vaultPushOpts) error {
 			fmt.Fprintln(out, "nothing written")
 			return withheld
 		}
-		if kp == nil && contains(names, "key/"+cfg.Workstation) {
+		if kp == nil && slices.Contains(names, "key/"+cfg.Workstation) {
 			k, enc, err := materializeKey(lk, cfg, o, stdin, in, errw)
 			if err != nil {
 				return err
@@ -228,6 +235,7 @@ func vaultPush(cmd *cobra.Command, o vaultPushOpts) error {
 			if it.Name == "key/"+cfg.Workstation && o.EncryptLocal && !lk.Encrypted {
 				// Only now: the passphrase that opens the re-encrypted file is
 				// safely in the vault.
+				pubBefore, _ := filepath.Glob(lk.Path + ".pub.bak-*")
 				backup, werr := keystore.Write(lk.Path, vaultCopy, lk.PubFile, time.Now())
 				if werr != nil {
 					return fmt.Errorf("vault has the key, but encrypting %s failed (backup: %s): %w", lk.Path, listOrNone([]string{backup}), werr)
@@ -241,12 +249,14 @@ func vaultPush(cmd *cobra.Command, o vaultPushOpts) error {
 					keep = "could not verify the re-encrypted key (" + verr.Error() + ")"
 				} else if rerr := os.Remove(backup); rerr != nil {
 					keep = "could not remove the backup (" + rerr.Error() + ")"
+				} else {
+					removeNewPubBackups(lk.Path, pubBefore, lk.PubFile)
 				}
 				if keep != "" {
 					postErr = fmt.Errorf("%s: %s is kept — plaintext — delete it after `fleet keys unlock` works", keep, backup)
 					fmt.Fprintf(out, "WARNING: %v\n", postErr)
 				} else {
-					fmt.Fprintln(out, "removed the plaintext backup; the vault holds the recovery copy")
+					fmt.Fprintln(out, "removed the plaintext backup and its .pub copy; the vault holds the recovery copy")
 				}
 			}
 		}
@@ -260,7 +270,25 @@ func vaultPush(cmd *cobra.Command, o vaultPushOpts) error {
 	return fmt.Errorf("the vault kept changing under us (%d rounds); nothing more was written — re-run `fleet vault push`", maxPushRounds)
 }
 
-func ensureSignedIn(ctx context.Context, store vault.Store, in io.Reader, out, errw io.Writer) error {
+// removeNewPubBackups deletes the .pub backup keystore.Write just made (the
+// pre-encrypt pair's public half), identified as a .pub.bak-* that did not
+// exist before and still holds the same public key.
+func removeNewPubBackups(keyPath string, before []string, pub []byte) {
+	after, _ := filepath.Glob(keyPath + ".pub.bak-*")
+	for _, p := range after {
+		if slices.Contains(before, p) {
+			continue
+		}
+		if b, err := os.ReadFile(p); err == nil && string(b) == string(pub) {
+			_ = os.Remove(p)
+		}
+	}
+}
+
+// ensureSignedIn is the ONE Ready → SignIn → Ready path (setup and push). in
+// must be the command's own stdin (an *os.File in production), never a
+// bufio.Reader: it is handed to the vendor's interactive child.
+func ensureSignedIn(ctx context.Context, store vault.Store, provider string, in io.Reader, out, errw io.Writer) error {
 	err := store.Ready(ctx)
 	if errors.Is(err, vault.ErrSignedOut) {
 		if serr := store.SignIn(ctx, in, out, errw); serr != nil {
@@ -268,10 +296,24 @@ func ensureSignedIn(ctx context.Context, store vault.Store, in io.Reader, out, e
 		}
 		err = store.Ready(ctx)
 	}
+	if errors.Is(err, vault.ErrNotInstalled) {
+		return fmt.Errorf("%s: %w", installHint(provider), err)
+	}
 	if err != nil {
 		return fmt.Errorf("%s is not ready: %w", store.Name(), err)
 	}
 	return nil
+}
+
+// installHint names the provider's own CLI package.
+func installHint(provider string) string {
+	switch provider {
+	case "lpass":
+		return "lpass is not installed: install lastpass-cli (e.g. `brew install lastpass-cli` or `sudo apt install lastpass-cli`) and re-run"
+	case "op":
+		return "op is not installed: install 1password-cli (e.g. `brew install 1password-cli`; see https://developer.1password.com/docs/cli/get-started/) and re-run"
+	}
+	return provider + " is not installed: install its CLI and re-run"
 }
 
 func signInHint(provider string) string {
@@ -418,14 +460,13 @@ func planVaultPush(ctx context.Context, st vault.Store, cfg vault.Config, lk loc
 	if invErr != nil {
 		p.Withheld = append(p.Withheld, fmt.Sprintf("inventory: NOT pushed — local fleet hosts unreadable: %v", invErr))
 	} else {
-		plan, perr := cfgplan.Build(cur, inv.Config, cfgplan.Opts{Marker: flagMarker, All: true})
+		plan, perr := planInventory(cur, inv)
 		if perr != nil {
 			p.Withheld = append(p.Withheld, fmt.Sprintf("inventory: NOT pushed — %v", perr))
 		} else {
 			it := pushItem{Name: "inventory", Version: b.Version, Diff: []string{"inventory:"}}
-			for _, l := range strings.Split(strings.TrimRight(renderPlan(plan), "\n"), "\n") {
-				it.Diff = append(it.Diff, l)
-			}
+			it.Diff = append(it.Diff, strings.Split(strings.TrimRight(renderPlan(plan), "\n"), "\n")...)
+			it.Diff = append(it.Diff, "  ("+pushNeverRemoves+")")
 			if !plan.Empty() {
 				next, aerr := plan.Apply(cur)
 				if aerr != nil {
@@ -452,8 +493,9 @@ func planVaultPush(ctx context.Context, st vault.Store, cfg vault.Config, lk loc
 			return p, fmt.Errorf("the vault known_hosts is unreadable (%v); refusing to overwrite it", err)
 		}
 	}
+	noneResolved := errors.Is(khErr, errNoAliasResolved) // a fresh machine: unresolved is the whole fleet
 	switch {
-	case khErr != nil:
+	case khErr != nil && !noneResolved:
 		p.Withheld = append(p.Withheld, fmt.Sprintf("known_hosts: NOT pushed — %v", khErr))
 	case len(unresolved) > 0 && !o.AllowPartial:
 		w := fmt.Sprintf("known_hosts: NOT pushed — %d fleet host(s) have no usable known_hosts entry, and a partial copy must not replace the vault's:", len(unresolved))
@@ -463,6 +505,12 @@ func planVaultPush(ctx context.Context, st vault.Store, cfg vault.Config, lk loc
 		w += "\n    fix: connect to each host once (or `ssh-keyscan <host> >> ~/.ssh/known_hosts`), then re-run `fleet vault push`" +
 			"\n    or:  re-run with --allow-partial to upload only the hosts that resolved"
 		p.Withheld = append(p.Withheld, w)
+	case noneResolved:
+		// --allow-partial with nothing resolved here: the merge keeps
+		// every vault line and adds none.
+		p.Items = append(p.Items, pushItem{Name: "known_hosts", Version: b.Version, Diff: []string{
+			fmt.Sprintf("known_hosts: unchanged — no fleet host resolved here (%d unresolved); --allow-partial keeps all %d vault line(s)", len(unresolved), len(vk.Lines)),
+		}})
 	default:
 		lines := append([]string(nil), kh.Lines...)
 		var keptFor, noneFor []string
@@ -494,7 +542,7 @@ func planVaultPush(ctx context.Context, st vault.Store, cfg vault.Config, lk loc
 			}
 		}
 		sort.Strings(lines)
-		add, del := setDiff(lines, vk.Lines)
+		add, del := lineSetDiff(lines, vk.Lines)
 		it := pushItem{Name: "known_hosts", Version: b.Version}
 		if add == 0 && del == 0 {
 			it.Diff = []string{"known_hosts: unchanged"}
@@ -563,8 +611,9 @@ func knownHostsLineMatches(line string, names []string) bool {
 	return false
 }
 
-// setDiff counts lines only in a (added) and only in b (removed).
-func setDiff(a, b []string) (add, del int) {
+// lineSetDiff counts the distinct lines only in a (add) and only in b (del);
+// add+del is the size of the symmetric difference. push and status share it.
+func lineSetDiff(a, b []string) (add, del int) {
 	sa, sb := map[string]bool{}, map[string]bool{}
 	for _, x := range a {
 		sa[x] = true

@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/vault"
@@ -34,7 +33,8 @@ type Interactive func(ctx context.Context, stdin io.Reader, stdout, stderr io.Wr
 type Store struct {
 	folder string
 	exec   vault.Exec
-	// Interactive runs `lpass login`; it defaults to os/exec with the given stdio.
+	// Interactive runs `lpass login`; providers.Open wires the shared
+	// providers.Interactive (nil here: SignIn then errors).
 	Interactive Interactive
 }
 
@@ -46,13 +46,7 @@ func New(cfg vault.Config, x vault.Exec) *Store {
 	if f == "" {
 		f = defaultFolder
 	}
-	return &Store{folder: f, exec: x, Interactive: runInteractive}
-}
-
-func runInteractive(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
-	c := exec.CommandContext(ctx, name, args...)
-	c.Stdin, c.Stdout, c.Stderr = stdin, stdout, stderr
-	return c.Run()
+	return &Store{folder: f, exec: x}
 }
 
 // Name returns "lpass".
@@ -113,6 +107,9 @@ func (s *Store) SignIn(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	user := strings.TrimSpace(os.Getenv("LPASS_USER"))
 	if user == "" {
 		return errors.New("lpass: LPASS_USER is not set; run `lpass login --trust <email>` yourself, then retry")
+	}
+	if s.Interactive == nil {
+		return errors.New("lpass: no interactive runner wired (open the store with providers.Open)")
 	}
 	return s.Interactive(ctx, stdin, stdout, stderr, bin, "login", "--trust", user)
 }

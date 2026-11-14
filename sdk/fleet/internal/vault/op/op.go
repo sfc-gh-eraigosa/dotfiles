@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -44,7 +43,8 @@ type Interactive func(ctx context.Context, stdin io.Reader, stdout, stderr io.Wr
 type Store struct {
 	vault string
 	exec  vault.Exec
-	// Interactive runs `op signin`; it defaults to os/exec with the given stdio.
+	// Interactive runs `op signin`; providers.Open wires the shared
+	// providers.Interactive (nil here: SignIn then errors).
 	Interactive Interactive
 }
 
@@ -56,13 +56,7 @@ func New(cfg vault.Config, x vault.Exec) *Store {
 	if v == "" {
 		v = defaultVault
 	}
-	return &Store{vault: v, exec: x, Interactive: runInteractive}
-}
-
-func runInteractive(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, name string, args ...string) error {
-	c := exec.CommandContext(ctx, name, args...)
-	c.Stdin, c.Stdout, c.Stderr = stdin, stdout, stderr
-	return c.Run()
+	return &Store{vault: v, exec: x}
 }
 
 // Name returns "op".
@@ -123,6 +117,9 @@ func (s *Store) Ready(ctx context.Context) error {
 
 // SignIn runs `op signin` on the operator's terminal.
 func (s *Store) SignIn(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer) error {
+	if s.Interactive == nil {
+		return errors.New("op: no interactive runner wired (open the store with providers.Open)")
+	}
 	return s.Interactive(ctx, stdin, stdout, stderr, bin, "signin")
 }
 

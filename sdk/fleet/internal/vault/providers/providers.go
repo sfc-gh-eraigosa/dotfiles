@@ -13,9 +13,13 @@ import (
 func Open(cfg vault.Config, x vault.Exec) (vault.Store, error) {
 	switch cfg.Provider {
 	case "lpass":
-		return lpass.New(cfg, x), nil
+		s := lpass.New(cfg, x)
+		s.Interactive = Interactive
+		return s, nil
 	case "op":
-		return op.New(cfg, x), nil
+		s := op.New(cfg, x)
+		s.Interactive = Interactive
+		return s, nil
 	default:
 		return nil, fmt.Errorf("unknown vault provider %q (supported: %q, %q)", cfg.Provider, "op", "lpass")
 	}

@@ -8,12 +8,14 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/agent"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/featflag"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/hostkey"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keystore"
@@ -89,20 +91,24 @@ func newVaultSetupCmd() *cobra.Command {
 		Short: "Choose a password manager, check it is usable, and save vault.yaml",
 		Args:  cobra.NoArgs,
 		RunE: gated(func(cmd *cobra.Command) error {
-			in, out := bufio.NewReader(cmd.InOrStdin()), cmd.OutOrStdout()
+			// stdin stays the command's own reader (the real *os.File in
+			// production): the vendor sign-in child must get that, never a
+			// bufio.Reader. The prompt reads one line only, and only when
+			// there is no --provider.
+			stdin, out := cmd.InOrStdin(), cmd.OutOrStdout()
 			if provider == "" {
 				fmt.Fprint(out, "Password manager [lpass/op]: ")
-				line, _ := in.ReadString('\n')
+				line, _ := bufio.NewReader(stdin).ReadString('\n')
 				provider = strings.TrimSpace(line)
 			}
 			cfg, err := applyVaultDefaults(vault.Config{Provider: provider, Vault: vaultName, Workstation: workstation, Key: key})
 			if err != nil {
 				return err
 			}
-			store, err := openVault(cfg)
-			if errors.Is(err, vault.ErrNotInstalled) && cfg.Provider == "op" {
-				return errors.New("1Password support is not in this build yet; use lpass")
+			if cfg.Provider == "op" {
+				fmt.Fprintln(out, "note: 1Password support is unconfirmed live (no account tested)")
 			}
+			store, err := openVault(cfg)
 			if err != nil {
 				return err
 			}
@@ -110,19 +116,11 @@ func newVaultSetupCmd() *cobra.Command {
 			if ctx == nil {
 				ctx = context.Background()
 			}
-			err = store.Ready(ctx)
-			if errors.Is(err, vault.ErrSignedOut) {
-				if serr := store.SignIn(ctx, in, out, cmd.ErrOrStderr()); serr != nil {
-					return fmt.Errorf("sign in to %s: %w", store.Name(), serr)
+			if err := ensureSignedIn(ctx, store, cfg.Provider, stdin, out, cmd.ErrOrStderr()); err != nil {
+				if errors.Is(err, vault.ErrNotInstalled) {
+					fmt.Fprintln(out, err.Error())
 				}
-				err = store.Ready(ctx)
-			}
-			if errors.Is(err, vault.ErrNotInstalled) {
-				fmt.Fprintf(out, "%s is not installed: install its CLI (e.g. `brew install lastpass-cli`) and re-run fleet vault setup\n", cfg.Provider)
 				return err
-			}
-			if err != nil {
-				return fmt.Errorf("%s is not ready: %w", store.Name(), err)
 			}
 			if err := saveVaultConfig(vaultConfigPath(), cfg); err != nil {
 				return err
@@ -157,15 +155,19 @@ func newVaultStatusCmd() *cobra.Command {
 			if ctx == nil {
 				ctx = context.Background()
 			}
-			vaultStatus(ctx, out, cfg)
+			if !vaultStatus(ctx, out, cfg) {
+				return exitError{code: 1}
+			}
 			return nil
 		}),
 	}
 }
 
 // vaultStatus prints one line per facet. A signed-out provider is reported and
-// the local-only facets still print; status never signs in.
-func vaultStatus(ctx context.Context, out io.Writer, cfg vault.Config) {
+// the local-only facets still print; status never signs in. It returns false
+// when a vault item exists but cannot be read (status then exits non-zero).
+func vaultStatus(ctx context.Context, out io.Writer, cfg vault.Config) (ok bool) {
+	ok = true
 	var store vault.Store
 	live := false
 	st, err := openVault(cfg)
@@ -217,7 +219,7 @@ func vaultStatus(ctx context.Context, out io.Writer, cfg vault.Config) {
 	}
 	if live {
 		own := "key/" + cfg.Workstation
-		if contains(names, own) {
+		if slices.Contains(names, own) {
 			fmt.Fprintf(out, "key: vault has %s\n", own)
 		} else {
 			var others []string
@@ -250,35 +252,29 @@ func vaultStatus(ctx context.Context, out io.Writer, cfg vault.Config) {
 
 	// inventory and known_hosts
 	if !live {
-		return
+		return ok
 	}
-	var vi vault.Inventory
-	hasInv := false
-	if contains(names, "inventory") {
-		if b, gerr := store.Get(ctx, "inventory"); gerr == nil {
-			if vi, gerr = vault.Decode[vault.Inventory](b.Data); gerr == nil {
-				hasInv = true
-			}
-		}
-	}
+	vi, hasInv, ierr := readVaultItem[vault.Inventory](ctx, store, names, "inventory")
 	li, lerr := fleetInventory()
 	switch {
+	case ierr != nil:
+		ok = false
+		fmt.Fprintf(out, "inventory: unreadable: %v\n", ierr)
 	case lerr != nil:
 		fmt.Fprintf(out, "inventory: local fleet hosts unreadable: %v\n", lerr)
 	case !hasInv:
 		fmt.Fprintln(out, "inventory: not in vault")
 	default:
-		fmt.Fprintf(out, "inventory: in vault, %d hosts differ\n", inventoryDrift(li, vi))
-	}
-	var vk vault.KnownHosts
-	hasKH := false
-	if contains(names, "known_hosts") {
-		if b, gerr := store.Get(ctx, "known_hosts"); gerr == nil {
-			if vk, gerr = vault.Decode[vault.KnownHosts](b.Data); gerr == nil {
-				hasKH = true
-			}
+		// The same planner push uses, so "status: in sync" ⇔ "push: unchanged".
+		if p, perr := planInventory(vi.Config, li); perr != nil {
+			fmt.Fprintf(out, "inventory: cannot compare: %v\n", perr)
+		} else if n := hostsToPush(p); n == 0 {
+			fmt.Fprintln(out, "inventory: in vault, in sync")
+		} else {
+			fmt.Fprintf(out, "inventory: in vault, %d host(s) to push\n", n)
 		}
 	}
+	vk, hasKH, kherr := readVaultItem[vault.KnownHosts](ctx, store, names, "known_hosts")
 	lk, unresolved, kerr := fleetKnownHosts()
 	defer func() {
 		if kerr == nil && len(unresolved) > 0 {
@@ -286,17 +282,61 @@ func vaultStatus(ctx context.Context, out io.Writer, cfg vault.Config) {
 		}
 	}()
 	switch {
+	case kherr != nil:
+		ok = false
+		fmt.Fprintf(out, "known_hosts: unreadable: %v\n", kherr)
 	case kerr != nil:
 		fmt.Fprintf(out, "known_hosts: local fleet lines unreadable: %v\n", kerr)
 	case !hasKH:
 		fmt.Fprintln(out, "known_hosts: not in vault")
 	default:
-		fmt.Fprintf(out, "known_hosts: in vault, %d lines differ\n", linesDrift(lk.Lines, vk.Lines))
+		add, del := lineSetDiff(lk.Lines, vk.Lines)
+		fmt.Fprintf(out, "known_hosts: in vault, %d lines differ\n", add+del)
 	}
+	return ok
+}
+
+// readVaultItem reads and decodes one item for status. Absent (not listed, or
+// ErrNotFound) is (zero, false, nil); any other failure is an error, so an
+// item that exists but cannot be read is never reported as "not in vault".
+func readVaultItem[T vault.KeyPair | vault.Roster | vault.Inventory | vault.KnownHosts](ctx context.Context, st vault.Store, names []string, name string) (T, bool, error) {
+	var zero T
+	if !slices.Contains(names, name) {
+		return zero, false, nil
+	}
+	b, err := st.Get(ctx, name)
+	if errors.Is(err, vault.ErrNotFound) {
+		return zero, false, nil
+	}
+	if err != nil {
+		return zero, false, err
+	}
+	v, err := vault.Decode[T](b.Data)
+	if err != nil {
+		return zero, false, err
+	}
+	return v, true, nil
+}
+
+// planInventory is the ONE inventory comparison: push writes its result and
+// status reports it. Only cfgplan's modelled fields count.
+func planInventory(vaultText string, local vault.Inventory) (cfgplan.Plan, error) {
+	return cfgplan.Build(vaultText, local.Config, cfgplan.Opts{Marker: flagMarker, All: true})
+}
+
+// hostsToPush counts the hosts a push would add or update.
+func hostsToPush(p cfgplan.Plan) int {
+	n := 0
+	for _, c := range p.Changes {
+		if c.Kind == cfgplan.Add || c.Kind == cfgplan.Update {
+			n++
+		}
+	}
+	return n
 }
 
 func rosterFacet(ctx context.Context, store vault.Store, names []string, fp string) string {
-	if !contains(names, "roster") {
+	if !slices.Contains(names, "roster") {
 		return "roster: not in vault"
 	}
 	b, err := store.Get(ctx, "roster")
@@ -316,15 +356,6 @@ func rosterFacet(ctx context.Context, store vault.Store, names []string, fp stri
 		}
 	}
 	return "roster: this key is not in the roster"
-}
-
-func contains(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
 
 // inventoryFromConfig is the vault Inventory for this machine: the text of
@@ -387,57 +418,11 @@ func hostBlocks(cfg string) []hostBlock {
 	return out
 }
 
-// inventoryDrift counts aliases present in only one side or whose block text
-// differs.
-func inventoryDrift(local, remote vault.Inventory) int {
-	l, r := map[string]string{}, map[string]string{}
-	for _, b := range hostBlocks(local.Config) {
-		l[b.alias] = b.text
-	}
-	for _, b := range hostBlocks(remote.Config) {
-		r[b.alias] = b.text
-	}
-	n := 0
-	for a, t := range l {
-		if rt, ok := r[a]; !ok || rt != t {
-			n++
-		}
-	}
-	for a := range r {
-		if _, ok := l[a]; !ok {
-			n++
-		}
-	}
-	return n
-}
+// errNoAliasResolved: knownHostsFor resolved none of the fleet aliases. The
+// unresolved list is returned with it; a real ssh-keygen failure is a
+// different error.
+var errNoAliasResolved = errors.New("no fleet alias resolved")
 
-// linesDrift is the size of the symmetric difference of two line sets.
-func linesDrift(a, b []string) int {
-	sa, sb := map[string]bool{}, map[string]bool{}
-	for _, x := range a {
-		sa[x] = true
-	}
-	for _, x := range b {
-		sb[x] = true
-	}
-	n := 0
-	for x := range sa {
-		if !sb[x] {
-			n++
-		}
-	}
-	for x := range sb {
-		if !sa[x] {
-			n++
-		}
-	}
-	return n
-}
-
-// knownHostsFor collects the known_hosts lines ssh would consult for each
-// alias, resolving names and files through hostkey.Resolve (ssh -G) the way
-// `fleet trust` does.
-//
 // unresolvedHost is a fleet alias whose known_hosts lines are missing from a
 // knownHostsFor result. Names are the known_hosts lookup names it is known by
 // (the alias, plus ssh -G's HostName/IPs when that resolved), so a caller can
@@ -458,16 +443,20 @@ func joinUnresolved(us []unresolvedHost, sep string) string {
 	return strings.Join(s, sep)
 }
 
+// knownHostsFor collects the known_hosts lines ssh would consult for each
+// alias, resolving names and files through hostkey.Resolve (ssh -G) the way
+// `fleet trust` does.
+//
 // Contract (relied on by `fleet vault push`): the returned KnownHosts is
-// COMPLETE only when the unresolved list is empty. Each unresolved entry is
-// "alias: reason" for an alias whose lines are missing from the result (ssh -G
+// COMPLETE only when the unresolved list is empty. Each unresolved entry names
+// an alias whose lines are missing from the result (ssh -G
 // failed, one of its known_hosts files could not be read, or no known_hosts
 // entry exists for any of its names: "alias: no known_hosts entry"); the reason never
 // carries key material. A caller that uploads the result as the vault copy
 // must refuse while the list is non-empty unless the user opts in
 // (--allow-partial), or the vault silently loses those hosts. Errors: any
 // ssh-keygen failure other than exit 1 (= no entry, fine), and every alias
-// being unresolved.
+// being unresolved (errNoAliasResolved, returned WITH the unresolved list).
 func knownHostsFor(x hostkey.Exec, aliases []string) (vault.KnownHosts, []unresolvedHost, error) {
 	seen := map[string]bool{}
 	var lines []string
@@ -513,7 +502,9 @@ func knownHostsFor(x hostkey.Exec, aliases []string) (vault.KnownHosts, []unreso
 		}
 	}
 	if len(aliases) > 0 && len(unresolved) == len(aliases) {
-		return vault.KnownHosts{}, nil, fmt.Errorf("no fleet alias resolved (first: %s)", unresolved[0])
+		// The list rides along so push --allow-partial can still keep the
+		// vault's lines on a fresh machine where nothing resolves yet.
+		return vault.KnownHosts{}, unresolved, fmt.Errorf("%w (first: %s)", errNoAliasResolved, unresolved[0])
 	}
 	sort.Strings(lines)
 	return vault.KnownHosts{Lines: lines}, unresolved, nil
