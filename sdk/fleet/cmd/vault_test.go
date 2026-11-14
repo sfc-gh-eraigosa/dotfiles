@@ -36,7 +36,7 @@ func vaultEnv(t *testing.T, enabled bool) vaultEnvT {
 	vaultSettings = func() featflag.Settings { return featflag.Settings{VaultEnabled: enabled} }
 	agentLoaded = func(context.Context, string) (bool, error) { return false, agent.ErrNoAgent }
 	fleetInventory = func() (vault.Inventory, error) { return vault.Inventory{}, nil }
-	fleetKnownHosts = func() (vault.KnownHosts, []string, error) { return vault.KnownHosts{}, nil, nil }
+	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) { return vault.KnownHosts{}, nil, nil }
 	return vaultEnvT{home: home, store: st}
 }
 
@@ -215,7 +215,7 @@ func TestStatusReportsEachFacet(t *testing.T) {
 	fleetInventory = func() (vault.Inventory, error) {
 		return vault.Inventory{Config: "Host a\n  HostName 1.1.1.1\n\nHost c\n  HostName 3.3.3.3\n"}, nil
 	}
-	fleetKnownHosts = func() (vault.KnownHosts, []string, error) {
+	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
 		return vault.KnownHosts{Lines: []string{"a ssh-ed25519 K1", "c ssh-ed25519 K3"}}, nil, nil
 	}
 	agentLoaded = func(_ context.Context, got string) (bool, error) { return got == fp, nil }
@@ -363,7 +363,7 @@ func TestKnownHostsAliasWithNoEntryIsListedUnresolved(t *testing.T) {
 		return "", exitErr(1) // no entry
 	}
 	k, bad, err := knownHostsFor(x, []string{"a", "b"})
-	if err != nil || len(k.Lines) != 1 || len(bad) != 1 || bad[0] != "b: no known_hosts entry" {
+	if err != nil || len(k.Lines) != 1 || len(bad) != 1 || bad[0].String() != "b: no known_hosts entry" {
 		t.Fatalf("%v %v %v", k, bad, err)
 	}
 	// every alias without an entry is still an error
@@ -396,7 +396,7 @@ func TestStatusShowsKnownHostsErrorAndKeepsGoing(t *testing.T) {
 	configure(t, "ws1")
 	putBlob(t, e.store, "known_hosts", vault.KnownHosts{Lines: []string{"a k"}})
 	putBlob(t, e.store, "inventory", vault.Inventory{})
-	fleetKnownHosts = func() (vault.KnownHosts, []string, error) {
+	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
 		return vault.KnownHosts{}, nil, errors.New("ssh-keygen: not found")
 	}
 	out, err := runVault(t, "", "status")
@@ -423,7 +423,7 @@ func TestKnownHostsReportsUnresolvedAliases(t *testing.T) {
 	if len(k.Lines) != 1 || k.Lines[0] != "good ssh-ed25519 KEY" {
 		t.Fatalf("lines: %v", k.Lines)
 	}
-	if len(bad) != 1 || !strings.HasPrefix(bad[0], "bad: ") {
+	if len(bad) != 1 || !strings.HasPrefix(bad[0].String(), "bad: ") {
 		t.Fatalf("unresolved: %v", bad)
 	}
 }
@@ -453,7 +453,7 @@ func TestKnownHostsUnreadableFileIsReportedNotSkipped(t *testing.T) {
 		}
 		return x(n, i, a...)
 	}, []string{"a", "ok"})
-	if err != nil || len(bad) != 1 || !strings.HasPrefix(bad[0], "a: ") {
+	if err != nil || len(bad) != 1 || !strings.HasPrefix(bad[0].String(), "a: ") {
 		t.Fatalf("%v %v %v", k, bad, err)
 	}
 }
@@ -462,8 +462,8 @@ func TestStatusShowsUnresolvedFleetHosts(t *testing.T) {
 	e := vaultEnv(t, true)
 	configure(t, "ws1")
 	putBlob(t, e.store, "known_hosts", vault.KnownHosts{Lines: []string{"a k"}})
-	fleetKnownHosts = func() (vault.KnownHosts, []string, error) {
-		return vault.KnownHosts{Lines: []string{"a k"}}, []string{"b: no route", "c: no route"}, nil
+	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
+		return vault.KnownHosts{Lines: []string{"a k"}}, []unresolvedHost{{Alias: "b", Reason: "no route"}, {Alias: "c", Reason: "no route"}}, nil
 	}
 	out, err := runVault(t, "", "status")
 	if err != nil || !strings.Contains(out, "known_hosts: in vault, 0 lines differ") || !strings.Contains(out, "known_hosts: 2 fleet host(s) unresolved: b: no route, c: no route") {

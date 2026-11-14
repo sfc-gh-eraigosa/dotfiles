@@ -3,7 +3,9 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha1" // #nosec G505 -- known_hosts "|1|" hashing is HMAC-SHA1 by format; used only to match, never to protect
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 	"golang.org/x/term"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan"
@@ -25,6 +28,24 @@ import (
 // maxPushRounds bounds the re-read/re-ask loop when another workstation keeps
 // writing the same items.
 const maxPushRounds = 3
+
+// verifyLocalEncrypted re-reads the key file written by --encrypt-local and
+// proves it is encrypted, opens with pass, and is the key fp names. It is a
+// seam so a test can drive the "verification failed" path.
+var verifyLocalEncrypted = func(path string, pass []byte, fp string) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if _, err := ssh.ParseRawPrivateKey(b); err == nil {
+		return errors.New("the file is still unencrypted")
+	}
+	raw, err := ssh.ParseRawPrivateKeyWithPassphrase(b, pass)
+	if err != nil {
+		return errors.New("the file does not open with the vault passphrase")
+	}
+	return matchesPub(raw, localKey{Path: path, Fingerprint: fp})
+}
 
 type vaultPushOpts struct {
 	AllowPartial bool // upload known_hosts even when some fleet hosts are unresolved
@@ -135,6 +156,7 @@ func vaultPush(cmd *cobra.Command, o vaultPushOpts) error {
 	inv, invErr := fleetInventory()
 	kh, unresolved, khErr := fleetKnownHosts()
 
+	var postErr error     // a problem after a successful write (exit non-zero)
 	var kp *vault.KeyPair // materialized once, reused across conflict rounds
 	var vaultCopy []byte  // the encrypted bytes stored in the vault (for --encrypt-local)
 	for round := 1; round <= maxPushRounds; round++ {
@@ -161,7 +183,7 @@ func vaultPush(cmd *cobra.Command, o vaultPushOpts) error {
 		line, _ := in.ReadString('\n')
 		if a := strings.ToLower(strings.TrimSpace(line)); a != "y" && a != "yes" {
 			fmt.Fprintln(out, "nothing written")
-			return nil
+			return withheld
 		}
 		if kp == nil && contains(names, "key/"+cfg.Workstation) {
 			k, enc, err := materializeKey(lk, cfg, o, stdin, in, errw)
@@ -173,9 +195,15 @@ func vaultPush(cmd *cobra.Command, o vaultPushOpts) error {
 
 		var wrote []string
 		conflict := ""
-		for _, it := range plan.Items {
+		for i, it := range plan.Items {
 			if !it.Changed {
 				continue
+			}
+			var pending []string // this item and every later one we meant to write
+			for _, rest := range plan.Items[i:] {
+				if rest.Changed {
+					pending = append(pending, rest.Name)
+				}
 			}
 			data := it.Data
 			if it.Name == "key/"+cfg.Workstation {
@@ -188,10 +216,10 @@ func vaultPush(cmd *cobra.Command, o vaultPushOpts) error {
 			case errors.Is(perr, vault.ErrConflict):
 				conflict = it.Name
 			case errors.Is(perr, vault.ErrSignedOut):
-				return fmt.Errorf("signed out of %s midway (wrote: %s); nothing more was written. %s, then re-run `fleet vault push`: %w",
-					cfg.Provider, listOrNone(wrote), signInHint(cfg.Provider), perr)
+				return fmt.Errorf("signed out of %s midway (wrote: %s; not written: %s); nothing more was written. %s, then re-run `fleet vault push`: %w",
+					cfg.Provider, listOrNone(wrote), strings.Join(pending, ", "), signInHint(cfg.Provider), perr)
 			case perr != nil:
-				return fmt.Errorf("writing %s (wrote: %s; nothing more was written): %w", it.Name, listOrNone(wrote), perr)
+				return fmt.Errorf("writing %s (wrote: %s; not written: %s); nothing more was written: %w", it.Name, listOrNone(wrote), strings.Join(pending, ", "), perr)
 			}
 			if conflict != "" {
 				break
@@ -204,7 +232,22 @@ func vaultPush(cmd *cobra.Command, o vaultPushOpts) error {
 				if werr != nil {
 					return fmt.Errorf("vault has the key, but encrypting %s failed (backup: %s): %w", lk.Path, listOrNone([]string{backup}), werr)
 				}
-				fmt.Fprintf(out, "encrypted %s with the passphrase now stored in the vault (plain copy backed up to %s); your agent will now need `fleet keys unlock` to load it\n", lk.Path, backup)
+				// The file is now encrypted: a retry round must neither
+				// re-store the key nor rewrite the file again.
+				lk.Encrypted, lk.Private = true, vault.Secret(vaultCopy)
+				fmt.Fprintf(out, "encrypted %s with the passphrase now stored in the vault; your agent will now need `fleet keys unlock` to load it\n", lk.Path)
+				keep := ""
+				if verr := verifyLocalEncrypted(lk.Path, []byte(kp.Passphrase), lk.Fingerprint); verr != nil {
+					keep = "could not verify the re-encrypted key (" + verr.Error() + ")"
+				} else if rerr := os.Remove(backup); rerr != nil {
+					keep = "could not remove the backup (" + rerr.Error() + ")"
+				}
+				if keep != "" {
+					postErr = fmt.Errorf("%s: %s is kept — plaintext — delete it after `fleet keys unlock` works", keep, backup)
+					fmt.Fprintf(out, "WARNING: %v\n", postErr)
+				} else {
+					fmt.Fprintln(out, "removed the plaintext backup; the vault holds the recovery copy")
+				}
 			}
 		}
 		if conflict != "" {
@@ -212,7 +255,7 @@ func vaultPush(cmd *cobra.Command, o vaultPushOpts) error {
 			continue
 		}
 		fmt.Fprintf(out, "wrote: %s\n", strings.Join(wrote, ", "))
-		return withheld
+		return errors.Join(postErr, withheld)
 	}
 	return fmt.Errorf("the vault kept changing under us (%d rounds); nothing more was written — re-run `fleet vault push`", maxPushRounds)
 }
@@ -276,7 +319,7 @@ func getVaultItem(ctx context.Context, st vault.Store, name string) (vault.Blob,
 // planVaultPush reads the four items and decides each one. It writes nothing
 // and needs no secret: the key is compared by fingerprint.
 func planVaultPush(ctx context.Context, st vault.Store, cfg vault.Config, lk localKey,
-	inv vault.Inventory, invErr error, kh vault.KnownHosts, unresolved []string, khErr error, o vaultPushOpts) (vaultPushPlan, error) {
+	inv vault.Inventory, invErr error, kh vault.KnownHosts, unresolved []unresolvedHost, khErr error, o vaultPushOpts) (vaultPushPlan, error) {
 	var p vaultPushPlan
 	now := time.Now()
 
@@ -415,13 +458,41 @@ func planVaultPush(ctx context.Context, st vault.Store, cfg vault.Config, lk loc
 	case len(unresolved) > 0 && !o.AllowPartial:
 		w := fmt.Sprintf("known_hosts: NOT pushed — %d fleet host(s) have no usable known_hosts entry, and a partial copy must not replace the vault's:", len(unresolved))
 		for _, u := range unresolved {
-			w += "\n      " + u
+			w += "\n      " + u.String()
 		}
 		w += "\n    fix: connect to each host once (or `ssh-keyscan <host> >> ~/.ssh/known_hosts`), then re-run `fleet vault push`" +
 			"\n    or:  re-run with --allow-partial to upload only the hosts that resolved"
 		p.Withheld = append(p.Withheld, w)
 	default:
 		lines := append([]string(nil), kh.Lines...)
+		var keptFor, noneFor []string
+		kept := 0
+		if len(unresolved) > 0 {
+			// --allow-partial: the vault's lines for hosts we could not
+			// resolve here are the only verified copy; keep them.
+			have := map[string]bool{}
+			for _, l := range lines {
+				have[l] = true
+			}
+			for _, u := range unresolved {
+				n := 0
+				for _, l := range vk.Lines {
+					if knownHostsLineMatches(l, u.Names) {
+						n++
+						if !have[l] {
+							have[l] = true
+							lines = append(lines, l)
+							kept++
+						}
+					}
+				}
+				if n > 0 {
+					keptFor = append(keptFor, u.Alias)
+				} else {
+					noneFor = append(noneFor, u.Alias)
+				}
+			}
+		}
 		sort.Strings(lines)
 		add, del := setDiff(lines, vk.Lines)
 		it := pushItem{Name: "known_hosts", Version: b.Version}
@@ -435,11 +506,61 @@ func planVaultPush(ctx context.Context, st vault.Store, cfg vault.Config, lk loc
 			}
 		}
 		if len(unresolved) > 0 {
-			it.Diff = append(it.Diff, fmt.Sprintf("  partial (--allow-partial): %d host(s) will be missing from the vault copy: %s", len(unresolved), strings.Join(unresolved, "; ")))
+			it.Diff = append(it.Diff, fmt.Sprintf("  partial (--allow-partial): %d host(s) unresolved here: %s", len(unresolved), joinUnresolved(unresolved, "; ")))
+			if len(keptFor) > 0 {
+				it.Diff = append(it.Diff, fmt.Sprintf("  kept %d existing vault line(s) for: %s", kept, strings.Join(keptFor, ", ")))
+			}
+			if len(noneFor) > 0 {
+				it.Diff = append(it.Diff, fmt.Sprintf("  the vault has no lines for: %s (they stay missing)", strings.Join(noneFor, ", ")))
+			}
 		}
 		p.Items = append(p.Items, it)
 	}
 	return p, nil
+}
+
+// knownHostsLineMatches reports whether a known_hosts line names any of names,
+// plain ("host", "[host]:port", comma lists, an @marker prefix) or hashed
+// ("|1|salt|hash", re-hashed with the entry's own salt). Patterns and negations
+// never match: only concrete names identify a host's own line.
+func knownHostsLineMatches(line string, names []string) bool {
+	f := strings.Fields(line)
+	if len(f) > 0 && strings.HasPrefix(f[0], "@") {
+		f = f[1:]
+	}
+	if len(f) == 0 || strings.HasPrefix(f[0], "#") {
+		return false
+	}
+	norm := make([]string, len(names))
+	for i, n := range names {
+		norm[i] = knownhosts.Normalize(n)
+	}
+	for _, h := range strings.Split(f[0], ",") {
+		if rest, ok := strings.CutPrefix(h, "|1|"); ok {
+			salt64, hash64, ok := strings.Cut(rest, "|")
+			salt, err := base64.StdEncoding.DecodeString(salt64)
+			if !ok || err != nil {
+				continue
+			}
+			for _, n := range norm {
+				m := hmac.New(sha1.New, salt) // #nosec G401 -- OpenSSH known_hosts hash format
+				m.Write([]byte(n))
+				if base64.StdEncoding.EncodeToString(m.Sum(nil)) == hash64 {
+					return true
+				}
+			}
+			continue
+		}
+		if strings.ContainsAny(h, "*?!") {
+			continue
+		}
+		for _, n := range norm {
+			if knownhosts.Normalize(h) == n {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // setDiff counts lines only in a (added) and only in b (removed).

@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keystore"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/vault"
@@ -39,7 +41,7 @@ func pushEnv(t *testing.T, pass string) (vaultEnvT, pushKeyT) {
 	configure(t, "ws1")
 	k := writePushKey(t, e.home, pass)
 	fleetInventory = func() (vault.Inventory, error) { return vault.Inventory{Config: pushInventory}, nil }
-	fleetKnownHosts = func() (vault.KnownHosts, []string, error) {
+	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
 		return vault.KnownHosts{Lines: append([]string(nil), pushKnownHosts...)}, nil, nil
 	}
 	return e, k
@@ -239,37 +241,57 @@ func TestPushConflictRereadsAndAsksAgain(t *testing.T) {
 	assertNoSecret(t, out, keyLines(k.private)...)
 }
 
-// signedOutStore reads fine but its session has expired by the first write.
+// signedOutStore reads fine but its session expires at write number failAt
+// (0 = the first); earlier writes land.
 type signedOutStore struct {
 	*vault.Fake
+	failAt   int
 	putTries int
 }
 
-func (s *signedOutStore) Put(context.Context, string, vault.Secret, string) (string, error) {
+func (s *signedOutStore) Put(ctx context.Context, name string, data vault.Secret, version string) (string, error) {
 	s.putTries++
-	return "", vault.ErrSignedOut
+	if s.putTries >= max(s.failAt, 1) {
+		return "", vault.ErrSignedOut
+	}
+	return s.Fake.Put(ctx, name, data, version)
 }
 
 func TestPushStopsCleanlyWhenSignedOutMidway(t *testing.T) {
 	e, k := pushEnv(t, pushTestPass)
-	st := &signedOutStore{Fake: e.store}
+	st := &signedOutStore{Fake: e.store, failAt: 3} // key and roster land, inventory hits the expired session
 	openVault = func(vault.Config) (vault.Store, error) { return st, nil }
 	out, err := runVault(t, "y\n"+pushTestPass+"\n", "push")
 	if !errors.Is(err, vault.ErrSignedOut) {
 		t.Fatalf("err = %v, want ErrSignedOut\n%s", err, out)
 	}
-	if st.putTries != 1 {
+	if st.putTries != 3 {
 		t.Fatalf("kept writing after the session expired: %d tries", st.putTries)
+	}
+	names, _ := e.store.List(context.Background())
+	if strings.Join(names, ",") != "key/ws1,roster" {
+		t.Fatalf("landed: %v", names)
+	}
+	msg := err.Error()
+	for _, want := range []string{"wrote: key/ws1, roster;", "not written: inventory, known_hosts", "lpass login", "nothing more was written", "fleet vault push"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("missing %q in: %v", want, msg)
+		}
+	}
+	assertNoSecret(t, out+msg, keyLines(k.private)...)
+}
+
+func TestPushStopsAtTheFirstWriteWhenSignedOut(t *testing.T) {
+	e, _ := pushEnv(t, pushTestPass)
+	st := &signedOutStore{Fake: e.store}
+	openVault = func(vault.Config) (vault.Store, error) { return st, nil }
+	_, err := runVault(t, "y\n"+pushTestPass+"\n", "push")
+	if !errors.Is(err, vault.ErrSignedOut) || st.putTries != 1 || !strings.Contains(err.Error(), "wrote: none;") {
+		t.Fatalf("err=%v tries=%d", err, st.putTries)
 	}
 	if names, _ := e.store.List(context.Background()); len(names) != 0 {
 		t.Fatalf("partial items: %v", names)
 	}
-	for _, want := range []string{"lpass login", "nothing more was written", "fleet vault push"} {
-		if !strings.Contains(err.Error()+out, want) {
-			t.Errorf("missing %q in: %v\n%s", want, err, out)
-		}
-	}
-	assertNoSecret(t, out+err.Error(), keyLines(k.private)...)
 }
 
 func TestPushNeverIncludesAnExecDirective(t *testing.T) {
@@ -296,8 +318,8 @@ func TestPushNeverIncludesAnExecDirective(t *testing.T) {
 
 func TestPushRefusesPartialKnownHostsWithoutFlag(t *testing.T) {
 	e, _ := pushEnv(t, pushTestPass)
-	fleetKnownHosts = func() (vault.KnownHosts, []string, error) {
-		return vault.KnownHosts{Lines: []string{"a ssh-ed25519 AAAAKEYA"}}, []string{"b: no known_hosts entry", "c: ssh -G failed"}, nil
+	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
+		return vault.KnownHosts{Lines: []string{"a ssh-ed25519 AAAAKEYA"}}, []unresolvedHost{{Alias: "b", Reason: "no known_hosts entry", Names: []string{"b"}}, {Alias: "c", Reason: "ssh -G failed", Names: []string{"c"}}}, nil
 	}
 	out, err := runVault(t, "y\n"+pushTestPass+"\n", "push")
 	if err == nil {
@@ -372,9 +394,7 @@ func TestPushEncryptLocalRewritesTheKeyAfterTheVaultWrite(t *testing.T) {
 	if _, err := ssh.ParsePrivateKeyWithPassphrase(local, kp.Passphrase); err != nil {
 		t.Fatalf("local key does not open with the vault passphrase: %v", err)
 	}
-	if m, _ := filepath.Glob(k.path + ".bak-*"); len(m) == 0 {
-		t.Fatal("no backup of the plain key")
-	}
+	// the plaintext backup is verified-then-removed (TestPushEncryptLocalDropsThePlaintextBackupOnceVerified)
 	if !strings.Contains(out, "fleet keys unlock") {
 		t.Fatalf("does not say the agent now needs unlock:\n%s", out)
 	}
@@ -491,5 +511,112 @@ func TestPushNotConfigured(t *testing.T) {
 	out, err := runVault(t, "", "push")
 	if err == nil || !strings.Contains(out, "not configured: run fleet vault setup") {
 		t.Fatalf("err=%v out=%s", err, out)
+	}
+}
+
+func TestPushAllowPartialKeepsTheVaultLinesOfUnresolvedHosts(t *testing.T) {
+	e, _ := pushEnv(t, pushTestPass)
+	hashedB := knownhosts.HashHostname("10.0.0.2") + " ssh-ed25519 AAAAHASHEDB"
+	hashedZ := knownhosts.HashHostname("10.0.0.9") + " ssh-ed25519 AAAAHASHEDZ"
+	putBlob(t, e.store, "known_hosts", vault.KnownHosts{Lines: []string{
+		"a ssh-ed25519 AAAAOLDA",
+		"b,10.0.0.2 ssh-ed25519 AAAAKEYB",
+		"[b]:2222 ssh-ed25519 AAAAPORTB",
+		hashedB,
+		hashedZ,
+		"z ssh-ed25519 AAAASTALE",
+	}})
+	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
+		return vault.KnownHosts{Lines: []string{"a ssh-ed25519 AAAANEWA"}},
+			[]unresolvedHost{{Alias: "b", Reason: "no known_hosts entry", Names: []string{"b", "10.0.0.2", "[b]:2222"}}}, nil
+	}
+	out, err := runVault(t, "y\n"+pushTestPass+"\n", "push", "--allow-partial")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	kh := getItem[vault.KnownHosts](t, e.store, "known_hosts")
+	got := map[string]bool{}
+	for _, l := range kh.Lines {
+		got[l] = true
+	}
+	for _, want := range []string{"a ssh-ed25519 AAAANEWA", "b,10.0.0.2 ssh-ed25519 AAAAKEYB", "[b]:2222 ssh-ed25519 AAAAPORTB", hashedB} {
+		if !got[want] {
+			t.Errorf("missing %q in %v", want, kh.Lines)
+		}
+	}
+	for _, gone := range []string{"a ssh-ed25519 AAAAOLDA", hashedZ, "z ssh-ed25519 AAAASTALE"} {
+		if got[gone] {
+			t.Errorf("kept %q", gone)
+		}
+	}
+	if !strings.Contains(out, "kept 3 existing vault line(s) for: b") {
+		t.Fatalf("diff does not say b's lines are kept:\n%s", out)
+	}
+}
+
+func TestPushEncryptLocalDropsThePlaintextBackupOnceVerified(t *testing.T) {
+	_, k := pushEnv(t, "")
+	out, err := runVault(t, "y\n", "push", "--encrypt-local")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if m, _ := filepath.Glob(k.path + ".bak-*"); len(m) != 0 {
+		t.Fatalf("plaintext backup left on disk: %v", m)
+	}
+	if !strings.Contains(out, "the vault holds the recovery copy") {
+		t.Fatalf("missing recovery note:\n%s", out)
+	}
+}
+
+func TestPushEncryptLocalKeepsTheBackupWhenVerificationFails(t *testing.T) {
+	_, k := pushEnv(t, "")
+	orig := verifyLocalEncrypted
+	t.Cleanup(func() { verifyLocalEncrypted = orig })
+	verifyLocalEncrypted = func(string, []byte, string) error { return errors.New("re-read mismatch") }
+	out, err := runVault(t, "y\n", "push", "--encrypt-local")
+	m, _ := filepath.Glob(k.path + ".bak-*")
+	if len(m) != 1 {
+		t.Fatalf("backup not kept: %v (err=%v)\n%s", m, err, out)
+	}
+	if b, _ := os.ReadFile(m[0]); string(b) != string(k.private) {
+		t.Fatal("backup is not the plain key")
+	}
+	if !strings.Contains(out+fmt.Sprint(err), m[0]) || !strings.Contains(out+fmt.Sprint(err), "plaintext — delete it after `fleet keys unlock` works") {
+		t.Fatalf("backup path/warning missing: %v\n%s", err, out)
+	}
+}
+
+func TestPushEncryptLocalConflictRetryRewritesOnce(t *testing.T) {
+	e, k := pushEnv(t, "")
+	st := &conflictStore{Fake: e.store}
+	openVault = func(vault.Config) (vault.Store, error) { return st, nil }
+	out, err := runVault(t, "y\ny\n", "push", "--encrypt-local")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if strings.Contains(out, "re-stored under a new passphrase") {
+		t.Fatalf("retry re-stored the key:\n%s", out)
+	}
+	if n := strings.Count(out, "encrypted "+k.path); n != 1 {
+		t.Fatalf("local key rewritten %d times:\n%s", n, out)
+	}
+	kp := getItem[vault.KeyPair](t, st, "key/ws1")
+	local, _ := os.ReadFile(k.path)
+	if _, err := ssh.ParsePrivateKeyWithPassphrase(local, kp.Passphrase); err != nil {
+		t.Fatalf("local key does not open with the vault passphrase: %v", err)
+	}
+}
+
+func TestPushDeclinedWithWithheldKnownHostsExitsNonZero(t *testing.T) {
+	e, _ := pushEnv(t, pushTestPass)
+	fleetKnownHosts = func() (vault.KnownHosts, []unresolvedHost, error) {
+		return vault.KnownHosts{Lines: []string{"a ssh-ed25519 AAAAKEYA"}}, []unresolvedHost{{Alias: "b", Reason: "no known_hosts entry", Names: []string{"b"}}}, nil
+	}
+	out, err := runVault(t, "n\n", "push")
+	if err == nil {
+		t.Fatalf("want non-zero exit:\n%s", out)
+	}
+	if puts(e.store.Calls) != 0 {
+		t.Fatal("wrote after 'n'")
 	}
 }
