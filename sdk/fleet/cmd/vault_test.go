@@ -36,7 +36,7 @@ func vaultEnv(t *testing.T, enabled bool) vaultEnvT {
 	vaultSettings = func() featflag.Settings { return featflag.Settings{VaultEnabled: enabled} }
 	agentLoaded = func(context.Context, string) (bool, error) { return false, agent.ErrNoAgent }
 	fleetInventory = func() (vault.Inventory, error) { return vault.Inventory{}, nil }
-	fleetKnownHosts = func() (vault.KnownHosts, error) { return vault.KnownHosts{}, nil }
+	fleetKnownHosts = func() (vault.KnownHosts, []string, error) { return vault.KnownHosts{}, nil, nil }
 	return vaultEnvT{home: home, store: st}
 }
 
@@ -215,8 +215,8 @@ func TestStatusReportsEachFacet(t *testing.T) {
 	fleetInventory = func() (vault.Inventory, error) {
 		return vault.Inventory{Config: "Host a\n  HostName 1.1.1.1\n\nHost c\n  HostName 3.3.3.3\n"}, nil
 	}
-	fleetKnownHosts = func() (vault.KnownHosts, error) {
-		return vault.KnownHosts{Lines: []string{"a ssh-ed25519 K1", "c ssh-ed25519 K3"}}, nil
+	fleetKnownHosts = func() (vault.KnownHosts, []string, error) {
+		return vault.KnownHosts{Lines: []string{"a ssh-ed25519 K1", "c ssh-ed25519 K3"}}, nil, nil
 	}
 	agentLoaded = func(_ context.Context, got string) (bool, error) { return got == fp, nil }
 
@@ -301,7 +301,10 @@ func TestFleetInventoryAndKnownHosts(t *testing.T) {
 		}
 		return "# Host " + args[1] + " found: line 1\n" + args[1] + " ssh-ed25519 KEY\n", nil
 	}
-	k, err := knownHostsFor(x, []string{"a", "b"})
+	k, bad, err := knownHostsFor(x, []string{"a", "b"})
+	if len(bad) != 0 {
+		t.Fatalf("unresolved: %v", bad)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +350,7 @@ func khExec(t *testing.T, keygen func() (string, error)) func(string, string, ..
 
 func TestKnownHostsNoEntryIsNotAnError(t *testing.T) {
 	x := khExec(t, func() (string, error) { return "", exitErr(1) })
-	k, err := knownHostsFor(x, []string{"a"})
+	k, _, err := knownHostsFor(x, []string{"a"})
 	if err != nil || len(k.Lines) != 0 {
 		t.Fatalf("%v %v", k, err)
 	}
@@ -357,17 +360,17 @@ func TestKnownHostsKeygenMissingIsAnError(t *testing.T) {
 	x := khExec(t, func() (string, error) {
 		return "", errors.New(`exec: "ssh-keygen": executable file not found in $PATH`)
 	})
-	if _, err := knownHostsFor(x, []string{"a"}); err == nil {
+	if _, _, err := knownHostsFor(x, []string{"a"}); err == nil {
 		t.Fatal("want error")
 	}
 }
 
 func TestKnownHostsEveryAliasUnresolvableIsAnError(t *testing.T) {
 	x := func(string, string, ...string) (string, error) { return "", errors.New("not found") }
-	if _, err := knownHostsFor(x, []string{"a", "b"}); err == nil {
+	if _, _, err := knownHostsFor(x, []string{"a", "b"}); err == nil {
 		t.Fatal("want error")
 	}
-	if k, err := knownHostsFor(x, nil); err != nil || len(k.Lines) != 0 {
+	if k, _, err := knownHostsFor(x, nil); err != nil || len(k.Lines) != 0 {
 		t.Fatalf("no aliases is fine: %v %v", k, err)
 	}
 }
@@ -377,9 +380,77 @@ func TestStatusShowsKnownHostsErrorAndKeepsGoing(t *testing.T) {
 	configure(t, "ws1")
 	putBlob(t, e.store, "known_hosts", vault.KnownHosts{Lines: []string{"a k"}})
 	putBlob(t, e.store, "inventory", vault.Inventory{})
-	fleetKnownHosts = func() (vault.KnownHosts, error) { return vault.KnownHosts{}, errors.New("ssh-keygen: not found") }
+	fleetKnownHosts = func() (vault.KnownHosts, []string, error) {
+		return vault.KnownHosts{}, nil, errors.New("ssh-keygen: not found")
+	}
 	out, err := runVault(t, "", "status")
 	if err != nil || !strings.Contains(out, "known_hosts: local fleet lines unreadable: ssh-keygen: not found") || !strings.Contains(out, "inventory:") {
+		t.Fatalf("%v\n%s", err, out)
+	}
+}
+
+func partialExec(t *testing.T) func(string, string, ...string) (string, error) {
+	good := khExec(t, func() (string, error) { return "good ssh-ed25519 KEY\n", nil })
+	return func(name, in string, args ...string) (string, error) {
+		if name == "ssh" && args[1] == "bad" {
+			return "", errors.New("ssh -G: could not resolve")
+		}
+		return good(name, in, args...)
+	}
+}
+
+func TestKnownHostsReportsUnresolvedAliases(t *testing.T) {
+	k, bad, err := knownHostsFor(partialExec(t), []string{"good", "bad"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(k.Lines) != 1 || k.Lines[0] != "good ssh-ed25519 KEY" {
+		t.Fatalf("lines: %v", k.Lines)
+	}
+	if len(bad) != 1 || !strings.HasPrefix(bad[0], "bad: ") {
+		t.Fatalf("unresolved: %v", bad)
+	}
+}
+
+func TestKnownHostsUnreadableFileIsReportedNotSkipped(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o000); err != nil {
+		t.Skip(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+	x := func(name, _ string, args ...string) (string, error) {
+		if name == "ssh" {
+			return "hostname " + args[1] + "\nport 22\nuserknownhostsfile " + filepath.Join(dir, "kh") + "\n", nil
+		}
+		return "", nil
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores modes")
+	}
+	_, _, err := knownHostsFor(x, []string{"a"})
+	if err == nil {
+		t.Fatal("sole alias with unreadable file must be an error")
+	}
+	k, bad, err := knownHostsFor(func(n, i string, a ...string) (string, error) {
+		if n == "ssh" && a[1] == "ok" {
+			return partialExec(t)("ssh", i, "-G", "good")
+		}
+		return x(n, i, a...)
+	}, []string{"a", "ok"})
+	if err != nil || len(bad) != 1 || !strings.HasPrefix(bad[0], "a: ") {
+		t.Fatalf("%v %v %v", k, bad, err)
+	}
+}
+
+func TestStatusShowsUnresolvedFleetHosts(t *testing.T) {
+	e := vaultEnv(t, true)
+	configure(t, "ws1")
+	putBlob(t, e.store, "known_hosts", vault.KnownHosts{Lines: []string{"a k"}})
+	fleetKnownHosts = func() (vault.KnownHosts, []string, error) {
+		return vault.KnownHosts{Lines: []string{"a k"}}, []string{"b: no route", "c: no route"}, nil
+	}
+	out, err := runVault(t, "", "status")
+	if err != nil || !strings.Contains(out, "known_hosts: in vault, 0 lines differ") || !strings.Contains(out, "known_hosts: 2 fleet host(s) unresolved: b, c") {
 		t.Fatalf("%v\n%s", err, out)
 	}
 }

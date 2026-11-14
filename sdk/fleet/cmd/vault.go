@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"sort"
 	"strings"
@@ -35,10 +36,10 @@ var (
 	// fleetInventory and fleetKnownHosts gather the local half of the
 	// vault's inventory and known_hosts items (status compares; push uploads).
 	fleetInventory  = inventoryFromConfig
-	fleetKnownHosts = func() (vault.KnownHosts, error) {
+	fleetKnownHosts = func() (vault.KnownHosts, []string, error) {
 		hosts, err := fleetHosts()
 		if err != nil {
-			return vault.KnownHosts{}, err
+			return vault.KnownHosts{}, nil, err
 		}
 		aliases := make([]string, 0, len(hosts))
 		for _, h := range hosts {
@@ -278,7 +279,16 @@ func vaultStatus(ctx context.Context, out io.Writer, cfg vault.Config) {
 			}
 		}
 	}
-	lk, kerr := fleetKnownHosts()
+	lk, unresolved, kerr := fleetKnownHosts()
+	defer func() {
+		if kerr == nil && len(unresolved) > 0 {
+			names := make([]string, len(unresolved))
+			for i, u := range unresolved {
+				names[i], _, _ = strings.Cut(u, ": ")
+			}
+			fmt.Fprintf(out, "known_hosts: %d fleet host(s) unresolved: %s\n", len(unresolved), strings.Join(names, ", "))
+		}
+	}()
 	switch {
 	case kerr != nil:
 		fmt.Fprintf(out, "known_hosts: local fleet lines unreadable: %v\n", kerr)
@@ -430,28 +440,39 @@ func linesDrift(a, b []string) int {
 
 // knownHostsFor collects the known_hosts lines ssh would consult for each
 // alias, resolving names and files through hostkey.Resolve (ssh -G) the way
-// `fleet trust` does. ssh-keygen exit 1 means "no entry" and is fine; any
-// other failure (a missing binary, a bad file) is an error, as is every alias
-// failing to resolve - an empty result must never mean "the tools broke". A
-// partial resolve failure still returns the lines found.
-func knownHostsFor(x hostkey.Exec, aliases []string) (vault.KnownHosts, error) {
+// `fleet trust` does.
+//
+// Contract (relied on by `fleet vault push`): the returned KnownHosts is
+// COMPLETE only when the unresolved list is empty. Each unresolved entry is
+// "alias: reason" for an alias whose lines are missing from the result (ssh -G
+// failed, or one of its known_hosts files could not be read); the reason never
+// carries key material. A caller that uploads the result as the vault copy
+// must refuse while the list is non-empty unless the user opts in
+// (--allow-partial), or the vault silently loses those hosts. Errors: any
+// ssh-keygen failure other than exit 1 (= no entry, fine), and every alias
+// being unresolved.
+func knownHostsFor(x hostkey.Exec, aliases []string) (vault.KnownHosts, []string, error) {
 	seen := map[string]bool{}
-	var lines, failed []string
+	var lines, unresolved []string
 	for _, a := range aliases {
 		t, err := hostkey.Resolve(x, a)
 		if err != nil {
-			failed = append(failed, err.Error())
+			unresolved = append(unresolved, a+": "+err.Error())
 			continue
 		}
+		bad := ""
 		for _, file := range t.KnownHosts {
 			if _, err := os.Stat(file); err != nil {
-				continue
+				if !errors.Is(err, fs.ErrNotExist) && bad == "" {
+					bad = file + ": " + err.Error()
+				}
+				continue // a missing file holds no keys
 			}
 			for _, n := range t.Names() {
 				out, err := x("ssh-keygen", "", "-F", n, "-f", file)
 				var ec interface{ ExitCode() int }
 				if err != nil && !(errors.As(err, &ec) && ec.ExitCode() == 1) {
-					return vault.KnownHosts{}, fmt.Errorf("ssh-keygen -F %s: %w", n, err)
+					return vault.KnownHosts{}, nil, fmt.Errorf("ssh-keygen -F %s: %w", n, err)
 				}
 				for l := range strings.SplitSeq(out, "\n") {
 					if l = strings.TrimSpace(l); l == "" || strings.HasPrefix(l, "#") || seen[l] {
@@ -462,10 +483,13 @@ func knownHostsFor(x hostkey.Exec, aliases []string) (vault.KnownHosts, error) {
 				}
 			}
 		}
+		if bad != "" {
+			unresolved = append(unresolved, a+": "+bad)
+		}
 	}
-	if len(aliases) > 0 && len(failed) == len(aliases) {
-		return vault.KnownHosts{}, fmt.Errorf("no fleet alias resolved (first: %s)", failed[0])
+	if len(aliases) > 0 && len(unresolved) == len(aliases) {
+		return vault.KnownHosts{}, nil, fmt.Errorf("no fleet alias resolved (first: %s)", unresolved[0])
 	}
 	sort.Strings(lines)
-	return vault.KnownHosts{Lines: lines}, nil
+	return vault.KnownHosts{Lines: lines}, unresolved, nil
 }
