@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"strings"
@@ -252,7 +255,7 @@ func TestPullOnDarwinOffersUseKeychain(t *testing.T) {
 		t.Fatalf("asked again:\n%s", out)
 	}
 	cfg, _ = os.ReadFile(e.ssh("config"))
-	if strings.Count(string(cfg), "UseKeychain") != 1 {
+	if strings.Count(string(cfg), "UseKeychain yes") != 1 {
 		t.Fatalf("duplicated:\n%s", cfg)
 	}
 
@@ -294,5 +297,175 @@ func TestPullLoadsTheKeyIntoTheAgent(t *testing.T) {
 	out, err = runVault(t, "", "pull")
 	if err != nil || len(e.loads) != 0 || !strings.Contains(out, "no agent") {
 		t.Fatalf("no agent: %v %v\n%s", err, e.loads, out)
+	}
+}
+
+// ---- PR #457 review fixes ----
+
+func TestPullIsAllOrNothing(t *testing.T) {
+	e := pullEnv(t)
+	e.seedKey(t, "ws1")
+	if _, err := e.store.Put(context.Background(), "inventory", vault.Secret("{not json"), ""); err != nil {
+		t.Fatal(err)
+	}
+	priv, pb, _ := keystore.Generate([]byte("other"), "local")
+	if _, err := keystore.Write(e.ssh("id_ed25519"), priv, pb, vaultNow()); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(e.ssh("id_ed25519"))
+	if out, err := runVault(t, "", "pull", "--replace-key"); err == nil {
+		t.Fatalf("corrupt inventory must fail the pull\n%s", out)
+	}
+	if after, _ := os.ReadFile(e.ssh("id_ed25519")); string(after) != string(before) {
+		t.Fatal("key was replaced although the inventory item was corrupt")
+	}
+	if len(backups(t, e.ssh(), "id_ed25519")) != 0 {
+		t.Fatal("no backup/write may happen before every item is planned")
+	}
+}
+
+func TestPullDarwinBlockIgnoresUnknownUseKeychainFirst(t *testing.T) {
+	e := pullEnv(t)
+	e.seedKey(t, "ws1")
+	e.goos = "darwin"
+	if _, err := runVault(t, "y\n", "pull"); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := os.ReadFile(e.ssh("config"))
+	s := string(cfg)
+	iu, uk := strings.Index(s, "IgnoreUnknown UseKeychain"), strings.Index(s, "UseKeychain yes")
+	if iu < 0 || uk < 0 || iu > uk {
+		t.Fatalf("IgnoreUnknown must precede UseKeychain:\n%s", s)
+	}
+}
+
+func TestPullAsBecomesThatWorkstation(t *testing.T) {
+	e := pullEnv(t)
+	e.seedKey(t, "laptop")
+	out, err := runVault(t, "", "pull", "--as", "laptop")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	cfg, ok, err := loadVaultConfig(vaultConfigPath())
+	if err != nil || !ok || cfg.Workstation != "laptop" {
+		t.Fatalf("cfg=%+v ok=%v err=%v", cfg, ok, err)
+	}
+	if !strings.Contains(out, "laptop") || !strings.Contains(out, "workstation") {
+		t.Fatalf("not announced:\n%s", out)
+	}
+}
+
+func hashedLine(host string) string {
+	salt := []byte("0123456789abcdefghij")
+	m := hmac.New(sha1.New, salt)
+	m.Write([]byte(host))
+	return "|1|" + base64.StdEncoding.EncodeToString(salt) + "|" + base64.StdEncoding.EncodeToString(m.Sum(nil)) + " ssh-ed25519 LOCALKEY"
+}
+
+func TestPullKnownHostsKeepsRotatedAndHashedLocalEntries(t *testing.T) {
+	e := pullEnv(t)
+	e.seed(t, "known_hosts", vault.KnownHosts{Lines: []string{
+		"rotated ssh-ed25519 OLDVAULT",
+		"hashedbox ssh-ed25519 VAULTKEY",
+		"[gone]:2222 ssh-ed25519 NEWHOST",
+		"@revoked badhost ssh-ed25519 REVOKED",
+	}})
+	if err := os.MkdirAll(e.ssh(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	local := "rotated ssh-ed25519 NEWLOCAL\n" + hashedLine("hashedbox") + "\n"
+	if err := os.WriteFile(e.ssh("known_hosts"), []byte(local), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := runVault(t, "", "pull"); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	b, _ := os.ReadFile(e.ssh("known_hosts"))
+	s := string(b)
+	if strings.Contains(s, "OLDVAULT") {
+		t.Fatalf("rotated host's old vault key re-added:\n%s", s)
+	}
+	if strings.Contains(s, "VAULTKEY") {
+		t.Fatalf("hashed local entry duplicated:\n%s", s)
+	}
+	if !strings.Contains(s, "[gone]:2222 ssh-ed25519 NEWHOST") || !strings.Contains(s, "@revoked badhost") {
+		t.Fatalf("absent host / revoked line missing:\n%s", s)
+	}
+	if fi, _ := os.Stat(e.ssh("known_hosts")); fi.Mode().Perm() != 0o644 {
+		t.Fatalf("mode not preserved: %o", fi.Mode().Perm())
+	}
+	if tmp, _ := filepath.Glob(e.ssh(".known_hosts.tmp-*")); len(tmp) != 0 {
+		t.Fatalf("temp file left: %v", tmp)
+	}
+	if len(backups(t, e.ssh(), "known_hosts")) != 1 {
+		t.Fatal("backup missing")
+	}
+}
+
+func TestPullNoBackupNoticeWithoutPriorConfig(t *testing.T) {
+	e := pullEnv(t)
+	e.seed(t, "inventory", vault.Inventory{Config: pullInv})
+	out, err := runVault(t, "", "pull")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "backup was written") {
+		t.Fatalf("claims a backup that was never taken:\n%s", out)
+	}
+	if out, _ = runVault(t, "", "pull"); strings.Contains(out, "updated") {
+		t.Fatalf("second pull should change nothing:\n%s", out)
+	}
+}
+
+func TestPullDoesNotChmodASymlinkedSSHDir(t *testing.T) {
+	e := pullEnv(t)
+	e.seedKey(t, "ws1")
+	target := filepath.Join(e.home, "real-ssh")
+	if err := os.Mkdir(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, e.ssh()); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runVault(t, "", "pull")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if fi, _ := os.Stat(target); fi.Mode().Perm() != 0o755 {
+		t.Fatalf("symlink target chmodded to %o", fi.Mode().Perm())
+	}
+	if !strings.Contains(out, "warning") {
+		t.Fatalf("want a group/world-accessible warning:\n%s", out)
+	}
+}
+
+func TestPullValidatesTheVaultKeyAndComparesPrivateBytes(t *testing.T) {
+	e := pullEnv(t)
+	// vault key whose Private does not match its Public
+	priv, _, _ := keystore.Generate([]byte(pullPass), "a")
+	_, pubB, _ := keystore.Generate([]byte(pullPass), "b")
+	fp, _ := keystore.Fingerprint(pubB)
+	e.seed(t, "key/ws1", vault.KeyPair{Private: priv, Passphrase: vault.Secret(pullPass), Public: string(pubB), Fingerprint: fp})
+	out, err := runVault(t, "", "pull")
+	if err == nil || !strings.Contains(out+err.Error(), "does not match") {
+		t.Fatalf("mismatched vault key must be refused: %v\n%s", err, out)
+	}
+	if _, serr := os.Stat(e.ssh("id_ed25519")); serr == nil {
+		t.Fatal("nothing may be written")
+	}
+
+	// local .pub equals the vault's but the private half differs: not "unchanged"
+	e2 := pullEnv(t)
+	pub, _ := e2.seedKey(t, "ws1")
+	lpriv, _, _ := keystore.Generate([]byte("zzz"), "local")
+	if _, err := keystore.Write(e2.ssh("id_ed25519"), lpriv, []byte(pub), vaultNow()); err != nil {
+		t.Fatal(err)
+	}
+	out, err = runVault(t, "", "pull")
+	if err == nil || !strings.Contains(out+err.Error(), "--replace-key") {
+		t.Fatalf("differing private key behind a matching .pub must need --replace-key: %v\n%s", err, out)
 	}
 }
