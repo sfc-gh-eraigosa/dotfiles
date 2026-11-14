@@ -53,9 +53,12 @@ if [ -d "$HOME/opt/scripts" ]; then
     done
 fi
 
-# Load NVM (still used by other Node tooling, e.g. gws)
+# Load NVM (still used by other Node tooling, e.g. gws).
+# --no-use skips nvm's automatic `nvm use default` at load time, which cost
+# ~5 s per shell on the Intel Mac (nvm_auto -> nvm_ensure_version_installed).
+# `nvm use <ver>` still works on demand; `node` resolves to whatever is on PATH.
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use
 # nvm's completion runs a bare `compinit` under zsh when none has run yet.
 # zsh login shells reach this file via ~/.zprofile -> ~/.profile BEFORE
 # ~/.zshrc shadows dangling vendor completions (Docker Desktop's WSL _docker
