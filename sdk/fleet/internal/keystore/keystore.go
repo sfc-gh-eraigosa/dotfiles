@@ -144,6 +144,10 @@ func atomicWrite(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	ok = true
+	if d, err := os.Open(filepath.Dir(path)); err == nil { // make the rename durable
+		_ = d.Sync()
+		_ = d.Close()
+	}
 	return nil
 }
 
@@ -191,4 +195,16 @@ func Encrypt(rawPrivate, passphrase []byte, comment string) ([]byte, error) {
 		return nil, fmt.Errorf("keystore: marshal private key: %w", err)
 	}
 	return pem.EncodeToMemory(blk), nil
+}
+
+// Backup copies data to <path>.bak-<YYYYmmddTHHMMSS> exclusively (0600, fsync),
+// trying -1, -2, ... when the name is taken, and returns the name used.
+func Backup(path string, data []byte, now time.Time) (string, error) {
+	return writeBackup(path+".bak-"+now.Format(tsLayout), data)
+}
+
+// AtomicWrite replaces path with data via a temp file in the same directory
+// (fsync, then rename) at the given mode.
+func AtomicWrite(path string, data []byte, mode os.FileMode) error {
+	return atomicWrite(path, data, mode)
 }

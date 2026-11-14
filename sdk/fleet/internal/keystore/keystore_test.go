@@ -267,3 +267,32 @@ func TestEncryptRefusesEmptyPassphraseAndGarbage(t *testing.T) {
 		t.Fatal("want error re-encrypting an already-encrypted key")
 	}
 }
+
+func TestBackupIsExclusiveAndAtomicWriteReplaces(t *testing.T) {
+	d := t.TempDir()
+	p := filepath.Join(d, "f")
+	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	b1, err := Backup(p, []byte("one"), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b2, err := Backup(p, []byte("two"), now)
+	if err != nil || b1 == b2 {
+		t.Fatalf("b1=%s b2=%s err=%v", b1, b2, err)
+	}
+	if got, _ := os.ReadFile(b1); string(got) != "one" {
+		t.Fatalf("first backup clobbered: %s", got)
+	}
+	if err := AtomicWrite(p, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := AtomicWrite(p, []byte("y"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(p); string(got) != "y" {
+		t.Fatalf("got %s", got)
+	}
+	if fi, _ := os.Stat(p); fi.Mode().Perm() != 0o644 {
+		t.Fatalf("mode %o", fi.Mode().Perm())
+	}
+}
