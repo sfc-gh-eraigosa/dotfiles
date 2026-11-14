@@ -65,7 +65,10 @@ func Loaded(ctx context.Context, x Exec, fp string) (bool, error) {
 // <0700 tmpdir>/askpass.sock and runs `ssh-add [--apple-use-keychain] keyPath`
 // with SSH_ASKPASS=self, SSH_ASKPASS_REQUIRE=force (OpenSSH >= 8.4) and
 // FLEET_ASKPASS_SOCK=<sock>. self must be the fleet binary (or anything that
-// calls AskpassClient when FLEET_ASKPASS_SOCK is set).
+// calls AskpassClient when FLEET_ASKPASS_SOCK is set). Success means ssh-add
+// exited 0, whether or not it asked (Apple's ssh-add may take the passphrase
+// from the keychain); verify with Loaded. Load blocks while ssh-add runs, so
+// pass a ctx with a deadline.
 func Load(ctx context.Context, x Exec, self, keyPath string, passphrase vault.Secret, goos string) error {
 	if len(passphrase) == 0 {
 		return errors.New("agent: empty passphrase")
@@ -87,18 +90,22 @@ func Load(ctx context.Context, x Exec, self, keyPath string, passphrase vault.Se
 	}
 	env = append(env, "SSH_ASKPASS="+self, "SSH_ASKPASS_REQUIRE=force", "FLEET_ASKPASS_SOCK="+srv.Sock)
 
-	args := []string{keyPath}
-	if goos == "darwin" {
-		args = []string{"--apple-use-keychain", keyPath}
-	}
-	_, runErr := x(ctx, "ssh-add", env, args...)
-	cancel()
-	_ = srv.Close() // waits for the server goroutine, so served() is final
-	if runErr != nil {
-		return fmt.Errorf("agent: ssh-add %s: %w", keyPath, runErr)
-	}
-	if !srv.served() {
-		return fmt.Errorf("agent: ssh-add %s never asked for the passphrase (key unencrypted, or askpass not used?)", keyPath)
+	name, args := sshAdd(goos, keyPath)
+	if _, err := x(ctx, name, env, args...); err != nil {
+		return fmt.Errorf("agent: ssh-add %s: %w", keyPath, err)
 	}
 	return nil
+}
+
+// appleSSHAdd is Apple's ssh-add, the only one that knows
+// --apple-use-keychain; Homebrew's upstream openssh, often first in PATH,
+// rejects the flag.
+const appleSSHAdd = "/usr/bin/ssh-add"
+
+// sshAdd picks the ssh-add binary and args for goos.
+func sshAdd(goos, keyPath string) (string, []string) {
+	if goos == "darwin" {
+		return appleSSHAdd, []string{"--apple-use-keychain", keyPath}
+	}
+	return "ssh-add", []string{keyPath}
 }
