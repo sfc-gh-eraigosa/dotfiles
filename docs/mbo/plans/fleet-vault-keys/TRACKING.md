@@ -24,9 +24,9 @@
 | T2 payload + roster | done | 2df7add, a72a737 | `go test -cover ./internal/vault/...` → PASS, vault 96.4 % | JSON field names pinned; retired keys stay retired |
 | T3 op adapter | todo | | | |
 | T4 lpass adapter | done | 40479f9, b29734b, 544d6c5 | `go test -cover ./internal/vault/...` → PASS, lpass 91.1 %, providers 94.1 %; live PASS | best-effort CAS documented; ambiguous names refused |
-| T5 vault.yaml + gate | todo | | | |
-| T6 keystore | todo | | | |
-| T7 agent + askpass | todo | | | |
+| T5 vault.yaml + gate | done | 3d78151, dabe23c | `go test -cover ./internal/featflag/ ./cmd/` → PASS (featflag 96.9 %, cmd 77.0 %; only the 3 known cmd failures); `gff lint .github/gff/features.yaml` → 0 | fail-closed; ~ expanded; unknown YAML keys rejected; golden keys-sync argv captured |
+| T6 keystore | done | cec71aa, 7065ab2 | `go test -cover ./internal/keystore/` → PASS 75.0 %; ssh-keygen fingerprint match | x/crypto v0.59.0; O_EXCL+counter backups, fsync'd, path returned on error |
+| T7 agent + askpass | done | f10db28, 93f3f62 | `go test -race -count=3 -cover ./internal/agent/` → PASS 87.9 %; real ssh-add vs throwaway agent (OpenSSH_10.5p1) PASS | success = ssh-add exit 0 (keychain reloads); /usr/bin/ssh-add on darwin |
 | T8 pre-flight | todo | | | |
 | T9 vault setup/status | todo | | | |
 | T10 vault push | todo | | | |
@@ -88,4 +88,4 @@ never silently patched.
 | Date | Session | What advanced |
 | :-- | :-- | :-- |
 | 2026-11-13 | planning | Plan + execution trio written on worker `design` (PR #452). |
-| 2026-11-13 | build 1 | T1, T2, T4 (+T0 lpass live) done, subagent-driven with per-task review. Rulings: lpass-first, op deferred; T0 as a Go `live` test. |
+| 2026-11-13 | build 1 | T1, T2, T4 (+T0 lpass live), T5, T6, T7 done, subagent-driven with per-task review. Rulings: lpass-first, op deferred; T0 as a Go `live` test. |
