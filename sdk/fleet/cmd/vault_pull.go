@@ -174,7 +174,7 @@ func vaultPull(cmd *cobra.Command, as string, replaceKey bool) error {
 	} else {
 		fmt.Fprintf(out, "key: unchanged (%s)\n", vfp)
 	}
-	out.Write([]byte(invPlan.msg))
+	fmt.Fprint(out, invPlan.msg)
 	if invPlan.write {
 		secureDir(out, filepath.Dir(flagConfig))
 		_, serr := os.Stat(flagConfig)

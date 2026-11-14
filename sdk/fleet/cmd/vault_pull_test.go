@@ -261,7 +261,7 @@ func TestPullOnDarwinOffersUseKeychain(t *testing.T) {
 
 	// never on linux, even with an eager stdin
 	e.goos = "linux"
-	os.Remove(e.ssh("config"))
+	_ = os.Remove(e.ssh("config")) // may already be absent
 	out, _ = runVault(t, "y\n", "pull")
 	if cfg, _ := os.ReadFile(e.ssh("config")); strings.Contains(string(cfg), "UseKeychain") || strings.Contains(out, "UseKeychain") {
 		t.Fatalf("linux got a keychain block:\n%s\n%s", cfg, out)
@@ -486,8 +486,12 @@ func TestPullHashedVaultLineForRotatedHostIsNotReAdded(t *testing.T) {
 	e := pullEnv(t)
 	e.seed(t, "inventory", vault.Inventory{Config: piInv})
 	e.seed(t, "known_hosts", vault.KnownHosts{Lines: []string{hashedWith("pi", "saltsaltsaltsaltsalt", "OLD")}})
-	os.MkdirAll(e.ssh(), 0o700)
-	os.WriteFile(e.ssh("known_hosts"), []byte("pi ssh-ed25519 NEW\n"), 0o600)
+	if err := os.MkdirAll(e.ssh(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(e.ssh("known_hosts"), []byte("pi ssh-ed25519 NEW\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if out, err := runVault(t, "", "pull"); err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
@@ -509,7 +513,9 @@ func TestPullHashedVaultLineForAbsentHostIsAddedOnceAndSecondPullIsANoOp(t *test
 	}
 	before := readKH(e)
 	// same host+key under a different local salt must not be re-added either
-	os.WriteFile(e.ssh("known_hosts"), []byte(hashedWith("pi", "othersaltothersalt!", "VKEY")+"\n"), 0o600)
+	if err := os.WriteFile(e.ssh("known_hosts"), []byte(hashedWith("pi", "othersaltothersalt!", "VKEY")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	out, err := runVault(t, "", "pull")
 	if err != nil || !strings.Contains(out, "known_hosts: unchanged") {
 		t.Fatalf("%v\n%s", err, out)
@@ -556,10 +562,16 @@ func TestPullWritesThroughSymlinkedKnownHostsAndConfig(t *testing.T) {
 	e.seed(t, "inventory", vault.Inventory{Config: pullInv})
 	e.seed(t, "known_hosts", vault.KnownHosts{Lines: []string{"box ssh-ed25519 K"}})
 	real := filepath.Join(e.home, "dots")
-	os.MkdirAll(real, 0o755)
-	os.MkdirAll(e.ssh(), 0o700)
+	if err := os.MkdirAll(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(e.ssh(), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	for _, n := range []string{"known_hosts", "config"} {
-		os.WriteFile(filepath.Join(real, n), []byte("# x\n"), 0o600)
+		if err := os.WriteFile(filepath.Join(real, n), []byte("# x\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
 		if err := os.Symlink(filepath.Join(real, n), e.ssh(n)); err != nil {
 			t.Fatal(err)
 		}
