@@ -173,3 +173,22 @@ func Fingerprint(public []byte) (string, error) {
 	}
 	return ssh.FingerprintSHA256(k), nil
 }
+
+// Encrypt re-wraps an UNENCRYPTED private key (any format ssh.ParseRawPrivateKey
+// reads) as an OpenSSH PEM protected by passphrase. An empty passphrase, an
+// unparseable key, or an already-encrypted key is refused. Pure: nothing is
+// written; the caller decides where the bytes go.
+func Encrypt(rawPrivate, passphrase []byte, comment string) ([]byte, error) {
+	if len(passphrase) == 0 {
+		return nil, errors.New("keystore: empty passphrase refused")
+	}
+	k, err := ssh.ParseRawPrivateKey(rawPrivate)
+	if err != nil {
+		return nil, fmt.Errorf("keystore: parse private key: %w", err)
+	}
+	blk, err := ssh.MarshalPrivateKeyWithPassphrase(k, comment, passphrase)
+	if err != nil {
+		return nil, fmt.Errorf("keystore: marshal private key: %w", err)
+	}
+	return pem.EncodeToMemory(blk), nil
+}
