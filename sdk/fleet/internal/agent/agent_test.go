@@ -102,6 +102,8 @@ func TestLoadedParsesSshAddList(t *testing.T) {
 // program by dialing FLEET_ASKPASS_SOCK from the env it was handed.
 type fakeSshAdd struct {
 	mu       sync.Mutex
+	name     string
+	sock     string
 	env      []string
 	args     []string
 	received string
@@ -112,19 +114,16 @@ type fakeSshAdd struct {
 func (f *fakeSshAdd) exec(_ context.Context, name string, env []string, args ...string) ([]byte, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if name != "ssh-add" {
-		return nil, fmt.Errorf("unexpected %s", name)
-	}
+	f.name = name
 	f.env, f.args = append([]string(nil), env...), append([]string(nil), args...)
-	if !f.skipAsk {
-		var sock string
-		for _, e := range env {
-			if v, ok := strings.CutPrefix(e, "FLEET_ASKPASS_SOCK="); ok {
-				sock = v
-			}
+	for _, e := range env {
+		if v, ok := strings.CutPrefix(e, "FLEET_ASKPASS_SOCK="); ok {
+			f.sock = v
 		}
+	}
+	if !f.skipAsk {
 		var out bytes.Buffer
-		if err := AskpassClient(sock, &out); err != nil {
+		if err := AskpassClient(f.sock, &out); err != nil {
 			return nil, err
 		}
 		f.received = out.String()
@@ -178,9 +177,14 @@ func TestLoadPassesThePassphraseOnlyOverTheSocket(t *testing.T) {
 			if socks != 1 || askpass != 1 {
 				t.Errorf("FLEET_ASKPASS_SOCK x%d, SSH_ASKPASS x%d; want exactly one each", socks, askpass)
 			}
-			wantArgs := "/k/id_ed25519"
+			wantName, wantArgs := "ssh-add", "/k/id_ed25519"
 			if goos == "darwin" {
-				wantArgs = "--apple-use-keychain /k/id_ed25519"
+				// Only Apple's ssh-add knows --apple-use-keychain; Homebrew's
+				// upstream openssh, often first in PATH, rejects it.
+				wantName, wantArgs = "/usr/bin/ssh-add", "--apple-use-keychain /k/id_ed25519"
+			}
+			if f.name != wantName {
+				t.Errorf("ran %q, want %q", f.name, wantName)
 			}
 			if got := strings.Join(f.args, " "); got != wantArgs {
 				t.Errorf("args = %q, want %q", got, wantArgs)
@@ -201,19 +205,29 @@ func TestLoadErrors(t *testing.T) {
 			t.Fatal("passphrase in error")
 		}
 	})
-	t.Run("never asked", func(t *testing.T) {
-		f := &fakeSshAdd{skipAsk: true}
-		err := Load(ctx, f.exec, "/fleet", "/k", vault.Secret(testPass), "linux")
-		if err == nil || !strings.Contains(err.Error(), "never asked") {
-			t.Fatalf("err = %v, want a never-asked error", err)
-		}
-	})
 	t.Run("empty passphrase", func(t *testing.T) {
 		f := &fakeSshAdd{}
 		if err := Load(ctx, f.exec, "/fleet", "/k", nil, "linux"); err == nil {
 			t.Fatal("empty passphrase accepted")
 		}
 	})
+}
+
+// Apple's ssh-add --apple-use-keychain reads a stored passphrase from the
+// keychain and never runs askpass; a zero exit still means the key is loaded.
+func TestLoadSucceedsWhenSshAddDoesNotAsk(t *testing.T) {
+	for _, goos := range []string{"darwin", "linux"} {
+		f := &fakeSshAdd{skipAsk: true}
+		if err := Load(context.Background(), f.exec, "/fleet", "/k", vault.Secret(testPass), goos); err != nil {
+			t.Fatalf("%s: Load = %v, want nil when ssh-add exits 0 without asking", goos, err)
+		}
+		if f.sock == "" {
+			t.Fatalf("%s: no FLEET_ASKPASS_SOCK handed to ssh-add", goos)
+		}
+		if _, err := os.Stat(filepath.Dir(f.sock)); !os.IsNotExist(err) {
+			t.Fatalf("%s: socket dir still present: %v", goos, err)
+		}
+	}
 }
 
 func TestAskpassServesOnceThenCloses(t *testing.T) {
