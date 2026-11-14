@@ -144,6 +144,10 @@ func atomicWrite(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	ok = true
+	if d, err := os.Open(filepath.Dir(path)); err == nil { // make the rename durable
+		_ = d.Sync()
+		_ = d.Close()
+	}
 	return nil
 }
 

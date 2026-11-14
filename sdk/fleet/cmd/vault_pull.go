@@ -20,6 +20,7 @@ import (
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/agent"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/cfgplan"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/keystore"
+	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/sshconf"
 	"github.com/sfc-gh-eraigosa/dotfiles/sdk/fleet/internal/vault"
 )
 
@@ -134,7 +135,7 @@ func vaultPull(cmd *cobra.Command, as string, replaceKey bool) error {
 	if err != nil {
 		return err
 	}
-	khPlan, err := planKnownHosts(ctx, store, names, filepath.Join(sshDir, "known_hosts"))
+	khPlan, err := planKnownHosts(ctx, store, names, filepath.Join(sshDir, "known_hosts"), fleetNameCandidates(invPlan.next))
 	if err != nil {
 		return err
 	}
@@ -194,7 +195,7 @@ func vaultPull(cmd *cobra.Command, as string, replaceKey bool) error {
 	if err := khPlan.apply(out); err != nil {
 		return err
 	}
-	if as != "" && as != cfg.Workstation {
+	if as != "" && haveKey && as != cfg.Workstation {
 		cfg.Workstation = as
 		if err := saveVaultConfig(vaultConfigPath(), cfg); err != nil {
 			return err
@@ -256,9 +257,10 @@ func localKeyIs(path string, kp vault.KeyPair, vfp string) bool {
 	return err == nil && fp == vfp
 }
 
-// secureDir makes a directory this pull writes into 0700. A symlinked
-// directory is never chmodded (that would change its target): warn instead
-// when the target is group/world-accessible.
+// secureDir makes a directory this pull writes into safe. It creates a missing
+// one 0700 and chmods only a directory named .ssh; any other existing
+// directory (e.g. $HOME) is left alone, with a warning when it is
+// group/world-writable. A symlinked directory is never chmodded either.
 func secureDir(out io.Writer, dir string) {
 	fi, err := os.Lstat(dir)
 	switch {
@@ -269,8 +271,12 @@ func secureDir(out io.Writer, dir string) {
 		if ti, terr := os.Stat(dir); terr == nil && ti.Mode().Perm()&0o077 != 0 {
 			fmt.Fprintf(out, "warning: %s is a symlink to a group/world-accessible directory (mode %04o); not changing it\n", dir, ti.Mode().Perm())
 		}
-	case fi.Mode().Perm() != 0o700:
-		_ = os.Chmod(dir, 0o700)
+	case filepath.Base(dir) == ".ssh":
+		if fi.Mode().Perm() != 0o700 {
+			_ = os.Chmod(dir, 0o700)
+		}
+	case fi.Mode().Perm()&0o022 != 0:
+		fmt.Fprintf(out, "warning: %s is group/world-writable (mode %04o); not changing it\n", dir, fi.Mode().Perm())
 	}
 }
 
@@ -361,18 +367,22 @@ func hasUseKeychain(cfg string) bool {
 }
 
 type khPlanT struct {
-	path  string
-	old   []byte
-	mode  fs.FileMode
-	add   []string
-	write bool
+	path    string
+	old     []byte
+	mode    fs.FileMode
+	add     []string
+	skipped int
+	write   bool
 }
 
 // planKnownHosts decides which vault lines to add. A host that already has ANY
 // line locally (plain, [host]:port or hashed) gets nothing from the vault: its
 // local key may have rotated, and trusting both would be wrong. Only hosts
 // absent locally take vault lines; @revoked lines are added when missing.
-func planKnownHosts(ctx context.Context, store vault.Store, names []string, path string) (khPlanT, error) {
+func planKnownHosts(ctx context.Context, store vault.Store, names []string, path string, candidates []string) (khPlanT, error) {
+	if r, err := filepath.EvalSymlinks(path); err == nil {
+		path = r // write through a symlink so the link survives
+	}
 	p := khPlanT{path: path, mode: 0o644}
 	if !contains(names, "known_hosts") {
 		return p, nil
@@ -404,17 +414,27 @@ func planKnownHosts(ctx context.Context, store vault.Store, names []string, path
 			continue
 		}
 		if !strings.HasPrefix(l, "@revoked") {
-			if hn := knownHostNames(l); len(hn) > 0 {
-				seen := false
-				for _, ll := range locals {
-					if knownHostsLineMatches(ll, hn) {
-						seen = true
-						break
+			hn := knownHostNames(l)
+			if len(hn) == 0 { // hashed: only the fleet's own names can identify the host
+				for _, c := range candidates {
+					if knownHostsLineMatches(l, []string{c}) {
+						hn = append(hn, c)
 					}
 				}
-				if seen {
+				if len(hn) == 0 {
+					p.skipped++
 					continue
 				}
+			}
+			seen := false
+			for _, ll := range locals {
+				if knownHostsLineMatches(ll, hn) {
+					seen = true
+					break
+				}
+			}
+			if seen {
+				continue
 			}
 		}
 		have[l] = true
@@ -444,6 +464,9 @@ func knownHostNames(line string) []string {
 }
 
 func (p khPlanT) apply(out io.Writer) error {
+	if p.skipped > 0 {
+		fmt.Fprintf(out, "known_hosts: skipped %d hashed vault line(s) matching no fleet host\n", p.skipped)
+	}
 	if !p.write {
 		fmt.Fprintln(out, "known_hosts: unchanged")
 		return nil
@@ -489,4 +512,30 @@ func pullLoadAgent(ctx context.Context, out io.Writer, keyPath, fp string, pass 
 		return
 	}
 	fmt.Fprintln(out, "agent: key loaded in agent")
+}
+
+// fleetNameCandidates lists the names a known_hosts entry for a fleet host may
+// carry: each Host alias, its HostName, and [h]:port for a non-22 port.
+func fleetNameCandidates(cfg string) []string {
+	hosts, err := sshconf.Parse(cfg, flagMarker)
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	add := func(n string) {
+		if n != "" && !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	for _, h := range hosts {
+		for _, n := range []string{h.Alias, h.HostName} {
+			add(n)
+			if n != "" && h.Port != "" && h.Port != "22" {
+				add("[" + n + "]:" + h.Port)
+			}
+		}
+	}
+	return out
 }

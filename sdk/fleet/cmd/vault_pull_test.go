@@ -469,3 +469,130 @@ func TestPullValidatesTheVaultKeyAndComparesPrivateBytes(t *testing.T) {
 		t.Fatalf("differing private key behind a matching .pub must need --replace-key: %v\n%s", err, out)
 	}
 }
+
+// ---- PR #457 fix round 2 ----
+
+func hashedWith(host, salt, key string) string {
+	m := hmac.New(sha1.New, []byte(salt))
+	m.Write([]byte(host))
+	return "|1|" + base64.StdEncoding.EncodeToString([]byte(salt)) + "|" + base64.StdEncoding.EncodeToString(m.Sum(nil)) + " ssh-ed25519 " + key
+}
+
+const piInv = "Host pi  #fleet\n    HostName 10.0.0.5\n    User me\n"
+
+func readKH(e *pullEnvT) string { b, _ := os.ReadFile(e.ssh("known_hosts")); return string(b) }
+
+func TestPullHashedVaultLineForRotatedHostIsNotReAdded(t *testing.T) {
+	e := pullEnv(t)
+	e.seed(t, "inventory", vault.Inventory{Config: piInv})
+	e.seed(t, "known_hosts", vault.KnownHosts{Lines: []string{hashedWith("pi", "saltsaltsaltsaltsalt", "OLD")}})
+	os.MkdirAll(e.ssh(), 0o700)
+	os.WriteFile(e.ssh("known_hosts"), []byte("pi ssh-ed25519 NEW\n"), 0o600)
+	if out, err := runVault(t, "", "pull"); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if s := readKH(e); strings.Contains(s, "OLD") || !strings.Contains(s, "NEW") {
+		t.Fatalf("old hashed key re-trusted:\n%s", s)
+	}
+}
+
+func TestPullHashedVaultLineForAbsentHostIsAddedOnceAndSecondPullIsANoOp(t *testing.T) {
+	e := pullEnv(t)
+	e.seed(t, "inventory", vault.Inventory{Config: piInv})
+	line := hashedWith("pi", "saltsaltsaltsaltsalt", "VKEY")
+	e.seed(t, "known_hosts", vault.KnownHosts{Lines: []string{line}})
+	if out, err := runVault(t, "", "pull"); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !strings.Contains(readKH(e), line) {
+		t.Fatalf("hashed line for an absent fleet host not added:\n%s", readKH(e))
+	}
+	before := readKH(e)
+	// same host+key under a different local salt must not be re-added either
+	os.WriteFile(e.ssh("known_hosts"), []byte(hashedWith("pi", "othersaltothersalt!", "VKEY")+"\n"), 0o600)
+	out, err := runVault(t, "", "pull")
+	if err != nil || !strings.Contains(out, "known_hosts: unchanged") {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if strings.Count(readKH(e), "VKEY") != 1 {
+		t.Fatalf("re-added under a new salt:\n%s", readKH(e))
+	}
+	_ = before
+	if n := len(backups(t, e.ssh(), "known_hosts")); n != 0 && n != 1 {
+		t.Fatalf("unexpected backups %d", n)
+	}
+}
+
+func TestPullSkipsHashedLineMatchingNoFleetHost(t *testing.T) {
+	e := pullEnv(t)
+	e.seed(t, "inventory", vault.Inventory{Config: piInv})
+	e.seed(t, "known_hosts", vault.KnownHosts{Lines: []string{hashedWith("stranger", "saltsaltsaltsaltsalt", "XKEY")}})
+	out, err := runVault(t, "", "pull")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(readKH(e), "XKEY") {
+		t.Fatal("unmatched hashed line appended blindly")
+	}
+	if !strings.Contains(out, "skipped 1 hashed") {
+		t.Fatalf("no notice:\n%s", out)
+	}
+}
+
+func TestPullAsWithATypoDoesNotRenameThisMachine(t *testing.T) {
+	e := pullEnv(t)
+	e.seedKey(t, "ws1")
+	if _, err := runVault(t, "", "pull", "--as", "nosuch"); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, _ := loadVaultConfig(vaultConfigPath())
+	if cfg.Workstation != "ws1" {
+		t.Fatalf("renamed to %q", cfg.Workstation)
+	}
+}
+
+func TestPullWritesThroughSymlinkedKnownHostsAndConfig(t *testing.T) {
+	e := pullEnv(t)
+	e.seed(t, "inventory", vault.Inventory{Config: pullInv})
+	e.seed(t, "known_hosts", vault.KnownHosts{Lines: []string{"box ssh-ed25519 K"}})
+	real := filepath.Join(e.home, "dots")
+	os.MkdirAll(real, 0o755)
+	os.MkdirAll(e.ssh(), 0o700)
+	for _, n := range []string{"known_hosts", "config"} {
+		os.WriteFile(filepath.Join(real, n), []byte("# x\n"), 0o600)
+		if err := os.Symlink(filepath.Join(real, n), e.ssh(n)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if out, err := runVault(t, "", "pull"); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	for _, n := range []string{"known_hosts", "config"} {
+		if fi, err := os.Lstat(e.ssh(n)); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+			t.Fatalf("%s symlink replaced", n)
+		}
+	}
+	if b, _ := os.ReadFile(filepath.Join(real, "known_hosts")); !strings.Contains(string(b), "box ssh-ed25519 K") {
+		t.Fatal("target not updated")
+	}
+	if b, _ := os.ReadFile(filepath.Join(real, "config")); !strings.Contains(string(b), "Host box") {
+		t.Fatal("config target not updated")
+	}
+}
+
+func TestPullDoesNotChmodHome(t *testing.T) {
+	e := pullEnv(t)
+	e.seedKey(t, "ws1")
+	if err := os.Chmod(e.home, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveVaultConfig(vaultConfigPath(), vault.Config{Provider: "lpass", Workstation: "ws1", Key: filepath.Join(e.home, "id_x")}); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := runVault(t, "", "pull"); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if fi, _ := os.Stat(e.home); fi.Mode().Perm() != 0o755 {
+		t.Fatalf("$HOME chmodded to %o", fi.Mode().Perm())
+	}
+}
